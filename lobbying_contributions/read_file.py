@@ -31,7 +31,7 @@ arraytype = type([])
 
 for YEAR in YEAR_LIST:
 
-    OUTFILE_NAME = "lobbyist_contributions_ld203_%s.csv" % YEAR
+    OUTFILE_NAME = "lobbyist_contributions_ld-203_%s.csv" % YEAR
     outfile =  open(OUTFILE_NAME, 'w')
     print("Writing %s data out to %s" % (YEAR, OUTFILE_NAME))
     dw = csv.DictWriter(outfile, fieldnames=headers, extrasaction='ignore')
