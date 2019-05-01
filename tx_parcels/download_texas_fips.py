@@ -20,3 +20,5 @@ for county in TEXAS_FIPS:
     dl_url = url % county
     print("url is %s" % dl_url)
     download_file(dl_url)
+
+
