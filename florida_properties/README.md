@@ -5,7 +5,7 @@ Florida parcels are available via public FTP per county here:
 
 [ftp://sdrftp03.dor.state.fl.us/Tax%20Roll%20Data%20Files/2018%20Final%20NAL%20-%20SDF%20Files/](ftp://sdrftp03.dor.state.fl.us/Tax%20Roll%20Data%20Files/2018%20Final%20NAL%20-%20SDF%20Files/)
 
-It's actually the SDF files we want. Download all of them to this dirctory, either by using the "download_files.py" to download and unzip them or some other means. (the download script just runs the command line commands curl and unzip on the files). 
+It's actually the SDF files we want. Download all of them to this directory, either by using the "download_files.py" to download and unzip them or some other means. (the download script just runs the command line commands curl and unzip on the files). 
 
 After downloading the files, you can combine them into a single file using csvkit's csvstack:
 
