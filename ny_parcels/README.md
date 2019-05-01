@@ -1,6 +1,6 @@
 # New York Parcel data
 
-Go to this [NY State GIS page](http://gis.ny.gov/gisdata/inventories/details.cfm?DSID=1300). Download the file "NYS Tax Parcel Centroid Points." This is the only file for the whole state; the parcel file is only from counties that cooperated. 
+Go to this [NY State GIS page](http://gis.ny.gov/gisdata/inventories/details.cfm?DSID=1300). Download the file "NYS Tax Parcel Centroid Points." This is the only file for the whole state; the parcel file is only from counties that cooperated. The metadata is also available on that page. 
 
 The summary for this file is: "Parcel centroid data for all 62 New York State counties. Parcel centroids were generated using the NYS Office of Information Technology Services GIS Program Office's (GPO) Statewide Parcel Map program data. Attribute values were populated using Assessment Roll tabular data the GPO obtained from the NYS Department of Tax and Finances Office of Real Property Tax Services (ORPTS)."
 
