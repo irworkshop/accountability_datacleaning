@@ -5,143 +5,110 @@ These queries are run against a postgres database built according to the [irs-xm
 
 ## Employees
 
+### From form 990
+
 Make a temporary address lookup table for easier joining:
 
-
-	SELECT "USAddrss_AddrssLn1Txt",
-       "USAddrss_AddrssLn2Txt",
-       "USAddrss_CtyNm",
-       "USAddrss_SttAbbrvtnCd",
-       "USAddrss_ZIPCd",
-       object_id,
-       ein 
-    INTO address_table
-	FROM return_part_0;
+		DROP TABLE if exists address_table;
+	
+	
+		SELECT  
+		   return_returnheader990x_part_i.ein,
+		   return_returnheader990x_part_i.object_id,
+	       return_returnheader990x_part_i."RtrnHdr_TxPrdEndDt",
+	       return_returnheader990x_part_i."RtrnHdr_TxYr",
+	       return_returnheader990x_part_i."BsnssNm_BsnssNmLn1Txt",
+	       return_returnheader990x_part_i."BsnssNm_BsnssNmLn2Txt",
+	       return_returnheader990x_part_i."BsnssOffcr_PrsnNm",
+	       return_returnheader990x_part_i."BsnssOffcr_PrsnTtlTxt",
+	       return_returnheader990x_part_i."BsnssOffcr_PhnNm",
+	       return_returnheader990x_part_i."BsnssOffcr_EmlAddrssTxt",
+	       return_returnheader990x_part_i."USAddrss_AddrssLn1Txt",
+	       return_returnheader990x_part_i."USAddrss_AddrssLn2Txt",
+	       return_returnheader990x_part_i."USAddrss_CtyNm",
+	       return_returnheader990x_part_i."USAddrss_SttAbbrvtnCd",
+	       return_returnheader990x_part_i."USAddrss_ZIPCd",
+	       return_returnheader990x_part_i."FrgnAddrss_AddrssLn1Txt",
+			return_returnheader990x_part_i."FrgnAddrss_AddrssLn2Txt",
+			return_returnheader990x_part_i."FrgnAddrss_CtyNm",
+			return_returnheader990x_part_i."FrgnAddrss_PrvncOrSttNm",
+			return_returnheader990x_part_i."FrgnAddrss_CntryCd"      
+		INTO address_table
+		FROM return_returnheader990x_part_i;
 
 Index it so the queries don't take forever
 
+	DROP INDEX IF EXISTS xx_990_address_oid_ein;
+	CREATE INDEX xx_990_address_oid_ein ON address_table (object_id, ein);
 
-	CREATE INDEX tmp1_zz ON tmp1 (object_id, ein);
-
-
-### From form 990
-
-990:
 
 Make a temporary table with the stuff to pull from Part VII Section A
+
+	DROP TABLE IF EXISTS tmp_990_employees;
 	
-	SELECT filing_filing.submission_year,
-       filing_filing.ein,
-       filing_filing.object_id,
-       taxpayer_name,
-       tax_period,
+	SELECT address_table.*,
        "PrsnNm",
        "TtlTxt",
-       "RprtblCmpFrmOrgAmt" 
-    INTO tmp1
+       "RprtblCmpFrmOrgAmt" as "CmpnstnAmt"
+    INTO tmp_990_employees
 	FROM return_Frm990PrtVIISctnA
-	LEFT JOIN filing_filing ON return_Frm990PrtVIISctnA.ein = filing_filing.ein
-	AND return_Frm990PrtVIISctnA.object_id=filing_filing.object_id;
+	LEFT JOIN address_table ON return_Frm990PrtVIISctnA.ein = address_table.ein
+	AND return_Frm990PrtVIISctnA.object_id=address_table.object_id;
 
 
-
-
-Join it back to the address info:
-
-
-	SELECT tmp1.*,
-       "USAddrss_AddrssLn1Txt",
-       "USAddrss_AddrssLn2Txt",
-       "USAddrss_CtyNm",
-       "USAddrss_SttAbbrvtnCd",
-       "USAddrss_ZIPCd" 
- 	INTO tmp2
-	FROM tmp1
-	LEFT JOIN address_table ON tmp1.object_id = address_table.object_id
-	AND tmp1.ein = address_table.ein;
 
 
 Copy back with:
 
-	\copy tmp2 to '/local/path/here/990_employees.csv' with csv header;
+
+
+	\copy tmp_990_employees to '/tmp/990_employees.csv' with csv header;
+
 
 
 
 ### 990EZ
 
 
-For the EZ filings:
+	DROP TABLE IF EXISTS tmp_990ez_employees;
 	
-	SELECT filing_filing.submission_year,
-	       filing_filing.ein,
-	       filing_filing.object_id,
-	       taxpayer_name,
-	       tax_period,
-	       "PrsnNm",
-	       "TtlTxt",
-	       "CmpnstnAmt" 
-	INTO tmpEZ1
-	FROM return_EZOffcrDrctrTrstEmpl
-	LEFT JOIN filing_filing ON return_EZOffcrDrctrTrstEmpl.ein = filing_filing.ein
-	AND return_EZOffcrDrctrTrstEmpl.object_id=filing_filing.object_id;
-	
+	SELECT address_table.*,
+       "PrsnNm",
+       "TtlTxt",
+       "CmpnstnAmt" 
+   INTO tmp_990EZ_employees
+   FROM return_EZOffcrDrctrTrstEmpl
+	LEFT JOIN address_table ON return_EZOffcrDrctrTrstEmpl.ein = address_table.ein
+	AND return_EZOffcrDrctrTrstEmpl.object_id= address_table.object_id;
 
- Index it
-
-	CREATE INDEX tmp1EZ_zz ON tmpEZ1 (object_id, ein);
-
-Then the EZ specific records
-
-	SELECT tmpEZ1.*,
-	       "USAddrss_AddrssLn1Txt",
-	       "USAddrss_AddrssLn2Txt",
-	       "USAddrss_CtyNm",
-	       "USAddrss_SttAbbrvtnCd",
-	       "USAddrss_ZIPCd" 
-	INTO tmpEZ2
-	FROM tmpEZ1
-	LEFT JOIN address_table ON tmpEZ1.object_id = address_table.object_id
-	AND tmpEZ1.ein = address_table.ein;
 
 And then move with: 
 
- 	\copy tmpEZ2 to '/local/path/here/990EZ_employees.csv' with csv header;
+ 	\copy tmp_990ez_employees to '/tmp/990EZ_employees.csv' with csv header;
+ 	
 
 
 ### 990PF
 
 Get PF values
 
-	SELECT filing_filing.submission_year,
-	       filing_filing.ein,
-	       filing_filing.object_id,
-	       taxpayer_name,
-	       tax_period,
+	DROP TABLE IF EXISTS tmp_990PF_employees;
+	
+	SELECT address_table.*,
 	       "OffcrDrTrstKyEmpl_PrsnNm" AS "PrsnNm",
 	       "OffcrDrTrstKyEmpl_TtlTxt" AS "TtlTxt",
 	       "OffcrDrTrstKyEmpl_CmpnstnAmt" AS "CmpnstnAmt" 
-	INTO tmpPF1
+	INTO tmp_990PF_employees
 	FROM return_PFOffcrDrTrstKyEmpl
-	LEFT JOIN filing_filing ON return_PFOffcrDrTrstKyEmpl.ein = filing_filing.ein
-	AND return_PFOffcrDrTrstKyEmpl.object_id=filing_filing.object_id;
+	LEFT JOIN address_table ON return_PFOffcrDrTrstKyEmpl.ein = address_table.ein
+	AND return_PFOffcrDrTrstKyEmpl.object_id= address_table.object_id;
 
 
-join with addresses
 
-	SELECT tmpPF1.*,
-	       "USAddrss_AddrssLn1Txt",
-	       "USAddrss_AddrssLn2Txt",
-	       "USAddrss_CtyNm",
-	       "USAddrss_SttAbbrvtnCd",
-	       "USAddrss_ZIPCd" 
-	INTO tmpPF2
-	FROM tmpPF1
-	LEFT JOIN address_table ON tmpPF1.object_id = address_table.object_id
-	AND tmpPF1.ein = address_table.ein;
 	
 copy it with: 
 
-	\copy tmpPF2 to '/tmp/990PF_employees.csv' with csv header;
+	\copy tmp_990PF_employees to '/tmp/990PF_employees.csv' with csv header;
 
 ## Schedule I
 
@@ -150,41 +117,80 @@ The schedule I variables are defined in the [irsx documentation](http://www.irsx
 Here's a query to a temp table
 
 
-
-	SELECT return_returnheader990x_part_i.ein AS "Donor_EIN",
-	       return_returnheader990x_part_i."RtrnHdr_TxPrdEndDt" AS "TxPrdEndDt",
-	       return_returnheader990x_part_i."RtrnHdr_TxYr" AS "TxYr",
-	       return_returnheader990x_part_i."BsnssNm_BsnssNmLn1Txt",
-	       return_returnheader990x_part_i."BsnssNm_BsnssNmLn2Txt",
-	       return_returnheader990x_part_i."BsnssOffcr_PrsnNm",
-	       return_returnheader990x_part_i."BsnssOffcr_PrsnTtlTxt",
-	       return_returnheader990x_part_i."BsnssOffcr_PhnNm",
-	       return_returnheader990x_part_i."BsnssOffcr_EmlAddrssTxt",
-	       return_returnheader990x_part_i."USAddrss_AddrssLn1Txt" AS "AddrssLn1Txt",
-	       return_returnheader990x_part_i."USAddrss_AddrssLn2Txt" AS "AddrssLn2Txt",
-	       return_returnheader990x_part_i."USAddrss_CtyNm" AS "CtyNm",
-	       return_returnheader990x_part_i."USAddrss_SttAbbrvtnCd" AS "SttAbbrvtnCd",
-	       return_returnheader990x_part_i."USAddrss_ZIPCd" AS "ZIPCd",
-	       return_SkdIRcpntTbl."RcpntBsnssNm_BsnssNmLn1Txt",
-	       return_SkdIRcpntTbl."RcpntBsnssNm_BsnssNmLn2Txt",
-	       return_SkdIRcpntTbl."RcpntTbl_RcpntEIN",
-	       return_SkdIRcpntTbl."RcpntTbl_CshGrntAmt",
-	       return_SkdIRcpntTbl."RcpntTbl_NnCshAssstncAmt",
-	       return_SkdIRcpntTbl."RcpntTbl_VltnMthdUsdDsc",
-	       return_SkdIRcpntTbl."RcpntTbl_NnCshAssstncDsc",
-	       return_SkdIRcpntTbl."RcpntTbl_PrpsOfGrntTxt",
-	       return_SkdIRcpntTbl."USAddrss_AddrssLn1Txt" AS "Rcpnt_AddrssLn1Txt",
-	       return_SkdIRcpntTbl."USAddrss_AddrssLn2Txt" AS "Rcpnt_AddrssLn2Txt",
-	       return_SkdIRcpntTbl."USAddrss_CtyNm" AS "Rcpnt_CtyNm",
-	       return_SkdIRcpntTbl."USAddrss_SttAbbrvtnCd" AS "Rcpnt_SttAbbrvtnCd",
-	       return_SkdIRcpntTbl."USAddrss_ZIPCd" AS "Rcpnt_ZIPCd" INTO TEMP TABLE grants
+	DROP TABLE IF EXISTS grants;
+	
+	SELECT 
+           address_table."RtrnHdr_TxPrdEndDt",
+           address_table."RtrnHdr_TxYr",
+           address_table."BsnssNm_BsnssNmLn1Txt" as "Donor_BsnssNmLn1",
+           address_table."BsnssNm_BsnssNmLn2Txt" as "Donor_BsnssNmL21",
+           address_table."BsnssOffcr_PrsnNm" as "Donor_BsnssOffcr_PrsnNm",
+           address_table."BsnssOffcr_PrsnTtlTxt" as "Donor_ BsnssOffcr_PrsnTtlTxt",
+           address_table."BsnssOffcr_PhnNm" as "Donor_ BsnssOffcr_PhnNm" ,
+           address_table."BsnssOffcr_EmlAddrssTxt"  as "Donor_ BsnssOffcr_EmlAddrssTxt" ,
+           address_table."USAddrss_AddrssLn1Txt" as "Donor_AddrssLn1Txt",
+           address_table."USAddrss_AddrssLn2Txt" as "Donor_AddrssLn2Txt",
+           address_table."USAddrss_CtyNm" as "Donor_CtyNm",
+           address_table."USAddrss_SttAbbrvtnCd" as "Donor_SttAbbrvtnCd",
+           address_table."USAddrss_ZIPCd" as "Donor_ZIPCd",
+           address_table."FrgnAddrss_AddrssLn1Txt" as "Donor_FrgnAddrss_AddrssLn1Txt",
+           address_table."FrgnAddrss_AddrssLn2Txt" as "Donor_FrgnAddrss_AddrssLn2Txt",
+           address_table."FrgnAddrss_CtyNm" as "Donor_FrgnAddrss_CtyNm",
+           address_table."FrgnAddrss_PrvncOrSttNm" as "Donor_PrvncOrSttNm",
+           address_table."FrgnAddrss_CntryCd" as "Donor_CntryCd",
+	       return_SkdIRcpntTbl.* 
+	INTO TEMP TABLE grants
 	FROM return_SkdIRcpntTbl
-	LEFT JOIN return_returnheader990x_part_i ON return_SkdIRcpntTbl.object_id = return_returnheader990x_part_i.object_id
-	AND return_SkdIRcpntTbl.ein = return_returnheader990x_part_i.ein;
+	LEFT JOIN address_table 
+	ON return_SkdIRcpntTbl.object_id = address_table.object_id
+	AND return_SkdIRcpntTbl.ein = address_table.ein;
 	
 
 
 
 Then copy to local with \copy: 
 
-	\copy grants to '/local/path/here/grants.csv' with csv header;
+	\copy grants to '/tmp/skedigrants.csv' with csv header;
+	
+
+
+## Form PF Part XV "Grant or Contribution Paid During Year"
+
+See the IRSX documentation for form PPF Part XV [Grant or Contribution Paid During Year](http://www.irsx.info/metadata/groups/PFGrntOrCntrbtnPdDrYr.html)
+
+Note that there's also a different section for grants of contributions approved for future years that we aren't using to avoid double-counting; see [the form instructions](https://www.irs.gov/instructions/i990pf#idm140486306377296) for (not much) more info. 
+
+
+	
+	DROP TABLE IF EXISTS pfgrants;
+	
+	SELECT 
+           address_table."RtrnHdr_TxPrdEndDt",
+           address_table."RtrnHdr_TxYr",
+           address_table."BsnssNm_BsnssNmLn1Txt" as "Donor_BsnssNmLn1",
+           address_table."BsnssNm_BsnssNmLn2Txt" as "Donor_BsnssNmL21",
+           address_table."BsnssOffcr_PrsnNm" as "Donor_BsnssOffcr_PrsnNm",
+           address_table."BsnssOffcr_PrsnTtlTxt" as "Donor_ BsnssOffcr_PrsnTtlTxt",
+           address_table."BsnssOffcr_PhnNm" as "Donor_ BsnssOffcr_PhnNm" ,
+           address_table."BsnssOffcr_EmlAddrssTxt"  as "Donor_ BsnssOffcr_EmlAddrssTxt" ,
+           address_table."USAddrss_AddrssLn1Txt" as "Donor_AddrssLn1Txt",
+           address_table."USAddrss_AddrssLn2Txt" as "Donor_AddrssLn2Txt",
+           address_table."USAddrss_CtyNm" as "Donor_CtyNm",
+           address_table."USAddrss_SttAbbrvtnCd" as "Donor_SttAbbrvtnCd",
+           address_table."USAddrss_ZIPCd" as "Donor_ZIPCd",
+           address_table."FrgnAddrss_AddrssLn1Txt" as "Donor_FrgnAddrss_AddrssLn1Txt",
+           address_table."FrgnAddrss_AddrssLn2Txt" as "Donor_FrgnAddrss_AddrssLn2Txt",
+           address_table."FrgnAddrss_CtyNm" as "Donor_FrgnAddrss_CtyNm",
+           address_table."FrgnAddrss_PrvncOrSttNm" as "Donor_PrvncOrSttNm",
+           address_table."FrgnAddrss_CntryCd" as "Donor_CntryCd",
+	        return_PFGrntOrCntrbtnPdDrYr.*
+	       
+			INTO TABLE pfgrants
+				FROM return_PFGrntOrCntrbtnPdDrYr
+				LEFT JOIN address_table ON return_PFGrntOrCntrbtnPdDrYr.object_id = address_table.object_id
+				AND return_PFGrntOrCntrbtnPdDrYr.ein = address_table.ein;
+	
+Copy to local 
+
+	\copy pfgrants to '/tmp/pfgrants.csv' with csv header;
+
