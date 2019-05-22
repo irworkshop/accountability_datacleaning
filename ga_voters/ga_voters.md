@@ -10,6 +10,7 @@ from ga_voters
 group by 1
 order by 1`
 
+Using a mix of check against other data, openref and viewing, get the city_lookup table as clean as we can.
 
 **Add spaces in main table for new fields:**
 
