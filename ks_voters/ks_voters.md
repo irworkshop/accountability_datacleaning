@@ -10,7 +10,9 @@ from ks_voters
 group by 1
 order by 1`
 
-Insert spaces for clean city and year (of registration date)
+Using a mix of check against other data, openref and viewing, get the city_lookup table as clean as we can.
+
+**Insert fields for clean city and year (of registration date)**
 
 `ALTER TABLE ks_voters ADD COLUMN RES_CITY_CLEAN;
 ALTER TABLE ks_voters ADD COLUMN YEAR;`
