@@ -12,7 +12,7 @@ order by 1`
 
 Using a mix of check against other data, openref and viewing, get the city_lookup table as clean as we can.
 
-**Add spaces in main table for new fields:**
+**Add fields in main table for new fields:**
 
 `ALTER TABLE ga_voters ADD COLUMN RESIDENCE_CITY_CLEAN;
 ALTER TABLE ga_voters ADD COLUMN ZIP5;
