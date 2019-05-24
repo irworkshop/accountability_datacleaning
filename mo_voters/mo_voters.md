@@ -2,6 +2,8 @@
 
 Data was acquired via public records request in tab-delimited format.
 
+Record count: 4,210,231
+
 **Add year and ZIP5 columns:**
 
 `alter table mo_voters add column DOBYEAR;
