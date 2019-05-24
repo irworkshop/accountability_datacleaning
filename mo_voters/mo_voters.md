@@ -19,7 +19,7 @@ from mo_voters
 group by 1
 order by 1`
 
-There are two ZIP codes that appear to be IA zips for Davis City. There also are 719 records with XXXXX as ZIP.
+Two ZIP codes are for IA zips for Davis City. There also are 719 records with XXXXX as ZIP.
 
 **Check cities for consistency**
 
