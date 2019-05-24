@@ -4,9 +4,12 @@ Combine 254 county fixed-length text files into one
 Uses SPSS syntax for now
 
 Data was obtained via public records request through a consortium of media.
+
 count20181218042000_20190073.txt provides counts of each individual county file and the total. See tx_voter_layout.pdf for
+
 record layout - note that it does not match exactly. Party is an included field, but not provided in public release.
 
+Record count: 8,409,940
 
 **Import data**
 
