@@ -1,6 +1,8 @@
 ## Georgia voter processing notes
 
-This data was obtained Jan. 2019 via public records request.
+This data was obtained Jan. 2019 via public records request in csv formal.
+
+Record count: 6,947,649
 
 **Fix cities by creating a lookup table of clean cities:**
 
