@@ -1,0 +1,82 @@
+---
+title: "NJ Data Diary"
+author: "Kiernan Nicholls"
+date: "5/14/2019"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+library(knitr)
+opts_chunk$set(
+  echo = TRUE,
+  eval = TRUE,
+  warning = FALSE,
+  error = FALSE,
+  collapse = TRUE
+)
+```
+
+## Packages
+
+```{r packages, message=FALSE, warning=FALSE, error=FALSE}
+library(tidyverse)
+library(lubridate)
+library(magrittr)
+library(janitor)
+library(tidylog)
+library(zipcode)
+library(rvest)
+library(here)
+```
+
+## Read
+
+The data is saved across many files, some seperated with tabs, others with
+commas. They can all be read with `purrr::map()` and `readr::read_delim()` and
+combined into a single tibble with `dplyr::bind_rows()`.
+
+```{r}
+nj_leg_raw <- list.files(
+  full.names = TRUE,
+  path = here(
+    "money-politics",
+    "campaign-finance",
+    "data",
+    "NJ",
+    "raw",
+    "ALL_legislative"
+  )
+)
+
+nj_leg_tabs <- map(
+  nj_leg_raw[-c(16, 17, 18, 31, 32, 33)], 
+  read_delim,
+  delim = "\t",
+  escape_double = FALSE,
+  locale = locale(tz = "US/Eastern"),
+  col_types = cols(
+    .default = col_character(),
+    CONT_DATE = col_date(format = "%m/%d/%Y"),
+    CONT_AMT = col_double()
+  )
+)
+
+nj_leg_coms <- map(
+  nj_leg_raw[c(16, 17, 18, 31, 32, 33)], 
+  read_delim,
+  delim = ",",
+  escape_double = FALSE,
+  locale = locale(tz = "US/Eastern"),
+  col_types = cols(
+    .default = col_character(),
+    CONT_DATE = col_date(format = "%m/%d/%Y"),
+    CONT_AMT = col_double()
+  )
+)
+
+nj_leg <- bind_rows(nj_leg_tabs, nj_leg_coms)
+rm(nj_leg_tabs, nj_leg_coms)
+```
+

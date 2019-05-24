@@ -1,0 +1,791 @@
+---
+title: "Data Diary"
+subtitle: "Washington Contributions"
+author: "Kiernan Nicholls"
+date: "`r format(Sys.time())`"
+output:
+  html_document: 
+    df_print: tibble
+    fig_caption: yes
+    highlight: tango
+    keep_md: yes
+    max.print: 32
+    toc: yes
+    toc_float: no
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+library(knitr)
+opts_chunk$set(
+  echo = TRUE,
+  warning = FALSE
+)
+options(width = 99)
+```
+
+## Objectives
+
+1. How many records are in the database?
+1. Check for duplicates
+1. Check ranges
+1. Is there anything blank or missing?
+1. Check for consistency issues
+1. Create a five-digit ZIP Code called ZIP5
+1. Create a YEAR field from the transaction date
+1. For campaign donation data, make sure there is both a donor AND recipient
+
+## Data
+
+Retrieved from [data.wa.gov][01], uploaded by the 
+[Public Disclosure Commission][02]. Created December 16, 2016. Updated on 
+`r format(Sys.time(), "%b %d, %Y")`.
+
+[01]: https://data.wa.gov/Politics/Contributions-to-Candidates-and-Political-Committe/kv7h-kjye/data
+[02]: https://www.pdc.wa.gov/
+
+### About
+
+> This dataset contains cash and in-kind contributions, (including unpaid loans) made to Washington
+State Candidates and Political Committees for the last 10 years as reported to the PDC on forms C3,
+C4, Schedule C and their electronic filing equivalents. It does not include loans which have been
+paid or forgiven, pledges or any expenditures.
+> 
+> For candidates, the number of years is determined by the year of the election, not necessarily
+the year the contribution was reported. For political committees, the number of years is determined
+by the calendar year of the reporting period.
+>
+> Candidates and political committees choosing to file under "mini reporting" are not included in
+this dataset. See WAC 390-16-105 for information regarding eligibility.
+>
+> This dataset is a best-effort by the PDC to provide a complete set of records as described
+herewith and may contain incomplete or incorrect information. The PDC provides access to the
+original reports for the purpose of record verification.
+>
+> Descriptions attached to this dataset do not constitute legal definitions; please consult RCW
+42.17A and WAC Title 390 for legal definitions and additional information political finance
+disclosure requirements.
+>
+> CONDITION OF RELEASE: This publication constitutes a list of individuals prepared by the
+Washington State Public Disclosure Commission and may not be used for commercial purposes. This
+list is provided on the condition and with the understanding that the persons receiving it agree to
+this statutorily imposed limitation on its use. See RCW 42.56.070(9) and AGO 1975 No. 15.
+
+### Variables
+
+The Public Disclosure Commission [provides definitions][03] for each of the variables in the data
+set:
+
+* `id`: Corresponds to a single record. Uniquely identifies a single row When combined with the
+origin value.
+* `report_number`: Used for tracking the individual form. Unique to the report it represents.
+* `origin`: The form, schedule or section where the record was reported.
+* `filier_id`: The unique id assigned to a candidate or political committee. Consistent across
+election years.
+* `type`: Indicates if this record is for a candidate or a political committee
+* `first_name`: First name, as reported by the filer. Potentially inconsistent.
+* `last_name`: Last name or full name of a filing entity that is registered under one name.
+* `office`: The office sought by the candidate
+* `legislative_district`: The Washington State legislative district
+* `position`: The position associated with an office with multiple seats.
+* `party`: "Major party" declaration
+* `ballot_number`: Initiative ballot number is assigned by the Secretary of State
+* `for_or_against`: Ballot initiative committees either supports or opposes
+* `jurisdiction`: The political jurisdiction associated with the office of a candidate
+* `election_year`: Election year for candidates and single election committees. Reporting year for
+continuing committees.
+* `amount`: The amount of the cash or in-kind contribution (or adjustment).
+* `cash_or_in_kind`: What kind of contribution, if known.
+* `receipt_date`: The date that the contribution was received.
+* `description`: The reported description of the transaction. This field does not apply to cash
+contributions
+* `primary_general`: Candidates must specify whether a contribution is designated for the primary
+or the general election.
+* `code`: Type of entity that made the contribution.
+* `contributor_name`:	The name of the individual _or_ organization making the contribution as
+reported (where total >$25).
+* `contributor_address`: The street address of the individual or organization making the
+contribution.
+* `contributor_city`: The city of the individual or organization making the contribution.
+* `contributor_state`: The state of the individual or organization making the contribution.
+* `contributor_zip`: The US zip code of the individual or organization making the contribution.
+* `contributor_occupation`: The occupation of the (individual) contributor (where total >$100).
+* `contributor_employer_name`: The name of the contributor's employer.
+* `contributor_employer_city`: City of the contributor's employer.
+* `contributor_employer_state`: State of the contributor's employer.
+* `url`: A link to a PDF version of the original report as it was filed to the PDC.
+* `contributor_location`: The geocoded location of the contributor as reported. Quality dependent
+on how many of the address fields are available and is calculated using a third-party service.
+
+[03]: https://data.wa.gov/Politics/Contributions-to-Candidates-and-Political-Committe/kv7h-kjye
+
+## Packages
+
+This data set will be collected, explored, and saved using the free and open R packages below.
+
+```{r libs, message=FALSE, warning=FALSE, error=FALSE}
+# install.packages("pacman")
+pacman::p_load(
+  tidyverse, 
+  lubridate, 
+  magrittr, 
+  janitor, 
+  zipcode, 
+  here
+)
+```
+
+## Read
+
+The source file is updated, daily so reproducing findings precisely is unlikely. Code here has been
+generalized as much as possible. The data in this document was retrieved the day it was created
+(see above).
+
+If _today's_ file exists in the project directory, read it into R; otherwise, retrieve the file
+directly from the Washington State website. This is done using `readr::read_csv()`
+
+The `receipt_date` strings are converted from their original format (MM/DD/YYYY) to ISO-8601 format
+(YYYY-MM-DD) as to be handled as date objects in R. The contribution `amount` values are read as
+doubles. All other variables are handled as character strings.
+
+```{r read_csv}
+# create path to file
+wa_file <- here("wa_contribs", "data", "Contributions_to_Candidates_and_Political_Committees.csv")
+# if a recent version exists where it should, read it
+if (file.exists(wa_file) & as_date(file.mtime(wa_file)) == today()) {
+  wa <- read_csv(
+    file = wa_file,
+    na = c("", "NA", "N/A"),
+    col_types = cols(
+      .default = col_character(),
+      amount = col_double(),
+      receipt_date = col_date(format = "%m/%d/%Y")
+    )
+  )
+} else { # otherwise read it from the internet
+  wa <- read_csv(
+    file = "https://data.wa.gov/api/views/kv7h-kjye/rows.csv?accessType=DOWNLOAD",
+    na = c("", "NA", "N/A"),
+    col_types = cols(
+      .default = col_character(),
+      amount = col_double(),
+      receipt_date = col_date(format = "%m/%d/%Y")
+    )
+  )
+}
+```
+
+## Explore
+
+There are `r nrow(wa)` records of `r length(wa)` variables. There are no duplicate rows.
+However, without the unique `id` variable, there are `nrow(wa) - nrow(distinct(select(wa, -id)))` 
+rows with repeated information.
+
+```{r dims}
+glimpse(wa)
+nrow(distinct(wa)) == nrow(wa)
+wa %>% 
+  select(-id) %>% 
+  distinct() %>% 
+  nrow() %>% 
+  subtract(nrow(wa))
+```
+
+Variables range in their degree of distinctness. For example, There are only 10 distinct value of
+`origin` and 97 for `ballot_number`; however, there are understandably nearly half a million
+distinct values for `contributor_location` and even more for `contributor_name`.
+
+```{r n_distinct}
+wa %>% 
+  map(n_distinct) %>% 
+  unlist() %>% 
+  enframe(name = "variable", value = "n_distinct") %>% 
+  mutate(prop_distinct = round(n_distinct / nrow(wa), 4)) %>% 
+  print(n = length(wa))
+```
+
+Variables also range in their degree of missing values. Key variables like `report_number` or
+`code` have 0 missing values, while others like `first_name` or `office` are missing over half
+(likely PAC/Corp. contributions and issue contributions respectively).
+
+```{r}
+count_na <- function(v) sum(is.na(v))
+wa %>% map(count_na) %>% 
+  unlist() %>% 
+  enframe(name = "variable", value = "n_na") %>% 
+  mutate(prop_na = n_na / nrow(wa)) %>% 
+  print(n = length(wa))
+```
+
+We can use `janitor::tablyl()` and `base::summary()` to explore the least distinct and continuous
+variables.
+
+```{r}
+wa %>% tabyl(origin) %>% arrange(desc(n))
+
+wa %>% tabyl(type) %>% arrange(desc(n))
+
+wa %>% tabyl(party) %>% arrange(desc(n))
+
+wa %>% tabyl(for_or_against) %>% arrange(desc(n))
+
+wa %>% tabyl(election_year)
+
+wa %>% tabyl(cash_or_in_kind) %>% arrange(desc(n))
+
+wa %>% tabyl(cash_or_in_kind) %>% arrange(desc(n))
+
+wa %>% tabyl(primary_general) %>% arrange(desc(n))
+
+wa %>%  tabyl(code) %>% arrange(desc(n))
+
+wa %>% tabyl(contributor_state) %>% arrange(desc(n))
+```
+
+```{r log_amount_plot, fig.width=10, fig.align="center", fig.keep="none"}
+wa %>% 
+  ggplot(mapping = aes(x = amount)) +
+  geom_histogram(bins = 30) +
+  scale_y_log10() +
+  scale_x_log10(labels = scales::dollar, 
+                breaks = c(1, 10, 100, 1000, 100000, 1000000)) +
+  facet_wrap(~cash_or_in_kind, ncol = 1) +
+  labs(title = "Logarithmic Histogram of Contribution Amounts",
+       x = "Dollars Contributed",
+       y = "Number of Contributions")
+```
+
+There are `r sum(wa$amount < 0)` records with `amount` values less than zero, which seem to
+indicate corrections or refunds.
+
+The median negative amount is only \$100, but `r sum(wa$amount < -10000)` are less than $10,000 and
+one is a correction of \$2.5 million. That report can be found at the URL below.
+
+```{r summary_amount}
+summary(wa$amount)
+summary(wa$amount[wa$amount < 0])
+wa$url[wa$amount == min(wa$amount)]
+```
+
+There seems to be a number of broken date strings in the `receipt_date` variable. The earliest and
+latest dates do not make sense. The earliest date was listed on a form from 2007, but records the
+receiving date as 1900.
+
+```{r date_dims}
+min(wa$receipt_date, na.rm = TRUE)
+max(wa$receipt_date, na.rm = TRUE)
+sum(is.na(wa$receipt_date))
+```
+
+There should only be reports for the last 10 years, but over 100,000 are more than 12 years old.
+There are 15 records with dates from before the year 2000. There are also 34 record with receipt
+dates more than a year from today.
+
+```{r n_weird_dates}
+wa %>% 
+  filter(receipt_date < "2000-01-01") %>%
+  arrange(receipt_date) %>% 
+  select(
+    id, 
+    receipt_date, 
+    election_year, 
+    contributor_name, 
+    amount, filer_name
+  )
+
+wa %>% 
+  filter(receipt_date > today() + years(1)) %>%
+  arrange(desc(receipt_date)) %>% 
+  select(
+    id, 
+    receipt_date, 
+    election_year, 
+    contributor_name, 
+    amount, filer_name
+  )
+```
+
+Looking at the original report source for a few of them (found through the `url` value), we can see
+normal looking contribution dates alongside the weird ones. Writing "06/06/14" as "06/06/41" is an
+example of a likely error.
+
+There are nearly 200 records with egregious dates older than 1990 or from the future. I will flag
+these dates with a new `date_flag` logical variable.
+
+```{r weird_dates}
+wa <- wa %>% mutate(date_flag = receipt_date < "1990-01-01" | receipt_date > today())
+```
+
+## Clean
+
+We can now clean the data to reach our objectives. All original columns and rows are preserved. New
+cleaned columns are suffixed with `*_clean`.
+
+### Mutate
+
+Add new variables using `dplyr::mutate()` and string functions from: `zipcode`, `lubridate`, and
+`stringr`.
+
+```{r add_vars}
+wa <- wa %>% 
+  # create needed cols
+  mutate(zip5_clean = clean.zipcodes(contributor_zip)) %>% 
+  mutate(year_clean = year(receipt_date)) %>%
+  # initialize other cols
+  mutate(
+    address_clean = str_remove(contributor_address, "[:punct:]"),
+    city_clean    = contributor_city,
+    state_clean   = contributor_state
+  )
+```
+
+### ZIP Codes
+
+After `zipcode::clean.zipcodes()` runs, there are still,
+`r sum(nchar(wa$zip5_clean) < 5, na.rm = T)` ZIP codes less than 5 characters. We can make these
+`NA` rather than try to figure them out. We can also make some common erroneous ZIPs `NA`.
+
+```{r}
+n_distinct(wa$contributor_zip)
+n_distinct(wa$zip5_clean)
+sum(nchar(wa$zip5_clean) < 5, na.rm = T)
+unique(wa$zip5_clean[nchar(wa$zip5_clean) < 5 & !is.na(wa$zip5_clean)])
+wa$zip5_clean[nchar(wa$zip5_clean) < 5 & !is.na(wa$zip5_clean)] <- NA
+wa$zip5_clean <- wa$zip5_clean %>% na_if("00000|11111|99999")
+```
+
+### Sate Abbreviations
+
+There are `r n_distinct(wa$contributor_state)` distinct state abbreviations in the
+`contributor_state` variable.
+
+```{r}
+n_distinct(wa$contributor_state)
+```
+
+The `zipcode` package contains a useful list of zip codes and their accompanying states and cities.
+This package has a list of state abbreviations that includes armed forces postal addresses and
+American territories. We can add Canadian provinces to make it even more useful (compared to
+`base::state.abb`).
+
+```{r make_valid_abbs, collapse=TRUE}
+data("zipcode")
+zipcode <- 
+  tribble(
+    ~city,           ~state,
+    "Toronto",       "ON",
+    "Quebec City",   "QC",
+    "Montreal",      "QC",
+    "Halifax",       "NS",
+    "Fredericton",   "NB",
+    "Moncton",       "NB",
+    "Winnipeg",      "MB",
+    "Victoria",      "BC",
+    "Vancouver",     "BC",
+    "Surrey",        "BC",
+    "Richmond",      "BC",
+    "Charlottetown", "PE",
+    "Regina",        "SK",
+    "Saskatoon",     "SK",
+    "Edmonton",      "AB",
+    "Calgary",       "AB",
+    "St. John's",    "NL") %>% 
+  bind_rows(zipcode) %>%
+  mutate(city = str_to_upper(city) %>% str_remove_all("[:punct:]")) %>% 
+  arrange(zip)
+
+valid_abbs   <- sort(unique(zipcode$state))
+invalid_abbs <- setdiff(wa$contributor_state, valid_abbs)
+```
+
+From this list, we know there are `r length(valid_abbs)` valid abbreviations across the 50 states,
+DC, territories, military bases, and Canadian provinces.
+
+There are `r sum(!(na.omit(wa$contributor_state) %in% valid_abbs))` records with 
+`r length(setdiff(wa$contributor_state, valid_abbs))` invalid abbreviations.
+
+```{r see_invalid_abbs}
+wa %>% 
+  filter(!(contributor_state %in% valid_abbs)) %>% 
+  group_by(contributor_state) %>% 
+  count() %>%
+  arrange(desc(n))
+```
+
+"ZZ" is used to represent contributions from foreign countries. Some Canadian contributions have
+valid `contributor_state` values (e.g., "BC", "ON"). There are `r sum((na.omit(wa$contributor_state
+== "ZZ")))` "ZZ" records with `r n_distinct(wa$contributor_city[wa$contributor_state == "ZZ"])`
+distinct `contributor_city` values.
+
+```{r see_zz_city}
+wa %>%
+  filter(contributor_state == "ZZ") %>% 
+  pull(contributor_city) %>% 
+  unique()
+```
+
+```{r fix_zz_state}
+wa$state_clean[wa$contributor_state == "ZZ" & 
+                 wa$contributor_city == "VANCOUVER BC" & 
+                   !is.na(wa$contributor_state)] <- "BC"
+
+wa$state_clean[wa$contributor_state == "ZZ" & 
+                 wa$contributor_city == "RICHMOND, BC" & 
+                   !is.na(wa$contributor_state)] <- "BC"
+
+wa$state_clean[wa$contributor_state == "ZZ" & 
+                 wa$contributor_city == "SURREY BC" & 
+                   !is.na(wa$contributor_state)] <- "BC"
+```
+
+Once those "ZZ" values are made into Canadian abbreviations, we can make the rest of the "ZZ"
+values `NA`.
+
+```{r fix_xx_state}
+wa$state_clean <- wa$state_clean %>% na_if("ZZ")
+wa$state_clean <- wa$state_clean %>% na_if("XX") # also foreign
+```
+
+All the records with a `state_clean` value of `,` have a `contributor_city` value of "SEATTLE",
+so we can make them all "WA".
+
+```{r fix_comma_state}
+if (
+  wa %>% 
+  filter(state_clean == ",") %>% 
+  pull(contributor_city) %>% 
+  unique() %>% 
+  equals("SEATTLE")
+) {
+  wa$state_clean[wa$state_clean == "," & !is.na(wa$state_clean)] <- "WA"
+}
+```
+
+Most of the records with a `contributor_state` value of "RE" have "REQUESTED" in the fields as a
+placeholder. We will have to make them `NA`. Two records can be fixed manually based on their
+`contributor_city` value.
+
+```{r fix_re_state}
+wa %>% 
+  filter(address_clean == "REQUESTED") %>%
+  filter(state_clean == "RE") %>% 
+  select(
+    id,
+    contributor_name,
+    contributor_address,
+    contributor_state,
+    contributor_zip,
+    amount,
+    filer_name
+  )
+
+wa$state_clean[wa$address_clean == "REQUESTED" & wa$state_clean == "RE"] <- NA
+
+wa %>% 
+  filter(state_clean == "RE") %>% 
+  pull(contributor_city) %>% 
+  unique()
+
+# if the city is REDMOND and state RE, make WA
+wa$state_clean[wa$state_clean == "RE" & 
+                 wa$city_clean == "REDMOND" & 
+                  !is.na(wa$state_clean)] <- "WA"
+
+# if the city is LAKE FOREST PARK and state RE, make WA
+wa$state_clean[wa$state_clean == "RE" & 
+                 wa$city_clean == "LAKE FOREST PARK" & 
+                  !is.na(wa$state_clean)] <- "WA"
+
+```
+
+Many of the records with a `contributor_state` value of "OT" seem to be located in Australia, and
+all of them appear to be from foreign countries. Perhaps "OT" is an abbreviation for "Overseas
+Territory"? We can make these values `NA`.
+
+```{r fix_ot_state}
+wa %>% 
+  filter(state_clean == "OT") %>% 
+  select(
+    contributor_name,
+    contributor_address,
+    contributor_city,
+    contributor_state,
+    contributor_zip,
+    filer_name
+  )
+
+wa$state_clean %<>% na_if("OT")
+```
+
+There are 26 records with numeric state abbreviations. Using the `contributor_city` and
+`contributor_zip` variables and comparing those in our `zipcode` table, we can see these should all
+have state abbreviations of "WA."
+
+```{r fix_digit_state}
+if (
+  wa %>% 
+  filter(state_clean %>% str_detect("[\\d+]")) %>% 
+  left_join(
+    y = (zipcode %>% 
+      select(city, zip, state) %>% 
+      drop_na()), 
+    by = c("zip5_clean" = "zip")) %>%
+  pull(state) %>%
+  na.omit() %>% 
+  unique() %>% 
+  equals("WA")
+) {
+  wa$state_clean[str_detect(wa$state_clean, "[\\d+]") & !is.na(wa$state_clean)] <- "WA"
+}
+```
+
+There are `r sum(wa$state_clean == "OL", na.rm = T)` records with a `contributor_state` value of
+"OL." Each of these records has a `contributor_state` value of "OLYMPIA" and a `contributor_zip`
+value in Washington. We can give all these records a `state_clean` value of "WA."
+
+One is from Selfoss, a city in Iceland. The `contributor_name` value for that record has many
+missing characters, as one from Iceland would. We will make that state record `NA`.
+
+```{r fix_ol_state}
+wa %>% 
+  filter(state_clean == "OL") %>% 
+  pull(city_clean) %>% 
+  unique()
+
+wa$state_clean[wa$state_clean == "OL"] <- "WA"
+wa$state_clean[wa$city_clean == "SELFOSS"] <- NA
+```
+
+After fixing these most common `contributor_state` errors, there are a little over 100 records
+still with invalid state abbreviations. Looking at the city names, most of these abbreviations
+stand for other countries and can be made `NA`. We can fix records with `contributor_city` values
+that look American.
+
+```{r see_invalid_state_city}
+sum(na.omit(wa$state_clean) %in% invalid_abbs)
+
+wa %>% 
+  filter(state_clean %in% invalid_abbs) %>% 
+  filter(!is.na(state_clean)) %>% 
+  pull(city_clean) %>% 
+  unique()
+```
+
+There are over 50 records with a `contributor_city` value of "SEATTLE" and Washington state ZIP
+codes with invalid `contributor_state` values. We can make these "WA".
+
+```{r fix_seattle_state}
+seattle_ids <- wa %>%
+  filter(city_clean == "SEATTLE") %>% 
+  filter(state_clean %in% invalid_abbs) %>% 
+  select(
+    id, 
+    contributor_name,
+    address_clean,
+    city_clean,
+    state_clean,
+    zip5_clean,
+    filer_name) %>% 
+  left_join(
+    (zipcode %>% select(city, zip, state) %>% drop_na()), 
+    by = c("zip5_clean" = "zip", "city_clean" = "city")) %>% 
+  pull(id)
+
+wa$state_clean[wa$id %in% seattle_ids] <- "WA"
+rm(seattle_ids)
+```
+
+This record should be placed in Washington, D.C.
+
+```{r fix_di_state}
+wa$state_clean[wa$state_clean == "DI" & 
+                 wa$city_clean == "WASHINGTON" & 
+                   wa$zip5_clean == "20016" & 
+                     !is.na(wa$state_clean)] <- "DC"
+```
+
+Finally, we can make all remaining invalid abbreviations `NA`.
+
+```{r make_invalid_na, collapse=TRUE}
+n_distinct(wa$state_clean)
+length(valid_abbs)
+sum(na.omit(wa$state_clean) %in% invalid_abbs)
+wa$state_clean[wa$state_clean %in% invalid_abbs] <- NA
+```
+
+This brings our total distinct abbreviations to `r n_distinct(wa$state_clean)`. There are records
+from every state except for American Samoa, the Marshall Islands, and Palau.
+
+```{r final_diff, collapse=TRUE}
+n_distinct(wa$state_clean)
+setdiff(valid_abbs, sort(unique(wa$state_clean)))
+```
+
+### Clean City
+
+Cities are the most challenging. There are `r n_distinct(wa$contributor_city)` distinct values of
+`contributor_city`. There are `r length(zipcode$city[zipcode$state == "WA"])` Washington state
+cities in the fairly comprehensive `zipcode` list. Since only 5% of records are from outside the
+state, there are clearly many misspelled `contributor_city` values.
+
+```{r confirm_misspell}
+n_distinct(wa$contributor_city)
+wa %>% tabyl(state_clean) %>% arrange(desc(n))
+```
+
+Looking at just values starting with "SEAT", we can see how many different ways people can misspell
+their city.
+
+```{r view_seat_bad}
+unique(wa$city_clean[str_detect(wa$city_clean, "SEAT")])
+```
+
+There are `r length(unique(wa$city_clean[!(wa$city_clean %in% zipcode$city)]))` of 
+`contributor_city` values not contained in the `zipcodes` data base; not all are misspellings, but
+there are still too many to correct by hand.
+
+```{r count_weird_city}
+length(setdiff(wa$city_clean, zipcode$city))
+```
+
+I am going to create a separate table of spelling corrections. We can then join this table onto
+the original data to create a new column of correct city names. The bulk of the work will be done
+using key collision and ngram fingerprint algorithms from the open source tool Open Refine. These
+algorithms are ported to R in the package `refinr`. These tools are able to correct most of the 
+common errors, but I will be double checking the table and making changes in R.
+
+There is a separate file in `wa_contribs/code/` which creates the lookup table needed to correct
+spelling. That file has more detailed comments on the process. Below you can see some of the
+changes made.
+
+```{r source_refine}
+source(here("wa_contribs", "code", "fix_wa_city.R"))
+sample_n(city_fix_table, 10)
+```
+
+Join the original data set with the table of corrected city spellings. For every record, 
+make `city_clean` either the original spelling or the corrected spelling.
+
+```{r join_refine}
+wa <- wa %>% 
+  left_join(city_fix_table, by = c("zip5_clean", "city_clean", "state_clean")) %>% 
+  mutate(city_clean = ifelse(is.na(city_fix), city_clean, city_fix)) %>% 
+  select(-city_fix)
+```
+
+## Confirm
+
+The key variables for this project are:
+
+* `id` and `record_number` to identify the form
+* `contributor_name` for who is giving money
+* `amount` for how much was given
+* `filer_name` for who it was given to
+
+We need to ensure every row in the cleaned table contains that information.
+
+```{r check_dupes}
+wa %>% 
+  # select for the important vars
+  select(
+    id, 
+    report_number, 
+    contributor_name, 
+    amount, 
+    filer_name) %>% 
+  # drop any row with missing data
+  drop_na() %>% 
+  # count the rows
+  nrow() %>% 
+  # check if equal to total total
+  subtract(nrow(wa))
+```
+
+The cleaned data set has 27 rows missing key information. Many of them are from a single auction,
+held on April 29, 2008. Looking at the report for that auction, these auction rows were items
+donated _by_ the Washington State Republican part that did not sell (hence the \$0 `amount`
+values). Since there was no buyer, there is no `contributor_name` value.
+
+I will flag these reports with a new `missing_flag` logical variable.
+
+```{r flag_missing}
+wa %>% 
+  select(
+    id, 
+    report_number,
+    contributor_name, 
+    amount, 
+    filer_name) %>% 
+  map(count_na) %>% 
+  unlist() %>% 
+  enframe(name = "variable", value = "n_na") %>% 
+  mutate(prop_na = n_na / nrow(wa)) %>% 
+  print(n = length(wa))
+
+wa %>% 
+  # select for the important vars
+  select(
+    id, 
+    report_number,
+    contributor_name, 
+    amount, 
+    filer_name,
+    receipt_date) %>% 
+  filter(is.na(contributor_name)) %>% 
+  print(n = 27)
+
+wa <- wa %>% mutate(missing_flag = is.na(contributor_name))
+```
+
+## Conclusion
+
+The final data set now meets all our objectives:
+
+1. There are `r nrow(wa)` records.
+1. There are no duplicated records.
+1. `amount` has a large range due to corrections, while `receipt_date` has a few
+erroneous values do to entry errors (flagged with `date_flag`).
+1. Missing data varies by nature of variable.
+1. The `state_clean`, `city_clean`, and `address_clean` are all consistently uppercase without punctuation. Many spelling errors have been corrected in the first two.
+1. The `zip5_clean` variable contains clean ZIP codes.
+1. the `year_clean` variable contains clean receipt year values.
+1. The 27 records missing contributor names have been flagged with the
+`missing_flag` variable.
+
+The overall number of distinct values has been reduced, allowing for better searching.
+
+```{r confirm_n_distinct, collapse=TRUE}
+n_distinct(wa$address_clean) - n_distinct(wa$contributor_address)
+n_distinct(wa$city_clean)    - n_distinct(wa$contributor_city)  
+n_distinct(wa$state_clean)   - n_distinct(wa$contributor_state) 
+n_distinct(wa$zip5_clean)    - n_distinct(wa$contributor_zip)   
+```
+
+We can write two versions of the document. The first has all original columns along with cleaned
+data in the `*_clean` columns. The second remove the original columns for file size reasons.
+
+```{r write_csv, eval=FALSE}
+# all data, original and cleaned
+wa %>% write_csv(
+  path = here("wa_contribs", "data", "wa_contribs_all.csv"),
+  na = "",
+  col_names = TRUE,
+  quote_escape = "backslash"
+)
+
+wa %>%
+  # remove the original contributor_* columns for space
+  select(
+    -contributor_address,
+    -contributor_city,
+    -contributor_state,
+    -contributor_zip
+  ) %>% 
+  write_csv(
+    path = here("wa_contribs", "data", "wa_contribs_clean.csv"),
+    na = "",
+    col_names = TRUE,
+    quote_escape = "backslash"
+  )
+```
