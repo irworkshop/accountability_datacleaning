@@ -1,6 +1,7 @@
 ## Kansas voter registration processing notes
 
 Data obtained via public records request in January 2019.
+Record count: 1,842,596
 
 **Created city_lookup table to clean cities. All cities longer than 9 characters were cut off.**
 
