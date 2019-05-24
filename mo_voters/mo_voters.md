@@ -23,10 +23,10 @@ There are two ZIP codes that appear to be IA zips for Davis City. There also are
 
 **Check cities for consistency**
 
-select ResidentialCity, count(*)
+`select ResidentialCity, count(*)
 from mo_voters
 group by 1
-order by 1
+order by 1`
 
 
 **Export table**
