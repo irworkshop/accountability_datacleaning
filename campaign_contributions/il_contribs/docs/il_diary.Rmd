@@ -1,0 +1,540 @@
+---
+title: "IL Data Diary"
+author: "Kiernan Nicholls"
+date: "5/14/2019"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+library(knitr)
+opts_chunk$set(
+  echo = TRUE,
+  warning = FALSE
+)
+options(width = 99)
+```
+
+## Packages
+
+```{r libs, message=FALSE, warning=FALSE, error=FALSE}
+# install.packages("pacman")
+pacman::p_load(
+  tidyverse,
+  lubridate,
+  magrittr,
+  janitor,
+  zipcode, 
+  here
+)
+```
+
+## Read
+
+The files can be easily located and listed using the `here` package.
+
+```{r list_files}
+il_files <- list.files(
+  full.names = TRUE,
+  path = here("il_contribs", "data", "raw")
+)
+```
+
+### Repair
+
+Three files contain delimiter errors that result in imperfect parsing by `readr::read_delim()`.
+
+* `2010Receipts.txt`
+* `2015Receipts.txt`
+* `2016Receipts.txt`
+
+All together, there are only a dozen broken lines out of a million but they prevent perfect parsing
+of their respective files.
+
+These errors can be removed by reading in the file as a vector of character string using
+`readr::read_lines()`, each element containing the raw text of the line.
+
+Broken lines are combined into their proper form and the leftovers are removed.
+
+The repaired vectors are then read as rectangles with `readr::read_delim()` making each element a
+row and splitting each row into columns by `\t`.
+
+```{r fix_il_10}
+il_broken_10 <- read_lines(file = il_files[3])
+
+# Where there is a erronous line break, combine the two false lines
+il_broken_10[[98510]] <- str_c(il_broken_10[98510:98511], collapse = TRUE)
+# Remove leftover line
+il_broken_10 <- il_broken_10[-98511]
+
+il_fixed_10 <- il_broken_10 %>% read_delim(
+  delim = "\t",
+  trim_ws = TRUE,
+  quoted_na = TRUE,
+  escape_double = FALSE,
+  locale = locale(tz = "US/Central"),
+  col_types = cols(
+    .default           = col_character(),
+    RedactionRequested = col_logical(),
+    LoanAmount         = col_double(),
+    Amount             = col_double(),
+    RcvDate            = col_date(format = "%m/%d/%Y"),
+    RptPdBegDate       = col_date(format = "%m/%d/%Y"),
+    RptPdEndDate       = col_date(format = "%m/%d/%Y"))
+)
+
+nrow(il_fixed_10)
+```
+
+```{r fix_il_15}
+il_broken_15 <- read_lines(file = il_files[8])
+
+il_broken_15[12379] <- str_c(il_broken_15[12379] %>% str_sub(end = -2),
+                             il_broken_15[12380],
+                             il_broken_15[12385])
+
+il_broken_15[28155] <- str_c(il_broken_15[28155] %>% str_sub(end = -24),
+                             il_broken_15[28157])
+
+il_broken_15[56695] <- str_c(il_broken_15[56695], il_broken_15[56697])
+
+il_broken_15[56701] <- str_c(il_broken_15[56701], il_broken_15[56703])
+
+il_broken_15[61683] <- str_c(il_broken_15[61683], il_broken_15[61685])
+
+il_broken_15[61686] <- str_c(il_broken_15[61686], il_broken_15[61688])
+
+il_broken_15[61690] <- str_c(il_broken_15[61690], il_broken_15[61692])
+
+il_broken_15[100263] <- str_c(il_broken_15[100263], il_broken_15[100264])
+
+il_broken_15 <- il_broken_15[-c(12380:12385,
+                                28156, 28157,
+                                56696, 56697,
+                                56702, 56703,
+                                61684, 61685,
+                                61687, 61688,
+                                61691, 61692,
+                                100264)]
+
+il_fixed_15 <- il_broken_15 %>%
+  read_delim(
+    delim = "\t",
+    trim_ws = TRUE,
+    quoted_na = TRUE,
+    escape_double = FALSE,
+    locale = locale(tz = "US/Central"),
+    col_types = cols(
+      .default           = col_character(),
+      RedactionRequested = col_logical(),
+      LoanAmount         = col_double(),
+      Amount             = col_double(),
+      RcvDate            = col_date(format = "%m/%d/%Y"),
+      RptPdBegDate       = col_date(format = "%m/%d/%Y"),
+      RptPdEndDate       = col_date(format = "%m/%d/%Y"))
+  )
+
+nrow(il_fixed_15)
+```
+
+```{r fix_il_16}
+il_broken_16 <- read_lines(file = il_files[9])
+
+il_broken_16[12315] <- str_c(il_broken_16[12315],
+                             il_broken_16[12317],
+                             il_broken_16[12319])
+
+# remove erroneous \t column
+il_broken_16[22095] <- il_broken_16[22095] %>%
+  str_split("\t") %>%
+  unlist() %>%
+  extract(-5) %>%
+  str_c(collapse = "\t")
+
+il_broken_16[79935] <- str_c(il_broken_16[79935], il_broken_16[79937])
+
+il_broken_16[118771] <- str_c(il_broken_16[118771], il_broken_16[118772])
+
+il_broken_16 <- il_broken_16[-c(12316:12319, 79936, 79937, 118772)]
+
+il_fixed_16 <- il_broken_16 %>%
+  read_delim(
+    delim = "\t",
+    trim_ws = TRUE,
+    quoted_na = TRUE,
+    escape_double = FALSE,
+    locale = locale(tz = "US/Central"),
+    col_types = cols(
+      .default           = col_character(),
+      RedactionRequested = col_logical(),
+      LoanAmount         = col_double(),
+      Amount             = col_double(),
+      RcvDate            = col_date(format = "%m/%d/%Y"),
+      RptPdBegDate       = col_date(format = "%m/%d/%Y"),
+      RptPdEndDate       = col_date(format = "%m/%d/%Y"))
+  )
+
+nrow(il_fixed_16)
+```
+
+### Automated
+
+They "perfect" files can all be read at once by applying the `readr::read_delim()` function using
+`purrr:map()`.
+
+The files are combined into one with `dplyr::bind_rows()`.
+
+```{r read_good}
+il <- map(
+  
+  # read the unchanged files
+  il_files[-c(3, 8, 9)], 
+  read_delim, 
+  
+  # arguments for read_delim()
+  delim = "\t",
+  trim_ws = TRUE,
+  quoted_na = TRUE,
+  escape_double = FALSE,
+  locale = locale(tz = "US/Central"),
+  col_types = cols(
+    .default           = col_character(),
+    RedactionRequested = col_logical(),
+    LoanAmount         = col_double(),
+    Amount             = col_double(),
+    RcvDate            = col_date(format = "%m/%d/%Y"),
+    RptPdBegDate       = col_date(format = "%m/%d/%Y"),
+    RptPdEndDate       = col_date(format = "%m/%d/%Y"))
+)
+
+# combine back with fixed frames and remove empty col
+il <- il %>% 
+  bind_rows(il_fixed_10, il_fixed_15, il_fixed_16) %>% 
+  select(-X31)
+
+# remove individual objects
+rm(il_broken_10, il_broken_15, il_broken_16)
+rm(il_fixed_10, il_fixed_15, il_fixed_16)
+```
+
+## Explore
+
+```{r confirm_size}
+nrow(il)
+nrow(distinct(il)) == nrow(il) # no duplicate rows
+n_distinct(il$RctNum) == nrow(il) # no duplicate recipt numbers
+```
+
+```{r explore_cols}
+il %>% tabyl(RedactionRequested)
+
+summary(il$RptPdBegDate)
+
+summary(il$LoanAmount)
+
+summary(il$Amount)
+
+il %>% tabyl(D2Part)
+
+il %>% tabyl(ElectionType)
+
+summary(il$RptPdBegDate)
+
+summary(il$RptPdEndDate)
+
+il %>% 
+  tabyl(CmteName) %>% 
+  as_tibble() %>% 
+  arrange(desc(n))
+```
+
+## Clean Data
+
+Objectives:
+
+* Check for consistency issues.
+* Create a five-digit ZIP Code called `ZIP5`. 
+* Create a `YEAR` field from the transaction date.
+* For campaign donation data, make sure there is both a donor _and_ recipient.
+
+### Clean Zip codes
+
+The `zipcode` package contains a `clean.zipcodes()` function that performs a few simple common
+fixes (e.g., makes character, removes spaces, restores leading zeroes). It also contains a data
+frame of all valid US zip codes along with state and city information.
+
+> This data.frame contains city, state, latitude, and longitude for U.S. ZIP codes from the
+CivicSpace Database (August 2004) augmented by Daniel Coven's federalgovernmentzipcodes.us web site
+(updated on January 22, 2012).
+
+```{r zips}
+data("zipcode")
+zipcode <- as_tibble(zipcode)
+
+il$Zip5_clean <- clean.zipcodes(il$Zip) %>% str_sub(1, 5)
+
+il$Zip5_clean %<>% na_if("00000")
+il$Zip5_clean %<>% na_if("11111")
+il$Zip5_clean %<>% na_if("99999")
+```
+
+### Extract Year
+
+```{r year}
+il <- il %>% mutate(Year_clean = year(RcvDate))
+```
+
+### Clean States
+
+There are `length(sort(unique(il$State)))` unique `State` variables. All values are 2 characters or
+less.
+
+```{r states}
+sort(unique(il$State))
+max(nchar(il$State), na.rm = TRUE)
+```
+
+These can be cleaned with comprehensive list of state abbreviations in the `zipcodes` package data
+set. Most of them are case errors, so we will make all values uppercase. We will also add in the
+Canadian province abbreviations.
+
+```{r}
+zipcode <- tribble(
+  ~city,           ~state,
+  "Toronto",       "ON",
+  "Quebec City",   "QC",
+  "Montreal",      "QC",
+  "Halifax",       "NS",
+  "Fredericton",   "NB",
+  "Moncton",       "NB",
+  "Winnipeg",      "MB",
+  "Victoria",      "BC",
+  "Charlottetown", "PE",
+  "Regina",        "SK",
+  "Saskatoon",     "SK",
+  "Edmonton",      "AB",
+  "Calgary",       "AB",
+  "St. John's",    "NL"
+) %>% 
+  bind_rows(zipcode) %>% 
+  arrange(zip)
+```
+
+There are some 60 rows with bad `State` values. By comparing against the data in the `zipcodes`
+package and Google Searching a few `Address1` values, we can fix nearly all of them.
+
+```{r}
+il$State_clean <- str_to_upper(il$State)
+
+bad_states <- setdiff(x = il$State_clean, zipcode$state)
+
+il %>% 
+  filter(!(State_clean %in% zipcode$state)) %>%
+  filter(State_clean != "ZZ") %>% 
+  select(RctNum, Address1, City, State_clean, Zip5_clean) %>%
+  sample_n(10)
+```
+
+Most of the irregular `State` values are `NA`, "ZZ", or "60". Based off the `City` variable, we can
+tell "ZZ" is used to indicate a foreign country. Based off the `Zip` variable, we can tell "60"
+(and "61") should all be "IL" (All Zip codes in Illinois start with 6----).
+
+First, we will check `State_clean` against the `city`, `zip`, and `state` values in the `zipcodes`
+table. From this info, we can fix most bad `State_clean` values.
+
+```{r confirm_bad_states, message=FALSE}
+il %>% 
+  filter(State_clean == "ZZ") %>% 
+  count(City) %>% 
+  arrange(desc(n))
+
+# "60" states have zips in IL
+il %>% 
+  filter(State_clean == "60") %>% 
+  pull(Zip5_clean) %>% 
+  unique() %>% 
+  sort() %in% 
+  zipcode$zip[zipcode$state == "IL"] %>% 
+  mean() %>% 
+  equals(1)
+
+# "61" states have cities in IL with "61---" zips
+il %>% 
+  filter(State_clean == "61") %>% 
+  pull(City) %>% 
+  unique() %in% 
+  zipcode$city[zipcode$state == "IL"]
+
+zipcode$zip[zipcode$city == "Bloomington" & zipcode$state == "IL"]
+zipcode$zip[zipcode$city == "Champaign" & zipcode$state == "IL"]
+
+il %>% 
+  filter(State_clean == "F") %>% 
+  pull(City) %>% 
+  unique()
+
+# "I" states have zipcodes from IL
+il %>% 
+  filter(State_clean == "I") %>% 
+  pull(Zip5_clean) %in% 
+  zipcode$zip[zipcode$state == "IL"] %>% 
+  mean() %>% 
+  equals(1)
+
+# "IO" states with zipcodes place them in IA
+il %>% 
+  filter(State_clean == "IO", !is.na(Zip5_clean)) %>% 
+  pull(Zip) %in% 
+  zipcode$zip[zipcode$state == "IA"] %>% 
+  mean() %>% 
+  equals(1)
+
+# "NB" states with zipcodes place them in NE
+il %>% 
+  filter(State_clean == "NB", !is.na(Zip5_clean)) %>% 
+  pull(Zip) %in% 
+  zipcode$zip[zipcode$state == "NE"] %>% 
+  mean() %>% 
+  equals(1)
+
+zipcode %>% filter(
+  zip == "62568" | 
+    zip == "60015" | 
+    city == "Mamaroneck"
+) 
+```
+
+Once the correct values are identified, they can be manually replaced.
+
+```{r}
+il$State_clean %<>% str_replace_all("^F$", "FL")
+il$State_clean %<>% str_replace_all("^I$", "IL")
+il$State_clean %<>% str_replace_all("60",  "IL")
+il$State_clean %<>% str_replace_all("61",  "IL")
+il$State_clean %<>% str_replace_all("IO",  "IA")
+il$State_clean %<>% str_replace_all("NB",  "NE")
+il$State_clean %<>% str_replace_all("CH",  "IL")
+il$State_clean %<>% str_replace_all("D.",  "DC")
+il$State_clean %<>% str_replace_all("W9",  "ZZ")
+il$State_clean %<>% str_replace_all("SE",  "ZZ")
+il$State_clean %<>% str_replace_all("CR",  "ZZ")
+il$State_clean %<>% str_replace_all("LL",  "IL")
+il$State_clean %<>% str_replace_all("\`",  "IL")
+```
+
+```{r}
+il %>% 
+  filter(!(State_clean %in% zipcode$state)) %>%
+  filter(State_clean != "ZZ") %>% 
+  select(RctNum, Address1, City, State_clean, Zip5_clean)
+```
+
+The last five rows can be figured out based on a combination of their `Address1` and `City` values.
+
+```{r}
+il$State_clean %<>% str_replace_all("^Q$", "IL")
+il$State_clean %<>% str_replace_all("MY",  "NY")
+il$State_clean %<>% str_replace_all("^A$", "AR")
+il$State_clean %<>% str_replace_all("MM",  "MA")
+il$State_clean %<>% str_replace_all("LO`", "ZZ")
+```
+
+### Clean Cities
+
+Read in a lookup table to correct common City misspellings. Perform a left join and replace bad
+names with the good ones from the table. This cuts the number of distinct city names almost in
+half.
+
+```{r fix_city, collapse=TRUE}
+il_city_lookup <- read_csv(
+  file = here("il_contribs", "data", "il_city_lookup.csv"),
+  col_types = "cc",
+  col_names = c("bad_city", "good_city"),
+  skip = 1
+)
+
+n_distinct(il$City)
+
+# contains all lookup
+mean(il_city_lookup$bad_city %in% il$City) == 1
+
+il <- il %>% 
+  left_join(distinct(il_city_lookup), by = c("City" = "bad_city")) %>%
+  mutate(City_clean = ifelse(
+    test = !is.na(good_city), 
+    yes = str_to_upper(good_city), 
+    no = str_to_upper(City))) %>% 
+  select(-good_city)
+
+n_distinct(il$City_clean)
+```
+
+### Clean Address
+
+First, make all redacted addresses `NA` based off `RedactionRequested`. Then, make useless
+information `NA` based on a custom list of non-valuable patterns.
+
+```{r na_addresses}
+il$Address1_clean <- str_to_upper(il$Address1)
+
+il$Address1_clean[il$RedactionRequested] <- NA
+
+il %>%
+  filter(is.na(Zip)) %>%
+  select(Address1_clean) %>%
+  count(Address1_clean) %>%
+  arrange(desc(n))
+
+na_patterns <- c(
+  "GOOD FAITH",
+  "BEST FAITH",
+  "BEST EFFORT",
+  "GOOD EFFORT",
+  "EFFORT MADE",
+  "NO ADDRESS",
+  "NONE PROVIDED",
+  "PRIVATE ADDRESS",
+  "AWAITING",
+  "FOLLOW UP",
+  "UNKNOWN",
+  "UMKNOWN",
+  "ATTEMPT",
+  "REDACTION",
+  "REQUESTED",
+  "VARIOUS",
+  "MISCELLANEOUS",
+  "DID NOT PROVIDE",
+  "ACTION FUND",
+  "(^|\\b)NA(\\b|$)",
+  "XXX",
+  "WWW"
+)
+
+il$Address1_clean[str_detect(il$Address1_clean, paste(na_patterns, collapse = "|"))] <- NA
+```
+
+## Check Names
+
+There are no rows without both a donor and recipient.
+
+```{r no_dupes}
+il %>% 
+  select(LastOnlyName, CmteName) %>%
+  drop_na() %>% 
+  nrow() %>% 
+  equals(nrow(il))
+```
+
+## Write
+
+```{r write_csv, eval=FALSE}
+write_csv(
+  x = il,
+  path = here("il_contribs", "data", "il_contribs_clean.csv"),
+  na = "",
+  col_names = TRUE,
+  quote_escape = "backslash"
+)
+```
+
