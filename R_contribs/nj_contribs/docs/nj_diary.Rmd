@@ -65,6 +65,16 @@ four separate files:
 
 Each ZIP file contains a number of individual TXT files separated by year.
 
+ELEC makes the following disclaimer at the bottom of the download page:
+
+> The data contained in the ELEC database includes information as reported by candidates and
+committees. Although ELEC has taken all reasonable precautions to prevent data entry errors, the
+possibility that some exist cannot be entirely eliminated. Contributor and Expenditure types are
+coded by ELEC staff members and are subjective according to the information provided by the filer.
+Additionally, this information is subject to change as amendments are filed by candidates and
+committees. For the most up-to-date information, please go to the “Search for Contributions” pages
+to search for the most recent contributor information.
+
 ## Read
 
 Each of the ZIP files can be read using the following process:
@@ -105,7 +115,7 @@ nj_gub_tsv <- map(
   read_tsv,
   col_types = cols(
     .default = col_character(),
-    CONT_DATE = col_datetime("%m/%d/%Y"),
+    CONT_DATE = col_date("%m/%d/%Y"),
     CONT_AMT = col_double()
   )
 )
@@ -116,7 +126,7 @@ nj_gub_csv <- map(
   read_csv,
   col_types = cols(
     .default = col_character(),
-    CONT_DATE = col_datetime("%m/%d/%Y"),
+    CONT_DATE = col_date("%m/%d/%Y"),
     CONT_AMT = col_double()
   )
 )
@@ -150,7 +160,7 @@ nj_leg_tsv <- map(
   read_tsv,
   col_types = cols(
     .default = col_character(),
-    CONT_DATE = col_datetime("%m/%d/%Y"),
+    CONT_DATE = col_date("%m/%d/%Y"),
     CONT_AMT = col_double()
   )
 )
@@ -160,7 +170,7 @@ nj_leg_csv <- map(
   read_csv,
   col_types = cols(
     .default = col_character(),
-    CONT_DATE = col_datetime("%m/%d/%Y"),
+    CONT_DATE = col_date("%m/%d/%Y"),
     CONT_AMT = col_double()
   )
 )
@@ -192,7 +202,7 @@ nj_cw_tsv <- map(
   read_tsv,
   col_types = cols(
     .default = col_character(),
-    CONT_DATE = col_datetime("%m/%d/%Y"),
+    CONT_DATE = col_date("%m/%d/%Y"),
     CONT_AMT = col_number()
   )
 )
@@ -202,7 +212,7 @@ nj_cw_csv <- map(
   read_csv,
   col_types = cols(
     .default = col_character(),
-    CONT_DATE = col_datetime("%m/%d/%Y"),
+    CONT_DATE = col_date("%m/%d/%Y"),
     CONT_AMT = col_double()
   )
 )
@@ -234,7 +244,7 @@ nj_pac_tsv <- map(
   read_tsv,
   col_types = cols(
     .default = col_character(),
-    CONT_DATE = col_datetime("%m/%d/%Y"),
+    CONT_DATE = col_date("%m/%d/%Y"),
     CONT_AMT = col_number()
   )
 )
@@ -244,7 +254,7 @@ nj_pac_csv <- map(
   read_csv,
   col_types = cols(
     .default = col_character(),
-    CONT_DATE = col_datetime("%m/%d/%Y"),
+    CONT_DATE = col_date("%m/%d/%Y"),
     CONT_AMT = col_double()
   )
 )
@@ -257,8 +267,6 @@ rm(nj_pac_files, nj_pac_tsv, nj_pac_csv)
 Since each file has the same structure, we can bind them all into a single data frame.
 
 ```{r bind_all}
-names(nj_gub)
-
 nj <-
   bind_rows(nj_gub, nj_leg, nj_cw, nj_pac, .id = "source") %>%
   clean_names() %>%
@@ -285,35 +293,129 @@ Below is the structure of the data arranged randomly by row. There are `r nrow(n
 glimpse(sample_frac(nj))
 ```
 
-The hard copy files span from `r min(nj$election_year)` to `r max(nj$election_year)`. When you
-filter out those records from before 2008, you are left with much less data.
+The hard files contain data on elections from `r min(nj$election_year)` to `r
+max(nj$election_year)`. When you filter out those contributions made before 2008, about
+$\frac{2}{3}$ of the data is remove.
 
-```{r dims_new}
-nj2 <- nj %>% filter(cont_date > "2008-01-01")
-nrow(nj2)
-min(nj2$cont_date)
-max(nj2$cont_date)
+```{r filter_date}
+nj <- nj %>% filter(cont_date > "2008-01-01")
+nrow(nj)
+min(nj$cont_date)
+max(nj$cont_date)
 ```
 
-There are a little under 2,000 rows with duplicates values in every variable. Over 1% of rows
-are complete duplicates.
+There are `r nrow(nj)-nrow(distinct(nj))` rows with duplicates values in every variable. Over 1% of
+rows are complete duplicates.
 
-```{r}
-nj2 %>% 
+```{r n_distinct}
+nrow(distinct(nj)) - nrow(nj)
+```
+
+The variables vary in their degree of distinctedness.
+
+```{r count_distinct}
+nj %>% 
+  map(n_distinct) %>% 
+  unlist() %>% 
+  enframe(name = "variable", value = "n_distinct") %>% 
+  mutate(prop_distinct = round(n_distinct / nrow(nj), 4)) %>%
+  print(n = length(nj))
+```
+
+There are nearly 1,300 records with values across every variable duplicated at least once more.
+
+```{r get_dupes}
+# create dupes df
+nj_dupes <- nj %>% 
+  get_dupes() %>%
   distinct() %>% 
-  nrow() %>% 
-  subtract(nrow(nj2))
+  mutate(dupe_flag = TRUE)
+
+# show dupes
+nj_dupes %>% 
+  mutate(rec = coalesce(rec_lname, rec_non_ind_name)) %>% 
+  select(
+    cont_lname,
+    cont_amt,
+    cont_date,
+    rec,
+    dupe_count
+  ) %>% 
+  print()
 ```
 
-## Write
+Flag these duplicate rows by joining the duplicate table with the original data.
 
 ```{r}
-write_csv(
-  x = nj2,
-  path = here("nj_contribs", "data", "nj_2008-2013"),
-  na = "",
-  col_names = TRUE,
-  quote_escape = "backslash"
-)
+nj <- left_join(nj, nj_dupes)
+```
+
+Since there is no entirely unique variable to track contributions, we will create one.
+
+```{r rownames_to_column, collapse=TRUE}
+nj <- nj %>% rownames_to_column(var = "id")
+n_distinct(nj$id) == nrow(nj)
+```
+
+
+```{r count_na}
+nj %>% map(function(v) sum(is.na(v))) %>% 
+  unlist() %>% 
+  enframe(name = "variable", value = "n_na") %>% 
+  mutate(prop_na = n_na / nrow(nj)) %>% 
+  print(n = length(nj))
+```
+
+## Clean
+
+### Year
+
+```{r mutate_year}
+# extract year variable
+nj <- nj %>% mutate(year = year(nj$cont_date))
+
+# print all years
+sort(unique(nj$year))
+
+# view futures contribs
+nj %>% 
+  filter(cont_date > today()) %>% 
+  arrange(cont_date) %>% 
+  mutate(cont = coalesce(cont_lname, cont_non_ind_name)) %>% 
+  mutate(rec = coalesce(rec_lname, rec_non_ind_name)) %>% 
+  select(cont_date, cont, cont_amt, rec, source)
+
+# flag future contribs
+nj <- nj %>% 
+  filter(cont_date > today()) %>% 
+  mutate(date_flag = TRUE) %>% 
+  right_join(nj)
+```
+
+### Zips
+
+```{r mutate_zip5}
+data("zipcode")
+nj <- nj %>% mutate(zip5 = clean.zipcodes(cont_zip))
+```
+
+```{r clean_zip5}
+nj %>% 
+  filter(nchar(zip5) != 5) %>% 
+  select(cont_city, cont_state, cont_zip, zip5) %>% 
+  print(n = nrow(.))
+```
+
+### States
+
+```{r clean_state}
+nj %>% 
+  filter(cont_state %in% setdiff(cont_state, c(state.abb, "DC"))) %>% 
+  select(cont_city, cont_state, cont_zip) %>% 
+  filter(!is.na(cont_state)) %>% 
+  left_join(
+    y = zipcode %>% select(zip, city, state), 
+    by = c("cont_zip" = "zip")
+  )
 ```
 
