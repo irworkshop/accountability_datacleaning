@@ -281,17 +281,17 @@ CivicSpace Database (August 2004) augmented by Daniel Coven's federalgovernmentz
 data("zipcode")
 zipcode <- as_tibble(zipcode)
 
-il$Zip5_clean <- clean.zipcodes(il$Zip) %>% str_sub(1, 5)
+il$ZIP5 <- clean.zipcodes(il$Zip) %>% str_sub(1, 5)
 
-il$Zip5_clean %<>% na_if("00000")
-il$Zip5_clean %<>% na_if("11111")
-il$Zip5_clean %<>% na_if("99999")
+il$ZIP5 %<>% na_if("00000")
+il$ZIP5 %<>% na_if("11111")
+il$ZIP5 %<>% na_if("99999")
 ```
 
 ### Extract Year
 
 ```{r year}
-il <- il %>% mutate(Year_clean = year(RcvDate))
+il <- il %>% mutate(YEAR = year(RcvDate))
 ```
 
 ### Clean States
@@ -341,7 +341,7 @@ bad_states <- setdiff(x = il$State_clean, zipcode$state)
 il %>% 
   filter(!(State_clean %in% zipcode$state)) %>%
   filter(State_clean != "ZZ") %>% 
-  select(RctNum, Address1, City, State_clean, Zip5_clean) %>%
+  select(RctNum, Address1, City, State_clean, ZIP5) %>%
   sample_n(10)
 ```
 
@@ -361,7 +361,7 @@ il %>%
 # "60" states have zips in IL
 il %>% 
   filter(State_clean == "60") %>% 
-  pull(Zip5_clean) %>% 
+  pull(ZIP5) %>% 
   unique() %>% 
   sort() %in% 
   zipcode$zip[zipcode$state == "IL"] %>% 
@@ -386,14 +386,14 @@ il %>%
 # "I" states have zipcodes from IL
 il %>% 
   filter(State_clean == "I") %>% 
-  pull(Zip5_clean) %in% 
+  pull(ZIP5) %in% 
   zipcode$zip[zipcode$state == "IL"] %>% 
   mean() %>% 
   equals(1)
 
 # "IO" states with zipcodes place them in IA
 il %>% 
-  filter(State_clean == "IO", !is.na(Zip5_clean)) %>% 
+  filter(State_clean == "IO", !is.na(ZIP5)) %>% 
   pull(Zip) %in% 
   zipcode$zip[zipcode$state == "IA"] %>% 
   mean() %>% 
@@ -401,7 +401,7 @@ il %>%
 
 # "NB" states with zipcodes place them in NE
 il %>% 
-  filter(State_clean == "NB", !is.na(Zip5_clean)) %>% 
+  filter(State_clean == "NB", !is.na(ZIP5)) %>% 
   pull(Zip) %in% 
   zipcode$zip[zipcode$state == "NE"] %>% 
   mean() %>% 
@@ -436,7 +436,7 @@ il$State_clean %<>% str_replace_all("\`",  "IL")
 il %>% 
   filter(!(State_clean %in% zipcode$state)) %>%
   filter(State_clean != "ZZ") %>% 
-  select(RctNum, Address1, City, State_clean, Zip5_clean)
+  select(RctNum, Address1, City, State_clean, ZIP5)
 ```
 
 The last five rows can be figured out based on a combination of their `Address1` and `City` values.
@@ -481,7 +481,7 @@ il %>%
   select(
     RctNum, 
     State_clean, 
-    Zip5_clean, 
+    ZIP5, 
     City, 
     City_clean
   )
@@ -550,7 +550,8 @@ il %>%
 ## Write
 
 Before writing to the disk, we will replace all `"` characters with `'` to make nested quotes
-easier to deal with across software. `NA` values will be written as empty strings to save space.
+easier to deal with across software. `NA` values will be written as empty strings and uncleaned
+columns will be removed to save space on the server.
 
 ```{r write_csv, eval=FALSE}
 il <- il %>% 
@@ -559,12 +560,20 @@ il <- il %>%
   # recombine columbs
   as_tibble()
 
-# write to disk
-write_csv(
-  x = il,
-  path = here("il_contribs", "data", "il_contribs_clean.csv"),
-  na = "",
-  col_names = TRUE,
-)
+il %>% 
+  # remove unclean cols
+  select(
+    -Address1,
+    -City,
+    -State,
+    -Zip
+  ) %>% 
+  # write to disk
+  write_csv(
+    x = il,
+    path = here("il_contribs", "data", "il_contribs_clean.csv"),
+    na = "",
+    col_names = TRUE,
+  )
 ```
 

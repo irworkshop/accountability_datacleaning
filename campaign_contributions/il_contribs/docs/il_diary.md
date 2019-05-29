@@ -2,7 +2,7 @@
 title: "Data Diary"
 subtitle: "Illinois Contributions"
 author: "Kiernan Nicholls"
-date: "2019-05-29 11:53:40"
+date: "2019-05-29 12:09:05"
 output:
   html_document: 
     df_print: tibble
@@ -401,18 +401,18 @@ CivicSpace Database (August 2004) augmented by Daniel Coven's federalgovernmentz
 data("zipcode")
 zipcode <- as_tibble(zipcode)
 
-il$Zip5_clean <- clean.zipcodes(il$Zip) %>% str_sub(1, 5)
+il$ZIP5 <- clean.zipcodes(il$Zip) %>% str_sub(1, 5)
 
-il$Zip5_clean %<>% na_if("00000")
-il$Zip5_clean %<>% na_if("11111")
-il$Zip5_clean %<>% na_if("99999")
+il$ZIP5 %<>% na_if("00000")
+il$ZIP5 %<>% na_if("11111")
+il$ZIP5 %<>% na_if("99999")
 ```
 
 ### Extract Year
 
 
 ```r
-il <- il %>% mutate(Year_clean = year(RcvDate))
+il <- il %>% mutate(YEAR = year(RcvDate))
 ```
 
 ### Clean States
@@ -481,24 +481,24 @@ bad_states <- setdiff(x = il$State_clean, zipcode$state)
 il %>% 
   filter(!(State_clean %in% zipcode$state)) %>%
   filter(State_clean != "ZZ") %>% 
-  select(RctNum, Address1, City, State_clean, Zip5_clean) %>%
+  select(RctNum, Address1, City, State_clean, ZIP5) %>%
   sample_n(10)
 ```
 
 ```
 ## # A tibble: 10 x 5
-##    RctNum  Address1                        City         State_clean Zip5_clean
-##    <chr>   <chr>                           <chr>        <chr>       <chr>     
-##  1 2961359 14 Conti Parkway                Elmwood Park 60          60707     
-##  2 2793002 14 Conti Parkway                Elmwood Park 60          60707     
-##  3 2961358 14 Conti Parkway                Elmwood Park 60          60707     
-##  4 2872445 141 W. Jackson Blvd.-Suite 1901 <NA>         CH          <NA>      
-##  5 4893897 104 Wilmot Rd.   MS #1415       Deerfield    `           60015     
-##  6 3475399 393 S. Arlington Ave.           Elmhurst     60          60126     
-##  7 2961356 14 Conti Parkway                Elmwood Park 60          60707     
-##  8 4691727 1340 W. Washington Blvd.        Chicago      I           60607     
-##  9 3998860 3508 Roosevelt Road             Taylorville  LL          62568     
-## 10 3617671 309 E Maple St.                 Villa Park   I           60181
+##    RctNum  Address1                 City          State_clean ZIP5 
+##    <chr>   <chr>                    <chr>         <chr>       <chr>
+##  1 2961360 14 Conti Parkway         Elmwood Park  60          60707
+##  2 3617734 128 Seneca Trail         Bloomingdale  I           60108
+##  3 3617670 309 E Maple St.          Villa Park    I           60181
+##  4 3130450 14 Conti Parkway         Elmwood Park  60          60707
+##  5 3186866 92 Royster Drive         Crawfordville F           <NA> 
+##  6 2961359 14 Conti Parkway         Elmwood Park  60          60707
+##  7 2979161 321 N Clark #2800        Chicago       60          <NA> 
+##  8 3745620 393 S. Arlington Ave.    Elmhurst      60          60126
+##  9 3386144 106 East Second Street   Davenport     IO          <NA> 
+## 10 4691727 1340 W. Washington Blvd. Chicago       I           60607
 ```
 
 Most of the irregular `State` values are `NA`, "ZZ", or "60". Based off the `City` variable, we can
@@ -537,7 +537,7 @@ il %>%
 # "60" states have zips in IL
 il %>% 
   filter(State_clean == "60") %>% 
-  pull(Zip5_clean) %>% 
+  pull(ZIP5) %>% 
   unique() %>% 
   sort() %in% 
   zipcode$zip[zipcode$state == "IL"] %>% 
@@ -593,7 +593,7 @@ il %>%
 # "I" states have zipcodes from IL
 il %>% 
   filter(State_clean == "I") %>% 
-  pull(Zip5_clean) %in% 
+  pull(ZIP5) %in% 
   zipcode$zip[zipcode$state == "IL"] %>% 
   mean() %>% 
   equals(1)
@@ -606,7 +606,7 @@ il %>%
 ```r
 # "IO" states with zipcodes place them in IA
 il %>% 
-  filter(State_clean == "IO", !is.na(Zip5_clean)) %>% 
+  filter(State_clean == "IO", !is.na(ZIP5)) %>% 
   pull(Zip) %in% 
   zipcode$zip[zipcode$state == "IA"] %>% 
   mean() %>% 
@@ -620,7 +620,7 @@ il %>%
 ```r
 # "NB" states with zipcodes place them in NE
 il %>% 
-  filter(State_clean == "NB", !is.na(Zip5_clean)) %>% 
+  filter(State_clean == "NB", !is.na(ZIP5)) %>% 
   pull(Zip) %in% 
   zipcode$zip[zipcode$state == "NE"] %>% 
   mean() %>% 
@@ -672,17 +672,17 @@ il$State_clean %<>% str_replace_all("\`",  "IL")
 il %>% 
   filter(!(State_clean %in% zipcode$state)) %>%
   filter(State_clean != "ZZ") %>% 
-  select(RctNum, Address1, City, State_clean, Zip5_clean)
+  select(RctNum, Address1, City, State_clean, ZIP5)
 ```
 
 ```
 ## # A tibble: 5 x 5
-##   RctNum  Address1                City        State_clean Zip5_clean
-##   <chr>   <chr>                   <chr>       <chr>       <chr>     
-## 1 2665312 300 West Edwards        Springfield Q           <NA>      
-## 2 3333619 1020 Constable Drive    Mamaroneck  MY          <NA>      
-## 3 3675863 702 SW 8th St           Bentonville A           <NA>      
-## 4 4736799 C/O Red Curve Solutions Beverly     MM          <NA>      
+##   RctNum  Address1                City        State_clean ZIP5 
+##   <chr>   <chr>                   <chr>       <chr>       <chr>
+## 1 2665312 300 West Edwards        Springfield Q           <NA> 
+## 2 3333619 1020 Constable Drive    Mamaroneck  MY          <NA> 
+## 3 3675863 702 SW 8th St           Bentonville A           <NA> 
+## 4 4736799 C/O Red Curve Solutions Beverly     MM          <NA> 
 ## 5 4907046 Flat 4 5 Eton Ave       <NA>        LO          <NA>
 ```
 
@@ -733,23 +733,23 @@ il %>%
   select(
     RctNum, 
     State_clean, 
-    Zip5_clean, 
+    ZIP5, 
     City, 
     City_clean
   )
 ## # A tibble: 1,387,108 x 5
-##    RctNum  State_clean Zip5_clean City          City_clean 
-##    <chr>   <chr>       <chr>      <chr>         <chr>      
-##  1 3507110 IL          60662      , Orland Park ORLAND PARK
-##  2 4381796 IL          60085      , Waukegan    WAUKEGAN   
-##  3 4642016 IL          60441      ;ockport      ROCKPORT   
-##  4 3323272 IL          61615      :Peoria       PEORIA     
-##  5 3487322 AZ          85054      :Phoenix      PHOENIX    
-##  6 3739493 AZ          85054      :Phoenix      PHOENIX    
-##  7 3248564 IL          60473      ?             <NA>       
-##  8 4930411 IL          60473      ?             <NA>       
-##  9 4930312 IL          60473      ?             <NA>       
-## 10 3427171 IL          60423      ?Frankfort    FRANKFORT  
+##    RctNum  State_clean ZIP5  City          City_clean 
+##    <chr>   <chr>       <chr> <chr>         <chr>      
+##  1 3507110 IL          60662 , Orland Park ORLAND PARK
+##  2 4381796 IL          60085 , Waukegan    WAUKEGAN   
+##  3 4642016 IL          60441 ;ockport      ROCKPORT   
+##  4 3323272 IL          61615 :Peoria       PEORIA     
+##  5 3487322 AZ          85054 :Phoenix      PHOENIX    
+##  6 3739493 AZ          85054 :Phoenix      PHOENIX    
+##  7 3248564 IL          60473 ?             <NA>       
+##  8 4930411 IL          60473 ?             <NA>       
+##  9 4930312 IL          60473 ?             <NA>       
+## 10 3427171 IL          60423 ?Frankfort    FRANKFORT  
 ## # … with 1,387,098 more rows
 ```
 
@@ -841,7 +841,8 @@ il %>%
 ## Write
 
 Before writing to the disk, we will replace all `"` characters with `'` to make nested quotes
-easier to deal with across software. `NA` values will be written as empty strings to save space.
+easier to deal with across software. `NA` values will be written as empty strings and uncleaned
+columns will be removed to save space on the server.
 
 
 ```r
@@ -851,12 +852,20 @@ il <- il %>%
   # recombine columbs
   as_tibble()
 
-# write to disk
-write_csv(
-  x = il,
-  path = here("il_contribs", "data", "il_contribs_clean.csv"),
-  na = "",
-  col_names = TRUE,
-)
+il %>% 
+  # remove unclean cols
+  select(
+    -Address1,
+    -City,
+    -State,
+    -Zip
+  ) %>% 
+  # write to disk
+  write_csv(
+    x = il,
+    path = here("il_contribs", "data", "il_contribs_clean.csv"),
+    na = "",
+    col_names = TRUE,
+  )
 ```
 

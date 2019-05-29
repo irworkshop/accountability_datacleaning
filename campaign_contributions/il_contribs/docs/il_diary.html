@@ -433,7 +433,7 @@ $(document).ready(function () {
 <h1 class="title toc-ignore">Data Diary</h1>
 <h3 class="subtitle">Illinois Contributions</h3>
 <h4 class="author">Kiernan Nicholls</h4>
-<h4 class="date">2019-05-29 11:53:40</h4>
+<h4 class="date">2019-05-29 12:09:05</h4>
 
 </div>
 
@@ -721,15 +721,15 @@ $(document).ready(function () {
 <div class="sourceCode" id="cb34"><pre class="sourceCode r"><code class="sourceCode r"><a class="sourceLine" id="cb34-1" data-line-number="1"><span class="kw">data</span>(<span class="st">&quot;zipcode&quot;</span>)</a>
 <a class="sourceLine" id="cb34-2" data-line-number="2">zipcode &lt;-<span class="st"> </span><span class="kw">as_tibble</span>(zipcode)</a>
 <a class="sourceLine" id="cb34-3" data-line-number="3"></a>
-<a class="sourceLine" id="cb34-4" data-line-number="4">il<span class="op">$</span>Zip5_clean &lt;-<span class="st"> </span><span class="kw">clean.zipcodes</span>(il<span class="op">$</span>Zip) <span class="op">%&gt;%</span><span class="st"> </span><span class="kw">str_sub</span>(<span class="dv">1</span>, <span class="dv">5</span>)</a>
+<a class="sourceLine" id="cb34-4" data-line-number="4">il<span class="op">$</span>ZIP5 &lt;-<span class="st"> </span><span class="kw">clean.zipcodes</span>(il<span class="op">$</span>Zip) <span class="op">%&gt;%</span><span class="st"> </span><span class="kw">str_sub</span>(<span class="dv">1</span>, <span class="dv">5</span>)</a>
 <a class="sourceLine" id="cb34-5" data-line-number="5"></a>
-<a class="sourceLine" id="cb34-6" data-line-number="6">il<span class="op">$</span>Zip5_clean <span class="op">%&lt;&gt;%</span><span class="st"> </span><span class="kw">na_if</span>(<span class="st">&quot;00000&quot;</span>)</a>
-<a class="sourceLine" id="cb34-7" data-line-number="7">il<span class="op">$</span>Zip5_clean <span class="op">%&lt;&gt;%</span><span class="st"> </span><span class="kw">na_if</span>(<span class="st">&quot;11111&quot;</span>)</a>
-<a class="sourceLine" id="cb34-8" data-line-number="8">il<span class="op">$</span>Zip5_clean <span class="op">%&lt;&gt;%</span><span class="st"> </span><span class="kw">na_if</span>(<span class="st">&quot;99999&quot;</span>)</a></code></pre></div>
+<a class="sourceLine" id="cb34-6" data-line-number="6">il<span class="op">$</span>ZIP5 <span class="op">%&lt;&gt;%</span><span class="st"> </span><span class="kw">na_if</span>(<span class="st">&quot;00000&quot;</span>)</a>
+<a class="sourceLine" id="cb34-7" data-line-number="7">il<span class="op">$</span>ZIP5 <span class="op">%&lt;&gt;%</span><span class="st"> </span><span class="kw">na_if</span>(<span class="st">&quot;11111&quot;</span>)</a>
+<a class="sourceLine" id="cb34-8" data-line-number="8">il<span class="op">$</span>ZIP5 <span class="op">%&lt;&gt;%</span><span class="st"> </span><span class="kw">na_if</span>(<span class="st">&quot;99999&quot;</span>)</a></code></pre></div>
 </div>
 <div id="extract-year" class="section level3">
 <h3>Extract Year</h3>
-<div class="sourceCode" id="cb35"><pre class="sourceCode r"><code class="sourceCode r"><a class="sourceLine" id="cb35-1" data-line-number="1">il &lt;-<span class="st"> </span>il <span class="op">%&gt;%</span><span class="st"> </span><span class="kw">mutate</span>(<span class="dt">Year_clean =</span> <span class="kw">year</span>(RcvDate))</a></code></pre></div>
+<div class="sourceCode" id="cb35"><pre class="sourceCode r"><code class="sourceCode r"><a class="sourceLine" id="cb35-1" data-line-number="1">il &lt;-<span class="st"> </span>il <span class="op">%&gt;%</span><span class="st"> </span><span class="kw">mutate</span>(<span class="dt">YEAR =</span> <span class="kw">year</span>(RcvDate))</a></code></pre></div>
 </div>
 <div id="clean-states" class="section level3">
 <h3>Clean States</h3>
@@ -771,21 +771,21 @@ $(document).ready(function () {
 <a class="sourceLine" id="cb41-5" data-line-number="5">il <span class="op">%&gt;%</span><span class="st"> </span></a>
 <a class="sourceLine" id="cb41-6" data-line-number="6"><span class="st">  </span><span class="kw">filter</span>(<span class="op">!</span>(State_clean <span class="op">%in%</span><span class="st"> </span>zipcode<span class="op">$</span>state)) <span class="op">%&gt;%</span></a>
 <a class="sourceLine" id="cb41-7" data-line-number="7"><span class="st">  </span><span class="kw">filter</span>(State_clean <span class="op">!=</span><span class="st"> &quot;ZZ&quot;</span>) <span class="op">%&gt;%</span><span class="st"> </span></a>
-<a class="sourceLine" id="cb41-8" data-line-number="8"><span class="st">  </span><span class="kw">select</span>(RctNum, Address1, City, State_clean, Zip5_clean) <span class="op">%&gt;%</span></a>
+<a class="sourceLine" id="cb41-8" data-line-number="8"><span class="st">  </span><span class="kw">select</span>(RctNum, Address1, City, State_clean, ZIP5) <span class="op">%&gt;%</span></a>
 <a class="sourceLine" id="cb41-9" data-line-number="9"><span class="st">  </span><span class="kw">sample_n</span>(<span class="dv">10</span>)</a></code></pre></div>
 <pre><code>## # A tibble: 10 x 5
-##    RctNum  Address1                        City         State_clean Zip5_clean
-##    &lt;chr&gt;   &lt;chr&gt;                           &lt;chr&gt;        &lt;chr&gt;       &lt;chr&gt;     
-##  1 2961359 14 Conti Parkway                Elmwood Park 60          60707     
-##  2 2793002 14 Conti Parkway                Elmwood Park 60          60707     
-##  3 2961358 14 Conti Parkway                Elmwood Park 60          60707     
-##  4 2872445 141 W. Jackson Blvd.-Suite 1901 &lt;NA&gt;         CH          &lt;NA&gt;      
-##  5 4893897 104 Wilmot Rd.   MS #1415       Deerfield    `           60015     
-##  6 3475399 393 S. Arlington Ave.           Elmhurst     60          60126     
-##  7 2961356 14 Conti Parkway                Elmwood Park 60          60707     
-##  8 4691727 1340 W. Washington Blvd.        Chicago      I           60607     
-##  9 3998860 3508 Roosevelt Road             Taylorville  LL          62568     
-## 10 3617671 309 E Maple St.                 Villa Park   I           60181</code></pre>
+##    RctNum  Address1                 City          State_clean ZIP5 
+##    &lt;chr&gt;   &lt;chr&gt;                    &lt;chr&gt;         &lt;chr&gt;       &lt;chr&gt;
+##  1 2961360 14 Conti Parkway         Elmwood Park  60          60707
+##  2 3617734 128 Seneca Trail         Bloomingdale  I           60108
+##  3 3617670 309 E Maple St.          Villa Park    I           60181
+##  4 3130450 14 Conti Parkway         Elmwood Park  60          60707
+##  5 3186866 92 Royster Drive         Crawfordville F           &lt;NA&gt; 
+##  6 2961359 14 Conti Parkway         Elmwood Park  60          60707
+##  7 2979161 321 N Clark #2800        Chicago       60          &lt;NA&gt; 
+##  8 3745620 393 S. Arlington Ave.    Elmhurst      60          60126
+##  9 3386144 106 East Second Street   Davenport     IO          &lt;NA&gt; 
+## 10 4691727 1340 W. Washington Blvd. Chicago       I           60607</code></pre>
 <p>Most of the irregular <code>State</code> values are <code>NA</code>, “ZZ”, or “60”. Based off the <code>City</code> variable, we can tell “ZZ” is used to indicate a foreign country. Based off the <code>Zip</code> variable, we can tell “60” (and “61”) should all be “IL” (All Zip codes in Illinois start with 6—-).</p>
 <p>First, we will check <code>State_clean</code> against the <code>city</code>, <code>zip</code>, and <code>state</code> values in the <code>zipcodes</code> table. From this info, we can fix most bad <code>State_clean</code> values.</p>
 <div class="sourceCode" id="cb43"><pre class="sourceCode r"><code class="sourceCode r"><a class="sourceLine" id="cb43-1" data-line-number="1">il <span class="op">%&gt;%</span><span class="st"> </span></a>
@@ -809,7 +809,7 @@ $(document).ready(function () {
 <div class="sourceCode" id="cb45"><pre class="sourceCode r"><code class="sourceCode r"><a class="sourceLine" id="cb45-1" data-line-number="1"><span class="co"># &quot;60&quot; states have zips in IL</span></a>
 <a class="sourceLine" id="cb45-2" data-line-number="2">il <span class="op">%&gt;%</span><span class="st"> </span></a>
 <a class="sourceLine" id="cb45-3" data-line-number="3"><span class="st">  </span><span class="kw">filter</span>(State_clean <span class="op">==</span><span class="st"> &quot;60&quot;</span>) <span class="op">%&gt;%</span><span class="st"> </span></a>
-<a class="sourceLine" id="cb45-4" data-line-number="4"><span class="st">  </span><span class="kw">pull</span>(Zip5_clean) <span class="op">%&gt;%</span><span class="st"> </span></a>
+<a class="sourceLine" id="cb45-4" data-line-number="4"><span class="st">  </span><span class="kw">pull</span>(ZIP5) <span class="op">%&gt;%</span><span class="st"> </span></a>
 <a class="sourceLine" id="cb45-5" data-line-number="5"><span class="st">  </span><span class="kw">unique</span>() <span class="op">%&gt;%</span><span class="st"> </span></a>
 <a class="sourceLine" id="cb45-6" data-line-number="6"><span class="st">  </span><span class="kw">sort</span>() <span class="op">%in%</span><span class="st"> </span></a>
 <a class="sourceLine" id="cb45-7" data-line-number="7"><span class="st">  </span>zipcode<span class="op">$</span>zip[zipcode<span class="op">$</span>state <span class="op">==</span><span class="st"> &quot;IL&quot;</span>] <span class="op">%&gt;%</span><span class="st"> </span></a>
@@ -835,14 +835,14 @@ $(document).ready(function () {
 <div class="sourceCode" id="cb55"><pre class="sourceCode r"><code class="sourceCode r"><a class="sourceLine" id="cb55-1" data-line-number="1"><span class="co"># &quot;I&quot; states have zipcodes from IL</span></a>
 <a class="sourceLine" id="cb55-2" data-line-number="2">il <span class="op">%&gt;%</span><span class="st"> </span></a>
 <a class="sourceLine" id="cb55-3" data-line-number="3"><span class="st">  </span><span class="kw">filter</span>(State_clean <span class="op">==</span><span class="st"> &quot;I&quot;</span>) <span class="op">%&gt;%</span><span class="st"> </span></a>
-<a class="sourceLine" id="cb55-4" data-line-number="4"><span class="st">  </span><span class="kw">pull</span>(Zip5_clean) <span class="op">%in%</span><span class="st"> </span></a>
+<a class="sourceLine" id="cb55-4" data-line-number="4"><span class="st">  </span><span class="kw">pull</span>(ZIP5) <span class="op">%in%</span><span class="st"> </span></a>
 <a class="sourceLine" id="cb55-5" data-line-number="5"><span class="st">  </span>zipcode<span class="op">$</span>zip[zipcode<span class="op">$</span>state <span class="op">==</span><span class="st"> &quot;IL&quot;</span>] <span class="op">%&gt;%</span><span class="st"> </span></a>
 <a class="sourceLine" id="cb55-6" data-line-number="6"><span class="st">  </span><span class="kw">mean</span>() <span class="op">%&gt;%</span><span class="st"> </span></a>
 <a class="sourceLine" id="cb55-7" data-line-number="7"><span class="st">  </span><span class="kw">equals</span>(<span class="dv">1</span>)</a></code></pre></div>
 <pre><code>## [1] TRUE</code></pre>
 <div class="sourceCode" id="cb57"><pre class="sourceCode r"><code class="sourceCode r"><a class="sourceLine" id="cb57-1" data-line-number="1"><span class="co"># &quot;IO&quot; states with zipcodes place them in IA</span></a>
 <a class="sourceLine" id="cb57-2" data-line-number="2">il <span class="op">%&gt;%</span><span class="st"> </span></a>
-<a class="sourceLine" id="cb57-3" data-line-number="3"><span class="st">  </span><span class="kw">filter</span>(State_clean <span class="op">==</span><span class="st"> &quot;IO&quot;</span>, <span class="op">!</span><span class="kw">is.na</span>(Zip5_clean)) <span class="op">%&gt;%</span><span class="st"> </span></a>
+<a class="sourceLine" id="cb57-3" data-line-number="3"><span class="st">  </span><span class="kw">filter</span>(State_clean <span class="op">==</span><span class="st"> &quot;IO&quot;</span>, <span class="op">!</span><span class="kw">is.na</span>(ZIP5)) <span class="op">%&gt;%</span><span class="st"> </span></a>
 <a class="sourceLine" id="cb57-4" data-line-number="4"><span class="st">  </span><span class="kw">pull</span>(Zip) <span class="op">%in%</span><span class="st"> </span></a>
 <a class="sourceLine" id="cb57-5" data-line-number="5"><span class="st">  </span>zipcode<span class="op">$</span>zip[zipcode<span class="op">$</span>state <span class="op">==</span><span class="st"> &quot;IA&quot;</span>] <span class="op">%&gt;%</span><span class="st"> </span></a>
 <a class="sourceLine" id="cb57-6" data-line-number="6"><span class="st">  </span><span class="kw">mean</span>() <span class="op">%&gt;%</span><span class="st"> </span></a>
@@ -850,7 +850,7 @@ $(document).ready(function () {
 <pre><code>## [1] TRUE</code></pre>
 <div class="sourceCode" id="cb59"><pre class="sourceCode r"><code class="sourceCode r"><a class="sourceLine" id="cb59-1" data-line-number="1"><span class="co"># &quot;NB&quot; states with zipcodes place them in NE</span></a>
 <a class="sourceLine" id="cb59-2" data-line-number="2">il <span class="op">%&gt;%</span><span class="st"> </span></a>
-<a class="sourceLine" id="cb59-3" data-line-number="3"><span class="st">  </span><span class="kw">filter</span>(State_clean <span class="op">==</span><span class="st"> &quot;NB&quot;</span>, <span class="op">!</span><span class="kw">is.na</span>(Zip5_clean)) <span class="op">%&gt;%</span><span class="st"> </span></a>
+<a class="sourceLine" id="cb59-3" data-line-number="3"><span class="st">  </span><span class="kw">filter</span>(State_clean <span class="op">==</span><span class="st"> &quot;NB&quot;</span>, <span class="op">!</span><span class="kw">is.na</span>(ZIP5)) <span class="op">%&gt;%</span><span class="st"> </span></a>
 <a class="sourceLine" id="cb59-4" data-line-number="4"><span class="st">  </span><span class="kw">pull</span>(Zip) <span class="op">%in%</span><span class="st"> </span></a>
 <a class="sourceLine" id="cb59-5" data-line-number="5"><span class="st">  </span>zipcode<span class="op">$</span>zip[zipcode<span class="op">$</span>state <span class="op">==</span><span class="st"> &quot;NE&quot;</span>] <span class="op">%&gt;%</span><span class="st"> </span></a>
 <a class="sourceLine" id="cb59-6" data-line-number="6"><span class="st">  </span><span class="kw">mean</span>() <span class="op">%&gt;%</span><span class="st"> </span></a>
@@ -884,14 +884,14 @@ $(document).ready(function () {
 <div class="sourceCode" id="cb64"><pre class="sourceCode r"><code class="sourceCode r"><a class="sourceLine" id="cb64-1" data-line-number="1">il <span class="op">%&gt;%</span><span class="st"> </span></a>
 <a class="sourceLine" id="cb64-2" data-line-number="2"><span class="st">  </span><span class="kw">filter</span>(<span class="op">!</span>(State_clean <span class="op">%in%</span><span class="st"> </span>zipcode<span class="op">$</span>state)) <span class="op">%&gt;%</span></a>
 <a class="sourceLine" id="cb64-3" data-line-number="3"><span class="st">  </span><span class="kw">filter</span>(State_clean <span class="op">!=</span><span class="st"> &quot;ZZ&quot;</span>) <span class="op">%&gt;%</span><span class="st"> </span></a>
-<a class="sourceLine" id="cb64-4" data-line-number="4"><span class="st">  </span><span class="kw">select</span>(RctNum, Address1, City, State_clean, Zip5_clean)</a></code></pre></div>
+<a class="sourceLine" id="cb64-4" data-line-number="4"><span class="st">  </span><span class="kw">select</span>(RctNum, Address1, City, State_clean, ZIP5)</a></code></pre></div>
 <pre><code>## # A tibble: 5 x 5
-##   RctNum  Address1                City        State_clean Zip5_clean
-##   &lt;chr&gt;   &lt;chr&gt;                   &lt;chr&gt;       &lt;chr&gt;       &lt;chr&gt;     
-## 1 2665312 300 West Edwards        Springfield Q           &lt;NA&gt;      
-## 2 3333619 1020 Constable Drive    Mamaroneck  MY          &lt;NA&gt;      
-## 3 3675863 702 SW 8th St           Bentonville A           &lt;NA&gt;      
-## 4 4736799 C/O Red Curve Solutions Beverly     MM          &lt;NA&gt;      
+##   RctNum  Address1                City        State_clean ZIP5 
+##   &lt;chr&gt;   &lt;chr&gt;                   &lt;chr&gt;       &lt;chr&gt;       &lt;chr&gt;
+## 1 2665312 300 West Edwards        Springfield Q           &lt;NA&gt; 
+## 2 3333619 1020 Constable Drive    Mamaroneck  MY          &lt;NA&gt; 
+## 3 3675863 702 SW 8th St           Bentonville A           &lt;NA&gt; 
+## 4 4736799 C/O Red Curve Solutions Beverly     MM          &lt;NA&gt; 
 ## 5 4907046 Flat 4 5 Eton Ave       &lt;NA&gt;        LO          &lt;NA&gt;</code></pre>
 <p>The last five rows can be figured out based on a combination of their <code>Address1</code> and <code>City</code> values.</p>
 <div class="sourceCode" id="cb66"><pre class="sourceCode r"><code class="sourceCode r"><a class="sourceLine" id="cb66-1" data-line-number="1">il<span class="op">$</span>State_clean <span class="op">%&lt;&gt;%</span><span class="st"> </span><span class="kw">str_replace_all</span>(<span class="st">&quot;^Q$&quot;</span>, <span class="st">&quot;IL&quot;</span>)</a>
@@ -931,23 +931,23 @@ $(document).ready(function () {
 <a class="sourceLine" id="cb67-26" data-line-number="26"><span class="st">  </span><span class="kw">select</span>(</a>
 <a class="sourceLine" id="cb67-27" data-line-number="27">    RctNum, </a>
 <a class="sourceLine" id="cb67-28" data-line-number="28">    State_clean, </a>
-<a class="sourceLine" id="cb67-29" data-line-number="29">    Zip5_clean, </a>
+<a class="sourceLine" id="cb67-29" data-line-number="29">    ZIP5, </a>
 <a class="sourceLine" id="cb67-30" data-line-number="30">    City, </a>
 <a class="sourceLine" id="cb67-31" data-line-number="31">    City_clean</a>
 <a class="sourceLine" id="cb67-32" data-line-number="32">  )</a>
 <a class="sourceLine" id="cb67-33" data-line-number="33"><span class="co">## # A tibble: 1,387,108 x 5</span></a>
-<a class="sourceLine" id="cb67-34" data-line-number="34"><span class="co">##    RctNum  State_clean Zip5_clean City          City_clean </span></a>
-<a class="sourceLine" id="cb67-35" data-line-number="35"><span class="co">##    &lt;chr&gt;   &lt;chr&gt;       &lt;chr&gt;      &lt;chr&gt;         &lt;chr&gt;      </span></a>
-<a class="sourceLine" id="cb67-36" data-line-number="36"><span class="co">##  1 3507110 IL          60662      , Orland Park ORLAND PARK</span></a>
-<a class="sourceLine" id="cb67-37" data-line-number="37"><span class="co">##  2 4381796 IL          60085      , Waukegan    WAUKEGAN   </span></a>
-<a class="sourceLine" id="cb67-38" data-line-number="38"><span class="co">##  3 4642016 IL          60441      ;ockport      ROCKPORT   </span></a>
-<a class="sourceLine" id="cb67-39" data-line-number="39"><span class="co">##  4 3323272 IL          61615      :Peoria       PEORIA     </span></a>
-<a class="sourceLine" id="cb67-40" data-line-number="40"><span class="co">##  5 3487322 AZ          85054      :Phoenix      PHOENIX    </span></a>
-<a class="sourceLine" id="cb67-41" data-line-number="41"><span class="co">##  6 3739493 AZ          85054      :Phoenix      PHOENIX    </span></a>
-<a class="sourceLine" id="cb67-42" data-line-number="42"><span class="co">##  7 3248564 IL          60473      ?             &lt;NA&gt;       </span></a>
-<a class="sourceLine" id="cb67-43" data-line-number="43"><span class="co">##  8 4930411 IL          60473      ?             &lt;NA&gt;       </span></a>
-<a class="sourceLine" id="cb67-44" data-line-number="44"><span class="co">##  9 4930312 IL          60473      ?             &lt;NA&gt;       </span></a>
-<a class="sourceLine" id="cb67-45" data-line-number="45"><span class="co">## 10 3427171 IL          60423      ?Frankfort    FRANKFORT  </span></a>
+<a class="sourceLine" id="cb67-34" data-line-number="34"><span class="co">##    RctNum  State_clean ZIP5  City          City_clean </span></a>
+<a class="sourceLine" id="cb67-35" data-line-number="35"><span class="co">##    &lt;chr&gt;   &lt;chr&gt;       &lt;chr&gt; &lt;chr&gt;         &lt;chr&gt;      </span></a>
+<a class="sourceLine" id="cb67-36" data-line-number="36"><span class="co">##  1 3507110 IL          60662 , Orland Park ORLAND PARK</span></a>
+<a class="sourceLine" id="cb67-37" data-line-number="37"><span class="co">##  2 4381796 IL          60085 , Waukegan    WAUKEGAN   </span></a>
+<a class="sourceLine" id="cb67-38" data-line-number="38"><span class="co">##  3 4642016 IL          60441 ;ockport      ROCKPORT   </span></a>
+<a class="sourceLine" id="cb67-39" data-line-number="39"><span class="co">##  4 3323272 IL          61615 :Peoria       PEORIA     </span></a>
+<a class="sourceLine" id="cb67-40" data-line-number="40"><span class="co">##  5 3487322 AZ          85054 :Phoenix      PHOENIX    </span></a>
+<a class="sourceLine" id="cb67-41" data-line-number="41"><span class="co">##  6 3739493 AZ          85054 :Phoenix      PHOENIX    </span></a>
+<a class="sourceLine" id="cb67-42" data-line-number="42"><span class="co">##  7 3248564 IL          60473 ?             &lt;NA&gt;       </span></a>
+<a class="sourceLine" id="cb67-43" data-line-number="43"><span class="co">##  8 4930411 IL          60473 ?             &lt;NA&gt;       </span></a>
+<a class="sourceLine" id="cb67-44" data-line-number="44"><span class="co">##  9 4930312 IL          60473 ?             &lt;NA&gt;       </span></a>
+<a class="sourceLine" id="cb67-45" data-line-number="45"><span class="co">## 10 3427171 IL          60423 ?Frankfort    FRANKFORT  </span></a>
 <a class="sourceLine" id="cb67-46" data-line-number="46"><span class="co">## # … with 1,387,098 more rows</span></a></code></pre></div>
 </div>
 <div id="clean-address" class="section level3">
@@ -1020,20 +1020,28 @@ $(document).ready(function () {
 </div>
 <div id="write" class="section level2">
 <h2>Write</h2>
-<p>Before writing to the disk, we will replace all <code>&quot;</code> characters with <code>'</code> to make nested quotes easier to deal with across software. <code>NA</code> values will be written as empty strings to save space.</p>
+<p>Before writing to the disk, we will replace all <code>&quot;</code> characters with <code>'</code> to make nested quotes easier to deal with across software. <code>NA</code> values will be written as empty strings and uncleaned columns will be removed to save space on the server.</p>
 <div class="sourceCode" id="cb73"><pre class="sourceCode r"><code class="sourceCode r"><a class="sourceLine" id="cb73-1" data-line-number="1">il &lt;-<span class="st"> </span>il <span class="op">%&gt;%</span><span class="st"> </span></a>
 <a class="sourceLine" id="cb73-2" data-line-number="2"><span class="st">  </span><span class="co"># apply to each column</span></a>
 <a class="sourceLine" id="cb73-3" data-line-number="3"><span class="st">  </span><span class="kw">map</span>(str_replace_all, <span class="st">&quot;</span><span class="ch">\&quot;</span><span class="st">&quot;</span>, <span class="st">&quot;</span><span class="ch">\'</span><span class="st">&quot;</span>) <span class="op">%&gt;%</span><span class="st"> </span></a>
 <a class="sourceLine" id="cb73-4" data-line-number="4"><span class="st">  </span><span class="co"># recombine columbs</span></a>
 <a class="sourceLine" id="cb73-5" data-line-number="5"><span class="st">  </span><span class="kw">as_tibble</span>()</a>
 <a class="sourceLine" id="cb73-6" data-line-number="6"></a>
-<a class="sourceLine" id="cb73-7" data-line-number="7"><span class="co"># write to disk</span></a>
-<a class="sourceLine" id="cb73-8" data-line-number="8"><span class="kw">write_csv</span>(</a>
-<a class="sourceLine" id="cb73-9" data-line-number="9">  <span class="dt">x =</span> il,</a>
-<a class="sourceLine" id="cb73-10" data-line-number="10">  <span class="dt">path =</span> <span class="kw">here</span>(<span class="st">&quot;il_contribs&quot;</span>, <span class="st">&quot;data&quot;</span>, <span class="st">&quot;il_contribs_clean.csv&quot;</span>),</a>
-<a class="sourceLine" id="cb73-11" data-line-number="11">  <span class="dt">na =</span> <span class="st">&quot;&quot;</span>,</a>
-<a class="sourceLine" id="cb73-12" data-line-number="12">  <span class="dt">col_names =</span> <span class="ot">TRUE</span>,</a>
-<a class="sourceLine" id="cb73-13" data-line-number="13">)</a></code></pre></div>
+<a class="sourceLine" id="cb73-7" data-line-number="7">il <span class="op">%&gt;%</span><span class="st"> </span></a>
+<a class="sourceLine" id="cb73-8" data-line-number="8"><span class="st">  </span><span class="co"># remove unclean cols</span></a>
+<a class="sourceLine" id="cb73-9" data-line-number="9"><span class="st">  </span><span class="kw">select</span>(</a>
+<a class="sourceLine" id="cb73-10" data-line-number="10">    <span class="op">-</span>Address1,</a>
+<a class="sourceLine" id="cb73-11" data-line-number="11">    <span class="op">-</span>City,</a>
+<a class="sourceLine" id="cb73-12" data-line-number="12">    <span class="op">-</span>State,</a>
+<a class="sourceLine" id="cb73-13" data-line-number="13">    <span class="op">-</span>Zip</a>
+<a class="sourceLine" id="cb73-14" data-line-number="14">  ) <span class="op">%&gt;%</span><span class="st"> </span></a>
+<a class="sourceLine" id="cb73-15" data-line-number="15"><span class="st">  </span><span class="co"># write to disk</span></a>
+<a class="sourceLine" id="cb73-16" data-line-number="16"><span class="st">  </span><span class="kw">write_csv</span>(</a>
+<a class="sourceLine" id="cb73-17" data-line-number="17">    <span class="dt">x =</span> il,</a>
+<a class="sourceLine" id="cb73-18" data-line-number="18">    <span class="dt">path =</span> <span class="kw">here</span>(<span class="st">&quot;il_contribs&quot;</span>, <span class="st">&quot;data&quot;</span>, <span class="st">&quot;il_contribs_clean.csv&quot;</span>),</a>
+<a class="sourceLine" id="cb73-19" data-line-number="19">    <span class="dt">na =</span> <span class="st">&quot;&quot;</span>,</a>
+<a class="sourceLine" id="cb73-20" data-line-number="20">    <span class="dt">col_names =</span> <span class="ot">TRUE</span>,</a>
+<a class="sourceLine" id="cb73-21" data-line-number="21">  )</a></code></pre></div>
 </div>
 
 
