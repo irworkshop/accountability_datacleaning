@@ -54,231 +54,226 @@ pacman::p_load(
 ## Data
 
 Data comes courtesy of the New Jersey Election Law Enforcement Commission (ELEC)
-[website](https://www.elec.state.nj.us/ELECReport/). The data can be downloaded after a search
-of the database.
+[website](https://www.elec.state.nj.us/ELECReport/). The data can be downloaded from their 
+["Quick Data Downloads"](https://www.elec.state.nj.us/publicinformation/quickdownload.htm) page in
+four separate files:
 
-The website is organized by filing report. A search returns a list of R-1 reports, each report
-containing the information on the various contributors. Each report must be downloaded 
-individually. As of right now, there are 11310 "rows" (reports), each with a number of records.
+* `All_GUB_Text.zip`
+* `All_LEG_Text.zip`
+* `All_CW_Text.zip`
+* `All_PAC_Text.zip`
 
-We can use an `RSelenium` browser to automate the collection of data. Here, we will search for
-reports from 2008 through 2018, then download the first report.
-
-```{r remote_download, eval=FALSE, echo=TRUE}
-### need to bypass firefox confirm download
-
-# open rselenium client
-rs_driver <- rsDriver(
-  port = 4444L,
-  browser = "firefox",
-  extraCapabilities = RSelenium::makeFirefoxProfile(
-    list(
-      "browser.download.dir" = here("nj_contribs", "data"), # current wd
-      "browser.download.folderList" = 2L,
-      "browser.helperApps.neverAsk.saveToDisk" = "text/csv"
-    )
-  )
-)
-remote_driver <- rs_driver$client
-# naviate to the ELEC portal
-remote_driver$navigate("https://www.elec.state.nj.us/ELECReport/searchcontribcandidate.aspx")
-# type in our search fields
-remote_driver$findElement(using = "css", "#txtStartDate")$sendKeysToElement(list("01/01/2008"))
-remote_driver$findElement(using = "css", "#txtEndDate")$sendKeysToElement(list("12/31/2008"))
-# load the search parameters
-remote_driver$findElement(using = "css", "#btnSearch")$clickElement()
-# download the top report
-remote_driver$findElement(
-  using = "css","#ContentPlaceHolder1_BITSReportViewer1_btnDownloadData")$clickElement()
-# close the remote browser
-remote_driver$close()
-rs_driver$server$stop()
-```
-
-Below is the structure of this downloaded report:
-
-```{r read_sample}
-# list files
-files <- list.files(
-  path = here("nj_contribs", "data"), 
-  pattern = "csv$", 
-  full.names = TRUE
-)
-
-# read the latest file
-nj_sample <- files[file.mtime(files) == max(file.mtime(files))] %>% 
-  read_csv(col_types = cols(
-    .default = col_character(),
-    `RECIPIENT ELECTION YEAR` = col_double(),
-    `CONT AMT` = col_double(),
-    `CONT DATE` = col_date("%m/%d/%Y"))) %>% 
-  clean_names()
-
-# view structure
-glimpse(nj_sample)
-```
-
-We might eventually automate the collection of many reports in a similar manner, but for now the
-rest of this document will rely on hard copy files given to IRW straight from ELEC.
+Each ZIP file contains a number of individual TXT files separated by year.
 
 ## Read
 
-The files are divided into three folders:
+Each of the ZIP files can be read using the following process:
 
-* `data/legislative/`
-* `data/ALL_gubernatorial/`
-* `data/ALL_PACs/`
-
-We will start with gubernatorial data, then do the same for legislative and PAC contributions.
-
-We can read all the files at once with a combination of `purrr:map()` and `readr::read_delim()`.
-Then, the files can be combined into a single table with `dplyr::bind_rows()`.
-
-The delimiter is not consistent across all files, so they will have to be read in groups and then
-combined.
+1. Download from ELEC with `utils::download.file()`
+1. Unzip the file into a local directory with `utils::unzip()`
+1. Create a vector of new file names with `base::list.files()`
+1. Read all the files into a list by mapping `readr::read_delim()` to each file with `purrr:map()`
+    * All files have `.txt` extension, but some are really `.tsv` and others `.csv`. Use the
+    appropriate `readr::read_*` function for each deliminator type
+    * Read all columns as character except for `CONT_DATE` and `CONT_AMT`
+1. Combined the rows from each list element into a single table with `dplyr::bind_rows()`
+1. Repeat for other ZIP files
 
 ```{r read_gub}
-# list the gubernatorial files
+# download the file
+download.file(
+  url = "https://www.elec.state.nj.us/download/Data/Gubernatorial/All_GUB_Text.zip",
+  destfile = here("nj_contribs", "data", "All_GUB_Text.zip")
+)
+
+# unzip into a folder
+unzip(
+  zipfile = here("nj_contribs", "data", "All_GUB_Text.zip"),
+  overwrite = TRUE,
+  exdir = here("nj_contribs", "data", "All_GUB")
+)
+
+# list the new files
 nj_gub_files <- list.files(
-  path = here("nj_contribs", "data", "ALL_gubernatorial"), 
-  full.names = TRUE,
-  recursive = TRUE
+  path = here("nj_contribs", "data", "All_GUB"),
+  full.names = TRUE
 )
 
-# read those with tab delims
+# read files with tab delims
 nj_gub_tsv <- map(
-  nj_gub_files[-c(8, 16, 24)], 
-  read_delim,
-  # args to read_delim
-  delim = "\t",
-  escape_double = FALSE,
-  # with new jersey time
-  locale = locale(tz = "US/Eastern"),
+  nj_gub_files[-c(8, 16, 24)],
+  read_tsv,
   col_types = cols(
-    # all as char but date & amount
     .default = col_character(),
-    CONT_DATE = col_date(format = "%m/%d/%Y"),
+    CONT_DATE = col_datetime("%m/%d/%Y"),
     CONT_AMT = col_double()
   )
 )
 
-# read those with comma delims
+# read files with comma delims
 nj_gub_csv <- map(
-  nj_gub_files[c(8, 16, 24)], 
-  read_delim,
-  delim = ",",
-  escape_double = FALSE,
-  locale = locale(tz = "US/Eastern"),
+  nj_gub_files[c(8, 16, 24)],
+  read_csv,
   col_types = cols(
     .default = col_character(),
-    CONT_DATE = col_date(format = "%m/%d/%Y"),
+    CONT_DATE = col_datetime("%m/%d/%Y"),
     CONT_AMT = col_double()
   )
 )
 
-# bind both types of delims
+# combined all year tables
 nj_gub <- bind_rows(nj_gub_tsv, nj_gub_csv)
 
-# remove intermediary files
-rm(nj_gub_tsv, nj_gub_csv, nj_gub_files)
+# remove intermediate data
+rm(nj_gub_files, nj_gub_tsv, nj_gub_csv)
 ```
 
 ```{r read_leg}
+download.file(
+  url = "https://www.elec.state.nj.us/download/Data/Legislative/All_LEG_Text.zip",
+  destfile = here("nj_contribs", "data", "All_LEG_Text.zip")
+)
+
+unzip(
+  zipfile = here("nj_contribs", "data", "All_LEG_Text.zip"),
+  overwrite = TRUE,
+  exdir = here("nj_contribs", "data", "All_LEG")
+)
+
 nj_leg_files <- list.files(
-  path = here("nj_contribs", "data", "ALL_legislative"), 
-  full.names = TRUE,
-  recursive = TRUE
+  path = here("nj_contribs", "data", "All_LEG"),
+  full.names = TRUE
 )
 
 nj_leg_tsv <- map(
-  nj_leg_files[-c(16:18, 31:33)], 
-  read_delim,
-  delim = "\t",
-  escape_double = FALSE,
-  locale = locale(tz = "US/Eastern"),
+  nj_leg_files[-c(16:18, 31:33)],
+  read_tsv,
   col_types = cols(
     .default = col_character(),
-    CONT_DATE = col_date(format = "%m/%d/%Y"),
+    CONT_DATE = col_datetime("%m/%d/%Y"),
     CONT_AMT = col_double()
   )
 )
 
 nj_leg_csv <- map(
-  nj_leg_files[c(16:18, 31:33)], 
-  read_delim,
-  delim = ",",
-  escape_double = FALSE,
-  locale = locale(tz = "US/Eastern"),
+  nj_leg_files[c(16:18, 31:33)],
+  read_csv,
   col_types = cols(
     .default = col_character(),
-    CONT_DATE = col_date(format = "%m/%d/%Y"),
+    CONT_DATE = col_datetime("%m/%d/%Y"),
     CONT_AMT = col_double()
   )
 )
 
 nj_leg <- bind_rows(nj_leg_tsv, nj_leg_csv)
 
-rm(nj_leg_tsv, nj_leg_csv, nj_leg_files)
+rm(nj_leg_files, nj_leg_tsv, nj_leg_csv)
+```
+
+```{r read_local}
+download.file(
+  url = "https://www.elec.state.nj.us/download/Data/Countywide/All_CW_Text.zip",
+  destfile = here("nj_contribs", "data", "All_CW_Text.zip")
+)
+
+unzip(
+  zipfile = here("nj_contribs", "data", "All_CW_Text.zip"),
+  overwrite = TRUE,
+  exdir = here("nj_contribs", "data", "All_CW")
+)
+
+nj_cw_files <- list.files(
+  path = here("nj_contribs", "data", "All_CW"),
+  full.names = TRUE
+)
+
+nj_cw_tsv <- map(
+  nj_cw_files[-c(5:9, 14:18)],
+  read_tsv,
+  col_types = cols(
+    .default = col_character(),
+    CONT_DATE = col_datetime("%m/%d/%Y"),
+    CONT_AMT = col_number()
+  )
+)
+
+nj_cw_csv <- map(
+  nj_cw_files[c(5:9, 14:18)],
+  read_csv,
+  col_types = cols(
+    .default = col_character(),
+    CONT_DATE = col_datetime("%m/%d/%Y"),
+    CONT_AMT = col_double()
+  )
+)
+
+nj_cw <- bind_rows(nj_cw_tsv, nj_cw_csv)
+
+rm(nj_cw_files, nj_cw_tsv, nj_cw_csv)
 ```
 
 ```{r read_pac}
+download.file(
+  url = "https://www.elec.state.nj.us/download/Data/PAC/All_PAC_Text.zip",
+  destfile = here("nj_contribs", "data", "All_PAC_Text.zip")
+)
+
+unzip(
+  zipfile = here("nj_contribs", "data", "All_PAC_Text.zip"),
+  overwrite = TRUE,
+  exdir = here("nj_contribs", "data", "All_PAC")
+)
+
 nj_pac_files <- list.files(
-  path = here("nj_contribs", "data", "ALL_PACs"), 
-  full.names = TRUE,
-  recursive = TRUE
+  path = here("nj_contribs", "data", "All_PAC"),
+  full.names = TRUE
 )
 
 nj_pac_tsv <- map(
-  nj_pac_files[-c(19, 21:22)], 
-  read_delim,
-  delim = "\t",
-  escape_double = FALSE,
-  locale = locale(tz = "US/Eastern"),
+  nj_pac_files[-c(19, 21, 22)],
+  read_tsv,
   col_types = cols(
     .default = col_character(),
-    CONT_DATE = col_date(format = "%m/%d/%Y"),
-    CONT_AMT = col_double()
+    CONT_DATE = col_datetime("%m/%d/%Y"),
+    CONT_AMT = col_number()
   )
 )
 
 nj_pac_csv <- map(
-  nj_pac_files[c(19, 21:22)], 
-  read_delim,
-  delim = ",",
-  escape_double = FALSE,
-  locale = locale(tz = "US/Eastern"),
+  nj_pac_files[c(19, 21, 22)],
+  read_csv,
   col_types = cols(
     .default = col_character(),
-    CONT_DATE = col_date(format = "%m/%d/%Y"),
+    CONT_DATE = col_datetime("%m/%d/%Y"),
     CONT_AMT = col_double()
   )
 )
 
-nj_pac <-  bind_rows(nj_pac_tsv, nj_pac_csv)
+nj_pac <- bind_rows(nj_pac_tsv, nj_pac_csv)
 
-rm(nj_pac_tsv, nj_pac_csv, nj_pac_files)
+rm(nj_pac_files, nj_pac_tsv, nj_pac_csv)
 ```
 
-All three file groups have the same columns structure, so they can be combined rowsise.
+Since each file has the same structure, we can bind them all into a single data frame.
 
-```{r bind_all, collapse=TRUE}
-# check for matching names
-sum(names(nj_gub) == names(nj_leg)) == length(nj_gub)
-sum(names(nj_leg) == names(nj_pac)) == length(nj_leg)
+```{r bind_all}
+names(nj_gub)
 
-# bind all rows
-nj <- 
-  bind_rows(nj_gub, nj_leg, nj_pac, .id = "source") %>% 
-  clean_names() %>% 
-  arrange(election_year) %>% 
-  mutate(source = source %>% recode(
-    "1" = "gub", 
-    "2" = "leg", 
-    "3" = "pac")
+nj <-
+  bind_rows(nj_gub, nj_leg, nj_cw, nj_pac, .id = "source") %>%
+  clean_names() %>%
+  arrange(desc(election_year)) %>%
+  mutate(
+    source = source %>%
+      recode(
+        "1" = "gub",
+        "2" = "leg",
+        "3" = "cw",
+        "4" = "pac"
+      )
   )
 
-# remove intermediary files
-rm(nj_gub, nj_leg, nj_pac)
+rm(nj_gub, nj_leg, nj_cw, nj_pac)
 ```
 
 ## Explore
