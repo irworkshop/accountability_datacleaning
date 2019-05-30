@@ -262,8 +262,10 @@ nj <-
         "2" = "leg",
         "3" = "cw",
         "4" = "pac"
-      )
-  )
+      ),
+    occupation = coalesce(occupation, occupation_name)
+  ) %>%
+  select(-occupation_name)
 
 rm(nj_gub, nj_leg, nj_cw, nj_pac, nj_cols)
 ```
