@@ -20,7 +20,10 @@ editor_options:
 library(knitr)
 opts_chunk$set(
   echo = TRUE,
-  warning = FALSE
+  warning = FALSE,
+  message = FALSE,
+  error = FALSE,
+  cache = TRUE
 )
 options(width = 99)
 ```
@@ -38,7 +41,7 @@ options(width = 99)
 
 ## Packages
 
-```{r libs, message=FALSE, warning=FALSE, error=FALSE}
+```{r pkgs, message=FALSE, warning=FALSE, error=FALSE}
 # install.packages("pacman")
 pacman::p_load(
   tidyverse,
@@ -46,8 +49,11 @@ pacman::p_load(
   lubridate,
   magrittr,
   janitor,
-  zipcode, 
-  here
+  zipcode,
+  vroom,
+  rvest,
+  here,
+  fs
 )
 ```
 
@@ -109,26 +115,28 @@ nj_gub_files <- list.files(
   full.names = TRUE
 )
 
+# create convenience wrapper fun
+# all files need same col types
+nj_cols <- function() {
+  cols(
+    .default  = col_character(),
+    CONT_DATE = col_date("%m/%d/%Y"),
+    CONT_AMT  = col_double()
+  )
+}
+
 # read files with tab delims
 nj_gub_tsv <- map(
   nj_gub_files[-c(8, 16, 24)],
   read_tsv,
-  col_types = cols(
-    .default = col_character(),
-    CONT_DATE = col_date("%m/%d/%Y"),
-    CONT_AMT = col_double()
-  )
+  col_types = nj_cols()
 )
 
 # read files with comma delims
 nj_gub_csv <- map(
   nj_gub_files[c(8, 16, 24)],
   read_csv,
-  col_types = cols(
-    .default = col_character(),
-    CONT_DATE = col_date("%m/%d/%Y"),
-    CONT_AMT = col_double()
-  )
+  col_types = nj_cols()
 )
 
 # combined all year tables
@@ -158,21 +166,13 @@ nj_leg_files <- list.files(
 nj_leg_tsv <- map(
   nj_leg_files[-c(16:18, 31:33)],
   read_tsv,
-  col_types = cols(
-    .default = col_character(),
-    CONT_DATE = col_date("%m/%d/%Y"),
-    CONT_AMT = col_double()
-  )
+  col_types = nj_cols()
 )
 
 nj_leg_csv <- map(
   nj_leg_files[c(16:18, 31:33)],
   read_csv,
-  col_types = cols(
-    .default = col_character(),
-    CONT_DATE = col_date("%m/%d/%Y"),
-    CONT_AMT = col_double()
-  )
+  col_types = nj_cols()
 )
 
 nj_leg <- bind_rows(nj_leg_tsv, nj_leg_csv)
@@ -200,21 +200,13 @@ nj_cw_files <- list.files(
 nj_cw_tsv <- map(
   nj_cw_files[-c(5:9, 14:18)],
   read_tsv,
-  col_types = cols(
-    .default = col_character(),
-    CONT_DATE = col_date("%m/%d/%Y"),
-    CONT_AMT = col_number()
-  )
+  col_types = nj_cols()
 )
 
 nj_cw_csv <- map(
   nj_cw_files[c(5:9, 14:18)],
   read_csv,
-  col_types = cols(
-    .default = col_character(),
-    CONT_DATE = col_date("%m/%d/%Y"),
-    CONT_AMT = col_double()
-  )
+  col_types = nj_cols()
 )
 
 nj_cw <- bind_rows(nj_cw_tsv, nj_cw_csv)
@@ -242,21 +234,13 @@ nj_pac_files <- list.files(
 nj_pac_tsv <- map(
   nj_pac_files[-c(19, 21, 22)],
   read_tsv,
-  col_types = cols(
-    .default = col_character(),
-    CONT_DATE = col_date("%m/%d/%Y"),
-    CONT_AMT = col_number()
-  )
+  col_types = nj_cols()
 )
 
 nj_pac_csv <- map(
   nj_pac_files[c(19, 21, 22)],
   read_csv,
-  col_types = cols(
-    .default = col_character(),
-    CONT_DATE = col_date("%m/%d/%Y"),
-    CONT_AMT = col_double()
-  )
+  col_types = nj_cols()
 )
 
 nj_pac <- bind_rows(nj_pac_tsv, nj_pac_csv)
@@ -281,7 +265,7 @@ nj <-
       )
   )
 
-rm(nj_gub, nj_leg, nj_cw, nj_pac)
+rm(nj_gub, nj_leg, nj_cw, nj_pac, nj_cols)
 ```
 
 ## Explore
@@ -311,7 +295,9 @@ rows are complete duplicates.
 nrow(distinct(nj)) - nrow(nj)
 ```
 
-The variables vary in their degree of distinctedness.
+### Distinct
+
+The variables vary in their degree of distinctiveness.
 
 ```{r count_distinct}
 nj %>% 
@@ -321,6 +307,22 @@ nj %>%
   mutate(prop_distinct = round(n_distinct / nrow(nj), 4)) %>%
   print(n = length(nj))
 ```
+
+For the least distinct variables, we can explore the most common values.
+
+```{r tabyls}
+nj %>% tabyl(source) %>% arrange(desc(n))
+nj %>% tabyl(party) %>% arrange(desc(n))
+nj %>% tabyl(election_year)
+nj %>% tabyl(election_type) %>% arrange(desc(n))
+nj %>% tabyl(cont_type) %>% arrange(desc(n))
+nj %>% tabyl(receipt_type) %>% arrange(desc(n))
+nj %>% tabyl(office) %>% arrange(desc(n))
+nj %>% tabyl(cont_state) %>% arrange(desc(n))
+nj %>% tabyl(occupation) %>% arrange(desc(n))
+```
+
+### Duplicates
 
 There are nearly 1,300 records with values across every variable duplicated at least once more.
 
@@ -353,13 +355,24 @@ nj <- left_join(nj, nj_dupes)
 Since there is no entirely unique variable to track contributions, we will create one.
 
 ```{r rownames_to_column, collapse=TRUE}
-nj <- nj %>% rownames_to_column(var = "id")
+nj <- nj %>%
+  # unique row num id
+  rownames_to_column(var = "id") %>% 
+  # make all same width
+  mutate(id = str_pad(
+    string = id, 
+    width = max(nchar(id)), 
+    side = "left", 
+    pad = "0")
+  )
+
 n_distinct(nj$id) == nrow(nj)
 ```
 
+### `NA`
 
 ```{r count_na}
-nj %>% map(function(v) sum(is.na(v))) %>% 
+nj %>% map(function(var) sum(is.na(var))) %>% 
   unlist() %>% 
   enframe(name = "variable", value = "n_na") %>% 
   mutate(prop_na = n_na / nrow(nj)) %>% 
@@ -368,12 +381,34 @@ nj %>% map(function(v) sum(is.na(v))) %>%
 
 ## Clean
 
+New variables will be added with _cleaned_ versions of the original data. Cleaning follows the
+[IRW data cleaning guide](https://github.com/irworkshop/accountability_datacleaning/blob/master/R_contribs/accountability_datacleaning/IRW_guides/data_check_guide.md). Cleaned variables will all
+match the `*_clean` name syntax.
+
+This primarily means correcting obvious spelling and structure mistakes in Address, City, State,
+and ZIP variables. Steps will also be taken to remove punctuation and make strings consistently
+uppercase. New variables will also be made from the original data to match the searching parameters
+of the Accountability Project database. Rows with unresolvable errors in `*_clean` will be flagged
+with a logical `*_flag` variable.
+
+Ultimately, each cleaned variable should contain less distinct values. This would indicate typos
+have been corrected and invalid values made `NA`.
+
 ### Year
+
+Since the `cont_date` variable was parsed as an R date object through `readr::read_delim()`, the
+`lubridate::year()` function makes this step easy.
 
 ```{r mutate_year}
 # extract year variable
-nj <- nj %>% mutate(year = year(nj$cont_date))
+nj <- nj %>% mutate(year = year(cont_date))
+```
 
+There are a number of year variables that don't make any sense. Since we previously filtered any
+date before 2008-01-01, the only erroneous dates are from the future. There are 11 records with
+date values from the future. They can be flagged with a new `date_flag` variable.
+
+```{r}
 # print all years
 sort(unique(nj$year))
 
@@ -383,39 +418,225 @@ nj %>%
   arrange(cont_date) %>% 
   mutate(cont = coalesce(cont_lname, cont_non_ind_name)) %>% 
   mutate(rec = coalesce(rec_lname, rec_non_ind_name)) %>% 
-  select(cont_date, cont, cont_amt, rec, source)
+  select(cont_date, cont, cont_amt, rec, source) %>% 
+  print()
 
 # flag future contribs
-nj <- nj %>% 
-  filter(cont_date > today()) %>% 
-  mutate(date_flag = TRUE) %>% 
-  right_join(nj)
+nj <- nj %>% mutate(date_flag = cont_date > today())
 ```
 
-### Zips
+### ZIPs
 
-```{r mutate_zip5}
+The `zipcodes::clean.zipcodes()` function automates many of the required steps to clean US Zip code
+strings. From the function documentation:
+
+> Attempts to detect and clean up suspected ZIP codes. Will strip "ZIP+4" suffixes to match format
+of zipcode data.frame. Restores leading zeros, converts invalid entries to NAs, and returns
+character vector. Note that this function does not attempt to find a matching ZIP code in the
+database, but rather examines formatting alone.
+
+The `zipcode` package also contains a useful `zipcode` database: 
+
+> This package contains a database of city, state, latitude, and longitude information for U.S. ZIP
+codes from the CivicSpace Database (August 2004) and augmented by Daniel Coven's
+federalgovernmentzipcodes.us web site (updated January 22, 2012).
+
+```{r}
 data("zipcode")
-nj <- nj %>% mutate(zip5 = clean.zipcodes(cont_zip))
+
+zipcode <- zipcode %>% 
+  as_tibble() %>% 
+  select(city, state, zip) %>% 
+  mutate(city = str_to_upper(city))
+
+zipcode %>% sample_n(10)
 ```
 
-```{r clean_zip5}
-nj %>% 
+```{r mutate_zip5, collapse=TRUE}
+nj <- nj %>% mutate(zip5 = clean.zipcodes(cont_zip))
+
+nj$zip5 <- nj$zip5 %>% 
+  na_if("0") %>% 
+  na_if("000000") %>% 
+  na_if("999999")
+
+n_distinct(nj$cont_zip)
+n_distinct(nj$zip5)
+```
+
+We can filter for zip codes that are not five characters long and compare them against the first valid zipcode for that contributor's city and state. If need be, the `cont_street1` can be looked
+up to get an exact ZIP.
+
+```{r}
+nj_bad_zip <- nj %>% 
   filter(nchar(zip5) != 5) %>% 
-  select(cont_city, cont_state, cont_zip, zip5) %>% 
-  print(n = nrow(.))
+  select(id, cont_street1, cont_city, cont_state, cont_zip, zip5) %>% 
+  left_join(zipcode, by = c("cont_city" = "city", "cont_state" = "state")) %>% 
+  group_by(cont_city, cont_state) %>% 
+  slice(1) %>% 
+  rename(clean_zip = zip5, valid_zip = zip)
+
+print(nj_bad_zip)
+```
+
+Then some of these typo ZIPs can be corrected explicitly using their unique `id`. Most either
+contain an erroneous leading zero or trailing digit.
+
+```{r}
+nj$zip5[nj$id == "050326"] <- "08816" # valid NJ
+nj$zip5[nj$id == "121548"] <- "83713" # valid boise
+nj$zip5[nj$id == "026593"] <- "08302" # valid bridgeton
+nj$zip5[nj$id == "073409"] <- "08077" # valid cinnaminson
+nj$zip5[nj$id == "087322"] <- "07932" # valid florham
+nj$zip5[nj$id == "088170"] <- NA      # can't say
+nj$zip5[nj$id == "074883"] <- "08691" # valid hamilton
+nj$zip5[nj$id == "054013"] <- NA      # can't say
+nj$zip5[nj$id == "164408"] <- "10013" # valid nyc
+nj$zip5[nj$id == "056842"] <- "08902" # valid n brunswick
+nj$zip5[nj$id == "134903"] <- "08902" # valid n brunswick
+nj$zip5[nj$id == "054997"] <- "84201" # valid ogden
+nj$zip5[nj$id == "145089"] <- "63105" # valid stl
+nj$zip5[nj$id == "239945"] <- "08872" # valid sayreville
+nj$zip5[nj$id == "119008"] <- "07666" # valid teaneck
+nj$zip5[nj$id == "043066"] <- "07083" # valid union
+n_distinct(nj$zip5)
 ```
 
 ### States
 
-```{r clean_state}
+We can clean states abbreviations by comparing the `cont_state` variable values against a
+comprehensive list of valid abbreviations.
+
+The `zipcode` database also contains many city names and the full list of abbreviations for all US
+states, territories, and military mail codes (as opposed to `datasets::state.abb`).
+
+I will add rows for the Canadian provinces from Wikipedia. The capital city and largest city are
+included alongside the proper provincial abbreviation. Canada uses a different ZIP code convention,
+so that data cannot be included.
+
+```{r can_zips, collapse=TRUE}
+canadian_zips <-
+  # read in page source code
+  read_html("https://en.Wikipedia.org/wiki/Provinces_and_territories_of_Canada") %>%
+  # select the table node
+  html_node("table.wikitable:nth-child(12)") %>% 
+  # read as data frame
+  html_table(fill = TRUE) %>% 
+  # clean name and format
+  as_tibble(.name_repair = make_clean_names) %>% 
+  # remove top and bottom
+  slice(-1, -nrow(.)) %>% 
+  # remove extra rows
+  select(postalabbrev, capital_1, largestcity_2) %>%
+  rename(state = postalabbrev,
+         capital = capital_1, 
+         queen = largestcity_2) %>% 
+  # gather city names
+  gather(-state, capital, queen,
+         key = type,
+         value = city) %>% 
+  select(-type) %>% 
+  # keep one if capital == queen
+  distinct()
+```
+
+We can use this database to locate records with invalid values and compare them against possible
+valid values. Here, we can see most invalid `cont_state` values are reasonable typos that can be
+corrected.
+
+```{r valid_abb}
+zipcode <- zipcode %>% 
+  bind_rows(canadian_zips) %>%
+  mutate(city = str_to_upper(city))
+
+valid_abb <- sort(unique(zipcode$state))
+setdiff(valid_abb, state.abb)
+```
+
+```{r clean_state, collapse=TRUE}
+sum(!(na.omit(nj$cont_state) %in% valid_abb))
+n_distinct(nj$cont_state)
+
 nj %>% 
-  filter(cont_state %in% setdiff(cont_state, c(state.abb, "DC"))) %>% 
-  select(cont_city, cont_state, cont_zip) %>% 
+  filter(!(cont_state %in% valid_abb)) %>% 
+  select(id, cont_city, cont_state, cont_zip) %>% 
   filter(!is.na(cont_state)) %>% 
   left_join(
     y = zipcode %>% select(zip, city, state), 
     by = c("cont_zip" = "zip")
+  )
+
+nj$state_clean <- nj$cont_state %>% 
+  str_replace_all(pattern = "MJ", replacement = "NJ") %>% 
+  str_replace_all("^N$",  "NJ") %>% 
+  str_replace_all("NK", "NJ") %>% 
+  str_replace_all("TE", "TN") %>% 
+  str_replace_all("^P$",  "PA") %>% 
+  str_replace_all("^7$",  "PA")
+
+sum(!(na.omit(nj$state_clean) %in% valid_abb))
+n_distinct(nj$state_clean)
+```
+
+```{r tabyl_state}
+nj %>% 
+  tabyl(state_clean) %>% 
+  arrange(desc(n)) %>% 
+  as_tibble() %>% 
+  mutate(cum_percent = cumsum(percent))
+```
+
+### Cities
+
+The State of New Jersey publishes a comprehensive list of all municipalities in the state. We can
+read that file from the internet to check the `cont_city` variable values.
+
+Not all conributions come from New Jersey, but 9/10 do so this list is a good start.
+
+```{r}
+nj_muni <- 
+  read_tsv(
+    file = "https://www.nj.gov/infobank/muni.dat", 
+    col_names = c("muni", "county", "old_code", "tax_code", "district", "fed_code", "county_code"),
+    col_types = cols(.default = col_character())
+  ) %>% 
+  mutate(county = str_to_upper(county),
+         muni = muni %>% 
+           str_to_upper() %>% 
+           str_remove_all("\\sTWP.$") %>% 
+           str_remove_all("\\sBORO$") %>% 
+           str_remove_all("\\sCITY$")
+  )
+
+valid_muni <- sort(unique(nj_muni$muni))
+```
+
+```{r}
+n_distinct(nj$cont_city)
+
+nj %>%
+  filter(!(cont_city %in% zipcode$city)) %>% 
+  filter(!is.na(cont_city)) %>% 
+  group_by(cont_city) %>% 
+  count() %>% 
+  arrange(desc(n))
+
+```
+
+
+## Write
+
+```{r write_csv, eval=FALSE}
+nj %>% 
+  # remove unclean cols
+  select(
+    -cont_state,
+    -cont_zip
+  ) %>% 
+  # write to disk
+  write_csv(
+    path = here("nj_contribs", "data", "nj_contribs_clean.csv"),
+    na = ""
   )
 ```
 
