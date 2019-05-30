@@ -5,7 +5,8 @@ This data was obtained Jan. 2019 via public records request.
 Number of records: 1,792,963
 
 **Create table from csv file**
-See record layout for more information
+
+See data_dictionary.xls for more information
 
 **Create new columns for clean data**
 
