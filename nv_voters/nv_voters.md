@@ -35,9 +35,14 @@ alter table nv_voters add column YEAR;
 update nv_voters set BIRTHYEAR=SUBSTR(DOB,7,4);
 update nv_voters set YEAR=SUBSTR(REGDATE,7,4)`
 
-
+**Other known issues**
 ZIP missing from 18,068 records, 00000 in another 2,445 records
+
 A few ZIPs are out of range for NV.
+
+A few BIRTHYEARs that seem out of range on the low end (1900, 1902,etc...)
+
+1,300+ registration years that are out of range on the low end.
 
 **Export**
 
