@@ -1,6 +1,7 @@
 ##Nevada voter registration
 
 Data acquired via public records request in Oct. 2018 in csv
+See NEVADA DATA FORMAT.PDF for more information
 
 Number of records: 1,778,501
 
