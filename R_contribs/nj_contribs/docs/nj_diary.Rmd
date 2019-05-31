@@ -22,8 +22,7 @@ opts_chunk$set(
   echo = TRUE,
   warning = FALSE,
   message = FALSE,
-  error = FALSE,
-  cache = TRUE
+  error = FALSE
 )
 options(width = 99)
 ```
@@ -64,10 +63,10 @@ Data comes courtesy of the New Jersey Election Law Enforcement Commission (ELEC)
 ["Quick Data Downloads"](https://www.elec.state.nj.us/publicinformation/quickdownload.htm) page in
 four separate files:
 
-* `All_GUB_Text.zip`
-* `All_LEG_Text.zip`
-* `All_CW_Text.zip`
-* `All_PAC_Text.zip`
+* [`All_GUB_Text.zip`]("https://www.elec.state.nj.us/download/Data/Gubernatorial/All_GUB_Text.zip")
+* [`All_LEG_Text.zip`]("https://www.elec.state.nj.us/download/Data/Legislative/All_LEG_Text.zip")
+* [`All_CW_Text.zip`]("https://www.elec.state.nj.us/download/Data/Countywide/All_CW_Text.zip")
+* [`All_PAC_Text.zip`]("https://www.elec.state.nj.us/download/Data/PAC/All_PAC_Text.zip")
 
 Each ZIP file contains a number of individual TXT files separated by year.
 
@@ -83,191 +82,87 @@ to search for the most recent contributor information.
 
 ## Read
 
-Each of the ZIP files can be read using the following process:
+The files can be read into R after downloading and unzipping. The delimiter used in each file is inconsistent, with some using tabs and others using commas. The `vroom::vroom()` function will
+allow us to read all the unzipped files (~100) at once, with automatic detection of the delimeter.
 
-1. Download from ELEC with `utils::download.file()`
-1. Unzip the file into a local directory with `utils::unzip()`
-1. Create a vector of new file names with `base::list.files()`
-1. Read all the files into a list by mapping `readr::read_delim()` to each file with `purrr:map()`
-    * All files have `.txt` extension, but some are really `.tsv` and others `.csv`. Use the
-    appropriate `readr::read_*` function for each deliminator type
-    * Read all columns as character except for `CONT_DATE` and `CONT_AMT`
-1. Combined the rows from each list element into a single table with `dplyr::bind_rows()`
-1. Repeat for other ZIP files
+First, download each file and unzip each into the `nj_contribs/data` directory.
 
-```{r read_gub}
-# download the file
-download.file(
-  url = "https://www.elec.state.nj.us/download/Data/Gubernatorial/All_GUB_Text.zip",
-  destfile = here("nj_contribs", "data", "All_GUB_Text.zip")
+```{r download_files}
+# list all files
+nj_zip_files <- c(
+  "https://www.elec.state.nj.us/download/Data/Gubernatorial/All_GUB_Text.zip", # (5.7 MB)
+  "https://www.elec.state.nj.us/download/Data/Legislative/All_LEG_Text.zip", # (9.7 MB)
+  "https://www.elec.state.nj.us/download/Data/Countywide/All_CW_Text.zip", # (3.5 MB)
+  "https://www.elec.state.nj.us/download/Data/PAC/All_PAC_Text.zip" # (6.2 MB)
 )
 
-# unzip into a folder
-unzip(
-  zipfile = here("nj_contribs", "data", "All_GUB_Text.zip"),
-  overwrite = TRUE,
-  exdir = here("nj_contribs", "data", "All_GUB")
-)
+# create a direcory for download
+dir.create(here("nj_contribs", "data"))
 
-# list the new files
-nj_gub_files <- list.files(
-  path = here("nj_contribs", "data", "All_GUB"),
-  full.names = TRUE
-)
-
-# create convenience wrapper fun
-# all files need same col types
-nj_cols <- function() {
-  cols(
-    .default  = col_character(),
-    CONT_DATE = col_date("%m/%d/%Y"),
-    CONT_AMT  = col_double()
+# download each file in the list
+# 
+for (file in nj_zip_files) {
+  download.file(
+    url = file,
+    destfile = here(
+      "nj_contribs",
+      "data",
+      basename(file)
+    )
   )
 }
 
-# read files with tab delims
-nj_gub_tsv <- map(
-  nj_gub_files[-c(8, 16, 24)],
-  read_tsv,
-  col_types = nj_cols()
-)
-
-# read files with comma delims
-nj_gub_csv <- map(
-  nj_gub_files[c(8, 16, 24)],
-  read_csv,
-  col_types = nj_cols()
-)
-
-# combined all year tables
-nj_gub <- bind_rows(nj_gub_tsv, nj_gub_csv)
-
-# remove intermediate data
-rm(nj_gub_files, nj_gub_tsv, nj_gub_csv)
+# unzip each file downloaded
+here("nj_contribs", "data") %>%
+  dir_ls(type = "file", glob = "*.zip") %>%
+  map(
+    unzip,
+    exdir = here("nj_contribs", "data"),
+    overwrite = TRUE
+  )
 ```
 
-```{r read_leg}
-download.file(
-  url = "https://www.elec.state.nj.us/download/Data/Legislative/All_LEG_Text.zip",
-  destfile = here("nj_contribs", "data", "All_LEG_Text.zip")
-)
+While every file has the same structure, the _names_ of those columns vary slightly. In some, there
+is an `occupation` variable; in others, that variable is named `occupation_name`. This incongruity
+prevents them from all being read together with `vroom::vroom()`. We can solve this by extracting
+the variable names from a single file and using those to names for every file.
 
-unzip(
-  zipfile = here("nj_contribs", "data", "All_LEG_Text.zip"),
-  overwrite = TRUE,
-  exdir = here("nj_contribs", "data", "All_LEG")
-)
-
-nj_leg_files <- list.files(
-  path = here("nj_contribs", "data", "All_LEG"),
-  full.names = TRUE
-)
-
-nj_leg_tsv <- map(
-  nj_leg_files[-c(16:18, 31:33)],
-  read_tsv,
-  col_types = nj_cols()
-)
-
-nj_leg_csv <- map(
-  nj_leg_files[c(16:18, 31:33)],
-  read_csv,
-  col_types = nj_cols()
-)
-
-nj_leg <- bind_rows(nj_leg_tsv, nj_leg_csv)
-
-rm(nj_leg_files, nj_leg_tsv, nj_leg_csv)
+```{r}
+# extract names from first file
+nj_names <-
+  here("nj_contribs", "data") %>%
+  dir_ls(type = "file", glob = "*.txt") %>%
+  extract(1) %>%
+  read.table(sep = "\t", nrows = 1, header = FALSE) %>%
+  as_vector() %>%
+  str_to_lower()
 ```
 
-```{r read_local}
-download.file(
-  url = "https://www.elec.state.nj.us/download/Data/Countywide/All_CW_Text.zip",
-  destfile = here("nj_contribs", "data", "All_CW_Text.zip")
-)
+One we have this vector of column names, we can read each file into a single data fram. Every
+column will be read as character strings and parsed after the fact using the `dplyr::parse_*()`
+functions. Normally we would use `col_types = cols(cont_date = col_date())`, but this seems to
+introduce a number of `NA` values from some unknown parsing error that is does not happen with
+`dplyr::parse_date()`.
 
-unzip(
-  zipfile = here("nj_contribs", "data", "All_CW_Text.zip"),
-  overwrite = TRUE,
-  exdir = here("nj_contribs", "data", "All_CW")
-)
-
-nj_cw_files <- list.files(
-  path = here("nj_contribs", "data", "All_CW"),
-  full.names = TRUE
-)
-
-nj_cw_tsv <- map(
-  nj_cw_files[-c(5:9, 14:18)],
-  read_tsv,
-  col_types = nj_cols()
-)
-
-nj_cw_csv <- map(
-  nj_cw_files[c(5:9, 14:18)],
-  read_csv,
-  col_types = nj_cols()
-)
-
-nj_cw <- bind_rows(nj_cw_tsv, nj_cw_csv)
-
-rm(nj_cw_files, nj_cw_tsv, nj_cw_csv)
-```
-
-```{r read_pac}
-download.file(
-  url = "https://www.elec.state.nj.us/download/Data/PAC/All_PAC_Text.zip",
-  destfile = here("nj_contribs", "data", "All_PAC_Text.zip")
-)
-
-unzip(
-  zipfile = here("nj_contribs", "data", "All_PAC_Text.zip"),
-  overwrite = TRUE,
-  exdir = here("nj_contribs", "data", "All_PAC")
-)
-
-nj_pac_files <- list.files(
-  path = here("nj_contribs", "data", "All_PAC"),
-  full.names = TRUE
-)
-
-nj_pac_tsv <- map(
-  nj_pac_files[-c(19, 21, 22)],
-  read_tsv,
-  col_types = nj_cols()
-)
-
-nj_pac_csv <- map(
-  nj_pac_files[c(19, 21, 22)],
-  read_csv,
-  col_types = nj_cols()
-)
-
-nj_pac <- bind_rows(nj_pac_tsv, nj_pac_csv)
-
-rm(nj_pac_files, nj_pac_tsv, nj_pac_csv)
-```
-
-Since each file has the same structure, we can bind them all into a single data frame.
-
-```{r bind_all}
+```{r}
 nj <-
-  bind_rows(nj_gub, nj_leg, nj_cw, nj_pac, .id = "source") %>%
-  clean_names() %>%
-  arrange(desc(election_year)) %>%
-  mutate(
-    source = source %>%
-      recode(
-        "1" = "gub",
-        "2" = "leg",
-        "3" = "cw",
-        "4" = "pac"
-      ),
-    occupation = coalesce(occupation, occupation_name)
+  here("nj_contribs", "data") %>%
+  dir_ls(type = "file", glob = "*.txt") %>%
+  vroom(
+    delim = NULL,
+    col_names = nj_names,
+    col_types = cols(.default = "c"),
+    id = "source",
+    skip = 1,
+    trim_ws = TRUE,
+    locale = locale(tz = "US/Eastern"),
+    progress = FALSE
   ) %>%
-  select(-occupation_name)
-
-rm(nj_gub, nj_leg, nj_cw, nj_pac, nj_cols)
+  mutate(
+    source    = basename(source),
+    cont_date = parse_date(cont_date, "%m/%d/%Y"),
+    cont_amt  = parse_number(cont_amt)
+  )
 ```
 
 ## Explore
@@ -484,24 +379,25 @@ print(nj_bad_zip)
 Then some of these typo ZIPs can be corrected explicitly using their unique `id`. Most either
 contain an erroneous leading zero or trailing digit.
 
-```{r}
-nj$zip5[nj$id == "050326"] <- "08816" # valid NJ
-nj$zip5[nj$id == "121548"] <- "83713" # valid boise
-nj$zip5[nj$id == "026593"] <- "08302" # valid bridgeton
-nj$zip5[nj$id == "073409"] <- "08077" # valid cinnaminson
-nj$zip5[nj$id == "087322"] <- "07932" # valid florham
-nj$zip5[nj$id == "088170"] <- NA      # can't say
-nj$zip5[nj$id == "074883"] <- "08691" # valid hamilton
-nj$zip5[nj$id == "054013"] <- NA      # can't say
-nj$zip5[nj$id == "164408"] <- "10013" # valid nyc
-nj$zip5[nj$id == "056842"] <- "08902" # valid n brunswick
-nj$zip5[nj$id == "134903"] <- "08902" # valid n brunswick
-nj$zip5[nj$id == "054997"] <- "84201" # valid ogden
-nj$zip5[nj$id == "145089"] <- "63105" # valid stl
-nj$zip5[nj$id == "239945"] <- "08872" # valid sayreville
-nj$zip5[nj$id == "119008"] <- "07666" # valid teaneck
-nj$zip5[nj$id == "043066"] <- "07083" # valid union
+```{r zip_fix_manual, collapse=TRUE}
+nj$zip5[nj$id == "078916"] <- "08816" # valid NJ
+nj$zip5[nj$id == "179554"] <- "83713" # valid boise
+nj$zip5[nj$id == "082309"] <- "08302" # valid bridgeton
+nj$zip5[nj$id == "137753"] <- "08077" # valid cinnaminson
+nj$zip5[nj$id == "187741"] <- "07932" # valid florham
+nj$zip5[nj$id == "188589"] <- NA      # can't say
+nj$zip5[nj$id == "139227"] <- "08691" # valid hamilton
+nj$zip5[nj$id == "258254"] <- NA      # can't say
+nj$zip5[nj$id == "165661"] <- "10013" # valid nyc
+nj$zip5[nj$id == "238983"] <- "08902" # valid n brunswick
+nj$zip5[nj$id == "261083"] <- "08902" # valid n brunswick
+nj$zip5[nj$id == "259238"] <- "84201" # valid ogden
+nj$zip5[nj$id == "098051"] <- "63105" # valid stl
+nj$zip5[nj$id == "146304"] <- "08872" # valid sayreville
+nj$zip5[nj$id == "253099"] <- "07666" # valid teaneck
+nj$zip5[nj$id == "038095"] <- "07083" # valid union
 n_distinct(nj$zip5)
+sum(nchar(nj$zip5) != 5, na.rm = TRUE)
 ```
 
 ### States
@@ -602,6 +498,7 @@ nj_muni <-
     col_names = c("muni", "county", "old_code", "tax_code", "district", "fed_code", "county_code"),
     col_types = cols(.default = col_character())
   ) %>% 
+  # remove muni type suffix
   mutate(county = str_to_upper(county),
          muni = muni %>% 
            str_to_upper() %>% 
@@ -613,18 +510,19 @@ nj_muni <-
 valid_muni <- sort(unique(nj_muni$muni))
 ```
 
+With this list and the fairly comprehensive list of cities from other states, we can isolate only
+the most suspicious `cont_city` values.
+
 ```{r}
 n_distinct(nj$cont_city)
 
 nj %>%
-  filter(!(cont_city %in% zipcode$city)) %>% 
+  filter(!(cont_city %in% c(valid_muni, zipcode$city))) %>% 
   filter(!is.na(cont_city)) %>% 
   group_by(cont_city) %>% 
   count() %>% 
   arrange(desc(n))
-
 ```
-
 
 ## Write
 
