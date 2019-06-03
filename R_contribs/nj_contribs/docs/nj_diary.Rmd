@@ -22,7 +22,9 @@ opts_chunk$set(
   echo = TRUE,
   warning = FALSE,
   message = FALSE,
-  error = FALSE
+  error = FALSE,
+  comment = "#>",
+  fig.path = "/nj_contribs/plots/"
 )
 options(width = 99)
 ```
@@ -40,17 +42,18 @@ options(width = 99)
 
 ## Packages
 
-```{r pkgs, message=FALSE, warning=FALSE, error=FALSE}
+```{r p_load, message=FALSE, warning=FALSE, error=FALSE}
 # install.packages("pacman")
 pacman::p_load(
   tidyverse,
-  RSelenium,
   lubridate,
   magrittr,
   janitor,
   zipcode,
+  refinr,
   vroom,
   rvest,
+  httr,
   here,
   fs
 )
@@ -82,44 +85,95 @@ to search for the most recent contributor information.
 
 ## Read
 
-The files can be read into R after downloading and unzipping. The delimiter used in each file is inconsistent, with some using tabs and others using commas. The `vroom::vroom()` function will
-allow us to read all the unzipped files (~100) at once, with automatic detection of the delimeter.
+Since ELEC breaks up each year into a separate file and each groups them by contribution type, we
+will have to do a little work to download, unzip, and read them all at once.
 
-First, download each file and unzip each into the `nj_contribs/data` directory.
+Furthermore, the delimiter used in each file is inconsistent, with some using tabs and others using
+commas. The newly developed `vroom::vroom()` function is perfect for this situation, as it will
+allow us to read all the unzipped files (~100) at once, with automatic detection of the delimiter.
 
-```{r download_files}
-# list all files
-nj_zip_files <- c(
+First, we will get some general info on the files we are about to download. We want to be sure the
+ZIP files aren't old, huge in size, or contain too many/weird files.
+
+```{r pre_download}
+response <- GET("https://www.elec.state.nj.us/download/Data/Gubernatorial/All_GUB_Text.zip")
+utils:::format.object_size(as.numeric(headers(response)[["Content-Length"]]), "auto")
+httr::headers(response)[["last-modified"]]
+```
+
+Then, create a list of files to be downloaded at once.
+
+```{r}
+nj_zip_urls <- c(
   "https://www.elec.state.nj.us/download/Data/Gubernatorial/All_GUB_Text.zip", # (5.7 MB)
   "https://www.elec.state.nj.us/download/Data/Legislative/All_LEG_Text.zip", # (9.7 MB)
   "https://www.elec.state.nj.us/download/Data/Countywide/All_CW_Text.zip", # (3.5 MB)
   "https://www.elec.state.nj.us/download/Data/PAC/All_PAC_Text.zip" # (6.2 MB)
 )
+```
 
+If any of the files have not yet been downloaded today, download them again to ensure the latest
+data from ELEC is being analyzed.
+
+```{r download_files, collapse=TRUE}
 # create a direcory for download
-dir.create(here("nj_contribs", "data"))
+dir.create(here("nj_contribs", "data"), showWarnings = FALSE)
 
-# download each file in the list
-# 
-for (file in nj_zip_files) {
-  download.file(
-    url = file,
-    destfile = here(
-      "nj_contribs",
-      "data",
-      basename(file)
-    )
-  )
+# file date wrapper function
+any_old_files <- function(path, type) {
+  path %>%
+    dir_ls(type = "file", glob = type) %>% 
+    file.mtime() %>% 
+    floor_date("day") %>% 
+    equals(today()) %>% 
+    not() %>% 
+    any()
 }
 
-# unzip each file downloaded
-here("nj_contribs", "data") %>%
-  dir_ls(type = "file", glob = "*.zip") %>%
+# download each file in the vector
+if (here("nj_contribs", "data") %>% any_old_files("*.zip")) {
+  for (url in nj_zip_urls) {
+    download.file(
+      url = url,
+      destfile = here(
+        "nj_contribs",
+        "data",
+        basename(url)
+      )
+    )
+  }
+}
+```
+
+View the content of all ZIP files before unzipping.
+
+```{r view_zip}
+nj_zip_files <- dir_ls(
+  path = here("nj_contribs", "data"),
+  type = "file",
+  glob = "*.zip",
+)
+
+nj_zip_files %>% 
+  map(unzip, list = TRUE) %>% 
+  bind_rows(.id = "zip") %>%
+  mutate(zip = basename(zip)) %>% 
+  set_names(c("zip", "file", "bytes", "date")) %>% 
+  print()
+```
+
+Each ZIP file contains individual text files for each election year. If the `/data` directory
+does not already contain these files, or if any are older than a day, unzip them now.
+
+```{r unzip}
+if (here("nj_contribs", "data") %>% any_old_files("*.txt")) {
   map(
+    nj_zip_files,
     unzip,
     exdir = here("nj_contribs", "data"),
     overwrite = TRUE
   )
+}
 ```
 
 While every file has the same structure, the _names_ of those columns vary slightly. In some, there
@@ -127,24 +181,24 @@ is an `occupation` variable; in others, that variable is named `occupation_name`
 prevents them from all being read together with `vroom::vroom()`. We can solve this by extracting
 the variable names from a single file and using those to names for every file.
 
-```{r}
-# extract names from first file
+```{r make_names}
+# extract names from first line of first file
 nj_names <-
   here("nj_contribs", "data") %>%
   dir_ls(type = "file", glob = "*.txt") %>%
   extract(1) %>%
-  read.table(sep = "\t", nrows = 1, header = FALSE) %>%
+  read.table(nrows = 1, sep = "\t", header = FALSE) %>%
   as_vector() %>%
-  str_to_lower()
+  make_clean_names()
 ```
 
-One we have this vector of column names, we can read each file into a single data fram. Every
+One we have this vector of column names, we can read each file into a single data frame. Every
 column will be read as character strings and parsed after the fact using the `dplyr::parse_*()`
 functions. Normally we would use `col_types = cols(cont_date = col_date())`, but this seems to
 introduce a number of `NA` values from some unknown parsing error that is does not happen with
 `dplyr::parse_date()`.
 
-```{r}
+```{r vroom_read}
 nj <-
   here("nj_contribs", "data") %>%
   dir_ls(type = "file", glob = "*.txt") %>%
@@ -152,20 +206,21 @@ nj <-
     delim = NULL,
     col_names = nj_names,
     col_types = cols(.default = "c"),
-    id = "source",
+    id = "source_file",
     skip = 1,
     trim_ws = TRUE,
     locale = locale(tz = "US/Eastern"),
     progress = FALSE
   ) %>%
+  # parse non-character cols
   mutate(
-    source    = basename(source),
-    cont_date = parse_date(cont_date, "%m/%d/%Y"),
-    cont_amt  = parse_number(cont_amt)
+    source_file = basename(source_file) %>% str_remove("\\.txt$"),
+    cont_date   = parse_date(cont_date, "%m/%d/%Y"),
+    cont_amt    = parse_number(cont_amt)
   )
 ```
 
-## Explore
+## Explore and Flag
 
 Below is the structure of the data arranged randomly by row. There are `r nrow(nj)` rows of 
 `r length(nj)` variables.
@@ -174,25 +229,41 @@ Below is the structure of the data arranged randomly by row. There are `r nrow(n
 glimpse(sample_frac(nj))
 ```
 
+### Dates
+
 The hard files contain data on elections from `r min(nj$election_year)` to `r
-max(nj$election_year)`. When you filter out those contributions made before 2008, about
-$\frac{2}{3}$ of the data is remove.
+max(nj$election_year)`. When you filter out those contributions made before 2008, more than 2/3rds
+of the data is removed.
 
 ```{r filter_date}
-nj <- nj %>% filter(cont_date > "2008-01-01")
-nrow(nj)
+sum(nj$cont_date < "2008-01-01", na.rm = TRUE) / nrow(nj)
 min(nj$cont_date)
 max(nj$cont_date)
 ```
 
-There are `r nrow(nj)-nrow(distinct(nj))` rows with duplicates values in every variable. Over 1% of
-rows are complete duplicates.
-
-```{r n_distinct}
-nrow(distinct(nj)) - nrow(nj)
+```{r plot_n_year, fig.width=10}
+nj %>% 
+  group_by(year = year(cont_date)) %>% 
+  count() %>% 
+  ggplot(mapping = aes(x = year, y = n)) +
+  geom_col() +
+  coord_cartesian(xlim = c(1978, 2015)) +
+  scale_x_continuous(breaks = 1978:2015) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(
+    title = "Number of Records Over Time",
+    subtitle = "New Jersey ELEC Contribution Files",
+    x = "Contribution Year",
+    y = "Number of Records"
+  )
 ```
 
-### Distinct
+```{r}
+nj <- nj %>% 
+  filter(year(cont_date) > 2008)
+```
+
+### Distinct Values
 
 The variables vary in their degree of distinctiveness.
 
@@ -207,21 +278,31 @@ nj %>%
 
 For the least distinct variables, we can explore the most common values.
 
-```{r tabyls}
-nj %>% tabyl(source) %>% arrange(desc(n))
-nj %>% tabyl(party) %>% arrange(desc(n))
-nj %>% tabyl(election_year)
-nj %>% tabyl(election_type) %>% arrange(desc(n))
-nj %>% tabyl(cont_type) %>% arrange(desc(n))
-nj %>% tabyl(receipt_type) %>% arrange(desc(n))
-nj %>% tabyl(office) %>% arrange(desc(n))
-nj %>% tabyl(cont_state) %>% arrange(desc(n))
-nj %>% tabyl(occupation) %>% arrange(desc(n))
+```{r tabyls_function, echo=FALSE}
+print_tabyl <- function(data, ...) {
+  as_tibble(arrange(tabyl(data, ...), desc(n)))
+}
 ```
 
-### Duplicates
+```{r print_tabyls}
+print_tabyl(nj, source_file)
+print_tabyl(nj, party)
+print_tabyl(nj, election_year) %>% arrange(election_year)
+print_tabyl(nj, cont_type)
+print_tabyl(nj, receipt_type)
+print_tabyl(nj, office)
+print_tabyl(nj, cont_state)
+print_tabyl(nj, occupation)
+```
 
-There are nearly 1,300 records with values across every variable duplicated at least once more.
+### Duplicate Records
+
+There are `r nrow(nj)-nrow(distinct(nj))` rows with duplicates values in every variable. Over 1% of
+rows are complete duplicates.
+
+```{r n_distinct}
+nrow(distinct(nj)) - nrow(nj)
+```
 
 ```{r get_dupes}
 # create dupes df
@@ -238,15 +319,20 @@ nj_dupes %>%
     cont_amt,
     cont_date,
     rec,
-    dupe_count
-  ) %>% 
-  print()
+    dupe_count,
+    dupe_flag
+  )
 ```
 
 Flag these duplicate rows by joining the duplicate table with the original data.
 
-```{r}
-nj <- left_join(nj, nj_dupes)
+```{r flag_dupes, warning=FALSE, message=FALSE, error=FALSE}
+nj <- nj %>% 
+  left_join(nj_dupes) %>% 
+  mutate(
+    dupe_count = ifelse(is.na(dupe_count), 1, dupe_count),
+    dupe_flag  = !is.na(dupe_flag)
+    )
 ```
 
 Since there is no entirely unique variable to track contributions, we will create one.
@@ -263,13 +349,36 @@ nj <- nj %>%
     pad = "0")
   )
 
+# distinct for every row
 n_distinct(nj$id) == nrow(nj)
 ```
 
-### `NA`
+### `NA` Values
+
+The variables also vary in their degree of values that are `NA` (empty). 
+
+Many of these variables are understandably `NA`; there cannot, for example, be both a `cont_lname`
+and `cont_non_ind_name` value for a single record, as these two variables are mutually exclusive.
+These mutually exclusive variables cover 100% of records.
+
+```{r mutually_exclusive, collapse=TRUE}
+# prop NA each sum to 1
+mean(is.na(nj$rec_lname)) + mean(is.na(nj$rec_non_ind_name))
+```
+
+Other variables like `cont_mname` or `cont_suffix` simply aren't recorded as frequently or as
+common as the required `cont_lname` (for a single person).
+
+It's notable that many important variables (e.g., `cont_type`, `cont_amt`, `cont_date`, `office`)
+contain _zero_ `NA` values.
+
+The geographic contributor variables (e.g., `cont_zip`, `cont_city`) each contain 2-3% `NA` values.
+
+The full count of `NA` for each variable in the data frame can be found below:
 
 ```{r count_na}
-nj %>% map(function(var) sum(is.na(var))) %>% 
+nj %>% 
+  map(function(var) sum(is.na(var))) %>% 
   unlist() %>% 
   enframe(name = "variable", value = "n_na") %>% 
   mutate(prop_na = n_na / nrow(nj)) %>% 
@@ -291,38 +400,46 @@ with a logical `*_flag` variable.
 Ultimately, each cleaned variable should contain less distinct values. This would indicate typos
 have been corrected and invalid values made `NA`.
 
-### Year
+### Create Year
 
-Since the `cont_date` variable was parsed as an R date object through `readr::read_delim()`, the
-`lubridate::year()` function makes this step easy.
+Since the `cont_date` variable was parsed as an R date object through `readr::parse_date()`, the
+`lubridate::year()` function makes it easy to extract the contribution year from the contribution
+date.
 
 ```{r mutate_year}
 # extract year variable
-nj <- nj %>% mutate(year = year(cont_date))
+nj <- nj %>% mutate(cont_year = year(cont_date))
+```
+
+Note that this new `cont_year` variable, _does not_ always equal the `election_year` variable.
+
+```{r year_vars_diff}
+mean(nj$cont_year == nj$election_year)
 ```
 
 There are a number of year variables that don't make any sense. Since we previously filtered any
-date before 2008-01-01, the only erroneous dates are from the future. There are 11 records with
-date values from the future. They can be flagged with a new `date_flag` variable.
+date before 2008-01-01, the only erroneous dates are from the future. There are 
+`r sum(nj$cont_date > today())` records with date values from the future. They can be flagged with
+a new `date_flag` variable.
 
-```{r}
-# print all years
-sort(unique(nj$year))
-
+```{r view_future, echo=FALSE}
 # view futures contribs
 nj %>% 
   filter(cont_date > today()) %>% 
   arrange(cont_date) %>% 
   mutate(cont = coalesce(cont_lname, cont_non_ind_name)) %>% 
   mutate(rec = coalesce(rec_lname, rec_non_ind_name)) %>% 
-  select(cont_date, cont, cont_amt, rec, source) %>% 
+  select(cont_date, cont, cont_amt, rec, source_file) %>% 
   print()
-
-# flag future contribs
-nj <- nj %>% mutate(date_flag = cont_date > today())
 ```
 
-### ZIPs
+```{r flag_dates}
+# flag future contribs
+nj <- nj %>% 
+  mutate(date_flag = cont_date > today())
+```
+
+### ZIP Code
 
 The `zipcodes::clean.zipcodes()` function automates many of the required steps to clean US Zip code
 strings. From the function documentation:
@@ -370,7 +487,6 @@ nj_bad_zip <- nj %>%
   select(id, cont_street1, cont_city, cont_state, cont_zip, zip5) %>% 
   left_join(zipcode, by = c("cont_city" = "city", "cont_state" = "state")) %>% 
   group_by(cont_city, cont_state) %>% 
-  slice(1) %>% 
   rename(clean_zip = zip5, valid_zip = zip)
 
 print(nj_bad_zip)
@@ -380,27 +496,30 @@ Then some of these typo ZIPs can be corrected explicitly using their unique `id`
 contain an erroneous leading zero or trailing digit.
 
 ```{r zip_fix_manual, collapse=TRUE}
-nj$zip5[nj$id == "078916"] <- "08816" # valid NJ
-nj$zip5[nj$id == "179554"] <- "83713" # valid boise
-nj$zip5[nj$id == "082309"] <- "08302" # valid bridgeton
-nj$zip5[nj$id == "137753"] <- "08077" # valid cinnaminson
-nj$zip5[nj$id == "187741"] <- "07932" # valid florham
-nj$zip5[nj$id == "188589"] <- NA      # can't say
-nj$zip5[nj$id == "139227"] <- "08691" # valid hamilton
-nj$zip5[nj$id == "258254"] <- NA      # can't say
-nj$zip5[nj$id == "165661"] <- "10013" # valid nyc
-nj$zip5[nj$id == "238983"] <- "08902" # valid n brunswick
-nj$zip5[nj$id == "261083"] <- "08902" # valid n brunswick
-nj$zip5[nj$id == "259238"] <- "84201" # valid ogden
-nj$zip5[nj$id == "098051"] <- "63105" # valid stl
-nj$zip5[nj$id == "146304"] <- "08872" # valid sayreville
-nj$zip5[nj$id == "253099"] <- "07666" # valid teaneck
-nj$zip5[nj$id == "038095"] <- "07083" # valid union
+nj$zip5[nj$id %in% nj_bad_zip$id] <- c(
+  "07083", # (070083) valid union
+  "08816", # (008816) valid NJ
+  "08302", # (080302) valid bridgeton
+  "63105", # (631053) valid stl
+  "08077", # (089077) valid cinnaminson
+  "08691", # (086914) valid hamilton
+  "08872", # (088872) valid sayreville
+  "10013", # (100313) valid nyc
+  "83713", # (083713) valid boise
+  "07932", # (079325) valid florham
+  "08028", # (08)     valid glassboro
+  "08902", # (008902) valid n brunswick
+  "07666", # (076666) valid teaneck
+  "07047", # (07)     valid jersey city
+  "84201", # (084201) valid ogden
+  "08902"  # (008902) valid n brunswick
+)
+
 n_distinct(nj$zip5)
 sum(nchar(nj$zip5) != 5, na.rm = TRUE)
 ```
 
-### States
+### State Abbreviations
 
 We can clean states abbreviations by comparing the `cont_state` variable values against a
 comprehensive list of valid abbreviations.
@@ -412,49 +531,39 @@ I will add rows for the Canadian provinces from Wikipedia. The capital city and 
 included alongside the proper provincial abbreviation. Canada uses a different ZIP code convention,
 so that data cannot be included.
 
-```{r can_zips, collapse=TRUE}
-canadian_zips <-
-  # read in page source code
+```{r can_abbs, collapse=TRUE}
+canadian_abbs <-
   read_html("https://en.Wikipedia.org/wiki/Provinces_and_territories_of_Canada") %>%
-  # select the table node
   html_node("table.wikitable:nth-child(12)") %>% 
-  # read as data frame
   html_table(fill = TRUE) %>% 
-  # clean name and format
   as_tibble(.name_repair = make_clean_names) %>% 
-  # remove top and bottom
   slice(-1, -nrow(.)) %>% 
-  # remove extra rows
   select(postalabbrev, capital_1, largestcity_2) %>%
   rename(state = postalabbrev,
          capital = capital_1, 
          queen = largestcity_2) %>% 
-  # gather city names
   gather(-state, capital, queen,
          key = type,
          value = city) %>% 
   select(-type) %>% 
-  # keep one if capital == queen
   distinct()
 ```
 
 We can use this database to locate records with invalid values and compare them against possible
-valid values. Here, we can see most invalid `cont_state` values are reasonable typos that can be
-corrected.
+valid values.
 
 ```{r valid_abb}
 zipcode <- zipcode %>% 
-  bind_rows(canadian_zips) %>%
+  bind_rows(canadian_abbs) %>%
   mutate(city = str_to_upper(city))
 
 valid_abb <- sort(unique(zipcode$state))
 setdiff(valid_abb, state.abb)
 ```
 
-```{r clean_state, collapse=TRUE}
-sum(!(na.omit(nj$cont_state) %in% valid_abb))
-n_distinct(nj$cont_state)
+Here, we can see most invalid `cont_state` values are reasonable typos that can be corrected.
 
+```{r view_bad_abbs, echo=FALSE}
 nj %>% 
   filter(!(cont_state %in% valid_abb)) %>% 
   select(id, cont_city, cont_state, cont_zip) %>% 
@@ -463,18 +572,25 @@ nj %>%
     y = zipcode %>% select(zip, city, state), 
     by = c("cont_zip" = "zip")
   )
+```
+
+```{r clean_abbs, collapse=TRUE}
+sum(!(na.omit(nj$cont_state) %in% valid_abb))
+n_distinct(nj$cont_state)
 
 nj$state_clean <- nj$cont_state %>% 
   str_replace_all(pattern = "MJ", replacement = "NJ") %>% 
-  str_replace_all("^N$",  "NJ") %>% 
-  str_replace_all("NK", "NJ") %>% 
-  str_replace_all("TE", "TN") %>% 
-  str_replace_all("^P$",  "PA") %>% 
-  str_replace_all("^7$",  "PA")
+  str_replace_all("^N$", "NJ") %>% 
+  str_replace_all("NK",  "NJ") %>% 
+  str_replace_all("TE",  "TN") %>% 
+  str_replace_all("^P$", "PA") %>% 
+  str_replace_all("^7$", "PA")
 
 sum(!(na.omit(nj$state_clean) %in% valid_abb))
 n_distinct(nj$state_clean)
 ```
+
+Over 98% of all contributions have a `state_clean` value from the top 10 most common states.
 
 ```{r tabyl_state}
 nj %>% 
@@ -484,12 +600,12 @@ nj %>%
   mutate(cum_percent = cumsum(percent))
 ```
 
-### Cities
+### City Names
 
 The State of New Jersey publishes a comprehensive list of all municipalities in the state. We can
 read that file from the internet to check the `cont_city` variable values.
 
-Not all conributions come from New Jersey, but 9/10 do so this list is a good start.
+Not all contributions come from New Jersey, but 9/10 do so this list is a good start.
 
 ```{r}
 nj_muni <- 
@@ -498,30 +614,241 @@ nj_muni <-
     col_names = c("muni", "county", "old_code", "tax_code", "district", "fed_code", "county_code"),
     col_types = cols(.default = col_character())
   ) %>% 
-  # remove muni type suffix
-  mutate(county = str_to_upper(county),
-         muni = muni %>% 
-           str_to_upper() %>% 
-           str_remove_all("\\sTWP.$") %>% 
-           str_remove_all("\\sBORO$") %>% 
-           str_remove_all("\\sCITY$")
+  mutate(
+    county = str_to_upper(county),
+    muni   = str_to_upper(muni)
   )
 
-valid_muni <- sort(unique(nj_muni$muni))
+nj_valid_muni <- sort(unique(nj_muni$muni))
 ```
 
 With this list and the fairly comprehensive list of cities from other states, we can isolate only
 the most suspicious `cont_city` values.
 
-```{r}
-n_distinct(nj$cont_city)
+There are `r sum(!(nj$cont_city %in% c(nj_valid_muni, zipcode$city)))` records (~5%) with a
+`cont_city` value not in either of these two lists. Of these suspicious records, there are
+`r n_distinct(nj$cont_city[!(nj$cont_city %in% c(nj_valid_muni, zipcode$city))])` distinct 
+`cont_city`values.
 
-nj %>%
-  filter(!(cont_city %in% c(valid_muni, zipcode$city))) %>% 
+We can expand our list of valid city values to include those without the municipality type suffix,
+those with the full version of the suffix, and those with the suffix but without punctuation.
+
+```{r}
+nj_without_suffix <- nj_valid_muni %>% 
+  str_remove("[:punct:]") %>% 
+  str_remove("\\b(\\w+)$") %>% 
+  str_trim()
+
+nj_no_punct <- nj_valid_muni %>% 
+  str_remove_all("[:punct:]")
+
+nj_full_suffix <- nj_valid_muni %>% 
+  str_replace("TWP\\.$", "TOWNSHIP")
+
+all_valid_muni <- sort(unique(c(
+  nj_valid_muni,
+  nj_without_suffix, 
+  nj_no_punct,
+  nj_full_suffix,
+  zipcode$city,
+  "WHITEHOUSE STATION",
+  "MCAFEE",
+  "GLEN MILLS",
+  "KINGS POINT"
+)))
+```
+
+After this full list is created, there are now only `r sum(!(nj$cont_city %in% all_valid_muni))`
+records with a `cont_city` value not in our extended list. There are 
+`r n_distinct(nj$cont_city[!(nj$cont_city %in% all_valid_muni)])` distinct `cont_city` values
+that need to be checked or corrected.
+
+```{r}
+nj_bad_city <- nj %>%
+  filter(!(cont_city %in% all_valid_muni)) %>% 
   filter(!is.na(cont_city)) %>% 
-  group_by(cont_city) %>% 
+  select(id, cont_street1, state_clean, zip5, cont_city)
+```
+
+Many (almost all) of these "bad" `cont_city` values are valid city names simply not in the created
+list of municipalities. They are either too obscure, are unincorperated territories, or have too
+many valid spelling variations. Almost 50% of all "bad" values are from the 10 most common, and are
+all actually valid.
+
+```{r view_bad}
+nj_bad_city %>% 
+  group_by(cont_city, state_clean) %>% 
   count() %>% 
-  arrange(desc(n))
+  ungroup() %>% 
+  arrange(desc(n)) %>% 
+  mutate(
+    prop = n / sum(n),
+    cumsum = cumsum(n),
+    cumprop = cumsum(prop)
+  )
+```
+
+Invalid `cont_city` values are going to be corrected using key collision and ngram fingerprint
+algorithms from the open source tool OpenRefine. These algorithms are ported to R in the package
+`refinr`. These tools are able to correct many simple errors, but I will be double checking
+the table and making changes in R.
+
+First, we will create the `city_prep` variable, 
+
+A seperate table will be used to correct the `cont_city` values in the original table. The
+`city_prep` variable is created by expanding abbreviations and removes common non-city information.
+The `city_prep` value is refined using `refinr::key_collision_merge()` and
+`refinr::n_gram_merge()`. Unchanged rows are removed, as well as non-geographical information.
+
+```{r city_prep, collapse=TRUE}
+nj_city_fix <- nj %>%  
+  rename(city_original = cont_city) %>%
+  select(
+    id,
+    cont_street1,
+    state_clean,
+    zip5,
+    city_original
+  ) %>% 
+  mutate(city_prep = city_original %>%
+           str_to_upper() %>%
+           str_replace_all("(^|\\b)N(\\b|$)",  "NORTH") %>%
+           str_replace_all("(^|\\b)S(\\b|$)",  "SOUTH") %>%
+           str_replace_all("(^|\\b)E(\\b|$)",  "EAST") %>%
+           str_replace_all("(^|\\b)W(\\b|$)",  "WEST") %>%
+           str_replace_all("(^|\\b)MT(\\b|$)", "MOUNT") %>%
+           str_replace_all("(^|\\b)ST(\\b|$)", "SAINT") %>%
+           str_replace_all("(^|\\b)PT(\\b|$)", "PORT") %>%
+           str_replace_all("(^|\\b)FT(\\b|$)", "FORT") %>%
+           str_replace_all("(^|\\b)PK(\\b|$)", "PARK") %>%
+           str_replace_all("(^|\\b)JCT(\\b|$)", "JUNCTION") %>%
+           str_replace_all("(^|\\b)TWP(\\b|$)", "TOWNSHIP") %>%
+           str_replace_all("(^|\\b)TWP\\.(\\b|$)", "TOWNSHIP") %>%
+           str_remove("(^|\\b)NJ(\\b|$)") %>%
+           str_remove("(^|\\b)NY(\\b|$)") %>%
+           str_remove_all(fixed("\\")) %>%
+           str_replace_all("\\s\\s", " ") %>% 
+           str_trim() %>% 
+           na_if("")
+  )
+
+sum(nj_city_fix$city_original != nj_city_fix$city_prep, na.rm = TRUE)
+```
+
+The new `city_prep` variable is fed into the OpenRefine algorithm and a new `city_fix` variable is
+returned. Records unchanged by this process are removed and the table is formatte.
+
+```{r refine, collapse=TRUE}
+nj_city_fix <- nj_city_fix %>% 
+  # refine the prepared variable
+  mutate(city_fix = city_prep %>%
+           # edit to match valid munis
+           key_collision_merge(dict = all_valid_muni) %>%
+           n_gram_merge()) %>%
+  # create logical change variable
+  mutate(fixed = city_prep != city_fix) %>%
+  # keep only changed records
+  filter(fixed) %>%
+  # group by fixes
+  arrange(city_fix) %>% 
+  select(-fixed)
+
+nrow(nj_city_fix)
+nj_city_fix %>% 
+  select(city_original, city_fix) %>% 
+  distinct() %>% 
+  nrow()
+```
+
+Not all of the changes made to create `city_fix` should have been made. We can "accept" any change
+that resulted in a state, zip, and city combination that matches the `zipcode` database. Almost
+exactly half of the `city_fix` variables _definitely_ fixed a misspelled city name. Not bad.
+
+```{r good_fix}
+good_fix <- nj_city_fix %>%
+  inner_join(
+    y = zipcode,
+    by = c(
+      "zip5" = "zip",
+      "city_fix" = "city",
+      "state_clean" = "state"
+    )
+  )
+
+nrow(good_fix) # total changes made
+n_distinct(good_fix$city_fix) # distinct changes
+print(good_fix)
+```
+
+Those changes without a full matching combination should be checked and corrected.
+
+```{r bad_fix}
+bad_fix <- nj_city_fix %>%
+  filter(!(id %in% good_fix$id))
+
+nrow(bad_fix)
+print(bad_fix)
+
+# these 6 erroneous changes accoutn for 4/5 bad fixes
+bad_fix$city_fix <- bad_fix$city_fix %>% 
+  str_replace_all("^DOUGLASVILLE", "DOUGLASSVILLE") %>% 
+  str_replace_all("^FOREST LAKE", "LAKE FOREST") %>% 
+  str_replace_all("^GLENN MILLS", "GLEN MILLS") %>% 
+  str_replace_all("^LAKE SPRING", "SPRING LAKE") %>% 
+  str_replace_all("^WHITE HOUSE STATION", "WHITEHOUSE STATION") %>% 
+  str_replace_all("^WINSTON SALEM", "WINSTON-SALEM")
+
+# last 25 changes
+bad_fix %>% 
+  filter(city_original != city_fix) %>% 
+  filter(!(city_fix %in% all_valid_muni)) %>% 
+  print(n = nrow(.))
+
+bad_fix$city_fix <- bad_fix$city_fix %>% 
+  str_replace_all("^AVENTURA", "VENTURA") %>% 
+  str_replace_all("^BERARDSVILLE", "BERNARDSVILLE") %>% 
+  str_replace_all("^FOREST HILL", "FOREST HILLS") %>% 
+  str_replace_all("^FOREST RIVER", "RIVER FOREST") %>% 
+  str_replace_all("^MALVERN", "MALVERN") %>% 
+  str_replace_all("^MC AFEE", "MCAFEE") %>% 
+  str_replace_all("^NARBETH", "NARBERTH") %>% 
+  str_replace_all("^ORRISTOWN", "MORRISTOWN") %>% 
+  str_replace_all("^NMORRISTOWN", "MORRISTOWN") %>% 
+  str_replace_all("^KINGSPOINT", "KINGS POINT") %>% 
+  str_replace_all("^MILLSTONE BOROUGH", "MILLSTONE BORO") %>% 
+  str_replace_all("^PLAINFEILD", "PLAINFIELD") %>% 
+  str_replace_all("^RIVERVIEW", "RIVERVIEW") %>% 
+  str_replace_all("^ROLLING HILL ESTATES$", "ROLLING HILLS ESTATES") %>% 
+  str_replace_all("^SHARK RIVER HILL", "SHARK RIVER HILLS") %>% 
+  str_replace_all("^TAREYTOWN", "TARRYTOWN") %>% 
+  str_replace_all("^WELLSLEY HILLS", "WELLESLEY HILLS")
+```
+
+After fixing the bad fixes, the two tables of fixed spellings can be combined.
+
+```{r all_fix}
+if (nrow(good_fix) + nrow(bad_fix) == nrow(nj_city_fix)) {
+  nj_city_fix <- 
+    bind_rows(good_fix, bad_fix) %>% 
+    select(id, city_original, city_fix) %>% 
+    filter(city_original != city_fix)
+}
+
+print(nj_city_fix)
+```
+
+Using the unique `id` variable, replace the incorrectly spelled `cont_city` values with the
+refined and corrected `city_fix` values from the new table. In a final `city_clean` variable, use
+`city_fix` where changes were made, otherwise use the original `cont_city`.
+
+```{r fix_city_join, collapse=TRUE}
+nj <- nj %>% 
+  left_join(nj_city_fix, by = "id") %>% 
+  mutate(city_clean = ifelse(is.na(city_fix), cont_city, city_fix)) %>% 
+  select(-city_original, -city_fix)
+
+n_distinct(nj$cont_city)
+n_distinct(nj$city_clean)
 ```
 
 ## Write
