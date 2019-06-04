@@ -189,7 +189,7 @@ extracting the variable names from a single file and using those to name every f
 
 ```{r make_names}
 nj_names <-
-  here("nj_contribs", "data") %>%
+  here("nj_contribs", "data", "raw") %>%
   dir_ls(type = "file", glob = "*.txt") %>%
   extract(1) %>%
   read.table(nrows = 1, sep = "\t", header = FALSE) %>%
@@ -205,7 +205,7 @@ introduce a number of `NA` values from some unknown parsing error that is does n
 
 ```{r vroom_read}
 nj <-
-  here("nj_contribs", "data") %>%
+  here("nj_contribs", "data", "raw") %>%
   dir_ls(type = "file", glob = "*.txt") %>%
   vroom(
     delim = NULL,
@@ -305,6 +305,8 @@ print_tabyl(nj, cont_state)
 print_tabyl(nj, occupation)
 print_tabyl(nj, election_type)
 ```
+
+### Plot
 
 We can create some visualizations to better help us understand the value of these distinct and 
 continuous variables. 
