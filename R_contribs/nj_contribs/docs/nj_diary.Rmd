@@ -24,7 +24,9 @@ opts_chunk$set(
   message = FALSE,
   error = FALSE,
   comment = "#>",
-  fig.path = "/nj_contribs/plots/"
+  fig.path = here::here("nj_contribs", "plots", "diary-"),
+  fig.width = 10,
+  dpi = 300
 )
 options(width = 99)
 ```
@@ -42,20 +44,24 @@ options(width = 99)
 
 ## Packages
 
+The following packages are needed to collect, manipulate, visualize, analyze, and communicate
+these results. The `pacman` package will facilitate their installation and attachment.
+
 ```{r p_load, message=FALSE, warning=FALSE, error=FALSE}
 # install.packages("pacman")
 pacman::p_load(
-  tidyverse,
-  lubridate,
-  magrittr,
-  janitor,
-  zipcode,
-  refinr,
-  vroom,
-  rvest,
-  httr,
-  here,
-  fs
+  tidyverse, # data manipulation
+  lubridate, # date strings
+  magrittr, # pipe opperators
+  janitor, # data cleaning
+  zipcode, # clean and compare
+  refinr, # cluster and merge
+  vroom, # read files fast
+  rvest, # scrape web pages
+  knitr, # knit documents
+  httr, # acess web API
+  here, # navigate local storage
+  fs # search local storage 
 )
 ```
 
@@ -93,9 +99,9 @@ commas. The newly developed `vroom::vroom()` function is perfect for this situat
 allow us to read all the unzipped files (~100) at once, with automatic detection of the delimiter.
 
 First, we will get some general info on the files we are about to download. We want to be sure the
-ZIP files aren't old, huge in size, or contain too many/weird files.
+ZIP files aren't old, huge in size, or contain too many/suspicious files.
 
-```{r pre_download}
+```{r pre_download, collapse=TRUE}
 response <- GET("https://www.elec.state.nj.us/download/Data/Gubernatorial/All_GUB_Text.zip")
 utils:::format.object_size(as.numeric(headers(response)[["Content-Length"]]), "auto")
 httr::headers(response)[["last-modified"]]
@@ -117,13 +123,14 @@ data from ELEC is being analyzed.
 
 ```{r download_files, collapse=TRUE}
 # create a direcory for download
-dir.create(here("nj_contribs", "data"), showWarnings = FALSE)
+dir_create(here("nj_contribs", "data", "raw"))
 
 # file date wrapper function
 any_old_files <- function(path, type) {
   path %>%
     dir_ls(type = "file", glob = type) %>% 
-    file.mtime() %>% 
+    file_info() %>% 
+    pull(modification_time) %>% 
     floor_date("day") %>% 
     equals(today()) %>% 
     not() %>% 
@@ -131,7 +138,7 @@ any_old_files <- function(path, type) {
 }
 
 # download each file in the vector
-if (here("nj_contribs", "data") %>% any_old_files("*.zip")) {
+if (any_old_files(here("nj_contribs", "data", "raw"), "*.zip")) {
   for (url in nj_zip_urls) {
     download.file(
       url = url,
@@ -145,8 +152,6 @@ if (here("nj_contribs", "data") %>% any_old_files("*.zip")) {
 }
 ```
 
-View the content of all ZIP files before unzipping.
-
 ```{r view_zip}
 nj_zip_files <- dir_ls(
   path = here("nj_contribs", "data"),
@@ -158,7 +163,8 @@ nj_zip_files %>%
   map(unzip, list = TRUE) %>% 
   bind_rows(.id = "zip") %>%
   mutate(zip = basename(zip)) %>% 
-  set_names(c("zip", "file", "bytes", "date")) %>% 
+  set_names(c("zip", "file", "bytes", "date")) %>%
+  sample_n(10) %>% 
   print()
 ```
 
@@ -166,7 +172,7 @@ Each ZIP file contains individual text files for each election year. If the `/da
 does not already contain these files, or if any are older than a day, unzip them now.
 
 ```{r unzip}
-if (here("nj_contribs", "data") %>% any_old_files("*.txt")) {
+if (any_old_files(here("nj_contribs", "data", "raw"), "*.txt")) {
   map(
     nj_zip_files,
     unzip,
@@ -177,12 +183,11 @@ if (here("nj_contribs", "data") %>% any_old_files("*.txt")) {
 ```
 
 While every file has the same structure, the _names_ of those columns vary slightly. In some, there
-is an `occupation` variable; in others, that variable is named `occupation_name`. This incongruity
-prevents them from all being read together with `vroom::vroom()`. We can solve this by extracting
-the variable names from a single file and using those to names for every file.
+is an `occupation` variable; in others, that _same_ variable is named `occupation_name`. This
+incongruity prevents them from all being read together with `vroom::vroom()`. We can solve this by
+extracting the variable names from a single file and using those to name every file's columns.
 
 ```{r make_names}
-# extract names from first line of first file
 nj_names <-
   here("nj_contribs", "data") %>%
   dir_ls(type = "file", glob = "*.txt") %>%
@@ -235,13 +240,16 @@ The hard files contain data on elections from `r min(nj$election_year)` to `r
 max(nj$election_year)`. When you filter out those contributions made before 2008, more than 2/3rds
 of the data is removed.
 
-```{r filter_date}
+```{r filter_date, collapse=TRUE}
 sum(nj$cont_date < "2008-01-01", na.rm = TRUE) / nrow(nj)
-min(nj$cont_date)
-max(nj$cont_date)
+min(nj$cont_date, na.rm = TRUE)
+max(nj$cont_date, na.rm = TRUE)
 ```
 
-```{r plot_n_year, fig.width=10}
+Although the data does become more abundant as time goes on, there is still a significant number
+of records before our 2008 time frame.
+
+```{r plot_n_year, echo=FALSE}
 nj %>% 
   group_by(year = year(cont_date)) %>% 
   count() %>% 
@@ -257,6 +265,8 @@ nj %>%
     y = "Number of Records"
   )
 ```
+
+Regardless, (for now) we will filter out any contributions made before 2008.
 
 ```{r}
 nj <- nj %>% 
@@ -293,6 +303,119 @@ print_tabyl(nj, receipt_type)
 print_tabyl(nj, office)
 print_tabyl(nj, cont_state)
 print_tabyl(nj, occupation)
+print_tabyl(nj, election_type)
+```
+
+We can create some visualizations to better help us understand the value of these distinct and 
+continuous variables. 
+
+**Note that all contribution amount values have been scaled logarithmically on both the X and Y**
+**axis to account for the incredibly skewed distribution.**
+
+```{r plot_non_log, echo=FALSE, fig.height=10}
+nj %>% 
+  filter(party != "OTHER (ANY COMBINATION OF DEM/REP/IND)") %>% 
+  ggplot(aes(cont_amt)) +
+  geom_histogram(aes(fill = party)) +
+  scale_fill_manual(values = c("blue", "forestgreen", "purple", "red")) +
+  theme(legend.position = "none") +
+  facet_wrap(~party) +
+  labs(
+    title = "Contribution Distribution",
+    subtitle = "by political Party",
+    y = "Number of Contributions",
+    x = "Amount ($USD)"
+  )
+```
+
+```{r plot_amt_party, echo=FALSE, fig.height=10}
+nj %>% 
+  filter(party != "OTHER (ANY COMBINATION OF DEM/REP/IND)") %>% 
+  ggplot(aes(cont_amt)) +
+  geom_histogram(aes(fill = party)) +
+  scale_x_log10() +
+  scale_y_log10() +
+  scale_fill_manual(values = c("blue", "forestgreen", "purple", "red")) +
+  theme(legend.position = "none") +
+  facet_wrap(~party) +
+  labs(
+    title = "Contribution Distribution",
+    subtitle = "by political Party",
+    y = "Number of Contributions",
+    x = "Amount ($USD)"
+  )
+```
+
+```{r plot_amt_year, echo=FALSE}
+nj %>% 
+  filter(election_year > 2008) %>% 
+  filter(party != "OTHER (ANY COMBINATION OF DEM/REP/IND)") %>% 
+  group_by(election_year, party) %>% 
+  summarize(sum = sum(cont_amt)) %>% 
+  ggplot(aes(x = election_year, y = sum)) +
+  geom_col(aes(fill = party)) +
+  scale_fill_manual(values = c("blue", "forestgreen", "purple", "red"))
+```
+
+```{r plot_amt_cont, echo=FALSE, fig.height=10}
+nj %>% 
+  ggplot(aes(cont_amt)) +
+  geom_histogram() +
+  scale_x_log10() +
+  scale_y_log10() +
+  facet_wrap(~cont_type) +
+  labs(
+    title = "Contribution Distribution",
+    subtitle = "by Contribution Type",
+    y = "Number of Contributions",
+    x = "Amount ($USD)"
+  )
+```
+
+```{r plot_amt_rec, echo=FALSE, fig.height=10}
+nj %>% 
+  ggplot(aes(cont_amt)) +
+  geom_histogram() +
+  scale_x_log10() +
+  scale_y_log10() +
+  facet_wrap(~receipt_type) +
+  labs(
+    title = "Contribution Distribution",
+    subtitle = "by Recipient Type",
+    y = "Number of Contributions",
+    x = "Amount ($USD)"
+  )
+```
+
+```{r plot_amt_elec, echo=FALSE, fig.height=10}
+nj %>% 
+  ggplot(aes(cont_amt)) +
+  geom_histogram() +
+  scale_x_log10() +
+  scale_y_log10() +
+  facet_wrap(~election_type) +
+  labs(
+    title = "Contribution Distribution",
+    subtitle = "by Election Type",
+    y = "Number of Contributions",
+    x = "Amount ($USD)"
+  )
+```
+
+```{r plot_amt_state, fig.height=14}
+nj %>% 
+  group_by(cont_state) %>% 
+  summarize(mean_cont = median(cont_amt)) %>%
+  filter(cont_state %in% c(state.abb, "DC")) %>% 
+  ggplot(aes(x = reorder(cont_state, -mean_cont), mean_cont)) +
+  geom_col() +
+  coord_flip() +
+  labs(
+    title = "Median Contribution Amount",
+    subtitle = "by Contributor's State",
+    x = "State",
+    y = "Mean Amount ($USD)"
+  )
 ```
 
 ### Duplicate Records
@@ -300,7 +423,7 @@ print_tabyl(nj, occupation)
 There are `r nrow(nj)-nrow(distinct(nj))` rows with duplicates values in every variable. Over 1% of
 rows are complete duplicates.
 
-```{r n_distinct}
+```{r n_distinct, collapse=TRUE}
 nrow(distinct(nj)) - nrow(nj)
 ```
 
@@ -408,12 +531,13 @@ date.
 
 ```{r mutate_year}
 # extract year variable
-nj <- nj %>% mutate(cont_year = year(cont_date))
+nj <- nj %>% 
+  mutate(cont_year = year(cont_date))
 ```
 
 Note that this new `cont_year` variable, _does not_ always equal the `election_year` variable.
 
-```{r year_vars_diff}
+```{r year_vars_diff, collapse=TRUE}
 mean(nj$cont_year == nj$election_year)
 ```
 
@@ -486,7 +610,6 @@ nj_bad_zip <- nj %>%
   filter(nchar(zip5) != 5) %>% 
   select(id, cont_street1, cont_city, cont_state, cont_zip, zip5) %>% 
   left_join(zipcode, by = c("cont_city" = "city", "cont_state" = "state")) %>% 
-  group_by(cont_city, cont_state) %>% 
   rename(clean_zip = zip5, valid_zip = zip)
 
 print(nj_bad_zip)
@@ -646,11 +769,14 @@ nj_full_suffix <- nj_valid_muni %>%
   str_replace("TWP\\.$", "TOWNSHIP")
 
 all_valid_muni <- sort(unique(c(
+  # variations on valid NJ munis
   nj_valid_muni,
   nj_without_suffix, 
   nj_no_punct,
   nj_full_suffix,
+  # valid cities outside NJ
   zipcode$city,
+  # very common valid unincorperated places
   "WHITEHOUSE STATION",
   "MCAFEE",
   "GLEN MILLS",
@@ -671,7 +797,7 @@ nj_bad_city <- nj %>%
 ```
 
 Many (almost all) of these "bad" `cont_city` values are valid city names simply not in the created
-list of municipalities. They are either too obscure, are unincorperated territories, or have too
+list of municipalities. They are either too obscure, are unincorporated territories, or have too
 many valid spelling variations. Almost 50% of all "bad" values are from the 10 most common, and are
 all actually valid.
 
@@ -695,7 +821,7 @@ the table and making changes in R.
 
 First, we will create the `city_prep` variable, 
 
-A seperate table will be used to correct the `cont_city` values in the original table. The
+A separate table will be used to correct the `cont_city` values in the original table. The
 `city_prep` variable is created by expanding abbreviations and removes common non-city information.
 The `city_prep` value is refined using `refinr::key_collision_merge()` and
 `refinr::n_gram_merge()`. Unchanged rows are removed, as well as non-geographical information.
@@ -736,7 +862,7 @@ sum(nj_city_fix$city_original != nj_city_fix$city_prep, na.rm = TRUE)
 ```
 
 The new `city_prep` variable is fed into the OpenRefine algorithm and a new `city_fix` variable is
-returned. Records unchanged by this process are removed and the table is formatte.
+returned. Records unchanged by this process are removed and the table is formatted.
 
 ```{r refine, collapse=TRUE}
 nj_city_fix <- nj_city_fix %>% 
@@ -789,7 +915,7 @@ bad_fix <- nj_city_fix %>%
 nrow(bad_fix)
 print(bad_fix)
 
-# these 6 erroneous changes accoutn for 4/5 bad fixes
+# these 6 erroneous changes account for 4/5 bad fixes
 bad_fix$city_fix <- bad_fix$city_fix %>% 
   str_replace_all("^DOUGLASVILLE", "DOUGLASSVILLE") %>% 
   str_replace_all("^FOREST LAKE", "LAKE FOREST") %>% 
@@ -849,6 +975,121 @@ nj <- nj %>%
 
 n_distinct(nj$cont_city)
 n_distinct(nj$city_clean)
+
+nj %>% 
+  filter(cont_city != city_clean) %>% 
+  select(id, cont_city, city_clean, state_clean) %>% 
+  sample_frac()
+```
+
+## Missing Parties
+
+To ensure every columns contains some kind of identifying information on both the contributor and
+recipient, we can united individual names and coalesce the united variable with non-individual
+names. This captures all names for both contributors and donors. We then select for key variables
+and identify any remaining missing values.
+
+```{r key_vars, collapse=TRUE}
+nj_key_vars <- nj %>%
+  replace_na(
+    list(
+      cont_lname  = "",
+      cont_fname  = "",
+      cont_mname  = "",
+      cont_suffix = ""
+    )
+  ) %>% 
+  # unite first and last names
+  unite(cont_fname, cont_mname, cont_lname, cont_suffix,
+        col = cont_full_name,
+        sep = " ") %>%
+  # remove empty unites
+  mutate(cont_full_name = na_if(str_trim(cont_full_name), "")) %>% 
+  # repeat for non-individual contributors
+  replace_na(
+    list(
+      cont_non_ind_name  = "",
+      cont_non_ind_name2  = ""
+    )
+  ) %>% 
+  unite(cont_non_ind_name, cont_non_ind_name2,
+        col = cont_non_ind_name,
+        sep = " ") %>%
+  mutate(cont_non_ind_name = na_if(str_trim(cont_non_ind_name), "")) %>% 
+  # coalesce ind and non-ind united names into single variable
+  mutate(cont = coalesce(cont_full_name, cont_non_ind_name)) %>% 
+  # repeat for recipients
+  replace_na(
+    list(
+      rec_lname  = "",
+      rec_fname  = "",
+      rec_mname  = "",
+      rec_suffix = ""
+    )
+  ) %>% 
+  # unite first and last names
+  unite(rec_fname, rec_mname, rec_lname, rec_suffix,
+        col = rec_full_name,
+        sep = " ") %>%
+  # remove empty unites
+  mutate(rec_full_name = na_if(str_trim(rec_full_name), "")) %>% 
+  # repeat for non-individual contributors
+  replace_na(
+    list(
+      rec_non_ind_name  = "",
+      rec_non_ind_name2  = ""
+    )
+  ) %>% 
+  unite(rec_non_ind_name, rec_non_ind_name2,
+        col = rec_non_ind_name,
+        sep = " ") %>%
+  mutate(rec_non_ind_name = na_if(str_trim(rec_non_ind_name), "")) %>% 
+  # coalesce ind and non-ind united names into single variable
+  mutate(rec = coalesce(rec_full_name, rec_non_ind_name)) %>% 
+  # select key vars
+  select(id, cont_date, cont_type, cont_amt, cont, rec)
+
+
+print(nj_key_vars)
+nrow(nj_key_vars)
+nrow(distinct(nj_key_vars))
+nrow(drop_na(nj_key_vars))
+```
+
+There are `r nrow(nj_key_vars) - nrow(drop_na(nj_key_vars))` records with missing contributor
+information. We will flag these variables with a new `na_flag` variable based on their unique `id`.
+
+```{r}
+nj_key_vars %>% 
+  map(function(var) sum(is.na(var))) %>% 
+  unlist() %>% 
+  enframe(name = "variable", value = "n_na")
+
+nj <- nj %>% 
+  mutate(na_flag = id %in% nj_key_vars$id[is.na(nj_key_vars$cont)])
+```
+
+## Conclusion
+
+1. There are `r nrow(nj)` records in the database
+1. There are `r sum(nj$dupe_flag)` duplicated records (flagged with `dupe_flag`)
+1. There are `r sum(nj$date_flag)` dates from the future (flagged with `date_flag`)
+1. The degree of blank or missing values varies by variable
+1. City, state, and ZIP code consistency issues have been remedied (`*_clean` variables)
+1. The five-digit ZIP Code variable is named `zip5`
+1. The YEAR field from the transaction date is named `cont_year`
+1. There are `r sum(nj$na_flag)` records missing contributor names (flagged with `na_flag`)
+
+```{r}
+nj %>% 
+  select(
+    id,
+    cont_date, 
+    cont_type, 
+    cont_amt,
+    ends_with("clean"),
+    ends_with("flag")
+  )
 ```
 
 ## Write
@@ -857,6 +1098,7 @@ n_distinct(nj$city_clean)
 nj %>% 
   # remove unclean cols
   select(
+    -cont_city,
     -cont_state,
     -cont_zip
   ) %>% 
