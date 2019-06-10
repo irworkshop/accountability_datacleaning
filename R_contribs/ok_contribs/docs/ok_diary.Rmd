@@ -1,0 +1,183 @@
+---
+title: "Data Diary"
+subtitle: "Nevada Contributions"
+author: "Kiernan Nicholls"
+date: "`r format(Sys.time())`"
+output:
+  html_document: 
+    df_print: tibble
+    fig_caption: yes
+    highlight: tango
+    keep_md: yes
+    max.print: 32
+    toc: yes
+    toc_float: no
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE, purl=FALSE}
+library(knitr)
+opts_chunk$set(
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  error = FALSE,
+  comment = "#>",
+  fig.path = "../plots/",
+  fig.width = 10,
+  dpi = 300
+)
+options(width = 99)
+```
+
+## Objectives
+
+1. How many records are in the database?
+1. Check for duplicates
+1. Check ranges
+1. Is there anything blank or missing?
+1. Check for consistency issues
+1. Create a five-digit ZIP Code called ZIP5
+1. Create a YEAR field from the transaction date
+1. For campaign donation data, make sure there is both a donor AND recipient
+
+## Packages
+
+The following packages are needed to collect, manipulate, visualize, analyze, and communicate
+these results. The `pacman` package will facilitate their installation and attachment.
+
+```{r p_load, message=FALSE, warning=FALSE, error=FALSE}
+# install.packages("pacman")
+pacman::p_load(
+  conflicted, # function conflictions
+  tidyverse, # data manipulation
+  lubridate, # date strings
+  magrittr, # pipe opperators
+  janitor, # data cleaning
+  refinr, # cluster and merge
+  rvest, # scrape web pages
+  knitr, # knit documents
+  here, # navigate local storage
+  fs # search local storage 
+)
+```
+
+```{r conflicts, echo=FALSE}
+here <- here::here
+```
+
+## Data
+
+If the raw data has not been downloaded, it can be retrieved from the 
+[Oklahoma Ethics Commision's website](https://www.ok.gov/ethics/public/login.php) as a ZIP archive.
+
+```{r any_old_files, echo=FALSE}
+any_old_files <- function(path, type) {
+  path %>%
+    dir_ls(type = "file", glob = type) %>% 
+    file_info() %>% 
+    pull(modification_time) %>% 
+    as.Date() %>% 
+    equals(today()) %>% 
+    not() %>% 
+    any()
+}
+```
+
+```{r download_zip}
+if (here("ok_contribs", "data", "raw") %>% any_old_files("*.zip")) {
+  download.file(
+    url = "https://www.ok.gov/ethics/public/dfile.php?action=csv",
+    destfile = here("ok_contribs", "data", "raw", "ethicscsvfile.zip")
+  )
+}
+```
+
+There are 48 individual CSV files contained within the ZIP archive. Many of these files are not
+relevant to this project, but all will be unzipped into the `data/raw` directory.
+
+```{r unzip_list, echo=FALSE}
+unzip(
+  zipfile = here("ok_contribs", "data", "raw", "ethicscsvfile.zip"),
+  list = TRUE
+)
+```
+
+If these files have not yet been unzipped, they will be now.
+
+```{r unzip}
+if (here("ok_contribs", "data", "raw") %>% any_old_files("*.zip")) {
+  unzip(
+    zipfile = here("ok_contribs", "data", "raw", "ethicscsvfile.zip"),
+    exdir = here("ok_contribs", "data", "raw")
+  )
+}
+```
+
+### Descriptions
+
+The relationship between these files is described in the `data/relations_db.xls` Excel file.
+Descriptions for each of these files is provided int the `data/descriptions.doc` Word file.
+
+## Read
+
+### Transactions
+
+The `transaction.csv` file contains...
+
+> all the contribution and expenditure transactions. Has the transaction date, amount, the
+contributor id and report number ([`rep_num`]) that it ties back to in the report table.
+
+The file can be read into a data frame using `readr::read_csv()`. 
+
+```{r read_transaction}
+ok_transactions <- read_csv(
+  file = "ok_contribs/data/raw/transaction.csv",
+  col_types = cols(
+    TRANS_INDEX = col_character(),
+    TRANSACTION_DATE = col_date("%d-%b-%y"),
+    CONTRIBUTOR_ID = col_character(),
+    TRANS_AMOUNT = col_double(),
+    REP_NUM = col_character()
+  )
+)
+
+ok_transactions <- ok_transactions %>% 
+  select(-X6) %>% 
+  clean_names()
+
+print(ok_transactions)
+```
+
+The information regarding the contribution itself as well as the contributor and recipeients
+involved are contains in various other tables and can be joined to this primary transactions table.
+The additional tables can be read in a similar manner.
+
+###
+
+> Holds address, phone and type of any contributor using [`contributor_id`] as its identifier in
+other tables.
+
+```{r}
+ok_contributors <- read_csv(
+  file = "ok_contribs/data/raw/contributor.csv",
+  col_types = cols(.default = "c")
+)
+
+ok_contributors %>%
+  select(-X9) %>% 
+  clean_names()
+```
+
+
+## Explore
+
+The transactions database has `r nrow(ok)` rows of `r length(ok)` variables.
+
+```{r ok_dims, collapse=TRUE}
+nrow(ok)
+length(ok)
+names(ok)
+```
+
