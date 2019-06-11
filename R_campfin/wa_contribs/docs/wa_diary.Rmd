@@ -624,6 +624,23 @@ setdiff(valid_abbs, sort(unique(wa$state_clean)))
 
 ### Clean City
 
+#### New Method
+
+The spelling of city names will be corrected using a lookup table available in the `data`
+directory.
+
+```{r}
+wa_city_lookup <- read_csv("wa_contribs/data/wa_city_lookup.csv")
+
+wa %>% 
+  left_join(wa_city_lookup, by = c("city_clean" = "CITY_CLEAN")) %>% 
+  select(-city_clean) %>% 
+  rename(city_clean = CITY_CLEAN_JL)
+```
+
+
+#### Old Method
+
 Cities are the most challenging. There are `r n_distinct(wa$contributor_city)` distinct values of
 `contributor_city`. There are `r length(zipcode$city[zipcode$state == "WA"])` Washington state
 cities in the fairly comprehensive `zipcode` list. Since only 5% of records are from outside the
