@@ -2,7 +2,7 @@
 title: "Data Diary"
 subtitle: "New Jersey Contributions"
 author: "Kiernan Nicholls"
-date: "2019-06-04 14:56:44"
+date: "2019-06-11 16:28:48"
 output:
   html_document: 
     df_print: tibble
@@ -119,15 +119,25 @@ data from ELEC is being analyzed.
 dir_create(here("nj_contribs", "data", "raw"))
 
 # file date wrapper function
-any_old_files <- function(path, type) {
-  path %>%
-    dir_ls(type = "file", glob = type) %>% 
-    file_info() %>% 
-    pull(modification_time) %>% 
-    floor_date("day") %>% 
-    equals(today()) %>% 
-    not() %>% 
-    any()
+any_old_files <- function(path, glob) {
+  # list files
+  files <- dir_ls(
+    path = path,
+    type = "file", ,
+    glob = glob
+  )
+  # if no files, FALSE
+  if (length(files) == 0) {
+    TRUE
+  } else {
+    # if any old files, FALSE
+    file_info(files) %>% 
+      pull(modification_time) %>% 
+      floor_date("day") %>% 
+      equals(today()) %>% 
+      not() %>% 
+      any()
+  }
 }
 
 # download each file in the vector
@@ -137,7 +147,7 @@ if (any_old_files(here("nj_contribs", "data", "raw"), "*.zip")) {
       url = url,
       destfile = here(
         "nj_contribs",
-        "data",
+        "data", "raw",
         basename(url)
       )
     )
@@ -148,7 +158,7 @@ if (any_old_files(here("nj_contribs", "data", "raw"), "*.zip")) {
 
 ```r
 nj_zip_files <- dir_ls(
-  path = here("nj_contribs", "data"),
+  path = here("nj_contribs", "data", "raw"),
   type = "file",
   glob = "*.zip",
 )
@@ -164,16 +174,16 @@ nj_zip_files %>%
 
 ```
 #>                 zip          file   bytes                date
-#> 1   All_CW_Text.zip   CWP2015.txt 1328594 2017-03-27 16:01:00
+#> 1  All_LEG_Text.zip LEG_P2015.txt 2846088 2016-08-29 15:53:00
 #> 2  All_GUB_Text.zip Gub_I1998.txt  549770 2009-10-09 14:16:00
-#> 3   All_CW_Text.zip   CWG2009.txt 1731054 2011-08-10 12:12:00
-#> 4  All_PAC_Text.zip   PAC2015.txt 2556994 2017-03-27 16:01:00
-#> 5  All_GUB_Text.zip Gub_P2005.txt 3576926 2009-10-09 14:27:00
-#> 6  All_LEG_Text.zip Leg_G2009.txt 1512691 2010-08-24 12:11:00
-#> 7   All_CW_Text.zip   CWG2000.txt  140846 2009-10-09 14:09:00
-#> 8  All_PAC_Text.zip   PAC1994.txt  368357 2009-10-09 14:37:00
-#> 9  All_PAC_Text.zip   PAC2003.txt 3874758 2009-10-09 14:41:00
-#> 10 All_LEG_Text.zip LEG_G2005.txt 2144542 2009-10-09 14:33:00
+#> 3  All_GUB_Text.zip Gub_P1993.txt 1704636 2009-10-09 14:18:00
+#> 4  All_LEG_Text.zip LEG_G1987.txt 3351674 2009-10-09 14:29:00
+#> 5  All_LEG_Text.zip Leg_G2012.txt   58693 2016-08-29 14:51:00
+#> 6  All_LEG_Text.zip Leg_G1995.txt 1718895 2009-10-09 14:30:00
+#> 7  All_GUB_Text.zip Gub_G2001.txt 2641427 2009-10-09 14:13:00
+#> 8   All_CW_Text.zip   CWG2015.txt 1480436 2017-03-27 16:01:00
+#> 9   All_CW_Text.zip   CWP2000.txt  218386 2009-10-09 14:10:00
+#> 10 All_PAC_Text.zip   PAC2014.txt 2621442 2017-03-27 16:01:00
 ```
 
 Each ZIP file contains individual text files for each election year. If the `/data` directory
@@ -185,7 +195,7 @@ if (any_old_files(here("nj_contribs", "data", "raw"), "*.txt")) {
   map(
     nj_zip_files,
     unzip,
-    exdir = here("nj_contribs", "data"),
+    exdir = here("nj_contribs", "data", "raw"),
     overwrite = TRUE
   )
 }
@@ -199,7 +209,7 @@ extracting the variable names from a single file and using those to name every f
 
 ```r
 nj_names <-
-  here("nj_contribs", "data") %>%
+  here("nj_contribs", "data", "raw") %>%
   dir_ls(type = "file", glob = "*.txt") %>%
   extract(1) %>%
   read.table(nrows = 1, sep = "\t", header = FALSE) %>%
@@ -216,7 +226,7 @@ introduce a number of `NA` values from some unknown parsing error that is does n
 
 ```r
 nj <-
-  here("nj_contribs", "data") %>%
+  here("nj_contribs", "data", "raw") %>%
   dir_ls(type = "file", glob = "*.txt") %>%
   vroom(
     delim = NULL,
@@ -249,40 +259,40 @@ glimpse(sample_frac(nj))
 ```
 #> Observations: 879,485
 #> Variables: 34
-#> $ source_file        <chr> "Gub_G1985", "LEG_G2003", "Gub_I2006", "LEG_P2003", "PAC2002", "Leg_G…
-#> $ cont_lname         <chr> "SCHWARTZ", "KAHN", "DESANTI", NA, "COLLINS", NA, "OSTLIND", NA, "WAG…
-#> $ cont_fname         <chr> "EDWARD", "ANDREA", "FRED", NA, "BARBARA", NA, "DAN", NA, "JEFFREY", …
-#> $ cont_mname         <chr> "R", "L", NA, NA, NA, NA, "A", NA, "B", "M", "R", NA, "A", NA, NA, NA…
+#> $ source_file        <chr> "Leg_P2013", "Gub_G2001", "LEG_G2015", "Leg_G1995", "PAC2007", "LEG_P…
+#> $ cont_lname         <chr> NA, "KELLEY", NA, "MCNAIR", "JOEWONO", NA, NA, "CHASTAIN", "PATTERSON…
+#> $ cont_fname         <chr> NA, "KANE", NA, "DICAL & MELISSA", "LORRAINE", NA, NA, "THOMAS", "MAB…
+#> $ cont_mname         <chr> NA, "L", NA, NA, NA, NA, NA, "H", "A", NA, NA, NA, "F", NA, NA, NA, N…
 #> $ cont_suffix        <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
-#> $ cont_non_ind_name  <chr> NA, NA, NA, "PIPEFITTERS LU 274", NA, "NJ AUTO DEALERS ASSOC", NA, "B…
-#> $ cont_non_ind_name2 <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "STATE FUND", NA, NA, NA,…
-#> $ cont_street1       <chr> "3 BIRCHWOOD DR", "ONE RIVERFRONT PLZ 4TH FL", "112 HARMONY LANE", "P…
-#> $ cont_street2       <chr> NA, NA, NA, NA, NA, NA, NA, NA, "ONE SPEEDWELL AVE", NA, NA, NA, NA, …
-#> $ cont_city          <chr> "LIVINGSTON", "NEWARK", "BROOKSIDE", "RIDGEFIELD", "WOODSTOWN", "WEST…
-#> $ cont_state         <chr> "NJ", "NJ", "NJ", "NJ", "NJ", "NJ", "NJ", "NJ", "NJ", "NJ", "NJ", "NJ…
-#> $ cont_zip           <chr> "07039", "07102", "07926", "07657", "08098", "00000", "08889", "07701…
-#> $ cont_type          <chr> "INDIVIDUAL", "INDIVIDUAL", "INDIVIDUAL", "UNION", "INDIVIDUAL", "PRO…
-#> $ cont_amt           <dbl> 100, 500, 250, 500, 200, 200, 5, 5000, 500, 500, 500, 150, 500, 4000,…
+#> $ cont_non_ind_name  <chr> "PLASTERERS LOCAL UNION 8 PAC", NA, "BELL COLIN FOR ASSEMBLY EFO", NA…
+#> $ cont_non_ind_name2 <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "JEFFERY ALTSCHULER", NA, NA,…
+#> $ cont_street1       <chr> "2535 ORTHODOX ST", "109 GREENWOOD LN", "P O BOX 362", "5545 CANDLEWO…
+#> $ cont_street2       <chr> " ", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
+#> $ cont_city          <chr> "PHILADELPHIA", "FORKED RIVER", "NORTHFIELD", "HOUSTON", "CARLSTADT",…
+#> $ cont_state         <chr> "PA", "NJ", "NJ", "TX", "NJ", "NJ", "NJ", "NY", "OR", "NJ", "NJ", "NJ…
+#> $ cont_zip           <chr> "19137", "08731", "08225", "77056", "07072", NA, "07105", "11542", "9…
+#> $ cont_type          <chr> "UNION PAC", "INDIVIDUAL", "CAMPAIGN FUND", "INDIVIDUAL", "INDIVIDUAL…
+#> $ cont_amt           <dbl> 1000.00, 15.00, 9000.00, 1500.00, 50.00, 200.00, 500.00, 600.00, 2.00…
 #> $ receipt_type       <chr> "MONETARY", "MONETARY", "MONETARY", "MONETARY", "MONETARY", "MONETARY…
-#> $ cont_date          <date> 1985-05-28, 2003-07-29, 2006-01-12, 2002-10-23, 2002-11-13, 1991-09-…
-#> $ occupation         <chr> NA, "OTHER", "MANAGEMENT", NA, "OTHER", NA, "OTHER", NA, "MGMT/EXECUT…
-#> $ emp_name           <chr> NA, "MCMANIMON & SCOTLAND", "PSE&G", NA, "SALEM CTY TAX BOARD", NA, N…
-#> $ emp_street1        <chr> NA, "ONE RIVERFRONT PLZ 4TH FL", "80 PARK PLAZA", NA, "94 MARKET ST",…
-#> $ emp_street2        <chr> NA, NA, NA, NA, NA, NA, NA, NA, "ONE SPEEDWELL AVE", NA, NA, NA, NA, …
-#> $ emp_city           <chr> NA, "NEWARK", "NEWARK", NA, "SALEM", NA, NA, NA, "MORRISTOWN", NA, "P…
-#> $ emp_state          <chr> NA, "NJ", "NJ", NA, "NJ", NA, NA, NA, "NJ", NA, "NJ", NA, "NJ", NA, N…
-#> $ emp_zip            <chr> NA, "07102", "07102", NA, "08079", NA, NA, NA, "07960", NA, "08854", …
-#> $ rec_lname          <chr> "KEAN(G)", "GILL", NA, "IMPREVEDUTO", NA, "MARINI", "SCHUNDLER", NA, …
-#> $ rec_fname          <chr> "THOMAS", "NIA", NA, "ANTHONY", NA, "RAY", "BRET", NA, NA, NA, NA, "J…
-#> $ rec_mname          <chr> "H", "H", NA, NA, NA, "J", NA, NA, NA, NA, NA, "J", "E", NA, NA, NA, …
-#> $ rec_suffix         <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
-#> $ rec_non_ind_name   <chr> NA, NA, "INAUGURAL 2006, INC. (CORZINE)", NA, "SALEM COUNTY REPUBLICA…
-#> $ rec_non_ind_name2  <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
-#> $ office             <chr> "GOVERNOR", "STATE SENATE", "POL CMTE (BALLOT QUESTION)", "STATE ASSE…
-#> $ party              <chr> "REPUBLICAN", "DEMOCRAT", "DEMOCRAT", "DEMOCRAT", "REPUBLICAN", "INDE…
-#> $ location           <chr> "STATEWIDE", "34TH LEGISLATIVE DISTRICT", "STATEWIDE", "32ND LEGISLAT…
-#> $ election_year      <chr> "1985", "2003", "2006", "2003", "2002", "1991", "2001", "2000", "2002…
-#> $ election_type      <chr> "GENERAL", "GENERAL", "INAUGURAL", "PRIMARY", "POLITICAL ACTION COMMI…
+#> $ cont_date          <date> 2012-04-16, 2001-10-12, 2015-10-15, 1995-10-18, 2007-01-23, 1987-06-…
+#> $ occupation         <chr> NA, NA, NA, "OTHER", "MGMT/CHIEF EXECUTIVES", NA, NA, NA, NA, NA, NA,…
+#> $ emp_name           <chr> NA, NA, NA, "COGEN TECHNOLOGIES", NA, NA, NA, NA, NA, NA, NA, "GRUCCI…
+#> $ emp_street1        <chr> NA, NA, NA, "1600 SMITH ST", "ONE BERGEN COUNTY PLZ", NA, NA, NA, NA,…
+#> $ emp_street2        <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
+#> $ emp_city           <chr> NA, NA, NA, "HOUSTON", "HACKENSACK", NA, NA, NA, NA, NA, NA, "VINELAN…
+#> $ emp_state          <chr> NA, NA, NA, "TX", "NJ", NA, NA, NA, NA, NA, NA, "NJ", "NJ", "NJ", "NJ…
+#> $ emp_zip            <chr> NA, NA, NA, "77002", "07601", NA, NA, NA, NA, NA, NA, "08360", "07102…
+#> $ rec_lname          <chr> "NORCROSS", "SCHUNDLER", NA, "DIGAETANO", NA, "ROMA", NA, "WHITMAN", …
+#> $ rec_fname          <chr> "DONALD", "BRET", NA, "PAUL", NA, "PATRICK", NA, "CHRISTINE", "JIM", …
+#> $ rec_mname          <chr> "W", NA, NA, NA, NA, "J", NA, "T", NA, NA, "J", NA, "J", NA, "M", NA,…
+#> $ rec_suffix         <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "JR", NA, NA, NA, NA,…
+#> $ rec_non_ind_name   <chr> NA, NA, "MAZZEO & BELL", NA, "BERGEN COUNTY DEMOCRATIC ORGANIZATION",…
+#> $ rec_non_ind_name2  <chr> NA, NA, "FOR ASSEMBLY", NA, NA, NA, NA, NA, NA, "FO", NA, NA, NA, NA,…
+#> $ office             <chr> "STATE SENATE", "GOVERNOR", "JOINT CANDIDATES CMTE", "STATE ASSEMBLY"…
+#> $ party              <chr> "DEMOCRAT", "REPUBLICAN", "DEMOCRAT", "REPUBLICAN", "DEMOCRAT", "REPU…
+#> $ location           <chr> " 5TH LEGISLATIVE DISTRICT", "STATEWIDE", " 2ND LEGISLATIVE DISTRICT"…
+#> $ election_year      <chr> "2013", "2001", "2015", "1995", "2007", "1987", "1999", "1993", "1981…
+#> $ election_type      <chr> "PRIMARY", "GENERAL", "GENERAL", "GENERAL", "POLITICAL ACTION COMMITT…
 ```
 
 ### Dates
@@ -551,6 +561,8 @@ print_tabyl(nj, election_type)
 #> 4 INAUGURAL                   1506 0.00593
 ```
 
+### Plot
+
 We can create some visualizations to better help us understand the value of these distinct and 
 continuous variables. 
 
@@ -669,7 +681,7 @@ n_distinct(nj$id) == nrow(nj)
 #> [1] TRUE
 ```
 
-### `NA` Values
+### Mising Values
 
 The variables also vary in their degree of values that are `NA` (empty). 
 
@@ -843,18 +855,18 @@ zipcode %>% sample_n(10)
 
 ```
 #> # A tibble: 10 x 3
-#>    city               state zip  
-#>    <chr>              <chr> <chr>
-#>  1 DENVER             CO    80234
-#>  2 HALSEY             NE    69142
-#>  3 FORT SMITH         AR    72901
-#>  4 GENEVA             TX    75947
-#>  5 MIDLAND            TX    79706
-#>  6 FARMINGTON         MI    48332
-#>  7 DES MOINES         IA    50309
-#>  8 HUNTINGTON STATION NY    11750
-#>  9 ROYERSFORD         PA    19468
-#> 10 WARREN             NJ    07059
+#>    city                 state zip  
+#>    <chr>                <chr> <chr>
+#>  1 MILWAUKEE            WI    53259
+#>  2 PROSPECT             NY    13435
+#>  3 SAN LEANDRO          CA    94579
+#>  4 NORTH FRANKLIN       CT    06254
+#>  5 NATIONAL STOCK YARDS IL    62071
+#>  6 ELKTON               MI    48731
+#>  7 TILTON               NH    03276
+#>  8 LAKESIDE             MT    59922
+#>  9 SPRINGFIELD          VA    22156
+#> 10 YOUNGSVILLE          LA    70952
 ```
 
 
@@ -1454,17 +1466,37 @@ nj %>%
 #> # A tibble: 629 x 4
 #>    id     cont_city     city_clean    state_clean
 #>    <chr>  <chr>         <chr>         <chr>      
-#>  1 155553 WINSTON-SALEM WINSTON SALEM NC         
-#>  2 108618 WINSTON-SALEM WINSTON SALEM NC         
-#>  3 222841 WINSTON-SALEM WINSTON SALEM NC         
-#>  4 181805 WINSTON-SALEM WINSTON SALEM NC         
-#>  5 175819 CRESKILL      CRESSKILL     NJ         
-#>  6 135288 CHADS FORD    CHADDS FORD   PA         
-#>  7 126086 KENNILWORTH   KENILWORTH    NJ         
-#>  8 134322 RIVERVALE     RIVER VALE    NJ         
-#>  9 201480 TARREYTOWN    TARRYTOWN     NY         
-#> 10 238864 MC LEAN       MCLEAN        VA         
+#>  1 228394 WOOD-RIDGE    WOOD RIDGE    NJ         
+#>  2 147154 RIVERVALE     RIVER VALE    NJ         
+#>  3 233102 WINSTON-SALEM WINSTON SALEM NC         
+#>  4 108639 WINSTON-SALEM WINSTON SALEM NC         
+#>  5 222845 WINSTON-SALEM WINSTON SALEM NC         
+#>  6 138489 WINSTON-SALEM WINSTON SALEM NC         
+#>  7 138472 WINSTON-SALEM WINSTON SALEM NC         
+#>  8 108631 WINSTON-SALEM WINSTON SALEM NC         
+#>  9 096152 WINSTON-SALEM WINSTON SALEM NC         
+#> 10 132574 CREAMRIDGE    CREAM RIDGE   NJ         
 #> # … with 619 more rows
+```
+
+There are a few other changes that need to be made using a lookup table available in the `data`
+directory.
+
+
+```r
+nj_city_lookup <- read_csv(
+  file = "nj_contribs/data/nj_city_lookup.csv", 
+  col_names = c("city_clean", "city_new", "count"),
+  skip = 1
+)
+
+nj <- nj %>% 
+  left_join(nj_city_lookup, by = "city_clean") %>% 
+  select(-city_clean, -count) %>% 
+  rename(city_clean = city_new)
+
+n_distinct(nj$city_clean)
+#> [1] 2464
 ```
 
 ## Missing Parties

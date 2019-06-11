@@ -126,15 +126,25 @@ data from ELEC is being analyzed.
 dir_create(here("nj_contribs", "data", "raw"))
 
 # file date wrapper function
-any_old_files <- function(path, type) {
-  path %>%
-    dir_ls(type = "file", glob = type) %>% 
-    file_info() %>% 
-    pull(modification_time) %>% 
-    floor_date("day") %>% 
-    equals(today()) %>% 
-    not() %>% 
-    any()
+any_old_files <- function(path, glob) {
+  # list files
+  files <- dir_ls(
+    path = path,
+    type = "file", ,
+    glob = glob
+  )
+  # if no files, FALSE
+  if (length(files) == 0) {
+    TRUE
+  } else {
+    # if any old files, FALSE
+    file_info(files) %>% 
+      pull(modification_time) %>% 
+      floor_date("day") %>% 
+      equals(today()) %>% 
+      not() %>% 
+      any()
+  }
 }
 
 # download each file in the vector
@@ -144,7 +154,7 @@ if (any_old_files(here("nj_contribs", "data", "raw"), "*.zip")) {
       url = url,
       destfile = here(
         "nj_contribs",
-        "data",
+        "data", "raw",
         basename(url)
       )
     )
@@ -154,7 +164,7 @@ if (any_old_files(here("nj_contribs", "data", "raw"), "*.zip")) {
 
 ```{r view_zip}
 nj_zip_files <- dir_ls(
-  path = here("nj_contribs", "data"),
+  path = here("nj_contribs", "data", "raw"),
   type = "file",
   glob = "*.zip",
 )
@@ -176,7 +186,7 @@ if (any_old_files(here("nj_contribs", "data", "raw"), "*.txt")) {
   map(
     nj_zip_files,
     unzip,
-    exdir = here("nj_contribs", "data"),
+    exdir = here("nj_contribs", "data", "raw"),
     overwrite = TRUE
   )
 }
@@ -478,7 +488,7 @@ nj <- nj %>%
 n_distinct(nj$id) == nrow(nj)
 ```
 
-### `NA` Values
+### Mising Values
 
 The variables also vary in their degree of values that are `NA` (empty). 
 
@@ -982,6 +992,24 @@ nj %>%
   filter(cont_city != city_clean) %>% 
   select(id, cont_city, city_clean, state_clean) %>% 
   sample_frac()
+```
+
+There are a few other changes that need to be made using a lookup table available in the `data`
+directory.
+
+```{r city_lookup, collapse=TRUE}
+nj_city_lookup <- read_csv(
+  file = "nj_contribs/data/nj_city_lookup.csv", 
+  col_names = c("city_clean", "city_new", "count"),
+  skip = 1
+)
+
+nj <- nj %>% 
+  left_join(nj_city_lookup, by = "city_clean") %>% 
+  select(-city_clean, -count) %>% 
+  rename(city_clean = city_new)
+
+n_distinct(nj$city_clean)
 ```
 
 ## Missing Parties
