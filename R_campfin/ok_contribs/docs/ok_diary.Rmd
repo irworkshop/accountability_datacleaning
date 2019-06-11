@@ -77,12 +77,12 @@ downloadable raw data option. This option provides an entire database dump in co
 import into an existing database.
 
 ```{r any_old_files, echo=FALSE}
-any_old_files <- function(path, type) {
+any_old_files <- function(path, glob) {
   path %>%
-    dir_ls(type = "file", glob = type) %>% 
+    dir_ls(type = "file", glob = glob) %>% 
     file_info() %>% 
     pull(modification_time) %>% 
-    as.Date() %>% 
+    floor_date("day") %>% 
     equals(today()) %>% 
     not() %>% 
     any()
@@ -111,10 +111,11 @@ unzip(
 If these files have not yet been unzipped, they will be now.
 
 ```{r unzip}
-if (here("ok_contribs", "data", "raw") %>% any_old_files("*.zip")) {
+if (here("ok_contribs", "data", "raw") %>% any_old_files("*.csv")) {
   unzip(
     zipfile = here("ok_contribs", "data", "raw", "ethicscsvfile.zip"),
-    exdir = here("ok_contribs", "data", "raw")
+    exdir = here("ok_contribs", "data", "raw"),
+    overwrite = TRUE
   )
 }
 ```
@@ -131,27 +132,27 @@ Descriptions for each of these files is provided int the `data/descriptions.doc`
 In general, there are three _types_ of files that need to be read and joined together
 
 1. All transactions
-  * `transaction.csv`
+    * `transaction.csv`
 1. Contributor information
-  * `contributor.csv`
-    * `cont_type.csv`
-  * `individual_cont.csv`
-  * `business_cont.csv`
-  * `committee_cont.csv`
-  * `vendor_cont.csv`
+    * `contributor.csv`
+      * `cont_type.csv`
+    * `individual_cont.csv`
+    * `business_cont.csv`
+    * `committee_cont.csv`
+    * `vendor_cont.csv`
 1. Recipient information
-  * `so1.csv`
-  * `so2.csv`
-  * `party.csv`
-  * `district.csv`
-  * `office.csv`
-  * `affiliation.csv`
-  * `report.csv`
-  * `lump_fund.csv`
-  * `surplus.csv`
-  * `refund.csv`
+    * `so1.csv`
+    * `so2.csv`
+    * `party.csv`
+    * `district.csv`
+    * `office.csv`
+    * `affiliation.csv`
+    * `report.csv`
+    * `lump_fund.csv`
+    * `surplus.csv`
+    * `refund.csv`
 
-They will each be read as data frames using `readr::read_csv()`. All files contain an erronous
+They will each be read as data frames using `readr::read_csv()`. All files contain an erroneous
 trailing column in the header resulting in an empty column that will be removed. All variable names
 will be made "clean" (lowercase and snake_case) using `janitor::clean_names()`.
 
@@ -174,7 +175,10 @@ transactions <- read_csv(
 transactions <- transactions %>% 
   select(-X6) %>% 
   clean_names() %>% 
-  rename(cont_id = contributor_id)
+  rename(
+    cont_id = contributor_id,
+    trans_date = transaction_date
+    )
 
 print(transactions)
 ```
@@ -216,8 +220,6 @@ cont_types <- read_csv(
 cont_types <- cont_types %>%
   select(-X3) %>% 
   clean_names()
-
-print(cont_types)
 ```
 
 #### Individual Contributors
@@ -280,6 +282,7 @@ committee_conts <- committee_conts %>%
   select(-X6) %>% 
   clean_names() %>% 
   rename(
+    cont_interest = principal_interest,
     cont_id = id,
     ethics_id = ethics_num,
     cont_cname = committee_name
@@ -299,15 +302,14 @@ vendor_conts <- read_csv(
 vendor_conts <- vendor_conts %>% 
   select(-X3) %>% 
   clean_names() %>% 
-  rename(
-    cont_interest = principal_interest,
-    cont_vname = cont_name
-  )
+  rename(cont_vname = cont_name)
 ```
 
 ### Recipients
 
-### Statment of Organization
+The information on the recipients of each transaction are held in other databases.
+
+#### Statement of Organization
 
 The "SO-1" form applies to committees formed to support a political candidate.
 
@@ -340,7 +342,8 @@ The "SO-2" form applies to committees formed to support non-candidate issues.
 so2 <- read_csv(
   file = "ok_contribs/data/raw/so2.csv",
   col_types = cols(
-    .default = col_character()
+    .default = col_character(),
+    ORGANIZATION_DATE = col_date("%m/%d/%Y")
   )
 )
 
@@ -362,13 +365,13 @@ so2$stmnt_of_intent <-
 appropriate SO1 or SO2 in the Report table. The name, address, street, city, state and zip for the
 bank are contained in this table.
 
-```{r}
-affiliation <- read_csv(
+```{r read_affiliation}
+affiliations <- read_csv(
   file = "ok_contribs/data/raw/affiliation.csv",
   col_types = cols(.default = col_character())
 )
 
-affiliation <- affiliation %>% 
+affiliations <- affiliations %>% 
   select(-X8) %>% 
   clean_names()
 ```
@@ -378,13 +381,13 @@ affiliation <- affiliation %>%
 > Holds the ballot year for the appropriate SO1 or SO2 that is filed. The rep_num refers to the
 appropriate SO1 or SO2 in the Report table.
 
-```{r}
-ballot_measure <- read_csv(
+```{r read_ballot_measure}
+ballot_measures <- read_csv(
   file = "ok_contribs/data/raw/ballot_measure.csv",
   col_types = cols(.default = col_character())
 )
 
-ballot_measure <- ballot_measure %>% 
+ballot_measures <- ballot_measures %>% 
   select(-X3) %>% 
   clean_names()
 ```
@@ -394,13 +397,13 @@ ballot_measure <- ballot_measure %>%
 > Holds the full name and address for the depository information for the SO1 or SO2 from the
 report_num field that relates to the report table.
 
-```{r}
-depository <- read_csv(
+```{r read_depository}
+depositories <- read_csv(
   file = "ok_contribs/data/raw/depository.csv",
   col_types = cols(.default = col_character())
 )
 
-depository <- depository %>% 
+depositories <- depositories %>% 
   select(-X8) %>% 
   clean_names()
 ```
@@ -428,13 +431,13 @@ parties <- parties %>%
 
 > Description of office types (mainly for elections)
 
-```{r read_district}
-office <- read_csv(
+```{r read_office}
+offices <- read_csv(
   file = "ok_contribs/data/raw/office.csv",
   col_types = cols(.default = col_character())
 )
 
-office <- office %>% 
+offices <- offices %>% 
   select(-X3) %>% 
   clean_names() %>% 
   rename(office_id = id)
@@ -445,12 +448,12 @@ office <- office %>%
 > List of the districts for elections
 
 ```{r read_district}
-district <- read_csv(
+districts <- read_csv(
   file = "ok_contribs/data/raw/district.csv",
   col_types = cols(.default = col_character())
 )
 
-district <- district %>% 
+districts <- districts %>% 
   select(-X3) %>% 
   clean_names()
 ```
@@ -475,7 +478,7 @@ candidates <- candidates %>%
 
 > Holds lump fund information for the respective report_num
 
-```{r read_district}
+```{r read_lump_funds}
 lump_funds <- read_csv(
   file = "ok_contribs/data/raw/lump_fund.csv",
   col_types = cols(
@@ -531,6 +534,27 @@ rep_types <- rep_types %>%
 
 ## Join
 
+Our primary interest is when a transaction was made, for how much, from whom, and to whom. The
+transaction database contains the when and how much, but uses keys to identify the who.
+
+The contributor of a transaction (giving mondey) is identified by the `cont_id` variable.
+
+The recipeint of a transaction (getting money) are the ones filing the report on which each
+transaction appears, identifying by the `rep_num` variable. In the database of reports, the filer
+of each report is identified with their `ethics_id`.
+
+By joining each transaction with ther filer of the respective report, we can identify the filer.
+
+```{r join_recs}
+ok <- transactions %>% 
+  left_join(reports %>% select(rep_num, ethics_id))
+
+print(ok)
+```
+
+To improve the searchability of this database of transactions, we will add the name and location
+of each contributor and recipient.
+
 ### Contributors
 
 First, we will join the `contributors` table, which contains geographic data on each contributor
@@ -546,6 +570,10 @@ There are four types of contributors, each identified with different `cont_*name
     * with `cont_interest` and `ethics_id`
 1. Vendors with a `cont_vname`
     * With OK Ethics Commission `ethics_id`
+    
+It's important to note that the transactions database contains both contributions _and_
+expenditures reported by the filer. For expenditures, the "contributor" is actually the vendor
+recipient of the money
 
 ```{r join_conts, collapse=TRUE}
 nrow(contributors)
@@ -554,17 +582,19 @@ nrow(business_conts)
 nrow(committee_conts)
 nrow(vendor_conts)
 
-contributors <- contributors %>% 
+contributors2 <- contributors %>% 
   left_join(individual_conts, by = "cont_id") %>% 
   left_join(business_conts, by = "cont_id") %>% 
   left_join(committee_conts, by = "cont_id") %>% 
   left_join(vendor_conts, by = "cont_id") %>% 
   left_join(cont_types, by = "cont_type")
+
+nrow(contributors2)
 ```
 
-There appears to be more total contributors than listed in the `contributors` database. There are
+There appears to be more total contributors than listed in the contributors database. There are
 `r nrow(individual_conts) - nrow(contributors)` more _individual_ contributors alone than there are
-total records in the `contributors` database.
+total records in the contributors database.
 
 ```{r cont_miss, collapse=TRUE}
 nrow(individual_conts) - nrow(contributors)
@@ -573,25 +603,93 @@ mean(individual_conts$cont_id %in% contributors$cont_id)
 
 ### Recipients
 
-Contributions can be made to candidates and committees. These contributions are reported _by_ the
-recipients in various report forms listed in the `reports` (and `rep_type`).
+When a committee is formed to recieve contributions, the file a "Stament of Organization" report.
+Committees formed to recieve funds on behalf of a candidate file an "SO-1" form, and non-candidate
+organizations file an "SO-2" form.
 
-The filer of those reports is given an `ethics_id` by the Oklahoma Ethics Commision, which then
-corrisponds to the `candidates` and `committees` databases.
+These formn contain a lot of information, but we will extract only the geographic information of
+each, so that we can better search the contributions and expenditures in the transactions database.
 
-```{r join_repts}
-reports %>% 
-  select(rep_num, ethics_id) %>% 
-  left_join(candidates, by = "ethics_id")
+First, we will create a new table of candidate committee information from the SO-1 database.
+
+```{r can_recs}
+candidate_rec <- so1 %>%
+  left_join(candidates, by = "ethics_id") %>% 
+  left_join(parties, by = c("party_num" = "party_id")) %>% 
+  left_join(offices, by = c("office_num" = "office_id")) %>% 
+  rename(
+    rec_street   = street,
+    rec_city     = city,
+    rec_state    = state, 
+    rec_zip      = zip,
+    rec_cname    = comname,
+    rec_party    = party_desc,
+    rec_office   = office_desc
+  ) %>% 
+  select(ethics_id, starts_with("rec_")) %>%
+  # multiple entries per ethics id
+  # make all upper
+  mutate_if(is_character, str_to_upper) %>% 
+  # take only the first
+  group_by(ethics_id) %>% 
+  slice(1) %>% 
+  ungroup() %>% 
+  distinct()
+
+print(candidate_rec)
 ```
 
-### Transactions
+The same can be done with non-candidate committee recipients from SO-2 filings.
 
-Once we have this single table of contributor information, we can join it with the `transactions`
-database to provide information on the contributing party to each transaction.
+```{r com_recs}
+committee_rec <- so2 %>% 
+  rename(
+    rec_cname    = comname,
+    rec_street   = street,
+    rec_city     = city,
+    rec_state    = state,
+    rec_zip      = zip
+  ) %>% 
+  select(ethics_id, starts_with("rec_")) %>%
+  mutate_if(is_character, str_to_upper) %>% 
+  group_by(ethics_id) %>% 
+  slice(1) %>% 
+  ungroup() %>% 
+  distinct()
 
-```{r join_trans}
-ok <- transactions %>% 
-  left_join(contributors, by = "cont_id")
+print(committee_rec)
+```
+
+Combine the two types of recipients into a single table that can be joined to the transactions
+database along the `ethics_id` of each transaction's report filer.
+
+```{r bind_recs, collapse=TRUE}
+recipients <- bind_rows(candidate_rec, committee_rec)
+dim(recipients)
+n_distinct(recipients$ethics_id) == nrow(recipients)
+```
+
+There are `r nrow(recipients)` unique committees that have filed SO-1 or S0-2 reports, each
+identified by their unique `ethics_id` variable.
+
+### Total Join
+
+With our new tables of unique contributors and unique recipients, we can better identify the
+parties to each transaction. We will join all three tables by their respective `*_id` variables.
+
+```{r}
+ok <- ok %>% 
+  left_join(contributors2 %>% select(-ethics_id), by = "cont_id") %>% 
+  left_join(recipients, by = "ethics_id")
+```
+
+## Explore
+
+```{r dims}
+nrow(ok)
+length(ok)
+names(ok)
+sample_frac(ok)
+glimpse(sample_frac(ok))
 ```
 
