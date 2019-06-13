@@ -54,6 +54,7 @@ pacman::p_load(
   lubridate, # date strings
   magrittr, # pipe opperators
   janitor, # data cleaning
+  zipcode, # clean and data
   refinr, # cluster and merge
   rvest, # scrape web pages
   knitr, # knit documents
@@ -62,8 +63,10 @@ pacman::p_load(
 )
 ```
 
-```{r conflicts, echo=FALSE}
+```{r fix_fun, echo=FALSE}
 here <- here::here
+"%out%" <- Negate("%in%")
+print_all <- function(df) df %>% print(n = nrow(.)) 
 ```
 
 ## Data
@@ -537,17 +540,20 @@ rep_types <- rep_types %>%
 Our primary interest is when a transaction was made, for how much, from whom, and to whom. The
 transaction database contains the when and how much, but uses keys to identify the who.
 
-The contributor of a transaction (giving mondey) is identified by the `cont_id` variable.
+The contributor of a transaction (giving money) is identified by the `cont_id` variable.
 
-The recipeint of a transaction (getting money) are the ones filing the report on which each
+The recipient of a transaction (getting money) are the ones filing the report on which each
 transaction appears, identifying by the `rep_num` variable. In the database of reports, the filer
 of each report is identified with their `ethics_id`.
 
-By joining each transaction with ther filer of the respective report, we can identify the filer.
+By joining each transaction with the filer of the respective report, we can identify the filer.
 
 ```{r join_recs}
 ok <- transactions %>% 
-  left_join(reports %>% select(rep_num, ethics_id))
+  left_join(
+    reports %>% select(rep_num, ethics_id), 
+    by = "rep_num"
+  )
 
 print(ok)
 ```
@@ -603,11 +609,11 @@ mean(individual_conts$cont_id %in% contributors$cont_id)
 
 ### Recipients
 
-When a committee is formed to recieve contributions, the file a "Stament of Organization" report.
-Committees formed to recieve funds on behalf of a candidate file an "SO-1" form, and non-candidate
+When a committee is formed to receive contributions, the file a "Statement of Organization" report.
+Committees formed to receive funds on behalf of a candidate file an "SO-1" form, and non-candidate
 organizations file an "SO-2" form.
 
-These formn contain a lot of information, but we will extract only the geographic information of
+These forms contain a lot of information, but we will extract only the geographic information of
 each, so that we can better search the contributions and expenditures in the transactions database.
 
 First, we will create a new table of candidate committee information from the SO-1 database.
@@ -685,11 +691,437 @@ ok <- ok %>%
 
 ## Explore
 
+There are `r nrow(ok)` records of `r length(ok)` variables in the full database.
+
 ```{r dims}
 nrow(ok)
 length(ok)
 names(ok)
 sample_frac(ok)
 glimpse(sample_frac(ok))
+```
+
+### Distinct
+
+The variables range in their degree of distinctness.
+
+The `trans_index` is `r noquote(scales::percent(n_distinct(ok$trans_index)/nrow(ok)))` distinct and
+can be used to identify a unique transaction.
+
+```{r}
+ok %>% 
+  map(n_distinct) %>% 
+  unlist() %>% 
+  enframe(name = "variable", value = "n_distinct") %>% 
+  mutate(prop_distinct = round(n_distinct / nrow(ok), 4)) %>%
+  print(n = length(ok))
+```
+
+The `*_id` variables have as many distinct values as the length of their respective tables.
+
+```{r distinct_id, collapse=TRUE}
+n_distinct(individual_conts$cont_id)/nrow(individual_conts)
+n_distinct(business_conts$cont_id)/nrow(business_conts)
+```
+
+```{r tabyls_function, echo=FALSE}
+print_tabyl <- function(data, ...) {
+  as_tibble(arrange(tabyl(data, ...), desc(n)))
+}
+```
+
+```{r tabyls}
+print_tabyl(ok, cont_desc)
+print_tabyl(ok, cont_city)
+print_tabyl(ok, cont_state)
+print_tabyl(ok, cont_occupation)
+print_tabyl(ok, cont_interest)
+print_tabyl(ok, rec_city)
+print_tabyl(ok, rec_state)
+print_tabyl(ok, rec_party)
+print_tabyl(ok, rec_office)
+```
+
+### Missing
+
+The variables also vary in their degree of values that are `NA` (missing). 
+
+Some variables are mutually exclusive. There cannot be, for example, both `cont_lname` and
+`cont_bname` value for the same record, as these two variables identify different kinds of
+transactions.
+
+It's notable that the important variables (e.g., `*_id`, `trans_*`) contain 
+mostly no missing values. There are `r sum(is.na(ok$trans_amount))` records without a 
+`trans_amount`. They will be flaged with a new `na_flag` variable.
+
+```{r missin_important, collapse=TRUE}
+sum(is.na(ok$cont_id))
+sum(is.na(ok$ethics_id))
+sum(is.na(ok$trans_date))
+sum(is.na(ok$trans_amount))
+ok <- ok %>% 
+  mutate(na_flag = is.na(trans_amount))
+```
+
+The full count of `NA` for each variable in the data frame can be found below:
+
+```{r count_na}
+ok %>% 
+  map(function(var) sum(is.na(var))) %>% 
+  unlist() %>% 
+  enframe(name = "variable", value = "n_na") %>% 
+  mutate(prop_na = n_na / nrow(ok)) %>% 
+  print(n = length(ok))
+```
+
+### Ranges
+
+The range of continous variables will need to be checked for data integrity. There are only two
+quasi-continuous variables, the `trans_amount` and `trans_date`
+
+#### Transaction Amounts
+
+The range for `trans_amount` seems reasonable enough.
+
+```{r amount_range}
+summary(ok$trans_amount)
+```
+
+There are only `r sum(ok$trans_amount > 500000, na.rm = T)` transactions greater than \$500,000. 
+
+```{r plot_amt_nonlog, collapse=TRUE}
+sum(ok$trans_amount > 500000, na.rm = TRUE)
+ggplot(ok, aes(trans_amount)) + 
+  geom_histogram() + 
+  scale_y_log10() +
+  scale_x_continuous(labels = scales::dollar) +
+  geom_hline(yintercept = 10)
+```
+
+```{r glimpse_min_max}
+glimpse(ok %>% filter(trans_amount == min(trans_amount, na.rm = T)))
+glimpse(ok %>% filter(trans_amount == max(trans_amount, na.rm = T)))
+```
+
+```{r reports_min_max}
+reports %>%
+  filter(rep_num == ok$rep_num[which(ok$trans_amount == min(ok$trans_amount, na.rm = TRUE))])
+reports %>%
+  filter(rep_num == ok$rep_num[which(ok$trans_amount == max(ok$trans_amount, na.rm = TRUE))])
+```
+
+### Transaction Dates
+
+There are 
+
+```{r date_range}
+summary(ok$trans_date)
+```
+
+### Plots
+
+```{r plot_amt_hist}
+ok %>%
+  filter(rec_party %in% c("REPUBLICAN", "DEMOCRAT", "NON-PARTISAN", "INDEPENDENT")) %>% 
+  ggplot(aes(trans_amount)) +
+  geom_histogram(bins = 30, aes(fill = rec_party)) +
+  scale_x_continuous(labels = scales::dollar, trans = "log10") +
+  scale_y_log10() +
+  scale_fill_manual(values = c("blue", "forestgreen", "purple", "red")) +
+  facet_wrap(~rec_party) +
+  theme(legend.position = "none") +
+  labs(
+    title = "Transaction Distribution",
+    caption = "Source: OKEC",
+    y = "Number of Contributions",
+    x = "Amount (USD)"
+  )
+```
+
+```{r plot_amt_hist}
+ok %>%
+  ggplot(aes(trans_amount)) +
+  geom_histogram(bins = 30, aes(fill = cont_desc)) +
+  scale_x_continuous(labels = scales::dollar, trans = "log10") +
+  scale_y_log10() +
+  facet_wrap(~cont_desc) +
+  theme(legend.position = "none") +
+  labs(
+    title = "Transaction Distribution",
+    subtitle = "by Contribution Type",
+    caption = "Source: OKEC",
+    y = "Number of Contributions",
+    x = "Amount (USD)"
+  )
+```
+
+```{r plot_amt_year}
+ok %>% 
+  group_by(year = year(trans_date)) %>% 
+  summarise(sum = sum(trans_amount, na.rm = TRUE)) %>% 
+  ggplot(aes(year, sum)) +
+  geom_col() +
+  labs(
+    title = "Transaction Sum by Year",
+    caption = "Source: OKEC",
+    y = "Total Transaction Amount",
+    x = "Transaction Date"
+  )
+```
+
+
+## Clean
+
+We can now create new variables on our comprehensive table of transactions. The objective of these
+cleaning steps will be to create `*_clean` variables with a reduced number of distinct values by
+fixing spelling mistakes. We will also create new variables to better identify each transaction in
+the Accountability Database.
+
+### Year
+
+```{r mutate_year}
+ok <- ok %>% 
+  mutate(trans_year = year(trans_date))
+```
+
+### ZIPs
+
+```{r clean_zipcodes}
+n_distinct(ok$cont_zip)
+
+ok <- ok %>% 
+  mutate(cont_zip_clean = clean.zipcodes(cont_zip) %>% 
+           na_if("00000") %>% 
+           na_if("11111") %>% 
+           na_if("99999") %>% 
+           str_sub(1, 5)
+  )
+
+# reduced by half
+n_distinct(ok$cont_zip_clean)
+```
+
+```{r clean_zipcodes}
+n_distinct(ok$rec_zip)
+
+ok <- ok %>% 
+  mutate(rec_zip_clean = clean.zipcodes(rec_zip) %>% 
+           na_if("00000") %>% 
+           na_if("11111") %>% 
+           na_if("99999") %>% 
+           str_sub(1, 5)
+  )
+
+# reduced by half
+n_distinct(ok$rec_zip_clean)
+```
+
+### States
+
+```{r zip_data}
+data("zipcode")
+zipcode <-
+  as_tibble(zipcode) %>% 
+  mutate_if(is.character, str_to_upper) %>% 
+  select(city, state, zip)
+
+valid_abb <- unique(zipcode$state)
+setdiff(valid_abb, state.abb)
+```
+
+```{r count_bad_states}
+n_distinct(ok$cont_state)
+setdiff(ok$cont_state, valid_abb)
+ok %>% 
+  filter(cont_state %out% valid_abb) %>% 
+  print_tabyl(cont_state)
+```
+
+```{r upper_states}
+ok <- ok %>% mutate(cont_state_clean = str_to_upper(cont_state))
+```
+
+```{r view_bad_states}
+ok %>% 
+  filter(cont_state_clean %out% valid_abb) %>% 
+  filter(!is.na(cont_state_clean)) %>% 
+  select(
+    trans_index,
+    cont_street,
+    cont_city,
+    cont_state_clean,
+    cont_zip_clean
+  ) %>% 
+  left_join(
+    zipcode %>% select(city, state, zip), 
+    by = c("cont_zip_clean" = "zip")
+  )
+```
+
+```{r fix_bad_states, collapse=TRUE}
+ok$cont_state_clean <- 
+  ok$cont_state_clean %>% 
+  str_replace("^K$",  "OK") %>% 
+  str_replace("^OL$", "OK") %>% 
+  str_replace("^FO$", "OK") %>% 
+  # address matches tulsa
+  # zip matches new york
+  str_replace("^74$", "OK") %>% 
+  na_if("NG")
+
+# all fixed
+setdiff(ok$cont_state_clean, valid_abb)
+```
+
+```{r count_bad_states, collapse=TRUE}
+n_distinct(ok$rec_state)
+setdiff(ok$rec_state, valid_abb)
+```
+
+### Cities
+
+```{r valid_city}
+valid_city <- unique(zipcode$city)
+length(valid_city)
+
+valid_ok_city <- unique(zipcode$city[zipcode$state == "OK"])
+length(valid_ok_city)
+```
+
+```{r count_bad_city, collapse=TRUE}
+n_distinct(ok$cont_city) # 7424
+length(setdiff(ok$cont_city, valid_city))
+sum(ok$cont_city %out% valid_city)
+mean(ok$cont_city %out% valid_city)
+```
+
+```{r}
+ok %>% 
+  filter(cont_city_clean %out% valid_city) %>% 
+  count(cont_city_clean) %>% 
+  arrange(desc(n))
+```
+
+```{r}
+ok$cont_city_clean <- 
+  str_to_upper(ok$cont_city) %>%
+  str_remove_all("[:punct:]") %>%
+  str_remove_all("\\d+") %>% 
+  str_remove_all("(^|\\b)OK(\\b|$)") %>% 
+  str_remove_all("(^|\\b)DC(\\b|$)") %>%
+  str_replace_all("\\s+", "\\s") %>% 
+  str_trim() %>% 
+  # make common NA
+  na_if("N/A") %>% 
+  na_if("NA") %>% 
+  na_if("N A") %>% 
+  na_if("N.A") %>% 
+  na_if("NONE") %>% 
+  na_if("NONR") %>% 
+  na_if("NON") %>% 
+  na_if("NONE GIVEN") %>% 
+  na_if("NOT GIVEN") %>%
+  na_if("NOT GIVE") %>% 
+  na_if("NOT REQUIRED") %>%
+  na_if("INFORMATION REQUESTED") %>% 
+  na_if("REQUESTED INFORMATION") %>% 
+  na_if("INFO REQUESTED") %>% 
+  na_if("REQUESTED INFO") %>% 
+  na_if("UNKOWN") %>%
+  na_if("UNKNOWN") %>% 
+  na_if("NOTAPPLICABLE") %>% 
+  na_if("NOT APPLICABLE") %>% 
+  na_if("VARIOUS") %>% 
+  na_if("UNDER $1000") %>% 
+  na_if("ANYWHERE") %>% 
+  na_if("X") %>% 
+  na_if("XX") %>% 
+  na_if("XXX") %>% 
+  na_if("XXXX") %>% 
+  na_if("XXXXX") %>% 
+  na_if("XXXXXXX") %>% 
+  na_if("XXXXXXXX") %>% 
+  na_if("-") %>% 
+  na_if("")
+
+ok$cont_city_clean <- 
+  ok$cont_city_clean %>%
+  # very frequent city abbs
+  str_replace_all("^OKC$", "OKLAHOMA CITY") %>% 
+  str_replace_all("^OKLA CITY$", "OKLAHOMA CITY") %>% 
+  str_replace_all("^OKLAHOMA$", "OKLAHOMA CITY") %>% 
+  str_replace_all("^OK CITY$", "OKLAHOMA CITY") %>% 
+  str_replace_all("^OKLAHOM CITY$", "OKLAHOMA CITY") %>% 
+  str_replace_all("^OKLAHMA CITY$", "OKLAHOMA CITY") %>% 
+  str_replace_all("^OKLAHOMA CITH$", "OKLAHOMA CITY") %>% 
+  str_replace_all("^OKLAHOMA CIT$", "OKLAHOMA CITY") %>% 
+  # location type abbs
+  str_replace_all("^FT\\s", "FORT") %>% 
+  str_replace_all("^ST\\s", "SAINT") %>% 
+  str_replace_all("^MT\\s", "MOUNT")
+
+n_distinct(ok$cont_city)
+n_distinct(ok$cont_city_clean)
+```
+
+```{r}
+ok_city_fix <- ok %>%
+  filter(!is.na(cont_city)) %>% 
+  mutate(cont_city_fix = cont_city_clean %>%
+           key_collision_merge(dict = valid_ok_city) %>% 
+           n_gram_merge()
+  ) %>% 
+  mutate(fixed = (cont_city_fix != cont_city_clean))
+
+sum(x$fixed, na.rm = TRUE)
+tabyl(x$fixed)
+
+ok_city_fix %>% 
+  filter(fixed) %>%
+  count(cont_state, cont_city_clean, cont_city_fix) %>% 
+  arrange(desc(n))
+```
+
+```{r}
+ok_city_fix <- ok_city_fix %>%
+  filter(fixed) %>% 
+  select(
+    cont_city,
+    cont_city_clean,
+    cont_city_fix,
+    cont_state_clean,
+    cont_zip_clean
+  ) %>% 
+  distinct()
+
+n_distinct(x$cont_city)
+n_distinct(x$cont_city_clean)
+n_distinct(x$cont_city_fix)
+```
+
+```{r}
+good_fix <- ok_city_fix %>% 
+  inner_join(
+    zipcode,
+    by = c(
+      "cont_state_clean" = "state",
+      "cont_zip_clean" = "zip",
+      "cont_city_fix" = "city"
+    )
+  )
+
+nrow(good_fix)
+
+bad_fix <- ok_city_fix %>% 
+  anti_join(
+    zipcode,
+    by = c(
+      "cont_state_clean" = "state",
+      "cont_zip_clean" = "zip",
+      "cont_city_fix" = "city"
+    )
+  )
+
+nrow(bad_fix)
 ```
 
