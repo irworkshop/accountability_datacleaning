@@ -119,7 +119,7 @@ dir_create(here("ok_contribs", "data", "raw"))
 if (any_old_files(here("ok_contribs", "data", "raw"), "*.zip")) {
   download.file(
     url = "https://www.ok.gov/ethics/public/dfile.php?action=csv",
-    destfile = here("ok_contribs", "data", "raw", )
+    destfile = here("ok_contribs", "data", "raw", "ethicscsvfile.zip")
   )
 }
 ```
@@ -355,53 +355,6 @@ so2 <-
   clean_names() %>% 
   rename(ethics_id = ethics_num) %>% 
   mutate(stmnt_of_intent = to_logical(stmnt_of_intent))
-```
-
-#### Affiliation
-
-> Contains the banking information for the SO1 or SO2 that is filed. The rep_num refers to the
-appropriate SO1 or SO2 in the Report table. The name, address, street, city, state and zip for the
-bank are contained in this table.
-
-```{r read_affiliation}
-affiliations <- 
-  here("ok_contribs", "data", "raw", "affiliation.csv") %>% 
-  read_csv(col_types = cols(.default = "c")) %>% 
-  remove_empty("cols") %>% 
-  clean_names()
-```
-
-#### Ballot Measures
-
-> Holds the ballot year for the appropriate SO1 or SO2 that is filed. The rep_num refers to the
-appropriate SO1 or SO2 in the Report table.
-
-```{r read_ballot_measure}
-ballot_measures <-
-  here("ok_contribs", "data", "raw", "ballot_measure.csv") %>% 
-  read_csv(col_types = cols(REP_NUM = "c", BALLOT_YEAR = "d")) %>% 
-  remove_empty("cols") %>% 
-  clean_names()
-```
-
-#### Depository
-
-> Holds the full name and address for the depository information for the SO1 or SO2 from the
-report_num field that relates to the report table.
-
-```{r read_depository}
-depositories <-
-  here("ok_contribs", "data", "raw", "depository.csv") %>% 
-  read_csv(col_types = cols(.default = "c")) %>% 
-  remove_empty("cols") %>% 
-  clean_names() %>% 
-  rename(
-    depos_dname  = full_name,
-    depos_street = street,
-    depos_city   = city,
-    depos_state  = state,
-    depos_zip    = zip
-  )
 ```
 
 #### Parties
@@ -669,6 +622,29 @@ ok <- ok %>%
   left_join(all_recipients, by = "ethics_id")
 ```
 
+```{r}
+rm(
+  all_contributors,
+  all_recipients,
+  candidates,
+  parties,
+  offices,
+  contributors,
+  individual_conts,
+  business_conts,
+  vendor_conts,
+  committee_conts,
+  committee_recs,
+  transactions,
+  so1, 
+  so2,
+  lump_funds,
+  reports,
+  cont_types,
+  districts
+)
+```
+
 ## Explore
 
 There are `r nrow(ok)` records of `r length(ok)` variables in the full database.
@@ -871,7 +847,7 @@ ok <- ok %>%
 
 ### ZIPs
 
-```{r clean_zipcodes}
+```{r clean_cont_zipcodes}
 n_distinct(ok$cont_zip)
 
 ok <- ok %>% 
@@ -886,7 +862,7 @@ ok <- ok %>%
 n_distinct(ok$cont_zip_clean)
 ```
 
-```{r clean_zipcodes}
+```{r clean_rec_zipcodes}
 n_distinct(ok$rec_zip)
 
 ok <- ok %>% 
@@ -958,7 +934,12 @@ ok$cont_state_clean <-
 setdiff(ok$cont_state_clean, valid_abb)
 ```
 
-```{r count_bad_states, collapse=TRUE}
+```{r count_clean_states, collapse=TRUE}
+n_distinct(ok$cont_state_clean)
+setdiff(ok$cont_state_clean, valid_abb)
+```
+
+```{r count_bad_states_rec, collapse=TRUE}
 n_distinct(ok$rec_state)
 setdiff(ok$rec_state, valid_abb)
 ```
@@ -975,15 +956,41 @@ We will also remove punctuation, expand common abbreviations, and make all strin
 aim of this process is to reduce the total number of distinct city values by standardizing
 spelling. This improves the usability of the database by correcting connecting similar records.
 
-```{r valid_city}
-valid_city <- unique(zipcode$city)
-length(valid_city)
-
-valid_ok_city <- unique(zipcode$city[zipcode$state == "OK"])
-length(valid_ok_city)
-```
-
 ```{r zip_city, echo=FALSE}
+zipcode <- zipcode %>% 
+  bind_rows(
+    tribble(
+      ~city, ~state, ~zip,
+      "PARK HILL",     "OK", "74451",
+      "PARK HILL",     "OK", "74464",
+      "PARK HILL",     "OK", "74471",
+      "QUAPAW",        "OK", "74363",
+      "THE VILLAGE",   "OK", "73120",
+      "THE VILLAGE",   "OK", "73156",
+      "NICHOLS HILLS", "OK", "73116",
+      "NICHOLS HILLS", "OK", "73120",
+      "DEL CITY",      "OK", "73115",
+      "DEL CITY",      "OK", "73117",
+      "DEL CITY",      "OK", "73135",
+      "MIDWEST CITY",  "OK", "73020",
+      "MIDWEST CITY",  "OK", "73110",
+      "MIDWEST CITY",  "OK", "73117",
+      "MIDWEST CITY",  "OK", "73130",
+      "MIDWEST CITY",  "OK", "73140",
+      "MIDWEST CITY",  "OK", "73141",
+      "MIDWEST CITY",  "OK", "73145",
+      "WALTERS",       "OK", "73572",
+      "WARR ACRES",    "OK", "73122",
+      "WARR ACRES",    "OK", "73123",
+      "WARR ACRES",    "OK", "73132",
+      "FORAKER",       "OK", "74652",
+      "BALKO",         "OK", "73931",
+      "GOLDSBY",       "OK", "73072",
+      "GOLDSBY",       "OK", "73080",
+      "GOLDSBY",       "OK", "73093"
+    )
+  )
+
 zipcode$city <- zipcode$city %>%
   str_replace_all("-", " ") %>% 
   str_remove_all("[:punct:]") %>% 
@@ -1000,6 +1007,17 @@ zipcode$city <- zipcode$city %>%
   str_squish()
 ```
 
+```{r valid_city}
+valid_city <- unique(zipcode$city)
+length(valid_city)
+
+valid_ok_city <- unique(zipcode$city[zipcode$state == "OK"])
+length(valid_ok_city)
+```
+
+There are `r n_distinct(ok$cont_city)` distinct city values. 
+`r length(setdiff(ok$cont_city, valid_city))` of those are not in our list of valid city names.
+
 ```{r count_bad_city, collapse=TRUE}
 n_distinct(ok$cont_city) # 6095
 length(setdiff(ok$cont_city, valid_city))
@@ -1009,10 +1027,10 @@ mean(ok$cont_city %out% valid_city)
 
 ### Prepare
 
-First, we will prepare the `cont_city` string by removing punctuation and numbers, expanding
-directional and geographical abbreviations ("N" for "North", "MT" for "MOUNT", etc), as well as
-trimming and squishing excess white space. We will also remove common state abbreviations from the
-city names.
+First, we will prepare the `cont_city` string by making all values uppercase, removing punctuation
+and numbers, expanding directional and geographical abbreviations ("N" for "North", "MT" for
+"MOUNT", etc), as well as trimming and squishing excess white space. We will also remove common
+state abbreviations from the city names.
 
 ```{r prep_city}
 ok$cont_city_prep <- 
@@ -1041,10 +1059,22 @@ ok$cont_city_prep <-
   str_trim()
 ```
 
-While, there are already `r sum(is.na(ok$cont_city), na.rm = T)` `NA` (missing) values, there
-are even more existing values that should really be interpreted as missing.
+At each stage of refining, we should check our progress.
 
-```{r}
+```{r count_bad_city, collapse=TRUE}
+n_distinct(ok$cont_city_prep)
+length(setdiff(ok$cont_city_prep, valid_city))
+sum(ok$cont_city_prep %out% valid_city)
+mean(ok$cont_city_prep %out% valid_city)
+```
+
+While, there are already `r sum(is.na(ok$cont_city), na.rm = T)` `NA` (missing) values, there
+are even more existing values that should really be interpreted as missing. Fixing these values
+increases the number of `NA` values by over 10,000.
+
+```{r na_if, collapse=TRUE}
+mean(is.na(ok$cont_city))
+
 # make common NA
 ok$cont_city_prep <- 
   ok$cont_city_prep %>% 
@@ -1065,6 +1095,7 @@ ok$cont_city_prep <-
   na_if("REQUESTED INFORMATION") %>% 
   na_if("INFO REQUESTED") %>%
   na_if("IR") %>% 
+  na_if("RD") %>% 
   na_if("REQUESTED INFO") %>% 
   na_if("UNKOWN") %>%
   na_if("UNKNOWN") %>% 
@@ -1073,6 +1104,8 @@ ok$cont_city_prep <-
   na_if("VARIOUS") %>% 
   na_if("UNDER $") %>% 
   na_if("ANYWHERE") %>% 
+  na_if("TEST") %>% 
+  na_if("TSET") %>% 
   na_if("X") %>% 
   na_if("XX") %>% 
   na_if("XXX") %>% 
@@ -1083,9 +1116,9 @@ ok$cont_city_prep <-
   na_if("-") %>% 
   na_if("")
 
-sum(is.na(ok$cont_city_prep)) - sum(is.na(ok$cont_city)) #10,000
+mean(is.na(ok$cont_city_prep))
+sum(is.na(ok$cont_city_prep)) - sum(is.na(ok$cont_city))
 ```
-
 
 One pitfall of the cluster and merge algorithms is their agnosticism towards _incorrect_ strings.
 If a misspelling is more common than the correct spelling, some of those correct values may be 
@@ -1104,19 +1137,17 @@ ok$cont_city_prep <-
   str_replace("^OKLAHMA CITY$",  "OKLAHOMA CITY") %>% 
   str_replace("^OKLAHOMA CITH$", "OKLAHOMA CITY") %>% 
   str_replace("^OKLAHOMA CIT$",  "OKLAHOMA CITY") %>% 
-  str_replace("^OKLA$",  "OKLAHOMA CITY") %>% 
-  str_replace("^MWC$", "MIDWEST CITY") %>% 
-  str_replace("^STW$", "STILLWATER") %>% 
-  str_replace("^BA$", "BROKEN ARROW") %>% 
+  str_replace("^OKLA$",          "OKLAHOMA CITY") %>% 
+  str_replace("^MWC$",           "MIDWEST CITY")  %>% 
+  str_replace("^STW$",           "STILLWATER")    %>% 
+  str_replace("^BA$",            "BROKEN ARROW")  %>% 
   str_trim() %>% 
   str_squish()
 ```
 
 We can now compare our prepared values to our list of valid city values to explore the most
 frequent suspicious values. Many, perhaps most, of these values actually _are_ valid and are simply
-too uncommon or unofficial to be included in our valid city list. "MIDWEST CITY" is really a part
-of Oklahoma City but will be left unchanged. We only want to correct misspellings and remove
-nonsense.
+too uncommon or unofficial to be included in our valid city list.
 
 ```{r view_bad}
 ok %>% 
@@ -1128,7 +1159,7 @@ ok %>%
 Now we can run this prepared column through the OpenRefine algorithms to cluster similar strings
 and merge them together if they meet the threshold.
 
-```{r}
+```{r refine_merge}
 ok_city_fix <- ok %>%
   # 0.953 in OK, don't confuse cities
   filter(cont_state_clean== "OK") %>% 
@@ -1141,7 +1172,7 @@ ok_city_fix <- ok %>%
            str_squish()) %>% 
   mutate(fixed = (cont_city_fix != cont_city_prep))
 
-tabyl(ok_city_fix$fixed)
+tabyl(ok_city_fix, fixed)
 
 ok_city_fix %>% 
   filter(fixed) %>%
@@ -1149,17 +1180,17 @@ ok_city_fix %>%
   arrange(desc(n))
 ```
 
-```{r}
+```{r trim_fix}
 ok_city_fix <- ok_city_fix %>%
   filter(fixed) %>%
   select(
+    trans_index,
     cont_city,
     cont_city_prep,
     cont_city_fix,
     cont_state_clean,
     cont_zip_clean
-  ) %>% 
-  distinct() %>% 
+  ) %>%
   rename(
     city_orig = cont_city,
     city_prep = cont_city_prep,
@@ -1168,6 +1199,7 @@ ok_city_fix <- ok_city_fix %>%
     zip = cont_zip_clean
     )
 
+nrow(ok_city_fix)
 n_distinct(ok_city_fix$city_orig)
 n_distinct(ok_city_fix$city_prep)
 n_distinct(ok_city_fix$city_fix)
@@ -1177,24 +1209,108 @@ Some of these changes were successful, some were not. If the new record with cle
 and ZIP match a record in the zipcodes database, we can be confident that the refine was 
 successful.
 
-```{r}
+```{r good_fix}
 good_fix <- ok_city_fix %>% 
   inner_join(zipcode, by = c("city_fix" = "city", "state", "zip"))
 
-nrow(good_fix)
+print(good_fix)
 ```
 
 If the cleaned records still dont' match a valid address, we can check them by hand. Some will
 still be acceptable, other will need to be manually corrected.
 
-```{r}
+```{r bad_fix}
 bad_fix <- ok_city_fix %>% 
   anti_join(zipcode, by = c("city_fix" = "city", "state", "zip"))
 
-nrow(bad_fix)
+bad_fix$city_fix <- bad_fix$city_fix %>%
+  str_replace("^QUAPAAW$", "QUAPAW") %>% 
+  str_replace("^PARKHILL$", "PARK HILL") %>% 
+  str_replace("^BROKEN ARRO$", "BROKEN ARROW") %>% 
+  str_replace("^CHICHASHA$", "CHICKASHA") %>% 
+  str_replace("^COLLINSVIL$", "COLLINSVILLE") %>% 
+  str_replace("^EMOND$", "EDMOND") %>% 
+  str_replace("^EUFUAL$", "EUFAULA") %>% 
+  str_replace("^FORT GIBBS$", "FORT GIBSON") %>% 
+  str_replace("^MCALISTER$", "MCALESTER") %>% 
+  str_replace("^MIDWEST$", "MIDWEST CITY") %>% 
+  str_replace("^NORTH A$", "HAWORTH") %>% 
+  str_replace("^NROMAN$", "RAMONA") %>% 
+  str_replace("^NS$", "SNYDER") %>% 
+  str_replace("^OKLACITY$", "OKLAHOMA CITY") %>% 
+  str_replace("^OKLAHOMA JCITY$", "OKLAHOMA CITY") %>% 
+  str_replace("^BARLTESVILLE$", "BARTLESVILLE") %>% 
+  str_replace("^OWASSI$", "OWASSO") %>% 
+  str_replace("^POTEU$", "POTEAU") %>% 
+  str_replace("^PRYOR CREEK$", "PRYOR") %>% 
+  str_replace("^SAND SPRING$", "SAND SPRINGS") %>% 
+  str_replace("^SUPULPA$", "SAPULPA") %>% 
+  str_replace("^TISHIMINGO$", "TISHOMINGO") %>% 
+  str_replace("^TULS$", "TULSA") %>% 
+  str_replace("^PRYRO$", "PRYOR") %>% 
+  str_replace("^BALCO$", "BALKO")
 
 bad_fix %>% 
-  left_join(zipcode, by = c("zip", "state")) %>%
-  arrange(city) %>% 
+  left_join(zipcode, by = c("state", "zip")) %>%
+  filter(city_fix != city) %>% 
+  arrange(city_fix) %>% 
+  select(city_fix, state, zip, city) %>% 
+  distinct() %>% 
   print_all()
+
+sum(bad_fix$city_fix %out% valid_city)
 ```
+
+```{r bind_fix}
+if (nrow(good_fix) + nrow(bad_fix) == nrow(ok_city_fix)) {
+    ok_city_fix <- 
+    bind_rows(bad_fix, good_fix) %>% 
+    select(trans_index, city_fix)
+}
+
+print(ok_city_fix)
+```
+
+```{r join_fix, collapse=TRUE}
+ok <- ok %>% 
+  left_join(ok_city_fix, by = "trans_index") %>% 
+  mutate(cont_city_clean = ifelse(is.na(city_fix), cont_city_prep, city_fix))
+
+n_distinct(ok$cont_city)
+mean(ok$cont_city %in% valid_city)
+
+n_distinct(ok$cont_city_clean)
+mean(ok$cont_city_clean %in% valid_city)
+```
+
+```{r city_change}
+ok %>% 
+  sample_frac() %>% 
+  select(
+    cont_city, 
+    cont_city_prep, 
+    city_fix, 
+    cont_city_clean
+  )
+```
+
+## Write
+
+The final combined table can be saved, with original unclean variables removed to save space.
+
+```{r write_csv}
+ok %>% 
+  select(
+    -cont_state,
+    -cont_zip,
+    -cont_city,
+    -cont_city_prep,
+    -city_fix,
+    -rec_zip,
+  ) %>% 
+  write_csv(
+    path = here("ok_contribs", "data", "ok_contribs_clean.csv"),
+    na = ""
+  )
+```
+
