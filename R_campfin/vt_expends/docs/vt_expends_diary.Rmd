@@ -1,0 +1,259 @@
+---
+title: "Data Diary"
+subtitle: "Vermont Expenditures"
+author: "Kiernan Nicholls"
+date: "`r format(Sys.time())`"
+output:
+  html_document: 
+    df_print: tibble
+    fig_caption: yes
+    highlight: tango
+    keep_md: yes
+    max.print: 32
+    toc: yes
+    toc_float: no
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE, purl=FALSE}
+library(knitr)
+opts_chunk$set(
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  error = FALSE,
+  comment = "#>",
+  fig.path = "../plots/",
+  fig.width = 10,
+  dpi = 300
+)
+options(width = 99)
+```
+
+## Objectives
+
+1. How many records are in the database?
+1. Check for duplicates
+1. Check ranges
+1. Is there anything blank or missing?
+1. Check for consistency issues
+1. Create a five-digit ZIP Code called ZIP5
+1. Create a YEAR field from the transaction date
+1. For campaign donation data, make sure there is both a donor AND recipient
+
+## Packages
+
+The following packages are needed to collect, manipulate, visualize, analyze, and communicate
+these results. The `pacman` package will facilitate their installation and attachment.
+
+```{r p_load, message=FALSE, warning=FALSE, error=FALSE}
+pacman::p_load(
+  tidyverse, # data manipulation
+  lubridate, # datetime strings
+  magrittr, # pipe opperators
+  janitor, # dataframe clean
+  zipcode, # clean & databse
+  batman, # parse yes & no
+  refinr, # cluster & merge
+  rvest, # scrape website
+  knitr, # knit documents
+  here, # locate storage
+  fs # search storage 
+)
+```
+
+```{r fix_fun, echo=FALSE}
+here <- here::here
+"%out%" <- Negate("%in%")
+print_all <- function(df) df %>% print(n = nrow(.)) 
+```
+
+This document should be run as part of the `R_campfin` project, which lives as a sub-directory
+of the more general, language-agnostic `irworkshop/accountability_datacleaning` 
+[GitHub repository](https://github.com/irworkshop/accountability_datacleaning).
+
+The `R_campfin` project uses the 
+[RStudio projects](https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects)
+feature and should be run as such. The project also uses the dynamic 
+[`here::here()`](https://github.com/jennybc/here_here) tool for
+file paths relative to _your_ machine.
+
+```{r where_here, collapse=TRUE}
+# where was this document knit?
+here::here()
+```
+
+## Data
+
+> Definition of Expenditure - 17 V.S.A. 2901(7)
+> 
+> Expenditure means a payment, disbursement, distribution, advance deposit, loan, or gift of money,
+or anything of value paid or promised to be paid for the purpose of influencing an election,
+advocating a position on a public question, or supporting or opposing one or more candidates. As
+used in this chapter, expenditure shall not include any of the following:
+> 
+> 1. A personal loan of money to a candidate from a lending institution made in the ordinary course
+> of business;
+> 2. Services provided without compensation by individuals volunteering their time on behalf of a
+> candidate, political committee, or political party;
+> 3. Unreimbursed travel expenses paid for by an individual for himself or herself, who volunteers
+> personal services to a candidate; or
+> 4. Unreimbursed campaign-related travel expenses, paid for by the candidate or the candidates
+> spouse.
+
+## Read
+
+```{r read_csv}
+vt <- 
+  here("vt_expends", "data", "raw", "ViewExpenditureList.csv") %>% 
+  read_csv(
+    col_types = cols(
+      .default = col_character(),
+      `Transaction Date` = col_date("%m/%d/%Y %H:%M:%S %p"),
+      `Reporting Period` = col_date("%m/%d/%Y %H:%M:%S %p"),
+      `Expenditure Amount` = col_number()
+    )
+  ) %>% 
+  clean_names() %>% 
+  mutate_if(is.character, str_to_upper) %>% 
+  rownames_to_column("id")
+```
+
+## Explore 
+
+## Explore
+
+There are `r nrow(vt)` records of `r length(vt)` variables in the full database.
+
+```{r glimpse}
+glimpse(sample_frac(vt))
+```
+
+### Distinct
+
+The variables range in their degree of distinctness.
+
+```{r n_distinct}
+vt %>% 
+  map(n_distinct) %>% 
+  unlist() %>% 
+  enframe(name = "variable", value = "n_distinct") %>% 
+  mutate(prop_distinct = round(n_distinct / nrow(vt), 4)) %>%
+  print(n = length(vt))
+```
+
+```{r tabyls_function, echo=FALSE}
+print_tabyl <- function(data, ...) {
+  as_tibble(arrange(tabyl(data, ...), desc(n)))
+}
+```
+
+```{r tabyls}
+print_tabyl(vt, payee_type)
+print_tabyl(vt, registrant_type)
+print_tabyl(vt, office)
+print_tabyl(vt, election_cycle)
+print_tabyl(vt, expenditure_type)
+print_tabyl(vt, expenditure_purpose)
+```
+
+### Missing
+
+The variables also vary in their degree of values that are `NA` (missing). 
+
+There are `r sum(is.na(vt$transaction_date))` records with `NA` values in many _all_ variables.
+These can be dropped with `janitor::remove_empty("rows")`
+
+```{r remove_empty}
+vt <- remove_empty(vt, "rows")
+```
+
+The remaining missing values in each variable can be found below:
+
+```{r count_na}
+vt %>% 
+  map(function(var) sum(is.na(var))) %>% 
+  unlist() %>% 
+  enframe(name = "variable", value = "n_na") %>% 
+  mutate(prop_na = n_na / nrow(vt)) %>% 
+  print(n = length(vt))
+```
+
+### Ranges
+
+The range of continuous variables will need to be checked for data integrity. There are only three
+quasi-continuous variables, the `transaction_date`, `reporting_period`, and `expenditure_amount`.
+
+The range for `trans_amount` seems reasonable enough.
+
+```{r tran_amount_range}
+summary(vt$expenditure_amount)
+```
+
+```{r plot_exp_amt_type}
+vt %>% 
+  ggplot(mapping = aes(expenditure_amount)) +
+  geom_histogram() +
+  scale_x_continuous(trans = "log10", labels = scales::dollar) +
+  facet_wrap(~expenditure_type, scales = "free_y") +
+  labs(
+    title = "Distribution of VT Expenditures",
+    x = "Expenditure Amount (USD)",
+    y = "Number of Expenditures"
+  )
+```
+
+The number of contributions is fairly lopsides, with nearly 80% of all records coming from 2016 and
+2018. This makes some sense, as these were election years.
+
+```{r tran_date_range}
+summary(vt$transaction_date)
+```
+
+```{r plot_exp_year}
+vt %>% 
+  group_by(transaction_year = year(transaction_date)) %>% 
+  count() %>% 
+  ggplot(mapping = aes(transaction_year, n)) +
+  geom_col() +
+  labs(
+    title = "Number of Expenditures by Year",
+    x = "Year",
+    y = "Number of Expenditures"
+  )
+```
+
+For some reason, the reporting period for expenditures begin in 2014 despite our data spanning
+2008 to 2019.
+
+```{r rep_per_range}
+summary(vt$reporting_period)
+```
+
+## Mutate
+
+Payee and registrant addresses are not divided into street, city, state, and ZIP columns. We can
+either try to seperate the column by comma or simply extract the ZIP code from the end.
+
+```{r add_zip}
+vt <- vt %>% mutate(payee_zip = payee_address %>% str_extract("[\\d-]+$") %>% clean.zipcodes())
+```
+
+Since we parsed the `transaction_date` as a date file using `readr::col_date()` inside
+`readr::read_csv()`, we can simply extract the year of the transaction with `lubridate::year()`
+
+```{r add_year}
+vt <- vt %>% mutate(transaction_year = year(transaction_date))
+```
+
+## Write
+
+```{r write_csv}
+write_csv(
+  x = vt,
+  path = here("vt_expends", "data", "vt_expends_clean.csv"),
+  na = ""
+)
+```
+
