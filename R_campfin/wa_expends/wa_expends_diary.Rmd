@@ -1,0 +1,820 @@
+---
+title: "Data Diary"
+subtitle: "Washington Expenditures"
+author: "Kiernan Nicholls"
+date: "`r format(Sys.time())`"
+output:
+  github_document: 
+    df_print: tibble
+    fig_caption: yes
+    highlight: tango
+    keep_md: yes
+    max.print: 32
+    toc: yes
+    toc_float: no
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE, purl=FALSE}
+library(knitr)
+opts_chunk$set(
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  error = FALSE,
+  comment = "#>",
+  fig.path = "../plots/",
+  fig.width = 10,
+  dpi = 300
+)
+options(width = 99)
+```
+
+## Objectives
+
+1. How many records are in the database?
+1. Check for duplicates
+1. Check ranges
+1. Is there anything blank or missing?
+1. Check for consistency issues
+1. Create a five-digit ZIP Code called ZIP5
+1. Create a YEAR field from the transaction date
+1. For campaign donation data, make sure there is both a donor AND recipient
+
+## Packages
+
+The following packages are needed to collect, manipulate, visualize, analyze, and communicate
+these results. The `pacman` package will facilitate their installation and attachment.
+
+```{r p_load, message=FALSE, warning=FALSE, error=FALSE}
+pacman::p_load(
+  tidyverse, # data manipulation
+  lubridate, # datetime strings
+  magrittr, # pipe opperators
+  RSocrata, # read SODA APIs
+  janitor, # dataframe clean
+  zipcode, # clean & databse
+  batman, # parse yes & no
+  refinr, # cluster & merge
+  rvest, # scrape website
+  knitr, # knit documents
+  here, # locate storage
+  fs # search storage 
+)
+```
+
+```{r fix_fun, echo=FALSE}
+here <- here::here
+"%out%" <- Negate("%in%")
+print_all <- function(df) df %>% print(n = nrow(.)) 
+```
+
+This document should be run as part of the `R_campfin` project, which lives as a sub-directory
+of the more general, language-agnostic `irworkshop/accountability_datacleaning` 
+[GitHub repository](https://github.com/irworkshop/accountability_datacleaning).
+
+The `R_campfin` project uses the 
+[RStudio projects](https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects)
+feature and should be run as such. The project also uses the dynamic 
+[`here::here()`](https://github.com/jennybc/here_here) tool for
+file paths relative to _your_ machine.
+
+```{r where_here, collapse=TRUE}
+# where was this document knit?
+here::here()
+```
+
+## Data
+
+This dataset comes courtesy of the State of 
+[Washington Public Disclosure Commission](http://www.pdc.wa.gov), acces through the [data.wa.gov](https://data.wa.gov) portal.
+
+The resource is named `exenditures_by_candidates_and_political_committees` and covers the last 10
+years of data, updates daily. Each records represents a single "Expenditure by a campaign or
+committee."
+
+### About
+
+> This dataset contains expenditures made by Washington State Candidates and Political Committees
+for the last 10 years as reported to the PDC on forms C3, C4, Schedule C and their electronic
+filing equivalents.
+> 
+> In-kind contributions are included in this data set as they are considered as both a contribution
+and expenditure. In-kind contributions are also included in the data set "Contributions to
+Candidates and Political Committees."
+> 
+> For candidates, the number of years is determined by the year of the election, not necessarily the
+year the expenditure was reported. For political committees, the number of years is determined by
+the calendar year of the reporting period.
+> 
+> Candidates and political committees choosing to file under "mini reporting" are not included in
+this dataset. See WAC 390-16-105 for information regarding eligibility.
+> 
+> This dataset is a best-effort by the PDC to provide a complete set of records as described
+herewith and may contain incomplete or incorrect information. The PDC provides access to the
+original reports for the purpose of record verification.
+> 
+> Descriptions attached to this dataset do not constitute legal definitions; please consult RCW
+42.17A and WAC Title 390 for legal definitions and additional information regarding political
+finance disclosure requirements.
+> 
+> CONDITION OF RELEASE: This publication constitutes a list of individuals prepared by the
+Washington State Public Disclosure Commission and may not be used for commercial purposes. This
+list is provided on the condition and with the understanding that the persons receiving it agree to
+this statutorily imposed limitation on its use. See RCW 42.56.070(9) and AGO 1975 No. 15.
+
+### Variables
+
+The [Data.WA API page](https://dev.socrata.com/foundry/data.wa.gov/ukxb-bc7h) provides definitions
+for the variables provided in this dataset.
+
+`id`:
+
+> PDC internal identifier that corresponds to a single expenditure record. When combined with the
+origin value, this number uniquely identifies a single row.
+
+`report_number`:
+
+> PDC identifier used for tracking the individual form C4 . Multiple expenditures will have the
+same report number when they were reported to the PDC at the same time. The report number is unique
+to the report it represents. When a report is amended, a new report number is assigned that
+supersedes the original version and the original report records are not included in this dataset.
+
+`origin`:
+
+> This field shows from which filed report-type the data originates. A/LE50 refers to non-itemized
+expenditures of $50 and less per expenditure. A/GT50 refers to itemized expenditures greater than
+$50 per expenditure. A/LE50 and A/GT50 are both reported on schedule A of form C4
+>
+> To view the different report types and forms browse to:https://www.pdc.wa.gov/learn/forms
+
+`filer_id`:
+
+> The unique id assigned to a candidate or political committee. The filer id is consistent across
+election years with the exception that an individual running for a second office in the same
+election year will receive a second filer id. There is no correlation between the two filer ids.
+For a candidate and single-election-year committee such as a ballot committee, the combination of
+filerid and electionyear uniquely identifies a campaign.
+
+`type`:
+
+> Indicates if this record is for a candidate or a political committee. In the case of a political
+committee, it may be either a continuing political committee, party committee or single election
+year committee.
+
+`filer_name`:
+
+> The candidate or committee name as reported on the form C1 candidate or committee registration
+form. The name will be consistent across all records for the same filer id and election year but
+may differ across years due to candidates or committees changing their name.
+
+`id`:
+
+> This field represents the first name, as reported by the filer. This field may appear blank if
+the name is not reported or if a filing entity has a single name, such as a PAC or other political
+committee. Note that this data appears as represented by the filer and may not be consistent from
+one reporting period to another.
+
+`last_name`:
+
+> This field represents the last name, as reported by the filer. The field may also contain the
+full name of a filing entity that is registered under one name, such as a PAC or other filing
+committee. Note that this data appears as represented by the filer and may not be consistent from
+one reporting period to another.
+
+`office`:
+
+> The office sought by the candidate. Does not apply to political committees.
+
+`legislative_district`:
+
+> The Washington State legislative district. This field only applies to candidates where the office
+is "state senator" or "state representative."
+
+`position`:
+
+> The position associated with an office. This field typically applies to judicial and local office
+that have multiple positions or seats. This field does not apply to political committees.
+
+`party`:
+
+> The political party as declared by the candidate or committee on their form C1 registration.
+Contains only "Major parties" as recognized by Washington State law.
+
+`ballot_number`:
+
+> If the committee is a Statewide Ballot Initiative Committee a ballot number will appear once a
+ballot number is assigned by the Secretary of State. Local Ballot Initiatives will not have a
+ballot number. This field will contain a number only if the Secretary of State issues a number.
+
+`for_or_against`:
+
+> Ballot initiative committees are formed to either support or oppose an initiative. This field
+represents whether a committee “Supports” or “Opposes” a ballot initiative.
+
+`jurisdiction_*`:
+
+> The political jurisdiction associated with the office of a candidate.
+
+> The county associated with the jurisdiction of a candidate. Multi-county jurisdictions as
+reported as the primary county. This field will be empty for political committees and when a
+candidate jurisdiction is statewide.
+
+> The type of jurisdiction this office is: Statewide, Local, etc.
+
+`election_year`:
+
+> The election year in the case of candidates and single election committees. The reporting year in
+the case of continuing political committees.
+
+`amount`:
+
+> The amount of the expenditure or in-kind contribution. In-kind contributions are both a
+contribution and an expenditure and represented in both the contributions and expenditures data.
+
+`itemized_or_non_itemized`:
+
+> A record for an itemized expenditure represents a single expenditure. A record for a non-itemized
+expenditure represents one or more expenditures where the individual expenditures are less than the
+limit for itemized reporting. In this case the record is the aggregate total for the reporting
+period.
+
+`expenditure_date`:
+
+> The date that the expenditure was made or the in-kind contribution was received. See the metadata
+for the origin and amount field regarding in-kind contributions.
+
+`code`:
+
+> The type of expenditure. The values displayed are human readable equivalents of the type codes reported on the form C4 schedule A. Please refer to the form for a listing of all codes. Itemized expenditures are generally required to have either a code or a description but may be required to have both. Non-itemized expenditures do not have a description. 
+
+`recipient_name`:
+
+> The name of the individual or vendor paid as reported. The names appearing here have not been normalized and the same entity may be represented by different names in the dataset. Non-itemized expenditures of $50 or less will have a recepient_name of EXPENSES OF $50 OR LESS and origin of A/LE50, and all address fields will be empty.
+
+`recipient_*`:
+
+> The street address of the individual or vendor paid as reported.
+
+> The city of the individual or vendor paid as reported.
+
+> The state of the individual or vendor paid as reported.
+
+> The zip code of the individual or vendor paid as reported.
+
+`url`:
+
+> A link to a PDF version of the original report as it was filed to the PDC.
+
+`recipient_location`:
+
+> The geocoded location of the individual or vendor paid as reported. The quality of the geocoded
+location is dependent on how many of the address fields are available and is calculated using a
+third-party service. The PDC has not verified the results of the geocoding. Please refer to the
+recipient_name field for more information regarding address fields.
+
+## Read
+
+> The [Socrata Open Data API (SODA)](http://dev.socrata.com/) provides programmatic access to this
+dataset including the ability to filter, query, and aggregate data. For more more information, view
+the [API docs for this dataset](https://dev.socrata.com/foundry/data.wa.gov/ukxb-bc7h) or visit our
+[developer portal](http://dev.socrata.com/)
+
+If an _recent_ version of the file doesn't exist locally, the `RSocrata::read.socrate()` function
+can read the SODA dataset directly from the API into R.
+
+```{r read_data}
+wa_filename <- here(
+  "wa_expends", "data", "raw", 
+  "exenditures_by_candidates_and_political_committees.csv"
+)  
+if (file.exists(wa_filename) & as_date(file.mtime(wa_filename)) == today()) {
+  wa <- read_csv(
+    file = wa_filename,
+    col_types = cols(.default = col_character())
+  )
+  read_from_soda = FALSE
+} else {
+  wa <- as_tibble(read.socrata("https://data.wa.gov/resource/ukxb-bc7h.json"))
+  read_from_soda = TRUE
+}
+wa$amount <- parse_number(wa$amount)
+wa$election_year <- parse_number(wa$election_year)
+wa$expenditure_date <- as_date(wa$expenditure_date)
+```
+
+If the file had to be downloaded from the SODA API, save a copy of the raw data locally. Each
+`recipient_location.coordinates` value is a list type, so they will have to be converted to
+character vectors before being saved as a flat text file.
+
+```{r write_raw}
+dir_create(here("wa_expends", "data", "raw"))
+if (read_from_soda) {
+  wa %>% 
+    mutate(recipient_location.coordinates = as.character(recipient_location.coordinates)) %>% 
+    write_csv(
+      path = wa_filename,
+      na = ""
+    )
+}
+```
+
+Before working with the data in R, some binary character type variables will be converted to
+logical variables. The coordinates character string will also be seperated and converted to numeric
+latitude and longitude variables.s
+
+```{r}
+wa <- wa %>% 
+  separate(
+    col = recipient_location.coordinates,
+    into = c("recipient_longitude", "recipient_latitude"),
+    sep = ",\\s",
+    remove = TRUE
+  ) %>% 
+  mutate(
+    recipient_longitude = as.double(str_remove(recipient_longitude, "c\\(")),
+    recipient_latitude = as.double(str_remove(recipient_latitude, "\\)")),
+    expenditure_itemized = itemized_or_non_itemized == "Itemized",
+    filer_supports = for_or_against == "For",
+  ) %>% 
+  select(
+    -itemized_or_non_itemized,
+    -for_or_against
+  )
+```
+
+## Explore
+
+There are `r nrow(wa)` records of `r length(wa)` variables in the full database.
+
+```{r glimpse}
+sample_frac(wa)
+glimpse(sample_frac(wa))
+```
+
+### Distinct
+
+The variables range in their degree of distinctness.
+
+The `id` is `r scales::percent(n_distinct(wa$id)/nrow(wa))` distinct and can be used to
+identify a unique transaction.
+
+```{r n_distinct}
+wa %>% 
+  map(n_distinct) %>% 
+  unlist() %>% 
+  enframe(name = "variable", value = "n_distinct") %>% 
+  mutate(prop_distinct = round(n_distinct / nrow(wa), 4)) %>%
+  print(n = length(wa))
+```
+
+The `*_id` variables have as many distinct values as the length of their respective tables.
+
+```{r tabyls_function, echo=FALSE}
+print_tabyl <- function(data, ...) {
+  as_tibble(arrange(tabyl(data, ...), desc(n)))
+}
+```
+
+```{r tabyls, echo=FALSE}
+wa %>% print_tabyl(origin)
+wa %>% print_tabyl(type)
+wa %>% print_tabyl(office)
+wa %>% print_tabyl(position)
+wa %>% print_tabyl(party)
+wa %>% print_tabyl(jurisdiction_type)
+wa %>% print_tabyl(election_year)
+wa %>% print_tabyl(expenditure_itemized)
+wa %>% print_tabyl(legislative_district)
+wa %>% print_tabyl(code)
+wa %>% print_tabyl(filer_supports)
+```
+
+```{r plot_origin_bar, echo=FALSE}
+ggplot(wa) + geom_bar(aes(origin))
+```
+
+```{r plot_type_bar, echo=FALSE}
+ggplot(wa) + geom_bar(aes(type))
+```
+
+```{r plot_party_bar, echo=FALSE}
+ggplot(wa) + geom_bar(aes(party)) + coord_flip()
+```
+
+```{r plot_jurisdiction_bar, echo=FALSE}
+ggplot(wa) + geom_bar(aes(jurisdiction_type))
+```
+
+```{r plot_election_year_bar, echo=FALSE}
+ggplot(wa) + geom_bar(aes(election_year))
+```
+
+```{r plot_itemized_bar, echo=FALSE}
+ggplot(wa) + geom_bar(aes(expenditure_itemized))
+```
+
+```{r plot_code_bar, echo=FALSE}
+ggplot(wa %>% filter(!is.na(code))) + geom_bar(aes(code)) + coord_flip()
+```
+
+```{r plot_supports_bar, echo=FALSE}
+ggplot(wa %>% filter(!is.na(filer_supports))) + geom_bar(aes(filer_supports))
+```
+
+### Missing
+
+The variables also vary in their degree of values that are `NA` (missing).
+
+```{r count_na}
+wa %>% 
+  map(function(var) sum(is.na(var))) %>% 
+  unlist() %>% 
+  enframe(name = "variable", value = "n_na") %>% 
+  mutate(prop_na = n_na / nrow(wa)) %>% 
+  print(n = length(wa))
+```
+
+We will flag any records with missing values in the key variables used to identify an expenditure.
+
+```{r na_flag}
+sum(is.na(wa$filer_name))
+sum(is.na(wa$recipient_name))
+sum(is.na(wa$amount))
+sum(is.na(wa$expenditure_date))
+
+wa <- wa %>% 
+  mutate(
+    na_flag = is.na(expenditure_date) | is.na(recipient_name)
+  )
+
+wa %>% 
+  filter(na_flag) %>%
+  sample_frac() %>% 
+  select(
+    na_flag,
+    id, 
+    report_number,
+    filer_name,
+    recipient_name,
+    amount,
+    expenditure_date
+    )
+```
+
+### Ranges
+
+The range of continuous variables will need to be checked for data integrity. There are only two
+quasi-continuous variables, the `amount` and `expenditure_date`
+
+#### Transaction Amounts
+
+The middle range for `amount` seems reasonable enough.
+`r scales::percent(mean(wa$amount < 0))` percent of `amount` values are less than zero. 
+
+```{r amount_range}
+summary(wa$amount)
+tabyl(wa$amount > 0)
+```
+
+```{r plot_amt_nonlog, collapse=TRUE}
+ggplot(wa, aes(amount)) + 
+  geom_histogram() + 
+  scale_y_log10() +
+  scale_x_continuous(labels = scales::dollar) +
+  geom_hline(yintercept = 10)
+```
+
+Below are the smallest and largest expenditures.
+
+```{r glimpse_min_max}
+glimpse(wa %>% filter(amount == min(amount, na.rm = T)))
+glimpse(wa %>% filter(amount == max(amount, na.rm = T)))
+```
+
+We can vew the link provided in the `url` variable to see the smallest expenditure is a correction
+to an expenditure to Costco previously reported as \$8,929,810 that should have been \$6,429,810.
+Interestingly, this same report shows a _contribution_ from the same Costco for the exact same
+amount with the exact same correction. There is no description for the correction.
+
+Using the `url` from the maximum report, the \$5,000,000 expenditure has "contribution" listed in
+the "Purpose of Expense" box with nothing put in the spot for "Code" meant to identify the record
+as a contribution or expenditure.
+
+These two sample reports can be found as PDF files in the `data/` directory.
+
+### Transaction Dates
+
+There are a number of records with incorrect `expenditure_date` variables. There are no records
+with expenditures made in the future, but there are a number of suspicuously old expenditures.
+
+```{r date_future}
+max(wa$expenditure_date, na.rm = TRUE)
+sum(wa$expenditure_date > today(), na.rm = T)
+```
+
+PDC claims that the dataset covers the last 10 years of data, but there are thousands of records
+older than that, with one from `r year(min(wa$expenditure_date, na.rm = TRUE))`. The report
+containing that expenditure was filed in 2010 and can be found as PDF in the `data/` directory.
+That one report is the only one with an expenditure date before 2000, the rest appear to be
+correct dates simply outside the expected timespan.
+
+```{r date_past}
+min(wa$expenditure_date, na.rm = TRUE)
+sum(year(wa$expenditure_date) < 2007, na.rm = T)
+```
+
+```{r plot_exp_year, echo=FALSE}
+wa %>% 
+  count(year = year(expenditure_date)) %>% 
+  ggplot(aes(year, n)) +
+  geom_col() +
+  coord_cartesian(xlim = c(2000, 2020)) +
+  geom_vline(xintercept = 2008)
+```
+
+## Plots
+
+```{r plot_exp_party, echo=FALSE}
+wa %>%
+  filter(party %in% c("DEMOCRAT", "REPUBLICAN", NA)) %>% 
+  group_by(party, code) %>% 
+  summarise(mean = mean(amount)) %>%
+  arrange(code) %>% 
+  ggplot(aes(code, mean)) +
+  geom_col(aes(fill = party)) +
+  facet_wrap(~party) +
+  coord_flip() +
+  scale_y_continuous(labels = scales::dollar) +
+  theme(legend.position = "none") +
+  labs(
+    title = "Washington State Campaign Expenditures",
+    subtitle = "NA for Non-Candidate Campaigns",
+    caption = "Source: data.wa.gov/d/tijg-9zyp",
+    y = "Mean Expenditure",
+    x = "Expenditure Type"
+  )
+```
+
+## Clean
+
+### Zipcode
+
+```{r zipcode_data}
+data("zipcode")
+zipcode <- zipcode %>% 
+  as_tibble() %>% 
+  select(city, state, zip) %>% 
+  bind_rows(
+    tribble(
+      ~city,           ~state,
+      "Toronto",       "ON",
+      "Quebec City",   "QC",
+      "Montreal",      "QC",
+      "Halifax",       "NS",
+      "Fredericton",   "NB",
+      "Moncton",       "NB",
+      "Winnipeg",      "MB",
+      "Victoria",      "BC",
+      "Vancouver",     "BC",
+      "Surrey",        "BC",
+      "Richmond",      "BC",
+      "Charlottetown", "PE",
+      "Regina",        "SK",
+      "Saskatoon",     "SK",
+      "Edmonton",      "AB",
+      "Calgary",       "AB",
+      "St. John's",    "NL"
+    )
+  )
+
+zipcode$city <- zipcode$city %>%
+  str_to_upper() %>% 
+  str_replace_all("-", " ") %>% 
+  str_remove_all("[:punct:]") %>% 
+  str_replace("(^|\\b)N(\\b|$)",  "NORTH") %>%
+  str_replace("(^|\\b)NO(\\b|$)", "NORTH") %>%
+  str_replace("(^|\\b)S(\\b|$)",  "SOUTH") %>%
+  str_replace("(^|\\b)SO(\\b|$)", "SOUTH") %>%
+  str_replace("(^|\\b)E(\\b|$)",  "EAST") %>%
+  str_replace("(^|\\b)W(\\b|$)",  "WEST") %>%
+  str_replace("(^|\\b)MT(\\b|$)", "MOUNT") %>%
+  str_replace("(^|\\b)ST(\\b|$)", "SAINT") %>%
+  str_replace("(^|\\b)PT(\\b|$)", "PORT") %>%
+  str_replace("(^|\\b)FT(\\b|$)", "FORT") %>%
+  str_replace("(^|\\b)PK(\\b|$)", "PARK") %>% 
+  str_trim() %>% 
+  str_squish()
+```
+
+```{r clean_zipcodes}
+wa <- wa %>% 
+  mutate(zip_clean = recipient_zip %>% 
+           clean.zipcodes() %>% 
+           na_if("00000") %>% 
+           na_if("11111") %>% 
+           na_if("99999") %>% 
+           na_if("98") %>% 
+           na_if("1")
+  )
+```
+
+### State
+
+```{r valid_state, collapse=TRUE}
+valid_state <- sort(unique(zipcode$state))
+length(valid_state)
+setdiff(valid_state, state.abb)
+```
+
+```{r}
+setdiff(wa$recipient_state, valid_state)
+wa %>% 
+  filter(recipient_state %out% valid_state) %>% 
+  filter(!is.na(recipient_state)) %>% 
+  select(
+    id,
+    recipient_address,
+    recipient_city,
+    recipient_state,
+    recipient_zip
+  ) %>% 
+  print_all()
+
+wa$state_clean <- wa$recipient_state %>% 
+  str_replace("QA", "WA") %>% # add match
+  str_replace("SW", "WA") %>% # add match 
+  str_replace("TE", "TX") %>% # add match
+  str_replace("CN", "AB") %>% # calgary
+  str_remove("[:punct:]") %>% 
+  na_if("") %>% 
+  na_if("RE") %>% # requested
+  na_if("98") %>% # WA zip
+  na_if("99") %>% # WA zip
+  na_if("SH") %>% # hong kong
+  na_if("FR") %>% # france
+  na_if("OT") %>% # overseas
+  na_if("HR") %>% # hungary
+  na_if("UK") %>% # united kingdom
+  na_if("IR") %>% # ireland
+  na_if("IS")     # israel
+```
+
+### City
+
+```{r valid_city, collapse=TRUE}
+valid_city <- unique(zipcode$city)
+valid_wa_city <- unique(zipcode$city[zipcode$state == "WA"])
+length(valid_city)
+length(valid_wa_city)
+```
+
+```{r invalid_city}
+n_distinct(wa$recipient_city)
+length(setdiff(wa$recipient_city, valid_city))
+```
+
+```{r refine}
+n_distinct(wa$recipient_city)
+
+wa <- wa %>% mutate(
+  # prepare for auto refine
+  city_prep = recipient_city %>%
+    str_to_upper() %>% 
+    # remove punct and numbers
+    str_replace("-", " ") %>% 
+    str_remove_all("[:punct:]") %>% 
+    str_remove("\\d+") %>% 
+    # remove state abbs
+    str_remove("(^|\\b)WA($)") %>% 
+    str_remove("(^|\\b)DC($)") %>% 
+    str_remove("(^|\\b)ID($)") %>%
+    str_remove("(^|\\b)LA($)") %>%
+    # expand dir abbs
+    str_replace("(^|\\b)N(\\b|$)",  "NORTH") %>%
+    str_replace("(^|\\b)S(\\b|$)",  "SOUTH") %>%
+    str_replace("(^|\\b)E(\\b|$)",  "EAST") %>%
+    str_replace("(^|\\b)W(\\b|$)",  "WEST") %>%
+    # remove geo abbs
+    str_replace("(^|\\b)MT(\\b|$)", "MOUNT") %>%
+    str_replace("(^|\\b)ST(\\b|$)", "SAINT") %>%
+    str_replace("(^|\\b)PT(\\b|$)", "PORT") %>%
+    str_replace("(^|\\b)FT(\\b|$)", "FORT") %>%
+    str_replace("(^|\\b)PK(\\b|$)", "PARK") %>% 
+    # fix white space
+    str_trim() %>% 
+    str_squish() %>% 
+    na_if("") %>% 
+    na_if("NA")
+)
+
+n_distinct(wa$city_prep)
+```
+
+```{r view_refine}
+wa_fix <- wa %>% 
+  mutate(
+    # cluster and merge
+    city_fix = city_prep %>% 
+      key_collision_merge(dict = valid_wa_city) %>% 
+      n_gram_merge(),
+    # check if changed
+    fixed = (city_prep != city_fix)
+  ) %>% 
+  filter(fixed) %>% 
+  select(
+    id,
+    state_clean,
+    zip_clean,
+    recipient_city,
+    city_prep,
+    city_fix
+  ) %>% 
+  rename(
+    state = state_clean,
+    zip = zip_clean,
+    city_orig = recipient_city
+  )
+
+wa_fix %>% 
+  count(city_prep, city_fix) %>% 
+  arrange(desc(n))
+```
+
+```{r good_fix}
+good_fixes <- wa_fix %>% 
+  inner_join(zipcode, by = c("city_fix" = "city", "state", "zip"))
+
+nrow(good_fixes)
+n_distinct(good_fixes$city_fix)
+```
+
+```{r bad_fix}
+bad_fixes <- wa_fix %>% 
+  anti_join(zipcode, by = c("city_fix" = "city", "state", "zip"))
+
+nrow(bad_fixes)
+n_distinct(bad_fixes$city_fix)
+```
+
+We will compare the automated correction to the actual city for that record's zip code and state.
+If the Levenshtein distance between the actual city and the fixed city is two or less, we can
+safely correct the automatic correct. For the rest of changes without a clear match, we can
+correct them manually. Not all records will have a city name in the valid city list.
+
+```{r zip_match}
+check_bad_fixes <- bad_fixes %>% 
+  left_join(zipcode, by = c("state", "zip")) %>% 
+  rename(city_real = city) %>% 
+  rowwise() %>% 
+  mutate(lev_dist = as.double(adist(city_fix, city_real))) %>% 
+  ungroup() %>% 
+  mutate(city_fix = ifelse(lev_dist <= 2 & !is.na(lev_dist), city_real, city_fix))
+```
+
+```{r fix_fix}
+bad_fixes$city_fix <- 
+  check_bad_fixes$city_fix %>% 
+  str_replace("^MOUNTVIEW$", "MOUNTAIN VIEW") %>% 
+  str_replace("^BARLETT$", "BARTLETT") %>% 
+  str_replace("^VENTURA$", "AVENTURA") %>% 
+  str_replace("^BELL$", "ELBE") %>% 
+  str_replace("^BELLEVILLE$", "BELLEVUE") %>% 
+  na_if("WWW") %>% 
+  na_if("XX") %>% 
+  na_if("INTERNET") %>% 
+  na_if("NO CITY") %>% 
+  na_if("PO BOX") %>% 
+  na_if("ONLINE") %>% 
+  na_if("ANYCITY")
+```
+
+```{r bind_fix}
+if (nrow(good_fix) + nrow(bad_fix) == nrow(wa_fix)) {
+  wa_fix <- 
+    bind_rows(good_fix, bad_fix) %>% 
+    select(id, city_fix)
+}
+```
+
+```{r join_fix}
+wa %>% 
+  left_join(wa_fix, by = "id") %>% 
+  mutate(city_clean = ifelse(is.na(city_fix), city_prep, city_fix))
+```
+
+## Write
+
+```{r write_csv}
+wa %>% 
+  select(
+    -recipient_zip,
+    -recipient_state
+  ) %>% 
+  write_csv(
+    path = here("wa_expends", "data", "raw", "wa_expends_clean.csv"),
+    na = ""
+  )
+```
+
