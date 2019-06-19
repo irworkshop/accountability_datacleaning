@@ -6,12 +6,6 @@ date: "`r format(Sys.time())`"
 output:
   github_document: 
     df_print: tibble
-    fig_caption: yes
-    highlight: tango
-    keep_md: yes
-    max.print: 32
-    toc: yes
-    toc_float: no
 editor_options: 
   chunk_output_type: console
 ---
@@ -49,6 +43,7 @@ these results. The `pacman` package will facilitate their installation and attac
 
 ```{r p_load, message=FALSE, warning=FALSE, error=FALSE}
 pacman::p_load(
+  stringdist, # levenshtein value
   tidyverse, # data manipulation
   lubridate, # datetime strings
   magrittr, # pipe opperators
@@ -88,7 +83,7 @@ here::here()
 ## Data
 
 This dataset comes courtesy of the State of 
-[Washington Public Disclosure Commission](http://www.pdc.wa.gov), acces through the [data.wa.gov](https://data.wa.gov) portal.
+[Washington Public Disclosure Commission](http://www.pdc.wa.gov), access through the [data.wa.gov](https://data.wa.gov) portal.
 
 The resource is named `exenditures_by_candidates_and_political_committees` and covers the last 10
 years of data, updates daily. Each records represents a single "Expenditure by a campaign or
@@ -321,10 +316,10 @@ if (read_from_soda) {
 ```
 
 Before working with the data in R, some binary character type variables will be converted to
-logical variables. The coordinates character string will also be seperated and converted to numeric
+logical variables. The coordinates character string will also be separated and converted to numeric
 latitude and longitude variables.s
 
-```{r}
+```{r parse_vars}
 wa <- wa %>% 
   separate(
     col = recipient_location.coordinates,
@@ -493,7 +488,7 @@ glimpse(wa %>% filter(amount == min(amount, na.rm = T)))
 glimpse(wa %>% filter(amount == max(amount, na.rm = T)))
 ```
 
-We can vew the link provided in the `url` variable to see the smallest expenditure is a correction
+We can view the link provided in the `url` variable to see the smallest expenditure is a correction
 to an expenditure to Costco previously reported as \$8,929,810 that should have been \$6,429,810.
 Interestingly, this same report shows a _contribution_ from the same Costco for the exact same
 amount with the exact same correction. There is no description for the correction.
@@ -507,7 +502,7 @@ These two sample reports can be found as PDF files in the `data/` directory.
 ### Transaction Dates
 
 There are a number of records with incorrect `expenditure_date` variables. There are no records
-with expenditures made in the future, but there are a number of suspicuously old expenditures.
+with expenditures made in the future, but there are a number of suspiciously old expenditures.
 
 ```{r date_future}
 max(wa$expenditure_date, na.rm = TRUE)
@@ -518,7 +513,7 @@ PDC claims that the dataset covers the last 10 years of data, but there are thou
 older than that, with one from `r year(min(wa$expenditure_date, na.rm = TRUE))`. The report
 containing that expenditure was filed in 2010 and can be found as PDF in the `data/` directory.
 That one report is the only one with an expenditure date before 2000, the rest appear to be
-correct dates simply outside the expected timespan.
+correct dates simply outside the expected time span.
 
 ```{r date_past}
 min(wa$expenditure_date, na.rm = TRUE)
@@ -532,6 +527,14 @@ wa %>%
   geom_col() +
   coord_cartesian(xlim = c(2000, 2020)) +
   geom_vline(xintercept = 2008)
+```
+
+To better track expenditures in the TAP database, we will create a `expenditure_year` variable from
+the previously parsed `expenditure_date` using `lubridate::year()`.
+
+```{r add_year}
+wa <- wa %>% 
+  mutate(expenditure_year = year(expenditure_date))
 ```
 
 ## Plots
@@ -559,35 +562,37 @@ wa %>%
 
 ## Clean
 
+### Address
+
+The `recipient_address` variable will be minimally cleaned by removing punctuation and fixing
+white-space.
+
+```{r}
+wa <- wa %>% 
+  mutate(
+    address_clean = recipient_address %>% 
+      str_to_upper() %>% 
+      # remove punct and numbers
+      str_replace("-", " ") %>% 
+      str_remove_all("[:punct:]") %>% 
+      str_trim() %>% 
+      str_squish() %>% 
+      na_if("") %>% 
+      na_if("NA")
+  )
+```
+
 ### Zipcode
 
-```{r zipcode_data}
+We can clean the `recipient_zip` variable using the `zipcodes::clean.zipcodes()` function, which
+strips the ZIP+4 digits and adds leading zeroes to three or four digit strings. We will also make
+some common invalid zips `NA`.
+
+```{r zipcode_data, echo=FALSE}
 data("zipcode")
 zipcode <- zipcode %>% 
   as_tibble() %>% 
-  select(city, state, zip) %>% 
-  bind_rows(
-    tribble(
-      ~city,           ~state,
-      "Toronto",       "ON",
-      "Quebec City",   "QC",
-      "Montreal",      "QC",
-      "Halifax",       "NS",
-      "Fredericton",   "NB",
-      "Moncton",       "NB",
-      "Winnipeg",      "MB",
-      "Victoria",      "BC",
-      "Vancouver",     "BC",
-      "Surrey",        "BC",
-      "Richmond",      "BC",
-      "Charlottetown", "PE",
-      "Regina",        "SK",
-      "Saskatoon",     "SK",
-      "Edmonton",      "AB",
-      "Calgary",       "AB",
-      "St. John's",    "NL"
-    )
-  )
+  select(city, state, zip)
 
 zipcode$city <- zipcode$city %>%
   str_to_upper() %>% 
@@ -603,7 +608,8 @@ zipcode$city <- zipcode$city %>%
   str_replace("(^|\\b)ST(\\b|$)", "SAINT") %>%
   str_replace("(^|\\b)PT(\\b|$)", "PORT") %>%
   str_replace("(^|\\b)FT(\\b|$)", "FORT") %>%
-  str_replace("(^|\\b)PK(\\b|$)", "PARK") %>% 
+  str_replace("(^|\\b)PK(\\b|$)", "PARK") %>%
+  str_replace("CAMANO", "CAMANO ISLAND") %>% 
   str_trim() %>% 
   str_squish()
 ```
@@ -614,16 +620,19 @@ wa <- wa %>%
            clean.zipcodes() %>% 
            na_if("00000") %>% 
            na_if("11111") %>% 
-           na_if("99999") %>% 
-           na_if("98") %>% 
-           na_if("1")
+           na_if("99999")
   )
+
+wa$zip_clean[which(nchar(wa$zip_clean) != 5)] <- NA
 ```
 
 ### State
 
+Using comprehensive list of state abbreviations in the Zipcodes database, we can isolate invalid
+`recipient_state` values and manually correct them.
+
 ```{r valid_state, collapse=TRUE}
-valid_state <- sort(unique(zipcode$state))
+valid_state <- c(unique(zipcode$state), "AB", "BC", "MB", "NB", "NL", "NS", "ON", "PE", "QC", "SK")
 length(valid_state)
 setdiff(valid_state, state.abb)
 ```
@@ -641,7 +650,13 @@ wa %>%
     recipient_zip
   ) %>% 
   print_all()
+```
 
+If the `recipient_state` abbreviation is invalid, use the `recipient_city` and `recipient_zip`
+values for that record to manually correct the abbreviation where possible. If it can't be manually
+corrected, make the value `NA`.
+
+```{r}
 wa$state_clean <- wa$recipient_state %>% 
   str_replace("QA", "WA") %>% # add match
   str_replace("SW", "WA") %>% # add match 
@@ -663,145 +678,128 @@ wa$state_clean <- wa$recipient_state %>%
 
 ### City
 
-```{r valid_city, collapse=TRUE}
-valid_city <- unique(zipcode$city)
-valid_wa_city <- unique(zipcode$city[zipcode$state == "WA"])
-length(valid_city)
-length(valid_wa_city)
+The first step in cleaning city names is to reduce inconsistencies. The custom `city_prep()`
+function found in the `R/` sub-directory of this root project performs the bulk of our preparation.
+In short, the function (1) removes punctuation, numbers, and state abbreviations, (2) expands
+directional and geographic abbreviations, and (3) catches common `NA` strings.
+
+```{r prep_city}
+source(here("R", "prep_city.R"))
+wa <- wa %>% 
+  mutate(
+    city_prep = prep_city(
+      cities = recipient_city,
+      na = read_lines(here("R", "na_city.csv")),
+      abbs = c("WA", "OR", "ID", "DC", "BC")
+    )
+  )
 ```
 
-```{r invalid_city}
-n_distinct(wa$recipient_city)
-length(setdiff(wa$recipient_city, valid_city))
+The second step will be to compare the new `city_prep` value to the _actual_ city value for that
+record's `zip_clean` value. If the `city_prep` is very similar to the expected city name for that
+ZIP code, we can make that change.
+
+```{r match_dist}
+wa <- wa %>%
+  left_join(zipcode, by = c("state_clean" = "state", "zip_clean" = "zip")) %>%
+  rename(city_match = city) %>%
+  mutate(
+    match_dist  = stringdist(city_prep, city_match),
+    city_swap = if_else(match_dist == 1, city_match, city_prep)
+  )
 ```
 
-```{r refine}
-n_distinct(wa$recipient_city)
+Now that we've prepared out city values and made the most obvious changes, we can use the
+OpenRefine algorithms to cluster similar values and merge them together. This can be done using the
+`refinr::key_collision_merge()` and `refinr::n_gram_merge()` functions on our prepared and swapped
+city data.
 
-wa <- wa %>% mutate(
-  # prepare for auto refine
-  city_prep = recipient_city %>%
-    str_to_upper() %>% 
-    # remove punct and numbers
-    str_replace("-", " ") %>% 
-    str_remove_all("[:punct:]") %>% 
-    str_remove("\\d+") %>% 
-    # remove state abbs
-    str_remove("(^|\\b)WA($)") %>% 
-    str_remove("(^|\\b)DC($)") %>% 
-    str_remove("(^|\\b)ID($)") %>%
-    str_remove("(^|\\b)LA($)") %>%
-    # expand dir abbs
-    str_replace("(^|\\b)N(\\b|$)",  "NORTH") %>%
-    str_replace("(^|\\b)S(\\b|$)",  "SOUTH") %>%
-    str_replace("(^|\\b)E(\\b|$)",  "EAST") %>%
-    str_replace("(^|\\b)W(\\b|$)",  "WEST") %>%
-    # remove geo abbs
-    str_replace("(^|\\b)MT(\\b|$)", "MOUNT") %>%
-    str_replace("(^|\\b)ST(\\b|$)", "SAINT") %>%
-    str_replace("(^|\\b)PT(\\b|$)", "PORT") %>%
-    str_replace("(^|\\b)FT(\\b|$)", "FORT") %>%
-    str_replace("(^|\\b)PK(\\b|$)", "PARK") %>% 
-    # fix white space
-    str_trim() %>% 
-    str_squish() %>% 
-    na_if("") %>% 
-    na_if("NA")
-)
-
-n_distinct(wa$city_prep)
-```
+We will create a new table with these refined values.
 
 ```{r view_refine}
-wa_fix <- wa %>% 
+wa_refined <- wa %>%
+  filter(state_clean == "WA") %>% 
+  filter(match_dist != 1) %>% 
   mutate(
-    # cluster and merge
-    city_fix = city_prep %>% 
-      key_collision_merge(dict = valid_wa_city) %>% 
-      n_gram_merge(),
-    # check if changed
-    fixed = (city_prep != city_fix)
+    city_refine = city_swap %>% 
+      key_collision_merge(dict = unique(zipcode$city)) %>% 
+      n_gram_merge(numgram = 1),
+    refined = (city_swap != city_refine)
   ) %>% 
-  filter(fixed) %>% 
+  filter(refined) %>% 
   select(
     id,
     state_clean,
     zip_clean,
     recipient_city,
     city_prep,
-    city_fix
+    city_match,
+    match_dist,
+    city_swap,
+    city_refine,
   ) %>% 
   rename(
     state = state_clean,
     zip = zip_clean,
-    city_orig = recipient_city
+    city_raw = recipient_city
   )
+```
 
-wa_fix %>% 
-  count(city_prep, city_fix) %>% 
+```{r most_refined}
+wa_refined %>% 
+  count(city_swap, city_refine) %>% 
   arrange(desc(n))
 ```
 
-```{r good_fix}
-good_fixes <- wa_fix %>% 
-  inner_join(zipcode, by = c("city_fix" = "city", "state", "zip"))
+The key to the refine algorithms is clustering rare values with their more common similar values.
+We can count how often the original value appears and compare it to the frequency of the refined
+value.
 
-nrow(good_fixes)
-n_distinct(good_fixes$city_fix)
-```
+```{r count_refined}
+refined_values <- unique(wa_refined$city_refine)
+count_refined <- tibble(
+  city_refine = refined_values, 
+  refine_count = NA
+)
 
-```{r bad_fix}
-bad_fixes <- wa_fix %>% 
-  anti_join(zipcode, by = c("city_fix" = "city", "state", "zip"))
+for (i in seq_along(refined_values)) {
+  count_refined$refine_count[i] <- sum(str_detect(wa$city_swap, refined_values[i]), na.rm = TRUE)
+}
 
-nrow(bad_fixes)
-n_distinct(bad_fixes$city_fix)
-```
+swap_values <- unique(wa_refined$city_swap)
+count_swap <- tibble(
+  city_swap = swap_values, 
+  swap_count = NA
+)
 
-We will compare the automated correction to the actual city for that record's zip code and state.
-If the Levenshtein distance between the actual city and the fixed city is two or less, we can
-safely correct the automatic correct. For the rest of changes without a clear match, we can
-correct them manually. Not all records will have a city name in the valid city list.
-
-```{r zip_match}
-check_bad_fixes <- bad_fixes %>% 
-  left_join(zipcode, by = c("state", "zip")) %>% 
-  rename(city_real = city) %>% 
-  rowwise() %>% 
-  mutate(lev_dist = as.double(adist(city_fix, city_real))) %>% 
-  ungroup() %>% 
-  mutate(city_fix = ifelse(lev_dist <= 2 & !is.na(lev_dist), city_real, city_fix))
-```
-
-```{r fix_fix}
-bad_fixes$city_fix <- 
-  check_bad_fixes$city_fix %>% 
-  str_replace("^MOUNTVIEW$", "MOUNTAIN VIEW") %>% 
-  str_replace("^BARLETT$", "BARTLETT") %>% 
-  str_replace("^VENTURA$", "AVENTURA") %>% 
-  str_replace("^BELL$", "ELBE") %>% 
-  str_replace("^BELLEVILLE$", "BELLEVUE") %>% 
-  na_if("WWW") %>% 
-  na_if("XX") %>% 
-  na_if("INTERNET") %>% 
-  na_if("NO CITY") %>% 
-  na_if("PO BOX") %>% 
-  na_if("ONLINE") %>% 
-  na_if("ANYCITY")
-```
-
-```{r bind_fix}
-if (nrow(good_fix) + nrow(bad_fix) == nrow(wa_fix)) {
-  wa_fix <- 
-    bind_rows(good_fix, bad_fix) %>% 
-    select(id, city_fix)
+for (i in seq_along(swap_values)) {
+  count_swap$swap_count[i] <- sum(str_detect(wa$city_swap, swap_values[i]), na.rm = TRUE)
 }
 ```
 
-```{r join_fix}
-wa %>% 
-  left_join(wa_fix, by = "id") %>% 
-  mutate(city_clean = ifelse(is.na(city_fix), city_prep, city_fix))
+```{r distinct_refined}
+wa_refined %>% 
+  arrange(city_refine) %>%
+  left_join(count_swap) %>% 
+  left_join(count_refined) %>% 
+  select(
+    city_swap, 
+    swap_count, 
+    city_refine, 
+    refine_count
+  ) %>% 
+  distinct() %>% 
+  print_all()
+```
+
+There are only a few distinct refined values that do not appear in our list of valid cities. These
+are the values that need to be checked manually checked.
+
+```{r}
+wa_refined %>% 
+  filter(city_refine %out% zipcode$city) %>% 
+  select(-id) %>% 
+  distinct()
 ```
 
 ## Write
