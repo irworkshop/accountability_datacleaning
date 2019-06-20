@@ -1,4 +1,4 @@
-prep_city <- function(cities, abbs, na) {
+prep_city <- function(cities, abbs = NULL, na = c("NA", "")) {
   cities <- cities %>%
     # prepare string
     str_conv("UTF-8") %>%
@@ -30,7 +30,11 @@ prep_city <- function(cities, abbs, na) {
     str_replace("(^|\\b)ISL(\\b|$)", "PARK") %>%
     str_replace("(^|\\b)VLY(\\b|$)", "VALLEY") %>%
     str_replace("(^|\\b)VLG(\\b|$)", "VILLAGE") %>%
-    str_replace("(^|\\b)BCH(\\b|$)", "BEACH")
+    str_replace("(^|\\b)BCH(\\b|$)", "BEACH") %>%
+    str_replace("(^|\\b)AFB(\\b|$)", "AIR FORCE BASE") %>%
+    str_replace("(^|\\b)A F B(\\b|$)", "AIR FORCE BASE") %>%
+    str_replace("(^|\\b)USAF(\\b|$)", "UNITED STATES AIR FORCE") %>%
+    str_replace("(^|\\b)U S A F(\\b|$)", "UNITED STATES AIR FORCE")
 
   cities <- cities %>%
     # remove bad white space
@@ -38,8 +42,10 @@ prep_city <- function(cities, abbs, na) {
     str_trim()
 
   # remove every abb from end of string
-  for (i in seq_along(abbs)) {
-    cities <- str_remove(cities, str_c("\\s", abbs[i], "$"))
+  if (!is.null(abbs)) {
+    for (i in seq_along(abbs)) {
+      cities <- str_remove(cities, str_c("\\s", abbs[i], "$"))
+    }
   }
 
   # make NA if in list
