@@ -6,6 +6,8 @@ date: "`r format(Sys.time())`"
 output:
   github_document: 
     df_print: tibble
+    toc: true
+    toc_dept: 2
 editor_options: 
   chunk_output_type: console
 ---
@@ -83,10 +85,11 @@ here::here()
 ## Data
 
 This dataset comes courtesy of the State of 
-[Washington Public Disclosure Commission](http://www.pdc.wa.gov), access through the [data.wa.gov](https://data.wa.gov) portal.
+[Washington Public Disclosure Commission](http://www.pdc.wa.gov), access through the 
+[data.wa.gov](https://data.wa.gov) portal.
 
 The resource is named `exenditures_by_candidates_and_political_committees` and covers the last 10
-years of data, updates daily. Each records represents a single "Expenditure by a campaign or
+years of data with daily updates. Each records represents a single "Expenditure by a campaign or
 committee."
 
 ### About
@@ -99,9 +102,9 @@ filing equivalents.
 and expenditure. In-kind contributions are also included in the data set "Contributions to
 Candidates and Political Committees."
 > 
-> For candidates, the number of years is determined by the year of the election, not necessarily the
-year the expenditure was reported. For political committees, the number of years is determined by
-the calendar year of the reporting period.
+> For candidates, the number of years is determined by the year of the election, not necessarily
+the year the expenditure was reported. For political committees, the number of years is determined
+by the calendar year of the reporting period.
 > 
 > Candidates and political committees choosing to file under "mini reporting" are not included in
 this dataset. See WAC 390-16-105 for information regarding eligibility.
@@ -364,58 +367,76 @@ wa %>%
   print(n = length(wa))
 ```
 
-The `*_id` variables have as many distinct values as the length of their respective tables.
-
-```{r tabyls_function, echo=FALSE}
-print_tabyl <- function(data, ...) {
-  as_tibble(arrange(tabyl(data, ...), desc(n)))
-}
-```
-
-```{r tabyls, echo=FALSE}
-wa %>% print_tabyl(origin)
-wa %>% print_tabyl(type)
-wa %>% print_tabyl(office)
-wa %>% print_tabyl(position)
-wa %>% print_tabyl(party)
-wa %>% print_tabyl(jurisdiction_type)
-wa %>% print_tabyl(election_year)
-wa %>% print_tabyl(expenditure_itemized)
-wa %>% print_tabyl(legislative_district)
-wa %>% print_tabyl(code)
-wa %>% print_tabyl(filer_supports)
-```
+We can explore the distribution of the least distinct values with `ggplot2::geom_bar()`.
 
 ```{r plot_origin_bar, echo=FALSE}
-ggplot(wa) + geom_bar(aes(origin))
+ggplot(wa) + 
+  geom_bar(aes(origin))
 ```
 
 ```{r plot_type_bar, echo=FALSE}
-ggplot(wa) + geom_bar(aes(type))
+ggplot(wa) + 
+  geom_bar(aes(type))
 ```
 
 ```{r plot_party_bar, echo=FALSE}
-ggplot(wa) + geom_bar(aes(party)) + coord_flip()
+ggplot(wa) + 
+  geom_bar(aes(party)) + 
+  coord_flip()
 ```
 
 ```{r plot_jurisdiction_bar, echo=FALSE}
-ggplot(wa) + geom_bar(aes(jurisdiction_type))
+ggplot(wa) + 
+  geom_bar(aes(jurisdiction_type))
 ```
 
 ```{r plot_election_year_bar, echo=FALSE}
-ggplot(wa) + geom_bar(aes(election_year))
+ggplot(wa) + 
+  geom_bar(aes(election_year))
 ```
 
 ```{r plot_itemized_bar, echo=FALSE}
-ggplot(wa) + geom_bar(aes(expenditure_itemized))
+ggplot(wa) + 
+  geom_bar(aes(expenditure_itemized))
 ```
 
-```{r plot_code_bar, echo=FALSE}
-ggplot(wa %>% filter(!is.na(code))) + geom_bar(aes(code)) + coord_flip()
+```{r plot_code_party, echo=FALSE}
+wa %>%
+  filter(party %in% c("DEMOCRAT", "REPUBLICAN", NA)) %>% 
+  group_by(party, code) %>% 
+  summarise(mean = mean(amount)) %>%
+  arrange(code) %>% 
+  ggplot(aes(code, mean)) +
+  geom_col(aes(fill = party)) +
+  facet_wrap(~party) +
+  coord_flip() +
+  scale_y_continuous(labels = scales::dollar) +
+  theme(legend.position = "none") +
+  labs(
+    title = "Washington State Campaign Expenditures",
+    subtitle = "NA for Non-Candidate Campaigns",
+    caption = "Source: data.wa.gov/d/tijg-9zyp",
+    y = "Mean Expenditure",
+    x = "Expenditure Type"
+  )
 ```
 
 ```{r plot_supports_bar, echo=FALSE}
-ggplot(wa %>% filter(!is.na(filer_supports))) + geom_bar(aes(filer_supports))
+wa %>% 
+  filter(!is.na(filer_supports)) %>% 
+  ggplot(aes(filer_supports)) + 
+  geom_bar()
+```
+
+```{r plot_office_bar, echo=FALSE}
+wa %>% 
+  filter(!is.na(office)) %>%  
+  count(office) %>% 
+  arrange(desc(n)) %>% 
+  slice(1:10) %>% 
+  ggplot() + 
+  geom_col(aes(office, n)) + 
+  coord_flip()
 ```
 
 ### Missing
@@ -434,11 +455,6 @@ wa %>%
 We will flag any records with missing values in the key variables used to identify an expenditure.
 
 ```{r na_flag}
-sum(is.na(wa$filer_name))
-sum(is.na(wa$recipient_name))
-sum(is.na(wa$amount))
-sum(is.na(wa$expenditure_date))
-
 wa <- wa %>% 
   mutate(
     na_flag = is.na(expenditure_date) | is.na(recipient_name)
@@ -458,27 +474,135 @@ wa %>%
     )
 ```
 
+### Duplicates
+
+There are no completely duplicate rows, as each record has a unique `id` variable.
+
+```{r id_dupes, collapse=TRUE}
+n_distinct(wa$id)/nrow(wa)
+```
+
+There are, however, records that are otherwise complete duplicates. It's possible that two
+expenditures might be made by filer, to the same recipient, on the same day, for the same amount
+but we will flag them with a logical `dupe_flag` variable not the less.
+
+Using `janitor::get_dupes()`, we can create a table of records with duplicate filer, recipient,
+date, _and_ amount values.
+
+```{r get_dupes, collapse=TRUE}
+wa_dupes <- wa %>% 
+  get_dupes(
+    filer_name,
+    recipient_name,
+    expenditure_date,
+    amount
+    ) %>% 
+  mutate(dupe_flag = TRUE) %>%
+  select(id, dupe_flag)
+
+nrow(wa_dupes)
+```
+
+Then we join the table of duplicate records back onto the original dataset, with a new variable 
+marking each duplicate row.
+
+```{r flag_dupes, message=FALSE, warning=FALSE}
+wa <- wa %>% 
+  left_join(wa_dupes, by = "id") %>% 
+  mutate(dupe_flag = !is.na(dupe_flag))
+```
+
+```{r count_dupes}
+wa %>% 
+  filter(dupe_flag) %>% 
+  select(
+    id,
+    filer_name,
+    recipient_name,
+    expenditure_date,
+    amount,
+    code
+  )
+```
+
+Many of these duplicate records have an `amount` value of zero, meaning they are likely
+corrections to previous expenditures.
+
+```{r plot_dupes_amount, echo=FALSE}
+wa %>% 
+  filter(dupe_flag) %>% 
+  distinct() %>% 
+  ggplot() + 
+  geom_histogram(aes(amount))
+```
+
 ### Ranges
 
 The range of continuous variables will need to be checked for data integrity. There are only two
 quasi-continuous variables, the `amount` and `expenditure_date`
+
+We can checl the distribution of continuous variables with `ggplot2::geom_histogram()`
 
 #### Transaction Amounts
 
 The middle range for `amount` seems reasonable enough.
 `r scales::percent(mean(wa$amount < 0))` percent of `amount` values are less than zero. 
 
-```{r amount_range}
+```{r amount_range, collapse=TRUE}
 summary(wa$amount)
 tabyl(wa$amount > 0)
 ```
 
-```{r plot_amt_nonlog, collapse=TRUE}
+Most expenditures are for relatively little amount.
+
+```{r plot_amt_nonlog, echo=FALSE}
 ggplot(wa, aes(amount)) + 
   geom_histogram() + 
   scale_y_log10() +
   scale_x_continuous(labels = scales::dollar) +
   geom_hline(yintercept = 10)
+```
+
+```{r plot_party_hist, echo=FALSE}
+ggplot(wa, aes(amount)) + 
+  geom_histogram(aes(fill = party)) + 
+  scale_y_log10() +
+  scale_x_continuous(labels = scales::dollar, trans = "log10") +
+  scale_fill_manual(
+    guide = FALSE,
+    values = c(
+      "brown", 
+      "royalblue", 
+      "forestgreen", 
+      "gold",
+      "mediumpurple", 
+      "#999999", 
+      "firebrick",
+      "black"
+    )
+  ) +
+  geom_vline(xintercept = 100000) +
+  facet_wrap(~party)
+```
+
+```{r plot_party_box, echo=FALSE}
+ggplot(wa, aes(party, amount)) + 
+  geom_boxplot(aes(fill = party), varwidth = TRUE) + 
+  scale_y_continuous(labels = scales::dollar, trans = "log10") +
+  scale_fill_manual(
+    guide = FALSE,
+    values = c(
+      "brown", 
+      "royalblue", 
+      "forestgreen", 
+      "gold",
+      "mediumpurple", 
+      "#999999", 
+      "firebrick",
+      "black"
+    )
+  ) +
+  geom_hline(yintercept = 100000)
 ```
 
 Below are the smallest and largest expenditures.
@@ -504,7 +628,7 @@ These two sample reports can be found as PDF files in the `data/` directory.
 There are a number of records with incorrect `expenditure_date` variables. There are no records
 with expenditures made in the future, but there are a number of suspiciously old expenditures.
 
-```{r date_future}
+```{r date_future, collapse=TRUE}
 max(wa$expenditure_date, na.rm = TRUE)
 sum(wa$expenditure_date > today(), na.rm = T)
 ```
@@ -515,7 +639,7 @@ containing that expenditure was filed in 2010 and can be found as PDF in the `da
 That one report is the only one with an expenditure date before 2000, the rest appear to be
 correct dates simply outside the expected time span.
 
-```{r date_past}
+```{r date_past, collapse=TRUE}
 min(wa$expenditure_date, na.rm = TRUE)
 sum(year(wa$expenditure_date) < 2007, na.rm = T)
 ```
@@ -535,29 +659,6 @@ the previously parsed `expenditure_date` using `lubridate::year()`.
 ```{r add_year}
 wa <- wa %>% 
   mutate(expenditure_year = year(expenditure_date))
-```
-
-## Plots
-
-```{r plot_exp_party, echo=FALSE}
-wa %>%
-  filter(party %in% c("DEMOCRAT", "REPUBLICAN", NA)) %>% 
-  group_by(party, code) %>% 
-  summarise(mean = mean(amount)) %>%
-  arrange(code) %>% 
-  ggplot(aes(code, mean)) +
-  geom_col(aes(fill = party)) +
-  facet_wrap(~party) +
-  coord_flip() +
-  scale_y_continuous(labels = scales::dollar) +
-  theme(legend.position = "none") +
-  labs(
-    title = "Washington State Campaign Expenditures",
-    subtitle = "NA for Non-Candidate Campaigns",
-    caption = "Source: data.wa.gov/d/tijg-9zyp",
-    y = "Mean Expenditure",
-    x = "Expenditure Type"
-  )
 ```
 
 ## Clean
@@ -590,28 +691,11 @@ some common invalid zips `NA`.
 
 ```{r zipcode_data, echo=FALSE}
 data("zipcode")
-zipcode <- zipcode %>% 
-  as_tibble() %>% 
-  select(city, state, zip)
-
-zipcode$city <- zipcode$city %>%
-  str_to_upper() %>% 
-  str_replace_all("-", " ") %>% 
-  str_remove_all("[:punct:]") %>% 
-  str_replace("(^|\\b)N(\\b|$)",  "NORTH") %>%
-  str_replace("(^|\\b)NO(\\b|$)", "NORTH") %>%
-  str_replace("(^|\\b)S(\\b|$)",  "SOUTH") %>%
-  str_replace("(^|\\b)SO(\\b|$)", "SOUTH") %>%
-  str_replace("(^|\\b)E(\\b|$)",  "EAST") %>%
-  str_replace("(^|\\b)W(\\b|$)",  "WEST") %>%
-  str_replace("(^|\\b)MT(\\b|$)", "MOUNT") %>%
-  str_replace("(^|\\b)ST(\\b|$)", "SAINT") %>%
-  str_replace("(^|\\b)PT(\\b|$)", "PORT") %>%
-  str_replace("(^|\\b)FT(\\b|$)", "FORT") %>%
-  str_replace("(^|\\b)PK(\\b|$)", "PARK") %>%
-  str_replace("CAMANO", "CAMANO ISLAND") %>% 
-  str_trim() %>% 
-  str_squish()
+source(here("R", "prep_city.R"))
+zipcode <-
+  as_tibble(zipcode) %>% 
+  select(city, state, zip) %>% 
+  mutate(city = prep_city(city))
 ```
 
 ```{r clean_zipcodes}
@@ -637,8 +721,7 @@ length(valid_state)
 setdiff(valid_state, state.abb)
 ```
 
-```{r}
-setdiff(wa$recipient_state, valid_state)
+```{r view_states}
 wa %>% 
   filter(recipient_state %out% valid_state) %>% 
   filter(!is.na(recipient_state)) %>% 
@@ -678,6 +761,15 @@ wa$state_clean <- wa$recipient_state %>%
 
 ### City
 
+Cleaning city values is the most complicated. This process involves four steps:
+
+1. Prepare raw city values by removing invalid data and reducing inconsistencies
+1. Match prepared city values with the _actual_ city name of that record's ZIP code
+1. Swap prepared city values with the ZIP code match _if_ only 1 edit is needed
+1. Refine swapped city values with key collision and n-gram fingerprints
+
+#### Prep City
+
 The first step in cleaning city names is to reduce inconsistencies. The custom `city_prep()`
 function found in the `R/` sub-directory of this root project performs the bulk of our preparation.
 In short, the function (1) removes punctuation, numbers, and state abbreviations, (2) expands
@@ -695,6 +787,8 @@ wa <- wa %>%
   )
 ```
 
+#### Match and Swap City
+
 The second step will be to compare the new `city_prep` value to the _actual_ city value for that
 record's `zip_clean` value. If the `city_prep` is very similar to the expected city name for that
 ZIP code, we can make that change.
@@ -709,10 +803,25 @@ wa <- wa %>%
   )
 ```
 
+#### Refine City
+
 Now that we've prepared out city values and made the most obvious changes, we can use the
 OpenRefine algorithms to cluster similar values and merge them together. This can be done using the
 `refinr::key_collision_merge()` and `refinr::n_gram_merge()` functions on our prepared and swapped
 city data.
+
+```{r valid_city}
+valid_city <- c(
+  unique(zipcode$city), 
+  "SPOKANE VALLEY",
+  "TUKWILA", 
+  "BURIEN", 
+  "SEATAC", 
+  "LAKE FOREST PARK",
+  "NORMANDY PARK",
+  "FIRCREST"
+  )
+```
 
 We will create a new table with these refined values.
 
@@ -722,7 +831,7 @@ wa_refined <- wa %>%
   filter(match_dist != 1) %>% 
   mutate(
     city_refine = city_swap %>% 
-      key_collision_merge(dict = unique(zipcode$city)) %>% 
+      key_collision_merge(dict = valid_city) %>% 
       n_gram_merge(numgram = 1),
     refined = (city_swap != city_refine)
   ) %>% 
@@ -744,6 +853,8 @@ wa_refined <- wa %>%
     city_raw = recipient_city
   )
 ```
+
+#### Review Refined City
 
 ```{r most_refined}
 wa_refined %>% 
@@ -777,30 +888,95 @@ for (i in seq_along(swap_values)) {
 }
 ```
 
+The least frequent refined values are the ones of which we should be most suspicious. The more
+frequent a refined value appears compared to it's original value, the more confident the algorithm
+can be in making the change. We should manually check any refined value with a small count.
+Furthermore, some refined values appear _less_ often than their original value because their
+fingerprint matches an entry in our dictionary (e.g., "Lake Forrest" vs "Forrest Lake").
+
 ```{r distinct_refined}
 wa_refined %>% 
-  arrange(city_refine) %>%
   left_join(count_swap) %>% 
-  left_join(count_refined) %>% 
+  left_join(count_refined) %>%
   select(
-    city_swap, 
-    swap_count, 
-    city_refine, 
+    city_match,
+    city_swap,
+    city_refine,
+    swap_count,
     refine_count
   ) %>% 
-  distinct() %>% 
+  mutate(diff_count = refine_count - swap_count) %>%
+  mutate(refine_dist = stringdist(city_swap, city_refine)) %>%
+  distinct() %>%
+  arrange(city_refine) %>% 
   print_all()
 ```
 
-There are only a few distinct refined values that do not appear in our list of valid cities. These
-are the values that need to be checked manually checked.
+We can finally manually correct the last of these values.
 
-```{r}
-wa_refined %>% 
-  filter(city_refine %out% zipcode$city) %>% 
-  select(-id) %>% 
-  distinct()
+```{r refine_fix}
+wa_refined$city_refine <- wa_refined$city_refine %>% 
+  str_replace("^FOREST LAKE$", "LAKE FOREST PARK") %>% 
+  str_replace("^REARDAN$", "ARDEN") %>% 
+  str_replace("^CLEARLAKE$", "CLEAR LAKE") %>% 
+  str_replace("^STEILCOOM$", "STEILACOOM") %>% 
+  str_replace("^SOUTH ALASKA$", "KAHLOTUS") %>% 
+  str_replace("^TULWILLA$", "TUKWILA") %>% 
+  str_replace("^SEATTLE WEST$", "SEATTLE") %>% 
+  str_replace("^MCCHAORD AFB$", "MCCHORD AFB") %>% 
+  str_replace("^ORIENT$", "RENTON") %>% 
+  str_replace("^TUMWATERS$", "TUMWATER") %>% 
+  str_replace("^CARLTON$", "LA CONNER") %>% 
+  str_replace("^CARLTON$", "LA CONNER") %>% 
+  str_replace("^COSMOPOLIS$", "MOCLIPS") %>% 
+  str_replace("^FERNDALE$", "FREELAND") %>% 
+  str_replace("^LEAVENWORTH$", "LEAVENWORTH") %>% 
+  str_replace("^MOUNTLAKE TERRACE$", "MOUNT LAKE TERRACE") %>% 
+  str_replace("^MTLAKE TERRACE$", "MOUNT LAKE TERRACE") %>% 
+  str_replace("^NORDLAND$", "RONALD") %>% 
+  str_replace("^ORIENT$", "RENTON") %>% 
+  str_replace("^RAYMOND$", "NORMANDY") %>% 
+  str_replace("^SPOKANE VALLEY$", "SPOKANE") %>% 
+  na_if("INTERNET COMPANY")
+
+refine_table <- wa_refined %>% 
+  select(id, city_refine)
 ```
+
+#### Merge Refined City
+
+Then, we match these refined values to the original data. Use the refined value where possible,
+otherwise use the swapped city value (which is the prepared value or real value).
+
+```{r join_refine}
+wa <- wa %>% 
+  left_join(refine_table, by = "id") %>% 
+  mutate(city_clean = coalesce(city_refine, city_swap))
+```
+
+Each step of the cleaning process reduces the number of distinct city values.
+
+```{r city_steps_distinct, collapse=TRUE}
+n_distinct(wa$recipient_city)
+n_distinct(wa$city_prep)
+n_distinct(wa$city_swap)
+n_distinct(wa$city_clean)
+sum(wa$recipient_city != wa$city_clean, na.rm = TRUE)
+sample(setdiff(wa$recipient_city, wa$city_clean), 25)
+```
+
+## Conclude
+
+1. There are `r nrow(wa)` records in the database
+1. There are `r sum(wa$dupe_flag)` records with duplicate filer, recipient, date, _and_ amount
+(flagged with `dupe_flag`)
+1. The ranges for dates and amounts are reasonable
+1. Consistency in strings has been fixed with `city_prep()` and the `stringr` package
+1. The five-digit `zip_clean` variable has been created with `zipcode::clean.zipcode()`
+1. The `expenditure_year` variable has been created with `lubridate::year()`
+1. There are `r sum(is.na(wa$recipient_name))` records with missing `recipient_name` values and 
+`r sum(is.na(wa$expenditure_date))` records with missing `expenditure_date` values (both flagged
+with the `na_flag`)
 
 ## Write
 
@@ -808,7 +984,13 @@ wa_refined %>%
 wa %>% 
   select(
     -recipient_zip,
-    -recipient_state
+    -recipient_state,
+    -recipient_city,
+    -city_prep,
+    -city_match,
+    -match_dist,
+    -city_swap,
+    -city_refine
   ) %>% 
   write_csv(
     path = here("wa_expends", "data", "raw", "wa_expends_clean.csv"),
