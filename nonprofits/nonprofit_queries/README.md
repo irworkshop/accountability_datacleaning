@@ -76,10 +76,10 @@ Copy back with:
        "PrsnNm",
        "TtlTxt",
        "CmpnstnAmt" 
-   INTO tmp_990EZ_employees
-   FROM return_EZOffcrDrctrTrstEmpl
-	LEFT JOIN address_table ON return_EZOffcrDrctrTrstEmpl.ein = address_table.ein
-	AND return_EZOffcrDrctrTrstEmpl.object_id= address_table.object_id;
+	   INTO tmp_990EZ_employees
+	   FROM return_EZOffcrDrctrTrstEmpl
+		LEFT JOIN address_table ON return_EZOffcrDrctrTrstEmpl.ein = address_table.ein
+		AND return_EZOffcrDrctrTrstEmpl.object_id= address_table.object_id;
 
 
 And then move with: 
@@ -199,13 +199,14 @@ Copy to local
 ## Contractor compensation
 
 
+### Form 990: 
 
-990: 
-
-
+	
 	DROP TABLE IF EXISTS contractor_comp_990;
 	
 	SELECT 
+		address_table.ein,
+		address_table.object_id,
 		address_table."RtrnHdr_TxPrdEndDt",
 		address_table."RtrnHdr_TxYr",
 		address_table."BsnssNm_BsnssNmLn1Txt" as "Org_BsnssNmLn1",
@@ -242,14 +243,16 @@ Copy to local
 	
 	
 	\copy contractor_comp_990 to '/tmp/contractors_990.csv' with csv header;
-
-
-### 990 PF
-
 	
+
+
+## 990 PF
+
 	DROP TABLE IF EXISTS contractor_comp_990_pf;
 		
 	SELECT 
+		address_table.ein,
+		address_table.object_id,
 		address_table."RtrnHdr_TxPrdEndDt",
 		address_table."RtrnHdr_TxYr",
 		address_table."BsnssNm_BsnssNmLn1Txt" as "Org_BsnssNmLn1",
@@ -285,14 +288,15 @@ Copy to local
 	
 	
 	\copy contractor_comp_990_pf to '/tmp/contractor_comp_990_pf.csv' with csv header;
+	
 
 ### 990EZ
-
-This is rarely used
 
 	DROP TABLE IF EXISTS contractor_comp_990_ez;
 		
 	SELECT 
+		address_table.ein,
+		address_table.object_id,
 		address_table."RtrnHdr_TxPrdEndDt",
 		address_table."RtrnHdr_TxYr",
 		address_table."BsnssNm_BsnssNmLn1Txt" as "Org_BsnssNmLn1",
@@ -325,8 +329,8 @@ This is rarely used
 		FROM return_EZCmpnstnOfHghstPdCntrct 
 		LEFT JOIN address_table ON return_EZCmpnstnOfHghstPdCntrct .object_id = address_table.object_id
 		AND return_EZCmpnstnOfHghstPdCntrct .ein = address_table.ein;
-
-
+	
+	
 	\copy contractor_comp_990_ez to '/tmp/contractor_comp_990_ez.csv' with csv header;
-
-
+	
+	
