@@ -1,0 +1,255 @@
+---
+title: "Data Diary"
+subtitle: "Alabama"
+author: "First Last"
+date: "` format(Sys.time())`"
+output:
+  github_document: 
+    df_print: tibble
+    toc: true
+    toc_dept: 2
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE, purl=FALSE}
+library(knitr)
+opts_chunk$set(
+  eval    = FALSE,
+  echo    = TRUE,
+  dfrning = FALSE,
+  message = FALSE,
+  error   = FALSE,
+  comment = "#>",
+  fig.path = "../plots/",
+  fig.width = 10,
+  dpi = 300
+)
+options(width = 99)
+```
+
+## Project
+
+The Accountability Project is an effort to cut across data silos and give journalists, policy
+professionals, activists, and the public at large a simple way to search across huge volumes of
+public data about people and organizations.
+
+Our goal is to standardizing public data on a few key fields by thinking of each dataset row as a
+transaction. For each transaction there should be (at least) 3 variables:
+
+1. All **parties** to a transaction
+2. The **date** of the transaction
+3. The **amount** of money involved
+
+## Objectives
+
+This document describes the process used to complete the following objectives:
+
+1. How many records are in the database?
+1. Check for duplicates
+1. Check ranges
+1. Is there anything blank or missing?
+1. Check for consistency issues
+1. Create a five-digit ZIP Code called `ZIP5`
+1. Create a `YEAR` field from the transaction date
+1. Make sure there is data on both parties to a transaction
+
+## Packages
+
+The following packages are needed to collect, manipulate, visualize, analyze, and communicate
+these results. The `pacman` package will facilitate their installation and attachment.
+
+```{r p_load, message=FALSE, dfrning=FALSE, error=FALSE}
+pacman::p_load(
+  stringdist, # levenshtein value
+  tidyverse, # data manipulation
+  lubridate, # datetime strings
+  magrittr, # pipe opperators
+  RSocrata, # read SODA APIs
+  janitor, # dataframe clean
+  zipcode, # clean & databse
+  icesTAF, # convert dos2unix
+  batman, # parse logicals
+  refinr, # cluster & merge
+  rvest, # scrape website
+  vroom, # quickly read
+  glue, # combine strings
+  here, # locate storage
+  fs # search storage 
+)
+```
+
+```{r custom_prep, echo=FALSE}
+# fix conflict
+here <- here::here
+# custom utility functions
+"%out%" <- Negate("%in%")
+print_all <- function(df) df %>% print(n = nrow(.)) 
+# load data
+data("zipcode")
+```
+
+This document should be run as part of the `R_campfin` project, which lives as a sub-directory
+of the more general, language-agnostic `irworkshop/accountability_datacleaning` 
+[GitHub repository](https://github.com/irworkshop/accountability_datacleaning).
+
+The `R_campfin` project uses the 
+[RStudio projects](https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects)
+feature and should be run as such. The project also uses the dynamic `here::here()` tool for file
+paths relative to _your_ machine.
+
+```{r where_here, collapse=TRUE}
+# where dfs this document knit?
+here::here()
+```
+
+## Data
+
+> This page provides comma separated value (CSV) downloadable files which contain annual data for
+Cash Contributions, In-Kind Contributions, Other Receipts, and Expenditures in a zipped file
+format. These files can be downloaded and imported into other applications (Microsoft Excel,
+Microsoft Access, etc.) for your use. This data is extracted from the Alabama Electronic FCPA
+Reporting System database as it existed as of 6/21/2019 12:35 AM.
+
+> You can access the Campaign Finance Data Download page to download contribution and expenditure
+data for import into other applications such as Microsoft Excel or Access. A weekly batch process
+is run that captures the year-to-date information for the current year. The data is available for
+each calendar year. The file is downloaded in CSV format.
+
+## Variables
+
+## Read
+
+### Download
+
+To read the files into R, we will first have to download them individually from the. The files
+have a consistent naming convention, all we have to do is change the year for each file.
+
+```{r glue_url}
+expend_urls <- glue("http://fcpa.alabamavotes.gov/PublicSite/Docs/BulkDataDownloads/{2013:2019}_ExpendituresExtract.csv.zip")
+```
+
+```{r any_old_files, echo=FALSE}
+any_old_files <- function(path, glob) {
+  files <- dir_ls(
+    path = path,
+    type = "file",
+    glob = glob
+  )
+  if (length(files) == 0) {
+    TRUE
+  } else {
+    file_info(files) %>% 
+      pull(modification_time) %>% 
+      floor_date("day") %>% 
+      equals(today()) %>% 
+      not() %>% 
+      any()
+  }
+}
+```
+
+If recent versions of the ZIP files do not exists in the `data/raw` directory, download them from
+the Alabama 
+
+```{r download.file}
+dir_create(here("al_expends", "data", "raw"))
+
+if (any_old_files(here("al_expends", "data", "raw"), "*.zip")) {
+  for (url in expend_urls) {
+    download.file(
+      url = url,
+      destfile = here("al_expends", "data", "raw", basename(url))
+    ) 
+  }
+}
+```
+
+```{r dir_ls_zip}
+here("al_expends", "data", "raw") %>% 
+  dir_ls(glob = "*.zip") %>% 
+  file_info() %>% 
+  mutate(file = basename(path)) %>% 
+  select(
+    file, 
+    type, 
+    size,
+    modification_time,
+    birth_time
+  )
+```
+
+### Unzip
+
+If recent versions of the unzipped CSV files do not exist in the `data/raw` directory, unzip the
+ZIP archive files.
+
+```{r unzip}
+if (any_old_files(here("al_expends", "data", "raw"), "*.csv")) {
+  here("al_expends", "data", "raw") %>% 
+    dir_ls(glob = "*.zip") %>% 
+    map(unzip, exdir = here("al_expends", "data", "raw"))
+}
+```
+
+```{r dir_ls_csv}
+here("al_expends", "data", "raw") %>% 
+  dir_ls(glob = "*.csv") %>% 
+  file_info() %>% 
+  mutate(file = basename(path)) %>% 
+  select(
+    file, 
+    type, 
+    size,
+    modification_time,
+    birth_time
+  )
+```
+
+### Import
+
+```{r vroom, eval=FALSE, echo=FALSE}
+al <- 
+  here("al_expends", "data", "raw") %>% 
+  dir_ls(glob = "*.csv") %>% 
+  vroom(
+    delim = ",",
+    .name_repair = make_clean_names,
+    na = c("", "NA", " "),
+    quote = "\"",
+    escape_double = FALSE,
+    escape_backslash = TRUE,
+    col_types = cols(
+      ExpenditureDate = col_date("%m/%d/%Y"),
+      ExpenditureAmount = col_double(),
+      FiledDate = col_date("%m/%d/%Y")
+    )
+  )
+```
+
+```{r read.csv}
+al <- 
+  here("al_expends", "data", "raw") %>% 
+  dir_ls(glob = "*.csv") %>% 
+  map(read.delim, sep = ",", stringsAsFactors = FALSE, colClasses = "character") %>% 
+  map(as_tibble) %>% 
+  bind_rows() %>% 
+  clean_names() %>% 
+  map_dfr(na_if, "") %>% 
+  mutate(
+    expenditure_amount = parse_double(expenditure_amount),
+    expenditure_date = parse_date(expenditure_date, "%m/%d/%Y"),
+    filed_date = parse_date(filed_date, "%m/%d/%Y"),
+    amended = to_logical(amended)
+  )
+```
+
+```{r}
+here("al_expends", "data", "raw") %>% 
+  dir_ls(glob = "*.csv") %>% 
+  map(dos2unix)
+```
+
+```{r}
+```
+
