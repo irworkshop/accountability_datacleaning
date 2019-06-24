@@ -63,7 +63,8 @@ pacman::p_load(
 )
 ```
 
-```{r fix_fun, echo=FALSE}
+```{r custom_funs_dat, echo=FALSE}
+data("zipcode")
 here <- here::here
 "%out%" <- Negate("%in%")
 print_all <- function(df) df %>% print(n = nrow(.)) 
@@ -116,6 +117,7 @@ vt <-
     )
   ) %>% 
   clean_names() %>% 
+  remove_empty("rows") %>% 
   mutate_if(is.character, str_to_upper) %>% 
   rownames_to_column("id")
 ```
@@ -143,33 +145,86 @@ vt %>%
   print(n = length(vt))
 ```
 
-```{r tabyls_function, echo=FALSE}
-print_tabyl <- function(data, ...) {
-  as_tibble(arrange(tabyl(data, ...), desc(n)))
-}
+We can use `ggplot2::geom_bar()` to explore the distribution of these least distinct nominal
+values.
+
+```{r plot_payee_type, echo=FALSE, fig.height=10}
+ggplot(vt) + 
+  geom_bar(aes(payee_type)) + 
+  coord_flip() +
+  labs(title = "VT Payee Type")
 ```
 
-```{r tabyls}
-print_tabyl(vt, payee_type)
-print_tabyl(vt, registrant_type)
-print_tabyl(vt, office)
-print_tabyl(vt, election_cycle)
-print_tabyl(vt, expenditure_type)
-print_tabyl(vt, expenditure_purpose)
+```{r plot_reg_type, echo=FALSE, fig.height=10}
+ggplot(vt) + 
+  geom_bar(aes(registrant_type)) + 
+  coord_flip() +
+  labs(title = "VT Registrant Type")
+```
+
+```{r plot_office, echo=FALSE, fig.height=10}
+vt$office %>% 
+  str_extract("(?:(?!-).)*") %>% 
+  str_trim() %>% 
+  enframe(NULL) %>%
+  ggplot() +
+  geom_bar(aes(value)) +
+  coord_flip() +
+  labs(title = "VT Office")
+```
+
+```{r plot_cycle, echo=FALSE, fig.height=10}
+ggplot(vt) + 
+  geom_bar(aes(election_cycle)) + 
+  coord_flip() +
+  labs(title = "VT Election Cycle")
+```
+
+```{r plot_expend_type, echo=FALSE}
+ggplot(vt) + 
+  geom_bar(aes(expenditure_type)) +
+  labs(title = "VT Expenditure Type (Log)") +
+  scale_y_log10()
+```
+
+```{r plot_expend_amt_type, echo=FALSE}
+vt %>% 
+  filter(!is.na(expenditure_type)) %>% 
+  ggplot() +
+  scale_y_continuous(labels = scales::dollar, trans = "log10") +
+  labs(title = "VT Expenditure Amount by Type (Log)") +
+  geom_boxplot(
+    mapping = aes(
+      x = expenditure_type,
+      y = expenditure_amount
+    )
+  )
+```
+
+### Duplicate
+
+We can use `janitor::get_dupes()` to create a new table of records with duplicate values across
+all rows. We will flag these with a new `dupe_flag` variable and join them back to the original
+data.
+
+```{r get_dupes}
+vt_dupes <- vt %>% 
+  select(-id) %>% 
+  get_dupes() %>% 
+  select(-dupe_count) %>% 
+  mutate(dupe_flag = TRUE) %>% 
+  distinct()
+
+vt <- vt %>% 
+  left_join(vt_dupes) %>% 
+  mutate(dupe_flag = !is.na(dupe_flag))
 ```
 
 ### Missing
 
-The variables also vary in their degree of values that are `NA` (missing). 
-
-There are `r sum(is.na(vt$transaction_date))` records with `NA` values in many _all_ variables.
-These can be dropped with `janitor::remove_empty("rows")`
-
-```{r remove_empty}
-vt <- remove_empty(vt, "rows")
-```
-
-The remaining missing values in each variable can be found below:
+The variables also vary in their degree of values that are `NA` (missing). Note that 68 rows were
+removed using `janitor::remove_empty()` during our initial reading of the file. The remaining count
+of missing values in each variable can be found below:
 
 ```{r count_na}
 vt %>% 
@@ -178,6 +233,16 @@ vt %>%
   enframe(name = "variable", value = "n_na") %>% 
   mutate(prop_na = n_na / nrow(vt)) %>% 
   print(n = length(vt))
+```
+
+Most variables have zero `NA` values, aside from the supplemental `public_question` and `comments` 
+variables. `NA` values in the `office` variable represent expenditures from non-candidate
+registrants.
+
+```{r office_na}
+vt %>% 
+  group_by(registrant_type) %>% 
+  summarise(n_na = sum(is.na(office)))
 ```
 
 ### Ranges
@@ -191,7 +256,7 @@ The range for `trans_amount` seems reasonable enough.
 summary(vt$expenditure_amount)
 ```
 
-```{r plot_exp_amt_type}
+```{r plot_exp_amt_type, echo=FALSE}
 vt %>% 
   ggplot(mapping = aes(expenditure_amount)) +
   geom_histogram() +
@@ -214,9 +279,9 @@ summary(vt$transaction_date)
 ```{r plot_exp_year}
 vt %>% 
   group_by(transaction_year = year(transaction_date)) %>% 
-  count() %>% 
-  ggplot(mapping = aes(transaction_year, n)) +
-  geom_col() +
+  ggplot(mapping = aes(transaction_year)) +
+  geom_bar() +
+  scale_x_continuous(breaks = seq(2007, 2020)) + 
   labs(
     title = "Number of Expenditures by Year",
     x = "Year",
@@ -234,18 +299,77 @@ summary(vt$reporting_period)
 ## Mutate
 
 Payee and registrant addresses are not divided into street, city, state, and ZIP columns. We can
-either try to seperate the column by comma or simply extract the ZIP code from the end.
-
-```{r add_zip}
-vt <- vt %>% mutate(payee_zip = payee_address %>% str_extract("[\\d-]+$") %>% clean.zipcodes())
-```
+extract the ZIP digits and state abbreviation from the end of the string using regular expressions.
 
 Since we parsed the `transaction_date` as a date file using `readr::col_date()` inside
 `readr::read_csv()`, we can simply extract the year of the transaction with `lubridate::year()`
 
-```{r add_year}
-vt <- vt %>% mutate(transaction_year = year(transaction_date))
+```{r add_zip}
+vt <- vt %>% 
+  mutate(
+    payee_zip = payee_address %>% 
+      str_extract("[\\d-]+$") %>% 
+      clean.zipcodes(),
+    payee_state = payee_address %>% 
+      str_remove("[\\d-]+$") %>% 
+      str_trim() %>% 
+      str_extract("..$"),
+    transaction_year = year(transaction_date)
+    )
 ```
+
+## Clean
+
+There are `r length(vt$payee_address[which(vt$payee_state %out% zipcode$state)])` records
+with invalid `payee_state` values. Aside from those that are "US" (which should be "VT"),
+the rest can be made `NA`, as they represent expenditures made overseas.
+
+```{r fix_state}
+unique(vt$payee_address[which(vt$payee_state %out% zipcode$state)])
+vt$payee_state[which(vt$payee_state == "US")] <- "VT"
+vt$payee_state[which(vt$payee_state %out% zipcode$state)] <- NA
+```
+
+All zipcodes are five digits, but there are a handful that do not exist in our list of valid
+zipcodes. We can remove those we know to be truly invalid, but leave the rest.
+
+```{r check_zip, collapse=TRUE}
+vt$payee_zip[which(nchar(vt$payee_zip) != 5)]
+unique(vt$payee_zip[vt$payee_zip %out% zipcode$zip])
+```
+
+```{r fix_zip}
+vt$payee_zip <- vt$payee_zip %>% 
+  na_if("00000") %>% 
+  na_if("11111") %>% 
+  na_if("33333")
+
+vt %>%
+  filter(!is.na(payee_zip)) %>%
+  filter(payee_zip %out% zipcode$zip) %>% 
+  select(
+    payee_name,
+    payee_address,
+    payee_zip,
+    payee_state
+  ) %>% 
+  distinct() %>% 
+  arrange(payee_state) %>% 
+  print_all()
+```
+
+## Conclude
+
+1. There are `r nrow(vt)` records in the database
+1. The `r sum(vt$dupe_flag)` duplicate records have been flagged with `dupe_flag`
+1. Ranges for continuous variables have been checked and make sense
+1. There are no important variables with blank or missing values
+1. Consistency issues have been fixed with the `stringr` package
+1. The `payee_zip` variable has been extracted from `payee_address` with `stringr::str_extract()`
+and cleaned with `zipcode::clean.zipcode()`
+1. The `transaction_year` variable has been extracted from `transaction_date` with
+`readr::col_date()` and `lubridate::year()`
+1. There is both a registrant and payee for every record.
 
 ## Write
 

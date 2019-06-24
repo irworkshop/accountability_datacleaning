@@ -2,7 +2,7 @@
 title: "Data Diary"
 subtitle: "Vermont Expenditures"
 author: "Kiernan Nicholls"
-date: "2019-06-17 16:21:50"
+date: "2019-06-24 12:06:30"
 output:
   html_document: 
     df_print: tibble
@@ -103,6 +103,7 @@ vt <-
     )
   ) %>% 
   clean_names() %>% 
+  remove_empty("rows") %>% 
   mutate_if(is.character, str_to_upper) %>% 
   rownames_to_column("id")
 ```
@@ -111,7 +112,7 @@ vt <-
 
 ## Explore
 
-There are 39640 records of 15 variables in the full database.
+There are 39572 records of 15 variables in the full database.
 
 
 ```r
@@ -119,23 +120,23 @@ glimpse(sample_frac(vt))
 ```
 
 ```
-#> Observations: 39,640
+#> Observations: 39,572
 #> Variables: 15
-#> $ id                  <chr> "24843", "39544", "2814", "15775", "1566", "22268", "8950", "19783",…
-#> $ transaction_date    <date> 2016-08-31, 2014-07-10, 2018-10-24, 2016-11-17, 2018-11-02, 2016-09…
-#> $ payee_type          <chr> "BUSINESS/GROUP/ORGANIZATION", "BUSINESS/GROUP/ORGANIZATION", "INDIV…
-#> $ payee_name          <chr> "HEARTLAND PAYMENT SYSTEMS", "TRANSFIRST, LLC", "WOLF, DEBORAH", "ER…
-#> $ payee_address       <chr> "90 NASSAU ST, PRINCETON, NJ 08542-4529", "12202 AIRPORT WAY, SUITE …
-#> $ registrant_name     <chr> "MINTER, SUE", "VERMONT-NEA FUND FOR CHILDREN AND PUBLIC EDUCATION",…
-#> $ registrant_type     <chr> "CANDIDATE", "POLITICAL ACTION COMMITTEE", "CANDIDATE", "CANDIDATE",…
-#> $ office              <chr> "GOVERNOR", NA, "STATE SENATE - WASHINGTON", "STATE REPRESENTATIVE -…
-#> $ election_cycle      <chr> "2016 GENERAL", "2014 GENERAL", "2018 GENERAL", "2016 GENERAL", "201…
-#> $ reporting_period    <date> 2016-10-01, 2014-08-18, 2018-11-02, 2016-11-22, 2018-11-20, 2016-10…
+#> $ id                  <chr> "4395", "11782", "14871", "8803", "25511", "24042", "18704", "2383",…
+#> $ transaction_date    <date> 2018-10-05, 2018-02-28, 2017-02-01, 2018-07-14, 2016-08-17, 2016-09…
+#> $ payee_type          <chr> "BUSINESS/GROUP/ORGANIZATION", "BUSINESS/GROUP/ORGANIZATION", "BUSIN…
+#> $ payee_name          <chr> "MAPLEFIELDS", "QUEEN CITY PRINTERS INC.", "AUTHORIZE.NET", "ACTBLUE…
+#> $ payee_address       <chr> "555 FAIRFAX ROAD, SAINT ALBANS, VT 05478", "701 PINE STREET, BURLIN…
+#> $ registrant_name     <chr> "LAROSE, KATE E", "WARREN, JESSE", "VERMONT PROGRESSIVE PARTY", "CAM…
+#> $ registrant_type     <chr> "CANDIDATE", "CANDIDATE", "POLITICAL PARTY COMMITTEE", "CANDIDATE", …
+#> $ office              <chr> "STATE REPRESENTATIVE - FRANKLIN 3-1", "CITY COUNCILOR - 5", NA, "ST…
+#> $ election_cycle      <chr> "2018 GENERAL", "2018 ANNUAL MEETING (ALL TOWNS)", "2018 GENERAL", "…
+#> $ reporting_period    <date> 2018-10-15, 2018-03-20, 2017-07-15, 2018-08-15, 2016-09-01, 2016-10…
 #> $ expenditure_type    <chr> "MONETARY", "MONETARY", "MONETARY", "MONETARY", "MONETARY", "MONETAR…
-#> $ expenditure_purpose <chr> "ADMINISTRATIVE - SALARIES AND WAGES", "BANK CHARGES", "MEDIA - NEWS…
-#> $ expenditure_amount  <dbl> 4224.50, 21.10, 212.70, 262.82, 5.00, 0.04, 400.00, 213.62, 4.36, 19…
+#> $ expenditure_purpose <chr> "VOLUNTEER MEALS", "MEDIA- BROCHURES", "BANK CHARGES", "ACTBLUE FEES…
+#> $ expenditure_amount  <dbl> 47.05, 176.12, 37.54, 54.33, 16.57, 400.00, 100.00, 11.24, 108.00, 0…
 #> $ public_question     <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
-#> $ comments            <chr> "PAYROLL TAX", NA, "REIMBURSEMENT FOR AD IN WATERBURY RECORD AND VAL…
+#> $ comments            <chr> NA, "MEDIA: BROCHURES FINAL INVOICE AMOUNT OF $2692.12 OVER ESTIMATE…
 ```
 
 ### Distinct
@@ -156,161 +157,63 @@ vt %>%
 #> # A tibble: 15 x 3
 #>    variable            n_distinct prop_distinct
 #>    <chr>                    <int>         <dbl>
-#>  1 id                       39640      1       
-#>  2 transaction_date          1729      0.0436  
-#>  3 payee_type                  11      0.000300
-#>  4 payee_name                6875      0.173   
-#>  5 payee_address             9371      0.236   
-#>  6 registrant_name            813      0.0205  
-#>  7 registrant_type              8      0.0002  
+#>  1 id                       39572      1       
+#>  2 transaction_date          1728      0.0437  
+#>  3 payee_type                  10      0.000300
+#>  4 payee_name                6874      0.174   
+#>  5 payee_address             9370      0.237   
+#>  6 registrant_name            812      0.0205  
+#>  7 registrant_type              7      0.0002  
 #>  8 office                     170      0.0043  
-#>  9 election_cycle              16      0.0004  
-#> 10 reporting_period            61      0.0015  
-#> 11 expenditure_type             5      0.0001  
-#> 12 expenditure_purpose         87      0.0022  
-#> 13 expenditure_amount       12633      0.319   
+#>  9 election_cycle              15      0.0004  
+#> 10 reporting_period            60      0.0015  
+#> 11 expenditure_type             4      0.0001  
+#> 12 expenditure_purpose         86      0.0022  
+#> 13 expenditure_amount       12632      0.319   
 #> 14 public_question             11      0.000300
-#> 15 comments                  6750      0.170
+#> 15 comments                  6750      0.171
 ```
 
+We can use `ggplot2::geom_bar()` to explore the distribution of these least distinct nominal
+values.
 
+![](../plots/plot_payee_type-1.png)<!-- -->
+
+![](../plots/plot_reg_type-1.png)<!-- -->
+
+![](../plots/plot_office-1.png)<!-- -->
+
+![](../plots/plot_cycle-1.png)<!-- -->
+
+![](../plots/plot_expend_type-1.png)<!-- -->
+
+![](../plots/plot_expend_amt_type-1.png)<!-- -->
+
+### Duplicate
+
+We can use `janitor::get_dupes()` to create a new table of records with duplicate values across
+all rows. We will flag these with a new `dupe_flag` variable and join them back to the original
+data.
 
 
 ```r
-print_tabyl(vt, payee_type)
-```
+vt_dupes <- vt %>% 
+  select(-id) %>% 
+  get_dupes() %>% 
+  select(-dupe_count) %>% 
+  mutate(dupe_flag = TRUE) %>% 
+  distinct()
 
-```
-#> # A tibble: 11 x 4
-#>    payee_type                      n   percent valid_percent
-#>    <chr>                       <dbl>     <dbl>         <dbl>
-#>  1 BUSINESS/GROUP/ORGANIZATION 30529 0.770         0.771    
-#>  2 INDIVIDUAL                   4635 0.117         0.117    
-#>  3 CANDIDATE                    2666 0.0673        0.0674   
-#>  4 POLITICAL PARTY               786 0.0198        0.0199   
-#>  5 SELF                          731 0.0184        0.0185   
-#>  6 PAC                           141 0.00356       0.00356  
-#>  7 <NA>                           68 0.00172      NA        
-#>  8 FAMILY                         40 0.00101       0.00101  
-#>  9 LEGISLATIVE LEADERSHIP PAC     30 0.000757      0.000758 
-#> 10 PUBLIC QUESTION                11 0.000277      0.000278 
-#> 11 IE-ONLY PAC                     3 0.0000757     0.0000758
-```
-
-```r
-print_tabyl(vt, registrant_type)
-```
-
-```
-#> # A tibble: 8 x 4
-#>   registrant_type                        n percent valid_percent
-#>   <chr>                              <dbl>   <dbl>         <dbl>
-#> 1 CANDIDATE                          31643 0.798         0.800  
-#> 2 POLITICAL PARTY COMMITTEE           3207 0.0809        0.0810 
-#> 3 POLITICAL ACTION COMMITTEE          3100 0.0782        0.0783 
-#> 4 IE-ONLY POLITICAL ACTION COMMITTEE   986 0.0249        0.0249 
-#> 5 LEGISLATIVE LEADERSHIP PAC           479 0.0121        0.0121 
-#> 6 PUBLIC MEDIA ACTIVITIES               86 0.00217       0.00217
-#> 7 PUBLIC QUESTION COMMITTEE             71 0.00179       0.00179
-#> 8 <NA>                                  68 0.00172      NA
-```
-
-```r
-print_tabyl(vt, office)
-```
-
-```
-#> # A tibble: 170 x 4
-#>    office                                  n percent valid_percent
-#>    <chr>                               <dbl>   <dbl>         <dbl>
-#>  1 <NA>                                 7997  0.202        NA     
-#>  2 GOVERNOR                             6527  0.165         0.206 
-#>  3 STATE REPRESENTATIVE - ADDISON 4     3447  0.0870        0.109 
-#>  4 LIEUTENANT GOVERNOR                  2229  0.0562        0.0704
-#>  5 STATE SENATE - CHITTENDEN            1538  0.0388        0.0486
-#>  6 MAYOR -                               927  0.0234        0.0293
-#>  7 ATTORNEY GENERAL                      710  0.0179        0.0224
-#>  8 STATE SENATE - FRANKLIN               555  0.0140        0.0175
-#>  9 STATE REPRESENTATIVE - FRANKLIN 3-1   552  0.0139        0.0174
-#> 10 CITY COUNCILOR -                      538  0.0136        0.0170
-#> # … with 160 more rows
-```
-
-```r
-print_tabyl(vt, election_cycle)
-```
-
-```
-#> # A tibble: 16 x 4
-#>    election_cycle                                           n   percent valid_percent
-#>    <chr>                                                <dbl>     <dbl>         <dbl>
-#>  1 2016 GENERAL                                         21343 0.538         0.539    
-#>  2 2018 GENERAL                                         13238 0.334         0.335    
-#>  3 2014 GENERAL                                          2002 0.0505        0.0506   
-#>  4 2018 ANNUAL MEETING (ALL TOWNS)                       1038 0.0262        0.0262   
-#>  5 2015 ANNUAL MEETING (ALL TOWNS)                        721 0.0182        0.0182   
-#>  6 2017 ANNUAL MEETING (ALL TOWNS)                        473 0.0119        0.0120   
-#>  7 2019 ANNUAL MEETING (ALL TOWNS)                        433 0.0109        0.0109   
-#>  8 2016 ANNUAL MEETING (ALL TOWNS)                        151 0.00381       0.00382  
-#>  9 2016 SPECIAL TOWN MEETING (ALL TOWNS)                   93 0.00235       0.00235  
-#> 10 <NA>                                                    68 0.00172      NA        
-#> 11 2017 SOUTH BURLINGTON BUDGET VOTE (SOUTH BURLINGTON)    33 0.000832      0.000834 
-#> 12 2017 BURLINGTON CITY COUNCIL (BURLINGTON)               32 0.000807      0.000809 
-#> 13 2018 LOCAL ELECTION (MONTPELIER)                         5 0.000126      0.000126 
-#> 14 2016 AUGUST SPECIAL TOWN MEETING (ALL TOWNS)             4 0.000101      0.000101 
-#> 15 2017 SPECIAL MEETING-ZONING (JERICHO)                    4 0.000101      0.000101 
-#> 16 2020 GENERAL                                             2 0.0000505     0.0000505
-```
-
-```r
-print_tabyl(vt, expenditure_type)
-```
-
-```
-#> # A tibble: 5 x 4
-#>   expenditure_type         n percent valid_percent
-#>   <chr>                <dbl>   <dbl>         <dbl>
-#> 1 MONETARY             38431 0.970         0.971  
-#> 2 IN-KIND                699 0.0176        0.0177 
-#> 3 RETURN CONTRIBUTIONS   343 0.00865       0.00867
-#> 4 LOAN PAYMENT            99 0.00250       0.00250
-#> 5 <NA>                    68 0.00172      NA
-```
-
-```r
-print_tabyl(vt, expenditure_purpose)
-```
-
-```
-#> # A tibble: 87 x 4
-#>    expenditure_purpose                     n percent valid_percent
-#>    <chr>                               <dbl>   <dbl>         <dbl>
-#>  1 ACTBLUE FEES                         4652  0.117         0.118 
-#>  2 BANK CHARGES                         3644  0.0919        0.0921
-#>  3 ADMINISTRATIVE - SALARIES AND WAGES  2682  0.0677        0.0678
-#>  4 CONTRIBUTION TO REGISTRANT           2358  0.0595        0.0596
-#>  5 POSTAGE                              2063  0.0520        0.0521
-#>  6 OTHER                                1831  0.0462        0.0463
-#>  7 MEDIA - NEWSPAPER                    1801  0.0454        0.0455
-#>  8 MEDIA - ONLINE ADVERTISING           1560  0.0394        0.0394
-#>  9 OFFICE SUPPLIES                      1317  0.0332        0.0333
-#> 10 MEDIA - POSTCARDS                    1202  0.0303        0.0304
-#> # … with 77 more rows
+vt <- vt %>% 
+  left_join(vt_dupes) %>% 
+  mutate(dupe_flag = !is.na(dupe_flag))
 ```
 
 ### Missing
 
-The variables also vary in their degree of values that are `NA` (missing). 
-
-There are 68 records with `NA` values in many _all_ variables.
-These can be dropped with `janitor::remove_empty("rows")`
-
-
-```r
-vt <- remove_empty(vt, "rows")
-```
-
-The remaining missing values in each variable can be found below:
+The variables also vary in their degree of values that are `NA` (missing). Note that 68 rows were
+removed using `janitor::remove_empty()` during our initial reading of the file. The remaining count
+of missing values in each variable can be found below:
 
 
 ```r
@@ -323,24 +226,49 @@ vt %>%
 ```
 
 ```
-#> # A tibble: 15 x 3
+#> # A tibble: 16 x 3
 #>    variable             n_na prop_na
 #>    <chr>               <int>   <dbl>
-#>  1 id                      0 0      
-#>  2 transaction_date       68 0.00172
-#>  3 payee_type             68 0.00172
-#>  4 payee_name             68 0.00172
-#>  5 payee_address          68 0.00172
-#>  6 registrant_name        68 0.00172
-#>  7 registrant_type        68 0.00172
-#>  8 office               7997 0.202  
-#>  9 election_cycle         68 0.00172
-#> 10 reporting_period       68 0.00172
-#> 11 expenditure_type       68 0.00172
-#> 12 expenditure_purpose    68 0.00172
-#> 13 expenditure_amount     68 0.00172
-#> 14 public_question     39569 0.998  
-#> 15 comments            25957 0.655
+#>  1 id                      0   0    
+#>  2 transaction_date        0   0    
+#>  3 payee_type              0   0    
+#>  4 payee_name              0   0    
+#>  5 payee_address           0   0    
+#>  6 registrant_name         0   0    
+#>  7 registrant_type         0   0    
+#>  8 office               7929   0.200
+#>  9 election_cycle          0   0    
+#> 10 reporting_period        0   0    
+#> 11 expenditure_type        0   0    
+#> 12 expenditure_purpose     0   0    
+#> 13 expenditure_amount      0   0    
+#> 14 public_question     39501   0.998
+#> 15 comments            25889   0.654
+#> 16 dupe_flag               0   0
+```
+
+Most variables have zero `NA` values, aside from the supplemental `public_question` and `comments` 
+variables. `NA` values in the `office` variable represent expenditures from non-candidate
+registrants.
+
+
+```r
+vt %>% 
+  group_by(registrant_type) %>% 
+  summarise(n_na = sum(is.na(office)))
+```
+
+```
+#> # A tibble: 7 x 2
+#>   registrant_type                     n_na
+#>   <chr>                              <int>
+#> 1 CANDIDATE                              0
+#> 2 IE-ONLY POLITICAL ACTION COMMITTEE   986
+#> 3 LEGISLATIVE LEADERSHIP PAC           479
+#> 4 POLITICAL ACTION COMMITTEE          3100
+#> 5 POLITICAL PARTY COMMITTEE           3207
+#> 6 PUBLIC MEDIA ACTIVITIES               86
+#> 7 PUBLIC QUESTION COMMITTEE             71
 ```
 
 ### Ranges
@@ -356,22 +284,8 @@ summary(vt$expenditure_amount)
 ```
 
 ```
-#>      Min.   1st Qu.    Median      Mean   3rd Qu.      Max.      NA's 
-#>      0.01     14.52     75.00    695.26    327.54 288221.00        68
-```
-
-
-```r
-vt %>% 
-  ggplot(mapping = aes(expenditure_amount)) +
-  geom_histogram() +
-  scale_x_continuous(trans = "log10", labels = scales::dollar) +
-  facet_wrap(~expenditure_type, scales = "free_y") +
-  labs(
-    title = "Distribution of VT Expenditures",
-    x = "Expenditure Amount (USD)",
-    y = "Number of Expenditures"
-  )
+#>      Min.   1st Qu.    Median      Mean   3rd Qu.      Max. 
+#>      0.01     14.52     75.00    695.26    327.54 288221.00
 ```
 
 ![](../plots/plot_exp_amt_type-1.png)<!-- -->
@@ -385,17 +299,17 @@ summary(vt$transaction_date)
 ```
 
 ```
-#>         Min.      1st Qu.       Median         Mean      3rd Qu.         Max.         NA's 
-#> "2008-08-08" "2016-06-17" "2016-10-01" "2017-02-08" "2018-06-13" "2019-04-11"         "68"
+#>         Min.      1st Qu.       Median         Mean      3rd Qu.         Max. 
+#> "2008-08-08" "2016-06-17" "2016-10-01" "2017-02-08" "2018-06-13" "2019-04-11"
 ```
 
 
 ```r
 vt %>% 
   group_by(transaction_year = year(transaction_date)) %>% 
-  count() %>% 
-  ggplot(mapping = aes(transaction_year, n)) +
-  geom_col() +
+  ggplot(mapping = aes(transaction_year)) +
+  geom_bar() +
+  scale_x_continuous(breaks = seq(2007, 2020)) + 
   labs(
     title = "Number of Expenditures by Year",
     x = "Year",
@@ -414,27 +328,169 @@ summary(vt$reporting_period)
 ```
 
 ```
-#>         Min.      1st Qu.       Median         Mean      3rd Qu.         Max.         NA's 
-#> "2014-08-18" "2016-07-15" "2016-10-15" "2017-03-21" "2018-07-15" "2019-07-15"         "68"
+#>         Min.      1st Qu.       Median         Mean      3rd Qu.         Max. 
+#> "2014-08-18" "2016-07-15" "2016-10-15" "2017-03-21" "2018-07-15" "2019-07-15"
 ```
 
 ## Mutate
 
 Payee and registrant addresses are not divided into street, city, state, and ZIP columns. We can
-either try to seperate the column by comma or simply extract the ZIP code from the end.
-
-
-```r
-vt <- vt %>% mutate(payee_zip = payee_address %>% str_extract("[\\d-]+$") %>% clean.zipcodes())
-```
+extract the ZIP digits and state abbreviation from the end of the string using regular expressions.
 
 Since we parsed the `transaction_date` as a date file using `readr::col_date()` inside
 `readr::read_csv()`, we can simply extract the year of the transaction with `lubridate::year()`
 
 
 ```r
-vt <- vt %>% mutate(transaction_year = year(transaction_date))
+vt <- vt %>% 
+  mutate(
+    payee_zip = payee_address %>% 
+      str_extract("[\\d-]+$") %>% 
+      clean.zipcodes(),
+    payee_state = payee_address %>% 
+      str_remove("[\\d-]+$") %>% 
+      str_trim() %>% 
+      str_extract("..$"),
+    transaction_year = year(transaction_date)
+    )
 ```
+
+## Clean
+
+There are 39 records
+with invalid `payee_state` values. Aside from those that are "US" (which should be "VT"),
+the rest can be made `NA`, as they represent expenditures made overseas.
+
+
+```r
+unique(vt$payee_address[which(vt$payee_state %out% zipcode$state)])
+```
+
+```
+#>  [1] "HUDSONWEG 8, VENLO 5928LW, VT 5928L"                                                         
+#>  [2] "SOFTWARE INDUSTRY BASE, SHENZHEN, 518000, CH"                                                
+#>  [3] "HAUTEVILLE TRUST (BVI) LIMITED 3483 TORTOLA,, ROAD TOWN, 6971918, BRITISH VIRGIN ISLANDS, VQ"
+#>  [4] "HUDSONWEG 8 , VENLO, 5928LW, NL"                                                             
+#>  [5] "UNIT 6A, SOUTH RING BUSINESS PARK, KINSALE RD, BALLYPHEHANE, CORK, EI"                       
+#>  [6] "HUDSONWEG 8, VENLO, NL"                                                                      
+#>  [7] "EASYHI B.V. , POSTBUS 75023 , 1070 AA AMSTERDAM , NI"                                        
+#>  [8] "HUSONWEG8, VENLO, THE NETHERLANDS 5928LW, NT"                                                
+#>  [9] "HUDSONWEG 8, VENIO, NL"                                                                      
+#> [10] "WEBAVENUE LDA. RUA TOMAS DA ANUNCIACAO N14, ODIVELAS, 2ESQ, 2675-464, PO"                    
+#> [11] "WERDSTRASSE 21, CH-8021 ZURICH, SZ"                                                          
+#> [12] "HUDSONWEG 8, 5928LW, VENLO, NL"                                                              
+#> [13] "HUDSONWEG 8, VENLO, 5928LW, NL"                                                              
+#> [14] "22 GROVE ST, APT A, BURLINGTON, US"                                                          
+#> [15] "85 SWIFT ST, SOUTH BURLIINGOTN, US"                                                          
+#> [16] "75 S WINOOSKI AVE, BURLINGTON, US"                                                           
+#> [17] "18 SYKES MTN AVE, WHITE RIVER JCT, US"                                                       
+#> [18] "15609 UPPER CAROLINA, ST JOHN, UV 00830-9520"                                                
+#> [19] "PO BOX 6347, CHARLOTTE AMALIE, UV 00804-6347"
+```
+
+```r
+vt$payee_state[which(vt$payee_state == "US")] <- "VT"
+vt$payee_state[which(vt$payee_state %out% zipcode$state)] <- NA
+```
+
+All zipcodes are five digits, but there are a handful that do not exist in our list of valid
+zipcodes. We can remove those we know to be truly invalid, but leave the rest.
+
+
+```r
+vt$payee_zip[which(nchar(vt$payee_zip) != 5)]
+#> character(0)
+unique(vt$payee_zip[vt$payee_zip %out% zipcode$zip])
+#>  [1] "00000" NA      "04501" "86260" "05256" "02843" "01544" "06660" "05642" "05948" "05645"
+#> [12] "90425" "00584" "05409" "05410" "05643" "05202" "40866" "90420" "05611" "05000" "05503"
+#> [23] "05243" "05628" "42019" "03434" "70120" "05480" "05092" "11111" "33333" "00294" "05434"
+#> [34] "05389" "94113" "06048" "05412" "00540" "01617" "76144" "30000" "05646" "06541" "05755"
+#> [45] "09520"
+```
+
+
+```r
+vt$payee_zip <- vt$payee_zip %>% 
+  na_if("00000") %>% 
+  na_if("11111") %>% 
+  na_if("33333")
+
+vt %>%
+  filter(!is.na(payee_zip)) %>%
+  filter(payee_zip %out% zipcode$zip) %>% 
+  select(
+    payee_name,
+    payee_address,
+    payee_zip,
+    payee_state
+  ) %>% 
+  distinct() %>% 
+  arrange(payee_state) %>% 
+  print_all()
+```
+
+```
+#> # A tibble: 44 x 4
+#>    payee_name                   payee_address                                 payee_zip payee_state
+#>    <chr>                        <chr>                                         <chr>     <chr>      
+#>  1 GODADDY                      14455 N HAYDEN RD, SCOTTSDALE, AZ 86260       86260     AZ         
+#>  2 FACEBOOK                     1601 WILLOW RD, MENIO PARK, CA 90425          90425     CA         
+#>  3 PAYPAL                       2211NORTH FIRST STREET, SAN JOSE, CA 40866    40866     CA         
+#>  4 FACEBOOK                     1 HACKER WAY, MENLO PARK, CA 90420            90420     CA         
+#>  5 WEEBLY                       564 PACIFIC AVENUE , SUITE 250, SAN FRANCISC… 94113     CA         
+#>  6 ACT BLUE                     ROAD, SOMERVILLE, MA 01544                    01544     MA         
+#>  7 RIMUHOSTING                  60 VICTORIA ST, CAMBRIDGE, MA 03434           03434     MA         
+#>  8 CT ONLINE                    AMHERST, AMHERST, MA 70120                    70120     MA         
+#>  9 BAKERS' BEST                 150 GOULD ST, NEEDHAM, MA 00294               00294     MA         
+#> 10 APPLE STORE                  BOYLSTON ST, BOSTON , MA 01617                01617     MA         
+#> 11 CIRCLE K                     MAIN ST, W. LEBANON, NH 06048                 06048     NH         
+#> 12 U PRINTING                   DALLAS, DALLAS, TX 42019                      42019     TX         
+#> 13 INFOCUS CAMPAIGNS            PO BOX 10726, FORT WORTH, TX 76144            76144     TX         
+#> 14 VERMONT FEDERAL CREDIT UNION 84 PINE STREET, BURLINGTON, VT 04501          04501     VT         
+#> 15 CRISTO                       MAIN STREET, MANCHESTER , VT 05256            05256     VT         
+#> 16 HARDWICK GAZETTE             P.O. BOX 367, HARDWICK, VT 02843              02843     VT         
+#> 17 US POSTAL SERVICE            1115 ROUTE 100B, MORETOWN, VT 06660           06660     VT         
+#> 18 WORKSAFE                     115 INDUSTRIAL LANE, BARRE, VT 05642          05642     VT         
+#> 19 TOWN OF HARTLAND             1 QUECHEE ROAD, HARTLAND, VT 05948            05948     VT         
+#> 20 PELKEY, CHRIS                169 MIDDLE RD, GRANITEVILLE, VT 05645         05645     VT         
+#> 21 WONDERARTS                   165 E CRAFTSBURY RD,, GREENSBORO, VT 0584     00584     VT         
+#> 22 PAYDATA PAYROLL SERVICES IN… PO BOX 706, ESSEX JCT, VT 05409               05409     VT         
+#> 23 PAYDATA PAYROLL SERVICES IN… PO BOX 706, ESSEX JCT, VT 05410               05410     VT         
+#> 24 PRICE CHOPPER                AMES DRIVE , BARRE, VT 05643                  05643     VT         
+#> 25 ERICA MARTHAGE FOR STATES A… 185 NORTH ST, BENNINGTON, VT 05202            05202     VT         
+#> 26 ESPRESSO BUENO               248 N MAIN ST, BARRE, VT 05642                05642     VT         
+#> 27 YACOVONE, DAVID              28 MANSFIELD AVENUE, MORRISVILLE, VT 05611    05611     VT         
+#> 28 GO DADDY                     WWW.GODADDY.COM, NONE, VT 05000               05000     VT         
+#> 29 LANGROCK, KATIE              6 GREEN DOLPHIN DRIVE, SOUTH BURLINGTON, VT … 05503     VT         
+#> 30 LUEBKE, DOLORES              12 MIDDLE RD, PAWLET, VT 05243                05243     VT         
+#> 31 TOLL, CATHERINE              PO BOX 192, DANVILLE, VT 05628                05628     VT         
+#> 32 VERMONT REPUBLICN PARTY      115 INDUSTRIAL LANE, SUITE 1, BERLIN, VT 056… 05642     VT         
+#> 33 STAPLES                      861 WILLISON ROAD, SOUTH BURLINGTON , VT 054… 05480     VT         
+#> 34 BENTLEY'S                    1 ELM STREET, WOODSTOCK, VT 05092             05092     VT         
+#> 35 SWEENEY, KRYSTAL LEE         1105 QUAKER ST, LINCOLN, VT 05434             05434     VT         
+#> 36 NORTHFIELD SAVINGS BANK      291 NORTH MAIN STREET, BARRE, VT 05643        05643     VT         
+#> 37 PATT, AVRAM                  138 WEST HILL ROAD, WORCESTER, VT 05389       05389     VT         
+#> 38 CUMBERLFARMS                 MAIN &AMP; BRIDGE ST, RICHMOND, VT 05412      05412     VT         
+#> 39 RADIO SHACK                  SHELBOURN RD, BURLINGTON, VT 00540            00540     VT         
+#> 40 ENVATO PTY LTD               121 KING STREET, , VICTORIA, AUSTRALIA, MELB… 30000     VT         
+#> 41 THE MAILING CENTER           PO BOX 646, BARRE, VT 05646                   05646     VT         
+#> 42 ISABELLE, GUY                5 HILLCREST LANE, BARRE, VT 06541             06541     VT         
+#> 43 MANCHESTER BEVERAGE          ROUTE 11/30, MANCHESTER, VT 05755             05755     VT         
+#> 44 VISTA PRINT                  INTERNET, BENNINGTON, VT 09520                09520     VT
+```
+
+## Conclude
+
+1. There are 39572 records in the database
+1. The 3513 duplicate records have been flagged with `dupe_flag`
+1. Ranges for continuous variables have been checked and make sense
+1. There are no important variables with blank or missing values
+1. Consistency issues have been fixed with the `stringr` package
+1. The `payee_zip` variable has been extracted from `payee_address` with `stringr::str_extract()`
+and cleaned with `zipcode::clean.zipcode()`
+1. The `transaction_year` variable has been extracted from `transaction_date` with
+`readr::col_date()` and `lubridate::year()`
+1. There is both a registrant and payee for every record.
 
 ## Write
 
