@@ -1,0 +1,1247 @@
+---
+title: "Data Diary"
+subtitle: "Nevada Contributions"
+author: "Kiernan Nicholls"
+date: "`r format(Sys.time())`"
+output:
+  html_document: 
+    df_print: tibble
+    fig_caption: yes
+    highlight: tango
+    keep_md: yes
+    max.print: 32
+    toc: yes
+    toc_float: no
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE, purl=FALSE}
+library(knitr)
+opts_chunk$set(
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  error = FALSE,
+  comment = "#>",
+  fig.path = "../plots/",
+  fig.width = 10,
+  dpi = 300
+)
+options(width = 99)
+```
+
+## Objectives
+
+1. How many records are in the database?
+1. Check for duplicates
+1. Check ranges
+1. Is there anything blank or missing?
+1. Check for consistency issues
+1. Create a five-digit ZIP Code called ZIP5
+1. Create a YEAR field from the transaction date
+1. For campaign donation data, make sure there is both a donor AND recipient
+
+## Packages
+
+The following packages are needed to collect, manipulate, visualize, analyze, and communicate
+these results. The `pacman` package will facilitate their installation and attachment.
+
+```{r p_load, message=FALSE, warning=FALSE, error=FALSE}
+pacman::p_load(
+  tidyverse, # data manipulation
+  lubridate, # datetime strings
+  magrittr, # pipe opperators
+  janitor, # dataframe clean
+  zipcode, # clean & databse
+  batman, # parse yes & no
+  refinr, # cluster & merge
+  rvest, # scrape website
+  knitr, # knit documents
+  here, # locate storage
+  fs # search storage 
+)
+```
+
+```{r fix_fun, echo=FALSE}
+here <- here::here
+"%out%" <- Negate("%in%")
+print_all <- function(df) df %>% print(n = nrow(.)) 
+```
+
+This document should be run as part of the `R_campfin` project, which lives as a sub-directory
+of the more general, language-agnostic `irworkshop/accountability_datacleaning` 
+[GitHub repository](https://github.com/irworkshop/accountability_datacleaning).
+
+The `R_campfin` project uses the 
+[RStudio projects](https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects)
+feature and should be run as such. The project also uses the dynamic 
+[`here::here()`](https://github.com/jennybc/here_here) tool for
+file paths relative to _your_ machine.
+
+```{r where_here, collapse=TRUE}
+# where was this document knit?
+here::here()
+```
+
+## Data
+
+If the raw data has not been downloaded, it can be retrieved from the 
+[Oklahoma Ethics Commision's website](https://www.ok.gov/ethics/public/login.php) as a ZIP archive.
+
+> Everyone has access to the public disclosure system, the only secured access point is the
+downloadable raw data option. This option provides an entire database dump in comma separated value
+(.csv) or tab delimited (.txt) formats. This secure area is intended for use by the media and
+import into an existing database.
+
+```{r any_old_files, echo=FALSE}
+any_old_files <- function(path, glob) {
+  files <- dir_ls(
+    path = path,
+    type = "file",
+    glob = glob
+  )
+  if (length(files) == 0) {
+    TRUE
+  } else {
+    file_info(files) %>% 
+      pull(modification_time) %>% 
+      floor_date("day") %>% 
+      equals(today()) %>% 
+      not() %>% 
+      any()
+  }
+}
+```
+
+```{r download_zip}
+dir_create(here("ok", "contribs", "data", "raw"))
+if (any_old_files(here("ok", "contribs", "data", "raw"), "*.zip")) {
+  download.file(
+    url = "https://www.ok.gov/ethics/public/dfile.php?action=csv",
+    destfile = here("ok", "contribs", "data", "raw", "ethicscsvfile.zip")
+  )
+}
+```
+
+There are 48 individual CSV files contained within the ZIP archive. Many of these files are not
+relevant to this project, but all will be unzipped into the `data/raw` directory.
+
+```{r unzip_list, echo=FALSE}
+unzip(
+  zipfile = here("ok", "contribs", "data", "raw", "ethicscsvfile.zip"),
+  list = TRUE
+)
+```
+
+If these files have not yet been unzipped, they will be now.
+
+```{r unzip}
+if (any_old_files(here("ok", "contribs", "data", "raw"), "*.csv")) {
+  unzip(
+    zipfile = here("ok", "contribs", "data", "raw", "ethicscsvfile.zip"),
+    exdir = here("ok", "contribs", "data", "raw"),
+    overwrite = TRUE
+  )
+}
+```
+
+## Read
+
+The data of interest is spread across a number of different files than can be joined along their
+respective `*_id` variables. The `transaction.csv` contains the list of contributions and expenses,
+and data on those transactions is spread across other tables. 
+
+The relationship between these files is described in the `data/relations_db.xls` Excel file.
+Descriptions for each of these files is provided int the `data/descriptions.doc` Word file.
+
+In general, there are three _types_ of files that need to be read and joined together
+
+1. All transactions
+    * `transaction.csv`
+1. Contributor information
+    * `contributor.csv`
+      * `cont_type.csv`
+    * `individual_cont.csv`
+    * `business_cont.csv`
+    * `committee_cont.csv`
+    * `vendor_cont.csv`
+1. Recipient information
+    * `so1.csv`
+    * `so2.csv`
+    * `party.csv`
+    * `district.csv`
+    * `office.csv`
+    * `affiliation.csv`
+    * `report.csv`
+    * `lump_fund.csv`
+    * `surplus.csv`
+    * `refund.csv`
+
+They will each be read as data frames using `readr::read_csv()`. All files contain an erroneous
+trailing column in the header resulting in an empty column that will be removed. All variable names
+will be made "clean" (lowercase and snake_case) using `janitor::clean_names()`.
+
+### Transactions
+
+> Holds all the contribution and expenditure transactions. Has the transaction date, amount, the contributor id and report number (report_num) that it ties back to in the report table.
+
+```{r read_transaction}
+transactions <- 
+  read_csv(
+    file = here("ok", "contribs", "data", "raw", "transaction.csv"),
+    col_types = cols(
+      TRANS_INDEX = col_character(),
+      TRANSACTION_DATE = col_date("%d-%b-%y"),
+      CONTRIBUTOR_ID = col_character(),
+      TRANS_AMOUNT = col_double(),
+      REP_NUM = col_character()
+    )
+  ) %>% 
+  remove_empty("cols") %>% 
+  clean_names() %>% 
+  rename(
+    cont_id = contributor_id,
+    trans_date = transaction_date
+  )
+
+print(transactions)
+```
+
+### Contributors
+
+> Holds address, phone and type of any contributor using [`contributor_id`] as its identifier in
+other tables.
+
+```{r read_contributor}
+contributors <- 
+  here("ok", "contribs", "data", "raw", "contributor.csv") %>% 
+  read_csv(col_types = cols(.default = "c")) %>% 
+  remove_empty("cols") %>% 
+  clean_names() %>% 
+  rename(
+    cont_id = contributor_id,
+    cont_type = type,
+    cont_street = street,
+    cont_city = city,
+    cont_state = state,
+    cont_zip = zip
+  )
+
+print(contributors)
+```
+
+> Holds the different contributor types available (Individual, Business, Committee, Vendor)
+
+```{r read_cont_type}
+cont_types <-
+  here("ok", "contribs", "data", "raw", "cont_type.csv") %>% 
+  read_csv(col_types = cols(.default = "c")) %>% 
+  remove_empty("cols") %>% 
+  clean_names()
+```
+
+#### Individual Contributors
+
+> Holds information relating to any individual contributor. Name, employer and occupation. Contributor id is the key that goes back to the contributor table and into either the transaction table for a transaction list or contributor aggregate table for tie ins to the `ethics_num` (committee) with aggregate totals.
+
+```{r read_individual_cont}
+individual_conts <-
+  here("ok", "contribs", "data", "raw", "individual_cont.csv") %>% 
+  read_csv(col_types = cols(.default = "c")) %>% 
+  remove_empty("cols") %>% 
+  clean_names() %>%
+  rename(
+    cont_id = contributor_id,
+    cont_employer = employer,
+    cont_occupation = occupation
+  )
+```
+
+#### Business Contributors
+
+> Holds the business name (`cont_name`) and business activity of a business contributor.
+Contributor id is the key that goes back to the contributor table and into either the transaction
+table for a transaction list or contributor aggregate table for tie ins to the `ethics_num`
+(committee) with aggregate totals.
+
+```{r read_business_cont}
+business_conts <- 
+  here("ok", "contribs", "data", "raw", "business_cont.csv") %>% 
+  read_csv(col_types = cols(.default = "c")) %>% 
+  remove_empty("cols") %>% 
+  clean_names() %>% 
+  rename(
+    cont_bname = cont_name,
+    cont_activity = business_activity
+  )
+```
+
+#### Committee Contributors
+
+> Holds the principal interest, contributor committee name and contributor FEC number and
+committees ethics number for any committee contributors (`contributor_id`). Contributor id is the
+key that goes back to the contributor table and into either the transaction table for a transaction
+list or contributor aggregate table for tie ins to the ethics_num (committee) with aggregate
+totals.
+
+```{r read_committee_cont}
+committee_conts <-  
+  here("ok", "contribs", "data", "raw", "committee_cont.csv") %>% 
+  read_csv(
+    col_types = cols(.default = "c")
+  ) %>% 
+  remove_empty("cols") %>% 
+  clean_names() %>% 
+  rename(
+    cont_interest = principal_interest,
+    cont_id = id,
+    ethics_id = ethics_num,
+    cont_cname = committee_name
+  )
+```
+
+#### Vendor Contributors
+
+> Holds the Vendor Contributor name for any expenditure transaction
+
+```{r read_vendor_cont}
+vendor_conts <-
+  here("ok", "contribs", "data", "raw", "vendor_cont.csv") %>% 
+  read_csv(col_types = cols(.default = "c")) %>% 
+  remove_empty("cols") %>% 
+  clean_names() %>% 
+  rename(cont_vname = cont_name)
+```
+
+### Recipients
+
+The information on the recipients of each transaction are held in other databases.
+
+#### Statement of Organization
+
+The "SO-1" form applies to committees formed to support a political candidate.
+
+```{r read_so1}
+so1 <-
+  here("ok", "contribs", "data", "raw", "so1.csv") %>% 
+  read_csv(
+    col_types = cols(
+      .default = col_character(),
+      STRICKEN_WITHDRAWN = col_logical(),
+      ORGANIZATION_DATE = col_date("%m/%d/%Y"),
+      STMT_OF_INTENT = col_date("%m/%d/%Y"),
+      STRICKEN_WITHDRAWN  = col_date("%m/%d/%Y")
+    )
+  ) %>% 
+  remove_empty("cols") %>% 
+  clean_names() %>% 
+  rename(ethics_id = ethics_num) %>% 
+  mutate(special_election = to_logical(special_election))
+```
+
+The "SO-2" form applies to committees formed to support non-candidate issues.
+
+```{r read_so2}
+so2 <- 
+  here("ok", "contribs", "data", "raw", "so2.csv") %>% 
+  read_csv(
+    col_types = cols(
+      .default = col_character(),
+      ORGANIZATION_DATE = col_date("%m/%d/%Y")
+    )
+  ) %>% 
+  remove_empty("cols") %>% 
+  clean_names() %>% 
+  rename(ethics_id = ethics_num) %>% 
+  mutate(stmnt_of_intent = to_logical(stmnt_of_intent))
+```
+
+#### Parties
+
+> Has the different party affiliation types
+
+```{r read_party}
+parties <- 
+  here("ok", "contribs", "data", "raw", "party.csv") %>% 
+  read_csv(
+    col_types = cols(
+      VIEWABLE   = col_logical(),
+      PARTY_ID   = col_character(),
+      PARTY_DESC = col_character()
+    )
+  ) %>% 
+  remove_empty("cols") %>% 
+  clean_names() %>% 
+  rename(party_viewable = viewable)
+```
+
+#### Offices
+
+> Description of office types (mainly for elections)
+
+```{r read_office}
+offices <- 
+  here("ok", "contribs", "data", "raw", "office.csv") %>% 
+  read_csv(col_types = cols(.default = "c")) %>% 
+  remove_empty("cols") %>% 
+  clean_names() %>% 
+  rename(office_id = id)
+```
+
+#### Districts
+
+> List of the districts for elections
+
+```{r read_district}
+districts <-
+  here("ok", "contribs", "data", "raw", "district.csv") %>% 
+  read_csv(col_types = cols(.default = "c")) %>% 
+  remove_empty("cols") %>% 
+  clean_names()
+```
+
+#### Candidates
+
+> Holds the candidate name and birthdate tied to the specific ethics_num (committee)
+
+```{r read_candidate}
+candidates <- 
+  here("ok", "contribs", "data", "raw", "candidate.csv") %>% 
+  read_csv(col_types = cols(.default = "c")) %>% 
+  remove_empty("cols") %>% 
+  clean_names() %>% 
+  rename(ethics_id = ethics_num)
+```
+
+#### Lump Funds
+
+> Holds lump fund information for the respective report_num
+
+```{r read_lump_fund}
+lump_funds <- 
+  here("ok", "contribs", "data", "raw", "lump_fund.csv") %>% 
+  read_csv(
+    col_types = cols(
+      .default = col_character(),
+      LUMP_AMOUNT = col_double(),
+      LUMP_DATE = col_date("%d-%b-%y")
+    )
+  ) %>% 
+  remove_empty("cols") %>% 
+  clean_names()
+```
+
+### Report
+
+> Holds all the `report_num` for all filed reports in the system from the SO1, SO2s to all the C1R,
+C3R, C4R, and C5R reports. C6R reports are stored in the c6r_report table. Contains the date the
+report was submitted, the `ethics_num` (committee) that it ties to, period id, the report type,
+signature field, admin entered (means the report was filed by administrator), the amended reference
+(if null, is the latest report, if not then that report was amended to the `report_num` that is
+displayed in that field.), the final flag determines if that was the final report they will be
+filing and `supp_year` is just a field on the form to show the year.
+
+```{r read_report}
+reports <- 
+  here("ok", "contribs", "data", "raw", "report.csv") %>% 
+  read_csv(
+    col_types = cols(
+      .default = col_character(),
+      SUBMITTED_DATE = col_date("%d-%b-%y"),
+      FINAL = col_logical()
+    )
+  ) %>% 
+  remove_empty("cols") %>% 
+  clean_names() %>% 
+  rename(ethics_id = ethics_num)
+```
+
+> Description of each type of report available  (SO1, SO2, C1R, C3R, C4R, C5R, C6R)
+
+```{r read_rep_type}
+rep_types <- 
+  here("ok", "contribs", "data", "raw", "report_type.csv") %>% 
+  read_csv(col_types = cols(.default = "c")) %>%
+  remove_empty("cols") %>% 
+  clean_names()
+```
+
+## Join
+
+Our primary interest is when a transaction was made, for how much, from whom, and to whom. The
+transaction database contains the when and how much, but uses keys to identify the who.
+
+The contributor of a transaction (giving money) is identified by the `cont_id` variable.
+
+The recipient of a transaction (getting money) are the ones filing the report on which each
+transaction appears, identifying by the `rep_num` variable. In the database of reports, the filer
+of each report is identified with their `ethics_id`.
+
+By joining each transaction with the filer of the respective report, we can identify the filer.
+
+```{r join_recs}
+ok <- left_join(
+  x = transactions,
+  y = reports %>% select(rep_num, ethics_id), 
+  by = "rep_num"
+)
+
+print(ok)
+```
+
+To improve the searchability of this database of transactions, we will add the name and location
+of each contributor and recipient.
+
+### Contributors
+
+First, we will join the `contributors` table, which contains geographic data on each contributor
+(city, state, zip), which the full tables of each contributor type.
+
+There are four types of contributors, each identified with different `cont_*name` variables:
+
+1. Individuals with `cont_fname` (first), `cont_mname` (middle), and `cont_lname` (last)
+    * With `cont_employer` and `cont_occupation`
+1. Businesses with a `cont_bname`
+    * With `cont_activity`
+1. Committees with a `cont_cname`
+    * with `cont_interest` and `ethics_id`
+1. Vendors with a `cont_vname`
+    * With OK Ethics Commission `ethics_id`
+    
+It's important to note that the transactions database contains both contributions _and_
+expenditures reported by the filer. For expenditures, the "contributor" is actually the vendor
+recipient of the money. These vendor transactions will be filtered out.
+
+```{r join_conts, collapse=TRUE}
+vendor_conts <- vendor_conts %>% 
+  left_join(contributors, by = "cont_id")
+
+nrow(vendor_conts)
+```
+
+### Recipients
+
+When a committee is formed to receive contributions, the file a "Statement of Organization" report.
+Committees formed to receive funds on behalf of a candidate file an "SO-1" form, and non-candidate
+organizations file an "SO-2" form.
+
+These forms contain a lot of information, but we will extract only the geographic information of
+each, so that we can better search the contributions and expenditures in the transactions database.
+
+First, we will create a new table of candidate committee information from the SO-1 database.
+
+```{r can_recs}
+candidate_recs <- so1 %>%
+  left_join(candidates, by = "ethics_id") %>% 
+  left_join(parties, by = c("party_num" = "party_id")) %>% 
+  left_join(offices, by = c("office_num" = "office_id")) %>% 
+  rename(
+    rec_street   = street,
+    rec_city     = city,
+    rec_state    = state, 
+    rec_zip      = zip,
+    rec_cname    = comname,
+    rec_party    = party_desc,
+    rec_office   = office_desc
+  ) %>% 
+  select(ethics_id, starts_with("rec_")) %>%
+  # multiple entries per ethics id
+  # make all upper
+  mutate_if(is_character, str_to_upper) %>% 
+  # take only the first
+  group_by(ethics_id) %>% 
+  slice(1) %>% 
+  ungroup() %>% 
+  distinct()
+
+print(candidate_recs)
+```
+
+The same can be done with non-candidate committee recipients from SO-2 filings.
+
+```{r com_recs}
+committee_recs <- so2 %>% 
+  rename(
+    rec_cname    = comname,
+    rec_street   = street,
+    rec_city     = city,
+    rec_state    = state,
+    rec_zip      = zip
+  ) %>% 
+  select(ethics_id, starts_with("rec_")) %>%
+  mutate_if(is_character, str_to_upper) %>% 
+  group_by(ethics_id) %>% 
+  slice(1) %>% 
+  ungroup() %>% 
+  distinct()
+
+print(committee_recs)
+```
+
+Combine the two types of recipients into a single table that can be joined to the transactions
+database along the `ethics_id` of each transaction's report filer.
+
+```{r bind_recs, collapse=TRUE}
+all_recipients <- bind_rows(candidate_recs, committee_recs)
+dim(all_recipients)
+n_distinct(all_recipients$ethics_id) == nrow(all_recipients)
+```
+
+There are `r nrow(all_recipients)` unique committees that have filed SO-1 or S0-2 reports, each
+identified by their unique `ethics_id` variable.
+
+### Total Join
+
+With our new tables of unique contributors and unique recipients, we can better identify the
+parties to each transaction. We will join all three tables by their respective `*_id` variables.
+
+```{r}
+ok <- ok %>%
+  inner_join(vendor_conts, by = "cont_id") %>% 
+  left_join(all_recipients, by = "ethics_id") %>% 
+  select(-phone, -ext)
+```
+
+## Explore
+
+There are `r nrow(ok)` records of `r length(ok)` variables in the full database.
+
+```{r dims}
+dim(ok)
+names(ok)
+sample_frac(ok)
+glimpse(sample_frac(ok))
+```
+
+### Distinct
+
+The variables range in their degree of distinctness.
+
+The `trans_index` is `r noquote(scales::percent(n_distinct(ok$trans_index)/nrow(ok)))` distinct and
+can be used to identify a unique transaction.
+
+```{r}
+ok %>% 
+  map(n_distinct) %>% 
+  unlist() %>% 
+  enframe(name = "variable", value = "n_distinct") %>% 
+  mutate(prop_distinct = round(n_distinct / nrow(ok), 4)) %>%
+  print(n = length(ok))
+```
+
+The `*_id` variables have as many distinct values as the length of their respective tables.
+
+```{r tabyls_function, echo=FALSE}
+print_tabyl <- function(data, ...) {
+  as_tibble(arrange(tabyl(data, ...), desc(n)))
+}
+```
+
+```{r tabyls}
+print_tabyl(ok, cont_type)
+print_tabyl(ok, cont_state)
+print_tabyl(ok, rec_state)
+print_tabyl(ok, rec_party)
+print_tabyl(ok, rec_office)
+```
+
+### Missing
+
+The variables also vary in their degree of values that are `NA` (missing). 
+
+```{r missin_important, collapse=TRUE}
+sum(is.na(ok$cont_id))
+sum(is.na(ok$ethics_id))
+sum(is.na(ok$trans_date))
+sum(is.na(ok$trans_amount))
+ok <- ok %>% 
+  mutate(na_flag = is.na(trans_amount))
+```
+
+The full count of `NA` for each variable in the data frame can be found below:
+
+```{r count_na}
+ok %>% 
+  map(function(var) sum(is.na(var))) %>% 
+  unlist() %>% 
+  enframe(name = "variable", value = "n_na") %>% 
+  mutate(prop_na = n_na / nrow(ok)) %>% 
+  print(n = length(ok))
+```
+
+### Ranges
+
+The range of continuous variables will need to be checked for data integrity. There are only two
+quasi-continuous variables, the `trans_amount` and `trans_date`
+
+#### Transaction Amounts
+
+The range for `trans_amount` seems reasonable enough.
+
+```{r amount_range}
+summary(ok$trans_amount)
+```
+
+There are only `r sum(ok$trans_amount > 500000, na.rm = T)` transactions greater than \$500,000. 
+
+```{r plot_amt_nonlog, collapse=TRUE}
+sum(ok$trans_amount > 500000, na.rm = TRUE)
+ggplot(ok, aes(trans_amount)) + 
+  geom_histogram() + 
+  scale_y_log10() +
+  scale_x_continuous(labels = scales::dollar) +
+  geom_hline(yintercept = 10)
+```
+
+```{r glimpse_min_max}
+glimpse(ok %>% filter(trans_amount == min(trans_amount, na.rm = T)))
+glimpse(ok %>% filter(trans_amount == max(trans_amount, na.rm = T)))
+```
+
+```{r reports_min_max}
+reports %>%
+  filter(rep_num %in% ok$rep_num[which(ok$trans_amount == min(ok$trans_amount, na.rm = TRUE))])
+reports %>%
+  filter(rep_num %in% ok$rep_num[which(ok$trans_amount == max(ok$trans_amount, na.rm = TRUE))])
+```
+
+### Transaction Dates
+
+There are no dates before `r min(ok$trans_datr)` and none after `r max(ok$trans_date)`. However,
+there are only `r sum(year(ok$trans_date) < 2003)` records from before 2003. There are also 
+suspiciously few records from 2016, an election year.
+
+```{r date_range}
+summary(ok$trans_date)
+ok %>% 
+  count(trans_year = year(trans_date))
+```
+
+### Plots
+
+We can also generate graphics to explore the distribution and range of continuous and distinct 
+variables.
+
+```{r plot_amt_hist}
+ok %>%
+  filter(rec_party %in% c("REPUBLICAN", "DEMOCRAT", "NON-PARTISAN", "INDEPENDENT")) %>% 
+  ggplot(aes(trans_amount)) +
+  geom_histogram(bins = 30, aes(fill = rec_party)) +
+  scale_x_continuous(labels = scales::dollar, trans = "log10") +
+  scale_y_log10() +
+  scale_fill_manual(values = c("blue", "forestgreen", "purple", "red")) +
+  facet_wrap(~rec_party) +
+  theme(legend.position = "none") +
+  labs(
+    title = "Expenditure Distribution",
+    caption = "Source: OKEC",
+    y = "Number of Contributions",
+    x = "Amount (USD)"
+  )
+```
+
+```{r plot_amt_year}
+ok %>% 
+  group_by(year = year(trans_date)) %>% 
+  summarise(sum = sum(trans_amount, na.rm = TRUE)) %>% 
+  ggplot(aes(year, sum)) +
+  geom_col() +
+  labs(
+    title = "Expenditure Sum by Year",
+    caption = "Source: OKEC",
+    y = "Total Expenditure Amount",
+    x = "Expenditure Date"
+  )
+```
+
+## Clean
+
+We can now create new variables on our comprehensive table of transactions. The objective of these
+cleaning steps will be to create `*_clean` variables with a reduced number of distinct values by
+fixing spelling mistakes. We will also create new variables to better identify each transaction in
+the Accountability Database.
+
+### Year
+
+```{r mutate_year}
+ok <- ok %>% 
+  mutate(trans_year = year(trans_date))
+```
+
+### ZIPs
+
+```{r clean_cont_zipcodes}
+n_distinct(ok$cont_zip)
+
+ok <- ok %>% 
+  mutate(cont_zip_clean = clean.zipcodes(cont_zip) %>% 
+           na_if("00000") %>% 
+           na_if("11111") %>% 
+           na_if("99999") %>% 
+           str_sub(1, 5)
+  )
+
+# reduced by half
+n_distinct(ok$cont_zip_clean)
+```
+
+```{r clean_rec_zipcodes}
+n_distinct(ok$rec_zip)
+
+ok <- ok %>% 
+  mutate(rec_zip_clean = clean.zipcodes(rec_zip) %>% 
+           na_if("00000") %>% 
+           na_if("11111") %>% 
+           na_if("99999") %>% 
+           str_sub(1, 5)
+  )
+
+# reduced by half
+n_distinct(ok$rec_zip_clean)
+```
+
+### States
+
+There are no invalid state values.
+
+```{r zip_data}
+data("zipcode")
+zipcode <-
+  as_tibble(zipcode) %>% 
+  mutate_if(is.character, str_to_upper) %>% 
+  select(city, state, zip)
+
+valid_abb <- unique(zipcode$state)
+setdiff(valid_abb, state.abb)
+```
+
+```{r count_bad_states}
+n_distinct(ok$cont_state)
+setdiff(ok$cont_state, valid_abb)
+```
+
+### Cities
+
+To clean the `*_city` values, we will rely on a fairly comprehensive list of valid city names and
+the OpenRefine cluster merging algorithms. This process allows us to check for invalid names and
+merge them with more frequent similar strings. For example, a city value of "Owassa" (n = 
+`r sum(str_detect(ok$cont_city, "Owassa"), na.rm = T)`) is clustered and merged with "Owasso" (n =
+`r sum(str_detect(ok$cont_city, "Owasso"), na.rm = T)`).
+
+We will also remove punctuation, expand common abbreviations, and make all strings uppercase. The
+aim of this process is to reduce the total number of distinct city values by standardizing
+spelling. This improves the usability of the database by correcting connecting similar records.
+
+```{r zip_city, echo=FALSE}
+zipcode <- zipcode %>% 
+  bind_rows(
+    tribble(
+      ~city, ~state, ~zip,
+      "PARK HILL",     "OK", "74451",
+      "PARK HILL",     "OK", "74464",
+      "PARK HILL",     "OK", "74471",
+      "QUAPAW",        "OK", "74363",
+      "THE VILLAGE",   "OK", "73120",
+      "THE VILLAGE",   "OK", "73156",
+      "NICHOLS HILLS", "OK", "73116",
+      "NICHOLS HILLS", "OK", "73120",
+      "DEL CITY",      "OK", "73115",
+      "DEL CITY",      "OK", "73117",
+      "DEL CITY",      "OK", "73135",
+      "MIDWEST CITY",  "OK", "73020",
+      "MIDWEST CITY",  "OK", "73110",
+      "MIDWEST CITY",  "OK", "73117",
+      "MIDWEST CITY",  "OK", "73130",
+      "MIDWEST CITY",  "OK", "73140",
+      "MIDWEST CITY",  "OK", "73141",
+      "MIDWEST CITY",  "OK", "73145",
+      "WALTERS",       "OK", "73572",
+      "WARR ACRES",    "OK", "73122",
+      "WARR ACRES",    "OK", "73123",
+      "WARR ACRES",    "OK", "73132",
+      "FORAKER",       "OK", "74652",
+      "BALKO",         "OK", "73931",
+      "GOLDSBY",       "OK", "73072",
+      "GOLDSBY",       "OK", "73080",
+      "GOLDSBY",       "OK", "73093"
+    )
+  )
+
+zipcode$city <- zipcode$city %>%
+  str_replace_all("-", " ") %>% 
+  str_remove_all("[:punct:]") %>% 
+  str_replace("(^|\\b)N(\\b|$)",  "NORTH") %>%
+  str_replace("(^|\\b)S(\\b|$)",  "SOUTH") %>%
+  str_replace("(^|\\b)E(\\b|$)",  "EAST") %>%
+  str_replace("(^|\\b)W(\\b|$)",  "WEST") %>%
+  str_replace("(^|\\b)MT(\\b|$)", "MOUNT") %>%
+  str_replace("(^|\\b)ST(\\b|$)", "SAINT") %>%
+  str_replace("(^|\\b)PT(\\b|$)", "PORT") %>%
+  str_replace("(^|\\b)FT(\\b|$)", "FORT") %>%
+  str_replace("(^|\\b)PK(\\b|$)", "PARK") %>% 
+  str_trim() %>% 
+  str_squish()
+```
+
+```{r valid_city}
+valid_city <- unique(zipcode$city)
+length(valid_city)
+
+valid_ok_city <- unique(zipcode$city[zipcode$state == "OK"])
+length(valid_ok_city)
+```
+
+There are `r n_distinct(ok$cont_city)` distinct city values. 
+`r length(setdiff(ok$cont_city, valid_city))` of those are not in our list of valid city names.
+
+```{r count_bad_city, collapse=TRUE}
+n_distinct(ok$cont_city) # 3055
+length(setdiff(ok$cont_city, valid_city))
+sum(ok$cont_city %out% valid_city)
+mean(ok$cont_city %out% valid_city)
+```
+
+### Prepare
+
+First, we will prepare the `cont_city` string by making all values uppercase, removing punctuation
+and numbers, expanding directional and geographical abbreviations ("N" for "North", "MT" for
+"MOUNT", etc), as well as trimming and squishing excess white space. We will also remove common
+state abbreviations from the city names.
+
+```{r prep_city}
+ok$cont_city_prep <- 
+  ok$cont_city %>% 
+  str_to_upper() %>%
+  str_replace_all("-", " ") %>% 
+  str_remove_all("[^A-z_\\s]") %>%
+  str_remove_all("`") %>% 
+  # remove state abbs
+  str_replace("^OK CITY$", "OKLAHOMA CITY") %>% 
+  str_remove_all("(^|\\b)OK(\\b|$)") %>% 
+  str_remove_all("(^|\\b)DC(\\b|$)") %>% 
+  # directional abbs
+  str_replace("(^|\\b)N(\\b|$)",  "NORTH") %>%
+  str_replace("(^|\\b)S(\\b|$)",  "SOUTH") %>%
+  str_replace("(^|\\b)E(\\b|$)",  "EAST") %>%
+  str_replace("(^|\\b)W(\\b|$)",  "WEST") %>%
+  # geographic abbs
+  str_replace("(^|\\b)MT(\\b|$)", "MOUNT") %>%
+  str_replace("(^|\\b)ST(\\b|$)", "SAINT") %>%
+  str_replace("(^|\\b)PT(\\b|$)", "PORT") %>%
+  str_replace("(^|\\b)FT(\\b|$)", "FORT") %>%
+  str_replace("(^|\\b)PK(\\b|$)", "PARK") %>% 
+  # white space
+  str_squish() %>% 
+  str_trim()
+```
+
+At each stage of refining, we should check our progress.
+
+```{r check_bad_city, collapse=TRUE}
+n_distinct(ok$cont_city_prep)
+length(setdiff(ok$cont_city_prep, valid_city))
+sum(ok$cont_city_prep %out% valid_city)
+mean(ok$cont_city_prep %out% valid_city)
+```
+
+While, there are already `r sum(is.na(ok$cont_city), na.rm = T)` `NA` (missing) values, there
+are even more existing values that should really be interpreted as missing. Fixing these values
+increases the number of `NA` values by over 10,000.
+
+```{r na_if, collapse=TRUE}
+mean(is.na(ok$cont_city))
+
+# make common NA
+ok$cont_city_prep <- 
+  ok$cont_city_prep %>% 
+  na_if("N/A") %>% 
+  na_if("NA") %>% 
+  na_if("N A") %>% 
+  na_if("N.A") %>% 
+  na_if("NONE") %>% 
+  na_if("NONR") %>% 
+  na_if("NON") %>% 
+  na_if("NONE GIVEN") %>% 
+  na_if("NOT GIVEN") %>%
+  na_if("NOT GIVE") %>% 
+  na_if("NOT REQUIRED") %>%
+  na_if("NO INFORMATION GIVEN") %>% 
+  na_if("REQUESTED") %>% 
+  na_if("INFORMATION REQUESTED") %>% 
+  na_if("REQUESTED INFORMATION") %>% 
+  na_if("INFO REQUESTED") %>%
+  na_if("IR") %>% 
+  na_if("RD") %>% 
+  na_if("REQUESTED INFO") %>% 
+  na_if("UNKOWN") %>%
+  na_if("UNKNOWN") %>% 
+  na_if("NOTAPPLICABLE") %>% 
+  na_if("NOT APPLICABLE") %>% 
+  na_if("VARIOUS") %>% 
+  na_if("UNDER $") %>% 
+  na_if("ANYWHERE") %>% 
+  na_if("TEST") %>% 
+  na_if("TSET") %>% 
+  na_if("X") %>% 
+  na_if("XX") %>% 
+  na_if("XXX") %>% 
+  na_if("XXXX") %>% 
+  na_if("XXXXX") %>% 
+  na_if("XXXXXXX") %>% 
+  na_if("XXXXXXXX") %>% 
+  na_if("-") %>% 
+  na_if("INFO PENDING") %>% 
+  na_if("LJJKLJ") %>% 
+  na_if("FSDFSF") %>% 
+  na_if("NOT PROVIDED") %>% 
+  na_if("COUNTY") %>% 
+  na_if("VARIED") %>% 
+  na_if("A") %>% 
+  na_if("INTERNET") %>% 
+  na_if("KJLKJK") %>% 
+  na_if("B") %>% 
+  na_if("JLJLJJ") %>% 
+  na_if("NOT KNOWN") %>% 
+  na_if("SOMEWHERE") %>% 
+  na_if("UNKNOW") %>% 
+  na_if("KLJKL") %>% 
+  na_if("NONE GIVE") %>% 
+  na_if("GFAGAG") %>% 
+  na_if("KOKOK") %>% 
+  na_if("ASDSADD") %>% 
+  na_if("ABC") %>% 
+  na_if("UNKNOWN CITY") %>% 
+  na_if("WWWGODADDYCOM") %>% 
+  na_if("DFFF") %>% 
+  na_if("O") %>% 
+  na_if("NOT STATED") %>% 
+  na_if("ASFSDFF") %>% 
+  na_if("NON REPORTABLE") %>% 
+  na_if("NOT AVAILABLE") %>% 
+  na_if("REQUEST") %>% 
+  na_if("AND UNDER") %>% 
+  na_if("NOWHERE") %>% 
+  na_if("ONLINE SERVICE") %>% 
+  na_if("SFJDLKFJF") %>% 
+  na_if("TO FIND OUT") %>% 
+  na_if("NOT SURE") %>% 
+  na_if("ON LINE") %>% 
+  na_if("POBOX") %>% 
+  na_if("ONLINE COMPANY") %>% 
+  na_if("OOO") %>% 
+  na_if("JLJK") %>% 
+  na_if("FKFJD") %>% 
+  na_if("DFDFD") %>% 
+  na_if("DFFSDFDF") %>% 
+  na_if("FDFF") %>% 
+  na_if("FDSFSADFSDF") %>% 
+  na_if("OOOOOOOO") %>% 
+  na_if("FASDFDFA") %>% 
+  na_if("ADFDFDF") %>% 
+  na_if("DFDSF") %>% 
+  na_if("DFSFSADF") %>% 
+  na_if("DFASDFASD") %>% 
+  na_if("DFASDFFA") %>% 
+  na_if("DFASDFSDAF")
+
+mean(is.na(ok$cont_city_prep))
+sum(is.na(ok$cont_city_prep)) - sum(is.na(ok$cont_city))
+```
+
+One pitfall of the cluster and merge algorithms is their agnosticism towards _incorrect_ strings.
+If a misspelling is more common than the correct spelling, some of those correct values may be 
+merged with their incorrect matches. To mitigate the risk of this, we can manually change some
+_very_ frequent "misspellings."
+
+```{r expand_prep}
+ok$cont_city_prep <- 
+  ok$cont_city_prep %>%
+  # very frequent city abbs
+  str_replace("^OKC$",           "OKLAHOMA CITY") %>%
+  str_replace("^OKLA CITY$",     "OKLAHOMA CITY") %>% 
+  str_replace("^OKLACITY$",     "OKLAHOMA CITY") %>% 
+  str_replace("^OKLAHOMA$",      "OKLAHOMA CITY") %>% 
+  str_replace("^OK CITY$",       "OKLAHOMA CITY") %>% 
+  str_replace("^OKLAHOM CITY$",  "OKLAHOMA CITY") %>% 
+  str_replace("^OKLAHMA CITY$",  "OKLAHOMA CITY") %>% 
+  str_replace("^OKLAHOMA CITH$", "OKLAHOMA CITY") %>% 
+  str_replace("^OKLAHOMA CIT$",  "OKLAHOMA CITY") %>% 
+  str_replace("^OKLA$",          "OKLAHOMA CITY") %>% 
+  str_replace("^MWC$",           "MIDWEST CITY")  %>% 
+  str_replace("^STW$",           "STILLWATER")    %>% 
+  str_replace("^BA$",            "BROKEN ARROW")  %>% 
+  str_trim() %>% 
+  str_squish()
+```
+
+We can now compare our prepared values to our list of valid city values to explore the most
+frequent suspicious values. Many, perhaps most, of these values actually _are_ valid and are simply
+too uncommon or unofficial to be included in our valid city list.
+
+```{r view_bad}
+ok %>% 
+  filter(cont_city_prep %out% valid_city) %>% 
+  count(cont_city_prep) %>% 
+  arrange(desc(n))
+```
+
+Now we can run this prepared column through the OpenRefine algorithms to cluster similar strings
+and merge them together if they meet the threshold.
+
+```{r refine_merge}
+ok_city_fix <- ok %>%
+  filter(cont_state == "OK") %>% 
+  filter(!is.na(cont_city)) %>% 
+  mutate(cont_city_fix = cont_city_prep %>%
+           key_collision_merge(dict = valid_ok_city) %>% 
+           n_gram_merge() %>%
+           str_to_upper() %>% 
+           str_trim() %>% 
+           str_squish()) %>% 
+  mutate(fixed = (cont_city_fix != cont_city_prep))
+
+tabyl(ok_city_fix, fixed)
+
+ok_city_fix %>% 
+  filter(fixed) %>%
+  count(cont_state, cont_city_prep, cont_city_fix) %>% 
+  arrange(desc(n))
+```
+
+```{r trim_fix}
+ok_city_fix <- ok_city_fix %>%
+  filter(fixed) %>%
+  select(
+    trans_index,
+    cont_city,
+    cont_city_prep,
+    cont_city_fix,
+    cont_state,
+    cont_zip_clean
+  ) %>%
+  rename(
+    city_orig = cont_city,
+    city_prep = cont_city_prep,
+    city_fix = cont_city_fix,
+    state = cont_state,
+    zip = cont_zip_clean
+    )
+
+nrow(ok_city_fix)
+n_distinct(ok_city_fix$city_orig)
+n_distinct(ok_city_fix$city_prep)
+n_distinct(ok_city_fix$city_fix)
+```
+
+Some of these changes were successful, some were not. If the new record with cleaned city, state,
+and ZIP match a record in the zipcodes database, we can be confident that the refine was 
+successful.
+
+```{r good_fix}
+good_fix <- ok_city_fix %>% 
+  inner_join(zipcode, by = c("city_fix" = "city", "state", "zip"))
+
+print(good_fix)
+```
+
+If the cleaned records still dont' match a valid address, we can check them by hand. Some will
+still be acceptable, other will need to be manually corrected.
+
+```{r bad_fix}
+bad_fix <- ok_city_fix %>% 
+  anti_join(zipcode, by = c("city_fix" = "city", "state", "zip"))
+
+bad_fix$city_fix <- bad_fix$city_fix %>%
+  str_replace("^QUAPAAW$", "QUAPAW") %>% 
+  str_replace("^PARKHILL$", "PARK HILL") %>% 
+  str_replace("^BROKEN ARRO$", "BROKEN ARROW") %>% 
+  str_replace("^CHICHASHA$", "CHICKASHA") %>% 
+  str_replace("^COLLINSVIL$", "COLLINSVILLE") %>% 
+  str_replace("^EMOND$", "EDMOND") %>% 
+  str_replace("^EUFUAL$", "EUFAULA") %>% 
+  str_replace("^FORT GIBBS$", "FORT GIBSON") %>% 
+  str_replace("^MCALISTER$", "MCALESTER") %>% 
+  str_replace("^MIDWEST$", "MIDWEST CITY") %>% 
+  str_replace("^NORTH A$", "HAWORTH") %>% 
+  str_replace("^NROMAN$", "RAMONA") %>% 
+  str_replace("^NS$", "SNYDER") %>% 
+  str_replace("^OKLACITY$", "OKLAHOMA CITY") %>% 
+  str_replace("^OKLAHOMA JCITY$", "OKLAHOMA CITY") %>% 
+  str_replace("^BARLTESVILLE$", "BARTLESVILLE") %>% 
+  str_replace("^OWASSI$", "OWASSO") %>% 
+  str_replace("^POTEU$", "POTEAU") %>% 
+  str_replace("^PRYOR CREEK$", "PRYOR") %>% 
+  str_replace("^SAND SPRING$", "SAND SPRINGS") %>% 
+  str_replace("^SUPULPA$", "SAPULPA") %>% 
+  str_replace("^TISHIMINGO$", "TISHOMINGO") %>% 
+  str_replace("^TULS$", "TULSA") %>% 
+  str_replace("^PRYRO$", "PRYOR") %>% 
+  str_replace("^BALCO$", "BALKO") %>% 
+  str_replace("^OKAHOMA CITY$", "OKLAHOMA CITY") %>% 
+  str_replace("^CLAREMARE$", "CLAREMORE")
+
+bad_fix %>% 
+  left_join(zipcode, by = c("state", "zip")) %>%
+  filter(city_fix != city) %>% 
+  arrange(city_fix) %>% 
+  select(city_fix, state, zip, city) %>% 
+  distinct() %>% 
+  print_all()
+
+sum(bad_fix$city_fix %out% valid_city)
+```
+
+```{r bind_fix}
+if (nrow(good_fix) + nrow(bad_fix) == nrow(ok_city_fix)) {
+    ok_city_fix <- 
+    bind_rows(bad_fix, good_fix) %>% 
+    select(trans_index, city_fix)
+}
+
+print(ok_city_fix)
+```
+
+```{r join_fix, collapse=TRUE}
+ok <- ok %>% 
+  left_join(ok_city_fix, by = "trans_index") %>% 
+  mutate(cont_city_clean = ifelse(is.na(city_fix), cont_city_prep, city_fix))
+
+n_distinct(ok$cont_city)
+mean(ok$cont_city %in% valid_city)
+
+n_distinct(ok$cont_city_clean)
+mean(ok$cont_city_clean %in% valid_city)
+```
+
+```{r city_change}
+ok %>% 
+  sample_frac() %>% 
+  select(
+    cont_city, 
+    cont_city_prep, 
+    city_fix, 
+    cont_city_clean
+  )
+```
+
+## Write
+
+The final combined table can be saved, with original unclean variables removed to save space.
+
+```{r write_csv}
+dir_create(here("ok", "expends", "data", "processed"))
+ok %>% 
+  select(
+    -cont_zip,
+    -cont_city,
+    -cont_city_prep,
+    -city_fix,
+    -rec_zip,
+  ) %>% 
+  write_csv(
+    path = here("ok", "expends", "data", "processed", "ok_expends_clean.csv"),
+    na = ""
+  )
+```
+
