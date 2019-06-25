@@ -1,8 +1,8 @@
 ---
 title: "Data Diary"
-subtitle: "Nevada Contributions"
+subtitle: "Nevada Expenditures"
 author: "Kiernan Nicholls"
-date: "2019-06-05 17:23:15"
+date: "2019-06-25 12:10:24"
 output:
   html_document: 
     df_print: tibble
@@ -233,22 +233,22 @@ The ZIP file contains the six individual files, as expected.
 #> # A tibble: 6 x 3
 #>   name                                               length date               
 #>   <chr>                                               <dbl> <dttm>             
-#> 1 CampaignFinance.Cnddt.43898.060419073713.csv       598979 2019-06-04 07:37:00
-#> 2 CampaignFinance.Cntrbt.43898.060419073713.csv    32805188 2019-06-04 07:37:00
-#> 3 CampaignFinance.Cntrbtrs-.43898.060419073713.csv  6375270 2019-06-04 07:37:00
-#> 4 CampaignFinance.Expn.43898.060419073713.csv      16972004 2019-06-04 07:37:00
-#> 5 CampaignFinance.Grp.43898.060419073713.csv         118074 2019-06-04 07:37:00
-#> 6 CampaignFinance.Rpr.43898.060419073713.csv        2415840 2019-06-04 07:37:00
+#> 1 CampaignFinance.Cnddt.43993.062519084828.csv       599467 2019-06-25 08:48:00
+#> 2 CampaignFinance.Cntrbt.43993.062519084828.csv    32807839 2019-06-25 08:48:00
+#> 3 CampaignFinance.Cntrbtrs-.43993.062519084828.csv  6375595 2019-06-25 08:48:00
+#> 4 CampaignFinance.Expn.43993.062519084828.csv      16976680 2019-06-25 08:48:00
+#> 5 CampaignFinance.Grp.43993.062519084828.csv         118072 2019-06-25 08:48:00
+#> 6 CampaignFinance.Rpr.43993.062519084828.csv        2419063 2019-06-25 08:48:00
 ```
 
 The files will be unzipped into the `data/` directory.
 
 
 ```r
-dir_create(here("nv_contribs", "data"))
-here("nv_contribs", "data") %>% 
+dir_create(here("nv_contribs", "data", "raw"))
+here("nv_contribs", "data", "raw") %>% 
   dir_ls(glob = "*.zip") %>% 
-  unzip(exdir = here("nv_contribs", "data"))
+  unzip(exdir = here("nv_contribs", "data", "raw"))
 ```
 
 Each file can be read using the `vroom::vroom()` function and the parameters explained by NVSOS.
@@ -258,7 +258,7 @@ function.
 
 ```r
 nv_candidates <- vroom(
-  file = here("nv_contribs", "data", "CampaignFinance.Cnddt.43898.060419073713.csv"),
+  file = here("nv_contribs", "data", "raw","CampaignFinance.Cnddt.43993.062519084828.csv"),
   delim = ",",
   col_names = TRUE,
   na = "",
@@ -279,7 +279,7 @@ print(nv_candidates)
 ```
 
 ```
-#> # A tibble: 6,659 x 6
+#> # A tibble: 6,665 x 6
 #>    candidate_id first_name last_name  party         office                          jurisdiction   
 #>    <chr>        <chr>      <chr>      <chr>         <chr>                           <chr>          
 #>  1 28           Michael    Douglas    Nonpartisan   Supreme Court Justice, Seat F   NV SOS         
@@ -292,13 +292,13 @@ print(nv_candidates)
 #>  8 36           Harry      Reid       Democratic P… U.S. Senate                     NV SOS         
 #>  9 37           Kenneth    Wegner     Republican P… U.S. Senate                     NV SOS         
 #> 10 38           Cynthia    Steel      Nonpartisan   District Court Judge, District… CLARK COUNTY   
-#> # … with 6,649 more rows
+#> # … with 6,655 more rows
 ```
 
 
 ```r
 nv_groups <- vroom(
-  file = here("nv_contribs", "data", "CampaignFinance.Grp.43898.060419073713.csv"),
+  file = here("nv_contribs", "data", "raw","CampaignFinance.Grp.43993.062519084828.csv"),
   delim = ",",
   col_names = TRUE,
   na = "",
@@ -338,7 +338,7 @@ print(nv_groups)
 
 ```r
 nv_reports <- vroom(
-  file = here("nv_contribs", "data", "CampaignFinance.Rpr.43898.060419073713.csv"),
+  file = here("nv_contribs", "data", "raw","CampaignFinance.Rpr.43993.062519084828.csv"),
   delim = ",",
   col_names = TRUE,
   na = "",
@@ -362,7 +362,7 @@ print(nv_reports)
 ```
 
 ```
-#> # A tibble: 37,580 x 9
+#> # A tibble: 37,625 x 9
 #>    report_id candidate_id group_id report_name election_cycle filing_due_date filed_date amended
 #>    <chr>     <chr>        <chr>    <chr>                <dbl> <date>          <date>     <lgl>  
 #>  1 6980      <NA>         1220     CE Report 1           2006 NA              2006-08-08 FALSE  
@@ -375,13 +375,13 @@ print(nv_reports)
 #>  8 6987      <NA>         1364     CE Report 1           2006 NA              2006-08-08 FALSE  
 #>  9 6990      2368         <NA>     CE Report 1           2006 NA              2006-08-08 FALSE  
 #> 10 6991      2360         <NA>     CE Report 1           2006 NA              2006-08-08 FALSE  
-#> # … with 37,570 more rows, and 1 more variable: superseded <lgl>
+#> # … with 37,615 more rows, and 1 more variable: superseded <lgl>
 ```
 
 
 ```r
 nv_payees <- vroom(
-  file = here("nv_contribs", "data", "CampaignFinance.Cntrbtrs-.43898.060419073713.csv"),
+  file = here("nv_contribs", "data", "raw","CampaignFinance.Cntrbtrs-.43993.062519084828.csv"),
   delim = ",",
   col_names = TRUE,
   na = "",
@@ -400,7 +400,7 @@ print(nv_payees)
 ```
 
 ```
-#> # A tibble: 189,045 x 4
+#> # A tibble: 189,055 x 4
 #>    contact_id first_name middle_name last_name               
 #>    <chr>      <chr>      <chr>       <chr>                   
 #>  1 3          <NA>       <NA>        UNITE HERE TIP          
@@ -413,13 +413,13 @@ print(nv_payees)
 #>  8 10         <NA>       <NA>        Oriental Trading        
 #>  9 11         <NA>       <NA>        V&S variety & True Value
 #> 10 12         <NA>       <NA>        BuildASign.com          
-#> # … with 189,035 more rows
+#> # … with 189,045 more rows
 ```
 
 
 ```r
 nv_contributions <- vroom(
-  file = here("nv_contribs", "data", "CampaignFinance.Cntrbt.43898.060419073713.csv"),
+  file = here("nv_contribs", "data", "raw","CampaignFinance.Cntrbt.43993.062519084828.csv"),
   delim = ",",
   col_names = TRUE,
   na = "",
@@ -441,27 +441,10 @@ nv_contributions <- vroom(
 print(nv_contributions)
 ```
 
-```
-#> # A tibble: 456,976 x 8
-#>    contribution_id report_id candidate_id group_id contribution_da… contribution_am…
-#>    <chr>           <chr>     <chr>        <chr>    <date>                      <dbl>
-#>  1 2               6980      <NA>         1220     2006-06-28                  35000
-#>  2 3               6983      <NA>         1332     2006-03-29                      2
-#>  3 4               6983      <NA>         1332     2006-03-31                      1
-#>  4 5               6983      <NA>         1332     2006-04-10                    200
-#>  5 6               6983      <NA>         1332     2006-01-01                      0
-#>  6 7               6983      <NA>         1332     2006-01-01                      0
-#>  7 8               6983      <NA>         1332     2006-01-01                      0
-#>  8 9               6987      <NA>         1364     2006-01-13                   1000
-#>  9 10              6991      2360         <NA>     2006-02-07                    100
-#> 10 11              6991      2360         <NA>     2006-02-08                    500
-#> # … with 456,966 more rows, and 2 more variables: contribution_type <chr>, contributor_id <chr>
-```
-
 
 ```r
 nv_expenses <- vroom(
-  file = here("nv_contribs", "data", "CampaignFinance.Cntrbt.43898.060419073713.csv"),
+  file = here("nv_contribs", "data", "raw", "CampaignFinance.Expn.43993.062519084828.csv"),
   delim = ",",
   col_names = TRUE,
   na = "",
@@ -469,14 +452,9 @@ nv_expenses <- vroom(
   escape_double = TRUE,
   .name_repair = make_clean_names,
   col_types = cols(
-    `ExpenseID` = col_character(),
-    `ReportID` = col_character(),
-    `CandidateID` = col_character(),
-    `GroupID` = col_character(),
+    .default = col_character(),
     `Expense Date` = col_date("%m/%d/%Y"),
     `Expense Amount`	= col_number(),
-    `Expense Type` = col_character(),
-    `Payee ID` = col_character()
   )
 )
 ```
@@ -490,12 +468,12 @@ be added.
 
 
 ```r
-nv <- nv_contributions %>%
+nv <- nv_expenses %>%
   # join with relational tables
   left_join(nv_reports, by = c("report_id", "candidate_id", "group_id")) %>%
   left_join(nv_candidates, by = "candidate_id") %>% 
   left_join(nv_groups, by = "group_id") %>%
-  left_join(nv_payees, by = c("contributor_id" = "contact_id")) %>% 
+  left_join(nv_payees, by = c("payee_id" = "contact_id")) %>% 
   # add origin table info to ambiguous variables
   rename(
     candidate_first = first_name.x,
@@ -513,11 +491,11 @@ nv <- nv_contributions %>%
   )
 
 # all rows preserved
-nrow(nv) == nrow(nv_contributions)
+nrow(nv) == nrow(nv_expenses)
 #> [1] TRUE
 
 # all cols includes
-length(nv_contributions) %>% 
+length(nv_expenses) %>% 
   add(length(nv_reports)) %>% 
   add(length(nv_candidates)) %>% 
   add(length(nv_groups)) %>% 
@@ -533,7 +511,7 @@ without changing the number or records included.
 ## Explore
 
 Variables containing information on the contributor themselves seem to be missing. While the
-`contributor_id` variable from the "Contributions" database is used to identify each contributor
+`payee_id` variable from the "Expenses" database is used to identify each contributor
 in the "Contributors-Payees" using the `contact_id` variable, the later table contains only names.
 
 This information is submitted by the filer of the report and can be found using the 
@@ -558,23 +536,23 @@ nv %>%
 ```
 
 ```
-#> # A tibble: 47 x 4
-#>    report_id filed_date payee_last candidate_last
-#>    <chr>     <date>     <chr>      <chr>         
-#>  1 6991      2006-08-08 Mueller    Tiras         
-#>  2 6991      2006-08-08 Paganelli  Tiras         
-#>  3 6991      2006-08-08 Tiras      Tiras         
-#>  4 6991      2006-08-08 Clark      Tiras         
-#>  5 6991      2006-08-08 Elias      Tiras         
-#>  6 6991      2006-08-08 Offerdahl  Tiras         
-#>  7 6991      2006-08-08 Hengst     Tiras         
-#>  8 6991      2006-08-08 Hengst     Tiras         
-#>  9 6991      2006-08-08 Hengst     Tiras         
-#> 10 6991      2006-08-08 Hubbard    Tiras         
-#> # … with 37 more rows
+#> # A tibble: 22 x 4
+#>    report_id filed_date payee_last                                   candidate_last
+#>    <chr>     <date>     <chr>                                        <chr>         
+#>  1 6991      2006-08-08 Bonanza                                      Tiras         
+#>  2 6991      2006-08-08 Tiras                                        Tiras         
+#>  3 6991      2006-08-08 Adventures in Advertising                    Tiras         
+#>  4 6991      2006-08-08 Creative Marketing and Design                Tiras         
+#>  5 6991      2006-08-08 Adventures in Advertising Corp               Tiras         
+#>  6 6991      2006-08-08 Adventures in Advertising                    Tiras         
+#>  7 6991      2006-08-08 Bonanza                                      Tiras         
+#>  8 6991      2006-08-08 Sierra Nevada Media Group                    Tiras         
+#>  9 6991      2006-08-08 Incline Village General Improvement District Tiras         
+#> 10 6991      2006-08-08 Bonanza                                      Tiras         
+#> # … with 12 more rows
 ```
 
-Below is the structure of the data arranged randomly by row. There are 456976 rows of 
+Below is the structure of the data arranged randomly by row. There are 253644 rows of 
 27 variables.
 
 
@@ -583,42 +561,42 @@ glimpse(sample_frac(nv))
 ```
 
 ```
-#> Observations: 456,976
+#> Observations: 253,644
 #> Variables: 27
-#> $ contribution_id     <chr> "460446", "26992", "354729", "65304", "155472", "52165", "370857", "…
-#> $ report_id           <chr> "71415", "26543", "57360", "32623", "40937", "31248", "60123", "7652…
-#> $ candidate_id        <chr> "6188", "762", "6864", NA, "3305", NA, "1900", "419", NA, "322", "53…
-#> $ group_id            <chr> NA, NA, NA, "1209", NA, "826", NA, NA, "1339", NA, NA, NA, NA, "698"…
-#> $ contribution_date   <date> 2017-06-30, 2010-03-23, 2015-12-31, 2012-05-22, 2013-10-10, 2012-01…
-#> $ contribution_amount <dbl> 5.00, 500.00, 500.00, 150.00, 1000.00, 20.00, 100.00, 10.00, 5.00, 1…
-#> $ contribution_type   <chr> "Monetary Contribution", "Monetary Contribution", "Monetary Contribu…
-#> $ contributor_id      <chr> "249792", "5619", "100404", "37733", "73039", "28668", "166515", "28…
-#> $ report_name         <chr> "2018 Annual CE Filing", "2011 Annual CE Filing", "2016 Annual CE Fi…
-#> $ election_cycle      <dbl> 2017, 2010, 2015, 2012, 2013, 2012, 2016, 2018, 2013, 2017, 2012, 20…
-#> $ filing_due_date     <date> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, 2012-10-16, NA, 2014-10-14,…
-#> $ filed_date          <date> 2018-01-16, 2011-01-17, 2016-01-15, 2012-06-08, 2014-01-15, 2012-05…
-#> $ report_amended      <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, TRUE,…
-#> $ report_superseded   <lgl> FALSE, TRUE, FALSE, FALSE, FALSE, TRUE, FALSE, TRUE, FALSE, TRUE, FA…
-#> $ candidate_first     <chr> "Adam", "Kelly", "Carrie", NA, "Ross", NA, "Joyce", "Chris", NA, "St…
-#> $ candidate_last      <chr> "Laxalt", "Kite", "Buck", NA, "Miller", NA, "Woodhouse", "Giunchigli…
-#> $ candidate_party     <chr> "Republican Party", "Republican Party", "Republican Party", NA, "Dem…
-#> $ seeking_office      <chr> "Governor", "State Assembly, District 39", "State Senate, Clark Dist…
-#> $ jurisdiction        <chr> "NV SOS", "NV SOS", "CLARK COUNTY", NA, "NV SOS", NA, "CLARK COUNTY"…
-#> $ group_name          <chr> NA, NA, NA, "Nevada State Democratic Party", NA, "Farmers Employees …
-#> $ group_type          <chr> NA, NA, NA, "Political Party Committee", NA, "Political Action Commi…
-#> $ group_contact       <chr> NA, NA, NA, NA, NA, "MaryAnn Mangan", NA, NA, "Randy Robison", NA, N…
-#> $ group_active        <lgl> NA, NA, NA, TRUE, NA, TRUE, NA, NA, FALSE, NA, NA, NA, NA, TRUE, TRU…
-#> $ group_city          <chr> NA, NA, NA, "Las Vegas", NA, "Las Vegas", NA, NA, "Washington", NA, …
-#> $ payee_first         <chr> "John", NA, "Travis", "Fred", NA, "Peter", "Paul", "Henry", "Penny",…
-#> $ payee_middle        <chr> NA, NA, NA, NA, NA, NA, NA, NA, "S.", NA, NA, NA, NA, NA, "R", "M", …
-#> $ payee_last          <chr> "Califano", "Professional Firefighters of Nevada", "Brady", "Litin",…
+#> $ expense_id        <chr> "149585", "277094", "52409", "92342", "178857", "232558", "290173", "2…
+#> $ report_id         <chr> "53190", "79190", "34731", "43352", "61223", "69702", "82190", "17560"…
+#> $ candidate_id      <chr> NA, NA, "3867", NA, NA, "3935", "10962", "1202", NA, "3704", "6631", "…
+#> $ group_id          <chr> "1215", "1210", NA, "1444", "1218", NA, NA, NA, "1210", NA, NA, NA, NA…
+#> $ expense_date      <date> 2014-08-26, 2018-04-10, 2012-09-16, 2013-12-12, 2016-05-10, 2017-04-2…
+#> $ expense_amount    <dbl> 3498.68, 63.00, 150.00, 3135.00, 2000.00, 30.58, 262.50, 500.00, 25.73…
+#> $ expense_type      <chr> "Monetary Expense", "Monetary Expense", "Monetary Expense", "Monetary …
+#> $ payee_id          <chr> "140196", "276880", "34160", "137400", "210950", "246734", "303048", "…
+#> $ report_name       <chr> "2015 Annual CE Filing", "CE Report 1 (Amended)", "CE Report 3", "2014…
+#> $ election_cycle    <dbl> 2014, 2018, 2012, 2013, 2016, 2017, 2018, 2007, 2018, 2010, 2018, 2014…
+#> $ filing_due_date   <date> NA, NA, 2012-10-16, NA, NA, NA, 2018-10-16, NA, NA, 2010-10-26, 2018-…
+#> $ filed_date        <date> 2015-01-13, 2018-06-14, 2012-10-16, 2014-02-14, 2016-05-24, 2017-05-3…
+#> $ report_amended    <lgl> FALSE, TRUE, FALSE, TRUE, FALSE, TRUE, FALSE, FALSE, FALSE, FALSE, TRU…
+#> $ report_superseded <lgl> FALSE, TRUE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, F…
+#> $ candidate_first   <chr> NA, NA, "Jason", NA, NA, "Michele", "Paris", "James", NA, "Don", "Laur…
+#> $ candidate_last    <chr> NA, NA, "Frierson", NA, NA, "Fiore", "Wade", "Settelmeyer", NA, "Gusta…
+#> $ candidate_party   <chr> NA, NA, "Democratic Party", NA, NA, "Republican Party", "Republican Pa…
+#> $ seeking_office    <chr> NA, NA, "State Assembly, District 8", NA, NA, "City Council, Las Vegas…
+#> $ jurisdiction      <chr> NA, NA, "CLARK COUNTY", NA, NA, "CITY OF LAS VEGAS", "CLARK COUNTY", "…
+#> $ group_name        <chr> "Clark County Republican Central Committee", "Washoe County Republican…
+#> $ group_type        <chr> "Political Party Committee", "Political Party Committee", NA, "Politic…
+#> $ group_contact     <chr> NA, "Patricia Miller, Treasurer", NA, "Nancy Jean King", "Shawn Kinsey…
+#> $ group_active      <lgl> TRUE, TRUE, NA, TRUE, TRUE, NA, NA, NA, TRUE, NA, NA, NA, NA, NA, NA, …
+#> $ group_city        <chr> "Las Vegas", "Reno", NA, "Reno", "Pasadena", NA, NA, NA, "Reno", NA, N…
+#> $ payee_first       <chr> NA, "Andrew", NA, NA, NA, NA, "Ismyn", NA, "Andrew", NA, NA, NA, NA, N…
+#> $ payee_middle      <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
+#> $ payee_last        <chr> "Managed Pay - Payroll Services", "Goyhenetche", "Committee to Elect K…
 ```
 
 ### Distinct
 
 The variables vary in their degree of distinctiveness.
 
-The `contribution_id` is 100% 
+The `expense_id` is 100% 
 distinct and can be used to identify a unique contribution.
 
 
@@ -633,35 +611,35 @@ nv %>%
 
 ```
 #> # A tibble: 27 x 3
-#>    variable            n_distinct prop_distinct
-#>    <chr>                    <int>         <dbl>
-#>  1 contribution_id         456976       1      
-#>  2 report_id                13040       0.0285 
-#>  3 candidate_id              1795       0.0039 
-#>  4 group_id                   640       0.0014 
-#>  5 contribution_date         4441       0.0097 
-#>  6 contribution_amount      13277       0.0291 
-#>  7 contribution_type            4       0      
-#>  8 contributor_id          145126       0.318  
-#>  9 report_name                 80       0.0002 
-#> 10 election_cycle              14       0      
-#> 11 filing_due_date             10       0      
-#> 12 filed_date                1177       0.0026 
-#> 13 report_amended               2       0      
-#> 14 report_superseded            2       0      
-#> 15 candidate_first            762       0.0017 
-#> 16 candidate_last            1476       0.0032 
-#> 17 candidate_party             13       0      
-#> 18 seeking_office             537       0.00120
-#> 19 jurisdiction                36       0.0001 
-#> 20 group_name                 639       0.0014 
-#> 21 group_type                   7       0      
-#> 22 group_contact              474       0.001  
-#> 23 group_active                 3       0      
-#> 24 group_city                  89       0.0002 
-#> 25 payee_first              16750       0.0367 
-#> 26 payee_middle              1094       0.00240
-#> 27 payee_last               65373       0.143
+#>    variable          n_distinct prop_distinct
+#>    <chr>                  <int>         <dbl>
+#>  1 expense_id            253644      1       
+#>  2 report_id              15287      0.0603  
+#>  3 candidate_id            2174      0.0086  
+#>  4 group_id                 718      0.0028  
+#>  5 expense_date            4478      0.0177  
+#>  6 expense_amount         51605      0.204   
+#>  7 expense_type               2      0       
+#>  8 payee_id               52123      0.206   
+#>  9 report_name               76      0.000300
+#> 10 election_cycle            14      0.0001  
+#> 11 filing_due_date           11      0       
+#> 12 filed_date              1358      0.0054  
+#> 13 report_amended             2      0       
+#> 14 report_superseded          2      0       
+#> 15 candidate_first          865      0.0034  
+#> 16 candidate_last          1737      0.0068  
+#> 17 candidate_party            9      0       
+#> 18 seeking_office           638      0.0025  
+#> 19 jurisdiction              38      0.0001  
+#> 20 group_name               717      0.0028  
+#> 21 group_type                 7      0       
+#> 22 group_contact            499      0.002   
+#> 23 group_active               3      0       
+#> 24 group_city               132      0.0005  
+#> 25 payee_first             2966      0.0117  
+#> 26 payee_middle             381      0.0015  
+#> 27 payee_last             32231      0.127
 ```
 
 The `*_id` variables have as many distinct values as the length of their respective tables.
@@ -680,17 +658,15 @@ For the least distinct variables, we can explore the most common values.
 
 
 ```r
-print_tabyl(nv, contribution_type)
+print_tabyl(nv, expense_type)
 ```
 
 ```
-#> # A tibble: 4 x 3
-#>   contribution_type               n  percent
-#>   <chr>                       <dbl>    <dbl>
-#> 1 Monetary Contribution      443084 0.970   
-#> 2 In Kind Contribution        13643 0.0299  
-#> 3 In Kind Written Commitment    128 0.000280
-#> 4 Written Commitment            121 0.000265
+#> # A tibble: 2 x 3
+#>   expense_type          n percent
+#>   <chr>             <dbl>   <dbl>
+#> 1 Monetary Expense 243664  0.961 
+#> 2 In Kind Expense    9980  0.0393
 ```
 
 ```r
@@ -698,22 +674,18 @@ print_tabyl(nv, candidate_party)
 ```
 
 ```
-#> # A tibble: 13 x 4
-#>    candidate_party                   n    percent valid_percent
-#>    <chr>                         <dbl>      <dbl>         <dbl>
-#>  1 <NA>                         197465 0.432         NA        
-#>  2 Democratic Party             119072 0.261          0.459    
-#>  3 Republican Party              69135 0.151          0.266    
-#>  4 Nonpartisan                   36205 0.0792         0.140    
-#>  5 Unspecified                   33549 0.0734         0.129    
-#>  6 Independent                     814 0.00178        0.00314  
-#>  7 Independent American Party      409 0.000895       0.00158  
-#>  8 Test Party Name 5               153 0.000335       0.000590 
-#>  9 Libertarian Party of Nevada     127 0.000278       0.000489 
-#> 10 Nevada Green Party               25 0.0000547      0.0000963
-#> 11 Tea Party                        13 0.0000284      0.0000501
-#> 12 DuoFreedomist Party               5 0.0000109      0.0000193
-#> 13 Constitution Party of Nevada      4 0.00000875     0.0000154
+#> # A tibble: 9 x 4
+#>   candidate_party                 n   percent valid_percent
+#>   <chr>                       <dbl>     <dbl>         <dbl>
+#> 1 Democratic Party            69564 0.274         0.375    
+#> 2 <NA>                        68035 0.268        NA        
+#> 3 Republican Party            64453 0.254         0.347    
+#> 4 Unspecified                 24920 0.0982        0.134    
+#> 5 Nonpartisan                 24741 0.0975        0.133    
+#> 6 Independent                   853 0.00336       0.00460  
+#> 7 Independent American Party    557 0.00220       0.00300  
+#> 8 Libertarian Party of Nevada   507 0.00200       0.00273  
+#> 9 Nevada Green Party             14 0.0000552     0.0000754
 ```
 
 ```r
@@ -721,20 +693,20 @@ print_tabyl(nv, seeking_office)
 ```
 
 ```
-#> # A tibble: 537 x 4
-#>    seeking_office                       n percent valid_percent
-#>    <chr>                            <dbl>   <dbl>         <dbl>
-#>  1 <NA>                            197465 0.432         NA     
-#>  2 Governor                         41600 0.0910         0.160 
-#>  3 Lieutenant Governor              18143 0.0397         0.0699
-#>  4 Attorney General                  8523 0.0187         0.0328
-#>  5 City Council, Las Vegas           6897 0.0151         0.0266
-#>  6 Secretary Of State                4416 0.00966        0.0170
-#>  7 Sheriff, Clark County             4082 0.00893        0.0157
-#>  8 County Commissioner, District F   3888 0.00851        0.0150
-#>  9 State Assembly, District 21       3239 0.00709        0.0125
-#> 10 State Assembly, District 8        3072 0.00672        0.0118
-#> # … with 527 more rows
+#> # A tibble: 638 x 4
+#>    seeking_office                  n percent valid_percent
+#>    <chr>                       <dbl>   <dbl>         <dbl>
+#>  1 <NA>                        68035  0.268        NA     
+#>  2 Governor                    13136  0.0518        0.0708
+#>  3 City Council, Las Vegas      5962  0.0235        0.0321
+#>  4 Lieutenant Governor          5411  0.0213        0.0292
+#>  5 Attorney General             4336  0.0171        0.0234
+#>  6 State Assembly, District 1   3511  0.0138        0.0189
+#>  7 State Assembly, District 36  3273  0.0129        0.0176
+#>  8 State Assembly, District 21  2747  0.0108        0.0148
+#>  9 Secretary Of State           2730  0.0108        0.0147
+#> 10 State Senate, District 13    2563  0.0101        0.0138
+#> # … with 628 more rows
 ```
 
 ```r
@@ -742,20 +714,20 @@ print_tabyl(nv, jurisdiction)
 ```
 
 ```
-#> # A tibble: 36 x 4
-#>    jurisdiction                 n percent valid_percent
-#>    <chr>                    <dbl>   <dbl>         <dbl>
-#>  1 <NA>                    197465 0.432        NA      
-#>  2 NV SOS                   96253 0.211         0.371  
-#>  3 CLARK COUNTY             94874 0.208         0.366  
-#>  4 WASHOE COUNTY            26706 0.0584        0.103  
-#>  5 CITY OF LAS VEGAS        11966 0.0262        0.0461 
-#>  6 CITY OF RENO              7589 0.0166        0.0292 
-#>  7 CITY OF HENDERSON         3255 0.00712       0.0125 
-#>  8 CARSON CITY               3188 0.00698       0.0123 
-#>  9 CITY OF NORTH LAS VEGAS   3180 0.00696       0.0123 
-#> 10 UNKNOWN                   2489 0.00545       0.00959
-#> # … with 26 more rows
+#> # A tibble: 38 x 4
+#>    jurisdiction                n percent valid_percent
+#>    <chr>                   <dbl>   <dbl>         <dbl>
+#>  1 CLARK COUNTY            78478  0.309         0.423 
+#>  2 <NA>                    68035  0.268        NA     
+#>  3 NV SOS                  47766  0.188         0.257 
+#>  4 WASHOE COUNTY           19093  0.0753        0.103 
+#>  5 CITY OF LAS VEGAS       10132  0.0399        0.0546
+#>  6 CITY OF RENO             4520  0.0178        0.0244
+#>  7 NYE COUNTY               3330  0.0131        0.0179
+#>  8 CITY OF NORTH LAS VEGAS  3293  0.0130        0.0177
+#>  9 CARSON CITY              2908  0.0115        0.0157
+#> 10 CITY OF HENDERSON        2893  0.0114        0.0156
+#> # … with 28 more rows
 ```
 
 ```r
@@ -766,20 +738,20 @@ print_tabyl(nv, election_cycle)
 #> # A tibble: 14 x 3
 #>    election_cycle     n percent
 #>             <dbl> <dbl>   <dbl>
-#>  1           2013 90111 0.197  
-#>  2           2018 88975 0.195  
-#>  3           2014 77793 0.170  
-#>  4           2012 55131 0.121  
-#>  5           2016 50722 0.111  
-#>  6           2017 27855 0.0610 
-#>  7           2015 21103 0.0462 
-#>  8           2011 20006 0.0438 
-#>  9           2010 11796 0.0258 
-#> 10           2008  6113 0.0134 
-#> 11           2019  2863 0.00627
-#> 12           2009  2045 0.00448
-#> 13           2006  1546 0.00338
-#> 14           2007   917 0.00201
+#>  1           2018 55991 0.221  
+#>  2           2014 46911 0.185  
+#>  3           2016 39289 0.155  
+#>  4           2012 31745 0.125  
+#>  5           2017 18213 0.0718 
+#>  6           2013 15721 0.0620 
+#>  7           2015 14672 0.0578 
+#>  8           2010 10795 0.0426 
+#>  9           2011 10040 0.0396 
+#> 10           2008  4669 0.0184 
+#> 11           2019  1955 0.00771
+#> 12           2006  1652 0.00651
+#> 13           2009  1551 0.00611
+#> 14           2007   440 0.00173
 ```
 
 ```r
@@ -790,8 +762,8 @@ print_tabyl(nv, report_amended)
 #> # A tibble: 2 x 3
 #>   report_amended      n percent
 #>   <lgl>           <dbl>   <dbl>
-#> 1 FALSE          372463   0.815
-#> 2 TRUE            84513   0.185
+#> 1 FALSE          207268   0.817
+#> 2 TRUE            46376   0.183
 ```
 
 ```r
@@ -802,8 +774,8 @@ print_tabyl(nv, report_superseded)
 #> # A tibble: 2 x 3
 #>   report_superseded      n percent
 #>   <lgl>              <dbl>   <dbl>
-#> 1 FALSE             380687   0.833
-#> 2 TRUE               76289   0.167
+#> 1 FALSE             210150   0.829
+#> 2 TRUE               43494   0.171
 ```
 
 ```r
@@ -812,15 +784,15 @@ print_tabyl(nv, group_type)
 
 ```
 #> # A tibble: 7 x 4
-#>   group_type                      n   percent valid_percent
-#>   <chr>                       <dbl>     <dbl>         <dbl>
-#> 1 <NA>                       259511 0.568         NA       
-#> 2 Political Action Committee 152199 0.333          0.771   
-#> 3 Political Party Committee   41845 0.0916         0.212   
-#> 4 PAC Ballot Advocacy Group    2988 0.00654        0.0151  
-#> 5 Recall Committee              270 0.000591       0.00137 
-#> 6 Non-Profit Corporation        135 0.000295       0.000684
-#> 7 Independent Expenditure        28 0.0000613      0.000142
+#>   group_type                      n  percent valid_percent
+#>   <chr>                       <dbl>    <dbl>         <dbl>
+#> 1 <NA>                       185609 0.732        NA       
+#> 2 Political Action Committee  42042 0.166         0.618   
+#> 3 Political Party Committee   20516 0.0809        0.302   
+#> 4 PAC Ballot Advocacy Group    4598 0.0181        0.0676  
+#> 5 Recall Committee              410 0.00162       0.00603 
+#> 6 Non-Profit Corporation        405 0.00160       0.00595 
+#> 7 Independent Expenditure        64 0.000252      0.000941
 ```
 
 ```r
@@ -831,9 +803,9 @@ print_tabyl(nv, group_active)
 #> # A tibble: 3 x 4
 #>   group_active      n percent valid_percent
 #>   <lgl>         <dbl>   <dbl>         <dbl>
-#> 1 NA           259511  0.568        NA     
-#> 2 TRUE         181224  0.397         0.918 
-#> 3 FALSE         16241  0.0355        0.0822
+#> 1 NA           185609  0.732         NA    
+#> 2 TRUE          53440  0.211          0.785
+#> 3 FALSE         14595  0.0575         0.215
 ```
 
 ```r
@@ -841,20 +813,20 @@ print_tabyl(nv, group_city)
 ```
 
 ```
-#> # A tibble: 89 x 4
+#> # A tibble: 132 x 4
 #>    group_city       n percent valid_percent
 #>    <chr>        <dbl>   <dbl>         <dbl>
-#>  1 <NA>        259511 0.568         NA     
-#>  2 Washington   57513 0.126          0.291 
-#>  3 Las Vegas    46687 0.102          0.236 
-#>  4 Reno         43772 0.0958         0.222 
-#>  5 Wilmington   12815 0.0280         0.0649
-#>  6 Hartford     11433 0.0250         0.0579
-#>  7 Northbrook    8521 0.0186         0.0432
-#>  8 Carson City   5381 0.0118         0.0273
-#>  9 Henderson     3013 0.00659        0.0153
-#> 10 New York      2019 0.00442        0.0102
-#> # … with 79 more rows
+#>  1 <NA>        185609 0.732        NA      
+#>  2 Las Vegas    24606 0.0970        0.362  
+#>  3 Reno         21845 0.0861        0.321  
+#>  4 Washington    6759 0.0266        0.0993 
+#>  5 Carson City   3213 0.0127        0.0472 
+#>  6 Henderson     2892 0.0114        0.0425 
+#>  7 Sacramento    1786 0.00704       0.0263 
+#>  8 San Rafael     747 0.00295       0.0110 
+#>  9 Minden         590 0.00233       0.00867
+#> 10 New York       531 0.00209       0.00780
+#> # … with 122 more rows
 ```
 
 ### Ranges
@@ -863,21 +835,21 @@ For continuous variables, the ranges should be checked.
 
 
 ```r
-summary(nv$contribution_date)
+summary(nv$expense_date)
 ```
 
 ```
 #>         Min.      1st Qu.       Median         Mean      3rd Qu.         Max. 
-#> "2006-01-01" "2013-03-28" "2014-08-14" "2014-12-13" "2017-03-16" "2019-04-19"
+#> "2006-01-01" "2013-02-25" "2015-03-13" "2015-03-18" "2017-09-21" "2019-06-14"
 ```
 
 ```r
-summary(nv$contribution_amount)
+summary(nv$expense_amount)
 ```
 
 ```
 #>     Min.  1st Qu.   Median     Mean  3rd Qu.     Max. 
-#>   -25000       25      200     1883     1000 20700000
+#>   -60000       99      320     3113     1125 19071790
 ```
 
 ```r
@@ -886,7 +858,7 @@ summary(nv$filing_due_date)
 
 ```
 #>         Min.      1st Qu.       Median         Mean      3rd Qu.         Max.         NA's 
-#> "2006-10-31" "2012-10-16" "2014-10-31" "2015-06-02" "2018-10-16" "2018-10-16"     "343350"
+#> "2006-10-31" "2012-10-16" "2014-10-31" "2015-06-05" "2018-10-16" "2018-10-16"     "185439"
 ```
 
 ```r
@@ -895,51 +867,51 @@ summary(nv$filed_date)
 
 ```
 #>         Min.      1st Qu.       Median         Mean      3rd Qu.         Max. 
-#> "2006-08-07" "2014-01-06" "2014-10-14" "2015-03-27" "2017-12-09" "2019-05-21"
+#> "2006-08-07" "2014-01-09" "2016-01-14" "2015-06-30" "2018-01-16" "2019-06-21"
 ```
 
 The date variables all seem to make sense. There are no dates before 
 2006-01-01 and none from the future (aside from the upcoming filing dates). 
 
-The maximum contribution is for $20,700,000.
+The maximum contribution is for $19,071,790.
 
 
 ```r
 nv %>% 
-  filter(contribution_amount == max(contribution_amount)) %>% 
+  filter(expense_amount == max(expense_amount)) %>% 
   glimpse()
 ```
 
 ```
 #> Observations: 1
 #> Variables: 27
-#> $ contribution_id     <chr> "544130"
-#> $ report_id           <chr> "80598"
-#> $ candidate_id        <chr> NA
-#> $ group_id            <chr> "3708"
-#> $ contribution_date   <date> 2018-09-21
-#> $ contribution_amount <dbl> 20700000
-#> $ contribution_type   <chr> "Monetary Contribution"
-#> $ contributor_id      <chr> "268234"
-#> $ report_name         <chr> "CE Report 3"
-#> $ election_cycle      <dbl> 2018
-#> $ filing_due_date     <date> 2018-10-16
-#> $ filed_date          <date> 2018-10-16
-#> $ report_amended      <lgl> FALSE
-#> $ report_superseded   <lgl> FALSE
-#> $ candidate_first     <chr> NA
-#> $ candidate_last      <chr> NA
-#> $ candidate_party     <chr> NA
-#> $ seeking_office      <chr> NA
-#> $ jurisdiction        <chr> NA
-#> $ group_name          <chr> "Coalition to Defeat Question 3"
-#> $ group_type          <chr> "Political Action Committee"
-#> $ group_contact       <chr> "Daniel Bravo"
-#> $ group_active        <lgl> TRUE
-#> $ group_city          <chr> "Las Vegas"
-#> $ payee_first         <chr> NA
-#> $ payee_middle        <chr> NA
-#> $ payee_last          <chr> "NV Energy"
+#> $ expense_id        <chr> "283456"
+#> $ report_id         <chr> "80598"
+#> $ candidate_id      <chr> NA
+#> $ group_id          <chr> "3708"
+#> $ expense_date      <date> 2018-09-21
+#> $ expense_amount    <dbl> 19071790
+#> $ expense_type      <chr> "Monetary Expense"
+#> $ payee_id          <chr> "268320"
+#> $ report_name       <chr> "CE Report 3"
+#> $ election_cycle    <dbl> 2018
+#> $ filing_due_date   <date> 2018-10-16
+#> $ filed_date        <date> 2018-10-16
+#> $ report_amended    <lgl> FALSE
+#> $ report_superseded <lgl> FALSE
+#> $ candidate_first   <chr> NA
+#> $ candidate_last    <chr> NA
+#> $ candidate_party   <chr> NA
+#> $ seeking_office    <chr> NA
+#> $ jurisdiction      <chr> NA
+#> $ group_name        <chr> "Coalition to Defeat Question 3"
+#> $ group_type        <chr> "Political Action Committee"
+#> $ group_contact     <chr> "Daniel Bravo"
+#> $ group_active      <lgl> TRUE
+#> $ group_city        <chr> "Las Vegas"
+#> $ payee_first       <chr> NA
+#> $ payee_middle      <chr> NA
+#> $ payee_last        <chr> "Winner & Mandabach Campaigns"
 ```
 
 ### Plot
@@ -991,44 +963,44 @@ nv %>%
 
 ```
 #> # A tibble: 27 x 3
-#>    variable              n_na prop_na
-#>    <chr>                <int>   <dbl>
-#>  1 contribution_id          0   0    
-#>  2 report_id                0   0    
-#>  3 candidate_id        197465   0.432
-#>  4 group_id            259511   0.568
-#>  5 contribution_date        0   0    
-#>  6 contribution_amount      0   0    
-#>  7 contribution_type        0   0    
-#>  8 contributor_id           0   0    
-#>  9 report_name              0   0    
-#> 10 election_cycle           0   0    
-#> 11 filing_due_date     343350   0.751
-#> 12 filed_date               0   0    
-#> 13 report_amended           0   0    
-#> 14 report_superseded        0   0    
-#> 15 candidate_first     197465   0.432
-#> 16 candidate_last      197465   0.432
-#> 17 candidate_party     197465   0.432
-#> 18 seeking_office      197465   0.432
-#> 19 jurisdiction        197465   0.432
-#> 20 group_name          259511   0.568
-#> 21 group_type          259511   0.568
-#> 22 group_contact       264319   0.578
-#> 23 group_active        259511   0.568
-#> 24 group_city          259511   0.568
-#> 25 payee_first         155998   0.341
-#> 26 payee_middle        371851   0.814
-#> 27 payee_last               0   0
+#>    variable            n_na prop_na
+#>    <chr>              <int>   <dbl>
+#>  1 expense_id             0   0    
+#>  2 report_id              0   0    
+#>  3 candidate_id       68035   0.268
+#>  4 group_id          185609   0.732
+#>  5 expense_date           0   0    
+#>  6 expense_amount         0   0    
+#>  7 expense_type           0   0    
+#>  8 payee_id               0   0    
+#>  9 report_name            0   0    
+#> 10 election_cycle         0   0    
+#> 11 filing_due_date   185439   0.731
+#> 12 filed_date             0   0    
+#> 13 report_amended         0   0    
+#> 14 report_superseded      0   0    
+#> 15 candidate_first    68035   0.268
+#> 16 candidate_last     68035   0.268
+#> 17 candidate_party    68035   0.268
+#> 18 seeking_office     68035   0.268
+#> 19 jurisdiction       68035   0.268
+#> 20 group_name        185609   0.732
+#> 21 group_type        185609   0.732
+#> 22 group_contact     191108   0.753
+#> 23 group_active      185609   0.732
+#> 24 group_city        185609   0.732
+#> 25 payee_first       207655   0.819
+#> 26 payee_middle      248754   0.981
+#> 27 payee_last             0   0
 ```
 
 ### Duplicates
 
-There are no duplicate contributions in the database.
+There are no duplicate expenses in the database.
 
 
 ```r
-nrow(get_dupes(nv_contributions))
+nrow(get_dupes(nv_expenses))
 #> [1] 0
 ```
 
@@ -1051,23 +1023,12 @@ contribution date.
 
 ```r
 nv <- nv %>% 
-  mutate(year_clean = lubridate::year(contribution_date))
-```
-
-### Group City
-
-There are 87 `group_city` values.  Only one appears to be invalid.
-
-
-```r
-nv$group_city_clean <- nv$group_city %>% 
-  str_remove("[:punct:]") %>% 
-  na_if("ALKDJF")
+  mutate(expense_year = lubridate::year(expense_date))
 ```
 
 ### Jurisdiction
 
-There are 36 `jurisdiction` values.  Only one appears to be invalid.
+There are 38 `jurisdiction` values.  Only one appears to be invalid.
 
 
 ```r
@@ -1086,10 +1047,9 @@ nv_candidates %>%
 ```
 
 ```
-#> # A tibble: 1 x 6
-#>   candidate_id first_name last_name party             office                      jurisdiction
-#>   <chr>        <chr>      <chr>     <chr>             <chr>                       <chr>       
-#> 1 9735         Tom        Roberts   Test Party Name 5 State Assembly, District 13 CLARK COUNTY
+#> # A tibble: 0 x 6
+#> # … with 6 variables: candidate_id <chr>, first_name <chr>, last_name <chr>, party <chr>,
+#> #   office <chr>, jurisdiction <chr>
 ```
 
 ```r
@@ -1099,12 +1059,12 @@ nv$party_clean <- nv$candidate_party %>%
 
 ### Payee
 
-Because contributions are reported by the recipient, there are inconsistencies in the spelling
-of the contributor's name. While we can't fix potential misspelling of individual names, there are
+Because expense payee's are reported by the recipient, there are inconsistencies in the spelling
+of the payee's name. While we can't fix potential misspelling of individual names, there are
 ways to reduce the number of variants of non-individual contributor names.
 
 Among records with _only_ a `payee_last` value (non-individuals), there are
-52840 distinct values.
+52844 distinct values.
 
 By using the OpenRefine merging algorithms, we can reduce the number of distinct `payee_last`
 values. The approach takes uncommon values and changes them to a more common very similar value.
@@ -1112,13 +1072,14 @@ values. The approach takes uncommon values and changes them to a more common ver
 
 ```r
 n_distinct(nv_payees$last_name[is.na(nv_payees$first_name)])
-#> [1] 52840
+#> [1] 52844
 
 payee_fix <- nv %>%
   filter(is.na(payee_first)) %>%
   mutate(payee_prep = payee_last %>% 
-           str_remove_all(fixed("\""))) %>% 
-  select(contribution_id, payee_last, payee_prep) %>% 
+           str_remove_all(fixed("\"")) %>% 
+           iconv(to = "utf-8")) %>% 
+  select(expense_id, payee_last, payee_prep) %>% 
   mutate(payee_fix = payee_prep %>%
            key_collision_merge() %>%
            n_gram_merge()) %>% 
@@ -1127,27 +1088,27 @@ payee_fix <- nv %>%
 
 # total changed records
 sum(payee_fix$fixed, na.rm = TRUE)
-#> [1] 27329
+#> [1] 21784
 
 # distinct changes made
 payee_fix %>% 
   filter(fixed) %>% 
-  select(-contribution_id) %>% 
+  select(-expense_id) %>% 
   distinct() %>%
   nrow()
-#> [1] 5294
+#> [1] 2497
 
 # reduced distinct names
 n_distinct(payee_fix$payee_last)
-#> [1] 28608
+#> [1] 25765
 n_distinct(payee_fix$payee_fix)
-#> [1] 23322
+#> [1] 23286
 
 # percent change
 n_distinct(payee_fix$payee_last) %>% 
   subtract(n_distinct(payee_fix$payee_fix)) %>% 
   divide_by(n_distinct(payee_fix$payee_last))
-#> [1] 0.1847735
+#> [1] 0.0962158
 ```
 
 
@@ -1160,20 +1121,20 @@ payee_fix %>%
 ```
 
 ```
-#> # A tibble: 5,294 x 3
-#>    payee_last                         payee_fix                          n
-#>    <chr>                              <chr>                          <int>
-#>  1 BOYD GAMING CORPORATION            BOYD GAMING                      348
-#>  2 SOUTHWEST GAS                      SOUTHWEST GAS CORPORATION        213
-#>  3 CITIZENS FOR JUSTICE TRUST         CITIZENS FOR JUSTICE, TRUST      176
-#>  4 NEVADA HEALTHPAC                   NEVADA HEALTH PAC                175
-#>  5 NEVADA POWER                       NEVADA POWER COMPANY             167
-#>  6 SOUTH POINT HOTEL AND CASINO       SOUTH POINT HOTEL & CASINO       156
-#>  7 LAS VEGAS CHAMBER OF COMERCE       LAS VEGAS CHAMBER OF COMMERCE    154
-#>  8 CENTURYLINK                        CENTURY LINK                     122
-#>  9 LEWIS AND ROCA                     LEWIS & ROCA                     117
-#> 10 REPUBLIC SILVER STATE DISPOSAL INC REPUBLIC SILVER STATE DISPOSAL   113
-#> # … with 5,284 more rows
+#> # A tibble: 2,497 x 3
+#>    payee_last        payee_fix              n
+#>    <chr>             <chr>              <int>
+#>  1 ANEDOT LLC        ANEDOT               715
+#>  2 PAY PAL           PAYPAL               517
+#>  3 IN COMPLIANCE INC IN COMPLIANCE INC.   460
+#>  4 A & B PRINTING    A&B PRINTING         386
+#>  5 VISTAPRINT        VISTA PRINT          365
+#>  6 WAL MART          WALMART              251
+#>  7 ACT BLUE          ACTBLUE              242
+#>  8 SMITHS            SMITH'S              240
+#>  9 AB PRINTING       A&B PRINTING         228
+#> 10 OCTOBER INC.      OCTOBER INC          226
+#> # … with 2,487 more rows
 ```
 
 Use the table of fixed payee last names to correct the original values.
@@ -1181,7 +1142,7 @@ Use the table of fixed payee last names to correct the original values.
 
 ```r
 nv <- nv %>% 
-  left_join(payee_fix, by = c("contribution_id", "payee_last")) %>%
+  left_join(payee_fix, by = c("expense_id", "payee_last")) %>%
   mutate(fixed = !is.na(fixed)) %>% 
   mutate(payee_clean = ifelse(fixed, payee_fix, payee_last)) %>% 
   mutate(payee_clean = na_if(payee_clean, "NONE"))
@@ -1189,8 +1150,8 @@ nv <- nv %>%
 
 ## Check
 
-There are 127 records with `NA` values in the new `payee_clean`.
-127 of those values were previously "NONE" in the
+There are 68 records with `NA` values in the new `payee_clean`.
+68 of those values were previously "NONE" in the
 original `payee_last` variable.
 
 To check for records without _any_ kind of identifying information on either side of the 
@@ -1199,15 +1160,15 @@ transaction, we can coalesce the various variables into one.
 
 ```
 #> # A tibble: 4 x 2
-#>   variable             n_na
-#>   <chr>               <int>
-#> 1 contribution_id         0
-#> 2 contribution_amount     0
-#> 3 recipient               0
-#> 4 contributor            76
+#>   variable        n_na
+#>   <chr>          <int>
+#> 1 expense_id         0
+#> 2 expense_amount     0
+#> 3 payer              0
+#> 4 payee             46
 ```
 
-There are 16 unique recipient/contributor combinations missing either value.
+There are 14 unique recipient/contributor combinations missing either value.
 
 
 ```r
@@ -1220,36 +1181,34 @@ nv %>%
     payee_clean
   ) %>% 
   # coalesce recipient types into one col
-  mutate(recipient = coalesce(candidate_last, group_name)) %>% 
+  mutate(payer = coalesce(candidate_last, group_name)) %>% 
   select(-candidate_last, -group_name) %>%
   # repeat for contributors
-  mutate(contributor = coalesce(payee_first, payee_clean)) %>%
+  mutate(payee = coalesce(payee_first, payee_clean)) %>%
   select(-payee_first, -payee_clean) %>% 
   # filter for NA
-  filter(is.na(contributor) | is.na(recipient)) %>% 
+  filter(is.na(payee) | is.na(payer)) %>% 
   distinct()
 ```
 
 ```
-#> # A tibble: 16 x 2
-#>    recipient                                                              contributor
-#>    <chr>                                                                  <chr>      
-#>  1 NEVADA NEXT PAC                                                        <NA>       
-#>  2 MILLER                                                                 <NA>       
-#>  3 HERZOG                                                                 <NA>       
-#>  4 DOUGLAS COUNTY PROFESSIONAL EDUCATION ASSOCIATION TOGETHER IN POLITICS <NA>       
-#>  5 LEAVITT                                                                <NA>       
-#>  6 MURDOCH                                                                <NA>       
-#>  7 LANCASTER                                                              <NA>       
-#>  8 GLASSON                                                                <NA>       
-#>  9 BUNDY                                                                  <NA>       
-#> 10 BALLOT INITIATIVE STRATEGY CENTER                                      <NA>       
-#> 11 SANTUCCI                                                               <NA>       
-#> 12 O'BRIEN                                                                <NA>       
-#> 13 BURTON                                                                 <NA>       
-#> 14 RIVERO                                                                 <NA>       
-#> 15 COCHRAN                                                                <NA>       
-#> 16 POLLOCK                                                                <NA>
+#> # A tibble: 14 x 2
+#>    payer                             payee
+#>    <chr>                             <chr>
+#>  1 NEVADA NEXT PAC                   <NA> 
+#>  2 MILLER                            <NA> 
+#>  3 HERZOG                            <NA> 
+#>  4 LEAVITT                           <NA> 
+#>  5 LANCASTER                         <NA> 
+#>  6 GLASSON                           <NA> 
+#>  7 BALLOT INITIATIVE STRATEGY CENTER <NA> 
+#>  8 SANTUCCI                          <NA> 
+#>  9 BUNDY                             <NA> 
+#> 10 BURTON                            <NA> 
+#> 11 DIXON                             <NA> 
+#> 12 COCHRAN                           <NA> 
+#> 13 SEVERNS                           <NA> 
+#> 14 POLLOCK                           <NA>
 ```
 
 If both the `payee_first` and `payee_last` variables are `NA`, flag the record with a new `na_flag`
@@ -1259,17 +1218,20 @@ variable.
 ```r
 nv <- nv %>% 
   mutate(na_flag = is.na(payee_first) & is.na(payee_clean))
+
+sum(nv$na_flag)
+#> [1] 46
 ```
 
 ## Conclusion
 
-1. There are 456976 records in the database
+1. There are 253644 records in the database
 1. There are no duplicate records
 1. All continous ranges make sense
 1. There are very few missing values where there shouldn't be 
 1. consistency issues among non-individual contributor names has been fixed
 1. There is no ZIP code variable
-1. The `contribution_year` variable has been created from the `contribution_date` variable
+1. The `expense_year` variable has been created from the `expense_date` variable
 1. Records missing any key information are flagged with the `na_flag` variable
 
 ## Write
@@ -1279,6 +1241,7 @@ To save space, unclean columns will be removed and `NA` values will be written a
 
 
 ```r
+dir_create(here("nv_expends", "data", "processed"))
 nv %>% 
   select(
     -jurisdiction,
@@ -1287,22 +1250,7 @@ nv %>%
   ) %>% 
   mutate_if(is.character, str_replace_all, "\"", "\'") %>% 
   write_csv(
-    path = here("nv_contribs", "data", "nv_contribs_clean.csv"),
+    path = here("nv_expends", "data", "processed", "nv_expends_clean.csv"),
     na = ""
   )
 ```
-
-## Purl
-
-To facilitate any future processing of this same information, we can create an executable R script
-from the code chunks in this document. This script can then be run from the command line to output
-a cleaned file.
-
-
-```r
-purl(
-  input  = here::here("nv_contribs", "docs", "nv_diary.Rmd"),
-  output = here::here("nv_contribs", "code", "nv_script.R")
-)
-```
-
