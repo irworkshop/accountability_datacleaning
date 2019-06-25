@@ -105,20 +105,120 @@ here::here()
 
 ## Data
 
+Data is collected from the [AlabamaVotes.gov][01] website, which publishes data in concordance with
+the Alabama Electronic Fair Campaign Practices Act (FCPA). 
+
+> Welcome to the public disclosure website for the Alabama Electronic Fair Campaign Practices Act
+(FCPA) Reporting System. My staff and I developed this online system pursuant to Alabama
+Legislative Act 2011-687. It requires electronic reports of contributions and expenditures to
+increase the efficiency of data entry, provide more accurate data, enhance reporting capabilities
+and improve user navigation of the system.
+> 
+> This website contains detailed financial records and related information that candidates and
+political action committees are required by law to disclose. You can search the system in several
+ways and review the results online, print them or extract them for further analysis.
+
+Per the "[Data Download][02]" resounce page of that website:
+
 > This page provides comma separated value (CSV) downloadable files which contain annual data for
 Cash Contributions, In-Kind Contributions, Other Receipts, and Expenditures in a zipped file
 format. These files can be downloaded and imported into other applications (Microsoft Excel,
 Microsoft Access, etc.) for your use. This data is extracted from the Alabama Electronic FCPA
 Reporting System database as it existed as of 6/21/2019 12:35 AM.
 
+As the "[Help][03]" page for that page explains:
+
 > You can access the Campaign Finance Data Download page to download contribution and expenditure
 data for import into other applications such as Microsoft Excel or Access. A weekly batch process
 is run that captures the year-to-date information for the current year. The data is available for
 each calendar year. The file is downloaded in CSV format.
 
+[01]: http://fcpa.alabamavotes.gov
+[02]: http://fcpa.alabamavotes.gov/PublicSite/DataDownload.aspx
+[03]: https://fcpa.alabamavotes.gov/CampaignFinance/WebHelp/Public/PublicSite/DataDownload.htm
+
 ## Variables
 
-## Read
+The Data Download page also links to PDF files with keys to the file format.
+Per the [Expenditures Key][04]:
+
+`ORG ID`:
+
+> This is the unique ID of the paying candidate or committee.
+
+`EXPENDITURE AMOUNT`:
+
+> Dollar amount of the expenditure.
+
+`EXPENDITURE DATE`:
+
+> Date of the expenditure.
+
+`LAST NAME`:
+
+> Last Name of Payee (entity paid), if an individual person. If not an individual, the entity full
+name will be in the LAST NAME field.
+
+`FIRST NAME`:
+
+> Payee First Name.
+
+`ADDRESS`:
+
+> Payee Address Number, Street, PO Box or other directional information.
+
+`CITY`, `STATE`, `ZIP`:
+
+> Payee City [State, ZIP]
+
+`EXPENDITURE`:
+
+> Dollar amount of the expenditure.
+
+`EXPLANATION`:
+
+> This is the explanation provided for the expenditure if “Other” purpose is used.
+
+`EXPENDITURE ID`:
+
+> This is the Expenditure internal ID. This ID is unique.
+
+`FILED DATE`:
+
+> Date the Expenditure was filed.
+
+`PURPOSE`: 
+
+> Purpose of the Expenditure.
+
+`EXPENDITURE TYPE`:
+
+> Indicates the Type of Expenditure, Itemized, Non-Itemized, Itemized Line of Credit, Non-Itemized
+Line of Credit.
+
+`COMMITTEE TYPE`:
+
+> Type of committee making the expenditure. PCC or PAC
+
+`COMMITTEE NAME`:
+
+> This is the name of the Committee making the expenditure if a PAC.
+
+`CANDIDATE NAME`:
+
+> This is the name of the Candidate making the expenditure if a PCC.
+
+`AMENDED`: 
+
+> Y/N Indicator to designate if this record has been amended.
+
+
+[04]: http://fcpa.alabamavotes.gov/PublicSite/Resources/AL_ExpendituresFileLayout.pdf
+
+## Import
+
+To process our data in R, we will have to read each annual CSV file and combine them into a single
+data frame. This combined data frame can be cleaned and uploaded to TAP.
 
 ### Download
 
@@ -127,6 +227,8 @@ have a consistent naming convention, all we have to do is change the year for ea
 
 ```{r glue_url}
 expend_urls <- glue("http://fcpa.alabamavotes.gov/PublicSite/Docs/BulkDataDownloads/{2013:2019}_ExpendituresExtract.csv.zip")
+
+print(expend_urls)
 ```
 
 ```{r any_old_files, echo=FALSE}
@@ -150,7 +252,7 @@ any_old_files <- function(path, glob) {
 ```
 
 If recent versions of the ZIP files do not exists in the `data/raw` directory, download them from
-the Alabama 
+the Alabama FCPA website with `utils::download.file()`.
 
 ```{r download.file}
 dir_create(here("al_expends", "data", "raw"))
@@ -165,7 +267,7 @@ if (any_old_files(here("al_expends", "data", "raw"), "*.zip")) {
 }
 ```
 
-```{r dir_ls_zip}
+```{r dir_ls_zip, echo=FALSE}
 here("al_expends", "data", "raw") %>% 
   dir_ls(glob = "*.zip") %>% 
   file_info() %>% 
@@ -174,8 +276,8 @@ here("al_expends", "data", "raw") %>%
     file, 
     type, 
     size,
-    modification_time,
-    birth_time
+    birth_time,
+    modification_time
   )
 ```
 
@@ -184,7 +286,7 @@ here("al_expends", "data", "raw") %>%
 If recent versions of the unzipped CSV files do not exist in the `data/raw` directory, unzip the
 ZIP archive files.
 
-```{r unzip}
+```{r unzip, message=FALSE}
 if (any_old_files(here("al_expends", "data", "raw"), "*.csv")) {
   here("al_expends", "data", "raw") %>% 
     dir_ls(glob = "*.zip") %>% 
@@ -201,12 +303,12 @@ here("al_expends", "data", "raw") %>%
     file, 
     type, 
     size,
-    modification_time,
-    birth_time
+    birth_time,
+    modification_time
   )
 ```
 
-### Import
+### Read
 
 ```{r vroom, eval=FALSE, echo=FALSE}
 al <- 
