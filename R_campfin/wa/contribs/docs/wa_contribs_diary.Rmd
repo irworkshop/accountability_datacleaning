@@ -127,8 +127,9 @@ This data set will be collected, explored, and saved using the free and open R p
 ```{r libs, message=FALSE, warning=FALSE, error=FALSE}
 # install.packages("pacman")
 pacman::p_load(
-  tidyverse, 
+  tidyverse,
   lubridate, 
+  RSocrata,
   magrittr, 
   janitor, 
   zipcode, 
@@ -152,42 +153,26 @@ doubles. All other variables are handled as character strings.
 
 ```{r read_csv, collapse=TRUE}
 # create path to file
+dir_create(here("wa", "contribs", "data", "raw"))
 wa_file <- here(
-  "wa_contribs", "data", "raw", 
+  "wa", "contribs", "data", "raw", 
   "Contributions_to_Candidates_and_Political_Committees.csv"
 )
 
-# if a recent version exists where it should, read it
-if (file.exists(wa_file) & as_date(file.mtime(wa_file)) == today()) {
-  downloaded <- FALSE
-  wa <- read_csv(
-    file = wa_file,
-    na = c("", "NA", "N/A"),
-    col_types = cols(
-      .default = col_character(),
-      amount = col_double(),
-      receipt_date = col_date(format = "%m/%d/%Y")
-    )
+download.file(
+  url = "https://data.wa.gov/api/views/kv7h-kjye/rows.csv?accessType=DOWNLOAD",
+  destfile = wa_file
+)
+
+wa <- read_csv(
+  file = wa_file,
+  col_types = cols(
+    .default = col_character(),
+    election_year = col_double(),
+    amount = col_double(),
+    receipt_date = col_date("%m/%d/%Y")
   )
-} else { 
-  # otherwise read it from the internet
-  wa <- read_csv(
-    file = "https://data.wa.gov/api/views/kv7h-kjye/rows.csv?accessType=DOWNLOAD",
-    na = c("", "NA", "N/A"),
-    col_types = cols(
-      .default = col_character(),
-      amount = col_double(),
-      receipt_date = col_date(format = "%m/%d/%Y")
-    )
-  )
-  # and save to disk
-  dir_create(here("wa_contribs", "data", "raw"))
-  write_csv(
-    x = wa,
-    path = wa_file,
-    na = ""
-  )
-}
+)
 
 file.exists(wa_file)
 ```
@@ -798,7 +783,7 @@ n_distinct(wa$zip5_clean)    - n_distinct(wa$contributor_zip)
 We can write two versions of the document. The first has all original columns along with cleaned
 data in the `*_clean` columns. The second remove the original columns for file size reasons.
 
-```{r write_csv, eval=FALSE}
+```{r write_csv}
 dir_create(here("wa_contribs", "data", "processed"))
 wa %>%
   # remove the original contributor_* columns for space
@@ -808,6 +793,7 @@ wa %>%
     -contributor_state,
     -contributor_zip
   ) %>% 
+  mutate_if(is.character, str_squish) %>% 
   write_csv(
     path = here("wa_contribs", "data", "processed", "wa_contribs_clean.csv"),
     na = "",
