@@ -1,7 +1,7 @@
 Data Diary
 ================
 Kiernan Nicholls
-2019-06-26 17:14:38
+2019-06-27 15:02:35
 
   - [Project](#project)
   - [Objectives](#objectives)
@@ -11,6 +11,7 @@ Kiernan Nicholls
   - [Import](#import)
   - [Explore](#explore)
   - [Wrangle](#wrangle)
+  - [Export](#export)
 
 ## Project
 
@@ -132,7 +133,7 @@ page for that page explains:
 
 The Data Download page also links to PDF files with keys to the file
 format. Per the [Expenditures
-Key](http://fcpa.alabamavotes.gov/PublicSite/Resources/AL_ExpendituresFileLayout.pdf):
+Key](https://en.wikipedia.org/wiki/List_of_cities_and_towns_in_Alabama):
 
 `ORG ID`:
 
@@ -251,13 +252,13 @@ if (!all_files_new(raw_dir, "zip$")) {
     #> # A tibble: 7 x 5
     #>   file                             type         size birth_time          modification_time  
     #>   <chr>                            <fct> <fs::bytes> <dttm>              <dttm>             
-    #> 1 2013_ExpendituresExtract.csv.zip file       416.6K 2019-06-26 11:03:53 2019-06-26 11:03:53
-    #> 2 2014_ExpendituresExtract.csv.zip file        1.94M 2019-06-26 11:03:54 2019-06-26 11:03:54
-    #> 3 2015_ExpendituresExtract.csv.zip file      473.37K 2019-06-26 11:03:55 2019-06-26 11:03:55
-    #> 4 2016_ExpendituresExtract.csv.zip file      898.76K 2019-06-26 11:03:56 2019-06-26 11:03:56
-    #> 5 2017_ExpendituresExtract.csv.zip file      997.92K 2019-06-26 11:03:57 2019-06-26 11:03:57
-    #> 6 2018_ExpendituresExtract.csv.zip file        3.72M 2019-06-26 11:04:01 2019-06-26 11:04:01
-    #> 7 2019_ExpendituresExtract.csv.zip file      414.17K 2019-06-26 11:04:01 2019-06-26 11:04:01
+    #> 1 2013_ExpendituresExtract.csv.zip file       416.6K 2019-06-27 09:58:58 2019-06-27 09:58:58
+    #> 2 2014_ExpendituresExtract.csv.zip file        1.94M 2019-06-27 09:59:01 2019-06-27 09:59:01
+    #> 3 2015_ExpendituresExtract.csv.zip file      473.37K 2019-06-27 09:59:01 2019-06-27 09:59:01
+    #> 4 2016_ExpendituresExtract.csv.zip file      898.76K 2019-06-27 09:59:02 2019-06-27 09:59:02
+    #> 5 2017_ExpendituresExtract.csv.zip file      997.92K 2019-06-27 09:59:03 2019-06-27 09:59:03
+    #> 6 2018_ExpendituresExtract.csv.zip file        3.72M 2019-06-27 09:59:06 2019-06-27 09:59:06
+    #> 7 2019_ExpendituresExtract.csv.zip file      415.72K 2019-06-27 09:59:07 2019-06-27 09:59:07
 
 ### Unzip
 
@@ -316,20 +317,20 @@ al_bad <- read_delim(
   )
 )
 
-problems(al_bad)
+problems(al_bad) %>% mutate(file = basename(file))
 ```
 
     #> # A tibble: 8 x 5
-    #>     row col      expected       actual   file                                                      
-    #>   <int> <chr>    <chr>          <chr>    <chr>                                                     
-    #> 1 33007 FiledDa… date like %m/… 178296   '/home/ubuntu/R/accountability_datacleaning/R_campfin/al/…
-    #> 2 33007 <NA>     20 columns     21 colu… '/home/ubuntu/R/accountability_datacleaning/R_campfin/al/…
-    #> 3 38848 FiledDa… date like %m/… 178297   '/home/ubuntu/R/accountability_datacleaning/R_campfin/al/…
-    #> 4 38848 <NA>     20 columns     21 colu… '/home/ubuntu/R/accountability_datacleaning/R_campfin/al/…
-    #> 5 42978 FiledDa… date like %m/… 178298   '/home/ubuntu/R/accountability_datacleaning/R_campfin/al/…
-    #> 6 42978 <NA>     20 columns     21 colu… '/home/ubuntu/R/accountability_datacleaning/R_campfin/al/…
-    #> 7 52031 FiledDa… date like %m/… 111826   '/home/ubuntu/R/accountability_datacleaning/R_campfin/al/…
-    #> 8 52031 <NA>     20 columns     21 colu… '/home/ubuntu/R/accountability_datacleaning/R_campfin/al/…
+    #>     row col       expected           actual     file                             
+    #>   <int> <chr>     <chr>              <chr>      <chr>                            
+    #> 1 33007 FiledDate date like %m/%d/%Y 178296     2018_ExpendituresExtract.csv.zip'
+    #> 2 33007 <NA>      20 columns         21 columns 2018_ExpendituresExtract.csv.zip'
+    #> 3 38848 FiledDate date like %m/%d/%Y 178297     2018_ExpendituresExtract.csv.zip'
+    #> 4 38848 <NA>      20 columns         21 columns 2018_ExpendituresExtract.csv.zip'
+    #> 5 42978 FiledDate date like %m/%d/%Y 178298     2018_ExpendituresExtract.csv.zip'
+    #> 6 42978 <NA>      20 columns         21 columns 2018_ExpendituresExtract.csv.zip'
+    #> 7 52031 FiledDate date like %m/%d/%Y 111826     2018_ExpendituresExtract.csv.zip'
+    #> 8 52031 <NA>      20 columns         21 columns 2018_ExpendituresExtract.csv.zip'
 
 To fix these instances, we can read each line as a character string,
 replace `\"` with `\'` in those instances, combined the strings back
@@ -362,9 +363,11 @@ al <- al_good %>%
   bind_rows(al_bad) %>% 
   clean_names() %>% 
   mutate(amended = to_logical(amended))
+
+rm(al_good, al_bad)
 ```
 
-This process does *not* capture every row. I need to fix this.
+**This process does *not* capture every row. I need to fix this.**
 
 ``` r
 n_lines <- 
@@ -375,18 +378,18 @@ n_lines <-
   sum()
 
 nrow(al) - n_lines
-#> [1] -2451
+#> [1] -2456
 ```
 
 ## Explore
 
-In the combined data frame, there are 226934 rows of 20 variables.
+In the combined data frame, there are 226977 rows of 20 variables.
 
 ``` r
 glimpse(al)
 ```
 
-    #> Observations: 226,934
+    #> Observations: 226,977
     #> Variables: 20
     #> $ org_id             <chr> "25144", "25189", "25156", "25382", "25033", "25032", "24965", "24965…
     #> $ expenditure_amount <dbl> 50.00, 100.00, 235.00, 10.00, 1.00, 45.00, 1228.15, 750.00, 2500.00, …
@@ -411,7 +414,7 @@ glimpse(al)
 
 ### Missing
 
-There are 1027165 missing values across all 20 variables.
+There are 1027393 missing values across all 20 variables.
 
 ``` r
 al %>% 
@@ -428,15 +431,15 @@ al %>%
     #>  1 org_id                  0   0    
     #>  2 expenditure_amount      0   0    
     #>  3 expenditure_date        0   0    
-    #>  4 last_name           32297   0.142
-    #>  5 first_name         189072   0.833
-    #>  6 mi                 221740   0.977
-    #>  7 suffix             226292   0.997
-    #>  8 address1            32518   0.143
-    #>  9 city                32503   0.143
-    #> 10 state               32493   0.143
-    #> 11 zip                 32639   0.144
-    #> 12 explanation        146603   0.646
+    #>  4 last_name           32312   0.142
+    #>  5 first_name         189110   0.833
+    #>  6 mi                 221783   0.977
+    #>  7 suffix             226335   0.997
+    #>  8 address1            32533   0.143
+    #>  9 city                32518   0.143
+    #> 10 state               32508   0.143
+    #> 11 zip                 32654   0.144
+    #> 12 explanation        146632   0.646
     #> 13 expenditure_id          0   0    
     #> 14 filed_date              0   0    
     #> 15 purpose             81008   0.357
@@ -448,7 +451,7 @@ al %>%
 
 ### Distinct
 
-Each varaibles differs in it’s number of distinct values.
+Each variables differs in it’s number of distinct values.
 
 ``` r
 al %>% 
@@ -463,19 +466,19 @@ al %>%
     #>    variable           n_distinct prop_distinct
     #>    <chr>                   <int>         <dbl>
     #>  1 org_id                   2630    0.0116    
-    #>  2 expenditure_amount      43425    0.191     
-    #>  3 expenditure_date         2361    0.0104    
-    #>  4 last_name               39484    0.174     
+    #>  2 expenditure_amount      43434    0.191     
+    #>  3 expenditure_date         2362    0.0104    
+    #>  4 last_name               39495    0.174     
     #>  5 first_name               3499    0.0154    
     #>  6 mi                         31    0.000137  
     #>  7 suffix                      9    0.0000397 
-    #>  8 address1                51654    0.228     
-    #>  9 city                     3042    0.0134    
+    #>  8 address1                51663    0.228     
+    #>  9 city                     3043    0.0134    
     #> 10 state                      68    0.000300  
     #> 11 zip                      4237    0.0187    
-    #> 12 explanation             34445    0.152     
-    #> 13 expenditure_id         226926    1.000     
-    #> 14 filed_date               1433    0.00631   
+    #> 12 explanation             34457    0.152     
+    #> 13 expenditure_id         226969    1.000     
+    #> 14 filed_date               1434    0.00632   
     #> 15 purpose                 18933    0.0834    
     #> 16 expenditure_type           15    0.0000661 
     #> 17 committee_type              2    0.00000881
@@ -501,16 +504,11 @@ expenditures still have a listed `purpose`.
 sample(al$purpose, 10)
 ```
 
-    #>  [1] "Administrative"                                              
-    #>  [2] "Advertising"                                                 
-    #>  [3] "Administrative"                                              
-    #>  [4] NA                                                            
-    #>  [5] "Charitable Contribution"                                     
-    #>  [6] "Advertising"                                                 
-    #>  [7] "REIMBURSEMENT FOR FOOD FOR MOTON SENIOR THANKSGIVING DINNER."
-    #>  [8] "Loan Repayment"                                              
-    #>  [9] "Advertising"                                                 
-    #> [10] "Food"
+    #>  [1] "Administrative"                     NA                                  
+    #>  [3] "Food"                               "Offset due to update of filed item"
+    #>  [5] "Administrative"                     NA                                  
+    #>  [7] "Administrative"                     "RENT"                              
+    #>  [9] "Advertising"                        "Contribution"
 
 We can use text mining tools to analyze the most common (non-stop)
 *words* in these strings.
@@ -521,7 +519,7 @@ We can use text mining tools to analyze the most common (non-stop)
 
 #### Amounts
 
-For the continous variables, we can explore the distrobution of values
+For the continuous variables, we can explore the distribution of values
 with `ggplot2::geom_histogram()` and `ggplot2::geom_boxplot()`.
 
 ![](../plots/amount_hist_non_log-1.png)<!-- -->
@@ -538,7 +536,7 @@ with `ggplot2::geom_histogram()` and `ggplot2::geom_boxplot()`.
 
 #### Dates
 
-The range of `expenditure_date` is entirely reasonablem, as is
+The range of `expenditure_date` is entirely reasonable, as is
 `filed_date`. There are 37 expenditures made before 2013 yet the
 earliest filing was made on 2013-06-27
 
@@ -547,14 +545,14 @@ summary(al$expenditure_date)
 ```
 
     #>         Min.      1st Qu.       Median         Mean      3rd Qu.         Max. 
-    #> "2010-02-09" "2014-09-22" "2017-05-19" "2016-09-01" "2018-05-15" "2019-06-17"
+    #> "2010-02-09" "2014-09-22" "2017-05-21" "2016-09-02" "2018-05-15" "2019-06-17"
 
 ``` r
 summary(al$filed_date)
 ```
 
     #>         Min.      1st Qu.       Median         Mean      3rd Qu.         Max. 
-    #> "2013-06-27" "2014-10-16" "2017-09-30" "2016-11-09" "2018-05-29" "2019-06-20"
+    #> "2013-06-27" "2014-10-16" "2017-09-30" "2016-11-09" "2018-05-29" "2019-06-26"
 
 ### Duplicates
 
@@ -582,18 +580,20 @@ al <- al %>%
 
 ### Year
 
+Since we’ve already parsed the `expenditure_date` variable as an R date
+class with `readr::col_date()`, we can use `lubridate::year()` to
+extract the year of the transaction into a new `expenditure_year`
+variable.
+
 ``` r
-al %<>% mutate(year = year(expenditure_date))
+al <- al %>% mutate(expenditure_year = year(expenditure_date))
 ```
 
-### Zipcode
+### ZIP
 
-``` r
-zipcode <- zipcode %>% 
-  as_tibble() %>% 
-  mutate(city = str_to_upper(city)) %>% 
-  select(city, state, zip)
-```
+For the payee `zip` variable, we can use the `stringr::str_*()`
+functions to remove white-space and non-numbers, pad with leading
+zeroes, and remove the ZIP+4 extension.
 
 ``` r
 al <- al %>% mutate(
@@ -611,11 +611,15 @@ al <- al %>% mutate(
 
 ### Address
 
+For the payee `address1`, we can again use the `stringr::str_*()`
+functions to force uppercase, remove non-alphanumeric characters, remove
+trailing, leading, and repeated white space.
+
 ``` r
 al <- al %>% mutate(
   address_clean = address1 %>% 
   str_to_upper() %>% 
-  str_remove_all(rx_alnum(inverse = TRUE)) %>% 
+  str_remove_all("[^A-z0-9\\s]") %>% 
   str_squish() %>% 
   str_trim() %>% 
   str_replace("P O", "PO") %>% 
@@ -623,13 +627,62 @@ al <- al %>% mutate(
 )
 ```
 
-### State
+Then, we can use a list of [abbreviations from the
+USPS](https://pe.usps.com/text/pub28/28apc_002.htm) to expand all
+abbreviations
 
 ``` r
-valid_states <- zipcode$state
+usps <- 
+  read_html("https://pe.usps.com/text/pub28/28apc_002.htm") %>% 
+  html_node("#ep533076") %>% 
+  html_table(fill = TRUE, header = TRUE) %>% 
+  as_tibble() %>% 
+  select(2, 1) %>% 
+  set_names(c("abv", "rep")) %>% 
+  add_row(abv = "E", rep = "EAST") %>% 
+  add_row(abv = "N", rep = "NORTH") %>% 
+  add_row(abv = "S", rep = "SOUTH") %>% 
+  add_row(abv = "W", rep = "WEST") %>% 
+  add_row(abv = "NO", rep = "NORTH") %>% 
+  add_row(abv = "SO", rep = "SOUTH") %>% 
+  mutate(
+    abv = str_c("(^|\\s)", abv, "(\\s|$)"),
+    rep = str_c(" ", rep, " ")
+  )
+```
+
+``` r
+for (i in seq_along(usps$abv)) {
+  al$address_clean <- al$address_clean %>% 
+    str_replace(usps$abv[i], usps$rep[i]) %>% 
+    str_trim() %>% 
+    str_squish()
+}
+```
+
+### State
+
+From the `zipcodes` database, we can create a comprehensive list of
+valid state abbreviations.
+
+``` r
+valid_states <- sort(unique(zipcode$state))
+length(valid_states)
+#> [1] 62
 setdiff(al$state, valid_states)
 #>  [1] NA   "UN" "GE" "TE" "RO" "BC" "TH" "IO" "AB" "L"  "ON" "QC" "NL" "NB" "AJ"
 ```
+
+Using this list, we can find the invalid payee `state` values.
+
+``` r
+setdiff(al$state, valid_states)
+```
+
+    #>  [1] NA   "UN" "GE" "TE" "RO" "BC" "TH" "IO" "AB" "L"  "ON" "QC" "NL" "NB" "AJ"
+
+Then, we can isolate those records with invalid payee `state` values and
+compare them to the *expected* state value for that payee’s ZIP code
 
 ``` r
 al %>% 
@@ -680,17 +733,297 @@ al %>%
     #> 28 UNKNOWN                             UNKNOWN                UN      <NA>      <NA>        <NA>   
     #> 29 UNKNOWN                             UNKNWON                UN      <NA>      <NA>        <NA>
 
+Many of these are simply the first two letters of the full state name
+(e.g., “TE” for “Texas”). Others are Canadian province abbreviations
+(e.g., “ON”, “NB”). We will expand our list of valid state abbreviations
+to include the Canadian provinces, manually replace types, and remove
+all remaining invalid abbreviations.
+
+``` r
+valid_states <- c(valid_states, "AB", "BC", "MB", "NB", "NL", "NS", "NT", "ON", "QC")
+```
+
 ``` r
 al <- al %>% mutate(
   state_clean = state %>% 
-    str_replace("AJ", "AL") %>% 
-    str_replace("GE", "GA") %>% 
-    str_replace("IO", "IA") %>% 
-    str_replace("^L", "AL") %>% 
-    str_replace("NB", "NE") %>% 
-    str_replace("TE", "TX") %>% 
-    na_if("UN") 
+    str_replace("^AJ$", "AL") %>% 
+    str_replace("^GE$", "GA") %>% 
+    str_replace("^IO$", "IA") %>% 
+    str_replace("^L$", "AL") %>% 
+    str_replace("^NB$", "NE") %>% 
+    str_replace("^TE$", "TX") 
 )
 ```
 
+``` r
+al$state_clean[which(al$state_clean %out% valid_states)] <- NA
+```
+
 ### City
+
+Cleaning city values takes the most work, due to the irregularity and
+variety in valid values. Our objective is to reduce the number of
+distinct values and increase the percentage of values matching our list
+of valid city names.
+
+Our list of valid cities will include those in the `zipcode` database
+and those on the Wikipedia page [“List of cities and towns in
+Alabama”](https://en.wikipedia.org/wiki/List_of_cities_and_towns_in_Alabama)
+
+``` r
+alabama_towns <- 
+  read_html("https://en.wikipedia.org/wiki/List_of_cities_and_towns_in_Alabama") %>% 
+  html_node("table") %>% 
+  html_table(fill = T) %>% 
+  as_tibble(.name_repair = "unique") %>%
+  slice(2:(nrow(.)-3)) %>% 
+  pull(1) %>% 
+  str_remove("\\[(.*)") %>% 
+  str_to_upper() %>% 
+  str_remove_all("[:punct:]")
+
+setdiff(alabama_towns, zipcode$city)
+```
+
+    #>  [1] "ARGO"                   "BABBIE"                 "BAKERHILL"             
+    #>  [4] "CLAYHATCHEE"            "COUNTY LINE"            "EAST BREWTON"          
+    #>  [7] "GEIGER"                 "GOLDVILLE"              "GUWIN"                 
+    #> [10] "HALEBURG"               "HAMMONDVILLE"           "HOBSON CITY"           
+    #> [13] "HOKES BLUFF"            "HOOVER"                 "HORN HILL"             
+    #> [16] "HUEYTOWN"               "HYTOP"                  "INDIAN SPRINGS VILLAGE"
+    #> [19] "LEVEL PLAINS"           "LITTLEVILLE"            "MAGNOLIA SPRINGS "     
+    #> [22] "MCMULLEN"               "MOSSES"                 "MOUNTAIN BROOK"        
+    #> [25] "NAPIER FIELD"           "NECTAR"                 "NORTH COURTLAND"       
+    #> [28] "NORTH JOHNS"            "ONYCHA"                 "PERDIDO BEACH"         
+    #> [31] "PICKENSVILLE"           "PLEASANT GROVES"        "PRICEVILLE"            
+    #> [34] "REECE CITY"             "ROSA"                   "ST FLORIAN"            
+    #> [37] "SAND ROCK"              "SARDIS CITY"            "SKYLINE"               
+    #> [40] "SMITHS STATION"         "SNEAD"                  "SOUTH VINEMONT"        
+    #> [43] "SUSAN MOORE"            "SYLVAN SPRINGS"         "TALLADEGA SPRINGS"     
+    #> [46] "TARRANT"                "TRIANA"                 "TWIN"                  
+    #> [49] "VALLEY GRANDE"          "VESTAVIA HILLS"         "YELLOW BLUFF"
+
+``` r
+valid_cities <- prep_city(sort(unique(c(zipcode$city, alabama_towns))))
+```
+
+``` r
+n_distinct(al$city)
+#> [1] 3043
+mean(al$city %in% valid_cities)
+#> [1] 0.8315116
+```
+
+``` r
+al %>% 
+  filter(city %out% valid_cities) %>% 
+  count(city) %>% 
+  arrange(desc(n))
+```
+
+    #> # A tibble: 1,427 x 2
+    #>    city                  n
+    #>    <chr>             <int>
+    #>  1 <NA>              32518
+    #>  2 VESTAVIA            332
+    #>  3 SYMMES TOWNSHIP     159
+    #>  4 MTG                  89
+    #>  5 PONTE VERDA BEACH    80
+    #>  6 MONTOGMERY           76
+    #>  7 BHAM                 74
+    #>  8 ALEX CITY            72
+    #>  9 FT LAUDERDALE        69
+    #> 10 LUVURNE              66
+    #> 11 SOMMERVILLE          59
+    #> 12 MONTGOMERY,          58
+    #> 13 PRATVILLE            56
+    #> 14 RED WOOD CITY        49
+    #> 15 MENIO PARK           46
+    #> 16 MONTOMGERY           46
+    #> 17 BIRMINGHAM,          45
+    #> 18 MT. HOPE             42
+    #> 19 TUSKEGEE INST        38
+    #> 20 BATON ROUGE,         34
+    #> 21 UNKNOWN              33
+    #> 22 ST. LOUIS            32
+    #> 23 OWENS CROSSROADS     31
+    #> 24 BRIMINGHAM           30
+    #> 25 PALTO ALTO           30
+    #> 26 MT BROOK             29
+    #> 27 HAMPTON COVE         28
+    #> 28 FT. LAUDERDALE       27
+    #> 29 BIRMNGHAM            25
+    #> 30 AUBURNB              24
+    #> 31 BIRMIGHAM            24
+    #> 32 ENSLEY               24
+    #> # … with 1,395 more rows
+
+There are five steps to achieve these goals:
+
+1.  Prepare raw city values by removing invalid data and reducing
+    inconsistencies
+2.  Match prepared city values with the *actual* city name of that
+    record’s ZIP code
+3.  swap prepared city values with the ZIP code match *if* only 1 edit
+    is needed
+4.  Refine swapped city values with key collision and n-gram
+    fingerprints
+5.  Review invalid refines and manually correct
+
+#### Prepare
+
+Before the other steps, we need to prepare the values using common
+normalization techniques. This work is done using the `prep_city()`
+function in the `R/` directory of this project. This function also
+removes common invalid entires and strips state abbreviations from the
+end of city names.
+
+``` r
+al <- al %>% 
+  mutate(
+    city_prep = prep_city(
+      cities = city,
+      na = read_lines(here("R", "na_city.csv")),
+      abbs = c("AL", "DC")
+    )
+  )
+
+n_distinct(al$city_prep)
+#> [1] 2781
+mean(al$city_prep %in% valid_cities)
+#> [1] 0.8360715
+```
+
+#### Match
+
+The next step involves matching a payee `city_prep` value to the
+*expect* city name for that payee’s ZIP code and state.
+
+``` r
+al <- al %>%
+  left_join(zipcode, by = c("zip_clean" = "zip", "state_clean" = "state")) %>%
+  rename(city = city.x, city_match = city.y) %>%
+  mutate(match_dist = stringdist(city_prep, city_match))
+
+summary(al$match_dist)
+#>    Min. 1st Qu.  Median    Mean 3rd Qu.    Max.    NA's 
+#>    0.00    0.00    0.00    0.55    0.00   21.00   35148
+```
+
+``` r
+ggplot(al) + 
+  geom_bar(aes(match_dist)) + 
+  scale_y_log10() +
+  labs(
+    title = "Levenshtein Distances",
+    subtitle = "between Prepared City and Matched City",
+    x = "Levenshtein Edit Distance",
+    y = "Count"
+  )
+```
+
+![](../plots/lev_dist_bar-1.png)<!-- -->
+
+#### Swap
+
+For `city_prep` values less than **3** edits away from the expected
+matched city name, we can safely make that swap. Otherwise, we will keep
+the `city_prep` value.
+
+``` r
+al <- al %>% 
+  mutate(
+    city_swap = if_else(
+      condition = match_dist < 3,
+      true = city_match,
+      false = city_prep
+    )
+  )
+
+n_distinct(al$city_swap)
+#> [1] 1949
+mean(al$city_swap %in% valid_cities)
+#> [1] 0.8378029
+```
+
+``` r
+al %>% 
+  filter(city_swap %out% valid_cities) %>% 
+  count(state_clean, city_swap) %>% 
+  arrange(desc(n)) %>% 
+  drop_na()
+```
+
+    #> # A tibble: 318 x 3
+    #>    state_clean city_swap                          n
+    #>    <chr>       <chr>                          <int>
+    #>  1 AL          VESTAVIA                         331
+    #>  2 OH          SYMMES TOWNSHIP                  168
+    #>  3 AL          MTG                               87
+    #>  4 AL          ALEX CITY                         72
+    #>  5 AL          BHAM                              71
+    #>  6 AL          TUSKEGEE INST                     42
+    #>  7 AL          MOUNT BROOK                       33
+    #>  8 AL          HAMPTON COVE                      27
+    #>  9 NY          NY                                24
+    #> 10 NJ          DELRAN                            23
+    #> 11 NY          NEW YORK CITY                     22
+    #> 12 FL          MIAMI SHORES                      21
+    #> 13 OH          GAHANNA                           18
+    #> 14 AL          PRITCHARD                         15
+    #> 15 FL          PONTE VERDA                       14
+    #> 16 AL          WHISTLER                          13
+    #> 17 MA          SOMERVILLE MA                     13
+    #> 18 OH          SYMMES                            13
+    #> 19 VA          TYSONS                            13
+    #> 20 AL          MTGY                              11
+    #> 21 MN          SHOREVIEW                         11
+    #> 22 AL          ENSLEY                             9
+    #> 23 AL          MOUNTAIN BRK                       9
+    #> 24 AL          TUSKEGEE INSTITUTE POST OFFICE     9
+    #> 25 GA          NORTH METRO                        9
+    #> 26 OH          MAYFIELD VILLAGE                   9
+    #> 27 AL          ASHAND                             8
+    #> 28 AL          MONTG                              8
+    #> 29 AL          REDSTONE ARSENAL                   8
+    #> 30 TX          LAGO VISTA                         8
+    #> 31 AL          SMITH STATION                      7
+    #> 32 FL          MIRAMAR                            7
+    #> # … with 286 more rows
+
+``` r
+al$city_swap <- al$city_swap %>% 
+  str_replace("^BHAM$", "BIRMINGHAM") %>% 
+  str_replace("^MTGY$", "MONTGOMERY") %>% 
+  str_replace("^MTG$", "MONTGOMERY") %>% 
+  str_replace("^TUSKEGEE INST$", "TUSKEGEE INSTITUTE") %>% 
+  str_replace("^MOUNT BROOK$", "MOUNTAIN BROOK") %>% 
+  str_replace("^NY$", "NEW YORK CITY")
+```
+
+#### Refine
+
+Once we’ve repaired these small edits, we will rely on the OpenRefine
+key collision and n-gram merge algorithms to group similar values and
+merge them together.
+
+#### Review
+
+## Export
+
+``` r
+clean_dir <- here("al", "expends", "data", "processed")
+dir_create(clean_dir)
+al %>% 
+  select(
+    -address1,
+    state,
+    zip,
+    city
+  ) %>% 
+  write_csv(
+    x = ,
+    path = str_c(clean_dir, "al_expends_clean.csv", sep = "/"),
+    na = ""
+  )
+```

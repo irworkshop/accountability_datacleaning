@@ -24,7 +24,11 @@ opts_chunk$set(
   fig.width = 10,
   dpi = 300
 )
-options(width = 99)
+options(
+  width = 99, 
+  tibble.print_max = 32, 
+  tibble.print_min = 32
+)
 ```
 
 ## Project
@@ -85,6 +89,9 @@ here <- here::here
 # custom utility functions
 "%out%" <- Negate("%in%")
 print_all <- function(df) df %>% print(n = nrow(.)) 
+# source functions
+source(here("R", "prep_city.R"))
+source(here("R", "all_files_new.R"))
 # load data
 data("zipcode")
 ```
@@ -231,10 +238,6 @@ expend_urls <- glue(base_url, "{2013:2019}_ExpendituresExtract.csv.zip")
 print(expend_urls)
 ```
 
-```{r any_old_files, echo=FALSE}
-source(here("R", "all_files_new.R"))
-```
-
 If recent versions of the ZIP files do not exists in the `data/raw` directory, download them from
 the Alabama FCPA website with `utils::download.file()`.
 
@@ -314,7 +317,7 @@ al_bad <- read_delim(
   )
 )
 
-problems(al_bad)
+problems(al_bad) %>% mutate(file = basename(file))
 ```
 
 To fix these instances, we can read each line as a character string, replace `\"` with `\'` in
@@ -348,9 +351,11 @@ al <- al_good %>%
   bind_rows(al_bad) %>% 
   clean_names() %>% 
   mutate(amended = to_logical(amended))
+
+rm(al_good, al_bad)
 ```
 
-This process does _not_ capture every row. I need to fix this.
+**This process does _not_ capture every row. I need to fix this.**
 
 ```{r compare_length, collapse=TRUE}
 n_lines <- 
@@ -386,7 +391,7 @@ al %>%
 
 ### Distinct
 
-Each varaibles differs in it's number of distinct values. 
+Each variables differs in it's number of distinct values. 
 
 ```{r n_distinct}
 al %>% 
@@ -400,7 +405,8 @@ al %>%
 For the _least_ distinct of these values, we can explore the values with `ggplot2::geom_bar()`.
 
 ```{r expend_type_bar, echo=FALSE}
-ggplot(data = al) + 
+al %>% 
+  ggplot() + 
   geom_bar(mapping = aes(expenditure_type)) +
   coord_flip() +
   labs(
@@ -411,7 +417,8 @@ ggplot(data = al) +
 ```
 
 ```{r comm_type_bar, echo=FALSE}
-ggplot(data = al) + 
+al %>% 
+  ggplot() + 
   geom_bar(mapping = aes(committee_type)) +
   ggtitle("AL Expenditures by Committee Type")
 ```
@@ -466,16 +473,18 @@ al %>%
 
 #### Amounts
 
-For the continous variables, we can explore the distrobution of values with 
+For the continuous variables, we can explore the distribution of values with 
 `ggplot2::geom_histogram()` and `ggplot2::geom_boxplot()`.
 
 ```{r amount_hist_non_log, echo=FALSE, fig.keep=FALSE}
-ggplot(data = al) +
+al %>% 
+  ggplot() +
   geom_histogram(mapping = aes(expenditure_amount))
 ```
 
 ```{r amount_hist, echo=FALSE}
-ggplot(data = al) +
+al %>% 
+  ggplot() +
   geom_histogram(mapping = aes(expenditure_amount)) +
   scale_y_log10() +
   scale_x_continuous(trans = "log10", labels = scales::dollar) +
@@ -549,7 +558,7 @@ al %>%
 
 #### Dates
 
-The range of `expenditure_date` is entirely reasonablem, as is `filed_date`. There are
+The range of `expenditure_date` is entirely reasonable, as is `filed_date`. There are
 `r sum(year(al$expenditure_date) < 2013)` expenditures made before 2013 yet the earliest filing was 
 made on `r min(al$filed_date)`
 
@@ -582,20 +591,27 @@ al <- al %>%
 
 ### Year
 
-```{r}
-al %<>% mutate(year = year(expenditure_date))
+Since we've already parsed the `expenditure_date` variable as an R date class with 
+`readr::col_date()`, we can use `lubridate::year()` to extract the year of the transaction into a
+new `expenditure_year` variable.
+
+```{r mutate_year}
+al <- al %>% mutate(expenditure_year = year(expenditure_date))
 ```
 
-### Zipcode
+### ZIP
 
-```{r}
+```{r data_zipcode, echo=FALSE}
 zipcode <- zipcode %>% 
   as_tibble() %>% 
   mutate(city = str_to_upper(city)) %>% 
   select(city, state, zip)
 ```
 
-```{r}
+For the payee `zip` variable, we can use the `stringr::str_*()` functions to remove white-space and
+non-numbers, pad with leading zeroes, and remove the ZIP+4 extension.
+
+```{r clean_zip}
 al <- al %>% mutate(
   zip_clean = zip %>%
     str_remove_all(rx_whitespace()) %>%
@@ -611,11 +627,14 @@ al <- al %>% mutate(
 
 ### Address
 
-```{r}
+For the payee `address1`, we can again use the `stringr::str_*()` functions to force uppercase,
+remove non-alphanumeric characters, remove trailing, leading, and repeated white space.
+
+```{r clean_address}
 al <- al %>% mutate(
   address_clean = address1 %>% 
   str_to_upper() %>% 
-  str_remove_all(rx_alnum(inverse = TRUE)) %>% 
+  str_remove_all("[^A-z0-9\\s]") %>% 
   str_squish() %>% 
   str_trim() %>% 
   str_replace("P O", "PO") %>% 
@@ -623,12 +642,54 @@ al <- al %>% mutate(
 )
 ```
 
+Then, we can use a list of [abbreviations from the USPS][05] to expand all abbreviations
+
+[05]: https://pe.usps.com/text/pub28/28apc_002.htm
+
+```{r read_usps}
+usps <- 
+  read_html("https://pe.usps.com/text/pub28/28apc_002.htm") %>% 
+  html_node("#ep533076") %>% 
+  html_table(fill = TRUE, header = TRUE) %>% 
+  as_tibble() %>% 
+  select(2, 1) %>% 
+  set_names(c("abv", "rep")) %>% 
+  add_row(abv = "E",  rep = "EAST")  %>% 
+  add_row(abv = "N",  rep = "NORTH") %>% 
+  add_row(abv = "S",  rep = "SOUTH") %>% 
+  add_row(abv = "W",  rep = "WEST")  %>% 
+  add_row(abv = "NO", rep = "NORTH") %>% 
+  add_row(abv = "SO", rep = "SOUTH") %>% 
+  filter(abv != rep)
+```
+
+```{r replace_abvs}
+for (i in seq_along(usps$abv)) {
+  al$address_clean <- al$address_clean %>% 
+    str_replace(usps$abv[i], usps$rep[i]) %>% 
+    str_trim() %>% 
+    str_squish()
+}
+```
+
 ### State
 
+From the `zipcodes` database, we can create a comprehensive list of valid state abbreviations.
+
 ```{r valid_states, collapse=TRUE}
-valid_states <- zipcode$state
+valid_states <- sort(unique(zipcode$state))
+length(valid_states)
 setdiff(al$state, valid_states)
 ```
+
+Using this list, we can find the invalid payee `state` values.
+
+```{r invalid_states}
+setdiff(al$state, valid_states)
+```
+
+Then, we can isolate those records with invalid payee `state` values and compare them to the
+_expected_ state value for that payee's ZIP code
 
 ```{r view_states}
 al %>% 
@@ -646,17 +707,214 @@ al %>%
   print_all()
 ```
 
-```{r fix_state}
+Many of these are simply the first two letters of the full state name (e.g., "TE" for "Texas").
+Others are Canadian province abbreviations (e.g., "ON", "NB"). We will expand our list of valid
+state abbreviations to include the Canadian provinces, manually replace types, and remove all
+remaining invalid abbreviations.
+
+```{r canadian_states}
+valid_states <- c(valid_states, "AB", "BC", "MB", "NB", "NL", "NS", "NT", "ON", "QC")
+```
+
+```{r clean_state}
 al <- al %>% mutate(
   state_clean = state %>% 
-    str_replace("AJ", "AL") %>% 
-    str_replace("GE", "GA") %>% 
-    str_replace("IO", "IA") %>% 
-    str_replace("^L", "AL") %>% 
-    str_replace("NB", "NE") %>% 
-    str_replace("TE", "TX") %>% 
-    na_if("UN") 
+    str_replace("^AJ$", "AL") %>% 
+    str_replace("^GE$", "GA") %>% 
+    str_replace("^IO$", "IA") %>% 
+    str_replace("^L$", "AL") %>% 
+    str_replace("^NB$", "NE") %>% 
+    str_replace("^TE$", "TX") 
 )
 ```
 
+```{r na_states}
+al$state_clean[which(al$state_clean %out% valid_states)] <- NA
+```
+
 ### City
+
+Cleaning city values takes the most work, due to the irregularity and variety in valid values.
+Our objective is to reduce the number of distinct values and increase the percentage of values
+matching our list of valid city names.
+
+Our list of valid cities will include those in the `zipcode` database and those on the Wikipedia
+page ["List of cities and towns in Alabama"][04]
+
+[04]: https://en.wikipedia.org/wiki/List_of_cities_and_towns_in_Alabama
+
+```{r valid_cities}
+alabama_towns <- 
+  read_html("https://en.wikipedia.org/wiki/List_of_cities_and_towns_in_Alabama") %>% 
+  html_node("table") %>% 
+  html_table(fill = T) %>% 
+  as_tibble(.name_repair = "unique") %>%
+  slice(2:(nrow(.)-3)) %>% 
+  pull(1) %>% 
+  str_remove("\\[(.*)") %>% 
+  str_to_upper() %>% 
+  str_remove_all("[:punct:]")
+
+setdiff(alabama_towns, zipcode$city)
+
+valid_cities <- prep_city(sort(unique(c(zipcode$city, alabama_towns))))
+```
+
+```{r summary_city, collapse=TRUE}
+n_distinct(al$city)
+mean(al$city %in% valid_cities)
+```
+
+```{r view_bad_city}
+al %>% 
+  filter(city %out% valid_cities) %>% 
+  count(city) %>% 
+  arrange(desc(n))
+```
+
+There are five steps to achieve these goals:
+
+1. Prepare raw city values by removing invalid data and reducing inconsistencies
+1. Match prepared city values with the _actual_ city name of that record's ZIP code
+1. swap prepared city values with the ZIP code match _if_ only 1 edit is needed
+1. Refine swapped city values with key collision and n-gram fingerprints
+1. Review invalid refines and manually correct
+
+#### Prepare
+
+Before the other steps, we need to prepare the values using common normalization techniques. This
+work is done using the `prep_city()` function in the `R/` directory of this project. This function
+also removes common invalid entires and strips state abbreviations from the end of city names.
+
+```{r prepare_city, collapse=TRUE}
+al <- al %>% 
+  mutate(
+    city_prep = prep_city(
+      cities = city,
+      na = read_lines(here("R", "na_city.csv")),
+      abbs = valid_states
+    )
+  )
+
+for (i in seq_along(usps$abv)) {
+  al$city_prep <- al$city_prep %>% 
+    str_replace(usps$abv[i], usps$rep[i]) %>% 
+    str_trim() %>% 
+    str_squish()
+}
+
+n_distinct(al$city_prep)
+mean(al$city_prep %in% valid_cities)
+```
+
+#### Match
+
+The next step involves matching a payee `city_prep` value to the _expect_ city name for that
+payee's ZIP code and state.
+
+```{r match_city, collapse=TRUE}
+al <- al %>%
+  left_join(zipcode, by = c("zip_clean" = "zip", "state_clean" = "state")) %>%
+  rename(city = city.x, city_match = city.y) %>%
+  mutate(match_dist = stringdist(city_prep, city_match))
+
+summary(al$match_dist)
+```
+
+```{r lev_dist_bar}
+ggplot(al) + 
+  geom_bar(aes(match_dist)) + 
+  scale_y_log10() +
+  labs(
+    title = "Levenshtein Distances",
+    subtitle = "between Prepared City and Matched City",
+    x = "Levenshtein Edit Distance",
+    y = "Count"
+  )
+```
+
+#### Swap
+
+For `city_prep` values less than **3** edits away from the expected matched city name, we can
+safely make that swap. Otherwise, we will keep the `city_prep` value.
+
+```{r swap_city, collapse=TRUE}
+al <- al %>% 
+  mutate(
+    city_swap = if_else(
+      condition = match_dist < 3,
+      true = city_match,
+      false = city_prep
+    )
+  )
+
+n_distinct(al$city_swap)
+mean(al$city_swap %in% valid_cities)
+```
+
+```{r}
+al %>% 
+  filter(city_swap %out% valid_cities) %>% 
+  count(state_clean, city_swap) %>% 
+  arrange(desc(n)) %>% 
+  drop_na()
+```
+
+```{r}
+al$city_swap <- al$city_swap %>% 
+  str_remove("(^|\\b)ALABAMA(\\b|$)") %>% 
+  str_replace("^BHAM$", "BIRMINGHAM") %>%
+  str_replace("^BIRM$", "BIRMINGHAM") %>% 
+  str_replace("^MTGY$", "MONTGOMERY") %>% 
+  str_replace("^MTG$",  "MONTGOMERY") %>% 
+  str_replace("^RBC$",  "RAINBOW CITY") %>% 
+  str_replace("^ALEX CITY$", "ALEXANDER CITY") %>% 
+  str_replace("\\bINST$", "INSTITUTE") %>% 
+  str_replace("^MOUNT BROOK$", "MOUNTAIN BROOK") %>%
+  str_replace("^NY$", "NEW YORK")
+```
+
+#### Refine
+
+Once we've repaired these small edits, we will rely on the OpenRefine key collision and n-gram
+merge algorithms to group similar values and merge them together.
+
+```{r refine_city}
+al %>% 
+  mutate(
+    city_refine = city_swap %>% 
+      key_collision_merge(dict = alabama_towns) %>% 
+      n_gram_merge(numgram = 1),
+    refined = (city_refine != city_swap)
+  )
+```
+
+#### Review
+
+```{r review_city}
+al %>% 
+  filter(refined) %>% 
+  filter(city_refine %out% valid_cities) %>% 
+  count(city_refine) %>% 
+  arrange(desc(n))
+```
+
+## Export
+
+```{r write_clean}
+clean_dir <- here("al", "expends", "data", "processed")
+dir_create(clean_dir)
+al %>% 
+  select(
+    -address1,
+    state,
+    zip,
+    city
+  ) %>% 
+  write_csv(
+    x = ,
+    path = str_c(clean_dir, "al_expends_clean.csv", sep = "/"),
+    na = ""
+  )
+```
+
