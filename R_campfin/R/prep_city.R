@@ -30,6 +30,7 @@ prep_city <- function(cities, abbs = NULL, na = c("NA", "")) {
     str_replace("(^|\\b)VLY(\\b|$)", "VALLEY") %>%
     str_replace("(^|\\b)VLG(\\b|$)", "VILLAGE") %>%
     str_replace("(^|\\b)BCH(\\b|$)", "BEACH") %>%
+    str_replace("(^|\\b)BRK(\\b|$)", "BROOK") %>%
     str_replace("(^|\\b)STA(\\b|$)", "STATION") %>%
     str_replace("(^|\\b)MTN(\\b|$)", "MOUNTAIN") %>%
     str_replace("(^|\\b)TWP(\\b|$)", "TOWNSHIP") %>%
