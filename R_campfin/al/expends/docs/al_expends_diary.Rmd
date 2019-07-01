@@ -24,11 +24,7 @@ opts_chunk$set(
   fig.width = 10,
   dpi = 300
 )
-options(
-  width = 99, 
-  tibble.print_max = 32, 
-  tibble.print_min = 32
-)
+options(width = 99)
 ```
 
 ## Project
@@ -380,7 +376,7 @@ glimpse(al)
 
 There are `r sum(is.na(al))` missing values across all `r length(al)` variables.
 
-```{r n_missing}
+```{r count_na}
 al %>% 
   map(function(var) sum(is.na(var))) %>% 
   unlist() %>% 
@@ -388,6 +384,26 @@ al %>%
   mutate(prop_na = n_na / nrow(al)) %>% 
   print(n = length(al))
 ```
+
+Some records are missing key information regarding who the expenditure was made to.
+
+```{r view_na}
+al %>% select(
+  org_id,
+  expenditure_amount,
+  expenditure_date,
+  first_name,
+  mi,
+  last_name
+)
+```
+
+These records can be flagged with a new `na_flag` variable.
+
+```{r flag_na}
+al <- al %>% mutate(na_flag = is.na(first_name) & is.na(mi) & is.na(last_name))
+```
+
 
 ### Distinct
 
@@ -634,42 +650,12 @@ remove non-alphanumeric characters, remove trailing, leading, and repeated white
 al <- al %>% mutate(
   address_clean = address1 %>% 
   str_to_upper() %>% 
-  str_remove_all("[^A-z0-9\\s]") %>% 
+  str_remove_all(rx_punctuation()) %>% 
   str_squish() %>% 
   str_trim() %>% 
   str_replace("P O", "PO") %>% 
   na_if("")
 )
-```
-
-Then, we can use a list of [abbreviations from the USPS][05] to expand all abbreviations
-
-[05]: https://pe.usps.com/text/pub28/28apc_002.htm
-
-```{r read_usps}
-usps <- 
-  read_html("https://pe.usps.com/text/pub28/28apc_002.htm") %>% 
-  html_node("#ep533076") %>% 
-  html_table(fill = TRUE, header = TRUE) %>% 
-  as_tibble() %>% 
-  select(2, 1) %>% 
-  set_names(c("abv", "rep")) %>% 
-  add_row(abv = "E",  rep = "EAST")  %>% 
-  add_row(abv = "N",  rep = "NORTH") %>% 
-  add_row(abv = "S",  rep = "SOUTH") %>% 
-  add_row(abv = "W",  rep = "WEST")  %>% 
-  add_row(abv = "NO", rep = "NORTH") %>% 
-  add_row(abv = "SO", rep = "SOUTH") %>% 
-  filter(abv != rep)
-```
-
-```{r replace_abvs}
-for (i in seq_along(usps$abv)) {
-  al$address_clean <- al$address_clean %>% 
-    str_replace(usps$abv[i], usps$rep[i]) %>% 
-    str_trim() %>% 
-    str_squish()
-}
 ```
 
 ### State
@@ -787,21 +773,17 @@ work is done using the `prep_city()` function in the `R/` directory of this proj
 also removes common invalid entires and strips state abbreviations from the end of city names.
 
 ```{r prepare_city, collapse=TRUE}
+common_na <- read_lines(here("R", "na_city.csv"))
+sample(common_na, 3)
+
 al <- al %>% 
   mutate(
     city_prep = prep_city(
       cities = city,
-      na = read_lines(here("R", "na_city.csv")),
+      na = common_na,
       abbs = valid_states
     )
   )
-
-for (i in seq_along(usps$abv)) {
-  al$city_prep <- al$city_prep %>% 
-    str_replace(usps$abv[i], usps$rep[i]) %>% 
-    str_trim() %>% 
-    str_squish()
-}
 
 n_distinct(al$city_prep)
 mean(al$city_prep %in% valid_cities)
@@ -809,8 +791,12 @@ mean(al$city_prep %in% valid_cities)
 
 #### Match
 
-The next step involves matching a payee `city_prep` value to the _expect_ city name for that
-payee's ZIP code and state.
+The next step involves matching a payee `city_prep` value to the _expect_ city value for that
+record's payee ZIP `zip_clean` and `state_state` values. We then calculate the 
+[Levenshtein distance][05], which measures the distance between the two character strings by the
+number of changes needed to match the two strings.
+
+[05]: https://en.wikipedia.org/wiki/Levenshtein_distance
 
 ```{r match_city, collapse=TRUE}
 al <- al %>%
@@ -852,7 +838,7 @@ n_distinct(al$city_swap)
 mean(al$city_swap %in% valid_cities)
 ```
 
-```{r}
+```{r view_bad_swap}
 al %>% 
   filter(city_swap %out% valid_cities) %>% 
   count(state_clean, city_swap) %>% 
@@ -860,7 +846,16 @@ al %>%
   drop_na()
 ```
 
-```{r}
+#### Refine
+
+Once we've repaired these small edits, we will rely on the OpenRefine key collision and n-gram
+merge algorithms to group similar values and merge them together.
+
+These algorithms rely on the frequency of one string compared to the frequency of another similar
+string. To ensure the correct changes are made, we can manually correct some very frequent yet
+incorrect values.
+
+```{r manual_swap}
 al$city_swap <- al$city_swap %>% 
   str_remove("(^|\\b)ALABAMA(\\b|$)") %>% 
   str_replace("^BHAM$", "BIRMINGHAM") %>%
@@ -874,30 +869,105 @@ al$city_swap <- al$city_swap %>%
   str_replace("^NY$", "NEW YORK")
 ```
 
-#### Refine
-
-Once we've repaired these small edits, we will rely on the OpenRefine key collision and n-gram
-merge algorithms to group similar values and merge them together.
-
 ```{r refine_city}
-al %>% 
+al_refine <- al %>% 
+  filter(state_clean == "AL") %>% 
   mutate(
-    city_refine = city_swap %>% 
-      key_collision_merge(dict = alabama_towns) %>% 
-      n_gram_merge(numgram = 1),
-    refined = (city_refine != city_swap)
+    city_refine = if_else(
+      condition = match_dist > 2,
+      true = city_swap %>% 
+        key_collision_merge() %>% 
+        n_gram_merge(),
+      false = city_swap
+    )
+  ) %>% 
+  filter(city_refine != city_swap) %>%
+  rename(city_raw = city) %>% 
+  select(
+    expenditure_id,
+    zip_clean,
+    state_clean,
+    city_raw,
+    city_prep,
+    match_dist,
+    city_swap,
+    city_refine
   )
 ```
 
 #### Review
 
-```{r review_city}
-al %>% 
-  filter(refined) %>% 
-  filter(city_refine %out% valid_cities) %>% 
-  count(city_refine) %>% 
-  arrange(desc(n))
+This refining progress made `r nrow(al_refine)` changes.
+`r nrow(distinct(select(al_refine, -expenditure_id)))` of these changes are distinct. We can
+count the frequency of the original `city_swap` value and the new `city_refine` value to ensure
+the algorithm is making the right changes.
+
+```{r review_city, collapse=TRUE}
+mean(al_refine$city_refine %in% valid_cities)
+
+al_refine$swap_count <- NA
+al_refine$refine_count <- NA
+
+for (i in 1:nrow(al_refine)) {
+  al_refine$swap_count[i] <- sum(
+    str_detect(
+      string = al$city_swap, 
+      pattern = al_refine$city_swap[i]), 
+    na.rm = TRUE
+  )
+  al_refine$refine_count[i] <- sum(
+    str_detect(
+      string = al$city_swap, 
+      pattern = al_refine$city_refine[i]), 
+    na.rm = TRUE
+  )
+}
+
+mean(al_refine$swap_count)
+mean(al_refine$refine_count)
+mean(al_refine$refine_count > al_refine$swap_count)
 ```
+
+```{r view_refine_count}
+sample_frac(al_refine)
+```
+
+```{r join_refine}
+al <- al %>% 
+  left_join(al_refine) %>% 
+  mutate(
+    city_clean = if_else(
+      condition = is.na(city_refine),
+      true = city_swap,
+      false = city_refine
+    )
+  )
+```
+
+```{r clean_distinct, collapse=TRUE}
+n_distinct(al$city)
+n_distinct(al$city_prep)
+n_distinct(al$city_swap)
+n_distinct(al$city_clean)
+```
+
+```{r}
+al %>% 
+  filter(city_clean %out% valid_cities) %>% 
+  count(state_clean, city_clean) %>% 
+  arrange(city_clean) %>% 
+  drop_na()
+```
+
+## Conclude
+
+1. There are `r nrow(al)` records in the database
+1. Duplicate rows have been flagged with the `dupe_flag` variable
+1. Ranges for continuous variables make sense
+1. Records with missing key information are flagged with the `na_flag` variable
+1. Consistency in character strings has been fixed with `prep_city()` and the `stringr` functions
+1. The `zip_clean` variable has been created from `zip`
+1. The `expenditure_year` variable has been created from `expenditure_date`
 
 ## Export
 
@@ -907,9 +977,16 @@ dir_create(clean_dir)
 al %>% 
   select(
     -address1,
-    state,
-    zip,
-    city
+    -state,
+    -zip,
+    -city,
+    -city_prep,
+    -city_match,
+    -match_dist,
+    -city_swap,
+    -city_refine,
+    -swap_count,
+    -refine_count
   ) %>% 
   write_csv(
     x = ,
