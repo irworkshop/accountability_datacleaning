@@ -80,7 +80,7 @@ pacman::p_load(
 )
 ```
 
-```{r custom_prep, echo=FALSE}
+```{r custom, echo=FALSE}
 # fix conflict
 here <- here::here
 # custom utility functions
@@ -91,6 +91,10 @@ source(here("R", "prep_city.R"))
 source(here("R", "all_files_new.R"))
 # load data
 data("zipcode")
+zipcode <-
+  as_tibble(zipcode) %>% 
+  select(city, state, zip) %>% 
+  mutate(city = prep_city(city))
 ```
 
 This document should be run as part of the `R_campfin` project, which lives as a sub-directory of
@@ -152,10 +156,6 @@ For years after 2011, the files are organized by month and are not separated:
 
 1. `SBE_CSV/CF/2013_02/ScheduleD.csv`
 
-We will have to download and read the two types of files differently.
-
-#### Singular
-
 We will start by downloading all the files separated by month from 2012 to 2019.
 
 First we need to create the URLs for each year/month combination.
@@ -169,15 +169,15 @@ head(exp_urls)
 Then we can download these files to our `/data/raw/single/` directory.
 
 ```{r}
-dir_raw_single <- here("va", "expends", "data", "raw", "single")
-dir_create(dir_raw_single)
+dir_raw <- here("va", "expends", "data", "raw", "single")
+dir_create(dir_raw)
 
 if (!all_files_new(dir_raw_single)) {
   for (url in exp_urls[3:90]) {
     download.file(
       url = url,
       destfile = str_c(
-        dir_raw_single,
+        dir_raw,
         url %>% 
           str_extract("(\\d{4}_\\d{2})/ScheduleD.csv$") %>% 
           str_replace_all("/", "_"),
@@ -188,40 +188,15 @@ if (!all_files_new(dir_raw_single)) {
 }
 ```
 
-#### Separated 
-
-For the years 1999 through 2011, the Schedule D data is held in two anual files, one for
-expenditures by PACs and another for all others.
-
-We can download each yearly file to the `/data/raw/separated/` directory.
-
-```{r}
-dir_raw_sep <- here("va", "expends", "data", "raw", "separated")
-dir_create(dir_raw_sep)
-
-if (!all_files_new(dir_raw_sep)) {
-  for (year in 1999:2011) {
-    download.file(
-      url = glue("https://apps.elections.virginia.gov/SBE_CSV/CF/{year}/ScheduleD.csv"),
-      destfile = glue("{dir_raw_sep}/{year}_ScheduleD.csv")
-    )
-    download.file(
-      url = glue("https://apps.elections.virginia.gov/SBE_CSV/CF/{year}/ScheduleD_PAC.csv"),
-      destfile = glue("{dir_raw_sep}/{year}_ScheduleD_PAC.csv")
-    )
-  }
-}
-```
-
 ### Read
 
-Since all files are located in the same directory with the same structure, we can read them all
-at once by using `purrr::map()` to apply `readr::read_csv()` to each file in the directory, then
-binding each file into a single data frame using `dplyr::bind_rows()`.
+Since all recent files are located in the same directory with the same structure, we can read them
+all at once by using `purrr::map()` to apply `readr::read_csv()` to each file in the directory,
+then binding each file into a single data frame using `dplyr::bind_rows()`.
 
 ```{r}
 va <- 
-  dir_ls(dir_raw_single, glob = "*.csv") %>% 
+  dir_ls(dir_raw, glob = "*.csv") %>% 
   map(
     read_delim,
     delim = ",",
@@ -237,6 +212,9 @@ va <-
   bind_rows() %>% 
   clean_names()
 ```
+
+The older files, separated by payee type, have a different structure and will have to be imported,
+explored, and cleaned seperated from the recent files.
 
 ## Explore
 
@@ -255,8 +233,7 @@ va %>%
   map(n_distinct) %>% 
   unlist() %>% 
   enframe(name = "variable", value = "n_distinct") %>% 
-  mutate(prop_distinct = round(n_distinct / nrow(va), 4)) %>%
-  print(n = length(va))
+  mutate(prop_distinct = round(n_distinct / nrow(va), 4))
 ```
 
 We can explore the distribution of the least distinct values with `ggplot2::geom_bar()`.
@@ -308,17 +285,94 @@ va %>%
   map(function(var) sum(is.na(var))) %>% 
   unlist() %>% 
   enframe(name = "variable", value = "n_na") %>% 
-  mutate(prop_na = n_na / nrow(va)) %>% 
-  print(n = length(va))
+  mutate(prop_na = n_na / nrow(va))
 ```
 
 ### Duplicates
 
+We can use `janitor::get_dupes()` to create a table only including records that are completely
+duplicated across every row, aside from the uniqe `schedule_d_id` variable.
+
+```{r get_dupes}
+va_dupes <- va %>% 
+  select(-schedule_d_id) %>% 
+  get_dupes() %>% 
+  distinct() %>% 
+  mutate(dupe_flag = TRUE)
+```
+
+There are `r nrow(va_dupes)` distinct duplicated records in this database, covering 
+`r sum(va_dupes$dupe_count)` total records. It's entirely possible that two expenditures can be
+made by the same committee, to the same payeee, of the same amount, on the same day, for the same
+purpose. However, we will flag these records with `dupe_flag` nonetheless.
+
+```{r view_dupes}
+va_dupes %>% 
+  tabyl(item_or_service) %>%
+  as_tibble() %>% 
+  arrange(desc(n)) %>% 
+  mutate(cum_percent = cumsum(percent))
+```
+
+```{r join_dupes}
+va <- va %>%
+  left_join(va_dupes) %>% 
+  mutate(dupe_flag = !is.na(dupe_flag))
+```
+
 ### Ranges
 
-We can explore the continuous variables with `ggplot2::geom_histogram()` and `base::summary()`
+It's important to ensure the ranges for continuous variables makes sense; that there aren't any
+old or future dates or trillion dollar expenditures. We can explore these variables with
+`ggplot2::ggplot()` functions and `base::summary()`.
 
 #### Amounts
+
+The expenditure `amount` variable contains the USD value of the expenditure and can reasonably
+reach millions of dollars. This dataset contains `r sum(va$amount < 0, na.rm = T)` records with
+an `amount` value less than zero, which sometimes indicate expenditure correction filings.
+There are however `r sum(va$amount == 0, na.rm = T)` records with an `amount` value _of_ zero.
+
+```{r}
+summary(va$amount)
+va %>% filter(amount == max(amount, na.rm = TRUE)) %>% glimpse()
+```
+
+We can visually explore the distribution and range of `amount` values using 
+`ggplot2::geom_histogram()` and `ggplot2::geom_boxplot()`. 
+
+Expenditures have a Log-normal distribution, with the vast majority of expenditures around the 
+mean of \$1,385.
+
+```{r}
+va %>% 
+  select(amount) %>% 
+  mutate(oom = 10^(ceiling(log10(amount)))) %>% 
+  count(oom) %>% 
+  arrange(oom) %>%
+  mutate(oom = as.ordered(oom)) %>% 
+  ggplot() +
+  geom_col(aes(oom, n)) +
+  labs(
+    title = "Distribution of VA Expenditures by Amount Order of Magnitude",
+    x = "Order of Magnitude",
+    y = "Count"
+  )
+```
+
+```{r amount_hist_nonlog, echo=FALSE}
+va %>% 
+  ggplot() +
+  geom_histogram(aes(amount)) +
+  scale_x_continuous(labels = scales::dollar) +
+  labs(
+    title = "Distribution of VA Expenditure Amount",
+    x = "Expenditure Amount (Log)",
+    caption = "SOURCE: www.virginia.gov"
+  )
+```
+
+We will have to transformt he x-axis logarithmically to find patterns in the distribution.
 
 ```{r amount_hist, echo=FALSE}
 va %>% 
@@ -331,6 +385,9 @@ va %>%
     caption = "SOURCE: www.virginia.gov"
   )
 ```
+
+We can use `ggplot2::facet_wrap()` to explore that distribution for both individual (candidate)
+committees and more general issue committees.
 
 ```{r amount_hist_ind, echo=FALSE}
 va %>% 
@@ -377,6 +434,7 @@ va %>%
     )
   ) +
   geom_line(mapping = aes(color = election_year), size = 2) +
+  scale_x_continuous(breaks = 1:12) +
   labs(
     title = "Mean Cost of VA Expenditures Over Year",
     x = "Month of Year",
@@ -387,9 +445,13 @@ va %>%
 
 ### Dates
 
-```{r date_minmax, collapse=TRUE}
-max(va$transaction_date, na.rm = TRUE)
-min(va$transaction_date, na.rm = TRUE)
+The quasi-continuous variable `transaction_date` should also be explored for a reasonable
+range. There are no expenditures made before `r min(va$transaction_date)` and
+`r sum(va$transaction_date > today(), na.rm = TRUE)` expenditures reported as being made in the
+future.
+
+```{r summary_date, collapse=TRUE}
+summary(va$transaction_date)
 ```
 
 ```{r n_year_bar, echo=FALSE}
@@ -428,9 +490,15 @@ va %>%
 
 ## Wrangle
 
+To improve the searchability of the data on the TAP website, we will endeavor to normalize
+character strings, correct misspellings, flag undisambiguatable values. Original variables will
+remain immutable, all records will be preserved, and manipulated versions of each variable take
+the form `*_clean`.
+
 ### Year
 
-Add a `year` variable from `date` after `col_date()` using `lubridate::year()`.
+Create a `transaction_year` variable from `transaction_date` using `lubridate::year()` after 
+parsing the character string earlier with `readr::col_date()`.
 
 ```{r add_year}
 va <- va %>% mutate(transaction_year = year(transaction_date))
@@ -440,28 +508,35 @@ va <- va %>% mutate(transaction_year = year(transaction_date))
 
 The `address` variable should be minimally cleaned by removing punctuation and fixing white-space.
 
-```{r}
+```{r str_normalize}
+str_normalize <- function(string) {
+  string %>% 
+    str_to_upper() %>% 
+    str_replace("-", " ") %>% 
+    str_remove_all(rx_punctuation()) %>% 
+    str_trim() %>% 
+    str_squish() %>% 
+    na_if("") %>% 
+    na_if("NA")
+}
+```
+
+```{rclean_address1}
 va <- va %>% 
   mutate(
-    address1_clean = address_line1 %>% 
-      str_to_upper() %>% 
-      str_replace("-", " ") %>% 
-      str_remove_all("[:punct:]") %>% 
-      str_trim() %>% 
-      str_squish() %>% 
-      na_if("") %>% 
-      na_if("NA")
+    address1_clean = str_normalize(address_line1),
+    address2_clean = str_normalize(address_line2)
   )
+
+va %>% 
+  filter(address_line1 != address1_clean) %>%
+  select(address_line1, address1_clean) %>% 
+  sample_n(10)
 ```
 
 ### Zipcode
 
-```{r zipcode_data, echo=FALSE}
-zipcode <-
-  as_tibble(zipcode) %>% 
-  select(city, state, zip) %>% 
-  mutate(city = prep_city(city))
-```
+
 
 ```{r clean_zipcodes}
 va <- va %>% 
@@ -484,7 +559,7 @@ Using comprehensive list of state abbreviations in the Zipcodes database, we can
 `state` values and manually correct them.
 
 ```{r valid_state, collapse=TRUE}
-valid_state <- c(unique(zipcode$state), "AB", "BC", "MB", "NB", "NL", "NS", "ON", "PE", "QC", "SK")
+valid_state <- c(unique(zipcode$state), "AB", "BC", "MB", "NB", "NS", "ON", "PE", "QC", "SK")
 length(valid_state)
 setdiff(valid_state, state.abb)
 ```
@@ -511,14 +586,16 @@ Cleaning city values is the most complicated. This process involves four steps:
 
 #### Prep
 
-```{r prep_city}
+We will use the `prep_city()` function in the `/R` directory to normalize the strings, remove some
+common `NA` values, and lop abbreviations off the end of the string.
+
+```{r prep_city, collapse=TRUE}
 va <- va %>%
-  rename(city_raw = city) %>% 
   mutate(
     city_prep = prep_city(
-      cities = city_raw,
+      cities = city,
       na = read_lines(here("R", "na_city.csv")),
-      abbs = c("VA", "MA", "DC", "VIRGINIA")
+      abbs = c("VA", "VIRGINIA", "MA", "DC", "TX")
     ) %>% 
       str_replace("^VA\\b", "VIRGINIA")
   )
@@ -527,9 +604,12 @@ n_distinct(va$city_prep)
 mean(va$city_prep %in% zipcode$city)
 ```
 
-#### Swap
+#### Match
 
-```{r match_dist}
+To disambiguate the city values, we will look at the _expected_ city name for a given ZIP code. We
+can calculate the edit distance between each original value and the expected value.
+
+```{r match_city}
 va <- va %>%
   left_join(
     zipcode,
@@ -538,17 +618,46 @@ va <- va %>%
       "zip_clean" = "zip"
     )
   ) %>%
-  rename(city_match = city) %>%
-  mutate(
-    match_dist = stringdist(city_prep, city_match),
-    city_swap = if_else(match_dist < 3, city_match, city_prep)
-  )
-
-summary(va$match_dist)
-tabyl(va$match_dist == 0)
+  rename(city = city.x, city_match = city.y) %>%
+  mutate(match_dist = stringdist(city_prep, city_match))
 ```
 
-```{r}
+```{r view_dist}
+summary(va$match_dist)
+va %>% 
+  count(perf_match = match_dist == 0) %>% 
+  mutate(p = n/sum(n))
+```
+
+```{r view_match}
+va %>% 
+    filter(match_dist == 1) %>% 
+    count(city_prep, city_match, sort = TRUE)
+```
+
+#### Swap
+
+If the edit distance is less than or equal to two, we can fairly safely use the actual, expected
+value instead of the original value.
+
+```{r swap_city, collapse=TRUE}
+va <- va %>% 
+  mutate(
+    city_swap = if_else(
+      condition = match_dist <= 2, 
+      true = city_match, 
+      false = city_swap
+    )
+  )
+
+n_distinct(va$city_swap)
+```
+
+There are still `r sum(va$city_swap %out% valid_city, na.rm = T)` records with a `city_swap` value
+not in our list of valid city names. Many, if not most, of these values are actually acceptable
+city names that are simply not in our list.
+
+```{r view_swap}
 va %>% 
   filter(city_swap %out% valid_city) %>%
   count(city_swap, sort = TRUE)
@@ -556,9 +665,11 @@ va %>%
 
 #### Refine
 
+We can use the OpenRefine clustering algorithms to further cluster and merge similar values. We
+will create a new table of these refined values.
+
 ```{r view_refine}
 va_refined <- va %>%
-  filter(state_clean == "VA") %>% 
   filter(match_dist != 1) %>% 
   mutate(
     city_refine = if_else(
@@ -570,6 +681,7 @@ va_refined <- va %>%
     )
   ) %>% 
   filter(city_refine != city_swap) %>% 
+  rename(city_raw = city) %>% 
   select(
     schedule_d_id,
     state_clean,
@@ -584,6 +696,9 @@ va_refined <- va %>%
 
 #### Review
 
+The algorithms rely on comparing the relative frequencies of two similar values, rather than a list
+of _actual_ values. This can cause some accidential changes to be made.
+
 ```{r most_refined}
 va_refined %>% 
   select(-schedule_d_id) %>%
@@ -594,4 +709,25 @@ va_refined %>%
 ```
 
 
+## Export
 
+```{r}
+proc_dir <- here("va", "expends", "data", "processed")
+dir_create(proc_dir)
+
+va %>% 
+  select(
+    -address_line1,
+    -address_line2,
+    -zip_code,
+    -state_code,
+    -city,
+    -city_prep,
+    -city_match,
+    -match_dist
+  ) %>% 
+  write_csv(
+    na = "",
+    path = str_c(proc_dir, "va_expends_clean.csv", sep = "/")
+  )
+```
