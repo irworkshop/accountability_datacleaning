@@ -1,7 +1,7 @@
-Data Diary
+Virgina Expenditures Data Diary
 ================
-First Last
-`format(Sys.time())`
+Kiernan Nicholls
+2019-07-02 15:49:45
 
   - [Project](#project)
   - [Objectives](#objectives)
@@ -10,6 +10,7 @@ First Last
   - [Import](#import)
   - [Explore](#explore)
   - [Wrangle](#wrangle)
+  - [Export](#export)
 
 ## Project
 
@@ -133,10 +134,6 @@ separated:
 
 1.  `SBE_CSV/CF/2013_02/ScheduleD.csv`
 
-We will have to download and read the two types of files differently.
-
-#### Singular
-
 We will start by downloading all the files separated by month from 2012
 to 2019.
 
@@ -158,15 +155,15 @@ head(exp_urls)
 Then we can download these files to our `/data/raw/single/` directory.
 
 ``` r
-dir_raw_single <- here("va", "expends", "data", "raw", "single")
-dir_create(dir_raw_single)
+dir_raw <- here("va", "expends", "data", "raw", "single")
+dir_create(dir_raw)
 
-if (!all_files_new(dir_raw_single)) {
+if (!all_files_new(dir_raw)) {
   for (url in exp_urls[3:90]) {
     download.file(
       url = url,
       destfile = str_c(
-        dir_raw_single,
+        dir_raw,
         url %>% 
           str_extract("(\\d{4}_\\d{2})/ScheduleD.csv$") %>% 
           str_replace_all("/", "_"),
@@ -177,42 +174,16 @@ if (!all_files_new(dir_raw_single)) {
 }
 ```
 
-#### Separated
-
-For the years 1999 through 2011, the Schedule D data is held in two
-anual files, one for expenditures by PACs and another for all others.
-
-We can download each yearly file to the `/data/raw/separated/`
-directory.
-
-``` r
-dir_raw_sep <- here("va", "expends", "data", "raw", "separated")
-dir_create(dir_raw_sep)
-
-if (!all_files_new(dir_raw_sep)) {
-  for (year in 1999:2011) {
-    download.file(
-      url = glue("https://apps.elections.virginia.gov/SBE_CSV/CF/{year}/ScheduleD.csv"),
-      destfile = glue("{dir_raw_sep}/{year}_ScheduleD.csv")
-    )
-    download.file(
-      url = glue("https://apps.elections.virginia.gov/SBE_CSV/CF/{year}/ScheduleD_PAC.csv"),
-      destfile = glue("{dir_raw_sep}/{year}_ScheduleD_PAC.csv")
-    )
-  }
-}
-```
-
 ### Read
 
-Since all files are located in the same directory with the same
+Since all recent files are located in the same directory with the same
 structure, we can read them all at once by using `purrr::map()` to apply
 `readr::read_csv()` to each file in the directory, then binding each
 file into a single data frame using `dplyr::bind_rows()`.
 
 ``` r
 va <- 
-  dir_ls(dir_raw_single, glob = "*.csv") %>% 
+  dir_ls(dir_raw, glob = "*.csv") %>% 
   map(
     read_delim,
     delim = ",",
@@ -229,200 +200,9 @@ va <-
   clean_names()
 ```
 
-    #> Warning: 2 parsing failures.
-    #>  row col   expected     actual                                                                                                    file
-    #> 3991  -- 20 columns 22 columns '/home/ubuntu/R/accountability_datacleaning/R_campfin/va/expends/data/raw/single/2012_04_ScheduleD.csv'
-    #> 4567  -- 20 columns 22 columns '/home/ubuntu/R/accountability_datacleaning/R_campfin/va/expends/data/raw/single/2012_04_ScheduleD.csv'
-
-    #> Warning: 1 parsing failure.
-    #> row col   expected     actual                                                                                                    file
-    #>  26  -- 20 columns 22 columns '/home/ubuntu/R/accountability_datacleaning/R_campfin/va/expends/data/raw/single/2012_05_ScheduleD.csv'
-
-    #> Warning: 3 parsing failures.
-    #>  row col   expected     actual                                                                                                    file
-    #> 8925  -- 20 columns 21 columns '/home/ubuntu/R/accountability_datacleaning/R_campfin/va/expends/data/raw/single/2012_07_ScheduleD.csv'
-    #> 8931  -- 20 columns 21 columns '/home/ubuntu/R/accountability_datacleaning/R_campfin/va/expends/data/raw/single/2012_07_ScheduleD.csv'
-    #> 8936  -- 20 columns 21 columns '/home/ubuntu/R/accountability_datacleaning/R_campfin/va/expends/data/raw/single/2012_07_ScheduleD.csv'
-
-    #> Warning: 3 parsing failures.
-    #>  row col   expected     actual                                                                                                    file
-    #>  831  -- 20 columns 21 columns '/home/ubuntu/R/accountability_datacleaning/R_campfin/va/expends/data/raw/single/2012_10_ScheduleD.csv'
-    #> 3274  -- 20 columns 21 columns '/home/ubuntu/R/accountability_datacleaning/R_campfin/va/expends/data/raw/single/2012_10_ScheduleD.csv'
-    #> 3453  -- 20 columns 21 columns '/home/ubuntu/R/accountability_datacleaning/R_campfin/va/expends/data/raw/single/2012_10_ScheduleD.csv'
-
-    #> Warning: 1 parsing failure.
-    #>  row col   expected     actual                                                                                                    file
-    #> 2208  -- 20 columns 21 columns '/home/ubuntu/R/accountability_datacleaning/R_campfin/va/expends/data/raw/single/2013_01_ScheduleD.csv'
-
-    #> Warning: 1 parsing failure.
-    #>  row col   expected     actual                                                                                                    file
-    #> 9115  -- 20 columns 22 columns '/home/ubuntu/R/accountability_datacleaning/R_campfin/va/expends/data/raw/single/2013_06_ScheduleD.csv'
-
-    #> Warning: 2 parsing failures.
-    #>  row col   expected     actual                                                                                                    file
-    #> 2601  -- 20 columns 22 columns '/home/ubuntu/R/accountability_datacleaning/R_campfin/va/expends/data/raw/single/2013_07_ScheduleD.csv'
-    #> 4794  -- 20 columns 21 columns '/home/ubuntu/R/accountability_datacleaning/R_campfin/va/expends/data/raw/single/2013_07_ScheduleD.csv'
-
-    #> Warning: 3 parsing failures.
-    #> row col   expected     actual                                                                                                    file
-    #> 100  -- 20 columns 21 columns '/home/ubuntu/R/accountability_datacleaning/R_campfin/va/expends/data/raw/single/2013_09_ScheduleD.csv'
-    #> 103  -- 20 columns 18 columns '/home/ubuntu/R/accountability_datacleaning/R_campfin/va/expends/data/raw/single/2013_09_ScheduleD.csv'
-    #> 104  -- 20 columns 3 columns  '/home/ubuntu/R/accountability_datacleaning/R_campfin/va/expends/data/raw/single/2013_09_ScheduleD.csv'
-
-    #> Warning: 1 parsing failure.
-    #>  row col   expected     actual                                                                                                    file
-    #> 6123  -- 20 columns 21 columns '/home/ubuntu/R/accountability_datacleaning/R_campfin/va/expends/data/raw/single/2014_07_ScheduleD.csv'
-
-    #> Warning: 6 parsing failures.
-    #>   row col   expected     actual                                                                                                    file
-    #>  1861  -- 20 columns 19 columns '/home/ubuntu/R/accountability_datacleaning/R_campfin/va/expends/data/raw/single/2015_09_ScheduleD.csv'
-    #>  1862  -- 20 columns 3 columns  '/home/ubuntu/R/accountability_datacleaning/R_campfin/va/expends/data/raw/single/2015_09_ScheduleD.csv'
-    #> 12485  -- 20 columns 18 columns '/home/ubuntu/R/accountability_datacleaning/R_campfin/va/expends/data/raw/single/2015_09_ScheduleD.csv'
-    #> 12486  -- 20 columns 1 columns  '/home/ubuntu/R/accountability_datacleaning/R_campfin/va/expends/data/raw/single/2015_09_ScheduleD.csv'
-    #> 12487  -- 20 columns 3 columns  '/home/ubuntu/R/accountability_datacleaning/R_campfin/va/expends/data/raw/single/2015_09_ScheduleD.csv'
-    #> ..... ... .......... .......... .......................................................................................................
-    #> See problems(...) for more details.
-
-    #> Warning: 9 parsing failures.
-    #>  row col   expected     actual                                                                                                    file
-    #> 1806  -- 20 columns 19 columns '/home/ubuntu/R/accountability_datacleaning/R_campfin/va/expends/data/raw/single/2015_10_ScheduleD.csv'
-    #> 1807  -- 20 columns 3 columns  '/home/ubuntu/R/accountability_datacleaning/R_campfin/va/expends/data/raw/single/2015_10_ScheduleD.csv'
-    #> 2608  -- 20 columns 22 columns '/home/ubuntu/R/accountability_datacleaning/R_campfin/va/expends/data/raw/single/2015_10_ScheduleD.csv'
-    #> 3034  -- 20 columns 21 columns '/home/ubuntu/R/accountability_datacleaning/R_campfin/va/expends/data/raw/single/2015_10_ScheduleD.csv'
-    #> 3274  -- 20 columns 21 columns '/home/ubuntu/R/accountability_datacleaning/R_campfin/va/expends/data/raw/single/2015_10_ScheduleD.csv'
-    #> .... ... .......... .......... .......................................................................................................
-    #> See problems(...) for more details.
-
-    #> Warning: 2 parsing failures.
-    #>  row col   expected     actual                                                                                                    file
-    #> 1006  -- 20 columns 19 columns '/home/ubuntu/R/accountability_datacleaning/R_campfin/va/expends/data/raw/single/2015_11_ScheduleD.csv'
-    #> 1007  -- 20 columns 3 columns  '/home/ubuntu/R/accountability_datacleaning/R_campfin/va/expends/data/raw/single/2015_11_ScheduleD.csv'
-
-    #> Warning: 6 parsing failures.
-    #>   row col   expected     actual                                                                                                    file
-    #>  8479  -- 20 columns 18 columns '/home/ubuntu/R/accountability_datacleaning/R_campfin/va/expends/data/raw/single/2015_12_ScheduleD.csv'
-    #>  8480  -- 20 columns 1 columns  '/home/ubuntu/R/accountability_datacleaning/R_campfin/va/expends/data/raw/single/2015_12_ScheduleD.csv'
-    #>  8481  -- 20 columns 3 columns  '/home/ubuntu/R/accountability_datacleaning/R_campfin/va/expends/data/raw/single/2015_12_ScheduleD.csv'
-    #> 10212  -- 20 columns 18 columns '/home/ubuntu/R/accountability_datacleaning/R_campfin/va/expends/data/raw/single/2015_12_ScheduleD.csv'
-    #> 10213  -- 20 columns 1 columns  '/home/ubuntu/R/accountability_datacleaning/R_campfin/va/expends/data/raw/single/2015_12_ScheduleD.csv'
-    #> ..... ... .......... .......... .......................................................................................................
-    #> See problems(...) for more details.
-
-    #> Warning: 3 parsing failures.
-    #>  row col   expected     actual                                                                                                    file
-    #> 3938  -- 20 columns 21 columns '/home/ubuntu/R/accountability_datacleaning/R_campfin/va/expends/data/raw/single/2016_07_ScheduleD.csv'
-    #> 3939  -- 20 columns 21 columns '/home/ubuntu/R/accountability_datacleaning/R_campfin/va/expends/data/raw/single/2016_07_ScheduleD.csv'
-    #> 3940  -- 20 columns 21 columns '/home/ubuntu/R/accountability_datacleaning/R_campfin/va/expends/data/raw/single/2016_07_ScheduleD.csv'
-
-    #> Warning: 16 parsing failures.
-    #>  row col   expected     actual                                                                                                    file
-    #> 3314  -- 20 columns 21 columns '/home/ubuntu/R/accountability_datacleaning/R_campfin/va/expends/data/raw/single/2016_10_ScheduleD.csv'
-    #> 5429  -- 20 columns 21 columns '/home/ubuntu/R/accountability_datacleaning/R_campfin/va/expends/data/raw/single/2016_10_ScheduleD.csv'
-    #> 5430  -- 20 columns 21 columns '/home/ubuntu/R/accountability_datacleaning/R_campfin/va/expends/data/raw/single/2016_10_ScheduleD.csv'
-    #> 5431  -- 20 columns 21 columns '/home/ubuntu/R/accountability_datacleaning/R_campfin/va/expends/data/raw/single/2016_10_ScheduleD.csv'
-    #> 5432  -- 20 columns 21 columns '/home/ubuntu/R/accountability_datacleaning/R_campfin/va/expends/data/raw/single/2016_10_ScheduleD.csv'
-    #> .... ... .......... .......... .......................................................................................................
-    #> See problems(...) for more details.
-
-    #> Warning: 1 parsing failure.
-    #>   row col   expected     actual                                                                                                    file
-    #> 12812  -- 20 columns 21 columns '/home/ubuntu/R/accountability_datacleaning/R_campfin/va/expends/data/raw/single/2017_01_ScheduleD.csv'
-
-    #> Warning: 3 parsing failures.
-    #>   row col   expected     actual                                                                                                    file
-    #> 10723  -- 20 columns 21 columns '/home/ubuntu/R/accountability_datacleaning/R_campfin/va/expends/data/raw/single/2017_07_ScheduleD.csv'
-    #> 12373  -- 20 columns 21 columns '/home/ubuntu/R/accountability_datacleaning/R_campfin/va/expends/data/raw/single/2017_07_ScheduleD.csv'
-    #> 20702  -- 20 columns 21 columns '/home/ubuntu/R/accountability_datacleaning/R_campfin/va/expends/data/raw/single/2017_07_ScheduleD.csv'
-
-    #> Warning: 11 parsing failures.
-    #>   row col   expected     actual                                                                                                    file
-    #>  1122  -- 20 columns 21 columns '/home/ubuntu/R/accountability_datacleaning/R_campfin/va/expends/data/raw/single/2017_10_ScheduleD.csv'
-    #>  1465  -- 20 columns 21 columns '/home/ubuntu/R/accountability_datacleaning/R_campfin/va/expends/data/raw/single/2017_10_ScheduleD.csv'
-    #> 12851  -- 20 columns 19 columns '/home/ubuntu/R/accountability_datacleaning/R_campfin/va/expends/data/raw/single/2017_10_ScheduleD.csv'
-    #> 12852  -- 20 columns 4 columns  '/home/ubuntu/R/accountability_datacleaning/R_campfin/va/expends/data/raw/single/2017_10_ScheduleD.csv'
-    #> 17639  -- 20 columns 21 columns '/home/ubuntu/R/accountability_datacleaning/R_campfin/va/expends/data/raw/single/2017_10_ScheduleD.csv'
-    #> ..... ... .......... .......... .......................................................................................................
-    #> See problems(...) for more details.
-
-    #> Warning: 2 parsing failures.
-    #>  row col   expected     actual                                                                                                    file
-    #> 6800  -- 20 columns 18 columns '/home/ubuntu/R/accountability_datacleaning/R_campfin/va/expends/data/raw/single/2017_12_ScheduleD.csv'
-    #> 6801  -- 20 columns 3 columns  '/home/ubuntu/R/accountability_datacleaning/R_campfin/va/expends/data/raw/single/2017_12_ScheduleD.csv'
-
-    #> Warning: 1 parsing failure.
-    #>   row col   expected     actual                                                                                                    file
-    #> 11632  -- 20 columns 21 columns '/home/ubuntu/R/accountability_datacleaning/R_campfin/va/expends/data/raw/single/2018_01_ScheduleD.csv'
-
-    #> Warning: 8 parsing failures.
-    #>  row             col               expected     actual                                                                                                    file
-    #> 1153 IsIndividual    1/0/T/F/TRUE/FALSE     10014      '/home/ubuntu/R/accountability_datacleaning/R_campfin/va/expends/data/raw/single/2018_06_ScheduleD.csv'
-    #> 1153 TransactionDate date like %m/%d/%Y     False      '/home/ubuntu/R/accountability_datacleaning/R_campfin/va/expends/data/raw/single/2018_06_ScheduleD.csv'
-    #> 1153 Amount          no trailing characters /06/2018   '/home/ubuntu/R/accountability_datacleaning/R_campfin/va/expends/data/raw/single/2018_06_ScheduleD.csv'
-    #> 1153 NA              20 columns             21 columns '/home/ubuntu/R/accountability_datacleaning/R_campfin/va/expends/data/raw/single/2018_06_ScheduleD.csv'
-    #> 1154 IsIndividual    1/0/T/F/TRUE/FALSE     10014      '/home/ubuntu/R/accountability_datacleaning/R_campfin/va/expends/data/raw/single/2018_06_ScheduleD.csv'
-    #> .... ............... ...................... .......... .......................................................................................................
-    #> See problems(...) for more details.
-
-    #> Warning: 13 parsing failures.
-    #> row col   expected     actual                                                                                                    file
-    #> 888  -- 20 columns 21 columns '/home/ubuntu/R/accountability_datacleaning/R_campfin/va/expends/data/raw/single/2018_09_ScheduleD.csv'
-    #> 889  -- 20 columns 21 columns '/home/ubuntu/R/accountability_datacleaning/R_campfin/va/expends/data/raw/single/2018_09_ScheduleD.csv'
-    #> 890  -- 20 columns 21 columns '/home/ubuntu/R/accountability_datacleaning/R_campfin/va/expends/data/raw/single/2018_09_ScheduleD.csv'
-    #> 891  -- 20 columns 21 columns '/home/ubuntu/R/accountability_datacleaning/R_campfin/va/expends/data/raw/single/2018_09_ScheduleD.csv'
-    #> 892  -- 20 columns 21 columns '/home/ubuntu/R/accountability_datacleaning/R_campfin/va/expends/data/raw/single/2018_09_ScheduleD.csv'
-    #> ... ... .......... .......... .......................................................................................................
-    #> See problems(...) for more details.
-
-    #> Warning: 12 parsing failures.
-    #>   row col   expected     actual                                                                                                    file
-    #>  4102  -- 20 columns 21 columns '/home/ubuntu/R/accountability_datacleaning/R_campfin/va/expends/data/raw/single/2018_10_ScheduleD.csv'
-    #>  7826  -- 20 columns 21 columns '/home/ubuntu/R/accountability_datacleaning/R_campfin/va/expends/data/raw/single/2018_10_ScheduleD.csv'
-    #> 10189  -- 20 columns 21 columns '/home/ubuntu/R/accountability_datacleaning/R_campfin/va/expends/data/raw/single/2018_10_ScheduleD.csv'
-    #> 10190  -- 20 columns 21 columns '/home/ubuntu/R/accountability_datacleaning/R_campfin/va/expends/data/raw/single/2018_10_ScheduleD.csv'
-    #> 10191  -- 20 columns 21 columns '/home/ubuntu/R/accountability_datacleaning/R_campfin/va/expends/data/raw/single/2018_10_ScheduleD.csv'
-    #> ..... ... .......... .......... .......................................................................................................
-    #> See problems(...) for more details.
-
-    #> Warning: 116 parsing failures.
-    #> row col   expected     actual                                                                                                    file
-    #>   1  -- 20 columns 21 columns '/home/ubuntu/R/accountability_datacleaning/R_campfin/va/expends/data/raw/single/2018_12_ScheduleD.csv'
-    #>   2  -- 20 columns 21 columns '/home/ubuntu/R/accountability_datacleaning/R_campfin/va/expends/data/raw/single/2018_12_ScheduleD.csv'
-    #>   3  -- 20 columns 21 columns '/home/ubuntu/R/accountability_datacleaning/R_campfin/va/expends/data/raw/single/2018_12_ScheduleD.csv'
-    #>   4  -- 20 columns 21 columns '/home/ubuntu/R/accountability_datacleaning/R_campfin/va/expends/data/raw/single/2018_12_ScheduleD.csv'
-    #>   5  -- 20 columns 21 columns '/home/ubuntu/R/accountability_datacleaning/R_campfin/va/expends/data/raw/single/2018_12_ScheduleD.csv'
-    #> ... ... .......... .......... .......................................................................................................
-    #> See problems(...) for more details.
-
-    #> Warning: 101 parsing failures.
-    #>  row col   expected     actual                                                                                                    file
-    #> 2620  -- 20 columns 21 columns '/home/ubuntu/R/accountability_datacleaning/R_campfin/va/expends/data/raw/single/2019_01_ScheduleD.csv'
-    #> 2621  -- 20 columns 21 columns '/home/ubuntu/R/accountability_datacleaning/R_campfin/va/expends/data/raw/single/2019_01_ScheduleD.csv'
-    #> 2622  -- 20 columns 21 columns '/home/ubuntu/R/accountability_datacleaning/R_campfin/va/expends/data/raw/single/2019_01_ScheduleD.csv'
-    #> 2623  -- 20 columns 21 columns '/home/ubuntu/R/accountability_datacleaning/R_campfin/va/expends/data/raw/single/2019_01_ScheduleD.csv'
-    #> 2624  -- 20 columns 21 columns '/home/ubuntu/R/accountability_datacleaning/R_campfin/va/expends/data/raw/single/2019_01_ScheduleD.csv'
-    #> .... ... .......... .......... .......................................................................................................
-    #> See problems(...) for more details.
-
-    #> Warning: 3 parsing failures.
-    #>  row col   expected     actual                                                                                                    file
-    #> 1207  -- 20 columns 18 columns '/home/ubuntu/R/accountability_datacleaning/R_campfin/va/expends/data/raw/single/2019_02_ScheduleD.csv'
-    #> 1208  -- 20 columns 1 columns  '/home/ubuntu/R/accountability_datacleaning/R_campfin/va/expends/data/raw/single/2019_02_ScheduleD.csv'
-    #> 1209  -- 20 columns 3 columns  '/home/ubuntu/R/accountability_datacleaning/R_campfin/va/expends/data/raw/single/2019_02_ScheduleD.csv'
-
-    #> Warning: 6 parsing failures.
-    #>   row col   expected     actual                                                                                                    file
-    #>  3984  -- 20 columns 22 columns '/home/ubuntu/R/accountability_datacleaning/R_campfin/va/expends/data/raw/single/2019_04_ScheduleD.csv'
-    #>  7075  -- 20 columns 22 columns '/home/ubuntu/R/accountability_datacleaning/R_campfin/va/expends/data/raw/single/2019_04_ScheduleD.csv'
-    #> 18637  -- 20 columns 18 columns '/home/ubuntu/R/accountability_datacleaning/R_campfin/va/expends/data/raw/single/2019_04_ScheduleD.csv'
-    #> 18638  -- 20 columns 4 columns  '/home/ubuntu/R/accountability_datacleaning/R_campfin/va/expends/data/raw/single/2019_04_ScheduleD.csv'
-    #> 22082  -- 20 columns 18 columns '/home/ubuntu/R/accountability_datacleaning/R_campfin/va/expends/data/raw/single/2019_04_ScheduleD.csv'
-    #> ..... ... .......... .......... .......................................................................................................
-    #> See problems(...) for more details.
-
-    #> Warning: 2 parsing failures.
-    #>   row col   expected     actual                                                                                                    file
-    #>   249  -- 20 columns 21 columns '/home/ubuntu/R/accountability_datacleaning/R_campfin/va/expends/data/raw/single/2019_06_ScheduleD.csv'
-    #> 16630  -- 20 columns 21 columns '/home/ubuntu/R/accountability_datacleaning/R_campfin/va/expends/data/raw/single/2019_06_ScheduleD.csv'
+The older files, separated by payee type, have a different structure and
+will have to be imported, explored, and cleaned seperated from the
+recent files.
 
 ## Explore
 
@@ -434,26 +214,26 @@ glimpse(sample_frac(va))
 
     #> Observations: 705,142
     #> Variables: 20
-    #> $ schedule_d_id        <chr> "723980", "1274180", "1156016", "2492842", "1025198", "1256159", "1…
-    #> $ report_id            <chr> "44387", "87748", "75034", "164252", "65521", "86096", "119055", "1…
-    #> $ committee_contact_id <chr> "161611", NA, "281572", "561549", "65899", "298902", "290838", "537…
-    #> $ first_name           <chr> NA, "Katherine", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
-    #> $ middle_name          <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
-    #> $ last_or_company_name <chr> "PayPal", "Buchanan", "Party City", "Leadership for Educational Equ…
+    #> $ schedule_d_id        <chr> "1285123", "1277363", "1159376", "598000", "2433260", "1417551", "4…
+    #> $ report_id            <chr> "88695", "87978", "75406", "35346", "159892", "97648", "24190", "60…
+    #> $ committee_contact_id <chr> "17438", "243848", "269184", "161720", "251128", NA, "72013", "2309…
+    #> $ first_name           <chr> NA, NA, NA, NA, NA, NA, NA, "Julie", NA, "Rebecca", "Ray", "Devin",…
+    #> $ middle_name          <chr> NA, NA, NA, NA, NA, NA, NA, "S", NA, NA, NA, NA, NA, NA, NA, NA, NA…
+    #> $ last_or_company_name <chr> "OFFICE MAX", "Virginia National Bank", "Cox Communications", "Capi…
     #> $ prefix               <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
     #> $ suffix               <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
-    #> $ address_line1        <chr> "2211 North 1st Street", "1751 Potomac Greens Dr", "4107 Portsmouth…
-    #> $ address_line2        <chr> NA, NA, NA, NA, NA, NA, NA, NA, "Suite 104", NA, NA, NA, NA, NA, NA…
-    #> $ city                 <chr> "San Jose", "Alexandria", "Chesapeake", "Washington", "Virginia Bea…
-    #> $ state_code           <chr> "CA", "VA", "VA", "DC", "VA", "VA", "VA", "VA", "FL", "CA", "VA", "…
-    #> $ zip_code             <chr> "95131", "22314-6233", "23321", "20001", "23456", "23601", "20153",…
-    #> $ is_individual        <lgl> FALSE, TRUE, FALSE, FALSE, FALSE, TRUE, FALSE, FALSE, FALSE, FALSE,…
-    #> $ transaction_date     <date> 2014-04-09, 2015-12-09, 2015-09-11, 2019-04-03, 2015-06-01, 2015-1…
-    #> $ amount               <dbl> 8.15, 500.00, 49.11, 300.00, 15.00, 500.00, 500.00, 1000.00, 3700.0…
-    #> $ authorizing_name     <chr> "Sandra Phillips", "Scott Remley", "Marcia Price", "Nathanael Swans…
-    #> $ item_or_service      <chr> "PayPal fees", "Compliance Services", "items for event", "Consultin…
+    #> $ address_line1        <chr> "5900 E VA BEACH BLVD", "222 East Main St", "Post Office Box 900108…
+    #> $ address_line2        <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "Un…
+    #> $ city                 <chr> "NORFOLK", "Charlottesville", "Louisville", "Herndon", "Midlothian"…
+    #> $ state_code           <chr> "VA", "VA", "KY", "VA", "VA", "VA", "VA", "VA", "VA", "VA", "VA", "…
+    #> $ zip_code             <chr> "23502", "22902", "40290-1088", "20170", "23112", "22003-3308", "20…
+    #> $ is_individual        <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, TRUE, FALSE, TRUE,…
+    #> $ transaction_date     <date> 2015-12-11, 2015-12-31, 2015-09-18, 2013-10-22, 2019-03-22, 2016-0…
+    #> $ amount               <dbl> 33.89, 2.00, 350.50, 791.56, 250.00, 125.00, 14.79, 2250.00, 39.00,…
+    #> $ authorizing_name     <chr> "Angelia M. Williams", "Amy Laufer", "John S. Edwards", "Janet D. H…
+    #> $ item_or_service      <chr> "Supplies for 12/12 fundraising event", "bank account fee", "Intern…
     #> $ schedule_id          <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
-    #> $ report_uid           <chr> "{482C483B-2806-BA91-2613-681A2F96BEF0}", "{209A44BC-6B1B-C2D4-14F0…
+    #> $ report_uid           <chr> "{2A74C453-624E-BCFC-B0B7-5E9A48AA4E2A}", "{A63E4840-BD26-16E1-330C…
 
 ### Distinct
 
@@ -464,8 +244,7 @@ va %>%
   map(n_distinct) %>% 
   unlist() %>% 
   enframe(name = "variable", value = "n_distinct") %>% 
-  mutate(prop_distinct = round(n_distinct / nrow(va), 4)) %>%
-  print(n = length(va))
+  mutate(prop_distinct = round(n_distinct / nrow(va), 4))
 ```
 
     #> # A tibble: 20 x 3
@@ -529,8 +308,7 @@ va %>%
   map(function(var) sum(is.na(var))) %>% 
   unlist() %>% 
   enframe(name = "variable", value = "n_na") %>% 
-  mutate(prop_na = n_na / nrow(va)) %>% 
-  print(n = length(va))
+  mutate(prop_na = n_na / nrow(va))
 ```
 
     #> # A tibble: 20 x 3
@@ -559,58 +337,173 @@ va %>%
 
 ### Duplicates
 
+We can use `janitor::get_dupes()` to create a table only including
+records that are completely duplicated across every row, aside from the
+uniqe `schedule_d_id` variable.
+
+``` r
+va_dupes <- va %>% 
+  select(-schedule_d_id) %>% 
+  get_dupes() %>% 
+  distinct() %>% 
+  mutate(dupe_flag = TRUE)
+```
+
+There are 5100 distinct duplicated records in this database, covering
+12647 total records. It’s entirely possible that two expenditures can be
+made by the same committee, to the same payeee, of the same amount, on
+the same day, for the same purpose. However, we will flag these records
+with `dupe_flag` nonetheless.
+
+``` r
+va_dupes %>% 
+  tabyl(item_or_service) %>%
+  as_tibble() %>% 
+  arrange(desc(n)) %>% 
+  mutate(cum_percent = cumsum(percent))
+```
+
+    #> # A tibble: 931 x 5
+    #>    item_or_service           n percent valid_percent cum_percent
+    #>    <chr>                 <dbl>   <dbl>         <dbl>       <dbl>
+    #>  1 Contribution Fee        632  0.124         0.125        0.124
+    #>  2 Refund to Contributor   263  0.0516        0.0520       0.175
+    #>  3 Refund                  190  0.0373        0.0375       0.213
+    #>  4 Bank Fee                105  0.0206        0.0207       0.233
+    #>  5 Processing Fee           91  0.0178        0.0180       0.251
+    #>  6 Parking                  88  0.0173        0.0174       0.268
+    #>  7 Advertising              82  0.0161        0.0162       0.285
+    #>  8 Lodging                  82  0.0161        0.0162       0.301
+    #>  9 Credit Card Fee          73  0.0143        0.0144       0.315
+    #> 10 Travel                   73  0.0143        0.0144       0.329
+    #> # … with 921 more rows
+
+``` r
+va <- va %>%
+  left_join(va_dupes) %>% 
+  mutate(dupe_flag = !is.na(dupe_flag))
+```
+
 ### Ranges
 
-We can explore the continuous variables with `ggplot2::geom_histogram()`
-and `base::summary()`
+It’s important to ensure the ranges for continuous variables makes
+sense; that there aren’t any old or future dates or trillion dollar
+expenditures. We can explore these variables with `ggplot2::ggplot()`
+functions and `base::summary()`.
 
 #### Amounts
 
-    #> Warning: Transformation introduced infinite values in continuous x-axis
+The expenditure `amount` variable contains the USD value of the
+expenditure and can reasonably reach millions of dollars. This dataset
+contains 0 records with an `amount` value less than zero, which
+sometimes indicate expenditure correction filings. There are however 50
+records with an `amount` value *of* zero.
 
-    #> Warning: Removed 74 rows containing non-finite values (stat_bin).
+``` r
+summary(va$amount)
+```
+
+    #>    Min. 1st Qu.  Median    Mean 3rd Qu.    Max.    NA's 
+    #>       0      33     138    1385     504 5000000      24
+
+``` r
+va %>% filter(amount == max(amount, na.rm = TRUE)) %>% glimpse()
+```
+
+    #> Observations: 1
+    #> Variables: 22
+    #> $ schedule_d_id        <chr> "1542693"
+    #> $ report_id            <chr> "105163"
+    #> $ committee_contact_id <chr> "344338"
+    #> $ first_name           <chr> NA
+    #> $ middle_name          <chr> NA
+    #> $ last_or_company_name <chr> "A STRONGER VIRGINIA"
+    #> $ prefix               <chr> NA
+    #> $ suffix               <chr> NA
+    #> $ address_line1        <chr> "6825 WASHINGTON BLVD. NO. 202"
+    #> $ address_line2        <chr> NA
+    #> $ city                 <chr> "ARLINGTON"
+    #> $ state_code           <chr> "VA"
+    #> $ zip_code             <chr> "22213"
+    #> $ is_individual        <lgl> FALSE
+    #> $ transaction_date     <date> 2017-01-09
+    #> $ amount               <dbl> 5e+06
+    #> $ authorizing_name     <chr> "Michael G. Adams"
+    #> $ item_or_service      <chr> "CONTRIBUTION"
+    #> $ schedule_id          <chr> NA
+    #> $ report_uid           <chr> "{D18BC2A8-EA06-C738-2DEA-1CD660F211C8}"
+    #> $ dupe_count           <int> NA
+    #> $ dupe_flag            <lgl> FALSE
+
+We can visually explore the distribution and range of `amount` values
+using `ggplot2::geom_histogram()` and `ggplot2::geom_boxplot()`.
+
+Expenditures have a Log-normal distribution, with the vast majority of
+expenditures around the mean of $1,385.
+
+``` r
+va %>% 
+  select(amount) %>% 
+  mutate(oom = 10^(ceiling(log10(amount)))) %>% 
+  count(oom) %>% 
+  arrange(oom) %>%
+  mutate(oom = as.ordered(oom)) %>% 
+  ggplot() +
+  geom_col(aes(oom, n)) +
+  labs(
+    title = "Distribution of VA Expenditures by Amount Order of Magnitude",
+    x = "Order of Magnitude",
+    y = "Count"
+  )
+```
+
+![](../plots/unnamed-chunk-4-1.png)<!-- -->
+
+![](../plots/amount_hist_nonlog-1.png)<!-- -->
+
+We will have to transformt he x-axis logarithmically to find patterns in
+the distribution.
 
 ![](../plots/amount_hist-1.png)<!-- -->
 
-    #> Warning: Transformation introduced infinite values in continuous x-axis
-
-    #> Warning: Removed 50 rows containing non-finite values (stat_bin).
+We can use `ggplot2::facet_wrap()` to explore that distribution for both
+individual (candidate) committees and more general issue committees.
 
 ![](../plots/amount_hist_ind-1.png)<!-- -->
 
-    #> Warning: Transformation introduced infinite values in continuous y-axis
-
-    #> Warning: Removed 50 rows containing non-finite values (stat_boxplot).
-
 ![](../plots/amount_box_ind-1.png)<!-- -->
-
-    #> Warning: Removed 1 rows containing missing values (geom_path).
 
 ![](../plots/mean_month_line-1.png)<!-- -->
 
 ### Dates
 
+The quasi-continuous variable `transaction_date` should also be explored
+for a reasonable range. There are no expenditures made before NA and 0
+expenditures reported as being made in the future.
+
 ``` r
-max(va$transaction_date, na.rm = TRUE)
-#> [1] "2019-06-28"
-min(va$transaction_date, na.rm = TRUE)
-#> [1] "2009-10-01"
+summary(va$transaction_date)
+#>         Min.      1st Qu.       Median         Mean      3rd Qu.         Max.         NA's 
+#> "2009-10-01" "2013-12-13" "2015-10-27" "2015-11-27" "2017-09-06" "2019-06-28"         "24"
 ```
 
-    #> Warning: Removed 1 rows containing missing values (position_stack).
-
 ![](../plots/n_year_bar-1.png)<!-- -->
-
-    #> Warning: Removed 1 rows containing missing values (geom_path).
 
 ![](../plots/n_month_line-1.png)<!-- -->
 
 ## Wrangle
 
+To improve the searchability of the data on the TAP website, we will
+endeavor to normalize character strings, correct misspellings, flag
+undisambiguatable values. Original variables will remain immutable, all
+records will be preserved, and manipulated versions of each variable
+take the form `*_clean`.
+
 ### Year
 
-Add a `year` variable from `date` after `col_date()` using
-`lubridate::year()`.
+Create a `transaction_year` variable from `transaction_date` using
+`lubridate::year()` after parsing the character string earlier with
+`readr::col_date()`.
 
 ``` r
 va <- va %>% mutate(transaction_year = year(transaction_date))
@@ -622,17 +515,29 @@ The `address` variable should be minimally cleaned by removing
 punctuation and fixing white-space.
 
 ``` r
+str_normalize <- function(string) {
+  string %>% 
+    str_to_upper() %>% 
+    str_replace("-", " ") %>% 
+    str_remove_all(rx_punctuation()) %>% 
+    str_trim() %>% 
+    str_squish() %>% 
+    na_if("") %>% 
+    na_if("NA")
+}
+```
+
+``` rclean_address1
 va <- va %>% 
   mutate(
-    address1_clean = address_line1 %>% 
-      str_to_upper() %>% 
-      str_replace("-", " ") %>% 
-      str_remove_all("[:punct:]") %>% 
-      str_trim() %>% 
-      str_squish() %>% 
-      na_if("") %>% 
-      na_if("NA")
+    address1_clean = str_normalize(address_line1),
+    address2_clean = str_normalize(address_line2)
   )
+
+va %>% 
+  filter(address_line1 != address1_clean) %>%
+  select(address_line1, address1_clean) %>% 
+  sample_n(10)
 ```
 
 ### Zipcode
@@ -659,21 +564,17 @@ database, we can isolate invalid `state` values and manually correct
 them.
 
 ``` r
-valid_state <- c(unique(zipcode$state), "AB", "BC", "MB", "NB", "NL", "NS", "ON", "PE", "QC", "SK")
+valid_state <- c(unique(zipcode$state), "AB", "BC", "MB", "NB", "NS", "ON", "PE", "QC", "SK")
 length(valid_state)
-#> [1] 72
+#> [1] 71
 setdiff(valid_state, state.abb)
-#>  [1] "PR" "VI" "AE" "DC" "AA" "AP" "AS" "GU" "PW" "FM" "MP" "MH" "AB" "BC" "MB" "NB" "NL" "NS" "ON"
-#> [20] "PE" "QC" "SK"
+#>  [1] "PR" "VI" "AE" "DC" "AA" "AP" "AS" "GU" "PW" "FM" "MP" "MH" "AB" "BC" "MB" "NB" "NS" "ON" "PE"
+#> [20] "QC" "SK"
 ```
 
 ``` r
 setdiff(va$state_code, valid_state)
-```
-
-    #> [1] NA         "New York"
-
-``` r
+#> [1] NA         "New York"
 va <- va %>% mutate(state_clean = state_code %>% str_replace("New York", "NY"))
 ```
 
@@ -701,30 +602,32 @@ steps:
 
 #### Prep
 
+We will use the `prep_city()` function in the `/R` directory to
+normalize the strings, remove some common `NA` values, and lop
+abbreviations off the end of the string.
+
 ``` r
 va <- va %>%
-  rename(city_raw = city) %>% 
   mutate(
-    city_prep = prep_city(
-      cities = city_raw,
-      na = read_lines(here("R", "na_city.csv")),
-      abbs = c("VA", "MA", "DC", "VIRGINIA")
+    city_prep = normalize_city(
+      city = city,
+      na = read_lines(here("R", "data", "na_city.csv")),
+      state_abbs = c("VA", "VIRGINIA", "MA", "DC", "TX")
     ) %>% 
       str_replace("^VA\\b", "VIRGINIA")
   )
 
 n_distinct(va$city_prep)
-```
-
-    #> [1] 4273
-
-``` r
+#> [1] 4327
 mean(va$city_prep %in% zipcode$city)
+#> [1] 0.9677498
 ```
 
-    #> [1] 0.9705166
+#### Match
 
-#### Swap
+To disambiguate the city values, we will look at the *expected* city
+name for a given ZIP code. We can calculate the edit distance between
+each original value and the expected value.
 
 ``` r
 va <- va %>%
@@ -735,28 +638,73 @@ va <- va %>%
       "zip_clean" = "zip"
     )
   ) %>%
-  rename(city_match = city) %>%
-  mutate(
-    match_dist = stringdist(city_prep, city_match),
-    city_swap = if_else(match_dist < 3, city_match, city_prep)
-  )
+  rename(city = city.x, city_match = city.y) %>%
+  mutate(match_dist = stringdist(city_prep, city_match))
+```
 
+``` r
 summary(va$match_dist)
 ```
 
     #>    Min. 1st Qu.  Median    Mean 3rd Qu.    Max.    NA's 
-    #>   0.000   0.000   0.000   0.348   0.000  32.000   12984
+    #>   0.000   0.000   0.000   0.354   0.000  32.000   12928
 
 ``` r
-tabyl(va$match_dist == 0)
+va %>% 
+  count(perf_match = match_dist == 0) %>% 
+  mutate(p = n/sum(n))
 ```
 
-    #> # A tibble: 3 x 4
-    #>   `va$match_dist == 0`      n percent valid_percent
-    #>   <lgl>                 <dbl>   <dbl>         <dbl>
-    #> 1 FALSE                 34152  0.0484        0.0493
-    #> 2 TRUE                 658006  0.933         0.951 
-    #> 3 NA                    12984  0.0184       NA
+    #> # A tibble: 3 x 3
+    #>   perf_match      n      p
+    #>   <lgl>       <int>  <dbl>
+    #> 1 FALSE       36068 0.0511
+    #> 2 TRUE       656146 0.931 
+    #> 3 NA          12928 0.0183
+
+``` r
+va %>% 
+    filter(match_dist == 1) %>% 
+    count(city_prep, city_match, sort = TRUE)
+```
+
+    #> # A tibble: 893 x 3
+    #>    city_prep      city_match         n
+    #>    <chr>          <chr>          <int>
+    #>  1 MC LEAN        MCLEAN           457
+    #>  2 SOMMERVILLE    SOMERVILLE       399
+    #>  3 SAN FRANSISCO  SAN FRANCISCO    395
+    #>  4 MENLOW PARK    MENLO PARK       208
+    #>  5 CENTERVILLE    CENTREVILLE      207
+    #>  6 MENLO PARF     MENLO PARK       138
+    #>  7 MENIO PARK     MENLO PARK       134
+    #>  8 ACCOMACK       ACCOMAC          113
+    #>  9 VRIGINIA BEACH VIRGINIA BEACH    87
+    #> 10 FREDRICKSBURG  FREDERICKSBURG    84
+    #> # … with 883 more rows
+
+#### Swap
+
+If the edit distance is less than or equal to two, we can fairly safely
+use the actual, expected value instead of the original value.
+
+``` r
+va <- va %>% 
+  mutate(
+    city_swap = if_else(
+      condition = match_dist <= 2, 
+      true = city_match, 
+      false = city_prep
+    )
+  )
+
+n_distinct(va$city_swap)
+#> [1] 3095
+```
+
+There are still 25627 records with a `city_swap` value not in our list
+of valid city names. Many, if not most, of these values are actually
+acceptable city names that are simply not in our list.
 
 ``` r
 va %>% 
@@ -764,26 +712,29 @@ va %>%
   count(city_swap, sort = TRUE)
 ```
 
-    #> # A tibble: 481 x 2
+    #> # A tibble: 524 x 2
     #>    city_swap              n
     #>    <chr>              <int>
-    #>  1 <NA>               12984
+    #>  1 <NA>               12928
     #>  2 WEST SOMERVILLE     2449
-    #>  3 NORTH CHESTERFIELD  1968
+    #>  3 NORTH CHESTERFIELD  1552
     #>  4 SOUTH RIDING        1011
     #>  5 DALE CITY            806
-    #>  6 MANASSAS PARK        368
-    #>  7 GLENN ALLAN          249
-    #>  8 POTOMAC FALLS        238
-    #>  9 LAKE RIDGE           211
-    #> 10 SAN FRANSICO         206
-    #> # … with 471 more rows
+    #>  6 N CHESTERFIELD       414
+    #>  7 MANASSAS PARK        368
+    #>  8 ST PETERSBURG        355
+    #>  9 GLENN ALLAN          249
+    #> 10 POTOMAC FALLS        238
+    #> # … with 514 more rows
 
 #### Refine
 
+We can use the OpenRefine clustering algorithms to further cluster and
+merge similar values. We will create a new table of these refined
+values.
+
 ``` r
 va_refined <- va %>%
-  filter(state_clean == "VA") %>% 
   filter(match_dist != 1) %>% 
   mutate(
     city_refine = if_else(
@@ -795,6 +746,7 @@ va_refined <- va %>%
     )
   ) %>% 
   filter(city_refine != city_swap) %>% 
+  rename(city_raw = city) %>% 
   select(
     schedule_d_id,
     state_clean,
@@ -809,46 +761,107 @@ va_refined <- va %>%
 
 #### Review
 
+The algorithms rely on comparing the relative frequencies of two similar
+values, rather than a list of *actual* values. This can cause some
+accidential changes to be made.
+
 ``` r
 va_refined %>% 
   select(-schedule_d_id) %>%
   distinct()
 ```
 
-    #> # A tibble: 13 x 7
-    #>    state_clean zip_clean city_raw       city_prep      city_match      city_swap     city_refine   
-    #>    <chr>       <chr>     <chr>          <chr>          <chr>           <chr>         <chr>         
-    #>  1 VA          22041     Baileys Cross… BAILEYS CROSS… FALLS CHURCH    BAILEYS CROS… BAILEYS CROSS…
-    #>  2 VA          22314     Carrolton      CARROLTON      ALEXANDRIA      CARROLTON     CARROLLTON    
-    #>  3 VA          22973     Sommerville    SOMMERVILLE    STANARDSVILLE   SOMMERVILLE   SOMERVILLE    
-    #>  4 VA          20178     Manasssas      MANASSSAS      LEESBURG        MANASSSAS     MANASSAS      
-    #>  5 VA          22201     ArlingtonArli… ARLINGTONARLI… ARLINGTON       ARLINGTONARL… ARLINGTON     
-    #>  6 VA          23454     Culpepper      CULPEPPER      VIRGINIA BEACH  CULPEPPER     CULPEPER      
-    #>  7 VA          22546     Rutherford Gl… RUTHERFORD GL… RUTHER GLEN     RUTHERFORD G… RUTHERFORD GL…
-    #>  8 VA          22456     Ruther Glenn   RUTHER GLENN   EDWARDSVILLE    RUTHER GLENN  RUTHER GLEN   
-    #>  9 VA          23002     Amellia        AMELLIA        AMELIA COURT H… AMELLIA       AMELIA        
-    #> 10 VA          23963     Crew           CREW           RED HOUSE       CREW          CREWE         
-    #> 11 VA          22307     ALEXA          ALEXA          ALEXANDRIA      ALEXA         ALEX          
-    #> 12 VA          23323     Carrolton      CARROLTON      CHESAPEAKE      CARROLTON     CARROLLTON    
-    #> 13 VA          20111     Mansassas Park MANSASSAS PARK MANASSAS        MANSASSAS PA… MANASSAS PARK
+    #> # A tibble: 31 x 7
+    #>    state_clean zip_clean city_raw       city_prep      city_match     city_swap     city_refine    
+    #>    <chr>       <chr>     <chr>          <chr>          <chr>          <chr>         <chr>          
+    #>  1 VA          22041     Baileys Cross… BAILEYS CROSS… FALLS CHURCH   BAILEYS CROS… BAILEYS CROSSR…
+    #>  2 VA          23234     N.Chesterfield NCHESTERFIELD  RICHMOND       NCHESTERFIELD N CHESTERFIELD 
+    #>  3 CA          94133     SanFransico    SANFRANSICO    SAN FRANCISCO  SANFRANSICO   SAN FRANSICO   
+    #>  4 VA          22314     Carrolton      CARROLTON      ALEXANDRIA     CARROLTON     CARROLLTON     
+    #>  5 FL          33180     Aventura       AVENTURA       MIAMI          AVENTURA      VENTURA        
+    #>  6 MN          55126     Shore View     SHORE VIEW     SAINT PAUL     SHORE VIEW    SHOREVIEW      
+    #>  7 VA          22121     MtVernon       MTVERNON       MOUNT VERNON   MTVERNON      MT VERNON      
+    #>  8 CA          90045     Westchester    WESTCHESTER    LOS ANGELES    WESTCHESTER   WEST CHESTER   
+    #>  9 VA          22973     Sommerville    SOMMERVILLE    STANARDSVILLE  SOMMERVILLE   SOMERVILLE     
+    #> 10 VA          23834     S. Chesterfie… S CHESTERFIELD COLONIAL HEIG… S CHESTERFIE… CHESTERFIELD   
+    #> # … with 21 more rows
 
 ``` r
 va_refined %>% 
   count(state_clean, city_refine, sort = TRUE)
 ```
 
-    #> # A tibble: 12 x 3
+    #> # A tibble: 28 x 3
     #>    state_clean city_refine            n
     #>    <chr>       <chr>              <int>
     #>  1 VA          CREWE                  8
-    #>  2 VA          BAILEYS CROSSROADS     4
-    #>  3 VA          RUTHER GLEN            4
-    #>  4 VA          AMELIA                 2
-    #>  5 VA          CARROLLTON             2
-    #>  6 VA          CULPEPER               2
-    #>  7 VA          SOMERVILLE             2
-    #>  8 VA          ALEX                   1
-    #>  9 VA          ARLINGTON              1
-    #> 10 VA          MANASSAS               1
-    #> 11 VA          MANASSAS PARK          1
-    #> 12 VA          RUTHERFORD GLENN       1
+    #>  2 VA          N CHESTERFIELD         6
+    #>  3 VA          CHESTERFIELD           5
+    #>  4 MN          SHOREVIEW              4
+    #>  5 VA          BAILEYS CROSSROADS     4
+    #>  6 VA          RUTHER GLEN            4
+    #>  7 VA          URBANNA                3
+    #>  8 FL          VENTURA                2
+    #>  9 KS          BEL AIR                2
+    #> 10 VA          AMELIA                 2
+    #> # … with 18 more rows
+
+``` r
+va_refined <- va_refined %>% 
+  inner_join(
+    zipcode,
+    by = c(
+      "city_refine" = "city",
+      "state_clean" = "state"
+    )
+  ) %>% 
+  select(schedule_d_id, city_refine)
+```
+
+#### Join
+
+``` r
+va <- va %>% 
+  left_join(va_refined) %>% 
+  mutate(
+    city_clean = if_else(
+      condition = is.na(city_refine),
+      true = city_swap,
+      false = city_refine
+    )
+  )
+```
+
+``` r
+n_distinct(va$city)
+#> [1] 5824
+n_distinct(va$city_prep)
+#> [1] 4327
+n_distinct(va$city_swap)
+#> [1] 3095
+n_distinct(va$city_clean)
+#> [1] 3084
+```
+
+## Export
+
+``` r
+proc_dir <- here("va", "expends", "data", "processed")
+dir_create(proc_dir)
+
+va %>% 
+  select(
+    -address_line1,
+    -address_line2,
+    -zip_code,
+    -state_code,
+    -city,
+    -city_prep,
+    -city_match,
+    -match_dist
+  ) %>% 
+  write_csv(
+    na = "",
+    path = str_c(proc_dir, "va_expends_clean.csv", sep = "/")
+  )
+```

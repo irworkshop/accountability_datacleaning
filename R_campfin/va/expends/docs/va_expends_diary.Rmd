@@ -1,8 +1,7 @@
 ---
-title: "Data Diary"
-subtitle: "State Data"
-author: "First Last"
-date: "` format(Sys.time())`"
+title: "Virgina Expenditures Data Diary"
+author: "Kiernan Nicholls"
+date: "`r format(Sys.time())`"
 output:
   github_document: 
     df_print: tibble
@@ -15,9 +14,8 @@ editor_options:
 ```{r setup, include=FALSE, purl=FALSE}
 library(knitr)
 opts_chunk$set(
-  eval = FALSE,
   echo = TRUE,
-  dfrning = FALSE,
+  warning = FALSE,
   message = FALSE,
   error = FALSE,
   comment = "#>",
@@ -87,14 +85,14 @@ here <- here::here
 "%out%" <- Negate("%in%")
 print_all <- function(df) df %>% print(n = nrow(.)) 
 # source functions
-source(here("R", "prep_city.R"))
-source(here("R", "all_files_new.R"))
+source(here("R", "code", "normalize_geo.R"))
+source(here("R", "code", "all_files_new.R"))
 # load data
 data("zipcode")
 zipcode <-
   as_tibble(zipcode) %>% 
   select(city, state, zip) %>% 
-  mutate(city = prep_city(city))
+  mutate(city = normalize_city(city))
 ```
 
 This document should be run as part of the `R_campfin` project, which lives as a sub-directory of
@@ -172,7 +170,7 @@ Then we can download these files to our `/data/raw/single/` directory.
 dir_raw <- here("va", "expends", "data", "raw", "single")
 dir_create(dir_raw)
 
-if (!all_files_new(dir_raw_single)) {
+if (!all_files_new(dir_raw)) {
   for (url in exp_urls[3:90]) {
     download.file(
       url = url,
@@ -253,7 +251,7 @@ Or, filter the data and explore the most frequent discrete data.
 ```{r state_bar, echo=FALSE, fig.height=10}
 va %>% 
   count(state_code, sort = TRUE) %>% 
-  head(10) %>% 
+  head(20) %>% 
   ggplot() + 
   geom_col(aes(reorder(state_code, n), n)) +
   coord_flip() +
@@ -564,7 +562,7 @@ length(valid_state)
 setdiff(valid_state, state.abb)
 ```
 
-```{r view_states}
+```{r view_states, collapse=TRUE}
 setdiff(va$state_code, valid_state)
 va <- va %>% mutate(state_clean = state_code %>% str_replace("New York", "NY"))
 ```
@@ -592,10 +590,10 @@ common `NA` values, and lop abbreviations off the end of the string.
 ```{r prep_city, collapse=TRUE}
 va <- va %>%
   mutate(
-    city_prep = prep_city(
-      cities = city,
-      na = read_lines(here("R", "na_city.csv")),
-      abbs = c("VA", "VIRGINIA", "MA", "DC", "TX")
+    city_prep = normalize_city(
+      city = city,
+      na = read_lines(here("R", "data", "na_city.csv")),
+      state_abbs = c("VA", "VIRGINIA", "MA", "DC", "TX")
     ) %>% 
       str_replace("^VA\\b", "VIRGINIA")
   )
@@ -646,7 +644,7 @@ va <- va %>%
     city_swap = if_else(
       condition = match_dist <= 2, 
       true = city_match, 
-      false = city_swap
+      false = city_prep
     )
   )
 
@@ -708,6 +706,38 @@ va_refined %>%
   count(state_clean, city_refine, sort = TRUE)
 ```
 
+```{r good_refine}
+va_refined <- va_refined %>% 
+  inner_join(
+    zipcode,
+    by = c(
+      "city_refine" = "city",
+      "state_clean" = "state"
+    )
+  ) %>% 
+  select(schedule_d_id, city_refine)
+```
+
+#### Join
+
+```{r join_refine}
+va <- va %>% 
+  left_join(va_refined) %>% 
+  mutate(
+    city_clean = if_else(
+      condition = is.na(city_refine),
+      true = city_swap,
+      false = city_refine
+    )
+  )
+```
+
+```{r city_progress, collapse=TRUE}
+n_distinct(va$city)
+n_distinct(va$city_prep)
+n_distinct(va$city_swap)
+n_distinct(va$city_clean)
+```
 
 ## Export
 

@@ -61,7 +61,7 @@ normalize_state <- function(state, valid = NULL, na = c("")) {
 
 # cities -------------------------------------------------------------------------------------
 
-normalize_city <- function(city, abbs = NULL, na = c("")) {
+normalize_city <- function(city, geo_abbs = NULL, state_abbs = NULL, na = c("")) {
 
   city_clean <- city %>%
     str_to_upper() %>%
@@ -72,14 +72,20 @@ normalize_city <- function(city, abbs = NULL, na = c("")) {
     str_squish() %>%
     na_if("")
 
-  if (!is.null(abbs)) {
-    abbs <- as.data.frame(abbs)
-    for (i in seq_along(abbs[, 1])) {
+  if (!is.null(geo_abbs)) {
+    geo_abbs <- as.data.frame(geo_abbs)
+    for (i in seq_along(geo_abbs[, 1])) {
       address_clean <- str_replace(
         string = address_clean,
-        pattern = str_c("\\b", abbs[i, 1], "\\b"),
-        replacement = abbs[i, 2]
+        pattern = str_c("\\b", geo_abbs[i, 1], "\\b"),
+        replacement = geo_abbs[i, 2]
       )
+    }
+  }
+
+  if (!is.null(state_abbs)) {
+    for (i in seq_along(state_abbs)) {
+      city_clean <- str_remove(city_clean, str_c("\\s", state_abbs[i], "$"))
     }
   }
 
