@@ -30,12 +30,17 @@ normalize_address <- function(address, abbs = NULL, na = c("")) {
 
 # zip codes ----------------------------------------------------------------------------------
 
-normalize_zip <- function(zip, na = c("")) {
+normalize_zip <- function(zip, na = c(""), na_rep = FALSE) {
 
   zip_clean <- zip %>%
+    as.character() %>%
     str_remove_all("\\D") %>%
     str_pad(width = 5, side = "left", pad = "0") %>%
     str_sub(start = 1, end = 5)
+
+  if (na_rep) {
+    zip_clean[zip_clean %>% str_which("^(.)\\1+$")] <- NA
+  }
 
   return(zip_clean)
 }
