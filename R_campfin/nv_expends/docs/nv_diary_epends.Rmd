@@ -1,6 +1,6 @@
 ---
 title: "Data Diary"
-subtitle: "Nevada Expenses"
+subtitle: "Nevada Expenditures"
 author: "Kiernan Nicholls"
 date: "`r format(Sys.time())`"
 output:
@@ -195,8 +195,8 @@ https://www.nvsos.gov/yourreports/CampaignFinance.43993.060419121813.zip
 The ZIP file contains the six individual files, as expected.
 
 ```{r unzip_list, echo=FALSE}
-here("nv_contribs", "data") %>% 
-  dir_ls(, glob = "*.zip") %>% 
+here("nv_contribs", "data", "raw") %>% 
+  dir_ls(glob = "*.zip") %>% 
   unzip(list = TRUE) %>% 
   clean_names()
 ```
@@ -204,10 +204,10 @@ here("nv_contribs", "data") %>%
 The files will be unzipped into the `data/` directory.
 
 ```{r unzip}
-dir_create(here("nv_contribs", "data"))
-here("nv_contribs", "data") %>% 
+dir_create(here("nv_contribs", "data", "raw"))
+here("nv_contribs", "data", "raw") %>% 
   dir_ls(glob = "*.zip") %>% 
-  unzip(exdir = here("nv_contribs", "data"))
+  unzip(exdir = here("nv_contribs", "data", "raw"))
 ```
 
 Each file can be read using the `vroom::vroom()` function and the parameters explained by NVSOS.
@@ -216,7 +216,7 @@ function.
 
 ```{r read_candidates}
 nv_candidates <- vroom(
-  file = here("nv_contribs", "data", "CampaignFinance.Cnddt.43898.060419073713.csv"),
+  file = here("nv_contribs", "data", "raw","CampaignFinance.Cnddt.43993.062519084828.csv"),
   delim = ",",
   col_names = TRUE,
   na = "",
@@ -238,7 +238,7 @@ print(nv_candidates)
 
 ```{r read_groups}
 nv_groups <- vroom(
-  file = here("nv_contribs", "data", "CampaignFinance.Grp.43898.060419073713.csv"),
+  file = here("nv_contribs", "data", "raw","CampaignFinance.Grp.43993.062519084828.csv"),
   delim = ",",
   col_names = TRUE,
   na = "",
@@ -260,7 +260,7 @@ print(nv_groups)
 
 ```{r read_reports}
 nv_reports <- vroom(
-  file = here("nv_contribs", "data", "CampaignFinance.Rpr.43898.060419073713.csv"),
+  file = here("nv_contribs", "data", "raw","CampaignFinance.Rpr.43993.062519084828.csv"),
   delim = ",",
   col_names = TRUE,
   na = "",
@@ -285,7 +285,7 @@ print(nv_reports)
 
 ```{r read_payees}
 nv_payees <- vroom(
-  file = here("nv_contribs", "data", "CampaignFinance.Cntrbtrs-.43898.060419073713.csv"),
+  file = here("nv_contribs", "data", "raw","CampaignFinance.Cntrbtrs-.43993.062519084828.csv"),
   delim = ",",
   col_names = TRUE,
   na = "",
@@ -305,7 +305,7 @@ print(nv_payees)
 
 ```{r read_contribs, eval=FALSE}
 nv_contributions <- vroom(
-  file = here("nv_contribs", "data", "CampaignFinance.Cntrbt.43898.060419073713.csv"),
+  file = here("nv_contribs", "data", "raw","CampaignFinance.Cntrbt.43993.062519084828.csv"),
   delim = ",",
   col_names = TRUE,
   na = "",
@@ -323,11 +323,13 @@ nv_contributions <- vroom(
     `ContributorID` = col_character()
   )
 )
+
+print(nv_contributions)
 ```
 
 ```{r read_expenses}
 nv_expenses <- vroom(
-  file = here("nv_contribs", "data", "CampaignFinance.Expn.43898.060419073713.csv"),
+  file = here("nv_contribs", "data", "raw", "CampaignFinance.Expn.43993.062519084828.csv"),
   delim = ",",
   col_names = TRUE,
   na = "",
@@ -335,18 +337,11 @@ nv_expenses <- vroom(
   escape_double = TRUE,
   .name_repair = make_clean_names,
   col_types = cols(
-    `ExpenseID` = col_character(),
-    `ReportID` = col_character(),
-    `CandidateID` = col_character(),
-    `GroupID` = col_character(),
+    .default = col_character(),
     `Expense Date` = col_date("%m/%d/%Y"),
     `Expense Amount`	= col_number(),
-    `Expense Type` = col_character(),
-    `Payee ID` = col_character()
   )
 )
-
-print(nv_expenses)
 ```
 
 ## Join
@@ -779,7 +774,7 @@ We will write the final data set to disk to be uploaded to the Accountability Pr
 To save space, unclean columns will be removed and `NA` values will be written as empty strings.
 
 ```{r write_csv}
-dir_create(path = str_c(here("nv_expends"), "data", sep = "/"))
+dir_create(here("nv_expends", "data", "processed"))
 nv %>% 
   select(
     -jurisdiction,
@@ -788,21 +783,7 @@ nv %>%
   ) %>% 
   mutate_if(is.character, str_replace_all, "\"", "\'") %>% 
   write_csv(
-    path = here("nv_expends", "data", "nv_contribs_clean.csv"),
+    path = here("nv_expends", "data", "processed", "nv_expends_clean.csv"),
     na = ""
   )
-```
-
-## Purl
-
-To facilitate any future processing of this same information, we can create an executable R script
-from the code chunks in this document. This script can then be run from the command line to output
-a cleaned file.
-
-```{r purl, eval=FALSE, purl=FALSE}
-dir_create(path = str_c(here("nv_expends"), "code", sep = "/"))
-purl(
-  input  = here::here("nv_expends", "docs", "nv_diary.Rmd"),
-  output = here::here("nv_expends", "code", "nv_script.R")
-)
 ```

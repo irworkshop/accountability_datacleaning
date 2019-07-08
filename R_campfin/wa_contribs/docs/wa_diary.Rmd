@@ -132,7 +132,8 @@ pacman::p_load(
   magrittr, 
   janitor, 
   zipcode, 
-  here
+  here,
+  fs
 )
 ```
 
@@ -149,11 +150,16 @@ The `receipt_date` strings are converted from their original format (MM/DD/YYYY)
 (YYYY-MM-DD) as to be handled as date objects in R. The contribution `amount` values are read as
 doubles. All other variables are handled as character strings.
 
-```{r read_csv}
+```{r read_csv, collapse=TRUE}
 # create path to file
-wa_file <- here("wa_contribs", "data", "Contributions_to_Candidates_and_Political_Committees.csv")
+wa_file <- here(
+  "wa_contribs", "data", "raw", 
+  "Contributions_to_Candidates_and_Political_Committees.csv"
+)
+
 # if a recent version exists where it should, read it
 if (file.exists(wa_file) & as_date(file.mtime(wa_file)) == today()) {
+  downloaded <- FALSE
   wa <- read_csv(
     file = wa_file,
     na = c("", "NA", "N/A"),
@@ -163,7 +169,8 @@ if (file.exists(wa_file) & as_date(file.mtime(wa_file)) == today()) {
       receipt_date = col_date(format = "%m/%d/%Y")
     )
   )
-} else { # otherwise read it from the internet
+} else { 
+  # otherwise read it from the internet
   wa <- read_csv(
     file = "https://data.wa.gov/api/views/kv7h-kjye/rows.csv?accessType=DOWNLOAD",
     na = c("", "NA", "N/A"),
@@ -173,7 +180,16 @@ if (file.exists(wa_file) & as_date(file.mtime(wa_file)) == today()) {
       receipt_date = col_date(format = "%m/%d/%Y")
     )
   )
+  # and save to disk
+  dir_create(here("wa_contribs", "data", "raw"))
+  write_csv(
+    x = wa,
+    path = wa_file,
+    na = ""
+  )
 }
+
+file.exists(wa_file)
 ```
 
 ## Explore
@@ -783,14 +799,7 @@ We can write two versions of the document. The first has all original columns al
 data in the `*_clean` columns. The second remove the original columns for file size reasons.
 
 ```{r write_csv, eval=FALSE}
-# all data, original and cleaned
-wa %>% write_csv(
-  path = here("wa_contribs", "data", "wa_contribs_all.csv"),
-  na = "",
-  col_names = TRUE,
-  quote_escape = "backslash"
-)
-
+dir_create(here("wa_contribs", "data", "processed"))
 wa %>%
   # remove the original contributor_* columns for space
   select(
@@ -800,9 +809,7 @@ wa %>%
     -contributor_zip
   ) %>% 
   write_csv(
-    path = here("wa_contribs", "data", "wa_contribs_clean.csv"),
+    path = here("wa_contribs", "data", "processed", "wa_contribs_clean.csv"),
     na = "",
-    col_names = TRUE,
-    quote_escape = "backslash"
   )
 ```

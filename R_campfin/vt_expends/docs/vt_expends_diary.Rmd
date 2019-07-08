@@ -374,9 +374,10 @@ and cleaned with `zipcode::clean.zipcode()`
 ## Write
 
 ```{r write_csv}
+dir_create(here("vt_expends", "data", "processed"))
 write_csv(
   x = vt,
-  path = here("vt_expends", "data", "vt_expends_clean.csv"),
+  path = here("vt_expends", "data", "processed", "vt_expends_clean.csv"),
   na = ""
 )
 ```
