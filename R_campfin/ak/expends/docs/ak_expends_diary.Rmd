@@ -1,0 +1,449 @@
+---
+title: "Alaska Expenditures"
+author: "Kiernan Nicholls"
+date: "`r format(Sys.time())`"
+output:
+  github_document: 
+    df_print: tibble
+    toc: true
+    toc_dept: 2
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE, purl=FALSE}
+library(knitr)
+opts_chunk$set(
+  echo = TRUE,
+  dfrning = FALSE,
+  message = FALSE,
+  error = FALSE,
+  comment = "#>",
+  fig.path = "../plots/",
+  fig.width = 10,
+  dpi = 300
+)
+options(width = 99)
+```
+
+## Project
+
+The Accountability Project is an effort to cut across data silos and give journalists, policy
+professionals, activists, and the public at large a simple way to search across huge volumes of
+public data about people and organizations.
+
+Our goal is to standardizing public data on a few key fields by thinking of each dataset row as a
+transaction. For each transaction there should be (at least) 3 variables:
+
+1. All **parties** to a transaction
+2. The **date** of the transaction
+3. The **amount** of money involved
+
+## Objectives
+
+This document describes the process used to complete the following objectives:
+
+1. How many records are in the database?
+1. Check for duplicates
+1. Check ranges
+1. Is there anything blank or missing?
+1. Check for consistency issues
+1. Create a five-digit ZIP Code called `ZIP5`
+1. Create a `YEAR` field from the transaction date
+1. Make sure there is data on both parties to a transaction
+
+## Packages
+
+The following packages are needed to collect, manipulate, visualize, analyze, and communicate
+these results. The `pacman` package will facilitate their installation and attachment.
+
+```{r p_load, message=FALSE, dfrning=FALSE, error=FALSE}
+# install.packages("pacman")
+pacman::p_load(
+  stringdist, # levenshtein value
+  tidyverse, # data manipulation
+  lubridate, # datetime strings
+  magrittr, # pipe opperators
+  RSelenium, # read soda api
+  janitor, # dataframe clean
+  zipcode, # clean & database
+  explore, # basic exploration
+  batman, # parse yes & no
+  refinr, # cluster & merge
+  vroom,
+  rvest, # scrape website
+  knitr, # knit documents
+  here, # relative storage
+  fs # search storage 
+)
+```
+
+```{r fix_fun, echo=FALSE}
+# fix conflict
+here <- here::here
+# custom utility functions
+"%out%" <- Negate("%in%")
+print_all <- function(df) df %>% print(n = nrow(.)) 
+# source functions
+source(here("R", "code", "normalize_geo.R"))
+source(here("R", "code", "all_files_new.R"))
+# load data
+data("zipcode")
+zipcode <-
+  as_tibble(zipcode) %>% 
+  select(city, state, zip) %>% 
+  mutate(city = normalize_city(city))
+```
+
+This document should be run as part of the `R_campfin` project, which lives as a sub-directory of
+the more general, language-agnostic [`irworkshop/accountability_datacleaning`][01] GitHub
+repository.
+
+The `R_campfin` project uses the [RStudio projects][02] feature and should be run as such. The
+project also uses the dynamic `here::here()` tool for file paths relative to _your_ machine.
+
+```{r where_here, collapse=TRUE}
+# where dfs this document knit?
+here::here()
+```
+
+[01]: https://github.com/irworkshop/accountability_datacleaning "TAP repo"
+[02]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects "Rproj"
+
+## Data
+
+Describe _where_ the data is coming from. [Link to the data download][03] page if possible.
+
+Describe the data set that is going to be cleaned. A file name, age, and unit of observation.
+
+[03]: https://example.com "source"
+
+### About
+
+> If the publisher provides any information on the file, you can directly quote that here.
+
+### Variables
+
+Often the publisher will provide a dictionary to describe the variables in the data (and
+potentially the key pairs between many relational tables). 
+[Link to the dictionary](https://example.com).
+
+`variable_name`:
+
+> Directly quote the definition given for variables of interest.
+
+## Import
+
+### Download
+
+Download raw, immutable data file.
+
+```{r download_raw, eval=FALSE}
+raw_dir <- here("ak", "expends", "data", "raw")
+dir_create(raw_dir)
+
+file.path(find.package("RSelenium"), "examples/serverUtils")
+RSelenium::startServer()
+
+rs_driver <- rsDriver(
+  port = 4444L,
+  browser = "firefox",
+  extraCapabilities = RSelenium::makeFirefoxProfile(
+    list(
+      "browser.download.dir" = here::here(), # current wd
+      "browser.download.folderList" = 2L,
+      "browser.helperApps.neverAsk.saveToDisk" = "text/csv"
+    )
+  )
+)
+
+remote_driver <- rs_driver$client
+remote_driver$navigate("https://aws.state.ak.us/ApocReports/IndependentExpenditures/IEExpenditures.aspx")
+
+filed_box <- remote_driver$findElement(using = "css", "#M_C_csfFilter_txtBeginDate")
+filed_box$sendKeysToElement(list("1/1/2008"))
+
+export_button <- remote_driver$findElement(using = "css", "#M_C_csfFilter_btnExport")
+export_button$send
+
+csv_button <- remote_driver$findElement(using = "css", "#M_C_csfFilter_ExportDialog_hlAllCSV")
+csv_button$clickElement()
+
+remote_driver$close()
+rs_driver$server$stop()
+```
+
+### Read
+
+```{r}
+ak <- 
+  read_csv(
+    file = "ak/expends/data/raw/IE_Expenditure_07-08-2019.CSV",
+    na = c("", "na", "n/a", "NA", "N/A"),
+    col_types = cols(
+      .default = col_character(),
+      Date = col_date("%m/%d/%Y"),
+      Amount = col_number(),
+      `Election Year` = col_integer(),
+      `Report Year` = col_integer(),
+      Submitted = col_date("%m/%d/%Y")
+    )
+  ) %>% 
+  clean_names() %>% 
+  mutate_if(is.character, str_to_upper)
+```
+
+## Explore
+
+There are `nrow(df)` records of `length(df)` variables in the full database.
+
+```{r glimpse}
+glimpse(sample_frac(ak))
+```
+
+### Distinct
+
+The variables range in their degree of distinctness.
+
+```{r n_distinct}
+ak %>% 
+  map(n_distinct) %>% 
+  unlist() %>% 
+  enframe(name = "variable", value = "n_distinct") %>%
+  mutate(prop_distinct = round(n_distinct / nrow(ak), 4)) %>%
+  print(n = length(ak))
+```
+
+```{r payment_type_bar, echo=FALSE}
+ggplot(data = ak) + 
+  geom_bar(mapping = aes(payment_type)) +
+  coord_flip()
+```
+
+```{r state_bar, echo=FALSE}
+ak %>% 
+  count(recipient_state, sort = TRUE) %>%
+  mutate(p = n/sum(n)) %>% 
+  head() %>% 
+  ggplot() + 
+  geom_col(mapping = aes(reorder(recipient_state, p), p)) +
+  scale_y_continuous(labels = scales::percent) +
+  coord_flip()
+```
+
+```{r country_bar, echo=FALSE}
+ggplot(data = ak) + 
+  geom_bar(mapping = aes(recipient_country)) +
+  scale_y_log10()
+```
+
+```{r year_bar, echo=FALSE}
+ggplot(data = ak) +
+  geom_bar(mapping = aes(election_year)) +
+  scale_x_continuous(breaks = 2012:2019) +
+  coord_cartesian(xlim = c(2012:2019))
+```
+
+```{r filer_type_bar, echo=FALSE}
+ggplot(data = ak) +
+  geom_bar(mapping = aes(filer_type))
+```
+
+### Missing
+
+There are relatively few variables with much missing information, aside from `payment_detail`.
+
+```{r count_na}
+ak %>% 
+  map(function(var) sum(is.na(var))) %>% 
+  unlist() %>% 
+  enframe(name = "variable", value = "n_na") %>% 
+  mutate(prop_na = n_na / nrow(ak)) %>% 
+  print(n = length(ak))
+```
+
+We will flag any records missing key values used to identify an expenditure.
+
+```{r na_flag}
+ak <- ak %>% mutate(na_flag = is.na(recipient))
+```
+
+### Duplicates
+
+There are no duplicate rows.
+
+```{r get_dupes, collapse=TRUE}
+ak_dupes <- get_dupes(ak)
+nrow(ak_dupes)
+rm(ak_dupes)
+```
+
+### Ranges
+
+Explore the continuous variables with `ggplot2::geom_histogram()` and `base::summary()`
+
+#### Amounts
+
+There are `sum(ak$amount == 0)` recods with an `amount` value of zero.
+
+Below is a `glimpse()` at the smallest and largest `amount` records.
+
+```{r glimpse_min_max}
+glimpse(ak %>% filter(amount == min(amount)))
+glimpse(ak %>% filter(amount == max(amount)))
+```
+
+### Dates
+
+```{r date_future, collapse=TRUE}
+max(ak$date, na.rm = TRUE)
+sum(ak$date > today(), na.rm = T)
+ak <- ak %>% mutate(date_flag = date > today())
+```
+
+```{r date_past, collapse=TRUE}
+min(ak$date, na.rm = TRUE)
+sum(year(ak$date) < 2010, na.rm = T)
+```
+
+## Wrangle
+
+### Year
+
+Add a `year` variable from `date` using `lubridate::year()` after parsing the variable with 
+`readr::col_date()`.
+
+```{r add_year}
+ak <- ak %>% mutate(year = year(date))
+```
+
+### Address
+
+The `address` variable should be minimally cleaned by removing punctuation and fixing white-space.
+
+```{r clean_address}
+ak <- ak %>% mutate(address_clean = normalize_address(recipient_address))
+```
+
+### Zipcode
+
+```{r clean_zipcodes, collapse=TRUE}
+ak <- ak %>% mutate(zip_clean = normalize_zip(recipient_zip, na_rep = TRUE))
+mean(ak$zip_clean %in% zipcode$zip)
+ak$zip_clean[ak$zip_clean %out% zipcode$zip]
+```
+
+```{r view_bad}
+ak %>% 
+  filter(zip_clean %out% zipcode$zip) %>% 
+  select(starts_with("recipient")) %>% 
+  distinct()
+```
+
+### State
+
+The database uses full state names instead of the 2 character abbreviations typically used. We can
+convert between them.
+
+```{r view_states}
+sample(ak$recipient_state, 10)
+```
+
+```{r make_table}
+states <- tibble(
+  name = str_to_upper(c(state.name, "District of Columbia", "NSW", "Ontario", "British Columbia")),
+  abb = c(state.abb, "DC", "NW", "ON", "BC")
+)
+```
+
+```{r abbreviate_states, collapse=TRUE}
+ak$state_clean <- ak$recipient_state
+for (i in seq_along(states$name)) {
+  ak$state_clean <- str_replace(
+    string = ak$state_clean,
+    pattern = states$name[i],
+    replacement = states$abb[i] 
+  )
+}
+mean(na.omit(ak$state_clean) %in% states$abb)
+```
+
+### City
+
+Cleaning city values is the most complicated. This process involves four steps:
+
+1. Prepare raw city values by removing invalid data and reducing inconsistencies
+1. Match prepared city values with the _actual_ city name of that record's ZIP code
+1. swap prepared city values with the ZIP code match _if_ only 1 edit is needed
+1. Refine swapped city values with key collision and n-gram fingerprints
+
+```{r}
+n_distinct(ak$recipient_city)
+valid_city <- unique(zipcode$city)
+mean(ak$recipient_city %in% valid_city)
+```
+
+#### Prep
+
+```{r prep_city, collapse=TRUE}
+ak <- ak %>% mutate(city_prep = normalize_city(recipient_city))
+n_distinct(ak$city_prep)
+mean(ak$city_prep %in% valid_city)
+```
+
+#### Swap
+
+```{r match_dist, collapse=TRUE}
+ak$city_match <- NULL
+ak <- ak %>%
+  left_join(
+    zipcode,
+    by = c(
+      "zip_clean" = "zip",
+      "state_clean" = "state"
+    )
+  ) %>%
+  rename(city_match = city) %>%
+  mutate(
+    match_dist = stringdist(city_match, city_prep),
+    city_swap = if_else(match_dist == 1, city_match, city_prep)
+  )
+
+summary(ak$match_dist)
+n_distinct(ak$city_swap)
+mean(ak$city_swap %in% valid_city)
+```
+
+Each step of the cleaning process reduces the number of distinct city values.
+
+## Conclude
+
+1. There are `r nrow(ak)` records in the database
+1. There are `r sum(ak$dupe_flag)` records with duplicate rows
+1. The ranges for dates and amounts are reasonable
+1. Consistency in strings has been fixed with the custom `normalize_*()` functions
+1. The five-digit `zip_clean` variable has been created
+1. The `expenditure_year` variable has been created with `lubridate::year()`
+1. There are `r sum(is.na(ak$recipient))` records with missing `recipient` values flagged with 
+`na_flag`
+
+## Write
+
+```{r write_clean}
+dir_create("ak/expends/data/processed")
+ak %>% 
+  select(
+   -recipient_address,
+   -recipient_zip,
+   -recipient_state,
+   -recipient_city,
+   -city_prep,
+   -city_match,
+   -match_dist
+  ) %>% 
+  write_csv(
+    path = "ak/expends/data/processed/ak_expends_clean.csv",
+    na = ""
+  )
+```
+
