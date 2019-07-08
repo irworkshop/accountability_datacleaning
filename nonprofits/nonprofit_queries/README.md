@@ -334,3 +334,5 @@ Copy to local
 	\copy contractor_comp_990_ez to '/tmp/contractor_comp_990_ez.csv' with csv header;
 	
 	
+## Schedule R Part IV - Identification of related organizations taxable as a corporation or trust 
+
