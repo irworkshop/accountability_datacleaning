@@ -4,7 +4,9 @@
 The folks at [CalAccess](https://www.californiacivicdata.org/) have done a ton of work with the state's raw data files. Using their work, it's much less painful to grab the relatively few line itemizations that we're interested in making searchable.
 
 
-You can find a link to the downloadable tables for form 460 in the appendix below, thanks to James Gordon. We're going to ignore most of the tables and just focus on certain classes of giving and spending, just using the filing tables as needed to populate details. In general we want to use the current files, not the "version" ones.
+You can find a link to the downloadable tables for form 460 in the appendix below (thanks @gordonje). We're going to ignore most of the tables and just focus on certain classes of giving, just using the filing tables as needed to populate details. In general we want to use the current files, not the "version" ones.
+
+We plan to do the same for expenditures once it's clear we've sucked in all the contributions.
 
 ### Goal
 
