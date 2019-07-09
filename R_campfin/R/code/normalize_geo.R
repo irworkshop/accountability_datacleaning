@@ -80,8 +80,8 @@ normalize_city <- function(city, geo_abbs = NULL, state_abbs = NULL, na = c(""))
   if (!is.null(geo_abbs)) {
     geo_abbs <- as.data.frame(geo_abbs)
     for (i in seq_along(geo_abbs[, 1])) {
-      address_clean <- str_replace(
-        string = address_clean,
+      city_clean <- str_replace(
+        string = city_clean,
         pattern = str_c("\\b", geo_abbs[i, 1], "\\b"),
         replacement = geo_abbs[i, 2]
       )
