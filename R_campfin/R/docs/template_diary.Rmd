@@ -1,8 +1,7 @@
 ---
-title: "Data Diary"
-subtitle: "State Data"
-author: "First Last"
-date: "` format(Sys.time())`"
+title: "{State} {Data}"
+author: "{First} {Last}"
+date: "`r Sys.time()`"
 output:
   github_document: 
     df_print: tibble
@@ -60,19 +59,14 @@ The following packages are needed to collect, manipulate, visualize, analyze, an
 these results. The `pacman` package will facilitate their installation and attachment.
 
 ```{r p_load, message=FALSE, dfrning=FALSE, error=FALSE}
-# install.packages("pacman")
+if (!require("pacman")) install.packages("pacman")
 pacman::p_load(
   stringdist, # levenshtein value
   tidyverse, # data manipulation
   lubridate, # datetime strings
   magrittr, # pipe opperators
-  RSocrata, # read soda api
   janitor, # dataframe clean
   zipcode, # clean & database
-  explore, # basic exploration
-  batman, # parse yes & no
-  refinr, # cluster & merge
-  rvest, # scrape website
   knitr, # knit documents
   here, # relative storage
   fs # search storage 
@@ -85,8 +79,16 @@ here <- here::here
 # custom utility functions
 "%out%" <- Negate("%in%")
 print_all <- function(df) df %>% print(n = nrow(.)) 
+# source functions
+source(here("R", "code", "normalize_geo.R"))
+source(here("R", "code", "all_files_new.R"))
+source(here("R", "code", "glimpse_fun.R"))
 # load data
 data("zipcode")
+zipcode <-
+  as_tibble(zipcode) %>% 
+  select(city, state, zip) %>% 
+  mutate(city = normalize_city(city))
 ```
 
 This document should be run as part of the `R_campfin` project, which lives as a sub-directory of
@@ -118,10 +120,6 @@ Describe the data set that is going to be cleaned. A file name, age, and unit of
 
 ### Variables
 
-Often the publisher will provide a dictionary to describe the variables in the data (and
-potentially the key pairs between many relational tables). 
-[Link to the dictionary](https://example.com).
-
 `variable_name`:
 
 > Directly quote the definition given for variables of interest.
@@ -130,15 +128,10 @@ potentially the key pairs between many relational tables).
 
 ### Download
 
-Download raw, immutable data file.
+Download raw, **immutable** data file.
 
 ```{r download_raw}
-raw_dir <- here("df", "type", "data", "raw")
-dir_create(raw_dir)
-download.file(
-  url = url,
-  destfile = here(raw_dir, "file_name.zip")
-)
+download.file()
 ```
 
 ### Unzip
@@ -146,22 +139,13 @@ download.file(
 If needed, unzip into the same directory
 
 ```{r unzip_raw}
-unzip(
-  zipfile = here(raw_dir, "file_name.zip"),
-  exdir = raw_dir
-)
+unzip()
 ```
 
 ### Read
 
 ```{r read_raw}
-df <- read_delim(
-  file = here(raw_dir, "file_name.csv"),
-  delim = ",",
-  col_types = cols(
-    
-  )
-)
+df <- read_delim()
 ```
 
 ## Explore
@@ -169,8 +153,7 @@ df <- read_delim(
 There are `nrow(df)` records of `length(df)` variables in the full database.
 
 ```{r glimpse}
-describe(df)
-glimpse(sample_frac(df))
+glimpse(df)
 ```
 
 ### Distinct
@@ -178,28 +161,22 @@ glimpse(sample_frac(df))
 The variables range in their degree of distinctness.
 
 ```{r n_distinct}
-df %>% 
-  map(n_distinct) %>% 
-  unlist() %>% 
-  enframe(name = "variable", value = "n_distinct") %>% 
-  mutate(prop_distinct = round(n_distinct / nrow(df), 4)) %>%
-  print(n = length(df))
+df %>% glimpse_fun(n_distinct)
 ```
 
 We can explore the distribution of the least distinct values with `ggplot2::geom_bar()`.
 
-```{r plot_var1_bar, echo=FALSE}
+```{r plot_bar, echo=FALSE}
 ggplot(data = df) + 
   geom_bar(mapping = aes(var))
 ```
 
 Or, filter the data and explore the most frequent discrete data.
 
-```{r plot_var2_bar, echo=FALSE}
+```{r plot_bar2, echo=FALSE}
 df %>% 
-  count(var2) %>% 
-  arrange(desc(n)) %>% 
-  slice(1:10) %>% 
+  count(var, sort = TRUE) %>% 
+  head(10) %>% 
   ggplot(mapping = aes(x = var)) + 
   geom_bar(mapping = aes(color = var))
 ```
@@ -209,12 +186,7 @@ df %>%
 The variables also vary in their degree of values that are `NA` (missing).
 
 ```{r count_na}
-df %>% 
-  map(function(var) sum(is.na(var))) %>% 
-  unlist() %>% 
-  enframe(name = "variable", value = "n_na") %>% 
-  mutate(prop_na = n_na / nrow(df)) %>% 
-  print(n = length(df))
+df %>% glimpse_fun(count_na)
 ```
 
 We will flag any records with missing values in the key variables used to identify an expenditure.
@@ -226,44 +198,21 @@ df <- df %>% mutate(na_flag = is.na(var))
 ### Duplicates
 
 ```{r get_dupes, collapse=TRUE}
-df_dupes <- df %>% 
-  get_dupes(
-    
-    ) %>% 
-  mutate(dupe_flag = TRUE)
-
-nrow(df_dupes)
-```
-
-```{r flag_dupes, message=FALSE, dfrning=FALSE}
-df <- df %>% 
-  left_join(df_dupes, by = "id") %>% 
-  mutate(dupe_flag = !is.na(dupe_flag))
+df_dupes <- get_dupes(df)
 ```
 
 ### Ranges
 
-Explore the continuous variables with `ggplot2::geom_histogram()` and `base::summary()`
-
 #### Amounts
 
-Below are the smallest and largest expenditures.
-
-```{r glimpse_min_max}
-glimpse(df %>% filter(amount == min(amount, na.rm = T)))
-glimpse(df %>% filter(amount == max(amount, na.rm = T)))
+```{r}
+summary(df$amount)
 ```
 
 ### Dates
 
-```{r date_future, collapse=TRUE}
-max(df$date, na.rm = TRUE)
-sum(df$date > today(), na.rm = T)
-```
-
-```{r date_past, collapse=TRUE}
-min(df$date, na.rm = TRUE)
-sum(year(df$date) < 2007, na.rm = T)
+```{r}
+summary(df$date)
 ```
 
 ## Wrangle
@@ -280,80 +229,20 @@ df <- df %>% mutate(year = year(date))
 
 The `address` variable should be minimally cleaned by removing punctuation and fixing white-space.
 
-```{r}
-df <- df %>% 
-  mutate(
-    address_clean = address %>% 
-      str_to_upper() %>% 
-      str_replace("-", " ") %>% 
-      str_remove_all("[:punct:]") %>% 
-      str_trim() %>% 
-      str_squish() %>% 
-      na_if("") %>% 
-      na_if("NA")
-  )
+```{r normalize_address}
+df <- df %>% mutate(address_clean = normalize_address(address))
 ```
 
 ### Zipcode
 
-Use the `zipcodes::clean.zipcodes()` function to strips the ZIP+4 digits and adds leading zeroes to
-three or four digit strings. We will also make some common invalid zips `NA`.
-
-```{r zipcode_data, echo=FALSE}
-source(here("R", "prep_city.R"))
-zipcode <-
-  as_tibble(zipcode) %>% 
-  select(city, state, zip) %>% 
-  mutate(city = prep_city(city))
-```
-
-```{r clean_zipcodes}
-df <- df %>% 
-  mutate(zip_clean = zip %>% 
-           clean.zipcodes() %>% 
-           na_if("00000") %>% 
-           na_if("11111") %>% 
-           na_if("99999")
-  )
-
-df$zip_clean[which(nchar(df$zip_clean) != 5)] <- NA
+```{r normalize_zip}
+df <- df %>% mutate(zip_clean = normalize_zip(zip))
 ```
 
 ### State
 
-Using comprehensive list of state abbreviations in the Zipcodes database, we can isolate invalid
-`state` values and manually correct them.
-
-```{r valid_state, collapse=TRUE}
-valid_state <- c(unique(zipcode$state), "AB", "BC", "MB", "NB", "NL", "NS", "ON", "PE", "QC", "SK")
-length(valid_state)
-setdiff(valid_state, state.abb)
-```
-
-```{r view_states}
-df %>% 
-  filter(state %out% valid_state) %>% 
-  filter(!is.na(state)) %>% 
-  select(
-    id,
-    address,
-    city,
-    state,
-    zip
-  ) %>% 
-  print_all()
-```
-
-If the `state` abbreviation is invalid, use the `city` and `zip` values for that record to manually
-correct the abbreviation where possible. If it can't be manually corrected, make the value `NA`.
-
-```{r fix_states}
-df$state_clean <- df$state %>% 
-  str_replace("DG", "DF") %>% # add match
-  str_remove("[:punct:]") %>% 
-  na_if("")   %>% # empty
-  na_if("RE") %>% # requested
-  na_if("99") %>% # df zip
+```{r normalize_state, collapse=TRUE}
+df <- df %>% mutate(state_clean = normalize_state(state))
 ```
 
 ### City
@@ -368,26 +257,27 @@ Cleaning city values is the most complicated. This process involves four steps:
 #### Prep
 
 ```{r prep_city}
-source(here("R", "prep_city.R"))
-df <- df %>% 
-  mutate(
-    city_prep = prep_city(
-      cities = city,
-      na = read_lines(here("R", "na_city.csv")),
-      abbs = c("DF", "OR", "ID", "DC", "BC")
-    )
-  )
+df <- df %>% mutate(city_prep = normalize_city(city))
 ```
 
-#### Swap
+#### Match
 
 ```{r match_dist}
 df <- df %>%
   left_join() %>%
   rename() %>%
+  mutate(match_dist = stringdist())
+```
+
+#### Swap
+
+```{r}
+df <- df %>% 
   mutate(
-    match_dist = stringdist(),
-    city_swap = if_else(match_dist == 1)
+    city_swap = if_else(
+      condition = match_dist == 1, 
+      true = city_match, 
+      false = city_prep)
   )
 ```
 
@@ -399,79 +289,14 @@ valid_city <- unique(zipcode$city)
 
 ```{r view_refine}
 df_refined <- df %>%
-  filter(var == "") %>% 
+  filter(var == "DF") %>% 
   filter(match_dist != 1) %>% 
   mutate(
     city_refine = var %>% 
       key_collision_merge(dict = valid_city) %>% 
-      n_gram_merge(numgram = 1),
-    refined = (city_swal != city_refine)
+      n_gram_merge(numgram = 1)
   ) %>% 
-  filter(refined) %>% 
-  select(
-    
-  ) %>% 
-  rename(
-    
-  )
-```
-
-#### Review
-
-```{r most_refined}
-df_refined %>% 
-  count(city_swap, city_refine) %>% 
-  arrange(desc(n))
-```
-
-```{r count_refined}
-refined_values <- unique(df_refined$city_refine)
-count_refined <- tibble(
-  city_refine = refined_values, 
-  refine_count = NA
-)
-
-for (i in seq_along(refined_values)) {
-  count_refined$refine_count[i] <- sum(str_detect(df$city_swap, refined_values[i]), na.rm = TRUE)
-}
-
-swap_values <- unique(df_refined$city_swap)
-count_swap <- tibble(
-  city_swap = swap_values, 
-  swap_count = NA
-)
-
-for (i in seq_along(swap_values)) {
-  count_swap$swap_count[i] <- sum(str_detect(df$city_swap, swap_values[i]), na.rm = TRUE)
-}
-```
-
-```{r distinct_refined}
-df_refined %>% 
-  left_join(count_swap) %>% 
-  left_join(count_refined) %>%
-  select(
-    city_match,
-    city_swap,
-    city_refine,
-    swap_count,
-    refine_count
-  ) %>% 
-  mutate(diff_count = refine_count - swap_count) %>%
-  mutate(refine_dist = stringdist(city_swap, city_refine)) %>%
-  distinct() %>%
-  arrange(city_refine) %>% 
-  print_all()
-```
-
-```{r refine_fix}
-df_refined$city_refine <- df_refined$city_refine %>% 
-  str_replace("^BAD FIX$", "GOOD FIX") %>% 
-  str_replace("^BAD FIX$", "ORIGINAL") %>% 
-  na_if("NA")
-
-refine_table <- df_refined %>% 
-  select(id, city_refine)
+  filter(city_swal != city_refine)
 ```
 
 #### Merge
@@ -486,17 +311,17 @@ Each step of the cleaning process reduces the number of distinct city values.
 
 ## Conclude
 
-1. There are `nrow(df)` records in the database
-1. There are `sum(df$dupe_flag)` records with duplicate filer, recipient, date, _and_ amount
+1. There are `r nrow(df)` records in the database
+1. There are `r sum(df$dupe_flag)` records with duplicate filer, recipient, date, _and_ amount
 (flagged with `dupe_flag`)
 1. The ranges for dates and amounts are reasonable
-1. Consistency in strings has been fixed with `city_prep()` and the `stringr` package
+1. Consistency has been improved with `stringr` package and custom `normalize_*()` functions.
 1. The five-digit `zip_clean` variable has been created with `zipcode::clean.zipcode()`
-1. The `expenditure_year` variable has been created with `lubridate::year()`
-1. There are `sum(is.na(df$name))` records with missing `name` values and ` sum(is.na(df$date))`
+1. The `year` variable has been created with `lubridate::year()`
+1. There are `r sum(is.na(df$name))` records with missing `name` values and `r sum(is.na(df$date))`
 records with missing `date` values (both flagged with the `na_flag`)
 
-## Write
+## Export
 
 ```{r write_clean}
 df %>% 
