@@ -198,6 +198,7 @@ fl <-
     read_delim,
     delim = "\t",
     escape_double = FALSE,
+    escape_backslash = FALSE,
     col_types = cols(
       .default = col_character(),
       Date = col_date("%m/%d/%Y"),
@@ -206,7 +207,10 @@ fl <-
   ) %>% 
   bind_rows() %>% 
   distinct() %>% 
-  clean_names()
+  clean_names() %>% 
+  mutate_if(is_character, str_to_upper) %>% 
+  map_if(is_character, str_replace_all, "\\\"", "\'") %>% 
+  as_tibble()
 ```
 
 ## Explore
@@ -215,5 +219,79 @@ fl <-
 head(fl)
 tail(fl)
 glimpse(fl)
+```
+
+### Categorical
+
+```{r n_distinct}
+fl %>% glimpse_fun(n_distinct)
+```
+
+```{r type_bar, echo=FALSE}
+ggplot(data = fl) +
+  geom_bar(mapping = aes(type)) +
+  scale_y_log10() +
+  coord_flip()
+```
+
+```{r purpose_bar, echo=FALSE}
+library(tidytext)
+fl %>% 
+  unnest_tokens(word, purpose) %>% 
+  anti_join(stop_words) %>% 
+  count(word, sort = TRUE) %>% 
+  head(20) %>% 
+  ggplot() +
+  geom_col(aes(reorder(word, n), n)) +
+  coord_flip()
+```
+
+### Continuous
+
+```{r amount_hist}
+ggplot(data = fl) +
+  geom_histogram(aes(amount)) +
+  scale_x_continuous(labels = scales::dollar, trans = "log10")
+```
+
+```{r year_bar}
+fl %>% 
+  filter(year(date) > 2008, date < today()) %>% 
+  ggplot() +
+  geom_bar(aes(year(date))) +
+  scale_x_continuous(breaks = 2008:2019)
+```
+
+```{r month_line}
+fl %>% 
+  mutate(year = year(date), election_year = year %% 2 == 0) %>% 
+  group_by(election_year, month = month(date)) %>% 
+  filter(year > 2008, year < 2019) %>% 
+  summarise(mean = mean(amount)) %>% 
+  ggplot(mapping = aes(x = month, y = mean)) +
+  geom_line(aes(color = election_year), size = 2) +
+  scale_x_continuous(breaks = 1:12, labels = month.abb)
+```
+
+### Duplicates
+
+Since the three seperate files have siginificant overlap, duplicate rows were removed during the
+initial importing step.
+
+### Missing
+
+```{r count_na}
+fl %>% glimpse_fun(count_na)
+```
+
+## Export
+
+```{r}
+dir_create("fl/data/processed")
+write_csv(
+  x = fl,
+  path = "fl/data/processed/fl_expends_clean.csv",
+  na = ""
+)
 ```
 
