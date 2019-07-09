@@ -72,7 +72,7 @@ normalize_city <- function(city, geo_abbs = NULL, state_abbs = NULL, na = c(""))
     str_to_upper() %>%
     str_replace("-", " ") %>%
     str_remove_all("[[:punct:]]") %>%
-    str_remove("\\d+") %>%
+    str_remove_all("\\d+") %>%
     str_trim() %>%
     str_squish() %>%
     na_if("")
