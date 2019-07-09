@@ -1,7 +1,7 @@
 Alaska Expenditures
 ================
 Kiernan Nicholls
-2019-07-08 12:56:06
+2019-07-09 14:08:27
 
   - [Project](#project)
   - [Objectives](#objectives)
@@ -49,25 +49,25 @@ analyze, and communicate these results. The `pacman` package will
 facilitate their installation and attachment.
 
 ``` r
-# install.packages("pacman")
+if (!require("pacman")) install.packages("pacman")
 pacman::p_load(
   stringdist, # levenshtein value
   tidyverse, # data manipulation
+  RSelenium, # navigate browser
   lubridate, # datetime strings
   magrittr, # pipe opperators
-  RSelenium, # read soda api
   janitor, # dataframe clean
   zipcode, # clean & database
-  explore, # basic exploration
-  batman, # parse yes & no
   refinr, # cluster & merge
-  vroom,
-  rvest, # scrape website
-  knitr, # knit documents
+  vroom, # quickly read files
+  glue, # create strings
   here, # relative storage
   fs # search storage 
 )
 ```
+
+    #> Warning: The `printer` argument is deprecated as of rlang 0.3.0.
+    #> This warning is displayed once per session.
 
 This document should be run as part of the `R_campfin` project, which
 lives as a sub-directory of the more general, language-agnostic
@@ -82,71 +82,72 @@ feature and should be run as such. The project also uses the dynamic
 ``` r
 # where dfs this document knit?
 here::here()
-#> [1] "/home/kiernan/R/accountability_datacleaning/R_campfin"
+#> [1] "/home/ubuntu/R/accountability_datacleaning/R_campfin"
 ```
 
 ## Data
 
-Describe *where* the data is coming from. [Link to the data
-download](https://example.com "source") page if possible.
+Data is obtained through the Alaska Public Offices Commission \[APOC\]
+Online Reports tool.
 
-Describe the data set that is going to be cleaned. A file name, age, and
-unit of observation.
+> To encourage public confidence, the commission staff provides free
+> reports available online. Here you can discover submissions to or
+> decisions by the Alaska Public Offices Commission… For current
+> information (e.g.from 2011 to present), please go to [APOC Online
+> Reports](https://aws.state.ak.us/ApocReports/ "reports"). Specific
+> links are also provided below, under Current Reporting Systems.
 
-### About
-
-> If the publisher provides any information on the file, you can
-> directly quote that here.
-
-### Variables
-
-Often the publisher will provide a dictionary to describe the variables
-in the data (and potentially the key pairs between many relational
-tables). [Link to the dictionary](https://example.com).
-
-`variable_name`:
-
-> Directly quote the definition given for variables of interest.
+From this page we will chose “Search Expenditures.” On the [Independent
+Expenditures](https://aws.state.ak.us/ApocReports/IndependentExpenditures/IEExpenditures.aspx "expends")
+page, we can select “All Complete Forms.”
 
 ## Import
 
+To import the data, we will have to first download a raw immutable
+version to disk. The files can be downloaded as CSV, DOC, or TXT.
+
 ### Download
 
-Download raw, immutable data file.
+Since the download process is hidden behind a search port, we will have
+to use the `RSelenium` package to navigate the web page in a remote web
+browser.
 
 ``` r
+# create a directory for the raw data
 raw_dir <- here("ak", "expends", "data", "raw")
 dir_create(raw_dir)
+```
 
-file.path(find.package("RSelenium"), "examples/serverUtils")
-RSelenium::startServer()
-
-rs_driver <- rsDriver(
+``` r
+# open the driver with auto download options
+remote_driver <- rsDriver(
   port = 4444L,
   browser = "firefox",
-  extraCapabilities = RSelenium::makeFirefoxProfile(
+  extraCapabilities = makeFirefoxProfile(
     list(
-      "browser.download.dir" = here::here(), # current wd
-      "browser.download.folderList" = 2L,
-      "browser.helperApps.neverAsk.saveToDisk" = "text/csv"
+      browser.download.dir = raw_dir,
+      browser.download.folderList = 2L,
+      browser.helperApps.neverAsk.saveToDisk = "text/csv"
     )
   )
 )
 
-remote_driver <- rs_driver$client
-remote_driver$navigate("https://aws.state.ak.us/ApocReports/IndependentExpenditures/IEExpenditures.aspx")
+# navigate to the APOC download site
+expend_url <- "https://aws.state.ak.us/ApocReports/IndependentExpenditures/IEExpenditures.aspx"
+remote_browser <- remote_driver$client
+remote_browser$navigate(expend_url)
 
-filed_box <- remote_driver$findElement(using = "css", "#M_C_csfFilter_txtBeginDate")
-filed_box$sendKeysToElement(list("1/1/2008"))
+# click the export button
+export_button <- remote_browser$findElement("css", "#M_C_csfFilter_btnExport")
+export_button$clickElement()
 
-export_button <- remote_driver$findElement(using = "css", "#M_C_csfFilter_btnExport")
-export_button$send
-
-csv_button <- remote_driver$findElement(using = "css", "#M_C_csfFilter_ExportDialog_hlAllCSV")
+# click the CSV option button
+csv_button <- remote_browser$findElement("css", "#M_C_csfFilter_ExportDialog_hlAllCSV")
 csv_button$clickElement()
 
-remote_driver$close()
-rs_driver$server$stop()
+# close the browser and driver
+remote_browser$close()
+remote_driver$server$stop()
 ```
 
 ### Read
@@ -154,11 +155,11 @@ rs_driver$server$stop()
 ``` r
 ak <- 
   read_csv(
-    file = "ak/expends/data/raw/IE_Expenditure_07-08-2019.CSV",
-    na = c("", "na", "n/a", "NA", "N/A"),
+    file = glue("{raw_dir}/IE_Expenditure_{format(today(), \"%m-%d-%Y\")}.CSV"),
+    na = c("", "na", "n/a", "NA", "N/A", "-", "none", "NONE", "UNK"),
     col_types = cols(
       .default = col_character(),
-      Date = col_date("%m/%d/%Y"),
+      Date = col_date("%m/%e/%Y"),
       Amount = col_number(),
       `Election Year` = col_integer(),
       `Report Year` = col_integer(),
@@ -166,17 +167,17 @@ ak <-
     )
   ) %>% 
   clean_names() %>% 
-  mutate_if(is.character, str_to_upper)
+  mutate_if(is_character, str_to_upper)
 ```
 
-    #> Warning: 22561 parsing failures.
-    #> row col   expected     actual                                                file
-    #>   1  -- 21 columns 22 columns 'ak/expends/data/raw/IE_Expenditure_07-08-2019.CSV'
-    #>   2  -- 21 columns 22 columns 'ak/expends/data/raw/IE_Expenditure_07-08-2019.CSV'
-    #>   3  -- 21 columns 22 columns 'ak/expends/data/raw/IE_Expenditure_07-08-2019.CSV'
-    #>   4  -- 21 columns 22 columns 'ak/expends/data/raw/IE_Expenditure_07-08-2019.CSV'
-    #>   5  -- 21 columns 22 columns 'ak/expends/data/raw/IE_Expenditure_07-08-2019.CSV'
-    #> ... ... .......... .......... ...................................................
+    #> Warning: 29095 parsing failures.
+    #> row  col           expected     actual                                                                                                     file
+    #>   1 NA   21 columns         22 columns '/home/ubuntu/R/accountability_datacleaning/R_campfin/ak/expends/data/raw/IE_Expenditure_07-09-2019.CSV'
+    #>   2 Date date like %m/%e/%Y 7/1/2019   '/home/ubuntu/R/accountability_datacleaning/R_campfin/ak/expends/data/raw/IE_Expenditure_07-09-2019.CSV'
+    #>   2 NA   21 columns         22 columns '/home/ubuntu/R/accountability_datacleaning/R_campfin/ak/expends/data/raw/IE_Expenditure_07-09-2019.CSV'
+    #>   3 NA   21 columns         22 columns '/home/ubuntu/R/accountability_datacleaning/R_campfin/ak/expends/data/raw/IE_Expenditure_07-09-2019.CSV'
+    #>   4 Date date like %m/%e/%Y 7/3/2019   '/home/ubuntu/R/accountability_datacleaning/R_campfin/ak/expends/data/raw/IE_Expenditure_07-09-2019.CSV'
+    #> ... .... .................. .......... ........................................................................................................
     #> See problems(...) for more details.
 
 ## Explore
@@ -190,26 +191,26 @@ glimpse(sample_frac(ak))
 
     #> Observations: 22,561
     #> Variables: 21
-    #> $ result                <chr> "12679", "16556", "20562", "17358", "2332", "14231", "22200", "761…
-    #> $ date                  <date> 2014-10-21, 2014-10-03, 2014-08-27, 2014-09-03, 2018-07-12, 2014-…
-    #> $ payment_type          <chr> "NON-MONETARY", "CASH", "CASH", "CHECK", "DEBIT CARD", "NON-MONETA…
-    #> $ payment_detail        <chr> "NON FEDERAL IN-KIND STAFF", NA, NA, NA, NA, "OBLIGATION INCURRED,…
-    #> $ amount                <dbl> 94.54, 279.30, 55.86, 3113.29, 53.65, 1296.35, 837.50, 221.60, 220…
-    #> $ recipient             <chr> "AFSCME SPECIAL ACCOUNT", "JOSHUA DUSHEWICH", "STEVEN GEORGE", "MA…
-    #> $ recipient_address     <chr> "1625 L STREET, NW", "1106 HADDON AVE APT. B", "420 E 14TH AVE APT…
-    #> $ recipient_city        <chr> "WASHINGTON", "COLLINGSWOOD", "ANCHORAGE", "NEWINGTON", "ANCHORAGE…
-    #> $ recipient_state       <chr> "DISTRICT OF COLUMBIA", "NEW JERSEY", "ALASKA", "VIRGINIA", "ALASK…
-    #> $ recipient_zip         <chr> "20036", "08108", "99501", "22122", "99508", "20013", "99501", "99…
+    #> $ result                <chr> "987", "10329", "17176", "20627", "7970", "343", "12436", "16947",…
+    #> $ date                  <date> 2018-04-20, 2016-07-26, NA, 2014-09-10, 2017-09-30, NA, NA, 2014-…
+    #> $ payment_type          <chr> "DEBIT CARD", NA, "CASH", "ELECTRONIC FUNDS TRANSFER", "CREDIT CAR…
+    #> $ payment_detail        <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "N/A - EST…
+    #> $ amount                <dbl> 5.45, 550.38, 70.54, 5000.00, 10.00, 1475.00, 7.15, 36.48, 79.00, …
+    #> $ recipient             <chr> "ANCHORAGE USPS", "RICK CANOY", "LISA\tLOVELL", "STRATEGIES 360", …
+    #> $ recipient_address     <chr> "4141 POSTMARK DRIVE", "520 EAST 34TH AVENUE, SUITE 102", "8815 DO…
+    #> $ recipient_city        <chr> "ANCHORAGE", "ANCHORAGE", "EAGLE RIVER", "ANCHORAGE", "MENLO PARK"…
+    #> $ recipient_state       <chr> "ALASKA", "ALASKA", "ALASKA", "ALASKA", "CALIFORNIA", "COLORADO", …
+    #> $ recipient_zip         <chr> "99530", "99503", "99577", "99501", "94025-1452", "80908", "20006"…
     #> $ recipient_country     <chr> "USA", "USA", "USA", "USA", "USA", "USA", "USA", "USA", "USA", "US…
-    #> $ election_year         <int> 2014, 2014, 2014, 2014, 2018, 2014, 2012, 2017, 2018, 2014, 2014, …
-    #> $ election_name         <chr> "STATE GENERAL ELECTION", "STATE GENERAL ELECTION", "STATE GENERAL…
-    #> $ candidate_proposition <chr> "BALLOT MEASURE", "MUNI PROP 1", "ALASKANS FOR A FAIR MINIMUM WAGE…
-    #> $ position              <chr> "SUPPORTS", "OPPOSES", "SUPPORTS", "SUPPORTS", "OPPOSES", "SUPPORT…
+    #> $ election_year         <int> 2018, 2016, 2014, 2014, 2017, 2018, 2014, 2014, 2018, 2018, 2014, …
+    #> $ election_name         <chr> "STATE GENERAL ELECTION", "KODIAK, CITY OF", "STATE GENERAL ELECTI…
+    #> $ candidate_proposition <chr> "ALASKANS FOR INTEGRITY", "1", "MUNI PROP 1", "2014 - GABRIELLE LE…
+    #> $ position              <chr> "SUPPORTS", "SUPPORTS", "OPPOSES", "OPPOSES", "OPPOSES", "SUPPORTS…
     #> $ x                     <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
-    #> $ report_year           <int> 2014, 2014, 2014, 2014, 2018, 2014, 2012, 2017, 2018, 2014, 2014, …
-    #> $ filer_type            <chr> "OTHER", "OTHER", "OTHER", "OTHER", "REGISTERED GROUP", "OTHER", "…
-    #> $ filer_name            <chr> "WORKERS' VOICE ALASKA<BR/>MORTON, KIMBERLY Y", "WORKING AMERICA<B…
-    #> $ submitted             <date> 2014-10-28, 2014-10-08, 2014-10-02, 2014-09-11, 2018-07-12, 2014-…
+    #> $ report_year           <int> 2018, 2016, 2014, 2014, 2017, 2018, 2014, 2014, 2018, 2018, 2014, …
+    #> $ filer_type            <chr> "REGISTERED GROUP", "OTHER", "OTHER", "INDIVIDUAL", "INDIVIDUAL", …
+    #> $ filer_name            <chr> "2018 - ALASKANS FOR INTEGRITY", "TEAMSTERS LOCAL 959<BR/>LIRA, KR…
+    #> $ submitted             <date> 2018-04-30, 2016-08-02, 2014-11-02, 2014-10-10, 2017-10-03, 2018-…
     #> $ status                <chr> "FILED", "FILED", "FILED", "FILED", "FILED", "FILED", "FILED", "FI…
 
 ### Distinct
@@ -217,38 +218,33 @@ glimpse(sample_frac(ak))
 The variables range in their degree of distinctness.
 
 ``` r
-ak %>% 
-  map(n_distinct) %>% 
-  unlist() %>% 
-  enframe(name = "variable", value = "n_distinct") %>%
-  mutate(prop_distinct = round(n_distinct / nrow(ak), 4)) %>%
-  print(n = length(ak))
+ak %>% glimpse_fun(n_distinct)
 ```
 
-    #> # A tibble: 21 x 3
-    #>    variable              n_distinct prop_distinct
-    #>    <chr>                      <int>         <dbl>
-    #>  1 result                     22561        1     
-    #>  2 date                        1389        0.0616
-    #>  3 payment_type                  10        0.0004
-    #>  4 payment_detail              1701        0.0754
-    #>  5 amount                      5928        0.263 
-    #>  6 recipient                   2268        0.100 
-    #>  7 recipient_address           3038        0.135 
-    #>  8 recipient_city               340        0.0151
-    #>  9 recipient_state               44        0.002 
-    #> 10 recipient_zip                477        0.0211
-    #> 11 recipient_country              3        0.0001
-    #> 12 election_year                 10        0.0004
-    #> 13 election_name                 47        0.0021
-    #> 14 candidate_proposition        759        0.0336
-    #> 15 position                       2        0.0001
-    #> 16 x                              1        0     
-    #> 17 report_year                    9        0.0004
-    #> 18 filer_type                     3        0.0001
-    #> 19 filer_name                   456        0.0202
-    #> 20 submitted                   1053        0.0467
-    #> 21 status                         1        0
+    #> # A tibble: 21 x 4
+    #>    var                   type      n         p
+    #>    <chr>                 <chr> <int>     <dbl>
+    #>  1 result                chr   22561 1        
+    #>  2 date                  date    987 0.0437   
+    #>  3 payment_type          chr      10 0.000443 
+    #>  4 payment_detail        chr    1700 0.0754   
+    #>  5 amount                dbl    5928 0.263    
+    #>  6 recipient             chr    2267 0.100    
+    #>  7 recipient_address     chr    3036 0.135    
+    #>  8 recipient_city        chr     339 0.0150   
+    #>  9 recipient_state       chr      44 0.00195  
+    #> 10 recipient_zip         chr     476 0.0211   
+    #> 11 recipient_country     chr       3 0.000133 
+    #> 12 election_year         int      10 0.000443 
+    #> 13 election_name         chr      47 0.00208  
+    #> 14 candidate_proposition chr     759 0.0336   
+    #> 15 position              chr       2 0.0000886
+    #> 16 x                     chr       1 0.0000443
+    #> 17 report_year           int       9 0.000399 
+    #> 18 filer_type            chr       3 0.000133 
+    #> 19 filer_name            chr     456 0.0202   
+    #> 20 submitted             date   1053 0.0467   
+    #> 21 status                chr       1 0.0000443
 
 ![](../plots/payment_type_bar-1.png)<!-- -->
 
@@ -266,38 +262,33 @@ There are relatively few variables with much missing information, aside
 from `payment_detail`.
 
 ``` r
-ak %>% 
-  map(function(var) sum(is.na(var))) %>% 
-  unlist() %>% 
-  enframe(name = "variable", value = "n_na") %>% 
-  mutate(prop_na = n_na / nrow(ak)) %>% 
-  print(n = length(ak))
+ak %>% glimpse_fun(count_na)
 ```
 
-    #> # A tibble: 21 x 3
-    #>    variable               n_na  prop_na
-    #>    <chr>                 <int>    <dbl>
-    #>  1 result                    0 0       
-    #>  2 date                      0 0       
-    #>  3 payment_type           2104 0.0933  
-    #>  4 payment_detail        13464 0.597   
-    #>  5 amount                    0 0       
-    #>  6 recipient                 3 0.000133
-    #>  7 recipient_address        18 0.000798
-    #>  8 recipient_city           23 0.00102 
-    #>  9 recipient_state          13 0.000576
-    #> 10 recipient_zip            30 0.00133 
-    #> 11 recipient_country         0 0       
-    #> 12 election_year             0 0       
-    #> 13 election_name             0 0       
-    #> 14 candidate_proposition     0 0       
-    #> 15 position                  0 0       
-    #> 16 x                     22561 1       
-    #> 17 report_year               0 0       
-    #> 18 filer_type                0 0       
-    #> 19 filer_name                0 0       
-    #> 20 submitted                 0 0       
-    #> 21 status                    0 0
+    #> # A tibble: 21 x 4
+    #>    var                   type      n        p
+    #>    <chr>                 <chr> <int>    <dbl>
+    #>  1 result                chr       0 0       
+    #>  2 date                  date   6534 0.290   
+    #>  3 payment_type          chr    2104 0.0933  
+    #>  4 payment_detail        chr   13526 0.600   
+    #>  5 amount                dbl       0 0       
+    #>  6 recipient             chr      34 0.00151 
+    #>  7 recipient_address     chr      92 0.00408 
+    #>  8 recipient_city        chr      91 0.00403 
+    #>  9 recipient_state       chr      13 0.000576
+    #> 10 recipient_zip         chr     101 0.00448 
+    #> 11 recipient_country     chr       0 0       
+    #> 12 election_year         int       0 0       
+    #> 13 election_name         chr       0 0       
+    #> 14 candidate_proposition chr       0 0       
+    #> 15 position              chr       0 0       
+    #> 16 x                     chr   22561 1       
+    #> 17 report_year           int       0 0       
+    #> 18 filer_type            chr       0 0       
+    #> 19 filer_name            chr       0 0       
+    #> 20 submitted             date      0 0       
+    #> 21 status                chr       0 0
 
 We will flag any records missing key values used to identify an
 expenditure.
@@ -334,8 +325,8 @@ glimpse(ak %>% filter(amount == min(amount)))
 
     #> Observations: 107
     #> Variables: 22
-    #> $ result                <chr> "3752", "7723", "9296", "9551", "9552", "9553", "9554", "9555", "9…
-    #> $ date                  <date> 2018-07-02, 2017-05-05, 2016-07-06, 2016-11-06, 2016-11-06, 2016-…
+    #> $ result                <chr> "3752", "7723", "9296", "9550", "9551", "9552", "9553", "9554", "9…
+    #> $ date                  <date> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
     #> $ payment_type          <chr> "NON-MONETARY", "NON-MONETARY", NA, "NON-MONETARY", "NON-MONETARY"…
     #> $ payment_detail        <chr> "BOILERPLATE CONTRIBUTION REQUEST FORM", "FACEBOOK PAGE", NA, "ONL…
     #> $ amount                <dbl> 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, …
@@ -363,7 +354,7 @@ glimpse(ak %>% filter(amount == max(amount)))
 
     #> Observations: 1
     #> Variables: 22
-    #> $ result                <chr> "1414"
+    #> $ result                <chr> "1411"
     #> $ date                  <date> 2018-08-22
     #> $ payment_type          <chr> "CHECK"
     #> $ payment_detail        <chr> "261"
@@ -426,59 +417,48 @@ ak <- ak %>% mutate(address_clean = normalize_address(recipient_address))
 ### Zipcode
 
 ``` r
+# normalize character string
 ak <- ak %>% mutate(zip_clean = normalize_zip(recipient_zip, na_rep = TRUE))
+# remove foreign zips
+ak$zip_clean[which(ak$recipient_country != "USA")] <- NA
+# check improvement
+mean(ak$recipient_zip %in% zipcode$zip)
+#> [1] 0.9695935
 mean(ak$zip_clean %in% zipcode$zip)
-#> [1] 0.9877665
-ak$zip_clean[ak$zip_clean %out% zipcode$zip]
-#>   [1] "48256" NA      NA      NA      "98618" "98618" "98618" "98618" "98618" "98618" "98618"
-#>  [12] "98618" "98618" "88108" "88108" "88108" "88108" "88108" "88108" "88108" "88108" "88108"
-#>  [23] "88108" "88108" "88108" "88108" "88108" "88108" "88108" "88108" "88108" "88108" "88108"
-#>  [34] "88108" "88108" "88108" "88108" "88108" "88108" "88108" "88108" "88108" "88108" "88108"
-#>  [45] "88108" "88108" "09953" "09953" "09953" "09951" "09951" "02000" "02000" "02000" "02000"
-#>  [56] "02000" "09951" "09951" "09918" "09918" "99051" "99051" NA      NA      NA      NA     
-#>  [67] NA      NA      "99601" "09983" "09983" "09983" "04000" "04000" "04000" "09963" "09963"
-#>  [78] "09953" "09953" "09953" NA      NA      NA      NA      NA      NA      NA      NA     
-#>  [89] NA      NA      NA      NA      "99617" "02000" "02000" "09970" "91515" NA      "09953"
-#> [100] "09953" "42094" "02000" "02000" "02000" NA      NA      NA      NA      NA      NA     
-#> [111] NA      NA      NA      "09901" NA      "99951" NA      NA      NA      NA      NA     
-#> [122] NA      NA      NA      NA      NA      NA      NA      NA      NA      NA      NA     
-#> [133] NA      NA      NA      NA      NA      "09453" "09453" NA      NA      NA      NA     
-#> [144] NA      NA      NA      NA      NA      NA      NA      NA      NA      NA      NA     
-#> [155] NA      NA      NA      NA      NA      NA      NA      NA      NA      NA      NA     
-#> [166] NA      NA      NA      NA      NA      "32019" "32019" "32019" "09953" "09953" "09953"
-#> [177] "09953" "00532" "19413" "19413" "19413" NA      NA      "03384" "03384" "03384" "03384"
-#> [188] "03384" "11305" "72695" "99717" NA      NA      "01250" NA      NA      NA      NA     
-#> [199] NA      NA      NA      NA      "02007" "02007" "02007" "02007" "02007" "02007" "02007"
-#> [210] "32866" "32866" "32866" "32866" "32866" NA      "05586" "05586" "05586" NA      NA     
-#> [221] NA      NA      NA      NA      NA      NA      NA      NA      NA      NA      "96131"
-#> [232] NA      NA      "09518" "00528" "00528" "00528" "00528" "00528" "00528" NA      "07362"
-#> [243] NA      NA      NA      NA      NA      NA      NA      NA      NA      NA      NA     
-#> [254] NA      NA      NA      "00319" NA      NA      NA      NA      NA      NA      NA     
-#> [265] NA      NA      NA      NA      NA      NA      NA      NA      NA      NA      "09970"
-#> [276] "99601"
+#> [1] 0.9877222
+unique(ak$zip_clean[ak$zip_clean %out% zipcode$zip])
+#>  [1] "48256" NA      "98618" "88108" "09953" "09951" "09918" "99051" "99601" "09983" "04000"
+#> [12] "09963" "99617" "09970" "91515" "09901" "99951" "32019" "19413" "03384" "11305" "72695"
+#> [23] "99717" "01250" "02007" "32866" "05586" "96131" "09518" "07362"
 ```
 
 ``` r
 ak %>% 
   filter(zip_clean %out% zipcode$zip) %>% 
-  select(starts_with("recipient")) %>% 
+  filter(!is.na(zip_clean)) %>% 
+  select(
+    recipient_city,
+    recipient_state,
+    recipient_zip,
+    zip_clean
+  ) %>% 
   distinct()
 ```
 
-    #> # A tibble: 99 x 6
-    #>    recipient      recipient_address   recipient_city recipient_state recipient_zip recipient_count…
-    #>    <chr>          <chr>               <chr>          <chr>           <chr>         <chr>           
-    #>  1 HARLAND CLARK… 15955 LACANTERRA P… SAN ANTONIO    TEXAS           48256         USA             
-    #>  2 -              -                   -              ALASKA          -             USA             
-    #>  3 AKISMET.COM    WWW.AKISMET.COM     <NA>           ALASKA          <NA>          USA             
-    #>  4 ALASKA AIR CA… 19300 INTERNATIONA… SEATTLE        WASHINGTON      98618         USA             
-    #>  5 ALASKA AIRLIN… ALASKA AIRLINES     SEATTLE        WASHINGTON      98618         USA             
-    #>  6 ALASKA AIRLIN… 19300 INTERNATIONA… SEATTLE        WASHINGTON      98618         USA             
-    #>  7 AMAZON         P.O. BOX 81226      SEATTLE        WASHINGTON      88108         USA             
-    #>  8 AMAZON.COM     P.O. BOX 81226      SEATTLE        WASHINGTON      88108         USA             
-    #>  9 BLAINE'S ART   1025 PHOTO AVE      ANCHORAGE      ALASKA          9953          USA             
-    #> 10 BLUEPRINT ALA… 600 BARROW ST #400  ANCHORAGE      ALASKA          9951          USA             
-    #> # … with 89 more rows
+    #> # A tibble: 31 x 4
+    #>    recipient_city recipient_state recipient_zip zip_clean
+    #>    <chr>          <chr>           <chr>         <chr>    
+    #>  1 SAN ANTONIO    TEXAS           48256         48256    
+    #>  2 SEATTLE        WASHINGTON      98618         98618    
+    #>  3 SEATTLE        WASHINGTON      88108         88108    
+    #>  4 ANCHORAGE      ALASKA          9953          09953    
+    #>  5 ANCHORAGE      ALASKA          9951          09951    
+    #>  6 ANCHORAGE      ALASKA          9918          09918    
+    #>  7 ANCHORAGE      ALASKA          99051         99051    
+    #>  8 JUNEAU         ALASKA          99601         99601    
+    #>  9 JUNEAU         ALASKA          9983          09983    
+    #> 10 CHICAGO        ILLINOIS        4000          04000    
+    #> # … with 21 more rows
 
 ### State
 
@@ -489,8 +469,9 @@ abbreviations typically used. We can convert between them.
 sample(ak$recipient_state, 10)
 ```
 
-    #>  [1] "ALASKA"     "CALIFORNIA" "VIRGINIA"   "ALASKA"     "ALASKA"     "ALASKA"     "ALASKA"    
-    #>  [8] "ALASKA"     "NEW JERSEY" "ALASKA"
+    #>  [1] "ALASKA"               "ALASKA"               "CALIFORNIA"           "ALASKA"              
+    #>  [5] "CALIFORNIA"           "ALASKA"               "CALIFORNIA"           "DISTRICT OF COLUMBIA"
+    #>  [9] "ALASKA"               "CALIFORNIA"
 
 ``` r
 states <- tibble(
@@ -530,25 +511,28 @@ steps:
 
 ``` r
 n_distinct(ak$recipient_city)
-```
-
-    #> [1] 340
-
-``` r
+#> [1] 339
 valid_city <- unique(zipcode$city)
 mean(ak$recipient_city %in% valid_city)
+#> [1] 0.9718984
 ```
-
-    #> [1] 0.9718984
 
 #### Prep
 
 ``` r
-ak <- ak %>% mutate(city_prep = normalize_city(recipient_city))
+ak <- ak %>% 
+  mutate(
+    city_prep = normalize_city(
+      city = recipient_city %>% str_replace("^ANC$", "ANCHORAGE"),
+      state_abbs = c("AK", "ALASKA", "DC", "MA"),
+      geo_abbs = tibble(abv = c("PK", "ST"), rep = c("PARK", "SAINT")),
+      na = read_lines("R/data/na_city.csv")
+    )
+  )
 n_distinct(ak$city_prep)
-#> [1] 327
+#> [1] 316
 mean(ak$city_prep %in% valid_city)
-#> [1] 0.9723417
+#> [1] 0.9802314
 ```
 
 #### Swap
@@ -558,24 +542,26 @@ ak$city_match <- NULL
 ak <- ak %>%
   left_join(
     zipcode,
-    by = c(
-      "zip_clean" = "zip",
-      "state_clean" = "state"
-    )
+    by = c("zip_clean" = "zip")
   ) %>%
   rename(city_match = city) %>%
+  select(-state) %>% 
   mutate(
     match_dist = stringdist(city_match, city_prep),
-    city_swap = if_else(match_dist == 1, city_match, city_prep)
+    city_swap = if_else(
+      condition = !is.na(match_dist) & match_dist <= 2,
+      true = city_match,
+      false = city_prep
+    )
   )
 
 summary(ak$match_dist)
 #>    Min. 1st Qu.  Median    Mean 3rd Qu.    Max.    NA's 
-#>  0.0000  0.0000  0.0000  0.2389  0.0000 49.0000     565
+#>  0.0000  0.0000  0.0000  0.2697  0.0000 33.0000     278
 n_distinct(ak$city_swap)
-#> [1] 240
+#> [1] 244
 mean(ak$city_swap %in% valid_city)
-#> [1] 0.9606844
+#> [1] 0.9878995
 ```
 
 Each step of the cleaning process reduces the number of distinct city
@@ -591,7 +577,7 @@ values.
 5.  The five-digit `zip_clean` variable has been created
 6.  The `expenditure_year` variable has been created with
     `lubridate::year()`
-7.  There are 3 records with missing `recipient` values flagged with
+7.  There are 34 records with missing `recipient` values flagged with
     `na_flag`
 
 ## Write
