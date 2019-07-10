@@ -2,7 +2,7 @@
 
 # addresses ----------------------------------------------------------------------------------
 
-normalize_address <- function(address, abbs = NULL, na = c("")) {
+normalize_address <- function(address, abbs = NULL, na = c(""), na_rep = FALSE) {
 
   address_clean <- address %>%
     str_to_upper() %>%
@@ -21,6 +21,10 @@ normalize_address <- function(address, abbs = NULL, na = c("")) {
         replacement = abbs[i, 2]
       )
     }
+  }
+
+  if (na_rep) {
+    address_clean[address_clean %>% str_which("^(.)\\1+$")] <- NA
   }
 
   address_clean[which(address_clean %in% na)] <- NA
@@ -47,9 +51,44 @@ normalize_zip <- function(zip, na = c(""), na_rep = FALSE) {
 
 # state abbs ---------------------------------------------------------------------------------
 
-normalize_state <- function(state, valid = NULL, na = c("")) {
+normalize_state <- function(state, valid = NULL, na = c(""), na_rep = FALSE, expand = FALSE) {
 
-  state_clean <- state %>%
+  state_clean <- state
+
+  if (expand) {
+    states_df <- tibble(
+      name = str_to_upper(
+        c(
+          state.name,
+          "District of Columbia",
+          "NSW",
+          "Ontario",
+          "British Columbia",
+          "ALBERTA",
+          "ONTARIO"
+        )
+      ),
+      abb = c(
+        state.abb,
+        "DC",
+        "NW",
+        "ON",
+        "BC",
+        "AB",
+        "ON"
+      )
+    )
+
+    for (i in seq_along(states_df$name)) {
+      state_clean <- str_replace(
+        string = state_clean,
+        pattern = states_df$name[i],
+        replacement = states_df$abb[i]
+      )
+    }
+  }
+
+  state_clean <- state_clean %>%
     str_to_upper() %>%
     str_remove("[^A-z]") %>%
     str_sub(start = 1, end = 2)
@@ -59,6 +98,10 @@ normalize_state <- function(state, valid = NULL, na = c("")) {
     state_clean[!(state_clean %in% valid)] <- NA
   }
 
+  if (na_rep) {
+    zip_clean[zip_clean %>% str_which("^(.)\\1+$")] <- NA
+  }
+
   state_clean[which(state_clean %in% na)] <- NA
 
   return(state_clean)
@@ -66,7 +109,7 @@ normalize_state <- function(state, valid = NULL, na = c("")) {
 
 # cities -------------------------------------------------------------------------------------
 
-normalize_city <- function(city, geo_abbs = NULL, state_abbs = NULL, na = c("")) {
+normalize_city <- function(city, geo_abbs = NULL, state_abbs = NULL, na = c(""), na_rep = FALSE) {
 
   city_clean <- city %>%
     str_to_upper() %>%
@@ -92,6 +135,10 @@ normalize_city <- function(city, geo_abbs = NULL, state_abbs = NULL, na = c(""))
     for (i in seq_along(state_abbs)) {
       city_clean <- str_remove(city_clean, str_c("\\s", state_abbs[i], "$"))
     }
+  }
+
+  if (na_rep) {
+    city_clean[city_clean %>% str_which("^(.)\\1+$")] <- NA
   }
 
   city_clean[which(city_clean %in% na)] <- NA

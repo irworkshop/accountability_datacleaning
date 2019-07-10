@@ -65,10 +65,13 @@ pacman::p_load(
   tidyverse, # data manipulation
   RSelenium, # remote browser
   lubridate, # datetime strings
+  tidytext, # string analysis
   magrittr, # pipe opperators
   janitor, # dataframe clean
   zipcode, # clean & database
+  refinr, # cluster and merge
   knitr, # knit documents
+  glue, # combine strings
   here, # relative storage
   fs # search storage 
 )
@@ -89,7 +92,12 @@ data("zipcode")
 zipcode <-
   as_tibble(zipcode) %>% 
   select(city, state, zip) %>% 
-  mutate(city = normalize_city(city))
+  mutate(
+    city = normalize_city(
+      city = city,
+      geo_abbs = read_csv(here("R", "data", "city_abvs.csv"))
+    )
+  )
 ```
 
 This document should be run as part of the `R_campfin` project, which lives as a sub-directory of
@@ -183,10 +191,10 @@ files:
 To get all files covering all expenditures:
 
 1. Select "All" from the **Election Year** drop down menu
-2. Check the  appropriate file **List** type box (Payee, Candidate, Committee) 
-3. In the **From Date Range** text box, enter "01/01/2008."
-4. Select "Return Results in a Tab Delimited Text File" **Retrieval Format** option.
-5. Save to the `/fl/expends/data/raw` directory.
+1. In the **From Date Range** text box, enter "01/01/2008"
+1. Delete "500" from the **Limit Records** text box
+1. Select "Return Results in a Tab Delimited Text File" **Retrieval Format** option
+1. Save to the `/fl/expends/data/raw` directory
 
 We can automate this process using the `RSelenium` package:
 
@@ -196,7 +204,7 @@ raw_dir <- here("fl", "expends", "data", "raw")
 dir_create(raw_dir)
 ```
 
-```{r download_raw}
+```{r download_raw, warning=FALSE, error=FALSE, message=FALSE, collapse=TRUE, eval=FALSE}
 # open the driver with auto download options
 remote_driver <- rsDriver(
   port = 4444L,
@@ -212,36 +220,28 @@ remote_driver <- rsDriver(
 
 # navigate to the FL DOE download site
 remote_browser <- remote_driver$client
-remote_browser$navigate("https://dos.elections.myflorida.com/campaign-finance/expenditures/")
+expends_url <- "https://dos.elections.myflorida.com/campaign-finance/expenditures/"
+remote_browser$navigate(expends_url)
 
 # chose "All" from elections list
-year_menu <- remote_browser$findElement(
-  using = "xpath", 
-  "/html/body/div/div[1]/div/div/div/div/div/div/div/div/form/select[1]/option[@value = 'All']"
-  )
-year_menu$clickElement()
+year_menu <- "/html/body/div/div[1]/div/div/div/div/div/div/div/div/form/select[1]/option[@value = 'All']"
+remote_browser$findElement("xpath", year_menu)$clickElement()
 
 # remove the records limit text of 500
-limit_box <- remote_browser$findElement("css", "div.marginBot:nth-child(64) > input:nth-child(1)")
-limit_box$clearElement()
+limit_box <- "div.marginBot:nth-child(64) > input:nth-child(1)"
+remote_browser$findElement("css", limit_box)$clearElement()
 
 # enter Jan 1 2008 as start date
-date_box <- remote_browser$findElement("css", "div.indent:nth-child(2) > input:nth-child(1)")
-date_box$sendKeysToElement(list("01/01/2008"))
+date_box <- "div.indent:nth-child(2) > input:nth-child(1)"
+remote_browser$findElement("css", )$sendKeysToElement(list("01/01/2008"))
 
 # chose "txt" as export option
-txt_button <- remote_browser$findElement(
-  using = "css", 
-  "ul.noBullet:nth-child(70) > li:nth-child(2) > input:nth-child(1)"
-)
-txt_button$clickElement()
+txt_button <- "ul.noBullet:nth-child(70) > li:nth-child(2) > input:nth-child(1)"
+remote_browser$findElement("css", txt_button)$clickElement()
 
 # click the submit button
-submit_button <- remote_browser$findElement(
-  using = "css", 
-  "#rightContent > form:nth-child(6) > div:nth-child(71) > input:nth-child(2)"
-)
-submit_button$clickElement()
+submit_button <- "#rightContent > form:nth-child(6) > div:nth-child(71) > input:nth-child(2)"
+remote_browser$findElement("css", submit_button)$clickElement()
 
 # close the browser and driver
 remote_browser$close()
@@ -252,9 +252,9 @@ remote_driver$server$stop()
 
 ### Read
 
-```{r read_raw}
+```{r read_many, echo=FALSE, eval=FALSE}
 fl <- 
-  dir_ls(path = "fl/data/raw/") %>% 
+  dir_ls(path = raw_dir) %>% 
   map(
     read_delim,
     delim = "\t",
@@ -268,10 +268,30 @@ fl <-
   ) %>% 
   bind_rows() %>% 
   distinct() %>% 
+  select(-starts_with("X")) %>% 
   clean_names() %>% 
   mutate_if(is_character, str_to_upper) %>% 
   map_if(is_character, str_replace_all, "\\\"", "\'") %>% 
   as_tibble()
+```
+
+```{r read_raw}
+fl <- 
+  read_delim(
+    file = dir_ls(path = raw_dir),
+    delim = "\t",
+    escape_double = FALSE,
+    escape_backslash = FALSE,
+    trim_ws = TRUE,
+    col_types = cols(
+      .default = col_character(),
+      Date = col_date("%m/%d/%Y"),
+      Amount = col_double()
+    )
+  ) %>% 
+  select(-starts_with("X")) %>% 
+  clean_names() %>% 
+  mutate_if(is_character, str_to_upper)
 ```
 
 ## Explore
@@ -283,6 +303,9 @@ glimpse(fl)
 ```
 
 ### Categorical
+
+We can explore the least distinct variables with `ggplot::geom_bar()` or perform tidytext analysis
+on complex character strings.
 
 ```{r n_distinct}
 fl %>% glimpse_fun(n_distinct)
@@ -296,7 +319,6 @@ ggplot(data = fl) +
 ```
 
 ```{r purpose_bar, echo=FALSE}
-library(tidytext)
 fl %>% 
   unnest_tokens(word, purpose) %>% 
   anti_join(stop_words) %>% 
@@ -309,13 +331,13 @@ fl %>%
 
 ### Continuous
 
-```{r amount_hist}
+```{r amount_hist, echo=FALSE}
 ggplot(data = fl) +
   geom_histogram(aes(amount)) +
   scale_x_continuous(labels = scales::dollar, trans = "log10")
 ```
 
-```{r year_bar}
+```{r year_bar, echo=FALSE}
 fl %>% 
   filter(year(date) > 2008, date < today()) %>% 
   ggplot() +
@@ -323,7 +345,7 @@ fl %>%
   scale_x_continuous(breaks = 2008:2019)
 ```
 
-```{r month_line}
+```{r month_line, echo=FALSE}
 fl %>% 
   mutate(year = year(date), election_year = year %% 2 == 0) %>% 
   group_by(election_year, month = month(date)) %>% 
@@ -336,23 +358,230 @@ fl %>%
 
 ### Duplicates
 
-Since the three seperate files have siginificant overlap, duplicate rows were removed during the
-initial importing step.
+The `janitor::get_dupes()` function can locate records with duplicate values across every variable.
+
+```{r get_dupes, collapse=TRUE}
+fl_dupes <- fl %>% 
+  get_dupes() %>% 
+  distinct() %>% 
+  mutate(dupe_flag = TRUE)
+
+nrow(fl_dupes)
+mean(fl_dupes$dupe_count)
+max(fl_dupes$dupe_count)
+sum(fl_dupes$dupe_count)
+```
+
+This data frame of duplicate records can then be flagged on the original database.
+
+```{r join_dupes}
+fl <- fl %>% 
+  left_join(fl_dupes) %>% 
+  mutate(
+    dupe_count = if_else(is.na(dupe_count), 0L, dupe_count),
+    dupe_flag = !is.na(dupe_flag)
+    )
+```
 
 ### Missing
+
+There are a number of rows missing key information.
 
 ```{r count_na}
 fl %>% glimpse_fun(count_na)
 ```
 
-## Export
+These rows will be flagged with a new `na_flag` variable.
+
+```{r flag_na}
+fl <- fl %>% 
+  mutate(
+    na_flag = is.na(candidate_committee) | is.na(date) | is.na(amount) | is.na(payee_name)
+  )
+```
+
+## Clean
+
+We need to separate the `city_state_zip` variable into their respective variables. Then we can
+clean each part.
+
+```{r separate_geo}
+fl <- fl %>% 
+  separate(
+    col = city_state_zip,
+    into = c("city_sep", "state_zip"),
+    sep = ",\\s",
+    remove = FALSE
+  ) %>% 
+  separate(
+    col = state_zip,
+    into = c("state_sep", "zip_sep"),
+    sep = "\\s",
+    remove = TRUE
+  )
+```
+
+### Address
+
+The database seems to use repeating astricks characters as `NA` values. We can remove any value
+with a single repeating character.
+
+```{r norm_address}
+fl %<>% mutate(address_clean = normalize_address(address, na_rep = TRUE))
+```
+
+### Zip
+
+```{r bad_zip, collapse=TRUE}
+sample(fl$zip_sep[which(nchar(fl$zip_sep) != 5)], 10)
+```
+
+```{r norm_zip}
+fl %<>% mutate(zip_clean = normalize_zip(zip_sep, na_rep = TRUE))
+```
+
+### State
+
+```{r bad_state, collapse=TRUE}
+valid_state <- c(unique(zipcode$state), "ON", "BC", "QC", "NB", "AB")
+n_distinct(fl$state_sep)
+mean(fl$state_sep %in% valid_state)
+sum(fl$state_sep %out% valid_state)
+sample(unique(na.omit(fl$state_sep[fl$state_sep %out% valid_state])), 20)
+```
+
+```{r norm_state}
+fl %<>% mutate(
+  state_clean = normalize_state(
+    state = state_sep,
+    expand = TRUE,
+    na = c("", "XC")
+  )
+)
+```
+
+```{r still_bad_state, collapse=TRUE}
+unique(fl$state_clean[which(fl$state_clean %out% valid_state)])
+fl$state_clean[which(fl$state_clean == "F")] <- "FL"
+fl$state_clean[which(fl$state_clean %out% valid_state)] <- NA
+n_distinct(fl$state_clean)
+```
+
+### City
+
+```{r bad_city, collapse=TRUE}
+valid_city <- unique(zipcode$city)
+
+n_distinct(fl$city_sep)
+
+mean(fl$city_sep %in% valid_city)
+
+sum(fl$city_sep %out% valid_city)
+
+sample(unique(na.omit(fl$city_sep[fl$city_sep %out% valid_city])), 20)
+```
+
+### Normalize 
+
+```{r norm_city}
+fl <- fl %>% 
+  mutate(
+    city_norm = normalize_city(
+      city = city_sep,
+      na_rep = TRUE,
+      state_abbs = c("FL", "DC"),
+      geo_abbs = read_csv(here("R", "data", "city_abvs.csv"))
+    )
+  )
+
+n_distinct(fl$city_norm)
+```
+
+### Match
+
+```{r match_city}
+fl <- fl %>% 
+  left_join(
+    y = zipcode, 
+    by = c(
+      "zip_clean" = "zip", 
+      "state_clean" = "state"
+    )
+  ) %>% 
+  rename(city_match = city)
+```
+
+### Swap
+
+```{r match_dist}
+fl <- fl %>% 
+  mutate(
+    match_dist = stringdist(city_norm, city_match),
+    city_swap = if_else(
+      condition = match_dist <= 2,
+      true = city_match,
+      false = city_norm
+    )
+  )
+
+summary(fl$match_dist)
+sum(fl$match_dist == 1, na.rm = TRUE)
+n_distinct(fl$city_swap)
+```
+
+### Refine
 
 ```{r}
-dir_create("fl/data/processed")
-write_csv(
-  x = fl,
-  path = "fl/data/processed/fl_expends_clean.csv",
-  na = ""
-)
+fl_refine <- fl %>% 
+  filter(state_clean == "FL") %>% 
+  mutate(
+    city_refine = city_swap %>% 
+      key_collision_merge() %>% 
+      n_gram_merge()
+  ) %>% 
+  filter(city_refine != city_swap)
+
+fl_refine %>% 
+  count(
+    city_swap, 
+    city_refine,
+    sort = TRUE
+  )
+```
+
+```{r join_refine}
+fl <- fl %>% 
+  left_join(fl_refine) %>% 
+  mutate(city_clean = coalesce(city_refine, city_swap))
+```
+
+```{r city_reduce, collapse=TRUE}
+n_distinct(fl$city_sep)
+n_distinct(fl$city_norm)
+n_distinct(fl$city_swap)
+n_distinct(fl$city_clean)
+```
+
+## Export
+
+```{r write_clean}
+clean_dir <- here("fl", "expends", "data", "processed")
+dir_create(clean_dir)
+fl %>% 
+  select(
+    -address,
+    -city_state_zip,
+    -city_sep,
+    -state_sep,
+    -zip_sep,
+    -city_norm,
+    -city_match,
+    -match_dist,
+    -city_swap
+  ) %>% 
+  write_csv(
+    path = glue("{clean_dir}/fl_expends_clean.csv"),
+    na = ""
+  )
 ```
 
