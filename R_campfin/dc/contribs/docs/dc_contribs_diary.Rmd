@@ -65,6 +65,7 @@ pacman::p_load(
   tidyverse, # data manipulation
   lubridate, # datetime strings
   magrittr, # pipe opperators
+  jsonlite, # reading JSON
   janitor, # dataframe clean
   zipcode, # clean & database
   refinr, # cluster & merge
@@ -87,18 +88,7 @@ source(here("R", "code", "normalize_geo.R"))
 source(here("R", "code", "all_files_new.R"))
 source(here("R", "code", "glimpse_fun.R"))
 # load data
-data("zipcode")
-zipcode <-
-  as_tibble(zipcode) %>% 
-  select(city, state, zip) %>% 
-  mutate(
-    city = normalize_city(
-      city = city, 
-      geo_abbs = read_csv(
-        file = here("R", "data", "city_abvs.csv")
-      )
-    )
-  )
+geo <- read_csv(here("R", "data", "geo.csv"))
 ```
 
 This document should be run as part of the `R_campfin` project, which lives as a sub-directory of
@@ -149,45 +139,74 @@ data by zip codes.
 [05]: https://opendata.dc.gov/datasets/campaign-financial-contributions
 [06]: http://geospatial.dcgis.dc.gov/ocf/
 
+> Keywords:
+> * contributions
+> * dc
+> * dc gis
+> * elections
+> * expenditures
+> * finance
+> * money
+> * oct2016
+> * political
+> * public service
+> * vote
+> * washington dc
+
+> Contact:
+> * Organization: D.C. Office of the Chief Technology Officer
+> * Person: GIS Data Coordinator
+> * Address: Address: 200 I Street SE, 5th Floor, Washington DC 20003 USA
+> * Facsimile Telephone: (202) 727-5660
+> * Electronic Mail Address: dcgis@dc.gov
+> * Hours: 8:30 am - 5 pm
+
 ## Import
 
-### Download
+We can retreive the data from the GeoJSON API using the `jsonlite::fromJSON()` function.
 
-We can directly download the raw, **immutable** text file from the OpenData website.
-
-```{r download_raw}
+```{r download_json}
 dir_raw <- here("dc", "contribs", "data", "raw")
 dir_create(dir_raw)
-download.file(
-  url = "https://opendata.arcgis.com/datasets/6443e0b5b2454e86a3208b8a38fdee84_34.csv",
-  destfile = glue("{dir_raw}/Campaign_Financial_Contributions.csv")
-)
-```
 
-### Read
-
-The file can be read using `vroom::vroom()` with expected variable formats.
-
-```{r read_raw}
-dc <- vroom(
-  file = glue("{dir_raw}/Campaign_Financial_Contributions.csv"),
-  locale = locale(tz = "US/Eastern"),
-  .name_repair = make_clean_names,
-  col_types = cols(
-    .default = col_character(),
-    ELECTIONYEAR = col_integer(),
-    AMOUNT = col_double(),
-    DATEOFRECEIPT = col_datetime()
-  )
-)
-
-dc <- dc %>% 
+dc <- 
+  fromJSON("https://opendata.arcgis.com/datasets/6443e0b5b2454e86a3208b8a38fdee84_34.geojson") %>% 
+  use_series(features) %>% 
+  use_series(properties) %>% 
+  as_tibble() %>% 
+  clean_names() %>%
+  mutate_if(is_character, str_to_upper) %>% 
+  mutate_at(vars(dateofreceipt), parse_datetime) %>% 
   select(
     -xcoord, 
     -ycoord, 
     -fulladdress, 
     -gis_last_mod_dttm,
   )
+```
+
+Then save a copy of the data frame to the disk in the `/data/raw` directory.
+
+```{r write_raw}
+write_delim(
+  x = dc,
+  path = glue("{dir_raw}/Campaign_Financial_Contributions.csv"),
+  delim = ";",
+  na = "",
+  append = FALSE,
+  col_names = TRUE,
+  quote_escape = "double"
+)
+```
+
+```{r download_raw, echo=FALSE, eval=FALSE}
+dir_raw <- here("dc", "contribs", "data", "raw")
+dir_create(dir_raw)
+
+download.file(
+  url = "https://opendata.arcgis.com/datasets/6443e0b5b2454e86a3208b8a38fdee84_34.csv",
+  destfile = glue("{dir_raw}/Campaign_Financial_Contributions.csv")
+)
 ```
 
 ## Explore
@@ -208,22 +227,28 @@ The variables range in their degree of distinctness.
 dc %>% glimpse_fun(n_distinct)
 ```
 
-```{r year_bar, echo=FALSE}
-dc %>% 
-  ggplot() +
-  geom_bar(aes(electionyear)) +
-  scale_x_continuous(labels = 2002:2020, breaks = 2002:2020)
-```
-
 ```{r who_bar, echo=FALSE}
 dc %>% 
-  filter(contributortype %in% c("INDIVIDUAL", "CORPORATION", "CANDIDATE")) %>% 
+  mutate(
+    contributortype = if_else(
+      condition = contributortype %in% c("INDIVIDUAL", "CORPORATION"),
+      true = contributortype,
+      false = "ALL OTHER"
+    )
+  ) %>% 
   ggplot() +
   geom_bar(aes(contributortype))
 ```
 
-```{r cont_bar, echo=FALSE}
+```{r how_bar, echo=FALSE}
 dc %>% 
+  mutate(
+    contributiontype = if_else(
+      condition = contributiontype %in% c("CHECK", "CREDIT CARD", "CASH"),
+      true = contributiontype,
+      false = "ALL OTHER"
+    )
+  ) %>%
   ggplot() +
   geom_bar(aes(contributiontype))
 ```
@@ -234,21 +259,40 @@ dc %>%
   geom_bar(aes(ward))
 ```
 
-```{r ward_map, echo=FALSE}
+### Map
 
+```{r size_point_map}
+get_map(
+  location = "Washington, DC", 
+  zoom = 12, 
+  maptype = "roadmap"
+) %>% 
+  ggmap() +
+  geom_point(
+    data = dc %>% filter(amount %>% between(0, 1000)),
+    alpha = 0.01,
+    mapping = aes(x = longitude, y = latitude, size = amount)
+  )
 ```
 
 ### Missing
 
+There are several variables missing key values:
+
 ```{r count_na}
 dc %>% glimpse_fun(count_na)
 ```
+
+Any row with a missing `contributorname` _or_ `amount` value will have a `TRUE` value in the new
+`na_flag` variable.
 
 ```{r na_flag}
 dc <- dc %>% mutate(na_flag = is.na(contributorname) | is.na(amount))
 ```
 
 ### Duplicates
+
+There are no duplicate records.
 
 ```{r get_dupes, collapse=TRUE}
 dc_dupes <- get_dupes(dc)
@@ -259,13 +303,131 @@ nrow(dc_dupes)
 
 #### Amounts
 
+The `amount` varies from `r scales::dollar(min(dc$amount, na.rm = T))` to 
+`r scales::dollar(max(dc$amount, na.rm = T))`.
+
 ```{r amount_range, collapse=TRUE}
 summary(dc$amount)
+sum(dc$amount < 0, na.rm = TRUE)
+```
+
+```{r amount_hist, echo=FALSE}
+dc %>% 
+  ggplot() +
+  geom_histogram(aes(amount)) +
+  scale_x_continuous(
+    labels = scales::dollar, 
+    trans = "log10"
+  )
+```
+
+```{r amount_hist_how, echo=FALSE}
+dc %>%
+  filter(contributortype %in% c("INDIVIDUAL", "CORPORATION")) %>% 
+  ggplot() +
+  geom_histogram(aes(amount)) +
+  facet_wrap(~contributortype, ncol = 1) +
+  scale_x_continuous(
+    labels = scales::dollar, 
+    trans = "log10"
+  )
+```
+
+```{r amount_box_who, echo=FALSE}
+dc %>%
+  filter(contributortype %in% c("INDIVIDUAL", "CORPORATION")) %>% 
+  ggplot() +
+  geom_boxplot(
+    mapping = aes(contributortype, amount),
+    varwidth = TRUE,
+    outlier.alpha = 0.10
+  ) +
+  scale_y_continuous(
+    labels = scales::dollar, 
+    trans = "log10"
+  )
+```
+
+```{r amount_box_how}
+dc %>% 
+  filter(contributiontype %in% c("CHECK", "CREDIT CARD", "CASH", "OTHER")) %>% 
+  ggplot() +
+  geom_boxplot(
+    mapping = aes(contributiontype, amount),
+    varwidth = TRUE,
+    outlier.alpha = 0.10
+  ) +
+  scale_y_continuous(
+    labels = scales::dollar, 
+    trans = "log10"
+  )
 ```
 
 ### Dates
+
+The dates range from `r min(dc$dc$dateofreceipt)` and `r max(dc$dc$dateofreceipt)`. There are
+`r sum(dc$dateofreceipt > today())` records with a date greater than `r today()`.
 
 ```{r date_range, collapse=TRUE}
 summary(dc$dateofreceipt)
 sum(dc$dateofreceipt > today())
 ```
+
+```{r year_bar, echo=FALSE}
+dc %>% 
+  ggplot() +
+  geom_bar(aes(electionyear)) +
+  scale_x_continuous(labels = 2002:2020, breaks = 2002:2020)
+```
+
+```{r amount_line_month, echo=FALSE}
+dc %>%
+  filter(!is.na(electionyear)) %>% 
+  mutate(on_year = electionyear %% 2 == 0) %>% 
+  group_by(on_year, month = month(dateofreceipt)) %>% 
+  summarise(median = mean(amount, na.rm = TRUE)) %>% 
+  ggplot(aes(x = month, y = median)) +
+  geom_line(aes(color = on_year), size = 2) +
+  scale_x_continuous(labels = month.abb, breaks = 1:12)
+```
+
+## Wrangle
+
+We will have to break the `address` variable into `address`, `city`, `state`, and `zip`.
+
+```{r head_address}
+head(dc$address)
+```
+
+First, we will extract the ZIP digits from the end of the `address` string.
+
+```{r norm_zip}
+dc <- dc %>% 
+  mutate(
+    zip_clean = address %>% 
+      str_extract("\\d{5}(?:-\\d{4})?$") %>% 
+      normalize_zip(na_rep = TRUE)
+  )
+```
+
+Then we can get the two digit state abbreviation preceding those digits.
+
+```{r norm_state}
+dc <- dc %>% 
+  mutate(
+    state_clean = address %>% 
+      str_extract(",\\s[:alpha:]+(?=[:space:]+[:digit:]{5}(?:-[:digit:]{4})?$)") %>% 
+      normalize_state(
+        na = c("UNKNOWN", "TBD", "INFORMATION", "REQUESTED"), 
+        expand = TRUE
+      )
+  )
+
+n_distinct(dc$state_clean)
+```
+
+```{r}
+
+```
+
+

@@ -90,8 +90,7 @@ normalize_state <- function(state, valid = NULL, na = c(""), na_rep = FALSE, exp
 
   state_clean <- state_clean %>%
     str_to_upper() %>%
-    str_remove("[^A-z]") %>%
-    str_sub(start = 1, end = 2)
+    str_remove("[^A-z]")
 
   if (!is.null(valid)) {
     state_clean[which(state_clean %in% na)] <- NA
