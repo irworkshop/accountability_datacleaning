@@ -70,10 +70,12 @@ pacman::p_load(
   zipcode, # clean & database
   refinr, # cluster & merge
   vroom, # quickly read files
+  ggmap, # google maps API
   knitr, # knit documents
   glue, # combine strings
   here, # relative storage
-  fs # search storage 
+  fs, # search storage 
+  sf # spatial data
 )
 ```
 
@@ -261,7 +263,7 @@ dc %>%
 
 ### Map
 
-```{r size_point_map}
+```{r size_point_map, echo=FALSE}
 get_map(
   location = "Washington, DC", 
   zoom = 12, 
@@ -348,7 +350,7 @@ dc %>%
   )
 ```
 
-```{r amount_box_how}
+```{r amount_box_how, echo=FALSE}
 dc %>% 
   filter(contributiontype %in% c("CHECK", "CREDIT CARD", "CASH", "OTHER")) %>% 
   ggplot() +
@@ -425,9 +427,4 @@ dc <- dc %>%
 
 n_distinct(dc$state_clean)
 ```
-
-```{r}
-
-```
-
 
