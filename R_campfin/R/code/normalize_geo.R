@@ -61,7 +61,6 @@ normalize_state <- function(state, valid = NULL, na = c(""), na_rep = FALSE, exp
         c(
           state.name,
           "District of Columbia",
-          "NSW",
           "Ontario",
           "British Columbia",
           "ALBERTA",
@@ -71,7 +70,6 @@ normalize_state <- function(state, valid = NULL, na = c(""), na_rep = FALSE, exp
       abb = c(
         state.abb,
         "DC",
-        "NW",
         "ON",
         "BC",
         "AB",
@@ -90,7 +88,8 @@ normalize_state <- function(state, valid = NULL, na = c(""), na_rep = FALSE, exp
 
   state_clean <- state_clean %>%
     str_to_upper() %>%
-    str_remove("[^A-z]")
+    str_remove("[^A-z]") %>%
+    str_trim()
 
   if (!is.null(valid)) {
     state_clean[which(state_clean %in% na)] <- NA

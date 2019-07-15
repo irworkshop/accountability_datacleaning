@@ -1,7 +1,7 @@
 District Contributions
 ================
 Kiernan Nicholls
-2019-07-11 16:14:40
+2019-07-15 12:27:10
 
   - [Project](#project)
   - [Objectives](#objectives)
@@ -10,6 +10,8 @@ Kiernan Nicholls
   - [Import](#import)
   - [Explore](#explore)
   - [Wrangle](#wrangle)
+  - [Conclude](#conclude)
+  - [Write](#write)
 
 ## Project
 
@@ -80,7 +82,7 @@ feature and should be run as such. The project also uses the dynamic
 ``` r
 # where dcs this document knit?
 here::here()
-#> [1] "/home/kiernan/R/accountability_datacleaning/R_campfin"
+#> [1] "/home/ubuntu/R/accountability_datacleaning/R_campfin"
 ```
 
 ## Data
@@ -184,12 +186,12 @@ head(dc)
     #> # A tibble: 6 x 16
     #>   objectid committeename candidatename electionyear contributorname address contributortype
     #>      <int> <chr>         <chr>                <int> <chr>           <chr>   <chr>          
-    #> 1        1 REID 4 WARD … SHEIKA REID           2018 WAYNE AGNEW     3600 R… INDIVIDUAL     
-    #> 2        2 REID 4 WARD … SHEIKA REID           2018 WAYNE AGNEW     3600 R… INDIVIDUAL     
-    #> 3        3 ED LAZERE FO… ED LAZERE             2018 SHARON FARMER   3601 1… INDIVIDUAL     
-    #> 4        4 ELISSA 2014   ELISSA SILVE…         2014 MICHAEL SAPPOL  3601 3… INDIVIDUAL     
-    #> 5        5 ELISSA 2013   ELISSA SILVE…         2013 MICHAEL SAPPOL  3601 3… INDIVIDUAL     
-    #> 6        6 THE MICHAEL … MICHAEL BROWN         2008 GUY ROHLING     3601 4… INDIVIDUAL     
+    #> 1     1001 RE-ELECT BRA… BRANDON TODD          2016 JOIGIE HAYES    7503 1… INDIVIDUAL     
+    #> 2     1002 ALLEN FOR DC  S. KATHRYN A…         2018 CAMILLE MOSLEY  7504 1… INDIVIDUAL     
+    #> 3     1003 FENTY 2006    ADRIAN FENTY          2006 CAMILLE RIGGS-… 7504 1… INDIVIDUAL     
+    #> 4     1004 MICHAEL BROW… MICHAEL BROWN         2007 PEYTON MCCALL … 7504 A… CORPORATION    
+    #> 5     1005 FRIENDS OF M… MICHAEL BROWN         2008 HERBERT SCOTT   7504 A… INDIVIDUAL     
+    #> 6     1006 FENTY 2006    ADRIAN FENTY          2006 PEYTON MCCALL,… 7504 A… CORPORATION    
     #> # … with 9 more variables: contributiontype <chr>, employer <chr>, employeraddress <chr>,
     #> #   amount <dbl>, dateofreceipt <dttm>, address_id <int>, latitude <dbl>, longitude <dbl>,
     #> #   ward <chr>
@@ -201,12 +203,12 @@ tail(dc)
     #> # A tibble: 6 x 16
     #>   objectid committeename candidatename electionyear contributorname address contributortype
     #>      <int> <chr>         <chr>                <int> <chr>           <chr>   <chr>          
-    #> 1   244673 WASHINGTON D… <NA>                  2002 SARAH BERNARDI  4400 J… INDIVIDUAL     
-    #> 2   244674 WASHINGTON D… <NA>                  2002 CHRISTINE BARM… 4400 J… INDIVIDUAL     
-    #> 3   244675 WASHINGTON D… <NA>                  2002 MIMI STANSBURY  4400 J… INDIVIDUAL     
-    #> 4   244676 WASHINGTON D… <NA>                  2002 EMILY KAROLYI   4400 J… INDIVIDUAL     
-    #> 5   244677 WASHINGTON D… <NA>                  2002 ELLEN SANDLER   4400 J… INDIVIDUAL     
-    #> 6   244678 WASHINGTON D… <NA>                  2002 ROBERT JENNINGS 4400 J… INDIVIDUAL     
+    #> 1   243995 BB&T DISTRIC… CALVIN WINGF…         2002 JAMES NORTON    4322 W… INDIVIDUAL     
+    #> 2   243996 BOLDEN 2006 … A. SCOTT BOL…         2006 DOROTHY MYERS   4323 1… INDIVIDUAL     
+    #> 3   243997 MARY CHEH WA… MARY CHEH             2006 ELLEN BERLOW    4323 E… INDIVIDUAL     
+    #> 4   243998 KATHY PATTER… KATHY PATTER…         2006 ANDRE DE VINCE… 4323 R… INDIVIDUAL     
+    #> 5   243999 "DUMPTRUMP -… JOHN CAPOZZI          2018 CATRINA EDWARDS 4323 V… INDIVIDUAL     
+    #> 6   244000 MENDELSON FO… PHIL MENDELS…         2006 BETH KRAVETZ    4323 W… INDIVIDUAL     
     #> # … with 9 more variables: contributiontype <chr>, employer <chr>, employeraddress <chr>,
     #> #   amount <dbl>, dateofreceipt <dttm>, address_id <int>, latitude <dbl>, longitude <dbl>,
     #> #   ward <chr>
@@ -217,22 +219,22 @@ glimpse(dc)
 
     #> Observations: 244,678
     #> Variables: 16
-    #> $ objectid         <int> 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, …
-    #> $ committeename    <chr> "REID 4 WARD 1 2018", "REID 4 WARD 1 2018", "ED LAZERE FOR DC CHAIR", "…
-    #> $ candidatename    <chr> "SHEIKA REID", "SHEIKA REID", "ED LAZERE", "ELISSA SILVERMAN", "ELISSA …
-    #> $ electionyear     <int> 2018, 2018, 2018, 2014, 2013, 2008, 2014, 2012, 2007, 2010, 2006, 2014,…
-    #> $ contributorname  <chr> "WAYNE AGNEW", "WAYNE AGNEW", "SHARON FARMER", "MICHAEL SAPPOL", "MICHA…
-    #> $ address          <chr> "3600 ROCK CREEK CHURCH RD NW, WASHINGTON, DC 20010", "3600 ROCK CREEK …
-    #> $ contributortype  <chr> "INDIVIDUAL", "INDIVIDUAL", "INDIVIDUAL", "INDIVIDUAL", "INDIVIDUAL", "…
-    #> $ contributiontype <chr> "CREDIT CARD", "CREDIT CARD", "CHECK", "CREDIT CARD", "CREDIT CARD", "O…
-    #> $ employer         <chr> "A CUT ABOVE G.C", "A CUT ABOVE G.C", NA, "NATIONAL LIBRARY OF MEDICINE…
-    #> $ employeraddress  <chr> "WASHINGTON, DC", "WASHINGTON, DC", NA, "8600 ROCKVILLE PIKE BLD 38, BE…
-    #> $ amount           <dbl> 50, 50, 50, 50, 10, 500, 250, 500, 500, 50, 50, 51, 100, 50, 100, 150, …
-    #> $ dateofreceipt    <dttm> 2018-07-10, 2017-12-10, 2018-05-25, 2014-08-27, 2013-04-17, 2012-01-28…
-    #> $ address_id       <int> 230549, 230549, 230417, 223204, 223204, 266658, 266658, 266658, 266658,…
-    #> $ latitude         <dbl> 38.93425, 38.93425, 38.93466, 38.93709, 38.93709, 38.93629, 38.93629, 3…
-    #> $ longitude        <dbl> -77.02647, -77.02647, -77.02832, -77.07737, -77.07737, -77.09576, -77.0…
-    #> $ ward             <chr> "WARD 1", "WARD 1", "WARD 1", "WARD 3", "WARD 3", "WARD 3", "WARD 3", "…
+    #> $ objectid         <int> 1001, 1002, 1003, 1004, 1005, 1006, 1007, 1008, 1009, 1010, 1011, 1012,…
+    #> $ committeename    <chr> "RE-ELECT BRANDON TODD FOR WARD 4", "ALLEN FOR DC", "FENTY 2006", "MICH…
+    #> $ candidatename    <chr> "BRANDON TODD", "S. KATHRYN ALLEN", "ADRIAN FENTY", "MICHAEL BROWN", "M…
+    #> $ electionyear     <int> 2016, 2018, 2006, 2007, 2008, 2006, 2006, 2015, 2002, 2008, 2018, 2008,…
+    #> $ contributorname  <chr> "JOIGIE HAYES", "CAMILLE MOSLEY", "CAMILLE RIGGS-MOSLEY", "PEYTON MCCAL…
+    #> $ address          <chr> "7503 12TH STREET, NW, WASHINGTON, DC 20012", "7504 14TH ST NW, WASHING…
+    #> $ contributortype  <chr> "INDIVIDUAL", "INDIVIDUAL", "INDIVIDUAL", "CORPORATION", "INDIVIDUAL", …
+    #> $ contributiontype <chr> "CREDIT CARD", "CREDIT CARD", "CHECK", "CHECK", "CHECK", "CHECK", "CHEC…
+    #> $ employer         <chr> NA, "ARAMARK", "LEE HECHT HARRISSON", NA, NA, NA, "SELF-EMPLOYED", NA, …
+    #> $ employeraddress  <chr> NA, "1101 MARKET ST, PHILADELPHIA, PA 19107", "WASHINGTON, DC", NA, NA,…
+    #> $ amount           <dbl> 51.00, 100.00, 100.00, 250.00, 250.00, 150.00, 100.00, 100.00, 100.00, …
+    #> $ dateofreceipt    <dttm> 2016-06-08, 2018-06-05, 2006-11-04, 2007-04-19, 2009-01-29, 2005-07-30…
+    #> $ address_id       <int> 253514, 256263, 256263, 257290, 257290, 257290, 257290, 251129, 253508,…
+    #> $ latitude         <dbl> 38.98059, 38.98074, 38.98074, 38.98080, 38.98080, 38.98080, 38.98080, 3…
+    #> $ longitude        <dbl> -77.02759, -77.03366, -77.03366, -77.03043, -77.03043, -77.03043, -77.0…
+    #> $ ward             <chr> "WARD 4", "WARD 4", "WARD 4", "WARD 4", "WARD 4", "WARD 4", "WARD 4", "…
 
 ### Distinct
 
@@ -269,8 +271,6 @@ dc %>% glimpse_fun(n_distinct)
 ![](../plots/ward_bar-1.png)<!-- -->
 
 ### Map
-
-    #> Warning: Removed 87704 rows containing missing values (geom_point).
 
 ![](../plots/size_point_map-1.png)<!-- -->
 
@@ -333,42 +333,18 @@ sum(dc$amount < 0, na.rm = TRUE)
 #> [1] 58
 ```
 
-    #> Warning in self$trans$transform(x): NaNs produced
-
-    #> Warning: Transformation introduced infinite values in continuous x-axis
-
-    #> Warning: Removed 803 rows containing non-finite values (stat_bin).
-
 ![](../plots/amount_hist-1.png)<!-- -->
-
-    #> Warning in self$trans$transform(x): NaNs produced
-
-    #> Warning: Transformation introduced infinite values in continuous x-axis
-
-    #> Warning: Removed 165 rows containing non-finite values (stat_bin).
 
 ![](../plots/amount_hist_how-1.png)<!-- -->
 
-    #> Warning in self$trans$transform(x): NaNs produced
-
-    #> Warning: Transformation introduced infinite values in continuous y-axis
-
-    #> Warning: Removed 165 rows containing non-finite values (stat_boxplot).
-
 ![](../plots/amount_box_who-1.png)<!-- -->
-
-    #> Warning in self$trans$transform(x): NaNs produced
-
-    #> Warning: Transformation introduced infinite values in continuous y-axis
-
-    #> Warning: Removed 169 rows containing non-finite values (stat_boxplot).
 
 ![](../plots/amount_box_how-1.png)<!-- -->
 
 ### Dates
 
 The dates range from  and -. There are 0 records with a date greater
-than 2019-07-11.
+than 2019-07-15.
 
 ``` r
 summary(dc$dateofreceipt)
@@ -380,11 +356,17 @@ sum(dc$dateofreceipt > today())
 #> [1] 0
 ```
 
-    #> Warning: Removed 28 rows containing non-finite values (stat_count).
-
 ![](../plots/year_bar-1.png)<!-- -->
 
 ![](../plots/amount_line_month-1.png)<!-- -->
+
+Since we’ve already used `readr::parse_datetime()`, we can use
+`lubridate::year()` to create a new variable representng the year of the
+reciept.
+
+``` r
+dc <- dc %>% mutate(yearofreceipt = year(dateofreceipt))
+```
 
 ## Wrangle
 
@@ -395,12 +377,9 @@ We will have to break the `address` variable into `address`, `city`,
 head(dc$address)
 ```
 
-    #> [1] "3600 ROCK CREEK CHURCH RD NW, WASHINGTON, DC 20010"
-    #> [2] "3600 ROCK CREEK CHURCH RD NW, WASHINGTON, DC 20010"
-    #> [3] "3601 11TH ST NW, WASHINGTON, DC 20010"             
-    #> [4] "3601 39TH ST NW, WASHINGTON, DC 20016"             
-    #> [5] "3601 39TH ST NW, WASHINGTON, DC 20016"             
-    #> [6] "3601 49TH ST NW, WASHINGTON, DC 20016"
+    #> [1] "7503 12TH STREET, NW, WASHINGTON, DC 20012"   "7504 14TH ST NW, WASHINGTON, DC 20012"       
+    #> [3] "7504 14TH ST NW, WASHINGTON, DC 20012"        "7504 ALASKA AVE NW, WASHINGTON, DC 20012"    
+    #> [5] "7504 ALASKA AVE NW, WASHINGTON, DC 20012"     "7504 ALASKA AVENUE, NW, WASHINGTON, DC 20012"
 
 First, we will extract the ZIP digits from the end of the `address`
 string.
@@ -412,6 +391,9 @@ dc <- dc %>%
       str_extract("\\d{5}(?:-\\d{4})?$") %>% 
       normalize_zip(na_rep = TRUE)
   )
+
+sample(dc$zip_clean, 10)
+#>  [1] "20016" "20009" "20012" "20001" "20895" "20817" "20012" "20017" "38116" "20016"
 ```
 
 Then we can get the two digit state abbreviation preceding those digits.
@@ -420,14 +402,81 @@ Then we can get the two digit state abbreviation preceding those digits.
 dc <- dc %>% 
   mutate(
     state_clean = address %>% 
-      str_extract(",\\s[:alpha:]+(?=[:space:]+[:digit:]{5}(?:-[:digit:]{4})?$)") %>% 
+      str_extract("[:alpha:]+(?=[:space:]+[:digit:]{5}(?:-[:digit:]{4})?$)") %>%
       normalize_state(
-        na = c("UNKNOWN", "TBD", "INFORMATION", "REQUESTED"), 
+        na = c("UNKNOWN", "TBD", "INFORMATION", "REQUESTED", "DISCLOSED"), 
         expand = TRUE
       )
   )
 
 n_distinct(dc$state_clean)
+#> [1] 101
+sample(dc$state_clean, 10)
+#>  [1] "MD" "DC" "DC" "DC" "DC" "DC" "DC" "DC" "DC" "MD"
 ```
 
-    #> [1] 90
+``` r
+setdiff(dc$state_clean, geo$state)
+```
+
+    #>  [1] NA              "COLUMBIA"      "JERSEY"        "CAROLINA"      "YORK"         
+    #>  [6] "WASH"          "MARLBORO"      "A"             "MCLEAN"        "MARYALND"     
+    #> [11] "BROOKLYN"      "PARK"          "PENSACOLA"     "GAITHERSBURG"  "CHURCH"       
+    #> [16] "POTOMAC"       "LORTON"        "LEESBURG"      "BALTIMORE"     "HILL"         
+    #> [21] "LANHAM"        "SPRING"        "SEATTLE"       "MARLOBR"       "HOHENFELS"    
+    #> [26] "MILWAUKEE"     "ALEXANDRIA"    "MONTREAL"      "CHASE"         "APO"          
+    #> [31] "DALE"          "BETHESDA"      "FREDERICK"     "STEVENSVILLE"  "BEACH"        
+    #> [36] "DPO"           "BAMAKO"        "RESTON"        "KINSHASA"      "COLOMBIA"     
+    #> [41] "ARLINGTON"     "MITCHELLVILLE" "BETHES"        "BLANK"         "CALIFORRNIA"
+
+Some `address` strings lack the two character abbreviation, so we will
+have to infer from their city names.
+
+``` r
+dc$state_clean <- dc$state_clean %>% 
+  na_if("A") %>% 
+  str_replace("COLUMBIA",  "DC") %>% 
+  str_replace("BETHESDA",  "MD") %>% 
+  str_replace("MARYALND",  "MD") %>% 
+  str_replace("SPRING",    "MD") %>% 
+  str_replace("ARLINGTON", "VA") %>% 
+  str_replace("BROOKLYN", "NY") %>% 
+  str_replace("YORK", "NY") %>% 
+  str_replace("BALTIMORE", "MD") %>% 
+  str_replace("CAROLINA", "NC") %>% 
+  str_replace("DALE", "MD") %>% 
+  str_replace("BALTIMORE", "MD") %>% 
+  str_replace("ALEXANDRIA", "VA") %>% 
+  str_replace("MARLBORO", "MD")
+
+dc$state_clean[dc$state_clean %out% geo$state] <- NA
+```
+
+## Conclude
+
+1.  How are 244678 records in the database
+2.  There are 0 duplicate records
+3.  The `amount` values range from $-31,889.24 to $400,000; the
+    `dateofreceipt` ranges from to .
+4.  There are 1161 records missing a `contributorname` or `amount` value
+    (flagged with the logical `na_flag` variable)
+5.  Consistency in ZIP codes and state abbreviations has been fixed from
+    `address`
+6.  The `zip_clean` variable contains the 5 digit ZIP from `address`
+7.  The `yearofreceipt` variable contains the 4 digit year of the
+    receipt.
+8.  There are not both names to *every* transaction (99.5% of records
+    have all data)
+
+## Write
+
+``` r
+dir_proc <- here("dc", "contribs", "data", "processed")
+dir_create(dir_proc)
+
+write_csv(
+  x = dc,
+  na = "",
+  path = glue("{dir_proc}/dc_contribs_clean.csv")
+)
+```

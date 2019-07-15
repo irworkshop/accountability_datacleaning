@@ -16,7 +16,7 @@ library(knitr)
 opts_chunk$set(
   eval = TRUE,
   echo = TRUE,
-  dcrning = FALSE,
+  warning = FALSE,
   message = FALSE,
   error = FALSE,
   comment = "#>",
@@ -393,6 +393,13 @@ dc %>%
   scale_x_continuous(labels = month.abb, breaks = 1:12)
 ```
 
+Since we've already used `readr::parse_datetime()`, we can use `lubridate::year()` to create a new
+variable representng the year of the reciept.
+
+```{r}
+dc <- dc %>% mutate(yearofreceipt = year(dateofreceipt))
+```
+
 ## Wrangle
 
 We will have to break the `address` variable into `address`, `city`, `state`, and `zip`.
@@ -403,28 +410,98 @@ head(dc$address)
 
 First, we will extract the ZIP digits from the end of the `address` string.
 
-```{r norm_zip}
+```{r norm_zip, collapse=TRUE}
 dc <- dc %>% 
   mutate(
     zip_clean = address %>% 
       str_extract("\\d{5}(?:-\\d{4})?$") %>% 
       normalize_zip(na_rep = TRUE)
   )
+
+sample(dc$zip_clean, 10)
 ```
 
 Then we can get the two digit state abbreviation preceding those digits.
 
-```{r norm_state}
+```{r norm_state, collapse=TRUE}
 dc <- dc %>% 
   mutate(
     state_clean = address %>% 
-      str_extract(",\\s[:alpha:]+(?=[:space:]+[:digit:]{5}(?:-[:digit:]{4})?$)") %>% 
+      str_extract("[:alpha:]+(?=[:space:]+[:digit:]{5}(?:-[:digit:]{4})?$)") %>%
       normalize_state(
-        na = c("UNKNOWN", "TBD", "INFORMATION", "REQUESTED"), 
+        na = c("UNKNOWN", "TBD", "INFORMATION", "REQUESTED", "DISCLOSED"), 
         expand = TRUE
       )
   )
 
 n_distinct(dc$state_clean)
+sample(dc$state_clean, 10)
+```
+
+```{r view_bad_state}
+setdiff(dc$state_clean, geo$state)
+```
+
+Some `address` strings lack the two character abbreviation, so we will have to infer from their
+city names.
+
+```{r fix_state}
+dc$state_clean <- dc$state_clean %>% 
+  na_if("A") %>% 
+  str_replace("COLUMBIA",  "DC") %>% 
+  str_replace("BETHESDA",  "MD") %>% 
+  str_replace("MARYALND",  "MD") %>% 
+  str_replace("SPRING",    "MD") %>% 
+  str_replace("ARLINGTON", "VA") %>% 
+  str_replace("BROOKLYN", "NY") %>% 
+  str_replace("YORK", "NY") %>% 
+  str_replace("BALTIMORE", "MD") %>% 
+  str_replace("CAROLINA", "NC") %>% 
+  str_replace("DALE", "MD") %>% 
+  str_replace("BALTIMORE", "MD") %>% 
+  str_replace("ALEXANDRIA", "VA") %>% 
+  str_replace("MARLBORO", "MD")
+
+dc$state_clean[dc$state_clean %out% geo$state] <- NA
+```
+
+## Conclude
+
+```{r conclue_amount, echo=FALSE}
+min_amount <- scales::dollar(min(dc$amount, na.rm = TRUE))
+max_amount <- scales::dollar(max(dc$amount, na.rm = TRUE))
+```
+
+```{r conclue_date, echo=FALSE}
+min_date <- as.character(min(dc$dateofreceipt, na.rm = TRUE))
+max_date <- as.character(max(dc$dateofreceipt, na.rm = TRUE))
+```
+
+```{r conclue_na, echo=FALSE}
+not_na <- scales::percent(mean(!dc$na_flag))
+```
+
+1. How are `r nrow(dc)` records in the database
+1. There are `r nrow(dc_dupes)` duplicate records
+1. The `amount` values range from `r min_amount` to `r max_amount`; 
+the `dateofreceipt` ranges from `r print(min_date)` to `r print(max_date)`.
+1. There are `r sum(dc$na_flag)` records missing a `contributorname` or `amount` value (flagged 
+with the logical `na_flag` variable)
+1. Consistency in ZIP codes and state abbreviations has been fixed from `address`
+1. The `zip_clean` variable contains the 5 digit ZIP from `address`
+1. The `yearofreceipt` variable contains the 4 digit year of the receipt.
+1. There are not both names to _every_ transaction (`r not_na` of records have all data)
+
+## Write
+
+```{r}
+dir_proc <- here("dc", "contribs", "data", "processed")
+dir_create(dir_proc)
+
+write_csv(
+  x = dc,
+  na = "",
+  path = glue("{dir_proc}/dc_contribs_clean.csv")
+)
 ```
 
