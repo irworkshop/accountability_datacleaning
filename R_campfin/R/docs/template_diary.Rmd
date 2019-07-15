@@ -16,7 +16,7 @@ library(knitr)
 opts_chunk$set(
   eval = FALSE,
   echo = TRUE,
-  dfrning = FALSE,
+  warning = FALSE,
   message = FALSE,
   error = FALSE,
   comment = "#>",
