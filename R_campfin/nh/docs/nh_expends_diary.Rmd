@@ -175,7 +175,7 @@ remote_driver <- rsDriver(
 
 # navigate to the FL DOE download site
 remote_browser <- remote_driver$client
-remote_browser$navigate("https://cfs.sos.nh.gov/Public/ExpensesList")
+  remote_browser$navigate("https://cfs.sos.nh.gov/Public/ExpensesList")
 
 # chose "All" from elections list
 cycle_menu <- "/html/body/div[1]/div[3]/table/tbody/tr/td[4]/div[2]/table[1]/tbody/tr[3]/td/table/tbody/tr[6]/td[2]/select/option[1]"
@@ -236,7 +236,7 @@ nh <- nh %>%
 
 ## Explore
 
-There are `r nrow(df)` records of `r length(df)` variables in the full database.
+There are `r nrow(nh)` records of `r length(nh)` variables in the full database.
 
 ```{r glimpse}
 head(nh)
