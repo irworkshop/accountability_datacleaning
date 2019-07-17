@@ -1,9 +1,9 @@
 ##Rhode Island voter registration data
 
-Obtained via public records request Oct. 2018
+Obtained via public records request Oct. 2018  
 Number of records: 792,686
 
-Start import at line 2 - first line is "Note: Pipe is the delimiter" 
+NOTE: Data starts on line 2. Line one is: "Note: Pipe is the delimiter" 
 
 --CREATE TABLE  
 CREATE TABLE 'RI_VOTERS' ( 'VOTERID', 'STATUSCODE', 'LASTNAME', 'FIRSTNAME', 'MIDDLENAME', 'PREFIX', 'SUFFIX',
