@@ -1,6 +1,6 @@
 ## Kansas voter registration processing notes
 
-Data obtained via public records request in January 2019.
+Data obtained via public records request in January 2019.  
 Record count: 1,842,596
 
 --ADD NEW FIELDS
@@ -20,7 +20,7 @@ order by 1
 UPDATE KS_VOTERS set RES_CITY_CLEAN = (select y.RES_CITY_CLEAN from CITY_LOOKUP as y where y.TEXT_RES_CITY=KS_VOTERS.TEXT_RES_CITY)  
 
 --EXPORT FOR UPLOAD
-`CREATE TABLE KS_VOTERS_OUT AS
+CREATE TABLE KS_VOTERS_OUT AS  
 SELECT db_logid,cde_registrant_status,cde_name_title as TITLE,text_name_first as FIRSTNAME,
 text_name_middle AS MIDDLENAME,text_name_last AS LASTNAME,cde_name_suffix AS SUFFIX, 
 cde_gender AS GENDER, text_registrant_id AS REGID,text_res_address_nbr AS ADDRESS_NUMBER,
@@ -29,7 +29,7 @@ text_street_name AS ADDRESS_STREET,cde_street_type AS ADDRESS_STREET_TYPE,
 cde_street_dir_suffix AS ADDRESS_DIR_SUFFIX, cde_res_unit_type AS UNIT_TYPE,text_res_unit_nbr AS UNIT_NUM,
 RES_CITY_CLEAN AS RES_CITY,cde_res_state AS RES_STATE, text_res_zip5 AS ZIP5,
 date_of_birth AS DATE_OF_BIRTH,date_of_registration AS REG_DATE,text_phone_area_code||text_phone_exchange||text_phone_last_four AS PHONE,YEAR
-FROM KS_VOTERS`
+FROM KS_VOTERS
 
 
 **Know data issues:**
