@@ -5,8 +5,8 @@ This data was obtained Jan. 2019 via public records request in csv formal.
 Record count: 6,947,649
 
 --ADD NEW FIELDS  
-ALTER TABLE ga_voters ADD COLUMN RESIDENCE_CITY_CLEAN;  
-ALTER TABLE ga_voters ADD COLUMN ZIP5;  
+ALTER TABLE ga_voters ADD COLUMN RESIDENCE_CITY_CLEAN;    
+ALTER TABLE ga_voters ADD COLUMN ZIP5;    
 ALTER TABLE ga_voters ADD COLUMN YEAR;  
 --UPDATE NEW FIELDS
 UPDATE GA_VOTERS set ZIP5 = SUBSTR(RESIDENCE_ZIPCODE,1,5);  
@@ -31,7 +31,7 @@ REGISTRATION_DATE, STATUS_REASON, DATE_LAST_VOTED, PARTY_LAST_VOTED,
 DATE_ADDED,  RESIDENCE_CITY_CLEAN AS RESIDENCE_CITY, ZIP5, YEAR
 FROM GA_VOTERS;  
 
-**Known data issues**
-A few cases with ZIPs out of state or invalid.
-BIRTHDATES range from 1800 to 2018
+**Known issues**  
+A few cases with ZIPs out of state or invalid.  
+BIRTHDATES range from 1800 to 2018.  
 
