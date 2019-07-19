@@ -1,18 +1,15 @@
 ## Texas voter registration data
 
-Combine 254 county fixed-length text files into one
-Uses SPSS syntax for now
+Combine 254 county fixed-length text files into one.  Uses SPSS syntax for now to manage size and format issues.  
 
-Data was obtained via public records request through a consortium of media.
+Data was obtained via public records request through a consortium of media.  
 
 count20181218042000_20190073.txt provides counts of each individual county file and the total. See tx_voter_layout.pdf for
+record layout - note that it does not match exactly. Party is an included field, but not provided in public release.  
 
-record layout - note that it does not match exactly. Party is an included field, but not provided in public release.
-
-Record count: 8,409,940
+Record count: 8,409,940  
 
 **Import data**
-
 GET DATA  /TYPE=TXT
   /FILE="C:\JENDATAxps\accountability_data\voters\TX\Nov. 2018 general election Voting History "+
     "Data\tx_voters.txt"
