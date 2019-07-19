@@ -1,0 +1,32 @@
+## Ohio voter registration
+
+Data obtained via public records request  
+See Ohio_voters_layout.pdf for documentation.  
+
+--CREATE OH_CITY_LOOKUP
+create table oh_city_lookup as  
+select RESIDENTIAL_CITY, upper(residential_city), count(*)  
+from oh_voters  
+group by 1  
+order by 1  
+
+--ADD NEW FIELDS
+ALTER TABLE OH_voters ADD COLUMN RESIDENTIAL_CITY_CLEAN;  
+ALTER TABLE OH_voters ADD COLUMN YEAR;  
+ALTER TABLE OH_voters ADD COLUMN BIRTHYEAR;  
+--UPDATE NEW FIELDS
+UPDATE oh_voters SET BIRTHYEAR=SUBSTR(DATE_OF_BIRTH,1,4);  
+UPDATE OH_VOTERS SET YEAR=SUBSTR(REGISTRATION_DATE,1,4);    
+UPDATE OH_VOTERS set RESIDENTIAL_CITY_CLEAN = (select y.RESIDENTIAL_CITY_CLEAN from oh_city_lookup as y where y.RESIDENTIAL_CITY=OH_VOTERS.RESIDENTIAL_CITY)`
+
+--EXPORT FOR UPLOAD
+create table oh_voters_out as  
+select SOS_VOTERID, COUNTY_NUMBER, COUNTY_ID,LAST_NAME,FIRST_NAME,MIDDLE_NAME,SUFFIX,DATE_OF_BIRTH,REGISTRATION_DATE,VOTER_STATUS,
+	PARTY_AFFILIATION,RESIDENTIAL_ADDRESS1, RESIDENTIAL_SECONDARY_ADDR,RESIDENTIAL_CITY,RESIDENTIAL_STATE, RESIDENTIAL_ZIP as ZIP5, RESIDENTIAL_COUNTRY,
+	MAILING_ADDRESS1, MAILING_SECONDARY_ADDRESS, MAILING_CITY,MAILING_STATE,MAILING_ZIP,MAILING_COUNTRY,PRECINCT_NAME,PRECINCT_CODE,RESIDENTIAL_CITY_CLEAN,
+	YEAR, BIRTHYEAR
+	from oh_voters
+
+**Known issues:**  
+325,419 records have registration dates as 1900 -- likely a placeholder for missing or unknown  
+2,435 records have birthdates in 1800 and a few other out of range years  
