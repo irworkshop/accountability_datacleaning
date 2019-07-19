@@ -1,48 +1,41 @@
 ## Vermont voter registation
 
-Obtained via public records request from Vermont Secretary of State in Pipe-delimited format.
+Obtained via public records request from Vermont Secretary of State in Pipe-delimited format.  
+See field_listing.xls for full record descriptions.  
 
-See field_listing.xls for full record descriptions.
-
-Record count: 487,210
-
-**Known issues:**
-
-Birthyears that are invalid and several out of range, including 49,257 for 1900.
-
-Year, based on registration date has 8 invalid entries and several out of range, including 65,745 for 1900.
-
-114,377 ZIPs are blank
-
-**Many issues with ZIPs out of range. Created lookup table to fix:**
-
-`CREATE TABLE ZIP_LOOKUP AS 
-SELECT LEGALADDRESSZIP, UPPER(LEGALADDRESSZIP), COUNT(*)
-FROM VT_VOTERS
-GROUP BY 1
-ORDER BY 1`
+Record count: 487,210  
 
 
-**Inconsistent case in name fields created new versions to fix along with a few other stray typos:**
+--CREATE ZIP_LOOKUP TO FIX INCONSISTENCIES IN ZIPCODE  
+CREATE TABLE ZIP_LOOKUP AS  
+SELECT LEGALADDRESSZIP, UPPER(LEGALADDRESSZIP), COUNT(*)  
+FROM VT_VOTERS  
+GROUP BY 1  
+ORDER BY 1  
 
-`Create table vt_voters_out as
+
+--INCONSISTENT CASE IN NAME FIELDS NEW VERSIONS TO FIX ALONG WITH A FEW STRAY TYPOS  
+Create table vt_voters_out as  
 Select VoterID, LastName_CLEAN AS LASTNAME, FirstName_CLEAN AS FIRSTNAME, MiddleName_CLEAN AS MIDDLENAME,
 Suffix AS SUFFIX, LegalAddressLine1 AS ADDRESS1, LegalAddressLine2 AS ADDRESS2, 
 LegalAddressCity AS CITY, LegalAddressState AS STATE, RESZIP_CLEAN AS ZIP5, YearofBirth,
-DateofRegistration as REG_DATE, YEAR, DatelastVoted as LASTVOTEDATE, COUNTY,STATUS,TOWNOFREGISTRATION FROM VT_VOTERS
- `
+DateofRegistration as REG_DATE, YEAR, DatelastVoted as LASTVOTEDATE, COUNTY,STATUS,TOWNOFREGISTRATION FROM VT_VOTERS  
 
-**Update RESZIP_CLEAN using the lookup table**
+--UPDATE RESZIP_CLEAN WITH FIXED ZIPS  
+UPDATE VT_VOTERS
+set RESZIP_CLEAN = (select y.LEGALADDRESSZIP from ZIP_LOOKUP as y where y.LEGALADDRESSZIP=VT_VOTERS.LEGALADDRESSZIP)  
 
-`UPDATE VT_VOTERS
-set RESZIP_CLEAN = (select y.LEGALADDRESSZIP from ZIP_LOOKUP as y where y.LEGALADDRESSZIP=VT_VOTERS.LEGALADDRESSZIP)`
-
-**Export file**
-
-`Create table vt_voters_out as
+--EXPORT FOR UPLOAD  
+Create table vt_voters_out as  
 Select VoterID, LastName_CLEAN AS LASTNMAE, FirstName_CLEAN AS FIRSTNAME, MiddleName_CLEAN AS MIDDLENAME,
 Suffix AS SUFFIX, LegalAddressLine1 AS ADDRESS1, LegalAddressLine2 AS ADDRESS2, 
 LegalAddressCity AS CITY, LegalAddressState AS STATE, RESZIP_CLEAN AS ZIP5, YearofBirth,
-DateofRegistration as REG_DATE, YEAR, DatelastVoted as LASTVOTEDATE, COUNTY,STATUS,TOWNOFREGISTRATION FROM VT_VOTERS
- `
+DateofRegistration as REG_DATE, YEAR, DatelastVoted as LASTVOTEDATE, COUNTY,STATUS,TOWNOFREGISTRATION FROM VT_VOTERS  
+
+**Known issues:**
+
+Birthyears that are invalid and several out of range, including 49,257 for 1900.  
+Year, based on registration date has 8 invalid entries and several out of range, including 65,745 for 1900.  
+114,377 ZIPs are blank.  
+
  
