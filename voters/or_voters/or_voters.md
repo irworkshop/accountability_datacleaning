@@ -1,0 +1,17 @@
+## Oregon Voters data processing
+
+--ADD YEAR AND UPDATE YEAR   
+alter table or_voters add column YEAR;  
+update or_voters set YEAR=substr(EFF_REGN_DATE,7,4)  
+
+--EXPORT  
+CREATE TABLE OR_VOTERS_OUT AS  
+SELECT 	VOTER_ID, FIRST_NAME, MIDDLE_NAME, LAST_NAME, NAME_SUFFIX, BIRTH_DATE, CONFIDENTIAL, EFF_REGN_DATE, STATUS, PARTY_CODE, PHONE_NUM, UNLISTED, COUNTY, RES_ADDRESS_1,	RES_ADDRESS_2, HOUSE_NUM, HOUSE_SUFFIX, PRE_DIRECTION, STREET_NAME, STREET_TYPE, POST_DIRECTION, UNIT_TYPE, UNIT_NUM, ADDR_NON_STD, CITY, STATE, ZIP_CODE AS ZIP5, ZIP_PLUS_FOUR, 	EFF_ADDRESS_1, EFF_ADDRESS_2, EFF_ADDRESS_3, EFF_ADDRESS_4, EFF_CITY, EFF_STATE, EFF_ZIP_CODE, EFF_ZIP_PLUS_FOUR, ABSENTEE_TYPE, PRECINCT_NAME, PRECINCT, SPLIT, YEAR
+FROM OR_VOTERS
+
+
+**Known issues**
+YEAR field has incorrect years  including 173 blanks, "0001", "1111" and "1801" it also has years that likely are out of range
+
+BIRTH_DATE has incorrect years including 173 that contain "ACP", 1,518 that contain "XXXXXXXX", also: "1001", "1111", "1801" and 
+and others that likely are too early.
