@@ -125,7 +125,38 @@ raw_dir <- here("ri", "expends", "data", "raw")
 dir_create(raw_dir)
 ```
 
+To download the file, we can create our own URL and navigate to the page using the `RSelenium`
+package.
+
 ```{r download_raw, eval=FALSE}
+url <- str_c(
+  "http://ricampaignfinance.com/RIPublic/Reporting/ExpenditureReport.aspx?OrgID=0",
+  "BeginDate=",
+  "EndDate=",
+  "LastName=",
+  "FirstName=",
+  "ContType=0",
+  "State=",
+  "City=",
+  "ZIPCode=",
+  "Amount=0",
+  "ReportType=Expend",
+  "CFStatus=F",
+  "MPFStatus=F",
+  "Level=S",
+  "SumBy=Type",
+  "Sort1=None",
+  "Direct1=asc",
+  "Sort2=None",
+  "Direct2=asc",
+  "Sort3=None",
+  "Direct3=asc",
+  "Site=Public",
+  "Incomplete=A",
+  "ContSource=CF",
+  sep = "&"
+)
+
 # open the driver with auto download options
 remote_driver <- rsDriver(
   port = 4444L,
@@ -138,15 +169,21 @@ remote_driver <- rsDriver(
     )
   )
 )
+
 # navigate to the APOC download site
 remote_browser <- remote_driver$client
-remote_browser$navigate("http://ricampaignfinance.com/RIPublic/Expenditures.aspx")
+remote_browser$navigate(url)
+
 # click the export button
-export_button <- remote_browser$findElement("css", "#M_C_csfFilter_btnExport")
-export_button$clickElement()
-# click the CSV option button
-csv_button <- remote_browser$findElement("css", "#M_C_csfFilter_ExportDialog_hlAllCSV")
-csv_button$clickElement()
+remote_browser$findElement("css", "#lnkExport")$clickElement()
+
+# switch to pop up window
+pop_up <- remote_driver$client$getWindowHandles()[[2]]
+remote_driver$client$switchToWindow(windowId = pop_up)
+
+# click the download option button
+csv_button <- remote_browser$findElement("css", "#hypFileDownload")$clickElement()
+
 # close the browser and driver
 remote_browser$close()
 remote_driver$server$stop()
@@ -156,7 +193,7 @@ remote_driver$server$stop()
 
 ```{r read_raw}
 ri <- read_csv(
-  file = "ri/expends/data/raw/1c4eb100-d3cc-4130-9374-c02782ebf646.csv",
+  file = dir_ls(raw_dir),
   col_types = cols(
     .default = col_character(),
     ExpDate = col_date("%m/%d/%Y"),

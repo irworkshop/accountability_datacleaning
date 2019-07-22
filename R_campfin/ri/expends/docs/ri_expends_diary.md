@@ -1,7 +1,7 @@
 Rhode Island Expenditures
 ================
 Kiernan Nicholls
-2019-07-22 16:09:27
+2019-07-22 16:57:51
 
   - [Project](#project)
   - [Objectives](#objectives)
@@ -117,7 +117,38 @@ raw_dir <- here("ri", "expends", "data", "raw")
 dir_create(raw_dir)
 ```
 
+To download the file, we can create our own URL and navigate to the page
+using the `RSelenium` package.
+
 ``` r
+url <- str_c(
+  "http://ricampaignfinance.com/RIPublic/Reporting/ExpenditureReport.aspx?OrgID=0",
+  "BeginDate=",
+  "EndDate=",
+  "LastName=",
+  "FirstName=",
+  "ContType=0",
+  "State=",
+  "City=",
+  "ZIPCode=",
+  "Amount=0",
+  "ReportType=Expend",
+  "CFStatus=F",
+  "MPFStatus=F",
+  "Level=S",
+  "SumBy=Type",
+  "Sort1=None",
+  "Direct1=asc",
+  "Sort2=None",
+  "Direct2=asc",
+  "Sort3=None",
+  "Direct3=asc",
+  "Site=Public",
+  "Incomplete=A",
+  "ContSource=CF",
+  sep = "&"
+)
+
 # open the driver with auto download options
 remote_driver <- rsDriver(
   port = 4444L,
@@ -130,15 +161,21 @@ remote_driver <- rsDriver(
     )
   )
 )
+
 # navigate to the APOC download site
 remote_browser <- remote_driver$client
-remote_browser$navigate("http://ricampaignfinance.com/RIPublic/Expenditures.aspx")
+remote_browser$navigate(url)
+
 # click the export button
-export_button <- remote_browser$findElement("css", "#M_C_csfFilter_btnExport")
-export_button$clickElement()
-# click the CSV option button
-csv_button <- remote_browser$findElement("css", "#M_C_csfFilter_ExportDialog_hlAllCSV")
-csv_button$clickElement()
+remote_browser$findElement("css", "#lnkExport")$clickElement()
+
+# switch to pop up window
+pop_up <- remote_driver$client$getWindowHandles()[[2]]
+remote_driver$client$switchToWindow(windowId = pop_up)
+
+# click the download option button
+csv_button <- remote_browser$findElement("css", "#hypFileDownload")$clickElement()
+
 # close the browser and driver
 remote_browser$close()
 remote_driver$server$stop()
@@ -148,7 +185,7 @@ remote_driver$server$stop()
 
 ``` r
 ri <- read_csv(
-  file = "ri/expends/data/raw/1c4eb100-d3cc-4130-9374-c02782ebf646.csv",
+  file = dir_ls(raw_dir),
   col_types = cols(
     .default = col_character(),
     ExpDate = col_date("%m/%d/%Y"),
@@ -174,25 +211,25 @@ glimpse(sample_frac(ri))
 
     #> Observations: 310,842
     #> Variables: 21
-    #> $ organization_name   <chr> "DONALD L CARCIERI", "DONALD R GREBIEN", "RI LABORERS' STATE EMPLOYE…
-    #> $ expenditure_id      <chr> "14130", "115207", "234448", "183484", "166059", "250582", "295683",…
+    #> $ organization_name   <chr> "KENNETH PARRILLA", "PEOPLE, RI COUNCIL 94, AFSCME AFL-CIO PAC", "JO…
+    #> $ expenditure_id      <chr> "219397", "288270", "97135", "71381", "305665", "179798", "164823", …
     #> $ disb_desc           <chr> "CAMPAIGN EXPENDITURE", "CAMPAIGN EXPENDITURE", "CAMPAIGN EXPENDITUR…
-    #> $ exp_desc            <chr> "DONATIONS (POLITICAL)", "FOOD, BEVERAGES AND MEALS", "DONATIONS (PO…
+    #> $ exp_desc            <chr> "ADVERTISING", "DONATIONS (POLITICAL)", "FUNDRAISING EXPENSES", "ENT…
     #> $ exp_pmt_desc        <chr> "CHECK", "CHECK", "CHECK", "CHECK", "CHECK", "CHECK", "CHECK", "CHEC…
-    #> $ incomplete_desc     <chr> "EXPLANATION<BR>", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
+    #> $ incomplete_desc     <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
     #> $ view_incomplete     <chr> "INCOMPLETE", "INCOMPLETE", "INCOMPLETE", "INCOMPLETE", "INCOMPLETE"…
-    #> $ exp_date            <date> 2004-07-01, 2010-09-24, 2015-05-07, 2013-07-13, 2012-09-04, 2016-04…
-    #> $ pmt_date            <chr> "07/01/2004", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "09/09…
-    #> $ amount              <dbl> 295.00, 1353.23, 200.00, 100.00, 100.00, 60.00, 25.00, 426.66, 56.57…
-    #> $ full_name           <chr> "THE THOMAS CHAMBERAS SCHOLARSHIP FUND", "GREGG'S RESTAURANT", "RAYM…
-    #> $ address             <chr> "CYNTHIA CHAMBERAS 43 SUMMIT AVE.", "NORTH MAIN STREET", "616 MOUNT …
-    #> $ city_st_zip         <chr> "SALEM, MA 01970", "PROVIDENCE, RI 02906", "PROVIDENCE, RI 02908", "…
+    #> $ exp_date            <date> 2014-10-15, 2017-09-06, 2010-03-02, 2008-11-17, 2018-05-13, 2013-05…
+    #> $ pmt_date            <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
+    #> $ amount              <dbl> 196.00, 250.00, 95.00, 761.31, 3.00, 200.00, 38.50, 19.14, 10.00, 41…
+    #> $ full_name           <chr> "WESTERLY POSTMASTER", "MARVIN L ABNEY", "PAYPAL", "AMERICAN EXPRESS…
+    #> $ address             <chr> "HIGH ST", "12 SUMMER STREET", NA, NA, "ONE CITIZENS PLAZA", "P.O. B…
+    #> $ city_st_zip         <chr> "WESTERLY, RI 02891", "NEWPORT, RI", NA, NA, "PROVIDENCE, RI 02903",…
     #> $ receipt_desc        <chr> "CAMPAIGN EXPENDITURE", "CAMPAIGN EXPENDITURE", "CAMPAIGN EXPENDITUR…
-    #> $ expenditure_code_id <chr> "7", "10", "7", "10", "2", "32", "31", "28", "15", "7", "8", "32", "…
+    #> $ expenditure_code_id <chr> "2", "7", "12", "9", "4", "7", "15", "4", "4", "2", "10", "4", "25",…
     #> $ begin_date          <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
     #> $ end_date            <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
     #> $ mpf_used            <chr> "-1", "-1", "-1", "-1", "-1", "-1", "-1", "-1", "-1", "-1", "-1", "-…
-    #> $ osap                <dbl> 295.00, 1353.23, 200.00, 100.00, 100.00, 60.00, 25.00, 426.66, 56.57…
+    #> $ osap                <dbl> 196.00, 250.00, 95.00, 761.31, 3.00, 200.00, 38.50, 19.14, 10.00, 41…
     #> $ zeroed_by_cf7       <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE…
     #> $ ricf7filing_id      <chr> "0", "0", "0", "0", "0", "0", "0", "0", "0", "0", "0", "0", "0", "0"…
 
@@ -398,18 +435,18 @@ ri %>%
 ```
 
     #> # A tibble: 10 x 2
-    #>    address                     address_clean                   
-    #>    <chr>                       <chr>                           
-    #>  1 13 INDUSTRIAL LANE, SUITE 3 13 INDUSTRIAL LANE SUITE 3      
-    #>  2 1155 RIPLEY ST APT. 2019    1155 RIPLEY STREET APT 2019     
-    #>  3 12 NARRAGANSETT PKWY        12 NARRAGANSETT PARKWAY         
-    #>  4 PAWTUCKET AVE               PAWTUCKET AVENUE                
-    #>  5 CHALKSTONE AVE              CHALKSTONE AVENUE               
-    #>  6 2844 ST. GEORGE ROAD        2844 STREET GEORGE ROAD         
-    #>  7 822 EASTERN AVE             822 EASTERN AVENUE              
-    #>  8 P.O. BOX 722                PO BOX 722                      
-    #>  9 7582 LAS VEGAS BLVD STE 487 7582 LAS VEGAS BOULEVARD STE 487
-    #> 10 NORTH MAIN ST               NORTH MAIN STREET
+    #>    address           address_clean        
+    #>    <chr>             <chr>                
+    #>  1 HIGH ST           HIGH STREET          
+    #>  2 MAIN ST           MAIN STREET          
+    #>  3 P.O BOX 1270      PO BOX 1270          
+    #>  4 65 BROOKRIDGE DR. 65 BROOKRIDGE DRIVE  
+    #>  5 60 BELMONT AVE.   60 BELMONT AVENUE    
+    #>  6 6 FAIR OAKS CT S  6 FAIR OAKS COURT S  
+    #>  7 173 WASHINGTON ST 173 WASHINGTON STREET
+    #>  8 268 PROSPECT ST.  268 PROSPECT STREET  
+    #>  9 TAUNTON AVE       TAUNTON AVENUE       
+    #> 10 8 LEDYARD ST., #1 8 LEDYARD STREET 1
 
 ### ZIP
 
