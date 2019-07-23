@@ -1,0 +1,627 @@
+---
+title: "Colorado Expenditures"
+author: "Kiernan Nicholls"
+date: "`r Sys.time()`"
+output:
+  github_document: 
+    df_print: tibble
+    toc: true
+    toc_dept: 2
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE, purl=FALSE}
+library(knitr)
+opts_chunk$set(
+  eval = TRUE,
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  error = FALSE,
+  comment = "#>",
+  fig.path = "../plots/",
+  fig.width = 10,
+  dpi = 300
+)
+options(width = 99)
+```
+
+## Project
+
+The Accountability Project is an effort to cut across data silos and give journalists, policy
+professionals, activists, and the public at large a simple way to search across huge volumes of
+public data about people and organizations.
+
+Our goal is to standardizing public data on a few key fields by thinking of each dataset row as a
+transaction. For each transaction there should be (at least) 3 variables:
+
+1. All **parties** to a transaction
+2. The **date** of the transaction
+3. The **amount** of money involved
+
+## Objectives
+
+This document describes the process used to complete the following objectives:
+
+1. How many records are in the database?
+1. Check for duplicates
+1. Check ranges
+1. Is there anything blank or missing?
+1. Check for consistency issues
+1. Create a five-digit ZIP Code called `ZIP5`
+1. Create a `YEAR` field from the transaction date
+1. Make sure there is data on both parties to a transaction
+
+## Packages
+
+The following packages are needed to collect, manipulate, visualize, analyze, and communicate
+these results. The `pacman` package will facilitate their installation and attachment.
+
+```{r load_packages, message=FALSE, dfrning=FALSE, error=FALSE}
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load(
+  stringdist, # levenshtein value
+  tidyverse, # data manipulation
+  snakecase, # change string case
+  lubridate, # datetime strings
+  tidytext, # text analysis
+  magrittr, # pipe opperators
+  janitor, # dataframe clean
+  batman, # parse NA and LGL
+  scales, # text formatting
+  vroom, # quick file read
+  knitr, # knit documents
+  glue, # combine strings
+  here, # relative storage
+  fs # search storage 
+)
+```
+
+The IRW's `campfin` package will also have to be installed from GitHub. This package contains
+functions custom made to help facilitate the processing of campaign finance data.
+
+```{r load_campfin}
+pacman::p_load_current_gh("kiernann/campfin")
+```
+
+This document should be run as part of the `R_campfin` project, which lives as a sub-directory of
+the more general, language-agnostic [`irworkshop/accountability_datacleaning`][01] GitHub
+repository.
+
+The `R_campfin` project uses the [RStudio projects][02] feature and should be run as such. The
+project also uses the dynamic `here::here()` tool for file paths relative to _your_ machine.
+
+```{r where_here, collapse=TRUE}
+# where dfs this document knit?
+here::here()
+```
+
+[01]: https://github.com/irworkshop/accountability_datacleaning "TAP repo"
+[02]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects "Rproj"
+
+## Data
+
+Colorado campaign expenditures data comes courtesy of Colorado Campaign Finance Disclosure Website,
+which is managed by the TRACER reporting system (**Tra**nsparency in **C**ontribution and 
+**E**xpenditure **R**eporting). Files can be found on the [Data Download][03] page.
+
+[03]: http://tracer.sos.colorado.gov/PublicSite/DataDownload.aspx "source"
+
+### Access
+
+> You can access the Campaign Finance Data Download page to download contribution and expenditure
+data for import into other applications such as Microsoft Excel or Access. A weekly batch process
+is run that captures the year-to-date information for the current year. The data is available for
+each calendar year. The file is downloaded in CSV format.
+
+> This page provides comma separated value (CSV) downloads of contribution/donation, expenditure,
+and loan data for each reporting year in a zipped file format. These files can be downloaded and
+imported into other applications (Microsoft Excel, Microsoft Access, etc.). This data is extracted
+from the Department of State database as it existed as of  7/20/2019  3:01 AM
+
+### Quality
+
+In the [TRACER FAQ file][04], the Secretary of State explains:
+
+[04]: http://tracer.sos.colorado.gov/PublicSite/FAQ.aspx
+
+> The information presented in the campaign finance database is, to the best of the ability of the
+Secretary of State, an accurate representation of the disclosure reports filed with the applicable
+office.It is suggested that the information found from reports data-entered by the Secretary of
+State or County Clerks (which includes reports filed prior to 2010) be cross-checked with the
+original document or scanned image of the original document.
+> 
+> Beginning in 2010, all candidates, committees, and political parties who file disclosure reports
+with the Secretary of State must do so electronically using the TRACER system. Therefore, all data
+contained in the database dated January 2010 onward reflects that data as entered by the reporting
+person or entity.
+>
+> Prior to 2010, filers had the option of filing manual disclosure reports. Therefore, some of the
+information in the campaign finance database dated prior to 2010was submitted in electronic form by
+the candidate, committee or party, and some of the information was data-entered from paper reports
+filed with the appropriate office. Sometimes items which are not consistent with filing
+requirements, such as missing names and addresses or contributions that exceed the allowable
+limits, are displayed when data is viewed online. Incorrect entries in the database typically
+reflect incorrect or incomplete entries on manually filed reports submitted to the Secretary of
+State or County Clerk. If you believe that there is a discrepancy in data dated prior to January
+2010, please contact the appropriate filing officer for that data—the Secretary of State for
+statewide candidates, committees, and parties; or the County Clerk for county candidates and
+committees.
+
+### Variables
+
+TRACER also provides a [spreadsheet key][05].
+
+[05]: http://tracer.sos.colorado.gov/PublicSite/Resources/DownloadDataFileKey.pdf
+
+## Import
+
+To wrangle the expenditures files in R, we will download the data locally and read everything into
+a single tabular data frame.
+
+### Download
+
+To download the **immutable** raw data files, we first have to create the URLs. Files are split
+annually, with only the 4-digit year differing in each the URL.
+
+```{r glue_urls}
+co_exp_urls <- glue(
+  "http://tracer.sos.colorado.gov/PublicSite/Docs/BulkDataDownloads/{2000:2019}_ExpenditureData.csv.zip"
+)
+```
+
+```{r cat_urls, echo=FALSE, results = 'asis'}
+for (url in co_exp_urls){
+  cat("*", url, "\n")
+}
+```
+
+If the files have not yet been downloaded to the Colorado `/data/raw` directory, we can do so now.
+
+```{r download_raw}
+raw_dir <- here("co", "expends", "data", "raw")
+dir_create(raw_dir)
+if (!all_files_new(raw_dir)) {
+  for (url in co_exp_urls) {
+    download.file(
+      url = url,
+      destfile = glue("{raw_dir}/{basename(url)}")
+    )
+  }
+}
+```
+
+### Read
+
+Reading these files into a single data frame is not easy. First, we will unzip each file.
+
+```{r unzip}
+zip_files <- dir_ls(raw_dir, glob = "*.zip")
+if (!all_files_new(path = raw_dir, glob = "*.csv")) {
+  for (i in seq_along(zip_files)) {
+    unzip(
+      zipfile = zip_files[i],
+      exdir = raw_dir
+    )
+  }
+}
+```
+
+Then we have to read the lines of each file (without separating the columns). We need to extract a
+header from one file, remove the headers from the rest, and filter out any row with an unexpected
+number of delimiters.
+
+```{r read_lines}
+# read as unlisted lines
+co_lines <- dir_ls(raw_dir, glob = "*ExpenditureData.csv") %>% map(read_lines) %>% unlist()
+# extract header line
+col_names <- co_lines[1]
+# remove other headers
+co_lines <- co_lines[-str_which(co_lines, col_names)]
+# count expected delims
+n_delim <- str_count(co_lines[1], "\",")
+# convert header line
+col_names <- to_snake_case(unlist(str_split(col_names, ",")))
+# remove if unexpected num of delims
+co_lines <- co_lines[-which(str_count(co_lines, "\",") != n_delim)]
+```
+
+Then, we replace all comma delimiters with a `\v` (vertical tab) to use as the delimiter.
+
+```{r collapse_lines}
+co <- co_lines %>% 
+  str_replace_all("\",", "\"\v") %>% 
+  str_remove_all("\"") %>% 
+  str_c(collapse = "\n") %>% 
+  read_delim(
+    delim = "\v",
+    col_names = col_names,
+    col_types = cols(
+      .default = col_character(),
+      expenditure_amount = col_double(),
+      expenditure_date = col_date("%Y-%m-%d %H:%M:%S"),
+      filed_date = col_date("%Y-%m-%d %H:%M:%S")
+    )
+  )
+
+rm(col_names)
+```
+
+Then we should parse some quasi-logical values.
+
+```{r parse_char}
+co <- co %>% 
+  mutate_if(is_character, str_to_upper) %>% 
+  mutate_if(is_character, na_if, "UNKNOWN") %>%
+  remove_empty("cols") %>%
+  remove_empty("rows") %>% 
+  mutate(
+    amended = to_logical(amended),
+    amendment = to_logical(amendment),
+  )
+```
+
+And finally save the formatted single data frame to disc.
+
+```{r write_raw}
+proc_dir <- here("co", "expends", "data", "processed")
+dir_create(proc_dir)
+
+write_csv(
+  x = co,
+  path = glue("{proc_dir}/co_expends.csv"),
+  na = ""
+)
+```
+
+## Explore
+
+```{r glimpse}
+head(co)
+tail(co)
+glimpse(sample_frac(co))
+```
+
+### Distinct
+
+The variables range in their degree of distinctness.
+
+```{r n_distinct}
+glimpse_fun(co, n_distinct)
+```
+
+We can use `ggplot::geom_col()` to explore the distribution of the least distinct categorical 
+variables.
+
+```{r expend_type_bar, echo=FALSE}
+co %>%
+  filter(!is.na(expenditure_type)) %>% 
+  count(expenditure_type, sort = TRUE) %>% 
+  mutate(p = n/sum(n)) %>% 
+  ggplot(aes(reorder(expenditure_type, n), n)) +
+  geom_col() +
+  scale_y_continuous(labels = percent) +
+  coord_flip() +
+  labs(
+    title = "CO Expends Purpose",
+    y = "Count", 
+    x = "Type"
+  )
+```
+
+```{r payment_type_bar, echo=FALSE}
+co %>%
+  filter(!is.na(payment_type)) %>% 
+  count(payment_type, sort = TRUE) %>% 
+  mutate(p = n/sum(n)) %>% 
+  ggplot(aes(reorder(payment_type, p), p)) +
+  geom_col() +
+  scale_y_continuous(labels = percent) +
+  coord_flip() +
+  labs(
+    title = "CO Expends Type",
+    y = "Count", 
+    x = "Type"
+  )
+```
+
+```{r disburse_type_bar, echo=FALSE}
+co %>%
+  filter(!is.na(disbursement_type)) %>% 
+  count(disbursement_type, sort = TRUE) %>% 
+  mutate(p = n/sum(n)) %>% 
+  ggplot(aes(reorder(disbursement_type, p), p)) +
+  geom_col() +
+  scale_y_continuous(labels = percent) +
+  coord_flip() +
+  labs(
+    title = "CO Expends Disbursement Type",
+    y = "Count", 
+    x = "Type"
+  )
+```
+
+```{r committee_type_bar, echo=FALSE}
+co %>%
+  filter(!is.na(committee_type)) %>% 
+  count(committee_type, sort = TRUE) %>%
+  mutate(p = n/sum(n)) %>% 
+  ggplot(aes(reorder(committee_type, p), p)) +
+  geom_col() +
+  scale_y_continuous(labels = percent) +
+  coord_flip() +
+  labs(
+    title = "CO Expends Committee Type",
+    y = "Count", 
+    x = "Type"
+  )
+```
+
+```{r jurisdiction_bar, echo=FALSE}
+co %>%
+  filter(!is.na(jurisdiction)) %>% 
+  mutate(statewide = equals(jurisdiction, "STATEWIDE")) %>% 
+  ggplot(aes(x = statewide)) +
+  geom_bar(aes(y = (..count..)/sum(..count..))) +
+  scale_y_continuous(labels = percent) +
+  labs(
+    title = "CO Expends Statewide Jurisdiction",
+    y = "Count", 
+    x = "Statewide"
+  )
+```
+
+```{r explanation_bar, fig.height=10, echo=FALSE}
+co %>% 
+  unnest_tokens(word, explanation) %>% 
+  count(word, sort = TRUE) %>% 
+  anti_join(stop_words) %>% 
+  drop_na() %>% 
+  head(30) %>% 
+  ggplot(
+    mapping = aes(
+      x = reorder(word, n),
+      y = n
+    )
+  ) +
+  geom_col() +
+  coord_flip() +
+  labs(
+    title = "CO Expends Explanation",
+    subtitle = "Text Analysis of Sentences",
+    x = "Word",
+    y = "Count"
+  )
+```
+
+### Missing
+
+The variables also differ in their degree of missing values.
+
+```{r}
+glimpse_fun(co, count_na)
+```
+
+It's important to note that there are zero missing values in important rows like `co_id`,
+`expenditure_amount`, or `expenditure_date`.
+
+There are `r percent(count_na(co$last_name)/nrow(co))` of records missing a `last_name` value used
+to identify every individual or entity. If the record has no name whatsoever, we will flag it with
+a new `na_flag` variable.
+
+```{r flag_na}
+co <- co %>% 
+  mutate(
+    na_flag = is.na(last_name) & is.na(first_name) & is.na(mi)
+  )
+```
+
+### Ranges
+
+For continuous variables, we should check the ranges.
+
+#### Amount
+
+```{r amount_ranges, collapse=TRUE}
+summary(co$expenditure_amount)
+sum(co$expenditure_amount < 0)
+```
+
+From this summary, we can see the median of `r dollar(median(co$expenditure_amount))` and mean of
+`r dollar(mean(co$expenditure_amount))` are reasonable, but the minimum and maximum should be
+explored.
+
+```{r glimpse_min}
+glimpse(filter(co, expenditure_amount == min(expenditure_amount)))
+```
+
+```{r min_explanation, echo=FALSE, results='asis'}
+cat(">", filter(co, expenditure_amount == min(expenditure_amount))$explanation)
+```
+
+```{r glimpse_max}
+glimpse(filter(co, expenditure_amount == max(expenditure_amount)))
+```
+
+
+We can use `ggplot2:geom_histogram()` and `ggplot2:geom_boxplot()` to explore the distribution of
+the amount.
+
+```{r amount_hist_log}
+co %>% 
+  ggplot(aes(x = expenditure_amount)) +
+  geom_histogram() +
+  scale_x_continuous(
+    trans = "log10",
+    labels = dollar
+  )
+```
+
+```{r amount_box_pay}
+co %>% 
+  ggplot(aes(y = expenditure_amount)) +
+  geom_boxplot(aes(x = payment_type), outlier.alpha = 0.01) +
+  scale_y_continuous(
+    trans = "log10",
+    labels = dollar,
+    breaks = c(0, 1, 10, 100, 1000, 1000000)
+  ) +
+  coord_flip() +
+  labs(
+    title = "CO Expends Amount",
+    subtitle = "by Payment Type",
+    x = "Payment Type",
+    y = "Amount (log)"
+  )
+```
+
+```{r amount_box_type, echo=FALSE}
+top_types <- co %>% 
+  count(expenditure_type, sort = TRUE) %>% 
+  drop_na() %>% 
+  pull(expenditure_type) %>% 
+  extract(1:5)
+
+co %>% 
+  filter(expenditure_type %in% top_types) %>% 
+  ggplot(aes(y = expenditure_amount)) +
+  geom_boxplot(aes(x = expenditure_type), outlier.alpha = 0.01) +
+  scale_y_continuous(
+    trans = "log10",
+    labels = dollar,
+    breaks = c(0, 1, 10, 100, 1000, 1000000)
+  ) +
+  coord_flip() +
+  labs(
+    title = "CO Expends Amount",
+    subtitle = "by Top Expenditure Purposes",
+    x = "Purpose",
+    y = "Amount (log)"
+  )
+```
+
+### Dates
+
+From the minimum and maximum expenditure dates, we can see that something is wrong.
+
+```{r check_date, collapse=TRUE}
+min(co$expenditure_date)
+max(co$expenditure_date)
+
+sum(co$expenditure_date > today())
+sum(co$expenditure_date < "2002-01-01")
+```
+
+First, we will create a new `expenditure_year` variable from the `expenditure_date` using
+`lubridate::year()` (after parsing with `readr::col_date()`).
+
+```{r mutate_year}
+co <- co %>% mutate(expenditure_year = year(expenditure_date))
+```
+
+Then we can see that there are a handful of expenditures supposedly made before 2002 and after
+2019.
+
+```{r count_date}
+co %>% 
+  count(expenditure_year) %>% 
+  print(n = n_distinct(co$expenditure_year))
+```
+
+We can flag these broken dates with a new `date_flag` variable.
+
+```{r flag_date, collapse=TRUE}
+co <- co %>% mutate(date_flag = !between(expenditure_date, as_date("2002-01-01"), today()))
+sum(co$date_flag)
+```
+
+We can also explore the intersection of `expenditure_date` and `expenditure_anount`.
+
+```{r amount_month_line, echo=FALSE}
+co %>% 
+  mutate(on_year = expenditure_year %% 2 == 0) %>% 
+  group_by(on_year, month = month(expenditure_date)) %>% 
+  summarise(med_amount = median(expenditure_amount)) %>% 
+  ggplot(mapping = aes(x = month, y = med_amount)) +
+  geom_line(mapping = aes(color = on_year), size = 2) +
+  scale_y_continuous(labels = dollar) +
+  labs(
+    title = "CO Expends Amount",
+    subtitle = "by Month and Election Year",
+    color = "Election Year",
+    x = "Month", 
+    y = "Median Amount"
+  )
+```
+
+```{r amount_type_bar, echo=FALSE}
+co %>% 
+  mutate(on_year = expenditure_year %% 2 == 0) %>% 
+  group_by(on_year, expenditure_type) %>% 
+  summarise(med_amount = median(expenditure_amount)) %>% 
+  ggplot(mapping = aes(x = expenditure_type, y = med_amount)) +
+  geom_col(mapping = aes(fill = on_year), position = "dodge") +
+  scale_y_continuous(labels = dollar) +
+  coord_flip() +
+  labs(
+    title = "CO Expends Amount",
+    subtitle = "by Expenditure Purpose",
+    color = "Election Year",
+    x = "Purpose", 
+    y = "Median Amount"
+  )
+```
+
+## Wrangle
+
+### Address
+
+```{r norm_address}
+co <- co %>% 
+  mutate(
+    address_clean = 
+      paste(address_1, address_2) %>% 
+      normal_address(
+        add_abbs = usps,
+        na_rep = TRUE
+      )
+  )
+```
+
+### ZIP
+
+```{r norm_zip, collapse=TRUE}
+mean(co$zip %in% geo$zip)
+
+co <- co %>% 
+  mutate(
+    zip_clean = normal_zip(
+      zip = zip,
+      na_rep = TRUE,
+    )
+  )
+
+# percent changed
+mean(co$zip != co$zip_clean, na.rm = TRUE)
+# percent valid
+mean(co$zip_clean %in% geo$zip)
+```
+
+### State
+
+The `state` values appear to already be trimmed, or are otherwise nonsense. We can make them `NA`.
+
+```{r norm_state, collapse=TRUE}
+n_distinct(co$state)
+mean(co$state %in% geo$state)
+setdiff(co$state, geo$state)
+co$state[which(co$state %out% geo$state)] <- NA
+```
+
+### City
+
+```{r}
+
+```
+
