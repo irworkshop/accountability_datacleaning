@@ -1,0 +1,446 @@
+---
+title: "District Contributions"
+author: "Kiernan Nicholls"
+date: "`r Sys.time()`"
+output:
+  github_document: 
+    df_print: tibble
+    toc: true
+    toc_dept: 2
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE, purl=FALSE}
+library(knitr)
+opts_chunk$set(
+  eval = TRUE,
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  error = FALSE,
+  comment = "#>",
+  fig.path = "../plots/",
+  fig.width = 10,
+  dpi = 300
+)
+options(width = 99)
+```
+
+## Project
+
+The Accountability Project is an effort to cut across data silos and give journalists, policy
+professionals, activists, and the public at large a simple way to search across huge volumes of
+public data about people and organizations.
+
+Our goal is to standardizing public data on a few key fields by thinking of each dataset row as a
+transaction. For each transaction there should be (at least) 3 variables:
+
+1. All **parties** to a transaction
+2. The **date** of the transaction
+3. The **amount** of money involved
+
+## Objectives
+
+This document describes the process used to complete the following objectives:
+
+1. How many records are in the database?
+1. Check for duplicates
+1. Check ranges
+1. Is there anything blank or missing?
+1. Check for consistency issues
+1. Create a five-digit ZIP Code called `ZIP5`
+1. Create a `YEAR` field from the transaction date
+1. Make sure there is data on both parties to a transaction
+
+## Packages
+
+The following packages are needed to collect, manipulate, visualize, analyze, and communicate
+these results. The `pacman` package will facilitate their installation and attachment.
+
+```{r p_load, message=FALSE, dcrning=FALSE, error=FALSE}
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load(
+  stringdist, # levenshtein value
+  tidyverse, # data manipulation
+  lubridate, # datetime strings
+  tidytext, # text analysis
+  magrittr, # pipe opperators
+  jsonlite, # reading JSON
+  janitor, # dataframe clean
+  zipcode, # clean & database
+  refinr, # cluster & merge
+  vroom, # quickly read files
+  ggmap, # google maps API
+  knitr, # knit documents
+  glue, # combine strings
+  here, # relative storage
+  fs, # search storage 
+  sf # spatial data
+)
+```
+
+```{r fix_fun, echo=FALSE}
+# fix conflict
+here <- here::here
+# custom utility functions
+"%out%" <- Negate("%in%")
+print_all <- function(dc) dc %>% print(n = nrow(.)) 
+# source functions
+source(here("R", "code", "normalize_geo.R"))
+source(here("R", "code", "all_files_new.R"))
+source(here("R", "code", "glimpse_fun.R"))
+# load data
+geo <- read_csv(here("R", "data", "geo.csv"))
+```
+
+This document should be run as part of the `R_campfin` project, which lives as a sub-directory of
+the more general, language-agnostic [`irworkshop/accountability_datacleaning`][01] GitHub
+repository.
+
+The `R_campfin` project uses the [RStudio projects][02] feature and should be run as such. The
+project also uses the dynamic `here::here()` tool for file paths relative to _your_ machine.
+
+```{r where_here, collapse=TRUE}
+# where dcs this document knit?
+here::here()
+```
+
+[01]: https://github.com/irworkshop/accountability_datacleaning "TAP repo"
+[02]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects "Rproj"
+
+## Data
+
+Data comes courtesy of the Washington, [DC Office of Campaign Finance (OCF)][03].
+
+The data was published 2016-10-06 and was last updated 2019-05-07. Each record represents a single
+contribution made.
+
+As the [OCF website][04] explains: 
+
+> The Office of Campaign Finance (OCF) provides easy access to all contributions and expenditures reported from 2003, through the current reporting period. Because the system is updated on a daily basis, you may be able to retrieve data received by OCF after the latest reporting period. This data is as reported, but may not be complete.
+
+[03]: https://ocf.dc.gov/ "OCF"
+[04]: https://ocf.dc.gov/service/view-contributions-expenditures
+
+### About
+
+The data is found on the dc.gov [OpenData website][05]. The file abstract reads:
+
+> The Office of Campaign Finance (OCF), in cooperation with OCTO, is pleased to publicly share
+election campaign expenditures data. The Campaign Finance Office is charged with administering and
+enforcing the District of Columbia laws pertaining to campaign finance operations, lobbying
+activities, conflict of interest matters, the ethical conduct of public officials, and constituent
+service and statehood fund programs. OCF provides easy access to all contributions and expenditures
+reported from 2003, through the current reporting period. Because the system is updated on a daily
+basis, you may be able to retrieve data received by OCF after the latest reporting period. This
+data is as reported, but may not be complete. Visit the http://ocf.dc.gov for more information.
+
+[05]: https://opendata.dc.gov/datasets/campaign-financial-expenditures
+[06]: http://geospatial.dcgis.dc.gov/ocf/
+
+## Import
+
+We can retreive the data from the GeoJSON API using the `jsonlite::fromJSON()` function.
+
+```{r download_json}
+dir_raw <- here("dc", "expends", "data", "raw")
+dir_create(dir_raw)
+
+dc <- 
+  fromJSON("https://opendata.arcgis.com/datasets/f9d727168d204aa79c8be9091c967604_35.geojson") %>% 
+  use_series(features) %>% 
+  use_series(properties) %>% 
+  as_tibble() %>% 
+  clean_names() %>%
+  mutate_if(is_character, str_to_upper) %>% 
+  mutate_at(vars(transactiondate), parse_datetime) %>% 
+  select(
+    -xcoord, 
+    -ycoord, 
+    -fulladdress, 
+    -gis_last_mod_dttm,
+  )
+```
+
+Then save a copy of the data frame to the disk in the `/data/raw` directory.
+
+```{r write_raw}
+write_delim(
+  x = dc,
+  path = glue("{dir_raw}/Campaign_Financial_Expenditures.csv"),
+  delim = ";",
+  na = "",
+  quote_escape = "double"
+)
+```
+
+```{r download_raw, echo=FALSE, eval=FALSE}
+dir_raw <- here("dc", "contribs", "data", "raw")
+dir_create(dir_raw)
+
+download.file(
+  url = "https://opendata.arcgis.com/datasets/6443e0b5b2454e86a3208b8a38fdee84_34.csv",
+  destfile = glue("{dir_raw}/Campaign_Financial_Contributions.csv")
+)
+```
+
+## Explore
+
+There are `r nrow(dc)` records of `r length(dc)` variables in the full database.
+
+```{r glimpse}
+head(dc)
+tail(dc)
+glimpse(dc)
+```
+
+### Distinct
+
+The variables range in their degree of distinctness.
+
+```{r n_distinct}
+dc %>% glimpse_fun(n_distinct)
+```
+
+The `purpose` variable is an open ended text field.
+
+```{r sample_purpose}
+sample(dc$purpose, 10) %>% 
+  cat(sep = "\n")
+```
+
+But we can perform token analysis on the strings.
+
+```{r}
+dc %>% 
+  filter(!is.na(purpose)) %>% 
+  unnest_tokens(word, purpose) %>% 
+  anti_join(stop_words) %>% 
+  count(word, sort = TRUE) %>% 
+  head(20) %>% 
+  ggplot(aes(reorder(word, n), n)) +
+  geom_col() +
+  coord_flip() +
+  labs(
+    title = "DC Expenditure Purposes",
+    x = "Word", 
+    y = "Frequency"
+  )
+```
+
+### Map
+
+```{r size_point_map, echo=FALSE}
+get_map(
+  location = "Washington, DC", 
+  zoom = 12, 
+  maptype = "roadmap"
+) %>% 
+  ggmap() +
+  stat_density_2d(
+    data = dc,
+    mapping = aes(
+      x = longitude,
+      y = latitude,
+      fill = stat(level)
+    ),
+    alpha = .2,
+    bins = 25,
+    geom = "polygon"
+  ) +
+  scale_fill_gradient(low = "yellow", high = "red")
+```
+
+### Missing
+
+There are several variables missing key values:
+
+```{r count_na}
+dc %>% glimpse_fun(count_na)
+```
+
+Any row with a missing `candidatename`, `payee`, _or_ `amount` will have a `TRUE` value in the new
+`na_flag` variable.
+
+```{r na_flag, collapse=TRUE}
+dc <- dc %>% mutate(na_flag = is.na(candidatename) | is.na(payee) | is.na(amount))
+mean(dc$na_flag)
+```
+
+### Duplicates
+
+There are no duplicate records.
+
+```{r get_dupes, collapse=TRUE}
+dc_dupes <- get_dupes(dc)
+nrow(dc_dupes)
+```
+
+### Ranges
+
+#### Amounts
+
+The `amount` varies from `r scales::dollar(min(dc$amount, na.rm = T))` to 
+`r scales::dollar(max(dc$amount, na.rm = T))`.
+
+```{r amount_range, collapse=TRUE}
+summary(dc$amount)
+sum(dc$amount < 0, na.rm = TRUE)
+```
+
+```{r amount_hist, echo=FALSE}
+dc %>% 
+  ggplot() +
+  geom_histogram(aes(amount)) +
+  scale_x_continuous(
+    labels = scales::dollar, 
+    trans = "log10"
+  )
+```
+
+#### Dates
+
+The dates range from `r min(dc$dc$transactiondate)` and `r max(dc$dc$transactiondate)`. There are
+`r sum(dc$transactiondate > today())` records with a date greater than `r today()`.
+
+```{r date_range, collapse=TRUE}
+summary(as_date(dc$transactiondate))
+sum(dc$transactiondate > today())
+```
+
+```{r year_bar, echo=FALSE}
+dc %>% 
+  ggplot() +
+  geom_bar(aes(year(transactiondate)))
+```
+
+```{r amount_line_month, echo=FALSE}
+dc %>%
+  group_by(year = year(transactiondate)) %>% 
+  summarise(median_amount = median(amount, na.rm = TRUE)) %>% 
+  ggplot(aes(year, median_amount)) +
+  geom_col() +
+  scale_y_continuous(labels = scales::dollar) +
+  labs(
+    title = "DC Median Expenditure",
+    subtitle = "Campaigns are spending less", 
+    x = "Year",
+    y = "Median Expenditure Cost"
+  )
+```
+
+Since we've already used `readr::parse_datetime()`, we can use `lubridate::year()` to create a new
+variable representng the year of the reciept.
+
+```{r mutate_year}
+dc <- dc %>% mutate(transactionyear = year(transactiondate))
+```
+
+## Wrangle
+
+We will have to break the `address` variable into `address`, `city`, `state`, and `zip`.
+
+```{r head_address}
+head(dc$address) %>% 
+  cat(sep = "\n")
+```
+
+First, we will extract the ZIP digits from the end of the `address` string.
+
+```{r norm_zip, collapse=TRUE}
+dc <- dc %>% 
+  mutate(
+    zip_clean = address %>% 
+      str_extract("\\d{5}(?:-\\d{4})?$") %>% 
+      normalize_zip(na_rep = TRUE)
+  )
+
+sample(dc$zip_clean, 10)
+```
+
+Then we can get the two digit state abbreviation preceding those digits.
+
+```{r norm_state, collapse=TRUE}
+dc <- dc %>% 
+  mutate(
+    state_clean = address %>% 
+      str_extract("[:alpha:]+(?=[:space:]+[:digit:]{5}(?:-[:digit:]{4})?$)") %>%
+      normalize_state(
+        na = c("N/A", "NA", "A", "ONLINE", "DISCLOSED", "REQUESTED", "UNKNOWN", "TBD"), 
+        expand = TRUE
+      )
+  )
+
+n_distinct(dc$state_clean)
+sample(dc$state_clean, 10)
+```
+
+```{r view_bad_state}
+setdiff(dc$state_clean, geo$state)
+```
+
+```{r}
+dc %>% 
+  filter(state_clean %out% geo$state) %>% 
+  select(address, state_clean) %>%
+  filter(!is.na(state_clean)) %>% 
+  distinct()
+```
+
+Some `address` strings lack the two character abbreviation, so we will have to infer from their
+city names.
+
+```{r fix_state}
+dc$state_clean <- dc$state_clean %>% 
+  na_if("CANADA") %>% 
+  str_replace("WILLIAMSBURG", "VA") %>% 
+  str_replace("SCOTTSDALE", "AZ") %>% 
+  str_replace("CAROLINA", "NC") %>% 
+  str_replace("PARK", "MD") %>% 
+  str_replace("CHASE", "MD") %>% 
+  str_replace("DUNCAN", "BC") %>% 
+  str_replace("JOSE", "CA") %>% 
+  str_replace("VIEW", "CA")
+```
+
+## Conclude
+
+```{r conclue_amount, echo=FALSE}
+min_amount <- scales::dollar(min(dc$amount, na.rm = TRUE))
+max_amount <- scales::dollar(max(dc$amount, na.rm = TRUE))
+```
+
+```{r conclue_date, echo=FALSE}
+min_date <- as.character(min(dc$transactiondate, na.rm = TRUE))
+max_date <- as.character(max(dc$transactiondate, na.rm = TRUE))
+```
+
+```{r conclue_na, echo=FALSE}
+not_na <- scales::percent(mean(!dc$na_flag))
+```
+
+1. How are `r nrow(dc)` records in the database
+1. There are `r nrow(dc_dupes)` duplicate records
+1. The `amount` values range from `r min_amount` to `r max_amount`; 
+the `transactiondate` ranges from `r print(min_date)` to `r print(max_date)`.
+1. There are `r sum(dc$na_flag)` records missing a `candidatename` or `payee` value (flagged 
+with the logical `na_flag` variable)
+1. Consistency in ZIP codes and state abbreviations has been fixed from `address`
+1. The `zip_clean` variable contains the 5 digit ZIP from `address`
+1. The `transactionyear` variable contains the 4 digit year of the receipt.
+1. Only `r not_na` of records contain all the data needed to identify the transaction
+
+## Write
+
+```{r}
+dir_proc <- here("dc", "expends", "data", "processed")
+dir_create(dir_proc)
+
+write_csv(
+  x = dc,
+  na = "",
+  path = glue("{dir_proc}/dc_expends_clean.csv")
+)
+```
+
