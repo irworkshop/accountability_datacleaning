@@ -1,7 +1,7 @@
 Colorado Expenditures
 ================
 Kiernan Nicholls
-2019-07-23 17:27:57
+2019-07-24 14:07:38
 
   - [Project](#project)
   - [Objectives](#objectives)
@@ -10,6 +10,8 @@ Kiernan Nicholls
   - [Import](#import)
   - [Explore](#explore)
   - [Wrangle](#wrangle)
+  - [Conclude](#conclude)
+  - [Export](#export)
 
 ## Project
 
@@ -55,9 +57,11 @@ pacman::p_load(
   lubridate, # datetime strings
   tidytext, # text analysis
   magrittr, # pipe opperators
+  pdftools, # extract pdf text
   janitor, # dataframe clean
   batman, # parse NA and LGL
   scales, # text formatting
+  refinr, # cluster and merge
   vroom, # quick file read
   knitr, # knit documents
   glue, # combine strings
@@ -289,11 +293,13 @@ And finally save the formatted single data frame to disc.
 proc_dir <- here("co", "expends", "data", "processed")
 dir_create(proc_dir)
 
-write_csv(
-  x = co,
-  path = glue("{proc_dir}/co_expends.csv"),
-  na = ""
-)
+if (!all_files_new(proc_dir)) {
+  write_csv(
+    x = co,
+    path = glue("{proc_dir}/co_expends.csv"),
+    na = ""
+  )
+}
 ```
 
 ## Explore
@@ -305,12 +311,12 @@ head(co)
     #> # A tibble: 6 x 26
     #>   co_id expenditure_amo… expenditure_date last_name first_name mi    suffix address_1 address_2
     #>   <chr>            <dbl> <date>           <chr>     <chr>      <chr> <chr>  <chr>     <chr>    
-    #> 1 2000…            500   2003-01-01       COMMITTE… <NA>       <NA>  <NA>   2181 S. … <NA>     
-    #> 2 2000…            500   2003-01-01       COMMITTE… <NA>       <NA>  <NA>   2015 E. … <NA>     
-    #> 3 2000…           1000   2003-01-01       COMMITTE… <NA>       <NA>  <NA>   P.O. BOX… <NA>     
-    #> 4 1999…            605   2003-01-01       JDS PROF… <NA>       <NA>  <NA>   5655 S Y… <NA>     
-    #> 5 2001…            322.  2003-01-01       AMERICAN… <NA>       <NA>  <NA>   PO BOX 0… <NA>     
-    #> 6 2002…             48.8 2003-01-01       CRICKET   <NA>       <NA>  <NA>   P.O. BOX… <NA>     
+    #> 1 1999…           100    2000-01-01       LACY ELS… <NA>       <NA>  <NA>   11637 E … <NA>     
+    #> 2 2001…           100    1998-01-05       OWENS, B… <NA>       <NA>  <NA>   PO BOX 4… <NA>     
+    #> 3 2000…            24    2000-01-11       PIZZA HUT <NA>       <NA>  <NA>   1355 SAN… <NA>     
+    #> 4 1999…            20    2000-01-12       AURORA R… <NA>       <NA>  <NA>   UNKNOWNS… <NA>     
+    #> 5 2000…             3.96 2000-01-13       OFFICEMAX <NA>       <NA>  <NA>   343 S BR… <NA>     
+    #> 6 2000…            22.0  2000-01-13       HARLAND … <NA>       <NA>  <NA>   PO BOX 8… <NA>     
     #> # … with 17 more variables: city <chr>, state <chr>, zip <chr>, explanation <chr>,
     #> #   record_id <chr>, filed_date <date>, expenditure_type <chr>, payment_type <chr>,
     #> #   disbursement_type <chr>, electioneering <chr>, committee_type <chr>, committee_name <chr>,
@@ -340,34 +346,34 @@ tail(co)
 glimpse(sample_frac(co))
 ```
 
-    #> Observations: 601,732
+    #> Observations: 647,055
     #> Variables: 26
-    #> $ co_id              <chr> "20095622264", "20095608268", "20165030251", "20125025190", "20085600…
-    #> $ expenditure_amount <dbl> 33.00, 23.76, 150.44, 496.13, 32.00, 4.95, 50000.00, 203.00, 294.55, …
-    #> $ expenditure_date   <date> 2016-04-30, 2011-09-08, 2016-12-17, 2016-10-24, 2008-01-12, 2015-09-…
-    #> $ last_name          <chr> "CO DEPARTMENT OF REVENUE", "USPS", "OFFICE DEPOT", "PAGOSA SUN", "CL…
-    #> $ first_name         <chr> NA, NA, NA, NA, NA, NA, NA, NA, "SANFORD", NA, NA, NA, NA, NA, NA, NA…
-    #> $ mi                 <chr> NA, NA, NA, NA, NA, NA, NA, NA, "E", NA, NA, NA, NA, NA, NA, NA, NA, …
+    #> $ co_id              <chr> "20075643212", "20055624124", "20175031960", "20065645008", "19991200…
+    #> $ expenditure_amount <dbl> 250.00, 40.58, 90.90, 482.00, 11666.00, 590.00, 181.60, 134.59, 200.0…
+    #> $ expenditure_date   <date> 2008-10-14, 2018-07-23, 2018-10-22, 2007-06-04, 2000-07-14, 2010-02-…
+    #> $ last_name          <chr> "MARIJO RYMER", "STATE FARM", "MAIL CHIMP", "JOVIAN HOLDINGS LLC", "M…
+    #> $ first_name         <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
+    #> $ mi                 <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
     #> $ suffix             <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
-    #> $ address_1          <chr> "1375 SHERMAN ST", "1719 SHERIDAN BLVD", "8051 S BROADWAY", "PO BOX 9…
-    #> $ address_2          <chr> NA, NA, NA, NA, NA, NA, "SUITE 400", NA, NA, NA, NA, NA, NA, NA, NA, …
-    #> $ city               <chr> "DENVER", "EDGEWATER", "LITTLETON", "PAGOSA SPRINGS", "FORT COLLINS",…
-    #> $ state              <chr> "CO", "CO", "CO", "CO", "CO", "CA", "VA", "CO", "CO", "CO", "CO", "CO…
-    #> $ zip                <chr> "80261", "80214", "80122", "81147", "80524", "95131", "22209", "80103…
-    #> $ explanation        <chr> NA, NA, "SUPPLIES, PRINTER INK, PRINTER", NA, "CAMP. PHOTO", NA, "611…
-    #> $ record_id          <chr> "1003614", "739419", "1050886", "1042968", "544014", "965672", "93933…
-    #> $ filed_date         <date> 2016-06-08, 2011-10-14, 2017-04-15, 2016-11-04, 2008-07-22, 2015-10-…
-    #> $ expenditure_type   <chr> "EMPLOYEE SERVICES", "ADVERTISING", "OFFICE EQUIPMENT & SUPPLIES", "A…
-    #> $ payment_type       <chr> "CREDIT/DEBIT CARD", "CREDIT/DEBIT CARD", "CREDIT/DEBIT CARD", "CHECK…
+    #> $ address_1          <chr> "1580 LOGAN ST., STE 730", "11150 N. HURON ST  SUITE 209", "512 MEANS…
+    #> $ address_2          <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "STE C, #406", NA, "STE 5…
+    #> $ city               <chr> "DENVER", "NORTHGLENN", "ATLANTA", "DENVER", "DENVER", "DENVER", "CHI…
+    #> $ state              <chr> "CO", "CO", "GA", "CO", "CO", "CO", "IL", "CO", "CO", "CO", "CO", "CO…
+    #> $ zip                <chr> "80203", "80234", "30318", "80203-1264", "80207", "80201", "60666-010…
+    #> $ explanation        <chr> "FOOD FOR FUNDRAISER", "INSURANCE", NA, "RENT", "JUNE & JULY CONSULTI…
+    #> $ record_id          <chr> "578254", "1149323", "1186932", "502582", "223782", "649205", "607706…
+    #> $ filed_date         <date> 2008-10-27, 2018-10-15, 2018-10-28, 2007-10-31, 2000-08-03, 2010-05-…
+    #> $ expenditure_type   <chr> NA, "RENT & UTILITIES", "OFFICE EQUIPMENT & SUPPLIES", NA, NA, "RENT …
+    #> $ payment_type       <chr> NA, "CREDIT/DEBIT CARD", "CREDIT/DEBIT CARD", NA, NA, "CREDIT/DEBIT C…
     #> $ disbursement_type  <chr> "MONETARY (ITEMIZED)", "MONETARY (ITEMIZED)", "MONETARY (ITEMIZED)", …
-    #> $ electioneering     <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
-    #> $ committee_type     <chr> "POLITICAL PARTY COMMITTEE", "CANDIDATE COMMITTEE", "CANDIDATE COMMIT…
-    #> $ committee_name     <chr> "DENVER DEMOCRATIC CENTRAL COMMITTEE", "FRIENDS OF MAX TYLER", "ELECT…
-    #> $ candidate_name     <chr> NA, "MAX TYLER", "SUSAN BECKMAN", "STEVEN WADLEY", "TOM DONNELLY", "M…
-    #> $ amended            <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE,…
+    #> $ electioneering     <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "…
+    #> $ committee_type     <chr> "ISSUE COMMITTEE", "POLITICAL PARTY COMMITTEE", "CANDIDATE COMMITTEE"…
+    #> $ committee_name     <chr> "END COLORADO'S DEVELOPMENTAL DISABILITY WAIT LIST", "ADAMS COUNTY DE…
+    #> $ candidate_name     <chr> NA, NA, "JOSEPH ANTHONY SALAZAR", NA, NA, "MICHAEL JOHNSTON", "BILL R…
+    #> $ amended            <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, TRUE, FALSE, …
     #> $ amendment          <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE,…
     #> $ amended_record_id  <chr> "0", "0", "0", "0", "0", "0", "0", "0", "0", "0", "0", "0", "0", "0",…
-    #> $ jurisdiction       <chr> "DENVER", "STATEWIDE", "STATEWIDE", "ARCHULETA", "LARIMER", "DENVER",…
+    #> $ jurisdiction       <chr> "STATEWIDE", "ADAMS", "STATEWIDE", "BOULDER", "STATEWIDE", "STATEWIDE…
 
 ### Distinct
 
@@ -380,32 +386,32 @@ glimpse_fun(co, n_distinct)
     #> # A tibble: 26 x 4
     #>    var                type       n          p
     #>    <chr>              <chr>  <int>      <dbl>
-    #>  1 co_id              chr     9079 0.0151    
-    #>  2 expenditure_amount dbl    88374 0.147     
-    #>  3 expenditure_date   date    6232 0.0104    
-    #>  4 last_name          chr    86950 0.144     
-    #>  5 first_name         chr     3444 0.00572   
-    #>  6 mi                 chr       31 0.0000515 
-    #>  7 suffix             chr      119 0.000198  
-    #>  8 address_1          chr   115278 0.192     
-    #>  9 address_2          chr     3266 0.00543   
-    #> 10 city               chr     4890 0.00813   
-    #> 11 state              chr      123 0.000204  
-    #> 12 zip                chr     7606 0.0126    
-    #> 13 explanation        chr   127016 0.211     
-    #> 14 record_id          chr   601731 1.000     
-    #> 15 filed_date         date    4240 0.00705   
-    #> 16 expenditure_type   chr       18 0.0000299 
-    #> 17 payment_type       chr        7 0.0000116 
-    #> 18 disbursement_type  chr        7 0.0000116 
-    #> 19 electioneering     chr        2 0.00000332
-    #> 20 committee_type     chr       10 0.0000166 
-    #> 21 committee_name     chr     8858 0.0147    
-    #> 22 candidate_name     chr     3629 0.00603   
-    #> 23 amended            lgl        2 0.00000332
-    #> 24 amendment          lgl        2 0.00000332
-    #> 25 amended_record_id  chr    11287 0.0188    
-    #> 26 jurisdiction       chr       66 0.000110
+    #>  1 co_id              chr     9478 0.0146    
+    #>  2 expenditure_amount dbl    93773 0.145     
+    #>  3 expenditure_date   date    7116 0.0110    
+    #>  4 last_name          chr    97924 0.151     
+    #>  5 first_name         chr     3444 0.00532   
+    #>  6 mi                 chr       31 0.0000479 
+    #>  7 suffix             chr      119 0.000184  
+    #>  8 address_1          chr   126358 0.195     
+    #>  9 address_2          chr     3266 0.00505   
+    #> 10 city               chr     5423 0.00838   
+    #> 11 state              chr      123 0.000190  
+    #> 12 zip                chr     8178 0.0126    
+    #> 13 explanation        chr   135118 0.209     
+    #> 14 record_id          chr   647054 1.000     
+    #> 15 filed_date         date    4728 0.00731   
+    #> 16 expenditure_type   chr       18 0.0000278 
+    #> 17 payment_type       chr        7 0.0000108 
+    #> 18 disbursement_type  chr        7 0.0000108 
+    #> 19 electioneering     chr        2 0.00000309
+    #> 20 committee_type     chr       10 0.0000155 
+    #> 21 committee_name     chr     9240 0.0143    
+    #> 22 candidate_name     chr     3821 0.00591   
+    #> 23 amended            lgl        2 0.00000309
+    #> 24 amendment          lgl        2 0.00000309
+    #> 25 amended_record_id  chr    11315 0.0175    
+    #> 26 jurisdiction       chr       66 0.000102
 
 We can use `ggplot::geom_col()` to explore the distribution of the least
 distinct categorical variables.
@@ -436,25 +442,25 @@ glimpse_fun(co, count_na)
     #>  1 co_id              chr        0 0      
     #>  2 expenditure_amount dbl        0 0      
     #>  3 expenditure_date   date       0 0      
-    #>  4 last_name          chr    19078 0.0317 
-    #>  5 first_name         chr   545600 0.907  
-    #>  6 mi                 chr   592166 0.984  
-    #>  7 suffix             chr   600848 0.999  
-    #>  8 address_1          chr    25253 0.0420 
-    #>  9 address_2          chr   569562 0.947  
-    #> 10 city               chr    23082 0.0384 
-    #> 11 state              chr    19731 0.0328 
-    #> 12 zip                chr    26436 0.0439 
-    #> 13 explanation        chr   173749 0.289  
+    #>  4 last_name          chr    19089 0.0295 
+    #>  5 first_name         chr   590923 0.913  
+    #>  6 mi                 chr   637489 0.985  
+    #>  7 suffix             chr   646171 0.999  
+    #>  8 address_1          chr    27181 0.0420 
+    #>  9 address_2          chr   614885 0.950  
+    #> 10 city               chr    23858 0.0369 
+    #> 11 state              chr    19738 0.0305 
+    #> 12 zip                chr    26694 0.0413 
+    #> 13 explanation        chr   173923 0.269  
     #> 14 record_id          chr        0 0      
     #> 15 filed_date         date       0 0      
-    #> 16 expenditure_type   chr   157003 0.261  
-    #> 17 payment_type       chr   157068 0.261  
-    #> 18 disbursement_type  chr     4994 0.00830
-    #> 19 electioneering     chr   573212 0.953  
+    #> 16 expenditure_type   chr   202257 0.313  
+    #> 17 payment_type       chr   202322 0.313  
+    #> 18 disbursement_type  chr     4998 0.00772
+    #> 19 electioneering     chr   618535 0.956  
     #> 20 committee_type     chr        0 0      
     #> 21 committee_name     chr        0 0      
-    #> 22 candidate_name     chr   275632 0.458  
+    #> 22 candidate_name     chr   297057 0.459  
     #> 23 amended            lgl        0 0      
     #> 24 amendment          lgl        0 0      
     #> 25 amended_record_id  chr        0 0      
@@ -463,7 +469,7 @@ glimpse_fun(co, count_na)
 It’s important to note that there are zero missing values in important
 rows like `co_id`, `expenditure_amount`, or `expenditure_date`.
 
-There are 3.17% of records missing a `last_name` value used to identify
+There are 2.95% of records missing a `last_name` value used to identify
 every individual or entity. If the record has no name whatsoever, we
 will flag it with a new `na_flag` variable.
 
@@ -483,12 +489,12 @@ For continuous variables, we should check the ranges.
 ``` r
 summary(co$expenditure_amount)
 #>     Min.  1st Qu.   Median     Mean  3rd Qu.     Max. 
-#> -3566408       24      100     1562      400  6916000
+#> -3566408       25      100     1581      400  6916000
 sum(co$expenditure_amount < 0)
-#> [1] 11796
+#> [1] 11893
 ```
 
-From this summary, we can see the median of $100 and mean of $1,561.93
+From this summary, we can see the median of $100 and mean of $1,581.26
 are reasonable, but the minimum and maximum should be explored.
 
 ``` r
@@ -609,12 +615,12 @@ something is wrong.
 min(co$expenditure_date)
 #> [1] "1900-01-31"
 max(co$expenditure_date)
-#> [1] "3004-07-25"
+#> [1] "5200-10-10"
 
 sum(co$expenditure_date > today())
-#> [1] 31
+#> [1] 38
 sum(co$expenditure_date < "2002-01-01")
-#> [1] 40
+#> [1] 23516
 ```
 
 First, we will create a new `expenditure_year` variable from the
@@ -634,7 +640,7 @@ co %>%
   print(n = n_distinct(co$expenditure_year))
 ```
 
-    #> # A tibble: 37 x 2
+    #> # A tibble: 44 x 2
     #>    expenditure_year     n
     #>               <dbl> <int>
     #>  1             1900     1
@@ -643,44 +649,51 @@ co %>%
     #>  4             1993     4
     #>  5             1994     1
     #>  6             1995     1
-    #>  7             1999     1
-    #>  8             2000    17
-    #>  9             2001    13
-    #> 10             2002  1407
-    #> 11             2003  6983
-    #> 12             2004 22976
-    #> 13             2005 11046
-    #> 14             2006 44432
-    #> 15             2007 14074
-    #> 16             2008 43570
-    #> 17             2009 18423
-    #> 18             2010 58067
-    #> 19             2011 20163
-    #> 20             2012 55596
-    #> 21             2013 30604
-    #> 22             2014 58971
-    #> 23             2015 26095
-    #> 24             2016 57484
-    #> 25             2017 34124
-    #> 26             2018 86207
-    #> 27             2019 11439
-    #> 28             2020    17
-    #> 29             2022     1
-    #> 30             2026     3
-    #> 31             2028     1
-    #> 32             2055     1
-    #> 33             2066     1
-    #> 34             2203     1
-    #> 35             2205     1
-    #> 36             2206     4
-    #> 37             3004     1
+    #>  7             1996    48
+    #>  8             1997     1
+    #>  9             1998     3
+    #> 10             1999    30
+    #> 11             2000 17204
+    #> 12             2001  6221
+    #> 13             2002 23131
+    #> 14             2003  6993
+    #> 15             2004 22976
+    #> 16             2005 11054
+    #> 17             2006 44457
+    #> 18             2007 14074
+    #> 19             2008 43571
+    #> 20             2009 18423
+    #> 21             2010 58069
+    #> 22             2011 20163
+    #> 23             2012 55596
+    #> 24             2013 30604
+    #> 25             2014 59022
+    #> 26             2015 26095
+    #> 27             2016 57486
+    #> 28             2017 34124
+    #> 29             2018 86207
+    #> 30             2019 11456
+    #> 31             2020    20
+    #> 32             2022     1
+    #> 33             2026     3
+    #> 34             2028     1
+    #> 35             2055     1
+    #> 36             2066     1
+    #> 37             2110     1
+    #> 38             2202     1
+    #> 39             2203     1
+    #> 40             2205     1
+    #> 41             2206     4
+    #> 42             2900     1
+    #> 43             3004     1
+    #> 44             5200     1
 
 We can flag these broken dates with a new `date_flag` variable.
 
 ``` r
 co <- co %>% mutate(date_flag = !between(expenditure_date, as_date("2002-01-01"), today()))
 sum(co$date_flag)
-#> [1] 71
+#> [1] 23554
 ```
 
 We can also explore the intersection of `expenditure_date` and
@@ -696,21 +709,53 @@ We can also explore the intersection of `expenditure_date` and
 
 ``` r
 co <- co %>% 
+  unite(
+    address_1, address_2,
+    col = address_clean,
+    sep = " ",
+    remove = FALSE,
+    na.rm = TRUE
+  ) %>% 
   mutate(
-    address_clean = 
-      paste(address_1, address_2) %>% 
-      normal_address(
-        add_abbs = usps,
-        na_rep = TRUE
-      )
+    address_clean = normal_address(
+      address = address_clean,
+      add_abbs = usps,
+      na_rep = TRUE
+    )
+  ) %>% 
+  select(
+    everything(),
+    address_clean
+  )
+
+co %>%
+  sample_n(10) %>% 
+  select(
+    address_1, 
+    address_2, 
+    address_clean
   )
 ```
+
+    #> # A tibble: 10 x 3
+    #>    address_1               address_2 address_clean          
+    #>    <chr>                   <chr>     <chr>                  
+    #>  1 1000 DRIFTWOOD DRIVE    <NA>      1000 DRIFTWOOD DRIVE   
+    #>  2 2211 NORTH FIRST STREET <NA>      2211 NORTH FIRST STREET
+    #>  3 1700 BROADWAY STE#200   <NA>      1700 BROADWAY STE200   
+    #>  4 4821 E 38TH AVE         <NA>      4821 E 38TH AVENUE     
+    #>  5 717 4TH AVE             <NA>      717 4TH AVENUE         
+    #>  6 5 S. ELATI ST., UNIT 4  <NA>      5 S ELATI STREET UNIT 4
+    #>  7 PO BOX 173384           <NA>      PO BOX 173384          
+    #>  8 1001 4TH AVENUE         <NA>      1001 4TH AVENUE        
+    #>  9 315 S. 12TH             <NA>      315 S 12TH             
+    #> 10 47 THIRD ST             <NA>      47 THIRD STREET
 
 ### ZIP
 
 ``` r
 mean(co$zip %in% geo$zip)
-#> [1] 0.9736993
+#> [1] 0.9712173
 
 co <- co %>% 
   mutate(
@@ -722,28 +767,366 @@ co <- co %>%
 
 # percent changed
 mean(co$zip != co$zip_clean, na.rm = TRUE)
-#> [1] 0.02088861
+#> [1] 0.01966187
 # percent valid
 mean(co$zip_clean %in% geo$zip)
-#> [1] 0.9951673
+#> [1] 0.994985
 ```
 
 ### State
 
 The `state` values appear to already be trimmed, or are otherwise
-nonsense. We can make them `NA`.
+nonsense. We can make them `NA`. 99.9% of `state` values are already
+valid.
 
 ``` r
 n_distinct(co$state)
 #> [1] 123
-mean(co$state %in% geo$state)
-#> [1] 0.9657572
+prop_in(co$state, geo$state, na.rm = TRUE)
+#> [1] 0.9986068
 setdiff(co$state, geo$state)
 #>  [1] NA   "MY" "LU" "SO" "DI" "C0" "UN" "UK" "N/" "HA" "D." "CP" "BE" "IO" "KE" "NO" "TE" "LO" "EU"
 #> [20] "KA" "XX" "IR" "GE" "BR" "R." "DU" "BO" "AU" "PU" "OT" "CH" "00" "WE" "GB" "2"  "CC" "C)" "ST"
 #> [39] "FR" "IS" "WS" "SU" "EN" "TH" "SP" "EL" "QU" "LI" "OM" "HU" "L-" "C"  "QL" "`C" "H2" "EA" "UI"
 #> [58] "SW" "0"  "CS" "M"
-co$state[which(co$state %out% geo$state)] <- NA
+
+co <- co %>% 
+  mutate(
+  state_clean = normal_state(
+    state = state,
+    valid = unique(geo$state)
+  )
+)
+
+prop_in(co$state_clean, geo$state, na.rm = TRUE)
+#> [1] 1
 ```
 
 ### City
+
+First, we should expand our list of valid cities. The Colorado state
+government provides a PDF list of Colorado’s “Incorporated Cities and
+Towns.”
+
+> Below is a list of the incorporated cities and towns in Colorado.
+> Included in this list is the municipality’s county location and its
+> incorporation date. The information below primarily comes from the
+> Colorado Gazetteer of Cities and Towns, published by the Colorado
+> State Planning Division for inclusion in the Colorado Year Book, 1958.
+> For incorporations after 1958, the information comes from The
+> Directory of Municipal and County Officials in Colorado 1999-2000,
+> published by the Colorado Municipal League, 1999.
+
+``` r
+co_city <- pdf_text("https://www.colorado.gov/pacific/sites/default/files/List%20of%20Incorporated%20Cities%20and%20Towns%20in%20CO.pdf")
+# split and trim white text
+co_city <- str_trim(unlist(str_split(co_city, "\n"))[-c(1:7)])
+# remove empties
+co_city <- co_city[which(co_city != "")]
+# remove all after two spaces
+co_city <- str_remove(co_city, "\\s{2,}(.*)")
+# normalize
+co_city <- normal_city(co_city, geo_abbs = usps)
+# combine with others
+valid_city <- unique(c(co_city, geo$city))
+```
+
+Our aim here is to reduce the number of distinct city names by
+normalizing text and correcting *obvious* mispellings.
+
+``` r
+n_distinct(co$city)
+#> [1] 5423
+prop_in(co$city, valid_city, na.rm = TRUE)
+#> [1] 0.9529699
+sum(unique(co$city) %out% valid_city)
+#> [1] 3007
+```
+
+#### Normalize
+
+``` r
+co <- co %>% 
+  mutate(
+    city_norm = normal_city(
+      city = city %>% 
+        str_replace("\\bCOLO\\b", "COLORADO") %>% 
+        str_replace("\\bCO\\b",   "COLORADO") %>% 
+        str_replace("^COS$", "COLORADO SPRINGS") %>% 
+        str_replace("^LA$", "LOS ANGELES") %>% 
+        str_replace("^MPLS$", "MINNEAPOLIS") %>% 
+        str_replace("^SLC$", "SALT LAKE CITY") %>% 
+        str_replace("^GWS$", "GLENWOOD SPRINGS"),
+      geo_abbs = usps_city,
+      st_abbs = c("CO", "DC", "COLORADO"),
+      na = c(na_city, "UNKNOWNCITY", "REDACTED", "TBD"),
+      na_rep = TRUE
+    )
+  )
+
+n_distinct(co$city_norm)
+#> [1] 4874
+prop_in(co$city_norm, valid_city, na.rm = TRUE)
+#> [1] 0.9741308
+sum(unique(co$city_norm) %out% valid_city)
+#> [1] 2438
+```
+
+#### Match
+
+``` r
+co <- co %>%
+  left_join(
+    geo,
+    by = c(
+      "zip_clean" = "zip",
+      "state_clean" = "state"
+    )
+  ) %>%
+  rename(
+    city = city.x,
+    city_match = city.y
+  ) %>%
+  mutate(match_dist = stringdist(city_norm, city_match))
+
+n_distinct(co$city_match)
+#> [1] 2416
+prop_in(co$city_match, valid_city, na.rm = TRUE)
+#> [1] 1
+summary(co$match_dist)
+#>    Min. 1st Qu.  Median    Mean 3rd Qu.    Max.    NA's 
+#>    0.00    0.00    0.00    0.81    0.00   22.00   39479
+```
+
+#### Swap
+
+``` r
+co <- co %>% 
+  mutate(
+    city_swap = if_else(
+      condition = match_dist <= 2 | is.na(match_dist), 
+      true = city_match, 
+      false = city_norm
+    )
+  )
+
+# changes made
+sum(co$city_swap != co$city_norm, na.rm = TRUE)
+#> [1] 6782
+n_distinct(co$city_swap)
+#> [1] 3157
+prop_in(co$city_swap, valid_city, na.rm = TRUE)
+#> [1] 0.985522
+# remaining bad
+sum(unique(co$city_swap) %out% valid_city)
+#> [1] 780
+# average dist for good and bad
+mean(co$match_dist[which(co$city_swap %in%  valid_city)], na.rm = TRUE)
+#> [1] 0.6896384
+mean(co$match_dist[which(co$city_swap %out% valid_city)], na.rm = TRUE)
+#> [1] 9.308575
+```
+
+This ZIP match swapping made 6782 changes.
+
+``` r
+co %>% 
+  select(
+    city,
+    state_clean,
+    zip_clean,
+    city_norm,
+    city_match,
+    match_dist,
+    city_swap
+  ) %>% 
+  filter(!is.na(city_swap)) %>% 
+  filter(city_swap != city_norm) %>% 
+  distinct() %>% 
+  sample_frac()
+```
+
+    #> # A tibble: 1,935 x 7
+    #>    city            state_clean zip_clean city_norm        city_match      match_dist city_swap     
+    #>    <chr>           <chr>       <chr>     <chr>            <chr>                <dbl> <chr>         
+    #>  1 SOUIX FALLS     SD          57104     SOUIX FALLS      SIOUX FALLS              2 SIOUX FALLS   
+    #>  2 FORST COLLINS   CO          80526     FORST COLLINS    FORT COLLINS             1 FORT COLLINS  
+    #>  3 COLORAADO SPRI… CO          80916     COLORAADO SPRIN… COLORADO SPRIN…          1 COLORADO SPRI…
+    #>  4 DEVNER          CO          80211     DEVNER           DENVER                   1 DENVER        
+    #>  5 COLROADO SPRIN… CO          80907     COLROADO SPRINGS COLORADO SPRIN…          1 COLORADO SPRI…
+    #>  6 PAGSOA SPRINGS  CO          81147     PAGSOA SPRINGS   PAGOSA SPRINGS           1 PAGOSA SPRINGS
+    #>  7 WALDON          CO          80480     WALDON           WALDEN                   1 WALDEN        
+    #>  8 GUNNNISON       CO          81230     GUNNNISON        GUNNISON                 1 GUNNISON      
+    #>  9 LOISVILLE       CO          80027     LOISVILLE        LOUISVILLE               1 LOUISVILLE    
+    #> 10 DENER           CO          80264     DENER            DENVER                   1 DENVER        
+    #> # … with 1,925 more rows
+
+There are still many valid cities not captured by our list.
+
+``` r
+co %>% 
+  count(state_clean, city_swap, sort = TRUE) %>% 
+  filter(city_swap %out% valid_city) %>% 
+  drop_na()
+```
+
+    #> # A tibble: 783 x 3
+    #>    state_clean city_swap           n
+    #>    <chr>       <chr>           <int>
+    #>  1 CO          HIGHLANDS RANCH  3765
+    #>  2 CO          PUEBLO WEST      1076
+    #>  3 CO          CASTLE PINES      241
+    #>  4 MA          WEST SOMERVILLE   179
+    #>  5 MN          SHOREVIEW         147
+    #>  6 CO          THRONTON          140
+    #>  7 PA          CHESTERBROOK      135
+    #>  8 CO          WESTMINISTER      132
+    #>  9 CO          THORTON            99
+    #> 10 CO          BLACK FOREST       79
+    #> # … with 773 more rows
+
+#### Refine
+
+We can use the [OpenRefine cluster and merge
+algorithms](https://github.com/OpenRefine/OpenRefine/wiki/Clustering-In-Depth)
+to further disambiguate the city values.
+
+``` r
+co_refine <- co %>%
+  # only refine CO city
+  filter(state_clean == "CO") %>% 
+  mutate(
+    # cluster and merge
+    city_refine = city_swap %>% 
+      key_collision_merge(dict = unique(c(co_city, geo$city[geo$state == "CO"]))) %>% 
+      n_gram_merge(numgram = 2),
+    # undo refine if match
+    city_refine = if_else(
+      condition = match_dist <= 2,
+      true = city_swap,
+      false = city_refine
+    )
+  ) %>%
+  # filter out unchanged
+  filter(city_swap != city_refine)
+
+mean(co_refine$city_norm %in% valid_city)
+#> [1] 0.2267081
+mean(co_refine$city_refine %in% valid_city)
+#> [1] 0.8571429
+```
+
+``` r
+co_refine %>% 
+  count(
+    state_clean,
+    city_swap,
+    city_refine,
+    sort = TRUE
+  ) %>% 
+  mutate(made_valid = city_refine %in% valid_city)
+```
+
+    #> # A tibble: 78 x 5
+    #>    state_clean city_swap     city_refine      n made_valid
+    #>    <chr>       <chr>         <chr>        <int> <lgl>     
+    #>  1 CO          WHEATRIDGE    WHEAT RIDGE     67 TRUE      
+    #>  2 CO          LONETREE      LONE TREE       47 TRUE      
+    #>  3 CO          NORTHGLEN     NORTHGLENN      26 TRUE      
+    #>  4 CO          CENTENIAL     CENTENNIAL      23 TRUE      
+    #>  5 CO          CENNTENNIAL   CENTENNIAL      15 TRUE      
+    #>  6 CO          CENNTENIAL    CENTENNIAL      12 TRUE      
+    #>  7 CO          G J           GJ               8 FALSE     
+    #>  8 CO          LAKEWOD       LAKEWOOD         8 TRUE      
+    #>  9 CO          NEED          DEN              8 FALSE     
+    #> 10 CO          BLACK FORREST BLACK FOREST     6 FALSE     
+    #> # … with 68 more rows
+
+If the new `city_refine` *and* the `state_clean` values match a valid
+city in the geo table, we can fairly confident that these new city names
+are valid.
+
+``` r
+co_refine <- co_refine %>% 
+  select(
+    city_swap,
+    city_refine,
+    state_clean,
+    zip_clean
+  ) %>% 
+  inner_join(
+    geo,
+    by = c(
+      "city_refine" = "city",
+      "state_clean" = "state"
+    )
+  ) %>% 
+  select(-zip)
+```
+
+And we can join this table back to the original.
+
+``` r
+co <- co %>% 
+  left_join(co_refine) %>% 
+  mutate(city_clean = coalesce(city_refine, city_swap))
+```
+
+We can see this process reduces the number of distinct city values by
+2287.
+
+``` r
+n_distinct(co$city)
+#> [1] 5423
+n_distinct(co$city_norm)
+#> [1] 4874
+n_distinct(co$city_swap)
+#> [1] 3157
+n_distinct(co$city_clean)
+#> [1] 3136
+```
+
+We also increased the percent of valid city names by 3.82%, from 93.7%
+to 97.5%
+
+``` r
+prop_in(co$city, geo$city, na.rm = TRUE)
+#> [1] 0.93663
+prop_in(co$city_norm, geo$city, na.rm = TRUE)
+#> [1] 0.9574947
+prop_in(co$city_swap, geo$city, na.rm = TRUE)
+#> [1] 0.9691425
+prop_in(co$city_clean, geo$city, na.rm = TRUE)
+#> [1] 0.9748058
+```
+
+## Conclude
+
+1.  There are 650386 records in the database
+
+2.  
+3.  Ranges for continuous variables are reasonable.
+
+4.  There are 18943 records with missing data, flagged with `na_flag`.
+
+5.  Consistency issues in geographic strings has been improved with the
+    `campfin` package.
+
+6.  The 5-digit `zip_clean` variable has been created from `zip`.
+
+7.  The 4-digit `expenditure_year` variable has been created from
+    `expenditure_date`.
+
+8.  Not all files have both parties (see `na_flag`).
+
+## Export
+
+``` r
+if (!all_files_new(proc_dir)) {
+  write_csv(
+    x = co,
+    na = "",
+    path = glue("{proc_dir}/co_expends_clean.csv")
+  )
+}
+```
