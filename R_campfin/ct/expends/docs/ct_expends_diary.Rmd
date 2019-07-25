@@ -1,6 +1,6 @@
 ---
-title: "{State} {Data}"
-author: "{First} {Last}"
+title: "Connecticut Expenditures"
+author: "Kiernan Nicholls"
 date: "`r Sys.time()`"
 output:
   github_document: 
@@ -14,7 +14,7 @@ editor_options:
 ```{r setup, include=FALSE, purl=FALSE}
 library(knitr)
 opts_chunk$set(
-  eval = FALSE,
+  eval = TRUE,
   echo = TRUE,
   warning = FALSE,
   message = FALSE,
@@ -64,9 +64,12 @@ pacman::p_load(
   stringdist, # levenshtein value
   tidyverse, # data manipulation
   lubridate, # datetime strings
+  tidytext, # text analysis
   magrittr, # pipe opperators
   janitor, # dataframe clean
   zipcode, # clean & database
+  batman, # parse logicals
+  scales, # format values
   vroom, # read many files fast
   knitr, # knit documents
   glue, # combine strings
@@ -151,8 +154,8 @@ a data entry module.)
 To download **immutable** raw data files, we first need to create the download URLs for both
 PAC and Candidate expenditures.
 
-```{r download_raw}
-base_urls <- "http://seec.ct.gov/ecrisreporting/Data/eCrisDownloads/exportdatafiles"
+```{r make_urls}
+base_url <- "http://seec.ct.gov/ecrisreporting/Data/eCrisDownloads/exportdatafiles"
 pac_url <- glue("{base_url}/Disbursements{2008:2019}CalendarYearPartyPACCommittees.csv")
 can_url <- glue("{base_url}/Disbursements{2008:2019}ElectionYearCandidateExploratoryCommittees.csv")
 ct_urls <- c(pac_url, can_url)
@@ -173,31 +176,448 @@ if (!all_files_new(raw_dir)) {
     )
   }
 }
+
+ct_files <- dir_ls(raw_dir, glob = "*.csv")
 ```
 
-```{r read_raw}
-ct_files <- dir_ls(raw_dir, glob = "*.csv")
+### Read
 
+The files differ slightly in structure over time, so they can't all be read together. We can read
+each into a list by using `purrr::map()` and `readr::read_csv()` and then collapse them into a 
+single comprehensive data frame with `dplyr::bind_rows()`.
+
+```{r read_raw}
 ct <- map(
   ct_files,
   read_csv,
   na = c("", "NA", "NULL"),
   col_types = cols(.default = "c")
 )
+```
 
+The files from earlier years have less columns.
+
+```{r list_dims}
+names(ct) <- tools::file_path_sans_ext(basename(names(ct)))
+ct %>% 
+  map(dim) %>% 
+  enframe(
+    name = "file",
+    value = "dim"
+  ) %>% 
+  mutate(
+    dim = str_c(dim)
+  ) %>% 
+  print(n = length(ct))
+```
+
+But the newer files simply _add_ more information, and the first 18 columns are consistent across
+all `r length(ct_files)` files.
+
+```{r list_names}
+names(ct[[1]]) %in% names(ct[[23]])
+names(ct[[23]]) %in% names(ct[[1]])
+```
+
+When binding the rows from each list into a single data frame, the records from earier years will
+simply be filled with `NA` for variables that didn't exist.
+
+```{r bind_list}
 ct <- ct %>% 
-  bind_rows() %>% 
+  bind_rows(.id = "file") %>% 
   clean_names() %>% 
   mutate_all(str_to_upper) %>% 
   na_if("VOID") %>% 
+  na_if("VOIDED") %>%
+  na_if("-") %>% 
+  na_if("NO")
+```
+
+Since we read every column as character vectors, we will have to use `readr::parse_*()` after the
+fact to convert dates, logicals, and numbers to their approproate class.
+
+```{r parse_usa_date}
+parse_usa_date <- function(x, ...) {
+  parse_date(x, format = "%m/%d/%Y", ...)
+}
+```
+
+```{r parse_cols, warning=TRUE, collapse=TRUE}
+ct <- ct %>% 
   mutate(
-    payment_date = parse_date(payment_date, "%m/%d/%Y"),
     amount = parse_number(amount),
-    file_to_state = parse_date(file_to_state, "%m/%d/%Y"),
-    period_start = parse_date(period_start, "%m/%d/%Y"),
-    period_end = parse_date(period_end, "%m/%d/%Y"),
+    file_to_state = parse_usa_date(file_to_state),
+    period_start = parse_usa_date(period_start),
+    period_end = parse_usa_date(period_end),
     election_year = parse_integer(election_year),
-    refiled_electronically = parse_date(refiled_electronically, "%m/%d/%Y"),
+    refiled_electronically = to_logical(refiled_electronically),
+    amended = equals(status, "AMENDMENT"),
+    efiled = equals(data_source, "EFILE")
+  )
+
+# some dates will fail, make NA in new col
+sample(unique(ct$payment_date[str_which(ct$payment_date, "\\d+\\-\\w+$")]), 10)
+ct <- mutate(ct, date_clean = mdy(payment_date))
+```
+
+## Explore
+
+There are `r nrow(ct)` rows of `r ncol(ct)` columns.
+
+```{r glimpse}
+dim(ct)
+head(ct)
+tail(ct)
+glimpse(ct)
+```
+
+### Distinct
+
+The categorical variables differ in their degree of distinctness.
+
+```{r n_distinct}
+glimpse_fun(ct, n_distinct)
+```
+
+```{r comm_type_bar, echo=FALSE}
+ct %>% 
+  explore_plot(
+    var = committee_type,
+    title = "CT Expend Counts by Committee Type",
+    caption = "Source: CT SEEC"
+  )
+```
+
+```{r pay_meth_bar, echo=FALSE}
+ct %>% 
+  filter(!is.na(payment_method)) %>% 
+  explore_plot(
+    var = payment_method,
+    title = "CT Expend Counts by Payment Method",
+    caption = "Source: CT SEEC"
+  )
+```
+
+```{r data_source_bar, echo=FALSE}
+ct %>% 
+  explore_plot(
+    var = data_source,
+    title = "CT Expend Counts by Data Source",
+    caption = "Source: CT SEEC"
+  )
+```
+
+```{r small_change_cats, collapse=TRUE}
+unique(na.omit(ct$section_name))
+percent(mean(ct$amended))
+percent(mean(ct$refiled_electronically, na.rm = TRUE))
+```
+
+```{r description_bar, echo=TRUE, fig.height=10}
+ct %>%
+  mutate(description_2 = coalesce(description, description_1)) %>% 
+  filter(!is.na(description_2)) %>% 
+  unnest_tokens(word, description_2) %>% 
+  anti_join(stop_words) %>% 
+  count(word, sort = TRUE) %>% 
+  head(25) %>% 
+  ggplot(aes(reorder(word, n), n)) +
+  geom_col() +
+  coord_flip() +
+  labs(
+    title = "CO Expend Description",
+    caption = "Source: CT SEEC",
+    x = "Word",
+    y = "Count"
+  )
+```
+
+### Ranges
+
+For continuous variables, we should instead check the ranges and distribution of values.
+
+#### Amount
+
+```{r amount_summary, collapse=TRUE}
+summary(ct$amount)
+sum(ct$amount < 0, na.rm = TRUE)
+```
+
+```{r glimpse_range}
+glimpse(ct %>% filter(amount == min(ct$amount, na.rm = TRUE)))
+glimpse(ct %>% filter(amount == max(ct$amount, na.rm = TRUE)))
+```
+
+```{r amount_hist, echo=FALSE}
+ggplot(ct) +
+  geom_histogram(aes(amount)) +
+  scale_x_continuous(
+    trans = "log10",
+    labels = dollar
+  ) +
+  labs(
+    title = "CO Expends Amount Distribution",
+    caption = "Source: CT SEEC",
+    x = "Amount",
+    y = "Count"
+  )
+```
+
+```{r amount_hist_comm, echo=FALSE}
+ct %>% 
+  ggplot(aes(x = amount)) +
+  geom_histogram(aes(fill = committee_type)) +
+  scale_fill_brewer("qual", palette = "Set1", guide = FALSE) +
+  scale_x_continuous(
+    trans = "log10",
+    labels = dollar
+  ) +
+  labs(
+    title = "CO Expends Amount Distribution",
+    subtitle = "by Committee Type",
+    caption = "Source: CT SEEC",
+    x = "Amount",
+    y = "Count"
+  ) +
+  facet_wrap(~committee_type)
+```
+
+```{r amount_box_comm, echo=FALSE}
+ct %>% 
+  ggplot(aes(x = committee_type, y = amount)) +
+  geom_boxplot(
+    mapping = aes(fill = committee_type),
+    varwidth = TRUE,
+    outlier.alpha = 0.01
+  ) +
+  scale_fill_brewer("qual", palette = "Set1", guide = FALSE) +
+  scale_y_continuous(
+    trans = "log10",
+    labels = dollar
+  ) +
+  labs(
+    title = "CO Expends Amount Distribution",
+    subtitle = "by Committee Type",
+    caption = "Source: CT SEEC",
+    x = "Amount",
+    y = "Count"
+  )
+```
+
+```{r amount_box_method, echo=FALSE}
+ct %>% 
+  ggplot(aes(x = payment_method, y = amount)) +
+  geom_boxplot(
+    mapping = aes(fill = payment_method),
+    varwidth = TRUE,
+    outlier.alpha = 0.01
+  ) +
+  scale_fill_brewer("qual", palette = "Set1", guide = FALSE) +
+  scale_y_continuous(
+    trans = "log10",
+    labels = dollar
+  ) +
+  labs(
+    title = "CO Expends Amount Distribution",
+    subtitle = "by Committee Type",
+    caption = "Source: CT SEEC",
+    x = "Amount",
+    y = "Count"
+  )
+```
+
+#### Date
+
+Despite using `lubridate::mdy()` on the original `payment_date`, the date values are still very
+dirty.
+
+```{r date_range}
+min(ct$date_clean, na.rm = TRUE)
+max(ct$date_clean, na.rm = TRUE)
+```
+
+```{r count_years}
+ct %>% 
+  count(year = year(date_clean)) %>%
+  print(n = 25)
+```
+
+```{r fix_years}
+ct$date_clean[which(ct$date_clean == "215-08-27")] <- as_date("2015-08-27")
+ct$date_clean[which(ct$date_clean == "216-10-03")] <- as_date("2016-10-03")
+ct$date_clean[which(year(ct$date_clean) > 2019)] <- NA
+```
+
+Then we can create a `year_clean` variable from the 
+
+```{r add_year}
+ct <- mutate(ct, year_clean = year(date_clean))
+```
+
+### Missing
+
+This amount of missing values is complicated by the combination of multiple file structures. For
+example, 
+
+```{r count_missing}
+glimpse_fun(ct, count_na)
+```
+
+If we look at only the files from 2014 to 2019, there are zero missing values for variables like
+`committee_id` or `report_id`.
+
+```{r new_missing}
+new_ct_files <- basename(str_to_upper(tools::file_path_sans_ext(ct_files[12:23])))
+ct %>% 
+  filter(file %in% new_ct_files) %>% 
+  glimpse_fun(count_na)
+```
+
+We can should flag any variable missing the key values needed to identify a transaction: both
+parties, how much, and when.
+
+```{r flag_na, collapse=TRUE}
+ct <- ct %>% 
+  mutate(
+    na_flag = is.na(payee) | is.na(amount) | is.na(date_clean) | is.na(committee)
+  )
+
+sum(ct$na_flag)
+percent(mean(ct$na_flag))
+```
+
+### Duplicates
+
+```{r get_dupes, eval=FALSE}
+ct_dupes <- get_dupes(ct)
+```
+
+## Wrangle
+
+### Address
+
+```{r normal_address}
+ct <- ct %>% 
+  mutate(
+    address_clean = normal_address(
+      address = street_address,
+      add_abbs = usps,
+      na_rep = TRUE
+    )
+  )
+
+ct %>% 
+  select(
+    street_address,
+    address_clean
+  )
+```
+
+### ZIP
+
+There are no ZIP codes in the data base.
+
+### State
+
+```{r normal_state, collapse=TRUE}
+n_distinct(ct$state)
+prop_in(ct$state, geo$state, na.rm = TRUE)
+sum(na.omit(ct$state) %out% geo$state)
+sample(setdiff(ct$state, geo$state), 10)
+
+
+ct <- ct %>% 
+  mutate(
+    state_clean = normal_state(
+      abbreviate = TRUE,
+      na_rep = TRUE,
+      valid = unique(geo$state),
+      state = state %>% 
+        str_replace("^CONN$", "CT") %>% 
+        str_replace("^C\\sT$", "CT") %>% 
+        str_replace("^CCT$", "CT") %>% 
+        str_replace("^CTT$", "CT") %>% 
+        str_replace("^FLA$", "FL") %>%
+        str_replace("^C$", "CT") %>%
+        str_replace("^CY$", "CT")
+    )
+  )
+
+n_distinct(ct$state_clean)
+prop_in(ct$state_clean, geo$state, na.rm = TRUE)
+sum(na.omit(ct$state_clean) %out% geo$state)
+```
+
+### City
+
+```{r count_city}
+n_distinct(ct$city)
+prop_in(ct$city, geo$city, na.rm = TRUE)
+sum(na.omit(ct$city) %out% geo$city)
+sample(setdiff(ct$city, geo$city), 10)
+```
+
+```{r normal_city}
+ct <- ct %>% 
+  mutate(
+    city_norm = normal_city(
+      city = city,
+      geo_abbs = usps_city,
+      st_abbs = c("CO"),
+      na = c("",  "NA", "N/A"),
+      na_rep = TRUE
+    )
+  )
+```
+
+```{r fix_manual}
+ct$city_norm <- ct$city_norm %>% 
+  str_replace("HTFD",   "HARTFORD") %>% 
+  str_replace("^N\\b",  "NORTH") %>% 
+  str_replace("^NO\\b", "NORTH") %>% 
+  str_replace("^S\\b",  "SOUTH") %>% 
+  str_replace("^SO\\b", "SOUTH") %>% 
+  str_replace("^W\\b",  "WEST") %>% 
+  str_replace("^E\\b",  "EAST") %>% 
+  str_replace("^WHARTFORD$", "WEST HARTFORD") %>% 
+  str_replace("^E\\sH$",     "EAST HARTFORD") %>% 
+  str_replace("^EH$",        "EAST HARTFORD") %>% 
+  na_if("COURT")
+```
+
+```{r view_changes}
+ct %>% 
+  filter(city != city_norm) %>% 
+  count(state_clean, city, city_norm, sort = TRUE)
+```
+
+## Conclude
+
+1. There are `r nrow(ct)` records in the database.
+1. We did not check for duplicates.
+1. Ranges and distributions for continuous variables were checked and explored. Dates from the past
+or future were either fixed or removed.
+1. There are `r sum(ct$na_flag)` records missing data flagged with `na_flag`.
+1. Consistency issues in categorical variables was improved with the `campfin` package.
+1. The 5-digit `zip_clean` variable was created with `campfin::normal_zip(ct$zip)`
+1. The 4-digit `year_clean` variable was created with `lubridate::year(ct$payment_date)`
+1. Not every record has all key values (see above), but `r percent(mean(!ct$na_flag))` do.
+
+## Export
+
+```{r}
+proc_dir <- here("ct", "expends", "data", "processed")
+dir_create(proc_dir)
+
+ct %>% 
+  select(
+    -street_address,
+    -state,
+    -city
+  ) %>% 
+  write_csv(
+    na = "",
+    path = glue("{proc_dir}/ct_expends_clean.csv")
   )
 ```
 
