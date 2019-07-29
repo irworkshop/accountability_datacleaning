@@ -1,7 +1,7 @@
 Hawaii Expenditures
 ================
 Kiernan Nicholls
-2019-07-25 17:56:32
+2019-07-29 10:59:30
 
   - [Project](#project)
   - [Objectives](#objectives)
@@ -61,6 +61,7 @@ pacman::p_load(
   zipcode, # clean & database
   scales, # frormat values
   knitr, # knit documents
+  glue, # combine strings
   here, # relative storage
   fs # search storage 
 )
@@ -339,16 +340,339 @@ sum(hi$amount < 0)
 
 #### Date
 
+There are no dates before 2006-11-08 and 0 dates past the creation of
+this document.
+
+``` r
+min(hi$date)
+#> [1] "2006-11-08 13:13:16 EST"
+max(hi$date)
+#> [1] "2019-06-30 EDT"
+sum(hi$date > today())
+#> [1] 0
+```
+
+To better explore the distribution of dates and track expendtures, we
+will create a `year_clean` variable from `date` using
+`lubridate::year()`.
+
+``` r
+hi <- mutate(hi, year_clean = year(date))
+```
+
+We can see the expenditures naturally increase in frequency every other
+year, during the elections.
+
+``` r
+hi %>%
+  ggplot(aes(year_clean)) +
+  geom_bar() +
+  labs(
+    title = "HI Expends per Year",
+    caption = "Source: HI CRS",
+    x = "Year",
+    y = "Count"
+  )
+```
+
+![](../plots/year_count-1.png)<!-- -->
+
+``` r
+is_even <- function(x) x %% 2 == 0
+hi %>% 
+  mutate(election_year = is_even(year_clean)) %>% 
+  group_by(year_clean, election_year) %>% 
+  summarize(mean = mean(amount)) %>% 
+  ggplot(aes(year_clean, mean)) +
+  geom_col(aes(fill = election_year)) +
+  scale_y_continuous(labels = dollar) +
+  labs(
+    title = "HI Expend Mean Amount per Year",
+    caption = "Source: HI CRS",
+    fill = "Election Year",
+    x = "Amount",
+    y = "Mean Amount"
+  )
+```
+
+![](../plots/year_amount-1.png)<!-- -->
+
+``` r
+hi %>% 
+  mutate(
+    month = month(date),
+    election_year = is_even(year_clean)
+  ) %>%
+  group_by(month, election_year) %>% 
+  summarize(mean = mean(amount)) %>% 
+  ggplot(aes(month, mean)) +
+  scale_y_continuous(labels = dollar) +
+  geom_line(size = 2, aes(color = election_year)) +
+  labs(
+    title = "HI Expend Mean Amount over Year",
+    caption = "Source: HI CRS",
+    fill = "Election Year",
+    x = "Amount",
+    y = "Mean Amount"
+  )
+```
+
+![](../plots/unnamed-chunk-1-1.png)<!-- -->
+
 ## Wrangle
+
+To improve the searchability of the database, we can perform some
+functional data cleaning and text normalization, using the
+`campfin::normal_*()` functions, which wrap around `stringr::str_*()`
+functions.
 
 ### Address
 
+``` r
+hi <- hi %>% 
+  unite(
+    col = address_combine,
+    address_1, address_2,
+    sep = " ",
+    remove = FALSE,
+    na.rm = TRUE
+  ) %>% 
+  mutate(
+    address_norm = normal_address(
+      address = address_combine,
+      add_abbs = usps,
+      na_rep = TRUE
+    )
+  )
+```
+
+``` r
+hi %>% 
+  select(
+    address_1,
+    address_2,
+    address_norm
+  )
+```
+
+    #> # A tibble: 177,567 x 3
+    #>    address_1                    address_2 address_norm                      
+    #>    <chr>                        <chr>     <chr>                             
+    #>  1 197 SAND ISLAND ACCESS ROAD  UNIT A    197 SAND ISLAND ACCESS ROAD UNIT A
+    #>  2 25 MALUNIU AVE.              <NA>      25 MALUNIU AVENUE                 
+    #>  3 725 KAPIOLANI BLVD, #C-105   <NA>      725 KAPIOLANI BOULEVARD C 105     
+    #>  4 111 S KING ST                <NA>      111 S KING STREET                 
+    #>  5 28 KAINEHE ST., SUITE A-1    <NA>      28 KAINEHE STREET SUITE A 1       
+    #>  6 87-2028 FARRINGTON HWY.      <NA>      87 2028 FARRINGTON HIGHWAY        
+    #>  7 WAIPAHU POST OFFICE          <NA>      WAIPAHU POST OFFICE               
+    #>  8 2140 ARMSTRONG STREET        <NA>      2140 ARMSTRONG STREET             
+    #>  9 2955 E. MANOA ROAD           <NA>      2955 E MANOA ROAD                 
+    #> 10 99-185 MOANALUA RD SUITE 107 <NA>      99 185 MOANALUA ROAD SUITE 107    
+    #> # … with 177,557 more rows
+
 ### ZIP
+
+``` r
+n_distinct(hi$zip_code)
+#> [1] 2656
+prop_in(hi$zip_code, geo$zip)
+#> [1] 0.9576667
+sum(hi$zip_code %out% geo$zip)
+#> [1] 7517
+```
+
+``` r
+hi <- hi %>% 
+  mutate(
+    zip_norm = normal_zip(
+      zip = zip_code,
+      na_rep = TRUE
+    )
+  )
+```
+
+``` r
+n_distinct(hi$zip_norm)
+#> [1] 1808
+prop_in(hi$zip_norm, geo$zip)
+#> [1] 0.9977594
+sum(hi$zip_norm %out% geo$zip)
+#> [1] 396
+```
 
 ### State
 
+100% of `state` values are valid.
+
+``` r
+n_distinct(hi$state)
+#> [1] 53
+prop_in(hi$state, geo$state)
+#> [1] 1
+sum(hi$state %out% geo$state)
+#> [1] 0
+```
+
 ### City
+
+#### Normal
+
+``` r
+n_distinct(hi$city)
+#> [1] 1626
+prop_in(hi$city, geo$city)
+#> [1] 0.9542723
+sum(unique(hi$city) %out% geo$city)
+#> [1] 838
+```
+
+``` r
+hi %>% 
+  count(city, sort = TRUE) %>% 
+  filter(city %out% geo$city)
+```
+
+    #> # A tibble: 838 x 2
+    #>    city               n
+    #>    <chr>          <int>
+    #>  1 KAILUA-KONA     2288
+    #>  2 95131            226
+    #>  3 HON              189
+    #>  4 IWILEI           182
+    #>  5 ONLINE           155
+    #>  6 ???              139
+    #>  7 KANE'OHE         132
+    #>  8 -                127
+    #>  9 HONOLULU, OAHU   124
+    #> 10 SOMMERVILLE      116
+    #> # … with 828 more rows
+
+``` r
+hi <- hi %>% 
+  mutate(
+    city_norm = normal_city(
+      city = city,
+      geo_abbs = usps_city,
+      st_abbs = c("HI", "HAWAII", "DC"),
+      na = na_city,
+      na_rep = TRUE
+    )
+  )
+
+n_distinct(hi$city_norm)
+```
+
+    #> [1] 1467
+
+``` r
+prop_in(hi$city_norm, geo$city)
+```
+
+    #> [1] 0.97888
+
+``` r
+sum(unique(hi$city_norm) %out% geo$city)
+```
+
+    #> [1] 670
+
+#### Swap
+
+``` r
+hi <- hi %>% 
+  rename(city_raw = city) %>% 
+  left_join(
+    y = geo,
+    by = c(
+      "zip_norm" = "zip", 
+      "state" = "state"
+    )
+  ) %>% 
+  rename(city_match = city) %>% 
+  mutate(
+    match_dist = stringdist(city_norm, city_match),
+    city_swap = if_else(
+      condition = match_dist == 1,
+      true = city_match,
+      false = city_norm
+    )
+  )
+
+mean(hi$match_dist, na.rm = TRUE)
+#> [1] 0.1751593
+max(hi$match_dist, na.rm = TRUE)
+#> [1] 27
+sum(hi$match_dist == 1, na.rm = TRUE)
+#> [1] 1545
+n_distinct(hi$city_swap)
+#> [1] 1078
+prop_in(hi$city_swap, geo$city)
+#> [1] 0.9890686
+sum(unique(hi$city_swap) %out% geo$city)
+#> [1] 290
+```
+
+``` r
+hi %>% 
+  count(state, city_swap, sort = TRUE) %>% 
+  filter(city_swap %out% geo$city) %>% 
+  drop_na()
+```
+
+    #> # A tibble: 291 x 3
+    #>    state city_swap         n
+    #>    <chr> <chr>         <int>
+    #>  1 HI    HON             211
+    #>  2 HI    IWILEI          182
+    #>  3 HI    HONOLULU OAHU   123
+    #>  4 HI    KONA             81
+    #>  5 HI    WAILEA           74
+    #>  6 PA    CHESTERBROOK     62
+    #>  7 HI    KAHULUI MAUI     41
+    #>  8 HI    NANAKULI         41
+    #>  9 CA    MOUNT VIEW       36
+    #> 10 HI    HI               35
+    #> # … with 281 more rows
+
+``` r
+hi$city_swap <- hi$city_swap %>% 
+  str_replace("HON", "HONOLULU") %>% 
+  na_if("HI")
+```
 
 ## Conclude
 
+1.  There are 177,567 records in the database.
+2.  There are 1874 duplicate records, flagged with `dupe_flag`.
+3.  Ranges for `amount` and `date` are both reasonable.
+4.  There are no missing records of importance.
+5.  Consistency issues in geographic values have been improved.
+6.  The 5-digit `zip_norm` variable has been created with
+    `campfin::normal_zip(hi$zip_code)`
+7.  The 4-gitit `year_clean` variable has been created with
+    `lubridate::year(hi$date)`
+8.  Every record has a payer, payee, date, and amount.
+
 ## Export
+
+``` r
+proc_dir <- here("hi", "expends", "data", "processed")
+dir_create(proc_dir)
+
+hi %>% 
+  select(
+    -inoutstate,
+    -zip_code,
+    -city_raw,
+    -address_1,
+    -address_2,
+    -address_combine,
+    -city_norm,
+    -city_match,
+    -match_dist
+  ) %>% 
+  write_csv(
+    na = "",
+    path = glue("{proc_dir}/hi_expends_clean.csv")
+  )
+```

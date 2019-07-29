@@ -71,6 +71,7 @@ pacman::p_load(
   zipcode, # clean & database
   scales, # frormat values
   knitr, # knit documents
+  glue, # combine strings
   here, # relative storage
   fs # search storage 
 )
@@ -468,16 +469,251 @@ hi %>%
 
 #### Date
 
+There are no dates before `r as_date(min(hi$date))` and `r sum(hi$date > today())` dates past the
+creation of this document.
+
+```{r date_range, collapse=TRUE}
+min(hi$date)
+max(hi$date)
+sum(hi$date > today())
+```
+
+To better explore the distribution of dates and track expendtures, we will create a `year_clean`
+variable from `date` using `lubridate::year()`.
+
+```{r add_year}
+hi <- mutate(hi, year_clean = year(date))
+```
+
+We can see the expenditures naturally increase in frequency every other year, during the elections.
+
+```{r year_count}
+hi %>%
+  ggplot(aes(year_clean)) +
+  geom_bar() +
+  labs(
+    title = "HI Expends per Year",
+    caption = "Source: HI CRS",
+    x = "Year",
+    y = "Count"
+  )
+```
+
+```{r year_amount}
+is_even <- function(x) x %% 2 == 0
+hi %>% 
+  mutate(election_year = is_even(year_clean)) %>% 
+  group_by(year_clean, election_year) %>% 
+  summarize(mean = mean(amount)) %>% 
+  ggplot(aes(year_clean, mean)) +
+  geom_col(aes(fill = election_year)) +
+  scale_y_continuous(labels = dollar) +
+  labs(
+    title = "HI Expend Mean Amount per Year",
+    caption = "Source: HI CRS",
+    fill = "Election Year",
+    x = "Amount",
+    y = "Mean Amount"
+  )
+```
+
+```{r}
+hi %>% 
+  mutate(
+    month = month(date),
+    election_year = is_even(year_clean)
+  ) %>%
+  group_by(month, election_year) %>% 
+  summarize(mean = mean(amount)) %>% 
+  ggplot(aes(month, mean)) +
+  scale_y_continuous(labels = dollar) +
+  geom_line(size = 2, aes(color = election_year)) +
+  labs(
+    title = "HI Expend Mean Amount over Year",
+    caption = "Source: HI CRS",
+    fill = "Election Year",
+    x = "Amount",
+    y = "Mean Amount"
+  )
+```
+
 ## Wrangle
+
+To improve the searchability of the database, we can perform some functional data cleaning and
+text normalization, using the `campfin::normal_*()` functions, which wrap around `stringr::str_*()`
+functions.
 
 ### Address
 
+```{r norm_address}
+hi <- hi %>% 
+  unite(
+    col = address_combine,
+    address_1, address_2,
+    sep = " ",
+    remove = FALSE,
+    na.rm = TRUE
+  ) %>% 
+  mutate(
+    address_norm = normal_address(
+      address = address_combine,
+      add_abbs = usps,
+      na_rep = TRUE
+    )
+  )
+```
+
+```{r view_address}
+hi %>% 
+  select(
+    address_1,
+    address_2,
+    address_norm
+  )
+```
+
 ### ZIP
+
+```{r pre_zip, collapse=TRUE}
+n_distinct(hi$zip_code)
+prop_in(hi$zip_code, geo$zip)
+sum(hi$zip_code %out% geo$zip)
+```
+
+```{r normal_zip}
+hi <- hi %>% 
+  mutate(
+    zip_norm = normal_zip(
+      zip = zip_code,
+      na_rep = TRUE
+    )
+  )
+```
+
+```{r post_zip, collapse=TRUE}
+n_distinct(hi$zip_norm)
+prop_in(hi$zip_norm, geo$zip)
+sum(hi$zip_norm %out% geo$zip)
+```
 
 ### State
 
+`r percent(prop_in(hi$state, geo$state))` of `state` values are valid.
+
+```{r pre_state, collapse=TRUE}
+n_distinct(hi$state)
+prop_in(hi$state, geo$state)
+sum(hi$state %out% geo$state)
+```
+
 ### City
+
+#### Normal
+
+```{r pre_city, collapse=TRUE}
+n_distinct(hi$city)
+prop_in(hi$city, geo$city)
+sum(unique(hi$city) %out% geo$city)
+```
+
+```{r view_city}
+hi %>% 
+  count(city, sort = TRUE) %>% 
+  filter(city %out% geo$city)
+```
+
+```{r}
+hi <- hi %>% 
+  mutate(
+    city_norm = normal_city(
+      city = city,
+      geo_abbs = usps_city,
+      st_abbs = c("HI", "HAWAII", "DC"),
+      na = na_city,
+      na_rep = TRUE
+    )
+  )
+
+n_distinct(hi$city_norm)
+prop_in(hi$city_norm, geo$city)
+sum(unique(hi$city_norm) %out% geo$city)
+```
+
+#### Swap
+
+```{r swap_city, collapse=TRUE}
+hi <- hi %>% 
+  rename(city_raw = city) %>% 
+  left_join(
+    y = geo,
+    by = c(
+      "zip_norm" = "zip", 
+      "state" = "state"
+    )
+  ) %>% 
+  rename(city_match = city) %>% 
+  mutate(
+    match_dist = stringdist(city_norm, city_match),
+    city_swap = if_else(
+      condition = match_dist == 1,
+      true = city_match,
+      false = city_norm
+    )
+  )
+
+mean(hi$match_dist, na.rm = TRUE)
+max(hi$match_dist, na.rm = TRUE)
+sum(hi$match_dist == 1, na.rm = TRUE)
+n_distinct(hi$city_swap)
+prop_in(hi$city_swap, geo$city)
+sum(unique(hi$city_swap) %out% geo$city)
+```
+
+```{r view_swap}
+hi %>% 
+  count(state, city_swap, sort = TRUE) %>% 
+  filter(city_swap %out% geo$city) %>% 
+  drop_na()
+```
+
+```{r fix_city}
+hi$city_swap <- hi$city_swap %>% 
+  str_replace("HON", "HONOLULU") %>% 
+  na_if("HI")
+```
 
 ## Conclude
 
+1. There are `r comma(nrow(hi))` records in the database.
+1. There are `r sum(hi$dupe_flag)` duplicate records, flagged with `dupe_flag`.
+1. Ranges for `amount` and `date` are both reasonable.
+1. There are no missing records of importance.
+1. Consistency issues in geographic values have been improved.
+1. The 5-digit `zip_norm` variable has been created with `campfin::normal_zip(hi$zip_code)`
+1. The 4-gitit `year_clean` variable has been created with `lubridate::year(hi$date)`
+1. Every record has a payer, payee, date, and amount.
+
 ## Export
+
+```{r}
+proc_dir <- here("hi", "expends", "data", "processed")
+dir_create(proc_dir)
+
+hi %>% 
+  select(
+    -inoutstate,
+    -zip_code,
+    -city_raw,
+    -address_1,
+    -address_2,
+    -address_combine,
+    -city_norm,
+    -city_match,
+    -match_dist
+  ) %>% 
+  write_csv(
+    na = "",
+    path = glue("{proc_dir}/hi_expends_clean.csv")
+  )
+```
+
