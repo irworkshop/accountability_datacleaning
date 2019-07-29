@@ -1,0 +1,474 @@
+---
+title: "Iowa Expenditures"
+author: "Kiernan Nicholls"
+date: "`r Sys.time()`"
+output:
+  github_document: 
+    df_print: tibble
+    toc: true
+    toc_dept: 2
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE, purl=FALSE}
+library(knitr)
+opts_chunk$set(
+  eval = TRUE,
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  error = FALSE,
+  comment = "#>",
+  fig.path = "../plots/",
+  fig.width = 10,
+  dpi = 300
+)
+options(width = 99)
+```
+
+## Project
+
+The Accountability Project is an effort to cut across data silos and give journalists, policy
+professionals, activists, and the public at large a simple way to search across huge volumes of
+public data about people and organizations.
+
+Our goal is to standardizing public data on a few key fields by thinking of each dataset row as a
+transaction. For each transaction there should be (at least) 3 variables:
+
+1. All **parties** to a transaction
+2. The **date** of the transaction
+3. The **amount** of money involved
+
+## Objectives
+
+This document describes the process used to complete the following objectives:
+
+1. How many records are in the database?
+1. Check for duplicates
+1. Check ranges
+1. Is there anything blank or missing?
+1. Check for consistency issues
+1. Create a five-digit ZIP Code called `ZIP5`
+1. Create a `YEAR` field from the transaction date
+1. Make sure there is data on both parties to a transaction
+
+## Packages
+
+The following packages are needed to collect, manipulate, visualize, analyze, and communicate
+these results. The `pacman` package will facilitate their installation and attachment.
+
+```{r load_packages, message=FALSE, dfrning=FALSE, error=FALSE}
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load(
+  stringdist, # levenshtein value
+  tidyverse, # data manipulation
+  lubridate, # datetime strings
+  RSocrata, # read SODA api
+  magrittr, # pipe opperators
+  janitor, # dataframe clean
+  zipcode, # clean & database
+  scales, # format strings
+  knitr, # knit documents
+  glue, # combine strings
+  here, # relative storage
+  fs # search storage 
+)
+```
+
+The IRW's `campfin` package will also have to be installed from GitHub. This package contains
+functions custom made to help facilitate the processing of campaign finance data.
+
+```{r load_campfin}
+pacman::p_load_current_gh("kiernann/campfin")
+```
+
+This document should be run as part of the `R_campfin` project, which lives as a sub-directory of
+the more general, language-agnostic [`irworkshop/accountability_datacleaning`][01] GitHub
+repository.
+
+The `R_campfin` project uses the [RStudio projects][02] feature and should be run as such. The
+project also uses the dynamic `here::here()` tool for file paths relative to _your_ machine.
+
+```{r where_here, collapse=TRUE}
+# where dfs this document knit?
+here::here()
+```
+
+[01]: https://github.com/irworkshop/accountability_datacleaning "TAP repo"
+[02]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects "Rproj"
+
+## Data
+
+[Data][03] is obtained from the Iowa Ethics & Campaign Disclosure Board's open data portal.
+
+> This dataset contains information on expenditures made by state-wide, legislative or local
+candidate committees, state PACs, county central committees, state parties, and state and local
+ballot issue committees in Iowa. Data is available beginning in 2003 for all reports filed
+electronically, and some paper filed reports. Data is provided through reports submitted by
+candidate committees, state political committees, federal/out-of-state political committees, county
+central committees, ballot issue committees and organizations making contributions or independent
+expenditures. Quality of the data provided in the dataset is dependent upon the accuracy of the
+data reported electronically.
+
+[03]: https://data.iowa.gov/Campaigns-Elections/Iowa-Campaign-Expenditures/3adi-mht4
+
+## Import
+
+The data can be directly read using `RSocrata::read.socrata()`.
+
+```{r read_socrata}
+ia <- as_tibble(read.socrata("https://data.iowa.gov/resource/3adi-mht4.json"))
+ia$amount <- as.double(ia$amount)
+```
+
+## Explore
+
+```{r glimpse}
+head(ia)
+tail(ia)
+glimpse(sample_frac(ia))
+```
+
+### Missing
+
+The variables range in their degree of missing values. There are `r count_na(ia$amount)` missing
+values for variables like `transaction_id`, `date`, or `amount`.
+
+```{r count_na}
+glimpse_fun(ia, count_na)
+```
+
+While there are `r count_na(ia$committee_nm)` missing values for `committee_nm`, 
+`r percent(mean(is.na(ia$organization_nm)))` of `organization_nm` is missing. However,
+`r percent(mean(!is.na(ia$last_nm)))` of records _do_ have a `last_nm` value. We will flag any
+record without either an `organization_nm` or `last_nm`.
+
+```{r flag_na, collapse=TRUE}
+ia <- mutate(ia, na_flag = is.na(organization_nm) & is.na(last_nm))
+sum(ia$na_flag)
+```
+
+### Distinct
+
+The variables also range in their degree of distinctness. We can see that the `transaction_id` is
+`r percent(n_distinct(ia$transaction_id)/nrow(ia))` distinct and can be used to identify a unique
+expenditure.
+
+```{r n_distinct}
+glimpse_fun(ia, n_distinct)
+```
+
+### Duplicates
+
+There are no duplicate records.
+
+```{r get_dupes, collapse=TRUE}
+ia_dupes <- get_dupes(ia)
+nrow(ia_dupes)
+```
+
+### Ranges
+
+For continuous variables, we should check the range and distribution of values.
+
+#### Amounts
+
+The `amount` value ranges from `r dollar(min(ia$amount))` to `r dollar(max(ia$amount))` with
+`r sum(ia$amount < 0)` values less than `r dollar(0)` (which typically indicates a correction). 
+The mean expenditure is has a value of `r dollar(mean(ia$amount))`, while the median is only 
+`r dollar(median(ia$amount))`.
+
+```{r anmount_range}
+summary(ia$amount)
+sum(ia$amount < 0)
+percent(mean(ia$amount < 0))
+```
+
+```{r amount_hist, echo=FALSE}
+ia %>% 
+  ggplot(aes(amount)) +
+  geom_histogram() +
+  scale_x_continuous(
+    breaks = c(1, 10, 100, 1000, 10000, 100000, 1000000),
+    trans = "log10",
+    labels = dollar
+  ) +
+  labs(
+    title = "Iowa Expenditure Amounts",
+    caption = "Source: IA ECDB",
+    x = "Amount",
+    y = "Count"
+  )
+```
+
+We can view the smallest and largest expenditures to see if these are potentially typos.
+
+```{r glimpse_minmax_amount}
+glimpse(ia %>% filter(amount == min(amount)))
+glimpse(ia %>% filter(amount == max(amount)))
+```
+
+#### Dates
+
+The ranges for `date` seem reasonable. There are `r sum(ia$date > today())` dates beyond 
+`r today()`.
+
+```{r date_ranges, collapse=TRUE}
+min(ia$date)
+max(ia$date)
+sum(ia$date > today())
+```
+
+We can create a `year` variable to better explore and search the data, using `lubridate::year()`
+
+```{r add_year}
+ia <- ia %>% 
+  mutate(
+    year = year(date),
+    on_year = is_even(year)
+  )
+```
+
+```{r count_minmax_year, collapse=TRUE}
+sum(ia$year == min(ia$year))
+sum(ia$year == max(ia$year))
+```
+
+```{r year_count_bar, echo=FALSE}
+ia %>% 
+  count(on_year, year) %>% 
+  ggplot(aes(x = year, y = n)) +
+  geom_col(aes(fill = on_year)) +
+  scale_fill_brewer(
+    type = "qual",
+    palette = "Dark2",
+    guide = FALSE
+  ) +
+  labs(
+    title = "Iowa Expenditure Counts per Year",
+    caption = "Source: IA ECDB",
+    x = "Year",
+    y = "Count"
+  )
+```
+
+```{r amount_year_bar, echo=FALSE}
+ia %>% 
+  group_by(year, on_year) %>% 
+  summarize(mean = mean(amount)) %>% 
+  ggplot(aes(x = year, y = mean)) +
+  geom_col(aes(fill = on_year)) +
+  scale_fill_brewer(
+    type = "qual",
+    palette = "Dark2",
+    guide = FALSE
+  ) +
+  labs(
+    title = "Iowa Expenditure Mean Amount per Year",
+    caption = "Source: IA ECDB",
+    x = "Year",
+    y = "Count"
+  )
+```
+
+```{r amount_month_line}
+ia %>% 
+  mutate(month = month(date)) %>% 
+  group_by(on_year, month) %>% 
+  summarize(mean = mean(amount)) %>% 
+  ggplot(aes(month, mean)) +
+  geom_line(aes(color = on_year), size = 2) +
+  scale_y_continuous(labels = dollar) +
+  scale_x_continuous(labels = month.abb, breaks = 1:12) +
+  scale_color_brewer(
+    type = "qual",
+    palette = "Dark2"
+  ) +
+  labs(
+    title = "Iowa Expenditure Amount by Month",
+    caption = "Source: IA ECDB",
+    color = "Election Year",
+    x = "Month",
+    y = "Amount"
+  )
+```
+
+## Wrangle
+
+### Address
+
+```{r norm_address}
+ia <- ia %>% 
+  unite(
+    col = address_comb,
+    address_line_1, address_line_2,
+    remove = FALSE,
+    na.rm = TRUE
+  ) %>% 
+  mutate(
+    address_norm = normal_address(
+      address = address_comb,
+      add_abbs = usps,
+      na = c("", "NA"),
+      na_rep = TRUE
+    )
+  )
+```
+
+```{r view_address}
+ia %>% 
+  select(
+    address_line_1,
+    address_line_2,
+    address_norm
+  ) %>% 
+  sample_frac()
+```
+
+### ZIP
+
+```{r zip_pre, collapse=TRUE}
+n_distinct(ia$zip)
+prop_in(ia$zip, geo$zip)
+sum(unique(ia$zip) %out% geo$zip)
+```
+
+```{r norm_zip}
+ia <- ia %>% 
+  mutate(
+    zip_norm = normal_zip(
+      zip = zip,
+      na_rep = TRUE
+    )
+  )
+```
+
+```{r zip_post, collapse=TRUE}
+n_distinct(ia$zip_norm)
+prop_in(ia$zip_norm, geo$zip)
+sum(unique(ia$zip_norm) %out% geo$zip)
+```
+
+### State
+
+```{r state_pre, collapse=TRUE}
+n_distinct(ia$state_cd)
+prop_in(ia$state_cd, geo$state)
+sum(unique(ia$state_cd) %out% geo$state)
+```
+
+```{r norm_state}
+ia <- ia %>% 
+  mutate(
+    state_norm = normal_state(
+      state = str_replace(state_cd, "AI", "IA"),
+      na_rep = TRUE,
+      valid = geo$state
+    )
+  )
+```
+
+```{r state_post, collapse=TRUE}
+n_distinct(ia$state_norm)
+prop_in(ia$state_norm, geo$state)
+sum(unique(ia$state_norm) %out% geo$state)
+```
+
+### City
+
+```{r city_pre, collapse=TRUE}
+n_distinct(ia$city)
+prop_in(str_to_upper(ia$city), geo$city)
+sum(unique(str_to_upper(ia$city)) %out% geo$city)
+```
+
+### Normalize
+
+```{r norm_city}
+ia <- ia %>% 
+  mutate(
+    city_norm = normal_city(
+      city = city %>% str_replace("DesMoines", "Des Moines"),
+      geo_abbs = usps_city,
+      st_abbs = c("IA", "IOWA", "DC"),
+      na = c("", "NA"),
+      na_rep = TRUE
+    )
+  )
+```
+
+```{r city_post_norm, collapse=TRUE}
+n_distinct(ia$city_norm)
+prop_in(str_to_upper(ia$city_norm), geo$city)
+sum(unique(str_to_upper(ia$city_norm)) %out% geo$city)
+```
+
+```{r count_bad_city}
+ia %>% 
+  filter(city_norm %out% geo$city) %>% 
+  count(state_norm, city, city_norm, sort = TRUE)
+```
+
+### Swap
+
+```{r}
+ia <- ia %>% 
+  rename(city_raw = city) %>% 
+  left_join(
+    y = geo,
+    by = c(
+      "state_norm" = "state",
+      "zip_norm" = "zip"
+    )
+  ) %>% 
+  rename(city_match = city) %>% 
+  mutate(
+    match_dist = stringdist(city_norm, city_match),
+    city_swap = if_else(
+      condition = match_dist == 1,
+      true = city_match,
+      false = city_norm
+    )
+  )
+```
+
+```{r city_post_swap, collapse=TRUE}
+n_distinct(ia$city_swap)
+prop_in(str_to_upper(ia$city_swap), geo$city)
+sum(unique(str_to_upper(ia$city_swap)) %out% geo$city)
+```
+
+## Conclude
+
+1. There are `r nrow(ia)` records in the database.
+1. There are `r nrow(ia_dupes)` duplicate records in the database.
+1. The range and distribution of `amount` and `date` seem reasonable.
+1. There are `r sum(ia$na_flag)` records missing a recipient.
+1. Consistency in goegraphic data has been improved with `campfin::normal_*()`.
+1. The 5-digit `zip_norm` variable has been created with `campfin::normal_zip(ia$zip)`.
+1. The 4-digit `year` variable has been created with `lubridate::year(ia$date)`.
+
+## Export
+
+```{r proc_dir}
+proc_dir <- here("ia", "expends", "data", "processed")
+dir_create(proc_dir)
+```
+
+```{r write_csv}
+ia %>% 
+  select(
+    -state_cd,
+    -city_raw,
+    -zip,
+    -city_match,
+    -city_norm,
+    -match_dist
+  ) %>% 
+  write_csv(
+    path = glue("{proc_dir}/ia_expends_clean.csv"),
+    na = ""
+  )
+```
+
