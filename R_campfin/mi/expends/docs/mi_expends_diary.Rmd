@@ -141,7 +141,7 @@ No expenditure files are large enough to be split, so we can simply create a vec
 `glue()`-ing the standard format with each year.
 
 ```{r make_urls}
-urls <- glue("https://miboecfr.nictusa.com/cfr/dumpall/cfrdetail/{1995:2019}_mi_cfr_expenditures.zip")
+urls <- glue("https://miboecfr.nictusa.com/cfr/dumpall/cfrdetail/{2008:2019}_mi_cfr_expenditures.zip")
 ```
 
 ### Download
