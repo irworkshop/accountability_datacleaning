@@ -1,6 +1,6 @@
 ---
-title: "{State} {Data}"
-author: "{First} {Last}"
+title: "State Data"
+author: "First Last"
 date: "`r Sys.time()`"
 output:
   github_document: 
@@ -106,36 +106,200 @@ here::here()
 
 ### Download
 
-### Unzip
+```{r download_raw}
+
+```
 
 ### Read
 
+```{r read_raw}
+
+```
+
 ## Explore
+
+```{r glimpse}
+head(df)
+tail(df)
+glimpse(sample_frac(df))
+```
 
 ### Missing
 
+```{r glimpse_na}
+glimpse_fun(df, count_na)
+```
+
 ### Duplicates
+
+```{r get_dupes}
+df_dupes <- distinct(get_dupes(df))
+```
 
 ### Categorical
 
+```{r glimpse_distinct}
+glimpse_fun(df, n_distinct)
+```
+
 ### Continuous
+
+#### Amounts
+
+```{r summary_amount}
+summary(df$amount)
+```
+
+```{r amount_histogram, echo=FALSE}
+df %>%
+  ggplot(aes(amount)) +
+  geom_histogram(binwidth = 30) +
+  scale_x_continuous(
+    labels = dollar,
+    trans = "log10"
+  )
+```
+
+#### Dates
+
+```{r}
+df <- mutate(df, year = year(date))
+```
+
+```{r date_range, collapse=TRUE}
+min(df$date)
+sum(df$year < 2000)
+max(df$date)
+sum(df$date > today())
+```
 
 ## Wrangle
 
 ### Address
 
+```{r normal_address}
+df <- df %>% 
+  mutate(
+    address_norm = normal_address(
+      address = address,
+      add_abbs = usps,
+      na_rep = TRUE
+    )
+  )
+```
+
 ### ZIP
+
+```{r count_zip_pre, collapse=TRUE}
+n_distinct(df$zip)
+prop_in(df$zip, geo$zip, na.rm = TRUE)
+length(setdiff(df$zip, geo$zip))
+```
+
+```{r normal_zip}
+df <- df %>% 
+  mutate(
+    zip_norm = normal_zip(
+      zip = address,
+      na_rep = TRUE
+    )
+  )
+```
+
+```{r count_zip_post, collapse=TRUE}
+n_distinct(df$zip_norm)
+prop_in(df$zip_norm, geo$zip, na.rm = TRUE)
+length(setdiff(df$zip_norm, geo$zip))
+```
 
 ### State
 
+```{r count_state_pre, collapse=TRUE}
+n_distinct(df$state)
+prop_in(df$state, geo$state, na.rm = TRUE)
+length(setdiff(df$state, geo$state))
+```
+
+```{r normal_state}
+df <- df %>% 
+  mutate(
+    zip_norm = normal_state(
+      state = state,
+      abbreviate = TRUE,
+      na_rep = TRUE,
+      valid = geo$state
+    )
+  )
+```
+
+```{r count_state_post, collapse=TRUE}
+n_distinct(df$state)
+prop_in(df$state, geo$state, na.rm = TRUE)
+length(setdiff(df$state, geo$state))
+```
+
 ### City
+
+```{r count_city_pre, collapse=TRUE}
+n_distinct(df$city)
+prop_in(df$state, geo$city, na.rm = TRUE)
+length(setdiff(df$city, geo$state))
+```
 
 #### Normalize
 
+```{r normal_city}
+df <- df %>% 
+  mutate(
+    city_norm = normal_city(
+      city = city, 
+      geo_abbs = usps,
+      st_abbs = c("DF", "DC", "DATA FRAME"),
+      na = na_city,
+      na_rep = TRUE
+    )
+  )
+```
+
+```{r count_city_post_norm, collapse=TRUE}
+n_distinct(df$city_norm)
+prop_in(df$city_norm, geo$city, na.rm = TRUE)
+length(setdiff(df$city_norm, geo$state))
+```
+
 #### Swap
+
+```{r}
+df <- df %>% 
+  left_join(
+    y = geo,
+    by = c(
+      "state_norm" = "state",
+      "zip_norm" = "zip"
+    )
+  ) %>% 
+  rename(city_match = city) %>% 
+  mutate(
+    match_dist = stringdist()
+  )
+```
+
+```{r count_city_post_swap, collapse=TRUE}
+n_distinct(df$city_norm)
+prop_in(df$city_norm, geo$city, na.rm = TRUE)
+length(setdiff(df$city_norm, geo$state))
+```
 
 #### Refine
 
 ## Conclude
+
+1. There are `nrow(df)` records in the database.
+1. There are `sum(df$dupe_flag)` duplicate records in the database.
+1. The range and distribution of `amount` and `date` seem reasonable.
+1. There are `sum(mi$na_flag)` records missing either recipient or date.
+1. Consistency in goegraphic data has been improved with `campfin::normal_*()`.
+1. The 5-digit `zip_norm` variable has been created with `campfin::normal_zip(df$zip)`.
+1. The 4-digit `year` variable has been created with `lubridate::year(df$date)`.
 
 ## Export
