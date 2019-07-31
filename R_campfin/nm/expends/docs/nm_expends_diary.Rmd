@@ -125,7 +125,7 @@ The form on the data download page must be manually filled out to download a fil
 this process with the RSelenium package.
 
 ```{r raw_dir}
-raw_dir <- here("nm", "data", "raw")
+raw_dir <- here("nm", "expends", "data", "raw")
 dir_create(raw_dir)
 ```
 
