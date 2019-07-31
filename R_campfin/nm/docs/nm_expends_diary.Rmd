@@ -67,6 +67,7 @@ pacman::p_load(
   lubridate, # datetime strings
   magrittr, # pipe opperators
   janitor, # dataframe clean
+  refinr, # cluster and merge
   scales, # format strings
   knitr, # knit documents
   vroom, # read files fast
@@ -251,12 +252,13 @@ A huge number of records in this database are complete duplicates. We can find t
 nm_dupes <- distinct(get_dupes(nm))
 ```
 
-We will have to flag them in the original database with `dupe_flag`.
+We will have to flag them in the original database with a `dupe_flag` variable.
 
 ```{r flag_dupes}
 nm <- nm %>% 
   left_join(nm_dupes) %>% 
-  mutate(dupe_flag = !is.na(dupe_count))
+  mutate(dupe_flag = !is.na(dupe_count)) %>% 
+  select(-dupe_count)
 
 sum(nm$dupe_flag)
 percent(mean(nm$dupe_flag))
@@ -339,10 +341,10 @@ nm %>%
   geom_col(aes(fill = on)) +
   scale_fill_brewer(
     type = "qual",
-    palette = "Set1"
+    palette = "Dark2"
   ) +
   labs(
-    title = "New Mexico Expenditure Amount Distribution",
+    title = "New Mexico Expenditure Count by Year",
     caption = "Source: NM CFIS",
     fill = "Election Year",
     x = "Amount",
@@ -350,3 +352,250 @@ nm %>%
   )
 ```
 
+## Wrangle
+
+### Address
+
+```{r normal_address}
+nm <- nm %>% 
+  mutate(
+    address_norm = normal_address(
+      address = address,
+      add_abbs = usps,
+      na_rep = TRUE
+    )
+  )
+```
+
+```{r sample_address_changes}
+nm %>% 
+  select(
+    address,
+    address_norm
+  ) %>% 
+  sample_n(10)
+```
+
+### ZIP
+
+```{r zip_pre, collapse=TRUE}
+n_distinct(nm$zip)
+prop_in(nm$zip, geo$zip, na.rm = TRUE)
+length(setdiff(nm$zip, geo$zip))
+```
+
+```{r normal_zip}
+nm <- nm %>% 
+  mutate(
+    zip_norm = normal_zip(
+      zip = zip,
+      na_rep = TRUE
+    )
+  )
+```
+
+```{r zip_post, collapse=TRUE}
+n_distinct(nm$zip_norm)
+prop_in(nm$zip_norm, geo$zip, na.rm = TRUE)
+length(setdiff(nm$zip_norm, geo$zip))
+```
+
+### State
+
+```{r state_pre, collapse=TRUE}
+n_distinct(nm$state)
+prop_in(nm$state, geo$state, na.rm = TRUE)
+length(setdiff(nm$state, geo$state))
+```
+
+```{r normal_state}
+nm <- nm %>% 
+  mutate(
+    state_norm = normal_state(
+      abbreviate = TRUE,
+      valid = geo$state,
+      na_rep = TRUE,
+      state = state %>% 
+        str_replace("^NEWMEXICO$", "NM") %>% 
+        str_replace("^DISTRICTOFCOLUMBIA$", "DC") %>% 
+        str_replace("^NEWHAMPSHIRE$", "NH") %>%
+        str_replace("^NEWJERSEY$", "NJ") %>% 
+        str_replace("^NEWYORK$", "NY") %>% 
+        str_replace("^S DAKOTA$", "SD") %>% 
+        str_replace("^W VA$", "WV") %>% 
+        str_replace("^DEL$", "DE") %>% 
+        str_replace("^COLO$", "CO") %>% 
+        str_replace("^ILL$", "IL") %>% 
+        str_replace("^ILINOIS$", "IL") %>% 
+        str_replace("^CORADO$", "CO") %>% 
+        str_replace("^ONTARIO$", "OT") %>% 
+        str_replace("^S CAROLINA$", "SC") %>% 
+        str_replace("^WA DC$", "DC") %>% 
+        str_replace("^WASH DC$", "DC") %>% 
+        str_replace("^MASS$", "MA") %>% 
+        str_replace("^N CAROLINA$", "NC") %>% 
+        str_replace("^DEAWARE$", "DE") %>% 
+        str_replace("^NEW JERSERY$", "NJ") %>% 
+        str_replace("^NEW MEXCO$", "NM") %>% 
+        str_replace("^TENNESEE$", "TN") %>% 
+        str_replace("^TEX$", "TX") %>% 
+        str_replace("^DEAWARE$", "DE")
+    )
+  )
+```
+
+```{r state_post, collapse=TRUE}
+n_distinct(nm$state_norm)
+prop_in(nm$state_norm, geo$state, na.rm = TRUE)
+```
+
+### City
+
+```{r city_pre, collapse=TRUE}
+n_distinct(nm$city)
+prop_in(nm$city, geo$city, na.rm = TRUE)
+length(setdiff(nm$city, geo$city))
+```
+
+```{r rename_city}
+nm <- rename(nm, city_raw = city)
+```
+
+#### Normalize
+
+```{r normal_city}
+nm <- nm %>%
+  mutate(
+    city_norm = normal_city(
+      na = na_city,
+      na_rep = TRUE,
+      geo_abbs = usps_city,
+      st_abbs = c("NM", "DC", "NEW MEXICO"),
+      city = 
+        str_trim(city_raw) %>% 
+        str_replace("^SF$", "SANTA FE") %>% 
+        str_replace("^LC$", "LAS CRUCES") %>% 
+        str_replace("^AL$", "ALBUQUERQUE") %>% 
+        str_replace("^ABQ$", "ALBUQUERQUE") %>% 
+        str_replace("^ALB$", "ALBUQUERQUE") %>% 
+        str_replace("^ALBQ$", "ALBUQUERQUE") %>% 
+        str_replace("^ALBU$", "ALBUQUERQUE") %>% 
+        str_replace("^ALBUQ$", "ALBUQUERQUE") %>% 
+        str_replace("^ALBQU$", "ALBUQUERQUE") %>% 
+        str_replace("^ALBUEQ$", "ALBUQUERQUE") %>% 
+        str_replace("^ALBURQUE$", "ALBUQUERQUE") %>% 
+        str_replace("^ALBUQUQUE$", "ALBUQUERQUE") %>% 
+        str_replace("^ALBUQIERQUE$", "ALBUQUERQUE") %>% 
+        str_replace("^ALBUQUERQUENM$", "ALBUQUERQUE") %>% 
+        str_replace("^ALBUQUEWRWQUE$", "ALBUQUERQUE") %>% 
+        str_replace("^T OR C$", "TRUTH OR CONSEQUENCES")
+    )
+  )
+```
+
+```{r city_post_norm, collapse=TRUE}
+n_distinct(nm$city_norm)
+prop_in(nm$city_norm, geo$city, na.rm = TRUE)
+length(setdiff(nm$city_norm, geo$city))
+```
+
+#### Swap
+
+```{r swap_city}
+nm <- nm %>%
+  left_join(
+    y = geo,
+    by = c(
+      "state_norm" = "state",
+      "zip_norm" = "zip"
+    )
+  ) %>% 
+  rename(city_match = city) %>% 
+  mutate(
+    match_dist = stringdist(city_norm, city_match),
+    city_swap = if_else(
+      condition = match_dist == 1,
+      true = city_match,
+      false = city_norm
+    )
+  )
+
+mean(nm$match_dist, na.rm = TRUE)
+sum(nm$match_dist == 1, na.rm = TRUE)
+```
+
+```{r city_post_swap, collapse=TRUE}
+n_distinct(nm$city_swap)
+prop_in(nm$city_swap, geo$city, na.rm = TRUE)
+length(setdiff(nm$city_swap, geo$city))
+```
+
+```{r count_city_post_swap}
+nm %>% 
+  filter(city_swap %out% geo$city) %>% 
+  count(city_swap, sort = TRUE)
+```
+
+#### Refine
+
+```{r city_refine}
+nm_refined <- nm %>% 
+  mutate(
+    city_refine = city_swap %>% 
+      key_collision_merge(dict = geo$city[geo$state == "NM"]) %>% 
+      n_gram_merge(numgram = 2)
+  )
+```
+
+```{r join_refine}
+nm <- nm %>% 
+  left_join(nm_refined) %>% 
+  mutate(city_clean = coalesce(city_swap, city_refine))
+```
+
+```{r city_post_refine, collapse=TRUE}
+n_distinct(nm_refined$city_refine)
+prop_in(nm_refined$city_refine, geo$city, na.rm = TRUE)
+length(setdiff(nm_refined$city_refine, geo$city))
+```
+
+## Conclude
+
+```{r conclude, echo=FALSE}
+n_dupes <- sum(nm$dupe_flag, na.rm = T)
+p_dupes <- percent(mean(nm$dupe_flag))
+```
+
+1. There are `r nrow(nm)` records in the database.
+1. There are `r n_dupes` records (`r p_dupes` of the database) flagged with `dupe_flag`.
+1. The range and distribution of `amount` and `date` seem reasonable.
+1. There are zero records with unexpected missing values.
+1. Consistency in goegraphic data has been improved with `campfin::normal_*()`.
+1. The 5-digit `zip_norm` variable has been created with `campfin::normal_zip(nm$zip)`.
+1. The 4-digit `year` variable has been created with `lubridate::year(nm$date_clean)`.
+
+## Export
+
+```{r proc_dir}
+proc_dir <- here("nm", "expends", "data", "processed")
+dir_create(proc_dir)
+```
+
+```{r write_csv}
+nm %>% 
+  select(
+    -date_contribution,
+    -city_raw,
+    -state,
+    -zip,
+    -city_match,
+    -city_norm,
+    -match_dist,
+    -city_swap,
+    -city_refine
+  ) %>% 
+  write_csv(
+    path = glue("{proc_dir}/nm_expends_clean.csv"),
+    na = ""
+  )
+```
