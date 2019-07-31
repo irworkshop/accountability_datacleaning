@@ -58,26 +58,27 @@ This document describes the process used to complete the following objectives:
 The following packages are needed to collect, manipulate, visualize, analyze, and communicate
 these results. The `pacman` package will facilitate their installation and attachment.
 
+The IRW's `campfin` package will also have to be installed from GitHub. This package contains
+functions custom made to help facilitate the processing of campaign finance data.
+
 ```{r load_packages, message=FALSE, dfrning=FALSE, error=FALSE}
 if (!require("pacman")) install.packages("pacman")
+pacman::p_load_current_gh("kiernann/campfin")
 pacman::p_load(
   stringdist, # levenshtein value
+  RSelenium, # remote browser
   tidyverse, # data manipulation
   lubridate, # datetime strings
   magrittr, # pipe opperators
   janitor, # dataframe clean
-  zipcode, # clean & database
+  refinr, # cluster and merge
+  scales, # format strings
   knitr, # knit documents
+  vroom, # read files fast
+  glue, # combine strings
   here, # relative storage
   fs # search storage 
 )
-```
-
-The IRW's `campfin` package will also have to be installed from GitHub. This package contains
-functions custom made to help facilitate the processing of campaign finance data.
-
-```{r load_campfin}
-pacman::p_load_current_gh("kiernann/campfin")
 ```
 
 This document should be run as part of the `R_campfin` project, which lives as a sub-directory of
@@ -97,229 +98,44 @@ here::here()
 
 ## Data
 
-Describe _where_ the data is coming from. [Link to the data download][03] page if possible.
-
-Describe the data set that is going to be cleaned. A file name, age, and unit of observation.
-
-[03]: https://example.com "source"
-
 ### About
 
-> If the publisher provides any information on the file, you can directly quote that here.
-
 ### Variables
-
-`variable_name`:
-
-> Directly quote the definition given for variables of interest.
 
 ## Import
 
 ### Download
 
-Download raw, **immutable** data file.
-
-```{r download_raw}
-download.file()
-```
-
 ### Unzip
-
-If needed, unzip into the same directory
-
-```{r unzip_raw}
-unzip()
-```
 
 ### Read
 
-```{r read_raw}
-df <- read_delim()
-```
-
 ## Explore
-
-There are `nrow(df)` records of `length(df)` variables in the full database.
-
-```{r glimpse}
-glimpse(df)
-```
-
-### Distinct
-
-The variables range in their degree of distinctness.
-
-```{r n_distinct}
-df %>% glimpse_fun(n_distinct)
-```
-
-We can explore the distribution of the least distinct values with `ggplot2::geom_bar()`.
-
-```{r plot_bar, echo=FALSE}
-ggplot(data = df) + 
-  geom_bar(mapping = aes(var))
-```
-
-Or, filter the data and explore the most frequent discrete data.
-
-```{r plot_bar2, echo=FALSE}
-df %>% 
-  count(var, sort = TRUE) %>% 
-  head(10) %>% 
-  ggplot(mapping = aes(x = var)) + 
-  geom_bar(mapping = aes(color = var))
-```
 
 ### Missing
 
-The variables also vary in their degree of values that are `NA` (missing).
-
-```{r count_na}
-df %>% glimpse_fun(count_na)
-```
-
-We will flag any records with missing values in the key variables used to identify an expenditure.
-
-```{r na_flag}
-df <- df %>% mutate(na_flag = is.na(var))
-```
-
 ### Duplicates
 
-```{r get_dupes, collapse=TRUE}
-df_dupes <- get_dupes(df)
-```
+### Categorical
 
-### Ranges
-
-#### Amounts
-
-```{r}
-summary(df$amount)
-```
-
-### Dates
-
-```{r}
-summary(df$date)
-```
+### Continuous
 
 ## Wrangle
 
-### Year
-
-Add a `year` variable from `date` after `col_date()` using `lubridate::year()`.
-
-```{r add_year}
-df <- df %>% mutate(year = year(date))
-```
-
 ### Address
 
-The `address` variable should be minimally cleaned by removing punctuation and fixing white-space.
-
-```{r normalize_address}
-df <- df %>% mutate(address_clean = normalize_address(address))
-```
-
-### Zipcode
-
-```{r normalize_zip}
-df <- df %>% mutate(zip_clean = normalize_zip(zip))
-```
+### ZIP
 
 ### State
 
-```{r normalize_state, collapse=TRUE}
-df <- df %>% mutate(state_clean = normalize_state(state))
-```
-
 ### City
 
-Cleaning city values is the most complicated. This process involves four steps:
-
-1. Prepare raw city values by removing invalid data and reducing inconsistencies
-1. Match prepared city values with the _actual_ city name of that record's ZIP code
-1. swap prepared city values with the ZIP code match _if_ only 1 edit is needed
-1. Refine swapped city values with key collision and n-gram fingerprints
-
-#### Prep
-
-```{r prep_city}
-df <- df %>% mutate(city_prep = normalize_city(city))
-```
-
-#### Match
-
-```{r match_dist}
-df <- df %>%
-  left_join() %>%
-  rename() %>%
-  mutate(match_dist = stringdist())
-```
+#### Normalize
 
 #### Swap
 
-```{r}
-df <- df %>% 
-  mutate(
-    city_swap = if_else(
-      condition = match_dist == 1, 
-      true = city_match, 
-      false = city_prep)
-  )
-```
-
 #### Refine
-
-```{r valid_city}
-valid_city <- unique(zipcode$city)
-```
-
-```{r view_refine}
-df_refined <- df %>%
-  filter(var == "DF") %>% 
-  filter(match_dist != 1) %>% 
-  mutate(
-    city_refine = var %>% 
-      key_collision_merge(dict = valid_city) %>% 
-      n_gram_merge(numgram = 1)
-  ) %>% 
-  filter(city_swal != city_refine)
-```
-
-#### Merge
-
-```{r join_refine}
-df <- df %>% 
-  left_join(refine_table, by = "id") %>% 
-  mutate(city_clean = coalesce(city_refine, city_swap))
-```
-
-Each step of the cleaning process reduces the number of distinct city values.
 
 ## Conclude
 
-1. There are `r nrow(df)` records in the database
-1. There are `r sum(df$dupe_flag)` records with duplicate filer, recipient, date, _and_ amount
-(flagged with `dupe_flag`)
-1. The ranges for dates and amounts are reasonable
-1. Consistency has been improved with `stringr` package and custom `normalize_*()` functions.
-1. The five-digit `zip_clean` variable has been created with `zipcode::clean.zipcode()`
-1. The `year` variable has been created with `lubridate::year()`
-1. There are `r sum(is.na(df$name))` records with missing `name` values and `r sum(is.na(df$date))`
-records with missing `date` values (both flagged with the `na_flag`)
-
 ## Export
-
-```{r write_clean}
-df %>% 
-  select(
-   
-  ) %>% 
-  write_csv(
-    path = here(),
-    na = ""
-  )
-```
-
