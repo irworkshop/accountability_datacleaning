@@ -1,6 +1,6 @@
 ---
 title: "Data Diary"
-subtitle: "Wyoming Expenditures July 22"
+subtitle: "Wyoming Expenditures July 31"
 author: "Yanqi Xu"
 date: "`r Sys.time()`"
 output:
@@ -246,6 +246,39 @@ wy %>%
   geom_histogram() +
   scale_x_continuous(
     trans = "log10", labels = dollar)
+```
+
+Distribution of expenses by filer
+```{r box_plot_by_type, echo=FALSE}
+
+wy %>% 
+  ggplot(
+    mapping = aes(
+      x = filer_type, 
+      y = amount
+    )
+  ) +
+  geom_boxplot(
+    mapping  = aes(fill = filer_type), 
+    varwidth = TRUE,
+    outlier.alpha = 0.01
+  ) +
+  scale_fill_brewer(
+    type    = "qual",
+    palette = "Set1",
+    guide   = FALSE
+  ) +
+  scale_y_continuous(
+    trans = "log10",
+    labels = dollar
+  ) +
+  theme(axis.text.x = element_text(angle = 15, hjust = 1)) +
+  labs(
+    title = "Wyoming Expenditure Amount Ranges",
+    x     = "Expenditure Type",
+    y     = "Amount",
+    caption = "Source: Wyoming Secretary of State"
+  )
 ```
 
 ### Dates
