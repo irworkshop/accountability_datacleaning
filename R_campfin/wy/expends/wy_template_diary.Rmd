@@ -1,5 +1,5 @@
 ---
-title: "Data Diary"
+title: "Wyoming Campaign Expenditures Data Diary"
 subtitle: "Wyoming Expenditures July 31"
 author: "Yanqi Xu"
 date: "`r Sys.time()`"
@@ -555,7 +555,7 @@ wy_refined$city_refine <- wy_refined$city_refine %>%
   str_replace("^LAR$", "LARAMIE")
 
 refined_table <- wy_refined %>% 
-  select(id, zip, city_refine)
+  select(id, city_refine)
 ```
   
 
@@ -590,7 +590,9 @@ wy %>%
   select(
     -city_state_zip,
     -city_prep,
+    -on_year,
     -city_match,
+    -city_clean,
     -match_dist,
     -city_swap,
     -city_refine
