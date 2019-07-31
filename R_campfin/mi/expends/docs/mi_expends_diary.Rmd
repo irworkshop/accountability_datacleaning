@@ -1,0 +1,659 @@
+---
+title: "Michigan Expenditures"
+author: "Kiernan Nicholls"
+date: "`r Sys.time()`"
+output:
+  github_document: 
+    df_print: tibble
+    toc: true
+    toc_dept: 2
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE, purl=FALSE}
+library(knitr)
+opts_chunk$set(
+  eval = TRUE,
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  error = FALSE,
+  comment = "#>",
+  fig.path = "../plots/",
+  fig.width = 9,
+  fig.height = 5,
+  dpi = 300
+)
+options(width = 99)
+```
+
+## Project
+
+The Accountability Project is an effort to cut across data silos and give journalists, policy
+professionals, activists, and the public at large a simple way to search across huge volumes of
+public data about people and organizations.
+
+Our goal is to standardizing public data on a few key fields by thinking of each dataset row as a
+transaction. For each transaction there should be (at least) 3 variables:
+
+1. All **parties** to a transaction
+2. The **date** of the transaction
+3. The **amount** of money involved
+
+## Objectives
+
+This document describes the process used to complete the following objectives:
+
+1. How many records are in the database?
+1. Check for duplicates
+1. Check ranges
+1. Is there anything blank or missing?
+1. Check for consistency issues
+1. Create a five-digit ZIP Code called `ZIP5`
+1. Create a `YEAR` field from the transaction date
+1. Make sure there is data on both parties to a transaction
+
+## Packages
+
+The following packages are needed to collect, manipulate, visualize, analyze, and communicate
+these results. The `pacman` package will facilitate their installation and attachment.
+
+```{r load_packages, message=FALSE, dfrning=FALSE, error=FALSE}
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load(
+  stringdist, # levenshtein value
+  tidyverse, # data manipulation
+  lubridate, # datetime strings
+  tidytext, # text analysis
+  magrittr, # pipe opperators
+  janitor, # dataframe clean
+  zipcode, # clean & database
+  scales, # format values
+  knitr, # knit documents
+  rvest, # scrape internet
+  glue, # glue strings
+  here, # relative storage
+  fs # search storage 
+)
+```
+
+The IRW's `campfin` package will also have to be installed from GitHub. This package contains
+functions custom made to help facilitate the processing of campaign finance data.
+
+```{r load_campfin}
+pacman::p_load_current_gh("kiernann/campfin")
+```
+
+This document should be run as part of the `R_campfin` project, which lives as a sub-directory of
+the more general, language-agnostic [`irworkshop/accountability_datacleaning`][01] GitHub
+repository.
+
+The `R_campfin` project uses the [RStudio projects][02] feature and should be run as such. The
+project also uses the dynamic `here::here()` tool for file paths relative to _your_ machine.
+
+```{r where_here, collapse=TRUE}
+# where dfs this document knit?
+here::here()
+```
+
+[01]: https://github.com/irworkshop/accountability_datacleaning "TAP repo"
+[02]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects "Rproj"
+
+## Data
+
+The data is obtained from the [Michigan Secretary of State's website][03].
+
+[03]: https://miboecfr.nictusa.com/cfr/dumpall/cfrdetail/
+
+### Variables
+
+The [`cfrdetail/ReadMe_EXPENDITURES.html`][04] file provides a table of variable descriptions.
+
+[04]: https://miboecfr.nictusa.com/cfr/dumpall/cfrdetail/ReadMe_EXPENDITURES.html
+
+```{r readme, results='asis', echo=FALSE}
+download.file(
+  url = "https://miboecfr.nictusa.com/cfr/dumpall/cfrdetail/ReadMe_EXPENDITURES.html",
+  destfile = here("mi", "docs", "ReadMe_EXPENDITURES.html")
+)
+
+read_html("https://miboecfr.nictusa.com/cfr/dumpall/cfrdetail/ReadMe_EXPENDITURES.html") %>%
+  html_node("table") %>% 
+  html_table() %>% 
+  as_tibble() %>%
+  mutate(X1 = glue("`{X1}`")) %>% 
+  kable(
+    format = "markdown",
+    col.names = c("Variable", "Description")
+  )
+```
+
+## Import
+
+As the [`cfrdetail/ReadMe_EXPENDITURES.html`][04] file also explains:
+
+> Record layout of expenditures. Files are named by statement year. Larger files are split and
+numbered to make them easier to work with. In these cases the column header row will only exist in
+the first (00) file.
+
+No expenditure files are large enough to be split, so we can simply create a vector of URLs by
+`glue()`-ing the standard format with each year.
+
+```{r make_urls}
+urls <- glue("https://miboecfr.nictusa.com/cfr/dumpall/cfrdetail/{2008:2019}_mi_cfr_expenditures.zip")
+```
+
+### Download
+
+Then, if the files haven't already been downloaded we can download each file to the raw directory.
+
+```{r create_raw}
+raw_dir <- here("mi", "expends", "data", "raw")
+dir_create(raw_dir)
+```
+
+```{r download_raw}
+if (!all_files_new(raw_dir, "*.zip$")) {
+  for (year_url in urls) {
+    download.file(
+      url = year_url,
+      destfile = glue("{raw_dir}/{basename(year_url)}")
+    ) 
+  }
+}
+```
+
+### Read
+
+Since the `readr::read_delim()` function can read ZIP files, we don't need to unzip. We can read
+each file into a list using `purrr::map()` and then bind them into a single list after removing
+empty columns.
+
+```{r read_raw}
+mi <-
+  # list all files
+  dir_ls(raw_dir) %>% 
+  # read each into a list
+  map(
+    read_tsv,
+    col_type = cols(
+      .default = col_character(),
+      doc_stmnt_year = col_integer(),
+      exp_date = col_date("%m/%d/%Y"),
+      amount = col_double()
+    )
+  ) %>% 
+  # in each, remove RUNTIME col
+  map(remove_empty, "cols") %>% 
+  # bind list into a data frame
+  bind_rows()
+```
+
+## Explore
+
+```{r glimpse}
+head(mi)
+tail(mi)
+glimpse(sample_frac(mi))
+```
+
+### Missing
+
+As we know from the README, the `com_legal_name` variable represents who is making the expenditure
+and has `r percent(mean(is.na(mi$com_legal_name)))` missing values. The `l_name` variable
+represents the "Last name of the individual OR the organization name receiving the expenditure;"
+this variable, on the other hand, is `r percent(mean(is.na(mi$lname_or_org)))` missing 
+(`r sum(is.na(mi$lname_or_org))` records).
+
+```{r count_na}
+glimpse_fun(mi, count_na)
+```
+
+Any record missing the variables needed to identify both parties of the transaction can be flagged
+with a new `na_flag` variable.
+
+```{r flag_na, collapse=TRUE}
+mi <- mutate(mi, na_flag = is.na(com_legal_name) | is.na(lname_or_org) | is.na(amount))
+sum(mi$na_flag)
+```
+
+### Duplicates
+
+While there are zero completely duplicated records, there are a number that are duplicated save
+for the `expense_id` variable.
+
+```{r distinct_records}
+nrow(mi) - nrow(distinct(select(mi, -expense_id)))
+```
+
+### Categorical
+
+For categorical variables, we can explore the degree of distinctness and the distribution of these
+variables.
+
+```{r n_distinct}
+glimpse_fun(mi, n_distinct)
+```
+
+```{r exp_type_bar, echo=FALSE}
+explore_plot(
+  data = mi,
+  var = expenditure_type,
+  title = "Michigan Expenditures Count by Type"
+)
+```
+
+```{r com_type_bar, echo=FALSE}
+explore_plot(
+  data = mi,
+  var = com_type,
+  title = "Michigan Expenditures Count by Committee Type",
+  palette = "Dark2",
+  head = 8
+)
+```
+
+```{r sched_bar, echo=FALSE}
+explore_plot(
+  data = mi,
+  var = schedule_desc,
+  title = "Michigan Expenditures Count by Schedule"
+)
+```
+
+```{r desc_bar, echo=FALSE}
+angle_axis <- function(angle = 20, hjust = 1, ...) {
+  theme(axis.text.x = element_text(angle = angle, hjust = hjust, ...))
+}
+top <- head(pull(drop_na(count(mi, exp_desc, sort = TRUE)), exp_desc), 7)
+mi %>% 
+  mutate(exp_desc = if_else(exp_desc %in% c(NA, top), exp_desc, "OTHER")) %>% 
+  count(exp_desc, sort = TRUE) %>% 
+  mutate(p = n/sum(n)) %>% 
+  drop_na() %>% 
+  ggplot(aes(x = reorder(exp_desc, p), y = p)) +
+  geom_col(aes(fill = exp_desc)) +
+  scale_y_continuous(labels = percent) +
+  scale_fill_brewer(
+    type = "qual",
+    palette = "Dark2",
+    guide = FALSE
+  ) +
+  labs(
+    title = "Michigan Expenditures Count by Description",
+    x = "Expenditure Description",
+    y = "Percent"
+  ) +
+  angle_axis()
+```
+
+### Continuous
+
+For continuous variables, we can explore the range and distribution of values.
+
+#### Amounts
+
+```{r range_amount}
+summary(mi$amount)
+```
+
+```{r amount_hist, echo=FALSE}
+mi %>% 
+  ggplot(aes(amount)) +
+  geom_histogram() +
+  scale_x_continuous(
+    trans = "log10",
+    labels = dollar
+  ) +
+  labs(
+    title = "Michigan Expenditure Amount Distribution",
+    x = "Expenditure Amount",
+    y = "Count"
+  )
+```
+
+```{r amount_box_exp_type, echo=FALSE}
+mi %>% 
+  ggplot(
+    mapping = aes(
+      x = expenditure_type, 
+      y = amount
+    )
+  ) +
+  geom_boxplot(
+    mapping  = aes(fill = expenditure_type), 
+    varwidth = TRUE,
+    outlier.alpha = 0.01
+  ) +
+  scale_fill_brewer(
+    type    = "qual",
+    palette = "Set1",
+    guide   = FALSE
+  ) +
+  scale_y_continuous(
+    trans  = "log10",
+    labels = dollar
+  ) +
+  labs(
+    title = "Michigan Expenditure Amount Ranges",
+    x     = "Expenditure Type",
+    y     = "Count"
+  )
+```
+
+#### Dates
+
+From the minimum and maximum, we can see that the `date` variable is not exactly clean.
+
+```{r date_minmax, collapse=TRUE}
+min(mi$exp_date, na.rm = TRUE)
+max(mi$exp_date, na.rm = TRUE)
+```
+
+We can create a `exp_year` variable from `exp_date` using `lubridate::year()`.
+
+```{r add_year, collapse=TRUE}
+mi <- mutate(mi, exp_year = year(exp_date))
+sum(mi$exp_year < 2006, na.rm = TRUE)
+sum(mi$exp_date > today(), na.rm = TRUE)
+```
+
+We can nullify these few invalid dates in a new `date_clean` variable and flag those changed
+records with `data_flag`
+
+```{r clean_date, collapse=TRUE}
+mi <- mi %>% 
+  mutate(
+    date_clean = if_else(
+      condition = exp_year > 2019 | exp_year < 2006,
+      true = as.Date("1970-01-01"),
+      false = exp_date
+    ) %>% na_if("1970-01-01")
+  )
+
+sum(is.na(mi$exp_date))
+sum(is.na(mi$date_clean))
+```
+
+Then we'll have to go back and fix the `exp_year`.
+
+```{r fix_year}
+mi <- mutate(mi, exp_year = year(date_clean))
+```
+
+There is a `doc_stmnt_year` variable, which lists "The calendar year that this statement was
+required by the BOE."
+
+```{r stmnt_year_bar, echo=FALSE}
+mi %>% 
+  mutate(on_year = is_even(doc_stmnt_year)) %>%
+  count(on_year, doc_stmnt_year, sort = TRUE) %>%
+  mutate(p = n/sum(n)) %>% 
+  ggplot(aes(x = doc_stmnt_year, y = p)) +
+  geom_col(aes(fill = on_year)) +
+  scale_x_continuous(breaks = 2008:2019) +
+  scale_y_continuous(labels = percent) +
+  scale_fill_brewer(type = "qual", palette = "Dark2") +
+  labs(
+    title = "Michigan Expenditure Counts by Statement Year",
+    x     = "Statement Year",
+    y     = "Count",
+    fill  = "Election Year"
+  )
+```
+
+Most of the time, these are the same but they can't be equated.
+
+```{r years_same, collapse=TRUE}
+mean(mi$doc_stmnt_year == mi$exp_year, na.rm = TRUE)
+```
+
+We can also use `date_clean` to explore the intersection of `amount` and time.
+
+```{r month_amount_line}
+mi %>% 
+  mutate(
+    month = month(date_clean),
+    on_year = is_even(exp_year)
+  ) %>% 
+  group_by(month, on_year) %>% 
+  summarize(mean = mean(amount)) %>% 
+  drop_na() %>% 
+  ggplot(aes(month, mean)) +
+  geom_line(aes(color = on_year), size = 2) +
+  scale_y_continuous(labels = dollar) +
+  scale_color_brewer(type = "qual", palette = "Dark2") +
+  labs(
+    title = "Michigan Expenditure Amount by Month",
+    subtitle = "On Election Years and Off",
+    x      = "Month",
+    y      = "Mean Amount",
+    color  = "Election Year"
+  )
+```
+
+```{r year_amount_bar, echo=FALSE}
+mi %>% 
+  mutate(on_year = is_even(exp_year)) %>%
+  group_by(on_year, exp_year) %>% 
+  summarize(mean = mean(amount)) %>%
+  ggplot(aes(x = exp_year, y = mean)) +
+  geom_col(aes(fill = on_year)) +
+  scale_x_continuous(breaks = 2006:2019) +
+  scale_y_continuous(labels = dollar) +
+  scale_fill_brewer(type = "qual", palette = "Dark2") +
+  labs(
+    title = "Michigan Expenditure Amount by Year",
+    x     = "Statement Year",
+    y     = "Count",
+    fill  = "Election Year"
+  )
+```
+
+```{r year_amount_box, echo=FALSE}
+mi %>% 
+  mutate(on_year = is_even(exp_year)) %>%
+  filter(!is.na(on_year)) %>% 
+  ggplot(aes(x = on_year, y = amount)) +
+  geom_boxplot(aes(fill = on_year), varwidth = TRUE, outlier.alpha = 0.01) +
+  scale_y_continuous(labels = dollar, trans = "log10") +
+  scale_fill_brewer(type = "qual", palette = "Dark2") +
+  labs(
+    title = "Michigan Expenditure Amount by Year",
+    x     = "Statement Year",
+    y     = "Count",
+    fill  = "Election Year"
+  )
+```
+
+## Wrangle
+
+### Address
+
+```{r normal_address}
+mi <- mi %>% 
+  mutate(
+    address_norm = normal_address(
+      address = address,
+      add_abbs = usps,
+      na_rep = TRUE
+    )
+  )
+```
+
+```{r view_address, echo=FALSE}
+mi %>% 
+  select(address, address_norm) %>% 
+  sample_n(10)
+```
+
+### ZIP
+
+```{r zip_pre, collapse=TRUE}
+n_distinct(mi$zip)
+prop_in(mi$zip, geo$zip, na.rm = TRUE)
+sample(mi$zip, 10)
+```
+
+```{r}
+mi <- mi %>% 
+  mutate(
+    zip_norm = normal_zip(
+      zip = zip,
+      na_rep = TRUE
+    )
+  )
+```
+
+```{r zip_post, collapse=TRUE}
+n_distinct(mi$zip_norm)
+prop_in(mi$zip_norm, geo$zip, na.rm = TRUE)
+sum(unique(mi$zip_norm) %out% geo$zip)
+```
+
+### State
+
+```{r state_pre, collapse=TRUE}
+n_distinct(mi$state)
+prop_in(mi$state, geo$state, na.rm = TRUE)
+setdiff(mi$state, geo$state)
+length(setdiff(mi$state, geo$state))
+```
+
+```{r normal_state}
+mi <- mi %>% 
+  mutate(
+    state_norm = normal_state(
+      state = state,
+      na_rep = TRUE,
+      valid = geo$state
+    )
+  )
+```
+
+```{r state_post, collapse=TRUE}
+# changes made
+sum(mi$state != str_replace_na(mi$state_norm), na.rm = T)
+n_distinct(mi$state_norm)
+# only NA remains
+prop_in(mi$state_norm, geo$state, na.rm = TRUE)
+sum(unique(mi$state_norm) %out% geo$state)
+```
+
+### City
+
+#### Normalize
+
+```{r city_pre, collapse=TRUE}
+n_distinct(mi$city)
+prop_in(mi$city, geo$city, na.rm = TRUE)
+length(setdiff(mi$city, geo$city))
+```
+
+```{r nomal_city}
+mi <- mi %>% 
+  mutate(
+    city_norm = normal_city(
+      city = str_replace(city, "\\bTWP\\b", "TOWNSHIP"),
+      geo_abbs = usps_city,
+      st_abbs = c("MI", "MICHIGAN", "DC"),
+      na = na_city,
+      na_rep = TRUE
+    )
+  )
+```
+
+```{r changed_city, echo=FALSE}
+mi %>% 
+  select(city, city_norm) %>% 
+  filter(city != city_norm) %>% 
+  sample_frac()
+```
+
+```{r city_post_norm, collapse=TRUE}
+n_distinct(mi$city_norm)
+prop_in(mi$city_norm, geo$city, na.rm = TRUE)
+length(setdiff(mi$city_norm, geo$city))
+```
+
+#### Swap
+
+```{r swap_city}
+mi <- mi %>% 
+  rename(city_raw = city) %>% 
+  left_join(
+    y = geo,
+    by = c(
+      "state_norm" = "state",
+      "zip_norm" = "zip"
+    )
+  ) %>% 
+  rename(city_match = city) %>% 
+  mutate(
+    match_dist = stringdist(city_raw, city_match),
+    city_swap = if_else(
+      condition = match_dist == 1,
+      true = city_match,
+      false = city_norm
+    )
+  )
+```
+
+```{r dist_check, collapse=TRUE}
+mean(mi$match_dist == 0, na.rm = TRUE)
+sum(mi$match_dist == 1, na.rm = TRUE)
+```
+
+```{r city_post_swap, collapse=TRUE}
+n_distinct(mi$city_swap)
+prop_in(mi$city_swap, geo$city, na.rm = TRUE)
+length(setdiff(mi$city_swap, geo$city))
+```
+
+#### Reivew
+
+```{r}
+mi %>% 
+  filter(city_swap %out% geo$city) %>% 
+  count(state_norm, city_swap, sort = TRUE)
+```
+
+## Conclude
+
+```{r conclude, echo=FALSE}
+sum_dupe <- nrow(mi) - nrow(distinct(select(mi, -expense_id)))
+```
+
+1. There are `r nrow(mi)` records in the database.
+1. There are `r nrow(sum_dupe)` duplicate records in the database, ignoring `expense_id`.
+1. The range and distribution of `amount` and `date` seem reasonable.
+1. There are `r sum(mi$na_flag)` records missing either recipient or date.
+1. Consistency in goegraphic data has been improved with `campfin::normal_*()`.
+1. The 5-digit `zip_norm` variable has been created with `campfin::normal_zip(mi$zip)`.
+1. The 4-digit `exp_year` variable has been created with `lubridate::year(mi$date_clean)`.
+
+## Export
+
+```{r proc_dir}
+proc_dir <- here("mi", "expends", "data", "processed")
+dir_create(proc_dir)
+```
+
+```{r write_csv}
+mi %>% 
+  select(
+    -exp_date,
+    -address,
+    -state,
+    -city_raw,
+    -zip,
+    -city_match,
+    -city_norm,
+    -match_dist
+  ) %>% 
+  write_csv(
+    path = glue("{proc_dir}/mi_expends_clean.csv"),
+    na = ""
+  )
+```

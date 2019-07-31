@@ -58,7 +58,7 @@ This document describes the process used to complete the following objectives:
 The following packages are needed to collect, manipulate, visualize, analyze, and communicate
 these results. The `pacman` package will facilitate their installation and attachment.
 
-```{r p_load, message=FALSE, dfrning=FALSE, error=FALSE}
+```{r load_packages, message=FALSE, dfrning=FALSE, error=FALSE}
 if (!require("pacman")) install.packages("pacman")
 pacman::p_load(
   stringdist, # levenshtein value
@@ -73,22 +73,11 @@ pacman::p_load(
 )
 ```
 
-```{r fix_fun, echo=FALSE}
-# fix conflict
-here <- here::here
-# custom utility functions
-"%out%" <- Negate("%in%")
-print_all <- function(df) df %>% print(n = nrow(.)) 
-# source functions
-source(here("R", "code", "normalize_geo.R"))
-source(here("R", "code", "all_files_new.R"))
-source(here("R", "code", "glimpse_fun.R"))
-# load data
-data("zipcode")
-zipcode <-
-  as_tibble(zipcode) %>% 
-  select(city, state, zip) %>% 
-  mutate(city = normalize_city(city))
+The IRW's `campfin` package will also have to be installed from GitHub. This package contains
+functions custom made to help facilitate the processing of campaign finance data.
+
+```{r load_campfin}
+pacman::p_load_current_gh("kiernann/campfin")
 ```
 
 This document should be run as part of the `R_campfin` project, which lives as a sub-directory of

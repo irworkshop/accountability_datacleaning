@@ -434,13 +434,13 @@ with the logical `na_flag` variable)
 ## Write
 
 ```{r}
-dir_proc <- here("dc", "contribs", "data", "processed")
+dir_proc <- here("dc", "expends", "data", "processed")
 dir_create(dir_proc)
 
 write_csv(
   x = dc,
   na = "",
-  path = glue("{dir_proc}/dc_contribs_clean.csv")
+  path = glue("{dir_proc}/dc_expends_clean.csv")
 )
 ```
 
