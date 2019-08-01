@@ -61,7 +61,9 @@ these results. The `pacman` package will facilitate their installation and attac
 
 ```{r p_load, message=FALSE, dfrning=FALSE, error=FALSE}
 if (!require("pacman")) install.packages("pacman")
+pacman::p_load_current_gh("kiernann/campfin")
 pacman::p_load(
+  campfin,
   stringdist, # levenshtein value
   tidyverse, # data manipulation
   lubridate, # datetime strings
@@ -84,16 +86,9 @@ here <- here::here
 # custom utility functions
 "%out%" <- Negate("%in%")
 print_all <- function(df) df %>% print(n = nrow(.)) 
-# source functions
-source(here("R", "code", "normalize_geo.R"))
-source(here("R", "code", "all_files_new.R"))
-source(here("R", "code", "glimpse_fun.R"))
 # load data
 data("zipcode")
-zipcode <-
-  as_tibble(zipcode) %>% 
-  select(city, state, zip) %>% 
-  mutate(city = normalize_city(city))
+zipcode <- geo
 ```
 
 This document should be run as part of the `R_campfin` project, which lives as a sub-directory of
@@ -291,12 +286,6 @@ summary(wy$date)
 
 Add a `year` variable from `date` after `col_date()` using `lubridate::year()`.
 
-```{r echo=FALSE}
-is_even <- function(n){
-  n %% 2 == 0
-}
-```
-
 ```{r add_year}
 wy <- wy %>% mutate(year = year(date), on_year = is_even(year))
 ```
@@ -380,7 +369,7 @@ wy <- wy %>%
   mutate(
     zip_clean = city_state_zip %>% 
       str_extract("\\d{1,5}") %>% 
-      normalize_zip(na_rep = TRUE))
+      normal_zip(na_rep = TRUE))
 sample(wy$zip_clean, 10)
 ```
 
@@ -396,8 +385,8 @@ wy <- wy %>%
 count_na(wy$state_clean)
 ```
 
-```{r normalize_state, collapse=TRUE}
-wy <- wy %>% mutate(state_clean = normalize_state(state_clean))
+```{r normal_state, collapse=TRUE}
+wy <- wy %>% mutate(state_clean = normal_state(state_clean))
 ```
 
 ### City
@@ -410,10 +399,11 @@ Cleaning city values is the most complicated. This process involves four steps:
 1. Refine swapped city values with key collision and n-gram fingerprints
 
 #### Prep
+Find the cities before a comma first, if not, find the non-numeric string. 
 ``` {r}
 wy <- wy %>% 
   mutate(
-    city_clean = str_match(wy$city_state_zip,"(.+),")[,2]) 
+    city_clean = str_match(wy$city_state_zip,"(^[A-Z]+),")[,2]) 
 
 wy <- wy %>% mutate(city_clean=ifelse(is.na(city_clean)==TRUE, 
                str_extract(city_state_zip, "^[A-Z]{2,}\\S$"),paste(city_clean)))
@@ -424,7 +414,7 @@ count_na(wy$city_clean)
 
 `r sum(!is.na(wy$city_clean))` cities were found.
 ```{r prep_city}
-wy <- wy %>% mutate(city_prep = normalize_city(city_clean))
+wy <- wy %>% mutate(city_prep = normal_city(city_clean))
 n_distinct(wy$city_clean)
 ```
 
@@ -447,7 +437,6 @@ wy <- wy %>%
 
 To replace city names with expected city names from zipcode when the two variables are no more than two characters different
 ```{r }
-
 wy <- wy %>% 
   mutate(
     match_dist = stringdist(city_prep, city_match),
@@ -459,6 +448,20 @@ wy <- wy %>%
     ),
       false = city_prep
   ))
+
+wy$city_swap <- wy$city_swap %>% 
+  str_replace("^CAS$", "CASPER") %>% 
+  str_replace("^RS$","ROCK SPRINGS") %>% 
+  str_replace("^AF$", "AFTON") %>% 
+  str_replace("^M$", "MOUNTAIN VIEW") %>% 
+  str_replace("^GR$", "GREEN RIVER") %>% 
+  na_if("^WY$") %>% 
+  str_replace("^SLC$", "SALT LAKE CITY") %>% 
+  str_replace("^COD$", "CODY")
+  
+  
+  
+  
 
 summary(wy$match_dist)
 sum(wy$match_dist == 1, na.rm = TRUE)
@@ -474,6 +477,7 @@ Use the OpenRefine algorithms to cluster similar values and merge them together.
 ```{r view_refine}
 wy_refined <- wy %>%
   filter(match_dist != 1) %>% 
+  filter(state_clean =="WY") %>% 
   mutate(
     city_refine = city_swap %>% 
       key_collision_merge(dict = valid_city) %>% 
@@ -559,7 +563,7 @@ refined_table <- wy_refined %>%
 ```
   
 
-#### Merge
+#### Merge 
 
 ```{r join_refine}
 wy <- wy %>% 
@@ -568,6 +572,7 @@ wy <- wy %>%
 ```
 
 Each step of the cleaning process reduces the number of distinct city values.
+There are `r sum(!is.na(wy$city_clean))` entries of cities identified in the original data matching the regex with `r n_distinct(wy$city_clean)` distinct values, after the swap and refine processes, there are `r sum(!is.na(wy$city))` entries with `r n_distinct(wy$city)` distinct values. 
 
 ## Conclude
 
@@ -575,7 +580,7 @@ Each step of the cleaning process reduces the number of distinct city values.
 1. There are `r sum(wy$dupe_flag)` records with duplicate filer, recipient, date, _and_ amount
 (flagged with `dupe_flag`)
 1. The ranges for dates and amounts are reasonable
-1. Consistency has been improved with `stringr` package and custom `normalize_*()` functions.
+1. Consistency has been improved with `stringr` package and custom `normal_*()` functions.
 1. The five-digit `zip_clean` variable has been created with `zipcode::clean.zipcode()`
 1. The `year` variable has been created with `lubridate::year()`
 1. There are `r sum(is.na(wy$filer_name))` records with missing `name` values and `r sum(is.na(wy$date))`
