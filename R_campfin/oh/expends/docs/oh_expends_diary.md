@@ -1,7 +1,7 @@
 Ohio Expenditures
 ================
 Kiernan Nicholls
-2019-08-01 12:31:44
+2019-08-01 12:53:28
 
   - [Project](#project)
   - [Objectives](#objectives)
@@ -268,32 +268,32 @@ glimpse(sample_frac(oh))
 
     #> Observations: 889,140
     #> Variables: 26
-    #> $ file                 <chr> "ALL_CAN_EXP_2008.CSV", "ALL_CAN_EXP_2006.CSV", "ALL_PAC_EXP_2007.C…
-    #> $ com_name             <chr> "JENNIFER BRUNNER COMMITTEE", "FRIENDS OF DAVID FAGO", "OHIOANS FOR…
-    #> $ master_key           <chr> "10659", "11492", "11912", "1728", "13511", "749", "13534", "1647",…
-    #> $ rpt_year             <int> 2008, 2006, 2007, 2011, 2012, 2005, 2012, 2000, 2005, 2009, 2005, 2…
-    #> $ report_key           <chr> "238858", "196405", "942229", "112121716", "125018902", "190528", "…
-    #> $ report_description   <chr> "ANNUAL   (JANUARY)", "PRE-PRIMARY", "PRE-GENERAL", "PRE-GENERAL", …
+    #> $ file                 <chr> "CAC_EXP_2014.CSV", "ALL_PAC_EXP_2000.CSV", "ALL_PAC_EXP_2003.CSV",…
+    #> $ com_name             <chr> "CITIZENS FOR BROWN (TIM)", "FRIENDS OF OHIO HOSPITALS", "LABORERS …
+    #> $ master_key           <chr> "13628", "1508", "1635", "1780", "10854", "11217", "10794", "10659"…
+    #> $ rpt_year             <int> 2014, 2000, 2003, 2012, 2015, 2011, 2009, 2006, 2014, 2002, 2010, 2…
+    #> $ report_key           <chr> "156463246", "664366", "774478", "126708349", "190183534", "1116006…
+    #> $ report_description   <chr> "PRE-PRIMARY", "POST-PRIMARY", "POST-PRIMARY", "POST-GENERAL", "ANN…
     #> $ short_description    <chr> "31-B  Stmt of Expenditures", "31-B  Stmt of Expenditures", "31-B  …
-    #> $ first_name           <chr> NA, NA, "ARLENE", NA, "JESSICA", NA, NA, NA, NA, NA, NA, NA, NA, NA…
+    #> $ first_name           <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
     #> $ middle_name          <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
-    #> $ last_name            <chr> NA, NA, "ANDERSON", NA, "HALL", NA, NA, NA, NA, NA, NA, NA, NA, NA,…
+    #> $ last_name            <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
     #> $ suffix_name          <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
-    #> $ non_individual       <chr> "BLUE CAMPAIGN SOLUTIONS", "EINSTEIN BROTHERS BAGELS", NA, "FRIENDS…
-    #> $ address              <chr> "550 EAST WALNUT STREET", "25517 LORAIN ROAD", "1621 ALLEGHENY CIRC…
-    #> $ city_raw             <chr> "COLUMBUS", "NORTH OLMSTED", "EAST CLEVELAND", "YOUNGSTOWN", "CLEVE…
-    #> $ state                <chr> "OH", "OH", "OH", "OH", "OH", "OH", NA, "OH", "OH", "OH", "OH", NA,…
-    #> $ zip                  <chr> "43215", "44126", "44112", "44515", "44121", "43017", NA, "44266", …
-    #> $ expend_date          <date> 2008-07-29, 2006-01-13, 2007-10-17, 2011-09-14, 2011-12-16, 2005-1…
-    #> $ amount               <dbl> 1300.00, 11.99, 109.90, 250.00, 10.66, 210.10, 500.00, 1200.00, 304…
-    #> $ event_date           <date> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
-    #> $ purpose              <chr> "IT AND WEBSITE CONSULTING 6/2008", "REFRESHMENTS", "REIMBURSEMENT-…
-    #> $ inkind               <lgl> FALSE, FALSE, NA, NA, NA, FALSE, NA, NA, NA, NA, NA, NA, NA, NA, NA…
-    #> $ candidate_first_name <chr> "JENNIFER", "DAVID", NA, NA, NA, "STEPHEN", NA, NA, NA, NA, NA, NA,…
-    #> $ candidate_last_name  <chr> "BRUNNER", "FAGO", NA, NA, NA, "POWELL", NA, NA, NA, NA, NA, NA, NA…
-    #> $ office               <chr> "SECRETARY OF STATE", "HOUSE", NA, NA, NA, "COURT OF APPEALS JUDGE"…
-    #> $ district             <int> 0, 15, NA, NA, NA, 12, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, 15, …
-    #> $ party                <chr> "DEMOCRAT", "REPUBLICAN", NA, NA, NA, "REPUBLICAN", NA, NA, NA, NA,…
+    #> $ non_individual       <chr> "CAPITOL SQUARE REVIEW/ADV BOARD", "METZGER COMM TO ELECT KERRY", "…
+    #> $ address              <chr> "1 CAPITOL SQUARE", "116 4TH ST SE", "1470 CAMDEN RIDGE BLVD", "215…
+    #> $ city_raw             <chr> "COLUMBUS", "NEW PHILADELPHIA", "AKRON", "CLEVELAND", "CHICAGO", "C…
+    #> $ state                <chr> "OH", "OH", "OH", "OH", "IL", "OH", "OH", "CA", "NY", "OH", "OH", "…
+    #> $ zip                  <chr> "43215-4210", "44663", "44312", "44128", "60601-1604", "43215", "43…
+    #> $ expend_date          <date> 2014-02-05, 2000-02-22, 2003-05-16, 2012-10-29, 2015-12-04, 2011-0…
+    #> $ amount               <dbl> 56.82, 200.00, 150.00, 6.00, 292.10, 367.50, 43.93, 3.20, 7.95, 150…
+    #> $ event_date           <date> NA, NA, NA, NA, NA, 2011-08-14, NA, NA, NA, NA, NA, NA, NA, 2016-0…
+    #> $ purpose              <chr> "GIFT FOR ROTARY AUCTION", "FUNDRAISER", "TICKETS", "CONTRIBUTION A…
+    #> $ inkind               <lgl> NA, NA, NA, NA, NA, NA, FALSE, NA, NA, FALSE, NA, FALSE, NA, NA, FA…
+    #> $ candidate_first_name <chr> "TIM", NA, NA, NA, "JOSH", "TED", "ARMOND", "JENNIFER", "TERRY", "N…
+    #> $ candidate_last_name  <chr> "BROWN", NA, NA, NA, "MANDEL", "CELESTE", "BUDISH", "BRUNNER", "JOH…
+    #> $ office               <chr> "HOUSE", NA, NA, NA, "TREASURER", "HOUSE", "HOUSE", "SECRETARY OF S…
+    #> $ district             <int> 3, NA, NA, NA, 0, 24, 8, 0, 90, 93, 2, 11, NA, 0, 36, NA, 0, 50, 9,…
+    #> $ party                <chr> "REPUBLICAN", NA, NA, NA, "REPUBLICAN", "DEMOCRAT", "DEMOCRAT", "DE…
 
 ### Missing
 
@@ -492,18 +492,18 @@ oh <- oh %>%
 ```
 
     #> # A tibble: 10 x 2
-    #>    address                       address_norm                    
-    #>    <chr>                         <chr>                           
-    #>  1 OHIO STATEHOUSE               OHIO STATEHOUSE                 
-    #>  2 1270 VAN BUREN ST.            1270 VAN BUREN STREET           
-    #>  3 271 E STATE ST                271 E STATE STREET              
-    #>  4 211 SOUTH FIFTH ST.           211 SOUTH FIFTH STREET          
-    #>  5 2097 BEECH GROVE DR.          2097 BEECH GROVE DRIVE          
-    #>  6 1200 BLOIS                    1200 BLOIS                      
-    #>  7 721 N HIGH ST.                721 N HIGH STREET               
-    #>  8 P O BOX 45950                 PO BOX 45950                    
-    #>  9 200 RIVERSIDE INDUSTRIAL PKWY 200 RIVERSIDE INDUSTRIAL PARKWAY
-    #> 10 100 E. BROAD                  100 E BROAD
+    #>    address              address_norm            
+    #>    <chr>                <chr>                   
+    #>  1 P. O. BOX 92010      PO BOX 92010            
+    #>  2 50 WEST BROAD STREET 50 WEST BROAD STREET    
+    #>  3 <NA>                 <NA>                    
+    #>  4 210 B SOUTH MAIN ST  210 B SOUTH MAIN STREET 
+    #>  5 23224 CRENSHAW BLVD  23224 CRENSHAW BOULEVARD
+    #>  6 211 S FIFTH STREET   211 S FIFTH STREET      
+    #>  7 P. O. BOX 1558       PO BOX 1558             
+    #>  8 2804 N HIGH ST       2804 N HIGH STREET      
+    #>  9 1735 E 23RD STREET   1735 E 23RD STREET      
+    #> 10 1439 BANYAN LANE     1439 BANYAN LANE
 
 ### ZIP
 
@@ -576,10 +576,10 @@ length(setdiff(oh$state_norm, geo$state))
 ``` r
 n_distinct(oh$city_raw)
 #> [1] 7048
-prop_in(oh$city_raw, geo$city_raw, na.rm = TRUE)
-#> [1] 0
-length(setdiff(oh$city_raw, geo$city_raw))
-#> [1] 7048
+prop_in(oh$city_raw, geo$city, na.rm = TRUE)
+#> [1] 0.934562
+length(setdiff(oh$city_raw, geo$city))
+#> [1] 4109
 ```
 
 #### Normalize
@@ -594,15 +594,15 @@ oh <- oh %>%
       na_rep = TRUE,
       city = city_raw %>% 
         str_replace("^CIN$",   "CINCINNATI") %>% 
-        str_replace("^COL$",   "COLUMBUS") %>% 
-        str_replace("^CLEVE$", "CLEVELAND") %>% 
+        str_replace("^COL$",   "COLUMBUS")   %>% 
+        str_replace("^CLEVE$", "CLEVELAND")  %>% 
         str_replace("^CINTI$", "CINCINNATI") %>% 
         str_replace("^YO$",    "YOUNGSTOWN") %>% 
-        str_replace("^COLS$",  "COLUMBUS") %>% 
+        str_replace("^COLS$",  "COLUMBUS")   %>% 
         str_replace("^CINCI$", "CINCINNATI") %>% 
-        str_replace("^CLEV$",  "CLEVELAND") %>% 
-        str_replace("^CLE$",   "CLEVELAND") %>% 
-        str_replace("^LKWD$",  "LAKEWOOD") %>% 
+        str_replace("^CLEV$",  "CLEVELAND")  %>% 
+        str_replace("^CLE$",   "CLEVELAND")  %>% 
+        str_replace("^LKWD$",  "LAKEWOOD")   %>% 
         str_replace("^CINT$",  "CINCINNATI") %>% 
         str_replace("^ATL$",   "ATLANTA")
     )
@@ -641,12 +641,12 @@ oh <- oh %>%
 ```
 
 ``` r
-n_distinct(oh$city_norm)
-#> [1] 6529
-prop_in(oh$city_norm, geo$city, na.rm = TRUE)
-#> [1] 0.9469821
-length(setdiff(oh$city_norm, geo$state))
-#> [1] 6522
+n_distinct(oh$city_swap)
+#> [1] 4230
+prop_in(oh$city_swap, geo$city, na.rm = TRUE)
+#> [1] 0.9554653
+length(setdiff(oh$city_swap, geo$city))
+#> [1] 1330
 summary(oh$match_dist)
 #>    Min. 1st Qu.  Median    Mean 3rd Qu.    Max.    NA's 
 #>    0.00    0.00    0.00    0.86    0.00   27.00   83024
@@ -684,6 +684,15 @@ good_refined <- oh_refined %>%
 oh <- oh %>%
   left_join(good_refined) %>% 
   mutate(city_clean = coalesce(city_refine, city_swap))
+```
+
+``` r
+n_distinct(oh$city_clean)
+#> [1] 4213
+prop_in(oh$city_clean, geo$city, na.rm = TRUE)
+#> [1] 0.9555037
+length(setdiff(oh$city_clean, geo$city))
+#> [1] 1314
 ```
 
 #### Progress
