@@ -1,7 +1,7 @@
 Ohio Expenditures
 ================
 Kiernan Nicholls
-2019-07-31 17:09:58
+2019-08-01 12:31:44
 
   - [Project](#project)
   - [Objectives](#objectives)
@@ -218,7 +218,8 @@ oh <-
   ) %>% 
   bind_rows(.id = "file") %>%
   mutate(file = basename(file)) %>%
-  clean_names()
+  clean_names() %>% 
+  rename(city_raw = city)
 ```
 
 ## Explore
@@ -237,9 +238,10 @@ head(oh)
     #> 5 ALL_… FRIENDS… 2              2000 123946     ANNUAL   (JANUA… 31-B  Stmt of E… <NA>      
     #> 6 ALL_… FRIENDS… 2              2000 123946     ANNUAL   (JANUA… 31-B  Stmt of E… <NA>      
     #> # … with 18 more variables: middle_name <chr>, last_name <chr>, suffix_name <chr>,
-    #> #   non_individual <chr>, address <chr>, city <chr>, state <chr>, zip <chr>, expend_date <date>,
-    #> #   amount <dbl>, event_date <date>, purpose <chr>, inkind <lgl>, candidate_first_name <chr>,
-    #> #   candidate_last_name <chr>, office <chr>, district <int>, party <chr>
+    #> #   non_individual <chr>, address <chr>, city_raw <chr>, state <chr>, zip <chr>,
+    #> #   expend_date <date>, amount <dbl>, event_date <date>, purpose <chr>, inkind <lgl>,
+    #> #   candidate_first_name <chr>, candidate_last_name <chr>, office <chr>, district <int>,
+    #> #   party <chr>
 
 ``` r
 tail(oh)
@@ -255,9 +257,10 @@ tail(oh)
     #> 5 PAC_… OHIOANS… 15170          2019 350645149  SEMIANNUAL   (J… 31-B  Stmt of E… <NA>      
     #> 6 PAC_… OHIOANS… 15170          2019 350645149  SEMIANNUAL   (J… 31-B  Stmt of E… <NA>      
     #> # … with 18 more variables: middle_name <chr>, last_name <chr>, suffix_name <chr>,
-    #> #   non_individual <chr>, address <chr>, city <chr>, state <chr>, zip <chr>, expend_date <date>,
-    #> #   amount <dbl>, event_date <date>, purpose <chr>, inkind <lgl>, candidate_first_name <chr>,
-    #> #   candidate_last_name <chr>, office <chr>, district <int>, party <chr>
+    #> #   non_individual <chr>, address <chr>, city_raw <chr>, state <chr>, zip <chr>,
+    #> #   expend_date <date>, amount <dbl>, event_date <date>, purpose <chr>, inkind <lgl>,
+    #> #   candidate_first_name <chr>, candidate_last_name <chr>, office <chr>, district <int>,
+    #> #   party <chr>
 
 ``` r
 glimpse(sample_frac(oh))
@@ -265,32 +268,32 @@ glimpse(sample_frac(oh))
 
     #> Observations: 889,140
     #> Variables: 26
-    #> $ file                 <chr> "PAC_EXP_2010.CSV", "ALL_PAC_EXP_2000.CSV", "ALL_CAN_EXP_2008.CSV",…
-    #> $ com_name             <chr> "AFSCME OHIO COUNCIL 8  AFL-CIO PAC", "NATIONAL CITY CORPORATION PA…
-    #> $ master_key           <chr> "11422", "1488", "12116", "13180", "6665", "1159", "9095", "13511",…
-    #> $ rpt_year             <int> 2010, 2000, 2008, 2015, 2011, 2018, 2008, 2011, 2004, 2000, 2002, 2…
-    #> $ report_key           <chr> "86716921", "653365", "235384", "189288406", "100454023", "32573087…
-    #> $ report_description   <chr> "PRE-GENERAL", "POST-PRIMARY", "POST-PRIMARY", "ANNUAL   (JANUARY)"…
+    #> $ file                 <chr> "ALL_CAN_EXP_2008.CSV", "ALL_CAN_EXP_2006.CSV", "ALL_PAC_EXP_2007.C…
+    #> $ com_name             <chr> "JENNIFER BRUNNER COMMITTEE", "FRIENDS OF DAVID FAGO", "OHIOANS FOR…
+    #> $ master_key           <chr> "10659", "11492", "11912", "1728", "13511", "749", "13534", "1647",…
+    #> $ rpt_year             <int> 2008, 2006, 2007, 2011, 2012, 2005, 2012, 2000, 2005, 2009, 2005, 2…
+    #> $ report_key           <chr> "238858", "196405", "942229", "112121716", "125018902", "190528", "…
+    #> $ report_description   <chr> "ANNUAL   (JANUARY)", "PRE-PRIMARY", "PRE-GENERAL", "PRE-GENERAL", …
     #> $ short_description    <chr> "31-B  Stmt of Expenditures", "31-B  Stmt of Expenditures", "31-B  …
-    #> $ first_name           <chr> NA, NA, NA, NA, NA, NA, NA, "MIKE", NA, NA, NA, NA, NA, NA, NA, "RO…
-    #> $ middle_name          <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "L", NA…
-    #> $ last_name            <chr> NA, NA, NA, NA, NA, NA, NA, "NICHOLAS", NA, NA, NA, NA, NA, NA, NA,…
+    #> $ first_name           <chr> NA, NA, "ARLENE", NA, "JESSICA", NA, NA, NA, NA, NA, NA, NA, NA, NA…
+    #> $ middle_name          <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
+    #> $ last_name            <chr> NA, NA, "ANDERSON", NA, "HALL", NA, NA, NA, NA, NA, NA, NA, NA, NA,…
     #> $ suffix_name          <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
-    #> $ non_individual       <chr> "EDNA BROWN CAMPAIGN COMMITTEE", "GILB SATE REPRESENTATIVE COMM TO …
-    #> $ address              <chr> "2461 WARREN STREET", "1034 TWP RD 293", "PO BOX 143", "130 HARBOUR…
-    #> $ city                 <chr> "TOLEDO", "FOSTORIA", "MIAMIVILLE", "DAVIDSON", "BATAVIA", NA, "COL…
-    #> $ state                <chr> "OH", "OH", "OH", "NC", "OH", NA, "OH", "OH", "OH", "OH", "OH", "OH…
-    #> $ zip                  <chr> "43620", "44830", "45147", "28036", "45103", NA, "43215", "44471", …
-    #> $ expend_date          <date> 2010-10-05, 2000-04-04, 2008-04-01, 2015-07-12, 2011-04-05, 2018-0…
-    #> $ amount               <dbl> 11395.56, 500.00, 35.00, 165.66, 100.00, 500.00, 946.33, 1500.00, 1…
+    #> $ non_individual       <chr> "BLUE CAMPAIGN SOLUTIONS", "EINSTEIN BROTHERS BAGELS", NA, "FRIENDS…
+    #> $ address              <chr> "550 EAST WALNUT STREET", "25517 LORAIN ROAD", "1621 ALLEGHENY CIRC…
+    #> $ city_raw             <chr> "COLUMBUS", "NORTH OLMSTED", "EAST CLEVELAND", "YOUNGSTOWN", "CLEVE…
+    #> $ state                <chr> "OH", "OH", "OH", "OH", "OH", "OH", NA, "OH", "OH", "OH", "OH", NA,…
+    #> $ zip                  <chr> "43215", "44126", "44112", "44515", "44121", "43017", NA, "44266", …
+    #> $ expend_date          <date> 2008-07-29, 2006-01-13, 2007-10-17, 2011-09-14, 2011-12-16, 2005-1…
+    #> $ amount               <dbl> 1300.00, 11.99, 109.90, 250.00, 10.66, 210.10, 500.00, 1200.00, 304…
     #> $ event_date           <date> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
-    #> $ purpose              <chr> "CONTRIBUTION - CHECK OUTSTANDING", "CONTRIBUTION TO NON-FEDERAL CA…
-    #> $ inkind               <lgl> NA, NA, FALSE, NA, NA, NA, NA, NA, FALSE, NA, NA, NA, NA, FALSE, NA…
-    #> $ candidate_first_name <chr> NA, NA, "LAURA", "WILLIAM", NA, NA, "STEVE", NA, "CYRUS", NA, NA, "…
-    #> $ candidate_last_name  <chr> NA, NA, "CURLISS", "BEAGLE", NA, NA, "STIVERS", NA, "RICHARDSON", N…
-    #> $ office               <chr> NA, NA, "COURT OF APPEALS JUDGE", "SENATE", NA, NA, "SENATE", NA, "…
-    #> $ district             <int> NA, NA, 12, 5, NA, NA, 16, NA, 88, NA, NA, 4, NA, 0, 5, 46, NA, NA,…
-    #> $ party                <chr> NA, NA, "DEMOCRAT", "REPUBLICAN", NA, NA, "REPUBLICAN", NA, "DEMOCR…
+    #> $ purpose              <chr> "IT AND WEBSITE CONSULTING 6/2008", "REFRESHMENTS", "REIMBURSEMENT-…
+    #> $ inkind               <lgl> FALSE, FALSE, NA, NA, NA, FALSE, NA, NA, NA, NA, NA, NA, NA, NA, NA…
+    #> $ candidate_first_name <chr> "JENNIFER", "DAVID", NA, NA, NA, "STEPHEN", NA, NA, NA, NA, NA, NA,…
+    #> $ candidate_last_name  <chr> "BRUNNER", "FAGO", NA, NA, NA, "POWELL", NA, NA, NA, NA, NA, NA, NA…
+    #> $ office               <chr> "SECRETARY OF STATE", "HOUSE", NA, NA, NA, "COURT OF APPEALS JUDGE"…
+    #> $ district             <int> 0, 15, NA, NA, NA, 12, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, 15, …
+    #> $ party                <chr> "DEMOCRAT", "REPUBLICAN", NA, NA, NA, "REPUBLICAN", NA, NA, NA, NA,…
 
 ### Missing
 
@@ -314,7 +317,7 @@ glimpse_fun(oh, count_na)
     #> 11 suffix_name          chr   885918 0.996   
     #> 12 non_individual       chr    91270 0.103   
     #> 13 address              chr    72301 0.0813  
-    #> 14 city                 chr    58430 0.0657  
+    #> 14 city_raw             chr    58430 0.0657  
     #> 15 state                chr    56755 0.0638  
     #> 16 zip                  chr    68645 0.0772  
     #> 17 expend_date          date    1481 0.00167 
@@ -375,7 +378,7 @@ glimpse_fun(oh, n_distinct)
     #> 11 suffix_name          chr      189 0.000213  
     #> 12 non_individual       chr   133963 0.151     
     #> 13 address              chr   174155 0.196     
-    #> 14 city                 chr     7048 0.00793   
+    #> 14 city_raw             chr     7048 0.00793   
     #> 15 state                chr      136 0.000153  
     #> 16 zip                  chr    16159 0.0182    
     #> 17 expend_date          date    7791 0.00876   
@@ -477,12 +480,269 @@ oh <- oh %>%
 
 ### Address
 
+``` r
+oh <- oh %>% 
+  mutate(
+    address_norm = normal_address(
+      address = address,
+      add_abbs = usps,
+      na_rep = TRUE
+    )
+  )
+```
+
+    #> # A tibble: 10 x 2
+    #>    address                       address_norm                    
+    #>    <chr>                         <chr>                           
+    #>  1 OHIO STATEHOUSE               OHIO STATEHOUSE                 
+    #>  2 1270 VAN BUREN ST.            1270 VAN BUREN STREET           
+    #>  3 271 E STATE ST                271 E STATE STREET              
+    #>  4 211 SOUTH FIFTH ST.           211 SOUTH FIFTH STREET          
+    #>  5 2097 BEECH GROVE DR.          2097 BEECH GROVE DRIVE          
+    #>  6 1200 BLOIS                    1200 BLOIS                      
+    #>  7 721 N HIGH ST.                721 N HIGH STREET               
+    #>  8 P O BOX 45950                 PO BOX 45950                    
+    #>  9 200 RIVERSIDE INDUSTRIAL PKWY 200 RIVERSIDE INDUSTRIAL PARKWAY
+    #> 10 100 E. BROAD                  100 E BROAD
+
 ### ZIP
+
+``` r
+n_distinct(oh$zip)
+#> [1] 16159
+prop_in(oh$zip, geo$zip, na.rm = TRUE)
+#> [1] 0.9262567
+length(setdiff(oh$zip, geo$zip))
+#> [1] 9658
+```
+
+``` r
+oh <- oh %>% 
+  mutate(
+    zip_norm = normal_zip(
+      zip = zip,
+      na_rep = TRUE
+    )
+  )
+```
+
+``` r
+n_distinct(oh$zip_norm)
+#> [1] 8073
+prop_in(oh$zip_norm, geo$zip, na.rm = TRUE)
+#> [1] 0.987105
+length(setdiff(oh$zip_norm, geo$zip))
+#> [1] 1187
+```
 
 ### State
 
+``` r
+n_distinct(oh$state)
+#> [1] 136
+prop_in(oh$state, geo$state, na.rm = TRUE)
+#> [1] 0.9994041
+length(setdiff(oh$state, geo$state))
+#> [1] 74
+setdiff(oh$state, geo$state)
+#>  [1] NA   "IO" "IG" "CN" "0H" "KA" "NO" "UK" "IW" "O"  "OO" "NU" "II" "EC" "HO" "43" "PH" "MC" "OG"
+#> [20] "UH" "NI" "IH" "OJ" "M"  "IS" "T"  "0"  "TC" "45" "AV" "NZ" "LV" "O`" "H"  "OI" "TO" "PJ" "`O"
+#> [39] "44" "P"  "DL" "FR" "OY" "ST" "OP" "N/" "DR" "?"  "A"  "BE" "AU" "PO" "IR" "WS" "VS" "OX" "OV"
+#> [58] "UN" "CD" "FA" "BH" "11" "XX" "CI" "BZ" "BR" "SW" "SF" "IT" ")H" "HT" "SA" "."  "VO"
+```
+
+``` r
+oh <- oh %>% 
+  mutate(
+    state_norm = normal_state(
+      state = state,
+      abbreviate = FALSE,
+      valid = geo$state
+    )
+  )
+```
+
+``` r
+n_distinct(oh$state_norm)
+#> [1] 63
+prop_in(oh$state_norm, geo$state, na.rm = TRUE)
+#> [1] 1
+length(setdiff(oh$state_norm, geo$state))
+#> [1] 1
+```
+
 ### City
+
+``` r
+n_distinct(oh$city_raw)
+#> [1] 7048
+prop_in(oh$city_raw, geo$city_raw, na.rm = TRUE)
+#> [1] 0
+length(setdiff(oh$city_raw, geo$city_raw))
+#> [1] 7048
+```
+
+#### Normalize
+
+``` r
+oh <- oh %>% 
+  mutate(
+    city_norm = normal_city(
+      geo_abbs = usps_city,
+      st_abbs = c("OH", "DC", "OHIO"),
+      na = na_city,
+      na_rep = TRUE,
+      city = city_raw %>% 
+        str_replace("^CIN$",   "CINCINNATI") %>% 
+        str_replace("^COL$",   "COLUMBUS") %>% 
+        str_replace("^CLEVE$", "CLEVELAND") %>% 
+        str_replace("^CINTI$", "CINCINNATI") %>% 
+        str_replace("^YO$",    "YOUNGSTOWN") %>% 
+        str_replace("^COLS$",  "COLUMBUS") %>% 
+        str_replace("^CINCI$", "CINCINNATI") %>% 
+        str_replace("^CLEV$",  "CLEVELAND") %>% 
+        str_replace("^CLE$",   "CLEVELAND") %>% 
+        str_replace("^LKWD$",  "LAKEWOOD") %>% 
+        str_replace("^CINT$",  "CINCINNATI") %>% 
+        str_replace("^ATL$",   "ATLANTA")
+    )
+  )
+```
+
+``` r
+n_distinct(oh$city_norm)
+#> [1] 6529
+prop_in(oh$city_norm, geo$city, na.rm = TRUE)
+#> [1] 0.9469845
+length(setdiff(oh$city_norm, geo$city))
+#> [1] 3564
+```
+
+#### Swap
+
+``` r
+oh <- oh %>% 
+  left_join(
+    y = geo,
+    by = c(
+      "state_norm" = "state",
+      "zip_norm" = "zip"
+    )
+  ) %>% 
+  rename(city_match = city) %>% 
+  mutate(
+    match_dist = stringdist(city_norm, city_match),
+    city_swap = if_else(
+      condition = (match_dist <= 2),
+      true = city_match,
+      false = city_norm
+    )
+  )
+```
+
+``` r
+n_distinct(oh$city_norm)
+#> [1] 6529
+prop_in(oh$city_norm, geo$city, na.rm = TRUE)
+#> [1] 0.9469821
+length(setdiff(oh$city_norm, geo$state))
+#> [1] 6522
+summary(oh$match_dist)
+#>    Min. 1st Qu.  Median    Mean 3rd Qu.    Max.    NA's 
+#>    0.00    0.00    0.00    0.86    0.00   27.00   83024
+```
+
+#### Refine
+
+``` r
+oh_refined <- oh %>%
+  filter(
+    state_norm == "OH",
+    match_dist > 2,
+  ) %>% 
+  mutate(
+    city_refine = city_swap %>% 
+      key_collision_merge(dict = geo$city[geo$state == "OH"]) %>% 
+      n_gram_merge(numgram = 1, bus_suffix = FALSE)
+  ) %>% 
+  filter(city_refine != city_swap)
+```
+
+``` r
+good_refined <- oh_refined %>% 
+  inner_join(
+    y = geo,
+    by = c(
+      "city_refine" = "city",
+      "state_norm" = "state",
+      "zip_norm" = "zip"
+    )
+  )
+```
+
+``` r
+oh <- oh %>%
+  left_join(good_refined) %>% 
+  mutate(city_clean = coalesce(city_refine, city_swap))
+```
+
+#### Progress
+
+``` r
+n_distinct(oh$city_raw)
+#> [1] 7048
+n_distinct(oh$city_norm)
+#> [1] 6529
+n_distinct(oh$city_swap)
+#> [1] 4230
+n_distinct(oh$city_clean)
+#> [1] 4213
+
+prop_in(oh$city_raw, geo$city)
+#> [1] 0.9345599
+prop_in(oh$city_norm, geo$city)
+#> [1] 0.9469821
+prop_in(oh$city_swap, geo$city)
+#> [1] 0.9554653
+```
 
 ## Conclude
 
+1.  There are 889159 records in the database.
+2.  There are 10876 duplicate records, 1.22% of records. Not yet
+    flagged.
+3.  The range and distribution of `amount` and `date` seem reasonable.
+4.  There are 2493 records missing either recipient or date.
+5.  Consistency in goegraphic data has been improved with
+    `campfin::normal_*()`.
+6.  The 5-digit `zip_norm` variable has been created with
+    `campfin::normal_zip(oh$zip)`.
+7.  The 4-digit `year_clean` variable has been created with
+    `lubridate::year(oh$date_clean)`.
+
 ## Export
+
+``` r
+proc_dir <- here("oh", "expends", "data", "processed")
+dir_create(proc_dir)
+```
+
+``` r
+oh %>% 
+  select(
+    -city_raw,
+    -state,
+    -zip,
+    -expend_date,
+    -expend_year,
+    -city_norm,
+    -city_match,
+    -match_dist,
+    -city_swap,
+    -city_refine
+  ) %>% 
+  write_csv(
+    na = "",
+    path = glue("{proc_dir}/oh_expends_clean.csv")
+  )
+```
