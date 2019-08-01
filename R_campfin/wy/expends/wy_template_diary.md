@@ -1,7 +1,7 @@
-Data Diary
+Wyoming Campaign Expenditures Data Diary
 ================
 Yanqi Xu
-2019-07-31 12:27:48
+2019-08-01 12:04:00
 
 ## Project
 
@@ -40,7 +40,9 @@ facilitate their installation and attachment.
 
 ``` r
 if (!require("pacman")) install.packages("pacman")
+pacman::p_load_current_gh("kiernann/campfin")
 pacman::p_load(
+  campfin,
   stringdist, # levenshtein value
   tidyverse, # data manipulation
   lubridate, # datetime strings
@@ -248,6 +250,9 @@ wy %>%
 
 ![](../plots/unnamed-chunk-2-1.png)<!-- -->
 
+Distribution of expenses by filer
+![](../plots/box_plot_by_type-1.png)<!-- -->
+
 ### Dates
 
 The dates seem to be reasonable, with records dating back to
@@ -320,11 +325,11 @@ wy <- wy %>%
   mutate(
     zip_clean = city_state_zip %>% 
       str_extract("\\d{1,5}") %>% 
-      normalize_zip(na_rep = TRUE))
+      normal_zip(na_rep = TRUE))
 sample(wy$zip_clean, 10)
 ```
 
-    #>  [1] NA      NA      NA      "82601" "82604" "94043" NA      "82001" "82001" NA
+    #>  [1] NA      "82009" NA      "82609" NA      "02144" NA      NA      NA      "82001"
 
 ### State
 
@@ -342,7 +347,7 @@ count_na(wy$state_clean)
     #> [1] 3059
 
 ``` r
-wy <- wy %>% mutate(state_clean = normalize_state(state_clean))
+wy <- wy %>% mutate(state_clean = normal_state(state_clean))
 ```
 
 ### City
@@ -361,10 +366,13 @@ steps:
 
 #### Prep
 
+Find the cities before a comma first, if not, find the non-numeric
+string.
+
 ``` r
 wy <- wy %>% 
   mutate(
-    city_clean = str_match(wy$city_state_zip,"(.+),")[,2]) 
+    city_clean = str_match(wy$city_state_zip,"(^[A-Z]+),")[,2]) 
 
 wy <- wy %>% mutate(city_clean=ifelse(is.na(city_clean)==TRUE, 
                str_extract(city_state_zip, "^[A-Z]{2,}\\S$"),paste(city_clean)))
@@ -372,20 +380,20 @@ wy <- wy %>% mutate(city_clean=ifelse(is.na(city_clean)==TRUE,
 count_na(wy$city_clean)
 ```
 
-    #> [1] 11664
+    #> [1] 15229
 
 ``` r
 ## wy_ZIP <- wy %>% str_split(wy$city_state_zip, "\\s\\d{5}")
 ```
 
-33690 cities were found.
+30125 cities were found.
 
 ``` r
-wy <- wy %>% mutate(city_prep = normalize_city(city_clean))
+wy <- wy %>% mutate(city_prep = normal_city(city_clean))
 n_distinct(wy$city_clean)
 ```
 
-    #> [1] 801
+    #> [1] 515
 
 #### Match
 
@@ -419,23 +427,37 @@ wy <- wy %>%
       false = city_prep
   ))
 
+wy$city_swap <- wy$city_swap %>% 
+  str_replace("^CAS$", "CASPER") %>% 
+  str_replace("^RS$","ROCK SPRINGS") %>% 
+  str_replace("^AF$", "AFTON") %>% 
+  str_replace("^M$", "MOUNTAIN VIEW") %>% 
+  str_replace("^GR$", "GREEN RIVER") %>% 
+  na_if("^WY$") %>% 
+  str_replace("^SLC$", "SALT LAKE CITY") %>% 
+  str_replace("^COD$", "CODY")
+  
+  
+  
+  
+
 summary(wy$match_dist)
 ```
 
     #>    Min. 1st Qu.  Median    Mean 3rd Qu.    Max.    NA's 
-    #>   0.000   0.000   0.000   0.167   0.000  24.000   15182
+    #>   0.000   0.000   0.000   0.122   0.000  24.000   17769
 
 ``` r
 sum(wy$match_dist == 1, na.rm = TRUE)
 ```
 
-    #> [1] 264
+    #> [1] 214
 
 ``` r
 n_distinct(wy$city_swap)
 ```
 
-    #> [1] 579
+    #> [1] 418
 
 #### Refine
 
@@ -451,6 +473,7 @@ data.
 ``` r
 wy_refined <- wy %>%
   filter(match_dist != 1) %>% 
+  filter(state_clean =="WY") %>% 
   mutate(
     city_refine = city_swap %>% 
       key_collision_merge(dict = valid_city) %>% 
@@ -480,24 +503,15 @@ wy_refined %>%
   arrange(desc(n))
 ```
 
-    #> # A tibble: 15 x 3
-    #>    city_swap           city_refine           n
-    #>    <chr>               <chr>             <int>
-    #>  1 BAR NUNN            AUBURN               10
-    #>  2 E ROCHESTER         ROCHESTER             2
-    #>  3 SAN FRANSISCO       SAN FRANCISCO         2
-    #>  4 CHEY                CHEYE                 1
-    #>  5 CHEYENE             CHEYENNE              1
-    #>  6 GLENRROCK           GLENROCK              1
-    #>  7 INDEPENCE           INDEPENDENCE          1
-    #>  8 LARA                LAR                   1
-    #>  9 LARIMER             LARAMIE               1
-    #> 10 MELANO PARK         MENLO PARK            1
-    #> 11 PONTEAVERDA         DAVENPORT             1
-    #> 12 SOUIX FALLS         SIOUX FALLS           1
-    #> 13 STAR VALLEY RANCHES STAR VALLEY RANCH     1
-    #> 14 SUN VALLEY          SUNNYVALE             1
-    #> 15 WWHEATLAND          WHEATLAND             1
+    #> # A tibble: 6 x 3
+    #>   city_swap  city_refine     n
+    #>   <chr>      <chr>       <int>
+    #> 1 CHEY       CHEYE           1
+    #> 2 CHEYENE    CHEYENNE        1
+    #> 3 GLENRROCK  GLENROCK        1
+    #> 4 LARA       LAR             1
+    #> 5 LARIMER    LARAMIE         1
+    #> 6 WWHEATLAND WHEATLAND       1
 
 ##### Review Refined Cities
 
@@ -540,35 +554,15 @@ wy_refined %>%
   print_all()
 ```
 
-    #> # A tibble: 26 x 8
-    #>       id city_match     city_swap      city_refine   swap_count refine_count diff_count refine_dist
-    #>    <int> <chr>          <chr>          <chr>              <int>        <int>      <int>       <dbl>
-    #>  1  1803 CASPER         BAR NUNN       AUBURN                11           45         34           5
-    #>  2  2072 CASPER         BAR NUNN       AUBURN                11           45         34           5
-    #>  3 12294 CASPER         BAR NUNN       AUBURN                11           45         34           5
-    #>  4 18499 CASPER         BAR NUNN       AUBURN                11           45         34           5
-    #>  5 18881 CASPER         BAR NUNN       AUBURN                11           45         34           5
-    #>  6 27483 CASPER         BAR NUNN       AUBURN                11           45         34           5
-    #>  7 29057 CASPER         BAR NUNN       AUBURN                11           45         34           5
-    #>  8 29058 CASPER         BAR NUNN       AUBURN                11           45         34           5
-    #>  9 29059 CASPER         BAR NUNN       AUBURN                11           45         34           5
-    #> 10 33415 CASPER         BAR NUNN       AUBURN                11           45         34           5
-    #> 11 25189 CHEYENNE       CHEY           CHEYE               7763         7762         -1           1
-    #> 12 28465 ROCK SPRINGS   CHEYENE        CHEYENNE               3         7754       7751           1
-    #> 13 21028 PONTE VEDRA B… PONTEAVERDA    DAVENPORT              1           62         61           9
-    #> 14 42956 EVANSVILLE     GLENRROCK      GLENROCK               1           67         66           1
-    #> 15 18190 INDEPENDENCE   INDEPENCE      INDEPENDENCE           1            9          8           3
-    #> 16  4266 LARAMIE        LARA           LAR                 2709         2719         10           1
-    #> 17 14413 LARAMIE        LARIMER        LARAMIE                1         2702       2701           3
-    #> 18 13552 MENLO PARK     MELANO PARK    MENLO PARK             1          109        108           3
-    #> 19  3741 EAST ROCHESTER E ROCHESTER    ROCHESTER              2            6          4           2
-    #> 20  3742 EAST ROCHESTER E ROCHESTER    ROCHESTER              2            6          4           2
-    #> 21 11690 HALF MOON BAY  SAN FRANSISCO  SAN FRANCISCO          3          167        164           1
-    #> 22 11691 HALF MOON BAY  SAN FRANSISCO  SAN FRANCISCO          3          167        164           1
-    #> 23 30655 BELLE FOURCHE  SOUIX FALLS    SIOUX FALLS            1            1          0           2
-    #> 24 30356 THAYNE         STAR VALLEY R… STAR VALLEY …          1            2          1           2
-    #> 25 20976 SUN VALLEY     SUN VALLEY     SUNNYVALE              1            5          4           4
-    #> 26 16555 LAGRANGE       WWHEATLAND     WHEATLAND              1          340        339           1
+    #> # A tibble: 6 x 8
+    #>      id city_match   city_swap  city_refine swap_count refine_count diff_count refine_dist
+    #>   <int> <chr>        <chr>      <chr>            <int>        <int>      <int>       <dbl>
+    #> 1 25189 CHEYENNE     CHEY       CHEYE             7755         7754         -1           1
+    #> 2 28465 ROCK SPRINGS CHEYENE    CHEYENNE             3         7746       7743           1
+    #> 3 42956 EVANSVILLE   GLENRROCK  GLENROCK             1           64         63           1
+    #> 4  4266 LARAMIE      LARA       LAR               2683         2693         10           1
+    #> 5 14413 LARAMIE      LARIMER    LARAMIE              1         2681       2680           3
+    #> 6 16555 LAGRANGE     WWHEATLAND WHEATLAND            1          340        339           1
 
 Manually change the city\_refine fields due to overcorrection.
 
@@ -580,7 +574,7 @@ wy_refined$city_refine <- wy_refined$city_refine %>%
   str_replace("^LAR$", "LARAMIE")
 
 refined_table <- wy_refined %>% 
-  select(id, zip, city_refine)
+  select(id, city_refine)
 ```
 
 #### Merge
@@ -592,7 +586,9 @@ wy <- wy %>%
 ```
 
 Each step of the cleaning process reduces the number of distinct city
-values.
+values. There are 30125 entries of cities identified in the original
+data matching the regex with 515 distinct values, after the swap and
+refine processes, there are 30125 entries with 413 distinct values.
 
 ## Conclude
 
@@ -601,7 +597,7 @@ values.
     amount (flagged with `dupe_flag`)
 3.  The ranges for dates and amounts are reasonable
 4.  Consistency has been improved with `stringr` package and custom
-    `normalize_*()` functions.
+    `normal_*()` functions.
 5.  The five-digit `zip_clean` variable has been created with
     `zipcode::clean.zipcode()`
 6.  The `year` variable has been created with `lubridate::year()`
@@ -617,7 +613,9 @@ wy %>%
   select(
     -city_state_zip,
     -city_prep,
+    -on_year,
     -city_match,
+    -city_clean,
     -match_dist,
     -city_swap,
     -city_refine
