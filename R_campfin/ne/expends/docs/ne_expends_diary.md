@@ -1,7 +1,7 @@
 Nebraska Expenditures
 ================
 Kiernan Nicholls
-2019-08-05 17:22:26
+2019-08-06 11:05:07
 
   - [Project](#project)
   - [Objectives](#objectives)
@@ -304,7 +304,7 @@ read_lines(file = glue("{nadc_dir}/DATE_UPDATED.TXT")) %>%
   str_remove_all("[:alpha:]") %>% 
   as_datetime() %>% 
   subtract(now())
-#> Time difference of -18.37772 hours
+#> Time difference of -1.503543 days
 ```
 
 To work with the relational database managment system, we are going to
@@ -379,19 +379,20 @@ The form also defines the NADC conception of expenditure:
 > qualification, passage or defeat of a ballot question.
 
 ``` r
-head(ne$formb1d)
+glimpse(ne$formb1d)
 ```
 
-    #> # A tibble: 6 x 9
-    #>   committee_name committee_id date_received payee_name payee_address expenditure_pur…
-    #>   <chr>          <chr>        <chr>         <chr>      <chr>         <chr>           
-    #> 1 NEBRASKANS FO… 99BQC00006   06/30/2000    "SMITH, L… "RT 1 BOX 26… <NA>            
-    #> 2 NEBRASKANS FO… 99BQC00006   06/30/2000    "SUTTON, … "904 S 153RD… <NA>            
-    #> 3 NEBRASKANS FO… 99BQC00006   06/30/2000    "TERRELL,… "5209 S 8TH … <NA>            
-    #> 4 NEBRASKANS FO… 99BQC00006   06/30/2000    "TIPPERY,… "2000 NORTHR… <NA>            
-    #> 5 NEBRASKANS FO… 99BQC00006   06/30/2000    "VON RIEU… "4221 MARY C… <NA>            
-    #> 6 NEBRASKANS FO… 99BQC00006   06/30/2000    "WILSON, … "3825 SWIFT … <NA>            
-    #> # … with 3 more variables: expenditure_date <chr>, amount <chr>, in_kind <chr>
+    #> Observations: 79,172
+    #> Variables: 9
+    #> $ committee_name      <chr> "NEBRASKANS FOR TERM LIMITS (DISSOLVED)", "NEBRASKANS FOR TERM LIMIT…
+    #> $ committee_id        <chr> "99BQC00006", "99BQC00006", "99BQC00006", "99BQC00006", "99BQC00006"…
+    #> $ date_received       <chr> "06/30/2000", "06/30/2000", "06/30/2000", "06/30/2000", "06/30/2000"…
+    #> $ payee_name          <chr> "SMITH, LES                    ", "SUTTON, CAROLYN               ", …
+    #> $ payee_address       <chr> "RT 1 BOX 266, PALMYRA NE 68418          ", "904 S 153RD ST, OMAHA N…
+    #> $ expenditure_purpose <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "SETTLEM…
+    #> $ expenditure_date    <chr> "06/13/2000", "06/13/2000", "06/13/2000", "06/13/2000", "06/13/2000"…
+    #> $ amount              <chr> "139", "490", "60", "151", "190.5", "13.8", "575", "501", "0", "0", …
+    #> $ in_kind             <chr> "0", "0", "0", "0", "0", "0", "0", "0", "10000", "20000", "12452.86"…
 
 #### Form B-2
 
@@ -408,20 +409,22 @@ Political Party Committees, where Item 5 of that form asks the party to:
 > than one candidate or ballot question).
 
 ``` r
-head(ne$formb2b)
+glimpse(ne$formb2b)
 ```
 
-    #> # A tibble: 6 x 11
-    #>   committee_id date_received committee_id_ex… support_oppose nature_of_expen… expenditure_date
-    #>   <chr>        <chr>         <chr>            <chr>          <chr>            <chr>           
-    #> 1 99PPC00024   11/23/2000    99CAC00286       0              I                10/01/2000      
-    #> 2 99PPC00024   11/23/2000    99CAC00255       0              K                10/20/2000      
-    #> 3 99PPC00024   11/23/2000    99CAC00255       0              I                10/01/2000      
-    #> 4 99PPC00024   11/23/2000    99CAC00169       0              I                10/01/2000      
-    #> 5 99PPC00024   11/23/2000    99CAC00408       0              I                10/01/2000      
-    #> 6 99PPC00024   11/23/2000    99CAC00267       0              I                10/01/2000      
-    #> # … with 5 more variables: amount <chr>, description <chr>, line_id <chr>, report_id <chr>,
-    #> #   committee_name_expenditure_is_for <chr>
+    #> Observations: 5,479
+    #> Variables: 11
+    #> $ committee_id                      <chr> "99PPC00024", "99PPC00024", "99PPC00024", "99PPC00024"…
+    #> $ date_received                     <chr> "11/23/2000", "11/23/2000", "11/23/2000", "11/23/2000"…
+    #> $ committee_id_expenditure_is_for   <chr> "99CAC00286", "99CAC00255", "99CAC00255", "99CAC00169"…
+    #> $ support_oppose                    <chr> "0", "0", "0", "0", "0", "0", "0", "0", "0", "0", "0",…
+    #> $ nature_of_expenditure             <chr> "I", "K", "I", "I", "I", "I", "I", "K", "I", "I", "K",…
+    #> $ expenditure_date                  <chr> "10/01/2000", "10/20/2000", "10/01/2000", "10/01/2000"…
+    #> $ amount                            <chr> "46.88", "5", "46.88", "46.88", "46.9", "46.88", "46.8…
+    #> $ description                       <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
+    #> $ line_id                           <chr> "014", "022", "026", "016", "006", "027", "017", "025"…
+    #> $ report_id                         <chr> "FRIENDS OF DREW MILLER", "DUDA FOR COUNTY BOARD", "DU…
+    #> $ committee_name_expenditure_is_for <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
 
 #### Form B-4
 
@@ -442,20 +445,22 @@ to:
 > questions.
 
 ``` r
-head(ne$formb4b1)
+glimpse(ne$formb4b1)
 ```
 
-    #> # A tibble: 6 x 11
-    #>   form_id_number committee_id date_received committee_expen… support_oppose nature_of_expen…
-    #>   <chr>          <chr>        <chr>         <chr>            <chr>          <chr>           
-    #> 1 127            99PAC00016   01/24/2000    99CAC00276       0              D               
-    #> 2 128            99PAC00016   01/24/2000    99CAC00284       0              D               
-    #> 3 129            99PAC00016   01/24/2000    99CAC00178       0              D               
-    #> 4 130            99PAC00016   01/24/2000    99CAC00384       0              D               
-    #> 5 131            99PAC00016   01/24/2000    99CAC00384       0              D               
-    #> 6 132            99PAC00016   01/24/2000    99CAC00321       0              D               
-    #> # … with 5 more variables: expenditure_date <chr>, amount <chr>, expense_category <chr>,
-    #> #   report_id <chr>, expenditure_committee_name <chr>
+    #> Observations: 41,369
+    #> Variables: 11
+    #> $ form_id_number             <chr> "127", "128", "129", "130", "131", "132", "133", "134", "135"…
+    #> $ committee_id               <chr> "99PAC00016", "99PAC00016", "99PAC00016", "99PAC00016", "99PA…
+    #> $ date_received              <chr> "01/24/2000", "01/24/2000", "01/24/2000", "01/24/2000", "01/2…
+    #> $ committee_expenditure_id   <chr> "99CAC00276", "99CAC00284", "99CAC00178", "99CAC00384", "99CA…
+    #> $ support_oppose             <chr> "0", "0", "0", "0", "0", "0", "0", "0", "0", "0", "0", "0", "…
+    #> $ nature_of_expenditure      <chr> "D", "D", "D", "D", "D", "D", "D", "D", "D", "D", "D", "D", "…
+    #> $ expenditure_date           <chr> "11/16/1999", "11/16/1999", "10/20/1999", "10/15/1999", "02/2…
+    #> $ amount                     <chr> "1000", "500", "600", "1000", "100", "500", "100", "200", "50…
+    #> $ expense_category           <chr> "026", "026", "026", "026", "026", "026", "026", "026", "026"…
+    #> $ report_id                  <chr> "KRISTENSEN FOR LEGISLATURE", "MATZKE FOR LEGISLATURE", "PEOP…
+    #> $ expenditure_committee_name <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
 
 #### Bind
 
@@ -471,7 +476,8 @@ parties on both sides of each expenditure.
 ``` r
 fixed_b1d <- ne$formb1d %>% 
   # add from b1
-  select(-committee_name)
+  select(-committee_name) %>% 
+  map_dfr(str_trim)
 ```
 
 ``` r
@@ -481,7 +487,12 @@ fixed_b2b <- ne$formb2b %>%
     committee_payee_id = committee_id_expenditure_is_for,
     # this file has last cols shifted left
     committee_payee_name = report_id,
-  )
+  ) %>% 
+  left_join(
+    ne$forma1 %>% select(starts_with("committee")), 
+    by = c("committee_payee_id" = "committee_id_number")
+  ) %>% 
+  select(-committee_name)
 ```
 
 ``` r
@@ -491,8 +502,14 @@ fixed_b4b1 <- ne$formb4b1 %>%
     committee_payee_id = committee_expenditure_id,
     # this file has last cols shifted left
     committee_payee_name = report_id,
+  ) %>%
+  # add committee geo info
+  left_join(
+    ne$forma1 %>% select(starts_with("committee")), 
+    by = c("committee_payee_id" = "committee_id_number")
   ) %>% 
   select(
+    -committee_name,
     -form_id_number
   )
 ```
@@ -521,25 +538,26 @@ ne_exp <-
 head(ne_exp)
 ```
 
-    #> # A tibble: 6 x 19
+    #> # A tibble: 6 x 24
     #>   committee_id date_received payee_name payee_address expenditure_pur… expenditure_date amount
     #>   <chr>        <date>        <chr>      <chr>         <chr>            <date>           <chr> 
-    #> 1 99BQC00006   2000-06-30    "SMITH, L… "RT 1 BOX 26… <NA>             2000-06-13       139   
-    #> 2 99BQC00006   2000-06-30    "SUTTON, … "904 S 153RD… <NA>             2000-06-13       490   
-    #> 3 99BQC00006   2000-06-30    "TERRELL,… "5209 S 8TH … <NA>             2000-06-13       60    
-    #> 4 99BQC00006   2000-06-30    "TIPPERY,… "2000 NORTHR… <NA>             2000-06-13       151   
-    #> 5 99BQC00006   2000-06-30    "VON RIEU… "4221 MARY C… <NA>             2000-06-13       190.5 
-    #> 6 99BQC00006   2000-06-30    "WILSON, … "3825 SWIFT … <NA>             2000-06-13       13.8  
-    #> # … with 12 more variables: in_kind <chr>, committee_payee_id <chr>, support_oppose <chr>,
+    #> 1 99BQC00006   2000-06-30    SMITH, LES RT 1 BOX 266… <NA>             2000-06-13       139   
+    #> 2 99BQC00006   2000-06-30    SUTTON, C… 904 S 153RD … <NA>             2000-06-13       490   
+    #> 3 99BQC00006   2000-06-30    TERRELL, … 5209 S 8TH P… <NA>             2000-06-13       60    
+    #> 4 99BQC00006   2000-06-30    TIPPERY, … 2000 NORTHRI… <NA>             2000-06-13       151   
+    #> 5 99BQC00006   2000-06-30    VON RIEUT… 4221 MARY CI… <NA>             2000-06-13       190.5 
+    #> 6 99BQC00006   2000-06-30    WILSON, R… 3825 SWIFT #… <NA>             2000-06-13       13.8  
+    #> # … with 17 more variables: in_kind <chr>, committee_payee_id <chr>, support_oppose <chr>,
     #> #   nature_of_expenditure <chr>, description <chr>, line_id <chr>, committee_payee_name <chr>,
-    #> #   expense_category <chr>, oppose_clean <lgl>, amount_clean <dbl>, inkind_clean <lgl>,
-    #> #   payee_name_clean <chr>
+    #> #   committee_address <chr>, committee_city <chr>, committee_state <chr>, committee_zip <chr>,
+    #> #   committee_type <chr>, expense_category <chr>, oppose_clean <lgl>, amount_clean <dbl>,
+    #> #   inkind_clean <lgl>, payee_name_clean <chr>
 
 ``` r
 tail(ne_exp)
 ```
 
-    #> # A tibble: 6 x 19
+    #> # A tibble: 6 x 24
     #>   committee_id date_received payee_name payee_address expenditure_pur… expenditure_date amount
     #>   <chr>        <date>        <chr>      <chr>         <chr>            <date>           <chr> 
     #> 1 99PAC00069   2019-01-15    <NA>       <NA>          <NA>             2018-12-12       100   
@@ -548,36 +566,42 @@ tail(ne_exp)
     #> 4 99PAC00069   2019-01-15    <NA>       <NA>          <NA>             2018-11-15       296.57
     #> 5 99PAC00023   2018-04-16    <NA>       <NA>          <NA>             2017-07-17       1200  
     #> 6 13PAC00171   2017-04-27    <NA>       <NA>          <NA>             2017-03-31       100   
-    #> # … with 12 more variables: in_kind <chr>, committee_payee_id <chr>, support_oppose <chr>,
+    #> # … with 17 more variables: in_kind <chr>, committee_payee_id <chr>, support_oppose <chr>,
     #> #   nature_of_expenditure <chr>, description <chr>, line_id <chr>, committee_payee_name <chr>,
-    #> #   expense_category <chr>, oppose_clean <lgl>, amount_clean <dbl>, inkind_clean <lgl>,
-    #> #   payee_name_clean <chr>
+    #> #   committee_address <chr>, committee_city <chr>, committee_state <chr>, committee_zip <chr>,
+    #> #   committee_type <chr>, expense_category <chr>, oppose_clean <lgl>, amount_clean <dbl>,
+    #> #   inkind_clean <lgl>, payee_name_clean <chr>
 
 ``` r
 glimpse(sample_frac(ne_exp))
 ```
 
-    #> Observations: 126,020
-    #> Variables: 19
-    #> $ committee_id          <chr> "17CAC02334", "99CAC00201", "99CAC00578", "14CAC01871", "99BQC0000…
-    #> $ date_received         <date> 2019-01-15, 2014-10-06, 2002-04-15, 2014-04-14, 2000-11-06, 2002-…
-    #> $ payee_name            <chr> "BARRETT, MARY K", "DOUG PETERSON FOR ATTORNEY GEN", "GOLDENROD PR…
-    #> $ payee_address         <chr> "3702 JACKSON ST APT OMAHA NE 68105", NA, "2801 CORNHUSKER HWY    …
-    #> $ expenditure_purpose   <chr> "REIMBUSE- USPS FOR POSTAGE ", "FUNDRAISER", "PRINTING OF ENVELOPE…
-    #> $ expenditure_date      <date> 2018-10-24, 2014-07-15, 2002-03-04, 2014-03-04, 1999-04-15, 2002-…
-    #> $ amount                <chr> "300", "250", "583.62", NA, "493.38", "100", NA, "47.16", "1000", …
-    #> $ in_kind               <chr> NA, NA, NA, "90", NA, NA, "1680", NA, NA, NA, NA, NA, NA, "825", N…
-    #> $ committee_payee_id    <chr> NA, NA, NA, NA, NA, "99CAC00017", NA, "08CAC01095", "13CAC01830", …
+    #> Observations: 126,030
+    #> Variables: 24
+    #> $ committee_id          <chr> "99PAC00020", "07CAC01052", "15CAC02071", "16CAC02122", "99PAC0009…
+    #> $ date_received         <date> 2014-04-08, 2011-01-31, 2016-02-01, 2017-01-17, 2010-01-12, 2004-…
+    #> $ payee_name            <chr> NA, "GLOOR, MIKE", "ADELLE BURKE", "BICKEL, TAYLOR", NA, NA, "WNAX…
+    #> $ payee_address         <chr> NA, "3115 BRENTWOOD CIRCLE, GRAND ISLAND, NE", NA, "781016 CALIFOR…
+    #> $ expenditure_purpose   <chr> NA, "MILEAGE", "CONSULTING", "CONSULTING", NA, NA, "RADIO AD", NA,…
+    #> $ expenditure_date      <date> 2014-02-04, 2010-12-31, 2015-09-18, 2016-11-16, 2009-11-25, 2004-…
+    #> $ amount                <chr> "100", "1040.55", "600", "1999", "1000", "10000", "506", "500", "5…
+    #> $ in_kind               <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, "34.12", NA, NA, NA, NA, NA, N…
+    #> $ committee_payee_id    <chr> "14CAC01858", NA, NA, NA, "05CAC00757", "99PPC00003", NA, "07CAC01…
     #> $ support_oppose        <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
-    #> $ nature_of_expenditure <chr> NA, NA, NA, NA, NA, "D", NA, "I", "D", NA, NA, NA, NA, NA, "D", "D…
-    #> $ description           <chr> NA, NA, NA, NA, NA, NA, NA, "GOLDENROD PRINTING - MAIL PIECE", NA,…
+    #> $ nature_of_expenditure <chr> "D", NA, NA, NA, "D", "D", NA, "D", NA, NA, "I", NA, "E", "D", NA,…
+    #> $ description           <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "GOLDENROD PRINTING - MAIL…
     #> $ line_id               <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
-    #> $ committee_payee_name  <chr> NA, NA, NA, NA, NA, "NORTH LINCOLN VOTERS FOR LANDIS", NA, "FRIEND…
-    #> $ expense_category      <chr> NA, NA, NA, NA, NA, "026", NA, NA, "026", NA, NA, NA, NA, NA, "026…
+    #> $ committee_payee_name  <chr> "STINNER FOR LEGISLATURE", NA, NA, NA, "WIGHTMAN FOR LEGISLATURE (…
+    #> $ committee_address     <chr> "1510 BROADWAY", NA, NA, NA, "PO BOX 100", "201 N 8TH ST STE 210",…
+    #> $ committee_city        <chr> "SCOTTSBLUFF", NA, NA, NA, "LEXINGTON", "LINCOLN", NA, "OMAHA", NA…
+    #> $ committee_state       <chr> "NE", NA, NA, NA, "NE", "NE", NA, "NE", NA, NA, "NE", NA, "NE", "N…
+    #> $ committee_zip         <chr> "69361", NA, NA, NA, "68850", "68508", NA, "68112", NA, NA, "68028…
+    #> $ committee_type        <chr> "C", NA, NA, NA, "C", "T", NA, "C", NA, NA, "C", NA, "C", "C", NA,…
+    #> $ expense_category      <chr> "026", NA, NA, NA, "026", "028", NA, "026", NA, NA, NA, NA, "026",…
     #> $ oppose_clean          <lgl> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
-    #> $ amount_clean          <dbl> 300.00, 250.00, 583.62, 90.00, 493.38, 100.00, 1680.00, 47.16, 100…
-    #> $ inkind_clean          <lgl> FALSE, FALSE, FALSE, TRUE, FALSE, FALSE, TRUE, FALSE, FALSE, FALSE…
-    #> $ payee_name_clean      <chr> "BARRETT, MARY K", "DOUG PETERSON FOR ATTORNEY GEN", "GOLDENROD PR…
+    #> $ amount_clean          <dbl> 100.00, 1040.55, 600.00, 1999.00, 1000.00, 10000.00, 506.00, 500.0…
+    #> $ inkind_clean          <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, TRU…
+    #> $ payee_name_clean      <chr> "STINNER FOR LEGISLATURE", "GLOOR, MIKE", "ADELLE BURKE", "BICKEL,…
 
 ### Missing
 
@@ -585,28 +609,33 @@ glimpse(sample_frac(ne_exp))
 glimpse_fun(ne_exp, count_na)
 ```
 
-    #> # A tibble: 19 x 4
+    #> # A tibble: 24 x 4
     #>    var                   type       n        p
     #>    <chr>                 <chr>  <int>    <dbl>
     #>  1 committee_id          chr        0 0       
     #>  2 date_received         date       0 0       
-    #>  3 payee_name            chr    46904 0.372   
-    #>  4 payee_address         chr    58797 0.467   
-    #>  5 expenditure_purpose   chr    49675 0.394   
+    #>  3 payee_name            chr    46914 0.372   
+    #>  4 payee_address         chr    58807 0.467   
+    #>  5 expenditure_purpose   chr    49685 0.394   
     #>  6 expenditure_date      date       0 0       
     #>  7 amount                chr    14050 0.111   
-    #>  8 in_kind               chr   115164 0.914   
+    #>  8 in_kind               chr   115174 0.914   
     #>  9 committee_payee_id    chr    79172 0.628   
-    #> 10 support_oppose        chr   124159 0.985   
+    #> 10 support_oppose        chr   124166 0.985   
     #> 11 nature_of_expenditure chr    79187 0.628   
-    #> 12 description           chr   122358 0.971   
-    #> 13 line_id               chr   125606 0.997   
+    #> 12 description           chr   122366 0.971   
+    #> 13 line_id               chr   125616 0.997   
     #> 14 committee_payee_name  chr    79173 0.628   
-    #> 15 expense_category      chr    84726 0.672   
-    #> 16 oppose_clean          lgl   124159 0.985   
-    #> 17 amount_clean          dbl     3420 0.0271  
-    #> 18 inkind_clean          lgl        0 0       
-    #> 19 payee_name_clean      chr       57 0.000452
+    #> 15 committee_address     chr    79412 0.630   
+    #> 16 committee_city        chr    79779 0.633   
+    #> 17 committee_state       chr    79779 0.633   
+    #> 18 committee_zip         chr    79200 0.628   
+    #> 19 committee_type        chr    79200 0.628   
+    #> 20 expense_category      chr    84728 0.672   
+    #> 21 oppose_clean          lgl   124166 0.985   
+    #> 22 amount_clean          dbl     3420 0.0271  
+    #> 23 inkind_clean          lgl        0 0       
+    #> 24 payee_name_clean      chr       57 0.000452
 
 Since the combined data frame comes from three different sources, it’s
 difficult to identify what are expected missing values and those that
@@ -617,24 +646,16 @@ should be flagged. `na_flag` will equal `TRUE` when a record has either
 
 ``` r
 sum(is.na(ne_exp$payee_name) & is.na(ne_exp$committee_payee_name))
-```
+#> [1] 57
 
-    #> [1] 57
-
-``` r
 ne_exp <- ne_exp %>% 
   mutate(na_flag = is.na(amount_clean) | is.na(payee_name_clean))
 
 sum(ne_exp$na_flag)
-```
-
-    #> [1] 3465
-
-``` r
+#> [1] 3465
 percent(mean(ne_exp$na_flag))
+#> [1] "2.75%"
 ```
-
-    #> [1] "2.75%"
 
 ### Duplicates
 
@@ -644,30 +665,32 @@ variable, identifying every duplicate row *after* the initial occurance.
 ``` r
 ne_exp <- flag_dupes(ne_exp)
 sum(ne_exp$dupe_flag)
-#> [1] 634
+#> [1] 648
 ```
 
 ``` r
 filter(ne_exp, dupe_flag)
 ```
 
-    #> # A tibble: 634 x 21
+    #> # A tibble: 648 x 26
     #>    committee_id date_received payee_name payee_address expenditure_pur… expenditure_date amount
     #>    <chr>        <date>        <chr>      <chr>         <chr>            <date>           <chr> 
-    #>  1 99BQC00032   1999-07-01    "AMERICAN… "504 E. MADI… <NA>             1999-06-01       <NA>  
-    #>  2 99BQC00032   1999-07-01    "AMERICAN… "504 E. MADI… <NA>             1999-06-03       <NA>  
-    #>  3 99BQC00032   1999-07-01    AMERICANS… "811 SOUTH 1… <NA>             1999-06-29       <NA>  
-    #>  4 99BQC00032   1999-07-01    COALITION… "BOX 587,   … <NA>             1999-06-03       <NA>  
-    #>  5 99BQC00032   1999-07-01    COALITION… "BOX 587,   … <NA>             1999-06-07       <NA>  
-    #>  6 99BQC00032   1999-10-05    AMERICANS… "811 SOUTH 1… <NA>             1999-09-13       <NA>  
-    #>  7 99BQC00038   2000-04-11    "BARNHART… "2600 Farnam… <NA>             2000-03-20       <NA>  
-    #>  8 99BQC00038   2000-04-11    "BASS & A… 2027 DODGE S… <NA>             2000-03-01       <NA>  
-    #>  9 99BQC00038   2000-04-11    "COX JOHN… 440 REGENCY … <NA>             2000-03-23       <NA>  
-    #> 10 99BQC00038   2000-04-11    "DAYSPRIN… "8982 J ST, … <NA>             2000-03-16       <NA>  
-    #> # … with 624 more rows, and 14 more variables: in_kind <chr>, committee_payee_id <chr>,
+    #>  1 99BQC00032   1999-07-01    AMERICANS… 504 E. MADIS… <NA>             1999-06-01       <NA>  
+    #>  2 99BQC00032   1999-07-01    AMERICANS… 504 E. MADIS… <NA>             1999-06-03       <NA>  
+    #>  3 99BQC00032   1999-07-01    AMERICANS… 811 SOUTH 13… <NA>             1999-06-29       <NA>  
+    #>  4 99BQC00032   1999-07-01    COALITION… BOX 587,      <NA>             1999-06-03       <NA>  
+    #>  5 99BQC00032   1999-07-01    COALITION… BOX 587,      <NA>             1999-06-07       <NA>  
+    #>  6 99BQC00032   1999-10-05    AMERICANS… 811 SOUTH 13… <NA>             1999-09-13       <NA>  
+    #>  7 99BQC00038   2000-04-11    BARNHART … 2600 Farnam … <NA>             2000-03-20       <NA>  
+    #>  8 99BQC00038   2000-04-11    BASS & AS… 2027 DODGE S… <NA>             2000-03-01       <NA>  
+    #>  9 99BQC00038   2000-04-11    COX JOHNS… 440 REGENCY … <NA>             2000-03-23       <NA>  
+    #> 10 99BQC00038   2000-04-11    DAYSPRING… 8982 J ST, O… <NA>             2000-03-16       <NA>  
+    #> # … with 638 more rows, and 19 more variables: in_kind <chr>, committee_payee_id <chr>,
     #> #   support_oppose <chr>, nature_of_expenditure <chr>, description <chr>, line_id <chr>,
-    #> #   committee_payee_name <chr>, expense_category <chr>, oppose_clean <lgl>, amount_clean <dbl>,
-    #> #   inkind_clean <lgl>, payee_name_clean <chr>, na_flag <lgl>, dupe_flag <lgl>
+    #> #   committee_payee_name <chr>, committee_address <chr>, committee_city <chr>,
+    #> #   committee_state <chr>, committee_zip <chr>, committee_type <chr>, expense_category <chr>,
+    #> #   oppose_clean <lgl>, amount_clean <dbl>, inkind_clean <lgl>, payee_name_clean <chr>,
+    #> #   na_flag <lgl>, dupe_flag <lgl>
 
 ### Categorical
 
@@ -675,14 +698,14 @@ filter(ne_exp, dupe_flag)
 glimpse_fun(ne_exp, n_distinct)
 ```
 
-    #> # A tibble: 21 x 4
+    #> # A tibble: 26 x 4
     #>    var                   type      n         p
     #>    <chr>                 <chr> <int>     <dbl>
     #>  1 committee_id          chr    1713 0.0136   
     #>  2 date_received         date   2315 0.0184   
-    #>  3 payee_name            chr   22133 0.176    
-    #>  4 payee_address         chr   29188 0.232    
-    #>  5 expenditure_purpose   chr   28870 0.229    
+    #>  3 payee_name            chr   19832 0.157    
+    #>  4 payee_address         chr   28462 0.226    
+    #>  5 expenditure_purpose   chr   26593 0.211    
     #>  6 expenditure_date      date   7330 0.0582   
     #>  7 amount                chr   35529 0.282    
     #>  8 in_kind               chr    4616 0.0366   
@@ -692,13 +715,18 @@ glimpse_fun(ne_exp, n_distinct)
     #> 12 description           chr     482 0.00382  
     #> 13 line_id               chr      33 0.000262 
     #> 14 committee_payee_name  chr    1928 0.0153   
-    #> 15 expense_category      chr       6 0.0000476
-    #> 16 oppose_clean          lgl       2 0.0000159
-    #> 17 amount_clean          dbl   37971 0.301    
-    #> 18 inkind_clean          lgl       2 0.0000159
-    #> 19 payee_name_clean      chr   23919 0.190    
-    #> 20 na_flag               lgl       2 0.0000159
-    #> 21 dupe_flag             lgl       2 0.0000159
+    #> 15 committee_address     chr    1248 0.00990  
+    #> 16 committee_city        chr     191 0.00152  
+    #> 17 committee_state       chr       7 0.0000555
+    #> 18 committee_zip         chr     295 0.00234  
+    #> 19 committee_type        chr       8 0.0000635
+    #> 20 expense_category      chr       6 0.0000476
+    #> 21 oppose_clean          lgl       2 0.0000159
+    #> 22 amount_clean          dbl   37971 0.301    
+    #> 23 inkind_clean          lgl       2 0.0000159
+    #> 24 payee_name_clean      chr   21607 0.171    
+    #> 25 na_flag               lgl       2 0.0000159
+    #> 26 dupe_flag             lgl       2 0.0000159
 
 ![](../plots/words_bar-1.png)<!-- -->
 
@@ -754,7 +782,8 @@ sum(ne_exp$expenditure_date > today())
 ne_exp <- ne_exp %>% 
   mutate(
     date_flag = or(expenditure_year < 1999, expenditure_year > 2019),
-    date_clean = ifelse(date_flag, NA, expenditure_date)
+    date_clean = as_date(ifelse(date_flag, NA, expenditure_date)),
+    year_clean = year(date_clean)
   )
 
 sum(ne_exp$date_flag)
@@ -763,28 +792,50 @@ sum(ne_exp$date_flag)
 
 ## Wrangle
 
+### Address
+
 There is very little consistency in the format of `payee_address`.
 
 ``` r
+# Mon Aug  5 17:19:45 2019 ------------------------------
 sample(
   x = na.omit(ne_exp$payee_address),
   size = 20
 )
 ```
 
-    #>  [1] "926 P ST, LINCOLN, NE"                        "18806 CAPEHART ROAD"                         
-    #>  [3] "3232 H STREET OMAHA NE 68107"                 "COLUMBUS, NE"                                
-    #>  [5] "701 South 13th Street, P.O. Box 95023"        "195 BRAINTREE DR BLOOMINGDALE IL 60108"      
-    #>  [7] "700 R STREET, LINCOLN, NE"                    "845 S STRRET LINCOLN NE                 "    
-    #>  [9] "1209 HARNEY ST. #200, OMAHA, NE"              "7607 PACIFIC ST, OMAHA, NE"                  
-    #> [11] "505 CORNHUSKER RD PO BOX 259 BELLEVUE,NE"     "348 E 6TH ST FREMONT, NE 68025"              
-    #> [13] "1233 LINCOLN MALL, STE. 201 LINCOLN NE 68508" "14911 LAKE ST. OMAHA NE 68116"               
-    #> [15] "1209 HARNEY #260"                             "1610 N STREET LINCOLN NE 68508"              
-    #> [17] "BOX 37, SCOTTSBLUFF, NE                 "     "8100 SOUTH 13TH LINCOLN NE 68512"            
-    #> [19] "6054 COUNTRY CLUB OAKS PLACE, OMAHA NE"       "605 SOUTH 14TH, LINCOLN, NE"
+    #>  [1] "10031 MAPLE STREET, OMAHA NE 68134"      "1602 STONE ST FALLS CITY, NE 68355"     
+    #>  [3] "1850 M ST., NW  WASHINGTON, DC"          "P.O. BOX 80009 LINCOLN, NE"             
+    #>  [5] "700 R ST., LINCOLN NE 68508"             "LINCOLN NE 68502"                       
+    #>  [7] "514 UNIVERSITY"                          "5865 GRAND PAVILION WAY #302, VA"       
+    #>  [9] "1310 HARVEY STREET OMAHA NE 68102"       "P.O. BOX 8169"                          
+    #> [11] "1480 CO RD J OAKLAND,NE 68045"           "OMNI SHOREHAM HOTEL, WASHINGTON, DC"    
+    #> [13] "9746 CADY AVE, OMAHA, NE"                "1919 S. 40TH, STE 302, Lincoln NE 68506"
+    #> [15] "13467 CHANDLER RD, Omaha NE 68138"       "2907 S 186 PLAZA #702 OMAHA NE 68130"   
+    #> [17] "5200 SW 30 DAVENPORT IA 52802"           "3940 CRNHSKR HWY STE 400 LINCOLN 68504" 
+    #> [19] "5620 V ST., OMAHA, NE"                   "1013 W 75TH ST OMAHA, NE 68114"
 
 ``` r
-# Mon Aug  5 17:19:45 2019 ------------------------------
+ne_exp <- ne_exp %>% 
+  mutate(
+    zip_clean = payee_address %>% 
+      str_extract(rx_zip) %>% 
+      normal_zip(na_rep = TRUE)
+  )
+```
+
+``` r
+ne_exp <- ne_exp %>% 
+  mutate(
+    state_clean = payee_address %>% 
+      str_extract(rx_state) %>%
+      normal_state(
+        abbreviate = TRUE,
+        na = na_city,
+        na_rep = TRUE,
+        valid = geo$state
+      )
+  )
 ```
 
 ## Conclude

@@ -283,7 +283,7 @@ anything of ascertainable monetary value for purposes of influencing the nominat
 any candidate or the qualification, passage or defeat of a ballot question.
 
 ```{r head_b1d1}
-head(ne$formb1d)
+glimpse(ne$formb1d)
 ```
 
 #### Form B-2
@@ -298,7 +298,7 @@ be allocated (E.g. the purchase of a newspaper ad advocating support or oppositi
 candidate or ballot question).
 
 ```{r head_b2b}
-head(ne$formb2b)
+glimpse(ne$formb2b)
 ```
 
 #### Form B-4
@@ -314,7 +314,7 @@ in-kind contributions, loans, independent expenditures, and all other disburseme
 in support of or in opposition to Nebraska state and local candidates and ballot questions.
 
 ```{r head_b4b1}
-head(ne$formb4b1)
+glimpse(ne$formb4b1)
 ```
 
 #### Bind
@@ -329,7 +329,8 @@ information from other forms so we can identify the parties on both sides of eac
 ```{r fix_b1d}
 fixed_b1d <- ne$formb1d %>% 
   # add from b1
-  select(-committee_name)
+  select(-committee_name) %>% 
+  map_dfr(str_trim)
 ```
 
 ```{r fix_b2b}
@@ -339,7 +340,12 @@ fixed_b2b <- ne$formb2b %>%
     committee_payee_id = committee_id_expenditure_is_for,
     # this file has last cols shifted left
     committee_payee_name = report_id,
-  )
+  ) %>% 
+  left_join(
+    ne$forma1 %>% select(starts_with("committee")), 
+    by = c("committee_payee_id" = "committee_id_number")
+  ) %>% 
+  select(-committee_name)
 ```
 
 ```{r fix_b4b1}
@@ -349,8 +355,14 @@ fixed_b4b1 <- ne$formb4b1 %>%
     committee_payee_id = committee_expenditure_id,
     # this file has last cols shifted left
     committee_payee_name = report_id,
+  ) %>%
+  # add committee geo info
+  left_join(
+    ne$forma1 %>% select(starts_with("committee")), 
+    by = c("committee_payee_id" = "committee_id_number")
   ) %>% 
   select(
+    -committee_name,
     -form_id_number
   )
 ```
@@ -392,7 +404,7 @@ are expected missing values and those that should be flagged. `na_flag` will equ
 record has either (1) no `amount_clean` (`amount` or `in_kind`) _or_ (2) no `payee_name_clean`
 (`payee_name` for individuals or `payee_committee_name` for others).
 
-```{r flag_na}
+```{r flag_na, collapse=TRUE}
 sum(is.na(ne_exp$payee_name) & is.na(ne_exp$committee_payee_name))
 
 ne_exp <- ne_exp %>% 
@@ -482,7 +494,7 @@ ne_exp %>%
 
 #### Dates
 
-```{r}
+```{r add_year}
 ne_exp <- mutate(ne_exp, expenditure_year = year(expenditure_date))
 ```
 
@@ -497,7 +509,8 @@ sum(ne_exp$expenditure_date > today())
 ne_exp <- ne_exp %>% 
   mutate(
     date_flag = or(expenditure_year < 1999, expenditure_year > 2019),
-    date_clean = ifelse(date_flag, NA, expenditure_date)
+    date_clean = as_date(ifelse(date_flag, NA, expenditure_date)),
+    year_clean = year(date_clean)
   )
 
 sum(ne_exp$date_flag)
@@ -505,14 +518,39 @@ sum(ne_exp$date_flag)
 
 ## Wrangle
 
+### Address
+
 There is very little consistency in the format of `payee_address`.
 
 ```{r sample_address}
+# Mon Aug  5 17:19:45 2019 ------------------------------
 sample(
   x = na.omit(ne_exp$payee_address),
   size = 20
 )
-# Mon Aug  5 17:19:45 2019 ------------------------------
+```
+
+```{r extract_zip}
+ne_exp <- ne_exp %>% 
+  mutate(
+    zip_clean = payee_address %>% 
+      str_extract(rx_zip) %>% 
+      normal_zip(na_rep = TRUE)
+  )
+```
+
+```{r extract_state}
+ne_exp <- ne_exp %>% 
+  mutate(
+    state_clean = payee_address %>% 
+      str_extract(rx_state) %>%
+      normal_state(
+        abbreviate = TRUE,
+        na = na_city,
+        na_rep = TRUE,
+        valid = geo$state
+      )
+  )
 ```
 
 ## Conclude 
