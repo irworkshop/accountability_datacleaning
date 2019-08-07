@@ -200,7 +200,7 @@ length(setdiff(df$zip, geo$zip))
 df <- df %>% 
   mutate(
     zip_norm = normal_zip(
-      zip = address,
+      zip = zip,
       na_rep = TRUE
     )
   )
@@ -223,7 +223,7 @@ length(setdiff(df$state, geo$state))
 ```{r normal_state}
 df <- df %>% 
   mutate(
-    zip_norm = normal_state(
+    state_norm = normal_state(
       state = state,
       abbreviate = TRUE,
       na_rep = TRUE,
@@ -233,17 +233,17 @@ df <- df %>%
 ```
 
 ```{r count_state_post, collapse=TRUE}
-n_distinct(df$state)
-prop_in(df$state, geo$state, na.rm = TRUE)
-length(setdiff(df$state, geo$state))
+n_distinct(df$state_norm)
+prop_in(df$state_norm, geo$state, na.rm = TRUE)
+length(setdiff(df$state_norm, geo$state))
 ```
 
 ### City
 
 ```{r count_city_pre, collapse=TRUE}
 n_distinct(df$city)
-prop_in(df$state, geo$city, na.rm = TRUE)
-length(setdiff(df$city, geo$state))
+prop_in(df$city, geo$city, na.rm = TRUE)
+length(setdiff(df$city, geo$city))
 ```
 
 #### Normalize
@@ -264,12 +264,12 @@ df <- df %>%
 ```{r count_city_post_norm, collapse=TRUE}
 n_distinct(df$city_norm)
 prop_in(df$city_norm, geo$city, na.rm = TRUE)
-length(setdiff(df$city_norm, geo$state))
+length(setdiff(df$city_norm, geo$city))
 ```
 
 #### Swap
 
-```{r}
+```{r swap_city}
 df <- df %>% 
   left_join(
     y = geo,

@@ -214,7 +214,8 @@ oh <-
   ) %>% 
   bind_rows(.id = "file") %>%
   mutate(file = basename(file)) %>%
-  clean_names()
+  clean_names() %>% 
+  rename(city_raw = city)
 ```
 
 ## Explore
@@ -518,12 +519,238 @@ oh %>%
 
 ### Address
 
+```{r normal_address}
+oh <- oh %>% 
+  mutate(
+    address_norm = normal_address(
+      address = address,
+      add_abbs = usps,
+      na_rep = TRUE
+    )
+  )
+```
+
+```{r view_address_change, echo=FALSE}
+oh %>% 
+  sample_n(10) %>% 
+  select(
+    address,
+    address_norm
+  )
+```
+
 ### ZIP
+
+```{r count_zip_pre, collapse=TRUE}
+n_distinct(oh$zip)
+prop_in(oh$zip, geo$zip, na.rm = TRUE)
+length(setdiff(oh$zip, geo$zip))
+```
+
+```{r normal_zip}
+oh <- oh %>% 
+  mutate(
+    zip_norm = normal_zip(
+      zip = zip,
+      na_rep = TRUE
+    )
+  )
+```
+
+```{r count_zip_post, collapse=TRUE}
+n_distinct(oh$zip_norm)
+prop_in(oh$zip_norm, geo$zip, na.rm = TRUE)
+length(setdiff(oh$zip_norm, geo$zip))
+```
 
 ### State
 
+```{r count_state_pre, collapse=TRUE}
+n_distinct(oh$state)
+prop_in(oh$state, geo$state, na.rm = TRUE)
+length(setdiff(oh$state, geo$state))
+setdiff(oh$state, geo$state)
+```
+
+```{r normal_state}
+oh <- oh %>% 
+  mutate(
+    state_norm = normal_state(
+      state = state,
+      abbreviate = FALSE,
+      valid = geo$state
+    )
+  )
+```
+
+```{r count_state_post, collapse=TRUE}
+n_distinct(oh$state_norm)
+prop_in(oh$state_norm, geo$state, na.rm = TRUE)
+length(setdiff(oh$state_norm, geo$state))
+```
+
 ### City
+
+```{r count_city_pre, collapse=TRUE}
+n_distinct(oh$city_raw)
+prop_in(oh$city_raw, geo$city, na.rm = TRUE)
+length(setdiff(oh$city_raw, geo$city))
+```
+
+#### Normalize
+
+```{r normal_city}
+oh <- oh %>% 
+  mutate(
+    city_norm = normal_city(
+      geo_abbs = usps_city,
+      st_abbs = c("OH", "DC", "OHIO"),
+      na = na_city,
+      na_rep = TRUE,
+      city = city_raw %>% 
+        str_replace("^CIN$",   "CINCINNATI") %>% 
+        str_replace("^COL$",   "COLUMBUS")   %>% 
+        str_replace("^CLEVE$", "CLEVELAND")  %>% 
+        str_replace("^CINTI$", "CINCINNATI") %>% 
+        str_replace("^YO$",    "YOUNGSTOWN") %>% 
+        str_replace("^COLS$",  "COLUMBUS")   %>% 
+        str_replace("^CINCI$", "CINCINNATI") %>% 
+        str_replace("^CLEV$",  "CLEVELAND")  %>% 
+        str_replace("^CLE$",   "CLEVELAND")  %>% 
+        str_replace("^LKWD$",  "LAKEWOOD")   %>% 
+        str_replace("^CINT$",  "CINCINNATI") %>% 
+        str_replace("^ATL$",   "ATLANTA")
+    )
+  )
+```
+
+```{r count_city_post_norm, collapse=TRUE}
+n_distinct(oh$city_norm)
+prop_in(oh$city_norm, geo$city, na.rm = TRUE)
+length(setdiff(oh$city_norm, geo$city))
+```
+
+#### Swap
+
+```{r swap_city}
+oh <- oh %>% 
+  left_join(
+    y = geo,
+    by = c(
+      "state_norm" = "state",
+      "zip_norm" = "zip"
+    )
+  ) %>% 
+  rename(city_match = city) %>% 
+  mutate(
+    match_dist = stringdist(city_norm, city_match),
+    city_swap = if_else(
+      condition = (match_dist <= 2),
+      true = city_match,
+      false = city_norm
+    )
+  )
+```
+
+```{r count_city_post_swap, collapse=TRUE}
+n_distinct(oh$city_swap)
+prop_in(oh$city_swap, geo$city, na.rm = TRUE)
+length(setdiff(oh$city_swap, geo$city))
+summary(oh$match_dist)
+```
+
+#### Refine
+
+```{r city_refine}
+oh_refined <- oh %>%
+  filter(
+    state_norm == "OH",
+    match_dist > 2,
+  ) %>% 
+  mutate(
+    city_refine = city_swap %>% 
+      key_collision_merge(dict = geo$city[geo$state == "OH"]) %>% 
+      n_gram_merge(numgram = 1, bus_suffix = FALSE)
+  ) %>% 
+  filter(city_refine != city_swap)
+```
+
+```{r good_refine}
+good_refined <- oh_refined %>% 
+  inner_join(
+    y = geo,
+    by = c(
+      "city_refine" = "city",
+      "state_norm" = "state",
+      "zip_norm" = "zip"
+    )
+  )
+```
+
+```{r join_refine}
+oh <- oh %>%
+  left_join(good_refined) %>% 
+  mutate(city_clean = coalesce(city_refine, city_swap))
+```
+
+```{r count_city_post_refine, collapse=TRUE}
+n_distinct(oh$city_clean)
+prop_in(oh$city_clean, geo$city, na.rm = TRUE)
+length(setdiff(oh$city_clean, geo$city))
+```
+
+#### Progress
+
+```{r city_progress, collapse=TRUE}
+n_distinct(oh$city_raw)
+n_distinct(oh$city_norm)
+n_distinct(oh$city_swap)
+n_distinct(oh$city_clean)
+
+prop_in(oh$city_raw, geo$city)
+prop_in(oh$city_norm, geo$city)
+prop_in(oh$city_swap, geo$city)
+```
 
 ## Conclude
 
+```{r conclude_dupe, echo=FALSE}
+sum_dupe <- nrow(oh) - nrow(distinct(oh))
+prop_dupe <- sum_dupe/nrow(oh)
+```
+
+1. There are `r nrow(oh)` records in the database.
+1. There are `r sum_dupe` duplicate records, `r percent(prop_dupe)` of records. Not yet flagged.
+1. The range and distribution of `amount` and `date` seem reasonable.
+1. There are `r sum(oh$na_flag)` records missing either recipient or date.
+1. Consistency in goegraphic data has been improved with `campfin::normal_*()`.
+1. The 5-digit `zip_norm` variable has been created with `campfin::normal_zip(oh$zip)`.
+1. The 4-digit `year_clean` variable has been created with `lubridate::year(oh$date_clean)`.
+
 ## Export
+
+```{r proc_dir}
+proc_dir <- here("oh", "expends", "data", "processed")
+dir_create(proc_dir)
+```
+
+```{r write_clean}
+oh %>% 
+  select(
+    -city_raw,
+    -state,
+    -zip,
+    -expend_date,
+    -expend_year,
+    -city_norm,
+    -city_match,
+    -match_dist,
+    -city_swap,
+    -city_refine
+  ) %>% 
+  write_csv(
+    na = "",
+    path = glue("{proc_dir}/oh_expends_clean.csv")
+  )
+```
+
