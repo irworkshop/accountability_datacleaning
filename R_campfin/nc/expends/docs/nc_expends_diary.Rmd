@@ -1,0 +1,882 @@
+---
+title: "North Carolina Expenditures"
+author: "Kiernan Nicholls"
+date: "`r Sys.time()`"
+output:
+  github_document: 
+    df_print: tibble
+    toc: true
+    toc_dept: 2
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE, purl=FALSE}
+library(knitr)
+opts_chunk$set(
+  eval = TRUE,
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  error = FALSE,
+  comment = "#>",
+  fig.path = "../plots/",
+  fig.width = 10,
+  dpi = 300
+)
+options(width = 99)
+set.seed(10753)
+```
+
+## Project
+
+The Accountability Project is an effort to cut across data silos and give journalists, policy
+professionals, activists, and the public at large a simple way to search across huge volumes of
+public data about people and organizations.
+
+Our goal is to standardizing public data on a few key fields by thinking of each dataset row as a
+transaction. For each transaction there should be (at least) 3 variables:
+
+1. All **parties** to a transaction
+2. The **date** of the transaction
+3. The **amount** of money involved
+
+## Objectives
+
+This document describes the process used to complete the following objectives:
+
+1. How many records are in the database?
+1. Check for duplicates
+1. Check ranges
+1. Is there anything blank or missing?
+1. Check for consistency issues
+1. Create a five-digit ZIP Code called `ZIP5`
+1. Create a `YEAR` field from the transaction date
+1. Make sure there is data on both parties to a transaction
+
+## Packages
+
+The following packages are needed to collect, manipulate, visualize, analyze, and communicate
+these results. The `pacman` package will facilitate their installation and attachment.
+
+The IRW's `campfin` package will also have to be installed from GitHub. This package contains
+functions custom made to help facilitate the processing of campaign finance data.
+
+```{r load_packages, message=FALSE, dfrning=FALSE, error=FALSE}
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load_current_gh("kiernann/campfin")
+pacman::p_load(
+  stringdist, # levenshtein value
+  tidyverse, # data manipulation
+  RSelenium, # remote browser
+  lubridate, # datetime strings
+  magrittr, # pipe opperators
+  tidytext, # text analysis
+  janitor, # dataframe clean
+  batman, # parse logical
+  refinr, # cluster and merge
+  scales, # format strings
+  rvest, # read html files
+  knitr, # knit documents
+  vroom, # read files fast
+  glue, # combine strings
+  here, # relative storage
+  fs # search storage 
+)
+```
+
+This document should be run as part of the `R_campfin` project, which lives as a sub-directory of
+the more general, language-agnostic [`irworkshop/accountability_datacleaning`][01] GitHub
+repository.
+
+The `R_campfin` project uses the [RStudio projects][02] feature and should be run as such. The
+project also uses the dynamic `here::here()` tool for file paths relative to _your_ machine.
+
+```{r where_here, collapse=TRUE}
+# where does this document knit?
+here::here()
+```
+
+## Data
+
+Data is obtained from the North Carolina State Board of Elections (NC SBoE).
+
+> The State Board of Elections (State Board) is the state agency charged with the administration of the elections process and campaign finance disclosure and compliance.
+
+> The state's Campaign Reporting Act applies to:
+>
+>  * all candidates for public office;  
+>  * all political party groups and political action committees;  
+>  * all groups organized to support or oppose a referendum;  
+>  * every person or group participating in activities that support or oppose the nomination or  
+>  * election of one or more clearly identified candidates, or a political party or a referendum.  
+
+
+### Download
+
+To download the data, perform a [Transaction Entity Search][03] for type "Expenditure" from
+2008-01-01 to `r today()`.
+
+>  This page allows for searching through the NC SBoE Campaign Finance database of transactions
+that committees have received (Receipts) or spent (Expenditures).  Report data that is imported
+does not appear on our website in real-time.  Our website updates overnight each weeknight.  All
+data imported during a business day will appear on our website the following day.
+
+[03]: https://cf.ncsbe.gov/CFTxnLkup/
+
+```{r raw_dir}
+raw_dir <- here("nc", "expends", "data", "data", "raw")
+dir_create(raw_dir) 
+```
+
+### Read
+
+```{r read_raw}
+nc <- read_csv(
+  file = glue("{raw_dir}/transinq_results.csv"),
+  na = c("NA", "", "Not Available"),
+  col_types = cols(
+    .default = col_character(),
+    `Date Occured` = col_date("%m/%d/%Y"),
+    Amount = col_double()
+  )
+)
+
+nc <- nc %>% 
+  clean_names(case = "snake") %>% 
+  mutate_if(is_character, str_to_upper) %>% 
+  mutate(supports = equals(declaration, "SUPPORT"))
+```
+
+## Explore
+
+```{r glimpse}
+head(nc)
+tail(nc)
+glimpse(sample_frac(nc))
+```
+
+### Missing
+
+```{r glimpse_na}
+glimpse_fun(nc, count_na)
+```
+
+There seems to be a regular block of records missing the variables needed to properly identify a
+transaction. We can flag those expenditures with `campfin::flag_na()`.
+
+```{r flag_na}
+nc <- nc %>% flag_na(name, committee_name, date_occured, amount)
+sum(nc$na_flag)
+percent(mean(nc$na_flag))
+```
+
+### Duplicates
+
+```{r get_dupes}
+nc <- flag_dupes(nc, everything())
+sum(nc$dupe_flag)
+percent(mean(nc$dupe_flag))
+```
+
+### Categorical
+
+We can check the distribution of categorical variables to gain a better understanding as to what
+kind of expenditures are being made.
+
+```{r glimpse_distinct}
+glimpse_fun(nc, n_distinct)
+```
+
+We can use `campfin::explore_plot()` to explore the distribution of the least distinct categorical
+variables.
+
+```{r type_bar, echo=FALSE}
+explore_plot(
+  data = nc,
+  var = transction_type,
+  flip = TRUE,
+  palette = "Dark2",
+  title = "North Carolina Expenditure Types",
+  caption = "Source: NC SBoE"
+)
+```
+
+```{r method_bar, echo=FALSE}
+explore_plot(
+  data = nc,
+  var = form_of_payment,
+  flip = TRUE,
+  palette = "Dark2",
+  title = "North Carolina Expenditure Payment Method",
+  caption = "Source: NC SBoE"
+)
+```
+
+```{r support_bar, echo=FALSE}
+explore_plot(
+  data = drop_na(nc, supports),
+  var = supports,
+  flip = FALSE,
+  palette = "Dark2",
+  title = "North Carolina Expenditure Supports Candidate/Issue",
+  caption = "Source: NC SBoE"
+)
+```
+
+We can use `tidytext::unnest_tokens()` and `ggplot2::geom_col()` to explore the most frequent
+word usage of the long-form `purpose` variable.
+
+```{r purpose_bar, echo=FALSE, fig.height=10}
+nc %>% 
+  unnest_tokens(word, purpose) %>% 
+  anti_join(stop_words) %>% 
+  count(word, sort = TRUE) %>%
+  drop_na(word) %>% 
+  head(30) %>% 
+  ggplot(aes(x = reorder(word, n), y = n)) +
+  geom_col(aes(fill = n)) +
+  coord_flip() +
+  scale_fill_gradient(guide = FALSE) +
+  labs(
+    title = "North Carolina Expenditure Supports Candidate/Issue",
+    caption = "Source: NC SBoE",
+    x = "Word",
+    y = "Frequency"
+  )
+```
+
+### Continuous
+
+We should also check the range and distribution of continuous variables.
+
+#### Amounts
+
+```{r summary_amount}
+summary(nc$amount)
+```
+
+```{r amount_histogram, echo=FALSE}
+nc %>%
+  ggplot(aes(amount)) +
+  geom_histogram() +
+  scale_x_continuous(
+    breaks = c(1 %o% 10^(0:6)),
+    labels = dollar,
+    trans = "log10"
+  ) +
+  labs(
+    title = "North Carolina Expenditure Amount Distribution",
+    caption = "Source: NC SBoE",
+    x = "Amount",
+    y = "Count"
+  )
+```
+
+```{r amount_box_type, echo=FALSE}
+nc %>%
+  drop_na(transction_type) %>%
+  filter(transction_type %in% head(count(nc, transction_type, sort = T), 4)$transction_type) %>% 
+  ggplot(
+    mapping = aes(
+      x = reorder(
+        x = transction_type, 
+        X = amount, 
+        FUN = median, 
+        na.rm = TRUE
+      ), 
+      y = amount
+    )
+  ) +
+  geom_boxplot(
+    mapping = aes(fill = transction_type),
+    varwidth = TRUE,
+    outlier.alpha = 0.01
+  ) +
+  scale_y_continuous(
+    breaks = c(1 %o% 10^(0:6)),
+    labels = dollar,
+    trans = "log10"
+  ) +
+  scale_fill_brewer(
+    type = "qual",
+    palette = "Dark2",
+    guide = FALSE,
+  ) +
+  labs(
+    title = "North Carolina Expenditure Amount Range by Transaction Type",
+    caption = "Source: NC SBoE",
+    x = "Transaction Type",
+    y = "Amount"
+  )
+```
+
+```{r amount_box_method, echo=FALSE}
+nc %>%
+  drop_na(form_of_payment) %>%
+  filter(form_of_payment %in% head(count(nc, form_of_payment, sort = T), 4)$form_of_payment) %>% 
+  ggplot(
+    mapping = aes(
+      x = reorder(
+        x = form_of_payment, 
+        X = amount, 
+        FUN = median, 
+        na.rm = TRUE
+      ), 
+      y = amount
+    )
+  ) +
+  geom_boxplot(
+    mapping = aes(fill = form_of_payment),
+    varwidth = TRUE,
+    outlier.alpha = 0.01
+  ) +
+  scale_y_continuous(
+    breaks = c(1 %o% 10^(0:6)),
+    labels = dollar,
+    trans = "log10"
+  ) +
+  scale_fill_brewer(
+    type = "qual",
+    palette = "Dark2",
+    guide = FALSE,
+  ) +
+  labs(
+    title = "North Carolina Expenditure Amount Range by Transaction Type",
+    caption = "Source: NC SBoE",
+    x = "Transaction Type",
+    y = "Amount"
+  )
+```
+
+#### Dates
+
+We can add a `year_occured` variable using `lubridate::year()`.
+
+```{r add_year}
+nc <- mutate(nc, year_occured = year(date_occured))
+```
+
+The `date_occured` variable is very clean, with `r sum(nc$year_occured < 2008, na.rm = TRUE)`
+records before 2008 and `r sum(nc$date_occured > today(), na.rm = TRUE)` records after `r today()`.
+
+```{r date_range, collapse=TRUE}
+min(nc$date_occured, na.rm = TRUE)
+sum(nc$year_occured < 2008, na.rm = TRUE)
+max(nc$date_occured, na.rm = TRUE)
+sum(nc$date_occured > today(), na.rm = TRUE)
+```
+
+```{r year_bar_count, echo=FALSE}
+nc %>% 
+  count(year_occured, sort = T) %>% 
+  mutate(on = is_even(year_occured),) %>%
+  ggplot(aes(x = year_occured, y = n)) +
+  geom_col(aes(fill = on)) +
+  scale_x_continuous(breaks = 2008:2019) +
+  scale_fill_brewer(
+    type = "qual",
+    palette = "Dark2"
+  ) +
+  labs(
+    title = "North Carolina Expenditure Count by Year",
+    caption = "Source: NC SBoE",
+    fill = "Election Year",
+    x = "Year",
+    y = "Distinct Expenditures"
+  ) +
+  theme(legend.position = "bottom")
+```
+
+```{r year_bar_median, echo=FALSE}
+nc %>% 
+  drop_na(year_occured) %>% 
+  mutate(on = is_even(year_occured),) %>%
+  group_by(on, year_occured) %>% 
+  summarize(median = median(amount, na.rm = TRUE)) %>% 
+  ggplot(aes(x = year_occured, y = median)) +
+  geom_col(aes(fill = on)) +
+  scale_y_continuous(labels = dollar) +
+  scale_x_continuous(breaks = 2008:2019) +
+  scale_fill_brewer(
+    type = "qual",
+    palette = "Dark2"
+  ) +
+  labs(
+    title = "North Carolina Expenditure Median Amount by Year",
+    subtitle = "Are campaigns becoming cheaper over time?",
+    caption = "Source: NC SBoE",
+    fill = "Election Year",
+    x = "Year",
+    y = "Median Amount"
+  ) +
+  theme(legend.position = "bottom")
+```
+
+```{r year_bar_total, echo=FALSE}
+nc %>% 
+  drop_na(year_occured) %>% 
+  mutate(on = is_even(year_occured),) %>%
+  group_by(on, year_occured) %>% 
+  summarize(sum = sum(amount, na.rm = TRUE)) %>% 
+  ggplot(aes(x = year_occured, y = sum)) +
+  geom_col(aes(fill = on)) +
+  scale_y_continuous(labels = dollar) +
+  scale_x_continuous(breaks = 2008:2019) +
+  scale_fill_brewer(
+    type = "qual",
+    palette = "Dark2"
+  ) +
+  labs(
+    title = "North Carolina Expenditure Total Amount by Year",
+    subtitle = "Campaigns are not becoming cheaper overall",
+    caption = "Source: NC SBoE",
+    fill = "Election Year",
+    x = "Year",
+    y = "Total Amount"
+  ) +
+  theme(legend.position = "bottom")
+```
+
+```{r month_amount_line, echo=FALSE}
+nc %>%
+  drop_na(date_occured) %>% 
+  mutate(
+    month = month(date_occured),
+    on = is_even(year_occured),
+  ) %>%
+  group_by(month, on) %>%
+  summarize(sum = sum(amount, na.rm = TRUE)) %>% 
+  ggplot(aes(x = month, y = sum)) +
+  geom_line(aes(color = on), size = 2) +
+  scale_y_continuous(labels = dollar) +
+  scale_x_continuous(labels = month.abb, breaks = 1:12) +
+  scale_color_brewer(
+    type = "qual",
+    palette = "Dark2"
+  ) +
+  labs(
+    title = "North Carolina Expenditure Total Amount by Month",
+    subtitle = "Money is spent right before the election",
+    caption = "Source: NC SBoE",
+    fill = "Election Year",
+    x = "Month",
+    y = "Total Amount"
+  ) +
+  theme(legend.position = "bottom")
+```
+
+```{r cycle_amount_line, echo=FALSE}
+nc %>% 
+  drop_na(date_occured, amount) %>% 
+  select(date_occured, year_occured, amount) %>% 
+  mutate(
+    off = !is_even(year_occured),
+    cycle = as.character(if_else(!off, year_occured, year_occured - 1L)),
+    month = if_else(off, month(date_occured), month(date_occured) + 12)
+  ) %>% 
+  group_by(cycle, off, month) %>% 
+  summarize(mean = mean(amount)) %>% 
+  ggplot(mapping = aes(x = month, y = mean)) +
+  geom_vline(xintercept = 11, color = "grey10") +
+  geom_line(aes(color = cycle), size = 1) +
+  scale_color_brewer(type = "qual", palette = "Dark2") +
+  scale_x_continuous(labels = rep(month.abb, 2)[is_even(1:24)], breaks = seq(1, 24, 2)) +
+  scale_y_continuous(labels = dollar) +
+  labs(
+    title = "North Carolina Expenditure Mean Amount by Month in Cycle",
+    caption = "Source: NC SBoE",
+    color = "Election Cycle",
+    x = "Month in Cycle",
+    y = "Mean Amount"
+  )
+```
+
+## Wrangle
+
+To improve the searchability of the database, we can perform some functional text normalization of
+geographic data. Here, we have geographic data for both the expender and payee.
+
+### Payees
+
+#### Address
+
+First, we will perform simple text normalization on the address strings using `tidyr::unite()` and
+`campfin::normal_address()`.
+
+```{r normal_address, collapse=TRUE}
+# need the dev tidyr for na.rm
+packageVersion("tidyr")
+nc <- nc %>% 
+  unite(
+    col = street_combined,
+    starts_with("street_line"),
+    sep = " ",
+    remove = FALSE,
+    na.rm = TRUE,
+  ) %>% 
+  mutate(
+    address_norm = normal_address(
+      address = street_combined,
+      add_abbs = usps,
+      na = c(""),
+      na_rep = TRUE
+    )
+  )
+```
+
+```{r view_address_norm, echo=FALSE}
+nc %>% 
+  sample_n(10) %>% 
+  select(
+    street_line_1,
+    street_combined,
+    address_norm
+  ) %>% 
+  drop_na()
+```
+
+#### Payee ZIP
+
+```{r count_zip_pre, collapse=TRUE}
+n_distinct(nc$zip_code)
+prop_in(nc$zip_code, geo$zip, na.rm = TRUE)
+length(setdiff(nc$zip_code, geo$zip))
+```
+
+```{r normal_zip}
+nc <- nc %>% 
+  mutate(
+    zip_norm = normal_zip(
+      zip = zip_code,
+      na_rep = TRUE
+    )
+  )
+```
+
+```{r count_zip_post, collapse=TRUE}
+n_distinct(nc$zip_norm)
+prop_in(nc$zip_norm, geo$zip, na.rm = TRUE)
+length(setdiff(nc$zip_norm, geo$zip))
+```
+
+#### Payee State
+
+```{r count_state_pre, collapse=TRUE}
+n_distinct(nc$state)
+prop_in(nc$state, geo$state, na.rm = TRUE)
+length(setdiff(nc$state, geo$state))
+```
+
+```{r view_match_state}
+nc %>%
+  drop_na(state, zip_code) %>% 
+  filter(state %out% geo$state) %>% 
+  select(city, state, zip_code) %>% 
+  left_join(geo, by = c("zip_code" = "zip"), suffix = c("_nc", "_geo")) %>% 
+  arrange(state_nc)
+```
+
+```{r normal_state}
+nc <- nc %>% 
+  mutate(
+    state_norm = state %>% 
+      str_replace("^CD$", "DC") %>% 
+      str_replace("^GE$", "GA") %>% 
+      str_replace("^KE$", "KY") %>% 
+      str_replace("^LO$", "LA") %>% 
+      str_replace("^N$",  "NC") %>% 
+      str_replace("^NX$", "NC") %>% 
+      str_replace("^WE$", "NC") %>% 
+      na_if("PU") %>% 
+      na_if("KI") %>% 
+      na_if("TH") %>% 
+      na_if("VE")
+  )
+```
+
+```{r count_state_post, collapse=TRUE}
+n_distinct(nc$state_norm)
+prop_in(nc$state_norm, geo$state, na.rm = TRUE)
+length(setdiff(nc$state_norm, geo$state))
+```
+
+#### Payee City
+
+```{r count_city_pre, collapse=TRUE}
+n_distinct(nc$city)
+prop_in(nc$city, geo$city, na.rm = TRUE)
+length(setdiff(nc$city, geo$city))
+```
+
+##### Payee City Normalize
+
+```{r normal_city}
+nc <- nc %>% 
+  mutate(
+    city_norm = normal_city(
+      city = city %>% 
+        str_replace("CLT", "CHARLOTTE") %>% 
+        str_replace("ATL", "ATLANTA") %>% 
+        str_replace("AVL", "ASHEVILLE"),
+      geo_abbs = usps_city,
+      st_abbs = c("NC", "DC", "NORTH CAROLINA"),
+      na = na_city,
+      na_rep = TRUE
+    )
+  )
+```
+
+```{r count_city_post_norm, collapse=TRUE}
+n_distinct(nc$city_norm)
+prop_in(nc$city_norm, geo$city, na.rm = TRUE)
+length(setdiff(nc$city_norm, geo$city))
+```
+
+##### Payee City Swap
+
+```{r swap_city}
+nc <- nc %>% 
+  rename(city_raw = city) %>% 
+  left_join(
+    y = geo,
+    by = c(
+      "state_norm" = "state",
+      "zip_norm" = "zip"
+    )
+  ) %>% 
+  rename(city_match = city) %>% 
+  mutate(
+    match_dist = stringdist(city_norm, city_match),
+    city_swap = if_else(
+      condition = is_less_than(match_dist, 4),
+      true = city_match,
+      false = city_norm
+    )
+  )
+```
+
+```{r count_city_post_swap, collapse=TRUE}
+n_distinct(nc$city_swap)
+prop_in(nc$city_swap, geo$city, na.rm = TRUE)
+length(setdiff(nc$city_swap, geo$city))
+```
+
+```{r}
+nc %>% 
+  filter(city_swap %out% geo$city) %>% 
+  count(
+    city_swap, 
+    city_match, 
+    state_norm, 
+    sort = TRUE
+  ) %>% 
+  drop_na() %>% 
+  arrange(desc(n)) %>% 
+  mutate(cumulative_prop = cumsum(n)/sum(n)) %>% 
+  print(n = 20)
+```
+
+```{r city_progress, echo=FALSE}
+tibble(
+  step = c("raw", "norm", "swap"),
+  n_distinct = c(
+    n_distinct(nc$city_raw), 
+    n_distinct(nc$city_norm), 
+    n_distinct(nc$city_swap)
+  ),
+  prop_in = c(
+    prop_in(nc$city_raw, geo$city, na.rm = TRUE),
+    prop_in(nc$city_norm, geo$city, na.rm = TRUE),
+    prop_in(nc$city_swap, geo$city, na.rm = TRUE)
+  ),
+  unique_bad = c(
+    length(setdiff(nc$city_raw, geo$city)),
+    length(setdiff(nc$city_norm, geo$city)),
+    length(setdiff(nc$city_swap, geo$city))
+  )
+)
+```
+
+### Committees
+
+#### Committee Address
+
+```{r comm_normal_address, collapse=TRUE}
+nc <- nc %>% 
+  unite(
+    col = committee_street_combined,
+    starts_with("committee_street"),
+    sep = " ",
+    remove = FALSE,
+    na.rm = TRUE,
+  ) %>% 
+  mutate(
+    committee_address_norm = normal_address(
+      address = committee_street_combined,
+      add_abbs = usps,
+      na = c(""),
+      na_rep = TRUE
+    )
+  )
+```
+
+```{r comm_view_address_norm, echo=FALSE}
+nc %>% 
+  sample_n(10) %>% 
+  select(
+    committee_street_1,
+    committee_street_combined,
+    committee_address_norm
+  ) %>% 
+  drop_na()
+```
+
+#### Committee ZIP
+
+```{r comm_count_zip_pre, collapse=TRUE}
+n_distinct(nc$committee_zip_code)
+prop_in(nc$committee_zip_code, geo$zip, na.rm = TRUE)
+length(setdiff(nc$committee_zip_code, geo$zip))
+```
+
+```{r comm_normal_zip}
+nc <- nc %>% 
+  mutate(
+    committee_zip_norm = normal_zip(
+      zip = committee_zip_code,
+      na_rep = TRUE
+    )
+  )
+```
+
+```{r comm_count_zip_post, collapse=TRUE}
+n_distinct(nc$committee_zip_norm)
+prop_in(nc$committee_zip_norm, geo$zip, na.rm = TRUE)
+length(setdiff(nc$committee_zip_norm, geo$zip))
+```
+
+#### Committee State
+
+The `committee_state` variable does not need to be normalized.
+
+```{r comm_count_state_pre, collapse=TRUE}
+n_distinct(nc$committee_state)
+prop_in(nc$committee_state, geo$state, na.rm = TRUE)
+length(setdiff(nc$committee_state, geo$state))
+```
+
+#### Committee City
+
+```{r comm_count_city_pre, collapse=TRUE}
+n_distinct(nc$committee_city)
+prop_in(nc$committee_city, geo$city, na.rm = TRUE)
+length(setdiff(nc$committee_city, geo$city))
+```
+
+##### Committee City Normalize
+
+```{r comm_normal_city}
+nc <- nc %>% 
+  mutate(
+    committee_city_norm = normal_city(
+      city = committee_city,
+      geo_abbs = usps_city,
+      st_abbs = c("NC", "DC", "NORTH CAROLINA"),
+      na = na_city,
+      na_rep = TRUE
+    )
+  )
+```
+
+```{r comm_count_city_post_norm, collapse=TRUE}
+n_distinct(nc$committee_city_norm)
+prop_in(nc$committee_city_norm, geo$city, na.rm = TRUE)
+length(setdiff(nc$committee_city_norm, geo$city))
+```
+
+##### Committee City Swap
+
+```{r comm_swap_city}
+nc <- nc %>% 
+  rename(committee_city_raw = committee_city) %>% 
+  left_join(
+    y = geo,
+    by = c(
+      "committee_state" = "state",
+      "committee_zip_norm" = "zip"
+    )
+  ) %>% 
+  rename(committee_city_match = city) %>% 
+  mutate(
+    committee_match_dist = stringdist(committee_city_norm, city_match),
+    committee_city_swap = if_else(
+      condition = is_less_than(match_dist, 4),
+      true = committee_city_match,
+      false = committee_city_norm
+    )
+  )
+```
+
+```{r comm_count_city_post_swap, collapse=TRUE}
+n_distinct(nc$committee_city_swap)
+prop_in(nc$committee_city_swap, geo$city, na.rm = TRUE)
+length(setdiff(nc$committee_city_swap, geo$city))
+```
+
+Our usual normalization process has done little to clean the already clean `committee_city`.
+
+```{r comm_city_progress, echo=FALSE}
+tibble(
+  step = c("raw", "norm", "swap"),
+  n_distinct = c(
+    n_distinct(nc$committee_city_raw), 
+    n_distinct(nc$committee_city_norm), 
+    n_distinct(nc$committee_city_swap)
+  ),
+  prop_in = c(
+    prop_in(nc$committee_city_raw, geo$city, na.rm = TRUE),
+    prop_in(nc$committee_city_norm, geo$city, na.rm = TRUE),
+    prop_in(nc$committee_city_swap, geo$city, na.rm = TRUE)
+  ),
+  unique_bad = c(
+    length(setdiff(nc$committee_city_raw, geo$city)),
+    length(setdiff(nc$committee_city_norm, geo$city)),
+    length(setdiff(nc$committee_city_swap, geo$city))
+  )
+)
+```
+
+## Conclude
+
+1. There are `r nrow(nc)` records in the database
+1. There are `r sum(nc$dupe_flag)` (`r percent(mean(nc$dupe_flag))`) duplicate records
+1. The range and distribution of `amount` and `date_occured` are reasonable
+1. There are `r sum(nc$na_flag)` (`r percent(mean(nc$na_flag))`) records missing names
+1. Consistency in geographic data has been improved with `campfin::normal_*()`
+1. The 5-digit `zip_norm` variable has been created with `campfin::normal_zip()`
+1. The 4-digit `year_occured` variable has been created with `lubridate::year()`
+
+## Export
+
+```{r proc_dir}
+proc_dir <- here("nc", "expends", "data", "processed")
+dir_create(proc_dir)
+```
+
+```{r write_clean}
+nc %>% 
+  select(
+    -city_norm,
+    -match_dist,
+    -city_match,
+    -committee_city_norm,
+    -committee_match_dist,
+    -committee_city_match
+  ) %>% 
+  write_csv(
+    na = "",
+    path = glue("{proc_dir}/nc_expends_clean.csv")
+  )
+```
+
