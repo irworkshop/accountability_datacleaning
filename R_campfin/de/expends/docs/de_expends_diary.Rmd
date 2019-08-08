@@ -1,6 +1,6 @@
 ---
-title: "State Data"
-author: "First Last"
+title: "Deleware Expenditures"
+author: "Kiernan Nicholls"
 date: "`r Sys.time()`"
 output:
   github_document: 
