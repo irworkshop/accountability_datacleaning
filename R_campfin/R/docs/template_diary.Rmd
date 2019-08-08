@@ -153,8 +153,9 @@ summary(df$amount)
 ```{r amount_histogram, echo=FALSE}
 df %>%
   ggplot(aes(amount)) +
-  geom_histogram(binwidth = 30) +
+  geom_histogram() +
   scale_x_continuous(
+    breaks = c(1 %o% 10^(0:6)),
     labels = dollar,
     trans = "log10"
   )
