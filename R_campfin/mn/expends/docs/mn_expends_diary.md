@@ -1,7 +1,7 @@
 State Data
 ================
 First Last
-2019-08-06 17:24:16
+2019-08-07 12:03:10
 
   - [Project](#project)
   - [Objectives](#objectives)
@@ -205,15 +205,14 @@ mn <-
       Date = col_date("%m/%d/%Y"),
       Year = col_integer()
     )
-  ) %>% 
-  mutate(in_kind = to_logical(in_kind)) %>% 
-  filter(!str_detect(purpose, "PRINTING AND PHOTOCOPYING")) %>%  
-  mutate_if(is_character, str_to_upper)
+  )
+mn <- mutate(mn, in_kind = to_logical(in_kind))
+mn <- mutate_if(mn, is_character, toupper)
 ```
 
 ## Explore
 
-The database has 141847 records of 21 variables. The file appears to
+The database has 194252 records of 21 variables. The file appears to
 have been properly read into R as a data frame.
 
 ``` r
@@ -241,12 +240,12 @@ tail(mn)
     #> # A tibble: 6 x 21
     #>   committee_reg_n… committee_name entity_type entity_sub_type vendor_name vendor_name_mas…
     #>   <chr>            <chr>          <chr>       <chr>           <chr>       <chr>           
-    #> 1 80032            MN ALLIANCE F… PCF         PFN             RALLYORG    75864           
-    #> 2 80032            MN ALLIANCE F… PCF         PFN             RALLYORG    75864           
-    #> 3 80032            MN ALLIANCE F… PCF         PFN             RALLYORG    75864           
-    #> 4 80032            MN ALLIANCE F… PCF         PFN             RALLYORG    75864           
-    #> 5 80032            MN ALLIANCE F… PCF         PFN             RALLYORG    75864           
-    #> 6 80032            MN ALLIANCE F… PCF         PFN             RALLYORG    75864           
+    #> 1 80032            MN ALLIANCE F… PCF         PFN             ABELER, JI… 4678            
+    #> 2 80032            MN ALLIANCE F… PCF         PFN             FRANSON, M… 1923            
+    #> 3 80032            MN ALLIANCE F… PCF         PFN             SCHOMACKER… 82409           
+    #> 4 80032            MN ALLIANCE F… PCF         PFN             ALBRIGHT T… 89317           
+    #> 5 80032            MN ALLIANCE F… PCF         PFN             FRANSON, M… 1923            
+    #> 6 80032            MN ALLIANCE F… PCF         PFN             BENSON, MI… 1996            
     #> # … with 15 more variables: vendor_address_1 <chr>, vendor_address_2 <chr>, vendor_city <chr>,
     #> #   vendor_state <chr>, vendor_zip <chr>, amount <dbl>, unpaid_amount <dbl>, date <date>,
     #> #   purpose <chr>, year <int>, type <chr>, in_kind_descr <chr>, in_kind <lgl>,
@@ -256,29 +255,29 @@ tail(mn)
 glimpse(sample_frac(mn))
 ```
 
-    #> Observations: 141,847
+    #> Observations: 194,252
     #> Variables: 21
-    #> $ committee_reg_num          <chr> "17898", "17438", "20010", "20843", "17878", "20178", "18011"…
-    #> $ committee_name             <chr> "LAINE, CAROLYN SENATE COMMITTEE", "WARD, JOANN HOUSE COMMITT…
-    #> $ entity_type                <chr> "PCC", "PCC", "PTU", "PTU", "PCC", "PTU", "PCC", "PCF", "PTU"…
-    #> $ entity_sub_type            <chr> NA, NA, "CAU", NA, NA, NA, NA, "IEC", "CAU", "PF", NA, NA, "I…
-    #> $ vendor_name                <chr> "MICRO CENTER", "WARD, JOANN", "ISAAC SCHULTZ", "OFFICE DEPOT…
-    #> $ vendor_name_master_name_id <chr> "78774", "3211", "87861", "136291", "102204", "80256", "14616…
-    #> $ vendor_address_1           <chr> "3710 HIGHWAY 100 SOUTH", "7817 SOMERSET CIR", NA, "3001 NICO…
-    #> $ vendor_address_2           <chr> NA, NA, "6871 APOLLO RD", NA, NA, NA, NA, NA, NA, NA, NA, NA,…
-    #> $ vendor_city                <chr> "ST. LOUIS PARK", "WOODBURY", "SWANVILLE", "MINNEAPOLIS", "BL…
-    #> $ vendor_state               <chr> "MN", "MN", "MN", "MN", "MN", "MN", "MN", "MN", "CA", "MN", "…
-    #> $ vendor_zip                 <chr> "55416", "55125", "56382", "55408", "55449", "56258", "55113"…
-    #> $ amount                     <dbl> 90.07, 2500.00, 760.45, 346.93, 350.00, 300.00, 357.98, 5.65,…
-    #> $ unpaid_amount              <dbl> 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0…
-    #> $ date                       <date> 2016-07-16, 2018-07-13, 2016-10-14, 2018-01-19, 2016-11-08, …
-    #> $ purpose                    <chr> "SUPPLIES: PRINTER INK", "LOAN PAYMENTS - PRINCIPAL: REPAYMEN…
-    #> $ year                       <int> 2016, 2018, 2016, 2018, 2016, 2016, 2018, 2018, 2018, 2016, 2…
+    #> $ committee_reg_num          <chr> "17813", "17361", "20006", "20219", "30608", "17776", "20013"…
+    #> $ committee_name             <chr> "FREMLING, WADE K HOUSE COMMITTEE", "RADINOVICH, JOSEPH (JOE)…
+    #> $ entity_type                <chr> "PCC", "PCC", "PTU", "PTU", "PCF", "PCC", "PTU", "PCC", "PCF"…
+    #> $ entity_sub_type            <chr> NA, NA, "CAU", NA, "PF", NA, "CAU", NA, "PF", "SPU", "PC", NA…
+    #> $ vendor_name                <chr> "CLS", "STRIPE INC", "RICE, BRIAN F", "SCAPANSKI KARLA JEAN H…
+    #> $ vendor_name_master_name_id <chr> "81461", "78392", "27194", "136246", "6654", "37597", "88105"…
+    #> $ vendor_address_1           <chr> "N172 S PARK DR", "3180 18TH STREET", "10 2ND ST NE", NA, NA,…
+    #> $ vendor_address_2           <chr> NA, "HTTPS://STRIPE.COM", NA, NA, NA, NA, NA, NA, NA, NA, NA,…
+    #> $ vendor_city                <chr> "APPLETON", "SAN FRANCISCO", "MINNEAPOLIS", NA, NA, "LAKELAND…
+    #> $ vendor_state               <chr> "WI", "CA", "MN", NA, NA, "MN", "MO", "MN", "MN", "MN", NA, "…
+    #> $ vendor_zip                 <chr> "54914", "94110", "55413", NA, NA, "55043", "63179", "56001",…
+    #> $ amount                     <dbl> 1142.50, 1.75, 971.65, 500.00, 500.00, 75.00, 29.86, 80.40, 2…
+    #> $ unpaid_amount              <dbl> 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0…
+    #> $ date                       <date> 2014-07-25, 2014-10-31, 2018-07-19, 2018-06-10, 2013-07-30, …
+    #> $ purpose                    <chr> "ADVERTISING - PRINT: YARD SIGNS", "CREDIT CARD PROCESSING FE…
+    #> $ year                       <int> 2014, 2014, 2018, 2018, 2013, 2014, 2017, 2016, 2016, 2015, 2…
     #> $ type                       <chr> "CAMPAIGN EXPENDITURE", "NON-CAMPAIGN DISBURSEMENT", "GENERAL…
-    #> $ in_kind_descr              <chr> NA, NA, NA, NA, NA, NA, NA, "RENTAL VEHICLE", NA, NA, "OTHER …
-    #> $ in_kind                    <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, TRUE, FALSE,…
-    #> $ affected_committee_name    <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
-    #> $ affected_committee_reg_num <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
+    #> $ in_kind_descr              <chr> NA, NA, "EVENT FOOD & BEVERAGE", NA, NA, NA, NA, NA, NA, NA, …
+    #> $ in_kind                    <lgl> FALSE, FALSE, TRUE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE,…
+    #> $ affected_committee_name    <chr> NA, NA, NA, "SCAPANSKI, KARLA JEAN HOUSE COMMITTEE", "6TH SEN…
+    #> $ affected_committee_reg_num <chr> NA, NA, NA, "17861", "20899", NA, NA, NA, NA, NA, "15676", NA…
 
 ### Missing
 
@@ -296,24 +295,24 @@ glimpse_fun(mn, count_na)
     #>  1 committee_reg_num          chr        0 0        
     #>  2 committee_name             chr        0 0        
     #>  3 entity_type                chr        0 0        
-    #>  4 entity_sub_type            chr    89457 0.631    
-    #>  5 vendor_name                chr       10 0.0000705
-    #>  6 vendor_name_master_name_id chr       10 0.0000705
-    #>  7 vendor_address_1           chr    11544 0.0814   
-    #>  8 vendor_address_2           chr   131146 0.925    
-    #>  9 vendor_city                chr    10952 0.0772   
-    #> 10 vendor_state               chr    10946 0.0772   
-    #> 11 vendor_zip                 chr    12437 0.0877   
+    #>  4 entity_sub_type            chr   101642 0.523    
+    #>  5 vendor_name                chr       10 0.0000515
+    #>  6 vendor_name_master_name_id chr       10 0.0000515
+    #>  7 vendor_address_1           chr    63691 0.328    
+    #>  8 vendor_address_2           chr   183548 0.945    
+    #>  9 vendor_city                chr    63098 0.325    
+    #> 10 vendor_state               chr    63078 0.325    
+    #> 11 vendor_zip                 chr    64586 0.332    
     #> 12 amount                     dbl        0 0        
     #> 13 unpaid_amount              dbl        0 0        
     #> 14 date                       date       0 0        
-    #> 15 purpose                    chr        0 0        
+    #> 15 purpose                    chr    52405 0.270    
     #> 16 year                       int        0 0        
     #> 17 type                       chr        0 0        
-    #> 18 in_kind_descr              chr   128459 0.906    
+    #> 18 in_kind_descr              chr   180863 0.931    
     #> 19 in_kind                    lgl        0 0        
-    #> 20 affected_committee_name    chr   141179 0.995    
-    #> 21 affected_committee_reg_num chr   141179 0.995
+    #> 20 affected_committee_name    chr   141669 0.729    
+    #> 21 affected_committee_reg_num chr   141665 0.729
 
 There are 10 records missing a `vendor_name` value thay will be flagged.
 
@@ -325,11 +324,11 @@ sum(mn$na_flag)
 #> [1] 10
 ```
 
-It’s important to note that 7.72% of values are missing a
+It’s important to note that 32.5% of values are missing a
 `vendor_state`, `vendor_state`, and `vendor_zip` value. From the bar
-chart below, we can see that 89.1% of expenditures with a `type` value
+chart below, we can see that 99.9% of expenditures with a `type` value
 of “CONTRIBUTION.” are missing the geographic vendor data like
-`vendor_city`. However, only 0.490% of expenditures have `type`
+`vendor_city`. However, only 27.1% of expenditures have `type`
 “CONTRIBUTION.”
 
 ![](../plots/na_geo_bar-1.png)<!-- -->
@@ -339,9 +338,9 @@ of “CONTRIBUTION.” are missing the geographic vendor data like
 ``` r
 mn <- flag_dupes(mn)
 sum(mn$dupe_flag)
-#> [1] 5880
+#> [1] 6121
 percent(mean(mn$dupe_flag))
-#> [1] "4.15%"
+#> [1] "3.15%"
 ```
 
 ### Categorical
@@ -353,29 +352,29 @@ glimpse_fun(mn, n_distinct)
     #> # A tibble: 23 x 4
     #>    var                        type      n         p
     #>    <chr>                      <chr> <int>     <dbl>
-    #>  1 committee_reg_num          chr    1692 0.0119   
-    #>  2 committee_name             chr    1682 0.0119   
-    #>  3 entity_type                chr       3 0.0000211
-    #>  4 entity_sub_type            chr      12 0.0000846
-    #>  5 vendor_name                chr   21712 0.153    
-    #>  6 vendor_name_master_name_id chr   22976 0.162    
-    #>  7 vendor_address_1           chr   20679 0.146    
-    #>  8 vendor_address_2           chr    1459 0.0103   
-    #>  9 vendor_city                chr    2557 0.0180   
-    #> 10 vendor_state               chr      63 0.000444 
-    #> 11 vendor_zip                 chr    3161 0.0223   
-    #> 12 amount                     dbl   43165 0.304    
-    #> 13 unpaid_amount              dbl     660 0.00465  
-    #> 14 date                       date   1960 0.0138   
-    #> 15 purpose                    chr   43291 0.305    
-    #> 16 year                       int      10 0.0000705
-    #> 17 type                       chr       6 0.0000423
-    #> 18 in_kind_descr              chr    2982 0.0210   
-    #> 19 in_kind                    lgl       2 0.0000141
-    #> 20 affected_committee_name    chr     365 0.00257  
-    #> 21 affected_committee_reg_num chr     368 0.00259  
-    #> 22 na_flag                    lgl       2 0.0000141
-    #> 23 dupe_flag                  lgl       2 0.0000141
+    #>  1 committee_reg_num          chr    2375 0.0122   
+    #>  2 committee_name             chr    2327 0.0120   
+    #>  3 entity_type                chr       3 0.0000154
+    #>  4 entity_sub_type            chr      13 0.0000669
+    #>  5 vendor_name                chr   24385 0.126    
+    #>  6 vendor_name_master_name_id chr   25664 0.132    
+    #>  7 vendor_address_1           chr   20755 0.107    
+    #>  8 vendor_address_2           chr    1459 0.00751  
+    #>  9 vendor_city                chr    2559 0.0132   
+    #> 10 vendor_state               chr      63 0.000324 
+    #> 11 vendor_zip                 chr    3169 0.0163   
+    #> 12 amount                     dbl   44872 0.231    
+    #> 13 unpaid_amount              dbl     674 0.00347  
+    #> 14 date                       date   3462 0.0178   
+    #> 15 purpose                    chr   43292 0.223    
+    #> 16 year                       int      11 0.0000566
+    #> 17 type                       chr       6 0.0000309
+    #> 18 in_kind_descr              chr    2982 0.0154   
+    #> 19 in_kind                    lgl       2 0.0000103
+    #> 20 affected_committee_name    chr    1741 0.00896  
+    #> 21 affected_committee_reg_num chr    1777 0.00915  
+    #> 22 na_flag                    lgl       2 0.0000103
+    #> 23 dupe_flag                  lgl       2 0.0000103
 
 For categorical data, we can explore the distribution of values using
 `ggplot::geom_col()`.
@@ -402,9 +401,9 @@ of values.
 ``` r
 summary(mn$amount)
 #>      Min.   1st Qu.    Median      Mean   3rd Qu.      Max. 
-#>    -962.1      55.0     236.3    1255.5     719.7 3000000.0
+#>    -962.1      88.5     276.3    1847.2     800.0 3000000.0
 sum(mn$amount <= 0)
-#> [1] 41
+#> [1] 429
 ```
 
 ![](../plots/amount_hist-1.png)<!-- -->
@@ -425,7 +424,7 @@ The range of `date` is very good, there are 0 dates beyond `today()`.
 min(mn$date)
 ```
 
-    #> [1] "2010-03-06"
+    #> [1] "2009-01-01"
 
 ``` r
 max(mn$date)
@@ -451,6 +450,10 @@ We do not need to create a 4-digit year variable, as one already exists.
 
 ### Address
 
+To improve searcability of payees, we will unite the `vendor_address_1`
+and `vendor_address_2`. Then we can normalize the combined address with
+`campfin::normal_address()`.
+
 ``` r
 mn <- mn %>% 
   unite(
@@ -469,30 +472,32 @@ mn <- mn %>%
   )
 ```
 
-    #> # A tibble: 10,457 x 3
-    #>    vendor_address_1          vendor_address_2         address_norm                                 
-    #>    <chr>                     <chr>                    <chr>                                        
-    #>  1 4750 E. 53RD ST.          SUITE 206                4750 E 53RD STREET SUITE 206                 
-    #>  2 1678 CHARLES AVE          #2                       1678 CHARLES AVENUE 2                        
-    #>  3 706 N. 1ST. STREET        110                      706 N 1ST STREET 110                         
-    #>  4 BULK RATE CENTER          3145 LEXINGTON AVE S     BULK RATE CENTER 3145 LEXINGTON AVENUE S     
-    #>  5 1400 RAND TOWER           527 MARQUETTE AVE. SO.   1400 RAND TOWER 527 MARQUETTE AVENUE SO      
-    #>  6 70 BLANCHARD RD           3RD FLOOR                70 BLANCHARD ROAD 3RD FLOOR                  
-    #>  7 310 SECOND STREET         PO BOX 208               310 SECOND STREET PO BOX 208                 
-    #>  8 MINNETONKA COMMUNITY CEN… 14600 MINNETONKA BOULEV… MINNETONKA COMMUNITY CENTER 14600 MINNETONKA…
-    #>  9 PO BOX 709                608 MAIN ST              PO BOX 709 608 MAIN STREET                   
-    #> 10 8500 GOVERNORS HILL DRIVE 38 FOUNTAIN SQUARE PLAZA 8500 GOVERNORS HILL DRIVE 38 FOUNTAIN SQUARE…
-    #> # … with 10,447 more rows
+Here, we see the type of changes that are made.
+
+    #> # A tibble: 10,460 x 3
+    #>    vendor_address_1           vendor_address_2         address_norm                                
+    #>    <chr>                      <chr>                    <chr>                                       
+    #>  1 4170 WEST DIVISIION STREET SUITE 160                4170 WEST DIVISIION STREET SUITE 160        
+    #>  2 XCEL ENERGY SERVICES, INC. 414 NICOLLET MALL - 401… XCEL ENERGY SERVICES INC 414 NICOLLET MALL …
+    #>  3 1433 17TH STREET           SUITE 300                1433 17TH STREET SUITE 300                  
+    #>  4 1410 ENERGY PARK           STE 9                    1410 ENERGY PARK STE 9                      
+    #>  5 716 EAST 10TH STR          P.O. BOX 188             716 EAST 10TH STREET PO BOX 188             
+    #>  6 HQ 1                       HACKER WAY               HQ 1 HACKER WAY                             
+    #>  7 7 11TH AVE NW              APT. #5                  7 11TH AVENUE NW APT 5                      
+    #>  8 1101 15TH ST NW            #500                     1101 15TH STREET NW 500                     
+    #>  9 1828 MARSHALL STREET NE    #15A                     1828 MARSHALL STREET NE 15A                 
+    #> 10 48 GROVE STREET            SUITE 202                48 GROVE STREET SUITE 202                   
+    #> # … with 10,450 more rows
 
 ### ZIP
 
-We do not need to do much zip to normalize the zip code.
+We do not need to do much zip to normalize the `vendor_zip`.
 
 ``` r
 n_distinct(mn$vendor_zip)
-#> [1] 3161
+#> [1] 3169
 prop_in(mn$vendor_zip, geo$zip, na.rm = TRUE)
-#> [1] 0.9978518
+#> [1] 0.997856
 length(setdiff(mn$vendor_zip, geo$zip))
 #> [1] 67
 setdiff(mn$vendor_zip, geo$zip)
@@ -511,11 +516,13 @@ mn <- mutate(mn, zip_norm = vendor_zip %>% na_if("99999") %>% na_if("00000"))
 
 ### State
 
+The `vendor_state` value is also very clean.
+
 ``` r
 n_distinct(mn$vendor_state)
 #> [1] 63
 prop_in(mn$vendor_state, geo$state, na.rm = TRUE)
-#> [1] 0.9997937
+#> [1] 0.9997942
 length(setdiff(mn$vendor_state, geo$state))
 #> [1] 6
 setdiff(mn$vendor_state, geo$state)
@@ -525,33 +532,41 @@ setdiff(mn$vendor_state, geo$state)
 ``` r
 mn <- mn %>% 
   mutate(
-    state_norm = normal_state(
-      state = vendor_state %>% 
-        str_replace("M", "MN") %>% 
-        str_replace("MM", "MN"),
-      abbreviate = TRUE,
-      na_rep = TRUE,
-      valid = geo$state
-    )
+    state_norm = vendor_state %>% 
+      str_replace("^M$", "MN") %>% 
+      str_replace("^MM$", "MN") %>% 
+      str_replace("^FO$", "FL") %>% 
+      na_if("GR") %>% 
+      na_if("LW")
   )
 ```
 
 ``` r
 n_distinct(mn$state_norm)
-#> [1] 48
+#> [1] 58
 prop_in(mn$state_norm, geo$state, na.rm = TRUE)
 #> [1] 1
-length(setdiff(mn$state_norm, geo$state))
-#> [1] 1
+setdiff(mn$state_norm, geo$state)
+#> [1] NA
 ```
 
 ### City
 
+To clean the `vendor_city`, we will use a three step process that makes
+only simple normalization and confident automatic changes.
+
+1.  Normalize with `campfin::normal_city()` (capitalization,
+    punctuation, abbreviations)
+2.  Swap cities with their expected value (for that state and ZIP) if
+    the strings are very similar
+
+<!-- end list -->
+
 ``` r
 n_distinct(mn$vendor_city)
-#> [1] 2557
+#> [1] 2559
 prop_in(mn$vendor_city, geo$city, na.rm = TRUE)
-#> [1] 0.7936514
+#> [1] 0.7938225
 length(setdiff(mn$vendor_city, geo$city))
 #> [1] 835
 ```
@@ -573,9 +588,9 @@ mn <- mn %>%
 
 ``` r
 n_distinct(mn$city_norm)
-#> [1] 2220
+#> [1] 2222
 prop_in(mn$city_norm, geo$city, na.rm = TRUE)
-#> [1] 0.9252311
+#> [1] 0.9252187
 length(setdiff(mn$city_norm, geo$city))
 #> [1] 465
 ```
@@ -593,9 +608,9 @@ mn <- mn %>%
   ) %>% 
   rename(city_match = city) %>% 
   mutate(
-    match_dist = stringdist(vendor_city, city_norm),
+    match_dist = stringdist(city_norm, city_match),
     city_swap = if_else(
-      condition = equals(match_dist, 1),
+      condition = is_less_than(match_dist, 3) & !is.na(city_match),
       true = city_match,
       false = city_norm
     )
@@ -605,40 +620,83 @@ mn <- mn %>%
 ``` r
 summary(mn$match_dist)
 #>    Min. 1st Qu.  Median    Mean 3rd Qu.    Max.    NA's 
-#>   0.000   0.000   0.000   0.468   0.000  15.000   10977
+#>    0.00    0.00    0.00    1.64    0.00   18.00   65226
 mean(mn$match_dist == 0, na.rm = TRUE)
-#> [1] 0.852089
+#> [1] 0.8219264
 n_distinct(mn$city_swap)
-#> [1] 2187
+#> [1] 2009
 prop_in(mn$city_swap, geo$city, na.rm = TRUE)
-#> [1] 0.9276358
+#> [1] 0.9348516
 length(setdiff(mn$city_swap, geo$city))
-#> [1] 436
+#> [1] 237
 ```
 
 There are still cities which are registered as invalid.
 
-    #> # A tibble: 663 x 4
+    #> # A tibble: 296 x 4
     #>    state_norm vendor_city      city_swap            n
     #>    <chr>      <chr>            <chr>            <int>
-    #>  1 <NA>       <NA>             <NA>             10946
-    #>  2 <NA>       MAPLE GROVE      MAPLE GROVE        847
-    #>  3 <NA>       BROOKLYN PARK    BROOKLYN PARK      768
-    #>  4 <NA>       SHOREVIEW        SHOREVIEW          637
-    #>  5 <NA>       MENDOTA HEIGHTS  MENDOTA HEIGHTS    604
-    #>  6 <NA>       WHITE BEAR LAKE  WHITE BEAR LAKE    459
-    #>  7 <NA>       ST LOUIS PARK    SAINT LOUIS PARK   444
-    #>  8 <NA>       SAINT LOUIS PARK SAINT LOUIS PARK   382
-    #>  9 <NA>       NORTH ST. PAUL   NORTH SAINT PAUL   263
-    #> 10 <NA>       ST. LOUIS PARK   SAINT LOUIS PARK   231
-    #> # … with 653 more rows
+    #>  1 <NA>       <NA>             <NA>             63018
+    #>  2 MN         MAPLE GROVE      MAPLE GROVE        847
+    #>  3 MN         BROOKLYN PARK    BROOKLYN PARK      768
+    #>  4 MN         SHOREVIEW        SHOREVIEW          639
+    #>  5 MN         MENDOTA HEIGHTS  MENDOTA HEIGHTS    604
+    #>  6 MN         WHITE BEAR LAKE  WHITE BEAR LAKE    459
+    #>  7 MN         ST LOUIS PARK    SAINT LOUIS PARK   444
+    #>  8 MN         SAINT LOUIS PARK SAINT LOUIS PARK   382
+    #>  9 MN         NORTH ST. PAUL   NORTH SAINT PAUL   263
+    #> 10 MN         ST. LOUIS PARK   SAINT LOUIS PARK   231
+    #> # … with 286 more rows
 
 #### Refine
 
+``` r
+good_refine <- mn %>% 
+  filter(state_norm == "MN") %>% 
+  mutate(
+    city_refine = city_swap %>% 
+      key_collision_merge(dict = geo$city[geo$state == "MN"]) %>% 
+      n_gram_merge(numgram = 1)
+  ) %>% 
+  filter(city_swap != city_refine) %>% 
+  inner_join(
+    y = geo,
+    by = c(
+      "city_refine" = "city",
+      "state_norm" = "state",
+      "zip_norm" = "zip"
+    )
+  )
+```
+
+Obviously, this wasn’t worth the effort, but I’ve already done it.
+
+    #> # A tibble: 1 x 4
+    #>   state_norm city_swap  city_refine     n
+    #>   <chr>      <chr>      <chr>       <int>
+    #> 1 MN         NO MANKATO MANKATO         4
+
+Then we can join theses good refines back to the original database and
+combine them with the unchanged `city_swap`.
+
+``` r
+mn <- mn %>% 
+  left_join(good_refine) %>% 
+  mutate(city_clean = coalesce(city_refine, city_swap))
+```
+
+    #> # A tibble: 4 x 4
+    #>   step   n_distinct prop_in unique_bad
+    #>   <chr>       <int>   <dbl>      <int>
+    #> 1 raw          2559   0.794        835
+    #> 2 norm         2222   0.925        465
+    #> 3 swap         2009   0.935        237
+    #> 4 refine       2008   0.935        236
+
 ## Conclude
 
-1.  There are 141880 records in the database.
-2.  There are 5880 duplicate records in the database.
+1.  There are 194285 records in the database.
+2.  There are 6121 duplicate records in the database.
 3.  The range and distribution of `amount` and `date` seem reasonable.
 4.  There are 10 records missing a `vendor_name` variable.
 5.  Consistency in goegraphic data has been improved with
@@ -655,7 +713,7 @@ dir_create(proc_dir)
 
 ``` r
 date()
-#> [1] "Tue Aug  6 17:25:12 2019"
+#> [1] "Wed Aug  7 12:04:11 2019"
 mn %>% 
   select(
     everything()

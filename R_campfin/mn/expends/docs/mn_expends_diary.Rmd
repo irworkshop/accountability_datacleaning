@@ -207,10 +207,9 @@ mn <-
       Date = col_date("%m/%d/%Y"),
       Year = col_integer()
     )
-  ) %>% 
-  mutate(in_kind = to_logical(in_kind)) %>% 
-  filter(!str_detect(purpose, "PRINTING AND PHOTOCOPYING")) %>%  
-  mutate_if(is_character, str_to_upper)
+  )
+mn <- mutate(mn, in_kind = to_logical(in_kind))
+mn <- mutate_if(mn, is_character, toupper)
 ```
 
 ## Explore
@@ -329,7 +328,7 @@ explore_plot(
 )
 ```
 
-```{r purpose_bar, echo=FALSE, fig.height=10, fig.width=5}
+```{r purpose_bar, echo=FALSE, fig.height=10}
 mn %>% 
   unnest_tokens(word, purpose) %>% 
   anti_join(stop_words) %>% 
@@ -348,7 +347,7 @@ mn %>%
   )
 ```
 
-```{r ik_desc_bar, echo=FALSE, fig.height=10, fig.width=5}
+```{r ik_desc_bar, echo=FALSE, fig.height=10}
 mn %>% 
   unnest_tokens(word, in_kind_descr) %>% 
   anti_join(stop_words) %>% 
@@ -381,7 +380,7 @@ sum(mn$amount <= 0)
 ```{r amount_hist, echo=FALSE}
 mn %>% 
   ggplot(mapping = aes(x = amount)) +
-  geom_histogram(binwidth = 30) +
+  geom_histogram() +
   scale_x_continuous(
     breaks = c(1 %o% 10^(0:6)),
     trans = "log10",
@@ -626,6 +625,9 @@ mn %>%
 
 ### Address
 
+To improve searcability of payees, we will unite the `vendor_address_1` and `vendor_address_2`.
+Then we can normalize the combined address with `campfin::normal_address()`.
+
 ```{r normal_address}
 mn <- mn %>% 
   unite(
@@ -644,6 +646,8 @@ mn <- mn %>%
   )
 ```
 
+Here, we see the type of changes that are made.
+
 ```{r view_address_change, echo=FALSE}
 mn %>% 
   select(
@@ -657,7 +661,7 @@ mn %>%
 
 ### ZIP
 
-We do not need to do much zip to normalize the zip code.
+We do not need to do much zip to normalize the `vendor_zip`.
 
 ```{r count_zip_pre, collapse=TRUE}
 n_distinct(mn$vendor_zip)
@@ -672,6 +676,8 @@ mn <- mutate(mn, zip_norm = vendor_zip %>% na_if("99999") %>% na_if("00000"))
 
 ### State
 
+The `vendor_state` value is also very clean.
+
 ```{r count_state_pre, collapse=TRUE}
 n_distinct(mn$vendor_state)
 prop_in(mn$vendor_state, geo$state, na.rm = TRUE)
@@ -682,24 +688,28 @@ setdiff(mn$vendor_state, geo$state)
 ```{r normal_state}
 mn <- mn %>% 
   mutate(
-    state_norm = normal_state(
-      state = vendor_state %>% 
-        str_replace("M", "MN") %>% 
-        str_replace("MM", "MN"),
-      abbreviate = TRUE,
-      na_rep = TRUE,
-      valid = geo$state
-    )
+    state_norm = vendor_state %>% 
+      str_replace("^M$", "MN") %>% 
+      str_replace("^MM$", "MN") %>% 
+      str_replace("^FO$", "FL") %>% 
+      na_if("GR") %>% 
+      na_if("LW")
   )
 ```
 
 ```{r count_state_post, collapse=TRUE}
 n_distinct(mn$state_norm)
 prop_in(mn$state_norm, geo$state, na.rm = TRUE)
-length(setdiff(mn$state_norm, geo$state))
+setdiff(mn$state_norm, geo$state)
 ```
 
 ### City
+
+To clean the `vendor_city`, we will use a three step process that makes only simple normalization
+and confident automatic changes.
+
+1. Normalize with `campfin::normal_city()` (capitalization, punctuation, abbreviations)
+1. Swap cities with their expected value (for that state and ZIP) if the strings are very similar
 
 ```{r count_city_pre, collapse=TRUE}
 n_distinct(mn$vendor_city)
@@ -741,9 +751,9 @@ mn <- mn %>%
   ) %>% 
   rename(city_match = city) %>% 
   mutate(
-    match_dist = stringdist(vendor_city, city_norm),
+    match_dist = stringdist(city_norm, city_match),
     city_swap = if_else(
-      condition = equals(match_dist, 1),
+      condition = is_less_than(match_dist, 3) & !is.na(city_match),
       true = city_match,
       false = city_norm
     )
@@ -767,6 +777,70 @@ mn %>%
 ```
 
 #### Refine
+
+```{r refine_city}
+good_refine <- mn %>% 
+  filter(state_norm == "MN") %>% 
+  mutate(
+    city_refine = city_swap %>% 
+      key_collision_merge(dict = geo$city[geo$state == "MN"]) %>% 
+      n_gram_merge(numgram = 1)
+  ) %>% 
+  filter(city_swap != city_refine) %>% 
+  inner_join(
+    y = geo,
+    by = c(
+      "city_refine" = "city",
+      "state_norm" = "state",
+      "zip_norm" = "zip"
+    )
+  )
+```
+
+Obviously, this wasn't worth the effort, but I've already done it.
+
+```{r count_good_fix, echo=FALSE}
+count(
+  x = good_refine, 
+  state_norm, 
+  city_swap, 
+  city_refine, 
+  sort = TRUE
+)
+```
+
+Then we can join theses good refines back to the original database and combine them with the
+unchanged `city_swap`.
+
+```{r join_refine}
+mn <- mn %>% 
+  left_join(good_refine) %>% 
+  mutate(city_clean = coalesce(city_refine, city_swap))
+```
+
+```{r city_progress, echo=FALSE}
+tibble(
+  step = c("raw", "norm", "swap", "refine"),
+  n_distinct = c(
+    n_distinct(mn$vendor_city), 
+    n_distinct(mn$city_norm), 
+    n_distinct(mn$city_swap), 
+    n_distinct(mn$city_clean)
+  ),
+  prop_in = c(
+    prop_in(mn$vendor_city, geo$city, na.rm = TRUE),
+    prop_in(mn$city_norm, geo$city, na.rm = TRUE),
+    prop_in(mn$city_swap, geo$city, na.rm = TRUE),
+    prop_in(mn$city_clean, geo$city, na.rm = TRUE)
+  ),
+  unique_bad = c(
+    length(setdiff(mn$vendor_city, geo$city)),
+    length(setdiff(mn$city_norm, geo$city)),
+    length(setdiff(mn$city_swap, geo$city)),
+    length(setdiff(mn$city_clean, geo$city))
+  )
+)
+```
 
 ## Conclude
 

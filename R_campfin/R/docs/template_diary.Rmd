@@ -253,7 +253,7 @@ df <- df %>%
   mutate(
     city_norm = normal_city(
       city = city, 
-      geo_abbs = usps,
+      geo_abbs = usps_city,
       st_abbs = c("DF", "DC", "DATA FRAME"),
       na = na_city,
       na_rep = TRUE
@@ -280,14 +280,19 @@ df <- df %>%
   ) %>% 
   rename(city_match = city) %>% 
   mutate(
-    match_dist = stringdist()
+    match_dist = stringdist(city_norm, city_match),
+    city_swap = if_else(
+      condition = equals(match_dist, 1),
+      true = city_match,
+      false = city_norm
+    )
   )
 ```
 
 ```{r count_city_post_swap, collapse=TRUE}
-n_distinct(df$city_norm)
-prop_in(df$city_norm, geo$city, na.rm = TRUE)
-length(setdiff(df$city_norm, geo$state))
+n_distinct(df$city_swap)
+prop_in(df$city_swap, geo$city, na.rm = TRUE)
+length(setdiff(df$city_swap, geo$city))
 ```
 
 #### Refine
