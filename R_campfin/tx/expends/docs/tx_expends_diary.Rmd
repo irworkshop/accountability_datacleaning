@@ -207,6 +207,7 @@ readme[543:547][-2] %>%
 ```{r raw_paths}
 raw_dir <- here("tx", "expends", "data", "raw")
 dir_create(raw_dir)
+
 zip_url <- "https://www.ethics.state.tx.us/data/search/cf/TEC_CF_CSV.zip"
 zip_file <- str_c(raw_dir, basename(zip_url), sep = "/")
 ```
@@ -262,6 +263,10 @@ if (!all_files_new(raw_dir, "exp*.csv$")) {
 }
 ```
 
+```{r rm_objects, echo=FALSE}
+rm(zip_contents, readme, zip_expends, zip_size, zip_head)
+```
+
 ### Read 
 
 The TEC provides a helpful [record layout key][08] describing the structure of their flat files.
@@ -277,17 +282,22 @@ containing spaces will be double-quoted. Raw field data containing double-quotes
 double-quotes in the CSV encoding.In both raw dataand CSV encoding, new lines are represented with
 the escape notation `\n`.
 
+We can use this information as the arguments to `vroom::vroom()` and read all 8  files at once into
+a single data frame.
+
 [08]: https://www.ethics.state.tx.us/data/search/cf/CampaignFinanceCSVFileFormat.pdf
 
 ```{r read_csv, collapse=TRUE}
 tx <- vroom(
-  file = dir_ls(raw_dir, glob = "*0*.csv"),
+  file = dir_ls(raw_dir, glob = "*\\d+.csv"),
   .name_repair = make_clean_names,
   na = c("", "NA", "N/A", "UNKNOWN"),
   delim = ",",
   col_names = TRUE,
   escape_double = TRUE,
-  escape_backslash = TRUE,
+  escape_backslash = FALSE,
+  id = "file",
+  locale = locale(tz = "US/Central"),
   col_types = cols(
     .default = col_character(),
     receivedDt = col_date("%Y%m%d"),
@@ -296,8 +306,13 @@ tx <- vroom(
   )
 )
 
-# 3,223,841
-problems(tx)
+tx <- tx %>% 
+  # turn Y/N to T/F
+  mutate_if(is_binary, to_logical) %>% 
+  # shorten file var
+  mutate(file = basename(file)) %>%
+  # move to end of file
+  select(everything(), file)
 ```
 
 ## Explore
@@ -306,5 +321,370 @@ problems(tx)
 head(tx)
 tail(tx)
 glimpse(sample_n(tx, 10))
+```
+
+### Missing
+
+```{r glimpse_na}
+glimpse_fun(tx, count_na)
+```
+
+We can use `campfin::flag_na()` to create a new `na_flag` variable to identify any record missing
+one of the values needed to identify the transaction.
+
+```{r flag_na, collapse=TRUE}
+tx <- tx %>%
+  mutate(
+    payee_name = coalesce(
+      payee_name_last, 
+      payee_name_organization
+    )
+  ) %>% 
+  flag_na(
+    filer_name,
+    expend_dt,
+    expend_amount,
+    payee_name
+  ) %>% 
+  select(-payee_name)
+
+sum(tx$na_flag)
+mean(tx$na_flag)
+```
+
+### Duplicates
+
+```{r flag_dupes, collapse=TRUE, eval=FALSE}
+tx <- flag_dupes(tx, -expend_info_id)
+
+sum(tx$dupe_flag)
+mean(tx$dupe_flag)
+```
+
+### Categorical
+
+```{r glimpse_distinct}
+glimpse_fun(tx, n_distinct)
+```
+
+```{r form_bar, echo=FALSE}
+explore_plot(
+  data = tx,
+  var = filer_type_cd,
+  palette = "Dark2",
+  title = "Texas Expenditure Filer Types (Code)",
+  subtitle = "from 2000 to 2019",
+  caption = "Source: Texas Ethics Commission"
+)
+```
+
+```{r form_bar, echo=FALSE}
+explore_plot(
+  data = drop_na(tx, expend_cat_cd),
+  var = expend_cat_cd,
+  palette = "Dark2",
+  title = "Texas Expenditure Categories",
+  subtitle = "from 2000 to 2019, without NA",
+  caption = "Source: Texas Ethics Commission"
+)
+```
+
+### Continuous
+
+#### Amounts
+
+```{r summary_amount}
+summary(tx$expend_amount)
+```
+
+```{r amount_histogram, echo=FALSE}
+tx %>%
+  ggplot(aes(expend_amount)) +
+  geom_histogram(bins = 30) +
+  scale_x_continuous(
+    breaks = c(1 %o% 10^(0:6)),
+    labels = dollar,
+    trans = "log10"
+  ) +
+  labs(
+    title = "Texas Expenditure Amount Distribution",
+    subtitle = "from 2000 to 2019",
+    caption = "Source: Texas Ethics Commission"
+  )
+```
+
+```{r amount_violin_what, echo=FALSE}
+tx %>% 
+  filter(
+    expend_cat_cd %in% drop_na(count(tx, expend_cat_cd, sort = T))$expend_cat_cd[1:8],
+    expend_amount > 1, 
+    expend_amount < 1000000
+  ) %>% 
+  ggplot(
+    mapping = aes(
+      x = reorder(expend_cat_cd, X = expend_amount, FUN = median, na.rm = TRUE), 
+      y = expend_amount
+    )
+  ) +
+  geom_violin(
+    draw_quantiles = c(0.25, 0.50, 0.75),
+    scale = "width",
+    trim = TRUE,
+    na.rm = TRUE,
+    mapping = aes(fill = expend_cat_cd)
+  ) +
+  scale_y_continuous(
+    breaks = c(1 %o% 10^(0:6)),
+    labels = dollar,
+    trans = "log10"
+  ) +
+  scale_fill_brewer(
+    type = "qual",
+    palette = "Dark2",
+    guide = FALSE
+  ) +
+  labs(
+    title = "Texas Expenditure Amount Distribution",
+    subtitle = "from 2000 to 2019, for most common categories",
+    caption = "Source: Texas Ethics Commission",
+    x = "",
+    y = "Expenditure Amount"
+  )
+```
+
+```{r amount_violin_who, echo=FALSE}
+tx %>% 
+  filter(
+    filer_type_cd %in% drop_na(count(tx, filer_type_cd, sort = T))$filer_type_cd[1:8],
+    expend_amount > 1, 
+    expend_amount < 1000000
+  ) %>% 
+  ggplot(
+    mapping = aes(
+      x = reorder(filer_type_cd, X = expend_amount, FUN = median, na.rm = TRUE), 
+      y = expend_amount
+    )
+  ) +
+  geom_violin(
+    draw_quantiles = c(0.25, 0.50, 0.75),
+    scale = "width",
+    trim = TRUE,
+    na.rm = TRUE,
+    mapping = aes(fill = filer_type_cd)
+  ) +
+  scale_y_continuous(
+    breaks = c(1 %o% 10^(0:6)),
+    labels = dollar,
+    trans = "log10"
+  ) +
+  scale_fill_brewer(
+    type = "qual",
+    palette = "Dark2",
+    guide = FALSE
+  ) +
+  labs(
+    title = "Texas Expenditure Amount Distribution",
+    subtitle = "from 2000 to 2019, for most filer types",
+    caption = "Source: Texas Ethics Commission",
+    x = "",
+    y = "Expenditure Amount"
+  )
+```
+  
+#### Dates
+
+To better explore and search the database, we will create a `expend_yr` variable from `expend_dt`
+using `lubridate::year()`
+
+```{r add_year}
+tx <- mutate(tx, expend_yr = year(expend_dt))
+```
+
+The date range is fairly clean, with `r sum(tx$expend_dt > today(), na.rm = TRUE)` values after
+`r today()` and only `r sum(tx$expend_yr < 2000, na.rm = TRUE)` before the year 2000.
+
+```{r date_range, collapse=TRUE}
+min(tx$expend_dt, na.rm = TRUE)
+sum(tx$expend_yr < 2000, na.rm = TRUE)
+max(tx$expend_dt, na.rm = TRUE)
+sum(tx$expend_dt > today(), na.rm = TRUE)
+```
+
+We can see that the few expenditures in 1994 and 1999 seem to be outliers, with the vast majority
+of expenditures coming from 2000 through 2019. We will flag these records.
+
+```{r count_year}
+count(tx, expend_yr, sort = FALSE)
+```
+
+```{r flag_dates, collapse=TRUE}
+tx <- mutate(tx, date_flag = is_less_than(expend_yr, 2000))
+sum(tx$date_flag, na.rm = TRUE)
+```
+
+## Wrangle
+
+We can use the `campfin::normal_*()` functions to perform some basic and _confident_ programatic
+text normalization to the geographic data for payees. This helps improve the searchability of the
+database and more confidently links records.
+
+### Address
+
+```{r normal_address, collapse=TRUEm, eval=FALSE}
+packageVersion("tidyr")
+tx <- tx %>% 
+  # combine street addr
+  unite(
+    col = payee_street_addr_comb,
+    starts_with("payee_street_addr"),
+    remove = FALSE,
+    na.rm = TRUE
+  ) %>% 
+  # normalize combined addr
+  mutate(
+    address_norm = normal_address(
+      address = payee_street_addr_comb,
+      add_abbs = NULL,
+      na_rep = TRUE
+    )
+  )
+```
+
+```{r view_address_norm, eval=FALSE}
+select(tx, payee_street_comb, address_norm)
+```
+
+### ZIP
+
+```{r count_zip_pre, collapse=TRUE}
+n_distinct(tx$payee_street_postal_code)
+prop_in(tx$payee_street_postal_code, geo$zip, na.rm = TRUE)
+length(setdiff(tx$payee_street_postal_code, geo$zip))
+```
+
+```{r normal_zip}
+tx <- tx %>% 
+  mutate(
+    zip_norm = normal_zip(
+      zip = payee_street_postal_code,
+      na_rep = TRUE
+    )
+  )
+```
+
+```{r count_zip_post, collapse=TRUE}
+n_distinct(tx$zip_norm)
+prop_in(tx$zip_norm, geo$zip, na.rm = TRUE)
+length(setdiff(tx$zip_norm, geo$zip))
+```
+
+### State
+
+```{r count_state_pre, collapse=TRUE}
+n_distinct(tx$payee_street_state_cd)
+prop_in(tx$payee_street_state_cd, geo$state, na.rm = TRUE)
+length(setdiff(tx$payee_street_state_cd, geo$state))
+```
+
+```{r normal_state}
+tx <- tx %>% 
+  mutate(
+    state_norm = normal_state(
+      state = payee_street_state_cd,
+      abbreviate = FALSE,
+      na_rep = TRUE
+    )
+  )
+```
+
+```{r count_state_post, collapse=TRUE}
+n_distinct(tx$state_norm)
+prop_in(tx$state_norm, geo$state, na.rm = TRUE)
+setdiff(tx$state_norm, geo$state)
+tx$state_norm[which(tx$state_norm %out% geo$state)] <- NA
+```
+
+### City
+
+```{r count_city_pre, collapse=TRUE}
+n_distinct(tx$payee_street_city)
+prop_in(str_to_upper(tx$payee_street_city), geo$city, na.rm = TRUE)
+length(setdiff(str_to_upper(tx$payee_street_city), geo$city))
+```
+
+#### Normalize
+
+```{r normal_city}
+tx <- tx %>% 
+  mutate(
+    city_norm = normal_city(
+      city = payee_street_city, 
+      geo_abbs = usps_city,
+      st_abbs = c("TX", "DC", "TEXAS"),
+      na = na_city,
+      na_rep = TRUE
+    )
+  )
+```
+
+```{r count_city_post_norm, collapse=TRUE}
+n_distinct(df$city_norm)
+prop_in(df$city_norm, geo$city, na.rm = TRUE)
+length(setdiff(df$city_norm, geo$city))
+```
+
+#### Swap
+
+```{r swap_city}
+df <- df %>% 
+  left_join(
+    y = geo,
+    by = c(
+      "state_norm" = "state",
+      "zip_norm" = "zip"
+    )
+  ) %>% 
+  rename(city_match = city) %>% 
+  mutate(
+    match_dist = stringdist(city_norm, city_match),
+    city_swap = if_else(
+      condition = equals(match_dist, 1),
+      true = city_match,
+      false = city_norm
+    )
+  )
+```
+
+```{r count_city_post_swap, collapse=TRUE}
+n_distinct(df$city_swap)
+prop_in(df$city_swap, geo$city, na.rm = TRUE)
+length(setdiff(df$city_swap, geo$city))
+```
+
+#### Refine
+
+## Conclude
+
+1. There are `r nrow(tx)` records in the database.
+1. There are `r sum(tx$dupe_flag)` duplicate records in the database.
+1. The range and distribution of `expend_amount` and `expend_dt` seem reasonable.
+1. There are `r sum(tx$na_flag)` records missing either recipient or date.
+1. Consistency in goegraphic data has been improved with `campfin::normal_*()`.
+1. The 5-digit `zip_norm` variable has been created with `campfin::normal_zip()`.
+1. The 4-digit `expend_yr` variable has been created with `lubridate::year()`.
+
+## Export
+
+```{r proc_dir}
+proc_dir <- here("tx", "expends", "data", "processed")
+dir_create(proc_dir)
+```
+
+```{r write_proc}
+tx %>% 
+  write_csv(
+    path = glue("{proc_dir}/tx_expends_clean.csv"),
+    na = ""
+  )
 ```
 
