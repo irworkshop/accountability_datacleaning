@@ -11,6 +11,8 @@ editor_options:
   chunk_output_type: console
 ---
 
+<!-- Place comments regarding knitting here -->
+
 ```{r setup, include=FALSE, purl=FALSE}
 library(knitr)
 opts_chunk$set(
@@ -19,6 +21,8 @@ opts_chunk$set(
   warning = FALSE,
   message = FALSE,
   error = FALSE,
+  # it's nice to un-collapse df print
+  collapse = TRUE,
   comment = "#>",
   fig.path = "../plots/",
   fig.width = 10,
@@ -130,10 +134,14 @@ glimpse(sample_frac(df))
 glimpse_fun(df, count_na)
 ```
 
+```{r flag_na}
+df <- df %>% flag_na(payee, filer, date, amount)
+```
+
 ### Duplicates
 
-```{r get_dupes}
-df_dupes <- distinct(get_dupes(df))
+```{r flag_dupes}
+df <- flag_dupes(df, -id)
 ```
 
 ### Categorical
@@ -158,6 +166,13 @@ df %>%
     breaks = c(1 %o% 10^(0:6)),
     labels = dollar,
     trans = "log10"
+  ) +
+  labs(
+    title = "State Data Amount Distribution",
+    subtitle = "from 2000 to 2019",
+    caption = "Source: State Agency Name",
+    x = "Amount",
+    y = "Count"
   )
 ```
 
@@ -179,10 +194,19 @@ sum(df$date > today())
 ### Address
 
 ```{r normal_address}
-df <- df %>% 
+packageVersion("tidyr")
+tx <- tx %>% 
+  # combine street addr
+  unite(
+    col = adress_comb,
+    starts_with("address"),
+    remove = FALSE,
+    na.rm = TRUE
+  ) %>% 
+  # normalize combined addr
   mutate(
     address_norm = normal_address(
-      address = address,
+      address = adress_comb,
       add_abbs = usps,
       na_rep = TRUE
     )
@@ -303,7 +327,7 @@ length(setdiff(df$city_swap, geo$city))
 1. There are `nrow(df)` records in the database.
 1. There are `sum(df$dupe_flag)` duplicate records in the database.
 1. The range and distribution of `amount` and `date` seem reasonable.
-1. There are `sum(mi$na_flag)` records missing either recipient or date.
+1. There are `sum(df$na_flag)` records missing either recipient or date.
 1. Consistency in goegraphic data has been improved with `campfin::normal_*()`.
 1. The 5-digit `zip_norm` variable has been created with `campfin::normal_zip(df$zip)`.
 1. The 4-digit `year` variable has been created with `lubridate::year(df$date)`.
