@@ -254,13 +254,11 @@ zip_expends <- zip_contents$name[str_which(zip_contents$name, "exp")]
 If the files haven't been extracted, we can do so now.
 
 ```{r unzip_zip}
-if (!all_files_new(raw_dir, "exp*.csv$")) {
-  unzip(
-    zipfile = zip_file,
-    files = zip_expends,
-    exdir = raw_dir
-  )
-}
+unzip(
+  zipfile = zip_file,
+  files = zip_expends,
+  exdir = raw_dir
+)
 ```
 
 ```{r rm_objects, echo=FALSE}
@@ -306,7 +304,14 @@ tx <- vroom(
   )
 )
 
-tx <- tx %>% 
+tx <- tx %>%
+  filter(expend_dt > "2008-01-01") %>% 
+  mutate(
+    capital_livingexp_flag = capital_livingexp_flag %>% 
+      str_remove_all("X") %>%
+      str_remove_all(",") %>%
+      na_if("")
+  ) %>% 
   # turn Y/N to T/F
   mutate_if(is_binary, to_logical) %>% 
   # shorten file var
@@ -354,7 +359,7 @@ mean(tx$na_flag)
 
 ### Duplicates
 
-```{r flag_dupes, collapse=TRUE, eval=FALSE}
+```{r flag_dupes, collapse=TRUE, eval=TRUE}
 tx <- flag_dupes(tx, -expend_info_id)
 
 sum(tx$dupe_flag)
@@ -367,7 +372,7 @@ mean(tx$dupe_flag)
 glimpse_fun(tx, n_distinct)
 ```
 
-```{r form_bar, echo=FALSE}
+```{r filer_bar, echo=FALSE}
 explore_plot(
   data = tx,
   var = filer_type_cd,
@@ -378,7 +383,7 @@ explore_plot(
 )
 ```
 
-```{r form_bar, echo=FALSE}
+```{r category_bar, echo=FALSE}
 explore_plot(
   data = drop_na(tx, expend_cat_cd),
   var = expend_cat_cd,
@@ -530,7 +535,8 @@ database and more confidently links records.
 
 ### Address
 
-```{r normal_address, collapse=TRUEm, eval=FALSE}
+```{r normal_address, collapse=TRUE, eval=TRUE}
+# need version 0.8.99.9
 packageVersion("tidyr")
 tx <- tx %>% 
   # combine street addr
@@ -550,8 +556,8 @@ tx <- tx %>%
   )
 ```
 
-```{r view_address_norm, eval=FALSE}
-select(tx, payee_street_comb, address_norm)
+```{r view_address_norm, eval=TRUE}
+select(tx, payee_street_addr_comb, address_norm)
 ```
 
 ### ZIP
@@ -628,15 +634,15 @@ tx <- tx %>%
 ```
 
 ```{r count_city_post_norm, collapse=TRUE}
-n_distinct(df$city_norm)
-prop_in(df$city_norm, geo$city, na.rm = TRUE)
-length(setdiff(df$city_norm, geo$city))
+n_distinct(tx$city_norm)
+prop_in(tx$city_norm, geo$city, na.rm = TRUE)
+length(setdiff(tx$city_norm, geo$city))
 ```
 
 #### Swap
 
 ```{r swap_city}
-df <- df %>% 
+tx <- tx %>% 
   left_join(
     y = geo,
     by = c(
@@ -656,9 +662,9 @@ df <- df %>%
 ```
 
 ```{r count_city_post_swap, collapse=TRUE}
-n_distinct(df$city_swap)
-prop_in(df$city_swap, geo$city, na.rm = TRUE)
-length(setdiff(df$city_swap, geo$city))
+n_distinct(tx$city_swap)
+prop_in(tx$city_swap, geo$city, na.rm = TRUE)
+length(setdiff(tx$city_swap, geo$city))
 ```
 
 #### Refine
