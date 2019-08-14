@@ -1,7 +1,7 @@
 State Data
 ================
 First Last
-2019-08-13 23:11:03
+2019-08-14 14:05:25
 
   - [Project](#project)
   - [Objectives](#objectives)
@@ -153,53 +153,53 @@ contains the data we want.
 > creating duplicates, because they are supposed to be re-reported on
 > the next regular campaign finance report.
 
-| Field Name              | Type                     | Mask                                                           | Len | Description                   |
-| :---------------------- | :----------------------- | :------------------------------------------------------------- | :-- | :---------------------------- |
-| `recordType`            | String                   | 20 Record type code - always EXPN                              |     |                               |
-| `formTypeCd`            | String                   | 20 TEC form used                                               |     |                               |
-| `schedFormTypeCd`       | String                   | 20 TEC Schedule Used                                           |     |                               |
-| `reportInfoIdent`       | Long                     | 00000000000                                                    | 11  | Unique report                 |
-| `receivedDt`            | Date                     | yyyyMMdd                                                       | 8   | Date report received by TEC   |
-| `infoOnlyFlag`          | String                   | 1 Superseded by other report                                   |     |                               |
-| `filerIdent`            | String                   | 100 Filer account                                              |     |                               |
-| `filerTypeCd`           | String                   | 30 Type of filer                                               |     |                               |
-| `filerName`             | String                   | 200 Filer name                                                 |     |                               |
-| `expendInfoId`          | Long                     | 00000000000                                                    | 11  | Expenditure unique identifier |
-| `expendDt`              | Date                     | yyyyMMdd                                                       | 8   | Expenditure date              |
-| `expendAmount`          | BigDecimal 0000000000.00 | 12 Expenditure amount                                          |     |                               |
-| `expendDescr`           | String                   | 100 Expenditure description                                    |     |                               |
-| `expendCatCd`           | String                   | 30 Expenditure category code                                   |     |                               |
-| `expendCatDescr`        | String                   | 100 Expenditure category description                           |     |                               |
-| `itemizeFlag`           | String                   | 1 Y indicates that the expenditure is itemized                 |     |                               |
-| `travelFlag`            | String                   | 1 Y indicates that the expenditure has associated travel       |     |                               |
-| `politicalExpendCd`     | String                   | 30 Political expenditure indicator                             |     |                               |
-| `reimburseIntendedFlag` | String                   | 1 Reimbursement intended indicator                             |     |                               |
-| `srcCorpContribFlag`    | String                   | 1 Expenditure from corporate funds indicator                   |     |                               |
-| `capitalLivingexpFlag`  | String                   | 1 Austin living expense indicator                              |     |                               |
-| `payeePersentTypeCd`    | String                   | 30 Type of payee name data - INDIVIDUAL or ENTITY              |     |                               |
-| `payeeNameOrganization` | String                   | 100 For ENTITY, the payee organization name                    |     |                               |
-| `payeeNameLast`         | String                   | 100 For INDIVIDUAL, the payee last name                        |     |                               |
-| `payeeNameSuffixCd`     | String                   | 30 For INDIVIDUAL, the payee name suffix (e.g. JR, MD, II)     |     |                               |
-| `payeeNameFirst`        | String                   | 45 For INDIVIDUAL, the payee first name                        |     |                               |
-| `payeeNamePrefixCd`     | String                   | 30 For INDIVIDUAL, the payee name prefix (e.g. MR, MRS, MS)    |     |                               |
-| `payeeNameShort`        | String                   | 25 For INDIVIDUAL, the payee short name (nickname)             |     |                               |
-| `payeeStreetAddr1`      | String                   | 55 Payee street address - line 1                               |     |                               |
-| `payeeStreetAddr2`      | String                   | 55 Payee street address - line 2                               |     |                               |
-| `payeeStreetCity`       | String                   | 30 Payee street address - city                                 |     |                               |
-| `payeeStreetStateCd`    | String                   | 2 Payee street address - state code (e.g. TX, CA) - for        |     |                               |
-| `payeeStreetCountyCd`   | String                   | 5 Payee street address - Texas county                          |     |                               |
-| `payeeStreetCountryCd`  | String                   | 3 Payee street address - country (e.g. USA, UMI, MEX, CAN)     |     |                               |
-| `payeeStreetPostalCode` | String                   | 20 Payee street address - postal code - for USA addresses only |     |                               |
-| `payeeStreetRegion`     | String                   | 30 Payee street address - region for country other than USA    |     |                               |
+| Field Name                 | Type       | Description                                                 |
+| :------------------------- | :--------- | :---------------------------------------------------------- |
+| `record_type`              | String     | Record type code - always EXPN                              |
+| `form_type_cd`             | String     | TEC form used                                               |
+| `sched_form_type_cd`       | String     | TEC Schedule Used                                           |
+| `report_info_ident`        | Long       | Unique report                                               |
+| `received_dt`              | Date       | Date report received by TEC                                 |
+| `info_only_flag`           | String     | Superseded by other report                                  |
+| `filer_ident`              | String     | Filer account                                               |
+| `filer_type_cd`            | String     | Type of filer                                               |
+| `filer_name`               | String     | Filer name                                                  |
+| `expend_info_id`           | Long       | Expenditure unique identifier                               |
+| `expend_dt`                | Date       | Expenditure date                                            |
+| `expend_amount`            | BigDecimal | Expenditure amount                                          |
+| `expend_descr`             | String     | Expenditure description                                     |
+| `expend_cat_cd`            | String     | Expenditure category code                                   |
+| `expend_cat_descr`         | String     | Expenditure category description                            |
+| `itemize_flag`             | String     | Y indicates that the expenditure is itemized                |
+| `travel_flag`              | String     | Y indicates that the expenditure has associated travel      |
+| `political_expend_cd`      | String     | Political expenditure indicator                             |
+| `reimburse_intended_flag`  | String     | Reimbursement intended indicator                            |
+| `src_corp_contrib_flag`    | String     | Expenditure from corporate funds indicator                  |
+| `capital_livingexp_flag`   | String     | Austin living expense indicator                             |
+| `payee_persent_type_cd`    | String     | Type of payee name data - INDIVIDUAL or ENTITY              |
+| `payee_name_organization`  | String     | For ENTITY, the payee organization name                     |
+| `payee_name_last`          | String     | For INDIVIDUAL, the payee last name                         |
+| `payee_name_suffix_cd`     | String     | For INDIVIDUAL, the payee name suffix (e.g. JR, MD, II)     |
+| `payee_name_first`         | String     | For INDIVIDUAL, the payee first name                        |
+| `payee_name_prefix_cd`     | String     | For INDIVIDUAL, the payee name prefix (e.g. MR, MRS, MS)    |
+| `payee_name_short`         | String     | For INDIVIDUAL, the payee short name (nickname)             |
+| `payee_street_addr_1`      | String     | Payee street address - line 1                               |
+| `payee_street_addr_2`      | String     | Payee street address - line 2                               |
+| `payee_street_city`        | String     | Payee street address - city                                 |
+| `payee_street_state_cd`    | String     | Payee street address - state code (e.g. TX, CA) - for       |
+| `payee_street_county_cd`   | String     | Payee street address - Texas county                         |
+| `payee_street_country_cd`  | String     | Payee street address - country (e.g. USA, UMI, MEX, CAN)    |
+| `payee_street_postal_code` | String     | Payee street address - postal code - for USA addresses only |
+| `payee_street_region`      | String     | Payee street address - region for country other than USA    |
 
 The ExpendCategory record is a small table explaing the expenditure
 category codes used.
 
-| Field Name              | Type   | Len | Description                      |
-| :---------------------- | :----- | --: | :------------------------------- |
-| recordType              | String |  20 | Record type code - always EXCAT  |
-| expendCategoryCodeValue | String |  30 | Expenditure category code        |
-| expendCategoryCodeLabel | String | 100 | Expenditure category description |
+| Field Name                   | Type   | Description                      |
+| :--------------------------- | :----- | :------------------------------- |
+| `record_type`                | String | Record type code - always EXCAT  |
+| `expend_category_code_value` | String | Expenditure category code        |
+| `expend_category_code_label` | String | Expenditure category description |
 
 ### Download
 
@@ -235,19 +235,36 @@ if (!all_files_new(raw_dir, "*.zip$")) {
 
 There are 69 CSV files inside the ZIP archive.
 
+``` r
+zip_contents <- 
+  unzip(zip_file, list = TRUE) %>% 
+  as_tibble() %>% 
+  clean_names() %>% 
+  mutate(
+    length = number_bytes(length),
+    date = as_date(date)
+  )
+
+filter(zip_contents, name %>% str_detect("exp"))
+```
+
     #> # A tibble: 10 x 3
     #>    name          length date      
     #>    <chr>         <chr>  <date>    
-    #>  1 expend_01.csv 114 Mb 2019-08-13
-    #>  2 expend_02.csv 102 Mb 2019-08-13
-    #>  3 expend_03.csv 106 Mb 2019-08-13
-    #>  4 expend_04.csv 105 Mb 2019-08-13
-    #>  5 expend_05.csv 105 Mb 2019-08-13
-    #>  6 expend_06.csv 78 Mb  2019-08-13
-    #>  7 expend_07.csv 77 Mb  2019-08-13
-    #>  8 expend_08.csv 72 Mb  2019-08-13
-    #>  9 expn_catg.csv 0 Mb   2019-08-13
-    #> 10 expn_t.csv    2 Mb   2019-08-13
+    #>  1 expend_01.csv 114 Mb 2019-08-14
+    #>  2 expend_02.csv 102 Mb 2019-08-14
+    #>  3 expend_03.csv 106 Mb 2019-08-14
+    #>  4 expend_04.csv 105 Mb 2019-08-14
+    #>  5 expend_05.csv 105 Mb 2019-08-14
+    #>  6 expend_06.csv 78 Mb  2019-08-14
+    #>  7 expend_07.csv 77 Mb  2019-08-14
+    #>  8 expend_08.csv 72 Mb  2019-08-14
+    #>  9 expn_catg.csv 0 Mb   2019-08-14
+    #> 10 expn_t.csv    2 Mb   2019-08-14
+
+``` r
+zip_expends <- zip_contents$name[str_which(zip_contents$name, "expend_\\d{2}.csv")]
+```
 
 If the files haven’t been extracted, we can do so now.
 
@@ -290,7 +307,6 @@ tx <- vroom(
   col_names = TRUE,
   escape_double = TRUE,
   escape_backslash = FALSE,
-  id = "file",
   locale = locale(tz = "US/Central"),
   col_types = cols(
     .default = col_character(),
@@ -301,19 +317,14 @@ tx <- vroom(
 )
 
 tx <- tx %>%
-  filter(expend_dt > "2008-01-01") %>% 
-  mutate(
-    capital_livingexp_flag = capital_livingexp_flag %>% 
-      str_remove_all("X") %>%
-      str_remove_all(",") %>%
-      na_if("")
-  ) %>% 
+  # there are 3 empty cols
+  remove_empty("cols") %>% 
+  # remove handful bad chars
+  mutate(capital_livingexp_flag = na_if(str_remove(capital_livingexp_flag, "[^Y|N]"), "")) %>% 
   # turn Y/N to T/F
-  mutate_if(is_binary, to_logical) %>% 
-  # shorten file var
-  mutate(file = basename(file)) %>%
-  # move to end of file
-  select(everything(), file)
+  mutate_if(is_binary, to_logical) %>%
+  # all Y
+  mutate(itemize_flag = to_logical(itemize_flag))
 ```
 
 ## Explore
@@ -322,93 +333,88 @@ tx <- tx %>%
 head(tx)
 ```
 
-    #> # A tibble: 6 x 37
-    #>   file  record_type form_type_cd sched_form_type… report_info_ide… received_dt info_only_flag
-    #>   <chr> <chr>       <chr>        <chr>            <chr>            <date>      <lgl>         
-    #> 1 expe… EXPN        MPAC         F1               527709           2012-05-02  FALSE         
-    #> 2 expe… EXPN        MPAC         F1               527709           2012-05-02  FALSE         
-    #> 3 expe… EXPN        MPAC         F1               527709           2012-05-02  FALSE         
-    #> 4 expe… EXPN        MPAC         F1               527709           2012-05-02  FALSE         
-    #> 5 expe… EXPN        MPAC         F1               527709           2012-05-02  FALSE         
-    #> 6 expe… EXPN        MPAC         F1               527709           2012-05-02  FALSE         
-    #> # … with 30 more variables: filer_ident <chr>, filer_type_cd <chr>, filer_name <chr>,
-    #> #   expend_info_id <chr>, expend_dt <date>, expend_amount <dbl>, expend_descr <chr>,
-    #> #   expend_cat_cd <chr>, expend_cat_descr <chr>, itemize_flag <chr>, travel_flag <lgl>,
-    #> #   political_expend_cd <lgl>, reimburse_intended_flag <lgl>, src_corp_contrib_flag <lgl>,
-    #> #   capital_livingexp_flag <lgl>, payee_persent_type_cd <lgl>, payee_name_organization <chr>,
-    #> #   payee_name_last <chr>, payee_name_suffix_cd <chr>, payee_name_first <chr>,
-    #> #   payee_name_prefix_cd <chr>, payee_name_short <chr>, payee_street_addr1 <chr>,
-    #> #   payee_street_addr2 <chr>, payee_street_city <chr>, payee_street_state_cd <chr>,
-    #> #   payee_street_county_cd <chr>, payee_street_country_cd <chr>, payee_street_postal_code <chr>,
+    #> # A tibble: 6 x 34
+    #>   record_type form_type_cd sched_form_type… report_info_ide… received_dt info_only_flag filer_ident
+    #>   <chr>       <chr>        <chr>            <chr>            <date>      <lgl>          <chr>      
+    #> 1 EXPN        MPAC         F1               157773           2000-10-12  FALSE          00010883   
+    #> 2 EXPN        MPAC         F1               323134           2006-11-01  FALSE          00010883   
+    #> 3 EXPN        MPAC         F1               157773           2000-10-12  FALSE          00010883   
+    #> 4 EXPN        MPAC         F1               311114           2006-06-01  FALSE          00010883   
+    #> 5 EXPN        MPAC         F1               157773           2000-10-12  FALSE          00010883   
+    #> 6 EXPN        MPAC         F1               235729           2004-01-02  FALSE          00010883   
+    #> # … with 27 more variables: filer_type_cd <chr>, filer_name <chr>, expend_info_id <chr>,
+    #> #   expend_dt <date>, expend_amount <dbl>, expend_descr <chr>, expend_cat_cd <chr>,
+    #> #   expend_cat_descr <chr>, itemize_flag <lgl>, travel_flag <lgl>, political_expend_cd <lgl>,
+    #> #   reimburse_intended_flag <lgl>, src_corp_contrib_flag <lgl>, capital_livingexp_flag <lgl>,
+    #> #   payee_persent_type_cd <lgl>, payee_name_organization <chr>, payee_name_last <chr>,
+    #> #   payee_name_suffix_cd <chr>, payee_name_first <chr>, payee_name_prefix_cd <chr>,
+    #> #   payee_street_addr1 <chr>, payee_street_addr2 <chr>, payee_street_city <chr>,
+    #> #   payee_street_state_cd <chr>, payee_street_country_cd <chr>, payee_street_postal_code <chr>,
     #> #   payee_street_region <chr>
 
 ``` r
 tail(tx)
 ```
 
-    #> # A tibble: 6 x 37
-    #>   file  record_type form_type_cd sched_form_type… report_info_ide… received_dt info_only_flag
-    #>   <chr> <chr>       <chr>        <chr>            <chr>            <date>      <lgl>         
-    #> 1 expe… EXPN        CORCOH       F1               100757289        2019-08-09  FALSE         
-    #> 2 expe… EXPN        CORCOH       F1               100757289        2019-08-09  FALSE         
-    #> 3 expe… EXPN        CORCOH       F1               100757289        2019-08-09  FALSE         
-    #> 4 expe… EXPN        CORCOH       F1               100757289        2019-08-09  FALSE         
-    #> 5 expe… EXPN        COHFR        F1               100757394        2019-08-12  FALSE         
-    #> 6 expe… EXPN        GPAC         F1               100757413        2019-08-12  FALSE         
-    #> # … with 30 more variables: filer_ident <chr>, filer_type_cd <chr>, filer_name <chr>,
-    #> #   expend_info_id <chr>, expend_dt <date>, expend_amount <dbl>, expend_descr <chr>,
-    #> #   expend_cat_cd <chr>, expend_cat_descr <chr>, itemize_flag <chr>, travel_flag <lgl>,
-    #> #   political_expend_cd <lgl>, reimburse_intended_flag <lgl>, src_corp_contrib_flag <lgl>,
-    #> #   capital_livingexp_flag <lgl>, payee_persent_type_cd <lgl>, payee_name_organization <chr>,
-    #> #   payee_name_last <chr>, payee_name_suffix_cd <chr>, payee_name_first <chr>,
-    #> #   payee_name_prefix_cd <chr>, payee_name_short <chr>, payee_street_addr1 <chr>,
-    #> #   payee_street_addr2 <chr>, payee_street_city <chr>, payee_street_state_cd <chr>,
-    #> #   payee_street_county_cd <chr>, payee_street_country_cd <chr>, payee_street_postal_code <chr>,
+    #> # A tibble: 6 x 34
+    #>   record_type form_type_cd sched_form_type… report_info_ide… received_dt info_only_flag filer_ident
+    #>   <chr>       <chr>        <chr>            <chr>            <date>      <lgl>          <chr>      
+    #> 1 EXPN        GPAC         F1               100757106        2019-08-13  FALSE          00083590   
+    #> 2 EXPN        GPAC         F1               100757106        2019-08-13  FALSE          00083590   
+    #> 3 EXPN        MPAC         F1               100757472        2019-08-13  FALSE          00069951   
+    #> 4 EXPN        MPAC         F1               100757472        2019-08-13  FALSE          00069951   
+    #> 5 EXPN        MPAC         F1               100757472        2019-08-13  FALSE          00069951   
+    #> 6 EXPN        MPAC         F1               100757472        2019-08-13  FALSE          00069951   
+    #> # … with 27 more variables: filer_type_cd <chr>, filer_name <chr>, expend_info_id <chr>,
+    #> #   expend_dt <date>, expend_amount <dbl>, expend_descr <chr>, expend_cat_cd <chr>,
+    #> #   expend_cat_descr <chr>, itemize_flag <lgl>, travel_flag <lgl>, political_expend_cd <lgl>,
+    #> #   reimburse_intended_flag <lgl>, src_corp_contrib_flag <lgl>, capital_livingexp_flag <lgl>,
+    #> #   payee_persent_type_cd <lgl>, payee_name_organization <chr>, payee_name_last <chr>,
+    #> #   payee_name_suffix_cd <chr>, payee_name_first <chr>, payee_name_prefix_cd <chr>,
+    #> #   payee_street_addr1 <chr>, payee_street_addr2 <chr>, payee_street_city <chr>,
+    #> #   payee_street_state_cd <chr>, payee_street_country_cd <chr>, payee_street_postal_code <chr>,
     #> #   payee_street_region <chr>
 
 ``` r
-glimpse(sample_n(tx, 10))
+glimpse(tx)
 ```
 
-    #> Observations: 10
-    #> Variables: 37
-    #> $ file                     <chr> "expend_03.csv", "expend_06.csv", "expend_08.csv", "expend_04.c…
+    #> Observations: 3,506,135
+    #> Variables: 34
     #> $ record_type              <chr> "EXPN", "EXPN", "EXPN", "EXPN", "EXPN", "EXPN", "EXPN", "EXPN",…
-    #> $ form_type_cd             <chr> "COH", "GPAC", "GPAC", "CORPAC", "MPAC", "SCCOH", "JCOH", "COH"…
-    #> $ sched_form_type_cd       <chr> "F1", "F1", "F1", "F1", "F1", "F1", "F1", "F1", "I", "F1"
-    #> $ report_info_ident        <chr> "643302", "100627037", "100722595", "583457", "544138", "100626…
-    #> $ received_dt              <date> 2015-01-15, 2016-03-17, 2018-10-08, 2013-08-13, 2012-09-26, 20…
-    #> $ info_only_flag           <lgl> FALSE, FALSE, FALSE, TRUE, FALSE, TRUE, FALSE, FALSE, FALSE, FA…
-    #> $ filer_ident              <chr> "00030098", "00015649", "00062747", "00051153", "00018754", "00…
-    #> $ filer_type_cd            <chr> "COH", "GPAC", "GPAC", "SPAC", "MPAC", "SCC", "JCOH", "COH", "G…
-    #> $ filer_name               <chr> "Craddick, Christi L.", "Dallas Fire Fighters Public Safety Com…
-    #> $ expend_info_id           <chr> "101045052", "102853407", "103676252", "101532417", "100506394"…
-    #> $ expend_dt                <date> 2014-12-31, 2016-02-25, 2018-08-14, 2013-05-23, 2012-09-19, 20…
-    #> $ expend_amount            <dbl> 2111.84, 1000.00, 500.00, 79.06, 500.00, 84.00, 10000.00, 20.15…
-    #> $ expend_descr             <chr> "Schedule G reimbursement", " State Representative", " Politica…
-    #> $ expend_cat_cd            <chr> "LOAN", "DONATIONS", "DONATIONS", "FOOD", "DONATIONS", "FOOD", …
-    #> $ expend_cat_descr         <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA
-    #> $ itemize_flag             <chr> "Y", "Y", "Y", "Y", "Y", "Y", "Y", "Y", "Y", "Y"
+    #> $ form_type_cd             <chr> "MPAC", "MPAC", "MPAC", "MPAC", "MPAC", "MPAC", "MPAC", "MPAC",…
+    #> $ sched_form_type_cd       <chr> "F1", "F1", "F1", "F1", "F1", "F1", "F1", "F1", "F1", "F1", "F1…
+    #> $ report_info_ident        <chr> "157773", "323134", "157773", "311114", "157773", "235729", "20…
+    #> $ received_dt              <date> 2000-10-12, 2006-11-01, 2000-10-12, 2006-06-01, 2000-10-12, 20…
+    #> $ info_only_flag           <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, …
+    #> $ filer_ident              <chr> "00010883", "00010883", "00010883", "00010883", "00010883", "00…
+    #> $ filer_type_cd            <chr> "MPAC", "MPAC", "MPAC", "MPAC", "MPAC", "MPAC", "MPAC", "MPAC",…
+    #> $ filer_name               <chr> "THE EL PASO ENERGY CORPORATION PAC", "El Paso Corporation PAC"…
+    #> $ expend_info_id           <chr> "100000001", "100000002", "100000003", "100000004", "100000005"…
+    #> $ expend_dt                <date> 2000-09-14, 2006-10-10, 2000-09-12, 2006-05-02, 2000-09-01, 20…
+    #> $ expend_amount            <dbl> 1000.00, 1000.00, 500.00, 1000.00, 2500.00, 250.00, 1000.00, 10…
+    #> $ expend_descr             <chr> "CONTRIBUTION TO POLITICAL COMMITTEE", "Desc:Direct Contributio…
+    #> $ expend_cat_cd            <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
+    #> $ expend_cat_descr         <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
+    #> $ itemize_flag             <lgl> TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRU…
     #> $ travel_flag              <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, …
-    #> $ political_expend_cd      <lgl> TRUE, NA, NA, TRUE, TRUE, NA, TRUE, NA, NA, TRUE
+    #> $ political_expend_cd      <lgl> TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRU…
     #> $ reimburse_intended_flag  <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, …
     #> $ src_corp_contrib_flag    <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, …
     #> $ capital_livingexp_flag   <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, …
-    #> $ payee_persent_type_cd    <lgl> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA
-    #> $ payee_name_organization  <chr> NA, "Lance Gooden Campaign", NA, "The Carillon", "Sylvester Tur…
-    #> $ payee_name_last          <chr> "Craddick", NA, "Lozano", NA, NA, NA, NA, NA, NA, NA
-    #> $ payee_name_suffix_cd     <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA
-    #> $ payee_name_first         <chr> "Christi L.", NA, "Jose (JM)", NA, NA, NA, NA, NA, NA, NA
-    #> $ payee_name_prefix_cd     <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA
-    #> $ payee_name_short         <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA
-    #> $ payee_street_addr1       <chr> "1500 Dillman St", "PO Box 2125", "635 E King Ave", "1900 Unive…
-    #> $ payee_street_addr2       <chr> NA, NA, NA, NA, "Suite 250", NA, NA, NA, NA, "PO Box 20"
-    #> $ payee_street_city        <chr> "Austin", "Terrell", "Kingsville", "Austin", "Houston", "Fort W…
-    #> $ payee_street_state_cd    <chr> "TX", "TX", "TX", "TX", "TX", "TX", "TX", "CA", "TX", "TX"
-    #> $ payee_street_county_cd   <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA
+    #> $ payee_persent_type_cd    <lgl> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
+    #> $ payee_name_organization  <chr> "WARREN CHISUM CAMPAIGN", "Alaskans For Don Young", "GARNET COL…
+    #> $ payee_name_last          <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
+    #> $ payee_name_suffix_cd     <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
+    #> $ payee_name_first         <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
+    #> $ payee_name_prefix_cd     <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
+    #> $ payee_street_addr1       <chr> "P.O. BOX 1512", "2504 Fairbanks Street", "P. O. BOX 88140", "1…
+    #> $ payee_street_addr2       <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, "Suite A", NA, "104 Hume Av…
+    #> $ payee_street_city        <chr> "PAMPA", "Anchorage", "HOUSTON", "Washington", "HOUSTON", "WACO…
+    #> $ payee_street_state_cd    <chr> "TX", "AK", "TX", "DC", "TX", "TX", "TX", "LA", "TX", "DC", "TX…
     #> $ payee_street_country_cd  <chr> "USA", "USA", "USA", "USA", "USA", "USA", "USA", "USA", "USA", …
-    #> $ payee_street_postal_code <chr> "78703-2720", "75160", "78363", "78705", "77002", "76185", "770…
-    #> $ payee_street_region      <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA
+    #> $ payee_street_postal_code <chr> "79066-1512", "99503", "77288", "20005", "77098", "76702", "774…
+    #> $ payee_street_region      <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
 
 ### Missing
 
@@ -416,46 +422,43 @@ glimpse(sample_n(tx, 10))
 glimpse_fun(tx, count_na)
 ```
 
-    #> # A tibble: 37 x 4
+    #> # A tibble: 34 x 4
     #>    var                      type        n        p
     #>    <chr>                    <chr>   <int>    <dbl>
-    #>  1 file                     chr         0 0       
-    #>  2 record_type              chr         0 0       
-    #>  3 form_type_cd             chr         0 0       
-    #>  4 sched_form_type_cd       chr         0 0       
-    #>  5 report_info_ident        chr         0 0       
-    #>  6 received_dt              date      510 0.000211
-    #>  7 info_only_flag           lgl         0 0       
-    #>  8 filer_ident              chr         0 0       
-    #>  9 filer_type_cd            chr         0 0       
-    #> 10 filer_name               chr       551 0.000228
-    #> 11 expend_info_id           chr         0 0       
-    #> 12 expend_dt                date        0 0       
-    #> 13 expend_amount            dbl         0 0       
-    #> 14 expend_descr             chr      1838 0.000761
-    #> 15 expend_cat_cd            chr    482411 0.200   
-    #> 16 expend_cat_descr         chr   2332525 0.966   
-    #> 17 itemize_flag             chr         0 0       
-    #> 18 travel_flag              lgl         0 0       
-    #> 19 political_expend_cd      lgl    575755 0.238   
-    #> 20 reimburse_intended_flag  lgl         0 0       
-    #> 21 src_corp_contrib_flag    lgl     14990 0.00621 
-    #> 22 capital_livingexp_flag   lgl    286152 0.118   
-    #> 23 payee_persent_type_cd    lgl   2415267 1       
-    #> 24 payee_name_organization  chr    497173 0.206   
-    #> 25 payee_name_last          chr   1917161 0.794   
-    #> 26 payee_name_suffix_cd     chr   2409791 0.998   
-    #> 27 payee_name_first         chr   1917858 0.794   
-    #> 28 payee_name_prefix_cd     chr   2266336 0.938   
-    #> 29 payee_name_short         chr   2415267 1       
-    #> 30 payee_street_addr1       chr     15774 0.00653 
-    #> 31 payee_street_addr2       chr   2179340 0.902   
-    #> 32 payee_street_city        chr     10577 0.00438 
-    #> 33 payee_street_state_cd    chr      7749 0.00321 
-    #> 34 payee_street_county_cd   chr   2415267 1       
-    #> 35 payee_street_country_cd  chr       768 0.000318
-    #> 36 payee_street_postal_code chr     14864 0.00615 
-    #> 37 payee_street_region      chr   2414318 1.000
+    #>  1 record_type              chr         0 0       
+    #>  2 form_type_cd             chr         0 0       
+    #>  3 sched_form_type_cd       chr         0 0       
+    #>  4 report_info_ident        chr         0 0       
+    #>  5 received_dt              date      520 0.000148
+    #>  6 info_only_flag           lgl         0 0       
+    #>  7 filer_ident              chr         0 0       
+    #>  8 filer_type_cd            chr         0 0       
+    #>  9 filer_name               chr       559 0.000159
+    #> 10 expend_info_id           chr         0 0       
+    #> 11 expend_dt                date    21280 0.00607 
+    #> 12 expend_amount            dbl     21273 0.00607 
+    #> 13 expend_descr             chr     25154 0.00717 
+    #> 14 expend_cat_cd            chr   1572800 0.449   
+    #> 15 expend_cat_descr         chr   3423376 0.976   
+    #> 16 itemize_flag             lgl         0 0       
+    #> 17 travel_flag              lgl         0 0       
+    #> 18 political_expend_cd      lgl    576537 0.164   
+    #> 19 reimburse_intended_flag  lgl         0 0       
+    #> 20 src_corp_contrib_flag    lgl     14990 0.00428 
+    #> 21 capital_livingexp_flag   lgl    286152 0.0816  
+    #> 22 payee_persent_type_cd    lgl   3506135 1       
+    #> 23 payee_name_organization  chr    783044 0.223   
+    #> 24 payee_name_last          chr   2742213 0.782   
+    #> 25 payee_name_suffix_cd     chr   3497494 0.998   
+    #> 26 payee_name_first         chr   2745367 0.783   
+    #> 27 payee_name_prefix_cd     chr   3271984 0.933   
+    #> 28 payee_street_addr1       chr     55168 0.0157  
+    #> 29 payee_street_addr2       chr   3188979 0.910   
+    #> 30 payee_street_city        chr     37506 0.0107  
+    #> 31 payee_street_state_cd    chr     30698 0.00876 
+    #> 32 payee_street_country_cd  chr     23066 0.00658 
+    #> 33 payee_street_postal_code chr     51062 0.0146  
+    #> 34 payee_street_region      chr   3505186 1.000
 
 We can use `campfin::flag_na()` to create a new `na_flag` variable to
 identify any record missing one of the values needed to identify the
@@ -478,9 +481,9 @@ tx <- tx %>%
   select(-payee_name)
 
 sum(tx$na_flag)
-#> [1] 610
+#> [1] 21905
 mean(tx$na_flag)
-#> [1] 0.0002525601
+#> [1] 0.00624762
 ```
 
 ### Duplicates
@@ -489,10 +492,14 @@ mean(tx$na_flag)
 tx <- flag_dupes(tx, -expend_info_id)
 
 sum(tx$dupe_flag)
-#> [1] 42751
+#> [1] 68767
 mean(tx$dupe_flag)
-#> [1] 0.01770032
+#> [1] 0.01961333
 ```
+
+    #>            used  (Mb) gc trigger   (Mb)  max used    (Mb)
+    #> Ncells  5750683 307.2  151672390 8100.2 189590488 10125.3
+    #> Vcells 71091838 542.4  329588473 2514.6 325796141  2485.7
 
 ### Categorical
 
@@ -500,48 +507,45 @@ mean(tx$dupe_flag)
 glimpse_fun(tx, n_distinct)
 ```
 
-    #> # A tibble: 39 x 4
+    #> # A tibble: 36 x 4
     #>    var                      type        n           p
     #>    <chr>                    <chr>   <int>       <dbl>
-    #>  1 file                     chr         8 0.00000331 
-    #>  2 record_type              chr         1 0.000000414
-    #>  3 form_type_cd             chr        24 0.00000994 
-    #>  4 sched_form_type_cd       chr        11 0.00000455 
-    #>  5 report_info_ident        chr    101121 0.0419     
-    #>  6 received_dt              date     3615 0.00150    
-    #>  7 info_only_flag           lgl         2 0.000000828
-    #>  8 filer_ident              chr      6640 0.00275    
-    #>  9 filer_type_cd            chr        14 0.00000580 
-    #> 10 filer_name               chr     10081 0.00417    
-    #> 11 expend_info_id           chr   2415267 1          
-    #> 12 expend_dt                date     4225 0.00175    
-    #> 13 expend_amount            dbl    168793 0.0699     
-    #> 14 expend_descr             chr    549528 0.228      
-    #> 15 expend_cat_cd            chr        21 0.00000869 
-    #> 16 expend_cat_descr         chr     15906 0.00659    
-    #> 17 itemize_flag             chr         1 0.000000414
-    #> 18 travel_flag              lgl         2 0.000000828
-    #> 19 political_expend_cd      lgl         3 0.00000124 
-    #> 20 reimburse_intended_flag  lgl         2 0.000000828
-    #> 21 src_corp_contrib_flag    lgl         3 0.00000124 
-    #> 22 capital_livingexp_flag   lgl         3 0.00000124 
-    #> 23 payee_persent_type_cd    lgl         1 0.000000414
-    #> 24 payee_name_organization  chr    215923 0.0894     
-    #> 25 payee_name_last          chr     31163 0.0129     
-    #> 26 payee_name_suffix_cd     chr        26 0.0000108  
-    #> 27 payee_name_first         chr     20407 0.00845    
-    #> 28 payee_name_prefix_cd     chr        30 0.0000124  
-    #> 29 payee_name_short         chr         1 0.000000414
-    #> 30 payee_street_addr1       chr    369931 0.153      
-    #> 31 payee_street_addr2       chr     18763 0.00777    
-    #> 32 payee_street_city        chr     13575 0.00562    
-    #> 33 payee_street_state_cd    chr        84 0.0000348  
-    #> 34 payee_street_county_cd   chr         1 0.000000414
-    #> 35 payee_street_country_cd  chr        58 0.0000240  
-    #> 36 payee_street_postal_code chr     35199 0.0146     
-    #> 37 payee_street_region      chr       148 0.0000613  
-    #> 38 na_flag                  lgl         2 0.000000828
-    #> 39 dupe_flag                lgl         2 0.000000828
+    #>  1 record_type              chr         1 0.000000285
+    #>  2 form_type_cd             chr        27 0.00000770 
+    #>  3 sched_form_type_cd       chr        12 0.00000342 
+    #>  4 report_info_ident        chr    142311 0.0406     
+    #>  5 received_dt              date     5762 0.00164    
+    #>  6 info_only_flag           lgl         2 0.000000570
+    #>  7 filer_ident              chr      7718 0.00220    
+    #>  8 filer_type_cd            chr        14 0.00000399 
+    #>  9 filer_name               chr     13113 0.00374    
+    #> 10 expend_info_id           chr   3506135 1          
+    #> 11 expend_dt                date     7189 0.00205    
+    #> 12 expend_amount            dbl    205581 0.0586     
+    #> 13 expend_descr             chr    736044 0.210      
+    #> 14 expend_cat_cd            chr        21 0.00000599 
+    #> 15 expend_cat_descr         chr     15909 0.00454    
+    #> 16 itemize_flag             lgl         1 0.000000285
+    #> 17 travel_flag              lgl         2 0.000000570
+    #> 18 political_expend_cd      lgl         3 0.000000856
+    #> 19 reimburse_intended_flag  lgl         2 0.000000570
+    #> 20 src_corp_contrib_flag    lgl         3 0.000000856
+    #> 21 capital_livingexp_flag   lgl         3 0.000000856
+    #> 22 payee_persent_type_cd    lgl         1 0.000000285
+    #> 23 payee_name_organization  chr    299461 0.0854     
+    #> 24 payee_name_last          chr     41948 0.0120     
+    #> 25 payee_name_suffix_cd     chr        29 0.00000827 
+    #> 26 payee_name_first         chr     27501 0.00784    
+    #> 27 payee_name_prefix_cd     chr        30 0.00000856 
+    #> 28 payee_street_addr1       chr    507902 0.145      
+    #> 29 payee_street_addr2       chr     27741 0.00791    
+    #> 30 payee_street_city        chr     16824 0.00480    
+    #> 31 payee_street_state_cd    chr       101 0.0000288  
+    #> 32 payee_street_country_cd  chr        58 0.0000165  
+    #> 33 payee_street_postal_code chr     44890 0.0128     
+    #> 34 payee_street_region      chr       148 0.0000422  
+    #> 35 na_flag                  lgl         2 0.000000570
+    #> 36 dupe_flag                lgl         2 0.000000570
 
 ![](../plots/filer_bar-1.png)<!-- -->
 
@@ -555,8 +559,8 @@ glimpse_fun(tx, n_distinct)
 summary(tx$expend_amount)
 ```
 
-    #>     Min.  1st Qu.   Median     Mean  3rd Qu.     Max. 
-    #>     -350       43      157     1286      575 16151362
+    #>     Min.  1st Qu.   Median     Mean  3rd Qu.     Max.     NA's 
+    #>    -5000       48      162     1259      548 16996410    21273
 
 ![](../plots/amount_histogram-1.png)<!-- -->
 
@@ -573,14 +577,14 @@ variable from `expend_dt` using `lubridate::year()`
 tx <- mutate(tx, expend_yr = year(expend_dt))
 ```
 
-The date range is fairly clean, with 0 values after 2019-08-13 and only
-0 before the year 2000.
+The date range is fairly clean, with 0 values after 2019-08-14 and only
+91 before the year 2000.
 
 ``` r
 min(tx$expend_dt, na.rm = TRUE)
-#> [1] "2008-01-02"
+#> [1] "1994-10-01"
 sum(tx$expend_yr < 2000, na.rm = TRUE)
-#> [1] 0
+#> [1] 91
 max(tx$expend_dt, na.rm = TRUE)
 #> [1] "2019-08-05"
 sum(tx$expend_dt > today(), na.rm = TRUE)
@@ -592,29 +596,40 @@ outliers, with the vast majority of expenditures coming from 2000
 through 2019. We will flag these records.
 
 ``` r
-count(tx, expend_yr, sort = FALSE)
+count(tx, expend_yr, sort = FALSE) %>% print(n = 23)
 ```
 
-    #> # A tibble: 12 x 2
+    #> # A tibble: 23 x 2
     #>    expend_yr      n
     #>        <dbl>  <int>
-    #>  1      2008 213268
-    #>  2      2009 154416
-    #>  3      2010 262524
-    #>  4      2011 154829
-    #>  5      2012 243059
-    #>  6      2013 182011
-    #>  7      2014 265769
-    #>  8      2015 158690
-    #>  9      2016 220081
-    #> 10      2017 181985
-    #> 11      2018 300476
-    #> 12      2019  78159
+    #>  1      1994     14
+    #>  2      1999     77
+    #>  3      2000  83693
+    #>  4      2001  80415
+    #>  5      2002 177322
+    #>  6      2003  86667
+    #>  7      2004 149801
+    #>  8      2005 150066
+    #>  9      2006 208488
+    #> 10      2007 132657
+    #> 11      2008 213552
+    #> 12      2009 154416
+    #> 13      2010 262524
+    #> 14      2011 154829
+    #> 15      2012 243059
+    #> 16      2013 182011
+    #> 17      2014 265769
+    #> 18      2015 158690
+    #> 19      2016 220081
+    #> 20      2017 181985
+    #> 21      2018 300476
+    #> 22      2019  78263
+    #> 23        NA  21280
 
 ``` r
-tx <- mutate(tx, date_flag = is_less_than(expend_yr, 2000))
+tx <- mutate(tx, date_flag = is_less_than(expend_yr, 2000) | is.na(expend_yr))
 sum(tx$date_flag, na.rm = TRUE)
-#> [1] 0
+#> [1] 21371
 ```
 
 ## Wrangle
@@ -642,40 +657,44 @@ tx <- tx %>%
   mutate(
     address_norm = normal_address(
       address = payee_street_addr_comb,
-      add_abbs = NULL,
+      add_abbs = usps,
       na_rep = TRUE
     )
   )
 ```
 
 ``` r
-select(tx, payee_street_addr_comb, address_norm)
+tx %>% 
+  select(
+    payee_street_addr_comb, 
+    address_norm
+  ) %>% 
+  sample_n(10)
 ```
 
-    #> # A tibble: 2,415,267 x 2
-    #>    payee_street_addr_comb          address_norm                   
-    #>    <chr>                           <chr>                          
-    #>  1 228 S Washington St Ste B-20    228 S WASHINGTON ST STE B 20   
-    #>  2 900 19th Street N.W. 8th Floor  900 19TH STREET NW 8TH FLOOR   
-    #>  3 1420 West Canal Court Ste 10    1420 WEST CANAL COURT STE 10   
-    #>  4 201 Massachusetts Ave NE Ste C3 201 MASSACHUSETTS AVE NE STE C3
-    #>  5 213 Ashby ST                    213 ASHBY ST                   
-    #>  6 900 19th Street NW_8th Floor    900 19TH STREET NW 8TH FLOOR   
-    #>  7 PO Box 8166                     PO BOX 8166                    
-    #>  8 104 Hume Avenue                 104 HUME AVENUE                
-    #>  9 104 Hume Ave                    104 HUME AVE                   
-    #> 10 12535 Cedar Key Trail           12535 CEDAR KEY TRAIL          
-    #> # … with 2,415,257 more rows
+    #> # A tibble: 10 x 2
+    #>    payee_street_addr_comb                 address_norm                            
+    #>    <chr>                                  <chr>                                   
+    #>  1 3470 GOLFING GREEN DRIVE               3470 GOLFING GREEN DRIVE                
+    #>  2 1013 West University_Suite 600         1013 WEST UNIVERSITY SUITE 600          
+    #>  3 PO Box 5019                            PO BOX 5019                             
+    #>  4 2751 TX Hwy 71 E.                      2751 TX HIGHWAY 71 E                    
+    #>  5 P.O. Box 1803                          PO BOX 1803                             
+    #>  6 512 Means St Ste 404                   512 MEANS STREET STE 404                
+    #>  7 2355 I-10 S                            2355 I 10 S                             
+    #>  8 8765 Spring Cypress Rd_Suite L Box 172 8765 SPRING CYPRESS ROAD SUITE L BOX 172
+    #>  9 P.O. Box 688                           PO BOX 688                              
+    #> 10 ""                                     <NA>
 
 ### ZIP
 
 ``` r
 n_distinct(tx$payee_street_postal_code)
-#> [1] 35199
+#> [1] 44890
 prop_in(tx$payee_street_postal_code, geo$zip, na.rm = TRUE)
-#> [1] 0.8993798
+#> [1] 0.900763
 length(setdiff(tx$payee_street_postal_code, geo$zip))
-#> [1] 23997
+#> [1] 31628
 ```
 
 ``` r
@@ -690,22 +709,22 @@ tx <- tx %>%
 
 ``` r
 n_distinct(tx$zip_norm)
-#> [1] 13455
+#> [1] 16048
 prop_in(tx$zip_norm, geo$zip, na.rm = TRUE)
-#> [1] 0.9958842
+#> [1] 0.9959941
 length(setdiff(tx$zip_norm, geo$zip))
-#> [1] 1696
+#> [1] 2250
 ```
 
 ### State
 
 ``` r
 n_distinct(tx$payee_street_state_cd)
-#> [1] 84
+#> [1] 101
 prop_in(tx$payee_street_state_cd, geo$state, na.rm = TRUE)
-#> [1] 0.9989537
+#> [1] 0.9974613
 length(setdiff(tx$payee_street_state_cd, geo$state))
-#> [1] 25
+#> [1] 42
 ```
 
 ``` r
@@ -723,24 +742,39 @@ tx <- tx %>%
 n_distinct(tx$state_norm)
 #> [1] 64
 prop_in(tx$state_norm, geo$state, na.rm = TRUE)
-#> [1] 0.9999942
+#> [1] 0.999996
 setdiff(tx$state_norm, geo$state)
 #> [1] NA   "BE" "X"  "UN" "T"  "RZ"
-tx$state_norm[which(tx$state_norm %out% geo$state)] <- NA
+tx <- mutate(tx, state_norm = na_out(state_norm, geo$state))
 ```
 
 ### City
 
+The city value starts out very clean, with 96.7% of the
+`payee_street_city` values already in our `geo$city` list (after only
+converting to uppercase).
+
 ``` r
 n_distinct(tx$payee_street_city)
-#> [1] 13575
+#> [1] 16824
 prop_in(str_to_upper(tx$payee_street_city), geo$city, na.rm = TRUE)
-#> [1] 0.964887
+#> [1] 0.9669149
 length(setdiff(str_to_upper(tx$payee_street_city), geo$city))
-#> [1] 6130
+#> [1] 7755
+sample(setdiff(str_to_upper(tx$payee_street_city), geo$city), 10)
+#>  [1] "PRIMERA"                 "NORTH RICHARD HILLS"     "FT COLLINS"             
+#>  [4] "NINGTON"                 "WATERFORD IRELAND"       "DEQUEEN"                
+#>  [7] "OJINAGA CHIHUHUA MEXICO" "DUESSELDORF"             "MELBOURNE AUSTRALIA"    
+#> [10] " ODEM"
 ```
 
 #### Normalize
+
+We can use `campfin::normal_city()` to perform some standard text
+normalization like converting to uppercase, removing punctuation and
+numbers, and fixing white space erros. The function can also remove
+state abbreviation from the end of city names (`"Austin, TX"`) and
+remove some common invalid values.
 
 ``` r
 tx <- tx %>% 
@@ -749,7 +783,7 @@ tx <- tx %>%
       city = payee_street_city, 
       geo_abbs = usps_city,
       st_abbs = c("TX", "DC", "TEXAS"),
-      na = na_city,
+      na = c(na_city, "BEST EFFORT"),
       na_rep = TRUE
     )
   )
@@ -757,11 +791,11 @@ tx <- tx %>%
 
 ``` r
 n_distinct(tx$city_norm)
-#> [1] 9399
+#> [1] 11557
 prop_in(tx$city_norm, geo$city, na.rm = TRUE)
-#> [1] 0.9762946
+#> [1] 0.9773668
 length(setdiff(tx$city_norm, geo$city))
-#> [1] 4693
+#> [1] 6129
 ```
 
 #### Swap
@@ -779,7 +813,7 @@ tx <- tx %>%
   mutate(
     match_dist = stringdist(city_norm, city_match),
     city_swap = if_else(
-      condition = equals(match_dist, 1),
+      condition = is_less_than(match_dist, 3),
       true = city_match,
       false = city_norm
     )
@@ -788,22 +822,91 @@ tx <- tx %>%
 
 ``` r
 n_distinct(tx$city_swap)
-#> [1] 6270
+#> [1] 7069
 prop_in(tx$city_swap, geo$city, na.rm = TRUE)
-#> [1] 0.9861505
+#> [1] 0.9870788
 length(setdiff(tx$city_swap, geo$city))
-#> [1] 1658
+#> [1] 1747
 ```
 
 #### Refine
 
+``` r
+good_refine <- tx %>% 
+  mutate(
+    city_refine = city_swap %>% 
+      key_collision_merge() %>% 
+      n_gram_merge(numgram = 1)
+  ) %>% 
+  filter(city_refine != city_swap) %>% 
+  inner_join(
+    y = geo,
+    by = c(
+      "city_refine" = "city",
+      "state_norm" = "state",
+      "zip_norm" = "zip"
+    )
+  )
+```
+
+``` r
+tx <- tx %>% 
+  left_join(good_refine) %>% 
+  mutate(city_final = coalesce(city_refine, city_swap))
+```
+
+#### Progress
+
+There are still many `city_final` values not in `geo$city`, but many of
+these are actually valid cities simply not on our list. Others, like
+“SA” and “TX CITY” should be “SAN ANTONIO” and “TEXAS CITY” (two
+valid cities).
+
+``` r
+tx %>% 
+  filter(city_final %out% geo$city) %>% 
+  count(city_final, sort = TRUE) %>% 
+  print(n = 20)
+```
+
+    #> # A tibble: 1,695 x 2
+    #>    city_final           n
+    #>    <chr>            <int>
+    #>  1 <NA>             86029
+    #>  2 THE WOODLANDS    12264
+    #>  3 DFW AIRPORT       2700
+    #>  4 FARMERS BRANCH    1474
+    #>  5 LAKEWAY           1147
+    #>  6 PALMVIEW          1125
+    #>  7 HORSESHOE BAY     1048
+    #>  8 SA                1029
+    #>  9 WEST LAKE HILLS    631
+    #> 10 HIGHLAND VILLAGE   601
+    #> 11 SUNSET VALLEY      591
+    #> 12 WILLOW PARK        524
+    #> 13 BENBROOK           509
+    #> 14 RANCHO VIEJO       487
+    #> 15 RIVER OAKS         463
+    #> 16 SACHSE             432
+    #> 17 LOST PINES         417
+    #> 18 BEE CAVE           399
+    #> 19 LAGO VISTA         356
+    #> 20 OVERLAND PARK      354
+    #> # … with 1,675 more rows
+
+Still, our progress is significant without having to make a single
+manual or unconfident change. The percent of valid cities increased from
+96.7% to 98.7%. The number of total distinct city values descreased from
+16,824 to 7,016. The number of distinct invalid city names decreased
+from 14,594 to only 1,695, a change of -88.4%.
+
 ## Conclude
 
-1.  There are 2415267 records in the database.
-2.  There are 42751 duplicate records in the database.
+1.  There are 3506135 records in the database.
+2.  There are 68767 duplicate records (1.96%).
 3.  The range and distribution of `expend_amount` and `expend_dt` seem
     reasonable.
-4.  There are 610 records missing either recipient or date.
+4.  There are 21905 records missing important values (0.625%).
 5.  Consistency in goegraphic data has been improved with
     `campfin::normal_*()`.
 6.  The 5-digit `zip_norm` variable has been created with
@@ -820,6 +923,13 @@ dir_create(proc_dir)
 
 ``` r
 tx %>% 
+  select(
+    -city_norm,
+    -city_match,
+    -match_dist,
+    -city_swap,
+    -city_refine
+  ) %>% 
   write_csv(
     path = glue("{proc_dir}/tx_expends_clean.csv"),
     na = ""

@@ -156,9 +156,11 @@ readme[497:535] %>%
   extract(c(-2, -35)) %>% 
   str_split(pattern = "\\s{2,}") %>%
   map(str_c, collapse = "|") %>%
+  str_remove("\\d+") %>% 
   str_trim("both") %>% 
   str_c(collapse = "\n") %>%
-  read_delim(delim = "|") %>% 
+  read_delim(delim = "|") %>%
+  mutate(`Len Description` = coalesce(`Len Description`, Mask)) %>% 
   separate(
     col = `Len Description`,
     sep = " ",
@@ -166,10 +168,9 @@ readme[497:535] %>%
     extra = "merge",
     convert = TRUE
   ) %>%
-  mutate_at(vars(1), str_remove_all, "\\d+\\s") %>% 
-  mutate(`Field Name` = glue("`{`Field Name`}`")) %>% 
-  mutate_all(str_replace_na) %>% 
-  mutate_all(str_remove_all, "NA") %>% 
+  select(1, 2, 5) %>% 
+  mutate(`Field Name` = glue("`{to_snake_case(`Field Name`)}`")) %>%
+  mutate_at(vars(Type), str_remove_all, "[^A-z]") %>% 
   kable("markdown")
 ```
 
@@ -193,6 +194,8 @@ readme[543:547][-2] %>%
     extra = "merge",
     convert = TRUE
   ) %>% 
+  mutate(`Field Name` = glue("`{to_snake_case(`Field Name`)}`")) %>%
+  select(1, 2, 4) %>% 
   kable("markdown")
 ```
 
@@ -235,7 +238,7 @@ if (!all_files_new(raw_dir, "*.zip$")) {
 
 There are `r nrow(unzip(zip_file, list = T))` CSV files inside the ZIP archive.
 
-```{r list_zip, echo=FALSE}
+```{r list_zip}
 zip_contents <- 
   unzip(zip_file, list = TRUE) %>% 
   as_tibble() %>% 
@@ -245,10 +248,9 @@ zip_contents <-
     date = as_date(date)
   )
 
-zip_contents %>% 
-  filter(name %>% str_detect("exp"))
+filter(zip_contents, name %>% str_detect("exp"))
 
-zip_expends <- zip_contents$name[str_which(zip_contents$name, "exp")]
+zip_expends <- zip_contents$name[str_which(zip_contents$name, "expend_\\d{2}.csv")]
 ```
 
 If the files haven't been extracted, we can do so now.
@@ -294,7 +296,6 @@ tx <- vroom(
   col_names = TRUE,
   escape_double = TRUE,
   escape_backslash = FALSE,
-  id = "file",
   locale = locale(tz = "US/Central"),
   col_types = cols(
     .default = col_character(),
@@ -305,19 +306,14 @@ tx <- vroom(
 )
 
 tx <- tx %>%
-  filter(expend_dt > "2008-01-01") %>% 
-  mutate(
-    capital_livingexp_flag = capital_livingexp_flag %>% 
-      str_remove_all("X") %>%
-      str_remove_all(",") %>%
-      na_if("")
-  ) %>% 
+  # there are 3 empty cols
+  remove_empty("cols") %>% 
+  # remove handful bad chars
+  mutate(capital_livingexp_flag = na_if(str_remove(capital_livingexp_flag, "[^Y|N]"), "")) %>% 
   # turn Y/N to T/F
-  mutate_if(is_binary, to_logical) %>% 
-  # shorten file var
-  mutate(file = basename(file)) %>%
-  # move to end of file
-  select(everything(), file)
+  mutate_if(is_binary, to_logical) %>%
+  # all Y
+  mutate(itemize_flag = to_logical(itemize_flag))
 ```
 
 ## Explore
@@ -325,7 +321,7 @@ tx <- tx %>%
 ```{r glimpse}
 head(tx)
 tail(tx)
-glimpse(sample_n(tx, 10))
+glimpse(tx)
 ```
 
 ### Missing
@@ -364,6 +360,10 @@ tx <- flag_dupes(tx, -expend_info_id)
 
 sum(tx$dupe_flag)
 mean(tx$dupe_flag)
+```
+
+```{r collect_garbage, echo=FALSE}
+gc()
 ```
 
 ### Categorical
@@ -519,11 +519,11 @@ We can see that the few expenditures in 1994 and 1999 seem to be outliers, with 
 of expenditures coming from 2000 through 2019. We will flag these records.
 
 ```{r count_year}
-count(tx, expend_yr, sort = FALSE)
+count(tx, expend_yr, sort = FALSE) %>% print(n = 23)
 ```
 
 ```{r flag_dates, collapse=TRUE}
-tx <- mutate(tx, date_flag = is_less_than(expend_yr, 2000))
+tx <- mutate(tx, date_flag = is_less_than(expend_yr, 2000) | is.na(expend_yr))
 sum(tx$date_flag, na.rm = TRUE)
 ```
 
@@ -550,14 +550,19 @@ tx <- tx %>%
   mutate(
     address_norm = normal_address(
       address = payee_street_addr_comb,
-      add_abbs = NULL,
+      add_abbs = usps,
       na_rep = TRUE
     )
   )
 ```
 
 ```{r view_address_norm, eval=TRUE}
-select(tx, payee_street_addr_comb, address_norm)
+tx %>% 
+  select(
+    payee_street_addr_comb, 
+    address_norm
+  ) %>% 
+  sample_n(10)
 ```
 
 ### ZIP
@@ -607,18 +612,28 @@ tx <- tx %>%
 n_distinct(tx$state_norm)
 prop_in(tx$state_norm, geo$state, na.rm = TRUE)
 setdiff(tx$state_norm, geo$state)
-tx$state_norm[which(tx$state_norm %out% geo$state)] <- NA
+tx <- mutate(tx, state_norm = na_out(state_norm, geo$state))
 ```
 
 ### City
+
+The city value starts out very clean, with 
+`r percent(prop_in(str_to_upper(tx$payee_street_city), geo$city, na.rm = TRUE))` of the
+`payee_street_city` values already in our `geo$city` list (after only converting to uppercase).
 
 ```{r count_city_pre, collapse=TRUE}
 n_distinct(tx$payee_street_city)
 prop_in(str_to_upper(tx$payee_street_city), geo$city, na.rm = TRUE)
 length(setdiff(str_to_upper(tx$payee_street_city), geo$city))
+sample(setdiff(str_to_upper(tx$payee_street_city), geo$city), 10)
 ```
 
 #### Normalize
+
+We can use `campfin::normal_city()` to perform some standard text normalization like converting
+to uppercase, removing punctuation and numbers, and fixing white space erros. The function can also
+remove state abbreviation from the end of city names (`"Austin, TX"`) and remove some common 
+invalid values.
 
 ```{r normal_city}
 tx <- tx %>% 
@@ -627,7 +642,7 @@ tx <- tx %>%
       city = payee_street_city, 
       geo_abbs = usps_city,
       st_abbs = c("TX", "DC", "TEXAS"),
-      na = na_city,
+      na = c(na_city, "BEST EFFORT"),
       na_rep = TRUE
     )
   )
@@ -654,7 +669,7 @@ tx <- tx %>%
   mutate(
     match_dist = stringdist(city_norm, city_match),
     city_swap = if_else(
-      condition = equals(match_dist, 1),
+      condition = is_less_than(match_dist, 3),
       true = city_match,
       false = city_norm
     )
@@ -669,12 +684,84 @@ length(setdiff(tx$city_swap, geo$city))
 
 #### Refine
 
+```{r refine_city}
+good_refine <- tx %>% 
+  mutate(
+    city_refine = city_swap %>% 
+      key_collision_merge() %>% 
+      n_gram_merge(numgram = 1)
+  ) %>% 
+  filter(city_refine != city_swap) %>% 
+  inner_join(
+    y = geo,
+    by = c(
+      "city_refine" = "city",
+      "state_norm" = "state",
+      "zip_norm" = "zip"
+    )
+  )
+```
+
+```{r join_refine}
+tx <- tx %>% 
+  left_join(good_refine) %>% 
+  mutate(city_final = coalesce(city_refine, city_swap))
+```
+
+#### Progress
+
+There are still many `city_final` values not in `geo$city`, but many of these are actually valid
+cities simply not on our list. Others, like "SA" and "TX CITY" should be "SAN ANTONIO" and "TEXAS
+CITY" (two valid cities).
+
+```{r count_still_bad}
+tx %>% 
+  filter(city_final %out% geo$city) %>% 
+  count(city_final, sort = TRUE) %>% 
+  print(n = 20)
+```
+
+
+```{r progress_table, echo=FALSE}
+progress_table <- tibble(
+  stage = c("raw", "norm", "swap", "refine"),
+  total_distinct = c(
+    n_distinct(tx$payee_street_city),
+    n_distinct(tx$city_norm),
+    n_distinct(tx$city_swap),
+    n_distinct(tx$city_final)
+  ),
+  prop_good = c(
+    prop_in(str_to_upper(tx$payee_street_city), geo$city, na.rm = TRUE),
+    prop_in(tx$city_norm, geo$city, na.rm = TRUE),
+    prop_in(tx$city_swap, geo$city, na.rm = TRUE),
+    prop_in(tx$city_final, geo$city, na.rm = TRUE)
+  ),
+  unique_bad = c(
+    length(setdiff(tx$payee_street_city, geo$city)),
+    length(setdiff(tx$city_norm, geo$city)),
+    length(setdiff(tx$city_swap, geo$city)),
+    length(setdiff(tx$city_final, geo$city))
+  )
+)
+
+diff_change <- progress_table$unique_bad[4]-progress_table$unique_bad[1]
+prop_change <- diff_change/progress_table$unique_bad[1]
+```
+
+Still, our progress is significant without having to make a single manual or unconfident change.
+The percent of valid cities increased from `r percent(progress_table$prop_good[1])` to 
+`r percent(progress_table$prop_good[4])`. The number of total distinct city values descreased from
+`r comma(progress_table$total_distinct[1])` to `r comma(progress_table$total_distinct[4])`. The
+number of distinct invalid city names decreased from `r comma(progress_table$unique_bad[1])` to
+only `r comma(progress_table$unique_bad[4])`, a change of `r percent(prop_change)`.
+
 ## Conclude
 
 1. There are `r nrow(tx)` records in the database.
-1. There are `r sum(tx$dupe_flag)` duplicate records in the database.
+1. There are `r sum(tx$dupe_flag)` duplicate records (`r percent(mean(tx$dupe_flag))`).
 1. The range and distribution of `expend_amount` and `expend_dt` seem reasonable.
-1. There are `r sum(tx$na_flag)` records missing either recipient or date.
+1. There are `r sum(tx$na_flag)` records missing important values (`r percent(mean(tx$na_flag))`).
 1. Consistency in goegraphic data has been improved with `campfin::normal_*()`.
 1. The 5-digit `zip_norm` variable has been created with `campfin::normal_zip()`.
 1. The 4-digit `expend_yr` variable has been created with `lubridate::year()`.
@@ -688,6 +775,13 @@ dir_create(proc_dir)
 
 ```{r write_proc}
 tx %>% 
+  select(
+    -city_norm,
+    -city_match,
+    -match_dist,
+    -city_swap,
+    -city_refine
+  ) %>% 
   write_csv(
     path = glue("{proc_dir}/tx_expends_clean.csv"),
     na = ""
