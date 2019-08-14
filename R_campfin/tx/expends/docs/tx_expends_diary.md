@@ -1,7 +1,7 @@
-State Data
+Texas Expenditures
 ================
-First Last
-2019-08-14 14:05:25
+Kiernan Nicholls
+2019-08-14 15:50:21
 
   - [Project](#project)
   - [Objectives](#objectives)
@@ -498,8 +498,8 @@ mean(tx$dupe_flag)
 ```
 
     #>            used  (Mb) gc trigger   (Mb)  max used    (Mb)
-    #> Ncells  5750683 307.2  151672390 8100.2 189590488 10125.3
-    #> Vcells 71091838 542.4  329588473 2514.6 325796141  2485.7
+    #> Ncells  5749680 307.1  151655368 8099.3 189569210 10124.1
+    #> Vcells 71090399 542.4  329585608 2514.6 325801365  2485.7
 
 ### Categorical
 
@@ -555,14 +555,25 @@ glimpse_fun(tx, n_distinct)
 
 #### Amounts
 
+The `expend_amount` value ranges from a $-5,000 minimum to $16,996,410,
+with only 15 records having a value less than $0.
+
 ``` r
 summary(tx$expend_amount)
+#>     Min.  1st Qu.   Median     Mean  3rd Qu.     Max.     NA's 
+#>    -5000       48      162     1259      548 16996410    21273
+sum(tx$expend_amount < 0, na.rm = TRUE)
+#> [1] 15
 ```
 
-    #>     Min.  1st Qu.   Median     Mean  3rd Qu.     Max.     NA's 
-    #>    -5000       48      162     1259      548 16996410    21273
+The logarithm of `expend_amount` is normally distributed around the
+median value of $162.36.
 
 ![](../plots/amount_histogram-1.png)<!-- -->
+
+We can explore the distribution and range of `expend_amount` by
+expenditure category and filer type to better understand how Texans are
+spending money during different kinds of campaigns.
 
 ![](../plots/amount_violin_what-1.png)<!-- -->
 
@@ -626,11 +637,17 @@ count(tx, expend_yr, sort = FALSE) %>% print(n = 23)
     #> 22      2019  78263
     #> 23        NA  21280
 
+We will flag these dates with a new `date_flag` logical variable.
+
 ``` r
 tx <- mutate(tx, date_flag = is_less_than(expend_yr, 2000) | is.na(expend_yr))
 sum(tx$date_flag, na.rm = TRUE)
 #> [1] 21371
 ```
+
+![](../plots/year_bar-1.png)<!-- -->
+
+![](../plots/amount_line_month-1.png)<!-- -->
 
 ## Wrangle
 
@@ -750,7 +767,7 @@ tx <- mutate(tx, state_norm = na_out(state_norm, geo$state))
 
 ### City
 
-The city value starts out very clean, with 96.7% of the
+The city value starts out fairly clean, with 96.7% of the
 `payee_street_city` values already in our `geo$city` list (after only
 converting to uppercase).
 
@@ -852,53 +869,102 @@ good_refine <- tx %>%
 ``` r
 tx <- tx %>% 
   left_join(good_refine) %>% 
-  mutate(city_final = coalesce(city_refine, city_swap))
+  mutate(city_refine = coalesce(city_refine, city_swap))
+```
+
+``` r
+n_distinct(tx$city_refine)
+#> [1] 7016
+prop_in(tx$city_refine, geo$city, na.rm = TRUE)
+#> [1] 0.9871697
+length(setdiff(tx$city_refine, geo$city))
+#> [1] 1695
+```
+
+#### Replace
+
+To get over 99% valid city names, we can expand our list of valid cities
+and a few confident manual tweaks to `city_refine`. These tweaks will
+replace some common abbreviations.
+
+``` r
+tx %>% 
+  filter(city_refine %out% geo$city) %>% 
+  count(state_norm, city_refine, sort = TRUE) %>% 
+  drop_na() %>% 
+  print(n = 20)
+```
+
+    #> # A tibble: 1,711 x 3
+    #>    state_norm city_refine          n
+    #>    <chr>      <chr>            <int>
+    #>  1 TX         THE WOODLANDS    12264
+    #>  2 TX         DFW AIRPORT       2700
+    #>  3 TX         FARMERS BRANCH    1474
+    #>  4 TX         LAKEWAY           1147
+    #>  5 TX         PALMVIEW          1125
+    #>  6 TX         HORSESHOE BAY     1048
+    #>  7 TX         SA                1029
+    #>  8 TX         WEST LAKE HILLS    631
+    #>  9 TX         HIGHLAND VILLAGE   601
+    #> 10 TX         SUNSET VALLEY      591
+    #> 11 TX         WILLOW PARK        524
+    #> 12 TX         BENBROOK           509
+    #> 13 TX         RANCHO VIEJO       487
+    #> 14 TX         RIVER OAKS         463
+    #> 15 TX         SACHSE             432
+    #> 16 TX         LOST PINES         417
+    #> 17 TX         BEE CAVE           399
+    #> 18 TX         LAGO VISTA         356
+    #> 19 KS         OVERLAND PARK      354
+    #> 20 TX         BALCH SPRINGS      344
+    #> # … with 1,691 more rows
+
+``` r
+expanded_valid <- c(
+  unique(geo$city),
+  "THE WOODLANDS",
+  "FARMERS BRANCH",
+  "LAKEWAY",
+  "PALMVIEW",
+  "HORSESHOE BAY"
+)
+```
+
+``` r
+tx <- tx %>% 
+  mutate(
+    city_final = city_refine %>% 
+      str_replace("^SA$", "SAN ANTONIO") %>% 
+      str_replace("^FW$", "FORT WORTH") %>% 
+      str_replace("^DFW$", "DALAS FORT WORTH") %>% 
+      str_replace("^TX\\B", "TEXAS") %>% 
+      str_replace("^NY$", "NEW YORK") %>% 
+      str_replace("WDLS", "WOODLANDS") %>% 
+      str_replace("^NRH$", "NORTH RICHLAND HILLS")
+  )
+```
+
+``` r
+prop_in(tx$city_final, expanded_valid, na.rm = TRUE)
+#> [1] 0.9926128
 ```
 
 #### Progress
 
-There are still many `city_final` values not in `geo$city`, but many of
-these are actually valid cities simply not on our list. Others, like
-“SA” and “TX CITY” should be “SAN ANTONIO” and “TEXAS CITY” (two
-valid cities).
-
-``` r
-tx %>% 
-  filter(city_final %out% geo$city) %>% 
-  count(city_final, sort = TRUE) %>% 
-  print(n = 20)
-```
-
-    #> # A tibble: 1,695 x 2
-    #>    city_final           n
-    #>    <chr>            <int>
-    #>  1 <NA>             86029
-    #>  2 THE WOODLANDS    12264
-    #>  3 DFW AIRPORT       2700
-    #>  4 FARMERS BRANCH    1474
-    #>  5 LAKEWAY           1147
-    #>  6 PALMVIEW          1125
-    #>  7 HORSESHOE BAY     1048
-    #>  8 SA                1029
-    #>  9 WEST LAKE HILLS    631
-    #> 10 HIGHLAND VILLAGE   601
-    #> 11 SUNSET VALLEY      591
-    #> 12 WILLOW PARK        524
-    #> 13 BENBROOK           509
-    #> 14 RANCHO VIEJO       487
-    #> 15 RIVER OAKS         463
-    #> 16 SACHSE             432
-    #> 17 LOST PINES         417
-    #> 18 BEE CAVE           399
-    #> 19 LAGO VISTA         356
-    #> 20 OVERLAND PARK      354
-    #> # … with 1,675 more rows
-
 Still, our progress is significant without having to make a single
 manual or unconfident change. The percent of valid cities increased from
-96.7% to 98.7%. The number of total distinct city values descreased from
-16,824 to 7,016. The number of distinct invalid city names decreased
-from 14,594 to only 1,695, a change of -88.4%.
+96.7% to 99.3%. The number of total distinct city values descreased from
+16,824 to 7,011. The number of distinct invalid city names decreased
+from 14,594 to only 1,685, a change of -88.5%.
+
+| Normalization Stage | Total Distinct | Percent Valid | Unique Invalid |
+| :------------------ | -------------: | ------------: | -------------: |
+| raw                 |          16824 |        0.9669 |          14594 |
+| norm                |          11557 |        0.9774 |           6129 |
+| swap                |           7069 |        0.9871 |           1747 |
+| refine              |           7016 |        0.9872 |           1695 |
+| final               |           7011 |        0.9926 |           1685 |
 
 ## Conclude
 

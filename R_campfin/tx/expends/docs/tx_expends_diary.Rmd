@@ -1,6 +1,6 @@
 ---
-title: "State Data"
-author: "First Last"
+title: "Texas Expenditures"
+author: "Kiernan Nicholls"
 date: "`r Sys.time()`"
 output:
   github_document: 
@@ -398,9 +398,17 @@ explore_plot(
 
 #### Amounts
 
-```{r summary_amount}
+The `expend_amount` value ranges from a `r dollar(min(tx$expend_amount, na.rm = TRUE))` minimum to
+`r dollar(max(tx$expend_amount, na.rm = TRUE))`, with only 
+`r sum(tx$expend_amount < 0, na.rm = TRUE)` records having a value less than \$0.
+
+```{r summary_amount, collapse=TRUE}
 summary(tx$expend_amount)
+sum(tx$expend_amount < 0, na.rm = TRUE)
 ```
+
+The logarithm of `expend_amount` is normally distributed around the median value of
+`r dollar(median(tx$expend_amount, na.rm = TRUE))`.
 
 ```{r amount_histogram, echo=FALSE}
 tx %>%
@@ -411,12 +419,16 @@ tx %>%
     labels = dollar,
     trans = "log10"
   ) +
+  geom_vline(xintercept = median(tx$expend_amount, na.rm = TRUE)) +
   labs(
     title = "Texas Expenditure Amount Distribution",
     subtitle = "from 2000 to 2019",
     caption = "Source: Texas Ethics Commission"
   )
 ```
+
+We can explore the distribution and range of `expend_amount` by expenditure category and filer type
+to better understand how Texans are spending money during different kinds of campaigns.
 
 ```{r amount_violin_what, echo=FALSE}
 tx %>% 
@@ -522,9 +534,55 @@ of expenditures coming from 2000 through 2019. We will flag these records.
 count(tx, expend_yr, sort = FALSE) %>% print(n = 23)
 ```
 
+We will flag these dates with a new `date_flag` logical variable.
+
 ```{r flag_dates, collapse=TRUE}
 tx <- mutate(tx, date_flag = is_less_than(expend_yr, 2000) | is.na(expend_yr))
 sum(tx$date_flag, na.rm = TRUE)
+```
+
+```{r year_bar, echo=FALSE}
+tx %>% 
+  filter(!is.na(expend_yr), expend_yr > 1999) %>%
+  count(expend_yr) %>% 
+  mutate(even = is_even(expend_yr)) %>% 
+  ggplot(aes(x = expend_yr, y = n)) +
+  geom_col(aes(fill = even)) +
+  scale_fill_brewer(
+    type = "qual",
+    palette = "Dark2"
+  ) +
+  labs(
+    title = "Texas Expenditure Count per Year",
+    caption = "Source: Texas Ethics Commission",
+    x = "Year Made",
+    y = "Number of Expenditures",
+    fill = "Election Year"
+  ) +
+  theme(legend.position = "bottom")
+```
+
+```{r amount_line_month, echo=FALSE}
+tx %>% 
+  mutate(
+    expend_mn = month(expend_dt),
+    even = is_even(expend_yr)
+  ) %>% 
+  group_by(even, expend_mn) %>% 
+  summarise(median = median(expend_amount)) %>% 
+  ggplot(aes(expend_mn, median)) +
+  geom_line(aes(color = even), size = 2) +
+  scale_color_brewer(type = "qual", palette = "Dark2") +
+  labs(
+    title = "Texas Expenditure Median Amount by Month",
+    caption = "Source: Texas Ethics Commission",
+    x = "Month",
+    y = "Median Expenditure",
+    color = "Election Year"
+  ) +
+  scale_x_continuous(breaks = 1:12, labels = month.abb) +
+  scale_y_continuous(labels = dollar) +
+  theme(legend.position = "bottom")
 ```
 
 ## Wrangle
@@ -617,7 +675,7 @@ tx <- mutate(tx, state_norm = na_out(state_norm, geo$state))
 
 ### City
 
-The city value starts out very clean, with 
+The city value starts out fairly clean, with 
 `r percent(prop_in(str_to_upper(tx$payee_street_city), geo$city, na.rm = TRUE))` of the
 `payee_street_city` values already in our `geo$city` list (after only converting to uppercase).
 
@@ -705,56 +763,104 @@ good_refine <- tx %>%
 ```{r join_refine}
 tx <- tx %>% 
   left_join(good_refine) %>% 
-  mutate(city_final = coalesce(city_refine, city_swap))
+  mutate(city_refine = coalesce(city_refine, city_swap))
+```
+
+```{r count_city_post_refine, collapse=TRUE}
+n_distinct(tx$city_refine)
+prop_in(tx$city_refine, geo$city, na.rm = TRUE)
+length(setdiff(tx$city_refine, geo$city))
+```
+
+#### Replace
+
+To get over 99% valid city names, we can expand our list of valid cities and a few confident
+manual tweaks to `city_refine`. These tweaks will replace some common abbreviations.
+
+```{r count_still_bad}
+tx %>% 
+  filter(city_refine %out% geo$city) %>% 
+  count(state_norm, city_refine, sort = TRUE) %>% 
+  drop_na() %>% 
+  print(n = 20)
+```
+
+```{r expand_valid}
+expanded_valid <- c(
+  unique(geo$city),
+  "THE WOODLANDS",
+  "FARMERS BRANCH",
+  "LAKEWAY",
+  "PALMVIEW",
+  "HORSESHOE BAY"
+)
+```
+
+```{r edit_city}
+tx <- tx %>% 
+  mutate(
+    city_final = city_refine %>% 
+      str_replace("^SA$", "SAN ANTONIO") %>% 
+      str_replace("^FW$", "FORT WORTH") %>% 
+      str_replace("^DFW$", "DALAS FORT WORTH") %>% 
+      str_replace("^TX\\B", "TEXAS") %>% 
+      str_replace("^NY$", "NEW YORK") %>% 
+      str_replace("WDLS", "WOODLANDS") %>% 
+      str_replace("^NRH$", "NORTH RICHLAND HILLS")
+  )
+```
+
+```{r expanded_prop_in, collapse=TRUE}
+prop_in(tx$city_final, expanded_valid, na.rm = TRUE)
 ```
 
 #### Progress
 
-There are still many `city_final` values not in `geo$city`, but many of these are actually valid
-cities simply not on our list. Others, like "SA" and "TX CITY" should be "SAN ANTONIO" and "TEXAS
-CITY" (two valid cities).
-
-```{r count_still_bad}
-tx %>% 
-  filter(city_final %out% geo$city) %>% 
-  count(city_final, sort = TRUE) %>% 
-  print(n = 20)
-```
-
-
 ```{r progress_table, echo=FALSE}
 progress_table <- tibble(
-  stage = c("raw", "norm", "swap", "refine"),
+  stage = c("raw", "norm", "swap", "refine", "final"),
   total_distinct = c(
     n_distinct(tx$payee_street_city),
     n_distinct(tx$city_norm),
     n_distinct(tx$city_swap),
+    n_distinct(tx$city_refine),
     n_distinct(tx$city_final)
   ),
   prop_good = c(
     prop_in(str_to_upper(tx$payee_street_city), geo$city, na.rm = TRUE),
     prop_in(tx$city_norm, geo$city, na.rm = TRUE),
     prop_in(tx$city_swap, geo$city, na.rm = TRUE),
-    prop_in(tx$city_final, geo$city, na.rm = TRUE)
+    prop_in(tx$city_refine, geo$city, na.rm = TRUE),
+    prop_in(tx$city_final, expanded_valid, na.rm = TRUE)
   ),
   unique_bad = c(
     length(setdiff(tx$payee_street_city, geo$city)),
     length(setdiff(tx$city_norm, geo$city)),
     length(setdiff(tx$city_swap, geo$city)),
-    length(setdiff(tx$city_final, geo$city))
+    length(setdiff(tx$city_refine, geo$city)),
+    length(setdiff(tx$city_final, expanded_valid))
   )
 )
 
-diff_change <- progress_table$unique_bad[4]-progress_table$unique_bad[1]
+diff_change <- progress_table$unique_bad[5]-progress_table$unique_bad[1]
 prop_change <- diff_change/progress_table$unique_bad[1]
 ```
 
 Still, our progress is significant without having to make a single manual or unconfident change.
 The percent of valid cities increased from `r percent(progress_table$prop_good[1])` to 
-`r percent(progress_table$prop_good[4])`. The number of total distinct city values descreased from
-`r comma(progress_table$total_distinct[1])` to `r comma(progress_table$total_distinct[4])`. The
+`r percent(progress_table$prop_good[5])`. The number of total distinct city values descreased from
+`r comma(progress_table$total_distinct[1])` to `r comma(progress_table$total_distinct[5])`. The
 number of distinct invalid city names decreased from `r comma(progress_table$unique_bad[1])` to
-only `r comma(progress_table$unique_bad[4])`, a change of `r percent(prop_change)`.
+only `r comma(progress_table$unique_bad[5])`, a change of `r percent(prop_change)`.
+
+```{r print_progress, echo=FALSE}
+kable(
+  x = progress_table,
+  format = "markdown", 
+  digits = 4,
+  col.names = c("Normalization Stage", "Total Distinct", "Percent Valid", "Unique Invalid")
+)
+```
 
 ## Conclude
 
