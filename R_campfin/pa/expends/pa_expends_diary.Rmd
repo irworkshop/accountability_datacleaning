@@ -80,14 +80,13 @@ pacman::p_load(
 )
 ```
 
-```{r fix_fun, echo=FALSE}
+```{r fix_fun, echo=FALSE, collapse = TRUE}
 # fix conflict
 here <- here::here
 # custom utility functions
 "%out%" <- Negate("%in%")
 print_all <- function(df) df %>% print(n = nrow(.)) 
 # load data
-data("zipcode")
 zipcode <- geo
 ```
 
@@ -108,11 +107,8 @@ here::here()
 
 ## Data
 
-Describe _where_ the data is coming from. [Link to the data download][03] page if possible.
 
-Describe the data set that is going to be cleaned. A file name, age, and unit of observation.
-
-[03]: https://www.wycampaignfinance.gov/WYCFWebApplication/GSF_SystemConfiguration/SearchExpenditures.aspx "source"
+[03]: https://www.dos.pa.gov/VotingElections/CandidatesCommittees/CampaignFinance/Resources/Pages/FullCampaignFinanceExport.aspx "source"
 
 ### About
 
@@ -120,15 +116,11 @@ More information about the record layout can be found here https://www.dos.pa.go
 
 ### Variables
 
-`variable_name`:
-
-> Directly quote the definition given for variables of interest.
-
 ## Import
 
 ### Download
 
-Download raw, **immutable** data file. Go to https://www.dos.pa.gov//VotingElections/CandidatesCommittees/CampaignFinance/Resources/Documents/2019.zip,
+Download raw, **immutable** data file. Go to https://www.dos.pa.gov/VotingElections/CandidatesCommittees/CampaignFinance/Resources/Pages/FullCampaignFinanceExport.aspx. We'll download the files from 2015 to 2019 (file format: zip file).
 
 ```{r raw_dir}
 # create a directory for the raw data
@@ -136,7 +128,7 @@ raw_dir <- here("pa", "expends", "data", "raw")
 dir_create(raw_dir)
 ```
 
-```{r download to raw_dir, echo=FALSE}
+```{r download to raw_dir, eval = FALSE}
 #download the files into the directory
 pa_exp_urls <- glue("https://www.dos.pa.gov//VotingElections/CandidatesCommittees/CampaignFinance/Resources/Documents/{2015:2019}.zip")
 
@@ -149,97 +141,85 @@ if (!all_files_new(raw_dir)) {
   }
 }
 ```
-
-```{r read_many, echo=FALSE}
+### Read
+Read individual csv files from the downloaded zip files
+```{r read_many, eval = FALSE}
 
 zip_files <- dir_ls(raw_dir, glob = "*.zip")
-
 
 if (all_files_new(path = raw_dir, glob = "*.txt")) {
   for (i in seq_along(zip_files)) {
     unzip(
       zipfile = zip_files[i],
       #Matches the csv files that starts with expense, and trim the "./ " from directory names
-      files = grep("expense.+", unzip(zip_files[i]), value = TRUE) %>% substring(3,),
+      files = grep("expense.+", unzip(zip_files[i]), value = FALSE) %>% substring(3,),
       exdir = raw_dir
     )
   }
 }
 ```
-
+Read multiple csvs into R
 ```{r read multiple files}
 #recursive set to true because 2016 and 2015 have subdirectories under "raw"
 expense_files <- list.files(raw_dir, pattern = ".txt", recursive = TRUE, full.names = TRUE)
 #pa_lines <- list.files(raw_dir, pattern = ".txt", recursive = TRUE) %>% map(read_lines) %>% unlist()
 pa_col_names <- c("FILERID","EYEAR","CYCLE","EXPNAME","ADDRESS1","ADDRESS2","CITY","STATE","ZIPCODE","EXPDATE","EXPAMT","EXPDESC")
 
-pa <- expense_files %>% map(read_csv, col_names = pa_col_names) %>% bind_rows()
 
-s
-read_c
-n_delim <- str_count(pa_lines[1], ",")
-  map(
-    read_delim,
-    delim = ",",
-    escape_double = FALSE,
-    escape_backslash = FALSE,
-    col_names = c("FILERID","EYEAR","CYCLE","EXPNAME","ADDRESS1","ADDRESS2","CITY","STATE","ZIPCODE","EXPDATE","EXPAMT","EXPDESC"),
-    col_types = cols(
-      .default = col_character(),
-      EXPAMT = col_double()
-    )
-    ) %>% 
-  bind_rows() %>% 
-  distinct() %>% 
-  select(-starts_with("X")) %>% 
-  clean_names() %>% 
-  mutate_if(is_character, str_to_upper) %>% 
-  map_if(is_character, str_replace_all, "\\\"", "\'") %>% 
-  as_tibble() 
+pa <- expense_files %>% 
+  map(read_delim, delim = ",", escape_double = FALSE,
+      escape_backslash = FALSE, col_names = pa_col_names, 
+      col_types = cols(.default = col_character())) %>% 
+bind_rows()
+```
+There are `r nrow(pa %>% filter(nchar(STATE)!=2))` parsing failures.
+We'll move along the information in rows that were read incorrectly due to double quotes in the address column. 
+```{r}
+nudge <- which(nchar(pa$STATE) > 2)
+# However, the information in the last column EXPDESC for these columns has been lost at the time of data import.
+for (index in nudge) {
+  for (column in c(7:11)){
+    pa[[index, column]] <- pa[[index, column+1]]
+  }
+}
+#All the fields are converted to strings. Convert to date and double.
+pa$EXPDATE <- as.Date(pa$EXPDATE, "%Y%m%d")
+pa$EXPAMT <- as.double(pa$EXPAMT)
+pa$ADDRESS1 <- normal_address(pa$ADDRESS1)
+pa$ADDRESS2 <- normal_address(pa$ADDRESS2)
+```
+
+The text fields contain both lower-case and upper-case letters. The for loop converts them to all upper-case letters unifies the encoding to "UTF-8", replaces the "&amp;", the HTML expression of "An ampersand".
+
+```{r}
+for (i in c(4:7)) {
+  pa[[i]] <- iconv(pa[[i]], 'UTF-8', 'ASCII') %>% 
+    toupper() %>% 
+   str_replace("&AMP;", "&") 
+}
+
+pa$EXPDESC <- toupper(pa$EXPDESC)
+
 ```
 
 ## Explore
 
-There are `nrow(wy)` records of `length(wy)` variables in the full database.
+There are `nrow(pa)` records of `length(pa)` variables in the full database.
 
 ```{r glimpse}
-head(wy)
-tail(wy)
-glimpse(wy)
+head(pa)
+tail(pa)
+glimpse(pa)
 ```
 
 ### Distinct
 
 The variables range in their degree of distinctness.
 
-
 ```{r n_distinct}
 pa %>% glimpse_fun(n_distinct)
 ```
 
-We can explore the distribution of the least distinct values with `ggplot2::geom_bar()`.
-
-```{r plot_bar, echo=FALSE}
-ggplot(data = wy) +
-  geom_bar(aes(filer_type)) 
-```
-
-Or, filter the data and explore the most frequent discrete data.
-
-```{r plot_bar2, echo=FALSE}
-pa %>% 
-  group_by(payee)  %>% 
-  summarize(total_spent = sum(amount)) %>% 
-  arrange(desc(total_spent)) %>% 
-  head(10) %>% 
-  ggplot(aes(x=payee, y=total_spent,)) + 
-  geom_col() +
-    labs(title = "Pennsylvania Campaign Expenditures",
-       caption = "Source: Pennsylvania Dept. of State") +
-  scale_y_continuous(labels = scales::dollar) +
-  coord_flip() +
-  theme_minimal()
-```
 
 ### Missing
 
@@ -250,72 +230,63 @@ pa %>% glimpse_fun(count_na)
 ```
 
 We will flag any records with missing values in the key variables used to identify an expenditure.
-There are `r sum(wy$na_flag)` columns in city_state_zip that are NAs
+There are `r sum(pa$na_flag)` columns in city_state_zip that are NAs
 ```{r na_flag}
-pa <- pa %>% mutate(na_flag = is.na(city_state_zip))
+pa <- pa %>% mutate(na_flag = is.na(EXPNAME))
 ```
 
 ### Duplicates
-There are no duplicates
+
 ```{r get_dupes, collapse=TRUE}
-pa_dupes <- get_dupes(wy)
+pa_dupes <- get_dupes(pa)
+glimpse(pa_dupes)
 ```
 
 ### Ranges
 
 #### Amounts
 
-```{r}
-summary(wy$amount)
+```{r, collapse = TRUE}
+summary(pa$EXPAMT)
+sum(pa$EXPAMT < 0 , na.rm = TRUE)
 ```
 
 See how the campaign expenditures were distributed
 
-```{r}
+```{r amount distribution, eval = TRUE}
 pa %>% 
-  ggplot(aes(x = amount)) + 
+  ggplot(aes(x = EXPAMT)) + 
   geom_histogram() +
   scale_x_continuous(
     trans = "log10", labels = dollar)
 ```
 
-Distribution of expenses by filer
-```{r box_plot_by_type, echo=FALSE}
+Expenditures out of state
+```{r}
+sum(pa$STATE != "PA", na.rm = TRUE)
+```
 
-pa %>% 
-  ggplot(
-    mapping = aes(
-      x = filer_type, 
-      y = amount
-    )
-  ) +
-  geom_boxplot(
-    mapping  = aes(fill = filer_type), 
-    varwidth = TRUE,
-    outlier.alpha = 0.01
-  ) +
-  scale_fill_brewer(
-    type    = "qual",
-    palette = "Set1",
-    guide   = FALSE
-  ) +
-  scale_y_continuous(
-    trans = "log10",
-    labels = dollar
-  ) +
-  theme(axis.text.x = element_text(angle = 15, hjust = 1)) +
-  labs(
-    title = "Pennsylvania Expenditure Amount Ranges",
-    x     = "Expenditure Type",
-    y     = "Amount",
-    caption = "Source: Pennsylvania Dept. of State"
-  )
+Top spending purposes
+```{r eval = TRUE, echo = FALSE}
+pa %>%   drop_na(EXPDESC) %>% 
+  group_by(EXPDESC) %>% 
+  summarize(total_spent = sum(EXPAMT)) %>% 
+  arrange(desc(total_spent)) %>% 
+  head(10) %>% 
+  ggplot(aes(x = EXPDESC, y = total_spent)) +
+  geom_col() +
+  labs(title = "Pennsylvania Campaign Expenditures by Average Spending",
+       caption = "Source: Pennsylvania Dept. of State") +
+  scale_y_continuous(labels = scales::dollar) +
+  coord_flip() +
+  theme_minimal()
+
 ```
 
 ### Dates
-The dates seem to be reasonable, with records dating back to `r summary(wy$date)[1]` till `r summary(wy$date)[-1]` 
+The dates seem to be reasonable, with records dating back to `r summary(pa$date)[1]` till `r summary(pa$date)[-1]` 
 ```{r}
-summary(wy$date)
+summary(pa$EXPDATE)
 ```
 
 ### Year
@@ -323,12 +294,13 @@ summary(wy$date)
 Add a `year` variable from `date` after `col_date()` using `lubridate::year()`.
 
 ```{r add_year}
-pa <- pa %>% mutate(year = year(date), on_year = is_even(year))
+pa <- pa %>% mutate(year = year(EXPDATE), on_year = is_even(year))
 ```
 
-```{r year_count_bar, echo=FALSE}
+```{r year_count_bar, eval = TRUE, echo=FALSE}
 
 pa %>% 
+  filter( 2014 < year & year < 2020) %>% 
   count(on_year, year) %>% 
   ggplot(aes(x = year, y = n)) +
   geom_col(aes(fill=on_year)) +
@@ -346,10 +318,11 @@ pa %>%
   
 ```
 
-```{r amount_year_bar, echo=FALSE}
+```{r amount_year_bar, eval = TRUE, echo=FALSE}
 pa %>% 
+  filter( 2014 < year & year < 2020) %>% 
   group_by(year, on_year) %>% 
-  summarize(mean = mean(amount)) %>% 
+  summarize(mean = mean(EXPAMT)) %>% 
   ggplot(aes(x = year, y = mean)) +
   geom_col(aes(fill = on_year)) +
   scale_fill_brewer(
@@ -366,11 +339,12 @@ pa %>%
   ) 
 ```
 
-```{r amount_month_line}
+```{r amount_month_line, echo = FALSE}
 pa %>% 
-  mutate(month = month(date)) %>% 
+  mutate(month = month(EXPDATE)) %>% 
+  drop_na(month) %>% 
   group_by(on_year, month) %>% 
-  summarize(mean = mean(amount)) %>% 
+  summarize(mean = mean(EXPAMT)) %>% 
   ggplot(aes(month, mean)) +
   geom_line(aes(color = on_year), size = 2) +
   scale_y_continuous(labels = dollar) +
@@ -387,44 +361,45 @@ pa %>%
     y = "Amount"
   )
 ```
-## Wrangle
-### Indexing
+
 ```{r}
-pa <- tibble::rowid_to_column(wy, "id")
+pa %>% group_by(EXPDESC) %>% summarize(total = sum(EXPAMT)) %>% arrange(desc(total))
 ```
 
-The lengths of city_state_zip column differ, and regular expressions can be used to separate the components.
+## Wrangle
+The state column is now pretty clean, as all non-NA columns have two characters.
 
-The original data the city, state, and ZIP all in one column. The following code seperates them. 
+### Indexing
+```{r}
+pa <- tibble::rowid_to_column(pa, "index")
+```
+
 
 ### Zipcode
-First, we'll extract any numbers whose lengths range from 1 to 5 and normalize them under "zip_clean". 
+The Zipcode column can range from 1 to 13 columns.
 
-```{r}
+```{r collapse = TRUE}
+table(nchar(pa$ZIPCODE))
+```
+
+
+```{r normalize zip, collapse = TRUE}
 pa <- pa %>% 
   mutate(
-    zip_clean = city_state_zip %>% 
-      str_extract("\\d{1,5}") %>% 
+    zip_clean = ZIPCODE %>% 
       normal_zip(na_rep = TRUE))
-sample(wy$zip_clean, 10)
+sample(pa$zip_clean, 10)
 ```
 
 
 ### State
+View values in the STATE field is not a valid state abbreviation
+```{r fix state abbrev, collapse = TRUE}
+{pa$STATE[pa$STATE %out% zipcode$state]}[!is.na(pa$STATE[pa$STATE %out% zipcode$state])]
 
-In this regex, state is considered to consist of two upper-case letters following a space, or two upper-case letters with a trailing space at the end.
-
-```{r separate state}
-pa <- pa %>% 
-  mutate( state_clean =
-            trimws(str_extract(wy$city_state_zip, "\\s([A-Z]{2})\\s|^([A-Z]{2})\\s$")))
-count_na(wy$state_clean)
+pa %>% filter(STATE == "CN")
 ```
-
-```{r normal_state, collapse=TRUE}
-pa <- pa %>% mutate(state_clean = normal_state(state_clean))
-```
-
+These are expenditures in Canada, which we can leave in. 
 ### City
 
 Cleaning city values is the most complicated. This process involves four steps:
@@ -435,23 +410,11 @@ Cleaning city values is the most complicated. This process involves four steps:
 1. Refine swapped city values with key collision and n-gram fingerprints
 
 #### Prep
-Find the cities before a comma first, if not, find the non-numeric string. 
-``` {r}
-pa <- pa %>% 
-  mutate(
-    city_clean = str_match(wy$city_state_zip,"(^[A-Z]+),")[,2]) 
 
-pa <- pa %>% mutate(city_clean=ifelse(is.na(city_clean)==TRUE, 
-               str_extract(city_state_zip, "^[A-Z]{2,}\\S$"),paste(city_clean)))
-
-count_na(wy$city_clean)
-## wy_ZIP <- pa %>% str_split(wy$city_state_zip, "\\s\\d{5}")
-```
-
-`r sum(!is.na(wy$city_clean))` cities were found.
-```{r prep_city}
-pa <- pa %>% mutate(city_prep = normal_city(city_clean))
-n_distinct(wy$city_clean)
+`r sum(!is.na(pa$CITY))` distinct cities were in the original dataset in column 
+```{r prep_city, collapse = TRUE}
+pa <- pa %>% mutate(city_prep = normal_city(CITY))
+n_distinct(pa$city_prep)
 ```
 
 #### Match
@@ -462,11 +425,10 @@ pa <- pa %>%
     y = zipcode,
     by = c(
       "zip_clean" = "zip",
-      "state_clean" = "state"
+      "STATE" = "state"
     )
-  ) %>%
-  rename(city_match = city) 
-
+  ) %>% 
+  rename(city_match = city)
 ```
 
 #### Swap
@@ -485,23 +447,10 @@ pa <- pa %>%
       false = city_prep
   ))
 
-pa$city_swap <- wy$city_swap %>% 
-  str_replace("^CAS$", "CASPER") %>% 
-  str_replace("^RS$","ROCK SPRINGS") %>% 
-  str_replace("^AF$", "AFTON") %>% 
-  str_replace("^M$", "MOUNTAIN VIEW") %>% 
-  str_replace("^GR$", "GREEN RIVER") %>% 
-  na_if("^WY$") %>% 
-  str_replace("^SLC$", "SALT LAKE CITY") %>% 
-  str_replace("^COD$", "CODY")
-  
-  
-  
-  
 
-summary(wy$match_dist)
-sum(wy$match_dist == 1, na.rm = TRUE)
-n_distinct(wy$city_swap)
+summary(pa$match_dist)
+sum(pa$match_dist == 1, na.rm = TRUE)
+n_distinct(pa$city_swap)
 ```
 
 #### Refine
@@ -513,64 +462,59 @@ Use the OpenRefine algorithms to cluster similar values and merge them together.
 ```{r view_refine}
 pa_refined <- pa %>%
   filter(match_dist != 1) %>% 
-  filter(state_clean =="WY") %>% 
+  filter(STATE =="PA") %>% 
   mutate(
     city_refine = city_swap %>% 
       key_collision_merge(dict = valid_city) %>% 
-      n_gram_merge(numgram = 1),
+      n_gram_merge(numgram = 2),
     refined = (city_swap != city_refine)
   ) %>% 
   filter(refined) %>% 
   select(
-    id,
-    state_clean,
-    zip_clean,
-    city_clean,
+    index,
+    FILERID, 
+    CITY,
     city_prep,
     city_match,
-    match_dist,
     city_swap,
+    match_dist,
     city_refine,
-  ) %>% 
-  rename(
-    state = state_clean,
-    zip = zip_clean,
-    city_raw = city_clean
+    STATE, 
+    ZIPCODE,
+    zip_clean
   )
 
 pa_refined %>% 
   count(city_swap, city_refine) %>% 
   arrange(desc(n))
 ```
-##### Review Refined Cities
-
 
 ```{r}
-refined_values <- unique(wy_refined$city_refine)
+refined_values <- unique(pa_refined$city_refine)
 count_refined <- tibble(
   city_refine = refined_values, 
   refine_count = NA
 )
 
 for (i in seq_along(refined_values)) {
-  count_refined$refine_count[i] <- sum(str_detect(wy$city_swap, refined_values[i]), na.rm = TRUE)
+  count_refined$refine_count[i] <- sum(str_detect(pa$city_swap, refined_values[i]), na.rm = TRUE)
 }
 
-swap_values <- unique(wy_refined$city_swap)
+swap_values <- unique(pa_refined$city_swap)
 count_swap <- tibble(
   city_swap = swap_values, 
   swap_count = NA
 )
 
 for (i in seq_along(swap_values)) {
-  count_swap$swap_count[i] <- sum(str_detect(wy$city_swap, swap_values[i]), na.rm = TRUE)
+  count_swap$swap_count[i] <- sum(str_detect(pa$city_swap, swap_values[i]), na.rm = TRUE)
 }
 
 pa_refined %>% 
   left_join(count_swap) %>% 
   left_join(count_refined) %>%
   select(
-    id,
+    FILERID,
     city_match,
     city_swap,
     city_refine,
@@ -588,14 +532,18 @@ Manually change the city_refine fields due to overcorrection.
 
 
 ```{r}
-pa_refined$city_refine <- wy_refined$city_refine %>% 
-  str_replace("^SUNNYVALE$", "SUN VALLEY") %>% 
-  str_replace("^DAVENPORT$", "PONTE VEDRA BEACH") %>% 
-  str_replace("^AUBURN$", "CASPER") %>% 
-  str_replace("^LAR$", "LARAMIE")
+pa_refined$city_refine <- pa_refined$city_refine %>% 
+  str_replace("^DU BOIS$", "DUBOIS") %>% 
+  str_replace("^PIT$", "PITSSBURGH") %>% 
+  str_replace("^MCCBG$", "MCCONNELLSBURG") %>% 
+  str_replace("^PLUM BORO$", "PLUM") %>% 
+  str_replace("^GREENVILLE$", "EAST GREENVILLE") %>% 
+  str_replace("^NON$", "ONO") %>% 
+  str_replace("^FORD CLIFF$", "CLIFFORD") %>% 
+  str_replace("^W B$", "WILKES BARRE") 
 
-refined_table <- wy_refined %>% 
-  select(id, city_refine)
+refined_table <-pa_refined %>% 
+  select(index, FILERID, city_refine)
 ```
   
 
@@ -603,33 +551,62 @@ refined_table <- wy_refined %>%
 
 ```{r join_refine}
 pa <- pa %>% 
-  left_join(refined_table, by ="id") %>% 
-  mutate(city = coalesce(city_refine, city_swap))
+  left_join(refined_table, by ="index") %>% 
+  mutate(city = coalesce(city_refine, city_swap)) 
+
+pa$city <- pa$city %>% 
+  str_replace("^MT PLEASANT$", "MOUNT PLEASANT") %>% 
+  str_replace("^MT ", "MOUNT ") %>% 
+  str_replace("^ST\\s", "SAINT ") %>% 
+  str_replace("^PHILA$", "PHILADELPHIA") %>% 
+  str_replace("\\sTWP$", "") %>% 
+  str_replace("\\sPA$", "")
+  
+pa_sec_refine <- pa %>% 
+  filter(city %out% valid_city) %>%
+  mutate(sec_match_dis = stringdist(city, city_match)) 
+
+sec_refined_table <- pa_sec_refine %>% 
+  filter(sec_match_dis < 5 ) %>% 
+  select(index, city_match) %>% 
+  rename (sec_city_match = city_match)
+
+pa <-pa %>% 
+  left_join(sec_refined_table, by = "index") %>% 
+  mutate(city_clean = coalesce(sec_city_match, city))
+```
+
+Each process also increases the percent of valid city names.
+
+```{r city_progress2, collapse=TRUE}
+prop_in(pa$CITY, valid_city, na.rm = TRUE)
+prop_in(pa$city_prep, valid_city, na.rm = TRUE)
+prop_in(pa$city_swap, valid_city, na.rm = TRUE)
+prop_in(pa$city, valid_city, na.rm = TRUE)
+prop_in(pa$city_clean, valid_city, na.rm = TRUE)
 ```
 
 Each step of the cleaning process reduces the number of distinct city values.
-There are `r sum(!is.na(wy$city_clean))` entries of cities identified in the original data matching the regex with `r n_distinct(wy$city_clean)` distinct values, after the swap and refine processes, there are `r sum(!is.na(wy$city))` entries with `r n_distinct(wy$city)` distinct values. 
+There are `r sum(!is.na(pa$CITY))` with `r n_distinct(pa$CITY)` distinct values, after the swap and refine processes, there are `r sum(!is.na(pa$city_clean))` entries with `r n_distinct(pa$city_clean)` distinct values. 
 
 ## Conclude
 
-1. There are `r nrow(wy)` records in the database
-1. There are `r sum(wy$dupe_flag)` records with duplicate filer, recipient, date, _and_ amount
+1. There are `r nrow(pa)` records in the database
+1. There are `r sum(pa$dupe_flag)` records with suspected duplicate filerID, recipient, date, _and_ amount
 (flagged with `dupe_flag`)
 1. The ranges for dates and amounts are reasonable
 1. Consistency has been improved with `stringr` package and custom `normal_*()` functions.
 1. The five-digit `zip_clean` variable has been created with `zipcode::clean.zipcode()`
 1. The `year` variable has been created with `lubridate::year()`
-1. There are `r sum(is.na(wy$filer_name))` records with missing `name` values and `r sum(is.na(wy$date))`
-records with missing `date` values (both flagged with the `na_flag`)
+1. There are `r count_na(pa$CITY)` records with missing `city` values and `r count_na(pa$EXPNAME)` records with missing `payee` values (both flagged with the `na_flag`).
 
 ## Export
 
 ```{r write_clean}
-clean_dir <- here("wy", "expends", "data", "processed")
+clean_dir <- here("pa", "expends", "data", "processed")
 dir_create(clean_dir)
 pa %>% 
   select(
-    -city_state_zip,
     -city_prep,
     -on_year,
     -city_match,
@@ -639,7 +616,7 @@ pa %>%
     -city_refine
   ) %>% 
   write_csv(
-    path = glue("{clean_dir}/wy_expends_clean.csv"),
+    path = glue("{clean_dir}/pa_expends_clean.csv"),
     na = ""
   )
 ```
