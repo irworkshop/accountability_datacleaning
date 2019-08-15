@@ -109,21 +109,17 @@ here::here()
 
 ## Data
 
-Describe _where_ the data is coming from. [Link to the data download][03] page if possible.
+The data comes from the Wyoming Secretary of State. [Link to the data download][03].
 
-Describe the data set that is going to be cleaned. A file name, age, and unit of observation.
+This txt file contains 11 years worth of data (2008-2018) in 8 columns, Filer Type,	Filer Name,	Payee,	Purpose,	Date,	City,State & ZIP and Filing Status	Amount as of this writing. 
 
 [03]: https://www.wycampaignfinance.gov/WYCFWebApplication/GSF_SystemConfiguration/SearchExpenditures.aspx "source"
 
 ### About
 
-More information about the Wyoming Campaign Finance Information Systems can be found here https://www.wycampaignfinance.gov/WYCFWebApplication/Reports/FormationReportsViewer.aspx?docType=3.
+> Wyoming's Campaign Finance Information System (WYCFIS) exists to provide a mechanism for online filing of campaign finance information and to provide full disclosure to the public. This website contains detailed financial records and related information that candidates, committees, organizations and parties are required by law to disclose.
+Wyoming requires all statewide candidates, candidate committees, political action committees, organizations and political parties to file electronically online using this system. 
 
-### Variables
-
-`variable_name`:
-
-> Directly quote the definition given for variables of interest.
 
 ## Import
 
@@ -197,7 +193,7 @@ wy %>%
   summarize(total_spent = sum(amount)) %>% 
   arrange(desc(total_spent)) %>% 
   head(10) %>% 
-  ggplot(aes(x=payee, y=total_spent,)) + 
+  ggplot(aes(x=payee, y=total_spent)) + 
   geom_col() +
     labs(title = "Wyoming Campaign Expenditures",
        caption = "Source: Wyoming Secretary of State") +
@@ -546,7 +542,7 @@ wy_refined$city_refine <- wy_refined$city_refine %>%
   str_replace("^COLO SPGS$", "COLORADO SPRINGS") %>%
   str_replace("^WASHNGTON$", "WASHINGTON") %>% 
   str_replace("^WASHINGTON DC$", "WASHINGTON") %>% 
-  str_replace("^ST//s", "SAINT " ) %>% 
+  str_replace("^ST.\\s", "SAINT " ) %>% 
   str_replace("^PINE$", "PINEDALE")
 ```
 
@@ -589,7 +585,6 @@ dir_create(clean_dir)
 wy_refined %>% 
   rename(city_clean = city_refine) %>% 
   select(
-    -city_state_zip,
     -city_prep,
     -on_year,
     -city_match,

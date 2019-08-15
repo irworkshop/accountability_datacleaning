@@ -1,27 +1,32 @@
 Wyoming Campaign Expenditures Data Diary
 ================
 Yanqi Xu
-2019-08-07 10:58:05
+2019-08-14 11:33:32
 
-## Project
+-   [Project](#project)
+-   [Objectives](#objectives)
+-   [Packages](#packages)
+-   [Data](#data)
+-   [Import](#import)
+-   [Explore](#explore)
+-   [Conclude](#conclude)
+-   [Export](#export)
 
-The Accountability Project is an effort to cut across data silos and
-give journalists, policy professionals, activists, and the public at
-large a simple way to search across huge volumes of public data about
-people and organizations.
+Project
+-------
 
-Our goal is to standardizing public data on a few key fields by thinking
-of each dataset row as a transaction. For each transaction there should
-be (at least) 3 variables:
+The Accountability Project is an effort to cut across data silos and give journalists, policy professionals, activists, and the public at large a simple way to search across huge volumes of public data about people and organizations.
+
+Our goal is to standardizing public data on a few key fields by thinking of each dataset row as a transaction. For each transaction there should be (at least) 3 variables:
 
 1.  All **parties** to a transaction
 2.  The **date** of the transaction
 3.  The **amount** of money involved
 
-## Objectives
+Objectives
+----------
 
-This document describes the process used to complete the following
-objectives:
+This document describes the process used to complete the following objectives:
 
 1.  How many records are in the database?
 2.  Check for duplicates
@@ -32,11 +37,10 @@ objectives:
 7.  Create a `YEAR` field from the transaction date
 8.  Make sure there is data on both parties to a transaction
 
-## Packages
+Packages
+--------
 
-The following packages are needed to collect, manipulate, visualize,
-analyze, and communicate these results. The `pacman` package will
-facilitate their installation and attachment.
+The following packages are needed to collect, manipulate, visualize, analyze, and communicate these results. The `pacman` package will facilitate their installation and attachment.
 
 ``` r
 if (!require("pacman")) install.packages("pacman")
@@ -60,51 +64,33 @@ pacman::p_load(
 )
 ```
 
-This document should be run as part of the `R_campfin` project, which
-lives as a sub-directory of the more general, language-agnostic
-[`irworkshop/accountability_datacleaning`](https://github.com/irworkshop/accountability_datacleaning "TAP repo")
-GitHub repository.
+This document should be run as part of the `R_campfin` project, which lives as a sub-directory of the more general, language-agnostic [`irworkshop/accountability_datacleaning`](https://github.com/irworkshop/accountability_datacleaning "TAP repo") GitHub repository.
 
-The `R_campfin` project uses the [RStudio
-projects](https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects "Rproj")
-feature and should be run as such. The project also uses the dynamic
-`here::here()` tool for file paths relative to *your* machine.
+The `R_campfin` project uses the [RStudio projects](https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects "Rproj") feature and should be run as such. The project also uses the dynamic `here::here()` tool for file paths relative to *your* machine.
 
 ``` r
 # where dfs this document knit?
 here::here()
-#> [1] "/Users/soc/accountability_datacleaning/R_campfin"
+#> [1] "/Users/soc/accountability/accountability_datacleaning/R_campfin"
 ```
 
-## Data
+Data
+----
 
-Describe *where* the data is coming from. [Link to the data
-download](https://www.wycampaignfinance.gov/WYCFWebApplication/GSF_SystemConfiguration/SearchExpenditures.aspx "source")
-page if possible.
+The data comes from the Wyoming Secretary of State. [Link to the data download](https://www.wycampaignfinance.gov/WYCFWebApplication/GSF_SystemConfiguration/SearchExpenditures.aspx "source").
 
-Describe the data set that is going to be cleaned. A file name, age, and
-unit of observation.
+This txt file contains 11 years worth of data (2008-2018) in 8 columns, Filer Type, Filer Name, Payee, Purpose, Date, City,State & ZIP and Filing Status Amount as of this writing.
 
 ### About
 
-More information about the Wyoming Campaign Finance Information Systems
-can be found here
-<https://www.wycampaignfinance.gov/WYCFWebApplication/Reports/FormationReportsViewer.aspx?docType=3>.
+> Wyoming's Campaign Finance Information System (WYCFIS) exists to provide a mechanism for online filing of campaign finance information and to provide full disclosure to the public. This website contains detailed financial records and related information that candidates, committees, organizations and parties are required by law to disclose. Wyoming requires all statewide candidates, candidate committees, political action committees, organizations and political parties to file electronically online using this system.
 
-### Variables
-
-`variable_name`:
-
-> Directly quote the definition given for variables of interest.
-
-## Import
+Import
+------
 
 ### Download
 
-Download raw, **immutable** data file. Go to
-<https://www.wycampaignfinance.gov/WYCFWebApplication/GSF_SystemConfiguration/SearchExpenditures.aspx>,
-leave the fields blank, and click the “All” tab and hit “Search”. After
-the table is populated, click “Export”
+Download raw, **immutable** data file. Go to <https://www.wycampaignfinance.gov/WYCFWebApplication/GSF_SystemConfiguration/SearchExpenditures.aspx>, leave the fields blank, and click the "All" tab and hit "Search". After the table is populated, click "Export"
 
 ``` r
 # create a directory for the raw data
@@ -114,10 +100,10 @@ dir_create(raw_dir)
 
 ### Read
 
-## Explore
+Explore
+-------
 
-There are `nrow(wy)` records of `length(wy)` variables in the full
-database.
+There are `nrow(wy)` records of `length(wy)` variables in the full database.
 
 ``` r
 head(wy)
@@ -182,19 +168,17 @@ wy %>% glimpse_fun(n_distinct)
     #> 7 filing_status  chr       4 0.0000882
     #> 8 amount         dbl   16289 0.359
 
-We can explore the distribution of the least distinct values with
-`ggplot2::geom_bar()`.
+We can explore the distribution of the least distinct values with `ggplot2::geom_bar()`.
 
-![](../plots/plot_bar-1.png)<!-- -->
+![](../plots/plot_bar-1.png)
 
 Or, filter the data and explore the most frequent discrete data.
 
-![](../plots/plot_bar2-1.png)<!-- -->
+![](../plots/plot_bar2-1.png)
 
 ### Missing
 
-The variables also vary in their degree of values that are `NA`
-(missing).
+The variables also vary in their degree of values that are `NA` (missing).
 
 ``` r
 wy %>% glimpse_fun(count_na)
@@ -212,9 +196,7 @@ wy %>% glimpse_fun(count_na)
     #> 7 filing_status  chr       0 0     
     #> 8 amount         dbl       0 0
 
-We will flag any records with missing values in the key variables used
-to identify an expenditure. There are 0 columns in city\_state\_zip that
-are NAs
+We will flag any records with missing values in the key variables used to identify an expenditure. There are 0 columns in city\_state\_zip that are NAs
 
 ``` r
 wy <- wy %>% mutate(na_flag = is.na(city_state_zip))
@@ -249,17 +231,13 @@ wy %>%
     trans = "log10", labels = dollar)
 ```
 
-![](../plots/unnamed-chunk-2-1.png)<!-- -->
+![](../plots/unnamed-chunk-2-1.png)
 
-Distribution of expenses by filer
-![](../plots/box_plot_by_type-1.png)<!-- -->
+Distribution of expenses by filer ![](../plots/box_plot_by_type-1.png)
 
 ### Dates
 
-The dates seem to be reasonable, with records dating back to
-1.407510^{4} till 1.545610^{4}, 1.630410^{4}, 1.633529210^{4},
-1.745410^{4},
-    1.789610^{4}
+The dates seem to be reasonable, with records dating back to 1.407510^{4} till 1.545610^{4}, 1.630410^{4}, 1.633529210^{4}, 1.745410^{4}, 1.789610^{4}
 
 ``` r
 summary(wy$date)
@@ -270,16 +248,15 @@ summary(wy$date)
 
 ### Year
 
-Add a `year` variable from `date` after `col_date()` using
-`lubridate::year()`.
+Add a `year` variable from `date` after `col_date()` using `lubridate::year()`.
 
 ``` r
 wy <- wy %>% mutate(year = year(date), on_year = is_even(year))
 ```
 
-![](../plots/year_count_bar-1.png)<!-- -->
+![](../plots/year_count_bar-1.png)
 
-![](../plots/amount_year_bar-1.png)<!-- -->
+![](../plots/amount_year_bar-1.png)
 
 ``` r
 wy %>% 
@@ -303,23 +280,19 @@ wy %>%
   )
 ```
 
-![](../plots/amount_month_line-1.png)<!-- --> \#\# Wrangle \#\#\#
-Indexing
+![](../plots/amount_month_line-1.png) \#\# Wrangle \#\#\# Indexing
 
 ``` r
 wy <- tibble::rowid_to_column(wy, "id")
 ```
 
-The lengths of city\_state\_zip column differ, and regular expressions
-can be used to separate the components.
+The lengths of city\_state\_zip column differ, and regular expressions can be used to separate the components.
 
-The original data the city, state, and ZIP all in one column. The
-following code seperates them.
+The original data the city, state, and ZIP all in one column. The following code seperates them.
 
 ### Zipcode
 
-First, we’ll extract any numbers whose lengths range from 1 to 5 and
-normalize them under “zip\_clean”.
+First, we'll extract any numbers whose lengths range from 1 to 5 and normalize them under "zip\_clean".
 
 ``` r
 wy <- wy %>% 
@@ -330,13 +303,11 @@ wy <- wy %>%
 sample(wy$zip_clean, 10)
 ```
 
-    #>  [1] NA      "82701" NA      "83001" "82901" "82601" "82834" "75284" "82716" "82007"
+    #>  [1] "82609" "82001" "82414" "78746" "82401" NA      "82001" "82009" NA      "82009"
 
 ### State
 
-In this regex, state is considered to consist of two upper-case letters
-following a space, or two upper-case letters with a trailing space at
-the end.
+In this regex, state is considered to consist of two upper-case letters following a space, or two upper-case letters with a trailing space at the end.
 
 ``` r
 wy <- wy %>% 
@@ -353,10 +324,7 @@ wy <- wy %>% mutate(state_clean = normal_state(state_clean))
 
 ### City
 
-First, we can get a list of incorporated cities and towns in Wyoming.
-The Wyoming State Archives provided the list in a web table. We use the
-`rvest` package to scrape the names of Wyoming cities and towns.
-<http://wyoarchives.state.wy.us/index.php/incorporated-cities>.
+First, we can get a list of incorporated cities and towns in Wyoming. The Wyoming State Archives provided the list in a web table. We use the `rvest` package to scrape the names of Wyoming cities and towns. <http://wyoarchives.state.wy.us/index.php/incorporated-cities>.
 
 ``` r
 wyoming_cities_page <- read_html("http://wyoarchives.state.wy.us/index.php/incorporated-cities")
@@ -372,22 +340,16 @@ wy_city <- toupper(wy_city[!is.na(wy_city)])
 valid_city <- unique(c(wy_city,zipcode$city))
 ```
 
-Cleaning city values is the most complicated. This process involves four
-steps:
+Cleaning city values is the most complicated. This process involves four steps:
 
-1.  Prepare raw city values by removing invalid data and reducing
-    inconsistencies
-2.  Match prepared city values with the *actual* city name of that
-    record’s ZIP code
-3.  swap prepared city values with the ZIP code match *if* only 1 edit
-    is needed
-4.  Refine swapped city values with key collision and n-gram
-    fingerprints
+1.  Prepare raw city values by removing invalid data and reducing inconsistencies
+2.  Match prepared city values with the *actual* city name of that record's ZIP code
+3.  swap prepared city values with the ZIP code match *if* only 1 edit is needed
+4.  Refine swapped city values with key collision and n-gram fingerprints
 
 #### Prep
 
-Find the cities before a comma first, if not, find the non-numeric
-string.
+Find the cities before a comma first, if not, find the non-numeric string.
 
 ``` r
 wy <- wy %>% 
@@ -434,8 +396,7 @@ wy <- wy %>%
 
 #### Swap
 
-To replace city names with expected city names from zipcode when the two
-variables are no more than two characters different
+To replace city names with expected city names from zipcode when the two variables are no more than two characters different
 
 ``` r
 wy <- wy %>% 
@@ -485,10 +446,7 @@ This ZIP match swapping made 349 changes.
 
 #### Refine
 
-Instead of using the OpenRefine algorithms’
-`refinr::key_collision_merge()` and `refinr::n_gram_merge()` functions,
-we use `adist` and `agrep` to fuzzy match the swapped city data with
-valid city names.
+Instead of using the OpenRefine algorithms' `refinr::key_collision_merge()` and `refinr::n_gram_merge()` functions, we use `adist` and `agrep` to fuzzy match the swapped city data with valid city names.
 
 ``` r
 wy_cities <- tibble(city = wy_city, state = rep("WY",length(wy_city)))
@@ -530,8 +488,7 @@ wy_refined <- wy %>% left_join(to_refine, by = "city_swap") %>%
   )) %>% select(-city)
 ```
 
-Manually change the city\_refine fields due to
-overcorrection/undercorrection.
+Manually change the city\_refine fields due to overcorrection/undercorrection.
 
 ``` r
 wy_refined$city_refine <- wy_refined$city_refine %>% 
@@ -544,7 +501,7 @@ wy_refined$city_refine <- wy_refined$city_refine %>%
   str_replace("^COLO SPGS$", "COLORADO SPRINGS") %>%
   str_replace("^WASHNGTON$", "WASHINGTON") %>% 
   str_replace("^WASHINGTON DC$", "WASHINGTON") %>% 
-  str_replace("^ST//s", "SAINT " ) %>% 
+  str_replace("^ST.//s", "SAINT " ) %>% 
   str_replace("^PINE$", "PINEDALE")
 ```
 
@@ -574,26 +531,21 @@ prop_in(wy_refined$city_refine, valid_city, na.rm = TRUE)
 #> [1] 0.9952195
 ```
 
-Each step of the cleaning process reduces the number of distinct city
-values. There are 33051 entries of cities identified in the original
-data matching the regex with 742 distinct values, after the swap and
-refine processes, there are 33051 entries with 522 distinct values.
+Each step of the cleaning process reduces the number of distinct city values. There are 33051 entries of cities identified in the original data matching the regex with 742 distinct values, after the swap and refine processes, there are 33051 entries with 522 distinct values.
 
-## Conclude
+Conclude
+--------
 
 1.  There are 45354 records in the database
-2.  There are 0 records with duplicate filer, recipient, date, *and*
-    amount (flagged with `dupe_flag`)
+2.  There are 0 records with duplicate filer, recipient, date, *and* amount (flagged with `dupe_flag`)
 3.  The ranges for dates and amounts are reasonable
-4.  Consistency has been improved with `stringr` package and custom
-    `normal_*()` functions.
-5.  The five-digit `zip_clean` variable has been created with
-    `zipcode::clean.zipcode()`
+4.  Consistency has been improved with `stringr` package and custom `normal_*()` functions.
+5.  The five-digit `zip_clean` variable has been created with `zipcode::clean.zipcode()`
 6.  The `year` variable has been created with `lubridate::year()`
-7.  There are 0 records with missing `name` values and 0 records with
-    missing `date` values (both flagged with the `na_flag`)
+7.  There are 0 records with missing `name` values and 0 records with missing `date` values (both flagged with the `na_flag`)
 
-## Export
+Export
+------
 
 ``` r
 clean_dir <- here("wy", "expends", "data", "processed")
@@ -601,7 +553,6 @@ dir_create(clean_dir)
 wy_refined %>% 
   rename(city_clean = city_refine) %>% 
   select(
-    -city_state_zip,
     -city_prep,
     -on_year,
     -city_match,
