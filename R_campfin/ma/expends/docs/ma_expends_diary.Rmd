@@ -29,6 +29,7 @@ opts_chunk$set(
   dpi = 300
 )
 options(width = 99)
+set.seed(5)
 ```
 
 ## Project
@@ -71,7 +72,6 @@ pacman::p_load_current_gh("kiernann/campfin")
 pacman::p_load(
   stringdist, # levenshtein value
   snakecase, # change string case
-  RSelenium, # remote browser
   tidyverse, # data manipulation
   lubridate, # datetime strings
   tidytext, # text analysis
@@ -213,6 +213,7 @@ ma <- read_mdb(
   file = mdb_file,
   table = "vUPLOAD_tCURRENT_EXPENDITURES",
   na = c("", "NA", "N/A"),
+  locale = locale(tz = "US/Eastern"),
   col_types = cols(
     .default = col_character(),
     Date = col_date(),
@@ -221,7 +222,7 @@ ma <- read_mdb(
 )
 ```
 
-Finally, we can standardize the database structure with the `janitor` package.
+Finally, we can standardize the data frame structure with the `janitor` package.
 
 ```{r clean_expends}
 ma <- ma %>% 
@@ -231,7 +232,7 @@ ma <- ma %>%
 ```
 
 The `report_id` variable links to the "vUPLOAD_MASTER" table of the database, which gives more 
-information on the _filers_ of the reports whose expenditures are listed in 
+information on the _filers_ of the reports, whose expenditures are listed in 
 "vUPLOAD_tCURRENT_EXPENDITURES".
 
 ```{r read_master}
@@ -239,7 +240,7 @@ master <- read_mdb(
   file = mdb_file,
   table = "vUPLOAD_MASTER",
   na = c("", "NA", "N/A", "Unknown/ N/A"),
-  col_types = cols(.default = "c")
+  col_types = cols(.default = col_character())
 )
 
 master <- master %>%
@@ -261,7 +262,7 @@ master <- master %>%
   )
 ```
 
-We can join these two tables together.
+Then join these two tables together.
 
 ```{r join_master}
 ma <- left_join(ma, master)
@@ -358,8 +359,31 @@ ma %>%
 #### Amounts
 
 ```{r summary_amount}
-summary(ma$amount)
+summary(ma$amount) %>% map_chr(dollar)
+sum(ma$amount <= 0)
+sum(ma$amount >= 1000000)
 ```
+
+We can view the smallest and largest expenditures to check for range issues.
+
+From this, we can see the minimum `amount` value  from an expenditure with a `purpose` of
+`r ma$purpose[ma$amount == min(ma$amount)]`. This isn't really an expenditure in the normal
+sense.
+
+```{r glimpse_min}
+glimpse(filter(ma, amount == min(amount)))
+```
+
+The maximum `amount` of `r dollar(max(ma$amount))` was made by the 
+`r ma$comm_name[ma$amount == max(ma$amount)]` on `r ma$date[ma$amount == max(ma$amount)]`. However,
+both the `vendor` and `purpose` values for that expenditure are missing. Searching the OCPF
+database online does not return this expenditure.
+
+```{r glimpse_max}
+glimpse(filter(ma, amount == max(amount)))
+```
+
+We can use `ggplot2::geom_histogram()` to ensure a typical log-normal distribution of expenditures.
 
 ```{r amount_histogram, echo=FALSE}
 ma %>%
@@ -381,25 +405,111 @@ ma %>%
 
 #### Dates
 
+We can add a `year` variable from `date` using `lubridate::year()`.
+
 ```{r add_year}
 ma <- mutate(ma, year = year(date))
 ```
+
+There are a number of `date` values from the distant past or future.
 
 ```{r date_range, collapse=TRUE}
 min(ma$date, na.rm = TRUE)
 sum(ma$year < 2001, na.rm = TRUE)
 max(ma$date, na.rm = TRUE)
 sum(ma$date > today(), na.rm = TRUE)
+count_na(ma$date)
 ```
+
+We can flag these dates with a new `date_flag` variable.
 
 ```{r flag_date}
 ma <- mutate(ma, date_flag = is.na(date) | date > today() | year < 2001)
 sum(ma$date_flag, na.rm = TRUE)
 ```
 
+Using this new flag, we can create a `date_clean` variable that's missing these erronous dates.
+
+```{r clean_dates}
+ma <- ma %>% 
+  mutate(
+    date_clean = as_date(ifelse(date_flag, NA, date)),
+    year_clean = year(date_clean)
+    )
+```
+
+The Massachusetts Governor serves four-year terms, and we can see the number of expenditures spike
+every four years. 
+
+```{r year_bar_count, echo=FALSE}
+ma %>% 
+  count(year_clean) %>% 
+  mutate(on = is_even(year_clean)) %>%
+  ggplot(aes(x = year_clean, y = n)) +
+  geom_col(aes(fill = on)) +
+  scale_fill_brewer(type = "qual", palette = "Dark2") +
+  labs(
+    title = "Massachusetts Expenditure Count per Year",
+    caption = "Source: MA OCPF",
+    fill = "Election Year",
+    x = "Year Made",
+    y = "Number of Expenditures"
+  ) +
+  theme(legend.position = "bottom")
+```
+
+If we look at the _total_ amount spent, we can spot a fairly regular spike in the total cost of
+expenditures made. One outlier seems to be 2016, when there was no Governor's race but there was
+still `r dollar(sum(ma$amount[ma$year_clean == 2016], na.rm = TRUE))` spent, similar to 2018. 
+
+```{r year_bar_sum, echo=FALSE}
+ma %>% 
+  mutate(on = is_even(year_clean)) %>%
+  group_by(year_clean, on) %>%
+  summarize(sum = sum(amount)) %>% 
+  ggplot(aes(x = year_clean, y = sum)) +
+  geom_col(aes(fill = on)) +
+  scale_fill_brewer(type = "qual", palette = "Dark2") +
+  scale_y_continuous(labels = dollar) +
+  labs(
+    title = "Massachusetts Expenditure Amounts per Year",
+    caption = "Source: MA OCPF",
+    fill = "Election Year",
+    x = "Year Made",
+    y = "Total Amount Expended"
+  ) +
+  theme(legend.position = "bottom")
+```
+
+```{r month_line, echo=FALSE}
+ma %>% 
+  mutate(
+    month = month(date_clean),
+    on = is_even(year_clean)
+  ) %>% 
+  group_by(on, month) %>% 
+  summarize(mean = mean(amount)) %>% 
+  ggplot(aes(month, mean)) +
+  geom_line(aes(color = on), size = 2) +
+  scale_color_brewer(type = "qual", palette = "Dark2") +
+  labs(
+    title = "Massachusetts Expenditures per Year",
+    caption = "Source: MA OCPF",
+    fill = "Election Year",
+    x = "Year Made",
+    y = "Number of Expenditures"
+  ) +
+  theme(legend.position = "bottom")
+```
+
 ## Wrangle
 
+We should use the `campfin::normal_*()` functions to perform some basic, high-confidence text
+normalization to improve the searchability of the database.
+
 ### Address
+
+First, we will normalize the street address by removing punctuation and expanding abbreviations.
 
 ```{r normal_address}
 ma <- ma %>% 
@@ -412,17 +522,25 @@ ma <- ma %>%
   )
 ```
 
+We can see how this improves consistency across the `address` field.
+
 ```{r view_address_change, echo=FALSE}
 drop_na(select(ma, starts_with("address")))
 ```
 
 ### ZIP
 
+The `zip` address is already fairly clean, with `r percent(prop_in(ma$zip, geo$zip, na.rm = TRUE))`
+of the values already in our comprehensive `geo$zip` list.
+
 ```{r count_zip_pre, collapse=TRUE}
 n_distinct(ma$zip)
 prop_in(ma$zip, geo$zip, na.rm = TRUE)
 length(setdiff(ma$zip, geo$zip))
 ```
+
+We can improve this further by lopping off the uncommon four-digit extensions and removing common
+invalid codes like 00000 and 99999.
 
 ```{r normal_zip}
 ma <- ma %>% 
@@ -434,6 +552,8 @@ ma <- ma %>%
   )
 ```
 
+This brings our valid percentage to `r percent(prop_in(ma$zip_norm, geo$zip, na.rm = TRUE))`.
+
 ```{r count_zip_post, collapse=TRUE}
 n_distinct(ma$zip_norm)
 prop_in(ma$zip_norm, geo$zip, na.rm = TRUE)
@@ -442,6 +562,9 @@ length(setdiff(ma$zip_norm, geo$zip))
 
 ### State
 
+The `state` variable is also very clean, already at 
+`r percent(prop_in(ma$state, geo$state, na.rm = TRUE))`.
+
 ```{r count_state_pre, collapse=TRUE}
 n_distinct(ma$state)
 prop_in(ma$state, geo$state, na.rm = TRUE)
@@ -449,11 +572,13 @@ length(setdiff(ma$state, geo$state))
 setdiff(ma$state, geo$state)
 ```
 
+There are still `r length(setdiff(ma$state, geo$state))` invalid values which we can remove.
+
 ```{r normal_state}
 ma <- ma %>% 
   mutate(
     state_norm = normal_state(
-      state = state,
+      state = str_replace(state, "^M$", "MA"),
       abbreviate = TRUE,
       na_rep = TRUE,
       valid = geo$state
@@ -468,10 +593,25 @@ prop_in(ma$state_norm, geo$state, na.rm = TRUE)
 
 ### City
 
+The `city` value is the hardest to normalize. We can use a four-step system to functionally improve
+the searchablity of the database.
+
+1. **Normalize** the raw values with `campfin::normal_city()`
+1. **Match** the normal values with the _expected_ value for that ZIP code
+1. **Swap** the normal values with the expected value if they are _very_ similar
+1. **Refine** the swapped values the [OpenRefine algorithms][08] and keep good changes
+
+[08]: https://github.com/OpenRefine/OpenRefine/wiki/Clustering-In-Depth
+
+The raw `city` values are relatively normal, with 
+`r percent(prop_in(ma$city, geo$city, na.rm = TRUE))` already in `geo$city` (which is not
+comprehensive). We will aim to get this number over 99%.
+
 ```{r count_city_pre, collapse=TRUE}
 n_distinct(ma$city)
 prop_in(ma$city, geo$city, na.rm = TRUE)
 length(setdiff(ma$city, geo$city))
+prop_na(ma$city)
 ```
 
 #### Normalize
@@ -482,20 +622,41 @@ ma <- ma %>%
     city_norm = normal_city(
       city = city, 
       geo_abbs = usps_city,
-      st_abbs = c("MA", "DC"),
+      st_abbs = c("MA", "DC", "MASSACHUSETTS"),
       na = na_city,
       na_rep = TRUE
     )
   )
 ```
 
+This process brought us to `r percent(prop_in(ma$city_norm, geo$city, na.rm = TRUE))` valid.
+
 ```{r count_city_post_norm, collapse=TRUE}
 n_distinct(ma$city_norm)
 prop_in(ma$city_norm, geo$city, na.rm = TRUE)
 length(setdiff(ma$city_norm, geo$city))
+prop_na(ma$city_norm)
+```
+
+It also increased the proportion of `NA` values by 
+`r percent(prop_na(ma$city_norm) - prop_na(ma$city))`. These new `NA` values were either a single
+(possibly repeating) character, or contained in the `na_city` vector.
+
+```{r new_city_na, echo=FALSE}
+ma %>% 
+  filter(is.na(city_norm) & !is.na(city)) %>% 
+  select(zip_norm, state_norm, city, city_norm) %>% 
+  distinct() %>% 
+  sample_frac()
 ```
 
 #### Swap
+
+Then, we will compare these normalized `city_norm` values to the _expected_ city value for that
+vendor's ZIP code. If the [levenshtein distance][09] is less than 3, we can confidently swap these
+two values.
+
+[09]: https://en.wikipedia.org/wiki/Levenshtein_distance
 
 ```{r swap_city}
 ma <- ma %>% 
@@ -518,6 +679,11 @@ ma <- ma %>%
   )
 ```
 
+This is a very fast way to increase the valid proportion to
+`r percent(prop_in(ma$city_swap, geo$city, na.rm = TRUE))` and reduce the number of distinct
+_invalid_ values from `r length(setdiff(ma$city_norm, geo$city))` to only
+`r length(setdiff(ma$city_swap, geo$city))`
+
 ```{r count_city_post_swap, collapse=TRUE}
 n_distinct(ma$city_swap)
 prop_in(ma$city_swap, geo$city, na.rm = TRUE)
@@ -525,6 +691,11 @@ length(setdiff(ma$city_swap, geo$city))
 ```
 
 #### Refine
+
+Finally, we can pass these swapped `city_swap` values to the OpenRefine cluster and merge 
+algorithms. These two algorithms cluster similar values and replace infrequent values with their
+more common counterparts. This process can be harmful by making _incorrect_ changes. We will only
+keep changes where the state, ZIP code, _and_ new city value all match a valid combination.
 
 ```{r refine_city}
 good_refine <- ma %>% 
@@ -544,11 +715,27 @@ good_refine <- ma %>%
   )
 ```
 
+```{r view_city_refines, echo=FALSE}
+good_refine %>%
+  count(
+    state_norm, 
+    zip_norm, 
+    city_raw, 
+    city_refine
+  ) %>% 
+  sample_frac()
+```
+
+We can join these good refined values back to the original data and use them over their incorrect
+`city_swap` counterparts in a new `city_refine` variable.
+
 ```{r join_refine}
 ma <- ma %>% 
   left_join(good_refine) %>% 
   mutate(city_refine = coalesce(city_refine, city_swap))
 ```
+
+This brings us to `r percent(prop_in(ma$city_refine, geo$city, na.rm = TRUE))` valid values.
 
 ```{r count_city_post_refine, collapse=TRUE}
 n_distinct(ma$city_refine)
@@ -558,39 +745,77 @@ length(setdiff(ma$city_refine, geo$city))
 
 #### Progress
 
+We can make very few manual changes to capture the last few big invalid values. Local city
+abbreviations (BOS, DORC, WORD, CAMB) often need to be changed by hand.
+
+```{r view_final_bad}
+ma %>%
+  filter(city_refine %out% geo$city) %>% 
+  count(state_norm, zip_norm, city_refine, sort = TRUE) %>% 
+  drop_na(city_refine) %>% 
+  print(n = 20)
+```
+
+```{r city_final}
+ma <- ma %>% 
+  mutate(
+    city_final = city_refine %>% 
+      str_replace("\bBOS\b", "BOSTON") %>% 
+      str_replace("^DORC$", "DORCHESTER") %>% 
+      str_replace("^WORC$", "WORCHESTER") %>% 
+      str_replace("^HP$", "HYDE PARK") %>% 
+      str_replace("^JP$", "JAMAICA PLAIN") %>% 
+      str_replace("^NY$", "NEW YORK") %>% 
+      str_replace("^CRLSTRM$", "CAROL STREAM") %>% 
+      str_replace("^SPFLD$", "SPRINGFIELD") %>% 
+      str_replace("^SPGFLD$", "SPRINGFIELD") %>% 
+      str_replace("^PLY$", "PLYMOUTH") %>% 
+      str_replace("^CAMB$", "CAMBRIDGE")
+  )
+```
+
+By making less than a dozen manual string replacements, we bring our final valid percentage to 
+`r percent(prop_in(ma$city_final, geo$city, na.rm = TRUE))`, above our 99% goal. There are still
+`r length(setdiff(ma$city_final, geo$city))` different _invalid_ values that could be checked, but
+they make up less than 1% of records. Many of these values are actually valid and simply not in our
+list (which doesn't contain very small towns and census desginated places).
+
 ```{r progress_table, echo=FALSE}
 progress_table <- tibble(
-  stage = c("raw", "norm", "swap", "refine"),
+  stage = c("raw", "norm", "swap", "refine", "final"),
   total_distinct = c(
     n_distinct(ma$city_raw),
     n_distinct(ma$city_norm),
     n_distinct(ma$city_swap),
-    n_distinct(ma$city_refine)
+    n_distinct(ma$city_refine),
+    n_distinct(ma$city_final)
   ),
   prop_good = c(
     prop_in(ma$city_raw, geo$city, na.rm = TRUE),
     prop_in(ma$city_norm, geo$city, na.rm = TRUE),
     prop_in(ma$city_swap, geo$city, na.rm = TRUE),
-    prop_in(ma$city_refine, geo$city, na.rm = TRUE)
+    prop_in(ma$city_refine, geo$city, na.rm = TRUE),
+    prop_in(ma$city_final, geo$city, na.rm = TRUE)
   ),
   unique_bad = c(
     length(setdiff(ma$city_raw, geo$city)),
     length(setdiff(ma$city_norm, geo$city)),
     length(setdiff(ma$city_swap, geo$city)),
-    length(setdiff(ma$city_refine, geo$city))
+    length(setdiff(ma$city_refine, geo$city)),
+    length(setdiff(ma$city_final, geo$city))
   )
 )
 
-diff_change <- progress_table$unique_bad[4]-progress_table$unique_bad[1]
+diff_change <- progress_table$unique_bad[5]-progress_table$unique_bad[1]
 prop_change <- diff_change/progress_table$unique_bad[1]
 ```
 
 Still, our progress is significant without having to make a single manual or unconfident change.
 The percent of valid cities increased from `r percent(progress_table$prop_good[1])` to 
-`r percent(progress_table$prop_good[4])`. The number of total distinct city values descreased from
-`r comma(progress_table$total_distinct[1])` to `r comma(progress_table$total_distinct[4])`. The
+`r percent(progress_table$prop_good[5])`. The number of total distinct city values decreased from
+`r comma(progress_table$total_distinct[1])` to `r comma(progress_table$total_distinct[5])`. The
 number of distinct invalid city names decreased from `r comma(progress_table$unique_bad[1])` to
-only `r comma(progress_table$unique_bad[4])`, a change of `r percent(prop_change)`.
+only `r comma(progress_table$unique_bad[5])`, a change of `r percent(prop_change)`.
 
 ```{r print_progress, echo=FALSE}
 kable(
@@ -607,7 +832,7 @@ kable(
 1. There are `sum(ma$dupe_flag)` duplicate records in the database.
 1. The range and distribution of `amount` and `date` seem reasonable.
 1. There are `r sum(ma$na_flag)` records missing either recipient or date.
-1. Consistency in goegraphic data has been improved with `campfin::normal_*()`.
+1. Consistency in geographic data has been improved with `campfin::normal_*()`.
 1. The 5-digit `zip_norm` variable has been created with `campfin::normal_zip(ma$zip)`.
 1. The 4-digit `year` variable has been created with `lubridate::year(ma$date)`.
 
