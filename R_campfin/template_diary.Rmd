@@ -29,6 +29,7 @@ opts_chunk$set(
   dpi = 300
 )
 options(width = 99)
+set.seed(5)
 ```
 
 ## Project
