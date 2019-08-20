@@ -1,0 +1,522 @@
+---
+title: "State Data"
+author: "First Last"
+date: "`r Sys.time()`"
+output:
+  github_document: 
+    df_print: tibble
+    toc: true
+    toc_dept: 2
+editor_options: 
+  chunk_output_type: console
+---
+
+<!-- Place comments regarding knitting here -->
+
+```{r setup, include=FALSE, purl=FALSE}
+library(knitr)
+opts_chunk$set(
+  eval = FALSE,
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  error = FALSE,
+  # it's nice to un-collapse df print
+  collapse = TRUE,
+  comment = "#>",
+  fig.path = "../plots/",
+  fig.width = 10,
+  dpi = 300
+)
+options(width = 99)
+set.seed(5)
+```
+
+## Project
+
+The Accountability Project is an effort to cut across data silos and give journalists, policy
+professionals, activists, and the public at large a simple way to search across huge volumes of
+public data about people and organizations.
+
+Our goal is to standardizing public data on a few key fields by thinking of each dataset row as a
+transaction. For each transaction there should be (at least) 3 variables:
+
+1. All **parties** to a transaction
+2. The **date** of the transaction
+3. The **amount** of money involved
+
+## Objectives
+
+This document describes the process used to complete the following objectives:
+
+1. How many records are in the database?
+1. Check for duplicates
+1. Check ranges
+1. Is there anything blank or missing?
+1. Check for consistency issues
+1. Create a five-digit ZIP Code called `ZIP5`
+1. Create a `YEAR` field from the transaction date
+1. Make sure there is data on both parties to a transaction
+
+## Packages
+
+The following packages are needed to collect, manipulate, visualize, analyze, and communicate
+these results. The `pacman` package will facilitate their installation and attachment.
+
+The IRW's `campfin` package will also have to be installed from GitHub. This package contains
+functions custom made to help facilitate the processing of campaign finance data.
+
+```{r load_packages, message=FALSE, dfrning=FALSE, error=FALSE}
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load_current_gh("kiernann/campfin")
+pacman::p_load(
+  stringdist, # levenshtein value
+  RSelenium, # remote browser
+  tidyverse, # data manipulation
+  lubridate, # datetime strings
+  tidytext, # text analysis
+  magrittr, # pipe opperators
+  janitor, # dataframe clean
+  refinr, # cluster and merge
+  scales, # format strings
+  rvest, # scrape html pages
+  knitr, # knit documents
+  vroom, # read files fast
+  glue, # combine strings
+  here, # relative storage
+  fs # search storage 
+)
+```
+
+This document should be run as part of the `R_campfin` project, which lives as a sub-directory of
+the more general, language-agnostic [`irworkshop/accountability_datacleaning`][01] GitHub
+repository.
+
+The `R_campfin` project uses the [RStudio projects][02] feature and should be run as such. The
+project also uses the dynamic `here::here()` tool for file paths relative to _your_ machine.
+
+```{r where_here, collapse=TRUE}
+# where dfs this document knit?
+here::here()
+```
+
+[01]: https://github.com/irworkshop/accountability_datacleaning "TAP repo"
+[02]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects "Rproj"
+
+## Data
+
+Data is obtained from the [Indiana Election Division][03] (IED). Their data can be downloaded as
+anual files on their [data download page][04].
+
+> The campaign finance database contains detailed financial records that campaigns and committees
+are required by law to disclose. Through this database, you can view contribution and expense
+records from candidate, PAC, regular party, legislative caucus, and exploratory committees. You can
+select specific reports based on the candidate, office, party, caucus, or PAC name or keyword. You
+can also search across one or more finance reports according to specific criteria that you choose.
+You can review the results on screen, print them, or extract the information for further analysis.
+
+The IDE provides [some background information][05] on their campaign finance database.
+
+> ### What is the quality of the data?  
+The information presented in the campaign finance database is, to the best of our ability, an
+accurate representation of the reports filed with the Election Division. This information is being
+provided as a service to the public, has been processed by the Election Division and should be
+cross-referenced with the original report on file with the Election Division.
+> 
+> Some of the information in the campaign finance database was submitted in electronic form. Most
+of the information was key-entered from paper reports. Sometimes items which are inconsistent with
+filing requirements, such as incorrect codes or incorrectly formatted or blank items, are present
+in the results of a query. They are incorrect or missing in the database because they were
+incorrect or missing on the reports submitted to the Election Division. For some incorrect or
+missing data in campaign finance reports, the Election Division has requested that the filer supply
+an amended report. The campaign finance database will be updated to reflect amendments received.
+
+> ### What does the database contain?  
+> By Indiana law, candidates and committees are required to disclose detailed financial records of
+contributions received and expenditures made and debts owed by or to the committee. For committees,
+the campaign finance database contains all contributions, expenditures, and debts reported to the
+Election Division since January 1, 1998.
+
+[03]: http://campaignfinance.in.gov/PublicSite/Homepage.aspx
+[04]: http://campaignfinance.in.gov/PublicSite/Reporting/DataDownload.aspx
+[05]: http://campaignfinance.in.gov/PublicSite/AboutDatabase.aspx
+
+## Import
+
+We can import each file into R as a single data frame to be explored, wrangled, and exported
+as a single file to be indexed on the TAP database.
+
+### Download
+
+```{r raw_dir}
+raw_dir <- here("in", "expends", "data", "raw")
+dir_create(raw_dir)
+```
+
+> This page provides comma separated value (CSV) downloads of contribution and expenditure data for each reporting year in a zipped file format. These files can be downloaded and imported into other applications (Microsoft Excel, Microsoft Access, etc.). This data was extracted from the Campaign Finance database as it existed as of 8/6/2019  1:00 AM. 
+
+The download URL to each file follows a consistent structure. We can create a URL for each file
+by using `glue::glue()` to change the year in the character string.
+
+```{r glue_urls}
+base_url <- "http://campaignfinance.in.gov/PublicSite/Docs/BulkDataDownloads"
+exp_urls <- glue("{base_url}/{2000:2019}_ExpenditureData.csv.zip")
+```
+
+The files range in size, which we can check before downloading with `campfin::url_file_size()`. 
+
+```{r check_file_sizes}
+file_sizes <- map_dbl(exp_urls, url_file_size)
+number_bytes(sum(file_sizes))
+```
+
+If the files haven't yet been downloaded, we can download each to the `/in/data/raw` subdirectory.
+
+```{r download_raw}
+if (!all_files_new(raw_dir, "*.zip$")) {
+  for (year_url in exp_urls) {
+    year_file <- glue("{raw_dir}/{basename(year_url)}")
+    download.file(
+      url = year_url,
+      destfile = year_file
+    )
+  }
+}
+```
+
+### Read
+
+We can read each file as a data frame into a list of data frames by using `purrr::map()` and 
+`readr::read_delim()`.
+
+```{r map_read_raw}
+ind <- map(
+  .x = dir_ls(raw_dir),
+  .f = read_delim,
+  delim = ",",
+  escape_backslash = FALSE,
+  escape_double = FALSE,
+  col_types = cols(
+    .default = col_character(),
+    Amount = col_double(),
+    Expenditure_Date = col_datetime(),
+    Amended = col_logical()
+  )
+)
+```
+
+```{r clean_raw_list}
+ind <- ind %>% 
+  bind_rows(.id = "FileYear") %>% 
+  clean_names(case = "snake") %>% 
+  mutate(
+    file_year = basename(file_year) %>% 
+      str_extract("\\d+") %>% 
+      parse_integer()
+  )
+```
+
+## Explore
+
+```{r glimpse}
+head(ind)
+tail(ind)
+glimpse(sample_frac(ind))
+```
+
+### Missing
+
+```{r glimpse_na}
+glimpse_fun(ind, count_na)
+```
+
+There are a fairly significant number of records missing one of the four variables needed to fully
+identify a transaction (who, what, and when). We will use `campfin::flag_na()` to flag them with
+`TRUE` values in the new `na_flag` variable. Most of these records are missing the payee `name`
+value.
+
+```{r flag_na}
+ind <- ind %>% flag_na(committee, name, expenditure_date, amount)
+sum(ind$na_flag)
+percent(mean(ind$na_flag))
+```
+
+### Duplicates
+
+There are very few duplicate records in the database. They have `TRUE` values in the new 
+`dupe_flag` variable.
+
+```{r flag_dupes}
+ind <- mutate(ind, dupe_flag = duplicated(ind))
+sum(ind$dupe_flag)
+```
+
+### Categorical
+
+```{r glimpse_distinct}
+glimpse_fun(ind, n_distinct)
+```
+
+For categorical variables, we can use `ggplo2::geom_col()` to explore the count of each variable.
+
+```{r comm_type_bar, echo=FALSE}
+explore_plot(
+  data = ind %>% 
+    mutate(committee_type = str_remove(committee_type, "\\d+.\\d+") %>% na_if("")) %>% 
+    drop_na(committee_type), 
+  var = committee_type,
+  title = "Indiana Expenditures by Committe Type",
+  caption = "Source: Indiana Election Division"
+)
+```
+
+```{r expend_code_bar, echo=FALSE}
+explore_plot(
+  data = ind,
+  var = expenditure_code,
+  title = "Indiana Expenditures by Committe Type",
+  caption = "Source: Indiana Election Division"
+)
+```
+
+```{r occupation_bar, echo=FALSE}
+explore_plot(
+  data = ind %>% drop_na(occupation) %>% filter(occupation != "Other"),
+  var = occupation,
+  flip = TRUE,
+  title = "Indiana Expenditures by Payee Occupation",
+  subtitle = "Without Missing or 'Other'",
+  caption = "Source: Indiana Election Division"
+)
+```
+
+```{r expend_type_bar, echo=FALSE}
+explore_plot(
+  data = ind,
+  var = expenditure_type,
+  flip = TRUE,
+  title = "Indiana Expenditures by Expenditure Use",
+  caption = "Source: Indiana Election Division"
+)
+```
+
+```{r purpose_word_bar, echo=FALSE, fig.height=10}
+ind %>% 
+  drop_na(purpose) %>% 
+  unnest_tokens(word, purpose) %>% 
+  count(word, sort = TRUE) %>% 
+  anti_join(stop_words, by = "word") %>% 
+  head(35) %>% 
+  ggplot(aes(x = reorder(word, n), y = n)) +
+  geom_col(aes(fill = n)) +
+  scale_fill_gradient(guide = FALSE) +
+  coord_flip() +
+  labs(
+    title = "Indiana Expenditures Purpose (Words)",
+    caption = "Source: Indiana Election Division",
+    x = "Word",
+    y = "Count"
+  )
+```
+
+### Continuous
+
+For continuous variables, we should explore both the range and distribution. This can be done with
+visually with `ggplot2::geom_histogram()` and `ggplot2::geom_violin()`.
+
+#### Amounts
+
+```{r summary_amount}
+summary(ind$amount)
+sum(ind$amount < 0, na.rm = TRUE)
+sum(ind$amount > 100000, na.rm = TRUE)
+```
+
+```{r amount_histogram, echo=FALSE}
+ind %>%
+  ggplot(aes(amount)) +
+  geom_histogram(fill = "blue") +
+  geom_vline(xintercept = median(ind$amount, na.rm = TRUE)) +
+  scale_x_continuous(
+    breaks = c(1 %o% 10^(0:6)),
+    labels = dollar,
+    trans = "log10"
+  ) +
+  labs(
+    title = "Indiana Expenditures Amount Distribution",
+    caption = "Source: Indiana Election Division",
+    x = "Amount",
+    y = "Count"
+  )
+```
+
+#### Dates
+
+```{r add_year}
+ind <- mutate(ind, expenditure_year = year(expenditure_date))
+```
+
+```{r date_range, collapse=TRUE}
+min(ind$expenditure_date, na.rm = TRUE)
+sum(ind$expenditure_year < 1999, na.rm = TRUE)
+max(ind$expenditure_date, na.rm = TRUE)
+sum(ind$expenditure_date > today(), na.rm = TRUE)
+```
+
+```{r count_year}
+count(ind, expenditure_year) %>% print(n = 52)
+```
+
+```{r flag_fix_dates}
+ind <- ind %>% 
+  mutate(
+    date_flag = is.na(expenditure_date) | expenditure_year < 1999 | expenditure_date > today(),
+    date_clean = as_date(ifelse(date_flag, NA, expenditure_date)),
+    year_clean = year(date_clean)
+  )
+```
+
+## Wrangle
+
+### Address
+
+```{r normal_address}
+packageVersion("tidyr")
+tx <- tx %>% 
+  # combine street addr
+  unite(
+    col = adress_comb,
+    starts_with("address"),
+    remove = FALSE,
+    na.rm = TRUE
+  ) %>% 
+  # normalize combined addr
+  mutate(
+    address_norm = normal_address(
+      address = adress_comb,
+      add_abbs = usps,
+      na_rep = TRUE
+    )
+  )
+```
+
+### ZIP
+
+```{r count_zip_pre, collapse=TRUE}
+n_distinct(df$zip)
+prop_in(df$zip, geo$zip, na.rm = TRUE)
+length(setdiff(df$zip, geo$zip))
+```
+
+```{r normal_zip}
+df <- df %>% 
+  mutate(
+    zip_norm = normal_zip(
+      zip = zip,
+      na_rep = TRUE
+    )
+  )
+```
+
+```{r count_zip_post, collapse=TRUE}
+n_distinct(df$zip_norm)
+prop_in(df$zip_norm, geo$zip, na.rm = TRUE)
+length(setdiff(df$zip_norm, geo$zip))
+```
+
+### State
+
+```{r count_state_pre, collapse=TRUE}
+n_distinct(df$state)
+prop_in(df$state, geo$state, na.rm = TRUE)
+length(setdiff(df$state, geo$state))
+```
+
+```{r normal_state}
+df <- df %>% 
+  mutate(
+    state_norm = normal_state(
+      state = state,
+      abbreviate = TRUE,
+      na_rep = TRUE,
+      valid = geo$state
+    )
+  )
+```
+
+```{r count_state_post, collapse=TRUE}
+n_distinct(df$state_norm)
+prop_in(df$state_norm, geo$state, na.rm = TRUE)
+length(setdiff(df$state_norm, geo$state))
+```
+
+### City
+
+```{r count_city_pre, collapse=TRUE}
+n_distinct(df$city)
+prop_in(df$city, geo$city, na.rm = TRUE)
+length(setdiff(df$city, geo$city))
+```
+
+#### Normalize
+
+```{r normal_city}
+df <- df %>% 
+  mutate(
+    city_norm = normal_city(
+      city = city, 
+      geo_abbs = usps_city,
+      st_abbs = c("DF", "DC", "DATA FRAME"),
+      na = na_city,
+      na_rep = TRUE
+    )
+  )
+```
+
+```{r count_city_post_norm, collapse=TRUE}
+n_distinct(df$city_norm)
+prop_in(df$city_norm, geo$city, na.rm = TRUE)
+length(setdiff(df$city_norm, geo$city))
+```
+
+#### Swap
+
+```{r swap_city}
+df <- df %>% 
+  left_join(
+    y = geo,
+    by = c(
+      "state_norm" = "state",
+      "zip_norm" = "zip"
+    )
+  ) %>% 
+  rename(city_match = city) %>% 
+  mutate(
+    match_dist = stringdist(city_norm, city_match),
+    city_swap = if_else(
+      condition = equals(match_dist, 1),
+      true = city_match,
+      false = city_norm
+    )
+  )
+```
+
+```{r count_city_post_swap, collapse=TRUE}
+n_distinct(df$city_swap)
+prop_in(df$city_swap, geo$city, na.rm = TRUE)
+length(setdiff(df$city_swap, geo$city))
+```
+
+#### Refine
+
+## Conclude
+
+1. There are `nrow(df)` records in the database.
+1. There are `sum(df$dupe_flag)` duplicate records in the database.
+1. The range and distribution of `amount` and `date` seem reasonable.
+1. There are `sum(df$na_flag)` records missing either recipient or date.
+1. Consistency in goegraphic data has been improved with `campfin::normal_*()`.
+1. The 5-digit `zip_norm` variable has been created with `campfin::normal_zip(df$zip)`.
+1. The 4-digit `year` variable has been created with `lubridate::year(df$date)`.
+
+## Export
