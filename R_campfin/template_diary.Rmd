@@ -196,10 +196,10 @@ sum(df$date > today())
 
 ```{r normal_address}
 packageVersion("tidyr")
-tx <- tx %>% 
+df <- df %>% 
   # combine street addr
   unite(
-    col = adress_comb,
+    col = adress_full,
     starts_with("address"),
     remove = FALSE,
     na.rm = TRUE
@@ -207,7 +207,7 @@ tx <- tx %>%
   # normalize combined addr
   mutate(
     address_norm = normal_address(
-      address = adress_comb,
+      address = adress_full,
       add_abbs = usps,
       na_rep = TRUE
     )
