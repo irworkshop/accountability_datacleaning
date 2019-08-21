@@ -1,7 +1,7 @@
-State Data
+Indiana Expenditures
 ================
-First Last
-2019-08-21 13:07:54
+Kiernan Nicholls
+2019-08-21 13:32:03
 
   - [Project](#project)
   - [Objectives](#objectives)
@@ -262,23 +262,23 @@ tail(ind)
 glimpse(sample_frac(ind))
 #> Observations: 582,201
 #> Variables: 18
-#> $ file_number      <chr> "4902", "4681", "6169", "3511", "17", "5138", "3598", "71", "5556", "26…
-#> $ committee_type   <chr> "Candidate", "Regular Party", "Candidate", "Candidate", "Regular Party"…
-#> $ committee        <chr> "Hoosiers for Kelty", "Porter County Republican Central Committee", "Su…
-#> $ candidate_name   <chr> "Matthew Gerard Kelty", NA, "C. Susan Glick", "ROBERT BEHNING", NA, "Ri…
-#> $ expenditure_code <chr> "Contributions", "Operations", "Advertising", "Operations", "Operations…
-#> $ name             <chr> "Whirlwind Pictures", "KLT Consulting, LLC", "KPC Media", "Avery Paper …
-#> $ address          <chr> "4930 Illinois Road", "306 Napoleon Street", "102 N. Main St.", "1021 W…
-#> $ city             <chr> "Fort Wayne", "Valparaiso", "Kendallville", "Indianapolis", "Logansport…
-#> $ state            <chr> "IN", "IN", "IN", "In", "IN", "IN", "IN", "IN", "IN", "IN", "IN", "IN",…
-#> $ zip              <chr> "46804", "46368", "46755", "46204", "46947", "46706", "46818", "46804",…
-#> $ occupation       <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "Other", NA, NA…
-#> $ office_sought    <chr> NA, NA, NA, NA, NA, NA, NA, "State Senator", "Newton County Council", N…
-#> $ expenditure_type <chr> "Direct - Contributions", "Direct - Operations", "Direct - Advertising"…
+#> $ file_number      <chr> "1272", "4981", "6047", "6489", "5588", "1194", "6060", "4252", "26", "…
+#> $ committee_type   <chr> "Candidate", "Candidate", "Regular Party", "Regular Party", "Candidate"…
+#> $ committee        <chr> "FRIENDS TO ELECT VANETA BECKER", "Andy Miller 2004", "Wells County Rep…
+#> $ candidate_name   <chr> "VANETA G. BECKER", "Andrew John Miller", NA, NA, "Mary Ann Sullivan", …
+#> $ expenditure_code <chr> "Unitemized", "Operations", "Operations", "Operations", "Operations", "…
+#> $ name             <chr> NA, "Andy Miller", "Verizon Wireless", "Target", "Tavern on South", "TU…
+#> $ address          <chr> NA, NA, "PO Box 25505", NA, "423 W. South Street", "5541 SOUTH HAMMAN S…
+#> $ city             <chr> NA, "Carmel", "Lehigh", "Streamwood", "Indianapolis", "MARION", "Bloomi…
+#> $ state            <chr> NA, "IN", "PA", "IL", "IN", "IN", "IN", "IN", "VA", "IN", "AZ", "IN", "…
+#> $ zip              <chr> NA, "46032", "18002", "60107", "46225", "46953", "47401", "46307", "223…
+#> $ occupation       <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
+#> $ office_sought    <chr> NA, NA, NA, "Regular Party", NA, "STATE REP", "State Representative Dis…
+#> $ expenditure_type <chr> "Unitemized - Unitemized", "Returned Contribution - Operations", "Direc…
 #> $ description      <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
-#> $ purpose          <chr> NA, "congress of counties", "newspaper subscription", "Paper", NA, NA, …
-#> $ amount           <dbl> 2000.00, 313.68, 16.10, 1285.05, 187.50, 68.12, 520.70, 500.00, 200.00,…
-#> $ expenditure_date <date> 2002-11-08, 2018-01-19, 2018-01-27, 2014-04-25, 2005-07-21, 2010-04-28…
+#> $ purpose          <chr> "Contribution", "returned contribution", "Telephone", "Equipment for op…
+#> $ amount           <dbl> 100.00, 1158.79, 75.08, 8.10, 74.68, 500.00, 1500.00, 250.00, 2631.74, …
+#> $ expenditure_date <date> 2017-12-04, 2004-12-01, 2015-12-31, 2013-05-20, 2012-07-26, 2003-10-20…
 #> $ amended          <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, F…
 ```
 
@@ -524,18 +524,18 @@ ind <- ind %>%
 We can see how this improves consistency across the `address` field.
 
     #> # A tibble: 10 x 2
-    #>    address                      address_norm               
-    #>    <chr>                        <chr>                      
-    #>  1 1923 Jasmine Dr              1923 JASMINE DRIVE         
-    #>  2 111 E. 3rd St.               111 E 3RD STREET           
-    #>  3 1601 Trapelo Road, Suite 329 1601 TRAPELO ROAD SUITE 329
-    #>  4 3607 OAK RIDGE DRIVE         3607 OAK RIDGE DRIVE       
-    #>  5 1363 Grant Street            1363 GRANT STREET          
-    #>  6 MAIN ST.                     MAIN STREET                
-    #>  7 31 West Ohio Street          31 WEST OHIO STREET        
-    #>  8 5954 Dewey Ave               5954 DEWEY AVENUE          
-    #>  9 6260 Intech Commons Dr       6260 INTECH COMMONS DRIVE  
-    #> 10 1623 N College Ave           1623 N COLLEGE AVENUE
+    #>    address                                     address_norm                               
+    #>    <chr>                                       <chr>                                      
+    #>  1 PO Box 861                                  PO BOX 861                                 
+    #>  2 500 N Main St                               500 NORTH MAIN STREET                      
+    #>  3 350 East Sherman                            350 EAST SHERMAN                           
+    #>  4 115 W Washington st, #1165                  115 WEST WASHINGTON STREET 1165            
+    #>  5 1811 West 455 South                         1811 WEST 455 SOUTH                        
+    #>  6 PO Box 2688                                 PO BOX 2688                                
+    #>  7 8464 N. SYRACUSE-WEBSTER RD.                8464 NORTH SYRACUSE WEBSTER ROAD           
+    #>  8 135 S. Lafayette Blvd.                      135 SOUTH LAFAYETTE BOULEVARD              
+    #>  9 One North Capitol Avenue Suite 200          ONE NORTH CAPITOL AVENUE SUITE 200         
+    #> 10 National Vice President and General Counsel NATIONAL VICE PRESIDENT AND GENERAL COUNSEL
 
 ### ZIP
 
@@ -686,37 +686,37 @@ ind <- ind %>%
   )
 ```
 
-This process brought us to 95.4% valid.
+This process brought us to 95.1% valid.
 
 ``` r
 n_distinct(ind$city_norm)
-#> [1] 6142
+#> [1] 6149
 prop_in(ind$city_norm, valid_city, na.rm = TRUE)
-#> [1] 0.9540764
+#> [1] 0.950849
 length(setdiff(ind$city_norm, valid_city))
-#> [1] 2987
+#> [1] 3009
 prop_na(ind$city_norm)
-#> [1] 0.05901055
+#> [1] 0.05905005
 ```
 
-It also increased the proportion of `NA` values by 0.0725%. These new
+It also increased the proportion of `NA` values by 0.0764%. These new
 `NA` values were either a single (possibly repeating) character, or
 contained in the `na_city` vector.
 
-    #> # A tibble: 67 x 4
+    #> # A tibble: 70 x 4
     #>    zip_norm state_norm city       city_norm
     #>    <chr>    <chr>      <chr>      <chr>    
-    #>  1 01050    IN         47404-1553 <NA>     
-    #>  2 <NA>     IN         OOOOOOOOOO <NA>     
-    #>  3 <NA>     IN         UNKNOWN    <NA>     
-    #>  4 <NA>     FL         UNKNOWN    <NA>     
-    #>  5 <NA>     <NA>       Online     <NA>     
-    #>  6 46268    IN         44064      <NA>     
-    #>  7 <NA>     IN         46201      <NA>     
-    #>  8 46250    IN         unknown    <NA>     
-    #>  9 <NA>     IN         N/A        <NA>     
-    #> 10 <NA>     IL         unknown    <NA>     
-    #> # … with 57 more rows
+    #>  1 46016    IN         requested  <NA>     
+    #>  2 <NA>     IN         *          <NA>     
+    #>  3 <NA>     WA         2151       <NA>     
+    #>  4 00046    IN         46268      <NA>     
+    #>  5 46250    IN         unknown    <NA>     
+    #>  6 <NA>     <NA>       ***        <NA>     
+    #>  7 <NA>     <NA>       Online     <NA>     
+    #>  8 47601    IN         Unknown    <NA>     
+    #>  9 <NA>     IN         OOOOOOOOOO <NA>     
+    #> 10 <NA>     IN         xxx        <NA>     
+    #> # … with 60 more rows
 
 #### Swap
 
@@ -746,16 +746,16 @@ ind <- ind %>%
   )
 ```
 
-This is a very fast way to increase the valid proportion to 97.9% and
-reduce the number of distinct *invalid* values from 2987 to only 627
+This is a very fast way to increase the valid proportion to 97.6% and
+reduce the number of distinct *invalid* values from 3009 to only 660
 
 ``` r
 n_distinct(ind$city_swap)
-#> [1] 3730
+#> [1] 3747
 prop_in(ind$city_swap, valid_city, na.rm = TRUE)
-#> [1] 0.9785053
+#> [1] 0.9755157
 length(setdiff(ind$city_swap, valid_city))
-#> [1] 627
+#> [1] 660
 ```
 
 #### Refine
@@ -785,20 +785,20 @@ good_refine <- ind %>%
   )
 ```
 
-    #> # A tibble: 38 x 5
-    #>    state_norm zip_norm city_raw       city_refine          n
-    #>    <chr>      <chr>    <chr>          <chr>            <int>
-    #>  1 IN         47906    West Lafaye    WEST LAFAYETTE       1
-    #>  2 IA         50265    WEST DEMONIS   WEST DES MOINES      1
-    #>  3 OH         45999    Cinnatti       CINCINNATI           2
-    #>  4 IN         46590    WINNIOA LAKE   WINONA LAKE          4
-    #>  5 IN         46184    New Whiteland  WHITELAND           22
-    #>  6 IN         46375    Scherrillville SCHERERVILLE         1
-    #>  7 IN         46410    Merrivelle     MERRILLVILLE         1
-    #>  8 CA         94107    Francisco      SAN FRANCISCO        3
-    #>  9 DC         20006    NW Washington  WASHINGTON           1
-    #> 10 IN         46962    NO MANCHESTER  NORTH MANCHESTER     1
-    #> # … with 28 more rows
+    #> # A tibble: 39 x 5
+    #>    state_norm zip_norm city_raw        city_refine        n
+    #>    <chr>      <chr>    <chr>           <chr>          <int>
+    #>  1 DC         20006    N.W. Washington WASHINGTON         6
+    #>  2 CA         94107    Francisco       SAN FRANCISCO      3
+    #>  3 IN         47978    Reneeslear      RENSSELAER         1
+    #>  4 IN         47978    Renesslear      RENSSELAER         4
+    #>  5 IN         47150    New Albany Lane NEW ALBANY        53
+    #>  6 IN         47906    West Lafaye     WEST LAFAYETTE     1
+    #>  7 IN         46375    Schervile       SCHERERVILLE       1
+    #>  8 IN         46410    MERRERVILLE     MERRILLVILLE       1
+    #>  9 IN         46184    New Whiteland   WHITELAND         22
+    #> 10 IN         47577    ST. MEINRAD     SAINT MEINRAD      9
+    #> # … with 29 more rows
 
 We can join these good refined values back to the original data and use
 them over their incorrect `city_swap` counterparts in a new
@@ -810,15 +810,15 @@ ind <- ind %>%
   mutate(city_refine = coalesce(city_refine, city_swap))
 ```
 
-This brings us to 97.9% valid values.
+This brings us to 97.6% valid values.
 
 ``` r
 n_distinct(ind$city_refine)
-#> [1] 3703
+#> [1] 3720
 prop_in(ind$city_refine, valid_city, na.rm = TRUE)
-#> [1] 0.9787747
+#> [1] 0.9758084
 length(setdiff(ind$city_refine, valid_city))
-#> [1] 601
+#> [1] 634
 ```
 
 #### Progress
@@ -832,20 +832,20 @@ ind %>%
   filter(city_refine %out% valid_city) %>% 
   count(state_norm, city_refine, sort = TRUE) %>% 
   drop_na(city_refine)
-#> # A tibble: 606 x 3
-#>    state_norm city_refine          n
-#>    <chr>      <chr>            <int>
-#>  1 IN         INDPLS            7595
-#>  2 IN         SPEEDWAY           400
-#>  3 IL         COUNTRYSIDE        392
-#>  4 IN         INDY               157
-#>  5 IL         OAKBROOK TERRACE    86
-#>  6 IN         EC                  76
-#>  7 IN         MERR                63
-#>  8 IN         OGDEN DUNES         60
-#>  9 MA         FITCHBONS           59
-#> 10 TX         DFW AIRPORT         55
-#> # … with 596 more rows
+#> # A tibble: 647 x 3
+#>    state_norm city_refine           n
+#>    <chr>      <chr>             <int>
+#>  1 IN         INDPLS             7595
+#>  2 MO         STREET LOUIS        746
+#>  3 IN         SPEEDWAY            400
+#>  4 IL         COUNTRYSIDE         392
+#>  5 MN         STREET PAUL         226
+#>  6 IN         STREET JOHN         192
+#>  7 IN         INDY                157
+#>  8 MN         STREET CLOUD        114
+#>  9 FL         STREET PETERSBURG   102
+#> 10 IL         OAKBROOK TERRACE     86
+#> # … with 637 more rows
 ```
 
 ``` r
@@ -860,7 +860,7 @@ ind <- ind %>%
 ```
 
 By making less than a dozen manual string replacements, we bring our
-final valid percentage to 99.4%, above our 99% goal. There are still 597
+final valid percentage to 99.1%, above our 99% goal. There are still 630
 different *invalid* values that could be checked, but they make up less
 than 1% of records. Many of these values are actually valid and simply
 not in our list (which doesn’t contain very small towns and census
@@ -868,17 +868,17 @@ desginated places).
 
 Still, our progress is significant without having to make a single
 manual or unconfident change. The percent of valid cities increased from
-12.9% to 99.4%. The number of total distinct city values decreased from
-9,314 to 3,699. The number of distinct invalid city names decreased from
-7,790 to only 597, a change of -92.3%.
+12.9% to 99.1%. The number of total distinct city values decreased from
+9,314 to 3,716. The number of distinct invalid city names decreased from
+7,790 to only 630, a change of -91.9%.
 
 | Normalization Stage | Total Distinct | Percent Valid | Unique Invalid |
 | :------------------ | -------------: | ------------: | -------------: |
 | raw                 |           9314 |        0.1291 |           7790 |
-| norm                |           6142 |        0.9541 |           2987 |
-| swap                |           3730 |        0.9785 |            627 |
-| refine              |           3703 |        0.9788 |            601 |
-| final               |           3699 |        0.9941 |            597 |
+| norm                |           6149 |        0.9508 |           3009 |
+| swap                |           3747 |        0.9755 |            660 |
+| refine              |           3720 |        0.9758 |            634 |
+| final               |           3716 |        0.9911 |            630 |
 
 ## Conclude
 
