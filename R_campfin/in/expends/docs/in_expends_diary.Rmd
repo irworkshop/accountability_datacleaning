@@ -16,7 +16,7 @@ editor_options:
 ```{r setup, include=FALSE, purl=FALSE}
 library(knitr)
 opts_chunk$set(
-  eval = FALSE,
+  eval = TRUE,
   echo = TRUE,
   warning = FALSE,
   message = FALSE,
@@ -186,12 +186,12 @@ if (!all_files_new(raw_dir, "*.zip$")) {
 
 ### Read
 
-We can read each file as a data frame into a list of data frames by using `purrr::map()` and 
-`readr::read_delim()`.
+We can read each file as a data frame into a list of data frames by using `purrr::map_df()` and 
+`readr::read_delim()`. We don't need to unzip the files.
 
 ```{r map_read_raw}
-ind <- map(
-  .x = dir_ls(raw_dir),
+ind <- map_df(
+  .x = dir_ls(raw_dir, glob = "*.csv.zip$"),
   .f = read_delim,
   delim = ",",
   escape_backslash = FALSE,
@@ -199,20 +199,22 @@ ind <- map(
   col_types = cols(
     .default = col_character(),
     Amount = col_double(),
-    Expenditure_Date = col_datetime(),
+    Expenditure_Date = col_date("%Y-%m-%d %H:%M:%S"),
     Amended = col_logical()
   )
-)
+) %>% clean_names("snake")
 ```
 
-```{r clean_raw_list}
-ind <- ind %>% 
-  bind_rows(.id = "FileYear") %>% 
-  clean_names(case = "snake") %>% 
-  mutate(
-    file_year = basename(file_year) %>% 
-      str_extract("\\d+") %>% 
-      parse_integer()
+There were about a dozen parsing errors, so we will remove these rows by using `dplyr::filter()` to
+remove any record with an invalid `file_number` (typically numeric nominal values) or 
+`committee_type`/`expenditure_code` values (fixed categorical).
+
+```{r filter_broken}
+ind <- ind %>%
+  filter(
+    str_detect(file_number, "\\d+"),
+    str_detect(committee_type, "^\\d+.\\d+$", negate = TRUE),
+    expenditure_code %out% "Thomas Lewis Andrews"
   )
 ```
 
@@ -249,6 +251,7 @@ There are very few duplicate records in the database. They have `TRUE` values in
 ```{r flag_dupes}
 ind <- mutate(ind, dupe_flag = duplicated(ind))
 sum(ind$dupe_flag)
+percent(mean(ind$dupe_flag))
 ```
 
 ### Categorical
@@ -261,9 +264,7 @@ For categorical variables, we can use `ggplo2::geom_col()` to explore the count 
 
 ```{r comm_type_bar, echo=FALSE}
 explore_plot(
-  data = ind %>% 
-    mutate(committee_type = str_remove(committee_type, "\\d+.\\d+") %>% na_if("")) %>% 
-    drop_na(committee_type), 
+  data = ind, 
   var = committee_type,
   title = "Indiana Expenditures by Committe Type",
   caption = "Source: Indiana Election Division"
@@ -306,13 +307,14 @@ ind %>%
   unnest_tokens(word, purpose) %>% 
   count(word, sort = TRUE) %>% 
   anti_join(stop_words, by = "word") %>% 
-  head(35) %>% 
+  filter(word != "contribution") %>% 
+  head(35) %>%
   ggplot(aes(x = reorder(word, n), y = n)) +
   geom_col(aes(fill = n)) +
   scale_fill_gradient(guide = FALSE) +
   coord_flip() +
   labs(
-    title = "Indiana Expenditures Purpose (Words)",
+    title = "Indiana Operational Expenditure Purpose (Words)",
     caption = "Source: Indiana Election Division",
     x = "Word",
     y = "Count"
@@ -333,9 +335,10 @@ sum(ind$amount > 100000, na.rm = TRUE)
 ```
 
 ```{r amount_histogram, echo=FALSE}
+brewer_dark2 <- RColorBrewer::brewer.pal(n = 8, name = "Dark2")
 ind %>%
   ggplot(aes(amount)) +
-  geom_histogram(fill = "blue") +
+  geom_histogram(fill = brewer_dark2[1]) +
   geom_vline(xintercept = median(ind$amount, na.rm = TRUE)) +
   scale_x_continuous(
     breaks = c(1 %o% 10^(0:6)),
@@ -357,8 +360,9 @@ ind <- mutate(ind, expenditure_year = year(expenditure_date))
 ```
 
 ```{r date_range, collapse=TRUE}
+count_na(ind$expenditure_date)
 min(ind$expenditure_date, na.rm = TRUE)
-sum(ind$expenditure_year < 1999, na.rm = TRUE)
+sum(ind$expenditure_year < 1998, na.rm = TRUE)
 max(ind$expenditure_date, na.rm = TRUE)
 sum(ind$expenditure_date > today(), na.rm = TRUE)
 ```
@@ -370,46 +374,138 @@ count(ind, expenditure_year) %>% print(n = 52)
 ```{r flag_fix_dates}
 ind <- ind %>% 
   mutate(
-    date_flag = is.na(expenditure_date) | expenditure_year < 1999 | expenditure_date > today(),
-    date_clean = as_date(ifelse(date_flag, NA, expenditure_date)),
+    date_flag = expenditure_year < 1998 | expenditure_date > today(),
+    date_clean = case_when(
+      date_flag~ as.Date(NA),
+      not(date_flag) ~ expenditure_date
+    ),
     year_clean = year(date_clean)
   )
+
+sum(ind$date_flag, na.rm = TRUE)
+```
+
+```{r year_bar_count, echo=FALSE}
+ind %>% 
+  count(year_clean) %>% 
+  mutate(even = is_even(year_clean)) %>% 
+  filter(n > 100) %>% 
+  ggplot(aes(x = year_clean, y = n)) +
+  geom_col(aes(fill = even)) +
+  scale_fill_brewer(type = "qual", palette = "Dark2") +
+  labs(
+    title = "Indiana Expenditures Count by Year",
+    caption = "Source: Indiana Election Division",
+    fill = "Election Year",
+    x = "Year Made",
+    y = "Number of Expenditures"
+  ) +
+  theme(legend.position = "bottom")
+```
+
+```{r year_bar_sum, echo=FALSE}
+ind %>% 
+  group_by(year_clean) %>% 
+  summarise(sum = sum(amount, na.rm = TRUE)) %>% 
+  mutate(even = is_even(year_clean)) %>% 
+  ggplot(aes(x = year_clean, y = sum)) +
+  geom_col(aes(fill = even)) +
+  scale_fill_brewer(type = "qual", palette = "Dark2") +
+  scale_y_continuous(labels = dollar) +
+  labs(
+    title = "Indiana Expenditures Total by Year",
+    caption = "Source: Indiana Election Division",
+    fill = "Election Year",
+    x = "Year Made",
+    y = "Total Amount"
+  ) +
+  theme(legend.position = "bottom")
+```
+
+```{r year_bar_mean, echo=FALSE}
+ind %>% 
+  group_by(year_clean) %>% 
+  summarise(mean = mean(amount, na.rm = TRUE)) %>% 
+  mutate(even = is_even(year_clean)) %>% 
+  ggplot(aes(x = year_clean, y = mean)) +
+  geom_col(aes(fill = even)) +
+  scale_fill_brewer(type = "qual", palette = "Dark2") +
+  scale_y_continuous(labels = dollar) +
+  labs(
+    title = "Indiana Expenditures Mean by Year",
+    caption = "Source: Indiana Election Division",
+    fill = "Election Year",
+    x = "Year Made",
+    y = "Mean Amount"
+  ) +
+  theme(legend.position = "bottom")
+```
+
+```{r month_line_count, echo=FALSE}
+ind %>% 
+  mutate(month = month(date_clean), even = is_even(year_clean)) %>% 
+  group_by(month, even) %>% 
+  summarize(n = n()) %>% 
+  ggplot(aes(x = month, y = n)) +
+  geom_line(aes(color = even), size = 2) +
+  scale_color_brewer(type = "qual", palette = "Dark2") +
+  scale_y_continuous(labels = dollar)+
+  labs(
+    title = "Indiana Expenditures Count by Month",
+    caption = "Source: Indiana Election Division",
+    fill = "Election Year",
+    x = "Year Made",
+    y = "Number of Expenditures"
+  ) +
+  theme(legend.position = "bottom")
 ```
 
 ## Wrangle
 
+We should use the `campfin::normal_*()` functions to perform some basic, high-confidence text
+normalization to improve the searchability of the database.
+
 ### Address
 
+First, we will normalize the street address by removing punctuation and expanding abbreviations.
+
 ```{r normal_address}
-packageVersion("tidyr")
-tx <- tx %>% 
-  # combine street addr
-  unite(
-    col = adress_comb,
-    starts_with("address"),
-    remove = FALSE,
-    na.rm = TRUE
-  ) %>% 
-  # normalize combined addr
+ind <- ind %>% 
   mutate(
     address_norm = normal_address(
-      address = adress_comb,
+      address = address,
       add_abbs = usps,
       na_rep = TRUE
     )
   )
 ```
 
-### ZIP
+We can see how this improves consistency across the `address` field.
 
-```{r count_zip_pre, collapse=TRUE}
-n_distinct(df$zip)
-prop_in(df$zip, geo$zip, na.rm = TRUE)
-length(setdiff(df$zip, geo$zip))
+```{r view_address_change, echo=FALSE}
+ind %>% 
+  select(starts_with("address")) %>% 
+  drop_na() %>% 
+  sample_n(10)
 ```
 
+### ZIP
+
+The `zip` address is already pretty good, with 
+`r percent(prop_in(ind$zip, valid_zip, na.rm = TRUE))` of the values already in our 95% 
+comprehensive `valid_zip` list.
+
+```{r count_zip_pre, collapse=TRUE}
+n_distinct(ind$zip)
+prop_in(ind$zip, valid_zip)
+length(setdiff(ind$zip, valid_zip))
+```
+
+We can improve this further by lopping off the uncommon four-digit extensions and removing common
+invalid codes like 00000 and 99999.
+
 ```{r normal_zip}
-df <- df %>% 
+ind <- ind %>% 
   mutate(
     zip_norm = normal_zip(
       zip = zip,
@@ -418,71 +514,116 @@ df <- df %>%
   )
 ```
 
+This brings our valid percentage to `r percent(prop_in(ind$zip_norm, valid_zip, na.rm = TRUE))`.
+
 ```{r count_zip_post, collapse=TRUE}
-n_distinct(df$zip_norm)
-prop_in(df$zip_norm, geo$zip, na.rm = TRUE)
-length(setdiff(df$zip_norm, geo$zip))
+n_distinct(ind$zip_norm)
+prop_in(ind$zip_norm, valid_zip)
+length(setdiff(ind$zip_norm, valid_zip))
+count_na(ind$zip_norm) - count_na(ind$zip)
 ```
 
 ### State
 
+The `state` variable is also very clean, already at 
+`r percent(prop_in(ind$state, valid_state, na.rm = TRUE))`.
+
 ```{r count_state_pre, collapse=TRUE}
-n_distinct(df$state)
-prop_in(df$state, geo$state, na.rm = TRUE)
-length(setdiff(df$state, geo$state))
+n_distinct(ind$state)
+prop_in(ind$state, valid_state, na.rm = TRUE)
+length(setdiff(ind$state, valid_state))
+setdiff(ind$state, valid_state)
 ```
 
+There are still `r length(setdiff(ind$state, valid_state))` invalid values which we can remove.
+
 ```{r normal_state}
-df <- df %>% 
+ind <- ind %>% 
   mutate(
     state_norm = normal_state(
-      state = state,
+      state = str_replace(str_trim(state), "^I$", "IN"),
       abbreviate = TRUE,
       na_rep = TRUE,
-      valid = geo$state
+      valid = valid_state
     )
   )
 ```
 
 ```{r count_state_post, collapse=TRUE}
-n_distinct(df$state_norm)
-prop_in(df$state_norm, geo$state, na.rm = TRUE)
-length(setdiff(df$state_norm, geo$state))
+n_distinct(ind$state_norm)
+prop_in(ind$state_norm, valid_state)
 ```
 
 ### City
 
+The `city` value is the hardest to normalize. We can use a four-step system to functionally improve
+the searchablity of the database.
+
+1. **Normalize** the raw values with `campfin::normal_city()`
+1. **Match** the normal values with the _expected_ value for that ZIP code
+1. **Swap** the normal values with the expected value if they are _very_ similar
+1. **Refine** the swapped values the [OpenRefine algorithms][08] and keep good changes
+
+[08]: https://github.com/OpenRefine/OpenRefine/wiki/Clustering-In-Depth
+
+The raw `city` values are not very normal, with only
+`r percent(prop_in(ind$city, valid_city, na.rm = TRUE))` already in `valid_city`, mostly due to case difference. If we simply convert to uppcase that numbers increases to 
+`r percent(prop_in(str_to_upper(ind$city), valid_city, na.rm = TRUE))`. We will aim to get this number over 99% using the other steps in the process.
+
 ```{r count_city_pre, collapse=TRUE}
-n_distinct(df$city)
-prop_in(df$city, geo$city, na.rm = TRUE)
-length(setdiff(df$city, geo$city))
+n_distinct(ind$city)
+prop_in(ind$city, valid_city, na.rm = TRUE)
+length(setdiff(ind$city, valid_city))
+prop_na(ind$city)
 ```
 
 #### Normalize
 
 ```{r normal_city}
-df <- df %>% 
+ind <- ind %>% 
   mutate(
     city_norm = normal_city(
       city = city, 
       geo_abbs = usps_city,
-      st_abbs = c("DF", "DC", "DATA FRAME"),
+      st_abbs = c("IN", "DC", "INDIANA"),
       na = na_city,
       na_rep = TRUE
     )
   )
 ```
 
+This process brought us to `r percent(prop_in(ind$city_norm, valid_city, na.rm = TRUE))` valid.
+
 ```{r count_city_post_norm, collapse=TRUE}
-n_distinct(df$city_norm)
-prop_in(df$city_norm, geo$city, na.rm = TRUE)
-length(setdiff(df$city_norm, geo$city))
+n_distinct(ind$city_norm)
+prop_in(ind$city_norm, valid_city, na.rm = TRUE)
+length(setdiff(ind$city_norm, valid_city))
+prop_na(ind$city_norm)
+```
+
+It also increased the proportion of `NA` values by 
+`r percent(prop_na(ind$city_norm) - prop_na(ind$city))`. These new `NA` values were either a single
+(possibly repeating) character, or contained in the `na_city` vector.
+
+```{r new_city_na, echo=FALSE}
+ind %>% 
+  filter(is.na(city_norm) & !is.na(city)) %>% 
+  select(zip_norm, state_norm, city, city_norm) %>% 
+  distinct() %>% 
+  sample_frac()
 ```
 
 #### Swap
 
+Then, we will compare these normalized `city_norm` values to the _expected_ city value for that
+vendor's ZIP code. If the [levenshtein distance][09] is less than 3, we can confidently swap these
+two values.
+
+[09]: https://en.wikipedia.org/wiki/Levenshtein_distance
+
 ```{r swap_city}
-df <- df %>% 
+ind <- ind %>% 
+  rename(city_raw = city) %>% 
   left_join(
     y = geo,
     by = c(
@@ -494,29 +635,184 @@ df <- df %>%
   mutate(
     match_dist = stringdist(city_norm, city_match),
     city_swap = if_else(
-      condition = equals(match_dist, 1),
+      condition = is_less_than(match_dist, 3),
       true = city_match,
       false = city_norm
     )
   )
 ```
 
+This is a very fast way to increase the valid proportion to
+`r percent(prop_in(ind$city_swap, valid_city, na.rm = TRUE))` and reduce the number of distinct
+_invalid_ values from `r length(setdiff(ind$city_norm, valid_city))` to only
+`r length(setdiff(ind$city_swap, valid_city))`
+
 ```{r count_city_post_swap, collapse=TRUE}
-n_distinct(df$city_swap)
-prop_in(df$city_swap, geo$city, na.rm = TRUE)
-length(setdiff(df$city_swap, geo$city))
+n_distinct(ind$city_swap)
+prop_in(ind$city_swap, valid_city, na.rm = TRUE)
+length(setdiff(ind$city_swap, valid_city))
 ```
 
 #### Refine
 
+Finally, we can pass these swapped `city_swap` values to the OpenRefine cluster and merge 
+algorithms. These two algorithms cluster similar values and replace infrequent values with their
+more common counterparts. This process can be harmful by making _incorrect_ changes. We will only
+keep changes where the state, ZIP code, _and_ new city value all match a valid combination.
+
+```{r refine_city}
+good_refine <- ind %>% 
+  mutate(
+    city_refine = city_swap %>% 
+      key_collision_merge() %>% 
+      n_gram_merge(numgram = 1)
+  ) %>% 
+  filter(city_refine != city_swap) %>% 
+  inner_join(
+    y = geo,
+    by = c(
+      "city_refine" = "city",
+      "state_norm" = "state",
+      "zip_norm" = "zip"
+    )
+  )
+```
+
+```{r view_city_refines, echo=FALSE}
+good_refine %>%
+  count(
+    state_norm, 
+    zip_norm, 
+    city_raw, 
+    city_refine
+  ) %>% 
+  sample_frac()
+```
+
+We can join these good refined values back to the original data and use them over their incorrect
+`city_swap` counterparts in a new `city_refine` variable.
+
+```{r join_refine}
+ind <- ind %>% 
+  left_join(good_refine) %>% 
+  mutate(city_refine = coalesce(city_refine, city_swap))
+```
+
+This brings us to `r percent(prop_in(ind$city_refine, valid_city, na.rm = TRUE))` valid values.
+
+```{r count_city_post_refine, collapse=TRUE}
+n_distinct(ind$city_refine)
+prop_in(ind$city_refine, valid_city, na.rm = TRUE)
+length(setdiff(ind$city_refine, valid_city))
+```
+
+#### Progress
+
+We can make very few manual changes to capture the last few big invalid values. Local city
+abbreviations (e.g., INDPLS) often need to be changed by hand.
+
+```{r view_final_bad}
+ind %>%
+  filter(city_refine %out% valid_city) %>% 
+  count(state_norm, city_refine, sort = TRUE) %>% 
+  drop_na(city_refine)
+```
+
+```{r city_final}
+ind <- ind %>% 
+  mutate(
+    city_final = city_refine %>% 
+      str_replace("^INDPLS$", "INDIANAPOLIS") %>% 
+      str_replace("^EC$", "EAST CHICAGO") %>% 
+      str_replace("^INDY$", "INDIANAPOLIS") %>% 
+      str_replace("^MERR$", "MERRILLVILLE")
+  )
+```
+
+By making less than a dozen manual string replacements, we bring our final valid percentage to 
+`r percent(prop_in(ind$city_final, valid_city, na.rm = TRUE))`, above our 99% goal. There are still
+`r length(setdiff(ind$city_final, valid_city))` different _invalid_ values that could be checked, but
+they make up less than 1% of records. Many of these values are actually valid and simply not in our
+list (which doesn't contain very small towns and census desginated places).
+
+```{r progress_table, echo=FALSE}
+progress_table <- tibble(
+  stage = c("raw", "norm", "swap", "refine", "final"),
+  total_distinct = c(
+    n_distinct(ind$city_raw),
+    n_distinct(ind$city_norm),
+    n_distinct(ind$city_swap),
+    n_distinct(ind$city_refine),
+    n_distinct(ind$city_final)
+  ),
+  prop_good = c(
+    prop_in(ind$city_raw, valid_city, na.rm = TRUE),
+    prop_in(ind$city_norm, valid_city, na.rm = TRUE),
+    prop_in(ind$city_swap, valid_city, na.rm = TRUE),
+    prop_in(ind$city_refine, valid_city, na.rm = TRUE),
+    prop_in(ind$city_final, valid_city, na.rm = TRUE)
+  ),
+  unique_bad = c(
+    length(setdiff(ind$city_raw, valid_city)),
+    length(setdiff(ind$city_norm, valid_city)),
+    length(setdiff(ind$city_swap, valid_city)),
+    length(setdiff(ind$city_refine, valid_city)),
+    length(setdiff(ind$city_final, valid_city))
+  )
+)
+
+diff_change <- progress_table$unique_bad[5]-progress_table$unique_bad[1]
+prop_change <- diff_change/progress_table$unique_bad[1]
+```
+
+Still, our progress is significant without having to make a single manual or unconfident change.
+The percent of valid cities increased from `r percent(progress_table$prop_good[1])` to 
+`r percent(progress_table$prop_good[5])`. The number of total distinct city values decreased from
+`r comma(progress_table$total_distinct[1])` to `r comma(progress_table$total_distinct[5])`. The
+number of distinct invalid city names decreased from `r comma(progress_table$unique_bad[1])` to
+only `r comma(progress_table$unique_bad[5])`, a change of `r percent(prop_change)`.
+
+```{r print_progress, echo=FALSE}
+kable(
+  x = progress_table,
+  format = "markdown", 
+  digits = 4,
+  col.names = c("Normalization Stage", "Total Distinct", "Percent Valid", "Unique Invalid")
+)
+```
+
 ## Conclude
 
-1. There are `nrow(df)` records in the database.
-1. There are `sum(df$dupe_flag)` duplicate records in the database.
-1. The range and distribution of `amount` and `date` seem reasonable.
-1. There are `sum(df$na_flag)` records missing either recipient or date.
-1. Consistency in goegraphic data has been improved with `campfin::normal_*()`.
-1. The 5-digit `zip_norm` variable has been created with `campfin::normal_zip(df$zip)`.
-1. The 4-digit `year` variable has been created with `lubridate::year(df$date)`.
+1. There are `r nrow(ind)` records in the database.
+1. There are `r sum(ind$dupe_flag)` duplicate records in the database.
+1. The range and distribution of `amount` seems reasomable, and `date` has been cleaned by removing
+`r sum(ind$date_flag, na.rm = T)` values from the distance past or future.
+1. There are `r sum(ind$na_flag)` records missing either recipient or date.
+1. Consistency in geographic data has been improved with `campfin::normal_*()`.
+1. The 5-digit `zip_norm` variable has been created with `campfin::normal_zip()`.
+1. The 4-digit `year_clean` variable has been created with `lubridate::year()`.
 
 ## Export
+
+```{r create_proc_dir}
+proc_dir <- here("in", "expends", "data", "processed")
+dir_create(proc_dir)
+```
+
+```{r write_clean}
+ind %>% 
+  select(
+    -city_norm,
+    -city_swap,
+    -city_match,
+    -city_swap,
+    -match_dist,
+    -city_refine,
+    -expenditure_year
+  ) %>% 
+  write_csv(
+    path = glue("{proc_dir}/in_expends_clean.csv"),
+    na = ""
+  )
+```
+
