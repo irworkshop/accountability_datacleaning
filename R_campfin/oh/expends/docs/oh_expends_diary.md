@@ -1,7 +1,7 @@
 Ohio Expenditures
 ================
 Kiernan Nicholls
-2019-08-01 12:53:28
+2019-08-22 14:40:50
 
   - [Project](#project)
   - [Objectives](#objectives)
@@ -53,6 +53,7 @@ This package contains functions custom made to help facilitate the
 processing of campaign finance data.
 
 ``` r
+# Thu Aug 01 12:53:28 2019 ------------------------------
 if (!require("pacman")) install.packages("pacman")
 pacman::p_load_current_gh("kiernann/campfin")
 pacman::p_load(
@@ -250,12 +251,12 @@ tail(oh)
     #> # A tibble: 6 x 26
     #>   file  com_name master_key rpt_year report_key report_descript… short_descripti… first_name
     #>   <chr> <chr>    <chr>         <int> <chr>      <chr>            <chr>            <chr>     
-    #> 1 PAC_… OHIOANS… 15142          2019 348934018  SEMIANNUAL   (J… 31-B  Stmt of E… <NA>      
-    #> 2 PAC_… THE JM … 15154          2019 348983053  MAY 20TH MONTHLY 31-B  Stmt of E… <NA>      
+    #> 1 PAC_… THE JM … 15154          2019 348983053  MAY 20TH MONTHLY 31-B  Stmt of E… <NA>      
+    #> 2 PAC_… OHIOANS… 15170          2019 350645149  SEMIANNUAL   (J… 31-B  Stmt of E… <NA>      
     #> 3 PAC_… OHIOANS… 15170          2019 350645149  SEMIANNUAL   (J… 31-B  Stmt of E… <NA>      
     #> 4 PAC_… OHIOANS… 15170          2019 350645149  SEMIANNUAL   (J… 31-B  Stmt of E… <NA>      
     #> 5 PAC_… OHIOANS… 15170          2019 350645149  SEMIANNUAL   (J… 31-B  Stmt of E… <NA>      
-    #> 6 PAC_… OHIOANS… 15170          2019 350645149  SEMIANNUAL   (J… 31-B  Stmt of E… <NA>      
+    #> 6 PAC_… VOTE MA… 15175          2019 351967570  JULY 31 MIDYEAR… 31-B  Stmt of E… <NA>      
     #> # … with 18 more variables: middle_name <chr>, last_name <chr>, suffix_name <chr>,
     #> #   non_individual <chr>, address <chr>, city_raw <chr>, state <chr>, zip <chr>,
     #> #   expend_date <date>, amount <dbl>, event_date <date>, purpose <chr>, inkind <lgl>,
@@ -266,34 +267,34 @@ tail(oh)
 glimpse(sample_frac(oh))
 ```
 
-    #> Observations: 889,140
+    #> Observations: 893,075
     #> Variables: 26
-    #> $ file                 <chr> "CAC_EXP_2014.CSV", "ALL_PAC_EXP_2000.CSV", "ALL_PAC_EXP_2003.CSV",…
-    #> $ com_name             <chr> "CITIZENS FOR BROWN (TIM)", "FRIENDS OF OHIO HOSPITALS", "LABORERS …
-    #> $ master_key           <chr> "13628", "1508", "1635", "1780", "10854", "11217", "10794", "10659"…
-    #> $ rpt_year             <int> 2014, 2000, 2003, 2012, 2015, 2011, 2009, 2006, 2014, 2002, 2010, 2…
-    #> $ report_key           <chr> "156463246", "664366", "774478", "126708349", "190183534", "1116006…
-    #> $ report_description   <chr> "PRE-PRIMARY", "POST-PRIMARY", "POST-PRIMARY", "POST-GENERAL", "ANN…
+    #> $ file                 <chr> "CAC_EXP_2012.CSV", "PAC_EXP_2013.CSV", "CAC_EXP_2010.CSV", "ALL_PA…
+    #> $ com_name             <chr> "DR. TERRY JOHNSON FOR OHIO", "NISOURCE  INC. PAC", "FRIENDS OF BRU…
+    #> $ master_key           <chr> "12981", "1116", "12054", "1894", "9469", "8251", "12856", "12822",…
+    #> $ rpt_year             <int> 2012, 2013, 2010, 2009, 2017, 2007, 2016, 2014, 2006, 2010, 2010, 2…
+    #> $ report_key           <chr> "123656572", "158565562", "76633567", "1017466", "309205321", "2344…
+    #> $ report_description   <chr> "PRE-GENERAL", "JAN 31 YEAR END (FEDERAL)", "PRE-PRIMARY", "SEMIANN…
     #> $ short_description    <chr> "31-B  Stmt of Expenditures", "31-B  Stmt of Expenditures", "31-B  …
-    #> $ first_name           <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
+    #> $ first_name           <chr> NA, NA, NA, "JIM", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
     #> $ middle_name          <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
-    #> $ last_name            <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
+    #> $ last_name            <chr> NA, NA, NA, "HUGHES", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
     #> $ suffix_name          <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
-    #> $ non_individual       <chr> "CAPITOL SQUARE REVIEW/ADV BOARD", "METZGER COMM TO ELECT KERRY", "…
-    #> $ address              <chr> "1 CAPITOL SQUARE", "116 4TH ST SE", "1470 CAMDEN RIDGE BLVD", "215…
-    #> $ city_raw             <chr> "COLUMBUS", "NEW PHILADELPHIA", "AKRON", "CLEVELAND", "CHICAGO", "C…
-    #> $ state                <chr> "OH", "OH", "OH", "OH", "IL", "OH", "OH", "CA", "NY", "OH", "OH", "…
-    #> $ zip                  <chr> "43215-4210", "44663", "44312", "44128", "60601-1604", "43215", "43…
-    #> $ expend_date          <date> 2014-02-05, 2000-02-22, 2003-05-16, 2012-10-29, 2015-12-04, 2011-0…
-    #> $ amount               <dbl> 56.82, 200.00, 150.00, 6.00, 292.10, 367.50, 43.93, 3.20, 7.95, 150…
-    #> $ event_date           <date> NA, NA, NA, NA, NA, 2011-08-14, NA, NA, NA, NA, NA, NA, NA, 2016-0…
-    #> $ purpose              <chr> "GIFT FOR ROTARY AUCTION", "FUNDRAISER", "TICKETS", "CONTRIBUTION A…
-    #> $ inkind               <lgl> NA, NA, NA, NA, NA, NA, FALSE, NA, NA, FALSE, NA, FALSE, NA, NA, FA…
-    #> $ candidate_first_name <chr> "TIM", NA, NA, NA, "JOSH", "TED", "ARMOND", "JENNIFER", "TERRY", "N…
-    #> $ candidate_last_name  <chr> "BROWN", NA, NA, NA, "MANDEL", "CELESTE", "BUDISH", "BRUNNER", "JOH…
-    #> $ office               <chr> "HOUSE", NA, NA, NA, "TREASURER", "HOUSE", "HOUSE", "SECRETARY OF S…
-    #> $ district             <int> 3, NA, NA, NA, 0, 24, 8, 0, 90, 93, 2, 11, NA, 0, 36, NA, 0, 50, 9,…
-    #> $ party                <chr> "REPUBLICAN", NA, NA, NA, "REPUBLICAN", "DEMOCRAT", "DEMOCRAT", "DE…
+    #> $ non_individual       <chr> "SOUTHERN OHIO BUSINESS SOURCE", "FRIENDS OF TIMOTHY J DE GEETER", …
+    #> $ address              <chr> "111 EAST MAIN STREET  P O BOX 26", NA, "14 ARROW STREET SUITE 11",…
+    #> $ city_raw             <chr> "WEST UNION", NA, "CAMBRIDGE", "COLUMBUS", "WEST CHESTER", "COLUMBU…
+    #> $ state                <chr> "OH", NA, "MA", "OH", "OH", "OH", "OH", "OH", NA, "OH", "OH", "OH",…
+    #> $ zip                  <chr> "45693", NA, "02138", "43214", "45069", "43215", "43215", "43015", …
+    #> $ expend_date          <date> 2012-08-16, 2013-12-20, 2010-02-05, 2009-06-19, 2017-02-06, 2007-0…
+    #> $ amount               <dbl> 680.00, 200.00, 0.15, 350.00, 1.59, 150.00, 19.99, 240.00, 25.00, 2…
+    #> $ event_date           <date> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
+    #> $ purpose              <chr> "FAIR SUPPLIES", NA, "CREDIT CARD PAYMENT FEE", "6/24/09 FUNDRAISER…
+    #> $ inkind               <lgl> NA, NA, NA, NA, NA, FALSE, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
+    #> $ candidate_first_name <chr> "TERRY", NA, "BRUCE", NA, "WILLIAM (BILL)", "SANDRA", "JOHN", "DAVI…
+    #> $ candidate_last_name  <chr> "JOHNSON", NA, "CARTER", NA, "COLEY", "STABILE HARWOOD", "KASICH", …
+    #> $ office               <chr> "HOUSE", NA, "HOUSE", NA, "SENATE", "HOUSE", "GOVERNOR", "AUDITOR",…
+    #> $ district             <int> 90, NA, 54, NA, 4, 65, 0, 0, 0, 33, NA, NA, NA, 7, NA, NA, NA, 49, …
+    #> $ party                <chr> "REPUBLICAN", NA, "DEMOCRAT", NA, "REPUBLICAN", "DEMOCRAT", "REPUBL…
 
 ### Missing
 
@@ -311,32 +312,32 @@ glimpse_fun(oh, count_na)
     #>  5 report_key           chr        0 0       
     #>  6 report_description   chr        0 0       
     #>  7 short_description    chr        0 0       
-    #>  8 first_name           chr   800767 0.901   
-    #>  9 middle_name          chr   872936 0.982   
-    #> 10 last_name            chr   799729 0.899   
-    #> 11 suffix_name          chr   885918 0.996   
-    #> 12 non_individual       chr    91270 0.103   
-    #> 13 address              chr    72301 0.0813  
-    #> 14 city_raw             chr    58430 0.0657  
-    #> 15 state                chr    56755 0.0638  
-    #> 16 zip                  chr    68645 0.0772  
-    #> 17 expend_date          date    1481 0.00167 
-    #> 18 amount               dbl      400 0.000450
-    #> 19 event_date           date  857776 0.965   
-    #> 20 purpose              chr    52266 0.0588  
-    #> 21 inkind               lgl   786537 0.885   
-    #> 22 candidate_first_name chr   394875 0.444   
-    #> 23 candidate_last_name  chr   394656 0.444   
-    #> 24 office               chr   394656 0.444   
-    #> 25 district             int   398309 0.448   
-    #> 26 party                chr   394742 0.444
+    #>  8 first_name           chr   804282 0.901   
+    #>  9 middle_name          chr   876840 0.982   
+    #> 10 last_name            chr   803237 0.899   
+    #> 11 suffix_name          chr   889851 0.996   
+    #> 12 non_individual       chr    91683 0.103   
+    #> 13 address              chr    73060 0.0818  
+    #> 14 city_raw             chr    59141 0.0662  
+    #> 15 state                chr    57451 0.0643  
+    #> 16 zip                  chr    69421 0.0777  
+    #> 17 expend_date          date    1481 0.00166 
+    #> 18 amount               dbl      400 0.000448
+    #> 19 event_date           date  861634 0.965   
+    #> 20 purpose              chr    52807 0.0591  
+    #> 21 inkind               lgl   790472 0.885   
+    #> 22 candidate_first_name chr   395739 0.443   
+    #> 23 candidate_last_name  chr   395520 0.443   
+    #> 24 office               chr   395520 0.443   
+    #> 25 district             int   399395 0.447   
+    #> 26 party                chr   395606 0.443
 
 There are 0 missing values for the `com_name` variable, used to identify
 the giving party to the expenditure. The payee is identified by either
 `last_name` for individuals or `non_individual` for, well, non
 individuals. There are some records without wither payee name, which we
 will now flag with `na_flag`. We will also flag any record missing an
-`amount` value. However, there 0.167% of records are missing an
+`amount` value. However, there 0.166% of records are missing an
 `expend_date`, too usefully many to flag.
 
 ``` r
@@ -344,7 +345,7 @@ oh <- mutate(oh, na_flag = (is.na(last_name) & is.na(non_individual)) | is.na(am
 sum(oh$na_flag)
 ```
 
-    #> [1] 2493
+    #> [1] 2496
 
 ### Duplicates
 
@@ -354,7 +355,7 @@ There are many duplicated records, 1.22% of the entire database.
 nrow(oh) - nrow(distinct(oh))
 ```
 
-    #> [1] 10876
+    #> [1] 10905
 
 ### Categorical
 
@@ -365,33 +366,33 @@ glimpse_fun(oh, n_distinct)
     #> # A tibble: 27 x 4
     #>    var                  type       n          p
     #>    <chr>                <chr>  <int>      <dbl>
-    #>  1 file                 chr       39 0.0000439 
-    #>  2 com_name             chr     4159 0.00468   
-    #>  3 master_key           chr     4175 0.00470   
-    #>  4 rpt_year             int       20 0.0000225 
-    #>  5 report_key           chr    58226 0.0655    
-    #>  6 report_description   chr       61 0.0000686 
+    #>  1 file                 chr       39 0.0000437 
+    #>  2 com_name             chr     4169 0.00467   
+    #>  3 master_key           chr     4185 0.00469   
+    #>  4 rpt_year             int       20 0.0000224 
+    #>  5 report_key           chr    58422 0.0654    
+    #>  6 report_description   chr       61 0.0000683 
     #>  7 short_description    chr       14 0.0000157 
-    #>  8 first_name           chr     4777 0.00537   
-    #>  9 middle_name          chr      336 0.000378  
-    #> 10 last_name            chr    12054 0.0136    
-    #> 11 suffix_name          chr      189 0.000213  
-    #> 12 non_individual       chr   133963 0.151     
-    #> 13 address              chr   174155 0.196     
-    #> 14 city_raw             chr     7048 0.00793   
-    #> 15 state                chr      136 0.000153  
-    #> 16 zip                  chr    16159 0.0182    
-    #> 17 expend_date          date    7791 0.00876   
-    #> 18 amount               dbl    84179 0.0947    
-    #> 19 event_date           date    4725 0.00531   
-    #> 20 purpose              chr   148833 0.167     
-    #> 21 inkind               lgl        3 0.00000337
-    #> 22 candidate_first_name chr      689 0.000775  
-    #> 23 candidate_last_name  chr     1742 0.00196   
-    #> 24 office               chr       17 0.0000191 
-    #> 25 district             int      102 0.000115  
-    #> 26 party                chr       12 0.0000135 
-    #> 27 na_flag              lgl        2 0.00000225
+    #>  8 first_name           chr     4798 0.00537   
+    #>  9 middle_name          chr      337 0.000377  
+    #> 10 last_name            chr    12097 0.0135    
+    #> 11 suffix_name          chr      189 0.000212  
+    #> 12 non_individual       chr   134314 0.150     
+    #> 13 address              chr   174580 0.195     
+    #> 14 city_raw             chr     7056 0.00790   
+    #> 15 state                chr      137 0.000153  
+    #> 16 zip                  chr    16200 0.0181    
+    #> 17 expend_date          date    7799 0.00873   
+    #> 18 amount               dbl    84367 0.0945    
+    #> 19 event_date           date    4744 0.00531   
+    #> 20 purpose              chr   149232 0.167     
+    #> 21 inkind               lgl        3 0.00000336
+    #> 22 candidate_first_name chr      694 0.000777  
+    #> 23 candidate_last_name  chr     1747 0.00196   
+    #> 24 office               chr       17 0.0000190 
+    #> 25 district             int      102 0.000114  
+    #> 26 party                chr       12 0.0000134 
+    #> 27 na_flag              lgl        2 0.00000224
 
 ![](../plots/words_bar-1.png)<!-- -->
 
@@ -404,13 +405,13 @@ summary(oh$amount)
 ```
 
     #>    Min. 1st Qu.  Median    Mean 3rd Qu.    Max.    NA's 
-    #> -150000      48     200    1595     500 9715708     400
+    #> -150000      48     200    1590     500 9715708     400
 
 ``` r
 sum(oh$amount < 0, na.rm = TRUE)
 ```
 
-    #> [1] 2953
+    #> [1] 2966
 
 ``` r
 oh %>% 
@@ -444,11 +445,11 @@ min_year <- min(as.double(str_extract(dir_ls(raw_dir) , "\\d{4}")))
 min(oh$expend_date, na.rm = TRUE)
 #> [1] "10-03-02"
 sum(oh$expend_year < min_year, na.rm = TRUE)
-#> [1] 915
+#> [1] 917
 max(oh$expend_date, na.rm = TRUE)
 #> [1] "5555-05-05"
 sum(oh$expend_date > today(), na.rm = TRUE)
-#> [1] 318
+#> [1] 328
 ```
 
 ``` r
@@ -456,7 +457,7 @@ oh <- mutate(oh, date_flag = expend_year < min_year | expend_date > today())
 sum(oh$date_flag, na.rm = TRUE)
 ```
 
-    #> [1] 1233
+    #> [1] 1245
 
 ``` r
 oh <- oh %>% 
@@ -492,28 +493,28 @@ oh <- oh %>%
 ```
 
     #> # A tibble: 10 x 2
-    #>    address              address_norm            
-    #>    <chr>                <chr>                   
-    #>  1 P. O. BOX 92010      PO BOX 92010            
-    #>  2 50 WEST BROAD STREET 50 WEST BROAD STREET    
-    #>  3 <NA>                 <NA>                    
-    #>  4 210 B SOUTH MAIN ST  210 B SOUTH MAIN STREET 
-    #>  5 23224 CRENSHAW BLVD  23224 CRENSHAW BOULEVARD
-    #>  6 211 S FIFTH STREET   211 S FIFTH STREET      
-    #>  7 P. O. BOX 1558       PO BOX 1558             
-    #>  8 2804 N HIGH ST       2804 N HIGH STREET      
-    #>  9 1735 E 23RD STREET   1735 E 23RD STREET      
-    #> 10 1439 BANYAN LANE     1439 BANYAN LANE
+    #>    address                     address_norm                 
+    #>    <chr>                       <chr>                        
+    #>  1 P O BOX 45950               PO BOX 45950                 
+    #>  2 70 ROSS RD                  70 ROSS ROAD                 
+    #>  3 1028 BENZ AVENUE            1028 BENZ AVENUE             
+    #>  4 1509 BON AIR CIRCLE         1509 BON AIR CIRCLE          
+    #>  5 3578 SUNSET D.              3578 SUNSET D                
+    #>  6 214 WEST WEBER              214 WEST WEBER               
+    #>  7 233 S. HIGH STREET          233 SOUTH HIGH STREET        
+    #>  8 812 HURON ROAD E  SUITE 690 812 HURON ROAD EAST SUITE 690
+    #>  9 <NA>                        <NA>                         
+    #> 10 <NA>                        <NA>
 
 ### ZIP
 
 ``` r
 n_distinct(oh$zip)
-#> [1] 16159
+#> [1] 16200
 prop_in(oh$zip, geo$zip, na.rm = TRUE)
-#> [1] 0.9262567
+#> [1] 0.9262397
 length(setdiff(oh$zip, geo$zip))
-#> [1] 9658
+#> [1] 9690
 ```
 
 ``` r
@@ -528,27 +529,27 @@ oh <- oh %>%
 
 ``` r
 n_distinct(oh$zip_norm)
-#> [1] 8073
+#> [1] 8084
 prop_in(oh$zip_norm, geo$zip, na.rm = TRUE)
-#> [1] 0.987105
+#> [1] 0.987146
 length(setdiff(oh$zip_norm, geo$zip))
-#> [1] 1187
+#> [1] 1189
 ```
 
 ### State
 
 ``` r
 n_distinct(oh$state)
-#> [1] 136
+#> [1] 137
 prop_in(oh$state, geo$state, na.rm = TRUE)
-#> [1] 0.9994041
+#> [1] 0.9994028
 length(setdiff(oh$state, geo$state))
-#> [1] 74
+#> [1] 75
 setdiff(oh$state, geo$state)
 #>  [1] NA   "IO" "IG" "CN" "0H" "KA" "NO" "UK" "IW" "O"  "OO" "NU" "II" "EC" "HO" "43" "PH" "MC" "OG"
 #> [20] "UH" "NI" "IH" "OJ" "M"  "IS" "T"  "0"  "TC" "45" "AV" "NZ" "LV" "O`" "H"  "OI" "TO" "PJ" "`O"
 #> [39] "44" "P"  "DL" "FR" "OY" "ST" "OP" "N/" "DR" "?"  "A"  "BE" "AU" "PO" "IR" "WS" "VS" "OX" "OV"
-#> [58] "UN" "CD" "FA" "BH" "11" "XX" "CI" "BZ" "BR" "SW" "SF" "IT" ")H" "HT" "SA" "."  "VO"
+#> [58] "UN" "CD" "FA" "BH" "11" "XX" "CI" "BZ" "BR" "SW" "SF" "IT" ")H" "TE" "HT" "SA" "."  "VO"
 ```
 
 ``` r
@@ -575,11 +576,11 @@ length(setdiff(oh$state_norm, geo$state))
 
 ``` r
 n_distinct(oh$city_raw)
-#> [1] 7048
+#> [1] 7056
 prop_in(oh$city_raw, geo$city, na.rm = TRUE)
-#> [1] 0.934562
+#> [1] 0.9345428
 length(setdiff(oh$city_raw, geo$city))
-#> [1] 4109
+#> [1] 4113
 ```
 
 #### Normalize
@@ -611,11 +612,11 @@ oh <- oh %>%
 
 ``` r
 n_distinct(oh$city_norm)
-#> [1] 6529
+#> [1] 6527
 prop_in(oh$city_norm, geo$city, na.rm = TRUE)
-#> [1] 0.9469845
+#> [1] 0.9470637
 length(setdiff(oh$city_norm, geo$city))
-#> [1] 3564
+#> [1] 3557
 ```
 
 #### Swap
@@ -642,14 +643,14 @@ oh <- oh %>%
 
 ``` r
 n_distinct(oh$city_swap)
-#> [1] 4230
+#> [1] 4225
 prop_in(oh$city_swap, geo$city, na.rm = TRUE)
-#> [1] 0.9554653
+#> [1] 0.9555501
 length(setdiff(oh$city_swap, geo$city))
-#> [1] 1330
+#> [1] 1321
 summary(oh$match_dist)
 #>    Min. 1st Qu.  Median    Mean 3rd Qu.    Max.    NA's 
-#>    0.00    0.00    0.00    0.86    0.00   27.00   83024
+#>    0.00    0.00    0.00    0.86    0.00   27.00   83826
 ```
 
 #### Refine
@@ -688,40 +689,67 @@ oh <- oh %>%
 
 ``` r
 n_distinct(oh$city_clean)
-#> [1] 4213
+#> [1] 4209
 prop_in(oh$city_clean, geo$city, na.rm = TRUE)
-#> [1] 0.9555037
+#> [1] 0.9555871
 length(setdiff(oh$city_clean, geo$city))
-#> [1] 1314
+#> [1] 1306
+```
+
+#### Lookup
+
+To catch the final few invalid city names, we will use this custom
+lookup table.
+
+``` r
+# Thu Aug 22 14:31:02 2019 ------------------------------
+lookup <- read_csv(file = here("oh", "expends", "data", "oh_city_lookup.csv"))
+```
+
+``` r
+oh <- left_join(oh, lookup %>% select(city_clean, city_new))
+```
+
+``` r
+n_distinct(oh$city_new)
+#> [1] 3607
+prop_in(oh$city_new, geo$city, na.rm = TRUE)
+#> [1] 0.9567738
+length(setdiff(oh$city_new, geo$city))
+#> [1] 730
 ```
 
 #### Progress
 
 ``` r
 n_distinct(oh$city_raw)
-#> [1] 7048
+#> [1] 7056
 n_distinct(oh$city_norm)
-#> [1] 6529
+#> [1] 6527
 n_distinct(oh$city_swap)
-#> [1] 4230
+#> [1] 4225
 n_distinct(oh$city_clean)
-#> [1] 4213
+#> [1] 4209
+n_distinct(oh$city_new)
+#> [1] 3607
 
 prop_in(oh$city_raw, geo$city)
-#> [1] 0.9345599
+#> [1] 0.9345408
 prop_in(oh$city_norm, geo$city)
-#> [1] 0.9469821
+#> [1] 0.9470615
 prop_in(oh$city_swap, geo$city)
-#> [1] 0.9554653
+#> [1] 0.9555501
+prop_in(oh$city_new, geo$city)
+#> [1] 0.9567738
 ```
 
 ## Conclude
 
-1.  There are 889159 records in the database.
-2.  There are 10876 duplicate records, 1.22% of records. Not yet
+1.  There are 893096 records in the database.
+2.  There are 10905 duplicate records, 1.22% of records. Not yet
     flagged.
 3.  The range and distribution of `amount` and `date` seem reasonable.
-4.  There are 2493 records missing either recipient or date.
+4.  There are 2496 records missing either recipient or date.
 5.  Consistency in goegraphic data has been improved with
     `campfin::normal_*()`.
 6.  The 5-digit `zip_norm` variable has been created with
@@ -748,7 +776,8 @@ oh %>%
     -city_match,
     -match_dist,
     -city_swap,
-    -city_refine
+    -city_refine,
+    -city_clean
   ) %>% 
   write_csv(
     na = "",

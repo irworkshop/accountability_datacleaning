@@ -62,6 +62,7 @@ The IRW's `campfin` package will also have to be installed from GitHub. This pac
 functions custom made to help facilitate the processing of campaign finance data.
 
 ```{r load_packages, message=FALSE, dfrning=FALSE, error=FALSE}
+# Thu Aug 01 12:53:28 2019 ------------------------------
 if (!require("pacman")) install.packages("pacman")
 pacman::p_load_current_gh("kiernann/campfin")
 pacman::p_load(
@@ -699,6 +700,25 @@ prop_in(oh$city_clean, geo$city, na.rm = TRUE)
 length(setdiff(oh$city_clean, geo$city))
 ```
 
+#### Lookup
+
+To catch the final few invalid city names, we will use this custom lookup table.
+
+```{r read_lookup}
+# Thu Aug 22 14:31:02 2019 ------------------------------
+lookup <- read_csv(file = here("oh", "expends", "data", "oh_city_lookup.csv"))
+```
+
+```{r join_lookup}
+oh <- left_join(oh, lookup %>% select(city_clean, city_new))
+```
+
+```{r count_city_post_lookup, collapse=TRUE}
+n_distinct(oh$city_new)
+prop_in(oh$city_new, geo$city, na.rm = TRUE)
+length(setdiff(oh$city_new, geo$city))
+```
+
 #### Progress
 
 ```{r city_progress, collapse=TRUE}
@@ -706,10 +726,12 @@ n_distinct(oh$city_raw)
 n_distinct(oh$city_norm)
 n_distinct(oh$city_swap)
 n_distinct(oh$city_clean)
+n_distinct(oh$city_new)
 
 prop_in(oh$city_raw, geo$city)
 prop_in(oh$city_norm, geo$city)
 prop_in(oh$city_swap, geo$city)
+prop_in(oh$city_new, geo$city)
 ```
 
 ## Conclude
@@ -746,11 +768,13 @@ oh %>%
     -city_match,
     -match_dist,
     -city_swap,
-    -city_refine
+    -city_refine,
+    -city_clean
   ) %>% 
   write_csv(
     na = "",
     path = glue("{proc_dir}/oh_expends_clean.csv")
   )
 ```
+
 
