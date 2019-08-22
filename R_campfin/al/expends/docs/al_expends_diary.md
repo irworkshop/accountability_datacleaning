@@ -1,7 +1,7 @@
 Data Diary
 ================
 Kiernan Nicholls
-2019-07-01 11:33:59
+2019-08-22 15:52:21
 
   - [Project](#project)
   - [Objectives](#objectives)
@@ -51,6 +51,7 @@ facilitate their installation and attachment.
 
 ``` r
 pacman::p_load_gh("VerbalExpressions/RVerbalExpressions")
+pacman::p_load_current_gh("kiernann/campfin")
 pacman::p_load(
   stringdist, # levenshtein value
   tidyverse, # data manipulation
@@ -240,7 +241,7 @@ directory, download them from the Alabama FCPA website with
 ``` r
 raw_dir <- here("al", "expends", "data", "raw")
 dir_create(raw_dir)
-if (!all_files_new(raw_dir, "zip$")) {
+if (!all_files_new(raw_dir, "*.zip$")) {
   for (url in expend_urls) {
     download.file(
       url = url,
@@ -253,13 +254,13 @@ if (!all_files_new(raw_dir, "zip$")) {
     #> # A tibble: 7 x 5
     #>   file                             type         size birth_time          modification_time  
     #>   <chr>                            <fct> <fs::bytes> <dttm>              <dttm>             
-    #> 1 2013_ExpendituresExtract.csv.zip file       416.6K 2019-07-01 09:51:27 2019-07-01 09:51:27
-    #> 2 2014_ExpendituresExtract.csv.zip file        1.94M 2019-07-01 09:51:29 2019-07-01 09:51:29
-    #> 3 2015_ExpendituresExtract.csv.zip file      473.37K 2019-07-01 09:51:29 2019-07-01 09:51:29
-    #> 4 2016_ExpendituresExtract.csv.zip file      898.76K 2019-07-01 09:51:30 2019-07-01 09:51:30
-    #> 5 2017_ExpendituresExtract.csv.zip file      997.92K 2019-07-01 09:51:31 2019-07-01 09:51:31
-    #> 6 2018_ExpendituresExtract.csv.zip file        3.72M 2019-07-01 09:51:35 2019-07-01 09:51:35
-    #> 7 2019_ExpendituresExtract.csv.zip file      418.52K 2019-07-01 09:51:35 2019-07-01 09:51:35
+    #> 1 2013_ExpendituresExtract.csv.zip file       416.6K 2019-08-22 15:36:59 2019-08-22 15:36:59
+    #> 2 2014_ExpendituresExtract.csv.zip file        1.94M 2019-08-22 15:37:00 2019-08-22 15:37:00
+    #> 3 2015_ExpendituresExtract.csv.zip file      473.37K 2019-08-22 15:37:01 2019-08-22 15:37:01
+    #> 4 2016_ExpendituresExtract.csv.zip file      898.76K 2019-08-22 15:37:02 2019-08-22 15:37:02
+    #> 5 2017_ExpendituresExtract.csv.zip file      997.92K 2019-08-22 15:37:03 2019-08-22 15:37:03
+    #> 6 2018_ExpendituresExtract.csv.zip file        3.72M 2019-08-22 15:37:06 2019-08-22 15:37:06
+    #> 7 2019_ExpendituresExtract.csv.zip file      466.61K 2019-08-22 15:37:07 2019-08-22 15:37:07
 
 ### Unzip
 
@@ -379,18 +380,18 @@ n_lines <-
   sum()
 
 nrow(al) - n_lines
-#> [1] -2456
+#> [1] -2462
 ```
 
 ## Explore
 
-In the combined data frame, there are 227054 rows of 20 variables.
+In the combined data frame, there are 228272 rows of 20 variables.
 
 ``` r
 glimpse(al)
 ```
 
-    #> Observations: 227,054
+    #> Observations: 228,272
     #> Variables: 20
     #> $ org_id             <chr> "25144", "25189", "25156", "25382", "25033", "25032", "24965", "24965…
     #> $ expenditure_amount <dbl> 50.00, 100.00, 235.00, 10.00, 1.00, 45.00, 1228.15, 750.00, 2500.00, …
@@ -415,7 +416,7 @@ glimpse(al)
 
 ### Missing
 
-There are 1027702 missing values across all 20 variables.
+There are 1032629 missing values across all 20 variables.
 
 ``` r
 al %>% 
@@ -432,18 +433,18 @@ al %>%
     #>  1 org_id                  0   0    
     #>  2 expenditure_amount      0   0    
     #>  3 expenditure_date        0   0    
-    #>  4 last_name           32318   0.142
-    #>  5 first_name         189183   0.833
-    #>  6 mi                 221860   0.977
-    #>  7 suffix             226412   0.997
-    #>  8 address1            32539   0.143
-    #>  9 city                32524   0.143
-    #> 10 state               32514   0.143
-    #> 11 zip                 32660   0.144
-    #> 12 explanation        146684   0.646
+    #>  4 last_name           32443   0.142
+    #>  5 first_name         190227   0.833
+    #>  6 mi                 223070   0.977
+    #>  7 suffix             227628   0.997
+    #>  8 address1            32665   0.143
+    #>  9 city                32650   0.143
+    #> 10 state               32640   0.143
+    #> 11 zip                 32786   0.144
+    #> 12 explanation        147512   0.646
     #> 13 expenditure_id          0   0    
     #> 14 filed_date              0   0    
-    #> 15 purpose             81008   0.357
+    #> 15 purpose             81008   0.355
     #> 16 expenditure_type        0   0    
     #> 17 committee_type          0   0    
     #> 18 committee_name          0   0    
@@ -464,7 +465,7 @@ al %>% select(
 )
 ```
 
-    #> # A tibble: 227,054 x 6
+    #> # A tibble: 228,272 x 6
     #>    org_id expenditure_amount expenditure_date first_name mi    last_name                           
     #>    <chr>               <dbl> <date>           <chr>      <chr> <chr>                               
     #>  1 25144                 50  2013-01-01       <NA>       <NA>  CULLMAN COUNTY SPORTS HALL OF FAME  
@@ -477,7 +478,7 @@ al %>% select(
     #>  8 24965                750  2013-01-02       <NA>       <NA>  ECHOLS COOGLER & ASSOCIATES PC      
     #>  9 24965               2500  2013-01-02       <NA>       <NA>  RYALS, PLUMMER, DONALDSON, AGRICOLA…
     #> 10 25142                200  2013-01-02       <NA>       <NA>  RENAISSANCE HOTEL                   
-    #> # … with 227,044 more rows
+    #> # … with 228,262 more rows
 
 These records can be flagged with a new `na_flag` variable.
 
@@ -501,27 +502,27 @@ al %>%
     #> # A tibble: 21 x 3
     #>    variable           n_distinct prop_distinct
     #>    <chr>                   <int>         <dbl>
-    #>  1 org_id                   2631    0.0116    
-    #>  2 expenditure_amount      43440    0.191     
-    #>  3 expenditure_date         2377    0.0105    
-    #>  4 last_name               39506    0.174     
-    #>  5 first_name               3499    0.0154    
-    #>  6 mi                         31    0.000137  
-    #>  7 suffix                      9    0.0000396 
-    #>  8 address1                51675    0.228     
-    #>  9 city                     3043    0.0134    
-    #> 10 state                      68    0.000299  
-    #> 11 zip                      4237    0.0187    
-    #> 12 explanation             34469    0.152     
-    #> 13 expenditure_id         227046    1.000     
-    #> 14 filed_date               1436    0.00632   
-    #> 15 purpose                 18933    0.0834    
-    #> 16 expenditure_type           15    0.0000661 
-    #> 17 committee_type              2    0.00000881
-    #> 18 committee_name            486    0.00214   
-    #> 19 candidate_name           2092    0.00921   
-    #> 20 amended                     2    0.00000881
-    #> 21 na_flag                     2    0.00000881
+    #>  1 org_id                   2648    0.0116    
+    #>  2 expenditure_amount      43565    0.191     
+    #>  3 expenditure_date         2429    0.0106    
+    #>  4 last_name               39664    0.174     
+    #>  5 first_name               3513    0.0154    
+    #>  6 mi                         31    0.000136  
+    #>  7 suffix                      9    0.0000394 
+    #>  8 address1                51898    0.227     
+    #>  9 city                     3054    0.0134    
+    #> 10 state                      68    0.000298  
+    #> 11 zip                      4253    0.0186    
+    #> 12 explanation             34630    0.152     
+    #> 13 expenditure_id         228264    1.000     
+    #> 14 filed_date               1465    0.00642   
+    #> 15 purpose                 18933    0.0829    
+    #> 16 expenditure_type           15    0.0000657 
+    #> 17 committee_type              2    0.00000876
+    #> 18 committee_name            487    0.00213   
+    #> 19 candidate_name           2107    0.00923   
+    #> 20 amended                     2    0.00000876
+    #> 21 na_flag                     2    0.00000876
 
 For the *least* distinct of these values, we can explore the values with
 `ggplot2::geom_bar()`.
@@ -541,16 +542,11 @@ expenditures still have a listed `purpose`.
 sample(al$purpose, 10)
 ```
 
-    #>  [1] NA                                                                          
-    #>  [2] NA                                                                          
-    #>  [3] "Administrative"                                                            
-    #>  [4] "Administrative"                                                            
-    #>  [5] "Advertising"                                                               
-    #>  [6] "Transportation"                                                            
-    #>  [7] "PURCHASE OF TABLE AT JEFFERSON JACKSON DINNER FOR ALABAMA DEMOCRATIC PARTY"
-    #>  [8] "CHRISTMAS CARDS"                                                           
-    #>  [9] "Administrative"                                                            
-    #> [10] NA
+    #>  [1] "Contribution"                            NA                                       
+    #>  [3] NA                                        "Advertising"                            
+    #>  [5] "ACCOUNTING"                              NA                                       
+    #>  [7] "Advertising"                             "UNIFIED BREAKFAST FORUM MEMBERSHIP DUES"
+    #>  [9] "Contribution"                            "Other"
 
 We can use text mining tools to analyze the most common (non-stop)
 *words* in these strings.
@@ -587,14 +583,14 @@ summary(al$expenditure_date)
 ```
 
     #>         Min.      1st Qu.       Median         Mean      3rd Qu.         Max. 
-    #> "2010-02-09" "2014-09-22" "2017-05-22" "2016-09-02" "2018-05-15" "2019-06-29"
+    #> "2010-02-09" "2014-09-23" "2017-06-07" "2016-09-07" "2018-05-17" "2019-08-16"
 
 ``` r
 summary(al$filed_date)
 ```
 
     #>         Min.      1st Qu.       Median         Mean      3rd Qu.         Max. 
-    #> "2013-06-27" "2014-10-17" "2017-10-01" "2016-11-10" "2018-05-29" "2019-06-30"
+    #> "2013-06-27" "2014-10-19" "2017-10-02" "2016-11-15" "2018-05-29" "2019-08-20"
 
 ### Duplicates
 
@@ -638,17 +634,13 @@ functions to remove white-space and non-numbers, pad with leading
 zeroes, and remove the ZIP+4 extension.
 
 ``` r
-al <- al %>% mutate(
-  zip_clean = zip %>%
-    str_remove_all(rx_whitespace()) %>%
-    str_remove_all(rx_digit(inverse = TRUE)) %>% 
-    str_pad(width = 5, pad = "0") %>% 
-    str_sub(1, 5) %>%
-    na_if("00000") %>% 
-    na_if("11111") %>% 
-    na_if("99999") %>% 
-    na_if("")
-)
+al <- al %>% 
+  mutate(
+    zip_clean = normal_zip(
+      zip = zip,
+      na_rep = TRUE
+    )
+  )
 ```
 
 ### Address
@@ -658,44 +650,30 @@ functions to force uppercase, remove non-alphanumeric characters, remove
 trailing, leading, and repeated white space.
 
 ``` r
-al <- al %>% mutate(
-  address_clean = address1 %>% 
-  str_to_upper() %>% 
-  str_remove_all(rx_punctuation()) %>% 
-  str_squish() %>% 
-  str_trim() %>% 
-  str_replace("P O", "PO") %>% 
-  na_if("")
-)
+al <- al %>% 
+  mutate(
+    address_clean = normal_address(
+      address = address1,
+      add_abbs = usps,
+      na_rep = TRUE
+    )
+  )
 ```
 
 ### State
 
-From the `zipcodes` database, we can create a comprehensive list of
-valid state abbreviations.
-
 ``` r
-valid_states <- sort(unique(zipcode$state))
-length(valid_states)
-#> [1] 62
-setdiff(al$state, valid_states)
-#>  [1] NA   "UN" "GE" "TE" "RO" "BC" "TH" "IO" "AB" "L"  "ON" "QC" "NL" "NB" "AJ"
+setdiff(al$state, valid_state)
 ```
 
-Using this list, we can find the invalid payee `state` values.
-
-``` r
-setdiff(al$state, valid_states)
-```
-
-    #>  [1] NA   "UN" "GE" "TE" "RO" "BC" "TH" "IO" "AB" "L"  "ON" "QC" "NL" "NB" "AJ"
+    #> [1] NA   "UN" "GE" "TE" "RO" "TH" "IO" "L"  "AJ"
 
 Then, we can isolate those records with invalid payee `state` values and
 compare them to the *expected* state value for that payee’s ZIP code
 
 ``` r
 al %>% 
-  filter(state %out% valid_states) %>% 
+  filter(state %out% valid_state) %>% 
   filter(!is.na(state)) %>%
   select(
     address1,
@@ -705,52 +683,80 @@ al %>%
   ) %>% 
   distinct() %>% 
   arrange(state) %>%
-  left_join(zipcode, by = c("zip_clean" = "zip")) %>% 
-  print_all()
+  left_join(geo, by = c("zip_clean" = "zip")) %>% 
+  print(n = nrow(.))
 ```
 
-    #> # A tibble: 29 x 6
-    #>    address1                            city.x                 state.x zip_clean city.y      state.y
-    #>    <chr>                               <chr>                  <chr>   <chr>     <chr>       <chr>  
-    #>  1 1 WHITEHORN ROAD                    LAKE LOUISE            AB      <NA>      <NA>        <NA>   
-    #>  2 2016D AIRPORT RD NE                 CALGARY                AB      <NA>      <NA>        <NA>   
-    #>  3 405 SPRAY AVENUE                    BANFF                  AB      <NA>      <NA>        <NA>   
-    #>  4 LAKE LOUISE DR.                     LAKE LOUISE            AB      <NA>      <NA>        <NA>   
-    #>  5 P O BOX 290843                      HOMEWOOD               AJ      35229     BIRMINGHAM  AL     
-    #>  6 200-171 WATER STREET                VANCOUVER              BC      00617     BARCELONETA PR     
-    #>  7 1030 DELTA BOULEVARD                ATLANTA                GE      30354     ATLANTA     GA     
-    #>  8 POST OFFICE BOX 105262              ATLANTA                GE      30348     ATLANTA     GA     
-    #>  9 P.O. BOX 105262                     ATLANTA                GE      30348     ATLANTA     GA     
-    #> 10 P.O. BOX 105083                     ATLANTA                GE      30348     ATLANTA     GA     
-    #> 11 P.O. BOX 105262                     ATLANTA                GE      31132     <NA>        <NA>   
-    #> 12 200 ASHFORD CENTER NORTH, SUITE 500 ATLANTA                GE      30338     ATLANTA     GA     
-    #> 13 5200 SW 30TH ST.                    DAVENPORT              IO      52802     DAVENPORT   IA     
-    #> 14 3401 UNIVERSITY AVE                 DES MOINES             IO      50351     <NA>        <NA>   
-    #> 15 507 HILLSBORO LANE                  HELENA                 L       35007     ALABASTER   AL     
-    #> 16 12312 PORT GRACE BOULEVARD          LA VISTA               NB      68128     LA VISTA    NE     
-    #> 17 HUDSONWEG 8                         VENLO                  NL      05928     DERBY CENT… VT     
-    #> 18 UNIT 33, 330 ESNA PARK DR.          MARKHAN                ON      36037     GREENVILLE  AL     
-    #> 19 219 DUFFERIN SREET, UNIT 6A         TORONTO                ON      <NA>      <NA>        <NA>   
-    #> 20 2120 RUE LETENDRE                   DRUMMONDVILLE (J2C7E9) QC      <NA>      <NA>        <NA>   
-    #> 21 1810 EAST WOODCHASE                 BATON                  RO      <NA>      <NA>        <NA>   
-    #> 22 11550 STONEHOLLOW DR.               AUSTIN                 TE      78758     AUSTIN      TX     
-    #> 23 P.O. BOX 660108                     DALLAS                 TE      75266     DALLAS      TX     
-    #> 24 PO BOX 660108                       DALLAS                 TE      75266     DALLAS      TX     
-    #> 25 PO BOX 6600108                      DALLAS                 TE      75266     DALLAS      TX     
-    #> 26 P.O. BOX 6600108                    DALLAS                 TE      75266     DALLAS      TX     
-    #> 27 HUDSONWEG 8                         VENLO                  TH      05928     DERBY CENT… VT     
-    #> 28 UNKNOWN                             UNKNOWN                UN      <NA>      <NA>        <NA>   
-    #> 29 UNKNOWN                             UNKNWON                UN      <NA>      <NA>        <NA>
+    #> # A tibble: 61 x 6
+    #>    address1                            city.x     state.x zip_clean city.y        state.y
+    #>    <chr>                               <chr>      <chr>   <chr>     <chr>         <chr>  
+    #>  1 P O BOX 290843                      HOMEWOOD   AJ      35229     BIRMINGHAM    AL     
+    #>  2 1030 DELTA BOULEVARD                ATLANTA    GE      30354     ATLANTA       GA     
+    #>  3 POST OFFICE BOX 105262              ATLANTA    GE      30348     ATLANTA       GA     
+    #>  4 P.O. BOX 105262                     ATLANTA    GE      30348     ATLANTA       GA     
+    #>  5 P.O. BOX 105083                     ATLANTA    GE      30348     ATLANTA       GA     
+    #>  6 P.O. BOX 105262                     ATLANTA    GE      31132     <NA>          <NA>   
+    #>  7 200 ASHFORD CENTER NORTH, SUITE 500 ATLANTA    GE      30338     ATLANTA       GA     
+    #>  8 5200 SW 30TH ST.                    DAVENPORT  IO      52802     DAVENPORT     IA     
+    #>  9 3401 UNIVERSITY AVE                 DES MOINES IO      50351     <NA>          <NA>   
+    #> 10 507 HILLSBORO LANE                  HELENA     L       35007     ALABASTER     AL     
+    #> 11 1810 EAST WOODCHASE                 BATON      RO      <NA>      EDMONTON      AB     
+    #> 12 1810 EAST WOODCHASE                 BATON      RO      <NA>      CALGARY       AB     
+    #> 13 1810 EAST WOODCHASE                 BATON      RO      <NA>      VICTORIA      BC     
+    #> 14 1810 EAST WOODCHASE                 BATON      RO      <NA>      VANCOUVER     BC     
+    #> 15 1810 EAST WOODCHASE                 BATON      RO      <NA>      WINNIPEG      MB     
+    #> 16 1810 EAST WOODCHASE                 BATON      RO      <NA>      FREDERICTON   NB     
+    #> 17 1810 EAST WOODCHASE                 BATON      RO      <NA>      MONCTON       NB     
+    #> 18 1810 EAST WOODCHASE                 BATON      RO      <NA>      SAINT JOHNS   NL     
+    #> 19 1810 EAST WOODCHASE                 BATON      RO      <NA>      HALIFAX       NS     
+    #> 20 1810 EAST WOODCHASE                 BATON      RO      <NA>      TORONTO       ON     
+    #> 21 1810 EAST WOODCHASE                 BATON      RO      <NA>      CHARLOTTETOWN PE     
+    #> 22 1810 EAST WOODCHASE                 BATON      RO      <NA>      QUEBEC CITY   QC     
+    #> 23 1810 EAST WOODCHASE                 BATON      RO      <NA>      MONTREAL      QC     
+    #> 24 1810 EAST WOODCHASE                 BATON      RO      <NA>      REGINA        SK     
+    #> 25 1810 EAST WOODCHASE                 BATON      RO      <NA>      SASKATOON     SK     
+    #> 26 11550 STONEHOLLOW DR.               AUSTIN     TE      78758     AUSTIN        TX     
+    #> 27 P.O. BOX 660108                     DALLAS     TE      75266     DALLAS        TX     
+    #> 28 PO BOX 660108                       DALLAS     TE      75266     DALLAS        TX     
+    #> 29 PO BOX 6600108                      DALLAS     TE      75266     DALLAS        TX     
+    #> 30 P.O. BOX 6600108                    DALLAS     TE      75266     DALLAS        TX     
+    #> 31 HUDSONWEG 8                         VENLO      TH      05928     DERBY CENTER  VT     
+    #> 32 UNKNOWN                             UNKNOWN    UN      <NA>      EDMONTON      AB     
+    #> 33 UNKNOWN                             UNKNOWN    UN      <NA>      CALGARY       AB     
+    #> 34 UNKNOWN                             UNKNOWN    UN      <NA>      VICTORIA      BC     
+    #> 35 UNKNOWN                             UNKNOWN    UN      <NA>      VANCOUVER     BC     
+    #> 36 UNKNOWN                             UNKNOWN    UN      <NA>      WINNIPEG      MB     
+    #> 37 UNKNOWN                             UNKNOWN    UN      <NA>      FREDERICTON   NB     
+    #> 38 UNKNOWN                             UNKNOWN    UN      <NA>      MONCTON       NB     
+    #> 39 UNKNOWN                             UNKNOWN    UN      <NA>      SAINT JOHNS   NL     
+    #> 40 UNKNOWN                             UNKNOWN    UN      <NA>      HALIFAX       NS     
+    #> 41 UNKNOWN                             UNKNOWN    UN      <NA>      TORONTO       ON     
+    #> 42 UNKNOWN                             UNKNOWN    UN      <NA>      CHARLOTTETOWN PE     
+    #> 43 UNKNOWN                             UNKNOWN    UN      <NA>      QUEBEC CITY   QC     
+    #> 44 UNKNOWN                             UNKNOWN    UN      <NA>      MONTREAL      QC     
+    #> 45 UNKNOWN                             UNKNOWN    UN      <NA>      REGINA        SK     
+    #> 46 UNKNOWN                             UNKNOWN    UN      <NA>      SASKATOON     SK     
+    #> 47 UNKNOWN                             UNKNWON    UN      <NA>      EDMONTON      AB     
+    #> 48 UNKNOWN                             UNKNWON    UN      <NA>      CALGARY       AB     
+    #> 49 UNKNOWN                             UNKNWON    UN      <NA>      VICTORIA      BC     
+    #> 50 UNKNOWN                             UNKNWON    UN      <NA>      VANCOUVER     BC     
+    #> 51 UNKNOWN                             UNKNWON    UN      <NA>      WINNIPEG      MB     
+    #> 52 UNKNOWN                             UNKNWON    UN      <NA>      FREDERICTON   NB     
+    #> 53 UNKNOWN                             UNKNWON    UN      <NA>      MONCTON       NB     
+    #> 54 UNKNOWN                             UNKNWON    UN      <NA>      SAINT JOHNS   NL     
+    #> 55 UNKNOWN                             UNKNWON    UN      <NA>      HALIFAX       NS     
+    #> 56 UNKNOWN                             UNKNWON    UN      <NA>      TORONTO       ON     
+    #> 57 UNKNOWN                             UNKNWON    UN      <NA>      CHARLOTTETOWN PE     
+    #> 58 UNKNOWN                             UNKNWON    UN      <NA>      QUEBEC CITY   QC     
+    #> 59 UNKNOWN                             UNKNWON    UN      <NA>      MONTREAL      QC     
+    #> 60 UNKNOWN                             UNKNWON    UN      <NA>      REGINA        SK     
+    #> 61 UNKNOWN                             UNKNWON    UN      <NA>      SASKATOON     SK
 
 Many of these are simply the first two letters of the full state name
 (e.g., “TE” for “Texas”). Others are Canadian province abbreviations
 (e.g., “ON”, “NB”). We will expand our list of valid state abbreviations
 to include the Canadian provinces, manually replace types, and remove
 all remaining invalid abbreviations.
-
-``` r
-valid_states <- c(valid_states, "AB", "BC", "MB", "NB", "NL", "NS", "NT", "ON", "QC")
-```
 
 ``` r
 al <- al %>% mutate(
@@ -765,7 +771,7 @@ al <- al %>% mutate(
 ```
 
 ``` r
-al$state_clean[which(al$state_clean %out% valid_states)] <- NA
+al$state_clean[which(al$state_clean %out% valid_state)] <- NA
 ```
 
 ### City
@@ -791,59 +797,60 @@ alabama_towns <-
   str_to_upper() %>% 
   str_remove_all("[:punct:]")
 
-setdiff(alabama_towns, zipcode$city)
+setdiff(alabama_towns, valid_city)
 ```
 
     #>  [1] "ARGO"                   "BABBIE"                 "BAKERHILL"             
-    #>  [4] "CLAYHATCHEE"            "COUNTY LINE"            "EAST BREWTON"          
-    #>  [7] "GEIGER"                 "GOLDVILLE"              "GUWIN"                 
-    #> [10] "HALEBURG"               "HAMMONDVILLE"           "HOBSON CITY"           
-    #> [13] "HOKES BLUFF"            "HOOVER"                 "HORN HILL"             
-    #> [16] "HUEYTOWN"               "HYTOP"                  "INDIAN SPRINGS VILLAGE"
-    #> [19] "LEVEL PLAINS"           "LITTLEVILLE"            "MAGNOLIA SPRINGS "     
-    #> [22] "MCMULLEN"               "MOSSES"                 "MOUNTAIN BROOK"        
-    #> [25] "NAPIER FIELD"           "NECTAR"                 "NORTH COURTLAND"       
-    #> [28] "NORTH JOHNS"            "ONYCHA"                 "PERDIDO BEACH"         
-    #> [31] "PICKENSVILLE"           "PLEASANT GROVES"        "PRICEVILLE"            
-    #> [34] "REECE CITY"             "ROSA"                   "ST FLORIAN"            
-    #> [37] "SAND ROCK"              "SARDIS CITY"            "SKYLINE"               
-    #> [40] "SMITHS STATION"         "SNEAD"                  "SOUTH VINEMONT"        
-    #> [43] "SUSAN MOORE"            "SYLVAN SPRINGS"         "TALLADEGA SPRINGS"     
-    #> [46] "TARRANT"                "TRIANA"                 "TWIN"                  
-    #> [49] "VALLEY GRANDE"          "VESTAVIA HILLS"         "YELLOW BLUFF"
+    #>  [4] "CENTRE"                 "CLAYHATCHEE"            "COUNTY LINE"           
+    #>  [7] "EAST BREWTON"           "GEIGER"                 "GOLDVILLE"             
+    #> [10] "GUWIN"                  "HALEBURG"               "HAMMONDVILLE"          
+    #> [13] "HOBSON CITY"            "HOKES BLUFF"            "HOOVER"                
+    #> [16] "HORN HILL"              "HUEYTOWN"               "HYTOP"                 
+    #> [19] "INDIAN SPRINGS VILLAGE" "LEVEL PLAINS"           "LITTLEVILLE"           
+    #> [22] "MAGNOLIA SPRINGS "      "MCMULLEN"               "MOSSES"                
+    #> [25] "MOUNTAIN BROOK"         "NAPIER FIELD"           "NECTAR"                
+    #> [28] "NORTH COURTLAND"        "NORTH JOHNS"            "ONYCHA"                
+    #> [31] "PERDIDO BEACH"          "PICKENSVILLE"           "PLEASANT GROVES"       
+    #> [34] "PRICEVILLE"             "REECE CITY"             "ROSA"                  
+    #> [37] "ST FLORIAN"             "SAND ROCK"              "SARDIS CITY"           
+    #> [40] "SKYLINE"                "SMITHS STATION"         "SNEAD"                 
+    #> [43] "SOUTH VINEMONT"         "SUSAN MOORE"            "SYLVAN SPRINGS"        
+    #> [46] "TALLADEGA SPRINGS"      "TARRANT"                "TRIANA"                
+    #> [49] "TWIN"                   "VALLEY GRANDE"          "VESTAVIA HILLS"        
+    #> [52] "YELLOW BLUFF"
 
 ``` r
-valid_cities <- prep_city(sort(unique(c(zipcode$city, alabama_towns))))
+valid_city <- c(valid_city, normal_city(alabama_towns, geo_abbs = usps_city))
 ```
 
 ``` r
 n_distinct(al$city)
-#> [1] 3043
-mean(al$city %in% valid_cities)
-#> [1] 0.8315379
+#> [1] 3054
+mean(al$city %in% valid_city)
+#> [1] 0.8282444
 ```
 
 ``` r
 al %>% 
-  filter(city %out% valid_cities) %>% 
+  filter(city %out% valid_city) %>% 
   count(city) %>% 
   arrange(desc(n))
 ```
 
-    #> # A tibble: 1,427 x 2
+    #> # A tibble: 1,430 x 2
     #>    city                  n
     #>    <chr>             <int>
-    #>  1 <NA>              32524
-    #>  2 VESTAVIA            332
-    #>  3 SYMMES TOWNSHIP     159
-    #>  4 MTG                  89
-    #>  5 PONTE VERDA BEACH    80
-    #>  6 MONTOGMERY           76
-    #>  7 BHAM                 74
-    #>  8 ALEX CITY            72
-    #>  9 FT LAUDERDALE        69
-    #> 10 LUVURNE              66
-    #> # … with 1,417 more rows
+    #>  1 <NA>              32650
+    #>  2 CENTRE              808
+    #>  3 VESTAVIA            336
+    #>  4 SYMMES TOWNSHIP     159
+    #>  5 MTG                  89
+    #>  6 PONTE VERDA BEACH    80
+    #>  7 MONTOGMERY           77
+    #>  8 BHAM                 74
+    #>  9 ALEX CITY            72
+    #> 10 FT LAUDERDALE        69
+    #> # … with 1,420 more rows
 
 There are five steps to achieve these goals:
 
@@ -866,23 +873,21 @@ removes common invalid entires and strips state abbreviations from the
 end of city names.
 
 ``` r
-common_na <- read_lines(here("R", "na_city.csv"))
-sample(common_na, 3)
-#> [1] "VIRTUAL"  "INTERNET" "NONE"
-
 al <- al %>% 
   mutate(
-    city_prep = prep_city(
-      cities = city,
-      na = common_na,
-      abbs = valid_states
+    city_prep = normal_city(
+      city = city,
+      geo_abbs = usps_city,
+      st_abbs = c("AL", "DC", "ALABAMA"),
+      na = na_city,
+      na_rep = TRUE
     )
   )
 
 n_distinct(al$city_prep)
-#> [1] 2761
-mean(al$city_prep %in% valid_cities)
-#> [1] 0.8364398
+#> [1] 2785
+mean(al$city_prep %in% valid_city)
+#> [1] 0.8363706
 ```
 
 #### Match
@@ -896,13 +901,13 @@ changes needed to match the two strings.
 
 ``` r
 al <- al %>%
-  left_join(zipcode, by = c("zip_clean" = "zip", "state_clean" = "state")) %>%
+  left_join(geo, by = c("zip_clean" = "zip", "state_clean" = "state")) %>%
   rename(city = city.x, city_match = city.y) %>%
   mutate(match_dist = stringdist(city_prep, city_match))
 
 summary(al$match_dist)
 #>    Min. 1st Qu.  Median    Mean 3rd Qu.    Max.    NA's 
-#>    0.00    0.00    0.00    0.55    0.00   21.00   35163
+#>    0.00    0.00    0.00    0.55    0.00   21.00   35287
 ```
 
 ``` r
@@ -936,24 +941,24 @@ al <- al %>%
   )
 
 n_distinct(al$city_swap)
-#> [1] 1940
-mean(al$city_swap %in% valid_cities)
-#> [1] 0.8380297
+#> [1] 1956
+mean(al$city_swap %in% valid_city)
+#> [1] 0.8381659
 ```
 
 ``` r
 al %>% 
-  filter(city_swap %out% valid_cities) %>% 
+  filter(city_swap %out% valid_city) %>% 
   count(state_clean, city_swap) %>% 
   arrange(desc(n)) %>% 
   drop_na()
 ```
 
-    #> # A tibble: 309 x 3
+    #> # A tibble: 316 x 3
     #>    state_clean city_swap           n
     #>    <chr>       <chr>           <int>
-    #>  1 AL          VESTAVIA          331
-    #>  2 OH          SYMMES TOWNSHIP   168
+    #>  1 AL          VESTAVIA          335
+    #>  2 OH          SYMMES TOWNSHIP   159
     #>  3 AL          MTG                87
     #>  4 AL          ALEX CITY          72
     #>  5 AL          BHAM               71
@@ -962,7 +967,7 @@ al %>%
     #>  8 AL          HAMPTON COVE       27
     #>  9 NY          NY                 24
     #> 10 NJ          DELRAN             23
-    #> # … with 299 more rows
+    #> # … with 306 more rows
 
 #### Refine
 
@@ -1016,13 +1021,13 @@ al_refine <- al %>%
 
 #### Review
 
-This refining progress made 95 changes. 55 of these changes are
+This refining progress made 78 changes. 46 of these changes are
 distinct. We can count the frequency of the original `city_swap` value
 and the new `city_refine` value to ensure the algorithm is making the
 right changes.
 
 ``` r
-mean(al_refine$city_refine %in% valid_cities)
+mean(al_refine$city_refine %in% valid_city)
 #> [1] 1
 
 al_refine$swap_count <- NA
@@ -1044,31 +1049,31 @@ for (i in 1:nrow(al_refine)) {
 }
 
 mean(al_refine$swap_count)
-#> [1] 33.47368
+#> [1] 40.21795
 mean(al_refine$refine_count)
-#> [1] 811.2421
+#> [1] 592.3718
 mean(al_refine$refine_count > al_refine$swap_count)
-#> [1] 0.8947368
+#> [1] 0.8717949
 ```
 
 ``` r
 sample_frac(al_refine)
 ```
 
-    #> # A tibble: 95 x 10
+    #> # A tibble: 78 x 10
     #>    expenditure_id zip_clean state_clean city_raw city_prep match_dist city_swap city_refine
     #>    <chr>          <chr>     <chr>       <chr>    <chr>          <dbl> <chr>     <chr>      
-    #>  1 28424          36801     AL          SMITH    SMITH              6 SMITH     SMITHS     
-    #>  2 161662         36266     AL          SCOTSBO… SCOTSBORO          9 SCOTSBORO SCOTTSBORO 
-    #>  3 92872          36663     AL          EIGHTMI… EIGHTMILE          6 EIGHTMILE EIGHT MILE 
-    #>  4 30545          35244     AL          HOVER    HOVER             10 HOVER     HOOVER     
-    #>  5 9834           36782     AL          VALLEY,… VALLEYAL          10 VALLEYAL  VALLEY     
-    #>  6 59015          35905     AL          GLENCO   GLENCO             6 GLENCO    GLENCOE    
-    #>  7 91945          36663     AL          EIGHTMI… EIGHTMILE          6 EIGHTMILE EIGHT MILE 
-    #>  8 87061          36067     AL          PRATTVI… PRATTVIL…          8 "PRATTVI… PRATTVILLE 
-    #>  9 5913           35266     AL          VESTAVI… VESTAVIA…         11 VESTAVIA… VESTAVIA H…
-    #> 10 99492          35210     AL          IRONDAL… IRONDALE…         13 "IRONDAL… IRONDALE   
-    #> # … with 85 more rows, and 2 more variables: swap_count <int>, refine_count <int>
+    #>  1 12470          36867     AL          LAFAYETT LAFAYETT          10 LAFAYETT  LAFAYETTE  
+    #>  2 15605          36271     AL          VALLEY,… VALLEYAL           8 VALLEYAL  VALLEY     
+    #>  3 132026         35758     AL          HUNTSVI… HUNTSVILE          8 HUNTSVILE HUNTSVILLE 
+    #>  4 54666          36872     AL          FIVEPOI… FIVEPOIN…          9 FIVEPOIN… FIVE POINTS
+    #>  5 161662         36266     AL          SCOTSBO… SCOTSBORO          9 SCOTSBORO SCOTTSBORO 
+    #>  6 201130         36877     AL          SMITH S… SMITH ST…          7 SMITH ST… SMITHS STA…
+    #>  7 196212         36877     AL          SMITH S… SMITH ST…          7 SMITH ST… SMITHS STA…
+    #>  8 91945          36663     AL          EIGHTMI… EIGHTMILE          6 EIGHTMILE EIGHT MILE 
+    #>  9 12458          36201     AL          VALLEY,… VALLEYAL           8 VALLEYAL  VALLEY     
+    #> 10 179403         36124     AL          PRATTVI… PRATTVILE          9 PRATTVILE PRATTVILLE 
+    #> # … with 68 more rows, and 2 more variables: swap_count <int>, refine_count <int>
 
 ``` r
 al <- al %>% 
@@ -1084,24 +1089,24 @@ al <- al %>%
 
 ``` r
 n_distinct(al$city)
-#> [1] 3043
+#> [1] 3054
 n_distinct(al$city_prep)
-#> [1] 2761
+#> [1] 2785
 n_distinct(al$city_swap)
-#> [1] 1931
+#> [1] 1947
 n_distinct(al$city_clean)
-#> [1] 1891
+#> [1] 1915
 ```
 
 ``` r
 al %>% 
-  filter(city_clean %out% valid_cities) %>% 
+  filter(city_clean %out% valid_city) %>% 
   count(state_clean, city_clean) %>% 
   arrange(city_clean) %>% 
   drop_na()
 ```
 
-    #> # A tibble: 263 x 3
+    #> # A tibble: 278 x 3
     #>    state_clean city_clean     n
     #>    <chr>       <chr>      <int>
     #>  1 AL          ""             1
@@ -1114,11 +1119,28 @@ al %>%
     #>  8 AL          ASHAND         8
     #>  9 AL          ASHLANS        1
     #> 10 FL          AVENTURA       1
-    #> # … with 253 more rows
+    #> # … with 268 more rows
+
+#### Lookup
+
+``` r
+lookup <- read_csv(file = here("al", "expends", "data", "al_city_lookup.csv"))
+lookup <- select(lookup, city_clean, city_new)
+al <- left_join(al, lookup)
+n_distinct(al$city_new)
+```
+
+    #> [1] 1830
+
+``` r
+prop_in(al$city_new, valid_city)
+```
+
+    #> [1] 0.994336
 
 ## Conclude
 
-1.  There are 227054 records in the database
+1.  There are 228277 records in the database
 2.  Duplicate rows have been flagged with the `dupe_flag` variable
 3.  Ranges for continuous variables make sense
 4.  Records with missing key information are flagged with the `na_flag`
@@ -1146,7 +1168,8 @@ al %>%
     -city_swap,
     -city_refine,
     -swap_count,
-    -refine_count
+    -refine_count,
+    -city_clean
   ) %>% 
   write_csv(
     x = ,
