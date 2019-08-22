@@ -1,0 +1,332 @@
+---
+title: "Missouri Expenditures"
+author: "Kiernan Nicholls"
+date: "`r Sys.time()`"
+output:
+  github_document: 
+    df_print: tibble
+    toc: true
+    toc_dept: 2
+editor_options: 
+  chunk_output_type: console
+---
+
+<!-- Place comments regarding knitting here -->
+
+```{r setup, include=FALSE, purl=FALSE}
+library(knitr)
+opts_chunk$set(
+  eval = TRUE,
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  error = FALSE,
+  # it's nice to un-collapse df print
+  collapse = TRUE,
+  comment = "#>",
+  fig.path = "../plots/",
+  fig.width = 10,
+  dpi = 300
+)
+options(width = 99)
+set.seed(5)
+```
+
+## Project
+
+The Accountability Project is an effort to cut across data silos and give journalists, policy
+professionals, activists, and the public at large a simple way to search across huge volumes of
+public data about people and organizations.
+
+Our goal is to standardizing public data on a few key fields by thinking of each dataset row as a
+transaction. For each transaction there should be (at least) 3 variables:
+
+1. All **parties** to a transaction
+2. The **date** of the transaction
+3. The **amount** of money involved
+
+## Objectives
+
+This document describes the process used to complete the following objectives:
+
+1. How many records are in the database?
+1. Check for duplicates
+1. Check ranges
+1. Is there anything blank or missing?
+1. Check for consistency issues
+1. Create a five-digit ZIP Code called `ZIP5`
+1. Create a `YEAR` field from the transaction date
+1. Make sure there is data on both parties to a transaction
+
+## Packages
+
+The following packages are needed to collect, manipulate, visualize, analyze, and communicate
+these results. The `pacman` package will facilitate their installation and attachment.
+
+The IRW's `campfin` package will also have to be installed from GitHub. This package contains
+functions custom made to help facilitate the processing of campaign finance data.
+
+```{r load_packages, message=FALSE, dfrning=FALSE, error=FALSE}
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load_current_gh("kiernann/campfin")
+pacman::p_load(
+  stringdist, # levenshtein value
+  RSelenium, # remote browser
+  tidyverse, # data manipulation
+  lubridate, # datetime strings
+  tidytext, # text analysis
+  magrittr, # pipe opperators
+  janitor, # dataframe clean
+  refinr, # cluster and merge
+  scales, # format strings
+  rvest, # scrape html pages
+  knitr, # knit documents
+  vroom, # read files fast
+  glue, # combine strings
+  here, # relative storage
+  fs # search storage 
+)
+```
+
+This document should be run as part of the `R_campfin` project, which lives as a sub-directory of
+the more general, language-agnostic [`irworkshop/accountability_datacleaning`][01] GitHub
+repository.
+
+The `R_campfin` project uses the [RStudio projects][02] feature and should be run as such. The
+project also uses the dynamic `here::here()` tool for file paths relative to _your_ machine.
+
+```{r where_here, collapse=TRUE}
+# where dfs this document knit?
+here::here()
+```
+
+[01]: https://github.com/irworkshop/accountability_datacleaning
+[02]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects
+
+## Data
+
+Data is obtained from the [New York Board of Elections][03] (SBOE). 
+
+> The State Board of Elections was established in the Executive Department June 1, 1974 as a
+bipartisan agency vested with the responsibility for administration and enforcement of all laws
+relating to elections in New York State. The Board is also responsible for regulating disclosure
+and limitations of a Fair Campaign Code intended to govern campaign practices. In conducting these
+wide-ranging responsibilities, the Board offers assistance to local election boards and
+investigates complaints of possible statutory violations. In addition to the regulatory and
+enforcement responsibilities the board is charged with the preservation of citizen confidence in
+the democratic process and enhancement in voter participation in elections.
+
+The NYSBOE database can be obstained from their Campaign Finance [discolure reports page][04]. On
+that page, they elaborate on the availability and accuracy of the website.
+
+> ### Data Availability  
+> This database contains all financial disclosure reports filed with NYSBOE from July of 1999 to
+the present. Financial disclosure reports filed prior to the 1999 July Periodic report are either
+on file with the New York State Archives or in storage with the New York State Board of Elections.
+For further information or to obtain copies of these archived or stored filings, please call
+1-800-458-3453. Each page costs 25¢ plus postage and copy orders must be prepaid.
+> 
+> Electronically filed disclosure reports are generally available in the database on the day they
+are received. A small number of candidates and committees are either statutorily exempt or have
+applied for and obtained exemptions from electronic filing. These filers will continue filing on
+paper and their disclosure reports will become available as they are manually entered into the
+database by NYSBOE staff.
+
+> ### Data Accuracy  
+> The majority of financial disclosure reports filed at NYSBOE are entered into the database
+directly from e-mail, diskette, CD or DVD filings submitted by committee treasurers or candidates.
+The information contained in paper filings will be entered into the database exactly as it appears
+on the forms. Because database searches retrieve information exactly the way it is reported and
+then entered into the database, search results may be inaccurate and/or incomplete. This will
+occur, for example, if filers do not adhere to the required format, do not use the proper codes,
+misspell words or leave items blank. Although NYSBOE carefully reviews disclosure reports and
+requires treasurers to submit amended reports as needed, there will necessarily be delays before
+the review process is completed and the information in the database is corrected.
+
+The page also describes the format of their campaign finance database.
+
+> ### Database Files in ASCII Delimited Format
+> **Updated data files are uploaded during active filing periods after 4:00 P.M. daily until the
+filing is complete.**
+>
+> **Note:** To match the filing data files to Filer Names by filer ID you will need to Download the
+Filer data file. Commcand.zip is a zipped file containing the data file (commcand.asc) in ASCII
+delimited and two text files. (filerec.txt contains the data file layout - codes.txt explains the
+codes used in the data file).
+>
+> **All downloadable files are zipped files containing a data file in ASCII delimited format and
+two text files. (efsrecb.txt contains the data file layout - efssched.txt explains the different
+schedules as they apply to the database).**
+>
+> [Download Data file containing ALL filings][05]. **Note:** This file is a large file (238,994
+KB) that contains over 6 million records. Do not attempt to download this file unless you have a
+database to download the file to.
+
+[03]: https://www.elections.ny.gov/INDEX.html
+[04]: https://www.elections.ny.gov/CFViewReports.html
+[05]: https://www.elections.ny.gov/NYSBOE/download/ZipDataFiles/ALL_REPORTS.zip
+
+## Import
+
+We can use the link above to download a copy of the NYSBOE database to the `/data/raw` directory.
+
+```{r raw_dir}
+raw_dir <- here("ny", "expends", "data", "raw")
+dir_create(raw_dir)
+```
+
+### Download
+
+```{r create_zip_paths}
+zip_url <- "https://www.elections.ny.gov/NYSBOE/download/ZipDataFiles/ALL_REPORTS.zip"
+zip_path <- glue("{raw_dir}/{basename(zip_url)}")
+```
+
+Like they suggest, we will double check the size of the file before downloading.
+
+```{r check_file_size}
+url_file_size(zip_url, format = TRUE)
+```
+
+If the `ALL_REPORTS.zip` file hasn't yet been downloaded, do so now with `download.file()`.
+
+```{r download_zip}
+if (!this_file_new(zip_path)) {
+  download.file(
+    url = zip_url,
+    destfile = zip_path
+  )
+}
+```
+
+### Unzip
+
+If the `ALL_REPORTS.zip` file hasn't yet been unziped, we can do so now with `unzip()`. First, we
+will list the files in the ZIP archive.
+
+```{r}
+zip_content <- as_tibble(
+  x = unzip(zip_path, list = TRUE),
+  .name_repair = make_clean_names
+)
+print(zip_content)
+
+out_file <- glue("{raw_dir}/{zip_content$name[3]}")
+```
+
+```{r}
+if (!this_file_new(out_file)) {
+  unzip(
+    zipfile = zip_path,
+    exdir = raw_dir,
+    overwrite = TRUE
+  )
+}
+```
+
+### Read
+
+```{r out_layout, echo=FALSE}
+layout_file <- glue("{raw_dir}/{zip_content$name[1]}")
+out_layout <- 
+  read_lines(file = layout_file) %>% 
+  extract(11:42) %>%
+  enframe(NULL) %>% 
+  filter(str_detect(value, "^$", negate = TRUE)) %>% 
+  map_df(str_trim) %>% 
+  separate(
+    col = value,
+    into = c("FIELD", "LOCATION", "TYPE", "FORMAT", "IMPORT"),
+    sep = "   +"
+  ) %>% 
+  na_if("REQUIRED") %>% 
+  select(-IMPORT)
+
+print(out_layout, n = 30)
+```
+
+```{r out_format, echo=FALSE}
+out_format <- 
+  read_lines(file = layout_file) %>% 
+  extract(44:50) %>%
+  enframe(NULL) %>% 
+  separate(
+    col = value,
+    into = c("aspect", "value"),
+    sep = ":"
+  ) %>% 
+  map_df(str_trim) %>% 
+  mutate(aspect = snakecase::to_snake_case(aspect))
+
+print(out_format)
+```
+
+From the `EFSSCHED.TXT` file, we know Schedule L records contain the expenditures we are interested
+in.
+
+```{r out_schedules, echo=FALSE}
+sched_file <- glue("{raw_dir}/{zip_content$name[2]}")
+out_scheds <- 
+  read_lines(file = sched_file) %>% 
+  extract(60:78) %>% 
+  enframe(NULL) %>% 
+  separate(
+    col = value, 
+    into = c("sched", "desc"), 
+    sep = "\\s-\\s"
+  ) %>% 
+  map_df(str_trim)
+
+print(out_scheds)
+```
+
+```{r}
+out_cols <- str_remove(read_lines(file = sched_file, skip_empty_rows = TRUE)[4:34][-2], "\n")
+out_cols_header <- unlist(str_split(out_cols[1], "\\s+"))
+x <- str_c(out_cols[str_which(out_cols, "X")], collapse = "\n")
+z <- read_fwf(file = x, col_positions = fwf_empty(x, col_names = out_cols_header))
+names <- str_remove(na.omit(z$FIELD[z$J == "X"]), "_\\d+")
+```
+
+```
+FIELD NAMES     A  B  C D  E  F  G  H  I  J K  L  M  N  O  P Q
+--------------------------------------------------------------
+DATE1           X  X  X X  X  X  X  X  X  X X  X  X  X     X X
+DATE2                                       X  X  X
+CONTRIB_CODE    X       X                               X  X
+CONTRIB_TYPE            X
+CORP            X  X  X X  X  X  X  X  X  X X  X  X  X  X  X X
+FIRST_NAME      X       X                                  X
+MID_INIT        X       X                                  X
+LAST_NAME       X       X                                  X
+ADDR            X  X  X X  X  X  X  X  X  X X  X  X  X     X X
+CITY            X  X  X X  X  X  X  X  X  X X  X  X  X     X X
+STATE           X  X  X X  X  X  X  X  X  X X  X  X  X     X X
+ZIP             X  X  X X  X  X  X  X  X  X X  X  X  X     X X
+CHECK_NO        X  X  X       X  X  X     X       X        X X
+CHECK_DATE                                X
+AMOUNT          X  X  X X  X  X  X  X  X  X X  X  X  X     X X
+AMOUNT2                                     X        X  X
+DESCRIPTION             X
+OTHER_RECPT                X
+PURPOSE_CODE1                 X                      X  X
+PURPOSE_CODE2                                                X
+EXPLANATION                   X                      X  X    X
+XFER_TYPE                        X  X
+CHKBOX                                 X                      
+```
+
+```{r}
+ny <- read_delim(
+  file = out_file, 
+  delim = ",", 
+  col_names = FALSE,
+  col_types = cols(
+    .default = col_character()
+  ),
+  escape_double = FALSE,
+  escape_backslash = FALSE
+)
+
+ny <- filter(ny, X2 == "J")
+```
