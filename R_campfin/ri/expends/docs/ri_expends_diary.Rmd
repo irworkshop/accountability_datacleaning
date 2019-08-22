@@ -434,7 +434,6 @@ mean(ri$city_sep %in% geo$city)
 sum(unique(ri$city_sep) %out% geo$city)
 ```
 
-
 ```{r prep_city, collapse=TRUE}
 ri <- ri %>% 
   mutate(
@@ -475,7 +474,7 @@ summary(ri$match_dist)
 ri <- ri %>% 
   mutate(
     city_swap = if_else(
-      condition = match_dist == 1, 
+      condition = is_less_than(match_dist, 2), 
       true = city_match, 
       false = city_norm
     )
@@ -528,6 +527,16 @@ n_distinct(ri$city_swap)
 n_distinct(ri$city_clean)
 ```
 
+#### Lookup
+
+```{r}
+lookup <- read_csv(file = here("ri", "expends", "data", "ri_city_lookup.csv"))
+lookup <- select(lookup, city_clean, city_new)
+
+ri <- left_join(ri, lookup)
+n_distinct(ri$city_new)
+```
+
 ## Conclude
 
 1. There are `r nrow(ri)` records in the database
@@ -545,10 +554,18 @@ n_distinct(ri$city_clean)
 proc_dir <- here("ri", "expends", "data", "processed")
 dir_create(proc_dir)
 
-write_csv(
-  x = ri,
-  na = "",
-  path = glue("{proc_dir}/ri_expends_clean.csv")
-)
+ri %>% 
+  select(
+    -city_norm,
+    -city_match,
+    -match_dist,
+    -city_swap,
+    -city_refine,
+    -city_clean
+  ) %>% 
+  write_csv(
+    na = "",
+    path = glue("{proc_dir}/ri_expends_clean.csv")
+  )
 ```
 
