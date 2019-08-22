@@ -120,7 +120,7 @@ More information about the record layout can be found here https://www.dos.pa.go
 
 ### Download
 
-Download raw, **immutable** data file. Go to https://www.dos.pa.gov/VotingElections/CandidatesCommittees/CampaignFinance/Resources/Pages/FullCampaignFinanceExport.aspx. We'll download the files from 2015 to 2019 (file format: zip file).
+Download raw, **immutable** data file. Go to https://www.dos.pa.gov/VotingElections/CandidatesCommittees/CampaignFinance/Resources/Pages/FullCampaignFinanceExport.aspx. We'll download the files from 2015 to 2019 (file format: zip file) with the script.
 
 ```{r raw_dir}
 # create a directory for the raw data
@@ -128,6 +128,7 @@ raw_dir <- here("pa", "expends", "data", "raw")
 dir_create(raw_dir)
 ```
 
+Download all the file packages containing all campaign-finance-related files. 
 ```{r download to raw_dir, eval = FALSE}
 #download the files into the directory
 pa_exp_urls <- glue("https://www.dos.pa.gov//VotingElections/CandidatesCommittees/CampaignFinance/Resources/Documents/{2015:2019}.zip")
@@ -152,7 +153,7 @@ if (all_files_new(path = raw_dir, glob = "*.txt")) {
     unzip(
       zipfile = zip_files[i],
       #Matches the csv files that starts with expense, and trim the "./ " from directory names
-      files = grep("expense.+", unzip(zip_files[i]), value = FALSE) %>% substring(3,),
+      files = grep("expense.+", unzip(zip_files[i]), value = TRUE) %>% substring(3,),
       exdir = raw_dir
     )
   }
@@ -532,6 +533,9 @@ Manually change the city_refine fields due to overcorrection.
 
 
 ```{r}
+st_pattern <- str_c("\\s",unique(zipcode$state), "$", collapse = "|")
+
+
 pa_refined$city_refine <- pa_refined$city_refine %>% 
   str_replace("^DU BOIS$", "DUBOIS") %>% 
   str_replace("^PIT$", "PITSSBURGH") %>% 
@@ -541,6 +545,8 @@ pa_refined$city_refine <- pa_refined$city_refine %>%
   str_replace("^NON$", "ONO") %>% 
   str_replace("^FORD CLIFF$", "CLIFFORD") %>% 
   str_replace("^W B$", "WILKES BARRE") 
+
+  
 
 refined_table <-pa_refined %>% 
   select(index, FILERID, city_refine)
@@ -556,25 +562,153 @@ pa <- pa %>%
 
 pa$city <- pa$city %>% 
   str_replace("^MT PLEASANT$", "MOUNT PLEASANT") %>% 
-  str_replace("^MT ", "MOUNT ") %>% 
+ str_replace("\\sTWP$", " TOWNSHIP") %>% 
   str_replace("^ST\\s", "SAINT ") %>% 
-  str_replace("^PHILA$", "PHILADELPHIA") %>% 
-  str_replace("\\sTWP$", "") %>% 
-  str_replace("\\sPA$", "")
-  
-pa_sec_refine <- pa %>% 
-  filter(city %out% valid_city) %>%
-  mutate(sec_match_dis = stringdist(city, city_match)) 
+  str_replace("^MT\\s", "MOUNT ") %>%  
+  str_replace("^FT\\s", "FORT ") %>% 
+  str_replace("^W\\sB$|WB", "WILKES BARRE") %>% 
+  str_replace("\\sHTS$|\\sHGTS$", " HEIGHTS") %>% 
+  str_replace("\\sSQ$", " SQUARE") %>% 
+  str_replace("\\sSPGS$|\\sSPR$|\\sSPRG$", "  SPRINGS") %>% 
+  str_replace("\\sJCT$", " JUNCTION") %>% 
+  str_replace("^E\\s", "EAST ") %>% 
+  str_replace("^N\\s", "NORTH ") %>% 
+  str_replace("^W\\s", "WEST ") %>% 
+  str_remove(st_pattern) %>% 
+  str_remove("^X+$")
+```
 
-sec_refined_table <- pa_sec_refine %>% 
-  filter(sec_match_dis < 5 ) %>% 
-  select(index, city_match) %>% 
-  rename (sec_city_match = city_match)
+```{r after lookup}
+pa_match_table <- pa %>% 
+  filter(str_sub(pa$city, 1,1) == str_sub(pa$city_match, 1,1)) %>% 
+  filter(city %out% valid_city)  %>% 
+  mutate(string_dis = stringdist(city, city_match)) %>% 
+  select (index, zip_clean, STATE, city, city_match, string_dis) %>% 
+  distinct() %>% 
+  add_count(city_match) %>% 
+  rename("sec_city_match" = "city_match")
+
+# Manually change overcorrected city names to original 
+pa_match_table$city_match <- pa_match_table$city_match %>% 
+  str_replace("^ARLINGTON$", "ALEXANDRIA") %>% 
+  str_replace("^BROWNSVILLE$", "BENTLEYVILLE") %>% 
+  str_replace("^FEASTERVILLE\\sTREVOSE", "FEASTERVILLE") %>% 
+  str_replace("LEES SUMMIT", "LAKE LOTAWANA") %>% 
+  str_replace("HAZLETON", "HAZLE TOWNSHIP") %>% 
+  str_replace("DANIA", "DANIA BEACH") %>% 
+  str_replace("CRANBERRY", "CRANBERRY TOWNSHIP")
+
+pa_match_table[pa_match_table$city == "HOLLIDASBURG", "city_match"] <- "HOLLIDAYSBURG"
+pa_match_table[pa_match_table$city == "PENN HELLE", "city_match"] <- "PENN HILLS"
+pa_match_table[pa_match_table$city == "PHUM", "city_match"] <- "PLUM"
+pa_match_table[pa_match_table$city == "CLARKSGREEN", "city_match"] <- "CLARKS GREEN"
+pa_match_table[pa_match_table$city == "SANFRANCISCO", "city_match"] <- "SAN FRANCISCO"
+pa_match_table[pa_match_table$city == "RIEFFTON", "city_match"] <- "REIFFTON"
+pa_match_table[pa_match_table$city == "SHOREVILLE", "city_match"] <- "SHOREVIEW"
+pa_match_table[pa_match_table$city == "PITTSBURGH PLUM", "city_match"] <- "PLUM"
+pa_match_table[pa_match_table$city == "MOUNTVIEW", "city_match"] <- "MOUNT VIEW"
+pa_match_table[pa_match_table$city == "PLUM BORO", "city_match"] <- "PLUM"
+pa_match_table[pa_match_table$city == "HAZELTON CITY", "city_match"] <- "HAZLE TOWNSHIP"
+pa_match_table[pa_match_table$city == "BARNSVILLE", "city_match"] <- "BARNESVILLE"
+
+keep_original <- c( "SHOREVIEW" ,
+   "CUYAHOGA" ,
+   "MEDFORD LAKES" ,
+   "WEST GOSHEN" ,
+   "CLEVELAND HEIGHTS" ,
+   "LAHORNE" ,
+   "ROCHESTER HILLS" ,
+   "PENLLYN" ,
+   "SOUTHERN" ,
+   "WEST DEPTFORD" ,
+   "SEVEN FIELDS" ,
+   "LORDS VALLEY" ,
+   "WILDWOOD CREST" ,
+   "BETHLEHEM TOWNSHIP" ,
+   "MOON TOWNSHIP" ,
+   "BELFONTE" ,
+   "NEWPORT TOWNSHIP" , 
+   "LINTHICUM" , 
+   "WARRIOR RUN" ,
+   "PRIMOS SECANE" ,
+   "COOKPORT" , 
+   "MANASSAS PARK" ,
+   "MCMURRAY" ,
+   "MOYLAN" ,
+   "BELMONT HILLS" ,
+   "THORNBURY" ,
+   "HANOVER TOWNSHIP" ,
+   "MIAMI SPRINGS" ,
+   "BROOKLYN PARK" )
+
+pa_match_table[pa_match_table$city %in% keep_original,"sec_city_match"] <-
+  pa_match_table[pa_match_table$city %in% keep_original,"city"]
+
 
 pa <-pa %>% 
-  left_join(sec_refined_table, by = "index") %>% 
+  left_join(select(pa_match_match, index, sec_city_match), by = "index") %>% 
   mutate(city_clean = coalesce(sec_city_match, city))
+
+n_distinct(pa$city_clean[pa$city_clean %out% valid_city])
 ```
+
+```{r}
+pa_sec_refined <- pa %>%
+  filter(city_clean %out% c(valid_city, pa_match_table$sec_city_match)) %>% 
+  mutate(
+    city_sec_refine = city_clean %>% 
+      key_collision_merge(dict = c(valid_city, pa_match_table$sec_city_match), keep_original) %>% 
+      n_gram_merge(numgram = 1),
+    refined = (city_clean != city_sec_refine)
+  ) %>% 
+  filter(refined) %>% 
+  select(
+    index,
+    CITY,
+    city_prep,
+    city_match,
+    city_swap,
+    match_dist,
+    city_refine,
+    city_clean,
+    city_sec_refine,
+    STATE, 
+    ZIPCODE,
+    zip_clean
+  )
+
+
+```
+
+
+
+```{r}
+cities <- select(pa_match_table, STATE, sec_city_match) %>% rename("state" = "STATE") %>% rename("city" = "sec_city_match") %>% rbind(select(zipcode, -zip)) %>% unique()
+# Get a table of cities that are not in the valid_city vector
+pa_out <- pa %>% 
+  count(STATE, city_clean, sort = TRUE) %>% 
+  filter(city_clean %out% cities$city) %>% 
+  drop_na()
+
+# Fuzzy-matching city names with the names out of such list. This will take a while, and be patient
+prep_refine <- pa_out %>% 
+  # Join on all names in the relevant state
+  left_join(cities, by=c(STATE = "state")) %>%
+  # Calculate the distances, per original city name.
+  group_by(city) %>%                
+  mutate(dist = diag(adist(city_clean, city, partial=TRUE))) %>%
+  # Append the agrepl result with the Levenshtein edit distance
+  rowwise() %>%
+  mutate(string_agrep = agrepl(city_clean, city, max.distance = 0.3)) %>%
+  ungroup() %>%  
+  # Only retain minimum distances
+  group_by(city_clean) %>%   
+  filter(dist == min(dist))
+
+# Refine the entries where city_swap is six letter apart from a single match in cities (It's a rather safe switch, after examining the prep_refine table). Overcorrection can be manually changed later.
+to_refine <- prep_refine %>% filter(n()==1) %>% filter(city_swap %in% prep_refine$city_swap[prep_refine$dist<6])
+```
+
 
 Each process also increases the percent of valid city names.
 
