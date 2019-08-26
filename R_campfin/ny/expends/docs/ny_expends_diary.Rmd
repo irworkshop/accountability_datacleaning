@@ -71,7 +71,7 @@ if (!require("pacman")) install.packages("pacman")
 pacman::p_load_current_gh("kiernann/campfin")
 pacman::p_load(
   stringdist, # levenshtein value
-  RSelenium, # remote browser
+  snakecase, # case conversion
   tidyverse, # data manipulation
   lubridate, # datetime strings
   tidytext, # text analysis
@@ -224,7 +224,7 @@ if (!this_file_new(out_file)) {
 }
 ```
 
-### Read
+### About
 
 ```{r out_layout, echo=FALSE}
 layout_file <- glue("{raw_dir}/{zip_content$name[1]}")
@@ -258,6 +258,10 @@ out_format <-
   map_df(str_trim) %>% 
   mutate(aspect = snakecase::to_snake_case(aspect))
 
+out_format <- as.list(out_format$value) %>% 
+  set_names(out_format$aspect) %>% 
+  map(parse_guess)
+
 print(out_format)
 ```
 
@@ -280,12 +284,24 @@ out_scheds <-
 print(out_scheds)
 ```
 
-```{r}
+```{r out_columns}
 out_cols <- str_remove(read_lines(file = sched_file, skip_empty_rows = TRUE)[4:34][-2], "\n")
+out_cols <- str_remove(out_cols, "NAMES")
 out_cols_header <- unlist(str_split(out_cols[1], "\\s+"))
-x <- str_c(out_cols[str_which(out_cols, "X")], collapse = "\n")
-z <- read_fwf(file = x, col_positions = fwf_empty(x, col_names = out_cols_header))
-names <- str_remove(na.omit(z$FIELD[z$J == "X"]), "_\\d+")
+out_cols <- str_c(out_cols[str_which(out_cols, "X")], collapse = "\n")
+
+out_cols <- read_fwf(
+  file = out_cols, 
+  col_positions = fwf_empty(out_cols, col_names = out_cols_header)
+)
+
+out_cols <- mutate_at(
+  .tbl = out_cols, 
+  .vars = c(2:18), 
+  .funs = function(x) !is.na(x)
+)
+
+(names <- str_remove(na.omit(out_cols$FIELD[out_cols$J]), "_\\d+"))
 ```
 
 ```
@@ -317,16 +333,505 @@ CHKBOX                                 X
 ```
 
 ```{r}
+cat(read_lines(layout_file), sep = "\n")
+cat(read_lines(sched_file), sep = "\n")
+```
+
+```{r}
+read_lines(sched_file)[93:186]
+```
+
+### Read
+
+```{r}
+ny_names <- c(
+  "FILER_ID", 
+  "FREPORT_ID",
+  "TRANSACTION_CODE", 
+  "E_YEAR",
+  "T3_TRID", 
+  "DATE1", 
+  "DATE2", 
+  "CONTRIB_CODE", 
+  "CONTRIB_TYPE_CODE",
+  "CORP", 
+  "FIRST_NAME", 
+  "MID_INT", 
+  "LAST_NAME", 
+  "ADDR", 
+  "CITY", 
+  "STATE", 
+  "ZIP", 
+  "CHECK_NO",
+  "CHECK_DATE",
+  "AMOUNT",
+  "AMOUNT2", 
+  "DESCRIPTION", 
+  "OTHER_RECPT_CODE", 
+  "PURPOSE_CODE1", 
+  "PURPOSE_CODE2", 
+  "EXPLANATION", 
+  "XFER_TYPE", 
+  "CHKBOX", 
+  "CREREC_UID", 
+  "CREREC_DATE"
+  )
+```
+
+```{r read_out}
 ny <- read_delim(
   file = out_file, 
   delim = ",", 
-  col_names = FALSE,
+  col_names = to_snake_case(ny_names),
+   escape_double = FALSE,
+  escape_backslash = FALSE,
   col_types = cols(
-    .default = col_character()
+    .default = col_character(),
+    e_year = col_integer(),
+    date_1 = col_date("%m/%d/%Y"),
+    date_2 = col_date("%m/%d/%Y"),
+    amount = col_double(),
+    amount_2 = col_double(),
+    crerec_date = col_datetime("%m/%d/%Y %H:%M:%S")
+  )
+)  
+```
+
+The New York campaign finance database is a single data frame with `r comma(nrow(ny))` rows and
+`r ncol(ny)` columns. This data frame contains data for campaign contributions, expenditures, 
+
+```{r filter_sched}
+# filter only expenditures
+expend_sched <- out_scheds$sched[str_which(out_scheds$desc, "Expenditure/Payments")]
+ny <- filter(ny, transaction_code == expend_sched)
+```
+
+```{r select_not_na}
+ny_nas <- glimpse_fun(ny, count_na)
+ny <- select(ny, ny_nas$var[ny_nas$p < 0.989])
+```
+
+## Explore
+
+```{r head_tail}
+head(ny)
+tail(ny)
+glimpse(sample_frac(ny))
+```
+
+### Missing
+
+```{r glimpse_na}
+glimpse_fun(ny, count_na)
+```
+
+```{r flag_na}
+ny <- ny %>% flag_na(corp, filer_id, amount, date_1)
+sum(ny$na_flag)
+mean(ny$na_flag)
+```
+
+### Duplicate
+
+### Categorical
+
+```{r}
+glimpse_fun(ny, n_distinct)
+```
+
+## Wrangle
+
+We should use the `campfin::normal_*()` functions to perform some basic, high-confidence text
+normalization to improve the searchability of the database.
+
+### Address
+
+First, we will normalize the street address by removing punctuation and expanding abbreviations.
+
+```{r normal_address}
+ny <- ny %>% 
+  mutate(
+    addr_norm = normal_address(
+      address = addr,
+      add_abbs = usps,
+      na_rep = TRUE
+    )
+  )
+```
+
+We can see how this improves consistency across the `address_1` and `address_2` fields.
+
+```{r view_address_change, echo=FALSE}
+ny %>% 
+  select(starts_with("addr")) %>% 
+  drop_na() %>% 
+  sample_n(10)
+```
+
+### ZIP
+
+The `zip` address is already pretty good, with 
+`r percent(prop_in(ny$zip, valid_zip, na.rm = TRUE))` of the values already in our 95% 
+comprehensive `valid_zip` list.
+
+```{r count_zip_pre, collapse=TRUE}
+n_distinct(ny$zip)
+prop_in(ny$zip, valid_zip)
+length(setdiff(ny$zip, valid_zip))
+```
+
+We can improve this further by lopping off the uncommon four-digit extensions and removing common
+invalid codes like 00000 and 99999.
+
+```{r normal_zip}
+ny <- ny %>% 
+  mutate(
+    zip_norm = normal_zip(
+      zip = zip,
+      na_rep = TRUE
+    )
+  )
+```
+
+This brings our valid percentage to `r percent(prop_in(ny$zip_norm, valid_zip, na.rm = TRUE))`.
+
+```{r count_zip_post, collapse=TRUE}
+n_distinct(ny$zip_norm)
+prop_in(ny$zip_norm, valid_zip)
+length(setdiff(ny$zip_norm, valid_zip))
+count_na(ny$zip_norm) - count_na(ny$zip)
+```
+
+### State
+
+The `state` variable is also very clean, already at 
+`r percent(prop_in(ny$state, valid_state, na.rm = TRUE))`.
+
+```{r count_state_pre, collapse=TRUE}
+n_distinct(ny$state)
+prop_in(ny$state, valid_state, na.rm = TRUE)
+length(setdiff(ny$state, valid_state))
+setdiff(ny$state, valid_state)
+```
+
+There are still `r length(setdiff(ny$state, valid_state))` invalid values which we can remove.
+
+```{r normal_state}
+ny <- ny %>% 
+  mutate(
+    state_norm = normal_state(
+      state = state,
+      abbreviate = TRUE,
+      na_rep = TRUE,
+    )
+  )
+```
+
+```{r}
+ny$state_norm <- ny$state_norm %>% 
+  str_replace("^N$",  "NY") %>% 
+  str_replace("^MY$", "NY") %>% 
+  str_replace("^NT$", "NY") %>% 
+  str_replace("^NU$", "NY") %>% 
+  str_replace("^BY$", "NY")
+```
+
+```{r count_state_post, collapse=TRUE}
+n_distinct(ny$state_norm)
+prop_in(ny$state_norm, valid_state)
+length(setdiff(ny$state_norm, valid_state))
+ny$state_norm[which(ny$state_norm %out% valid_state)] <- NA
+```
+
+### City
+
+The `city` value is the hardest to normalize. We can use a four-step system to functionally improve
+the searchablity of the database.
+
+1. **Normalize** the raw values with `campfin::normal_city()`
+1. **Match** the normal values with the _expected_ value for that ZIP code
+1. **Swap** the normal values with the expected value if they are _very_ similar
+1. **Refine** the swapped values the [OpenRefine algorithms][08] and keep good changes
+
+[08]: https://github.com/OpenRefine/OpenRefine/wiki/Clustering-In-Depth
+
+The raw `city` values are fairly normal, with
+`r percent(prop_in(ny$city, valid_city, na.rm = TRUE))` already in `valid_city`. We will aim to get this number over 99% using the above steps.
+
+```{r count_city_pre, collapse=TRUE}
+n_distinct(ny$city)
+prop_in(str_to_upper(ny$city), valid_city, na.rm = TRUE)
+length(setdiff(ny$city, valid_city))
+prop_na(ny$city)
+```
+
+#### Normalize
+
+```{r normal_city}
+ny <- ny %>% 
+  mutate(
+    city_norm = normal_city(
+      city = str_replace("\\bNY\\b", "NEW YORK"), 
+      geo_abbs = usps_city,
+      st_abbs = c("NY", "DC"),
+      na = na_city,
+      na_rep = TRUE
+    )
+  )
+```
+
+This process brought us to `r percent(prop_in(ny$city_norm, valid_city, na.rm = TRUE))` valid.
+
+```{r count_city_post_norm, collapse=TRUE}
+n_distinct(ny$city_norm)
+prop_in(ny$city_norm, valid_city, na.rm = TRUE)
+length(setdiff(ny$city_norm, valid_city))
+prop_na(ny$city_norm)
+```
+
+It also increased the number of `NA` values by 
+`r comma(count_na(ny$city_norm) - count_na(ny$city))`. These new `NA` values were either a single
+(possibly repeating) character, or contained in the `na_city` vector.
+
+```{r new_city_na, echo=FALSE}
+ny %>% 
+  filter(is.na(city_norm) & !is.na(city)) %>% 
+  select(zip_norm, state_norm, city, city_norm) %>% 
+  distinct() %>% 
+  sample_frac()
+```
+
+#### Swap
+
+Then, we will compare these normalized `city_norm` values to the _expected_ city value for that
+vendor's ZIP code. If the [levenshtein distance][09] is less than 3, we can confidently swap these
+two values.
+
+[09]: https://en.wikipedia.org/wiki/Levenshtein_distance
+
+```{r swap_city}
+ny <- ny %>% 
+  rename(city_raw = city) %>% 
+  left_join(
+    y = geo,
+    by = c(
+      "state_norm" = "state",
+      "zip_norm" = "zip"
+    )
+  ) %>% 
+  rename(city_match = city) %>% 
+  mutate(
+    match_dist = stringdist(city_norm, city_match),
+    city_swap = if_else(
+      condition = is_less_than(match_dist, 3),
+      true = city_match,
+      false = city_norm
+    )
+  )
+```
+
+This is a very fast way to increase the valid proportion to
+`r percent(prop_in(ny$city_swap, valid_city, na.rm = TRUE))` and reduce the number of distinct
+_invalid_ values from `r length(setdiff(ny$city_norm, valid_city))` to only
+`r length(setdiff(ny$city_swap, valid_city))`
+
+```{r count_city_post_swap, collapse=TRUE}
+n_distinct(ny$city_swap)
+prop_in(ny$city_swap, valid_city, na.rm = TRUE)
+length(setdiff(ny$city_swap, valid_city))
+```
+
+#### Refine
+
+Finally, we can pass these swapped `city_swap` values to the OpenRefine cluster and merge 
+algorithms. These two algorithms cluster similar values and replace infrequent values with their
+more common counterparts. This process can be harmful by making _incorrect_ changes. We will only
+keep changes where the state, ZIP code, _and_ new city value all match a valid combination.
+
+```{r refine_city}
+good_refine <- ny %>% 
+  mutate(
+    city_refine = city_swap %>% 
+      key_collision_merge() %>% 
+      n_gram_merge(numgram = 1)
+  ) %>% 
+  filter(city_refine != city_swap) %>% 
+  inner_join(
+    y = geo,
+    by = c(
+      "city_refine" = "city",
+      "state_norm" = "state",
+      "zip_norm" = "zip"
+    )
+  )
+
+nrow(good_refine)
+```
+
+```{r view_city_refines, echo=FALSE}
+good_refine %>%
+  count(
+    state_norm, 
+    zip_norm, 
+    city_raw, 
+    city_refine,
+    sort = TRUE
+  )
+```
+
+We can join these good refined values back to the original data and use them over their incorrect
+`city_swap` counterparts in a new `city_refine` variable.
+
+```{r join_refine}
+ny <- ny %>% 
+  left_join(good_refine) %>% 
+  mutate(city_refine = coalesce(city_refine, city_swap))
+```
+
+This brings us to `r percent(prop_in(ny$city_refine, valid_city, na.rm = TRUE))` valid values.
+
+```{r count_city_post_refine, collapse=TRUE}
+n_distinct(ny$city_refine)
+prop_in(ny$city_refine, valid_city, na.rm = TRUE)
+length(setdiff(ny$city_refine, valid_city))
+```
+
+#### Progress
+
+We can make very few manual changes to capture the last few big invalid values. Local city
+abbreviations (e.g., SPFD) often need to be changed by hand.
+
+```{r view_final_bad}
+ny %>%
+  filter(city_refine %out% valid_city) %>% 
+  count(state_norm, zip_norm, city_refine, sort = TRUE) %>% 
+  drop_na(city_refine) %>% 
+  left_join(geo, by = c("state_norm" = "state", "zip_norm" = "zip"))
+```
+
+```{r city_final}
+ny <- ny %>% 
+  mutate(
+    city_final = city_refine %>% 
+      str_replace("^BKLYN$", "BROOKLYN") %>% 
+      str_replace("^NYC$", "NEW YORK") %>% 
+      str_replace("^NF$", "NIAGARA FALLS") %>% 
+      str_replace("^LIC$", "LONG ISLAND CITY") %>% 
+      str_replace("")
+  )
+```
+
+By adding a dozen popular Missouri cities to our `valid_city` list, we can reach our 99% goal.
+
+```{r increase_valid_city}
+valid_city <- c(
+  valid_city,
+  "OVERLAND",
+  "OVERLAND PARK",
+  "RAYTOWN",
+  "NORTH KANSAS CITY",
+  "PRAIRIE VILLAGE",
+  "UNIVERSITY CITY",
+  "WEBSTER GROVES",
+  "RICHMOND HEIGHTS",
+  "LENEXA",
+  "STE GENEVIEVE",
+  "LEAWOOD",
+  "DES PERES",
+  "OLIVETTE",
+  "TOWN AND COUNTRY",
+  "AFFTON"
+)
+```
+
+```{r progress_table, echo=FALSE}
+progress_table <- tibble(
+  stage = c("raw", "norm", "swap", "refine", "final"),
+  prop_good = c(
+    prop_in(str_to_upper(ny$city_raw), valid_city, na.rm = TRUE),
+    prop_in(ny$city_norm, valid_city, na.rm = TRUE),
+    prop_in(ny$city_swap, valid_city, na.rm = TRUE),
+    prop_in(ny$city_refine, valid_city, na.rm = TRUE),
+    prop_in(ny$city_final, valid_city, na.rm = TRUE)
   ),
-  escape_double = FALSE,
-  escape_backslash = FALSE
+  total_distinct = c(
+    n_distinct(str_to_upper(ny$city_raw)),
+    n_distinct(ny$city_norm),
+    n_distinct(ny$city_swap),
+    n_distinct(ny$city_refine),
+    n_distinct(ny$city_final)
+  ),
+  unique_bad = c(
+    length(setdiff(str_to_upper(ny$city_raw), valid_city)),
+    length(setdiff(ny$city_norm, valid_city)),
+    length(setdiff(ny$city_swap, valid_city)),
+    length(setdiff(ny$city_refine, valid_city)),
+    length(setdiff(ny$city_final, valid_city))
+  )
 )
 
-ny <- filter(ny, X2 == "J")
+diff_change <- progress_table$unique_bad[5]-progress_table$unique_bad[1]
+prop_change <- diff_change/progress_table$unique_bad[1]
 ```
+
+Still, our progress is significant without having to make a single manual or unconfident change.
+The percent of valid cities increased from `r percent(progress_table$prop_good[1])` to 
+`r percent(progress_table$prop_good[5])`. The number of total distinct city values decreased from
+`r comma(progress_table$total_distinct[1])` to `r comma(progress_table$total_distinct[5])`. The
+number of distinct invalid city names decreased from `r comma(progress_table$unique_bad[1])` to
+only `r comma(progress_table$unique_bad[5])`, a change of `r percent(prop_change)`.
+
+```{r print_progress, echo=FALSE}
+kable(
+  x = progress_table,
+  format = "markdown", 
+  digits = 4,
+  col.names = c("Normalization Stage", "Total Distinct", "Percent Valid", "Unique Invalid")
+)
+```
+
+```{r wrangle_bar_prop, echo=FALSE}
+progress_table %>% 
+  mutate(stage = as_factor(stage)) %>% 
+  ggplot(aes(x = stage, y = prop_good)) +
+  geom_hline(yintercept = 0.99) +
+  geom_col(fill = brewer_dark2[2]) +
+  coord_cartesian(ylim = c(0.75, 1)) +
+  scale_y_continuous(labels = percent) +
+  labs(
+    title = "Missouri Expenditures Payee City Progress",
+    subtitle = "Percent of total values contained in pre-defined list of cities",
+    caption = "Source: Missouri Ethics Commission",
+    x = "Wrangling Stage",
+    y = "Proportion Valid Cities"
+  )
+```
+
+```{r wrangle_bar_distinct, echo=FALSE}
+progress_table %>% 
+  mutate(stage = as_factor(stage)) %>% 
+  select(-prop_good) %>% 
+  rename(
+    All = total_distinct,
+    Invalid = unique_bad
+  ) %>% 
+  gather(
+    -stage,
+    key = "key",
+    value = "value"
+  ) %>% 
+  ggplot(aes(x = stage, y = value)) +
+  geom_col(aes(fill = key)) +
+  scale_fill_brewer(type = "qual", palette = "Dark2") +
+  scale_y_continuous(labels = comma) +
+  labs(
+    title = "Missouri Expenditures Payee City Progress",
+    subtitle = "Total distinct number of city values",
+    caption = "Source: Missouri Ethics Commission",
+    fill = "Distinct Values",
+    x = "Wrangling Stage",
+    y = "Number of Expenditures"
+  )
+```
+
+## Conclude
