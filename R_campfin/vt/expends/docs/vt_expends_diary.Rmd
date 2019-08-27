@@ -1,17 +1,12 @@
 ---
-title: "Data Diary"
-subtitle: "Vermont Expenditures"
+title: "Vermont Expenditures"
 author: "Kiernan Nicholls"
-date: "`r format(Sys.time())`"
+date: "`r Sys.time()`"
 output:
-  html_document: 
+  github_document: 
     df_print: tibble
-    fig_caption: yes
-    highlight: tango
-    keep_md: yes
-    max.print: 32
-    toc: yes
-    toc_float: no
+    toc: true
+    toc_dept: 2
 editor_options: 
   chunk_output_type: console
 ---
@@ -48,26 +43,27 @@ The following packages are needed to collect, manipulate, visualize, analyze, an
 these results. The `pacman` package will facilitate their installation and attachment.
 
 ```{r p_load, message=FALSE, warning=FALSE, error=FALSE}
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load_current_gh("kiernann/campfin")
 pacman::p_load(
+  stringdist, # levenshtein value
+  snakecase, # change string case
+  RSelenium, # remote browser
   tidyverse, # data manipulation
   lubridate, # datetime strings
+  tidytext, # text analysis
   magrittr, # pipe opperators
   janitor, # dataframe clean
-  zipcode, # clean & databse
-  batman, # parse yes & no
-  refinr, # cluster & merge
-  rvest, # scrape website
+  batman, # rep(NA, 8) Batman!
+  refinr, # cluster and merge
+  scales, # format strings
   knitr, # knit documents
-  here, # locate storage
+  vroom, # read files fast
+  glue, # combine strings
+  here, # relative storage
+  httr, # http query
   fs # search storage 
 )
-```
-
-```{r custom_funs_dat, echo=FALSE}
-data("zipcode")
-here <- here::here
-"%out%" <- Negate("%in%")
-print_all <- function(df) df %>% print(n = nrow(.)) 
 ```
 
 This document should be run as part of the `R_campfin` project, which lives as a sub-directory
@@ -107,7 +103,7 @@ used in this chapter, expenditure shall not include any of the following:
 
 ```{r read_csv}
 vt <- 
-  here("vt_expends", "data", "raw", "ViewExpenditureList.csv") %>% 
+  here("vt", "expends", "data", "raw", "ViewExpenditureList.csv") %>% 
   read_csv(
     col_types = cols(
       .default = col_character(),
@@ -137,12 +133,7 @@ glimpse(sample_frac(vt))
 The variables range in their degree of distinctness.
 
 ```{r n_distinct}
-vt %>% 
-  map(n_distinct) %>% 
-  unlist() %>% 
-  enframe(name = "variable", value = "n_distinct") %>% 
-  mutate(prop_distinct = round(n_distinct / nrow(vt), 4)) %>%
-  print(n = length(vt))
+glimpse_fun(vt, n_distinct)
 ```
 
 We can use `ggplot2::geom_bar()` to explore the distribution of these least distinct nominal
@@ -203,21 +194,12 @@ vt %>%
 
 ### Duplicate
 
-We can use `janitor::get_dupes()` to create a new table of records with duplicate values across
-all rows. We will flag these with a new `dupe_flag` variable and join them back to the original
-data.
+There are a significant number of duplicate records.
 
 ```{r get_dupes}
-vt_dupes <- vt %>% 
-  select(-id) %>% 
-  get_dupes() %>% 
-  select(-dupe_count) %>% 
-  mutate(dupe_flag = TRUE) %>% 
-  distinct()
-
-vt <- vt %>% 
-  left_join(vt_dupes) %>% 
-  mutate(dupe_flag = !is.na(dupe_flag))
+vt <- flag_dupes(vt, -id)
+sum(vt$dupe_flag)
+percent(mean(vt$dupe_flag))
 ```
 
 ### Missing
@@ -227,12 +209,7 @@ removed using `janitor::remove_empty()` during our initial reading of the file. 
 of missing values in each variable can be found below:
 
 ```{r count_na}
-vt %>% 
-  map(function(var) sum(is.na(var))) %>% 
-  unlist() %>% 
-  enframe(name = "variable", value = "n_na") %>% 
-  mutate(prop_na = n_na / nrow(vt)) %>% 
-  print(n = length(vt))
+glimpse_fun(vt, count_na)
 ```
 
 Most variables have zero `NA` values, aside from the supplemental `public_question` and `comments` 
@@ -307,55 +284,18 @@ Since we parsed the `transaction_date` as a date file using `readr::col_date()` 
 ```{r add_zip}
 vt <- vt %>% 
   mutate(
+    transaction_year = year(transaction_date),
     payee_zip = payee_address %>% 
-      str_extract("[\\d-]+$") %>% 
-      clean.zipcodes(),
+      str_extract(rx_zip) %>% 
+      normal_zip(na_rep = TRUE),
     payee_state = payee_address %>% 
-      str_remove("[\\d-]+$") %>% 
-      str_trim() %>% 
-      str_extract("..$"),
-    transaction_year = year(transaction_date)
+      str_extract(rx_state) %>%
+      normal_state(
+        abbreviate = TRUE, 
+        na_rep = TRUE, 
+        valid = valid_state
+      )
     )
-```
-
-## Clean
-
-There are `r length(vt$payee_address[which(vt$payee_state %out% zipcode$state)])` records
-with invalid `payee_state` values. Aside from those that are "US" (which should be "VT"),
-the rest can be made `NA`, as they represent expenditures made overseas.
-
-```{r fix_state}
-unique(vt$payee_address[which(vt$payee_state %out% zipcode$state)])
-vt$payee_state[which(vt$payee_state == "US")] <- "VT"
-vt$payee_state[which(vt$payee_state %out% zipcode$state)] <- NA
-```
-
-All zipcodes are five digits, but there are a handful that do not exist in our list of valid
-zipcodes. We can remove those we know to be truly invalid, but leave the rest.
-
-```{r check_zip, collapse=TRUE}
-vt$payee_zip[which(nchar(vt$payee_zip) != 5)]
-unique(vt$payee_zip[vt$payee_zip %out% zipcode$zip])
-```
-
-```{r fix_zip}
-vt$payee_zip <- vt$payee_zip %>% 
-  na_if("00000") %>% 
-  na_if("11111") %>% 
-  na_if("33333")
-
-vt %>%
-  filter(!is.na(payee_zip)) %>%
-  filter(payee_zip %out% zipcode$zip) %>% 
-  select(
-    payee_name,
-    payee_address,
-    payee_zip,
-    payee_state
-  ) %>% 
-  distinct() %>% 
-  arrange(payee_state) %>% 
-  print_all()
 ```
 
 ## Conclude
@@ -374,10 +314,10 @@ and cleaned with `zipcode::clean.zipcode()`
 ## Write
 
 ```{r write_csv}
-dir_create(here("vt_expends", "data", "processed"))
+dir_create(here("vt", "expends", "data", "processed"))
 write_csv(
   x = vt,
-  path = here("vt_expends", "data", "processed", "vt_expends_clean.csv"),
+  path = here("vt", "expends", "data", "processed", "vt_expends_clean.csv"),
   na = ""
 )
 ```
