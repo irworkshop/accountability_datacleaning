@@ -60,32 +60,26 @@ these results. The `pacman` package will facilitate their installation and attac
 
 ```{r p_load, message=FALSE, dfrning=FALSE, error=FALSE}
 if (!require("pacman")) install.packages("pacman")
+pacman::p_load_current_gh("kiernann/campfin")
 pacman::p_load(
   stringdist, # levenshtein value
+  snakecase, # change string case
   RSelenium, # remote browser
   tidyverse, # data manipulation
   lubridate, # datetime strings
+  tidytext, # text analysis
   magrittr, # pipe opperators
   janitor, # dataframe clean
-  zipcode, # clean & database
+  batman, # rep(NA, 8) Batman!
+  refinr, # cluster and merge
+  scales, # format strings
+  knitr, # knit documents
+  vroom, # read files fast
   glue, # combine strings
   here, # relative storage
+  httr, # http query
   fs # search storage 
 )
-```
-
-```{r fix_fun, echo=FALSE}
-# fix conflict
-here <- here::here
-# custom utility functions
-"%out%" <- Negate("%in%")
-print_all <- function(dc) dc %>% print(n = nrow(.)) 
-# source functions
-source(here("R", "code", "normalize_geo.R"))
-source(here("R", "code", "all_files_new.R"))
-source(here("R", "code", "glimpse_fun.R"))
-# load data
-geo <- read_csv(here("R", "data", "geo.csv"))
 ```
 
 This document should be run as part of the `R_campfin` project, which lives as a sub-directory of
@@ -173,9 +167,9 @@ remote_driver <- rsDriver(
   )
 )
 
-# navigate to the FL DOE download site
+# navigate to the NH download site
 remote_browser <- remote_driver$client
-  remote_browser$navigate("https://cfs.sos.nh.gov/Public/ExpensesList")
+remote_browser$navigate("https://cfs.sos.nh.gov/Public/ExpensesList")
 
 # chose "All" from elections list
 cycle_menu <- "/html/body/div[1]/div[3]/table/tbody/tr/td[4]/div[2]/table[1]/tbody/tr[3]/td/table/tbody/tr[6]/td[2]/select/option[1]"
@@ -188,7 +182,7 @@ remote_browser$findElement("css", "#dtEndDate")$sendKeysToElement(list(format(to
 # click search button
 remote_browser$findElement("css", "#btnSearch")$clickElement()
 
-csv_button <- "html body#bodyPulic.innerbg0.leftnavbg2 div.wrapper div.container_inner table#data_container1 tbody tr td.contentpadding div#divExpensesListDetails table tbody tr td#tdExpenses.boxbg div#divExpensesGrid table.borderFooter tbody tr td.bgfooter a img"
+csv_button <- "td.bgfooter:nth-child(2) > a:nth-child(2)"
 remote_browser$findElement("css", csv_button)$clickElement()
 
 # close the browser and driver
@@ -249,7 +243,7 @@ glimpse(sample_frac(nh))
 The variables range in their degree of distinctness.
 
 ```{r n_distinct}
-nh %>% glimpse_fun(n_distinct)
+glimpse_fun(nh, n_distinct)
 ```
 
 ```{r payee_type_bar, echo=FALSE}
@@ -316,27 +310,21 @@ nh %>%
 The variables also vary in their degree of values that are `NA` (missing).
 
 ```{r count_na}
-nh %>% glimpse_fun(count_na)
+glimpse_fun(nh, count_na)
 ```
 
 We will flag any records with missing values in the key variables used to identify an expenditure.
 
 ```{r na_flag}
-nh <- nh %>% mutate(na_flag = is.na(payee_name))
+nh <- flag_na(nh, payee_name)
+sum(nh$na_flag)
 ```
 
 ### Duplicates
 
 ```{r get_dupes, collapse=TRUE}
-nh_dupes <- distinct(get_dupes(nh))
-nrow(nh_dupes)
-sum(nh_dupes$dupe_count)
-```
-
-```{r join_dupes}
-nh <- nh %>% 
-  left_join(nh_dupes) %>% 
-  mutate(dupe_flag = !is.na(dupe_count))
+nh <- flag_dupes(nh, everything())
+sum(nh$dupe_flag)
 ```
 
 ### Ranges
@@ -345,7 +333,7 @@ nh <- nh %>%
 
 ```{r range_amount}
 summary(nh$expenditure_amount)
-sum(nh$expenditure_amount < 0)
+sum(nh$expenditure_amount <= 0)
 ```
 
 ```{r amount_hist}
@@ -425,8 +413,8 @@ First, we will extract the ZIP digits from the end of the `address` string.
 nh <- nh %>% 
   mutate(
     zip_clean = payee_address %>% 
-      str_extract("\\d{5}(?:-\\d{4})?$") %>% 
-      normalize_zip(na_rep = TRUE)
+      str_extract(rx_zip) %>% 
+      normal_zip(na_rep = TRUE)
   )
 
 sample(nh$zip_clean, 10)
@@ -438,16 +426,13 @@ Then we can get the two digit state abbreviation preceding those digits.
 nh <- nh %>% 
   mutate(
     state_clean = payee_address %>% 
-      str_extract("[:alpha:]+(?=[:space:]+[:digit:]{5}(?:-[:digit:]{4})?$)") %>%
-      normalize_state(
-        na = c(""), 
-        expand = TRUE
-      )
+      str_extract(rx_state) %>%
+      normal_state(abbreviate = TRUE, na_rep = TRUE)
   )
 
 n_distinct(nh$state_clean)
 sample(nh$state_clean, 10)
-mean(na.omit(nh$state_clean) %in% geo$state)
+prop_in(nh$state_clean, valid_state)
 ```
 
 ## Conclude
