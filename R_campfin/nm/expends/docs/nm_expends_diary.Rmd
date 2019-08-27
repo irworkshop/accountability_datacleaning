@@ -60,28 +60,26 @@ these results. The `pacman` package will facilitate their installation and attac
 
 ```{r load_packages, message=FALSE, dfrning=FALSE, error=FALSE}
 if (!require("pacman")) install.packages("pacman")
+pacman::p_load_current_gh("kiernann/campfin")
 pacman::p_load(
   stringdist, # levenshtein value
+  snakecase, # change string case
   RSelenium, # remote browser
   tidyverse, # data manipulation
   lubridate, # datetime strings
+  tidytext, # text analysis
   magrittr, # pipe opperators
   janitor, # dataframe clean
+  batman, # rep(NA, 8) Batman!
   refinr, # cluster and merge
   scales, # format strings
   knitr, # knit documents
   vroom, # read files fast
   glue, # combine strings
   here, # relative storage
+  httr, # http query
   fs # search storage 
 )
-```
-
-The IRW's `campfin` package will also have to be installed from GitHub. This package contains
-functions custom made to help facilitate the processing of campaign finance data.
-
-```{r load_campfin}
-pacman::p_load_current_gh("kiernann/campfin")
 ```
 
 This document should be run as part of the `R_campfin` project, which lives as a sub-directory of
@@ -249,17 +247,7 @@ A huge number of records in this database are complete duplicates. We can find t
 `janitor::get_dupes()`.
 
 ```{r get_dupes}
-nm_dupes <- distinct(get_dupes(nm))
-```
-
-We will have to flag them in the original database with a `dupe_flag` variable.
-
-```{r flag_dupes}
-nm <- nm %>% 
-  left_join(nm_dupes) %>% 
-  mutate(dupe_flag = !is.na(dupe_count)) %>% 
-  select(-dupe_count)
-
+nm <- flag_dupes(nm, everything())
 sum(nm$dupe_flag)
 percent(mean(nm$dupe_flag))
 ```
