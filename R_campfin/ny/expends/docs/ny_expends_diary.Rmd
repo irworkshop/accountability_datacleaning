@@ -105,7 +105,7 @@ here::here()
 
 ## Data
 
-Data is obtained from the [New York Board of Elections][03] (SBOE). 
+Data is obtained from the [New York State Board of Elections][03] (SBOE). 
 
 > The State Board of Elections was established in the Executive Department June 1, 1974 as a
 bipartisan agency vested with the responsibility for administration and enforcement of all laws
@@ -394,17 +394,20 @@ ny <- read_delim(
     amount_2 = col_double(),
     crerec_date = col_datetime("%m/%d/%Y %H:%M:%S")
   )
-)  
+)
 ```
 
 The New York campaign finance database is a single data frame with `r comma(nrow(ny))` rows and
-`r ncol(ny)` columns. This data frame contains data for campaign contributions, expenditures, 
+`r ncol(ny)` columns. This data frame contains data for _all_ campaign finance. We will filter out
+any transaction that is not an expenditure.
 
 ```{r filter_sched}
 # filter only expenditures
 expend_sched <- out_scheds$sched[str_which(out_scheds$desc, "Expenditure/Payments")]
 ny <- filter(ny, transaction_code == expend_sched)
 ```
+
+We can then remove any columns which _should_ not have any variables.
 
 ```{r select_not_na}
 ny_nas <- glimpse_fun(ny, count_na)
@@ -437,6 +440,156 @@ mean(ny$na_flag)
 
 ```{r}
 glimpse_fun(ny, n_distinct)
+```
+
+### Continuous
+
+#### Amount
+
+```{r amount_summary}
+summary(ny$amount)
+```
+
+`r percent(mean(ny$amount == 0, na.rm = TRUE))` of `amount` values are zero.
+
+```{r zero_amount}
+sum(ny$amount < 0, na.rm = TRUE)
+sum(ny$amount == 0, na.rm = TRUE)
+```
+
+The largest amount `r dollar(max(ny$amount, na.rm = T))` has an `explanation` of "Transfer."
+
+```{r glimpse_max}
+glimpse(ny %>% filter(amount == max(amount, na.rm = TRUE)))
+```
+
+```{r amount_hist, echo=FALSE}
+ny %>% 
+  ggplot(aes(x = amount)) +
+  geom_histogram(fill = RColorBrewer::brewer.pal(8, "Dark2")[3]) +
+  geom_vline(xintercept = median(ny$amount, na.rm = TRUE), size = 1) +
+  geom_vline(xintercept = mean(ny$amount, na.rm = TRUE), linetype = 2, size = 1) +
+  scale_x_continuous(
+    breaks = c(1 %o% 10^(0:6)),
+    labels = dollar,
+    trans = "log10"
+  ) +
+  scale_y_continuous(labels = comma) +
+  labs(
+    title = "New York Expenditure Amount Distribution",
+    x = "Amount",
+    y = "Count",
+    caption = "Source: New York State Board of Elections"
+  )
+```
+
+#### Date
+
+```{r add_year}
+ny <- mutate(ny, year = year(date_1))
+```
+
+```{r bad_year_count}
+count_na(ny$year)
+sum(ny$year < 1999, na.rm = TRUE)
+sum(ny$year > 2019, na.rm = TRUE)
+```
+
+```{r flag_date}
+ny <- ny %>% 
+  mutate(
+    date_flag = year < 1999 | year > 2019,
+    date_clean = as_date(ifelse(date_flag, NA, date_1)),
+    year_clean = year(date_clean)
+  )
+
+sum(ny$date_flag, na.rm = TRUE)
+```
+
+```{r year_bar_count, echo=FALSE}
+ny %>% 
+  count(year_clean) %>% 
+  mutate( even = is_even(year_clean)) %>% 
+  ggplot(aes(x = year_clean, y = n)) +
+  geom_col(aes(fill = even)) +
+  scale_fill_brewer(type = "qual", palette = "Dark2") +
+  scale_y_continuous(labels = comma) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "New York Expenditures Made by Year",
+    x = "Year",
+    y = "Count",
+    fill = "Election Year",
+    caption = "Source: New York State Board of Elections"
+  )
+```
+
+```{r year_bar_median, echo=FALSE}
+ny %>% 
+  group_by(year_clean) %>% 
+  summarise(median = median(amount, na.rm = TRUE)) %>% 
+  mutate(even = is_even(year_clean)) %>% 
+  ggplot(aes(x = year_clean, y = median)) +
+  geom_col(aes(fill = even)) +
+  scale_fill_brewer(type = "qual", palette = "Dark2") +
+  scale_y_continuous(labels = dollar) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "New York Expenditures Made by Year",
+    x = "Year",
+    y = "Median Amount",
+    fill = "Election Year",
+    caption = "Source: New York State Board of Elections"
+  )
+```
+
+```{r amount_125}
+ny %>% 
+  filter(amount == 125) %>% 
+  count(explanation, sort = TRUE)
+```
+
+```{r year_bar_sum, echo=FALSE}
+ny %>% 
+  group_by(year_clean) %>% 
+  summarise(sum = sum(amount, na.rm = TRUE)) %>% 
+  mutate(even = is_even(year_clean)) %>% 
+  ggplot(aes(x = year_clean, y = sum)) +
+  geom_col(aes(fill = even)) +
+  scale_fill_brewer(type = "qual", palette = "Dark2") +
+  scale_y_continuous(labels = dollar) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "New York Expenditures Made by Year",
+    x = "Year",
+    y = "Total Amount",
+    fill = "Election Year",
+    caption = "Source: New York State Board of Elections"
+  )
+```
+
+```{r}
+ny %>% 
+  filter(!date_flag) %>% 
+  mutate(
+    month = month(date_clean),
+    even = is_even(year_clean)
+  ) %>% 
+  group_by(even, month) %>% 
+  summarise(sum = sum(amount, na.rm = TRUE)) %>% 
+  ggplot(aes(x = month, y = sum)) +
+  geom_line(aes(color = even), size = 2) +
+  scale_color_brewer(type = "qual", palette = "Dark2") +
+  scale_y_continuous(labels = dollar) +
+  scale_x_continuous(breaks = 1:12, labels = month.abb) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "New York Expenditures Mean by Month",
+    x = "Year",
+    y = "Total Amount",
+    color = "Election Year",
+    caption = "Source: New York State Board of Elections"
+  )
 ```
 
 ## Wrangle
@@ -571,7 +724,7 @@ prop_na(ny$city)
 ny <- ny %>% 
   mutate(
     city_norm = normal_city(
-      city = str_replace("\\bNY\\b", "NEW YORK"), 
+      city = str_replace(city, "\\bNY\\b", "NEW YORK"), 
       geo_abbs = usps_city,
       st_abbs = c("NY", "DC"),
       na = na_city,
@@ -598,18 +751,17 @@ ny %>%
   filter(is.na(city_norm) & !is.na(city)) %>% 
   select(zip_norm, state_norm, city, city_norm) %>% 
   distinct() %>% 
-  sample_frac()
+  sample_n(10)
 ```
 
 #### Swap
 
 Then, we will compare these normalized `city_norm` values to the _expected_ city value for that
-vendor's ZIP code. If the [levenshtein distance][09] is less than 3, we can confidently swap these
-two values.
+vendor's ZIP code.
 
 [09]: https://en.wikipedia.org/wiki/Levenshtein_distance
 
-```{r swap_city}
+```{r match_city}
 ny <- ny %>% 
   rename(city_raw = city) %>% 
   left_join(
@@ -619,11 +771,29 @@ ny <- ny %>%
       "zip_norm" = "zip"
     )
   ) %>% 
-  rename(city_match = city) %>% 
+  rename(city_match = city)
+```
+
+Fist, we will calculate the [levenshtein distance][09] between our `city_norm` value and the
+expected `city_match` value. Then, we'll check whether our `city_norm` is potentially an
+abbreviation of the expected `city_match` using `campfin::is_abbrev()`.
+
+```{r dist_abb}
+ny <- ny %>%
   mutate(
     match_dist = stringdist(city_norm, city_match),
+    match_abb  = vis_abbrev(city_norm, city_match)
+  )
+```
+
+If the `match_dist` is less than 3, we can confidently swap these two values. We can _also_ swap
+these values if `city_norm` is an abbreviation of `city_match`.
+
+```{r swap_city}
+ny <- ny %>% 
+  mutate(
     city_swap = if_else(
-      condition = is_less_than(match_dist, 3),
+      condition = match_dist < 3 | match_abb == TRUE,
       true = city_match,
       false = city_norm
     )
@@ -705,19 +875,15 @@ abbreviations (e.g., SPFD) often need to be changed by hand.
 ny %>%
   filter(city_refine %out% valid_city) %>% 
   count(state_norm, zip_norm, city_refine, sort = TRUE) %>% 
-  drop_na(city_refine) %>% 
-  left_join(geo, by = c("state_norm" = "state", "zip_norm" = "zip"))
+  drop_na(city_refine)
 ```
 
 ```{r city_final}
 ny <- ny %>% 
   mutate(
     city_final = city_refine %>% 
-      str_replace("^BKLYN$", "BROOKLYN") %>% 
       str_replace("^NYC$", "NEW YORK") %>% 
-      str_replace("^NF$", "NIAGARA FALLS") %>% 
-      str_replace("^LIC$", "LONG ISLAND CITY") %>% 
-      str_replace("")
+      str_replace("^BUFF$", "BUFFALO")
   )
 ```
 
@@ -726,27 +892,20 @@ By adding a dozen popular Missouri cities to our `valid_city` list, we can reach
 ```{r increase_valid_city}
 valid_city <- c(
   valid_city,
-  "OVERLAND",
-  "OVERLAND PARK",
-  "RAYTOWN",
-  "NORTH KANSAS CITY",
-  "PRAIRIE VILLAGE",
-  "UNIVERSITY CITY",
-  "WEBSTER GROVES",
-  "RICHMOND HEIGHTS",
-  "LENEXA",
-  "STE GENEVIEVE",
-  "LEAWOOD",
-  "DES PERES",
-  "OLIVETTE",
-  "TOWN AND COUNTRY",
-  "AFFTON"
+  "CHEEKTOWAGA",
+  "WEST SENECA",
+  "LACKAWANNA",
+  "QUEENS",
+  "BLASDELL",
+  "NISKAYUNA",
+  "COLONIE",
+  "LAKE SUCCESS"
 )
 ```
 
 ```{r progress_table, echo=FALSE}
 progress_table <- tibble(
-  stage = c("raw", "norm", "swap", "refine", "final"),
+  stage = as_factor(c("raw", "norm", "swap", "refine", "final")),
   prop_good = c(
     prop_in(str_to_upper(ny$city_raw), valid_city, na.rm = TRUE),
     prop_in(ny$city_norm, valid_city, na.rm = TRUE),
@@ -783,19 +942,19 @@ only `r comma(progress_table$unique_bad[5])`, a change of `r percent(prop_change
 
 ```{r print_progress, echo=FALSE}
 kable(
-  x = progress_table,
+  x = progress_table %>% mutate(prop_good = percent(prop_good)),
   format = "markdown", 
   digits = 4,
-  col.names = c("Normalization Stage", "Total Distinct", "Percent Valid", "Unique Invalid")
+  align = "lrrr",
+  col.names = c("Normalization Stage", "Percent Valid", "Total Distinct", "Unique Invalid")
 )
 ```
 
 ```{r wrangle_bar_prop, echo=FALSE}
 progress_table %>% 
-  mutate(stage = as_factor(stage)) %>% 
   ggplot(aes(x = stage, y = prop_good)) +
   geom_hline(yintercept = 0.99) +
-  geom_col(fill = brewer_dark2[2]) +
+  geom_col(fill = RColorBrewer::brewer.pal(8, "Dark2")[2]) +
   coord_cartesian(ylim = c(0.75, 1)) +
   scale_y_continuous(labels = percent) +
   labs(
@@ -809,8 +968,8 @@ progress_table %>%
 
 ```{r wrangle_bar_distinct, echo=FALSE}
 progress_table %>% 
-  mutate(stage = as_factor(stage)) %>% 
   select(-prop_good) %>% 
+  mutate(total_distinct = total_distinct - unique_bad) %>% 
   rename(
     All = total_distinct,
     Invalid = unique_bad
