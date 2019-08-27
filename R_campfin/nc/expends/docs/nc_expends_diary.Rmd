@@ -125,7 +125,7 @@ data imported during a business day will appear on our website the following day
 [03]: https://cf.ncsbe.gov/CFTxnLkup/
 
 ```{r raw_dir}
-raw_dir <- here("nc", "expends", "data", "data", "raw")
+raw_dir <- here("nc", "expends", "data", "raw")
 dir_create(raw_dir) 
 ```
 
