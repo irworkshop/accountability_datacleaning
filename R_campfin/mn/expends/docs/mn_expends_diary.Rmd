@@ -274,7 +274,7 @@ mn %>%
 ### Duplicates
 
 ```{r flag_dupes, collapse=TRUE}
-mn <- flag_dupes(mn)
+mn <- flag_dupes(mn, everything())
 sum(mn$dupe_flag)
 percent(mean(mn$dupe_flag))
 ```
@@ -862,7 +862,11 @@ dir_create(proc_dir)
 date()
 mn %>% 
   select(
-    everything()
+    -city_norm,
+    -city_match,
+    -match_dist,
+    -city_swap,
+    -city_refine
   ) %>% 
   write_csv(
     na = "",
