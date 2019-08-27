@@ -144,11 +144,6 @@ remote_driver <- rsDriver(
   )
 )
 
-tr.ng-scope:nth-child(2)  > td:nth-child(3) > a:nth-child(1)
-tr.ng-scope:nth-child(4)  > td:nth-child(3) > a:nth-child(1)
-tr.ng-scope:nth-child(6)  > td:nth-child(3) > a:nth-child(1)
-tr.ng-scope:nth-child(28) > td:nth-child(3) > a:nth-child(1)
-
 # navigate to the download site
 remote_browser <- remote_driver$client
 remote_browser$navigate("https://mainecampaignfinance.com/index.html#/dataDownload")
@@ -175,8 +170,8 @@ remote_driver$server$stop()
 ## Read
 
 ```{r read_names}
-me08 <- scan(file = glue("{raw_dir}/EXP_2008.csv"), sep = ",", what = "", nmax = 21)
-me19 <- scan(file = glue("{raw_dir}/EXP_2019.csv"), sep = ",", what = "", nmax = 39)
+me08 <- scan(file = glue("{raw_dir}/EXP_2008.csv.csv"), sep = ",", what = "", nmax = 21)
+me19 <- scan(file = glue("{raw_dir}/EXP_2019.csv.csv"), sep = ",", what = "", nmax = 39)
 ```
 
 The files come in two structures. For files from 2008 to 2017, there are `r length(me08)` variables.
