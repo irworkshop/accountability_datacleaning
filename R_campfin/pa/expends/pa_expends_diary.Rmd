@@ -76,18 +76,17 @@ pacman::p_load(
   scales, #format strings
   here, # relative storage
   fs, # search storage 
-  vroom #read deliminated files
+  vroom, #read deliminated files
+  fuzzyjoin #fuzzy-join 
 )
 ```
 
 ```{r fix_fun, echo=FALSE, collapse = TRUE}
 # fix conflict
 here <- here::here
-# custom utility functions
-"%out%" <- Negate("%in%")
 print_all <- function(df) df %>% print(n = nrow(.)) 
 # load data
-zipcode <- geo
+zipcode <- zipcodes
 ```
 
 This document should be run as part of the `R_campfin` project, which lives as a sub-directory of
@@ -231,16 +230,16 @@ pa %>% glimpse_fun(count_na)
 ```
 
 We will flag any records with missing values in the key variables used to identify an expenditure.
-There are `r sum(pa$na_flag)` columns in city_state_zip that are NAs
+There are `r sum(pa$na_flag)` elements that are flagged as missing at least one value.
 ```{r na_flag}
-pa <- pa %>% mutate(na_flag = is.na(EXPNAME))
+pa <- pa %>% flag_na(EXPNAME, EXPDATE, EXPDESC, EXPAMT, CITY)
 ```
 
 ### Duplicates
 
 ```{r get_dupes, collapse=TRUE}
-pa_dupes <- get_dupes(pa)
-glimpse(pa_dupes)
+pa <- flag_dupes(pa, dplyr::everything())
+sum(pa$dupe_flag)
 ```
 
 ### Ranges
@@ -276,7 +275,7 @@ pa %>%   drop_na(EXPDESC) %>%
   head(10) %>% 
   ggplot(aes(x = EXPDESC, y = total_spent)) +
   geom_col() +
-  labs(title = "Pennsylvania Campaign Expenditures by Average Spending",
+  labs(title = "Pennsylvania Campaign Expenditures by Total Spending",
        caption = "Source: Pennsylvania Dept. of State") +
   scale_y_continuous(labels = scales::dollar) +
   coord_flip() +
@@ -285,7 +284,7 @@ pa %>%   drop_na(EXPDESC) %>%
 ```
 
 ### Dates
-The dates seem to be reasonable, with records dating back to `r summary(pa$date)[1]` till `r summary(pa$date)[-1]` 
+Some of the dates are too far back and some are past the current dates. 
 ```{r}
 summary(pa$EXPDATE)
 ```
@@ -297,6 +296,15 @@ Add a `year` variable from `date` after `col_date()` using `lubridate::year()`.
 ```{r add_year}
 pa <- pa %>% mutate(year = year(EXPDATE), on_year = is_even(year))
 ```
+Turn some year and date values to NAs. 
+```{r year_flag}
+pa <- pa %>% mutate(date_flag = year < 2000 | year > format(Sys.Date(), "%Y"), 
+                    date_clean = ifelse(
+                    date_flag, NA, EXPDATE),
+                    year_clean = ifelse(
+                    date_flag, NA, year))
+```
+
 
 ```{r year_count_bar, eval = TRUE, echo=FALSE}
 
@@ -414,7 +422,11 @@ Cleaning city values is the most complicated. This process involves four steps:
 
 `r sum(!is.na(pa$CITY))` distinct cities were in the original dataset in column 
 ```{r prep_city, collapse = TRUE}
-pa <- pa %>% mutate(city_prep = normal_city(CITY))
+pa <- pa %>% mutate(city_prep = normal_city(city = CITY,
+                                            geo_abbs = usps_city,
+                                            st_abbs = c(valid_state),
+                                            na = invalid_city,
+                                            na_rep = TRUE))
 n_distinct(pa$city_prep)
 ```
 
@@ -457,7 +469,7 @@ n_distinct(pa$city_swap)
 #### Refine
 
 ```{r valid_city}
-valid_city <- unique(zipcode$city)
+valid_city <- campfin::valid_city
 ```
 Use the OpenRefine algorithms to cluster similar values and merge them together. This can be done using the refinr::key_collision_merge() and refinr::n_gram_merge() functions on our prepared and swapped city data.
 ```{r view_refine}
@@ -532,24 +544,24 @@ pa_refined %>%
 Manually change the city_refine fields due to overcorrection.
 
 
-```{r}
+```{r revert overcorrected refine}
 st_pattern <- str_c("\\s",unique(zipcode$state), "$", collapse = "|")
 
 
 pa_refined$city_refine <- pa_refined$city_refine %>% 
   str_replace("^DU BOIS$", "DUBOIS") %>% 
-  str_replace("^PIT$", "PITSSBURGH") %>% 
+  str_replace("^PIT$", "PITTSBURGH") %>% 
   str_replace("^MCCBG$", "MCCONNELLSBURG") %>% 
   str_replace("^PLUM BORO$", "PLUM") %>% 
   str_replace("^GREENVILLE$", "EAST GREENVILLE") %>% 
   str_replace("^NON$", "ONO") %>% 
   str_replace("^FORD CLIFF$", "CLIFFORD") %>% 
-  str_replace("^W B$", "WILKES BARRE") 
+  str_replace("^W\\sB$", "WILKES BARRE") 
 
   
 
 refined_table <-pa_refined %>% 
-  select(index, FILERID, city_refine)
+  select(index, city_refine)
 ```
   
 
@@ -562,7 +574,6 @@ pa <- pa %>%
 
 pa$city <- pa$city %>% 
   str_replace("^MT PLEASANT$", "MOUNT PLEASANT") %>% 
- str_replace("\\sTWP$", " TOWNSHIP") %>% 
   str_replace("^ST\\s", "SAINT ") %>% 
   str_replace("^MT\\s", "MOUNT ") %>%  
   str_replace("^FT\\s", "FORT ") %>% 
@@ -589,14 +600,14 @@ pa_match_table <- pa %>%
   rename("sec_city_match" = "city_match")
 
 # Manually change overcorrected city names to original 
-pa_match_table$city_match <- pa_match_table$city_match %>% 
+pa_match_table$sec_city_match <- pa_match_table$sec_city_match %>% 
   str_replace("^ARLINGTON$", "ALEXANDRIA") %>% 
   str_replace("^BROWNSVILLE$", "BENTLEYVILLE") %>% 
   str_replace("^FEASTERVILLE\\sTREVOSE", "FEASTERVILLE") %>% 
   str_replace("LEES SUMMIT", "LAKE LOTAWANA") %>% 
   str_replace("HAZLETON", "HAZLE TOWNSHIP") %>% 
   str_replace("DANIA", "DANIA BEACH") %>% 
-  str_replace("CRANBERRY", "CRANBERRY TOWNSHIP")
+  str_replace("CRANBERRY TWP", "CRANBERRY TOWNSHIP")
 
 pa_match_table[pa_match_table$city == "HOLLIDASBURG", "city_match"] <- "HOLLIDAYSBURG"
 pa_match_table[pa_match_table$city == "PENN HELLE", "city_match"] <- "PENN HILLS"
@@ -646,68 +657,39 @@ pa_match_table[pa_match_table$city %in% keep_original,"sec_city_match"] <-
 
 
 pa <-pa %>% 
-  left_join(select(pa_match_match, index, sec_city_match), by = "index") %>% 
-  mutate(city_clean = coalesce(sec_city_match, city))
+  left_join(select(pa_match_table, index, sec_city_match), by = "index") %>% mutate(city_clean = coalesce(sec_city_match, city))
+
+pa$city_clean <- pa$city_clean %>% str_replace("\\sTWP$", " TOWNSHIP")
 
 n_distinct(pa$city_clean[pa$city_clean %out% valid_city])
 ```
 
 ```{r}
-pa_sec_refined <- pa %>%
-  filter(city_clean %out% c(valid_city, pa_match_table$sec_city_match)) %>% 
-  mutate(
-    city_sec_refine = city_clean %>% 
-      key_collision_merge(dict = c(valid_city, pa_match_table$sec_city_match), keep_original) %>% 
-      n_gram_merge(numgram = 1),
-    refined = (city_clean != city_sec_refine)
-  ) %>% 
-  filter(refined) %>% 
-  select(
-    index,
-    CITY,
-    city_prep,
-    city_match,
-    city_swap,
-    match_dist,
-    city_refine,
-    city_clean,
-    city_sec_refine,
-    STATE, 
-    ZIPCODE,
-    zip_clean
-  )
+valid_city <- unique(c(valid_city, pa_match_table$sec_city_match))
 
+pa_city_lookup <- read_csv(file = here("pa", "expends", "data", "raw", "pa_city_lookup.csv"), col_names = c("city", "city_lookup", "changed", "count"))
 
-```
-
-
-
-```{r}
-cities <- select(pa_match_table, STATE, sec_city_match) %>% rename("state" = "STATE") %>% rename("city" = "sec_city_match") %>% rbind(select(zipcode, -zip)) %>% unique()
-# Get a table of cities that are not in the valid_city vector
 pa_out <- pa %>% 
-  count(STATE, city_clean, sort = TRUE) %>% 
-  filter(city_clean %out% cities$city) %>% 
-  drop_na()
+  count( city_clean, sort = TRUE) %>% 
+  filter(city_clean %out% valid_city) 
 
-# Fuzzy-matching city names with the names out of such list. This will take a while, and be patient
-prep_refine <- pa_out %>% 
-  # Join on all names in the relevant state
-  left_join(cities, by=c(STATE = "state")) %>%
-  # Calculate the distances, per original city name.
-  group_by(city) %>%                
-  mutate(dist = diag(adist(city_clean, city, partial=TRUE))) %>%
-  # Append the agrepl result with the Levenshtein edit distance
-  rowwise() %>%
-  mutate(string_agrep = agrepl(city_clean, city, max.distance = 0.3)) %>%
-  ungroup() %>%  
-  # Only retain minimum distances
-  group_by(city_clean) %>%   
-  filter(dist == min(dist))
+pa_out <- pa_out %>% left_join(pa_city_lookup, by = c("city_clean" = "city")) %>% filter(city_clean != city_lookup | is.na(city_lookup) == T ) %>% drop_na(city_clean)
 
-# Refine the entries where city_swap is six letter apart from a single match in cities (It's a rather safe switch, after examining the prep_refine table). Overcorrection can be manually changed later.
-to_refine <- prep_refine %>% filter(n()==1) %>% filter(city_swap %in% prep_refine$city_swap[prep_refine$dist<6])
+
+pa <- pa %>% left_join(pa_out, by = "city_clean") %>% mutate(city_final = ifelse(
+  is.na(city_lookup) == TRUE,
+  NA,
+  coalesce(city_lookup, city_clean))) 
+
+pa$city_final <- pa$city_final %>% str_replace("^\\sTWP$", " TOWNSHIP")
+
+pa[pa$index == which(pa$city_final == "MA"),8:9] <- c("LEXINGTON", "MA")
+pa[pa$index == which(pa$city_final == "L"),8] <- c("LOS ANGELES")
+pa[pa$index %in% which(pa$city_final %in% c("PA", "NJ")), 8] <- ""
+pa[pa$index == "319505", 8] <- "HARRISBURG"
+
 ```
+
 
 
 Each process also increases the percent of valid city names.
@@ -718,6 +700,7 @@ prop_in(pa$city_prep, valid_city, na.rm = TRUE)
 prop_in(pa$city_swap, valid_city, na.rm = TRUE)
 prop_in(pa$city, valid_city, na.rm = TRUE)
 prop_in(pa$city_clean, valid_city, na.rm = TRUE)
+prop_in(pa$city_final, valid_city, na.rm = TRUE)
 ```
 
 Each step of the cleaning process reduces the number of distinct city values.
@@ -740,6 +723,7 @@ There are `r sum(!is.na(pa$CITY))` with `r n_distinct(pa$CITY)` distinct values,
 clean_dir <- here("pa", "expends", "data", "processed")
 dir_create(clean_dir)
 pa %>% 
+  rename(ZIP5 = zip_clean, YEAR = year, CITY_CLEAN = city_final) %>% 
   select(
     -city_prep,
     -on_year,
@@ -747,7 +731,14 @@ pa %>%
     -city_clean,
     -match_dist,
     -city_swap,
-    -city_refine
+    -city_refine,
+    -city_clean,
+    -city_lookup,
+    -sec_city_match,
+    -n,
+    -changed,
+    -city,
+    -count
   ) %>% 
   write_csv(
     path = glue("{clean_dir}/pa_expends_clean.csv"),
