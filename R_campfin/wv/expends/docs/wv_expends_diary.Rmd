@@ -1,0 +1,834 @@
+---
+title: "wv_expends_diary"
+author: "Yanqi Xu"
+date: "`r Sys.time()`"
+output: 
+  github_document:
+    df_print: tibble
+    toc: true
+    toc_dept: 2
+editor_options: 
+  chunk_output_type: console
+---
+
+<!-- Place comments regarding knitting here -->
+
+```{r setup, include=FALSE, purl=FALSE}
+library(knitr)
+opts_chunk$set(
+  eval = TRUE,
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  error = FALSE,
+  # it's nice to un-collapse df print
+  collapse = TRUE,
+  comment = "#>",
+  fig.path = "../plots/",
+  fig.width = 10,
+  dpi = 300
+)
+options(width = 99)
+set.seed(5)
+```
+
+## Project
+
+The Accountability Project is an effort to cut across data silos and give journalists, policy
+professionals, activists, and the public at large a simple way to search across huge volumes of
+public data about people and organizations.
+
+Our goal is to standardizing public data on a few key fields by thinking of each dataset row as a
+transaction. For each transaction there should be (at least) 3 variables:
+
+1. All **parties** to a transaction
+2. The **date** of the transaction
+3. The **amount** of money involved
+
+## Objectives
+
+This document describes the process used to complete the following objectives:
+
+1. How many records are in the database?
+1. Check for duplicates
+1. Check ranges
+1. Is there anything blank or missing?
+1. Check for consistency issues
+1. Create a five-digit ZIP Code called `ZIP5`
+1. Create a `YEAR` field from the transaction date
+1. Make sure there is data on both parties to a transaction
+
+## Packages
+
+The following packages are needed to collect, manipulate, visualize, analyze, and communicate
+these results. The `pacman` package will facilitate their installation and attachment.
+
+The IRW's `campfin` package will also have to be installed from GitHub. This package contains
+functions custom made to help facilitate the processing of campaign finance data.
+
+```{r load_packages, message=FALSE, dfrning=FALSE, error=FALSE}
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load_current_gh("kiernann/campfin")
+pacman::p_load(
+  stringdist, # levenshtein value
+  RSelenium, # remote browser
+  tidyverse, # data manipulation
+  lubridate, # datetime strings
+  tidytext, # text analysis
+  magrittr, # pipe opperators
+  janitor, # dataframe clean
+  refinr, # cluster and merge
+  scales, # format strings
+  rvest, # scrape html pages
+  knitr, # knit documents
+  vroom, # read files fast
+  glue, # combine strings
+  here, # relative storage
+  fs # search storage 
+)
+```
+
+This document should be run as part of the `R_campfin` project, which lives as a sub-directory of
+the more general, language-agnostic [`irworkshop/accountability_datacleaning`][01] GitHub
+repository.
+
+The `R_campfin` project uses the [RStudio projects][02] feature and should be run as such. The
+project also uses the dynamic `here::here()` tool for file paths relative to _your_ machine.
+
+```{r where_here, collapse=TRUE}
+# where dfs this document knit?
+here::here()
+```
+
+[01]: https://github.com/irworkshop/accountability_datacleaning "TAP repo"
+[02]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects "Rproj"
+
+## Data
+
+Data is obtained from the [West Virginia Secretary of State's Campaign Finance Reporting System][03]. 
+
+West Virginia SOS's instructions on data entry for filers:
+>Enter each expenditure during the reporting period during which the expense was incurred, even if the campaign has not paid the bill, or has paid only a portion of the bill.
+Paid bills
+If the expense is both incurred and paid in the same reporting period, follow these steps:
+	1.	Enter the date payment was made and the amount of the expenditure.
+	2.	Enter the name of business or person to whom payment was made.
+	3.	Enter an appropriate description for the purpose.
+Unpaid bills
+If the expense is incurred in the filing period but has not yet been paid, follow these steps:
+	1.	Enter the date expense was incurred and the amount owed.
+	2.	Enter the name of business or person to whom payment is owed and remains unpaid.
+	3.	Enter the appropriate description of the purpose of the expense incurred.
+Paying unpaid bills from previous reporting periods
+If the expense was incurred in a previous filing period and listed as an unpaid debt, and has now been paid, follow these steps:
+	1.	List the name and purpose the same way as an unpaid bill.
+	2.	Enter the date the payment was made and the amount of the payment.
+
+For filing requirements about candidacy:
+>	The online Campaign Finance Reporting System (CFRS) is mandatory for candidates and political action committees required to file with the Secretary of State. Candidates for the offices listed below are required to file reports electronically utilizing CFRS:
+	1.	Governor
+	2.	Secretary of State
+	3.	Attorney General
+	4.	Auditor
+	5.	Treasurer
+	6.	Commissioner of Agriculture
+	7.	State Senate
+	8.	House of Delegates
+	9.	Supreme Court of Appeals
+	10.	Circuit and family court judge
+
+
+Their data can be downloaded as anual files on their [data download page][04]. At the time of this writing, the data available for expenditures are from 2018 and 2019.
+It also comes with the [Expenditures File Layout] [05]
+
+[03]: https://cfrs.wvsos.gov/#/index
+[04]: https://cfrs.wvsos.gov/#/dataDownload
+[05]: https://cfrs.wvsos.gov/CFIS_APIService/Template/KeyDownloads/Expenditures%20File%20Layout%20Key.pdf
+
+## Import
+
+We can import each file into R as a single data frame to be explored, wrangled, and exported
+as a single file to be indexed on the TAP database.
+
+### Download
+
+We can select the year for expenditure data download. We can automate this process with the RSelenium package.
+
+```{r raw_dir}
+raw_dir <- here("wv", "expends", "data", "raw")
+dir_create(raw_dir)
+```
+
+```{r download_raw, warning=FALSE, error=FALSE, message=FALSE, collapse=TRUE, eval=FALSE}
+# Use the url to access files
+wv_exp_urls <- glue("https://cfrs.wvsos.gov/CFIS_APIService/api/DataDownload/GetCSVDownloadReport?year={2018:2019}&transactionType=EXP&reportFormat=csv&fileName=EXP_{2018:2019}.csv")
+
+if (!all_files_new(raw_dir)) {
+  for (url in wv_exp_urls) {
+    download.file(
+      url = url,
+      destfile = glue("{raw_dir}/{str_sub(url,-12,-1)}")
+    )
+  }
+}
+
+```
+
+### Read
+
+We can read each file as a data frame into a list of data frames by `read_delim`. 
+Remember to pay attention to the date the files were last modified. It gives us an idea of how current the data was.`file.info(dir_ls(raw_dir, glob = "*.csv$"))$mtime`. This data is extracted from the West Virginia Campaign Finance database as it existed as of `r file.info(dir_ls(raw_dir, glob = "*.csv$"))$mtime[1]` for `r basename(dir_ls(raw_dir, glob = "*.csv$"))[1]` and `r file.info(dir_ls(raw_dir, glob = "*.csv$"))$mtime[2]` for `r basename(dir_ls(raw_dir, glob = "*.csv$"))[2]`.
+
+```{r read_raw}
+wv <- 
+  dir_ls(
+    path = raw_dir, 
+    glob = "*.csv"
+  ) %>% 
+  map(
+   read_delim, delim = ",", escape_double = FALSE,
+      escape_backslash = FALSE,
+    col_types = cols(
+      .default = col_character(),
+      `Expenditure Amount` = col_number(),
+      `Expenditure Date` = col_date("%m/%d/%Y %I:%M:%S %p"),
+      `Filed Date` = col_date("%m/%d/%Y %I:%M:%S %p"),
+      `Fundraiser Event Date` = col_date("%m/%d/%Y %I:%M:%S %p")
+    )
+  ) %>%
+  bind_rows(.id = "file") %>%
+  mutate(file = basename(file)) %>%
+  rename(city_raw = City) %>% 
+  clean_names()
+```
+
+
+## Explore
+
+```{r glimpse}
+head(wv)
+tail(wv)
+glimpse(sample_frac(wv))
+```
+
+### Missing
+
+```{r glimpse_na}
+glimpse_fun(wv, count_na)
+```
+
+There are very few records missing one of the key values needed to identify a transaction (who, what, when). The`last_name`, `middle_name`,`first_name` and `suffix`variables are used to identify individual payees, while non-individuals were identified in the `last_name` column. We can flag any record with `campfin::flag_na()`
+to create a new `na_flag` variable with value `TRUE` for any record missing _any_ of those key
+variables.
+
+```{r flag_na}
+wv <- wv %>%  
+  flag_na(
+    last_name,
+    committee_name,
+    expenditure_date,
+    expenditure_amount
+  )
+
+sum(wv$na_flag)
+```
+
+### Duplicates
+
+We can use `campfin::flag_dupes()` to create a new `dupe_flag` variable with with value `TRUE` for any duplicate row, after the first occurance.
+variable.
+
+```{r flag_dupes}
+wv <- flag_dupes(wv, dplyr::everything())
+sum(wv$dupe_flag)
+percent(mean(wv$dupe_flag))
+```
+
+### Categorical
+
+```{r glimpse_distinct}
+glimpse_fun(wv, n_distinct)
+```
+
+```{r purpose_bar, echo=FALSE, fig.height=10}
+wv %>% 
+  drop_na(purpose) %>% 
+  count(purpose, sort = TRUE) %>% 
+  filter(purpose != "Contribution" & purpose != "Contribution to Candidate") %>% 
+  ggplot(aes(x = reorder(purpose, n), y = n)) +
+  geom_col(aes(fill = n)) +
+  scale_fill_gradient(guide = FALSE) +
+  coord_flip() +
+  labs(
+    title = "West Virginia Expenditure Purpose (Times)",
+    caption = "Source: West Virginia Secretary of State",
+    x = "Occurrences",
+    y = "Count"
+  )
+```
+
+### Continuous
+
+For continuous variables, we should explore both the range and distribution. This can be done with
+visually with `ggplot2::geom_histogram()` and `ggplot2::geom_violin()`.
+
+#### Amounts
+
+```{r summary_amount}
+summary(wv$expenditure_amount)
+sum(wv$expenditure_amount <= 0, na.rm = TRUE)
+sum(wv$expenditure_amount >= 100000, na.rm = TRUE)
+```
+
+```{r amount_histogram, echo=FALSE}
+brewer_dark2 <- RColorBrewer::brewer.pal(n = 8, name = "Dark2")
+wv %>%
+  ggplot(aes(expenditure_amount)) +
+  geom_histogram(fill = brewer_dark2[1]) +
+  geom_vline(xintercept = median(wv$expenditure_amount, na.rm = TRUE)) +
+  scale_x_continuous(
+    breaks = c(1 %o% 10^(0:6)),
+    labels = dollar,
+    trans = "log10"
+  ) +
+  scale_y_continuous(labels = comma) +
+  labs(
+    title = "West Virginia Expenditures Amount Distribution",
+    caption = "Source: West Virginia Secretary of State",
+    x = "Amount",
+    y = "Count"
+  )
+```
+
+```{r average amounts, echo = FALSE}
+wv %>% 
+  group_by(committee_type, purpose) %>% 
+  summarize(med_exp = median(expenditure_amount)) %>% 
+  top_n(5) %>% 
+  filter(purpose != "Entry to offset entry of outstanding loans") %>% 
+  ggplot(aes(x=committee_type, y = med_exp, fill = purpose)) +
+  geom_col(position = "dodge") +
+  scale_fill_brewer(palette="Set3") +
+  scale_y_continuous(labels = dollar) +
+  labs(
+    title = "West Virginia Top 5 Median Expenditure Purposes by Committee Type",
+    caption = "Source: West Virginia Secretary of State",
+    x = "Comittee Type",
+    y = "Median Spending"
+  )
+```
+
+`r percent(meanwvy$amount == 0, na.rm = TRUE))` of `amount` values are zero.
+
+```{r zero_amount}
+sum(wv$expenditure_amount < 0, na.rm = TRUE)
+sum(wv$expenditure_amount == 0, na.rm = TRUE)
+```
+
+
+#### Dates
+
+```{r add_year}
+wv <- mutate(wv, year = year(expenditure_date))
+```
+The range of expenditure dates seem reasonable.
+```{r date_range, collapse=TRUE}
+count_na(wv$date)
+min(wv$expenditure_date, na.rm = TRUE)
+max(wv$expenditure_date, na.rm = TRUE)
+sum(wv$expenditure_date > today(), na.rm = TRUE)
+```
+
+```{r count_year}
+count(wv, year)
+```
+
+```{r year_bar_count, echo=FALSE}
+wv %>% 
+  count(year) %>% 
+  mutate(even = is_even(year)) %>% 
+  ggplot(aes(x = year, y = n)) +
+  geom_col(aes(fill = even)) +
+  scale_fill_brewer(type = "qual", palette = "Dark2") +
+  scale_y_continuous(labels = comma) +
+  scale_x_continuous(breaks = 2016:2019) +
+  labs(
+    title = "West Virginia Expenditures Count by Year",
+    caption = "Source: West Virginia Secretary of State",
+    fill = "Election Year",
+    x = "Year Made",
+    y = "Number of Expenditures"
+  ) +
+  theme(legend.position = "bottom")
+```
+
+```{r year_bar_sum, echo=FALSE}
+wv %>% 
+  group_by(yearn) %>% 
+  summarise(sum = sum(expenditure_amount, na.rm = TRUE)) %>% 
+  mutate(even = is_even(year)) %>% 
+  ggplot(aes(x = year, y = sum)) +
+  geom_col(aes(fill = even)) +
+  scale_fill_brewer(type = "qual", palette = "Dark2") +
+  scale_y_continuous(labels = dollar) +
+  scale_x_continuous(breaks = 2010:2019) +
+  labs(
+    title = "West Virginia Expenditures Total by Year",
+    caption = "Source: West Virginia Secretary of State",
+    fill = "Election Year",
+    x = "Year Made",
+    y = "Total Amount"
+  ) +
+  theme(legend.position = "bottom")
+```
+
+```{r year_bar_mean, echo=FALSE}
+wv %>% 
+  group_by(year) %>% 
+  summarise(mean = mean(expenditure_amount, na.rm = TRUE)) %>% 
+  mutate(even = is_even(year)) %>% 
+  ggplot(aes(x = year, y = mean)) +
+  geom_col(aes(fill = even)) +
+  scale_fill_brewer(type = "qual", palette = "Dark2") +
+  scale_y_continuous(labels = dollar) +
+  scale_x_continuous(breaks = 2016:2019) +
+  labs(
+    title = "West Virginia Expenditures Mean by Year",
+    caption = "Source: West Virginia Secretary of State",
+    fill = "Election Year",
+    x = "Year Made",
+    y = "Mean Amount"
+  ) +
+  theme(legend.position = "bottom")
+```
+
+```{r month_line_count, echo=FALSE}
+wv %>% 
+  mutate(month = month(expenditure_date), even = is_even(year)) %>% 
+  group_by(month, even) %>% 
+  summarize(n = n()) %>% 
+  ggplot(aes(x = month, y = n)) +
+  geom_line(aes(color = even), size = 2) +
+  scale_color_brewer(type = "qual", palette = "Dark2") +
+  scale_y_continuous(labels = dollar) +
+  scale_x_continuous(breaks = 1:12, labels = month.abb) +
+  labs(
+    title = "West Virginia Expenditures Count by Month",
+    caption = "Source: West Virginia Secretary of State",
+    color = "Election Year",
+    x = "Month Made",
+    y = "Number of Expenditures"
+  ) +
+  theme(legend.position = "bottom")
+```
+
+## Wrangle
+
+We should use the `campfin::normal_*()` functions to perform some basic, high-confidence text
+normalization to improve the searchability of the database.
+
+### Address
+
+First, we will normalize the street address by removing punctuation and expanding abbreviations.
+
+```{r normal_address}
+  wv <- wv %>% 
+    unite( col = address_full,c("address1", "address2"), sep = ", ", remove = FALSE) %>% 
+    mutate(address_norm = normal_address(
+      address = address_full,
+      add_abbs = usps,
+      na_rep = TRUE
+    ))
+```
+
+We can see how this improves consistency across the `address_1` and `address_2` fields.
+
+```{r view_address_change, echo=FALSE}
+wv %>% 
+  select(starts_with("address")) %>% 
+  drop_na() %>% 
+  sample_n(10)
+```
+
+### ZIP
+
+The `zip` address is already pretty good, with 
+`r percent(prop_in(mo$zip, valid_zip, na.rm = TRUE))` of the values already in our 95% 
+comprehensive `valid_zip` list.
+
+```{r count_zip_pre, collapse=TRUE}
+n_distinct(wv$zip)
+prop_in(wv$zip, valid_zip)
+length(setdiff(wv$zip, valid_zip))
+```
+
+We can improve this further by lopping off the uncommon four-digit extensions and removing common
+invalid codes like 00000 and 99999.
+
+```{r normal_zip}
+wv <- wv %>% 
+  mutate(
+    zip_norm = normal_zip(
+      zip = zip,
+      na_rep = TRUE
+    )
+  )
+```
+
+This brings our valid percentage to `r percent(prop_in(wv$zip_norm, valid_zip, na.rm = TRUE))`.
+
+```{r count_zip_post, collapse=TRUE}
+n_distinct(wv$zip_norm)
+prop_in(wv$zip_norm, valid_zip)
+length(setdiff(wv$zip_norm, valid_zip))
+count_na(wv$zip_norm) - count_na(wv$zip)
+```
+
+### State
+
+The `state` variable is also very clean, already at 
+`r percent(prop_in(mo$state, valid_state, na.rm = TRUE))`.
+
+```{r count_state_pre, collapse=TRUE}
+n_distinct(wv$state)
+prop_in(wv$state, valid_state, na.rm = TRUE)
+length(setdiff(wv$state, valid_state))
+setdiff(wv$state, valid_state)
+```
+
+There are still `r length(setdiff(mo$state, valid_state))` invalid values which we can remove.
+
+```{r normal_state}
+wv$state <- toupper(wv$state)
+```
+
+```{r count_state_post, collapse=TRUE}
+n_distinct(wv$state)
+prop_in(wv$state, valid_state)
+```
+
+### City
+
+The `city` value is the hardest to normalize. We can use a four-step system to functionally improve
+the searchablity of the database.
+
+1. **Normalize** the raw values with `campfin::normal_city()`
+1. **Match** the normal values with the _expected_ value for that ZIP code
+1. **Swap** the normal values with the expected value if they are _very_ similar
+1. **Refine** the swapped values the [OpenRefine algorithms][08] and keep good changes
+
+[08]: https://github.com/OpenRefine/OpenRefine/wiki/Clustering-In-Depth
+
+The raw `city` values are not very normal, with only
+`r percent(prop_in(mo$city, valid_city, na.rm = TRUE))` already in `valid_city`, mostly due to case difference. If we simply convert to uppcase that numbers increases to 
+`r percent(prop_in(str_to_upper(mo$city), valid_city, na.rm = TRUE))`. We will aim to get this number over 99% using the other steps in the process.
+
+```{r count_city_pre, collapse=TRUE}
+n_distinct(wv$city_raw)
+prop_in(str_to_upper(wv$city_raw), valid_city, na.rm = TRUE)
+length(setdiff(wv$city_raw, valid_city))
+count_na(wv$city_raw)
+```
+
+#### Normalize
+
+```{r normal_city}
+wv <- wv %>% 
+  mutate(
+    city_norm = normal_city(
+      city = city_raw, 
+      geo_abbs = usps_city,
+      st_abbs = c(valid_state),
+      na = na_city,
+      na_rep = TRUE
+    )
+  )
+```
+
+This process brought us to `r percent(prop_in(wv$city_norm, valid_city, na.rm = TRUE))` valid.
+
+```{r count_city_post_norm, collapse=TRUE}
+n_distinct(wv$city_norm)
+prop_in(wv$city_norm, valid_city, na.rm = TRUE)
+length(setdiff(wv$city_norm, valid_city))
+count_na(wv$city_norm)
+```
+
+It also increased the proportion of `NA` values by 
+`r percent(prop_na(mo$city_norm) - prop_na(mo$city))`. These new `NA` values were either a single
+(possibly repeating) character, or contained in the `na_city` vector.
+
+```{r introduced_city_na, echo=FALSE}
+wv %>% 
+  filter(is.na(city_norm) & !is.na(city_raw)) %>% 
+  select(zip_norm, state, city_raw, city_norm) %>% 
+  distinct() %>% 
+  sample_frac()
+```
+
+#### Swap
+
+Then, we will compare these normalized `city_norm` values to the _expected_ city value for that
+vendor's ZIP code. If the [levenshtein distance][09] is less than 3, we can confidently swap these
+two values.
+
+[09]: https://en.wikipedia.org/wiki/Levenshtein_distance
+
+```{r swap_city}
+wv <- wv %>% 
+  left_join(
+    y = geo,
+    by = c(
+      "state" = "state",
+      "zip_norm" = "zip"
+    )
+  ) %>% 
+  rename(city_match = city) %>% 
+  mutate(
+    match_dist = stringdist(city_norm, city_match),
+city_swap = if_else(condition = is.na(city_match) == FALSE,
+                        if_else(
+      condition = match_dist <= 2,
+      true = city_match,
+      false = city_norm
+    ),
+      false = city_norm
+  ))
+```
+
+This is a very fast way to increase the valid proportion to
+`r percent(prop_in(mo$city_swap, valid_city, na.rm = TRUE))` and reduce the number of distinct
+_invalid_ values from `r length(setdiff(mo$city_norm, valid_city))` to only
+`r length(setdiff(mo$city_swap, valid_city))`
+
+```{r count_city_post_swap, collapse=TRUE}
+n_distinct(wv$city_swap)
+prop_in(wv$city_swap, valid_city, na.rm = TRUE)
+length(setdiff(wv$city_swap, valid_city))
+```
+
+#### Refine
+
+Finally, we can pass these swapped `city_swap` values to the OpenRefine cluster and merge 
+algorithms. These two algorithms cluster similar values and replace infrequent values with their
+more common counterparts. This process can be harmful by making _incorrect_ changes. We will only
+keep changes where the state, ZIP code, _and_ new city value all match a valid combination.
+
+```{r add_to_valid}
+valid_city <- c(valid_city, "SYMMES TOWNSHIP",
+                "CROSS LANES",
+                "LAGO VISTA",
+                "CRANBERRY TOWNSHIP",
+                "BLUEWELL")
+
+```
+
+```{r refine_city}
+wv_match_table <- wv %>% 
+  filter(str_sub(wv$city_swap, 1,1) == str_sub(wv$city_match, 1,1)) %>% 
+  filter(city_swap %out% valid_city)  %>% 
+  mutate(string_dis = stringdist(city_raw, city_match)) %>% 
+  select (expenditure_id, zip, state, city_raw, city_swap, city_match, string_dis) %>% 
+  distinct() %>% 
+  add_count(city_match) %>% 
+  rename("sec_city_match" = "city_match")
+```
+
+
+We can revert `city_swap` back to the `city_match` values in the match table resulting from misspellings.
+
+```{r join_refine}
+wv<- wv_match_table %>% select(expenditure_id, sec_city_match) %>% right_join(wv, by = "expenditure_id")
+```
+
+This brings us to `r percent(prop_in(mo$city_swap, valid_city, na.rm = TRUE))` valid values.
+
+```{r count_city_post_refine, collapse=TRUE}
+n_distinct(mo$city_refine)
+prop_in(mo$city_refine, valid_city, na.rm = TRUE)
+length(setdiff(mo$city_refine, valid_city))
+```
+
+#### Progress
+
+We can make very few manual changes to capture the last few big invalid values. Local city
+abbreviations (e.g., SPFD) often need to be changed by hand.
+
+```{r view_final_bad}
+mo %>%
+  filter(city_refine %out% valid_city) %>% 
+  count(state_norm, city_refine, sort = TRUE) %>% 
+  drop_na(city_refine)
+```
+
+```{r city_final}
+wv <- wv %>% 
+  mutate(
+    city_final = sec_city_match %>% 
+      str_replace("^BARBOUSVILLE$", "BARBOURSVILLE") %>% 
+      str_replace("^SAN\\sFRANSICO$", "SAN FRANCISCO") %>% 
+      str_replace("^BUCHANNAN$", "BUCKHANNON") %>% 
+      str_replace("^MOUNT\\sCLAIRE$", "MOUNT CLARE") %>% 
+      str_replace("^SYMMONS\\sTOWNSHIP$"|"^MES\\sTOWNSHIP$", "SYMMES TOWNSHIP") %>% 
+      str_replace("^GALLAGER$", "GALLAGHER") %>% 
+      str_replace("^MES\\sTOWNSHIP$", "SYMMES TOWNSHIP") %>% 
+      str_replace("^WEST\\sCOMERVILLE$"|"^SOMMERVILLE$"|"^SOMERVILEE$", "SOMERVILLE") %>% 
+      str_replace("^CHARSLETON$", "CHARLESTON") %>% 
+      str_replace("^OAH\\sHILL$", "OAK HILL") %>% 
+      str_replace("^LICOLN$", "LINCOLN") %>% 
+      str_replace("^GREENBAG ROAD$", "MORGANTOWN") %>% 
+      str_replace("^FARILEA$", "FAIRLEA") %>% 
+      str_replace("^GREENBAG ROAD$", "MORGANTOWN") %>% 
+      str_replace("^GREENBAG ROAD$", "MORGANTOWN") %>% 
+      str_replace("^GREENBAG ROAD$", "MORGANTOWN") %>% 
+  )
+```
+
+By adding a dozen popular West Virginia cities to our `valid_city` list, we can reach our 99% goal.
+
+```{r increase_valid_city}
+valid_city <- c(
+  valid_city,
+  "OVERLAND",
+  "OVERLAND PARK",
+  "RAYTOWN",
+  "NORTH KANSAS CITY",
+  "PRAIRIE VILLAGE",
+  "UNIVERSITY CITY",
+  "WEBSTER GROVES",
+  "RICHMOND HEIGHTS",
+  "LENEXA",
+  "STE GENEVIEVE",
+  "LEAWOOD",
+  "DES PERES",
+  "OLIVETTE",
+  "TOWN AND COUNTRY",
+  "AFFTON"
+)
+```
+
+```{r progress_table, echo=FALSE}
+progress_table <- tibble(
+  stage = c("raw", "norm", "swap", "refine", "final"),
+  prop_good = c(
+    prop_in(str_to_upper(mo$city_raw), valid_city, na.rm = TRUE),
+    prop_in(mo$city_norm, valid_city, na.rm = TRUE),
+    prop_in(wv$city_swap, valid_city, na.rm = TRUE),
+    prop_in(mo$city_refine, valid_city, na.rm = TRUE),
+    prop_in(mo$city_final, valid_city, na.rm = TRUE)
+  ),
+  total_distinct = c(
+    n_distinct(str_to_upper(mo$city_raw)),
+    n_distinct(mo$city_norm),
+    n_distinct(mo$city_swap),
+    n_distinct(mo$city_refine),
+    n_distinct(mo$city_final)
+  ),
+  unique_bad = c(
+    length(setdiff(str_to_upper(mo$city_raw), valid_city)),
+    length(setdiff(mo$city_norm, valid_city)),
+    length(setdiff(mo$city_swap, valid_city)),
+    length(setdiff(mo$city_refine, valid_city)),
+    length(setdiff(mo$city_final, valid_city))
+  )
+)
+
+diff_change <- progress_table$unique_bad[5]-progress_table$unique_bad[1]
+prop_change <- diff_change/progress_table$unique_bad[1]
+```
+
+Still, our progress is significant without having to make a single manual or unconfident change.
+The percent of valid cities increased from `r percent(progress_table$prop_good[1])` to 
+`r percent(progress_table$prop_good[5])`. The number of total distinct city values decreased from
+`r comma(progress_table$total_distinct[1])` to `r comma(progress_table$total_distinct[5])`. The
+number of distinct invalid city names decreased from `r comma(progress_table$unique_bad[1])` to
+only `r comma(progress_table$unique_bad[5])`, a change of `r percent(prop_change)`.
+
+```{r print_progress, echo=FALSE}
+kable(
+  x = progress_table,
+  format = "markdown", 
+  digits = 4,
+  col.names = c("Normalization Stage", "Total Distinct", "Percent Valid", "Unique Invalid")
+)
+```
+
+```{r wrangle_bar_prop, echo=FALSE}
+progress_table %>% 
+  mutate(stage = as_factor(stage)) %>% 
+  ggplot(aes(x = stage, y = prop_good)) +
+  geom_hline(yintercept = 0.99) +
+  geom_col(fill = brewer_dark2[2]) +
+  coord_cartesian(ylim = c(0.75, 1)) +
+  scale_y_continuous(labels = percent) +
+  labs(
+    title = "West Virginia Expenditures Payee City Progress",
+    subtitle = "Percent of total values contained in pre-defined list of cities",
+    caption = "Source: West Virginia Ethics Commission",
+    x = "Wrangling Stage",
+    y = "Proportion Valid Cities"
+  )
+```
+
+```{r wrangle_bar_distinct, echo=FALSE}
+progress_table %>% 
+  mutate(stage = as_factor(stage)) %>% 
+  select(-prop_good) %>% 
+  rename(
+    All = total_distinct,
+    Invalid = unique_bad
+  ) %>% 
+  gather(
+    -stage,
+    key = "key",
+    value = "value"
+  ) %>% 
+  ggplot(aes(x = stage, y = value)) +
+  geom_col(aes(fill = key)) +
+  scale_fill_brewer(type = "qual", palette = "Dark2") +
+  scale_y_continuous(labels = comma) +
+  labs(
+    title = "West Virginia Expenditures Payee City Progress",
+    subtitle = "Total distinct number of city values",
+    caption = "Source: West Virginia Secretary of Sate",
+    fill = "Distinct Values",
+    x = "Wrangling Stage",
+    y = "Number of Expenditures"
+  )
+```
+
+## Conclude
+
+1. There are `r nrow(mo)` records in the database.
+1. There are `r sum(mo$dupe_flag)` duplicate records in the database.
+1. The range and distribution of `amount` seems reasomable, and `date` has been cleaned by removing
+`r sum(mo$date_flag, na.rm = T)` values from the distance past or future.
+1. There are `r sum(mo$na_flag)` records missing either recipient or date.
+1. Consistency in geographic data has been improved with `campfin::normal_*()`.
+1. The 5-digit `zip_norm` variable has been created with `campfin::normal_zip()`.
+1. The 4-digit `year_clean` variable has been created with `lubridate::year()`.
+
+## Export
+
+```{r create_proc_dir}
+proc_dir <- here("in", "expends", "data", "processed")
+dir_create(proc_dir)
+```
+
+```{r write_clean}
+mo %>% 
+  select(
+    -city_norm,
+    -city_swap,
+    -city_match,
+    -city_swap,
+    -match_dist,
+    -city_refine,
+    -year
+  ) %>% 
+  write_csv(
+    path = glue("{proc_dir}/wv_expends_clean.csv"),
+    na = ""
+  )
+```
+
