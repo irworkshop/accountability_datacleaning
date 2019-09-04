@@ -140,3 +140,6 @@ vignettes/*.pdf
 
 # Shiny token, see https://shiny.rstudio.com/articles/shinyapps.html
 rsconnect/
+
+# macOS folder attrs file
+.DS_Store
