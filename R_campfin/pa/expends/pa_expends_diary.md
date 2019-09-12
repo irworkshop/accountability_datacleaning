@@ -1,7 +1,7 @@
 Pennsylvania Campaign Expenditures Data Diary
 ================
 Yanqi Xu
-2019-09-04 13:17:55
+2019-09-09 16:58:03
 
 -   [Project](#project)
 -   [Objectives](#objectives)
@@ -53,7 +53,6 @@ pacman::p_load(
   tidytext, # string analysis
   magrittr, # pipe opperators
   janitor, # dataframe clean
-  zipcode, # clean & database
   refinr, # cluster and merge
   knitr, # knit documents
   glue, # combine strings
@@ -78,9 +77,11 @@ here::here()
 Data
 ----
 
+The Pennsylvania campaign expenditure data is made available by the [Pennsylvania Department of State's website](https://www.dos.pa.gov/VotingElections/CandidatesCommittees/CampaignFinance/Resources/Pages/FullCampaignFinanceExport.aspx "website").
+
 ### About
 
-More information about the record layout can be found here <https://www.dos.pa.gov/VotingElections/CandidatesCommittees/CampaignFinance/Resources/Documents/readme.txt>.
+More information about the record layout can be found [here](https://www.dos.pa.gov/VotingElections/CandidatesCommittees/CampaignFinance/Resources/Documents/readme.txt. "here") as well as at [FAQs](https://www.dos.pa.gov/VotingElections/CandidatesCommittees/CampaignFinance/Documents/FAQ/CampaignFinanceFAQ.pdf "FAQs") about Pennsylvania Campaign Finance regulations
 
 ### Variables
 
@@ -89,7 +90,7 @@ Import
 
 ### Download
 
-Download raw, **immutable** data file. Go to <https://www.dos.pa.gov/VotingElections/CandidatesCommittees/CampaignFinance/Resources/Pages/FullCampaignFinanceExport.aspx>. We'll download the files from 2015 to 2019 (file format: zip file) with the script.
+Download raw, **immutable** data file. Go to [Pennsylvania Department of State's website](https://www.dos.pa.gov/VotingElections/CandidatesCommittees/CampaignFinance/Resources/Pages/FullCampaignFinanceExport.aspx "website"). [05](https://www.dos.pa.gov/VotingElections/CandidatesCommittees/CampaignFinance/Resources/Pages/FullCampaignFinanceExport.aspx "website"): <https://www.dos.pa.gov/VotingElections/CandidatesCommittees/CampaignFinance/Resources/Pages/FullCampaignFinanceExport.aspx> "website" We'll download the files from 2015 to 2019 (file format: zip file) with the following code.
 
 ``` r
 # create a directory for the raw data
@@ -102,6 +103,7 @@ Download all the file packages containing all campaign-finance-related files.
 ``` r
 #download the files into the directory
 pa_exp_urls <- glue("https://www.dos.pa.gov//VotingElections/CandidatesCommittees/CampaignFinance/Resources/Documents/{2015:2019}.zip")
+
 
 if (!all_files_new(raw_dir)) {
   for (url in pa_exp_urls) {
@@ -120,6 +122,7 @@ Read individual csv files from the downloaded zip files
 ``` r
 zip_files <- dir_ls(raw_dir, glob = "*.zip")
 
+
 if (all_files_new(path = raw_dir, glob = "*.txt")) {
   for (i in seq_along(zip_files)) {
     unzip(
@@ -136,7 +139,7 @@ Read multiple csvs into R
 
 ``` r
 #recursive set to true because 2016 and 2015 have subdirectories under "raw"
-expense_files <- list.files(raw_dir, pattern = ".txt", recursive = TRUE, full.names = TRUE)
+expense_files <- dir_ls(raw_dir, regexp = "expense.+", recurse = TRUE)
 #pa_lines <- list.files(raw_dir, pattern = ".txt", recursive = TRUE) %>% map(read_lines) %>% unlist()
 pa_col_names <- c("FILERID","EYEAR","CYCLE","EXPNAME","ADDRESS1","ADDRESS2","CITY","STATE","ZIPCODE","EXPDATE","EXPAMT","EXPDESC")
 
@@ -144,7 +147,9 @@ pa_col_names <- c("FILERID","EYEAR","CYCLE","EXPNAME","ADDRESS1","ADDRESS2","CIT
 pa <- expense_files %>% 
   map(read_delim, delim = ",", escape_double = FALSE,
       escape_backslash = FALSE, col_names = pa_col_names, 
-      col_types = cols(.default = col_character())) %>% 
+      col_types = cols(.default = col_character(),
+                       EYEAR = col_integer(),
+                       CYCLE = col_integer())) %>% 
 bind_rows()
 ```
 
@@ -174,6 +179,7 @@ for (i in c(4:7)) {
    str_replace("&AMP;", "&") 
 }
 
+
 pa$EXPDESC <- toupper(pa$EXPDESC)
 ```
 
@@ -188,13 +194,13 @@ head(pa)
 
     #> # A tibble: 6 x 12
     #>   FILERID  EYEAR CYCLE EXPNAME    ADDRESS1   ADDRESS2 CITY  STATE ZIPCODE EXPDATE    EXPAMT EXPDESC
-    #>   <chr>    <chr> <chr> <chr>      <chr>      <chr>    <chr> <chr> <chr>   <date>      <dbl> <chr>  
-    #> 1 20140199 2015  2     VALLEY DE… 1321 FREE… <NA>     CHES… PA    15024   2015-02-16  250   DONATI…
-    #> 2 20140199 2015  2     OFFICE MAX 4080 WILA… <NA>     MONR… PA    15146   2015-02-18   16.6 OFFICE…
-    #> 3 20140199 2015  2     GATEWAY C… PARKING    <NA>     PITT… PA    15222   2015-02-18   20   PARKING
-    #> 4 20140199 2015  2     USPS       KILBUCK    <NA>     PITT… PA    15290   2015-02-18  980   POSTAGE
-    #> 5 20140199 2015  2     EDDIE MER… GATEWAY C… <NA>     PITT… PA    15222   2015-02-18  102.  CAMPAI…
-    #> 6 20140199 2015  2     CASTLE SH… CO EILEEN… <NA>     PITT… PA    15234   2015-02-23  100   DONATI…
+    #>   <chr>    <int> <int> <chr>      <chr>      <chr>    <chr> <chr> <chr>   <date>      <dbl> <chr>  
+    #> 1 20140199  2015     2 VALLEY DE… 1321 FREE… <NA>     CHES… PA    15024   2015-02-16  250   DONATI…
+    #> 2 20140199  2015     2 OFFICE MAX 4080 WILA… <NA>     MONR… PA    15146   2015-02-18   16.6 OFFICE…
+    #> 3 20140199  2015     2 GATEWAY C… PARKING    <NA>     PITT… PA    15222   2015-02-18   20   PARKING
+    #> 4 20140199  2015     2 USPS       KILBUCK    <NA>     PITT… PA    15290   2015-02-18  980   POSTAGE
+    #> 5 20140199  2015     2 EDDIE MER… GATEWAY C… <NA>     PITT… PA    15222   2015-02-18  102.  CAMPAI…
+    #> 6 20140199  2015     2 CASTLE SH… CO EILEEN… <NA>     PITT… PA    15234   2015-02-23  100   DONATI…
 
 ``` r
 tail(pa)
@@ -202,13 +208,13 @@ tail(pa)
 
     #> # A tibble: 6 x 12
     #>   FILERID  EYEAR CYCLE EXPNAME  ADDRESS1  ADDRESS2 CITY  STATE ZIPCODE EXPDATE    EXPAMT EXPDESC   
-    #>   <chr>    <chr> <chr> <chr>    <chr>     <chr>    <chr> <chr> <chr>   <date>      <dbl> <chr>     
-    #> 1 2019C02… 2019  2     VISTA P… 95 HAYDE… <NA>     LEXI… MA    02421   2019-03-17   36.0 PRINTING …
-    #> 2 2019C02… 2019  2     VISTA P… 95 HAYDE… <NA>     LEXI… MA    02421   2019-03-28   36.3 PRINTED C…
-    #> 3 20190018 2019  1     VISTA P… 95 HAYDE… <NA>     LEXI… MA    02421   2019-01-29  121.  CAMPAIGN …
-    #> 4 2019C02… 2019  2     VISTA P… ONLINE    <NA>     <NA>  <NA>  <NA>    2019-04-30  604.  5.5 X 8.5…
-    #> 5 2019C02… 2019  2     VISTA P… ONLINE    <NA>     <NA>  <NA>  <NA>    2019-05-01  165.  4X6 POSTC…
-    #> 6 20170137 2019  2     VISTA P… ONLINE    <NA>     <NA>  <NA>  <NA>    2019-05-01  165.  4X6 POSTC…
+    #>   <chr>    <int> <int> <chr>    <chr>     <chr>    <chr> <chr> <chr>   <date>      <dbl> <chr>     
+    #> 1 2019C02…  2019     2 VISTA P… 95 HAYDE… <NA>     LEXI… MA    02421   2019-03-17   36.0 PRINTING …
+    #> 2 2019C02…  2019     2 VISTA P… 95 HAYDE… <NA>     LEXI… MA    02421   2019-03-28   36.3 PRINTED C…
+    #> 3 20190018  2019     1 VISTA P… 95 HAYDE… <NA>     LEXI… MA    02421   2019-01-29  121.  CAMPAIGN …
+    #> 4 2019C02…  2019     2 VISTA P… ONLINE    <NA>     <NA>  <NA>  <NA>    2019-04-30  604.  5.5 X 8.5…
+    #> 5 2019C02…  2019     2 VISTA P… ONLINE    <NA>     <NA>  <NA>  <NA>    2019-05-01  165.  4X6 POSTC…
+    #> 6 20170137  2019     2 VISTA P… ONLINE    <NA>     <NA>  <NA>  <NA>    2019-05-01  165.  4X6 POSTC…
 
 ``` r
 glimpse(pa)
@@ -217,8 +223,8 @@ glimpse(pa)
     #> Observations: 493,025
     #> Variables: 12
     #> $ FILERID  <chr> "20140199", "20140199", "20140199", "20140199", "20140199", "20140199", "201401…
-    #> $ EYEAR    <chr> "2015", "2015", "2015", "2015", "2015", "2015", "2015", "2015", "2015", "2015",…
-    #> $ CYCLE    <chr> "2", "2", "2", "2", "2", "2", "2", "2", "2", "2", "2", "2", "2", "2", "2", "2",…
+    #> $ EYEAR    <int> 2015, 2015, 2015, 2015, 2015, 2015, 2015, 2015, 2015, 2015, 2015, 2015, 2015, 2…
+    #> $ CYCLE    <int> 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2…
     #> $ EXPNAME  <chr> "VALLEY DEMOCRATIC COMM", "OFFICE MAX", "GATEWAY CENTER", "USPS", "EDDIE MERIOT…
     #> $ ADDRESS1 <chr> "1321 FREEPORT RD", "4080 WILAM PENN HIGHWAY", "PARKING", "KILBUCK", "GATEWAY C…
     #> $ ADDRESS2 <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
@@ -238,11 +244,11 @@ pa %>% glimpse_fun(n_distinct)
 ```
 
     #> # A tibble: 12 x 4
-    #>    var      type       n         p
-    #>    <chr>    <chr>  <int>     <dbl>
+    #>    col      type       n         p
+    #>    <chr>    <chr>  <dbl>     <dbl>
     #>  1 FILERID  chr     4137 0.00839  
-    #>  2 EYEAR    chr        7 0.0000142
-    #>  3 CYCLE    chr        9 0.0000183
+    #>  2 EYEAR    int        7 0.0000142
+    #>  3 CYCLE    int        9 0.0000183
     #>  4 EXPNAME  chr   101285 0.205    
     #>  5 ADDRESS1 chr    94272 0.191    
     #>  6 ADDRESS2 chr     4412 0.00895  
@@ -262,11 +268,11 @@ pa %>% glimpse_fun(count_na)
 ```
 
     #> # A tibble: 12 x 4
-    #>    var      type       n        p
-    #>    <chr>    <chr>  <int>    <dbl>
+    #>    col      type       n        p
+    #>    <chr>    <chr>  <dbl>    <dbl>
     #>  1 FILERID  chr        0 0       
-    #>  2 EYEAR    chr        0 0       
-    #>  3 CYCLE    chr        0 0       
+    #>  2 EYEAR    int        0 0       
+    #>  3 CYCLE    int        0 0       
     #>  4 EXPNAME  chr      124 0.000252
     #>  5 ADDRESS1 chr    14918 0.0303  
     #>  6 ADDRESS2 chr   457826 0.929   
@@ -407,7 +413,7 @@ pa <- pa %>%
     zip_clean = ZIPCODE %>% 
       normal_zip(na_rep = TRUE))
 sample(pa$zip_clean, 10)
-#>  [1] "19146" "16823" "17101" "15238" "98108" "18052" "15501" "19110" "15824" "19012"
+#>  [1] "19149" NA      "16141" "17401" "19101" "15230" "15347" "17512" "16823" "17013"
 ```
 
 ### State
@@ -418,14 +424,15 @@ View values in the STATE field is not a valid state abbreviation
 {pa$STATE[pa$STATE %out% zipcode$state]}[!is.na(pa$STATE[pa$STATE %out% zipcode$state])]
 #> [1] "CN" "CN" "CN" "CN"
 
+
 pa %>% filter(STATE == "CN")
 #> # A tibble: 4 x 21
 #>    index FILERID EYEAR CYCLE EXPNAME ADDRESS1 ADDRESS2 CITY  STATE ZIPCODE EXPDATE    EXPAMT
-#>    <int> <chr>   <chr> <chr> <chr>   <chr>    <chr>    <chr> <chr> <chr>   <date>      <dbl>
-#> 1   3445 7900257 2015  1     CSA BA… 1500 NO… <NA>     QUEB… CN    J4B 5H3 2015-03-18   5.11
-#> 2   3446 7900257 2015  1     CSA BA… 1500 NO… <NA>     QUEB… CN    J4B 5H3 2015-03-18 511.  
-#> 3 296601 201700… 2017  6     ISTOCK  1240 20… <NA>     CALG… CN    00000   2017-10-27  35.0 
-#> 4 400304 2009450 2018  6     HOOTSU… 5 EAST … <NA>     VANC… CN    V5T 1R6 2018-10-31  47.7 
+#>    <int> <chr>   <int> <int> <chr>   <chr>    <chr>    <chr> <chr> <chr>   <date>      <dbl>
+#> 1   3445 7900257  2015     1 CSA BA… 1500 NO… <NA>     QUEB… CN    J4B 5H3 2015-03-18   5.11
+#> 2   3446 7900257  2015     1 CSA BA… 1500 NO… <NA>     QUEB… CN    J4B 5H3 2015-03-18 511.  
+#> 3 296601 201700…  2017     6 ISTOCK  1240 20… <NA>     CALG… CN    00000   2017-10-27  35.0 
+#> 4 400304 2009450  2018     6 HOOTSU… 5 EAST … <NA>     VANC… CN    V5T 1R6 2018-10-31  47.7 
 #> # … with 9 more variables: EXPDESC <chr>, na_flag <lgl>, dupe_flag <lgl>, year <dbl>,
 #> #   on_year <lgl>, date_flag <lgl>, date_clean <dbl>, year_clean <dbl>, zip_clean <chr>
 ```
@@ -473,35 +480,33 @@ To replace city names with expected city names from zipcode when the two variabl
 
 ``` r
 pa <- pa %>% 
-  mutate(
-    match_dist = stringdist(city_prep, city_match),
-    city_swap = if_else(condition = is.na(city_match) == FALSE,
-                        if_else(
-      condition = match_dist <= 2,
+mutate(
+    match_dist = stringdist(city_match, city_prep),
+    city_swap = if_else(
+      condition = !is.na(match_dist) & match_dist <= 2,
       true = city_match,
       false = city_prep
-    ),
-      false = city_prep
-  ))
+    )
+  )
 
 
 summary(pa$match_dist)
 ```
 
     #>    Min. 1st Qu.  Median    Mean 3rd Qu.    Max.    NA's 
-    #>   0.000   0.000   0.000   0.583   0.000  22.000   20605
+    #>   0.000   0.000   0.000   0.601   0.000  22.000   20598
 
 ``` r
 sum(pa$match_dist == 1, na.rm = TRUE)
 ```
 
-    #> [1] 5073
+    #> [1] 5425
 
 ``` r
 n_distinct(pa$city_swap)
 ```
 
-    #> [1] 4349
+    #> [1] 4351
 
 #### Refine
 
@@ -541,447 +546,24 @@ pa_refined %>%
   arrange(desc(n))
 ```
 
-    #> # A tibble: 81 x 3
-    #>    city_swap        city_refine      n
-    #>    <chr>            <chr>        <int>
-    #>  1 GREENVILLE       E GREENVILLE   322
-    #>  2 W NEWTON         NEWTOWN        310
-    #>  3 N HUNTINGDON     HUNTINGDON     128
-    #>  4 BERLIN           E BERLIN        72
-    #>  5 W LAWN           LAWN            46
-    #>  6 E MCKEESPORT     MCKEESPORT      29
-    #>  7 E FREEDOM        FREEDOM         26
-    #>  8 SINKING SPGS     SINKING SPG     23
-    #>  9 SOUTHERN EASTERN SOUTHEASTERN    18
-    #> 10 E WATERFORD      WATERFORD       15
-    #> # … with 71 more rows
-
-``` r
-refined_values <- unique(pa_refined$city_refine)
-count_refined <- tibble(
-  city_refine = refined_values, 
-  refine_count = NA
-)
-
-for (i in seq_along(refined_values)) {
-  count_refined$refine_count[i] <- sum(str_detect(pa$city_swap, refined_values[i]), na.rm = TRUE)
-}
-
-swap_values <- unique(pa_refined$city_swap)
-count_swap <- tibble(
-  city_swap = swap_values, 
-  swap_count = NA
-)
-
-for (i in seq_along(swap_values)) {
-  count_swap$swap_count[i] <- sum(str_detect(pa$city_swap, swap_values[i]), na.rm = TRUE)
-}
-
-pa_refined %>% 
-  left_join(count_swap) %>% 
-  left_join(count_refined) %>%
-  select(
-    FILERID,
-    city_match,
-    city_swap,
-    city_refine,
-    swap_count,
-    refine_count
-  ) %>% 
-  mutate(diff_count = refine_count - swap_count) %>%
-  mutate(refine_dist = stringdist(city_swap, city_refine)) %>%
-  distinct() %>%
-  arrange(city_refine) %>% 
-  print_all()
-```
-
-    #> # A tibble: 377 x 8
-    #>     FILERID  city_match   city_swap    city_refine   swap_count refine_count diff_count refine_dist
-    #>     <chr>    <chr>        <chr>        <chr>              <int>        <int>      <int>       <dbl>
-    #>   1 2002093  PITTSBURGH   ADDRESSON F… ADDRESS ON F…          1           26         25           1
-    #>   2 9500250  BRIDGEVILLE  ALISON PRK   ALLISON PRK            1          321        320           1
-    #>   3 7900321  PITTSTON     AVOCO        AVOCA                  1          501        500           1
-    #>   4 20170352 WILKES BARRE BEARCREEK    BEAR CREEK             1           10          9           1
-    #>   5 8100217  MARCUS HOOK  BOOTHWYNN    BOOTHWYN               1          184        183           1
-    #>   6 2017C01… HARRISBURG   BRESLER      BRESSLER               1           63         62           1
-    #>   7 20130207 NEWTOWN SQU… BROMALL      BROOMALL               4          407        403           1
-    #>   8 20150282 NEWTOWN SQU… BROMALL      BROOMALL               4          407        403           1
-    #>   9 2000115  E BUTLER     E BUTLER     BUTLER                 4         1335       1331           2
-    #>  10 20170314 S LONDONDER… CARSLISLE    CARLISLE               4          689        685           1
-    #>  11 8900208  BROCKWAY     DUBOIS       DU BOIS                7          430        423           1
-    #>  12 20170387 SCRANTON     DUNMMORE     DUNMORE                1          454        453           1
-    #>  13 2002291  BERLIN       BERLIN       E BERLIN             233          106       -127           2
-    #>  14 8000638  BERLIN       BERLIN       E BERLIN             233          106       -127           2
-    #>  15 20150034 BERLIN       BERLIN       E BERLIN             233          106       -127           2
-    #>  16 2015C03… BERLIN       BERLIN       E BERLIN             233          106       -127           2
-    #>  17 20150080 BERLIN       BERLIN       E BERLIN             233          106       -127           2
-    #>  18 2000169  BERLIN       BERLIN       E BERLIN             233          106       -127           2
-    #>  19 7900405  BERLIN       BERLIN       E BERLIN             233          106       -127           2
-    #>  20 20150062 BERLIN       BERLIN       E BERLIN             233          106       -127           2
-    #>  21 2008133  BERLIN       BERLIN       E BERLIN             233          106       -127           2
-    #>  22 8000674  BERLIN       BERLIN       E BERLIN             233          106       -127           2
-    #>  23 9000335  BERLIN       BERLIN       E BERLIN             233          106       -127           2
-    #>  24 9200347  BERLIN       BERLIN       E BERLIN             233          106       -127           2
-    #>  25 2007003  BERLIN       BERLIN       E BERLIN             233          106       -127           2
-    #>  26 7900321  BERLIN       BERLIN       E BERLIN             233          106       -127           2
-    #>  27 20140023 BERLIN       BERLIN       E BERLIN             233          106       -127           2
-    #>  28 20140116 BERLIN       BERLIN       E BERLIN             233          106       -127           2
-    #>  29 2010377  BERLIN       BERLIN       E BERLIN             233          106       -127           2
-    #>  30 9300188  BERLIN       BERLIN       E BERLIN             233          106       -127           2
-    #>  31 8400378  BERLIN       BERLIN       E BERLIN             233          106       -127           2
-    #>  32 7900442  BERLIN       BERLIN       E BERLIN             233          106       -127           2
-    #>  33 7900337  BERLIN       BERLIN       E BERLIN             233          106       -127           2
-    #>  34 8200616  BERLIN       BERLIN       E BERLIN             233          106       -127           2
-    #>  35 8800219  BERLIN       BERLIN       E BERLIN             233          106       -127           2
-    #>  36 8600110  BERLIN       BERLIN       E BERLIN             233          106       -127           2
-    #>  37 2001148  BERLIN       BERLIN       E BERLIN             233          106       -127           2
-    #>  38 9100045  BERLIN       BERLIN       E BERLIN             233          106       -127           2
-    #>  39 7900366  BERLIN       BERLIN       E BERLIN             233          106       -127           2
-    #>  40 9000307  BERLIN       BERLIN       E BERLIN             233          106       -127           2
-    #>  41 2000081  BERLIN       BERLIN       E BERLIN             233          106       -127           2
-    #>  42 9700250  BERLIN       BERLIN       E BERLIN             233          106       -127           2
-    #>  43 8500209  BERLIN       BERLIN       E BERLIN             233          106       -127           2
-    #>  44 2002077  BERLIN       BERLIN       E BERLIN             233          106       -127           2
-    #>  45 7900264  BERLIN       BERLIN       E BERLIN             233          106       -127           2
-    #>  46 7900364  BERLIN       BERLIN       E BERLIN             233          106       -127           2
-    #>  47 20180088 BERLIN       BERLIN       E BERLIN             233          106       -127           2
-    #>  48 8000674  SOMERSET     BERLIN       E BERLIN             233          106       -127           2
-    #>  49 20150366 BERLIN       BERLIN       E BERLIN             233          106       -127           2
-    #>  50 20130289 BERLIN       BERLIN       E BERLIN             233          106       -127           2
-    #>  51 20180136 BERLIN       BERLIN       E BERLIN             233          106       -127           2
-    #>  52 20150020 GREENVILLE   GREENVILLE   E GREENVILLE         658          328       -330           2
-    #>  53 9000319  GREENVILLE   GREENVILLE   E GREENVILLE         658          328       -330           2
-    #>  54 20140414 GREENVILLE   GREENVILLE   E GREENVILLE         658          328       -330           2
-    #>  55 20150067 GREENVILLE   GREENVILLE   E GREENVILLE         658          328       -330           2
-    #>  56 2005203  GREENVILLE   GREENVILLE   E GREENVILLE         658          328       -330           2
-    #>  57 9700164  GREENVILLE   GREENVILLE   E GREENVILLE         658          328       -330           2
-    #>  58 9500042  GREENVILLE   GREENVILLE   E GREENVILLE         658          328       -330           2
-    #>  59 8600238  GREENVILLE   GREENVILLE   E GREENVILLE         658          328       -330           2
-    #>  60 8000367  GREENVILLE   GREENVILLE   E GREENVILLE         658          328       -330           2
-    #>  61 9500250  GREENVILLE   GREENVILLE   E GREENVILLE         658          328       -330           2
-    #>  62 2015C04… GREENVILLE   GREENVILLE   E GREENVILLE         658          328       -330           2
-    #>  63 2015C04… MERCER       GREENVILLE   E GREENVILLE         658          328       -330           2
-    #>  64 2006340  GREENVILLE   GREENVILLE   E GREENVILLE         658          328       -330           2
-    #>  65 9000035  GREENVILLE   GREENVILLE   E GREENVILLE         658          328       -330           2
-    #>  66 20140300 GREENVILLE   GREENVILLE   E GREENVILLE         658          328       -330           2
-    #>  67 2007049  GREENVILLE   GREENVILLE   E GREENVILLE         658          328       -330           2
-    #>  68 8200157  GREENVILLE   GREENVILLE   E GREENVILLE         658          328       -330           2
-    #>  69 9100286  GREENVILLE   GREENVILLE   E GREENVILLE         658          328       -330           2
-    #>  70 7900504  GREENVILLE   GREENVILLE   E GREENVILLE         658          328       -330           2
-    #>  71 2009450  GREENVILLE   GREENVILLE   E GREENVILLE         658          328       -330           2
-    #>  72 20110252 GREENVILLE   GREENVILLE   E GREENVILLE         658          328       -330           2
-    #>  73 20140099 GREENVILLE   GREENVILLE   E GREENVILLE         658          328       -330           2
-    #>  74 2016C01… GREENVILLE   GREENVILLE   E GREENVILLE         658          328       -330           2
-    #>  75 7900443  GREENVILLE   GREENVILLE   E GREENVILLE         658          328       -330           2
-    #>  76 8600109  GREENVILLE   GREENVILLE   E GREENVILLE         658          328       -330           2
-    #>  77 9400239  GREENVILLE   GREENVILLE   E GREENVILLE         658          328       -330           2
-    #>  78 7900369  GREENVILLE   GREENVILLE   E GREENVILLE         658          328       -330           2
-    #>  79 2002017  GREENVILLE   GREENVILLE   E GREENVILLE         658          328       -330           2
-    #>  80 7900444  GREENVILLE   GREENVILLE   E GREENVILLE         658          328       -330           2
-    #>  81 2002152  GREENVILLE   GREENVILLE   E GREENVILLE         658          328       -330           2
-    #>  82 2000081  GREENVILLE   GREENVILLE   E GREENVILLE         658          328       -330           2
-    #>  83 7900403  GREENVILLE   GREENVILLE   E GREENVILLE         658          328       -330           2
-    #>  84 7900366  GREENVILLE   GREENVILLE   E GREENVILLE         658          328       -330           2
-    #>  85 8000121  GREENVILLE   GREENVILLE   E GREENVILLE         658          328       -330           2
-    #>  86 2002121  GREENVILLE   GREENVILLE   E GREENVILLE         658          328       -330           2
-    #>  87 2011139  GREENVILLE   GREENVILLE   E GREENVILLE         658          328       -330           2
-    #>  88 2007224  GREENVILLE   GREENVILLE   E GREENVILLE         658          328       -330           2
-    #>  89 2008225  GREENVILLE   GREENVILLE   E GREENVILLE         658          328       -330           2
-    #>  90 2002077  GREENVILLE   GREENVILLE   E GREENVILLE         658          328       -330           2
-    #>  91 2004106  GREENVILLE   GREENVILLE   E GREENVILLE         658          328       -330           2
-    #>  92 20140001 GREENVILLE   GREENVILLE   E GREENVILLE         658          328       -330           2
-    #>  93 2000127  GREENVILLE   GREENVILLE   E GREENVILLE         658          328       -330           2
-    #>  94 9900209  GREENVILLE   GREENVILLE   E GREENVILLE         658          328       -330           2
-    #>  95 8200085  GREENVILLE   GREENVILLE   E GREENVILLE         658          328       -330           2
-    #>  96 2003193  GREENVILLE   GREENVILLE   E GREENVILLE         658          328       -330           2
-    #>  97 2016C12… GREENVILLE   GREENVILLE   E GREENVILLE         658          328       -330           2
-    #>  98 9000307  GREENVILLE   GREENVILLE   E GREENVILLE         658          328       -330           2
-    #>  99 7900500  GREENVILLE   GREENVILLE   E GREENVILLE         658          328       -330           2
-    #> 100 20170105 GREENVILLE   GREENVILLE   E GREENVILLE         658          328       -330           2
-    #> 101 20160149 GREENVILLE   GREENVILLE   E GREENVILLE         658          328       -330           2
-    #> 102 8300175  GREENVILLE   GREENVILLE   E GREENVILLE         658          328       -330           2
-    #> 103 8600316  GREENVILLE   GREENVILLE   E GREENVILLE         658          328       -330           2
-    #> 104 9400126  GREENVILLE   GREENVILLE   E GREENVILLE         658          328       -330           2
-    #> 105 2004037  GREENVILLE   GREENVILLE   E GREENVILLE         658          328       -330           2
-    #> 106 2000115  GREENVILLE   GREENVILLE   E GREENVILLE         658          328       -330           2
-    #> 107 20170192 GREENVILLE   GREENVILLE   E GREENVILLE         658          328       -330           2
-    #> 108 8200278  GREENVILLE   GREENVILLE   E GREENVILLE         658          328       -330           2
-    #> 109 8400088  GREENVILLE   GREENVILLE   E GREENVILLE         658          328       -330           2
-    #> 110 9900137  GREENVILLE   GREENVILLE   E GREENVILLE         658          328       -330           2
-    #> 111 20180094 GREENVILLE   GREENVILLE   E GREENVILLE         658          328       -330           2
-    #> 112 20150154 GREENVILLE   GREENVILLE   E GREENVILLE         658          328       -330           2
-    #> 113 2005249  GREENVILLE   GREENVILLE   E GREENVILLE         658          328       -330           2
-    #> 114 2008336  GREENVILLE   GREENVILLE   E GREENVILLE         658          328       -330           2
-    #> 115 2003196  GREENVILLE   GREENVILLE   E GREENVILLE         658          328       -330           2
-    #> 116 2008026  NEW CASTLE   GREENVILLE   E GREENVILLE         658          328       -330           2
-    #> 117 2002358  GREENVILLE   GREENVILLE   E GREENVILLE         658          328       -330           2
-    #> 118 2018C04… GREENVILLE   GREENVILLE   E GREENVILLE         658          328       -330           2
-    #> 119 2001144  GREENVILLE   GREENVILLE   E GREENVILLE         658          328       -330           2
-    #> 120 2019C01… GREENVILLE   GREENVILLE   E GREENVILLE         658          328       -330           2
-    #> 121 2019C00… GREENVILLE   GREENVILLE   E GREENVILLE         658          328       -330           2
-    #> 122 20190022 GREENVILLE   GREENVILLE   E GREENVILLE         658          328       -330           2
-    #> 123 2019C02… GREENVILLE   GREENVILLE   E GREENVILLE         658          328       -330           2
-    #> 124 20190017 GREENVILLE   GREENVILLE   E GREENVILLE         658          328       -330           2
-    #> 125 9000319  MERCER       GREENVILLE   E GREENVILLE         658          328       -330           2
-    #> 126 20130154 PETERSBURG   PETERSBURG   E PETERSBURG         273          193        -80           2
-    #> 127 2005249  PETERSBURG   PETERSBURG   E PETERSBURG         273          193        -80           2
-    #> 128 7900374  PETERSBURG   PETERSBURG   E PETERSBURG         273          193        -80           2
-    #> 129 2008219  SOUTHEASTERN S EASTON     EASTON                 7         1034       1027           2
-    #> 130 8300005  SOUTHEASTERN S EASTON     EASTON                 7         1034       1027           2
-    #> 131 8300005  WESTTOWN     S EASTON     EASTON                 7         1034       1027           2
-    #> 132 7900243  CRUM LYNNE   EDDYSTON     EDDYSTONE             38           31         -7           1
-    #> 133 2010095  LEVITTOWN    FALSINGTON   FALLSINGTON            1           57         56           1
-    #> 134 20180378 LEVITTOWN    FALSSINGTON  FALLSINGTON            1           57         56           1
-    #> 135 8100217  KINGSTON     FORTY FORTY  FORTY FT               1           29         28           3
-    #> 136 20130305 E FREEDOM    E FREEDOM    FREEDOM               26          105         79           2
-    #> 137 8000635  E FREEDOM    E FREEDOM    FREEDOM               26          105         79           2
-    #> 138 2015C01… E FREEDOM    E FREEDOM    FREEDOM               26          105         79           2
-    #> 139 7900383  E FREEDOM    E FREEDOM    FREEDOM               26          105         79           2
-    #> 140 7900139  E FREEDOM    E FREEDOM    FREEDOM               26          105         79           2
-    #> 141 20160351 E FREEDOM    E FREEDOM    FREEDOM               26          105         79           2
-    #> 142 2018C08… E FREEDOM    E FREEDOM    FREEDOM               26          105         79           2
-    #> 143 20180045 E FREEDOM    E FREEDOM    FREEDOM               26          105         79           2
-    #> 144 20170318 E FREEDOM    E FREEDOM    FREEDOM               26          105         79           2
-    #> 145 2005249  E FREEDOM    E FREEDOM    FREEDOM               26          105         79           2
-    #> 146 8100217  GLN LYON     GLN OLDEN    GLENOLDEN              1          334        333           2
-    #> 147 9600227  CARBONDALE   GREENFIELD … GREENFIELD T…          1           21         20           1
-    #> 148 2004037  HARRISBURG   W HANOVER T… HANOVER TOWN…          2           41         39           2
-    #> 149 20150043 HARRISBURG   W HANOVER T… HANOVER TOWN…          2           41         39           2
-    #> 150 9000060  HARRISBURG   W HANOVER T… HANOVER TWP            1           28         27           2
-    #> 151 9500133  SOUTHAMPTON  HOLAND       HOLLAND                1          343        342           1
-    #> 152 7900134  DUNCANSVILLE HOLIDAYSBURG HOLLIDAYSBURG          5          599        594           1
-    #> 153 7900366  IRWIN        N HUNTINGDON HUNTINGDON           129          762        633           2
-    #> 154 20140462 IRWIN        N HUNTINGDON HUNTINGDON           129          762        633           2
-    #> 155 20150064 IRWIN        N HUNTINGDON HUNTINGDON           129          762        633           2
-    #> 156 2008336  IRWIN        N HUNTINGDON HUNTINGDON           129          762        633           2
-    #> 157 2010427  IRWIN        N HUNTINGDON HUNTINGDON           129          762        633           2
-    #> 158 20140416 IRWIN        N HUNTINGDON HUNTINGDON           129          762        633           2
-    #> 159 2015C01… IRWIN        N HUNTINGDON HUNTINGDON           129          762        633           2
-    #> 160 2004105  IRWIN        N HUNTINGDON HUNTINGDON           129          762        633           2
-    #> 161 20140421 IRWIN        N HUNTINGDON HUNTINGDON           129          762        633           2
-    #> 162 20150064 JEANNETTE    N HUNTINGDON HUNTINGDON           129          762        633           2
-    #> 163 20120153 IRWIN        N HUNTINGDON HUNTINGDON           129          762        633           2
-    #> 164 20150284 IRWIN        N HUNTINGDON HUNTINGDON           129          762        633           2
-    #> 165 2008336  LATROBE      N HUNTINGDON HUNTINGDON           129          762        633           2
-    #> 166 2008047  IRWIN        N HUNTINGDON HUNTINGDON           129          762        633           2
-    #> 167 20160071 IRWIN        N HUNTINGDON HUNTINGDON           129          762        633           2
-    #> 168 20170100 IRWIN        N HUNTINGDON HUNTINGDON           129          762        633           2
-    #> 169 2010444  IRWIN        N HUNTINGDON HUNTINGDON           129          762        633           2
-    #> 170 20170320 IRWIN        N HUNTINGDON HUNTINGDON           129          762        633           2
-    #> 171 20160359 IRWIN        N HUNTINGDON HUNTINGDON           129          762        633           2
-    #> 172 2010389  IRWIN        N HUNTINGDON HUNTINGDON           129          762        633           2
-    #> 173 20180122 IRWIN        N HUNTINGDON HUNTINGDON           129          762        633           2
-    #> 174 2005249  IRWIN        N HUNTINGDON HUNTINGDON           129          762        633           2
-    #> 175 20180085 IRWIN        N HUNTINGDON HUNTINGDON           129          762        633           2
-    #> 176 20180097 MCKEESPORT   N HUNTINGDON HUNTINGDON           129          762        633           2
-    #> 177 7900079  IRWIN        N HUNTINGDON HUNTINGDON           129          762        633           2
-    #> 178 20180097 IRWIN        N HUNTINGDON HUNTINGDON           129          762        633           2
-    #> 179 20180374 IRWIN        N HUNTINGDON HUNTINGDON           129          762        633           2
-    #> 180 2002171  NORRISTOWN   JEFFERSONVI… JEFFERSONVIL…          2          310        308           1
-    #> 181 2006168  NORRISTOWN   JEFFERSONVI… JEFFERSONVIL…          2          310        308           1
-    #> 182 7900259  LANCASTER    LANCASTERTER LANCASTER              1         5607       5606           3
-    #> 183 2015C02… READING      W LAWN       LAWN                  46          198        152           2
-    #> 184 20150015 READING      W LAWN       LAWN                  46          198        152           2
-    #> 185 20150078 READING      W LAWN       LAWN                  46          198        152           2
-    #> 186 20140445 READING      W LAWN       LAWN                  46          198        152           2
-    #> 187 9000335  READING      W LAWN       LAWN                  46          198        152           2
-    #> 188 7900405  READING      W LAWN       LAWN                  46          198        152           2
-    #> 189 7900263  READING      W LAWN       LAWN                  46          198        152           2
-    #> 190 20140117 READING      W LAWN       LAWN                  46          198        152           2
-    #> 191 8100246  READING      W LAWN       LAWN                  46          198        152           2
-    #> 192 9700164  READING      W LAWN       LAWN                  46          198        152           2
-    #> 193 8300256  READING      W LAWN       LAWN                  46          198        152           2
-    #> 194 2000081  READING      W LAWN       LAWN                  46          198        152           2
-    #> 195 9100219  READING      W LAWN       LAWN                  46          198        152           2
-    #> 196 9500243  READING      W LAWN       LAWN                  46          198        152           2
-    #> 197 2006014  READING      W LAWN       LAWN                  46          198        152           2
-    #> 198 7900442  READING      W LAWN       LAWN                  46          198        152           2
-    #> 199 2018C07… READING      W LAWN       LAWN                  46          198        152           2
-    #> 200 2006211  READING      W LAWN       LAWN                  46          198        152           2
-    #> 201 8600281  READING      W LAWN       LAWN                  46          198        152           2
-    #> 202 20150020 PITTSBURGH   E LIBERTY    LIBERTY                2           24         22           2
-    #> 203 2002072  NEW KENSING… LOWER BURER… LOWER BURRELL          1           74         73           1
-    #> 204 9600321  AMBLER       LOWER GWYNE… LOWER GWYNEDD          3          109        106           1
-    #> 205 9800210  PITTSBURGH   MC CANDLESS  MCCANDLESS             1            8          7           1
-    #> 206 8200038  MCCONNELLSB… MC CBG       MCCBG                  2           18         16           1
-    #> 207 7900343  MCCONNELLSB… MC BG        MCCBG                 13           18          5           1
-    #> 208 7900343  FT LITTLETON MC BG        MCCBG                 13           18          5           1
-    #> 209 7900343  MARION       MC BG        MCCBG                 13           18          5           1
-    #> 210 7900343  NEEDMORE     MC CONNELLS… MCCONNELLSBU…          3          209        206           1
-    #> 211 7900343  MARION       MC CONNELLS… MCCONNELLSBU…          3          209        206           1
-    #> 212 7900343  SALTILLO     MC CONNELLS… MCCONNELLSBU…          3          209        206           1
-    #> 213 2010389  E MCKEESPORT E MCKEESPORT MCKEESPORT            30         1280       1250           2
-    #> 214 9500250  E MCKEESPORT E MCKEESPORT MCKEESPORT            30         1280       1250           2
-    #> 215 20140199 FREDERICKTO… E MCKEESPORT MCKEESPORT            30         1280       1250           2
-    #> 216 9800084  E MCKEESPORT E MCKEESPORT MCKEESPORT            30         1280       1250           2
-    #> 217 20170068 E MCKEESPORT E MCKEESPORT MCKEESPORT            30         1280       1250           2
-    #> 218 2017C03… CANONSBURG   MC MURRAY    MCMURRAY              15          586        571           1
-    #> 219 20180183 CANONSBURG   MC MURRAY    MCMURRAY              15          586        571           1
-    #> 220 8000629  CANONSBURG   MC MURRAY    MCMURRAY              15          586        571           1
-    #> 221 7900298  CANONSBURG   MC MURRAY    MCMURRAY              15          586        571           1
-    #> 222 20170137 CANONSBURG   MC MURRAY    MCMURRAY              15          586        571           1
-    #> 223 8200637  ORVISTON     MILHEIM      MILLHEIM               1          135        134           1
-    #> 224 8000474  FOLSOM       MILMONT      MILLMONT              76            9        -67           1
-    #> 225 8100217  FOLSOM       MILMONT      MILLMONT              76            9        -67           1
-    #> 226 2016C03… PITTSBURGH   MT LEBANNON  MT LEBANON             1           64         63           1
-    #> 227 20150064 W NEWTON     W NEWTON     NEWTOWN              317         1995       1678           3
-    #> 228 9700309  W NEWTON     W NEWTON     NEWTOWN              317         1995       1678           3
-    #> 229 20140421 W NEWTON     W NEWTON     NEWTOWN              317         1995       1678           3
-    #> 230 2010427  W NEWTON     W NEWTON     NEWTOWN              317         1995       1678           3
-    #> 231 2008336  W NEWTON     W NEWTON     NEWTOWN              317         1995       1678           3
-    #> 232 20140201 W NEWTON     W NEWTON     NEWTOWN              317         1995       1678           3
-    #> 233 2005226  W NEWTON     W NEWTON     NEWTOWN              317         1995       1678           3
-    #> 234 8400326  W NEWTON     W NEWTON     NEWTOWN              317         1995       1678           3
-    #> 235 20150138 W NEWTON     W NEWTON     NEWTOWN              317         1995       1678           3
-    #> 236 2016C09… W NEWTON     W NEWTON     NEWTOWN              317         1995       1678           3
-    #> 237 8600238  W NEWTON     W NEWTON     NEWTOWN              317         1995       1678           3
-    #> 238 9500250  W NEWTON     W NEWTON     NEWTOWN              317         1995       1678           3
-    #> 239 20160071 W NEWTON     W NEWTON     NEWTOWN              317         1995       1678           3
-    #> 240 20160071 PITTSBURGH   W NEWTON     NEWTOWN              317         1995       1678           3
-    #> 241 8200237  W NEWTON     W NEWTON     NEWTOWN              317         1995       1678           3
-    #> 242 20130205 W NEWTON     W NEWTON     NEWTOWN              317         1995       1678           3
-    #> 243 8600169  W NEWTON     W NEWTON     NEWTOWN              317         1995       1678           3
-    #> 244 9600257  W NEWTON     W NEWTON     NEWTOWN              317         1995       1678           3
-    #> 245 20160129 W NEWTON     W NEWTON     NEWTOWN              317         1995       1678           3
-    #> 246 8000488  W NEWTON     W NEWTON     NEWTOWN              317         1995       1678           3
-    #> 247 2010389  W NEWTON     W NEWTON     NEWTOWN              317         1995       1678           3
-    #> 248 8600398  W NEWTON     W NEWTON     NEWTOWN              317         1995       1678           3
-    #> 249 9300158  W NEWTON     W NEWTON     NEWTOWN              317         1995       1678           3
-    #> 250 8900170  W NEWTON     W NEWTON     NEWTOWN              317         1995       1678           3
-    #> 251 7900369  W NEWTON     W NEWTON     NEWTOWN              317         1995       1678           3
-    #> 252 7900006  W NEWTON     W NEWTON     NEWTOWN              317         1995       1678           3
-    #> 253 7900188  W NEWTON     W NEWTON     NEWTOWN              317         1995       1678           3
-    #> 254 20160050 W NEWTON     W NEWTON     NEWTOWN              317         1995       1678           3
-    #> 255 7900117  W NEWTON     W NEWTON     NEWTOWN              317         1995       1678           3
-    #> 256 7900456  W NEWTON     W NEWTON     NEWTOWN              317         1995       1678           3
-    #> 257 7900202  W NEWTON     W NEWTON     NEWTOWN              317         1995       1678           3
-    #> 258 8200660  W NEWTON     W NEWTON     NEWTOWN              317         1995       1678           3
-    #> 259 2016C04… W NEWTON     W NEWTON     NEWTOWN              317         1995       1678           3
-    #> 260 7900160  W NEWTON     W NEWTON     NEWTOWN              317         1995       1678           3
-    #> 261 9200410  W NEWTON     W NEWTON     NEWTOWN              317         1995       1678           3
-    #> 262 7900650  W NEWTON     W NEWTON     NEWTOWN              317         1995       1678           3
-    #> 263 2006260  W NEWTON     W NEWTON     NEWTOWN              317         1995       1678           3
-    #> 264 2010427  WEBSTER      W NEWTON     NEWTOWN              317         1995       1678           3
-    #> 265 8000568  W NEWTON     W NEWTON     NEWTOWN              317         1995       1678           3
-    #> 266 2006101  W NEWTON     W NEWTON     NEWTOWN              317         1995       1678           3
-    #> 267 9400089  W NEWTON     W NEWTON     NEWTOWN              317         1995       1678           3
-    #> 268 20130191 W NEWTON     W NEWTON     NEWTOWN              317         1995       1678           3
-    #> 269 9500243  W NEWTON     W NEWTON     NEWTOWN              317         1995       1678           3
-    #> 270 8100158  W NEWTON     W NEWTON     NEWTOWN              317         1995       1678           3
-    #> 271 7900366  W NEWTON     W NEWTON     NEWTOWN              317         1995       1678           3
-    #> 272 20120373 W NEWTON     W NEWTON     NEWTOWN              317         1995       1678           3
-    #> 273 2002204  W NEWTON     W NEWTON     NEWTOWN              317         1995       1678           3
-    #> 274 20140200 W NEWTON     W NEWTON     NEWTOWN              317         1995       1678           3
-    #> 275 8100304  W NEWTON     W NEWTON     NEWTOWN              317         1995       1678           3
-    #> 276 8400338  W NEWTON     W NEWTON     NEWTOWN              317         1995       1678           3
-    #> 277 8200047  W NEWTON     W NEWTON     NEWTOWN              317         1995       1678           3
-    #> 278 2002265  W NEWTON     W NEWTON     NEWTOWN              317         1995       1678           3
-    #> 279 9000335  W NEWTON     W NEWTON     NEWTOWN              317         1995       1678           3
-    #> 280 7900387  W NEWTON     W NEWTON     NEWTOWN              317         1995       1678           3
-    #> 281 9000164  W NEWTON     W NEWTON     NEWTOWN              317         1995       1678           3
-    #> 282 7900079  W NEWTON     W NEWTON     NEWTOWN              317         1995       1678           3
-    #> 283 8000703  W NEWTON     W NEWTON     NEWTOWN              317         1995       1678           3
-    #> 284 20130237 W NEWTON     W NEWTON     NEWTOWN              317         1995       1678           3
-    #> 285 20110243 W NEWTON     W NEWTON     NEWTOWN              317         1995       1678           3
-    #> 286 20140166 W NEWTON     W NEWTON     NEWTOWN              317         1995       1678           3
-    #> 287 2007295  W NEWTON     W NEWTON     NEWTOWN              317         1995       1678           3
-    #> 288 9700285  W NEWTON     W NEWTON     NEWTOWN              317         1995       1678           3
-    #> 289 2006085  W NEWTON     W NEWTON     NEWTOWN              317         1995       1678           3
-    #> 290 8200529  W NEWTON     W NEWTON     NEWTOWN              317         1995       1678           3
-    #> 291 2000142  W NEWTON     W NEWTON     NEWTOWN              317         1995       1678           3
-    #> 292 20170058 W NEWTON     W NEWTON     NEWTOWN              317         1995       1678           3
-    #> 293 20160166 W NEWTON     W NEWTON     NEWTOWN              317         1995       1678           3
-    #> 294 2017C02… W NEWTON     W NEWTON     NEWTOWN              317         1995       1678           3
-    #> 295 20160352 W NEWTON     W NEWTON     NEWTOWN              317         1995       1678           3
-    #> 296 20160071 GREENSBURG   W NEWTON     NEWTOWN              317         1995       1678           3
-    #> 297 2018C11… W NEWTON     W NEWTON     NEWTOWN              317         1995       1678           3
-    #> 298 2018C11… HARRISBURG   W NEWTON     NEWTOWN              317         1995       1678           3
-    #> 299 8600109  W NEWTON     W NEWTON     NEWTOWN              317         1995       1678           3
-    #> 300 2010310  W NEWTON     W NEWTON     NEWTOWN              317         1995       1678           3
-    #> 301 8600065  W NEWTON     W NEWTON     NEWTOWN              317         1995       1678           3
-    #> 302 20190098 W NEWTON     W NEWTON     NEWTOWN              317         1995       1678           3
-    #> 303 20190058 W NEWTON     W NEWTON     NEWTOWN              317         1995       1678           3
-    #> 304 20190016 W NEWTON     W NEWTON     NEWTOWN              317         1995       1678           3
-    #> 305 20140113 W NEWTON     W NEWTON     NEWTOWN              317         1995       1678           3
-    #> 306 2019C03… W NEWTON     W NEWTON     NEWTOWN              317         1995       1678           3
-    #> 307 20160056 ONO          ONO          NON                  606         3250       2644           2
-    #> 308 2018C07… LOYSVILLE    ON           NON                55595         3250     -52345           1
-    #> 309 2010095  LANGHORNE    PENDEL       PENNDEL                2           85         83           1
-    #> 310 9500165  PHILADELPHIA PHIILA       PHILA                  1        83313      83312           1
-    #> 311 2010025  PHILADELPHIA PHILLA       PHILA                  1        83313      83312           1
-    #> 312 20180008 PHILADELPHIA PHILADEL     PHILADE            73984        73986          2           1
-    #> 313 7900117  PITTSBURGH   PITT         PIT                33711        33761         50           1
-    #> 314 2010389  PITTSBURGH   PLUMBORO     PLUM BORO              1            3          2           1
-    #> 315 2011150  NEW PROVIDE… QUARYVILLE   QUARRYVILLE            1          383        382           1
-    #> 316 2018C01… WELLSVILLE   E RED LION   RED LION               1          595        594           2
-    #> 317 9400092  BANGOR       ROSETTO      ROSETO                 2           21         19           1
-    #> 318 20120110 BELLE VERNON ROS TRAVER … ROSTRAVER TWP          1           34         33           1
-    #> 319 7900366  BELLE VERNON ROOSTRAVER … ROSTRAVER TWP          1           34         33           1
-    #> 320 20160233 WILLIAMSPORT WMSPT        S WMSPT                2            1         -1           2
-    #> 321 8800271  READING      SINKING SPGS SINKING SPG           24          199        175           1
-    #> 322 2007012  READING      SINKING SPGS SINKING SPG           24          199        175           1
-    #> 323 2004017  READING      SINKING SPGS SINKING SPG           24          199        175           1
-    #> 324 9700250  READING      SINKING SPGS SINKING SPG           24          199        175           1
-    #> 325 9700144  READING      SINKING SPGS SINKING SPG           24          199        175           1
-    #> 326 20120083 READING      SINKING SPGS SINKING SPG           24          199        175           1
-    #> 327 7900300  READING      SINKING SP   SINKING SPG          200          199         -1           1
-    #> 328 7900443  READING      SINKING SPGS SINKING SPG           24          199        175           1
-    #> 329 7900364  READING      SINKING SPGS SINKING SPG           24          199        175           1
-    #> 330 7900302  READING      SINKING SPGS SINKING SPG           24          199        175           1
-    #> 331 9200410  READING      SINKING SPGS SINKING SPG           24          199        175           1
-    #> 332 8400128  READING      SINKING SPGS SINKING SPG           24          199        175           1
-    #> 333 7900202  READING      SINKING SPGS SINKING SPG           24          199        175           1
-    #> 334 9700178  READING      SINKING SPGS SINKING SPG           24          199        175           1
-    #> 335 2000081  READING      SINKING SPGS SINKING SPG           24          199        175           1
-    #> 336 2002336  READING      SINKING SPGS SINKING SPG           24          199        175           1
-    #> 337 8600110  READING      SINKING SPGS SINKING SPG           24          199        175           1
-    #> 338 8000639  E SMETHPORT  E SMETHPORT  SMETHPORT              5           30         25           2
-    #> 339 2002121  E SMETHPORT  E SMETHPORT  SMETHPORT              5           30         25           2
-    #> 340 2015C01… E SMITHFIELD E SMITHFIELD SMITHFIELD            11           43         32           2
-    #> 341 9100275  E SMITHFIELD E SMITHFIELD SMITHFIELD            11           43         32           2
-    #> 342 8400421  MILAN        E SMITHFIELD SMITHFIELD            11           43         32           2
-    #> 343 20180026 E SMITHFIELD E SMITHFIELD SMITHFIELD            11           43         32           2
-    #> 344 7900491  SOUTHEASTERN SOUTHERN EA… SOUTHEASTERN          18         1578       1560           4
-    #> 345 9500250  SPG HOUSE    SSPRING HOU… SPRINGHOUSE            1           17         16           2
-    #> 346 9700178  HARRISBURG   STEELLTON    STEELTON               2          660        658           1
-    #> 347 9500250  HARRISBURG   STEELLTON    STEELTON               2          660        658           1
-    #> 348 20120153 CANONSBURG   N STRABANE   STRABANE               1            4          3           2
-    #> 349 2000213  PITTSBURGH   SWISVALE     SWISSVALE              1           58         57           1
-    #> 350 2004037  RUSSELL      TITTUSVILLE  TITUSVILLE             1           31         30           1
-    #> 351 9500237  MARCUS HOOK  UPPER HICHE… UPPER CHICHE…          1          263        262           1
-    #> 352 8100217  SPRINGFIELD  UPPERCHICHE… UPPER CHICHE…          1          263        262           1
-    #> 353 7900444  ASTON        UPPER CHICH… UPPER CHICHE…        264          263         -1           1
-    #> 354 9500250  PITTSBURGH   UPER ST CLA… UPPER ST CLA…          1          195        194           1
-    #> 355 7900443  PITTSBURGH   UPPER ST CL… UPPER ST CLA…          1          195        194           1
-    #> 356 7900406  PITTSBURGH   UPPER STCLA… UPPER ST CLA…          1          195        194           1
-    #> 357 20160062 E VANDERGRI… E VANDERGRI… VANDERGRIFT            3          177        174           2
-    #> 358 9400098  E VANDERGRI… E VANDERGRI… VANDERGRIFT            3          177        174           2
-    #> 359 20120022 WYOMING      W W          W                     31        85851      85820           2
-    #> 360 20160111 WILKES BARRE WB           W B                  118          427        309           1
-    #> 361 20120022 WILKES BARRE WB           W B                  118          427        309           1
-    #> 362 20170211 WILKES BARRE WB           W B                  118          427        309           1
-    #> 363 2019C00… N WASHINGTON N WASHINGTON WASHINGTON             1        11748      11747           2
-    #> 364 2002017  E WATERFORD  E WATERFORD  WATERFORD             15          102         87           2
-    #> 365 7900419  E WATERFORD  E WATERFORD  WATERFORD             15          102         87           2
-    #> 366 2018C09… E WATERFORD  E WATERFORD  WATERFORD             15          102         87           2
-    #> 367 7900374  E WATERFORD  E WATERFORD  WATERFORD             15          102         87           2
-    #> 368 9800029  E WATERFORD  E WATERFORD  WATERFORD             15          102         87           2
-    #> 369 20180125 E WATERFORD  E WATERFORD  WATERFORD             15          102         87           2
-    #> 370 20180134 E WATERFORD  E WATERFORD  WATERFORD             15          102         87           2
-    #> 371 8300167  ALLENTOWN    WESCOESVILLE WESCOSVILLE            8           45         37           1
-    #> 372 7900433  GRN LN       WESCOESVILLE WESCOSVILLE            8           45         37           1
-    #> 373 20120381 ALLENTOWN    WESCOESVILLE WESCOSVILLE            8           45         37           1
-    #> 374 7900433  CATASAUQUA   WESCOESVILLE WESCOSVILLE            8           45         37           1
-    #> 375 9400092  ALLENTOWN    WESCOESVILLE WESCOSVILLE            8           45         37           1
-    #> 376 9700250  PITTSBURGH   WILKES TOWN… WILKENS TOWN…          1            1          0           1
-    #> 377 7900488  ANTES FT     S WILLIAMSP… WILLIAMSPORT           1          913        912           2
+    #> # A tibble: 70 x 3
+    #>    city_swap        city_refine        n
+    #>    <chr>            <chr>          <int>
+    #>  1 SINKING SPRINGS  SINKING SPRING    23
+    #>  2 SOUTHERN EASTERN SOUTHEASTERN      18
+    #>  3 MC MURRAY        MCMURRAY          15
+    #>  4 MC BG            MCCBG             13
+    #>  5 PLEASANT MOUNT   MOUNT PLEASANT    12
+    #>  6 CLIFFORD         FORD CLIFF         8
+    #>  7 WESCOESVILLE     WESCOSVILLE        8
+    #>  8 EDDYSTON         EDDYSTONE          7
+    #>  9 BROMALL          BROOMALL           4
+    #> 10 CARSLISLE        CARLISLE           4
+    #> # … with 60 more rows
 
 Manually change the city\_refine fields due to overcorrection.
 
 ``` r
-st_pattern <- str_c("\\s",unique(zipcode$state), "$", collapse = "|")
-
-
 pa_refined$city_refine <- pa_refined$city_refine %>% 
   str_replace("^DU BOIS$", "DUBOIS") %>% 
   str_replace("^PIT$", "PITTSBURGH") %>% 
@@ -992,7 +574,6 @@ pa_refined$city_refine <- pa_refined$city_refine %>%
   str_replace("^FORD CLIFF$", "CLIFFORD") %>% 
   str_replace("^W\\sB$", "WILKES BARRE") 
 
-  
 
 refined_table <-pa_refined %>% 
   select(index, city_refine)
@@ -1004,22 +585,6 @@ refined_table <-pa_refined %>%
 pa <- pa %>% 
   left_join(refined_table, by ="index") %>% 
   mutate(city = coalesce(city_refine, city_swap)) 
-
-pa$city <- pa$city %>% 
-  str_replace("^MT PLEASANT$", "MOUNT PLEASANT") %>% 
-  str_replace("^ST\\s", "SAINT ") %>% 
-  str_replace("^MT\\s", "MOUNT ") %>%  
-  str_replace("^FT\\s", "FORT ") %>% 
-  str_replace("^W\\sB$|WB", "WILKES BARRE") %>% 
-  str_replace("\\sHTS$|\\sHGTS$", " HEIGHTS") %>% 
-  str_replace("\\sSQ$", " SQUARE") %>% 
-  str_replace("\\sSPGS$|\\sSPR$|\\sSPRG$", "  SPRINGS") %>% 
-  str_replace("\\sJCT$", " JUNCTION") %>% 
-  str_replace("^E\\s", "EAST ") %>% 
-  str_replace("^N\\s", "NORTH ") %>% 
-  str_replace("^W\\s", "WEST ") %>% 
-  str_remove(st_pattern) %>% 
-  str_remove("^X+$")
 ```
 
 ``` r
@@ -1032,6 +597,7 @@ pa_match_table <- pa %>%
   add_count(city_match) %>% 
   rename("sec_city_match" = "city_match")
 
+
 # Manually change overcorrected city names to original 
 pa_match_table$sec_city_match <- pa_match_table$sec_city_match %>% 
   str_replace("^ARLINGTON$", "ALEXANDRIA") %>% 
@@ -1041,6 +607,7 @@ pa_match_table$sec_city_match <- pa_match_table$sec_city_match %>%
   str_replace("HAZLETON", "HAZLE TOWNSHIP") %>% 
   str_replace("DANIA", "DANIA BEACH") %>% 
   str_replace("CRANBERRY TWP", "CRANBERRY TOWNSHIP")
+
 
 pa_match_table[pa_match_table$city == "HOLLIDASBURG", "city_match"] <- "HOLLIDAYSBURG"
 pa_match_table[pa_match_table$city == "PENN HELLE", "city_match"] <- "PENN HILLS"
@@ -1054,6 +621,7 @@ pa_match_table[pa_match_table$city == "MOUNTVIEW", "city_match"] <- "MOUNT VIEW"
 pa_match_table[pa_match_table$city == "PLUM BORO", "city_match"] <- "PLUM"
 pa_match_table[pa_match_table$city == "HAZELTON CITY", "city_match"] <- "HAZLE TOWNSHIP"
 pa_match_table[pa_match_table$city == "BARNSVILLE", "city_match"] <- "BARNESVILLE"
+
 
 keep_original <- c( "SHOREVIEW" ,
    "CUYAHOGA" ,
@@ -1085,41 +653,48 @@ keep_original <- c( "SHOREVIEW" ,
    "MIAMI SPRINGS" ,
    "BROOKLYN PARK" )
 
+
 pa_match_table[pa_match_table$city %in% keep_original,"sec_city_match"] <-
   pa_match_table[pa_match_table$city %in% keep_original,"city"]
+
+
 
 
 pa <-pa %>% 
   left_join(select(pa_match_table, index, sec_city_match), by = "index") %>% mutate(city_clean = coalesce(sec_city_match, city))
 
+
 pa$city_clean <- pa$city_clean %>% str_replace("\\sTWP$", " TOWNSHIP")
+
 
 n_distinct(pa$city_clean[pa$city_clean %out% valid_city])
 ```
 
-    #> [1] 934
+    #> [1] 917
+
+Lastly, we'll make some manual changes to the data.
 
 ``` r
-valid_city <- unique(c(valid_city, pa_match_table$sec_city_match))
+pa_out <- pa %>% filter(city %out% valid_city) 
+
 
 pa_city_lookup <- read_csv(file = here("pa", "expends", "data", "raw", "pa_city_lookup.csv"), col_names = c("city", "city_lookup", "changed", "count"))
 
-pa_out <- pa %>% 
-  count( city_clean, sort = TRUE) %>% 
-  filter(city_clean %out% valid_city) 
 
-pa_out <- pa_out %>% left_join(pa_city_lookup, by = c("city_clean" = "city")) %>% filter(city_clean != city_lookup | is.na(city_lookup) == T ) %>% drop_na(city_clean)
+pa_out <- pa_out %>% select(index, CITY) %>% 
+  inner_join(pa_city_lookup, by = c("CITY" = "city")) %>% 
+  drop_na(CITY) %>% 
+  select(-changed, -CITY, -count) %>% 
+  distinct() 
 
 
-pa <- pa %>% left_join(pa_out, by = "city_clean") %>% mutate(city_final = ifelse(
-  is.na(city_lookup) == TRUE,
-  NA,
-  coalesce(city_lookup, city_clean))) 
+pa <- pa %>% left_join(pa_out, by = "index") %>% mutate(city_final = ifelse(pa$index %in% pa_out$index, city_lookup,city))
 
 pa$city_final <- pa$city_final %>% str_replace("^\\sTWP$", " TOWNSHIP")
 
 pa[pa$index == which(pa$city_final == "MA"),8:9] <- c("LEXINGTON", "MA")
-pa[pa$index == which(pa$city_final == "L"),8] <- c("LOS ANGELES")
+pa[pa$index == {which(pa$city_final == "L")[1]},8] <- c("LOS ANGELES")
+pa[pa$index == {which(pa$city_final == "L")[2]},8] <- c("LOS ANGELES")
 pa[pa$index %in% which(pa$city_final %in% c("PA", "NJ")), 8] <- ""
 pa[pa$index == "319505", 8] <- "HARRISBURG"
 ```
@@ -1128,31 +703,245 @@ Each process also increases the percent of valid city names.
 
 ``` r
 prop_in(pa$CITY, valid_city, na.rm = TRUE)
-#> [1] 0.8692647
+#> [1] 0.9308741
 prop_in(pa$city_prep, valid_city, na.rm = TRUE)
-#> [1] 0.9435455
+#> [1] 0.9397328
 prop_in(pa$city_swap, valid_city, na.rm = TRUE)
-#> [1] 0.9549554
+#> [1] 0.9496889
 prop_in(pa$city, valid_city, na.rm = TRUE)
-#> [1] 0.9323915
+#> [1] 0.9499012
 prop_in(pa$city_clean, valid_city, na.rm = TRUE)
-#> [1] 0.9774069
+#> [1] 0.971376
 prop_in(pa$city_final, valid_city, na.rm = TRUE)
-#> [1] 0.7707594
+#> [1] 0.9715765
 ```
 
-Each step of the cleaning process reduces the number of distinct city values. There are 481469 with 6218 distinct values, after the swap and refine processes, there are 480546 entries with 4053 distinct values.
+``` r
+if (all_files_new(path = raw_dir, glob = "*.txt")) {
+  for (i in seq_along(zip_files)) {
+    unzip(
+      zipfile = zip_files[i],
+      #Matches the csv files that start with "filer", and trim the "./ " from directory names
+      files = grep("filer.+", unzip(zip_files[i]), value = TRUE) %>% substring(3,),
+      exdir = glue(raw_dir,"/filer")
+    )
+  }
+}
+
+
+filer_files <- list.files(raw_dir, pattern = "filer.+", recursive = TRUE, full.names = TRUE)
+
+filer_fields <- c("FILERID", "EYEAR", "CYCLE", "AMMEND", "TERMINATE", "FILERTYPE", "FILERNAME", "OFFICE", "DISTRICT", "PARTY", "ADDRESS1", "ADDRESS2", "CITY", "STATE", "ZIPCODE", "COUNTY", "PHONE", "BEGINNING", "MONETARY", "INKIND")
+
+pa_filer <- filer_files %>% 
+  map(read_delim, delim = ",", escape_double = FALSE,
+      escape_backslash = TRUE, col_names = filer_fields, 
+      col_types = cols(.default = col_character(),
+                       CYCLE = col_integer(),
+                       EYEAR = col_integer(),
+                       BEGINNING = col_double(),
+                       MONETARY = col_double(),
+                       INKIND = col_double()
+                       )) %>% 
+  bind_rows() %>% 
+  mutate_if(is_character, str_to_upper)
+
+pa_filer <- pa_filer %>% mutate(zip_clean = normal_zip(pa_filer$ZIPCODE))
+
+glimpse(pa_filer)
+```
+
+    #> Observations: 33,986
+    #> Variables: 21
+    #> $ FILERID   <chr> "2008291", "20150285", "2006371", "2007295", "8000489", "8700115", "2002295", …
+    #> $ EYEAR     <int> 2015, 2015, 2015, 2015, 2015, 2015, 2015, 2015, 2015, 2015, 2015, 2015, 2015, …
+    #> $ CYCLE     <int> 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 7, 7, 6, 7, 7, 7, 7, 7, 7, 7, 7, …
+    #> $ AMMEND    <chr> "N", "N", "N", "N", "N", "N", "N", "N", "N", "N", "N", "N", "N", "N", "N", "N"…
+    #> $ TERMINATE <chr> "N", "N", "N", "N", "N", "N", "N", "N", "N", "N", "N", "N", "N", "N", "N", "N"…
+    #> $ FILERTYPE <chr> "2", "2", "2", "2", "2", "2", "2", "2", "2", "2", "2", "2", "2", "2", "2", "2"…
+    #> $ FILERNAME <chr> "FRANKLIN COUNTY REAGAN COALITION", "NEXTGEN CLIMATE ACTION COMMITTEE", "ZARWI…
+    #> $ OFFICE    <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
+    #> $ DISTRICT  <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
+    #> $ PARTY     <chr> NA, NA, NA, NA, NA, NA, NA, "REP", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
+    #> $ ADDRESS1  <chr> "P.O. BOX 240", "700 13TH STREET NW", "1818 MARKET STREET", "C/O TREASURER BRI…
+    #> $ ADDRESS2  <chr> NA, "SUITE 600", "13TH FLOOR", "ONE FREEDOM SQUARE, 11951 FREEDOM DRIVE, 13TH …
+    #> $ CITY      <chr> "MARION", "WASHINGTON", "PHILADELPHIA", "RESTON", "HORSHAM", "WASHINGTON", "PH…
+    #> $ STATE     <chr> "PA", "DC", "PA", "VA", "PA", "DC", "PA", "PA", "PA", "PA", "PA", "PA", "PA", …
+    #> $ ZIPCODE   <chr> "17235", "20005", "19103", "20190", "19044", "20001", "191541003", "17901", "1…
+    #> $ COUNTY    <chr> NA, NA, NA, NA, NA, NA, NA, "54", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
+    #> $ PHONE     <chr> "7172670032", NA, "2155692800", "7038604194", "2159388000", "2024197053", "215…
+    #> $ BEGINNING <dbl> 22116.63, 0.00, 736.77, 885319.13, 206155.84, 274293.06, 34693.91, 9565.69, 14…
+    #> $ MONETARY  <dbl> 8.00, 0.00, 0.00, 0.00, 0.00, 0.00, 1531.00, 375.00, 0.00, 0.00, 0.00, 5165.00…
+    #> $ INKIND    <dbl> 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, …
+    #> $ zip_clean <chr> "17235", "20005", "19103", "20190", "19044", "20001", "19154", "17901", "19047…
+
+``` r
+tabyl(pa_filer$STATE)
+```
+
+    #> # A tibble: 34 x 4
+    #>    `pa_filer$STATE`     n  percent valid_percent
+    #>    <chr>            <dbl>    <dbl>         <dbl>
+    #>  1 AL                   5 0.000147      0.000147
+    #>  2 AR                   7 0.000206      0.000206
+    #>  3 AZ                  11 0.000324      0.000324
+    #>  4 CA                  68 0.00200       0.00200 
+    #>  5 CO                  23 0.000677      0.000678
+    #>  6 CT                  36 0.00106       0.00106 
+    #>  7 DC                1020 0.0300        0.0301  
+    #>  8 DE                  51 0.00150       0.00150 
+    #>  9 FL                  29 0.000853      0.000855
+    #> 10 GA                  21 0.000618      0.000619
+    #> # … with 24 more rows
+
+``` r
+pa_filer <- pa_filer %>% mutate(city_prep = normal_city(city = CITY, 
+                                                          geo_abbs = usps_city,
+                                            st_abbs = c(valid_state),
+                                            na = invalid_city,
+                                            na_rep = TRUE))
+pa_filer <- tibble::rowid_to_column(pa_filer, "index")
+
+pa_filer$FILERNAME <- pa_filer$FILERNAME %>%  str_replace("&AMP;", "&") 
+
+# Match
+pa_filer <- pa_filer %>%
+  left_join(
+    y = zipcode,
+    by = c(
+      "zip_clean" = "zip",
+      "STATE" = "state"
+    )
+  ) %>% 
+  rename(city_match = city)
+# Swap
+pa_filer <- pa_filer %>% 
+mutate(
+    match_dist = stringdist(city_match, city_prep),
+    city_swap = if_else(
+      condition = !is.na(match_dist) & match_dist <= 2,
+      true = city_match,
+      false = city_prep
+    )
+  )
+
+# Refine
+pa_filer_refined <- pa_filer %>%
+  filter(match_dist != 1) %>% 
+  filter(STATE =="PA") %>% 
+  mutate(
+    city_refine = city_swap %>% 
+      key_collision_merge(dict = valid_city) %>% 
+      n_gram_merge(numgram = 2),
+    refined = (city_swap != city_refine)
+  ) %>% 
+  filter(refined) %>% 
+  select(
+    index,
+    FILERID, 
+    CITY,
+    city_prep,
+    city_match,
+    city_swap,
+    match_dist,
+    city_refine,
+    STATE, 
+    ZIPCODE,
+    zip_clean
+  )
+
+pa_filer_refined %>% 
+  count(city_swap, city_refine) %>% 
+  arrange(desc(n))
+```
+
+    #> # A tibble: 4 x 3
+    #>   city_swap     city_refine        n
+    #>   <chr>         <chr>          <int>
+    #> 1 CHESTER BROOK CHESTERBROOK       7
+    #> 2 MC CBG        MCCBG              2
+    #> 3 MILLMONT PARK MILMONT PARK       1
+    #> 4 NEW           NEW ENTERPRISE     1
+
+``` r
+pa_filer_refined$city_refine <- pa_filer_refined$city_refine %>% 
+  str_replace("^MCCBG$", "MCCONNELLSBURG")
+
+
+filer_refined_table <-pa_filer_refined %>% 
+  select(index, city_refine)
+
+pa_filer <- pa_filer %>% 
+  left_join(filer_refined_table, by ="index") %>% 
+  mutate(city = coalesce(city_refine, city_swap)) 
+
+prop_in(pa_filer$CITY, valid_city, na.rm = TRUE)
+```
+
+    #> [1] 0.7217363
+
+``` r
+prop_in(pa_filer$f_city_prep, valid_city, na.rm = TRUE)
+```
+
+    #> [1] NaN
+
+``` r
+prop_in(pa_filer$city_swap, valid_city, na.rm = TRUE)
+```
+
+    #> [1] 0.9621286
+
+``` r
+prop_in(pa_filer$city, valid_city, na.rm = TRUE)
+```
+
+    #> [1] 0.9622169
+
+``` r
+pa_filer <- pa_filer %>% 
+  unite(
+    ADDRESS1, ADDRESS2,
+    col = address_clean,
+    sep = " ",
+    remove = FALSE,
+    na.rm = TRUE
+  ) %>% 
+  mutate(
+    address_clean = normal_address(
+      address = address_clean,
+      add_abbs = usps_city,
+      na_rep = TRUE
+    )
+  ) %>% 
+  select(
+    everything(),
+    address_clean
+  )
+
+
+
+pa <- pa_filer %>% 
+  select(FILERID, EYEAR, CYCLE, FILERNAME, address_clean, zip_clean, city, STATE) %>% 
+  rename(filer_address_clean = address_clean,
+         filer_zip_clean = zip_clean,
+         filer_city = city,
+         filer_state = STATE) %>% 
+  right_join(pa, pa_filer, by = c("FILERID", "EYEAR", "CYCLE"))
+```
+
+Each step of the cleaning process reduces the number of distinct city values. There are 487014 with 6215 distinct values, after the swap and refine processes, there are 486155 entries with 4051 distinct values.
 
 Conclude
 --------
 
-1.  There are 493025 records in the database
-2.  There are 6999 records with suspected duplicate filerID, recipient, date, *and* amount (flagged with `dupe_flag`)
+1.  There are 498582 records in the database
+2.  There are 7801 records with suspected duplicate filerID, recipient, date, *and* amount (flagged with `dupe_flag`)
 3.  The ranges for dates and amounts are reasonable
 4.  Consistency has been improved with `stringr` package and custom `normal_*()` functions.
 5.  The five-digit `zip_clean` variable has been created with `zipcode::clean.zipcode()`
 6.  The `year` variable has been created with `lubridate::year()`
-7.  There are 11556 records with missing `city` values and 124 records with missing `payee` values (both flagged with the `na_flag`).
+7.  There are 11568 records with missing `city` values and 125 records with missing `payee` values (both flagged with the `na_flag`).
 
 Export
 ------
@@ -1173,10 +962,7 @@ pa %>%
     -city_clean,
     -city_lookup,
     -sec_city_match,
-    -n,
-    -changed,
-    -city,
-    -count
+    -city
   ) %>% 
   write_csv(
     path = glue("{clean_dir}/pa_expends_clean.csv"),
