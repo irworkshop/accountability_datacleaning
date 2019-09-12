@@ -49,8 +49,8 @@ This document describes the process used to complete the following objectives:
 1. Check ranges
 1. Is there anything blank or missing?
 1. Check for consistency issues
-1. Create a five-digit `zip` Code variable
-1. Create a `year` variable from the transaction date
+1. Create a five-digit ZIP Code called `ZIP5`
+1. Create a `YEAR` field from the transaction date
 1. Make sure there is data on both parties to a transaction
 
 ## Packages
@@ -58,46 +58,28 @@ This document describes the process used to complete the following objectives:
 The following packages are needed to collect, manipulate, visualize, analyze, and communicate
 these results. The `pacman` package will facilitate their installation and attachment.
 
-```{r p_load, message=FALSE, dfrning=FALSE, error=FALSE}
+The IRW's `campfin` package will also have to be installed from GitHub. This package contains
+functions custom made to help facilitate the processing of campaign finance data.
+
+```{r load_packages, message=FALSE, dfrning=FALSE, error=FALSE}
 if (!require("pacman")) install.packages("pacman")
+pacman::p_load_current_gh("kiernann/campfin")
 pacman::p_load(
   stringdist, # levenshtein value
-  tidyverse, # data manipulation
   RSelenium, # remote browser
+  tidyverse, # data manipulation
   lubridate, # datetime strings
   tidytext, # string analysis
   magrittr, # pipe opperators
   janitor, # dataframe clean
-  zipcode, # clean & database
   refinr, # cluster and merge
+  scales, # format strings
   knitr, # knit documents
+  vroom, # read files fast
   glue, # combine strings
   here, # relative storage
   fs # search storage 
 )
-```
-
-```{r fix_fun, echo=FALSE}
-# fix conflict
-here <- here::here
-# custom utility functions
-"%out%" <- Negate("%in%")
-print_all <- function(df) df %>% print(n = nrow(.)) 
-# source functions
-source(here("R", "code", "normalize_geo.R"))
-source(here("R", "code", "all_files_new.R"))
-source(here("R", "code", "glimpse_fun.R"))
-# load data
-data("zipcode")
-zipcode <-
-  as_tibble(zipcode) %>% 
-  select(city, state, zip) %>% 
-  mutate(
-    city = normalize_city(
-      city = city,
-      geo_abbs = read_csv(here("R", "data", "city_abvs.csv"))
-    )
-  )
 ```
 
 This document should be run as part of the `R_campfin` project, which lives as a sub-directory of
@@ -358,29 +340,12 @@ fl %>%
 
 ### Duplicates
 
-The `janitor::get_dupes()` function can locate records with duplicate values across every variable.
+The `flag_dupes()` function can flag records with duplicate values across every variable.
 
 ```{r get_dupes, collapse=TRUE}
-fl_dupes <- fl %>% 
-  get_dupes() %>% 
-  distinct() %>% 
-  mutate(dupe_flag = TRUE)
-
-nrow(fl_dupes)
-mean(fl_dupes$dupe_count)
-max(fl_dupes$dupe_count)
-sum(fl_dupes$dupe_count)
-```
-
-This data frame of duplicate records can then be flagged on the original database.
-
-```{r join_dupes}
-fl <- fl %>% 
-  left_join(fl_dupes) %>% 
-  mutate(
-    dupe_count = if_else(is.na(dupe_count), 0L, dupe_count),
-    dupe_flag = !is.na(dupe_flag)
-    )
+fl <- flag_dupes(fl, everything())
+sum(fl$dupe_flag)
+mean(fl$dupe_flag)
 ```
 
 ### Missing
@@ -391,13 +356,11 @@ There are a number of rows missing key information.
 fl %>% glimpse_fun(count_na)
 ```
 
-These rows will be flagged with a new `na_flag` variable.
+The `flag_na()` function can flag records missing values key values in any key variable.
 
 ```{r flag_na}
-fl <- fl %>% 
-  mutate(
-    na_flag = is.na(candidate_committee) | is.na(date) | is.na(amount) | is.na(payee_name)
-  )
+fl <- flag_na(fl, payee_name, candidate_committee, date, amount)
+sum(fl$na_flag)
 ```
 
 ## Clean
@@ -427,7 +390,14 @@ The database seems to use repeating astricks characters as `NA` values. We can r
 with a single repeating character.
 
 ```{r norm_address}
-fl %<>% mutate(address_clean = normalize_address(address, na_rep = TRUE))
+fl <- fl %>% 
+  mutate(
+    address_clean = normal_address(
+      address = address,
+      add_abbs = usps_street,
+      na_rep = TRUE
+    )
+  )
 ```
 
 ### Zip
@@ -437,41 +407,35 @@ sample(fl$zip_sep[which(nchar(fl$zip_sep) != 5)], 10)
 ```
 
 ```{r norm_zip}
-fl %<>% mutate(zip_clean = normalize_zip(zip_sep, na_rep = TRUE))
+fl <- fl %>% mutate(zip_clean = normal_zip(zip_sep, na_rep = TRUE))
+```
+
+```{r prop_valid_zip}
+prop_in(fl$zip_clean, valid_zip)
 ```
 
 ### State
 
 ```{r bad_state, collapse=TRUE}
-valid_state <- c(unique(zipcode$state), "ON", "BC", "QC", "NB", "AB")
 n_distinct(fl$state_sep)
-mean(fl$state_sep %in% valid_state)
-sum(fl$state_sep %out% valid_state)
+prop_in(fl$state_sep, valid_state)
+count_out(fl$state_sep, valid_state)
 sample(unique(na.omit(fl$state_sep[fl$state_sep %out% valid_state])), 20)
 ```
 
 ```{r norm_state}
-fl %<>% mutate(
-  state_clean = normalize_state(
+fl <- fl %>% mutate(
+  state_clean = normal_state(
     state = state_sep,
-    expand = TRUE,
-    na = c("", "XC")
+    abbreviate = TRUE,
+    valid = valid_state
   )
 )
-```
-
-```{r still_bad_state, collapse=TRUE}
-unique(fl$state_clean[which(fl$state_clean %out% valid_state)])
-fl$state_clean[which(fl$state_clean == "F")] <- "FL"
-fl$state_clean[which(fl$state_clean %out% valid_state)] <- NA
-n_distinct(fl$state_clean)
 ```
 
 ### City
 
 ```{r bad_city, collapse=TRUE}
-valid_city <- unique(zipcode$city)
-
 n_distinct(fl$city_sep)
 
 mean(fl$city_sep %in% valid_city)
@@ -486,11 +450,11 @@ sample(unique(na.omit(fl$city_sep[fl$city_sep %out% valid_city])), 20)
 ```{r norm_city}
 fl <- fl %>% 
   mutate(
-    city_norm = normalize_city(
+    city_norm = normal_city(
       city = city_sep,
       na_rep = TRUE,
-      state_abbs = c("FL", "DC"),
-      geo_abbs = read_csv(here("R", "data", "city_abvs.csv"))
+      st_abbs = c("FL", "DC"),
+      geo_abbs = usps_city
     )
   )
 
@@ -502,7 +466,7 @@ n_distinct(fl$city_norm)
 ```{r match_city}
 fl <- fl %>% 
   left_join(
-    y = zipcode, 
+    y = zipcodes, 
     by = c(
       "zip_clean" = "zip", 
       "state_clean" = "state"
@@ -562,6 +526,19 @@ n_distinct(fl$city_swap)
 n_distinct(fl$city_clean)
 ```
 
+## Lookup
+
+```{r lookup}
+lookup <- read_csv("fl/expends/data/fl_city_lookup.csv")
+fl <- left_join(fl, select(lookup, 1, 2))
+```
+
+```{r}
+n_distinct(fl$city_new)
+prop_in(fl$city_new, valid_city)
+count_out(fl$city_new, valid_city)
+```
+
 ## Export
 
 ```{r write_clean}
@@ -577,11 +554,14 @@ fl %>%
     -city_norm,
     -city_match,
     -match_dist,
-    -city_swap
+    -city_swap,
+    -city_clean
   ) %>% 
   write_csv(
     path = glue("{clean_dir}/fl_expends_clean.csv"),
     na = ""
   )
 ```
+
+
 

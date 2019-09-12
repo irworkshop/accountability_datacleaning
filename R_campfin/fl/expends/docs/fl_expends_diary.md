@@ -1,7 +1,7 @@
 Florida Expenditures
 ================
 Kienan Nicholls
-2019-07-10 16:16:33
+2019-09-12 10:50:38
 
   - [Project](#project)
   - [Objectives](#objectives)
@@ -10,6 +10,7 @@ Kienan Nicholls
   - [Import](#import)
   - [Explore](#explore)
   - [Clean](#clean)
+  - [Lookup](#lookup)
   - [Export](#export)
 
 ## Project
@@ -37,8 +38,8 @@ objectives:
 3.  Check ranges
 4.  Is there anything blank or missing?
 5.  Check for consistency issues
-6.  Create a five-digit `zip` Code variable
-7.  Create a `year` variable from the transaction date
+6.  Create a five-digit ZIP Code called `ZIP5`
+7.  Create a `YEAR` field from the transaction date
 8.  Make sure there is data on both parties to a transaction
 
 ## Packages
@@ -47,19 +48,25 @@ The following packages are needed to collect, manipulate, visualize,
 analyze, and communicate these results. The `pacman` package will
 facilitate their installation and attachment.
 
+The IRW’s `campfin` package will also have to be installed from GitHub.
+This package contains functions custom made to help facilitate the
+processing of campaign finance data.
+
 ``` r
 if (!require("pacman")) install.packages("pacman")
+pacman::p_load_current_gh("kiernann/campfin")
 pacman::p_load(
   stringdist, # levenshtein value
-  tidyverse, # data manipulation
   RSelenium, # remote browser
+  tidyverse, # data manipulation
   lubridate, # datetime strings
   tidytext, # string analysis
   magrittr, # pipe opperators
   janitor, # dataframe clean
-  zipcode, # clean & database
   refinr, # cluster and merge
+  scales, # format strings
   knitr, # knit documents
+  vroom, # read files fast
   glue, # combine strings
   here, # relative storage
   fs # search storage 
@@ -256,42 +263,42 @@ head(fl)
 ```
 
     #> # A tibble: 6 x 8
-    #>   candidate_committee    date       amount payee_name    address     city_state_zip  purpose  type 
-    #>   <chr>                  <date>      <dbl> <chr>         <chr>       <chr>           <chr>    <chr>
-    #> 1 ACKERMAN, PAUL J (REP… 2008-01-01   15.0 STAPLES       1950 STATE… OVIEDO, FL 327… OFFICE … MON  
-    #> 2 ADKINS, JANET H. (REP… 2008-01-01   30   PAY PAL, INC. 2145 HAMIL… SAN JOSE, CA    SERVICE… MON  
-    #> 3 FLORIDA JUSTICE PAC (… 2008-01-01   30   REGIONS BANK  2000 CAPIT… TALLAHASSEE, F… BANK FE… MON  
-    #> 4 CITIZENS SPEAKING OUT… 2008-01-01 2000   DSI, INC      PO BOX 126… GAINESVILLE, F… CONSULT… MON  
-    #> 5 CITIZENS SPEAKING OUT… 2008-01-01 9000   DATA TARGETI… 6211 NW 13… GAINESVILLE, F… CONSULT… MON  
-    #> 6 FLORIDA HOMETOWN DEMO… 2008-01-01   48.5 RACEWAY       INT'L SPEE… DAYTONA BEACH,… GAS      MON
+    #>   candidate_committee date       amount payee_name   address      city_state_zip  purpose     type 
+    #>   <chr>               <date>      <dbl> <chr>        <chr>        <chr>           <chr>       <chr>
+    #> 1 MERRITT, KEITH P. … 2008-05-01  550   SWEENEY, JA… 1038 COSMOS… LAKELAND, FL 3… YARD SIGNS  MON  
+    #> 2 MERRITT, KEITH P. … 2008-08-02   34.1 LAWPAY       3700 N CAPI… AUSTIN, TX 787… MERCHANT S… MON  
+    #> 3 MORRIS, ROBERT  (N… 2013-09-30   12   SUNTRUST BA… PO BOX 3051… NASHVILLE, TN … BANK FEE    MON  
+    #> 4 RICHARDSON, DAVID … 2014-07-21   98.9 DELUXE CORP… 3680 VICTOR… SHOREVIEW, MN … CHECKS      MON  
+    #> 5 BRACY, RANDOLPH  (… 2014-09-23  500   ORANGE CO. … P. O. BOX 1… ORLANDO, FL 32… DEC GALA    MON  
+    #> 6 BRACY, RANDOLPH  (… 2014-09-24  500   EAST WINTER… 830 KLONDIK… WINTER GARDEN,… GALA SPONS… MON
 
 ``` r
 tail(fl)
 ```
 
     #> # A tibble: 6 x 8
-    #>   candidate_commit… date       amount payee_name    address       city_state_zip  purpose     type 
-    #>   <chr>             <date>      <dbl> <chr>         <chr>         <chr>           <chr>       <chr>
-    #> 1 FLORIDA CUPAC (C… 9919-12-03   5    99FLORIDA DE… POST OFFICE … TALLAHASSEE,  … ONHOLIDAY … X    
-    #> 2 FLORIDA CUPAC (C… 9919-12-03   5    99LAURENT, J… FLORIDA HOUS… BARTOW,  FL338  ONRE-ELECT… X    
-    #> 3 FLORIDA CUPAC (C… 9919-12-03   2.5  99FARKAS, FR… FLORIDA HOUS… SAINT PETERSBU… ONRE-ELECT… X    
-    #> 4 FLORIDA CUPAC (C… 9919-12-20   2.5  99DOBSON, MI… THE MICHAEL … TALLAHASSEE,  … ONELECTION… X    
-    #> 5 FLORIDA CUPAC (C… 9919-12-20  15    99SENATE MAJ… PO BOX 311    TALLAHASSEE,  … ONSUGAR BO… X    
-    #> 6 FLORIDA CUPAC (C… 9919-12-31   0.12 99SOUTHEAST … 3555 COMMONW… TALLAHASSEE,  … ONCU CHARG… X
+    #>   candidate_committee date        amount payee_name  address    city_state_zip  purpose       type 
+    #>   <chr>               <date>       <dbl> <chr>       <chr>      <chr>           <chr>         <chr>
+    #> 1 GRAHAM, GWEN  (DEM… 2019-08-20 34967.  DEPARTMENT… 500 S. BR… TALLAHASSEE, F… RETURNING MA… DIS  
+    #> 2 BODDICKER, JENNIFE… 2019-09-28    19.1 STRIPE      510 TOWNS… SAN FRANCISCO,… STRIPE PROCE… MON  
+    #> 3 BROWN, REGINALD LA… 2019-09-30    40   BROWN, REG… 3063 RAY … JACKSONVILLE, … REFUNDED REM… DIS  
+    #> 4 GILLUM, ANDREW  (D… 2019-10-26    35.0 ZOOM.US     55 ALMADE… SAN JOSE, CA 9… SOFTWARE EXP… X    
+    #> 5 KEEP FLORIDA STRON… 2019-10-31    25   REGIONS BA… 517 W MOR… WINTER PARK, F… BANK FEE      MON  
+    #> 6 SHEELEY, VITO D. (… 3018-08-27  1000   MINIER, MA… 201 5TH S… ST PETERSBURG,… CAMPAIGN MAN… MON
 
 ``` r
 glimpse(fl)
 ```
 
-    #> Observations: 814,775
+    #> Observations: 172,352
     #> Variables: 8
-    #> $ candidate_committee <chr> "ACKERMAN, PAUL J (REP)(STR)", "ADKINS, JANET H. (REP)(STR)", "FLORI…
-    #> $ date                <date> 2008-01-01, 2008-01-01, 2008-01-01, 2008-01-01, 2008-01-01, 2008-01…
-    #> $ amount              <dbl> 14.97, 30.00, 30.00, 2000.00, 9000.00, 48.51, 43.55, 46.05, 200.00, …
-    #> $ payee_name          <chr> "STAPLES", "PAY PAL, INC.", "REGIONS BANK", "DSI, INC", "DATA TARGET…
-    #> $ address             <chr> "1950 STATE RD 426", "2145 HAMILTON AVENUE", "2000 CAPITAL CIRCLE NE…
-    #> $ city_state_zip      <chr> "OVIEDO, FL 32765", "SAN JOSE, CA", "TALLAHASSEE, FL 32308", "GAINES…
-    #> $ purpose             <chr> "OFFICE SUPPLIES", "SERVICE CHARGE", "BANK FEES", "CONSULTING", "CON…
+    #> $ candidate_committee <chr> "MERRITT, KEITH P. (NOP)(CTJ)", "MERRITT, KEITH P. (NOP)(CTJ)", "MOR…
+    #> $ date                <date> 2008-05-01, 2008-08-02, 2013-09-30, 2014-07-21, 2014-09-23, 2014-09…
+    #> $ amount              <dbl> 550.00, 34.11, 12.00, 98.91, 500.00, 500.00, 300.00, 1383.44, 212.99…
+    #> $ payee_name          <chr> "SWEENEY, JAMES", "LAWPAY", "SUNTRUST BANK", "DELUXE CORPORATION", "…
+    #> $ address             <chr> "1038 COSMOS DRIVE", "3700 N CAPITAL OF TEXAS HWY SUITE 300", "PO BO…
+    #> $ city_state_zip      <chr> "LAKELAND, FL 33813", "AUSTIN, TX 78746", "NASHVILLE, TN 37230", "SH…
+    #> $ purpose             <chr> "YARD SIGNS", "MERCHANT SERVICES - BANKCARD SERVICES", "BANK FEE", "…
     #> $ type                <chr> "MON", "MON", "MON", "MON", "MON", "MON", "MON", "MON", "MON", "MON"…
 
 ### Categorical
@@ -304,16 +311,16 @@ fl %>% glimpse_fun(n_distinct)
 ```
 
     #> # A tibble: 8 x 4
-    #>   var                 type       n         p
-    #>   <chr>               <chr>  <int>     <dbl>
-    #> 1 candidate_committee chr     6830 0.00838  
-    #> 2 date                date    3757 0.00461  
-    #> 3 amount              dbl   109834 0.135    
-    #> 4 payee_name          chr   191917 0.236    
-    #> 5 address             chr   223179 0.274    
-    #> 6 city_state_zip      chr    22714 0.0279   
-    #> 7 purpose             chr   125610 0.154    
-    #> 8 type                chr       28 0.0000344
+    #>   col                 type      n         p
+    #>   <chr>               <chr> <dbl>     <dbl>
+    #> 1 candidate_committee chr    2144 0.0124   
+    #> 2 date                date   1121 0.00650  
+    #> 3 amount              dbl   38800 0.225    
+    #> 4 payee_name          chr   41047 0.238    
+    #> 5 address             chr   47370 0.275    
+    #> 6 city_state_zip      chr    6521 0.0378   
+    #> 7 purpose             chr   25958 0.151    
+    #> 8 type                chr      17 0.0000986
 
 ![](../plots/type_bar-1.png)<!-- -->
 
@@ -329,35 +336,15 @@ fl %>% glimpse_fun(n_distinct)
 
 ### Duplicates
 
-The `janitor::get_dupes()` function can locate records with duplicate
-values across every variable.
+The `flag_dupes()` function can flag records with duplicate values
+across every variable.
 
 ``` r
-fl_dupes <- fl %>% 
-  get_dupes() %>% 
-  distinct() %>% 
-  mutate(dupe_flag = TRUE)
-
-nrow(fl_dupes)
-#> [1] 6573
-mean(fl_dupes$dupe_count)
-#> [1] 2.444698
-max(fl_dupes$dupe_count)
-#> [1] 50
-sum(fl_dupes$dupe_count)
-#> [1] 16069
-```
-
-This data frame of duplicate records can then be flagged on the original
-database.
-
-``` r
-fl <- fl %>% 
-  left_join(fl_dupes) %>% 
-  mutate(
-    dupe_count = if_else(is.na(dupe_count), 0L, dupe_count),
-    dupe_flag = !is.na(dupe_flag)
-    )
+fl <- flag_dupes(fl, everything())
+sum(fl$dupe_flag)
+#> [1] 2748
+mean(fl$dupe_flag)
+#> [1] 0.01594411
 ```
 
 ### Missing
@@ -368,28 +355,28 @@ There are a number of rows missing key information.
 fl %>% glimpse_fun(count_na)
 ```
 
-    #> # A tibble: 10 x 4
-    #>    var                 type      n         p
-    #>    <chr>               <chr> <int>     <dbl>
-    #>  1 candidate_committee chr       0 0        
-    #>  2 date                date      9 0.0000110
-    #>  3 amount              dbl      11 0.0000135
-    #>  4 payee_name          chr      42 0.0000515
-    #>  5 address             chr     783 0.000961 
-    #>  6 city_state_zip      chr       9 0.0000110
-    #>  7 purpose             chr     243 0.000298 
-    #>  8 type                chr      15 0.0000184
-    #>  9 dupe_count          int       0 0        
-    #> 10 dupe_flag           lgl       0 0
+    #> # A tibble: 9 x 4
+    #>   col                 type      n         p
+    #>   <chr>               <chr> <dbl>     <dbl>
+    #> 1 candidate_committee chr       0 0        
+    #> 2 date                date      0 0        
+    #> 3 amount              dbl       0 0        
+    #> 4 payee_name          chr       3 0.0000174
+    #> 5 address             chr     326 0.00189  
+    #> 6 city_state_zip      chr       0 0        
+    #> 7 purpose             chr      22 0.000128 
+    #> 8 type                chr       0 0        
+    #> 9 dupe_flag           lgl       0 0
 
-These rows will be flagged with a new `na_flag` variable.
+The `flag_na()` function can flag records missing values key values in
+any key variable.
 
 ``` r
-fl <- fl %>% 
-  mutate(
-    na_flag = is.na(candidate_committee) | is.na(date) | is.na(amount) | is.na(payee_name)
-  )
+fl <- flag_na(fl, payee_name, candidate_committee, date, amount)
+sum(fl$na_flag)
 ```
+
+    #> [1] 3
 
 ## Clean
 
@@ -418,76 +405,77 @@ The database seems to use repeating astricks characters as `NA` values.
 We can remove any value with a single repeating character.
 
 ``` r
-fl %<>% mutate(address_clean = normalize_address(address, na_rep = TRUE))
+fl <- fl %>% 
+  mutate(
+    address_clean = normal_address(
+      address = address,
+      add_abbs = usps_street,
+      na_rep = TRUE
+    )
+  )
 ```
 
 ### Zip
 
 ``` r
 sample(fl$zip_sep[which(nchar(fl$zip_sep) != 5)], 10)
-#>  [1] "0059" ""     "403"  "3231" "500"  "613"  "752"  "T2G"  "3367" "613"
+#>  [1] "2001"   "3444"   "CANADA" "2009"   "215"    "2144"   "215"    "3340"   "3231"   "2301"
 ```
 
 ``` r
-fl %<>% mutate(zip_clean = normalize_zip(zip_sep, na_rep = TRUE))
+fl <- fl %>% mutate(zip_clean = normal_zip(zip_sep, na_rep = TRUE))
 ```
+
+``` r
+prop_in(fl$zip_clean, valid_zip)
+```
+
+    #> [1] 0.996401
 
 ### State
 
 ``` r
-valid_state <- c(unique(zipcode$state), "ON", "BC", "QC", "NB", "AB")
 n_distinct(fl$state_sep)
-#> [1] 138
-mean(fl$state_sep %in% valid_state)
-#> [1] 0.9954699
-sum(fl$state_sep %out% valid_state)
-#> [1] 3691
+#> [1] 89
+prop_in(fl$state_sep, valid_state)
+#> [1] 0.9986467
+count_out(fl$state_sep, valid_state)
+#> [1] 232
 sample(unique(na.omit(fl$state_sep[fl$state_sep %out% valid_state])), 20)
-#>  [1] "PL"        "AUSTRALIA" "33"        "BOCA"      "32"        "LN"        "XX"       
-#>  [8] "THE"       "BA"        "CL"        "TOKYO"     "ALBERTA"   "ONTARIO"   "FF"       
-#> [15] "NSW"       "DD"        "KENT"      "BRITISH"   "M"         "FLORIDA"
+#>  [1] "FRANCE"      "HM"          "(WEST"       "B.C."        "SA"          "GE"         
+#>  [7] "QU"          "NS"          "TOKYO"       "AUS"         "ON"          "BC"         
+#> [13] "XE"          "UK"          "BOCA"        "FF"          "NETHERLANDS" "CANADA"     
+#> [19] "QC"          "AUSTRALIA"
 ```
 
 ``` r
-fl %<>% mutate(
-  state_clean = normalize_state(
+fl <- fl %>% mutate(
+  state_clean = normal_state(
     state = state_sep,
-    expand = TRUE,
-    na = c("", "XC")
+    abbreviate = TRUE,
+    valid = valid_state
   )
 )
-```
-
-``` r
-unique(fl$state_clean[which(fl$state_clean %out% valid_state)])
-#>  [1] NA   "F"  "NW" "CN" "MM" "KE" "3"  "FK" "B"  "SU" "M"  "BE" "TR" "NA" "MY" "DD" "AU" "PE" "W" 
-#> [20] "2"  "BA" "CL" "DR" "QU" "LN" "PQ" "41" "PL" "NL" "HO" "VG" "XX" "*"  "IS" "SA" "CH" "BR" "BO"
-#> [39] "HA" "NS" "ST" "SO" "V"  "JO" "PO" "HM" "TH" "WE" "UK" "XE" "GE" "FF" "FR" "TO"
-fl$state_clean[which(fl$state_clean == "F")] <- "FL"
-fl$state_clean[which(fl$state_clean %out% valid_state)] <- NA
-n_distinct(fl$state_clean)
-#> [1] 61
 ```
 
 ### City
 
 ``` r
-valid_city <- unique(zipcode$city)
-
 n_distinct(fl$city_sep)
-#> [1] 7622
+#> [1] 2344
 
 mean(fl$city_sep %in% valid_city)
-#> [1] 0.8806603
+#> [1] 0.8824035
 
 sum(fl$city_sep %out% valid_city)
-#> [1] 97235
+#> [1] 20268
 
 sample(unique(na.omit(fl$city_sep[fl$city_sep %out% valid_city])), 20)
-#>  [1] "COCO BEACH"      "SEDALIA,"        "MARY ESTER"      "IRWINDALE"       "ST AUGISTINE"   
-#>  [6] "BLOUTSTOWN"      "AVENURA"         "TALALHASSEE"     "ST; PETERSBURG"  "BINYAMINA"      
-#> [11] "MINNEAPOLIS,"    "QIUNCY"          "ALTANTIS"        "7TH FLOOR"       "ST. PAETERSBURG"
-#> [16] "HALENDALE"       "KEY LARGE"       "WILLIMGTON"      "STILL WATER"     "TITUSVILLLE"
+#>  [1] "FT.PIERCE"         "LAKD O LAKES"      "FT WORTH"          "PEMBROOK PINES"   
+#>  [5] "ALPHARETTE"        "BELLEAIR BLUFFS"   "ST LOUIS"          "TALLAHASSEE4"     
+#>  [9] "JACKSONILLE BEACH" "ORANDO"            "CITY"              "SOTH PASADENA"    
+#> [13] "MAITKAND"          "OLSDMAR"           "SUNNY ISLE BEACH"  "LADY LAK"         
+#> [17] "HAWTHRONE"         "KISSISSIMMEE"      "DANIA BEACG"       "CORAL SPRINGS"
 ```
 
 ### Normalize
@@ -495,25 +483,25 @@ sample(unique(na.omit(fl$city_sep[fl$city_sep %out% valid_city])), 20)
 ``` r
 fl <- fl %>% 
   mutate(
-    city_norm = normalize_city(
+    city_norm = normal_city(
       city = city_sep,
       na_rep = TRUE,
-      state_abbs = c("FL", "DC"),
-      geo_abbs = read_csv(here("R", "data", "city_abvs.csv"))
+      st_abbs = c("FL", "DC"),
+      geo_abbs = usps_city
     )
   )
 
 n_distinct(fl$city_norm)
 ```
 
-    #> [1] 7013
+    #> [1] 2162
 
 ### Match
 
 ``` r
 fl <- fl %>% 
   left_join(
-    y = zipcode, 
+    y = zipcodes, 
     by = c(
       "zip_clean" = "zip", 
       "state_clean" = "state"
@@ -539,19 +527,19 @@ summary(fl$match_dist)
 ```
 
     #>    Min. 1st Qu.  Median    Mean 3rd Qu.    Max.    NA's 
-    #>   0.000   0.000   0.000   1.171   0.000  20.000   23522
+    #>   0.000   0.000   0.000   1.098   0.000  20.000    6551
 
 ``` r
 sum(fl$match_dist == 1, na.rm = TRUE)
 ```
 
-    #> [1] 6699
+    #> [1] 1557
 
 ``` r
 n_distinct(fl$city_swap)
 ```
 
-    #> [1] 4896
+    #> [1] 1573
 
 ### Refine
 
@@ -573,20 +561,20 @@ fl_refine %>%
   )
 ```
 
-    #> # A tibble: 189 x 3
-    #>    city_swap           city_refine               n
-    #>    <chr>               <chr>                 <int>
-    #>  1 SPRINGHILL          SPRING HILL              32
-    #>  2 GREEN ACRES         GREENACRES               22
-    #>  3 LAUDERDALE BYTHESEA LAUDERDALE BY THE SEA    18
-    #>  4 HALLANDALE BEAC     HALLANDALE BEACH         16
-    #>  5 ANNA MARIA          MARIANNA                 15
-    #>  6 BAY HARBOR ISLAND   BAY HARBOR ISLANDS       15
-    #>  7 MIAMII GARDENS      MIAMI GARDENS            13
-    #>  8 LAKE BUENA VIST     LAKE BUENA VISTA         10
-    #>  9 PASADENA            S PASADENA                9
-    #> 10 CHAMPIONSGATE       CHAMPIONS GATE            8
-    #> # … with 179 more rows
+    #> # A tibble: 33 x 3
+    #>    city_swap       city_refine          n
+    #>    <chr>           <chr>            <int>
+    #>  1 HALLANDALE BEAC HALLANDALE BEACH    14
+    #>  2 DEL RAY BEACH   DELRAY BEACH         6
+    #>  3 NORTH LAUDERDAL NORTH LAUDERDALE     6
+    #>  4 ANNA MARIA      MARIANNA             5
+    #>  5 CHAMPIONSGATE   CHAMPIONS GATE       4
+    #>  6 CUTTLER BAY     CUTLER BAY           2
+    #>  7 AVENUTURA       AVENUTRA             1
+    #>  8 COCONUT GROVER  COCONUT GROVE        1
+    #>  9 CORAL GABLESL   CORAL GABLES         1
+    #> 10 CORAL SPRING    CORAL SPRINGS        1
+    #> # … with 23 more rows
 
 ``` r
 fl <- fl %>% 
@@ -596,14 +584,39 @@ fl <- fl %>%
 
 ``` r
 n_distinct(fl$city_sep)
-#> [1] 7622
+#> [1] 2344
 n_distinct(fl$city_norm)
-#> [1] 7013
+#> [1] 2162
 n_distinct(fl$city_swap)
-#> [1] 4896
+#> [1] 1573
 n_distinct(fl$city_clean)
-#> [1] 4709
+#> [1] 1540
 ```
+
+## Lookup
+
+``` r
+lookup <- read_csv("fl/expends/data/fl_city_lookup.csv")
+fl <- left_join(fl, select(lookup, 1, 2))
+```
+
+``` r
+n_distinct(fl$city_new)
+```
+
+    #> [1] 1409
+
+``` r
+prop_in(fl$city_new, valid_city)
+```
+
+    #> [1] 0.9333603
+
+``` r
+count_out(fl$city_new, valid_city)
+```
+
+    #> [1] 11040
 
 ## Export
 
@@ -620,7 +633,8 @@ fl %>%
     -city_norm,
     -city_match,
     -match_dist,
-    -city_swap
+    -city_swap,
+    -city_clean
   ) %>% 
   write_csv(
     path = glue("{clean_dir}/fl_expends_clean.csv"),
