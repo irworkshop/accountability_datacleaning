@@ -104,6 +104,8 @@ here::here()
 
 Data is obtained from the [Maryland Campaign Reporting Information System][03] (CRIS).
 
+As explained by this [CRIS help page][04]:
+
 > ## General Information on Expenditures and Outstanding Obligations
 >
 > An ***expenditure*** is defined as a gift, transfer, disbursement, or promise of money or
@@ -119,25 +121,39 @@ individual.
 reporting period.
 
 [03]: https://campaignfinance.maryland.gov/Home/Logout
+[04]: https://campaignfinance.maryland.gov/home/viewpage?title=View%20Expenditures%20/%20Outstanding%20Obligations&link=Public/ViewExpenses
 
 ## Import
 
 ### Download
+
+The data must be exported from the results page of an [expenditure search][05]. We can automate
+this proccess usng the RSelenium package.
 
 ```{r create_raw_dir}
 raw_dir <- here("md", "expends", "data", "raw")
 dir_create(raw_dir)
 ```
 
-```{r download_raw}
-
+```{r download_raw, warning=FALSE, error=FALSE, message=FALSE, collapse=TRUE, eval=FALSE}
+remote_driver <- rsDriver(browser = "firefox")
+remote_browser <- remote_driver$client
+remote_browser$navigate("https://campaignfinance.maryland.gov/Public/ViewExpenses")
+remote_browser$findElement("css", "#dtStartDate")$sendKeysToElement(list("01/01/2008"))
+end_date <- format(today(), "%m/%d/%Y")
+remote_browser$findElement("css", "#dtEndDate")$sendKeysToElement(list(end_date))
+remote_browser$findElement("css", "#btnSearch")$clickElement()
+remote_browser$findElement("css", "a.t-button:nth-child(1)")$clickElement()
+remote_driver$server$stop()
 ```
+
+[05]: https://campaignfinance.maryland.gov/Public/ViewExpenses
 
 ### Read
 
 ```{r read_raw}
 md <- read_delim(
-  file = dir_ls(raw_dir),
+  file = raw_file,
   delim = ",",
   escape_double = FALSE,
   escape_backslash = FALSE,
@@ -149,28 +165,20 @@ md <- read_delim(
 )
 ```
 
+Our search result above indicated that 503,676 records were available for download, yet we were
+only able to correctly read `r comma(nrow(md))`. From `readr::problems()` we can see the types
+of issues found when reading the file.
+
 ```{r read_problems}
-problems(md) %>% 
-  select(-row, -file) %>% 
-  distinct()
+distinct(select(problems(md), -row, -file))
 ```
+
+These issues almost assuredly stem from extraneous or erroneous commas or quotation marks. We are
+going to remove rows with these problems (for now).
 
 ```{r}
-md <- 
-  read_lines(file = dir_ls(raw_dir)) %>% 
-  str_remove_all("\"") %>% 
-  str_c(collapse = "\n") %>% 
-  vroom(
-  delim = ",",
-  escape_double = FALSE,
-  escape_backslash = FALSE,
-  col_types = cols(
-    .default = col_character()
-  )
-)
+bad_rows <- filter(problems(md), !str_detect(actual, "14 columns"))$row
+md <- clean_names(md[-bad_rows, ])
 ```
 
-```{r}
-md <- md[which(str_count(md, ",") != 12)] %>% str_split(",")
-```
-
+## Wrangle 
