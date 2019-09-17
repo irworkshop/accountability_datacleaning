@@ -67,7 +67,7 @@ functions custom made to help facilitate the processing of campaign finance data
 
 ```{r load_packages, message=FALSE, dfrning=FALSE, error=FALSE}
 if (!require("pacman")) install.packages("pacman")
-pacman::p_load_current_gh("kiernann/campfin")
+pacman::p_load_gh("irworkshop/campfin")
 pacman::p_load(
   stringdist, # levenshtein value
   RSelenium, # remote browser
@@ -147,6 +147,10 @@ remote_browser$findElement("css", "a.t-button:nth-child(1)")$clickElement()
 remote_driver$server$stop()
 ```
 
+```{r find_raw_file}
+raw_file <- dir_ls(raw_dir)
+```
+
 [05]: https://campaignfinance.maryland.gov/Public/ViewExpenses
 
 ### Read
@@ -170,15 +174,570 @@ only able to correctly read `r comma(nrow(md))`. From `readr::problems()` we can
 of issues found when reading the file.
 
 ```{r read_problems}
-distinct(select(problems(md), -row, -file))
+md_probs <- problems(md)
+nrow(md_probs)
+distinct(select(md_probs, -row, -file))
 ```
 
 These issues almost assuredly stem from extraneous or erroneous commas or quotation marks. We are
 going to remove rows with these problems (for now).
 
-```{r}
-bad_rows <- filter(problems(md), !str_detect(actual, "14 columns"))$row
-md <- clean_names(md[-bad_rows, ])
+```{r filter_bad_rows}
+# identify bad rows
+bad_rows <- unique(md_probs$row)
+# bad rows make up small part
+percent(length(bad_rows)/nrow(md))
+# filter out bad rows and cols
+md <- md %>% 
+  extract(-bad_rows, ) %>% 
+  remove_empty("cols") %>% 
+  clean_names("snake")
 ```
 
 ## Wrangle 
+
+To better understand the database, we will first have to perform some rudementary wrangling.
+
+### Separate
+
+The `address` feild contains many not only the street address, but also the city, state, and ZIP
+code. We will have to separate this column using a chain of `tidyr::separate()` and
+`tidyr::unite()`.
+
+```{r sep_address}
+md <- md %>% 
+  separate(
+    col = address,
+    into = c(
+      "address1", 
+      "address2", 
+      "city_sep", 
+      "state_zip_sep"
+    ),
+    sep = "\\s{2}",
+    remove = FALSE,
+    extra = "merge",
+    fill = "left"
+  ) %>% 
+  unite(
+    col = "address_sep",
+    address1, address2,
+    sep = " ",
+    remove = TRUE,
+    na.rm = TRUE
+  ) %>% 
+  separate(
+    col = state_zip_sep,
+    into = c("state_sep", "zip_sep"),
+    sep = "\\s(?=\\d)",
+    remove = TRUE,
+    extra = "merge"
+  )
+```
+
+Below, you can see how this makes wrangling these individual components much easier. Now we can
+more easily search the database for a certain state or ZIP code.
+
+```{r show_sep, echo=FALSE}
+ex_sep <- sample_n(md, 10)
+select(ex_sep, address)
+select(ex_sep, ends_with("sep"))
+rm(ex_sep)
+```
+
+### Normalize
+
+Now that each geographic element in a separate column, we can use the `campfin::normal_*()` 
+functions to improve the searchability of the database.
+
+#### ZIP
+
+```{r zip_pre}
+prop_in(md$zip_sep, valid_zip)
+prop_na(md$zip_sep)
+count_out(md$zip_sep, valid_zip)
+length(setdiff(md$zip_sep, valid_zip))
+```
+
+```{r normal_zip}
+md <- mutate(md, zip_norm = normal_zip(zip_sep, na_rep = TRUE))
+```
+
+```{r zip_post}
+prop_in(md$zip_norm, valid_zip)
+prop_na(md$zip_norm)
+count_out(md$zip_norm, valid_zip, na.rm = TRUE)
+length(setdiff(md$zip_norm, valid_zip))
+```
+
+#### Address
+
+```{r normal_address}
+md <- md %>% 
+  mutate(
+    address_norm = normal_address(
+      address = address_sep,
+      add_abbs = usps_street,
+      na_rep = TRUE
+    )
+  )
+```
+
+```{r show_address_norm, echo=FALSE}
+ex_add <- sample_n(md, 10)
+select(ex_add, address_sep)
+select(ex_add, address_norm)
+rm(ex_add)
+```
+
+#### State
+
+```{r state_pre}
+n_distinct(md$state_sep)
+prop_in(md$state_sep, valid_state)
+prop_na(md$state_sep)
+count_out(md$state_sep, valid_state)
+length(setdiff(md$state_sep, valid_state))
+```
+
+```{r normal_state}
+md <- md %>% 
+  mutate(
+    state_norm =
+      normal_state(
+      state = state_sep,
+      abbreviate = TRUE,
+      na_rep = TRUE
+    )
+  )
+```
+
+```{r manual_abbrev_check}
+bad_states <- md$state_norm[which(md$state_norm %out% valid_state)]
+bad_states <- abbrev_full(bad_states, full = valid_name, rep = valid_state)
+bad_states <- if_else(
+  condition = str_extract(bad_states, "\\b[:upper:]{2}$") %in% valid_state,
+  true = str_extract(bad_states, "\\b[:upper:]{2}$"),
+  false = bad_states
+)
+md$state_norm[which(md$state_norm %out% valid_state)] <- bad_states
+```
+
+```{r state_post}
+n_distinct(md$state_norm)
+prop_in(md$state_norm, valid_state)
+prop_na(md$state_norm)
+count_out(md$state_norm, valid_state)
+length(setdiff(md$state_norm, valid_state))
+md$state_norm[which(md$state_norm %out% valid_state)] <- NA
+```
+
+#### City
+
+```{r city_pre}
+n_distinct(md$city_sep)
+prop_in(md$city_sep, valid_city)
+prop_in(str_to_upper(md$city_sep), valid_city)
+prop_na(md$city_sep)
+count_out(md$city_sep, valid_city)
+length(setdiff(md$city_sep, valid_city))
+```
+
+##### Normalize
+
+```{r normal_city}
+md <- md %>% 
+  mutate(
+    city_norm = normal_city(
+      city = city_sep,
+      geo_abbs = usps_city,
+      st_abbs = c("MD", "DC", "MARYLAND"),
+      na = c(invalid_city, ""),
+      na_rep = TRUE
+    )
+  )
+```
+
+```{r city_post_norm}
+n_distinct(md$city_norm)
+prop_in(md$city_norm, valid_city)
+prop_in(str_to_upper(md$city_norm), valid_city)
+prop_na(md$city_norm)
+count_out(md$city_norm, valid_city)
+length(setdiff(md$city_norm, valid_city))
+```
+
+##### Match
+
+```{r match_city}
+md <- md %>% 
+  left_join(
+    y = zipcodes,
+    by = c(
+      "state_norm" = "state",
+      "zip_norm" = "zip"
+    )
+  ) %>% 
+  rename(city_match = city)
+```
+
+```{r prop_match_na}
+prop_na(md$city_norm)
+prop_na(md$city_match)
+```
+
+##### Compare
+
+```{r compare_city}
+md <- md %>% 
+  mutate(
+    match_dist = str_dist(city_norm, city_match),
+    match_abb = is_abbrev(city_norm, city_match)
+  )
+```
+
+```{r compare_stats}
+summary(md$match_dist)
+sum(md$match_abb, na.rm = TRUE)
+```
+
+```{r view_match_abbs}
+md %>% 
+  filter(match_abb) %>% 
+  count(city_norm, city_match, sort = TRUE)
+```
+
+```{r view_match_dist}
+md %>% 
+  filter(match_dist == 1) %>% 
+  count(city_norm, city_match, sort = TRUE)
+```
+
+##### Swap
+
+```{r swap_city}
+md <- md %>% 
+  mutate(
+    city_swap = if_else(
+      condition = match_abb | match_dist == 1,
+      true = city_match,
+      false = city_norm
+    )
+  )
+```
+
+```{r city_post_swap}
+n_distinct(md$city_swap)
+prop_in(md$city_swap, valid_city)
+prop_in(str_to_upper(md$city_swap), valid_city)
+prop_na(md$city_swap)
+count_out(md$city_swap, valid_city)
+length(setdiff(md$city_swap, valid_city))
+```
+
+##### Refine
+
+```{r refine_city}
+good_refine <- md %>% 
+  filter(state_norm == "MD") %>% 
+  mutate(
+    city_refine = city_swap %>% 
+      key_collision_merge() %>% 
+      n_gram_merge(numgram = 1)
+  ) %>%
+  filter(city_refine != city_swap) %>% 
+  inner_join(
+    y = zipcodes,
+    by = c(
+      "city_refine" = "city",
+      "state_norm" = "state",
+      "zip_norm" = "zip"
+    )
+  )
+```
+
+```{r count_refine}
+good_refine %>% 
+  count(city_swap, city_refine, sort = TRUE)
+```
+
+```{r join_refine}
+md <- md %>% 
+  left_join(good_refine) %>% 
+  mutate(city_refine = coalesce(city_refine, city_swap))
+```
+
+##### Evaluate
+
+We can make very few manual changes to capture the last few big invalid values. Local city
+abbreviations (e.g., SPFD) often need to be changed by hand.
+
+```{r view_final_bad}
+md %>%
+  filter(city_refine %out% valid_city) %>% 
+  count(state_norm, city_refine, sort = TRUE) %>% 
+  drop_na(city_refine)
+```
+
+```{r progress_table, echo=FALSE}
+progress_table <- tibble(
+  stage = c("raw", "norm", "swap", "refine"),
+  prop_good = c(
+    prop_in(str_to_upper(md$city_sep), valid_city, na.rm = TRUE),
+    prop_in(md$city_norm, valid_city, na.rm = TRUE),
+    prop_in(md$city_swap, valid_city, na.rm = TRUE),
+    prop_in(md$city_refine, valid_city, na.rm = TRUE)
+  ),
+  total_distinct = c(
+    n_distinct(str_to_upper(md$city_sep)),
+    n_distinct(md$city_norm),
+    n_distinct(md$city_swap),
+    n_distinct(md$city_refine)
+  ),
+  unique_bad = c(
+    length(setdiff(str_to_upper(md$city_sep), valid_city)),
+    length(setdiff(md$city_norm, valid_city)),
+    length(setdiff(md$city_swap, valid_city)),
+    length(setdiff(md$city_refine, valid_city))
+  ),
+  prop_na = c(
+    prop_na(md$city_sep),
+    prop_na(md$city_norm),
+    prop_na(md$city_swap),
+    prop_na(md$city_refine)
+  )
+)
+
+diff_change <- progress_table$unique_bad[4]-progress_table$unique_bad[1]
+prop_change <- diff_change/progress_table$unique_bad[1]
+```
+
+Still, our progress is significant without having to make a single manual or unconfident change.
+The percent of valid cities increased from `r percent(progress_table$prop_good[1])` to 
+`r percent(progress_table$prop_good[4])`. The number of total distinct city values decreased from
+`r comma(progress_table$total_distinct[1])` to `r comma(progress_table$total_distinct[4])`. The
+number of distinct invalid city names decreased from `r comma(progress_table$unique_bad[1])` to
+only `r comma(progress_table$unique_bad[4])`, a change of `r percent(prop_change)`.
+
+```{r print_progress, echo=FALSE}
+progress_table %>% 
+  mutate_at(vars(2, 5), scales::percent) %>% 
+  kable(
+    format = "markdown", 
+    digits = 4,
+    col.names = c(
+      "Normalization Stage", 
+      "Percent Valid",
+      "Total Distinct", 
+      "Unique Invalid", 
+      "Prop NA"
+    )
+  )
+```
+
+```{r wrangle_bar_prop, echo=FALSE}
+brewer_dark2 <- RColorBrewer::brewer.pal(8, "Dark2")
+progress_table %>% 
+  mutate(stage = as_factor(stage)) %>% 
+  ggplot(aes(x = stage, y = prop_good)) +
+  geom_hline(yintercept = 0.99) +
+  geom_col(fill = brewer_dark2[2]) +
+  coord_cartesian(ylim = c(0.75, 1)) +
+  scale_y_continuous(labels = percent) +
+  labs(
+    title = "Missouri Expenditures Payee City Progress",
+    subtitle = "Percent of total values contained in pre-defined list of cities",
+    caption = "Source: Missouri Ethics Commission",
+    x = "Wrangling Stage",
+    y = "Proportion Valid Cities"
+  )
+```
+
+```{r wrangle_bar_distinct, echo=FALSE}
+progress_table %>% 
+  mutate(stage = as_factor(stage)) %>% 
+  select(-prop_good, -prop_na) %>% 
+  rename(
+    All = total_distinct,
+    Invalid = unique_bad
+  ) %>% 
+  gather(
+    -stage,
+    key = "key",
+    value = "value"
+  ) %>% 
+  ggplot(aes(x = stage, y = value)) +
+  geom_col(aes(fill = key)) +
+  scale_fill_brewer(type = "qual", palette = "Dark2") +
+  scale_y_continuous(labels = comma) +
+  labs(
+    title = "Missouri Expenditures Payee City Progress",
+    subtitle = "Total distinct number of city values",
+    caption = "Source: Missouri Ethics Commission",
+    fill = "Distinct Values",
+    x = "Wrangling Stage",
+    y = "Number of Expenditures"
+  )
+```
+
+## Explore
+
+Now that the data is sufficiently wrangled and normalized, we should explore it
+a little for consistency issues.
+
+```{r glimpse}
+head(md)
+tail(md)
+glimpse(sample_frac(md))
+```
+
+### Missing
+
+There are a number of records missing one of the four key variables we need to
+identify a unique transaction.
+
+```{r glimpse_na}
+glimpse_fun(md, count_na)
+```
+
+We will flag these records with a new `na_flag` variable using the
+`campfin::flag_na()` function.
+
+```{r flag_na}
+md <- md %>% flag_na(expenditure_date, amount, payee_name, committee_name)
+sum(md$na_flag)
+mean(md$na_flag)
+```
+
+### Duplicates
+
+There are also a number of records that are complete duplicates of another row.
+It's possible that a campaign made multiple valid expenditures for the same
+amount, to the same vendor, on the same day. However, we will flag these two
+variables just to be safe. We can create a new `dupe_flag` variable using the
+`campfin::flag_dupes()` function.
+
+```{r flag_dupes}
+md <- flag_dupes(md, everything())
+sum(md$dupe_flag)
+mean(md$dupe_flag)
+```
+
+### Categorical
+
+```{r glimpse_distinct}
+glimpse_fun(md, n_distinct)
+```
+
+```{r payee_type_bar, echo=FALSE}
+explore_plot(
+  data = drop_na(md, payee_type),
+  var = payee_type,
+  title = "Maryland Expenditure Count by Payee Type",
+  caption = "Source: Maryland Campaign Reporting Information System",
+  x = "Amount",
+  y = "Count"
+)
+```
+
+```{r expense_category_bar, echo=FALSE}
+explore_plot(
+  data = drop_na(md, expense_category),
+  var = expense_category,
+  title = "Maryland Expenditure Count by Expense Category",
+  caption = "Source: Maryland Campaign Reporting Information System",
+  x = "Amount",
+  y = "Count"
+) + theme(axis.text.x = element_text(angle = 10, vjust = 1, hjust = 1))
+```
+
+```{r expense_method_bar, echo=FALSE}
+explore_plot(
+  data = drop_na(md, expense_method),
+  var = expense_method,
+  title = "Maryland Expenditure Count by Expense Methods",
+  caption = "Source: Maryland Campaign Reporting Information System",
+  x = "Amount",
+  y = "Count"
+)
+```
+
+### Continuous
+
+#### Amounts
+
+```{r summary_amount}
+summary(md$amount)
+sum(md$amount <= 0)
+sum(md$amount > 1000000)
+```
+
+```{r amount_histogram, echo=FALSE}
+md %>%
+  ggplot(aes(amount)) +
+  geom_histogram(fill = brewer_dark2[1]) +
+  geom_vline(xintercept = median(md$amount)) +
+  scale_x_continuous(
+    breaks = c(1 %o% 10^(0:6)),
+    labels = dollar,
+    trans = "log10"
+  ) +
+  labs(
+    title = "Maryland Expenditure Amount Distribution",
+    caption = "Source: Maryland Campaign Reporting Information System",
+    x = "Amount",
+    y = "Count"
+  )
+```
+
+```{r}
+
+```
+
+#### Dates
+
+```{r}
+md <- mutate(md, year = year(date))
+```
+
+```{r date_range, collapse=TRUE}
+min(md$date)
+sum(md$year < 2000)
+max(md$date)
+sum(md$date > today())
+```
+
+## Conclude
+
+1. There are `r nrow(md)` records in the database.
+1. There are `r sum(md$dupe_flag)` duplicate records in the database.
+1. The range and distribution of `amount` seems reasomable, and `date` has been cleaned by removing
+`r sum(md$date_flag, na.rm = T)` values from the distance past or future.
+1. There are `r sum(md$na_flag)` records missing either recipient or date.
+1. Consistency in geographic data has been improved with `campfin::normal_*()`.
+1. The 5-digit `zip_norm` variable has been created with `campfin::normal_zip()`.
+1. The 4-digit `year_clean` variable has been created with `lubridate::year()`.
+
+## Export
+
+```{r create_proc_dir}
+proc_dir <- here("in", "expends", "data", "processed")
+dir_create(proc_dir)
+```
+
+```{r write_clean}
+mo %>% 
+  select(
+    -city_norm,
+    -city_swap,
+    -city_match,
+    -city_swap,
+    -match_dist,
+    -city_refine,
+    -year
+  ) %>% 
+  write_csv(
+    path = glue("{proc_dir}/mo_expends_clean.csv"),
+    na = ""
+  )
+```
