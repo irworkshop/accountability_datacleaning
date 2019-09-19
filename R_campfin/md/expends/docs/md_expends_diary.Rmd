@@ -128,7 +128,7 @@ reporting period.
 ### Download
 
 The data must be exported from the results page of an [expenditure search][05]. We can automate
-this proccess usng the RSelenium package.
+this process using the RSelenium package.
 
 ```{r create_raw_dir}
 raw_dir <- here("md", "expends", "data", "raw")
@@ -196,43 +196,56 @@ md <- md %>%
 
 ## Wrangle 
 
-To better understand the database, we will first have to perform some rudementary wrangling.
+To better understand the database, we will first have to perform some rudimentary wrangling.
 
 ### Separate
 
 The `address` feild contains many not only the street address, but also the city, state, and ZIP
-code. We will have to separate this column using a chain of `tidyr::separate()` and
-`tidyr::unite()`.
+code. Each element of the address is separated by _two_ space characters (`\\s`). We can use the
+[`tidyr::separate()`][sep] function to split this single column into four new columns. There are a
+few rows containing more than four instances of double spaces; The first half of the address is the
+most troublesome, sometimes containing a name or additional address information. The city, state,
+and ZIP code are always the last 3 elements, so we can set `extra = "merge"` and `fill = "left"`
+to push ensure our data is pushed to the rightmost column.
 
 ```{r sep_address}
-md <- md %>% 
-  separate(
-    col = address,
-    into = c(
-      "address1", 
-      "address2", 
-      "city_sep", 
-      "state_zip_sep"
-    ),
-    sep = "\\s{2}",
-    remove = FALSE,
-    extra = "merge",
-    fill = "left"
-  ) %>% 
-  unite(
-    col = "address_sep",
-    address1, address2,
-    sep = " ",
-    remove = TRUE,
-    na.rm = TRUE
-  ) %>% 
-  separate(
-    col = state_zip_sep,
-    into = c("state_sep", "zip_sep"),
-    sep = "\\s(?=\\d)",
-    remove = TRUE,
-    extra = "merge"
-  )
+md %>% separate(
+  col    = address,
+  into   = c("address1", "address2", "city_sep", "state_zip"),
+  sep    = "\\s{2}",
+  remove = FALSE,
+  extra  = "merge",
+  fill   = "left"
+) -> md
+```
+
+Since we `fill = "left"`, any record without a secondary address unit (e.g., Apartment number)
+will have their primary street address shifted into the new rightmost `address2` column. We do not
+need the complex street address separated, so we can use [`tidyr::unite()`][unite] to combine them
+into a single `address_sep` column.
+
+```{r unite_address}
+md %>% unite(
+  address1, address2,
+  col    = "address_sep",
+  sep    = " ",
+  remove = TRUE,
+  na.rm  = TRUE
+) -> md
+```
+
+Unlike the rest of the original `address` string, the state and ZIP code are separated by only _one_
+space character. We can again use `tidyr::separate()`, this time only splitting the two elements
+by the single space preceding the fist digit (`\\d`) of the ZIP code.
+
+```{r separate_state_zip}
+md %>% separate(
+  col    = state_zip,
+  into   = c("state_sep", "zip_sep"),
+  sep    = "\\s{1,}(?=\\d)",
+  remove = TRUE,
+  extra  = "merge"
+) -> md
 ```
 
 Below, you can see how this makes wrangling these individual components much easier. Now we can
@@ -245,6 +258,9 @@ select(ex_sep, ends_with("sep"))
 rm(ex_sep)
 ```
 
+[sep]: https://tidyr.tidyverse.org/reference/separate.html
+[unite]: https://tidyr.tidyverse.org/reference/unite.html
+
 ### Normalize
 
 Now that each geographic element in a separate column, we can use the `campfin::normal_*()` 
@@ -252,25 +268,49 @@ functions to improve the searchability of the database.
 
 #### ZIP
 
+Before each normalization, we should check the quality of our existing data so we have a benchmark
+to compare against.
+
 ```{r zip_pre}
+n_distinct(md$zip_sep)
 prop_in(md$zip_sep, valid_zip)
 prop_na(md$zip_sep)
 count_out(md$zip_sep, valid_zip)
 length(setdiff(md$zip_sep, valid_zip))
 ```
 
+The `campfin::normal_zip()` function is used to form a valid 5-digit US ZIP code from messy data.
+It removes the unnecessary ZIP+4 suffix, pads the left of short strings with zeroes, and removes
+any values which are a single repeating digit (e.g., 00000, XXXXX).
+
 ```{r normal_zip}
 md <- mutate(md, zip_norm = normal_zip(zip_sep, na_rep = TRUE))
 ```
 
 ```{r zip_post}
+n_distinct(md$zip_norm)
 prop_in(md$zip_norm, valid_zip)
 prop_na(md$zip_norm)
 count_out(md$zip_norm, valid_zip, na.rm = TRUE)
 length(setdiff(md$zip_norm, valid_zip))
 ```
 
+This process puts our percentage of valid `zip_norm` values well over 99%.
+
+```{r zip_progress}
+progress_table(
+  raw = md$zip_sep,
+  norm = md$zip_norm,
+  compare = valid_zip
+)
+```
+
 #### Address
+
+We can perform similar normalization on the `address_sep` variable, although it's impractical to
+compare these values against a fixed set of known valid addresses. The primary function of
+`campfin::normal_address()` is to replace all USPS abbreviations with their full string equivalent.
+This improves consistency in our database and makes addresses more searchable.
 
 ```{r normal_address}
 md <- md %>% 
@@ -300,6 +340,9 @@ count_out(md$state_sep, valid_state)
 length(setdiff(md$state_sep, valid_state))
 ```
 
+The `campfin::normal_state()` function aims to form a valid 2-letter state abbreviation from our
+`state_sep` variable.
+
 ```{r normal_state}
 md <- md %>% 
   mutate(
@@ -312,15 +355,50 @@ md <- md %>%
   )
 ```
 
+There are still a fair number of invalid `state_norm` values that we can try and fix more manually,
+although they account for less than `r percent(prop_out(md$state_norm, valid_state))` of the total
+values.
+
+```{r state_post_norm}
+n_distinct(md$state_norm)
+prop_in(md$state_norm, valid_state)
+prop_na(md$state_norm)
+count_out(md$state_norm, valid_state)
+length(setdiff(md$state_norm, valid_state))
+```
+
+We will create a list of all `state_norm` values not found in our comprehensive `valid_state` 
+vector. Many of these are longer strings which contain a valid abbreviation or name.
+
 ```{r manual_abbrev_check}
 bad_states <- md$state_norm[which(md$state_norm %out% valid_state)]
+count_vec(bad_states)
+```
+
+We can abbreviate these full strings and attempt to extract a valid abbreviation from the end of
+the invalid string.
+
+```{r abbrev_bad_states}
 bad_states <- abbrev_full(bad_states, full = valid_name, rep = valid_state)
-bad_states <- if_else(
+fixed_states <- if_else(
   condition = str_extract(bad_states, "\\b[:upper:]{2}$") %in% valid_state,
   true = str_extract(bad_states, "\\b[:upper:]{2}$"),
   false = bad_states
 )
-md$state_norm[which(md$state_norm %out% valid_state)] <- bad_states
+```
+
+```{r view_bad_state_fixes, echo=FALSE}
+tibble(
+  orig = md$state_norm[which(md$state_norm %out% valid_state)],
+  new = bad_states
+) %>% 
+  mutate(fixed = new %in% valid_state) %>%
+  count(orig, new, fixed, sort = TRUE)
+```
+
+```{r}
+md <- mutate(md, state_fixed = state_norm)
+md$state_fixed[which(md$state_fixed %out% valid_state)] <- fixed_states
 ```
 
 ```{r state_post}
@@ -711,7 +789,7 @@ sum(md$date > today())
 
 1. There are `r nrow(md)` records in the database.
 1. There are `r sum(md$dupe_flag)` duplicate records in the database.
-1. The range and distribution of `amount` seems reasomable, and `date` has been cleaned by removing
+1. The range and distribution of `amount` seems reasonable, and `date` has been cleaned by removing
 `r sum(md$date_flag, na.rm = T)` values from the distance past or future.
 1. There are `r sum(md$na_flag)` records missing either recipient or date.
 1. Consistency in geographic data has been improved with `campfin::normal_*()`.
