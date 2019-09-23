@@ -16,7 +16,7 @@ editor_options:
 ```{r setup, include=FALSE, purl=FALSE}
 library(knitr)
 opts_chunk$set(
-  eval = FALSE,
+  eval = TRUE,
   echo = TRUE,
   warning = FALSE,
   message = FALSE,
@@ -65,7 +65,7 @@ these results. The `pacman` package will facilitate their installation and attac
 The IRW's `campfin` package will also have to be installed from GitHub. This package contains
 functions custom made to help facilitate the processing of campaign finance data.
 
-```{r load_packages, message=FALSE, dfrning=FALSE, error=FALSE}
+```{r load_packages, message=FALSE, warning=FALSE, error=FALSE}
 if (!require("pacman")) install.packages("pacman")
 pacman::p_load_gh("irworkshop/campfin")
 pacman::p_load(
@@ -170,8 +170,8 @@ md <- read_delim(
 ```
 
 Our search result above indicated that 503,676 records were available for download, yet we were
-only able to correctly read `r comma(nrow(md))`. From `readr::problems()` we can see the types
-of issues found when reading the file.
+only able to correctly read `r scales::comma(nrow(md))`. From `readr::problems()` we can see the 
+types of issues found when reading the file.
 
 ```{r read_problems}
 md_probs <- problems(md)
@@ -268,15 +268,11 @@ functions to improve the searchability of the database.
 
 #### ZIP
 
-Before each normalization, we should check the quality of our existing data so we have a benchmark
-to compare against.
-
 ```{r zip_pre}
-n_distinct(md$zip_sep)
-prop_in(md$zip_sep, valid_zip)
-prop_na(md$zip_sep)
-count_out(md$zip_sep, valid_zip)
-length(setdiff(md$zip_sep, valid_zip))
+progress_table(
+  md$zip_sep,
+  compare = valid_zip
+)
 ```
 
 The `campfin::normal_zip()` function is used to form a valid 5-digit US ZIP code from messy data.
@@ -287,20 +283,12 @@ any values which are a single repeating digit (e.g., 00000, XXXXX).
 md <- mutate(md, zip_norm = normal_zip(zip_sep, na_rep = TRUE))
 ```
 
-```{r zip_post}
-n_distinct(md$zip_norm)
-prop_in(md$zip_norm, valid_zip)
-prop_na(md$zip_norm)
-count_out(md$zip_norm, valid_zip, na.rm = TRUE)
-length(setdiff(md$zip_norm, valid_zip))
-```
-
 This process puts our percentage of valid `zip_norm` values well over 99%.
 
-```{r zip_progress}
+```{r zip_post}
 progress_table(
-  raw = md$zip_sep,
-  norm = md$zip_norm,
+  md$zip_sep,
+  md$zip_norm,
   compare = valid_zip
 )
 ```
@@ -325,19 +313,17 @@ md <- md %>%
 
 ```{r show_address_norm, echo=FALSE}
 ex_add <- sample_n(md, 10)
-select(ex_add, address_sep)
-select(ex_add, address_norm)
+select(ex_add, address_sep, address_norm)
 rm(ex_add)
 ```
 
 #### State
 
 ```{r state_pre}
-n_distinct(md$state_sep)
-prop_in(md$state_sep, valid_state)
-prop_na(md$state_sep)
-count_out(md$state_sep, valid_state)
-length(setdiff(md$state_sep, valid_state))
+progress_table(
+  md$state_sep,
+  compare = valid_state
+)
 ```
 
 The `campfin::normal_state()` function aims to form a valid 2-letter state abbreviation from our
@@ -358,14 +344,6 @@ md <- md %>%
 There are still a fair number of invalid `state_norm` values that we can try and fix more manually,
 although they account for less than `r percent(prop_out(md$state_norm, valid_state))` of the total
 values.
-
-```{r state_post_norm}
-n_distinct(md$state_norm)
-prop_in(md$state_norm, valid_state)
-prop_na(md$state_norm)
-count_out(md$state_norm, valid_state)
-length(setdiff(md$state_norm, valid_state))
-```
 
 We will create a list of all `state_norm` values not found in our comprehensive `valid_state` 
 vector. Many of these are longer strings which contain a valid abbreviation or name.
@@ -390,38 +368,55 @@ fixed_states <- if_else(
 ```{r view_bad_state_fixes, echo=FALSE}
 tibble(
   orig = md$state_norm[which(md$state_norm %out% valid_state)],
-  new = bad_states
+  new = fixed_states
 ) %>% 
   mutate(fixed = new %in% valid_state) %>%
   count(orig, new, fixed, sort = TRUE)
 ```
 
-```{r}
-md <- mutate(md, state_fixed = state_norm)
-md$state_fixed[which(md$state_fixed %out% valid_state)] <- fixed_states
+```{r replace_bad_states}
+md <- mutate(md, state_clean = state_norm)
+md$state_clean[which(md$state_clean %out% valid_state)] <- fixed_states
 ```
 
 ```{r state_post}
-n_distinct(md$state_norm)
-prop_in(md$state_norm, valid_state)
-prop_na(md$state_norm)
-count_out(md$state_norm, valid_state)
-length(setdiff(md$state_norm, valid_state))
-md$state_norm[which(md$state_norm %out% valid_state)] <- NA
+progress_table(
+  md$state_sep,
+  md$state_norm,
+  md$state_clean,
+  compare = valid_state
+)
+```
+
+```{r count_bad_state}
+md %>% 
+  filter(state_clean %out% valid_state) %>% 
+  count(state_clean, sort = TRUE)
 ```
 
 #### City
 
-```{r city_pre}
-n_distinct(md$city_sep)
-prop_in(md$city_sep, valid_city)
-prop_in(str_to_upper(md$city_sep), valid_city)
-prop_na(md$city_sep)
-count_out(md$city_sep, valid_city)
-length(setdiff(md$city_sep, valid_city))
+The `city_sep` portion of the `address` is the hardest to normalize. The sheer potential variation
+makes it difficult to assess how clean the data is. There is a five-step process we use to make
+_confident_ improvements to the data.
+
+1. Normalize with `campfin::normal_city()`.
+1. Match against an _expected_ city for that ZIP code.
+1. Compare that expected city against our normalized city.
+1. Swap for our expected value if it meets our criteria.
+1. Refine by cluster and merging remaining similar values.
+
+```{r}
+progress_table(
+  md$city_sep,
+  compare = valid_city
+)
 ```
 
 ##### Normalize
+
+First, we will use `campfin::normal_city()` to force consistent capitalization, abbreviations,
+punctuation, and remove known invalid values.
 
 ```{r normal_city}
 md <- md %>% 
@@ -436,16 +431,10 @@ md <- md %>%
   )
 ```
 
-```{r city_post_norm}
-n_distinct(md$city_norm)
-prop_in(md$city_norm, valid_city)
-prop_in(str_to_upper(md$city_norm), valid_city)
-prop_na(md$city_norm)
-count_out(md$city_norm, valid_city)
-length(setdiff(md$city_norm, valid_city))
-```
-
 ##### Match
+
+Then, we can use `dplyr::left_join()` to perform a relational join with the `campfin::zipcodes`
+dataframe, matching each `zip_norm` and `state_norm` value with their _expect_ city.
 
 ```{r match_city}
 md <- md %>% 
@@ -460,11 +449,15 @@ md <- md %>%
 ```
 
 ```{r prop_match_na}
-prop_na(md$city_norm)
-prop_na(md$city_match)
+# no matching value
+percent(prop_na(md$city_match)- prop_na(md$city_norm))
 ```
 
 ##### Compare
+
+By using `campfin::str_dist()` and `campfin::is_abbrev()` we can compare our `city_norm` value
+against the expected `city_match` value. These two functions are programmatic methods of checking
+for fixed consistency issues.
 
 ```{r compare_city}
 md <- md %>% 
@@ -479,11 +472,16 @@ summary(md$match_dist)
 sum(md$match_abb, na.rm = TRUE)
 ```
 
+Here, we can see `city_norm` values that appear to be abbreviations of their expected `city_match`.
+
 ```{r view_match_abbs}
 md %>% 
   filter(match_abb) %>% 
   count(city_norm, city_match, sort = TRUE)
 ```
+
+Here, we can see `city_norm` values that are only 1 character change different than their 
+`city_match` counterpart.
 
 ```{r view_match_dist}
 md %>% 
@@ -492,6 +490,9 @@ md %>%
 ```
 
 ##### Swap
+
+If `city_norm` is _either_ an abbreviation for `city_match` or only 1 edit away, we can 
+confidently use the expected value in place of the typo/abbreviation.
 
 ```{r swap_city}
 md <- md %>% 
@@ -504,16 +505,11 @@ md <- md %>%
   )
 ```
 
-```{r city_post_swap}
-n_distinct(md$city_swap)
-prop_in(md$city_swap, valid_city)
-prop_in(str_to_upper(md$city_swap), valid_city)
-prop_na(md$city_swap)
-count_out(md$city_swap, valid_city)
-length(setdiff(md$city_swap, valid_city))
-```
-
 ##### Refine
+
+One further step to mass check for inconsistencies is a cluster and merge method relying on the
+OpenRefine algorithms to match similar values and rely on the most common. We will use 
+`dplyr::inner_join()` to only keep any values where a _correct_ refine was made.
 
 ```{r refine_city}
 good_refine <- md %>% 
@@ -534,10 +530,14 @@ good_refine <- md %>%
   )
 ```
 
+In this dataset, not many additional changes we made.
+
 ```{r count_refine}
 good_refine %>% 
   count(city_swap, city_refine, sort = TRUE)
 ```
+
+Nevertheless, it's still an improvement and we can add these changes to our data.
 
 ```{r join_refine}
 md <- md %>% 
@@ -547,68 +547,95 @@ md <- md %>%
 
 ##### Evaluate
 
-We can make very few manual changes to capture the last few big invalid values. Local city
-abbreviations (e.g., SPFD) often need to be changed by hand.
+Maryland is a state with a large number of residents living in 
+[census designated places (CDP)][cdp]. We can get a list of Census Designated Places in Maryland
+from the [Maryland OpenData portal][mdod]. This is a shape file, but we are only interested in the
+_names_ of each CDP. These are names people will often use when listing their residence.
+
+> Places always nest within a State, but may extend across county and county subdivision
+boundaries. An incorporated place usually is a city, town, village, or borough, but can have other
+legal descriptions. CDPs are delineated for the decennial census as the statistical counterparts of
+incorporated places. CDPs are delineated to provide data for settled concentrations of population
+that are identifiable by name, but are not legally incorporated under the laws of the State in
+which they are located.
+
+[cdp]: https://en.wikipedia.org/wiki/Census-designated_place
+[mdod]: https://data.imap.maryland.gov/datasets/008cbfc9d1d34644864b6b0110f318ab_1
+
+```{r read_designated_places}
+cdp <- read_csv("https://opendata.arcgis.com/datasets/008cbfc9d1d34644864b6b0110f318ab_1.csv")
+designated_place <- normal_city(cdp$NAME10, geo_abbs = usps_city)
+```
+
+```{r combine_valid_city}
+valid_city2 <- c(valid_city, designated_place)
+```
+
+We will add the four most common invalid city names. These have been checked and are valid city
+names, primarily small towns in Maryland or CDPs in other states that appear frequently in the
+dataset.
+
+```{r extend_valid_city2}
+valid_city3 <- c(valid_city2, "CHEVERLY", "PRINCE GEORGES" ,"BERWYN HEIGHTS", "SYMMES TOWNSHIP")
+```
+
+We will fix four typos manually in a new `city_clean` variable.
+
+```{r manual_fix_city}
+md <- md %>% 
+  mutate(
+    city_clean = city_refine %>% 
+      str_replace("^BALTO$", "BALTIMORE") %>% 
+      str_replace("^LAVALE$", "LA VALE") %>% 
+      str_replace("^SYMMES$", "SYMMES TOWNSHIP") %>% 
+      str_replace("^BALTIMORE CITY$", "BALTIMORE")
+  )
+```
+
+There are still many `city_clean` variables not contained in our list of valid cities and census
+designated places. Many of them are actually valid, but some are still errors that could be
+corrected with more effort.
 
 ```{r view_final_bad}
 md %>%
-  filter(city_refine %out% valid_city) %>% 
-  count(state_norm, city_refine, sort = TRUE) %>% 
-  drop_na(city_refine)
+  filter(city_clean %out% valid_city3) %>% 
+  count(city_clean, state_clean, city_match, sort = TRUE) %>% 
+  drop_na(city_clean)
 ```
 
-```{r progress_table, echo=FALSE}
-progress_table <- tibble(
-  stage = c("raw", "norm", "swap", "refine"),
-  prop_good = c(
-    prop_in(str_to_upper(md$city_sep), valid_city, na.rm = TRUE),
-    prop_in(md$city_norm, valid_city, na.rm = TRUE),
-    prop_in(md$city_swap, valid_city, na.rm = TRUE),
-    prop_in(md$city_refine, valid_city, na.rm = TRUE)
-  ),
-  total_distinct = c(
-    n_distinct(str_to_upper(md$city_sep)),
-    n_distinct(md$city_norm),
-    n_distinct(md$city_swap),
-    n_distinct(md$city_refine)
-  ),
-  unique_bad = c(
-    length(setdiff(str_to_upper(md$city_sep), valid_city)),
-    length(setdiff(md$city_norm, valid_city)),
-    length(setdiff(md$city_swap, valid_city)),
-    length(setdiff(md$city_refine, valid_city))
-  ),
-  prop_na = c(
-    prop_na(md$city_sep),
-    prop_na(md$city_norm),
-    prop_na(md$city_swap),
-    prop_na(md$city_refine)
-  )
-)
+However, this five-step process has allowed us to go from 
+`r percent(prop_in(str_to_upper(md$city_sep), valid_city3))` of our (capitalized) `city_sep` values
+being recognized as valid, to over `r percent(prop_in(str_to_upper(md$city_clean), valid_city3))`.
 
-diff_change <- progress_table$unique_bad[4]-progress_table$unique_bad[1]
-prop_change <- diff_change/progress_table$unique_bad[1]
+```{r city_prog_final}
+progress_table(
+  str_to_upper(md$city_sep),
+  md$city_norm,
+  md$city_swap,
+  md$city_refine,
+  md$city_clean,
+  compare = valid_city3
+) -> progress_table
 ```
 
-Still, our progress is significant without having to make a single manual or unconfident change.
-The percent of valid cities increased from `r percent(progress_table$prop_good[1])` to 
-`r percent(progress_table$prop_good[4])`. The number of total distinct city values decreased from
-`r comma(progress_table$total_distinct[1])` to `r comma(progress_table$total_distinct[4])`. The
-number of distinct invalid city names decreased from `r comma(progress_table$unique_bad[1])` to
-only `r comma(progress_table$unique_bad[4])`, a change of `r percent(prop_change)`.
+```{r fix_prog_stage, echo=FALSE}
+progress_table$stage <- str_remove(progress_table$stage, "\\)")
+```
 
 ```{r print_progress, echo=FALSE}
 progress_table %>% 
-  mutate_at(vars(2, 5), scales::percent) %>% 
+  mutate_at(vars(2, 4), percent) %>% 
+  mutate_at(vars(3, 5, 6), comma) %>% 
   kable(
     format = "markdown", 
     digits = 4,
     col.names = c(
-      "Normalization Stage", 
+      "Stage", 
       "Percent Valid",
       "Total Distinct", 
-      "Unique Invalid", 
-      "Prop NA"
+      "Prop NA",
+      "Total Invalid",
+      "Unique Invalid"
     )
   )
 ```
@@ -617,15 +644,15 @@ progress_table %>%
 brewer_dark2 <- RColorBrewer::brewer.pal(8, "Dark2")
 progress_table %>% 
   mutate(stage = as_factor(stage)) %>% 
-  ggplot(aes(x = stage, y = prop_good)) +
+  ggplot(aes(x = stage, y = prop_in)) +
   geom_hline(yintercept = 0.99) +
   geom_col(fill = brewer_dark2[2]) +
   coord_cartesian(ylim = c(0.75, 1)) +
   scale_y_continuous(labels = percent) +
   labs(
-    title = "Missouri Expenditures Payee City Progress",
+    title = "Maryland Expenditures Payee City Progress",
     subtitle = "Percent of total values contained in pre-defined list of cities",
-    caption = "Source: Missouri Ethics Commission",
+    caption = "Source: Maryland Campaign Reporting Information System",
     x = "Wrangling Stage",
     y = "Proportion Valid Cities"
   )
@@ -634,10 +661,10 @@ progress_table %>%
 ```{r wrangle_bar_distinct, echo=FALSE}
 progress_table %>% 
   mutate(stage = as_factor(stage)) %>% 
-  select(-prop_good, -prop_na) %>% 
+  select(-prop_in, -prop_na, -n_out) %>% 
   rename(
-    All = total_distinct,
-    Invalid = unique_bad
+    All = n_distinct,
+    Invalid = n_diff
   ) %>% 
   gather(
     -stage,
@@ -649,9 +676,9 @@ progress_table %>%
   scale_fill_brewer(type = "qual", palette = "Dark2") +
   scale_y_continuous(labels = comma) +
   labs(
-    title = "Missouri Expenditures Payee City Progress",
+    title = "Maryland Expenditures Payee City Progress",
     subtitle = "Total distinct number of city values",
-    caption = "Source: Missouri Ethics Commission",
+    caption = "Source: Maryland Campaign Reporting Information System",
     fill = "Distinct Values",
     x = "Wrangling Stage",
     y = "Number of Expenditures"
@@ -660,8 +687,8 @@ progress_table %>%
 
 ## Explore
 
-Now that the data is sufficiently wrangled and normalized, we should explore it
-a little for consistency issues.
+Now that the data is sufficiently wrangled and normalized, we should explore it a little for
+consistency issues.
 
 ```{r glimpse}
 head(md)
@@ -671,34 +698,39 @@ glimpse(sample_frac(md))
 
 ### Missing
 
-There are a number of records missing one of the four key variables we need to
-identify a unique transaction.
+There are a number of records missing one of the four key variables we need to identify a unique
+transaction (primarily `payee_name`).
 
 ```{r glimpse_na}
 glimpse_fun(md, count_na)
 ```
 
-We will flag these records with a new `na_flag` variable using the
-`campfin::flag_na()` function.
+We will flag these records with a new `na_flag` variable using the `campfin::flag_na()` function.
 
 ```{r flag_na}
 md <- md %>% flag_na(expenditure_date, amount, payee_name, committee_name)
 sum(md$na_flag)
-mean(md$na_flag)
+percent(mean(md$na_flag))
 ```
 
 ### Duplicates
 
-There are also a number of records that are complete duplicates of another row.
-It's possible that a campaign made multiple valid expenditures for the same
-amount, to the same vendor, on the same day. However, we will flag these two
-variables just to be safe. We can create a new `dupe_flag` variable using the
-`campfin::flag_dupes()` function.
+There are also a number of records that are complete duplicates of another row. It's possible that
+a campaign made multiple valid expenditures for the same amount, to the same vendor, on the same
+day. However, we will flag these two variables just to be safe. We can create a new `dupe_flag`
+variable using the `campfin::flag_dupes()` function.
 
 ```{r flag_dupes}
 md <- flag_dupes(md, everything())
 sum(md$dupe_flag)
-mean(md$dupe_flag)
+percent(mean(md$dupe_flag))
+```
+
+```{r view_dupes}
+md %>% 
+  filter(dupe_flag) %>% 
+  select(expenditure_date, amount, payee_name, committee_name) %>% 
+  arrange(expenditure_date)
 ```
 
 ### Categorical
@@ -768,54 +800,169 @@ md %>%
   )
 ```
 
-```{r}
-
+```{r amount_violin_category, echo=FALSE}
+md %>%
+  filter(expense_category %in% most_common(expense_category)) %>% 
+  ggplot(
+    mapping = aes(
+      x = reorder(expense_category, amount), 
+      y = amount
+    )
+  ) +
+  geom_violin(
+    mapping = aes(fill = expense_category),
+    scale = "width"
+  ) +
+  scale_fill_brewer(palette = "Dark2", guide = FALSE) +
+  scale_y_continuous(
+    breaks = c(1 %o% 10^(0:6)),
+    labels = dollar,
+    trans = "log10"
+  ) +
+  labs(
+    title = "Maryland Expenditure Amount Distribution",
+    caption = "Source: Maryland Campaign Reporting Information System",
+    x = "Amount",
+    y = "Count"
+  ) + 
+  theme(axis.text.x = element_text(angle = 10, vjust = 1, hjust = 1))
 ```
 
 #### Dates
 
-```{r}
-md <- mutate(md, year = year(date))
-```
+The `expenditure_date` is very clean, given that our data was downloaded from a search result 
+bounded by 2008-01-01 and `lubridate::today()`.
 
 ```{r date_range, collapse=TRUE}
-min(md$date)
-sum(md$year < 2000)
-max(md$date)
-sum(md$date > today())
+min(md$expenditure_date)
+max(md$expenditure_date)
+sum(md$expenditure_date > today())
+```
+
+We can use `lubridate::year()` to create an `expenditure_year` variable from the 
+`expenditure_date`.
+
+```{r add_year}
+md <- mutate(md, expenditure_year = year(expenditure_date))
+```
+
+```{r year_bar_count, echo=FALSE}
+md %>% 
+  count(expenditure_year) %>% 
+  mutate(even = is_even(expenditure_year)) %>% 
+  ggplot(aes(x = expenditure_year, y = n)) +
+  geom_col(aes(fill = even)) +
+  scale_fill_brewer(palette = "Dark2") +
+  scale_y_continuous(labels = comma) +
+  scale_x_continuous(breaks = 2008:2019) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "Maryland Expenditures Count by Year",
+    caption = "Source: Maryland Campaign Reporting Information System",
+    fill = "Election Year",
+    x = "Year Made",
+    y = "Number of Expenditures"
+  )
+```
+
+```{r year_bar_median, echo=FALSE}
+md %>% 
+  group_by(expenditure_year) %>% 
+  summarize(median = median(amount)) %>% 
+  mutate(even = is_even(expenditure_year)) %>% 
+  ggplot(aes(x = expenditure_year, y = median)) +
+  geom_col(aes(fill = even)) +
+  scale_fill_brewer(palette = "Dark2") +
+  scale_y_continuous(labels = dollar) +
+  scale_x_continuous(breaks = 2008:2019) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "Maryland Expenditures Median Amount by Year",
+    caption = "Source: Maryland Campaign Reporting Information System",
+    fill = "Election Year",
+    x = "Year Made",
+    y = "Median Expenditure"
+  )
+```
+
+```{r year_bar_sum, echo=FALSE}
+md %>% 
+  group_by(expenditure_year) %>% 
+  summarize(sum = sum(amount)) %>% 
+  mutate(even = is_even(expenditure_year)) %>% 
+  ggplot(aes(x = expenditure_year, y = sum)) +
+  geom_col(aes(fill = even)) +
+  scale_fill_brewer(palette = "Dark2") +
+  scale_y_continuous(labels = dollar) +
+  scale_x_continuous(breaks = 2008:2019) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "Maryland Expenditures Total Amount by Year",
+    caption = "Source: Maryland Campaign Reporting Information System",
+    fill = "Election Year",
+    x = "Year Made",
+    y = "Median Expenditure"
+  )
+```
+
+```{r year_line_sum, echo=FALSE}
+md %>% 
+  mutate(
+    month = month(expenditure_date),
+    even = is_even(expenditure_year)
+  ) %>% 
+  group_by(month, even) %>% 
+  summarize(sum = sum(amount)) %>% 
+  ggplot(aes(x = month, y = sum)) +
+  geom_line(aes(color = even), size = 2) +
+  scale_color_brewer(palette = "Dark2") +
+  scale_y_continuous(labels = dollar) +
+  scale_x_continuous(breaks = 1:12, labels = month.abb) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "Maryland Expenditures Total Amount by Year",
+    caption = "Source: Maryland Campaign Reporting Information System",
+    color = "Election Year",
+    x = "Year Made",
+    y = "Median Expenditure"
+  )
 ```
 
 ## Conclude
 
 1. There are `r nrow(md)` records in the database.
 1. There are `r sum(md$dupe_flag)` duplicate records in the database.
-1. The range and distribution of `amount` seems reasonable, and `date` has been cleaned by removing
-`r sum(md$date_flag, na.rm = T)` values from the distance past or future.
-1. There are `r sum(md$na_flag)` records missing either recipient or date.
+1. The range and distribution of `amount` and `date` seem reasonable.
+1. There are `r sum(md$na_flag)` records missing a `payee_name`.
 1. Consistency in geographic data has been improved with `campfin::normal_*()`.
 1. The 5-digit `zip_norm` variable has been created with `campfin::normal_zip()`.
-1. The 4-digit `year_clean` variable has been created with `lubridate::year()`.
+1. The 4-digit `expenditure_year` variable has been created with `lubridate::year()`.
 
 ## Export
 
 ```{r create_proc_dir}
-proc_dir <- here("in", "expends", "data", "processed")
+proc_dir <- here("md", "expends", "data", "processed")
 dir_create(proc_dir)
 ```
 
 ```{r write_clean}
-mo %>% 
+md %>% 
   select(
+    -address_sep,
+    -zip_sep,
+    -state_sep,
+    -state_norm,
+    -city_sep,
     -city_norm,
-    -city_swap,
     -city_match,
     -city_swap,
+    -city_swap,
     -match_dist,
+    -match_abb,
     -city_refine,
-    -year
   ) %>% 
   write_csv(
-    path = glue("{proc_dir}/mo_expends_clean.csv"),
+    path = glue("{proc_dir}/md_expends_clean.csv"),
     na = ""
   )
 ```
