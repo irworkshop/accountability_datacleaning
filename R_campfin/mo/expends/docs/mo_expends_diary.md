@@ -1,7 +1,7 @@
 Missouri Expenditures
 ================
 Kiernan Nicholls
-2019-08-21 15:58:25
+2019-09-30 12:58:29
 
   - [Project](#project)
   - [Objectives](#objectives)
@@ -12,6 +12,7 @@ Kiernan Nicholls
   - [Wrangle](#wrangle)
   - [Conclude](#conclude)
   - [Export](#export)
+  - [Lookup](#lookup)
 
 <!-- Place comments regarding knitting here -->
 
@@ -89,7 +90,7 @@ feature and should be run as such. The project also uses the dynamic
 ``` r
 # where dfs this document knit?
 here::here()
-#> [1] "/home/ubuntu/R/accountability_datacleaning/R_campfin"
+#> [1] "/home/kiernan/R/accountability_datacleaning/R_campfin"
 ```
 
 ## Data
@@ -243,8 +244,8 @@ glimpse(sample_frac(mo))
 ``` r
 glimpse_fun(mo, count_na)
 #> # A tibble: 16 x 4
-#>    var              type       n         p
-#>    <chr>            <chr>  <int>     <dbl>
+#>    col              type       n         p
+#>    <chr>            <chr>  <dbl>     <dbl>
 #>  1 cd3_b_id         chr        0 0        
 #>  2 mecid            chr        0 0        
 #>  3 committee_name   chr        0 0        
@@ -306,8 +307,8 @@ percent(mean(mo$dupe_flag))
 ``` r
 glimpse_fun(mo, n_distinct)
 #> # A tibble: 20 x 4
-#>    var              type       n          p
-#>    <chr>            <chr>  <int>      <dbl>
+#>    col              type       n          p
+#>    <chr>            <chr>  <dbl>      <dbl>
 #>  1 cd3_b_id         chr   276742 1         
 #>  2 mecid            chr     6816 0.0246    
 #>  3 committee_name   chr     7254 0.0262    
@@ -438,7 +439,7 @@ if (packageVersion("tidyr") > "0.8.3.9") {
     mutate(
       address_norm = normal_address(
         address = adress_full,
-        add_abbs = usps,
+        add_abbs = usps_street,
         na_rep = TRUE
       )
     )
@@ -456,15 +457,15 @@ We can see how this improves consistency across the `address_1` and
     #>    address_1                address_2             address_norm                                  
     #>    <chr>                    <chr>                 <chr>                                         
     #>  1 7925 Clayton Road        Suite 200             7925 CLAYTON ROAD SUITE 200                   
-    #>  2 135 Paul Avenue          Ste B                 135 PAUL AVENUE STE B                         
-    #>  3 5555 Hilton Ave          Ste 203               5555 HILTON AVENUE STE 203                    
+    #>  2 135 Paul Avenue          Ste B                 135 PAUL AVENUE SUITE B                       
+    #>  3 5555 Hilton Ave          Ste 203               5555 HILTON AVENUE SUITE 203                  
     #>  4 2001 Holly Ave           #5                    2001 HOLLY AVENUE 5                           
     #>  5 "1034 S Brentwood Blvd " Suite 1700            1034 SOUTH BRENTWOOD BOULEVARD SUITE 1700     
     #>  6 6142 Greer               6142 Greer            6142 GREER 6142 GREER                         
-    #>  7 1200 18th St NW          Ste 700               1200 18TH STREET NW STE 700                   
-    #>  8 850 Quincy Street NW     #402                  850 QUINCY STREET NW 402                      
+    #>  7 1200 18th St NW          Ste 700               1200 18TH STREET NORTHWEST SUITE 700          
+    #>  8 850 Quincy Street NW     #402                  850 QUINCY STREET NORTHWEST 402               
     #>  9 3433 Hampton Ave         3841 Holly Hills Blvd 3433 HAMPTON AVENUE 3841 HOLLY HILLS BOULEVARD
-    #> 10 34100 Woodward Ave       Ste 250               34100 WOODWARD AVENUE STE 250
+    #> 10 34100 Woodward Ave       Ste 250               34100 WOODWARD AVENUE SUITE 250
 
 ### ZIP
 
@@ -499,11 +500,11 @@ This brings our valid percentage to 99.6%.
 n_distinct(mo$zip_norm)
 #> [1] 4682
 prop_in(mo$zip_norm, valid_zip)
-#> [1] 0.995687
+#> [1] 0.9955967
 length(setdiff(mo$zip_norm, valid_zip))
 #> [1] 511
 count_na(mo$zip_norm) - count_na(mo$zip)
-#> [1] 227
+#> [1] 218
 ```
 
 ### State
@@ -514,15 +515,15 @@ The `state` variable is also very clean, already at 99.8%.
 n_distinct(mo$state)
 #> [1] 84
 prop_in(mo$state, valid_state, na.rm = TRUE)
-#> [1] 0.9976728
+#> [1] 0.9976439
 length(setdiff(mo$state, valid_state))
-#> [1] 27
+#> [1] 29
 setdiff(mo$state, valid_state)
-#>  [1] NA   "Ks" "Mo" "mo" "0"  "na" "CN" "Tx" "UK" "Fl" " "  "Pa" "SP" "SA" "Ca" "US" "Il" "AU" "Va"
-#> [20] "b"  "EN" "Fr" "JS" "mO" "Ne" "Ia" "KC"
+#>  [1] NA   "Ks" "Mo" "mo" "0"  "na" "BC" "CN" "Tx" "UK" "Fl" " "  "Pa" "SP" "SA" "Ca" "US" "Il" "AU"
+#> [20] "Va" "b"  "EN" "Fr" "JS" "mO" "QC" "Ne" "Ia" "KC"
 ```
 
-There are still 27 invalid values which we can remove.
+There are still 29 invalid values which we can remove.
 
 ``` r
 mo <- mo %>% 
@@ -538,7 +539,7 @@ mo <- mo %>%
 
 ``` r
 n_distinct(mo$state_norm)
-#> [1] 52
+#> [1] 56
 prop_in(mo$state_norm, valid_state)
 #> [1] 1
 ```
@@ -566,7 +567,7 @@ over 99% using the other steps in the process.
 n_distinct(mo$city)
 #> [1] 6203
 prop_in(str_to_upper(mo$city), valid_city, na.rm = TRUE)
-#> [1] 0.7721939
+#> [1] 0.7721903
 length(setdiff(mo$city, valid_city))
 #> [1] 5594
 count_na(mo$city)
@@ -582,7 +583,7 @@ mo <- mo %>%
       city = city, 
       geo_abbs = usps_city,
       st_abbs = c("MO", "DC", "MISSOURI"),
-      na = na_city,
+      na = invalid_city,
       na_rep = TRUE
     )
   )
@@ -592,33 +593,33 @@ This process brought us to 95.7% valid.
 
 ``` r
 n_distinct(mo$city_norm)
-#> [1] 3635
+#> [1] 3639
 prop_in(mo$city_norm, valid_city, na.rm = TRUE)
-#> [1] 0.9574533
+#> [1] 0.9574209
 length(setdiff(mo$city_norm, valid_city))
-#> [1] 1625
+#> [1] 1629
 count_na(mo$city_norm)
-#> [1] 199
+#> [1] 198
 ```
 
-It also increased the proportion of `NA` values by 0.0679%. These new
+It also increased the proportion of `NA` values by 0.0676%. These new
 `NA` values were either a single (possibly repeating) character, or
 contained in the `na_city` vector.
 
-    #> # A tibble: 114 x 4
-    #>    zip_norm state_norm city      city_norm
-    #>    <chr>    <chr>      <chr>     <chr>    
-    #>  1 63368    MO         Online    <NA>     
-    #>  2 65203    MO         Unknown   <NA>     
-    #>  3 65101    MO         unknown   <NA>     
-    #>  4 <NA>     MO         None      <NA>     
-    #>  5 63376    MO         requested <NA>     
-    #>  6 64444    MO         Unkown    <NA>     
-    #>  7 <NA>     MO         Unknown   <NA>     
-    #>  8 65803    MO         internet  <NA>     
-    #>  9 66212    MO         Unknown   <NA>     
-    #> 10 12345    CA         Online    <NA>     
-    #> # … with 104 more rows
+    #> # A tibble: 113 x 4
+    #>    zip_norm state_norm city          city_norm
+    #>    <chr>    <chr>      <chr>         <chr>    
+    #>  1 64444    MO         Unkown        <NA>     
+    #>  2 63044    MO         unknown       <NA>     
+    #>  3 65101    MO         unknown       <NA>     
+    #>  4 <NA>     MO         xxxxx         <NA>     
+    #>  5 63376    MO         requested     <NA>     
+    #>  6 30353    GA         PO Box 536216 <NA>     
+    #>  7 <NA>     MO         Unknown       <NA>     
+    #>  8 65043    <NA>       Requested     <NA>     
+    #>  9 <NA>     PA         Online        <NA>     
+    #> 10 95033    IL         Requested     <NA>     
+    #> # … with 103 more rows
 
 #### Swap
 
@@ -631,7 +632,7 @@ than 3, we can confidently swap these two values.
 mo <- mo %>% 
   rename(city_raw = city) %>% 
   left_join(
-    y = geo,
+    y = zipcodes,
     by = c(
       "state_norm" = "state",
       "zip_norm" = "zip"
@@ -648,16 +649,16 @@ mo <- mo %>%
   )
 ```
 
-This is a very fast way to increase the valid proportion to 97.1% and
-reduce the number of distinct *invalid* values from 1625 to only 590
+This is a very fast way to increase the valid proportion to 97.0% and
+reduce the number of distinct *invalid* values from 1629 to only 596
 
 ``` r
 n_distinct(mo$city_swap)
-#> [1] 2572
+#> [1] 2579
 prop_in(mo$city_swap, valid_city, na.rm = TRUE)
-#> [1] 0.970532
+#> [1] 0.9704719
 length(setdiff(mo$city_swap, valid_city))
-#> [1] 590
+#> [1] 596
 ```
 
 #### Refine
@@ -678,7 +679,7 @@ good_refine <- mo %>%
   ) %>% 
   filter(city_refine != city_swap) %>% 
   inner_join(
-    y = geo,
+    y = zipcodes,
     by = c(
       "city_refine" = "city",
       "state_norm" = "state",
@@ -698,11 +699,11 @@ nrow(good_refine)
     #>  3 CA         92067    Ranchero Sante Fe     RANCHO SANTA FE     3
     #>  4 CA         94133    "San Francisco CA "   SAN FRANCISCO       1
     #>  5 CA         95131    Jose San              SAN JOSE            1
-    #>  6 DC         20009    NW Washington         WASHINGTON          1
-    #>  7 IA         52802    Daavenportvenport     DAVENPORT           1
-    #>  8 IL         60094    Palenentine           PALATINE            1
-    #>  9 KS         66101    Kanansas Citysas City KANSAS CITY         1
-    #> 10 KS         66101    Kansas City KS        KANSAS CITY         1
+    #>  6 IA         52802    Daavenportvenport     DAVENPORT           1
+    #>  7 IL         60094    Palenentine           PALATINE            1
+    #>  8 KS         66101    Kanansas Citysas City KANSAS CITY         1
+    #>  9 KS         66101    Kansas City KS        KANSAS CITY         1
+    #> 10 MA         02421    Lextoning             LEXINGTON           1
     #> # … with 47 more rows
 
 We can join these good refined values back to the original data and use
@@ -719,11 +720,11 @@ This brings us to 97.1% valid values.
 
 ``` r
 n_distinct(mo$city_refine)
-#> [1] 2532
+#> [1] 2539
 prop_in(mo$city_refine, valid_city, na.rm = TRUE)
-#> [1] 0.9707729
+#> [1] 0.9707128
 length(setdiff(mo$city_refine, valid_city))
-#> [1] 550
+#> [1] 556
 ```
 
 #### Progress
@@ -737,20 +738,20 @@ mo %>%
   filter(city_refine %out% valid_city) %>% 
   count(state_norm, city_refine, sort = TRUE) %>% 
   drop_na(city_refine)
-#> # A tibble: 553 x 3
+#> # A tibble: 559 x 3
 #>    state_norm city_refine           n
 #>    <chr>      <chr>             <int>
 #>  1 KS         OVERLAND PARK       868
 #>  2 MO         RAYTOWN             665
-#>  3 MO         NORTH KANSAS CITY   518
+#>  3 MO         NORTH KANSAS CITY   513
 #>  4 KS         PRAIRIE VILLAGE     430
 #>  5 MO         OVERLAND            421
 #>  6 MO         WEBSTER GROVES      418
 #>  7 MO         UNIVERSITY CITY     376
 #>  8 MO         STLOUIS             318
-#>  9 MO         RICHMOND HEIGHTS    312
-#> 10 KS         LENEXA              256
-#> # … with 543 more rows
+#>  9 KS         LENEXA              256
+#> 10 MO         RICHMOND HEIGHTS    254
+#> # … with 549 more rows
 ```
 
 ``` r
@@ -790,17 +791,17 @@ valid_city <- c(
 
 Still, our progress is significant without having to make a single
 manual or unconfident change. The percent of valid cities increased from
-79.0% to 99.2%. The number of total distinct city values decreased from
-4,700 to 2,528. The number of distinct invalid city names decreased from
-2,721 to only 531, a change of -80.5%.
+79.0% to 99.1%. The number of total distinct city values decreased from
+4,700 to 2,535. The number of distinct invalid city names decreased from
+2,722 to only 537, a change of -80.3%.
 
 | Normalization Stage | Total Distinct | Percent Valid | Unique Invalid |
 | :------------------ | -------------: | ------------: | -------------: |
-| raw                 |         0.7902 |          4700 |           2721 |
-| norm                |         0.9767 |          3635 |           1610 |
-| swap                |         0.9897 |          2572 |            575 |
-| refine              |         0.9899 |          2532 |            535 |
-| final               |         0.9915 |          2528 |            531 |
+| raw                 |         0.7901 |          4700 |           2722 |
+| norm                |         0.9764 |          3639 |           1614 |
+| swap                |         0.9894 |          2579 |            581 |
+| refine              |         0.9897 |          2539 |            541 |
+| final               |         0.9912 |          2535 |            537 |
 
 ![](../plots/wrangle_bar_prop-1.png)<!-- -->
 
@@ -824,12 +825,12 @@ manual or unconfident change. The percent of valid cities increased from
 ## Export
 
 ``` r
-proc_dir <- here("in", "expends", "data", "processed")
+proc_dir <- here("mo", "expends", "data", "processed")
 dir_create(proc_dir)
 ```
 
 ``` r
-mo %>% 
+mo <- mo %>% 
   select(
     -city_norm,
     -city_swap,
@@ -838,9 +839,31 @@ mo %>%
     -match_dist,
     -city_refine,
     -year
-  ) %>% 
-  write_csv(
-    path = glue("{proc_dir}/mo_expends_clean.csv"),
-    na = ""
   )
+```
+
+## Lookup
+
+``` r
+lookup <- read_csv("mo/expends/data/mo_city_lookup.csv") %>% select(1:2)
+mo <- left_join(mo, lookup, by = c("city_final" = "CITY_FINAL"))
+
+progress_table(
+  mo$city_raw,
+  mo$city_final, 
+  mo$CITY_FINAL2, 
+  compare = valid_city
+)
+#> # A tibble: 3 x 6
+#>   stage       prop_in n_distinct   prop_na  n_out n_diff
+#>   <chr>         <dbl>      <dbl>     <dbl>  <dbl>  <dbl>
+#> 1 city_raw     0.0512       6203 0.0000397 262558   5579
+#> 2 city_final   0.991        2535 0.0101      2398    537
+#> 3 CITY_FINAL2  0.988        2307 0.0106      3248    320
+
+write_csv(
+  x = mo,
+  path = glue("{proc_dir}/mo_expends_clean.csv"),
+  na = ""
+)
 ```
