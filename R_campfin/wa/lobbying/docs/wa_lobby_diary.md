@@ -1,7 +1,7 @@
 State Data
 ================
 First Last
-2019-09-26 17:15:24
+2019-09-30 10:41:59
 
   - [Project](#project)
   - [Objectives](#objectives)
@@ -12,6 +12,7 @@ First Last
   - [Categorical](#categorical)
   - [Continuous](#continuous)
   - [Wrangle](#wrangle)
+  - [Export](#export)
 
 <!-- Place comments regarding knitting here -->
 
@@ -241,10 +242,9 @@ count(wa, employment_year)
 
 ## Wrangle
 
-We will convert every character column to uppercase for consistency.
-
 ``` r
-wa <- mutate_if(wa, is_character, str_to_upper)
+wa <- mutate_at(wa, vars(3, 6, 7, 8), str_to_upper)
+wa <- mutate_at(wa, vars(lobbyist_email), str_to_lower)
 ```
 
 ### Telephone
@@ -313,8 +313,9 @@ zips2 <- zipcodes %>%
   add_row(city = "SEATAC", state = "WA")
 ```
 
-Then, for each row, we attempt to extract every city name for that row’s
-state from the end of the string.
+Then, for each row, we attempt to extract every city name (for that
+row’s state) from the end of the address string sans ZIP code and
+state.
 
 ``` r
 for (row in seq_along(wa$other_sep)) {
@@ -474,4 +475,54 @@ progress_table(
 #> 1 city_sep    0.979        148 0          90     11
 #> 2 city_norm   0.979        148 0          90     11
 #> 3 city_swap   0.980        145 0.00370    86      9
+```
+
+``` r
+wa %>% 
+  filter(city_swap %out% valid_city) %>% 
+  count(city_swap, sort = TRUE)
+#> # A tibble: 9 x 2
+#>   city_swap            n
+#>   <chr>            <int>
+#> 1 TUKWILA             42
+#> 2 SEATAC              20
+#> 3 <NA>                16
+#> 4 LAKE FOREST PARK    11
+#> 5 BURIEN               5
+#> 6 LAKE TAPPS           3
+#> 7 TIGARD               3
+#> 8 BRIDGEVIEW COURT     1
+#> 9 GOLD RIVER           1
+```
+
+## Export
+
+``` r
+proc_dir <- here("wa", "lobbying", "data", "processed")
+dir_create(proc_dir)
+```
+
+``` r
+wa %>% 
+  select(
+    -zip_sep,
+    -other_sep,
+    -city_sep,
+    -city_norm,
+    -address_sep,
+    -city_match,
+    -match_dist,
+    -match_abb
+  ) %>% 
+  rename(
+    address_clean = address_norm,
+    city_clean = city_swap,
+    state_clean = state_sep,
+    zip_clean = zip_norm,
+    phone_clean = phone_norm
+  ) %>% 
+  write_csv(
+    path = glue("{proc_dir}/wa_lobbyist_clean.csv"),
+    na = ""
+  )
 ```

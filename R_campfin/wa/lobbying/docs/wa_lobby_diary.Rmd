@@ -215,10 +215,9 @@ wa %>%
 
 ## Wrangle
 
-We will convert every character column to uppercase for consistency.
-
-```{r upper_all}
-wa <- mutate_if(wa, is_character, str_to_upper)
+```{r case_change}
+wa <- mutate_at(wa, vars(3, 6, 7, 8), str_to_upper)
+wa <- mutate_at(wa, vars(lobbyist_email), str_to_lower)
 ```
 
 ### Telephone
@@ -277,8 +276,8 @@ zips2 <- zipcodes %>%
   add_row(city = "SEATAC", state = "WA")
 ```
 
-Then, for each row, we attempt to extract every city name for that row's state from the end of the
-string.
+Then, for each row, we attempt to extract every city name (for that row's state) from the end of
+the address string sans ZIP code and state.
 
 ```{r city_loop_extract}
 for (row in seq_along(wa$other_sep)) {
@@ -407,5 +406,43 @@ progress_table(
   wa$city_swap,
   compare = valid_city
 )
+```
+
+```{r}
+wa %>% 
+  filter(city_swap %out% valid_city) %>% 
+  count(city_swap, sort = TRUE)
+```
+
+## Export
+
+```{r create_proc_dir}
+proc_dir <- here("wa", "lobbying", "data", "processed")
+dir_create(proc_dir)
+```
+
+```{r write_clean}
+wa %>% 
+  select(
+    -zip_sep,
+    -other_sep,
+    -city_sep,
+    -city_norm,
+    -address_sep,
+    -city_match,
+    -match_dist,
+    -match_abb
+  ) %>% 
+  rename(
+    address_clean = address_norm,
+    city_clean = city_swap,
+    state_clean = state_sep,
+    zip_clean = zip_norm,
+    phone_clean = phone_norm
+  ) %>% 
+  write_csv(
+    path = glue("{proc_dir}/wa_lobbyist_clean.csv"),
+    na = ""
+  )
 ```
 
