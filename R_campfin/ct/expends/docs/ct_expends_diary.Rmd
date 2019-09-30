@@ -477,11 +477,7 @@ We can should flag any variable missing the key values needed to identify a tran
 parties, how much, and when.
 
 ```{r flag_na, collapse=TRUE}
-ct <- ct %>% 
-  mutate(
-    na_flag = is.na(payee) | is.na(amount) | is.na(date_clean) | is.na(committee)
-  )
-
+ct <- flag_na(ct, payee, amount, date_clean, committee)
 sum(ct$na_flag)
 percent(mean(ct$na_flag))
 ```
@@ -489,7 +485,9 @@ percent(mean(ct$na_flag))
 ### Duplicates
 
 ```{r get_dupes, eval=FALSE}
-ct_dupes <- get_dupes(ct)
+ct <- flag_dupes(ct, everything())
+sum(ct$dupe_flag)
+percent(mean(ct$dupe_flag))
 ```
 
 ## Wrangle
@@ -501,7 +499,7 @@ ct <- ct %>%
   mutate(
     address_clean = normal_address(
       address = street_address,
-      add_abbs = usps,
+      add_abbs = usps_street,
       na_rep = TRUE
     )
   )
@@ -521,9 +519,9 @@ There are no ZIP codes in the data base.
 
 ```{r normal_state, collapse=TRUE}
 n_distinct(ct$state)
-prop_in(ct$state, geo$state, na.rm = TRUE)
-sum(na.omit(ct$state) %out% geo$state)
-sample(setdiff(ct$state, geo$state), 10)
+prop_in(ct$state, valid_state, na.rm = TRUE)
+sum(na.omit(ct$state) %out% valid_state)
+sample(setdiff(ct$state, valid_state), 10)
 
 
 ct <- ct %>% 
@@ -531,7 +529,7 @@ ct <- ct %>%
     state_clean = normal_state(
       abbreviate = TRUE,
       na_rep = TRUE,
-      valid = unique(geo$state),
+      valid = unique(valid_state),
       state = state %>% 
         str_replace("^CONN$", "CT") %>% 
         str_replace("^C\\sT$", "CT") %>% 
@@ -544,17 +542,17 @@ ct <- ct %>%
   )
 
 n_distinct(ct$state_clean)
-prop_in(ct$state_clean, geo$state, na.rm = TRUE)
-sum(na.omit(ct$state_clean) %out% geo$state)
+prop_in(ct$state_clean, valid_state, na.rm = TRUE)
+sum(na.omit(ct$state_clean) %out% valid_state)
 ```
 
 ### City
 
 ```{r count_city}
 n_distinct(ct$city)
-prop_in(ct$city, geo$city, na.rm = TRUE)
-sum(na.omit(ct$city) %out% geo$city)
-sample(setdiff(ct$city, geo$city), 10)
+prop_in(ct$city, valid_city, na.rm = TRUE)
+sum(na.omit(ct$city) %out% valid_city)
+sample(setdiff(ct$city, valid_city), 10)
 ```
 
 ```{r normal_city}
@@ -619,5 +617,18 @@ ct %>%
     na = "",
     path = glue("{proc_dir}/ct_expends_clean.csv")
   )
+```
+
+## Lookup
+
+```{r lookup_city}
+lookup <- read_csv("ct/expends/data/ct_city_lookup.csv") %>% select(1:2)
+ct <- left_join(ct, lookup)
+progress_table(ct$city_norm, ct$city_clean, compare = valid_city)
+write_csv(
+  x = ct,
+  path = glue("{proc_dir}/mi_expends_clean.csv"),
+  na = ""
+)
 ```
 
