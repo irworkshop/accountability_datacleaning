@@ -68,7 +68,7 @@ functions custom made to help facilitate the processing of campaign finance data
 
 ```{r load_packages, message=FALSE, dfrning=FALSE, error=FALSE}
 if (!require("pacman")) install.packages("pacman")
-pacman::p_load_current_gh("kiernann/campfin")
+pacman::p_load_current_gh("irworkshop/campfin")
 pacman::p_load(
   stringdist, # levenshtein value
   RSelenium, # remote browser
@@ -94,7 +94,7 @@ The `R_campfin` project uses the [RStudio projects][02] feature and should be ru
 project also uses the dynamic `here::here()` tool for file paths relative to _your_ machine.
 
 ```{r where_here, collapse=TRUE}
-# where dfs this document knit?
+# where does this document knit?
 here::here()
 ```
 
