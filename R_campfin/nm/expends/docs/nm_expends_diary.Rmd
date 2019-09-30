@@ -349,7 +349,7 @@ nm <- nm %>%
   mutate(
     address_norm = normal_address(
       address = address,
-      add_abbs = usps,
+      add_abbs = usps_street,
       na_rep = TRUE
     )
   )
@@ -368,8 +368,8 @@ nm %>%
 
 ```{r zip_pre, collapse=TRUE}
 n_distinct(nm$zip)
-prop_in(nm$zip, geo$zip, na.rm = TRUE)
-length(setdiff(nm$zip, geo$zip))
+prop_in(nm$zip, valid_zip, na.rm = TRUE)
+length(setdiff(nm$zip, valid_zip))
 ```
 
 ```{r normal_zip}
@@ -384,16 +384,16 @@ nm <- nm %>%
 
 ```{r zip_post, collapse=TRUE}
 n_distinct(nm$zip_norm)
-prop_in(nm$zip_norm, geo$zip, na.rm = TRUE)
-length(setdiff(nm$zip_norm, geo$zip))
+prop_in(nm$zip_norm, valid_zip, na.rm = TRUE)
+length(setdiff(nm$zip_norm, valid_zip))
 ```
 
 ### State
 
 ```{r state_pre, collapse=TRUE}
 n_distinct(nm$state)
-prop_in(nm$state, geo$state, na.rm = TRUE)
-length(setdiff(nm$state, geo$state))
+prop_in(nm$state, valid_state, na.rm = TRUE)
+length(setdiff(nm$state, valid_state))
 ```
 
 ```{r normal_state}
@@ -401,7 +401,7 @@ nm <- nm %>%
   mutate(
     state_norm = normal_state(
       abbreviate = TRUE,
-      valid = geo$state,
+      valid = valid_state,
       na_rep = TRUE,
       state = state %>% 
         str_replace("^NEWMEXICO$", "NM") %>% 
@@ -434,15 +434,15 @@ nm <- nm %>%
 
 ```{r state_post, collapse=TRUE}
 n_distinct(nm$state_norm)
-prop_in(nm$state_norm, geo$state, na.rm = TRUE)
+prop_in(nm$state_norm, valid_state, na.rm = TRUE)
 ```
 
 ### City
 
 ```{r city_pre, collapse=TRUE}
 n_distinct(nm$city)
-prop_in(nm$city, geo$city, na.rm = TRUE)
-length(setdiff(nm$city, geo$city))
+prop_in(nm$city, valid_city, na.rm = TRUE)
+length(setdiff(nm$city, valid_city))
 ```
 
 ```{r rename_city}
@@ -455,7 +455,7 @@ nm <- rename(nm, city_raw = city)
 nm <- nm %>%
   mutate(
     city_norm = normal_city(
-      na = na_city,
+      na = invalid_city,
       na_rep = TRUE,
       geo_abbs = usps_city,
       st_abbs = c("NM", "DC", "NEW MEXICO"),
@@ -483,8 +483,8 @@ nm <- nm %>%
 
 ```{r city_post_norm, collapse=TRUE}
 n_distinct(nm$city_norm)
-prop_in(nm$city_norm, geo$city, na.rm = TRUE)
-length(setdiff(nm$city_norm, geo$city))
+prop_in(nm$city_norm, valid_city, na.rm = TRUE)
+length(setdiff(nm$city_norm, valid_city))
 ```
 
 #### Swap
@@ -492,7 +492,7 @@ length(setdiff(nm$city_norm, geo$city))
 ```{r swap_city}
 nm <- nm %>%
   left_join(
-    y = geo,
+    y = zipcodes,
     by = c(
       "state_norm" = "state",
       "zip_norm" = "zip"
@@ -514,13 +514,13 @@ sum(nm$match_dist == 1, na.rm = TRUE)
 
 ```{r city_post_swap, collapse=TRUE}
 n_distinct(nm$city_swap)
-prop_in(nm$city_swap, geo$city, na.rm = TRUE)
-length(setdiff(nm$city_swap, geo$city))
+prop_in(nm$city_swap, valid_city, na.rm = TRUE)
+length(setdiff(nm$city_swap, valid_city))
 ```
 
 ```{r count_city_post_swap}
 nm %>% 
-  filter(city_swap %out% geo$city) %>% 
+  filter(city_swap %out% valid_city) %>% 
   count(city_swap, sort = TRUE)
 ```
 
@@ -530,7 +530,7 @@ nm %>%
 nm_refined <- nm %>% 
   mutate(
     city_refine = city_swap %>% 
-      key_collision_merge(dict = geo$city[geo$state == "NM"]) %>% 
+      key_collision_merge(dict = valid_city[valid_state == "NM"]) %>% 
       n_gram_merge(numgram = 2)
   )
 ```
@@ -543,8 +543,8 @@ nm <- nm %>%
 
 ```{r city_post_refine, collapse=TRUE}
 n_distinct(nm_refined$city_refine)
-prop_in(nm_refined$city_refine, geo$city, na.rm = TRUE)
-length(setdiff(nm_refined$city_refine, geo$city))
+prop_in(nm_refined$city_refine, valid_city, na.rm = TRUE)
+length(setdiff(nm_refined$city_refine, valid_city))
 ```
 
 ## Conclude
@@ -570,20 +570,31 @@ dir_create(proc_dir)
 ```
 
 ```{r write_csv}
-nm %>% 
+nm <- nm %>% 
   select(
-    -date_contribution,
-    -city_raw,
-    -state,
-    -zip,
     -city_match,
     -city_norm,
     -match_dist,
     -city_swap,
     -city_refine
-  ) %>% 
-  write_csv(
-    path = glue("{proc_dir}/nm_expends_clean.csv"),
-    na = ""
   )
 ```
+
+## Lookup
+
+```{r lookup_city}
+lookup <- read_csv("nm/expends/data/nm_city_lookup.csv") %>% select(1:2)
+nm <- left_join(nm, lookup)
+progress_table(
+  nm$city_raw,
+  nm$city_clean, 
+  nm$city_clean2, 
+  compare = valid_city
+)
+write_csv(
+  x = nm,
+  path = glue("{proc_dir}/mi_expends_clean.csv"),
+  na = ""
+)
+```
+
