@@ -63,7 +63,7 @@ functions custom made to help facilitate the processing of campaign finance data
 
 ```{r load_packages, message=FALSE, dfrning=FALSE, error=FALSE}
 if (!require("pacman")) install.packages("pacman")
-pacman::p_load_current_gh("kiernann/campfin")
+pacman::p_load_gh("irworkshop/campfin")
 pacman::p_load(
   stringdist, # levenshtein value
   snakecase, # change string case
@@ -506,7 +506,7 @@ me <- me %>%
   mutate(
     address_norm = normal_address(
       address = address_combine,
-      add_abbs = usps,
+      add_abbs = usps_street,
       na_rep = TRUE
     )
   )
@@ -523,8 +523,8 @@ me %>%
 ```{r count_zip_pre, collapse=TRUE}
 n_distinct(me$zip)
 prop_na(me$zip)
-prop_in(me$zip, geo$zip)
-length(setdiff(me$zip, geo$zip))
+prop_in(me$zip, valid_zip)
+length(setdiff(me$zip, valid_zip))
 ```
 
 ```{r normal_zip}
@@ -540,14 +540,14 @@ me <- me %>%
 ```{r count_zip_post, collapse=TRUE}
 n_distinct(me$zip_norm)
 prop_na(me$zip_norm)
-prop_in(me$zip_norm, geo$zip)
-length(setdiff(me$zip_norm, geo$zip))
+prop_in(me$zip_norm, valid_zip)
+length(setdiff(me$zip_norm, valid_zip))
 ```
 
 There are still some `zip_norm` values that are invalid. We will leave these unchanged for now.
 
 ```{r unfixed, collapse=TRUE}
-sample(unique(me$zip[which(me$zip_norm %out% geo$zip)]), 20)
+sample(unique(me$zip[which(me$zip_norm %out% valid_zip)]), 20)
 ```
 
 ### State
@@ -555,9 +555,9 @@ sample(unique(me$zip[which(me$zip_norm %out% geo$zip)]), 20)
 ```{r count_state_pre, collapse=TRUE}
 n_distinct(me$state)
 prop_na(me$state)
-prop_in(me$state, geo$state)
-length(setdiff(me$state, geo$state))
-setdiff(me$state, geo$state)
+prop_in(me$state, valid_state)
+length(setdiff(me$state, valid_state))
+setdiff(me$state, valid_state)
 ```
 
 ```{r normal_state}
@@ -568,7 +568,7 @@ me <- me %>%
       abbreviate = FALSE,
       na_rep = TRUE,
       na = c("", "NA"),
-      valid = geo$state
+      valid = valid_state
     )
   )
 ```
@@ -576,16 +576,16 @@ me <- me %>%
 ```{r count_state_post, collapse=TRUE}
 n_distinct(me$state_norm)
 prop_na(me$state)
-prop_in(me$state_norm, geo$state, na.rm = TRUE)
-length(setdiff(me$state_norm, geo$state))
+prop_in(me$state_norm, valid_state, na.rm = TRUE)
+length(setdiff(me$state_norm, valid_state))
 ```
 
 ### City
 
 ```{r count_city_pre, collapse=TRUE}
 n_distinct(me$city)
-prop_in(me$city, geo$city, na.rm = TRUE)
-length(setdiff(me$city, geo$city))
+prop_in(me$city, valid_city, na.rm = TRUE)
+length(setdiff(me$city, valid_city))
 ```
 
 #### Normalize
@@ -597,7 +597,7 @@ me <- me %>%
       city = city, 
       geo_abbs = usps_city,
       st_abbs = c("ME", "DC", "MAINE"),
-      na = na_city,
+      na = invalid_city,
       na_rep = TRUE
     )
   )
@@ -605,8 +605,8 @@ me <- me %>%
 
 ```{r count_city_post_norm, collapse=TRUE}
 n_distinct(me$city_norm)
-prop_in(me$city_norm, geo$city, na.rm = TRUE)
-length(setdiff(me$city_norm, geo$city))
+prop_in(me$city_norm, valid_city, na.rm = TRUE)
+length(setdiff(me$city_norm, valid_city))
 ```
 
 #### Swap
@@ -615,7 +615,7 @@ length(setdiff(me$city_norm, geo$city))
 me <- me %>% 
   rename(city_raw = city) %>% 
   left_join(
-    y = geo,
+    y = zipcodes,
     by = c(
       "state_norm" = "state",
       "zip_norm" = "zip"
@@ -641,14 +641,14 @@ tibble(
     n_distinct(me$city_swap)
   ),
   prop_in = c(
-    prop_in(me$city_raw, geo$city, na.rm = TRUE),
-    prop_in(me$city_norm, geo$city, na.rm = TRUE),
-    prop_in(me$city_swap, geo$city, na.rm = TRUE)
+    prop_in(me$city_raw, valid_city, na.rm = TRUE),
+    prop_in(me$city_norm, valid_city, na.rm = TRUE),
+    prop_in(me$city_swap, valid_city, na.rm = TRUE)
   ),
   unique_bad = c(
-    length(setdiff(me$city_raw, geo$city)),
-    length(setdiff(me$city_norm, geo$city)),
-    length(setdiff(me$city_swap, geo$city))
+    length(setdiff(me$city_raw, valid_city)),
+    length(setdiff(me$city_norm, valid_city)),
+    length(setdiff(me$city_swap, valid_city))
   )
 )
 ```
@@ -674,14 +674,28 @@ dir_create(proc_dir)
 ```
 
 ```{r write_clean}
-me %>% 
+me <- me %>% 
   select(
     -city_match,
     -city_norm,
-  ) %>% 
-  write_csv(
-    na = "",
-    path = glue("{proc_dir}/me_expends_clean.csv")
   )
 ```
 
+## Lookup
+
+```{r lookup_city}
+lookup <- read_csv("me/expends/data/me_city_lookup.csv") %>% select(1:2)
+me <- left_join(me, lookup, by = c("city_swap" = "CITY_SWAP"))
+
+progress_table(
+  me$city_swap, 
+  me$CITY_CLEAN, 
+  compare = valid_city
+)
+
+write_csv(
+  x = me,
+  path = glue("{proc_dir}/me_expends_clean.csv"),
+  na = ""
+)
+```
