@@ -175,7 +175,7 @@ mi <-
   # list all files
   dir_ls(raw_dir) %>% 
   # read each into a list
-  map(
+  map_dfr(
     read_tsv,
     col_type = cols(
       .default = col_character(),
@@ -184,10 +184,7 @@ mi <-
       amount = col_double()
     )
   ) %>% 
-  # in each, remove RUNTIME col
-  map(remove_empty, "cols") %>% 
-  # bind list into a data frame
-  bind_rows()
+  remove_empty("cols")
 ```
 
 ## Explore
@@ -657,3 +654,18 @@ mi %>%
     na = ""
   )
 ```
+
+## Lookup
+
+```{r}
+mi <- read_csv("mi/expends/data/processed/mi_expends_clean.csv")
+lookup <- read_csv("mi/expends/data/mi_city_lookup.csv") %>% select(1:2)
+mi <- left_join(mi, lookup)
+progress_table(mi$city_swap, mi$city_clean, compare = valid_city)
+write_csv(
+  x = mi,
+  path = glue("{proc_dir}/mi_expends_clean.csv"),
+  na = ""
+)
+```
+
