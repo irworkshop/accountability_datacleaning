@@ -1,0 +1,454 @@
+---
+title: "Texas Lobbyists"
+author: "Kiernan Nicholls"
+date: "`r Sys.time()`"
+output:
+  github_document: 
+    df_print: tibble
+    toc: true
+    toc_dept: 2
+editor_options: 
+  chunk_output_type: console
+---
+
+<!-- Place comments regarding knitting here -->
+
+```{r setup, include=FALSE, purl=FALSE}
+library(knitr)
+opts_chunk$set(
+  eval = TRUE,
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  error = FALSE,
+  collapse = TRUE,
+  comment = "#>",
+  fig.path = "../plots/",
+  fig.width = 10,
+  dpi = 300
+)
+options(width = 99)
+set.seed(5)
+```
+
+## Project
+
+The Accountability Project is an effort to cut across data silos and give journalists, policy
+professionals, activists, and the public at large a simple way to search across huge volumes of
+public data about people and organizations.
+
+Our goal is to standardizing public data on a few key fields by thinking of each dataset row as a
+transaction. For each transaction there should be (at least) 3 variables:
+
+1. All **parties** to a transaction
+2. The **date** of the transaction
+3. The **amount** of money involved
+
+## Objectives
+
+This document describes the process used to complete the following objectives:
+
+1. How many records are in the database?
+1. Check for duplicates
+1. Check ranges
+1. Is there anything blank or missing?
+1. Check for consistency issues
+1. Create a five-digit ZIP Code called `ZIP5`
+1. Create a `YEAR` field from the transaction date
+1. Make sure there is data on both parties to a transaction
+
+## Packages
+
+The following packages are needed to collect, manipulate, visualize, analyze, and communicate
+these results. The `pacman` package will facilitate their installation and attachment.
+
+The IRW's `campfin` package will also have to be installed from GitHub. This package contains
+functions custom made to help facilitate the processing of campaign finance data.
+
+```{r load_packages, message=FALSE, dfrning=FALSE, error=FALSE}
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load_gh("irworkshop/campfin")
+pacman::p_load(
+  stringdist, # levenshtein value
+  RSelenium, # remote browser
+  tidyverse, # data manipulation
+  lubridate, # datetime strings
+  magrittr, # pipe opperators
+  janitor, # dataframe clean
+  refinr, # cluster and merge
+  scales, # format strings
+  readxl, # read excel files
+  knitr, # knit documents
+  vroom, # read files fast
+  glue, # combine strings
+  here, # relative storage
+  fs # search storage 
+)
+```
+
+This document should be run as part of the `R_campfin` project, which lives as a sub-directory of
+the more general, language-agnostic [`irworkshop/accountability_datacleaning`][01] GitHub
+repository.
+
+The `R_campfin` project uses the [RStudio projects][02] feature and should be run as such. The
+project also uses the dynamic `here::here()` tool for file paths relative to _your_ machine.
+
+```{r where_here, collapse=TRUE}
+# where does this document knit?
+here::here()
+```
+
+[01]: https://github.com/irworkshop/accountability_datacleaning "TAP repo"
+[02]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects "Rproj"
+
+## Data
+
+### About
+
+### Variables
+
+## Import
+
+### Download
+
+```{r create_raw_dir}
+raw_dir <- here("txl", "lobbying", "data", "raw")
+dir_create(raw_dir)
+```
+
+```{r download_raw}
+txl_urls <- c(
+  "https://www.ethics.state.tx.us/data/search/lobby/2016/2016LobbyistGroupByLobbyist.nopag.xlsx",
+  "https://www.ethics.state.tx.us/data/search/lobby/2017/2017LobbyistGroupByLobbyist.xlsx",
+  "https://www.ethics.state.tx.us/data/search/lobby/2018/2018LobbyGroupByLobbyist.xlsx",
+  "https://www.ethics.state.tx.us/data/search/lobby/2019/2019LobbyGroupByLobbyist.xlsx"
+)
+
+if (!all_files_new(raw_dir)) {
+  for (xlsx_url in txl_urls) {
+    download.file(
+      url = xlsx_url,
+      destfile = str_c(raw_dir, basename(xlsx_url), sep = "/")
+    )
+  }
+}
+```
+
+### Read
+
+```{r read_raw_xlsx}
+txl <- map_df(
+  .x = dir_ls(raw_dir, glob = "*.xlsx"), 
+  .f = read_excel,
+  col_types = "text"
+)
+
+txl <- clean_names(txl)
+
+names(txl)[04:08] <- str_c("filer",  c("addr1", "addr2", "city", "state", "zip"), sep = "_")
+names(txl)[10:14] <- str_c("client", c("addr1", "addr2", "city", "state", "zip"), sep = "_")
+```
+
+```{r write_raw_csv}
+raw_file <- glue("{raw_dir}/txl_lobbyists.csv")
+write_csv(x = txl, path = raw_file, na = "")
+```
+
+```{r read_raw_csv}
+txl <- read_csv(
+  file = raw_file,
+  col_types = cols(
+    .default = col_character(),
+    begin = col_date_usa(),
+    stop = col_date_usa(),
+  )
+)
+```
+
+## Explore
+
+```{r glimpse}
+head(txl)
+tail(txl)
+glimpse(sample_frac(txl))
+```
+
+### Missing
+
+```{r glimpse_na}
+glimpse_fun(txl, count_na)
+```
+
+```{r flag_na}
+txl <- flag_na(txl, filer_name, client_name, begin, stop)
+sum(txl$na_flag)
+mean(txl$na_flag)
+```
+
+### Duplicates
+
+```{r flag_dupes}
+txl <- flag_dupes(txl, everything())
+sum(txl$dupe_flag)
+mean(txl$dupe_flag)
+```
+
+### Categorical
+
+```{r glimpse_distinct}
+glimpse_fun(txl, n_distinct)
+```
+
+```{r plot_distinct, echo=FALSE, fig.keep=FALSE}
+explore_plot(txl, reporting_interval)
+explore_plot(txl, method)
+explore_plot(txl, amount)
+```
+
+#### Dates
+
+```{r add_year}
+txl %>% mutate(
+  begin_year = year(begin),
+  stop_year = year(stop)
+) -> txl
+```
+
+```{r date_range, collapse=TRUE}
+min(txl$begin, na.rm = TRUE)
+min(txl$stop, na.rm = TRUE)
+max(txl$begin, na.rm = TRUE)
+# haven't started yet?
+sum(txl$begin > today(), na.rm = TRUE)
+# registered this year
+mean(txl$stop > today(), na.rm = TRUE)
+```
+
+## Wrangle
+
+### Filer Location
+
+#### Address
+
+```{r normal_filer_address}
+packageVersion("tidyr")
+txl <- txl %>% 
+  # combine street addr
+  unite(
+    col = filer_adress_full,
+    starts_with("filer_addr"),
+    remove = FALSE,
+    na.rm = TRUE
+  ) %>% 
+  # normalize combined addr
+  mutate(
+    filer_address_norm = normal_address(
+      address = filer_adress_full,
+      add_abbs = usps_street,
+      na_rep = TRUE
+    )
+  ) %>% 
+  select(-filer_adress_full)
+```
+
+```{r view_filer_add_norm, echo=FALSE}
+txl %>% 
+  select(
+    starts_with("filer_addr"),
+    filer_address_norm
+  ) %>% 
+  distinct() %>% 
+  sample_frac()
+```
+
+#### ZIP
+
+```{r normal_filer_zip}
+txl <- txl %>% 
+  mutate(
+    filer_zip_norm = normal_zip(
+      zip = filer_zip,
+      na_rep = TRUE
+    )
+  )
+```
+
+```{r zip_filer_progress}
+progress_table(
+  txl$filer_zip,
+  txl$filer_zip_norm,
+  compare = valid_zip
+)
+```
+
+#### State
+
+```{r filer_state_pre}
+prop_in(txl$filer_state, valid_state)
+setdiff(txl$filer_state, valid_state)
+```
+
+
+#### City
+
+```{r filer_normal_city}
+txl <- txl %>% 
+  mutate(
+    filer_city_norm = normal_city(
+      city = filer_city, 
+      geo_abbs = usps_city,
+      st_abbs = c("TX", "DC", "TEXAS"),
+      na = invalid_city,
+      na_rep = TRUE
+    )
+  )
+```
+
+```{r filer_swap_city}
+txl <- txl %>% 
+  left_join(
+    y = zipcodes,
+    by = c(
+      "filer_state" = "state",
+      "filer_zip_norm" = "zip"
+    )
+  ) %>% 
+  rename(filer_city_match = city) %>% 
+  mutate(
+    match_dist = str_dist(filer_city_norm, filer_city_match),
+    match_abb = is_abbrev(filer_city_norm, filer_city_match),
+    filer_city_swap = if_else(
+      condition = match_abb | equals(match_dist, 1),
+      true = filer_city_match,
+      false = filer_city_norm
+    )
+  )
+```
+
+```{r filer_city_progress}
+progress_table(
+  toupper(txl$filer_city),
+  txl$filer_city_norm,
+  txl$filer_city_swap,
+  compare = valid_city
+)
+```
+
+```{r view_bad_filer_city}
+txl %>% 
+  filter(filer_city_swap %out% valid_city) %>% 
+  count(filer_city_swap, sort = TRUE)
+```
+
+### Client Location
+
+#### Address
+
+```{r client_normal_address}
+packageVersion("tidyr")
+txl <- txl %>% 
+  # combine street addr
+  unite(
+    col = client_address_full,
+    starts_with("client_addr"),
+    remove = FALSE,
+    na.rm = TRUE
+  ) %>% 
+  # normalize combined addr
+  mutate(
+    client_address_norm = normal_address(
+      address = client_address_full,
+      add_abbs = usps_street,
+      na_rep = TRUE
+    )
+  ) %>% 
+  select(-client_address_full)
+```
+
+```{r view_client_add_norm, echo=FALSE}
+txl %>% 
+  select(
+    starts_with("client_addr"),
+    client_address_norm
+  ) %>% 
+  distinct() %>% 
+  sample_frac()
+```
+
+#### ZIP
+
+```{r client_normal_zip}
+txl <- txl %>% 
+  mutate(
+    client_zip_norm = normal_zip(
+      zip = client_zip,
+      na_rep = TRUE
+    )
+  )
+```
+
+```{r client_zip_progress}
+progress_table(
+  txl$client_zip,
+  txl$client_zip_norm,
+  compare = valid_zip
+)
+```
+
+#### State
+
+```{r client_state_pre}
+prop_in(txl$client_state, valid_state)
+setdiff(txl$client_state, valid_state)
+```
+
+#### City
+
+```{r client_normal_city}
+txl <- txl %>% 
+  mutate(
+    client_city_norm = normal_city(
+      city = str_replace(client_city, "DFW", "DALLAS FORT WORTH"), 
+      geo_abbs = usps_city,
+      st_abbs = c("TX", "DC", "TEXAS"),
+      na = invalid_city,
+      na_rep = TRUE
+    )
+  )
+```
+
+```{r client_swap_city}
+txl <- txl %>% 
+  left_join(
+    y = zipcodes,
+    by = c(
+      "client_state" = "state",
+      "client_zip_norm" = "zip"
+    )
+  ) %>% 
+  rename(client_city_match = city) %>% 
+  mutate(
+    match_dist = str_dist(client_city_norm, client_city_match),
+    match_abb = is_abbrev(client_city_norm, client_city_match),
+    client_city_swap = if_else(
+      condition = match_abb | equals(match_dist, 1),
+      true = client_city_match,
+      false = client_city_norm
+    )
+  )
+```
+
+```{r client_city_progress}
+progress_table(
+  toupper(txl$client_city),
+  txl$client_city_norm,
+  txl$client_city_swap,
+  compare = valid_city
+)
+```
+
+```{r view_bad_client_city}
+txl %>% 
+  filter(client_city_swap %out% valid_city) %>% 
+  count(client_city_swap, sort = TRUE)
+```
