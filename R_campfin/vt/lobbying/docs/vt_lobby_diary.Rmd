@@ -1,0 +1,248 @@
+---
+title: "Vermont Lobbyists"
+author: "Kiernan Nicholls"
+date: "`r Sys.time()`"
+output:
+  github_document: 
+    df_print: tibble
+    toc: true
+    toc_dept: 2
+editor_options: 
+  chunk_output_type: console
+---
+
+<!-- Place comments regarding knitting here -->
+
+```{r setup, include=FALSE, purl=FALSE}
+library(knitr)
+opts_chunk$set(
+  eval = TRUE,
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  error = FALSE,
+  # it's nice to un-collapse df print
+  collapse = TRUE,
+  comment = "#>",
+  fig.path = "../plots/",
+  fig.width = 10,
+  dpi = 300
+)
+options(width = 99)
+set.seed(5)
+```
+
+## Project
+
+The Accountability Project is an effort to cut across data silos and give journalists, policy
+professionals, activists, and the public at large a simple way to search across huge volumes of
+public data about people and organizations.
+
+Our goal is to standardizing public data on a few key fields by thinking of each dataset row as a
+transaction. For each transaction there should be (at least) 3 variables:
+
+1. All **parties** to a transaction
+2. The **date** of the transaction
+3. The **amount** of money involved
+
+## Objectives
+
+This document describes the process used to complete the following objectives:
+
+1. How many records are in the database?
+1. Check for duplicates
+1. Check ranges
+1. Is there anything blank or missing?
+1. Check for consistency issues
+1. Create a five-digit ZIP Code called `ZIP5`
+1. Create a `YEAR` field from the transaction date
+1. Make sure there is data on both parties to a transaction
+
+## Packages
+
+The following packages are needed to collect, manipulate, visualize, analyze, and communicate
+these results. The `pacman` package will facilitate their installation and attachment.
+
+The IRW's `campfin` package will also have to be installed from GitHub. This package contains
+functions custom made to help facilitate the processing of campaign finance data.
+
+```{r load_packages, message=FALSE, dfrning=FALSE, error=FALSE}
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load_gh("irworkshop/campfin")
+pacman::p_load(
+  RSelenium, # remote browser
+  tidyverse, # data manipulation
+  lubridate, # datetime strings
+  magrittr, # pipe opperators
+  janitor, # dataframe clean
+  refinr, # cluster and merge
+  scales, # format strings
+  knitr, # knit documents
+  vroom, # read files fast
+  glue, # combine strings
+  here, # relative storage
+  fs # search storage 
+)
+```
+
+This document should be run as part of the `R_campfin` project, which lives as a sub-directory of
+the more general, language-agnostic [`irworkshop/accountability_datacleaning`][01] GitHub
+repository.
+
+The `R_campfin` project uses the [RStudio projects][02] feature and should be run as such. The
+project also uses the dynamic `here::here()` tool for file paths relative to _your_ machine.
+
+```{r where_here, collapse=TRUE}
+# where does this document knit?
+here::here()
+```
+
+[01]: https://github.com/irworkshop/accountability_datacleaning "TAP repo"
+[02]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects "Rproj"
+
+## Data
+
+### About
+
+### Variables
+
+## Import
+
+### Download
+
+```{r create_raw_dir}
+raw_dir <- here("vt", "lobbying", "data", "raw")
+dir_create(raw_dir)
+```
+
+```{r download_raw, warning=FALSE, error=FALSE, message=FALSE, collapse=TRUE, eval=FALSE}
+# open the driver with auto download options
+remote_driver <- rsDriver(port = 4444L, browser = "firefox")
+
+# navigate to the FL DOE download site
+remote_browser <- remote_driver$client
+remote_browser$navigate("https://lobbying.sec.state.vt.us/Public/SearchFiledReports")
+
+# chose "All" from elections list
+biennium_menu <- ""
+remote_browser$findElement("xpath", biennium_menu)$clickElement()
+
+# check report type boxes
+checkboxes <- c("#chkDisclosure", "#chkTermination", "#chkRemoved", "#chkAdvertising")
+for(box in checkboxes) {
+  remote_browser$findElement("css", box)$clickElement()
+}
+
+# click search button
+remote_browser$findElement("css", "#btnSearch")$clickElement()
+
+# click csv export button
+csv_button <- "td.bgfooter:nth-child(2) > a:nth-child(2) > img:nth-child(1)"
+remote_browser$findElement("css", csv_button)$clickElement()
+
+# close the browser and driver
+remote_browser$close()
+remote_driver$server$stop()
+```
+
+```{r raw_file}
+raw_file <- dir_ls(raw_dir)
+```
+
+### Read
+
+```{r read_raw}
+usa_dttm <- "%m/%d/%Y %H:%M:%S %p"
+vt <- read_csv(
+  file = raw_file,
+  col_types = cols(
+    .default = col_character(),
+    `Start Date` = col_date(usa_dttm),
+    `End Date` = col_date(usa_dttm),
+    `Filed Date` = col_date(usa_dttm),
+    `Amended Date` = col_date(usa_dttm)
+  )
+)
+
+vt <- vt %>% 
+  clean_names("snake") %>% 
+  remove_empty("cols")
+```
+
+## Explore
+
+```{r glimpse}
+head(vt)
+tail(vt)
+glimpse(sample_frac(vt))
+```
+
+### Missing
+
+```{r glimpse_na}
+glimpse_fun(vt, count_na)
+```
+
+```{r flag_na}
+vt <- flag_na(vt, -amended_date)
+sum(vt$na_flag)
+```
+
+### Duplicates
+
+```{r flag_dupes}
+vt <- flag_dupes(vt, everything())
+sum(vt$dupe_flag)
+```
+
+```{r view_dupes}
+filter(vt, dupe_flag)
+```
+
+### Categorical
+
+```{r glimpse_distinct}
+glimpse_fun(vt, n_distinct)
+```
+
+```{r reg_type_bar}
+explore_plot(vt, registrant_type)
+```
+
+#### Dates
+
+```{r add_year}
+vt <- mutate(vt, filed_year = year(filed_date))
+```
+
+```{r date_range, collapse=TRUE}
+min(vt$filed_date)
+sum(vt$filed_year < 2000)
+max(vt$filed_date)
+sum(vt$filed_date > today())
+```
+
+## Conclude
+
+1. There are `nrow(vt)` records in the database.
+1. There are `sum(vt$dupe_flag)` duplicate records in the database.
+1. The range of `filed_date` is very reasonable.
+1. There are `sum(vt$na_flag)` records missing the `start_date` and `end_date`.
+1. The database does not contain any geographic data.
+1. The 4-digit `filed_year` variable has been created with `lubridate::year()`.
+
+## Export
+
+```{r create_proc_dir}
+proc_dir <- here("vt", "lobbying", "data", "processed")
+dir_create(proc_dir)
+```
+
+```{r}
+write_csv(
+  x = vt,
+  path = glue("{proc_dir}/vt_lobbyists_clean.csv"),
+  na = ""
+)
+```
+
