@@ -4,7 +4,7 @@ subtitle: "Pennsylvania Contribution"
 author: "Yanqi Xu"
 date: "`r format(Sys.time())`"
 output:
-  html_document: 
+   github_document:    
     df_print: tibble
     fig_caption: yes
     highlight: tango
@@ -117,7 +117,8 @@ here::here()
 ## Import
 
 
-Link to download:
+[Link][03] to download
+
 [03]: https://www.dos.pa.gov/VotingElections/CandidatesCommittees/CampaignFinance/Resources/Pages/FullCampaignFinanceExport.aspx "source"
 
 
