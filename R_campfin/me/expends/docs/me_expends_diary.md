@@ -1,7 +1,7 @@
 Maine Expenditures
 ================
 Kiernan Nicholls
-2019-08-13 10:10:13
+2019-09-30 13:07:30
 
   - [Project](#project)
   - [Objectives](#objectives)
@@ -12,6 +12,7 @@ Kiernan Nicholls
   - [Wrangle](#wrangle)
   - [Conclude](#conclude)
   - [Export](#export)
+  - [Lookup](#lookup)
 
 ## Project
 
@@ -54,7 +55,7 @@ processing of campaign finance data.
 
 ``` r
 if (!require("pacman")) install.packages("pacman")
-pacman::p_load_current_gh("kiernann/campfin")
+pacman::p_load_gh("irworkshop/campfin")
 pacman::p_load(
   stringdist, # levenshtein value
   snakecase, # change string case
@@ -88,7 +89,7 @@ feature and should be run as such. The project also uses the dynamic
 ``` r
 # where dfs this document knit?
 here::here()
-#> [1] "/home/ubuntu/R/accountability_datacleaning/R_campfin"
+#> [1] "/home/kiernan/R/accountability_datacleaning/R_campfin"
 ```
 
 ## Data
@@ -139,11 +140,6 @@ remote_driver <- rsDriver(
   )
 )
 
-tr.ng-scope:nth-child(2)  > td:nth-child(3) > a:nth-child(1)
-tr.ng-scope:nth-child(4)  > td:nth-child(3) > a:nth-child(1)
-tr.ng-scope:nth-child(6)  > td:nth-child(3) > a:nth-child(1)
-tr.ng-scope:nth-child(28) > td:nth-child(3) > a:nth-child(1)
-
 # navigate to the download site
 remote_browser <- remote_driver$client
 remote_browser$navigate("https://mainecampaignfinance.com/index.html#/dataDownload")
@@ -170,8 +166,8 @@ remote_driver$server$stop()
 ## Read
 
 ``` r
-me08 <- scan(file = glue("{raw_dir}/EXP_2008.csv"), sep = ",", what = "", nmax = 21)
-me19 <- scan(file = glue("{raw_dir}/EXP_2019.csv"), sep = ",", what = "", nmax = 39)
+me08 <- scan(file = glue("{raw_dir}/EXP_2008.csv.csv"), sep = ",", what = "", nmax = 21)
+me19 <- scan(file = glue("{raw_dir}/EXP_2019.csv.csv"), sep = ",", what = "", nmax = 39)
 ```
 
 The files come in two structures. For files from 2008 to 2017, there are
@@ -311,35 +307,35 @@ glimpse(sample_frac(me))
 
     #> Observations: 195,512
     #> Variables: 29
-    #> $ org_id                   <chr> "660", "2081", "7880", "4469", "4976", "5231", "7587", "3860", …
-    #> $ expenditure_amount       <dbl> 250.00, 1056.55, 1509.62, 100.00, 672.00, 550.00, 49.00, 1910.0…
-    #> $ expenditure_date         <date> 2011-10-25, 2018-08-19, 2015-05-01, 2009-10-02, 2018-09-30, 20…
-    #> $ last_name                <chr> "Hayes for ME", "HEATHER PAC", "BOSSIE", "Hainline", "SEBASTIAN…
-    #> $ first_name               <chr> NA, NA, "ANDREW", "Damon", "ASHBOW", NA, NA, NA, "Dory ", NA, "…
-    #> $ middle_name              <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
+    #> $ org_id                   <chr> "3751", "5628", "4738", "3152", "5641", "9311", "3275", "5257",…
+    #> $ expenditure_amount       <dbl> 320.25, 74.00, 9.90, 24.01, 400.00, 100.00, 2000.00, 65.00, 135…
+    #> $ expenditure_date         <date> 2008-10-20, 2017-05-30, 2010-04-21, 2015-03-22, 2018-09-18, 20…
+    #> $ last_name                <chr> "Dale Rand", "HALLOWELL POSTMASTER, USPS", "Hill", "Oxford Coun…
+    #> $ first_name               <chr> NA, NA, "Dawn", NA, NA, "NANCY", "Amanda ", "Christopher", NA, …
+    #> $ middle_name              <chr> NA, NA, NA, NA, NA, "C", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
     #> $ suffix                   <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
-    #> $ address1                 <chr> "PO Box 367", "82 FROST HILL ROAD", "31 BRACKETT ST.", "83 Vand…
+    #> $ address1                 <chr> NA, "95 SECOND ST", NA, "PO Box 187", "54 BOWDOIN PINES ROAD", …
     #> $ address2                 <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
-    #> $ city                     <chr> "Buckfield", "PORTLAND", "PORTLAND", "Brooklyn", "PORTLAND", "B…
-    #> $ state                    <chr> "ME", "ME", "ME", "NY", "ME", "VT", "ME", NA, "ME", "NH", "ME",…
-    #> $ zip                      <chr> NA, "04103", "04102", "11205", "04101", "05401", "04062", NA, "…
-    #> $ explanation              <chr> NA, NA, "EXECUTIVE DIRECTOR.", NA, "Canvass Staff", "CONTRIBUTI…
-    #> $ expenditure_id           <chr> "60202", "593874", "127899", "27666", "534273", "129333", "1087…
-    #> $ filed_date               <date> 2012-01-04, 2018-10-05, 2015-07-14, 2013-05-01, 2018-10-05, 20…
-    #> $ purpose                  <chr> "Contribution to Other Candidate, Party, Cmte", "Contribution t…
+    #> $ city                     <chr> NA, "HALLOWELL", NA, "Greenwood", "BOWDOIN", "AUGUSTA", "Lawren…
+    #> $ state                    <chr> NA, "ME", NA, "ME", "ME", "ME", "ME", "ME", NA, "ME", "ME", "ME…
+    #> $ zip                      <chr> NA, "04347", NA, "04255", "04287", "04330", "01841", "04345", N…
+    #> $ explanation              <chr> "Clincher post card", "MAIL BOX FEE", "Money order fee; reimbur…
+    #> $ expenditure_id           <chr> "16062", "459089", "50615", "126815", "637913", "164933", "3178…
+    #> $ filed_date               <date> 2008-10-24, 2018-04-01, 2010-07-20, 2015-04-02, 2018-10-26, 20…
+    #> $ purpose                  <chr> "Campaign literature (printing and graphics)", "Postage for U.S…
     #> $ expenditure_type         <chr> "Monetary (Itemized)", "Monetary (Itemized)", "Monetary (Itemiz…
-    #> $ committee_type           <chr> "Political Action Committee", "Political Action Committee", "Ba…
-    #> $ committee_name           <chr> "Maine Dental PAC", "ACTBLUE MAINE", "MAINE CITIZENS FOR CLEAN …
-    #> $ candidate_name           <chr> NA, NA, NA, NA, NA, NA, "MICHAEL J TIMMONS", "Senator Richard A…
+    #> $ committee_type           <chr> "Candidate", "Candidate", "Candidate", "Political Action Commit…
+    #> $ committee_name           <chr> NA, "Sweet for Governor", NA, "ACTBLUE MAINE", "Richmond Republ…
+    #> $ candidate_name           <chr> "Representative David C Webster", NA, "Senator Dawn Hill", NA, …
     #> $ amended                  <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, …
-    #> $ legacy_id                <chr> NA, "3152", NA, NA, "8488", NA, NA, NA, NA, "10164", NA, NA, NA…
+    #> $ legacy_id                <chr> NA, "10106", NA, NA, "10134", NA, NA, NA, NA, NA, NA, "638", NA…
     #> $ candidate_office         <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
     #> $ candidate_district       <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
     #> $ candidate_party          <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
     #> $ candidate_financing_type <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
-    #> $ office                   <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, "SENATOR", NA, NA, NA, NA, …
-    #> $ district                 <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, "17", NA, NA, NA, NA, NA, N…
-    #> $ report_name              <chr> NA, "OCTOBER QUARTERLY REPORT", NA, NA, "OCTOBER QUARTERLY REPO…
+    #> $ office                   <chr> NA, "GOVERNOR", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
+    #> $ district                 <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
+    #> $ report_name              <chr> NA, "2017 JULY SEMIANNUAL REPORT", NA, NA, "11-DAY PRE-GENERAL …
 
 ### Missing
 
@@ -348,8 +344,8 @@ glimpse_fun(me, count_na)
 ```
 
     #> # A tibble: 29 x 4
-    #>    var                      type       n          p
-    #>    <chr>                    <chr>  <int>      <dbl>
+    #>    col                      type       n          p
+    #>    <chr>                    <chr>  <dbl>      <dbl>
     #>  1 org_id                   chr        0 0         
     #>  2 expenditure_amount       dbl        0 0         
     #>  3 expenditure_date         date       0 0         
@@ -493,12 +489,12 @@ glimpse_fun(me, n_distinct)
 ```
 
     #> # A tibble: 32 x 4
-    #>    var                      type       n         p
-    #>    <chr>                    <chr>  <int>     <dbl>
+    #>    col                      type       n         p
+    #>    <chr>                    <chr>  <dbl>     <dbl>
     #>  1 org_id                   chr     3258 0.0167   
-    #>  2 expenditure_amount       dbl    49841 0.255    
+    #>  2 expenditure_amount       dbl    49839 0.255    
     #>  3 expenditure_date         date    4179 0.0214   
-    #>  4 last_name                chr    30642 0.157    
+    #>  4 last_name                chr    30643 0.157    
     #>  5 first_name               chr     3022 0.0155   
     #>  6 middle_name              chr      142 0.000726 
     #>  7 suffix                   chr        9 0.0000460
@@ -636,25 +632,25 @@ me <- me %>%
   mutate(
     address_norm = normal_address(
       address = address_combine,
-      add_abbs = usps,
+      add_abbs = usps_street,
       na_rep = TRUE
     )
   )
 ```
 
     #> # A tibble: 10 x 4
-    #>    address_combine               address1                      address2 address_norm               
-    #>    <chr>                         <chr>                         <chr>    <chr>                      
-    #>  1 ""                            <NA>                          <NA>     <NA>                       
-    #>  2 1952 ASILOMAR DRIVE           1952 ASILOMAR DRIVE           <NA>     1952 ASILOMAR DRIVE        
-    #>  3 PO Box 2449                   PO Box 2449                   <NA>     PO BOX 2449                
-    #>  4 2211 N FIRST ST               2211 N FIRST ST               <NA>     2211 N FIRST STREET        
-    #>  5 100 MIDDLE STREET, PO BOX 97… 100 MIDDLE STREET, PO BOX 97… <NA>     100 MIDDLE STREET PO BOX 9…
-    #>  6 PO Box 9184                   PO Box 9184                   <NA>     PO BOX 9184                
-    #>  7 279 TURKEY FARM RD.           279 TURKEY FARM RD.           <NA>     279 TURKEY FARM ROAD       
-    #>  8 980 WESTERN AVENUE            980 WESTERN AVENUE            <NA>     980 WESTERN AVENUE         
-    #>  9 99 WASHINGTON STREET          99 WASHINGTON STREET          <NA>     99 WASHINGTON STREET       
-    #> 10 AIRPORT RD                    AIRPORT RD                    <NA>     AIRPORT ROAD
+    #>    address_combine            address1                   address2 address_norm                 
+    #>    <chr>                      <chr>                      <chr>    <chr>                        
+    #>  1 6 ASSELYN DR               6 ASSELYN DR               <NA>     6 ASSELYN DRIVE              
+    #>  2 116 MILLS RD.              116 MILLS RD.              <NA>     116 MILLS ROAD               
+    #>  3 P.O. BOX 15124             P.O. BOX 15124             <NA>     PO BOX 15124                 
+    #>  4 21 LIMEROCK ST             21 LIMEROCK ST             <NA>     21 LIMEROCK STREET           
+    #>  5 565 CONGRESS ST, SUITE 200 565 CONGRESS ST, SUITE 200 <NA>     565 CONGRESS STREET SUITE 200
+    #>  6 243 WESTERN AVE            243 WESTERN AVE            <NA>     243 WESTERN AVENUE           
+    #>  7 ""                         <NA>                       <NA>     <NA>                         
+    #>  8 www.staples.com            www.staples.com            <NA>     WWWSTAPLESCOM                
+    #>  9 45 GOSLING RD              45 GOSLING RD              <NA>     45 GOSLING ROAD              
+    #> 10 1600 AMPHITHEATRE PKWY     1600 AMPHITHEATRE PKWY     <NA>     1600 AMPHITHEATRE PARKWAY
 
 ### ZIP
 
@@ -663,10 +659,10 @@ n_distinct(me$zip)
 #> [1] 3169
 prop_na(me$zip)
 #> [1] 0.2319909
-prop_in(me$zip, geo$zip)
+prop_in(me$zip, valid_zip)
 #> [1] 0.9406147
-length(setdiff(me$zip, geo$zip))
-#> [1] 916
+length(setdiff(me$zip, valid_zip))
+#> [1] 917
 ```
 
 ``` r
@@ -681,12 +677,12 @@ me <- me %>%
 
 ``` r
 n_distinct(me$zip_norm)
-#> [1] 2507
+#> [1] 2505
 prop_na(me$zip_norm)
-#> [1] 0.239172
-prop_in(me$zip_norm, geo$zip)
-#> [1] 0.9946757
-length(setdiff(me$zip_norm, geo$zip))
+#> [1] 0.2391618
+prop_in(me$zip_norm, valid_zip)
+#> [1] 0.994622
+length(setdiff(me$zip_norm, valid_zip))
 #> [1] 198
 ```
 
@@ -694,10 +690,10 @@ There are still some `zip_norm` values that are invalid. We will leave
 these unchanged for now.
 
 ``` r
-sample(unique(me$zip[which(me$zip_norm %out% geo$zip)]), 20)
-#>  [1] "V6E 4A2"    "54596"      "04894"      "90000"      "6.68"       "08180"      "01909"     
-#>  [8] "04374"      "04814"      "18429-0204" "04704"      "04385"      "04439"      "04437"     
-#> [15] "04322"      "04331"      "20200"      "00001"      "06862"      "B3H 1C2"
+sample(unique(me$zip[which(me$zip_norm %out% valid_zip)]), 20)
+#>  [1] "04641"      "V6E 4A2"    "04486"      "04517"      "04542"      "83508"      "00000-4005"
+#>  [8] "999999"     "00413"      "04277"      "40605"      "04704"      "98714"      "04340"     
+#> [15] "04130"      "04384"      "0410"       "3000"       "04804"      "90425"
 ```
 
 ### State
@@ -707,13 +703,14 @@ n_distinct(me$state)
 #> [1] 95
 prop_na(me$state)
 #> [1] 0.2065756
-prop_in(me$state, geo$state)
-#> [1] 0.9797001
-length(setdiff(me$state, geo$state))
-#> [1] 35
-setdiff(me$state, geo$state)
-#>  [1] NA   "  " "ns" "Me" "Ca" "Mn" "me" "md" "Va" "Ma" "PQ" "mE" "Cu" "UK" "ma" "m " "nh" "In" "IF"
-#> [20] "M " "na" ". " "mA" "Fl" "id" "on" "Il" "Dc" "dc" "ut" "XX" "Ta" "NT" "AU" "SP"
+prop_in(me$state, valid_state)
+#> [1] 0.9794616
+length(setdiff(me$state, valid_state))
+#> [1] 42
+setdiff(me$state, valid_state)
+#>  [1] NA   "  " "ns" "ON" "Me" "Ca" "Mn" "me" "md" "Va" "BC" "Ma" "PQ" "mE" "Cu" "UK" "ma" "m " "nh"
+#> [20] "In" "IF" "M " "na" ". " "NB" "mA" "Fl" "id" "on" "Il" "Dc" "dc" "ut" "XX" "Ta" "AB" "NS" "PE"
+#> [39] "NT" "QC" "AU" "SP"
 ```
 
 ``` r
@@ -724,19 +721,19 @@ me <- me %>%
       abbreviate = FALSE,
       na_rep = TRUE,
       na = c("", "NA"),
-      valid = geo$state
+      valid = valid_state
     )
   )
 ```
 
 ``` r
 n_distinct(me$state_norm)
-#> [1] 60
+#> [1] 53
 prop_na(me$state)
 #> [1] 0.2065756
-prop_in(me$state_norm, geo$state, na.rm = TRUE)
+prop_in(me$state_norm, valid_state, na.rm = TRUE)
 #> [1] 1
-length(setdiff(me$state_norm, geo$state))
+length(setdiff(me$state_norm, valid_state))
 #> [1] 1
 ```
 
@@ -745,10 +742,10 @@ length(setdiff(me$state_norm, geo$state))
 ``` r
 n_distinct(me$city)
 #> [1] 3151
-prop_in(me$city, geo$city, na.rm = TRUE)
-#> [1] 0.6082915
-length(setdiff(me$city, geo$city))
-#> [1] 2113
+prop_in(me$city, valid_city, na.rm = TRUE)
+#> [1] 0.6082784
+length(setdiff(me$city, valid_city))
+#> [1] 2114
 ```
 
 #### Normalize
@@ -760,7 +757,7 @@ me <- me %>%
       city = city, 
       geo_abbs = usps_city,
       st_abbs = c("ME", "DC", "MAINE"),
-      na = na_city,
+      na = invalid_city,
       na_rep = TRUE
     )
   )
@@ -768,11 +765,11 @@ me <- me %>%
 
 ``` r
 n_distinct(me$city_norm)
-#> [1] 1967
-prop_in(me$city_norm, geo$city, na.rm = TRUE)
-#> [1] 0.9791235
-length(setdiff(me$city_norm, geo$city))
-#> [1] 641
+#> [1] 1966
+prop_in(me$city_norm, valid_city, na.rm = TRUE)
+#> [1] 0.9780086
+length(setdiff(me$city_norm, valid_city))
+#> [1] 640
 ```
 
 #### Swap
@@ -781,7 +778,7 @@ length(setdiff(me$city_norm, geo$city))
 me <- me %>% 
   rename(city_raw = city) %>% 
   left_join(
-    y = geo,
+    y = zipcodes,
     by = c(
       "state_norm" = "state",
       "zip_norm" = "zip"
@@ -801,13 +798,13 @@ me <- me %>%
     #> # A tibble: 3 x 4
     #>   step  n_distinct prop_in unique_bad
     #>   <chr>      <int>   <dbl>      <int>
-    #> 1 raw         3151   0.608       2113
-    #> 2 norm        1967   0.979        641
-    #> 3 swap        1536   0.991        246
+    #> 1 raw         3151   0.608       2114
+    #> 2 norm        1966   0.978        640
+    #> 3 swap        1534   0.991        244
 
 ## Conclude
 
-1.  There are 195513 records in the database.
+1.  There are 195512 records in the database.
 2.  There are 5551 (2.84%) duplicate records in the database, flagged
     with `dupe_flag`.
 3.  The range and distribution of `expenditure_amount` and
@@ -829,13 +826,36 @@ dir_create(proc_dir)
 ```
 
 ``` r
-me %>% 
+me <- me %>% 
   select(
     -city_match,
     -city_norm,
-  ) %>% 
-  write_csv(
-    na = "",
-    path = glue("{proc_dir}/me_expends_clean.csv")
   )
+```
+
+## Lookup
+
+``` r
+lookup <- read_csv("me/expends/data/me_city_lookup.csv") %>% select(1:2)
+me <- left_join(me, lookup, by = c("city_swap" = "CITY_SWAP"))
+
+progress_table(
+  me$city_swap, 
+  me$CITY_CLEAN, 
+  compare = valid_city
+)
+```
+
+    #> # A tibble: 2 x 6
+    #>   stage      prop_in n_distinct prop_na n_out n_diff
+    #>   <chr>        <dbl>      <dbl>   <dbl> <dbl>  <dbl>
+    #> 1 city_swap    0.991       1534   0.250  1315    244
+    #> 2 CITY_CLEAN   0.994       1456   0.251   907    165
+
+``` r
+write_csv(
+  x = me,
+  path = glue("{proc_dir}/me_expends_clean.csv"),
+  na = ""
+)
 ```

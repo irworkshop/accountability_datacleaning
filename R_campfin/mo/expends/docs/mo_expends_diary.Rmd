@@ -432,7 +432,7 @@ if (packageVersion("tidyr") > "0.8.3.9") {
     mutate(
       address_norm = normal_address(
         address = adress_full,
-        add_abbs = usps,
+        add_abbs = usps_street,
         na_rep = TRUE
       )
     )
@@ -549,7 +549,7 @@ mo <- mo %>%
       city = city, 
       geo_abbs = usps_city,
       st_abbs = c("MO", "DC", "MISSOURI"),
-      na = na_city,
+      na = invalid_city,
       na_rep = TRUE
     )
   )
@@ -588,7 +588,7 @@ two values.
 mo <- mo %>% 
   rename(city_raw = city) %>% 
   left_join(
-    y = geo,
+    y = zipcodes,
     by = c(
       "state_norm" = "state",
       "zip_norm" = "zip"
@@ -632,7 +632,7 @@ good_refine <- mo %>%
   ) %>% 
   filter(city_refine != city_swap) %>% 
   inner_join(
-    y = geo,
+    y = zipcodes,
     by = c(
       "city_refine" = "city",
       "state_norm" = "state",
@@ -821,12 +821,12 @@ progress_table %>%
 ## Export
 
 ```{r create_proc_dir}
-proc_dir <- here("in", "expends", "data", "processed")
+proc_dir <- here("mo", "expends", "data", "processed")
 dir_create(proc_dir)
 ```
 
 ```{r write_clean}
-mo %>% 
+mo <- mo %>% 
   select(
     -city_norm,
     -city_swap,
@@ -835,10 +835,25 @@ mo %>%
     -match_dist,
     -city_refine,
     -year
-  ) %>% 
-  write_csv(
-    path = glue("{proc_dir}/mo_expends_clean.csv"),
-    na = ""
   )
 ```
 
+## Lookup
+
+```{r lookup_city}
+lookup <- read_csv("mo/expends/data/mo_city_lookup.csv") %>% select(1:2)
+mo <- left_join(mo, lookup, by = c("city_final" = "CITY_FINAL"))
+
+progress_table(
+  mo$city_raw,
+  mo$city_final, 
+  mo$CITY_FINAL2, 
+  compare = valid_city
+)
+
+write_csv(
+  x = mo,
+  path = glue("{proc_dir}/mo_expends_clean.csv"),
+  na = ""
+)
+```

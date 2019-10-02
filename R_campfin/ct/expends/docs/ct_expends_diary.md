@@ -1,7 +1,7 @@
 Connecticut Expenditures
 ================
 Kiernan Nicholls
-2019-07-25 16:22:37
+2019-09-30 11:19:44
 
   - [Project](#project)
   - [Objectives](#objectives)
@@ -12,6 +12,7 @@ Kiernan Nicholls
   - [Wrangle](#wrangle)
   - [Conclude](#conclude)
   - [Export](#export)
+  - [Lookup](#lookup)
 
 ## Project
 
@@ -89,7 +90,7 @@ feature and should be run as such. The project also uses the dynamic
 ``` r
 # where dfs this document knit?
 here::here()
-#> [1] "/home/ubuntu/R/accountability_datacleaning/R_campfin"
+#> [1] "/home/kiernan/R/accountability_datacleaning/R_campfin"
 ```
 
 ## Data
@@ -232,12 +233,12 @@ ct %>%
     #> 15 Disbursements2015ElectionYearCandidateExploratoryCommittees c(1043, 27) 
     #> 16 Disbursements2016CalendarYearPartyPACCommittees             c(11499, 24)
     #> 17 Disbursements2016ElectionYearCandidateExploratoryCommittees c(19825, 29)
-    #> 18 Disbursements2017CalendarYearPartyPACCommittees             c(13536, 24)
+    #> 18 Disbursements2017CalendarYearPartyPACCommittees             c(13528, 24)
     #> 19 Disbursements2017ElectionYearCandidateExploratoryCommittees c(2896, 29) 
-    #> 20 Disbursements2018CalendarYearPartyPACCommittees             c(13670, 24)
-    #> 21 Disbursements2018ElectionYearCandidateExploratoryCommittees c(42455, 29)
-    #> 22 Disbursements2019CalendarYearPartyPACCommittees             c(2161, 24) 
-    #> 23 Disbursements2019ElectionYearCandidateExploratoryCommittees c(357, 29)
+    #> 20 Disbursements2018CalendarYearPartyPACCommittees             c(13667, 24)
+    #> 21 Disbursements2018ElectionYearCandidateExploratoryCommittees c(42725, 29)
+    #> 22 Disbursements2019CalendarYearPartyPACCommittees             c(4462, 24) 
+    #> 23 Disbursements2019ElectionYearCandidateExploratoryCommittees c(740, 29)
 
 But the newer files simply *add* more information, and the first 18
 columns are consistent across all 23 files.
@@ -298,21 +299,21 @@ ct <- ct %>%
 
 # some dates will fail, make NA in new col
 sample(unique(ct$payment_date[str_which(ct$payment_date, "\\d+\\-\\w+$")]), 10)
-#>  [1] "MAY 1-2015" "6-OCT"      "13-OCT"     "3-FEB"      "19-NOV"     "30-JUN"     "7-NOV"     
-#>  [8] "11-JUN"     "18-MAR"     "9-JUN"
+#>  [1] "29-JAN"      "4/30 - 9-30" "2.27-2015"   "30-OCT"      "27-MAR"      "14-MAR"     
+#>  [7] "31-DEC"      "4-MAY"       "3-FEB"       "8-OCT"
 ct <- mutate(ct, date_clean = mdy(payment_date))
-#> Warning: 795 failed to parse.
+#> Warning: 801 failed to parse.
 ```
 
 ## Explore
 
-There are 293466 rows of 33 columns.
+There are 296409 rows of 33 columns.
 
 ``` r
 dim(ct)
 ```
 
-    #> [1] 293466     33
+    #> [1] 296409     33
 
 ``` r
 head(ct)
@@ -342,12 +343,12 @@ tail(ct)
     #> # A tibble: 6 x 33
     #>   file  committee committee_type payee purpose_of_expe… description payment_method payment_date
     #>   <chr> <chr>     <chr>          <chr> <chr>            <chr>       <chr>          <chr>       
-    #> 1 DISB… ZULLO FO… CANDIDATE COM… DANE… RMB(REIMBURSEME… REIMBURSEM… CHECK          2/16/2019   
-    #> 2 DISB… ZULLO FO… CANDIDATE COM… MINU… A-DM(ADVERTISE … MAILER #3   CHECK          2/16/2019   
-    #> 3 DISB… ZULLO FO… CANDIDATE COM… MINU… A-DM(ADVERTISE … MAILER #4   CHECK          2/16/2019   
-    #> 4 DISB… ZULLO FO… CANDIDATE COM… MARK… A-SIGN(COST OF … DEPOSIT-LA… CHECK          1/20/2019   
-    #> 5 DISB… ZULLO FO… CANDIDATE COM… CEP   CEF(PAYMENT TO … BUFFER CHE… CHECK          1/24/2019   
-    #> 6 DISB… ZULLO FO… CANDIDATE COM… CITI… BNK(BANK FEES, … CHECKS      ELECTRONIC FU… 1/16/2019   
+    #> 1 DISB… ZULLO FO… CANDIDATE COM… SHOR… A-NEWS(ADVERTIS… COURIER NE… CHECK          3/9/2019    
+    #> 2 DISB… ZULLO FO… CANDIDATE COM… FACE… A-WEB(ADVERTISE… AD BOOST    DEBIT CARD     3/13/2019   
+    #> 3 DISB… ZULLO FO… CANDIDATE COM… QUIC… MISC *(MISCELLA… DATA HOSTI… DEBIT CARD     3/18/2019   
+    #> 4 DISB… ZULLO FO… CANDIDATE COM… CITI… BNK(BANK FEES, … STATEMENT … DEBIT CARD     3/29/2019   
+    #> 5 DISB… ZULLO FO… CANDIDATE COM… CLIF… OVHD(OVERHEAD O… RENT- HEAD… CHECK          3/31/2019   
+    #> 6 DISB… ZULLO FO… CANDIDATE COM… CITI… BNK(BANK FEES, … STATEMENT … DEBIT CARD     4/30/2019   
     #> # … with 25 more variables: amount <dbl>, file_to_state <date>, period_start <date>,
     #> #   period_end <date>, election_year <int>, status <chr>, data_source <chr>,
     #> #   refiled_electronically <lgl>, street_address <chr>, city <chr>, state <chr>,
@@ -360,7 +361,7 @@ tail(ct)
 glimpse(ct)
 ```
 
-    #> Observations: 293,466
+    #> Observations: 296,409
     #> Variables: 33
     #> $ file                    <chr> "DISBURSEMENTS2008CALENDARYEARPARTYPACCOMMITTEES", "DISBURSEMENT…
     #> $ committee               <chr> "12TH DISTRICT DEMOCRATS", "12TH DISTRICT DEMOCRATS", "12TH DIST…
@@ -405,41 +406,41 @@ glimpse_fun(ct, n_distinct)
 ```
 
     #> # A tibble: 33 x 4
-    #>    var                     type       n          p
-    #>    <chr>                   <chr>  <int>      <dbl>
-    #>  1 file                    chr       23 0.0000784 
-    #>  2 committee               chr     3346 0.0114    
-    #>  3 committee_type          chr        4 0.0000136 
-    #>  4 payee                   chr    77304 0.263     
-    #>  5 purpose_of_expenditure  chr     1260 0.00429   
-    #>  6 description             chr   107522 0.366     
-    #>  7 payment_method          chr        4 0.0000136 
-    #>  8 payment_date            chr     4764 0.0162    
-    #>  9 amount                  dbl    58130 0.198     
-    #> 10 file_to_state           date    2812 0.00958   
-    #> 11 period_start            date    1766 0.00602   
-    #> 12 period_end              date    1959 0.00668   
-    #> 13 election_year           int       12 0.0000409 
-    #> 14 status                  chr        2 0.00000682
-    #> 15 data_source             chr        2 0.00000682
-    #> 16 refiled_electronically  lgl        2 0.00000682
-    #> 17 street_address          chr    71788 0.245     
-    #> 18 city                    chr     2427 0.00827   
-    #> 19 state                   chr      142 0.000484  
-    #> 20 fundraising_event       chr     2591 0.00883   
-    #> 21 report_name             chr       73 0.000249  
-    #> 22 committee_id            chr     2160 0.00736   
-    #> 23 section_letter          chr        3 0.0000102 
-    #> 24 section_name            chr        2 0.00000682
-    #> 25 report_id               chr    22039 0.0751    
-    #> 26 candidate_first_name    chr      450 0.00153   
-    #> 27 candidate_middle_intial chr       51 0.000174  
-    #> 28 candidate_last_name     chr      842 0.00287   
-    #> 29 form                    chr        3 0.0000102 
-    #> 30 description_1           chr    24287 0.0828    
-    #> 31 amended                 lgl        2 0.00000682
-    #> 32 efiled                  lgl        2 0.00000682
-    #> 33 date_clean              date    4150 0.0141
+    #>    col                     type       n          p
+    #>    <chr>                   <chr>  <dbl>      <dbl>
+    #>  1 file                    chr       23 0.0000776 
+    #>  2 committee               chr     3351 0.0113    
+    #>  3 committee_type          chr        4 0.0000135 
+    #>  4 payee                   chr    77717 0.262     
+    #>  5 purpose_of_expenditure  chr     1260 0.00425   
+    #>  6 description             chr   108706 0.367     
+    #>  7 payment_method          chr        4 0.0000135 
+    #>  8 payment_date            chr     4846 0.0163    
+    #>  9 amount                  dbl    58453 0.197     
+    #> 10 file_to_state           date    2869 0.00968   
+    #> 11 period_start            date    1776 0.00599   
+    #> 12 period_end              date    1988 0.00671   
+    #> 13 election_year           int       12 0.0000405 
+    #> 14 status                  chr        2 0.00000675
+    #> 15 data_source             chr        2 0.00000675
+    #> 16 refiled_electronically  lgl        2 0.00000675
+    #> 17 street_address          chr    72110 0.243     
+    #> 18 city                    chr     2437 0.00822   
+    #> 19 state                   chr      142 0.000479  
+    #> 20 fundraising_event       chr     2669 0.00900   
+    #> 21 report_name             chr       73 0.000246  
+    #> 22 committee_id            chr     2166 0.00731   
+    #> 23 section_letter          chr        3 0.0000101 
+    #> 24 section_name            chr        2 0.00000675
+    #> 25 report_id               chr    22602 0.0763    
+    #> 26 candidate_first_name    chr      451 0.00152   
+    #> 27 candidate_middle_intial chr       51 0.000172  
+    #> 28 candidate_last_name     chr      845 0.00285   
+    #> 29 form                    chr        3 0.0000101 
+    #> 30 description_1           chr    24458 0.0825    
+    #> 31 amended                 lgl        2 0.00000675
+    #> 32 efiled                  lgl        2 0.00000675
+    #> 33 date_clean              date    4231 0.0143
 
 ![](../plots/comm_type_bar-1.png)<!-- -->
 
@@ -451,7 +452,7 @@ glimpse_fun(ct, n_distinct)
 unique(na.omit(ct$section_name))
 #> [1] "EXPENSES PAID BY COMMITTEE"
 percent(mean(ct$amended))
-#> [1] "4.55%"
+#> [1] "4.57%"
 percent(mean(ct$refiled_electronically, na.rm = TRUE))
 #> [1] "100%"
 ```
@@ -487,7 +488,7 @@ distribution of values.
 ``` r
 summary(ct$amount)
 #>    Min. 1st Qu.  Median    Mean 3rd Qu.    Max.    NA's 
-#>   -7500      46     138     979     500 6300000     242
+#>   -7500      46     137     975     500 6300000     242
 sum(ct$amount < 0, na.rm = TRUE)
 #> [1] 257
 ```
@@ -603,7 +604,7 @@ ct %>%
   print(n = 25)
 ```
 
-    #> # A tibble: 25 x 2
+    #> # A tibble: 24 x 2
     #>     year     n
     #>    <dbl> <int>
     #>  1   215     1
@@ -615,22 +616,21 @@ ct %>%
     #>  7  2006     3
     #>  8  2007    60
     #>  9  2008 28212
-    #> 10  2009  9686
+    #> 10  2009  9685
     #> 11  2010 39949
     #> 12  2011 16759
     #> 13  2012 22817
     #> 14  2013 14776
-    #> 15  2014 37586
+    #> 15  2014 37585
     #> 16  2015 14020
-    #> 17  2016 30515
-    #> 18  2017 20718
-    #> 19  2018 51655
-    #> 20  2019  3182
+    #> 17  2016 30514
+    #> 18  2017 20707
+    #> 19  2018 51762
+    #> 20  2019  6027
     #> 21  2020     2
-    #> 22  2026     1
-    #> 23  2106     1
-    #> 24  3023     2
-    #> 25    NA  3512
+    #> 22  2106     1
+    #> 23  3023     2
+    #> 24    NA  3518
 
 ``` r
 ct$date_clean[which(ct$date_clean == "215-08-27")] <- as_date("2015-08-27")
@@ -654,42 +654,42 @@ glimpse_fun(ct, count_na)
 ```
 
     #> # A tibble: 34 x 4
-    #>    var                     type       n        p
-    #>    <chr>                   <chr>  <int>    <dbl>
+    #>    col                     type       n        p
+    #>    <chr>                   <chr>  <dbl>    <dbl>
     #>  1 file                    chr        0 0       
     #>  2 committee               chr        0 0       
     #>  3 committee_type          chr        0 0       
-    #>  4 payee                   chr      227 0.000774
-    #>  5 purpose_of_expenditure  chr     6402 0.0218  
-    #>  6 description             chr    64946 0.221   
-    #>  7 payment_method          chr     5657 0.0193  
-    #>  8 payment_date            chr     2717 0.00926 
-    #>  9 amount                  dbl      242 0.000825
+    #>  4 payee                   chr      227 0.000766
+    #>  5 purpose_of_expenditure  chr     6402 0.0216  
+    #>  6 description             chr    65753 0.222   
+    #>  7 payment_method          chr     5657 0.0191  
+    #>  8 payment_date            chr     2717 0.00917 
+    #>  9 amount                  dbl      242 0.000816
     #> 10 file_to_state           date       0 0       
-    #> 11 period_start            date     315 0.00107 
-    #> 12 period_end              date     320 0.00109 
-    #> 13 election_year           int   129204 0.440   
+    #> 11 period_start            date     315 0.00106 
+    #> 12 period_end              date     320 0.00108 
+    #> 13 election_year           int   131494 0.444   
     #> 14 status                  chr        0 0       
     #> 15 data_source             chr        0 0       
-    #> 16 refiled_electronically  lgl   293334 1.000   
-    #> 17 street_address          chr     4656 0.0159  
-    #> 18 city                    chr     3078 0.0105  
-    #> 19 state                   chr     3059 0.0104  
-    #> 20 fundraising_event       chr   281611 0.960   
-    #> 21 report_name             chr   134612 0.459   
-    #> 22 committee_id            chr   134457 0.458   
-    #> 23 section_letter          chr   134457 0.458   
-    #> 24 section_name            chr   134457 0.458   
-    #> 25 report_id               chr   134457 0.458   
-    #> 26 candidate_first_name    chr   199929 0.681   
-    #> 27 candidate_middle_intial chr   229084 0.781   
-    #> 28 candidate_last_name     chr   199929 0.681   
-    #> 29 form                    chr   227933 0.777   
-    #> 30 description_1           chr   243769 0.831   
+    #> 16 refiled_electronically  lgl   296277 1.000   
+    #> 17 street_address          chr     4656 0.0157  
+    #> 18 city                    chr     3078 0.0104  
+    #> 19 state                   chr     3064 0.0103  
+    #> 20 fundraising_event       chr   284069 0.958   
+    #> 21 report_name             chr   134612 0.454   
+    #> 22 committee_id            chr   134457 0.454   
+    #> 23 section_letter          chr   134457 0.454   
+    #> 24 section_name            chr   134457 0.454   
+    #> 25 report_id               chr   134457 0.454   
+    #> 26 candidate_first_name    chr   202219 0.682   
+    #> 27 candidate_middle_intial chr   231743 0.782   
+    #> 28 candidate_last_name     chr   202219 0.682   
+    #> 29 form                    chr   230223 0.777   
+    #> 30 description_1           chr   246384 0.831   
     #> 31 amended                 lgl        0 0       
     #> 32 efiled                  lgl        0 0       
-    #> 33 date_clean              date    3518 0.0120  
-    #> 34 year_clean              dbl     3518 0.0120
+    #> 33 date_clean              date    3523 0.0119  
+    #> 34 year_clean              dbl     3523 0.0119
 
 If we look at only the files from 2014 to 2019, there are zero missing
 values for variables like `committee_id` or `report_id`.
@@ -702,62 +702,60 @@ ct %>%
 ```
 
     #> # A tibble: 34 x 4
-    #>    var                     type       n        p
-    #>    <chr>                   <chr>  <int>    <dbl>
+    #>    col                     type       n        p
+    #>    <chr>                   <chr>  <dbl>    <dbl>
     #>  1 file                    chr        0 0       
     #>  2 committee               chr        0 0       
     #>  3 committee_type          chr        0 0       
-    #>  4 payee                   chr       35 0.000220
-    #>  5 purpose_of_expenditure  chr     1565 0.00984 
-    #>  6 description             chr    38511 0.242   
-    #>  7 payment_method          chr     1215 0.00764 
-    #>  8 payment_date            chr      667 0.00419 
-    #>  9 amount                  dbl       50 0.000314
+    #>  4 payee                   chr       35 0.000216
+    #>  5 purpose_of_expenditure  chr     1565 0.00966 
+    #>  6 description             chr    39318 0.243   
+    #>  7 payment_method          chr     1215 0.00750 
+    #>  8 payment_date            chr      667 0.00412 
+    #>  9 amount                  dbl       50 0.000309
     #> 10 file_to_state           date       0 0       
-    #> 11 period_start            date     153 0.000962
-    #> 12 period_end              date     153 0.000962
-    #> 13 election_year           int    65472 0.412   
+    #> 11 period_start            date     153 0.000945
+    #> 12 period_end              date     153 0.000945
+    #> 13 election_year           int    67762 0.418   
     #> 14 status                  chr        0 0       
     #> 15 data_source             chr        0 0       
-    #> 16 refiled_electronically  lgl   158971 1.000   
-    #> 17 street_address          chr      685 0.00431 
-    #> 18 city                    chr      729 0.00458 
-    #> 19 state                   chr      887 0.00558 
-    #> 20 fundraising_event       chr   147154 0.925   
-    #> 21 report_name             chr      155 0.000975
+    #> 16 refiled_electronically  lgl   161914 1.000   
+    #> 17 street_address          chr      685 0.00423 
+    #> 18 city                    chr      729 0.00450 
+    #> 19 state                   chr      892 0.00551 
+    #> 20 fundraising_event       chr   149612 0.924   
+    #> 21 report_name             chr      155 0.000957
     #> 22 committee_id            chr        0 0       
     #> 23 section_letter          chr        0 0       
     #> 24 section_name            chr        0 0       
     #> 25 report_id               chr        0 0       
-    #> 26 candidate_first_name    chr    65472 0.412   
-    #> 27 candidate_middle_intial chr    94627 0.595   
-    #> 28 candidate_last_name     chr    65472 0.412   
-    #> 29 form                    chr    93476 0.588   
-    #> 30 description_1           chr   109312 0.687   
+    #> 26 candidate_first_name    chr    67762 0.418   
+    #> 27 candidate_middle_intial chr    97286 0.601   
+    #> 28 candidate_last_name     chr    67762 0.418   
+    #> 29 form                    chr    95766 0.591   
+    #> 30 description_1           chr   111927 0.691   
     #> 31 amended                 lgl        0 0       
     #> 32 efiled                  lgl        0 0       
-    #> 33 date_clean              date     980 0.00616 
-    #> 34 year_clean              dbl      980 0.00616
+    #> 33 date_clean              date     984 0.00608 
+    #> 34 year_clean              dbl      984 0.00608
 
 We can should flag any variable missing the key values needed to
 identify a transaction: both parties, how much, and when.
 
 ``` r
-ct <- ct %>% 
-  mutate(
-    na_flag = is.na(payee) | is.na(amount) | is.na(date_clean) | is.na(committee)
-  )
-
+ct <- flag_na(ct, payee, amount, date_clean, committee)
 sum(ct$na_flag)
-#> [1] 3653
+#> [1] 3658
 percent(mean(ct$na_flag))
-#> [1] "1.24%"
+#> [1] "1.23%"
 ```
 
 ### Duplicates
 
 ``` r
-ct_dupes <- get_dupes(ct)
+ct <- flag_dupes(ct, everything())
+sum(ct$dupe_flag)
+percent(mean(ct$dupe_flag))
 ```
 
 ## Wrangle
@@ -769,7 +767,7 @@ ct <- ct %>%
   mutate(
     address_clean = normal_address(
       address = street_address,
-      add_abbs = usps,
+      add_abbs = usps_street,
       na_rep = TRUE
     )
   )
@@ -781,7 +779,7 @@ ct %>%
   )
 ```
 
-    #> # A tibble: 293,466 x 2
+    #> # A tibble: 296,409 x 2
     #>    street_address           address_clean         
     #>    <chr>                    <chr>                 
     #>  1 PO BOX 261172            PO BOX 261172         
@@ -794,7 +792,7 @@ ct %>%
     #>  8 35 MARSHALL RD.          35 MARSHALL ROAD      
     #>  9 574 NEW LONDON TPK       574 NEW LONDON TPK    
     #> 10 289 NORWICH / NEW LONDON 289 NORWICH NEW LONDON
-    #> # … with 293,456 more rows
+    #> # … with 296,399 more rows
 
 ### ZIP
 
@@ -805,13 +803,13 @@ There are no ZIP codes in the data base.
 ``` r
 n_distinct(ct$state)
 #> [1] 142
-prop_in(ct$state, geo$state, na.rm = TRUE)
-#> [1] 0.9993492
-sum(na.omit(ct$state) %out% geo$state)
-#> [1] 189
-sample(setdiff(ct$state, geo$state), 10)
-#>  [1] "CT 06371"   NA           "6897"       "CY"         "TC"         "6410"       "BNK"       
-#>  [8] "TEXAS"      "STRATFORD"  "MIDDLETOWN"
+prop_in(ct$state, valid_state, na.rm = TRUE)
+#> [1] 0.9992671
+sum(na.omit(ct$state) %out% valid_state)
+#> [1] 215
+sample(setdiff(ct$state, valid_state), 10)
+#>  [1] "QC"          "CN"          "BALTIC"      "6410"        "BNK"         "NL"         
+#>  [7] "MA CT"       "UI"          "WILLIMANTIC" "CALIF"
 
 
 ct <- ct %>% 
@@ -819,7 +817,7 @@ ct <- ct %>%
     state_clean = normal_state(
       abbreviate = TRUE,
       na_rep = TRUE,
-      valid = unique(geo$state),
+      valid = unique(valid_state),
       state = state %>% 
         str_replace("^CONN$", "CT") %>% 
         str_replace("^C\\sT$", "CT") %>% 
@@ -832,10 +830,10 @@ ct <- ct %>%
   )
 
 n_distinct(ct$state_clean)
-#> [1] 57
-prop_in(ct$state_clean, geo$state, na.rm = TRUE)
+#> [1] 53
+prop_in(ct$state_clean, valid_state, na.rm = TRUE)
 #> [1] 1
-sum(na.omit(ct$state_clean) %out% geo$state)
+sum(na.omit(ct$state_clean) %out% valid_state)
 #> [1] 0
 ```
 
@@ -845,27 +843,28 @@ sum(na.omit(ct$state_clean) %out% geo$state)
 n_distinct(ct$city)
 ```
 
-    #> [1] 2427
+    #> [1] 2437
 
 ``` r
-prop_in(ct$city, geo$city, na.rm = TRUE)
+prop_in(ct$city, valid_city, na.rm = TRUE)
 ```
 
-    #> [1] 0.9807637
+    #> [1] 0.9807044
 
 ``` r
-sum(na.omit(ct$city) %out% geo$city)
+sum(na.omit(ct$city) %out% valid_city)
 ```
 
-    #> [1] 5586
+    #> [1] 5660
 
 ``` r
-sample(setdiff(ct$city, geo$city), 10)
+sample(setdiff(ct$city, valid_city), 10)
 ```
 
-    #>  [1] "MENLOW PARK"        "SEATTLLE"           "NORTH GROVENONDALE" "CINNCINNATI"       
-    #>  [5] "WASH DC"            "GLAST."             "LIME ROCK"          "ON-LINE"           
-    #>  [9] "BRISTEL"            "MT LAUREL"
+    #>  [1] "NORTH GROSVENOR DALE"      "N PROVIDENCE"              "PAYMENT FOR PO BOX 127 FO"
+    #>  [4] "EAST HAVENT"               "NORWICHTOWN"               "NORTH. HAVEN"             
+    #>  [7] "EAST HEAVEN"               "CLAF."                     "NORTH BRIDGETON"          
+    #> [10] "AURORA, COLORADO"
 
 ``` r
 ct <- ct %>% 
@@ -901,10 +900,10 @@ ct %>%
   count(state_clean, city, city_norm, sort = TRUE)
 ```
 
-    #> # A tibble: 193 x 4
+    #> # A tibble: 192 x 4
     #>    state_clean city                 city_norm           n
     #>    <chr>       <chr>                <chr>           <int>
-    #>  1 MN          ST PAUL              SAINT PAUL        183
+    #>  1 MN          ST PAUL              SAINT PAUL        185
     #>  2 CT          HTFD                 HARTFORD           89
     #>  3 CT          W. HARTFORD          WEST HARTFORD      66
     #>  4 MN          ST. PAUL             SAINT PAUL         52
@@ -914,16 +913,16 @@ ct %>%
     #>  8 FL          FT LAUDERDALE        FORT LAUDERDALE    23
     #>  9 CT          E. HTFD              EAST HARTFORD      17
     #> 10 CT          W. HTFD              WEST HARTFORD      16
-    #> # … with 183 more rows
+    #> # … with 182 more rows
 
 ## Conclude
 
-1.  There are 293466 records in the database.
+1.  There are 296409 records in the database.
 2.  We did not check for duplicates.
 3.  Ranges and distributions for continuous variables were checked and
     explored. Dates from the past or future were either fixed or
     removed.
-4.  There are 3653 records missing data flagged with `na_flag`.
+4.  There are 3658 records missing data flagged with `na_flag`.
 5.  Consistency issues in categorical variables was improved with the
     `campfin` package.
 6.  The 5-digit `zip_clean` variable was created with
@@ -948,4 +947,26 @@ ct %>%
     na = "",
     path = glue("{proc_dir}/ct_expends_clean.csv")
   )
+```
+
+## Lookup
+
+``` r
+lookup <- read_csv("ct/expends/data/ct_city_lookup.csv") %>% select(1:2)
+ct <- left_join(ct, lookup)
+progress_table(ct$city_norm, ct$city_clean, compare = valid_city)
+```
+
+    #> # A tibble: 2 x 6
+    #>   stage      prop_in n_distinct prop_na n_out n_diff
+    #>   <chr>        <dbl>      <dbl>   <dbl> <dbl>  <dbl>
+    #> 1 city_norm    0.984       2324  0.0105  4832    876
+    #> 2 city_clean   0.988       1821  0.0108  3586    385
+
+``` r
+write_csv(
+  x = ct,
+  path = glue("{proc_dir}/mi_expends_clean.csv"),
+  na = ""
+)
 ```

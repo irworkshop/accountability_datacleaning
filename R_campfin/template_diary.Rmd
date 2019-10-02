@@ -21,7 +21,6 @@ opts_chunk$set(
   warning = FALSE,
   message = FALSE,
   error = FALSE,
-  # it's nice to un-collapse df print
   collapse = TRUE,
   comment = "#>",
   fig.path = "../plots/",
@@ -68,7 +67,7 @@ functions custom made to help facilitate the processing of campaign finance data
 
 ```{r load_packages, message=FALSE, dfrning=FALSE, error=FALSE}
 if (!require("pacman")) install.packages("pacman")
-pacman::p_load_current_gh("kiernann/campfin")
+pacman::p_load_gh("irworkshop/campfin")
 pacman::p_load(
   stringdist, # levenshtein value
   RSelenium, # remote browser
@@ -94,7 +93,7 @@ The `R_campfin` project uses the [RStudio projects][02] feature and should be ru
 project also uses the dynamic `here::here()` tool for file paths relative to _your_ machine.
 
 ```{r where_here, collapse=TRUE}
-# where dfs this document knit?
+# where does this document knit?
 here::here()
 ```
 
@@ -218,8 +217,8 @@ df <- df %>%
 
 ```{r count_zip_pre, collapse=TRUE}
 n_distinct(df$zip)
-prop_in(df$zip, geo$zip, na.rm = TRUE)
-length(setdiff(df$zip, geo$zip))
+prop_in(df$zip, valid_zip, na.rm = TRUE)
+length(setdiff(df$zip, valid_zip))
 ```
 
 ```{r normal_zip}
@@ -234,16 +233,16 @@ df <- df %>%
 
 ```{r count_zip_post, collapse=TRUE}
 n_distinct(df$zip_norm)
-prop_in(df$zip_norm, geo$zip, na.rm = TRUE)
-length(setdiff(df$zip_norm, geo$zip))
+prop_in(df$zip_norm, valid_zip, na.rm = TRUE)
+length(setdiff(df$zip_norm, valid_zip))
 ```
 
 ### State
 
 ```{r count_state_pre, collapse=TRUE}
 n_distinct(df$state)
-prop_in(df$state, geo$state, na.rm = TRUE)
-length(setdiff(df$state, geo$state))
+prop_in(df$state, valid_state, na.rm = TRUE)
+length(setdiff(df$state, valid_state))
 ```
 
 ```{r normal_state}
@@ -253,23 +252,23 @@ df <- df %>%
       state = state,
       abbreviate = TRUE,
       na_rep = TRUE,
-      valid = geo$state
+      valid = valid_state
     )
   )
 ```
 
 ```{r count_state_post, collapse=TRUE}
 n_distinct(df$state_norm)
-prop_in(df$state_norm, geo$state, na.rm = TRUE)
-length(setdiff(df$state_norm, geo$state))
+prop_in(df$state_norm, valid_state, na.rm = TRUE)
+length(setdiff(df$state_norm, valid_state))
 ```
 
 ### City
 
 ```{r count_city_pre, collapse=TRUE}
 n_distinct(df$city)
-prop_in(df$city, geo$city, na.rm = TRUE)
-length(setdiff(df$city, geo$city))
+prop_in(df$city, valid_city, na.rm = TRUE)
+length(setdiff(df$city, valid_city))
 ```
 
 #### Normalize
@@ -281,7 +280,7 @@ df <- df %>%
       city = city, 
       geo_abbs = usps_city,
       st_abbs = c("DF", "DC", "DATA FRAME"),
-      na = na_city,
+      na = invalid_city,
       na_rep = TRUE
     )
   )
@@ -289,8 +288,8 @@ df <- df %>%
 
 ```{r count_city_post_norm, collapse=TRUE}
 n_distinct(df$city_norm)
-prop_in(df$city_norm, geo$city, na.rm = TRUE)
-length(setdiff(df$city_norm, geo$city))
+prop_in(df$city_norm, valid_city, na.rm = TRUE)
+length(setdiff(df$city_norm, valid_city))
 ```
 
 #### Swap
@@ -298,7 +297,7 @@ length(setdiff(df$city_norm, geo$city))
 ```{r swap_city}
 df <- df %>% 
   left_join(
-    y = geo,
+    y = zipcodes,
     by = c(
       "state_norm" = "state",
       "zip_norm" = "zip"
@@ -317,8 +316,8 @@ df <- df %>%
 
 ```{r count_city_post_swap, collapse=TRUE}
 n_distinct(df$city_swap)
-prop_in(df$city_swap, geo$city, na.rm = TRUE)
-length(setdiff(df$city_swap, geo$city))
+prop_in(df$city_swap, valid_city, na.rm = TRUE)
+length(setdiff(df$city_swap, valid_city))
 ```
 
 #### Refine
@@ -331,6 +330,6 @@ length(setdiff(df$city_swap, geo$city))
 1. There are `sum(df$na_flag)` records missing either recipient or date.
 1. Consistency in goegraphic data has been improved with `campfin::normal_*()`.
 1. The 5-digit `zip_norm` variable has been created with `campfin::normal_zip(df$zip)`.
-1. The 4-digit `year` variable has been created with `lubridate::year(df$date)`.
+1. The 4-digit `year` variable has been created with `lubridate::year()`.
 
 ## Export

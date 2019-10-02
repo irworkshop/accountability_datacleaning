@@ -84,7 +84,7 @@ The IRW's `campfin` package will also have to be installed from GitHub. This pac
 functions custom made to help facilitate the processing of campaign finance data.
 
 ```{r load_campfin}
-pacman::p_load_current_gh("kiernann/campfin")
+pacman::p_load_gh("kiernann/campfin")
 ```
 
 This document should be run as part of the `R_campfin` project, which lives as a sub-directory of
@@ -416,9 +416,12 @@ a new `na_flag` variable.
 
 ```{r flag_na}
 co <- co %>% 
-  mutate(
-    na_flag = is.na(last_name) & is.na(first_name) & is.na(mi)
-  )
+  mutate(payee = coalesce(first_name, mi, last_name)) %>% 
+  flag_na(expenditure_amount, expenditure_date, payee, committee_name) %>% 
+  select(-payee)
+
+sum(co$na_flag)
+mean(co$na_flag)
 ```
 
 ### Ranges
@@ -430,6 +433,7 @@ For continuous variables, we should check the ranges.
 ```{r amount_ranges, collapse=TRUE}
 summary(co$expenditure_amount)
 sum(co$expenditure_amount < 0)
+mean(co$expenditure_amount < 0)
 ```
 
 From this summary, we can see the median of `r dollar(median(co$expenditure_amount))` and mean of
@@ -593,7 +597,7 @@ co <- co %>%
   mutate(
     address_clean = normal_address(
       address = address_clean,
-      add_abbs = usps,
+      add_abbs = usps_street,
       na_rep = TRUE
     )
   ) %>% 
@@ -614,7 +618,7 @@ co %>%
 ### ZIP
 
 ```{r norm_zip, collapse=TRUE}
-mean(co$zip %in% geo$zip)
+mean(co$zip %in% valid_zip)
 
 co <- co %>% 
   mutate(
@@ -627,28 +631,29 @@ co <- co %>%
 # percent changed
 mean(co$zip != co$zip_clean, na.rm = TRUE)
 # percent valid
-mean(co$zip_clean %in% geo$zip)
+mean(co$zip_clean %in% valid_zip)
 ```
 
 ### State
 
 The `state` values appear to already be trimmed, or are otherwise nonsense. We can make them `NA`.
-`r percent(prop_in(co$state, geo$state, na.rm = TRUE))` of `state` values are already valid.
+`r percent(prop_in(co$state, valid_state, na.rm = TRUE))` of `state` values are already valid.
 
 ```{r norm_state, collapse=TRUE}
 n_distinct(co$state)
-prop_in(co$state, geo$state, na.rm = TRUE)
-setdiff(co$state, geo$state)
+prop_in(co$state, valid_state, na.rm = TRUE)
+setdiff(co$state, valid_state)
 
 co <- co %>% 
   mutate(
   state_clean = normal_state(
     state = state,
-    valid = unique(geo$state)
+    abbreviate = TRUE,
+    na_rep = TRUE
   )
 )
 
-prop_in(co$state_clean, geo$state, na.rm = TRUE)
+prop_in(co$state_clean, valid_state, na.rm = TRUE)
 ```
 
 ### City
@@ -672,9 +677,9 @@ co_city <- co_city[which(co_city != "")]
 # remove all after two spaces
 co_city <- str_remove(co_city, "\\s{2,}(.*)")
 # normalize
-co_city <- normal_city(co_city, geo_abbs = usps)
+co_city <- normal_city(co_city, geo_abbs = usps_city)
 # combine with others
-valid_city <- unique(c(co_city, geo$city))
+valid_city <- unique(c(co_city, valid_city))
 ```
 
 Our aim here is to reduce the number of distinct city names by normalizing text and correcting
@@ -702,7 +707,7 @@ co <- co %>%
         str_replace("^GWS$", "GLENWOOD SPRINGS"),
       geo_abbs = usps_city,
       st_abbs = c("CO", "DC", "COLORADO"),
-      na = c(na_city, "UNKNOWNCITY", "REDACTED", "TBD"),
+      na = c(invalid_city, "UNKNOWNCITY", "REDACTED", "TBD"),
       na_rep = TRUE
     )
   )
@@ -717,7 +722,7 @@ sum(unique(co$city_norm) %out% valid_city)
 ```{r match_city, collapse=TRUE}
 co <- co %>%
   left_join(
-    geo,
+    zipcodes,
     by = c(
       "zip_clean" = "zip",
       "state_clean" = "state"
@@ -799,7 +804,7 @@ co_refine <- co %>%
   mutate(
     # cluster and merge
     city_refine = city_swap %>% 
-      key_collision_merge(dict = unique(c(co_city, geo$city[geo$state == "CO"]))) %>% 
+      key_collision_merge(dict = unique(c(co_city, valid_city[valid_state == "CO"]))) %>% 
       n_gram_merge(numgram = 2),
     # undo refine if match
     city_refine = if_else(
@@ -838,7 +843,7 @@ co_refine <- co_refine %>%
     zip_clean
   ) %>% 
   inner_join(
-    geo,
+    zipcodes,
     by = c(
       "city_refine" = "city",
       "state_clean" = "state"
@@ -866,15 +871,15 @@ n_distinct(co$city_clean)
 ```
 
 We also increased the percent of valid city names by
-`r percent(prop_in(co$city_clean,geo$city,na.rm = TRUE)-prop_in(co$city,geo$city,na.rm = TRUE))`,
-from `r percent(prop_in(co$city,geo$city,na.rm = TRUE))` to 
-`r percent(prop_in(co$city_clean,geo$city,na.rm = TRUE))`
+`r percent(prop_in(co$city_clean,valid_city,na.rm = TRUE)-prop_in(co$city,valid_city,na.rm = TRUE))`,
+from `r percent(prop_in(co$city,valid_city,na.rm = TRUE))` to 
+`r percent(prop_in(co$city_clean,valid_city,na.rm = TRUE))`
 
 ```{r city_progress2, collapse=TRUE}
-prop_in(co$city, geo$city, na.rm = TRUE)
-prop_in(co$city_norm, geo$city, na.rm = TRUE)
-prop_in(co$city_swap, geo$city, na.rm = TRUE)
-prop_in(co$city_clean, geo$city, na.rm = TRUE)
+prop_in(co$city, valid_city, na.rm = TRUE)
+prop_in(co$city_norm, valid_city, na.rm = TRUE)
+prop_in(co$city_swap, valid_city, na.rm = TRUE)
+prop_in(co$city_clean, valid_city, na.rm = TRUE)
 ```
 
 ## Conclude
@@ -888,14 +893,27 @@ prop_in(co$city_clean, geo$city, na.rm = TRUE)
 1. The 4-digit `expenditure_year` variable has been created from `expenditure_date`.
 1. Not all files have both parties (see `na_flag`).
 
-## Export
+## Lookup
 
-```{r write_clean}
-if (!all_files_new(proc_dir)) {
+```{r lookup_city}
+lookup <- read_csv("co/expends/data/co_city_lookup.csv") %>% select(1:2)
+co <- left_join(co, lookup)
+
+progress_table(
+  co$city, 
+  co$city_swap,
+  co$city_clean, 
+  co$city_clean2, 
+  compare = valid_city
+)
+
+clean_file <- glue("{proc_dir}/co_expends_clean.csv")
+
+if (!this_file_new(clean_file)) {
   write_csv(
     x = co,
-    na = "",
-    path = glue("{proc_dir}/co_expends_clean.csv")
+    path = clean_file,
+    na = ""
   )
 }
 ```

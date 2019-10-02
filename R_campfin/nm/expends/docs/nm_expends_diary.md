@@ -1,7 +1,7 @@
 New Mexico Expenditures
 ================
 Kiernan Nicholls
-2019-07-31 13:00:49
+2019-09-30 12:38:55
 
   - [Project](#project)
   - [Objectives](#objectives)
@@ -12,6 +12,7 @@ Kiernan Nicholls
   - [Wrangle](#wrangle)
   - [Conclude](#conclude)
   - [Export](#export)
+  - [Lookup](#lookup)
 
 ## Project
 
@@ -50,29 +51,26 @@ facilitate their installation and attachment.
 
 ``` r
 if (!require("pacman")) install.packages("pacman")
+pacman::p_load_current_gh("kiernann/campfin")
 pacman::p_load(
   stringdist, # levenshtein value
+  snakecase, # change string case
   RSelenium, # remote browser
   tidyverse, # data manipulation
   lubridate, # datetime strings
+  tidytext, # text analysis
   magrittr, # pipe opperators
   janitor, # dataframe clean
+  batman, # rep(NA, 8) Batman!
   refinr, # cluster and merge
   scales, # format strings
   knitr, # knit documents
   vroom, # read files fast
   glue, # combine strings
   here, # relative storage
+  httr, # http query
   fs # search storage 
 )
-```
-
-The IRW’s `campfin` package will also have to be installed from GitHub.
-This package contains functions custom made to help facilitate the
-processing of campaign finance data.
-
-``` r
-pacman::p_load_current_gh("kiernann/campfin")
 ```
 
 This document should be run as part of the `R_campfin` project, which
@@ -88,7 +86,7 @@ feature and should be run as such. The project also uses the dynamic
 ``` r
 # where dfs this document knit?
 here::here()
-#> [1] "/home/ubuntu/R/accountability_datacleaning/R_campfin"
+#> [1] "/home/kiernan/R/accountability_datacleaning/R_campfin"
 ```
 
 ## Data
@@ -120,7 +118,7 @@ download a file. We can automate this process with the RSelenium
 package.
 
 ``` r
-raw_dir <- here("nm", "data", "raw")
+raw_dir <- here("nm", "expends", "data", "raw")
 dir_create(raw_dir)
 ```
 
@@ -227,12 +225,12 @@ head(nm)
     #> # A tibble: 6 x 22
     #>   cand_first cand_last type  is_contribution is_anonymous amount date_contribution   memo 
     #>   <chr>      <chr>     <chr> <lgl>           <lgl>         <dbl> <dttm>              <chr>
-    #> 1 BILLIE     HELEAN    MONE… FALSE           FALSE           1.5 2019-03-29 00:00:00 <NA> 
-    #> 2 BILLIE     HELEAN    MONE… FALSE           FALSE          15   2019-03-21 00:00:00 <NA> 
-    #> 3 BILLIE     HELEAN    MONE… FALSE           FALSE         100   2019-03-14 00:00:00 <NA> 
-    #> 4 BILLIE     HELEAN    MONE… FALSE           FALSE          21.3 2019-03-08 00:00:00 <NA> 
-    #> 5 BILLIE     HELEAN    MONE… FALSE           FALSE          15   2019-02-21 00:00:00 <NA> 
-    #> 6 BILLIE     HELEAN    MONE… FALSE           FALSE         100   2019-02-16 00:00:00 <NA> 
+    #> 1 JIMMIE     HALL      MONE… FALSE           FALSE         5000  2019-07-26 00:00:00 <NA> 
+    #> 2 JIMMIE     HALL      MONE… FALSE           FALSE         3754. 2019-06-18 00:00:00 <NA> 
+    #> 3 JIMMIE     HALL      MONE… FALSE           FALSE          337. 2019-06-18 00:00:00 <NA> 
+    #> 4 JIMMIE     HALL      MONE… FALSE           FALSE          156. 2019-05-14 00:00:00 <NA> 
+    #> 5 JIMMIE     HALL      MONE… FALSE           FALSE           75  2019-05-14 00:00:00 <NA> 
+    #> 6 JIMMIE     HALL      MONE… FALSE           FALSE          738. 2019-05-14 00:00:00 <NA> 
     #> # … with 14 more variables: description <chr>, first_name <chr>, middle_name <chr>,
     #> #   last_name <chr>, suffix <chr>, company_name <chr>, address <chr>, city <chr>, state <chr>,
     #> #   zip <chr>, occupation <chr>, filing_period <chr>, date_added <dttm>, pac_name <chr>
@@ -258,30 +256,30 @@ tail(nm)
 glimpse(sample_frac(nm))
 ```
 
-    #> Observations: 370,295
+    #> Observations: 370,312
     #> Variables: 22
-    #> $ cand_first        <chr> "RICKY", "CARROLL", "LINDA", "JIM", NA, NA, NA, NA, "RAY", NA, NA, NA,…
-    #> $ cand_last         <chr> "LITTLE", "LEAVELL", "SMRKOVSKY", "BACA", NA, NA, NA, NA, "POWELL", NA…
+    #> $ cand_first        <chr> NA, NA, "PHILLIP", NA, NA, "HECTOR", NA, NA, NA, "RODOLPHO", "RONNIE",…
+    #> $ cand_last         <chr> NA, NA, "GUTIERREZ", NA, NA, "BALDERAS", NA, NA, NA, "MARTINEZ", "RARD…
     #> $ type              <chr> "MONETARY EXPENDITURE", "MONETARY EXPENDITURE", "MONETARY EXPENDITURE"…
     #> $ is_contribution   <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, …
     #> $ is_anonymous      <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, …
-    #> $ amount            <dbl> 73.00, 25.00, 550.00, 28.57, 50.00, 500.00, 500.00, 500.00, 330.00, 19…
-    #> $ date_contribution <dttm> 2012-10-12, 2010-11-27, 2018-10-08, 2006-10-30, 2018-02-14, 2018-03-1…
-    #> $ memo              <chr> "DEBIT", NA, "POSTAGE FOR CAMPAIGN LETTERS", NA, NA, NA, NA, NA, NA, N…
-    #> $ description       <chr> "FUEL", "CONTRIBUTION", "STAMPS", NA, "EARMARK: REBECCA LORING", "EARM…
-    #> $ first_name        <chr> NA, NA, NA, NA, NA, NA, "GAIL", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
-    #> $ middle_name       <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
-    #> $ last_name         <chr> NA, NA, NA, NA, NA, NA, "CHASEY", NA, NA, NA, NA, NA, NA, NA, NA, NA, …
-    #> $ suffix            <chr> NA, NA, NA, "NULL", NA, NA, NA, NA, NA, "NULL", NA, NA, NA, "NULL", NA…
-    #> $ company_name      <chr> "CHROME OUTLET", "ST. JUDES CHILDRENS RESEARCH HOSPITAL", "UNITED STAT…
-    #> $ address           <chr> "I-H 10, EXIT 155", "BOX 810", "201 WEST SPRUCE STREET", "1475 RIO RAN…
-    #> $ city              <chr> "VADO", "MEMPHIS", "DEMING", "RIO RANCHO", "WASHINGTON", "ALBUQUERQUE"…
-    #> $ state             <chr> "NM", "TN", "NM", "NEW MEXICO", "DC", "NM", "NM", "DC", "NM", "NM", "C…
-    #> $ zip               <chr> "88048", "38101", "88030", "87124-1857", "20003", "87181", "87106", "2…
-    #> $ occupation        <chr> NA, NA, NA, "NULL", "POLITICAL COMMITTEE", "POLITICAL COMMITTEE", NA, …
-    #> $ filing_period     <chr> "THIRD GENERAL REPORT 2012", "2011 FIRST BI-ANNUAL", "2018 THIRD GENER…
-    #> $ date_added        <dttm> 2012-11-01 09:48:58, 2011-08-25 15:45:00, 2018-11-01 07:33:11, 2010-0…
-    #> $ pac_name          <chr> NA, NA, NA, NA, "ACTBLUE NEW MEXICO", "ACTBLUE NEW MEXICO", "PLUMBERS …
+    #> $ amount            <dbl> 200.00, 2500.00, 539.69, 15.00, 100.00, 500.00, 82.61, 48048.42, 25.00…
+    #> $ date_contribution <dttm> 2014-07-30, 2018-10-01, 2010-05-07, 2012-08-05, 2018-09-16, 2018-10-0…
+    #> $ memo              <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
+    #> $ description       <chr> "CONTRIBUTION", "CONTRIBUTION", "RADIO ADVERTISING", "EARMARKED CONTRI…
+    #> $ first_name        <chr> NA, NA, NA, NA, NA, NA, "RYAN", NA, NA, NA, NA, NA, "JAMES", "JOANNA",…
+    #> $ middle_name       <chr> NA, NA, NA, NA, NA, NA, "R.", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
+    #> $ last_name         <chr> NA, NA, NA, NA, NA, NA, "CANGIOLOSI", NA, NA, NA, NA, NA, "PACHTA", "T…
+    #> $ suffix            <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "NULL"…
+    #> $ company_name      <chr> "HARPER FOR STATE REPRESENTATIVE", "COMMITTEE TO ELECT JOY GARRATT", "…
+    #> $ address           <chr> "4917 FOXMORE COURT NE", "10308 MARIN DR. NW", "CEDAR HILLS PLAZA", "1…
+    #> $ city              <chr> "RIO RANCHO", "ALBUQUERQUE", "GALLUP", "SANTA FE", "WASHINGTON", "BAYA…
+    #> $ state             <chr> "NM", "NM", "NM", "NM", "DC", "NM", "NM", "NM", "NM", "NM", "NM", "AZ"…
+    #> $ zip               <chr> "87144", "87114", "87301", "87508", "20003", "88023", "87113", "87110"…
+    #> $ occupation        <chr> NA, NA, NA, "POLITICAL COMMITTEE", "POLITICAL COMMITTEE", "POLITICAL O…
+    #> $ filing_period     <chr> "2014 FIRST GENERAL", "2018 SECOND GENERAL", "THIRD PRIMARY REPORT 201…
+    #> $ date_added        <dttm> 2014-09-05 14:38:41, 2018-10-05 14:27:00, 2010-05-23 22:41:15, 2012-0…
+    #> $ pac_name          <chr> "NATIONAL FEDERATION OF INDEPENDENT BUSINESS NEW MEXICO POLITICAL ACTI…
 
 ### Missing
 
@@ -293,8 +291,8 @@ glimpse_fun(nm, count_na)
 ```
 
     #> # A tibble: 22 x 4
-    #>    var               type       n        p
-    #>    <chr>             <chr>  <int>    <dbl>
+    #>    col               type       n        p
+    #>    <chr>             <chr>  <dbl>    <dbl>
     #>  1 cand_first        chr   161062 0.435   
     #>  2 cand_last         chr   161062 0.435   
     #>  3 type              chr        0 0       
@@ -302,21 +300,21 @@ glimpse_fun(nm, count_na)
     #>  5 is_anonymous      lgl        0 0       
     #>  6 amount            dbl        0 0       
     #>  7 date_contribution dttm       0 0       
-    #>  8 memo              chr   348378 0.941   
+    #>  8 memo              chr   348395 0.941   
     #>  9 description       chr    72532 0.196   
-    #> 10 first_name        chr   313455 0.847   
-    #> 11 middle_name       chr   361870 0.977   
-    #> 12 last_name         chr   313493 0.847   
-    #> 13 suffix            chr   296264 0.800   
-    #> 14 company_name      chr    54210 0.146   
+    #> 10 first_name        chr   313468 0.846   
+    #> 11 middle_name       chr   361883 0.977   
+    #> 12 last_name         chr   313506 0.847   
+    #> 13 suffix            chr   296281 0.800   
+    #> 14 company_name      chr    54214 0.146   
     #> 15 address           chr       80 0.000216
     #> 16 city              chr      128 0.000346
     #> 17 state             chr      158 0.000427
     #> 18 zip               chr       70 0.000189
-    #> 19 occupation        chr   161948 0.437   
+    #> 19 occupation        chr   161957 0.437   
     #> 20 filing_period     chr     3849 0.0104  
     #> 21 date_added        dttm       0 0       
-    #> 22 pac_name          chr   209233 0.565
+    #> 22 pac_name          chr   209250 0.565
 
 ### Duplicates
 
@@ -324,28 +322,17 @@ A huge number of records in this database are complete duplicates. We
 can find them using `janitor::get_dupes()`.
 
 ``` r
-nm_dupes <- distinct(get_dupes(nm))
-```
-
-We will have to flag them in the original database with a `dupe_flag`
-variable.
-
-``` r
-nm <- nm %>% 
-  left_join(nm_dupes) %>% 
-  mutate(dupe_flag = !is.na(dupe_count)) %>% 
-  select(-dupe_count)
-
+nm <- flag_dupes(nm, everything())
 sum(nm$dupe_flag)
 ```
 
-    #> [1] 15928
+    #> [1] 11374
 
 ``` r
 percent(mean(nm$dupe_flag))
 ```
 
-    #> [1] "4.30%"
+    #> [1] "3.07%"
 
 ### Categorical
 
@@ -357,29 +344,29 @@ glimpse_fun(nm, n_distinct)
 ```
 
     #> # A tibble: 23 x 4
-    #>    var               type       n          p
-    #>    <chr>             <chr>  <int>      <dbl>
+    #>    col               type       n          p
+    #>    <chr>             <chr>  <dbl>      <dbl>
     #>  1 cand_first        chr     1148 0.00310   
     #>  2 cand_last         chr     1642 0.00443   
     #>  3 type              chr        1 0.00000270
     #>  4 is_contribution   lgl        1 0.00000270
     #>  5 is_anonymous      lgl        1 0.00000270
-    #>  6 amount            dbl    59735 0.161     
-    #>  7 date_contribution dttm    5719 0.0154    
+    #>  6 amount            dbl    59743 0.161     
+    #>  7 date_contribution dttm    5723 0.0155    
     #>  8 memo              chr    13602 0.0367    
-    #>  9 description       chr    72026 0.195     
+    #>  9 description       chr    72039 0.195     
     #> 10 first_name        chr     4110 0.0111    
     #> 11 middle_name       chr      374 0.00101   
-    #> 12 last_name         chr     6287 0.0170    
+    #> 12 last_name         chr     6288 0.0170    
     #> 13 suffix            chr       35 0.0000945 
-    #> 14 company_name      chr    45550 0.123     
-    #> 15 address           chr    69529 0.188     
+    #> 14 company_name      chr    45553 0.123     
+    #> 15 address           chr    69535 0.188     
     #> 16 city              chr     3403 0.00919   
     #> 17 state             chr      203 0.000548  
     #> 18 zip               chr     6337 0.0171    
-    #> 19 occupation        chr     6028 0.0163    
+    #> 19 occupation        chr     6029 0.0163    
     #> 20 filing_period     chr       89 0.000240  
-    #> 21 date_added        dttm  167880 0.453     
+    #> 21 date_added        dttm  167897 0.453     
     #> 22 pac_name          chr      526 0.00142   
     #> 23 dupe_flag         lgl        2 0.00000540
 
@@ -483,8 +470,8 @@ print(count(nm, year), n = 26)
     #> 21  2015 10358
     #> 22  2016 43029
     #> 23  2017 30387
-    #> 24  2018 72001
-    #> 25  2019  2331
+    #> 24  2018 71996
+    #> 25  2019  2353
     #> 26  2106     1
 
 ``` r
@@ -504,7 +491,7 @@ nm <- nm %>%
   mutate(
     address_norm = normal_address(
       address = address,
-      add_abbs = usps,
+      add_abbs = usps_street,
       na_rep = TRUE
     )
   )
@@ -520,28 +507,28 @@ nm %>%
 ```
 
     #> # A tibble: 10 x 2
-    #>    address               address_norm        
-    #>    <chr>                 <chr>               
-    #>  1 100 S PLAZA STE C     100 S PLAZA STE C   
-    #>  2 20 BUFFALO THUNDER    20 BUFFALO THUNDER  
-    #>  3 824 N. CALIFORNIA     824 N CALIFORNIA    
-    #>  4 608 MCKEE DR          608 MCKEE DRIVE     
-    #>  5 P.O. BOX 998          PO BOX 998          
-    #>  6 PO BOX 36611          PO BOX 36611        
-    #>  7 2014 OTOWI ROAD       2014 OTOWI ROAD     
-    #>  8 128 GRANT AVENUE #301 128 GRANT AVENUE 301
-    #>  9 PO BOX 382110         PO BOX 382110       
-    #> 10 P.O. BOX 660108       PO BOX 660108
+    #>    address                              address_norm                               
+    #>    <chr>                                <chr>                                      
+    #>  1 518 RIVER OVERLOOK                   518 RIVER OVERLOOK                         
+    #>  2 PO BOX 803                           PO BOX 803                                 
+    #>  3 51 VEGAS RD.                         51 VEGAS ROAD                              
+    #>  4 PO BOX 697                           PO BOX 697                                 
+    #>  5 5508 LONAS DR                        5508 LONAS DRIVE                           
+    #>  6 P.O. BOX 1838                        PO BOX 1838                                
+    #>  7 1413 PASEO DE PERALTA                1413 PASEO DE PERALTA                      
+    #>  8 611 PENNSYLVANIA AVENUE SE SUITE 143 611 PENNSYLVANIA AVENUE SOUTHEAST SUITE 143
+    #>  9 OLD LAS VEGAS HWY                    OLD LAS VEGAS HIGHWAY                      
+    #> 10 611 PENNSYLVANIA AVENUE SE SUITE 143 611 PENNSYLVANIA AVENUE SOUTHEAST SUITE 143
 
 ### ZIP
 
 ``` r
 n_distinct(nm$zip)
 #> [1] 6337
-prop_in(nm$zip, geo$zip, na.rm = TRUE)
-#> [1] 0.9421892
-length(setdiff(nm$zip, geo$zip))
-#> [1] 3116
+prop_in(nm$zip, valid_zip, na.rm = TRUE)
+#> [1] 0.9421784
+length(setdiff(nm$zip, valid_zip))
+#> [1] 3117
 ```
 
 ``` r
@@ -556,11 +543,11 @@ nm <- nm %>%
 
 ``` r
 n_distinct(nm$zip_norm)
-#> [1] 3972
-prop_in(nm$zip_norm, geo$zip, na.rm = TRUE)
-#> [1] 0.9941083
-length(setdiff(nm$zip_norm, geo$zip))
-#> [1] 537
+#> [1] 3969
+prop_in(nm$zip_norm, valid_zip, na.rm = TRUE)
+#> [1] 0.9936185
+length(setdiff(nm$zip_norm, valid_zip))
+#> [1] 539
 ```
 
 ### State
@@ -568,10 +555,10 @@ length(setdiff(nm$zip_norm, geo$zip))
 ``` r
 n_distinct(nm$state)
 #> [1] 203
-prop_in(nm$state, geo$state, na.rm = TRUE)
-#> [1] 0.9844922
-length(setdiff(nm$state, geo$state))
-#> [1] 145
+prop_in(nm$state, valid_state, na.rm = TRUE)
+#> [1] 0.9844281
+length(setdiff(nm$state, valid_state))
+#> [1] 150
 ```
 
 ``` r
@@ -579,7 +566,7 @@ nm <- nm %>%
   mutate(
     state_norm = normal_state(
       abbreviate = TRUE,
-      valid = geo$state,
+      valid = valid_state,
       na_rep = TRUE,
       state = state %>% 
         str_replace("^NEWMEXICO$", "NM") %>% 
@@ -612,8 +599,8 @@ nm <- nm %>%
 
 ``` r
 n_distinct(nm$state_norm)
-#> [1] 59
-prop_in(nm$state_norm, geo$state, na.rm = TRUE)
+#> [1] 54
+prop_in(nm$state_norm, valid_state, na.rm = TRUE)
 #> [1] 1
 ```
 
@@ -622,10 +609,10 @@ prop_in(nm$state_norm, geo$state, na.rm = TRUE)
 ``` r
 n_distinct(nm$city)
 #> [1] 3403
-prop_in(nm$city, geo$city, na.rm = TRUE)
-#> [1] 0.9585836
-length(setdiff(nm$city, geo$city))
-#> [1] 1932
+prop_in(nm$city, valid_city, na.rm = TRUE)
+#> [1] 0.9585666
+length(setdiff(nm$city, valid_city))
+#> [1] 1933
 ```
 
 ``` r
@@ -638,7 +625,7 @@ nm <- rename(nm, city_raw = city)
 nm <- nm %>%
   mutate(
     city_norm = normal_city(
-      na = na_city,
+      na = invalid_city,
       na_rep = TRUE,
       geo_abbs = usps_city,
       st_abbs = c("NM", "DC", "NEW MEXICO"),
@@ -667,10 +654,10 @@ nm <- nm %>%
 ``` r
 n_distinct(nm$city_norm)
 #> [1] 2977
-prop_in(nm$city_norm, geo$city, na.rm = TRUE)
-#> [1] 0.9745797
-length(setdiff(nm$city_norm, geo$city))
-#> [1] 1499
+prop_in(nm$city_norm, valid_city, na.rm = TRUE)
+#> [1] 0.9743254
+length(setdiff(nm$city_norm, valid_city))
+#> [1] 1496
 ```
 
 #### Swap
@@ -678,7 +665,7 @@ length(setdiff(nm$city_norm, geo$city))
 ``` r
 nm <- nm %>%
   left_join(
-    y = geo,
+    y = zipcodes,
     by = c(
       "state_norm" = "state",
       "zip_norm" = "zip"
@@ -697,33 +684,33 @@ nm <- nm %>%
 mean(nm$match_dist, na.rm = TRUE)
 ```
 
-    #> [1] 0.2162395
+    #> [1] 0.2180483
 
 ``` r
 sum(nm$match_dist == 1, na.rm = TRUE)
 ```
 
-    #> [1] 5268
+    #> [1] 5261
 
 ``` r
 n_distinct(nm$city_swap)
-#> [1] 2029
-prop_in(nm$city_swap, geo$city, na.rm = TRUE)
-#> [1] 0.9898001
-length(setdiff(nm$city_swap, geo$city))
-#> [1] 583
+#> [1] 2027
+prop_in(nm$city_swap, valid_city, na.rm = TRUE)
+#> [1] 0.9897808
+length(setdiff(nm$city_swap, valid_city))
+#> [1] 580
 ```
 
 ``` r
 nm %>% 
-  filter(city_swap %out% geo$city) %>% 
+  filter(city_swap %out% valid_city) %>% 
   count(city_swap, sort = TRUE)
 ```
 
-    #> # A tibble: 583 x 2
+    #> # A tibble: 580 x 2
     #>    city_swap         n
     #>    <chr>         <int>
-    #>  1 <NA>           6862
+    #>  1 <NA>           6975
     #>  2 T OR C          218
     #>  3 LOS RANCHOS     197
     #>  4 SOMMERVILLE     164
@@ -733,7 +720,7 @@ nm %>%
     #>  8 CHESTERBROOK    103
     #>  9 CHAROLETTE      102
     #> 10 POJOAQUE        102
-    #> # … with 573 more rows
+    #> # … with 570 more rows
 
 #### Refine
 
@@ -741,7 +728,7 @@ nm %>%
 nm_refined <- nm %>% 
   mutate(
     city_refine = city_swap %>% 
-      key_collision_merge(dict = geo$city[geo$state == "NM"]) %>% 
+      key_collision_merge(dict = valid_city[valid_state == "NM"]) %>% 
       n_gram_merge(numgram = 2)
   )
 ```
@@ -754,17 +741,17 @@ nm <- nm %>%
 
 ``` r
 n_distinct(nm_refined$city_refine)
-#> [1] 1942
-prop_in(nm_refined$city_refine, geo$city, na.rm = TRUE)
-#> [1] 0.9908154
-length(setdiff(nm_refined$city_refine, geo$city))
-#> [1] 507
+#> [1] 1940
+prop_in(nm_refined$city_refine, valid_city, na.rm = TRUE)
+#> [1] 0.9908346
+length(setdiff(nm_refined$city_refine, valid_city))
+#> [1] 504
 ```
 
 ## Conclude
 
-1.  There are 498393 records in the database.
-2.  There are 144024 records (28.9% of the database) flagged with
+1.  There are 475658 records in the database.
+2.  There are 116720 records (24.5% of the database) flagged with
     `dupe_flag`.
 3.  The range and distribution of `amount` and `date` seem reasonable.
 4.  There are zero records with unexpected missing values.
@@ -783,20 +770,40 @@ dir_create(proc_dir)
 ```
 
 ``` r
-nm %>% 
+nm <- nm %>% 
   select(
-    -date_contribution,
-    -city_raw,
-    -state,
-    -zip,
     -city_match,
     -city_norm,
     -match_dist,
     -city_swap,
     -city_refine
-  ) %>% 
-  write_csv(
-    path = glue("{proc_dir}/nm_expends_clean.csv"),
-    na = ""
   )
+```
+
+## Lookup
+
+``` r
+lookup <- read_csv("nm/expends/data/nm_city_lookup.csv") %>% select(1:2)
+nm <- left_join(nm, lookup)
+progress_table(
+  nm$city_raw,
+  nm$city_clean, 
+  nm$city_clean2, 
+  compare = valid_city
+)
+```
+
+    #> # A tibble: 3 x 6
+    #>   stage       prop_in n_distinct  prop_na n_out n_diff
+    #>   <chr>         <dbl>      <dbl>    <dbl> <dbl>  <dbl>
+    #> 1 city_raw      0.962       3403 0.000269 18266   1933
+    #> 2 city_clean    0.992       2027 0.0147    3763    580
+    #> 3 city_clean2   0.984       1737 0.0150    7349    302
+
+``` r
+write_csv(
+  x = nm,
+  path = glue("{proc_dir}/mi_expends_clean.csv"),
+  na = ""
+)
 ```

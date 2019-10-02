@@ -81,7 +81,7 @@ The IRW's `campfin` package will also have to be installed from GitHub. This pac
 functions custom made to help facilitate the processing of campaign finance data.
 
 ```{r load_campfin}
-pacman::p_load_current_gh("kiernann/campfin")
+pacman::p_load_gh("kiernann/campfin")
 ```
 
 This document should be run as part of the `R_campfin` project, which lives as a sub-directory of
@@ -557,7 +557,7 @@ hi <- hi %>%
   mutate(
     address_norm = normal_address(
       address = address_combine,
-      add_abbs = usps,
+      add_abbs = usps_street,
       na_rep = TRUE
     )
   )
@@ -576,8 +576,8 @@ hi %>%
 
 ```{r pre_zip, collapse=TRUE}
 n_distinct(hi$zip_code)
-prop_in(hi$zip_code, geo$zip)
-sum(hi$zip_code %out% geo$zip)
+prop_in(hi$zip_code, valid_zip)
+sum(hi$zip_code %out% valid_zip)
 ```
 
 ```{r normal_zip}
@@ -592,18 +592,18 @@ hi <- hi %>%
 
 ```{r post_zip, collapse=TRUE}
 n_distinct(hi$zip_norm)
-prop_in(hi$zip_norm, geo$zip)
-sum(hi$zip_norm %out% geo$zip)
+prop_in(hi$zip_norm, valid_zip)
+sum(hi$zip_norm %out% valid_zip)
 ```
 
 ### State
 
-`r percent(prop_in(hi$state, geo$state))` of `state` values are valid.
+`r percent(prop_in(hi$state, valid_state))` of `state` values are valid.
 
 ```{r pre_state, collapse=TRUE}
 n_distinct(hi$state)
-prop_in(hi$state, geo$state)
-sum(hi$state %out% geo$state)
+prop_in(hi$state, valid_state)
+sum(hi$state %out% valid_state)
 ```
 
 ### City
@@ -612,14 +612,14 @@ sum(hi$state %out% geo$state)
 
 ```{r pre_city, collapse=TRUE}
 n_distinct(hi$city)
-prop_in(hi$city, geo$city)
-sum(unique(hi$city) %out% geo$city)
+prop_in(hi$city, valid_city)
+sum(unique(hi$city) %out% valid_city)
 ```
 
 ```{r view_city}
 hi %>% 
   count(city, sort = TRUE) %>% 
-  filter(city %out% geo$city)
+  filter(city %out% valid_city)
 ```
 
 ```{r}
@@ -629,14 +629,14 @@ hi <- hi %>%
       city = city,
       geo_abbs = usps_city,
       st_abbs = c("HI", "HAWAII", "DC"),
-      na = na_city,
+      na = invalid_city,
       na_rep = TRUE
     )
   )
 
 n_distinct(hi$city_norm)
-prop_in(hi$city_norm, geo$city)
-sum(unique(hi$city_norm) %out% geo$city)
+prop_in(hi$city_norm, valid_city)
+sum(unique(hi$city_norm) %out% valid_city)
 ```
 
 #### Swap
@@ -645,7 +645,7 @@ sum(unique(hi$city_norm) %out% geo$city)
 hi <- hi %>% 
   rename(city_raw = city) %>% 
   left_join(
-    y = geo,
+    y = zipcodes,
     by = c(
       "zip_norm" = "zip", 
       "state" = "state"
@@ -665,14 +665,14 @@ mean(hi$match_dist, na.rm = TRUE)
 max(hi$match_dist, na.rm = TRUE)
 sum(hi$match_dist == 1, na.rm = TRUE)
 n_distinct(hi$city_swap)
-prop_in(hi$city_swap, geo$city)
-sum(unique(hi$city_swap) %out% geo$city)
+prop_in(hi$city_swap, valid_city)
+sum(unique(hi$city_swap) %out% valid_city)
 ```
 
 ```{r view_swap}
 hi %>% 
   count(state, city_swap, sort = TRUE) %>% 
-  filter(city_swap %out% geo$city) %>% 
+  filter(city_swap %out% valid_city) %>% 
   drop_na()
 ```
 
@@ -699,7 +699,7 @@ hi$city_swap <- hi$city_swap %>%
 proc_dir <- here("hi", "expends", "data", "processed")
 dir_create(proc_dir)
 
-hi %>% 
+hi <- hi %>% 
   select(
     -inoutstate,
     -zip_code,
@@ -710,10 +710,19 @@ hi %>%
     -city_norm,
     -city_match,
     -match_dist
-  ) %>% 
-  write_csv(
-    na = "",
-    path = glue("{proc_dir}/hi_expends_clean.csv")
   )
+```
+
+## Lookup
+
+```{r}
+lookup <- read_csv("hi/expends/data/hi_city_lookup.csv") %>% select(1:2)
+hi <- left_join(hi, lookup)
+progress_table(hi$city_swap, hi$city_clean, compare = valid_city)
+write_csv(
+  x = hi,
+  path = glue("{proc_dir}/hi_expends_clean.csv"),
+  na = ""
+)
 ```
 

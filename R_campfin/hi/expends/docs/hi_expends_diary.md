@@ -1,7 +1,7 @@
 Hawaii Expenditures
 ================
 Kiernan Nicholls
-2019-07-29 10:59:30
+2019-09-30 11:31:19
 
   - [Project](#project)
   - [Objectives](#objectives)
@@ -12,6 +12,7 @@ Kiernan Nicholls
   - [Wrangle](#wrangle)
   - [Conclude](#conclude)
   - [Export](#export)
+  - [Lookup](#lookup)
 
 ## Project
 
@@ -72,7 +73,7 @@ This package contains functions custom made to help facilitate the
 processing of campaign finance data.
 
 ``` r
-pacman::p_load_current_gh("kiernann/campfin")
+pacman::p_load_gh("kiernann/campfin")
 ```
 
 This document should be run as part of the `R_campfin` project, which
@@ -88,7 +89,7 @@ feature and should be run as such. The project also uses the dynamic
 ``` r
 # where dfs this document knit?
 here::here()
-#> [1] "/home/ubuntu/R/accountability_datacleaning/R_campfin"
+#> [1] "/home/kiernan/R/accountability_datacleaning/R_campfin"
 ```
 
 ## Data
@@ -159,12 +160,12 @@ tail(hi)
     #> # A tibble: 6 x 23
     #>   candidate_name vendor_type vendor_name date                amount expenditure_cat…
     #>   <chr>          <chr>       <chr>       <dttm>               <dbl> <chr>           
-    #> 1 WATERS, TOMMY  OTH         MCCOY CONS… 2019-03-31 00:00:00 3600   PROFESSIONAL SE…
-    #> 2 OZAWA, TREVOR  OTH         DROPBOX     2019-04-08 00:00:00   90   OTHER           
-    #> 3 OZAWA, TREVOR  OTH         PAYPAL      2019-04-13 00:00:00    3.2 BANK CHARGES & …
-    #> 4 WATERS, TOMMY  OTH         STRIPE, IN… 2019-04-09 00:00:00    3.2 PROFESSIONAL SE…
-    #> 5 OZAWA, TREVOR  OTH         PAYPAL      2019-04-05 00:00:00    3.2 BANK CHARGES & …
-    #> 6 WATERS, TOMMY  OTH         GOOGLE      2019-04-09 00:00:00  500   ADVERTISING     
+    #> 1 COUCH, DON     OTH         PAYPAL INC. 2013-10-14 00:00:00 7.55e0 BANK CHARGES & …
+    #> 2 COUCH, DON     OTH         MAUI CHAMB… 2010-06-06 00:00:00 1.50e2 ADVERTISING     
+    #> 3 HANABUSA, COL… OTH         FISHER HAW… 2018-05-21 00:00:00 9.68e1 OFFICE SUPPLIES 
+    #> 4 YUKIMURA, JOA… OTH         NATURAL VI… 2008-09-14 00:00:00 1.25e3 OTHER           
+    #> 5 COUCH, DON     IMM         COUCH, LES… 2010-08-02 00:00:00 4.94e2 ADVERTISING     
+    #> 6 COUCH, DON     IND         NALETTE, A… 2012-02-22 00:00:00 6.00e1 CONTRIBUTION TO…
     #> # … with 17 more variables: purpose_of_expenditure <chr>, address_1 <chr>, address_2 <chr>,
     #> #   city <chr>, state <chr>, zip_code <chr>, office <chr>, district <chr>, party <chr>,
     #> #   reg_no <chr>, election_period <chr>, inoutstate <chr>, lat <dbl>, lon <dbl>, county <chr>,
@@ -174,7 +175,7 @@ tail(hi)
 glimpse(hi)
 ```
 
-    #> Observations: 177,567
+    #> Observations: 180,451
     #> Variables: 23
     #> $ candidate_name         <chr> "ICHIYAMA, LINDA", "PRENTISS, MERRILY", "GAPOL, DEREK", "SCHATZ, …
     #> $ vendor_type            <chr> "OTH", "OTH", "PP", "OTH", "OTH", "OTH", "OTH", "IND", "OTH", "OT…
@@ -207,31 +208,31 @@ glimpse_fun(hi, n_distinct)
 ```
 
     #> # A tibble: 23 x 4
-    #>    var                    type      n         p
-    #>    <chr>                  <chr> <int>     <dbl>
-    #>  1 candidate_name         chr    1000 0.00563  
-    #>  2 vendor_type            chr       6 0.0000338
-    #>  3 vendor_name            chr   32304 0.182    
-    #>  4 date                   dttm   5223 0.0294   
-    #>  5 amount                 dbl   44504 0.251    
-    #>  6 expenditure_category   chr      23 0.000130 
-    #>  7 purpose_of_expenditure chr   75710 0.426    
-    #>  8 address_1              chr   35455 0.200    
-    #>  9 address_2              chr    2635 0.0148   
-    #> 10 city                   chr    1626 0.00916  
-    #> 11 state                  chr      53 0.000298 
-    #> 12 zip_code               chr    2656 0.0150   
-    #> 13 office                 chr      12 0.0000676
-    #> 14 district               chr      70 0.000394 
-    #> 15 party                  chr       6 0.0000338
-    #> 16 reg_no                 chr    1103 0.00621  
-    #> 17 election_period        chr       9 0.0000507
-    #> 18 inoutstate             chr       2 0.0000113
-    #> 19 lat                    dbl   12855 0.0724   
-    #> 20 lon                    dbl   12796 0.0721   
-    #> 21 county                 chr       5 0.0000282
-    #> 22 authorized_use         chr       9 0.0000507
-    #> 23 in_state               lgl       2 0.0000113
+    #>    col                    type      n         p
+    #>    <chr>                  <chr> <dbl>     <dbl>
+    #>  1 candidate_name         chr    1003 0.00556  
+    #>  2 vendor_type            chr       6 0.0000333
+    #>  3 vendor_name            chr   32551 0.180    
+    #>  4 date                   dttm   5339 0.0296   
+    #>  5 amount                 dbl   44769 0.248    
+    #>  6 expenditure_category   chr      23 0.000127 
+    #>  7 purpose_of_expenditure chr   76736 0.425    
+    #>  8 address_1              chr   35749 0.198    
+    #>  9 address_2              chr    2657 0.0147   
+    #> 10 city                   chr    1639 0.00908  
+    #> 11 state                  chr      53 0.000294 
+    #> 12 zip_code               chr    2674 0.0148   
+    #> 13 office                 chr      12 0.0000665
+    #> 14 district               chr      70 0.000388 
+    #> 15 party                  chr       6 0.0000333
+    #> 16 reg_no                 chr    1106 0.00613  
+    #> 17 election_period        chr      10 0.0000554
+    #> 18 inoutstate             chr       2 0.0000111
+    #> 19 lat                    dbl   12950 0.0718   
+    #> 20 lon                    dbl   12888 0.0714   
+    #> 21 county                 chr       5 0.0000277
+    #> 22 authorized_use         chr       9 0.0000499
+    #> 23 in_state               lgl       2 0.0000111
 
 We can use `campfin::explore_plot()` and/or `ggplot2::geom_bar()` to
 explore the distribution of distinct categorical variables.
@@ -261,11 +262,11 @@ duplicate rows, then flag those rows on the original data frame.
 hi_dupes <- distinct(get_dupes(hi))
 
 nrow(hi_dupes)
-#> [1] 848
+#> [1] 860
 sum(hi_dupes$dupe_count)
-#> [1] 1874
+#> [1] 1899
 n_distinct(hi_dupes$candidate_name)
-#> [1] 254
+#> [1] 255
 ```
 
 ``` r
@@ -276,7 +277,7 @@ hi <- hi %>%
 
 rm(hi_dupes)
 sum(hi$dupe_flag)
-#> [1] 1874
+#> [1] 1899
 ```
 
 ### Missing
@@ -289,8 +290,8 @@ glimpse_fun(hi, count_na)
 ```
 
     #> # A tibble: 24 x 4
-    #>    var                    type       n         p
-    #>    <chr>                  <chr>  <int>     <dbl>
+    #>    col                    type       n         p
+    #>    <chr>                  <chr>  <dbl>     <dbl>
     #>  1 candidate_name         chr        0 0        
     #>  2 vendor_type            chr        0 0        
     #>  3 vendor_name            chr        0 0        
@@ -298,21 +299,21 @@ glimpse_fun(hi, count_na)
     #>  5 amount                 dbl        0 0        
     #>  6 expenditure_category   chr        0 0        
     #>  7 purpose_of_expenditure chr        0 0        
-    #>  8 address_1              chr       71 0.000400 
-    #>  9 address_2              chr   166400 0.937    
-    #> 10 city                   chr       16 0.0000901
+    #>  8 address_1              chr       71 0.000393 
+    #>  9 address_2              chr   169111 0.937    
+    #> 10 city                   chr       16 0.0000887
     #> 11 state                  chr        0 0        
     #> 12 zip_code               chr        0 0        
     #> 13 office                 chr        0 0        
-    #> 14 district               chr    51273 0.289    
+    #> 14 district               chr    50001 0.277    
     #> 15 party                  chr        0 0        
     #> 16 reg_no                 chr        0 0        
     #> 17 election_period        chr        0 0        
     #> 18 inoutstate             chr        0 0        
-    #> 19 lat                    dbl    48666 0.274    
-    #> 20 lon                    dbl    48666 0.274    
-    #> 21 county                 chr   119968 0.676    
-    #> 22 authorized_use         chr    97691 0.550    
+    #> 19 lat                    dbl    49380 0.274    
+    #> 20 lon                    dbl    49380 0.274    
+    #> 21 county                 chr   119880 0.664    
+    #> 22 authorized_use         chr    97691 0.541    
     #> 23 in_state               lgl        0 0        
     #> 24 dupe_flag              lgl        0 0
 
@@ -323,9 +324,9 @@ glimpse_fun(hi, count_na)
 ``` r
 summary(hi$amount)
 #>     Min.  1st Qu.   Median     Mean  3rd Qu.     Max. 
-#>  -6452.5     30.0    100.0    587.2    350.0 271096.0
+#>  -6452.5     30.0    100.0    582.6    350.0 271096.0
 sum(hi$amount < 0)
-#> [1] 256
+#> [1] 262
 ```
 
 ![](../plots/amount_hist-1.png)<!-- -->
@@ -340,16 +341,16 @@ sum(hi$amount < 0)
 
 #### Date
 
-There are no dates before 2006-11-08 and 0 dates past the creation of
+There are no dates before 2006-11-08 and 1 dates past the creation of
 this document.
 
 ``` r
 min(hi$date)
 #> [1] "2006-11-08 13:13:16 EST"
 max(hi$date)
-#> [1] "2019-06-30 EDT"
+#> [1] "2019-10-27 EDT"
 sum(hi$date > today())
-#> [1] 0
+#> [1] 1
 ```
 
 To better explore the distribution of dates and track expendtures, we
@@ -440,7 +441,7 @@ hi <- hi %>%
   mutate(
     address_norm = normal_address(
       address = address_combine,
-      add_abbs = usps,
+      add_abbs = usps_street,
       na_rep = TRUE
     )
   )
@@ -455,30 +456,30 @@ hi %>%
   )
 ```
 
-    #> # A tibble: 177,567 x 3
+    #> # A tibble: 180,451 x 3
     #>    address_1                    address_2 address_norm                      
     #>    <chr>                        <chr>     <chr>                             
     #>  1 197 SAND ISLAND ACCESS ROAD  UNIT A    197 SAND ISLAND ACCESS ROAD UNIT A
     #>  2 25 MALUNIU AVE.              <NA>      25 MALUNIU AVENUE                 
     #>  3 725 KAPIOLANI BLVD, #C-105   <NA>      725 KAPIOLANI BOULEVARD C 105     
-    #>  4 111 S KING ST                <NA>      111 S KING STREET                 
+    #>  4 111 S KING ST                <NA>      111 SOUTH KING STREET             
     #>  5 28 KAINEHE ST., SUITE A-1    <NA>      28 KAINEHE STREET SUITE A 1       
     #>  6 87-2028 FARRINGTON HWY.      <NA>      87 2028 FARRINGTON HIGHWAY        
     #>  7 WAIPAHU POST OFFICE          <NA>      WAIPAHU POST OFFICE               
     #>  8 2140 ARMSTRONG STREET        <NA>      2140 ARMSTRONG STREET             
-    #>  9 2955 E. MANOA ROAD           <NA>      2955 E MANOA ROAD                 
+    #>  9 2955 E. MANOA ROAD           <NA>      2955 EAST MANOA ROAD              
     #> 10 99-185 MOANALUA RD SUITE 107 <NA>      99 185 MOANALUA ROAD SUITE 107    
-    #> # … with 177,557 more rows
+    #> # … with 180,441 more rows
 
 ### ZIP
 
 ``` r
 n_distinct(hi$zip_code)
-#> [1] 2656
-prop_in(hi$zip_code, geo$zip)
-#> [1] 0.9576667
-sum(hi$zip_code %out% geo$zip)
-#> [1] 7517
+#> [1] 2674
+prop_in(hi$zip_code, valid_zip)
+#> [1] 0.9575785
+sum(hi$zip_code %out% valid_zip)
+#> [1] 7655
 ```
 
 ``` r
@@ -493,11 +494,11 @@ hi <- hi %>%
 
 ``` r
 n_distinct(hi$zip_norm)
-#> [1] 1808
-prop_in(hi$zip_norm, geo$zip)
-#> [1] 0.9977594
-sum(hi$zip_norm %out% geo$zip)
-#> [1] 396
+#> [1] 1823
+prop_in(hi$zip_norm, valid_zip)
+#> [1] 0.9979898
+sum(hi$zip_norm %out% valid_zip)
+#> [1] 1227
 ```
 
 ### State
@@ -507,9 +508,9 @@ sum(hi$zip_norm %out% geo$zip)
 ``` r
 n_distinct(hi$state)
 #> [1] 53
-prop_in(hi$state, geo$state)
+prop_in(hi$state, valid_state)
 #> [1] 1
-sum(hi$state %out% geo$state)
+sum(hi$state %out% valid_state)
 #> [1] 0
 ```
 
@@ -519,33 +520,33 @@ sum(hi$state %out% geo$state)
 
 ``` r
 n_distinct(hi$city)
-#> [1] 1626
-prop_in(hi$city, geo$city)
-#> [1] 0.9542723
-sum(unique(hi$city) %out% geo$city)
-#> [1] 838
+#> [1] 1639
+prop_in(hi$city, valid_city)
+#> [1] 0.9544434
+sum(unique(hi$city) %out% valid_city)
+#> [1] 848
 ```
 
 ``` r
 hi %>% 
   count(city, sort = TRUE) %>% 
-  filter(city %out% geo$city)
+  filter(city %out% valid_city)
 ```
 
-    #> # A tibble: 838 x 2
+    #> # A tibble: 848 x 2
     #>    city               n
     #>    <chr>          <int>
-    #>  1 KAILUA-KONA     2288
+    #>  1 KAILUA-KONA     2296
     #>  2 95131            226
     #>  3 HON              189
-    #>  4 IWILEI           182
-    #>  5 ONLINE           155
-    #>  6 ???              139
+    #>  4 IWILEI           184
+    #>  5 ONLINE           156
+    #>  6 ???              143
     #>  7 KANE'OHE         132
     #>  8 -                127
-    #>  9 HONOLULU, OAHU   124
-    #> 10 SOMMERVILLE      116
-    #> # … with 828 more rows
+    #>  9 HONOLULU, OAHU   126
+    #> 10 SOMMERVILLE      125
+    #> # … with 838 more rows
 
 ``` r
 hi <- hi %>% 
@@ -554,7 +555,7 @@ hi <- hi %>%
       city = city,
       geo_abbs = usps_city,
       st_abbs = c("HI", "HAWAII", "DC"),
-      na = na_city,
+      na = invalid_city,
       na_rep = TRUE
     )
   )
@@ -562,19 +563,19 @@ hi <- hi %>%
 n_distinct(hi$city_norm)
 ```
 
-    #> [1] 1467
+    #> [1] 1478
 
 ``` r
-prop_in(hi$city_norm, geo$city)
+prop_in(hi$city_norm, valid_city)
 ```
 
-    #> [1] 0.97888
+    #> [1] 0.9753003
 
 ``` r
-sum(unique(hi$city_norm) %out% geo$city)
+sum(unique(hi$city_norm) %out% valid_city)
 ```
 
-    #> [1] 670
+    #> [1] 678
 
 #### Swap
 
@@ -582,7 +583,7 @@ sum(unique(hi$city_norm) %out% geo$city)
 hi <- hi %>% 
   rename(city_raw = city) %>% 
   left_join(
-    y = geo,
+    y = zipcodes,
     by = c(
       "zip_norm" = "zip", 
       "state" = "state"
@@ -599,40 +600,40 @@ hi <- hi %>%
   )
 
 mean(hi$match_dist, na.rm = TRUE)
-#> [1] 0.1751593
+#> [1] 0.1880947
 max(hi$match_dist, na.rm = TRUE)
 #> [1] 27
 sum(hi$match_dist == 1, na.rm = TRUE)
-#> [1] 1545
+#> [1] 1567
 n_distinct(hi$city_swap)
-#> [1] 1078
-prop_in(hi$city_swap, geo$city)
-#> [1] 0.9890686
-sum(unique(hi$city_swap) %out% geo$city)
-#> [1] 290
+#> [1] 1086
+prop_in(hi$city_swap, valid_city)
+#> [1] 0.9873216
+sum(unique(hi$city_swap) %out% valid_city)
+#> [1] 294
 ```
 
 ``` r
 hi %>% 
   count(state, city_swap, sort = TRUE) %>% 
-  filter(city_swap %out% geo$city) %>% 
+  filter(city_swap %out% valid_city) %>% 
   drop_na()
 ```
 
-    #> # A tibble: 291 x 3
+    #> # A tibble: 296 x 3
     #>    state city_swap         n
     #>    <chr> <chr>         <int>
-    #>  1 HI    HON             211
-    #>  2 HI    IWILEI          182
-    #>  3 HI    HONOLULU OAHU   123
-    #>  4 HI    KONA             81
-    #>  5 HI    WAILEA           74
-    #>  6 PA    CHESTERBROOK     62
-    #>  7 HI    KAHULUI MAUI     41
-    #>  8 HI    NANAKULI         41
-    #>  9 CA    MOUNT VIEW       36
-    #> 10 HI    HI               35
-    #> # … with 281 more rows
+    #>  1 CA    ""              228
+    #>  2 HI    HON             211
+    #>  3 HI    IWILEI          184
+    #>  4 HI    HONOLULU OAHU   125
+    #>  5 HI    KONA             81
+    #>  6 HI    ""               77
+    #>  7 HI    WAILEA           75
+    #>  8 PA    CHESTERBROOK     73
+    #>  9 CA    MOUNT VIEW       42
+    #> 10 HI    KAHULUI MAUI     41
+    #> # … with 286 more rows
 
 ``` r
 hi$city_swap <- hi$city_swap %>% 
@@ -642,8 +643,8 @@ hi$city_swap <- hi$city_swap %>%
 
 ## Conclude
 
-1.  There are 177,567 records in the database.
-2.  There are 1874 duplicate records, flagged with `dupe_flag`.
+1.  There are 180,451 records in the database.
+2.  There are 1899 duplicate records, flagged with `dupe_flag`.
 3.  Ranges for `amount` and `date` are both reasonable.
 4.  There are no missing records of importance.
 5.  Consistency issues in geographic values have been improved.
@@ -659,7 +660,7 @@ hi$city_swap <- hi$city_swap %>%
 proc_dir <- here("hi", "expends", "data", "processed")
 dir_create(proc_dir)
 
-hi %>% 
+hi <- hi %>% 
   select(
     -inoutstate,
     -zip_code,
@@ -670,9 +671,27 @@ hi %>%
     -city_norm,
     -city_match,
     -match_dist
-  ) %>% 
-  write_csv(
-    na = "",
-    path = glue("{proc_dir}/hi_expends_clean.csv")
   )
+```
+
+## Lookup
+
+``` r
+lookup <- read_csv("hi/expends/data/hi_city_lookup.csv") %>% select(1:2)
+hi <- left_join(hi, lookup)
+progress_table(hi$city_swap, hi$city_clean, compare = valid_city)
+```
+
+    #> # A tibble: 2 x 6
+    #>   stage      prop_in n_distinct prop_na n_out n_diff
+    #>   <chr>        <dbl>      <dbl>   <dbl> <dbl>  <dbl>
+    #> 1 city_swap    0.608       1085  0.0124 69818    296
+    #> 2 city_clean   0.992        989  0.0142  1411    200
+
+``` r
+write_csv(
+  x = hi,
+  path = glue("{proc_dir}/hi_expends_clean.csv"),
+  na = ""
+)
 ```
