@@ -593,7 +593,7 @@ progress_table(
 )
 write_csv(
   x = nm,
-  path = glue("{proc_dir}/mi_expends_clean.csv"),
+  path = glue("{proc_dir}/nm_expends_clean.csv"),
   na = ""
 )
 ```

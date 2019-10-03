@@ -627,7 +627,7 @@ ct <- left_join(ct, lookup)
 progress_table(ct$city_norm, ct$city_clean, compare = valid_city)
 write_csv(
   x = ct,
-  path = glue("{proc_dir}/mi_expends_clean.csv"),
+  path = glue("{proc_dir}/ct_expends_clean.csv"),
   na = ""
 )
 ```
