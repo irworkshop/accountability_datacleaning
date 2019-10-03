@@ -68,7 +68,7 @@ functions custom made to help facilitate the processing of campaign finance data
 
 ```{r load_packages, message=FALSE, dfrning=FALSE, error=FALSE}
 if (!require("pacman")) install.packages("pacman")
-pacman::p_load_current_gh("kiernann/campfin")
+pacman::p_load_current_gh("irworkshop/campfin")
 pacman::p_load(
   stringdist, # levenshtein value
   RSelenium, # remote browser
@@ -676,6 +676,7 @@ wv$city_clean <- wv$city_clean %>%
       str_replace_all("^BARBOUSVILLE$", "BARBOURSVILLE") %>% 
       str_replace_all("^SAN\\sFRANSICO$", "SAN FRANCISCO") %>% 
       str_replace_all("^BUCHANNAN$", "BUCKHANNON") %>% 
+      str_replace_all("^CHARSLETON$", "CHARLESTON") %>% 
       str_replace_all("^MOUNT\\sCLAIRE$", "MOUNT CLARE") %>% 
       str_replace_all("^SYMMONS\\sTOWNSHIP$|^MES\\sTOWNSHIP$", "SYMMES TOWNSHIP") %>% 
       str_replace_all("^GALLAGER$", "GALLAGHER") %>% 
@@ -786,7 +787,7 @@ progress_table %>%
   select(-prop_good) %>% 
   rename(
     All = total_distinct,
-    Invalid = unique_bad
+    Invalid = unique_bad 
   ) %>% 
   gather(
     -stage,
@@ -821,7 +822,7 @@ progress_table %>%
 ## Export
 
 ```{r create_proc_dir}
-proc_dir <- here("in", "expends", "data", "processed")
+proc_dir <- here("wv", "expends", "data", "processed")
 dir_create(proc_dir)
 ```
 
@@ -834,8 +835,7 @@ wv %>%
     -city_match,
     -city_swap,
     -match_dist,
-    -sec_city_match,
-    -year
+    -sec_city_match
   ) %>% 
   write_csv(
     path = glue("{proc_dir}/wv_expends_clean.csv"),

@@ -1,7 +1,7 @@
-wv\_expends\_diary
+West Virginia Expenditures
 ================
 Yanqi Xu
-2019-09-12 13:59:41
+2019-09-18 13:30:18
 
 -   [Project](#project)
 -   [Objectives](#objectives)
@@ -49,6 +49,25 @@ The IRW's `campfin` package will also have to be installed from GitHub. This pac
 ``` r
 if (!require("pacman")) install.packages("pacman")
 pacman::p_load_current_gh("kiernann/campfin")
+#> knitr   (1.24 -> 1.25) [CRAN]
+#> curl    (4.0  -> 4.1 ) [CRAN]
+#> tinytex (0.15 -> 0.16) [CRAN]
+#> 
+#>   There are binary versions available but the source versions are later:
+#>         binary source needs_compilation
+#> knitr     1.24   1.25             FALSE
+#> tinytex   0.15   0.16             FALSE
+#> 
+#> 
+#> The downloaded binary packages are in
+#>  /var/folders/zt/3t09bqwn7h36rlyjxpbxnx800000gp/T//RtmpoZoUQA/downloaded_packages
+#> * checking for file ‘/private/var/folders/zt/3t09bqwn7h36rlyjxpbxnx800000gp/T/RtmpoZoUQA/remotes985f5e9af618/irworkshop-campfin-27b51d0/DESCRIPTION’ ... OK
+#> * preparing ‘campfin’:
+#> * checking DESCRIPTION meta-information ... OK
+#> * checking for LF line-endings in source and make files and shell scripts
+#> * checking for empty or unneeded directories
+#> * looking to see if a ‘data/datalist’ file should be added
+#> * building ‘campfin_0.0.0.9010.tar.gz’
 pacman::p_load(
   stringdist, # levenshtein value
   RSelenium, # remote browser
@@ -660,6 +679,7 @@ wv$city_clean <- wv$city_clean %>%
       str_replace_all("^BARBOUSVILLE$", "BARBOURSVILLE") %>% 
       str_replace_all("^SAN\\sFRANSICO$", "SAN FRANCISCO") %>% 
       str_replace_all("^BUCHANNAN$", "BUCKHANNON") %>% 
+      str_replace_all("^CHARSLETON$", "CHARLESTON") %>% 
       str_replace_all("^MOUNT\\sCLAIRE$", "MOUNT CLARE") %>% 
       str_replace_all("^SYMMONS\\sTOWNSHIP$|^MES\\sTOWNSHIP$", "SYMMES TOWNSHIP") %>% 
       str_replace_all("^GALLAGER$", "GALLAGHER") %>% 
@@ -732,7 +752,7 @@ Export
 ------
 
 ``` r
-proc_dir <- here("in", "expends", "data", "processed")
+proc_dir <- here("wv", "expends", "data", "processed")
 dir_create(proc_dir)
 ```
 
@@ -745,8 +765,7 @@ wv %>%
     -city_match,
     -city_swap,
     -match_dist,
-    -sec_city_match,
-    -year
+    -sec_city_match
   ) %>% 
   write_csv(
     path = glue("{proc_dir}/wv_expends_clean.csv"),
