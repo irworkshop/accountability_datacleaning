@@ -89,7 +89,7 @@ functions custom made to help facilitate the processing of campaign finance data
 
 ```{r load_packages, message=FALSE, dfrning=FALSE, error=FALSE}
 if (!require("pacman")) install.packages("pacman")
-pacman::p_load_current_gh("irworkshop/campfin")
+pacman::p_load_gh("irworkshop/campfin")
 pacman::p_load(
   tidyverse, # data manipulation
   lubridate, # datetime strings
@@ -763,16 +763,27 @@ logical `na_flag` variable.
 1. The `transactionyear` variable contains the 4 digit year of the receipt.
 1. Only `r not_na` of records contain all the data needed to identify the transaction.
 
+## Lookup
+
+```{r lookup_city}
+lookup <- read_csv("dc/expends/data/dc_city_lookup.csv") %>% select(1:2)
+dc <- left_join(dc, lookup, by = "city_refine")
+
+progress_table(
+  dc$city_refine, 
+  dc$city_refine2, 
+  compare = valid_city
+)
+```
+
 ## Write
 
 ```{r}
 dir_proc <- here("dc", "expends", "data", "processed")
 dir_create(dir_proc)
+raw_file <- glue("{dir_proc}/dc_expends_clean.csv")
 
-write_csv(
-  x = dc,
-  na = "",
-  path = glue("{dir_proc}/dc_expends_clean.csv")
-)
+if (!this_file_new(raw_file)) {
+  write_csv(dc, raw_file, na = "")
+}
 ```
-
