@@ -783,6 +783,20 @@ dir_proc <- here("dc", "expends", "data", "processed")
 dir_create(dir_proc)
 raw_file <- glue("{dir_proc}/dc_expends_clean.csv")
 
+dc <- dc %>% 
+  select(
+    -address_sep,
+    -city_sep,
+    -state_sep,
+    -zip_sep,
+    -city_norm,
+    -city_match,
+    -match_dist,
+    -match_abb,
+    -city_swap,
+    -city_refine
+  )
+
 if (!this_file_new(raw_file)) {
   write_csv(dc, raw_file, na = "")
 }
