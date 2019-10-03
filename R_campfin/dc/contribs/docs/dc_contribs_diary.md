@@ -1,7 +1,7 @@
 District Contributions
 ================
 Kiernan Nicholls
-2019-10-01 14:09:35
+2019-10-03 15:44:47
 
   - [Project](#project)
   - [Objectives](#objectives)
@@ -14,6 +14,7 @@ Kiernan Nicholls
   - [Separate](#separate)
   - [Normalize](#normalize)
   - [Conclude](#conclude)
+  - [Lookup](#lookup)
   - [Write](#write)
 
 ## Project
@@ -177,12 +178,12 @@ head(dc)
 #> # A tibble: 6 x 20
 #>   objectid committeename candidatename electionyear contributorname address contributortype
 #>      <dbl> <chr>         <chr>                <dbl> <chr>           <chr>   <chr>          
-#> 1     1001 WARD 4 CONST… BRANDON  TODD         2015 KATE MOORE      7032 3… INDIVIDUAL     
-#> 2     1002 BOWSER 2012   MURIEL BOWSER         2012 BETH LAMOREAUX  7034 O… INDIVIDUAL     
-#> 3     1003 DC CANNABIS … <NA>                  2014 ELLEN  MCNAMARA 7035 B… INDIVIDUAL     
-#> 4     1004 MURIEL BOWSE… MURIEL BOWSER         2014 JAMES SLATTERY  7035 B… INDIVIDUAL     
-#> 5     1005 MURIEL BOWSE… MURIEL BOWSER         2014 ETHAN HASE      7035 B… INDIVIDUAL     
-#> 6     1006 MURIEL BOWSE… MURIEL BOWSER         2014 JAMES SLATTERY  7035 B… INDIVIDUAL     
+#> 1        1 FENTY 2006    ADRIAN FENTY          2006 STUART & VIRGI… 2950 C… INDIVIDUAL     
+#> 2        2 EVANS FOR MA… JACK EVANS            2014 STUART PAPE     2950 C… INDIVIDUAL     
+#> 3        3 FENTY 2006    ADRIAN FENTY          2006 LINDA ADAMS & … 2950 M… INDIVIDUAL     
+#> 4        4 EVANS 2008    JACK EVANS            2008 L DUEMLING      2950 U… INDIVIDUAL     
+#> 5        5 COMMITTEE TO… GREG RHETT            2007 L.C. DUEMLING   2950 U… INDIVIDUAL     
+#> 6        6 JEREMIAH AT … JEREMIAH LOW…         2018 LINDA BENESCH   2950 V… INDIVIDUAL     
 #> # … with 13 more variables: contributiontype <chr>, employer <chr>, employeraddress <chr>,
 #> #   amount <dbl>, dateofreceipt <dttm>, address_id <dbl>, xcoord <dbl>, ycoord <dbl>,
 #> #   latitude <dbl>, longitude <dbl>, fulladdress <chr>, gis_last_mod_dttm <dttm>, ward <chr>
@@ -202,26 +203,26 @@ tail(dc)
 glimpse(dc)
 #> Observations: 244,678
 #> Variables: 20
-#> $ objectid          <dbl> 1001, 1002, 1003, 1004, 1005, 1006, 1007, 1008, 1009, 1010, 1011, 1012…
-#> $ committeename     <chr> "WARD 4 CONSTITUENT SERVICES FUND", "BOWSER 2012", "DC CANNABIS CAMPAI…
-#> $ candidatename     <chr> "BRANDON  TODD", "MURIEL BOWSER", NA, "MURIEL BOWSER", "MURIEL BOWSER"…
-#> $ electionyear      <dbl> 2015, 2012, 2014, 2014, 2014, 2014, 2014, 2018, 2014, 2010, 2012, 2018…
-#> $ contributorname   <chr> "KATE MOORE", "BETH LAMOREAUX", "ELLEN  MCNAMARA", "JAMES SLATTERY", "…
-#> $ address           <chr> "7032 31ST ST NW, WASHINGTON, DC 20015", "7034 OREGON AVENUE NW, WASHI…
+#> $ objectid          <dbl> 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20,…
+#> $ committeename     <chr> "FENTY 2006", "EVANS FOR MAYOR", "FENTY 2006", "EVANS 2008", "COMMITTE…
+#> $ candidatename     <chr> "ADRIAN FENTY", "JACK EVANS", "ADRIAN FENTY", "JACK EVANS", "GREG RHET…
+#> $ electionyear      <dbl> 2006, 2014, 2006, 2008, 2007, 2018, 2010, 2018, 2018, 2006, 2014, 2004…
+#> $ contributorname   <chr> "STUART & VIRGINIA PAPE", "STUART PAPE", "LINDA ADAMS & JONATHAN GREEN…
+#> $ address           <chr> "2950 CHAIN BRIDGE RD NW, WASHINGTON, DC 20016", "2950 CHAIN BRIDGE RO…
 #> $ contributortype   <chr> "INDIVIDUAL", "INDIVIDUAL", "INDIVIDUAL", "INDIVIDUAL", "INDIVIDUAL", …
-#> $ contributiontype  <chr> "CHECK", "CHECK", "CREDIT CARD", "CREDIT CARD", "CREDIT CARD", "CREDIT…
-#> $ employer          <chr> "RETIRED", "N/A", NA, "DC COUNCIL", "NOVITEX", "DC COUNCIL", "DC GOVER…
-#> $ employeraddress   <chr> NA, "WASHINGTON, DC", NA, NA, NA, NA, "WASHINGTON, DC", "1155 15TH ST …
-#> $ amount            <dbl> 35, 100, 20, 25, 25, 25, 250, 100, 500, 100, 50, 200, 50, 35, 250, 100…
-#> $ dateofreceipt     <dttm> 2018-05-03, 2012-01-11, 2015-03-26, 2013-04-01, 2014-03-29, 2014-03-2…
-#> $ address_id        <dbl> 261229, 261282, 307022, 307022, 307022, 307022, 307022, 2936, 2936, 29…
-#> $ xcoord            <dbl> 395313.3, 395348.8, 398369.1, 398369.1, 398369.1, 398369.1, 398369.1, …
-#> $ ycoord            <dbl> 146104.6, 146291.9, 145300.6, 145300.6, 145300.6, 145300.6, 145300.6, …
-#> $ latitude          <dbl> 38.98286, 38.98454, 38.97563, 38.97563, 38.97563, 38.97563, 38.97563, …
-#> $ longitude         <dbl> -77.05409, -77.05368, -77.01882, -77.01882, -77.01882, -77.01882, -77.…
-#> $ fulladdress       <chr> "7032 31ST STREET NW", "7034 OREGON AVENUE NW", "7035 BLAIR ROAD NW", …
+#> $ contributiontype  <chr> "CHECK", "CHECK", "CHECK", "CHECK", "CHECK", "CREDIT CARD", "CHECK", "…
+#> $ employer          <chr> NA, "PATTON BOGGS LLP", "SHERMAN & STERLING, LLP", "DUPONG EI DE NEMOU…
+#> $ employeraddress   <chr> NA, "2550 M STREET NW, WASHINGTON, DC 20037", "WASHINGTON, DC", "WASHI…
+#> $ amount            <dbl> 1000, 500, 500, 250, 200, 25, 50, 100, 150, 100, 500, 300, 250, 250, 1…
+#> $ dateofreceipt     <dttm> 2006-10-29, 2013-09-29, 2006-08-03, 2008-05-27, 2007-03-15, 2017-11-2…
+#> $ address_id        <dbl> 224723, 224723, 221195, 224173, 224173, 219415, 219415, 219415, 219415…
+#> $ xcoord            <dbl> 391629.0, 391629.0, 394808.6, 391537.1, 391537.1, 394699.6, 394699.6, …
+#> $ ycoord            <dbl> 140190.3, 140190.3, 140604.4, 140169.9, 140169.9, 141669.4, 141669.4, …
+#> $ latitude          <dbl> 38.92955, 38.92955, 38.93331, 38.92937, 38.92937, 38.94290, 38.94290, …
+#> $ longitude         <dbl> -77.09654, -77.09654, -77.05987, -77.09760, -77.09760, -77.06114, -77.…
+#> $ fulladdress       <chr> "2950 CHAIN BRIDGE ROAD NW", "2950 CHAIN BRIDGE ROAD NW", "2950 MACOMB…
 #> $ gis_last_mod_dttm <dttm> 2019-09-30 06:20:49, 2019-09-30 06:20:49, 2019-09-30 06:20:49, 2019-0…
-#> $ ward              <chr> "WARD 4", "WARD 4", "WARD 4", "WARD 4", "WARD 4", "WARD 4", "WARD 4", …
+#> $ ward              <chr> "WARD 3", "WARD 3", "WARD 3", "WARD 3", "WARD 3", "WARD 3", "WARD 3", …
 ```
 
 ### Distinct
@@ -248,8 +249,8 @@ glimpse_fun(dc, n_distinct)
 #> 13 address_id        dbl    28688 0.117     
 #> 14 xcoord            dbl    28101 0.115     
 #> 15 ycoord            dbl    28085 0.115     
-#> 16 latitude          dbl    37487 0.153     
-#> 17 longitude         dbl    37678 0.154     
+#> 16 latitude          dbl    37527 0.153     
+#> 17 longitude         dbl    37747 0.154     
 #> 18 fulladdress       chr    28721 0.117     
 #> 19 gis_last_mod_dttm dttm       1 0.00000409
 #> 20 ward              chr        9 0.0000368
@@ -334,7 +335,7 @@ sum(dc$amount < 0, na.rm = TRUE)
 #### Dates
 
 The dates range from  and -. There are 0 records with a date greater
-than 2019-10-01.
+than 2019-10-03.
 
 ``` r
 summary(as_date(dc$dateofreceipt))
@@ -366,16 +367,16 @@ select(sample_frac(dc), address)
 #> # A tibble: 244,678 x 1
 #>    address                                            
 #>    <chr>                                              
-#>  1 1715 P ST NW APT 402, WASHINGTON, DC 20036         
-#>  2 5034 WISCONSIN AVE NW, WASHINGTON, DC 20016        
-#>  3 1101 N. KENTUCKY ST., ARLINGTON, DC 22205          
-#>  4 3751 CRESTWAY DRIVE, VIEW PARK, CA 90043           
-#>  5 401 CAMERON STATION BOULEVARD, ALEXANDRIA, DC 22304
-#>  6 2339 GOLF VIEW LANE, HAMPSTEAD, MD 21074           
-#>  7 1819 KENYON STREET, NW, WASHINGTON, DC 20010       
-#>  8 1801 OTIS STREET NE, WASHINGTON, DC 20018          
-#>  9 614 W BRADDOCK ROAD, ALEXANDRIA, DC 22302          
-#> 10 9401 CYPRESS SPRING COURT, #1, RICHMOND, VA 25294  
+#>  1 3834 WINDOM PL NW, WASHINGTON, DC 20016            
+#>  2 14113 ARTIC AVENUE, ROCKVILLE, MD 20853            
+#>  3 6613 13TH PL NW, WASHINGTON, DC 20012              
+#>  4 1314  KENYON ST NW, WASHINGTON, DC 20010           
+#>  5 3303 18TH ST NW, MCLEAN, VA 20010                  
+#>  6 4339 CONNECTICUT AVE., NW., WASHINGTON, DC 20008   
+#>  7 2929 38TH ST NW, WASHINGTON, DC 20016              
+#>  8 101 CONSTITUTION AVENUE, N.W., WASHINGTON, DC 20080
+#>  9 6503 N CAPITOL ST NE, WASHINGTON, DC 20012         
+#> 10 113 10TH ST NE, WASHINGTON, DC 20002               
 #> # … with 244,668 more rows
 ```
 
@@ -422,18 +423,18 @@ dc %>% separate(
 ```
 
     #> # A tibble: 244,678 x 5
-    #>    address                                   address_sep              city_sep  state_sep zip_sep  
-    #>    <chr>                                     <chr>                    <chr>     <chr>     <chr>    
-    #>  1 2125 14TH STREET, NW, APT 906, WASHINGTO… 2125 14TH STREET NW APT… WASHINGT… DC        20009    
-    #>  2 1050 CONNECTICUT AVE., NW, WASHINGTON, D… 1050 CONNECTICUT AVE. NW WASHINGT… DC        20036    
-    #>  3 3310 CLAVIER PL., WASHINGTON, DC 20735    3310 CLAVIER PL.         WASHINGT… DC        20735    
-    #>  4 912 INDEPENDENCE AVENUE SE, WASHINGTON, … 912 INDEPENDENCE AVENUE… WASHINGT… DC        20003    
-    #>  5 3113 LYFARNE LN, KESWICK, DC 22947        3113 LYFARNE LN          KESWICK   DC        22947    
-    #>  6 1905 BRENTWOOD RD NE, WASHINGTON, DC 200… 1905 BRENTWOOD RD NE     WASHINGT… DC        20018    
-    #>  7 7 STABLER CIRCLE, WILMINGTON, DC 19807    7 STABLER CIRCLE         WILMINGT… DC        19807    
-    #>  8 612 ONEIDA PLACE, NW, WASHINGTON, DC 200… 612 ONEIDA PLACE NW      WASHINGT… DC        20011    
-    #>  9 1300 I ST NW, WASHINGTON, DC 20005-3314   1300 I ST NW             WASHINGT… DC        20005-33…
-    #> 10 1919 M STREET, NW., WASHINGTON, DC 20036  1919 M STREET NW.        WASHINGT… DC        20036    
+    #>    address                                   address_sep             city_sep     state_sep zip_sep
+    #>    <chr>                                     <chr>                   <chr>        <chr>     <chr>  
+    #>  1 4002 COTTON TREE LN, BURTONSVILLE, MD 20… 4002 COTTON TREE LN     BURTONSVILLE MD        20866  
+    #>  2 140 BRINKWOOD RD, BROOKEVILLE, DC 20833   140 BRINKWOOD RD        BROOKEVILLE  DC        20833  
+    #>  3 3716 NASH STREET, SE, WASHINGTON, DC 200… 3716 NASH STREET SE     WASHINGTON   DC        20020  
+    #>  4 3 CREEK PARK DRIVE , PORTOLA VALLEY, CA … "3 CREEK PARK DRIVE "   PORTOLA VAL… CA        94028  
+    #>  5 1828 L STREET, NW SUITE 625, WASHINGTON,… 1828 L STREET NW SUITE… WASHINGTON   DC        20003  
+    #>  6 23117 77TH AVE., SE., WOODINVILLE, WA 98… 23117 77TH AVE. SE.     WOODINVILLE  WA        98072  
+    #>  7 2877 ARIZONA TERRACE,  NW, WASHINGTON, D… 2877 ARIZONA TERRACE  … WASHINGTON   DC        20016  
+    #>  8 1312 FLORAL STREET, NW, WASHINGTON, DC 2… 1312 FLORAL STREET NW   WASHINGTON   DC        20012  
+    #>  9 1445 CHURCH ST. NW, #31, WASHINGTON, DC … 1445 CHURCH ST. NW #31  WASHINGTON   DC        20005  
+    #> 10 1505 Q STREET, NW, WASHINGTON, DC 20009   1505 Q STREET NW        WASHINGTON   DC        20009  
     #> # … with 244,668 more rows
 
 There are a number of columns where the lack of a component in the
@@ -441,18 +442,18 @@ original `address` has caused the separation to incorrectly shift
 content.
 
     #> # A tibble: 350 x 5
-    #>    address                                 address_sep       city_sep     state_sep         zip_sep
-    #>    <chr>                                   <chr>             <chr>        <chr>             <chr>  
-    #>  1 1612 CARLIN LN, MCLEAN, VIRGINIA  22101 1612 CARLIN LN    MCLEAN       VIRGINIA          22101  
-    #>  2 219 T ST NE #102, WASHINGTON 20002      ""                219 T ST NE… WASHINGTON        20002  
-    #>  3 6523 DRYLOG, CAPITOL HEIGHTS, MARYLAND… 6523 DRYLOG       CAPITOL HEI… MARYLAND          20743  
-    #>  4 7703 13TH STREET, NW, WASHNGTON, DISTR… 7703 13TH STREET… WASHNGTON    DISTRICT OF THE … 20012  
-    #>  5 3847 N RIVER STREET, ARLINGTON, VIRGIN… 3847 N RIVER STR… ARLINGTON    VIRGINIA          22207  
-    #>  6 1372 BUTTONWILLOW TRL, PENSACOLA, FLOR… 1372 BUTTONWILLO… PENSACOLA    FLORIDA           32506  
-    #>  7 6120 ENTERPRISE DRIVE, PENSACOLA, FLOR… 6120 ENTERPRISE … PENSACOLA    FLORIDA           32505  
-    #>  8 PO BOX 1142, FALLS CHURCH, VIRGINIA 22… PO BOX 1142       FALLS CHURCH VIRGINIA          22041  
-    #>  9 900 F STREET, NW, WASHINGTON, DISTICT … 900 F STREET NW   WASHINGTON   DISTICT OF COLUM… 20004  
-    #> 10 929 GIST AVE, SILVER SPRING 20910       ""                929 GIST AVE SILVER SPRING     20910  
+    #>    address                               address_sep         city_sep        state_sep      zip_sep
+    #>    <chr>                                 <chr>               <chr>           <chr>          <chr>  
+    #>  1 1350 PENNSYLVANIA AVE., NW SUITE 107  ""                  1350 PENNSYLVA… NW SUITE       107    
+    #>  2 5431 WOODLAND BLVD, OXON HILL 20745   ""                  5431 WOODLAND … OXON HILL      20745  
+    #>  3 202 VARNUM ST NW, WASHINGTON 20011    ""                  202 VARNUM ST … WASHINGTON     20011  
+    #>  4 1212 NEW YORK AVENUE, #300-A, WASHIN… 1212 NEW YORK AVEN… WASHINGTON      DISTICT OF CO… 20005  
+    #>  5 20910 BEALLSVILLE RD, DICKERSON, MAR… 20910 BEALLSVILLE … DICKERSON       MARYLAND       20842  
+    #>  6 1750 K STREET NW #200, WASHINGTON 20… ""                  1750 K STREET … WASHINGTON     20006  
+    #>  7 6305 WAYLES STREET, SPRINGFIELD, VIR… 6305 WAYLES STREET  SPRINGFIELD     VIRGINIA       22150  
+    #>  8 4122 16TH STREET, NW, WASHINGTON 200… 4122 16TH STREET    NW              WASHINGTON     20011  
+    #>  9 PO BOX 1732, BELTSVILLE, MARYLAND 20… PO BOX 1732         BELTSVILLE      MARYLAND       20706  
+    #> 10 316 BAYLEN STREET, PENSACOLA, FLORID… 316 BAYLEN STREET   PENSACOLA       FLORIDA        32502  
     #> # … with 340 more rows
 
 We can fix many of these errors using index subsetting. The most common
@@ -475,18 +476,18 @@ There are only 19 remaining rows with a unique `state_sep` value outside
 of `valid_state` of `valid_name`.
 
     #> # A tibble: 29 x 4
-    #>    address_sep                                                  city_sep  state_sep         zip_sep
-    #>    <chr>                                                        <chr>     <chr>             <chr>  
-    #>  1 1877 CHANNING ST.                                            NE        WASH              20018  
-    #>  2 84 HULME COURT                                               STANFORD  CALIFORRNIA       94305  
-    #>  3 900 F STREET NW                                              WASHINGT… DISTICT OF COLUM… 20004  
-    #>  4 720 13TH STREET NW                                           WASHINGT… DISTICT OF COLUM… 20002  
-    #>  5 7703 13TH STREET NW                                          WASHNGTON DISTRICT OF THE … 20012  
-    #>  6 1350 PENNSYLVANIA AVENUE                                     NW        SUITE             406    
-    #>  7 101-2304 YONGSAN PARK TOWER 67 SEOBINGO-RO YONGSAN-DONG 5-1… SEOUL     SOUTH KOREA, DC   140    
-    #>  8 CALLE 84 #105                                                BOGATA    COLOMBIA          00000  
-    #>  9 1212 NEW YORK AVENUE #300-A                                  WASHINGT… DISTICT OF COLUM… 20005  
-    #> 10 131 INDUSTRY LN                                              #2        FOREST HILL       21050  
+    #>    address_sep              city_sep     state_sep                zip_sep
+    #>    <chr>                    <chr>        <chr>                    <chr>  
+    #>  1 10707 GLOXINIA DRIVE     ROCKVILLE    MARYALND                 20852  
+    #>  2 4419 35TH STREET NW      WASHINGTON   DISTICT OF COLUMBIA      20008  
+    #>  3 CALLE 84 #105            BOGATA       COLOMBIA                 00000  
+    #>  4 8 MCCAUSLAND PLACE #T-1  GAITHERSBURG MARYALND                 20877  
+    #>  5 131 INDUSTRY LN          #2           FOREST HILL              21050  
+    #>  6 343 CEDAR STREET NW #116 WASHINGTON   DISTICT OF COLUMBIA      20012  
+    #>  7 2200 20TH STREET NW      WASHINGTON   DISTICT OF COLUMBIA      20009  
+    #>  8 7703 13TH STREET NW      WASHNGTON    DISTRICT OF THE COLUMBIA 20012  
+    #>  9 REQUESTED                REQUESTED    REQUESTED                20000  
+    #> 10 REQUESTED                REQUESTED    REQUESTED                0      
     #> # … with 19 more rows
 
 ## Normalize
@@ -512,18 +513,18 @@ dc <- dc %>%
 ```
 
     #> # A tibble: 124,731 x 2
-    #>    address_sep               address_norm                            
-    #>    <chr>                     <chr>                                   
-    #>  1 122 HESKETH STREET        122 HESKETH STREET                      
-    #>  2 9912 SIDNEY RD            9912 SIDNEY ROAD                        
-    #>  3 "3155 BERRY ROAD NE "     3155 BERRY ROAD NORTHEAST               
-    #>  4 149 W STREET NW #22       149 WEST STREET NORTHWEST 22            
-    #>  5 2806 BATTERY PLACE. NW    2806 BATTERY PLACE NORTHWEST            
-    #>  6 5078 11TH ST. NE          5078 11TH STREET NORTHEAST              
-    #>  7 3426 16TH ST. NW APT. 203 3426 16TH STREET NORTHWEST APARTMENT 203
-    #>  8 1050 17TH ST NW STE 600   1050 17TH STREET NORTHWEST SUITE 600    
-    #>  9 3502 N HILTON RD          3502 NORTH HILTON ROAD                  
-    #> 10 603 JEFFERSON ST. NE      603 JEFFERSON STREET NORTHEAST          
+    #>    address_sep              address_norm                    
+    #>    <chr>                    <chr>                           
+    #>  1 6604 NEWPORT PALIVIS CT  6604 NEWPORT PALIVIS COURT      
+    #>  2 1737 P ST NW #201        1737 P STREET NORTHWEST 201     
+    #>  3 4207 CHESAPEAKE ST NW    4207 CHESAPEAKE STREET NORTHWEST
+    #>  4 7621 TREMAYNE PLACE #311 7621 TREMAYNE PLACE 311         
+    #>  5 7111 ELIZABETH DR        7111 ELIZABETH DRIVE            
+    #>  6 28 BAILESY CT            28 BAILESY COURT                
+    #>  7 43709 MAHOGNY RUN CT     43709 MAHOGNY RUN COURT         
+    #>  8 "14 GLENHURST COURT "    14 GLENHURST COURT              
+    #>  9 17 SEATON PLACE NW       17 SEATON PLACE NORTHWEST       
+    #> 10 1029 VERMONT AVENUE NW   1029 VERMONT AVENUE NORTHWEST   
     #> # … with 124,721 more rows
 
 ### ZIP
@@ -544,16 +545,16 @@ dc <- dc %>%
     #> # A tibble: 1,114 x 2
     #>    zip_sep    zip_norm
     #>    <chr>      <chr>   
-    #>  1 20012-1004 20012   
-    #>  2 900352641  90035   
-    #>  3 208542553  20854   
-    #>  4 200103237  20010   
-    #>  5 20037-2301 20037   
-    #>  6 20010-3017 20010   
-    #>  7 480701515  48070   
-    #>  8 230058181  23005   
-    #>  9 200095552  20009   
-    #> 10 200244230  20024   
+    #>  1 209011133  20901   
+    #>  2 200081707  20008   
+    #>  3 482363546  48236   
+    #>  4 480701515  48070   
+    #>  5 200095775  20009   
+    #>  6 03755-3206 03755   
+    #>  7 200072122  20007   
+    #>  8 200101767  20010   
+    #>  9 20017-4309 20017   
+    #> 10 2726       02726   
     #> # … with 1,104 more rows
 
 This process improves the consistency of our ZIP code variable and
@@ -584,13 +585,13 @@ setdiff(dc$state_sep, valid_state)
 #>  [7] "NORTH CAROLINA"           "WISCONSIN"                "CALIFORNIA"              
 #> [10] "FLORIDA"                  "PENNSYLVANIA"             "NEW YORK"                
 #> [13] "TEXAS"                    "NEW JERSEY"               "WASH"                    
-#> [16] "DC INFOR"                 "MARYALND"                 "REQUESTED"               
-#> [19] "DISTRICT OF THE COLUMBIA" "CONNECTICUT"              "DISTRICT OF COLUMBIA"    
+#> [16] "DC INFOR"                 "MARYALND"                 "CONNECTICUT"             
+#> [19] "DISTRICT OF COLUMBIA"     "REQUESTED"                "DISTRICT OF THE COLUMBIA"
 #> [22] "FOREST HILL"              "SUITE"                    "GEORGIA"                 
 #> [25] " #400"                    "UNIT A"                   "KINSHASA"                
 #> [28] "BALTIMORE"                "ARLINGTON"                "COLOMBIA"                
-#> [31] "D.C."                     "MISSISSIPPI"              "MISSOURI"                
-#> [34] "ALABAMA"                  "ILLINOIS"                 ""                        
+#> [31] "D.C."                     "MISSOURI"                 "ALABAMA"                 
+#> [34] "ILLINOIS"                 "MISSISSIPPI"              ""                        
 #> [37] "SOUTH KOREA, DC"          "MASSACHUSETTES"           "CALIFORRNIA"
 ```
 
@@ -945,17 +946,51 @@ progress_table(
 9.  Only 91.0% of records contain all the data needed to identify the
     transaction.
 
+## Lookup
+
+``` r
+lookup <- read_csv("dc/contribs/data/dc_city_lookup_CONT.csv") %>% select(1:2)
+dc <- left_join(dc, lookup, by = "city_refine")
+
+progress_table(
+  dc$city_refine, 
+  dc$city_refine2, 
+  compare = valid_city
+)
+#> # A tibble: 2 x 6
+#>   stage        prop_in n_distinct prop_na n_out n_diff
+#>   <chr>          <dbl>      <dbl>   <dbl> <dbl>  <dbl>
+#> 1 city_refine    0.992       3031  0.0792  1727    518
+#> 2 city_refine2   0.993       2895  0.0792  1525    390
+```
+
 ## Write
 
 ``` r
 dir_proc <- here("dc", "contribs", "data", "processed")
 dir_create(dir_proc)
-```
+raw_file <- glue("{dir_proc}/dc_contribs_clean.csv")
 
-``` r
-write_csv(
-  x = dc,
-  na = "",
-  path = glue("{dir_proc}/dc_contribs_clean.csv")
-)
+dc <- dc %>% 
+  select(
+    -address_sep,
+    -city_sep,
+    -state_sep,
+    -zip_sep,
+    -city_norm,
+    -city_match,
+    -match_dist,
+    -match_abb,
+    -city_swap,
+    -city_refine,
+    -address_id,
+    -xcoord,
+    -ycoord,
+    -fulladdress,
+    -gis_last_mod_dttm
+  )
+
+if (!this_file_new(raw_file)) {
+  write_csv(dc, raw_file, na = "")
+}
 ```
