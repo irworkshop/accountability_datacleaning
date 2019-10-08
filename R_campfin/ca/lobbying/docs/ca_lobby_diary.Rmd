@@ -1,6 +1,6 @@
 ---
-title: "State Data"
-author: "First Last"
+title: "California Lobbyists"
+author: "Kiernan Nicholls"
 date: "`r Sys.time()`"
 output:
   github_document: 
@@ -102,9 +102,91 @@ here::here()
 
 ## Data
 
+Data is obtained from the California Secretary of State's [Cal-Access database][03].
+
+> Cal-Access provides financial information supplied by state candidates, donors, lobbyists, and
+others. Simply start by selecting either Campaign Finance Activity, Lobbying Activity, or
+Cal-Access Resources and we will guide you to the information.
+
+The [Political Reform Division][04] (PRD) collects the data regarding expenditures made.
+
+> The Political Reform Division administers provisions of California's Political Reform Act, including the law's most fundamental purpose of ensuring that "receipts and expenditures in election campaigns should be fully and truthfully disclosed in order that the voters may be fully informed and the activities of lobbyists should be regulated and their finances disclosed..."
+
+> * Receive campaign disclosure statements (itemizing contributions received and expenditures made)
+filed by individuals and committees raising or spending campaign funds to support or oppose state
+candidates or ballot measures. (Local campaign committees file their itemized disclosure statements
+with local filing officers).
+
 ### About
 
+All California campaign finance data can be downloaded in a single file. As described on PRD
+website:
+
+> ### Raw Data for Campaign Finance and Lobbying Activity  
+> In addition to presenting California campaign finance and lobbying activity on the user-friendly
+[CAL-ACCESS website][05], the Secretary of State provides the raw data to allow people with 
+technical expertise to create their own databases.
+> 
+> The raw data is presented in tab-delimited text files from corresponding tables in the CAL-ACCESS
+database. Users can uncompress and extract the data with standard software such as PKZIP, WinZip,
+or MacZip. The Secretary of State does not provide technical support to users who want to download
+and analyze CAL-ACCESS data in this advanced way. However, the Secretary of State offers guides to
+the CAL-ACCESS data structure and fields.
+
+> ### Download Files  
+* [Guides to CAL-ACCESS data structure and fields (ZIP)][06]
+* [CAL-ACCESS raw data (ZIP)][07]
+> 
+> All CAL-ACCESS users should keep in mind that campaign finance and lobbying activity information
+changes often. The raw data extracts are updated once a day. Campaign finance and lobbying activity
+filings can also be obtained in hard copy by contacting the Secretary of State's Political Reform
+Division.
+
+[03]: https://www.sos.ca.gov/
+[04]: https://www.sos.ca.gov/campaign-lobbying/about-political-reform-division/
+[05]: http://cal-access.sos.ca.gov/
+[06]: https://campaignfinance.cdn.sos.ca.gov/calaccess-documentation.zip
+[07]: https://campaignfinance.cdn.sos.ca.gov/dbwebexport.zip
+
 ### Variables
+
+Using the data key provided by Cal-Access, we can find the expenditure file and understand it's 
+contents.
+
+```{r check_key}
+key_url <- "https://campaignfinance.cdn.sos.ca.gov/calaccess-documentation.zip"
+key_file <- str_c(raw_dir, basename(key_url), sep = "/")
+url_file_size(key_url, format = TRUE)
+```
+
+If they ZIP file containing the documentation files has not yet been downloaded, we can do so now.
+
+```{r download_key}
+if (!this_file_new(key_file)) {
+  download.file(
+    url = key_url,
+    destfile = key_file
+  )
+}
+```
+
+Before we unzip the file, we can view it's contents.
+
+```{r list_key}
+key_content <- key_file %>% 
+  unzip(list = TRUE) %>% 
+  as_tibble(.name_repair = make_clean_names)
+```
+
+```{r unzip_key}
+key_dir <- str_c(raw_dir, "CalAccess-Documentation", sep = "/")
+if (!dir_exists(key_dir)) {
+  unzip(
+    zipfile = key_file,
+    exdir = raw_dir
+  )
+}
+```
 
 ## Import
 
@@ -120,6 +202,15 @@ zip_url <- "https://campaignfinance.cdn.sos.ca.gov/dbwebexport.zip"
 zip_file <- str_c(raw_dir, basename(zip_url), sep = "/")
 ```
 
+The ZIP file is extremelly large, and will take quite some time 
+
+```{r file_size}
+  url_file_size(zip_url, format = TRUE)
+speedtest::spd_test()
+```
+
+If the most recent version of the file has not yet been downloaded, we can do so now.
+
 ```{r download_raw}
 if (!this_file_new(zip_file)) {
   download.file(
@@ -129,11 +220,23 @@ if (!this_file_new(zip_file)) {
 }
 ```
 
-```{r unzip_raw}
-cal_dir <- dir_ls(raw_dir, recurse = TRUE, type = "directory", glob = "*DATA$")
-if (is_empty(cal_dir)) {
-  unzip(zip_file, exdir = raw_dir)
-  cal_dir <- dir_ls(raw_dir, recurse = TRUE, type = "directory", glob = "*DATA$")
+We don't need to unzip every file, only those pertaining to lobbying.
+
+```{r list_zip}
+zip_content <- unzip(zip_file, list = TRUE) 
+zip_lobby <- zip_content$Name[str_which(zip_content$Name, "LOBBY")]
+cal_dir <- str_c(raw_dir, unique(dirname(zip_lobby)))
+```
+
+Then, if those files have not yet been unzipped, we can do so now.
+
+```{r unzip_zip}
+if (!dir_exists(cal_dir)) {
+  unzip(
+    zipfile = zip_file,
+    files = zip_lobby,
+    exdir = raw_dir
+  )
 }
 ```
 
@@ -141,7 +244,7 @@ if (is_empty(cal_dir)) {
 
 ```{r warn_vroom}
 if (packageVersion("vroom") < "1.0.2.9000") {
-  warning("vroom version greater than 1.0.2.9000 is needed")
+  stop("vroom version of at least 1.0.2.9000 is needed")
 }
 ```
 
