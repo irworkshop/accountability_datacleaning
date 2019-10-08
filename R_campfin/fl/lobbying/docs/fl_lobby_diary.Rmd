@@ -1,0 +1,206 @@
+---
+title: "Florida Lobbyists"
+author: "Kiernan Nicholls"
+date: "`r Sys.time()`"
+output:
+  github_document: 
+    df_print: tibble
+    toc: true
+    toc_dept: 2
+editor_options: 
+  chunk_output_type: console
+---
+
+<!-- Place comments regarding knitting here -->
+
+```{r setup, include=FALSE, purl=FALSE}
+library(knitr)
+opts_chunk$set(
+  eval = TRUE,
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  error = FALSE,
+  collapse = TRUE,
+  comment = "#>",
+  fig.path = "../plots/",
+  fig.width = 10,
+  dpi = 300
+)
+options(width = 99)
+set.seed(5)
+```
+
+```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
+fs::dir_create(here::here("fl", "lobbying", "docs"))
+```
+
+## Project
+
+The Accountability Project is an effort to cut across data silos and give journalists, policy
+professionals, activists, and the public at large a simple way to search across huge volumes of
+public data about people and organizations.
+
+Our goal is to standardizing public data on a few key fields by thinking of each dataset row as a
+transaction. For each transaction there should be (at least) 3 variables:
+
+1. All **parties** to a transaction
+2. The **date** of the transaction
+3. The **amount** of money involved
+
+## Objectives
+
+This document describes the process used to complete the following objectives:
+
+1. How many records are in the database?
+1. Check for duplicates
+1. Check ranges
+1. Is there anything blank or missing?
+1. Check for consistency issues
+1. Create a five-digit ZIP Code called `ZIP5`
+1. Create a `YEAR` field from the transaction date
+1. Make sure there is data on both parties to a transaction
+
+## Packages
+
+The following packages are needed to collect, manipulate, visualize, analyze, and communicate
+these results. The `pacman` package will facilitate their installation and attachment.
+
+The IRW's `campfin` package will also have to be installed from GitHub. This package contains
+functions custom made to help facilitate the processing of campaign finance data.
+
+```{r load_packages, message=FALSE, dfrning=FALSE, error=FALSE}
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load_gh("irworkshop/campfin")
+pacman::p_load(
+  tidyverse, # data manipulation
+  lubridate, # datetime strings
+  magrittr, # pipe opperators
+  janitor, # dataframe clean
+  scales, # format strings
+  knitr, # knit documents
+  vroom, # read files fast
+  rvest, # read web pages
+  glue, # combine strings
+  here, # relative storage
+  fs # search storage 
+)
+```
+
+This document should be run as part of the `R_campfin` project, which lives as a sub-directory of
+the more general, language-agnostic [`irworkshop/accountability_datacleaning`][01] GitHub
+repository.
+
+The `R_campfin` project uses the [RStudio projects][02] feature and should be run as such. The
+project also uses the dynamic `here::here()` tool for file paths relative to _your_ machine.
+
+```{r where_here, collapse=TRUE}
+# where does this document knit?
+here::here()
+```
+
+[01]: https://github.com/irworkshop/accountability_datacleaning "TAP repo"
+[02]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects "Rproj"
+
+## Data
+
+Data is obtained as tab-delinated files from the [Florida Lobbying Registration Office][lro] (LRO).
+
+[lro]: https://floridalobbyist.gov/
+
+### About
+
+>  Delimited data files are made available below for compensation reports submitted online,
+beginning in 2007. Data files for the last eight quarters will be retained for each branch. The
+tab-delimited files below are in the (.TXT) format and can be imported into any word processor,
+spreadsheet, or database program.
+
+### Variables
+
+The LRO provides a variable key with definitions for each column in the data sets.
+
+[key]: https://floridalobbyist.gov/CompensationReportSearch/DownloadDataChart
+
+```{r var_defs, echo=FALSE}
+var_url <- "https://floridalobbyist.gov/CompensationReportSearch/DownloadDataChart"
+read_html(var_url) %>% 
+  html_node("table") %>% 
+  html_table() %>% 
+  mutate(
+    `Data Element` = glue("`{`Data Element`}`"),
+    `Definition` = str_trunc(Definition, width = 80)
+  ) %>% 
+  kable()
+```
+
+## Import
+
+To create a single clean data file of lobbyist activity, we will first download each file locally
+and read as a single data frame.
+
+### Download
+
+The data is separated into quarterly files by year. With the `glue::glue()` function, we can
+create the URL for each file.
+
+```{r list_year_urls}
+years <- rep(2008:2019, each = 8, length.out = 88)
+quarters <- rep(1:4, length = 88)
+branches <- rep(c("Executive", "Legislative"), each = 4, length.out = 88)
+urls <- glue("https://floridalobbyist.gov/reports/{years}_Quarter{quarters}_{branches}.txt")
+n_distinct(urls) == 11 * 4 * 2
+```
+
+This creates `r n_distinct(urls)` distinct URLs, each corresponding to a separate file.
+
+```{r print_urls, results='asis'}
+cat(paste("*", head(urls)), sep = "\n")
+```
+
+We can download each TXT file to the `/fl/data/raw` directory.
+
+```{r create_raw_dir}
+raw_dir <- here("fl", "lobbying", "data", "raw")
+dir_create(raw_dir)
+```
+
+```{r download_raw, eval=FALSE}
+if (!all_files_new(raw_dir, glob = "*.txt$")) {
+  for (url in urls) {
+    download.file(url, destfile = str_c(raw_dir, basename(url), sep = "/"))
+  }
+}
+```
+
+```{r list_files, echo=FALSE}
+dir_info(raw_dir) %>% 
+  mutate(path = str_remove(path, here())) %>% 
+  select(
+    path, 
+    type,
+    size,
+    birth_time
+  )
+```
+
+### Read
+
+```{r read_raw}
+fll <- dir_ls(raw_dir) %>% 
+  vroom(
+    delim = "\t",
+    .name_repair = make_clean_names,
+    id = "source_file",
+    col_types = cols(
+      .default = col_character(),
+      REPORT_YEAR = col_double()
+    )
+  )
+```
+
+```{r glimpse_raw}
+head(fll)
+tail(fll)
+glimpse(sample_frac(fll))
+```
+
