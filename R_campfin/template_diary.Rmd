@@ -182,7 +182,7 @@ df %>%
 
 #### Dates
 
-```{r}
+```{r add_year}
 df <- mutate(df, year = year(date))
 ```
 
