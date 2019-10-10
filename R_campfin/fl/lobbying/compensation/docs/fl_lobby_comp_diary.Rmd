@@ -6,7 +6,7 @@ output:
   github_document: 
     df_print: tibble
     toc: true
-    toc_dept: 2
+    toc_dept: 3
 editor_options: 
   chunk_output_type: console
 ---
@@ -32,7 +32,7 @@ set.seed(5)
 ```
 
 ```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
-fs::dir_create(here::here("fl", "lobbying", "docs"))
+fs::dir_create(here::here("fl", "lobbying", "compensation", "docs"))
 ```
 
 ## Project
@@ -161,7 +161,7 @@ urls <-
 print(urls)
 ```
 
-```{r}
+```{r pull_urls}
 urls <- pull(urls)
 ```
 
@@ -174,7 +174,7 @@ md_bullet(head(urls), cat = TRUE)
 We can download each TXT file to the `/fl/data/raw` directory.
 
 ```{r create_raw_dir}
-raw_dir <- here("fl", "lobbying", "data", "raw")
+raw_dir <- here("fl", "lobbying", "compensation", "data", "raw")
 dir_create(raw_dir)
 ```
 
@@ -200,35 +200,59 @@ dir_info(raw_dir) %>%
 ### Read
 
 ```{r read_raw}
-fll <- dir_ls(raw_dir) %>% 
-  vroom(
-    delim = "\t",
-    .name_repair = make_clean_names,
-    escape_backslash = FALSE,
-    escape_double = TRUE,
-    id = "source_file",
-    col_types = cols(
-      .default = col_character(),
-      REPORT_YEAR = col_double(),
-      TOTAL_COMPENSATION_RANGE = col_factor(
-        levels = c(
-          "$0.00", 
-          "$1.00-$49,999.00",
-          "$50,000.00-$99,999.00", 
-          "$100,000.00-$249,999.00", 
-          "$250,000.00-$499,999.00", 
-          "$500,000.00-$999,999.00",
-          "$1,000,000.00"
-        )
+fllc <- map_dfr(
+  .x = dir_ls(raw_dir),
+  .f = read_delim,
+  delim = "\t",
+  escape_backslash = FALSE,
+  escape_double = FALSE,
+  .id = "source_file",
+  col_types = cols(
+    .default = col_character(),
+    REPORT_YEAR = col_double(),
+    TOTAL_COMPENSATION_RANGE = col_factor(
+      levels = c(
+        "$0.00", 
+        "$1.00-$49,999.00",
+        "$50,000.00-$99,999.00", 
+        "$100,000.00-$249,999.00", 
+        "$250,000.00-$499,999.00", 
+        "$500,000.00-$999,999.00",
+        "$1,000,000.00"
       )
     )
   )
+)
+
+fllc <- clean_names(fllc)
 ```
 
+## Explore
+
 ```{r glimpse_raw}
-head(fll)
-tail(fll)
-glimpse(sample_frac(fll))
+head(fllc)
+tail(fllc)
+glimpse(sample_frac(fllc))
+```
+
+```{r distinct_rows}
+fllc <- distinct(fllc)
+```
+
+```{r year_bar_quarter, echo=FALSE}
+fllc %>% 
+  count(report_year, report_quarter) %>% 
+  ggplot(aes(x = report_year, y = n)) +
+  geom_col(aes(fill = report_quarter)) +
+  scale_fill_brewer(palette = "Dark2") +
+  scale_y_continuous(labels = comma) +
+  scale_x_continuous(labels = 2008:2019, breaks = 2008:2019) +
+  labs(
+    title = "Flordina Lobbyist Compensation Reports",
+    x = "Report Year",
+    y = "Filed Reports",
+    fill = "Report Quarter"
+  )
 ```
 
 ## Wrangle
@@ -242,7 +266,7 @@ package. Much of the data is repeated for both the principal lobbyist and then t
 
 ```{r address_norm}
 packageVersion("tidyr")
-fll <- fll %>%
+fllc <- fllc %>%
   unite(
     starts_with("address_line"),
     col = "address_full",
@@ -261,7 +285,7 @@ fll <- fll %>%
 ```
 
 ```{r address_view, echo=FALSE}
-fll %>% 
+fllc %>% 
   select(
     starts_with("address_line"),
     address_norm
@@ -273,7 +297,7 @@ fll %>%
 #### Postal
 
 ```{r zip_norm}
-fll <- fll %>% 
+fllc <- fllc %>% 
   mutate(
     zip_norm = normal_zip(
       zip = postal_code,
@@ -284,8 +308,8 @@ fll <- fll %>%
 
 ```{r zip_progress}
 progress_table(
-  fll$postal_code,
-  fll$zip_norm,
+  fllc$postal_code,
+  fllc$zip_norm,
   compare = valid_zip
 )
 ```
@@ -293,7 +317,7 @@ progress_table(
 #### State
 
 ```{r state_norm}
-fll <- fll %>% 
+fllc <- fllc %>% 
   mutate(
     state_norm = normal_state(
       state = state,
@@ -305,8 +329,8 @@ fll <- fll %>%
 
 ```{r state_progress}
 progress_table(
-  fll$state,
-  fll$state_norm,
+  fllc$state,
+  fllc$state_norm,
   compare = valid_state
 )
 ```
@@ -314,7 +338,7 @@ progress_table(
 #### City
 
 ```{r city_norm_swap}
-fll <- fll %>% 
+fllc <- fllc %>% 
   rename(city_raw = city) %>% 
   mutate(
     city_norm = normal_city(
@@ -343,7 +367,7 @@ fll <- fll %>%
 ```
 
 ```{r city_refine}
-good_refine <- fll %>% 
+good_refine <- fllc %>% 
   filter(state_norm == "FL") %>% 
   mutate(
     city_refine = city_swap %>% 
@@ -367,17 +391,17 @@ good_refine %>%
 ```
 
 ```{r join_refine}
-fll <- fll %>% 
-  left_join(good_refine, by = names(fll)) %>% 
+fllc <- fllc %>% 
+  left_join(good_refine, by = names(fllc)) %>% 
   mutate(city_refine = coalesce(city_refine, city_swap))
 ```
 
 ```{r city_progress}
 progress_table(
-  fll$city_raw,
-  fll$city_norm,
-  fll$city_swap,
-  fll$city_refine,
+  fllc$city_raw,
+  fllc$city_norm,
+  fllc$city_swap,
+  fllc$city_refine,
   compare = valid_city
 )
 ```
@@ -385,7 +409,7 @@ progress_table(
 #### Phone
 
 ```{r phone_norm, echo=FALSE}
-fll <- fll %>% 
+fllc <- fllc %>% 
   mutate(
     phone_norm = normal_phone(
       number = phone_number,
@@ -397,7 +421,7 @@ fll <- fll %>%
 ```
 
 ```{r phone_view}
-fll %>%
+fllc %>%
   filter(phone_number != phone_norm) %>% 
   select(
     phone_number,
@@ -413,7 +437,7 @@ fll %>%
 #### Address
 
 ```{r principal_address_norm}
-fll <- fll %>%
+fllc <- fllc %>%
   unite(
     starts_with("principal_address_line"),
     col = "principal_address_full",
@@ -432,7 +456,7 @@ fll <- fll %>%
 ```
 
 ```{r principal_address_view, echo=FALSE}
-fll %>% 
+fllc %>% 
   select(
     starts_with("principal_address_line"),
     principal_address_norm
@@ -444,7 +468,7 @@ fll %>%
 #### Postal
 
 ```{r principal_zip_norm}
-fll <- fll %>% 
+fllc <- fllc %>% 
   mutate(
     principal_zip_norm = normal_zip(
       zip = principal_postal_code,
@@ -455,8 +479,8 @@ fll <- fll %>%
 
 ```{r principal_zip_progress}
 progress_table(
-  fll$principal_postal_code,
-  fll$principal_zip_norm,
+  fllc$principal_postal_code,
+  fllc$principal_zip_norm,
   compare = valid_zip
 )
 ```
@@ -464,7 +488,7 @@ progress_table(
 #### State
 
 ```{r principal_state_norm}
-fll <- fll %>% 
+fllc <- fllc %>% 
   mutate(
     principal_state_norm = normal_state(
       state = principal_state_name,
@@ -476,8 +500,8 @@ fll <- fll %>%
 
 ```{r principal_state_progress}
 progress_table(
-  fll$principal_state_name,
-  fll$principal_state_norm,
+  fllc$principal_state_name,
+  fllc$principal_state_norm,
   compare = valid_state
 )
 ```
@@ -485,7 +509,7 @@ progress_table(
 #### City
 
 ```{r principal_city_norm_swap}
-fll <- fll %>% 
+fllc <- fllc %>% 
   mutate(
     principal_city_norm = normal_city(
       city = principal_city_name,
@@ -514,9 +538,9 @@ fll <- fll %>%
 
 ```{r principal_city_progress}
 progress_table(
-  fll$principal_city_name,
-  fll$principal_city_norm,
-  fll$principal_city_swap,
+  fllc$principal_city_name,
+  fllc$principal_city_norm,
+  fllc$principal_city_swap,
   compare = valid_city
 )
 ```
@@ -524,7 +548,7 @@ progress_table(
 #### Phone
 
 ```{r principal_phone_norm}
-fll <- fll %>% 
+fllc <- fllc %>% 
   mutate(
     principal_phone_norm = normal_phone(
       number = principal_phone_number,
@@ -536,7 +560,7 @@ fll <- fll %>%
 ```
 
 ```{r principal_phone_view, echo=FALSE}
-fll %>%
+fllc %>%
   filter(principal_phone_number != principal_phone_norm) %>% 
   select(
     principal_phone_number,
@@ -552,7 +576,7 @@ fll %>%
 #### Address
 
 ```{r prime_firm_address_norm}
-fll <- fll %>%
+fllc <- fllc %>%
   unite(
     starts_with("prime_firm_address_line"),
     col = "prime_firm_address_full",
@@ -571,7 +595,7 @@ fll <- fll %>%
 ```
 
 ```{r prime_firm_address_view, echo=FALSE}
-fll %>% 
+fllc %>% 
   select(
     starts_with("prime_firm_address_line"),
     prime_firm_address_norm
@@ -583,7 +607,7 @@ fll %>%
 #### Postal
 
 ```{r prime_firm_zip_norm}
-fll <- fll %>% 
+fllc <- fllc %>% 
   mutate(
     prime_firm_zip_norm = normal_zip(
       zip = prime_firm_postal_code,
@@ -594,8 +618,8 @@ fll <- fll %>%
 
 ```{r prime_firm_zip_progress}
 progress_table(
-  fll$prime_firm_postal_code,
-  fll$prime_firm_zip_norm,
+  fllc$prime_firm_postal_code,
+  fllc$prime_firm_zip_norm,
   compare = valid_zip
 )
 ```
@@ -603,7 +627,7 @@ progress_table(
 #### State
 
 ```{r prime_firm_state_norm}
-fll <- fll %>% 
+fllc <- fllc %>% 
   mutate(
     prime_firm_state_norm = normal_state(
       state = prime_firm_state_name,
@@ -615,8 +639,8 @@ fll <- fll %>%
 
 ```{r prime_firm_state_progress}
 progress_table(
-  fll$prime_firm_state_name,
-  fll$prime_firm_state_norm,
+  fllc$prime_firm_state_name,
+  fllc$prime_firm_state_norm,
   compare = valid_state
 )
 ```
@@ -624,7 +648,7 @@ progress_table(
 #### City
 
 ```{r prime_firm_city_norm_swap}
-fll <- fll %>% 
+fllc <- fllc %>% 
   mutate(
     prime_firm_city_norm = normal_city(
       city = prime_firm_city_name,
@@ -653,9 +677,9 @@ fll <- fll %>%
 
 ```{r prime_firm_city_progress}
 progress_table(
-  fll$prime_firm_city_name,
-  fll$prime_firm_city_norm,
-  fll$prime_firm_city_swap,
+  fllc$prime_firm_city_name,
+  fllc$prime_firm_city_norm,
+  fllc$prime_firm_city_swap,
   compare = valid_city
 )
 ```
@@ -663,7 +687,7 @@ progress_table(
 #### Phone
 
 ```{r prime_firm_phone_norm}
-fll <- fll %>% 
+fllc <- fllc %>% 
   mutate(
     prime_firm_phone_norm = normal_phone(
       number = prime_firm_phone_number,
@@ -675,7 +699,7 @@ fll <- fll %>%
 ```
 
 ```{r prime_firm_phone_view, echo=FALSE}
-fll %>%
+fllc %>%
   filter(prime_firm_phone_number != prime_firm_phone_norm) %>% 
   select(
     prime_firm_phone_number,
