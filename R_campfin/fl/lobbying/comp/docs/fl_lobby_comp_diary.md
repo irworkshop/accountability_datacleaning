@@ -1,14 +1,22 @@
-Florida Lobbyists
+Florida Lobbyist Compensation
 ================
 Kiernan Nicholls
-2019-10-09 16:39:01
+2019-10-10 14:20:37
 
   - [Project](#project)
   - [Objectives](#objectives)
   - [Packages](#packages)
   - [Data](#data)
+      - [About](#about)
+      - [Variables](#variables)
   - [Import](#import)
+      - [Download](#download)
+      - [Read](#read)
+  - [Explore](#explore)
   - [Wrangle](#wrangle)
+      - [Firm](#firm)
+      - [Principal](#principal)
+      - [Firm](#firm-1)
 
 <!-- Place comments regarding knitting here -->
 
@@ -202,7 +210,7 @@ md_bullet(head(urls), cat = TRUE)
 We can download each TXT file to the `/fl/data/raw` directory.
 
 ``` r
-raw_dir <- here("fl", "lobbying", "data", "raw")
+raw_dir <- here("fl", "lobbying", "comp", "data", "raw")
 dir_create(raw_dir)
 ```
 
@@ -214,51 +222,55 @@ if (!all_files_new(raw_dir, glob = "*.txt$")) {
 }
 ```
 
-    #> # A tibble: 88 x 4
-    #>    path                                                type         size birth_time         
-    #>    <chr>                                               <fct> <fs::bytes> <dttm>             
-    #>  1 /fl/lobbying/data/raw/2008_Quarter1_Executive.txt   file         653K 2019-10-08 17:26:36
-    #>  2 /fl/lobbying/data/raw/2008_Quarter1_Legislative.txt file         789K 2019-10-08 17:26:44
-    #>  3 /fl/lobbying/data/raw/2008_Quarter2_Executive.txt   file         667K 2019-10-08 17:26:37
-    #>  4 /fl/lobbying/data/raw/2008_Quarter2_Legislative.txt file         801K 2019-10-08 17:26:45
-    #>  5 /fl/lobbying/data/raw/2008_Quarter3_Executive.txt   file         694K 2019-10-08 17:26:39
-    #>  6 /fl/lobbying/data/raw/2008_Quarter3_Legislative.txt file         815K 2019-10-08 17:26:46
-    #>  7 /fl/lobbying/data/raw/2008_Quarter4_Executive.txt   file         713K 2019-10-08 17:26:40
-    #>  8 /fl/lobbying/data/raw/2008_Quarter4_Legislative.txt file         830K 2019-10-08 17:26:50
-    #>  9 /fl/lobbying/data/raw/2009_Quarter1_Executive.txt   file         684K 2019-10-08 17:26:51
-    #> 10 /fl/lobbying/data/raw/2009_Quarter1_Legislative.txt file         813K 2019-10-08 17:26:56
-    #> # … with 78 more rows
+    #> # A tibble: 96 x 4
+    #>    path                                                     type         size birth_time         
+    #>    <chr>                                                    <fct> <fs::bytes> <dttm>             
+    #>  1 /fl/lobbying/comp/data/raw/2008_Quarter1_Executive.txt   file         653K 2019-10-10 12:31:52
+    #>  2 /fl/lobbying/comp/data/raw/2008_Quarter1_Legislative.txt file         789K 2019-10-10 12:31:53
+    #>  3 /fl/lobbying/comp/data/raw/2008_Quarter2_Executive.txt   file         667K 2019-10-10 12:31:55
+    #>  4 /fl/lobbying/comp/data/raw/2008_Quarter2_Legislative.txt file         801K 2019-10-10 12:31:57
+    #>  5 /fl/lobbying/comp/data/raw/2008_Quarter3_Executive.txt   file         694K 2019-10-10 12:31:59
+    #>  6 /fl/lobbying/comp/data/raw/2008_Quarter3_Legislative.txt file         815K 2019-10-10 12:32:00
+    #>  7 /fl/lobbying/comp/data/raw/2008_Quarter4_Executive.txt   file         713K 2019-10-10 12:32:02
+    #>  8 /fl/lobbying/comp/data/raw/2008_Quarter4_Legislative.txt file         830K 2019-10-10 12:32:03
+    #>  9 /fl/lobbying/comp/data/raw/2009_Quarter1_Executive.txt   file         684K 2019-10-10 12:32:06
+    #> 10 /fl/lobbying/comp/data/raw/2009_Quarter1_Legislative.txt file         813K 2019-10-10 12:32:09
+    #> # … with 86 more rows
 
 ### Read
 
 ``` r
-fll <- dir_ls(raw_dir) %>% 
-  vroom(
-    delim = "\t",
-    .name_repair = make_clean_names,
-    escape_backslash = FALSE,
-    escape_double = TRUE,
-    id = "source_file",
-    col_types = cols(
-      .default = col_character(),
-      REPORT_YEAR = col_double(),
-      TOTAL_COMPENSATION_RANGE = col_factor(
-        levels = c(
-          "$0.00", 
-          "$1.00-$49,999.00",
-          "$50,000.00-$99,999.00", 
-          "$100,000.00-$249,999.00", 
-          "$250,000.00-$499,999.00", 
-          "$500,000.00-$999,999.00",
-          "$1,000,000.00"
-        )
+fllc <- map_dfr(
+  .x = dir_ls(raw_dir),
+  .f = read_delim,
+  delim = "\t",
+  escape_backslash = FALSE,
+  escape_double = FALSE,
+  .id = "source_file",
+  col_types = cols(
+    .default = col_character(),
+    REPORT_YEAR = col_double(),
+    TOTAL_COMPENSATION_RANGE = col_factor(
+      levels = c(
+        "$0.00", 
+        "$1.00-$49,999.00",
+        "$50,000.00-$99,999.00", 
+        "$100,000.00-$249,999.00", 
+        "$250,000.00-$499,999.00", 
+        "$500,000.00-$999,999.00",
+        "$1,000,000.00"
       )
     )
   )
+)
+
+fllc <- clean_names(fllc)
 ```
 
+## Explore
+
 ``` r
-head(fll)
+head(fllc)
 #> # A tibble: 6 x 37
 #>   source_file report_quarter report_year record_type firm_name certification_n… title
 #>   <chr>       <chr>                <dbl> <chr>       <chr>     <chr>            <chr>
@@ -278,16 +290,16 @@ head(fll)
 #> #   prime_firm_address_line_2 <chr>, prime_firm_city_name <chr>, prime_firm_state_name <chr>,
 #> #   prime_firm_postal_code <chr>, prime_firm_zip_ext <chr>, prime_firm_country_name <chr>,
 #> #   prime_firm_phone_number <chr>
-tail(fll)
+tail(fllc)
 #> # A tibble: 6 x 37
 #>   source_file report_quarter report_year record_type firm_name certification_n… title
 #>   <chr>       <chr>                <dbl> <chr>       <chr>     <chr>            <chr>
-#> 1 /home/kier… October - Dec…        2018 PRINCIPAL   Wilson &… <NA>             <NA> 
-#> 2 /home/kier… October - Dec…        2018 PRINCIPAL   Wilson &… <NA>             <NA> 
-#> 3 /home/kier… October - Dec…        2018 FIRM        Young Qu… Senior Partner … Seni…
-#> 4 /home/kier… October - Dec…        2018 LOBBYIST    Young Qu… <NA>             <NA> 
-#> 5 /home/kier… October - Dec…        2018 LOBBYIST    Young Qu… <NA>             <NA> 
-#> 6 /home/kier… October - Dec…        2018 PRINCIPAL   Young Qu… <NA>             <NA> 
+#> 1 /home/kier… October - Dec…        2019 LOBBYIST    Theresa … <NA>             <NA> 
+#> 2 /home/kier… October - Dec…        2019 PRINCIPAL   Theresa … <NA>             <NA> 
+#> 3 /home/kier… October - Dec…        2019 PRINCIPAL   Theresa … <NA>             <NA> 
+#> 4 /home/kier… October - Dec…        2019 PRINCIPAL   Theresa … <NA>             <NA> 
+#> 5 /home/kier… October - Dec…        2019 PRINCIPAL   Theresa … <NA>             <NA> 
+#> 6 /home/kier… October - Dec…        2019 PRINCIPAL   Theresa … <NA>             <NA> 
 #> # … with 30 more variables: address_line_1 <chr>, address_line_2 <chr>, city <chr>, state <chr>,
 #> #   postal_code <chr>, zip_4 <chr>, country <chr>, phone_number <chr>, submission_date <chr>,
 #> #   total_compensation_range <fct>, lobbyist_name <chr>, principal_name <chr>,
@@ -298,35 +310,35 @@ tail(fll)
 #> #   prime_firm_address_line_2 <chr>, prime_firm_city_name <chr>, prime_firm_state_name <chr>,
 #> #   prime_firm_postal_code <chr>, prime_firm_zip_ext <chr>, prime_firm_country_name <chr>,
 #> #   prime_firm_phone_number <chr>
-glimpse(sample_frac(fll))
-#> Observations: 420,825
+glimpse(sample_frac(fllc))
+#> Observations: 443,915
 #> Variables: 37
 #> $ source_file                  <chr> "/home/kiernan/R/accountability_datacleaning/R_campfin/fl/l…
 #> $ report_quarter               <chr> "January - March", "July - September", "October - December"…
-#> $ report_year                  <dbl> 2011, 2008, 2012, 2009, 2016, 2012, 2010, 2016, 2016, 2012,…
+#> $ report_year                  <dbl> 2011, 2008, 2012, 2009, 2016, 2019, 2012, 2010, 2016, 2016,…
 #> $ record_type                  <chr> "PRINCIPAL", "PRINCIPAL", "PRINCIPAL", "PRINCIPAL", "PRINCI…
 #> $ firm_name                    <chr> "Ronald L. Book, P.A.", "Garrison Consulting Group", "Johns…
-#> $ certification_name           <chr> NA, NA, NA, NA, NA, NA, NA, NA, "Senior Partner Al Cardenas…
-#> $ title                        <chr> NA, NA, NA, NA, NA, NA, NA, NA, "Senior Partner", NA, "Owne…
-#> $ address_line_1               <chr> NA, NA, NA, NA, NA, NA, NA, NA, "215 S Monroe St", NA, "Po …
-#> $ address_line_2               <chr> NA, NA, NA, NA, NA, NA, NA, NA, "Ste 602", NA, NA, NA, NA, …
-#> $ city                         <chr> NA, NA, NA, NA, NA, NA, NA, NA, "Tallahassee", NA, "Cocoa",…
-#> $ state                        <chr> NA, NA, NA, NA, NA, NA, NA, NA, "FL", NA, "FL", NA, NA, NA,…
-#> $ postal_code                  <chr> NA, NA, NA, NA, NA, NA, NA, NA, "32301", NA, "32923-0098", …
+#> $ certification_name           <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, "Senior Partner Al Card…
+#> $ title                        <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, "Senior Partner", NA, "…
+#> $ address_line_1               <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, "215 S Monroe St", NA, …
+#> $ address_line_2               <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, "Ste 602", NA, NA, NA, …
+#> $ city                         <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, "Tallahassee", NA, "Coc…
+#> $ state                        <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, "FL", NA, "FL", NA, NA,…
+#> $ postal_code                  <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, "32301", NA, "32923-009…
 #> $ zip_4                        <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
-#> $ country                      <chr> NA, NA, NA, NA, NA, NA, NA, NA, "US", NA, "US", NA, NA, NA,…
-#> $ phone_number                 <chr> NA, NA, NA, NA, NA, NA, NA, NA, "(850) 222-8900", NA, "(321…
-#> $ submission_date              <chr> NA, NA, NA, NA, NA, NA, NA, NA, "08/11/2016", NA, "11/14/20…
-#> $ total_compensation_range     <fct> NA, NA, NA, NA, NA, NA, NA, NA, "$250,000.00-$499,999.00", …
-#> $ lobbyist_name                <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "Ch…
+#> $ country                      <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, "US        ", NA, "US  …
+#> $ phone_number                 <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, "(850) 222-8900", NA, "…
+#> $ submission_date              <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, "08/11/2016", NA, "11/1…
+#> $ total_compensation_range     <fct> NA, NA, NA, NA, NA, NA, NA, NA, NA, "$250,000.00-$499,999.0…
+#> $ lobbyist_name                <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
 #> $ principal_name               <chr> "University Area Community Development Corporation", "Garri…
 #> $ principal_address_line_1     <chr> "14013 N 22nd St", "2390 Sunset Bluff Dr", "Stephanie A. Le…
 #> $ principal_address_line_2     <chr> NA, NA, "12780 Waterford Lakes Pky Ste 115", NA, "1947 Lee …
 #> $ principal_city_name          <chr> "TAMPA", "JACKSONVILLE", "ORLANDO", "NEPTUNE BEACH", "Winte…
-#> $ principal_state_name         <chr> "FLORIDA", "FLORIDA", "FLORIDA", "FLORIDA", "FL", "CALIFORN…
-#> $ principal_postal_code        <chr> "33613", "32216", "32828", "32266", "32789", "94063", "3340…
+#> $ principal_state_name         <chr> "FLORIDA", "FLORIDA", "FLORIDA", "FLORIDA", "FL", "FL", "CA…
+#> $ principal_postal_code        <chr> "33613", "32216", "32828", "32266", "32789", "32792", "9406…
 #> $ principal_zip_ext            <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
-#> $ principal_country_name       <chr> "US", "US", "US", "US", "US", "US", "US", "US", NA, "US", N…
+#> $ principal_country_name       <chr> "US        ", "US        ", "US        ", "US        ", "US…
 #> $ principal_phone_number       <chr> "(813)558-5216", "(904)725-7926", "(904)645-9936 x114", "(9…
 #> $ principal_compensation_range <chr> "$20,000.00-$29,999.00", "$0.00", "$1.00-$9,999.00", "$0.00…
 #> $ prime_firm_name              <chr> "Robert M. Levy & Associates", NA, NA, NA, NA, NA, NA, NA, …
@@ -336,9 +348,15 @@ glimpse(sample_frac(fll))
 #> $ prime_firm_state_name        <chr> "FL", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
 #> $ prime_firm_postal_code       <chr> "33138", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
 #> $ prime_firm_zip_ext           <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
-#> $ prime_firm_country_name      <chr> "US", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
+#> $ prime_firm_country_name      <chr> "US        ", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
 #> $ prime_firm_phone_number      <chr> "(305)758-1194", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
 ```
+
+``` r
+fllc <- distinct(fllc)
+```
+
+![](../plots/year_bar_quarter-1.png)<!-- -->
 
 ## Wrangle
 
@@ -353,7 +371,7 @@ both the principal lobbyist and then their firm.
 ``` r
 packageVersion("tidyr")
 #> [1] '1.0.0'
-fll <- fll %>%
+fllc <- fllc %>%
   unite(
     starts_with("address_line"),
     col = "address_full",
@@ -371,25 +389,25 @@ fll <- fll %>%
   select(-address_full)
 ```
 
-    #> # A tibble: 2,699 x 3
-    #>    address_line_1              address_line_2 address_norm                      
-    #>    <chr>                       <chr>          <chr>                             
-    #>  1 1450 Brickell Avenue        Suite 2300     1450 BRICKELL AVENUE SUITE 2300   
-    #>  2 3600 Maclay Boulevard       Suite 101      3600 MACLAY BOULEVARD SUITE 101   
-    #>  3 Po Box 98                   <NA>           PO BOX 98                         
-    #>  4 633 Sunflower Rd            <NA>           633 SUNFLOWER ROAD                
-    #>  5 PO Box 1231                 <NA>           PO BOX 1231                       
-    #>  6 2822 Remington Green Circle <NA>           2822 REMINGTON GREEN CIRCLE       
-    #>  7 PRINCIPAL                   Wendy Bitner   PRINCIPAL WENDY BITNER            
-    #>  8 1101 West Swann Avenue      <NA>           1101 WEST SWANN AVENUE            
-    #>  9 693 Forest Lair             <NA>           693 FOREST LAIR                   
-    #> 10 200 S Orange Ave Ste 2300   <NA>           200 SOUTH ORANGE AVENUE SUITE 2300
-    #> # … with 2,689 more rows
+    #> # A tibble: 2,685 x 3
+    #>    address_line_1               address_line_2 address_norm                  
+    #>    <chr>                        <chr>          <chr>                         
+    #>  1 1520 Oldfield Dr             <NA>           1520 OLDFIELD DRIVE           
+    #>  2 31 W Adams St Ste 204        <NA>           31 WEST ADAMS STREET SUITE 204
+    #>  3 315 Kentuckey Ave            <NA>           315 KENTUCKEY AVENUE          
+    #>  4 8161 SW 170Th Ter            <NA>           8161 SOUTHWEST 170TH TERRACE  
+    #>  5 1431 Lloyd's Cove Rd         <NA>           1431 LLOYDS COVE ROAD         
+    #>  6 115 East Park Avenue, Suite1 <NA>           115 EAST PARK AVENUE SUITE1   
+    #>  7 111 Llano Cove               <NA>           111 LLANO COVE                
+    #>  8 PO Box 111488                <NA>           PO BOX 111488                 
+    #>  9 110 E College Ave            <NA>           110 EAST COLLEGE AVENUE       
+    #> 10 437 Opal Court               <NA>           437 OPAL COURT                
+    #> # … with 2,675 more rows
 
 #### Postal
 
 ``` r
-fll <- fll %>% 
+fllc <- fllc %>% 
   mutate(
     zip_norm = normal_zip(
       zip = postal_code,
@@ -400,21 +418,21 @@ fll <- fll %>%
 
 ``` r
 progress_table(
-  fll$postal_code,
-  fll$zip_norm,
+  fllc$postal_code,
+  fllc$zip_norm,
   compare = valid_zip
 )
 #> # A tibble: 2 x 6
 #>   stage       prop_in n_distinct prop_na n_out n_diff
 #>   <chr>         <dbl>      <dbl>   <dbl> <dbl>  <dbl>
-#> 1 postal_code   0.854        979   0.917  5062    544
-#> 2 zip_norm      0.999        504   0.917    44     35
+#> 1 postal_code   0.829       1011   0.918  6245    569
+#> 2 zip_norm      1.000        481   0.918    12      5
 ```
 
 #### State
 
 ``` r
-fll <- fll %>% 
+fllc <- fllc %>% 
   mutate(
     state_norm = normal_state(
       state = state,
@@ -426,21 +444,21 @@ fll <- fll %>%
 
 ``` r
 progress_table(
-  fll$state,
-  fll$state_norm,
+  fllc$state,
+  fllc$state_norm,
   compare = valid_state
 )
 #> # A tibble: 2 x 6
 #>   stage      prop_in n_distinct prop_na n_out n_diff
 #>   <chr>        <dbl>      <dbl>   <dbl> <dbl>  <dbl>
-#> 1 state        0.363         64   0.917 22153     44
-#> 2 state_norm   0.998         36   0.917    60      8
+#> 1 state        0.394         69   0.918 22185     44
+#> 2 state_norm   1.000         37   0.918    14      5
 ```
 
 #### City
 
 ``` r
-fll <- fll %>% 
+fllc <- fllc %>% 
   rename(city_raw = city) %>% 
   mutate(
     city_norm = normal_city(
@@ -469,7 +487,7 @@ fll <- fll %>%
 ```
 
 ``` r
-good_refine <- fll %>% 
+good_refine <- fllc %>% 
   filter(state_norm == "FL") %>% 
   mutate(
     city_refine = city_swap %>% 
@@ -492,43 +510,43 @@ good_refine <- fll %>%
     #>    <chr>      <chr>              <chr>              <int>
     #>  1 FL         TALLAHASSEE        TALLAHASSEE           38
     #>  2 FL         CLEARWATER BEACH   CLEARWATER BEACH      19
-    #>  3 FL         SILVER SPRINGS     SILVER SPRINGS        11
-    #>  4 FL         SAINT AUGUSTINE    SAINT AUGUSTINE        8
-    #>  5 FL         FERNANDINA BEACH   FERNANDINA BEACH       7
-    #>  6 FL         NEW PORT RICHEY    NEW PORT RICHEY        6
-    #>  7 FL         ALTAMONTE SPRINGS  ALTAMONTE SPRINGS      5
+    #>  3 FL         NEW PORT RICHEY    NEW PORT RICHEY       12
+    #>  4 FL         FERNANDINA BEACH   FERNANDINA BEACH      11
+    #>  5 FL         SILVER SPRINGS     SILVER SPRINGS        11
+    #>  6 FL         ALTAMONTE SPRINGS  ALTAMONTE SPRINGS      8
+    #>  7 FL         SAINT AUGUSTINE    SAINT AUGUSTINE        8
     #>  8 FL         JACKSONVILLE BEACH JACKSONVILLE BEACH     5
     #>  9 FL         SAINT PETERSBURG   SAINT PETERSBURG       5
     #> 10 FL         SANTA ROSA BEACH   SANTA ROSA BEACH       2
     #> 11 FL         BOCA RATON         BOCA RATON             1
 
 ``` r
-fll <- fll %>% 
-  left_join(good_refine, by = names(fll)) %>% 
+fllc <- fllc %>% 
+  left_join(good_refine, by = names(fllc)) %>% 
   mutate(city_refine = coalesce(city_refine, city_swap))
 ```
 
 ``` r
 progress_table(
-  fll$city_raw,
-  fll$city_norm,
-  fll$city_swap,
-  fll$city_refine,
+  fllc$city_raw,
+  fllc$city_norm,
+  fllc$city_swap,
+  fllc$city_refine,
   compare = valid_city
 )
 #> # A tibble: 4 x 6
 #>   stage       prop_in n_distinct prop_na n_out n_diff
 #>   <chr>         <dbl>      <dbl>   <dbl> <dbl>  <dbl>
-#> 1 city_raw      0.579        436   0.917 14643    287
-#> 2 city_norm     0.968        289   0.917  1110     92
-#> 3 city_swap     0.972        229   0.918   963     31
-#> 4 city_refine   0.972        229   0.918   963     31
+#> 1 city_raw      0.551        408   0.918 16426    258
+#> 2 city_norm     0.968        252   0.918  1162     48
+#> 3 city_swap     0.972        238   0.918  1040     33
+#> 4 city_refine   0.972        238   0.918  1040     33
 ```
 
 #### Phone
 
 ``` r
-fll %>%
+fllc %>%
   filter(phone_number != phone_norm) %>% 
   select(
     phone_number,
@@ -540,16 +558,16 @@ fll %>%
 #> # A tibble: 1,174 x 2
 #>    phone_number  phone_norm    
 #>    <chr>         <chr>         
-#>  1 (813)831-1500 (813) 831-1500
-#>  2 (904)612-3589 (904) 612-3589
-#>  3 (305)698-7992 (305) 698-7992
-#>  4 (305)342-6111 (305) 342-6111
-#>  5 (850)421-9100 (850) 421-9100
-#>  6 (813)421-3797 (813) 421-3797
-#>  7 (850)212-8870 (850) 212-8870
-#>  8 (850)222-7718 (850) 222-7718
-#>  9 (850)561-3503 (850) 561-3503
-#> 10 (850)222-5155 (850) 222-5155
+#>  1 (239)425-2815 (239) 425-2815
+#>  2 (813)477-2105 (813) 477-2105
+#>  3 (813)931-3125 (813) 931-3125
+#>  4 (850)222-1988 (850) 222-1988
+#>  5 (850)769-7714 (850) 769-7714
+#>  6 (850)222-2300 (850) 222-2300
+#>  7 (863)287-5076 (863) 287-5076
+#>  8 (850)668-3068 (850) 668-3068
+#>  9 (813)777-5578 (813) 777-5578
+#> 10 (407)835-0020 (407) 835-0020
 #> # … with 1,164 more rows
 ```
 
@@ -558,7 +576,7 @@ fll %>%
 #### Address
 
 ``` r
-fll <- fll %>%
+fllc <- fllc %>%
   unite(
     starts_with("principal_address_line"),
     col = "principal_address_full",
@@ -576,25 +594,25 @@ fll <- fll %>%
   select(-principal_address_full)
 ```
 
-    #> # A tibble: 15,931 x 3
-    #>    principal_address_line_1         principal_address_line… principal_address_norm                 
-    #>    <chr>                            <chr>                   <chr>                                  
-    #>  1 1 N Ft Lauderdale Beach Blvd #1… <NA>                    1 NORTH FORT LAUDERDALE BEACH BOULEVAR…
-    #>  2 3250 Lacey Road                  <NA>                    3250 LACEY ROAD                        
-    #>  3 c/o 110 Paces Run                <NA>                    CO 110 PACES RUN                       
-    #>  4 204 S Monroe St ste 105          <NA>                    204 SOUTH MONROE STREET SUITE 105      
-    #>  5 631 US Hwy One Ste 304           <NA>                    631 US HIGHWAY ONE SUITE 304           
-    #>  6 6 City Place Dr 10th Floor       <NA>                    6 CITY PLACE DRIVE 10TH FLOOR          
-    #>  7 341 North Matiland Avenue        Suite 115               341 NORTH MATILAND AVENUE SUITE 115    
-    #>  8 4209 Baymeadows Rd               <NA>                    4209 BAYMEADOWS ROAD                   
-    #>  9 1990 Central Ave                 <NA>                    1990 CENTRAL AVENUE                    
-    #> 10 7777 NW 72 Avenue                <NA>                    7777 NORTHWEST 72 AVENUE               
-    #> # … with 15,921 more rows
+    #> # A tibble: 16,617 x 3
+    #>    principal_address_line_1      principal_address_line… principal_address_norm                    
+    #>    <chr>                         <chr>                   <chr>                                     
+    #>  1 100 N Tampa St Ste 3620       <NA>                    100 NORTH TAMPA STREET SUITE 3620         
+    #>  2 1201 S McCall Rd              <NA>                    1201 SOUTH MCCALL ROAD                    
+    #>  3 11710 Olde English Drive      Unit K                  11710 OLDE ENGLISH DRIVE UNIT K           
+    #>  4 901 New York Ave NW 3rd Floor <NA>                    901 NEW YORK AVENUE NORTHWEST 3RD FLOOR   
+    #>  5 150 Headquarters Plaza        5th Floor - East Tower  150 HEADQUARTERS PLAZA 5TH FLOOR EAST TOW…
+    #>  6 1901 L St NW Ste 800          <NA>                    1901 L STREET NORTHWEST SUITE 800         
+    #>  7 7000 Cardinal Place           <NA>                    7000 CARDINAL PLACE                       
+    #>  8 5256 Peachtree Road           Suite 135               5256 PEACHTREE ROAD SUITE 135             
+    #>  9 10880 Lin Page Pl             <NA>                    10880 LIN PAGE PLACE                      
+    #> 10 399 Park Avenue - 16th Floor  Attn: Bradley Tusk      399 PARK AVENUE 16TH FLOOR ATTN BRADLEY T…
+    #> # … with 16,607 more rows
 
 #### Postal
 
 ``` r
-fll <- fll %>% 
+fllc <- fllc %>% 
   mutate(
     principal_zip_norm = normal_zip(
       zip = principal_postal_code,
@@ -605,21 +623,21 @@ fll <- fll %>%
 
 ``` r
 progress_table(
-  fll$principal_postal_code,
-  fll$principal_zip_norm,
+  fllc$principal_postal_code,
+  fllc$principal_zip_norm,
   compare = valid_zip
 )
 #> # A tibble: 2 x 6
 #>   stage                 prop_in n_distinct prop_na n_out n_diff
 #>   <chr>                   <dbl>      <dbl>   <dbl> <dbl>  <dbl>
-#> 1 principal_postal_code   0.904       4715   0.239 30690   2359
-#> 2 principal_zip_norm      0.992       2995   0.240  2450    370
+#> 1 principal_postal_code   0.892       4665   0.238 36653   2270
+#> 2 principal_zip_norm      0.994       2702   0.239  2155    126
 ```
 
 #### State
 
 ``` r
-fll <- fll %>% 
+fllc <- fllc %>% 
   mutate(
     principal_state_norm = normal_state(
       state = principal_state_name,
@@ -631,21 +649,21 @@ fll <- fll %>%
 
 ``` r
 progress_table(
-  fll$principal_state_name,
-  fll$principal_state_norm,
+  fllc$principal_state_name,
+  fllc$principal_state_norm,
   compare = valid_state
 )
 #> # A tibble: 2 x 6
 #>   stage                prop_in n_distinct prop_na  n_out n_diff
 #>   <chr>                  <dbl>      <dbl>   <dbl>  <dbl>  <dbl>
-#> 1 principal_state_name   0.424        733   0.238 184822    687
-#> 2 principal_state_norm   0.996        609   0.238   1226    560
+#> 1 principal_state_name   0.454        246   0.237 184856    200
+#> 2 principal_state_norm   0.998        116   0.237    735     67
 ```
 
 #### City
 
 ``` r
-fll <- fll %>% 
+fllc <- fllc %>% 
   mutate(
     principal_city_norm = normal_city(
       city = principal_city_name,
@@ -674,23 +692,23 @@ fll <- fll %>%
 
 ``` r
 progress_table(
-  fll$principal_city_name,
-  fll$principal_city_norm,
-  fll$principal_city_swap,
+  fllc$principal_city_name,
+  fllc$principal_city_norm,
+  fllc$principal_city_swap,
   compare = valid_city
 )
 #> # A tibble: 3 x 6
 #>   stage               prop_in n_distinct prop_na  n_out n_diff
 #>   <chr>                 <dbl>      <dbl>   <dbl>  <dbl>  <dbl>
-#> 1 principal_city_name   0.483       2561   0.239 165630   1686
-#> 2 principal_city_norm   0.922       1593   0.239  25101    511
-#> 3 principal_city_swap   0.933       1293   0.248  21094    228
+#> 1 principal_city_name   0.457       2596   0.237 183795   1720
+#> 2 principal_city_norm   0.921       1567   0.237  26647    447
+#> 3 principal_city_swap   0.933       1338   0.245  22553    237
 ```
 
 #### Phone
 
 ``` r
-fll <- fll %>% 
+fllc <- fllc %>% 
   mutate(
     principal_phone_norm = normal_phone(
       number = principal_phone_number,
@@ -701,27 +719,27 @@ fll <- fll %>%
   )
 ```
 
-    #> # A tibble: 13,629 x 2
+    #> # A tibble: 13,617 x 2
     #>    principal_phone_number principal_phone_norm
     #>    <chr>                  <chr>               
-    #>  1 (650)859-5548          (650) 859-5548      
-    #>  2 (909)483-2444          (909) 483-2444      
-    #>  3 (305)593-6100          (305) 593-6100      
-    #>  4 (215)299-6000          (215) 299-6000      
-    #>  5 (202)223-8204          (202) 223-8204      
-    #>  6 (863)938-8121          (863) 938-8121      
-    #>  7 (302)674-4089          (302) 674-4089      
-    #>  8 (954)382-8229          (954) 382-8229      
-    #>  9 (800)241-1853          (800) 241-1853      
-    #> 10 (305)222-1212          (305) 222-1212      
-    #> # … with 13,619 more rows
+    #>  1 (850)521-4918          (850) 521-4918      
+    #>  2 (813)287-5032          (813) 287-5032      
+    #>  3 (414)343-4056          (414) 343-4056      
+    #>  4 (561)994-8366          (561) 994-8366      
+    #>  5 +1 8509267003          (850) 926-7003      
+    #>  6 (561)775-1125          (561) 775-1125      
+    #>  7 (305)891-8811          (305) 891-8811      
+    #>  8 (941)444-1440          (941) 444-1440      
+    #>  9 (813)223-0800          (813) 223-0800      
+    #> 10 (850)357-7357          (850) 357-7357      
+    #> # … with 13,607 more rows
 
 ### Firm
 
 #### Address
 
 ``` r
-fll <- fll %>%
+fllc <- fllc %>%
   unite(
     starts_with("prime_firm_address_line"),
     col = "prime_firm_address_full",
@@ -739,25 +757,25 @@ fll <- fll %>%
   select(-prime_firm_address_full)
 ```
 
-    #> # A tibble: 2,055 x 3
-    #>    prime_firm_address_line_1 prime_firm_address_line_2 prime_firm_address_norm              
-    #>    <chr>                     <chr>                     <chr>                                
-    #>  1 215 South Monroe          Suite 200                 215 SOUTH MONROE SUITE 200           
-    #>  2 713 E Park Ave            <NA>                      713 EAST PARK AVENUE                 
-    #>  3 215 S. Monroe Street      2nd Floor                 215 SOUTH MONROE STREET 2ND FLOOR    
-    #>  4 108 S. Monroe St., #200   <NA>                      108 SOUTH MONROE STREET 200          
-    #>  5 519 E. Park Ave.          <NA>                      519 EAST PARK AVENUE                 
-    #>  6 301 E. Pine Street        <NA>                      301 EAST PINE STREET                 
-    #>  7 110 E. Broward Blvd.      Suite 1700                110 EAST BROWARD BOULEVARD SUITE 1700
-    #>  8 301 East Pine Street      Suite 1400                301 EAST PINE STREET SUITE 1400      
-    #>  9 US                        (305) 569-0015            US 305 569 0015                      
-    #> 10 123 S> Calhoun St         <NA>                      123 SOUTH> CALHOUN STREET            
-    #> # … with 2,045 more rows
+    #> # A tibble: 1,786 x 3
+    #>    prime_firm_address_line_1          prime_firm_address_line… prime_firm_address_norm             
+    #>    <chr>                              <chr>                    <chr>                               
+    #>  1 Post Office box 10909              <NA>                     POST OFFICE BOX 10909               
+    #>  2 108 South Monroe St.               <NA>                     108 SOUTH MONROE STREET             
+    #>  3 600 Grant Street                   Suite 5010               600 GRANT STREET SUITE 5010         
+    #>  4 2350 Coral Way                     "301 "                   2350 CORAL WAY 301                  
+    #>  5 450 E. Las Olas Blvd.              1250                     450 EAST LAS OLAS BOULEVARD 1250    
+    #>  6 P.O. Box 3068                      <NA>                     PO BOX 3068                         
+    #>  7 2999 N.E. 191st Street, Penthouse… <NA>                     2999 NORTHEAST 191ST STREET PENTHOU…
+    #>  8 215 S/ Monroe, 2nd floor           <NA>                     215 SOUTH MONROE 2ND FLOOR          
+    #>  9 "301 South Bronough Street "       <NA>                     301 SOUTH BRONOUGH STREET           
+    #> 10 PO Box 10011                       <NA>                     PO BOX 10011                        
+    #> # … with 1,776 more rows
 
 #### Postal
 
 ``` r
-fll <- fll %>% 
+fllc <- fllc %>% 
   mutate(
     prime_firm_zip_norm = normal_zip(
       zip = prime_firm_postal_code,
@@ -768,21 +786,21 @@ fll <- fll %>%
 
 ``` r
 progress_table(
-  fll$prime_firm_postal_code,
-  fll$prime_firm_zip_norm,
+  fllc$prime_firm_postal_code,
+  fllc$prime_firm_zip_norm,
   compare = valid_zip
 )
 #> # A tibble: 2 x 6
 #>   stage                  prop_in n_distinct prop_na n_out n_diff
 #>   <chr>                    <dbl>      <dbl>   <dbl> <dbl>  <dbl>
-#> 1 prime_firm_postal_code   0.964        229   0.971   434     97
-#> 2 prime_firm_zip_norm      0.997        172   0.971    35     25
+#> 1 prime_firm_postal_code   0.963        234   0.971   480     94
+#> 2 prime_firm_zip_norm      0.998        169   0.971    22     17
 ```
 
 #### State
 
 ``` r
-fll <- fll %>% 
+fllc <- fllc %>% 
   mutate(
     prime_firm_state_norm = normal_state(
       state = prime_firm_state_name,
@@ -794,21 +812,21 @@ fll <- fll %>%
 
 ``` r
 progress_table(
-  fll$prime_firm_state_name,
-  fll$prime_firm_state_norm,
+  fllc$prime_firm_state_name,
+  fllc$prime_firm_state_norm,
   compare = valid_state
 )
 #> # A tibble: 2 x 6
 #>   stage                 prop_in n_distinct prop_na n_out n_diff
 #>   <chr>                   <dbl>      <dbl>   <dbl> <dbl>  <dbl>
-#> 1 prime_firm_state_name   0.592         71   0.970  5131     62
-#> 2 prime_firm_state_norm   0.993         43   0.970    82     32
+#> 1 prime_firm_state_name   0.598         66   0.970  5383     56
+#> 2 prime_firm_state_norm   0.994         32   0.970    76     20
 ```
 
 #### City
 
 ``` r
-fll <- fll %>% 
+fllc <- fllc %>% 
   mutate(
     prime_firm_city_norm = normal_city(
       city = prime_firm_city_name,
@@ -837,23 +855,23 @@ fll <- fll %>%
 
 ``` r
 progress_table(
-  fll$prime_firm_city_name,
-  fll$prime_firm_city_norm,
-  fll$prime_firm_city_swap,
+  fllc$prime_firm_city_name,
+  fllc$prime_firm_city_norm,
+  fllc$prime_firm_city_swap,
   compare = valid_city
 )
 #> # A tibble: 3 x 6
 #>   stage                prop_in n_distinct prop_na n_out n_diff
 #>   <chr>                  <dbl>      <dbl>   <dbl> <dbl>  <dbl>
-#> 1 prime_firm_city_name  0.0887        178   0.969 11933    164
-#> 2 prime_firm_city_norm  0.909         115   0.969  1186     61
-#> 3 prime_firm_city_swap  0.958          77   0.971   508     24
+#> 1 prime_firm_city_name  0.0900        200   0.970 12181    186
+#> 2 prime_firm_city_norm  0.948         123   0.970   692     63
+#> 3 prime_firm_city_swap  0.959          84   0.971   532     25
 ```
 
 #### Phone
 
 ``` r
-fll <- fll %>% 
+fllc <- fllc %>% 
   mutate(
     prime_firm_phone_norm = normal_phone(
       number = prime_firm_phone_number,
@@ -867,14 +885,14 @@ fll <- fll %>%
     #> # A tibble: 344 x 2
     #>    prime_firm_phone_number prime_firm_phone_norm
     #>    <chr>                   <chr>                
-    #>  1 (813)527-0172           (813) 527-0172       
-    #>  2 (850)841-1726           (850) 841-1726       
-    #>  3 (305)529-9492           (305) 529-9492       
-    #>  4 (202)783-6800           (202) 783-6800       
-    #>  5 (850)224-9634           (850) 224-9634       
-    #>  6 (305)433-6300           (305) 433-6300       
-    #>  7 (850)509-6999           (850) 509-6999       
-    #>  8 (866)330-1355           (866) 330-1355       
-    #>  9 (850)570-2778           (850) 570-2778       
-    #> 10 (850)205-9000           (850) 205-9000       
+    #>  1 (850)777-0444           (850) 777-0444       
+    #>  2 (865)637-6055           (865) 637-6055       
+    #>  3 (850)513-3379           (850) 513-3379       
+    #>  4 (850)878-2411           (850) 878-2411       
+    #>  5 (850)224-6789           (850) 224-6789       
+    #>  6 (954)788-7934           (954) 788-7934       
+    #>  7 (305)374-5600           (305) 374-5600       
+    #>  8 (850)224-5081           (850) 224-5081       
+    #>  9 (305)935-1866           (305) 935-1866       
+    #> 10 +1 8502518898           (850) 251-8898       
     #> # … with 334 more rows

@@ -1,5 +1,5 @@
 ---
-title: "Florida Lobbyists"
+title: "Florida Lobbyist Compensation"
 author: "Kiernan Nicholls"
 date: "`r Sys.time()`"
 output:
@@ -32,7 +32,7 @@ set.seed(5)
 ```
 
 ```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
-fs::dir_create(here::here("fl", "lobbying", "compensation", "docs"))
+fs::dir_create(here::here("fl", "lobbying", "comp", "docs"))
 ```
 
 ## Project
@@ -174,7 +174,7 @@ md_bullet(head(urls), cat = TRUE)
 We can download each TXT file to the `/fl/data/raw` directory.
 
 ```{r create_raw_dir}
-raw_dir <- here("fl", "lobbying", "compensation", "data", "raw")
+raw_dir <- here("fl", "lobbying", "comp", "data", "raw")
 dir_create(raw_dir)
 ```
 
