@@ -1,0 +1,383 @@
+---
+title: "California Lobbyists"
+author: "Kiernan Nicholls"
+date: "`r Sys.time()`"
+output:
+  github_document: 
+    df_print: tibble
+    toc: true
+    toc_dept: 2
+editor_options: 
+  chunk_output_type: console
+---
+
+<!-- Place comments regarding knitting here -->
+
+```{r setup, include=FALSE, purl=FALSE}
+library(knitr)
+opts_chunk$set(
+  eval = TRUE,
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  error = FALSE,
+  collapse = TRUE,
+  comment = "#>",
+  fig.path = "../plots/",
+  fig.width = 10,
+  dpi = 300
+)
+options(width = 99)
+set.seed(5)
+```
+
+## Project
+
+The Accountability Project is an effort to cut across data silos and give journalists, policy
+professionals, activists, and the public at large a simple way to search across huge volumes of
+public data about people and organizations.
+
+Our goal is to standardizing public data on a few key fields by thinking of each dataset row as a
+transaction. For each transaction there should be (at least) 3 variables:
+
+1. All **parties** to a transaction
+2. The **date** of the transaction
+3. The **amount** of money involved
+
+## Objectives
+
+This document describes the process used to complete the following objectives:
+
+1. How many records are in the database?
+1. Check for duplicates
+1. Check ranges
+1. Is there anything blank or missing?
+1. Check for consistency issues
+1. Create a five-digit ZIP Code called `ZIP5`
+1. Create a `YEAR` field from the transaction date
+1. Make sure there is data on both parties to a transaction
+
+## Packages
+
+The following packages are needed to collect, manipulate, visualize, analyze, and communicate
+these results. The `pacman` package will facilitate their installation and attachment.
+
+The IRW's `campfin` package will also have to be installed from GitHub. This package contains
+functions custom made to help facilitate the processing of campaign finance data.
+
+```{r load_packages, message=FALSE, dfrning=FALSE, error=FALSE}
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load_gh("irworkshop/campfin")
+pacman::p_load(
+  stringdist, # levenshtein value
+  RSelenium, # remote browser
+  tidyverse, # data manipulation
+  lubridate, # datetime strings
+  magrittr, # pipe opperators
+  janitor, # dataframe clean
+  refinr, # cluster and merge
+  scales, # format strings
+  knitr, # knit documents
+  vroom, # read files fast
+  glue, # combine strings
+  here, # relative storage
+  fs # search storage 
+)
+```
+
+This document should be run as part of the `R_campfin` project, which lives as a sub-directory of
+the more general, language-agnostic [`irworkshop/accountability_datacleaning`][01] GitHub
+repository.
+
+The `R_campfin` project uses the [RStudio projects][02] feature and should be run as such. The
+project also uses the dynamic `here::here()` tool for file paths relative to _your_ machine.
+
+```{r where_here, collapse=TRUE}
+# where does this document knit?
+here::here()
+```
+
+[01]: https://github.com/irworkshop/accountability_datacleaning "TAP repo"
+[02]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects "Rproj"
+
+## Data
+
+Data is obtained from the California Secretary of State's [Cal-Access database][03].
+
+> Cal-Access provides financial information supplied by state candidates, donors, lobbyists, and
+others. Simply start by selecting either Campaign Finance Activity, Lobbying Activity, or
+Cal-Access Resources and we will guide you to the information.
+
+The [Political Reform Division][04] (PRD) collects the data regarding expenditures made.
+
+> The Political Reform Division administers provisions of California's Political Reform Act, including the law's most fundamental purpose of ensuring that "receipts and expenditures in election campaigns should be fully and truthfully disclosed in order that the voters may be fully informed and the activities of lobbyists should be regulated and their finances disclosed..."
+
+> * Receive campaign disclosure statements (itemizing contributions received and expenditures made)
+filed by individuals and committees raising or spending campaign funds to support or oppose state
+candidates or ballot measures. (Local campaign committees file their itemized disclosure statements
+with local filing officers).
+
+### About
+
+All California campaign finance data can be downloaded in a single file. As described on PRD
+website:
+
+> ### Raw Data for Campaign Finance and Lobbying Activity  
+> In addition to presenting California campaign finance and lobbying activity on the user-friendly
+[CAL-ACCESS website][05], the Secretary of State provides the raw data to allow people with 
+technical expertise to create their own databases.
+> 
+> The raw data is presented in tab-delimited text files from corresponding tables in the CAL-ACCESS
+database. Users can uncompress and extract the data with standard software such as PKZIP, WinZip,
+or MacZip. The Secretary of State does not provide technical support to users who want to download
+and analyze CAL-ACCESS data in this advanced way. However, the Secretary of State offers guides to
+the CAL-ACCESS data structure and fields.
+
+> ### Download Files  
+* [Guides to CAL-ACCESS data structure and fields (ZIP)][06]
+* [CAL-ACCESS raw data (ZIP)][07]
+> 
+> All CAL-ACCESS users should keep in mind that campaign finance and lobbying activity information
+changes often. The raw data extracts are updated once a day. Campaign finance and lobbying activity
+filings can also be obtained in hard copy by contacting the Secretary of State's Political Reform
+Division.
+
+[03]: https://www.sos.ca.gov/
+[04]: https://www.sos.ca.gov/campaign-lobbying/about-political-reform-division/
+[05]: http://cal-access.sos.ca.gov/
+[06]: https://campaignfinance.cdn.sos.ca.gov/calaccess-documentation.zip
+[07]: https://campaignfinance.cdn.sos.ca.gov/dbwebexport.zip
+
+### Variables
+
+Using the data key provided by Cal-Access, we can find the expenditure file and understand it's 
+contents.
+
+```{r check_key}
+key_url <- "https://campaignfinance.cdn.sos.ca.gov/calaccess-documentation.zip"
+key_file <- str_c(raw_dir, basename(key_url), sep = "/")
+url_file_size(key_url, format = TRUE)
+```
+
+If they ZIP file containing the documentation files has not yet been downloaded, we can do so now.
+
+```{r download_key}
+if (!this_file_new(key_file)) {
+  download.file(
+    url = key_url,
+    destfile = key_file
+  )
+}
+```
+
+Before we unzip the file, we can view it's contents.
+
+```{r list_key}
+key_content <- key_file %>% 
+  unzip(list = TRUE) %>% 
+  as_tibble(.name_repair = make_clean_names)
+```
+
+```{r unzip_key}
+key_dir <- str_c(raw_dir, "CalAccess-Documentation", sep = "/")
+if (!dir_exists(key_dir)) {
+  unzip(
+    zipfile = key_file,
+    exdir = raw_dir
+  )
+}
+```
+
+## Import
+
+### Download
+
+```{r raw_dir}
+raw_dir <- here("ca", "lobbying", "data", "raw")
+dir_create(raw_dir)
+```
+
+```{r zip_file}
+zip_url <- "https://campaignfinance.cdn.sos.ca.gov/dbwebexport.zip"
+zip_file <- str_c(raw_dir, basename(zip_url), sep = "/")
+```
+
+The ZIP file is extremelly large, and will take quite some time 
+
+```{r file_size}
+  url_file_size(zip_url, format = TRUE)
+speedtest::spd_test()
+```
+
+If the most recent version of the file has not yet been downloaded, we can do so now.
+
+```{r download_raw}
+if (!this_file_new(zip_file)) {
+  download.file(
+    url = zip_url,
+    destfile = zip_file
+  )
+}
+```
+
+We don't need to unzip every file, only those pertaining to lobbying.
+
+```{r list_zip}
+zip_content <- unzip(zip_file, list = TRUE) 
+zip_lobby <- zip_content$Name[str_which(zip_content$Name, "LOBBY")]
+cal_dir <- str_c(raw_dir, unique(dirname(zip_lobby)))
+```
+
+Then, if those files have not yet been unzipped, we can do so now.
+
+```{r unzip_zip}
+if (!dir_exists(cal_dir)) {
+  unzip(
+    zipfile = zip_file,
+    files = zip_lobby,
+    exdir = raw_dir
+  )
+}
+```
+
+### Read
+
+```{r warn_vroom}
+if (packageVersion("vroom") < "1.0.2.9000") {
+  stop("vroom version of at least 1.0.2.9000 is needed")
+}
+```
+
+```{r read_conts}
+cal_conts <- 
+  dir_ls(
+    path = cal_dir, 
+    type = "file", 
+    glob = "*LOBBYIST_CONTRIBUTIONS\\d_CD.TSV$"
+  ) %>% 
+  vroom(
+    col_types = cols(
+      FILER_ID = col_character(),
+      FILING_PERIOD_START_DT = col_date("%m/%d/%Y %H:%M:%S %p"),
+      FILING_PERIOD_END_DT = col_date("%m/%d/%Y %H:%M:%S %p"),
+      CONTRIBUTION_DT = col_character(),
+      RECIPIENT_NAME = col_character(),
+      RECIPIENT_ID = col_character(),
+      AMOUNT = col_double()
+    )
+  ) %>% 
+  clean_names("snake") %>% 
+  remove_empty("cols")
+```
+
+```{r read_emp_lob}
+cal <- cal_emp_lob <- 
+  dir_ls(
+    path = cal_dir, 
+    type = "file", 
+    glob = "*LOBBYIST_EMP_LOBBYIST\\d_CD.TSV"
+  ) %>% 
+  vroom(
+    col_types = cols(
+      .default = col_character(),
+      SESSION_ID = col_double()
+    )
+  ) %>% 
+  clean_names("snake")
+```
+
+```{r read_emp_total}
+cal_emp_total <- 
+  dir_ls(
+    path = cal_dir, 
+    type = "file", 
+    glob = "*LOBBYIST_EMPLOYER\\d_CD.TSV$"
+  ) %>% 
+  vroom(
+    col_types = cols(
+      .default = col_character(),
+      CURRENT_QTR_AMT = col_double(),
+      SESSION_TOTAL_AMT = col_double(),
+      SESSION_YR_1 = col_double(),
+      SESSION_YR_2 = col_double(),
+      YR_1_YTD_AMT = col_double(),
+      YR_2_YTD_AMT = col_double(),
+      QTR_1 = col_double(),
+      QTR_2 = col_double(),
+      QTR_3 = col_double(),
+      QTR_4 = col_double(),
+      QTR_5 = col_double(),
+      QTR_6 = col_double(),
+      QTR_7 = col_double(),
+      QTR_8 = col_double()
+    )
+  ) %>% 
+  clean_names("snake") %>% 
+  remove_empty("cols")
+```
+
+```{r read_emp_firms}
+cal_emp_firms <- 
+  dir_ls(
+    path = cal_dir, 
+    type = "file", 
+    glob = "*LOBBYIST_EMPLOYER_FIRMS\\d_CD.TSV$"
+  ) %>% 
+  vroom(
+    col_types = cols(
+      .default = col_character(),
+      SESSION_ID = col_double()
+    )
+  ) %>% 
+  clean_names("snake") %>% 
+  remove_empty("cols")
+```
+
+```{r read_emp_hist}
+# empty file
+cal_lob_hist <- 
+dir_ls(
+    path = cal_dir, 
+    type = "file", 
+    glob = "*LOBBYIST_EMPLOYER_HISTORY_CD.TSV$"
+  ) %>% 
+  file_size()
+```
+
+```{r read_firms}
+cal_firm_totals <- 
+  dir_ls(
+    path = cal_dir, 
+    type = "file", 
+    glob = "*LOBBYIST_FIRM\\d_CD.TSV$"
+  ) %>% 
+  vroom(
+    col_types = cols(
+      .default = col_character(),
+      CURRENT_QTR_AMT = col_double(),
+      SESSION_TOTAL_AMT = col_double(),
+      SESSION_YR_1 = col_double(),
+      SESSION_YR_2 = col_double(),
+      YR_1_YTD_AMT = col_double(),
+      YR_2_YTD_AMT = col_double(),
+      QTR_1 = col_double(),
+      QTR_2 = col_double(),
+      QTR_3 = col_double(),
+      QTR_4 = col_double(),
+      QTR_5 = col_double(),
+      QTR_6 = col_double(),
+      QTR_7 = col_double(),
+      QTR_8 = col_double()
+    )
+  ) %>% 
+  clean_names("snake")
+```
+
+## Explore
+
+```{r}
+head(cal)
+tail(cal)
+glimpse(sample_frac(cal))
+```
+

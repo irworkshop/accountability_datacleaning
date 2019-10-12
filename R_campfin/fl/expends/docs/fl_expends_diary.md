@@ -1,7 +1,7 @@
 Florida Expenditures
 ================
 Kienan Nicholls
-2019-09-12 10:50:38
+2019-10-03 15:32:26
 
   - [Project](#project)
   - [Objectives](#objectives)
@@ -54,7 +54,7 @@ processing of campaign finance data.
 
 ``` r
 if (!require("pacman")) install.packages("pacman")
-pacman::p_load_current_gh("kiernann/campfin")
+pacman::p_load_current_gh("irworkshop/campfin")
 pacman::p_load(
   stringdist, # levenshtein value
   RSelenium, # remote browser
@@ -86,7 +86,7 @@ feature and should be run as such. The project also uses the dynamic
 ``` r
 # where dfs this document knit?
 here::here()
-#> [1] "/home/ubuntu/R/accountability_datacleaning/R_campfin"
+#> [1] "/home/kiernan/R/accountability_datacleaning/R_campfin"
 ```
 
 ## Data
@@ -328,6 +328,10 @@ fl %>% glimpse_fun(n_distinct)
 
 ### Continuous
 
+``` r
+fl <- mutate(fl, year = year(date))
+```
+
 ![](../plots/amount_hist-1.png)<!-- -->
 
 ![](../plots/year_bar-1.png)<!-- -->
@@ -355,18 +359,19 @@ There are a number of rows missing key information.
 fl %>% glimpse_fun(count_na)
 ```
 
-    #> # A tibble: 9 x 4
-    #>   col                 type      n         p
-    #>   <chr>               <chr> <dbl>     <dbl>
-    #> 1 candidate_committee chr       0 0        
-    #> 2 date                date      0 0        
-    #> 3 amount              dbl       0 0        
-    #> 4 payee_name          chr       3 0.0000174
-    #> 5 address             chr     326 0.00189  
-    #> 6 city_state_zip      chr       0 0        
-    #> 7 purpose             chr      22 0.000128 
-    #> 8 type                chr       0 0        
-    #> 9 dupe_flag           lgl       0 0
+    #> # A tibble: 10 x 4
+    #>    col                 type      n         p
+    #>    <chr>               <chr> <dbl>     <dbl>
+    #>  1 candidate_committee chr       0 0        
+    #>  2 date                date      0 0        
+    #>  3 amount              dbl       0 0        
+    #>  4 payee_name          chr       3 0.0000174
+    #>  5 address             chr     326 0.00189  
+    #>  6 city_state_zip      chr       0 0        
+    #>  7 purpose             chr      22 0.000128 
+    #>  8 type                chr       0 0        
+    #>  9 year                dbl       0 0        
+    #> 10 dupe_flag           lgl       0 0
 
 The `flag_na()` function can flag records missing values key values in
 any key variable.
@@ -419,7 +424,7 @@ fl <- fl %>%
 
 ``` r
 sample(fl$zip_sep[which(nchar(fl$zip_sep) != 5)], 10)
-#>  [1] "2001"   "3444"   "CANADA" "2009"   "215"    "2144"   "215"    "3340"   "3231"   "2301"
+#>  [1] "CANADA" "68"     "2063"   "3725"   ""       "3331"   "325"    "403"    "021"    "940"
 ```
 
 ``` r
@@ -442,10 +447,9 @@ prop_in(fl$state_sep, valid_state)
 count_out(fl$state_sep, valid_state)
 #> [1] 232
 sample(unique(na.omit(fl$state_sep[fl$state_sep %out% valid_state])), 20)
-#>  [1] "FRANCE"      "HM"          "(WEST"       "B.C."        "SA"          "GE"         
-#>  [7] "QU"          "NS"          "TOKYO"       "AUS"         "ON"          "BC"         
-#> [13] "XE"          "UK"          "BOCA"        "FF"          "NETHERLANDS" "CANADA"     
-#> [19] "QC"          "AUSTRALIA"
+#>  [1] "UK"      "XC"      "V"       "XE"      "NS"      "JOHNS"   "F"       "BRITISH" "FL."    
+#> [10] "HM"      "ALBERTA" "BC"      "BOCA"    "FF"      "THE"     "SO"      "AUS"     "**"     
+#> [19] "QU"      "HANOI"
 ```
 
 ``` r
@@ -471,11 +475,10 @@ sum(fl$city_sep %out% valid_city)
 #> [1] 20268
 
 sample(unique(na.omit(fl$city_sep[fl$city_sep %out% valid_city])), 20)
-#>  [1] "FT.PIERCE"         "LAKD O LAKES"      "FT WORTH"          "PEMBROOK PINES"   
-#>  [5] "ALPHARETTE"        "BELLEAIR BLUFFS"   "ST LOUIS"          "TALLAHASSEE4"     
-#>  [9] "JACKSONILLE BEACH" "ORANDO"            "CITY"              "SOTH PASADENA"    
-#> [13] "MAITKAND"          "OLSDMAR"           "SUNNY ISLE BEACH"  "LADY LAK"         
-#> [17] "HAWTHRONE"         "KISSISSIMMEE"      "DANIA BEACG"       "CORAL SPRINGS"
+#>  [1] "BELLE BLADE"     "HOLLOYWOOD"      "RIVERA BEACH"    "WAUCHULLA"       "JACKSONVILLELLE"
+#>  [6] "PA;M BAY"        "FT LAUDEDALE"    "DEERFIELS BEACH" "LW"              "MERRIT ISLAND"  
+#> [11] "GAINVESVILLE"    "BELLAIR BLUFFS"  "HIGHLAND BEACH"  "WELLINGTON,"     "RED WOOD"       
+#> [16] "NEW PORT RICHET" "ORLAN"           "MICCO"           "JACKSONILLE"     "CALABASSAS"
 ```
 
 ### Normalize
@@ -494,7 +497,7 @@ fl <- fl %>%
 n_distinct(fl$city_norm)
 ```
 
-    #> [1] 2162
+    #> [1] 2161
 
 ### Match
 
@@ -527,7 +530,7 @@ summary(fl$match_dist)
 ```
 
     #>    Min. 1st Qu.  Median    Mean 3rd Qu.    Max.    NA's 
-    #>   0.000   0.000   0.000   1.098   0.000  20.000    6551
+    #>     0.0     0.0     0.0     1.1     0.0    20.0    6551
 
 ``` r
 sum(fl$match_dist == 1, na.rm = TRUE)
@@ -539,7 +542,7 @@ sum(fl$match_dist == 1, na.rm = TRUE)
 n_distinct(fl$city_swap)
 ```
 
-    #> [1] 1573
+    #> [1] 1572
 
 ### Refine
 
@@ -586,11 +589,11 @@ fl <- fl %>%
 n_distinct(fl$city_sep)
 #> [1] 2344
 n_distinct(fl$city_norm)
-#> [1] 2162
+#> [1] 2161
 n_distinct(fl$city_swap)
-#> [1] 1573
+#> [1] 1572
 n_distinct(fl$city_clean)
-#> [1] 1540
+#> [1] 1539
 ```
 
 ## Lookup
@@ -610,13 +613,13 @@ n_distinct(fl$city_new)
 prop_in(fl$city_new, valid_city)
 ```
 
-    #> [1] 0.9333603
+    #> [1] 0.9329042
 
 ``` r
 count_out(fl$city_new, valid_city)
 ```
 
-    #> [1] 11040
+    #> [1] 11121
 
 ## Export
 

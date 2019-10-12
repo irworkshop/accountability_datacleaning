@@ -63,7 +63,7 @@ functions custom made to help facilitate the processing of campaign finance data
 
 ```{r load_packages, message=FALSE, dfrning=FALSE, error=FALSE}
 if (!require("pacman")) install.packages("pacman")
-pacman::p_load_current_gh("kiernann/campfin")
+pacman::p_load_current_gh("irworkshop/campfin")
 pacman::p_load(
   stringdist, # levenshtein value
   RSelenium, # remote browser
@@ -313,6 +313,11 @@ fl %>%
 
 ### Continuous
 
+```{r}
+fl <- mutate(fl, year = year(date))
+```
+
+
 ```{r amount_hist, echo=FALSE}
 ggplot(data = fl) +
   geom_histogram(aes(amount)) +
@@ -321,15 +326,15 @@ ggplot(data = fl) +
 
 ```{r year_bar, echo=FALSE}
 fl %>% 
-  filter(year(date) > 2008, date < today()) %>% 
+  filter(year > 2008, date < today()) %>% 
   ggplot() +
-  geom_bar(aes(year(date))) +
+  geom_bar(aes(year)) +
   scale_x_continuous(breaks = 2008:2019)
 ```
 
 ```{r month_line, echo=FALSE}
 fl %>% 
-  mutate(year = year(date), election_year = year %% 2 == 0) %>% 
+  mutate(election_year = year %% 2 == 0) %>% 
   group_by(election_year, month = month(date)) %>% 
   filter(year > 2008, year < 2019) %>% 
   summarise(mean = mean(amount)) %>% 

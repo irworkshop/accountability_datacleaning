@@ -1,0 +1,711 @@
+---
+title: "Florida Lobbyist Compensation"
+author: "Kiernan Nicholls"
+date: "`r Sys.time()`"
+output:
+  github_document: 
+    df_print: tibble
+    toc: true
+    toc_dept: 3
+editor_options: 
+  chunk_output_type: console
+---
+
+<!-- Place comments regarding knitting here -->
+
+```{r setup, include=FALSE, purl=FALSE}
+library(knitr)
+opts_chunk$set(
+  eval = TRUE,
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  error = FALSE,
+  collapse = TRUE,
+  comment = "#>",
+  fig.path = "../plots/",
+  fig.width = 10,
+  dpi = 300
+)
+options(width = 99)
+set.seed(5)
+```
+
+```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
+fs::dir_create(here::here("fl", "lobbying", "comp", "docs"))
+```
+
+## Project
+
+The Accountability Project is an effort to cut across data silos and give journalists, policy
+professionals, activists, and the public at large a simple way to search across huge volumes of
+public data about people and organizations.
+
+Our goal is to standardizing public data on a few key fields by thinking of each dataset row as a
+transaction. For each transaction there should be (at least) 3 variables:
+
+1. All **parties** to a transaction
+2. The **date** of the transaction
+3. The **amount** of money involved
+
+## Objectives
+
+This document describes the process used to complete the following objectives:
+
+1. How many records are in the database?
+1. Check for duplicates
+1. Check ranges
+1. Is there anything blank or missing?
+1. Check for consistency issues
+1. Create a five-digit ZIP Code called `ZIP5`
+1. Create a `YEAR` field from the transaction date
+1. Make sure there is data on both parties to a transaction
+
+## Packages
+
+The following packages are needed to collect, manipulate, visualize, analyze, and communicate
+these results. The `pacman` package will facilitate their installation and attachment.
+
+The IRW's `campfin` package will also have to be installed from GitHub. This package contains
+functions custom made to help facilitate the processing of campaign finance data.
+
+```{r load_packages, message=FALSE, dfrning=FALSE, error=FALSE}
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load_gh("irworkshop/campfin")
+pacman::p_load_gh("kiernann/gluedown")
+pacman::p_load(
+  tidyverse, # data manipulation
+  lubridate, # datetime strings
+  magrittr, # pipe opperators
+  janitor, # dataframe clean
+  scales, # format strings
+  knitr, # knit documents
+  vroom, # read files fast
+  rvest, # read web pages
+  glue, # combine strings
+  here, # relative storage
+  fs # search storage 
+)
+```
+
+This document should be run as part of the `R_campfin` project, which lives as a sub-directory of
+the more general, language-agnostic [`irworkshop/accountability_datacleaning`][01] GitHub
+repository.
+
+The `R_campfin` project uses the [RStudio projects][02] feature and should be run as such. The
+project also uses the dynamic `here::here()` tool for file paths relative to _your_ machine.
+
+```{r where_here, collapse=TRUE}
+# where does this document knit?
+here::here()
+```
+
+[01]: https://github.com/irworkshop/accountability_datacleaning "TAP repo"
+[02]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects "Rproj"
+
+## Data
+
+Data is obtained as tab-delinated files from the [Florida Lobbying Registration Office][lro] (LRO).
+
+[lro]: https://floridalobbyist.gov/
+
+### About
+
+>  Delimited data files are made available below for compensation reports submitted online,
+beginning in 2007. Data files for the last eight quarters will be retained for each branch. The
+tab-delimited files below are in the (.TXT) format and can be imported into any word processor,
+spreadsheet, or database program.
+
+### Variables
+
+The LRO provides a variable key with definitions for each column in the data sets.
+
+[key]: https://floridalobbyist.gov/CompensationReportSearch/DownloadDataChart
+
+```{r var_defs, echo=FALSE}
+var_url <- "https://floridalobbyist.gov/CompensationReportSearch/DownloadDataChart"
+read_html(var_url) %>% 
+  html_node("table") %>% 
+  html_table() %>% 
+  mutate(
+    `Data Element` = glue("`{make_clean_names(`Data Element`)}`"),
+    `Definition` = str_trunc(Definition, width = 80)
+  ) %>% 
+  kable()
+```
+
+## Import
+
+To create a single clean data file of lobbyist activity, we will first download each file locally
+and read as a single data frame.
+
+### Download
+
+The data is separated into quarterly files by year. The URL for each file takes a consistent
+format. With the `tidyr::expand_grid()` and `glue::glue()` functions, we can create a URL for all
+bombinations of year, quarter, and branch.
+
+```{r list_year_urls}
+urls <- 
+  expand_grid(
+    year = 2008:2019,
+    quarter = 1:4,
+    branch = c("Executive", "Legislative")
+  ) %>% 
+  mutate(
+    url = glue("https://floridalobbyist.gov/reports/{year}_Quarter{quarter}_{branch}.txt")
+  )
+```
+
+```{r urls_view, echo=FALSE}
+print(urls)
+```
+
+```{r pull_urls}
+urls <- pull(urls)
+```
+
+This creates `r n_distinct(urls)` distinct URLs, each corresponding to a separate file.
+
+```{r print_urls, results='asis'}
+md_bullet(head(urls), cat = TRUE)
+```
+
+We can download each TXT file to the `/fl/data/raw` directory.
+
+```{r create_raw_dir}
+raw_dir <- here("fl", "lobbying", "comp", "data", "raw")
+dir_create(raw_dir)
+```
+
+```{r download_raw, eval=FALSE}
+if (!all_files_new(raw_dir, glob = "*.txt$")) {
+  for (url in urls) {
+    download.file(url, destfile = str_c(raw_dir, basename(url), sep = "/"))
+  }
+}
+```
+
+```{r list_files, echo=FALSE}
+dir_info(raw_dir) %>% 
+  mutate(path = str_remove(path, here())) %>% 
+  select(
+    path, 
+    type,
+    size,
+    birth_time
+  )
+```
+
+### Read
+
+```{r read_raw}
+fllc <- map_dfr(
+  .x = dir_ls(raw_dir),
+  .f = read_delim,
+  delim = "\t",
+  escape_backslash = FALSE,
+  escape_double = FALSE,
+  .id = "source_file",
+  col_types = cols(
+    .default = col_character(),
+    REPORT_YEAR = col_double(),
+    TOTAL_COMPENSATION_RANGE = col_factor(
+      levels = c(
+        "$0.00", 
+        "$1.00-$49,999.00",
+        "$50,000.00-$99,999.00", 
+        "$100,000.00-$249,999.00", 
+        "$250,000.00-$499,999.00", 
+        "$500,000.00-$999,999.00",
+        "$1,000,000.00"
+      )
+    )
+  )
+)
+
+fllc <- clean_names(fllc)
+```
+
+## Explore
+
+```{r glimpse_raw}
+head(fllc)
+tail(fllc)
+glimpse(sample_frac(fllc))
+```
+
+```{r distinct_rows}
+fllc <- distinct(fllc)
+```
+
+```{r year_bar_quarter, echo=FALSE}
+fllc %>% 
+  count(report_year, report_quarter) %>% 
+  ggplot(aes(x = report_year, y = n)) +
+  geom_col(aes(fill = report_quarter)) +
+  scale_fill_brewer(palette = "Dark2") +
+  scale_y_continuous(labels = comma) +
+  scale_x_continuous(labels = 2008:2019, breaks = 2008:2019) +
+  labs(
+    title = "Flordina Lobbyist Compensation Reports",
+    x = "Report Year",
+    y = "Filed Reports",
+    fill = "Report Quarter"
+  )
+```
+
+## Wrangle
+
+To improve the searchability of the database, we can normalize much of the data using the `campfin`
+package. Much of the data is repeated for both the principal lobbyist and then their firm.
+
+### Firm
+
+#### Address
+
+```{r address_norm}
+packageVersion("tidyr")
+fllc <- fllc %>%
+  unite(
+    starts_with("address_line"),
+    col = "address_full",
+    sep = " ",
+    remove = FALSE,
+    na.rm = TRUE
+  ) %>% 
+  mutate(
+    address_norm = normal_address(
+      address = address_full,
+      add_abbs = usps_street,
+      na_rep = TRUE
+    )
+  ) %>% 
+  select(-address_full)
+```
+
+```{r address_view, echo=FALSE}
+fllc %>% 
+  select(
+    starts_with("address_line"),
+    address_norm
+  ) %>% 
+  distinct() %>% 
+  sample_frac()
+```
+
+#### Postal
+
+```{r zip_norm}
+fllc <- fllc %>% 
+  mutate(
+    zip_norm = normal_zip(
+      zip = postal_code,
+      na_rep = TRUE
+    )
+  )
+```
+
+```{r zip_progress}
+progress_table(
+  fllc$postal_code,
+  fllc$zip_norm,
+  compare = valid_zip
+)
+```
+
+#### State
+
+```{r state_norm}
+fllc <- fllc %>% 
+  mutate(
+    state_norm = normal_state(
+      state = state,
+      abbreviate = TRUE,
+      na_rep = TRUE
+    )
+  )
+```
+
+```{r state_progress}
+progress_table(
+  fllc$state,
+  fllc$state_norm,
+  compare = valid_state
+)
+```
+
+#### City
+
+```{r city_norm_swap}
+fllc <- fllc %>% 
+  rename(city_raw = city) %>% 
+  mutate(
+    city_norm = normal_city(
+      city = city_raw,
+      geo_abbs = usps_city,
+      na_rep = TRUE
+    )
+  ) %>% 
+  left_join(
+    y = zipcodes,
+    by = c(
+      "zip_norm" = "zip",
+      "state_norm" = "state"
+    )
+  ) %>% 
+  rename(city_match = city) %>% 
+  mutate(
+    match_dist = str_dist(city_norm, city_match),
+    match_abb = is_abbrev(city_norm, city_match),
+    city_swap = if_else(
+      condition = match_abb | match_dist == 1,
+      true = city_match,
+      false = city_norm
+    )
+  )
+```
+
+```{r city_refine}
+good_refine <- fllc %>% 
+  filter(state_norm == "FL") %>% 
+  mutate(
+    city_refine = city_swap %>% 
+      refinr::key_collision_merge() %>% 
+      refinr::n_gram_merge(numgram = 1)
+  ) %>% 
+  filter(city_norm != city_refine) %>% 
+  inner_join(
+    y = zipcodes,
+    by = c(
+      "city_refine" = "city",
+      "zip_norm" = "zip",
+      "state_norm" = "state"
+    )
+  )
+```
+
+```{r view_refine, echo=FALSE}
+good_refine %>% 
+  count(state_norm, city_swap, city_refine, sort = TRUE)
+```
+
+```{r join_refine}
+fllc <- fllc %>% 
+  left_join(good_refine, by = names(fllc)) %>% 
+  mutate(city_refine = coalesce(city_refine, city_swap))
+```
+
+```{r city_progress}
+progress_table(
+  fllc$city_raw,
+  fllc$city_norm,
+  fllc$city_swap,
+  fllc$city_refine,
+  compare = valid_city
+)
+```
+
+#### Phone
+
+```{r phone_norm, echo=FALSE}
+fllc <- fllc %>% 
+  mutate(
+    phone_norm = normal_phone(
+      number = phone_number,
+      format = "(%a) %e-%l",
+      na_bad = FALSE,
+      rm_ext = TRUE
+    )
+  )
+```
+
+```{r phone_view}
+fllc %>%
+  filter(phone_number != phone_norm) %>% 
+  select(
+    phone_number,
+    phone_norm
+  ) %>% 
+  drop_na() %>% 
+  distinct() %>% 
+  sample_frac()
+```
+
+### Principal
+
+#### Address
+
+```{r principal_address_norm}
+fllc <- fllc %>%
+  unite(
+    starts_with("principal_address_line"),
+    col = "principal_address_full",
+    sep = " ",
+    remove = FALSE,
+    na.rm = TRUE
+  ) %>% 
+  mutate(
+    principal_address_norm = normal_address(
+      address = principal_address_full,
+      add_abbs = usps_street,
+      na_rep = TRUE
+    )
+  ) %>% 
+  select(-principal_address_full)
+```
+
+```{r principal_address_view, echo=FALSE}
+fllc %>% 
+  select(
+    starts_with("principal_address_line"),
+    principal_address_norm
+  ) %>% 
+  distinct() %>% 
+  sample_frac()
+```
+
+#### Postal
+
+```{r principal_zip_norm}
+fllc <- fllc %>% 
+  mutate(
+    principal_zip_norm = normal_zip(
+      zip = principal_postal_code,
+      na_rep = TRUE
+    )
+  )
+```
+
+```{r principal_zip_progress}
+progress_table(
+  fllc$principal_postal_code,
+  fllc$principal_zip_norm,
+  compare = valid_zip
+)
+```
+
+#### State
+
+```{r principal_state_norm}
+fllc <- fllc %>% 
+  mutate(
+    principal_state_norm = normal_state(
+      state = principal_state_name,
+      abbreviate = TRUE,
+      na_rep = TRUE
+    )
+  )
+```
+
+```{r principal_state_progress}
+progress_table(
+  fllc$principal_state_name,
+  fllc$principal_state_norm,
+  compare = valid_state
+)
+```
+
+#### City
+
+```{r principal_city_norm_swap}
+fllc <- fllc %>% 
+  mutate(
+    principal_city_norm = normal_city(
+      city = principal_city_name,
+      geo_abbs = usps_city,
+      na_rep = TRUE
+    )
+  ) %>% 
+  left_join(
+    y = zipcodes,
+    by = c(
+      "principal_zip_norm" = "zip",
+      "principal_state_norm" = "state"
+    )
+  ) %>% 
+  rename(principal_city_match = city) %>% 
+  mutate(
+    principal_match_dist = str_dist(principal_city_norm, principal_city_match),
+    principal_match_abb = is_abbrev(principal_city_norm, principal_city_match),
+    principal_city_swap = if_else(
+      condition = principal_match_abb | principal_match_dist == 1,
+      true = principal_city_match,
+      false = principal_city_norm
+    )
+  )
+```
+
+```{r principal_city_progress}
+progress_table(
+  fllc$principal_city_name,
+  fllc$principal_city_norm,
+  fllc$principal_city_swap,
+  compare = valid_city
+)
+```
+
+#### Phone
+
+```{r principal_phone_norm}
+fllc <- fllc %>% 
+  mutate(
+    principal_phone_norm = normal_phone(
+      number = principal_phone_number,
+      format = "(%a) %e-%l",
+      na_bad = FALSE,
+      rm_ext = TRUE
+    )
+  )
+```
+
+```{r principal_phone_view, echo=FALSE}
+fllc %>%
+  filter(principal_phone_number != principal_phone_norm) %>% 
+  select(
+    principal_phone_number,
+    principal_phone_norm
+  ) %>% 
+  drop_na() %>% 
+  distinct() %>% 
+  sample_frac()
+```
+
+### Firm
+
+#### Address
+
+```{r prime_firm_address_norm}
+fllc <- fllc %>%
+  unite(
+    starts_with("prime_firm_address_line"),
+    col = "prime_firm_address_full",
+    sep = " ",
+    remove = FALSE,
+    na.rm = TRUE
+  ) %>% 
+  mutate(
+    prime_firm_address_norm = normal_address(
+      address = prime_firm_address_full,
+      add_abbs = usps_street,
+      na_rep = TRUE
+    )
+  ) %>% 
+  select(-prime_firm_address_full)
+```
+
+```{r prime_firm_address_view, echo=FALSE}
+fllc %>% 
+  select(
+    starts_with("prime_firm_address_line"),
+    prime_firm_address_norm
+  ) %>% 
+  distinct() %>% 
+  sample_frac()
+```
+
+#### Postal
+
+```{r prime_firm_zip_norm}
+fllc <- fllc %>% 
+  mutate(
+    prime_firm_zip_norm = normal_zip(
+      zip = prime_firm_postal_code,
+      na_rep = TRUE
+    )
+  )
+```
+
+```{r prime_firm_zip_progress}
+progress_table(
+  fllc$prime_firm_postal_code,
+  fllc$prime_firm_zip_norm,
+  compare = valid_zip
+)
+```
+
+#### State
+
+```{r prime_firm_state_norm}
+fllc <- fllc %>% 
+  mutate(
+    prime_firm_state_norm = normal_state(
+      state = prime_firm_state_name,
+      abbreviate = TRUE,
+      na_rep = TRUE
+    )
+  )
+```
+
+```{r prime_firm_state_progress}
+progress_table(
+  fllc$prime_firm_state_name,
+  fllc$prime_firm_state_norm,
+  compare = valid_state
+)
+```
+
+#### City
+
+```{r prime_firm_city_norm_swap}
+fllc <- fllc %>% 
+  mutate(
+    prime_firm_city_norm = normal_city(
+      city = prime_firm_city_name,
+      geo_abbs = usps_city,
+      na_rep = TRUE
+    )
+  ) %>% 
+  left_join(
+    y = zipcodes,
+    by = c(
+      "prime_firm_zip_norm" = "zip",
+      "prime_firm_state_norm" = "state"
+    )
+  ) %>% 
+  rename(prime_firm_city_match = city) %>% 
+  mutate(
+    prime_firm_match_dist = str_dist(prime_firm_city_norm, prime_firm_city_match),
+    prime_firm_match_abb = is_abbrev(prime_firm_city_norm, prime_firm_city_match),
+    prime_firm_city_swap = if_else(
+      condition = prime_firm_match_abb | prime_firm_match_dist == 1,
+      true = prime_firm_city_match,
+      false = prime_firm_city_norm
+    )
+  )
+```
+
+```{r prime_firm_city_progress}
+progress_table(
+  fllc$prime_firm_city_name,
+  fllc$prime_firm_city_norm,
+  fllc$prime_firm_city_swap,
+  compare = valid_city
+)
+```
+
+#### Phone
+
+```{r prime_firm_phone_norm}
+fllc <- fllc %>% 
+  mutate(
+    prime_firm_phone_norm = normal_phone(
+      number = prime_firm_phone_number,
+      format = "(%a) %e-%l",
+      na_bad = FALSE,
+      rm_ext = TRUE
+    )
+  )
+```
+
+```{r prime_firm_phone_view, echo=FALSE}
+fllc %>%
+  filter(prime_firm_phone_number != prime_firm_phone_norm) %>% 
+  select(
+    prime_firm_phone_number,
+    prime_firm_phone_norm
+  ) %>% 
+  drop_na() %>% 
+  distinct() %>% 
+  sample_frac()
+```

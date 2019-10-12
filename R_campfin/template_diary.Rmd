@@ -31,6 +31,10 @@ options(width = 99)
 set.seed(5)
 ```
 
+```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
+fs::dir_create(here::here("df", "data", "docs"))
+```
+
 ## Project
 
 The Accountability Project is an effort to cut across data silos and give journalists, policy
@@ -178,7 +182,7 @@ df %>%
 
 #### Dates
 
-```{r}
+```{r add_year}
 df <- mutate(df, year = year(date))
 ```
 

@@ -1,7 +1,7 @@
 District Contributions
 ================
 Kiernan Nicholls
-2019-09-30 16:57:27
+2019-10-03 15:49:24
 
   - [Project](#project)
   - [Objectives](#objectives)
@@ -14,6 +14,7 @@ Kiernan Nicholls
   - [Separate](#separate)
   - [Normalize](#normalize)
   - [Conclude](#conclude)
+  - [Lookup](#lookup)
   - [Write](#write)
 
 ## Project
@@ -86,7 +87,7 @@ processing of campaign finance data.
 
 ``` r
 if (!require("pacman")) install.packages("pacman")
-pacman::p_load_current_gh("irworkshop/campfin")
+pacman::p_load_gh("irworkshop/campfin")
 pacman::p_load(
   tidyverse, # data manipulation
   lubridate, # datetime strings
@@ -247,16 +248,16 @@ sample(dc$purpose, 10) %>%
   cat(sep = "\n")
 ```
 
-    #> BANK FEES
+    #> RENTAL
     #> NA
-    #> IN-KIND**
-    #> **PIZZA FOR BALD EAGLE HEADBANGER'S BOXING CLUB
-    #> **DONATION
     #> NA
-    #> UTILITY
-    #> SALARY/STIPEND
     #> BANK FEES
-    #> LOAN REPAYMENT
+    #> PRINTING
+    #> **WARD REBATE
+    #> COMPUTER EXPENSES
+    #> CATERING/REFRESHMENTS
+    #> CAMPAIGN MATERIALS
+    #> NA
 
 But we can perform token analysis on the strings.
 
@@ -342,7 +343,7 @@ sum(dc$amount < 0, na.rm = TRUE)
 #### Dates
 
 The dates range from  and -. There are 0 records with a date greater
-than 2019-09-30.
+than 2019-10-03.
 
 ``` r
 summary(as_date(dc$transactiondate))
@@ -374,18 +375,18 @@ select(sample_frac(dc), address)
 ```
 
     #> # A tibble: 101,437 x 1
-    #>    address                                    
-    #>    <chr>                                      
-    #>  1 PO BOX 11496 , WASHINGTON, DC 20008        
-    #>  2 4512 CURTIS AVE., BALTIMORE, MD 21226      
-    #>  3 7815 WOODMONT AVE, BETHESDA, MD 20814      
-    #>  4 816 E STREET NE, WASHINGTON, DC 20002      
-    #>  5 555 MARKET  STREET, SAN FRANCISCO, CA 94104
-    #>  6 2411 18TH STREET, SE, WASHINGTON, DC 20003 
-    #>  7 3903 MEADOWHILL ROAD, SPRINGDALE, MD 20774 
-    #>  8 9930 LOGAN DRIVE, POTOMAC, MD 20854        
-    #>  9 3717 GEORGIA AVE NW, WASHINGTON, DC 20010  
-    #> 10 184 BERRY ST, SAN FRACISCO, CA 94107       
+    #>    address                                              
+    #>    <chr>                                                
+    #>  1 5429 CONNECTICUT AVENUE, NW #B1, WASHINGTON, DC 20015
+    #>  2 3440 WISCONSIN AVE., NW, WASHINGTON, DC 20016        
+    #>  3 1730 B CORCORAN STREET, NW, WASHINGTON, DC 20009     
+    #>  4 715 D STREET SE, WASHINGTON, DC 20003                
+    #>  5 1307 12TH STREET NW  #505, WASHINGTON, DC 20005      
+    #>  6 1455 MARKET STREET, SAN FRANCISCO, CA 94103          
+    #>  7 127 HAWAII AVENUE, N.E., WASHINGTON, DC 20011        
+    #>  8 <NA>                                                 
+    #>  9 715 VAN BUREN ST NW, WASHINGTON, DC 20012            
+    #> 10 9933 WOODS DRIVE, SKOKIE, IL 60077                   
     #> # … with 101,427 more rows
 
 First, we can split the `address` variable into new columns at each
@@ -431,18 +432,18 @@ dc %>% separate(
 ```
 
     #> # A tibble: 101,437 x 5
-    #>    address                                     address_sep        city_sep        state_sep zip_sep
-    #>    <chr>                                       <chr>              <chr>           <chr>     <chr>  
-    #>  1 2441 LINDEN LANE, SILVER SPRING, MD 20910   2441 LINDEN LANE   SILVER SPRING   MD        20910  
-    #>  2 MAIN CITY ADDRESS, WASHINGTON, DC 20000     MAIN CITY ADDRESS  WASHINGTON      DC        20000  
-    #>  3 1512 14TH STREET NW, WASHINGTON, DC 20010   1512 14TH STREET … WASHINGTON      DC        20010  
-    #>  4 1653 BENNING RD., NE, WASHINGTON, DC 20002  1653 BENNING RD. … WASHINGTON      DC        20002  
-    #>  5 1612 K STREET NW, WASHINGTON, DC 20006      1612 K STREET NW   WASHINGTON      DC        20006  
-    #>  6 6115 MARLBORO PIKE, DISTRICT HEIGHTS, MD 2… 6115 MARLBORO PIKE DISTRICT HEIGH… MD        20747  
-    #>  7 335 O STREET, SW, WASHINGTON, DC 20024      335 O STREET SW    WASHINGTON      DC        20024  
-    #>  8 PO BOX 62401, WASHINGTON, DC 20019          PO BOX 62401       WASHINGTON      DC        20019  
-    #>  9 1625 16TH STREET NW, WASHINGTON, DC 20009   1625 16TH STREET … WASHINGTON      DC        20009  
-    #> 10 601 EDGEWOOD ST NE, WASHINGTON, DC 20017    601 EDGEWOOD ST NE WASHINGTON      DC        20017  
+    #>    address                                   address_sep              city_sep    state_sep zip_sep
+    #>    <chr>                                     <chr>                    <chr>       <chr>     <chr>  
+    #>  1 <NA>                                      ""                       <NA>        <NA>      <NA>   
+    #>  2 3710 BANGOR STREET, SE STE 102, WASHINGT… 3710 BANGOR STREET SE S… WASHINGTON  DC        20020  
+    #>  3 202 VARNUM ST. NW, WASHINGTON, DC 20011   202 VARNUM ST. NW        WASHINGTON  DC        20011  
+    #>  4 2730 WISCONSIN AVE NW #23, WASHINGTON, D… 2730 WISCONSIN AVE NW #… WASHINGTON  DC        20016  
+    #>  5 4009 16TH STREET NW, WASHINGTON, DC 20011 4009 16TH STREET NW      WASHINGTON  DC        20011  
+    #>  6 6011 BLAIR ROAD, NW, WASHINGTON, DC 20012 6011 BLAIR ROAD NW       WASHINGTON  DC        20012  
+    #>  7 185 BERRY STREET, SAN FRANCISCO, CA 94107 185 BERRY STREET         SAN FRANCI… CA        94107  
+    #>  8 222 7TH STREET SOUTHEAST, WASHINGTON, DC… 222 7TH STREET SOUTHEAST WASHINGTON  DC        20003  
+    #>  9 960 RANDOLPH ST NW #1, WASHINGTON, DC 20… 960 RANDOLPH ST NW #1    WASHINGTON  DC        20011  
+    #> 10 418 N STREET NW, WASHINGTON, DC 20001     418 N STREET NW          WASHINGTON  DC        20001  
     #> # … with 101,427 more rows
 
 There are a number of columns where the lack of a component in the
@@ -450,18 +451,18 @@ original `address` has caused the separation to incorrectly shift
 content.
 
     #> # A tibble: 83 x 5
-    #>    address                                address_sep        city_sep           state_sep   zip_sep
-    #>    <chr>                                  <chr>              <chr>              <chr>       <chr>  
-    #>  1 1712 SURREY LANE NW, WASHINGTON 20007  ""                 1712 SURREY LANE … WASHINGTON  20007  
-    #>  2 P.O. BOX 64468, ST PAUL, MINNESOTA 55… P.O. BOX 64468     ST PAUL            MINNESOTA   55164  
-    #>  3 2211 NORTH FIRST STREET , SAN JOSE 94… ""                 "2211 NORTH FIRST… SAN JOSE    94043  
-    #>  4 22505 4TH ST NW, WASHINGTON 22059      ""                 22505 4TH ST NW    WASHINGTON  22059  
-    #>  5 1514 SHIPPEN LN SE, WASHINGTON 20020   ""                 1514 SHIPPEN LN SE WASHINGTON  20020  
-    #>  6 ONE WEST FOURTH STREET, WINSTON-SALEM… ONE WEST FOURTH S… WINSTON-SALEM      NORTH CARO… 27101  
-    #>  7 URELL ST. NW, WASHINGTON 00000         ""                 URELL ST. NW       WASHINGTON  00000  
-    #>  8 1200 H STREET NE, WASHINGTON  20014    ""                 1200 H STREET NE   WASHINGTON  20014  
-    #>  9 2100 19TH ST NW APT 402, WASHINGTON 2… ""                 2100 19TH ST NW A… WASHINGTON  20009  
-    #> 10 P.O. BOX 2308, OMAHA, NEBRASKA 68103   P.O. BOX 2308      OMAHA              NEBRASKA    68103  
+    #>    address                             address_sep         city_sep             state_sep   zip_sep
+    #>    <chr>                               <chr>               <chr>                <chr>       <chr>  
+    #>  1 W-8, WASHINGTON 00000               ""                  W-8                  WASHINGTON  00000  
+    #>  2 95 HAYDEN AVENUE, LEXINGTON, MASSA… 95 HAYDEN AVENUE    LEXINGTON            MASSACHUSE… 02421  
+    #>  3 800 SOUTHERN AVENUE SE #712, WASHI… ""                  800 SOUTHERN AVENUE… WASHINGTON  20032  
+    #>  4 1304 COLUMBIA ROAD,NW, WASHINGTON … ""                  1304 COLUMBIA ROAD,… WASHINGTON  20010  
+    #>  5 1564 NIMPKISH PLACE, DUNCAN 20001   ""                  1564 NIMPKISH PLACE  DUNCAN      20001  
+    #>  6 270 18TH STREET, BRANDON, MANITOBA… 270 18TH STREET BR… MANITOBA             CANADA      70609  
+    #>  7 115 V STREET NW, WASHINGTON  20001  ""                  115 V STREET NW      WASHINGTON  20001  
+    #>  8 5108 HAYES STREET NE, WASHINGTON 2… ""                  5108 HAYES STREET NE WASHINGTON  20019  
+    #>  9 1712 SURREY LANE NW, WASHINGTON 20… ""                  1712 SURREY LANE NW  WASHINGTON  20007  
+    #> 10 1455 MARKET STREET, SAN FRANCISCO,… 1455 MARKET STREET  SAN FRANCISCO        CALIFORNIA  94013  
     #> # … with 73 more rows
 
 We can fix many of these errors using index subsetting. The most common
@@ -484,18 +485,18 @@ The remaining invalid separations are simply long-form state names,
 which can be fixed in the normalization stage.
 
     #> # A tibble: 28 x 5
-    #>    address                                address_sep            city_sep         state_sep zip_sep
-    #>    <chr>                                  <chr>                  <chr>            <chr>     <chr>  
-    #>  1 1914 WINDHAM LANE, SILVER SPRING, MAR… 1914 WINDHAM LANE      SILVER SPRING    MARYLAND  20902  
-    #>  2 2 LACEY STREET LEVEL 2 SURRY HILLS, N… 2 LACEY STREET LEVEL … NEW SOUTH WALES… NA        02010  
-    #>  3 2021 E. LAKE MARY BLVD, SANFORD, FLOR… 2021 E. LAKE MARY BLVD SANFORD          FLORIDA   32773  
-    #>  4 270 18TH STREET, BRANDON, MANITOBA, C… 270 18TH STREET BRAND… MANITOBA         CANADA    70609  
-    #>  5 6150 OXON HILL ROAD, OXON HILL, MARYL… 6150 OXON HILL ROAD    OXON HILL        MARYLAND  20745  
-    #>  6 P.O. BOX 64468, ST PAUL, MINNESOTA 55… P.O. BOX 64468         ST PAUL          MINNESOTA 55164  
-    #>  7 829 QUINCY STREET NW, WASHINGTON,  20… 829 QUINCY STREET NW   WASHINGTON       ""        20011  
-    #>  8 6422 GEORGIA AVENUE, N.W., WASHINGTON… 6422 GEORGIA AVENUE    N.W.             WASHINGT… 20011  
-    #>  9 1715 MINNESOTA AVE, SE SUITE 307, WAS… 1715 MINNESOTA AVE SE… WASHINGTON       ""        20020  
-    #> 10 11400 W.OLYMPIC BLVD. SUITE 200, LOS … 11400 W.OLYMPIC BLVD.… LOS ANGELES      CALIFORN… 90064  
+    #>    address                                 address_sep             city_sep     state_sep   zip_sep
+    #>    <chr>                                   <chr>                   <chr>        <chr>       <chr>  
+    #>  1 6139 OXON HILL ROAD, OXON HILL, MARYLA… 6139 OXON HILL ROAD     OXON HILL    MARYLAND    20745  
+    #>  2 1529 CASINO CIRCLE, SILVER SPRING, MAR… 1529 CASINO CIRCLE      SILVER SPRI… MARYLAND    20906  
+    #>  3 P O BOX 441146, SOMERVILLE, MASSACHUSE… P O BOX 441146          SOMERVILLE   MASSACHUSE… 02144  
+    #>  4 270 18TH STREET, BRANDON, MANITOBA, CA… 270 18TH STREET BRANDON MANITOBA     CANADA      70609  
+    #>  5 3240  O STREET, NW , WASHINGTON  20007  3240  O STREET          "NW "        WASHINGTON  20007  
+    #>  6 2021 E. LAKE MARY BLVD, SANFORD, FLORI… 2021 E. LAKE MARY BLVD  SANFORD      FLORIDA     32773  
+    #>  7 8755 BRANCH AVENUE, CLINTON, MARYLAND … 8755 BRANCH AVENUE      CLINTON      MARYLAND    20735  
+    #>  8 4398 ST LAURENT BLVD 103, MONTREAL QUE… 4398 ST LAURENT BLVD 1… MONTREAL QU… NA          00000  
+    #>  9 11400 W.OLYMPIC BLVD. SUITE 200, LOS A… 11400 W.OLYMPIC BLVD. … LOS ANGELES  CALIFORNIA  90064  
+    #> 10 95 HAYDEN AVENUE, LEXINGTON, MASSACHUS… 95 HAYDEN AVENUE        LEXINGTON    MASSACHUSE… 02421  
     #> # … with 18 more rows
 
 ## Normalize
@@ -521,18 +522,18 @@ dc <- dc %>%
 ```
 
     #> # A tibble: 33,344 x 2
-    #>    address_sep                      address_norm                               
-    #>    <chr>                            <chr>                                      
-    #>  1 901 RI AVE. NE.                  901 RI AVENUE NORTHEAST                    
-    #>  2 1130 CONNECTICUT AVE. NW STE 200 1130 CONNECTICUT AVENUE NORTHWEST SUITE 200
-    #>  3 900 SECOND ST. NE #206           900 SECOND STREET NORTHEAST 206            
-    #>  4 "15955 LA CANTERA PARKWAY "      15955 LA CANTERA PARKWAY                   
-    #>  5 "5911 APPLEGATE PL "             5911 APPLEGATE PLACE                       
-    #>  6 4809 COLONEL ASHTON PL           4809 COLONEL ASHTON PLACE                  
-    #>  7 2725 DUMBARTON STREET NW         2725 DUMBARTON STREET NORTHWEST            
-    #>  8 2537 18TH STREET SE              2537 18TH STREET SOUTHEAST                 
-    #>  9 2500 MINNESOTA AVE SE            2500 MINNESOTA AVENUE SOUTHEAST            
-    #> 10 716 QUACKENBOS STREET N.W.       716 QUACKENBOS STREET NORTHWEST            
+    #>    address_sep               address_norm                      
+    #>    <chr>                     <chr>                             
+    #>  1 711 N. STREET NW          711 NORTH STREET NORTHWEST        
+    #>  2 P.O. BOX 37420            PO BOX 37420                      
+    #>  3 2703 12TH ST NE           2703 12TH STREET NORTHEAST        
+    #>  4 32  BUCHANAN STREET N.E.  32 BUCHANAN STREET NORTHEAST      
+    #>  5 1280 MARYLAND AVE SW #280 1280 MARYLAND AVENUE SOUTHWEST 280
+    #>  6 2619 BRANCH AVENUE        2619 BRANCH AVENUE                
+    #>  7 1831 KALORAMA RD. NW      1831 KALORAMA ROAD NORTHWEST      
+    #>  8 350 50TH STREET SE #414   350 50TH STREET SOUTHEAST 414     
+    #>  9 8638B 16TH ST. SUITE 171  8638B 16TH STREET SUITE 171       
+    #> 10 1169 1ST TERRACE NW       1169 1ST TERRACE NORTHWEST        
     #> # … with 33,334 more rows
 
 ### ZIP
@@ -553,16 +554,16 @@ dc <- dc %>%
     #> # A tibble: 124 x 2
     #>    zip_sep    zip_norm
     #>    <chr>      <chr>   
-    #>  1 027252525  02725   
-    #>  2 084016621  08401   
-    #>  3 20010-2619 20010   
-    #>  4 20002-4406 20002   
-    #>  5 8530974350 85309   
-    #>  6 201513229  20151   
-    #>  7 372305183  37230   
-    #>  8 20010-2002 20010   
-    #>  9 45274-2572 45274   
-    #> 10 482363758  48236   
+    #>  1 482363758  48236   
+    #>  2 28256-0825 28256   
+    #>  3 193963005  19396   
+    #>  4 576588     57658   
+    #>  5 200015612  20001   
+    #>  6 37230-5183 37230   
+    #>  7 208153739  20815   
+    #>  8 8530974350 85309   
+    #>  9 8553140008 85531   
+    #> 10 200112852  20011   
     #> # … with 114 more rows
 
 This process improves the consistency of our ZIP code variable and
@@ -923,15 +924,47 @@ progress_table(
 9.  Only 88.3% of records contain all the data needed to identify the
     transaction.
 
+## Lookup
+
+``` r
+lookup <- read_csv("dc/expends/data/dc_city_lookup.csv") %>% select(1:2)
+dc <- left_join(dc, lookup, by = "city_refine")
+
+progress_table(
+  dc$city_refine, 
+  dc$city_refine2, 
+  compare = valid_city
+)
+```
+
+    #> # A tibble: 2 x 6
+    #>   stage        prop_in n_distinct prop_na n_out n_diff
+    #>   <chr>          <dbl>      <dbl>   <dbl> <dbl>  <dbl>
+    #> 1 city_refine    0.994       1169  0.0566   540    197
+    #> 2 city_refine2   0.995       1107  0.0567   453    137
+
 ## Write
 
 ``` r
 dir_proc <- here("dc", "expends", "data", "processed")
 dir_create(dir_proc)
+raw_file <- glue("{dir_proc}/dc_expends_clean.csv")
 
-write_csv(
-  x = dc,
-  na = "",
-  path = glue("{dir_proc}/dc_expends_clean.csv")
-)
+dc <- dc %>% 
+  select(
+    -address_sep,
+    -city_sep,
+    -state_sep,
+    -zip_sep,
+    -city_norm,
+    -city_match,
+    -match_dist,
+    -match_abb,
+    -city_swap,
+    -city_refine
+  )
+
+if (!this_file_new(raw_file)) {
+  write_csv(dc, raw_file, na = "")
+}
 ```
