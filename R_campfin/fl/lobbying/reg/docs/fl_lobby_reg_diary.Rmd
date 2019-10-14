@@ -219,6 +219,12 @@ So we can overwrite the orignal names with this new vector.
 fllr <- set_names(fllr, fllr_names)
 ```
 
+Some columns are actually completely empty. We can remove those columns now.
+
+```{r remove_cols}
+fllr <- remove_empty(fllr, "cols")
+```
+
 ## Explore
 
 ```{r glimpse}
@@ -241,10 +247,12 @@ mean(fllr$na_flag)
 
 ### Duplicates
 
+There are no duplicate records in the database.
+
 ```{r flag_dupes}
 fllr <- flag_dupes(fllr, everything())
-sum(fllr$na_flag)
-mean(fllr$na_flag)
+sum(fllr$dupe_flag)
+mean(fllr$dupe_flag)
 ```
 
 ### Dates
@@ -257,6 +265,308 @@ unique(fllr$client_year == year(today()))
 ```
 
 ```{r date_range, collapse=TRUE}
-min(fllr$client_eff)
-max(fllr$client_eff)
+min(fllr$client_eff) == today() %>% floor_date("year")
+max(fllr$client_eff) == today()
+```
+
+## Wrangle
+
+For each of three entity types (lobbyists, client, firm) there are: 1-3 `*_address*` variables, 
+`*_city`, `*_state`, `*_zip`, `*_phone`, and `*_ext`. We will wrangle each variable type for all
+three entity types at a time.
+
+### Addresses
+
+We will begin with address normalization. First, we can use `tidyr::unite()` to combine each 
+separate variable into a single string for each registrant.
+
+```{r address_unite}
+fllr <- fllr %>% 
+  unite(
+    starts_with("lobby_address"),
+    col = lobby_address_full,
+    sep = " ",
+    remove = FALSE,
+    na.rm = TRUE
+  ) %>% 
+  unite(
+    starts_with("client_address"),
+    col = client_address_full,
+    sep = " ",
+    remove = FALSE,
+    na.rm = TRUE
+  ) %>% 
+  unite(
+    starts_with("firm_address"),
+    col = firm_address_full,
+    sep = " ",
+    remove = FALSE,
+    na.rm = TRUE
+  )
+```
+
+Then, each of these full address variables can be passed to `campfin::normal_address()` to create
+new normalized variables with improved consistency.
+
+```{r address_norm}
+fllr <- fllr %>% 
+  mutate(
+    lobby_address_norm = normal_address(
+      address = lobby_address_full,
+      add_abbs = usps_street,
+      na_rep = TRUE
+    ),
+    client_address_norm = normal_address(
+      address = client_address_full,
+      add_abbs = usps_street,
+      na_rep = TRUE
+    ),
+    client_address_norm = normal_address(
+      address = client_address_full,
+      add_abbs = usps_street,
+      na_rep = TRUE
+    )
+  )
+```
+
+Finally, remove the intermediary combined variables.
+
+```{r address_remove}
+fllr <- select(fllr, -ends_with("address_full"))
+```
+
+From this, we can see the kind of normalization that was performed.
+
+```{r address_view, echo=FALSE}
+fllr %>% 
+  select(starts_with("lobby_address")) %>% 
+  distinct() %>% 
+  sample_frac()
+```
+
+### ZIP
+
+Similarly, we can use `campfin::normal_zip()` to create a normalized five-digit ZIP code and remove
+invalid values.
+
+```{r zip_normal}
+fllr <- fllr %>% 
+  mutate(
+    lobby_zip_norm = normal_zip(
+      zip = lobby_zip,
+      na_rep = TRUE
+    ),
+    client_zip_norm = normal_zip(
+      zip = client_zip,
+      na_rep = TRUE
+    ),
+    firm_zip_norm = normal_zip(
+      zip = firm_zip,
+      na_rep = TRUE
+    )
+  )
+```
+
+```{r zip_progress}
+progress_table(fllr$lobby_zip,  fllr$lobby_zip_norm,  compare = valid_zip)
+progress_table(fllr$client_zip, fllr$client_zip_norm, compare = valid_zip)
+progress_table(fllr$firm_zip,   fllr$firm_zip_norm,   compare = valid_zip)
+```
+
+### States
+
+Below, we can see the inconsistency in `*_state` variable format.
+
+```{r state_pre}
+fllr %>% 
+  select(ends_with("state")) %>% 
+  distinct() %>% 
+  sample_frac()
+```
+
+We can use `campfin::normal_state()` to create valid two-letter state abbreviations.
+
+```{r state_normal}
+fllr <- fllr %>% 
+  mutate(
+    lobby_state_norm = normal_state(
+      state = lobby_state,
+      abbreviate = TRUE,
+      valid = NULL
+    ),
+    client_state_norm = normal_state(
+      state = client_state,
+      abbreviate = TRUE,
+      valid = NULL
+    ),
+    firm_state_norm = normal_state(
+      state = firm_state,
+      abbreviate = TRUE,
+      valid = NULL
+    )
+  )
+```
+
+```{r state_progress}
+progress_table(fllr$lobby_state,  fllr$lobby_state_norm,  compare = valid_state)
+progress_table(fllr$client_state, fllr$client_state_norm, compare = valid_state)
+progress_table(fllr$firm_state,   fllr$firm_state_norm,   compare = valid_state)
+```
+
+### City
+
+The `*_city` variables are the hardest to clean. We can make consistent and _confident_
+improvements in normalization by combining `campfin::normal_city()`, `campfin::is_abbrev()`,
+`campfin::str_dist()`, and `refinr::n_gram_merge()`.
+
+First, we will normalize the `*_city` variable for each entity.
+
+```{r city_normal}
+fllr <- fllr %>% 
+  mutate(
+    lobby_city_norm = normal_city(
+      city = lobby_city,
+      geo_abbs = usps_city,
+      st_abbs = c("FL", "DC", "FLORIDA"),
+      na = invalid_city,
+      na_rep = TRUE
+    ),
+    client_city_norm = normal_city(
+      city = client_city,
+      geo_abbs = usps_city,
+      st_abbs = c("FL", "DC", "FLORIDA"),
+      na = invalid_city,
+      na_rep = TRUE
+    ),
+    firm_city_norm = normal_city(
+      city = firm_city,
+      geo_abbs = usps_city,
+      st_abbs = c("FL", "DC", "FLORIDA"),
+      na = invalid_city,
+      na_rep = TRUE
+    )
+  )
+```
+
+Then, we can match each normalized city against the _expected_ city for that registrant's 
+`*_zip_normal` and `*_state_normal` variables. If the two city strings, normalized and exptected,
+have an extremelly similar string distance _or_ if the normalized string appears to be an
+abbreviation of the matched expected string, then we can confidently rely on the matched value.
+
+```{r city_match}
+fllr <- fllr %>% 
+  left_join(
+    y = zipcodes,
+    by = c(
+      "lobby_zip_norm" = "zip",
+      "lobby_state_norm" = "state"
+    )
+  ) %>% 
+  rename(lobby_city_match = city) %>% 
+  left_join(
+    y = zipcodes,
+    by = c(
+      "client_zip_norm" = "zip",
+      "client_state_norm" = "state"
+    )
+  ) %>% 
+  rename(client_city_match = city) %>% 
+  left_join(
+    y = zipcodes,
+    by = c(
+      "firm_zip_norm" = "zip",
+      "firm_state_norm" = "state"
+    )
+  ) %>% 
+  rename(firm_city_match = city)
+```
+
+```{r city_swap}
+fllr <- fllr %>% 
+  mutate(
+    lobby_city_abb = is_abbrev(lobby_city_norm, lobby_city_match),
+    lobby_city_dist = str_dist(lobby_city_norm, lobby_city_match),
+    lobby_city_swap = if_else(
+      condition = lobby_city_abb | lobby_city_dist == 1,
+      true = lobby_city_match,
+      false = lobby_city_norm
+    )
+  ) %>% 
+  mutate(
+    client_city_abb = is_abbrev(client_city_norm, client_city_match),
+    client_city_dist = str_dist(client_city_norm, client_city_match),
+    client_city_swap = if_else(
+      condition = client_city_abb | client_city_dist == 1,
+      true = client_city_match,
+      false = client_city_norm
+    )
+  ) %>% 
+  mutate(
+    firm_city_abb = is_abbrev(firm_city_norm, firm_city_match),
+    firm_city_dist = str_dist(firm_city_norm, firm_city_match),
+    firm_city_swap = if_else(
+      condition = firm_city_abb | firm_city_dist == 1,
+      true = firm_city_match,
+      false = firm_city_norm
+    )
+  )
+```
+
+```{r city_progress}
+progress_table(
+  str_to_upper(fllr$lobby_city), 
+  fllr$lobby_city_norm,
+  fllr$lobby_city_swap,
+  compare = valid_city
+)
+
+progress_table(
+  str_to_upper(fllr$client_city), 
+  fllr$client_city_norm,
+  fllr$client_city_swap,
+  compare = valid_city
+)
+
+progress_table(
+  str_to_upper(fllr$firm_city), 
+  fllr$firm_city_norm,
+  fllr$firm_city_swap,
+  compare = valid_city
+)
+```
+
+```{r bad_city}
+fllr %>% 
+  filter(client_city_swap %out% valid_city) %>% 
+  count(client_city_norm, sort = TRUE)
+```
+
+## Export
+
+```{r create_proc_dir}
+proc_dir <- here("fl", "lobbying", "reg", "data", "processed")
+dir_create(proc_dir)
+```
+
+```{r write_clean}
+fllr %>%
+  # remove intermediary columns
+  select(
+    -lobby_city_match,
+    -lobby_city_dist,
+    -lobby_city_abb,
+    -lobby_city_norm,
+    -client_city_match,
+    -client_city_dist,
+    -client_city_abb,
+    -client_city_norm,
+    -firm_city_match,
+    -firm_city_dist,
+    -firm_city_abb,
+    -firm_city_norm
+  ) %>% 
+  write_csv(
+    path = glue("{proc_dir}/fl_lobby_reg_clean.csv"),
+    na = ""
+  )
 ```
