@@ -73,8 +73,6 @@ functions custom made to help facilitate the processing of campaign finance data
 if (!require("pacman")) install.packages("pacman")
 pacman::p_load_gh("irworkshop/campfin")
 pacman::p_load(
-  stringdist, # levenshtein value
-  RSelenium, # remote browser
   tidyverse, # data manipulation
   lubridate, # datetime strings
   magrittr, # pipe opperators
@@ -295,9 +293,10 @@ df <- df %>%
   ) %>% 
   rename(city_match = city) %>% 
   mutate(
-    match_dist = stringdist(city_norm, city_match),
+    match_abb = is_abbrev(city_norm, city_match),
+    match_dist = str_dist(city_norm, city_match),
     city_swap = if_else(
-      condition = equals(match_dist, 1),
+      condition = match_abb | match_dist == 1,
       true = city_match,
       false = city_norm
     )
