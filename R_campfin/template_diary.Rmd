@@ -96,7 +96,7 @@ repository.
 The `R_campfin` project uses the [RStudio projects][02] feature and should be run as such. The
 project also uses the dynamic `here::here()` tool for file paths relative to _your_ machine.
 
-```{r where_here, collapse=TRUE}
+```{r where_here}
 # where does this document knit?
 here::here()
 ```
@@ -114,14 +114,23 @@ here::here()
 
 ### Download
 
-```{r download_raw}
+```{r create_raw_dir}
+raw_dir <- here("df", "type", "data", "raw")
+dir_create(raw_dir)
+```
 
+```{r download_raw}
+download.file(
+  
+)
 ```
 
 ### Read
 
 ```{r read_raw}
-
+df <- read_delim(
+  file = dir_ls(raw_dir)
+)
 ```
 
 ## Explore
@@ -182,11 +191,11 @@ df %>%
 
 #### Dates
 
-```{r add_year}
+```{r year_add}
 df <- mutate(df, year = year(date))
 ```
 
-```{r date_range, collapse=TRUE}
+```{r date_range}
 min(df$date)
 sum(df$year < 2000)
 max(df$date)
@@ -197,7 +206,7 @@ sum(df$date > today())
 
 ### Address
 
-```{r normal_address}
+```{r address_normal}
 packageVersion("tidyr")
 df <- df %>% 
   # combine street addr
@@ -220,13 +229,7 @@ df <- df %>%
 
 ### ZIP
 
-```{r count_zip_pre, collapse=TRUE}
-n_distinct(df$zip)
-prop_in(df$zip, valid_zip, na.rm = TRUE)
-length(setdiff(df$zip, valid_zip))
-```
-
-```{r normal_zip}
+```{r zip_normal}
 df <- df %>% 
   mutate(
     zip_norm = normal_zip(
@@ -236,21 +239,17 @@ df <- df %>%
   )
 ```
 
-```{r count_zip_post, collapse=TRUE}
-n_distinct(df$zip_norm)
-prop_in(df$zip_norm, valid_zip, na.rm = TRUE)
-length(setdiff(df$zip_norm, valid_zip))
+```{r zip_progress}
+progress_table(
+  df$zip,
+  df$zip_norm,
+  compare = valid_zip
+)
 ```
 
 ### State
 
-```{r count_state_pre, collapse=TRUE}
-n_distinct(df$state)
-prop_in(df$state, valid_state, na.rm = TRUE)
-length(setdiff(df$state, valid_state))
-```
-
-```{r normal_state}
+```{r state_normal}
 df <- df %>% 
   mutate(
     state_norm = normal_state(
@@ -262,21 +261,15 @@ df <- df %>%
   )
 ```
 
-```{r count_state_post, collapse=TRUE}
-n_distinct(df$state_norm)
-prop_in(df$state_norm, valid_state, na.rm = TRUE)
-length(setdiff(df$state_norm, valid_state))
+```{r state_progress}
+progress_table(
+  df$state,
+  df$state_norm,
+  compare = valid_state
+)
 ```
 
 ### City
-
-```{r count_city_pre, collapse=TRUE}
-n_distinct(df$city)
-prop_in(df$city, valid_city, na.rm = TRUE)
-length(setdiff(df$city, valid_city))
-```
-
-#### Normalize
 
 ```{r normal_city}
 df <- df %>% 
@@ -290,14 +283,6 @@ df <- df %>%
     )
   )
 ```
-
-```{r count_city_post_norm, collapse=TRUE}
-n_distinct(df$city_norm)
-prop_in(df$city_norm, valid_city, na.rm = TRUE)
-length(setdiff(df$city_norm, valid_city))
-```
-
-#### Swap
 
 ```{r swap_city}
 df <- df %>% 
@@ -319,13 +304,13 @@ df <- df %>%
   )
 ```
 
-```{r count_city_post_swap, collapse=TRUE}
-n_distinct(df$city_swap)
-prop_in(df$city_swap, valid_city, na.rm = TRUE)
-length(setdiff(df$city_swap, valid_city))
+```{r city_progress}
+progress_table(
+  df$city,
+  df$city_norm,
+  compare = valid_city
+)
 ```
-
-#### Refine
 
 ## Conclude
 
@@ -338,3 +323,20 @@ length(setdiff(df$city_swap, valid_city))
 1. The 4-digit `year` variable has been created with `lubridate::year()`.
 
 ## Export
+
+```{r create_proc_dir}
+proc_dir <- here("df", "type", "data", "processed")
+dir_create(proc_dir)
+```
+
+```{r write_clean}
+df %>% 
+  select(
+    
+  ) %>% 
+  write_csv(
+    path = glue("{proc_dir}/df_type_clean.csv"),
+    na = ""
+  )
+```
+
