@@ -1,0 +1,458 @@
+---
+title: "Deleware Lobbyist Registration"
+author: "Kiernan Nicholls"
+date: "`r Sys.time()`"
+output:
+  github_document: 
+    df_print: tibble
+    toc: true
+    toc_dept: 2
+editor_options: 
+  chunk_output_type: console
+---
+
+<!-- Place comments regarding knitting here -->
+
+```{r setup, include=FALSE, purl=FALSE}
+library(knitr)
+opts_chunk$set(
+  eval = TRUE,
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  error = FALSE,
+  collapse = TRUE,
+  comment = "#>",
+  fig.path = "../plots/",
+  fig.width = 10,
+  dpi = 300
+)
+options(width = 99)
+set.seed(5)
+```
+
+```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
+fs::dir_create(here::here("de", "lobbying", "reg", "docs"))
+```
+
+## Project
+
+The Accountability Project is an effort to cut across data silos and give journalists, policy
+professionals, activists, and the public at large a simple way to search across huge volumes of
+public data about people and organizations.
+
+Our goal is to standardizing public data on a few key fields by thinking of each dataset row as a
+transaction. For each transaction there should be (at least) 3 variables:
+
+1. All **parties** to a transaction
+2. The **date** of the transaction
+3. The **amount** of money involved
+
+## Objectives
+
+This document describes the process used to complete the following objectives:
+
+1. How many records are in the database?
+1. Check for duplicates
+1. Check ranges
+1. Is there anything blank or missing?
+1. Check for consistency issues
+1. Create a five-digit ZIP Code called `ZIP5`
+1. Create a `YEAR` field from the transaction date
+1. Make sure there is data on both parties to a transaction
+
+## Packages
+
+The following packages are needed to collect, manipulate, visualize, analyze, and communicate
+these results. The `pacman` package will facilitate their installation and attachment.
+
+The IRW's `campfin` package will also have to be installed from GitHub. This package contains
+functions custom made to help facilitate the processing of campaign finance data.
+
+```{r load_packages, message=FALSE, dfrning=FALSE, error=FALSE}
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load_gh("irworkshop/campfin")
+pacman::p_load(
+  stringdist, # levenshtein value
+  RSelenium, # remote browser
+  tidyverse, # data manipulation
+  lubridate, # datetime strings
+  magrittr, # pipe opperators
+  janitor, # dataframe clean
+  refinr, # cluster and merge
+  scales, # format strings
+  knitr, # knit documents
+  vroom, # read files fast
+  glue, # combine strings
+  here, # relative storage
+  httr, # http request
+  fs # search storage 
+)
+```
+
+This document should be run as part of the `R_campfin` project, which lives as a sub-directory of
+the more general, language-agnostic [`irworkshop/accountability_datacleaning`][01] GitHub
+repository.
+
+The `R_campfin` project uses the [RStudio projects][02] feature and should be run as such. The
+project also uses the dynamic `here::here()` tool for file paths relative to _your_ machine.
+
+```{r where_here}
+# where does this document knit?
+here::here()
+```
+
+[01]: https://github.com/irworkshop/accountability_datacleaning "TAP repo"
+[02]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects "Rproj"
+
+## Data
+
+Data is obtained from the [Deleware Public Integrity Commission][depic] (PIC).
+
+> Registration and authorization laws for those lobbying the General Assembly or State agencies,
+whether paid or not. Quarterly expense reports required for direct expenditures on General Assembly
+members or agency employees or officials. Lobbying activity reports with the Bill Number of
+legislation and number or title of administrative action must be filed within 5 business days of
+Lobbying. PIC submits weekly reports on that lobbying activity to the General Assembly while in
+session.
+
+[depic]: https://depic.delaware.gov/
+
+## Import
+
+From the PIC search page, we have the option to download the complete list of registered lobbyists.
+
+> Enter the name of registered Delaware lobbyist to find employer/client list, lobbying expenses,
+and address. Click magnifying glass to search.  
+> [Download complete list](https://egov.delaware.gov/Lobs/Explore/DownloadReport?reportCode=LOB)
+
+We can use `httr::GET()` to submit an HTTP request for the file. Then, the response content of that
+request can be parsed as a CSV using `httr:content()` and `readr::read_csv()`.
+
+```{r download_raw}
+raw_url <- "https://egov.delaware.gov/Lobs/Explore/DownloadReport?reportCode=LOB"
+delr <- 
+  GET(url = raw_url) %>%
+  content(as = "raw") %>%
+  read_csv(
+    col_types = cols(
+      .default = col_character(),
+      StartDate = col_date_usa(),
+      EndDate = col_date_usa()
+    )
+  ) %>% 
+  clean_names(case = "snake")
+```
+
+Some of the variable names will be prepended with `lobby_*` or truncated for simplicity and
+clarity.
+
+```{r names_change}
+names(delr)[c(1:8, 13)] <- c(
+  "lobby_first", 
+  "lobby_last", 
+  "lobby_address1", 
+  "lobby_address2", 
+  "lobby_city", 
+  "lobby_state", 
+  "lobby_zip",
+  "employer_name",
+  "employer_zip"
+)
+```
+
+## Explore
+
+We can `dplyr::glimpse()` to ensure our data was read and parsed properly.
+
+```{r glimpse}
+head(delr)
+tail(delr)
+glimpse(sample_frac(delr))
+```
+
+### Missing
+
+There are no states missing key variables like `last_name` or `start_date`.
+
+```{r glimpse_na}
+glimpse_fun(delr, count_na)
+```
+
+### Duplicates
+
+There are a small number of duplicate records, which can be flagged with a new `dupe_flag` variable
+using the `campfin::dupe_flag()` function.
+
+```{r flag_dupes}
+delr <- flag_dupes(delr, everything())
+sum(delr$dupe_flag)
+```
+
+## Wrangle
+
+To improve the searchability of the databse, we will normalize the variables for both lobbyist and
+client.
+
+### Address
+
+For addressed, we will use `tidyr::unite()` to create a single variable, then normalize that new
+variable with `campfin::normal_address()`.
+
+```{r address_normal}
+packageVersion("tidyr")
+delr <- delr %>% 
+  # combine street addr
+  unite(
+    col = lobby_adress_full,
+    starts_with("lobby_address"),
+    sep = " ",
+    remove = FALSE,
+    na.rm = TRUE
+  ) %>% 
+  # normalize combined addr
+  mutate(
+    lobby_address_norm = normal_address(
+      address = lobby_adress_full,
+      add_abbs = usps_street,
+      na_rep = TRUE
+    )
+  ) %>% 
+  select(-lobby_adress_full)
+```
+
+The same process will be performed for `employer_address`.
+
+```{r employer_address_normal}
+delr <- delr %>% 
+  unite(
+    col = employer_adress_full,
+    employer_address1, employer_address2,
+    sep = " ",
+    remove = FALSE,
+    na.rm = TRUE
+  ) %>% 
+  mutate(
+    employer_address_norm = normal_address(
+      address = employer_adress_full,
+      add_abbs = usps_street,
+      na_rep = TRUE
+    )
+  ) %>% 
+  select(-employer_adress_full)
+```
+
+```{r address_view}
+delr %>% 
+  select(starts_with("lobby_address")) %>% 
+  distinct() %>% 
+  sample_frac()
+```
+
+### ZIP
+
+```{r zip_normal}
+delr <- delr %>% 
+  mutate(
+    lobby_zip_norm = normal_zip(
+      zip = lobby_zip,
+      na_rep = TRUE
+    ),
+    employer_zip_norm = normal_zip(
+      zip = employer_zip,
+      na_rep = TRUE
+    )
+  )
+```
+
+```{r zip_progress}
+progress_table(
+  delr$lobby_zip,
+  delr$lobby_zip_norm,
+  compare = valid_zip
+)
+progress_table(
+  delr$employer_zip,
+  delr$employer_zip_norm,
+  compare = valid_zip
+)
+```
+
+### State
+
+```{r state_normal}
+delr <- delr %>% 
+  mutate(
+    lobby_state_norm = normal_state(
+      state = lobby_state,
+      abbreviate = TRUE,
+      na_rep = TRUE,
+      valid = valid_state
+    ),
+    employer_state_norm = normal_state(
+      state = employer_state,
+      abbreviate = TRUE,
+      na_rep = TRUE,
+      valid = valid_state
+    )
+  )
+```
+
+```{r state_progress}
+progress_table(
+  delr$lobby_state,
+  delr$lobby_state_norm,
+  compare = valid_state
+)
+progress_table(
+  delr$employer_state,
+  delr$employer_state_norm,
+  compare = valid_state
+)
+```
+
+```{r view_states}
+select(delr, contains("state"))
+```
+
+### City
+
+```{r normal_city}
+delr <- delr %>% 
+  mutate(
+    lobby_city_norm = normal_city(
+      city = lobby_city, 
+      geo_abbs = usps_city,
+      st_abbs = c("DE", "DC", "DELEWARE"),
+      na = invalid_city,
+      na_rep = TRUE
+    ),
+    employer_city_norm = normal_city(
+      city = employer_city, 
+      geo_abbs = usps_city,
+      st_abbs = c("DE", "DC", "DELEWARE"),
+      na = invalid_city,
+      na_rep = TRUE
+    )
+  )
+```
+
+```{r lobby_swap_city}
+delr <- delr %>% 
+  left_join(
+    y = select(zipcodes, -state),
+    by = c(
+      "lobby_zip_norm" = "zip"
+    )
+  ) %>% 
+  rename(lobby_city_match = city) %>% 
+  mutate(
+    lobby_match_abb = is_abbrev(lobby_city_norm, lobby_city_match),
+    lobby_match_dist = stringdist(lobby_city_norm, lobby_city_match),
+    lobby_city_swap = if_else(
+      condition = lobby_match_abb | lobby_match_dist == 1,
+      true = lobby_city_match,
+      false = lobby_city_norm
+    )
+  )
+```
+
+```{r employer_swap_city}
+delr <- delr %>% 
+  left_join(
+    y = select(zipcodes, -state),
+    by = c(
+      "employer_zip_norm" = "zip"
+    )
+  ) %>% 
+  rename(employer_city_match = city) %>% 
+  mutate(
+    employer_match_abb = is_abbrev(employer_city_norm, employer_city_match),
+    employer_match_dist = stringdist(employer_city_norm, employer_city_match),
+    employer_city_swap = if_else(
+      condition = employer_match_abb | employer_match_dist == 1,
+      true = employer_city_match,
+      false = employer_city_norm
+    )
+  )
+```
+
+```{r city_progress}
+progress_table(
+  str_to_upper(delr$lobby_city),
+  delr$lobby_city_norm,
+  delr$lobby_city_swap,
+  compare = valid_city
+)
+progress_table(
+  str_to_upper(delr$employer_city),
+  delr$employer_city_norm,
+  delr$employer_city_swap,
+  compare = valid_city
+)
+```
+
+```{r city_view_bad}
+delr %>% 
+  filter(lobby_city_swap %out% valid_city) %>% 
+  count(
+    lobby_state_norm, 
+    lobby_zip_norm, 
+    lobby_city, 
+    lobby_city_norm,
+    lobby_city_match, 
+    sort = TRUE
+  )
+```
+
+### Year
+
+```{r dates_range}
+min(delr$start_date)
+max(delr$start_date)
+min(delr$end_date, na.rm = TRUE)
+max(delr$end_date, na.rm = TRUE)
+```
+
+```{r year_add}
+delr <- delr %>% 
+  mutate(
+    start_year = year(start_date),
+    end_year = year(end_date)
+  )
+```
+
+## Conclude
+
+1. There are `r nrow(delr)` records in the database.
+1. There are `r sum(delr$dupe_flag)` duplicate records in the database.
+1. There are zero records missing key date.
+1. Consistency in goegraphic data has been improved with `campfin::normal_*()`.
+1. The 5-digit `zip_norm` variable has been created with `campfin::normal_zip()`.
+1. The 4-digit `year` variable has been created with `lubridate::year()`.
+
+## Export
+
+```{r create_proc_dir}
+proc_dir <- here("de", "lobbying", "reg", "data", "processed")
+dir_create(proc_dir)
+```
+
+```{r write_clean}
+delr %>% 
+  select(
+    -lobby_city_norm,
+    -lobby_city_match,
+    -lobby_match_abb,
+    -lobby_match_dist,
+    -employer_city_norm,
+    -employer_city_match,
+    -employer_match_abb,
+    -employer_match_dist
+  ) %>% 
+  write_csv(
+    path = glue("{proc_dir}/df_type_clean.csv"),
+    na = ""
+  )
+```
+
