@@ -204,6 +204,7 @@ df <- df %>%
   unite(
     col = adress_full,
     starts_with("address"),
+    sep = " ",
     remove = FALSE,
     na.rm = TRUE
   ) %>% 
@@ -211,7 +212,7 @@ df <- df %>%
   mutate(
     address_norm = normal_address(
       address = adress_full,
-      add_abbs = usps,
+      add_abbs = usps_street,
       na_rep = TRUE
     )
   )
