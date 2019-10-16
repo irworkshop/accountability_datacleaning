@@ -524,7 +524,6 @@ ia_lobby <- ia_lobby_cl %>%
 
 ## Export
 
-
 ```{r write_clean}
 clean_dir <- here("ia", "lobbying", "data", "processed")
 dir_create(clean_dir)
