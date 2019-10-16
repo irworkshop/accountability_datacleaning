@@ -1,6 +1,6 @@
 ---
-title: "State Data"
-author: "First Last"
+title: "Ohio Lobbyists"
+author: "Kiernan Nicholls"
 date: "`r Sys.time()`"
 output:
   github_document: 
@@ -16,7 +16,7 @@ editor_options:
 ```{r setup, include=FALSE, purl=FALSE}
 library(knitr)
 opts_chunk$set(
-  eval = FALSE,
+  eval = TRUE,
   echo = TRUE,
   warning = FALSE,
   message = FALSE,
@@ -32,7 +32,7 @@ set.seed(5)
 ```
 
 ```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
-fs::dir_create(here::here("df", "data", "docs"))
+fs::dir_create(here::here("oh", "lobbying", "docs"))
 ```
 
 ## Project
@@ -73,6 +73,8 @@ functions custom made to help facilitate the processing of campaign finance data
 if (!require("pacman")) install.packages("pacman")
 pacman::p_load_gh("irworkshop/campfin")
 pacman::p_load(
+  stringdist, # levenshtein value
+  RSelenium, # remote browser
   tidyverse, # data manipulation
   lubridate, # datetime strings
   magrittr, # pipe opperators
@@ -82,6 +84,7 @@ pacman::p_load(
   knitr, # knit documents
   vroom, # read files fast
   glue, # combine strings
+  httr, # query the web
   here, # relative storage
   fs # search storage 
 )
@@ -94,7 +97,7 @@ repository.
 The `R_campfin` project uses the [RStudio projects][02] feature and should be run as such. The
 project also uses the dynamic `here::here()` tool for file paths relative to _your_ machine.
 
-```{r where_here}
+```{r where_here, collapse=TRUE}
 # where does this document knit?
 here::here()
 ```
@@ -104,100 +107,67 @@ here::here()
 
 ## Data
 
-### About
+Data is obtained from the [Ohio Legislative Inspector General][olig] (OLIG) Joint Legislative
+Ethics Committee (JLEC)
 
-### Variables
+> JLEC provides access to the database of all currently registered legislative agents, executive
+agency and retirement system lobbyists, and their employers. If you want to search the database for
+a specific agent or employer, this can be done in the website's Search For Lobbying Agents and
+Employers feature. Alternatively, a complete list of all currently registered Agents and a separate
+list of all Employers have been created and are updated daily. Please note, the lobbying lists
+include both private and public sector employees.
+
+[olig]: http://www.jlec-olig.state.oh.us/
 
 ## Import
 
-### Download
+### GET
 
-```{r create_raw_dir}
-raw_dir <- here("df", "type", "data", "raw")
+The file can be downloaded directly from the [OLIG-JLEC website][raw] using an `httr::GET()`
+request.
+
+[raw]: https://www2.jlec-olig.state.oh.us/olac/Reports/AgentEmployerList.aspx
+
+```{r}
+raw_dir <- here("oh", "lobbying", "data", "raw")
 dir_create(raw_dir)
 ```
 
 ```{r download_raw}
-download.file(
-  
-)
-```
-
-### Read
-
-```{r read_raw}
-df <- read_delim(
-  file = dir_ls(raw_dir)
-)
+raw_url <- "https://www2.jlec-olig.state.oh.us/olac/Reports/agentList.aspx"
+ohlr <- content(GET(raw_url)) %>% clean_names("snake")
 ```
 
 ## Explore
 
 ```{r glimpse}
-head(df)
-tail(df)
-glimpse(sample_frac(df))
+head(ohlr)
+tail(ohlr)
+glimpse(sample_frac(ohlr))
 ```
 
 ### Missing
 
+There are no records missing important information.
+
 ```{r glimpse_na}
-glimpse_fun(df, count_na)
+glimpse_fun(ohlr, count_na)
 ```
 
 ```{r flag_na}
-df <- df %>% flag_na(payee, filer, date, amount)
+ohlr <- flag_na(ohlr, last_name, employer_name, zipcode)
+if (sum(ohlr$na_flag) == 0) {
+  ohlr <- select(ohlr, -na_flag)
+}
 ```
 
 ### Duplicates
 
 ```{r flag_dupes}
-df <- flag_dupes(df, -id)
-```
-
-### Categorical
-
-```{r glimpse_distinct}
-glimpse_fun(df, n_distinct)
-```
-
-### Continuous
-
-#### Amounts
-
-```{r summary_amount}
-summary(df$amount)
-```
-
-```{r amount_histogram, echo=FALSE}
-df %>%
-  ggplot(aes(amount)) +
-  geom_histogram() +
-  scale_x_continuous(
-    breaks = c(1 %o% 10^(0:6)),
-    labels = dollar,
-    trans = "log10"
-  ) +
-  labs(
-    title = "State Data Amount Distribution",
-    subtitle = "from 2000 to 2019",
-    caption = "Source: State Agency Name",
-    x = "Amount",
-    y = "Count"
-  )
-```
-
-#### Dates
-
-```{r year_add}
-df <- mutate(df, year = year(date))
-```
-
-```{r date_range}
-min(df$date)
-sum(df$year < 2000)
-max(df$date)
-sum(df$date > today())
+ohlr <- flag_dupes(ohlr, everything())
+if (sum(ohlr$dupe_flag) == 0) {
+  ohlr <- select(ohlr, -dupe_flag)
+}
 ```
 
 ## Wrangle
@@ -206,10 +176,10 @@ sum(df$date > today())
 
 ```{r address_normal}
 packageVersion("tidyr")
-df <- df %>% 
+ohlr <- ohlr %>% 
   # combine street addr
   unite(
-    col = adress_full,
+    col = address_full,
     starts_with("address"),
     sep = " ",
     remove = FALSE,
@@ -218,29 +188,37 @@ df <- df %>%
   # normalize combined addr
   mutate(
     address_norm = normal_address(
-      address = adress_full,
+      address = address_full,
       add_abbs = usps_street,
       na_rep = TRUE
     )
-  )
+  ) %>% 
+  select(-address_full)
+```
+
+```{r address_view}
+ohlr %>% 
+  select(starts_with("address")) %>% 
+  distinct() %>% 
+  sample_frac()
 ```
 
 ### ZIP
 
-```{r zip_normal}
-df <- df %>% 
+```{r normal_zip}
+ohlr <- ohlr %>% 
   mutate(
     zip_norm = normal_zip(
-      zip = zip,
+      zip = zipcode,
       na_rep = TRUE
     )
   )
 ```
 
-```{r zip_progress}
+```{r zip_progress, collapse=TRUE}
 progress_table(
-  df$zip,
-  df$zip_norm,
+  ohlr$zipcode,
+  ohlr$zip_norm,
   compare = valid_zip
 )
 ```
@@ -248,42 +226,43 @@ progress_table(
 ### State
 
 ```{r state_normal}
-df <- df %>% 
+ohlr <- ohlr %>% 
   mutate(
     state_norm = normal_state(
       state = state,
       abbreviate = TRUE,
       na_rep = TRUE,
-      valid = valid_state
+      valid = NULL
     )
   )
 ```
 
-```{r state_progress}
+```{r state_progress, collapse=TRUE}
 progress_table(
-  df$state,
-  df$state_norm,
+  ohlr$state,
+  ohlr$state_norm,
   compare = valid_state
 )
 ```
 
 ### City
 
-```{r normal_city}
-df <- df %>% 
+```{r city_normal}
+ohlr <- ohlr %>% 
   mutate(
     city_norm = normal_city(
       city = city, 
       geo_abbs = usps_city,
-      st_abbs = c("DF", "DC", "DATA FRAME"),
+      st_abbs = c("OH", "DC", "OHIO"),
       na = invalid_city,
       na_rep = TRUE
     )
   )
 ```
 
-```{r swap_city}
-df <- df %>% 
+```{r city_swap}
+ohlr <- ohlr %>%
+  rename(city_raw = city) %>% 
   left_join(
     y = zipcodes,
     by = c(
@@ -293,8 +272,8 @@ df <- df %>%
   ) %>% 
   rename(city_match = city) %>% 
   mutate(
+    match_dist = stringdist(city_norm, city_match),
     match_abb = is_abbrev(city_norm, city_match),
-    match_dist = str_dist(city_norm, city_match),
     city_swap = if_else(
       condition = match_abb | match_dist == 1,
       true = city_match,
@@ -303,38 +282,52 @@ df <- df %>%
   )
 ```
 
-```{r city_progress}
+```{r city_progress, collapse=TRUE}
 progress_table(
-  df$city,
-  df$city_norm,
+  str_to_upper(ohlr$city_raw),
+  ohlr$city_norm,
+  ohlr$city_swap,
   compare = valid_city
 )
 ```
 
+```{r city_count}
+ohlr %>% 
+  filter(city_swap %out% valid_city) %>% 
+  count(state_norm, city_swap, city_match, sort = TRUE)
+```
+
+### Year
+
+```{r year_add}
+ohlr <- mutate(ohlr, year = year(today()))
+```
+
 ## Conclude
 
-1. There are `nrow(df)` records in the database.
-1. There are `sum(df$dupe_flag)` duplicate records in the database.
-1. The range and distribution of `amount` and `date` seem reasonable.
-1. There are `sum(df$na_flag)` records missing either recipient or date.
+1. There are `r comma(nrow(ohlr))` records in the database.
+1. There are no duplicate records in the database.
+1. There are no records missing any pertinent information.
 1. Consistency in goegraphic data has been improved with `campfin::normal_*()`.
-1. The 5-digit `zip_norm` variable has been created with `campfin::normal_zip(df$zip)`.
-1. The 4-digit `year` variable has been created with `lubridate::year()`.
+1. The 5-digit `zip_norm` variable has been created with `campfin::normal_zip()`.
+1. There is no date listed in the database. The current `year` was added.
 
 ## Export
 
 ```{r create_proc_dir}
-proc_dir <- here("df", "type", "data", "processed")
+proc_dir <- here("oh", "lobbying", "reg", "data", "processed")
 dir_create(proc_dir)
 ```
 
 ```{r write_clean}
-df %>% 
+ohlr %>% 
   select(
-    
+    -city_match,
+    -match_abb,
+    -match_dist
   ) %>% 
   write_csv(
-    path = glue("{proc_dir}/df_type_clean.csv"),
+    path = glue("{proc_dir}/oh_lobby_reg_clean.csv"),
     na = ""
   )
 ```
