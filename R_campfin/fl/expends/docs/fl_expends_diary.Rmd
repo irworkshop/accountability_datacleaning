@@ -234,29 +234,6 @@ remote_driver$server$stop()
 
 ### Read
 
-```{r read_many, echo=FALSE, eval=FALSE}
-fl <- 
-  dir_ls(path = raw_dir) %>% 
-  map(
-    read_delim,
-    delim = "\t",
-    escape_double = FALSE,
-    escape_backslash = FALSE,
-    col_types = cols(
-      .default = col_character(),
-      Date = col_date("%m/%d/%Y"),
-      Amount = col_double()
-    )
-  ) %>% 
-  bind_rows() %>% 
-  distinct() %>% 
-  select(-starts_with("X")) %>% 
-  clean_names() %>% 
-  mutate_if(is_character, str_to_upper) %>% 
-  map_if(is_character, str_replace_all, "\\\"", "\'") %>% 
-  as_tibble()
-```
-
 ```{r read_raw}
 fl <- 
   read_delim(
@@ -290,14 +267,22 @@ We can explore the least distinct variables with `ggplot::geom_bar()` or perform
 on complex character strings.
 
 ```{r n_distinct}
-fl %>% glimpse_fun(n_distinct)
+glimpse_fun(fl, n_distinct)
 ```
 
 ```{r type_bar, echo=FALSE}
-ggplot(data = fl) +
-  geom_bar(mapping = aes(type)) +
+fl %>% 
+  count(type, sort = TRUE) %>% 
+  ggplot(aes(reorder(type, n), n)) +
+  geom_col(fill = rep(RColorBrewer::brewer.pal(8, "Dark2"), length.out = 19)) +
   scale_y_log10() +
-  coord_flip()
+  coord_flip() +
+  labs(
+    title = "Florida Expenditures by Type",
+    x = "Type",
+    y = "Count",
+    caption = "Source: Florida Dept. of State"
+  )
 ```
 
 ```{r purpose_bar, echo=FALSE}
@@ -306,9 +291,15 @@ fl %>%
   anti_join(stop_words) %>% 
   count(word, sort = TRUE) %>% 
   head(20) %>% 
-  ggplot() +
-  geom_col(aes(reorder(word, n), n)) +
-  coord_flip()
+  ggplot(aes(reorder(word, n), n)) +
+  geom_col() +
+  coord_flip() +
+  labs(
+    title = "Florida Expenditure Purpose by Word Count",
+    x = "Word",
+    y = "Count",
+    caption = "Source: Florida Dept. of State"
+  )
 ```
 
 ### Continuous
@@ -317,30 +308,56 @@ fl %>%
 fl <- mutate(fl, year = year(date))
 ```
 
-
 ```{r amount_hist, echo=FALSE}
-ggplot(data = fl) +
-  geom_histogram(aes(amount)) +
-  scale_x_continuous(labels = scales::dollar, trans = "log10")
+fl %>% 
+  ggplot(aes(amount)) +
+  geom_histogram(fill = RColorBrewer::brewer.pal(3, "Dark2")[1]) +
+  scale_x_continuous(labels = scales::dollar, trans = "log10") +
+  labs(
+    title = "Florida Expenditures by Amount",
+    x = "Amount",
+    y = "Count",
+    caption = "Source: Florida Dept. of State"
+  )
 ```
 
 ```{r year_bar, echo=FALSE}
 fl %>% 
   filter(year > 2008, date < today()) %>% 
-  ggplot() +
-  geom_bar(aes(year)) +
-  scale_x_continuous(breaks = 2008:2019)
+  count(year) %>% 
+  mutate(even = is_even(year)) %>% 
+  ggplot(aes(year, n)) +
+  geom_col(aes(fill = even)) +
+  scale_fill_brewer(palette = "Dark2") +
+  scale_x_continuous(breaks = 2008:2019) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "Florida Expenditures by Year",
+    x = "Year",
+    y = "Count",
+    caption = "Source: Florida Dept. of State",
+    fill = "Election Year"
+  )
 ```
 
 ```{r month_line, echo=FALSE}
 fl %>% 
-  mutate(election_year = year %% 2 == 0) %>% 
-  group_by(election_year, month = month(date)) %>% 
+  mutate(even = is_even(year)) %>% 
+  group_by(even, month = month(date)) %>% 
   filter(year > 2008, year < 2019) %>% 
   summarise(mean = mean(amount)) %>% 
   ggplot(mapping = aes(x = month, y = mean)) +
-  geom_line(aes(color = election_year), size = 2) +
-  scale_x_continuous(breaks = 1:12, labels = month.abb)
+  geom_line(aes(color = even), size = 2) +
+  scale_x_continuous(breaks = 1:12, labels = month.abb) +
+  scale_color_brewer(palette = "Dark2") +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "Florida Expenditures by Month",
+    x = "Month",
+    y = "Count",
+    caption = "Source: Florida Dept. of State",
+    color = "Election Year"
+  )
 ```
 
 ### Duplicates
@@ -358,7 +375,7 @@ mean(fl$dupe_flag)
 There are a number of rows missing key information.
 
 ```{r count_na}
-fl %>% glimpse_fun(count_na)
+glimpse_fun(fl, count_na)
 ```
 
 The `flag_na()` function can flag records missing values key values in any key variable.
@@ -415,60 +432,63 @@ sample(fl$zip_sep[which(nchar(fl$zip_sep) != 5)], 10)
 fl <- fl %>% mutate(zip_clean = normal_zip(zip_sep, na_rep = TRUE))
 ```
 
-```{r prop_valid_zip}
-prop_in(fl$zip_clean, valid_zip)
+```{r zip_progress}
+progress_table(
+  fl$zip_sep,
+  fl$zip_clean,
+  compare = valid_zip
+)
 ```
 
 ### State
-
-```{r bad_state, collapse=TRUE}
-n_distinct(fl$state_sep)
-prop_in(fl$state_sep, valid_state)
-count_out(fl$state_sep, valid_state)
-sample(unique(na.omit(fl$state_sep[fl$state_sep %out% valid_state])), 20)
-```
 
 ```{r norm_state}
 fl <- fl %>% mutate(
   state_clean = normal_state(
     state = state_sep,
     abbreviate = TRUE,
-    valid = valid_state
+    valid = NULL
   )
 )
 ```
 
-### City
-
-```{r bad_city, collapse=TRUE}
-n_distinct(fl$city_sep)
-
-mean(fl$city_sep %in% valid_city)
-
-sum(fl$city_sep %out% valid_city)
-
-sample(unique(na.omit(fl$city_sep[fl$city_sep %out% valid_city])), 20)
+```{r state_progress}
+progress_table(
+  fl$state_sep,
+  fl$state_clean,
+  compare = valid_state
+)
 ```
 
-### Normalize 
+```{r view_state}
+fl %>% 
+  filter(state_clean %out% valid_state) %>% 
+  count(state_clean, sort = TRUE)
+```
 
-```{r norm_city}
+```{r manual_state}
+fl$state_clean <- str_replace(fl$state_clean, "^F$", "FL")
+fl$state_clean <- na_out(fl$state_clean, valid_state)
+```
+
+### City
+
+```{r city_normal}
 fl <- fl %>% 
   mutate(
     city_norm = normal_city(
       city = city_sep,
-      na_rep = TRUE,
+      na = invalid_city,
       st_abbs = c("FL", "DC"),
-      geo_abbs = usps_city
+      geo_abbs = usps_city,
+      na_rep = TRUE
     )
   )
 
 n_distinct(fl$city_norm)
 ```
 
-### Match
-
-```{r match_city}
+```{r city_match}
 fl <- fl %>% 
   left_join(
     y = zipcodes, 
@@ -480,14 +500,13 @@ fl <- fl %>%
   rename(city_match = city)
 ```
 
-### Swap
-
-```{r match_dist}
+```{r city_swap}
 fl <- fl %>% 
   mutate(
-    match_dist = stringdist(city_norm, city_match),
+    match_abb = is_abbrev(city_norm, city_match),
+    match_dist = str_dist(city_norm, city_match),
     city_swap = if_else(
-      condition = match_dist <= 2,
+      condition = match_abb | match_dist <= 2,
       true = city_match,
       false = city_norm
     )
@@ -495,12 +514,9 @@ fl <- fl %>%
 
 summary(fl$match_dist)
 sum(fl$match_dist == 1, na.rm = TRUE)
-n_distinct(fl$city_swap)
 ```
 
-### Refine
-
-```{r}
+```{r city_refine}
 fl_refine <- fl %>% 
   filter(state_clean == "FL") %>% 
   mutate(
@@ -508,7 +524,15 @@ fl_refine <- fl %>%
       key_collision_merge() %>% 
       n_gram_merge()
   ) %>% 
-  filter(city_refine != city_swap)
+  filter(city_refine != city_swap) %>% 
+  inner_join(
+    y = zipcodes, 
+    by = c(
+      "city_swap" = "city",
+      "zip_clean" = "zip", 
+      "state_clean" = "state"
+    )
+  )
 
 fl_refine %>% 
   count(
@@ -518,30 +542,102 @@ fl_refine %>%
   )
 ```
 
-```{r join_refine}
+```{r city_join}
 fl <- fl %>% 
   left_join(fl_refine) %>% 
   mutate(city_clean = coalesce(city_refine, city_swap))
 ```
 
-```{r city_reduce, collapse=TRUE}
-n_distinct(fl$city_sep)
-n_distinct(fl$city_norm)
-n_distinct(fl$city_swap)
-n_distinct(fl$city_clean)
+We will check a few remaining cities by hand. The 20 most common cities not in
+`valid_city` are actually valid cities.
+
+```{r city_bad}
+bad_city <- fl$city_clean[which(fl$city_clean %out% valid_city)]
+more_city <- most_common(bad_city, n = 20)
+print(more_city)
+```
+
+```{r city_progress}
+progress <-
+  progress_table(
+    fl$city_sep,
+    fl$city_norm,
+    fl$city_swap,
+    fl$city_clean,
+    compare = c(valid_city, more_city)
+  ) %>% 
+  mutate(stage = as_factor(stage))
+```
+
+```{r progress_print, echo=FALSE}
+print(progress)
+```
+
+You can see how the percentage of valid values increased with each stage.
+
+```{r progress_bar, echo=FALSE}
+progress %>% 
+  ggplot(aes(x = stage, y = prop_in)) +
+  geom_hline(yintercept = 0.99) +
+  geom_col(fill = RColorBrewer::brewer.pal(3, "Dark2")[3]) +
+  coord_cartesian(ylim = c(0.75, 1)) +
+  scale_y_continuous(labels = percent) +
+  labs(
+    title = "Florida City Normalization Progress",
+    x = "Stage",
+    y = "Percent Valid",
+    caption = "Source: Florida Dept. of State"
+  )
+```
+
+More importantly, the number of distinct values decreased each stage. We were
+able to confidently change many distinct invalid values to their valid
+equivilent.
+
+```{r distinct_bar}
+progress %>% 
+  select(
+    stage, 
+    all = n_distinct,
+    bad = n_diff
+  ) %>% 
+  mutate(good = all - bad) %>% 
+  pivot_longer(c("good", "bad")) %>% 
+  mutate(name = name == "good") %>% 
+  ggplot(aes(x = stage, y = value)) +
+  geom_col(aes(fill = name)) +
+  scale_fill_brewer(palette = "Dark2") +
+  scale_y_continuous(labels = comma) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "Florida City Normalization Progress",
+    subtitle = "Distinct values, valid and invalid",
+    x = "Stage",
+    y = "Percent Valid",
+    caption = "Source: Florida Dept. of State",
+    fill = "Valid"
+  )
+  
 ```
 
 ## Lookup
 
-```{r lookup}
-lookup <- read_csv("fl/expends/data/fl_city_lookup.csv")
-fl <- left_join(fl, select(lookup, 1, 2))
-```
+If there is a lookup file, we can add that stage too.
 
-```{r}
-n_distinct(fl$city_new)
-prop_in(fl$city_new, valid_city)
-count_out(fl$city_new, valid_city)
+```{r lookup, eval=TRUE}
+lookup_file <- here("fl", "expends", "data", "fl_expends_city_lookup.csv")
+if (file.exists(lookup_file)) {
+  lookup <- read_csv(lookup_file) %>% clean_names()
+  fl <- left_join(fl, select(lookup, 1, 2))
+  progress_table(
+    fl$city_sep,
+    fl$city_norm,
+    fl$city_swap,
+    fl$city_clean,
+    fl$city_clean2,
+    compare = c(valid_city, more_city)
+  ) 
+}
 ```
 
 ## Export
@@ -551,7 +647,6 @@ clean_dir <- here("fl", "expends", "data", "processed")
 dir_create(clean_dir)
 fl %>% 
   select(
-    -address,
     -city_state_zip,
     -city_sep,
     -state_sep,
@@ -559,8 +654,9 @@ fl %>%
     -city_norm,
     -city_match,
     -match_dist,
+    -match_abb,
     -city_swap,
-    -city_clean
+    -city_refine
   ) %>% 
   write_csv(
     path = glue("{clean_dir}/fl_expends_clean.csv"),
