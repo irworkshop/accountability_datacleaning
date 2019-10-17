@@ -215,7 +215,7 @@ remote_browser$findElement("css", limit_box)$clearElement()
 
 # enter Jan 1 2008 as start date
 date_box <- "div.indent:nth-child(2) > input:nth-child(1)"
-remote_browser$findElement("css", )$sendKeysToElement(list("01/01/2008"))
+remote_browser$findElement("css", date_box)$sendKeysToElement(list("01/01/2008"))
 
 # chose "txt" as export option
 txt_button <- "ul.noBullet:nth-child(70) > li:nth-child(2) > input:nth-child(1)"
