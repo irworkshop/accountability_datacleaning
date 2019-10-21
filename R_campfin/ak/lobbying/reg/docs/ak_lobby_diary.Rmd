@@ -1,0 +1,286 @@
+---
+title: "Alaksa Lobbyists"
+author: "Kiernan Nicholls"
+date: "`r Sys.time()`"
+output:
+  github_document: 
+    df_print: tibble
+    toc: true
+    toc_dept: 3
+editor_options: 
+  chunk_output_type: console
+---
+
+<!-- Place comments regarding knitting here -->
+
+```{r setup, include=FALSE, purl=FALSE}
+library(knitr)
+opts_chunk$set(
+  eval = TRUE,
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  error = FALSE,
+  collapse = TRUE,
+  comment = "#>",
+  fig.path = "../plots/",
+  fig.width = 10,
+  dpi = 300
+)
+options(width = 99)
+set.seed(5)
+```
+
+```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
+fs::dir_create(here::here("ak", "lobbying", "reg", "docs"))
+```
+
+## Project
+
+The Accountability Project is an effort to cut across data silos and give journalists, policy
+professionals, activists, and the public at large a simple way to search across huge volumes of
+public data about people and organizations.
+
+Our goal is to standardizing public data on a few key fields by thinking of each dataset row as a
+transaction. For each transaction there should be (at least) 3 variables:
+
+1. All **parties** to a transaction
+2. The **date** of the transaction
+3. The **amount** of money involved
+
+## Objectives
+
+This document describes the process used to complete the following objectives:
+
+1. How many records are in the database?
+1. Check for duplicates
+1. Check ranges
+1. Is there anything blank or missing?
+1. Check for consistency issues
+1. Create a five-digit ZIP Code called `ZIP5`
+1. Create a `YEAR` field from the transaction date
+1. Make sure there is data on both parties to a transaction
+
+## Packages
+
+The following packages are needed to collect, manipulate, visualize, analyze, and communicate
+these results. The `pacman` package will facilitate their installation and attachment.
+
+The IRW's `campfin` package will also have to be installed from GitHub. This package contains
+functions custom made to help facilitate the processing of campaign finance data.
+
+```{r load_packages, message=FALSE, dfrning=FALSE, error=FALSE}
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load_gh("irworkshop/campfin")
+pacman::p_load(
+  tidyverse, # data manipulation
+  lubridate, # datetime strings
+  magrittr, # pipe opperators
+  janitor, # dataframe clean
+  refinr, # cluster and merge
+  scales, # format strings
+  knitr, # knit documents
+  vroom, # read files fast
+  glue, # combine strings
+  here, # relative storage
+  httr, # http queries
+  fs # search storage 
+)
+```
+
+This document should be run as part of the `R_campfin` project, which lives as a sub-directory of
+the more general, language-agnostic [`irworkshop/accountability_datacleaning`][01] GitHub
+repository.
+
+The `R_campfin` project uses the [RStudio projects][02] feature and should be run as such. The
+project also uses the dynamic `here::here()` tool for file paths relative to _your_ machine.
+
+```{r where_here}
+# where does this document knit?
+here::here()
+```
+
+[01]: https://github.com/irworkshop/accountability_datacleaning "TAP repo"
+[02]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects "Rproj"
+
+## Data
+
+Data is obtained from the [Alaska Public Offices Commission][apoc] (APOC).
+
+> #### Mission
+> To encourage the public's confidence in their elected and appointed officials by administering
+Alaska's disclosure statutes and publishing financial information regarding the activities of
+election campaigns, public officials, lobbyists and lobbyist employers.
+
+On the APOC home page, we can see that lobbying disclosure data can be searched.
+
+> #### [Lobbying Disclosure](https://aws.state.ak.us/ApocReports/Lobbying/)
+> Search reports from Lobbyists and Employers of Lobbyists.
+
+[apoc]: http://doa.alaska.gov/apoc/home.html
+
+## Import
+
+From the APOC website, we can query the database for any year and download the data locally.
+
+```{r raw_dir}
+raw_dir <- here("ak", "lobbying", "reg", "data", "raw")
+dir_create(raw_dir)
+```
+
+We could also attemp this with `httr::GET()` (but not now).
+
+```{r raw_get, eval=FALSE}
+response <- GET(
+  url = "https://aws.state.ak.us/ApocReports/Lobbying/LORForms.aspx", 
+  query = list(
+    exportAll = "True", 
+    exportFormat = "CSV", 
+    isExport = "True"
+  )
+)
+
+aklr <- content(response)
+```
+
+```{r list_files}
+raw_file <- dir_ls(raw_dir)
+length(raw_file) == 1
+```
+
+The raw file can be read using `vroom::vroom()`.
+
+```{r raw_read}
+aklr <- read_delim(
+  file = raw_file,
+  delim = ",",
+  escape_backslash = FALSE,
+  escape_double = FALSE,
+  col_types = cols(
+    .default = col_character(),
+    Result = col_double(),
+    `Report Year` = col_integer(),
+    `Other Services Performed` = col_logical(),
+    `Administrative Lobbying` = col_logical(),
+    `Legislative Lobbying` = col_logical(),
+    `Start Date` = col_date_usa(),
+    `Compensation Amount` = col_double(),
+    `Reimbursement Of Expenses` = col_logical(),
+    `Other Compensation` = col_logical(),
+    `Not Qualified As Lobbyist` = col_logical(),
+    `Date Qualified As Lobbyist` = col_date_usa()
+  )
+)
+```
+
+We know the file was properly read as the number of rows is equal to the number of distinct
+`report` values, a unique row number variable.
+
+```{r raw_count}
+n_distinct(aklr$Result) == nrow(aklr)
+```
+
+Using `readr::problems()`, we do see that, aside from the trailing column, there are a couple
+dozen parsing problems. These typically stem from an incorrect number of delimeter or escape
+characters.
+
+```{r raw_problems}
+problems(aklr) %>% 
+  filter(expected != "51 columns") %>% 
+  group_by(row)
+```
+
+We can repair the data frame using the `janitor` package and by filtering out those few
+incorrectly parsed rows.
+
+```{r raw_repair}
+aklr <- aklr %>% 
+  clean_names("snake") %>% 
+  remove_empty("cols") %>% 
+  remove_empty("rows") %>%
+  filter(!is.na(result))
+```
+
+## Explore
+
+```{r glimpse}
+head(aklr)
+tail(aklr)
+glimpse(sample_frac(aklr))
+```
+
+### Missing
+
+_Very_ few records are missing some of the variables we need to identify a lobbyist.
+
+```{r na_count}
+glimpse_fun(aklr, count_na)
+```
+
+We can flag those rows with `campfin::na_flag()`.
+
+```{r na_flag}
+aklr <- aklr %>% flag_na(last_name, address, employer_contact_last_name, start_date)
+sum(aklr$na_flag)
+```
+
+### Duplicate
+
+There are no duplicate records that need to be flagged.
+
+```{r dupe_count}
+aklr <- flag_dupes(aklr, -result)
+if (sum(aklr$dupe_flag) == 0) {
+  aklr <- select(aklr, -dupe_flag)
+}
+```
+
+### Categorical
+
+```{r cat_distinct}
+glimpse_fun(aklr, n_distinct)
+```
+
+```{r plot_comp_name, echo=FALSE}
+explore_plot(aklr, compensation_name, flip = TRUE)
+```
+
+```{r plot_reimburse, echo=FALSE}
+explore_plot(aklr, reimbursement_of_expenses)
+```
+
+### Continuous
+
+### Amounts
+
+```{r plot_comp_amount, echo=FALSE, fig.height=9}
+aklr %>% 
+  filter(compensation_name %in% most_common(aklr$compensation_name, 4)) %>% 
+  ggplot(aes(compensation_amount)) +
+  geom_histogram(fill = RColorBrewer::brewer.pal(3, "Dark2")[1]) +
+  scale_x_continuous(labels = dollar, trans = "log10") +
+  scale_y_continuous(labels = comma) +
+  facet_wrap(~compensation_name, scales = "free", ncol = 1)
+```
+
+### Dates
+
+```{r year_add}
+aklr <- mutate(aklr, start_year = year(start_date))
+```
+
+```{r date_range}
+min(aklr$start_date, na.rm = TRUE)
+max(aklr$start_date, na.rm = TRUE)
+```
+
+```{r plot_year_count, echo=FALSE}
+aklr %>%
+  count(start_year) %>% 
+  mutate(start_year = as.character(start_year)) %>% 
+  ggplot(aes(start_year, n)) +
+  geom_col(aes(fill = start_year)) +
+  scale_fill_discrete(guide = FALSE)
+```
+
+## Wrangle
