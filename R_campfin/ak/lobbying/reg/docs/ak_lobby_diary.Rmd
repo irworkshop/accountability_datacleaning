@@ -173,7 +173,7 @@ aklr <- read_delim(
 )
 ```
 
-We know the file was properly read as the number of rows is equal to the number of distinct
+We know the file was not properly read as the number of rows is not equal to the number of distinct
 `report` values, a unique row number variable.
 
 ```{r raw_count}
@@ -181,16 +181,17 @@ n_distinct(aklr$Result) == nrow(aklr)
 ```
 
 Using `readr::problems()`, we do see that, aside from the trailing column, there are a couple
-dozen parsing problems. These typically stem from an incorrect number of delimeter or escape
+dozen parsing problems. These typically cascade from an incorrect number of delimeter or escape
 characters.
 
 ```{r raw_problems}
 problems(aklr) %>% 
   filter(expected != "51 columns") %>% 
-  group_by(row)
+  group_by(row) %>% 
+  select(-file)
 ```
 
-We can repair the data frame using the `janitor` package and by filtering out those few
+For now, we can repair the data frame using the `janitor` package and by filtering out those few
 incorrectly parsed rows.
 
 ```{r raw_repair}
@@ -199,6 +200,10 @@ aklr <- aklr %>%
   remove_empty("cols") %>% 
   remove_empty("rows") %>%
   filter(!is.na(result))
+```
+
+```{r raw_count2}
+n_distinct(aklr$result) == nrow(aklr)
 ```
 
 ## Explore
@@ -284,3 +289,130 @@ aklr %>%
 ```
 
 ## Wrangle
+
+### Address
+
+```{r address_norm}
+aklr <- aklr %>% 
+  mutate_at(
+    .vars = vars(ends_with("address")),
+    .funs = list(norm = normal_address),
+    add_abbs = usps_street,
+    na_rep = TRUE
+  )
+```
+
+### ZIP
+
+```{r zip_norm}
+aklr <- aklr %>% 
+  mutate_at(
+    .vars = vars(ends_with("zip")),
+    .funs = list(norm = normal_zip),
+    na_rep = TRUE
+  )
+```
+
+```{r zip_progress}
+progress_table(
+  aklr$zip,
+  aklr$zip_norm,
+  compare = valid_zip
+)
+progress_table(
+  aklr$legislative_zip,
+  aklr$legislative_zip_norm,
+  compare = valid_zip
+)
+progress_table(
+  aklr$employer_contact_zip,
+  aklr$employer_contact_zip_norm,
+  compare = valid_zip
+)
+```
+
+### State
+
+```{r state_norm}
+aklr <- aklr %>% 
+  mutate_at(
+    .vars = vars(ends_with("state_region")),
+    .funs = list(norm = normal_state),
+    abbreviate = TRUE,
+    na_rep = TRUE,
+    valid = NULL
+  )
+```
+
+```{r state_progress}
+progress_table(
+  aklr$state_region,
+  aklr$state_region_norm,
+  compare = valid_state
+)
+progress_table(
+  aklr$legislative_state_region,
+  aklr$legislative_state_region_norm,
+  compare = valid_state
+)
+progress_table(
+  aklr$employer_contact_state_region,
+  aklr$employer_contact_state_region_norm,
+  compare = valid_state
+)
+```
+
+```{r state_view_post}
+aklr %>% 
+  select(state_region, state_region_norm) %>% 
+  distinct() %>% 
+  sample_frac()
+```
+
+### Phone
+
+```{r phone_view_pre}
+aklr %>% 
+  select(phone, fax) %>% 
+  distinct() %>% 
+  sample_frac()
+```
+
+```{r phone_norm, eval=FALSE}
+aklr <- aklr %>%
+  %>% 
+  mutate(p2 = str_split(phone, pattern = "\\s\\s")) %>% 
+  sample_frac() %>% 
+  mutate(
+    p3 = map(p2, normal_phone)
+  ) %>% 
+  mutate(p4 = sapply(p3, toString))
+
+  mutate_at(
+    .vars = vars(ends_with("phone")),
+    .funs = list(norm = normal_phone),
+    format = "(%a) %e-%l",
+    na_bad = FALSE,
+    convert = FALSE,
+    rm_ext = FALSE
+  )
+```
+
+```{r fax_norm}
+aklr <- aklr 
+  mutate_at(
+    .vars = vars(ends_with("fax")),
+    .funs = list(norm = normal_phone),
+    format = "(%a) %e-%l",
+    na_bad = FALSE,
+    convert = FALSE,
+    rm_ext = FALSE
+  )
+```
+
+```{r phone_view_post}
+aklr %>% 
+  select(phone_norm, fax_norm) %>% 
+  distinct() %>% 
+  sample_frac()
+```
