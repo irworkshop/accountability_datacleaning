@@ -1,7 +1,7 @@
 Alaksa Lobbyists
 ================
 Kiernan Nicholls
-2019-10-21 12:45:19
+2019-10-22 12:44:58
 
 <!-- Place comments regarding knitting here -->
 
@@ -154,8 +154,9 @@ aklr <- read_delim(
 )
 ```
 
-We know the file was properly read as the number of rows is equal to the
-number of distinct `report` values, a unique row number variable.
+We know the file was not properly read as the number of rows is not
+equal to the number of distinct `report` values, a unique row number
+variable.
 
 ``` r
 n_distinct(aklr$Result) == nrow(aklr)
@@ -163,30 +164,31 @@ n_distinct(aklr$Result) == nrow(aklr)
 ```
 
 Using `readr::problems()`, we do see that, aside from the trailing
-column, there are a couple dozen parsing problems. These typically stem
-from an incorrect number of delimeter or escape characters.
+column, there are a couple dozen parsing problems. These typically
+cascade from an incorrect number of delimeter or escape characters.
 
 ``` r
 problems(aklr) %>% 
   filter(expected != "51 columns") %>% 
-  group_by(row)
-#> # A tibble: 26 x 5
-#>      row col          expected     actual                       file                               
-#>    <int> <chr>        <chr>        <chr>                        <chr>                              
-#>  1   467 Not Qualifi… 1/0/T/F/TRU… " John Middleton Co."        '/home/kiernan/R/accountability_da…
-#>  2   467 Date Qualif… date like %… " U.S. Smokelss Tobacco Co." '/home/kiernan/R/accountability_da…
-#>  3   555 Result       a double     "\",,,\r\n555,2018,1/8/2018… '/home/kiernan/R/accountability_da…
-#>  4   555 Report Year  an integer   " 28 Liberty Ship Way"       '/home/kiernan/R/accountability_da…
-#>  5   555 Other Servi… 1/0/T/F/TRU… 92.0000                      '/home/kiernan/R/accountability_da…
-#>  6   555 Start Date   date like %… Computer Utilization; Educa… '/home/kiernan/R/accountability_da…
-#>  7   730 Result       a double     "HB357\""                    '/home/kiernan/R/accountability_da…
-#>  8   730 Report Year  an integer   True                         '/home/kiernan/R/accountability_da…
-#>  9   920 Not Qualifi… 1/0/T/F/TRU… " John Middleton Co."        '/home/kiernan/R/accountability_da…
-#> 10   920 Date Qualif… date like %… " U.S. Smokelss Tobacco Co." '/home/kiernan/R/accountability_da…
+  group_by(row) %>% 
+  select(-file)
+#> # A tibble: 26 x 4
+#>      row col                  expected        actual                                               
+#>    <int> <chr>                <chr>           <chr>                                                
+#>  1   467 Not Qualified As Lo… 1/0/T/F/TRUE/F… " John Middleton Co."                                
+#>  2   467 Date Qualified As L… date like %m/%… " U.S. Smokelss Tobacco Co."                         
+#>  3   555 Result               a double        "\",,,\r\n555,2018,1/8/2018,Filed,,John,Drescher,,\"…
+#>  4   555 Report Year          an integer      " 28 Liberty Ship Way"                               
+#>  5   555 Other Services Perf… 1/0/T/F/TRUE/F… 92.0000                                              
+#>  6   555 Start Date           date like %m/%… Computer Utilization; Education                      
+#>  7   730 Result               a double        "HB357\""                                            
+#>  8   730 Report Year          an integer      True                                                 
+#>  9   920 Not Qualified As Lo… 1/0/T/F/TRUE/F… " John Middleton Co."                                
+#> 10   920 Date Qualified As L… date like %m/%… " U.S. Smokelss Tobacco Co."                         
 #> # … with 16 more rows
 ```
 
-We can repair the data frame using the `janitor` package and by
+For now, we can repair the data frame using the `janitor` package and by
 filtering out those few incorrectly parsed rows.
 
 ``` r
@@ -195,6 +197,11 @@ aklr <- aklr %>%
   remove_empty("cols") %>% 
   remove_empty("rows") %>%
   filter(!is.na(result))
+```
+
+``` r
+n_distinct(aklr$result) == nrow(aklr)
+#> [1] TRUE
 ```
 
 ## Explore
@@ -476,3 +483,366 @@ max(aklr$start_date, na.rm = TRUE)
 ![](../plots/plot_year_count-1.png)<!-- -->
 
 ## Wrangle
+
+### Address
+
+``` r
+aklr <- aklr %>% 
+  mutate_at(
+    .vars = vars(ends_with("address")),
+    .funs = list(norm = normal_address),
+    add_abbs = usps_street,
+    na_rep = TRUE
+  )
+```
+
+### ZIP
+
+``` r
+aklr <- aklr %>% 
+  mutate_at(
+    .vars = vars(ends_with("zip")),
+    .funs = list(norm = normal_zip),
+    na_rep = TRUE
+  )
+```
+
+``` r
+progress_table(
+  aklr$zip,
+  aklr$zip_norm,
+  compare = valid_zip
+)
+#> # A tibble: 2 x 6
+#>   stage    prop_in n_distinct prop_na n_out n_diff
+#>   <chr>      <dbl>      <dbl>   <dbl> <dbl>  <dbl>
+#> 1 zip        0.990        115       0    48     11
+#> 2 zip_norm   0.998        107       0     8      2
+progress_table(
+  aklr$legislative_zip,
+  aklr$legislative_zip_norm,
+  compare = valid_zip
+)
+#> # A tibble: 2 x 6
+#>   stage                prop_in n_distinct prop_na n_out n_diff
+#>   <chr>                  <dbl>      <dbl>   <dbl> <dbl>  <dbl>
+#> 1 legislative_zip        0.989        115       0    51     15
+#> 2 legislative_zip_norm   0.998        104       0     9      3
+progress_table(
+  aklr$employer_contact_zip,
+  aklr$employer_contact_zip_norm,
+  compare = valid_zip
+)
+#> # A tibble: 2 x 6
+#>   stage                     prop_in n_distinct prop_na n_out n_diff
+#>   <chr>                       <dbl>      <dbl>   <dbl> <dbl>  <dbl>
+#> 1 employer_contact_zip        0.917        390       0   386     77
+#> 2 employer_contact_zip_norm   0.988        343       0    55      6
+```
+
+### State
+
+``` r
+aklr <- aklr %>% 
+  mutate_at(
+    .vars = vars(ends_with("state_region")),
+    .funs = list(norm = normal_state),
+    abbreviate = TRUE,
+    na_rep = TRUE,
+    valid = NULL
+  )
+```
+
+``` r
+progress_table(
+  aklr$state_region,
+  aklr$state_region_norm,
+  compare = valid_state
+)
+#> # A tibble: 2 x 6
+#>   stage             prop_in n_distinct prop_na n_out n_diff
+#>   <chr>               <dbl>      <dbl>   <dbl> <dbl>  <dbl>
+#> 1 state_region        0             19 0.00923  4617     19
+#> 2 state_region_norm   1.000         19 0.00923     1      2
+progress_table(
+  aklr$legislative_state_region,
+  aklr$legislative_state_region_norm,
+  compare = valid_state
+)
+#> # A tibble: 2 x 6
+#>   stage                         prop_in n_distinct prop_na n_out n_diff
+#>   <chr>                           <dbl>      <dbl>   <dbl> <dbl>  <dbl>
+#> 1 legislative_state_region        0             18 0.00966  4615     18
+#> 2 legislative_state_region_norm   1.000         18 0.00966     1      2
+progress_table(
+  aklr$employer_contact_state_region,
+  aklr$employer_contact_state_region_norm,
+  compare = valid_state
+)
+#> # A tibble: 2 x 6
+#>   stage                              prop_in n_distinct prop_na n_out n_diff
+#>   <chr>                                <dbl>      <dbl>   <dbl> <dbl>  <dbl>
+#> 1 employer_contact_state_region        0             42  0.0157  4587     42
+#> 2 employer_contact_state_region_norm   0.996         42  0.0157    20      5
+```
+
+``` r
+aklr %>% 
+  select(state_region, state_region_norm) %>% 
+  distinct() %>% 
+  sample_frac()
+#> # A tibble: 19 x 2
+#>    state_region         state_region_norm
+#>    <chr>                <chr>            
+#>  1 Arizona              AZ               
+#>  2 Idaho                ID               
+#>  3 Texas                TX               
+#>  4 Florida              FL               
+#>  5 Illinois             IL               
+#>  6 Virginia             VA               
+#>  7 Utah                 UT               
+#>  8 New York             NY               
+#>  9 Alberta              ALBERTA          
+#> 10 California           CA               
+#> 11 Alaska               AK               
+#> 12 <NA>                 <NA>             
+#> 13 District of Columbia DC               
+#> 14 Washington           WA               
+#> 15 Tennessee            TN               
+#> 16 Oregon               OR               
+#> 17 Colorado             CO               
+#> 18 Montana              MT               
+#> 19 Massachusetts        MA
+```
+
+### Phone
+
+``` r
+aklr %>% 
+  select(phone, fax) %>% 
+  distinct() %>% 
+  sample_frac()
+#> # A tibble: 516 x 2
+#>    phone                              fax         
+#>    <chr>                              <chr>       
+#>  1 "907 230 08843  "                  <NA>        
+#>  2 907-575-4464                       <NA>        
+#>  3 (916) 340-0733                     <NA>        
+#>  4 9075658236                         <NA>        
+#>  5 9074633067  9074632533  9072278022 9074633922  
+#>  6 907-723-6486                       907-463-3275
+#>  7 9073213311                         907-789-7041
+#>  8 907-321-2551                       907-586-1098
+#>  9 "9072502855  "                     <NA>        
+#> 10 907-789-9273                       <NA>        
+#> # … with 506 more rows
+```
+
+``` r
+multi_phone_norm <- function(number, ...) {
+  number %>% 
+    str_trim("both") %>% 
+    str_split(pattern = "\\s\\s") %>% 
+    map(normal_phone, ...) %>% 
+    sapply(toString) %>% 
+    na_if("NA")
+}
+```
+
+``` r
+aklr <- aklr %>% 
+  mutate_at(
+    .vars = vars(ends_with("phone")),
+    .funs = list(norm = multi_phone_norm),
+    format = "(%a) %e-%l",
+    na_bad = FALSE,
+    convert = FALSE,
+    rm_ext = FALSE
+  )
+```
+
+``` r
+aklr <- aklr %>% 
+  mutate_at(
+    .vars = vars(ends_with("fax")),
+    .funs = list(norm = multi_phone_norm),
+    format = "(%a) %e-%l",
+    na_bad = FALSE,
+    convert = FALSE,
+    rm_ext = FALSE
+  )
+```
+
+``` r
+aklr %>% 
+  select(phone_norm, fax_norm) %>% 
+  distinct() %>% 
+  sample_frac()
+#> # A tibble: 431 x 2
+#>    phone_norm                                     fax_norm      
+#>    <chr>                                          <chr>         
+#>  1 (888) 264-8799                                 (901) 818-7194
+#>  2 (512) 394-0049                                 (866) 953-4112
+#>  3 (907) 883-4468, (907) 360-7438, (907) 360-7438 (907) 883-4468
+#>  4 (907) 796-4999                                 (907) 796-4998
+#>  5 (907) 764-5778                                 <NA>          
+#>  6 (907) 230-1692                                 <NA>          
+#>  7 (907) 230-1111                                 <NA>          
+#>  8 (907) 229-8008                                 <NA>          
+#>  9 (907) 459-2000                                 (907) 459-2060
+#> 10 (907) 586-2264                                 (907) 586-1097
+#> # … with 421 more rows
+```
+
+### City
+
+``` r
+aklr <- aklr %>% 
+  mutate_at(
+    .vars = vars(ends_with("city")),
+    .funs = list(norm = normal_city),
+    geo_abbs = usps_city,
+    st_abbs = c("AK", "DC", "ALASKA"),
+    na = invalid_city,
+    na_rep = TRUE
+  )
+```
+
+``` r
+aklr <- aklr %>%
+  rename(city_raw = city) %>% 
+  left_join(
+    y = zipcodes,
+    by = c(
+      "state_region_norm" = "state",
+      "zip_norm" = "zip"
+    )
+  ) %>% 
+  rename(city_match = city) %>% 
+  mutate(
+    match_abb = is_abbrev(city_norm, city_match),
+    match_dist = str_dist(city_norm, city_match),
+    city_swap = if_else(
+      condition = match_abb | match_dist == 1,
+      true = city_match, false = city_norm
+    )
+  )
+```
+
+``` r
+progress_table(
+  str_to_upper(aklr$city_raw),
+  aklr$city_norm,
+  aklr$city_swap,
+  compare = valid_city
+)
+#> # A tibble: 3 x 6
+#>   stage     prop_in n_distinct prop_na n_out n_diff
+#>   <chr>       <dbl>      <dbl>   <dbl> <dbl>  <dbl>
+#> 1 city_raw)   0.982         75  0         85      8
+#> 2 city_norm   0.996         71  0         17      4
+#> 3 city_swap   1.000         70  0.0124     1      2
+```
+
+``` r
+aklr <- aklr %>%
+  left_join(
+    y = zipcodes,
+    by = c(
+      "legislative_state_region_norm" = "state",
+      "legislative_zip_norm" = "zip"
+    )
+  ) %>% 
+  rename(legislative_city_match = city) %>% 
+  mutate(
+    legislative_match_abb = is_abbrev(
+      abb = legislative_city_norm, 
+      full = legislative_city_match
+    ),
+    match_dist = str_dist(
+      a = legislative_city_norm, 
+      b = legislative_city_match
+    ),
+    legislative_city_swap = if_else(
+      condition = match_abb | match_dist == 1,
+      true = legislative_city_match, 
+      false = legislative_city_norm
+    )
+  )
+```
+
+``` r
+progress_table(
+  str_to_upper(aklr$legislative_city),
+  aklr$legislative_city_norm,
+  aklr$legislative_city_swap,
+  compare = valid_city
+)
+#> # A tibble: 3 x 6
+#>   stage                 prop_in n_distinct prop_na n_out n_diff
+#>   <chr>                   <dbl>      <dbl>   <dbl> <dbl>  <dbl>
+#> 1 legislative_city)       0.981         71  0         87      7
+#> 2 legislative_city_norm   0.996         68  0         17      4
+#> 3 legislative_city_swap   1.000         67  0.0122     1      2
+```
+
+``` r
+aklr <- aklr %>%
+  left_join(
+    y = zipcodes,
+    by = c(
+      "employer_contact_state_region_norm" = "state",
+      "employer_contact_zip_norm" = "zip"
+    )
+  ) %>% 
+  rename(employer_contact_city_match = city) %>% 
+  mutate(
+    employer_contact_match_abb = is_abbrev(
+      abb = employer_contact_city_norm, 
+      full = employer_contact_city_match
+    ),
+    match_dist = str_dist(
+      a = employer_contact_city_norm, 
+      b = employer_contact_city_match
+    ),
+    employer_contact_city_swap = if_else(
+      condition = match_abb | match_dist == 1,
+      true = employer_contact_city_match, 
+      false = employer_contact_city_norm
+    )
+  )
+```
+
+``` r
+progress_table(
+  str_to_upper(aklr$employer_contact_city),
+  aklr$employer_contact_city_norm,
+  aklr$employer_contact_city_swap,
+  compare = valid_city
+)
+#> # A tibble: 3 x 6
+#>   stage                      prop_in n_distinct prop_na n_out n_diff
+#>   <chr>                        <dbl>      <dbl>   <dbl> <dbl>  <dbl>
+#> 1 employer_contact_city)       0.977        229  0        107     34
+#> 2 employer_contact_city_norm   0.987        220  0         59     21
+#> 3 employer_contact_city_swap   0.996        205  0.0395    17     10
+```
+
+## Export
+
+``` r
+proc_dir <- here("ak", "lobbying", "reg", "data", "processed")
+dir_create(proc_dir)
+```
+
+``` r
+aklr %>% 
+  select(
+    -ends_with("city_norm"),
+    -contains("match")
+  ) %>% 
+  write_csv(
+    path = glue("{proc_dir}/ak_lobbyists_clean.csv"),
+    na = ""
+  )
+```

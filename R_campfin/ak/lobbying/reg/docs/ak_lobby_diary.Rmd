@@ -378,19 +378,22 @@ aklr %>%
   sample_frac()
 ```
 
-```{r phone_norm, eval=FALSE}
-aklr <- aklr %>%
-  %>% 
-  mutate(p2 = str_split(phone, pattern = "\\s\\s")) %>% 
-  sample_frac() %>% 
-  mutate(
-    p3 = map(p2, normal_phone)
-  ) %>% 
-  mutate(p4 = sapply(p3, toString))
+```{r multi_phone_norm}
+multi_phone_norm <- function(number, ...) {
+  number %>% 
+    str_trim("both") %>% 
+    str_split(pattern = "\\s\\s") %>% 
+    map(normal_phone, ...) %>% 
+    sapply(toString) %>% 
+    na_if("NA")
+}
+```
 
+```{r phone_norm}
+aklr <- aklr %>% 
   mutate_at(
     .vars = vars(ends_with("phone")),
-    .funs = list(norm = normal_phone),
+    .funs = list(norm = multi_phone_norm),
     format = "(%a) %e-%l",
     na_bad = FALSE,
     convert = FALSE,
@@ -399,10 +402,10 @@ aklr <- aklr %>%
 ```
 
 ```{r fax_norm}
-aklr <- aklr 
+aklr <- aklr %>% 
   mutate_at(
     .vars = vars(ends_with("fax")),
-    .funs = list(norm = normal_phone),
+    .funs = list(norm = multi_phone_norm),
     format = "(%a) %e-%l",
     na_bad = FALSE,
     convert = FALSE,
@@ -416,3 +419,139 @@ aklr %>%
   distinct() %>% 
   sample_frac()
 ```
+
+### City
+
+```{r city_norm}
+aklr <- aklr %>% 
+  mutate_at(
+    .vars = vars(ends_with("city")),
+    .funs = list(norm = normal_city),
+    geo_abbs = usps_city,
+    st_abbs = c("AK", "DC", "ALASKA"),
+    na = invalid_city,
+    na_rep = TRUE
+  )
+```
+
+```{r city_swap}
+aklr <- aklr %>%
+  rename(city_raw = city) %>% 
+  left_join(
+    y = zipcodes,
+    by = c(
+      "state_region_norm" = "state",
+      "zip_norm" = "zip"
+    )
+  ) %>% 
+  rename(city_match = city) %>% 
+  mutate(
+    match_abb = is_abbrev(city_norm, city_match),
+    match_dist = str_dist(city_norm, city_match),
+    city_swap = if_else(
+      condition = match_abb | match_dist == 1,
+      true = city_match, false = city_norm
+    )
+  )
+```
+
+```{r city_progress}
+progress_table(
+  str_to_upper(aklr$city_raw),
+  aklr$city_norm,
+  aklr$city_swap,
+  compare = valid_city
+)
+```
+
+```{r legislative_city_swap}
+aklr <- aklr %>%
+  left_join(
+    y = zipcodes,
+    by = c(
+      "legislative_state_region_norm" = "state",
+      "legislative_zip_norm" = "zip"
+    )
+  ) %>% 
+  rename(legislative_city_match = city) %>% 
+  mutate(
+    legislative_match_abb = is_abbrev(
+      abb = legislative_city_norm, 
+      full = legislative_city_match
+    ),
+    match_dist = str_dist(
+      a = legislative_city_norm, 
+      b = legislative_city_match
+    ),
+    legislative_city_swap = if_else(
+      condition = match_abb | match_dist == 1,
+      true = legislative_city_match, 
+      false = legislative_city_norm
+    )
+  )
+```
+
+```{r legislative_city_progress}
+progress_table(
+  str_to_upper(aklr$legislative_city),
+  aklr$legislative_city_norm,
+  aklr$legislative_city_swap,
+  compare = valid_city
+)
+```
+
+```{r employer_city_swap}
+aklr <- aklr %>%
+  left_join(
+    y = zipcodes,
+    by = c(
+      "employer_contact_state_region_norm" = "state",
+      "employer_contact_zip_norm" = "zip"
+    )
+  ) %>% 
+  rename(employer_contact_city_match = city) %>% 
+  mutate(
+    employer_contact_match_abb = is_abbrev(
+      abb = employer_contact_city_norm, 
+      full = employer_contact_city_match
+    ),
+    match_dist = str_dist(
+      a = employer_contact_city_norm, 
+      b = employer_contact_city_match
+    ),
+    employer_contact_city_swap = if_else(
+      condition = match_abb | match_dist == 1,
+      true = employer_contact_city_match, 
+      false = employer_contact_city_norm
+    )
+  )
+```
+
+```{r employer_city_progress}
+progress_table(
+  str_to_upper(aklr$employer_contact_city),
+  aklr$employer_contact_city_norm,
+  aklr$employer_contact_city_swap,
+  compare = valid_city
+)
+```
+
+## Export
+
+```{r proc_dir}
+proc_dir <- here("ak", "lobbying", "reg", "data", "processed")
+dir_create(proc_dir)
+```
+
+```{r proc_export}
+aklr %>% 
+  select(
+    -ends_with("city_norm"),
+    -contains("match")
+  ) %>% 
+  write_csv(
+    path = glue("{proc_dir}/ak_lobbyists_clean.csv"),
+    na = ""
+  )
+```
+
