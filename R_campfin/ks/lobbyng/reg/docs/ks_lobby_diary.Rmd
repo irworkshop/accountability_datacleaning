@@ -1,0 +1,239 @@
+---
+title: "Kansas Lobbyists"
+author: "Kiernan Nicholls"
+date: "`r Sys.time()`"
+output:
+  github_document: 
+    df_print: tibble
+    toc: true
+    toc_dept: 2
+editor_options: 
+  chunk_output_type: console
+---
+
+<!-- Place comments regarding knitting here -->
+
+```{r setup, include=FALSE, purl=FALSE}
+library(knitr)
+opts_chunk$set(
+  eval = TRUE,
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  error = FALSE,
+  collapse = TRUE,
+  comment = "#>",
+  fig.path = "../plots/",
+  fig.width = 10,
+  dpi = 300
+)
+options(width = 99)
+set.seed(5)
+```
+
+```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
+fs::dir_create(here::here("ks", "lobbyng", "reg", "docs"))
+```
+
+## Project
+
+The Accountability Project is an effort to cut across data silos and give journalists, policy
+professionals, activists, and the public at large a simple way to search across huge volumes of
+public data about people and organizations.
+
+Our goal is to standardizing public data on a few key fields by thinking of each dataset row as a
+transaction. For each transaction there should be (at least) 3 variables:
+
+1. All **parties** to a transaction
+2. The **date** of the transaction
+3. The **amount** of money involved
+
+## Objectives
+
+This document describes the process used to complete the following objectives:
+
+1. How many records are in the database?
+1. Check for duplicates
+1. Check ranges
+1. Is there anything blank or missing?
+1. Check for consistency issues
+1. Create a five-digit ZIP Code called `ZIP5`
+1. Create a `YEAR` field from the transaction date
+1. Make sure there is data on both parties to a transaction
+
+## Packages
+
+The following packages are needed to collect, manipulate, visualize, analyze, and communicate
+these results. The `pacman` package will facilitate their installation and attachment.
+
+The IRW's `campfin` package will also have to be installed from GitHub. This package contains
+functions custom made to help facilitate the processing of campaign finance data.
+
+```{r load_packages, message=FALSE, dfrning=FALSE, error=FALSE}
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load_gh("irworkshop/campfin")
+pacman::p_load(
+  tidyverse, # data manipulation
+  lubridate, # datetime strings
+  magrittr, # pipe opperators
+  janitor, # dataframe clean
+  refinr, # cluster and merge
+  scales, # format strings
+  knitr, # knit documents
+  vroom, # read files fast
+  rvest, # scrape html pages
+  glue, # combine strings
+  here, # relative storage
+  httr, # http queries
+  fs # search storage 
+)
+```
+
+This document should be run as part of the `R_campfin` project, which lives as a sub-directory of
+the more general, language-agnostic [`irworkshop/accountability_datacleaning`][01] GitHub
+repository.
+
+The `R_campfin` project uses the [RStudio projects][02] feature and should be run as such. The
+project also uses the dynamic `here::here()` tool for file paths relative to _your_ machine.
+
+```{r where_here}
+# where does this document knit?
+here::here()
+```
+
+[01]: https://github.com/irworkshop/accountability_datacleaning "TAP repo"
+[02]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects "Rproj"
+
+## Data
+
+Data is obtained from the [Kansas Secretary of State's Office][sos].
+
+[sos]: https://sos.kansas.gov/
+
+As described on the SOS website:
+
+> Lobbyists are required to register with the Secretary of State’s office if
+they meet the qualifications outlined in K.S.A. 46-222. Individuals who meet one
+of the following criteria in a calendar year must register as a lobbyist:
+>
+> *  receives compensation to lobby;
+> * serves as the primary representative of an organization, individual or other
+> entity to lobby, regardless of whether compensation is received; or
+> * expends a total of $100 or more for lobbying activities in a calendar year.
+> 
+> For more information on lobbying activities in Kansas, please contact the
+Kansas Governmental Ethics Commission. For assistance with the Kansas Lobbyist
+Center, please contact the Elections Division at 785-296-4561.
+
+## Import
+
+We can use `httr::GET()` to query the [SOS lobbyist directory][lob] and scrape
+then scrape the HTML table that's returned with `rves::html_table()`.
+
+[lob]: http://www.sos.ks.gov/elections/elections_lobbyists.html
+
+```{r raw_get}
+url <- "http://www.kssos.org/elections/lobbyist_directory_display.aspx?"
+response <- GET(url, query = list(SearchBy = "Lobbyist", LobbyYear = "2019"))
+kslr <- content(response) %>% 
+  html_node("table") %>% 
+  html_table(fill = TRUE) %>% 
+  as_tibble(.name_repair = make_clean_names)
+```
+
+Or, we can download the file manually and read it directly...
+
+```{r raw_dir}
+raw_dir <- here("ks", "lobbyng", "reg", "data", "raw")
+dir_create(raw_dir)
+```
+
+```{r raw_read}
+kslr <- dir_ls(raw_dir, glob = "*.html$") %>% 
+  read_html() %>% 
+  html_node("table") %>% 
+  html_table(fill = TRUE) %>% 
+  as_tibble(.name_repair = make_clean_names) %>% 
+  mutate_all(str_squish) %>% 
+  na_if("") %>% 
+  select(-starts_with("x")) %>% 
+  mutate(client = "")
+```
+
+As you can see, the clients of each lobbyist are not listed as a separate
+column, but are instead listed as in the first `name` _under_ each lobbyist.
+
+```{r raw_view}
+kslr
+```
+
+Looping from the bottom to top, we can check every row and attempt to
+concatinate each client name into a new client column.
+
+```{r raw_fix}
+for (i in nrow(kslr):1) {
+  if (is.na(kslr$name[i])) {
+    next
+  } else {
+    if (str_sub(kslr$name[i], end = 1) == "*") {
+      kslr$client[i-1] <- str_c(kslr$name[i], kslr$client[i], collapse = "#")
+      kslr[i, 1:7] <- NA
+    }
+  }
+}
+```
+
+Then, we can split this new column into a list-column and use
+`tidyr::pivot_longer()` to create a new row for every client with the lobbyist
+repeated in each row.
+
+```{r raw_unnest}
+kslr <- kslr %>% 
+  drop_na(name) %>% 
+  mutate(client = client %>% str_remove("\\*\\s") %>% str_split("\\*\\s")) %>% 
+  unnest_longer(client) %>% 
+  distinct()
+```
+
+## Wrangle
+
+The single `city_state_zip` needs to be separated into three columns with
+`tidyr::separate()`.
+
+```{r geo_split}
+kslr <- kslr %>% 
+  separate(
+    col = city_state_zip,
+    into = c("city_sep", "state_zip"),
+    sep = ",\\s",
+    remove = FALSE
+  ) %>% 
+  separate(
+    col = state_zip,
+    into = c("state_sep", "zip_sep"),
+    sep = "\\s",
+    remove = TRUE
+  )
+```
+
+From these three new columns, we can see almost all rows already contain
+valid values.
+
+```{r geo_check}
+prop_in(kslr$city_sep, valid_city)
+prop_in(kslr$state_sep, valid_state)
+prop_in(kslr$zip_sep, valid_zip)
+```
+
+## Explore
+
+```{r glimpse}
+head(kslr)
+tail(kslr)
+glimpse(sample_frac(kslr))
+```
+
+```{r}
+glimpse_fun(kslr, count_na)
+```
+

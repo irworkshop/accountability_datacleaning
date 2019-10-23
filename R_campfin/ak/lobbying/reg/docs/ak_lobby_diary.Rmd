@@ -1,0 +1,557 @@
+---
+title: "Alaksa Lobbyists"
+author: "Kiernan Nicholls"
+date: "`r Sys.time()`"
+output:
+  github_document: 
+    df_print: tibble
+    toc: true
+    toc_dept: 3
+editor_options: 
+  chunk_output_type: console
+---
+
+<!-- Place comments regarding knitting here -->
+
+```{r setup, include=FALSE, purl=FALSE}
+library(knitr)
+opts_chunk$set(
+  eval = TRUE,
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  error = FALSE,
+  collapse = TRUE,
+  comment = "#>",
+  fig.path = "../plots/",
+  fig.width = 10,
+  dpi = 300
+)
+options(width = 99)
+set.seed(5)
+```
+
+```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
+fs::dir_create(here::here("ak", "lobbying", "reg", "docs"))
+```
+
+## Project
+
+The Accountability Project is an effort to cut across data silos and give journalists, policy
+professionals, activists, and the public at large a simple way to search across huge volumes of
+public data about people and organizations.
+
+Our goal is to standardizing public data on a few key fields by thinking of each dataset row as a
+transaction. For each transaction there should be (at least) 3 variables:
+
+1. All **parties** to a transaction
+2. The **date** of the transaction
+3. The **amount** of money involved
+
+## Objectives
+
+This document describes the process used to complete the following objectives:
+
+1. How many records are in the database?
+1. Check for duplicates
+1. Check ranges
+1. Is there anything blank or missing?
+1. Check for consistency issues
+1. Create a five-digit ZIP Code called `ZIP5`
+1. Create a `YEAR` field from the transaction date
+1. Make sure there is data on both parties to a transaction
+
+## Packages
+
+The following packages are needed to collect, manipulate, visualize, analyze, and communicate
+these results. The `pacman` package will facilitate their installation and attachment.
+
+The IRW's `campfin` package will also have to be installed from GitHub. This package contains
+functions custom made to help facilitate the processing of campaign finance data.
+
+```{r load_packages, message=FALSE, dfrning=FALSE, error=FALSE}
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load_gh("irworkshop/campfin")
+pacman::p_load(
+  tidyverse, # data manipulation
+  lubridate, # datetime strings
+  magrittr, # pipe opperators
+  janitor, # dataframe clean
+  refinr, # cluster and merge
+  scales, # format strings
+  knitr, # knit documents
+  vroom, # read files fast
+  glue, # combine strings
+  here, # relative storage
+  httr, # http queries
+  fs # search storage 
+)
+```
+
+This document should be run as part of the `R_campfin` project, which lives as a sub-directory of
+the more general, language-agnostic [`irworkshop/accountability_datacleaning`][01] GitHub
+repository.
+
+The `R_campfin` project uses the [RStudio projects][02] feature and should be run as such. The
+project also uses the dynamic `here::here()` tool for file paths relative to _your_ machine.
+
+```{r where_here}
+# where does this document knit?
+here::here()
+```
+
+[01]: https://github.com/irworkshop/accountability_datacleaning "TAP repo"
+[02]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects "Rproj"
+
+## Data
+
+Data is obtained from the [Alaska Public Offices Commission][apoc] (APOC).
+
+> #### Mission
+> To encourage the public's confidence in their elected and appointed officials by administering
+Alaska's disclosure statutes and publishing financial information regarding the activities of
+election campaigns, public officials, lobbyists and lobbyist employers.
+
+On the APOC home page, we can see that lobbying disclosure data can be searched.
+
+> #### [Lobbying Disclosure](https://aws.state.ak.us/ApocReports/Lobbying/)
+> Search reports from Lobbyists and Employers of Lobbyists.
+
+[apoc]: http://doa.alaska.gov/apoc/home.html
+
+## Import
+
+From the APOC website, we can query the database for any year and download the data locally.
+
+```{r raw_dir}
+raw_dir <- here("ak", "lobbying", "reg", "data", "raw")
+dir_create(raw_dir)
+```
+
+We could also attemp this with `httr::GET()` (but not now).
+
+```{r raw_get, eval=FALSE}
+response <- GET(
+  url = "https://aws.state.ak.us/ApocReports/Lobbying/LORForms.aspx", 
+  query = list(
+    exportAll = "True", 
+    exportFormat = "CSV", 
+    isExport = "True"
+  )
+)
+
+aklr <- content(response)
+```
+
+```{r list_files}
+raw_file <- dir_ls(raw_dir)
+length(raw_file) == 1
+```
+
+The raw file can be read using `vroom::vroom()`.
+
+```{r raw_read}
+aklr <- read_delim(
+  file = raw_file,
+  delim = ",",
+  escape_backslash = FALSE,
+  escape_double = FALSE,
+  col_types = cols(
+    .default = col_character(),
+    Result = col_double(),
+    `Report Year` = col_integer(),
+    `Other Services Performed` = col_logical(),
+    `Administrative Lobbying` = col_logical(),
+    `Legislative Lobbying` = col_logical(),
+    `Start Date` = col_date_usa(),
+    `Compensation Amount` = col_double(),
+    `Reimbursement Of Expenses` = col_logical(),
+    `Other Compensation` = col_logical(),
+    `Not Qualified As Lobbyist` = col_logical(),
+    `Date Qualified As Lobbyist` = col_date_usa()
+  )
+)
+```
+
+We know the file was not properly read as the number of rows is not equal to the number of distinct
+`report` values, a unique row number variable.
+
+```{r raw_count}
+n_distinct(aklr$Result) == nrow(aklr)
+```
+
+Using `readr::problems()`, we do see that, aside from the trailing column, there are a couple
+dozen parsing problems. These typically cascade from an incorrect number of delimeter or escape
+characters.
+
+```{r raw_problems}
+problems(aklr) %>% 
+  filter(expected != "51 columns") %>% 
+  group_by(row) %>% 
+  select(-file)
+```
+
+For now, we can repair the data frame using the `janitor` package and by filtering out those few
+incorrectly parsed rows.
+
+```{r raw_repair}
+aklr <- aklr %>% 
+  clean_names("snake") %>% 
+  remove_empty("cols") %>% 
+  remove_empty("rows") %>%
+  filter(!is.na(result))
+```
+
+```{r raw_count2}
+n_distinct(aklr$result) == nrow(aklr)
+```
+
+## Explore
+
+```{r glimpse}
+head(aklr)
+tail(aklr)
+glimpse(sample_frac(aklr))
+```
+
+### Missing
+
+_Very_ few records are missing some of the variables we need to identify a lobbyist.
+
+```{r na_count}
+glimpse_fun(aklr, count_na)
+```
+
+We can flag those rows with `campfin::na_flag()`.
+
+```{r na_flag}
+aklr <- aklr %>% flag_na(last_name, address, employer_contact_last_name, start_date)
+sum(aklr$na_flag)
+```
+
+### Duplicate
+
+There are no duplicate records that need to be flagged.
+
+```{r dupe_count}
+aklr <- flag_dupes(aklr, -result)
+if (sum(aklr$dupe_flag) == 0) {
+  aklr <- select(aklr, -dupe_flag)
+}
+```
+
+### Categorical
+
+```{r cat_distinct}
+glimpse_fun(aklr, n_distinct)
+```
+
+```{r plot_comp_name, echo=FALSE}
+explore_plot(aklr, compensation_name, flip = TRUE)
+```
+
+```{r plot_reimburse, echo=FALSE}
+explore_plot(aklr, reimbursement_of_expenses)
+```
+
+### Continuous
+
+### Amounts
+
+```{r plot_comp_amount, echo=FALSE, fig.height=9}
+aklr %>% 
+  filter(compensation_name %in% most_common(aklr$compensation_name, 4)) %>% 
+  ggplot(aes(compensation_amount)) +
+  geom_histogram(fill = RColorBrewer::brewer.pal(3, "Dark2")[1]) +
+  scale_x_continuous(labels = dollar, trans = "log10") +
+  scale_y_continuous(labels = comma) +
+  facet_wrap(~compensation_name, scales = "free", ncol = 1)
+```
+
+### Dates
+
+```{r year_add}
+aklr <- mutate(aklr, start_year = year(start_date))
+```
+
+```{r date_range}
+min(aklr$start_date, na.rm = TRUE)
+max(aklr$start_date, na.rm = TRUE)
+```
+
+```{r plot_year_count, echo=FALSE}
+aklr %>%
+  count(start_year) %>% 
+  mutate(start_year = as.character(start_year)) %>% 
+  ggplot(aes(start_year, n)) +
+  geom_col(aes(fill = start_year)) +
+  scale_fill_discrete(guide = FALSE)
+```
+
+## Wrangle
+
+### Address
+
+```{r address_norm}
+aklr <- aklr %>% 
+  mutate_at(
+    .vars = vars(ends_with("address")),
+    .funs = list(norm = normal_address),
+    add_abbs = usps_street,
+    na_rep = TRUE
+  )
+```
+
+### ZIP
+
+```{r zip_norm}
+aklr <- aklr %>% 
+  mutate_at(
+    .vars = vars(ends_with("zip")),
+    .funs = list(norm = normal_zip),
+    na_rep = TRUE
+  )
+```
+
+```{r zip_progress}
+progress_table(
+  aklr$zip,
+  aklr$zip_norm,
+  compare = valid_zip
+)
+progress_table(
+  aklr$legislative_zip,
+  aklr$legislative_zip_norm,
+  compare = valid_zip
+)
+progress_table(
+  aklr$employer_contact_zip,
+  aklr$employer_contact_zip_norm,
+  compare = valid_zip
+)
+```
+
+### State
+
+```{r state_norm}
+aklr <- aklr %>% 
+  mutate_at(
+    .vars = vars(ends_with("state_region")),
+    .funs = list(norm = normal_state),
+    abbreviate = TRUE,
+    na_rep = TRUE,
+    valid = NULL
+  )
+```
+
+```{r state_progress}
+progress_table(
+  aklr$state_region,
+  aklr$state_region_norm,
+  compare = valid_state
+)
+progress_table(
+  aklr$legislative_state_region,
+  aklr$legislative_state_region_norm,
+  compare = valid_state
+)
+progress_table(
+  aklr$employer_contact_state_region,
+  aklr$employer_contact_state_region_norm,
+  compare = valid_state
+)
+```
+
+```{r state_view_post}
+aklr %>% 
+  select(state_region, state_region_norm) %>% 
+  distinct() %>% 
+  sample_frac()
+```
+
+### Phone
+
+```{r phone_view_pre}
+aklr %>% 
+  select(phone, fax) %>% 
+  distinct() %>% 
+  sample_frac()
+```
+
+```{r multi_phone_norm}
+multi_phone_norm <- function(number, ...) {
+  number %>% 
+    str_trim("both") %>% 
+    str_split(pattern = "\\s\\s") %>% 
+    map(normal_phone, ...) %>% 
+    sapply(toString) %>% 
+    na_if("NA")
+}
+```
+
+```{r phone_norm}
+aklr <- aklr %>% 
+  mutate_at(
+    .vars = vars(ends_with("phone")),
+    .funs = list(norm = multi_phone_norm),
+    format = "(%a) %e-%l",
+    na_bad = FALSE,
+    convert = FALSE,
+    rm_ext = FALSE
+  )
+```
+
+```{r fax_norm}
+aklr <- aklr %>% 
+  mutate_at(
+    .vars = vars(ends_with("fax")),
+    .funs = list(norm = multi_phone_norm),
+    format = "(%a) %e-%l",
+    na_bad = FALSE,
+    convert = FALSE,
+    rm_ext = FALSE
+  )
+```
+
+```{r phone_view_post}
+aklr %>% 
+  select(phone_norm, fax_norm) %>% 
+  distinct() %>% 
+  sample_frac()
+```
+
+### City
+
+```{r city_norm}
+aklr <- aklr %>% 
+  mutate_at(
+    .vars = vars(ends_with("city")),
+    .funs = list(norm = normal_city),
+    geo_abbs = usps_city,
+    st_abbs = c("AK", "DC", "ALASKA"),
+    na = invalid_city,
+    na_rep = TRUE
+  )
+```
+
+```{r city_swap}
+aklr <- aklr %>%
+  rename(city_raw = city) %>% 
+  left_join(
+    y = zipcodes,
+    by = c(
+      "state_region_norm" = "state",
+      "zip_norm" = "zip"
+    )
+  ) %>% 
+  rename(city_match = city) %>% 
+  mutate(
+    match_abb = is_abbrev(city_norm, city_match),
+    match_dist = str_dist(city_norm, city_match),
+    city_swap = if_else(
+      condition = match_abb | match_dist == 1,
+      true = city_match, false = city_norm
+    )
+  )
+```
+
+```{r city_progress}
+progress_table(
+  str_to_upper(aklr$city_raw),
+  aklr$city_norm,
+  aklr$city_swap,
+  compare = valid_city
+)
+```
+
+```{r legislative_city_swap}
+aklr <- aklr %>%
+  left_join(
+    y = zipcodes,
+    by = c(
+      "legislative_state_region_norm" = "state",
+      "legislative_zip_norm" = "zip"
+    )
+  ) %>% 
+  rename(legislative_city_match = city) %>% 
+  mutate(
+    legislative_match_abb = is_abbrev(
+      abb = legislative_city_norm, 
+      full = legislative_city_match
+    ),
+    match_dist = str_dist(
+      a = legislative_city_norm, 
+      b = legislative_city_match
+    ),
+    legislative_city_swap = if_else(
+      condition = match_abb | match_dist == 1,
+      true = legislative_city_match, 
+      false = legislative_city_norm
+    )
+  )
+```
+
+```{r legislative_city_progress}
+progress_table(
+  str_to_upper(aklr$legislative_city),
+  aklr$legislative_city_norm,
+  aklr$legislative_city_swap,
+  compare = valid_city
+)
+```
+
+```{r employer_city_swap}
+aklr <- aklr %>%
+  left_join(
+    y = zipcodes,
+    by = c(
+      "employer_contact_state_region_norm" = "state",
+      "employer_contact_zip_norm" = "zip"
+    )
+  ) %>% 
+  rename(employer_contact_city_match = city) %>% 
+  mutate(
+    employer_contact_match_abb = is_abbrev(
+      abb = employer_contact_city_norm, 
+      full = employer_contact_city_match
+    ),
+    match_dist = str_dist(
+      a = employer_contact_city_norm, 
+      b = employer_contact_city_match
+    ),
+    employer_contact_city_swap = if_else(
+      condition = match_abb | match_dist == 1,
+      true = employer_contact_city_match, 
+      false = employer_contact_city_norm
+    )
+  )
+```
+
+```{r employer_city_progress}
+progress_table(
+  str_to_upper(aklr$employer_contact_city),
+  aklr$employer_contact_city_norm,
+  aklr$employer_contact_city_swap,
+  compare = valid_city
+)
+```
+
+## Export
+
+```{r proc_dir}
+proc_dir <- here("ak", "lobbying", "reg", "data", "processed")
+dir_create(proc_dir)
+```
+
+```{r proc_export}
+aklr %>% 
+  select(
+    -ends_with("city_norm"),
+    -contains("match")
+  ) %>% 
+  write_csv(
+    path = glue("{proc_dir}/ak_lobbyists_clean.csv"),
+    na = ""
+  )
+```
+
