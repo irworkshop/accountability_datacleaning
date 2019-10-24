@@ -11,20 +11,28 @@ editor_options:
   chunk_output_type: console
 ---
 
+<!-- Place comments regarding knitting here -->
+
 ```{r setup, include=FALSE, purl=FALSE}
 library(knitr)
 opts_chunk$set(
-  eval = TRUE,
+  eval = FALSE,
   echo = TRUE,
   warning = FALSE,
   message = FALSE,
   error = FALSE,
+  collapse = TRUE,
   comment = "#>",
   fig.path = "../plots/",
   fig.width = 10,
   dpi = 300
 )
 options(width = 99)
+set.seed(5)
+```
+
+```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
+fs::dir_create(here::here("df", "data", "docs"))
 ```
 
 ## Project
@@ -58,29 +66,26 @@ This document describes the process used to complete the following objectives:
 The following packages are needed to collect, manipulate, visualize, analyze, and communicate
 these results. The `pacman` package will facilitate their installation and attachment.
 
+The IRW's `campfin` package will also have to be installed from GitHub. This package contains
+functions custom made to help facilitate the processing of campaign finance data.
+
 ```{r load_packages, message=FALSE, dfrning=FALSE, error=FALSE}
 if (!require("pacman")) install.packages("pacman")
+pacman::p_load_gh("irworkshop/campfin")
 pacman::p_load(
-  stringdist, # levenshtein value
   tidyverse, # data manipulation
   lubridate, # datetime strings
-  RSocrata, # read SODA api
+  RSocrata, # query soda api
   magrittr, # pipe opperators
   janitor, # dataframe clean
-  zipcode, # clean & database
+  refinr, # cluster and merge
   scales, # format strings
   knitr, # knit documents
+  vroom, # read files fast
   glue, # combine strings
   here, # relative storage
   fs # search storage 
 )
-```
-
-The IRW's `campfin` package will also have to be installed from GitHub. This package contains
-functions custom made to help facilitate the processing of campaign finance data.
-
-```{r load_campfin}
-pacman::p_load_current_gh("kiernann/campfin")
 ```
 
 This document should be run as part of the `R_campfin` project, which lives as a sub-directory of
@@ -90,8 +95,8 @@ repository.
 The `R_campfin` project uses the [RStudio projects][02] feature and should be run as such. The
 project also uses the dynamic `here::here()` tool for file paths relative to _your_ machine.
 
-```{r where_here, collapse=TRUE}
-# where dfs this document knit?
+```{r where_here}
+# where does this document knit?
 here::here()
 ```
 
@@ -99,6 +104,7 @@ here::here()
 [02]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects "Rproj"
 
 ## Data
+
 
 [Data][03] is obtained from the Iowa Ethics & Campaign Disclosure Board's open data portal.
 
@@ -145,7 +151,10 @@ While there are `r count_na(ia$committee_nm)` missing values for `committee_nm`,
 record without either an `organization_nm` or `last_nm`.
 
 ```{r flag_na, collapse=TRUE}
-ia <- mutate(ia, na_flag = is.na(organization_nm) & is.na(last_nm))
+ia <- ia %>% 
+  mutate(payee_nm = coalesce(organization_nm, last_nm)) %>% 
+  flag_na(committee_nm, payee_nm, date, amount)
+
 sum(ia$na_flag)
 ```
 
@@ -161,11 +170,13 @@ glimpse_fun(ia, n_distinct)
 
 ### Duplicates
 
-There are no duplicate records.
+Ignoring the supposedly unique `transaction_id` variable, there are a number of completely
+duplicated records than can be flagged with a new `dupe_flag` variable with `campfin::flag_dupes`.
 
 ```{r get_dupes, collapse=TRUE}
-ia_dupes <- get_dupes(ia)
-nrow(ia_dupes)
+ia <- flag_dupes(ia, -transaction_id)
+sum(ia$dupe_flag)
+mean(ia$dupe_flag)
 ```
 
 ### Ranges
@@ -174,26 +185,27 @@ For continuous variables, we should check the range and distribution of values.
 
 #### Amounts
 
-The `amount` value ranges from `r dollar(min(ia$amount))` to `r dollar(max(ia$amount))` with
-`r sum(ia$amount < 0)` values less than `r dollar(0)` (which typically indicates a correction). 
-The mean expenditure is has a value of `r dollar(mean(ia$amount))`, while the median is only 
-`r dollar(median(ia$amount))`.
+The `amount` value ranges from `r dollar(min(ia$amount))` to `r dollar(max(ia$amount))` with 
+`r sum(ia$amount <= 0)` values less than or equal to `r dollar(0)` (which typically indicates a
+correction). The mean expenditure is has a value of `r dollar(mean(ia$amount))`, while the median
+is only `r dollar(median(ia$amount))`.
 
 ```{r anmount_range}
 summary(ia$amount)
-sum(ia$amount < 0)
-percent(mean(ia$amount < 0))
+sum(ia$amount <= 0)
+percent(mean(ia$amount <= 0))
 ```
 
 ```{r amount_hist, echo=FALSE}
 ia %>% 
   ggplot(aes(amount)) +
-  geom_histogram() +
+  geom_histogram(fill = RColorBrewer::brewer.pal(3, "Dark2")[3]) +
   scale_x_continuous(
-    breaks = c(1, 10, 100, 1000, 10000, 100000, 1000000),
+    breaks = c(1 %o% 10^(0:6)),
     trans = "log10",
     labels = dollar
   ) +
+  scale_y_continuous(labels = comma) +
   labs(
     title = "Iowa Expenditure Amounts",
     caption = "Source: IA ECDB",
@@ -302,14 +314,14 @@ ia %>%
 ia <- ia %>% 
   unite(
     col = address_comb,
-    address_line_1, address_line_2,
+    starts_with("address_line"),
     remove = FALSE,
     na.rm = TRUE
   ) %>% 
   mutate(
     address_norm = normal_address(
       address = address_comb,
-      add_abbs = usps,
+      add_abbs = usps_street,
       na = c("", "NA"),
       na_rep = TRUE
     )
@@ -319,22 +331,14 @@ ia <- ia %>%
 ```{r view_address}
 ia %>% 
   select(
-    address_line_1,
-    address_line_2,
-    address_norm
+    starts_with("address")
   ) %>% 
   sample_frac()
 ```
 
 ### ZIP
 
-```{r zip_pre, collapse=TRUE}
-n_distinct(ia$zip)
-prop_in(ia$zip, geo$zip)
-sum(unique(ia$zip) %out% geo$zip)
-```
-
-```{r norm_zip}
+```{r zip_norm}
 ia <- ia %>% 
   mutate(
     zip_norm = normal_zip(
@@ -344,48 +348,40 @@ ia <- ia %>%
   )
 ```
 
-```{r zip_post, collapse=TRUE}
-n_distinct(ia$zip_norm)
-prop_in(ia$zip_norm, geo$zip)
-sum(unique(ia$zip_norm) %out% geo$zip)
+```{r zip_progress}
+progress_table(
+  ia$zip,
+  ia$zip_norm,
+  compare = valid_zip
+)
 ```
 
 ### State
 
-```{r state_pre, collapse=TRUE}
-n_distinct(ia$state_cd)
-prop_in(ia$state_cd, geo$state)
-sum(unique(ia$state_cd) %out% geo$state)
-```
-
-```{r norm_state}
+```{r state_norm}
 ia <- ia %>% 
   mutate(
     state_norm = normal_state(
       state = str_replace(state_cd, "AI", "IA"),
       na_rep = TRUE,
-      valid = geo$state
+      valid = NULL
     )
   )
 ```
 
-```{r state_post, collapse=TRUE}
-n_distinct(ia$state_norm)
-prop_in(ia$state_norm, geo$state)
-sum(unique(ia$state_norm) %out% geo$state)
+```{r state_progress}
+progress_table(
+  ia$state_cd,
+  ia$state_norm,
+  compare = valid_state
+)
 ```
 
 ### City
 
-```{r city_pre, collapse=TRUE}
-n_distinct(ia$city)
-prop_in(str_to_upper(ia$city), geo$city)
-sum(unique(str_to_upper(ia$city)) %out% geo$city)
-```
-
 ### Normalize
 
-```{r norm_city}
+```{r city_norm}
 ia <- ia %>% 
   mutate(
     city_norm = normal_city(
@@ -398,13 +394,7 @@ ia <- ia %>%
   )
 ```
 
-```{r city_post_norm, collapse=TRUE}
-n_distinct(ia$city_norm)
-prop_in(str_to_upper(ia$city_norm), geo$city)
-sum(unique(str_to_upper(ia$city_norm)) %out% geo$city)
-```
-
-```{r count_bad_city}
+```{r city_count_bad}
 ia %>% 
   filter(city_norm %out% geo$city) %>% 
   count(state_norm, city, city_norm, sort = TRUE)
@@ -412,11 +402,11 @@ ia %>%
 
 ### Swap
 
-```{r}
+```{r city_swap}
 ia <- ia %>% 
   rename(city_raw = city) %>% 
   left_join(
-    y = geo,
+    y = zipcodes,
     by = c(
       "state_norm" = "state",
       "zip_norm" = "zip"
@@ -424,20 +414,25 @@ ia <- ia %>%
   ) %>% 
   rename(city_match = city) %>% 
   mutate(
-    match_dist = stringdist(city_norm, city_match),
+    match_abb = is_abbrev(city_norm, city_match),
+    match_dist = str_dist(city_norm, city_match),
     city_swap = if_else(
-      condition = match_dist == 1,
+      condition = match_dist == 1 | match_abb,
       true = city_match,
       false = city_norm
     )
   )
 ```
 
-```{r city_post_swap, collapse=TRUE}
-n_distinct(ia$city_swap)
-prop_in(str_to_upper(ia$city_swap), geo$city)
-sum(unique(str_to_upper(ia$city_swap)) %out% geo$city)
+```{r city_progress}
+progress_table(
+  str_to_upper(ia$city_raw),
+  ia$city_norm,
+  ia$city_swap,
+  compare = valid_city
+)
 ```
+
 
 ## Conclude
 
@@ -449,6 +444,23 @@ sum(unique(str_to_upper(ia$city_swap)) %out% geo$city)
 1. The 5-digit `zip_norm` variable has been created with `campfin::normal_zip(ia$zip)`.
 1. The 4-digit `year` variable has been created with `lubridate::year(ia$date)`.
 
+## Lookup
+
+```{r}
+lookup_file <- here("ia", "expends", "data", "ia_city_lookup.csv")
+if (file.exists(lookup_file)) {
+  lookup <- read_csv(lookup_file) %>% select(1:2)
+  ia <- left_join(ia, lookup)
+  progress_table(
+    str_to_upper(ia$city_raw),
+    ia$city_norm,
+    ia$city_swap,
+    ia$city_clean,
+    compare = valid_city
+  )
+}
+```
+
 ## Export
 
 ```{r proc_dir}
@@ -459,12 +471,12 @@ dir_create(proc_dir)
 ```{r write_csv}
 ia %>% 
   select(
-    -state_cd,
-    -city_raw,
-    -zip,
+    -on_year,
+    -payee_nm,
     -city_match,
     -city_norm,
-    -match_dist
+    -match_dist,
+    -city_swap
   ) %>% 
   write_csv(
     path = glue("{proc_dir}/ia_expends_clean.csv"),
