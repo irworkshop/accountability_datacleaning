@@ -122,7 +122,7 @@ Does not include seeking a contract or grant, or quasi-judicial decisions.
 
 [03]: http://docs.legis.wisconsin.gov/statutes/statutes/13/III/62/10
 
-The [State of Wisconsin Ethics Commission][04] makes available directories of lobbyists, principals (otehrwise known as lobbying organizations, any person who employs a lobbyist) and state agency officials (legislative liaisons) that lobbying for their agency. The Accountability Project obtained the Wisconsin lobbying registration data from the Wisconsin Ethics Commission from 2013 to 2019. In an email communication, ethics specialist with the commission wrote:
+The [State of Wisconsin Ethics Commission][04] makes available directories of lobbyists, principals (otehrwise known as lobbying organizations, any person who employs a lobbyist) and state agency officials (legislative liaisons) that lobbying for their agency. The Accountability Project obtained the Wisconsin lobbying registration data from the Wisconsin Ethics Commission from 2013 to 2019. In an email communication, an ethics specialist with the commission wrote:
 >The WithdrawnDate column exists if the lobbyists authorization was ever removed. A “null” entry here means that the authorization was active from the AuthorizedDate until the end of the session (December 31 of the even numbered year).
 
 Set the download directory first.
@@ -165,13 +165,17 @@ The excel files contain some empty rows or text in some cells that are not part 
 
 ```{r read excel}
 wi_lobbyists <- list.files(lobbyists, pattern = ".xls", full.names = TRUE) %>% 
-  map_dfr(read_xls, skip = 3, .name_repair = make_clean_names) %>% 
+  map_dfr(read_xls, skip = 3, .name_repair = make_clean_names, .id = "session_id") %>% 
   filter(rowSums(!is.na(.))>=3) %>% 
         # cols(.default = col_character(),
         #                licensed_date = col_date(format = "%m/%d/%Y"),
         #                surrendered_date = col_date(format = "%m/%d/%Y")
     mutate(surrendered_date = excel_numeric_to_date(surrendered_date,date_system = "modern"),
-           licensed_date = as.Date(licensed_date, format = "%m/%d/%Y")) %>% 
+           licensed_date = as.Date(licensed_date, format = "%m/%d/%Y"),
+           session_id = case_when(session_id == "1" ~ "2013 REGULAR SESSION",
+                                  session_id == "2" ~ "2015 REGULAR SESSION",
+                                  session_id == "3" ~ "2017 REGULAR SESSION",
+                                  session_id == "4" ~ "2019 REGULAR SESSION")) %>% 
     mutate_if(is_character, str_to_upper)
 
 wi_principals <- list.files(principals, pattern = ".xls", full.names = TRUE) %>% 
@@ -195,9 +199,15 @@ wi_lobby <-  wi_lobby %>% mutate(authorized_date = excel_numeric_to_date(authori
 
 ```
 
-## Wrangling
+## Joining
 ```{r name}
+wi_lobbyists <- wi_lobbyists %>% 
+  mutate(first_name = {str_match(lobbyist_name, ",\\s([^,]{1,20})$")}[,2] %>% str_remove(" \\(.*\\)"),
+        last_name = str_remove(lobbyist_name, first_name) %>% str_remove("\\(.*\\)") %>% str_remove(",") %>% trimws(),
+        first_name =  first_name %>% str_remove("\\s.*"))
 
+wi_principals <- wi_principals %>% 
+  mutate(principal_session_id = str_replace(principal_session_id, "REG", " REGULAR SESSION"))
 ```
 
 ## Duplicates

@@ -694,7 +694,10 @@ wv$city_clean <- wv$city_clean %>%
       str_replace_all("^LOISVILLE$", "LOUISVILLE") %>% 
       str_replace_all("^SHEPERDSTOEN$", "SHEPHERDSTOWN") %>% 
       str_replace_all("^CAMERSON$", "CAMERON") %>% 
-      na_if("^CITY$|^WV$|^WEB BASED$|^A$|PO BOX|^ANYWHERE USA$|^VARIES$|^AMAZON$|COUNTY")
+      str_replace_all("AMAZON", "ONLINE PURCHASE") %>% 
+      na_if("CITY")
+      
+  wv <- wv %>% mutate(city_clean = case_when( city_clean %in% c("WV","WEB BASED","A","PO BOX","ANYWHERE USA","VARIES","COUNTY") ~ NA_character_, TRUE ~ as.character(city_clean)))
   
 ```
 

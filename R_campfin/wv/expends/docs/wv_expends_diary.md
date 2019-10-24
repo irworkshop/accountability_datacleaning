@@ -1,7 +1,7 @@
 West Virginia Expenditures
 ================
 Yanqi Xu
-2019-09-18 13:30:18
+2019-10-24 15:03:09
 
 -   [Project](#project)
 -   [Objectives](#objectives)
@@ -48,26 +48,7 @@ The IRW's `campfin` package will also have to be installed from GitHub. This pac
 
 ``` r
 if (!require("pacman")) install.packages("pacman")
-pacman::p_load_current_gh("kiernann/campfin")
-#> knitr   (1.24 -> 1.25) [CRAN]
-#> curl    (4.0  -> 4.1 ) [CRAN]
-#> tinytex (0.15 -> 0.16) [CRAN]
-#> 
-#>   There are binary versions available but the source versions are later:
-#>         binary source needs_compilation
-#> knitr     1.24   1.25             FALSE
-#> tinytex   0.15   0.16             FALSE
-#> 
-#> 
-#> The downloaded binary packages are in
-#>  /var/folders/zt/3t09bqwn7h36rlyjxpbxnx800000gp/T//RtmpoZoUQA/downloaded_packages
-#> * checking for file ‘/private/var/folders/zt/3t09bqwn7h36rlyjxpbxnx800000gp/T/RtmpoZoUQA/remotes985f5e9af618/irworkshop-campfin-27b51d0/DESCRIPTION’ ... OK
-#> * preparing ‘campfin’:
-#> * checking DESCRIPTION meta-information ... OK
-#> * checking for LF line-endings in source and make files and shell scripts
-#> * checking for empty or unneeded directories
-#> * looking to see if a ‘data/datalist’ file should be added
-#> * building ‘campfin_0.0.0.9010.tar.gz’
+pacman::p_load_current_gh("irworkshop/campfin")
 pacman::p_load(
   stringdist, # levenshtein value
   RSelenium, # remote browser
@@ -697,7 +678,10 @@ wv$city_clean <- wv$city_clean %>%
       str_replace_all("^LOISVILLE$", "LOUISVILLE") %>% 
       str_replace_all("^SHEPERDSTOEN$", "SHEPHERDSTOWN") %>% 
       str_replace_all("^CAMERSON$", "CAMERON") %>% 
-      na_if("^CITY$|^WV$|^WEB BASED$|^A$|PO BOX|^ANYWHERE USA$|^VARIES$|^AMAZON$|COUNTY")
+      str_replace_all("AMAZON", "ONLINE PURCHASE") %>% 
+      na_if("CITY")
+      
+  wv <- wv %>% mutate(city_clean = case_when( city_clean %in% c("WV","WEB BASED","A","PO BOX","ANYWHERE USA","VARIES","COUNTY") ~ NA_character_, TRUE ~ as.character(city_clean)))
   
 ```
 
@@ -724,14 +708,14 @@ valid_city <- c(
 )
 ```
 
-Still, our progress is significant without having to make a single manual or unconfident change. The percent of valid cities increased from 95.2% to 99.4%. The number of total distinct city values decreased from 1,015 to 775. The number of distinct invalid city names decreased from 286 to only 31, a change of 89.2%.
+Still, our progress is significant without having to make a single manual or unconfident change. The percent of valid cities increased from 95.2% to 99.7%. The number of total distinct city values decreased from 1,015 to 769. The number of distinct invalid city names decreased from 286 to only 25, a change of 91.3%.
 
 | Normalization Stage |  Percent Valid|  Total Distinct|  Unique Invalid|
 |:--------------------|--------------:|---------------:|---------------:|
 | raw                 |         0.9522|            1015|             286|
 | norm                |         0.9733|             942|             202|
 | swap                |         0.9890|             815|              73|
-| clean               |         0.9940|             775|              31|
+| clean               |         0.9972|             769|              25|
 
 ![](../plots/wrangle_bar_prop-1.png)
 
