@@ -1,17 +1,7 @@
 New Hampshire Expenditures
 ================
 Kiernan Nicholls
-2019-08-27 16:09:54
-
-  - [Project](#project)
-  - [Objectives](#objectives)
-  - [Packages](#packages)
-  - [Data](#data)
-  - [Import](#import)
-  - [Explore](#explore)
-  - [Wrangle](#wrangle)
-  - [Conclude](#conclude)
-  - [Export](#export)
+2019-10-24 11:55:48
 
 ## Project
 
@@ -50,14 +40,12 @@ facilitate their installation and attachment.
 
 ``` r
 if (!require("pacman")) install.packages("pacman")
-pacman::p_load_current_gh("kiernann/campfin")
+pacman::p_load_gh("irworkshop/campfin")
 pacman::p_load(
-  stringdist, # levenshtein value
   snakecase, # change string case
   RSelenium, # remote browser
   tidyverse, # data manipulation
   lubridate, # datetime strings
-  tidytext, # text analysis
   magrittr, # pipe opperators
   janitor, # dataframe clean
   batman, # rep(NA, 8) Batman!
@@ -85,7 +73,7 @@ feature and should be run as such. The project also uses the dynamic
 ``` r
 # where dfs this document knit?
 here::here()
-#> [1] "/home/ubuntu/R/accountability_datacleaning/R_campfin"
+#> [1] "/home/kiernan/R/accountability_datacleaning/R_campfin"
 ```
 
 ## Data
@@ -205,6 +193,26 @@ nh <-
   )
 ```
 
+``` r
+problems(nh) %>% 
+  filter(expected != "15 columns") %>% 
+  distinct()
+```
+
+    #> # A tibble: 10 x 5
+    #>      row col        expected          actual                 file                                  
+    #>    <int> <chr>      <chr>             <chr>                  <chr>                                 
+    #>  1  1575 Transacti… date like %m/%d/… Additional Candidate:… '/home/kiernan/R/accountability_datac…
+    #>  2  2883 Comments   delimiter or quo… D                      '/home/kiernan/R/accountability_datac…
+    #>  3  2883 Comments   delimiter or quo… 1                      '/home/kiernan/R/accountability_datac…
+    #>  4  2972 Comments   delimiter or quo… V                      '/home/kiernan/R/accountability_datac…
+    #>  5  2972 Comments   delimiter or quo… 3                      '/home/kiernan/R/accountability_datac…
+    #>  6  3650 Transacti… date like %m/%d/… Printing of palm card… '/home/kiernan/R/accountability_datac…
+    #>  7  3979 Comments   delimiter or quo… B                      '/home/kiernan/R/accountability_datac…
+    #>  8  3979 Comments   delimiter or quo… F                      '/home/kiernan/R/accountability_datac…
+    #>  9 11338 Comments   delimiter or quo… C                      '/home/kiernan/R/accountability_datac…
+    #> 10 11338 Comments   delimiter or quo… 2                      '/home/kiernan/R/accountability_datac…
+
 We will remove completely empty rows, clean names, uppcercase characters
 variables, and separate some columns into their true underlying
 variables.
@@ -232,7 +240,7 @@ nh <- nh %>%
 
 ## Explore
 
-There are 12053 records of 19 variables in the full database.
+There are 12278 records of 19 variables in the full database.
 
 ``` r
 head(nh)
@@ -272,27 +280,27 @@ tail(nh)
 glimpse(sample_frac(nh))
 ```
 
-    #> Observations: 12,053
+    #> Observations: 12,278
     #> Variables: 19
-    #> $ transaction_date    <date> 2018-09-23, 2019-07-07, 2016-09-08, 2018-10-31, 2018-10-14, 2017-03…
-    #> $ cf_id               <chr> "03004273", "03004273", "01000104", "01001093", "01001068", "0300005…
-    #> $ payee_type          <chr> "CANDIDATE COMMITTEE", "POLITICAL COMMITTEE", "BUSINESS/GROUP/ORGANI…
-    #> $ payee_name          <chr> "KATHERINE ROGERS FOR NH STATE REPRESENTATIVE", "COMMITTEE TO ELECT …
-    #> $ payee_address       <chr> "804 ALTON WOODS DRIVE, CONCORD, NH 03301", "PO BOX 1292, CONCORD, N…
-    #> $ registrant_name     <chr> "ACTBLUE NEW HAMPSHIRE", "ACTBLUE NEW HAMPSHIRE", "SCHLEIEN, ERIC", …
-    #> $ registrant_type     <chr> "POLITICAL COMMITTEE", "POLITICAL COMMITTEE", "CANDIDATE", "CANDIDAT…
-    #> $ office              <chr> NA, NA, "STATE REPRESENTATIVE - 37", "STATE REPRESENTATIVE - 33", "S…
-    #> $ office_clean        <chr> NA, NA, "STATE REPRESENTATIVE", "STATE REPRESENTATIVE", "STATE REPRE…
-    #> $ district_clean      <int> NA, NA, 37, 33, 29, NA, NA, 5, NA, NA, 9, NA, NA, NA, NA, 18, NA, 5,…
-    #> $ county              <chr> NA, NA, "HILLSBOROUGH", "ROCKINGHAM", "HILLSBOROUGH", NA, NA, NA, NA…
-    #> $ election_cycle      <chr> "2018 ELECTION CYCLE", "ROCKINGHAM DIST. 9 - EPPING", "2016 ELECTION…
-    #> $ reporting_period    <chr> "10/17/2018 - GENERAL", "07/31/2019 - PRIMARY", "09/21/2016 - PRIMAR…
-    #> $ reporting_date      <date> 2018-10-17, 2019-07-31, 2016-09-21, 2018-11-14, 2018-10-17, 2017-06…
-    #> $ reporting_type      <chr> "GENERAL", "PRIMARY", "PRIMARY", "GENERAL", "GENERAL", "GENERAL", "G…
+    #> $ transaction_date    <date> 2018-07-30, 2018-07-26, 2018-08-21, 2018-08-05, 2018-10-31, 2015-03…
+    #> $ cf_id               <chr> "01000967", "09000768", "01001494", "03004273", "01001018", "0500004…
+    #> $ payee_type          <chr> "BUSINESS/GROUP/ORGANIZATION", "BUSINESS/GROUP/ORGANIZATION", "BUSIN…
+    #> $ payee_name          <chr> "VISTAPRINT NORTH AMERICA", "GOOGLE", "SUPER CHEAP SIGNS", "HILLSBOR…
+    #> $ payee_address       <chr> "95 HAYDEN AVE, LEXINGTON, MA 02421", "355 MAIN ST, CAMBRIDGE, MA 02…
+    #> $ registrant_name     <chr> "MURRAY, MEGAN A", "COMMITTEE TO ELECT TOM FALTER", "WHITTEMORE, JAM…
+    #> $ registrant_type     <chr> "CANDIDATE", "CANDIDATE COMMITTEE", "CANDIDATE", "POLITICAL COMMITTE…
+    #> $ office              <chr> "STATE REPRESENTATIVE - 22", "STATE SENATE - 12", "STATE REPRESENTAT…
+    #> $ office_clean        <chr> "STATE REPRESENTATIVE", "STATE SENATE", "STATE REPRESENTATIVE", NA, …
+    #> $ district_clean      <int> 22, 12, 37, NA, 4, NA, NA, 24, NA, NA, NA, 41, NA, 4, NA, 2, NA, 10,…
+    #> $ county              <chr> "HILLSBOROUGH", NA, "HILLSBOROUGH", NA, "BELKNAP", NA, NA, "ROCKINGH…
+    #> $ election_cycle      <chr> "2018 ELECTION CYCLE", "2018 ELECTION CYCLE", "2018 ELECTION CYCLE",…
+    #> $ reporting_period    <chr> "08/22/2018 - PRIMARY", "08/22/2018 - PRIMARY", "10/17/2018 - GENERA…
+    #> $ reporting_date      <date> 2018-08-22, 2018-08-22, 2018-10-17, 2018-08-22, 2018-11-14, 2016-06…
+    #> $ reporting_type      <chr> "PRIMARY", "PRIMARY", "GENERAL", "PRIMARY", "GENERAL", "PRIMARY", "G…
     #> $ expenditure_type    <chr> "MONETARY", "MONETARY", "MONETARY", "MONETARY", "MONETARY", "MONETAR…
-    #> $ expenditure_purpose <chr> "OTHER", "OTHER", "PRINTING - COPIES", "PARADE EXPENSES - FEES, CAND…
-    #> $ expenditure_amount  <dbl> 67.23, 190.33, 900.08, 19.70, 46.72, 500.00, 100.00, 461.79, 300.00,…
-    #> $ comments            <chr> "POLITICAL CONTRIBUTION", "POLITICAL CONTRIBUTION", NA, "FLAGS", NA,…
+    #> $ expenditure_purpose <chr> "MEDIA - POSTCARDS", "OTHER", "YARD SIGNS", "OTHER", "MEDIA - NEWSPA…
+    #> $ expenditure_amount  <dbl> 55.57, 1.99, 324.99, 96.05, 440.00, 4900.50, 9.60, 26.15, 9676.00, 1…
+    #> $ comments            <chr> NA, "GOOGLE MONTHLY FEE FOR EMAIL", "BULK YARD SIGNS, H WIRES AND SH…
 
 ### Distinct
 
@@ -303,27 +311,27 @@ glimpse_fun(nh, n_distinct)
 ```
 
     #> # A tibble: 19 x 4
-    #>    var                 type      n        p
-    #>    <chr>               <chr> <int>    <dbl>
-    #>  1 transaction_date    date   1144 0.0949  
-    #>  2 cf_id               chr     470 0.0390  
-    #>  3 payee_type          chr       6 0.000498
-    #>  4 payee_name          chr    3161 0.262   
-    #>  5 payee_address       chr    3862 0.320   
-    #>  6 registrant_name     chr     447 0.0371  
-    #>  7 registrant_type     chr       4 0.000332
-    #>  8 office              chr      75 0.00622 
-    #>  9 office_clean        chr       9 0.000747
-    #> 10 district_clean      int      45 0.00373 
-    #> 11 county              chr      11 0.000913
-    #> 12 election_cycle      chr       8 0.000664
-    #> 13 reporting_period    chr      36 0.00299 
-    #> 14 reporting_date      date     36 0.00299 
-    #> 15 reporting_type      chr       3 0.000249
-    #> 16 expenditure_type    chr       6 0.000498
-    #> 17 expenditure_purpose chr      82 0.00680 
-    #> 18 expenditure_amount  dbl    4400 0.365   
-    #> 19 comments            chr    2040 0.169
+    #>    col                 type      n        p
+    #>    <chr>               <chr> <dbl>    <dbl>
+    #>  1 transaction_date    date   1166 0.0950  
+    #>  2 cf_id               chr     473 0.0385  
+    #>  3 payee_type          chr       6 0.000489
+    #>  4 payee_name          chr    3168 0.258   
+    #>  5 payee_address       chr    3874 0.316   
+    #>  6 registrant_name     chr     448 0.0365  
+    #>  7 registrant_type     chr       4 0.000326
+    #>  8 office              chr      75 0.00611 
+    #>  9 office_clean        chr       9 0.000733
+    #> 10 district_clean      int      45 0.00367 
+    #> 11 county              chr      11 0.000896
+    #> 12 election_cycle      chr       8 0.000652
+    #> 13 reporting_period    chr      39 0.00318 
+    #> 14 reporting_date      date     39 0.00318 
+    #> 15 reporting_type      chr       3 0.000244
+    #> 16 expenditure_type    chr       6 0.000489
+    #> 17 expenditure_purpose chr      82 0.00668 
+    #> 18 expenditure_amount  dbl    4478 0.365   
+    #> 19 comments            chr    2045 0.167
 
 ![](../plots/payee_type_bar-1.png)<!-- -->
 
@@ -349,19 +357,19 @@ glimpse_fun(nh, count_na)
 ```
 
     #> # A tibble: 19 x 4
-    #>    var                 type      n       p
-    #>    <chr>               <chr> <int>   <dbl>
+    #>    col                 type      n       p
+    #>    <chr>               <chr> <dbl>   <dbl>
     #>  1 transaction_date    date      0 0      
     #>  2 cf_id               chr       0 0      
     #>  3 payee_type          chr       0 0      
-    #>  4 payee_name          chr      61 0.00506
+    #>  4 payee_name          chr      69 0.00562
     #>  5 payee_address       chr       0 0      
     #>  6 registrant_name     chr       0 0      
     #>  7 registrant_type     chr       0 0      
-    #>  8 office              chr    5861 0.486  
-    #>  9 office_clean        chr    5861 0.486  
-    #> 10 district_clean      int    6336 0.526  
-    #> 11 county              chr    7782 0.646  
+    #>  8 office              chr    6075 0.495  
+    #>  9 office_clean        chr    6075 0.495  
+    #> 10 district_clean      int    6550 0.533  
+    #> 11 county              chr    7996 0.651  
     #> 12 election_cycle      chr       0 0      
     #> 13 reporting_period    chr       0 0      
     #> 14 reporting_date      date      0 0      
@@ -369,7 +377,7 @@ glimpse_fun(nh, count_na)
     #> 16 expenditure_type    chr       0 0      
     #> 17 expenditure_purpose chr       0 0      
     #> 18 expenditure_amount  dbl       0 0      
-    #> 19 comments            chr    7088 0.588
+    #> 19 comments            chr    7107 0.579
 
 We will flag any records with missing values in the key variables used
 to identify an expenditure.
@@ -379,7 +387,7 @@ nh <- flag_na(nh, payee_name)
 sum(nh$na_flag)
 ```
 
-    #> [1] 61
+    #> [1] 69
 
 ### Duplicates
 
@@ -397,8 +405,8 @@ sum(nh$dupe_flag)
 summary(nh$expenditure_amount)
 ```
 
-    #>      Min.   1st Qu.    Median      Mean   3rd Qu.      Max. 
-    #>       0.0      27.2     100.0    1867.5     340.2 1656456.7
+    #>    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+    #>       0      27     100    1840     340 1656457
 
 ``` r
 sum(nh$expenditure_amount <= 0)
@@ -451,7 +459,7 @@ nh %>%
 ``` r
 summary(nh$transaction_date)
 #>         Min.      1st Qu.       Median         Mean      3rd Qu.         Max. 
-#> "2014-06-16" "2016-11-06" "2018-08-08" "2018-02-03" "2018-10-18" "2019-08-18"
+#> "2014-06-16" "2016-11-08" "2018-08-11" "2018-02-14" "2018-10-18" "2019-10-08"
 sum(nh$transaction_date > today())
 #> [1] 0
 ```
@@ -485,58 +493,201 @@ Add a `transaction_year` variable from `transaction_date` using
 nh <- nh %>% mutate(transaction_year = year(transaction_date))
 ```
 
-### Address
+![](../plots/plot,%20year-1.png)<!-- -->
 
-We need to extract the ZIP code and state abbreviation from the
-`payee_address` string.
+### Separate
+
+The `payee_address` string contains the street address, city name, state
+abbreviation, and ZIP code.
 
 ``` r
 sample(nh$payee_address, 10) %>% cat(sep = "\n")
 ```
 
-    #> PO BOX 177, RUMNEY, NH 03266
-    #> PO BOX 999, HANOVER, NH 03755
-    #> 520 S. GRAND AVE., 2ND FLOOR,  LOS ANGELES, CA 90071
-    #> PO BOX 84314, BATON ROUGE, LA 70884
-    #> 510 D.W. HIGHWAY, MERRIMACK, NH 03054
-    #> ONE MEDICAL CENTER DRIVE  , LEBANON, NH 03756
-    #> 1383 HATFIELD ROAD, HOPKINTON, NH 03229
-    #> 11 DELAWARE RD, NASHUA, NH 03062
-    #> PO BOX 45950, OMAHA, NE 68145
-    #> 323 MAIN ST, SANDOWN, NH 03873
+    #> 45 RANDALL STREET, MANCHESTER, NH 03103
+    #> 41 NASHUA RD, LONDONDERRY, NH 03053
+    #> PO BOX 1240, PORTSMOUTH, NH 03802-1240
+    #> 18 SWART TERRACE, NASHUA, NH 03064
+    #> 126 DEPOT  STREET , HOLLIS, NH 03049
+    #> 94 PRIMROSE DRIVE NORTH , LACONIA, NH 03246
+    #> 13 FORD DR, BARRINGTON, NH 03825
+    #> 105 N. STATE ST., CONCORD, NH 03301
+    #> PO BOX 632, NASHUA, NH 03061
+    #> 20 PORTSMOUTH AVE, STRATHAM, NH 03885
 
-First, we will extract the ZIP digits from the end of the `address`
-string.
+We can use a combination of `tidyr::separate()` and `tidyr::unite()` to
+split this address into four distinct columns:
+
+1.  `payee_address_sep`
+2.  `payee_city_sep`
+3.  `payee_state_sep`
+4.  `payee_zip_sep`
+
+<!-- end list -->
+
+``` r
+nh <- nh %>% 
+  separate(
+    col = payee_address,
+    into = c(glue("payee_split_address{1:10}"), "payee_city_sep", "payee_state_zip_sep"),
+    sep = ",\\s",
+    remove = FALSE,
+    extra = "merge",
+    fill = "left"
+  ) %>% 
+  unite(
+    starts_with("payee_split_address"),
+    col = payee_address_sep,
+    sep = " ",
+    remove = TRUE,
+    na.rm = TRUE
+  ) %>% 
+  separate(
+    col = payee_state_zip_sep,
+    into = c("payee_state_sep", "payee_zip_sep"),
+    sep = "\\s(?=\\d)",
+    remove = TRUE,
+    convert = FALSE
+  )
+```
+
+### Address
 
 ``` r
 nh <- nh %>% 
   mutate(
-    zip_clean = payee_address %>% 
-      str_extract(rx_zip) %>% 
-      normal_zip(na_rep = TRUE)
+    payee_address_norm = normal_address(
+      address = payee_address_sep,
+      add_abbs = usps_street,
+      na_rep = TRUE
+    )
   )
-
-sample(nh$zip_clean, 10)
-#>  [1] "03102" "03302" "03784" "03103" "03755" "03103" "03885" "03258" "02191" "10001"
 ```
 
-Then we can get the two digit state abbreviation preceding those digits.
+``` r
+nh %>% 
+  select(payee_address_sep, payee_address_norm)
+```
+
+    #> # A tibble: 12,278 x 2
+    #>    payee_address_sep         payee_address_norm               
+    #>    <chr>                     <chr>                            
+    #>  1 817 CROSS COUNTRY ROAD    817 CROSS COUNTRY ROAD           
+    #>  2 193 SOUTH MAIN ST. APT. 6 193 SOUTH MAIN STREET APARTMENT 6
+    #>  3 130 SOUTH CYPRESS ST.     130 SOUTH CYPRESS STREET         
+    #>  4 13 HARTSHORN ROAD         13 HARTSHORN ROAD                
+    #>  5 24 OAK ISLAND ROAD        24 OAK ISLAND ROAD               
+    #>  6 PO BOX 632                PO BOX 632                       
+    #>  7 PO BOX 1107               PO BOX 1107                      
+    #>  8 332 ST. JAMES AVENUE      332 STREET JAMES AVENUE          
+    #>  9 195 PLYMOUTH ST SUITE 204 195 PLYMOUTH STREET SUITE 204    
+    #> 10 PO BOX 1292               PO BOX 1292                      
+    #> # … with 12,268 more rows
+
+### ZIP Code
 
 ``` r
 nh <- nh %>% 
   mutate(
-    state_clean = payee_address %>% 
-      str_extract(rx_state) %>%
-      normal_state(abbreviate = TRUE, na_rep = TRUE)
+    payee_zip_norm = normal_zip(
+      zip = payee_zip_sep,
+      na_rep = TRUE
+    )
   )
-
-n_distinct(nh$state_clean)
-#> [1] 44
-sample(nh$state_clean, 10)
-#>  [1] "NH" "PA" "NH" "NH" "NH" "MA" "NH" "NH" "MA" "AR"
-prop_in(nh$state_clean, valid_state)
-#> [1] 1
 ```
+
+``` r
+progress_table(
+  nh$payee_zip_sep,
+  nh$payee_zip_norm,
+  compare = valid_zip
+)
+```
+
+    #> # A tibble: 2 x 6
+    #>   stage          prop_in n_distinct prop_na n_out n_diff
+    #>   <chr>            <dbl>      <dbl>   <dbl> <dbl>  <dbl>
+    #> 1 payee_zip_sep    0.934        859 0.00244   810    240
+    #> 2 payee_zip_norm   0.983        672 0.00652   211     30
+
+### State
+
+``` r
+nh <- nh %>% 
+  mutate(
+    payee_state_norm = normal_state(
+      state = payee_state_sep,
+      abbreviate = TRUE,
+      na_rep = TRUE,
+      valid = NULL
+    )
+  )
+```
+
+No changes were made.
+
+``` r
+progress_table(
+  nh$payee_state_sep,
+  nh$payee_state_norm,
+  compare = valid_state
+)
+```
+
+    #> # A tibble: 2 x 6
+    #>   stage            prop_in n_distinct prop_na n_out n_diff
+    #>   <chr>              <dbl>      <dbl>   <dbl> <dbl>  <dbl>
+    #> 1 payee_state_sep    0.998         48       0    21      4
+    #> 2 payee_state_norm   0.998         48       0    21      4
+
+### City
+
+``` r
+nh <- nh %>% 
+  mutate(
+    payee_city_norm = normal_city(
+      city = payee_city_sep,
+      geo_abbs = usps_city,
+      st_abbs = c("NH", "DC"),
+      na_rep = TRUE
+    )
+  ) %>% 
+  left_join(
+    y = zipcodes,
+    by = c(
+      "payee_state_norm" = "state",
+      "payee_zip_norm" = "zip"
+    )
+  ) %>% 
+  rename(
+    payee_city_match = city
+  ) %>% 
+  mutate(
+    match_abb = is_abbrev(payee_city_norm, payee_city_match),
+    match_dist = str_dist(payee_city_norm, payee_city_match),
+    payee_city_swap = if_else(
+      condition = match_abb | match_dist == 1,
+      true = payee_city_match,
+      false = payee_city_norm
+    )
+  )
+```
+
+``` r
+progress_table(
+  nh$payee_city_sep,
+  nh$payee_city_norm,
+  nh$payee_city_swap,
+  compare = valid_city
+)
+```
+
+    #> # A tibble: 3 x 6
+    #>   stage           prop_in n_distinct prop_na n_out n_diff
+    #>   <chr>             <dbl>      <dbl>   <dbl> <dbl>  <dbl>
+    #> 1 payee_city_sep    0.948        648 0         640    199
+    #> 2 payee_city_norm   0.971        571 0.00138   360    103
+    #> 3 payee_city_swap   0.985        489 0.0323    182     31
 
 ## Conclude
 
@@ -548,17 +699,17 @@ min_date <- as.character(min(nh$transaction_date, na.rm = TRUE))
 max_date <- as.character(max(nh$transaction_date, na.rm = TRUE))
 ```
 
-1.  There are 12053 records in the database
+1.  There are 12278 records in the database
 2.  There are 144 records with duplicate rows(flagged with `dupe_flag`)
 3.  The `expenditure_amount` values range from $0.01 to $1,656,457; the
-    `transaction_date` values range from 2014-06-16 to 2019-08-18
+    `transaction_date` values range from 2014-06-16 to 2019-10-08
 4.  Consistency has been improved with `stringr` package and custom
     `normalize_*()` functions
 5.  The ZIP code and state abbreviation have been extracted fromt the
     `address` variable
 6.  The `transaction_year` variable has been created with
     `lubridate::year()`
-7.  There are 61 records with missing `payee_name` values
+7.  There are 69 records with missing `payee_name` values
 
 ## Export
 
