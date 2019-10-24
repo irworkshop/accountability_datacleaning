@@ -66,7 +66,7 @@ these results. The `pacman` package will facilitate their installation and attac
 
 ```{r p_load, message=FALSE, dfrning=FALSE, error=FALSE}
 if (!require("pacman")) install.packages("pacman")
-pacman::p_load_current_gh("irworkshop/campfin")
+pacman::p_load_gh("irworkshop/campfin")
 pacman::p_load(
   stringdist, # levenshtein value
   tidyverse, # data manipulation
@@ -122,8 +122,8 @@ Does not include seeking a contract or grant, or quasi-judicial decisions.
 
 [03]: http://docs.legis.wisconsin.gov/statutes/statutes/13/III/62/10
 
-The [State of Wisconsin Ethics Commission][04] makes available directories of lobbyists, principals (otehrwise known as lobbying organizations, any person who employs a lobbyist) and state agency officials (legislative liaisons) that
-lobbying for their agency. 
+The [State of Wisconsin Ethics Commission][04] makes available directories of lobbyists, principals (otehrwise known as lobbying organizations, any person who employs a lobbyist) and state agency officials (legislative liaisons) that lobbying for their agency. The Accountability Project obtained the Wisconsin lobbying registration data from the Wisconsin Ethics Commission from 2013 to 2019. In an email communication, ethics specialist with the commission wrote:
+>The WithdrawnDate column exists if the lobbyists authorization was ever removed. A “null” entry here means that the authorization was active from the AuthorizedDate until the end of the session (December 31 of the even numbered year).
 
 Set the download directory first.
 ```{r raw_dir}
@@ -132,66 +132,47 @@ raw_dir <- here("wi", "lobbyists", "data", "raw")
 
 principals <- file.path(raw_dir,"principals")
 lobbyists <- file.path(raw_dir, "lobbyists")
-liasons <- file.path(raw_dir, "liasons")
 
-dir_create(c(principals,lobbyists,liasons))
-
+dir_create(c(principals,lobbyists))
 ```
 
 [04]:https://lobbying.wi.gov/Directories/DirectoryOfLicensedLobbyists/2019REG
+[05]: https://docs.legis.wisconsin.gov/statutes/statutes/13/III/64
 
-```{r download all files, eval = FALSE}
+## Reading
 
-wi_url_lobbyists <- glue("https://lobbying.wi.gov/Reports/Report.aspx?ReportPath=/GAB/Lobbying/Public&ReportName=DirectoryOfLicensedLobbyistsFlat&SessionID={(2013:2020)[c(TRUE,FALSE)]}REG&SessionStartYear={(2005:2020)[c(TRUE,FALSE)]}&SessionEndYear={(2013:2020)[c(FALSE,TRUE)]}&OutputFormat=Excel")
+```{r download directories}
+wi_url_lobbyists <- glue("https://lobbying.wi.gov/Reports/Report.aspx?ReportPath=/GAB/Lobbying/Public&ReportName=DirectoryOfLicensedLobbyistsFlat&SessionID={(2013:2020)[c(TRUE,FALSE)]}REG&SessionStartYear={(2013:2020)[c(TRUE,FALSE)]}&SessionEndYear={(2013:2020)[c(FALSE,TRUE)]}&OutputFormat=Excel")
 
 wi_url_principals <- glue("https://lobbying.wi.gov/Reports/Report.aspx?ReportPath=/GAB/Lobbying/Public&ReportName=DirectoryOfRegisteredLobbyingOrganizationsFlatter&SessionID={(2013:2020)[c(TRUE,FALSE)]}REG&SessionStartYear={(2013:2020)[c(TRUE,FALSE)]}&SessionEndYear={(2013:2020)[c(FALSE,TRUE)]}&OutputFormat=Excel")
-
-
   if (!all_files_new(lobbyists)) {
     download.file(
       #this step execute strings as vairables.
       url = wi_url_lobbyists,
-      destfile = glue("{lobbyists}/wi_lobbyists_{(2005:2020)[c(TRUE,FALSE)]}.xls"))
+      destfile = glue("{lobbyists}/wi_lobbyists_{(2013:2020)[c(TRUE,FALSE)]}.xls"))
   }
-
-
   if (!all_files_new(principals)) {
     download.file(
       #this step execute strings as vairables.
       url = wi_url_principals,
-      destfile = glue("{principals}/wi_principals_{(2005:2020)[c(TRUE,FALSE)]}.xls"))
+      destfile = glue("{principals}/wi_principals_{(2013:2020)[c(TRUE,FALSE)]}.xls"))
   }
-
-
-  if (!all_files_new(liasons)) {
-    download.file(
-      #this step execute strings as vairables.
-      url = wi_url_liasons,
-      destfile = glue("{liasons}/wi_liasons.xlsx"))
-  }
-
-
 ```
 
-
-[05]: https://docs.legis.wisconsin.gov/statutes/statutes/13/III/64
-
-## Reading
-We'll first merge each dataset in each folder into a master dataset and then combine into one the three master datasets, `wi_principals` for principals, `wi_lobbyists` for lobbyists, and `wi_liasons` for legislative liasons. 
+We'll first merge each dataset in each folder into a master dataset and then combine into one the three master datasets, `wi_principals` for principals,  and `wi_lobbyists` for lobbyists.
 
 The excel files contain some empty rows or text in some cells that are not part of the dataset itself. There are usually 3 top rows with table title and metadata, but the invalid rows at the bottom vary in lengths. We'll get rid of these columns by skipping the first three rows and requiring at least 3 non-na cells, `name`, `organization` and `licensed date` to be a valid registration entry. 
-```{r read csv}
+
+```{r read excel}
 wi_lobbyists <- list.files(lobbyists, pattern = ".xls", full.names = TRUE) %>% 
   map_dfr(read_xls, skip = 3, .name_repair = make_clean_names) %>% 
   filter(rowSums(!is.na(.))>=3) %>% 
         # cols(.default = col_character(),
         #                licensed_date = col_date(format = "%m/%d/%Y"),
         #                surrendered_date = col_date(format = "%m/%d/%Y")
-
     mutate(surrendered_date = excel_numeric_to_date(surrendered_date,date_system = "modern"),
            licensed_date = as.Date(licensed_date, format = "%m/%d/%Y")) %>% 
     mutate_if(is_character, str_to_upper)
-
 
 wi_principals <- list.files(principals, pattern = ".xls", full.names = TRUE) %>% 
   map_dfr(read_xls, skip = 3, .name_repair = make_clean_names) %>% 
@@ -200,16 +181,23 @@ wi_principals <- list.files(principals, pattern = ".xls", full.names = TRUE) %>%
   select(-c(x, x_2)) %>% 
   mutate_if(is_character, str_to_upper)
 
-# libxls is not capable of reading the wi_liasons.xls file. Open the xls file in Excel, save it as xlsx file first.
-wi_liasons <- read_xlsx(glue("{liasons}/wi_liasons.xlsx"),.name_repair = make_clean_names) %>% 
-  mutate(end_date = excel_numeric_to_date(as.numeric(end_date),date_system = "modern"),
-         annual_salary = as.numeric(annual_salary)) %>% 
-  mutate_if(is_character, str_to_upper)
+wi_lobby <- read_xlsx(glue("{raw_dir}/wi_lobbyists.xlsx"), sheet = 1) %>% 
+  clean_names() %>% 
+  mutate_if(is_character, str_to_upper) %>% 
+  mutate(authorized_date = as.numeric(authorized_date))
+  
+wi_lobby$withdrawn_date <- wi_lobby$withdrawn_date %>% 
+  na_if("NULL") %>% 
+  as.numeric()
+  
+wi_lobby <-  wi_lobby %>% mutate(authorized_date = excel_numeric_to_date(authorized_date, date_system = "modern")) %>% 
+  mutate(withdrawn_date = excel_numeric_to_date(withdrawn_date, date_system = "modern"))
+
 ```
 
+## Wrangling
+```{r name}
 
-```{r joinig files}
-wi_liasons
 ```
 
 ## Duplicates
@@ -217,6 +205,7 @@ wi_liasons
 We'll use the `flag_dupes()` function to see if there are records identical to one another and flag the duplicates. A new variable `dupe_flag` will be created.
 
 ```{r flag dupe}
+wi_lobby <- flag_dupes(wi_lobby, dplyr::everything())
 wi_lobbyists <- flag_dupes(wi_lobbyists, dplyr::everything())
 wi_principals <- flag_dupes(wi_principals, dplyr::everything())
 ```
@@ -224,26 +213,28 @@ wi_principals <- flag_dupes(wi_principals, dplyr::everything())
 ## Missing
 
 ```{r count_na}
-  %>% glimpse_fun(count_na)
+wi_lobby %>% glimpse_fun(count_na)
 wi_principals %>% glimpse_fun(count_na)
-wi_liasons %>% glimpse_fun(count_na)
+wi_lobbyists %>% glimpse_fun(count_na)
 ```
 Few values are missing from the lobbyists database.
 
-## Wrangling
-We'll wrangle the three datasets one by one. First, lobbyists registration directory.
-Since all the lobbyists were jumbled together, we turn the lobbyists column into a vector, and then use `unnest_longer()` to unnest all the elements in the vector to keep each in individual row. 
-```{r name}
-wi_lobbyists <- wi_lobbyists %>% 
-  mutate(lobbyist_name = str_to_upper(lobbyist_name))
-```
+
 
 ### Phone
 ```{r normal phone}
-wi_lobbyists <- wi_lobbyists %>% mutate(phone_1_norm = normal_phone(phone_1),
-                                        phone_2_norm = normal_phone(phone_2))
-wi_principals <- wi_principals %>% mutate(phone_1_norm = normal_phone(principal_phone_1),
-                                        phone_2_norm = normal_phone(principal_phone_2))
+wi_lobby <- wi_lobby %>% 
+  mutate_at(.vars = vars(starts_with('phone')),
+            .funs = list(norm = normal_address),
+            add_abbs = usps_street,
+            na_rep = TRUE)
+
+                                        
+wi_principals <- wi_principals %>% 
+  mutate_at(.vars = vars(starts_with('principal_phone')),
+                                .funs = list(norm = normal_address),
+                                add_abbs = usps_street,
+                                na_rep = TRUE)
 ```
 
 
@@ -266,7 +257,7 @@ wi_lobbyists <- wi_lobbyists %>%
 ```
 ### Address
 ```{r normal address, echo=FALSE}
-wi_lobbyists <- wi_lobbyists %>% 
+wi_lobby <- wi_lobbyists %>% 
   mutate(lobbyist_address = normal_address(address = address,
       add_abbs = usps_city,
       na_rep = TRUE))
@@ -282,7 +273,9 @@ Running the following commands tells us the zipcode fields are mostly clean.
 ```{r client normal zip}
 prop_in(wi_lobbyists$zip, valid_zip, na.rm = TRUE) %>% percent()
 
-wi_principals <- wi_principals %>% mutate(principal_ZIP5 = normal_zip(principal_mailing_zip))
+wi_principals <- wi_principals %>% 
+  mutate(principal_ZIP5 = normal_zip(principal_mailing_zip))
+
 prop_in(wi_principals$principal_ZIP5, valid_zip, na.rm = TRUE) %>% percent()
 ```
 
@@ -297,6 +290,7 @@ prop_in(wi_principals$principal_mailing_state, valid_state, na.rm = TRUE) %>% pe
 The city field needs some work. We'll use the three-step cleaning method.
 ```{r}
 prop_in(wi_lobbyists$city_raw, valid_city, na.rm = TRUE) %>% percent()
+
 prop_in(wi_principals$principal_mailing_city, valid_city, na.rm = TRUE) %>% percent()
 
 ```
@@ -346,7 +340,7 @@ wi_lobbyists <- wi_lobbyists %>%
   rename(city_match = city) %>% 
   mutate(
     match_dist = stringdist(city_norm, city_match),
-city_swap = if_else(condition = !is.na(city_match),
+    city_swap = if_else(condition = !is.na(city_match),
                         if_else(
       condition = match_dist <= 2,
       true = city_match,
@@ -355,27 +349,24 @@ city_swap = if_else(condition = !is.na(city_match),
       false = city_norm
   ))
 
-prop_in(wi_lobby$city_swap, valid_city, na.rm = TRUE)
+prop_in(wi_lobbyists$city_swap, valid_city, na.rm = TRUE)
 ```
 
 
 ```{r Google Maps Places API}
-check_city <- function(city_input, verbose = FALSE) {
-  ### Put your api_key here                                            
-  response <- GET(api_url_root, query = list(query = city_input, key = api_key))
-  stop_for_status(response)
-  r_content <- content(response)
-  if (identical(r_content$status,   "REQUEST_DENIED")) {
-  warning("You must use an API key", call. = FALSE)
-  }
-    else if (identical(r_content$status,   "ZERO_RESULTS")){
-      warning("No results were found", call. = FALSE)
-    }
-    else{
-      formatted_adress = r_content$results[[1]]$formatted_address
-      city_fetched = str_split()
-    }
-}
+wi_lobbyists_out <- wi_lobbyists %>% 
+  filter(city_swap %out% valid_city) %>% 
+  drop_na(city_swap) %>% 
+  select(city_raw,
+         state,
+         city_norm,
+         city_match,
+         city_swap) %>% 
+  distinct()
+
+wi_lobbyists_out <- wi_lobbyists_out %>% 
+  mutate(test_col = pmap_lgl(.l = list(city_raw, state), .f = check_city, key = api_key))
+# For the 
 
 
 ```
