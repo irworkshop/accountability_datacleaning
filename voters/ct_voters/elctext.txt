@@ -1,0 +1,103 @@
+000100*&* SSCEBG02                                                      00010000
+000200******************************************************************00020000
+000300**                                                              **00030000
+000400**             COMMON WORKING STORAGE FOR THE ELECTIONS         **00040000
+000500**             REPORTING FILE  APPLICATION                      **00050000
+000600**             PROGRAMS SS20BTDG                                **00060000
+000700**                                                              **00070000
+000800******************************************************************00080000
+000900                                                                  00090000
+001000 01  WS-EXTRACT-FILE.                                             00100000
+001300     10  WS-TOWN-ID          PIC X(03).                           00121000
+           10  COMM1               PIC X.                               00121102
+002700     10  WS-VTR-ID-VOTER     PIC X(09).                           00122000
+           10  COMM2               PIC X.                               00123002
+001800     10  WS-VTR-NM-LAST      PIC X(35).                           00124006
+           10  COMM3               PIC X.                               00125007
+001900     10  WS-VTR-NM-FIRST     PIC X(20).                           00126006
+           10  COMM4               PIC X.                               00127007
+002000     10  WS-VTR-NM-MID       PIC X(15).                           00128006
+           10  COMM5               PIC X.                               00129007
+002900     10  WS-VTR-NM-PREFIX    PIC X(05).                           00129106
+           10  COMM6               PIC X.                               00129207
+003000     10  WS-VTR-NM-SUFF      PIC X(05).                           00129306
+           10  COMM7               PIC X.                               00129407
+002800     10  WS-VTR-CD-STATUS    PIC X(01).                           00129506
+           10  COMM8               PIC X.                               00129607
+005400     10  WS-CD-SPEC-STATUS   PIC X(01).                           00129706
+           10  COMM9               PIC X.                               00129807
+005200     10  WS-CD-OFF-REASON    PIC X(01).                           00129906
+           10  COMM10              PIC X.                               00130006
+001400     10  WS-VTR-DIST         PIC X(03).                           00130100
+           10  COMM11              PIC X.                               00130206
+001500     10  WS-VTR-PREC         PIC X(02).                           00131000
+           10  COMM12              PIC X.                               00131106
+001600     10  WS-CONGRESS         PIC X(03).                           00131305
+           10  COMM13              PIC X.                               00131406
+001610     10  WS-SENATE           PIC X(03).                           00131603
+           10  COMM14              PIC X.                               00131706
+001620     10  WS-ASSEMBLY         PIC X(03).                           00131905
+           10  COMM15              PIC X.                               00132006
+005500     10  WS-POLL-PL-NAME     PIC X(40).                           00132104
+           10  COMM16              PIC X.                               00132206
+001400     10  WS-LOC-VTR-DIST     PIC X(03).                           00132304
+           10  COMM17              PIC X.                               00132406
+001500     10  WS-LOC-VTR-PREC     PIC X(02).                           00132504
+           10  COMM18              PIC X.                               00132606
+001400     10  WS-SPC-VTR-DIST     PIC X(03).                           00132704
+           10  COMM19              PIC X.                               00132806
+001500     10  WS-SPC-VTR-PREC     PIC X(02).                           00132904
+           10  COMM20              PIC X.                               00133006
+003100     10  WS-VTR-AD-NUM       PIC X(06).                           00133106
+           10  COMM21              PIC X.                               00133206
+003200     10  WS-VTR-AD-UNIT      PIC X(08).                           00133306
+           10  COMM22              PIC X.                               00133406
+001700     10  WS-NM-STREET        PIC X(40).                           00133500
+           10  COMM23              PIC X.                               00134006
+002100     10  WS-TOWN-NAME        PIC X(18).                           00220000
+           10  COMM24              PIC X.                               00221004
+003400     10  WS-ST               PIC X(02).                           00240000
+           10  COMM25              PIC X.                               00240104
+003500     10  WS-ZIP5             PIC X(05).                           00250000
+           10  COMM26              PIC X.                               00250104
+003600     10  WS-ZIP4             PIC X(04).                           00251000
+           10  COMM27              PIC X.                               00251104
+003700     10  WS-CARRIER          PIC X(04).                           00261000
+           10  COMM28              PIC X.                               00261104
+003800     10  WS-MAIL-NUM         PIC X(06).                           00270000
+           10  COMM29              PIC X.                               00270104
+003900     10  WS-MAIL-UNIT        PIC X(08).                           00270300
+           10  COMM30              PIC X.                               00270404
+004000     10  WS-MAIL-STR1        PIC X(40).                           00270600
+           10  COMM31              PIC X.                               00270704
+004100     10  WS-MAIL-STR2        PIC X(20).                           00270900
+           10  COMM32              PIC X.                               00271004
+004200     10  WS-MAIL-CITY        PIC X(30).                           00271200
+           10  COMM33              PIC X.                               00271304
+004300     10  WS-MAIL-ST          PIC X(02).                           00271500
+           10  COMM34              PIC X.                               00271604
+004400     10  WS-MAIL-COUNTRY     PIC X(20).                           00271800
+           10  COMM35              PIC X.                               00271904
+004500     10  WS-MAIL-ZIP         PIC X(10).                           00272100
+           10  COMM36              PIC X.                               00272204
+004600     10  WS-MAIL-CARRIER     PIC X(04).                           00272400
+           10  COMM37              PIC X.                               00272504
+004700     10  WS-DT-BIRTH         PIC X(10).                           00272700
+           10  COMM38              PIC X.                               00272804
+004800     10  WS-PHONE            PIC X(10).                           00273000
+           10  COMM39              PIC X.                               00273104
+004900     10  WS-CD-PARTY         PIC X(05).                           00273300
+           10  COMM40              PIC X.                               00273404
+005300     10  WS-CD-PARTY-UNQUAL  PIC X(05).                           00273600
+           10  COMM41              PIC X.                               00273704
+005000     10  WS-CD-SEX           PIC X(01).                           00274000
+           10  COMM42              PIC X.                               00274104
+005100     10  WS-DT-ACCEPT        PIC X(10).                           00276000
+           10  COMM43              PIC X.                               00276104
+005600     10  WS-ELECTION OCCURS 20 TIMES.                             00279808
+005700         15  WS-ELECT-DT     PIC X(10).                           00279900
+               15  COMM45          PIC X.                               00280004
+005800         15  WS-ELECT-TYPE   PIC X.                               00280100
+               15  COMM46          PIC X.                               00280204
+005900         15  WS-ELECT-ABSTEE PIC X.                               00281000
+               15  COMM47          PIC X.                               00282004

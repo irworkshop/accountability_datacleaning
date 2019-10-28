@@ -1,0 +1,554 @@
+---
+title: "Rhode Island Expenditures"
+author: "Kiernan Nicholls"
+date: "`r Sys.time()`"
+output:
+  github_document: 
+    df_print: tibble
+    toc: true
+    toc_dept: 2
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE, purl=FALSE}
+library(knitr)
+opts_chunk$set(
+  eval = TRUE,
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  error = FALSE,
+  comment = "#>",
+  fig.path = "../plots/",
+  fig.width = 10,
+  dpi = 300
+)
+options(width = 99)
+```
+
+## Project
+
+The Accountability Project is an effort to cut across data silos and give journalists, policy
+professionals, activists, and the public at large a simple way to search across huge volumes of
+public data about people and organizations.
+
+Our goal is to standardizing public data on a few key fields by thinking of each dataset row as a
+transaction. For each transaction there should be (at least) 3 variables:
+
+1. All **parties** to a transaction
+2. The **date** of the transaction
+3. The **amount** of money involved
+
+## Objectives
+
+This document describes the process used to complete the following objectives:
+
+1. How many records are in the database?
+1. Check for duplicates
+1. Check ranges
+1. Is there anything blank or missing?
+1. Check for consistency issues
+1. Create a five-digit ZIP Code called `ZIP5`
+1. Create a `YEAR` field from the transaction date
+1. Make sure there is data on both parties to a transaction
+
+## Packages
+
+The following packages are needed to collect, manipulate, visualize, analyze, and communicate
+these results. The `pacman` package will facilitate their installation and attachment.
+
+```{r p_load, message=FALSE, dfrning=FALSE, error=FALSE}
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load(
+  stringdist, # levenshtein value
+  tidyverse, # data manipulation
+  RSelenium, # remote browsing
+  lubridate, # datetime strings
+  magrittr, # pipe opperators
+  janitor, # dataframe clean
+  zipcode, # clean & database
+  refinr, # cluster and merge
+  scales, # number formatting
+  knitr, # knit documents
+  here, # relative storage
+  glue, # combine strings
+  fs # search storage 
+)
+
+# fix conflict
+here <- here::here
+```
+
+The IRW's `campfin` package will also have to be installed from GitHub. This package contains
+functions custom made to help facilitate the processing of campaign finance data.
+
+```{r load_campfin}
+pacman::p_load_current_gh("kiernann/campfin")
+```
+
+This document should be run as part of the `R_campfin` project, which lives as a sub-directory of
+the more general, language-agnostic [`irworkshop/accountability_datacleaning`][01] GitHub
+repository.
+
+The `R_campfin` project uses the [RStudio projects][02] feature and should be run as such. The
+project also uses the dynamic `here::here()` tool for file paths relative to _your_ machine.
+
+```{r where_here, collapse=TRUE}
+# where dfs this document knit?
+here::here()
+```
+
+[01]: https://github.com/irworkshop/accountability_datacleaning "TAP repo"
+[02]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects "Rproj"
+
+## Data
+
+Data comes from the [Rhode Island Board of Elections][03]. Each records tracks a single expenditure
+as reported by the campaign.
+
+[03]: http://www.elections.ri.gov/finance/publicinfo/ "ri_boe"
+
+### About
+
+> The Expenditures tab allows you to run ad-hoc reports on expenditures filed on Summary of
+Campaign Activity (CF-2) reports. The reports allow a certain degree of customization in that you
+are able to specify certain filters to limit what appears on the reports.
+
+## Import
+
+### Download
+
+```{r raw_dir}
+# create a directory for the raw data
+raw_dir <- here("ri", "expends", "data", "raw")
+dir_create(raw_dir)
+```
+
+To download the file, we can create our own URL and navigate to the page using the `RSelenium`
+package.
+
+```{r download_raw, eval=FALSE}
+url <- str_c(
+  "http://ricampaignfinance.com/RIPublic/Reporting/ExpenditureReport.aspx?OrgID=0",
+  "BeginDate=",
+  "EndDate=",
+  "LastName=",
+  "FirstName=",
+  "ContType=0",
+  "State=",
+  "City=",
+  "ZIPCode=",
+  "Amount=0",
+  "ReportType=Expend",
+  "CFStatus=F",
+  "MPFStatus=F",
+  "Level=S",
+  "SumBy=Type",
+  "Sort1=None",
+  "Direct1=asc",
+  "Sort2=None",
+  "Direct2=asc",
+  "Sort3=None",
+  "Direct3=asc",
+  "Site=Public",
+  "Incomplete=A",
+  "ContSource=CF",
+  sep = "&"
+)
+
+# open the driver with auto download options
+remote_driver <- rsDriver(
+  port = 4444L,
+  browser = "firefox",
+  extraCapabilities = makeFirefoxProfile(
+    list(
+      browser.download.dir = raw_dir,
+      browser.download.folderList = 2L,
+      browser.helperApps.neverAsk.saveToDisk = "text/csv"
+    )
+  )
+)
+
+# navigate to the APOC download site
+remote_browser <- remote_driver$client
+remote_browser$navigate(url)
+
+# click the export button
+remote_browser$findElement("css", "#lnkExport")$clickElement()
+
+# switch to pop up window
+pop_up <- remote_driver$client$getWindowHandles()[[2]]
+remote_driver$client$switchToWindow(windowId = pop_up)
+
+# click the download option button
+csv_button <- remote_browser$findElement("css", "#hypFileDownload")$clickElement()
+
+# close the browser and driver
+remote_browser$close()
+remote_driver$server$stop()
+```
+
+### Read
+
+```{r read_raw}
+ri <- read_csv(
+  file = dir_ls(raw_dir),
+  col_types = cols(
+    .default = col_character(),
+    ExpDate = col_date("%m/%d/%Y"),
+    Amount = col_double(),
+    OSAP =  col_double(),
+    ZeroedByCF7 = col_logical()
+  )
+)
+
+ri <- ri %>% 
+  clean_names() %>% 
+  mutate_if(is_character, str_to_upper) %>% 
+  mutate_if(is_character, str_squish)
+```
+
+## Explore
+
+There are `r comma(nrow(ri))` records of `r comma(length(ri))` variables in the full database.
+
+```{r glimpse}
+glimpse(sample_frac(ri))
+```
+
+### Distinct
+
+The variables range in their degree of distinctness.
+
+```{r n_distinct}
+ri %>% glimpse_fun(n_distinct)
+```
+
+```{r plot_exp_bar, echo=FALSE}
+ggplot(data = ri) + 
+  geom_bar(mapping = aes(exp_desc)) +
+  coord_flip()
+```
+
+```{r plot_rec_bar, echo=FALSE}
+ggplot(data = ri) + 
+  geom_bar(mapping = aes(receipt_desc)) +
+  coord_flip()
+```
+
+### Missing
+
+The variables also vary in their degree of values that are `NA` (missing).
+
+```{r count_na}
+ri %>% glimpse_fun(count_na)
+```
+
+We will flag any record missing a `full_name` or `address`.
+
+```{r flag_na}
+ri <- ri %>% mutate(na_flag = is.na(full_name) | is.na(address) | is.na(city_st_zip))
+```
+
+### Duplicates
+
+We can use `janitor::get_dupes()` to create a table of records duplicated more than once.
+
+```{r get_dupes, collapse=TRUE}
+ri_dupes <- distinct(get_dupes(ri))
+nrow(ri_dupes)
+sum(ri_dupes$dupe_count)
+```
+
+We can then join this table back with the full dataset, flagging any duplicated rows with
+`dupe_flag()`.
+
+```{r join_dupes}
+ri <- ri %>%
+  left_join(ri_dupes) %>% 
+  mutate(dupe_flag = !is.na(dupe_count))
+
+rm(ri_dupes)
+```
+
+### Ranges
+
+#### amounts
+
+There are `r sum(ri$amount < 0)` records with `amount` values less than zero. 
+
+```{r range_amount, collapse=TRUE}
+summary(ri$amount)
+sum(ri$amount < 0)
+```
+
+```{r amount_hist}
+ri %>% 
+  ggplot(aes(amount)) +
+  geom_histogram() +
+  scale_x_continuous(trans = "log10", labels = dollar)
+```
+
+```{r amount_box_type, fig.height=10}
+ri %>% 
+  ggplot(aes(exp_desc, amount)) +
+  geom_boxplot(varwidth = TRUE, outlier.alpha = 0.01) +
+  scale_y_continuous(trans = "log10", labels = dollar) +
+  coord_flip()
+```
+
+### Dates
+
+There are `r sum(ri$exp_date > today())` records with an `exp_date` past `r today()`.
+
+```{r range_date, collapse=TRUE}
+summary(ri$exp_date)
+sum(ri$exp_date > today())
+```
+
+```{r year_bar, echo=FALSE}
+ri %>% 
+  ggplot() +
+  geom_bar(aes(year(exp_date)))
+```
+
+```{r month_line_desc, echo=FALSE}
+ri %>% 
+  group_by(exp_desc, month = month(exp_date)) %>% 
+  summarize(median_amount = median(amount)) %>% 
+  ggplot(aes(month, median_amount)) +
+  geom_line(aes(color = exp_desc), size = 2) +
+  scale_y_continuous(labels = scales::dollar)
+```
+
+## Wrangle
+
+Before wrangling the data, we need to separate the `city_st_zip` variable into it's respective
+parts.
+
+```{r sep_geo}
+ri <- ri %>% 
+  separate(
+    col = city_st_zip,
+    into = c("city_sep", "state_zip"),
+    sep = ",\\s",
+    remove = FALSE
+  ) %>% 
+  separate(
+    col = state_zip,
+    into = c("state_sep", "zip_sep"),
+    sep = "\\s",
+    remove = TRUE
+  )
+```
+
+### Year
+
+We can create an `exp_year` variable from the `exp_date` using `lubridate::year()` (after parsing
+the string with `readr::col_date()`).
+
+```{r add_year}
+ri <- mutate(ri, exp_year = year(exp_date))
+```
+
+### Address
+
+The `address` variable should be minimally cleaned using the `campfin::normal_address()` to
+simplify text and expand abbreviations.
+
+```{r norm_address}
+ri <- ri %>% 
+  mutate(
+    address_clean = normal_address(
+      address = address,
+      add_abbs = usps,
+      na_rep = TRUE,
+    )
+  )
+
+ri %>% 
+  filter(address_clean != address) %>% 
+  select(address, address_clean) %>% 
+  sample_n(10)
+```
+
+### ZIP
+
+We can do the same to ZIP codes using `campfin::normal_zip()`.
+
+```{r norm_zip, collapse=TRUE}
+n_distinct(ri$zip_sep)
+mean(na.omit(ri$zip_sep) %in% geo$zip)
+
+ri <- ri %>% 
+  mutate(
+    zip_clean = normal_zip(
+      zip = zip_sep, 
+      na_rep = TRUE
+    )
+  )
+
+mean(is.na(ri$zip_clean))
+n_distinct(ri$zip_clean)
+mean(na.omit(ri$zip_clean) %in% geo$zip)
+n_distinct(ri$zip_clean[which(ri$zip_clean %out% geo$zip)])
+```
+
+### State
+
+```{r norm_state, collapse=TRUE}
+n_distinct(ri$state_sep)
+mean(na.omit(ri$state_sep) %in% geo$state)
+setdiff(ri$state_sep, geo$state)
+
+ri <- ri %>% 
+  mutate(
+    state_clean = normal_state(
+      state = state_sep,
+      abbreviate = TRUE,
+      na_rep = TRUE,
+      valid = geo$state
+    )
+  )
+
+n_distinct(ri$state_clean)
+mean(na.omit(ri$state_clean) %in% geo$state)
+setdiff(ri$state_clean, geo$state)
+```
+
+### City
+
+Cleaning city values is the most complicated. This process involves four steps:
+
+1. Prepare raw city values by removing invalid data and reducing inconsistencies
+1. Match prepared city values with the _actual_ city name of that record's ZIP code
+1. swap prepared city values with the ZIP code match _if_ only 1 edit is needed
+1. Refine swapped city values with key collision and n-gram fingerprints
+
+#### Prep
+
+```{r count_city, collapse=TRUE}
+n_distinct(ri$city_sep)
+mean(ri$city_sep %in% geo$city)
+sum(unique(ri$city_sep) %out% geo$city)
+```
+
+
+```{r prep_city, collapse=TRUE}
+ri <- ri %>% 
+  mutate(
+    city_norm = normal_city(
+      city = city_sep %>% str_replace("\\bPROV\\b", "PROVIDENCE"),
+      geo_abbs = usps_city,
+      st_abbs = unique(geo$state),
+      na = na_city,
+      na_rep = TRUE
+    )
+  )
+
+n_distinct(ri$city_norm)
+mean(ri$city_norm %in% geo$city)
+sum(unique(ri$city_norm) %out% geo$city)
+```
+
+#### Match
+
+```{r match_dist, collapse=TRUE}
+ri <- ri %>%
+  left_join(
+    y = geo,
+    by = c(
+      "zip_clean" = "zip",
+      "state_clean" = "state"
+    )
+  ) %>%
+  rename(city_match = city) %>%
+  mutate(match_dist = stringdist(city_norm, city_match))
+
+summary(ri$match_dist)
+```
+
+#### Swap
+
+```{r swap_city, collapse=TRUE}
+ri <- ri %>% 
+  mutate(
+    city_swap = if_else(
+      condition = match_dist == 1, 
+      true = city_match, 
+      false = city_norm
+    )
+  )
+
+n_distinct(ri$city_swap)
+mean(ri$city_swap %in% geo$city)
+sum(unique(ri$city_swap) %out% geo$city)
+```
+
+```{r count_swaps}
+ri %>% 
+  filter(city_swap != city_norm) %>% 
+  count(state_clean, city_sep, city_norm, city_swap) %>% 
+  arrange(desc(n))
+```
+
+#### Refine
+
+```{r view_refine}
+ri_refined <- ri %>%
+  filter(state_clean == "RI") %>% 
+  filter(match_dist != 1) %>% 
+  mutate(
+    city_refine = city_swap %>% 
+      key_collision_merge(dict = geo$city[geo$state == "RI"]) %>% 
+      n_gram_merge(numgram = 1)
+  ) %>% 
+  filter(city_swap != city_refine)
+```
+
+#### Merge
+
+```{r join_refine, collapse=TRUE}
+ri <- ri %>% 
+  left_join(ri_refined) %>% 
+  mutate(city_clean = coalesce(city_refine, city_swap))
+
+n_distinct(ri$city_clean)
+mean(ri$city_clean %in% geo$city)
+sum(unique(ri$city_clean) %out% geo$city)
+```
+
+Each step of the cleaning process reduces the number of distinct city values.
+
+```{r city_reduce, collapse=TRUE}
+n_distinct(ri$city_sep)
+n_distinct(ri$city_norm)
+n_distinct(ri$city_swap)
+n_distinct(ri$city_clean)
+```
+
+## Conclude
+
+1. There are `r nrow(ri)` records in the database
+1. There are `r sum(ri$dupe_flag)` records with duplicate values (flagged with `dupe_flag`)
+1. The ranges for dates and amounts are reasonable
+1. Consistency has been improved with `stringr` package and custom `campfin::normal_*()` functions
+1. The five-digit `zip_clean` variable has been created with `campfin::normal_zip()`
+1. The `year` variable has been created with `lubridate::year()`
+1. There are `r sum(ri$na_flag)` records with some missing key value, 
+`r percent(sum(ri$na_flag)/nrow(ri))` of the total records.
+
+## Export
+
+```{r write_clean}
+proc_dir <- here("ri", "expends", "data", "processed")
+dir_create(proc_dir)
+
+write_csv(
+  x = ri,
+  na = "",
+  path = glue("{proc_dir}/ri_expends_clean.csv")
+)
+```
+

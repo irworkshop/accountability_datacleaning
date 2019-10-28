@@ -1,0 +1,997 @@
+---
+title: "Data Diary"
+subtitle: "Alabama Expenditures"
+author: "Kiernan Nicholls"
+date: "`r format(Sys.time())`"
+output:
+  github_document: 
+    df_print: tibble
+    toc: true
+    toc_depth: 2
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE, purl=FALSE}
+library(knitr)
+opts_chunk$set(
+  echo    = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  error   = FALSE,
+  comment = "#>",
+  fig.path = "../plots/",
+  fig.width = 10,
+  dpi = 300
+)
+options(width = 99)
+```
+
+## Project
+
+The Accountability Project is an effort to cut across data silos and give journalists, policy
+professionals, activists, and the public at large a simple way to search across huge volumes of
+public data about people and organizations.
+
+Our goal is to standardizing public data on a few key fields by thinking of each dataset row as a
+transaction. For each transaction there should be (at least) 3 variables:
+
+1. All **parties** to a transaction
+2. The **date** of the transaction
+3. The **amount** of money involved
+
+## Objectives
+
+This document describes the process used to complete the following objectives:
+
+1. How many records are in the database?
+1. Check for duplicates
+1. Check ranges
+1. Is there anything blank or missing?
+1. Check for consistency issues
+1. Create a five-digit ZIP Code called `ZIP5`
+1. Create a `YEAR` field from the transaction date
+1. Make sure there is data on both parties to a transaction
+
+## Prerequisites
+
+The following packages are needed to collect, manipulate, visualize, analyze, and communicate
+these results. The `pacman` package will facilitate their installation and attachment.
+
+```{r p_load, message=FALSE, warning=FALSE, error=FALSE}
+pacman::p_load_gh("VerbalExpressions/RVerbalExpressions")
+pacman::p_load(
+  stringdist, # levenshtein value
+  tidyverse, # data manipulation
+  lubridate, # datetime strings
+  tidytext, # text mining tools
+  magrittr, # pipe opperators
+  janitor, # dataframe clean
+  zipcode, # clean & databse
+  batman, # parse logicals
+  refinr, # cluster & merge
+  rvest, # scrape website
+  skimr, # summary stats
+  vroom, # quickly read
+  glue, # combine strings
+  here, # locate storage
+  fs # search storage 
+)
+```
+
+```{r custom_prep, echo=FALSE}
+# fix conflict
+here <- here::here
+# custom utility functions
+"%out%" <- Negate("%in%")
+print_all <- function(df) df %>% print(n = nrow(.)) 
+# source functions
+source(here("R", "prep_city.R"))
+source(here("R", "all_files_new.R"))
+# load data
+data("zipcode")
+```
+
+This document should be run as part of the `R_campfin` project, which lives as a sub-directory
+of the more general, language-agnostic `irworkshop/accountability_datacleaning` 
+[GitHub repository](https://github.com/irworkshop/accountability_datacleaning).
+
+The `R_campfin` project uses the 
+[RStudio projects](https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects)
+feature and should be run as such. The project also uses the dynamic `here::here()` tool for file
+paths relative to _your_ machine.
+
+```{r where_here, collapse=TRUE}
+# where does this document knit?
+here::here()
+```
+
+## Data
+
+Data is collected from the [AlabamaVotes.gov][01] website, which publishes data in concordance with
+the Alabama Electronic Fair Campaign Practices Act (FCPA). 
+
+> Welcome to the public disclosure website for the Alabama Electronic Fair Campaign Practices Act
+(FCPA) Reporting System. My staff and I developed this online system pursuant to Alabama
+Legislative Act 2011-687. It requires electronic reports of contributions and expenditures to
+increase the efficiency of data entry, provide more accurate data, enhance reporting capabilities
+and improve user navigation of the system.
+> 
+> This website contains detailed financial records and related information that candidates and
+political action committees are required by law to disclose. You can search the system in several
+ways and review the results online, print them or extract them for further analysis.
+
+Per the "[Data Download][02]" resource page of that website:
+
+> This page provides comma separated value (CSV) downloadable files which contain annual data for
+Cash Contributions, In-Kind Contributions, Other Receipts, and Expenditures in a zipped file
+format. These files can be downloaded and imported into other applications (Microsoft Excel,
+Microsoft Access, etc.) for your use. This data is extracted from the Alabama Electronic FCPA
+Reporting System database as it existed as of 6/21/2019 12:35 AM.
+
+As the "[Help][03]" page for that page explains:
+
+> You can access the Campaign Finance Data Download page to download contribution and expenditure
+data for import into other applications such as Microsoft Excel or Access. A weekly batch process
+is run that captures the year-to-date information for the current year. The data is available for
+each calendar year. The file is downloaded in CSV format.
+
+[01]: http://fcpa.alabamavotes.gov
+[02]: http://fcpa.alabamavotes.gov/PublicSite/DataDownload.aspx
+[03]: https://fcpa.alabamavotes.gov/CampaignFinance/WebHelp/Public/PublicSite/DataDownload.htm
+
+## Variables
+
+The Data Download page also links to PDF files with keys to the file format.
+Per the [Expenditures Key][04]:
+
+`ORG ID`:
+
+> This is the unique ID of the paying candidate or committee.
+
+`EXPENDITURE AMOUNT`:
+
+> Dollar amount of the expenditure.
+
+`EXPENDITURE DATE`:
+
+> Date of the expenditure.
+
+`LAST NAME`:
+
+> Last Name of Payee (entity paid), if an individual person. If not an individual, the entity full
+name will be in the LAST NAME field.
+
+`FIRST NAME`:
+
+> Payee First Name.
+
+`ADDRESS`:
+
+> Payee Address Number, Street, PO Box or other directional information.
+
+`CITY`, `STATE`, `ZIP`:
+
+> Payee City [State, ZIP]
+
+`EXPENDITURE`:
+
+> Dollar amount of the expenditure.
+
+`EXPLANATION`:
+
+> This is the explanation provided for the expenditure if “Other” purpose is used.
+
+`EXPENDITURE ID`:
+
+> This is the Expenditure internal ID. This ID is unique.
+
+`FILED DATE`:
+
+> Date the Expenditure was filed.
+
+`PURPOSE`: 
+
+> Purpose of the Expenditure.
+
+`EXPENDITURE TYPE`:
+
+> Indicates the Type of Expenditure, Itemized, Non-Itemized, Itemized Line of Credit, Non-Itemized
+Line of Credit.
+
+`COMMITTEE TYPE`:
+
+> Type of committee making the expenditure. PCC or PAC
+
+`COMMITTEE NAME`:
+
+> This is the name of the Committee making the expenditure if a PAC.
+
+`CANDIDATE NAME`:
+
+> This is the name of the Candidate making the expenditure if a PCC.
+
+`AMENDED`: 
+
+> Y/N Indicator to designate if this record has been amended.
+
+
+[04]: http://fcpa.alabamavotes.gov/PublicSite/Resources/AL_ExpendituresFileLayout.pdf
+
+## Import
+
+To process our data in R, we will have to read each annual CSV file and combine them into a single
+data frame. This combined data frame can be cleaned and uploaded to TAP.
+
+### Download
+
+To read the files into R, we will first have to download them individually from the. The files
+have a consistent naming convention, all we have to do is change the year for each file.
+
+```{r glue_url}
+base_url <- "http://fcpa.alabamavotes.gov/PublicSite/Docs/BulkDataDownloads/"
+expend_urls <- glue(base_url, "{2013:2019}_ExpendituresExtract.csv.zip")
+print(expend_urls)
+```
+
+If recent versions of the ZIP files do not exists in the `data/raw` directory, download them from
+the Alabama FCPA website with `utils::download.file()`.
+
+```{r download.file}
+raw_dir <- here("al", "expends", "data", "raw")
+dir_create(raw_dir)
+if (!all_files_new(raw_dir, "zip$")) {
+  for (url in expend_urls) {
+    download.file(
+      url = url,
+      destfile = str_c(raw_dir, basename(url), sep = "/")
+    ) 
+  }
+}
+```
+
+```{r dir_ls_zip, echo=FALSE}
+dir_ls(path = raw_dir, glob = "*.zip") %>% 
+  file_info() %>% 
+  mutate(file = basename(path)) %>% 
+  select(
+    file, 
+    type, 
+    size,
+    birth_time,
+    modification_time
+  )
+```
+
+### Unzip
+
+Since each ZIP file only contains a single CSV, and we are using the `readr` package to read files,
+we do not need to unzip these files.
+
+```{r unzip, message=FALSE}
+dir_ls(path = raw_dir, glob = "*.zip") %>% 
+  extract(1) %>% 
+  unzip(list = TRUE)
+```
+
+### Read
+
+For every year except 2018, we can read the files individually using `readr::read_delim()`.
+
+```{r read_good}
+al_good <- 
+  dir_ls(raw_dir) %>% 
+  extract(-6) %>% 
+  map(
+    read_delim,
+    delim = ",",
+    na = c("", "\\s", "NA"),
+    escape_double = FALSE,
+    col_types = cols(
+      .default = col_character(),
+      ExpenditureDate = col_date("%m/%d/%Y"),
+      ExpenditureAmount = col_double(),
+      FiledDate = col_date("%m/%d/%Y")
+    )
+  )
+```
+
+In the `2018_ExpendituresExtract.csv.zip` file, there are two instances of nested quotes preventing
+the same `readr::read_delim()` arguments from working.
+
+```{r parse_problems}
+al_bad <- read_delim(
+  file = str_c(raw_dir, "2018_ExpendituresExtract.csv.zip", sep = "/"),
+  delim = ",",
+  na = c("", "\\s", "NA", "N/A"),
+  escape_double = FALSE,
+  col_types = cols(
+    .default = col_character(),
+    ExpenditureDate = col_date("%m/%d/%Y"),
+    ExpenditureAmount = col_double(),
+    FiledDate = col_date("%m/%d/%Y")
+  )
+)
+
+problems(al_bad) %>% mutate(file = basename(file))
+```
+
+To fix these instances, we can read each line as a character string, replace `\"` with `\'` in
+those instances, combined the strings back into a single string (text file) and pass it to
+`readr::read_delim()`.
+
+```{r read_bad}
+al_bad <- 
+  read_lines(file = str_c(raw_dir, "2018_ExpendituresExtract.csv.zip", sep = "/")) %>% 
+  str_replace("\"RUSTY\"", "\'RUSTY\'") %>% 
+  str_replace("\"MIKE\"", "\'MIKE\'") %>% 
+  str_c("\n") %>% 
+  read_delim(
+  delim = ",",
+  na = c("", "\\s", "NA", "N/A"),
+  escape_double = FALSE,
+  escape_backslash = TRUE,
+  col_types = cols(
+    .default = col_character(),
+    ExpenditureDate = col_date("%m/%d/%Y"),
+    ExpenditureAmount = col_double(),
+    FiledDate = col_date("%m/%d/%Y")
+  )
+)
+```
+
+We can then bind this fixed data frame with the other years.
+
+```{r bind_rows}
+al <- al_good %>% 
+  bind_rows(al_bad) %>% 
+  clean_names() %>% 
+  mutate(amended = to_logical(amended))
+
+rm(al_good, al_bad)
+```
+
+**This process does _not_ capture every row. I need to fix this.**
+
+```{r compare_length, collapse=TRUE}
+n_lines <- 
+  dir_ls(raw_dir) %>% 
+  map(read_lines) %>% 
+  map(length) %>% 
+  unlist() %>% 
+  sum()
+
+nrow(al) - n_lines
+```
+
+## Explore
+
+In the combined data frame, there are `r nrow(al)` rows of `r length(al)` variables.
+
+```{r glimpse}
+glimpse(al)
+```
+
+### Missing
+
+There are `r sum(is.na(al))` missing values across all `r length(al)` variables.
+
+```{r count_na}
+al %>% 
+  map(function(var) sum(is.na(var))) %>% 
+  unlist() %>% 
+  enframe(name = "variable", value = "n_na") %>% 
+  mutate(prop_na = n_na / nrow(al)) %>% 
+  print(n = length(al))
+```
+
+Some records are missing key information regarding who the expenditure was made to.
+
+```{r view_na}
+al %>% select(
+  org_id,
+  expenditure_amount,
+  expenditure_date,
+  first_name,
+  mi,
+  last_name
+)
+```
+
+These records can be flagged with a new `na_flag` variable.
+
+```{r flag_na}
+al <- al %>% mutate(na_flag = is.na(first_name) & is.na(mi) & is.na(last_name))
+```
+
+
+### Distinct
+
+Each variables differs in it's number of distinct values. 
+
+```{r n_distinct}
+al %>% 
+  map(n_distinct) %>% 
+  unlist() %>% 
+  enframe(name = "variable", value = "n_distinct") %>% 
+  mutate(prop_distinct = n_distinct / nrow(al)) %>% 
+  print(n = length(al))
+```
+
+For the _least_ distinct of these values, we can explore the values with `ggplot2::geom_bar()`.
+
+```{r expend_type_bar, echo=FALSE}
+al %>% 
+  ggplot() + 
+  geom_bar(mapping = aes(expenditure_type)) +
+  coord_flip() +
+  labs(
+    title = "AL Expenditures by Type",
+    y = "Number of Expenditures",
+    x = "Expenditure Type"
+  )
+```
+
+```{r comm_type_bar, echo=FALSE}
+al %>% 
+  ggplot() + 
+  geom_bar(mapping = aes(committee_type)) +
+  ggtitle("AL Expenditures by Committee Type")
+```
+
+```{r state_bar, echo=FALSE, fig.height=10}
+al %>% 
+  filter(state != "AL") %>% 
+  filter(!is.na(state)) %>% 
+  count(state) %>%
+  arrange(desc(n)) %>% 
+  slice(1:30) %>% 
+  ggplot() + 
+  geom_col(mapping = aes(reorder(state, n), n)) +
+  coord_flip() +
+  labs(
+    title = "AL Expenditures by Payee State",
+    y = "Number of Expenditures",
+    x = "Payee State"
+  )
+```
+
+The `purpose` variable is a character string entered by the filer to describe how the expenditure
+is used. This differs from `expenditure_type` (which is a limited selection), as itemized 
+expenditures still have a listed `purpose`.
+
+```{r sample_purpose}
+sample(al$purpose, 10)
+```
+
+We can use text mining tools to analyze the most common (non-stop) _words_ in these strings.
+
+```{r purpose_bar, echo=FALSE, fig.height=10}
+al %>% 
+  unnest_tokens(word, purpose) %>%
+  mutate(word = str_to_lower(word)) %>% 
+  count(word) %>% 
+  drop_na() %>% 
+  anti_join(stop_words, by = "word") %>% 
+  arrange(desc(n)) %>% 
+  slice(1:30) %>% 
+  ggplot() +
+  geom_col(mapping = aes(reorder(word, n), n)) +
+  coord_flip() +
+  labs(
+    title = "Frequency of Words in AL Expenditures",
+    y = "Word",
+    x = "Frequency"
+  )
+```
+
+### Ranges
+
+#### Amounts
+
+For the continuous variables, we can explore the distribution of values with 
+`ggplot2::geom_histogram()` and `ggplot2::geom_boxplot()`.
+
+```{r amount_hist_non_log, echo=FALSE, fig.keep=FALSE}
+al %>% 
+  ggplot() +
+  geom_histogram(mapping = aes(expenditure_amount))
+```
+
+```{r amount_hist, echo=FALSE}
+al %>% 
+  ggplot() +
+  geom_histogram(mapping = aes(expenditure_amount)) +
+  scale_y_log10() +
+  scale_x_continuous(trans = "log10", labels = scales::dollar) +
+  labs(
+    title = "Distribution of Expenditure Amount",
+    x = "Expenditure Amount (USD)",
+    y = "Number of Expenditures"
+  )
+```
+
+```{r amount_hist_comm, echo=FALSE}
+al %>% 
+  ggplot() +
+  geom_histogram(mapping = aes(expenditure_amount)) +
+  scale_x_continuous(trans = "log10", labels = scales::dollar) +
+  facet_wrap(~committee_type, ncol = 1) +
+  labs(
+    title = "Distribution of Expenditure Amount",
+    subtitle = "by Committee Type",
+    x = "Expenditure Amount (USD)",
+    y = "Number of Expenditures"
+  )
+```
+
+```{r amount_hist_type, echo=FALSE, fig.height=10}
+al %>% 
+  ggplot() +
+  geom_histogram(mapping = aes(expenditure_amount)) +
+  scale_x_continuous(trans = "log10", labels = scales::dollar) +
+  facet_wrap(~expenditure_type, ncol = 3) +
+  labs(
+    title = "Distribution of Expenditure Amount",
+    subtitle = "by Expenditure Type",
+    x = "Expenditure Amount (USD)",
+    y = "Number of Expenditures"
+  )
+```
+
+```{r amount_box_comm, echo=FALSE}
+al %>% 
+  ggplot() +
+  geom_boxplot(mapping = aes(committee_type, expenditure_amount), varwidth = TRUE) +
+  scale_y_continuous(trans = "log10", labels = scales::dollar) +
+  labs(
+    title = "Range of Expenditure Amounts",
+    x = "Committee Type",
+    y = "Expenditure Amount (USD)"
+  )
+```
+
+```{r amount_box_comm_type, echo=FALSE, fig.height=20}
+al %>% 
+  ggplot() +
+  geom_boxplot(
+    varwidth = TRUE, 
+    outlier.alpha = 0.5,
+    mapping = aes(
+      committee_type, 
+      expenditure_amount
+    )
+  ) +
+  scale_y_continuous(trans = "log10", labels = scales::dollar) +
+  facet_wrap(~expenditure_type, ncol = 2, scales = "free_y") +
+  labs(
+    title = "Range of Expenditure Amounts",
+    subtitle = "by Expenditure Type",
+    x = "Committee Type",
+    y = "Expenditure Amount (USD)"
+  )
+```
+
+#### Dates
+
+The range of `expenditure_date` is entirely reasonable, as is `filed_date`. There are
+`r sum(year(al$expenditure_date) < 2013)` expenditures made before 2013 yet the earliest filing was 
+made on `r min(al$filed_date)`
+
+```{r date_range}
+summary(al$expenditure_date)
+summary(al$filed_date)
+```
+
+### Duplicates
+
+We can use `janitor::get_dupes()` to create a new table with only rows duplicated more than once.
+
+```{r get_dupes}
+dupe_rows <- al %>% 
+  select(-expenditure_id) %>% 
+  get_dupes() %>% 
+  distinct() %>% 
+  mutate(dupe_flag = TRUE)
+```
+
+Then, join this table against the original data to add a new `dupe_flag` variable.
+
+```{r join_dupes}
+al <- al %>% 
+  left_join(dupe_rows) %>% 
+  mutate(dupe_flag = !is.na(dupe_flag))
+```
+
+## Wrangle
+
+### Year
+
+Since we've already parsed the `expenditure_date` variable as an R date class with 
+`readr::col_date()`, we can use `lubridate::year()` to extract the year of the transaction into a
+new `expenditure_year` variable.
+
+```{r mutate_year}
+al <- al %>% mutate(expenditure_year = year(expenditure_date))
+```
+
+### ZIP
+
+```{r data_zipcode, echo=FALSE}
+zipcode <- zipcode %>% 
+  as_tibble() %>% 
+  mutate(city = str_to_upper(city)) %>% 
+  select(city, state, zip)
+```
+
+For the payee `zip` variable, we can use the `stringr::str_*()` functions to remove white-space and
+non-numbers, pad with leading zeroes, and remove the ZIP+4 extension.
+
+```{r clean_zip}
+al <- al %>% mutate(
+  zip_clean = zip %>%
+    str_remove_all(rx_whitespace()) %>%
+    str_remove_all(rx_digit(inverse = TRUE)) %>% 
+    str_pad(width = 5, pad = "0") %>% 
+    str_sub(1, 5) %>%
+    na_if("00000") %>% 
+    na_if("11111") %>% 
+    na_if("99999") %>% 
+    na_if("")
+)
+```
+
+### Address
+
+For the payee `address1`, we can again use the `stringr::str_*()` functions to force uppercase,
+remove non-alphanumeric characters, remove trailing, leading, and repeated white space.
+
+```{r clean_address}
+al <- al %>% mutate(
+  address_clean = address1 %>% 
+  str_to_upper() %>% 
+  str_remove_all(rx_punctuation()) %>% 
+  str_squish() %>% 
+  str_trim() %>% 
+  str_replace("P O", "PO") %>% 
+  na_if("")
+)
+```
+
+### State
+
+From the `zipcodes` database, we can create a comprehensive list of valid state abbreviations.
+
+```{r valid_states, collapse=TRUE}
+valid_states <- sort(unique(zipcode$state))
+length(valid_states)
+setdiff(al$state, valid_states)
+```
+
+Using this list, we can find the invalid payee `state` values.
+
+```{r invalid_states}
+setdiff(al$state, valid_states)
+```
+
+Then, we can isolate those records with invalid payee `state` values and compare them to the
+_expected_ state value for that payee's ZIP code
+
+```{r view_states}
+al %>% 
+  filter(state %out% valid_states) %>% 
+  filter(!is.na(state)) %>%
+  select(
+    address1,
+    city,
+    state,
+    zip_clean
+  ) %>% 
+  distinct() %>% 
+  arrange(state) %>%
+  left_join(zipcode, by = c("zip_clean" = "zip")) %>% 
+  print_all()
+```
+
+Many of these are simply the first two letters of the full state name (e.g., "TE" for "Texas").
+Others are Canadian province abbreviations (e.g., "ON", "NB"). We will expand our list of valid
+state abbreviations to include the Canadian provinces, manually replace types, and remove all
+remaining invalid abbreviations.
+
+```{r canadian_states}
+valid_states <- c(valid_states, "AB", "BC", "MB", "NB", "NL", "NS", "NT", "ON", "QC")
+```
+
+```{r clean_state}
+al <- al %>% mutate(
+  state_clean = state %>% 
+    str_replace("^AJ$", "AL") %>% 
+    str_replace("^GE$", "GA") %>% 
+    str_replace("^IO$", "IA") %>% 
+    str_replace("^L$", "AL") %>% 
+    str_replace("^NB$", "NE") %>% 
+    str_replace("^TE$", "TX") 
+)
+```
+
+```{r na_states}
+al$state_clean[which(al$state_clean %out% valid_states)] <- NA
+```
+
+### City
+
+Cleaning city values takes the most work, due to the irregularity and variety in valid values.
+Our objective is to reduce the number of distinct values and increase the percentage of values
+matching our list of valid city names.
+
+Our list of valid cities will include those in the `zipcode` database and those on the Wikipedia
+page ["List of cities and towns in Alabama"][04]
+
+[04]: https://en.wikipedia.org/wiki/List_of_cities_and_towns_in_Alabama
+
+```{r valid_cities}
+alabama_towns <- 
+  read_html("https://en.wikipedia.org/wiki/List_of_cities_and_towns_in_Alabama") %>% 
+  html_node("table") %>% 
+  html_table(fill = T) %>% 
+  as_tibble(.name_repair = "unique") %>%
+  slice(2:(nrow(.)-3)) %>% 
+  pull(1) %>% 
+  str_remove("\\[(.*)") %>% 
+  str_to_upper() %>% 
+  str_remove_all("[:punct:]")
+
+setdiff(alabama_towns, zipcode$city)
+
+valid_cities <- prep_city(sort(unique(c(zipcode$city, alabama_towns))))
+```
+
+```{r summary_city, collapse=TRUE}
+n_distinct(al$city)
+mean(al$city %in% valid_cities)
+```
+
+```{r view_bad_city}
+al %>% 
+  filter(city %out% valid_cities) %>% 
+  count(city) %>% 
+  arrange(desc(n))
+```
+
+There are five steps to achieve these goals:
+
+1. Prepare raw city values by removing invalid data and reducing inconsistencies
+1. Match prepared city values with the _actual_ city name of that record's ZIP code
+1. swap prepared city values with the ZIP code match _if_ only 1 edit is needed
+1. Refine swapped city values with key collision and n-gram fingerprints
+1. Review invalid refines and manually correct
+
+#### Prepare
+
+Before the other steps, we need to prepare the values using common normalization techniques. This
+work is done using the `prep_city()` function in the `R/` directory of this project. This function
+also removes common invalid entires and strips state abbreviations from the end of city names.
+
+```{r prepare_city, collapse=TRUE}
+common_na <- read_lines(here("R", "na_city.csv"))
+sample(common_na, 3)
+
+al <- al %>% 
+  mutate(
+    city_prep = prep_city(
+      cities = city,
+      na = common_na,
+      abbs = valid_states
+    )
+  )
+
+n_distinct(al$city_prep)
+mean(al$city_prep %in% valid_cities)
+```
+
+#### Match
+
+The next step involves matching a payee `city_prep` value to the _expect_ city value for that
+record's payee ZIP `zip_clean` and `state_state` values. We then calculate the 
+[Levenshtein distance][05], which measures the distance between the two character strings by the
+number of changes needed to match the two strings.
+
+[05]: https://en.wikipedia.org/wiki/Levenshtein_distance
+
+```{r match_city, collapse=TRUE}
+al <- al %>%
+  left_join(zipcode, by = c("zip_clean" = "zip", "state_clean" = "state")) %>%
+  rename(city = city.x, city_match = city.y) %>%
+  mutate(match_dist = stringdist(city_prep, city_match))
+
+summary(al$match_dist)
+```
+
+```{r lev_dist_bar}
+ggplot(al) + 
+  geom_bar(aes(match_dist)) + 
+  scale_y_log10() +
+  labs(
+    title = "Levenshtein Distances",
+    subtitle = "between Prepared City and Matched City",
+    x = "Levenshtein Edit Distance",
+    y = "Count"
+  )
+```
+
+#### Swap
+
+For `city_prep` values less than **3** edits away from the expected matched city name, we can
+safely make that swap. Otherwise, we will keep the `city_prep` value.
+
+```{r swap_city, collapse=TRUE}
+al <- al %>% 
+  mutate(
+    city_swap = if_else(
+      condition = match_dist < 3,
+      true = city_match,
+      false = city_prep
+    )
+  )
+
+n_distinct(al$city_swap)
+mean(al$city_swap %in% valid_cities)
+```
+
+```{r view_bad_swap}
+al %>% 
+  filter(city_swap %out% valid_cities) %>% 
+  count(state_clean, city_swap) %>% 
+  arrange(desc(n)) %>% 
+  drop_na()
+```
+
+#### Refine
+
+Once we've repaired these small edits, we will rely on the OpenRefine key collision and n-gram
+merge algorithms to group similar values and merge them together.
+
+These algorithms rely on the frequency of one string compared to the frequency of another similar
+string. To ensure the correct changes are made, we can manually correct some very frequent yet
+incorrect values.
+
+```{r manual_swap}
+al$city_swap <- al$city_swap %>% 
+  str_remove("(^|\\b)ALABAMA(\\b|$)") %>% 
+  str_replace("^BHAM$", "BIRMINGHAM") %>%
+  str_replace("^BIRM$", "BIRMINGHAM") %>% 
+  str_replace("^MTGY$", "MONTGOMERY") %>% 
+  str_replace("^MTG$",  "MONTGOMERY") %>% 
+  str_replace("^RBC$",  "RAINBOW CITY") %>% 
+  str_replace("^ALEX CITY$", "ALEXANDER CITY") %>% 
+  str_replace("\\bINST$", "INSTITUTE") %>% 
+  str_replace("^MOUNT BROOK$", "MOUNTAIN BROOK") %>%
+  str_replace("^NY$", "NEW YORK")
+```
+
+```{r refine_city}
+al_refine <- al %>% 
+  filter(state_clean == "AL") %>% 
+  mutate(
+    city_refine = if_else(
+      condition = match_dist > 2,
+      true = city_swap %>% 
+        key_collision_merge() %>% 
+        n_gram_merge(),
+      false = city_swap
+    )
+  ) %>% 
+  filter(city_refine != city_swap) %>%
+  rename(city_raw = city) %>% 
+  select(
+    expenditure_id,
+    zip_clean,
+    state_clean,
+    city_raw,
+    city_prep,
+    match_dist,
+    city_swap,
+    city_refine
+  )
+```
+
+#### Review
+
+This refining progress made `r nrow(al_refine)` changes.
+`r nrow(distinct(select(al_refine, -expenditure_id)))` of these changes are distinct. We can
+count the frequency of the original `city_swap` value and the new `city_refine` value to ensure
+the algorithm is making the right changes.
+
+```{r review_city, collapse=TRUE}
+mean(al_refine$city_refine %in% valid_cities)
+
+al_refine$swap_count <- NA
+al_refine$refine_count <- NA
+
+for (i in 1:nrow(al_refine)) {
+  al_refine$swap_count[i] <- sum(
+    str_detect(
+      string = al$city_swap, 
+      pattern = al_refine$city_swap[i]), 
+    na.rm = TRUE
+  )
+  al_refine$refine_count[i] <- sum(
+    str_detect(
+      string = al$city_swap, 
+      pattern = al_refine$city_refine[i]), 
+    na.rm = TRUE
+  )
+}
+
+mean(al_refine$swap_count)
+mean(al_refine$refine_count)
+mean(al_refine$refine_count > al_refine$swap_count)
+```
+
+```{r view_refine_count}
+sample_frac(al_refine)
+```
+
+```{r join_refine}
+al <- al %>% 
+  left_join(al_refine) %>% 
+  mutate(
+    city_clean = if_else(
+      condition = is.na(city_refine),
+      true = city_swap,
+      false = city_refine
+    )
+  )
+```
+
+```{r clean_distinct, collapse=TRUE}
+n_distinct(al$city)
+n_distinct(al$city_prep)
+n_distinct(al$city_swap)
+n_distinct(al$city_clean)
+```
+
+```{r}
+al %>% 
+  filter(city_clean %out% valid_cities) %>% 
+  count(state_clean, city_clean) %>% 
+  arrange(city_clean) %>% 
+  drop_na()
+```
+
+## Conclude
+
+1. There are `r nrow(al)` records in the database
+1. Duplicate rows have been flagged with the `dupe_flag` variable
+1. Ranges for continuous variables make sense
+1. Records with missing key information are flagged with the `na_flag` variable
+1. Consistency in character strings has been fixed with `prep_city()` and the `stringr` functions
+1. The `zip_clean` variable has been created from `zip`
+1. The `expenditure_year` variable has been created from `expenditure_date`
+
+## Export
+
+```{r write_clean}
+clean_dir <- here("al", "expends", "data", "processed")
+dir_create(clean_dir)
+al %>% 
+  select(
+    -address1,
+    -state,
+    -zip,
+    -city,
+    -city_prep,
+    -city_match,
+    -match_dist,
+    -city_swap,
+    -city_refine,
+    -swap_count,
+    -refine_count
+  ) %>% 
+  write_csv(
+    x = ,
+    path = str_c(clean_dir, "al_expends_clean.csv", sep = "/"),
+    na = ""
+  )
+```
+
