@@ -12,78 +12,98 @@ editor_options:
   chunk_output_type: console
 ---
 
+<!-- Place comments regarding knitting here -->
+
 ```{r setup, include=FALSE, purl=FALSE}
 library(knitr)
 opts_chunk$set(
+  eval = TRUE,
   echo = TRUE,
   warning = FALSE,
   message = FALSE,
   error = FALSE,
+  collapse = TRUE,
   comment = "#>",
   fig.path = "../plots/",
   fig.width = 10,
   dpi = 300
 )
 options(width = 99)
+set.seed(5)
 ```
 
+```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
+fs::dir_create(here::here("df", "data", "docs"))
+```
+
+## Project
+
+The Accountability Project is an effort to cut across data silos and give journalists, policy
+professionals, activists, and the public at large a simple way to search across huge volumes of
+public data about people and organizations.
+
+Our goal is to standardizing public data on a few key fields by thinking of each dataset row as a
+transaction. For each transaction there should be (at least) 3 variables:
+
+1. All **parties** to a transaction
+2. The **date** of the transaction
+3. The **amount** of money involved
+
 ## Objectives
+
+This document describes the process used to complete the following objectives:
 
 1. How many records are in the database?
 1. Check for duplicates
 1. Check ranges
 1. Is there anything blank or missing?
 1. Check for consistency issues
-1. Create a five-digit ZIP Code called ZIP5
-1. Create a YEAR field from the transaction date
-1. For campaign donation data, make sure there is both a donor AND recipient
+1. Create a five-digit ZIP Code called `ZIP5`
+1. Create a `YEAR` field from the transaction date
+1. Make sure there is data on both parties to a transaction
 
 ## Packages
 
 The following packages are needed to collect, manipulate, visualize, analyze, and communicate
 these results. The `pacman` package will facilitate their installation and attachment.
 
-```{r p_load, message=FALSE, warning=FALSE, error=FALSE}
+The IRW's `campfin` package will also have to be installed from GitHub. This package contains
+functions custom made to help facilitate the processing of campaign finance data.
+
+```{r load_packages, message=FALSE, dfrning=FALSE, error=FALSE}
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load_gh("irworkshop/campfin")
 pacman::p_load(
-  stringdist, # levenshtein value
   tidyverse, # data manipulation
   lubridate, # datetime strings
   magrittr, # pipe opperators
-  RSocrata, # read SODA APIs
   janitor, # dataframe clean
-  zipcode, # clean & databse
-  batman, # parse yes & no
-  refinr, # cluster & merge
-  rvest, # scrape website
+  refinr, # cluster and merge
+  scales, # format strings
   knitr, # knit documents
-  here, # locate storage
+  vroom, # read files fast
+  glue, # combine strings
+  here, # relative storage
   fs # search storage 
 )
 ```
 
-```{r fix_fun, echo=FALSE}
-here <- here::here
-"%out%" <- Negate("%in%")
-print_all <- function(df) df %>% print(n = nrow(.)) 
-```
+This document should be run as part of the `R_campfin` project, which lives as a sub-directory of
+the more general, language-agnostic [`irworkshop/accountability_datacleaning`][01] GitHub
+repository.
 
-This document should be run as part of the `R_campfin` project, which lives as a sub-directory
-of the more general, language-agnostic `irworkshop/accountability_datacleaning` 
-[GitHub repository](https://github.com/irworkshop/accountability_datacleaning).
+The `R_campfin` project uses the [RStudio projects][02] feature and should be run as such. The
+project also uses the dynamic `here::here()` tool for file paths relative to _your_ machine.
 
-The `R_campfin` project uses the 
-[RStudio projects](https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects)
-feature and should be run as such. The project also uses the dynamic 
-[`here::here()`](https://github.com/jennybc/here_here) tool for
-file paths relative to _your_ machine.
-
-```{r where_here, collapse=TRUE}
-# where was this document knit?
+```{r where_here}
+# where does this document knit?
 here::here()
 ```
 
-## Data
+[01]: https://github.com/irworkshop/accountability_datacleaning "TAP repo"
+[02]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects "Rproj"
 
+## Data
 This dataset comes courtesy of the State of 
 [Washington Public Disclosure Commission](http://www.pdc.wa.gov), access through the 
 [data.wa.gov](https://data.wa.gov) portal.
@@ -347,7 +367,8 @@ wa <- wa %>%
 There are `r nrow(wa)` records of `r length(wa)` variables in the full database.
 
 ```{r glimpse}
-sample_frac(wa)
+head(wa)
+tail(wa)
 glimpse(sample_frac(wa))
 ```
 
@@ -355,54 +376,46 @@ glimpse(sample_frac(wa))
 
 The variables range in their degree of distinctness.
 
-The `id` is `r scales::percent(n_distinct(wa$id)/nrow(wa))` distinct and can be used to
+The `id` is `r percent(n_distinct(wa$id)/nrow(wa))` distinct and can be used to
 identify a unique transaction.
 
 ```{r n_distinct}
-wa %>% 
-  map(n_distinct) %>% 
-  unlist() %>% 
-  enframe(name = "variable", value = "n_distinct") %>% 
-  mutate(prop_distinct = round(n_distinct / nrow(wa), 4)) %>%
-  print(n = length(wa))
+glimpse_fun(wa, n_distinct)
 ```
 
 We can explore the distribution of the least distinct values with `ggplot2::geom_bar()`.
 
 ```{r plot_origin_bar, echo=FALSE}
-ggplot(wa) + 
-  geom_bar(aes(origin))
+explore_plot(wa, origin)
 ```
 
 ```{r plot_type_bar, echo=FALSE}
-ggplot(wa) + 
-  geom_bar(aes(type))
+explore_plot(wa, type)
 ```
 
 ```{r plot_party_bar, echo=FALSE}
-ggplot(wa) + 
-  geom_bar(aes(party)) + 
-  coord_flip()
+explore_plot(wa, party, flip = TRUE)
 ```
 
 ```{r plot_jurisdiction_bar, echo=FALSE}
-ggplot(wa) + 
-  geom_bar(aes(jurisdiction_type))
+explore_plot(wa, jurisdiction_type)
 ```
 
-```{r plot_election_year_bar, echo=FALSE}
-ggplot(wa) + 
-  geom_bar(aes(election_year))
+```{r plot_election_year_bar, echo=FALSE, eval=FALSE}
+explore_plot(wa, election_year)
 ```
 
 ```{r plot_itemized_bar, echo=FALSE}
-ggplot(wa) + 
-  geom_bar(aes(expenditure_itemized))
+explore_plot(wa, expenditure_itemized)
 ```
 
 ```{r plot_code_party, echo=FALSE}
 wa %>%
-  filter(party %in% c("DEMOCRAT", "REPUBLICAN", NA)) %>% 
+  mutate(
+    party = if_else(party %in% c("DEMOCRAT", "REPUBLICAN"), party, "Other"),
+    party = factor(party, levels = c("DEMOCRAT", "REPUBLICAN", "Other"))
+  ) %>%
+  drop_na(code) %>% 
   group_by(party, code) %>% 
   summarise(mean = mean(amount)) %>%
   arrange(code) %>% 
@@ -410,11 +423,12 @@ wa %>%
   geom_col(aes(fill = party)) +
   facet_wrap(~party) +
   coord_flip() +
+  scale_fill_manual(values = c(RColorBrewer::brewer.pal(8, "RdBu")[c(1, 8)], "#000000")) +
   scale_y_continuous(labels = scales::dollar) +
   theme(legend.position = "none") +
   labs(
     title = "Washington State Campaign Expenditures",
-    subtitle = "NA for Non-Candidate Campaigns",
+    subtitle = "\"Other\" Includes Non-Candidate Campaigns",
     caption = "Source: data.wa.gov/d/tijg-9zyp",
     y = "Mean Expenditure",
     x = "Expenditure Type"
@@ -422,21 +436,26 @@ wa %>%
 ```
 
 ```{r plot_supports_bar, echo=FALSE}
-wa %>% 
-  filter(!is.na(filer_supports)) %>% 
-  ggplot(aes(filer_supports)) + 
-  geom_bar()
+explore_plot(drop_na(wa, filer_supports), filer_supports)
 ```
 
 ```{r plot_office_bar, echo=FALSE}
 wa %>% 
-  filter(!is.na(office)) %>%  
+  drop_na(office) %>%  
   count(office) %>% 
   arrange(desc(n)) %>% 
-  slice(1:10) %>% 
-  ggplot() + 
-  geom_col(aes(office, n)) + 
-  coord_flip()
+  slice(1:8) %>% 
+  ggplot(aes(reorder(office, n), n)) + 
+  geom_col(aes(fill = office)) +
+  scale_fill_brewer(palette = "Dark2", guide = FALSE) +
+  scale_y_continuous(labels = comma) +
+  coord_flip() +
+  labs(
+    title = "Washington State Campaign Expenditures",
+    caption = "Source: data.wa.gov/d/tijg-9zyp",
+    y = "Count",
+    x = "Office Sought"
+  )
 ```
 
 ### Missing
@@ -444,22 +463,14 @@ wa %>%
 The variables also vary in their degree of values that are `NA` (missing).
 
 ```{r count_na}
-wa %>% 
-  map(function(var) sum(is.na(var))) %>% 
-  unlist() %>% 
-  enframe(name = "variable", value = "n_na") %>% 
-  mutate(prop_na = n_na / nrow(wa)) %>% 
-  print(n = length(wa))
+glimpse_fun(wa, count_na)
 ```
 
 We will flag any records with missing values in the key variables used to identify an expenditure.
 
 ```{r na_flag}
-wa <- wa %>% 
-  mutate(
-    na_flag = is.na(expenditure_date) | is.na(recipient_name)
-  )
-
+wa <- flag_na(wa, expenditure_date, recipient_name)
+sum(wa$na_flag)
 wa %>% 
   filter(na_flag) %>%
   sample_frac() %>% 
@@ -476,56 +487,16 @@ wa %>%
 
 ### Duplicates
 
-There are no completely duplicate rows, as each record has a unique `id` variable.
+Using `campfin::dupe_flag()` we can identify a number of rows that have completely duplicated
+values, aside from the supposedly unique `id` variable.
 
-```{r id_dupes, collapse=TRUE}
-n_distinct(wa$id)/nrow(wa)
+```{r dupes_flag}
+wa <- flag_dupes(wa, -id)
+sum(wa$dupe_flag)
+percent(mean(wa$dupe_flag))
 ```
 
-There are, however, records that are otherwise complete duplicates. It's possible that two
-expenditures might be made by filer, to the same recipient, on the same day, for the same amount
-but we will flag them with a logical `dupe_flag` variable not the less.
-
-Using `janitor::get_dupes()`, we can create a table of records with duplicate filer, recipient,
-date, _and_ amount values.
-
-```{r get_dupes, collapse=TRUE}
-wa_dupes <- wa %>% 
-  get_dupes(
-    filer_name,
-    recipient_name,
-    expenditure_date,
-    amount
-    ) %>% 
-  mutate(dupe_flag = TRUE) %>%
-  select(id, dupe_flag)
-
-nrow(wa_dupes)
-```
-
-Then we join the table of duplicate records back onto the original dataset, with a new variable 
-marking each duplicate row.
-
-```{r flag_dupes, message=FALSE, warning=FALSE}
-wa <- wa %>% 
-  left_join(wa_dupes, by = "id") %>% 
-  mutate(dupe_flag = !is.na(dupe_flag))
-```
-
-```{r count_dupes}
-wa %>% 
-  filter(dupe_flag) %>% 
-  select(
-    id,
-    filer_name,
-    recipient_name,
-    expenditure_date,
-    amount,
-    code
-  )
-```
-
-Many of these duplicate records have an `amount` value of zero, meaning they are likely
+Most of these duplicate records have an `amount` value of zero, meaning they are likely
 corrections to previous expenditures.
 
 ```{r plot_dupes_amount, echo=FALSE}
@@ -556,18 +527,35 @@ tabyl(wa$amount > 0)
 Most expenditures are for relatively little amount.
 
 ```{r plot_amt_nonlog, echo=FALSE}
-ggplot(wa, aes(amount)) + 
-  geom_histogram() + 
-  scale_y_log10() +
-  scale_x_continuous(labels = scales::dollar) +
-  geom_hline(yintercept = 10)
+wa %>%
+  filter(amount >= 1) %>% 
+  ggplot(aes(amount)) +
+  geom_histogram(fill = RColorBrewer::brewer.pal(3, "Dark2")[3]) +
+  scale_x_continuous(
+    breaks = c(1 %o% 10^(0:6)),
+    labels = dollar,
+    trans = "log10"
+  ) +
+  scale_y_continuous(labels = comma) +
+  labs(
+    title = "Washington State Campaign Expenditures",
+    caption = "Source: data.wa.gov/d/tijg-9zyp",
+    y = "Count",
+    x = "Amount"
+  )
 ```
 
-```{r plot_party_hist, echo=FALSE}
-ggplot(wa, aes(amount)) + 
+```{r plot_party_hist, echo=FALSE, fig.height=12}
+wa %>% 
+  filter(amount >= 1, amount < 1e5) %>% 
+  ggplot(aes(amount)) + 
   geom_histogram(aes(fill = party)) + 
-  scale_y_log10() +
-  scale_x_continuous(labels = scales::dollar, trans = "log10") +
+  scale_x_continuous(
+    breaks = c(1 %o% 10^(0:5)),
+    labels = dollar,
+    trans = "log10"
+  ) +
+  scale_y_continuous(labels = comma) +
   scale_fill_manual(
     guide = FALSE,
     values = c(
@@ -581,14 +569,25 @@ ggplot(wa, aes(amount)) +
       "black"
     )
   ) +
-  geom_vline(xintercept = 100000) +
-  facet_wrap(~party)
+  facet_wrap(~party, scales = "free_y", ncol = 1) +
+  labs(
+    title = "Washington State Campaign Expenditures",
+    caption = "Source: data.wa.gov/d/tijg-9zyp",
+    y = "Count",
+    x = "Amount"
+  )
 ```
 
-```{r plot_party_box, echo=FALSE}
-ggplot(wa, aes(party, amount)) + 
-  geom_boxplot(aes(fill = party), varwidth = TRUE) + 
-  scale_y_continuous(labels = scales::dollar, trans = "log10") +
+```{r plot_party_violin, echo=FALSE}
+wa %>% 
+  filter(amount >= 1, amount < 1e5) %>% 
+  ggplot(aes(x = reorder(party, amount), y = amount)) + 
+  geom_violin(aes(fill = party)) + 
+  scale_y_continuous(
+    breaks = c(1 %o% 10^(0:5)),
+    labels = dollar,
+    trans = "log10"
+  ) +
   scale_fill_manual(
     guide = FALSE,
     values = c(
@@ -602,7 +601,12 @@ ggplot(wa, aes(party, amount)) +
       "black"
     )
   ) +
-  geom_hline(yintercept = 100000)
+  labs(
+    title = "Washington State Campaign Expenditures",
+    caption = "Source: data.wa.gov/d/tijg-9zyp",
+    y = "Amount",
+    x = "Party"
+  )
 ```
 
 Below are the smallest and largest expenditures.
@@ -641,24 +645,35 @@ correct dates simply outside the expected time span.
 
 ```{r date_past, collapse=TRUE}
 min(wa$expenditure_date, na.rm = TRUE)
-sum(year(wa$expenditure_date) < 2007, na.rm = T)
-```
-
-```{r plot_exp_year, echo=FALSE}
-wa %>% 
-  count(year = year(expenditure_date)) %>% 
-  ggplot(aes(year, n)) +
-  geom_col() +
-  coord_cartesian(xlim = c(2000, 2020)) +
-  geom_vline(xintercept = 2008)
+sum(year(wa$expenditure_date) < 2007, na.rm = TRUE)
 ```
 
 To better track expenditures in the TAP database, we will create a `expenditure_year` variable from
 the previously parsed `expenditure_date` using `lubridate::year()`.
 
 ```{r add_year}
-wa <- wa %>% 
-  mutate(expenditure_year = year(expenditure_date))
+wa <- wa %>% mutate(
+  expenditure_year = year(expenditure_date),
+  date_flag = is_less_than(expenditure_year, 2007)
+)
+```
+
+```{r plot_exp_year, echo=FALSE}
+wa %>% 
+  count(expenditure_year) %>% 
+  mutate(even = is_even(expenditure_year)) %>% 
+  ggplot(aes(expenditure_year, n)) +
+  geom_col(aes(fill = even)) +
+  scale_fill_brewer(palette = "Dark2", guide = FALSE) +
+  scale_y_continuous(labels = comma) +
+  coord_cartesian(xlim = c(2000, 2020)) +
+  geom_vline(xintercept = 2008) +
+  labs(
+    title = "Washington State Campaign Expenditures",
+    caption = "Source: data.wa.gov/d/tijg-9zyp",
+    y = "Count",
+    x = "Year"
+  )
 ```
 
 ## Clean
@@ -668,95 +683,76 @@ wa <- wa %>%
 The `recipient_address` variable will be minimally cleaned by removing punctuation and fixing
 white-space.
 
-```{r}
+```{r address_normal}
 wa <- wa %>% 
   mutate(
-    address_clean = recipient_address %>% 
-      str_to_upper() %>% 
-      # remove punct and numbers
-      str_replace("-", " ") %>% 
-      str_remove_all("[:punct:]") %>% 
-      str_trim() %>% 
-      str_squish() %>% 
-      na_if("") %>% 
-      na_if("NA")
+    address_norm = normal_address(
+      address = recipient_address,
+      add_abbs = usps_street,
+      na_rep = TRUE
+    )
   )
 ```
 
-### Zipcode
-
-We can clean the `recipient_zip` variable using the `zipcodes::clean.zipcodes()` function, which
-strips the ZIP+4 digits and adds leading zeroes to three or four digit strings. We will also make
-some common invalid zips `NA`.
-
-```{r zipcode_data, echo=FALSE}
-data("zipcode")
-source(here("R", "prep_city.R"))
-zipcode <-
-  as_tibble(zipcode) %>% 
-  select(city, state, zip) %>% 
-  mutate(city = prep_city(city))
+```{r address_view}
+wa %>% 
+  select(contains("address")) %>% 
+  distinct() %>% 
+  sample_frac()
 ```
 
-```{r clean_zipcodes}
+### ZIP
+
+```{r zip_norm}
 wa <- wa %>% 
-  mutate(zip_clean = recipient_zip %>% 
-           clean.zipcodes() %>% 
-           na_if("00000") %>% 
-           na_if("11111") %>% 
-           na_if("99999")
+  mutate(
+    zip_norm = normal_zip(
+      zip = recipient_zip,
+      na_rep = TRUE
+    )
   )
+```
 
-wa$zip_clean[which(nchar(wa$zip_clean) != 5)] <- NA
+```{r zip_view}
+wa %>% 
+  select(contains("zip")) %>% 
+  filter(zip_norm != recipient_zip)
+```
+
+```{r zip_progress}
+progress_table(
+  wa$recipient_zip,
+  wa$zip_norm,
+  compare = valid_zip
+)
 ```
 
 ### State
 
-Using comprehensive list of state abbreviations in the Zipcodes database, we can isolate invalid
-`recipient_state` values and manually correct them.
-
-```{r valid_state, collapse=TRUE}
-valid_state <- c(unique(zipcode$state), "AB", "BC", "MB", "NB", "NL", "NS", "ON", "PE", "QC", "SK")
-length(valid_state)
-setdiff(valid_state, state.abb)
+```{r state_norm}
+wa <- wa %>% 
+  mutate(
+    state_norm = normal_state(
+      state = recipient_state,
+      abbreviate = TRUE,
+      na_rep = TRUE,
+      valid = NULL
+    )
+  )
 ```
 
-```{r view_states}
+```{r state_view}
 wa %>% 
-  filter(recipient_state %out% valid_state) %>% 
-  filter(!is.na(recipient_state)) %>% 
-  select(
-    id,
-    recipient_address,
-    recipient_city,
-    recipient_state,
-    recipient_zip
-  ) %>% 
-  print_all()
+  filter(state_norm %out% valid_state) %>% 
+  count(state_norm, sort = TRUE)
 ```
 
-If the `recipient_state` abbreviation is invalid, use the `recipient_city` and `recipient_zip`
-values for that record to manually correct the abbreviation where possible. If it can't be manually
-corrected, make the value `NA`.
-
-```{r}
-wa$state_clean <- wa$recipient_state %>% 
-  str_replace("QA", "WA") %>% # add match
-  str_replace("SW", "WA") %>% # add match 
-  str_replace("TE", "TX") %>% # add match
-  str_replace("CN", "AB") %>% # calgary
-  str_remove("[:punct:]") %>% 
-  na_if("") %>% 
-  na_if("RE") %>% # requested
-  na_if("98") %>% # WA zip
-  na_if("99") %>% # WA zip
-  na_if("SH") %>% # hong kong
-  na_if("FR") %>% # france
-  na_if("OT") %>% # overseas
-  na_if("HR") %>% # hungary
-  na_if("UK") %>% # united kingdom
-  na_if("IR") %>% # ireland
-  na_if("IS")     # israel
+```{r state_progress}
+progress_table(
+  wa$recipient_state,
+  wa$state_norm,
+  compare = valid_state
+)
 ```
 
 ### City
@@ -768,201 +764,129 @@ Cleaning city values is the most complicated. This process involves four steps:
 1. Swap prepared city values with the ZIP code match _if_ only 1 edit is needed
 1. Refine swapped city values with key collision and n-gram fingerprints
 
-#### Prep City
+#### Normal
 
-The first step in cleaning city names is to reduce inconsistencies. The custom `city_prep()`
-function found in the `R/` sub-directory of this root project performs the bulk of our preparation.
-In short, the function (1) removes punctuation, numbers, and state abbreviations, (2) expands
-directional and geographic abbreviations, and (3) catches common `NA` strings.
-
-```{r prep_city}
-source(here("R", "prep_city.R"))
+```{r city_normal}
 wa <- wa %>% 
   mutate(
-    city_prep = prep_city(
-      cities = recipient_city,
-      na = read_lines(here("R", "na_city.csv")),
-      abbs = c("WA", "OR", "ID", "DC", "BC")
+    city_norm = normal_city(
+      city = recipient_city,
+      geo_abbs = usps_city,
+      st_abbs = c("WA", "DC"),
+      na = invalid_city,
+      na_rep = TRUE
     )
   )
 ```
 
-#### Match and Swap City
+#### Swap
 
-The second step will be to compare the new `city_prep` value to the _actual_ city value for that
-record's `zip_clean` value. If the `city_prep` is very similar to the expected city name for that
+The second step will be to compare the new `city_norm` value to the _actual_ city value for that
+record's `zip_norm` value. If the `city_norm` is very similar to the expected city name for that
 ZIP code, we can make that change.
 
 ```{r match_dist}
-wa <- wa %>%
-  left_join(zipcode, by = c("state_clean" = "state", "zip_clean" = "zip")) %>%
-  rename(city_match = city) %>%
+wa <- wa %>% 
+  left_join(
+    y = zipcodes,
+    by = c(
+      "state_norm" = "state",
+      "zip_norm" = "zip"
+    )
+  ) %>% 
+  rename(city_match = city) %>% 
   mutate(
-    match_dist  = stringdist(city_prep, city_match),
-    city_swap = if_else(match_dist == 1, city_match, city_prep)
+    match_abb = is_abbrev(city_norm, city_match),
+    match_dist = str_dist(city_norm, city_match),
+    city_swap = if_else(
+      condition = match_abb | match_dist == 1,
+      true = city_match,
+      false = city_norm
+    )
   )
 ```
 
-#### Refine City
+#### Refine
 
-Now that we've prepared out city values and made the most obvious changes, we can use the
-OpenRefine algorithms to cluster similar values and merge them together. This can be done using the
-`refinr::key_collision_merge()` and `refinr::n_gram_merge()` functions on our prepared and swapped
-city data.
-
-```{r valid_city}
-valid_city <- c(
-  unique(zipcode$city), 
-  "SPOKANE VALLEY",
-  "TUKWILA", 
-  "BURIEN", 
-  "SEATAC", 
-  "LAKE FOREST PARK",
-  "NORMANDY PARK",
-  "FIRCREST"
-  )
-```
-
-We will create a new table with these refined values.
-
-```{r view_refine}
-wa_refined <- wa %>%
-  filter(state_clean == "WA") %>% 
-  filter(match_dist != 1) %>% 
+```{r city_refine}
+wa_refine <- wa %>% 
   mutate(
     city_refine = city_swap %>% 
-      key_collision_merge(dict = valid_city) %>% 
-      n_gram_merge(numgram = 1),
-    refined = (city_swap != city_refine)
+      key_collision_merge() %>% 
+      n_gram_merge(numgram = 1)
   ) %>% 
-  filter(refined) %>% 
-  select(
-    id,
-    state_clean,
-    zip_clean,
-    recipient_city,
-    city_prep,
-    city_match,
-    match_dist,
-    city_swap,
-    city_refine,
-  ) %>% 
-  rename(
-    state = state_clean,
-    zip = zip_clean,
-    city_raw = recipient_city
+  inner_join(
+    y = zipcodes,
+    by = c(
+      "city_refine" = "city",
+      "state_norm" = "state",
+      "zip_norm" = "zip"
+    )
   )
 ```
 
-#### Review Refined City
-
 ```{r most_refined}
-wa_refined %>% 
-  count(city_swap, city_refine) %>% 
-  arrange(desc(n))
+wa_refine %>% 
+  filter(city_refine != city_swap) %>% 
+  count(city_swap, city_refine, sort = TRUE)
 ```
-
-The key to the refine algorithms is clustering rare values with their more common similar values.
-We can count how often the original value appears and compare it to the frequency of the refined
-value.
-
-```{r count_refined}
-refined_values <- unique(wa_refined$city_refine)
-count_refined <- tibble(
-  city_refine = refined_values, 
-  refine_count = NA
-)
-
-for (i in seq_along(refined_values)) {
-  count_refined$refine_count[i] <- sum(str_detect(wa$city_swap, refined_values[i]), na.rm = TRUE)
-}
-
-swap_values <- unique(wa_refined$city_swap)
-count_swap <- tibble(
-  city_swap = swap_values, 
-  swap_count = NA
-)
-
-for (i in seq_along(swap_values)) {
-  count_swap$swap_count[i] <- sum(str_detect(wa$city_swap, swap_values[i]), na.rm = TRUE)
-}
-```
-
-The least frequent refined values are the ones of which we should be most suspicious. The more
-frequent a refined value appears compared to it's original value, the more confident the algorithm
-can be in making the change. We should manually check any refined value with a small count.
-Furthermore, some refined values appear _less_ often than their original value because their
-fingerprint matches an entry in our dictionary (e.g., "Lake Forrest" vs "Forrest Lake").
-
-```{r distinct_refined}
-wa_refined %>% 
-  left_join(count_swap) %>% 
-  left_join(count_refined) %>%
-  select(
-    city_match,
-    city_swap,
-    city_refine,
-    swap_count,
-    refine_count
-  ) %>% 
-  mutate(diff_count = refine_count - swap_count) %>%
-  mutate(refine_dist = stringdist(city_swap, city_refine)) %>%
-  distinct() %>%
-  arrange(city_refine) %>% 
-  print_all()
-```
-
-We can finally manually correct the last of these values.
-
-```{r refine_fix}
-wa_refined$city_refine <- wa_refined$city_refine %>% 
-  str_replace("^FOREST LAKE$", "LAKE FOREST PARK") %>% 
-  str_replace("^REARDAN$", "ARDEN") %>% 
-  str_replace("^CLEARLAKE$", "CLEAR LAKE") %>% 
-  str_replace("^STEILCOOM$", "STEILACOOM") %>% 
-  str_replace("^SOUTH ALASKA$", "KAHLOTUS") %>% 
-  str_replace("^TULWILLA$", "TUKWILA") %>% 
-  str_replace("^SEATTLE WEST$", "SEATTLE") %>% 
-  str_replace("^MCCHAORD AFB$", "MCCHORD AFB") %>% 
-  str_replace("^ORIENT$", "RENTON") %>% 
-  str_replace("^TUMWATERS$", "TUMWATER") %>% 
-  str_replace("^CARLTON$", "LA CONNER") %>% 
-  str_replace("^CARLTON$", "LA CONNER") %>% 
-  str_replace("^COSMOPOLIS$", "MOCLIPS") %>% 
-  str_replace("^FERNDALE$", "FREELAND") %>% 
-  str_replace("^LEAVENWORTH$", "LEAVENWORTH") %>% 
-  str_replace("^MOUNTLAKE TERRACE$", "MOUNT LAKE TERRACE") %>% 
-  str_replace("^MTLAKE TERRACE$", "MOUNT LAKE TERRACE") %>% 
-  str_replace("^NORDLAND$", "RONALD") %>% 
-  str_replace("^ORIENT$", "RENTON") %>% 
-  str_replace("^RAYMOND$", "NORMANDY") %>% 
-  str_replace("^SPOKANE VALLEY$", "SPOKANE") %>% 
-  na_if("INTERNET COMPANY")
-
-refine_table <- wa_refined %>% 
-  select(id, city_refine)
-```
-
-#### Merge Refined City
 
 Then, we match these refined values to the original data. Use the refined value where possible,
 otherwise use the swapped city value (which is the prepared value or real value).
 
 ```{r join_refine}
 wa <- wa %>% 
-  left_join(refine_table, by = "id") %>% 
-  mutate(city_clean = coalesce(city_refine, city_swap))
+  left_join(wa_refine) %>% 
+  mutate(city_refine = coalesce(city_refine, city_swap))
 ```
 
-Each step of the cleaning process reduces the number of distinct city values.
+#### Progress
 
-```{r city_steps_distinct, collapse=TRUE}
-n_distinct(wa$recipient_city)
-n_distinct(wa$city_prep)
-n_distinct(wa$city_swap)
-n_distinct(wa$city_clean)
-sum(wa$recipient_city != wa$city_clean, na.rm = TRUE)
-sample(setdiff(wa$recipient_city, wa$city_clean), 25)
+```{r city_view_refine_out}
+wa %>% 
+  filter(city_refine %out% valid_city) %>% 
+  count(city_refine, state_norm, sort = TRUE) %>% 
+  drop_na()
+```
+
+If we expand `valid_city` to include the _six_ most common "invalid" cities, we realize the vast
+majority of our cities have been properly normalized.
+
+```{r most_common_bad}
+other_cities <- most_common(wa$city_refine[which(wa$city_refine %out% valid_city)])
+```
+
+```{r progress_table}
+prog_table <- progress_table(
+  wa$recipient_city,
+  wa$city_norm,
+  wa$city_swap,
+  wa$city_refine,
+  compare = c(valid_city, other_cities)
+)
+prog_table$stage <- as_factor(prog_table$stage)
+```
+
+```{r progress_kable}
+kable(prog_table)
+```
+
+```{r plot_prog_prop}
+prog_table %>% 
+  ggplot(aes(x = stage, y = prop_in)) +
+  geom_col(fill = RColorBrewer::brewer.pal(3, "Dark2")[1]) +
+  geom_hline(yintercept = 0.99) +
+  coord_cartesian(ylim = c(.9, 1))
+```
+
+```{r plot_prog_distinct}
+prog_table %>% 
+  mutate(n_good = n_distinct - n_diff) %>% 
+  rename(n_bad = n_diff) %>% 
+  pivot_longer(cols = c(n_good, n_bad)) %>% 
+  ggplot(aes(x = stage, y = value)) +
+  geom_col(aes(fill = name)) +
+  scale_fill_brewer(palette = "Set1")
 ```
 
 ## Conclude
@@ -972,7 +896,7 @@ sample(setdiff(wa$recipient_city, wa$city_clean), 25)
 (flagged with `dupe_flag`)
 1. The ranges for dates and amounts are reasonable
 1. Consistency in strings has been fixed with `city_prep()` and the `stringr` package
-1. The five-digit `zip_clean` variable has been created with `zipcode::clean.zipcode()`
+1. The five-digit `zip_norm` variable has been created with `zipcode::clean.zipcode()`
 1. The `expenditure_year` variable has been created with `lubridate::year()`
 1. There are `r sum(is.na(wa$recipient_name))` records with missing `recipient_name` values and 
 `r sum(is.na(wa$expenditure_date))` records with missing `expenditure_date` values (both flagged
@@ -980,20 +904,29 @@ with the `na_flag`)
 
 ## Write
 
+```{r proc_dir} 
+proc_dir <- here("wa", "expends", "data", "processed")
+dir_create(proc_dir)
+```
+
 ```{r write_csv}
 wa %>% 
+  rename(
+    address_clean = address_norm,
+    zip_clean = zip_norm,
+    state_clean = state_norm,
+    city_clean = city_refine
+  ) %>%
   select(
-    -recipient_zip,
-    -recipient_state,
-    -recipient_city,
-    -city_prep,
+    -recipient_location.type,
+    -city_norm,
     -city_match,
     -match_dist,
-    -city_swap,
-    -city_refine
+    -match_abb,
+    -city_swap
   ) %>% 
   write_csv(
-    path = here("wa_expends", "data", "raw", "wa_expends_clean.csv"),
+    path = glue("{proc_dir}/wa_expends_clean.csv"),
     na = ""
   )
 ```
