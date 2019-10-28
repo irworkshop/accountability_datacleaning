@@ -1,69 +1,109 @@
 ---
-title: "Data Diary"
-subtitle: "Nevada Expenditures"
+title: "Nevada Expenditures"
 author: "Kiernan Nicholls"
-date: "`r format(Sys.time())`"
+date: "`r Sys.time()`"
 output:
-  html_document: 
+  github_document: 
     df_print: tibble
-    fig_caption: yes
-    highlight: tango
-    keep_md: yes
-    max.print: 32
-    toc: yes
-    toc_float: no
+    toc: true
+    toc_dept: 2
 editor_options: 
   chunk_output_type: console
 ---
 
+<!-- Place comments regarding knitting here -->
+
 ```{r setup, include=FALSE, purl=FALSE}
 library(knitr)
 opts_chunk$set(
+  eval = TRUE,
   echo = TRUE,
   warning = FALSE,
   message = FALSE,
   error = FALSE,
+  collapse = TRUE,
   comment = "#>",
   fig.path = "../plots/",
   fig.width = 10,
   dpi = 300
 )
 options(width = 99)
+set.seed(5)
 ```
 
+```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
+fs::dir_create(here::here("ks", "expends", "docs"))
+```
+
+## Project
+
+The Accountability Project is an effort to cut across data silos and give journalists, policy
+professionals, activists, and the public at large a simple way to search across huge volumes of
+public data about people and organizations.
+
+Our goal is to standardizing public data on a few key fields by thinking of each dataset row as a
+transaction. For each transaction there should be (at least) 3 variables:
+
+1. All **parties** to a transaction
+2. The **date** of the transaction
+3. The **amount** of money involved
+
 ## Objectives
+
+This document describes the process used to complete the following objectives:
 
 1. How many records are in the database?
 1. Check for duplicates
 1. Check ranges
 1. Is there anything blank or missing?
 1. Check for consistency issues
-1. Create a five-digit ZIP Code called ZIP5
-1. Create a YEAR field from the transaction date
-1. For campaign donation data, make sure there is both a donor AND recipient
+1. Create a five-digit ZIP Code called `ZIP5`
+1. Create a `YEAR` field from the transaction date
+1. Make sure there is data on both parties to a transaction
 
 ## Packages
 
 The following packages are needed to collect, manipulate, visualize, analyze, and communicate
 these results. The `pacman` package will facilitate their installation and attachment.
 
-```{r p_load, message=FALSE, warning=FALSE, error=FALSE}
-# install.packages("pacman")
+The IRW's `campfin` package will also have to be installed from GitHub. This package contains
+functions custom made to help facilitate the processing of campaign finance data.
+
+```{r load_packages, message=FALSE, dfrning=FALSE, error=FALSE}
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load_gh("irworkshop/campfin")
 pacman::p_load(
   tidyverse, # data manipulation
+  lubridate, # datetime strings
   magrittr, # pipe opperators
-  janitor, # data cleaning
+  janitor, # dataframe clean
   refinr, # cluster and merge
-  vroom, # read files fast
-  rvest, # scrape web pages
+  scales, # format strings
+  rvest, # read html files
   knitr, # knit documents
-  here, # navigate local storage
-  fs # search local storage 
+  vroom, # read files fast
+  glue, # combine strings
+  here, # relative storage
+  fs # search storage 
 )
 ```
 
-## Data
+This document should be run as part of the `R_campfin` project, which lives as a sub-directory of
+the more general, language-agnostic [`irworkshop/accountability_datacleaning`][01] GitHub
+repository.
 
+The `R_campfin` project uses the [RStudio projects][02] feature and should be run as such. The
+project also uses the dynamic `here::here()` tool for file paths relative to _your_ machine.
+
+```{r where_here}
+# where does this document knit?
+here::here()
+```
+
+[01]: https://github.com/irworkshop/accountability_datacleaning "TAP repo"
+[02]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects "Rproj"
+
+## Data
 The Nevada Secretary of State (NVSOS) office requires that one register for an account to access 
 "[bulk data download](https://www.nvsos.gov/sos/online-services/data-download)" service page.
 
@@ -79,13 +119,13 @@ subsets of data such as all contributions filed after 1/1/2016 by groups of type
 The site allows users to define the format for their data download. The site generated the
 following summary of our data format:
 
-> Your report will generate 6 "," delimited ASCII text file(s) compressed into one Zip file named
-in the format "CampaignFinance.43993.<Today's Date>.zip"*. The first row in each file will contain
-the column names, not actual data. Any field capable of containing a non-numeric character (data
-types char, varchar, or datetime), will be enclosed in double quotes (") so that if the field
-contains your delimiter you may identify it as being contained within the field and not an actual
-delimiter. Any double quotes contained within these fields will be replaced by 2 consecutive double
-quotes ("") so that the end of the field's data is not erroneously identified...
+> Your report will generate 6 "~" delimited ASCII text file(s) compressed into one Zip file named
+in the format "CampaignFinance.43993.<Today's Date>.zip"*. Any field capable of containing a
+non-numeric character (data types char, varchar, or datetime), will be enclosed in double quotes
+(") so that if the field contains your delimiter you may identify it as being contained within the
+field and not an actual delimiter. Any double quotes contained within these fields will be replaced
+by 2 consecutive double quotes ("") so that the end of the field's data is not erroneously
+identified. Below you will find the format of each file:
 
 The above information provides the information needed to correctly parse each file using
 `vroom::vroom()`.
@@ -108,7 +148,7 @@ The summary continues to provide individual structure summaries on each of the s
 in the report along with an key to the file name:
 
 ```{r read_html, echo=FALSE, warning=FALSE}
-here("nv_contribs", "data") %>% 
+here("nv", "expends", "data") %>% 
   dir_ls(glob = "*.html") %>% 
   read_html() %>% 
   html_nodes("table") %>% 
@@ -160,7 +200,7 @@ organization name will be in the Last Name field only.
 > Use this column to differentiate which type of expense record this is: Monetary Expense or In
 Kind Expense.
 
-* `Active`
+* `Active` = 
 
 > A value of F (False) indicates the group has been marked as inactive by the NV Secretary of
 State's office Elections division due to submission of a "notice of inactivity" or for failure to
@@ -189,25 +229,35 @@ reporting period.  In this case the Superseded field for the older report record
 The following link was sent via email and downloaded to the `data/` directory:
 
 ```
-https://www.nvsos.gov/yourreports/CampaignFinance.43993.060419121813.zip
+https://www.nvsos.gov/yourreports/CampaignFinance.43993.102819110351.zip
+```
+
+```{r raw_dir}
+raw_dir <- here("nv", "expends", "data", "raw")
+dir_create(raw_dir)
+```
+
+```{r raw_read, eval=FALSE}
+raw_url <- "https://www.nvsos.gov/yourreports/CampaignFinance.43993.102819110351.zip"
+raw_file <- url2path(raw_url, raw_dir)
+download.file(raw_url, destfile = raw_file)
 ```
 
 The ZIP file contains the six individual files, as expected.
 
 ```{r unzip_list, echo=FALSE}
-here("nv_contribs", "data", "raw") %>% 
+raw_dir %>% 
   dir_ls(glob = "*.zip") %>% 
   unzip(list = TRUE) %>% 
   clean_names()
 ```
 
-The files will be unzipped into the `data/` directory.
+The files will be unzipped into the `data/raw/` directory.
 
 ```{r unzip}
-dir_create(here("nv_contribs", "data", "raw"))
-here("nv_contribs", "data", "raw") %>% 
+raw_dir %>% 
   dir_ls(glob = "*.zip") %>% 
-  unzip(exdir = here("nv_contribs", "data", "raw"))
+  unzip(exdir = raw_dir)
 ```
 
 Each file can be read using the `vroom::vroom()` function and the parameters explained by NVSOS.
@@ -216,8 +266,8 @@ function.
 
 ```{r read_candidates}
 nv_candidates <- vroom(
-  file = here("nv_contribs", "data", "raw","CampaignFinance.Cnddt.43993.062519084828.csv"),
-  delim = ",",
+  file = dir_ls(raw_dir, glob = "*Cnddt*"),
+  delim = "~",
   col_names = TRUE,
   na = "",
   quote = "\"",
@@ -238,8 +288,8 @@ print(nv_candidates)
 
 ```{r read_groups}
 nv_groups <- vroom(
-  file = here("nv_contribs", "data", "raw","CampaignFinance.Grp.43993.062519084828.csv"),
-  delim = ",",
+  file = dir_ls(raw_dir, glob = "*Grp*"),
+  delim = "~",
   col_names = TRUE,
   na = "",
   quote = "\"",
@@ -260,8 +310,8 @@ print(nv_groups)
 
 ```{r read_reports}
 nv_reports <- vroom(
-  file = here("nv_contribs", "data", "raw","CampaignFinance.Rpr.43993.062519084828.csv"),
-  delim = ",",
+  file = dir_ls(raw_dir, glob = "*Rpr*"),
+  delim = "~",
   col_names = TRUE,
   na = "",
   quote = "\"",
@@ -285,8 +335,8 @@ print(nv_reports)
 
 ```{r read_payees}
 nv_payees <- vroom(
-  file = here("nv_contribs", "data", "raw","CampaignFinance.Cntrbtrs-.43993.062519084828.csv"),
-  delim = ",",
+  file = dir_ls(raw_dir, glob = "*Cntrbtrs*"),
+  delim = "~",
   col_names = TRUE,
   na = "",
   quote = "\"",
@@ -305,8 +355,8 @@ print(nv_payees)
 
 ```{r read_contribs, eval=FALSE}
 nv_contributions <- vroom(
-  file = here("nv_contribs", "data", "raw","CampaignFinance.Cntrbt.43993.062519084828.csv"),
-  delim = ",",
+  file = dir_ls(raw_dir, glob = "*Cntrbt.*"),
+  delim = "~",
   col_names = TRUE,
   na = "",
   quote = "\"",
@@ -329,8 +379,8 @@ print(nv_contributions)
 
 ```{r read_expenses}
 nv_expenses <- vroom(
-  file = here("nv_contribs", "data", "raw", "CampaignFinance.Expn.43993.062519084828.csv"),
-  delim = ",",
+  file = dir_ls(raw_dir, glob = "*Expn*"),
+  delim = "~",
   col_names = TRUE,
   na = "",
   quote = "\"",
@@ -378,16 +428,16 @@ nv <- nv_expenses %>%
 nrow(nv) == nrow(nv_expenses)
 
 # all cols includes
-length(nv_expenses) %>% 
-  add(length(nv_reports)) %>% 
-  add(length(nv_candidates)) %>% 
-  add(length(nv_groups)) %>% 
-  add(length(nv_payees)) %>% 
+ncol(nv_expenses) %>% 
+  add(ncol(nv_reports)) %>% 
+  add(ncol(nv_candidates)) %>% 
+  add(ncol(nv_groups)) %>% 
+  add(ncol(nv_payees)) %>% 
   subtract(6) %>% # shared key cols
-  equals(length(nv))
+  equals(ncol(nv))
 ```
 
-This expands our primary table from `r length(nv_expenses)` variables to `r length(nv)`
+This expands our primary table from `r ncol(nv_expenses)` variables to `r ncol(nv)`
 without changing the number or records included.
 
 ## Explore
@@ -427,16 +477,11 @@ glimpse(sample_frac(nv))
 
 The variables vary in their degree of distinctiveness.
 
-The `expense_id` is `r noquote(scales::percent(n_distinct(nv$expense_id)/nrow(nv)))` 
-distinct and can be used to identify a unique contribution.
+The `expense_id` is `r percent(n_distinct(nv$expense_id)/nrow(nv))` distinct and can be used to
+identify a unique contribution.
 
 ```{r count_distinct}
-nv %>% 
-  map(n_distinct) %>% 
-  unlist() %>% 
-  enframe(name = "variable", value = "n_distinct") %>% 
-  mutate(prop_distinct = round(n_distinct / nrow(nv), 4)) %>%
-  print(n = length(nv))
+glimpse_fun(nv, n_distinct)
 ```
 
 The `*_id` variables have as many distinct values as the length of their respective tables.
@@ -454,17 +499,16 @@ print_tabyl <- function(data, ...) {
 }
 ```
 
-```{r tabyls}
-print_tabyl(nv, expense_type)
-print_tabyl(nv, candidate_party)
-print_tabyl(nv, seeking_office)
-print_tabyl(nv, jurisdiction)
-print_tabyl(nv, election_cycle)
-print_tabyl(nv, report_amended)
-print_tabyl(nv, report_superseded)
-print_tabyl(nv, group_type)
-print_tabyl(nv, group_active)
-print_tabyl(nv, group_city)
+```{r explore_plots, echo=FALSE}
+explore_plot(drop_na(nv, expense_type), expense_type)
+explore_plot(drop_na(nv, candidate_party), candidate_party)
+explore_plot(drop_na(nv, seeking_office), seeking_office)
+explore_plot(drop_na(nv, jurisdiction), jurisdiction)
+explore_plot(drop_na(nv, report_amended), report_amended)
+explore_plot(drop_na(nv, report_superseded), report_superseded)
+explore_plot(drop_na(nv, group_type), group_type)
+explore_plot(drop_na(nv, group_active), group_active)
+explore_plot(drop_na(nv, group_city), group_city)
 ```
 
 ### Ranges
@@ -499,9 +543,8 @@ nv %>%
   ggplot(aes(expense_amount)) +
   geom_histogram(aes(fill = expense_type), bins = 30) +
   scale_x_continuous(labels = scales::dollar, trans = "log10") +
-  scale_y_log10() +
   theme(legend.position = "none") +
-  facet_wrap(~expense_type) +
+  facet_wrap(~expense_type, ncol = 1, scales = "free_y") +
   labs(
     title = "Expense Distribution",
     subtitle = "by Expense Type",
@@ -512,16 +555,15 @@ nv %>%
 ```
 
 ```{r plot_amt_party, echo=FALSE}
-top_party <- c("Democratic Party", "Independent", "Nonpartisan", "Republican Party", "Unspecified")
+top_party <- most_common(nv$candidate_party, n = 5)
 nv %>%
-  mutate(candidate_party = ifelse(candidate_party %in% top_party, candidate_party, "Other")) %>% 
+  mutate(candidate_party = if_else(candidate_party %in% top_party, candidate_party, "Other")) %>% 
   ggplot(aes(expense_amount)) +
   geom_histogram(aes(fill = candidate_party), bins = 30) +
-  scale_x_continuous(labels = scales::dollar, trans = "log10") +
-  scale_y_log10() +
-  scale_fill_manual(values = c("blue", "forestgreen", "purple", "black", "red", "#999999")) +
+  scale_x_continuous(labels = dollar, trans = "log10") +
+  scale_fill_brewer(palette = "Dark2") +
   theme(legend.position = "none") +
-  facet_wrap(~candidate_party) +
+  facet_wrap(~candidate_party, ncol = 1) +
   labs(
     title = "Expense Distribution",
     subtitle = "by Political Party",
@@ -537,9 +579,8 @@ nv %>%
   ggplot(aes(expense_amount)) +
   geom_histogram(aes(fill = group_type), bins = 30) +
   scale_x_continuous(labels = scales::dollar, trans = "log10") +
-  scale_y_log10() +
   theme(legend.position = "none") +
-  facet_wrap(~group_type) +
+  facet_wrap(~group_type, scales = "free_y") +
   labs(
     title = "Expense Distribution",
     subtitle = "to groups, by type",
@@ -573,12 +614,7 @@ zero missing values.
 The full count of `NA` for each variable in the data frame can be found below:
 
 ```{r count_na}
-nv %>% 
-  map(function(var) sum(is.na(var))) %>% 
-  unlist() %>% 
-  enframe(name = "variable", value = "n_na") %>% 
-  mutate(prop_na = n_na / nrow(nv)) %>% 
-  print(n = length(nv))
+glimpse_fun(nv, count_na)
 ```
 
 ### Duplicates
@@ -594,8 +630,7 @@ nrow(get_dupes(nv_expenses))
 For consistency sake, we can make all character columns uppercase.
 
 ```{r str_to_upper}
-nv <- nv %>% 
-  mutate_if("is.character", "str_to_upper")
+nv <- mutate_if(nv, is.character, str_to_upper)
 ```
 
 ### Year
@@ -605,8 +640,17 @@ the `lubridate::year()` function makes it easy to extract the contribution year 
 contribution date.
 
 ```{r mutate_year}
-nv <- nv %>% 
-  mutate(expense_year = lubridate::year(expense_date))
+nv <- mutate(nv, expense_year = year(expense_date))
+```
+
+```{r}
+nv %>% 
+  count(expense_year) %>% 
+  mutate(even = is_even(expense_year)) %>% 
+  ggplot(aes(x = expense_year, n)) +
+  geom_col(aes(fill = even)) +
+  scale_fill_brewer(palette = "Dark2", guide = FALSE) +
+  scale_y_continuous(labels = comma)
 ```
 
 ### Jurisdiction
@@ -615,146 +659,6 @@ There are `r n_distinct(nv$jurisdiction)` `jurisdiction` values.  Only one appea
 
 ```{r clean_jurisditction}
 nv$jurisdiction_clean <- na_if(nv$jurisdiction, "UNKNOWN")
-```
-
-### Party
-
-[Tom Roberts](https://www.leg.state.nv.us/App/Legislator/A/Assembly/Current/13) is a member of the
-Republican Party.
-
-```{r clean_party}
-nv_candidates %>% 
-  filter(party == "Test Party Name 5")
-nv$party_clean <- nv$candidate_party %>% 
-  str_replace_all("TEST PARTY NAME 5", "REPUBLICAN PARTY")
-```
-
-### Payee
-
-Because expense payee's are reported by the recipient, there are inconsistencies in the spelling
-of the payee's name. While we can't fix potential misspelling of individual names, there are
-ways to reduce the number of variants of non-individual contributor names.
-
-Among records with _only_ a `payee_last` value (non-individuals), there are
-`r n_distinct(nv_payees$last_name[is.na(nv_payees$first_name)])` distinct values.
-
-By using the OpenRefine merging algorithms, we can reduce the number of distinct `payee_last`
-values. The approach takes uncommon values and changes them to a more common very similar value.
-
-```{r payee_name, collapse=TRUE}
-n_distinct(nv_payees$last_name[is.na(nv_payees$first_name)])
-
-payee_fix <- nv %>%
-  filter(is.na(payee_first)) %>%
-  mutate(payee_prep = payee_last %>% 
-           str_remove_all(fixed("\"")) %>% 
-           iconv(to = "utf-8")) %>% 
-  select(expense_id, payee_last, payee_prep) %>% 
-  mutate(payee_fix = payee_prep %>%
-           key_collision_merge() %>%
-           n_gram_merge()) %>% 
-  mutate(fixed = payee_last != payee_fix) %>% 
-  select(-payee_prep)
-
-# total changed records
-sum(payee_fix$fixed, na.rm = TRUE)
-
-# distinct changes made
-payee_fix %>% 
-  filter(fixed) %>% 
-  select(-expense_id) %>% 
-  distinct() %>%
-  nrow()
-
-# reduced distinct names
-n_distinct(payee_fix$payee_last)
-n_distinct(payee_fix$payee_fix)
-
-# percent change
-n_distinct(payee_fix$payee_last) %>% 
-  subtract(n_distinct(payee_fix$payee_fix)) %>% 
-  divide_by(n_distinct(payee_fix$payee_last))
-```
-
-```{r most_changed}
-# number of each fix
-payee_fix %>% 
-  filter(fixed) %>% 
-  count(payee_last, payee_fix) %>% 
-  arrange(desc(n))
-```
-
-Use the table of fixed payee last names to correct the original values.
-
-```{r join_fix}
-nv <- nv %>% 
-  left_join(payee_fix, by = c("expense_id", "payee_last")) %>%
-  mutate(fixed = !is.na(fixed)) %>% 
-  mutate(payee_clean = ifelse(fixed, payee_fix, payee_last)) %>% 
-  mutate(payee_clean = na_if(payee_clean, "NONE"))
-```
-
-## Check
-
-There are `r sum(is.na(nv$payee_clean))` records with `NA` values in the new `payee_clean`.
-`r sum(str_detect(nv$payee_last, "^NONE$"))` of those values were previously "NONE" in the
-original `payee_last` variable.
-
-To check for records without _any_ kind of identifying information on either side of the 
-transaction, we can coalesce the various variables into one.
-
-```{r check_na, echo=FALSE}
-nv %>%
-  # select key cols
-  select(
-    expense_id,
-    expense_amount,
-    candidate_last,
-    group_name,
-    payee_first,
-    payee_clean
-  ) %>% 
-  # coalesce recipient types into one col
-  mutate(payer = coalesce(candidate_last, group_name)) %>% 
-  select(-candidate_last, -group_name) %>%
-  mutate(payee = coalesce(payee_first, payee_clean)) %>%
-  select(-payee_first, -payee_clean) %>% 
-# count NA in each col
-  map(function(var) sum(is.na(var))) %>% 
-  unlist() %>% 
-  enframe(name = "variable", value = "n_na")
-```
-
-There are 14 unique recipient/contributor combinations missing either value.
-
-```{r show_check}
-nv %>%
-  # select key cols
-  select(
-    candidate_last,
-    group_name,
-    payee_first,
-    payee_clean
-  ) %>% 
-  # coalesce recipient types into one col
-  mutate(payer = coalesce(candidate_last, group_name)) %>% 
-  select(-candidate_last, -group_name) %>%
-  # repeat for contributors
-  mutate(payee = coalesce(payee_first, payee_clean)) %>%
-  select(-payee_first, -payee_clean) %>% 
-  # filter for NA
-  filter(is.na(payee) | is.na(payer)) %>% 
-  distinct()
-```
-
-If both the `payee_first` and `payee_last` variables are `NA`, flag the record with a new `na_flag`
-variable.
-
-```{r na_flag, collapse=TRUE}
-nv <- nv %>% 
-  mutate(na_flag = is.na(payee_first) & is.na(payee_clean))
-
-sum(nv$na_flag)
 ```
 
 ## Conclusion
@@ -773,17 +677,16 @@ sum(nv$na_flag)
 We will write the final data set to disk to be uploaded to the Accountability Project database.
 To save space, unclean columns will be removed and `NA` values will be written as empty strings.
 
-```{r write_csv}
-dir_create(here("nv_expends", "data", "processed"))
+```{r proc_dir}
+proc_dir <- here("nv", "expends", "data", "processed")
+dir_create(proc_dir)
+```
+
+```{r proc_write}
 nv %>% 
-  select(
-    -jurisdiction,
-    -candidate_party,
-    -payee_last
-  ) %>% 
   mutate_if(is.character, str_replace_all, "\"", "\'") %>% 
   write_csv(
-    path = here("nv_expends", "data", "processed", "nv_expends_clean.csv"),
+    path = glue("{proc_dir}/nv_expends_clean.csv"),
     na = ""
   )
 ```
