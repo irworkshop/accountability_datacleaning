@@ -19,12 +19,18 @@ opts_chunk$set(
   warning = FALSE,
   message = FALSE,
   error = FALSE,
+  collapse = TRUE,
   comment = "#>",
   fig.path = "../plots/",
   fig.width = 10,
   dpi = 300
 )
 options(width = 99)
+set.seed(5)
+```
+
+```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
+fs::dir_create(here::here("df", "data", "docs"))
 ```
 
 ## Project
@@ -58,33 +64,28 @@ This document describes the process used to complete the following objectives:
 The following packages are needed to collect, manipulate, visualize, analyze, and communicate
 these results. The `pacman` package will facilitate their installation and attachment.
 
+The IRW's `campfin` package will also have to be installed from GitHub. This package contains
+functions custom made to help facilitate the processing of campaign finance data.
+
 ```{r load_packages, message=FALSE, dfrning=FALSE, error=FALSE}
 if (!require("pacman")) install.packages("pacman")
+pacman::p_load_gh("irworkshop/campfin")
 pacman::p_load(
-  stringdist, # levenshtein value
   tidyverse, # data manipulation
-  snakecase, # change string case
+  snakecase, # convert strings
   lubridate, # datetime strings
   tidytext, # text analysis
   magrittr, # pipe opperators
-  pdftools, # extract pdf text
   janitor, # dataframe clean
-  batman, # parse NA and LGL
-  scales, # text formatting
+  batman, # handle na/lgl
   refinr, # cluster and merge
-  vroom, # quick file read
+  scales, # format strings
   knitr, # knit documents
+  vroom, # read files fast
   glue, # combine strings
   here, # relative storage
   fs # search storage 
 )
-```
-
-The IRW's `campfin` package will also have to be installed from GitHub. This package contains
-functions custom made to help facilitate the processing of campaign finance data.
-
-```{r load_campfin}
-pacman::p_load_gh("kiernann/campfin")
 ```
 
 This document should be run as part of the `R_campfin` project, which lives as a sub-directory of
@@ -94,8 +95,8 @@ repository.
 The `R_campfin` project uses the [RStudio projects][02] feature and should be run as such. The
 project also uses the dynamic `here::here()` tool for file paths relative to _your_ machine.
 
-```{r where_here, collapse=TRUE}
-# where dfs this document knit?
+```{r where_here}
+# where does this document knit?
 here::here()
 ```
 
@@ -668,7 +669,7 @@ for inclusion in the Colorado Year Book, 1958. For incorporations after 1958, th
 from The Directory of Municipal and County Officials in Colorado 1999-2000, published by the
 Colorado Municipal League, 1999.
 
-```{r co_city}
+```{r co_city, eval=FALSE}
 co_city <- pdf_text("https://www.colorado.gov/pacific/sites/default/files/List%20of%20Incorporated%20Cities%20and%20Towns%20in%20CO.pdf")
 # split and trim white text
 co_city <- str_trim(unlist(str_split(co_city, "\n"))[-c(1:7)])
@@ -732,7 +733,10 @@ co <- co %>%
     city = city.x,
     city_match = city.y
   ) %>%
-  mutate(match_dist = stringdist(city_norm, city_match))
+  mutate(
+    match_dist = str_dist(city_norm, city_match),
+    match_abb = is_abbrev(city_norm, city_match)
+  )
 
 n_distinct(co$city_match)
 prop_in(co$city_match, valid_city, na.rm = TRUE)
@@ -745,7 +749,7 @@ summary(co$match_dist)
 co <- co %>% 
   mutate(
     city_swap = if_else(
-      condition = match_dist <= 2 | is.na(match_dist), 
+      condition = match_dist == 1 | match_abb, 
       true = city_match, 
       false = city_norm
     )
@@ -804,8 +808,8 @@ co_refine <- co %>%
   mutate(
     # cluster and merge
     city_refine = city_swap %>% 
-      key_collision_merge(dict = unique(c(co_city, valid_city[valid_state == "CO"]))) %>% 
-      n_gram_merge(numgram = 2),
+      key_collision_merge() %>% 
+      n_gram_merge(numgram = 1),
     # undo refine if match
     city_refine = if_else(
       condition = match_dist <= 2,
@@ -895,26 +899,50 @@ prop_in(co$city_clean, valid_city, na.rm = TRUE)
 
 ## Lookup
 
-```{r lookup_city}
-lookup <- read_csv("co/expends/data/co_city_lookup.csv") %>% select(1:2)
-co <- left_join(co, lookup)
-
-progress_table(
-  co$city, 
-  co$city_swap,
-  co$city_clean, 
-  co$city_clean2, 
-  compare = valid_city
-)
-
-clean_file <- glue("{proc_dir}/co_expends_clean.csv")
-
-if (!this_file_new(clean_file)) {
-  write_csv(
-    x = co,
-    path = clean_file,
-    na = ""
-  )
-}
+```{r}
+proc_dir <- here("co", "expends", "data", "processed")
+dir_create(proc_dir)
 ```
 
+```{r lookup_city}
+lookup_file <- "co/expends/data/co_city_lookup.csv"
+if (file.exists(lookup_file)) {
+  lookup <- read_csv(lookup_file) %>% select(1:2)
+  co <- left_join(co, lookup)
+  progress_table(
+    co$city, 
+    co$city_swap,
+    co$city_clean, 
+    co$city_clean2, 
+    compare = valid_city
+  )
+  co %>% 
+    select(
+      -city_norm,
+      -city_match,
+      -match_dist,
+      -match_abb,
+      -city_swap,
+      -city_refine,
+      -city_clean
+    ) %>% 
+    write_csv(
+      path = glue("{proc_dir}/co_expends_clean.csv"),
+      na = ""
+    )
+} else {
+  co %>% 
+    select(
+      -city_norm,
+      -city_match,
+      -match_dist,
+      -match_abb,
+      -city_swap,
+      -city_refine,
+    ) %>% 
+    write_csv(
+      path = glue("{proc_dir}/co_expends_clean.csv"),
+      na = ""
+    )
+}
+```

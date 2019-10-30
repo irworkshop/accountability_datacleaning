@@ -21,7 +21,6 @@ opts_chunk$set(
   warning = FALSE,
   message = FALSE,
   error = FALSE,
-  # it's nice to un-collapse df print
   collapse = TRUE,
   comment = "#>",
   fig.path = "../plots/",
@@ -68,9 +67,8 @@ functions custom made to help facilitate the processing of campaign finance data
 
 ```{r load_packages, message=FALSE, dfrning=FALSE, error=FALSE}
 if (!require("pacman")) install.packages("pacman")
-pacman::p_load_current_gh("kiernann/campfin")
+pacman::p_load_gh("irworkshop/campfin")
 pacman::p_load(
-  stringdist, # levenshtein value
   snakecase, # change string case
   tidyverse, # data manipulation
   lubridate, # datetime strings
@@ -162,15 +160,13 @@ credit card reports, reimbursement reports and subvendor reports.
 
 ```{r create_paths}
 zip_url <- "http://ocpf2.blob.core.windows.net/downloads/data/campaign-finance-reports.zip"
-zip_path <- glue("{raw_dir}/{basename(zip_url)}")
+zip_path <- url2path(zip_url, raw_dir)
 ```
 
 First, check the file size before downloading.
 
 ```{r size_size}
-zip_head <- headers(HEAD(zip_url))
-zip_length <- as.numeric(zip_head$`content-length`)
-number_bytes(zip_length)
+url_file_size(zip_url, format = TRUE)
 ```
 
 Then download the file to the `/data/raw` directory and unzip.
@@ -290,13 +286,19 @@ glimpse_fun(ma, count_na)
 ```{r flag_na}
 ma <- ma %>% flag_na(date, amount, vendor, cand_name)
 sum(ma$na_flag)
+mean(ma$na_flag)
 ```
 
 ### Duplicates
 
 ```{r flag_dupes, eval=FALSE}
+# repeated variable
+all(ma$id == ma$line_sequence)
+n_distinct(ma$id) == n_distinct(ma$line_sequence)
+ma <- select(ma, -line_sequence)
 ma <- ma %>% flag_dupes(-id, -line_sequence, -guid)
 sum(ma$dupe_flag)
+mean(ma$dupe_flag)
 ```
 
 ### Categorical
@@ -516,7 +518,7 @@ ma <- ma %>%
   mutate(
     address_norm = normal_address(
       address = address,
-      add_abbs = usps,
+      add_abbs = usps_street,
       na_rep = TRUE
     )
   )
@@ -530,13 +532,13 @@ drop_na(select(ma, starts_with("address")))
 
 ### ZIP
 
-The `zip` address is already fairly clean, with `r percent(prop_in(ma$zip, geo$zip, na.rm = TRUE))`
-of the values already in our comprehensive `geo$zip` list.
+The `zip` address is already fairly clean, with `r percent(prop_in(ma$zip, valid_zip, na.rm = TRUE))`
+of the values already in our comprehensive `valid_zip` list.
 
 ```{r count_zip_pre, collapse=TRUE}
 n_distinct(ma$zip)
-prop_in(ma$zip, geo$zip, na.rm = TRUE)
-length(setdiff(ma$zip, geo$zip))
+prop_in(ma$zip, valid_zip, na.rm = TRUE)
+length(setdiff(ma$zip, valid_zip))
 ```
 
 We can improve this further by lopping off the uncommon four-digit extensions and removing common
@@ -552,27 +554,27 @@ ma <- ma %>%
   )
 ```
 
-This brings our valid percentage to `r percent(prop_in(ma$zip_norm, geo$zip, na.rm = TRUE))`.
+This brings our valid percentage to `r percent(prop_in(ma$zip_norm, valid_zip, na.rm = TRUE))`.
 
 ```{r count_zip_post, collapse=TRUE}
 n_distinct(ma$zip_norm)
-prop_in(ma$zip_norm, geo$zip, na.rm = TRUE)
-length(setdiff(ma$zip_norm, geo$zip))
+prop_in(ma$zip_norm, valid_zip, na.rm = TRUE)
+length(setdiff(ma$zip_norm, valid_zip))
 ```
 
 ### State
 
 The `state` variable is also very clean, already at 
-`r percent(prop_in(ma$state, geo$state, na.rm = TRUE))`.
+`r percent(prop_in(ma$state, valid_state, na.rm = TRUE))`.
 
 ```{r count_state_pre, collapse=TRUE}
 n_distinct(ma$state)
-prop_in(ma$state, geo$state, na.rm = TRUE)
-length(setdiff(ma$state, geo$state))
-setdiff(ma$state, geo$state)
+prop_in(ma$state, valid_state, na.rm = TRUE)
+length(setdiff(ma$state, valid_state))
+setdiff(ma$state, valid_state)
 ```
 
-There are still `r length(setdiff(ma$state, geo$state))` invalid values which we can remove.
+There are still `r length(setdiff(ma$state, valid_state))` invalid values which we can remove.
 
 ```{r normal_state}
 ma <- ma %>% 
@@ -581,14 +583,14 @@ ma <- ma %>%
       state = str_replace(state, "^M$", "MA"),
       abbreviate = TRUE,
       na_rep = TRUE,
-      valid = geo$state
+      valid = valid_state
     )
   )
 ```
 
 ```{r count_state_post, collapse=TRUE}
 n_distinct(ma$state_norm)
-prop_in(ma$state_norm, geo$state, na.rm = TRUE)
+prop_in(ma$state_norm, valid_state, na.rm = TRUE)
 ```
 
 ### City
@@ -604,13 +606,13 @@ the searchablity of the database.
 [08]: https://github.com/OpenRefine/OpenRefine/wiki/Clustering-In-Depth
 
 The raw `city` values are relatively normal, with 
-`r percent(prop_in(ma$city, geo$city, na.rm = TRUE))` already in `geo$city` (which is not
+`r percent(prop_in(ma$city, valid_city, na.rm = TRUE))` already in `valid_city` (which is not
 comprehensive). We will aim to get this number over 99%.
 
 ```{r count_city_pre, collapse=TRUE}
 n_distinct(ma$city)
-prop_in(ma$city, geo$city, na.rm = TRUE)
-length(setdiff(ma$city, geo$city))
+prop_in(ma$city, valid_city, na.rm = TRUE)
+length(setdiff(ma$city, valid_city))
 prop_na(ma$city)
 ```
 
@@ -623,18 +625,18 @@ ma <- ma %>%
       city = city, 
       geo_abbs = usps_city,
       st_abbs = c("MA", "DC", "MASSACHUSETTS"),
-      na = na_city,
+      na = invalid_city,
       na_rep = TRUE
     )
   )
 ```
 
-This process brought us to `r percent(prop_in(ma$city_norm, geo$city, na.rm = TRUE))` valid.
+This process brought us to `r percent(prop_in(ma$city_norm, valid_city, na.rm = TRUE))` valid.
 
 ```{r count_city_post_norm, collapse=TRUE}
 n_distinct(ma$city_norm)
-prop_in(ma$city_norm, geo$city, na.rm = TRUE)
-length(setdiff(ma$city_norm, geo$city))
+prop_in(ma$city_norm, valid_city, na.rm = TRUE)
+length(setdiff(ma$city_norm, valid_city))
 prop_na(ma$city_norm)
 ```
 
@@ -662,7 +664,7 @@ two values.
 ma <- ma %>% 
   rename(city_raw = city) %>% 
   left_join(
-    y = geo,
+    y = zipcodes,
     by = c(
       "state_norm" = "state",
       "zip_norm" = "zip"
@@ -670,7 +672,7 @@ ma <- ma %>%
   ) %>% 
   rename(city_match = city) %>% 
   mutate(
-    match_dist = stringdist(city_norm, city_match),
+    match_dist = str_dist(city_norm, city_match),
     city_swap = if_else(
       condition = is_less_than(match_dist, 3),
       true = city_match,
@@ -680,14 +682,14 @@ ma <- ma %>%
 ```
 
 This is a very fast way to increase the valid proportion to
-`r percent(prop_in(ma$city_swap, geo$city, na.rm = TRUE))` and reduce the number of distinct
-_invalid_ values from `r length(setdiff(ma$city_norm, geo$city))` to only
-`r length(setdiff(ma$city_swap, geo$city))`
+`r percent(prop_in(ma$city_swap, valid_city, na.rm = TRUE))` and reduce the number of distinct
+_invalid_ values from `r length(setdiff(ma$city_norm, valid_city))` to only
+`r length(setdiff(ma$city_swap, valid_city))`
 
 ```{r count_city_post_swap, collapse=TRUE}
 n_distinct(ma$city_swap)
-prop_in(ma$city_swap, geo$city, na.rm = TRUE)
-length(setdiff(ma$city_swap, geo$city))
+prop_in(ma$city_swap, valid_city, na.rm = TRUE)
+length(setdiff(ma$city_swap, valid_city))
 ```
 
 #### Refine
@@ -706,7 +708,7 @@ good_refine <- ma %>%
   ) %>% 
   filter(city_refine != city_swap) %>% 
   inner_join(
-    y = geo,
+    y = zipcodes,
     by = c(
       "city_refine" = "city",
       "state_norm" = "state",
@@ -735,12 +737,12 @@ ma <- ma %>%
   mutate(city_refine = coalesce(city_refine, city_swap))
 ```
 
-This brings us to `r percent(prop_in(ma$city_refine, geo$city, na.rm = TRUE))` valid values.
+This brings us to `r percent(prop_in(ma$city_refine, valid_city, na.rm = TRUE))` valid values.
 
 ```{r count_city_post_refine, collapse=TRUE}
 n_distinct(ma$city_refine)
-prop_in(ma$city_refine, geo$city, na.rm = TRUE)
-length(setdiff(ma$city_refine, geo$city))
+prop_in(ma$city_refine, valid_city, na.rm = TRUE)
+length(setdiff(ma$city_refine, valid_city))
 ```
 
 #### Progress
@@ -750,7 +752,7 @@ abbreviations (BOS, DORC, WORD, CAMB) often need to be changed by hand.
 
 ```{r view_final_bad}
 ma %>%
-  filter(city_refine %out% geo$city) %>% 
+  filter(city_refine %out% valid_city) %>% 
   count(state_norm, zip_norm, city_refine, sort = TRUE) %>% 
   drop_na(city_refine) %>% 
   print(n = 20)
@@ -775,8 +777,8 @@ ma <- ma %>%
 ```
 
 By making less than a dozen manual string replacements, we bring our final valid percentage to 
-`r percent(prop_in(ma$city_final, geo$city, na.rm = TRUE))`, above our 99% goal. There are still
-`r length(setdiff(ma$city_final, geo$city))` different _invalid_ values that could be checked, but
+`r percent(prop_in(ma$city_final, valid_city, na.rm = TRUE))`, above our 99% goal. There are still
+`r length(setdiff(ma$city_final, valid_city))` different _invalid_ values that could be checked, but
 they make up less than 1% of records. Many of these values are actually valid and simply not in our
 list (which doesn't contain very small towns and census desginated places).
 
@@ -791,18 +793,18 @@ progress_table <- tibble(
     n_distinct(ma$city_final)
   ),
   prop_good = c(
-    prop_in(ma$city_raw, geo$city, na.rm = TRUE),
-    prop_in(ma$city_norm, geo$city, na.rm = TRUE),
-    prop_in(ma$city_swap, geo$city, na.rm = TRUE),
-    prop_in(ma$city_refine, geo$city, na.rm = TRUE),
-    prop_in(ma$city_final, geo$city, na.rm = TRUE)
+    prop_in(ma$city_raw, valid_city, na.rm = TRUE),
+    prop_in(ma$city_norm, valid_city, na.rm = TRUE),
+    prop_in(ma$city_swap, valid_city, na.rm = TRUE),
+    prop_in(ma$city_refine, valid_city, na.rm = TRUE),
+    prop_in(ma$city_final, valid_city, na.rm = TRUE)
   ),
   unique_bad = c(
-    length(setdiff(ma$city_raw, geo$city)),
-    length(setdiff(ma$city_norm, geo$city)),
-    length(setdiff(ma$city_swap, geo$city)),
-    length(setdiff(ma$city_refine, geo$city)),
-    length(setdiff(ma$city_final, geo$city))
+    length(setdiff(ma$city_raw, valid_city)),
+    length(setdiff(ma$city_norm, valid_city)),
+    length(setdiff(ma$city_swap, valid_city)),
+    length(setdiff(ma$city_refine, valid_city)),
+    length(setdiff(ma$city_final, valid_city))
   )
 )
 

@@ -67,10 +67,8 @@ functions custom made to help facilitate the processing of campaign finance data
 
 ```{r load_packages, message=FALSE, warning=FALSE, error=FALSE}
 if (!require("pacman")) install.packages("pacman")
-pacman::p_load_current_gh("kiernann/campfin")
+pacman::p_load_gh("irworkshop/campfin")
 pacman::p_load(
-  stringdist, # levenshtein value
-  RSelenium, # remote browser
   tidyverse, # data manipulation
   lubridate, # datetime strings
   magrittr, # pipe opperators
@@ -101,15 +99,14 @@ here::here()
 [01]: https://github.com/irworkshop/accountability_datacleaning "TAP repo"
 [02]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects "Rproj"
 
-## Data
-
-### About
-
-### Variables
-
 ## Import
 
-### Download
+Data is obtained from the [Tennessee Bureau of Ethics and Campaign Finance (BECF)][becf].
+
+Data can be searched on the [BECF portal][portal] by year and downloaded locally.
+
+[becf]: https://www.tn.gov/tref.html
+[portal]: https://apps.tn.gov/tncamp-app/public/ceresults.htm
 
 ```{r create_raw_dir}
 raw_dir <- here("tn", "expends", "data", "raw")
@@ -128,13 +125,15 @@ tn <- map_df(
   col_types = cols(
     .default = col_character(),
     Amount = col_number(),
-    Date = col_date_usa(),
+    # date should be col_date_usa()
+    # a couple hundred use two digit year
+    Date = col_character(), 
     `Election Year` = col_integer()
   )
 )
 
 tn <- clean_names(tn, "snake")
-tn <- mutate(tn, adj = to_logical(adj))
+tn <- mutate(tn, adj = to_logical(adj), support_lgl = equals(s_o, "S"))
 ```
 
 ## Explore
@@ -154,6 +153,7 @@ glimpse_fun(tn, count_na)
 ```{r flag_na}
 tn <- tn %>% flag_na(amount, date, candidate_pac_name, vendor_name)
 sum(tn$na_flag)
+mean(tn$na_flag)
 ```
 
 ### Duplicates
@@ -161,7 +161,7 @@ sum(tn$na_flag)
 ```{r flag_dupes}
 tn <- flag_dupes(tn, everything())
 sum(tn$dupe_flag)
-percent(mean(tn$dupe_flag))
+mean(tn$dupe_flag)
 ```
 
 ### Categorical
@@ -181,8 +181,9 @@ summary(tn$amount)
 ```{r amount_histogram, echo=FALSE}
 tn %>%
   ggplot(aes(amount)) +
-  geom_histogram(fill = RColorBrewer::brewer.pal(3, "Dark2")[1]) +
+  geom_histogram(fill = RColorBrewer::brewer.pal(3, "Dark2")[3]) +
   geom_vline(xintercept = median(tn$amount, na.rm = TRUE), linetype = 2) +
+  scale_y_continuous(labels = comma) +
   scale_x_continuous(
     breaks = c(1 %o% 10^(0:6)),
     labels = dollar,
@@ -198,22 +199,41 @@ tn %>%
 
 #### Dates
 
+```{r}
+date_split <- str_split(tn$date, "/")
+date_join <- rep(NA_character_, length(tn$date))
+for (i in seq_along(date_split)) {
+  year <- date_split[[i]][3]
+  if (nchar(year) == 2 & grepl("^(0|1)\\d", year)) {
+    date_split[[i]][3] <- paste0("20", year)
+  }
+  date_join[i] <- str_c(date_split[[i]][3], date_split[[i]][1], date_split[[i]][2], sep = "-")
+}
+prop_na(tn$date)
+prop_na(date_join)
+tn <- mutate(tn, date_fix = as.Date(date_join))
+```
+
 ```{r add_year}
-tn <- mutate(tn, year = year(date))
+tn <- mutate(tn, year = year(date_fix))
+```
+
+```{r}
+count(tn, year)
 ```
 
 ```{r date_range, collapse=TRUE}
-min(tn$date, na.rm = TRUE)
+min(tn$date_fix, na.rm = TRUE)
 sum(tn$year < 2008, na.rm = TRUE)
-max(tn$date, na.rm = TRUE)
-sum(tn$date > today(), na.rm = TRUE)
+max(tn$date_fix, na.rm = TRUE)
+sum(tn$date_fix > today(), na.rm = TRUE)
 ```
 
 ```{r}
 tn <- tn %>% 
   mutate(
-    date_flag = year < 2008 | date > today(),
-    date_clean = as_date(ifelse(date_flag, NA, date)),
+    date_flag = year < 2008 | date_fix > today(),
+    date_clean = as_date(ifelse(date_flag, NA, date_fix)),
     year_clean = year(date_clean)
   )
 ```
@@ -236,50 +256,139 @@ tn %>%
 
 ## Wrangle
 
-```{r}
-rx_state <- "[:alpha:]+(?=,[:space:]+[:digit:]{5}(?:-[:digit:]{4})?$)"
+```{r address_separate}
 tn <- tn %>% 
-  mutate(
-    zip_norm = vendor_address %>% 
-      str_extract(rx_zip) %>% 
-      normal_zip(na_rep = TRUE),
-    state_norm = vendor_address %>% 
-      str_extract(rx_state) %>% 
-      normal_state(na_rep = TRUE),
-    street_city = vendor_address %>% 
-      str_remove(rx_zip) %>% 
-      str_remove(",\\s[:upper:]{2},\\s$") %>% 
-      str_trim("right"),
-    city_norm = street_city %>% 
-      str_extract("\\b[^,]+$") %>% 
-      normal_city(geo_abbs = usps_city, st_abbs = c("TN", "DC"), na_rep = TRUE),
-    address_norm = vendor_address %>% 
-      str_remove(",\\s\\b[^,]+,\\s[:upper:]{2},\\s\\d{5}(?:-\\d{4})?$") %>% 
-      normal_address(add_abbs = usps_street)
+  separate(
+    col = vendor_address,
+    into = c(glue("addr_split{1:5}"), "city_sep", "state_sep", "zip_sep"),
+    sep = ",\\s",
+    remove = FALSE,
+    fill = "left"
+  ) %>%
+  unite(
+    starts_with("addr_split"),
+    col = "address_sep",
+    sep = " ",
+    na.rm = TRUE
   ) %>% 
-  select(-street_city)
+  mutate_at(vars(ends_with("sep")), str_trim)
 ```
 
-```{r view_split, echo=FALSE}
+```{r address_spli_view, echo=FALSE}
 tn %>% 
   select(
     vendor_address,
-    address_norm,
-    city_norm,
-    state_norm,
-    zip_norm    
+    address_sep,
+    city_sep,
+    state_sep,
+    zip_sep    
   ) %>% 
-  sample_n(10)
+  distinct() %>% 
+  sample_frac()
 ```
 
 ```{r}
-percent(prop_in(tn$zip_norm, valid_zip))
-percent(prop_in(tn$state_norm, valid_state))
-percent(prop_in(tn$city_norm, valid_city))
+
 ```
 
-```{r match_swap_city}
+### Address
+
+```{r address_norm}
 tn <- tn %>% 
+  mutate(
+    address_norm = normal_address(
+      address = address_sep,
+      add_abbs = usps_street,
+      na_rep = TRUE
+    )
+  )
+```
+
+```{r address_view}
+tn %>% 
+  select(starts_with("address")) %>%
+  distinct() %>% 
+  sample_frac()
+```
+
+### ZIP
+
+```{r zip_norm}
+tn <- tn %>% 
+  mutate(
+    zip_norm = normal_zip(
+      zip = zip_sep,
+      na_rep = TRUE
+    )
+  )
+```
+
+```{r zip_view}
+tn %>% 
+  select(starts_with("zip")) %>% 
+  filter(zip_sep != zip_norm) %>% 
+  distinct() %>% 
+  sample_frac()
+```
+
+```{r zip_progress}
+progress_table(
+  tn$zip_sep,
+  tn$zip_norm,
+  compare = valid_zip
+)
+```
+
+## State
+
+```{r state_view_bad}
+tn %>% 
+  drop_na(state_sep) %>% 
+  filter(state_sep %out% valid_state) %>% 
+  count(state_sep, sort = TRUE)
+```
+
+```{r state_shift}
+# shift these all left 1
+city_states <- which(tn$state_sep %in% zipcodes$city[zipcodes$state == "TN"])
+tn$address_sep[city_states] <- tn$city_sep[city_states]
+tn$city_sep[city_states] <- tn$state_sep[city_states]
+tn$state_sep[city_states] <- "TN"
+```
+
+```{r state_norm}
+tn <- tn %>% 
+  mutate(
+    state_norm = normal_state(
+      state = state_sep,
+      abbreviate = TRUE,
+      na_rep = TRUE,
+      valid = valid_state
+    )
+  )
+```
+
+```{r state_progress}
+progress_table(
+  tn$state_sep,
+  tn$state_norm,
+  compare = valid_state
+)
+```
+
+## City
+
+```{r city_norm_match_swap}
+tn <- tn %>% 
+  mutate(
+    city_norm = normal_city(
+      city = city_sep,
+      geo_abbs = usps_city,
+      st_abbs = c("TN", "DC"),
+      na = invalid_city,
+      na_rep = TRUE
+    )
+  ) %>% 
   left_join(
     zipcodes, 
     by = c(
@@ -289,27 +398,23 @@ tn <- tn %>%
   ) %>% 
   rename(city_match = city) %>% 
   mutate(
-    match_dist = stringdist(city_norm, city_match),
+    match_dist = str_dist(city_norm, city_match),
     match_abb = is_abbrev(city_norm, city_match),
     city_swap = if_else(
-      condition = match_abb | match_dist < 3,
+      condition = match_abb | match_dist == 1,
       true = city_match,
       false = city_norm
     )
   )
 ```
 
-```{r count_city_post_swap, collapse=TRUE}
-n_distinct(tn$city_swap)
-prop_in(tn$city_swap, valid_city, na.rm = TRUE)
-length(setdiff(tn$city_swap, valid_city))
-```
-
-```{r city_swa_progress}
-prop_in(tn$city_swap, valid_city)
-prop_na(tn$city_swap)
-n_distinct(tn$city_swap)
-length(setdiff(tn$city_swap, valid_city))
+```{r city_progress}
+progress_table(
+  tn$city_sep,
+  tn$city_norm,
+  tn$city_swap,
+  compare = valid_city
+)
 ```
 
 ## Conclude
@@ -331,15 +436,24 @@ dir_create(proc_dir)
 ```
 
 ```{r write_clean}
-tn %>% 
+tn %>%
   select(
     -year,
+    -date_fix,
+    -address_sep,
+    -zip_sep,
+    -state_sep,
+    -city_sep,
     -city_norm,
-    -city_swap,
     -city_match,
-    -city_swap,
     -match_dist,
     -match_abb
+  ) %>% 
+  rename(
+    address_clean = address_norm,
+    zip_clean = zip_norm,
+    state_clean = state_norm,
+    city_clean = city_swap,
   ) %>% 
   write_csv(
     path = glue("{proc_dir}/tn_expends_clean.csv"),

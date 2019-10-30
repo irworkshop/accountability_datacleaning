@@ -60,14 +60,12 @@ these results. The `pacman` package will facilitate their installation and attac
 
 ```{r p_load, message=FALSE, dfrning=FALSE, error=FALSE}
 if (!require("pacman")) install.packages("pacman")
-pacman::p_load_current_gh("kiernann/campfin")
+pacman::p_load_gh("irworkshop/campfin")
 pacman::p_load(
-  stringdist, # levenshtein value
   snakecase, # change string case
   RSelenium, # remote browser
   tidyverse, # data manipulation
   lubridate, # datetime strings
-  tidytext, # text analysis
   magrittr, # pipe opperators
   janitor, # dataframe clean
   batman, # rep(NA, 8) Batman!
@@ -202,6 +200,12 @@ nh <-
       `Expenditure Amount` = col_double()
     )
   )
+```
+
+```{r read_problems}
+problems(nh) %>% 
+  filter(expected != "15 columns") %>% 
+  distinct()
 ```
 
 We will remove completely empty rows, clean names, uppcercase characters variables, and separate
@@ -399,40 +403,158 @@ Add a `transaction_year` variable from `transaction_date` using `lubridate::year
 nh <- nh %>% mutate(transaction_year = year(transaction_date))
 ```
 
-### Address
+```{r plot, year, echo=FALSE}
+nh %>% 
+  count(transaction_year) %>% 
+  ggplot(aes(transaction_year, n)) +
+  geom_col()
+```
 
-We need to extract the ZIP code and state abbreviation from the `payee_address` string.
+### Separate
+
+The `payee_address` string contains the street address, city name, state abbreviation, and ZIP
+code.
 
 ```{r sample_address}
 sample(nh$payee_address, 10) %>% cat(sep = "\n")
 ```
 
-First, we will extract the ZIP digits from the end of the `address` string.
+We can use a combination of `tidyr::separate()` and `tidyr::unite()` to split this address
+into four distinct columns:
 
-```{r norm_zip, collapse=TRUE}
+1. `payee_address_sep`
+1. `payee_city_sep`
+1. `payee_state_sep`
+1. `payee_zip_sep`
+
+```{r separate_address}
 nh <- nh %>% 
-  mutate(
-    zip_clean = payee_address %>% 
-      str_extract(rx_zip) %>% 
-      normal_zip(na_rep = TRUE)
+  separate(
+    col = payee_address,
+    into = c(glue("payee_split_address{1:10}"), "payee_city_sep", "payee_state_zip_sep"),
+    sep = ",\\s",
+    remove = FALSE,
+    extra = "merge",
+    fill = "left"
+  ) %>% 
+  unite(
+    starts_with("payee_split_address"),
+    col = payee_address_sep,
+    sep = " ",
+    remove = TRUE,
+    na.rm = TRUE
+  ) %>% 
+  separate(
+    col = payee_state_zip_sep,
+    into = c("payee_state_sep", "payee_zip_sep"),
+    sep = "\\s(?=\\d)",
+    remove = TRUE,
+    convert = FALSE
   )
-
-sample(nh$zip_clean, 10)
 ```
 
-Then we can get the two digit state abbreviation preceding those digits.
+### Address
 
-```{r norm_state, collapse=TRUE}
+```{r normal_address}
 nh <- nh %>% 
   mutate(
-    state_clean = payee_address %>% 
-      str_extract(rx_state) %>%
-      normal_state(abbreviate = TRUE, na_rep = TRUE)
+    payee_address_norm = normal_address(
+      address = payee_address_sep,
+      add_abbs = usps_street,
+      na_rep = TRUE
+    )
   )
+```
 
-n_distinct(nh$state_clean)
-sample(nh$state_clean, 10)
-prop_in(nh$state_clean, valid_state)
+```{r address_view}
+nh %>% 
+  select(payee_address_sep, payee_address_norm)
+```
+
+### ZIP Code
+
+```{r zip_norm}
+nh <- nh %>% 
+  mutate(
+    payee_zip_norm = normal_zip(
+      zip = payee_zip_sep,
+      na_rep = TRUE
+    )
+  )
+```
+
+```{r zip_progress}
+progress_table(
+  nh$payee_zip_sep,
+  nh$payee_zip_norm,
+  compare = valid_zip
+)
+```
+
+### State
+
+```{r state_norm}
+nh <- nh %>% 
+  mutate(
+    payee_state_norm = normal_state(
+      state = payee_state_sep,
+      abbreviate = TRUE,
+      na_rep = TRUE,
+      valid = NULL
+    )
+  )
+```
+
+No changes were made.
+
+```{r state_progress}
+progress_table(
+  nh$payee_state_sep,
+  nh$payee_state_norm,
+  compare = valid_state
+)
+```
+
+### City
+
+```{r city_norm}
+nh <- nh %>% 
+  mutate(
+    payee_city_norm = normal_city(
+      city = payee_city_sep,
+      geo_abbs = usps_city,
+      st_abbs = c("NH", "DC"),
+      na_rep = TRUE
+    )
+  ) %>% 
+  left_join(
+    y = zipcodes,
+    by = c(
+      "payee_state_norm" = "state",
+      "payee_zip_norm" = "zip"
+    )
+  ) %>% 
+  rename(
+    payee_city_match = city
+  ) %>% 
+  mutate(
+    match_abb = is_abbrev(payee_city_norm, payee_city_match),
+    match_dist = str_dist(payee_city_norm, payee_city_match),
+    payee_city_swap = if_else(
+      condition = match_abb | match_dist == 1,
+      true = payee_city_match,
+      false = payee_city_norm
+    )
+  )
+```
+
+```{r city_progress}
+progress_table(
+  nh$payee_city_sep,
+  nh$payee_city_norm,
+  nh$payee_city_swap,
+  compare = valid_city
+)
 ```
 
 ## Conclude

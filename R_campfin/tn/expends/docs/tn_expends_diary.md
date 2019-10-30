@@ -1,17 +1,7 @@
 Tennessee Expenditures
 ================
 Kiernan Nicholls
-2019-09-10 14:03:12
-
-  - [Project](#project)
-  - [Objectives](#objectives)
-  - [Packages](#packages)
-  - [Data](#data)
-  - [Import](#import)
-  - [Explore](#explore)
-  - [Wrangle](#wrangle)
-  - [Conclude](#conclude)
-  - [Export](#export)
+2019-10-30 14:15:49
 
 <!-- Place comments regarding knitting here -->
 
@@ -56,10 +46,8 @@ processing of campaign finance data.
 
 ``` r
 if (!require("pacman")) install.packages("pacman")
-pacman::p_load_current_gh("kiernann/campfin")
+pacman::p_load_gh("irworkshop/campfin")
 pacman::p_load(
-  stringdist, # levenshtein value
-  RSelenium, # remote browser
   tidyverse, # data manipulation
   lubridate, # datetime strings
   magrittr, # pipe opperators
@@ -88,18 +76,17 @@ feature and should be run as such. The project also uses the dynamic
 ``` r
 # where does this document knit?
 here::here()
-#> [1] "/home/ubuntu/R/accountability_datacleaning/R_campfin"
+#> [1] "/home/kiernan/R/accountability_datacleaning/R_campfin"
 ```
-
-## Data
-
-### About
-
-### Variables
 
 ## Import
 
-### Download
+Data is obtained from the [Tennessee Bureau of Ethics and Campaign
+Finance (BECF)](https://www.tn.gov/tref.html).
+
+Data can be searched on the [BECF
+portal](https://apps.tn.gov/tncamp-app/public/ceresults.htm) by year and
+downloaded locally.
 
 ``` r
 raw_dir <- here("tn", "expends", "data", "raw")
@@ -118,47 +105,49 @@ tn <- map_df(
   col_types = cols(
     .default = col_character(),
     Amount = col_number(),
-    Date = col_date_usa(),
+    # date should be col_date_usa()
+    # a couple hundred use two digit year
+    Date = col_character(), 
     `Election Year` = col_integer()
   )
 )
 
 tn <- clean_names(tn, "snake")
-tn <- mutate(tn, adj = to_logical(adj))
+tn <- mutate(tn, adj = to_logical(adj), support_lgl = equals(s_o, "S"))
 ```
 
 ## Explore
 
 ``` r
 head(tn)
-#> # A tibble: 6 x 12
-#>   type  adj   amount date       election_year report_name candidate_pac_n… vendor_name
-#>   <chr> <lgl>  <dbl> <date>             <int> <chr>       <chr>            <chr>      
-#> 1 <NA>  FALSE   18.9 2008-01-19            NA 1st Quarter NATIONAL CONSER… GODADDY.COM
-#> 2 <NA>  FALSE   43.0 2008-01-18            NA 1st Quarter NATIONAL CONSER… GODADDY.COM
-#> 3 <NA>  FALSE  120.  2008-02-15          2008 1st Quarter SWAFFORD, ERIC   PRINTING P…
-#> 4 <NA>  FALSE  500   2008-01-16          2008 1st Quarter MCCORMICK, GERA… AMERICAN H…
-#> 5 <NA>  FALSE  750   2008-01-23          2008 1st Quarter MCCORMICK, GERA… HAMILTON C…
-#> 6 <NA>  FALSE  600   2008-02-01          2008 1st Quarter MCCORMICK, GERA… MEMORIAL F…
-#> # … with 4 more variables: vendor_address <chr>, purpose <chr>, candidate_for <chr>, s_o <chr>
+#> # A tibble: 6 x 13
+#>   type  adj   amount date  election_year report_name candidate_pac_n… vendor_name vendor_address
+#>   <chr> <lgl>  <dbl> <chr>         <int> <chr>       <chr>            <chr>       <chr>         
+#> 1 <NA>  FALSE   18.9 01/1…            NA 1st Quarter NATIONAL CONSER… GODADDY.COM 14455 N. HAYD…
+#> 2 <NA>  FALSE   43.0 01/1…            NA 1st Quarter NATIONAL CONSER… GODADDY.COM 14455 N. HAYD…
+#> 3 <NA>  FALSE  120.  02/1…          2008 1st Quarter SWAFFORD, ERIC   PRINTING P… P.O. BOX 746,…
+#> 4 <NA>  FALSE  500   01/1…          2008 1st Quarter MCCORMICK, GERA… AMERICAN H… 519 E. 4TH ST…
+#> 5 <NA>  FALSE  750   01/2…          2008 1st Quarter MCCORMICK, GERA… HAMILTON C… N. MARKET STR…
+#> 6 <NA>  FALSE  600   02/0…          2008 1st Quarter MCCORMICK, GERA… MEMORIAL F… 2525 DE SALES…
+#> # … with 4 more variables: purpose <chr>, candidate_for <chr>, s_o <chr>, support_lgl <lgl>
 tail(tn)
-#> # A tibble: 6 x 12
-#>   type  adj   amount date       election_year report_name candidate_pac_n… vendor_name
-#>   <chr> <lgl>  <dbl> <date>             <int> <chr>       <chr>            <chr>      
-#> 1 Neit… FALSE 48500  2018-05-14            NA 2nd Quarter PROTECTIVE LIFE… NON TN EXP…
-#> 2 Neit… FALSE  2500  2018-04-12            NA 2nd Quarter JOBS PAC         LOWERY, MI…
-#> 3 Neit… FALSE  2500  2018-04-12            NA 2nd Quarter JOBS PAC         COMMITTEE …
-#> 4 Neit… FALSE  2500  2018-04-12            NA 2nd Quarter JOBS PAC         BILLINGSLE…
-#> 5 Neit… FALSE   101. 2018-04-03            NA 2nd Quarter CONCERNED AUTOM… TSYS MERCH…
-#> 6 Neit… FALSE   167. 2018-05-03            NA 2nd Quarter CONCERNED AUTOM… TSYS MERCH…
-#> # … with 4 more variables: vendor_address <chr>, purpose <chr>, candidate_for <chr>, s_o <chr>
+#> # A tibble: 6 x 13
+#>   type  adj   amount date  election_year report_name candidate_pac_n… vendor_name vendor_address
+#>   <chr> <lgl>  <dbl> <chr>         <int> <chr>       <chr>            <chr>       <chr>         
+#> 1 Neit… FALSE 48500  05/1…            NA 2nd Quarter PROTECTIVE LIFE… NON TN EXP… P.O. BOX 2606…
+#> 2 Neit… FALSE  2500  04/1…            NA 2nd Quarter JOBS PAC         LOWERY, MI… 761 HARBOR IS…
+#> 3 Neit… FALSE  2500  04/1…            NA 2nd Quarter JOBS PAC         COMMITTEE … 215 PASADENA …
+#> 4 Neit… FALSE  2500  04/1…            NA 2nd Quarter JOBS PAC         BILLINGSLE… 8439 FARRAH L…
+#> 5 Neit… FALSE   101. 04/0…            NA 2nd Quarter CONCERNED AUTOM… TSYS MERCH… 1601 DODGE ST…
+#> 6 Neit… FALSE   167. 05/0…            NA 2nd Quarter CONCERNED AUTOM… TSYS MERCH… 1601 DODGE ST…
+#> # … with 4 more variables: purpose <chr>, candidate_for <chr>, s_o <chr>, support_lgl <lgl>
 glimpse(sample_frac(tn))
 #> Observations: 68,808
-#> Variables: 12
+#> Variables: 13
 #> $ type               <chr> "Neither", NA, NA, NA, NA, NA, NA, "Neither", NA, NA, "Neither", "Nei…
 #> $ adj                <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, TRUE, FALSE, FALSE, …
 #> $ amount             <dbl> 2400.00, 500.00, 150.00, 136.56, 110.00, 195.96, 38.48, 500.00, 27.43…
-#> $ date               <date> 2011-04-21, 2015-04-10, 2016-03-02, 2013-05-14, 2014-02-27, 2017-03-…
+#> $ date               <chr> "04/21/2011", "04/10/2015", "03/02/2016", "05/14/2013", "02/27/2014",…
 #> $ election_year      <int> NA, 2016, 2014, 2014, 2014, 2018, 2016, NA, 2018, 2018, NA, NA, 2010,…
 #> $ report_name        <chr> "Annual Mid Year Supplemental", "Early Mid Year Supplemental", "Annua…
 #> $ candidate_pac_name <chr> "PLUMBERS LOCAL UNION 17 PAC", "FARMER, ANDREW ELLIS", "HASLAM, BILL"…
@@ -167,19 +156,20 @@ glimpse(sample_frac(tn))
 #> $ purpose            <chr> "CONTRIBUTION", "DONATIONS", "PROFESSIONAL SERVICES", "RESOLUTION FRA…
 #> $ candidate_for      <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
 #> $ s_o                <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
+#> $ support_lgl        <lgl> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
 ```
 
 ### Missing
 
 ``` r
 glimpse_fun(tn, count_na)
-#> # A tibble: 12 x 4
+#> # A tibble: 13 x 4
 #>    col                type      n       p
 #>    <chr>              <chr> <dbl>   <dbl>
 #>  1 type               chr   42998 0.625  
 #>  2 adj                lgl       0 0      
 #>  3 amount             dbl       0 0      
-#>  4 date               date   3639 0.0529 
+#>  4 date               chr    1292 0.0188 
 #>  5 election_year      int   28186 0.410  
 #>  6 report_name        chr       0 0      
 #>  7 candidate_pac_name chr       0 0      
@@ -187,13 +177,16 @@ glimpse_fun(tn, count_na)
 #>  9 vendor_address     chr     282 0.00410
 #> 10 purpose            chr       0 0      
 #> 11 candidate_for      chr   68699 0.998  
-#> 12 s_o                chr   68745 0.999
+#> 12 s_o                chr   68745 0.999  
+#> 13 support_lgl        lgl   68745 0.999
 ```
 
 ``` r
 tn <- tn %>% flag_na(amount, date, candidate_pac_name, vendor_name)
 sum(tn$na_flag)
-#> [1] 3866
+#> [1] 1521
+mean(tn$na_flag)
+#> [1] 0.02210499
 ```
 
 ### Duplicates
@@ -201,22 +194,22 @@ sum(tn$na_flag)
 ``` r
 tn <- flag_dupes(tn, everything())
 sum(tn$dupe_flag)
-#> [1] 1828
-percent(mean(tn$dupe_flag))
-#> [1] "2.66%"
+#> [1] 1634
+mean(tn$dupe_flag)
+#> [1] 0.02374724
 ```
 
 ### Categorical
 
 ``` r
 glimpse_fun(tn, n_distinct)
-#> # A tibble: 14 x 4
+#> # A tibble: 15 x 4
 #>    col                type      n         p
 #>    <chr>              <chr> <dbl>     <dbl>
 #>  1 type               chr       4 0.0000581
 #>  2 adj                lgl       2 0.0000291
 #>  3 amount             dbl   19089 0.277    
-#>  4 date               date   2685 0.0390   
+#>  4 date               chr    4705 0.0684   
 #>  5 election_year      int      16 0.000233 
 #>  6 report_name        chr      10 0.000145 
 #>  7 candidate_pac_name chr    1641 0.0238   
@@ -225,8 +218,9 @@ glimpse_fun(tn, n_distinct)
 #> 10 purpose            chr    5525 0.0803   
 #> 11 candidate_for      chr      47 0.000683 
 #> 12 s_o                chr       4 0.0000581
-#> 13 na_flag            lgl       2 0.0000291
-#> 14 dupe_flag          lgl       2 0.0000291
+#> 13 support_lgl        lgl       3 0.0000436
+#> 14 na_flag            lgl       2 0.0000291
+#> 15 dupe_flag          lgl       2 0.0000291
 ```
 
 ### Continuous
@@ -244,25 +238,60 @@ summary(tn$amount)
 #### Dates
 
 ``` r
-tn <- mutate(tn, year = year(date))
+date_split <- str_split(tn$date, "/")
+date_join <- rep(NA_character_, length(tn$date))
+for (i in seq_along(date_split)) {
+  year <- date_split[[i]][3]
+  if (nchar(year) == 2 & grepl("^(0|1)\\d", year)) {
+    date_split[[i]][3] <- paste0("20", year)
+  }
+  date_join[i] <- str_c(date_split[[i]][3], date_split[[i]][1], date_split[[i]][2], sep = "-")
+}
+prop_na(tn$date)
+#> [1] 0.01877689
+prop_na(date_join)
+#> [1] 0.01877689
+tn <- mutate(tn, date_fix = as.Date(date_join))
 ```
 
 ``` r
-min(tn$date, na.rm = TRUE)
-#> [1] "1008-01-23"
+tn <- mutate(tn, year = year(date_fix))
+```
+
+``` r
+count(tn, year)
+#> # A tibble: 39 x 2
+#>     year     n
+#>    <dbl> <int>
+#>  1    20     3
+#>  2    69     1
+#>  3  1008     1
+#>  4  1012     1
+#>  5  2000     4
+#>  6  2001    11
+#>  7  2003     1
+#>  8  2004     5
+#>  9  2005     3
+#> 10  2006     7
+#> # … with 29 more rows
+```
+
+``` r
+min(tn$date_fix, na.rm = TRUE)
+#> [1] "20-02-19"
 sum(tn$year < 2008, na.rm = TRUE)
-#> [1] 39
-max(tn$date, na.rm = TRUE)
+#> [1] 46
+max(tn$date_fix, na.rm = TRUE)
 #> [1] "3015-06-30"
-sum(tn$date > today(), na.rm = TRUE)
+sum(tn$date_fix > today(), na.rm = TRUE)
 #> [1] 26
 ```
 
 ``` r
 tn <- tn %>% 
   mutate(
-    date_flag = year < 2008 | date > today(),
-    date_clean = as_date(ifelse(date_flag, NA, date)),
+    date_flag = year < 2008 | date_fix > today(),
+    date_clean = as_date(ifelse(date_flag, NA, date_fix)),
     year_clean = year(date_clean)
   )
 ```
@@ -272,54 +301,188 @@ tn <- tn %>%
 ## Wrangle
 
 ``` r
-rx_state <- "[:alpha:]+(?=,[:space:]+[:digit:]{5}(?:-[:digit:]{4})?$)"
+tn <- tn %>% 
+  separate(
+    col = vendor_address,
+    into = c(glue("addr_split{1:5}"), "city_sep", "state_sep", "zip_sep"),
+    sep = ",\\s",
+    remove = FALSE,
+    fill = "left"
+  ) %>%
+  unite(
+    starts_with("addr_split"),
+    col = "address_sep",
+    sep = " ",
+    na.rm = TRUE
+  ) %>% 
+  mutate_at(vars(ends_with("sep")), str_trim)
+```
+
+    #> # A tibble: 23,983 x 5
+    #>    vendor_address                              address_sep            city_sep  state_sep zip_sep  
+    #>    <chr>                                       <chr>                  <chr>     <chr>     <chr>    
+    #>  1 HQ, MENLO PARK , CA, 94025                  HQ                     MENLO PA… CA        94025    
+    #>  2 103 SUBURBAN RD, KNOXVILLE , TN, 37923      103 SUBURBAN RD        KNOXVILLE TN        37923    
+    #>  3 109332 MURDOCK ROAD, KNOXVILLE , TN, 37932  109332 MURDOCK ROAD    KNOXVILLE TN        37932    
+    #>  4 ONE TERMINAL DRIVE, NASHVILLE , TN, 37214   ONE TERMINAL DRIVE     NASHVILLE TN        37214    
+    #>  5 1901 LINDELL AVE, NASHVILLE , TN, 37203-55… 1901 LINDELL AVE       NASHVILLE TN        37203-55…
+    #>  6 12103 BUTTERNUT CIRCLE, KNOXVILLE , TN, 37… 12103 BUTTERNUT CIRCLE KNOXVILLE TN        37934    
+    #>  7 607 MARLBORO, EAST RIDGE , TN, 37412        607 MARLBORO           EAST RID… TN        37412    
+    #>  8 227 W DEPOT AVE, KNOXVILLE , TN, 37917      227 W DEPOT AVE        KNOXVILLE TN        37917    
+    #>  9 214 MASSACHUSETTS AVE NE , WASHINGTON , DC… 214 MASSACHUSETTS AVE… WASHINGT… DC        20002    
+    #> 10 10 CAMPBELL RD., MADISON , TN, 37115        10 CAMPBELL RD.        MADISON   TN        37115    
+    #> # … with 23,973 more rows
+
+### Address
+
+``` r
 tn <- tn %>% 
   mutate(
-    zip_norm = vendor_address %>% 
-      str_extract(rx_zip) %>% 
-      normal_zip(na_rep = TRUE),
-    state_norm = vendor_address %>% 
-      str_extract(rx_state) %>% 
-      normal_state(na_rep = TRUE),
-    street_city = vendor_address %>% 
-      str_remove(rx_zip) %>% 
-      str_remove(",\\s[:upper:]{2},\\s$") %>% 
-      str_trim("right"),
-    city_norm = street_city %>% 
-      str_extract("\\b[^,]+$") %>% 
-      normal_city(geo_abbs = usps_city, st_abbs = c("TN", "DC"), na_rep = TRUE),
-    address_norm = vendor_address %>% 
-      str_remove(",\\s\\b[^,]+,\\s[:upper:]{2},\\s\\d{5}(?:-\\d{4})?$") %>% 
-      normal_address(add_abbs = usps_street)
-  ) %>% 
-  select(-street_city)
+    address_norm = normal_address(
+      address = address_sep,
+      add_abbs = usps_street,
+      na_rep = TRUE
+    )
+  )
 ```
 
-    #> # A tibble: 10 x 5
-    #>    vendor_address                            address_norm           city_norm   state_norm zip_norm
-    #>    <chr>                                     <chr>                  <chr>       <chr>      <chr>   
-    #>  1 4837 RAINER DRIVE, OLD HICKORY , TN, 371… 4837 RAINER DRIVE      OLD HICKORY TN         37138   
-    #>  2 25359 BLUE STAR HIGHWAY, JARRATT , VA, 2… 25359 BLUE STAR HIGHW… JARRATT     VA         23867   
-    #>  3 P.O. BOX 158513, NASHVILLE , TN, 37215    PO BOX 158513          NASHVILLE   TN         37215   
-    #>  4 11863 KINGSTON PIKE, KNOXVILLE , TN, 379… 11863 KINGSTON PIKE    KNOXVILLE   TN         37934   
-    #>  5 PO BOX 150368, NASHVILLE , TN, 37215      PO BOX 150368          NASHVILLE   TN         37215   
-    #>  6 1220 MARKET ST, DAYTON , TN, 37321        1220 MARKET STREET     DAYTON      TN         37321   
-    #>  7 RUTHREFORD BLVD, MURFREESBORO , TN, 37130 RUTHREFORD BOULEVARD   MURFREESBO… TN         37130   
-    #>  8 601 COLLEGE STREET, CLARKSVILLE , TN, 37… 601 COLLEGE STREET     CLARKSVILLE TN         37044   
-    #>  9 7111 KINGSTON PIKE, KNOXVILLE , TN, 37919 7111 KINGSTON PIKE     KNOXVILLE   TN         37919   
-    #> 10 P. O. BOX 684, KINGSTON , TN, 37763       PO BOX 684             KINGSTON    TN         37763
+``` r
+tn %>% 
+  select(starts_with("address")) %>%
+  distinct() %>% 
+  sample_frac()
+#> # A tibble: 22,302 x 2
+#>    address_sep               address_norm                        
+#>    <chr>                     <chr>                               
+#>  1 172 HORN SPRINGS ROAD     172 HORN SPRINGS ROAD               
+#>  2 156 W MAIN ST             156 WEST MAIN STREET                
+#>  3 90 WHITE BRIDGE ROAD      90 WHITE BRIDGE ROAD                
+#>  4 6708 AMANDA WAY           6708 AMANDA WAY                     
+#>  5 426 C STREET NE REAR BLDG 426 C STREET NORTHEAST REAR BUILDING
+#>  6 250 5TH AVE SOUTH         250 5TH AVENUE SOUTH                
+#>  7 COUNTRY CLUB RD           COUNTRY CLUB ROAD                   
+#>  8 1306 W. G STREET          1306 WEST G STREET                  
+#>  9 2263 YOUNG AVE #211       2263 YOUNG AVENUE 211               
+#> 10 305 EAST SPRING ST.       305 EAST SPRING STREET              
+#> # … with 22,292 more rows
+```
+
+### ZIP
 
 ``` r
-percent(prop_in(tn$zip_norm, valid_zip))
-#> [1] "99.5%"
-percent(prop_in(tn$state_norm, valid_state))
-#> [1] "99.9%"
-percent(prop_in(tn$city_norm, valid_city))
-#> [1] "98.1%"
+tn <- tn %>% 
+  mutate(
+    zip_norm = normal_zip(
+      zip = zip_sep,
+      na_rep = TRUE
+    )
+  )
+```
+
+``` r
+tn %>% 
+  select(starts_with("zip")) %>% 
+  filter(zip_sep != zip_norm) %>% 
+  distinct() %>% 
+  sample_frac()
+#> # A tibble: 538 x 2
+#>    zip_sep    zip_norm
+#>    <chr>      <chr>   
+#>  1 37132-0001 37132   
+#>  2 02144-3132 02144   
+#>  3 84115-4111 84115   
+#>  4 37215-2622 37215   
+#>  5 45271-2144 45271   
+#>  6 37371-1642 37371   
+#>  7 37027-4228 37027   
+#>  8 37203-5038 37203   
+#>  9 37206-2752 37206   
+#> 10 75265-0575 75265   
+#> # … with 528 more rows
+```
+
+``` r
+progress_table(
+  tn$zip_sep,
+  tn$zip_norm,
+  compare = valid_zip
+)
+#> # A tibble: 2 x 6
+#>   stage    prop_in n_distinct prop_na n_out n_diff
+#>   <chr>      <dbl>      <dbl>   <dbl> <dbl>  <dbl>
+#> 1 zip_sep    0.962       3419 0.00410  2634    667
+#> 2 zip_norm   0.995       2955 0.00573   310    115
+```
+
+## State
+
+``` r
+tn %>% 
+  drop_na(state_sep) %>% 
+  filter(state_sep %out% valid_state) %>% 
+  count(state_sep, sort = TRUE)
+#> # A tibble: 52 x 2
+#>    state_sep      n
+#>    <chr>      <int>
+#>  1 NASHVILLE     17
+#>  2 IR            13
+#>  3 MEMPHIS        6
+#>  4 KNOXVILLE      5
+#>  5 BC             3
+#>  6 CD             3
+#>  7 ON             3
+#>  8 OP             3
+#>  9 SMYRNA         3
+#> 10 WASHINGTON     3
+#> # … with 42 more rows
+```
+
+``` r
+# shift these all left 1
+city_states <- which(tn$state_sep %in% zipcodes$city[zipcodes$state == "TN"])
+tn$address_sep[city_states] <- tn$city_sep[city_states]
+tn$city_sep[city_states] <- tn$state_sep[city_states]
+tn$state_sep[city_states] <- "TN"
 ```
 
 ``` r
 tn <- tn %>% 
+  mutate(
+    state_norm = normal_state(
+      state = state_sep,
+      abbreviate = TRUE,
+      na_rep = TRUE,
+      valid = valid_state
+    )
+  )
+```
+
+``` r
+progress_table(
+  tn$state_sep,
+  tn$state_norm,
+  compare = valid_state
+)
+#> # A tibble: 2 x 6
+#>   stage      prop_in n_distinct prop_na n_out n_diff
+#>   <chr>        <dbl>      <dbl>   <dbl> <dbl>  <dbl>
+#> 1 state_sep    0.999         86 0.00437    55     33
+#> 2 state_norm   1             54 0.00513     0      1
+```
+
+## City
+
+``` r
+tn <- tn %>% 
+  mutate(
+    city_norm = normal_city(
+      city = city_sep,
+      geo_abbs = usps_city,
+      st_abbs = c("TN", "DC"),
+      na = invalid_city,
+      na_rep = TRUE
+    )
+  ) %>% 
   left_join(
     zipcodes, 
     by = c(
@@ -329,10 +492,10 @@ tn <- tn %>%
   ) %>% 
   rename(city_match = city) %>% 
   mutate(
-    match_dist = stringdist(city_norm, city_match),
+    match_dist = str_dist(city_norm, city_match),
     match_abb = is_abbrev(city_norm, city_match),
     city_swap = if_else(
-      condition = match_abb | match_dist < 3,
+      condition = match_abb | match_dist == 1,
       true = city_match,
       false = city_norm
     )
@@ -340,33 +503,28 @@ tn <- tn %>%
 ```
 
 ``` r
-n_distinct(tn$city_swap)
-#> [1] 1500
-prop_in(tn$city_swap, valid_city, na.rm = TRUE)
-#> [1] 0.9937496
-length(setdiff(tn$city_swap, valid_city))
-#> [1] 109
-```
-
-``` r
-prop_in(tn$city_swap, valid_city)
-#> [1] 0.9937496
-prop_na(tn$city_swap)
-#> [1] 0.01645158
-n_distinct(tn$city_swap)
-#> [1] 1500
-length(setdiff(tn$city_swap, valid_city))
-#> [1] 109
+progress_table(
+  tn$city_sep,
+  tn$city_norm,
+  tn$city_swap,
+  compare = valid_city
+)
+#> # A tibble: 3 x 6
+#>   stage     prop_in n_distinct prop_na n_out n_diff
+#>   <chr>       <dbl>      <dbl>   <dbl> <dbl>  <dbl>
+#> 1 city_sep    0.975       1853 0.00446  1711    469
+#> 2 city_norm   0.982       1815 0.00468  1260    419
+#> 3 city_swap   0.993       1519 0.0162    482    130
 ```
 
 ## Conclude
 
 1.  There are 68808 records in the database.
-2.  There are 1828 duplicate records in the database (`dupe_flag`).
+2.  There are 1634 duplicate records in the database (`dupe_flag`).
 3.  The range and distribution of `amount` is reasonable.
-4.  The range of `date` has been cleaned by removing 65 values in a new
+4.  The range of `date` has been cleaned by removing 72 values in a new
     `date_clean` variable.
-5.  There are 3866 records missing either `vendor_name` or `date`
+5.  There are 1521 records missing either `vendor_name` or `date`
     (`na_flag`).
 6.  Consistency in geographic data has been improved with
     `campfin::normal_*()`.
@@ -383,15 +541,24 @@ dir_create(proc_dir)
 ```
 
 ``` r
-tn %>% 
+tn %>%
   select(
     -year,
+    -date_fix,
+    -address_sep,
+    -zip_sep,
+    -state_sep,
+    -city_sep,
     -city_norm,
-    -city_swap,
     -city_match,
-    -city_swap,
     -match_dist,
     -match_abb
+  ) %>% 
+  rename(
+    address_clean = address_norm,
+    zip_clean = zip_norm,
+    state_clean = state_norm,
+    city_clean = city_swap,
   ) %>% 
   write_csv(
     path = glue("{proc_dir}/tn_expends_clean.csv"),
