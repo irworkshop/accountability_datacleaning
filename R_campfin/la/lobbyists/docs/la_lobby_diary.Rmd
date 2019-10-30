@@ -309,16 +309,14 @@ la_lobby  %>% glimpse_fun(count_na)
 ```{r write clean}
 clean_dir <- here("la", "lobbying", "data", "processed")
 dir_create(clean_dir)
-la_lobby %>% 
+la_lobby %>%
   rename(comp_city_clean = comp_city_swap,
-         lobbyist_city_norm = lobbyist_city_clean) %>% 
+         lobbyist_city_norm = lobbyist_city_clean) %>%
   select(-c(comp_city_norm,
             match_dist,
-            comp_city_match)) %>% 
-  write_csv(
-    path = glue("{clean_dir}/la_lobbyists_clean.csv"),
-    na = ""
-  )
+            comp_city_match)) %>%
+  write_csv(path = glue("{clean_dir}/la_lobbyists_clean.csv"),
+            na = "")
 ```
 
 
