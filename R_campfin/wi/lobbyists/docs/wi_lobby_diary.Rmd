@@ -1,5 +1,5 @@
 ---
-title: "Data Diary"
+title: "Wisconsin Lobbying Data Diary"
 subtitle: "Wisconsin Lobbying"
 author: "Yanqi Xu"
 date: "`r format(Sys.time())`"
@@ -16,7 +16,6 @@ editor_options:
   chunk_output_type: console
 ---
 
-
 ```{r setup, include=FALSE}
 library(knitr)
 opts_chunk$set(
@@ -32,15 +31,6 @@ options(width = 99)
 The Accountability Project is an effort to cut across data silos and give journalists, policy
 professionals, activists, and the public at large a simple way to search across huge volumes of
 public data about people and organizations.
-
-
-Our goal is to standardizing public data on a few key fields by thinking of each dataset row as a
-transaction. For each transaction there should be (at least) 3 variables:
-
-
-1. All **parties** to a transaction
-2. The **date** of the transaction
-3. The **amount** of money involved
 
 
 ## Objectives
@@ -66,8 +56,10 @@ these results. The `pacman` package will facilitate their installation and attac
 
 ```{r p_load, message=FALSE, dfrning=FALSE, error=FALSE}
 if (!require("pacman")) install.packages("pacman")
-pacman::p_load_gh("irworkshop/campfin")
+#pacman::p_load_gh("irworkshop/campfin")
+#uncooment the line above if you need to download IRW's package campfin from GitHub.
 pacman::p_load(
+  campfin, # wrangle campaign finance data
   stringdist, # levenshtein value
   tidyverse, # data manipulation
   lubridate, # datetime strings
@@ -98,6 +90,8 @@ repository.
 The `R_campfin` project uses the [RStudio projects][02] feature and should be run as such. The
 project also uses the dynamic `here::here()` tool for file paths relative to _your_ machine.
 
+[01]: https://github.com/irworkshop/accountability_datacleaning "TAP repo"
+[02]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects "Rproj"
 
 ```{r where_here, collapse=TRUE}
 # where dfs this document knit?
@@ -122,7 +116,10 @@ Does not include seeking a contract or grant, or quasi-judicial decisions.
 
 [03]: http://docs.legis.wisconsin.gov/statutes/statutes/13/III/62/10
 
-The [State of Wisconsin Ethics Commission][04] makes available directories of lobbyists, principals (otehrwise known as lobbying organizations, any person who employs a lobbyist) and state agency officials (legislative liaisons) that lobbying for their agency. The Accountability Project obtained the Wisconsin lobbying registration and authorization data from the Wisconsin Ethics Commission from 2013 to 2019 through an open records request. 
+The [State of Wisconsin Ethics Commission][04] makes available directories of lobbyists, principals (otehrwise known as lobbying organizations, any person who employs a lobbyist) and state agency officials (legislative liaisons) that lobbying for their agency. 
+
+Two sets of data were acquired, analyzed and processed: registration data and expenditure data. The Accountability Project obtained the Wisconsin lobbying registration and authorization data from the Wisconsin Ethics Commission from 2013 to 2019 through an open records request.The total expenditure data is avaialable for download at [State of Wisconsin Ethics Commission] [https://lobbying.wi.gov/Efforts/ReportSortedPrincipals/2019REG]. 
+
 >  WIS. STAT. § 13.65. speicifies: Before engaging in lobbying on behalf of a principal, a lobbyist or the organization who employs
 a lobbyist shall file with the commission a written authorization for the lobbyist to represent the
 principal, signed by or on behalf of the principal. A lobbyist or principal shall file a separate
@@ -131,13 +128,14 @@ authorization for each principal represented by a lobbyist.
 
 > If an individual’s duties are not exclusively limited to attempting to influence legislative or administrative action, the individual must be registered as a lobbyist and authorized to lobby on behalf of that principal prior to her or his fifth day of lobbying communication. For these individuals, lobbying communication is permitted on four separate days before being required to obtain a lobbyist license and authorization from a principal.
 
->An organization employing a lobbyist for compensation in Wisconsin must do four things:
+>An organization employing a lobbyist for compensation in Wisconsin must do four things:   
   1) license its lobbyist(s),  
   2) register the lobbying principal,   
   3) authorize its lobbyist(s), and  
   4) pay all applicable fees.
 
-Contract lobbyists authorization must be finished within a certain timeframe, according to [WIS. STAT. § 13.75(d).][https://ethics.wi.gov/Resources/UnauthorizedLobbyingReport_20180111.pdf#page=3]:
+Contract lobbyists authorization must be finished within a certain timeframe, according to [WIS. STAT. § 13.75(d).] [https://ethics.wi.gov/Resources/UnauthorizedLobbyingReport_20180111.pdf#page=3]:  
+
 > The written authorization requirement is satisfied through the Eye on Lobbying website
 (https://lobbying.wi.gov), as are all other registration and reporting requirements since the site’s
 launch in 2010. When a principal initially registers or subsequently amends their registration to
@@ -155,15 +153,16 @@ communication on November 15, one hour on November 16 and one phone call lasting
 on November 17. This would count as three instances of communication in terms of the four instance threshold. Wisconsin law also requires the payment of a $125 fee for each authorization.
 
 
-In an email communication, a staff member of with the commission wrote:
+In an email communication, a staff member of with the commission wrote:  
+
 >The WithdrawnDate column exists if the lobbyists authorization was ever removed. A “null” entry here means that the authorization was active from the AuthorizedDate until the end of the session (December 31 of the even numbered year). The Employer column the name of the organization that employs the lobbyist. In some cases, this is the same as the principal. However, when a lobbyist is employed by a lobbying firm then the name of the lobbying firm will be listed here.
 
->The WithdrawnDate column exists if the lobbyists authorization was ever removed. A “null” entry here means that the authorization was active from the AuthorizedDate until the end of the session (December 31 of the even numbered year). This dataset shows all lobbyist authorizations for the 2013, 2015, 2017 sessions, and the 2019 session as of today’s date (Oct 24, 2019). 
+>The WithdrawnDate column exists if the lobbyists authorization was ever removed. A “null” entry here means that the authorization was active from the AuthorizedDate until the end of the session (December 31 of the even numbered year). This dataset shows all lobbyist authorizations for the 2013, 2015, 2017 sessions, and the 2019 session as of today’s date (Oct 28, 2019). 
 
 Set the download directory first.
 ```{r raw_dir}
 # create a directory for the raw data
-reg_dir <- here("wi", "lobbyists", "data", "raw", "reg")
+reg_dir <- here("wi", "lobbyists", "data", "raw", "registration")
 expends_dir <- here("wi", "lobbyists", "data", "raw", "expends")
 
 dir_create(c(reg_dir, expends_dir))
@@ -175,6 +174,7 @@ dir_create(c(reg_dir, expends_dir))
 ## Download
 ```{r download expends}
 wi_lobby_expends_url <- glue("https://lobbying.wi.gov/Reports/Report.aspx?ReportPath=/Ethics/Lobbying/Public&ReportName=TotalLobbyingExpenditures&SessionID={(2013:2020)[c(TRUE,FALSE)]}REG&SortField=PrincipalName&OutputFormat=Excel")
+
   if (!all_files_new(expends_dir)) {
     download.file(
       #this step execute strings as vairables.
@@ -186,7 +186,7 @@ wi_lobby_expends_url <- glue("https://lobbying.wi.gov/Reports/Report.aspx?Report
 
 ## Reading
 The data obtained by the Investigative Reporting Workshop is an Excel spreasheet. The worksheet 1 contains all the records from 213 to 2019.
-```{r read excel}
+```{r read reg excel}
 wi_lobby <- read_xlsx(glue("{reg_dir}/wi_lobbyists.xlsx"), sheet = 1, col_types = "text") %>% 
   clean_names() %>% 
   mutate_if(is_character, str_to_upper) %>% 
@@ -197,65 +197,54 @@ wi_lobby <-  wi_lobby %>% mutate_at(.vars = vars(ends_with('date')),
                                     as.numeric) %>% 
                           mutate_at(.vars = vars(ends_with('date')),
                                     excel_numeric_to_date,date_system = "modern")
+```
+
+```{r read expends excel}
+read_wi_expends <-function(wi_exp_file_path){
+  wi_lobby_expends_year <- read_excel(wi_exp_file_path, skip = 6) %>% 
+    rename(index = ...1) %>% 
+    rename(type = ...2) %>%
+    # Get rid of the total rows for each session.
+    head({nrow(.)-2}) %>% 
+    # Reshape columns, add a new column based on the principal
+    add_column(principal = "placeholder",.after = 1) %>% 
+    mutate(principal = if_else(condition = rowSums(!is.na(.)) == 3, 
+                               true = type,
+                               false = NA_character_))  %>% 
+    #fill down to cover the dollars row and hours row
+    fill(principal, .direction = "down") %>% 
+    # Get rid of the rows with index and principal information
+    filter(rowSums(!is.na(.)) != 3) %>% 
+    select(-index) %>% 
+    mutate(type = str_remove(type, ":")) %>% 
+    pivot_longer(-c(principal,type), names_to = "session_period", values_to = "lobby") %>% 
+    mutate_if(is.character, str_to_upper) %>% 
+    mutate(session_period = str_replace(session_period, "SESSION-TO-DATE", str_c("SESSION-TO-DATE ",str_extract(wi_exp_file_path, '201.'))))
+  # In order to have two separate columns for hours and dollars, we separate them into two individual dataframes with the exact same princpal and session_period, and join them.
+  wi_lobby_expends_year <- wi_lobby_expends_year %>% 
+    filter(type == "HOURS") %>% 
+    select(-type) %>% 
+    rename(hours = lobby) %>% 
+    left_join(wi_lobby_expends_year %>% filter(type == "DOLLARS") %>% select(-type) %>% rename(dollars = lobby), by = c("principal", "session_period"))
+  
+  return(wi_lobby_expends_year)
+}
 
 wi_lobby_expends <- list.files(expends_dir, pattern = ".xls", full.names = TRUE) %>% 
-  map_dfr(read_xls, skip = 6, .name_repair = make_clean_names)
-
-wi_lobby_expends_2013 <- read_excel("~/accountability/accountability_datacleaning/R_campfin/wi/lobbyists/data/raw/expends/wi_lobby_expends_2013.xls",
-    skip = 6) %>% rename(index = ...1) %>% rename(type = ...2)
-wi_lobby_expends_2013 <-  wi_lobby_expends_2013 %>% 
-  head({nrow(.)-2}) %>% 
-  add_column(principal = "placeholder",.after = 1) %>% 
-  mutate(principal = if_else(condition = rowSums(!is.na(.)) == 3, 
-                             true = type,
-                             false = NA_character_))  %>% 
-  fill(principal, .direction = "down") %>% 
-  filter(rowSums(!is.na(.)) != 3) %>% 
-  select(-index) %>% 
-  # rowid_to_column(., var = "rowid") %>% 
-  # mutate(rowid = as.character(rowid))  %>% 
-  mutate(type = str_remove(type, ":")) %>% 
-  #pivot_wider(names_from = type, values_from = lobby) %>% 
-  pivot_longer(-c(principal,type), names_to = "session_period", values_to = "lobby") %>% 
-  pivot_wider(id_cols = c(principal, session_period), names_from = type, values_from = lobby)
-  
-  wi_lobby_expends_2013 %>% 
-  
-
-
-  filter(rowSums(!is.na(.))>=3) %>% 
-        # cols(.default = col_character(),
-        #                licensed_date = col_date(format = "%m/%d/%Y"),
-        #                surrendered_date = col_date(format = "%m/%d/%Y")
-    mutate(surrendered_date = excel_numeric_to_date(surrendered_date,date_system = "modern"),
-           licensed_date = as.Date(licensed_date, format = "%m/%d/%Y")) %>% 
-    mutate_if(is_character, str_to_upper)
-
+  map_dfr(read_wi_expends)
+```
+Since we reshaped the data quite a bit, let's take a random sample of the data and compare it against the original data to see if everything matches up.
+```{r sample}
+sample_n(wi_lobby_expends,10)
 ```
 
-## Duplicates
-
-We'll use the `flag_dupes()` function to see if there are records identical to one another and flag the duplicates. A new variable `dupe_flag` will be created.
-
-```{r flag dupe}
-wi_lobby <- flag_dupes(wi_lobby, dplyr::everything())
-#Since no duplicate was present, we'll delete this column
-wi_lobby <- wi_lobby %>% select(-dupe_flag)
-```
-
-## Missing
-
-```{r count_na}
-wi_lobby %>% glimpse_fun(count_na)
-```
-Few values are missing from the database.
 
 ## Explore
 We'll take a quick look at how many days are in between a lobbyist's authorization date for a principal and their registration date. 
 Positive days show the number of days authorization happens after the registration date, and negative numbers show the number of days authorization happens before the registration date.
 
-There are fewer lobbyists authorized to lobby while unregistered.
-```{r}
+There are fewer lobbyists authorized to lobby with their licenses pending approval.
+```{r plot gaps, warning=FALSE, message=FALSE}
 brewer_dark2 <- RColorBrewer::brewer.pal(n = 8, name = "Dark2")
 wi_lobby %>% 
   mutate(date_diff = as.numeric(authorized_date - licensed_date)) %>% 
@@ -274,6 +263,46 @@ wi_lobby_auth <- wi_lobby %>%
   filter(date_diff < 0 & principal != organization) 
 ```
 
+```{r plot expends, warning=FALSE, message=FALSE}
+wi_lobby_expends %>% 
+  mutate(dollars = str_remove(dollars, "[$]") %>% str_remove(",") %>% as.numeric()) %>% 
+  mutate(hours = str_remove(hours, ",") %>% as.numeric(hours)) %>% 
+  filter(str_detect(session_period, "SESSION-TO-DATE 201.")) %>% 
+  group_by(session_period) %>% 
+  top_n(3) %>% 
+  ggplot(aes(x=session_period, y = dollars, fill = principal)) +
+  geom_col(position = "dodge") +
+  coord_flip() +
+  scale_fill_brewer("Principals") +
+  scale_x_discrete(labels = wrap_format(10)) +
+  scale_y_continuous(labels = dollar) +
+  labs(
+    title = "Wisconsin's Highest Spending Lobbying Principals, 2013 - 2019",
+    caption = "Source: The Wisconsin Ethics Commission",
+    x = "Legislative Session",
+    y = "Dollars"
+  )
+```
+
+## Duplicates
+
+We'll use the `flag_dupes()` function to see if there are records identical to one another and flag the duplicates. A new variable `dupe_flag` will be created.
+
+```{r flag dupe}
+wi_lobby <- flag_dupes(wi_lobby, dplyr::everything())
+#Since no duplicate was present, we'll delete this column
+wi_lobby <- wi_lobby %>% select(-dupe_flag)
+
+wi_lobby_expends <- flag_dupes(wi_lobby_expends, dplyr::everything())
+```
+
+## Missing
+
+```{r count_na}
+wi_lobby %>% glimpse_fun(count_na)
+wi_lobby_expends %>% glimpse_fun(count_na)
+```
+Few values are missing from the database.
 
 ## Wrangle
 ### Phone
@@ -284,7 +313,7 @@ wi_lobby <- wi_lobby %>%
 ```
 
 ### Address
-```{r normal address, echo=FALSE}
+```{r normal address, echo=FALSE, collapse=TRUE}
 wi_lobby <- wi_lobby %>% 
   mutate_at(.vars = vars(ends_with('address')),
             .funs = list(norm = ~ normal_address(address = .,
@@ -294,9 +323,9 @@ wi_lobby <- wi_lobby %>%
 
 ### ZIP 
 Running the following commands tells us the zipcode fields are mostly clean.
-```{r client normal zip}
+```{r client normal zip, collapse=TRUE}
 wi_lobby %>% select(ends_with('zip')) %>% 
-  map_dbl(prop_in, valid_zip, na.rm = TRUE) %>% map_chr(percent)
+  map_dbl(prop_in, valid_zip, na.rm = TRUE) %>% map_chr(percent) %>% glimpse()
 
 wi_lobby <- wi_lobby %>% 
   mutate_at(.vars = vars(ends_with('zip')), .funs = list(norm = ~ normal_zip(.)))
@@ -307,18 +336,18 @@ wi_lobby %>% select(contains('zip')) %>%
 
 ### State
 Running the following commands tells us the state fields are mostl clean.
-```{r clients clean state}
+```{r clients clean state, collapse=TRUE}
 wi_lobby %>% select(ends_with('state')) %>% 
-  map_dbl(prop_in, valid_state, na.rm = TRUE) %>% map_chr(percent)
+  map_dbl(prop_in, valid_state, na.rm = TRUE) %>% map_chr(percent) %>% glimpse()
 
 wi_lobby <- wi_lobby %>% mutate(principal_mailing_state = normal_state(principal_mailing_state))
 
 ```
 ### City
 The city field needs some work. We'll use the three-step cleaning method.
-```{r}
+```{r, collapse=TRUE}
 wi_lobby %>% select(ends_with('city')) %>% 
-  map_dbl(prop_in, valid_city, na.rm = TRUE) %>% map_chr(percent)
+  map_dbl(prop_in, valid_city, na.rm = TRUE) %>% map_chr(percent) %>% glimpse()
 
 valid_place <- c(valid_city,extra_city)
 ```
@@ -337,46 +366,50 @@ wi_lobby %>% select(contains('city')) %>%
 ```
 
 #### Check
+The `campfin` package uses the `check_city` function to check for misspelled cities by matching the returned results of the misspelled cities from the Google Maps Geocoding API. The function also pulls the clean city and place names in the `lobbyist_city_fetch` column for us to inspect and approve. 
 
-```{r check_city, eval=FALSE}
+```{r lobbyist check_city}
+api_key <- Sys.getenv("GEOCODING_API")
+
 wi_lobbyist_out <- wi_lobby %>% 
-  filter(lobbyist_city_norm %out% valid_places) %>% 
+  filter(lobbyist_city_norm %out% valid_place) %>% 
   drop_na(lobbyist_city_norm,lobbyist_state) %>% 
   count(lobbyist_city_norm, lobbyist_state) 
 
 wi_lobbyist_out <- wi_lobbyist_out %>% cbind(
   pmap_dfr(.l = list(wi_lobbyist_out$lobbyist_city_norm, wi_lobbyist_out$lobbyist_state), .f = check_city, key = api_key, guess = T))
 
-valid_place_lb <-  c(wi_lobbyist_out$lobbyist_city_norm[wi_lobbyist_out$city_validity], valid_place)
+valid_place_lb <-  c(wi_lobbyist_out$lobbyist_city_norm[wi_lobbyist_out$check_city_flag], valid_place) %>% unique()
 ```
 
 
-```{r join city_fetch}
+```{r lobbyist join city_fetch}
 wi_lobbyist_out <- wi_lobbyist_out %>% mutate(lobbyist_city_fetch = coalesce(guess_city, guess_place))
 
 wi_lobby <- wi_lobbyist_out %>% 
-  filter(!city_validity) %>% 
+  filter(!check_city_flag) %>% 
   select(lobbyist_city_norm, lobbyist_state, lobbyist_city_fetch) %>% 
-  right_join(wi_lobby, by = c("principal_mailing_city_norm","principal_mailing_state")) 
+  right_join(wi_lobby, by = c("lobbyist_city_norm","lobbyist_state")) 
 
-wi_lobby <- wi_lobby %>% mutate(principal_mailing_city_clean = coalesce(principal_mailing_city_fetch, principal_mailing_city_norm))
+wi_lobby <- wi_lobby %>% mutate(lobbyist_city_clean = coalesce(lobbyist_city_fetch, lobbyist_city_norm))
 
-wi_lobby %>% select(contains('lobbyist_city')) %>% 
-  map_dbl(prop_in, valid_places, na.rm = TRUE) %>%  map_chr(percent)
+prop_in(wi_lobby$lobbyist_city, valid_place)
+prop_in(wi_lobby$lobbyist_norm, valid_place)
+prop_in(wi_lobby$lobbyist_clean, valid_place_lb)
 ```
 
 We then proceed to process using Google Maps Geocoding API to match cities.
 
 ```{r principal check_city}
-wi_principals_out <- wi_lobby %>% 
-  filter(principal_mailing_city_norm %out% valid_places) %>% 
+wi_principal_out <- wi_lobby %>% 
+  filter(principal_mailing_city_norm %out% valid_place) %>% 
   drop_na(principal_mailing_city_norm,principal_mailing_state) %>% 
   count(principal_mailing_city_norm, principal_mailing_state)
 
-wi_principals_out <- wi_principals_out %>% cbind(
-  pmap_dfr(.l = list(wi_principals_out$principal_mailing_city_norm, wi_principals_out$principal_mailing_city_norm), .f = check_city, key = api_key, guess = T))
+wi_principal_out <- wi_principal_out %>% cbind(
+  pmap_dfr(.l = list(wi_principal_out$principal_mailing_city_norm, wi_principal_out$principal_mailing_city_norm), .f = check_city, key = api_key, guess = T))
 
-valid_place_post <-  c(wi_principals_out$principal_mailing_city_norm[wi_principals_out$city_validity], valid_place_b)
+valid_place_post <-  c(wi_principal_out$principal_mailing_city_norm[wi_principal_out$check_city_flag], valid_place_lb) %>% unique()
 ```
 
 After manually inspecting the `wi_principal_out` table, we can make a confident switch.
@@ -385,38 +418,102 @@ After manually inspecting the `wi_principal_out` table, we can make a confident 
 wi_principal_out <- wi_principal_out %>% mutate(principal_mailing_city_fetch = coalesce(guess_city, guess_place))
 
 wi_lobby <- wi_principal_out %>% 
-  filter(!city_validity) %>% 
-  select(principal_mailing_city_norm, principal_mailing_state,principal_city_fetch) %>% 
+  filter(!check_city_flag) %>% 
+  select(principal_mailing_city_norm, principal_mailing_state,principal_mailing_city_fetch) %>% 
   right_join(wi_lobby, by = c("principal_mailing_city_norm","principal_mailing_state")) 
 
 wi_lobby <- wi_lobby %>% mutate(principal_mailing_city_clean = coalesce(principal_mailing_city_fetch, principal_mailing_city_norm))
 
-wi_lobby %>% select(contains('principal_mailing_city')) %>% 
-  map_dbl(prop_in, valid_place, na.rm = TRUE) %>%  map_chr(percent)
+prop_in(wi_lobby$principal_mailing_city, valid_place)
+prop_in(wi_lobby$principal_mailing_norm, valid_place)
+prop_in(wi_lobby$principal_mailing_clean, valid_place_post)
 ```
 
-This is a very fast way to increase the valid proportion to
-`r percent(prop_in(wi_lobby$city_swap, valid_place_new, na.rm = TRUE))` and reduce the number of distinct
-_invalid_ values from `r length(setdiff(wi_lobby$city_norm, valid_city))` to only
-`r length(setdiff(wi_lobby$city_swap, valid_place_post))`
+This is a very fast way to increase the valid lobbyist proportion to
+`r percent(prop_in(wi_lobby$lobbyist_city_clean, valid_place_lb, na.rm = TRUE))` and reduce the number of distinct
+_invalid_ values from `r length(setdiff(wi_lobby$lobbyist_city, valid_city))` to only
+`r length(setdiff(wi_lobby$lobbyist_city_clean, valid_place_lb))`.
+On the other hand, we increaesed the valid principal proportion to
+`r percent(prop_in(wi_lobby$principal_mailing_city_clean, valid_place_lb, na.rm = TRUE))` and reduce the number of distinct _invalid_ values from `r length(setdiff(wi_lobby$principal_mailing_city, valid_city))` to only
+`r length(setdiff(wi_lobby$principal_mailing_city_clean, valid_place_post))`.
+
+```{r progress table, echo = FALSE}
+progress_table <- tibble(
+  type = c(rep("Lobbyists",3), rep("Principals",3)),
+  stage = rep(c("raw","norm","clean"),2),
+  prop_good = c(
+    prop_in(str_to_upper(wi_lobby$lobbyist_city), valid_place, na.rm = TRUE) %>% percent(),
+    prop_in(wi_lobby$lobbyist_city_norm, valid_place, na.rm = TRUE) %>% percent(),
+    prop_in(wi_lobby$lobbyist_city_clean, valid_place_lb, na.rm = TRUE) %>% percent(),
+    prop_in(str_to_upper(wi_lobby$principal_mailing_city), valid_place, na.rm = TRUE) %>% percent(),
+    prop_in(wi_lobby$principal_mailing_city_norm, valid_place, na.rm = TRUE) %>% percent(),
+    prop_in(wi_lobby$principal_mailing_city_clean, valid_place_post, na.rm = TRUE) %>% percent()
+  ),
+  total_distinct = c(
+    n_distinct(str_to_upper(wi_lobby$lobbyist_city)),
+    n_distinct(wi_lobby$lobbyist_city_norm),
+    n_distinct(wi_lobby$lobbyist_city_clean),
+      n_distinct(str_to_upper(wi_lobby$principal_mailing_city)),
+    n_distinct(wi_lobby$principal_mailing_city_norm),
+    n_distinct(wi_lobby$principal_mailing_city_clean)
+  ),
+  unique_bad = c(
+    length(setdiff(str_to_upper(wi_lobby$lobbyist_city), valid_place)),
+    length(setdiff(wi_lobby$lobbyist_city_norm, valid_place)),
+    length(setdiff(wi_lobby$lobbyist_city_clean, valid_place_post)),
+    length(setdiff(str_to_upper(wi_lobby$principal_mailing_city), valid_place)),
+    length(setdiff(wi_lobby$principal_mailing_city_norm, valid_place)),
+    length(setdiff(wi_lobby$principal_mailing_city_clean, valid_place_post))
+  )
+)
+
+```
+
+```{r print_progress, echo=FALSE}
+kable(
+  x = progress_table,
+  format = "markdown", 
+  digits = 4,
+  col.names = c("Data Type", "Normalization Stage", "Percent Valid", "Total Distinct", "Unique Invalid")
+) %>% 
+  kableExtra::collapse_rows(columns = 1, valign = "top")
+```
 
 ## Export
 
-```{r writeean}
-clean_dir <- here("wi", "lobbying", "data", "processed", "reg")
-dir_create(clean_dir)
-wi_lobbyists %>% 
+```{r write clean}
+clean_reg_dir <- here("wi", "lobbying", "data", "processed", "registration")
+clean_exp_dir <- here("wi", "lobbying", "data", "processed", "expends")
+
+dir_create(c(clean_reg_dir, clean_exp_dir))
+
+wi_lobby %>% 
   select(-c(lobbyist_city_norm,
             lobbyist_city_fetch,
             principal_mailing_city_norm,
             principal_mailing_city_fetch)) %>% 
   write_csv(
-    path = glue("{clean_dir}/wi_lobbyists_reg.csv"),
+    path = glue("{clean_reg_dir}/wi_lobbyists_reg.csv"),
+    na = ""
+  )
+
+wi_lobby_expends %>% 
+  write_csv(
+    path = glue("{clean_exp_dir}/wi_lobbyists_exp.csv"),
     na = ""
   )
 ```
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+```{r write guess_city table, echo=FALSE}
+wi_lobbyist_out %>% 
+  write_csv(
+    path = glue("{clean_reg_dir}/wi_lobbyist_out.csv"),
+    na = ""
+  )
+wi_principal_out %>% 
+  write_csv(
+    path = glue("{clean_reg_dir}/wi_principal_out.csv"),
+    na = ""
+  )
 ```
 
