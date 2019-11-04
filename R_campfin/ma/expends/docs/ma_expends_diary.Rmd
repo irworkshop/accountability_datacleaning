@@ -745,7 +745,7 @@ prop_in(ma$city_refine, valid_city, na.rm = TRUE)
 length(setdiff(ma$city_refine, valid_city))
 ```
 
-#### Progress
+#### Manual
 
 We can make very few manual changes to capture the last few big invalid values. Local city
 abbreviations (BOS, DORC, WORD, CAMB) often need to be changed by hand.
@@ -761,7 +761,7 @@ ma %>%
 ```{r city_final}
 ma <- ma %>% 
   mutate(
-    city_final = city_refine %>% 
+    city_manual = city_refine %>% 
       str_replace("\bBOS\b", "BOSTON") %>% 
       str_replace("^DORC$", "DORCHESTER") %>% 
       str_replace("^WORC$", "WORCHESTER") %>% 
@@ -776,58 +776,6 @@ ma <- ma %>%
   )
 ```
 
-By making less than a dozen manual string replacements, we bring our final valid percentage to 
-`r percent(prop_in(ma$city_final, valid_city, na.rm = TRUE))`, above our 99% goal. There are still
-`r length(setdiff(ma$city_final, valid_city))` different _invalid_ values that could be checked, but
-they make up less than 1% of records. Many of these values are actually valid and simply not in our
-list (which doesn't contain very small towns and census desginated places).
-
-```{r progress_table, echo=FALSE}
-progress_table <- tibble(
-  stage = c("raw", "norm", "swap", "refine", "final"),
-  total_distinct = c(
-    n_distinct(ma$city_raw),
-    n_distinct(ma$city_norm),
-    n_distinct(ma$city_swap),
-    n_distinct(ma$city_refine),
-    n_distinct(ma$city_final)
-  ),
-  prop_good = c(
-    prop_in(ma$city_raw, valid_city, na.rm = TRUE),
-    prop_in(ma$city_norm, valid_city, na.rm = TRUE),
-    prop_in(ma$city_swap, valid_city, na.rm = TRUE),
-    prop_in(ma$city_refine, valid_city, na.rm = TRUE),
-    prop_in(ma$city_final, valid_city, na.rm = TRUE)
-  ),
-  unique_bad = c(
-    length(setdiff(ma$city_raw, valid_city)),
-    length(setdiff(ma$city_norm, valid_city)),
-    length(setdiff(ma$city_swap, valid_city)),
-    length(setdiff(ma$city_refine, valid_city)),
-    length(setdiff(ma$city_final, valid_city))
-  )
-)
-
-diff_change <- progress_table$unique_bad[5]-progress_table$unique_bad[1]
-prop_change <- diff_change/progress_table$unique_bad[1]
-```
-
-Still, our progress is significant without having to make a single manual or unconfident change.
-The percent of valid cities increased from `r percent(progress_table$prop_good[1])` to 
-`r percent(progress_table$prop_good[5])`. The number of total distinct city values decreased from
-`r comma(progress_table$total_distinct[1])` to `r comma(progress_table$total_distinct[5])`. The
-number of distinct invalid city names decreased from `r comma(progress_table$unique_bad[1])` to
-only `r comma(progress_table$unique_bad[5])`, a change of `r percent(prop_change)`.
-
-```{r print_progress, echo=FALSE}
-kable(
-  x = progress_table,
-  format = "markdown", 
-  digits = 4,
-  col.names = c("Normalization Stage", "Total Distinct", "Percent Valid", "Unique Invalid")
-)
-```
-
 ## Conclude
 
 1. There are `r nrow(ma)` records in the database.
@@ -837,6 +785,84 @@ kable(
 1. Consistency in geographic data has been improved with `campfin::normal_*()`.
 1. The 5-digit `zip_norm` variable has been created with `campfin::normal_zip(ma$zip)`.
 1. The 4-digit `year` variable has been created with `lubridate::year(ma$date)`.
+
+## Lookup
+
+```{r lookup}
+lookup_file <- here("ma", "expends", "data", "ma_city_lookup.csv")
+if (file.exists(lookup_file)) {
+  lookup <- read_csv(lookup_file) %>% select(1:2)
+  ma <- left_join(ma, lookup, by = c("city_manual" = "city_final"))
+  progress_table(
+    ma$city_raw,
+    ma$city_norm,
+    ma$city_swap,
+    ma$city_manual,
+    ma$city_clean,
+    compare = valid_city
+  )
+}
+```
+
+```{r}
+progress <- progress_table(
+  ma$city_raw,
+  ma$city_norm,
+  ma$city_swap,
+  ma$city_manual,
+  ma$city_clean,
+  compare = valid_city
+) %>% mutate(stage = as_factor(stage))
+```
+
+```{r progress_print, echo=FALSE}
+kable(progress, digits = 3)
+```
+
+You can see how the percentage of valid values increased with each stage.
+
+```{r progress_bar, echo=FALSE}
+progress %>% 
+  ggplot(aes(x = stage, y = prop_in)) +
+  geom_hline(yintercept = 0.99) +
+  geom_col(fill = RColorBrewer::brewer.pal(3, "Dark2")[3]) +
+  coord_cartesian(ylim = c(0.75, 1)) +
+  scale_y_continuous(labels = percent) +
+  labs(
+    title = "Massachusetts City Normalization Progress",
+    x = "Stage",
+    y = "Percent Valid"
+  )
+```
+
+More importantly, the number of distinct values decreased each stage. We were
+able to confidently change many distinct invalid values to their valid
+equivilent.
+
+```{r distinct_bar}
+progress %>% 
+  select(
+    stage, 
+    all = n_distinct,
+    bad = n_diff
+  ) %>% 
+  mutate(good = all - bad) %>% 
+  pivot_longer(c("good", "bad")) %>% 
+  mutate(name = name == "good") %>% 
+  ggplot(aes(x = stage, y = value)) +
+  geom_col(aes(fill = name)) +
+  scale_fill_brewer(palette = "Dark2") +
+  scale_y_continuous(labels = comma) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "Massachusetts City Normalization Progress",
+    subtitle = "Distinct values, valid and invalid",
+    x = "Stage",
+    y = "Percent Valid",
+    fill = "Valid"
+  )
+  
+```
 
 ## Export
 

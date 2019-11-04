@@ -1,7 +1,7 @@
 Massachusetts Expenditures
 ================
 Kiernan Nicholls
-2019-10-28 16:13:14
+2019-11-04 13:24:58
 
 <!-- Need to install mdbtools -->
 
@@ -151,14 +151,14 @@ reports.
 
 ``` r
 zip_url <- "http://ocpf2.blob.core.windows.net/downloads/data/campaign-finance-reports.zip"
-zip_path <- glue("{raw_dir}/{basename(zip_url)}")
+zip_path <- url2path(zip_url, raw_dir)
 ```
 
 First, check the file size before downloading.
 
 ``` r
 url_file_size(zip_url, format = TRUE)
-#> [1] "387 Mb"
+#> [1] "389 Mb"
 ```
 
 Then download the file to the `/data/raw` directory and unzip.
@@ -291,12 +291,12 @@ tail(ma)
     #> # A tibble: 6 x 27
     #>   id    report_id line_sequence date       vendor address city  state zip   amount purpose
     #>   <chr> <chr>     <chr>         <date>     <chr>  <chr>   <chr> <chr> <chr>  <dbl> <chr>  
-    #> 1 1345… 716512    13453480      2019-03-01 SANTA… 655 PA… WORC… MA    01603   7.5  MONTHL…
-    #> 2 1345… 716513    13453484      2019-10-25 PAYPAL <NA>    <NA>  <NA>  <NA>    1.03 PROCES…
-    #> 3 1345… 716513    13453485      2019-10-25 PAYPAL <NA>    <NA>  <NA>  <NA>    1.75 PROCES…
-    #> 4 1345… 716520    13453496      2019-10-01 STRIPE <NA>    <NA>  <NA>  <NA>    2.75 PROCES…
-    #> 5 1345… 716521    13453499      2019-10-22 WIX    <NA>    <NA>  <NA>  <NA>    6.4  PROCES…
-    #> 6 1345… 716523    13453511      2019-10-01 EVENT… <NA>    <NA>  <NA>  <NA>   45.5  PROCES…
+    #> 1 1347… 717473    13471512      2019-10-17 STRIPE <NA>    <NA>  <NA>  <NA>    3.98 PROCES…
+    #> 2 1347… 717474    13471514      2019-10-18 STRIPE <NA>    <NA>  <NA>  <NA>    2.75 PROCES…
+    #> 3 1347… 717475    13471516      2019-10-23 STRIPE <NA>    <NA>  <NA>  <NA>    1.53 PROCES…
+    #> 4 1347… 717476    13471518      2019-10-30 STRIPE <NA>    <NA>  <NA>  <NA>    1.53 PROCES…
+    #> 5 1347… 717479    13471596      2019-10-31 ACT B… <NA>    <NA>  <NA>  <NA>  212.   PROCES…
+    #> 6 1347… 717481    13471603      2019-09-30 STRIPE <NA>    <NA>  <NA>  <NA>   38.3  PROCES…
     #> # … with 16 more variables: check_number <chr>, candidate_clarification <chr>,
     #> #   recipient_cpf_id <chr>, clarified_name <chr>, clarified_purpose <chr>, guid <chr>,
     #> #   cpf_id <chr>, report_type <chr>, cand_name <chr>, office <chr>, district <chr>,
@@ -306,35 +306,35 @@ tail(ma)
 glimpse(sample_frac(ma))
 ```
 
-    #> Observations: 1,150,687
+    #> Observations: 1,154,088
     #> Variables: 27
-    #> $ id                      <chr> "9358834", "10315890", "10146386", "9447264", "12863329", "10982…
-    #> $ report_id               <chr> "23914", "203658", "163309", "40316", "675450", "84483", "679955…
-    #> $ line_sequence           <chr> "9358834", "10315890", "10146386", "9447264", "12863329", "10982…
-    #> $ date                    <date> 2004-12-28, 2014-05-09, 2011-12-01, 2004-09-07, 2018-10-19, 200…
+    #> $ id                      <chr> "9358834", "10315890", "10146341", "9447348", "12862329", "10982…
+    #> $ report_id               <chr> "23914", "203658", "163287", "40321", "675428", "84483", "679972…
+    #> $ line_sequence           <chr> "9358834", "10315890", "10146341", "9447348", "12862329", "10982…
+    #> $ date                    <date> 2004-12-28, 2014-05-09, 2012-12-07, 2006-01-03, 2018-03-05, 200…
     #> $ vendor                  <chr> "WELLINGTON NEWS SERVICE", "COMMITTEE TO ELECT JOSEPH PACHECO", …
-    #> $ address                 <chr> "P.O. BOX 15727", "775 ORCHARD STREET", "56 CREIGHTON ST.", "235…
-    #> $ city                    <chr> "BOSTON", "RAYNHAM", "CAMBRIDGE", "BROCKTON", "ATTLEBORO", "WILM…
-    #> $ state                   <chr> "MA", "MA", "MA", "MA", "MA", "DE", NA, NA, NA, "MA", "MA", "MA"…
-    #> $ zip                     <chr> "02115", "02767", "02140", "02301", "02703", "19886", NA, NA, NA…
-    #> $ amount                  <dbl> 84.09, 500.00, 7025.66, 100.00, 57.43, 724.53, 35.15, 100.00, 95…
-    #> $ purpose                 <chr> "SUBSCRIPTION", "CONTRIBUTION FOR 2014 GENERAL", "MAILING/PRINTI…
-    #> $ check_number            <chr> NA, NA, NA, NA, NA, NA, "N/A", "3818", "0", "159", NA, "2251", N…
+    #> $ address                 <chr> "P.O. BOX 15727", "775 ORCHARD STREET", "1101 15TH ST, NW SUITE …
+    #> $ city                    <chr> "BOSTON", "RAYNHAM", "WASHINGTON", "WATERTOWN", "RAYNHAM", "WILM…
+    #> $ state                   <chr> "MA", "MA", "DC", "MA", "MA", "DE", "FL", NA, NA, "MA", "MA", "M…
+    #> $ zip                     <chr> "02115", "02767", "20005", NA, "02767", "19886", "32258", NA, NA…
+    #> $ amount                  <dbl> 84.09, 500.00, 100.00, 250.00, 15.93, 724.53, 40791.42, 100.00, …
+    #> $ purpose                 <chr> "SUBSCRIPTION", "CONTRIBUTION FOR 2014 GENERAL", "WEBHOSTING", "…
+    #> $ check_number            <chr> NA, NA, "1675", "2965", NA, NA, "1788", "3818", "0", NA, "1352",…
     #> $ candidate_clarification <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
-    #> $ recipient_cpf_id        <chr> NA, "0", "0", NA, NA, "0", NA, NA, NA, "76315", NA, NA, "0", "0"…
+    #> $ recipient_cpf_id        <chr> NA, "0", NA, NA, NA, "0", NA, NA, NA, "0", NA, NA, "0", "0", "0"…
     #> $ clarified_name          <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
     #> $ clarified_purpose       <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
     #> $ guid                    <chr> "{96B8D07F-8EB1-44D8-44A6-2637EB03DD66}", "{F3B8515F-F8A7-4E47-4…
-    #> $ cpf_id                  <chr> "13802", "80527", "15396", "10633", "16242", "10130", "15710", "…
-    #> $ report_type             <chr> "YEAR-END REPORT (ND)", "PRE-PRIMARY REPORT (PAC)", "PRE-ELECTIO…
+    #> $ cpf_id                  <chr> "13802", "80527", "13783", "10328", "16927", "10130", "11035", "…
+    #> $ report_type             <chr> "YEAR-END REPORT (ND)", "PRE-PRIMARY REPORT (PAC)", "BANK REPORT…
     #> $ cand_name               <chr> "STEVEN A. BADDOUR", "BROTHERHOOD OF LOCOMOTIVE ENG LEGISLATIVE …
-    #> $ office                  <chr> "SENATE", NA, "SENATE", "SENATE", "HOUSE", "HOUSE", "STATEWIDE",…
-    #> $ district                <chr> "1ST ESSEX", NA, "2ND SUFFOLK & MIDDLESEX", "2ND PLYMOUTH & BRIS…
+    #> $ office                  <chr> "SENATE", NA, "MUNICIPAL", "CITY WIDE", "HOUSE", "HOUSE", NA, "S…
+    #> $ district                <chr> "1ST ESSEX", NA, "CAMBRIDGE", "BOSTON", "12TH BRISTOL", "3RD SUF…
     #> $ comm_name               <chr> "COMMITTEE TO ELECT STEVEN A. BADDOUR", "BROTHERHOOD OF LOCOMOTI…
-    #> $ comm_city               <chr> "METHUEN", "CLEVELAND", "WATERTOWN", "BROCKTON", "ATTLEBORO", "B…
-    #> $ comm_state              <chr> "MA", "OH", "MA", "MA", "MA", "MA", "MA", "MA", NA, "MA", "MA", …
-    #> $ comm_zip                <chr> "01844", "44113-1702", "02472", "02301", "02703", "02108", "0202…
-    #> $ category                <chr> "N", "P", "N", "N", "N", "N", "D", "D", "D", "N", "N", "D", "N",…
+    #> $ comm_city               <chr> "METHUEN", "CLEVELAND", NA, NA, "MIDDLEBOROUGH", "BOSTON", "BOST…
+    #> $ comm_state              <chr> "MA", "OH", NA, NA, "MA", "MA", "MA", "MA", NA, "MA", "MA", NA, …
+    #> $ comm_zip                <chr> "01844", "44113-1702", NA, NA, "02346", "02108", "02114", "02747…
+    #> $ category                <chr> "N", "P", "D", "D", "N", "N", "D", "D", "D", "N", "N", "D", "N",…
 
 ### Missing
 
@@ -349,41 +349,48 @@ glimpse_fun(ma, count_na)
     #>  2 report_id               chr         0 0          
     #>  3 line_sequence           chr         0 0          
     #>  4 date                    date       28 0.0000243  
-    #>  5 vendor                  chr     27901 0.0242     
-    #>  6 address                 chr    225139 0.196      
-    #>  7 city                    chr    222043 0.193      
-    #>  8 state                   chr    217457 0.189      
-    #>  9 zip                     chr    304141 0.264      
+    #>  5 vendor                  chr     27983 0.0242     
+    #>  6 address                 chr    226719 0.196      
+    #>  7 city                    chr    223458 0.194      
+    #>  8 state                   chr    218646 0.189      
+    #>  9 zip                     chr    305655 0.265      
     #> 10 amount                  dbl         0 0          
-    #> 11 purpose                 chr     46891 0.0408     
-    #> 12 check_number            chr    762124 0.662      
-    #> 13 candidate_clarification chr   1132725 0.984      
-    #> 14 recipient_cpf_id        chr    845438 0.735      
-    #> 15 clarified_name          chr   1147753 0.997      
-    #> 16 clarified_purpose       chr   1132725 0.984      
+    #> 11 purpose                 chr     47208 0.0409     
+    #> 12 check_number            chr    764169 0.662      
+    #> 13 candidate_clarification chr   1136126 0.984      
+    #> 14 recipient_cpf_id        chr    848706 0.735      
+    #> 15 clarified_name          chr   1151154 0.997      
+    #> 16 clarified_purpose       chr   1136126 0.984      
     #> 17 guid                    chr         0 0          
     #> 18 cpf_id                  chr         0 0          
     #> 19 report_type             chr         0 0          
-    #> 20 cand_name               chr         1 0.000000869
-    #> 21 office                  chr    180286 0.157      
-    #> 22 district                chr    153875 0.134      
-    #> 23 comm_name               chr     34764 0.0302     
-    #> 24 comm_city               chr    276313 0.240      
-    #> 25 comm_state              chr    276834 0.241      
-    #> 26 comm_zip                chr    276583 0.240      
+    #> 20 cand_name               chr         1 0.000000866
+    #> 21 office                  chr    180630 0.157      
+    #> 22 district                chr    154016 0.133      
+    #> 23 comm_name               chr     34824 0.0302     
+    #> 24 comm_city               chr    276376 0.239      
+    #> 25 comm_state              chr    276893 0.240      
+    #> 26 comm_zip                chr    276650 0.240      
     #> 27 category                chr         0 0
 
 ``` r
 ma <- ma %>% flag_na(date, amount, vendor, cand_name)
 sum(ma$na_flag)
-#> [1] 27929
+#> [1] 28011
+mean(ma$na_flag)
+#> [1] 0.02427111
 ```
 
 ### Duplicates
 
 ``` r
+# repeated variable
+all(ma$id == ma$line_sequence)
+n_distinct(ma$id) == n_distinct(ma$line_sequence)
+ma <- select(ma, -line_sequence)
 ma <- ma %>% flag_dupes(-id, -line_sequence, -guid)
 sum(ma$dupe_flag)
+mean(ma$dupe_flag)
 ```
 
 ### Categorical
@@ -395,34 +402,34 @@ glimpse_fun(ma, n_distinct)
     #> # A tibble: 28 x 4
     #>    col                     type        n          p
     #>    <chr>                   <chr>   <dbl>      <dbl>
-    #>  1 id                      chr   1150687 1         
-    #>  2 report_id               chr    128925 0.112     
-    #>  3 line_sequence           chr   1150687 1         
-    #>  4 date                    date     6896 0.00599   
-    #>  5 vendor                  chr    242587 0.211     
-    #>  6 address                 chr    165184 0.144     
-    #>  7 city                    chr      6592 0.00573   
-    #>  8 state                   chr       186 0.000162  
-    #>  9 zip                     chr     13521 0.0118    
-    #> 10 amount                  dbl    117191 0.102     
-    #> 11 purpose                 chr    229387 0.199     
-    #> 12 check_number            chr     18623 0.0162    
-    #> 13 candidate_clarification chr      8331 0.00724   
-    #> 14 recipient_cpf_id        chr      1799 0.00156   
+    #>  1 id                      chr   1154088 1         
+    #>  2 report_id               chr    129324 0.112     
+    #>  3 line_sequence           chr   1154088 1         
+    #>  4 date                    date     6904 0.00598   
+    #>  5 vendor                  chr    243209 0.211     
+    #>  6 address                 chr    165382 0.143     
+    #>  7 city                    chr      6603 0.00572   
+    #>  8 state                   chr       186 0.000161  
+    #>  9 zip                     chr     13536 0.0117    
+    #> 10 amount                  dbl    117413 0.102     
+    #> 11 purpose                 chr    230246 0.200     
+    #> 12 check_number            chr     18636 0.0161    
+    #> 13 candidate_clarification chr      8331 0.00722   
+    #> 14 recipient_cpf_id        chr      1823 0.00158   
     #> 15 clarified_name          chr      1614 0.00140   
-    #> 16 clarified_purpose       chr      8331 0.00724   
-    #> 17 guid                    chr   1150070 0.999     
-    #> 18 cpf_id                  chr      4410 0.00383   
-    #> 19 report_type             chr        75 0.0000652 
-    #> 20 cand_name               chr      4603 0.00400   
+    #> 16 clarified_purpose       chr      8331 0.00722   
+    #> 17 guid                    chr   1153471 0.999     
+    #> 18 cpf_id                  chr      4416 0.00383   
+    #> 19 report_type             chr        75 0.0000650 
+    #> 20 cand_name               chr      4612 0.00400   
     #> 21 office                  chr       131 0.000114  
-    #> 22 district                chr       319 0.000277  
-    #> 23 comm_name               chr      5928 0.00515   
-    #> 24 comm_city               chr       605 0.000526  
-    #> 25 comm_state              chr        32 0.0000278 
-    #> 26 comm_zip                chr       925 0.000804  
-    #> 27 category                chr         7 0.00000608
-    #> 28 na_flag                 lgl         2 0.00000174
+    #> 22 district                chr       319 0.000276  
+    #> 23 comm_name               chr      5932 0.00514   
+    #> 24 comm_city               chr       605 0.000524  
+    #> 25 comm_state              chr        32 0.0000277 
+    #> 26 comm_zip                chr       925 0.000801  
+    #> 27 category                chr         7 0.00000607
+    #> 28 na_flag                 lgl         2 0.00000173
 
 ![](../plots/report_bar-1.png)<!-- -->
 
@@ -439,9 +446,9 @@ glimpse_fun(ma, n_distinct)
 ``` r
 summary(ma$amount) %>% map_chr(dollar)
 #>          Min.       1st Qu.        Median          Mean       3rd Qu.          Max. 
-#>   "$-489,762"         "$50"        "$125"   "$1,090.48"     "$395.13" "$13,293,721"
+#>   "$-489,762"         "$50"        "$125"   "$1,089.36"     "$395.82" "$13,293,721"
 sum(ma$amount <= 0)
-#> [1] 1831
+#> [1] 1833
 sum(ma$amount >= 1000000)
 #> [1] 132
 ```
@@ -611,7 +618,7 @@ ma <- ma %>%
 
 We can see how this improves consistency across the `address` field.
 
-    #> # A tibble: 895,302 x 2
+    #> # A tibble: 897,121 x 2
     #>    address                               address_norm                        
     #>    <chr>                                 <chr>                               
     #>  1 217 EAST MAIN ST.                     217 EAST MAIN STREET                
@@ -624,7 +631,7 @@ We can see how this improves consistency across the `address` field.
     #>  8 11 ALCOTT RD                          11 ALCOTT ROAD                      
     #>  9 PERMIT FEE WINDON, FORT POINT STATION PERMIT FEE WINDON FORT POINT STATION
     #> 10 304 SILVER HILL ROAD                  304 SILVER HILL ROAD                
-    #> # … with 895,292 more rows
+    #> # … with 897,111 more rows
 
 ### ZIP
 
@@ -633,11 +640,11 @@ already in our comprehensive `valid_zip` list.
 
 ``` r
 n_distinct(ma$zip)
-#> [1] 13521
+#> [1] 13536
 prop_in(ma$zip, valid_zip, na.rm = TRUE)
-#> [1] 0.9504055
+#> [1] 0.9504557
 length(setdiff(ma$zip, valid_zip))
-#> [1] 8122
+#> [1] 8133
 ```
 
 We can improve this further by lopping off the uncommon four-digit
@@ -657,11 +664,11 @@ This brings our valid percentage to 99.5%.
 
 ``` r
 n_distinct(ma$zip_norm)
-#> [1] 7012
+#> [1] 7019
 prop_in(ma$zip_norm, valid_zip, na.rm = TRUE)
-#> [1] 0.9949841
+#> [1] 0.9949882
 length(setdiff(ma$zip_norm, valid_zip))
-#> [1] 1448
+#> [1] 1450
 ```
 
 ### State
@@ -672,7 +679,7 @@ The `state` variable is also very clean, already at 99.5%.
 n_distinct(ma$state)
 #> [1] 186
 prop_in(ma$state, valid_state, na.rm = TRUE)
-#> [1] 0.9953388
+#> [1] 0.9953455
 length(setdiff(ma$state, valid_state))
 #> [1] 126
 setdiff(ma$state, valid_state)
@@ -726,13 +733,13 @@ number over 99%.
 
 ``` r
 n_distinct(ma$city)
-#> [1] 6592
+#> [1] 6603
 prop_in(ma$city, valid_city, na.rm = TRUE)
-#> [1] 0.9476635
+#> [1] 0.9477397
 length(setdiff(ma$city, valid_city))
-#> [1] 4215
+#> [1] 4224
 prop_na(ma$city)
-#> [1] 0.1929656
+#> [1] 0.193623
 ```
 
 #### Normalize
@@ -754,13 +761,13 @@ This process brought us to 95.5% valid.
 
 ``` r
 n_distinct(ma$city_norm)
-#> [1] 5827
+#> [1] 5837
 prop_in(ma$city_norm, valid_city, na.rm = TRUE)
-#> [1] 0.9547191
+#> [1] 0.9547867
 length(setdiff(ma$city_norm, valid_city))
-#> [1] 3426
+#> [1] 3434
 prop_na(ma$city_norm)
-#> [1] 0.1934236
+#> [1] 0.1940805
 ```
 
 It also increased the proportion of `NA` values by 0.0458%. These new
@@ -768,18 +775,18 @@ It also increased the proportion of `NA` values by 0.0458%. These new
 contained in the `na_city` vector.
 
     #> # A tibble: 61 x 4
-    #>    zip_norm state_norm city                  city_norm
-    #>    <chr>    <chr>      <chr>                 <chr>    
-    #>  1 02129    <NA>       XX                    <NA>     
-    #>  2 <NA>     MA         ON LINE               <NA>     
-    #>  3 02026    MA         UNKNOWN               <NA>     
-    #>  4 <NA>     <NA>       ON-LINE               <NA>     
-    #>  5 <NA>     MA         INFORMATION REQUESTED <NA>     
-    #>  6 <NA>     <NA>       XXX                   <NA>     
-    #>  7 <NA>     MA         NONE GIVEN            <NA>     
-    #>  8 01062    MA         UNKNOWN               <NA>     
-    #>  9 <NA>     <NA>       NONE                  <NA>     
-    #> 10 14240    NY         PO BOX 0377           <NA>     
+    #>    zip_norm state_norm city        city_norm
+    #>    <chr>    <chr>      <chr>       <chr>    
+    #>  1 14240    NY         PO BOX 0377 <NA>     
+    #>  2 <NA>     MA         INTERNET    <NA>     
+    #>  3 <NA>     <NA>       INTERNET    <NA>     
+    #>  4 <NA>     MA         ON-LINE     <NA>     
+    #>  5 <NA>     CA         WEBSITE     <NA>     
+    #>  6 <NA>     DC         ON-LINE     <NA>     
+    #>  7 <NA>     MA         N/A         <NA>     
+    #>  8 02743    MA         UNKNOWN     <NA>     
+    #>  9 02026    MA         UNKNOWN     <NA>     
+    #> 10 02568    MA         UNKNOWN     <NA>     
     #> # … with 51 more rows
 
 #### Swap
@@ -811,15 +818,15 @@ ma <- ma %>%
 ```
 
 This is a very fast way to increase the valid proportion to 98.9% and
-reduce the number of distinct *invalid* values from 3426 to only 936
+reduce the number of distinct *invalid* values from 3434 to only 937
 
 ``` r
 n_distinct(ma$city_swap)
-#> [1] 3187
+#> [1] 3191
 prop_in(ma$city_swap, valid_city, na.rm = TRUE)
-#> [1] 0.9888651
+#> [1] 0.9888746
 length(setdiff(ma$city_swap, valid_city))
-#> [1] 936
+#> [1] 937
 ```
 
 #### Refine
@@ -850,18 +857,18 @@ good_refine <- ma %>%
 ```
 
     #> # A tibble: 67 x 5
-    #>    state_norm zip_norm city_raw            city_refine         n
-    #>    <chr>      <chr>    <chr>               <chr>           <int>
-    #>  1 MA         02139    CAMBRIDGE ID#13217  CAMBRIDGE           1
-    #>  2 MA         02138    CAMBRIDGE ID#13748  CAMBRIDGE           1
-    #>  3 NY         12212    ALBANY NY           ALBANY              2
-    #>  4 MA         02139    CAMBRIDGE (ID13182) CAMBRIDGE           1
-    #>  5 MA         02748    SO. DARTMOUTH       SOUTH DARTMOUTH    15
-    #>  6 SC         29401    CHARLESTON, SC      CHARLESTON          1
-    #>  7 MA         02125    SO. BOSTON          BOSTON              2
-    #>  8 NH         03105    MANCHESTER NH       MANCHESTER          1
-    #>  9 MA         02129    CHARLTONLESTOWN     CHARLESTOWN         1
-    #> 10 MA         02120    SO. BOSTON          BOSTON              1
+    #>    state_norm zip_norm city_raw                     city_refine             n
+    #>    <chr>      <chr>    <chr>                        <chr>               <int>
+    #>  1 MA         02125    SO. BOSTON                   BOSTON                  2
+    #>  2 MA         02648    "MARSTONS \r\nMARSTON MILLS" MARSTONS MILLS          1
+    #>  3 MA         02176    "MELROSE\r\nELROSE"          MELROSE                 1
+    #>  4 MA         02127    SOS BOSTON                   BOSTON                  1
+    #>  5 NY         10279    NEW YORK, N.Y.               NEW YORK                1
+    #>  6 CT         06255    N GROVERSDALE                NORTH GROSVENORDALE     1
+    #>  7 MA         01201    PITTSFIELD (ID 13009)        PITTSFIELD              1
+    #>  8 MA         02324    BRIDGEWATER (ID 13396)       BRIDGEWATER             1
+    #>  9 MA         02205    SO. BOSTON                   BOSTON                  1
+    #> 10 MA         02119    SO. BOSTON                   BOSTON                  1
     #> # … with 57 more rows
 
 We can join these good refined values back to the original data and use
@@ -878,14 +885,14 @@ This brings us to 99.0% valid values.
 
 ``` r
 n_distinct(ma$city_refine)
-#> [1] 3161
+#> [1] 3165
 prop_in(ma$city_refine, valid_city, na.rm = TRUE)
-#> [1] 0.9895215
+#> [1] 0.9895295
 length(setdiff(ma$city_refine, valid_city))
-#> [1] 910
+#> [1] 911
 ```
 
-#### Progress
+#### Manual
 
 We can make very few manual changes to capture the last few big invalid
 values. Local city abbreviations (BOS, DORC, WORD, CAMB) often need to
@@ -897,36 +904,36 @@ ma %>%
   count(state_norm, zip_norm, city_refine, sort = TRUE) %>% 
   drop_na(city_refine) %>% 
   print(n = 20)
-#> # A tibble: 1,245 x 4
+#> # A tibble: 1,248 x 4
 #>    state_norm zip_norm city_refine            n
 #>    <chr>      <chr>    <chr>              <int>
 #>  1 MA         02125    DORC                 946
 #>  2 MA         02171    NORTH QUINCY         495
 #>  3 MA         02346    MIDDLEBOROUGH        473
 #>  4 MA         02144    WEST SOMERVILLE      300
-#>  5 MA         02532    BOURNE               253
+#>  5 MA         02532    BOURNE               256
 #>  6 MA         02760    NORTH ATTLEBOROUGH   241
-#>  7 MA         02127    SO BOS               234
-#>  8 MA         02190    SOUTH WEYMOUTH       234
-#>  9 MA         02191    NORTH WEYMOUTH       182
+#>  7 MA         02190    SOUTH WEYMOUTH       236
+#>  8 MA         02127    SO BOS               234
+#>  9 MA         02191    NORTH WEYMOUTH       184
 #> 10 MA         01237    LANESBOROUGH         177
 #> 11 MA         01879    TYNGSBOROUGH         163
-#> 12 MN         55126    SHOREVIEW            144
+#> 12 MN         55126    SHOREVIEW            145
 #> 13 MA         02536    WAQUOIT              106
 #> 14 MA         01654    WORC                 104
 #> 15 PA         19087    CHESTERBROOK          94
 #> 16 MA         01331    PHILLIPSTON           90
 #> 17 MA         02494    NEEDHAM HEIGHTS       89
-#> 18 MA         02568    TISBURY               87
+#> 18 MA         02568    TISBURY               88
 #> 19 MA         02703    SOUTH ATTLEBORO       86
 #> 20 MA         02536    TEATICKET             83
-#> # … with 1,225 more rows
+#> # … with 1,228 more rows
 ```
 
 ``` r
 ma <- ma %>% 
   mutate(
-    city_final = city_refine %>% 
+    city_manual = city_refine %>% 
       str_replace("\bBOS\b", "BOSTON") %>% 
       str_replace("^DORC$", "DORCHESTER") %>% 
       str_replace("^WORC$", "WORCHESTER") %>% 
@@ -941,40 +948,98 @@ ma <- ma %>%
   )
 ```
 
-By making less than a dozen manual string replacements, we bring our
-final valid percentage to 99.1%, above our 99% goal. There are still 901
-different *invalid* values that could be checked, but they make up less
-than 1% of records. Many of these values are actually valid and simply
-not in our list (which doesn’t contain very small towns and census
-desginated places).
-
-Still, our progress is significant without having to make a single
-manual or unconfident change. The percent of valid cities increased from
-94.8% to 99.1%. The number of total distinct city values decreased from
-6,592 to 3,152. The number of distinct invalid city names decreased from
-4,215 to only 901, a change of
--78.6%.
-
-| Normalization Stage | Total Distinct | Percent Valid | Unique Invalid |
-| :------------------ | -------------: | ------------: | -------------: |
-| raw                 |           6592 |        0.9477 |           4215 |
-| norm                |           5827 |        0.9547 |           3426 |
-| swap                |           3187 |        0.9889 |            936 |
-| refine              |           3161 |        0.9895 |            910 |
-| final               |           3152 |        0.9913 |            901 |
-
 ## Conclude
 
-1.  There are 1150687 records in the database.
+1.  There are 1154088 records in the database.
 2.  There are `sum(ma$dupe_flag)` duplicate records in the database.
 3.  The range and distribution of `amount` and `date` seem reasonable.
-4.  There are 27929 records missing either recipient or date.
+4.  There are 28011 records missing either recipient or date.
 5.  Consistency in geographic data has been improved with
     `campfin::normal_*()`.
 6.  The 5-digit `zip_norm` variable has been created with
     `campfin::normal_zip(ma$zip)`.
 7.  The 4-digit `year` variable has been created with
     `lubridate::year(ma$date)`.
+
+## Lookup
+
+``` r
+lookup_file <- here("ma", "expends", "data", "ma_city_lookup.csv")
+if (file.exists(lookup_file)) {
+  lookup <- read_csv(lookup_file) %>% select(1:2)
+  ma <- left_join(ma, lookup, by = c("city_manual" = "city_final"))
+  progress_table(
+    ma$city_raw,
+    ma$city_norm,
+    ma$city_swap,
+    ma$city_manual,
+    ma$city_clean,
+    compare = valid_city
+  )
+}
+#> # A tibble: 5 x 6
+#>   stage       prop_in n_distinct prop_na n_out n_diff
+#>   <chr>         <dbl>      <dbl>   <dbl> <dbl>  <dbl>
+#> 1 city_raw      0.924       6603   0.303 78434   4224
+#> 2 city_norm     0.932       5837   0.303 70225   3434
+#> 3 city_swap     0.989       3191   0.436  9258    937
+#> 4 city_manual   0.991       3156   0.436  7205    902
+#> 5 city_clean    0.994       2672   0.436  5344    443
+```
+
+``` r
+progress <- progress_table(
+  ma$city_raw,
+  ma$city_norm,
+  ma$city_swap,
+  ma$city_manual,
+  ma$city_clean,
+  compare = valid_city
+) %>% mutate(stage = as_factor(stage))
+```
+
+| stage        | prop\_in | n\_distinct | prop\_na | n\_out | n\_diff |
+| :----------- | -------: | ----------: | -------: | -----: | ------: |
+| city\_raw    |    0.924 |        6603 |    0.303 |  78434 |    4224 |
+| city\_norm   |    0.932 |        5837 |    0.303 |  70225 |    3434 |
+| city\_swap   |    0.989 |        3191 |    0.436 |   9258 |     937 |
+| city\_manual |    0.991 |        3156 |    0.436 |   7205 |     902 |
+| city\_clean  |    0.994 |        2672 |    0.436 |   5344 |     443 |
+
+You can see how the percentage of valid values increased with each
+stage.
+
+![](../plots/progress_bar-1.png)<!-- -->
+
+More importantly, the number of distinct values decreased each stage. We
+were able to confidently change many distinct invalid values to their
+valid equivilent.
+
+``` r
+progress %>% 
+  select(
+    stage, 
+    all = n_distinct,
+    bad = n_diff
+  ) %>% 
+  mutate(good = all - bad) %>% 
+  pivot_longer(c("good", "bad")) %>% 
+  mutate(name = name == "good") %>% 
+  ggplot(aes(x = stage, y = value)) +
+  geom_col(aes(fill = name)) +
+  scale_fill_brewer(palette = "Dark2") +
+  scale_y_continuous(labels = comma) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "Massachusetts City Normalization Progress",
+    subtitle = "Distinct values, valid and invalid",
+    x = "Stage",
+    y = "Percent Valid",
+    fill = "Valid"
+  )
+```
+
+![](../plots/distinct_bar-1.png)<!-- -->
 
 ## Export
 
