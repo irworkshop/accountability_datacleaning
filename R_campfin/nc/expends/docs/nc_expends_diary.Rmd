@@ -64,9 +64,8 @@ functions custom made to help facilitate the processing of campaign finance data
 
 ```{r load_packages, message=FALSE, dfrning=FALSE, error=FALSE}
 if (!require("pacman")) install.packages("pacman")
-pacman::p_load_current_gh("kiernann/campfin")
+pacman::p_load_gh("irworkshop/campfin")
 pacman::p_load(
-  stringdist, # levenshtein value
   tidyverse, # data manipulation
   RSelenium, # remote browser
   lubridate, # datetime strings
@@ -135,15 +134,40 @@ dir_create(raw_dir)
 nc <- read_csv(
   file = glue("{raw_dir}/transinq_results.csv"),
   na = c("NA", "", "Not Available"),
+  skip = 1,
+  col_names = c(
+    "payee_name",
+    "payee_street1",
+    "payee_street2",
+    "payee_city",
+    "payee_state",
+    "payee_zip",
+    "profession",
+    "employer",
+    "transction_type",
+    "comm_name",
+    "comm_id",
+    "comm_street1",
+    "comm_street2",
+    "comm_city",
+    "comm_state",
+    "comm_zip",
+    "report_name",
+    "date",
+    "account_code",
+    "amount",
+    "form_of_payment",
+    "purpose",
+    "referendum_name",
+    "declaration",
+    "supports"
+  ),
   col_types = cols(
     .default = col_character(),
-    `Date Occured` = col_date("%m/%d/%Y"),
-    Amount = col_double()
+    date = col_date_usa(),
+    amount = col_double()
   )
-)
-
-nc <- nc %>% 
-  clean_names(case = "snake") %>% 
+) %>% 
   mutate_if(is_character, str_to_upper) %>% 
   mutate(supports = equals(declaration, "SUPPORT"))
 ```
@@ -158,22 +182,26 @@ glimpse(sample_frac(nc))
 
 ### Missing
 
-```{r glimpse_na}
+```{r missing_glimpse}
 glimpse_fun(nc, count_na)
 ```
 
 There seems to be a regular block of records missing the variables needed to properly identify a
 transaction. We can flag those expenditures with `campfin::flag_na()`.
 
-```{r flag_na}
-nc <- nc %>% flag_na(name, committee_name, date_occured, amount)
+```{r missing_flag}
+nc <- nc %>% flag_na(payee_name, comm_name, date, amount)
 sum(nc$na_flag)
 percent(mean(nc$na_flag))
 ```
 
 ### Duplicates
 
-```{r get_dupes}
+There are a fairly significant number of duplicate records in the database. It's possible for a 
+committee to make multiple legitimate expenditures to the same vendor, on the same day, for the
+same amount. Still, we will flag these records with `campfin::dupe_flag()`.
+
+```{r dupe_flag}
 nc <- flag_dupes(nc, everything())
 sum(nc$dupe_flag)
 percent(mean(nc$dupe_flag))
@@ -254,12 +282,15 @@ We should also check the range and distribution of continuous variables.
 
 ```{r summary_amount}
 summary(nc$amount)
+sum(nc$amount <= 0, na.rm = TRUE)
 ```
 
 ```{r amount_histogram, echo=FALSE}
 nc %>%
+  filter(amount >= 1) %>% 
   ggplot(aes(amount)) +
-  geom_histogram() +
+  geom_histogram(fill = RColorBrewer::brewer.pal(3, "Dark2")[3]) +
+  scale_y_continuous(labels = comma) +
   scale_x_continuous(
     breaks = c(1 %o% 10^(0:6)),
     labels = dollar,
@@ -275,8 +306,9 @@ nc %>%
 
 ```{r amount_box_type, echo=FALSE}
 nc %>%
+  filter(amount > 1) %>% 
   drop_na(transction_type) %>%
-  filter(transction_type %in% head(count(nc, transction_type, sort = T), 4)$transction_type) %>% 
+  filter(transction_type %in% most_common(nc$transction_type)) %>% 
   ggplot(
     mapping = aes(
       x = reorder(
@@ -288,10 +320,8 @@ nc %>%
       y = amount
     )
   ) +
-  geom_boxplot(
-    mapping = aes(fill = transction_type),
-    varwidth = TRUE,
-    outlier.alpha = 0.01
+  geom_violin(
+    mapping = aes(fill = transction_type)
   ) +
   scale_y_continuous(
     breaks = c(1 %o% 10^(0:6)),
@@ -313,8 +343,9 @@ nc %>%
 
 ```{r amount_box_method, echo=FALSE}
 nc %>%
+  filter(amount > 1) %>% 
   drop_na(form_of_payment) %>%
-  filter(form_of_payment %in% head(count(nc, form_of_payment, sort = T), 4)$form_of_payment) %>% 
+  filter(form_of_payment %in% most_common(form_of_payment)) %>% 
   ggplot(
     mapping = aes(
       x = reorder(
@@ -326,10 +357,8 @@ nc %>%
       y = amount
     )
   ) +
-  geom_boxplot(
-    mapping = aes(fill = form_of_payment),
-    varwidth = TRUE,
-    outlier.alpha = 0.01
+  geom_violin(
+    mapping = aes(fill = form_of_payment)
   ) +
   scale_y_continuous(
     breaks = c(1 %o% 10^(0:6)),
@@ -351,29 +380,30 @@ nc %>%
 
 #### Dates
 
-We can add a `year_occured` variable using `lubridate::year()`.
+We can add a `year` variable using `lubridate::year()`.
 
 ```{r add_year}
-nc <- mutate(nc, year_occured = year(date_occured))
+nc <- mutate(nc, year = year(date))
 ```
 
-The `date_occured` variable is very clean, with `r sum(nc$year_occured < 2008, na.rm = TRUE)`
-records before 2008 and `r sum(nc$date_occured > today(), na.rm = TRUE)` records after `r today()`.
+The `date` variable is very clean, with `r sum(nc$year < 2008, na.rm = TRUE)`
+records before 2008 and `r sum(nc$date > today(), na.rm = TRUE)` records after `r today()`.
 
 ```{r date_range, collapse=TRUE}
-min(nc$date_occured, na.rm = TRUE)
-sum(nc$year_occured < 2008, na.rm = TRUE)
-max(nc$date_occured, na.rm = TRUE)
-sum(nc$date_occured > today(), na.rm = TRUE)
+min(nc$date, na.rm = TRUE)
+sum(nc$year < 2008, na.rm = TRUE)
+max(nc$date, na.rm = TRUE)
+sum(nc$date > today(), na.rm = TRUE)
 ```
 
 ```{r year_bar_count, echo=FALSE}
 nc %>% 
-  count(year_occured, sort = T) %>% 
-  mutate(on = is_even(year_occured),) %>%
-  ggplot(aes(x = year_occured, y = n)) +
+  count(year, sort = T) %>% 
+  mutate(on = is_even(year),) %>%
+  ggplot(aes(x = year, y = n)) +
   geom_col(aes(fill = on)) +
   scale_x_continuous(breaks = 2008:2019) +
+  scale_y_continuous(labels = comma) +
   scale_fill_brewer(
     type = "qual",
     palette = "Dark2"
@@ -390,11 +420,11 @@ nc %>%
 
 ```{r year_bar_median, echo=FALSE}
 nc %>% 
-  drop_na(year_occured) %>% 
-  mutate(on = is_even(year_occured),) %>%
-  group_by(on, year_occured) %>% 
+  drop_na(year) %>% 
+  mutate(on = is_even(year),) %>%
+  group_by(on, year) %>% 
   summarize(median = median(amount, na.rm = TRUE)) %>% 
-  ggplot(aes(x = year_occured, y = median)) +
+  ggplot(aes(x = year, y = median)) +
   geom_col(aes(fill = on)) +
   scale_y_continuous(labels = dollar) +
   scale_x_continuous(breaks = 2008:2019) +
@@ -415,11 +445,11 @@ nc %>%
 
 ```{r year_bar_total, echo=FALSE}
 nc %>% 
-  drop_na(year_occured) %>% 
-  mutate(on = is_even(year_occured),) %>%
-  group_by(on, year_occured) %>% 
+  drop_na(year) %>% 
+  mutate(on = is_even(year),) %>%
+  group_by(on, year) %>% 
   summarize(sum = sum(amount, na.rm = TRUE)) %>% 
-  ggplot(aes(x = year_occured, y = sum)) +
+  ggplot(aes(x = year, y = sum)) +
   geom_col(aes(fill = on)) +
   scale_y_continuous(labels = dollar) +
   scale_x_continuous(breaks = 2008:2019) +
@@ -440,10 +470,10 @@ nc %>%
 
 ```{r month_amount_line, echo=FALSE}
 nc %>%
-  drop_na(date_occured) %>% 
+  drop_na(date) %>% 
   mutate(
-    month = month(date_occured),
-    on = is_even(year_occured),
+    month = month(date),
+    on = is_even(year),
   ) %>%
   group_by(month, on) %>%
   summarize(sum = sum(amount, na.rm = TRUE)) %>% 
@@ -468,12 +498,12 @@ nc %>%
 
 ```{r cycle_amount_line, echo=FALSE}
 nc %>% 
-  drop_na(date_occured, amount) %>% 
-  select(date_occured, year_occured, amount) %>% 
+  drop_na(date, amount) %>% 
+  select(date, year, amount) %>% 
   mutate(
-    off = !is_even(year_occured),
-    cycle = as.character(if_else(!off, year_occured, year_occured - 1L)),
-    month = if_else(off, month(date_occured), month(date_occured) + 12)
+    off = !is_even(year),
+    cycle = as.character(if_else(!off, year, year - 1L)),
+    month = if_else(off, month(date), month(date) + 12)
   ) %>% 
   group_by(cycle, off, month) %>% 
   summarize(mean = mean(amount)) %>% 
@@ -497,365 +527,241 @@ nc %>%
 To improve the searchability of the database, we can perform some functional text normalization of
 geographic data. Here, we have geographic data for both the expender and payee.
 
-### Payees
+### Adress
 
-#### Address
-
-First, we will perform simple text normalization on the address strings using `tidyr::unite()` and
-`campfin::normal_address()`.
-
-```{r normal_address, collapse=TRUE}
-# need the dev tidyr for na.rm
-packageVersion("tidyr")
+```{r address_unite_norm}
 nc <- nc %>% 
   unite(
-    col = street_combined,
-    starts_with("street_line"),
+    starts_with("payee_street"),
+    col = payee_street,
     sep = " ",
     remove = FALSE,
-    na.rm = TRUE,
+    na.rm = TRUE
   ) %>% 
-  mutate(
-    address_norm = normal_address(
-      address = street_combined,
-      add_abbs = usps,
-      na = c(""),
-      na_rep = TRUE
-    )
-  )
-```
-
-```{r view_address_norm, echo=FALSE}
-nc %>% 
-  sample_n(10) %>% 
+  unite(
+    starts_with("comm_street"),
+    col = comm_street,
+    sep = " ",
+    remove = FALSE,
+    na.rm = TRUE
+  ) %>% 
+  mutate_at(
+   .vars = vars(ends_with("street")),
+   .funs = list(norm = normal_address),
+   add_abbs = usps_street,
+   na = invalid_city,
+   na_rep = TRUE
+  ) %>% 
   select(
-    street_line_1,
-    street_combined,
-    address_norm
+    -ends_with("street")
+  )
+```
+
+### States
+
+```{r state_normal}
+nc <- nc %>%
+  mutate_at(
+    .vars = vars(ends_with("state")),
+    .funs = str_replace_all,
+    "^N$", "NC"
   ) %>% 
-  drop_na()
-```
-
-#### Payee ZIP
-
-```{r count_zip_pre, collapse=TRUE}
-n_distinct(nc$zip_code)
-prop_in(nc$zip_code, geo$zip, na.rm = TRUE)
-length(setdiff(nc$zip_code, geo$zip))
-```
-
-```{r normal_zip}
-nc <- nc %>% 
-  mutate(
-    zip_norm = normal_zip(
-      zip = zip_code,
-      na_rep = TRUE
-    )
+  mutate_at(
+   .vars = vars(ends_with("state")),
+   .funs = list(norm = normal_state),
+   abbreviate = TRUE,
+   na = c("", "NA"),
+   na_rep = TRUE,
+   valid = valid_state
   )
 ```
 
-```{r count_zip_post, collapse=TRUE}
-n_distinct(nc$zip_norm)
-prop_in(nc$zip_norm, geo$zip, na.rm = TRUE)
-length(setdiff(nc$zip_norm, geo$zip))
-```
-
-#### Payee State
-
-```{r count_state_pre, collapse=TRUE}
-n_distinct(nc$state)
-prop_in(nc$state, geo$state, na.rm = TRUE)
-length(setdiff(nc$state, geo$state))
-```
-
-```{r view_match_state}
-nc %>%
-  drop_na(state, zip_code) %>% 
-  filter(state %out% geo$state) %>% 
-  select(city, state, zip_code) %>% 
-  left_join(geo, by = c("zip_code" = "zip"), suffix = c("_nc", "_geo")) %>% 
-  arrange(state_nc)
-```
-
-```{r normal_state}
-nc <- nc %>% 
-  mutate(
-    state_norm = state %>% 
-      str_replace("^CD$", "DC") %>% 
-      str_replace("^GE$", "GA") %>% 
-      str_replace("^KE$", "KY") %>% 
-      str_replace("^LO$", "LA") %>% 
-      str_replace("^N$",  "NC") %>% 
-      str_replace("^NX$", "NC") %>% 
-      str_replace("^WE$", "NC") %>% 
-      na_if("PU") %>% 
-      na_if("KI") %>% 
-      na_if("TH") %>% 
-      na_if("VE")
-  )
-```
-
-```{r count_state_post, collapse=TRUE}
-n_distinct(nc$state_norm)
-prop_in(nc$state_norm, geo$state, na.rm = TRUE)
-length(setdiff(nc$state_norm, geo$state))
-```
-
-#### Payee City
-
-```{r count_city_pre, collapse=TRUE}
-n_distinct(nc$city)
-prop_in(nc$city, geo$city, na.rm = TRUE)
-length(setdiff(nc$city, geo$city))
-```
-
-##### Payee City Normalize
-
-```{r normal_city}
-nc <- nc %>% 
-  mutate(
-    city_norm = normal_city(
-      city = city %>% 
-        str_replace("CLT", "CHARLOTTE") %>% 
-        str_replace("ATL", "ATLANTA") %>% 
-        str_replace("AVL", "ASHEVILLE"),
-      geo_abbs = usps_city,
-      st_abbs = c("NC", "DC", "NORTH CAROLINA"),
-      na = na_city,
-      na_rep = TRUE
-    )
-  )
-```
-
-```{r count_city_post_norm, collapse=TRUE}
-n_distinct(nc$city_norm)
-prop_in(nc$city_norm, geo$city, na.rm = TRUE)
-length(setdiff(nc$city_norm, geo$city))
-```
-
-##### Payee City Swap
-
-```{r swap_city}
-nc <- nc %>% 
-  rename(city_raw = city) %>% 
-  left_join(
-    y = geo,
-    by = c(
-      "state_norm" = "state",
-      "zip_norm" = "zip"
-    )
-  ) %>% 
-  rename(city_match = city) %>% 
-  mutate(
-    match_dist = stringdist(city_norm, city_match),
-    city_swap = if_else(
-      condition = is_less_than(match_dist, 4),
-      true = city_match,
-      false = city_norm
-    )
-  )
-```
-
-```{r count_city_post_swap, collapse=TRUE}
-n_distinct(nc$city_swap)
-prop_in(nc$city_swap, geo$city, na.rm = TRUE)
-length(setdiff(nc$city_swap, geo$city))
-```
-
-```{r}
-nc %>% 
-  filter(city_swap %out% geo$city) %>% 
-  count(
-    city_swap, 
-    city_match, 
-    state_norm, 
-    sort = TRUE
-  ) %>% 
-  drop_na() %>% 
-  arrange(desc(n)) %>% 
-  mutate(cumulative_prop = cumsum(n)/sum(n)) %>% 
-  print(n = 20)
-```
-
-```{r city_progress, echo=FALSE}
-tibble(
-  step = c("raw", "norm", "swap"),
-  n_distinct = c(
-    n_distinct(nc$city_raw), 
-    n_distinct(nc$city_norm), 
-    n_distinct(nc$city_swap)
-  ),
-  prop_in = c(
-    prop_in(nc$city_raw, geo$city, na.rm = TRUE),
-    prop_in(nc$city_norm, geo$city, na.rm = TRUE),
-    prop_in(nc$city_swap, geo$city, na.rm = TRUE)
-  ),
-  unique_bad = c(
-    length(setdiff(nc$city_raw, geo$city)),
-    length(setdiff(nc$city_norm, geo$city)),
-    length(setdiff(nc$city_swap, geo$city))
-  )
+```{r state_progress}
+progress_table(
+  nc$payee_state,
+  nc$payee_state_norm,
+  compare = valid_state
 )
 ```
 
-### Committees
+### Zip
 
-#### Committee Address
-
-```{r comm_normal_address, collapse=TRUE}
-nc <- nc %>% 
-  unite(
-    col = committee_street_combined,
-    starts_with("committee_street"),
-    sep = " ",
-    remove = FALSE,
-    na.rm = TRUE,
-  ) %>% 
-  mutate(
-    committee_address_norm = normal_address(
-      address = committee_street_combined,
-      add_abbs = usps,
-      na = c(""),
-      na_rep = TRUE
-    )
+```{r zip_normal}
+nc <- nc %>%
+  mutate_at(
+   .vars = vars(ends_with("zip")),
+   .funs = list(norm = normal_zip),
+   na = c("", "NA"),
+   na_rep = TRUE
   )
 ```
 
-```{r comm_view_address_norm, echo=FALSE}
-nc %>% 
-  sample_n(10) %>% 
-  select(
-    committee_street_1,
-    committee_street_combined,
-    committee_address_norm
-  ) %>% 
-  drop_na()
-```
-
-#### Committee ZIP
-
-```{r comm_count_zip_pre, collapse=TRUE}
-n_distinct(nc$committee_zip_code)
-prop_in(nc$committee_zip_code, geo$zip, na.rm = TRUE)
-length(setdiff(nc$committee_zip_code, geo$zip))
-```
-
-```{r comm_normal_zip}
-nc <- nc %>% 
-  mutate(
-    committee_zip_norm = normal_zip(
-      zip = committee_zip_code,
-      na_rep = TRUE
-    )
-  )
-```
-
-```{r comm_count_zip_post, collapse=TRUE}
-n_distinct(nc$committee_zip_norm)
-prop_in(nc$committee_zip_norm, geo$zip, na.rm = TRUE)
-length(setdiff(nc$committee_zip_norm, geo$zip))
-```
-
-#### Committee State
-
-The `committee_state` variable does not need to be normalized.
-
-```{r comm_count_state_pre, collapse=TRUE}
-n_distinct(nc$committee_state)
-prop_in(nc$committee_state, geo$state, na.rm = TRUE)
-length(setdiff(nc$committee_state, geo$state))
-```
-
-#### Committee City
-
-```{r comm_count_city_pre, collapse=TRUE}
-n_distinct(nc$committee_city)
-prop_in(nc$committee_city, geo$city, na.rm = TRUE)
-length(setdiff(nc$committee_city, geo$city))
-```
-
-##### Committee City Normalize
-
-```{r comm_normal_city}
-nc <- nc %>% 
-  mutate(
-    committee_city_norm = normal_city(
-      city = committee_city,
-      geo_abbs = usps_city,
-      st_abbs = c("NC", "DC", "NORTH CAROLINA"),
-      na = na_city,
-      na_rep = TRUE
-    )
-  )
-```
-
-```{r comm_count_city_post_norm, collapse=TRUE}
-n_distinct(nc$committee_city_norm)
-prop_in(nc$committee_city_norm, geo$city, na.rm = TRUE)
-length(setdiff(nc$committee_city_norm, geo$city))
-```
-
-##### Committee City Swap
-
-```{r comm_swap_city}
-nc <- nc %>% 
-  rename(committee_city_raw = committee_city) %>% 
-  left_join(
-    y = geo,
-    by = c(
-      "committee_state" = "state",
-      "committee_zip_norm" = "zip"
-    )
-  ) %>% 
-  rename(committee_city_match = city) %>% 
-  mutate(
-    committee_match_dist = stringdist(committee_city_norm, city_match),
-    committee_city_swap = if_else(
-      condition = is_less_than(match_dist, 4),
-      true = committee_city_match,
-      false = committee_city_norm
-    )
-  )
-```
-
-```{r comm_count_city_post_swap, collapse=TRUE}
-n_distinct(nc$committee_city_swap)
-prop_in(nc$committee_city_swap, geo$city, na.rm = TRUE)
-length(setdiff(nc$committee_city_swap, geo$city))
-```
-
-Our usual normalization process has done little to clean the already clean `committee_city`.
-
-```{r comm_city_progress, echo=FALSE}
-tibble(
-  step = c("raw", "norm", "swap"),
-  n_distinct = c(
-    n_distinct(nc$committee_city_raw), 
-    n_distinct(nc$committee_city_norm), 
-    n_distinct(nc$committee_city_swap)
-  ),
-  prop_in = c(
-    prop_in(nc$committee_city_raw, geo$city, na.rm = TRUE),
-    prop_in(nc$committee_city_norm, geo$city, na.rm = TRUE),
-    prop_in(nc$committee_city_swap, geo$city, na.rm = TRUE)
-  ),
-  unique_bad = c(
-    length(setdiff(nc$committee_city_raw, geo$city)),
-    length(setdiff(nc$committee_city_norm, geo$city)),
-    length(setdiff(nc$committee_city_swap, geo$city))
-  )
+```{r zip_progress}
+progress_table(
+  nc$payee_zip,
+  nc$payee_zip_norm,
+  nc$comm_zip,
+  nc$comm_zip_norm,
+  compare = valid_zip
 )
+```
+
+### City
+
+```{r city_normal}
+nc <- nc %>% 
+  mutate_at(
+   .vars = vars(ends_with("city")),
+   .funs = list(norm = normal_city),
+   geo_abbs = usps_city,
+   st_abbs = c("NC", "DC"),
+   na = invalid_city,
+   na_rep = TRUE
+  )
+```
+
+```{r city_match}
+nc <- nc %>% 
+  left_join(
+    y = zipcodes,
+    by = c(
+      "payee_state_norm" = "state",
+      "payee_zip_norm" = "zip"
+    )
+  ) %>% 
+  rename(payee_city_match = city) %>% 
+  left_join(
+    y = zipcodes,
+    by = c(
+      "comm_state_norm" = "state",
+      "comm_zip_norm" = "zip"
+    )
+  ) %>% 
+  rename(comm_city_match = city)
+```
+
+```{r city_swap}
+nc <- nc %>%
+  # check and swap payee city
+  mutate(
+    match_abb = is_abbrev(payee_city_norm, payee_city_match),
+    match_dist = str_dist(payee_city_norm, payee_city_match),
+    payee_city_swap = if_else(
+      condition = match_abb | match_dist <= 1,
+      true = payee_city_match,
+      false = payee_city_norm
+    )
+  ) %>% 
+  # check and swap committee city
+  mutate(
+    match_abb = is_abbrev(comm_city_norm, comm_city_match),
+    match_dist = str_dist(comm_city_norm, comm_city_match),
+    comm_city_swap = if_else(
+      condition = match_abb | match_dist <= 2,
+      true = comm_city_match,
+      false = comm_city_norm
+    )
+  )
+```
+
+```{r city_prog_payee}
+progress_table(
+  nc$payee_city,
+  nc$payee_city_norm,
+  nc$payee_city_swap,
+  compare = valid_city
+)
+```
+
+```{r city_prog_comm}
+progress_table(
+  nc$comm_city,
+  nc$comm_city_norm,
+  nc$comm_city_swap,
+  compare = valid_city
+)
+```
+
+```{r city_prog, echo=FALSE}
+progress <- progress_table(
+  nc$payee_city,
+  nc$payee_city_norm,
+  nc$payee_city_swap,
+  compare = valid_city
+)
+```
+
+```{r progress_bar, echo=FALSE}
+progress %>% 
+  ggplot(aes(x = stage, y = prop_in)) +
+  geom_hline(yintercept = 0.99) +
+  geom_col(fill = RColorBrewer::brewer.pal(3, "Dark2")[3]) +
+  coord_cartesian(ylim = c(0.75, 1)) +
+  scale_y_continuous(labels = percent) +
+  labs(
+    title = "Massachusetts City Normalization Progress",
+    x = "Stage",
+    y = "Percent Valid"
+  )
+```
+
+More importantly, the number of distinct values decreased each stage. We were
+able to confidently change many distinct invalid values to their valid
+equivilent.
+
+```{r distinct_bar}
+progress %>% 
+  select(
+    stage, 
+    all = n_distinct,
+    bad = n_diff
+  ) %>% 
+  mutate(good = all - bad) %>% 
+  pivot_longer(c("good", "bad")) %>% 
+  mutate(name = name == "good") %>% 
+  ggplot(aes(x = stage, y = value)) +
+  geom_col(aes(fill = name)) +
+  scale_fill_brewer(palette = "Dark2") +
+  scale_y_continuous(labels = comma) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "Massachusetts City Normalization Progress",
+    subtitle = "Distinct values, valid and invalid",
+    x = "Stage",
+    y = "Percent Valid",
+    fill = "Valid"
+  )
 ```
 
 ## Conclude
 
 1. There are `r nrow(nc)` records in the database
 1. There are `r sum(nc$dupe_flag)` (`r percent(mean(nc$dupe_flag))`) duplicate records
-1. The range and distribution of `amount` and `date_occured` are reasonable
+1. The range and distribution of `amount` and `date` are reasonable
 1. There are `r sum(nc$na_flag)` (`r percent(mean(nc$na_flag))`) records missing names
 1. Consistency in geographic data has been improved with `campfin::normal_*()`
 1. The 5-digit `zip_norm` variable has been created with `campfin::normal_zip()`
-1. The 4-digit `year_occured` variable has been created with `lubridate::year()`
+1. The 4-digit `year` variable has been created with `lubridate::year()`
+
+## Lookup
+
+```{r city_lookup}
+nc_payee_city_lookup <- read_csv(here("nc", "expends", "data", "nc_payee_city_lookup.csv"))
+nc_comm_city_lookup <- read_csv(here("nc", "expends", "data", "nc_comm_city_lookup.csv"))
+nc <- nc %>% 
+  left_join(nc_payee_city_lookup) %>% 
+  left_join(nc_comm_city_lookup)
+```
+
+```{r city_prog_lookup}
+progress_table(
+  nc$payee_city,
+  nc$payee_city_norm,
+  nc$payee_city_swap,
+  nc$payee_city_clean,
+  compare = valid_city
+)
+```
 
 ## Export
 
@@ -865,18 +771,23 @@ dir_create(proc_dir)
 ```
 
 ```{r write_clean}
-nc %>% 
-  select(
-    -city_norm,
-    -match_dist,
-    -city_match,
-    -committee_city_norm,
-    -committee_match_dist,
-    -committee_city_match
-  ) %>% 
-  write_csv(
-    na = "",
-    path = glue("{proc_dir}/nc_expends_clean.csv")
-  )
+nc %>% select(
+  -payee_city_clean,
+  -comm_city_clean,
+  -payee_city_match,
+  -comm_city_match,
+  -match_abb,
+  -match_dist,
+  -payee_city_swap,
+  -comm_city_swap
+) -> nc
+
+names(nc) %>% str_replace("_norm$", "_clean") -> names(nc)
+
+write_csv(
+  x = nc,
+  na = "",
+  path = glue("{proc_dir}/nc_expends_clean.csv")
+)
 ```
 
