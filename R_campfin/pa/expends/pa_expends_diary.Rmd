@@ -1,6 +1,5 @@
 ---
 title: "Pennsylvania Campaign Expenditures Data Diary"
-subtitle: "Pennsylvania Expenditures August 1"
 author: "Yanqi Xu"
 date: "`r Sys.time()`"
 output:
@@ -61,7 +60,7 @@ these results. The `pacman` package will facilitate their installation and attac
 
 ```{r p_load, message=FALSE, dfrning=FALSE, error=FALSE}
 if (!require("pacman")) install.packages("pacman")
-pacman::p_load_current_gh("kiernann/campfin")
+pacman::p_load_gh("irworkshop/campfin")
 pacman::p_load(
   stringdist, # levenshtein value
   tidyverse, # data manipulation
@@ -110,8 +109,6 @@ here::here()
 ### About
 
 More information about the record layout can be found here https://www.dos.pa.gov/VotingElections/CandidatesCommittees/CampaignFinance/Resources/Documents/readme.txt.
-
-### Variables
 
 ## Import
 
@@ -583,7 +580,7 @@ pa$city <- pa$city %>%
   str_replace("^E\\s", "EAST ") %>% 
   str_replace("^N\\s", "NORTH ") %>% 
   str_replace("^W\\s", "WEST ") %>% 
-  str_remove(st_pattern) %>% 
+  str_remove(valid_state) %>% 
   str_remove("^X+$")
 ```
 
@@ -663,49 +660,48 @@ n_distinct(pa$city_clean[pa$city_clean %out% valid_city])
 ```
 
 ```{r}
-valid_city <- unique(c(valid_city, pa_match_table$sec_city_match), "WYOMISSING")
+valid_city <- unique(c(valid_city, extra_city))
 
-pa_city_lookup <- read_csv(file = here("pa", "expends", "data", "raw", "pa_city_lookup.csv"), col_names = c("city", "city_lookup", "changed", "count"))
+pa_city_lookup <- read_csv(file = here("pa", "expends", "data", "raw", "pa_city_lookup.csv"), col_names = c("city", "city_lookup", "changed", "count"), skip = 1)
 
 pa_out <- pa %>% 
   count( city_clean, sort = TRUE) %>% 
   filter(city_clean %out% valid_city) 
 
-pa_out <- pa_out %>% left_join(pa_city_lookup, by = c("city_clean" = "city")) %>% filter(city_clean != city_lookup | is.na(city_lookup) == T ) %>% drop_na(city_clean)
+pa_out <- pa_out %>% left_join(pa_city_lookup, by = c("city_clean" = "city")) %>% filter(city_clean != city_lookup | is.na(city_lookup)) %>% drop_na(city_clean)
 
-pa <- pa %>% left_join(pa_out, by = "city_clean") %>% mutate(city_final = ifelse(
-  is.na(city_lookup) == TRUE,
+pa <- pa %>% left_join(pa_out, by = "city_clean") %>% mutate(city_after_lookup = ifelse(
+  is.na(city_lookup) & city_clean %out% valid_city,
   NA,
   coalesce(city_lookup, city_clean))) 
 
-pa$city_final <- pa$city_final %>% str_replace("^\\sTWP$", " TOWNSHIP")
+pa$city_after_lookup <- pa$city_after_lookup %>% str_replace("^\\sTWP$", " TOWNSHIP")
 
-pa[pa$index == which(pa$city_final == "MA"),8:9] <- c("LEXINGTON", "MA")
-pa[pa$index == which(pa$city_final == "L"),8] <- c("LOS ANGELES")
-pa[pa$index %in% which(pa$city_final %in% c("PA", "NJ")), 8] <- ""
+pa[pa$index == which(pa$city_after_lookup == "MA"),8:9] <- c("LEXINGTON", "MA")
+pa[pa$index == which(pa$city_after_lookup == "L"),8] <- c("LOS ANGELES")
+pa[pa$index %in% which(pa$city_after_lookup %in% c("PA", "NJ")), 8] <- ""
 pa[pa$index == "319505", 8] <- "HARRISBURG"
 
 #pa_final_lookup <- read_excel(glue("{raw_dir}/pa_final_fixes.xlsx"))
 pa_final_lookup <- read_excel(glue("{raw_dir}/pa_final_fixes.xlsx"), col_types = "text")
 
 
-pa <- pa %>% left_join(pa_final_lookup, by = "city_clean") %>% 
-mutate(city_output = if_else(condition = is.na(fix),
-                               true = city_final,
-                               false = fix))
+pa <- pa %>% left_join(pa_final_lookup, by = c("city_after_lookup" = "city_clean")) %>% 
+mutate(city_output = if_else(condition = is.na(fix) & city_after_lookup %out% valid_city, NA_character_,
+                               coalesce(fix,city_after_lookup)))
 ```
 
 
 
 Each process also increases the percent of valid city names.
 
-```{r city_progress2, collapse=TRUE}
+```{r city_progress, collapse=TRUE}
 prop_in(pa$CITY, valid_city, na.rm = TRUE)
 prop_in(pa$city_prep, valid_city, na.rm = TRUE)
 prop_in(pa$city_swap, valid_city, na.rm = TRUE)
 prop_in(pa$city, valid_city, na.rm = TRUE)
 prop_in(pa$city_clean, valid_city, na.rm = TRUE)
-prop_in(pa$city_final, valid_city, na.rm = TRUE)
+prop_in(pa$city_after_lookup, valid_city, na.rm = TRUE)
 prop_in(pa$city_output, valid_city, na.rm = TRUE)
 
 progress_table <- tibble(
@@ -716,16 +712,16 @@ progress_table <- tibble(
     prop_in(pa$city_swap, valid_city, na.rm = TRUE),
     prop_in(pa$city, valid_city, na.rm = TRUE),
     prop_in(pa$city_clean, valid_city, na.rm = TRUE),
-    prop_in(pa$city_final, valid_city, na.rm = TRUE),
+    prop_in(pa$city_after_lookup, valid_city, na.rm = TRUE),
     prop_in(pa$city_output, valid_city, na.rm = TRUE)
   ),
   total_distinct = c(
-    n_distinct(str_to_upper(pa$city_raw)),
+    n_distinct(str_to_upper(pa$CITY)),
     n_distinct(pa$city_prep),
     n_distinct(pa$city_swap),
     n_distinct(pa$city),
     n_distinct(pa$city_clean),
-    n_distinct(pa$city_final),
+    n_distinct(pa$city_after_lookup),
     n_distinct(pa$city_output)
   ),
   unique_bad = c(
@@ -734,7 +730,7 @@ progress_table <- tibble(
     length(setdiff(pa$city_swap, valid_city)),
     length(setdiff(pa$city, valid_city)),
     length(setdiff(pa$city_clean, valid_city)),
-    length(setdiff(pa$city_final, valid_city)),
+    length(setdiff(pa$city_after_lookup, valid_city)),
     length(setdiff(pa$city_output, valid_city))
   )
 )
@@ -771,165 +767,27 @@ progress_table %>%
     y = "Proportion Valid Cities"
   )
 ```
-We also need to process the filer table to join back to the `FILERID` field.
-```{r unzip filer, eval=FALSE}
-if (all_files_new(path = raw_dir, glob = "*.txt")) {
-  for (i in seq_along(zip_files)) {
-    unzip(
-      zipfile = zip_files[i],
-      #Matches the csv files that start with "filer", and trim the "./ " from directory names
-      files = grep("filer.+", unzip(zip_files[i]), value = TRUE) %>% substring(3,),
-      exdir = glue(raw_dir,"/filer")
-    )
-  }
-}
-```
 
+We also need to process the processed filer table to join back to the `FILERID` field. 
 
-```{r}
-filer_files <- list.files(raw_dir, pattern = "filer.+", recursive = TRUE, full.names = TRUE)
-
-filer_fields <- c("FILERID", "EYEAR", "CYCLE", "AMMEND", "TERMINATE", "FILERTYPE", "FILERNAME", "OFFICE", "DISTRICT", "PARTY", "ADDRESS1", "ADDRESS2", "CITY", "STATE", "ZIPCODE", "COUNTY", "PHONE", "BEGINNING", "MONETARY", "INKIND")
-
-pa_filer <- filer_files %>% 
-  map(read_delim, delim = ",", escape_double = FALSE,
-      escape_backslash = TRUE, col_names = filer_fields, 
-      col_types = cols(.default = col_character(),
-                       CYCLE = col_integer(),
-                       EYEAR = col_integer(),
-                       BEGINNING = col_double(),
-                       MONETARY = col_double(),
-                       INKIND = col_double()
-                       )) %>% 
-  bind_rows() %>% 
-  mutate_if(is_character, str_to_upper)
-
-pa_filer <- pa_filer %>% mutate(zip_clean = normal_zip(pa_filer$ZIPCODE))
-
-glimpse(pa_filer)
-
-pa_filer <- pa_filer %>% 
-  unite(
-    ADDRESS1, ADDRESS2,
-    col = address_clean,
-    sep = " ",
-    remove = FALSE,
-    na.rm = TRUE
-  ) %>% 
-  mutate(
-    address_clean = normal_address(
-      address = address_clean,
-      add_abbs = usps_city,
-      na_rep = TRUE
-    )
-  ) %>% 
+```{r read filer table}
+clean_dir <- here("pa", "expends", "data", "processed")
+pa_filer <- read_csv(glue("{clean_dir}/pa_filers_clean.csv"), 
+                     col_types = cols(.default = col_character())) %>% 
+  rename_at(vars(contains("clean")), list(~str_c("filer_",.))) %>% 
   select(
-    everything(),
-    address_clean
+    FILERID,
+    EYEAR,
+    CYCLE,
+    FILERNAME,
+    FILERTYPE,
+    ends_with("clean")
   )
 ```
 
-```{r filer clean}
-pa_filer <- pa_filer %>% mutate(city_prep = normal_city(city = CITY, 
-                                                          geo_abbs = usps_city,
-                                            st_abbs = c(valid_state),
-                                            na = invalid_city,
-                                            na_rep = TRUE))
-pa_filer <- tibble::rowid_to_column(pa_filer, "index")
-
-pa_filer$FILERNAME <- pa_filer$FILERNAME %>%  str_replace("&AMP;", "&") 
-
-# Match
-pa_filer <- pa_filer %>%
-  left_join(
-    y = zipcodes,
-    by = c(
-      "zip_clean" = "zip",
-      "STATE" = "state"
-    )
-  ) %>% 
-  rename(city_match = city)
-# Swap
-pa_filer <- pa_filer %>% 
-mutate(
-    match_dist = stringdist(city_match, city_prep),
-    city_swap = if_else(
-      condition = !is.na(match_dist) & match_dist <= 2,
-      true = city_match,
-      false = city_prep
-    )
-  )
-
-# Refine
-pa_filer_refined <- pa_filer %>%
-  filter(match_dist != 1) %>% 
-  filter(STATE =="PA") %>% 
-  mutate(
-    city_refine = city_swap %>% 
-      key_collision_merge(dict = valid_city) %>% 
-      n_gram_merge(numgram = 2),
-    refined = (city_swap != city_refine)
-  ) %>% 
-  filter(refined) %>% 
-  select(
-    index,
-    FILERID, 
-    CITY,
-    city_prep,
-    city_match,
-    city_swap,
-    match_dist,
-    city_refine,
-    STATE, 
-    ZIPCODE,
-    zip_clean
-  )
-
-pa_filer_refined %>% 
-  count(city_swap, city_refine) %>% 
-  arrange(desc(n))
-
-pa_filer_refined$city_refine <- pa_filer_refined$city_refine %>% 
-  str_replace("^MCCBG$", "MCCONNELLSBURG")
-
-
-filer_refined_table <-pa_filer_refined %>% 
-  select(index, city_refine)
-pa_filer <- pa_filer %>% 
-  left_join(filer_refined_table, by ="index") %>% 
-  mutate(city = coalesce(city_refine, city_swap)) 
-
-prop_in(pa_filer$CITY, valid_city, na.rm = TRUE)
-prop_in(pa_filer$city_prep, valid_city, na.rm = TRUE)
-prop_in(pa_filer$city, valid_city, na.rm = TRUE)
+```{r join with filer}
+pa <- pa %>% left_join(pa_filer, by = c("FILERID", "EYEAR", "CYCLE"))
 ```
-Use `campfin` pacakage's check_city function to check if a locality is a valid place against returned results from Google. To use this function, you will need to substitute `api_key` with your own api key. 
-```{r filer check_city, eval=FALSE}
-pa_filer_out <- pa_filer %>% 
-  filter(city %out% valid_city) %>% 
-  drop_na(city,STATE) %>% 
-  count(city, STATE) %>% 
-  mutate(check_city_flag = pmap_lgl(.l = list(city, STATE), .f = check_city, key = api_key))
-
-pa_add_valid <- pa_filer_out %>% filter(check_city_flag) %>% print_all() 
-# Use the following command to paste to the extra_city Google sheet
-pa_add_valid$city %>% cat( sep = "\n")
-valid_places <- unique(c(valid_city, extra_city, pa_filer_out$city[pa_filer_out$check_city_flag]))
-```
-
-```{r fetch_city, eval=FALSE}
-pa_filer <- pa_filer %>% mutate(city_fetch = city %>% 
-  str_replace("^PHILA$", "PHILADELPHIA") %>% 
-  str_replace("^PGH$", "PITSSBURGH"))
-
-pa_filer_fetch <- pa_filer %>% filter(city_fetch %out% valid_places)
-```
-
-```{r}
-#write pa_filer_clean to a csv. 
-
-```
-
 
 
 ## Conclude
@@ -949,7 +807,6 @@ pa_filer_fetch <- pa_filer %>% filter(city_fetch %out% valid_places)
 clean_dir <- here("pa", "expends", "data", "processed")
 dir_create(clean_dir)
 pa %>% 
-  rename(ZIP5 = zip_clean, YEAR = year, CITY_CLEAN = city_output) %>% 
   select(
     -city_prep,
     -on_year,
@@ -959,6 +816,7 @@ pa %>%
     -city_refine,
     -city_clean,
     -city_lookup,
+    -city_after_lookup,
     -sec_city_match,
     -n,
     -fix,
