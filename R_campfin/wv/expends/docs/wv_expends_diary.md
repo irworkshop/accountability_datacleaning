@@ -1,7 +1,7 @@
 West Virginia Expenditures
 ================
 Yanqi Xu
-2019-10-24 15:03:09
+2019-10-31 14:40:32
 
 -   [Project](#project)
 -   [Objectives](#objectives)
@@ -49,6 +49,17 @@ The IRW's `campfin` package will also have to be installed from GitHub. This pac
 ``` r
 if (!require("pacman")) install.packages("pacman")
 pacman::p_load_current_gh("irworkshop/campfin")
+#> stringdist (0.9.5.3 -> 0.9.5.5) [CRAN]
+#> digest     (0.6.21  -> 0.6.22 ) [CRAN]
+#> hms        (0.5.1   -> 0.5.2  ) [CRAN]
+#> tinytex    (0.16    -> 0.17   ) [CRAN]
+#> 
+#>   There are binary versions available but the source versions are later:
+#>             binary  source needs_compilation
+#> stringdist 0.9.5.3 0.9.5.5              TRUE
+#> digest      0.6.21  0.6.22              TRUE
+#> hms          0.5.1   0.5.2             FALSE
+#> tinytex       0.16    0.17             FALSE
 pacman::p_load(
   stringdist, # levenshtein value
   RSelenium, # remote browser
