@@ -68,7 +68,7 @@ these results. The `pacman` package will facilitate their installation and attac
 
 ```{r p_load, message=FALSE, dfrning=FALSE, error=FALSE}
 if (!require("pacman")) install.packages("pacman")
-pacman::p_load_current_gh("kiernann/campfin")
+pacman::p_load_gh("irworkshop/campfin")
 pacman::p_load(
   stringdist, # levenshtein value
   tidyverse, # data manipulation
@@ -266,7 +266,7 @@ pa <- pa %>% flag_na(CONTRIBUTOR, CONTAMT1, CONTDATE1)
 ### Duplicates
 
 
-```{r flag_dupes, eval = TRUE, collapse=TRUE}
+```{r flag_dupes, eval = FALSE, collapse=TRUE}
 pa <- flag_dupes(pa, dplyr::everything())
 sum(pa$dupe_flag)
 ```
@@ -391,6 +391,8 @@ Cleaning city values is the most complicated. This process involves four steps:
 
 `r sum(!is.na(pa$CITY))` distinct cities were in the original dataset in column 
 ```{r prep_city, collapse = TRUE}
+valid_place <- c(valid_city, extra_city) %>% unique()
+
 pa <- pa %>% mutate(city_prep = normal_city(city = CITY,
                                             geo_abbs = usps_city,
                                             st_abbs = c(valid_state),
@@ -449,7 +451,7 @@ pa_refined <- pa %>%
   filter(STATE =="PA") %>% 
   mutate(
     city_refine = city_swap %>% 
-      key_collision_merge(dict = valid_city) %>% 
+      key_collision_merge(dict = valid_place) %>% 
       n_gram_merge(numgram = 2),
     refined = (city_swap != city_refine)
   ) %>% 
@@ -546,7 +548,7 @@ pa$city <- pa$city %>%
 
 
 ```{r}
-pa_out <- pa %>% filter(city %out% valid_city) 
+pa_out <- pa %>% filter(city %out% valid_place) 
 
 pa_city_lookup <- read_csv(file = here("pa", "contribs", "data", "raw", "pa_city_lookup_contrib.csv"), skip =1, col_names = c("city", "city_lookup", "changed"))
 
@@ -559,7 +561,7 @@ pa <- pa %>% left_join(pa_out, by = "index") %>% mutate(city_lkp = ifelse(pa$ind
 
 pa_match_table <- pa %>% 
   filter(str_sub(pa$city_swap, 1,1) == str_sub(pa$city_match, 1,1)) %>% 
-  filter(city_lkp %out% valid_city)  %>% 
+  filter(city_lkp %out% valid_place)  %>% 
   mutate(string_dis = stringdist(city, city_match)) %>% 
   select (index, zip_clean, STATE, city, city_match, string_dis) %>% 
   distinct() %>% 
@@ -582,6 +584,93 @@ pa <- pa_match_table %>% select(index, sec_city_match) %>%
   mutate(city_clean = coalesce(sec_city_match, city_lkp))
 ```
 
+#### Check
+```{r check_city}
+pa <- pa %>% 
+  filter(city %out% valid_place) %>% 
+  drop_na(city,STATE) %>% 
+  count(city, STATE) %>% 
+  mutate(check_city_flag = pmap_lgl(.l = list(city, STATE), .f = check_city, key = api_key))
+
+pa_add_valid <- pa %>% filter(check_city_flag) %>% print_all() 
+# Use the following command to paste to the extra_city Google sheet
+# pa_add_valid$city %>% cat( sep = "\n")
+valid_places <- unique(c(valid_places, pa$city[pa$check_city_flag]))
+```
+
+```{r fetch_city, eval=FALSE}
+pa_filer <- pa_filer %>% mutate(city = city %>% 
+  str_replace("^PHILA$", "PHILADELPHIA") %>% 
+  str_replace("^PGH$", "PITSSBURGH"))
+
+pa_filer_out <- pa_filer %>% filter(city %out% valid_places) %>% 
+  drop_na(STATE,city) %>% 
+  count(STATE, city) 
+
+api_key <- Sys.getenv("GEOCODING_API")
+
+
+pa_filer_out <- pa_filer_out %>% cbind(
+  pmap_dfr(.l = list(pa_filer_out$city, pa_filer_out$STATE), .f = check_city, key = api_key, guess = T))
+```
+
+
+```{r generate progress}
+progress <- progress_table(
+  pa$city_raw,
+  pa$city_norm,
+  pa$city_swap,
+  pa$city_clean,
+  compare = valid_place
+) %>% mutate(stage = as_factor(stage))
+```
+
+```{r print progress, echo=FALSE}
+kable(progress, digits = 3)
+```
+You can see how the percentage of valid values increased with each stage.
+
+```{r progress_bar, echo=FALSE}
+progress %>% 
+  ggplot(aes(x = stage, y = prop_in)) +
+  geom_hline(yintercept = 0.99) +
+  geom_col(fill = RColorBrewer::brewer.pal(3, "Dark2")[3]) +
+  coord_cartesian(ylim = c(0.75, 1)) +
+  scale_y_continuous(labels = percent) +
+  labs(
+    title = "Massachusetts City Normalization Progress",
+    x = "Stage",
+    y = "Percent Valid"
+  )
+```
+
+More importantly, the number of distinct values decreased each stage. We were
+able to confidently change many distinct invalid values to their valid
+equivilent.
+
+```{r distinct_bar}
+progress %>% 
+  select(
+    stage, 
+    all = n_distinct,
+    bad = n_diff
+  ) %>% 
+  mutate(good = all - bad) %>% 
+  pivot_longer(c("good", "bad")) %>% 
+  mutate(name = name == "good") %>% 
+  ggplot(aes(x = stage, y = value)) +
+  geom_col(aes(fill = name)) +
+  scale_fill_brewer(palette = "Dark2") +
+  scale_y_continuous(labels = comma) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "Pennsylvania Contributions City Normalization Progress",
+    subtitle = "Distinct values, valid and invalid",
+    x = "Stage",
+    y = "Percent Valid",
+    fill = "Valid"
+  )
+```
 
 ```{r clean address, echo = TRUE, execute = FALSE}
 pa <- pa %>%   
@@ -599,27 +688,25 @@ pa <- pa %>%
     ))
 ```
 
-
-
-
 ```{r join filer table}
-pa_filer <- read_csv(file = here("pa", "contribs", "data", "raw", "pa_filer_clean.csv"))
-
-pa <- pa_filer %>% 
-  select(FILERID, EYEAR, CYCLE, FILERNAME, filer_address_clean, filer_zip_clean, filer_city, filer_state, filer_zip_clean) %>% 
-  right_join(pa, pa_filer, by = c("FILERID", "EYEAR", "CYCLE"))
+filer_dir <- here("pa", "expends", "data", "processed")
+pa_filer <- read_csv(glue("{filer_dir}/pa_filers_clean.csv"), 
+                     col_types = cols(.default = col_character())) %>% 
+  rename_at(vars(contains("clean")), list(~str_c("filer_",.))) %>% 
+  select(
+    FILERID,
+    EYEAR,
+    CYCLE,
+    FILERNAME,
+    FILERTYPE,
+    filer_state,
+    ends_with("clean")
+  )
 ```
 
-Each process also increases the percent of valid city names.
 
-
-```{r city_progress2, collapse=TRUE}
-prop_in(pa$CITY, valid_city, na.rm = TRUE)
-prop_in(pa$city_prep, valid_city, na.rm = TRUE)
-prop_in(pa$city_swap, valid_city, na.rm = TRUE)
-prop_in(pa$city, valid_city, na.rm = TRUE)
-prop_in(pa$city_clean, valid_city, na.rm = TRUE)
-```
+Each step of the cleaning process reduces the number of distinct city values.
+There are `r sum(!is.na(pa$CITY))` with `r n_distinct(pa$CITY)` distinct values, after the swap and refine processes, there are `r sum(!is.na(pa$city_clean))` entries with `r n_distinct(pa$city_clean)` distinct values. 
 
 ### Address
 Finally, we will create a new variable named `address_clean` cleaned with the `normal_address` function. Make sure you're using a tidyr version that is greater than "0.8.3.9", where the na.rm argument of the `unite()` function is supported.
@@ -636,9 +723,6 @@ pa <- pa %>% unite(
       na_rep = TRUE))
 ```
 
-
-Each step of the cleaning process reduces the number of distinct city values.
-There are `r sum(!is.na(pa$CITY))` with `r n_distinct(pa$CITY)` distinct values, after the swap and refine processes, there are `r sum(!is.na(pa$city_clean))` entries with `r n_distinct(pa$city_clean)` distinct values. 
 
 
 ## Conclude
