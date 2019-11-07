@@ -1,0 +1,471 @@
+---
+title: "State Data"
+author: "First Last"
+date: "`r Sys.time()`"
+output:
+  github_document: 
+    df_print: tibble
+    toc: true
+    toc_dept: 2
+editor_options: 
+  chunk_output_type: console
+---
+
+<!-- Place comments regarding knitting here -->
+
+```{r setup, include=FALSE, purl=FALSE}
+library(knitr)
+opts_chunk$set(
+  eval = TRUE,
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  error = FALSE,
+  collapse = TRUE,
+  comment = "#>",
+  fig.path = "../plots/",
+  fig.width = 10,
+  dpi = 300
+)
+options(width = 99)
+set.seed(5)
+```
+
+```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
+fs::dir_create(here::here("az", "lobby", "docs"))
+```
+
+## Project
+
+The Accountability Project is an effort to cut across data silos and give journalists, policy
+professionals, activists, and the public at large a simple way to search across huge volumes of
+public data about people and organizations.
+
+Our goal is to standardizing public data on a few key fields by thinking of each dataset row as a
+transaction. For each transaction there should be (at least) 3 variables:
+
+1. All **parties** to a transaction
+2. The **date** of the transaction
+3. The **amount** of money involved
+
+## Objectives
+
+This document describes the process used to complete the following objectives:
+
+1. How many records are in the database?
+1. Check for duplicates
+1. Check ranges
+1. Is there anything blank or missing?
+1. Check for consistency issues
+1. Create a five-digit ZIP Code called `ZIP5`
+1. Create a `YEAR` field from the transaction date
+1. Make sure there is data on both parties to a transaction
+
+## Packages
+
+The following packages are needed to collect, manipulate, visualize, analyze, and communicate
+these results. The `pacman` package will facilitate their installation and attachment.
+
+The IRW's `campfin` package will also have to be installed from GitHub. This package contains
+functions custom made to help facilitate the processing of campaign finance data.
+
+```{r load_packages, message=FALSE, dfrning=FALSE, error=FALSE}
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load_gh("irworkshop/campfin")
+pacman::p_load_gh("kiernann/gluedown")
+pacman::p_load(
+  tidyverse, # data manipulation
+  lubridate, # datetime strings
+  magrittr, # pipe opperators
+  janitor, # dataframe clean
+  refinr, # cluster and merge
+  scales, # format strings
+  readxl, # read excel files
+  knitr, # knit documents
+  vroom, # read files fast
+  glue, # combine strings
+  here, # relative storage
+  fs # search storage 
+)
+```
+
+This document should be run as part of the `R_campfin` project, which lives as a sub-directory of
+the more general, language-agnostic [`irworkshop/accountability_datacleaning`][01] GitHub
+repository.
+
+The `R_campfin` project uses the [RStudio projects][02] feature and should be run as such. The
+project also uses the dynamic `here::here()` tool for file paths relative to _your_ machine.
+
+```{r where_here}
+# where does this document knit?
+here::here()
+```
+
+[01]: https://github.com/irworkshop/accountability_datacleaning "TAP repo"
+[02]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects "Rproj"
+
+## Data
+
+Data is obtained fromt the [Arizona Secretary of States](https://azsos.gov).
+The data was obtained personally from a contanct at the SOS office. The data
+is only available publically in PDF format.
+
+## Import
+
+The data was provided to IRW as a `.zip` archives of 12 `.csv` files and one
+`.xlsx` file with a key describing each of the individual files.
+
+```{r raw_dir}
+raw_dir <- here("az", "lobbying", "data", "raw")
+dir_exists(raw_dir)
+```
+
+We can read the excel file with `readxl::read_excel()` and list the rows.
+
+```{r keys_list}
+here("az", "lobbying", "data", "raw", "LOB Database Key.xlsx") %>% 
+  read_excel(col_names = FALSE) %>% 
+  select(1) %>% 
+  as_vector() %>% 
+  unname() %>% 
+  map_md(md_code, 1) %>% 
+  md_bullet()
+```
+
+Then, we can `unzip()` the file and list the `.csv` files within.
+
+```{r raw_unzip}
+zip_file <- dir_ls(raw_dir, glob = "*.zip$")
+unzip(
+  zipfile = zip_file,
+  exdir = raw_dir
+)
+```
+
+```{r raw_list}
+lob_dir <- dir_ls(raw_dir, type = "dir")
+dir_ls(lob_dir) %>% 
+  str_remove("^.*(az)") %>% 
+  md_code() %>% 
+  md_bullet()
+```
+
+We will join together these various tables into a single database of lobbyists,
+their employers, and their clients. First, we will have to read each file.
+
+The `LOB.csv` file contains the base information on each lobbyist (name, phone,
+address, etc).
+
+```{r read_lob}
+lob <- read_csv(
+  file = str_c(lob_dir, "LOB.CSV", sep = "/"),
+  col_types = cols(.default = col_character()),
+)
+```
+
+```{r echo=FALSE}
+lob <- clean_names(lob)
+```
+
+```{r echo=FALSE}
+glimpse(sample_frac(lob))
+```
+
+The `LOG_REG.csv` file contains the information regarding each lobbyist's
+registration status (when and why).
+
+```{r read_lob_reg}
+lob_reg <- read_csv(
+  file = str_c(lob_dir, "LOB_REG.CSV", sep = "/"),
+  col_types = cols(
+    .default = col_character(),
+    LOB_TERM = col_integer(),
+    REQUIRED = col_logical(),
+    RECEIVED = col_date("%m/%d/%Y %H:%M %p"),
+    STARTED = col_date("%m/%d/%Y %H:%M %p"),
+    TERMINATED = col_date("%m/%d/%Y %H:%M %p")
+  )
+)
+```
+
+```{r echo=FALSE}
+lob_reg <- clean_names(lob_reg)
+```
+
+```{r echo=FALSE}
+sample_n(lob_reg, 10)
+```
+
+The `lob_reg` data frame can be joined with the base `lob` using the `lob_id`
+variable as a relational key.
+
+```{r join_reg}
+lob <- left_join(lob, lob_reg, by = "lob_id")
+```
+
+The next data set to add will be the client (pincipal) represented by each
+lobbyist. The names of each lobbist are contained in `PPB.csv` and their
+registration is included in `PPB_REG.csv`.
+
+```{r read_lob_reg}
+ppb <- read_csv(
+  file = str_c(lob_dir, "PPB.CSV", sep = "/"),
+  col_types = cols(
+    .default = col_character(),
+    PPB_REP.REP_YEAR = col_integer(),
+    PPB_REP.REQUIRED = col_logical(),
+    PPB_REP.EXEMPTED = col_logical(),
+  )
+)
+```
+
+```{r repair_ppb, echo=FALSE}
+names(ppb) <- str_extract(string = names(ppb), pattern = "[^.]+$")
+ppb <- ppb %>% 
+  clean_names("snake") %>% 
+  remove_empty("cols") %>% 
+  select(-required, -exempted)
+```
+
+```{r echo=FALSE}
+sample_n(ppb, 10)
+```
+
+The `ppb` data frame can be linked to `lob` using the data in `REF.csv`.
+
+```{r read_ref}
+ref <- read_csv(
+  file = str_c(lob_dir, "REF.CSV", sep = "/"),
+  col_types = cols(
+    .default = col_character(),
+    DESIGNATED = col_logical(),
+    STARTED = col_date("%m/%d/%Y %H:%M %p"),
+    TERMINATED = col_date("%m/%d/%Y %H:%M %p"),
+    COMPENSATED = col_logical()
+  )
+)
+```
+
+```{r echo=FALSE}
+ref <- clean_names(ref)
+```
+
+Since each lobbyist in `lob` represents _multiple_ principals in `ppb`, when we
+join these list together, some rows of `lob` will be duplicated aside from the
+unique `ppb_id`.
+
+```{r}
+ref_ids <- distinct(select(ref, ppb_id, lob_id))
+lob %>% 
+  left_join(ref_ids, by = "lob_id") %>% 
+  left_join(ppb, by = "ppb_id")
+```
+
+## Explore
+
+```{r glimpse}
+head(df)
+tail(df)
+glimpse(sample_frac(df))
+```
+
+### Missing
+
+```{r glimpse_na}
+glimpse_fun(df, count_na)
+```
+
+```{r flag_na}
+df <- df %>% flag_na(payee, filer, date, amount)
+```
+
+### Duplicates
+
+```{r flag_dupes}
+df <- flag_dupes(df, -id)
+```
+
+### Categorical
+
+```{r glimpse_distinct}
+glimpse_fun(df, n_distinct)
+```
+
+### Continuous
+
+#### Amounts
+
+```{r summary_amount}
+summary(df$amount)
+```
+
+```{r amount_histogram, echo=FALSE}
+df %>%
+  ggplot(aes(amount)) +
+  geom_histogram() +
+  scale_x_continuous(
+    breaks = c(1 %o% 10^(0:6)),
+    labels = dollar,
+    trans = "log10"
+  ) +
+  labs(
+    title = "State Data Amount Distribution",
+    subtitle = "from 2000 to 2019",
+    caption = "Source: State Agency Name",
+    x = "Amount",
+    y = "Count"
+  )
+```
+
+#### Dates
+
+```{r year_add}
+df <- mutate(df, year = year(date))
+```
+
+```{r date_range}
+min(df$date)
+sum(df$year < 2000)
+max(df$date)
+sum(df$date > today())
+```
+
+## Wrangle
+
+### Address
+
+```{r address_normal}
+packageVersion("tidyr")
+df <- df %>% 
+  # combine street addr
+  unite(
+    col = adress_full,
+    starts_with("address"),
+    sep = " ",
+    remove = FALSE,
+    na.rm = TRUE
+  ) %>% 
+  # normalize combined addr
+  mutate(
+    address_norm = normal_address(
+      address = adress_full,
+      add_abbs = usps_street,
+      na_rep = TRUE
+    )
+  )
+```
+
+### ZIP
+
+```{r zip_normal}
+df <- df %>% 
+  mutate(
+    zip_norm = normal_zip(
+      zip = zip,
+      na_rep = TRUE
+    )
+  )
+```
+
+```{r zip_progress}
+progress_table(
+  df$zip,
+  df$zip_norm,
+  compare = valid_zip
+)
+```
+
+### State
+
+```{r state_normal}
+df <- df %>% 
+  mutate(
+    state_norm = normal_state(
+      state = state,
+      abbreviate = TRUE,
+      na_rep = TRUE,
+      valid = valid_state
+    )
+  )
+```
+
+```{r state_progress}
+progress_table(
+  df$state,
+  df$state_norm,
+  compare = valid_state
+)
+```
+
+### City
+
+```{r normal_city}
+df <- df %>% 
+  mutate(
+    city_norm = normal_city(
+      city = city, 
+      geo_abbs = usps_city,
+      st_abbs = c("DF", "DC", "DATA FRAME"),
+      na = invalid_city,
+      na_rep = TRUE
+    )
+  )
+```
+
+```{r swap_city}
+df <- df %>% 
+  left_join(
+    y = zipcodes,
+    by = c(
+      "state_norm" = "state",
+      "zip_norm" = "zip"
+    )
+  ) %>% 
+  rename(city_match = city) %>% 
+  mutate(
+    match_abb = is_abbrev(city_norm, city_match),
+    match_dist = str_dist(city_norm, city_match),
+    city_swap = if_else(
+      condition = match_abb | match_dist == 1,
+      true = city_match,
+      false = city_norm
+    )
+  )
+```
+
+```{r city_progress}
+progress_table(
+  df$city,
+  df$city_norm,
+  compare = valid_city
+)
+```
+
+## Conclude
+
+1. There are `nrow(df)` records in the database.
+1. There are `sum(df$dupe_flag)` duplicate records in the database.
+1. The range and distribution of `amount` and `date` seem reasonable.
+1. There are `sum(df$na_flag)` records missing either recipient or date.
+1. Consistency in goegraphic data has been improved with `campfin::normal_*()`.
+1. The 5-digit `zip_norm` variable has been created with `campfin::normal_zip(df$zip)`.
+1. The 4-digit `year` variable has been created with `lubridate::year()`.
+
+## Export
+
+```{r create_proc_dir}
+proc_dir <- here("df", "type", "data", "processed")
+dir_create(proc_dir)
+```
+
+```{r write_clean}
+df %>% 
+  select(
+    
+  ) %>% 
+  write_csv(
+    path = glue("{proc_dir}/df_type_clean.csv"),
+    na = ""
+  )
+```
+
