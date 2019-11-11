@@ -1,6 +1,6 @@
 ---
-title: "State Data"
-author: "First Last"
+title: "Arizona Lobbyists"
+author: "Kiernan Nicholls"
 date: "`r Sys.time()`"
 output:
   github_document: 
@@ -106,14 +106,13 @@ here::here()
 
 ## Data
 
-Data is obtained fromt the [Arizona Secretary of States](https://azsos.gov).
-The data was obtained personally from a contanct at the SOS office. The data
-is only available publically in PDF format.
+Data is obtained fromt the [Arizona Secretary of States](https://azsos.gov). The data was obtained
+personally from a contanct at the SOS office. The data is only available publically in PDF format.
 
 ## Import
 
-The data was provided to IRW as a `.zip` archives of 12 `.csv` files and one
-`.xlsx` file with a key describing each of the individual files.
+The data was provided to IRW as a `.zip` archives of 12 `.csv` files and one `.xlsx` file with a
+key describing each of the individual files.
 
 ```{r raw_dir}
 raw_dir <- here("az", "lobbying", "data", "raw")
@@ -122,7 +121,7 @@ dir_exists(raw_dir)
 
 We can read the excel file with `readxl::read_excel()` and list the rows.
 
-```{r keys_list}
+```{r keys_list, results='asis'}
 here("az", "lobbying", "data", "raw", "LOB Database Key.xlsx") %>% 
   read_excel(col_names = FALSE) %>% 
   select(1) %>% 
@@ -142,7 +141,7 @@ unzip(
 )
 ```
 
-```{r raw_list}
+```{r raw_list, results='asis'}
 lob_dir <- dir_ls(raw_dir, type = "dir")
 dir_ls(lob_dir) %>% 
   str_remove("^.*(az)") %>% 
@@ -150,13 +149,12 @@ dir_ls(lob_dir) %>%
   md_bullet()
 ```
 
-We will join together these various tables into a single database of lobbyists,
-their employers, and their clients. First, we will have to read each file.
+We will join together these various tables into a single database of lobbyists, their employers,
+and their clients. First, we will have to read each file.
 
-The `LOB.csv` file contains the base information on each lobbyist (name, phone,
-address, etc).
+The `LOB.csv` file contains the base information on each lobbyist (name, phone, address, etc).
 
-```{r read_lob}
+```{r lob_read}
 lob <- read_csv(
   file = str_c(lob_dir, "LOB.CSV", sep = "/"),
   col_types = cols(.default = col_character()),
@@ -164,6 +162,7 @@ lob <- read_csv(
 ```
 
 ```{r echo=FALSE}
+n <- n_distinct(lob$LOB_ID)
 lob <- clean_names(lob)
 ```
 
@@ -171,10 +170,10 @@ lob <- clean_names(lob)
 glimpse(sample_frac(lob))
 ```
 
-The `LOG_REG.csv` file contains the information regarding each lobbyist's
-registration status (when and why).
+The `LOG_REG.csv` file contains the information regarding each lobbyist's registration status for
+_every_ term for which they were registered.
 
-```{r read_lob_reg}
+```{r reg_read}
 lob_reg <- read_csv(
   file = str_c(lob_dir, "LOB_REG.CSV", sep = "/"),
   col_types = cols(
@@ -196,18 +195,19 @@ lob_reg <- clean_names(lob_reg)
 sample_n(lob_reg, 10)
 ```
 
-The `lob_reg` data frame can be joined with the base `lob` using the `lob_id`
-variable as a relational key.
+The `lob_reg` data frame can be joined with the base `lob` using the `lob_id` variable as a
+relational key. When we perform a `dplyr::left_join()`, new rows will be created. In the `lob` data
+frame, each lobbyist is only listed once. After joining, those single rows will be repeated with
+new distinct rows from `lob_reg`.
 
-```{r join_reg}
-lob <- left_join(lob, lob_reg, by = "lob_id")
+```{r reg_join}
+# lob <- left_join(lob, lob_reg, by = "lob_id")
 ```
 
-The next data set to add will be the client (pincipal) represented by each
-lobbyist. The names of each lobbist are contained in `PPB.csv` and their
-registration is included in `PPB_REG.csv`.
+The next data set to add will be the client (pincipal) represented by each lobbyist. The names of
+each lobbist are contained in `PPB.csv` and their registration is included in `PPB_REG.csv`.
 
-```{r read_lob_reg}
+```{r ppb_read}
 ppb <- read_csv(
   file = str_c(lob_dir, "PPB.CSV", sep = "/"),
   col_types = cols(
@@ -219,11 +219,12 @@ ppb <- read_csv(
 )
 ```
 
-```{r repair_ppb, echo=FALSE}
+```{r ppb_repair, echo=FALSE}
 names(ppb) <- str_extract(string = names(ppb), pattern = "[^.]+$")
 ppb <- ppb %>% 
   clean_names("snake") %>% 
   remove_empty("cols") %>% 
+  filter(!is.na(ppb_name)) %>% 
   select(-required, -exempted)
 ```
 
@@ -233,7 +234,7 @@ sample_n(ppb, 10)
 
 The `ppb` data frame can be linked to `lob` using the data in `REF.csv`.
 
-```{r read_ref}
+```{r ref_read}
 ref <- read_csv(
   file = str_c(lob_dir, "REF.CSV", sep = "/"),
   col_types = cols(
@@ -250,84 +251,80 @@ ref <- read_csv(
 ref <- clean_names(ref)
 ```
 
-Since each lobbyist in `lob` represents _multiple_ principals in `ppb`, when we
-join these list together, some rows of `lob` will be duplicated aside from the
-unique `ppb_id`.
+Since each lobbyist in `lob` represents _multiple_ principals in `ppb`, when we join these list
+together, some rows of `lob` will be duplicated aside from the unique `ppb_id`. Many of the
+principals (IDs) listed in `ref` do not exist in `ppb` and would create useless empty rows when
+joined to `lob` (along the `lob_id` in ref). We will filter out these rows.
+
+```{r ref_join}
+azl <- lob %>%
+  # add all the principals of a lobbyist
+  left_join(ref, by = "lob_id") %>% 
+  # add the names of those principals
+  left_join(ppb, by = "ppb_id")
+```
 
 ```{r}
-ref_ids <- distinct(select(ref, ppb_id, lob_id))
-lob %>% 
-  left_join(ref_ids, by = "lob_id") %>% 
-  left_join(ppb, by = "ppb_id")
+azl %>% 
+  arrange(
+    lob_lastname,
+    desc(rep_year),
+    ppb_name
+  )
 ```
 
 ## Explore
 
+After these various joins, our new data frame contains one row per client, per lobbyist, per year.
+
 ```{r glimpse}
-head(df)
-tail(df)
-glimpse(sample_frac(df))
+azl %>% 
+  select(
+    lob_id,
+    lob_lastname,
+    ppb_id,
+    ppb_name,
+    rep_year
+  ) %>% 
+  sample_frac()
+
+glimpse(sample_frac(azl))
 ```
 
 ### Missing
 
+The _vast_ majority of entries are missing the `ppb_name`, as only _current_  Principal names are
+listed in the `ppb` data frame.
+
+```{r count_ppb_year}
+count(ppb, rep_year)
+```
+
+However, the `lob` and `ref` data frames contain lobbyists and relationships dating back to
+`r format(min(lob_reg$started, na.rm = T), "%b %d, %Y")`. For all those lobbyists and relationships
+without corresponding names in `ppb`, rows are created with missing `ppb_*` values.
+
 ```{r glimpse_na}
-glimpse_fun(df, count_na)
+glimpse_fun(azl, count_na)
 ```
 
 ```{r flag_na}
-df <- df %>% flag_na(payee, filer, date, amount)
+azl <- azl %>% flag_na(lob_lastname, ppb_name)
+noquote(comma(sum(azl$na_flag)))
+noquote(percent(mean(azl$na_flag)))
 ```
 
 ### Duplicates
 
 ```{r flag_dupes}
-df <- flag_dupes(df, -id)
+azl <- flag_dupes(azl, everything())
+sum(azl$dupe_flag)
 ```
 
 ### Categorical
 
 ```{r glimpse_distinct}
-glimpse_fun(df, n_distinct)
-```
-
-### Continuous
-
-#### Amounts
-
-```{r summary_amount}
-summary(df$amount)
-```
-
-```{r amount_histogram, echo=FALSE}
-df %>%
-  ggplot(aes(amount)) +
-  geom_histogram() +
-  scale_x_continuous(
-    breaks = c(1 %o% 10^(0:6)),
-    labels = dollar,
-    trans = "log10"
-  ) +
-  labs(
-    title = "State Data Amount Distribution",
-    subtitle = "from 2000 to 2019",
-    caption = "Source: State Agency Name",
-    x = "Amount",
-    y = "Count"
-  )
-```
-
-#### Dates
-
-```{r year_add}
-df <- mutate(df, year = year(date))
-```
-
-```{r date_range}
-min(df$date)
-sum(df$year < 2000)
-max(df$date)
-sum(df$date > today())
+glimpse_fun(azl, n_distinct)
 ```
 
 ## Wrangle
@@ -336,32 +333,37 @@ sum(df$date > today())
 
 ```{r address_normal}
 packageVersion("tidyr")
-df <- df %>% 
+azl <- azl %>% 
   # combine street addr
   unite(
-    col = adress_full,
-    starts_with("address"),
+    col = lob_addr_full,
+    starts_with("lob_addr"),
     sep = " ",
     remove = FALSE,
     na.rm = TRUE
   ) %>% 
   # normalize combined addr
   mutate(
-    address_norm = normal_address(
-      address = adress_full,
+    lob_addr_norm = normal_address(
+      address = lob_addr_full,
       add_abbs = usps_street,
       na_rep = TRUE
     )
-  )
+  ) %>% 
+  select(-lob_addr_full)
+```
+
+```{r address_view}
+select(azl, starts_with("lob_addr")) %>% distinct() %>% sample_frac()
 ```
 
 ### ZIP
 
 ```{r zip_normal}
-df <- df %>% 
+azl <- azl %>% 
   mutate(
-    zip_norm = normal_zip(
-      zip = zip,
+    lob_zip_norm = normal_zip(
+      zip = lob_zip,
       na_rep = TRUE
     )
   )
@@ -369,8 +371,8 @@ df <- df %>%
 
 ```{r zip_progress}
 progress_table(
-  df$zip,
-  df$zip_norm,
+  azl$lob_zip,
+  azl$lob_zip_norm,
   compare = valid_zip
 )
 ```
@@ -378,10 +380,10 @@ progress_table(
 ### State
 
 ```{r state_normal}
-df <- df %>% 
+azl <- azl %>% 
   mutate(
-    state_norm = normal_state(
-      state = state,
+    lob_state_norm = normal_state(
+      state = lob_state,
       abbreviate = TRUE,
       na_rep = TRUE,
       valid = valid_state
@@ -391,8 +393,8 @@ df <- df %>%
 
 ```{r state_progress}
 progress_table(
-  df$state,
-  df$state_norm,
+  azl$lob_state,
+  azl$lob_state_norm,
   compare = valid_state
 )
 ```
@@ -400,71 +402,99 @@ progress_table(
 ### City
 
 ```{r normal_city}
-df <- df %>% 
+azl <- azl %>% 
   mutate(
-    city_norm = normal_city(
-      city = city, 
+    lob_city_norm = normal_city(
+      city = lob_city, 
       geo_abbs = usps_city,
-      st_abbs = c("DF", "DC", "DATA FRAME"),
-      na = invalid_city,
+      st_abbs = c("AZ", "DC", "ARIZONA"),
+      na = c(invalid_city, ""),
       na_rep = TRUE
     )
   )
 ```
 
 ```{r swap_city}
-df <- df %>% 
+azl <- azl %>% 
   left_join(
     y = zipcodes,
     by = c(
-      "state_norm" = "state",
-      "zip_norm" = "zip"
+      "lob_state_norm" = "state",
+      "lob_zip_norm" = "zip"
     )
   ) %>% 
-  rename(city_match = city) %>% 
+  rename(lob_city_match = city) %>% 
   mutate(
-    match_abb = is_abbrev(city_norm, city_match),
-    match_dist = str_dist(city_norm, city_match),
-    city_swap = if_else(
-      condition = match_abb | match_dist == 1,
-      true = city_match,
-      false = city_norm
+    lob_match_abb = is_abbrev(lob_city_norm, lob_city_match),
+    lob_match_dist = str_dist(lob_city_norm, lob_city_match),
+    lob_city_swap = if_else(
+      condition = lob_match_abb | lob_match_dist == 1,
+      true = lob_city_match,
+      false = lob_city_norm
     )
   )
 ```
 
+```{r}
+azl %>%
+  filter(lob_city_swap %out% valid_city) %>%
+  count(lob_city_swap, lob_city_match, lob_state_norm, sort = TRUE) %>% 
+  drop_na() %>% 
+  print(n = Inf)
+```
+
+```{r}
+many_city <- c(
+  valid_city,
+  extra_city,
+  "ORO VALLEY",
+  "SUN LAKES",
+  "PINETOP LAKESIDE",
+  "CORAL GABLES"
+)
+```
+
 ```{r city_progress}
 progress_table(
-  df$city,
-  df$city_norm,
-  compare = valid_city
+  azl$lob_city,
+  azl$lob_city_norm,
+  compare = many_city
 )
 ```
 
 ## Conclude
 
-1. There are `nrow(df)` records in the database.
-1. There are `sum(df$dupe_flag)` duplicate records in the database.
+1. There are `r nrow(azl)` records in the database.
+1. There are `r sum(azl$dupe_flag)` duplicate records in the database.
 1. The range and distribution of `amount` and `date` seem reasonable.
-1. There are `sum(df$na_flag)` records missing either recipient or date.
+1. There are `r sum(azl$na_flag)` records missing either the lobbyist or principal name.
 1. Consistency in goegraphic data has been improved with `campfin::normal_*()`.
-1. The 5-digit `zip_norm` variable has been created with `campfin::normal_zip(df$zip)`.
-1. The 4-digit `year` variable has been created with `lubridate::year()`.
+1. The 5-digit `lob_zip_norm` variable has been created with `campfin::normal_zip()`.
+1. The 4-digit `rep_year` was taken from the `ppb` data frame.
 
 ## Export
 
 ```{r create_proc_dir}
-proc_dir <- here("df", "type", "data", "processed")
+proc_dir <- here("az", "lobbying", "data", "processed")
 dir_create(proc_dir)
 ```
 
 ```{r write_clean}
-df %>% 
+azl %>% 
   select(
-    
+    -lob_city_norm,
+    -lob_city_match,
+    -lob_match_abb,
+    -lob_match_dist
+  ) %>%
+  rename(
+    lob_addr_clean = lob_addr_norm,
+    lob_zip_clean = lob_zip_norm,
+    lob_state_clean = lob_state_norm,
+    lob_city_clean = lob_city_swap
   ) %>% 
   write_csv(
-    path = glue("{proc_dir}/df_type_clean.csv"),
+    path = glue("{proc_dir}/az_type_clean.csv"),
     na = ""
   )
 ```
