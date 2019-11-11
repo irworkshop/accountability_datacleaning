@@ -429,6 +429,10 @@ vt <- vt %>%
   mutate(city_refine = coalesce(city_refine, city_swap))
 ```
 
+```{r city_edit}
+vt$city_refine[str_which(vt$city_refine, "^VENLO LW$")] <- NA
+```
+
 ### Progress
 
 To check our progress, we will expand out `valid_city` vector using a list of towns taken directly
@@ -453,8 +457,6 @@ vt %>%
   count(state_norm, zip_norm, city_refine, city_match, sort = TRUE) %>% 
   drop_na(city_refine)
 ```
-
-
 
 ```{r city_progress}
 progress <- progress_table(
@@ -535,8 +537,8 @@ proc_dir <- here("vt", "expends", "data", "processed")
 dir_create(proc_dir)
 ```
 
-```{r write_clean}
-vt %>% 
+```{r clean_trim}
+vt <- vt %>% 
   select(
     -address_sep,
     -zip_sep,
@@ -553,7 +555,11 @@ vt %>%
     zip_clean = zip_norm,
     state_clean = state_norm,
     city_clean = city_refine
-  ) %>% 
+  )
+```
+
+```{r clean_write, eval=FALSE}
+vt %>% 
   write_csv(
     path = glue("{proc_dir}/df_type_clean.csv"),
     na = ""

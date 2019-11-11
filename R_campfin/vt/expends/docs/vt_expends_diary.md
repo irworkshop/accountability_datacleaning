@@ -1,7 +1,7 @@
 Vermont Expenditures
 ================
 Kiernan Nicholls
-2019-11-05 12:44:43
+2019-11-11 12:12:06
 
 ## Objectives
 
@@ -113,21 +113,21 @@ glimpse(sample_frac(vt))
 
     #> Observations: 40,280
     #> Variables: 15
-    #> $ id                  <chr> "2128", "37417", "18998", "15660", "37993", "18237", "7613", "23842"…
-    #> $ transaction_date    <date> 2018-11-04, 2015-02-21, 2016-10-19, 2017-01-20, 2015-01-12, 2016-10…
+    #> $ id                  <chr> "583", "29934", "12850", "4003", "696", "8952", "31449", "31622", "2…
+    #> $ transaction_date    <date> 2019-02-23, 2016-06-27, 2018-02-14, 2018-10-19, 2019-02-15, 2018-07…
     #> $ payee_type          <chr> "BUSINESS/GROUP/ORGANIZATION", "BUSINESS/GROUP/ORGANIZATION", "BUSIN…
-    #> $ payee_name          <chr> "ACTBLUE", "BILLINGS MOBILE", "USPS", "VANTAGE PRESS", "CLOWNFISH ST…
-    #> $ payee_address       <chr> "PO BOX 441146, SOMERVILLE, VT 02144-0031", "RT 100, WATERBURY , VT …
-    #> $ registrant_name     <chr> "FREDETTE, KEN", "GOODKIND, STEVEN ALAN", "FRENCH, RIKI", "KNODELL, …
-    #> $ registrant_type     <chr> "CANDIDATE", "CANDIDATE", "CANDIDATE", "CANDIDATE", "CANDIDATE", "CA…
-    #> $ office              <chr> "STATE REPRESENTATIVE - RUTLAND 2", "MAYOR -", "STATE REPRESENTATIVE…
-    #> $ election_cycle      <chr> "2018 GENERAL", "2015 ANNUAL MEETING (ALL TOWNS)", "2016 GENERAL", "…
-    #> $ reporting_period    <date> 2018-11-20, 2015-03-17, 2016-11-04, 2017-02-05, 2015-02-01, 2016-11…
+    #> $ payee_name          <chr> "SOUTH STREET CAFE", "SHELL SERVICE STATION", "SIGNS ON THE CHEAP", …
+    #> $ payee_address       <chr> "105 SOUTH ST, BENNINGTON, VT 05201", "18 SYKES MTN AVE, WHITE RIVER…
+    #> $ registrant_name     <chr> "SCULLY, WILLIAM", "DUNNE, MATT", "ROZZI, MICHAEL", "BRAY, CHRISTOPH…
+    #> $ registrant_type     <chr> "CANDIDATE", "CANDIDATE", "CANDIDATE", "PUBLIC MEDIA ACTIVITIES", "C…
+    #> $ office              <chr> "SELECTPERSON -", "GOVERNOR", "SCHOOL DIRECTOR -", NA, "WARD CLERK -…
+    #> $ election_cycle      <chr> "2019 ANNUAL MEETING (ALL TOWNS)", "2016 GENERAL", "2018 ANNUAL MEET…
+    #> $ reporting_period    <date> 2019-03-01, 2016-07-15, 2018-02-24, 2018-11-20, 2019-02-23, 2018-08…
     #> $ expenditure_type    <chr> "MONETARY", "MONETARY", "MONETARY", "MONETARY", "MONETARY", "MONETAR…
-    #> $ expenditure_purpose <chr> "ACTBLUE FEES", "STAFF - TRAVEL", "MEDIA - POSTCARDS", "MEDIA - POST…
-    #> $ expenditure_amount  <dbl> 3.95, 3.79, 233.56, 191.14, 87.35, 35.59, 150.00, 0.10, 1735.35, 0.4…
+    #> $ expenditure_purpose <chr> "FUNDRAISER - FOOD &AMP; BEVERAGE", "STAFF - GAS", "YARD SIGNS", "ME…
+    #> $ expenditure_amount  <dbl> 150.00, 30.79, 224.11, 795.00, 145.00, 23.67, 461.53, 87.39, 0.18, 1…
     #> $ public_question     <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
-    #> $ comments            <chr> NA, NA, NA, NA, "CK # 1A", NA, NA, NA, NA, NA, "VOLUNTEER MEETING SP…
+    #> $ comments            <chr> NA, "GAS", NA, NA, NA, NA, NA, "OFFICE SUPPLIES", NA, NA, NA, "FB AD…
 
 ### Distinct
 
@@ -354,18 +354,18 @@ vt %>%
 ```
 
     #> # A tibble: 8,180 x 2
-    #>    address_sep                         address_norm                                 
-    #>    <chr>                               <chr>                                        
-    #>  1 0000 ROUTE 4                        0000 ROUTE 4                                 
-    #>  2 133 HEINEBERG DRIVE                 133 HEINEBERG DRIVE                          
-    #>  3 601 MASSACHUSETTS AVE NW WASHINGTON 601 MASSACHUSETTS AVENUE NORTHWEST WASHINGTON
-    #>  4 42 SEVERANCE GRN                    42 SEVERANCE GREEN                           
-    #>  5 P.O. BOX 30                         PO BOX 30                                    
-    #>  6 10 CHURCH STREET                    10 CHURCH STREET                             
-    #>  7 1 SCALE AVE                         1 SCALE AVENUE                               
-    #>  8 1920LAFAYETTEST                     1920LAFAYETTEST                              
-    #>  9 101 LAKE ST                         101 LAKE STREET                              
-    #> 10 172 N.MAIN STREET                   172 NMAIN STREET                             
+    #>    address_sep           address_norm            
+    #>    <chr>                 <chr>                   
+    #>  1 1340 WILLISTON ROAD   1340 WILLISTON ROAD     
+    #>  2 20455 BLUE HERON TER  20455 BLUE HERON TERRACE
+    #>  3 175 ROUTE 7 SOUTH     175 ROUTE 7 SOUTH       
+    #>  4 357 MAIN ST           357 MAIN STREET         
+    #>  5 414 MINISTER BROOK RD 414 MINISTER BROOK ROAD 
+    #>  6 105 W 3RD STREET      105 WEST 3RD STREET     
+    #>  7 682 CHRISTIAN ST.     682 CHRISTIAN STREET    
+    #>  8 6206 GEORGIA SHORE RD 6206 GEORGIA SHORE ROAD 
+    #>  9 346 SHELBURNE RD      346 SHELBURNE ROAD      
+    #> 10 43 FOREST AVE         43 FOREST AVENUE        
     #> # … with 8,170 more rows
 
 ### ZIP
@@ -485,6 +485,10 @@ vt <- vt %>%
   mutate(city_refine = coalesce(city_refine, city_swap))
 ```
 
+``` r
+vt$city_refine[str_which(vt$city_refine, "^VENLO LW$")] <- NA
+```
+
 ### Progress
 
 To check our progress, we will expand out `valid_city` vector using a
@@ -511,20 +515,20 @@ vt %>%
   drop_na(city_refine)
 ```
 
-    #> # A tibble: 56 x 5
-    #>    state_norm zip_norm city_refine      city_match       n
-    #>    <chr>      <chr>    <chr>            <chr>        <int>
-    #>  1 NJ         07726    MANALAPAN        ENGLISHTOWN     52
-    #>  2 VT         05682    NORTH MIDDLESEX  WORCESTER       28
-    #>  3 VT         05303    WEST BRATTLEBORO BRATTLEBORO     20
-    #>  4 VT         05763    NORTH CHITTENDEN PITTSFORD       18
-    #>  5 VT         05602    BELIN            MONTPELIER      16
-    #>  6 VT         05928    VENLO LW         DERBY CENTER     6
-    #>  7 CA         94025    HACKERS WAY      MENLO PARK       5
-    #>  8 CA         94016    SAN FRANSISCO    DALY CITY        4
-    #>  9 CA         94025    MELNO            MENLO PARK       4
-    #> 10 TX         78645    LAGO VISTA       LEANDER          4
-    #> # … with 46 more rows
+    #> # A tibble: 55 x 5
+    #>    state_norm zip_norm city_refine        city_match      n
+    #>    <chr>      <chr>    <chr>              <chr>       <int>
+    #>  1 NJ         07726    MANALAPAN          ENGLISHTOWN    52
+    #>  2 VT         05682    NORTH MIDDLESEX    WORCESTER      28
+    #>  3 VT         05303    WEST BRATTLEBORO   BRATTLEBORO    20
+    #>  4 VT         05763    NORTH CHITTENDEN   PITTSFORD      18
+    #>  5 VT         05602    BELIN              MONTPELIER     16
+    #>  6 CA         94025    HACKERS WAY        MENLO PARK      5
+    #>  7 CA         94016    SAN FRANSISCO      DALY CITY       4
+    #>  8 CA         94025    MELNO              MENLO PARK      4
+    #>  9 TX         78645    LAGO VISTA         LEANDER         4
+    #> 10 VT         05346    SOUTH WESTMINISTER PUTNEY          4
+    #> # … with 45 more rows
 
 ``` r
 progress <- progress_table(
@@ -543,7 +547,7 @@ progress$stage <- as_factor(progress$stage)
 | city\_sep    |    0.820 |        1239 |    0.000 |   7269 |     463 |
 | city\_norm   |    0.974 |        1035 |    0.001 |   1059 |     236 |
 | city\_swap   |    0.994 |         830 |    0.025 |    235 |      55 |
-| city\_refine |    0.994 |         829 |    0.025 |    231 |      54 |
+| city\_refine |    0.994 |         828 |    0.025 |    225 |      53 |
 
 You can see how the percentage of valid values increased with each
 stage.
@@ -601,7 +605,7 @@ dir_create(proc_dir)
 ```
 
 ``` r
-vt %>% 
+vt <- vt %>% 
   select(
     -address_sep,
     -zip_sep,
@@ -618,7 +622,11 @@ vt %>%
     zip_clean = zip_norm,
     state_clean = state_norm,
     city_clean = city_refine
-  ) %>% 
+  )
+```
+
+``` r
+vt %>% 
   write_csv(
     path = glue("{proc_dir}/df_type_clean.csv"),
     na = ""
