@@ -1,17 +1,7 @@
 Vermont Expenditures
 ================
 Kiernan Nicholls
-2019-08-27 16:41:20
-
-  - [Objectives](#objectives)
-  - [Packages](#packages)
-  - [Data](#data)
-  - [Read](#read)
-  - [Explore](#explore)
-  - [Explore](#explore-1)
-  - [Mutate](#mutate)
-  - [Conclude](#conclude)
-  - [Write](#write)
+2019-11-11 12:12:06
 
 ## Objectives
 
@@ -33,11 +23,9 @@ facilitate their installation and attachment.
 
 ``` r
 if (!require("pacman")) install.packages("pacman")
-pacman::p_load_current_gh("kiernann/campfin")
+pacman::p_load_gh("irworkshop/campfin")
 pacman::p_load(
-  stringdist, # levenshtein value
   snakecase, # change string case
-  RSelenium, # remote browser
   tidyverse, # data manipulation
   lubridate, # datetime strings
   tidytext, # text analysis
@@ -47,6 +35,7 @@ pacman::p_load(
   refinr, # cluster and merge
   scales, # format strings
   knitr, # knit documents
+  rvest, # scrape HTML pages
   vroom, # read files fast
   glue, # combine strings
   here, # relative storage
@@ -69,7 +58,7 @@ paths relative to *your* machine.
 ``` r
 # where was this document knit?
 here::here()
-#> [1] "/home/ubuntu/R/accountability_datacleaning/R_campfin"
+#> [1] "/home/kiernan/R/accountability_datacleaning/R_campfin"
 ```
 
 ## Data
@@ -124,21 +113,21 @@ glimpse(sample_frac(vt))
 
     #> Observations: 40,280
     #> Variables: 15
-    #> $ id                  <chr> "4240", "30817", "32895", "4665", "3418", "21349", "38794", "30303",…
-    #> $ transaction_date    <date> 2018-10-16, 2016-06-09, 2016-04-01, 2018-10-12, 2018-10-25, 2016-09…
-    #> $ payee_type          <chr> "BUSINESS/GROUP/ORGANIZATION", "INDIVIDUAL", "BUSINESS/GROUP/ORGANIZ…
-    #> $ payee_name          <chr> "FACEBOOK", "NADEAU, DWAYNE D.", "KSE PARTNERS LLP", "ACTBLUE", "VOT…
-    #> $ payee_address       <chr> "1601 WILLOW RD., MENLO PARK, VT 94025", "10 NORTHWOOD TERRACE, GRAN…
-    #> $ registrant_name     <chr> "PATT, AVRAM", "LISMAN, BRUCE M", "PECKHAM INDUSTRIES INC VERMONT PA…
-    #> $ registrant_type     <chr> "CANDIDATE", "CANDIDATE", "POLITICAL ACTION COMMITTEE", "CANDIDATE",…
-    #> $ office              <chr> "STATE REPRESENTATIVE - LAMOILLE-WASHINGTON", "GOVERNOR", NA, "STATE…
-    #> $ election_cycle      <chr> "2018 GENERAL", "2016 GENERAL", "2016 GENERAL", "2018 GENERAL", "201…
-    #> $ reporting_period    <date> 2018-11-02, 2016-07-15, 2016-07-15, 2018-10-15, 2018-11-02, 2016-10…
+    #> $ id                  <chr> "583", "29934", "12850", "4003", "696", "8952", "31449", "31622", "2…
+    #> $ transaction_date    <date> 2019-02-23, 2016-06-27, 2018-02-14, 2018-10-19, 2019-02-15, 2018-07…
+    #> $ payee_type          <chr> "BUSINESS/GROUP/ORGANIZATION", "BUSINESS/GROUP/ORGANIZATION", "BUSIN…
+    #> $ payee_name          <chr> "SOUTH STREET CAFE", "SHELL SERVICE STATION", "SIGNS ON THE CHEAP", …
+    #> $ payee_address       <chr> "105 SOUTH ST, BENNINGTON, VT 05201", "18 SYKES MTN AVE, WHITE RIVER…
+    #> $ registrant_name     <chr> "SCULLY, WILLIAM", "DUNNE, MATT", "ROZZI, MICHAEL", "BRAY, CHRISTOPH…
+    #> $ registrant_type     <chr> "CANDIDATE", "CANDIDATE", "CANDIDATE", "PUBLIC MEDIA ACTIVITIES", "C…
+    #> $ office              <chr> "SELECTPERSON -", "GOVERNOR", "SCHOOL DIRECTOR -", NA, "WARD CLERK -…
+    #> $ election_cycle      <chr> "2019 ANNUAL MEETING (ALL TOWNS)", "2016 GENERAL", "2018 ANNUAL MEET…
+    #> $ reporting_period    <date> 2019-03-01, 2016-07-15, 2018-02-24, 2018-11-20, 2019-02-23, 2018-08…
     #> $ expenditure_type    <chr> "MONETARY", "MONETARY", "MONETARY", "MONETARY", "MONETARY", "MONETAR…
-    #> $ expenditure_purpose <chr> "MEDIA - ONLINE ADVERTISING", "ADMINISTRATIVE - SALARIES AND WAGES",…
-    #> $ expenditure_amount  <dbl> 18.22, 13.39, 4000.00, 62.48, 99.00, 1500.00, 375.00, 4456.81, 29.99…
+    #> $ expenditure_purpose <chr> "FUNDRAISER - FOOD &AMP; BEVERAGE", "STAFF - GAS", "YARD SIGNS", "ME…
+    #> $ expenditure_amount  <dbl> 150.00, 30.79, 224.11, 795.00, 145.00, 23.67, 461.53, 87.39, 0.18, 1…
     #> $ public_question     <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
-    #> $ comments            <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, "FACEBOOK ADS: RAN FROM NOV 5-NO…
+    #> $ comments            <chr> NA, "GAS", NA, NA, NA, NA, NA, "OFFICE SUPPLIES", NA, NA, NA, "FB AD…
 
 ### Distinct
 
@@ -149,8 +138,8 @@ glimpse_fun(vt, n_distinct)
 ```
 
     #> # A tibble: 15 x 4
-    #>    var                 type      n         p
-    #>    <chr>               <chr> <int>     <dbl>
+    #>    col                 type      n         p
+    #>    <chr>               <chr> <dbl>     <dbl>
     #>  1 id                  chr   40280 1        
     #>  2 transaction_date    date   1822 0.0452   
     #>  3 payee_type          chr      10 0.000248 
@@ -211,8 +200,8 @@ glimpse_fun(vt, count_na)
 ```
 
     #> # A tibble: 16 x 4
-    #>    var                 type      n     p
-    #>    <chr>               <chr> <int> <dbl>
+    #>    col                 type      n     p
+    #>    <chr>               <chr> <dbl> <dbl>
     #>  1 id                  chr       0 0    
     #>  2 transaction_date    date      0 0    
     #>  3 payee_type          chr       0 0    
@@ -270,7 +259,8 @@ summary(vt$expenditure_amount)
 
 The number of contributions is fairly lopsides, with nearly 80% of all
 records coming from 2016 and 2018. This makes some sense, as these were
-election years.
+election
+    years.
 
 ``` r
 summary(vt$transaction_date)
@@ -280,8 +270,12 @@ summary(vt$transaction_date)
     #> "2008-08-08" "2016-06-23" "2016-10-06" "2017-02-21" "2018-06-30" "2019-07-04"
 
 ``` r
+vt <- mutate(vt, transaction_year = year(transaction_date))
+```
+
+``` r
 vt %>% 
-  group_by(transaction_year = year(transaction_date)) %>% 
+  group_by(transaction_year) %>% 
   ggplot(mapping = aes(transaction_year)) +
   geom_bar() +
   scale_x_continuous(breaks = seq(2007, 2020)) + 
@@ -295,7 +289,8 @@ vt %>%
 ![](../plots/plot_exp_year-1.png)<!-- -->
 
 For some reason, the reporting period for expenditures begin in 2014
-despite our data spanning 2008 to 2019.
+despite our data spanning 2008 to
+    2019.
 
 ``` r
 summary(vt$reporting_period)
@@ -304,32 +299,290 @@ summary(vt$reporting_period)
     #>         Min.      1st Qu.       Median         Mean      3rd Qu.         Max. 
     #> "2014-08-18" "2016-07-15" "2016-10-15" "2017-04-04" "2018-07-15" "2020-11-17"
 
-## Mutate
+## Wrangle
 
-Payee and registrant addresses are not divided into street, city, state,
-and ZIP columns. We can extract the ZIP digits and state abbreviation
-from the end of the string using regular expressions.
+We can split the `payee_address` variable into it’s base components in
+new variables using a combination of `tidyr::separate()` and
+`tidyr::unite()`.
 
-Since we parsed the `transaction_date` as a date file using
-`readr::col_date()` inside `readr::read_csv()`, we can simply extract
-the year of the transaction with `lubridate::year()`
+``` r
+vt <- vt %>% 
+  separate(
+    col = payee_address,
+    into = c(glue("split_address{1:10}"), "city_sep", "state_zip"),
+    sep = ",\\s",
+    fill = "left",
+    remove = FALSE,
+  ) %>% 
+  unite(
+    starts_with("split_address"),
+    col = "address_sep",
+    sep = " ",
+    na.rm = TRUE
+  ) %>% 
+  separate(
+    col = state_zip,
+    into = c("state_sep", "zip_sep"),
+    sep = "\\s(?=\\d)"
+  )
+```
+
+### Address
+
+``` r
+packageVersion("tidyr")
+```
+
+    #> [1] '1.0.0'
 
 ``` r
 vt <- vt %>% 
   mutate(
-    transaction_year = year(transaction_date),
-    payee_zip = payee_address %>% 
-      str_extract(rx_zip) %>% 
-      normal_zip(na_rep = TRUE),
-    payee_state = payee_address %>% 
-      str_extract(rx_state) %>%
-      normal_state(
-        abbreviate = TRUE, 
-        na_rep = TRUE, 
-        valid = valid_state
-      )
+    address_norm = normal_address(
+      address = address_sep,
+      add_abbs = usps_street,
+      na_rep = TRUE
     )
+  )
 ```
+
+``` r
+vt %>% 
+  select(starts_with("address")) %>% 
+  distinct() %>% 
+  sample_frac()
+```
+
+    #> # A tibble: 8,180 x 2
+    #>    address_sep           address_norm            
+    #>    <chr>                 <chr>                   
+    #>  1 1340 WILLISTON ROAD   1340 WILLISTON ROAD     
+    #>  2 20455 BLUE HERON TER  20455 BLUE HERON TERRACE
+    #>  3 175 ROUTE 7 SOUTH     175 ROUTE 7 SOUTH       
+    #>  4 357 MAIN ST           357 MAIN STREET         
+    #>  5 414 MINISTER BROOK RD 414 MINISTER BROOK ROAD 
+    #>  6 105 W 3RD STREET      105 WEST 3RD STREET     
+    #>  7 682 CHRISTIAN ST.     682 CHRISTIAN STREET    
+    #>  8 6206 GEORGIA SHORE RD 6206 GEORGIA SHORE ROAD 
+    #>  9 346 SHELBURNE RD      346 SHELBURNE ROAD      
+    #> 10 43 FOREST AVE         43 FOREST AVENUE        
+    #> # … with 8,170 more rows
+
+### ZIP
+
+``` r
+vt <- vt %>% 
+  mutate(
+    zip_norm = normal_zip(
+      zip = zip_sep,
+      na = c("", "NA"),
+      na_rep = TRUE
+    )
+  )
+```
+
+``` r
+progress_table(
+  vt$zip_sep,
+  vt$zip_norm,
+  compare = valid_zip
+)
+```
+
+    #> # A tibble: 2 x 6
+    #>   stage    prop_in n_distinct prop_na n_out n_diff
+    #>   <chr>      <dbl>      <dbl>   <dbl> <dbl>  <dbl>
+    #> 1 zip_sep    0.898       1964 0.00159  4104    940
+    #> 2 zip_norm   0.997       1249 0.00218   108     43
+
+### State
+
+``` r
+vt <- vt %>% 
+  mutate(
+    state_norm = normal_state(
+      state = state_sep,
+      abbreviate = TRUE,
+      na_rep = TRUE,
+      valid = valid_state
+    )
+  )
+```
+
+``` r
+progress_table(
+  vt$state_sep,
+  vt$state_norm,
+  compare = valid_state
+)
+```
+
+    #> # A tibble: 2 x 6
+    #>   stage      prop_in n_distinct  prop_na n_out n_diff
+    #>   <chr>        <dbl>      <dbl>    <dbl> <dbl>  <dbl>
+    #> 1 state_sep    0.999         59 0           33     10
+    #> 2 state_norm   1             50 0.000819     0      1
+
+### City
+
+``` r
+vt <- vt %>% 
+  mutate(
+    city_norm = normal_city(
+      city = city_sep, 
+      geo_abbs = usps_city,
+      st_abbs = c("VT", "DC", "VERMONT"),
+      na = invalid_city,
+      na_rep = TRUE
+    )
+  )
+```
+
+``` r
+vt <- vt %>% 
+  left_join(
+    y = zipcodes,
+    by = c(
+      "state_norm" = "state",
+      "zip_norm" = "zip"
+    )
+  ) %>% 
+  rename(city_match = city) %>% 
+  mutate(
+    match_abb = is_abbrev(city_norm, city_match),
+    match_exp = is_abbrev(city_match, city_norm),
+    match_dist = str_dist(city_norm, city_match),
+    city_swap = if_else(
+      condition = match_abb | match_exp | match_dist <= 2 | state_norm == city_norm,
+      true = city_match,
+      false = city_norm
+    )
+  )
+```
+
+``` r
+good_refine <- vt %>% 
+  filter(state_norm == "VT") %>% 
+  mutate(
+    city_refine = city_swap %>% 
+      key_collision_merge() %>% 
+      n_gram_merge(numgram = 1)
+  ) %>% 
+  filter(city_refine != city_swap) %>% 
+  inner_join(
+    y = zipcodes,
+    by = c(
+      "city_refine" = "city",
+      "state_norm" = "state",
+      "zip_norm" = "zip"
+    )
+  )
+```
+
+``` r
+vt <- vt %>% 
+  left_join(good_refine) %>% 
+  mutate(city_refine = coalesce(city_refine, city_swap))
+```
+
+``` r
+vt$city_refine[str_which(vt$city_refine, "^VENLO LW$")] <- NA
+```
+
+### Progress
+
+To check our progress, we will expand out `valid_city` vector using a
+list of towns taken directly from the
+[vermont.gov](https://www.vermont.gov) website.
+
+``` r
+vt_city <- 
+  read_html("https://www.vermont.gov/towns-and-Cities") %>% 
+  html_node("select") %>% 
+  html_nodes("option") %>% 
+  html_text(trim = TRUE) %>% 
+  normal_city(geo_abbs = usps_city)
+```
+
+``` r
+many_city <- unique(c(valid_city, extra_city, vt_city))
+```
+
+``` r
+vt %>% 
+  filter(city_refine %out% many_city) %>% 
+  count(state_norm, zip_norm, city_refine, city_match, sort = TRUE) %>% 
+  drop_na(city_refine)
+```
+
+    #> # A tibble: 55 x 5
+    #>    state_norm zip_norm city_refine        city_match      n
+    #>    <chr>      <chr>    <chr>              <chr>       <int>
+    #>  1 NJ         07726    MANALAPAN          ENGLISHTOWN    52
+    #>  2 VT         05682    NORTH MIDDLESEX    WORCESTER      28
+    #>  3 VT         05303    WEST BRATTLEBORO   BRATTLEBORO    20
+    #>  4 VT         05763    NORTH CHITTENDEN   PITTSFORD      18
+    #>  5 VT         05602    BELIN              MONTPELIER     16
+    #>  6 CA         94025    HACKERS WAY        MENLO PARK      5
+    #>  7 CA         94016    SAN FRANSISCO      DALY CITY       4
+    #>  8 CA         94025    MELNO              MENLO PARK      4
+    #>  9 TX         78645    LAGO VISTA         LEANDER         4
+    #> 10 VT         05346    SOUTH WESTMINISTER PUTNEY          4
+    #> # … with 45 more rows
+
+``` r
+progress <- progress_table(
+  vt$city_sep,
+  vt$city_norm,
+  vt$city_swap,
+  vt$city_refine,
+  compare = many_city
+)
+
+progress$stage <- as_factor(progress$stage)
+```
+
+| stage        | prop\_in | n\_distinct | prop\_na | n\_out | n\_diff |
+| :----------- | -------: | ----------: | -------: | -----: | ------: |
+| city\_sep    |    0.820 |        1239 |    0.000 |   7269 |     463 |
+| city\_norm   |    0.974 |        1035 |    0.001 |   1059 |     236 |
+| city\_swap   |    0.994 |         830 |    0.025 |    235 |      55 |
+| city\_refine |    0.994 |         828 |    0.025 |    225 |      53 |
+
+You can see how the percentage of valid values increased with each
+stage.
+
+![](../plots/progress_bar-1.png)<!-- -->
+
+More importantly, the number of distinct values decreased each stage. We
+were able to confidently change many distinct invalid values to their
+valid equivilent.
+
+``` r
+progress %>% 
+  select(
+    stage, 
+    all = n_distinct,
+    bad = n_diff
+  ) %>% 
+  mutate(good = all - bad) %>% 
+  pivot_longer(c("good", "bad")) %>% 
+  mutate(name = name == "good") %>% 
+  ggplot(aes(x = stage, y = value)) +
+  geom_col(aes(fill = name)) +
+  scale_fill_brewer(palette = "Dark2") +
+  scale_y_continuous(labels = comma) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "Vermont City Normalization Progress",
+    subtitle = "Distinct values, valid and invalid",
+    x = "Stage",
+    y = "Distinct Values",
+    fill = "Valid"
+  )
+```
+
+![](../plots/distinct_bar-1.png)<!-- -->
 
 ## Conclude
 
@@ -338,20 +591,44 @@ vt <- vt %>%
 3.  Ranges for continuous variables have been checked and make sense
 4.  There are no important variables with blank or missing values
 5.  Consistency issues have been fixed with the `stringr` package
-6.  The `payee_zip` variable has been extracted from `payee_address`
-    with `stringr::str_extract()` and cleaned with
-    `zipcode::clean.zipcode()`
+6.  The geographic data has been `tidyr::separate()`’d and cleaned with
+    `campfin::normal_*()`.
 7.  The `transaction_year` variable has been extracted from
     `transaction_date` with `readr::col_date()` and `lubridate::year()`
 8.  There is both a registrant and payee for every record.
 
-## Write
+## Export
 
 ``` r
-dir_create(here("vt", "expends", "data", "processed"))
-write_csv(
-  x = vt,
-  path = here("vt", "expends", "data", "processed", "vt_expends_clean.csv"),
-  na = ""
-)
+proc_dir <- here("vt", "expends", "data", "processed")
+dir_create(proc_dir)
+```
+
+``` r
+vt <- vt %>% 
+  select(
+    -address_sep,
+    -zip_sep,
+    -state_sep,
+    -city_sep,
+    -city_norm,
+    -city_match,
+    -match_abb,
+    -match_dist,
+    -city_swap
+  ) %>%
+  rename(
+    address_clean = address_norm,
+    zip_clean = zip_norm,
+    state_clean = state_norm,
+    city_clean = city_refine
+  )
+```
+
+``` r
+vt %>% 
+  write_csv(
+    path = glue("{proc_dir}/df_type_clean.csv"),
+    na = ""
+  )
 ```

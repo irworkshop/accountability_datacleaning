@@ -435,8 +435,8 @@ proc_dir <- here("tn", "expends", "data", "processed")
 dir_create(proc_dir)
 ```
 
-```{r write_clean}
-tn %>%
+```{r clean_trim}
+tn <- tn %>%
   select(
     -year,
     -date_fix,
@@ -454,7 +454,40 @@ tn %>%
     zip_clean = zip_norm,
     state_clean = state_norm,
     city_clean = city_swap,
-  ) %>% 
+  )
+
+```
+
+```{r clean_write, eval=FALSE}
+tn %>% 
+  write_csv(
+    path = glue("{proc_dir}/tn_expends_clean.csv"),
+    na = ""
+  )
+```
+
+## Lookup
+
+```{r lookup}
+lookup_file <- here("tn", "expends", "data", "tn_city_lookup.csv")
+if (file_exists(lookup_file)) {
+  lookup <- read_csv(lookup_file) %>% select(1:2)
+  tn <- left_join(tn, lookup, by = "city_clean")
+}
+```
+
+```{r lookup_progress}
+progress_table(
+  tn$city_clean,
+  tn$city_clean_new,
+  compare = valid_city
+)
+```
+
+```{r lookup_write}
+tn %>% 
+  select(-city_clean) %>% 
+  rename(city_clean = city_clean_new) %>% 
   write_csv(
     path = glue("{proc_dir}/tn_expends_clean.csv"),
     na = ""

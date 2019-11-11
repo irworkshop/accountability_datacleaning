@@ -1,7 +1,7 @@
 Tennessee Expenditures
 ================
 Kiernan Nicholls
-2019-10-30 14:15:49
+2019-11-11 11:47:10
 
 <!-- Place comments regarding knitting here -->
 
@@ -541,7 +541,7 @@ dir_create(proc_dir)
 ```
 
 ``` r
-tn %>%
+tn <- tn %>%
   select(
     -year,
     -date_fix,
@@ -559,7 +559,44 @@ tn %>%
     zip_clean = zip_norm,
     state_clean = state_norm,
     city_clean = city_swap,
-  ) %>% 
+  )
+```
+
+``` r
+tn %>% 
+  write_csv(
+    path = glue("{proc_dir}/tn_expends_clean.csv"),
+    na = ""
+  )
+```
+
+## Lookup
+
+``` r
+lookup_file <- here("tn", "expends", "data", "tn_city_lookup.csv")
+if (file_exists(lookup_file)) {
+  lookup <- read_csv(lookup_file) %>% select(1:2)
+  tn <- left_join(tn, lookup, by = "city_clean")
+}
+```
+
+``` r
+progress_table(
+  tn$city_clean,
+  tn$city_clean_new,
+  compare = valid_city
+)
+#> # A tibble: 2 x 6
+#>   stage          prop_in n_distinct prop_na n_out n_diff
+#>   <chr>            <dbl>      <dbl>   <dbl> <dbl>  <dbl>
+#> 1 city_clean       0.993       1519  0.0162   482    130
+#> 2 city_clean_new   0.994       1475  0.0162   382     89
+```
+
+``` r
+tn %>% 
+  select(-city_clean) %>% 
+  rename(city_clean = city_clean_new) %>% 
   write_csv(
     path = glue("{proc_dir}/tn_expends_clean.csv"),
     na = ""

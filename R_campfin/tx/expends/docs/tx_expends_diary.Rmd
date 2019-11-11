@@ -10,6 +10,7 @@ output:
 editor_options: 
   chunk_output_type: console
 ---
+<!-- Place comments regarding knitting here -->
 
 ```{r setup, include=FALSE, purl=FALSE}
 library(knitr)
@@ -19,13 +20,18 @@ opts_chunk$set(
   warning = FALSE,
   message = FALSE,
   error = FALSE,
+  collapse = TRUE,
   comment = "#>",
   fig.path = "../plots/",
   fig.width = 10,
   dpi = 300
 )
 options(width = 99)
-set.seed(seed = 05)
+set.seed(5)
+```
+
+```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
+fs::dir_create(here::here("tx", "expends", "docs"))
 ```
 
 ## Project
@@ -64,14 +70,11 @@ functions custom made to help facilitate the processing of campaign finance data
 
 ```{r load_packages, message=FALSE, dfrning=FALSE, error=FALSE}
 if (!require("pacman")) install.packages("pacman")
-pacman::p_load_current_gh("kiernann/campfin")
+pacman::p_load_gh("irworkshop/campfin")
 pacman::p_load(
-  stringdist, # levenshtein value
-  snakecase, # change string case
-  RSelenium, # remote browser
+  snakecase, # convert string case
   tidyverse, # data manipulation
   lubridate, # datetime strings
-  tidytext, # text analysis
   magrittr, # pipe opperators
   janitor, # dataframe clean
   batman, # rep(NA, 8) Batman!
@@ -81,7 +84,6 @@ pacman::p_load(
   vroom, # read files fast
   glue, # combine strings
   here, # relative storage
-  httr, # http query
   fs # search storage 
 )
 ```
@@ -93,8 +95,8 @@ repository.
 The `R_campfin` project uses the [RStudio projects][02] feature and should be run as such. The
 project also uses the dynamic `here::here()` tool for file paths relative to _your_ machine.
 
-```{r where_here, collapse=TRUE}
-# where dfs this document knit?
+```{r where_here}
+# where does this document knit?
 here::here()
 ```
 
@@ -218,9 +220,7 @@ zip_file <- str_c(raw_dir, basename(zip_url), sep = "/")
 The ZIP file is fairly large, check the file size before downloading.
 
 ```{r head_raw, collapse=TRUE}
-zip_head <- HEAD(zip_url)
-zip_size <- as.numeric(headers(zip_head)["content-length"])
-number_bytes(zip_size)
+url_file_size(zip_url, format = TRUE)
 ```
 
 If the file hasn't been downloaded yet, do so now.
@@ -256,15 +256,17 @@ zip_expends <- zip_contents$name[str_which(zip_contents$name, "expend_\\d{2}.csv
 If the files haven't been extracted, we can do so now.
 
 ```{r unzip_zip}
-unzip(
-  zipfile = zip_file,
-  files = zip_expends,
-  exdir = raw_dir
-)
+if (!all_files_new(raw_dir, "*.csv$")) {
+  unzip(
+    zipfile = zip_file,
+    files = zip_expends,
+    exdir = raw_dir
+  )
+}
 ```
 
 ```{r rm_objects, echo=FALSE}
-rm(zip_contents, readme, zip_expends, zip_size, zip_head)
+rm(zip_contents, readme, zip_expends)
 ```
 
 ### Read 
@@ -289,7 +291,7 @@ a single data frame.
 
 ```{r read_csv, collapse=TRUE}
 tx <- vroom(
-  file = dir_ls(raw_dir, glob = "*\\d+.csv"),
+  file = dir_ls(raw_dir, glob = "*expend_\\d+.csv"),
   .name_repair = make_clean_names,
   na = c("", "NA", "N/A", "UNKNOWN"),
   delim = ",",
@@ -355,11 +357,15 @@ mean(tx$na_flag)
 
 ### Duplicates
 
-```{r flag_dupes, collapse=TRUE, eval=TRUE}
+```{r flag_dupes, collapse=TRUE, eval=FALSE}
 tx <- flag_dupes(tx, -expend_info_id)
 
 sum(tx$dupe_flag)
 mean(tx$dupe_flag)
+```
+
+```{r}
+tx <- mutate(tx, dupe_flag = FALSE)
 ```
 
 ```{r collect_garbage, echo=FALSE}
@@ -593,9 +599,7 @@ database and more confidently links records.
 
 ### Address
 
-```{r normal_address, collapse=TRUE, eval=TRUE}
-# need version 0.8.99.9
-packageVersion("tidyr")
+```{r address_normal, collapse=TRUE, eval=TRUE}
 tx <- tx %>% 
   # combine street addr
   unite(
@@ -608,13 +612,13 @@ tx <- tx %>%
   mutate(
     address_norm = normal_address(
       address = payee_street_addr_comb,
-      add_abbs = usps,
+      add_abbs = usps_street,
       na_rep = TRUE
     )
   )
 ```
 
-```{r view_address_norm, eval=TRUE}
+```{r address_view, eval=TRUE}
 tx %>% 
   select(
     payee_street_addr_comb, 
@@ -625,37 +629,28 @@ tx %>%
 
 ### ZIP
 
-```{r count_zip_pre, collapse=TRUE}
-n_distinct(tx$payee_street_postal_code)
-prop_in(tx$payee_street_postal_code, geo$zip, na.rm = TRUE)
-length(setdiff(tx$payee_street_postal_code, geo$zip))
-```
-
-```{r normal_zip}
+```{r zip_normal}
 tx <- tx %>% 
   mutate(
     zip_norm = normal_zip(
       zip = payee_street_postal_code,
+      na = c(""),
       na_rep = TRUE
     )
   )
 ```
 
-```{r count_zip_post, collapse=TRUE}
-n_distinct(tx$zip_norm)
-prop_in(tx$zip_norm, geo$zip, na.rm = TRUE)
-length(setdiff(tx$zip_norm, geo$zip))
+```{r zip_progress}
+progress_table(
+  tx$payee_street_postal_code,
+  tx$zip_norm,
+  compare = valid_zip
+)
 ```
 
 ### State
 
-```{r count_state_pre, collapse=TRUE}
-n_distinct(tx$payee_street_state_cd)
-prop_in(tx$payee_street_state_cd, geo$state, na.rm = TRUE)
-length(setdiff(tx$payee_street_state_cd, geo$state))
-```
-
-```{r normal_state}
+```{r state_normal}
 tx <- tx %>% 
   mutate(
     state_norm = normal_state(
@@ -666,11 +661,12 @@ tx <- tx %>%
   )
 ```
 
-```{r count_state_post, collapse=TRUE}
-n_distinct(tx$state_norm)
-prop_in(tx$state_norm, geo$state, na.rm = TRUE)
-setdiff(tx$state_norm, geo$state)
-tx <- mutate(tx, state_norm = na_out(state_norm, geo$state))
+```{r state_progress}
+progress_table(
+  tx$payee_street_state_cd,
+  tx$state_norm,
+  compare = valid_state
+)
 ```
 
 ### City
@@ -678,13 +674,6 @@ tx <- mutate(tx, state_norm = na_out(state_norm, geo$state))
 The city value starts out fairly clean, with 
 `r percent(prop_in(str_to_upper(tx$payee_street_city), geo$city, na.rm = TRUE))` of the
 `payee_street_city` values already in our `geo$city` list (after only converting to uppercase).
-
-```{r count_city_pre, collapse=TRUE}
-n_distinct(tx$payee_street_city)
-prop_in(str_to_upper(tx$payee_street_city), geo$city, na.rm = TRUE)
-length(setdiff(str_to_upper(tx$payee_street_city), geo$city))
-sample(setdiff(str_to_upper(tx$payee_street_city), geo$city), 10)
-```
 
 #### Normalize
 
@@ -706,12 +695,6 @@ tx <- tx %>%
   )
 ```
 
-```{r count_city_post_norm, collapse=TRUE}
-n_distinct(tx$city_norm)
-prop_in(tx$city_norm, geo$city, na.rm = TRUE)
-length(setdiff(tx$city_norm, geo$city))
-```
-
 #### Swap
 
 ```{r swap_city}
@@ -725,19 +708,14 @@ tx <- tx %>%
   ) %>% 
   rename(city_match = city) %>% 
   mutate(
-    match_dist = stringdist(city_norm, city_match),
+    match_abb = is_abbrev(city_norm, city_match),
+    match_dist = str_dist(city_norm, city_match),
     city_swap = if_else(
-      condition = is_less_than(match_dist, 3),
+      condition = match_abb | match_dist < 3,
       true = city_match,
       false = city_norm
     )
   )
-```
-
-```{r count_city_post_swap, collapse=TRUE}
-n_distinct(tx$city_swap)
-prop_in(tx$city_swap, geo$city, na.rm = TRUE)
-length(setdiff(tx$city_swap, geo$city))
 ```
 
 #### Refine
@@ -766,12 +744,6 @@ tx <- tx %>%
   mutate(city_refine = coalesce(city_refine, city_swap))
 ```
 
-```{r count_city_post_refine, collapse=TRUE}
-n_distinct(tx$city_refine)
-prop_in(tx$city_refine, geo$city, na.rm = TRUE)
-length(setdiff(tx$city_refine, geo$city))
-```
-
 #### Replace
 
 To get over 99% valid city names, we can expand our list of valid cities and a few confident
@@ -796,10 +768,10 @@ expanded_valid <- c(
 )
 ```
 
-```{r edit_city}
+```{r city_edit}
 tx <- tx %>% 
   mutate(
-    city_final = city_refine %>% 
+    city_edit = city_refine %>% 
       str_replace("^SA$", "SAN ANTONIO") %>% 
       str_replace("^FW$", "FORT WORTH") %>% 
       str_replace("^DFW$", "DALAS FORT WORTH") %>% 
@@ -810,52 +782,22 @@ tx <- tx %>%
   )
 ```
 
-```{r expanded_prop_in, collapse=TRUE}
-prop_in(tx$city_final, expanded_valid, na.rm = TRUE)
-```
-
 #### Progress
 
-```{r progress_table, echo=FALSE}
-progress_table <- tibble(
-  stage = c("raw", "norm", "swap", "refine", "final"),
-  total_distinct = c(
-    n_distinct(tx$payee_street_city),
-    n_distinct(tx$city_norm),
-    n_distinct(tx$city_swap),
-    n_distinct(tx$city_refine),
-    n_distinct(tx$city_final)
-  ),
-  prop_good = c(
-    prop_in(str_to_upper(tx$payee_street_city), geo$city, na.rm = TRUE),
-    prop_in(tx$city_norm, geo$city, na.rm = TRUE),
-    prop_in(tx$city_swap, geo$city, na.rm = TRUE),
-    prop_in(tx$city_refine, geo$city, na.rm = TRUE),
-    prop_in(tx$city_final, expanded_valid, na.rm = TRUE)
-  ),
-  unique_bad = c(
-    length(setdiff(tx$payee_street_city, geo$city)),
-    length(setdiff(tx$city_norm, geo$city)),
-    length(setdiff(tx$city_swap, geo$city)),
-    length(setdiff(tx$city_refine, geo$city)),
-    length(setdiff(tx$city_final, expanded_valid))
-  )
+```{r city_progess}
+progress_table(
+  tx$city,
+  tx$city_norm,
+  tx$city_swap,
+  tx$city_refine,
+  tx$city_edit,
+  compare = valid_city
 )
-
-diff_change <- progress_table$unique_bad[5]-progress_table$unique_bad[1]
-prop_change <- diff_change/progress_table$unique_bad[1]
 ```
-
-Still, our progress is significant without having to make a single manual or unconfident change.
-The percent of valid cities increased from `r percent(progress_table$prop_good[1])` to 
-`r percent(progress_table$prop_good[5])`. The number of total distinct city values descreased from
-`r comma(progress_table$total_distinct[1])` to `r comma(progress_table$total_distinct[5])`. The
-number of distinct invalid city names decreased from `r comma(progress_table$unique_bad[1])` to
-only `r comma(progress_table$unique_bad[5])`, a change of `r percent(prop_change)`.
 
 ```{r print_progress, echo=FALSE}
 kable(
-  x = progress_table,
+  x = progress,
   format = "markdown", 
   digits = 4,
   col.names = c("Normalization Stage", "Total Distinct", "Percent Valid", "Unique Invalid")
@@ -893,4 +835,3 @@ tx %>%
     na = ""
   )
 ```
-
