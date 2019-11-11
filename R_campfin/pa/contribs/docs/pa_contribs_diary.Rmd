@@ -1,17 +1,13 @@
 ---
 title: "Data Diary"
-subtitle: "Pennsylvania Contribution"
+subtitle: "Pennsylvania Contributions"
 author: "Yanqi Xu"
 date: "`r format(Sys.time())`"
 output:
-   github_document:    
+  github_document: 
     df_print: tibble
-    fig_caption: yes
-    highlight: tango
-    keep_md: yes
-    max.print: 32
-    toc: yes
-    toc_float: no
+    toc: true
+    toc_dept: 2
 editor_options: 
   chunk_output_type: console
 ---
@@ -68,7 +64,6 @@ these results. The `pacman` package will facilitate their installation and attac
 
 ```{r p_load, message=FALSE, dfrning=FALSE, error=FALSE}
 if (!require("pacman")) install.packages("pacman")
-pacman::p_load_gh("irworkshop/campfin")
 pacman::p_load(
   stringdist, # levenshtein value
   tidyverse, # data manipulation
@@ -82,7 +77,8 @@ pacman::p_load(
   scales, #format strings
   here, # relative storage
   fs, # search storage 
-  vroom #read deliminated files
+  vroom, #read deliminated files
+  campfin #wrangle data for accountability project
 )
 ```
 
@@ -90,7 +86,6 @@ pacman::p_load(
 ```{r fix_fun, echo=FALSE, collapse = TRUE}
 # fix conflict
 here <- here::here
-print_all <- function(df) df %>% print(n = nrow(.)) 
 ```
 
 
@@ -168,7 +163,7 @@ if (all_files_new(path = raw_dir, glob = "*.txt")) {
 }
 ```
 Read multiple csvs into R
-```{r read multiple files}
+```{r read multiple files, eval=FALSE}
 #recursive set to true because 2016 and 2015 have subdirectories under "raw"
 contrib_files <- list.files(raw_dir, pattern = ".txt", recursive = TRUE, full.names = TRUE)
 #pa_lines <- list.files(raw_dir, pattern = ".txt", recursive = TRUE) %>% map(read_lines) %>% unlist()
@@ -191,7 +186,7 @@ pa <- contrib_files %>%
 More information about the record layout can be found here https://www.dos.pa.gov/VotingElections/CandidatesCommittees/CampaignFinance/Resources/Documents/readme.txt.
 
 ### Encoding
-```{r}
+```{r eval=FALSE}
 for (i in c(5:10)) {
   pa[[i]] <- iconv(pa[[i]], 'UTF-8', 'ASCII') %>% 
     toupper() %>% 
@@ -201,12 +196,12 @@ for (i in c(5:10)) {
 
 Some columns are not read properly due to extraneous and unescaped commas or double quotes. The following lines of code fix that. 
 ### Indexing
-```{r}
+```{r, eval=FALSE}
 pa <- tibble::rowid_to_column(pa, "index")
 ```
 
 ### Repositioning
-```{r misplaced columns}
+```{r misplaced columns,eval=FALSE}
 to_reposit <- which(pa$CONTDATE2 != 0 & is.na(pa$CONTDATE2) == FALSE )
 
 nudge <- function(df, index, cut_off_col) {
@@ -230,20 +225,37 @@ pa$CONTAMT1 <- as.numeric(pa$CONTAMT1)
 
 There are `nrow(pa)` records of `length(pa)` variables in the full database.
 
-```{r glimpse}
+```{r glimpse, eval=FALSE}
 head(pa)
 tail(pa)
 glimpse(pa)
 ```
 
+
+```{r echo=FALSE}
+pa <- read_csv(glue("{raw_dir}/pa_contribs_midway.csv"), 
+col_types = cols(.default = col_character(),
+                 CONTAMT1 = col_double(),
+                 CONTDATE1 = col_date(),
+                 dupe_flag = col_logical(),
+                 na_flag = col_logical()
+                 ))
+
+pa_orig <-  pa %>% 
+  select(2:25)
+```
+
 ### Distinct
 
+The variables range in their degree of distinctness.`CONTDATE2`,  `CONTDATE3`, only have one value 0.
 
-The variables range in their degree of distinctness.`CONTDATE2`, `CONTAMT2`, `CONTDATE3", "CONTAMT3` only have one value 0.
 
-
-```{r n_distinct}
+```{r n_distinct, eval=FALSE}
 pa %>% glimpse_fun(n_distinct)
+```
+
+```{r actual n_distinct, echo=FALSE, collapse=TRUE}
+pa_orig %>% glimpse_fun(n_distinct)
 ```
 
 ### Missing
@@ -251,25 +263,31 @@ pa %>% glimpse_fun(n_distinct)
 The variables also vary in their degree of values that are `NA` (missing).
 
 
-```{r count_na}
+```{r count_na, eval=FALSE}
 pa %>% glimpse_fun(count_na)
 ```
 
+```{r actual count_na, echo=FALSE}
+pa_orig %>% glimpse_fun(count_na)
+```
 
 We will flag any records with missing values in the key variables used to identify a contribution.
 There are `r sum(pa$na_flag)` records missing `CONTRIBUTOR`, `CONTAMT1` AND `CONTDATE1`
-```{r na_flag}
+```{r na_flag, eval=FALSE}
 pa <- pa %>% flag_na(CONTRIBUTOR, CONTAMT1, CONTDATE1)
 ```
-
 
 ### Duplicates
 
 
 ```{r flag_dupes, eval = FALSE, collapse=TRUE}
 pa <- flag_dupes(pa, dplyr::everything())
+```
+
+```{r, collapse=TRUE}
 sum(pa$dupe_flag)
 ```
+
 
 ### Ranges
 
@@ -297,11 +315,11 @@ pa %>%
 
 Add a `year` variable from `date` after `col_date()` using `lubridate::year()`.
 
-```{r convert to date}
+```{r convert to date, eval=FALSE}
 pa$CONTDATE1 <- as.Date(pa$CONTDATE1, "%Y%m%d")
 ```
 
-```{r add_year}
+```{r add_year, eval=FALSE}
 pa <- pa %>% mutate(year = year(CONTDATE1), on_year = is_even(year))
 ```
 
@@ -313,7 +331,7 @@ summary(pa$CONTDATE1)
 ```
 
 The `CONTDATE2` and `CONTDATE3` variables should be blank
-```{r year_flag}
+```{r year_flag, eval=FALSE}
 pa <- pa %>% mutate(date_flag = year < 2000 | year > format(Sys.Date(), "%Y"), 
                     year_clean = ifelse(
                     date_flag, NA, year))
@@ -325,7 +343,7 @@ summary(pa$date_clean)
 ```
 
 
-```{r year_count_bar, eval = FALSE, echo=FALSE}
+```{r year_count_bar, eval = TRUE, echo=FALSE}
 pa %>% 
   filter( 2014 < year & year < 2020) %>% 
   count(on_year, year) %>% 
@@ -346,7 +364,22 @@ pa %>%
 ```
 
 ## Wrangle
-The state column is now pretty clean, as all non-NA columns have two characters.
+In order to normalize column content and avoid irregular tabulation in the Accountability Project, we normalize column names with string functions from the `campfin` package.
+
+```{r names}
+pa <- pa %>% 
+  mutate(contributor_clean = str_remove(CONTRIBUTOR, "^MRS\\s|^MR\\s|^MS\\s|^MISS\\s|^DR\\s"))
+```
+
+
+### State
+View values in the STATE field is not a valid state abbreviation
+```{r fix state abbrev, collapse = TRUE, eval=TRUE}
+{pa$STATE[pa$STATE %out% valid_state]}[!is.na(pa$STATE[pa$STATE %out% valid_state])]
+{pa$ESTATE[pa$ESTATE %out% valid_state]}[!is.na(pa$ESTATE[pa$ESTATE %out% valid_state])]
+```
+These are contributions from people in Canada, which we can leave in. The state column is now pretty clean, as all non-NA columns have two characters.
+
 
 ### Zipcode
 The Zipcode column can range from 1 to 13 columns.
@@ -355,14 +388,14 @@ The Zipcode column can range from 1 to 13 columns.
 table(nchar(pa$ZIPCODE))
 ```
 
-```{r normalize zip, collapse = TRUE}
+```{r normalize zip, collapse = TRUE, eval=FALSE}
 pa <- pa %>% 
   mutate(
     zip_clean = ZIPCODE %>% 
       normal_zip(na_rep = TRUE))
 sample(pa$zip_clean, 10)
   
-## Same with EZIPCODE
+## Same as EZIPCODE
 pa <- pa %>% 
   mutate(
     employer_zip_clean = EZIPCODE %>% 
@@ -371,28 +404,27 @@ pa <- pa %>%
   sample(pa$employer_zip_clean, 10)
 ```
 
-### State
-View values in the STATE field is not a valid state abbreviation
-```{r fix state abbrev, collapse = TRUE}
-{pa$STATE[pa$STATE %out% valid_state]}[!is.na(pa$STATE[pa$STATE %out% valid_state])]
-{pa$ESTATE[pa$ESTATE %out% valid_state]}[!is.na(pa$ESTATE[pa$ESTATE %out% valid_state])]
-```
-These are contributions from people in Canada, which we can leave in. 
 
 ### City
-Cleaning city values is the most complicated. This process involves four steps:
+Cleaning city values is the most complicated. This process involves the following steps:
 
 1. Prepare raw city values by removing invalid data and reducing inconsistencies
 1. Match prepared city values with the _actual_ city name of that record's ZIP code
 1. swap prepared city values with the ZIP code match _if_ only 1 edit is needed
 1. Refine swapped city values with key collision and n-gram fingerprints
+1. Use the lookup table (inspected by data editor at IRW) to join and replace values outside of `valid_place`
+1. Use a second swap to swap out cities that have the same zipcode as the corresponding valid city and whose string distance is no greater than 11. The process is also vetted by an IRW staff. 
+
+Our goal is to correct misspelled city names to the point where the majority of the city names are within the `valid_place` vector. 
+```{r}
+valid_place <- c(valid_city, extra_city) %>% unique()
+```
+
 
 #### Prep
 
 `r sum(!is.na(pa$CITY))` distinct cities were in the original dataset in column 
-```{r prep_city, collapse = TRUE}
-valid_place <- c(valid_city, extra_city) %>% unique()
-
+```{r prep_city, collapse = TRUE, eval=FALSE}
 pa <- pa %>% mutate(city_prep = normal_city(city = CITY,
                                             geo_abbs = usps_city,
                                             st_abbs = c(valid_state),
@@ -409,7 +441,7 @@ n_distinct(pa$employer_city_prep)
 
 #### Match
 
-```{r match_dist}
+```{r match_dist, eval=FALSE}
 pa <- pa %>%
   left_join(
     y = zipcodes,
@@ -424,7 +456,7 @@ pa <- pa %>%
 #### Swap
 
 To replace city names with expected city names from zipcode when the two variables are no more than two characters different
-```{r }
+```{r swap, eval=FALSE}
 pa <- pa %>% 
   mutate(
     match_dist = stringdist(city_prep, city_match),
@@ -445,7 +477,7 @@ n_distinct(pa$city_swap)
 #### Refine
 
 Use the OpenRefine algorithms to cluster similar values and merge them together. This can be done using the refinr::key_collision_merge() and refinr::n_gram_merge() functions on our prepared and swapped city data.
-```{r view_refine}
+```{r view_refine, eval=FALSE}
 pa_refined <- pa %>%
   filter(match_dist != 1) %>% 
   filter(STATE =="PA") %>% 
@@ -522,7 +554,7 @@ pa_refined %>%
 
 Manually change the city_refine fields due to overcorrection.
 
-```{r}
+```{r, eval=FALSE}
 pa_refined$city_refine <- pa_refined$city_refine %>% 
   str_replace("SHAWNEE\\sON\\sDELA$", "SHAWNEE ON DELAWARE") %>% 
   str_replace("^SPRINGBROOK$", "SPRING BROOK") %>% 
@@ -535,7 +567,7 @@ refined_table <-pa_refined %>%
 
 #### Merge 
 
-```{r join_refine}
+```{r join_refine, eval=FALSE}
 pa <- pa %>% 
   left_join(refined_table, by ="index") %>% 
   mutate(city = coalesce(city_refine, city_swap)) 
@@ -548,7 +580,7 @@ pa$city <- pa$city %>%
 
 
 ```{r}
-pa_out <- pa %>% filter(city %out% valid_place) 
+pa_out <- pa %>% filter(city %out% valid_place)
 
 pa_city_lookup <- read_csv(file = here("pa", "contribs", "data", "raw", "pa_city_lookup_contrib.csv"), skip =1, col_names = c("city", "city_lookup", "changed"))
 
@@ -581,45 +613,91 @@ pa_match_table[pa_match_table$city == "SPRINGTON", "sec_city_match"] <- "SPRINGT
 
 pa <- pa_match_table %>% select(index, sec_city_match) %>% 
   right_join(pa, by = "index") %>% 
-  mutate(city_clean = coalesce(sec_city_match, city_lkp))
+  mutate(city_tocheck = coalesce(sec_city_match, city_lkp))
 ```
 
 #### Check
-```{r check_city}
-pa <- pa %>% 
-  filter(city %out% valid_place) %>% 
-  drop_na(city,STATE) %>% 
-  count(city, STATE) %>% 
-  mutate(check_city_flag = pmap_lgl(.l = list(city, STATE), .f = check_city, key = api_key))
-
-pa_add_valid <- pa %>% filter(check_city_flag) %>% print_all() 
-# Use the following command to paste to the extra_city Google sheet
-# pa_add_valid$city %>% cat( sep = "\n")
-valid_places <- unique(c(valid_places, pa$city[pa$check_city_flag]))
-```
-
-```{r fetch_city, eval=FALSE}
-pa_filer <- pa_filer %>% mutate(city = city %>% 
-  str_replace("^PHILA$", "PHILADELPHIA") %>% 
-  str_replace("^PGH$", "PITSSBURGH"))
-
-pa_filer_out <- pa_filer %>% filter(city %out% valid_places) %>% 
-  drop_na(STATE,city) %>% 
-  count(STATE, city) 
-
+```{r check_city, eval=FALSE}
 api_key <- Sys.getenv("GEOCODING_API")
 
+pa_check <- pa %>% 
+  filter(city_tocheck%out% valid_place) %>% 
+  drop_na(city_tocheck,STATE) %>% 
+  count(city_tocheck, STATE)
 
-pa_filer_out <- pa_filer_out %>% cbind(
-  pmap_dfr(.l = list(pa_filer_out$city, pa_filer_out$STATE), .f = check_city, key = api_key, guess = T))
+pa_check_result <- 
+  pmap_dfr(.l = list(city = pa_check$city_tocheck, state = pa_check$STATE), .f = check_city, key = api_key, guess = T)
+
+
+pa_check <- pa_check %>% 
+  left_join(pa_check_result, by = c("city_tocheck" = "original_city", "STATE" = "original_state"))
+
+pa_check <-  pa_check %>% select(-original_zip)
+
+head(pa_check)
 ```
 
 
+```{r write check_table to csv, echo=FALSE, eval=FALSE}
+clean_dir <- here("pa", "contribs", "data", "processed")
+pa_check %>% write_csv(
+    path = glue("{clean_dir}/pa_check.csv"),
+    na = ""
+  )
+```
+
+```{r read saved check_table, echo=FALSE}
+clean_dir <- here("pa", "contribs", "data", "processed")
+pa_check <- read_csv(glue("{clean_dir}/pa_check.csv"))
+head(pa_check)
+```
+
+Add the valid places to the `extra_city` spreadhseet.
+```{r add to extra_city, eval=FALSE}
+extra_city <- gs_title("extra_city")
+
+extra_city <- extra_city %>% 
+  gs_add_row(ws = 1, input = pa_check %>% filter(check_city_flag) %>% select(city_tocheck))
+```
+
+```{r}
+pa_check <-  pa_check %>% 
+  mutate(check_dist = stringdist(guess_place, city_tocheck),
+    check_swap = if_else(condition = !is.na(guess_place),
+                        if_else(
+      condition = check_dist <= 2,
+      true = guess_place,
+      false = city_tocheck
+    ),
+      false = city_tocheck
+  ))
+```
+
+Manually change the city_refine fields due to overcorrection.
+
+
+```{r revert overcorrected refine}
+pa <- pa_check %>% select(city_tocheck, STATE, check_swap) %>% 
+  right_join(pa, by = c("city_tocheck","STATE"))
+  
+pa <-  pa %>% mutate(city_clean = coalesce(check_swap,city_tocheck))
+
+pa$city_clean <- pa$city_clean %>% 
+  str_replace("^DOWNTOWN$", "DAWNSTOWN") %>% 
+  str_replace("^RESEARCH TRIANGLE PARK$", "RESEARCH TRIANGLE") %>% 
+  na_if("^VIRTUAL$") %>% 
+  na_if("^PROXY$")
+```
+
 ```{r generate progress}
+valid_place <-  c(valid_place,pa_check$city_tocheck[pa_check$check_city_flag]) %>% unique()
+
 progress <- progress_table(
-  pa$city_raw,
-  pa$city_norm,
+  pa$CITY,
+  pa$city_prep,
   pa$city_swap,
+  pa$city_lkp,
+  pa$city_tocheck,
   pa$city_clean,
   compare = valid_place
 ) %>% mutate(stage = as_factor(stage))
@@ -638,7 +716,7 @@ progress %>%
   coord_cartesian(ylim = c(0.75, 1)) +
   scale_y_continuous(labels = percent) +
   labs(
-    title = "Massachusetts City Normalization Progress",
+    title = "Pennsylvania Contributions City Normalization Progress",
     x = "Stage",
     y = "Percent Valid"
   )
@@ -672,39 +750,6 @@ progress %>%
   )
 ```
 
-```{r clean address, echo = TRUE, execute = FALSE}
-pa <- pa %>%   
-  unite(
-    ADDRESS1, ADDRESS2,
-    col = address_clean,
-    sep = " ",
-    remove = FALSE,
-    na.rm = TRUE
-  ) %>% 
-  mutate(address_clean = normal_address(
-      address = address_clean,
-      add_abbs = usps_city,
-      na_rep = TRUE
-    ))
-```
-
-```{r join filer table}
-filer_dir <- here("pa", "expends", "data", "processed")
-pa_filer <- read_csv(glue("{filer_dir}/pa_filers_clean.csv"), 
-                     col_types = cols(.default = col_character())) %>% 
-  rename_at(vars(contains("clean")), list(~str_c("filer_",.))) %>% 
-  select(
-    FILERID,
-    EYEAR,
-    CYCLE,
-    FILERNAME,
-    FILERTYPE,
-    filer_state,
-    ends_with("clean")
-  )
-```
-
-
 Each step of the cleaning process reduces the number of distinct city values.
 There are `r sum(!is.na(pa$CITY))` with `r n_distinct(pa$CITY)` distinct values, after the swap and refine processes, there are `r sum(!is.na(pa$city_clean))` entries with `r n_distinct(pa$city_clean)` distinct values. 
 
@@ -724,7 +769,29 @@ pa <- pa %>% unite(
 ```
 
 
+## Join with Filer 
 
+We also need to pull up the processed filer table to join back to the `FILERID`, `EYEAR` and `CYCLE` field.
+
+```{r join filer table}
+filer_dir <- here("pa", "expends", "data", "processed")
+pa_filer <- read_csv(glue("{filer_dir}/pa_filers_clean.csv"), 
+                     col_types = cols(.default = col_character())) %>% 
+  rename_at(vars(contains("clean")), list(~str_c("filer_",.))) %>% 
+  select(
+    FILERID,
+    EYEAR,
+    CYCLE,
+    FILERNAME,
+    FILERTYPE,
+    filer_state,
+    ends_with("clean")
+  )
+```
+
+```{r join with filer}
+pa <- pa %>% left_join(pa_filer, by = c("FILERID", "EYEAR", "CYCLE"))
+```
 ## Conclude
 
 
@@ -755,7 +822,10 @@ pa %>%
     -city,
     -city_lookup,
     -city_lkp,
-    -sec_city_match
+    -sec_city_match,
+    -check_swap,
+    -CONTDATE2,
+    -CONTDATE3
   ) %>% 
   rename(ZIP5 = zip_clean, employer_ZIP5 = employer_zip_clean) %>% 
   write_csv(
