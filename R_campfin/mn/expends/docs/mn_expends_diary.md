@@ -1,7 +1,7 @@
 State Data
 ================
 First Last
-2019-11-14 13:17:40
+2019-11-14 13:58:04
 
 ## Project
 
@@ -799,15 +799,19 @@ dir_create(proc_dir)
 ```
 
 ``` r
-date()
-#> [1] "Thu Nov 14 13:18:35 2019"
 mn %>% 
   select(
     -city_norm,
     -city_match,
+    -match_abb,
     -match_dist,
-    -city_swap,
-    -city_refine
+    -city_swap
+  ) %>% 
+  rename(
+    address_clean = address_norm,
+    city_clean    = city_refine,
+    state_clean   = state_norm,
+    zip_clean     = zip_norm,
   ) %>% 
   write_csv(
     na = "",

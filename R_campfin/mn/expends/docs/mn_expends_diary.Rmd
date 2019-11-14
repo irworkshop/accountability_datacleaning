@@ -961,14 +961,19 @@ dir_create(proc_dir)
 ```
 
 ```{r write_clean, collapse=TRUE}
-date()
 mn %>% 
   select(
     -city_norm,
     -city_match,
+    -match_abb,
     -match_dist,
-    -city_swap,
-    -city_refine
+    -city_swap
+  ) %>% 
+  rename(
+    address_clean = address_norm,
+    city_clean    = city_refine,
+    state_clean   = state_norm,
+    zip_clean     = zip_norm,
   ) %>% 
   write_csv(
     na = "",
