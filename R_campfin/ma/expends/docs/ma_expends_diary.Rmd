@@ -193,29 +193,30 @@ $ sudo apt install mdbtools
 
 [07]: https://github.com/brianb/mdbtools
 
-We can use `campfin:::mdb_tables()` to find the table name we are interested in from the database.
+We can use the  `mdb-tools` command line tool to find the table name we are interested in from the
+database.
 
 ```{r get_mdb_tables}
 # get file name
 mdb_file <- dir_ls(raw_dir, glob = "*.mdb$")
 # list tables in file
-campfin:::mdb_tables(file = mdb_file)
+system(paste("mdb-tables -1", mdb_file), intern = TRUE)
 ```
 
 Then, use `campfin::read_mdb()` to read the table as a data frame.
 
 ```{r read_expends}
-ma <- read_mdb(
-  file = mdb_file,
-  table = "vUPLOAD_tCURRENT_EXPENDITURES",
-  na = c("", "NA", "N/A"),
-  locale = locale(tz = "US/Eastern"),
-  col_types = cols(
-    .default = col_character(),
-    Date = col_date(),
-    Amount = col_double()
+ma <- paste("mdb-export", mdb_file, "vUPLOAD_tCURRENT_EXPENDITURES") %>% 
+  system(intern = TRUE) %>% 
+  read_csv(
+    na = c("", "NA", "N/A"),
+    locale = locale(tz = "US/Eastern"),
+    col_types = cols(
+      .default = col_character(),
+      Date = col_date(),
+      Amount = col_double()
+    )
   )
-)
 ```
 
 Finally, we can standardize the data frame structure with the `janitor` package.
@@ -232,12 +233,12 @@ information on the _filers_ of the reports, whose expenditures are listed in
 "vUPLOAD_tCURRENT_EXPENDITURES".
 
 ```{r read_master}
-master <- read_mdb(
-  file = mdb_file,
-  table = "vUPLOAD_MASTER",
-  na = c("", "NA", "N/A", "Unknown/ N/A"),
-  col_types = cols(.default = col_character())
-)
+master <- paste("mdb-export", mdb_file, "vUPLOAD_MASTER") %>% 
+  system(intern = TRUE) %>% 
+  read_csv(
+    na = c("", "NA", "N/A", "Unknown/ N/A"),
+    col_types = cols(.default = col_character())
+  )
 
 master <- master %>%
   clean_names("snake") %>% 
@@ -513,12 +514,12 @@ normalization to improve the searchability of the database.
 
 First, we will normalize the street address by removing punctuation and expanding abbreviations.
 
-```{r normal_address}
+```{r address_normal}
 ma <- ma %>% 
   mutate(
     address_norm = normal_address(
       address = address,
-      add_abbs = usps_street,
+      abbs = usps_street,
       na_rep = TRUE
     )
   )
@@ -526,8 +527,8 @@ ma <- ma %>%
 
 We can see how this improves consistency across the `address` field.
 
-```{r view_address_change, echo=FALSE}
-drop_na(select(ma, starts_with("address")))
+```{r address_view, echo=FALSE}
+sample_frac(drop_na(select(ma, starts_with("address"))))
 ```
 
 ### ZIP
@@ -535,68 +536,85 @@ drop_na(select(ma, starts_with("address")))
 The `zip` address is already fairly clean, with `r percent(prop_in(ma$zip, valid_zip, na.rm = TRUE))`
 of the values already in our comprehensive `valid_zip` list.
 
-```{r count_zip_pre, collapse=TRUE}
-n_distinct(ma$zip)
-prop_in(ma$zip, valid_zip, na.rm = TRUE)
-length(setdiff(ma$zip, valid_zip))
-```
-
 We can improve this further by lopping off the uncommon four-digit extensions and removing common
 invalid codes like 00000 and 99999.
 
-```{r normal_zip}
+```{r zip_normal}
 ma <- ma %>% 
-  mutate(
-    zip_norm = normal_zip(
-      zip = zip,
-      na_rep = TRUE
-    )
+  mutate_at(
+    .vars = vars(ends_with("zip")),
+    .funs = list(norm = normal_zip),
+    na_rep = TRUE
   )
 ```
 
 This brings our valid percentage to `r percent(prop_in(ma$zip_norm, valid_zip, na.rm = TRUE))`.
 
-```{r count_zip_post, collapse=TRUE}
-n_distinct(ma$zip_norm)
-prop_in(ma$zip_norm, valid_zip, na.rm = TRUE)
-length(setdiff(ma$zip_norm, valid_zip))
+```{r zip_progress}
+progress_table(
+  ma$zip,
+  ma$zip_norm,
+  ma$comm_zip,
+  ma$comm_zip_norm,
+  compare = valid_zip
+)
 ```
 
 ### State
 
-The `state` variable is also very clean, already at 
-`r percent(prop_in(ma$state, valid_state, na.rm = TRUE))`.
-
-```{r count_state_pre, collapse=TRUE}
-n_distinct(ma$state)
-prop_in(ma$state, valid_state, na.rm = TRUE)
-length(setdiff(ma$state, valid_state))
-setdiff(ma$state, valid_state)
-```
+The `state` variable is also very clean, already at `r percent(prop_in(ma$state, valid_state))`.
 
 There are still `r length(setdiff(ma$state, valid_state))` invalid values which we can remove.
 
-```{r normal_state}
-ma <- ma %>% 
-  mutate(
-    state_norm = normal_state(
-      state = str_replace(state, "^M$", "MA"),
-      abbreviate = TRUE,
-      na_rep = TRUE,
-      valid = valid_state
-    )
+```{r state_normal}
+ma <- ma %>%
+  mutate_at(
+    .vars = vars(ends_with("state")),
+    .funs = list(norm = normal_state),
+    abbreviate = TRUE,
+    na_rep = TRUE,
+    valid = NULL
   )
 ```
 
-```{r count_state_post, collapse=TRUE}
-n_distinct(ma$state_norm)
-prop_in(ma$state_norm, valid_state, na.rm = TRUE)
+```{r state_progress}
+progress_table(
+  ma$state,
+  ma$state_norm,
+  ma$comm_state,
+  ma$comm_state_norm,
+  compare = valid_state
+)
+```
+
+```{r state_view}
+ma %>% 
+  filter(state_norm %out% valid_state) %>% 
+  count(state_norm, sort = TRUE)
+```
+
+All records with the `state_norm` value of `M` or `A` have a `zip_norm` value which matches MA.
+
+```{r state_count}
+ma %>% 
+  filter(state_norm == "M" | state_norm == "A") %>% 
+  count(zip_norm, state_norm) %>% 
+  left_join(zipcodes, by = c("zip_norm" = "zip")) %>% 
+  count(state)
+```
+
+```{r state_overwrite}
+ma$state_norm[which(ma$state_norm == "M" | ma$state_norm == "A")] <- "MA"
+```
+
+```{r state_remove}
+ma$state_norm <- na_out(ma$state_norm, valid_state)
 ```
 
 ### City
 
-The `city` value is the hardest to normalize. We can use a four-step system to functionally improve
-the searchablity of the database.
+The `city` value(s) is the hardest to normalize. We can use a four-step system to functionally
+improve the searchablity of the database.
 
 1. **Normalize** the raw values with `campfin::normal_city()`
 1. **Match** the normal values with the _expected_ value for that ZIP code
@@ -609,36 +627,21 @@ The raw `city` values are relatively normal, with
 `r percent(prop_in(ma$city, valid_city, na.rm = TRUE))` already in `valid_city` (which is not
 comprehensive). We will aim to get this number over 99%.
 
-```{r count_city_pre, collapse=TRUE}
-n_distinct(ma$city)
-prop_in(ma$city, valid_city, na.rm = TRUE)
-length(setdiff(ma$city, valid_city))
-prop_na(ma$city)
-```
-
 #### Normalize
 
 ```{r normal_city}
-ma <- ma %>% 
-  mutate(
-    city_norm = normal_city(
-      city = city, 
-      geo_abbs = usps_city,
-      st_abbs = c("MA", "DC", "MASSACHUSETTS"),
-      na = invalid_city,
-      na_rep = TRUE
-    )
+ma <- ma %>%
+  mutate_at(
+    .vars = vars(ends_with("city")),
+    .funs = list(norm = normal_city),
+    abbs = usps_city,
+    states = c("MA", "DC", "MASSACHUSETTS"),
+    na = invalid_city,
+    na_rep = TRUE
   )
 ```
 
 This process brought us to `r percent(prop_in(ma$city_norm, valid_city, na.rm = TRUE))` valid.
-
-```{r count_city_post_norm, collapse=TRUE}
-n_distinct(ma$city_norm)
-prop_in(ma$city_norm, valid_city, na.rm = TRUE)
-length(setdiff(ma$city_norm, valid_city))
-prop_na(ma$city_norm)
-```
 
 It also increased the proportion of `NA` values by 
 `r percent(prop_na(ma$city_norm) - prop_na(ma$city))`. These new `NA` values were either a single
@@ -672,24 +675,37 @@ ma <- ma %>%
   ) %>% 
   rename(city_match = city) %>% 
   mutate(
+    match_abb = is_abbrev(city_norm, city_match),
     match_dist = str_dist(city_norm, city_match),
     city_swap = if_else(
-      condition = is_less_than(match_dist, 3),
+      condition = match_abb | match_dist < 3,
       true = city_match,
       false = city_norm
     )
   )
 ```
 
-This is a very fast way to increase the valid proportion to
-`r percent(prop_in(ma$city_swap, valid_city, na.rm = TRUE))` and reduce the number of distinct
-_invalid_ values from `r length(setdiff(ma$city_norm, valid_city))` to only
-`r length(setdiff(ma$city_swap, valid_city))`
-
-```{r count_city_post_swap, collapse=TRUE}
-n_distinct(ma$city_swap)
-prop_in(ma$city_swap, valid_city, na.rm = TRUE)
-length(setdiff(ma$city_swap, valid_city))
+```{r swap_comm_city}
+ma <- ma %>%
+  select(-city_match) %>% 
+  left_join(
+    y = zipcodes,
+    by = c(
+      "comm_state_norm" = "state",
+      "comm_zip_norm" = "zip"
+    )
+  ) %>% 
+  rename(city_match = city) %>% 
+  mutate(
+    match_abb = is_abbrev(comm_city_norm, city_match),
+    match_dist = str_dist(comm_city_norm, city_match),
+    comm_city_swap = if_else(
+      condition = match_abb | match_dist < 3,
+      true = city_match,
+      false = city_norm
+    )
+  ) %>% 
+  select(-match_abb, -match_dist)
 ```
 
 #### Refine
@@ -722,10 +738,10 @@ good_refine %>%
   count(
     state_norm, 
     zip_norm, 
-    city_raw, 
-    city_refine
-  ) %>% 
-  sample_frac()
+    city_swap, 
+    city_refine,
+    sort = TRUE
+  )
 ```
 
 We can join these good refined values back to the original data and use them over their incorrect
@@ -738,12 +754,6 @@ ma <- ma %>%
 ```
 
 This brings us to `r percent(prop_in(ma$city_refine, valid_city, na.rm = TRUE))` valid values.
-
-```{r count_city_post_refine, collapse=TRUE}
-n_distinct(ma$city_refine)
-prop_in(ma$city_refine, valid_city, na.rm = TRUE)
-length(setdiff(ma$city_refine, valid_city))
-```
 
 #### Manual
 
@@ -790,7 +800,7 @@ ma <- ma %>%
 
 ```{r lookup}
 lookup_file <- here("ma", "expends", "data", "ma_city_lookup.csv")
-if (file.exists(lookup_file)) {
+if (file_exists(lookup_file)) {
   lookup <- read_csv(lookup_file) %>% select(1:2)
   ma <- left_join(ma, lookup, by = c("city_manual" = "city_final"))
   progress_table(
@@ -872,13 +882,23 @@ dir_create(proc_dir)
 ```
 
 ```{r write_clean}
-ma %>% 
+ma %>%
   select(
     -city_norm,
     -city_swap,
     -city_match,
     -city_swap,
-    -match_dist
+    -city_refine,
+    -city_manual,
+    -comm_city_norm
+  ) %>% 
+  rename(
+    address_clean = address_norm,
+    zip_clean = zip_norm,
+    state_clean = state_norm,
+    comm_zip_clean = comm_zip_norm,
+    comm_state_clean = comm_state_norm,
+    comm_city_clean = comm_city_swap
   ) %>% 
   write_csv(
     path = glue("{proc_dir}/ma_expends_clean.csv"),
