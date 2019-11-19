@@ -68,10 +68,8 @@ functions custom made to help facilitate the processing of campaign finance data
 
 ```{r load_packages, message=FALSE, dfrning=FALSE, error=FALSE}
 if (!require("pacman")) install.packages("pacman")
-pacman::p_load_current_gh("kiernann/campfin")
+pacman::p_load_gh("irworkshop/campfin")
 pacman::p_load(
-  stringdist, # levenshtein value
-  RSelenium, # remote browser
   tidyverse, # data manipulation
   lubridate, # datetime strings
   tidytext, # text analysis
@@ -469,12 +467,12 @@ normalization to improve the searchability of the database.
 
 First, we will normalize the street address by removing punctuation and expanding abbreviations.
 
-```{r normal_address}
+```{r address_normal}
 ind <- ind %>% 
   mutate(
     address_norm = normal_address(
       address = address,
-      add_abbs = usps,
+      abbs = usps_street,
       na_rep = TRUE
     )
   )
@@ -482,7 +480,7 @@ ind <- ind %>%
 
 We can see how this improves consistency across the `address` field.
 
-```{r view_address_change, echo=FALSE}
+```{r address_view, echo=FALSE}
 ind %>% 
   select(starts_with("address")) %>% 
   drop_na() %>% 
@@ -495,16 +493,10 @@ The `zip` address is already pretty good, with
 `r percent(prop_in(ind$zip, valid_zip, na.rm = TRUE))` of the values already in our 95% 
 comprehensive `valid_zip` list.
 
-```{r count_zip_pre, collapse=TRUE}
-n_distinct(ind$zip)
-prop_in(ind$zip, valid_zip)
-length(setdiff(ind$zip, valid_zip))
-```
-
 We can improve this further by lopping off the uncommon four-digit extensions and removing common
 invalid codes like 00000 and 99999.
 
-```{r normal_zip}
+```{r zip_normal}
 ind <- ind %>% 
   mutate(
     zip_norm = normal_zip(
@@ -516,11 +508,12 @@ ind <- ind %>%
 
 This brings our valid percentage to `r percent(prop_in(ind$zip_norm, valid_zip, na.rm = TRUE))`.
 
-```{r count_zip_post, collapse=TRUE}
-n_distinct(ind$zip_norm)
-prop_in(ind$zip_norm, valid_zip)
-length(setdiff(ind$zip_norm, valid_zip))
-count_na(ind$zip_norm) - count_na(ind$zip)
+```{r zip_progress}
+progress_table(
+  ind$zip,
+  ind$zip_norm,
+  compare = valid_zip
+)
 ```
 
 ### State
@@ -528,16 +521,9 @@ count_na(ind$zip_norm) - count_na(ind$zip)
 The `state` variable is also very clean, already at 
 `r percent(prop_in(ind$state, valid_state, na.rm = TRUE))`.
 
-```{r count_state_pre, collapse=TRUE}
-n_distinct(ind$state)
-prop_in(ind$state, valid_state, na.rm = TRUE)
-length(setdiff(ind$state, valid_state))
-setdiff(ind$state, valid_state)
-```
-
 There are still `r length(setdiff(ind$state, valid_state))` invalid values which we can remove.
 
-```{r normal_state}
+```{r state_normal}
 ind <- ind %>% 
   mutate(
     state_norm = normal_state(
@@ -549,9 +535,12 @@ ind <- ind %>%
   )
 ```
 
-```{r count_state_post, collapse=TRUE}
-n_distinct(ind$state_norm)
-prop_in(ind$state_norm, valid_state)
+```{r state_progress}
+progress_table(
+  ind$state,
+  ind$state_norm,
+  compare = valid_state
+)
 ```
 
 ### City
@@ -570,36 +559,22 @@ The raw `city` values are not very normal, with only
 `r percent(prop_in(ind$city, valid_city, na.rm = TRUE))` already in `valid_city`, mostly due to case difference. If we simply convert to uppcase that numbers increases to 
 `r percent(prop_in(str_to_upper(ind$city), valid_city, na.rm = TRUE))`. We will aim to get this number over 99% using the other steps in the process.
 
-```{r count_city_pre, collapse=TRUE}
-n_distinct(ind$city)
-prop_in(ind$city, valid_city, na.rm = TRUE)
-length(setdiff(ind$city, valid_city))
-prop_na(ind$city)
-```
-
 #### Normalize
 
 ```{r normal_city}
 ind <- ind %>% 
   mutate(
     city_norm = normal_city(
-      city = city, 
-      geo_abbs = usps_city,
-      st_abbs = c("IN", "DC", "INDIANA"),
-      na = na_city,
+      city = city %>% str_replace(rx_break("Indianapol;is"), "INDIANAPOLIS"), 
+      abbs = usps_city,
+      states = c("IN", "DC", "INDIANA"),
+      na = invalid_city,
       na_rep = TRUE
     )
   )
 ```
 
 This process brought us to `r percent(prop_in(ind$city_norm, valid_city, na.rm = TRUE))` valid.
-
-```{r count_city_post_norm, collapse=TRUE}
-n_distinct(ind$city_norm)
-prop_in(ind$city_norm, valid_city, na.rm = TRUE)
-length(setdiff(ind$city_norm, valid_city))
-prop_na(ind$city_norm)
-```
 
 It also increased the proportion of `NA` values by 
 `r percent(prop_na(ind$city_norm) - prop_na(ind$city))`. These new `NA` values were either a single
@@ -625,7 +600,7 @@ two values.
 ind <- ind %>% 
   rename(city_raw = city) %>% 
   left_join(
-    y = geo,
+    y = zipcodes,
     by = c(
       "state_norm" = "state",
       "zip_norm" = "zip"
@@ -633,9 +608,10 @@ ind <- ind %>%
   ) %>% 
   rename(city_match = city) %>% 
   mutate(
-    match_dist = stringdist(city_norm, city_match),
+    match_abb = is_abbrev(city_norm, city_match),
+    match_dist = str_dist(city_norm, city_match),
     city_swap = if_else(
-      condition = is_less_than(match_dist, 3),
+      condition = match_dist < 3 | match_abb,
       true = city_match,
       false = city_norm
     )
@@ -644,18 +620,12 @@ ind <- ind %>%
 
 This is a very fast way to increase the valid proportion to
 `r percent(prop_in(ind$city_swap, valid_city, na.rm = TRUE))` and reduce the number of distinct
-_invalid_ values from `r length(setdiff(ind$city_norm, valid_city))` to only
-`r length(setdiff(ind$city_swap, valid_city))`
-
-```{r count_city_post_swap, collapse=TRUE}
-n_distinct(ind$city_swap)
-prop_in(ind$city_swap, valid_city, na.rm = TRUE)
-length(setdiff(ind$city_swap, valid_city))
-```
+_invalid_ values from `r count_diff(ind$city_norm, valid_city)` to only
+`r count_diff(ind$city_swap, valid_city)`
 
 #### Refine
 
-Finally, we can pass these swapped `city_swap` values to the OpenRefine cluster and merge 
+Additionally, we can pass these swapped `city_swap` values to the OpenRefine cluster and merge 
 algorithms. These two algorithms cluster similar values and replace infrequent values with their
 more common counterparts. This process can be harmful by making _incorrect_ changes. We will only
 keep changes where the state, ZIP code, _and_ new city value all match a valid combination.
@@ -669,7 +639,7 @@ good_refine <- ind %>%
   ) %>% 
   filter(city_refine != city_swap) %>% 
   inner_join(
-    y = geo,
+    y = zipcodes,
     by = c(
       "city_refine" = "city",
       "state_norm" = "state",
@@ -683,10 +653,10 @@ good_refine %>%
   count(
     state_norm, 
     zip_norm, 
-    city_raw, 
-    city_refine
-  ) %>% 
-  sample_frac()
+    city_swap, 
+    city_refine,
+    sort = TRUE
+  )
 ```
 
 We can join these good refined values back to the original data and use them over their incorrect
@@ -699,14 +669,6 @@ ind <- ind %>%
 ```
 
 This brings us to `r percent(prop_in(ind$city_refine, valid_city, na.rm = TRUE))` valid values.
-
-```{r count_city_post_refine, collapse=TRUE}
-n_distinct(ind$city_refine)
-prop_in(ind$city_refine, valid_city, na.rm = TRUE)
-length(setdiff(ind$city_refine, valid_city))
-```
-
-#### Progress
 
 We can make very few manual changes to capture the last few big invalid values. Local city
 abbreviations (e.g., INDPLS) often need to be changed by hand.
@@ -721,7 +683,7 @@ ind %>%
 ```{r city_final}
 ind <- ind %>% 
   mutate(
-    city_final = city_refine %>% 
+    city_refine = city_refine %>% 
       str_replace("^INDPLS$", "INDIANAPOLIS") %>% 
       str_replace("^EC$", "EAST CHICAGO") %>% 
       str_replace("^INDY$", "INDIANAPOLIS") %>% 
@@ -729,56 +691,150 @@ ind <- ind %>%
   )
 ```
 
-By making less than a dozen manual string replacements, we bring our final valid percentage to 
-`r percent(prop_in(ind$city_final, valid_city, na.rm = TRUE))`, above our 99% goal. There are still
-`r length(setdiff(ind$city_final, valid_city))` different _invalid_ values that could be checked, but
-they make up less than 1% of records. Many of these values are actually valid and simply not in our
-list (which doesn't contain very small towns and census desginated places).
+#### Check
 
-```{r progress_table, echo=FALSE}
-progress_table <- tibble(
-  stage = c("raw", "norm", "swap", "refine", "final"),
-  total_distinct = c(
-    n_distinct(ind$city_raw),
-    n_distinct(ind$city_norm),
-    n_distinct(ind$city_swap),
-    n_distinct(ind$city_refine),
-    n_distinct(ind$city_final)
-  ),
-  prop_good = c(
-    prop_in(ind$city_raw, valid_city, na.rm = TRUE),
-    prop_in(ind$city_norm, valid_city, na.rm = TRUE),
-    prop_in(ind$city_swap, valid_city, na.rm = TRUE),
-    prop_in(ind$city_refine, valid_city, na.rm = TRUE),
-    prop_in(ind$city_final, valid_city, na.rm = TRUE)
-  ),
-  unique_bad = c(
-    length(setdiff(ind$city_raw, valid_city)),
-    length(setdiff(ind$city_norm, valid_city)),
-    length(setdiff(ind$city_swap, valid_city)),
-    length(setdiff(ind$city_refine, valid_city)),
-    length(setdiff(ind$city_final, valid_city))
-  )
-)
+We can use the `check_city()` function to pass the remaining unknown `city_refine` values (and
+their `state_norm`) to the Google Geocode API. The function returns the name of the city or
+locality which most associated with those values.
 
-diff_change <- progress_table$unique_bad[5]-progress_table$unique_bad[1]
-prop_change <- diff_change/progress_table$unique_bad[1]
+This is an easy way to both check for typos and check whether an unknown `city_refine` value is
+actually a completely acceptable neighborhood, census designated place, or some other locality not
+found in our `valid_city` vector from our `zipcodes` database.
+
+First, we'll filter out any known valid city and aggregate the remaining records by their city and
+state. Then, we will only query those unknown cities which appear at least ten times.
+
+```{r check_filter}
+ind_out <- ind %>% 
+  filter(city_refine %out% c(valid_city, extra_city)) %>% 
+  count(city_refine, state_norm, sort = TRUE) %>% 
+  drop_na() %>% 
+  filter(n > 1)
 ```
 
-Still, our progress is significant without having to make a single manual or unconfident change.
-The percent of valid cities increased from `r percent(progress_table$prop_good[1])` to 
-`r percent(progress_table$prop_good[5])`. The number of total distinct city values decreased from
-`r comma(progress_table$total_distinct[1])` to `r comma(progress_table$total_distinct[5])`. The
-number of distinct invalid city names decreased from `r comma(progress_table$unique_bad[1])` to
-only `r comma(progress_table$unique_bad[5])`, a change of `r percent(prop_change)`.
+Passing these values to `check_city()` with `purrr::pmap_dfr()` will return a single tibble of the
+rows returned by each city/state combination.
 
-```{r print_progress, echo=FALSE}
-kable(
-  x = progress_table,
-  format = "markdown", 
-  digits = 4,
-  col.names = c("Normalization Stage", "Total Distinct", "Percent Valid", "Unique Invalid")
-)
+First, we'll check to see if the API query has already been done and a file exist on disk. If such
+a file exists, we can read it using `readr::read_csv()`. If not, the query will be sent and the
+file will be written using `readr::write_csv()`.
+
+```{r check_send}
+check_file <- here("in", "expends", "data", "api_check.csv")
+if (file_exists(check_file)) {
+  check <- read_csv(
+    file = check_file
+  )
+} else {
+  check <- pmap_dfr(
+    .l = list(
+      ind_out$city_refine, 
+      ind_out$state_norm
+    ), 
+    .f = check_city, 
+    key = Sys.getenv("GEOCODE_KEY"), 
+    guess = TRUE
+  ) %>% 
+    mutate(guess = coalesce(guess_city, guess_place)) %>% 
+    select(-guess_city, -guess_place)
+  write_csv(
+    x = check,
+    path = check_file
+  )
+}
+```
+
+Any city/state combination with a `check_city_flag` equal to `TRUE` returned a matching city string
+from the API, indicating this combination is valid enough to be ignored.
+
+```{r check_accept}
+valid_locality <- check$guess[check$check_city_flag]
+```
+
+Then we can perform some simple comparisons between the queried city and the returned city. If they
+are extremelly similar, we can accept those returned locality strings and add them to our list of
+accepted additional localities.
+
+```{r check_compare}
+valid_locality <- check %>% 
+  filter(!check_city_flag) %>% 
+  mutate(
+    abb = is_abbrev(original_city, guess),
+    dist = str_dist(original_city, guess)
+  ) %>%
+  filter(abb | dist <= 3) %>% 
+  pull(guess) %>% 
+  c(valid_locality)
+```
+
+This list of acceptable localities can be added with our `valid_city` and `extra_city` vectors
+from the `campfin` package. The cities checked will eventually be added to `extra_city`.
+
+```{r check_combine}
+many_city <- c(valid_city, extra_city, valid_locality)
+```
+
+```{r check_diff}
+prop_in(ind$city_refine, valid_city)
+prop_in(ind$city_refine, many_city)
+```
+
+```{r city_progress, echo=FALSE}
+progress <- progress_table(
+  str_to_upper(ind$city_raw),
+  ind$city_norm,
+  ind$city_swap,
+  ind$city_refine,
+  compare = many_city
+) %>% mutate(stage = as_factor(stage))
+```
+
+```{r progress_print, echo=FALSE}
+kable(progress, digits = 4)
+```
+
+You can see how the percentage of valid values increased with each stage.
+
+```{r progress_bar, echo=FALSE}
+progress %>% 
+  ggplot(aes(x = stage, y = prop_in)) +
+  geom_hline(yintercept = 0.99) +
+  geom_col(fill = RColorBrewer::brewer.pal(3, "Dark2")[3]) +
+  coord_cartesian(ylim = c(0.75, 1)) +
+  scale_y_continuous(labels = percent) +
+  labs(
+    title = "Indiana City Normalization Progress",
+    x = "Stage",
+    y = "Percent Valid"
+  )
+```
+
+More importantly, the number of distinct values decreased each stage. We were
+able to confidently change many distinct invalid values to their valid
+equivilent.
+
+```{r distinct_bar}
+progress %>% 
+  select(
+    stage, 
+    all = n_distinct,
+    bad = n_diff
+  ) %>% 
+  mutate(good = all - bad) %>% 
+  pivot_longer(c("good", "bad")) %>% 
+  mutate(name = name == "good") %>% 
+  ggplot(aes(x = stage, y = value)) +
+  geom_col(aes(fill = name)) +
+  scale_fill_brewer(palette = "Dark2") +
+  scale_y_continuous(labels = comma) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "Indiana City Normalization Progress",
+    subtitle = "Distinct values, valid and invalid",
+    x = "Stage",
+    y = "Distinct Values",
+    fill = "Valid"
+  )
 ```
 
 ## Conclude
@@ -806,9 +862,16 @@ ind %>%
     -city_swap,
     -city_match,
     -city_swap,
+    -match_abb,
     -match_dist,
-    -city_refine,
     -expenditure_year
+  ) %>% 
+  rename(
+    city = city_raw,
+    address_clean = address_norm,
+    zip_clean = zip_norm,
+    state_clean = state_norm,
+    city_clean = city_refine
   ) %>% 
   write_csv(
     path = glue("{proc_dir}/in_expends_clean.csv"),
