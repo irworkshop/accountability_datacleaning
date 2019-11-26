@@ -1,0 +1,1011 @@
+---
+title: "Missouri Expenditures"
+author: "Kiernan Nicholls"
+date: "`r Sys.time()`"
+output:
+  github_document: 
+    df_print: tibble
+    toc: true
+    toc_dept: 2
+editor_options: 
+  chunk_output_type: console
+---
+
+<!-- Place comments regarding knitting here -->
+
+```{r setup, include=FALSE, purl=FALSE}
+library(knitr)
+opts_chunk$set(
+  eval = TRUE,
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  error = FALSE,
+  # it's nice to un-collapse df print
+  collapse = TRUE,
+  comment = "#>",
+  fig.path = "../plots/",
+  fig.width = 10,
+  dpi = 300
+)
+options(width = 99)
+set.seed(5)
+```
+
+## Project
+
+The Accountability Project is an effort to cut across data silos and give journalists, policy
+professionals, activists, and the public at large a simple way to search across huge volumes of
+public data about people and organizations.
+
+Our goal is to standardizing public data on a few key fields by thinking of each dataset row as a
+transaction. For each transaction there should be (at least) 3 variables:
+
+1. All **parties** to a transaction
+2. The **date** of the transaction
+3. The **amount** of money involved
+
+## Objectives
+
+This document describes the process used to complete the following objectives:
+
+1. How many records are in the database?
+1. Check for duplicates
+1. Check ranges
+1. Is there anything blank or missing?
+1. Check for consistency issues
+1. Create a five-digit ZIP Code called `ZIP5`
+1. Create a `YEAR` field from the transaction date
+1. Make sure there is data on both parties to a transaction
+
+## Packages
+
+The following packages are needed to collect, manipulate, visualize, analyze, and communicate
+these results. The `pacman` package will facilitate their installation and attachment.
+
+The IRW's `campfin` package will also have to be installed from GitHub. This package contains
+functions custom made to help facilitate the processing of campaign finance data.
+
+```{r load_packages, message=FALSE, dfrning=FALSE, error=FALSE}
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load_current_gh("kiernann/campfin")
+pacman::p_load(
+  stringdist, # levenshtein value
+  snakecase, # case conversion
+  tidyverse, # data manipulation
+  lubridate, # datetime strings
+  tidytext, # text analysis
+  magrittr, # pipe opperators
+  janitor, # dataframe clean
+  refinr, # cluster and merge
+  scales, # format strings
+  rvest, # scrape html pages
+  knitr, # knit documents
+  vroom, # read files fast
+  glue, # combine strings
+  here, # relative storage
+  fs # search storage 
+)
+```
+
+This document should be run as part of the `R_campfin` project, which lives as a sub-directory of
+the more general, language-agnostic [`irworkshop/accountability_datacleaning`][01] GitHub
+repository.
+
+The `R_campfin` project uses the [RStudio projects][02] feature and should be run as such. The
+project also uses the dynamic `here::here()` tool for file paths relative to _your_ machine.
+
+```{r where_here, collapse=TRUE}
+# where dfs this document knit?
+here::here()
+```
+
+[01]: https://github.com/irworkshop/accountability_datacleaning
+[02]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects
+
+## Data
+
+Data is obtained from the [New York State Board of Elections][03] (SBOE). 
+
+> The State Board of Elections was established in the Executive Department June 1, 1974 as a
+bipartisan agency vested with the responsibility for administration and enforcement of all laws
+relating to elections in New York State. The Board is also responsible for regulating disclosure
+and limitations of a Fair Campaign Code intended to govern campaign practices. In conducting these
+wide-ranging responsibilities, the Board offers assistance to local election boards and
+investigates complaints of possible statutory violations. In addition to the regulatory and
+enforcement responsibilities the board is charged with the preservation of citizen confidence in
+the democratic process and enhancement in voter participation in elections.
+
+The NYSBOE database can be obstained from their Campaign Finance [discolure reports page][04]. On
+that page, they elaborate on the availability and accuracy of the website.
+
+> ### Data Availability  
+> This database contains all financial disclosure reports filed with NYSBOE from July of 1999 to
+the present. Financial disclosure reports filed prior to the 1999 July Periodic report are either
+on file with the New York State Archives or in storage with the New York State Board of Elections.
+For further information or to obtain copies of these archived or stored filings, please call
+1-800-458-3453. Each page costs 25¢ plus postage and copy orders must be prepaid.
+> 
+> Electronically filed disclosure reports are generally available in the database on the day they
+are received. A small number of candidates and committees are either statutorily exempt or have
+applied for and obtained exemptions from electronic filing. These filers will continue filing on
+paper and their disclosure reports will become available as they are manually entered into the
+database by NYSBOE staff.
+
+> ### Data Accuracy  
+> The majority of financial disclosure reports filed at NYSBOE are entered into the database
+directly from e-mail, diskette, CD or DVD filings submitted by committee treasurers or candidates.
+The information contained in paper filings will be entered into the database exactly as it appears
+on the forms. Because database searches retrieve information exactly the way it is reported and
+then entered into the database, search results may be inaccurate and/or incomplete. This will
+occur, for example, if filers do not adhere to the required format, do not use the proper codes,
+misspell words or leave items blank. Although NYSBOE carefully reviews disclosure reports and
+requires treasurers to submit amended reports as needed, there will necessarily be delays before
+the review process is completed and the information in the database is corrected.
+
+The page also describes the format of their campaign finance database.
+
+> ### Database Files in ASCII Delimited Format
+> **Updated data files are uploaded during active filing periods after 4:00 P.M. daily until the
+filing is complete.**
+>
+> **Note:** To match the filing data files to Filer Names by filer ID you will need to Download the
+Filer data file. Commcand.zip is a zipped file containing the data file (commcand.asc) in ASCII
+delimited and two text files. (filerec.txt contains the data file layout - codes.txt explains the
+codes used in the data file).
+>
+> **All downloadable files are zipped files containing a data file in ASCII delimited format and
+two text files. (efsrecb.txt contains the data file layout - efssched.txt explains the different
+schedules as they apply to the database).**
+>
+> [Download Data file containing ALL filings][05]. **Note:** This file is a large file (238,994
+KB) that contains over 6 million records. Do not attempt to download this file unless you have a
+database to download the file to.
+
+[03]: https://www.elections.ny.gov/INDEX.html
+[04]: https://www.elections.ny.gov/CFViewReports.html
+[05]: https://www.elections.ny.gov/NYSBOE/download/ZipDataFiles/ALL_REPORTS.zip
+
+## Import
+
+We can use the link above to download a copy of the NYSBOE database to the `/data/raw` directory.
+
+```{r raw_dir}
+raw_dir <- here("ny", "expends", "data", "raw")
+dir_create(raw_dir)
+```
+
+### Download
+
+```{r create_zip_paths}
+zip_url <- "https://www.elections.ny.gov/NYSBOE/download/ZipDataFiles/ALL_REPORTS.zip"
+zip_path <- glue("{raw_dir}/{basename(zip_url)}")
+```
+
+Like they suggest, we will double check the size of the file before downloading.
+
+```{r check_file_size}
+url_file_size(zip_url, format = TRUE)
+```
+
+If the `ALL_REPORTS.zip` file hasn't yet been downloaded, do so now with `download.file()`.
+
+```{r download_zip}
+if (!this_file_new(zip_path)) {
+  download.file(
+    url = zip_url,
+    destfile = zip_path
+  )
+}
+```
+
+### Unzip
+
+If the `ALL_REPORTS.zip` file hasn't yet been unziped, we can do so now with `unzip()`. First, we
+will list the files in the ZIP archive.
+
+```{r}
+zip_content <- as_tibble(
+  x = unzip(zip_path, list = TRUE),
+  .name_repair = make_clean_names
+)
+print(zip_content)
+
+out_file <- glue("{raw_dir}/{zip_content$name[3]}")
+```
+
+```{r}
+if (!this_file_new(out_file)) {
+  unzip(
+    zipfile = zip_path,
+    exdir = raw_dir,
+    overwrite = TRUE
+  )
+}
+```
+
+### About
+
+```{r out_layout, echo=FALSE}
+layout_file <- glue("{raw_dir}/{zip_content$name[1]}")
+out_layout <- 
+  read_lines(file = layout_file) %>% 
+  extract(11:42) %>%
+  enframe(NULL) %>% 
+  filter(str_detect(value, "^$", negate = TRUE)) %>% 
+  map_df(str_trim) %>% 
+  separate(
+    col = value,
+    into = c("FIELD", "LOCATION", "TYPE", "FORMAT", "IMPORT"),
+    sep = "   +"
+  ) %>% 
+  na_if("REQUIRED") %>% 
+  select(-IMPORT)
+
+print(out_layout, n = 30)
+```
+
+```{r out_format, echo=FALSE}
+out_format <- 
+  read_lines(file = layout_file) %>% 
+  extract(44:50) %>%
+  enframe(NULL) %>% 
+  separate(
+    col = value,
+    into = c("aspect", "value"),
+    sep = ":"
+  ) %>% 
+  map_df(str_trim) %>% 
+  mutate(aspect = snakecase::to_snake_case(aspect))
+
+out_format <- as.list(out_format$value) %>% 
+  set_names(out_format$aspect) %>% 
+  map(parse_guess)
+
+print(out_format)
+```
+
+From the `EFSSCHED.TXT` file, we know Schedule L records contain the expenditures we are interested
+in.
+
+```{r out_schedules, echo=FALSE}
+sched_file <- glue("{raw_dir}/{zip_content$name[2]}")
+out_scheds <- 
+  read_lines(file = sched_file) %>% 
+  extract(60:78) %>% 
+  enframe(NULL) %>% 
+  separate(
+    col = value, 
+    into = c("sched", "desc"), 
+    sep = "\\s-\\s"
+  ) %>% 
+  map_df(str_trim)
+
+print(out_scheds)
+```
+
+```{r out_columns}
+out_cols <- str_remove(read_lines(file = sched_file, skip_empty_rows = TRUE)[4:34][-2], "\n")
+out_cols <- str_remove(out_cols, "NAMES")
+out_cols_header <- unlist(str_split(out_cols[1], "\\s+"))
+out_cols <- str_c(out_cols[str_which(out_cols, "X")], collapse = "\n")
+
+out_cols <- read_fwf(
+  file = out_cols, 
+  col_positions = fwf_empty(out_cols, col_names = out_cols_header)
+)
+
+out_cols <- mutate_at(
+  .tbl = out_cols, 
+  .vars = c(2:18), 
+  .funs = function(x) !is.na(x)
+)
+
+(names <- str_remove(na.omit(out_cols$FIELD[out_cols$J]), "_\\d+"))
+```
+
+```
+FIELD NAMES     A  B  C D  E  F  G  H  I  J K  L  M  N  O  P Q
+--------------------------------------------------------------
+DATE1           X  X  X X  X  X  X  X  X  X X  X  X  X     X X
+DATE2                                       X  X  X
+CONTRIB_CODE    X       X                               X  X
+CONTRIB_TYPE            X
+CORP            X  X  X X  X  X  X  X  X  X X  X  X  X  X  X X
+FIRST_NAME      X       X                                  X
+MID_INIT        X       X                                  X
+LAST_NAME       X       X                                  X
+ADDR            X  X  X X  X  X  X  X  X  X X  X  X  X     X X
+CITY            X  X  X X  X  X  X  X  X  X X  X  X  X     X X
+STATE           X  X  X X  X  X  X  X  X  X X  X  X  X     X X
+ZIP             X  X  X X  X  X  X  X  X  X X  X  X  X     X X
+CHECK_NO        X  X  X       X  X  X     X       X        X X
+CHECK_DATE                                X
+AMOUNT          X  X  X X  X  X  X  X  X  X X  X  X  X     X X
+AMOUNT2                                     X        X  X
+DESCRIPTION             X
+OTHER_RECPT                X
+PURPOSE_CODE1                 X                      X  X
+PURPOSE_CODE2                                                X
+EXPLANATION                   X                      X  X    X
+XFER_TYPE                        X  X
+CHKBOX                                 X                      
+```
+
+### Read
+
+```{r ny_names}
+ny_names <- c(
+  "FILER_ID", 
+  "FREPORT_ID",
+  "TRANSACTION_CODE", 
+  "E_YEAR",
+  "T3_TRID", 
+  "DATE", 
+  "DATE2", 
+  "CONTRIB_CODE", 
+  "CONTRIB_TYPE_CODE",
+  "CORP", 
+  "FIRST_NAME", 
+  "MID_INT", 
+  "LAST_NAME", 
+  "ADDR", 
+  "CITY", 
+  "STATE", 
+  "ZIP", 
+  "CHECK_NO",
+  "CHECK_DATE",
+  "AMOUNT",
+  "AMOUNT2", 
+  "DESCRIPTION", 
+  "OTHER_RECPT_CODE", 
+  "PURPOSE_CODE1", 
+  "PURPOSE_CODE2", 
+  "EXPLANATION", 
+  "XFER_TYPE", 
+  "CHKBOX", 
+  "CREREC_UID", 
+  "CREREC_DATE"
+  )
+```
+
+```{r read_out}
+ny <- read_delim(
+  file = out_file, 
+  delim = ",", 
+  col_names = to_snake_case(ny_names),
+   escape_double = FALSE,
+  escape_backslash = FALSE,
+  col_types = cols(
+    .default = col_character(),
+    e_year = col_integer(),
+    date = col_date("%m/%d/%Y"),
+    amount = col_double(),
+    amount_2 = col_double(),
+    crerec_date = col_datetime("%m/%d/%Y %H:%M:%S")
+  )
+)
+```
+
+The New York campaign finance database is a single data frame with `r comma(nrow(ny))` rows and
+`r ncol(ny)` columns. This data frame contains data for _all_ campaign finance. We will filter out
+any transaction that is not an expenditure.
+
+```{r filter_sched}
+# filter only expenditures
+expend_sched <- out_scheds$sched[str_which(out_scheds$desc, "Expenditure/Payments")]
+ny <- filter(ny, transaction_code == expend_sched)
+```
+
+We can then remove any columns which _should_ not have any variables.
+
+```{r select_not_na}
+ny <- select(ny, names(ny)[map_dbl(ny, prop_na) < 0.989])
+```
+
+## Explore
+
+```{r head_tail}
+head(ny)
+tail(ny)
+glimpse(sample_frac(ny))
+```
+
+### Missing
+
+```{r glimpse_na}
+glimpse_fun(ny, count_na)
+```
+
+```{r flag_na}
+ny <- ny %>% flag_na(corp, filer_id, amount, date)
+sum(ny$na_flag)
+mean(ny$na_flag)
+```
+
+### Duplicate
+
+### Categorical
+
+```{r}
+glimpse_fun(ny, n_distinct)
+```
+
+### Continuous
+
+#### Amount
+
+```{r amount_summary}
+summary(ny$amount)
+summary(ny$amount_2)
+```
+
+`r percent(mean(ny$amount == 0, na.rm = TRUE))` of `amount` values are zero.
+
+```{r zero_amount}
+sum(ny$amount < 0, na.rm = TRUE)
+sum(ny$amount == 0, na.rm = TRUE)
+```
+
+The largest amount `r dollar(max(ny$amount, na.rm = T))` has an `explanation` of "Transfer."
+
+```{r glimpse_max}
+glimpse(ny %>% filter(amount == max(amount, na.rm = TRUE)))
+```
+
+```{r na_ampount2}
+summary(ny$amount_2)
+prop_na(ny$amount_2)
+```
+
+```{r amount_hist, echo=FALSE}
+ny %>% 
+  ggplot(aes(x = amount)) +
+  geom_histogram(fill = RColorBrewer::brewer.pal(8, "Dark2")[3]) +
+  geom_vline(xintercept = median(ny$amount, na.rm = TRUE), size = 1) +
+  geom_vline(xintercept = mean(ny$amount, na.rm = TRUE), linetype = 2, size = 1) +
+  scale_x_continuous(
+    breaks = c(1 %o% 10^(0:6)),
+    labels = dollar,
+    trans = "log10"
+  ) +
+  scale_y_continuous(labels = comma) +
+  labs(
+    title = "New York Expenditure Amount Distribution",
+    x = "Amount",
+    y = "Count",
+    caption = "Source: New York State Board of Elections"
+  )
+```
+
+#### Date
+
+```{r add_year}
+ny <- mutate(ny, year = year(date))
+```
+
+```{r bad_year_count}
+count_na(ny$year)
+sum(ny$year < 1999, na.rm = TRUE)
+sum(ny$year > 2019, na.rm = TRUE)
+```
+
+```{r flag_date}
+ny <- ny %>% 
+  mutate(
+    date_flag = year < 1999 | year > 2019,
+    date_clean = as_date(ifelse(date_flag, NA, date)),
+    year_clean = year(date_clean)
+  )
+
+sum(ny$date_flag, na.rm = TRUE)
+```
+
+```{r year_bar_count, echo=FALSE}
+ny %>% 
+  count(year_clean) %>% 
+  mutate( even = is_even(year_clean)) %>% 
+  ggplot(aes(x = year_clean, y = n)) +
+  geom_col(aes(fill = even)) +
+  scale_fill_brewer(type = "qual", palette = "Dark2") +
+  scale_y_continuous(labels = comma) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "New York Expenditures Made by Year",
+    x = "Year",
+    y = "Count",
+    fill = "Election Year",
+    caption = "Source: New York State Board of Elections"
+  )
+```
+
+```{r year_bar_median, echo=FALSE}
+ny %>% 
+  group_by(year_clean) %>% 
+  summarise(median = median(amount, na.rm = TRUE)) %>% 
+  mutate(even = is_even(year_clean)) %>% 
+  ggplot(aes(x = year_clean, y = median)) +
+  geom_col(aes(fill = even)) +
+  scale_fill_brewer(type = "qual", palette = "Dark2") +
+  scale_y_continuous(labels = dollar) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "New York Expenditures Made by Year",
+    x = "Year",
+    y = "Median Amount",
+    fill = "Election Year",
+    caption = "Source: New York State Board of Elections"
+  )
+```
+
+```{r amount_125}
+ny %>% 
+  filter(amount == 125) %>% 
+  count(explanation, sort = TRUE)
+```
+
+```{r year_bar_sum, echo=FALSE}
+ny %>% 
+  group_by(year_clean) %>% 
+  summarise(sum = sum(amount, na.rm = TRUE)) %>% 
+  mutate(even = is_even(year_clean)) %>% 
+  ggplot(aes(x = year_clean, y = sum)) +
+  geom_col(aes(fill = even)) +
+  scale_fill_brewer(type = "qual", palette = "Dark2") +
+  scale_y_continuous(labels = dollar) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "New York Expenditures Made by Year",
+    x = "Year",
+    y = "Total Amount",
+    fill = "Election Year",
+    caption = "Source: New York State Board of Elections"
+  )
+```
+
+```{r month_line_amount}
+ny %>% 
+  filter(!date_flag) %>% 
+  mutate(
+    month = month(date_clean),
+    even = is_even(year_clean)
+  ) %>% 
+  group_by(even, month) %>% 
+  summarise(sum = sum(amount, na.rm = TRUE)) %>% 
+  ggplot(aes(x = month, y = sum)) +
+  geom_line(aes(color = even), size = 2) +
+  scale_color_brewer(type = "qual", palette = "Dark2") +
+  scale_y_continuous(labels = dollar) +
+  scale_x_continuous(breaks = 1:12, labels = month.abb) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "New York Expenditures Mean by Month",
+    x = "Year",
+    y = "Total Amount",
+    color = "Election Year",
+    caption = "Source: New York State Board of Elections"
+  )
+```
+
+## Wrangle
+
+We should use the `campfin::normal_*()` functions to perform some basic, high-confidence text
+normalization to improve the searchability of the database.
+
+### Address
+
+First, we will normalize the street address by removing punctuation and expanding abbreviations.
+
+```{r normal_address}
+ny <- ny %>% 
+  mutate(
+    addr_norm = normal_address(
+      address = addr,
+      add_abbs = usps,
+      na_rep = TRUE
+    )
+  )
+```
+
+We can see how this improves consistency across the `address_1` and `address_2` fields.
+
+```{r view_address_change, echo=FALSE}
+ny %>% 
+  select(starts_with("addr")) %>% 
+  drop_na() %>% 
+  sample_n(10)
+```
+
+### ZIP
+
+The `zip` address is already pretty good, with 
+`r percent(prop_in(ny$zip, valid_zip, na.rm = TRUE))` of the values already in our 95% 
+comprehensive `valid_zip` list.
+
+```{r count_zip_pre, collapse=TRUE}
+n_distinct(ny$zip)
+prop_in(ny$zip, valid_zip)
+length(setdiff(ny$zip, valid_zip))
+```
+
+We can improve this further by lopping off the uncommon four-digit extensions and removing common
+invalid codes like 00000 and 99999.
+
+```{r normal_zip}
+ny <- ny %>% 
+  mutate(
+    zip_norm = normal_zip(
+      zip = zip,
+      na_rep = TRUE
+    )
+  )
+```
+
+This brings our valid percentage to `r percent(prop_in(ny$zip_norm, valid_zip, na.rm = TRUE))`.
+
+```{r count_zip_post, collapse=TRUE}
+n_distinct(ny$zip_norm)
+prop_in(ny$zip_norm, valid_zip)
+length(setdiff(ny$zip_norm, valid_zip))
+count_na(ny$zip_norm) - count_na(ny$zip)
+```
+
+### State
+
+The `state` variable is also very clean, already at 
+`r percent(prop_in(ny$state, valid_state, na.rm = TRUE))`.
+
+```{r count_state_pre, collapse=TRUE}
+n_distinct(ny$state)
+prop_in(ny$state, valid_state, na.rm = TRUE)
+length(setdiff(ny$state, valid_state))
+setdiff(ny$state, valid_state)
+```
+
+There are still `r length(setdiff(ny$state, valid_state))` invalid values which we can remove.
+
+```{r normal_state}
+ny <- ny %>% 
+  mutate(
+    state_norm = normal_state(
+      state = state,
+      abbreviate = TRUE,
+      na_rep = TRUE,
+    )
+  )
+```
+
+```{r fix_ny_states}
+ny$state_norm <- ny$state_norm %>% 
+  str_replace("^N$",  "NY") %>% 
+  str_replace("^MY$", "NY") %>% 
+  str_replace("^NT$", "NY") %>% 
+  str_replace("^NU$", "NY") %>% 
+  str_replace("^BY$", "NY")
+```
+
+```{r count_state_post, collapse=TRUE}
+n_distinct(ny$state_norm)
+prop_in(ny$state_norm, valid_state)
+length(setdiff(ny$state_norm, valid_state))
+ny$state_norm[which(ny$state_norm %out% valid_state)] <- NA
+```
+
+### City
+
+The `city` value is the hardest to normalize. We can use a four-step system to functionally improve
+the searchablity of the database.
+
+1. **Normalize** the raw values with `campfin::normal_city()`
+1. **Match** the normal values with the _expected_ value for that ZIP code
+1. **Swap** the normal values with the expected value if they are _very_ similar
+1. **Refine** the swapped values the [OpenRefine algorithms][08] and keep good changes
+
+[08]: https://github.com/OpenRefine/OpenRefine/wiki/Clustering-In-Depth
+
+The raw `city` values are fairly normal, with
+`r percent(prop_in(ny$city, valid_city, na.rm = TRUE))` already in `valid_city`. We will aim to get this number over 99% using the above steps.
+
+```{r count_city_pre, collapse=TRUE}
+n_distinct(ny$city)
+prop_in(str_to_upper(ny$city), valid_city, na.rm = TRUE)
+length(setdiff(ny$city, valid_city))
+prop_na(ny$city)
+```
+
+#### Normalize
+
+```{r normal_city}
+ny <- ny %>% 
+  mutate(
+    city_norm = normal_city(
+      city = city %>% 
+        str_replace("^NY$",  "NEW YORK") %>% 
+        str_replace("^NYC$", "NEW YORK"), 
+      geo_abbs = usps_city,
+      st_abbs = c("NY", "DC"),
+      na = na_city,
+      na_rep = TRUE
+    )
+  )
+```
+
+This process brought us to `r percent(prop_in(ny$city_norm, valid_city, na.rm = TRUE))` valid.
+
+```{r count_city_post_norm, collapse=TRUE}
+n_distinct(ny$city_norm)
+prop_in(ny$city_norm, valid_city, na.rm = TRUE)
+length(setdiff(ny$city_norm, valid_city))
+prop_na(ny$city_norm)
+```
+
+It also increased the number of `NA` values by 
+`r comma(count_na(ny$city_norm) - count_na(ny$city))`. These new `NA` values were either a single
+(possibly repeating) character, or contained in the `na_city` vector.
+
+```{r new_city_na, echo=FALSE}
+ny %>% 
+  filter(is.na(city_norm) & !is.na(city)) %>% 
+  select(zip_norm, state_norm, city, city_norm) %>% 
+  distinct() %>% 
+  sample_frac()
+```
+
+#### Swap
+
+Then, we will compare these normalized `city_norm` values to the _expected_ city value for that
+vendor's ZIP code.
+
+[09]: https://en.wikipedia.org/wiki/Levenshtein_distance
+
+```{r match_city}
+ny <- ny %>% 
+  rename(city_raw = city) %>% 
+  left_join(geo, by = c("state_norm" = "state", "zip_norm" = "zip")) %>% 
+  rename(city_match = city)
+```
+
+Fist, we will calculate the [levenshtein distance][09] between our `city_norm` value and the
+expected `city_match` value. Then, we'll check whether our `city_norm` is potentially an
+abbreviation of the expected `city_match` using `campfin::is_abbrev()`.
+
+```{r dist_abb}
+ny <- ny %>%
+  mutate(
+    match_dist = stringdist(city_norm, city_match),
+    # match_abb  = is_abbrev(city_norm, city_match)
+  )
+```
+
+If the `match_dist` is less than 3, we can confidently swap these two values. We can _also_ swap
+these values if `city_norm` is an abbreviation of `city_match`.
+
+```{r swap_city}
+ny <- ny %>% 
+  mutate(
+    city_swap = if_else(
+      condition = match_dist < 3, # | match_abb == TRUE,
+      true = city_match,
+      false = city_norm
+    )
+  )
+```
+
+This is a very fast way to increase the valid proportion to
+`r percent(prop_in(ny$city_swap, valid_city, na.rm = TRUE))` and reduce the number of distinct
+_invalid_ values from `r length(setdiff(ny$city_norm, valid_city))` to only
+`r length(setdiff(ny$city_swap, valid_city))`
+
+```{r count_city_post_swap, collapse=TRUE}
+n_distinct(ny$city_swap)
+prop_in(ny$city_swap, valid_city, na.rm = TRUE)
+length(setdiff(ny$city_swap, valid_city))
+```
+
+#### Refine
+
+Finally, we can pass these swapped `city_swap` values to the OpenRefine cluster and merge 
+algorithms. These two algorithms cluster similar values and replace infrequent values with their
+more common counterparts. This process can be harmful by making _incorrect_ changes. We will only
+keep changes where the state, ZIP code, _and_ new city value all match a valid combination.
+
+```{r refine_city}
+good_refine <- ny %>% 
+  mutate(
+    city_refine = city_swap %>% 
+      key_collision_merge() %>% 
+      n_gram_merge(numgram = 1)
+  ) %>% 
+  filter(city_refine != city_swap) %>% 
+  inner_join(
+    y = geo,
+    by = c(
+      "city_refine" = "city",
+      "state_norm" = "state",
+      "zip_norm" = "zip"
+    )
+  )
+
+nrow(good_refine)
+```
+
+```{r view_city_refines, echo=FALSE}
+good_refine %>%
+  count(
+    state_norm, 
+    zip_norm, 
+    city_norm, 
+    city_refine,
+    sort = TRUE
+  )
+```
+
+We can join these good refined values back to the original data and use them over their incorrect
+`city_swap` counterparts in a new `city_refine` variable.
+
+```{r join_refine}
+ny <- ny %>% 
+  left_join(good_refine) %>% 
+  mutate(city_refine = coalesce(city_refine, city_swap))
+```
+
+This brings us to `r percent(prop_in(ny$city_refine, valid_city, na.rm = TRUE))` valid values.
+
+```{r count_city_post_refine, collapse=TRUE}
+n_distinct(ny$city_refine)
+prop_in(ny$city_refine, valid_city, na.rm = TRUE)
+length(setdiff(ny$city_refine, valid_city))
+```
+
+#### Abbreviations
+
+We can use `campfin::is_abbrev()` to check whether our `city_refine` value is an abbreviation
+for the expected city for that `state_norm` and `zip_norm` combination.
+
+```{r view_final_bad}
+ny_abbs <- ny %>%
+  filter(city_refine %out% valid_city) %>% 
+  select(state_norm, zip_norm, city_refine) %>% 
+  drop_na(city_refine) %>% 
+  left_join(geo, by = c("state_norm" = "state", "zip_norm" = "zip")) %>%
+  rowwise() %>% 
+  mutate(match_abb = is_abbrev(city_refine, city)) %>% 
+  filter(match_abb) %>% 
+  rename(city_abb = city)
+```
+
+```{r count_abbs}
+ny_abbs %>% count(city_refine, city_abb, sort = TRUE)
+```
+
+```{r join_abbs}
+ny <- ny %>% 
+  left_join(ny_abbs) %>% 
+  mutate(city_final = coalesce(city_refine, city_abb))
+```
+
+```{r progress_table, echo=FALSE}
+progress_table <- tibble(
+  stage = as_factor(c("raw", "norm", "swap", "refine", "abbrevs")),
+  prop_good = c(
+    prop_in(str_to_upper(ny$city_raw), valid_city, na.rm = TRUE),
+    prop_in(ny$city_norm, valid_city, na.rm = TRUE),
+    prop_in(ny$city_swap, valid_city, na.rm = TRUE),
+    prop_in(ny$city_refine, valid_city, na.rm = TRUE),
+    prop_in(ny$city_final, valid_city, na.rm = TRUE)
+  ),
+  total_distinct = c(
+    n_distinct(str_to_upper(ny$city_raw)),
+    n_distinct(ny$city_norm),
+    n_distinct(ny$city_swap),
+    n_distinct(ny$city_refine),
+    n_distinct(ny$city_final)
+  ),
+  unique_bad = c(
+    length(setdiff(str_to_upper(ny$city_raw), valid_city)),
+    length(setdiff(ny$city_norm, valid_city)),
+    length(setdiff(ny$city_swap, valid_city)),
+    length(setdiff(ny$city_refine, valid_city)),
+    length(setdiff(ny$city_final, valid_city))
+  )
+)
+
+diff_change <- progress_table$unique_bad[5]-progress_table$unique_bad[1]
+prop_change <- diff_change/progress_table$unique_bad[1]
+```
+
+Still, our progress is significant without having to make a single manual or unconfident change.
+The percent of valid cities increased from `r percent(progress_table$prop_good[1])` to 
+`r percent(progress_table$prop_good[5])`. The number of total distinct city values decreased from
+`r comma(progress_table$total_distinct[1])` to `r comma(progress_table$total_distinct[5])`. The
+number of distinct invalid city names decreased from `r comma(progress_table$unique_bad[1])` to
+only `r comma(progress_table$unique_bad[5])`, a change of `r percent(prop_change)`.
+
+```{r print_progress, echo=FALSE}
+kable(
+  x = progress_table %>% mutate(prop_good = percent(prop_good)),
+  format = "markdown", 
+  digits = 4,
+  align = "lrrr",
+  col.names = c("Normalization Stage", "Percent Valid", "Total Distinct", "Unique Invalid")
+)
+```
+
+```{r wrangle_bar_prop, echo=FALSE}
+progress_table %>% 
+  ggplot(aes(x = stage, y = prop_good)) +
+  geom_hline(yintercept = 0.99) +
+  geom_col(fill = RColorBrewer::brewer.pal(8, "Dark2")[2]) +
+  coord_cartesian(ylim = c(0.75, 1)) +
+  scale_y_continuous(labels = percent) +
+  labs(
+    title = "Missouri Expenditures Payee City Progress",
+    subtitle = "Percent of total values contained in pre-defined list of cities",
+    caption = "Source: Missouri Ethics Commission",
+    x = "Wrangling Stage",
+    y = "Proportion Valid Cities"
+  )
+```
+
+```{r wrangle_bar_distinct, echo=FALSE}
+progress_table %>% 
+  select(-prop_good) %>% 
+  mutate(total_distinct = total_distinct - unique_bad) %>% 
+  rename(
+    All = total_distinct,
+    Invalid = unique_bad
+  ) %>% 
+  gather(
+    -stage,
+    key = "key",
+    value = "value"
+  ) %>% 
+  ggplot(aes(x = stage, y = value)) +
+  geom_col(aes(fill = key)) +
+  scale_fill_brewer(type = "qual", palette = "Dark2") +
+  scale_y_continuous(labels = comma) +
+  labs(
+    title = "Missouri Expenditures Payee City Progress",
+    subtitle = "Total distinct number of city values",
+    caption = "Source: Missouri Ethics Commission",
+    fill = "Distinct Values",
+    x = "Wrangling Stage",
+    y = "Number of Expenditures"
+  )
+```
+
+## Conclude
+
+1. There are `r nrow(ny)` records in the database.
+1. There are `r sum(ny$dupe_flag)` duplicate records in the database.
+1. The range and distribution of `amount` seems reasonable. 
+1. The `date` variable has been cleaned by removing bad dates in the new `date_flag` variable
+1. There are `r sum(ny$na_flag)` records missing a neccesary value, mostly `amount`.
+1. Consistency in goegraphic data has been improved with `campfin::normal_*()`.
+1. The 5-digit `zip_norm` variable has been created with `campfin::normal_zip()`.
+1. The 4-digit `year` variable has been created with `lubridate::year()`.
+
+## Export
+
+```{r proc_dir}
+proc_dir <- here("ny", "expends", "data", "processed")
+dir_create(proc_dir)
+```
+
+```{r write_clean}
+ny %>% 
+  select(
+    -city_norm,
+    -city_match,
+    -match_dist,
+    -match_abb,
+    -city_swap,
+    -city_refine,
+    -city_abb
+  ) %>% 
+  write_csv(
+    path = glue("{proc_dir}/ny_expends_clean.csv"),
+    na = ""
+  )
+```
+

@@ -1,0 +1,634 @@
+---
+title: "Connecticut Expenditures"
+author: "Kiernan Nicholls"
+date: "`r Sys.time()`"
+output:
+  github_document: 
+    df_print: tibble
+    toc: true
+    toc_dept: 2
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE, purl=FALSE}
+library(knitr)
+opts_chunk$set(
+  eval = TRUE,
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  error = FALSE,
+  comment = "#>",
+  fig.path = "../plots/",
+  fig.width = 10,
+  dpi = 300
+)
+options(width = 99)
+```
+
+## Project
+
+The Accountability Project is an effort to cut across data silos and give journalists, policy
+professionals, activists, and the public at large a simple way to search across huge volumes of
+public data about people and organizations.
+
+Our goal is to standardizing public data on a few key fields by thinking of each dataset row as a
+transaction. For each transaction there should be (at least) 3 variables:
+
+1. All **parties** to a transaction
+2. The **date** of the transaction
+3. The **amount** of money involved
+
+## Objectives
+
+This document describes the process used to complete the following objectives:
+
+1. How many records are in the database?
+1. Check for duplicates
+1. Check ranges
+1. Is there anything blank or missing?
+1. Check for consistency issues
+1. Create a five-digit ZIP Code called `ZIP5`
+1. Create a `YEAR` field from the transaction date
+1. Make sure there is data on both parties to a transaction
+
+## Packages
+
+The following packages are needed to collect, manipulate, visualize, analyze, and communicate
+these results. The `pacman` package will facilitate their installation and attachment.
+
+```{r load_packages, message=FALSE, dfrning=FALSE, error=FALSE}
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load(
+  stringdist, # levenshtein value
+  tidyverse, # data manipulation
+  lubridate, # datetime strings
+  tidytext, # text analysis
+  magrittr, # pipe opperators
+  janitor, # dataframe clean
+  zipcode, # clean & database
+  batman, # parse logicals
+  scales, # format values
+  vroom, # read many files fast
+  knitr, # knit documents
+  glue, # combine strings
+  here, # relative storage
+  fs # search storage 
+)
+```
+
+The IRW's `campfin` package will also have to be installed from GitHub. This package contains
+functions custom made to help facilitate the processing of campaign finance data.
+
+```{r load_campfin}
+pacman::p_load_current_gh("kiernann/campfin")
+```
+
+This document should be run as part of the `R_campfin` project, which lives as a sub-directory of
+the more general, language-agnostic [`irworkshop/accountability_datacleaning`][01] GitHub
+repository.
+
+The `R_campfin` project uses the [RStudio projects][02] feature and should be run as such. The
+project also uses the dynamic `here::here()` tool for file paths relative to _your_ machine.
+
+```{r where_here, collapse=TRUE}
+# where dfs this document knit?
+here::here()
+```
+
+[01]: https://github.com/irworkshop/accountability_datacleaning "TAP repo"
+[02]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects "Rproj"
+
+## Data
+
+Data is provided by the [Connecticut State Elections Enforcment Commission (SEEC)][03]. The data
+is processed through the [SEEC Campaign Reporting Information System (eCRIS)][04].
+
+[03]: https://portal.ct.gov/seec "seec"
+[04]: https://seec.ct.gov/eCrisHome/ "ecris"
+
+### About
+
+On the [eCRIS search page][05], SEEC provides an explanation on that can be found:
+
+> This page allows the public to search, browse and download information from campaign finance
+reports filed by committees with the SEEC’s Disclosure and Audit Unit. The term committees for
+purposes of this summary includes: Candidate committees, Exploratory committees, Party committees
+and Political Action committees (also known as PACs). We shall refer to all four distinct committee
+types as political committees in order to accent the political nature of their purpose in
+relationship to the financing of election campaigns for elective public office in Connecticut. The
+Commission strives to offer fast and easy public access to the filings by committees.
+> 
+> In most instances the Commission staff is able to make these documents and information accessible
+for the public to search and view in a matter of hours.
+>
+> In pursuit of SEEC’s mission to make information specific to political activities accessible in a
+user friendly manner to the public, we offer five distinct search options. Each option has been
+carefully designed to cater to the needs of its specific public audience. Our audience may include
+citizens generally interested in the democracy, researchers, reporters, students, politicians,
+political campaign staff, legislators, lobbyists and many others.
+
+From that page, we can go the [bulk downloads page][06], where four links are organized by year:
+
+* Disbursements Data for Party and PAC Committees
+* Receipts Data for Party and PAC Committees 
+* Disbursements Data for Candidate and Exploratory Committees 
+* Receipts Data for Candidate and Exploratory Committees 
+
+Data is available from 1999 to 2019.
+
+[05]: https://seec.ct.gov/eCrisHome/eCRIS_Search/eCrisSearchHome "about"
+[06]: https://seec.ct.gov/eCrisHome/eCRIS_Search/PreviousYears.aspx "bulk"
+
+## Import
+
+Anual files can be downloaded as CSV from this page. We only want the "disbursment" files.
+
+> Disbursements Data for Party, Political, Candidate and Exploratory Committees (e-filed in eCRIS
+and paper report transactions were entered by the State Election Enforcement Comission staff using
+a data entry module.)
+
+### Download
+
+To download **immutable** raw data files, we first need to create the download URLs for both
+PAC and Candidate expenditures.
+
+```{r make_urls}
+base_url <- "http://seec.ct.gov/ecrisreporting/Data/eCrisDownloads/exportdatafiles"
+pac_url <- glue("{base_url}/Disbursements{2008:2019}CalendarYearPartyPACCommittees.csv")
+can_url <- glue("{base_url}/Disbursements{2008:2019}ElectionYearCandidateExploratoryCommittees.csv")
+ct_urls <- c(pac_url, can_url)
+```
+
+```{r download_raw}
+raw_dir <- here("ct", "expends", "data", "raw")
+dir_create(raw_dir)
+
+if (!all_files_new(raw_dir)) {
+  for (url in ct_urls) {
+    tryCatch(
+      error = function(e) print("No file"),
+      download.file(
+        url = url,
+        destfile = glue("{raw_dir}/{basename(url)}")
+      )
+    )
+  }
+}
+
+ct_files <- dir_ls(raw_dir, glob = "*.csv")
+```
+
+### Read
+
+The files differ slightly in structure over time, so they can't all be read together. We can read
+each into a list by using `purrr::map()` and `readr::read_csv()` and then collapse them into a 
+single comprehensive data frame with `dplyr::bind_rows()`.
+
+```{r read_raw}
+ct <- map(
+  ct_files,
+  read_csv,
+  na = c("", "NA", "NULL"),
+  col_types = cols(.default = "c")
+)
+```
+
+The files from earlier years have less columns.
+
+```{r list_dims}
+names(ct) <- tools::file_path_sans_ext(basename(names(ct)))
+ct %>% 
+  map(dim) %>% 
+  enframe(
+    name = "file",
+    value = "dim"
+  ) %>% 
+  mutate(
+    dim = str_c(dim)
+  ) %>% 
+  print(n = length(ct))
+```
+
+But the newer files simply _add_ more information, and the first 18 columns are consistent across
+all `r length(ct_files)` files.
+
+```{r list_names}
+names(ct[[1]]) %in% names(ct[[23]])
+names(ct[[23]]) %in% names(ct[[1]])
+```
+
+When binding the rows from each list into a single data frame, the records from earier years will
+simply be filled with `NA` for variables that didn't exist.
+
+```{r bind_list}
+ct <- ct %>% 
+  bind_rows(.id = "file") %>% 
+  clean_names() %>% 
+  mutate_all(str_to_upper) %>% 
+  na_if("VOID") %>% 
+  na_if("VOIDED") %>%
+  na_if("-") %>% 
+  na_if("NO")
+```
+
+Since we read every column as character vectors, we will have to use `readr::parse_*()` after the
+fact to convert dates, logicals, and numbers to their approproate class.
+
+```{r parse_usa_date}
+parse_usa_date <- function(x, ...) {
+  parse_date(x, format = "%m/%d/%Y", ...)
+}
+```
+
+```{r parse_cols, warning=TRUE, collapse=TRUE}
+ct <- ct %>% 
+  mutate(
+    amount = parse_number(amount),
+    file_to_state = parse_usa_date(file_to_state),
+    period_start = parse_usa_date(period_start),
+    period_end = parse_usa_date(period_end),
+    election_year = parse_integer(election_year),
+    refiled_electronically = to_logical(refiled_electronically),
+    amended = equals(status, "AMENDMENT"),
+    efiled = equals(data_source, "EFILE")
+  )
+
+# some dates will fail, make NA in new col
+sample(unique(ct$payment_date[str_which(ct$payment_date, "\\d+\\-\\w+$")]), 10)
+ct <- mutate(ct, date_clean = mdy(payment_date))
+```
+
+## Explore
+
+There are `r nrow(ct)` rows of `r ncol(ct)` columns.
+
+```{r glimpse}
+dim(ct)
+head(ct)
+tail(ct)
+glimpse(ct)
+```
+
+### Distinct
+
+The categorical variables differ in their degree of distinctness.
+
+```{r n_distinct}
+glimpse_fun(ct, n_distinct)
+```
+
+```{r comm_type_bar, echo=FALSE}
+ct %>% 
+  explore_plot(
+    var = committee_type,
+    title = "CT Expend Counts by Committee Type",
+    caption = "Source: CT SEEC"
+  )
+```
+
+```{r pay_meth_bar, echo=FALSE}
+ct %>% 
+  filter(!is.na(payment_method)) %>% 
+  explore_plot(
+    var = payment_method,
+    title = "CT Expend Counts by Payment Method",
+    caption = "Source: CT SEEC"
+  )
+```
+
+```{r data_source_bar, echo=FALSE}
+ct %>% 
+  explore_plot(
+    var = data_source,
+    title = "CT Expend Counts by Data Source",
+    caption = "Source: CT SEEC"
+  )
+```
+
+```{r small_change_cats, collapse=TRUE}
+unique(na.omit(ct$section_name))
+percent(mean(ct$amended))
+percent(mean(ct$refiled_electronically, na.rm = TRUE))
+```
+
+```{r description_bar, echo=TRUE, fig.height=10}
+ct %>%
+  mutate(description_2 = coalesce(description, description_1)) %>% 
+  filter(!is.na(description_2)) %>% 
+  unnest_tokens(word, description_2) %>% 
+  anti_join(stop_words) %>% 
+  count(word, sort = TRUE) %>% 
+  head(25) %>% 
+  ggplot(aes(reorder(word, n), n)) +
+  geom_col() +
+  coord_flip() +
+  labs(
+    title = "CO Expend Description",
+    caption = "Source: CT SEEC",
+    x = "Word",
+    y = "Count"
+  )
+```
+
+### Ranges
+
+For continuous variables, we should instead check the ranges and distribution of values.
+
+#### Amount
+
+```{r amount_summary, collapse=TRUE}
+summary(ct$amount)
+sum(ct$amount < 0, na.rm = TRUE)
+```
+
+```{r glimpse_range}
+glimpse(ct %>% filter(amount == min(ct$amount, na.rm = TRUE)))
+glimpse(ct %>% filter(amount == max(ct$amount, na.rm = TRUE)))
+```
+
+```{r amount_hist, echo=FALSE}
+ggplot(ct) +
+  geom_histogram(aes(amount)) +
+  scale_x_continuous(
+    trans = "log10",
+    labels = dollar
+  ) +
+  labs(
+    title = "CO Expends Amount Distribution",
+    caption = "Source: CT SEEC",
+    x = "Amount",
+    y = "Count"
+  )
+```
+
+```{r amount_hist_comm, echo=FALSE}
+ct %>% 
+  ggplot(aes(x = amount)) +
+  geom_histogram(aes(fill = committee_type)) +
+  scale_fill_brewer("qual", palette = "Set1", guide = FALSE) +
+  scale_x_continuous(
+    trans = "log10",
+    labels = dollar
+  ) +
+  labs(
+    title = "CO Expends Amount Distribution",
+    subtitle = "by Committee Type",
+    caption = "Source: CT SEEC",
+    x = "Amount",
+    y = "Count"
+  ) +
+  facet_wrap(~committee_type)
+```
+
+```{r amount_box_comm, echo=FALSE}
+ct %>% 
+  ggplot(aes(x = committee_type, y = amount)) +
+  geom_boxplot(
+    mapping = aes(fill = committee_type),
+    varwidth = TRUE,
+    outlier.alpha = 0.01
+  ) +
+  scale_fill_brewer("qual", palette = "Set1", guide = FALSE) +
+  scale_y_continuous(
+    trans = "log10",
+    labels = dollar
+  ) +
+  labs(
+    title = "CO Expends Amount Distribution",
+    subtitle = "by Committee Type",
+    caption = "Source: CT SEEC",
+    x = "Amount",
+    y = "Count"
+  )
+```
+
+```{r amount_box_method, echo=FALSE}
+ct %>% 
+  ggplot(aes(x = payment_method, y = amount)) +
+  geom_boxplot(
+    mapping = aes(fill = payment_method),
+    varwidth = TRUE,
+    outlier.alpha = 0.01
+  ) +
+  scale_fill_brewer("qual", palette = "Set1", guide = FALSE) +
+  scale_y_continuous(
+    trans = "log10",
+    labels = dollar
+  ) +
+  labs(
+    title = "CO Expends Amount Distribution",
+    subtitle = "by Committee Type",
+    caption = "Source: CT SEEC",
+    x = "Amount",
+    y = "Count"
+  )
+```
+
+#### Date
+
+Despite using `lubridate::mdy()` on the original `payment_date`, the date values are still very
+dirty.
+
+```{r date_range}
+min(ct$date_clean, na.rm = TRUE)
+max(ct$date_clean, na.rm = TRUE)
+```
+
+```{r count_years}
+ct %>% 
+  count(year = year(date_clean)) %>%
+  print(n = 25)
+```
+
+```{r fix_years}
+ct$date_clean[which(ct$date_clean == "215-08-27")] <- as_date("2015-08-27")
+ct$date_clean[which(ct$date_clean == "216-10-03")] <- as_date("2016-10-03")
+ct$date_clean[which(year(ct$date_clean) > 2019)] <- NA
+```
+
+Then we can create a `year_clean` variable from the 
+
+```{r add_year}
+ct <- mutate(ct, year_clean = year(date_clean))
+```
+
+### Missing
+
+This amount of missing values is complicated by the combination of multiple file structures. For
+example, 
+
+```{r count_missing}
+glimpse_fun(ct, count_na)
+```
+
+If we look at only the files from 2014 to 2019, there are zero missing values for variables like
+`committee_id` or `report_id`.
+
+```{r new_missing}
+new_ct_files <- basename(str_to_upper(tools::file_path_sans_ext(ct_files[12:23])))
+ct %>% 
+  filter(file %in% new_ct_files) %>% 
+  glimpse_fun(count_na)
+```
+
+We can should flag any variable missing the key values needed to identify a transaction: both
+parties, how much, and when.
+
+```{r flag_na, collapse=TRUE}
+ct <- flag_na(ct, payee, amount, date_clean, committee)
+sum(ct$na_flag)
+percent(mean(ct$na_flag))
+```
+
+### Duplicates
+
+```{r get_dupes, eval=FALSE}
+ct <- flag_dupes(ct, everything())
+sum(ct$dupe_flag)
+percent(mean(ct$dupe_flag))
+```
+
+## Wrangle
+
+### Address
+
+```{r normal_address}
+ct <- ct %>% 
+  mutate(
+    address_clean = normal_address(
+      address = street_address,
+      add_abbs = usps_street,
+      na_rep = TRUE
+    )
+  )
+
+ct %>% 
+  select(
+    street_address,
+    address_clean
+  )
+```
+
+### ZIP
+
+There are no ZIP codes in the data base.
+
+### State
+
+```{r normal_state, collapse=TRUE}
+n_distinct(ct$state)
+prop_in(ct$state, valid_state, na.rm = TRUE)
+sum(na.omit(ct$state) %out% valid_state)
+sample(setdiff(ct$state, valid_state), 10)
+
+
+ct <- ct %>% 
+  mutate(
+    state_clean = normal_state(
+      abbreviate = TRUE,
+      na_rep = TRUE,
+      valid = unique(valid_state),
+      state = state %>% 
+        str_replace("^CONN$", "CT") %>% 
+        str_replace("^C\\sT$", "CT") %>% 
+        str_replace("^CCT$", "CT") %>% 
+        str_replace("^CTT$", "CT") %>% 
+        str_replace("^FLA$", "FL") %>%
+        str_replace("^C$", "CT") %>%
+        str_replace("^CY$", "CT")
+    )
+  )
+
+n_distinct(ct$state_clean)
+prop_in(ct$state_clean, valid_state, na.rm = TRUE)
+sum(na.omit(ct$state_clean) %out% valid_state)
+```
+
+### City
+
+```{r count_city}
+n_distinct(ct$city)
+prop_in(ct$city, valid_city, na.rm = TRUE)
+sum(na.omit(ct$city) %out% valid_city)
+sample(setdiff(ct$city, valid_city), 10)
+```
+
+```{r normal_city}
+ct <- ct %>% 
+  mutate(
+    city_norm = normal_city(
+      city = city,
+      geo_abbs = usps_city,
+      st_abbs = c("CO"),
+      na = c("",  "NA", "N/A"),
+      na_rep = TRUE
+    )
+  )
+```
+
+```{r fix_manual}
+ct$city_norm <- ct$city_norm %>% 
+  str_replace("HTFD",   "HARTFORD") %>% 
+  str_replace("^N\\b",  "NORTH") %>% 
+  str_replace("^NO\\b", "NORTH") %>% 
+  str_replace("^S\\b",  "SOUTH") %>% 
+  str_replace("^SO\\b", "SOUTH") %>% 
+  str_replace("^W\\b",  "WEST") %>% 
+  str_replace("^E\\b",  "EAST") %>% 
+  str_replace("^WHARTFORD$", "WEST HARTFORD") %>% 
+  str_replace("^E\\sH$",     "EAST HARTFORD") %>% 
+  str_replace("^EH$",        "EAST HARTFORD") %>% 
+  na_if("COURT")
+```
+
+```{r view_changes}
+ct %>% 
+  filter(city != city_norm) %>% 
+  count(state_clean, city, city_norm, sort = TRUE)
+```
+
+## Conclude
+
+1. There are `r nrow(ct)` records in the database.
+1. We did not check for duplicates.
+1. Ranges and distributions for continuous variables were checked and explored. Dates from the past
+or future were either fixed or removed.
+1. There are `r sum(ct$na_flag)` records missing data flagged with `na_flag`.
+1. Consistency issues in categorical variables was improved with the `campfin` package.
+1. The 5-digit `zip_clean` variable was created with `campfin::normal_zip(ct$zip)`
+1. The 4-digit `year_clean` variable was created with `lubridate::year(ct$payment_date)`
+1. Not every record has all key values (see above), but `r percent(mean(!ct$na_flag))` do.
+
+## Export
+
+```{r}
+proc_dir <- here("ct", "expends", "data", "processed")
+dir_create(proc_dir)
+
+ct %>% 
+  select(
+    -street_address,
+    -state,
+    -city
+  ) %>% 
+  write_csv(
+    na = "",
+    path = glue("{proc_dir}/ct_expends_clean.csv")
+  )
+```
+
+## Lookup
+
+```{r lookup_city}
+lookup <- read_csv("ct/expends/data/ct_city_lookup.csv") %>% select(1:2)
+ct <- left_join(ct, lookup)
+progress_table(ct$city_norm, ct$city_clean, compare = valid_city)
+write_csv(
+  x = ct,
+  path = glue("{proc_dir}/ct_expends_clean.csv"),
+  na = ""
+)
+```
+

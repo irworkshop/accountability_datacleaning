@@ -1,19 +1,38 @@
 Data Diary
 ================
 Kiernan Nicholls
-2019-06-20 14:22:03
+2019-10-28 13:14:33
+
+<!-- Place comments regarding knitting here -->
+
+## Project
+
+The Accountability Project is an effort to cut across data silos and
+give journalists, policy professionals, activists, and the public at
+large a simple way to search across huge volumes of public data about
+people and organizations.
+
+Our goal is to standardizing public data on a few key fields by thinking
+of each dataset row as a transaction. For each transaction there should
+be (at least) 3 variables:
+
+1.  All **parties** to a transaction
+2.  The **date** of the transaction
+3.  The **amount** of money involved
 
 ## Objectives
+
+This document describes the process used to complete the following
+objectives:
 
 1.  How many records are in the database?
 2.  Check for duplicates
 3.  Check ranges
 4.  Is there anything blank or missing?
 5.  Check for consistency issues
-6.  Create a five-digit ZIP Code called ZIP5
-7.  Create a YEAR field from the transaction date
-8.  For campaign donation data, make sure there is both a donor AND
-    recipient
+6.  Create a five-digit ZIP Code called `ZIP5`
+7.  Create a `YEAR` field from the transaction date
+8.  Make sure there is data on both parties to a transaction
 
 ## Packages
 
@@ -21,39 +40,42 @@ The following packages are needed to collect, manipulate, visualize,
 analyze, and communicate these results. The `pacman` package will
 facilitate their installation and attachment.
 
+The IRW’s `campfin` package will also have to be installed from GitHub.
+This package contains functions custom made to help facilitate the
+processing of campaign finance data.
+
 ``` r
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load_gh("irworkshop/campfin")
 pacman::p_load(
-  stringdist, # levenshtein value
   tidyverse, # data manipulation
   lubridate, # datetime strings
   magrittr, # pipe opperators
-  RSocrata, # read SODA APIs
   janitor, # dataframe clean
-  zipcode, # clean & databse
-  batman, # parse yes & no
-  refinr, # cluster & merge
-  rvest, # scrape website
+  refinr, # cluster and merge
+  scales, # format strings
   knitr, # knit documents
-  here, # locate storage
+  vroom, # read files fast
+  glue, # combine strings
+  here, # relative storage
   fs # search storage 
 )
 ```
 
 This document should be run as part of the `R_campfin` project, which
 lives as a sub-directory of the more general, language-agnostic
-`irworkshop/accountability_datacleaning` [GitHub
-repository](https://github.com/irworkshop/accountability_datacleaning).
+[`irworkshop/accountability_datacleaning`](https://github.com/irworkshop/accountability_datacleaning "TAP repo")
+GitHub repository.
 
 The `R_campfin` project uses the [RStudio
-projects](https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects)
+projects](https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects "Rproj")
 feature and should be run as such. The project also uses the dynamic
-[`here::here()`](https://github.com/jennybc/here_here) tool for file
-paths relative to *your* machine.
+`here::here()` tool for file paths relative to *your* machine.
 
 ``` r
-# where was this document knit?
+# where does this document knit?
 here::here()
-#> [1] "/home/ubuntu/R/accountability_datacleaning/R_campfin"
+#> [1] "/home/kiernan/R/accountability_datacleaning/R_campfin"
 ```
 
 ## Data
@@ -369,73 +391,81 @@ wa <- wa %>%
 
 ## Explore
 
-There are 768441 records of 34 variables in the full database.
+There are 799775 records of 34 variables in the full database.
 
 ``` r
-sample_frac(wa)
-```
-
-    #> # A tibble: 768,441 x 34
-    #>    id    report_number origin filer_id type  filer_name first_name middle_initial last_name office
-    #>    <chr> <chr>         <chr>  <chr>    <chr> <chr>      <chr>      <chr>          <chr>     <chr> 
-    #>  1 3408… 100220916     A/GT50 WILSD  … Cand… WILSON DO… DONALD     J              WILSON    CITY …
-    #>  2 6910… 100440374     A/GT50 RICHD  … Cand… RICHARDS … DOUGLAS    R              RICHARDS  STATE…
-    #>  3 6699… 100425132     A/GT50 YAKIDC … Poli… YAKIMA CO… <NA>       <NA>           YAKIMA C… <NA>  
-    #>  4 3386… 100219920     A/GT50 WASHHC … Poli… WA HEALTH… <NA>       <NA>           WA HEALT… <NA>  
-    #>  5 9743… 100641232     A/GT50 OLSOJ  … Cand… OLSON JUL… JULIE      E              OLSON     COUNT…
-    #>  6 1258… 100857624     A/GT50 BRIGC  … Cand… BRIGHT CI… CINDI      <NA>           BRIGHT    STATE…
-    #>  7 1005… 100665452     A/GT50 JUSTFA … Poli… WA ST ASS… <NA>       <NA>           WA ST AS… <NA>  
-    #>  8 7389… 100477531     A/GT50 HILTW  … Cand… HILTON WI… WILLIAM (… L              HILTON    STATE…
-    #>  9 1175… 100794219     A/LE50 WASHTP … Poli… WA TAXPAY… <NA>       <NA>           WA TAXPA… <NA>  
-    #> 10 7358… 100477194     A/GT50 INSLJ  … Cand… INSLEE JA… JAY        R              INSLEE    GOVER…
-    #> # … with 768,431 more rows, and 24 more variables: position <chr>, party <chr>,
-    #> #   jurisdiction <chr>, jurisdiction_county <chr>, jurisdiction_type <chr>, election_year <dbl>,
-    #> #   amount <dbl>, expenditure_date <date>, description <chr>, recipient_name <chr>,
-    #> #   recipient_address <chr>, recipient_city <chr>, recipient_state <chr>, recipient_zip <chr>,
-    #> #   url_description <chr>, url <chr>, recipient_location.type <chr>, recipient_longitude <dbl>,
-    #> #   recipient_latitude <dbl>, legislative_district <chr>, code <chr>, ballot_number <chr>,
-    #> #   expenditure_itemized <lgl>, filer_supports <lgl>
-
-``` r
+head(wa)
+#> # A tibble: 6 x 34
+#>   id    report_number origin filer_id type  filer_name first_name middle_initial last_name office
+#>   <chr> <chr>         <chr>  <chr>    <chr> <chr>      <chr>      <chr>          <chr>     <chr> 
+#> 1 7615… 100490476     A/GT50 MALIJ  … Cand… MALINOWSK… JAMES      H              MALINOWS… PUBLI…
+#> 2 7615… 100490476     A/GT50 MALIJ  … Cand… MALINOWSK… JAMES      H              MALINOWS… PUBLI…
+#> 3 7617… 100491167     A/GT50 NATIIO … Poli… NATL ASSN… <NA>       <NA>           NATL ASS… <NA>  
+#> 4 7617… 100491167     A/GT50 NATIIO … Poli… NATL ASSN… <NA>       <NA>           NATL ASS… <NA>  
+#> 5 7617… 100491167     A/GT50 NATIIO … Poli… NATL ASSN… <NA>       <NA>           NATL ASS… <NA>  
+#> 6 7617… 100491167     A/GT50 NATIIO … Poli… NATL ASSN… <NA>       <NA>           NATL ASS… <NA>  
+#> # … with 24 more variables: position <chr>, party <chr>, jurisdiction <chr>,
+#> #   jurisdiction_county <chr>, jurisdiction_type <chr>, election_year <dbl>, amount <dbl>,
+#> #   expenditure_date <date>, description <chr>, recipient_name <chr>, recipient_address <chr>,
+#> #   recipient_city <chr>, recipient_state <chr>, recipient_zip <chr>, url_description <chr>,
+#> #   url <chr>, recipient_location.type <chr>, recipient_longitude <dbl>, recipient_latitude <dbl>,
+#> #   legislative_district <chr>, code <chr>, ballot_number <chr>, expenditure_itemized <lgl>,
+#> #   filer_supports <lgl>
+tail(wa)
+#> # A tibble: 6 x 34
+#>   id    report_number origin filer_id type  filer_name first_name middle_initial last_name office
+#>   <chr> <chr>         <chr>  <chr>    <chr> <chr>      <chr>      <chr>          <chr>     <chr> 
+#> 1 6566… 100940935     B.1    DELOC  … Cand… DELOSTRIN… CYNTHIA    <NA>           DELOSTRI… CITY …
+#> 2 6566… 100940935     B.1    DELOC  … Cand… DELOSTRIN… CYNTHIA    <NA>           DELOSTRI… CITY …
+#> 3 6566… 100940967     B.1    MARTA  … Cand… MARTINELL… ANTHONY    J              MARTINEL… CITY …
+#> 4 6566… 100940967     B.1    MARTA  … Cand… MARTINELL… ANTHONY    J              MARTINEL… CITY …
+#> 5 6566… 100940968     B.1    MARTA  … Cand… MARTINELL… ANTHONY    J              MARTINEL… CITY …
+#> 6 6566… 100940969     B.1    MARTA  … Cand… MARTINELL… ANTHONY    J              MARTINEL… CITY …
+#> # … with 24 more variables: position <chr>, party <chr>, jurisdiction <chr>,
+#> #   jurisdiction_county <chr>, jurisdiction_type <chr>, election_year <dbl>, amount <dbl>,
+#> #   expenditure_date <date>, description <chr>, recipient_name <chr>, recipient_address <chr>,
+#> #   recipient_city <chr>, recipient_state <chr>, recipient_zip <chr>, url_description <chr>,
+#> #   url <chr>, recipient_location.type <chr>, recipient_longitude <dbl>, recipient_latitude <dbl>,
+#> #   legislative_district <chr>, code <chr>, ballot_number <chr>, expenditure_itemized <lgl>,
+#> #   filer_supports <lgl>
 glimpse(sample_frac(wa))
+#> Observations: 799,775
+#> Variables: 34
+#> $ id                      <chr> "394578.expn", "1129207.expn", "5966748.rcpt", "1164073.expn", "…
+#> $ report_number           <chr> "100256773", "100754654", "100845735", "100786566", "100433274",…
+#> $ origin                  <chr> "A/GT50", "A/GT50", "B.1", "A/GT50", "A/GT50", "A/GT50", "A/GT50…
+#> $ filer_id                <chr> "WASHID 144", "SATTD  166", "CLALDC 362", "OCKEA  019", "TURLW  …
+#> $ type                    <chr> "Political Committee", "Candidate", "Political Committee", "Cand…
+#> $ filer_name              <chr> "CONSUMER FIREWORKS SAFETY ASSN PAC", "SATTERBERG DANIEL T", "CL…
+#> $ first_name              <chr> NA, "DANIEL", NA, "AMY", "WILLIAM", "BRIAN", NA, NA, NA, NA, NA,…
+#> $ middle_initial          <chr> NA, "T", NA, "P", "E", "E", NA, NA, NA, NA, NA, "W", "C", NA, NA…
+#> $ last_name               <chr> "CONSUMER FIREWORKS SAFETY ASSN PAC", "SATTERBERG", "CLALLAM CO …
+#> $ office                  <chr> NA, "COUNTY PROSECUTOR", NA, "MAYOR", "CITY COUNCIL MEMBER", "ST…
+#> $ position                <chr> NA, NA, NA, NA, "06", "02", NA, NA, NA, NA, NA, "01", NA, NA, NA…
+#> $ party                   <chr> NA, "OTHER", NA, "NON PARTISAN", "NON PARTISAN", "DEMOCRAT", NA,…
+#> $ jurisdiction            <chr> NA, "KING CO", NA, "CITY OF DUVALL", "CITY OF VANCOUVER", "LEG D…
+#> $ jurisdiction_county     <chr> NA, "KING", NA, "KING", "CLARK", "COWLITZ", NA, NA, NA, NA, NA, …
+#> $ jurisdiction_type       <chr> NA, "Local", NA, "Local", "Local", "Legislative", NA, NA, NA, NA…
+#> $ election_year           <dbl> 2008, 2018, 2018, 2017, 2011, 2010, 2018, 2015, 2015, 2019, 2008…
+#> $ amount                  <dbl> 1000.00, 4500.00, 70.00, 164.05, 20.80, 15000.00, 500.00, 180.99…
+#> $ expenditure_date        <date> 2008-05-24, 2017-03-14, 2018-07-10, 2017-05-19, 2011-09-10, 201…
+#> $ description             <chr> "APRIL 15, 2008, FUND-RAISER", "BREAKFAST KICKOFF", "BUTTONS AND…
+#> $ recipient_name          <chr> "WASHINGTON STATE DEMOCRATIC CENTRAL COMMITTEE", "SHERATON SEATT…
+#> $ recipient_address       <chr> "P O BOX 4027", "1400 6TH AVENUE", "1236 HOLLAND RD", "14524 MAI…
+#> $ recipient_city          <chr> "SEATTLE", "SEATTLE", "SEQUIM", "DUVALL", "PORTLAND", "LONGVIEW"…
+#> $ recipient_state         <chr> "WA", "WA", "WA", "WA", "OR", "WA", "WA", "DE", "IL", "TX", "WA"…
+#> $ recipient_zip           <chr> "98194", "98101", "98382", "98019", "97202", "98632", "99338", "…
+#> $ url_description         <chr> "View report", "View report", "View report", "View report", "Vie…
+#> $ url                     <chr> "https://web.pdc.wa.gov/rptimg/default.aspx?batchnumber=10025677…
+#> $ recipient_location.type <chr> "Point", "Point", "Point", "Point", "Point", "Point", "Point", N…
+#> $ recipient_longitude     <dbl> -122.33206, -122.33351, -123.07327, -121.98660, -122.65001, -122…
+#> $ recipient_latitude      <dbl> 47.60621, 47.61050, 48.10089, 47.73297, 45.46311, 46.15473, 46.1…
+#> $ legislative_district    <chr> NA, NA, NA, NA, NA, "19", NA, NA, NA, NA, NA, "19", "12", NA, NA…
+#> $ code                    <chr> NA, "Fundraising", "Independent Expenditures", NA, NA, NA, NA, N…
+#> $ ballot_number           <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
+#> $ expenditure_itemized    <lgl> TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE…
+#> $ filer_supports          <lgl> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
 ```
-
-    #> Observations: 768,441
-    #> Variables: 34
-    #> $ id                      <chr> "24534.corr", "345435.expn", "1181838.expn", "1335382.expn", "12…
-    #> $ report_number           <chr> "100463917", "100224184", "100797318", "100908209", "100854121",…
-    #> $ origin                  <chr> "C.2", "A/GT50", "A/GT50", "A/LE50", "A/GT50", "A/LE50", "A/GT50…
-    #> $ filer_id                <chr> "PALUG  072", "ISLADC 236", "ASIAAP 104", "THURDC 507", "UNITFC …
-    #> $ type                    <chr> "Candidate", "Political Committee", "Political Committee", "Poli…
-    #> $ filer_name              <chr> "PALUMBO GUY F", "ISLAND CO DEMO CENT COMM", "ASIAN AMERICANS & …
-    #> $ first_name              <chr> "GUY", NA, NA, NA, NA, NA, "MICHAEL", NA, NA, NA, "JAMES", NA, N…
-    #> $ middle_initial          <chr> "F", NA, NA, NA, NA, NA, "M", NA, NA, NA, "A", NA, NA, "E", NA, …
-    #> $ last_name               <chr> "PALUMBO", "ISLAND CO DEMO CENT COMM NON EXEMPT", "ASIAN AMERICA…
-    #> $ office                  <chr> "STATE SENATOR", NA, NA, NA, NA, NA, "CITY COUNCIL MEMBER", NA, …
-    #> $ position                <chr> NA, NA, NA, NA, NA, NA, "07", NA, NA, NA, NA, NA, NA, "06", NA, …
-    #> $ party                   <chr> "DEMOCRAT", NA, NA, NA, NA, NA, "NON PARTISAN", NA, NA, NA, "REP…
-    #> $ jurisdiction            <chr> "LEG DISTRICT 01 - SENATE", NA, NA, NA, NA, NA, "CITY OF SEATTLE…
-    #> $ jurisdiction_county     <chr> "KING", NA, NA, NA, NA, NA, "KING", NA, NA, NA, "YAKIMA", NA, NA…
-    #> $ jurisdiction_type       <chr> "Legislative", NA, NA, NA, NA, NA, "Local", NA, NA, NA, "Legisla…
-    #> $ election_year           <dbl> 2012, 2007, 2017, 2019, 2017, 2018, 2019, 2017, 2016, 2009, 2007…
-    #> $ amount                  <dbl> -100.00, 517.45, 7000.00, 138.74, 15000.00, 0.00, 67.60, 191.35,…
-    #> $ expenditure_date        <date> 2012-03-10, 2007-08-24, 2017-10-18, 2019-05-01, 2017-10-06, 201…
-    #> $ description             <chr> "(Reported amount: 100.00; Corrected amount: 0.00) Description: …
-    #> $ recipient_name          <chr> "CORRECTION TO EXPENDITURES", "WA STATE DEPT OF REVENUE", "GREEN…
-    #> $ recipient_address       <chr> NA, "PO BOX 34051", "104 PALISADE AVENUE, APT. C1", NA, "1225 S …
-    #> $ recipient_city          <chr> NA, "SEATTLE", "JERSEY CITY", NA, "SEATTLE", NA, "BATON ROUGE", …
-    #> $ recipient_state         <chr> NA, "WA", "NJ", NA, "WA", NA, "LA", NA, "NE", "WA", "WA", "WA", …
-    #> $ recipient_zip           <chr> NA, "98124", "07306", NA, "98144", NA, "70801", NA, "68103", "98…
-    #> $ url_description         <chr> "View report", "View report", "View report", "View report", "Vie…
-    #> $ url                     <chr> "https://web.pdc.wa.gov/rptimg/default.aspx?batchnumber=10046391…
-    #> $ recipient_location.type <chr> NA, "Point", "Point", NA, "Point", NA, "Point", NA, NA, "Point",…
-    #> $ recipient_longitude     <dbl> NA, -122.31444, -74.05137, NA, -122.31586, NA, -91.18647, NA, NA…
-    #> $ recipient_latitude      <dbl> NA, 47.54783, 40.73265, NA, 47.59727, NA, 30.45014, NA, NA, 47.5…
-    #> $ legislative_district    <chr> "01", NA, NA, NA, NA, NA, NA, NA, NA, NA, "14", NA, NA, NA, NA, …
-    #> $ code                    <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "Literature", NA, "Manag…
-    #> $ ballot_number           <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "4204", NA, NA, …
-    #> $ expenditure_itemized    <lgl> TRUE, TRUE, TRUE, FALSE, TRUE, FALSE, TRUE, FALSE, TRUE, TRUE, T…
-    #> $ filer_supports          <lgl> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, TRUE, NA, TRUE, …
 
 ### Distinct
 
@@ -445,51 +475,45 @@ The `id` is 100% distinct and can be used to identify a unique
 transaction.
 
 ``` r
-wa %>% 
-  map(n_distinct) %>% 
-  unlist() %>% 
-  enframe(name = "variable", value = "n_distinct") %>% 
-  mutate(prop_distinct = round(n_distinct / nrow(wa), 4)) %>%
-  print(n = length(wa))
+glimpse_fun(wa, n_distinct)
+#> # A tibble: 34 x 4
+#>    col                     type       n          p
+#>    <chr>                   <chr>  <dbl>      <dbl>
+#>  1 id                      chr   799775 1         
+#>  2 report_number           chr   113421 0.142     
+#>  3 origin                  chr        6 0.00000750
+#>  4 filer_id                chr     6162 0.00770   
+#>  5 type                    chr        2 0.00000250
+#>  6 filer_name              chr     6582 0.00823   
+#>  7 first_name              chr     1202 0.00150   
+#>  8 middle_initial          chr       28 0.0000350 
+#>  9 last_name               chr     4937 0.00617   
+#> 10 office                  chr       44 0.0000550 
+#> 11 position                chr       72 0.0000900 
+#> 12 party                   chr        8 0.0000100 
+#> 13 jurisdiction            chr      541 0.000676  
+#> 14 jurisdiction_county     chr       39 0.0000488 
+#> 15 jurisdiction_type       chr        5 0.00000625
+#> 16 election_year           dbl       18 0.0000225 
+#> 17 amount                  dbl   120791 0.151     
+#> 18 expenditure_date        date    5223 0.00653   
+#> 19 description             chr   213776 0.267     
+#> 20 recipient_name          chr   109402 0.137     
+#> 21 recipient_address       chr   112864 0.141     
+#> 22 recipient_city          chr     4059 0.00508   
+#> 23 recipient_state         chr       74 0.0000925 
+#> 24 recipient_zip           chr     5092 0.00637   
+#> 25 url_description         chr        1 0.00000125
+#> 26 url                     chr   113421 0.142     
+#> 27 recipient_location.type chr        2 0.00000250
+#> 28 recipient_longitude     dbl    46892 0.0586    
+#> 29 recipient_latitude      dbl    46078 0.0576    
+#> 30 legislative_district    chr       51 0.0000638 
+#> 31 code                    chr       15 0.0000188 
+#> 32 ballot_number           chr      104 0.000130  
+#> 33 expenditure_itemized    lgl        2 0.00000250
+#> 34 filer_supports          lgl        3 0.00000375
 ```
-
-    #> # A tibble: 34 x 3
-    #>    variable                n_distinct prop_distinct
-    #>    <chr>                        <int>         <dbl>
-    #>  1 id                          768441        1     
-    #>  2 report_number               109027        0.142 
-    #>  3 origin                           6        0     
-    #>  4 filer_id                      5978        0.0078
-    #>  5 type                             2        0     
-    #>  6 filer_name                    6255        0.0081
-    #>  7 first_name                    1187        0.0015
-    #>  8 middle_initial                  27        0     
-    #>  9 last_name                     4786        0.0062
-    #> 10 office                          44        0.0001
-    #> 11 position                        67        0.0001
-    #> 12 party                            8        0     
-    #> 13 jurisdiction                   527        0.0007
-    #> 14 jurisdiction_county             39        0.0001
-    #> 15 jurisdiction_type                5        0     
-    #> 16 election_year                   17        0     
-    #> 17 amount                      118029        0.154 
-    #> 18 expenditure_date              5088        0.0066
-    #> 19 description                 203516        0.265 
-    #> 20 recipient_name              105715        0.138 
-    #> 21 recipient_address           108899        0.142 
-    #> 22 recipient_city                3977        0.0052
-    #> 23 recipient_state                 72        0.0001
-    #> 24 recipient_zip                 4983        0.0065
-    #> 25 url_description                  1        0     
-    #> 26 url                         109027        0.142 
-    #> 27 recipient_location.type          2        0     
-    #> 28 recipient_longitude          45234        0.0589
-    #> 29 recipient_latitude           44240        0.0576
-    #> 30 legislative_district            51        0.0001
-    #> 31 code                            15        0     
-    #> 32 ballot_number                  101        0.0001
-    #> 33 expenditure_itemized             2        0     
-    #> 34 filer_supports                   3        0
 
 We can explore the distribution of the least distinct values with
 `ggplot2::geom_bar()`.
@@ -501,8 +525,6 @@ We can explore the distribution of the least distinct values with
 ![](../plots/plot_party_bar-1.png)<!-- -->
 
 ![](../plots/plot_jurisdiction_bar-1.png)<!-- -->
-
-![](../plots/plot_election_year_bar-1.png)<!-- -->
 
 ![](../plots/plot_itemized_bar-1.png)<!-- -->
 
@@ -518,61 +540,53 @@ The variables also vary in their degree of values that are `NA`
 (missing).
 
 ``` r
-wa %>% 
-  map(function(var) sum(is.na(var))) %>% 
-  unlist() %>% 
-  enframe(name = "variable", value = "n_na") %>% 
-  mutate(prop_na = n_na / nrow(wa)) %>% 
-  print(n = length(wa))
+glimpse_fun(wa, count_na)
+#> # A tibble: 34 x 4
+#>    col                     type       n          p
+#>    <chr>                   <chr>  <dbl>      <dbl>
+#>  1 id                      chr        0 0         
+#>  2 report_number           chr        0 0         
+#>  3 origin                  chr        1 0.00000125
+#>  4 filer_id                chr        0 0         
+#>  5 type                    chr        0 0         
+#>  6 filer_name              chr        0 0         
+#>  7 first_name              chr   357574 0.447     
+#>  8 middle_initial          chr   405713 0.507     
+#>  9 last_name               chr      125 0.000156  
+#> 10 office                  chr   354752 0.444     
+#> 11 position                chr   520227 0.650     
+#> 12 party                   chr   355834 0.445     
+#> 13 jurisdiction            chr   336374 0.421     
+#> 14 jurisdiction_county     chr   390918 0.489     
+#> 15 jurisdiction_type       chr   354752 0.444     
+#> 16 election_year           dbl        0 0         
+#> 17 amount                  dbl        0 0         
+#> 18 expenditure_date        date     351 0.000439  
+#> 19 description             chr   114132 0.143     
+#> 20 recipient_name          chr       21 0.0000263 
+#> 21 recipient_address       chr   142205 0.178     
+#> 22 recipient_city          chr   135631 0.170     
+#> 23 recipient_state         chr   132215 0.165     
+#> 24 recipient_zip           chr   139552 0.174     
+#> 25 url_description         chr        0 0         
+#> 26 url                     chr        0 0         
+#> 27 recipient_location.type chr   164151 0.205     
+#> 28 recipient_longitude     dbl   164151 0.205     
+#> 29 recipient_latitude      dbl   164151 0.205     
+#> 30 legislative_district    chr   629563 0.787     
+#> 31 code                    chr   606469 0.758     
+#> 32 ballot_number           chr   763310 0.954     
+#> 33 expenditure_itemized    lgl        0 0         
+#> 34 filer_supports          lgl   736163 0.920
 ```
-
-    #> # A tibble: 34 x 3
-    #>    variable                  n_na    prop_na
-    #>    <chr>                    <int>      <dbl>
-    #>  1 id                           0 0         
-    #>  2 report_number                0 0         
-    #>  3 origin                       1 0.00000130
-    #>  4 filer_id                     0 0         
-    #>  5 type                         0 0         
-    #>  6 filer_name                   0 0         
-    #>  7 first_name              343892 0.448     
-    #>  8 middle_initial          388161 0.505     
-    #>  9 last_name                   95 0.000124  
-    #> 10 office                  343719 0.447     
-    #> 11 position                494718 0.644     
-    #> 12 party                   346493 0.451     
-    #> 13 jurisdiction            326345 0.425     
-    #> 14 jurisdiction_county     379271 0.494     
-    #> 15 jurisdiction_type       343719 0.447     
-    #> 16 election_year                0 0         
-    #> 17 amount                       0 0         
-    #> 18 expenditure_date           352 0.000458  
-    #> 19 description             109673 0.143     
-    #> 20 recipient_name              20 0.0000260 
-    #> 21 recipient_address       137025 0.178     
-    #> 22 recipient_city          130589 0.170     
-    #> 23 recipient_state         127232 0.166     
-    #> 24 recipient_zip           134445 0.175     
-    #> 25 url_description              0 0         
-    #> 26 url                          0 0         
-    #> 27 recipient_location.type 158217 0.206     
-    #> 28 recipient_longitude     158217 0.206     
-    #> 29 recipient_latitude      158217 0.206     
-    #> 30 legislative_district    599766 0.780     
-    #> 31 code                    581789 0.757     
-    #> 32 ballot_number           732698 0.953     
-    #> 33 expenditure_itemized         0 0         
-    #> 34 filer_supports          705846 0.919
 
 We will flag any records with missing values in the key variables used
 to identify an expenditure.
 
 ``` r
-wa <- wa %>% 
-  mutate(
-    na_flag = is.na(expenditure_date) | is.na(recipient_name)
-  )
-
+wa <- flag_na(wa, expenditure_date, recipient_name)
+sum(wa$na_flag)
+#> [1] 366
 wa %>% 
   filter(na_flag) %>%
   sample_frac() %>% 
@@ -585,94 +599,37 @@ wa %>%
     amount,
     expenditure_date
     )
+#> # A tibble: 366 x 7
+#>    na_flag id        report_number filer_name            recipient_name     amount expenditure_date
+#>    <lgl>   <chr>     <chr>         <chr>                 <chr>               <dbl> <date>          
+#>  1 TRUE    558876.e… 1001275686    GRIFFEY DANIEL G      Expenses of $50 o…     0  NA              
+#>  2 TRUE    1038902.… 1001294941    28TH DIST REPUB LEG … Expenses of $50 o…     0  NA              
+#>  3 TRUE    493835.e… 100267574     WA PUBLIC EMPLOYEES … Expenses of $50 o…     0  NA              
+#>  4 TRUE    400050.e… 1001267848    LJUNGHAMMAR KEITH N   Expenses of $50 o…     0  NA              
+#>  5 TRUE    1039327.… 1001295002    TRAVIS BRIAN M        Expenses of $50 o…     0  NA              
+#>  6 TRUE    746783.e… 1001283872    GALE STEPHAN G        Expenses of $50 o…     0  NA              
+#>  7 TRUE    535146.e… 1001273137    REYNOLDS ELIZABETH A  Expenses of $50 o…     0  NA              
+#>  8 TRUE    493792.e… 100230501     WA PUBLIC EMPLOYEES … Expenses of $50 o…     0  NA              
+#>  9 TRUE    778594.e… 1001284363    DAVIES MARK T         Expenses of $50 o…   195. NA              
+#> 10 TRUE    760323.e… 1001284164    GALE STEPHAN G        Expenses of $50 o…   103. NA              
+#> # … with 356 more rows
 ```
-
-    #> # A tibble: 366 x 7
-    #>    na_flag id        report_number filer_name             recipient_name    amount expenditure_date
-    #>    <lgl>   <chr>     <chr>         <chr>                  <chr>              <dbl> <date>          
-    #>  1 TRUE    599235.e… 1001277022    OLSEN JAMES M          Expenses of $50 …    0   NA              
-    #>  2 TRUE    582523.e… 1001276626    MAYBERRY CRAIG L       Expenses of $50 …    0   NA              
-    #>  3 TRUE    426519.e… 1001268229    LJUNGHAMMAR KEITH N    ISHMAD LARRY       100   NA              
-    #>  4 TRUE    1095782.… 1001295672    25TH LEG DIST REPUB C… Expenses of $50 …    0   NA              
-    #>  5 TRUE    399542.e… 1001267807    WHITE KELLY D          Expenses of $50 …    0   NA              
-    #>  6 TRUE    565469.e… 1001276186    QUALL DAVID S          Expenses of $50 …    0   NA              
-    #>  7 TRUE    867083.e… 1001287810    MCMANUS RICHARD (DICK… Expenses of $50 …   44.8 NA              
-    #>  8 TRUE    1036747.… 1001294923    STEVENS CO DEMO CENT … <NA>                 0   NA              
-    #>  9 TRUE    562707.e… 1001275952    WASHINGTONIANS AGAINS… Expenses of $50 …    0   NA              
-    #> 10 TRUE    558885.e… 1001275689    CRIDER SHEILAH H       Expenses of $50 …    0   NA              
-    #> # … with 356 more rows
 
 ### Duplicates
 
-There are no completely duplicate rows, as each record has a unique `id`
+Using `campfin::dupe_flag()` we can identify a number of rows that have
+completely duplicated values, aside from the supposedly unique `id`
 variable.
 
 ``` r
-n_distinct(wa$id)/nrow(wa)
-#> [1] 1
+wa <- flag_dupes(wa, -id)
+sum(wa$dupe_flag)
+#> [1] 7960
+percent(mean(wa$dupe_flag))
+#> [1] "0.995%"
 ```
 
-There are, however, records that are otherwise complete duplicates. It’s
-possible that two expenditures might be made by filer, to the same
-recipient, on the same day, for the same amount but we will flag them
-with a logical `dupe_flag` variable not the less.
-
-Using `janitor::get_dupes()`, we can create a table of records with
-duplicate filer, recipient, date, *and* amount values.
-
-``` r
-wa_dupes <- wa %>% 
-  get_dupes(
-    filer_name,
-    recipient_name,
-    expenditure_date,
-    amount
-    ) %>% 
-  mutate(dupe_flag = TRUE) %>%
-  select(id, dupe_flag)
-
-nrow(wa_dupes)
-#> [1] 25924
-```
-
-Then we join the table of duplicate records back onto the original
-dataset, with a new variable marking each duplicate row.
-
-``` r
-wa <- wa %>% 
-  left_join(wa_dupes, by = "id") %>% 
-  mutate(dupe_flag = !is.na(dupe_flag))
-```
-
-``` r
-wa %>% 
-  filter(dupe_flag) %>% 
-  select(
-    id,
-    filer_name,
-    recipient_name,
-    expenditure_date,
-    amount,
-    code
-  )
-```
-
-    #> # A tibble: 25,924 x 6
-    #>    id         filer_name              recipient_name       expenditure_date amount code            
-    #>    <chr>      <chr>                   <chr>                <date>            <dbl> <chr>           
-    #>  1 195563.ex… GODDEN JEAN H           BANK OF AMERICA      2004-10-31           10 Operation and O…
-    #>  2 195564.ex… GODDEN JEAN H           BANK OF AMERICA      2004-10-31           10 Operation and O…
-    #>  3 223266.ex… SOUTH KITSAP SCHOOL SU… Expenses of $50 or … NA                    0 <NA>            
-    #>  4 456855.ex… YES ON I 1000           FRCR                 2008-10-13            0 Broadcast Adver…
-    #>  5 456856.ex… YES ON I 1000           FRCR                 2008-10-13            0 Broadcast Adver…
-    #>  6 456857.ex… YES ON I 1000           FRCR                 2008-10-13            0 Broadcast Adver…
-    #>  7 456858.ex… YES ON I 1000           FRCR                 2008-10-13            0 Broadcast Adver…
-    #>  8 456859.ex… YES ON I 1000           FRCR                 2008-10-13            0 Broadcast Adver…
-    #>  9 456888.ex… YES ON I 1000           FRCR                 2008-10-13            0 Broadcast Adver…
-    #> 10 456889.ex… YES ON I 1000           FRCR                 2008-10-13            0 Broadcast Adver…
-    #> # … with 25,914 more rows
-
-Many of these duplicate records have an `amount` value of zero, meaning
+Most of these duplicate records have an `amount` value of zero, meaning
 they are likely corrections to previous expenditures.
 
 ![](../plots/plot_dupes_amount-1.png)<!-- -->
@@ -694,13 +651,13 @@ The middle range for `amount` seems reasonable enough. 1.80% percent of
 ``` r
 summary(wa$amount)
 #>     Min.  1st Qu.   Median     Mean  3rd Qu.     Max. 
-#> -2500000       53      195     1667      729  5000000
+#> -2500000       53      192     1639      716  5000000
 tabyl(wa$amount > 0)
 #> # A tibble: 2 x 3
 #>   `wa$amount > 0`      n percent
 #>   <lgl>            <dbl>   <dbl>
-#> 1 FALSE            75097  0.0977
-#> 2 TRUE            693344  0.902
+#> 1 FALSE            77726  0.0972
+#> 2 TRUE            722049  0.903
 ```
 
 Most expenditures are for relatively little amount.
@@ -709,95 +666,90 @@ Most expenditures are for relatively little amount.
 
 ![](../plots/plot_party_hist-1.png)<!-- -->
 
-![](../plots/plot_party_box-1.png)<!-- -->
+![](../plots/plot_party_violin-1.png)<!-- -->
 
 Below are the smallest and largest expenditures.
 
 ``` r
 glimpse(wa %>% filter(amount == min(amount, na.rm = T)))
-```
-
-    #> Observations: 1
-    #> Variables: 36
-    #> $ id                      <chr> "23405.corr"
-    #> $ report_number           <chr> "100441590"
-    #> $ origin                  <chr> "C.2"
-    #> $ filer_id                <chr> "YES1183109"
-    #> $ type                    <chr> "Political Committee"
-    #> $ filer_name              <chr> "YES ON 1183 COALITION"
-    #> $ first_name              <chr> NA
-    #> $ middle_initial          <chr> NA
-    #> $ last_name               <chr> "YES ON 1183 COALITION"
-    #> $ office                  <chr> NA
-    #> $ position                <chr> NA
-    #> $ party                   <chr> NA
-    #> $ jurisdiction            <chr> NA
-    #> $ jurisdiction_county     <chr> NA
-    #> $ jurisdiction_type       <chr> NA
-    #> $ election_year           <dbl> 2011
-    #> $ amount                  <dbl> -2500000
-    #> $ expenditure_date        <date> 2011-10-17
-    #> $ description             <chr> "(Reported amount: 8,929,810.00; Corrected amount: 6,429,810.00)…
-    #> $ recipient_name          <chr> "CORRECTION TO EXPENDITURES"
-    #> $ recipient_address       <chr> NA
-    #> $ recipient_city          <chr> NA
-    #> $ recipient_state         <chr> NA
-    #> $ recipient_zip           <chr> NA
-    #> $ url_description         <chr> "View report"
-    #> $ url                     <chr> "https://web.pdc.wa.gov/rptimg/default.aspx?batchnumber=10044159…
-    #> $ recipient_location.type <chr> NA
-    #> $ recipient_longitude     <dbl> NA
-    #> $ recipient_latitude      <dbl> NA
-    #> $ legislative_district    <chr> NA
-    #> $ code                    <chr> NA
-    #> $ ballot_number           <chr> "1183"
-    #> $ expenditure_itemized    <lgl> TRUE
-    #> $ filer_supports          <lgl> TRUE
-    #> $ na_flag                 <lgl> FALSE
-    #> $ dupe_flag               <lgl> FALSE
-
-``` r
+#> Observations: 1
+#> Variables: 36
+#> $ id                      <chr> "23405.corr"
+#> $ report_number           <chr> "100441590"
+#> $ origin                  <chr> "C.2"
+#> $ filer_id                <chr> "YES1183109"
+#> $ type                    <chr> "Political Committee"
+#> $ filer_name              <chr> "YES ON 1183 COALITION"
+#> $ first_name              <chr> NA
+#> $ middle_initial          <chr> NA
+#> $ last_name               <chr> "YES ON 1183 COALITION"
+#> $ office                  <chr> NA
+#> $ position                <chr> NA
+#> $ party                   <chr> NA
+#> $ jurisdiction            <chr> NA
+#> $ jurisdiction_county     <chr> NA
+#> $ jurisdiction_type       <chr> NA
+#> $ election_year           <dbl> 2011
+#> $ amount                  <dbl> -2500000
+#> $ expenditure_date        <date> 2011-10-17
+#> $ description             <chr> "(Reported amount: 8,929,810.00; Corrected amount: 6,429,810.00)…
+#> $ recipient_name          <chr> "CORRECTION TO EXPENDITURES"
+#> $ recipient_address       <chr> NA
+#> $ recipient_city          <chr> NA
+#> $ recipient_state         <chr> NA
+#> $ recipient_zip           <chr> NA
+#> $ url_description         <chr> "View report"
+#> $ url                     <chr> "https://web.pdc.wa.gov/rptimg/default.aspx?batchnumber=10044159…
+#> $ recipient_location.type <chr> NA
+#> $ recipient_longitude     <dbl> NA
+#> $ recipient_latitude      <dbl> NA
+#> $ legislative_district    <chr> NA
+#> $ code                    <chr> NA
+#> $ ballot_number           <chr> "1183"
+#> $ expenditure_itemized    <lgl> TRUE
+#> $ filer_supports          <lgl> TRUE
+#> $ na_flag                 <lgl> FALSE
+#> $ dupe_flag               <lgl> FALSE
 glimpse(wa %>% filter(amount == max(amount, na.rm = T)))
+#> Observations: 1
+#> Variables: 36
+#> $ id                      <chr> "1106020.expn"
+#> $ report_number           <chr> "100736208"
+#> $ origin                  <chr> "A/GT50"
+#> $ filer_id                <chr> "GROCMA 005"
+#> $ type                    <chr> "Political Committee"
+#> $ filer_name              <chr> "GROCERY MANUFACTURERS ASSN AGAINST I-522"
+#> $ first_name              <chr> NA
+#> $ middle_initial          <chr> NA
+#> $ last_name               <chr> "GROCERY MANUFACTURERS ASSN AGAINST I-522"
+#> $ office                  <chr> NA
+#> $ position                <chr> NA
+#> $ party                   <chr> NA
+#> $ jurisdiction            <chr> NA
+#> $ jurisdiction_county     <chr> NA
+#> $ jurisdiction_type       <chr> NA
+#> $ election_year           <dbl> 2013
+#> $ amount                  <dbl> 5e+06
+#> $ expenditure_date        <date> 2013-09-27
+#> $ description             <chr> "CONTRIBUTION"
+#> $ recipient_name          <chr> "NO ON I-522 COMMITTEE"
+#> $ recipient_address       <chr> "PO BOX 7325"
+#> $ recipient_city          <chr> "OLYMPIA"
+#> $ recipient_state         <chr> "WA"
+#> $ recipient_zip           <chr> "98507"
+#> $ url_description         <chr> "View report"
+#> $ url                     <chr> "https://web.pdc.wa.gov/rptimg/default.aspx?batchnumber=10073620…
+#> $ recipient_location.type <chr> "Point"
+#> $ recipient_longitude     <dbl> -122.896
+#> $ recipient_latitude      <dbl> 47.04087
+#> $ legislative_district    <chr> NA
+#> $ code                    <chr> NA
+#> $ ballot_number           <chr> "522"
+#> $ expenditure_itemized    <lgl> TRUE
+#> $ filer_supports          <lgl> FALSE
+#> $ na_flag                 <lgl> FALSE
+#> $ dupe_flag               <lgl> FALSE
 ```
-
-    #> Observations: 1
-    #> Variables: 36
-    #> $ id                      <chr> "1106020.expn"
-    #> $ report_number           <chr> "100736208"
-    #> $ origin                  <chr> "A/GT50"
-    #> $ filer_id                <chr> "GROCMA 005"
-    #> $ type                    <chr> "Political Committee"
-    #> $ filer_name              <chr> "GROCERY MANUFACTURERS ASSN AGAINST I-522"
-    #> $ first_name              <chr> NA
-    #> $ middle_initial          <chr> NA
-    #> $ last_name               <chr> "GROCERY MANUFACTURERS ASSN AGAINST I-522"
-    #> $ office                  <chr> NA
-    #> $ position                <chr> NA
-    #> $ party                   <chr> NA
-    #> $ jurisdiction            <chr> NA
-    #> $ jurisdiction_county     <chr> NA
-    #> $ jurisdiction_type       <chr> NA
-    #> $ election_year           <dbl> 2013
-    #> $ amount                  <dbl> 5e+06
-    #> $ expenditure_date        <date> 2013-09-27
-    #> $ description             <chr> "CONTRIBUTION"
-    #> $ recipient_name          <chr> "NO ON I-522 COMMITTEE"
-    #> $ recipient_address       <chr> "PO BOX 7325"
-    #> $ recipient_city          <chr> "OLYMPIA"
-    #> $ recipient_state         <chr> "WA"
-    #> $ recipient_zip           <chr> "98507"
-    #> $ url_description         <chr> "View report"
-    #> $ url                     <chr> "https://web.pdc.wa.gov/rptimg/default.aspx?batchnumber=10073620…
-    #> $ recipient_location.type <chr> "Point"
-    #> $ recipient_longitude     <dbl> -122.896
-    #> $ recipient_latitude      <dbl> 47.04087
-    #> $ legislative_district    <chr> NA
-    #> $ code                    <chr> NA
-    #> $ ballot_number           <chr> "522"
-    #> $ expenditure_itemized    <lgl> TRUE
-    #> $ filer_supports          <lgl> FALSE
-    #> $ na_flag                 <lgl> FALSE
-    #> $ dupe_flag               <lgl> FALSE
 
 We can view the link provided in the `url` variable to see the smallest
 expenditure is a correction to an expenditure to Costco previously
@@ -822,7 +774,7 @@ but there are a number of suspiciously old expenditures.
 
 ``` r
 max(wa$expenditure_date, na.rm = TRUE)
-#> [1] "2019-06-17"
+#> [1] "2019-10-25"
 sum(wa$expenditure_date > today(), na.rm = T)
 #> [1] 0
 ```
@@ -837,20 +789,22 @@ outside the expected time span.
 ``` r
 min(wa$expenditure_date, na.rm = TRUE)
 #> [1] "1964-06-11"
-sum(year(wa$expenditure_date) < 2007, na.rm = T)
-#> [1] 2480
+sum(year(wa$expenditure_date) < 2007, na.rm = TRUE)
+#> [1] 2486
 ```
-
-![](../plots/plot_exp_year-1.png)<!-- -->
 
 To better track expenditures in the TAP database, we will create a
 `expenditure_year` variable from the previously parsed
 `expenditure_date` using `lubridate::year()`.
 
 ``` r
-wa <- wa %>% 
-  mutate(expenditure_year = year(expenditure_date))
+wa <- wa %>% mutate(
+  expenditure_year = year(expenditure_date),
+  date_flag = is_less_than(expenditure_year, 2007)
+)
 ```
+
+![](../plots/plot_exp_year-1.png)<!-- -->
 
 ## Clean
 
@@ -862,126 +816,132 @@ punctuation and fixing white-space.
 ``` r
 wa <- wa %>% 
   mutate(
-    address_clean = recipient_address %>% 
-      str_to_upper() %>% 
-      # remove punct and numbers
-      str_replace("-", " ") %>% 
-      str_remove_all("[:punct:]") %>% 
-      str_trim() %>% 
-      str_squish() %>% 
-      na_if("") %>% 
-      na_if("NA")
+    address_norm = normal_address(
+      address = recipient_address,
+      add_abbs = usps_street,
+      na_rep = TRUE
+    )
   )
-```
-
-### Zipcode
-
-We can clean the `recipient_zip` variable using the
-`zipcodes::clean.zipcodes()` function, which strips the ZIP+4 digits and
-adds leading zeroes to three or four digit strings. We will also make
-some common invalid zips `NA`.
-
-``` r
-wa <- wa %>% 
-  mutate(zip_clean = recipient_zip %>% 
-           clean.zipcodes() %>% 
-           na_if("00000") %>% 
-           na_if("11111") %>% 
-           na_if("99999")
-  )
-
-wa$zip_clean[which(nchar(wa$zip_clean) != 5)] <- NA
-```
-
-### State
-
-Using comprehensive list of state abbreviations in the Zipcodes
-database, we can isolate invalid `recipient_state` values and manually
-correct
-them.
-
-``` r
-valid_state <- c(unique(zipcode$state), "AB", "BC", "MB", "NB", "NL", "NS", "ON", "PE", "QC", "SK")
-length(valid_state)
-#> [1] 72
-setdiff(valid_state, state.abb)
-#>  [1] "PR" "VI" "AE" "DC" "AA" "AP" "AS" "GU" "PW" "FM" "MP" "MH" "AB" "BC" "MB" "NB" "NL" "NS" "ON"
-#> [20] "PE" "QC" "SK"
 ```
 
 ``` r
 wa %>% 
-  filter(recipient_state %out% valid_state) %>% 
-  filter(!is.na(recipient_state)) %>% 
-  select(
-    id,
-    recipient_address,
-    recipient_city,
-    recipient_state,
-    recipient_zip
-  ) %>% 
-  print_all()
+  select(contains("address")) %>% 
+  distinct() %>% 
+  sample_frac()
+#> # A tibble: 112,864 x 2
+#>    recipient_address              address_norm                     
+#>    <chr>                          <chr>                            
+#>  1 17837 1ST AVENUE SOUTH         17837 1ST AVENUE SOUTH           
+#>  2 4023 E SPRAGUE                 4023 EAST SPRAGUE                
+#>  3 1110 N GRAND AVE               1110 NORTH GRAND AVENUE          
+#>  4 2925 HARRISON AVE NW           2925 HARRISON AVENUE NORTHWEST   
+#>  5 115 S 10TH AVE                 115 SOUTH 10TH AVENUE            
+#>  6 5432 PARK PLACE LOOP SE        5432 PARK PLACE LOOP SOUTHEAST   
+#>  7 1000 AURORA AVENUE, UNIT N-100 1000 AURORA AVENUE UNIT NORTH 100
+#>  8 600 STEWART ST., #1510         600 STEWART STREET 1510          
+#>  9 1525 209TH AVE NE              1525 209TH AVENUE NORTHEAST      
+#> 10 6934 FAIRWAY LN SE             6934 FAIRWAY LANE SOUTHEAST      
+#> # … with 112,854 more rows
 ```
 
-    #> # A tibble: 32 x 5
-    #>    id           recipient_address                  recipient_city  recipient_state recipient_zip
-    #>    <chr>        <chr>                              <chr>           <chr>           <chr>        
-    #>  1 978948.expn  P.O. BOX 44178                     HONG KONG       SH              <NA>         
-    #>  2 871688.expn  841 NE 105TH ST                    SEATTLE         ,               98125        
-    #>  3 392584.expn  UNUTS A & B BLOCK 4                SHANNON IRELAND IR              IE957        
-    #>  4 397522.expn  BAT A, 1 ER ETAGE                  31400 TOULOUSE  FR              <NA>         
-    #>  5 409282.expn  NADOR U. 17. II. 10.               BUDAPEST        HR              <NA>         
-    #>  6 460849.expn  5929 HARMONY LANE SW               OLYMPIA         SW              98512        
-    #>  7 451387.expn  8441 SE 68TH ST, PMB 212           MERCER          IS              WA           
-    #>  8 639423.expn  42 NEW CONCORDIA WHARF MILL STREET LONDON          UK              SE12B        
-    #>  9 889637.expn  16 COLLINGHAM ST #4                LONDON          OT              SW5 0        
-    #> 10 918645.expn  SUITE 200 - 1240 20TH AVE SE       CALGARY         CN              <NA>         
-    #> 11 658803.expn  11 KING SOLOMON ST                 JERUSALEM       IS              94182        
-    #> 12 658796.expn  KING SOLOMON ST                    JERUSALEM       IS              94182        
-    #> 13 903844.expn  2316 CASTLE ROCK ROAD              ARLINGTON       TE              76006        
-    #> 14 988127.expn  P.O. BOX 44178                     HONG KONG       SH              <NA>         
-    #> 15 1325683.expn 3542 S 198TH ST                    SEATAC          98              98188        
-    #> 16 1261273.expn PO BOX 13290                       DES MOINES      QA              98198        
-    #> 17 1331947.expn 3542 S 198TH ST                    SEATAC          98              98188        
-    #> 18 4742277.rcpt <NA>                               REQUESTED       RE              REQUE        
-    #> 19 4657775.rcpt 1576 WILLIAMS LAKE ROAD            COLVILLE        99              99114        
-    #> 20 4657779.rcpt 365 DOUGLAS FALLS                  COLVILLE        99              99114        
-    #> 21 4657767.rcpt 365 DOUGLAS FALLS                  COLVILLE        99              99114        
-    #> 22 4742278.rcpt REQUESTED                          REQUESTED       RE              REQUE        
-    #> 23 4742265.rcpt REQUESTED                          REQUESTED       RE              REQUE        
-    #> 24 4742266.rcpt REQUESTED                          REQUESTED       RE              REQUE        
-    #> 25 4742268.rcpt REQUESTED                          REQUESTED       RE              REQUE        
-    #> 26 4742269.rcpt REQUESTED                          REQUESTED       RE              REQUE        
-    #> 27 4742270.rcpt REQUESTED                          REQUESTED       RE              REQUE        
-    #> 28 4742271.rcpt REQUESTED                          REQUESTED       RE              REQUE        
-    #> 29 4742272.rcpt REQUESTED                          REQUESTED       RE              REQUE        
-    #> 30 4742273.rcpt REQUESTED                          REQUESTED       RE              REQUE        
-    #> 31 4742274.rcpt REQUESTED                          REQUESTED       RE              REQUE        
-    #> 32 4657771.rcpt 57 OLD BLACK BEACH ROAD            REPUBLIC        99              99166
-
-If the `recipient_state` abbreviation is invalid, use the
-`recipient_city` and `recipient_zip` values for that record to manually
-correct the abbreviation where possible. If it can’t be manually
-corrected, make the value `NA`.
+### ZIP
 
 ``` r
-wa$state_clean <- wa$recipient_state %>% 
-  str_replace("QA", "WA") %>% # add match
-  str_replace("SW", "WA") %>% # add match 
-  str_replace("TE", "TX") %>% # add match
-  str_replace("CN", "AB") %>% # calgary
-  str_remove("[:punct:]") %>% 
-  na_if("") %>% 
-  na_if("RE") %>% # requested
-  na_if("98") %>% # WA zip
-  na_if("99") %>% # WA zip
-  na_if("SH") %>% # hong kong
-  na_if("FR") %>% # france
-  na_if("OT") %>% # overseas
-  na_if("HR") %>% # hungary
-  na_if("UK") %>% # united kingdom
-  na_if("IR") %>% # ireland
-  na_if("IS")     # israel
+wa <- wa %>% 
+  mutate(
+    zip_norm = normal_zip(
+      zip = recipient_zip,
+      na_rep = TRUE
+    )
+  )
+```
+
+``` r
+wa %>% 
+  select(contains("zip")) %>% 
+  filter(zip_norm != recipient_zip)
+#> # A tibble: 762 x 2
+#>    recipient_zip zip_norm
+#>    <chr>         <chr>   
+#>  1 985           00985   
+#>  2 7011          07011   
+#>  3 7011          07011   
+#>  4 7011          07011   
+#>  5 3792          03792   
+#>  6 992           00992   
+#>  7 982           00982   
+#>  8 9811          09811   
+#>  9 9366          09366   
+#> 10 3/11/         00311   
+#> # … with 752 more rows
+```
+
+``` r
+progress_table(
+  wa$recipient_zip,
+  wa$zip_norm,
+  compare = valid_zip
+)
+#> # A tibble: 2 x 6
+#>   stage         prop_in n_distinct prop_na n_out n_diff
+#>   <chr>           <dbl>      <dbl>   <dbl> <dbl>  <dbl>
+#> 1 recipient_zip   0.991       5092   0.174  6028    679
+#> 2 zip_norm        0.997       5014   0.179  2220    539
+```
+
+### State
+
+``` r
+wa <- wa %>% 
+  mutate(
+    state_norm = normal_state(
+      state = recipient_state,
+      abbreviate = TRUE,
+      na_rep = TRUE,
+      valid = NULL
+    )
+  )
+```
+
+``` r
+wa %>% 
+  filter(state_norm %out% valid_state) %>% 
+  count(state_norm, sort = TRUE)
+#> # A tibble: 18 x 2
+#>    state_norm      n
+#>    <chr>       <int>
+#>  1 <NA>       132222
+#>  2 NB             45
+#>  3 RE             11
+#>  4 AB              8
+#>  5 BC              8
+#>  6 IS              3
+#>  7 ON              3
+#>  8 SA              2
+#>  9 SH              2
+#> 10 CN              1
+#> 11 FR              1
+#> 12 HR              1
+#> 13 IR              1
+#> 14 OT              1
+#> 15 QA              1
+#> 16 SW              1
+#> 17 TE              1
+#> 18 UK              1
+```
+
+``` r
+progress_table(
+  wa$recipient_state,
+  wa$state_norm,
+  compare = valid_state
+)
+#> # A tibble: 2 x 6
+#>   stage           prop_in n_distinct prop_na n_out n_diff
+#>   <chr>             <dbl>      <dbl>   <dbl> <dbl>  <dbl>
+#> 1 recipient_state   1.000         74   0.165    98     21
+#> 2 state_norm        1.000         71   0.165    91     18
 ```
 
 ### City
@@ -998,324 +958,87 @@ steps:
 4.  Refine swapped city values with key collision and n-gram
     fingerprints
 
-#### Prep City
-
-The first step in cleaning city names is to reduce inconsistencies. The
-custom `city_prep()` function found in the `R/` sub-directory of this
-root project performs the bulk of our preparation. In short, the
-function (1) removes punctuation, numbers, and state abbreviations, (2)
-expands directional and geographic abbreviations, and (3) catches common
-`NA` strings.
+#### Normal
 
 ``` r
-source(here("R", "prep_city.R"))
 wa <- wa %>% 
   mutate(
-    city_prep = prep_city(
-      cities = recipient_city,
-      na = read_lines(here("R", "na_city.csv")),
-      abbs = c("WA", "OR", "ID", "DC", "BC")
+    city_norm = normal_city(
+      city = recipient_city,
+      geo_abbs = usps_city,
+      st_abbs = c("WA", "DC"),
+      na = invalid_city,
+      na_rep = TRUE
     )
   )
 ```
 
-#### Match and Swap City
+#### Swap
 
-The second step will be to compare the new `city_prep` value to the
-*actual* city value for that record’s `zip_clean` value. If the
-`city_prep` is very similar to the expected city name for that ZIP code,
+The second step will be to compare the new `city_norm` value to the
+*actual* city value for that record’s `zip_norm` value. If the
+`city_norm` is very similar to the expected city name for that ZIP code,
 we can make that change.
 
 ``` r
-wa <- wa %>%
-  left_join(zipcode, by = c("state_clean" = "state", "zip_clean" = "zip")) %>%
-  rename(city_match = city) %>%
+wa <- wa %>% 
+  left_join(
+    y = zipcodes,
+    by = c(
+      "state_norm" = "state",
+      "zip_norm" = "zip"
+    )
+  ) %>% 
+  rename(city_match = city) %>% 
   mutate(
-    match_dist  = stringdist(city_prep, city_match),
-    city_swap = if_else(match_dist == 1, city_match, city_prep)
+    match_abb = is_abbrev(city_norm, city_match),
+    match_dist = str_dist(city_norm, city_match),
+    city_swap = if_else(
+      condition = match_abb | match_dist == 1,
+      true = city_match,
+      false = city_norm
+    )
   )
 ```
 
-#### Refine City
-
-Now that we’ve prepared out city values and made the most obvious
-changes, we can use the OpenRefine algorithms to cluster similar values
-and merge them together. This can be done using the
-`refinr::key_collision_merge()` and `refinr::n_gram_merge()` functions
-on our prepared and swapped city data.
+#### Refine
 
 ``` r
-valid_city <- c(
-  unique(zipcode$city), 
-  "SPOKANE VALLEY",
-  "TUKWILA", 
-  "BURIEN", 
-  "SEATAC", 
-  "LAKE FOREST PARK",
-  "NORMANDY PARK",
-  "FIRCREST"
-  )
-```
-
-We will create a new table with these refined values.
-
-``` r
-wa_refined <- wa %>%
-  filter(state_clean == "WA") %>% 
-  filter(match_dist != 1) %>% 
+wa_refine <- wa %>% 
   mutate(
     city_refine = city_swap %>% 
-      key_collision_merge(dict = valid_city) %>% 
-      n_gram_merge(numgram = 1),
-    refined = (city_swap != city_refine)
+      key_collision_merge() %>% 
+      n_gram_merge(numgram = 1)
   ) %>% 
-  filter(refined) %>% 
-  select(
-    id,
-    state_clean,
-    zip_clean,
-    recipient_city,
-    city_prep,
-    city_match,
-    match_dist,
-    city_swap,
-    city_refine,
-  ) %>% 
-  rename(
-    state = state_clean,
-    zip = zip_clean,
-    city_raw = recipient_city
+  inner_join(
+    y = zipcodes,
+    by = c(
+      "city_refine" = "city",
+      "state_norm" = "state",
+      "zip_norm" = "zip"
+    )
   )
 ```
 
-#### Review Refined City
-
 ``` r
-wa_refined %>% 
-  count(city_swap, city_refine) %>% 
-  arrange(desc(n))
+wa_refine %>% 
+  filter(city_refine != city_swap) %>% 
+  count(city_swap, city_refine, sort = TRUE)
+#> # A tibble: 30 x 3
+#>    city_swap          city_refine           n
+#>    <chr>              <chr>             <int>
+#>  1 CINCINATTI         CINCINNATI           19
+#>  2 MULKITEO           MUKILTEO              9
+#>  3 OLAOOA             OLALLA                9
+#>  4 COUER DALENE       COEUR D ALENE         8
+#>  5 SAN FRANSICO       SAN FRANCISCO         7
+#>  6 NO CANTON          CANTON                4
+#>  7 OKANGAON           OKANOGAN              3
+#>  8 SPOAKEN            SPOKANE               3
+#>  9 FREDRAL WAY        FEDERAL WAY           2
+#> 10 MOUNT LAEK TERRACE MOUNTLAKE TERRACE     2
+#> # … with 20 more rows
 ```
-
-    #> # A tibble: 107 x 3
-    #>    city_swap        city_refine          n
-    #>    <chr>            <chr>            <int>
-    #>  1 FREELAND         FERNDALE           322
-    #>  2 SEA TAC          SEATAC              52
-    #>  3 TUKWILLA         TUKWILA             35
-    #>  4 BATTLEGROUND     BATTLE GROUND       34
-    #>  5 BANBRIDGE        BAINBRIDGE          18
-    #>  6 CONVINGTON       COVINGTON           16
-    #>  7 UNIVERISTY PLACE UNIVERSITY PLACE    16
-    #>  8 CLYDE HILEE      CLYDE HILL          15
-    #>  9 MILLCREEK        MILL CREEK          15
-    #> 10 NEW CASTLE       NEWCASTLE           13
-    #> # … with 97 more rows
-
-The key to the refine algorithms is clustering rare values with their
-more common similar values. We can count how often the original value
-appears and compare it to the frequency of the refined value.
-
-``` r
-refined_values <- unique(wa_refined$city_refine)
-count_refined <- tibble(
-  city_refine = refined_values, 
-  refine_count = NA
-)
-
-for (i in seq_along(refined_values)) {
-  count_refined$refine_count[i] <- sum(str_detect(wa$city_swap, refined_values[i]), na.rm = TRUE)
-}
-
-swap_values <- unique(wa_refined$city_swap)
-count_swap <- tibble(
-  city_swap = swap_values, 
-  swap_count = NA
-)
-
-for (i in seq_along(swap_values)) {
-  count_swap$swap_count[i] <- sum(str_detect(wa$city_swap, swap_values[i]), na.rm = TRUE)
-}
-```
-
-The least frequent refined values are the ones of which we should be
-most suspicious. The more frequent a refined value appears compared to
-it’s original value, the more confident the algorithm can be in making
-the change. We should manually check any refined value with a small
-count. Furthermore, some refined values appear *less* often than their
-original value because their fingerprint matches an entry in our
-dictionary (e.g., “Lake Forrest” vs “Forrest Lake”).
-
-``` r
-wa_refined %>% 
-  left_join(count_swap) %>% 
-  left_join(count_refined) %>%
-  select(
-    city_match,
-    city_swap,
-    city_refine,
-    swap_count,
-    refine_count
-  ) %>% 
-  mutate(diff_count = refine_count - swap_count) %>%
-  mutate(refine_dist = stringdist(city_swap, city_refine)) %>%
-  distinct() %>%
-  arrange(city_refine) %>% 
-  print_all()
-```
-
-    #> # A tibble: 117 x 7
-    #>     city_match     city_swap       city_refine       swap_count refine_count diff_count refine_dist
-    #>     <chr>          <chr>           <chr>                  <int>        <int>      <int>       <dbl>
-    #>   1 AUBURN         AUAUBRN         AUBURN                     1         3615       3614           2
-    #>   2 BAINBRIDGE IS… BANBRIDGE       BAINBRIDGE                18         2078       2060           1
-    #>   3 BELLEVUE       BATTLEGROUND    BATTLE GROUND             34         1462       1428           1
-    #>   4 WOODLAND       BATTLEGROUND    BATTLE GROUND             34         1462       1428           1
-    #>   5 WOODINVILLE    BELLEUVE        BELLEVUE                   2        16290      16288           1
-    #>   6 BELLEVUE       BEELVUE         BELLEVUE                   1        16290      16289           2
-    #>   7 SEATTLE        BELLVUE         BELLEVUE                   2        16290      16288           1
-    #>   8 BELLEVUE       BLEELVUE        BELLEVUE                   1        16290      16289           2
-    #>   9 MERCER ISLAND  BOTHELLE        BOTHELL                    1         3818       3817           1
-    #>  10 KEYPORT        BOTTHELL        BOTHELL                    1         3818       3817           1
-    #>  11 BRUSH PRAIRIE  BUSH PRARIE     BRUSH PRAIRIE              3          269        266           2
-    #>  12 CAMAS          BRUSH PRARIE    BRUSH PRAIRIE              1          269        268           1
-    #>  13 SEATTLE        BURRIEN         BURIEN                     1         1624       1623           1
-    #>  14 STANWOOD       CAMNO ISLAND    CAMANO ISLAND              2          844        842           1
-    #>  15 CAMANO         CAMINO ISLAND   CAMANO ISLAND              2          844        842           1
-    #>  16 CAMANO         CAMANO ISLSAND  CAMANO ISLAND              1          844        843           1
-    #>  17 LA CONNER      LACONNRT        CARLTON                    1            9          8           7
-    #>  18 SEDRO WOOLLEY  CLEAR LAKE      CLEARLAKE                 10            8         -2           1
-    #>  19 BELLEVUE       CLYDE HILEE     CLYDE HILL                15          125        110           2
-    #>  20 MOCLIPS        MOCLIPS         COSMOPOLIS                 3          103        100           6
-    #>  21 MOUNT VERNON   COUPLEVILLE     COUPEVILLE                 1          594        593           1
-    #>  22 KENT           CONVINGTON      COVINGTON                 16         2476       2460           1
-    #>  23 KENT           COVI NGTON      COVINGTON                  1         2476       2475           1
-    #>  24 KENT           COVINGOTN       COVINGTON                  3         2476       2473           1
-    #>  25 SEATTLE        DESMOINES       DES MOINES                 8         1951       1943           1
-    #>  26 SEATTLE        DEMOINES        DES MOINES                 1         1951       1950           2
-    #>  27 EVERETT        EVERRET         EVERETT                    1         7992       7991           2
-    #>  28 FEDERAL WAY    FREDRAL WAY     FEDERAL WAY                2         8648       8646           2
-    #>  29 FREELAND       FREELAND        FERNDALE                 322          993        671           5
-    #>  30 LANGLEY        FREELAND        FERNDALE                 322          993        671           5
-    #>  31 GREENBANK      FREELAND        FERNDALE                 322          993        671           5
-    #>  32 COLVILLE       FREELAND        FERNDALE                 322          993        671           5
-    #>  33 LAKEBAY        FREELAND        FERNDALE                 322          993        671           5
-    #>  34 SEATTLE        LAKE FOREST     FOREST LAKE              614            0       -614          10
-    #>  35 LATAH          GREEN ACRES     GREENACRES                 1           72         71           1
-    #>  36 MOUNT VERNON   INTERTNET COMP… INTERNET COMPANY           8           12          4           1
-    #>  37 RENTON         ISSQUAH         ISSAQUAH                   1         4346       4345           1
-    #>  38 GLENOMA        KENEWICK        KENNEWICK                  1         3772       3771           1
-    #>  39 LAKEWOOD       KEY CETNTER     KEY CENTER                 1            1          0           1
-    #>  40 LA CENTER      LACEN TER       LA CENTER                  1          416        415           2
-    #>  41 EVERSON        LACONNER        LA CONNER                  1          149        148           1
-    #>  42 OLYMPIA        LAACEY          LACEY                      1         4807       4806           1
-    #>  43 SEATTLE        LAKE FORREST P… LAKE FOREST PARK           3          602        599           1
-    #>  44 SEATTLE        LAKE FOREST PA… LAKE FOREST PARK           1          602        601           1
-    #>  45 LEAVENWORTH    LEAVENENWORTH   LEAVENWORTH                1          267        266           2
-    #>  46 MARLIN         LONG VIEW       LONGVIEW                   1         4000       3999           1
-    #>  47 KENT           LYNWOOD         LYNNWOOD                   1         4342       4341           1
-    #>  48 ISSAQUAH       LYNNWOD         LYNNWOOD                   1         4342       4341           1
-    #>  49 TACOMA         MCCHORD AIR FO… MCCHAORD AIR FOR…          1            3          2           1
-    #>  50 OAKESDALE      MATALINE FALLS  METALINE FALLS             1           22         21           1
-    #>  51 BOTHELL        MILLCREEK       MILL CREEK                15         1420       1405           1
-    #>  52 BOTHELL        MILL CLERK      MILL CREEK                 1         1420       1419           2
-    #>  53 BOTHELL        MILL CREEEK     MILL CREEK                 2         1420       1418           1
-    #>  54 BOTHELL        MILLE CREEK     MILL CREEK                 1         1420       1419           1
-    #>  55 WOODINVILLE    MILLCREEK       MILL CREEK                15         1420       1405           1
-    #>  56 SNOHOMISH      MILLCREEK       MILL CREEK                15         1420       1405           1
-    #>  57 WOODINVILLE    MOUNTALKE TERR… MOUNTLAKE TERRACE          1          713        712           1
-    #>  58 MOUNTLAKE TER… MOUNT LAEK TER… MOUNTLAKE TERRACE          2          713        711           2
-    #>  59 MOUNTLAKE TER… MTLK TERRACE    MTLAKE TERRACE             1            1          0           2
-    #>  60 MUKILTEO       MULKITEO        MUKILTEO                   9         1971       1962           2
-    #>  61 MUKILTEO       MUKELTIO        MUKILTEO                   1         1971       1970           2
-    #>  62 RENTON         NEW CASTLE      NEWCASTLE                 14          419        405           1
-    #>  63 BELLEVUE       NEW CASTLE      NEWCASTLE                 14          419        405           1
-    #>  64 RONALD         RONALD          NORDLAND                   2           36         34           5
-    #>  65 SEATTLE        NORNAMDY PARK   NORMANDY PARK              1          420        419           2
-    #>  66 OKANOGAN       OKANGAON        OKANOGAN                   3          325        322           2
-    #>  67 PORT TOWNSEND  OLLALA          OLALLA                     6          221        215           1
-    #>  68 OLALLA         OLAOOA          OLALLA                     9          221        212           2
-    #>  69 PORT ORCHARD   OLLALA          OLALLA                     6          221        215           1
-    #>  70 OLYMPIA        OLYIMPA         OLYMPIA                    2        30789      30787           2
-    #>  71 SEATTLE        OLYPMIA         OLYMPIA                    3        30789      30786           1
-    #>  72 OLYMPIA        OYLIMPIA        OLYMPIA                    1        30789      30788           2
-    #>  73 RENTON         RENTONIN        ORIENT                     1            4          3           6
-    #>  74 SEQUIM         PORT ANGLES     PORT ANGELES               3         2950       2947           1
-    #>  75 KIRKLAND       PYALLUP         PUYALLUP                   2         6648       6646           1
-    #>  76 SEATTLE        NORMANDY        RAYMOND                  422          589        167           5
-    #>  77 COLVILLE       ARDEN           REARDAN                   33           28         -5           3
-    #>  78 SAINT JOHN     SAINT JOHN INN  SAINT JOHN                 1           41         40           4
-    #>  79 BOW            SAMISH          SAMMAMISH                 20         1162       1142           3
-    #>  80 SEATTLE        SEA TAC         SEATAC                    52          913        861           1
-    #>  81 SEATTLE        SETAC           SEATAC                     4          913        909           1
-    #>  82 SHORELINE      SEATLE          SEATTLE                    2       143531     143529           1
-    #>  83 SEATTLE        WEST SEATTLE    SEATTLE WEST               1            2          1           9
-    #>  84 SEDRO WOOLLEY  SSEDRO WOOOLLEY SEDRO WOOLLEY              1          561        560           2
-    #>  85 SEATTLE        SHORLINE        SHORELINE                  5         2579       2574           1
-    #>  86 SEATTLE        SHORELIEN       SHORELINE                  3         2579       2576           1
-    #>  87 KAHLOTUS       KAHLOTUS        SOUTH ALASKA               2            3          1          10
-    #>  88 SPOKANE        SPOAKEN         SPOKANE                    3        30027      30024           2
-    #>  89 SPOKANE        SPOLKANE VALLEY SPOKANE VALLEY             1         3264       3263           1
-    #>  90 SPOKANE        SPOKANE VELLEY  SPOKANE VALLEY             1         3264       3263           1
-    #>  91 SPOKANE        SPOKANE VALLLEY SPOKANE VALLEY             4         3264       3260           1
-    #>  92 SPOKANE        SPOKANE VALEY   SPOKANE VALLEY             3         3264       3261           1
-    #>  93 SPOKANE        SPOKEAN VALLEY  SPOKANE VALLEY             1         3264       3263           2
-    #>  94 SPOKANE        SPOKANE VALLY   SPOKANE VALLEY             2         3264       3262           1
-    #>  95 GREENACRES     SPOKANE VALLYE  SPOKANE VALLEY             1         3264       3263           1
-    #>  96 VERADALE       SPOKANE VALLLEY SPOKANE VALLEY             4         3264       3260           1
-    #>  97 STEILACOOM     STEILLECOM      STEILCOOM                  1            1          0           3
-    #>  98 STEILACOOM     STIELICOM       STEILCOOM                  1            1          0           3
-    #>  99 TACOMA         TAOMCA          TACOMA                     1        21102      21101           2
-    #> 100 TIETON         TIETON          TENINO                    13          170        157           4
-    #> 101 PASCO          TRICITIES       TRI CITIES                 4           23         19           1
-    #> 102 SEATTLE        TUKWILIA        TUKWILA                    5         1945       1940           1
-    #> 103 SEATTLE        TUKWILLA        TUKWILA                   35         1945       1910           1
-    #> 104 SEATTLE        TUWILA          TULWILLA                   1            2          1           2
-    #> 105 OLYMPIA        TUMWATRER       TUMWATER                   2         7073       7071           1
-    #> 106 OLYMPIA        TUMAWATER       TUMWATER                   5         7073       7068           1
-    #> 107 OLYMPIA        TUMWATERW       TUMWATER                   1         7073       7072           1
-    #> 108 OLYMPIA        TUMWATERE       TUMWATER                   3         7073       7070           1
-    #> 109 OLYMPIA        TUMMWATER       TUMWATER                   1         7073       7072           1
-    #> 110 OLYMPIA        TUMWAATER       TUMWATER                   8         7073       7065           1
-    #> 111 OLYMPIA        SW TUMWATER     TUMWATERS                  1            6          5           4
-    #> 112 TACOMA         UNIVERISTY PLA… UNIVERSITY PLACE          16         2790       2774           1
-    #> 113 TACOMA         UNIVERSTIY PLA… UNIVERSITY PLACE           7         2790       2783           1
-    #> 114 TACOMA         UNIVERSITY PAL… UNIVERSITY PLACE           2         2790       2788           1
-    #> 115 TACOMA         UNIVEERSITY PL… UNIVERSITY PLACE           1         2790       2789           1
-    #> 116 TACOMA         UNVERSITY PLACE UNIVERSITY PLACE           3         2790       2787           1
-    #> 117 OLYMPIA        YELLM           YELM                       1          653        652           1
-
-We can finally manually correct the last of these values.
-
-``` r
-wa_refined$city_refine <- wa_refined$city_refine %>% 
-  str_replace("^FOREST LAKE$", "LAKE FOREST PARK") %>% 
-  str_replace("^REARDAN$", "ARDEN") %>% 
-  str_replace("^CLEARLAKE$", "CLEAR LAKE") %>% 
-  str_replace("^STEILCOOM$", "STEILACOOM") %>% 
-  str_replace("^SOUTH ALASKA$", "KAHLOTUS") %>% 
-  str_replace("^TULWILLA$", "TUKWILA") %>% 
-  str_replace("^SEATTLE WEST$", "SEATTLE") %>% 
-  str_replace("^MCCHAORD AFB$", "MCCHORD AFB") %>% 
-  str_replace("^ORIENT$", "RENTON") %>% 
-  str_replace("^TUMWATERS$", "TUMWATER") %>% 
-  str_replace("^CARLTON$", "LA CONNER") %>% 
-  str_replace("^CARLTON$", "LA CONNER") %>% 
-  str_replace("^COSMOPOLIS$", "MOCLIPS") %>% 
-  str_replace("^FERNDALE$", "FREELAND") %>% 
-  str_replace("^LEAVENWORTH$", "LEAVENWORTH") %>% 
-  str_replace("^MOUNTLAKE TERRACE$", "MOUNT LAKE TERRACE") %>% 
-  str_replace("^MTLAKE TERRACE$", "MOUNT LAKE TERRACE") %>% 
-  str_replace("^NORDLAND$", "RONALD") %>% 
-  str_replace("^ORIENT$", "RENTON") %>% 
-  str_replace("^RAYMOND$", "NORMANDY") %>% 
-  str_replace("^SPOKANE VALLEY$", "SPOKANE") %>% 
-  na_if("INTERNET COMPANY")
-
-refine_table <- wa_refined %>% 
-  select(id, city_refine)
-```
-
-#### Merge Refined City
 
 Then, we match these refined values to the original data. Use the
 refined value where possible, otherwise use the swapped city value
@@ -1323,66 +1046,126 @@ refined value where possible, otherwise use the swapped city value
 
 ``` r
 wa <- wa %>% 
-  left_join(refine_table, by = "id") %>% 
-  mutate(city_clean = coalesce(city_refine, city_swap))
+  left_join(wa_refine) %>% 
+  mutate(city_refine = coalesce(city_refine, city_swap))
 ```
 
-Each step of the cleaning process reduces the number of distinct city
-values.
+#### Progress
 
 ``` r
-n_distinct(wa$recipient_city)
-#> [1] 3977
-n_distinct(wa$city_prep)
-#> [1] 3647
-n_distinct(wa$city_swap)
-#> [1] 2464
-n_distinct(wa$city_clean)
-#> [1] 2369
-sum(wa$recipient_city != wa$city_clean, na.rm = TRUE)
-#> [1] 9006
-sample(setdiff(wa$recipient_city, wa$city_clean), 25)
-#>  [1] "MOUNT VERNON`"        "NO CITY"              "VANCOUVEE"            "ST. PAUL"            
-#>  [5] "AMHERST"              "KIRKLNAD"             "MOYNT VERNON"         "PUYALLU"             
-#>  [9] "-- 173RD AVE SW"      "ST.JOHN"              "MUKILETEO"            "VICTORIA, AUSTRALIA" 
-#> [13] "N/A"                  "800 LLOYD RD"         "MILL CLERK"           "UN K"                
-#> [17] "BELLEVUE,"            "BALTAMORE"            "NEW WESTMINISTER, BC" "ANYTOWN"             
-#> [21] "OLYPIA"               "SAINT PAUL,"          "BRADEN TON"           "CASHEMRE"            
-#> [25] "SIVERDALE"
+wa %>% 
+  filter(city_refine %out% valid_city) %>% 
+  count(city_refine, state_norm, sort = TRUE) %>% 
+  drop_na()
+#> # A tibble: 462 x 3
+#>    city_refine      state_norm     n
+#>    <chr>            <chr>      <int>
+#>  1 SPOKANE VALLEY   WA          3423
+#>  2 TUKWILA          WA          2150
+#>  3 BURIEN           WA          1733
+#>  4 SEATAC           WA          1173
+#>  5 CAMANO ISLAND    WA           863
+#>  6 LAKE FOREST PARK WA           644
+#>  7 NORMANDY PARK    WA           439
+#>  8 SYMMES TOWNSHIP  OH           293
+#>  9 FIRCREST         WA           261
+#> 10 UNION GAP        WA           161
+#> # … with 452 more rows
 ```
+
+If we expand `valid_city` to include the *six* most common “invalid”
+cities, we realize the vast majority of our cities have been properly
+normalized.
+
+``` r
+other_cities <- most_common(wa$city_refine[which(wa$city_refine %out% valid_city)])
+```
+
+``` r
+prog_table <- progress_table(
+  wa$recipient_city,
+  wa$city_norm,
+  wa$city_swap,
+  wa$city_refine,
+  compare = c(valid_city, other_cities)
+)
+prog_table$stage <- as_factor(prog_table$stage)
+```
+
+``` r
+kable(prog_table)
+```
+
+| stage           |  prop\_in | n\_distinct |  prop\_na | n\_out | n\_diff |
+| :-------------- | --------: | ----------: | --------: | -----: | ------: |
+| recipient\_city | 0.9788871 |        4059 | 0.1695864 |  14022 |    2041 |
+| city\_norm      | 0.9859656 |        3734 | 0.1702854 |   9313 |    1704 |
+| city\_swap      | 0.9939347 |        2464 | 0.1908662 |   3925 |     487 |
+| city\_refine    | 0.9940707 |        2434 | 0.1908662 |   3837 |     457 |
+
+``` r
+prog_table %>% 
+  ggplot(aes(x = stage, y = prop_in)) +
+  geom_col(fill = RColorBrewer::brewer.pal(3, "Dark2")[1]) +
+  geom_hline(yintercept = 0.99) +
+  coord_cartesian(ylim = c(.9, 1))
+```
+
+![](../plots/plot_prog_prop-1.png)<!-- -->
+
+``` r
+prog_table %>% 
+  mutate(n_good = n_distinct - n_diff) %>% 
+  rename(n_bad = n_diff) %>% 
+  pivot_longer(cols = c(n_good, n_bad)) %>% 
+  ggplot(aes(x = stage, y = value)) +
+  geom_col(aes(fill = name)) +
+  scale_fill_brewer(palette = "Set1")
+```
+
+![](../plots/plot_prog_distinct-1.png)<!-- -->
 
 ## Conclude
 
-1.  There are 768441 records in the database
-2.  There are 25924 records with duplicate filer, recipient, date, *and*
+1.  There are 799775 records in the database
+2.  There are 7960 records with duplicate filer, recipient, date, *and*
     amount (flagged with `dupe_flag`)
 3.  The ranges for dates and amounts are reasonable
 4.  Consistency in strings has been fixed with `city_prep()` and the
     `stringr` package
-5.  The five-digit `zip_clean` variable has been created with
+5.  The five-digit `zip_norm` variable has been created with
     `zipcode::clean.zipcode()`
 6.  The `expenditure_year` variable has been created with
     `lubridate::year()`
-7.  There are 20 records with missing `recipient_name` values and 352
+7.  There are 21 records with missing `recipient_name` values and 351
     records with missing `expenditure_date` values (both flagged with
     the `na_flag`)
 
 ## Write
 
 ``` r
+proc_dir <- here("wa", "expends", "data", "processed")
+dir_create(proc_dir)
+```
+
+``` r
 wa %>% 
+  rename(
+    address_clean = address_norm,
+    zip_clean = zip_norm,
+    state_clean = state_norm,
+    city_clean = city_refine
+  ) %>%
   select(
-    -recipient_zip,
-    -recipient_state,
-    -recipient_city,
-    -city_prep,
+    -recipient_location.type,
+    -city_norm,
     -city_match,
     -match_dist,
-    -city_swap,
-    -city_refine
+    -match_abb,
+    -city_swap
   ) %>% 
   write_csv(
-    path = here("wa_expends", "data", "raw", "wa_expends_clean.csv"),
+    path = glue("{proc_dir}/wa_expends_clean.csv"),
     na = ""
   )
 ```

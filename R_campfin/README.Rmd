@@ -1,0 +1,106 @@
+---
+output: github_document
+---
+
+# campfin
+
+This folder contains the [R project][rproj] for collecting and cleaning state-level campaign
+finance records.
+
+[rproj]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects
+
+## Structure
+
+To begin working on the R project, clone the `campfin` branch of this repository.
+
+```
+$ git clone -b campfin git@github.com:irworkshop/accountability_datacleaning.git
+```
+
+Then in [RStudio](https://www.rstudio.com/), open the `R_campfin.Rproj` file.
+
+Data is organized by state at the top level of the R project, with files organized by data type
+subdirectories (contributions, expenditures, lobbyists, etc). The [`fs`][fs] package is used to
+create and explore the additional subdirectories.
+
+1. `docs/` for diaries and keys
+1. `data/raw` for _immutable_ raw data
+1. `data/clean` for processed data
+1. `plots/` for exploratory graphics
+
+```{r ex_tree}
+fs::dir_tree("dc/contribs")
+```
+
+[fs]: https://github.com/r-lib/fs
+
+## Data
+
+Data is collected from the individual states. All data is public record, but not all data is easily
+accessible from the internet; some states provided data in bulk downloads while others deliver them
+in hard copy.
+
+## Process
+
+We are standardizing public data on a few key fields by thinking of each dataset row as a
+transaction. For each transaction there should be (at least) 3 variables:
+
+1. All **parties** to a transaction
+1. The **date** of the transaction
+1. Any **amount** of money involved
+
+Data manipulation follows the [IRW data cleaning guide][guide] to achieve the following objectives: 
+
+[guide]: https://github.com/irworkshop/accountability_datacleaning/blob/campfin/IRW_guides/data_check_guide.md
+
+1. How many records are in the database? Does it seem to be in the correct range?
+1. Check for duplicates in cases where true duplicates would be a problem. 
+1. Check ranges: Are numeric fields in ranges that make sense. Anything too high or too low?
+1. Is there anything blank or missing?
+1. Is there information in the wrong field?
+1. Check for consistency issues - particularly on city, state and ZIP.
+1. Create a five-digit ZIP Code if one does not exist.
+1. Create a four-digit `year` field from the transaction `date`.
+1. For campaign donation data, make sure there is both a donor _and_ recipient.
+
+The documents in each state's `docs/` folder record the entire process to promote for
+reproducibility and transparency. The `template_diary.Rmd` file can be used as a template for the
+typical process, which has the following steps:
+
+1. Describe
+1. Import
+1. Explore
+1. Wrangle
+1. Export
+
+## Software
+
+Software used is free and open source. R can be downloaded from a [CRAN mirror][cran]. 
+
+The [`campfin`][campfin] R package has been written by IRW to facilitate exploration and wrangling
+of campaign finance data. As of now, package needs to be installed directly from GitHub.
+
+```{r install_campfin, eval=FALSE}
+# install.packages("remotes")
+remotes::install_github("irworkshp/campfin")
+```
+
+Most cleaning is done using the [tidyverse][tidyverse], an opinionated collection of R packages
+which can be easily downloaded with:
+
+```{r install_tidyverse, eval=FALSE}
+install.packages("tidyverse")
+```
+
+[cran]: https://cran.r-project.org/mirrors.html
+[campfin]: https://github.com/irworkshop/campfin
+[tidyverse]: https://github.com/tidyverse
+
+## Help
+
+If you know of a dataset that you think belongs here, [suggest it for inclusion][help]. We're
+especially interested in the data that agencies have hidden behind "search portals" or state
+legislative exemptions. Have you scraped a gnarly records site? Share it with us and we'll credit
+you. And more importantly, other people may benefit from your hard work.
+
+[help]: https://www.publicaccountability.org/static/apps/submit/index.html

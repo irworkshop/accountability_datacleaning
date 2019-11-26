@@ -59,6 +59,7 @@ these results. The `pacman` package will facilitate their installation and attac
 
 ```{r p_load, message=FALSE, dfrning=FALSE, error=FALSE}
 if (!require("pacman")) install.packages("pacman")
+pacman::p_load_current_gh("kiernann/campfin")
 pacman::p_load(
   stringdist, # levenshtein value
   tidyverse, # data manipulation
@@ -73,24 +74,6 @@ pacman::p_load(
   here, # relative storage
   fs # search storage 
 )
-```
-
-```{r custom, echo=FALSE}
-# fix conflict
-here <- here::here
-# custom utility functions
-"%out%" <- Negate("%in%")
-print_all <- function(df) df %>% print(n = nrow(.)) 
-# source functions
-source(here("R", "code", "normalize_geo.R"))
-source(here("R", "code", "all_files_new.R"))
-source(here("R", "code", "glimpse_fun.R"))
-# load data
-data("zipcode")
-zipcode <-
-  as_tibble(zipcode) %>% 
-  select(city, state, zip) %>% 
-  mutate(city = normalize_city(city))
 ```
 
 This document should be run as part of the `R_campfin` project, which lives as a sub-directory of
@@ -310,25 +293,32 @@ ak <- ak %>% mutate(year = year(date))
 The `address` variable should be minimally cleaned by removing punctuation and fixing white-space.
 
 ```{r clean_address}
-ak <- ak %>% mutate(address_clean = normalize_address(recipient_address))
+ak <- ak %>% 
+  mutate(
+    normal_address = normal_address(
+      address = recipient_address,
+      add_abbs = usps,
+      na_rep = TRUE
+    )
+  )
 ```
 
 ### Zipcode
 
 ```{r clean_zipcodes, collapse=TRUE}
 # normalize character string
-ak <- ak %>% mutate(zip_clean = normalize_zip(recipient_zip, na_rep = TRUE))
+ak <- ak %>% mutate(zip_clean = normal_zip(recipient_zip, na_rep = TRUE))
 # remove foreign zips
 ak$zip_clean[which(ak$recipient_country != "USA")] <- NA
 # check improvement
-mean(ak$recipient_zip %in% zipcode$zip)
-mean(ak$zip_clean %in% zipcode$zip)
-unique(ak$zip_clean[ak$zip_clean %out% zipcode$zip])
+mean(ak$recipient_zip %in% valid_zip)
+mean(ak$zip_clean %in% valid_zip)
+unique(ak$zip_clean[ak$zip_clean %out% valid_zip])
 ```
 
 ```{r view_bad}
 ak %>% 
-  filter(zip_clean %out% zipcode$zip) %>% 
+  filter(zip_clean %out% valid_zip) %>% 
   filter(!is.na(zip_clean)) %>% 
   select(
     recipient_city,
@@ -348,23 +338,17 @@ convert between them.
 sample(ak$recipient_state, 10)
 ```
 
-```{r make_table}
-states <- tibble(
-  name = str_to_upper(c(state.name, "District of Columbia", "NSW", "Ontario", "British Columbia")),
-  abb = c(state.abb, "DC", "NW", "ON", "BC")
-)
-```
-
 ```{r abbreviate_states, collapse=TRUE}
-ak$state_clean <- ak$recipient_state
-for (i in seq_along(states$name)) {
-  ak$state_clean <- str_replace(
-    string = ak$state_clean,
-    pattern = states$name[i],
-    replacement = states$abb[i] 
+ak <- ak %>%
+  mutate(
+    state_clean = normal_state(
+      state = recipient_state,
+      na_rep = TRUE,
+      abbreviate = TRUE
+    )
   )
-}
-mean(na.omit(ak$state_clean) %in% states$abb)
+
+prop_in(ak$state_clean, valid_state)
 ```
 
 ### City
@@ -378,7 +362,6 @@ Cleaning city values is the most complicated. This process involves four steps:
 
 ```{r count_city, collapse=TRUE}
 n_distinct(ak$recipient_city)
-valid_city <- unique(zipcode$city)
 mean(ak$recipient_city %in% valid_city)
 ```
 
@@ -387,13 +370,14 @@ mean(ak$recipient_city %in% valid_city)
 ```{r prep_city, collapse=TRUE}
 ak <- ak %>% 
   mutate(
-    city_prep = normalize_city(
+    city_prep = normal_city(
       city = recipient_city %>% str_replace("^ANC$", "ANCHORAGE"),
-      state_abbs = c("AK", "ALASKA", "DC", "MA"),
-      geo_abbs = tibble(abv = c("PK", "ST"), rep = c("PARK", "SAINT")),
-      na = read_lines("R/data/na_city.csv")
+      st_abbs = c("AK", "ALASKA", "DC", "MA"),
+      geo_abbs = usps_city,
+      na = na_city
     )
   )
+
 n_distinct(ak$city_prep)
 mean(ak$city_prep %in% valid_city)
 ```
@@ -401,10 +385,9 @@ mean(ak$city_prep %in% valid_city)
 #### Swap
 
 ```{r match_dist, collapse=TRUE}
-ak$city_match <- NULL
 ak <- ak %>%
   left_join(
-    zipcode,
+    geo,
     by = c("zip_clean" = "zip")
   ) %>%
   rename(city_match = city) %>%
@@ -423,7 +406,15 @@ n_distinct(ak$city_swap)
 mean(ak$city_swap %in% valid_city)
 ```
 
-Each step of the cleaning process reduces the number of distinct city values.
+#### Lookup
+
+```{r}
+lookup <- read_csv(file = here("ak", "expends", "data", "ak_city_lookup.csv"))
+lookup <- select(lookup, city_swap, city_new)
+ak <- left_join(ak, lookup)
+n_distinct(ak$city_new)
+prop_in(ak$city_new, valid_city)
+```
 
 ## Conclude
 
@@ -448,7 +439,8 @@ ak %>%
    -recipient_city,
    -city_prep,
    -city_match,
-   -match_dist
+   -match_dist,
+   -city_swap
   ) %>% 
   write_csv(
     path = "ak/expends/data/processed/ak_expends_clean.csv",

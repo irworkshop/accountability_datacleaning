@@ -1,16 +1,7 @@
 Florida Expenditures
 ================
 Kienan Nicholls
-2019-07-10 16:16:33
-
-  - [Project](#project)
-  - [Objectives](#objectives)
-  - [Packages](#packages)
-  - [Data](#data)
-  - [Import](#import)
-  - [Explore](#explore)
-  - [Clean](#clean)
-  - [Export](#export)
+2019-10-17 17:11:49
 
 ## Project
 
@@ -37,8 +28,8 @@ objectives:
 3.  Check ranges
 4.  Is there anything blank or missing?
 5.  Check for consistency issues
-6.  Create a five-digit `zip` Code variable
-7.  Create a `year` variable from the transaction date
+6.  Create a five-digit ZIP Code called `ZIP5`
+7.  Create a `YEAR` field from the transaction date
 8.  Make sure there is data on both parties to a transaction
 
 ## Packages
@@ -47,19 +38,25 @@ The following packages are needed to collect, manipulate, visualize,
 analyze, and communicate these results. The `pacman` package will
 facilitate their installation and attachment.
 
+The IRW’s `campfin` package will also have to be installed from GitHub.
+This package contains functions custom made to help facilitate the
+processing of campaign finance data.
+
 ``` r
 if (!require("pacman")) install.packages("pacman")
+pacman::p_load_current_gh("irworkshop/campfin")
 pacman::p_load(
   stringdist, # levenshtein value
-  tidyverse, # data manipulation
   RSelenium, # remote browser
+  tidyverse, # data manipulation
   lubridate, # datetime strings
   tidytext, # string analysis
   magrittr, # pipe opperators
   janitor, # dataframe clean
-  zipcode, # clean & database
   refinr, # cluster and merge
+  scales, # format strings
   knitr, # knit documents
+  vroom, # read files fast
   glue, # combine strings
   here, # relative storage
   fs # search storage 
@@ -79,7 +76,7 @@ feature and should be run as such. The project also uses the dynamic
 ``` r
 # where dfs this document knit?
 here::here()
-#> [1] "/home/ubuntu/R/accountability_datacleaning/R_campfin"
+#> [1] "/home/kiernan/R/accountability_datacleaning/R_campfin"
 ```
 
 ## Data
@@ -213,7 +210,7 @@ remote_browser$findElement("css", limit_box)$clearElement()
 
 # enter Jan 1 2008 as start date
 date_box <- "div.indent:nth-child(2) > input:nth-child(1)"
-remote_browser$findElement("css", )$sendKeysToElement(list("01/01/2008"))
+remote_browser$findElement("css", date_box)$sendKeysToElement(list("01/01/2008"))
 
 # chose "txt" as export option
 txt_button <- "ul.noBullet:nth-child(70) > li:nth-child(2) > input:nth-child(1)"
@@ -283,7 +280,7 @@ tail(fl)
 glimpse(fl)
 ```
 
-    #> Observations: 814,775
+    #> Observations: 939,372
     #> Variables: 8
     #> $ candidate_committee <chr> "ACKERMAN, PAUL J (REP)(STR)", "ADKINS, JANET H. (REP)(STR)", "FLORI…
     #> $ date                <date> 2008-01-01, 2008-01-01, 2008-01-01, 2008-01-01, 2008-01-01, 2008-01…
@@ -300,26 +297,30 @@ We can explore the least distinct variables with `ggplot::geom_bar()` or
 perform tidytext analysis on complex character strings.
 
 ``` r
-fl %>% glimpse_fun(n_distinct)
+glimpse_fun(fl, n_distinct)
 ```
 
     #> # A tibble: 8 x 4
-    #>   var                 type       n         p
-    #>   <chr>               <chr>  <int>     <dbl>
-    #> 1 candidate_committee chr     6830 0.00838  
-    #> 2 date                date    3757 0.00461  
-    #> 3 amount              dbl   109834 0.135    
-    #> 4 payee_name          chr   191917 0.236    
-    #> 5 address             chr   223179 0.274    
-    #> 6 city_state_zip      chr    22714 0.0279   
-    #> 7 purpose             chr   125610 0.154    
-    #> 8 type                chr       28 0.0000344
+    #>   col                 type       n         p
+    #>   <chr>               <chr>  <dbl>     <dbl>
+    #> 1 candidate_committee chr     6885 0.00733  
+    #> 2 date                date    4324 0.00460  
+    #> 3 amount              dbl   119588 0.127    
+    #> 4 payee_name          chr   212959 0.227    
+    #> 5 address             chr   246861 0.263    
+    #> 6 city_state_zip      chr    24546 0.0261   
+    #> 7 purpose             chr   141114 0.150    
+    #> 8 type                chr       19 0.0000202
 
 ![](../plots/type_bar-1.png)<!-- -->
 
 ![](../plots/purpose_bar-1.png)<!-- -->
 
 ### Continuous
+
+``` r
+fl <- mutate(fl, year = year(date))
+```
 
 ![](../plots/amount_hist-1.png)<!-- -->
 
@@ -329,35 +330,15 @@ fl %>% glimpse_fun(n_distinct)
 
 ### Duplicates
 
-The `janitor::get_dupes()` function can locate records with duplicate
-values across every variable.
+The `flag_dupes()` function can flag records with duplicate values
+across every variable.
 
 ``` r
-fl_dupes <- fl %>% 
-  get_dupes() %>% 
-  distinct() %>% 
-  mutate(dupe_flag = TRUE)
-
-nrow(fl_dupes)
-#> [1] 6573
-mean(fl_dupes$dupe_count)
-#> [1] 2.444698
-max(fl_dupes$dupe_count)
-#> [1] 50
-sum(fl_dupes$dupe_count)
-#> [1] 16069
-```
-
-This data frame of duplicate records can then be flagged on the original
-database.
-
-``` r
-fl <- fl %>% 
-  left_join(fl_dupes) %>% 
-  mutate(
-    dupe_count = if_else(is.na(dupe_count), 0L, dupe_count),
-    dupe_flag = !is.na(dupe_flag)
-    )
+fl <- flag_dupes(fl, everything())
+sum(fl$dupe_flag)
+#> [1] 10609
+mean(fl$dupe_flag)
+#> [1] 0.01129372
 ```
 
 ### Missing
@@ -365,31 +346,32 @@ fl <- fl %>%
 There are a number of rows missing key information.
 
 ``` r
-fl %>% glimpse_fun(count_na)
+glimpse_fun(fl, count_na)
 ```
 
     #> # A tibble: 10 x 4
-    #>    var                 type      n         p
-    #>    <chr>               <chr> <int>     <dbl>
+    #>    col                 type      n         p
+    #>    <chr>               <chr> <dbl>     <dbl>
     #>  1 candidate_committee chr       0 0        
-    #>  2 date                date      9 0.0000110
-    #>  3 amount              dbl      11 0.0000135
-    #>  4 payee_name          chr      42 0.0000515
-    #>  5 address             chr     783 0.000961 
-    #>  6 city_state_zip      chr       9 0.0000110
-    #>  7 purpose             chr     243 0.000298 
-    #>  8 type                chr      15 0.0000184
-    #>  9 dupe_count          int       0 0        
+    #>  2 date                date      0 0        
+    #>  3 amount              dbl       0 0        
+    #>  4 payee_name          chr      47 0.0000500
+    #>  5 address             chr     914 0.000973 
+    #>  6 city_state_zip      chr       0 0        
+    #>  7 purpose             chr     282 0.000300 
+    #>  8 type                chr       0 0        
+    #>  9 year                dbl       0 0        
     #> 10 dupe_flag           lgl       0 0
 
-These rows will be flagged with a new `na_flag` variable.
+The `flag_na()` function can flag records missing values key values in
+any key variable.
 
 ``` r
-fl <- fl %>% 
-  mutate(
-    na_flag = is.na(candidate_committee) | is.na(date) | is.na(amount) | is.na(payee_name)
-  )
+fl <- flag_na(fl, payee_name, candidate_committee, date, amount)
+sum(fl$na_flag)
 ```
+
+    #> [1] 47
 
 ## Clean
 
@@ -418,102 +400,116 @@ The database seems to use repeating astricks characters as `NA` values.
 We can remove any value with a single repeating character.
 
 ``` r
-fl %<>% mutate(address_clean = normalize_address(address, na_rep = TRUE))
+fl <- fl %>% 
+  mutate(
+    address_clean = normal_address(
+      address = address,
+      add_abbs = usps_street,
+      na_rep = TRUE
+    )
+  )
 ```
 
 ### Zip
 
 ``` r
 sample(fl$zip_sep[which(nchar(fl$zip_sep) != 5)], 10)
-#>  [1] "0059" ""     "403"  "3231" "500"  "613"  "752"  "T2G"  "3367" "613"
+#>  [1] "3278" "3225" "3316" "613"  "3337" "70"   "613"  "CP"   "3607" "3378"
 ```
 
 ``` r
-fl %<>% mutate(zip_clean = normalize_zip(zip_sep, na_rep = TRUE))
+fl <- fl %>% mutate(zip_clean = normal_zip(zip_sep, na_rep = TRUE))
 ```
+
+``` r
+progress_table(
+  fl$zip_sep,
+  fl$zip_clean,
+  compare = valid_zip
+)
+```
+
+    #> # A tibble: 2 x 6
+    #>   stage     prop_in n_distinct prop_na n_out n_diff
+    #>   <chr>       <dbl>      <dbl>   <dbl> <dbl>  <dbl>
+    #> 1 zip_sep     0.994      10773  0.0200  5353   1545
+    #> 2 zip_clean   0.996      10630  0.0238  3309   1294
 
 ### State
 
 ``` r
-valid_state <- c(unique(zipcode$state), "ON", "BC", "QC", "NB", "AB")
-n_distinct(fl$state_sep)
-#> [1] 138
-mean(fl$state_sep %in% valid_state)
-#> [1] 0.9954699
-sum(fl$state_sep %out% valid_state)
-#> [1] 3691
-sample(unique(na.omit(fl$state_sep[fl$state_sep %out% valid_state])), 20)
-#>  [1] "PL"        "AUSTRALIA" "33"        "BOCA"      "32"        "LN"        "XX"       
-#>  [8] "THE"       "BA"        "CL"        "TOKYO"     "ALBERTA"   "ONTARIO"   "FF"       
-#> [15] "NSW"       "DD"        "KENT"      "BRITISH"   "M"         "FLORIDA"
-```
-
-``` r
-fl %<>% mutate(
-  state_clean = normalize_state(
+fl <- fl %>% mutate(
+  state_clean = normal_state(
     state = state_sep,
-    expand = TRUE,
-    na = c("", "XC")
+    abbreviate = TRUE,
+    valid = NULL
   )
 )
 ```
 
 ``` r
-unique(fl$state_clean[which(fl$state_clean %out% valid_state)])
-#>  [1] NA   "F"  "NW" "CN" "MM" "KE" "3"  "FK" "B"  "SU" "M"  "BE" "TR" "NA" "MY" "DD" "AU" "PE" "W" 
-#> [20] "2"  "BA" "CL" "DR" "QU" "LN" "PQ" "41" "PL" "NL" "HO" "VG" "XX" "*"  "IS" "SA" "CH" "BR" "BO"
-#> [39] "HA" "NS" "ST" "SO" "V"  "JO" "PO" "HM" "TH" "WE" "UK" "XE" "GE" "FF" "FR" "TO"
-fl$state_clean[which(fl$state_clean == "F")] <- "FL"
-fl$state_clean[which(fl$state_clean %out% valid_state)] <- NA
-n_distinct(fl$state_clean)
-#> [1] 61
+progress_table(
+  fl$state_sep,
+  fl$state_clean,
+  compare = valid_state
+)
+```
+
+    #> # A tibble: 2 x 6
+    #>   stage       prop_in n_distinct prop_na n_out n_diff
+    #>   <chr>         <dbl>      <dbl>   <dbl> <dbl>  <dbl>
+    #> 1 state_sep     0.999        142 0.00384   926     87
+    #> 2 state_clean   0.999        130 0.00391   838     75
+
+``` r
+fl %>% 
+  filter(state_clean %out% valid_state) %>% 
+  count(state_clean, sort = TRUE)
+```
+
+    #> # A tibble: 75 x 2
+    #>    state_clean     n
+    #>    <chr>       <int>
+    #>  1 <NA>         3675
+    #>  2 XC            335
+    #>  3 F              86
+    #>  4 ON             86
+    #>  5 PETERSBURG     45
+    #>  6 MM             33
+    #>  7 CL             31
+    #>  8 BC             29
+    #>  9 NB             23
+    #> 10 QC             21
+    #> # … with 65 more rows
+
+``` r
+fl$state_clean <- str_replace(fl$state_clean, "^F$", "FL")
+fl$state_clean <- na_out(fl$state_clean, valid_state)
 ```
 
 ### City
 
 ``` r
-valid_city <- unique(zipcode$city)
-
-n_distinct(fl$city_sep)
-#> [1] 7622
-
-mean(fl$city_sep %in% valid_city)
-#> [1] 0.8806603
-
-sum(fl$city_sep %out% valid_city)
-#> [1] 97235
-
-sample(unique(na.omit(fl$city_sep[fl$city_sep %out% valid_city])), 20)
-#>  [1] "COCO BEACH"      "SEDALIA,"        "MARY ESTER"      "IRWINDALE"       "ST AUGISTINE"   
-#>  [6] "BLOUTSTOWN"      "AVENURA"         "TALALHASSEE"     "ST; PETERSBURG"  "BINYAMINA"      
-#> [11] "MINNEAPOLIS,"    "QIUNCY"          "ALTANTIS"        "7TH FLOOR"       "ST. PAETERSBURG"
-#> [16] "HALENDALE"       "KEY LARGE"       "WILLIMGTON"      "STILL WATER"     "TITUSVILLLE"
-```
-
-### Normalize
-
-``` r
 fl <- fl %>% 
   mutate(
-    city_norm = normalize_city(
+    city_norm = normal_city(
       city = city_sep,
-      na_rep = TRUE,
-      state_abbs = c("FL", "DC"),
-      geo_abbs = read_csv(here("R", "data", "city_abvs.csv"))
+      na = invalid_city,
+      st_abbs = c("FL", "DC"),
+      geo_abbs = usps_city,
+      na_rep = TRUE
     )
   )
 
 n_distinct(fl$city_norm)
 ```
 
-    #> [1] 7013
-
-### Match
+    #> [1] 7442
 
 ``` r
 fl <- fl %>% 
   left_join(
-    y = zipcode, 
+    y = zipcodes, 
     by = c(
       "zip_clean" = "zip", 
       "state_clean" = "state"
@@ -522,14 +518,13 @@ fl <- fl %>%
   rename(city_match = city)
 ```
 
-### Swap
-
 ``` r
 fl <- fl %>% 
   mutate(
-    match_dist = stringdist(city_norm, city_match),
+    match_abb = is_abbrev(city_norm, city_match),
+    match_dist = str_dist(city_norm, city_match),
     city_swap = if_else(
-      condition = match_dist <= 2,
+      condition = match_abb | match_dist <= 2,
       true = city_match,
       false = city_norm
     )
@@ -539,21 +534,13 @@ summary(fl$match_dist)
 ```
 
     #>    Min. 1st Qu.  Median    Mean 3rd Qu.    Max.    NA's 
-    #>   0.000   0.000   0.000   1.171   0.000  20.000   23522
+    #>    0.00    0.00    0.00    1.16    0.00   22.00   29735
 
 ``` r
 sum(fl$match_dist == 1, na.rm = TRUE)
 ```
 
-    #> [1] 6699
-
-``` r
-n_distinct(fl$city_swap)
-```
-
-    #> [1] 4896
-
-### Refine
+    #> [1] 7688
 
 ``` r
 fl_refine <- fl %>% 
@@ -563,7 +550,15 @@ fl_refine <- fl %>%
       key_collision_merge() %>% 
       n_gram_merge()
   ) %>% 
-  filter(city_refine != city_swap)
+  filter(city_refine != city_swap) %>% 
+  inner_join(
+    y = zipcodes, 
+    by = c(
+      "city_swap" = "city",
+      "zip_clean" = "zip", 
+      "state_clean" = "state"
+    )
+  )
 
 fl_refine %>% 
   count(
@@ -573,20 +568,10 @@ fl_refine %>%
   )
 ```
 
-    #> # A tibble: 189 x 3
-    #>    city_swap           city_refine               n
-    #>    <chr>               <chr>                 <int>
-    #>  1 SPRINGHILL          SPRING HILL              32
-    #>  2 GREEN ACRES         GREENACRES               22
-    #>  3 LAUDERDALE BYTHESEA LAUDERDALE BY THE SEA    18
-    #>  4 HALLANDALE BEAC     HALLANDALE BEACH         16
-    #>  5 ANNA MARIA          MARIANNA                 15
-    #>  6 BAY HARBOR ISLAND   BAY HARBOR ISLANDS       15
-    #>  7 MIAMII GARDENS      MIAMI GARDENS            13
-    #>  8 LAKE BUENA VIST     LAKE BUENA VISTA         10
-    #>  9 PASADENA            S PASADENA                9
-    #> 10 CHAMPIONSGATE       CHAMPIONS GATE            8
-    #> # … with 179 more rows
+    #> # A tibble: 1 x 3
+    #>   city_swap  city_refine     n
+    #>   <chr>      <chr>       <int>
+    #> 1 ANNA MARIA MARIANNA       15
 
 ``` r
 fl <- fl %>% 
@@ -594,16 +579,106 @@ fl <- fl %>%
   mutate(city_clean = coalesce(city_refine, city_swap))
 ```
 
+We will check a few remaining cities by hand. The 20 most common cities
+not in `valid_city` are actually valid cities.
+
 ``` r
-n_distinct(fl$city_sep)
-#> [1] 7622
-n_distinct(fl$city_norm)
-#> [1] 7013
-n_distinct(fl$city_swap)
-#> [1] 4896
-n_distinct(fl$city_clean)
-#> [1] 4709
+bad_city <- fl$city_clean[which(fl$city_clean %out% valid_city)]
+more_city <- most_common(bad_city, n = 20)
+print(more_city)
 ```
+
+    #>  [1] "CORAL GABLES"       "DORAL"              "PLANTATION"         "CORAL SPRINGS"     
+    #>  [5] "PALM BEACH GARDENS" "DAVIE"              "MIAMI GARDENS"      "SOUTH MIAMI"       
+    #>  [9] "RIVIERA BEACH"      "SUNRISE"            "MIAMI LAKES"        "MIRAMAR"           
+    #> [13] "AVENTURA"           "COCONUT GROVE"      "LAUDERHILL"         "TEMPLE TERRACE"    
+    #> [17] "ROYAL PALM BEACH"   "COCONUT CREEK"      "WILTON MANORS"      "MIAMI SPRINGS"
+
+``` r
+progress <-
+  progress_table(
+    fl$city_sep,
+    fl$city_norm,
+    fl$city_swap,
+    fl$city_clean,
+    compare = c(valid_city, more_city)
+  ) %>% 
+  mutate(stage = as_factor(stage))
+```
+
+    #> # A tibble: 4 x 6
+    #>   stage      prop_in n_distinct  prop_na n_out n_diff
+    #>   <fct>        <dbl>      <dbl>    <dbl> <dbl>  <dbl>
+    #> 1 city_sep     0.929       8152 0        66785   4491
+    #> 2 city_norm    0.965       7442 0.000130 32752   3753
+    #> 3 city_swap    0.980       4990 0.0317   17979   1373
+    #> 4 city_clean   0.980       4990 0.0317   17979   1373
+
+You can see how the percentage of valid values increased with each
+stage.
+
+![](../plots/progress_bar-1.png)<!-- -->
+
+More importantly, the number of distinct values decreased each stage. We
+were able to confidently change many distinct invalid values to their
+valid equivilent.
+
+``` r
+progress %>% 
+  select(
+    stage, 
+    all = n_distinct,
+    bad = n_diff
+  ) %>% 
+  mutate(good = all - bad) %>% 
+  pivot_longer(c("good", "bad")) %>% 
+  mutate(name = name == "good") %>% 
+  ggplot(aes(x = stage, y = value)) +
+  geom_col(aes(fill = name)) +
+  scale_fill_brewer(palette = "Dark2") +
+  scale_y_continuous(labels = comma) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "Florida City Normalization Progress",
+    subtitle = "Distinct values, valid and invalid",
+    x = "Stage",
+    y = "Percent Valid",
+    caption = "Source: Florida Dept. of State",
+    fill = "Valid"
+  )
+```
+
+![](../plots/distinct_bar-1.png)<!-- -->
+
+## Lookup
+
+If there is a lookup file, we can add that stage
+too.
+
+``` r
+lookup_file <- here("fl", "expends", "data", "fl_expends_city_lookup.csv")
+if (file.exists(lookup_file)) {
+  lookup <- read_csv(lookup_file) %>% clean_names()
+  fl <- left_join(fl, select(lookup, 1, 2))
+  progress_table(
+    fl$city_sep,
+    fl$city_norm,
+    fl$city_swap,
+    fl$city_clean,
+    fl$city_clean2,
+    compare = c(valid_city, more_city)
+  ) 
+}
+```
+
+    #> # A tibble: 5 x 6
+    #>   stage       prop_in n_distinct  prop_na n_out n_diff
+    #>   <chr>         <dbl>      <dbl>    <dbl> <dbl>  <dbl>
+    #> 1 city_sep      0.924       8152 0        73929   4491
+    #> 2 city_norm     0.961       7442 0.000252 38204   3753
+    #> 3 city_swap     0.980       4990 0.0614   17979   1373
+    #> 4 city_clean    0.980       4990 0.0614   17979   1373
+    #> 5 city_clean2   0.982       4057 0.0626   16505    636
 
 ## Export
 
@@ -612,7 +687,6 @@ clean_dir <- here("fl", "expends", "data", "processed")
 dir_create(clean_dir)
 fl %>% 
   select(
-    -address,
     -city_state_zip,
     -city_sep,
     -state_sep,
@@ -620,7 +694,9 @@ fl %>%
     -city_norm,
     -city_match,
     -match_dist,
-    -city_swap
+    -match_abb,
+    -city_swap,
+    -city_refine
   ) %>% 
   write_csv(
     path = glue("{clean_dir}/fl_expends_clean.csv"),

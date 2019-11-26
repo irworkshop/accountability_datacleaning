@@ -1,99 +1,92 @@
----
-title: "Data Diary"
-subtitle: "Vermont Expenditures"
-author: "Kiernan Nicholls"
-date: "2019-06-25 12:20:17"
-output:
-  html_document: 
-    df_print: tibble
-    fig_caption: yes
-    highlight: tango
-    keep_md: yes
-    max.print: 32
-    toc: yes
-    toc_float: no
-editor_options: 
-  chunk_output_type: console
----
-
-
+Vermont Expenditures
+================
+Kiernan Nicholls
+2019-11-11 12:12:06
 
 ## Objectives
 
-1. How many records are in the database?
-1. Check for duplicates
-1. Check ranges
-1. Is there anything blank or missing?
-1. Check for consistency issues
-1. Create a five-digit ZIP Code called ZIP5
-1. Create a YEAR field from the transaction date
-1. For campaign donation data, make sure there is both a donor AND recipient
+1.  How many records are in the database?
+2.  Check for duplicates
+3.  Check ranges
+4.  Is there anything blank or missing?
+5.  Check for consistency issues
+6.  Create a five-digit ZIP Code called ZIP5
+7.  Create a YEAR field from the transaction date
+8.  For campaign donation data, make sure there is both a donor AND
+    recipient
 
 ## Packages
 
-The following packages are needed to collect, manipulate, visualize, analyze, and communicate
-these results. The `pacman` package will facilitate their installation and attachment.
+The following packages are needed to collect, manipulate, visualize,
+analyze, and communicate these results. The `pacman` package will
+facilitate their installation and attachment.
 
-
-```r
+``` r
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load_gh("irworkshop/campfin")
 pacman::p_load(
+  snakecase, # change string case
   tidyverse, # data manipulation
   lubridate, # datetime strings
+  tidytext, # text analysis
   magrittr, # pipe opperators
   janitor, # dataframe clean
-  zipcode, # clean & databse
-  batman, # parse yes & no
-  refinr, # cluster & merge
-  rvest, # scrape website
+  batman, # rep(NA, 8) Batman!
+  refinr, # cluster and merge
+  scales, # format strings
   knitr, # knit documents
-  here, # locate storage
+  rvest, # scrape HTML pages
+  vroom, # read files fast
+  glue, # combine strings
+  here, # relative storage
+  httr, # http query
   fs # search storage 
 )
 ```
 
+This document should be run as part of the `R_campfin` project, which
+lives as a sub-directory of the more general, language-agnostic
+`irworkshop/accountability_datacleaning` [GitHub
+repository](https://github.com/irworkshop/accountability_datacleaning).
 
+The `R_campfin` project uses the [RStudio
+projects](https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects)
+feature and should be run as such. The project also uses the dynamic
+[`here::here()`](https://github.com/jennybc/here_here) tool for file
+paths relative to *your* machine.
 
-This document should be run as part of the `R_campfin` project, which lives as a sub-directory
-of the more general, language-agnostic `irworkshop/accountability_datacleaning` 
-[GitHub repository](https://github.com/irworkshop/accountability_datacleaning).
-
-The `R_campfin` project uses the 
-[RStudio projects](https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects)
-feature and should be run as such. The project also uses the dynamic 
-[`here::here()`](https://github.com/jennybc/here_here) tool for
-file paths relative to _your_ machine.
-
-
-```r
+``` r
 # where was this document knit?
 here::here()
-#> [1] "/home/ubuntu/R/accountability_datacleaning/R_campfin"
+#> [1] "/home/kiernan/R/accountability_datacleaning/R_campfin"
 ```
 
 ## Data
 
 > Definition of Expenditure - 17 V.S.A. 2901(7)
 > 
-> Expenditure means a payment, disbursement, distribution, advance deposit, loan, or gift of money,
-or anything of value paid or promised to be paid for the purpose of influencing an election,
-advocating a position on a public question, or supporting or opposing one or more candidates. As
-used in this chapter, expenditure shall not include any of the following:
+> Expenditure means a payment, disbursement, distribution, advance
+> deposit, loan, or gift of money, or anything of value paid or promised
+> to be paid for the purpose of influencing an election, advocating a
+> position on a public question, or supporting or opposing one or more
+> candidates. As used in this chapter, expenditure shall not include any
+> of the following:
 > 
-> 1. A personal loan of money to a candidate from a lending institution made in the ordinary course
-> of business;
-> 2. Services provided without compensation by individuals volunteering their time on behalf of a
-> candidate, political committee, or political party;
-> 3. Unreimbursed travel expenses paid for by an individual for himself or herself, who volunteers
-> personal services to a candidate; or
-> 4. Unreimbursed campaign-related travel expenses, paid for by the candidate or the candidates
-> spouse.
+> 1.  A personal loan of money to a candidate from a lending institution
+>     made in the ordinary course of business;
+> 2.  Services provided without compensation by individuals volunteering
+>     their time on behalf of a candidate, political committee, or
+>     political party;
+> 3.  Unreimbursed travel expenses paid for by an individual for himself
+>     or herself, who volunteers personal services to a candidate; or
+> 4.  Unreimbursed campaign-related travel expenses, paid for by the
+>     candidate or the candidates spouse.
 
 ## Read
 
-
-```r
+``` r
 vt <- 
-  here("vt_expends", "data", "raw", "ViewExpenditureList.csv") %>% 
+  here("vt", "expends", "data", "raw", "ViewExpenditureList.csv") %>% 
   read_csv(
     col_types = cols(
       .default = col_character(),
@@ -108,74 +101,63 @@ vt <-
   rownames_to_column("id")
 ```
 
-## Explore 
+## Explore
 
 ## Explore
 
-There are 39572 records of 15 variables in the full database.
+There are 40280 records of 15 variables in the full database.
 
-
-```r
+``` r
 glimpse(sample_frac(vt))
 ```
 
-```
-#> Observations: 39,572
-#> Variables: 15
-#> $ id                  <chr> "14381", "6907", "13574", "6158", "4917", "2505", "6577", "32138", "…
-#> $ transaction_date    <date> 2017-03-07, 2018-08-22, 2017-07-23, 2018-09-07, 2018-09-28, 2018-10…
-#> $ payee_type          <chr> "FAMILY", "CANDIDATE", "BUSINESS/GROUP/ORGANIZATION", "BUSINESS/GROU…
-#> $ payee_name          <chr> "ALLAIRE, AUDREY", "ROBIN CHESNUT-TANGERMAN FOR STATE REPRESENTATIVE…
-#> $ payee_address       <chr> "51 CHURCH STREET, RUTLAND, VT 05701", "72 SUNDOG LN, MIDDLETOWN SPR…
-#> $ registrant_name     <chr> "ALLAIRE, DAVID W.", "RUTLAND COUNTY DEMOCRATIC PARTY", "HOWARD, MAR…
-#> $ registrant_type     <chr> "CANDIDATE", "POLITICAL PARTY COMMITTEE", "CANDIDATE", "CANDIDATE", …
-#> $ office              <chr> "MAYOR -", NA, "STATE REPRESENTATIVE - RUTLAND 5-3", "STATE REPRESEN…
-#> $ election_cycle      <chr> "2017 ANNUAL MEETING (ALL TOWNS)", "2018 GENERAL", "2018 GENERAL", "…
-#> $ reporting_period    <date> 2017-03-21, 2018-09-01, 2018-03-15, 2018-10-01, 2018-10-01, 2018-11…
-#> $ expenditure_type    <chr> "MONETARY", "MONETARY", "MONETARY", "MONETARY", "MONETARY", "MONETAR…
-#> $ expenditure_purpose <chr> "PARTY EXP - ELECTION NIGHT", "CONTRIBUTION TO REGISTRANT", "PRINTIN…
-#> $ expenditure_amount  <dbl> 300.00, 150.00, 270.30, 186.56, 397.50, 35.00, 1209.10, 214.50, 30.5…
-#> $ public_question     <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
-#> $ comments            <chr> NA, NA, NA, NA, NA, NA, "SALARY", "MISTAKENLY POSTED TO LT. GOV. CAM…
-```
+    #> Observations: 40,280
+    #> Variables: 15
+    #> $ id                  <chr> "583", "29934", "12850", "4003", "696", "8952", "31449", "31622", "2…
+    #> $ transaction_date    <date> 2019-02-23, 2016-06-27, 2018-02-14, 2018-10-19, 2019-02-15, 2018-07…
+    #> $ payee_type          <chr> "BUSINESS/GROUP/ORGANIZATION", "BUSINESS/GROUP/ORGANIZATION", "BUSIN…
+    #> $ payee_name          <chr> "SOUTH STREET CAFE", "SHELL SERVICE STATION", "SIGNS ON THE CHEAP", …
+    #> $ payee_address       <chr> "105 SOUTH ST, BENNINGTON, VT 05201", "18 SYKES MTN AVE, WHITE RIVER…
+    #> $ registrant_name     <chr> "SCULLY, WILLIAM", "DUNNE, MATT", "ROZZI, MICHAEL", "BRAY, CHRISTOPH…
+    #> $ registrant_type     <chr> "CANDIDATE", "CANDIDATE", "CANDIDATE", "PUBLIC MEDIA ACTIVITIES", "C…
+    #> $ office              <chr> "SELECTPERSON -", "GOVERNOR", "SCHOOL DIRECTOR -", NA, "WARD CLERK -…
+    #> $ election_cycle      <chr> "2019 ANNUAL MEETING (ALL TOWNS)", "2016 GENERAL", "2018 ANNUAL MEET…
+    #> $ reporting_period    <date> 2019-03-01, 2016-07-15, 2018-02-24, 2018-11-20, 2019-02-23, 2018-08…
+    #> $ expenditure_type    <chr> "MONETARY", "MONETARY", "MONETARY", "MONETARY", "MONETARY", "MONETAR…
+    #> $ expenditure_purpose <chr> "FUNDRAISER - FOOD &AMP; BEVERAGE", "STAFF - GAS", "YARD SIGNS", "ME…
+    #> $ expenditure_amount  <dbl> 150.00, 30.79, 224.11, 795.00, 145.00, 23.67, 461.53, 87.39, 0.18, 1…
+    #> $ public_question     <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
+    #> $ comments            <chr> NA, "GAS", NA, NA, NA, NA, NA, "OFFICE SUPPLIES", NA, NA, NA, "FB AD…
 
 ### Distinct
 
 The variables range in their degree of distinctness.
 
-
-```r
-vt %>% 
-  map(n_distinct) %>% 
-  unlist() %>% 
-  enframe(name = "variable", value = "n_distinct") %>% 
-  mutate(prop_distinct = round(n_distinct / nrow(vt), 4)) %>%
-  print(n = length(vt))
+``` r
+glimpse_fun(vt, n_distinct)
 ```
 
-```
-#> # A tibble: 15 x 3
-#>    variable            n_distinct prop_distinct
-#>    <chr>                    <int>         <dbl>
-#>  1 id                       39572      1       
-#>  2 transaction_date          1728      0.0437  
-#>  3 payee_type                  10      0.000300
-#>  4 payee_name                6874      0.174   
-#>  5 payee_address             9370      0.237   
-#>  6 registrant_name            812      0.0205  
-#>  7 registrant_type              7      0.0002  
-#>  8 office                     170      0.0043  
-#>  9 election_cycle              15      0.0004  
-#> 10 reporting_period            60      0.0015  
-#> 11 expenditure_type             4      0.0001  
-#> 12 expenditure_purpose         86      0.0022  
-#> 13 expenditure_amount       12632      0.319   
-#> 14 public_question             11      0.000300
-#> 15 comments                  6750      0.171
-```
+    #> # A tibble: 15 x 4
+    #>    col                 type      n         p
+    #>    <chr>               <chr> <dbl>     <dbl>
+    #>  1 id                  chr   40280 1        
+    #>  2 transaction_date    date   1822 0.0452   
+    #>  3 payee_type          chr      10 0.000248 
+    #>  4 payee_name          chr    6938 0.172    
+    #>  5 payee_address       chr    9456 0.235    
+    #>  6 registrant_name     chr     816 0.0203   
+    #>  7 registrant_type     chr       7 0.000174 
+    #>  8 office              chr     170 0.00422  
+    #>  9 election_cycle      chr      15 0.000372 
+    #> 10 reporting_period    date     62 0.00154  
+    #> 11 expenditure_type    chr       4 0.0000993
+    #> 12 expenditure_purpose chr      86 0.00214  
+    #> 13 expenditure_amount  dbl   12769 0.317    
+    #> 14 public_question     chr      11 0.000273 
+    #> 15 comments            chr    6876 0.171
 
-We can use `ggplot2::geom_bar()` to explore the distribution of these least distinct nominal
-values.
+We can use `ggplot2::geom_bar()` to explore the distribution of these
+least distinct nominal values.
 
 ![](../plots/plot_payee_type-1.png)<!-- -->
 
@@ -191,122 +173,109 @@ values.
 
 ### Duplicate
 
-We can use `janitor::get_dupes()` to create a new table of records with duplicate values across
-all rows. We will flag these with a new `dupe_flag` variable and join them back to the original
-data.
+There are a significant number of duplicate records.
 
-
-```r
-vt_dupes <- vt %>% 
-  select(-id) %>% 
-  get_dupes() %>% 
-  select(-dupe_count) %>% 
-  mutate(dupe_flag = TRUE) %>% 
-  distinct()
-
-vt <- vt %>% 
-  left_join(vt_dupes) %>% 
-  mutate(dupe_flag = !is.na(dupe_flag))
+``` r
+vt <- flag_dupes(vt, -id)
+sum(vt$dupe_flag)
 ```
+
+    #> [1] 3165
+
+``` r
+percent(mean(vt$dupe_flag))
+```
+
+    #> [1] "7.86%"
 
 ### Missing
 
-The variables also vary in their degree of values that are `NA` (missing). Note that 68 rows were
-removed using `janitor::remove_empty()` during our initial reading of the file. The remaining count
-of missing values in each variable can be found below:
+The variables also vary in their degree of values that are `NA`
+(missing). Note that 68 rows were removed using
+`janitor::remove_empty()` during our initial reading of the file. The
+remaining count of missing values in each variable can be found below:
 
-
-```r
-vt %>% 
-  map(function(var) sum(is.na(var))) %>% 
-  unlist() %>% 
-  enframe(name = "variable", value = "n_na") %>% 
-  mutate(prop_na = n_na / nrow(vt)) %>% 
-  print(n = length(vt))
+``` r
+glimpse_fun(vt, count_na)
 ```
 
-```
-#> # A tibble: 16 x 3
-#>    variable             n_na prop_na
-#>    <chr>               <int>   <dbl>
-#>  1 id                      0   0    
-#>  2 transaction_date        0   0    
-#>  3 payee_type              0   0    
-#>  4 payee_name              0   0    
-#>  5 payee_address           0   0    
-#>  6 registrant_name         0   0    
-#>  7 registrant_type         0   0    
-#>  8 office               7929   0.200
-#>  9 election_cycle          0   0    
-#> 10 reporting_period        0   0    
-#> 11 expenditure_type        0   0    
-#> 12 expenditure_purpose     0   0    
-#> 13 expenditure_amount      0   0    
-#> 14 public_question     39501   0.998
-#> 15 comments            25889   0.654
-#> 16 dupe_flag               0   0
-```
+    #> # A tibble: 16 x 4
+    #>    col                 type      n     p
+    #>    <chr>               <chr> <dbl> <dbl>
+    #>  1 id                  chr       0 0    
+    #>  2 transaction_date    date      0 0    
+    #>  3 payee_type          chr       0 0    
+    #>  4 payee_name          chr       0 0    
+    #>  5 payee_address       chr       0 0    
+    #>  6 registrant_name     chr       0 0    
+    #>  7 registrant_type     chr       0 0    
+    #>  8 office              chr    8222 0.204
+    #>  9 election_cycle      chr       0 0    
+    #> 10 reporting_period    date      0 0    
+    #> 11 expenditure_type    chr       0 0    
+    #> 12 expenditure_purpose chr       0 0    
+    #> 13 expenditure_amount  dbl       0 0    
+    #> 14 public_question     chr   40209 0.998
+    #> 15 comments            chr   26285 0.653
+    #> 16 dupe_flag           lgl       0 0
 
-Most variables have zero `NA` values, aside from the supplemental `public_question` and `comments` 
-variables. `NA` values in the `office` variable represent expenditures from non-candidate
-registrants.
+Most variables have zero `NA` values, aside from the supplemental
+`public_question` and `comments` variables. `NA` values in the `office`
+variable represent expenditures from non-candidate registrants.
 
-
-```r
+``` r
 vt %>% 
   group_by(registrant_type) %>% 
   summarise(n_na = sum(is.na(office)))
 ```
 
-```
-#> # A tibble: 7 x 2
-#>   registrant_type                     n_na
-#>   <chr>                              <int>
-#> 1 CANDIDATE                              0
-#> 2 IE-ONLY POLITICAL ACTION COMMITTEE   986
-#> 3 LEGISLATIVE LEADERSHIP PAC           479
-#> 4 POLITICAL ACTION COMMITTEE          3100
-#> 5 POLITICAL PARTY COMMITTEE           3207
-#> 6 PUBLIC MEDIA ACTIVITIES               86
-#> 7 PUBLIC QUESTION COMMITTEE             71
-```
+    #> # A tibble: 7 x 2
+    #>   registrant_type                     n_na
+    #>   <chr>                              <int>
+    #> 1 CANDIDATE                              0
+    #> 2 IE-ONLY POLITICAL ACTION COMMITTEE  1071
+    #> 3 LEGISLATIVE LEADERSHIP PAC           485
+    #> 4 POLITICAL ACTION COMMITTEE          3136
+    #> 5 POLITICAL PARTY COMMITTEE           3373
+    #> 6 PUBLIC MEDIA ACTIVITIES               86
+    #> 7 PUBLIC QUESTION COMMITTEE             71
 
 ### Ranges
 
-The range of continuous variables will need to be checked for data integrity. There are only three
-quasi-continuous variables, the `transaction_date`, `reporting_period`, and `expenditure_amount`.
+The range of continuous variables will need to be checked for data
+integrity. There are only three quasi-continuous variables, the
+`transaction_date`, `reporting_period`, and `expenditure_amount`.
 
 The range for `trans_amount` seems reasonable enough.
 
-
-```r
+``` r
 summary(vt$expenditure_amount)
 ```
 
-```
-#>      Min.   1st Qu.    Median      Mean   3rd Qu.      Max. 
-#>      0.01     14.52     75.00    695.26    327.54 288221.00
-```
+    #>      Min.   1st Qu.    Median      Mean   3rd Qu.      Max. 
+    #>      0.01     14.36     75.00    688.93    324.00 288221.00
 
 ![](../plots/plot_exp_amt_type-1.png)<!-- -->
 
-The number of contributions is fairly lopsides, with nearly 80% of all records coming from 2016 and
-2018. This makes some sense, as these were election years.
+The number of contributions is fairly lopsides, with nearly 80% of all
+records coming from 2016 and 2018. This makes some sense, as these were
+election
+    years.
 
-
-```r
+``` r
 summary(vt$transaction_date)
 ```
 
-```
-#>         Min.      1st Qu.       Median         Mean      3rd Qu.         Max. 
-#> "2008-08-08" "2016-06-17" "2016-10-01" "2017-02-08" "2018-06-13" "2019-04-11"
+    #>         Min.      1st Qu.       Median         Mean      3rd Qu.         Max. 
+    #> "2008-08-08" "2016-06-23" "2016-10-06" "2017-02-21" "2018-06-30" "2019-07-04"
+
+``` r
+vt <- mutate(vt, transaction_year = year(transaction_date))
 ```
 
-
-```r
+``` r
 vt %>% 
-  group_by(transaction_year = year(transaction_date)) %>% 
+  group_by(transaction_year) %>% 
   ggplot(mapping = aes(transaction_year)) +
   geom_bar() +
   scale_x_continuous(breaks = seq(2007, 2020)) + 
@@ -319,188 +288,347 @@ vt %>%
 
 ![](../plots/plot_exp_year-1.png)<!-- -->
 
-For some reason, the reporting period for expenditures begin in 2014 despite our data spanning
-2008 to 2019.
+For some reason, the reporting period for expenditures begin in 2014
+despite our data spanning 2008 to
+    2019.
 
-
-```r
+``` r
 summary(vt$reporting_period)
 ```
 
+    #>         Min.      1st Qu.       Median         Mean      3rd Qu.         Max. 
+    #> "2014-08-18" "2016-07-15" "2016-10-15" "2017-04-04" "2018-07-15" "2020-11-17"
+
+## Wrangle
+
+We can split the `payee_address` variable into it’s base components in
+new variables using a combination of `tidyr::separate()` and
+`tidyr::unite()`.
+
+``` r
+vt <- vt %>% 
+  separate(
+    col = payee_address,
+    into = c(glue("split_address{1:10}"), "city_sep", "state_zip"),
+    sep = ",\\s",
+    fill = "left",
+    remove = FALSE,
+  ) %>% 
+  unite(
+    starts_with("split_address"),
+    col = "address_sep",
+    sep = " ",
+    na.rm = TRUE
+  ) %>% 
+  separate(
+    col = state_zip,
+    into = c("state_sep", "zip_sep"),
+    sep = "\\s(?=\\d)"
+  )
 ```
-#>         Min.      1st Qu.       Median         Mean      3rd Qu.         Max. 
-#> "2014-08-18" "2016-07-15" "2016-10-15" "2017-03-21" "2018-07-15" "2019-07-15"
+
+### Address
+
+``` r
+packageVersion("tidyr")
 ```
 
-## Mutate
+    #> [1] '1.0.0'
 
-Payee and registrant addresses are not divided into street, city, state, and ZIP columns. We can
-extract the ZIP digits and state abbreviation from the end of the string using regular expressions.
-
-Since we parsed the `transaction_date` as a date file using `readr::col_date()` inside
-`readr::read_csv()`, we can simply extract the year of the transaction with `lubridate::year()`
-
-
-```r
+``` r
 vt <- vt %>% 
   mutate(
-    payee_zip = payee_address %>% 
-      str_extract("[\\d-]+$") %>% 
-      clean.zipcodes(),
-    payee_state = payee_address %>% 
-      str_remove("[\\d-]+$") %>% 
-      str_trim() %>% 
-      str_extract("..$"),
-    transaction_year = year(transaction_date)
+    address_norm = normal_address(
+      address = address_sep,
+      add_abbs = usps_street,
+      na_rep = TRUE
     )
+  )
 ```
 
-## Clean
-
-There are 39 records
-with invalid `payee_state` values. Aside from those that are "US" (which should be "VT"),
-the rest can be made `NA`, as they represent expenditures made overseas.
-
-
-```r
-unique(vt$payee_address[which(vt$payee_state %out% zipcode$state)])
-```
-
-```
-#>  [1] "HUDSONWEG 8, VENLO 5928LW, VT 5928L"                                                         
-#>  [2] "SOFTWARE INDUSTRY BASE, SHENZHEN, 518000, CH"                                                
-#>  [3] "HAUTEVILLE TRUST (BVI) LIMITED 3483 TORTOLA,, ROAD TOWN, 6971918, BRITISH VIRGIN ISLANDS, VQ"
-#>  [4] "HUDSONWEG 8 , VENLO, 5928LW, NL"                                                             
-#>  [5] "UNIT 6A, SOUTH RING BUSINESS PARK, KINSALE RD, BALLYPHEHANE, CORK, EI"                       
-#>  [6] "HUDSONWEG 8, VENLO, NL"                                                                      
-#>  [7] "EASYHI B.V. , POSTBUS 75023 , 1070 AA AMSTERDAM , NI"                                        
-#>  [8] "HUSONWEG8, VENLO, THE NETHERLANDS 5928LW, NT"                                                
-#>  [9] "HUDSONWEG 8, VENIO, NL"                                                                      
-#> [10] "WEBAVENUE LDA. RUA TOMAS DA ANUNCIACAO N14, ODIVELAS, 2ESQ, 2675-464, PO"                    
-#> [11] "WERDSTRASSE 21, CH-8021 ZURICH, SZ"                                                          
-#> [12] "HUDSONWEG 8, 5928LW, VENLO, NL"                                                              
-#> [13] "HUDSONWEG 8, VENLO, 5928LW, NL"                                                              
-#> [14] "22 GROVE ST, APT A, BURLINGTON, US"                                                          
-#> [15] "85 SWIFT ST, SOUTH BURLIINGOTN, US"                                                          
-#> [16] "75 S WINOOSKI AVE, BURLINGTON, US"                                                           
-#> [17] "18 SYKES MTN AVE, WHITE RIVER JCT, US"                                                       
-#> [18] "15609 UPPER CAROLINA, ST JOHN, UV 00830-9520"                                                
-#> [19] "PO BOX 6347, CHARLOTTE AMALIE, UV 00804-6347"
-```
-
-```r
-vt$payee_state[which(vt$payee_state == "US")] <- "VT"
-vt$payee_state[which(vt$payee_state %out% zipcode$state)] <- NA
-```
-
-All zipcodes are five digits, but there are a handful that do not exist in our list of valid
-zipcodes. We can remove those we know to be truly invalid, but leave the rest.
-
-
-```r
-vt$payee_zip[which(nchar(vt$payee_zip) != 5)]
-#> character(0)
-unique(vt$payee_zip[vt$payee_zip %out% zipcode$zip])
-#>  [1] "00000" NA      "04501" "86260" "05256" "02843" "01544" "06660" "05642" "05948" "05645"
-#> [12] "90425" "00584" "05409" "05410" "05643" "05202" "40866" "90420" "05611" "05000" "05503"
-#> [23] "05243" "05628" "42019" "03434" "70120" "05480" "05092" "11111" "33333" "00294" "05434"
-#> [34] "05389" "94113" "06048" "05412" "00540" "01617" "76144" "30000" "05646" "06541" "05755"
-#> [45] "09520"
-```
-
-
-```r
-vt$payee_zip <- vt$payee_zip %>% 
-  na_if("00000") %>% 
-  na_if("11111") %>% 
-  na_if("33333")
-
-vt %>%
-  filter(!is.na(payee_zip)) %>%
-  filter(payee_zip %out% zipcode$zip) %>% 
-  select(
-    payee_name,
-    payee_address,
-    payee_zip,
-    payee_state
-  ) %>% 
+``` r
+vt %>% 
+  select(starts_with("address")) %>% 
   distinct() %>% 
-  arrange(payee_state) %>% 
-  print_all()
+  sample_frac()
 ```
 
-```
-#> # A tibble: 44 x 4
-#>    payee_name                   payee_address                                 payee_zip payee_state
-#>    <chr>                        <chr>                                         <chr>     <chr>      
-#>  1 GODADDY                      14455 N HAYDEN RD, SCOTTSDALE, AZ 86260       86260     AZ         
-#>  2 FACEBOOK                     1601 WILLOW RD, MENIO PARK, CA 90425          90425     CA         
-#>  3 PAYPAL                       2211NORTH FIRST STREET, SAN JOSE, CA 40866    40866     CA         
-#>  4 FACEBOOK                     1 HACKER WAY, MENLO PARK, CA 90420            90420     CA         
-#>  5 WEEBLY                       564 PACIFIC AVENUE , SUITE 250, SAN FRANCISC… 94113     CA         
-#>  6 ACT BLUE                     ROAD, SOMERVILLE, MA 01544                    01544     MA         
-#>  7 RIMUHOSTING                  60 VICTORIA ST, CAMBRIDGE, MA 03434           03434     MA         
-#>  8 CT ONLINE                    AMHERST, AMHERST, MA 70120                    70120     MA         
-#>  9 BAKERS' BEST                 150 GOULD ST, NEEDHAM, MA 00294               00294     MA         
-#> 10 APPLE STORE                  BOYLSTON ST, BOSTON , MA 01617                01617     MA         
-#> 11 CIRCLE K                     MAIN ST, W. LEBANON, NH 06048                 06048     NH         
-#> 12 U PRINTING                   DALLAS, DALLAS, TX 42019                      42019     TX         
-#> 13 INFOCUS CAMPAIGNS            PO BOX 10726, FORT WORTH, TX 76144            76144     TX         
-#> 14 VERMONT FEDERAL CREDIT UNION 84 PINE STREET, BURLINGTON, VT 04501          04501     VT         
-#> 15 CRISTO                       MAIN STREET, MANCHESTER , VT 05256            05256     VT         
-#> 16 HARDWICK GAZETTE             P.O. BOX 367, HARDWICK, VT 02843              02843     VT         
-#> 17 US POSTAL SERVICE            1115 ROUTE 100B, MORETOWN, VT 06660           06660     VT         
-#> 18 WORKSAFE                     115 INDUSTRIAL LANE, BARRE, VT 05642          05642     VT         
-#> 19 TOWN OF HARTLAND             1 QUECHEE ROAD, HARTLAND, VT 05948            05948     VT         
-#> 20 PELKEY, CHRIS                169 MIDDLE RD, GRANITEVILLE, VT 05645         05645     VT         
-#> 21 WONDERARTS                   165 E CRAFTSBURY RD,, GREENSBORO, VT 0584     00584     VT         
-#> 22 PAYDATA PAYROLL SERVICES IN… PO BOX 706, ESSEX JCT, VT 05409               05409     VT         
-#> 23 PAYDATA PAYROLL SERVICES IN… PO BOX 706, ESSEX JCT, VT 05410               05410     VT         
-#> 24 PRICE CHOPPER                AMES DRIVE , BARRE, VT 05643                  05643     VT         
-#> 25 ERICA MARTHAGE FOR STATES A… 185 NORTH ST, BENNINGTON, VT 05202            05202     VT         
-#> 26 ESPRESSO BUENO               248 N MAIN ST, BARRE, VT 05642                05642     VT         
-#> 27 YACOVONE, DAVID              28 MANSFIELD AVENUE, MORRISVILLE, VT 05611    05611     VT         
-#> 28 GO DADDY                     WWW.GODADDY.COM, NONE, VT 05000               05000     VT         
-#> 29 LANGROCK, KATIE              6 GREEN DOLPHIN DRIVE, SOUTH BURLINGTON, VT … 05503     VT         
-#> 30 LUEBKE, DOLORES              12 MIDDLE RD, PAWLET, VT 05243                05243     VT         
-#> 31 TOLL, CATHERINE              PO BOX 192, DANVILLE, VT 05628                05628     VT         
-#> 32 VERMONT REPUBLICN PARTY      115 INDUSTRIAL LANE, SUITE 1, BERLIN, VT 056… 05642     VT         
-#> 33 STAPLES                      861 WILLISON ROAD, SOUTH BURLINGTON , VT 054… 05480     VT         
-#> 34 BENTLEY'S                    1 ELM STREET, WOODSTOCK, VT 05092             05092     VT         
-#> 35 SWEENEY, KRYSTAL LEE         1105 QUAKER ST, LINCOLN, VT 05434             05434     VT         
-#> 36 NORTHFIELD SAVINGS BANK      291 NORTH MAIN STREET, BARRE, VT 05643        05643     VT         
-#> 37 PATT, AVRAM                  138 WEST HILL ROAD, WORCESTER, VT 05389       05389     VT         
-#> 38 CUMBERLFARMS                 MAIN &AMP; BRIDGE ST, RICHMOND, VT 05412      05412     VT         
-#> 39 RADIO SHACK                  SHELBOURN RD, BURLINGTON, VT 00540            00540     VT         
-#> 40 ENVATO PTY LTD               121 KING STREET, , VICTORIA, AUSTRALIA, MELB… 30000     VT         
-#> 41 THE MAILING CENTER           PO BOX 646, BARRE, VT 05646                   05646     VT         
-#> 42 ISABELLE, GUY                5 HILLCREST LANE, BARRE, VT 06541             06541     VT         
-#> 43 MANCHESTER BEVERAGE          ROUTE 11/30, MANCHESTER, VT 05755             05755     VT         
-#> 44 VISTA PRINT                  INTERNET, BENNINGTON, VT 09520                09520     VT
+    #> # A tibble: 8,180 x 2
+    #>    address_sep           address_norm            
+    #>    <chr>                 <chr>                   
+    #>  1 1340 WILLISTON ROAD   1340 WILLISTON ROAD     
+    #>  2 20455 BLUE HERON TER  20455 BLUE HERON TERRACE
+    #>  3 175 ROUTE 7 SOUTH     175 ROUTE 7 SOUTH       
+    #>  4 357 MAIN ST           357 MAIN STREET         
+    #>  5 414 MINISTER BROOK RD 414 MINISTER BROOK ROAD 
+    #>  6 105 W 3RD STREET      105 WEST 3RD STREET     
+    #>  7 682 CHRISTIAN ST.     682 CHRISTIAN STREET    
+    #>  8 6206 GEORGIA SHORE RD 6206 GEORGIA SHORE ROAD 
+    #>  9 346 SHELBURNE RD      346 SHELBURNE ROAD      
+    #> 10 43 FOREST AVE         43 FOREST AVENUE        
+    #> # … with 8,170 more rows
+
+### ZIP
+
+``` r
+vt <- vt %>% 
+  mutate(
+    zip_norm = normal_zip(
+      zip = zip_sep,
+      na = c("", "NA"),
+      na_rep = TRUE
+    )
+  )
 ```
 
-## Conclude
-
-1. There are 39572 records in the database
-1. The 3513 duplicate records have been flagged with `dupe_flag`
-1. Ranges for continuous variables have been checked and make sense
-1. There are no important variables with blank or missing values
-1. Consistency issues have been fixed with the `stringr` package
-1. The `payee_zip` variable has been extracted from `payee_address` with `stringr::str_extract()`
-and cleaned with `zipcode::clean.zipcode()`
-1. The `transaction_year` variable has been extracted from `transaction_date` with
-`readr::col_date()` and `lubridate::year()`
-1. There is both a registrant and payee for every record.
-
-## Write
-
-
-```r
-dir_create(here("vt_expends", "data", "processed"))
-write_csv(
-  x = vt,
-  path = here("vt_expends", "data", "processed", "vt_expends_clean.csv"),
-  na = ""
+``` r
+progress_table(
+  vt$zip_sep,
+  vt$zip_norm,
+  compare = valid_zip
 )
 ```
 
+    #> # A tibble: 2 x 6
+    #>   stage    prop_in n_distinct prop_na n_out n_diff
+    #>   <chr>      <dbl>      <dbl>   <dbl> <dbl>  <dbl>
+    #> 1 zip_sep    0.898       1964 0.00159  4104    940
+    #> 2 zip_norm   0.997       1249 0.00218   108     43
+
+### State
+
+``` r
+vt <- vt %>% 
+  mutate(
+    state_norm = normal_state(
+      state = state_sep,
+      abbreviate = TRUE,
+      na_rep = TRUE,
+      valid = valid_state
+    )
+  )
+```
+
+``` r
+progress_table(
+  vt$state_sep,
+  vt$state_norm,
+  compare = valid_state
+)
+```
+
+    #> # A tibble: 2 x 6
+    #>   stage      prop_in n_distinct  prop_na n_out n_diff
+    #>   <chr>        <dbl>      <dbl>    <dbl> <dbl>  <dbl>
+    #> 1 state_sep    0.999         59 0           33     10
+    #> 2 state_norm   1             50 0.000819     0      1
+
+### City
+
+``` r
+vt <- vt %>% 
+  mutate(
+    city_norm = normal_city(
+      city = city_sep, 
+      geo_abbs = usps_city,
+      st_abbs = c("VT", "DC", "VERMONT"),
+      na = invalid_city,
+      na_rep = TRUE
+    )
+  )
+```
+
+``` r
+vt <- vt %>% 
+  left_join(
+    y = zipcodes,
+    by = c(
+      "state_norm" = "state",
+      "zip_norm" = "zip"
+    )
+  ) %>% 
+  rename(city_match = city) %>% 
+  mutate(
+    match_abb = is_abbrev(city_norm, city_match),
+    match_exp = is_abbrev(city_match, city_norm),
+    match_dist = str_dist(city_norm, city_match),
+    city_swap = if_else(
+      condition = match_abb | match_exp | match_dist <= 2 | state_norm == city_norm,
+      true = city_match,
+      false = city_norm
+    )
+  )
+```
+
+``` r
+good_refine <- vt %>% 
+  filter(state_norm == "VT") %>% 
+  mutate(
+    city_refine = city_swap %>% 
+      key_collision_merge() %>% 
+      n_gram_merge(numgram = 1)
+  ) %>% 
+  filter(city_refine != city_swap) %>% 
+  inner_join(
+    y = zipcodes,
+    by = c(
+      "city_refine" = "city",
+      "state_norm" = "state",
+      "zip_norm" = "zip"
+    )
+  )
+```
+
+``` r
+vt <- vt %>% 
+  left_join(good_refine) %>% 
+  mutate(city_refine = coalesce(city_refine, city_swap))
+```
+
+``` r
+vt$city_refine[str_which(vt$city_refine, "^VENLO LW$")] <- NA
+```
+
+### Progress
+
+To check our progress, we will expand out `valid_city` vector using a
+list of towns taken directly from the
+[vermont.gov](https://www.vermont.gov) website.
+
+``` r
+vt_city <- 
+  read_html("https://www.vermont.gov/towns-and-Cities") %>% 
+  html_node("select") %>% 
+  html_nodes("option") %>% 
+  html_text(trim = TRUE) %>% 
+  normal_city(geo_abbs = usps_city)
+```
+
+``` r
+many_city <- unique(c(valid_city, extra_city, vt_city))
+```
+
+``` r
+vt %>% 
+  filter(city_refine %out% many_city) %>% 
+  count(state_norm, zip_norm, city_refine, city_match, sort = TRUE) %>% 
+  drop_na(city_refine)
+```
+
+    #> # A tibble: 55 x 5
+    #>    state_norm zip_norm city_refine        city_match      n
+    #>    <chr>      <chr>    <chr>              <chr>       <int>
+    #>  1 NJ         07726    MANALAPAN          ENGLISHTOWN    52
+    #>  2 VT         05682    NORTH MIDDLESEX    WORCESTER      28
+    #>  3 VT         05303    WEST BRATTLEBORO   BRATTLEBORO    20
+    #>  4 VT         05763    NORTH CHITTENDEN   PITTSFORD      18
+    #>  5 VT         05602    BELIN              MONTPELIER     16
+    #>  6 CA         94025    HACKERS WAY        MENLO PARK      5
+    #>  7 CA         94016    SAN FRANSISCO      DALY CITY       4
+    #>  8 CA         94025    MELNO              MENLO PARK      4
+    #>  9 TX         78645    LAGO VISTA         LEANDER         4
+    #> 10 VT         05346    SOUTH WESTMINISTER PUTNEY          4
+    #> # … with 45 more rows
+
+``` r
+progress <- progress_table(
+  vt$city_sep,
+  vt$city_norm,
+  vt$city_swap,
+  vt$city_refine,
+  compare = many_city
+)
+
+progress$stage <- as_factor(progress$stage)
+```
+
+| stage        | prop\_in | n\_distinct | prop\_na | n\_out | n\_diff |
+| :----------- | -------: | ----------: | -------: | -----: | ------: |
+| city\_sep    |    0.820 |        1239 |    0.000 |   7269 |     463 |
+| city\_norm   |    0.974 |        1035 |    0.001 |   1059 |     236 |
+| city\_swap   |    0.994 |         830 |    0.025 |    235 |      55 |
+| city\_refine |    0.994 |         828 |    0.025 |    225 |      53 |
+
+You can see how the percentage of valid values increased with each
+stage.
+
+![](../plots/progress_bar-1.png)<!-- -->
+
+More importantly, the number of distinct values decreased each stage. We
+were able to confidently change many distinct invalid values to their
+valid equivilent.
+
+``` r
+progress %>% 
+  select(
+    stage, 
+    all = n_distinct,
+    bad = n_diff
+  ) %>% 
+  mutate(good = all - bad) %>% 
+  pivot_longer(c("good", "bad")) %>% 
+  mutate(name = name == "good") %>% 
+  ggplot(aes(x = stage, y = value)) +
+  geom_col(aes(fill = name)) +
+  scale_fill_brewer(palette = "Dark2") +
+  scale_y_continuous(labels = comma) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "Vermont City Normalization Progress",
+    subtitle = "Distinct values, valid and invalid",
+    x = "Stage",
+    y = "Distinct Values",
+    fill = "Valid"
+  )
+```
+
+![](../plots/distinct_bar-1.png)<!-- -->
+
+## Conclude
+
+1.  There are 40280 records in the database
+2.  The 3165 duplicate records have been flagged with `dupe_flag`
+3.  Ranges for continuous variables have been checked and make sense
+4.  There are no important variables with blank or missing values
+5.  Consistency issues have been fixed with the `stringr` package
+6.  The geographic data has been `tidyr::separate()`’d and cleaned with
+    `campfin::normal_*()`.
+7.  The `transaction_year` variable has been extracted from
+    `transaction_date` with `readr::col_date()` and `lubridate::year()`
+8.  There is both a registrant and payee for every record.
+
+## Export
+
+``` r
+proc_dir <- here("vt", "expends", "data", "processed")
+dir_create(proc_dir)
+```
+
+``` r
+vt <- vt %>% 
+  select(
+    -address_sep,
+    -zip_sep,
+    -state_sep,
+    -city_sep,
+    -city_norm,
+    -city_match,
+    -match_abb,
+    -match_dist,
+    -city_swap
+  ) %>%
+  rename(
+    address_clean = address_norm,
+    zip_clean = zip_norm,
+    state_clean = state_norm,
+    city_clean = city_refine
+  )
+```
+
+``` r
+vt %>% 
+  write_csv(
+    path = glue("{proc_dir}/df_type_clean.csv"),
+    na = ""
+  )
+```
