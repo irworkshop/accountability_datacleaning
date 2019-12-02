@@ -65,7 +65,6 @@ functions custom made to help facilitate the processing of campaign finance data
 if (!require("pacman")) install.packages("pacman")
 pacman::p_load_gh("irworkshop/campfin")
 pacman::p_load(
-  stringdist, # levenshtein value
   snakecase, # change string case
   RSelenium, # remote browser
   tidyverse, # data manipulation
@@ -273,20 +272,6 @@ sum(me$na_flag)
 percent(mean(me$na_flag))
 ```
 
-The _vast_ majority of records flagged with `na_flag` are from 2018, where 
-`r percent(mean(me$na_flag[year(me$expenditure_date) == 2018]))` of that year's records are missing
-some variable needed to identify the transaction.
-
-```{r count_flags}
-me %>% 
-  group_by(year = year(expenditure_date)) %>% 
-  summarize(
-    rows = n(), 
-    na = sum(na_flag), 
-    prop_na = na/rows
-  )
-```
-
 ### Duplicates
 
 If we ignore the (supposedly) unique `expenditure_id` variable, there are a number of duplicated
@@ -295,6 +280,7 @@ records. We can flag every duplicate record (after the first) with a new `dupe_f
 ```{r get_dupes, collapse=TRUE}
 me <- flag_dupes(me, -expenditure_id)
 sum(me$dupe_flag)
+percent(mean(me$dupe_flag))
 ```
 
 ```{r view_dupes, echo=FALSE}
@@ -312,7 +298,7 @@ me %>%
 ### Categorical
 
 ```{r glimpse_distinct}
-glimpse_fun(me, n_distinct)
+col_stats(me, n_distinct)
 ```
 
 ```{r committe_type_bar, echo=FALSE}
@@ -321,16 +307,6 @@ explore_plot(
   var = committee_type,
   title = "Maine Expentitures by Committee Type",
   subtitle = "From 2008 to 2019",
-  caption = "Source: Maine Ethics Commission"
-)
-```
-
-```{r finance_type_bar, echo=FALSE}
-explore_plot(
-  data = drop_na(me, candidate_financing_type),
-  var = candidate_financing_type,
-  title = "Maine Expentitures by Finance Type",
-  subtitle = "From 2018 to 2019",
   caption = "Source: Maine Ethics Commission"
 )
 ```
@@ -494,7 +470,7 @@ a few different `stringr::str_*()` functions.
 
 ### Address
 
-```{r normal_address}
+```{r address_norm}
 me <- me %>% 
   unite(
     starts_with("address"),
@@ -506,13 +482,14 @@ me <- me %>%
   mutate(
     address_norm = normal_address(
       address = address_combine,
-      add_abbs = usps_street,
+      abbs = usps_street,
       na_rep = TRUE
     )
-  )
+  ) %>% 
+  select(-address_combine)
 ```
 
-```{r view_address, echo=FALSE}
+```{r address_view, echo=FALSE}
 me %>% 
   select(starts_with("address")) %>% 
   sample_n(10)
@@ -520,14 +497,7 @@ me %>%
 
 ### ZIP
 
-```{r count_zip_pre, collapse=TRUE}
-n_distinct(me$zip)
-prop_na(me$zip)
-prop_in(me$zip, valid_zip)
-length(setdiff(me$zip, valid_zip))
-```
-
-```{r normal_zip}
+```{r zip_norm}
 me <- me %>% 
   mutate(
     zip_norm = normal_zip(
@@ -537,11 +507,12 @@ me <- me %>%
   )
 ```
 
-```{r count_zip_post, collapse=TRUE}
-n_distinct(me$zip_norm)
-prop_na(me$zip_norm)
-prop_in(me$zip_norm, valid_zip)
-length(setdiff(me$zip_norm, valid_zip))
+```{r zip_progress, echo=FALSE}
+progress_table(
+  me$zip,
+  me$zip_norm,
+  compare = valid_zip
+)
 ```
 
 There are still some `zip_norm` values that are invalid. We will leave these unchanged for now.
@@ -552,15 +523,7 @@ sample(unique(me$zip[which(me$zip_norm %out% valid_zip)]), 20)
 
 ### State
 
-```{r count_state_pre, collapse=TRUE}
-n_distinct(me$state)
-prop_na(me$state)
-prop_in(me$state, valid_state)
-length(setdiff(me$state, valid_state))
-setdiff(me$state, valid_state)
-```
-
-```{r normal_state}
+```{r state_norm}
 me <- me %>% 
   mutate(
     state_norm = normal_state(
@@ -573,45 +536,30 @@ me <- me %>%
   )
 ```
 
-```{r count_state_post, collapse=TRUE}
-n_distinct(me$state_norm)
-prop_na(me$state)
-prop_in(me$state_norm, valid_state, na.rm = TRUE)
-length(setdiff(me$state_norm, valid_state))
+```{r state_progress, echo=FALSE}
+progress_table(
+  me$state,
+  me$state_norm,
+  compare = valid_state
+)
 ```
 
 ### City
 
-```{r count_city_pre, collapse=TRUE}
-n_distinct(me$city)
-prop_in(me$city, valid_city, na.rm = TRUE)
-length(setdiff(me$city, valid_city))
-```
-
-#### Normalize
-
-```{r normal_city}
+```{r city_norm}
 me <- me %>% 
   mutate(
     city_norm = normal_city(
-      city = city, 
-      geo_abbs = usps_city,
-      st_abbs = c("ME", "DC", "MAINE"),
+      city = city,
+      abbs = usps_city,
+      states = c("ME", "DC", "MAINE"),
       na = invalid_city,
       na_rep = TRUE
     )
   )
 ```
 
-```{r count_city_post_norm, collapse=TRUE}
-n_distinct(me$city_norm)
-prop_in(me$city_norm, valid_city, na.rm = TRUE)
-length(setdiff(me$city_norm, valid_city))
-```
-
-#### Swap
-
-```{r swap_city}
+```{r city_swap}
 me <- me %>% 
   rename(city_raw = city) %>% 
   left_join(
@@ -623,33 +571,27 @@ me <- me %>%
   ) %>% 
   rename(city_match = city) %>% 
   mutate(
-    match_dist = stringdist(city_norm, city_match),
+    match_abb = is_abbrev(city_norm, city_match),
+    match_dist = str_dist(city_norm, city_match),
     city_swap = if_else(
-      condition = equals(match_dist, 1),
+      condition = match_abb | match_dist <= 2,
       true = city_match,
       false = city_norm
     )
+  ) %>% 
+  select(
+    -city_match,
+    -match_abb,
+    -match_dist
   )
 ```
 
 ```{r city_progress, echo=FALSE}
-tibble(
-  step = c("raw", "norm", "swap"),
-  n_distinct = c(
-    n_distinct(me$city_raw), 
-    n_distinct(me$city_norm), 
-    n_distinct(me$city_swap)
-  ),
-  prop_in = c(
-    prop_in(me$city_raw, valid_city, na.rm = TRUE),
-    prop_in(me$city_norm, valid_city, na.rm = TRUE),
-    prop_in(me$city_swap, valid_city, na.rm = TRUE)
-  ),
-  unique_bad = c(
-    length(setdiff(me$city_raw, valid_city)),
-    length(setdiff(me$city_norm, valid_city)),
-    length(setdiff(me$city_swap, valid_city))
-  )
+progress_table(
+  me$city_raw,
+  me$city_norm,
+  me$city_swap,
+  compare = valid_city
 )
 ```
 
@@ -673,29 +615,28 @@ proc_dir <- here("me", "expends", "data", "processed")
 dir_create(proc_dir)
 ```
 
-```{r write_clean}
-me <- me %>% 
-  select(
-    -city_match,
-    -city_norm,
+```{r lookup_city}
+lookup_file <- here("me", "expends", "data", "me_city_lookup.csv")
+if (file_exists(lookup_file)) {
+  lookup <- 
+    read_csv(lookup_file) %>% 
+    select(1:2) %>% 
+    rename_all(str_to_lower)
+  me <- left_join(me, lookup)
+  progress_table(
+    me$city_swap, 
+    me$city_clean, 
+    compare = valid_city
   )
+  me <- select(me, -city_swap)
+}
 ```
 
-## Lookup
-
-```{r lookup_city}
-lookup <- read_csv("me/expends/data/me_city_lookup.csv") %>% select(1:2)
-me <- left_join(me, lookup, by = c("city_swap" = "CITY_SWAP"))
-
-progress_table(
-  me$city_swap, 
-  me$CITY_CLEAN, 
-  compare = valid_city
-)
-
+```{r proc_write}
+proc_file <- glue("{proc_dir}/me_expends_clean.csv")
 write_csv(
   x = me,
-  path = glue("{proc_dir}/me_expends_clean.csv"),
+  path = proc_file,
   na = ""
 )
 ```

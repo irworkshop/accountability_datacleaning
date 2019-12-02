@@ -1,7 +1,7 @@
 Maine Expenditures
 ================
 Kiernan Nicholls
-2019-09-30 13:07:30
+2019-12-02 16:40:24
 
   - [Project](#project)
   - [Objectives](#objectives)
@@ -12,7 +12,6 @@ Kiernan Nicholls
   - [Wrangle](#wrangle)
   - [Conclude](#conclude)
   - [Export](#export)
-  - [Lookup](#lookup)
 
 ## Project
 
@@ -57,7 +56,6 @@ processing of campaign finance data.
 if (!require("pacman")) install.packages("pacman")
 pacman::p_load_gh("irworkshop/campfin")
 pacman::p_load(
-  stringdist, # levenshtein value
   snakecase, # change string case
   RSelenium, # remote browser
   tidyverse, # data manipulation
@@ -180,26 +178,26 @@ variables.
     #> [13] "Explanation"       "ExpenditureID"     "FiledDate"         "Purpose"          
     #> [17] "ExpenditureType"   "CommitteeType"     "CommitteeName"     "CandidateName"    
     #> [21] "Amended"
-    #>  [1] "OrgID"                                   "LegacyID"                               
-    #>  [3] "Committee Type"                          "Committee Name"                         
-    #>  [5] "Candidate Name"                          "Candidate Office"                       
-    #>  [7] "Candidate District"                      "Candidate Party"                        
-    #>  [9] "Candidate Financing Type"                "Expenditure Amount"                     
-    #> [11] "Expenditure Date"                        "Office"                                 
-    #> [13] "District"                                "Last Name"                              
-    #> [15] "First Name"                              "Middle Name"                            
-    #> [17] "Suffix"                                  "Address1"                               
-    #> [19] "Address2"                                "City"                                   
-    #> [21] "State"                                   "Zip"                                    
-    #> [23] "Explanation"                             "Expenditure ID"                         
-    #> [25] "Filed Date"                              "Report Name"                            
-    #> [27] "Purpose"                                 "Expenditure Type"                       
-    #> [29] "Amended"                                 "Support/Oppose Ballot Question"         
-    #> [31] "Support/Oppose Candidate"                "Ballot Question Number"                 
-    #> [33] "Ballot Question Description/Title"       "Support Oppose CandidateLegacyID"       
-    #> [35] "Support/Oppose CandidateName"            "Support/Oppose Candidate Office"        
-    #> [37] "Support/Oppose Candidate District"       "Support/Oppose Candidate Party"         
-    #> [39] "Support/Oppose Candidate Financing Type"
+    #>  [1] "OrgID"                             "LegacyID"                         
+    #>  [3] "Committee Name"                    "Candidate Name"                   
+    #>  [5] "Committee Office"                  "Committee District"               
+    #>  [7] "Committee Party"                   "Committee FinancingType"          
+    #>  [9] "Support Oppose CandidateLegacyID"  "Expenditure Amount"               
+    #> [11] "Expenditure Date"                  "Office"                           
+    #> [13] "District"                          "Last Name"                        
+    #> [15] "First Name"                        "Middle Name"                      
+    #> [17] "Suffix"                            "Address1"                         
+    #> [19] "Address2"                          "City"                             
+    #> [21] "State"                             "Zip"                              
+    #> [23] "Explanation"                       "Expenditure ID"                   
+    #> [25] "Filed Date"                        "Report Name"                      
+    #> [27] "Purpose"                           "Expenditure Type"                 
+    #> [29] "Committee Type"                    "Amended"                          
+    #> [31] "Support/Oppose Ballot Question"    "Support/Oppose Candidate"         
+    #> [33] "Ballot Question Number"            "Ballot Question Description/Title"
+    #> [35] "Candidate"                         "Candidate Office"                 
+    #> [37] "District"                          "Party"                            
+    #> [39] "Financing Type"
 
 ``` r
 to_snake_case(str_replace(me08, "MI", "Middle Name")) %in% to_snake_case(me19)
@@ -267,7 +265,7 @@ me <-
 head(me)
 ```
 
-    #> # A tibble: 6 x 29
+    #> # A tibble: 6 x 30
     #>   org_id expenditure_amo… expenditure_date last_name first_name middle_name suffix address1
     #>   <chr>             <dbl> <date>           <chr>     <chr>      <chr>       <chr>  <chr>   
     #> 1 1187              600   2008-01-02       Hale & H… <NA>       <NA>        <NA>   4 State…
@@ -276,66 +274,69 @@ head(me)
     #> 4 3512               75   2008-01-02       Secretat… <NA>       <NA>        <NA>   123 Mai…
     #> 5 3533               15.7 2008-01-03       Marden's  <NA>       <NA>        <NA>   <NA>    
     #> 6 3533               13.1 2008-01-03       Staples   <NA>       <NA>        <NA>   <NA>    
-    #> # … with 21 more variables: address2 <chr>, city <chr>, state <chr>, zip <chr>, explanation <chr>,
+    #> # … with 22 more variables: address2 <chr>, city <chr>, state <chr>, zip <chr>, explanation <chr>,
     #> #   expenditure_id <chr>, filed_date <date>, purpose <chr>, expenditure_type <chr>,
     #> #   committee_type <chr>, committee_name <chr>, candidate_name <chr>, amended <lgl>,
-    #> #   legacy_id <chr>, candidate_office <chr>, candidate_district <chr>, candidate_party <chr>,
-    #> #   candidate_financing_type <chr>, office <chr>, district <chr>, report_name <chr>
+    #> #   legacy_id <chr>, committee_office <chr>, committee_district <chr>, committee_party <chr>,
+    #> #   committee_financing_type <chr>, support_oppose_candidate_legacy_id <chr>, office <chr>,
+    #> #   district <chr>, report_name <chr>
 
 ``` r
 tail(me)
 ```
 
-    #> # A tibble: 6 x 29
+    #> # A tibble: 6 x 30
     #>   org_id expenditure_amo… expenditure_date last_name first_name middle_name suffix address1
     #>   <chr>             <dbl> <date>           <chr>     <chr>      <chr>       <chr>  <chr>   
-    #> 1 354179             36.0 2019-07-11       Conley    Carroll    <NA>        <NA>   23 Mars…
-    #> 2 354179             75.0 2019-07-18       Amazon    <NA>       <NA>        <NA>   410 Ter…
-    #> 3 354179             98.3 2019-07-22       Conley    Carroll    <NA>        <NA>   23 Mars…
-    #> 4 354179            111.  2019-07-18       McClellan Michael    <NA>        <NA>   27 Pism…
-    #> 5 354179            146.  2019-06-29       McClellan Michael    <NA>        <NA>   27 Pism…
-    #> 6 354179            149.  2019-06-29       Conley    Carroll    <NA>        <NA>   23 Mars…
-    #> # … with 21 more variables: address2 <chr>, city <chr>, state <chr>, zip <chr>, explanation <chr>,
+    #> 1 10188            445.   2017-12-31       NATIONBU… <NA>       <NA>        <NA>   520 S G…
+    #> 2 10188           -445.   2017-12-31       NATIONBU… <NA>       <NA>        <NA>   520 S G…
+    #> 3 10188            495.   2017-12-31       NATIONBU… <NA>       <NA>        <NA>   520 S G…
+    #> 4 8661            1092.   2017-12-31       DUSTIN M… <NA>       <NA>        <NA>   62 EVER…
+    #> 5 6537               5    2017-12-31       Five Cou… <NA>       <NA>        <NA>   PO Box …
+    #> 6 2633               1.98 2017-12-31       ACT BLUE  <NA>       <NA>        <NA>   PO BOX …
+    #> # … with 22 more variables: address2 <chr>, city <chr>, state <chr>, zip <chr>, explanation <chr>,
     #> #   expenditure_id <chr>, filed_date <date>, purpose <chr>, expenditure_type <chr>,
     #> #   committee_type <chr>, committee_name <chr>, candidate_name <chr>, amended <lgl>,
-    #> #   legacy_id <chr>, candidate_office <chr>, candidate_district <chr>, candidate_party <chr>,
-    #> #   candidate_financing_type <chr>, office <chr>, district <chr>, report_name <chr>
+    #> #   legacy_id <chr>, committee_office <chr>, committee_district <chr>, committee_party <chr>,
+    #> #   committee_financing_type <chr>, support_oppose_candidate_legacy_id <chr>, office <chr>,
+    #> #   district <chr>, report_name <chr>
 
 ``` r
 glimpse(sample_frac(me))
 ```
 
-    #> Observations: 195,512
-    #> Variables: 29
-    #> $ org_id                   <chr> "3751", "5628", "4738", "3152", "5641", "9311", "3275", "5257",…
-    #> $ expenditure_amount       <dbl> 320.25, 74.00, 9.90, 24.01, 400.00, 100.00, 2000.00, 65.00, 135…
-    #> $ expenditure_date         <date> 2008-10-20, 2017-05-30, 2010-04-21, 2015-03-22, 2018-09-18, 20…
-    #> $ last_name                <chr> "Dale Rand", "HALLOWELL POSTMASTER, USPS", "Hill", "Oxford Coun…
-    #> $ first_name               <chr> NA, NA, "Dawn", NA, NA, "NANCY", "Amanda ", "Christopher", NA, …
-    #> $ middle_name              <chr> NA, NA, NA, NA, NA, "C", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
-    #> $ suffix                   <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
-    #> $ address1                 <chr> NA, "95 SECOND ST", NA, "PO Box 187", "54 BOWDOIN PINES ROAD", …
-    #> $ address2                 <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
-    #> $ city                     <chr> NA, "HALLOWELL", NA, "Greenwood", "BOWDOIN", "AUGUSTA", "Lawren…
-    #> $ state                    <chr> NA, "ME", NA, "ME", "ME", "ME", "ME", "ME", NA, "ME", "ME", "ME…
-    #> $ zip                      <chr> NA, "04347", NA, "04255", "04287", "04330", "01841", "04345", N…
-    #> $ explanation              <chr> "Clincher post card", "MAIL BOX FEE", "Money order fee; reimbur…
-    #> $ expenditure_id           <chr> "16062", "459089", "50615", "126815", "637913", "164933", "3178…
-    #> $ filed_date               <date> 2008-10-24, 2018-04-01, 2010-07-20, 2015-04-02, 2018-10-26, 20…
-    #> $ purpose                  <chr> "Campaign literature (printing and graphics)", "Postage for U.S…
-    #> $ expenditure_type         <chr> "Monetary (Itemized)", "Monetary (Itemized)", "Monetary (Itemiz…
-    #> $ committee_type           <chr> "Candidate", "Candidate", "Candidate", "Political Action Commit…
-    #> $ committee_name           <chr> NA, "Sweet for Governor", NA, "ACTBLUE MAINE", "Richmond Republ…
-    #> $ candidate_name           <chr> "Representative David C Webster", NA, "Senator Dawn Hill", NA, …
-    #> $ amended                  <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, …
-    #> $ legacy_id                <chr> NA, "10106", NA, NA, "10134", NA, NA, NA, NA, NA, NA, "638", NA…
-    #> $ candidate_office         <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
-    #> $ candidate_district       <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
-    #> $ candidate_party          <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
-    #> $ candidate_financing_type <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
-    #> $ office                   <chr> NA, "GOVERNOR", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
-    #> $ district                 <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
-    #> $ report_name              <chr> NA, "2017 JULY SEMIANNUAL REPORT", NA, NA, "11-DAY PRE-GENERAL …
+    #> Observations: 162,447
+    #> Variables: 30
+    #> $ org_id                             <chr> "5556", "4519", "7374", "6546", "6123", "3680", "4060…
+    #> $ expenditure_amount                 <dbl> 1000.00, 1615.00, 714.00, 27.60, 845.00, 41.00, 135.0…
+    #> $ expenditure_date                   <date> 2012-08-10, 2009-10-31, 2014-10-20, 2013-09-25, 2012…
+    #> $ last_name                          <chr> "Faulkner", "Gray", "USPS", "USPS", "Hayden Golden", …
+    #> $ first_name                         <chr> "Cynthia", "Robb", NA, NA, NA, NA, NA, NA, NA, NA, NA…
+    #> $ middle_name                        <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
+    #> $ suffix                             <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
+    #> $ address1                           <chr> NA, "820 First Street, NE", "GREAT FALLS PLAZA", "30 …
+    #> $ address2                           <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "…
+    #> $ city                               <chr> NA, "Washington", "AUBURN", "BRUNSWICK", "Westbrook",…
+    #> $ state                              <chr> NA, "DC", "ME", "ME", "ME", NA, NA, "DC", NA, "ME", "…
+    #> $ zip                                <chr> NA, "20002", "04210", "04011", "04092", NA, NA, "2000…
+    #> $ explanation                        <chr> "consulting", "total monthly salary", "PURCHASED STAM…
+    #> $ expenditure_id                     <chr> "84264", "28150", "114949", "84784", "37325", "8776",…
+    #> $ filed_date                         <date> 2013-10-08, 2009-12-14, 2014-10-23, 2014-01-15, 2012…
+    #> $ purpose                            <chr> "Campaign consultants", "Campaign workers' salaries",…
+    #> $ expenditure_type                   <chr> "Monetary (Itemized)", "Monetary (Itemized)", "Moneta…
+    #> $ committee_type                     <chr> "Candidate", "Ballot Question Committee", "Candidate"…
+    #> $ committee_name                     <chr> NA, "Center on Budget & Policy Priorities", NA, NA, "…
+    #> $ candidate_name                     <chr> "Governor Paul R LePage", NA, "R. WAYNE WERTS", "Ralp…
+    #> $ amended                            <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALS…
+    #> $ legacy_id                          <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
+    #> $ committee_office                   <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
+    #> $ committee_district                 <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
+    #> $ committee_party                    <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
+    #> $ committee_financing_type           <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
+    #> $ support_oppose_candidate_legacy_id <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
+    #> $ office                             <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
+    #> $ district                           <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
+    #> $ report_name                        <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
 
 ### Missing
 
@@ -343,38 +344,39 @@ glimpse(sample_frac(me))
 glimpse_fun(me, count_na)
 ```
 
-    #> # A tibble: 29 x 4
-    #>    col                      type       n          p
-    #>    <chr>                    <chr>  <dbl>      <dbl>
-    #>  1 org_id                   chr        0 0         
-    #>  2 expenditure_amount       dbl        0 0         
-    #>  3 expenditure_date         date       0 0         
-    #>  4 last_name                chr       19 0.0000972 
-    #>  5 first_name               chr   156082 0.798     
-    #>  6 middle_name              chr   187276 0.958     
-    #>  7 suffix                   chr   195154 0.998     
-    #>  8 address1                 chr    43235 0.221     
-    #>  9 address2                 chr   187023 0.957     
-    #> 10 city                     chr    42439 0.217     
-    #> 11 state                    chr    40388 0.207     
-    #> 12 zip                      chr    45357 0.232     
-    #> 13 explanation              chr    33307 0.170     
-    #> 14 expenditure_id           chr        0 0         
-    #> 15 filed_date               date       1 0.00000511
-    #> 16 purpose                  chr      285 0.00146   
-    #> 17 expenditure_type         chr        0 0         
-    #> 18 committee_type           chr        0 0         
-    #> 19 committee_name           chr    87100 0.445     
-    #> 20 candidate_name           chr   120904 0.618     
-    #> 21 amended                  lgl        0 0         
-    #> 22 legacy_id                chr   162447 0.831     
-    #> 23 candidate_office         chr   194747 0.996     
-    #> 24 candidate_district       chr   194796 0.996     
-    #> 25 candidate_party          chr   194747 0.996     
-    #> 26 candidate_financing_type chr   194049 0.993     
-    #> 27 office                   chr   176409 0.902     
-    #> 28 district                 chr   183762 0.940     
-    #> 29 report_name              chr   162965 0.834
+    #> # A tibble: 30 x 4
+    #>    col                                type        n          p
+    #>    <chr>                              <chr>   <dbl>      <dbl>
+    #>  1 org_id                             <chr>       0 0         
+    #>  2 expenditure_amount                 <dbl>       0 0         
+    #>  3 expenditure_date                   <date>      0 0         
+    #>  4 last_name                          <chr>      15 0.0000923 
+    #>  5 first_name                         <chr>  129674 0.798     
+    #>  6 middle_name                        <chr>  155336 0.956     
+    #>  7 suffix                             <chr>  162129 0.998     
+    #>  8 address1                           <chr>   43197 0.266     
+    #>  9 address2                           <chr>  156939 0.966     
+    #> 10 city                               <chr>   42421 0.261     
+    #> 11 state                              <chr>   40374 0.249     
+    #> 12 zip                                <chr>   45334 0.279     
+    #> 13 explanation                        <chr>   31821 0.196     
+    #> 14 expenditure_id                     <chr>       0 0         
+    #> 15 filed_date                         <date>      1 0.00000616
+    #> 16 purpose                            <chr>       0 0         
+    #> 17 expenditure_type                   <chr>       0 0         
+    #> 18 committee_type                     <chr>       0 0         
+    #> 19 committee_name                     <chr>   73843 0.455     
+    #> 20 candidate_name                     <chr>   88604 0.545     
+    #> 21 amended                            <lgl>       0 0         
+    #> 22 legacy_id                          <chr>  162447 1         
+    #> 23 committee_office                   <chr>  162447 1         
+    #> 24 committee_district                 <chr>  162447 1         
+    #> 25 committee_party                    <chr>  162447 1         
+    #> 26 committee_financing_type           <chr>  162447 1         
+    #> 27 support_oppose_candidate_legacy_id <chr>  162447 1         
+    #> 28 office                             <chr>  162447 1         
+    #> 29 district                           <chr>  162447 1         
+    #> 30 report_name                        <chr>  162447 1
 
 We can use `campfin::flag_na()` to create a new `na_flag` variable to
 flag any record missing a variable needed to identify the parties to a
@@ -391,40 +393,10 @@ me <- me %>%
 )
 
 sum(me$na_flag)
-#> [1] 13276
+#> [1] 15
 percent(mean(me$na_flag))
-#> [1] "6.79%"
+#> [1] "0%"
 ```
-
-The *vast* majority of records flagged with `na_flag` are from 2018,
-where 42.8% of that year’s records are missing some variable needed to
-identify the transaction.
-
-``` r
-me %>% 
-  group_by(year = year(expenditure_date)) %>% 
-  summarize(
-    rows = n(), 
-    na = sum(na_flag), 
-    prop_na = na/rows
-  )
-```
-
-    #> # A tibble: 12 x 4
-    #>     year  rows    na   prop_na
-    #>    <dbl> <int> <int>     <dbl>
-    #>  1  2008 18690     2 0.000107 
-    #>  2  2009  7937     0 0        
-    #>  3  2010 25569     3 0.000117 
-    #>  4  2011  5410     2 0.000370 
-    #>  5  2012 24413     3 0.000123 
-    #>  6  2013  6057     4 0.000660 
-    #>  7  2014 29689     0 0        
-    #>  8  2015  7873     0 0        
-    #>  9  2016 28545     1 0.0000350
-    #> 10  2017 10253   706 0.0689   
-    #> 11  2018 28730 12290 0.428    
-    #> 12  2019  2346   265 0.113
 
 ### Duplicates
 
@@ -435,10 +407,12 @@ are a number of duplicated records. We can flag every duplicate record
 ``` r
 me <- flag_dupes(me, -expenditure_id)
 sum(me$dupe_flag)
-#> [1] 5551
+#> [1] 5205
+percent(mean(me$dupe_flag))
+#> [1] "3%"
 ```
 
-    #> # A tibble: 5,551 x 32
+    #> # A tibble: 5,205 x 33
     #>    org_id expenditure_amo… expenditure_date last_name first_name middle_name suffix address1
     #>    <chr>             <dbl> <date>           <chr>     <chr>      <chr>       <chr>  <chr>   
     #>  1 639                50.6 2008-01-07       Vonage    <NA>       <NA>        <NA>   www.von…
@@ -451,12 +425,13 @@ sum(me$dupe_flag)
     #>  8 2257               10.5 2008-05-28       Printing  Atkins     <NA>        <NA>   155 Mai…
     #>  9 2257               10.5 2008-05-28       Printing  Atkins     <NA>        <NA>   155 Mai…
     #> 10 3993               31.5 2008-05-28       Rite Aid  <NA>       <NA>        <NA>   <NA>    
-    #> # … with 5,541 more rows, and 24 more variables: address2 <chr>, city <chr>, state <chr>,
+    #> # … with 5,195 more rows, and 25 more variables: address2 <chr>, city <chr>, state <chr>,
     #> #   zip <chr>, explanation <chr>, expenditure_id <chr>, filed_date <date>, purpose <chr>,
     #> #   expenditure_type <chr>, committee_type <chr>, committee_name <chr>, candidate_name <chr>,
-    #> #   amended <lgl>, legacy_id <chr>, candidate_office <chr>, candidate_district <chr>,
-    #> #   candidate_party <chr>, candidate_financing_type <chr>, office <chr>, district <chr>,
-    #> #   report_name <chr>, expender_name <chr>, na_flag <lgl>, dupe_flag <lgl>
+    #> #   amended <lgl>, legacy_id <chr>, committee_office <chr>, committee_district <chr>,
+    #> #   committee_party <chr>, committee_financing_type <chr>,
+    #> #   support_oppose_candidate_legacy_id <chr>, office <chr>, district <chr>, report_name <chr>,
+    #> #   expender_name <chr>, na_flag <lgl>, dupe_flag <lgl>
 
 Duplicate records are not clearly isolated to a single expenditure year.
 
@@ -466,7 +441,7 @@ me %>%
   summarize(dupes = sum(dupe_flag))
 ```
 
-    #> # A tibble: 12 x 2
+    #> # A tibble: 10 x 2
     #>     year dupes
     #>    <dbl> <int>
     #>  1  2008   356
@@ -478,55 +453,52 @@ me %>%
     #>  7  2014  1258
     #>  8  2015    48
     #>  9  2016  1610
-    #> 10  2017    88
-    #> 11  2018   303
-    #> 12  2019    24
+    #> 10  2017    69
 
 ### Categorical
 
 ``` r
-glimpse_fun(me, n_distinct)
+col_stats(me, n_distinct)
 ```
 
-    #> # A tibble: 32 x 4
-    #>    col                      type       n         p
-    #>    <chr>                    <chr>  <dbl>     <dbl>
-    #>  1 org_id                   chr     3258 0.0167   
-    #>  2 expenditure_amount       dbl    49839 0.255    
-    #>  3 expenditure_date         date    4179 0.0214   
-    #>  4 last_name                chr    30643 0.157    
-    #>  5 first_name               chr     3022 0.0155   
-    #>  6 middle_name              chr      142 0.000726 
-    #>  7 suffix                   chr        9 0.0000460
-    #>  8 address1                 chr    25738 0.132    
-    #>  9 address2                 chr     1150 0.00588  
-    #> 10 city                     chr     3151 0.0161   
-    #> 11 state                    chr       95 0.000486 
-    #> 12 zip                      chr     3169 0.0162   
-    #> 13 explanation              chr    62329 0.319    
-    #> 14 expenditure_id           chr   195512 1        
-    #> 15 filed_date               date    2325 0.0119   
-    #> 16 purpose                  chr       48 0.000246 
-    #> 17 expenditure_type         chr        5 0.0000256
-    #> 18 committee_type           chr        5 0.0000256
-    #> 19 committee_name           chr      749 0.00383  
-    #> 20 candidate_name           chr     2462 0.0126   
-    #> 21 amended                  lgl        2 0.0000102
-    #> 22 legacy_id                chr      643 0.00329  
-    #> 23 candidate_office         chr       10 0.0000511
-    #> 24 candidate_district       chr      111 0.000568 
-    #> 25 candidate_party          chr        6 0.0000307
-    #> 26 candidate_financing_type chr        6 0.0000307
-    #> 27 office                   chr       12 0.0000614
-    #> 28 district                 chr      167 0.000854 
-    #> 29 report_name              chr       37 0.000189 
-    #> 30 expender_name            chr     3038 0.0155   
-    #> 31 na_flag                  lgl        2 0.0000102
-    #> 32 dupe_flag                lgl        2 0.0000102
+    #> # A tibble: 33 x 4
+    #>    col                                class       n          p
+    #>    <chr>                              <chr>   <int>      <dbl>
+    #>  1 org_id                             <chr>    2921 0.0180    
+    #>  2 expenditure_amount                 <dbl>   44372 0.273     
+    #>  3 expenditure_date                   <date>   3621 0.0223    
+    #>  4 last_name                          <chr>   27208 0.167     
+    #>  5 first_name                         <chr>    2790 0.0172    
+    #>  6 middle_name                        <chr>      47 0.000289  
+    #>  7 suffix                             <chr>       8 0.0000492 
+    #>  8 address1                           <chr>   21716 0.134     
+    #>  9 address2                           <chr>     840 0.00517   
+    #> 10 city                               <chr>    2776 0.0171    
+    #> 11 state                              <chr>      95 0.000585  
+    #> 12 zip                                <chr>    2833 0.0174    
+    #> 13 explanation                        <chr>   50895 0.313     
+    #> 14 expenditure_id                     <chr>  162447 1         
+    #> 15 filed_date                         <date>   2030 0.0125    
+    #> 16 purpose                            <chr>      45 0.000277  
+    #> 17 expenditure_type                   <chr>       4 0.0000246 
+    #> 18 committee_type                     <chr>       4 0.0000246 
+    #> 19 committee_name                     <chr>     671 0.00413   
+    #> 20 candidate_name                     <chr>    2291 0.0141    
+    #> 21 amended                            <lgl>       2 0.0000123 
+    #> 22 legacy_id                          <chr>       1 0.00000616
+    #> 23 committee_office                   <chr>       1 0.00000616
+    #> 24 committee_district                 <chr>       1 0.00000616
+    #> 25 committee_party                    <chr>       1 0.00000616
+    #> 26 committee_financing_type           <chr>       1 0.00000616
+    #> 27 support_oppose_candidate_legacy_id <chr>       1 0.00000616
+    #> 28 office                             <chr>       1 0.00000616
+    #> 29 district                           <chr>       1 0.00000616
+    #> 30 report_name                        <chr>       1 0.00000616
+    #> 31 expender_name                      <chr>    2959 0.0182    
+    #> 32 na_flag                            <lgl>       2 0.0000123 
+    #> 33 dupe_flag                          <lgl>       2 0.0000123
 
 ![](../plots/committe_type_bar-1.png)<!-- -->
-
-![](../plots/finance_type_bar-1.png)<!-- -->
 
 ![](../plots/office_bar-1.png)<!-- -->
 
@@ -542,11 +514,11 @@ distribution of values for plausability.
 ``` r
 summary(me$expenditure_amount)
 #>       Min.    1st Qu.     Median       Mean    3rd Qu.       Max. 
-#> -1418350.0       33.6      142.4     1379.3      539.0  1418350.0
+#> -1418350.0       34.2      145.0     1392.8      541.0  1418350.0
 sum(me$expenditure_amount < 0)
-#> [1] 3908
+#> [1] 3906
 percent(mean(me$expenditure_amount < 0))
-#> [1] "2.00%"
+#> [1] "2%"
 ```
 
 From this summary, we can see a suspicious similarity between the
@@ -596,7 +568,7 @@ me <- mutate(me, expenditure_year = year(expenditure_date))
 ```
 
 The `expenditure_date` value is very clean, with 0 records from before
-2008-01-02 and 0 records after 2019-08-09.
+2008-01-02 and 0 records after 2017-12-31.
 
 ``` r
 prop_na(me$expenditure_date)
@@ -606,7 +578,7 @@ min(me$expenditure_date)
 sum(me$expenditure_year < 2000)
 #> [1] 0
 max(me$expenditure_date)
-#> [1] "2019-08-09"
+#> [1] "2017-12-31"
 sum(me$expenditure_date > today())
 #> [1] 0
 ```
@@ -632,38 +604,28 @@ me <- me %>%
   mutate(
     address_norm = normal_address(
       address = address_combine,
-      add_abbs = usps_street,
+      abbs = usps_street,
       na_rep = TRUE
     )
-  )
+  ) %>% 
+  select(-address_combine)
 ```
 
-    #> # A tibble: 10 x 4
-    #>    address_combine            address1                   address2 address_norm                 
-    #>    <chr>                      <chr>                      <chr>    <chr>                        
-    #>  1 6 ASSELYN DR               6 ASSELYN DR               <NA>     6 ASSELYN DRIVE              
-    #>  2 116 MILLS RD.              116 MILLS RD.              <NA>     116 MILLS ROAD               
-    #>  3 P.O. BOX 15124             P.O. BOX 15124             <NA>     PO BOX 15124                 
-    #>  4 21 LIMEROCK ST             21 LIMEROCK ST             <NA>     21 LIMEROCK STREET           
-    #>  5 565 CONGRESS ST, SUITE 200 565 CONGRESS ST, SUITE 200 <NA>     565 CONGRESS STREET SUITE 200
-    #>  6 243 WESTERN AVE            243 WESTERN AVE            <NA>     243 WESTERN AVENUE           
-    #>  7 ""                         <NA>                       <NA>     <NA>                         
-    #>  8 www.staples.com            www.staples.com            <NA>     WWWSTAPLESCOM                
-    #>  9 45 GOSLING RD              45 GOSLING RD              <NA>     45 GOSLING ROAD              
-    #> 10 1600 AMPHITHEATRE PKWY     1600 AMPHITHEATRE PKWY     <NA>     1600 AMPHITHEATRE PARKWAY
+    #> # A tibble: 10 x 3
+    #>    address1                       address2 address_norm                      
+    #>    <chr>                          <chr>    <chr>                             
+    #>  1 <NA>                           <NA>     <NA>                              
+    #>  2 PO BOX 437                     <NA>     PO BOX 437                        
+    #>  3 443 CONGRESS STREET, 3RD FLOOR NONE     443 CONGRESS STREET 3RD FLOOR NONE
+    #>  4 HAMMOND STREET                 <NA>     HAMMOND STREET                    
+    #>  5 177 WILSON STREET              <NA>     177 WILSON STREET                 
+    #>  6 WESTERN AVE                    <NA>     WESTERN AVENUE                    
+    #>  7 P.O. Box 336                   <NA>     PO BOX 336                        
+    #>  8 31 Birchwood Lane              <NA>     31 BIRCHWOOD LANE                 
+    #>  9 125 W 55TH ST                  FL 8     125 WEST 55TH STREET FLOOR 8      
+    #> 10 <NA>                           <NA>     <NA>
 
 ### ZIP
-
-``` r
-n_distinct(me$zip)
-#> [1] 3169
-prop_na(me$zip)
-#> [1] 0.2319909
-prop_in(me$zip, valid_zip)
-#> [1] 0.9406147
-length(setdiff(me$zip, valid_zip))
-#> [1] 917
-```
 
 ``` r
 me <- me %>% 
@@ -675,43 +637,22 @@ me <- me %>%
   )
 ```
 
-``` r
-n_distinct(me$zip_norm)
-#> [1] 2505
-prop_na(me$zip_norm)
-#> [1] 0.2391618
-prop_in(me$zip_norm, valid_zip)
-#> [1] 0.994622
-length(setdiff(me$zip_norm, valid_zip))
-#> [1] 198
-```
+    #> # A tibble: 2 x 6
+    #>   stage    prop_in n_distinct prop_na n_out n_diff
+    #>   <chr>      <dbl>      <dbl>   <dbl> <dbl>  <dbl>
+    #> 1 zip        0.934       2833   0.279  7707    815
+    #> 2 zip_norm   0.995       2248   0.287   608    175
 
 There are still some `zip_norm` values that are invalid. We will leave
 these unchanged for now.
 
 ``` r
 sample(unique(me$zip[which(me$zip_norm %out% valid_zip)]), 20)
-#>  [1] "04641"      "V6E 4A2"    "04486"      "04517"      "04542"      "83508"      "00000-4005"
-#>  [8] "999999"     "00413"      "04277"      "40605"      "04704"      "98714"      "04340"     
-#> [15] "04130"      "04384"      "0410"       "3000"       "04804"      "90425"
+#>  [1] "."      "000000" "04802"  "90236"  "83508"  "04432"  "04704"  "04882"  "04828"  "04035" 
+#> [11] "04335"  "04025"  "04839"  "03879"  "04598"  "94360"  "04201"  "03139"  "04301"  "04720"
 ```
 
 ### State
-
-``` r
-n_distinct(me$state)
-#> [1] 95
-prop_na(me$state)
-#> [1] 0.2065756
-prop_in(me$state, valid_state)
-#> [1] 0.9794616
-length(setdiff(me$state, valid_state))
-#> [1] 42
-setdiff(me$state, valid_state)
-#>  [1] NA   "  " "ns" "ON" "Me" "Ca" "Mn" "me" "md" "Va" "BC" "Ma" "PQ" "mE" "Cu" "UK" "ma" "m " "nh"
-#> [20] "In" "IF" "M " "na" ". " "NB" "mA" "Fl" "id" "on" "Il" "Dc" "dc" "ut" "XX" "Ta" "AB" "NS" "PE"
-#> [39] "NT" "QC" "AU" "SP"
-```
 
 ``` r
 me <- me %>% 
@@ -726,53 +667,26 @@ me <- me %>%
   )
 ```
 
-``` r
-n_distinct(me$state_norm)
-#> [1] 53
-prop_na(me$state)
-#> [1] 0.2065756
-prop_in(me$state_norm, valid_state, na.rm = TRUE)
-#> [1] 1
-length(setdiff(me$state_norm, valid_state))
-#> [1] 1
-```
+    #> # A tibble: 2 x 6
+    #>   stage      prop_in n_distinct prop_na n_out n_diff
+    #>   <chr>        <dbl>      <dbl>   <dbl> <dbl>  <dbl>
+    #> 1 state        0.975         95   0.249  3080     42
+    #> 2 state_norm   1             53   0.261     0      1
 
 ### City
-
-``` r
-n_distinct(me$city)
-#> [1] 3151
-prop_in(me$city, valid_city, na.rm = TRUE)
-#> [1] 0.6082784
-length(setdiff(me$city, valid_city))
-#> [1] 2114
-```
-
-#### Normalize
 
 ``` r
 me <- me %>% 
   mutate(
     city_norm = normal_city(
-      city = city, 
-      geo_abbs = usps_city,
-      st_abbs = c("ME", "DC", "MAINE"),
+      city = city,
+      abbs = usps_city,
+      states = c("ME", "DC", "MAINE"),
       na = invalid_city,
       na_rep = TRUE
     )
   )
 ```
-
-``` r
-n_distinct(me$city_norm)
-#> [1] 1966
-prop_in(me$city_norm, valid_city, na.rm = TRUE)
-#> [1] 0.9780086
-length(setdiff(me$city_norm, valid_city))
-#> [1] 640
-```
-
-#### Swap
 
 ``` r
 me <- me %>% 
@@ -786,31 +700,37 @@ me <- me %>%
   ) %>% 
   rename(city_match = city) %>% 
   mutate(
-    match_dist = stringdist(city_norm, city_match),
+    match_abb = is_abbrev(city_norm, city_match),
+    match_dist = str_dist(city_norm, city_match),
     city_swap = if_else(
-      condition = equals(match_dist, 1),
+      condition = match_abb | match_dist <= 2,
       true = city_match,
       false = city_norm
     )
+  ) %>% 
+  select(
+    -city_match,
+    -match_abb,
+    -match_dist
   )
 ```
 
-    #> # A tibble: 3 x 4
-    #>   step  n_distinct prop_in unique_bad
-    #>   <chr>      <int>   <dbl>      <int>
-    #> 1 raw         3151   0.608       2114
-    #> 2 norm        1966   0.978        640
-    #> 3 swap        1534   0.991        244
+    #> # A tibble: 3 x 6
+    #>   stage     prop_in n_distinct prop_na n_out n_diff
+    #>   <chr>       <dbl>      <dbl>   <dbl> <dbl>  <dbl>
+    #> 1 city_raw    0.595       2776   0.261 48635   1787
+    #> 2 city_norm   0.978       1758   0.269  2619    538
+    #> 3 city_swap   0.994       1339   0.297   736    152
 
 ## Conclude
 
-1.  There are 195512 records in the database.
-2.  There are 5551 (2.84%) duplicate records in the database, flagged
-    with `dupe_flag`.
+1.  There are 162447 records in the database.
+2.  There are 5205 (3%) duplicate records in the database, flagged with
+    `dupe_flag`.
 3.  The range and distribution of `expenditure_amount` and
     `expenditure_date` seem reasonable.
-4.  There are 13276 (6.79%) records missing either the amount, date,
-    payee, or expender. Most from 2018.
+4.  There are 15 (0%) records missing either the amount, date, payee, or
+    expender. Most from 2018.
 5.  Consistency in goegraphic data has been improved with
     `campfin::normal_*()`.
 6.  The 5-digit `zip_norm` variable has been created with
@@ -826,36 +746,27 @@ dir_create(proc_dir)
 ```
 
 ``` r
-me <- me %>% 
-  select(
-    -city_match,
-    -city_norm,
+lookup_file <- here("me", "expends", "data", "me_city_lookup.csv")
+if (file_exists(lookup_file)) {
+  lookup <- 
+    read_csv(lookup_file) %>% 
+    select(1:2) %>% 
+    rename_all(str_to_lower)
+  me <- left_join(me, lookup)
+  progress_table(
+    me$city_swap, 
+    me$city_clean, 
+    compare = valid_city
   )
+  me <- select(me, -city_swap)
+}
 ```
 
-## Lookup
-
 ``` r
-lookup <- read_csv("me/expends/data/me_city_lookup.csv") %>% select(1:2)
-me <- left_join(me, lookup, by = c("city_swap" = "CITY_SWAP"))
-
-progress_table(
-  me$city_swap, 
-  me$CITY_CLEAN, 
-  compare = valid_city
-)
-```
-
-    #> # A tibble: 2 x 6
-    #>   stage      prop_in n_distinct prop_na n_out n_diff
-    #>   <chr>        <dbl>      <dbl>   <dbl> <dbl>  <dbl>
-    #> 1 city_swap    0.991       1534   0.250  1315    244
-    #> 2 CITY_CLEAN   0.994       1456   0.251   907    165
-
-``` r
+proc_file <- glue("{proc_dir}/me_expends_clean.csv")
 write_csv(
   x = me,
-  path = glue("{proc_dir}/me_expends_clean.csv"),
+  path = proc_file,
   na = ""
 )
 ```
