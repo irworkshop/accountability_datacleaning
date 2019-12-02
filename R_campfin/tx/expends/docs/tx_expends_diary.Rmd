@@ -71,6 +71,7 @@ functions custom made to help facilitate the processing of campaign finance data
 ```{r load_packages, message=FALSE, dfrning=FALSE, error=FALSE}
 if (!require("pacman")) install.packages("pacman")
 pacman::p_load_gh("irworkshop/campfin")
+pacman::p_load_gh("kiernann/gluedown")
 pacman::p_load(
   snakecase, # convert string case
   tidyverse, # data manipulation
@@ -124,7 +125,7 @@ with the Texas Ethics Commission beginning July 1, 2000. Flat File Architecture 
 Generated 06/11/2016 12:38:08 PM
 
 ```{r read_key}
-readme <- read_lines(file = "https://www.ethics.state.tx.us/data/search/cf/CFS-ReadMe.txt")
+readme <- read_lines("https://www.ethics.state.tx.us/data/search/cf/CFS-ReadMe.txt")
 ```
 
 At the top of this file is a table of contents.
@@ -136,12 +137,15 @@ readme[seq(13, 47, 2)][-2] %>%
   map(str_c, collapse = "|") %>%
   str_trim("both") %>% 
   str_c(collapse = "\n") %>%
-  read_delim(delim = "|") %>%
+  read_delim(delim = "|") %>% 
   mutate(
-    `File Name(s)` = glue("`{`File Name(s)`}`"),
+    `File Name(s)` = `File Name(s)` %>% 
+      str_split(",\\s") %>% 
+      map(md_code) %>% 
+      map_chr(str_c, collapse = ", "),
     `File Contents` = str_trunc(`File Contents`, width = 30)
   ) %>% 
-  kable("markdown")
+  md_table()
 ```
 
 From this table, we know the ExpendData record (`contribs_##.csv`) contains the data we want.
@@ -171,7 +175,7 @@ readme[497:535] %>%
     convert = TRUE
   ) %>%
   select(1, 2, 5) %>% 
-  mutate(`Field Name` = glue("`{to_snake_case(`Field Name`)}`")) %>%
+  mutate(`Field Name` = md_code(to_snake_case(`Field Name`))) %>%
   mutate_at(vars(Type), str_remove_all, "[^A-z]") %>% 
   kable("markdown")
 ```
@@ -196,7 +200,7 @@ readme[543:547][-2] %>%
     extra = "merge",
     convert = TRUE
   ) %>% 
-  mutate(`Field Name` = glue("`{to_snake_case(`Field Name`)}`")) %>%
+  mutate(`Field Name` = md_code(to_snake_case(`Field Name`))) %>%
   select(1, 2, 4) %>% 
   kable("markdown")
 ```

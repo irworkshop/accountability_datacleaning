@@ -121,10 +121,83 @@ expenditures made by a candidate or political committee is guilty of a Class B m
 > * The Board provides files of campaign disclosure data; the Board does not provide software to
 process this data.
 
+>  Click the link below for the file type desired. Choose "Save" to copy the file to your computer.
+The maximum number of records available for download is 25,000.
+> ### File Type
+> * Tab-Delimited Text File
+> * CSV File
+> * XML File
 
 ```{r raw_dir_create}
 raw_dir <- here("il", "expends", "data", "raw")
 dir_create(raw_dir)
+```
+
+```{r}
+start_date <- as.Date("2008-01-01")
+end_date <- today()
+max_months <- interval(start_date, end_date) %/% months(1)
+n_months <- seq(0, max_months)
+```
+
+```{r}
+# open the driver with auto download options
+remote_driver <- rsDriver(
+  port = 4444L,
+  browser = "firefox",
+  extraCapabilities = makeFirefoxProfile(
+    list(
+      browser.download.dir = raw_dir,
+      browser.download.folderList = 2L,
+      browser.download.manager.showWhenStarting = FALSE,
+      browser.helperApps.alwaysAsk.force = FALSE,
+      browser.helperApps.neverAsk.saveToDisk = "text/plain",
+      browser.helperApps.neverAsk.openFile = "text/plain"
+    )
+  )
+)
+```
+
+```{r download_raw, warning=FALSE, error=FALSE, message=FALSE, collapse=TRUE, eval=FALSE}
+remote_browser <- remote_driver$client
+for (i in 0:1) {
+  # navigate to the FL DOE download site
+  url <- "https://www.elections.il.gov/CampaignDisclosure/ExpenditureSearchByAllExpenditures.aspx"
+  remote_browser$navigate(url)
+  
+  # calculate the month start and end
+  month_start <- start_date + months(i)
+  month_end <- month_start + months(1) - days(1)
+  
+  # enter the month start
+  start_keys <- list(format(month_start, "%m/%d/%Y"))
+  start_css <- "#ContentPlaceHolder1_txtExpendedDate"
+  remote_browser$findElement("css", start_css)$sendKeysToElement(start_keys)
+  
+  # enter the month end
+  end_keys <- list(format(month_end, "%m/%d/%Y"))
+  end_css <- "#ContentPlaceHolder1_txtExpendedDateThru"
+  remote_browser$findElement("css", end_css)$sendKeysToElement(end_keys)
+  
+  # click the submit button
+  remote_browser$findElement("css", "#ContentPlaceHolder1_btnSubmit")$clickElement()
+  
+  # click the download button
+  remote_browser$findElement("css", "#ContentPlaceHolder1_lnkDownloadList")$clickElement()
+  
+  # click the tab-file link
+  remote_browser$findElement("css", "#ContentPlaceHolder1_btnText")$clickElement()
+  
+  # rename the file after waiting
+  Sys.sleep(30)
+  file_path <- str_c(raw_dir, "Expenditures.txt", sep = "/")
+  new_name <- str_c(raw_dir, glue("{month_start}_{month_end}_Expenditures.txt"), sep = "/")
+  file_move(file_path, new_name)
+}
+
+# close the browser and driver
+remote_browser$close()
+remote_driver$server$stop()
 ```
 
 ## Import
