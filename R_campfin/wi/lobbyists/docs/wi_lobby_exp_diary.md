@@ -1,7 +1,7 @@
 Wisconsin Lobbying Data Diary
 ================
 Yanqi Xu
-2019-12-02 15:35:04
+2019-12-02 16:54:51
 
 -   [Project](#project)
 -   [Objectives](#objectives)
@@ -381,7 +381,7 @@ Export
 ------
 
 ``` r
-proc_dir <- here("wi", "type", "data", "processed","expends")
+proc_dir <- here("wi", "lobbyists", "data", "processed","expends")
 dir_create(proc_dir)
 ```
 

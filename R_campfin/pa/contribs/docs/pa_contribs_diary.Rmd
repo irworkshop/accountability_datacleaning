@@ -15,10 +15,19 @@ editor_options:
 ```{r setup, include=FALSE, results='asis'}
 library(knitr)
 opts_chunk$set(
+  eval = TRUE,
   echo = TRUE,
-  warning = FALSE
+  warning = FALSE,
+  message = FALSE,
+  error = FALSE,
+  collapse = TRUE,
+  comment = "#>",
+  fig.path = "../plots/",
+  fig.width = 10,
+  dpi = 300
 )
 options(width = 99)
+set.seed(5)
 ```
 
 
@@ -113,7 +122,7 @@ here::here()
 
 [Link][03] to download
 
-[03]: https://www.dos.pa.gov/VotingElections/CandidatesCommittees/CampaignFinance/Resources/Pages/FullCampaignFinanceExport.aspx "source"
+[03]:https://www.dos.pa.gov/VotingElections/CandidatesCommittees/CampaignFinance/Resources/Pages/FullCampaignFinanceExport.aspx "source"
 
 
 ### Download
@@ -183,7 +192,7 @@ pa <- contrib_files %>%
 
 ### About
 
-More information about the record layout can be found here https://www.dos.pa.gov/VotingElections/CandidatesCommittees/CampaignFinance/Resources/Documents/readme.txt.
+More information about the record layout can be found [here] [https://www.dos.pa.gov/VotingElections/CandidatesCommittees/CampaignFinance/Resources/Documents/readme.txt].
 
 ### Encoding
 ```{r eval=FALSE}
@@ -279,7 +288,7 @@ pa <- pa %>% flag_na(CONTRIBUTOR, CONTAMT1, CONTDATE1)
 
 ### Duplicates
 
-
+The `flag_dupes` function creates a new column `dupe_flag` that evaluates to `TRUE` when they are duplicates. 
 ```{r flag_dupes, eval = FALSE, collapse=TRUE}
 pa <- flag_dupes(pa, dplyr::everything())
 ```
@@ -304,11 +313,13 @@ See how the campaign contributions were distributed
 ```{r amount distribution}
 pa %>% 
   ggplot(aes(x = CONTAMT1)) + 
-  geom_histogram() +
+  geom_histogram(fill = RColorBrewer::brewer.pal(3, "Dark2")[3]) +
+    geom_vline(xintercept = median(pa$CONTAMT1, na.rm = TRUE), linetype = 2) +
   scale_x_continuous(
     trans = "log10", labels = dollar) +
   labs(title = "Pennsylvania Campaign Contribution Amount Distribution",
-       caption = "Source: Pennsylvania Dept. of State")
+       caption = "Source: Pennsylvania Dept. of State",
+       x = "Amount")
 ```
 
 #### Year
@@ -322,6 +333,32 @@ pa$CONTDATE1 <- as.Date(pa$CONTDATE1, "%Y%m%d")
 ```{r add_year, eval=FALSE}
 pa <- pa %>% mutate(year = year(CONTDATE1), on_year = is_even(year))
 ```
+
+We then plot the number of distinct contributions for each election year. 
+```{r}
+pa %>% 
+  mutate(year = as.numeric(year)) %>% 
+  filter(year > 2014 & year < 2020) %>% 
+  count(year, sort = T) %>% 
+  mutate(on = is_even(year),) %>%
+  ggplot(aes(x = year, y = n)) +
+  geom_col(aes(fill = on)) +
+  scale_x_continuous(breaks = 2013:2019) +
+  scale_y_continuous(labels = comma) +
+  scale_fill_brewer(
+    type = "qual",
+    palette = "Dark2"
+  ) +
+  labs(
+   title = "Pennsylvania Campaign Contribution Amount Distribution",
+       caption = "Source: Pennsylvania Dept. of State",
+    fill = "Election Year",
+    x = "Year",
+    y = "Distinct Contributions"
+  ) +
+  theme(legend.position = "bottom")
+```
+
 
 #### Dates
 

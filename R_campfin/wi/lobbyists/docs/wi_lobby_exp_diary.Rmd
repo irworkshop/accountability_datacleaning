@@ -478,7 +478,7 @@ wi_lobby_reg <- wi_reg %>%
 ## Export
 
 ```{r create_proc_dir}
-proc_dir <- here("wi", "type", "data", "processed","expends")
+proc_dir <- here("wi", "lobbyists", "data", "processed","expends")
 dir_create(proc_dir)
 ```
 
