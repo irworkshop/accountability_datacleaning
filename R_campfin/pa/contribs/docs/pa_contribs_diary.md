@@ -1,7 +1,7 @@
 Data Diary
 ================
 Yanqi Xu
-2019-11-11 16:53:26
+2019-11-14 15:45:12
 
 -   [Project](#project)
 -   [Objectives](#objectives)
@@ -204,32 +204,32 @@ pa %>% glimpse_fun(n_distinct)
 ```
 
     ## # A tibble: 24 x 4
-    ##    col         type       n           p
-    ##    <chr>       <chr>  <dbl>       <dbl>
-    ##  1 FILERID     chr     3209 0.000576   
-    ##  2 EYEAR       chr        5 0.000000898
-    ##  3 CYCLE       chr        9 0.00000162 
-    ##  4 SECTION     chr        8 0.00000144 
-    ##  5 CONTRIBUTOR chr   530096 0.0952     
-    ##  6 ADDRESS1    chr   446171 0.0801     
-    ##  7 ADDRESS2    chr    16143 0.00290    
-    ##  8 CITY        chr    18006 0.00323    
-    ##  9 STATE       chr       57 0.0000102  
-    ## 10 ZIPCODE     chr   185855 0.0334     
-    ## 11 OCCUPATION  chr    62240 0.0112     
-    ## 12 ENAME       chr    44791 0.00804    
-    ## 13 EADDRESS1   chr    54553 0.00979    
-    ## 14 EADDRESS2   chr     5398 0.000969   
-    ## 15 ECITY       chr     5320 0.000955   
-    ## 16 ESTATE      chr       56 0.0000101  
-    ## 17 EZIPCODE    chr    21225 0.00381    
-    ## 18 CONTDATE1   date    1904 0.000342   
-    ## 19 CONTAMT1    dbl    66596 0.0120     
-    ## 20 CONTDATE2   chr        1 0.000000180
-    ## 21 CONTAMT2    chr        1 0.000000180
-    ## 22 CONTDATE3   chr        1 0.000000180
-    ## 23 CONTAMT3    chr        1 0.000000180
-    ## 24 CONTDESC    chr    12675 0.00228
+    ##    col         type        n           p
+    ##    <chr>       <chr>   <dbl>       <dbl>
+    ##  1 FILERID     <chr>    3209 0.000576   
+    ##  2 EYEAR       <chr>       5 0.000000898
+    ##  3 CYCLE       <chr>       9 0.00000162 
+    ##  4 SECTION     <chr>       8 0.00000144 
+    ##  5 CONTRIBUTOR <chr>  530096 0.0952     
+    ##  6 ADDRESS1    <chr>  446171 0.0801     
+    ##  7 ADDRESS2    <chr>   16143 0.00290    
+    ##  8 CITY        <chr>   18006 0.00323    
+    ##  9 STATE       <chr>      57 0.0000102  
+    ## 10 ZIPCODE     <chr>  185855 0.0334     
+    ## 11 OCCUPATION  <chr>   62240 0.0112     
+    ## 12 ENAME       <chr>   44791 0.00804    
+    ## 13 EADDRESS1   <chr>   54553 0.00979    
+    ## 14 EADDRESS2   <chr>    5398 0.000969   
+    ## 15 ECITY       <chr>    5320 0.000955   
+    ## 16 ESTATE      <chr>      56 0.0000101  
+    ## 17 EZIPCODE    <chr>   21225 0.00381    
+    ## 18 CONTDATE1   <date>   1904 0.000342   
+    ## 19 CONTAMT1    <dbl>   66596 0.0120     
+    ## 20 CONTDATE2   <chr>       1 0.000000180
+    ## 21 CONTAMT2    <chr>       1 0.000000180
+    ## 22 CONTDATE3   <chr>       1 0.000000180
+    ## 23 CONTAMT3    <chr>       1 0.000000180
+    ## 24 CONTDESC    <chr>   12675 0.00228
 
 ### Missing
 
@@ -240,32 +240,32 @@ pa %>% glimpse_fun(count_na)
 ```
 
     ## # A tibble: 24 x 4
-    ##    col         type        n           p
-    ##    <chr>       <chr>   <dbl>       <dbl>
-    ##  1 FILERID     chr         0 0          
-    ##  2 EYEAR       chr         0 0          
-    ##  3 CYCLE       chr         0 0          
-    ##  4 SECTION     chr      1715 0.000308   
-    ##  5 CONTRIBUTOR chr         3 0.000000539
-    ##  6 ADDRESS1    chr     45297 0.00813    
-    ##  7 ADDRESS2    chr   4987653 0.895      
-    ##  8 CITY        chr     43682 0.00784    
-    ##  9 STATE       chr     44363 0.00796    
-    ## 10 ZIPCODE     chr     34634 0.00622    
-    ## 11 OCCUPATION  chr   2891642 0.519      
-    ## 12 ENAME       chr   3153617 0.566      
-    ## 13 EADDRESS1   chr   3825218 0.687      
-    ## 14 EADDRESS2   chr   5327033 0.956      
-    ## 15 ECITY       chr   3856224 0.692      
-    ## 16 ESTATE      chr   3860960 0.693      
-    ## 17 EZIPCODE    chr   3810189 0.684      
-    ## 18 CONTDATE1   date     4121 0.000740   
-    ## 19 CONTAMT1    dbl         0 0          
-    ## 20 CONTDATE2   chr         0 0          
-    ## 21 CONTAMT2    chr         0 0          
-    ## 22 CONTDATE3   chr         0 0          
-    ## 23 CONTAMT3    chr         0 0          
-    ## 24 CONTDESC    chr   5412685 0.972
+    ##    col         type         n           p
+    ##    <chr>       <chr>    <dbl>       <dbl>
+    ##  1 FILERID     <chr>        0 0          
+    ##  2 EYEAR       <chr>        0 0          
+    ##  3 CYCLE       <chr>        0 0          
+    ##  4 SECTION     <chr>     1715 0.000308   
+    ##  5 CONTRIBUTOR <chr>        3 0.000000539
+    ##  6 ADDRESS1    <chr>    45297 0.00813    
+    ##  7 ADDRESS2    <chr>  4987653 0.895      
+    ##  8 CITY        <chr>    43682 0.00784    
+    ##  9 STATE       <chr>    44363 0.00796    
+    ## 10 ZIPCODE     <chr>    34634 0.00622    
+    ## 11 OCCUPATION  <chr>  2891642 0.519      
+    ## 12 ENAME       <chr>  3153617 0.566      
+    ## 13 EADDRESS1   <chr>  3825218 0.687      
+    ## 14 EADDRESS2   <chr>  5327033 0.956      
+    ## 15 ECITY       <chr>  3856224 0.692      
+    ## 16 ESTATE      <chr>  3860960 0.693      
+    ## 17 EZIPCODE    <chr>  3810189 0.684      
+    ## 18 CONTDATE1   <date>    4121 0.000740   
+    ## 19 CONTAMT1    <dbl>        0 0          
+    ## 20 CONTDATE2   <chr>        0 0          
+    ## 21 CONTAMT2    <chr>        0 0          
+    ## 22 CONTDATE3   <chr>        0 0          
+    ## 23 CONTAMT3    <chr>        0 0          
+    ## 24 CONTDESC    <chr>  5412685 0.972
 
 We will flag any records with missing values in the key variables used to identify a contribution. There are 4124 records missing `CONTRIBUTOR`, `CONTAMT1` AND `CONTDATE1`
 
@@ -670,15 +670,16 @@ progress <- progress_table(
 ) %>% mutate(stage = as_factor(stage))
 ```
 
-| stage           |   prop\_in|    n\_distinct|    prop\_na|    n\_out|           n\_diff|
-|:----------------|----------:|--------------:|-----------:|---------:|-----------------:|
-| CITY            |      0.979|          18006|       0.008|    118640|              6501|
-| city\_prep      |      0.986|          16740|       0.008|     76824|              5129|
-| city\_swap      |      0.991|          13543|       0.008|     52262|              1895|
-| city\_lkp       |      0.993|          12844|       0.008|     40431|              1188|
-| city\_tocheck   |      0.996|          12369|       0.008|     22953|               697|
-| city\_clean     |      0.998|          12096|       0.008|     12745|               423|
-| You can see how |  the perce|  ntage of vali|  d values i|  ncreased|  with each stage.|
+| stage         |  prop\_in|  n\_distinct|  prop\_na|  n\_out|  n\_diff|
+|:--------------|---------:|------------:|---------:|-------:|--------:|
+| CITY          |     0.979|        18006|     0.008|  118640|     6501|
+| city\_prep    |     0.986|        16740|     0.008|   76824|     5129|
+| city\_swap    |     0.991|        13543|     0.008|   52262|     1895|
+| city\_lkp     |     0.993|        12844|     0.008|   40431|     1188|
+| city\_tocheck |     0.996|        12369|     0.008|   22953|      697|
+| city\_clean   |     0.998|        12096|     0.008|   12745|      423|
+
+You can see how the percentage of valid values increased with each stage.
 
 ![](pa_contribs_diary_files/figure-markdown_github/progress_bar-1.png)
 

@@ -251,11 +251,11 @@ The variables range in their degree of distinctness.`CONTDATE2`,  `CONTDATE3`, o
 
 
 ```{r n_distinct, eval=FALSE}
-pa %>% glimpse_fun(n_distinct)
+pa %>% col_stats(n_distinct)
 ```
 
 ```{r actual n_distinct, echo=FALSE, collapse=TRUE}
-pa_orig %>% glimpse_fun(n_distinct)
+pa_orig %>% col_stats(n_distinct)
 ```
 
 ### Missing
@@ -264,11 +264,11 @@ The variables also vary in their degree of values that are `NA` (missing).
 
 
 ```{r count_na, eval=FALSE}
-pa %>% glimpse_fun(count_na)
+pa %>% col_stats(count_na)
 ```
 
 ```{r actual count_na, echo=FALSE}
-pa_orig %>% glimpse_fun(count_na)
+pa_orig %>% col_stats(count_na)
 ```
 
 We will flag any records with missing values in the key variables used to identify a contribution.
@@ -301,7 +301,7 @@ sum(pa$CONTAMT1 < 0 , na.rm = TRUE)
 
 See how the campaign contributions were distributed
 
-```{r amount distribution, eval = TRUE}
+```{r amount distribution}
 pa %>% 
   ggplot(aes(x = CONTAMT1)) + 
   geom_histogram() +
@@ -706,6 +706,7 @@ progress <- progress_table(
 ```{r print progress, echo=FALSE}
 kable(progress, digits = 3)
 ```
+
 You can see how the percentage of valid values increased with each stage.
 
 ```{r progress_bar, echo=FALSE}
@@ -808,7 +809,7 @@ pa <- pa %>% left_join(pa_filer, by = c("FILERID", "EYEAR", "CYCLE"))
 ## Export
 
 
-```{r write_clean}
+```{r write_clean, eval=FALSE}
 clean_dir <- here("pa", "contribs", "data", "processed")
 dir_create(clean_dir)
 pa %>% 
