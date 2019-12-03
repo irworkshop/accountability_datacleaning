@@ -1,0 +1,509 @@
+---
+title: "Wyoming Lobbyists"
+author: "Kiernan Nicholls"
+date: "`r Sys.time()`"
+output:
+  github_document: 
+    df_print: tibble
+    toc: true
+    toc_dept: 2
+editor_options: 
+  chunk_output_type: console
+---
+
+<!-- Place comments regarding knitting here -->
+
+```{r setup, include=FALSE, purl=FALSE}
+library(knitr)
+opts_chunk$set(
+  eval = TRUE,
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  error = FALSE,
+  collapse = TRUE,
+  comment = "#>",
+  fig.path = "../plots/",
+  fig.width = 10,
+  dpi = 300
+)
+options(width = 99)
+set.seed(5)
+```
+
+```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
+fs::dir_create(here::here("wy", "lobby", "docs"))
+```
+
+## Project
+
+The Accountability Project is an effort to cut across data silos and give journalists, policy
+professionals, activists, and the public at large a simple way to search across huge volumes of
+public data about people and organizations.
+
+Our goal is to standardizing public data on a few key fields by thinking of each dataset row as a
+transaction. For each transaction there should be (at least) 3 variables:
+
+1. All **parties** to a transaction
+2. The **date** of the transaction
+3. The **amount** of money involved
+
+## Objectives
+
+This document describes the process used to complete the following objectives:
+
+1. How many records are in the database?
+1. Check for duplicates
+1. Check ranges
+1. Is there anything blank or missing?
+1. Check for consistency issues
+1. Create a five-digit ZIP Code called `ZIP5`
+1. Create a `YEAR` field from the transaction date
+1. Make sure there is data on both parties to a transaction
+
+## Packages
+
+The following packages are needed to collect, manipulate, visualize, analyze, and communicate
+these results. The `pacman` package will facilitate their installation and attachment.
+
+The IRW's `campfin` package will also have to be installed from GitHub. This package contains
+functions custom made to help facilitate the processing of campaign finance data.
+
+```{r load_packages, message=FALSE, dfrning=FALSE, error=FALSE}
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load_gh("irworkshop/campfin")
+pacman::p_load(
+  tidyverse, # data manipulation
+  lubridate, # datetime strings
+  magrittr, # pipe opperators
+  janitor, # dataframe clean
+  refinr, # cluster and merge
+  scales, # format strings
+  knitr, # knit documents
+  vroom, # read files fast
+  httr, # http queries
+  glue, # combine strings
+  here, # relative storage
+  fs # search storage 
+)
+```
+
+This document should be run as part of the `R_campfin` project, which lives as a sub-directory of
+the more general, language-agnostic [`irworkshop/accountability_datacleaning`][01] GitHub
+repository.
+
+The `R_campfin` project uses the [RStudio projects][02] feature and should be run as such. The
+project also uses the dynamic `here::here()` tool for file paths relative to _your_ machine.
+
+```{r where_here}
+# where does this document knit?
+here::here()
+```
+
+[01]: https://github.com/irworkshop/accountability_datacleaning "TAP repo"
+[02]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects "Rproj"
+
+## Data
+
+Data is obtained from the Wyoming Secretary of State's office [Lobbying Center][03]. From their, we
+can download "a zip file containing the lobbyist data files for the current period." We'll make a
+`httr::GET()` request on the file to download write the raw ZIP archive to disk.
+
+```{r raw_get}
+raw_dir <- here("wy", "lobby", "data", "raw")
+dir_create(raw_dir)
+lob_url <- "https://lobbyist.wyo.gov/Lobbyist/Download.aspx"
+lob_head <- headers(HEAD(lob_url))
+lob_file <- str_remove(lob_head[["content-disposition"]], "(.*);\\sfilename=")
+lob_path <- str_c(raw_dir, lob_file, sep = "/")
+if (!this_file_new(lob_path)) {
+  GET(lob_url, write_disk(lob_path, overwrite = TRUE))
+  unzip(lob_path, exdir = raw_dir)
+}
+```
+
+[03]: https://lobbyist.wyo.gov/Lobbyist/Default.aspx
+
+## Import
+
+The `schemaLobbyist.pdf` file outlines the relationship between the three text files included in the
+ZIP archive. Using this guide, we can add the principal organizations to each lobbyist.
+
+First, we will use `vroom::vroom()` to read the data frame of lobbyists.
+
+```{r raw_read_lob}
+lobs <- vroom(
+  .name_repair = make_clean_names,
+  file = glue("{raw_dir}/LOBBYIST.txt"),
+  delim = "|",
+  col_types = cols(
+    .default = col_character(),
+    REGISTRATION_DATE = col_date_usa(),
+    EXPIRATION_DATE = col_date_usa(),
+    TERMINATED_DATE = col_date_usa()
+  )
+)
+
+lobs <- lobs %>% 
+  rename(
+    lob_id = lobbyist_id,
+    lob_num = lobbyist_num,
+    lob_status = status_id,
+    lob_reg = registration_date,
+    lob_exp = expiration_date,
+    lob_badge = name_on_badge,
+    lob_first = first_name,
+    lob_middle = middle_name,
+    lob_last = last_name,
+    zip = postal_code,
+    lob_email = email,
+    lob_term = terminated_date
+  )
+
+lobs <- lobs %>%
+  mutate(lob_status = equals(lob_status, "Active")) %>% 
+  rename(lob_active = lob_status)
+```
+
+Then, we will read the `LOBBYIST_ORGANIZATION_XREF.txt` file to get the relational keys needed to
+add the information from `LOBBYIST_ORGANIZATION.txt` to our lobbyists data frame.
+
+```{r raw_read_xref}
+xref <- vroom(
+  .name_repair = make_clean_names,
+  file = glue("{raw_dir}/LOBBYIST_ORGANIZATION_XREF.txt"),
+  delim = "|",
+  col_types = cols(
+    .default = col_character()
+  )
+)
+
+xref <- xref %>%
+  remove_empty("cols") %>% 
+  rename(
+    xref_id = lobbyist_organization_xref_id,
+    lob_id = lobbyist_id,
+    org_id = lobbyist_organization_id
+  )
+```
+
+```{r raw_read_orgs}
+orgs <- vroom(
+  .name_repair = make_clean_names,
+  file = glue("{raw_dir}/LOBBYIST_ORGANIZATION.txt"),
+  delim = "|",
+  col_types = cols(
+    .default = col_character()
+  )
+)
+
+orgs <- orgs %>% 
+  rename(
+    org_id = lobbyist_organization_id,
+    org_num = lobbyist_organization_num,
+    org_name = name,
+    zip = postal_code
+  ) %>% 
+  mutate_at(vars(phone), str_remove, "\\|$") %>% 
+  na_if("")
+```
+
+Finally, we can use `dplyr::*_join()` to combine these three tables into a single data frame with
+the full record of a lobbyist and a client relationship.
+
+```{r raw_join}
+wylr <- lobs %>% 
+  left_join(xref, by = "lob_id") %>% 
+  left_join(orgs, by = "org_id", suffix = c("_lob", "_org")) %>% 
+  rename_prefix(suffix = c("_lob", "_org"))
+```
+
+## Explore
+
+```{r glimpse, echo=FALSE}
+head(wylr)
+tail(wylr)
+glimpse(wylr)
+```
+
+Most columns do not contain any missing information. Only 
+`r count_na(wylr$lob_phone) + count_na(wylr$lob_email)` lobbyists are missing either their phone
+number of email address. These variables do not need to be flagged.
+
+```{r col_missing}
+col_stats(wylr, count_na)
+```
+
+As you'd expect, some columns are more distinct than others. In our original lobbyist and
+organization tables, the respect `*_id` variables are 100% distinct, but lobbyists are repeated
+for every client organization in our joined data frame.
+
+```{r col_distinct}
+col_stats(wylr, n_distinct)
+```
+
+All but one of the lobbyists listed in the database have an "Active" status. That lobbyist is the
+only one to have a termination date, as we'd expect.
+
+```{r active_count}
+sum(!wylr$lob_active)
+prop_na(wylr$lob_term)
+prop_na(wylr$lob_term[wylr$lob_active])
+```
+
+## Wrangle
+
+To improve the consistency and search ability of our accountability database, we will perform some
+simple and **confident** manipulations to the original data and create new, normalized variables.
+
+### Year
+
+First, we will add the year in which each lobbyist was registered.
+
+```{r year_add}
+wylr <- mutate(wylr, lob_year = year(lob_reg))
+```
+
+```{r plot_reg_year, echo=FALSE}
+wylr %>% 
+  count(lob_year) %>%
+  ggplot(aes(x = lob_year, y = n)) + 
+  geom_col(fill = RColorBrewer::brewer.pal(3, "Dark2")[1]) +
+  labs(
+    title = "Lobbyists Registered in Wyoming per Year",
+    subtitle = "Carryover registrations in 2002",
+    x = "Registration Year",
+    y = "Lobbyists Registered"
+  )
+```
+
+### Phone
+
+We can use `campfin::normal_phone()` to convert the numeric phone numbers into an unambiguous
+character format. This prevents the column from being read as a numeric variable.
+
+```{r phone_norm}
+wylr <- mutate_at(
+  .tbl  = wylr,
+  .vars = vars(ends_with("phone")),
+  .funs = list(norm = normal_phone)
+)
+```
+
+```{r phone_view, echo=FALSE}
+wylr %>% 
+  select(contains("phone")) %>% 
+  distinct() %>% 
+  sample_frac()
+```
+
+### Address
+
+To normalize the street addresses, we will first `tidyr::unite()` each address column into a single
+column and then pass that string to `campfin::normal_address()`.
+
+```{r addr_unite_lob}
+wylr <- wylr %>% 
+  unite(
+    starts_with("lob_addr"),
+    col = "lob_addr_full",
+    sep = " ",
+    remove = FALSE,
+    na.rm = TRUE
+  ) %>% 
+  mutate(
+    lob_addr_norm = normal_address(
+      address = lob_addr_full,
+      abbs = usps_street
+    )
+  ) %>% 
+  select(-ends_with("addr_full"))
+```
+
+```{r addr_unite_org}
+wylr <- wylr %>% 
+  unite(
+    starts_with("org_addr"),
+    col = "org_addr_full",
+    sep = " ",
+    remove = FALSE,
+    na.rm = TRUE
+  ) %>% 
+  mutate(
+    org_addr_norm = normal_address(
+      address = org_addr_full,
+      abbs = usps_street
+    )
+  ) %>% 
+  select(-ends_with("addr_full"))
+```
+
+```{r}
+wylr %>% 
+  select(starts_with("lob_addr")) %>% 
+  distinct() %>% 
+  sample_frac()
+```
+
+### ZIP
+
+Our database uses 5-digit ZIP codes, so we can pass the original postal code variables to 
+`campfin::normal_zip()` to trim the strings and try and repair and broken formats.
+
+```{r zip_norm}
+wylr <- mutate_at(
+  .tbl  = wylr,
+  .vars = vars(ends_with("zip")),
+  .funs = list(norm = normal_zip),
+  na_rep = TRUE
+)
+```
+
+```{r zip_view, echo=FALSE}
+wylr %>% 
+  select(contains("zip")) %>% 
+  distinct() %>% 
+  sample_frac() %>% 
+  filter(lob_zip %out% valid_zip)
+```
+
+This makes out new ZIP variables very clean.
+
+```{r zip_progress, echo=FALSE}
+progress_table(
+  wylr$lob_zip,
+  wylr$lob_zip_norm,
+  wylr$org_zip,
+  wylr$org_zip_norm,
+  compare = valid_zip
+)
+```
+
+### State
+
+This database contains a mix of full state names and 2-letter abbreviations; we can pass these
+variables to `campfin::normal_state()` to try and convert them all the abbreviations.
+
+```{r state_norm}
+wylr <- mutate_at(
+  .tbl  = wylr,
+  .vars = vars(ends_with("state")),
+  .funs = list(norm = normal_state),
+  abbreviate = TRUE
+)
+
+wylr <- wylr %>% 
+  mutate_at(
+    .vars = vars(ends_with("state_norm")),
+    .funs = str_replace, 
+    "WY WY", "WY"
+  )
+```
+
+```{r state_view, echo=FALSE}
+wylr %>% 
+  select(contains("state")) %>% 
+  distinct() %>% 
+  sample_frac()
+```
+
+```{r state_progress, echo=FALSE}
+progress_table(
+  wylr$lob_state,
+  wylr$lob_state_norm,
+  wylr$org_state,
+  wylr$org_state_norm,
+  compare = valid_state
+)
+```
+
+### City
+
+The city values are typically the hardest to normalize due to the variety of valid formats. Again,
+the `campfin::normal_city()` function reduces inconsistencies and removes invalid values.
+
+```{r city_norm}
+wylr <- mutate_at(
+  .tbl  = wylr,
+  .vars = vars(ends_with("city")),
+  .funs = list(norm = normal_city),
+  abbs = usps_city,
+  na = invalid_city
+)
+```
+
+Then, we can compare these normalized values to the _expected_ values for that record's ZIP code.
+If the two values are similar, we can confidently assume a typo was made and default to the
+expected value.
+
+```{r swap_city_org}
+wylr <- wylr %>% 
+  left_join(
+    y = zipcodes,
+    by = c(
+      "org_state_norm" = "state",
+      "org_zip_norm" = "zip"
+    )
+  ) %>% 
+  rename(org_city_match = city) %>% 
+  mutate(
+    org_match_abb = is_abbrev(org_city_norm, org_city_match),
+    org_match_dist = str_dist(org_city_norm, org_city_match),
+    org_city_swap = if_else(
+      condition = org_match_abb | org_match_dist == 1,
+      true = org_city_match,
+      false = org_city_norm
+    )
+  ) %>% 
+  select(
+    -org_city_match,
+    -org_match_abb,
+    -org_match_dist
+  )
+```
+
+Our relatively few city values were already very clean, but this process was able to make some
+quick and easy improvements.
+
+```{r city_progress, echo=FALSE}
+progress_table(
+  str_to_upper(wylr$lob_city),
+  wylr$lob_city_norm,
+  str_to_upper(wylr$org_city),
+  wylr$org_city_norm,
+  wylr$org_city_swap,
+  compare = c(valid_city, extra_city)
+)
+```
+
+Now we can remove the normalized city column in favor of our improved compared value.
+
+```{r city_rename}
+wylr <- wylr %>% 
+  select(-org_city_norm) %>% 
+  rename(org_city_norm = org_city_swap)
+```
+
+Even the few remaining values are actually valid and are just absent from our list.
+
+```{r city_bad}
+wylr %>% 
+  filter(org_city_norm %out% valid_city) %>% 
+  count(org_zip_norm, org_city_norm, sort = TRUE)
+```
+
+## Export
+
+```{r proc_dir}
+proc_dir <- here("wy", "lobby", "data", "processed")
+dir_create(proc_dir)
+```
+
+```{r proc_write}
+write_csv(
+  x = wylr,
+  path = glue("{proc_dir}/wy_lobby_reg.csv"),
+  na = ""
+)
+```
+
