@@ -784,7 +784,7 @@ pa <- pa %>%
     ))
 ```
 
-We also need to process the processed filer table to join back to the `FILERID` field. 
+We also need to pull up the processed filer table to join back to the `FILERID`, `EYEAR` and `CYCLE` field. 
 
 ```{r read filer table}
 clean_dir <- here("pa", "expends", "data", "processed")

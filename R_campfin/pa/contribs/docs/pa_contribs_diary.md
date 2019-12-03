@@ -1,7 +1,7 @@
 Data Diary
 ================
 Yanqi Xu
-2019-11-11 16:53:26
+2019-12-02 17:30:21
 
 -   [Project](#project)
 -   [Objectives](#objectives)
@@ -70,7 +70,7 @@ The `R_campfin` project uses the [RStudio projects](https://support.rstudio.com/
 ``` r
 # where dfs this document knit?
 here::here()
-## [1] "/Users/soc/accountability/accountability_datacleaning/R_campfin"
+#> [1] "/Users/soc/accountability/accountability_datacleaning/R_campfin"
 ```
 
 Import
@@ -109,6 +109,7 @@ if (!all_files_new(raw_dir)) {
 Read individual csv files from the downloaded zip files
 
 ``` r
+
 zip_files <- dir_ls(raw_dir, glob = "*.zip")
 
 if (all_files_new(path = raw_dir, glob = "*.txt")) {
@@ -140,11 +141,12 @@ pa <- contrib_files %>%
                      CONTAMT1 = col_double())) %>% 
   bind_rows() %>% 
   mutate_if(is_character, str_to_upper)
+      
 ```
 
 ### About
 
-More information about the record layout can be found here <https://www.dos.pa.gov/VotingElections/CandidatesCommittees/CampaignFinance/Resources/Documents/readme.txt>.
+More information about the record layout can be found \[here\] \[<https://www.dos.pa.gov/VotingElections/CandidatesCommittees/CampaignFinance/Resources/Documents/readme.txt>\].
 
 ### Encoding
 
@@ -200,72 +202,72 @@ glimpse(pa)
 The variables range in their degree of distinctness.`CONTDATE2`, `CONTDATE3`, only have one value 0.
 
 ``` r
-pa %>% glimpse_fun(n_distinct)
+pa %>% col_stats(n_distinct)
 ```
 
-    ## # A tibble: 24 x 4
-    ##    col         type       n           p
-    ##    <chr>       <chr>  <dbl>       <dbl>
-    ##  1 FILERID     chr     3209 0.000576   
-    ##  2 EYEAR       chr        5 0.000000898
-    ##  3 CYCLE       chr        9 0.00000162 
-    ##  4 SECTION     chr        8 0.00000144 
-    ##  5 CONTRIBUTOR chr   530096 0.0952     
-    ##  6 ADDRESS1    chr   446171 0.0801     
-    ##  7 ADDRESS2    chr    16143 0.00290    
-    ##  8 CITY        chr    18006 0.00323    
-    ##  9 STATE       chr       57 0.0000102  
-    ## 10 ZIPCODE     chr   185855 0.0334     
-    ## 11 OCCUPATION  chr    62240 0.0112     
-    ## 12 ENAME       chr    44791 0.00804    
-    ## 13 EADDRESS1   chr    54553 0.00979    
-    ## 14 EADDRESS2   chr     5398 0.000969   
-    ## 15 ECITY       chr     5320 0.000955   
-    ## 16 ESTATE      chr       56 0.0000101  
-    ## 17 EZIPCODE    chr    21225 0.00381    
-    ## 18 CONTDATE1   date    1904 0.000342   
-    ## 19 CONTAMT1    dbl    66596 0.0120     
-    ## 20 CONTDATE2   chr        1 0.000000180
-    ## 21 CONTAMT2    chr        1 0.000000180
-    ## 22 CONTDATE3   chr        1 0.000000180
-    ## 23 CONTAMT3    chr        1 0.000000180
-    ## 24 CONTDESC    chr    12675 0.00228
+    #> # A tibble: 24 x 4
+    #>    col         class       n           p
+    #>    <chr>       <chr>   <int>       <dbl>
+    #>  1 FILERID     <chr>    3209 0.000576   
+    #>  2 EYEAR       <chr>       5 0.000000898
+    #>  3 CYCLE       <chr>       9 0.00000162 
+    #>  4 SECTION     <chr>       8 0.00000144 
+    #>  5 CONTRIBUTOR <chr>  530096 0.0952     
+    #>  6 ADDRESS1    <chr>  446171 0.0801     
+    #>  7 ADDRESS2    <chr>   16143 0.00290    
+    #>  8 CITY        <chr>   18006 0.00323    
+    #>  9 STATE       <chr>      57 0.0000102  
+    #> 10 ZIPCODE     <chr>  185855 0.0334     
+    #> 11 OCCUPATION  <chr>   62240 0.0112     
+    #> 12 ENAME       <chr>   44791 0.00804    
+    #> 13 EADDRESS1   <chr>   54553 0.00979    
+    #> 14 EADDRESS2   <chr>    5398 0.000969   
+    #> 15 ECITY       <chr>    5320 0.000955   
+    #> 16 ESTATE      <chr>      56 0.0000101  
+    #> 17 EZIPCODE    <chr>   21225 0.00381    
+    #> 18 CONTDATE1   <date>   1904 0.000342   
+    #> 19 CONTAMT1    <dbl>   66596 0.0120     
+    #> 20 CONTDATE2   <chr>       1 0.000000180
+    #> 21 CONTAMT2    <chr>       1 0.000000180
+    #> 22 CONTDATE3   <chr>       1 0.000000180
+    #> 23 CONTAMT3    <chr>       1 0.000000180
+    #> 24 CONTDESC    <chr>   12675 0.00228
 
 ### Missing
 
 The variables also vary in their degree of values that are `NA` (missing).
 
 ``` r
-pa %>% glimpse_fun(count_na)
+pa %>% col_stats(count_na)
 ```
 
-    ## # A tibble: 24 x 4
-    ##    col         type        n           p
-    ##    <chr>       <chr>   <dbl>       <dbl>
-    ##  1 FILERID     chr         0 0          
-    ##  2 EYEAR       chr         0 0          
-    ##  3 CYCLE       chr         0 0          
-    ##  4 SECTION     chr      1715 0.000308   
-    ##  5 CONTRIBUTOR chr         3 0.000000539
-    ##  6 ADDRESS1    chr     45297 0.00813    
-    ##  7 ADDRESS2    chr   4987653 0.895      
-    ##  8 CITY        chr     43682 0.00784    
-    ##  9 STATE       chr     44363 0.00796    
-    ## 10 ZIPCODE     chr     34634 0.00622    
-    ## 11 OCCUPATION  chr   2891642 0.519      
-    ## 12 ENAME       chr   3153617 0.566      
-    ## 13 EADDRESS1   chr   3825218 0.687      
-    ## 14 EADDRESS2   chr   5327033 0.956      
-    ## 15 ECITY       chr   3856224 0.692      
-    ## 16 ESTATE      chr   3860960 0.693      
-    ## 17 EZIPCODE    chr   3810189 0.684      
-    ## 18 CONTDATE1   date     4121 0.000740   
-    ## 19 CONTAMT1    dbl         0 0          
-    ## 20 CONTDATE2   chr         0 0          
-    ## 21 CONTAMT2    chr         0 0          
-    ## 22 CONTDATE3   chr         0 0          
-    ## 23 CONTAMT3    chr         0 0          
-    ## 24 CONTDESC    chr   5412685 0.972
+    #> # A tibble: 24 x 4
+    #>    col         class        n           p
+    #>    <chr>       <chr>    <int>       <dbl>
+    #>  1 FILERID     <chr>        0 0          
+    #>  2 EYEAR       <chr>        0 0          
+    #>  3 CYCLE       <chr>        0 0          
+    #>  4 SECTION     <chr>     1715 0.000308   
+    #>  5 CONTRIBUTOR <chr>        3 0.000000539
+    #>  6 ADDRESS1    <chr>    45297 0.00813    
+    #>  7 ADDRESS2    <chr>  4987653 0.895      
+    #>  8 CITY        <chr>    43682 0.00784    
+    #>  9 STATE       <chr>    44363 0.00796    
+    #> 10 ZIPCODE     <chr>    34634 0.00622    
+    #> 11 OCCUPATION  <chr>  2891642 0.519      
+    #> 12 ENAME       <chr>  3153617 0.566      
+    #> 13 EADDRESS1   <chr>  3825218 0.687      
+    #> 14 EADDRESS2   <chr>  5327033 0.956      
+    #> 15 ECITY       <chr>  3856224 0.692      
+    #> 16 ESTATE      <chr>  3860960 0.693      
+    #> 17 EZIPCODE    <chr>  3810189 0.684      
+    #> 18 CONTDATE1   <date>    4121 0.000740   
+    #> 19 CONTAMT1    <dbl>        0 0          
+    #> 20 CONTDATE2   <chr>        0 0          
+    #> 21 CONTAMT2    <chr>        0 0          
+    #> 22 CONTDATE3   <chr>        0 0          
+    #> 23 CONTAMT3    <chr>        0 0          
+    #> 24 CONTDESC    <chr>  5412685 0.972
 
 We will flag any records with missing values in the key variables used to identify a contribution. There are 4124 records missing `CONTRIBUTOR`, `CONTAMT1` AND `CONTDATE1`
 
@@ -275,13 +277,15 @@ pa <- pa %>% flag_na(CONTRIBUTOR, CONTAMT1, CONTDATE1)
 
 ### Duplicates
 
+The `flag_dupes` function creates a new column `dupe_flag` that evaluates to `TRUE` when they are duplicates.
+
 ``` r
 pa <- flag_dupes(pa, dplyr::everything())
 ```
 
 ``` r
 sum(pa$dupe_flag)
-## [1] 0
+#> [1] 0
 ```
 
 ### Ranges
@@ -290,10 +294,10 @@ sum(pa$dupe_flag)
 
 ``` r
 summary(pa$CONTRIBUTOR)
-##    Length     Class      Mode 
-##   5570805 character character
+#>    Length     Class      Mode 
+#>   5570805 character character
 sum(pa$CONTAMT1 < 0 , na.rm = TRUE)
-## [1] 871
+#> [1] 871
 ```
 
 See how the campaign contributions were distributed
@@ -301,16 +305,16 @@ See how the campaign contributions were distributed
 ``` r
 pa %>% 
   ggplot(aes(x = CONTAMT1)) + 
-  geom_histogram() +
+  geom_histogram(fill = RColorBrewer::brewer.pal(3, "Dark2")[3]) +
+    geom_vline(xintercept = median(pa$CONTAMT1, na.rm = TRUE), linetype = 2) +
   scale_x_continuous(
     trans = "log10", labels = dollar) +
   labs(title = "Pennsylvania Campaign Contribution Amount Distribution",
-       caption = "Source: Pennsylvania Dept. of State")
+       caption = "Source: Pennsylvania Dept. of State",
+       x = "Amount")
 ```
 
-    ## `stat_bin()` using `bins = 30`. Pick better value with `binwidth`.
-
-![](pa_contribs_diary_files/figure-markdown_github/amount%20distribution-1.png)
+![](../plots/amount%20distribution-1.png)
 
 #### Year
 
@@ -324,16 +328,43 @@ pa$CONTDATE1 <- as.Date(pa$CONTDATE1, "%Y%m%d")
 pa <- pa %>% mutate(year = year(CONTDATE1), on_year = is_even(year))
 ```
 
+We then plot the number of distinct contributions for each election year.
+
+``` r
+pa %>% 
+  mutate(year = as.numeric(year)) %>% 
+  filter(year > 2014 & year < 2020) %>% 
+  count(year, sort = T) %>% 
+  mutate(on = is_even(year),) %>%
+  ggplot(aes(x = year, y = n)) +
+  geom_col(aes(fill = on)) +
+  scale_x_continuous(breaks = 2013:2019) +
+  scale_y_continuous(labels = comma) +
+  scale_fill_brewer(
+    type = "qual",
+    palette = "Dark2"
+  ) +
+  labs(
+   title = "Pennsylvania Campaign Contribution Amount Distribution",
+       caption = "Source: Pennsylvania Dept. of State",
+    fill = "Election Year",
+    x = "Year",
+    y = "Distinct Contributions"
+  ) +
+  theme(legend.position = "bottom")
+```
+
+![](../plots/unnamed-chunk-6-1.png)
+
 #### Dates
 
 Records in the PA contribution datasets date back to 1900-01-16 till 9201-01-12
 
 ``` r
 summary(pa$CONTDATE1)
+#>         Min.      1st Qu.       Median         Mean      3rd Qu.         Max.         NA's 
+#> "1900-01-16" "2016-04-07" "2017-04-20" "2017-03-22" "2018-01-26" "9201-01-12"       "4121"
 ```
-
-    ##         Min.      1st Qu.       Median         Mean      3rd Qu.         Max.         NA's 
-    ## "1900-01-16" "2016-04-07" "2017-04-20" "2017-03-22" "2018-01-26" "9201-01-12"       "4121"
 
 The `CONTDATE2` and `CONTDATE3` variables should be blank
 
@@ -348,7 +379,7 @@ pa$date_clean[pa$date_flag] <- NA
 summary(pa$date_clean)
 ```
 
-![](pa_contribs_diary_files/figure-markdown_github/year_count_bar-1.png)
+![](../plots/year_count_bar-1.png)
 
 Wrangle
 -------
@@ -366,9 +397,9 @@ View values in the STATE field is not a valid state abbreviation
 
 ``` r
 {pa$STATE[pa$STATE %out% valid_state]}[!is.na(pa$STATE[pa$STATE %out% valid_state])]
-## [1] "CN" "CN"
+#> [1] "CN" "CN"
 {pa$ESTATE[pa$ESTATE %out% valid_state]}[!is.na(pa$ESTATE[pa$ESTATE %out% valid_state])]
-## [1] "CN"
+#> [1] "CN"
 ```
 
 These are contributions from people in Canada, which we can leave in. The state column is now pretty clean, as all non-NA columns have two characters.
@@ -379,9 +410,9 @@ The Zipcode column can range from 1 to 13 columns.
 
 ``` r
 table(nchar(pa$ZIPCODE))
-## 
-##       1       2       5       6       7       8       9      10 
-##    9361      22 2248009     571      22    2044 3264595   11547
+#> 
+#>       1       2       5       6       7       8       9      10 
+#>    9361      22 2248009     571      22    2044 3264595   11547
 ```
 
 ``` r
@@ -535,16 +566,7 @@ pa$city <- pa$city %>%
 pa_out <- pa %>% filter(city %out% valid_place)
 
 pa_city_lookup <- read_csv(file = here("pa", "contribs", "data", "raw", "pa_city_lookup_contrib.csv"), skip =1, col_names = c("city", "city_lookup", "changed"))
-```
 
-    ## Parsed with column specification:
-    ## cols(
-    ##   city = col_character(),
-    ##   city_lookup = col_character(),
-    ##   changed = col_character()
-    ## )
-
-``` r
 pa_out <- pa_out %>% select(index, CITY) %>% 
   inner_join(pa_city_lookup, by = c("CITY" = "city")) %>% 
   drop_na(CITY) %>% 
@@ -599,25 +621,15 @@ pa_check <-  pa_check %>% select(-original_zip)
 head(pa_check)
 ```
 
-    ## Parsed with column specification:
-    ## cols(
-    ##   city_tocheck = col_character(),
-    ##   STATE = col_character(),
-    ##   n = col_double(),
-    ##   check_city_flag = col_logical(),
-    ##   guess_city = col_character(),
-    ##   guess_place = col_character()
-    ## )
-
-    ## # A tibble: 6 x 6
-    ##   city_tocheck STATE     n check_city_flag guess_city guess_place      
-    ##   <chr>        <chr> <dbl> <lgl>           <chr>      <chr>            
-    ## 1 ABBOT PARK   IL        1 FALSE           GREEN OAKS ABBOTT PARK      
-    ## 2 ABBOTT PARL  IL        1 FALSE           GREEN OAKS ABBOTT PARK      
-    ## 3 ABERDSON     NJ       45 FALSE           <NA>       ABERDEEN TOWNSHIP
-    ## 4 ABOTT PARK   IL        3 FALSE           GREEN OAKS ABBOTT PARK      
-    ## 5 ABU DHABI    DC        3 NA              WASHINGTON <NA>             
-    ## 6 ABU DHABI    NE        8 NA              ABU DHABI  <NA>
+    #> # A tibble: 6 x 6
+    #>   city_tocheck STATE     n check_city_flag guess_city guess_place      
+    #>   <chr>        <chr> <dbl> <lgl>           <chr>      <chr>            
+    #> 1 ABBOT PARK   IL        1 FALSE           GREEN OAKS ABBOTT PARK      
+    #> 2 ABBOTT PARL  IL        1 FALSE           GREEN OAKS ABBOTT PARK      
+    #> 3 ABERDSON     NJ       45 FALSE           <NA>       ABERDEEN TOWNSHIP
+    #> 4 ABOTT PARK   IL        3 FALSE           GREEN OAKS ABBOTT PARK      
+    #> 5 ABU DHABI    DC        3 NA              WASHINGTON <NA>             
+    #> 6 ABU DHABI    NE        8 NA              ABU DHABI  <NA>
 
 Add the valid places to the `extra_city` spreadhseet.
 
@@ -670,17 +682,18 @@ progress <- progress_table(
 ) %>% mutate(stage = as_factor(stage))
 ```
 
-| stage           |   prop\_in|    n\_distinct|    prop\_na|    n\_out|           n\_diff|
-|:----------------|----------:|--------------:|-----------:|---------:|-----------------:|
-| CITY            |      0.979|          18006|       0.008|    118640|              6501|
-| city\_prep      |      0.986|          16740|       0.008|     76824|              5129|
-| city\_swap      |      0.991|          13543|       0.008|     52262|              1895|
-| city\_lkp       |      0.993|          12844|       0.008|     40431|              1188|
-| city\_tocheck   |      0.996|          12369|       0.008|     22953|               697|
-| city\_clean     |      0.998|          12096|       0.008|     12745|               423|
-| You can see how |  the perce|  ntage of vali|  d values i|  ncreased|  with each stage.|
+| stage         |  prop\_in|  n\_distinct|  prop\_na|  n\_out|  n\_diff|
+|:--------------|---------:|------------:|---------:|-------:|--------:|
+| CITY          |     0.979|        18006|     0.008|  118640|     6501|
+| city\_prep    |     0.986|        16740|     0.008|   76824|     5129|
+| city\_swap    |     0.991|        13543|     0.008|   52262|     1895|
+| city\_lkp     |     0.993|        12844|     0.008|   40431|     1188|
+| city\_tocheck |     0.996|        12369|     0.008|   22953|      697|
+| city\_clean   |     0.998|        12096|     0.008|   12745|      423|
 
-![](pa_contribs_diary_files/figure-markdown_github/progress_bar-1.png)
+You can see how the percentage of valid values increased with each stage.
+
+![](../plots/progress_bar-1.png)
 
 More importantly, the number of distinct values decreased each stage. We were able to confidently change many distinct invalid values to their valid equivilent.
 
@@ -708,7 +721,7 @@ progress %>%
   )
 ```
 
-![](pa_contribs_diary_files/figure-markdown_github/distinct_bar-1.png)
+![](../plots/distinct_bar-1.png)
 
 Each step of the cleaning process reduces the number of distinct city values. There are 5527123 with 18006 distinct values, after the swap and refine processes, there are 5525943 entries with 12096 distinct values.
 
