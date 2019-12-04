@@ -204,7 +204,7 @@ sum(df$date > today())
 
 ### Address
 
-```{r address_normal}
+```{r address_norm}
 packageVersion("tidyr")
 df <- df %>% 
   # combine street addr
@@ -227,7 +227,7 @@ df <- df %>%
 
 ### ZIP
 
-```{r zip_normal}
+```{r zip_norm}
 df <- df %>% 
   mutate(
     zip_norm = normal_zip(
@@ -247,7 +247,7 @@ progress_table(
 
 ### State
 
-```{r state_normal}
+```{r state_norm}
 df <- df %>% 
   mutate(
     state_norm = normal_state(
@@ -269,7 +269,7 @@ progress_table(
 
 ### City
 
-```{r normal_city}
+```{r city_norm}
 df <- df %>% 
   mutate(
     city_norm = normal_city(
@@ -282,7 +282,7 @@ df <- df %>%
   )
 ```
 
-```{r swap_city}
+```{r city_swap}
 df <- df %>% 
   left_join(
     y = zipcodes,
@@ -307,6 +307,7 @@ df <- df %>%
 progress_table(
   df$city,
   df$city_norm,
+  df$city_swap,
   compare = valid_city
 )
 ```
