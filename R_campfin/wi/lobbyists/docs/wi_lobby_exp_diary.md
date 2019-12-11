@@ -1,7 +1,7 @@
 Wisconsin Lobbying Data Diary
 ================
 Yanqi Xu
-2019-12-02 16:54:51
+2019-12-09 14:52:57
 
 -   [Project](#project)
 -   [Objectives](#objectives)
@@ -363,7 +363,7 @@ wi_reg <- read_csv(file.path(here("wi","lobbyists","data","processed","registrat
 wi_org <- wi_reg %>% select(principal, principal_mailing_address_norm, principal_mailing_city_clean, principal_mailing_state, principal_mailing_zip_norm, legislative_session, organization) %>% unique() %>% 
   right_join(wi_org, by = c("principal" = "principal_name", "organization" = "organization_name", "legislative_session" = "session")) 
 
-wi_lobby_reg <- wi_reg %>% 
+wi_lobbyist <- wi_reg %>% 
   select(lobbyist_first_name, lobbyist_last_name, lobbyist_address_norm, lobbyist_city_clean, lobbyist_state, lobbyist_zip_norm, principal, principal_mailing_address_norm, principal_mailing_city_clean, principal_mailing_state, principal_mailing_zip_norm, legislative_session, organization) %>% unique() %>% 
   right_join(wi_lobbyist, by = c("principal" = "principal_name", "legislative_session" = "session", "lobbyist_first_name", "lobbyist_last_name")) 
 ```
@@ -387,14 +387,15 @@ dir_create(proc_dir)
 
 ``` r
 wi_org %>% 
-  select(
-  ) %>% 
+  rename(principal_mailing_zip5 = principal_mailing_zip_norm) %>% 
   write_csv(
     path = glue("{proc_dir}/wi_org_exp_clean.csv"),
     na = ""
   )
 
 wi_lobbyist %>% 
+  rename(principal_mailing_zip5 = principal_mailing_zip_norm,
+         lobbyist_zip5 = lobbyist_zip_norm) %>% 
   write_csv(
     path = glue("{proc_dir}/wi_lobbyists_exp_clean.csv"),
     na = ""

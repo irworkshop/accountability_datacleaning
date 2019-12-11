@@ -1,0 +1,287 @@
+---
+title: "North Dakota Lobbying Registration Data Diary"
+author: "Yanqi Xu"
+date: "`r format(Sys.time())`"
+output:
+   github_document:    
+    df_print: tibble
+    toc: true
+    toc_dept: 2
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE, purl=FALSE}
+library(knitr)
+opts_chunk$set(
+  eval = TRUE,
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  error = FALSE,
+  collapse = TRUE,
+  comment = "#>",
+  fig.path = "../plots/",
+  fig.width = 10,
+  dpi = 300
+)
+options(width = 99)
+set.seed(5)
+```
+
+```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
+fs::dir_create(here::here("nd", "lobby", "docs"))
+```
+## Project
+
+
+The Accountability Project is an effort to cut across data silos and give journalists, policy
+professionals, activists, and the public at large a simple way to search across huge volumes of
+public data about people and organizations.
+
+
+Our goal is to standardizing public data on a few key fields by thinking of each dataset row as a
+transaction. For each transaction there should be (at least) 3 variables:
+
+
+1. All **parties** to a transaction
+2. The **date** of the transaction
+3. The **amount** of money involved
+
+
+## Objectives
+
+
+This document describes the process used to complete the following objectives:
+
+
+1. How many records are in the database?
+1. Check for duplicates
+1. Check ranges
+1. Is there anything blank or missing?
+1. Check for consistency issues
+1. Create a five-digit ZIP Code called `ZIP5`
+1. Create a `YEAR` field from the transaction date
+1. Make sure there is data on both parties to a transaction
+
+
+## Packages
+
+The following packages are needed to collect, manipulate, visualize, analyze, and communicate
+these results. The `pacman` package will facilitate their installation and attachment.
+
+```{r p_load, message=FALSE, dfrning=FALSE, error=FALSE}
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load_gh("irworkshop/campfin")
+pacman::p_load(
+  stringdist, # levenshtein value
+  tidyverse, # data manipulation
+  readxl, # import excel files
+  lubridate, # datetime strings
+  tidytext, # string analysis
+  magrittr, # pipe opperators
+  janitor, # dataframe clean
+  refinr, # cluster and merge
+  knitr, # knit documents
+  glue, # combine strings
+  scales, #format strings
+  here, # relative storage
+  fs, # search storage 
+  vroom, #read deliminated files
+  readxl #read excel files
+)
+```
+
+```{r fix_fun, echo=FALSE, collapse = TRUE}
+# fix conflict
+here <- here::here
+print_all <- function(df) df %>% print(n = nrow(.)) 
+```
+This document should be run as part of the `R_campfin` project, which lives as a sub-directory of
+the more general, language-agnostic [`irworkshop/accountability_datacleaning`][01] GitHub
+repository.
+
+
+The `R_campfin` project uses the [RStudio projects][02] feature and should be run as such. The
+project also uses the dynamic `here::here()` tool for file paths relative to _your_ machine.
+
+
+```{r where_here, collapse=TRUE}
+# where dfs this document knit?
+here::here()
+```
+
+## Download
+Set the data directory first.
+```{r raw_dir}
+# create a directory for the raw data
+reg_dir <- here("nd", "lobby", "data", "raw", "reg")
+dir_create(reg_dir)
+```
+The [North Dakota Secretary of State] [03] makes available a listing of all lobbyists from July 1, 2015 through June 30, 2020.
+
+[03]: http://sos.nd.gov/lobbyists/registered-lobbyists
+
+
+# Reading
+```{r download registry csv}
+nd_lobby_reg_url <- glue("https://firststop.sos.nd.gov/api/list/csv/{2015:2019}")
+
+if (!all_files_new(reg_dir)) {
+  for (url in nd_lobby_reg_url) {
+    download.file(
+      url = url,
+      destfile = glue("{reg_dir}/nd_lobbyists_{basename(url)}.csv")
+    )
+  }
+}
+```
+
+```{r read registry}
+nd_lobby_reg <- dir_ls(reg_dir, glob = "*.csv") %>% 
+  map_dfr(.id = "source_file", read_csv) %>% clean_names()
+
+# remove the extraneous last column
+nd_lobby_reg <- nd_lobby_reg[-22] %>% 
+  mutate(year = str_extract(source_file, "\\d{4}"))
+```
+
+## Duplicates
+
+We'll use the `flag_dupes()` function to see if there are records identical to one another and flag the duplicates. A new variable `dupe_flag` will be created.
+
+```{r flag dupe}
+nd_lobby_reg <- flag_dupes(nd_lobby_reg, dplyr::everything())
+```
+
+## Missing
+```{r glimpse_na, collapse=T}
+col_stats(nd_lobby_reg, count_na)
+```
+## Explore
+### Year
+Year 2018 has the largest number of lobbying registrations (representation of each organization by an individual lobbyist).
+```{r}
+nd_lobby_reg %>% 
+  count(year) %>% 
+  ggplot(aes(x = year, y = n)) +
+  geom_col(fill = RColorBrewer::brewer.pal(3, "Dark2")[1]) +
+  scale_y_continuous(labels = comma) +
+  scale_x_discrete(labels = 2015:2019, breaks = 2015:2019) +
+  labs(
+    title = "North Dakota Lobbyist Registration by Year",
+    x = "Report Year",
+    y = "Counts of Registrations",
+    caption = "Source: North Dakota SoS"
+  )
+```
+
+# Wrangling
+
+### ZIP 
+Running the following commands tells us the zipcode fields are mostly clean.
+```{r client normal zip}
+prop_in(nd_lobby_reg$postal_code, valid_zip, na.rm = TRUE) %>% percent()
+prop_in(nd_lobby_reg$org_postal_code, valid_zip, na.rm = TRUE) %>% percent()
+nd_lobby_reg <- nd_lobby_reg %>% 
+  mutate_at(
+    .vars = vars(ends_with("postal_code")),
+    .fun = list(norm = normal_zip),
+    na_rep = TRUE
+  )
+
+progress_table(nd_lobby_reg$postal_code,
+               nd_lobby_reg$postal_code_norm,
+               nd_lobby_reg$org_postal_code,
+               nd_lobby_reg$org_postal_code_norm,
+               compare = valid_zip)
+```
+
+### State
+The state fields is pretty clean and don't need to be normalized.
+```{r clean state}
+prop_in(nd_lobby_reg$state, valid_zip, na.rm = TRUE) %>% percent()
+prop_in(nd_lobby_reg$org_state, valid_zip, na.rm = TRUE) %>% percent()
+
+```
+
+### City
+
+#### Prep
+```{r prep_city, collapse = TRUE}
+valid_place <- c(valid_city, extra_city) %>% unique()
+
+prop_in(nd_lobby_reg$city, valid_place, na.rm = TRUE) %>% percent()
+prop_in(nd_lobby_reg$org_city, valid_place, na.rm = TRUE) %>% percent()
+
+nd_lobby_reg <- nd_lobby_reg %>% mutate_at(
+    .vars = vars(ends_with("city")),
+    .fun = list(norm = normal_city),
+    st_abbs = usps_state,
+    geo_abbs = usps_city,
+    na = invalid_city,
+    na_rep = TRUE
+  )
+
+progress_table(nd_lobby_reg$city,
+               nd_lobby_reg$city_norm,
+               nd_lobby_reg$org_city,
+               nd_lobby_reg$org_city_norm,
+               compare = valid_place)
+)
+```
+
+## Address
+We will combine all address fields into one for lobbyists and organizations. 
+```{r norm address}
+nd_lobby_reg <- nd_lobby_reg %>% 
+    unite(starts_with("addr"),
+          col = "full_address",
+                         sep = " ",
+                         remove = FALSE,
+                         na.rm = TRUE) %>% 
+        unite(starts_with("org_addr"),
+          col = "full_org_address",
+                         sep = " ",
+                         remove = FALSE,
+                         na.rm = TRUE)  %>% 
+  mutate_at(.vars = vars(starts_with("full")),
+    .fun = list(norm = normal_address),
+    add_abbs = usps_street,
+    na_rep = TRUE
+  )
+```
+
+### Phone
+
+We can use `campfin::normal_phone()` to convert the numeric phone numbers into an unambiguous
+character format. This prevents the column from being read as a numeric variable.
+
+```{r phone_norm}
+nd_lobby_reg <- nd_lobby_reg %>% 
+  mutate(phone_norm = normal_phone(phone)
+  )
+```
+
+```{r phone_view, echo=FALSE}
+nd_lobby_reg %>% 
+  select(contains("phone")) %>% 
+  distinct() %>% 
+  sample_frac()
+```
+
+## Export
+
+```{r write clean}
+clean_reg_dir <- here("nd", "lobby", "data", "processed", "reg")
+
+dir_create(clean_reg_dir)
+
+nd_lobby_reg %>%
+  select(-c(source_file,
+            full_address,
+            full_org_address)) %>%
+  write_csv(path = glue("{clean_reg_dir}/nd_lobby_reg_clean.csv"),
+            na = "")
+```
+

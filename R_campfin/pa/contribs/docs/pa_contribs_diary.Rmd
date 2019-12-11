@@ -195,13 +195,41 @@ pa <- contrib_files %>%
 More information about the record layout can be found [here] [https://www.dos.pa.gov/VotingElections/CandidatesCommittees/CampaignFinance/Resources/Documents/readme.txt].
 
 ### Encoding
-```{r eval=FALSE}
-for (i in c(5:10)) {
-  pa[[i]] <- iconv(pa[[i]], 'UTF-8', 'ASCII') %>% 
-    toupper() %>% 
-   str_replace("&AMP;", "&") 
-}
+The text fields contain both lower-case and upper-case letters. The for loop converts them to all upper-case letters unifies the encoding to "UTF-8", replaces the "&amp;", the HTML expression of "An ampersand". These strings are invalid and cannot be converted to regular characters. Converting the encoding may result in some NA values. But there're not too many of them based on counts of NAs before and after the encoding conversion.
+
+```{r echo=FALSE}
+pa <- read_csv(glue("{raw_dir}/pa_contribs_midway.csv"), 
+col_types = cols(.default = col_character(),
+                 CONTAMT1 = col_double(),
+                 CONTDATE1 = col_date(),
+                 dupe_flag = col_logical(),
+                 na_flag = col_logical()
+                 ))
+
+pa_orig <-  pa %>% 
+  select(2:25)
 ```
+
+```{r fix encoding, eval=FALSE}
+col_stats(pa, count_na)
+
+pa <- pa %>% mutate_all(.funs = iconv, to = "UTF-8") %>% 
+  mutate_all(.funs = str_replace,"&AMP;", "&") %>% 
+  mutate_if(is.character, str_to_upper)
+# After the encoding, we'll see how many entries have NA fields for each column.
+col_stats(pa, count_na)
+```
+
+```{r echo=FALSE}
+col_stats(pa_orig, count_na)
+
+pa_orig <- pa_orig %>% mutate_all(.funs = iconv, to = "UTF-8") %>% 
+  mutate_all(.funs = str_replace,"&AMP;", "&") %>% 
+  mutate_if(is.character, str_to_upper)
+# After the encoding, we'll see how many entries have NA fields for each column.
+col_stats(pa_orig, count_na)
+```
+
 
 Some columns are not read properly due to extraneous and unescaped commas or double quotes. The following lines of code fix that. 
 ### Indexing
@@ -240,24 +268,9 @@ tail(pa)
 glimpse(pa)
 ```
 
-
-```{r echo=FALSE}
-pa <- read_csv(glue("{raw_dir}/pa_contribs_midway.csv"), 
-col_types = cols(.default = col_character(),
-                 CONTAMT1 = col_double(),
-                 CONTDATE1 = col_date(),
-                 dupe_flag = col_logical(),
-                 na_flag = col_logical()
-                 ))
-
-pa_orig <-  pa %>% 
-  select(2:25)
-```
-
 ### Distinct
 
 The variables range in their degree of distinctness.`CONTDATE2`,  `CONTDATE3`, only have one value 0.
-
 
 ```{r n_distinct, eval=FALSE}
 pa %>% col_stats(n_distinct)
@@ -463,13 +476,13 @@ valid_place <- c(valid_city, extra_city) %>% unique()
 `r sum(!is.na(pa$CITY))` distinct cities were in the original dataset in column 
 ```{r prep_city, collapse = TRUE, eval=FALSE}
 pa <- pa %>% mutate(city_prep = normal_city(city = CITY,
-                                            geo_abbs = usps_city,
-                                            st_abbs = c(valid_state),
+                                            abbs = usps_city,
+                                            states = c(valid_state),
                                             na = invalid_city,
                                             na_rep = TRUE))
 pa <- pa %>% mutate(employer_city_prep = normal_city(city = ECITY,
-                                            geo_abbs = usps_city,
-                                            st_abbs = c(valid_state),
+                                            abbs = usps_city,
+                                            states = c(valid_state),
                                             na = invalid_city,
                                             na_rep = TRUE))
 n_distinct(pa$city_prep)
@@ -802,7 +815,7 @@ pa <- pa %>% unite(
     na.rm = TRUE
   ) %>% 
   mutate(address_clean = normal_address(address = address_clean,
-      add_abbs = usps_city,
+      abbs = usps_city,
       na_rep = TRUE))
 ```
 
@@ -812,10 +825,15 @@ pa <- pa %>% unite(
 We also need to pull up the processed filer table to join back to the `FILERID`, `EYEAR` and `CYCLE` field.
 
 ```{r join filer table}
-filer_dir <- here("pa", "expends", "data", "processed")
-pa_filer <- read_csv(glue("{filer_dir}/pa_filers_clean.csv"), 
+clean_dir <- here("pa", "expends", "data", "processed")
+pa_filer <- read_csv(glue("{clean_dir}/pa_filers_clean.csv"), 
                      col_types = cols(.default = col_character())) %>% 
-  rename_at(vars(contains("clean")), list(~str_c("filer_",.))) %>% 
+  rename_at(vars(contains("clean")), list(~str_c("filer_",.)))
+
+pa_filer <- pa_filer %>% flag_dupes(FILERID,EYEAR,CYCLE)
+
+pa_filer <-  pa_filer %>% 
+  filter(!dupe_flag) %>% 
   select(
     FILERID,
     EYEAR,
@@ -846,7 +864,7 @@ pa <- pa %>% left_join(pa_filer, by = c("FILERID", "EYEAR", "CYCLE"))
 ## Export
 
 
-```{r write_clean, eval=FALSE}
+```{r write_clean}
 clean_dir <- here("pa", "contribs", "data", "processed")
 dir_create(clean_dir)
 pa %>% 
@@ -861,11 +879,12 @@ pa %>%
     -city_lookup,
     -city_lkp,
     -sec_city_match,
+    -city_tocheck,
     -check_swap,
     -CONTDATE2,
     -CONTDATE3
   ) %>% 
-  rename(ZIP5 = zip_clean, employer_ZIP5 = employer_zip_clean) %>% 
+  rename(zip5 = zip_clean, employer_zip5 = employer_zip_clean, filer_zip5 = filer_zip_clean) %>% 
   write_csv(
     path = glue("{clean_dir}/pa_contribs_clean.csv"),
     na = ""
