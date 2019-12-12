@@ -1,7 +1,7 @@
 Data Diary
 ================
 Yanqi Xu
-2019-12-02 17:30:21
+2019-12-11 11:19:10
 
 -   [Project](#project)
 -   [Objectives](#objectives)
@@ -150,13 +150,72 @@ More information about the record layout can be found \[here\] \[<https://www.do
 
 ### Encoding
 
+The text fields contain both lower-case and upper-case letters. The for loop converts them to all upper-case letters unifies the encoding to "UTF-8", replaces the "&", the HTML expression of "An ampersand". These strings are invalid and cannot be converted to regular characters. Converting the encoding may result in some NA values. But there're not too many of them based on counts of NAs before and after the encoding conversion.
+
 ``` r
-for (i in c(5:10)) {
-  pa[[i]] <- iconv(pa[[i]], 'UTF-8', 'ASCII') %>% 
-    toupper() %>% 
-   str_replace("&AMP;", "&") 
-}
+col_stats(pa, count_na)
+
+pa <- pa %>% mutate_all(.funs = iconv, to = "UTF-8") %>% 
+  mutate_all(.funs = str_replace,"&AMP;", "&") %>% 
+  mutate_if(is.character, str_to_upper)
+# After the encoding, we'll see how many entries have NA fields for each column.
+col_stats(pa, count_na)
 ```
+
+    #> # A tibble: 24 x 4
+    #>    col         class        n           p
+    #>    <chr>       <chr>    <int>       <dbl>
+    #>  1 FILERID     <chr>        0 0          
+    #>  2 EYEAR       <chr>        0 0          
+    #>  3 CYCLE       <chr>        0 0          
+    #>  4 SECTION     <chr>     1715 0.000308   
+    #>  5 CONTRIBUTOR <chr>        3 0.000000539
+    #>  6 ADDRESS1    <chr>    45297 0.00813    
+    #>  7 ADDRESS2    <chr>  4987653 0.895      
+    #>  8 CITY        <chr>    43682 0.00784    
+    #>  9 STATE       <chr>    44363 0.00796    
+    #> 10 ZIPCODE     <chr>    34634 0.00622    
+    #> 11 OCCUPATION  <chr>  2891642 0.519      
+    #> 12 ENAME       <chr>  3153617 0.566      
+    #> 13 EADDRESS1   <chr>  3825218 0.687      
+    #> 14 EADDRESS2   <chr>  5327033 0.956      
+    #> 15 ECITY       <chr>  3856224 0.692      
+    #> 16 ESTATE      <chr>  3860960 0.693      
+    #> 17 EZIPCODE    <chr>  3810189 0.684      
+    #> 18 CONTDATE1   <date>    4121 0.000740   
+    #> 19 CONTAMT1    <dbl>        0 0          
+    #> 20 CONTDATE2   <chr>        0 0          
+    #> 21 CONTAMT2    <chr>        0 0          
+    #> 22 CONTDATE3   <chr>        0 0          
+    #> 23 CONTAMT3    <chr>        0 0          
+    #> 24 CONTDESC    <chr>  5412685 0.972
+    #> # A tibble: 24 x 4
+    #>    col         class       n           p
+    #>    <chr>       <chr>   <int>       <dbl>
+    #>  1 FILERID     <chr>       0 0          
+    #>  2 EYEAR       <chr>       0 0          
+    #>  3 CYCLE       <chr>       0 0          
+    #>  4 SECTION     <chr>    1715 0.000308   
+    #>  5 CONTRIBUTOR <chr>       3 0.000000539
+    #>  6 ADDRESS1    <chr>   45297 0.00813    
+    #>  7 ADDRESS2    <chr> 4987653 0.895      
+    #>  8 CITY        <chr>   43682 0.00784    
+    #>  9 STATE       <chr>   44363 0.00796    
+    #> 10 ZIPCODE     <chr>   34634 0.00622    
+    #> 11 OCCUPATION  <chr> 2891642 0.519      
+    #> 12 ENAME       <chr> 3153622 0.566      
+    #> 13 EADDRESS1   <chr> 3825219 0.687      
+    #> 14 EADDRESS2   <chr> 5327033 0.956      
+    #> 15 ECITY       <chr> 3856224 0.692      
+    #> 16 ESTATE      <chr> 3860960 0.693      
+    #> 17 EZIPCODE    <chr> 3810189 0.684      
+    #> 18 CONTDATE1   <chr>    4121 0.000740   
+    #> 19 CONTAMT1    <chr>       0 0          
+    #> 20 CONTDATE2   <chr>       0 0          
+    #> 21 CONTAMT2    <chr>       0 0          
+    #> 22 CONTDATE3   <chr>       0 0          
+    #> 23 CONTAMT3    <chr>       0 0          
+    #> 24 CONTDESC    <chr> 5412685 0.972
 
 Some columns are not read properly due to extraneous and unescaped commas or double quotes. The following lines of code fix that. \#\#\# Indexing
 
@@ -206,32 +265,32 @@ pa %>% col_stats(n_distinct)
 ```
 
     #> # A tibble: 24 x 4
-    #>    col         class       n           p
-    #>    <chr>       <chr>   <int>       <dbl>
-    #>  1 FILERID     <chr>    3209 0.000576   
-    #>  2 EYEAR       <chr>       5 0.000000898
-    #>  3 CYCLE       <chr>       9 0.00000162 
-    #>  4 SECTION     <chr>       8 0.00000144 
-    #>  5 CONTRIBUTOR <chr>  530096 0.0952     
-    #>  6 ADDRESS1    <chr>  446171 0.0801     
-    #>  7 ADDRESS2    <chr>   16143 0.00290    
-    #>  8 CITY        <chr>   18006 0.00323    
-    #>  9 STATE       <chr>      57 0.0000102  
-    #> 10 ZIPCODE     <chr>  185855 0.0334     
-    #> 11 OCCUPATION  <chr>   62240 0.0112     
-    #> 12 ENAME       <chr>   44791 0.00804    
-    #> 13 EADDRESS1   <chr>   54553 0.00979    
-    #> 14 EADDRESS2   <chr>    5398 0.000969   
-    #> 15 ECITY       <chr>    5320 0.000955   
-    #> 16 ESTATE      <chr>      56 0.0000101  
-    #> 17 EZIPCODE    <chr>   21225 0.00381    
-    #> 18 CONTDATE1   <date>   1904 0.000342   
-    #> 19 CONTAMT1    <dbl>   66596 0.0120     
-    #> 20 CONTDATE2   <chr>       1 0.000000180
-    #> 21 CONTAMT2    <chr>       1 0.000000180
-    #> 22 CONTDATE3   <chr>       1 0.000000180
-    #> 23 CONTAMT3    <chr>       1 0.000000180
-    #> 24 CONTDESC    <chr>   12675 0.00228
+    #>    col         class      n           p
+    #>    <chr>       <chr>  <int>       <dbl>
+    #>  1 FILERID     <chr>   3209 0.000576   
+    #>  2 EYEAR       <chr>      5 0.000000898
+    #>  3 CYCLE       <chr>      9 0.00000162 
+    #>  4 SECTION     <chr>      8 0.00000144 
+    #>  5 CONTRIBUTOR <chr> 530087 0.0952     
+    #>  6 ADDRESS1    <chr> 446171 0.0801     
+    #>  7 ADDRESS2    <chr>  16143 0.00290    
+    #>  8 CITY        <chr>  18006 0.00323    
+    #>  9 STATE       <chr>     57 0.0000102  
+    #> 10 ZIPCODE     <chr> 185855 0.0334     
+    #> 11 OCCUPATION  <chr>  62110 0.0111     
+    #> 12 ENAME       <chr>  44298 0.00795    
+    #> 13 EADDRESS1   <chr>  54551 0.00979    
+    #> 14 EADDRESS2   <chr>   5398 0.000969   
+    #> 15 ECITY       <chr>   5320 0.000955   
+    #> 16 ESTATE      <chr>     56 0.0000101  
+    #> 17 EZIPCODE    <chr>  21225 0.00381    
+    #> 18 CONTDATE1   <chr>   1904 0.000342   
+    #> 19 CONTAMT1    <chr>  66596 0.0120     
+    #> 20 CONTDATE2   <chr>      1 0.000000180
+    #> 21 CONTAMT2    <chr>      1 0.000000180
+    #> 22 CONTDATE3   <chr>      1 0.000000180
+    #> 23 CONTAMT3    <chr>      1 0.000000180
+    #> 24 CONTDESC    <chr>  12648 0.00227
 
 ### Missing
 
@@ -242,32 +301,32 @@ pa %>% col_stats(count_na)
 ```
 
     #> # A tibble: 24 x 4
-    #>    col         class        n           p
-    #>    <chr>       <chr>    <int>       <dbl>
-    #>  1 FILERID     <chr>        0 0          
-    #>  2 EYEAR       <chr>        0 0          
-    #>  3 CYCLE       <chr>        0 0          
-    #>  4 SECTION     <chr>     1715 0.000308   
-    #>  5 CONTRIBUTOR <chr>        3 0.000000539
-    #>  6 ADDRESS1    <chr>    45297 0.00813    
-    #>  7 ADDRESS2    <chr>  4987653 0.895      
-    #>  8 CITY        <chr>    43682 0.00784    
-    #>  9 STATE       <chr>    44363 0.00796    
-    #> 10 ZIPCODE     <chr>    34634 0.00622    
-    #> 11 OCCUPATION  <chr>  2891642 0.519      
-    #> 12 ENAME       <chr>  3153617 0.566      
-    #> 13 EADDRESS1   <chr>  3825218 0.687      
-    #> 14 EADDRESS2   <chr>  5327033 0.956      
-    #> 15 ECITY       <chr>  3856224 0.692      
-    #> 16 ESTATE      <chr>  3860960 0.693      
-    #> 17 EZIPCODE    <chr>  3810189 0.684      
-    #> 18 CONTDATE1   <date>    4121 0.000740   
-    #> 19 CONTAMT1    <dbl>        0 0          
-    #> 20 CONTDATE2   <chr>        0 0          
-    #> 21 CONTAMT2    <chr>        0 0          
-    #> 22 CONTDATE3   <chr>        0 0          
-    #> 23 CONTAMT3    <chr>        0 0          
-    #> 24 CONTDESC    <chr>  5412685 0.972
+    #>    col         class       n           p
+    #>    <chr>       <chr>   <int>       <dbl>
+    #>  1 FILERID     <chr>       0 0          
+    #>  2 EYEAR       <chr>       0 0          
+    #>  3 CYCLE       <chr>       0 0          
+    #>  4 SECTION     <chr>    1715 0.000308   
+    #>  5 CONTRIBUTOR <chr>       3 0.000000539
+    #>  6 ADDRESS1    <chr>   45297 0.00813    
+    #>  7 ADDRESS2    <chr> 4987653 0.895      
+    #>  8 CITY        <chr>   43682 0.00784    
+    #>  9 STATE       <chr>   44363 0.00796    
+    #> 10 ZIPCODE     <chr>   34634 0.00622    
+    #> 11 OCCUPATION  <chr> 2891642 0.519      
+    #> 12 ENAME       <chr> 3153622 0.566      
+    #> 13 EADDRESS1   <chr> 3825219 0.687      
+    #> 14 EADDRESS2   <chr> 5327033 0.956      
+    #> 15 ECITY       <chr> 3856224 0.692      
+    #> 16 ESTATE      <chr> 3860960 0.693      
+    #> 17 EZIPCODE    <chr> 3810189 0.684      
+    #> 18 CONTDATE1   <chr>    4121 0.000740   
+    #> 19 CONTAMT1    <chr>       0 0          
+    #> 20 CONTDATE2   <chr>       0 0          
+    #> 21 CONTAMT2    <chr>       0 0          
+    #> 22 CONTDATE3   <chr>       0 0          
+    #> 23 CONTAMT3    <chr>       0 0          
+    #> 24 CONTDESC    <chr> 5412685 0.972
 
 We will flag any records with missing values in the key variables used to identify a contribution. There are 4124 records missing `CONTRIBUTOR`, `CONTAMT1` AND `CONTDATE1`
 
@@ -454,13 +513,13 @@ valid_place <- c(valid_city, extra_city) %>% unique()
 
 ``` r
 pa <- pa %>% mutate(city_prep = normal_city(city = CITY,
-                                            geo_abbs = usps_city,
-                                            st_abbs = c(valid_state),
+                                            abbs = usps_city,
+                                            states = c(valid_state),
                                             na = invalid_city,
                                             na_rep = TRUE))
 pa <- pa %>% mutate(employer_city_prep = normal_city(city = ECITY,
-                                            geo_abbs = usps_city,
-                                            st_abbs = c(valid_state),
+                                            abbs = usps_city,
+                                            states = c(valid_state),
                                             na = invalid_city,
                                             na_rep = TRUE))
 n_distinct(pa$city_prep)
@@ -684,12 +743,12 @@ progress <- progress_table(
 
 | stage         |  prop\_in|  n\_distinct|  prop\_na|  n\_out|  n\_diff|
 |:--------------|---------:|------------:|---------:|-------:|--------:|
-| CITY          |     0.979|        18006|     0.008|  118640|     6501|
-| city\_prep    |     0.986|        16740|     0.008|   76824|     5129|
-| city\_swap    |     0.991|        13543|     0.008|   52262|     1895|
-| city\_lkp     |     0.993|        12844|     0.008|   40431|     1188|
-| city\_tocheck |     0.996|        12369|     0.008|   22953|      697|
-| city\_clean   |     0.998|        12096|     0.008|   12745|      423|
+| CITY          |     0.970|        18006|     0.008|  165719|     6500|
+| city\_prep    |     0.978|        16740|     0.008|  123903|     5128|
+| city\_swap    |     0.982|        13543|     0.008|   99355|     1895|
+| city\_lkp     |     0.984|        12841|     0.008|   87220|     1185|
+| city\_tocheck |     0.987|        12367|     0.008|   69777|      695|
+| city\_clean   |     0.989|        12096|     0.008|   59875|      423|
 
 You can see how the percentage of valid values increased with each stage.
 
@@ -738,7 +797,7 @@ pa <- pa %>% unite(
     na.rm = TRUE
   ) %>% 
   mutate(address_clean = normal_address(address = address_clean,
-      add_abbs = usps_city,
+      abbs = usps_city,
       na_rep = TRUE))
 ```
 
@@ -748,10 +807,15 @@ Join with Filer
 We also need to pull up the processed filer table to join back to the `FILERID`, `EYEAR` and `CYCLE` field.
 
 ``` r
-filer_dir <- here("pa", "expends", "data", "processed")
-pa_filer <- read_csv(glue("{filer_dir}/pa_filers_clean.csv"), 
+clean_dir <- here("pa", "expends", "data", "processed")
+pa_filer <- read_csv(glue("{clean_dir}/pa_filers_clean.csv"), 
                      col_types = cols(.default = col_character())) %>% 
-  rename_at(vars(contains("clean")), list(~str_c("filer_",.))) %>% 
+  rename_at(vars(contains("clean")), list(~str_c("filer_",.)))
+
+pa_filer <- pa_filer %>% flag_dupes(FILERID,EYEAR,CYCLE)
+
+pa_filer <-  pa_filer %>% 
+  filter(!dupe_flag) %>% 
   select(
     FILERID,
     EYEAR,
@@ -770,13 +834,13 @@ pa <- pa %>% left_join(pa_filer, by = c("FILERID", "EYEAR", "CYCLE"))
 Conclude
 --------
 
-1.  There are 5644512 records in the database
+1.  There are 5570805 records in the database
 2.  There are 0 records with suspected duplicate filerID, recipient, date, *and* amount (flagged with `dupe_flag`)
 3.  The ranges for dates and amounts are reasonable
 4.  Consistency has been improved with `stringr` package and custom `normal_*()` functions.
 5.  The five-digit `zip_clean` variable has been created with `zipcode::clean.zipcode()`
 6.  The `year` variable has been created with `lubridate::year()`
-7.  There are 43707 records with missing `city` values and 0 records with missing `payee` values (both flagged with the `na_flag`).
+7.  There are 43682 records with missing `city` values and 0 records with missing `payee` values (both flagged with the `na_flag`).
 
 Export
 ------
@@ -796,11 +860,12 @@ pa %>%
     -city_lookup,
     -city_lkp,
     -sec_city_match,
+    -city_tocheck,
     -check_swap,
     -CONTDATE2,
     -CONTDATE3
   ) %>% 
-  rename(ZIP5 = zip_clean, employer_ZIP5 = employer_zip_clean) %>% 
+  rename(zip5 = zip_clean, employer_zip5 = employer_zip_clean, filer_zip5 = filer_zip_clean) %>% 
   write_csv(
     path = glue("{clean_dir}/pa_contribs_clean.csv"),
     na = ""

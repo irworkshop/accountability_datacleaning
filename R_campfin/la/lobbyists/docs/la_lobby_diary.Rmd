@@ -388,7 +388,9 @@ clean_reg_dir <- here("la", "lobbyists", "data", "processed", "reg")
 dir_create(clean_reg_dir)
 la_reg %>%
   select(-c(mailing_city_norm,
-            employer_city_norm)) %>%
+            employer_city_norm,
+            mailing_city_swap,
+            employer_city_swap)) %>%
   write_csv(path = glue("{clean_reg_dir}/la_reg_clean.csv"),
             na = "")
 ```

@@ -4,14 +4,10 @@ subtitle: "Mississippi Lobbying"
 author: "Yanqi Xu"
 date: "`r format(Sys.time())`"
 output:
-   github_document:    
+  github_document: 
     df_print: tibble
-    # fig_caption: yes
-    # highlight: tango
-    # keep_md: yes
-    # max.print: 32
-    # toc: yes
-    # toc_float: no
+    toc: true
+    toc_dept: 2
 editor_options: 
   chunk_output_type: console
 ---
@@ -99,18 +95,11 @@ The `R_campfin` project uses the [RStudio projects][02] feature and should be ru
 project also uses the dynamic `here::here()` tool for file paths relative to _your_ machine.
 
 
-```{r where_here, collapse=TRUE}
-# where dfs this document knit?
-here::here()
-```
-
 ## Download
 Set the download directory first.
 ```{r create raw_dir}
 # create a directory for the raw data
-raw_dir <- here("ms", "lobbyists", "data", "raw")
-# clients <- here(raw_dir,"")
-# lobbyists <- here(raw_dir, "lobbyists")
+raw_dir <- here("ms", "lobby", "data", "raw","reg")
 
 dir_create(raw_dir)
 ```
@@ -138,29 +127,11 @@ if (!all_files_new(raw_dir)) {
     download.file(
       url = ms_url,
       destfile = dest_file)
+  Sys.sleep(1)
 }
 
 ```
 
-```{r lobbyists, eval = FALSE}
-
-ms_url_cl <- glue("https://sos.ms.gov/elec/Config/Mississippi/Elections/Handlers/ExportClientDirectoryToExcel.ashx?type=1&year={2009:2019}&lastName=&firstName=&clientName=, ")
-
-ms_url <- ms_url_1 %>% map(str_c,ms_url_2) %>% unlist()
-
-dest_file <- glue("{raw_dir}/ms_lobby_{c('cl','lb')}") %>% map(glue,"_{2009:2019}.xls") %>% unlist()
-
-if (!all_files_new(raw_dir)) {
-    for (i in seq_along(ms_url)){
-      download.file(
-      url = ms_url_cl[i],
-      destfile = dest_file[i]
-      )
-      Sys.sleep(30)
-    }
-}
-
-```
 
 Then, we'll merge each dataset into a master dataset. Note that there is no date or year field in the individual databases, and we will need to create such fields in the master file retaining the legislative period information. 
 [La. Stat. Ann. § 24:53.][05] regulates lobbyists registration as such.
@@ -172,23 +143,20 @@ registration as a lobbyist, whichever occurs first.
 
 ## Reading
 The excel files contain some empty rows or text in some cells that are not part of the dataset itself. There are usually 3 top rows with table title and metadata, but the invalid rows at the bottom vary in lengths. We'll get rid of these columns by skipping the first three rows and requiring at least 3 non-na cells, `name`, `organization` and `licensed date` to be a valid registration entry. 
+
+We discovered that the xls files are actually structured as html tables. We'll use the `rvest` package to read these files.
 ```{r read csv}
 ms_cl_files <- list.files(raw_dir, pattern = "ms_lobby_cl.*", recursive = TRUE, full.names = TRUE)
 ms_lb_files <- list.files(raw_dir, pattern = "ms_lobby_lb.*", recursive = TRUE, full.names = TRUE)
-# wi_lobby_colnames <- c("lobbyist_name", "licensed_date", "title", "organization_name", "address", "city_state_zip", "phone_1", "phone_2", "fax", "email", "license_type", "surrendered_date")
-ms_lobby_cl <- ms_cl_files %>% map(read_xls, skip = 10) %>% 
-                                   
-                                   # col_types = cols(.default = col_character(),
-                                   #                  licensed_date = col_date(format = "%m/%d/%Y"),
-                                   #                  surrendered_date = col_date(format = "%m/%d/%Y"))) %>% 
+# Create function to read a html table
+read_web_tb <- function(file){
+  df <- read_html(file) %>% html_node("table") %>% html_table(header = T)
+  return(df)
+}
+
+ms_lobby_cl <- ms_cl_files %>% map(read_web_tb) %>% 
                    bind_rows() %>% 
                    clean_names()
-
-
-wi_lobby <- wi_lobby %>%filter(rowSums(!is.na(wi_lobby))>=3)
-
-wi_lobby$licensed_date <-  wi_lobby$licensed_date %>% as.Date(format = "%m/%d/%Y")
-wi_lobby$surrendered_date <- wi_lobby$surrendered_date %>% excel_numeric_to_date(date_system = "modern")
 ```
 
 ## Duplicates

@@ -160,7 +160,6 @@ expense_files <- list.files(raw_dir, pattern = "expense.+", recursive = TRUE, fu
 #pa_lines <- list.files(raw_dir, pattern = ".txt", recursive = TRUE) %>% map(read_lines) %>% unlist()
 pa_col_names <- c("FILERID","EYEAR","CYCLE","EXPNAME","ADDRESS1","ADDRESS2","CITY","STATE","ZIPCODE","EXPDATE","EXPAMT","EXPDESC")
 
-
 pa <- expense_files %>% 
   map(read_delim, delim = ",", escape_double = FALSE,
       escape_backslash = FALSE, col_names = pa_col_names, 
@@ -177,24 +176,26 @@ for (index in nudge) {
     pa[[index, column]] <- pa[[index, column+1]]
   }
 }
+```
+
+The text fields contain both lower-case and upper-case letters. The for loop converts them to all upper-case letters unifies the encoding to "UTF-8", replaces the "&amp;", the HTML expression of "An ampersand". These strings are invalid and cannot be converted Converting the encoding may result in some NA values. But there're not too many of them based on counts of NAs before and after the encoding conversion.
+
+```{r fix encoding}
+col_stats(pa, count_na)
+
+pa <- pa %>% mutate_all(.funs = iconv, to = "UTF-8") %>% 
+  mutate_all(.funs = str_replace,"&AMP;", "&") %>% 
+  mutate_if(is.character, str_to_upper)
+# After the encoding, we'll see how many entries have NA fields for each column.
+col_stats(pa, count_na)
+```
+
+```{r column types}
 #All the fields are converted to strings. Convert to date and double.
 pa$EXPDATE <- as.Date(pa$EXPDATE, "%Y%m%d")
 pa$EXPAMT <- as.double(pa$EXPAMT)
 pa$ADDRESS1 <- normal_address(pa$ADDRESS1)
 pa$ADDRESS2 <- normal_address(pa$ADDRESS2)
-```
-
-The text fields contain both lower-case and upper-case letters. The for loop converts them to all upper-case letters unifies the encoding to "UTF-8", replaces the "&amp;", the HTML expression of "An ampersand".
-
-```{r}
-for (i in c(4:7)) {
-  pa[[i]] <- iconv(pa[[i]], 'UTF-8', 'ASCII') %>% 
-    toupper() %>% 
-   str_replace("&AMP;", "&") 
-}
-
-pa$EXPDESC <- toupper(pa$EXPDESC)
-
 ```
 
 ## Explore
@@ -212,7 +213,7 @@ glimpse(pa)
 The variables range in their degree of distinctness.
 
 ```{r n_distinct}
-pa %>% glimpse_fun(n_distinct)
+pa %>% col_stats(n_distinct)
 ```
 
 
@@ -221,7 +222,7 @@ pa %>% glimpse_fun(n_distinct)
 The variables also vary in their degree of values that are `NA` (missing).
 
 ```{r count_na}
-pa %>% glimpse_fun(count_na)
+pa %>% col_stats(count_na)
 ```
 
 We will flag any records with missing values in the key variables used to identify an expenditure.
@@ -418,8 +419,8 @@ Cleaning city values is the most complicated. This process involves four steps:
 `r sum(!is.na(pa$CITY))` distinct cities were in the original dataset in column 
 ```{r prep_city, collapse = TRUE}
 pa <- pa %>% mutate(city_prep = normal_city(city = CITY,
-                                            geo_abbs = usps_city,
-                                            st_abbs = c(valid_state),
+                                            abbs = usps_city,
+                                            states = c(valid_state),
                                             na = invalid_city,
                                             na_rep = TRUE))
 n_distinct(pa$city_prep)
@@ -779,7 +780,7 @@ pa <- pa %>%
   ) %>% 
   mutate(address_clean = normal_address(
       address = address_clean,
-      add_abbs = usps_city,
+      abbs = usps_city,
       na_rep = TRUE
     ))
 ```
@@ -790,7 +791,12 @@ We also need to pull up the processed filer table to join back to the `FILERID`,
 clean_dir <- here("pa", "expends", "data", "processed")
 pa_filer <- read_csv(glue("{clean_dir}/pa_filers_clean.csv"), 
                      col_types = cols(.default = col_character())) %>% 
-  rename_at(vars(contains("clean")), list(~str_c("filer_",.))) %>% 
+  rename_at(vars(contains("clean")), list(~str_c("filer_",.)))
+
+pa_filer <- pa_filer %>% flag_dupes(FILERID,EYEAR,CYCLE)
+
+pa_filer <-  pa_filer %>% 
+  filter(!dupe_flag) %>% 
   select(
     FILERID,
     EYEAR,
@@ -842,6 +848,9 @@ pa %>%
     -city,
     -count
   ) %>% 
+    rename (zip5 = zip_clean,
+          filer_zip5 = filer_zip_clean,
+          city_clean = city_output) %>% 
   write_csv(
     path = glue("{clean_dir}/pa_expends_clean.csv"),
     na = ""

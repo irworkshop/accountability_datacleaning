@@ -109,16 +109,29 @@ project also uses the dynamic `here::here()` tool for file paths relative to _yo
 ```{r where_here, collapse=TRUE}
 # where dfs this document knit?
 here::here()
+raw_dir <- here("la","lobbyists","data","raw","exp")
+reg_proc <- here("la","lobbyists","data","processed","reg")
 ```
 
 
 ```{r read}
-la_exp <- read_csv(dir_ls(exp_dir, glob = "*.csv"),
-                   col_types = cols(.default = col_character())) %>% 
+la_exp <- read_csv(dir_ls(raw_dir, glob = "*.csv"),
+                   col_types = cols(.default = col_character(),
+                                    amount = col_double())) %>% 
   clean_names() %>% 
   mutate_if(is.character, str_to_upper)
-la_exp$amount <-  la_exp$amount %>% str_remove("[$]") %>% as.numeric()
+
+la_reg <- read_csv(file.path(reg_proc,"la_reg_clean.csv"),
+                   col_types = cols(.default = col_character()))
+#la_exp$amount <-  la_exp$amount %>% str_remove("[$]") %>% as.numeric()
 ```
+
+We'll clean the fields that contain strings like "NULL" a bit.
+```{r}
+la_exp <- la_exp %>% 
+  na_if("NULL")
+```
+
 ##Duplicates
 ```{r flag_dupe}
 la_exp <- flag_dupes(la_exp, dplyr::everything())
@@ -129,6 +142,11 @@ la_exp <- flag_dupes(la_exp, dplyr::everything())
 ```{r missing}
 col_stats(la_exp, count_na)
 ```
+
+```{r}
+la_exp <- la_exp %>% flag_na(last_name_first_name, report_period, amount)
+```
+
 
 ##Explore
 ```{r histogram distribution, echo=F}

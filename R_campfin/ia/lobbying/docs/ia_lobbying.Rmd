@@ -1,17 +1,12 @@
 ---
-title: "Data Diary"
-subtitle: "Iowa Lobbying"
+title: "Iowa Lobbying Data Diary"
 author: "Yanqi Xu"
 date: "`r format(Sys.time())`"
 output:
-   github_document:    
+  github_document: 
     df_print: tibble
-    # fig_caption: yes
-    # highlight: tango
-    # keep_md: yes
-    # max.print: 32
-    # toc: yes
-    # toc_float: no
+    toc: true
+    toc_dept: 2
 editor_options: 
   chunk_output_type: console
 ---
@@ -168,7 +163,7 @@ if (!all_files_new(raw_dir_cl)) {
 ```
 
 Then, we'll merge each dataset into a master dataset. Note that there is no date or year field in the individual databases, and we will need to create such fields in the master file retaining the legislative period information. 
-[Iowa Code Ann. § 68B.36.][05] regulates lobbyists and clients reporting.
+[Iowa Code Ann. § 68B.36.][05] regulates lobbyists and clients reporting.   
 > All lobbyists shall, on or before the day their lobbying activity begins, register by
 electronically filing a lobbyist’s registration statement...Registration shall be valid from the date of registration until the end of the calendar
 year.
@@ -189,7 +184,8 @@ ia_lobby_cl <- dir_ls(raw_dir_cl, glob = "*.xlsx")  %>%
   mutate(session_1 = as.numeric(str_sub(basename(file), start = -8, end = -7)),
           session_2 = as.numeric(str_sub(basename(file), start = -6, end = -6))) %>% 
   mutate_if(is_character, str_to_upper) %>% 
-  rename(address_raw = address)
+  rename(address_raw = address) %>% 
+  na_if("NULL")
 ```
 
 ### Wrangling
@@ -197,8 +193,8 @@ ia_lobby_cl <- dir_ls(raw_dir_cl, glob = "*.xlsx")  %>%
 Since all the lobbyists were jumbled together, we turn the lobbyists column into a vector, and then use `unnest_longer()` to unnest all the elements in the vector to keep each in individual row. 
 ```{r unnest}
 ia_lobby_cl <- ia_lobby_cl %>% 
-  mutate(new_lobbyists = str_split(lobbyists, pattern = ",")) %>% 
-  unnest_longer(new_lobbyists)
+  mutate(lobbyist = str_split(lobbyists, pattern = ",")) %>% 
+  unnest_longer(lobbyist)
 ```
 
 ### Duplicates
@@ -231,7 +227,7 @@ ia_lobby_cl <- ia_lobby_cl %>%
 ```{r normal address, echo=FALSE}
 ia_lobby_cl <- ia_lobby_cl %>% 
   mutate(address_clean = normal_address(address = address,
-      add_abbs = usps_city,
+      abbs = usps_city,
       na_rep = TRUE))
 ```
 
@@ -239,11 +235,9 @@ ia_lobby_cl <- ia_lobby_cl %>%
 ```{r client normal zip}
 ia_lobby_cl <- ia_lobby_cl %>% 
   mutate(
-    zip_norm = na_if(normal_zip(
+    zip_norm = normal_zip(
       zip = zip,
-      na_rep = TRUE),
-      "NULL"
-    )
+      na_rep = TRUE)
   )
 ```
 
@@ -264,8 +258,8 @@ Now we turn on zen mode.
 ###### Prep
 ```{r prep_city, collapse = TRUE}
 ia_lobby_cl <- ia_lobby_cl %>% mutate(city_norm = normal_city(city = city_raw,
-                                            geo_abbs = usps_city,
-                                            st_abbs = c(valid_state),
+                                            abbs = usps_city,
+                                            states = c(valid_state),
                                             na = invalid_city,
                                             na_rep = TRUE))
 n_distinct(ia_lobby_cl$city_raw)
@@ -291,8 +285,7 @@ ia_lobby_cl <- ia_lobby_cl %>%
 ```
 
 ###### Swap
-Then, we will compare these normalized `city_norm` values to the _expected_ city value for that
-vendor's ZIP code. If the [levenshtein distance][09] is less than 3, we can confidently swap these
+Then, we will compare these normalized `city_norm` values to the _expected_ city value for the client's ZIP code. If the [levenshtein distance][09] is less than 3, we can confidently swap these
 two values.
 
 [09]: https://en.wikipedia.org/wiki/Levenshtein_distance
@@ -329,7 +322,7 @@ _invalid_ values from `r length(setdiff(ia_lobby_cl$city_norm, valid_city))` to 
 #### Missing
 
 ```{r count_na}
-ia_lobby_cl  %>% glimpse_fun(count_na)
+ia_lobby_cl  %>% col_stats(count_na)
 ```
 Few values are missing from the lobbyists database.
 
@@ -348,7 +341,8 @@ ia_lobby_lb <- dir_ls(raw_dir_lb, glob = "*.xlsx")  %>%
   mutate(session_1 = as.numeric(str_sub(basename(file), start = -8, end = -7)),
           session_2 = as.numeric(str_sub(basename(file), start = -6, end = -6))) %>% 
   mutate_if(is_character, str_to_upper) %>% 
-  rename(address_raw = address)
+  rename(address_raw = address) %>% 
+  na_if("NULL")
 ```
 
 #### Duplicates
@@ -382,18 +376,16 @@ ia_lobby_lb <- ia_lobby_lb %>%
 ```{r lobbyists normal address, echo=FALSE}
 ia_lobby_lb <- ia_lobby_lb %>% 
   mutate(address_clean = normal_address(address = address,
-      add_abbs = usps_city,
+      abbs = usps_city,
       na_rep = TRUE))
 ```
 ##### ZIP 
 ```{r lobbyists normal zip}
 ia_lobby_lb <- ia_lobby_lb %>% 
   mutate(
-    zip_norm = na_if(normal_zip(
+    zip_norm = normal_zip(
       zip = zip,
-      na_rep = TRUE),
-      "NULL"
-    )
+      na_rep = TRUE)
   )
 ```
 
@@ -413,8 +405,8 @@ Same thing as bove.
 
 ```{r lobbyists prep_city, collapse = TRUE}
 ia_lobby_lb <- ia_lobby_lb %>% mutate(city_norm = normal_city(city = city_raw,
-                                            geo_abbs = usps_city,
-                                            st_abbs = c(valid_state),
+                                            abbs = usps_city,
+                                            states = c(valid_state),
                                             na = invalid_city,
                                             na_rep = TRUE))
 n_distinct(ia_lobby_lb$city_raw)
@@ -446,7 +438,7 @@ ia_lobby_lb <- ia_lobby_lb %>% mutate(state_clean = if_else(condition = is.na(st
 
 ###### Swap
 Then, we will compare these normalized `city_norm` values to the _expected_ city value for that
-vendor's ZIP code. If the [levenshtein distance][09] is less than 3, we can confidently swap these
+lobbyist's ZIP code. If the [levenshtein distance][09] is less than 3, we can confidently swap these
 two values.
 
 [09]: https://en.wikipedia.org/wiki/Levenshtein_distance
@@ -479,13 +471,13 @@ prop_in(ia_lobby_lb$city_clean, valid_city, na.rm = TRUE)
 #### Missing
 
 ```{r lobbyists count_na}
-ia_lobby_lb  %>% glimpse_fun(count_na)
+ia_lobby_lb  %>% col_stats(count_na)
 ```
 Few values are missing from the lobbyists database.
 
 
 ## Join
-In order to get lobbyists' addresses, we will join by lobbyists names from these two dataframes. But first, we'll need to clean up the two data tables a bit by getting rid of some iterating columns that we created and join them by common fields. 
+In order to get lobbyists' addresses, we will join by lobbyists names from these two dataframes. But first, we'll need to clean up the two data tables a bit by getting rid of some iterative columns that we created and join them by common fields. 
 ```{r prepare lobbyists fields}
 ia_lobby_lb <- ia_lobby_lb %>% 
   select(-c(city_norm,
@@ -512,14 +504,17 @@ To avoid confusion and extraneous records, we only join the non-duplicate rows.
 
 ```{r join clients and lobbyists}
 ia_lobby <- ia_lobby_cl %>% 
+  rename(lobbyist = cl_lobbyist) %>% 
   filter(!cl_dupe_flag) %>% 
-  left_join(ia_lobby_lb %>% filter(!lb_dupe_flag), by = c("cl_new_lobbyists" = "lb_name",
+  left_join(ia_lobby_lb %>% filter(!lb_dupe_flag), by = c("lobbyist" = "lb_name",
                                                           "cl_session_1" = "lb_session_1",
                                                           "cl_session_2" = "lb_session_2",
                                                           "cl_year" = "lb_year")) %>% 
-  select(-c(cl_dupe_flag, lb_dupe_flag)) %>% 
+  select(-c(cl_dupe_flag, lb_dupe_flag, 
+            ends_with("_raw"))) %>% 
   rename(client = cl_client,
-         lobbyist = cl_lobbyists)
+         lb_zip5 = lb_zip_norm,
+         cl_zip5 = cl_zip_norm) 
 ```
 
 ## Export
@@ -528,8 +523,9 @@ ia_lobby <- ia_lobby_cl %>%
 clean_dir <- here("ia", "lobbying", "data", "processed")
 dir_create(clean_dir)
 ia_lobby %>% 
+  na_if("NULL") %>% 
   write_csv(
-    path = glue("{clean_dir}/ia_lobbyists_clean.csv"),
+    path = glue("{clean_dir}/ia_lobby_reg_clean.csv"),
     na = ""
   )
 ```

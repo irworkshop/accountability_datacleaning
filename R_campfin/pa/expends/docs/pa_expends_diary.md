@@ -1,7 +1,7 @@
 Pennsylvania Campaign Expenditures Data Diary
 ================
 Yanqi Xu
-2019-11-05 16:16:33
+2019-12-11 10:48:40
 
 -   [Project](#project)
 -   [Objectives](#objectives)
@@ -137,7 +137,6 @@ expense_files <- list.files(raw_dir, pattern = "expense.+", recursive = TRUE, fu
 #pa_lines <- list.files(raw_dir, pattern = ".txt", recursive = TRUE) %>% map(read_lines) %>% unlist()
 pa_col_names <- c("FILERID","EYEAR","CYCLE","EXPNAME","ADDRESS1","ADDRESS2","CITY","STATE","ZIPCODE","EXPDATE","EXPAMT","EXPDESC")
 
-
 pa <- expense_files %>% 
   map(read_delim, delim = ",", escape_double = FALSE,
       escape_backslash = FALSE, col_names = pa_col_names, 
@@ -155,23 +154,60 @@ for (index in nudge) {
     pa[[index, column]] <- pa[[index, column+1]]
   }
 }
+```
+
+The text fields contain both lower-case and upper-case letters. The for loop converts them to all upper-case letters unifies the encoding to "UTF-8", replaces the "&", the HTML expression of "An ampersand". These strings are invalid and cannot be converted Converting the encoding may result in some NA values
+
+``` r
+col_stats(pa, count_na)
+```
+
+    #> # A tibble: 12 x 4
+    #>    col      class      n        p
+    #>    <chr>    <chr>  <int>    <dbl>
+    #>  1 FILERID  <chr>      0 0       
+    #>  2 EYEAR    <chr>      0 0       
+    #>  3 CYCLE    <chr>      0 0       
+    #>  4 EXPNAME  <chr>    112 0.000227
+    #>  5 ADDRESS1 <chr>  14553 0.0295  
+    #>  6 ADDRESS2 <chr> 457826 0.929   
+    #>  7 CITY     <chr>  11556 0.0234  
+    #>  8 STATE    <chr>  11015 0.0223  
+    #>  9 ZIPCODE  <chr>  15654 0.0318  
+    #> 10 EXPDATE  <chr>   1450 0.00294 
+    #> 11 EXPAMT   <chr>      0 0       
+    #> 12 EXPDESC  <chr>   9492 0.0193
+
+``` r
+pa <- pa %>% mutate_all(.funs = iconv, to = "UTF-8") %>% 
+  mutate_all(.funs = str_replace,"&AMP;", "&") %>% 
+  mutate_if(is.character, str_to_upper)
+# After the encoding, we'll see how many entries have NA fields for each column.
+col_stats(pa, count_na)
+```
+
+    #> # A tibble: 12 x 4
+    #>    col      class      n        p
+    #>    <chr>    <chr>  <int>    <dbl>
+    #>  1 FILERID  <chr>      0 0       
+    #>  2 EYEAR    <chr>      0 0       
+    #>  3 CYCLE    <chr>      0 0       
+    #>  4 EXPNAME  <chr>    124 0.000252
+    #>  5 ADDRESS1 <chr>  14563 0.0295  
+    #>  6 ADDRESS2 <chr> 457826 0.929   
+    #>  7 CITY     <chr>  11556 0.0234  
+    #>  8 STATE    <chr>  11015 0.0223  
+    #>  9 ZIPCODE  <chr>  15654 0.0318  
+    #> 10 EXPDATE  <chr>   1450 0.00294 
+    #> 11 EXPAMT   <chr>      0 0       
+    #> 12 EXPDESC  <chr>   9495 0.0193
+
+``` r
 #All the fields are converted to strings. Convert to date and double.
 pa$EXPDATE <- as.Date(pa$EXPDATE, "%Y%m%d")
 pa$EXPAMT <- as.double(pa$EXPAMT)
 pa$ADDRESS1 <- normal_address(pa$ADDRESS1)
 pa$ADDRESS2 <- normal_address(pa$ADDRESS2)
-```
-
-The text fields contain both lower-case and upper-case letters. The for loop converts them to all upper-case letters unifies the encoding to "UTF-8", replaces the "&", the HTML expression of "An ampersand".
-
-``` r
-for (i in c(4:7)) {
-  pa[[i]] <- iconv(pa[[i]], 'UTF-8', 'ASCII') %>% 
-    toupper() %>% 
-   str_replace("&AMP;", "&") 
-}
-
-pa$EXPDESC <- toupper(pa$EXPDESC)
 ```
 
 Explore
@@ -191,7 +227,7 @@ head(pa)
     #> 3 20140199 2015  2     GATEWAY C… PARKING    <NA>     PITT… PA    15222   2015-02-18   20   PARKING
     #> 4 20140199 2015  2     USPS       KILBUCK    <NA>     PITT… PA    15290   2015-02-18  980   POSTAGE
     #> 5 20140199 2015  2     EDDIE MER… GATEWAY C… <NA>     PITT… PA    15222   2015-02-18  102.  CAMPAI…
-    #> 6 20140199 2015  2     CASTLE SH… CO EILEEN… <NA>     PITT… PA    15234   2015-02-23  100   DONATI…
+    #> 6 20140199 2015  2     CASTLE SH… C O EILEE… <NA>     PITT… PA    15234   2015-02-23  100   DONATI…
 
 ``` r
 tail(pa)
@@ -231,48 +267,48 @@ glimpse(pa)
 The variables range in their degree of distinctness.
 
 ``` r
-pa %>% glimpse_fun(n_distinct)
+pa %>% col_stats(n_distinct)
 ```
 
     #> # A tibble: 12 x 4
-    #>    col      type       n         p
-    #>    <chr>    <chr>  <dbl>     <dbl>
-    #>  1 FILERID  chr     4137 0.00839  
-    #>  2 EYEAR    chr        7 0.0000142
-    #>  3 CYCLE    chr        9 0.0000183
-    #>  4 EXPNAME  chr   101285 0.205    
-    #>  5 ADDRESS1 chr    94272 0.191    
-    #>  6 ADDRESS2 chr     4412 0.00895  
-    #>  7 CITY     chr     6218 0.0126   
-    #>  8 STATE    chr       56 0.000114 
-    #>  9 ZIPCODE  chr    20786 0.0422   
-    #> 10 EXPDATE  date    1820 0.00369  
-    #> 11 EXPAMT   dbl    66564 0.135    
-    #> 12 EXPDESC  chr    79862 0.162
+    #>    col      class       n         p
+    #>    <chr>    <chr>   <int>     <dbl>
+    #>  1 FILERID  <chr>    4133 0.00838  
+    #>  2 EYEAR    <chr>       7 0.0000142
+    #>  3 CYCLE    <chr>       9 0.0000183
+    #>  4 EXPNAME  <chr>  101504 0.206    
+    #>  5 ADDRESS1 <chr>   94245 0.191    
+    #>  6 ADDRESS2 <chr>    4403 0.00893  
+    #>  7 CITY     <chr>    6218 0.0126   
+    #>  8 STATE    <chr>      56 0.000114 
+    #>  9 ZIPCODE  <chr>   20786 0.0422   
+    #> 10 EXPDATE  <date>   1820 0.00369  
+    #> 11 EXPAMT   <dbl>   66564 0.135    
+    #> 12 EXPDESC  <chr>   79859 0.162
 
 ### Missing
 
 The variables also vary in their degree of values that are `NA` (missing).
 
 ``` r
-pa %>% glimpse_fun(count_na)
+pa %>% col_stats(count_na)
 ```
 
     #> # A tibble: 12 x 4
-    #>    col      type       n        p
-    #>    <chr>    <chr>  <dbl>    <dbl>
-    #>  1 FILERID  chr        0 0       
-    #>  2 EYEAR    chr        0 0       
-    #>  3 CYCLE    chr        0 0       
-    #>  4 EXPNAME  chr      124 0.000252
-    #>  5 ADDRESS1 chr    14918 0.0303  
-    #>  6 ADDRESS2 chr   457826 0.929   
-    #>  7 CITY     chr    11556 0.0234  
-    #>  8 STATE    chr    11015 0.0223  
-    #>  9 ZIPCODE  chr    15654 0.0318  
-    #> 10 EXPDATE  date    1450 0.00294 
-    #> 11 EXPAMT   dbl        0 0       
-    #> 12 EXPDESC  chr     9492 0.0193
+    #>    col      class       n        p
+    #>    <chr>    <chr>   <int>    <dbl>
+    #>  1 FILERID  <chr>       0 0       
+    #>  2 EYEAR    <chr>       0 0       
+    #>  3 CYCLE    <chr>       0 0       
+    #>  4 EXPNAME  <chr>     124 0.000252
+    #>  5 ADDRESS1 <chr>   14684 0.0298  
+    #>  6 ADDRESS2 <chr>  457826 0.929   
+    #>  7 CITY     <chr>   11556 0.0234  
+    #>  8 STATE    <chr>   11015 0.0223  
+    #>  9 ZIPCODE  <chr>   15654 0.0318  
+    #> 10 EXPDATE  <date>   1450 0.00294 
+    #> 11 EXPAMT   <dbl>       0 0       
+    #> 12 EXPDESC  <chr>    9495 0.0193
 
 We will flag any records with missing values in the key variables used to identify an expenditure. There are 0 elements that are flagged as missing at least one value.
 
@@ -285,7 +321,7 @@ pa <- pa %>% flag_na(EXPNAME, EXPDATE, EXPDESC, EXPAMT, CITY)
 ``` r
 pa <- flag_dupes(pa, dplyr::everything())
 sum(pa$dupe_flag)
-#> [1] 6999
+#> [1] 7000
 ```
 
 ### Ranges
@@ -320,7 +356,7 @@ sum(pa$STATE != "PA", na.rm = TRUE)
 
     #> [1] 78926
 
-Top spending purposes ![](../plots/unnamed-chunk-5-1.png)
+Top spending purposes ![](../plots/unnamed-chunk-4-1.png)
 
 ### Dates
 
@@ -361,10 +397,10 @@ pa <- pa %>% mutate(date_flag = year < 2000 | year > format(Sys.Date(), "%Y"),
 pa %>% group_by(EXPDESC) %>% summarize(total = sum(EXPAMT)) %>% arrange(desc(total))
 ```
 
-    #> # A tibble: 79,862 x 2
+    #> # A tibble: 79,859 x 2
     #>    EXPDESC                                       total
     #>    <chr>                                         <dbl>
-    #>  1 <NA>                                     266672765.
+    #>  1 <NA>                                     266672875.
     #>  2 CONTRIBUTION                             185395743.
     #>  3 NON PA DISBURSEMENTS                      95018717.
     #>  4 DONATION                                  26623333.
@@ -374,7 +410,7 @@ pa %>% group_by(EXPDESC) %>% summarize(total = sum(EXPAMT)) %>% arrange(desc(tot
     #>  8 BALANCE OF DISBURSEMENTS FROM FEC REPORT  15574849.
     #>  9 AD BUY                                    15494933.
     #> 10 CAMPAIGN CONTRIBUTION                     14995155.
-    #> # … with 79,852 more rows
+    #> # … with 79,849 more rows
 
 Wrangle
 -------
@@ -404,7 +440,7 @@ pa <- pa %>%
     zip_clean = ZIPCODE %>% 
       normal_zip(na_rep = TRUE))
 sample(pa$zip_clean, 10)
-#>  [1] NA      "15063" "18240" "19130" "17011" "94103" "18104" "19064" "85004" "19406"
+#>  [1] "19114" "19147" "18923" "17101" "40285" "17110" "19149" "84130" "19128" "18091"
 ```
 
 ### State
@@ -437,12 +473,12 @@ Cleaning city values is the most complicated. This process involves four steps:
 
 ``` r
 pa <- pa %>% mutate(city_prep = normal_city(city = CITY,
-                                            geo_abbs = usps_city,
-                                            st_abbs = c(valid_state),
+                                            abbs = usps_city,
+                                            states = c(valid_state),
                                             na = invalid_city,
                                             na_rep = TRUE))
 n_distinct(pa$city_prep)
-#> [1] 5729
+#> [1] 5747
 ```
 
 #### Match
@@ -481,19 +517,19 @@ summary(pa$match_dist)
 ```
 
     #>    Min. 1st Qu.  Median    Mean 3rd Qu.    Max.    NA's 
-    #>   0.000   0.000   0.000   0.609   0.000  22.000   20629
+    #>    0.00    0.00    0.00    0.61    0.00   22.00   20616
 
 ``` r
 sum(pa$match_dist == 1, na.rm = TRUE)
 ```
 
-    #> [1] 5422
+    #> [1] 5424
 
 ``` r
 n_distinct(pa$city_swap)
 ```
 
-    #> [1] 4323
+    #> [1] 4339
 
 #### Refine
 
@@ -540,7 +576,7 @@ pa_refined %>%
     #>  2 SOUTHERN EASTERN SOUTHEASTERN      18
     #>  3 MC MURRAY        MCMURRAY          15
     #>  4 MC BG            MCCBG             13
-    #>  5 PLEASANT MOUNT   MOUNT PLEASANT    12
+    #>  5 PLEASANT MOUNT   MOUNT PLEASANT    11
     #>  6 CLIFFORD         FORD CLIFF         8
     #>  7 WESCOESVILLE     WESCOSVILLE        8
     #>  8 EDDYSTON         EDDYSTONE          7
@@ -587,7 +623,7 @@ pa_refined %>%
   print_all()
 ```
 
-    #> # A tibble: 112 x 8
+    #> # A tibble: 111 x 8
     #>     FILERID  city_match   city_swap    city_refine   swap_count refine_count diff_count refine_dist
     #>     <chr>    <chr>        <chr>        <chr>              <int>        <int>      <int>       <dbl>
     #>   1 2002093  PITTSBURGH   ADDRESSON F… ADDRESS ON F…          1           26         25           1
@@ -640,68 +676,67 @@ pa_refined %>%
     #>  48 8000474  FOLSOM       MILMONT      MILLMONT              76            9        -67           1
     #>  49 8100217  FOLSOM       MILMONT      MILLMONT              76            9        -67           1
     #>  50 2016C03… PITTSBURGH   MOUNT LEBAN… MOUNT LEBANON          1           64         63           1
-    #>  51 2005279  PLEASANT MO… PLEASANT MO… MOUNT PLEASA…         12          487        475          12
-    #>  52 8000616  PLEASANT MO… PLEASANT MO… MOUNT PLEASA…         12          487        475          12
-    #>  53 20170074 PLEASANT MO… PLEASANT MO… MOUNT PLEASA…         12          487        475          12
-    #>  54 2010296  PLEASANT MO… PLEASANT MO… MOUNT PLEASA…         12          487        475          12
-    #>  55 20160035 PLEASANT MO… PLEASANT MO… MOUNT PLEASA…         12          487        475          12
+    #>  51 2005279  PLEASANT MO… PLEASANT MO… MOUNT PLEASA…         11          489        478          12
+    #>  52 8000616  PLEASANT MO… PLEASANT MO… MOUNT PLEASA…         11          489        478          12
+    #>  53 20170074 PLEASANT MO… PLEASANT MO… MOUNT PLEASA…         11          489        478          12
+    #>  54 2010296  PLEASANT MO… PLEASANT MO… MOUNT PLEASA…         11          489        478          12
+    #>  55 9200410  MOUNT PLEAS… MOUNT PLEAS… MOUNT PLEASA…          1          489        488           3
     #>  56 8800087  WILKES BARRE MOUNTAINTOP  MOUNTAIN TOP           2          138        136           1
     #>  57 2010090  WILKES BARRE MOUNTAINTOP  MOUNTAIN TOP           2          138        136           1
-    #>  58 2008047  MOUNT PLEAS… MTPLEASANTP  MTPLEASANT             1            2          1           1
-    #>  59 20160056 ONO          ONO          NON                  606         3250       2644           2
-    #>  60 2018C07… LOYSVILLE    ON           NON                55673         3250     -52423           1
-    #>  61 20130205 IRWIN        NORTH UNTIN… NORTH HUNTIN…          1          129        128           1
-    #>  62 2010095  LANGHORNE    PENDEL       PENNDEL                2           85         83           1
-    #>  63 9500165  PHILADELPHIA PHIILA       PHILA                  1        83313      83312           1
-    #>  64 2010025  PHILADELPHIA PHILLA       PHILA                  1        83313      83312           1
-    #>  65 20180008 PHILADELPHIA PHILADEL     PHILADE            73984        73986          2           1
-    #>  66 7900117  PITTSBURGH   PITT         PIT                33711        33761         50           1
-    #>  67 2010389  PITTSBURGH   PLUMBORO     PLUM BORO              1            3          2           1
-    #>  68 8100217  POTTSVILLE   POTTSGROVE   POTTS GROVE            1            2          1           1
-    #>  69 2011150  NEW PROVIDE… QUARYVILLE   QUARRYVILLE            1          383        382           1
-    #>  70 9400092  BANGOR       ROSETTO      ROSETO                 2           21         19           1
-    #>  71 20120110 BELLE VERNON ROS TRAVER … ROSTRAVER TO…          1           45         44           1
-    #>  72 7900366  BELLE VERNON ROOSTRAVER … ROSTRAVER TO…          1           45         44           1
-    #>  73 2010427  RECTOR       RUFFSDALE    RUFFS DALE             1           23         22           1
-    #>  74 8800271  READING      SINKING SPR… SINKING SPRI…         24          199        175           1
-    #>  75 2007012  READING      SINKING SPR… SINKING SPRI…         24          199        175           1
-    #>  76 2004017  READING      SINKING SPR… SINKING SPRI…         24          199        175           1
-    #>  77 9700250  READING      SINKING SPR… SINKING SPRI…         24          199        175           1
-    #>  78 9700144  READING      SINKING SPR… SINKING SPRI…         24          199        175           1
-    #>  79 20120083 READING      SINKING SPR… SINKING SPRI…         24          199        175           1
-    #>  80 7900443  READING      SINKING SPR… SINKING SPRI…         24          199        175           1
-    #>  81 7900364  READING      SINKING SPR… SINKING SPRI…         24          199        175           1
-    #>  82 7900302  READING      SINKING SPR… SINKING SPRI…         24          199        175           1
-    #>  83 9200410  READING      SINKING SPR… SINKING SPRI…         24          199        175           1
-    #>  84 8400128  READING      SINKING SPR… SINKING SPRI…         24          199        175           1
-    #>  85 7900202  READING      SINKING SPR… SINKING SPRI…         24          199        175           1
-    #>  86 9700178  READING      SINKING SPR… SINKING SPRI…         24          199        175           1
-    #>  87 2000081  READING      SINKING SPR… SINKING SPRI…         24          199        175           1
-    #>  88 2002336  READING      SINKING SPR… SINKING SPRI…         24          199        175           1
-    #>  89 8600110  READING      SINKING SPR… SINKING SPRI…         24          199        175           1
-    #>  90 7900491  SOUTHEASTERN SOUTHERN EA… SOUTHEASTERN          18         1599       1581           4
-    #>  91 8300005  CHATHAM      SOUTH EASTE… SOUTHEASTERN           4         1599       1595           1
-    #>  92 8300005  WESTTOWN     SOUTH EASTE… SOUTHEASTERN           4         1599       1595           1
-    #>  93 7900434  MOSCOW       SPRINGBROOK… SPRING BROOK…          1            4          3           1
-    #>  94 8000444  PHILADELPHIA SPRINGHOUSE  SPRING HOUSE           3          282        279           1
-    #>  95 2010310  AMBLER       SPRINGHOUSE  SPRING HOUSE           3          282        279           1
-    #>  96 20170091 SPRING HOUSE SPRINGMILL   SPRING MILLS           2           45         43           2
-    #>  97 9700178  HARRISBURG   STEELLTON    STEELTON               2          660        658           1
-    #>  98 9500250  HARRISBURG   STEELLTON    STEELTON               2          660        658           1
-    #>  99 2000213  PITTSBURGH   SWISVALE     SWISSVALE              1           58         57           1
-    #> 100 2004037  RUSSELL      TITTUSVILLE  TITUSVILLE             1           31         30           1
-    #> 101 9500237  MARCUS HOOK  UPPER HICHE… UPPER CHICHE…          1          263        262           1
-    #> 102 8100217  SPRINGFIELD  UPPERCHICHE… UPPER CHICHE…          1          263        262           1
-    #> 103 7900444  ASTON        UPPER CHICH… UPPER CHICHE…        264          263         -1           1
-    #> 104 9500250  PITTSBURGH   UPER SAINT … UPPER SAINT …          1          195        194           1
-    #> 105 7900443  PITTSBURGH   UPPER SAINT… UPPER SAINT …          1          195        194           1
-    #> 106 8300167  ALLENTOWN    WESCOESVILLE WESCOSVILLE            8           45         37           1
-    #> 107 7900433  GREEN LANE   WESCOESVILLE WESCOSVILLE            8           45         37           1
-    #> 108 20120381 ALLENTOWN    WESCOESVILLE WESCOSVILLE            8           45         37           1
-    #> 109 7900433  CATASAUQUA   WESCOESVILLE WESCOSVILLE            8           45         37           1
-    #> 110 9400092  ALLENTOWN    WESCOESVILLE WESCOSVILLE            8           45         37           1
-    #> 111 20120022 WYOMING      WEST WEST    WEST                   1         6386       6385           5
-    #> 112 9700250  PITTSBURGH   WILKES TOWN… WILKENS TOWN…          1            1          0           1
+    #>  58 20160056 ONO          ONO          NON                  606         3250       2644           2
+    #>  59 2018C07… LOYSVILLE    ON           NON                55673         3250     -52423           1
+    #>  60 20130205 IRWIN        NORTH UNTIN… NORTH HUNTIN…          1          129        128           1
+    #>  61 2010095  LANGHORNE    PENDEL       PENNDEL                2           85         83           1
+    #>  62 9500165  PHILADELPHIA PHIILA       PHILA                  1        83313      83312           1
+    #>  63 2010025  PHILADELPHIA PHILLA       PHILA                  1        83313      83312           1
+    #>  64 20180008 PHILADELPHIA PHILADEL     PHILADE            73984        73986          2           1
+    #>  65 7900117  PITTSBURGH   PITT         PIT                33711        33761         50           1
+    #>  66 2010389  PITTSBURGH   PLUMBORO     PLUM BORO              1            3          2           1
+    #>  67 8100217  POTTSVILLE   POTTSGROVE   POTTS GROVE            1            2          1           1
+    #>  68 2011150  NEW PROVIDE… QUARYVILLE   QUARRYVILLE            1          383        382           1
+    #>  69 9400092  BANGOR       ROSETTO      ROSETO                 2           21         19           1
+    #>  70 20120110 BELLE VERNON ROS TRAVER … ROSTRAVER TO…          1           45         44           1
+    #>  71 7900366  BELLE VERNON ROOSTRAVER … ROSTRAVER TO…          1           45         44           1
+    #>  72 2010427  RECTOR       RUFFSDALE    RUFFS DALE             1           23         22           1
+    #>  73 8800271  READING      SINKING SPR… SINKING SPRI…         24          199        175           1
+    #>  74 2007012  READING      SINKING SPR… SINKING SPRI…         24          199        175           1
+    #>  75 2004017  READING      SINKING SPR… SINKING SPRI…         24          199        175           1
+    #>  76 9700250  READING      SINKING SPR… SINKING SPRI…         24          199        175           1
+    #>  77 9700144  READING      SINKING SPR… SINKING SPRI…         24          199        175           1
+    #>  78 20120083 READING      SINKING SPR… SINKING SPRI…         24          199        175           1
+    #>  79 7900443  READING      SINKING SPR… SINKING SPRI…         24          199        175           1
+    #>  80 7900364  READING      SINKING SPR… SINKING SPRI…         24          199        175           1
+    #>  81 7900302  READING      SINKING SPR… SINKING SPRI…         24          199        175           1
+    #>  82 9200410  READING      SINKING SPR… SINKING SPRI…         24          199        175           1
+    #>  83 8400128  READING      SINKING SPR… SINKING SPRI…         24          199        175           1
+    #>  84 7900202  READING      SINKING SPR… SINKING SPRI…         24          199        175           1
+    #>  85 9700178  READING      SINKING SPR… SINKING SPRI…         24          199        175           1
+    #>  86 2000081  READING      SINKING SPR… SINKING SPRI…         24          199        175           1
+    #>  87 2002336  READING      SINKING SPR… SINKING SPRI…         24          199        175           1
+    #>  88 8600110  READING      SINKING SPR… SINKING SPRI…         24          199        175           1
+    #>  89 7900491  SOUTHEASTERN SOUTHERN EA… SOUTHEASTERN          18         1599       1581           4
+    #>  90 8300005  CHATHAM      SOUTH EASTE… SOUTHEASTERN           4         1599       1595           1
+    #>  91 8300005  WESTTOWN     SOUTH EASTE… SOUTHEASTERN           4         1599       1595           1
+    #>  92 7900434  MOSCOW       SPRINGBROOK… SPRING BROOK…          1            4          3           1
+    #>  93 8000444  PHILADELPHIA SPRINGHOUSE  SPRING HOUSE           3          282        279           1
+    #>  94 2010310  AMBLER       SPRINGHOUSE  SPRING HOUSE           3          282        279           1
+    #>  95 20170091 SPRING HOUSE SPRINGMILL   SPRING MILLS           2           45         43           2
+    #>  96 9700178  HARRISBURG   STEELLTON    STEELTON               2          660        658           1
+    #>  97 9500250  HARRISBURG   STEELLTON    STEELTON               2          660        658           1
+    #>  98 2000213  PITTSBURGH   SWISVALE     SWISSVALE              1           58         57           1
+    #>  99 2004037  RUSSELL      TITTUSVILLE  TITUSVILLE             1           31         30           1
+    #> 100 9500237  MARCUS HOOK  UPPER HICHE… UPPER CHICHE…          1          263        262           1
+    #> 101 8100217  SPRINGFIELD  UPPERCHICHE… UPPER CHICHE…          1          263        262           1
+    #> 102 7900444  ASTON        UPPER CHICH… UPPER CHICHE…        264          263         -1           1
+    #> 103 9500250  PITTSBURGH   UPER SAINT … UPPER SAINT …          1          196        195           1
+    #> 104 7900443  PITTSBURGH   UPPER SAINT… UPPER SAINT …          1          196        195           1
+    #> 105 8300167  ALLENTOWN    WESCOESVILLE WESCOSVILLE            8           45         37           1
+    #> 106 7900433  GREEN LANE   WESCOESVILLE WESCOSVILLE            8           45         37           1
+    #> 107 20120381 ALLENTOWN    WESCOESVILLE WESCOSVILLE            8           45         37           1
+    #> 108 7900433  CATASAUQUA   WESCOESVILLE WESCOSVILLE            8           45         37           1
+    #> 109 9400092  ALLENTOWN    WESCOESVILLE WESCOSVILLE            8           45         37           1
+    #> 110 20120022 WYOMING      WEST WEST    WEST                   1         6390       6389           5
+    #> 111 9700250  PITTSBURGH   WILKES TOWN… WILKENS TOWN…          1            1          0           1
 
 Manually change the city\_refine fields due to overcorrection.
 
@@ -824,7 +859,7 @@ pa$city_clean <- pa$city_clean %>% str_replace("\\sTWP$", " TOWNSHIP")
 n_distinct(pa$city_clean[pa$city_clean %out% valid_city])
 ```
 
-    #> [1] 1503
+    #> [1] 1502
 
 ``` r
 valid_city <- unique(c(valid_city, extra_city))
@@ -862,19 +897,19 @@ Each process also increases the percent of valid city names.
 
 ``` r
 prop_in(pa$CITY, valid_city, na.rm = TRUE)
-#> [1] 0.947494
+#> [1] 0.9510332
 prop_in(pa$city_prep, valid_city, na.rm = TRUE)
-#> [1] 0.9572793
+#> [1] 0.9621608
 prop_in(pa$city_swap, valid_city, na.rm = TRUE)
-#> [1] 0.9672271
+#> [1] 0.9720373
 prop_in(pa$city, valid_city, na.rm = TRUE)
-#> [1] 0.9339256
+#> [1] 0.9386369
 prop_in(pa$city_clean, valid_city, na.rm = TRUE)
-#> [1] 0.9846674
+#> [1] 0.9892286
 prop_in(pa$city_after_lookup, valid_city, na.rm = TRUE)
-#> [1] 0.9998799
+#> [1] 0.9999454
 prop_in(pa$city_output, valid_city, na.rm = TRUE)
-#> [1] 0.9999368
+#> [1] 0.9999727
 
 progress_table <- tibble(
   stage = c("raw", "norm", "swap", "refine","second match", "lookup", "final lookup"),
@@ -911,17 +946,17 @@ diff_change <- progress_table$unique_bad[1]-progress_table$unique_bad[4]
 prop_change <- diff_change/progress_table$unique_bad[1]
 ```
 
-Each step of the cleaning process reduces the number of distinct city values. There are 481469 with 6218 distinct values, after the swap and refine processes, there are 474380 entries with 3245 distinct values.
+Each step of the cleaning process reduces the number of distinct city values. There are 481469 with 6218 distinct values, after the swap and refine processes, there are 476488 entries with 3408 distinct values.
 
 | Normalization Stage |  Percent Valid|  Total Distinct|  Unique Invalid|
 |:--------------------|--------------:|---------------:|---------------:|
-| raw                 |         0.9475|            6218|            2986|
-| norm                |         0.9573|            5729|            2476|
-| swap                |         0.9672|            4323|            1088|
-| refine              |         0.9339|            5891|            2665|
-| second match        |         0.9847|            4646|            1399|
-| lookup              |         0.9999|            3269|              21|
-| final lookup        |         0.9999|            3245|               2|
+| raw                 |         0.9510|            6218|            2822|
+| norm                |         0.9622|            5747|            2327|
+| swap                |         0.9720|            4339|             938|
+| refine              |         0.9386|            5912|            2520|
+| second match        |         0.9892|            4646|            1236|
+| lookup              |         0.9999|            3422|              11|
+| final lookup        |         1.0000|            3408|               2|
 
 ![](../plots/wrangle_bar_prop-1.png)
 
@@ -936,18 +971,23 @@ pa <- pa %>%
   ) %>% 
   mutate(address_clean = normal_address(
       address = address_clean,
-      add_abbs = usps_city,
+      abbs = usps_city,
       na_rep = TRUE
     ))
 ```
 
-We also need to process the processed filer table to join back to the `FILERID` field.
+We also need to pull up the processed filer table to join back to the `FILERID`, `EYEAR` and `CYCLE` field.
 
 ``` r
 clean_dir <- here("pa", "expends", "data", "processed")
 pa_filer <- read_csv(glue("{clean_dir}/pa_filers_clean.csv"), 
                      col_types = cols(.default = col_character())) %>% 
-  rename_at(vars(contains("clean")), list(~str_c("filer_",.))) %>% 
+  rename_at(vars(contains("clean")), list(~str_c("filer_",.)))
+
+pa_filer <- pa_filer %>% flag_dupes(FILERID,EYEAR,CYCLE)
+
+pa_filer <-  pa_filer %>% 
+  filter(!dupe_flag) %>% 
   select(
     FILERID,
     EYEAR,
@@ -966,13 +1006,13 @@ pa <- pa %>% left_join(pa_filer, by = c("FILERID", "EYEAR", "CYCLE"))
 Conclude
 --------
 
-1.  There are 498582 records in the database
-2.  There are 7801 records with suspected duplicate filerID, recipient, date, *and* amount (flagged with `dupe_flag`)
+1.  There are 493025 records in the database
+2.  There are 7000 records with suspected duplicate filerID, recipient, date, *and* amount (flagged with `dupe_flag`)
 3.  The ranges for dates and amounts are reasonable
 4.  Consistency has been improved with `stringr` package and custom `normal_*()` functions.
 5.  The five-digit `zip_clean` variable has been created with `zipcode::clean.zipcode()`
 6.  The `year` variable has been created with `lubridate::year()`
-7.  There are 11568 records with missing `city` values and 125 records with missing `payee` values (both flagged with the `na_flag`).
+7.  There are 11556 records with missing `city` values and 124 records with missing `payee` values (both flagged with the `na_flag`).
 
 Export
 ------
@@ -999,6 +1039,9 @@ pa %>%
     -city,
     -count
   ) %>% 
+    rename (zip5 = zip_clean,
+          filer_zip5 = filer_zip_clean,
+          city_clean = city_output) %>% 
   write_csv(
     path = glue("{clean_dir}/pa_expends_clean.csv"),
     na = ""
