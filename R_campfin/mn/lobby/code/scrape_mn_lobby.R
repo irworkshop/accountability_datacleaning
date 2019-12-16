@@ -1,40 +1,31 @@
-# Kiernan Nicholls --------------------------------------
-# Investigative Reporting Workshop ----------------------
-# Fri Dec 13 12:01:30 2019 ------------------------------
 library(tidyverse)
 library(rvest)
 library(httr)
 library(glue)
+library(fs)
 
-# scrape id urls ----------------------------------------------------------
+# lobbyists pages ---------------------------------------------------------
 
-# list all the urls from the index page
-base_url <- "http://www.cfboard.state.mn.us/lobby/"
-lbatoz <- read_html(str_c(base_url, "lbatoz.html", sep = "/"))
-index_url <- str_c(base_url, html_attr(html_nodes(lbatoz, "a"), "href"))
-
-# for each letter scrape all name links
-all_links <- character()
-for (i in letters) {
-  url <- glue("http://www.cfboard.state.mn.us/lobby/lbdetail/lbindex{i}.html")
+# find all lobbyist page links
+lb_links <- character()
+for (l in letters) {
+  url <- glue("http://www.cfboard.state.mn.us/lobby/lbdetail/lbindex{l}.html")
   page <- read_html(url)
   nodes <- html_nodes(page, "a")
   names <- html_text(nodes)
   refs <- html_attr(nodes, "href")
   new_links <- str_c(dirname(url), refs, sep = "/")
   new_links <- str_subset(new_links, "/lb\\d+.html$")
-  all_links <- append(all_links, new_links)
+  lb_links <- unique(append(lb_links, new_links))
 }
-all_links <- unique(all_links)
 
-# scrape lbdetail page ----------------------------------------------------
+lb <- rep(x = list(NA), length.out = length(lb_links))
+# scrape every page
+for (i in seq_along(lb_links)) {
+  # read the pahe html
+  lb_detail <- read_html(lb_links[i])
 
-lb_list <- rep(list(NA), length(all_links))
-for (i in seq_along(all_links)) {
-  lb_detail <- read_html(all_links[i])
-  lb_id <- str_extract(all_links[i], "lb\\d+(?=\\.\\w+$)")
-
-  # get header text
+  # scrape the header text
   lb_header <- lb_detail %>%
     html_node("body") %>%
     html_text(trim = TRUE) %>%
@@ -42,69 +33,55 @@ for (i in seq_along(all_links)) {
     `[[`(1) %>%
     `[`(1:str_which(., "Registration Number"))
 
-  # separate header
-  lb_name <- html_text(html_node(lb_detail, "strong"))
-  lb_email <- str_remove(str_subset(lb_header, "Email"), "Email:\\s")
   lb_tel <- str_remove(str_subset(lb_header, "Telephone"), "Telephone:\\s")
-  lb_addr_index <- seq(
+  if (length(lb_tel) == 0) lb_tel <- NA_character_
+  lb_email <- str_remove(str_subset(lb_header, "Email"), "Email:\\s")
+  if (length(lb_email) == 0) lb_email <- NA_character_
+
+  lb_addr <- lb_header[seq(
     from = str_which(lb_header, "Lobbyist") + 1,
-    to = str_which(lb_header, "Telephone") - 1
-  )
-  lb_addr <- lb_header[lb_addr_index]
-  if (length(lb_addr) > 2) {
-    lb_comp <- lb_addr[1]
-    lb_street <- lb_addr[2]
-    lb_city <- lb_addr[3]
-  } else {
-    lb_comp <- NA_character_
-    lb_street <- lb_addr[1]
-    lb_city <- lb_addr[2]
-  }
+    to = min(str_which(lb_header, "Telephone|Email")) - 1
+  )]
 
-  # build 1 lob row
-  lb_table <- tibble(
-    lb_name,
-    lb_id,
-    lb_tel,
-    lb_email,
-    lb_comp,
-    lb_street,
-    lb_city
-  )
+  lb_city <- lb_addr[length(lb_addr)]
+  lb_street <- lb_addr[length(lb_addr) - 1]
+  lb_company <- if (length(lb_addr) > 2) lb_addr[1] else NA_character_
 
-  # separate lob address
-  lb_table <- lb_table %>%
+  lb_table <-
+    tibble(
+      lb_id = str_extract(lb_links[i], "\\d+(?=\\.\\w+$)"),
+      lb_name = html_text(html_node(lb_detail, "strong")),
+      lb_tel,
+      lb_email,
+      lb_company,
+      lb_street,
+      lb_city
+    ) %>%
     separate(
       col = lb_city,
       into = c("lb_city", "zip_state"),
-      sep = ",\\s(?=[:upper:]{2})",
+      sep = ",\\s",
       remove = TRUE
     ) %>%
     separate(
       col = zip_state,
-      into = c("lb_zip", "lb_state"),
+      into = c("lb_state", "lb_zip"),
       sep = "\\s(?=\\d)"
     )
 
-  # get represented clients from lbdetail
-  rep_table <- lb_detail %>%
+  # scrape clients table from page
+  lb_clients <- lb_detail %>%
     html_node("table") %>%
     html_table(header = TRUE) %>%
     as_tibble() %>%
-    na_if("") %>%
-    na_if("&nbsp") %>%
+    na_if("") %>% na_if("&nbsp") %>%
     mutate_at(
       .vars = vars(DesignatedLobbyist),
       .funs = `==`, "Yes"
     ) %>%
     mutate_at(
       .vars = vars(ends_with("Date")),
-      .funs = str_replace,
-      "^Pre-1996$", "01/01/1970"
-    ) %>%
-    mutate_at(
-      .vars = vars(ends_with("Date")),
-      .funs = as.character
+      .funs = str_replace, "Pre-1996", "1/1/1970"
     ) %>%
     mutate_at(
       .vars = vars(ends_with("Date")),
@@ -114,83 +91,95 @@ for (i in seq_along(all_links)) {
     set_names(nm = c(
       "a_name",
       "a_id",
-      "reg_date",
-      "term_date",
+      "start",
+      "end",
       "type",
       "designated"
     ))
 
-  # get assoc info for each rep ---------------------------------------------
-
-  a_list <- rep(list(NA), nrow(rep_table))
-  for (k in seq_along(rep_table$a_id)) {
-    # scrape page
-    a_id <- rep_table$a_id[k]
-    a_url <- glue("http://www.cfboard.state.mn.us/lobby/adetail/a{a_id}.html")
-    a_detail <- read_html(a_url)
-
-    # scrape header text
-    a_header <- a_detail %>%
-      html_node("body") %>%
-      html_text(trim = TRUE) %>%
-      str_split("\r\n") %>%
-      `[[`(1) %>%
-      `[`(1:str_which(., "Association Number"))
-
-    # find which lines are address
-    a_addr <- a_header[seq(
-      from = str_which(a_header, "Association data") + 1,
-      to = str_which(a_header, "Website") - 1
-    )]
-
-    # build a tibble row
-    a_table <- tibble(
-      a_id,
-      a_name = html_text(html_node(a_detail, "strong")),
-      a_website = str_remove(str_subset(a_header, "Website"), "Website:"),
-      a_street = a_addr[length(a_addr) - 1],
-      a_city = a_addr[length(a_addr)]
-    )
-
-    # separate the address lines
-    a_table <- a_table %>%
-      separate(
-        col = a_city,
-        into = c("a_city", "zip_state"),
-        sep = ",\\s(?=[:upper:]{2})",
-        remove = TRUE
-      ) %>%
-      separate(
-        col = zip_state,
-        into = c("a_zip", "a_state"),
-        sep = "\\s(?=\\d)"
-      )
-
-    # save to list location
-    a_list[[k]] <- a_table
-  }
-
-  # bind assoc back to rep --------------------------------------------------
-
-  rep_table <- left_join(
-    x = rep_table,
-    y = bind_rows(a_list),
-    by = c("a_name", "a_id")
-  )
-
-  # bind lb back to assoc
-  lb_list[[i]] <- as_tibble(cbind(lb_table, rep_table))
-  if (i %% 10 == 0) {
-    cat(glue("{lb_id} completed: {i} = {scales::percent(i/length(all_links))}\n\n"))
-  }
-  # Sys.sleep(time = sample(x = 1:5, size = 1))
+  # combine lob and clients
+  # fill lob rows down for every client
+  lb[[i]] <- as_tibble(cbind(lb_table, lb_clients))
+  cat(glue("{i} of {length(lb_links)} ({scales::percent(i/length(lb_links))})"), sep = "\n")
 }
 
-all_lb <- bind_rows(purrr::keep(lb_list, ~!all(is.na(.x))))
-nrow(all_lb)
-n_distinct(all_lb$lb_id)
-write_csv(
-  x = all_lb,
-  path = "mn/lobby/data/processed/mn_lobbyists.csv",
-  na = ""
-)
+# bind list of tibbles
+lb <- bind_rows(lb)
+lb$a_id <- as.character(lb$a_id)
+
+# association pages -------------------------------------------------------
+
+# repeat for associations
+a_links <- character()
+for (a in c(1:5, letters)) {
+  url <- glue("http://www.cfboard.state.mn.us/lobby/adetail/aindex{a}.html")
+  page <- read_html(url)
+  nodes <- html_nodes(page, "a")
+  names <- html_text(nodes)
+  refs <- html_attr(nodes, "href")
+  new_links <- str_c(dirname(url), refs, sep = "/")
+  new_links <- str_subset(new_links, "/a\\d+.html$")
+  a_links <- unique(append(a_links, new_links))
+}
+
+a <- rep(x = list(NA), length.out = length(a_links))
+for (i in seq_along(a_links)) {
+  a_detail <- read_html(a_links[i])
+  a_header <- a_detail %>%
+    html_node("body") %>%
+    html_text(trim = TRUE) %>%
+    str_split("\r\n") %>%
+    `[[`(1) %>%
+    `[`(1:str_which(., "Lobbyists Registered") - 1)
+  a_website <- str_remove(str_subset(a_header, "Website"), "Website:")
+  if (length(a_website) == 0) a_website <- NA_character_
+  addr_to <- str_which(a_header, "[:upper:]{2}\\s\\d+")
+  if (length(addr_to) == 0) {
+    a_city <- NA_character_
+    a_street <- NA_character_
+    a_contact <- NA_character_
+  } else {
+    a_addr <- a_header[seq(
+      from = min(str_which(a_header, "Association")) + 2,
+      to = max(addr_to)
+    )]
+    a_city <- a_addr[length(a_addr)]
+    a_street <- a_addr[length(a_addr) - 1]
+    a_contact <- a_header[min(str_which(a_header, "Association")) + 1]
+  }
+  a_table <-
+    tibble(
+      a_id = str_extract(a_links[i], "\\d+(?=\\.\\w+$)"),
+      a_name = html_text(html_node(a_detail, "strong")),
+      a_website,
+      a_contact,
+      a_street,
+      a_city
+    ) %>%
+    separate(
+      col = a_city,
+      into = c("a_city", "zip_state"),
+      sep = ",\\s",
+      remove = TRUE
+    ) %>%
+    separate(
+      col = zip_state,
+      into = c("a_state", "a_zip"),
+      sep = "\\s(?=\\d)"
+    )
+  a[[i]] <- a_table
+  cat(glue("{i} of {length(a_links)} ({scales::percent(i/length(a_links))})"), sep = "\n")
+}
+
+# bind list of tibbles
+a <- bind_rows(a)
+
+# combine tables ----------------------------------------------------------
+
+mnlr <- left_join(lb, a, by = c("a_name", "a_id"))
+head(mnlr)
+tail(mnlr)
+glimpse(sample_frac(mnlr))
+
+dir_create("mn/lobby/data/raw")
+write_csv(mnlr, path = "mn/lobby/data/raw/lob_scrape.csv", na = "")
