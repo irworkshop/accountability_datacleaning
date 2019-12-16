@@ -1,7 +1,7 @@
 Pennsylvania Lobbyists
 ================
 Kiernan Nicholls
-2019-12-11 17:12:06
+2019-12-12 14:15:13
 
   - [Project](#project)
   - [Objectives](#objectives)
@@ -10,6 +10,7 @@ Kiernan Nicholls
   - [Import](#import)
   - [Explore](#explore)
   - [Wrangle](#wrangle)
+  - [Export](#export)
 
 <!-- Place comments regarding knitting here -->
 
@@ -473,7 +474,15 @@ palr %>%
 
 ## Wrangle
 
+To improve the uniformity and searchability of our database, we will
+perform some very consistant and confident text normalization.
+
 ### Phone
+
+First, will create a single new telephone number variable for each
+lobbyist and principal by using `tidyr::unite()` to combine the number
+and extension and then pass that variable to `campfin::normal_phone()`
+to convert to a new format.
 
 ``` r
 palr <- palr %>% 
@@ -519,6 +528,11 @@ palr <- palr %>%
 
 ### Address
 
+We will perform a similar change to the street address,
+`tidyr:unite()`ing the two line variables and passing them to
+`campfin:normal_address()` to expand abbreviations and improve
+consistency.
+
 ``` r
 palr <- palr %>% 
   unite(
@@ -560,6 +574,8 @@ palr <- palr %>%
 
 ### ZIP
 
+We will use `campfin:normal_zip()` to coerce 5-digit ZIP codes.
+
 ``` r
 palr <- mutate_at(
   .tbl = palr,
@@ -568,6 +584,8 @@ palr <- mutate_at(
   na_rep = TRUE
 )
 ```
+
+This improves the proportion of ZIP codes that are valid.
 
     #> # A tibble: 4 x 6
     #>   stage        prop_in n_distinct prop_na n_out n_diff
@@ -579,6 +597,9 @@ palr <- mutate_at(
 
 ### State
 
+The 2-character state codes for both lobbyist and principal need no
+further cleaning.
+
 ``` r
 prop_in(palr$lob_state, valid_state)
 #> [1] 1
@@ -587,3 +608,78 @@ prop_in(palr$pri_state, valid_state)
 ```
 
 ### City
+
+The city strings are the most difficult to clean, given the variety in
+city names and the wide range of quasi-valid formats in which they might
+be writte. We can use `campfin::normal_city()` to normalize the strings.
+
+Then, we compare these normalized strings to the expected city name for
+that record’s state and ZIP code. If the normalized string is extremelly
+similar to the expected string, we can safely replace what is written
+with what we would expect.
+
+``` r
+palr <- palr %>% 
+  left_join(
+    y = zipcodes,
+    by = c(
+      "lob_state" = "state",
+      "lob_zip_norm" = "zip"
+    )
+  ) %>% 
+  rename(lob_city_match = city) %>% 
+  mutate(
+    lob_match_abb = is_abbrev(lob_city_norm, lob_city_match),
+    lob_match_dist = str_dist(lob_city_norm, lob_city_match),
+    lob_city_swap = if_else(
+      condition = !is.na(lob_city_match) & (lob_match_abb | lob_match_dist == 1),
+      true = lob_city_match,
+      false = lob_city_norm
+    )
+  ) %>% 
+  select(
+    -lob_city_match,
+    -lob_match_abb,
+    -lob_match_dist
+  ) %>% 
+  left_join(
+    y = zipcodes,
+    by = c(
+      "pri_state" = "state",
+      "pri_zip_norm" = "zip"
+    )
+  ) %>% 
+  rename(pri_city_match = city) %>% 
+  mutate(
+    pri_match_abb = is_abbrev(pri_city_norm, pri_city_match),
+    pri_match_dist = str_dist(pri_city_norm, pri_city_match),
+    pri_city_swap = if_else(
+      condition = !is.na(pri_city_match) & (pri_match_abb | pri_match_dist == 1),
+      true = pri_city_match,
+      false = pri_city_norm
+    )
+  ) %>% 
+  select(
+    -pri_city_match,
+    -pri_match_abb,
+    -pri_match_dist
+  )
+```
+
+These two steps *drastically* improve the consistency in city names.
+
+![](../plots/plot_prop-1.png)<!-- -->
+
+![](../plots/plot_distinct-1.png)<!-- -->
+
+## Export
+
+``` r
+proc_dir <- here("pa", "lobby", "data", "raw")
+dir_create(proc_dir)
+write_csv(
+  x = palr,
+  path = glue("{proc_dir}/pa_lobbyists.csv"),
+  na = ""
+)
+```

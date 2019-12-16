@@ -274,7 +274,14 @@ palr %>%
 
 ## Wrangle
 
+To improve the uniformity and searchability of our database, we will perform some very consistant
+and confident text normalization.
+
 ### Phone
+
+First, will create a single new telephone number variable for each lobbyist and principal by
+using `tidyr::unite()` to combine the number and extension and then pass that variable to
+`campfin::normal_phone()` to convert to a new format.
 
 ```{r phone_norm}
 palr <- palr %>% 
@@ -312,6 +319,9 @@ palr %>%
 
 ### Address
 
+We will perform a similar change to the street address, `tidyr:unite()`ing the two line variables
+and passing them to `campfin:normal_address()` to expand abbreviations and improve consistency.
+
 ```{r address_norm}
 palr <- palr %>% 
   unite(
@@ -345,6 +355,8 @@ palr %>%
 
 ### ZIP
 
+We will use `campfin:normal_zip()` to coerce 5-digit ZIP codes.
+
 ```{r zip_norm}
 palr <- mutate_at(
   .tbl = palr,
@@ -353,6 +365,8 @@ palr <- mutate_at(
   na_rep = TRUE
 )
 ```
+
+This improves the proportion of ZIP codes that are valid.
 
 ```{r zip_progress, echo=FALSE}
 progress_table(
@@ -366,10 +380,156 @@ progress_table(
 
 ### State
 
+The 2-character state codes for both lobbyist and principal need no further cleaning.
+
 ```{r state}
 prop_in(palr$lob_state, valid_state)
 prop_in(palr$pri_state, valid_state)
 ```
 
 ### City
+
+The city strings are the most difficult to clean, given the variety in city names and the wide
+range of quasi-valid formats in which they might be writte. We can use `campfin::normal_city()`
+to normalize the strings.
+
+```{r city_normal, echo=FALSE}
+palr <- mutate_at(
+  .tbl = palr,
+  .vars = vars(ends_with("city")),
+  .funs = list(norm = normal_city),
+  abbs = usps_city,
+  na = invalid_city
+)
+```
+
+Then, we compare these normalized strings to the expected city name for that record's state and ZIP
+code. If the normalized string is extremelly similar to the expected string, we can safely replace
+what is written with what we would expect.
+
+```{r}
+palr <- palr %>% 
+  left_join(
+    y = zipcodes,
+    by = c(
+      "lob_state" = "state",
+      "lob_zip_norm" = "zip"
+    )
+  ) %>% 
+  rename(lob_city_match = city) %>% 
+  mutate(
+    lob_match_abb = is_abbrev(lob_city_norm, lob_city_match),
+    lob_match_dist = str_dist(lob_city_norm, lob_city_match),
+    lob_city_swap = if_else(
+      condition = !is.na(lob_city_match) & (lob_match_abb | lob_match_dist == 1),
+      true = lob_city_match,
+      false = lob_city_norm
+    )
+  ) %>% 
+  select(
+    -lob_city_match,
+    -lob_match_abb,
+    -lob_match_dist
+  ) %>% 
+  left_join(
+    y = zipcodes,
+    by = c(
+      "pri_state" = "state",
+      "pri_zip_norm" = "zip"
+    )
+  ) %>% 
+  rename(pri_city_match = city) %>% 
+  mutate(
+    pri_match_abb = is_abbrev(pri_city_norm, pri_city_match),
+    pri_match_dist = str_dist(pri_city_norm, pri_city_match),
+    pri_city_swap = if_else(
+      condition = !is.na(pri_city_match) & (pri_match_abb | pri_match_dist == 1),
+      true = pri_city_match,
+      false = pri_city_norm
+    )
+  ) %>% 
+  select(
+    -pri_city_match,
+    -pri_match_abb,
+    -pri_match_dist
+  )
+```
+
+These two steps _drastically_ improve the consistency in city names.
+
+```{r city_progress, echo=FALSE}
+progress <- 
+  progress_table(
+    str_to_upper(palr$lob_city),
+    palr$lob_city_norm,
+    palr$lob_city_swap,
+    str_to_upper(palr$pri_city),
+    palr$pri_city_norm,
+    palr$pri_city_swap,
+    compare = c(valid_city, extra_city)
+  ) %>% 
+  separate(
+    col = stage,
+    sep = "_",
+    into = c("type", "stage"),
+    extra = "merge"
+  ) %>% 
+  group_by(type) %>% 
+  mutate(stage = as_factor(stage))
+```
+
+```{r plot_prop, echo=FALSE}
+progress %>% 
+  ggplot(aes(x = stage, y = prop_in)) +
+  geom_col(aes(fill = type), position = "dodge") +
+  scale_fill_brewer(palette = "Dark2") +
+  geom_hline(yintercept = 0.99) +
+  facet_wrap(~type) +
+  coord_cartesian(ylim = c(0.75, 1.00)) +
+  theme(legend.position = "none") +
+  scale_y_continuous(labels = percent) +
+  labs(
+    title = "Pennsylvania City Normalization Progress",
+    x = "Stage",
+    y = "Percent Valid"
+  )
+```
+
+```{r plot_distinct, echo=FALSE}
+progress %>% 
+  select(
+    type,
+    stage, 
+    all = n_distinct,
+    bad = n_diff
+  ) %>% 
+  mutate(good = all - bad) %>% 
+  pivot_longer(c("good", "bad")) %>% 
+  mutate(name = name == "good") %>% 
+  ggplot(aes(x = stage, y = value)) +
+  geom_col(aes(fill = name)) +
+  scale_fill_brewer(palette = "Dark2", direction = -1) +
+  scale_y_continuous(labels = comma) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "Pennsylvania City Normalization Progress",
+    subtitle = "Distinct values, valid and invalid",
+    x = "Stage",
+    y = "Distinct Values",
+    fill = "Valid"
+  ) +
+  facet_wrap(~type)
+```
+
+## Export
+
+```{r write_proc}
+proc_dir <- here("pa", "lobby", "data", "raw")
+dir_create(proc_dir)
+write_csv(
+  x = palr,
+  path = glue("{proc_dir}/pa_lobbyists.csv"),
+  na = ""
+)
+```
 
