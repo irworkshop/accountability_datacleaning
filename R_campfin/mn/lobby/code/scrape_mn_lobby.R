@@ -1,4 +1,5 @@
 library(tidyverse)
+library(magrittr)
 library(rvest)
 library(httr)
 library(glue)
@@ -17,6 +18,7 @@ for (l in letters) {
   new_links <- str_c(dirname(url), refs, sep = "/")
   new_links <- str_subset(new_links, "/lb\\d+.html$")
   lb_links <- unique(append(lb_links, new_links))
+  Sys.sleep(time = sample(1:3, 1))
 }
 
 lb <- rep(x = list(NA), length.out = length(lb_links))
@@ -88,7 +90,7 @@ for (i in seq_along(lb_links)) {
       .funs = parse_date,
       "%m/%d/%Y"
     ) %>%
-    set_names(nm = c(
+    set_names(value = c(
       "a_name",
       "a_id",
       "start",
@@ -101,6 +103,7 @@ for (i in seq_along(lb_links)) {
   # fill lob rows down for every client
   lb[[i]] <- as_tibble(cbind(lb_table, lb_clients))
   cat(glue("{i} of {length(lb_links)} ({scales::percent(i/length(lb_links))})"), sep = "\n")
+  Sys.sleep(time = sample(1:3, 1))
 }
 
 # bind list of tibbles
@@ -120,6 +123,7 @@ for (a in c(1:5, letters)) {
   new_links <- str_c(dirname(url), refs, sep = "/")
   new_links <- str_subset(new_links, "/a\\d+.html$")
   a_links <- unique(append(a_links, new_links))
+  Sys.sleep(time = sample(1:3, 1))
 }
 
 a <- rep(x = list(NA), length.out = length(a_links))
@@ -169,6 +173,7 @@ for (i in seq_along(a_links)) {
     )
   a[[i]] <- a_table
   cat(glue("{i} of {length(a_links)} ({scales::percent(i/length(a_links))})"), sep = "\n")
+  Sys.sleep(time = sample(1:3, 1))
 }
 
 # bind list of tibbles
