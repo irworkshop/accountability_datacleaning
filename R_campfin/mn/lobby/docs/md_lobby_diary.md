@@ -1,16 +1,18 @@
-State Data
+Minnesota Lobbyists
 ================
-First Last
-2019-12-17 14:58:43
+Kiernan Nicholls
+2019-12-17 16:38:11
 
   - [Project](#project)
   - [Objectives](#objectives)
   - [Packages](#packages)
-  - [Data](#data)
-  - [Import](#import)
-  - [Explore](#explore)
-  - [Wrangle](#wrangle)
-  - [Export](#export)
+  - [Registration](#registration)
+      - [Data](#data)
+      - [Import](#import)
+      - [Explore](#explore)
+      - [Wrangle](#wrangle)
+      - [Export](#export)
+  - [Expenditures](#expenditures)
 
 <!-- Place comments regarding knitting here -->
 
@@ -86,6 +88,8 @@ feature and should be run as such. The project also uses the dynamic
 here::here()
 #> [1] "/home/kiernan/R/accountability_datacleaning/R_campfin"
 ```
+
+# Registration
 
 ## Data
 
@@ -434,3 +438,54 @@ write_csv(
   na = ""
 )
 ```
+
+# Expenditures
+
+We can also obtain a report of lobbying expenditures made by the
+principal associations.
+
+``` r
+exp_url <- "https://cfb.mn.gov/reports-and-data/self-help/data-downloads/lobbying/?download=102614850"
+mnle <- read_csv(
+  file = exp_url,
+  col_types = cols(
+    Principal = col_character(),
+    `Entity ID` = col_character(),
+    `Report Year` = col_double(),
+    `General lobbying amount` = col_double(),
+    `PUC lobbying amount` = col_double(),
+    `Total spent` = col_double()
+  )
+)
+
+mnle <- mnle %>% 
+  rename(
+    a_name  = `Principal`,
+    a_id  = `Entity ID`,
+    year  = `Report Year`,
+    gen_amount  = `General lobbying amount`,
+    lob_amount  = `PUC lobbying amount`,
+    total_amount  = `Total spent`
+  )
+```
+
+``` r
+mnle %>% 
+  filter(total_amount > 1) %>% 
+  ggplot(aes(x = total_amount)) +
+  geom_histogram() +
+  scale_x_continuous(
+    breaks = c(1 %o% 10^(0:6)),
+    labels = dollar,
+    trans = "log10"
+  ) +
+  labs(
+    title = "State Data Amount Distribution",
+    subtitle = "from 2000 to 2019",
+    caption = "Source: State Agency Name",
+    x = "Amount",
+    y = "Count"
+  )
+```
+
+![](../plots/plot_lob_amount-1.png)<!-- -->
