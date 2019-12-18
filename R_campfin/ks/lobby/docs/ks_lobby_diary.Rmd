@@ -32,7 +32,7 @@ set.seed(5)
 ```
 
 ```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
-fs::dir_create(here::here("ks", "lobbyng", "reg", "docs"))
+fs::dir_create(here::here("ks", "lobby", "reg", "docs"))
 ```
 
 ## Project
@@ -144,7 +144,7 @@ kslr <- content(response) %>%
 Or, we can download the file manually and read it directly...
 
 ```{r raw_dir}
-raw_dir <- here("ks", "lobbyng", "reg", "data", "raw")
+raw_dir <- here("ks", "lobby", "data", "raw")
 dir_create(raw_dir)
 ```
 
@@ -206,7 +206,7 @@ kslr <- kslr %>%
     col = city_state_zip,
     into = c("city_sep", "state_zip"),
     sep = ",\\s",
-    remove = FALSE
+    remove = TRUE
   ) %>% 
   separate(
     col = state_zip,
@@ -219,8 +219,23 @@ kslr <- kslr %>%
 From these three new columns, we can see almost all rows already contain
 valid values.
 
-```{r geo_check}
-prop_in(kslr$city_sep, valid_city)
+```{r geo_check_pre}
+prop_in(kslr$city_sep, c(valid_city, extra_city))
+prop_in(kslr$state_sep, valid_state)
+prop_in(kslr$zip_sep, valid_zip)
+```
+
+```{r geo_normal}
+kslr <- kslr %>%
+  rename(address = addr_1_addr_2) %>% 
+  mutate_at(vars(address), normal_address, abbs = usps_street) %>% 
+  mutate_at(vars(city_sep), normal_city, abbs = usps_city) %>% 
+  mutate_at(vars(state_sep), normal_state, na_rep = TRUE) %>% 
+  mutate_at(vars(zip_sep), normal_zip, na_rep = TRUE)
+```
+
+```{r geo_check_post}
+prop_in(kslr$city_sep, c(valid_city, extra_city))
 prop_in(kslr$state_sep, valid_state)
 prop_in(kslr$zip_sep, valid_zip)
 ```
@@ -235,5 +250,17 @@ glimpse(sample_frac(kslr))
 
 ```{r}
 glimpse_fun(kslr, count_na)
+```
+
+## Export
+
+```{r}
+proc_dir <- here("ks", "lobby", "data", "processed")
+dir_create(proc_dir)
+write_csv(
+  x = kslr,
+  path = glue("{proc_dir}/ks_lobbyists.csv"),
+  na = ""
+)
 ```
 
