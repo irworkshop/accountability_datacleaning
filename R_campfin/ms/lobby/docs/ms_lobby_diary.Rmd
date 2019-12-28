@@ -1,5 +1,5 @@
 ---
-title: "Mississippi Lobbying Regostration Data Diary"
+title: "Mississippi Lobbying Registration Data Diary"
 author: "Yanqi Xu"
 date: "`r format(Sys.time())`"
 output:

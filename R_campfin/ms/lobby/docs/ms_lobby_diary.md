@@ -1,7 +1,7 @@
-Mississippi Lobbying Regostration Data Diary
+Mississippi Lobbying Registration Data Diary
 ================
 Yanqi Xu
-2019-12-16 15:40:00
+2019-12-16 17:07:43
 
 -   [Project](#project)
 -   [Objectives](#objectives)

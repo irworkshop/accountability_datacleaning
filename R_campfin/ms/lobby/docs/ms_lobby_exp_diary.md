@@ -1,7 +1,7 @@
 Mississippi Lobbying Expenditure Data Diary
 ================
 Yanqi Xu
-2019-12-16 17:05:17
+2019-12-16 17:08:10
 
 -   [Project](#project)
 -   [Objectives](#objectives)
@@ -93,6 +93,7 @@ According to [The Secretary of State’s Office](https://www.sos.ms.gov/Election
 After inespecting the client reports and lobbyist reports, we discovered that the client reports are cleaner without empty columns ("N/A" lobbyists and $0.00 expenses). Thus, we'll join the client reports to the registry.
 
 ``` r
+
 ms_url<- glue("https://sos.ms.gov/elec/Config/Mississippi/Elections/Handlers/ExportClientReportsToExcel.ashx?type=5&year={2009:2019}&firstName=&lastName=&clientName=&salaryBeginRange=&salaryEndRange=,")
 
 dest_file <- glue("{raw_dir}/ms_lobby_exp_{2009:2019}.xls")
@@ -148,19 +149,18 @@ We'll use the `flag_dupes()` function to see if there are records identical to o
 ``` r
 ms_lobby_exp <- flag_dupes(ms_lobby_exp, dplyr::everything())
 tabyl(ms_lobby_exp$dupe_flag)
+#> # A tibble: 2 x 3
+#>   `ms_lobby_exp$dupe_flag`     n percent
+#>   <lgl>                    <dbl>   <dbl>
+#> 1 FALSE                     8578 0.995  
+#> 2 TRUE                        39 0.00453
 ```
-
-    ## # A tibble: 2 x 3
-    ##   `ms_lobby_exp$dupe_flag`     n percent
-    ##   <lgl>                    <dbl>   <dbl>
-    ## 1 FALSE                     8578 0.995  
-    ## 2 TRUE                        39 0.00453
 
 ### Year
 
-![](ms_lobby_exp_diary_files/figure-markdown_github/plot%20yea-1.png)
+![](../plots/plot%20yea-1.png)
 
-![](ms_lobby_exp_diary_files/figure-markdown_github/bar_med_plot-1.png)
+![](../plots/bar_med_plot-1.png)
 
 ### Missing
 
@@ -168,19 +168,18 @@ There's no empty fields in the two data frames.
 
 ``` r
 ms_lobby_exp  %>% col_stats(count_na)
+#> # A tibble: 8 x 4
+#>   col          class      n     p
+#>   <chr>        <chr>  <int> <dbl>
+#> 1 file_number  <chr>      0     0
+#> 2 report_type  <chr>      0     0
+#> 3 cycle_year   <int>      0     0
+#> 4 entity_name  <chr>      0     0
+#> 5 lobbyist     <chr>      0     0
+#> 6 compensation <dbl>      0     0
+#> 7 filed        <date>     0     0
+#> 8 dupe_flag    <lgl>      0     0
 ```
-
-    ## # A tibble: 8 x 4
-    ##   col          class      n     p
-    ##   <chr>        <chr>  <int> <dbl>
-    ## 1 file_number  <chr>      0     0
-    ## 2 report_type  <chr>      0     0
-    ## 3 cycle_year   <int>      0     0
-    ## 4 entity_name  <chr>      0     0
-    ## 5 lobbyist     <chr>      0     0
-    ## 6 compensation <dbl>      0     0
-    ## 7 filed        <date>     0     0
-    ## 8 dupe_flag    <lgl>      0     0
 
 Join
 ----
@@ -191,15 +190,6 @@ We'll join the expenditure data with the registration data frame that we cleaned
 reg_dir <- here("ms", "lobby", "data", "processed","reg")
 ms_lobby_reg <- read_csv(glue("{reg_dir}/ms_lobby_reg.csv"))
 ```
-
-    ## Parsed with column specification:
-    ## cols(
-    ##   .default = col_character(),
-    ##   date = col_date(format = ""),
-    ##   year = col_double()
-    ## )
-
-    ## See spec(...) for full column specifications.
 
 We'll also clean up the lobbyist names to get rid of titles.
 
@@ -245,6 +235,7 @@ Export
 ``` r
 clean_dir <- here("ms", "lobby", "data", "processed","exp")
 dir_create(clean_dir)
+
 ms_lobby_reg %>% 
   select(-dupe_flag) %>% 
   write_csv(
