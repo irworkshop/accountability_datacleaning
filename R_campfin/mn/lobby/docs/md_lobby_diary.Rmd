@@ -1,0 +1,433 @@
+---
+title: "Minnesota Lobbyists"
+author: "Kiernan Nicholls"
+date: "`r Sys.time()`"
+output:
+  github_document: 
+    df_print: tibble
+    toc: true
+    toc_dept: 2
+editor_options: 
+  chunk_output_type: console
+---
+
+<!-- Place comments regarding knitting here -->
+
+```{r setup, include=FALSE, purl=FALSE}
+library(knitr)
+opts_chunk$set(
+  eval = TRUE,
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  error = FALSE,
+  collapse = TRUE,
+  comment = "#>",
+  fig.path = "../plots/",
+  fig.width = 10,
+  dpi = 300
+)
+options(width = 99)
+set.seed(5)
+```
+
+```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
+fs::dir_create(here::here("mn", "lobby", "docs"))
+```
+
+## Project
+
+The Accountability Project is an effort to cut across data silos and give journalists, policy
+professionals, activists, and the public at large a simple way to search across huge volumes of
+public data about people and organizations.
+
+Our goal is to standardizing public data on a few key fields by thinking of each dataset row as a
+transaction. For each transaction there should be (at least) 3 variables:
+
+1. All **parties** to a transaction
+2. The **date** of the transaction
+3. The **amount** of money involved
+
+## Objectives
+
+This document describes the process used to complete the following objectives:
+
+1. How many records are in the database?
+1. Check for duplicates
+1. Check ranges
+1. Is there anything blank or missing?
+1. Check for consistency issues
+1. Create a five-digit state Code called `ZIP5`
+1. Create a `YEAR` field from the transaction date
+1. Make sure there is data on both parties to a transaction
+
+## Packages
+
+The following packages are needed to collect, manipulate, visualize, analyze, and communicate
+these results. The `pacman` package will facilitate their installation and attachment.
+
+The IRW's `campfin` package will also have to be installed from GitHub. This package contains
+functions custom made to help facilitate the processing of campaign finance data.
+
+```{r load_packages, message=FALSE, dfrning=FALSE, error=FALSE}
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load_gh("irworkshop/campfin")
+pacman::p_load(
+  tidyverse, # data manipulation
+  lubridate, # datetime strings
+  magrittr, # pipe opperators
+  janitor, # dataframe clean
+  refinr, # cluster and merge
+  scales, # format strings
+  knitr, # knit documents
+  vroom, # read files fast
+  glue, # combine strings
+  here, # relative storage
+  fs # search storage 
+)
+```
+
+This document should be run as part of the `R_campfin` project, which lives as a sub-directory of
+the more general, language-agnostic [`irworkshop/accountability_datacleaning`][01] GitHub
+repository.
+
+The `R_campfin` project uses the [RStudio projects][02] feature and should be run as such. The
+project also uses the dynamic `here::here()` tool for file paths relative to _your_ machine.
+
+```{r where_here}
+# where does this document knit?
+here::here()
+```
+
+[01]: https://github.com/irworkshop/accountability_datacleaning "TAP repo"
+[02]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects "Rproj"
+[03]: https://cfb.mn.gov/
+
+# Registration
+
+## Data
+
+Data is obtained from the [Campaign Finance Public Disclosure Board (CFPB)][03]
+
+> The Board's four major programs are campaign finance registration and disclosure, public subsidy
+administration, **lobbyist registration and disclosure**, and economic interest disclosure by
+public officials. The Board has six members, appointed by the Governor on a bi-partisan basis for
+staggered four-year terms. The appointments must be confirmed by a three-fifths vote of the members
+of each house of the legislature.
+
+The CFPB provides an index of lobbyists in alphabetical order as well as a similar list for 
+associations who have hired lobbyists. Each letter of the alphabet has a corresponding page listing
+all the registered lobbyists (or associations) that start with that letter. Each name is linked to
+their own page, on which the address is listed alongside a table of represented associations (or
+lobbyists). 
+
+I have written a separate script that goes through the complicated process of scraping each
+individual lobbyist page, connecting that lobbyist to all their represented associations, and
+combining these relationships into a single data frame. We can run that script now if needed.
+
+```{r source}
+raw_dir <- here("mn", "lobby", "data", "raw")
+dir_create(raw_dir)
+scrape_file <- dir_ls(raw_dir, glob = "*lob_scrape.csv$")
+scrape_script <- here("mn", "lobby", "code", "scrape_mn_lobby.R")
+if (!file_exists(path = scrape_file)) {
+  source(file = scrape_script, local = TRUE)
+}
+```
+
+## Import
+
+```{r read_csv}
+mnlr <- read_csv(
+  file = scrape_file,
+  col_types = cols(
+    .default = col_character(),
+    start = col_date(),
+    end = col_date(),
+    designated = col_logical()
+  )
+)
+```
+
+## Explore
+
+```{r glimpse}
+head(mnlr)
+tail(mnlr)
+glimpse(sample_frac(mnlr))
+```
+
+Very few records are missing the kind of values needed to identify the lobbyist relationships.
+
+```{r count_na}
+col_stats(mnlr, count_na)
+```
+
+## Wrangle
+
+To improve the consistency and searchability of the database, we can perform some simple and 
+confident text normalization.
+
+### Phone
+
+```{r phone_norm}
+mnlr <- mutate(
+  .data = mnlr,
+  lb_tel_norm = normal_phone(lb_tel)
+)
+```
+
+```{r phone_view, echo=FALSE}
+mnlr %>% 
+  select(contains("tel")) %>% 
+  distinct() %>% 
+  sample_frac()
+```
+
+### Address
+
+```{r address_norm}
+mnlr <- mutate_at(
+  .tbl = mnlr,
+  .vars = vars(ends_with("street")),
+  .funs = list(norm = normal_address),
+  abbs = usps_street
+)
+```
+
+```{r address_view, echo=FALSE}
+mnlr %>% 
+  select(contains("street")) %>% 
+  distinct() %>% 
+  sample_frac()
+```
+
+### ZIP
+
+```{r zip_norm}
+mnlr <- mutate_at(
+  .tbl = mnlr,
+  .vars = vars(ends_with("zip")),
+  .funs = list(norm = normal_zip),
+  na_rep = TRUE
+)
+```
+
+```{r zip_view, echo=FALSE}
+mnlr %>% 
+  select(contains("zip")) %>% 
+  distinct() %>% 
+  sample_frac()
+```
+
+```{r zip_progress, echo=FALSE}
+progress_table(
+  mnlr$lb_zip,
+  mnlr$lb_zip_norm,
+  mnlr$a_zip,
+  mnlr$a_zip_norm,
+  compare = valid_zip
+)
+```
+
+### State
+
+```{r state_check}
+prop_in(mnlr$lb_state, valid_state)
+mnlr$lb_state <- na_out(mnlr$lb_state, valid_state)
+prop_in(mnlr$a_state, valid_state)
+```
+
+### City
+
+```{r city_normal}
+mnlr <- mutate_at(
+  .tbl = mnlr,
+  .vars = vars(ends_with("city")),
+  .funs = list(norm = normal_city),
+  abbs = usps_city,
+  state = c("MN", "DC", "MINNESOTA"),
+  na = invalid_city,
+  na_rep = TRUE
+)
+```
+
+```{r city_swap}
+mnlr <- mnlr %>%
+  left_join(
+    y = zipcodes,
+    by = c(
+      "lb_state" = "state",
+      "lb_zip_norm" = "zip"
+    )
+  ) %>% 
+  rename(lb_city_match = city) %>% 
+  mutate(
+    lb_match_abb = is_abbrev(lb_city_norm, lb_city_match),
+    lb_match_dist = str_dist(lb_city_norm, lb_city_match),
+    lb_city_swap = if_else(
+      condition = lb_match_abb | lb_match_dist == 1,
+      true = lb_city_match,
+      false = lb_city_norm
+    )
+  ) %>% 
+  select(
+    -lb_match_abb,
+    -lb_match_dist,
+    -lb_city_match
+  )
+
+# repeat for associations
+mnlr <- mnlr %>% 
+  left_join(
+    y = zipcodes,
+    by = c(
+      "a_state" = "state",
+      "a_zip_norm" = "zip"
+    )
+  ) %>% 
+  rename(a_city_match = city) %>% 
+  mutate(
+    a_match_abb = is_abbrev(a_city_norm, a_city_match),
+    a_match_dist = str_dist(a_city_norm, a_city_match),
+    a_city_swap = if_else(
+      condition = a_match_abb | a_match_dist == 1,
+      true = a_city_match,
+      false = a_city_norm
+    )
+  ) %>% 
+  select(
+    -a_match_abb,
+    -a_match_dist,
+    -a_city_match
+  )
+```
+
+```{r city_progress}
+progress <- 
+  progress_table(
+    str_to_upper(mnlr$lb_city),
+    mnlr$lb_city_norm,
+    mnlr$lb_city_swap,
+    str_to_upper(mnlr$a_city),
+    mnlr$a_city_norm,
+    mnlr$a_city_swap,
+    compare = valid_city
+  ) %>%
+  separate(
+    col = stage, 
+    into = c("type", "stage"), 
+    sep = "_", 
+    extra = "merge"
+  ) %>% 
+  mutate(stage = str_remove(as_factor(stage), "\\)$")) %>% 
+  group_by(stage) 
+```
+
+```{r city_kable}
+kable(progress, digits = 3)
+```
+
+```{r plot_prop, echo=FALSE}
+progress %>% 
+  ggplot(aes(x = stage, y = prop_in)) +
+  geom_col(aes(fill = type), position = "dodge") +
+  scale_fill_brewer(palette = "Dark2") +
+  geom_hline(yintercept = 0.99) +
+  facet_wrap(~type) +
+  coord_cartesian(ylim = c(0.5, 1.00)) +
+  theme(legend.position = "none") +
+  scale_y_continuous(labels = percent) +
+  labs(
+    title = "Pennsylvania City Normalization Progress",
+    x = "Stage",
+    y = "Percent Valid"
+  )
+```
+
+```{r plot_distinct, echo=FALSE}
+progress %>% 
+  select(
+    type,
+    stage, 
+    all = n_distinct,
+    bad = n_diff
+  ) %>% 
+  mutate(good = all - bad) %>% 
+  pivot_longer(c("good", "bad")) %>% 
+  mutate(name = name == "good") %>% 
+  ggplot(aes(x = stage, y = value)) +
+  geom_col(aes(fill = name)) +
+  scale_fill_brewer(palette = "Dark2", direction = -1) +
+  scale_y_continuous(labels = comma) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "Pennsylvania City Normalization Progress",
+    subtitle = "Distinct values, valid and invalid",
+    x = "Stage",
+    y = "Distinct Values",
+    fill = "Valid"
+  ) +
+  facet_wrap(~type)
+```
+
+## Export
+
+```{r write_csv}
+proc_dir <- here("mn", "lobby", "data", "processed")
+dir_create(proc_dir)
+write_csv(
+  x = mnlr,
+  path = glue("{proc_dir}/mn_lobbyists.csv"),
+  na = ""
+)
+```
+
+# Expenditures
+
+We can also obtain a report of lobbying expenditures made by the principal associations.
+
+```{r read_expends}
+exp_url <- "https://cfb.mn.gov/reports-and-data/self-help/data-downloads/lobbying/?download=102614850"
+mnle <- read_csv(
+  file = exp_url,
+  col_types = cols(
+    Principal = col_character(),
+    `Entity ID` = col_character(),
+    `Report Year` = col_double(),
+    `General lobbying amount` = col_double(),
+    `PUC lobbying amount` = col_double(),
+    `Total spent` = col_double()
+  )
+)
+
+mnle <- mnle %>% 
+  rename(
+    a_name  = `Principal`,
+    a_id  = `Entity ID`,
+    year  = `Report Year`,
+    gen_amount  = `General lobbying amount`,
+    lob_amount  = `PUC lobbying amount`,
+    total_amount  = `Total spent`
+  )
+```
+
+```{r plot_lob_amount}
+mnle %>% 
+  filter(total_amount > 1) %>% 
+  ggplot(aes(x = total_amount)) +
+  geom_histogram() +
+  scale_x_continuous(
+    breaks = c(1 %o% 10^(0:6)),
+    labels = dollar,
+    trans = "log10"
+  ) +
+  labs(
+    title = "State Data Amount Distribution",
+    subtitle = "from 2000 to 2019",
+    caption = "Source: State Agency Name",
+    x = "Amount",
+    y = "Count"
+  )
+```
+

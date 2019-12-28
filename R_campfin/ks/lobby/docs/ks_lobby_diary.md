@@ -1,7 +1,16 @@
 Kansas Lobbyists
 ================
 Kiernan Nicholls
-2019-10-23 14:45:30
+2019-12-18 12:59:37
+
+  - [Project](#project)
+  - [Objectives](#objectives)
+  - [Packages](#packages)
+  - [Data](#data)
+  - [Import](#import)
+  - [Wrangle](#wrangle)
+  - [Explore](#explore)
+  - [Export](#export)
 
 <!-- Place comments regarding knitting here -->
 
@@ -123,7 +132,7 @@ kslr <- content(response) %>%
 Or, we can download the file manually and read it directly…
 
 ``` r
-raw_dir <- here("ks", "lobbyng", "reg", "data", "raw")
+raw_dir <- here("ks", "lobby", "data", "raw")
 dir_create(raw_dir)
 ```
 
@@ -145,20 +154,20 @@ each lobbyist.
 
 ``` r
 kslr
-#> # A tibble: 2,648 x 7
-#>    name        addr_1_addr_2      city_state_zip     phone      fax        email_address     client
-#>    <chr>       <chr>              <chr>              <chr>      <chr>      <chr>             <chr> 
-#>  1 ALDERSON, … 2101 S.W. 21ST ST… TOPEKA, KS 66604   (785) 232… (785) 232… boba@aldersonlaw… ""    
-#>  2 * CASEY'S … * CASEY'S GENERAL… * CASEY'S GENERAL… * CASEY'S… * CASEY'S… * CASEY'S GENERA… ""    
-#>  3 * KANSAS M… * KANSAS MANUFACT… * KANSAS MANUFACT… * KANSAS … * KANSAS … * KANSAS MANUFAC… ""    
-#>  4 * ONE CALL… * ONE CALL CONCEP… * ONE CALL CONCEP… * ONE CAL… * ONE CAL… * ONE CALL CONCE… ""    
-#>  5 <NA>        <NA>               <NA>               <NA>       <NA>       <NA>              ""    
-#>  6 ALLEN, SHI… 5317 SW 11TH TER.  TOPEKA, KS 66604   (785) 633… <NA>       sallen5948@outlo… ""    
-#>  7 * KRITC     * KRITC            * KRITC            * KRITC    * KRITC    * KRITC           ""    
-#>  8 <NA>        <NA>               <NA>               <NA>       <NA>       <NA>              ""    
-#>  9 ANDERSON, … 2910 SW TOPEKA BO… TOPEKA, KS 66611   (778) 267… (785) 267… leslie@k4ad.org   ""    
-#> 10 * KANSAS A… * KANSAS ASSOCIAT… * KANSAS ASSOCIAT… * KANSAS … * KANSAS … * KANSAS ASSOCIA… ""    
-#> # … with 2,638 more rows
+#> # A tibble: 2,655 x 8
+#>    name    addr_1_addr_2   city_state_zip   phone   fax     email_address  registration_date client
+#>    <chr>   <chr>           <chr>            <chr>   <chr>   <chr>          <chr>             <chr> 
+#>  1 ALDERS… 2101 S.W. 21ST… TOPEKA, KS 66604 (785) … (785) … boba@alderson… 11/2/2018         ""    
+#>  2 * CASE… * CASEY'S GENE… * CASEY'S GENER… * CASE… * CASE… * CASEY'S GEN… * CASEY'S GENERA… ""    
+#>  3 * KANS… * KANSAS MANUF… * KANSAS MANUFA… * KANS… * KANS… * KANSAS MANU… * KANSAS MANUFAC… ""    
+#>  4 * ONE … * ONE CALL CON… * ONE CALL CONC… * ONE … * ONE … * ONE CALL CO… * ONE CALL CONCE… ""    
+#>  5 <NA>    <NA>            <NA>             <NA>    <NA>    <NA>           <NA>              ""    
+#>  6 ALLEN,… 5317 SW 11TH T… TOPEKA, KS 66604 (785) … <NA>    sallen5948@ou… 12/27/2018        ""    
+#>  7 * KRITC * KRITC         * KRITC          * KRITC * KRITC * KRITC        * KRITC           ""    
+#>  8 <NA>    <NA>            <NA>             <NA>    <NA>    <NA>           <NA>              ""    
+#>  9 ANDERS… 2910 SW TOPEKA… TOPEKA, KS 66611 (778) … (785) … leslie@k4ad.o… 6/18/2019         ""    
+#> 10 * KANS… * KANSAS ASSOC… * KANSAS ASSOCI… * KANS… * KANS… * KANSAS ASSO… * KANSAS ASSOCIA… ""    
+#> # … with 2,645 more rows
 ```
 
 Looping from the bottom to top, we can check every row and attempt to
@@ -200,7 +209,7 @@ kslr <- kslr %>%
     col = city_state_zip,
     into = c("city_sep", "state_zip"),
     sep = ",\\s",
-    remove = FALSE
+    remove = TRUE
   ) %>% 
   separate(
     col = state_zip,
@@ -214,12 +223,30 @@ From these three new columns, we can see almost all rows already contain
 valid values.
 
 ``` r
-prop_in(kslr$city_sep, valid_city)
-#> [1] 0.9667969
+prop_in(kslr$city_sep, c(valid_city, extra_city))
+#> [1] 0.9974076
 prop_in(kslr$state_sep, valid_state)
-#> [1] 0.9980469
+#> [1] 0.9980557
 prop_in(kslr$zip_sep, valid_zip)
-#> [1] 0.9550781
+#> [1] 0.9552819
+```
+
+``` r
+kslr <- kslr %>%
+  rename(address = addr_1_addr_2) %>% 
+  mutate_at(vars(address), normal_address, abbs = usps_street) %>% 
+  mutate_at(vars(city_sep), normal_city, abbs = usps_city) %>% 
+  mutate_at(vars(state_sep), normal_state, na_rep = TRUE) %>% 
+  mutate_at(vars(zip_sep), normal_zip, na_rep = TRUE)
+```
+
+``` r
+prop_in(kslr$city_sep, c(valid_city, extra_city))
+#> [1] 0.9993519
+prop_in(kslr$state_sep, valid_state)
+#> [1] 0.9980557
+prop_in(kslr$zip_sep, valid_zip)
+#> [1] 1
 ```
 
 ## Explore
@@ -227,52 +254,64 @@ prop_in(kslr$zip_sep, valid_zip)
 ``` r
 head(kslr)
 #> # A tibble: 6 x 10
-#>   name   addr_1_addr_2  city_state_zip city_sep state_sep zip_sep phone fax   email_address client 
-#>   <chr>  <chr>          <chr>          <chr>    <chr>     <chr>   <chr> <chr> <chr>         <chr>  
-#> 1 ALDER… 2101 S.W. 21S… TOPEKA, KS 66… TOPEKA   KS        66604   (785… (785… boba@alderso… CASEY'…
-#> 2 ALDER… 2101 S.W. 21S… TOPEKA, KS 66… TOPEKA   KS        66604   (785… (785… boba@alderso… KANSAS…
-#> 3 ALDER… 2101 S.W. 21S… TOPEKA, KS 66… TOPEKA   KS        66604   (785… (785… boba@alderso… ONE CA…
-#> 4 ALLEN… 5317 SW 11TH … TOPEKA, KS 66… TOPEKA   KS        66604   (785… <NA>  sallen5948@o… KRITC  
-#> 5 ANDER… 2910 SW TOPEK… TOPEKA, KS 66… TOPEKA   KS        66611   (778… (785… leslie@k4ad.… KANSAS…
-#> 6 ANGLE… 455 SE GOLF P… TOPEKA, KS 66… TOPEKA   KS        66605   (785… <NA>  scott@kacap.… KANSAS…
+#>   name   address   city_sep state_sep zip_sep phone  fax    email_address registration_da… client  
+#>   <chr>  <chr>     <chr>    <chr>     <chr>   <chr>  <chr>  <chr>         <chr>            <chr>   
+#> 1 ALDER… 2101 SOU… TOPEKA   KS        66604   (785)… (785)… boba@alderso… 11/2/2018        CASEY'S…
+#> 2 ALDER… 2101 SOU… TOPEKA   KS        66604   (785)… (785)… boba@alderso… 11/2/2018        KANSAS …
+#> 3 ALDER… 2101 SOU… TOPEKA   KS        66604   (785)… (785)… boba@alderso… 11/2/2018        ONE CAL…
+#> 4 ALLEN… 5317 SOU… TOPEKA   KS        66604   (785)… <NA>   sallen5948@o… 12/27/2018       KRITC   
+#> 5 ANDER… 2910 SOU… TOPEKA   KS        66611   (778)… (785)… leslie@k4ad.… 6/18/2019        KANSAS …
+#> 6 ANGLE… 455 SOUT… TOPEKA   KS        66605   (785)… <NA>   scott@kacap.… 12/20/2018       KANSAS …
 tail(kslr)
 #> # A tibble: 6 x 10
-#>   name   addr_1_addr_2  city_state_zip  city_sep state_sep zip_sep phone fax   email_address client
-#>   <chr>  <chr>          <chr>           <chr>    <chr>     <chr>   <chr> <chr> <chr>         <chr> 
-#> 1 YOUNG… 800 SW JACKSON TOPEKA, KS 666… TOPEKA   KS        66612   (785… (785… jyounger@kap… KAPA-…
-#> 2 ZAKOU… 7400 WEST 110… OVERLAND PARK,… OVERLAN… KS        66210   (913… (913… jim@smizak-l… KANSA…
-#> 3 ZALEN… 1038 LAKE VIK… ALTAMONT, MO 6… ALTAMONT MO        64620   (913… <NA>  szalensk@its… JOHNS…
-#> 4 ZEHR,… 217 SE 8TH AVE TOPEKA, KS 666… TOPEKA   KS        66603   (785… (785… debra@leadin… LEADI…
-#> 5 ZENZ,… 1 EMBARCADERO… SAN FRANCISCO,… SAN FRA… CA        941113… (415… (973… lobbying@pru… QMA L…
-#> 6 ZIMME… 1540 SW 23RD … TOPEKA, KS 666… TOPEKA   KS        66611   (816… <NA>  zjeff53@yaho… CBD A…
+#>   name   address   city_sep  state_sep zip_sep phone  fax    email_address registration_da… client 
+#>   <chr>  <chr>     <chr>     <chr>     <chr>   <chr>  <chr>  <chr>         <chr>            <chr>  
+#> 1 YOUNG… 800 SOUT… TOPEKA    KS        66612   (785)… (785)… jyounger@kap… 12/7/2018        KAPA-K…
+#> 2 ZAKOU… 7400 WES… OVERLAND… KS        66210   (913)… (913)… jim@smizak-l… 7/8/2019         KANSAS…
+#> 3 ZALEN… 1038 LAK… ALTAMONT  MO        64620   (913)… <NA>   szalensk@its… 11/20/2018       JOHNSO…
+#> 4 ZEHR,… 217 SOUT… TOPEKA    KS        66603   (785)… (785)… debra@leadin… 10/8/2018        LEADIN…
+#> 5 ZENZ,… 1 EMBARC… SAN FRAN… CA        94111   (415)… (973)… lobbying@pru… 10/5/2018        QMA LLC
+#> 6 ZIMME… 1540 SOU… TOPEKA    KS        66611   (816)… <NA>   zjeff53@yaho… 3/21/2019        CBD AM…
 glimpse(sample_frac(kslr))
-#> Observations: 1,536
+#> Observations: 1,543
 #> Variables: 10
-#> $ name           <chr> "LAFAVER, JEREMY J", "HUMMELL, JON", "BUTLER, MICHELLE R", "JASKINIA, ED"…
-#> $ addr_1_addr_2  <chr> "7200 MADISON AVE", "3929 SW AMBASSADOR PL.", "212 SW EIGHTH AVENUE, SUIT…
-#> $ city_state_zip <chr> "KANSAS CITY, MO 64114", "TOPEKA, KS 66610", "TOPEKA, KS 66603", "KANSAS …
-#> $ city_sep       <chr> "KANSAS CITY", "TOPEKA", "TOPEKA", "KANSAS CITY", "LAWRENCE", "TOPEKA", "…
-#> $ state_sep      <chr> "MO", "KS", "KS", "KS", "KS", "KS", "KS", "KS", "KS", "KS", "MO", "IN", "…
-#> $ zip_sep        <chr> "64114", "66610", "66603", "66112", "66049", "66612", "66603", "66603", "…
-#> $ phone          <chr> "(816) 654-3666", "(785) 409-8836", "(785) 233-1903", "(913) 207-0567", "…
-#> $ fax            <chr> NA, NA, "(785) 233-3518", NA, NA, NA, "(785) 354-4374", NA, NA, "(866) 58…
-#> $ email_address  <chr> "jeremylafaver@gmail.com", "jhummell@lexialearning.com", "mbutler@kansass…
-#> $ client         <chr> "BIRD RIDES INC Term Date: 3/1/2019", "ROSETTA STONE/LEXIA LEARNING INC."…
+#> $ name              <chr> "DAMRON, WHITNEY B", "MURRAY, MICHAEL R", "STEPHAN, JOHN", "FEDERICO, …
+#> $ address           <chr> "919 SOUTH KANSAS AVENUE", "100 SOUTHEAST 9TH STREET SUITE 503", "88 E…
+#> $ city_sep          <chr> "TOPEKA", "TOPEKA", "COLUMBUS", "TOPEKA", "OLATHE", "TOPEKA", "SAN RAF…
+#> $ state_sep         <chr> "KS", "KS", "OH", "KS", "KS", "KS", "CA", "MO", "KS", "KS", "KS", "KS"…
+#> $ zip_sep           <chr> "66612", "66612", "43215", "66612", "66062", "66612", "94901", "64081"…
+#> $ phone             <chr> "(785) 354-1354", "(785) 235-9000", "(614) 464-7475", "(785) 232-2557"…
+#> $ fax               <chr> "(785) 354-8092", "(785) 235-9002", NA, "(785) 232-1703", NA, NA, "(41…
+#> $ email_address     <chr> "wbdamron@gmail.com", "mikemurray@capitoladvantage.biz", "sstetson@mul…
+#> $ registration_date <chr> "12/29/2018", "12/27/2018", "12/31/2018", "12/18/2018", "1/9/2019", "1…
+#> $ client            <chr> "KANSAS GAS SERVICE", "CAPITOL ADVANTAGE LLC", "CGI TECHNOLOGIES Term …
 ```
 
 ``` r
 glimpse_fun(kslr, count_na)
 #> # A tibble: 10 x 4
-#>    col            type      n     p
-#>    <chr>          <chr> <dbl> <dbl>
-#>  1 name           chr       0 0    
-#>  2 addr_1_addr_2  chr       0 0    
-#>  3 city_state_zip chr       0 0    
-#>  4 city_sep       chr       0 0    
-#>  5 state_sep      chr       0 0    
-#>  6 zip_sep        chr       0 0    
-#>  7 phone          chr       0 0    
-#>  8 fax            chr     744 0.484
-#>  9 email_address  chr       0 0    
-#> 10 client         chr       0 0
+#>    col               type      n     p
+#>    <chr>             <chr> <dbl> <dbl>
+#>  1 name              <chr>     0 0    
+#>  2 address           <chr>     0 0    
+#>  3 city_sep          <chr>     0 0    
+#>  4 state_sep         <chr>     0 0    
+#>  5 zip_sep           <chr>     0 0    
+#>  6 phone             <chr>     0 0    
+#>  7 fax               <chr>   748 0.485
+#>  8 email_address     <chr>     0 0    
+#>  9 registration_date <chr>     0 0    
+#> 10 client            <chr>     0 0
+```
+
+## Export
+
+``` r
+proc_dir <- here("ks", "lobby", "data", "processed")
+dir_create(proc_dir)
+write_csv(
+  x = kslr,
+  path = glue("{proc_dir}/ks_lobbyists.csv"),
+  na = ""
+)
 ```
