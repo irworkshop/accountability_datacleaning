@@ -87,8 +87,7 @@ pacman::p_load(
   here, # relative storage
   fs, # search storage 
   vroom, #read deliminated files
-  readxl, #read excel files
-  networkD3 #create sankey plot
+  readxl #read excel files
 )
 ```
 
@@ -110,7 +109,7 @@ project also uses the dynamic `here::here()` tool for file paths relative to _yo
 Set the download directory first.
 ```{r create raw_dir}
 # create a directory for the raw data
-raw_dir <- here("ct", "lobby", "data", "raw","reg")
+raw_dir <- here("ct", "lobby", "data", "raw","exp")
 
 dir_create(raw_dir)
 ```
@@ -133,16 +132,17 @@ Registration and Filing Specifics:
  	Once the $3,000 threshold is met, registration with the OSE is required. Registration occurs biennially (every two years) by January 15, or prior to the commencement of lobbying, whichever is later.
 	
 Client Lobbyists:  
- 	> 1.	Client lobbyists file quarterly financial reports, with the third and fourth quarters combined. These reports are filed between the 1st and 10th days of April, July and January.  
+ 	> Client lobbyists file quarterly financial reports, with the third and fourth quarters combined. These reports are filed between the 1st and 10th days of April, July and January.  
  	2.	To ensure timely transparency, if a client lobbyist spends or agrees to spend more than $100 in legislative lobbying while the Legislature is in regular session, that lobbyist must file monthly financial reports.  
  	3.	The quarterly and monthly reports gather information such as compensation, sales tax and money expended in connection with lobbying; expenditures benefiting a public official or his/her staff or immediate family; all other lobbying expenditures; and the fundamental terms of any lobbying contract or agreement.
 	
 Communicator Lobbyists:  
+
  	> Communicator lobbyists also register upon meeting the threshold amount. Communicator lobbyists generally file a financial report once a year, due by January 10. These reports capture compensation, reimbursements from the client lobbyist and sales tax for the previous year.  
  	If a communicator lobbyist makes unreimbursed expenditures of $10 or more for the benefit of a public official, a member of his/her staff, or his/her immediate family, that lobbyist must also file on the client lobbyists schedule (either monthly or quarterly).
 
 [03]: https://www.oseapps.ct.gov/NewLobbyist/PublicReports/LobbyistFAQ.aspx
-This Rmd file documents the CT compensation data only, whereas the registration data is wrangled in a separate data diary.
+This Rmd file documents the data processing workflow for CT lobbying compensation only, whereas the registration data is wrangled in a separate data diary.
 
 ## Import
 
@@ -152,15 +152,7 @@ To create a single clean data file of lobbyist compensation, we will merge the d
 We'll download the `Communicator Detail Compensation` reports from [Office of State Ethics](https://www.oseapps.ct.gov/NewLobbyist/PublicReports/AdditionalReports.aspx#) => Additional Reports +> Issue/Financial Reports, as they specify the payors (clients) and payees (lobbyists) in a single data frame. The data is separated by year. 
 
 
-We can download each TXT file to the `/ct/data/raw` directory.
-
-Set the download directory first.
-```{r create raw_dir}
-# create a directory for the raw data
-raw_dir <- here("ct", "lobby", "data", "raw","exp")
-
-dir_create(raw_dir)
-```
+We can download each TXT file to the `/ct/data/raw` directory. 
 
 ```{r list_files, echo=FALSE}
 dir_info(raw_dir) %>% 
@@ -224,18 +216,18 @@ ctlc %>%
   scale_y_continuous(labels = comma) +
   labs(
     title = "Connecticut Lobbyist Compensation Reports",
-    x = "Report Year",
+    x = "Report Session",
     y = "Filed Reports",
     caption = "Source: Connecticut Office of State"
   ) 
 ```
 We can use the data to find out who are the top spenders, and how their payment amounts are distributed.
-```{r top comp echo=FALSE}
+```{r top comp, echo=FALSE}
 top5 <- ctlc %>% 
   group_by(client) %>% 
   summarize(sum = sum(total)) %>% 
   arrange(desc(sum)) %>% 
-  head(5) 
+  head(5)  
 
 ctlc %>% filter(client %in% top5$client) %>% 
   ggplot(
@@ -270,14 +262,18 @@ ctlc %>% filter(client %in% top5$client) %>%
   )
 ```
 
-```{r sankey plot, echo=FALSE}
-links <- ctlc %>% filter(client %in% top5$client) %>% select(client, communicator,total) %>% 
-  reorde
+```{r sankey plot, echo=FALSE, eval=FALSE}
+links <- ctlc %>% filter(client %in% top5$client) %>% select(client, communicator,total) %>% group_by(client, communicator) %>% summarize(sum = sum(total))
+  
 nodes <- data.frame("client"=links %>% pull(client) %>% unique())
 
-sankeyNetwork(Links = links, Nodes = nodes,
- Source = "client", Target = "communicator",
- Value = "total", NodeID = "client",
+links_copy <- data.frame(links$client, links$communicator, links$sum, rowid = match(links$client, nodes$client))
+
+links_copy <- links_copy %>% select(rowid, links.communicator, links.sum) 
+
+sankeyNetwork(Links = links_copy, Nodes = nodes,
+ Source = "rowid", Target = "links.communicator",
+ Value = "links.sum", NodeID = "client",
  fontSize= 12, nodeWidth = 30)
 ```
 
@@ -314,6 +310,7 @@ ct_dupe <- ct_join %>% filter(n==2) %>%
 
 ct_dedupe <- ct_dupe %>% group_split(client_name, lobbyist_first_name, lobbyist_last_name, session)
 
+
 for (i in seq_along(ct_dedupe)){
 ct_dedupe[[i]] <- ct_dedupe[[i]] %>% 
   mutate(early_more_info = ct_dedupe[[i]]$row_sum[1] - ct_dedupe[[i]]$row_sum[2] < 0 ) 
@@ -325,17 +322,16 @@ ct_dedupe[[i]] <- ct_dedupe[[i]] %>%
   }
 }
 
+ct_deduped <- ct_dedupe %>% plyr::ldply() %>% select(-c(row_sum,early_more_info,n))
 
-ct_join<- ct_join %>% filter(n !== 2) %>% 
-  select(-c(row_sum, early_more_info)) %>% 
-  unite(remove = T, col = lobbyist_first_name, lobbyist_last_name,sep = ",") %>% 
+ct_join<- ct_join %>% filter(n != 2) %>% 
+  unite(remove = T, col = "communicator", lobbyist_first_name, lobbyist_last_name,sep = ",") %>% 
   rename(client = client_name)
 ```
 
 ```{r join com & reg }
 ctlc <- ctlc %>% 
-  left_join(ct_join, by = c(client, communicator, session)) %>% 
-  select(-c(dupe_flag, source_file)
+  left_join(ct_join, by = c("client", "communicator", "session")) 
          
 sample_frac(ctlc)
 ```
@@ -343,15 +339,15 @@ sample_frac(ctlc)
 ## Export
 
 ```{r write clean}
-clean_dir <- here("ct", "lobby", "data", "raw","exp")
+clean_dir <- here("ct", "lobby", "data", "processed","exp")
 dir_create(clean_dir)
-ct_reg %>% 
-  select(-c(dupe_flag)) %>% 
+ctlc %>% 
+  select(-dupe_flag) %>% 
   mutate_if(is.character, str_to_upper) %>% 
   write_csv(
-    path = glue("{clean_dir}/ct_lobby_reg.csv"),
+    path = glue("{clean_dir}/ct_lobby_exp.csv"),
     na = ""
   )
 ```
-```
+
 
