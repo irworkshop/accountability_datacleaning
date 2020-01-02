@@ -19,7 +19,7 @@ indent <- which(is.na(df$address))
 df <- mutate(df, address = coalesce(address, contact))
 df$contact[indent] <- NA
 
-df %>%
+df <- df %>%
   mutate(
     lob_name = if_else(
       condition = is.na(contact),
@@ -49,9 +49,7 @@ df %>%
   select(
     starts_with("lob"),
     starts_with("pri")
-  )
-
-x %>%
+  ) %>%
   select(lob_address) %>%
   separate(
     col = lob_address,
@@ -68,8 +66,17 @@ x %>%
   ) %>%
   separate(
     col = lob_extra,
-    into = c("lob_city", "lob_state", "lob_zip"),
-    sep = "\\s",
+    into = c("lob_city_state", "lob_zip"),
+    sep = "\\s(?=\\d)",
     fill = "left",
     extra = "merge"
-  )
+  ) %>%
+  separate(
+    col = lob_city_state,
+    into = c("lob_city", "lob_state"),
+    sep = "\\s(?=[:upper:]{2})",
+    fill = "left",
+    extra = "merge"
+  ) %>%
+  distinct() %>%
+  sample_frac()

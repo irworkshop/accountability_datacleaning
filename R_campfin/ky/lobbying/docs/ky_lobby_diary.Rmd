@@ -100,6 +100,8 @@ project also uses the dynamic `here::here()` tool for file paths relative to _yo
 here::here()
 ```
 
+# Registration
+
 [01]: https://github.com/irworkshop/accountability_datacleaning "TAP repo"
 [02]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects "Rproj"
 
@@ -147,9 +149,9 @@ contain the lobbyist name table information.
 
 ```{r raw_trim}
 kylr <- str_subset(kylr, "Kentucky Registered Legislative Agents", negate = TRUE)
-kylr <- str_subset(kylr, "November 22, 2019", negate = TRUE)
+kylr <- str_subset(kylr, "\\w+\\s\\d{1,2},\\s\\d{4}", negate = TRUE)
 kylr <- str_subset(kylr, "Legislative Agents/Employer\tPhone\tContact\tAddress", negate = TRUE)
-kylr <- str_subset(kylr, "11/22/2019\t\\d{2}", negate = TRUE)
+kylr <- str_subset(kylr, "\\d{1,2}/\\d{1,2}/\\d{4}\t\\d{2}", negate = TRUE)
 kylr <- str_replace_all(kylr, "\"", "\'")
 ```
 
@@ -256,6 +258,8 @@ kylr <- kylr %>%
   )
 ```
 
+Then, we will perform the same process for the associated principal clients.
+
 ```{r raw_sep_pri}
 kylr <- kylr %>%
   separate(
@@ -288,6 +292,8 @@ kylr <- kylr %>%
   )
 ```
 
+We can also split the lobbyist name to improve searchability.
+
 ```{r raw_sep_name}
 kylr <- kylr %>% 
   separate(
@@ -297,6 +303,10 @@ kylr <- kylr %>%
     extra = "merge" 
   )
 ```
+
+Through this wrangling, we can see how we were able to reshape a single column text file into
+a clear tidy data frame of lobbyist/client relationships. Each record now identifies both parties
+in a lobbyist relationship, with information split into separate columns for searchability.
 
 ```{r echo=FALSE}
 head(kylr)
@@ -308,6 +318,8 @@ Now that the text file has been wrangled into a database format, we can proceed 
 _content_ of the file to improve the searchability of the database.
 
 ### Phone
+
+We can convert all telephone numbers to a single format with `campfin::normal_phone()`.
 
 ```{r phone_norm}
 kylr <- mutate_at(
@@ -325,6 +337,9 @@ kylr %>%
 ```
 
 ### Address
+
+For street addresses, we can use `campfin::normal_address()` to force string consistency and expand
+abbreviations.
 
 ```{r addr_norm}
 kylr <- mutate_at(
@@ -344,6 +359,9 @@ kylr %>%
 
 ### ZIP
 
+Only the 5-digit ZIP codes are desired. The `campfin::normal_zip()` function trims and pads ZIP 
+codes to make them valid.
+
 ```{r zip_norm}
 kylr <- mutate_at(
   .tbl  = kylr,
@@ -362,7 +380,23 @@ progress_table(
 )
 ```
 
+## State
+
+The state variables are already entirely normalized to their 2-digit USPS abbreviations.
+
+```{r state}
+count(kylr, lob_state, sort = TRUE)
+prop_in(kylr$lob_state, valid_state)
+# USPS store, manually checked
+kylr$pri_state <- str_replace(kylr$pri_state, "RD", "KY")
+prop_in(kylr$pri_state, valid_state)
+```
+
 ### City
+
+City strings are the most troublesome due to the sheer variety in names and the multiple valid
+ways to list the same cities. Using `campfin::normal_city()` is the first step in improving the
+consistency.
 
 ```{r city_norm}
 kylr <- mutate_at(
@@ -372,6 +406,9 @@ kylr <- mutate_at(
   abbs  = usps_city
 )
 ```
+
+Then, we compare the normalized city string to the _expected_ city for that record's state and ZIP
+code. If the two are _extremelly_ similar, we can confidently use the correct, expected value.
 
 ```{r city_swap_lob}
 kylr <- kylr %>% 
@@ -399,6 +436,8 @@ kylr <- kylr %>%
   )
 ```
 
+Then simply repeat that checking for the principal city.
+
 ```{r city_swap_pri}
 kylr <- kylr %>% 
   left_join(
@@ -425,6 +464,8 @@ kylr <- kylr %>%
   )
 ```
 
+These two-step process is able to bring both city variables to near complete normality.
+
 ```{r city_progress, echo=FALSE}
 progress_table(
   kylr$lob_city,
@@ -446,6 +487,8 @@ progress_table(
 glimpse(kylr)
 ```
 
+We can now export this wrangled and normalized data set.
+
 ```{r proc_dir}
 proc_dir <- here("ky", "lobbying", "data", "processed")
 dir_create(proc_dir)
@@ -453,9 +496,82 @@ dir_create(proc_dir)
 
 ```{r proc_write}
 kylr %>% 
-  select(-ends_with("city_norm")) %>% 
+  # swap over norm
+  select(-ends_with("city_norm")) %>%
+  rename(
+    lob_city_norm = lob_city_swap,
+    pri_city_norm = pri_city_swap
+  ) %>% 
   write_csv(
     path = glue("{proc_dir}/ky_lobby_reg.csv"),
     na = ""
   )
 ```
+
+# Compensation
+
+We can also download lobbyist compensation data for the past two years. We can directly read both
+files into a single data frame with `purrr:map_dfr()`.
+
+```{r comp_read}
+kylc <- map_dfr(
+  .x = c(
+    "https://klec.ky.gov/Reports/Reports/LAComp.txt",
+    "https://klec.ky.gov/Reports/Reports/LACompPrior.txt"
+  ),
+  .f = read_delim,
+  delim = ";",
+  skip = 2,
+  col_types = cols(
+    `Legislative Agent` = col_character(),
+    `Report Period` = col_character(),
+    Employer = col_character(),
+    Compensation = col_number()
+  )
+)
+```
+
+Repeat column headers can be removed, names converted to snake case, date columns separated and
+converted to date objects, and character columns converted to a consistent case.
+
+```{r comp_wrangle}
+kylc <- kylc %>% 
+  filter(
+    `Legislative Agent` != "Legislative Agent",
+    `Report Period` != "Report Period",
+    `Employer` != "Employer",
+    `Compensation` != "Compensation"
+  ) %>% 
+  clean_names("snake") %>% 
+  separate(
+    col = report_period,
+    into = c("start_date", "end_date"),
+    sep = "\\s"
+  ) %>% 
+  mutate_at(
+    .vars = vars(ends_with("date")),
+    .funs = parse_date,
+    format = "%m/%d/%Y"
+  ) %>% 
+  mutate_if(
+    .predicate = is_character,
+    .funs = ~str_trim(str_to_upper(str_replace(., "\"", "\'")))
+    )
+```
+
+```{r comp_glimpse}
+head(kylc)
+tail(kylc)
+glimpse(sample_frac(kylc))
+```
+
+This compensation database can also be written to disk.
+
+```{r comp_write}
+write_csv(
+  x = kylc,
+  path = glue("{proc_dir}/ky_lobby_comp.csv"),
+  na = ""
+)
+```
+
