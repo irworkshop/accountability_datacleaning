@@ -44,19 +44,6 @@ transaction. For each transaction there should be (at least) 3 variables:
 2. The **date** of the transaction
 3. The **amount** of money involved
 
-## Objectives
-
-This document describes the process used to complete the following objectives:
-
-1. How many records are in the database?
-1. Check for duplicates
-1. Check ranges
-1. Is there anything blank or missing?
-1. Check for consistency issues
-1. Create a five-digit ZIP Code called `ZIP5`
-1. Create a `YEAR` field from the transaction date
-1. Make sure there is data on both parties to a transaction
-
 ## Packages
 
 The following packages are needed to collect, manipulate, visualize, analyze, and communicate
@@ -69,8 +56,6 @@ functions custom made to help facilitate the processing of campaign finance data
 if (!require("pacman")) install.packages("pacman")
 pacman::p_load_gh("irworkshop/campfin")
 pacman::p_load(
-  stringdist, # levenshtein value
-  RSelenium, # remote browser
   tidyverse, # data manipulation
   lubridate, # datetime strings
   magrittr, # pipe opperators
@@ -110,7 +95,9 @@ Cal-Access Resources and we will guide you to the information.
 
 The [Political Reform Division][04] (PRD) collects the data regarding expenditures made.
 
-> The Political Reform Division administers provisions of California's Political Reform Act, including the law's most fundamental purpose of ensuring that "receipts and expenditures in election campaigns should be fully and truthfully disclosed in order that the voters may be fully informed and the activities of lobbyists should be regulated and their finances disclosed..."
+> The Political Reform Division administers provisions of California's Political Reform Act,
+including... that the voters may be fully informed and the activities of lobbyists should be
+regulated and their finances disclosed..."
 
 > * Receive campaign disclosure statements (itemizing contributions received and expenditures made)
 filed by individuals and committees raising or spending campaign funds to support or oppose state
@@ -155,13 +142,14 @@ contents.
 
 ```{r check_key}
 key_url <- "https://campaignfinance.cdn.sos.ca.gov/calaccess-documentation.zip"
-key_file <- str_c(raw_dir, basename(key_url), sep = "/")
 url_file_size(key_url, format = TRUE)
 ```
 
 If they ZIP file containing the documentation files has not yet been downloaded, we can do so now.
 
 ```{r download_key}
+raw_dir <- dir_create(here("ca", "lobby", "data", "raw"))
+key_file <- str_c(raw_dir, basename(key_url), sep = "/")
 if (!this_file_new(key_file)) {
   download.file(
     url = key_url,
@@ -192,11 +180,6 @@ if (!dir_exists(key_dir)) {
 
 ### Download
 
-```{r raw_dir}
-raw_dir <- here("ca", "lobbying", "data", "raw")
-dir_create(raw_dir)
-```
-
 ```{r zip_file}
 zip_url <- "https://campaignfinance.cdn.sos.ca.gov/dbwebexport.zip"
 zip_file <- str_c(raw_dir, basename(zip_url), sep = "/")
@@ -205,8 +188,10 @@ zip_file <- str_c(raw_dir, basename(zip_url), sep = "/")
 The ZIP file is extremelly large, and will take quite some time 
 
 ```{r file_size}
-  url_file_size(zip_url, format = TRUE)
-speedtest::spd_test()
+url_file_size(zip_url, format = TRUE)
+if (requireNamespace("speedtest", quietly = TRUE)) {
+  speedtest::spd_test()
+}
 ```
 
 If the most recent version of the file has not yet been downloaded, we can do so now.
@@ -225,7 +210,7 @@ We don't need to unzip every file, only those pertaining to lobbying.
 ```{r list_zip}
 zip_content <- unzip(zip_file, list = TRUE) 
 zip_lobby <- zip_content$Name[str_which(zip_content$Name, "LOBBY")]
-cal_dir <- str_c(raw_dir, unique(dirname(zip_lobby)))
+cal_dir <- str_c(raw_dir, unique(dirname(zip_lobby)), sep = "/")
 ```
 
 Then, if those files have not yet been unzipped, we can do so now.
@@ -242,36 +227,44 @@ if (!dir_exists(cal_dir)) {
 
 ### Read
 
+Much of the data is split into multiple files. We will list all the files of a similar name and
+read them into a single data frame with `purrr::map_dfr()` and `readr::read_tsv()`.
+
 ```{r warn_vroom}
 if (packageVersion("vroom") < "1.0.2.9000") {
   stop("vroom version of at least 1.0.2.9000 is needed")
 }
 ```
 
+> Lobbyist contribution disclosure table. Temporary table used to generate disclosure table
+(Lobbyist Contributions 3).
+
 ```{r read_conts}
-cal_conts <- 
-  dir_ls(
+lob_conts <- map_dfr(
+  .x = dir_ls(
     path = cal_dir, 
     type = "file", 
     glob = "*LOBBYIST_CONTRIBUTIONS\\d_CD.TSV$"
-  ) %>% 
-  vroom(
-    col_types = cols(
-      FILER_ID = col_character(),
-      FILING_PERIOD_START_DT = col_date("%m/%d/%Y %H:%M:%S %p"),
-      FILING_PERIOD_END_DT = col_date("%m/%d/%Y %H:%M:%S %p"),
-      CONTRIBUTION_DT = col_character(),
-      RECIPIENT_NAME = col_character(),
-      RECIPIENT_ID = col_character(),
-      AMOUNT = col_double()
-    )
-  ) %>% 
+  ),
+  .f = read_tsv,
+  col_types = cols(
+    FILER_ID = col_character(),
+    FILING_PERIOD_START_DT = col_date("%m/%d/%Y %H:%M:%S %p"),
+    FILING_PERIOD_END_DT = col_date("%m/%d/%Y %H:%M:%S %p"),
+    CONTRIBUTION_DT = col_character(),
+    RECIPIENT_NAME = col_character(),
+    RECIPIENT_ID = col_character(),
+    AMOUNT = col_double()
+  )
+) %>% 
   clean_names("snake") %>% 
   remove_empty("cols")
 ```
 
+Every yearly relationship between lobbyists and their principal clients.
+
 ```{r read_emp_lob}
-cal <- cal_emp_lob <- 
+cal_emp_lob <- 
   dir_ls(
     path = cal_dir, 
     type = "file", 
@@ -286,34 +279,48 @@ cal <- cal_emp_lob <-
   clean_names("snake")
 ```
 
+Quarterly and annual employee compensation amounts.
+
 ```{r read_emp_total}
-cal_emp_total <- 
-  dir_ls(
+cal_emp_total <- map_df(
+  .x = dir_ls(
     path = cal_dir, 
     type = "file", 
     glob = "*LOBBYIST_EMPLOYER\\d_CD.TSV$"
-  ) %>% 
-  vroom(
-    col_types = cols(
-      .default = col_character(),
-      CURRENT_QTR_AMT = col_double(),
-      SESSION_TOTAL_AMT = col_double(),
-      SESSION_YR_1 = col_double(),
-      SESSION_YR_2 = col_double(),
-      YR_1_YTD_AMT = col_double(),
-      YR_2_YTD_AMT = col_double(),
-      QTR_1 = col_double(),
-      QTR_2 = col_double(),
-      QTR_3 = col_double(),
-      QTR_4 = col_double(),
-      QTR_5 = col_double(),
-      QTR_6 = col_double(),
-      QTR_7 = col_double(),
-      QTR_8 = col_double()
-    )
-  ) %>% 
+  ),
+  .f = read_tsv,
+  col_types = cols(
+    .default = col_character(),
+    SESSION_ID = col_double(),
+    CURRENT_QTR_AMT = col_double(),
+    SESSION_TOTAL_AMT = col_double(),
+    SESSION_YR_1 = col_double(),
+    SESSION_YR_2 = col_double(),
+    YR_1_YTD_AMT = col_double(),
+    YR_2_YTD_AMT = col_double(),
+    QTR_1 = col_double(),
+    QTR_2 = col_double(),
+    QTR_3 = col_double(),
+    QTR_4 = col_double(),
+    QTR_5 = col_double(),
+    QTR_6 = col_double(),
+    QTR_7 = col_double(),
+    QTR_8 = col_double()
+  )
+) %>% 
   clean_names("snake") %>% 
   remove_empty("cols")
+```
+
+```{r}
+cal_emp_total <- cal_emp_total %>% 
+  select(
+    session_id,
+    employer_id,
+    interest_cd,
+    interest_name,
+    session_total_amt,
+  )
 ```
 
 ```{r read_emp_firms}
@@ -371,6 +378,42 @@ cal_firm_totals <-
     )
   ) %>% 
   clean_names("snake")
+```
+
+```{r}
+cal_firm_totals <- cal_firm_totals %>% 
+  select(
+    session_id,
+    firm_id,
+    firm_name,
+    session_total_amt,
+  )
+```
+
+```{r}
+lob <- read_delim(
+  file = str_c(cal_dir, "CVR_LOBBY_DISCLOSURE_CD.TSV", sep = "/"),
+  delim = "\t",
+  escape_backslash = FALSE,
+  escape_double = FALSE,
+  na = c("", "NA", "none", "NONE", "None"),
+  col_types = cols(
+    .default = col_character(),
+    AMEND_ID = col_double(),
+    RPT_DATE = col_date("%m/%d/%Y %H:%M:%S %p"),
+    FROM_DATE = col_date("%m/%d/%Y %H:%M:%S %p"),
+    THRU_DATE = col_date("%m/%d/%Y %H:%M:%S %p"),
+    CUM_BEG_DT = col_date("%m/%d/%Y %H:%M:%S %p"),
+    CUM_BEG_DT = col_date("%m/%d/%Y %H:%M:%S %p"),
+    SIG_DATE = col_date("%m/%d/%Y %H:%M:%S %p"),
+  )
+)
+```
+
+## Join
+
+```{r}
+calr <- cal_emp_lob
 ```
 
 ## Explore
