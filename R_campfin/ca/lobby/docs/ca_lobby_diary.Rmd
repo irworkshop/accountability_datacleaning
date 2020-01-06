@@ -342,13 +342,13 @@ cal_emp_firms <-
 
 ```{r read_emp_hist}
 # empty file
-cal_lob_hist <- 
-dir_ls(
+file_size(
+  dir_ls(
     path = cal_dir, 
     type = "file", 
     glob = "*LOBBYIST_EMPLOYER_HISTORY_CD.TSV$"
-  ) %>% 
-  file_size()
+  )
+)
 ```
 
 ```{r read_firms}
@@ -391,12 +391,12 @@ cal_firm_totals <- cal_firm_totals %>%
 ```
 
 ```{r}
-lob <- read_delim(
+calr <- read_delim(
   file = str_c(cal_dir, "CVR_LOBBY_DISCLOSURE_CD.TSV", sep = "/"),
   delim = "\t",
   escape_backslash = FALSE,
   escape_double = FALSE,
-  na = c("", "NA", "none", "NONE", "None"),
+  na = c("", "NA", "none", "NONE", "None", "n/a", "N/A"),
   col_types = cols(
     .default = col_character(),
     AMEND_ID = col_double(),
@@ -408,19 +408,186 @@ lob <- read_delim(
     SIG_DATE = col_date("%m/%d/%Y %H:%M:%S %p"),
   )
 )
-```
 
-## Join
-
-```{r}
-calr <- cal_emp_lob
+calr <- clean_names(calr, "snake")
 ```
 
 ## Explore
 
 ```{r}
-head(cal)
-tail(cal)
-glimpse(sample_frac(cal))
+head(calr)
+tail(calr)
+glimpse(sample_frac(calr))
+```
+
+```{r}
+col_stats(calr, count_na)
+```
+
+```{r}
+distinct_counts <- col_stats(calr, n_distinct, print = FALSE)
+print(distinct_counts)
+x_cols <- which(distinct_counts$n <= 4)
+x_cols <- x_cols[which(x_cols > 5)]
+```
+
+```{r}
+# parse checkbox cols
+calr <- mutate_at(
+  .tbl = calr,
+  .vars = vars(x_cols),
+  .funs = equals, "X"
+)
+```
+
+```{r}
+# capitalize all
+calr <- mutate_if(
+  .tbl = calr,
+  .predicate = is_character,
+  .funs = str_to_upper
+)
+```
+
+```{r}
+# `sender_id` = ID# of Lobbyist Entity that is SUBMITTING this report.
+# `filer_id` = ID# of Lobbyist Entity that is SUBJECT of this report.
+inner_join(
+  x = calr,
+  y = cal_emp_lob,
+  by = c("filer_id" = "lobbyist_id")
+)
+```
+
+## Wrangle
+
+### ZIP
+
+```{r}
+calr <- mutate_at(
+  .tbl = calr,
+  .vars = vars(ends_with("_zip4")),
+  .funs = list(norm = normal_zip),
+  na_rep = TRUE
+)
+```
+
+```{r}
+progress_table(
+  calr$firm_zip4,
+  calr$mail_zip4,
+  calr$firm_zip4_norm,
+  calr$mail_zip4_norm,
+  compare = valid_zip
+)
+```
+
+### States
+
+```{r}
+calr <- mutate_at(
+  .tbl = calr,
+  .vars = vars(ends_with("_st")),
+  .funs = list(norm = normal_state),
+  na_rep = TRUE
+)
+```
+
+```{r}
+progress_table(
+  calr$firm_st,
+  calr$mail_st,
+  calr$firm_st_norm,
+  calr$mail_st_norm,
+  compare = valid_state
+)
+```
+
+### City
+
+```{r}
+calr <- mutate_at(
+  .tbl = calr,
+  .vars = vars(ends_with("_city")),
+  .funs = list(norm = normal_city),
+  states = c("CA", "DC"),
+  na = invalid_city,
+  na_rep = TRUE
+)
+```
+
+```{r firm_city_swap}
+# firm city
+calr <- calr %>% 
+  left_join(
+    y = zipcodes,
+    by = c(
+      "firm_st_norm" = "state",
+      "firm_zip4_norm" = "zip"
+    )
+  ) %>% 
+  rename(firm_city_match = city) %>% 
+  mutate(
+    match_abb = is_abbrev(firm_city_norm, firm_city_match),
+    match_dist = str_dist(firm_city_norm, firm_city_match),
+    firm_city_swap = if_else(
+      condition = match_abb | match_dist == 1,
+      true = firm_city_match,
+      false = firm_city_norm
+    )
+  ) %>% 
+  select(
+    -match_abb,
+    -match_dist,
+  )
+```
+
+```{r mail_city_swap}
+# mail city
+calr <- calr %>% 
+  left_join(
+    y = zipcodes,
+    by = c(
+      "firm_st_norm" = "state",
+      "firm_zip4_norm" = "zip"
+    )
+  ) %>% 
+  rename(mail_city_match = city) %>% 
+  mutate(
+    match_abb = is_abbrev(mail_city_norm, mail_city_match),
+    match_dist = str_dist(mail_city_norm, mail_city_match),
+    mail_city_swap = if_else(
+      condition = match_abb | match_dist == 1,
+      true = mail_city_match,
+      false = mail_city_norm
+    )
+  ) %>% 
+  select(
+    -match_abb,
+    -match_dist,
+  )
+```
+
+```{r}
+progress_table(
+  calr$firm_city,
+  calr$firm_city_norm,
+  calr$firm_city_swap,
+  calr$mail_city,
+  calr$mail_city_norm,
+  calr$mail_city_swap,
+  compare = valid_city
+)
+```
+
+## Export
+
+```{r}
+proc_dir <- dir_create(here("ca", "lobby", "data", "processed"))
+write_csv(
+  x = calr,
+  path = glue("{proc_dir}/ca_lobby_reg.csv"),
+  na = ""
+)
 ```
 
