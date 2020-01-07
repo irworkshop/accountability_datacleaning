@@ -254,7 +254,7 @@ ctlc %>% filter(client %in% top5$client) %>%
     guide = FALSE
   ) +
   labs(
-    title = "Conencticut Top 10 Clients Lobbhying Amount Distribution",
+    title = "Conencticut Top 5 Clients Lobbhying Amount Distribution",
     subtitle = "from 2013 to 2019, by total expenditures",
     caption = "Source: CT Office of Ethics",
     x = "",
@@ -291,13 +291,13 @@ ct_reg <- ct_reg %>%
                              str_detect(client_year, "2019|2020") ~ "2019-2020"))
 
 ct_join <- ct_reg %>% 
-  select(client_name,client_year, lobbyist_first_name,lobbyist_last_name,lobbyist_year, session,client_phone,client_city_clean,client_email, client_zip, client_state, lobbyist_city_clean, lobbyist_address_norm, lobbyist_state, lobbyist_zip, lobbyist_email) %>% 
+  select(client_name,client_year, lobbyist_first_name,lobbyist_last_name,lobbyist_year, session,client_phone,client_city_clean,client_email, client_zip, client_state, lobbyist_city_clean, lobbyist_address_clean, lobbyist_state, lobbyist_zip, lobbyist_email) %>% 
   # we can safely de-dupe the rows where only the lobbyist_year is different from one another 
   flag_dupes(-c(lobbyist_year)) %>% 
   filter(!dupe_flag)
 
 ct_count <- ct_join %>% count(client_name, lobbyist_first_name, lobbyist_last_name, session) %>% arrange(desc(n))
-  #count(client_name, lobbyist_first_name, lobbyist_last_name, )
+  #count(client_name, lobbyist_first_name, lobbyist_last_name)
 ```
 Our goal is to reduce the number of rows in the `ct_reg` table to `r nrow(ct_count)`, which is the total number of ct_reg tows (each row represents a distinct relationship between a client and a lobbyist for a session).
 
@@ -310,10 +310,12 @@ ct_dupe <- ct_join %>% filter(n==2) %>%
 
 ct_dedupe <- ct_dupe %>% group_split(client_name, lobbyist_first_name, lobbyist_last_name, session)
 
-
+# For entries with the same client_name, lobbyist_first_name, lobbyist_last_name, session, we group them in a list for comparison
 for (i in seq_along(ct_dedupe)){
 ct_dedupe[[i]] <- ct_dedupe[[i]] %>% 
+  # early_more_info suggests whether the first entry has more information
   mutate(early_more_info = ct_dedupe[[i]]$row_sum[1] - ct_dedupe[[i]]$row_sum[2] < 0 ) 
+# if the first entry has more non-NA columns, use the first entry, otherwise use the second instance.
   if (ct_dedupe[[i]]$early_more_info[1]) {
   ct_dedupe[[i]] <- ct_dedupe[[i]][1,]
   }
@@ -323,14 +325,17 @@ ct_dedupe[[i]] <- ct_dedupe[[i]] %>%
 }
 
 ct_deduped <- ct_dedupe %>% plyr::ldply() %>% select(-c(row_sum,early_more_info,n))
-
+# first remove all the double entries
 ct_join<- ct_join %>% filter(n != 2) %>% 
-  unite(remove = T, col = "communicator", lobbyist_first_name, lobbyist_last_name,sep = ",") %>% 
+  unite(remove = T, col = "communicator", lobbyist_first_name, lobbyist_last_name,sep = " ", na.rm = TRUE) %>% 
+#then add the ones we're keeping back
+  bind_rows(ct_deduped) %>% 
   rename(client = client_name)
 ```
 
 ```{r join com & reg }
 ctlc <- ctlc %>% 
+  mutate_if(is.character, str_to_upper) %>% 
   left_join(ct_join, by = c("client", "communicator", "session")) 
          
 sample_frac(ctlc)
