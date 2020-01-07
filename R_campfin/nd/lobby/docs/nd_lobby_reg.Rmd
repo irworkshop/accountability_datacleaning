@@ -113,6 +113,7 @@ here::here()
 
 ## Download
 Set the data directory first.
+
 ```{r raw_dir}
 # create a directory for the raw data
 reg_dir <- here("nd", "lobby", "data", "raw", "reg")
@@ -124,6 +125,7 @@ The [North Dakota Secretary of State] [03] makes available a listing of all lobb
 
 
 # Reading
+The files were downloaded Dec. 3, 2019.
 ```{r download registry csv}
 nd_lobby_reg_url <- glue("https://firststop.sos.nd.gov/api/list/csv/{2015:2019}")
 
@@ -198,10 +200,10 @@ progress_table(nd_lobby_reg$postal_code,
 ```
 
 ### State
-The state fields is pretty clean and don't need to be normalized.
+The state fields is perfectly clean and don't need to be normalized.
 ```{r clean state}
-prop_in(nd_lobby_reg$state, valid_zip, na.rm = TRUE) %>% percent()
-prop_in(nd_lobby_reg$org_state, valid_zip, na.rm = TRUE) %>% percent()
+prop_in(nd_lobby_reg$state, valid_state, na.rm = TRUE) %>% percent()
+prop_in(nd_lobby_reg$org_state, valid_state, na.rm = TRUE) %>% percent()
 
 ```
 
@@ -214,21 +216,6 @@ valid_place <- c(valid_city, extra_city) %>% unique()
 prop_in(nd_lobby_reg$city, valid_place, na.rm = TRUE) %>% percent()
 prop_in(nd_lobby_reg$org_city, valid_place, na.rm = TRUE) %>% percent()
 
-nd_lobby_reg <- nd_lobby_reg %>% mutate_at(
-    .vars = vars(ends_with("city")),
-    .fun = list(norm = normal_city),
-    st_abbs = usps_state,
-    geo_abbs = usps_city,
-    na = invalid_city,
-    na_rep = TRUE
-  )
-
-progress_table(nd_lobby_reg$city,
-               nd_lobby_reg$city_norm,
-               nd_lobby_reg$org_city,
-               nd_lobby_reg$org_city_norm,
-               compare = valid_place)
-)
 ```
 
 ## Address
@@ -247,7 +234,7 @@ nd_lobby_reg <- nd_lobby_reg %>%
                          na.rm = TRUE)  %>% 
   mutate_at(.vars = vars(starts_with("full")),
     .fun = list(norm = normal_address),
-    add_abbs = usps_street,
+    abbs = usps_street,
     na_rep = TRUE
   )
 ```
@@ -259,7 +246,8 @@ character format. This prevents the column from being read as a numeric variable
 
 ```{r phone_norm}
 nd_lobby_reg <- nd_lobby_reg %>% 
-  mutate(phone_norm = normal_phone(phone)
+  mutate(phone_norm = normal_phone(phone),
+         org_phone_norm = normal_phone(org_phone)
   )
 ```
 

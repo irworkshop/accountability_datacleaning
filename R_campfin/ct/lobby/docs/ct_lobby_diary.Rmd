@@ -178,7 +178,7 @@ ct_cl <- ct_cl %>% mutate(registration_date = registration_date %>% as.Date(form
 
 ```
 #### Name
-We will replace the fields that said `1` for `communicator_name` and `comm_type` in `ct_reg`.
+We will replace the fields that said `1` for `communicator_name` and `comm_type` in `ct_reg` with `NA`s.
 ```{r full name}
 ct_reg <- ct_reg %>% mutate(communicator_status = str_match(communicator_name, " [(]TERMINATED: .+[)]") %>% 
                               str_remove("[(]") %>% str_remove("[)]"),
@@ -235,20 +235,41 @@ We'll wrangle the two datasets to extract information such as address, city, ZIP
 ### Phone
 ```{r normal phone}
 ct_cl <- ct_cl %>% mutate(phone_norm = normal_phone(phone))
-ct_cl  <- ct_cl  %>% mutate(phone_norm = normal_phone(phone))
 ```
 
 ### Address
 ```{r normal address}
-ct_cl <- ct_cl %>% 
-  mutate(address_norm = normal_address(address = str_c(address_1, address_2, sep = " "),
-      abbs = usps_city,
-      na_rep = TRUE))
-
-ct_lob <- ct_lob %>% 
-  mutate(address_norm = normal_address(address = str_c(street_address_1, street_address_2, sep = " "),
-      abbs = usps_city,
-      na_rep = TRUE))
+ct_cl <- ct_cl %>%
+  unite(
+  address_1,
+  address_2,
+  col = address_combined,
+  sep = " ",
+  remove = FALSE,
+  na.rm = TRUE
+  ) %>%
+  mutate(address_clean = normal_address(
+  address = address_combined,
+  abbs = usps_city,
+  na_rep = TRUE
+  )) %>% 
+  select(-address_combined)
+  
+  ct_lob <- ct_lob %>%
+unite(
+  street_address_1,
+  street_address_2,
+  col = address_combined,
+  sep = " ",
+  remove = FALSE,
+  na.rm = TRUE
+  ) %>% 
+    mutate(address_clean = normal_address(
+      address = address_combined,
+  abbs = usps_city,
+  na_rep = TRUE
+  )) %>% 
+    select(-address_combined)
 ```
 
 
@@ -415,8 +436,10 @@ ct_cl <- ct_cl %>%
 
 ct_cl <- ct_cl %>% flag_dupes(client_name, client_registration_date)
 ct_lob <- ct_lob %>% flag_dupes(lobbyist_first_name, lobbyist_last_name, lobbyist_year, lobbyist_organisation_name)
+
 ```
-After the join, we can see that all the clients' id information is accounted for. After the join, we can see the total numbers of NA columns are consistent, and we are not introducting extraneous entries. The numbers of NA columns are also consistent. 
+After the join, we can see that all the clients' id information is accounted for. After the join, we can see the total numbers of NA columns are consistent, and we are not introducting extraneous entries. The numbers of NA columns are also
+consistent. 
 ```{r join}
 ct_reg <- ct_reg %>% select(-dupe_flag)
 
@@ -428,18 +451,22 @@ ct_reg <- ct_cl %>%
 
 col_stats(ct_reg, count_na)
 
-ct_reg <- ct_lob %>% 
+ct_reg <- ct_reg %>% mutate(join = coalesce(business_organization, client_name))
+  #the lobbyhist_organisation name usually reflects the business organization field in ct_reg, but corresponds to client_name when they are in-house lobbyists
+
+
+ct_join<- ct_lob %>% 
   filter(!dupe_flag) %>% 
-  select(-dupe_flag) %>% 
+  select(-dupe_flag) %>%
   right_join(ct_reg,
             by = c( 'lobbyist_last_name' ='last_name',
                     'lobbyist_first_name' ='first_name',
                    'lobbyist_year' = 'year',
-                   'lobbyist_organisation_name' = "business_organization"))
+                   'lobbyist_organisation_name' = "join"))
 
-col_stats(ct_reg, count_na)
+col_stats(ct_join, count_na)
 
-head(ct_reg)
+sample_frac(ct_join)
 ```
 
 
@@ -448,7 +475,7 @@ head(ct_reg)
 ```{r write clean}
 clean_dir <- here("ct", "lobby", "data", "processed","reg")
 dir_create(clean_dir)
-ct_reg %>% 
+ct_join %>% 
   select(-c(dupe_flag)) %>% 
   mutate_if(is.character, str_to_upper) %>% 
   write_csv(

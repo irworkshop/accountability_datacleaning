@@ -1,7 +1,7 @@
 Connecticut Lobbying Registration Data Diary
 ================
 Yanqi Xu
-2019-12-26 11:20:57
+2020-01-07 13:48:45
 
 -   [Project](#project)
 -   [Objectives](#objectives)
@@ -86,7 +86,8 @@ According to [CT Office of State Ethics](https://www.oseapps.ct.gov/NewLobbyist/
 
 > Lobbying in Connecticut is defined as "communicating directly or soliciting others to communicate with any official or his or her staff in the legislative or executive branch of government or in a quasi-public agency, for the purpose of influencing any legislative or administrative action."
 
-Lobbyist terms: &gt; A Client Lobbyist is the party paying for lobbying services on its behalf. In other words, the client lobbyist is expending or agreeing to expend the threshold amount of $3,000 in a calendar year. A Communicator Lobbyist receives payment and does the actual lobbying legwork (i.e., communicating or soliciting others to communicate).
+Lobbyist terms:
+&gt; A Client Lobbyist is the party paying for lobbying services on its behalf. In other words, the client lobbyist is expending or agreeing to expend the threshold amount of $3,000 in a calendar year. A Communicator Lobbyist receives payment and does the actual lobbying legwork (i.e., communicating or soliciting others to communicate).
 &gt; A Communicator Lobbyist receives or agrees to receive $3,000 for lobbying activities in a calendar year. A communicator lobbyist can be:
 1. An individual; or 2. A member of a Business Organization (e.g., a firm or association that is owned by or employs a number of lobbyists), Conn. Gen. Stat. § 1-91 (t); or 3. An In-house Communicator (a lobbyist who is a salaried employee of a client lobbyist).
 
@@ -100,12 +101,13 @@ Client Lobbyists:
 2. To ensure timely transparency, if a client lobbyist spends or agrees to spend more than $100 in legislative lobbying while the Legislature is in regular session, that lobbyist must file monthly financial reports.
 3. The quarterly and monthly reports gather information such as compensation, sales tax and money expended in connection with lobbying; expenditures benefiting a public official or his/her staff or immediate family; all other lobbying expenditures; and the fundamental terms of any lobbying contract or agreement.
 
-Communicator Lobbyists: &gt; Communicator lobbyists also register upon meeting the threshold amount. Communicator lobbyists generally file a financial report once a year, due by January 10. These reports capture compensation, reimbursements from the client lobbyist and sales tax for the previous year.
+Communicator Lobbyists:
+&gt; Communicator lobbyists also register upon meeting the threshold amount. Communicator lobbyists generally file a financial report once a year, due by January 10. These reports capture compensation, reimbursements from the client lobbyist and sales tax for the previous year.
 If a communicator lobbyist makes unreimbursed expenditures of $10 or more for the benefit of a public official, a member of his/her staff, or his/her immediate family, that lobbyist must also file on the client lobbyists schedule (either monthly or quarterly).
 
 This Rmd file documents the CT registration data only, whereas the expenditure data is wrangled in a separate data diary.
 
-To generate a master dataset, we will need to download four kinds of data tables from \[Office of State Ethics\]\[<https://www.oseapps.ct.gov/NewLobbyist/PublicReports/AdditionalReports.aspx>\], *Communicator Lobbyist List* for information about lobbyists, *All Registrants - Client* for information about clients, *Registration by Client, Communicator, Bus Org and Registration Date* for their relationships, as well as the *Combined Lobbyist List by Registrant with Type of Lobbying and Issues*. There will be overlapping and missing fields, but we will use the *Registration by Client, Communicator, Bus Org and Registration Date* as the base table since it captures the relationship between the lobbyists and their clients.
+To generate a master dataset, we will need to download four kinds of data tables from [Office of State Ethics](https://www.oseapps.ct.gov/NewLobbyist/PublicReports/AdditionalReports.aspx), *Communicator Lobbyist List* for information about lobbyists, *All Registrants - Client* for information about clients, *Registration by Client, Communicator, Bus Org and Registration Date* for their relationships, as well as the *Combined Lobbyist List by Registrant with Type of Lobbying and Issues*. There will be overlapping and missing fields, but we will use the *Registration by Client, Communicator, Bus Org and Registration Date* as the base table since it captures the relationship between the lobbyists and their clients.
 
 Reading
 -------
@@ -146,7 +148,7 @@ ct_cl <- ct_cl %>% mutate(registration_date = registration_date %>% as.Date(form
 
 #### Name
 
-We will replace the fields that said `1` for `communicator_name` and `comm_type` in `ct_reg`.
+We will replace the fields that said `1` for `communicator_name` and `comm_type` in `ct_reg` with `NA`s.
 
 ``` r
 ct_reg <- ct_reg %>% mutate(communicator_status = str_match(communicator_name, " [(]TERMINATED: .+[)]") %>% 
@@ -245,21 +247,42 @@ We'll wrangle the two datasets to extract information such as address, city, ZIP
 
 ``` r
 ct_cl <- ct_cl %>% mutate(phone_norm = normal_phone(phone))
-ct_cl  <- ct_cl  %>% mutate(phone_norm = normal_phone(phone))
 ```
 
 ### Address
 
 ``` r
-ct_cl <- ct_cl %>% 
-  mutate(address_norm = normal_address(address = str_c(address_1, address_2, sep = " "),
-      abbs = usps_city,
-      na_rep = TRUE))
-
-ct_lob <- ct_lob %>% 
-  mutate(address_norm = normal_address(address = str_c(street_address_1, street_address_2, sep = " "),
-      abbs = usps_city,
-      na_rep = TRUE))
+ct_cl <- ct_cl %>%
+  unite(
+  address_1,
+  address_2,
+  col = address_combined,
+  sep = " ",
+  remove = FALSE,
+  na.rm = TRUE
+  ) %>%
+  mutate(address_clean = normal_address(
+  address = address_combined,
+  abbs = usps_city,
+  na_rep = TRUE
+  )) %>% 
+  select(-address_combined)
+  
+  ct_lob <- ct_lob %>%
+unite(
+  street_address_1,
+  street_address_2,
+  col = address_combined,
+  sep = " ",
+  remove = FALSE,
+  na.rm = TRUE
+  ) %>% 
+    mutate(address_clean = normal_address(
+      address = address_combined,
+  abbs = usps_city,
+  na_rep = TRUE
+  )) %>% 
+    select(-address_combined)
 ```
 
 ### ZIP
@@ -477,7 +500,7 @@ col_stats(ct_reg, count_na)
 #> 11 client_communicator_type <chr>  11965 1        
 #> 12 client_year              <dbl>      1 0.0000836
 #> 13 client_phone_norm        <chr>      0 0        
-#> 14 client_address_norm      <chr>   8218 0.687    
+#> 14 client_address_clean     <chr>      0 0        
 #> 15 client_city_clean        <chr>    106 0.00886  
 #> 16 dupe_flag                <lgl>      0 0        
 #> 17 comm_type                <chr>   1877 0.157    
@@ -490,34 +513,38 @@ col_stats(ct_reg, count_na)
 #> 24 first_name               <chr>   1877 0.157    
 #> 25 last_name                <chr>   1877 0.157
 
-ct_reg <- ct_lob %>% 
+ct_reg <- ct_reg %>% mutate(join = coalesce(business_organization, client_name))
+  #the lobbyhist_organisation name usually reflects the business organization field in ct_reg, but corresponds to client_name when they are in-house lobbyists
+
+
+ct_join<- ct_lob %>% 
   filter(!dupe_flag) %>% 
-  select(-dupe_flag) %>% 
+  select(-dupe_flag) %>%
   right_join(ct_reg,
             by = c( 'lobbyist_last_name' ='last_name',
                     'lobbyist_first_name' ='first_name',
                    'lobbyist_year' = 'year',
-                   'lobbyist_organisation_name' = "business_organization"))
+                   'lobbyist_organisation_name' = "join"))
 
-col_stats(ct_reg, count_na)
-#> # A tibble: 36 x 4
+col_stats(ct_join, count_na)
+#> # A tibble: 37 x 4
 #>    col                        class      n         p
 #>    <chr>                      <chr>  <int>     <dbl>
 #>  1 lobbyist_last_name         <chr>   1877 0.157    
 #>  2 lobbyist_first_name        <chr>   1877 0.157    
-#>  3 lobbyist_street_address_1  <chr>   5583 0.467    
-#>  4 lobbyist_street_address_2  <chr>  10186 0.851    
-#>  5 lobbyist_city              <chr>   5583 0.467    
-#>  6 lobbyist_state             <chr>   5583 0.467    
-#>  7 lobbyist_zip               <chr>   5583 0.467    
-#>  8 lobbyist_email             <chr>   5583 0.467    
-#>  9 lobbyist_registration_date <date>  5583 0.467    
-#> 10 lobbyist_member_type       <chr>   5583 0.467    
-#> 11 lobbyist_status            <chr>  11819 0.988    
-#> 12 lobbyist_organisation_name <chr>   3685 0.308    
+#>  3 lobbyist_street_address_1  <chr>   2733 0.228    
+#>  4 lobbyist_street_address_2  <chr>   9277 0.775    
+#>  5 lobbyist_city              <chr>   2733 0.228    
+#>  6 lobbyist_state             <chr>   2733 0.228    
+#>  7 lobbyist_zip               <chr>   2733 0.228    
+#>  8 lobbyist_email             <chr>   2733 0.228    
+#>  9 lobbyist_registration_date <date>  2733 0.228    
+#> 10 lobbyist_member_type       <chr>   2733 0.228    
+#> 11 lobbyist_status            <chr>  10997 0.919    
+#> 12 lobbyist_organisation_name <chr>      0 0        
 #> 13 lobbyist_year              <dbl>      1 0.0000836
-#> 14 lobbyist_address_norm      <chr>  10186 0.851    
-#> 15 lobbyist_city_clean        <chr>   5585 0.467    
+#> 14 lobbyist_address_clean     <chr>   2733 0.228    
+#> 15 lobbyist_city_clean        <chr>   2743 0.229    
 #> 16 client_name                <chr>      0 0        
 #> 17 client_address_1           <chr>      0 0        
 #> 18 client_address_2           <chr>   8218 0.687    
@@ -531,35 +558,40 @@ col_stats(ct_reg, count_na)
 #> 26 client_communicator_type   <chr>  11965 1        
 #> 27 client_year                <dbl>      1 0.0000836
 #> 28 client_phone_norm          <chr>      0 0        
-#> 29 client_address_norm        <chr>   8218 0.687    
+#> 29 client_address_clean       <chr>      0 0        
 #> 30 client_city_clean          <chr>    106 0.00886  
 #> 31 dupe_flag                  <lgl>      0 0        
 #> 32 comm_type                  <chr>   1877 0.157    
 #> 33 communicator_name          <chr>   1877 0.157    
-#> 34 client_status              <chr>      0 0        
-#> 35 communicator_status        <chr>  11060 0.924    
-#> 36 communicator_name_clean    <chr>      0 0
+#> 34 business_organization      <chr>   3685 0.308    
+#> 35 client_status              <chr>      0 0        
+#> 36 communicator_status        <chr>  11060 0.924    
+#> 37 communicator_name_clean    <chr>      0 0
 
-head(ct_reg)
-#> # A tibble: 6 x 36
-#>   lobbyist_last_n… lobbyist_first_… lobbyist_street… lobbyist_street… lobbyist_city lobbyist_state
-#>   <chr>            <chr>            <chr>            <chr>            <chr>         <chr>         
-#> 1 CONWAY           FRITZ            ONE LIBERTY SQU… <NA>             NEW BRITAIN   CT            
-#> 2 EDWARDS          STEVE            <NA>             <NA>             <NA>          <NA>          
-#> 3 <NA>             <NA>             <NA>             <NA>             <NA>          <NA>          
-#> 4 <NA>             <NA>             <NA>             <NA>             <NA>          <NA>          
-#> 5 ROSE             DAVID            100 PEARL STREET 10TH FLOOR       HARTFORD      CT            
-#> 6 ROSE             DAVID            <NA>             <NA>             <NA>          <NA>          
-#> # … with 30 more variables: lobbyist_zip <chr>, lobbyist_email <chr>,
+sample_frac(ct_join)
+#> # A tibble: 11,965 x 37
+#>    lobbyist_last_n… lobbyist_first_… lobbyist_street… lobbyist_street… lobbyist_city lobbyist_state
+#>    <chr>            <chr>            <chr>            <chr>            <chr>         <chr>         
+#>  1 SHEA             TIMOTHY          185 ASYLUM STRE… 38TH FLOOR       HARTFORD      CT            
+#>  2 ROSE             DAVID            <NA>             <NA>             <NA>          <NA>          
+#>  3 GALLO            BETTY            227 LAWRENCE ST… <NA>             HARTFORD      CT            
+#>  4 MCDONOUGH        DANIEL           737 NORTH MICHI… SUITE 1700       CHICAGO       IL            
+#>  5 <NA>             <NA>             <NA>             <NA>             <NA>          <NA>          
+#>  6 LUTZ             KATHERINE        21 OAK ST        SUITE 207        HARTFORD      CT            
+#>  7 DUGAN            MICHAEL          23 VIOLA DRIVE   <NA>             EAST HAMPTON  CT            
+#>  8 <NA>             <NA>             <NA>             <NA>             <NA>          <NA>          
+#>  9 CRONIN           JEAN             700 PLAZA MIDDL… <NA>             MIDDLETOWN    CT            
+#> 10 SULLIVAN         PATRICK          287 CAPITOL AVE… <NA>             HARTFORD      CT            
+#> # … with 11,955 more rows, and 31 more variables: lobbyist_zip <chr>, lobbyist_email <chr>,
 #> #   lobbyist_registration_date <date>, lobbyist_member_type <chr>, lobbyist_status <chr>,
-#> #   lobbyist_organisation_name <chr>, lobbyist_year <dbl>, lobbyist_address_norm <chr>,
+#> #   lobbyist_organisation_name <chr>, lobbyist_year <dbl>, lobbyist_address_clean <chr>,
 #> #   lobbyist_city_clean <chr>, client_name <chr>, client_address_1 <chr>, client_address_2 <chr>,
 #> #   client_city <chr>, client_state <chr>, client_zip <chr>, client_phone <chr>,
 #> #   client_email <chr>, client_registration_date <date>, client_term_date <date>,
 #> #   client_communicator_type <chr>, client_year <dbl>, client_phone_norm <chr>,
-#> #   client_address_norm <chr>, client_city_clean <chr>, dupe_flag <lgl>, comm_type <chr>,
-#> #   communicator_name <chr>, client_status <chr>, communicator_status <chr>,
-#> #   communicator_name_clean <chr>
+#> #   client_address_clean <chr>, client_city_clean <chr>, dupe_flag <lgl>, comm_type <chr>,
+#> #   communicator_name <chr>, business_organization <chr>, client_status <chr>,
+#> #   communicator_status <chr>, communicator_name_clean <chr>
 ```
 
 Export
@@ -568,7 +600,7 @@ Export
 ``` r
 clean_dir <- here("ct", "lobby", "data", "processed","reg")
 dir_create(clean_dir)
-ct_reg %>% 
+ct_join %>% 
   select(-c(dupe_flag)) %>% 
   mutate_if(is.character, str_to_upper) %>% 
   write_csv(

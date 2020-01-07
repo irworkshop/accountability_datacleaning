@@ -1,7 +1,7 @@
 Connecticut Lobbying Compensation Data Diary
 ================
 Yanqi Xu
-2019-12-28 14:34:55
+2020-01-07 13:51:10
 
 -   [Project](#project)
 -   [Objectives](#objectives)
@@ -215,13 +215,13 @@ ct_reg <- ct_reg %>%
                              str_detect(client_year, "2019|2020") ~ "2019-2020"))
 
 ct_join <- ct_reg %>% 
-  select(client_name,client_year, lobbyist_first_name,lobbyist_last_name,lobbyist_year, session,client_phone,client_city_clean,client_email, client_zip, client_state, lobbyist_city_clean, lobbyist_address_norm, lobbyist_state, lobbyist_zip, lobbyist_email) %>% 
+  select(client_name,client_year, lobbyist_first_name,lobbyist_last_name,lobbyist_year, session,client_phone,client_city_clean,client_email, client_zip, client_state, lobbyist_city_clean, lobbyist_address_clean, lobbyist_state, lobbyist_zip, lobbyist_email) %>% 
   # we can safely de-dupe the rows where only the lobbyist_year is different from one another 
   flag_dupes(-c(lobbyist_year)) %>% 
   filter(!dupe_flag)
 
 ct_count <- ct_join %>% count(client_name, lobbyist_first_name, lobbyist_last_name, session) %>% arrange(desc(n))
-  #count(client_name, lobbyist_first_name, lobbyist_last_name, )
+  #count(client_name, lobbyist_first_name, lobbyist_last_name)
 ```
 
 Our goal is to reduce the number of rows in the `ct_reg` table to 11811, which is the total number of ct\_reg tows (each row represents a distinct relationship between a client and a lobbyist for a session).
@@ -235,10 +235,12 @@ ct_dupe <- ct_join %>% filter(n==2) %>%
 
 ct_dedupe <- ct_dupe %>% group_split(client_name, lobbyist_first_name, lobbyist_last_name, session)
 
-
+# For entries with the same client_name, lobbyist_first_name, lobbyist_last_name, session, we group them in a list for comparison
 for (i in seq_along(ct_dedupe)){
 ct_dedupe[[i]] <- ct_dedupe[[i]] %>% 
+  # early_more_info suggests whether the first entry has more information
   mutate(early_more_info = ct_dedupe[[i]]$row_sum[1] - ct_dedupe[[i]]$row_sum[2] < 0 ) 
+# if the first entry has more non-NA columns, use the first entry, otherwise use the second instance.
   if (ct_dedupe[[i]]$early_more_info[1]) {
   ct_dedupe[[i]] <- ct_dedupe[[i]][1,]
   }
@@ -248,34 +250,38 @@ ct_dedupe[[i]] <- ct_dedupe[[i]] %>%
 }
 
 ct_deduped <- ct_dedupe %>% plyr::ldply() %>% select(-c(row_sum,early_more_info,n))
-
+# first remove all the double entries
 ct_join<- ct_join %>% filter(n != 2) %>% 
-  unite(remove = T, col = "communicator", lobbyist_first_name, lobbyist_last_name,sep = ",") %>% 
+  unite(remove = T, col = "communicator", lobbyist_first_name, lobbyist_last_name,sep = " ", na.rm = TRUE) %>% 
+#then add the ones we're keeping back
+  bind_rows(ct_deduped) %>% 
   rename(client = client_name)
 ```
 
 ``` r
 ctlc <- ctlc %>% 
+  mutate_if(is.character, str_to_upper) %>% 
   left_join(ct_join, by = c("client", "communicator", "session")) 
          
 sample_frac(ctlc)
-#> # A tibble: 15,434 x 22
+#> # A tibble: 15,434 x 24
 #>    communicator client selected_type comp_amt sales_tax exp_reimb  total session client_year
 #>    <chr>        <chr>  <chr>            <dbl>     <dbl>     <dbl>  <dbl> <chr>   <chr>      
-#>  1 Jennifer Wi… CT Co… Administrati…    2831.        0       193. 3.02e3 2013-2… <NA>       
-#>  2 Sullivan & … Lyft,… Legislative     19200      1219.      375  2.08e4 2013-2… <NA>       
-#>  3 Edwin Durso  ESPN,… Administrati…    9505.        0         0  9.50e3 2013-2… <NA>       
-#>  4 Barry Fadem  Natio… Legislative         0         0     15496. 1.55e4 2013-2… <NA>       
-#>  5 Gaffney, Be… Bridg… ClientTotal     33507.     2128.        0  3.56e4 2017-2… <NA>       
-#>  6 Gaffney, Be… Wine … ClientTotal    240000     15240         0  2.55e5 2013-2… <NA>       
-#>  7 Connecticut… Conne… ClientTotal    256132.    16264.     5766. 2.78e5 2015-2… <NA>       
-#>  8 Lorelei Mot… Wakef… Administrati…       0         0         0  0.     2015-2… <NA>       
-#>  9 Gloria Dimon Conne… Legislative      1718.        0         0  1.72e3 2015-2… <NA>       
-#> 10 Brown Rudni… Boehr… ClientTotal    125000      7938.      500  1.33e5 2013-2… <NA>       
-#> # … with 15,424 more rows, and 13 more variables: lobbyist_year <chr>, client_phone <chr>,
+#>  1 JENNIFER WI… CT CO… ADMINISTRATI…    2831.        0       193. 3.02e3 2013-2… 2013       
+#>  2 SULLIVAN & … LYFT,… LEGISLATIVE     19200      1219.      375  2.08e4 2013-2… <NA>       
+#>  3 EDWIN DURSO  ESPN,… ADMINISTRATI…    9505.        0         0  9.50e3 2013-2… 2013       
+#>  4 BARRY FADEM  NATIO… LEGISLATIVE         0         0     15496. 1.55e4 2013-2… 2013       
+#>  5 GAFFNEY, BE… BRIDG… CLIENTTOTAL     33507.     2128.        0  3.56e4 2017-2… <NA>       
+#>  6 GAFFNEY, BE… WINE … CLIENTTOTAL    240000     15240         0  2.55e5 2013-2… <NA>       
+#>  7 CONNECTICUT… CONNE… CLIENTTOTAL    256132.    16264.     5766. 2.78e5 2015-2… <NA>       
+#>  8 LORELEI MOT… WAKEF… ADMINISTRATI…       0         0         0  0.     2015-2… 2015       
+#>  9 GLORIA DIMON CONNE… LEGISLATIVE      1718.        0         0  1.72e3 2015-2… 2015       
+#> 10 BROWN RUDNI… BOEHR… CLIENTTOTAL    125000      7938.      500  1.33e5 2013-2… <NA>       
+#> # … with 15,424 more rows, and 15 more variables: lobbyist_year <chr>, client_phone <chr>,
 #> #   client_city_clean <chr>, client_email <chr>, client_zip <chr>, client_state <chr>,
-#> #   lobbyist_city_clean <chr>, lobbyist_address_norm <chr>, lobbyist_state <chr>,
-#> #   lobbyist_zip <chr>, lobbyist_email <chr>, dupe_flag <lgl>, n <int>
+#> #   lobbyist_city_clean <chr>, lobbyist_address_clean <chr>, lobbyist_state <chr>,
+#> #   lobbyist_zip <chr>, lobbyist_email <chr>, dupe_flag <lgl>, n <int>, lobbyist_first_name <chr>,
+#> #   lobbyist_last_name <chr>
 ```
 
 Export
