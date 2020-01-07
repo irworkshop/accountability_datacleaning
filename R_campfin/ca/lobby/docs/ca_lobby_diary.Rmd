@@ -148,8 +148,8 @@ url_file_size(key_url, format = TRUE)
 If they ZIP file containing the documentation files has not yet been downloaded, we can do so now.
 
 ```{r download_key}
-raw_dir <- dir_create(here("ca", "lobby", "data", "raw"))
-key_file <- str_c(raw_dir, basename(key_url), sep = "/")
+doc_dir <- here("ca", "lobby", "docs")
+key_file <- str_c(doc_dir, basename(key_url), sep = "/")
 if (!this_file_new(key_file)) {
   download.file(
     url = key_url,
@@ -161,19 +161,19 @@ if (!this_file_new(key_file)) {
 Before we unzip the file, we can view it's contents.
 
 ```{r list_key}
-key_content <- key_file %>% 
-  unzip(list = TRUE) %>% 
-  as_tibble(.name_repair = make_clean_names)
+key_content <- as_tibble(unzip(key_file, list = TRUE))
+print(key_content)
 ```
 
 ```{r unzip_key}
-key_dir <- str_c(raw_dir, "CalAccess-Documentation", sep = "/")
+key_dir <- str_c(doc_dir, key_content$Name[1], sep = "/")
 if (!dir_exists(key_dir)) {
   unzip(
     zipfile = key_file,
-    exdir = raw_dir
+    exdir = doc_dir
   )
 }
+file_delete(key_file)
 ```
 
 ## Import
@@ -181,6 +181,7 @@ if (!dir_exists(key_dir)) {
 ### Download
 
 ```{r zip_file}
+raw_dir <- dir_create(here("ca", "lobby", "data", "raw"))
 zip_url <- "https://campaignfinance.cdn.sos.ca.gov/dbwebexport.zip"
 zip_file <- str_c(raw_dir, basename(zip_url), sep = "/")
 ```
@@ -230,11 +231,10 @@ if (!dir_exists(cal_dir)) {
 Much of the data is split into multiple files. We will list all the files of a similar name and
 read them into a single data frame with `purrr::map_dfr()` and `readr::read_tsv()`.
 
-```{r warn_vroom}
-if (packageVersion("vroom") < "1.0.2.9000") {
-  stop("vroom version of at least 1.0.2.9000 is needed")
-}
-```
+The `CVR_LOBBY_DISCLOSURE_CD.TSV` file lists the information from every F615, F635, F625, F645
+form, which are submitted by principal clients employing lobbying efforts (LEM) and contains
+records for every lobbying firm (FRM), individual person (IND), lobbyists (LBY), andlobbying
+coalitions (LCO).
 
 > Lobbyist contribution disclosure table. Temporary table used to generate disclosure table
 (Lobbyist Contributions 3).
@@ -257,25 +257,24 @@ lob_conts <- map_dfr(
     AMOUNT = col_double()
   )
 ) %>% 
-  clean_names("snake") %>% 
-  remove_empty("cols")
+  clean_names("snake")
 ```
 
 Every yearly relationship between lobbyists and their principal clients.
 
 ```{r read_emp_lob}
-cal_emp_lob <- 
-  dir_ls(
+cal_emp_lob <- map_dfr(
+  .x = dir_ls(
     path = cal_dir, 
     type = "file", 
     glob = "*LOBBYIST_EMP_LOBBYIST\\d_CD.TSV"
-  ) %>% 
-  vroom(
-    col_types = cols(
-      .default = col_character(),
-      SESSION_ID = col_double()
-    )
-  ) %>% 
+  ),
+  .f = read_tsv,
+  col_types = cols(
+    .default = col_character(),
+    SESSION_ID = col_double()
+  )
+) %>% 
   clean_names("snake")
 ```
 
@@ -312,7 +311,7 @@ cal_emp_total <- map_df(
   remove_empty("cols")
 ```
 
-```{r}
+```{r eval=FALSE}
 cal_emp_total <- cal_emp_total %>% 
   select(
     session_id,
@@ -324,20 +323,19 @@ cal_emp_total <- cal_emp_total %>%
 ```
 
 ```{r read_emp_firms}
-cal_emp_firms <- 
-  dir_ls(
+cal_emp_firms <- map_dfr(
+  .x = dir_ls(
     path = cal_dir, 
     type = "file", 
     glob = "*LOBBYIST_EMPLOYER_FIRMS\\d_CD.TSV$"
-  ) %>% 
-  vroom(
-    col_types = cols(
-      .default = col_character(),
-      SESSION_ID = col_double()
-    )
-  ) %>% 
-  clean_names("snake") %>% 
-  remove_empty("cols")
+  ),
+  .f = read_tsv,
+  col_types = cols(
+    .default = col_character(),
+    SESSION_ID = col_double()
+  )
+) %>% 
+  clean_names("snake")
 ```
 
 ```{r read_emp_hist}
@@ -352,31 +350,31 @@ file_size(
 ```
 
 ```{r read_firms}
-cal_firm_totals <- 
-  dir_ls(
+cal_firm_totals <- map_dfr(
+  .x = dir_ls(
     path = cal_dir, 
     type = "file", 
     glob = "*LOBBYIST_FIRM\\d_CD.TSV$"
-  ) %>% 
-  vroom(
-    col_types = cols(
-      .default = col_character(),
-      CURRENT_QTR_AMT = col_double(),
-      SESSION_TOTAL_AMT = col_double(),
-      SESSION_YR_1 = col_double(),
-      SESSION_YR_2 = col_double(),
-      YR_1_YTD_AMT = col_double(),
-      YR_2_YTD_AMT = col_double(),
-      QTR_1 = col_double(),
-      QTR_2 = col_double(),
-      QTR_3 = col_double(),
-      QTR_4 = col_double(),
-      QTR_5 = col_double(),
-      QTR_6 = col_double(),
-      QTR_7 = col_double(),
-      QTR_8 = col_double()
-    )
-  ) %>% 
+  ), 
+  .f = read_tsv,
+  col_types = cols(
+    .default = col_character(),
+    CURRENT_QTR_AMT = col_double(),
+    SESSION_TOTAL_AMT = col_double(),
+    SESSION_YR_1 = col_double(),
+    SESSION_YR_2 = col_double(),
+    YR_1_YTD_AMT = col_double(),
+    YR_2_YTD_AMT = col_double(),
+    QTR_1 = col_double(),
+    QTR_2 = col_double(),
+    QTR_3 = col_double(),
+    QTR_4 = col_double(),
+    QTR_5 = col_double(),
+    QTR_6 = col_double(),
+    QTR_7 = col_double(),
+    QTR_8 = col_double()
+  )
+) %>% 
   clean_names("snake")
 ```
 
@@ -589,5 +587,10 @@ write_csv(
   path = glue("{proc_dir}/ca_lobby_reg.csv"),
   na = ""
 )
+```
+
+```{r}
+# no git
+dir_delete(key_dir)
 ```
 
