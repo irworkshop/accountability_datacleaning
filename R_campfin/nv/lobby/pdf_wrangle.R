@@ -22,7 +22,7 @@ data <- bind_rows(pages, .id = "page")
 
 # list split --------------------------------------------------------------
 
-sections <- data %>%
+data <- data %>%
   # lob left of x 274 and pri to right
   mutate(lob = x < 274, id = row_number()) %>%
   # collapse x line by column
@@ -43,9 +43,16 @@ sections <- data %>%
       str_detect("^(Non-Paid|Paid)") %>%
       # sum previous TRUEs
       cumsum()
-  ) %>%
-  # split frame into lists
-  group_split(section)
+  )
+
+for (i in unique(data$section)) {
+  pri_lines <- data$line[data$section == i & !data$lob]
+  pri_alpha <- pri_lines[c(TRUE, FALSE)] %>% str_sub(end = 1)
+  match(pri_alpha, LETTERS) %>% diff()
+}
+
+# split frame into lists
+sections <- group_split(data, section)
 
 # functions ----------------------------------------------------------------------------------
 
@@ -193,24 +200,42 @@ frame_lob <- function(section) {
 frame_pri <- function(section) {
 
   # lines from pri right side
-  z <- s$line[!s$lob]
+  z <- section$line[!section$lob]
 
   # pri phone ----------------------------------------------------------------------------------
 
-  for (i in seq_along(z)) {
+  # check for some kind of phone number on own line
+  rx_tel <- str_c(
+    "\\(\\d{3}\\)\\s\\d{3}-\\d{4}", # whole tel
+    "\\d+", # just nums
+    "-\\d+",
+    "\\d+-\\d+",
+    sep = "|"
+  ) %>% sprintf(fmt = "^(%s)$")
+
+  for (i in seq_along(z)[-1]) {
     # look for only nums or tel num
-    rx_tel <- c(
-      "\\(\\d{3}\\)\\s\\d{3}-\\d{4}", # whole tel
-      "\\d+", # just nums
-      "-\\d+",
-      "\\d+-\\d+"
-    )
-    rx_tel <- sprintf("^(%s)$", str_c(rx_tel, collapse = "|"))
     if (str_detect(z[i], rx_tel)) {
       # combine with previous line
-      z[i-1] <- str_c(z[i-1], z[i], sep = " ")
+      z[i - 1] <- str_c(z[i - 1], z[i], sep = " ")
       # remove overflow
       z[i] <- NA_character_
+    }
+  }
+
+  z <- na.omit(z)
+
+  # check for lack of phone after line
+  # some long biz names overflow
+  for (i in seq_along(z)[c(TRUE, FALSE)]) {
+    if (is.na(z[i]) | str_detect(z[i + 1], "N/A$")) {
+      next()
+    }
+    if (str_detect(z[i + 1], str_sub(rx_phone, start = 2, end = -2), negate = TRUE)) {
+      # combine with previous line
+      z[i] <- str_c(z[i], z[i + 1], sep = " ")
+      # remove overflow
+      z <- z[-(i + 1)]
     }
   }
 
@@ -227,19 +252,31 @@ frame_pri <- function(section) {
   pri <- pri %>%
     separate(
       col = pri_addr,
-      into = c("pri_addr", "two"),
-      sep = ",\\s"
+      into = c("pri_addr1", "pri_addr2", "two"),
+      sep = ",\\s",
+      extra = "merge",
+      fill = "left"
     ) %>%
+    unite(
+      col = pri_addr,
+      starts_with("pri_addr"),
+      sep = " ",
+      remove = TRUE,
+      na.rm = TRUE
+    ) %>%
+    mutate_all(str_trim) %>%
     separate(
       col = two,
       into = c("pri_state", "three"),
-      sep = "\\s",
-      extra = "merge"
+      sep = "(?<=[:upper:]{2})\\s(?=\\d+)",
+      extra = "merge",
+      fill = "left"
     ) %>%
     separate(
       col = three,
       into = c("pri_zip", "pri_phone"),
-      sep = "\\s(?=\\()"
+      sep = "(\\s(?=\\())|\\s",
+      extra = "merge"
     ) %>%
     mutate(
       pri_zip = normal_zip(pri_zip),
@@ -249,7 +286,11 @@ frame_pri <- function(section) {
   pri_city <- rep(NA_character_, nrow(pri))
   # look for city at end
   for (i in seq_along(pri$pri_addr)) {
-    for (city in zipcodes$city[which(zipcodes$state == pri$pri_state[i])]) {
+    loop_state <- pri$pri_state[i]
+    if (is.na(loop_state)) {
+      loop_state <- "NV"
+    }
+    for (city in zipcodes$city[which(zipcodes$state == loop_state)]) {
       check <- sprintf("(?<=\\s)(%s)(?=$)", str_to_title(city))
       if (str_detect(pri$pri_addr[i], check)) {
         pri_city[i] <- str_extract(pri$pri_addr[i], check)
@@ -270,6 +311,10 @@ frame_pri <- function(section) {
     )
 
   return(pri)
+}
+
+for (i in 101:200) {
+  frame_section(sections[[i]])
 }
 
 # create function to call both per
