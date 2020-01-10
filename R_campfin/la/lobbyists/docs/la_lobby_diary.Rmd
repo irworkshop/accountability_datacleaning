@@ -95,7 +95,6 @@ pacman::p_load(
 ```{r fix_fun, echo=FALSE, collapse = TRUE}
 # fix conflict
 here <- here::here
-print_all <- function(df) df %>% print(n = nrow(.)) 
 ```
 This document should be run as part of the `R_campfin` project, which lives as a sub-directory of
 the more general, language-agnostic [`irworkshop/accountability_datacleaning`][01] GitHub
@@ -118,7 +117,7 @@ Set the data directory first.
 reg_dir <- here("la", "lobbyists", "data", "raw", "reg")
 dir_create(reg_dir)
 ```
-The [Louisiana Board of Ethics] [03] makes available a listing of all current lobbyists (2019). The Accountability Project obtained records of previous years through a public record request.
+The [Louisiana Board of Ethics] [03] makes available a listing of all current lobbyists (2019). For more detailed representation data, the Accountability Project obtained records of previous years through a public record request.
 
 [03]: http://ethics.la.gov/LobbyistLists.aspx
 [05]: http://ethics.la.gov/Pub/Laws/Title24LegislativeLobbying.pdf
@@ -134,10 +133,72 @@ registration as a lobbyist, whichever occurs first.
 
 # Reading
 ```{r read csv}
-la_reg <- read_xlsx(dir_ls(reg_dir, glob = "*.xlsx"), col_types = "text") %>% 
+la_reg <- read_delim(glue("{reg_dir}/lobby_reg.csv"), delim = ",", col_types = cols(.default = col_character()),escape_double = FALSE, escape_backslash = FALSE) %>% 
   clean_names() 
+```
+
+We will notice that some rows were delimited incorrectly, as a supposedly single rows is separated into two lines with the first row of the overflow line an invalid forward slash.
+```{r}
 la_reg <- la_reg %>% mutate_at(.vars = vars(ends_with("date")),
   .funs = ~ excel_numeric_to_date(as.numeric(.),date_system = "modern"))
+
+la_lines <- read_lines(glue("{reg_dir}/lobby_reg.csv"))
+la_lines <- la_lines %>% na_if("^\\s/\\s$") %>% na.omit()
+for (i in seq_along(la_lines)) {
+  if (is.na(la_lines[i])) {
+    next()
+  }
+  if (str_detect(la_lines[i],"^ / d/b/a ")) {
+    la_lines[i-1] <- str_c(la_lines[i-1], str_remove(la_lines[i], "^ / d/b/a "), collapse = ", ")
+    la_lines[i] <- NA_character_
+  }
+}
+
+la_lines[310] <- str_c(la_lines[310:315] %>% str_remove("^\\s/\\s"), collapse = " ")
+la_lines[311:315] <- rep(NA_character_, 5)
+#la_lines <- la_lines[-c(311:315)]
+
+#la_lines <- la_lines %>% na.omit()
+regex <- "^\\s/\\s"
+# for (i in seq_along(la_lines)) {
+# if (str_detect(la_lines[i],regex)) {
+#   la_lines[i-1] <- str_c(la_lines[i-1], str_remove(la_lines[i], sep), sep = ", ")
+#   #test <- test[-i]
+#   la_lines[i] <- NA_character_
+#   #test <- test %>% na.omit()
+# }  
+# }
+# la_lines <- la_lines %>% na.omit()
+for (i in seq_along(la_lines)) {
+  if (is.na(la_lines[i])) {
+    next()
+  }
+  if (str_detect(la_lines[i],regex)) {
+    la_lines[i-1] <- str_c(la_lines[i-1], str_remove(la_lines[i], regex), collapse = "")
+    la_lines[i] <- NA_character_
+  }
+}
+
+
+
+
+# for (i in seq_along(la_lines)) {
+#   if (str_detect(la_lines[i],"^\\s/\\s")) {
+#     la_lines[i-1] <- str_c(la_lines[i-1], str_remove(la_lines[i], "^\\s/\\s"), collapse = " ")
+#     la_lines[i] <- NA_character_
+#   }
+# }
+
+
+
+#la_lines <- la_lines %>% na.omit() 
+
+la_reg <- la_lines %>% na.omit() %>%  read_csv()
+
+prob <- problems(la_reg)
+
+la_reg <- tibble::rowid_to_column(la_reg)
+
 la_reg <- la_reg %>% 
   rename_at(.vars = vars(starts_with("m_")), 
                                .funs = ~str_replace(.,"m_","mailing_")) %>% 
@@ -147,7 +208,6 @@ la_reg <- la_reg %>%
             .funs = ~str_replace(.,"l_","lobbyist_"))
 
 la_reg <- la_reg %>% mutate_if(is.character, str_to_upper)
-
 ```
 
 ## Duplicates

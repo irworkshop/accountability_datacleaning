@@ -105,6 +105,9 @@ The `R_campfin` project uses the [RStudio projects][02] feature and should be ru
 project also uses the dynamic `here::here()` tool for file paths relative to _your_ machine.
 
 
+[01]: https://github.com/irworkshop/accountability_datacleaning "TAP repo"
+[02]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects "Rproj"
+
 ## Download
 Set the download directory first.
 ```{r create raw_dir}

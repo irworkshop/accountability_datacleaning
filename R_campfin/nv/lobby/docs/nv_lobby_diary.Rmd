@@ -87,7 +87,8 @@ pacman::p_load(
   here, # relative storage
   fs, # search storage 
   vroom, #read deliminated files
-  readxl #read excel files
+  readxl, #read excel files
+  pdftools #wrangle pdf texts
 )
 ```
 
@@ -197,14 +198,38 @@ for (i in seq_along(nv_17_sep)){
  nv_17_sep[[i]] <- x
 }
 
-nv_17_sep %>% map_dbl(length) 
+line_count <-  nv_17_sep %>% map_dbl(length) 
 
-if (x %>% map(length) ==2) {
-  client_thisline <- x[[index]][2]
+# since the end of a lobbyist line will only has length 1, and the next line will have length 2 where the client name is the second element, we'll use this characteristic to identify the separator of these lines
+sep <- double()
+for (i in seq_along(line_count)) {
+  # find out the index of element 1 immediately followed by a 2, that will be the index of the last line of 
+  if (line_count[i] == 1 & line_count[i+1] == 2) {
+    #
+    sep <- append(sep, i)
+  }
 }
 
+start_index <- c(1, (sep+1))
 
-x <-  nv_17_sep %>% tail()
+tibs <- list(NA) %>% rep(length(start_index))
+for (i in seq_along(start_index)){
+  if (i == length(start_index)) {
+    single_index <- start_index[i]:length(nv_17_sep)
+  }else{
+  single_index <- start_index[i]:(start_index[i+1]-1)
+  }
+  single_lines_list <- nv_17_sep[single_index]
+      lob <- rep(NA, length(single_index))
+      cl <- rep(NA, length(single_index))
+  for (j in seq_along(single_index))  {
+    lob[j] <- single_lines_list[[j]][1]
+    cl[j] <- single_lines_list[[j]][2]
+    tibs[[i]] <- tibble(lobbyist = lob %>% str_c(collapse = '`'),
+                  client = cl %>% na.omit() %>% str_c(collapse = "`"))
+  }
+}
+
 ```
 
 
@@ -263,12 +288,6 @@ Few values are missing from the lobbyists database.
 ## Wrangling
 We'll wrangle the two datasets to extract information such as address, city, ZIP, state, phone for both lobbyists and their clients, as well as authorization date. The lobbyists registry has the one-to-one relationship between lobbyists and clients, so we will use `ct_cl` as the main data frame and join the clients' information from the `ct_lob` data frame.
 
-### Phone
-```{r normal phone}
-ct_cl <- ct_cl %>% mutate(phone_norm = normal_phone(phone))
-ct_cl  <- ct_cl  %>% mutate(phone_norm = normal_phone(phone))
-```
-
 ### ZIP 
 The ZIP code fields are pretty clean.
 ```{r client normal zip}
@@ -278,6 +297,13 @@ prop_in(ct_cl$zip, valid_zip, na.rm = TRUE) %>% percent()
 prop_in(ct_lob$zip, valid_zip, na.rm = TRUE) %>% percent()
 ```
 
+
+
+### Phone
+```{r normal phone}
+nv_80 <- ct_cl %>% mutate(phone_norm = normal_phone(phone))
+ct_cl  <- ct_cl  %>% mutate(phone_norm = normal_phone(phone))
+```
 ### State
 Running the following commands tells us the state fields are clean. The fields that are `NA`s were missing from the original field. 
 ```{r clients clean state}
