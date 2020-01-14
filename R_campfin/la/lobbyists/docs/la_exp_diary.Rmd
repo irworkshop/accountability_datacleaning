@@ -95,7 +95,6 @@ pacman::p_load(
 
 ```{r fix_fun, echo=FALSE, collapse = TRUE}
 here <- here::here
-print_all <- function(df) df %>% print(n = nrow(.)) 
 ```
 This document should be run as part of the `R_campfin` project, which lives as a sub-directory of
 the more general, language-agnostic [`irworkshop/accountability_datacleaning`][01] GitHub
@@ -105,7 +104,8 @@ repository.
 The `R_campfin` project uses the [RStudio projects][02] feature and should be run as such. The
 project also uses the dynamic `here::here()` tool for file paths relative to _your_ machine.
 
-
+# Data sources
+The data was obtained from the Louisiana Ethics Administration Program via a public record request. Expenditures are as current as December 9, 2020.
 ```{r where_here, collapse=TRUE}
 # where dfs this document knit?
 here::here()
@@ -113,23 +113,44 @@ raw_dir <- here("la","lobbyists","data","raw","exp")
 reg_proc <- here("la","lobbyists","data","processed","reg")
 ```
 
+# Reading
+We will notice that some rows were delimited incorrectly, as a supposedly single rows is separated into two lines with the first row of the overflow line an invalid forward slash.
 
-```{r read}
-la_exp <- read_csv(dir_ls(raw_dir, glob = "*.csv"),
-                   col_types = cols(.default = col_character(),
-                                    amount = col_double())) %>% 
-  clean_names() %>% 
-  mutate_if(is.character, str_to_upper)
+```{r}
 
-la_reg <- read_csv(file.path(reg_proc,"la_reg_clean.csv"),
-                   col_types = cols(.default = col_character()))
-#la_exp$amount <-  la_exp$amount %>% str_remove("[$]") %>% as.numeric()
+la_lines <- read_lines(dir_ls(raw_dir, glob = "*.csv"))
+la_cols <- str_split(la_lines[1], ",", simplify = TRUE)
+la_lines <- la_lines[-1]
+
+sum(str_detect(la_lines, "^\\D"))
+#> 4373
+
+for (i in rev(seq_along(la_lines))) {
+  if (is.na(la_lines[i])) {
+    next()
+  }
+  if (str_detect(la_lines[i], "^\\D")) {
+    la_lines[i - 1] <- str_c(la_lines[i - 1], la_lines[i], collapse = ",")
+    la_lines[i] <- NA_character_
+  }
+}
+
+la_lines <- na.omit(la_lines)
+
+la_exp <- read_csv(la_lines, col_names = la_cols) %>% clean_names() %>% 
+  mutate_if(is.character, str_to_upper) %>% 
+  rename(unique_id = fake_unique_id)
+```
+
+
+```{r}
+la_exp %>% glimpse()
 ```
 
 We'll clean the fields that contain strings like "NULL" a bit.
 ```{r}
 la_exp <- la_exp %>% 
-  na_if("NULL")
+  mutate_if(is.character,na_if, "NULL")
 ```
 
 ##Duplicates
@@ -137,23 +158,39 @@ la_exp <- la_exp %>%
 la_exp <- flag_dupes(la_exp, dplyr::everything())
 ```
 
-
 ##Missing
 ```{r missing}
 col_stats(la_exp, count_na)
 ```
-
+We'll flag that instances where the lobbyist name is missing.
 ```{r}
 la_exp <- la_exp %>% flag_na(last_name_first_name, report_period, amount)
 ```
 
+## Join
+```{r join reg}
+la_reg <- read_csv(file.path(here("la", "lobbyists", "data", "processed", "reg"), "la_reg_clean.csv"))
+
+la_exp <- la_exp %>% mutate(year = as.numeric(year(date_filed)))
+
+la_reg <- la_reg %>% select(unique_id, first_name, middle, last_name, m_street_norm, m_city_clean, m_state_norm, year_registered) %>% 
+  rename(year = year_registered,
+         lob_first_name = first_name,
+         lob_middle = middle,
+         lob_last_name = last_name)
+la_reg <- flag_dupes(la_reg, dplyr::everything())
+  # unite(first_name, middle, col = lob_first_middle, na.rm = TRUE, remove = FALSE, sep = " ") %>% 
+  # unite(last_name, lob_first_middle, col = lob_full_name, na.rm = TRUE, remove = FALSE, sep = ", ") %>% 
+la_exp <- la_reg %>% filter(!dupe_flag) %>% 
+right_join(la_exp, by = c('unique_id', 'year'))
+```
 
 ##Explore
 ```{r histogram distribution, echo=F}
 la_exp %>% 
   ggplot(aes(amount)) +
   geom_histogram(fill = RColorBrewer::brewer.pal(3, "Dark2")[3]) +
-  geom_vline(xintercept = median(la_exp$amount, na.rm = TRUE), linetype = 2) +
+  geom_vline(xintercept = median(la_exp$amount[la_exp$amount != 0], na.rm = TRUE), linetype = 2) +
   scale_y_continuous(labels = comma) +
   scale_x_continuous(
     breaks = c(1 %o% 10^(0:6)),
@@ -165,7 +202,8 @@ la_exp %>%
     caption = "Source: Louisiana Ethics Administration Program",
     x = "Amount",
     y = "Count"
-  )
+  ) +
+  theme_minimal()
 ```
 
 
@@ -182,22 +220,50 @@ la_exp %>%
   )
 
 ```
+### Top officials with highest total associated lobbying expenses
+```{r echo=FALSE}
+la_exp %>% 
+  unite(first_name, last_name, sep = " ", na.rm = TRUE, col = "officials_legislators", remove = FALSE) %>% 
+  group_by(officials_legislators) %>% 
+  summarize(total_expenses = sum(amount)) %>% 
+  arrange(desc(total_expenses)) %>% 
+  filter(officials_legislators != "") %>% 
+  head(10) %>% 
+  ggplot(aes(x = officials_legislators, y = total_expenses)) +
+  geom_col(fill =  RColorBrewer::brewer.pal(3, "Dark2")[1]) +
+  scale_x_discrete(labels = wrap_format(10)) +
+  scale_y_continuous(labels = dollar) +
+  theme_minimal() +
+    labs(
+    title = "Louisiana Officials or Legislator with the Most Total Lobbying Expenses Paid",
+    caption = "Source: Louisiana Ethics Administration Program",
+    x = "Official/Legislator",
+    y = "Total Expenses"
+  )
+```
+
 ## Wrangle
-### Year
+### Date
+We'll tweak the `report_period` column to follow the 4-digit format.
 ```{r year}
 la_exp <- la_exp %>% 
   mutate(year = str_extract(str_replace(report_period, " 09", " 2009"), "\\d{4}"))
 ```
 ### Name
-```{r name}
-la_exp <- la_exp %>% mutate(first_middle = str_match(lobbyist_name, ",\\s([^,]*$)")[,2]) %>% 
-  mutate(last_name = str_remove(lobbyist_name, first_middle)) %>% 
-  separate(first_middle, sep = "\\s", into = c("first_name", "middle"), remove = TRUE)
+```{r name, echo=FALSE, eval=FALSE}
+la_exp <- la_exp %>% mutate(first_middle = str_match(last_name_first_name, ",\\s([^,]*$)")[,2]) %>% 
+  mutate(lob_last_name = str_remove(last_name_first_name, ",\\s([^,]*$)"),
+         lob_middle = str_match(first_middle, "\\s([^\\s]*$)")[,2],
+         lob_first = if_else(condition = is.na(lob_middle), true = first_middle, 
+                             false = str_remove(first_middle, lob_middle)))
 ```
-## Join
-```{r join reg}
-la_reg <- read_csv(file.path(here("la", "lobbyists", "data", "processed", "reg"), "la_reg_clean.csv"))
 
-la_reg <- la_reg %>% select(first_name, middle, last_name, mailing_street, mailing_city_clean, mailing_state_norm, mailing_zip_string_norm, employer_street, employer_city_clean, employer_state_norm, employer_zip_string_norm) %>% right_join(la_exp, by = )
+## Writing
+```{r}
+clean_exp_dir <- here("la", "lobbyists", "data", "processed", "exp")
+dir_create(clean_exp_dir)
+la_exp %>%
+  write_csv(path = glue("{clean_exp_dir}/la_exp_clean.csv"),
+            na = "")
 ```
 

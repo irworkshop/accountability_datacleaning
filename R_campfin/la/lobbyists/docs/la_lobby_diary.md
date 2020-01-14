@@ -1,7 +1,19 @@
-Louisiana Lobbying
+Louisiana Lobbying Registration Data Diary
 ================
 Yanqi Xu
-2019-11-26 12:25:47
+2020-01-14 12:18:12
+
+-   [Project](#project)
+-   [Objectives](#objectives)
+-   [Packages](#packages)
+-   [Data sources](#data-sources)
+-   [Reading](#reading)
+    -   [Duplicates](#duplicates)
+    -   [Missing](#missing)
+    -   [Explore](#explore)
+    -   [Wrangling](#wrangling)
+    -   [Address](#address)
+    -   [Export](#export)
 
 Project
 -------
@@ -65,8 +77,8 @@ here::here()
 #> [1] "/Users/soc/accountability/accountability_datacleaning/R_campfin"
 ```
 
-Download
---------
+Data sources
+------------
 
 Set the data directory first.
 
@@ -76,27 +88,43 @@ reg_dir <- here("la", "lobbyists", "data", "raw", "reg")
 dir_create(reg_dir)
 ```
 
-The [Louisiana Board of Ethics](http://ethics.la.gov/LobbyistLists.aspx) makes available a listing of all current lobbyists (2019). The Accountability Project obtained records of previous years through a public record request.
+The [Louisiana Board of Ethics](http://ethics.la.gov/LobbyistLists.aspx) makes available a listing of all current lobbyists (2019). For more detailed representation data, the Accountability Project obtained records of previous years through a public record request.
 
 [La. Stat. Ann. § 24:53.](http://ethics.la.gov/Pub/Laws/Title24LegislativeLobbying.pdf) regulates lobbyists registration as such. &gt; Each lobbyist shall register with the board as soon as possible after employment as a lobbyist or after the first action requiring his registration as a lobbyist, whichever occurs first, and in any event not later than five days after employment as a lobbyist or not later than five days after the first action requiring his registration as a lobbyist, whichever occurs first.
+
+The authorization data is obtained by IRW through an open record request to the Louisiana Ethics Administration Program. The data is as current as July 10, 2020.
 
 Reading
 =======
 
-``` r
-la_reg <- read_xlsx(dir_ls(reg_dir, glob = "*.xlsx"), col_types = "text") %>% 
-  clean_names() 
-la_reg <- la_reg %>% mutate_at(.vars = vars(ends_with("date")),
-  .funs = ~ excel_numeric_to_date(as.numeric(.),date_system = "modern"))
-la_reg <- la_reg %>% 
-  rename_at(.vars = vars(starts_with("m_")), 
-                               .funs = ~str_replace(.,"m_","mailing_")) %>% 
-  rename_at(.vars = vars(starts_with("e_")), 
-            .funs = ~str_replace(.,"e_","employer_")) %>% 
-  rename_at(.vars = vars(starts_with("l_")), 
-            .funs = ~str_replace(.,"l_","lobbyist_"))
+We will notice that some rows were delimited incorrectly, as a supposedly single rows is separated into two lines with the first row of the overflow line an invalid forward slash.
 
-la_reg <- la_reg %>% mutate_if(is.character, str_to_upper)
+``` r
+reg_dir <- dir_create(here("la", "lobbyists", "data", "raw", "reg"))
+
+la_lines <- read_lines(glue("{reg_dir}/lobby_reg.csv"))
+la_cols <- str_split(la_lines[1], ",", simplify = TRUE)
+la_lines <- la_lines[-1]
+
+sum(str_detect(la_lines, "^\\D"))
+#> [1] 1092
+#> 1092
+
+for (i in rev(seq_along(la_lines))) {
+  if (is.na(la_lines[i])) {
+    next()
+  }
+  if (str_detect(la_lines[i], "^\\D")) {
+    la_lines[i - 1] <- str_c(la_lines[i - 1], la_lines[i], collapse = ",")
+    la_lines[i] <- NA_character_
+  }
+}
+
+la_lines <- na.omit(la_lines)
+
+la_reg <- read_csv(la_lines, col_names = la_cols) %>% clean_names() %>% 
+  mutate_if(is.character, str_to_upper) %>% 
+  mutate_if(is.character, na_if, "NULL")
 ```
 
 Duplicates
@@ -113,45 +141,54 @@ Missing
 
 ``` r
 col_stats(la_reg, count_na)
-#> # A tibble: 21 x 4
-#>    col                        class      n       p
-#>    <chr>                      <chr>  <int>   <dbl>
-#>  1 unique_id                  <chr>      0 0      
-#>  2 first_name                 <chr>      0 0      
-#>  3 middle                     <chr>   2383 0.316  
-#>  4 last_name                  <chr>      0 0      
-#>  5 mailing_street             <chr>      0 0      
-#>  6 mailing_city               <chr>      0 0      
-#>  7 mailing_state              <chr>      0 0      
-#>  8 mailing_zip_string         <chr>      0 0      
-#>  9 lobbyist_phone             <chr>     11 0.00146
-#> 10 lobbyist_phone_ext         <chr>   7178 0.952  
-#> 11 lobbyist_fax               <chr>   3450 0.458  
-#> 12 employer_name              <chr>      0 0      
-#> 13 employer_street            <chr>      0 0      
-#> 14 employer_city              <chr>      0 0      
-#> 15 employer_state             <chr>      0 0      
-#> 16 employer_zip_string        <chr>      0 0      
-#> 17 year_registered            <chr>      0 0      
-#> 18 branches                   <chr>      0 0      
-#> 19 earliest_registration_date <date>     0 0      
-#> 20 latest_termination_date    <date>     0 0      
-#> 21 dupe_flag                  <lgl>      0 0
+#> # A tibble: 24 x 4
+#>    col             class      n     p
+#>    <chr>           <chr>  <int> <dbl>
+#>  1 unique_id       <dbl>      0 0    
+#>  2 first_name      <chr>      0 0    
+#>  3 middle          <chr>  24235 0.280
+#>  4 last_name       <chr>      0 0    
+#>  5 m_street        <chr>      0 0    
+#>  6 m_city          <chr>      0 0    
+#>  7 m_state         <chr>      0 0    
+#>  8 m_zip_string    <dbl>      0 0    
+#>  9 year_registered <dbl>      0 0    
+#> 10 branches        <chr>      0 0    
+#> 11 id              <dbl>      0 0    
+#> 12 rep_name        <chr>      0 0    
+#> 13 rep_street      <chr>      0 0    
+#> 14 rep_city        <chr>      0 0    
+#> 15 rep_state       <chr>      0 0    
+#> 16 rep_zip         <dbl>      0 0    
+#> 17 branch          <chr>      0 0    
+#> 18 rep_paid        <chr>      0 0    
+#> 19 other_paid      <chr>  71069 0.821
+#> 20 rep_cat_pay     <chr>      0 0    
+#> 21 start_date      <dttm>     0 0    
+#> 22 term_date       <chr>  27489 0.318
+#> 23 status          <dbl>      0 0    
+#> 24 dupe_flag       <lgl>      0 0
 ```
 
 Explore
 -------
 
-``` r
-summary(la_reg$earliest_registration_date)
-#>         Min.      1st Qu.       Median         Mean      3rd Qu.         Max. 
-#> "2009-01-01" "2011-01-01" "2014-01-01" "2013-12-18" "2017-01-01" "2019-11-14"
-summary(la_reg$latest_termination_date)
-#>         Min.      1st Qu.       Median         Mean      3rd Qu.         Max. 
-#> "2009-01-31" "2011-12-31" "2014-12-31" "2014-11-09" "2017-12-31" "2019-12-31"
-```
-
 ### Year
+
+We'll take a look at the range of start date and termination date here.So far, every column is read in as charcater, so we'll turn them into dates.
+
+``` r
+la_reg <- la_reg %>% 
+  mutate(start_date = as_date(start_date),
+         term_date_clean = term_date %>% na_if("NULL") %>% as_date())
+
+summary(la_reg$start_date)
+#>         Min.      1st Qu.       Median         Mean      3rd Qu.         Max. 
+#> "1974-01-01" "2009-05-26" "2012-04-26" "2013-01-11" "2016-02-01" "3017-05-08"
+summary(la_reg$term_date)
+#>    Length     Class      Mode 
+#>     86576 character character
+```
 
 ![](../plots/bar%20reg%20year-1.png)
 
@@ -160,32 +197,27 @@ Wrangling
 
 ### ZIP
 
-Running the following commands tells us the zipcode fields are mostly clean.
+Running the following commands tells us the zipcode fields for lobbyists are mostly clean. The `rep_zip` fields need a bit of cleaning.
 
 ``` r
-prop_in(la_reg$mailing_zip_string , valid_zip, na.rm = TRUE) %>% percent()
-#> [1] "98.4%"
-prop_in(la_reg$employer_zip_string , valid_zip, na.rm = TRUE) %>% percent()
-#> [1] "95.6%"
-la_reg <- la_reg %>% 
-  mutate_at(
-    .vars = vars(contains("zip")),
-    .fun = list(norm = normal_zip),
-    na_rep = TRUE
-  )
+la_reg <- la_reg %>% rename(m_zip = m_zip_string)
 
-progress_table(la_reg$mailing_zip_string,
-               la_reg$mailing_zip_string_norm,
-               la_reg$employer_zip_string,
-               la_reg$employer_zip_string_norm,
+prop_in(la_reg$m_zip, valid_zip, na.rm = TRUE) %>% percent()
+#> [1] "100%"
+prop_in(la_reg$rep_zip, valid_zip, na.rm = TRUE) %>% percent()
+#> [1] "96%"
+la_reg <- la_reg %>% 
+  mutate(rep_zip_norm = normal_zip(zip = rep_zip, na_rep = TRUE))
+
+progress_table(
+               la_reg$rep_zip,
+               la_reg$rep_zip_norm,
                compare = valid_zip)
-#> # A tibble: 4 x 6
-#>   stage                    prop_in n_distinct prop_na n_out n_diff
-#>   <chr>                      <dbl>      <dbl>   <dbl> <dbl>  <dbl>
-#> 1 mailing_zip_string         0.984        522       0   118     22
-#> 2 mailing_zip_string_norm    1            522       0     0      0
-#> 3 employer_zip_string        0.956        409       0   331     41
-#> 4 employer_zip_string_norm   0.999        409       0     7      4
+#> # A tibble: 2 x 6
+#>   stage        prop_in n_distinct  prop_na n_out n_diff
+#>   <chr>          <dbl>      <dbl>    <dbl> <dbl>  <dbl>
+#> 1 rep_zip        0.961       1140 0         3350    117
+#> 2 rep_zip_norm   0.995       1140 0.000277   418     32
 ```
 
 ### State
@@ -197,24 +229,39 @@ la_reg <- la_reg %>%
     mutate_at(
     .vars = vars(ends_with("state")),
     .fun = list(norm = normal_state),
-    na_rep = TRUE
+    abbreviate = TRUE,
+    na_rep = FALSE
   )
 
-progress_table(la_reg$mailing_state,
-               la_reg$mailing_state_norm,
-               la_reg$employer_state,
-               la_reg$employer_state_norm,
+prop_in(la_reg$m_state_norm, valid_state, na.rm = TRUE) %>% percent()
+#> [1] "100%"
+prop_in(la_reg$rep_state_norm, valid_state, na.rm = TRUE) %>% percent()
+#> [1] "100%"
+
+progress_table(la_reg$m_state,
+               la_reg$m_state_norm,
+               la_reg$rep_state,
+               la_reg$rep_state_norm,
                compare = valid_state)
 #> # A tibble: 4 x 6
-#>   stage               prop_in n_distinct prop_na n_out n_diff
-#>   <chr>                 <dbl>      <dbl>   <dbl> <dbl>  <dbl>
-#> 1 mailing_state             0         40       0  7540     40
-#> 2 mailing_state_norm        1         40       0     0      0
-#> 3 employer_state            0         37       0  7540     37
-#> 4 employer_state_norm       1         37       0     0      0
+#>   stage          prop_in n_distinct prop_na n_out n_diff
+#>   <chr>            <dbl>      <dbl>   <dbl> <dbl>  <dbl>
+#> 1 m_state          0             40       0 86576     40
+#> 2 m_state_norm     1             40       0     0      0
+#> 3 rep_state        0             52       0 86576     52
+#> 4 rep_state_norm   0.998         52       0   131      4
 ```
 
 ### City
+
+First, we can quickly see the percentage of cities in our valid\_city data frame.
+
+``` r
+prop_in(la_reg$m_city, valid_city, na.rm = TRUE) %>% percent()
+#> [1] "99%"
+prop_in(la_reg$rep_city, valid_city, na.rm = TRUE) %>% percent()
+#> [1] "95%"
+```
 
 #### Prep
 
@@ -222,11 +269,15 @@ progress_table(la_reg$mailing_state,
 la_reg <- la_reg %>% mutate_at(
     .vars = vars(ends_with("city")),
     .fun = list(norm = normal_city),
-    st_abbs = usps_state,
-    geo_abbs = usps_city,
+    states = usps_state,
+    abbs = usps_city,
     na = invalid_city,
     na_rep = TRUE
   )
+prop_in(la_reg$m_city_norm, valid_city, na.rm = TRUE)
+#> [1] 0.993139
+prop_in(la_reg$rep_city_norm, valid_city, na.rm = TRUE) 
+#> [1] 0.9670845
 ```
 
 #### Swap
@@ -238,125 +289,99 @@ la_reg <- la_reg %>%
   left_join(
     y = zipcodes,
     by = c(
-      "employer_state_norm" = "state",
-      "employer_zip_string_norm" = "zip"
+      "rep_state_norm" = "state",
+      "rep_zip_norm" = "zip"
     )
   ) %>% 
-  rename(employer_city_match = city) %>% 
+  rename(rep_city_match = city) %>% 
   mutate(
-  match_abb = is_abbrev(employer_city_norm, employer_city_match),
-    match_dist = str_dist(employer_city_norm, employer_city_match),
-    employer_city_swap = if_else(
+  match_abb = is_abbrev(rep_city_norm, rep_city_match),
+    match_dist = str_dist(rep_city_norm, rep_city_match),
+    rep_city_swap = if_else(
       condition = match_abb | match_dist == 1,
-      true = employer_city_match,
-      false = employer_city_norm
+      true = rep_city_match,
+      false = rep_city_norm
     )
   ) %>% 
   select(
-    -employer_city_match,
+    -rep_city_match,
     -match_dist,
     -match_abb
   )
 
-prop_in(la_reg$employer_city_swap, valid_city, na.rm = TRUE)
-#> [1] 0.9898815
+prop_in(la_reg$rep_city_swap, valid_city, na.rm = TRUE)
+#> [1] 0.9804184
 ```
 
 ``` r
 la_reg <- la_reg %>% 
+  mutate(m_zip = as.character(m_zip)) %>% 
   left_join(
     y = zipcodes,
     by = c(
-      "mailing_state_norm" = "state",
-      "mailing_zip_string_norm" = "zip"
+      "m_state_norm" = "state",
+      "m_zip" = "zip"
     )
   ) %>% 
-  rename(mailing_city_match = city) %>% 
+  rename(m_city_match = city) %>% 
   mutate(
-  match_abb = is_abbrev(mailing_city_norm, mailing_city_match),
-    match_dist = str_dist(mailing_city_norm, mailing_city_match),
-    mailing_city_swap = if_else(
+  match_abb = is_abbrev(m_city_norm, m_city_match),
+    match_dist = str_dist(m_city_norm, m_city_match),
+    m_city_swap = if_else(
       condition = match_abb | match_dist == 1,
-      true = mailing_city_match,
-      false = mailing_city_norm
+      true = m_city_match,
+      false = m_city_norm
     )
   ) %>% 
   select(
-    -mailing_city_match,
+    -m_city_match,
     -match_dist,
     -match_abb
   )
-prop_in(la_reg$mailing_city_swap, valid_city, na.rm = TRUE)
-#> [1] 0.9868683
+prop_in(la_reg$m_city_swap, valid_city, na.rm = TRUE)
+#> [1] 0.9934153
 ```
 
-This is a very fast way to increase the valid proportion of modified `mailing_city` to 98.7% and reduce the number of distinct *invalid* values from 26 to only 20
+This is a very fast way to increase the valid proportion of modified `m_city` to 99% and reduce the number of distinct *invalid* values from 26 to only 20
+
+Besides the `valid_city` from the USPS dataframe, IRW has also collected valid localities based on our previous `check_city`
 
 #### Check
 
-``` r
-api_key <- Sys.getenv("GEOCODING_API")
+We can use the `check_city` function to pull fuzzy matching results for the `rep_city_norm` from Geocoding API. We will find out that the
 
+``` r
 valid_place <-  c(valid_city, extra_city) %>% unique()
-
-la_mail_check <- la_reg %>% 
-  filter(mailing_city_swap %out% valid_place) %>% 
-  drop_na(mailing_city_swap, mailing_state_norm) %>% 
-  count(mailing_city_swap, mailing_state_norm)
-
-la_mail_check_result <- 
-  pmap_dfr(.l = list(city = la_mail_check$mailing_city_swap, state = la_mail_check$mailing_state_norm), .f = check_city, key = api_key, guess = T)
-
-la_mail_check <- la_mail_check %>% 
-  left_join(la_mail_check_result %>% select(-original_zip), by = c("mailing_city_swap" = "original_city", "mailing_state_norm" = "original_state"))
-```
-
-``` r
-la_emp_check <- la_reg %>% 
-  filter(employer_city_swap %out% valid_place) %>% 
-  drop_na(employer_city_swap, employer_state_norm) %>% 
-  count(employer_city_swap, employer_state_norm)
-
-la_emp_check_result <- 
-  pmap_dfr(.l = list(city = la_emp_check$employer_city_swap, state = la_emp_check$employer_state_norm), .f = check_city, key = api_key, guess = T)
-
-la_emp_check <- la_emp_check %>% 
-  left_join(la_emp_check_result %>% select(-original_zip), by = c("employer_city_swap" = "original_city", "employer_state_norm" = "original_state"))
-```
-
-``` r
-extra_city_gs <- gs_title("extra_city")
-
-extra_city_gs <- extra_city_gs %>% 
-  gs_add_row(ws = 1, input = la_mail_check %>% filter(check_city_flag) %>% select(mailing_city_swap)) %>% 
-  gs_add_row(ws = 1, input = la_emp_check %>% filter(check_city_flag) %>% select(mailing_city_swap))
-```
-
-``` r
-valid_place <-  c(valid_place,la_mail_check$mailing_city_swap[la_mail_check$check_city_flag]) %>% unique()
-
-la_reg <- la_mail_check %>% select(mailing_city_swap, mailing_state_norm, guess_place) %>% 
-  right_join(la_reg, by = c("mailing_city_swap","mailing_state_norm"))
-  
-la_reg <-  la_reg %>% mutate(mailing_city_clean = coalesce(guess_place, mailing_city_swap)) %>% select(-guess_place)
-```
-
-``` r
-valid_place <-  c(valid_place,la_emp_check$employer_city_swap[la_emp_check$check_city_flag]) %>% unique()
-
-la_reg <- la_emp_check %>% select(employer_city_swap, employer_state_norm, guess_place) %>% 
-  right_join(la_reg, by = c("employer_city_swap","employer_state_norm"))
-  
-la_reg <-  la_reg %>% mutate(employer_city_clean = coalesce(guess_place, employer_city_swap)) %>% select(-guess_place)
+prop_in(la_reg$rep_city_swap, valid_place, na.rm = TRUE)
+#> [1] 0.992632
 ```
 
 We've now increased the percentage of clean city names in valid city names.
 
 ``` r
-prop_in(la_reg$mailing_city_clean, valid_place, na.rm = TRUE)
-#> [1] 1
-prop_in(la_reg$employer_city_clean, valid_place, na.rm = TRUE)
-#> [1] 0.9998669
+la_reg <- la_reg %>% 
+  rename(
+        m_city_clean      =  m_city_swap,
+          rep_city_clean =  rep_city_swap
+  )
+
+prop_in(la_reg$m_city_clean, valid_place, na.rm = TRUE)
+#> [1] 0.9949892
+prop_in(la_reg$rep_city_clean, valid_place, na.rm = TRUE)
+#> [1] 0.992632
+```
+
+Address
+-------
+
+``` r
+la_reg <- la_reg %>% 
+  mutate_at(
+    .vars = vars(ends_with("street")),
+    .fun = list(norm = normal_address),
+    abbs = usps_street,
+    na_rep = TRUE
+  )
 ```
 
 Export
@@ -365,9 +390,9 @@ Export
 ``` r
 clean_reg_dir <- here("la", "lobbyists", "data", "processed", "reg")
 dir_create(clean_reg_dir)
-la_reg %>%
-  select(-c(mailing_city_norm,
-            employer_city_norm)) %>%
+la_reg %>% 
+  select(-c(m_city_norm,
+            rep_city_norm)) %>%
   write_csv(path = glue("{clean_reg_dir}/la_reg_clean.csv"),
             na = "")
 ```

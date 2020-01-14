@@ -311,7 +311,8 @@ progress_table(
   fllc$postal_code,
   fllc$zip_norm,
   compare = valid_zip
-)
+) %>% 
+  kable()
 ```
 
 #### State
