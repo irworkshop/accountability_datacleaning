@@ -3,6 +3,7 @@
 library(tidyverse)
 library(pdftools)
 library(lubridate)
+library(scales)
 library(glue)
 library(httr)
 library(here)
@@ -14,11 +15,13 @@ raw_dir <- dir_create(here("al", "lobby", "data", "raw"))
 # lob id is sequential
 # min 1, max ~12000 for 2020
 # n <- 11100
-n <- 100
+min <- max(as.numeric(str_extract(dir_ls(raw_dir), "\\d+")))
+# min <- 6405
+n <- 11100
 start_time <- Sys.time()
-for (i in seq(1, n)) {
-  loop_start <- Sys.time()
+for (i in seq(min, n)) {
   path <- glue("{raw_dir}/reg_{i}.pdf")
+  loop_start <- Sys.time()
   # make get request
   GET(
     url = "http://ethics.alabama.gov/search/ViewReports.aspx",
@@ -31,16 +34,27 @@ for (i in seq(1, n)) {
   # delete if empty pdf
   if (file_size(path) == 55714) {
     file_delete(path)
+    deleted <- TRUE
+  } else {
+    deleted <- FALSE
   }
-  # print progress
+  # track progress
   loop_time <- Sys.time() - loop_start
-  loop_time <- paste(round(loop_time, 3), attributes(loop_time)$units)
+  loop_time <- paste(round(loop_time, 2), attributes(loop_time)$units)
   total_time <- Sys.time() - start_time
-  total_time <- paste(round(total_time, 3), attributes(total_time)$units)
-  message(glue("{i} done in {loop_time}, running {total_time} ({scales::percent(i/n)})"))
+  total_time <- paste(round(total_time, 2), attributes(total_time)$units)
+  message(glue(
+    "{i} done in {str_pad(loop_time, 2)}",
+    "running for {str_pad(total_time, 2)}",
+    "({percent(i/n)})",
+    deleted,
+    .sep = " / "
+  ))
   # rand sleep
   Sys.sleep(time = runif(n = 1, min = 0, max = 3))
 }
+
+length(dir_ls(raw_dir))
 
 # pdf scraping functions --------------------------------------------------
 
@@ -65,15 +79,15 @@ frame_lob <- function(frame) {
     lob_name  = text_yxx(frame, 152, 159, 353),
     lob_addr1   = text_yxx(frame, 170, 159, 353),
     lob_addr2  = text_yxx(frame, 188, 159, 353),
-    lob_city  = text_yxx(frame, 206, 159),
+    lob_city  = text_yxx(frame, frame$y[frame$text == "City/State/Zip:"][[1]], 159),
     lob_phone = text_yxx(frame, 152, 434),
-    lob_email = text_yxx(frame, 170, 434),
+    lob_email = text_yxx(frame, frame$y[str_which(frame$text, "E-Mail")]),
     # weird normal business section
     # lob_nrm_biz = text_yxx(frame, 251, 159),
     # lob_nrm_addr = text_yxx(frame, 269, 159),
     # lob_nrm_city = text_yxx(frame, 287, 159),
-    lob_pub = text_yxx(frame, 314, 159) == "Yes",
-    lob_topic = str_split(text_yxx(frame, 350), "ZZZ")
+    lob_pub = text_yxx(frame, frame$y[str_which(frame$text, "Public Employee")], 159),
+    lob_topic = text_yxx(frame, frame$y[str_which(frame$text, "Categories")])
   )
   as_tibble(lob)
 }
@@ -154,9 +168,12 @@ frame_pdf <- function(file) {
 # scape all files ---------------------------------------------------------
 
 allr <- map_df(
-  .x = dir_ls(raw_dir),
+  .x = dir_ls(raw_dir, glob = "*/reg_\\d+.pdf"),
   .f = frame_pdf
 )
+
+nrow(allr)
+#> 16982
 
 # check lob per file
 n_distinct(allr$lob_name)
@@ -165,6 +182,23 @@ length(dir_ls(raw_dir))
 # check id per loop
 max(as.numeric(allr$id))
 print(n)
+
+# normalize ---------------------------------------------------------------
+
+# sep cols
+allr %>%
+  mutate_all(str_to_upper) %>%
+  separate(
+    col = lob_name,
+    into = c("lob_last", "lob_first"),
+    sep = ",\\s",
+    extra = "merge",
+    fill = "right"
+  )
+
+allr %>%
+  select(lob_city) %>%
+  distinct()
 
 # write csv ---------------------------------------------------------------
 
