@@ -144,21 +144,22 @@ delr <-
   clean_names(case = "snake")
 ```
 
-Some of the variable names will be prepended with `lobby_*` or truncated for simplicity and
+Some of the variable names will be prepended with `lob_*` or truncated for simplicity and
 clarity.
 
 ```{r names_change}
 names(delr)[c(1:8, 13)] <- c(
-  "lobby_first", 
-  "lobby_last", 
-  "lobby_address1", 
-  "lobby_address2", 
-  "lobby_city", 
-  "lobby_state", 
-  "lobby_zip",
-  "employer_name",
-  "employer_zip"
+  "lob_first", 
+  "lob_last", 
+  "lob_address1", 
+  "lob_address2", 
+  "lob_city", 
+  "lob_state", 
+  "lob_zip",
+  "emp_name",
+  "emp_zip"
 )
+names(delr) <- str_replace(names(delr), "employer_", "emp_")
 ```
 
 ## Explore
@@ -176,7 +177,7 @@ glimpse(sample_frac(delr))
 There are no states missing key variables like `last_name` or `start_date`.
 
 ```{r glimpse_na}
-glimpse_fun(delr, count_na)
+col_stats(delr, count_na)
 ```
 
 ### Duplicates
@@ -204,47 +205,47 @@ packageVersion("tidyr")
 delr <- delr %>% 
   # combine street addr
   unite(
-    col = lobby_adress_full,
-    starts_with("lobby_address"),
+    starts_with("lob_address"),
+    col = lob_adress_full,
     sep = " ",
     remove = FALSE,
     na.rm = TRUE
   ) %>% 
   # normalize combined addr
   mutate(
-    lobby_address_norm = normal_address(
-      address = lobby_adress_full,
-      add_abbs = usps_street,
+    lob_address_norm = normal_address(
+      address = lob_adress_full,
+      abbs = usps_street,
       na_rep = TRUE
     )
   ) %>% 
-  select(-lobby_adress_full)
+  select(-lob_adress_full)
 ```
 
-The same process will be performed for `employer_address`.
+The same process will be performed for `emp_address`.
 
-```{r employer_address_normal}
+```{r emp_address_normal}
 delr <- delr %>% 
   unite(
-    col = employer_adress_full,
-    employer_address1, employer_address2,
+    col = emp_adress_full,
+    emp_address1, emp_address2,
     sep = " ",
     remove = FALSE,
     na.rm = TRUE
   ) %>% 
   mutate(
-    employer_address_norm = normal_address(
-      address = employer_adress_full,
-      add_abbs = usps_street,
+    emp_address_norm = normal_address(
+      address = emp_adress_full,
+      abbs = usps_street,
       na_rep = TRUE
     )
   ) %>% 
-  select(-employer_adress_full)
+  select(-emp_adress_full)
 ```
 
 ```{r address_view}
 delr %>% 
-  select(starts_with("lobby_address")) %>% 
+  select(starts_with("lob_address")) %>% 
   distinct() %>% 
   sample_frac()
 ```
@@ -252,28 +253,20 @@ delr %>%
 ### ZIP
 
 ```{r zip_normal}
-delr <- delr %>% 
-  mutate(
-    lobby_zip_norm = normal_zip(
-      zip = lobby_zip,
-      na_rep = TRUE
-    ),
-    employer_zip_norm = normal_zip(
-      zip = employer_zip,
-      na_rep = TRUE
-    )
-  )
+delr <- mutate_at(
+  .tbl = delr,
+  .vars = vars(ends_with("_zip")),
+  .funs = list(norm = normal_zip),
+  na_rep = TRUE
+)
 ```
 
 ```{r zip_progress}
 progress_table(
-  delr$lobby_zip,
-  delr$lobby_zip_norm,
-  compare = valid_zip
-)
-progress_table(
-  delr$employer_zip,
-  delr$employer_zip_norm,
+  delr$lob_zip,
+  delr$lob_zip_norm,
+  delr$emp_zip,
+  delr$emp_zip_norm,
   compare = valid_zip
 )
 ```
@@ -281,126 +274,115 @@ progress_table(
 ### State
 
 ```{r state_normal}
-delr <- delr %>% 
-  mutate(
-    lobby_state_norm = normal_state(
-      state = lobby_state,
-      abbreviate = TRUE,
-      na_rep = TRUE,
-      valid = valid_state
-    ),
-    employer_state_norm = normal_state(
-      state = employer_state,
-      abbreviate = TRUE,
-      na_rep = TRUE,
-      valid = valid_state
-    )
-  )
+delr <- mutate_at(
+  .tbl = delr,
+  .vars = vars(ends_with("_state")),
+  .funs = list(norm = normal_state),
+  na_rep = TRUE,
+  valid = valid_state
+)
 ```
 
 ```{r state_progress}
 progress_table(
-  delr$lobby_state,
-  delr$lobby_state_norm,
-  compare = valid_state
-)
-progress_table(
-  delr$employer_state,
-  delr$employer_state_norm,
+  delr$lob_state,
+  delr$lob_state_norm,
+  delr$emp_state,
+  delr$emp_state_norm,
   compare = valid_state
 )
 ```
 
 ```{r view_states}
-select(delr, contains("state"))
+select(delr, contains("state")) %>% 
+  distinct() %>% 
+  sample_frac()
 ```
 
 ### City
 
 ```{r normal_city}
-delr <- delr %>% 
-  mutate(
-    lobby_city_norm = normal_city(
-      city = lobby_city, 
-      geo_abbs = usps_city,
-      st_abbs = c("DE", "DC", "DELEWARE"),
-      na = invalid_city,
-      na_rep = TRUE
-    ),
-    employer_city_norm = normal_city(
-      city = employer_city, 
-      geo_abbs = usps_city,
-      st_abbs = c("DE", "DC", "DELEWARE"),
-      na = invalid_city,
-      na_rep = TRUE
-    )
-  )
+delr <- mutate_at(
+  .tbl = delr,
+  .vars = vars(ends_with("_city")),
+  .funs = list(norm = normal_city),
+  abbs = usps_city,
+  states = c("DE", "DC", "DELEWARE"),
+  na = invalid_city,
+  na_rep = TRUE
+)
 ```
 
-```{r lobby_swap_city}
+```{r lob_swap_city}
 delr <- delr %>% 
   left_join(
     y = select(zipcodes, -state),
     by = c(
-      "lobby_zip_norm" = "zip"
+      "lob_zip_norm" = "zip"
     )
   ) %>% 
-  rename(lobby_city_match = city) %>% 
+  rename(lob_city_match = city) %>% 
   mutate(
-    lobby_match_abb = is_abbrev(lobby_city_norm, lobby_city_match),
-    lobby_match_dist = stringdist(lobby_city_norm, lobby_city_match),
-    lobby_city_swap = if_else(
-      condition = lobby_match_abb | lobby_match_dist == 1,
-      true = lobby_city_match,
-      false = lobby_city_norm
+    lob_match_abb = is_abbrev(lob_city_norm, lob_city_match),
+    lob_match_dist = stringdist(lob_city_norm, lob_city_match),
+    lob_city_swap = if_else(
+      condition = lob_match_abb | lob_match_dist == 1,
+      true = lob_city_match,
+      false = lob_city_norm
     )
+  ) %>% 
+  select(
+    -lob_city_match,
+    -lob_match_abb,
+    -lob_match_dist
   )
 ```
 
-```{r employer_swap_city}
+```{r emp_swap_city}
 delr <- delr %>% 
   left_join(
     y = select(zipcodes, -state),
     by = c(
-      "employer_zip_norm" = "zip"
+      "emp_zip_norm" = "zip"
     )
   ) %>% 
-  rename(employer_city_match = city) %>% 
+  rename(emp_city_match = city) %>% 
   mutate(
-    employer_match_abb = is_abbrev(employer_city_norm, employer_city_match),
-    employer_match_dist = stringdist(employer_city_norm, employer_city_match),
-    employer_city_swap = if_else(
-      condition = employer_match_abb | employer_match_dist == 1,
-      true = employer_city_match,
-      false = employer_city_norm
+    emp_match_abb = is_abbrev(emp_city_norm, emp_city_match),
+    emp_match_dist = stringdist(emp_city_norm, emp_city_match),
+    emp_city_swap = if_else(
+      condition = emp_match_abb | emp_match_dist == 1,
+      true = emp_city_match,
+      false = emp_city_norm
     )
+  ) %>% 
+  select(
+    -emp_city_match,
+    -emp_match_abb,
+    -emp_match_dist
   )
 ```
 
 ```{r city_progress}
 progress_table(
-  str_to_upper(delr$lobby_city),
-  delr$lobby_city_norm,
-  delr$lobby_city_swap,
-  compare = valid_city
-)
-progress_table(
-  str_to_upper(delr$employer_city),
-  delr$employer_city_norm,
-  delr$employer_city_swap,
+  str_to_upper(delr$lob_city),
+  delr$lob_city_norm,
+  delr$lob_city_swap,
+  str_to_upper(delr$emp_city),
+  delr$emp_city_norm,
+  delr$emp_city_swap,
   compare = valid_city
 )
 ```
 
 ```{r city_view_bad}
 delr %>% 
-  filter(lobby_city_swap %out% valid_city) %>% 
+  filter(lob_city_swap %out% valid_city) %>% 
   count(
-    lobby_state_norm, 
-    lobby_zip_norm, 
-    lobby_city, 
-    lobby_city_norm,
-    lobby_city_match, 
+    lob_state_norm, 
+    lob_zip_norm, 
+    lob_city, 
+    lob_city_norm,
     sort = TRUE
   )
 ```
@@ -415,11 +397,11 @@ max(delr$end_date, na.rm = TRUE)
 ```
 
 ```{r year_add}
-delr <- delr %>% 
-  mutate(
-    start_year = year(start_date),
-    end_year = year(end_date)
-  )
+delr <- mutate(
+  .data = delr,
+  start_year = year(start_date),
+  end_year = year(end_date)
+)
 ```
 
 ## Conclude
@@ -434,24 +416,21 @@ delr <- delr %>%
 ## Export
 
 ```{r create_proc_dir}
-proc_dir <- here("de", "lobbying", "reg", "data", "processed")
-dir_create(proc_dir)
+proc_dir <- dir_create(here("de", "lobby", "data", "processed"))
 ```
 
 ```{r write_clean}
 delr %>% 
   select(
-    -lobby_city_norm,
-    -lobby_city_match,
-    -lobby_match_abb,
-    -lobby_match_dist,
-    -employer_city_norm,
-    -employer_city_match,
-    -employer_match_abb,
-    -employer_match_dist
+    -lob_city_norm,
+    -emp_city_norm,
+  ) %>% 
+  rename(
+    lob_city_norm = lob_city_swap,
+    emp_city_norm = emp_city_swap
   ) %>% 
   write_csv(
-    path = glue("{proc_dir}/df_type_clean.csv"),
+    path = glue("{proc_dir}/de_lobbyists.csv"),
     na = ""
   )
 ```
