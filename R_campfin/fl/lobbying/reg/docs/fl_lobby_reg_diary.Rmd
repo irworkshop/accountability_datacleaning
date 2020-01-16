@@ -310,22 +310,12 @@ new normalized variables with improved consistency.
 
 ```{r address_norm}
 fllr <- fllr %>% 
-  mutate(
-    lobby_address_norm = normal_address(
-      address = lobby_address_full,
-      add_abbs = usps_street,
-      na_rep = TRUE
-    ),
-    client_address_norm = normal_address(
-      address = client_address_full,
-      add_abbs = usps_street,
-      na_rep = TRUE
-    ),
-    client_address_norm = normal_address(
-      address = client_address_full,
-      add_abbs = usps_street,
-      na_rep = TRUE
-    )
+  mutate_at(
+    .tbl = fllr,
+    .vars = vars(ends_with("_address_full")),
+    .funs = list(norm = normal_address),
+    abbs = usps_street,
+    na_rep = TRUE
   )
 ```
 
@@ -333,6 +323,7 @@ Finally, remove the intermediary combined variables.
 
 ```{r address_remove}
 fllr <- select(fllr, -ends_with("address_full"))
+names(fllr) <- str_replace(names(fllr), "full_norm", "norm")
 ```
 
 From this, we can see the kind of normalization that was performed.
@@ -350,21 +341,12 @@ Similarly, we can use `campfin::normal_zip()` to create a normalized five-digit 
 invalid values.
 
 ```{r zip_normal}
-fllr <- fllr %>% 
-  mutate(
-    lobby_zip_norm = normal_zip(
-      zip = lobby_zip,
-      na_rep = TRUE
-    ),
-    client_zip_norm = normal_zip(
-      zip = client_zip,
-      na_rep = TRUE
-    ),
-    firm_zip_norm = normal_zip(
-      zip = firm_zip,
-      na_rep = TRUE
-    )
-  )
+fllr <- mutate_at(
+  .tbl = fllr,
+  .vars = vars(ends_with("_zip")),
+  .funs = list(norm = normal_zip),
+  na_rep = TRUE
+)
 ```
 
 ```{r zip_progress}
@@ -387,24 +369,13 @@ fllr %>%
 We can use `campfin::normal_state()` to create valid two-letter state abbreviations.
 
 ```{r state_normal}
-fllr <- fllr %>% 
-  mutate(
-    lobby_state_norm = normal_state(
-      state = lobby_state,
-      abbreviate = TRUE,
-      valid = NULL
-    ),
-    client_state_norm = normal_state(
-      state = client_state,
-      abbreviate = TRUE,
-      valid = NULL
-    ),
-    firm_state_norm = normal_state(
-      state = firm_state,
-      abbreviate = TRUE,
-      valid = NULL
-    )
-  )
+fllr <- mutate_at(
+  .tbl = fllr,
+  .vars = vars(ends_with("_state")),
+  .funs = list(norm = normal_state),
+  abbreviate = TRUE,
+  valid = NULL
+)
 ```
 
 ```{r state_progress}
@@ -422,30 +393,15 @@ improvements in normalization by combining `campfin::normal_city()`, `campfin::i
 First, we will normalize the `*_city` variable for each entity.
 
 ```{r city_normal}
-fllr <- fllr %>% 
-  mutate(
-    lobby_city_norm = normal_city(
-      city = lobby_city,
-      geo_abbs = usps_city,
-      st_abbs = c("FL", "DC", "FLORIDA"),
-      na = invalid_city,
-      na_rep = TRUE
-    ),
-    client_city_norm = normal_city(
-      city = client_city,
-      geo_abbs = usps_city,
-      st_abbs = c("FL", "DC", "FLORIDA"),
-      na = invalid_city,
-      na_rep = TRUE
-    ),
-    firm_city_norm = normal_city(
-      city = firm_city,
-      geo_abbs = usps_city,
-      st_abbs = c("FL", "DC", "FLORIDA"),
-      na = invalid_city,
-      na_rep = TRUE
-    )
-  )
+fllr <- mutate_at(
+  .tbl = fllr,
+  .vars = vars(ends_with("_city")),
+  .funs = list(norm = normal_city),
+  abbs = usps_city,
+  states = c("FL", "DC", "FLORIDA"),
+  na = invalid_city,
+  na_rep = TRUE
+)
 ```
 
 Then, we can match each normalized city against the _expected_ city for that registrant's 
@@ -517,35 +473,34 @@ progress_table(
   str_to_upper(fllr$lobby_city), 
   fllr$lobby_city_norm,
   fllr$lobby_city_swap,
-  compare = valid_city
+  compare = c(valid_city, extra_city)
 )
 
 progress_table(
   str_to_upper(fllr$client_city), 
   fllr$client_city_norm,
   fllr$client_city_swap,
-  compare = valid_city
+  compare = c(valid_city, extra_city)
 )
 
 progress_table(
   str_to_upper(fllr$firm_city), 
   fllr$firm_city_norm,
   fllr$firm_city_swap,
-  compare = valid_city
+  compare = c(valid_city, extra_city)
 )
 ```
 
 ```{r bad_city}
 fllr %>% 
-  filter(client_city_swap %out% valid_city) %>% 
+  filter(client_city_swap %out% c(valid_city, extra_city)) %>% 
   count(client_city_norm, sort = TRUE)
 ```
 
 ## Export
 
 ```{r create_proc_dir}
-proc_dir <- here("fl", "lobbying", "reg", "data", "processed")
-dir_create(proc_dir)
+proc_dir <- dir_create(here("fl", "lobbying", "reg", "data", "processed"))
 ```
 
 ```{r write_clean}

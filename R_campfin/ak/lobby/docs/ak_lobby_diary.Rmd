@@ -124,7 +124,7 @@ On the APOC home page, we can see that lobbying disclosure data can be searched.
 From the APOC website, we can query the database for any year and download the data locally.
 
 ```{r raw_dir}
-raw_dir <- here("ak", "lobbying", "reg", "data", "raw")
+raw_dir <- here("ak", "lobby", "data", "raw")
 dir_create(raw_dir)
 ```
 
@@ -139,13 +139,12 @@ response <- GET(
     isExport = "True"
   )
 )
-
 aklr <- content(response)
 ```
 
 ```{r list_files}
 raw_file <- dir_ls(raw_dir)
-length(raw_file) == 1
+length(raw_file) == 1e
 ```
 
 The raw file can be read using `vroom::vroom()`.
@@ -160,6 +159,7 @@ aklr <- read_delim(
     .default = col_character(),
     Result = col_double(),
     `Report Year` = col_integer(),
+    Submitted = col_date_usa(),
     `Other Services Performed` = col_logical(),
     `Administrative Lobbying` = col_logical(),
     `Legislative Lobbying` = col_logical(),
@@ -539,7 +539,7 @@ progress_table(
 ## Export
 
 ```{r proc_dir}
-proc_dir <- here("ak", "lobbying", "reg", "data", "processed")
+proc_dir <- here("ak", "lobby", "data", "processed")
 dir_create(proc_dir)
 ```
 
