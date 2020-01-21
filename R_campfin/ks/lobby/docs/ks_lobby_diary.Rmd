@@ -157,7 +157,8 @@ kslr <- dir_ls(raw_dir, glob = "*.html$") %>%
   mutate_all(str_squish) %>% 
   na_if("") %>% 
   select(-starts_with("x")) %>% 
-  mutate(client = "")
+  mutate(client = "") %>% 
+  mutate_at(vars(registration_date), parse_date, "%m/%d/%Y")
 ```
 
 As you can see, the clients of each lobbyist are not listed as a separate
@@ -249,7 +250,7 @@ glimpse(sample_frac(kslr))
 ```
 
 ```{r}
-glimpse_fun(kslr, count_na)
+col_stats(kslr, count_na)
 ```
 
 ## Export
