@@ -524,7 +524,7 @@ progress %>%
 ## Export
 
 ```{r write_proc}
-proc_dir <- here("pa", "lobby", "data", "raw")
+proc_dir <- here("pa", "lobby", "data", "processed")
 dir_create(proc_dir)
 write_csv(
   x = palr,

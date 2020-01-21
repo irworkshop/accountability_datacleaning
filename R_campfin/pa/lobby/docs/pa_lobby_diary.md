@@ -1,7 +1,7 @@
 Pennsylvania Lobbyists
 ================
 Kiernan Nicholls
-2019-12-12 14:15:13
+2020-01-21 16:39:07
 
   - [Project](#project)
   - [Objectives](#objectives)
@@ -512,18 +512,18 @@ palr <- palr %>%
 ```
 
     #> # A tibble: 13,017 x 6
-    #>    lob_phone    lob_phone_ext pri_phone    pri_phone_extn lob_phone_norm pri_phone_norm
-    #>    <chr>        <chr>         <chr>        <chr>          <chr>          <chr>         
-    #>  1 717-486-3696 <NA>          502-719-8761 <NA>           (717) 486-3696 (502) 719-8761
-    #>  2 724-859-5325 <NA>          <NA>         <NA>           (724) 859-5325 ""            
-    #>  3 717-234-4441 <NA>          267-979-6583 <NA>           (717) 234-4441 (267) 979-6583
-    #>  4 412-562-1243 <NA>          856-231-1000 <NA>           (412) 562-1243 (856) 231-1000
-    #>  5 <NA>         <NA>          717-584-6025 <NA>           ""             (717) 584-6025
-    #>  6 412-562-1559 <NA>          412-255-6611 <NA>           (412) 562-1559 (412) 255-6611
-    #>  7 717-635-2320 <NA>          717-653-8009 <NA>           (717) 635-2320 (717) 653-8009
-    #>  8 215-735-6660 <NA>          215-895-6038 <NA>           (215) 735-6660 (215) 895-6038
-    #>  9 412-553-5700 <NA>          717-720-5300 <NA>           (412) 553-5700 (717) 720-5300
-    #> 10 717-236-0443 <NA>          717-467-4186 <NA>           (717) 236-0443 (717) 467-4186
+    #>    lob_phone    lob_phone_ext pri_phone    pri_phone_extn lob_phone_norm   pri_phone_norm  
+    #>    <chr>        <chr>         <chr>        <chr>          <chr>            <chr>           
+    #>  1 717-486-3696 <NA>          502-719-8761 <NA>           "(717) 486-3696" "(502) 719-8761"
+    #>  2 724-859-5325 <NA>          <NA>         <NA>           "(724) 859-5325" ""              
+    #>  3 717-234-4441 <NA>          267-979-6583 <NA>           "(717) 234-4441" "(267) 979-6583"
+    #>  4 412-562-1243 <NA>          856-231-1000 <NA>           "(412) 562-1243" "(856) 231-1000"
+    #>  5 <NA>         <NA>          717-584-6025 <NA>           ""               "(717) 584-6025"
+    #>  6 412-562-1559 <NA>          412-255-6611 <NA>           "(412) 562-1559" "(412) 255-6611"
+    #>  7 717-635-2320 <NA>          717-653-8009 <NA>           "(717) 635-2320" "(717) 653-8009"
+    #>  8 215-735-6660 <NA>          215-895-6038 <NA>           "(215) 735-6660" "(215) 895-6038"
+    #>  9 412-553-5700 <NA>          717-720-5300 <NA>           "(412) 553-5700" "(717) 720-5300"
+    #> 10 717-236-0443 <NA>          717-467-4186 <NA>           "(717) 236-0443" "(717) 467-4186"
     #> # … with 13,007 more rows
 
 ### Address
@@ -558,18 +558,18 @@ palr <- palr %>%
 ```
 
     #> # A tibble: 2,592 x 3
-    #>    lob_line1                 lob_line2                lob_addr_norm                                
-    #>    <chr>                     <chr>                    <chr>                                        
-    #>  1 200 NORTH THIRD STREET    Suite 1500               200 NORTH THIRD STREET SUITE 1500            
-    #>  2 EQT Plaza, Suite 1700     625 Liberty Avenue       EQT PLAZA SUITE 1700 625 LIBERTY AVENUE      
-    #>  3 Macquarie Capital (USA) … 1345 Avenue of the Amer… MACQUARIE CAPITAL USA INC 1345 AVENUE OF THE…
-    #>  4 1332 Penn St              <NA>                     1332 PENN STREET                             
-    #>  5 208 N. 3rd Street         Suite 202                208 NORTH 3RD STREET SUITE 202               
-    #>  6 1140 Connecticut Avenue,… Suite 510                1140 CONNECTICUT AVENUE NORTHWEST SUITE 510  
-    #>  7 1717 Arch Street          Suite 1310               1717 ARCH STREET SUITE 1310                  
-    #>  8 1475 Phoenixville Pike    <NA>                     1475 PHOENIXVILLE PIKE                       
-    #>  9 P O BOX 25                <NA>                     PO BOX 25                                    
-    #> 10 4750 Lindle Road          <NA>                     4750 LINDLE ROAD                             
+    #>    lob_line1                  lob_line2                lob_addr_norm                               
+    #>    <chr>                      <chr>                    <chr>                                       
+    #>  1 200 NORTH THIRD STREET     Suite 1500               200 N THIRD ST STE 1500                     
+    #>  2 EQT Plaza, Suite 1700      625 Liberty Avenue       EQT PLZ STE 1700 625 LIBERTY AVE            
+    #>  3 Macquarie Capital (USA) I… 1345 Avenue of the Amer… MACQUARIE CAPITAL USA INC 1345 AVE OF THE A…
+    #>  4 1332 Penn St               <NA>                     1332 PENN ST                                
+    #>  5 208 N. 3rd Street          Suite 202                208 N 3RD ST STE 202                        
+    #>  6 1140 Connecticut Avenue, … Suite 510                1140 CONNECTICUT AVE NW STE 510             
+    #>  7 1717 Arch Street           Suite 1310               1717 ARCH ST STE 1310                       
+    #>  8 1475 Phoenixville Pike     <NA>                     1475 PHOENIXVILLE PIKE                      
+    #>  9 P O BOX 25                 <NA>                     PO BOX 25                                   
+    #> 10 4750 Lindle Road           <NA>                     4750 LINDLE RD                              
     #> # … with 2,582 more rows
 
 ### ZIP
@@ -591,7 +591,7 @@ This improves the proportion of ZIP codes that are valid.
     #>   stage        prop_in n_distinct prop_na n_out n_diff
     #>   <chr>          <dbl>      <dbl>   <dbl> <dbl>  <dbl>
     #> 1 lob_zip        0.968        840  0        894    192
-    #> 2 lob_zip_norm   1.000        686  0          9      5
+    #> 2 lob_zip_norm   1.00         686  0          9      5
     #> 3 pri_zip        0.886       1791  0.0570  3043    508
     #> 4 pri_zip_norm   0.998       1370  0.0577    42     20
 
@@ -675,7 +675,7 @@ These two steps *drastically* improve the consistency in city names.
 ## Export
 
 ``` r
-proc_dir <- here("pa", "lobby", "data", "raw")
+proc_dir <- here("pa", "lobby", "data", "processed")
 dir_create(proc_dir)
 write_csv(
   x = palr,
