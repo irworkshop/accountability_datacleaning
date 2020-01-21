@@ -127,14 +127,17 @@ dir_create(raw_dir)
 ```
 
 ```{r raw_curl}
-lob_url <- "https://miboecfr.nicusa.com/cfr/dumpdata/aaa4NaO5g/mi_lobby.sh"
+# changes from time to time
+lob_url <- "https://miboecfr.nictusa.com/cfr/dumpdata/aaa51aybN/mi_lobby.sh"
 lob_path <- url2path(lob_url, raw_dir)
-download.file(
-  url = lob_url,
-  destfile = lob_path,
-  method = "curl",
-  extra = "--insecure"
-)
+if (!file_exists(lob_path)) {
+  download.file(
+    url = lob_url,
+    destfile = lob_path,
+    method = "curl",
+    extra = "--insecure"
+  )
+}
 ```
 
 ## Import

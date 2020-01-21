@@ -1,7 +1,16 @@
 Michigan Lobbyists
 ================
 Kiernan Nicholls
-2019-12-04 16:10:11
+2020-01-21 16:03:02
+
+  - [Project](#project)
+  - [Objectives](#objectives)
+  - [Packages](#packages)
+  - [Data](#data)
+  - [Import](#import)
+  - [Explore](#explore)
+  - [Wrangle](#wrangle)
+  - [Export](#export)
 
 <!-- Place comments regarding knitting here -->
 
@@ -104,14 +113,17 @@ dir_create(raw_dir)
 ```
 
 ``` r
-lob_url <- "https://miboecfr.nicusa.com/cfr/dumpdata/aaa4NaO5g/mi_lobby.sh"
+# changes from time to time
+lob_url <- "https://miboecfr.nictusa.com/cfr/dumpdata/aaa51aybN/mi_lobby.sh"
 lob_path <- url2path(lob_url, raw_dir)
-download.file(
-  url = lob_url,
-  destfile = lob_path,
-  method = "curl",
-  extra = "--insecure"
-)
+if (!file_exists(lob_path)) {
+  download.file(
+    url = lob_url,
+    destfile = lob_path,
+    method = "curl",
+    extra = "--insecure"
+  )
+}
 ```
 
 ## Import
@@ -165,14 +177,14 @@ milr <- read_delim(
 ``` r
 head(milr)
 #> # A tibble: 6 x 13
-#>   id     type  last    first mi    sig     addr       city  state zip   phone reg        term      
-#>   <chr>  <fct> <chr>   <chr> <chr> <chr>   <chr>      <chr> <chr> <chr> <chr> <date>     <date>    
-#> 1 014673 A     (RADKE… JODI  L     <NA>    PO BOX 784 LOVE… CO    80539 9702… 2019-09-12 NA        
-#> 2 009995 L     2630 F… <NA>  <NA>  RICHAR… 721 NORTH… LANS… MI    4890… 5173… 2006-09-01 2008-11-30
-#> 3 011388 L     3 CLIC… <NA>  <NA>  A EDWI… 805 15TH … WASH… DC    20005 2026… 2010-07-12 2010-12-31
-#> 4 012438 L     3 REAS… <NA>  <NA>  RENAE … 201 TOWNS… LANS… MI    48933 5173… 2013-05-15 2014-07-31
-#> 5 011813 L     3D ETC… <NA>  <NA>  RICHAR… 22482 ORC… FARM… MI    48336 2489… 2011-08-15 2012-05-04
-#> 6 009088 L     3M COM… <NA>  <NA>  DAVID … 515 KING … ALEX… VA    22314 7036… 2003-01-01 NA
+#>   id     type  last     first mi    sig    addr       city  state zip   phone reg        term      
+#>   <chr>  <fct> <chr>    <chr> <chr> <chr>  <chr>      <chr> <chr> <chr> <chr> <date>     <date>    
+#> 1 014673 A     (RADKE)… JODI  L     <NA>   PO BOX 784 LOVE… CO    80539 9702… 2019-09-12 NA        
+#> 2 009995 L     2630 FE… <NA>  <NA>  RICHA… 721 NORTH… LANS… MI    4890… 5173… 2006-09-01 2008-11-30
+#> 3 011388 L     3 CLICK… <NA>  <NA>  A EDW… 805 15TH … WASH… DC    20005 2026… 2010-07-12 2010-12-31
+#> 4 012438 L     3 REASO… <NA>  <NA>  RENAE… 201 TOWNS… LANS… MI    48933 5173… 2013-05-15 2014-07-31
+#> 5 009088 L     3M COMP… <NA>  <NA>  DAVID… 515 KING … ALEX… VA    22314 7036… 2003-01-01 NA        
+#> 6 010670 L     3M ELEC… <NA>  <NA>  DAVID… 1838 GUNN… ODES… FL    33556 8137… 2008-06-09 2014-10-20
 tail(milr)
 #> # A tibble: 6 x 13
 #>   id     type  last   first  mi     sig      addr     city  state zip   phone reg        term      
@@ -181,24 +193,24 @@ tail(milr)
 #> 2 012240 A     ZWART  STEVEN J      <NA>     PO BOX … BAY … MI    4870… 9896… 2012-09-18 2013-12-31
 #> 3 009589 A     ZWARTZ ROBERT <NA>   <NA>     175 W J… CHIC… IL    60604 3124… 2005-06-21 2010-08-05
 #> 4 006811 A     ZYBLE  DAVID  A      <NA>     1 CORPO… LANS… MI    48951 5173… 1996-12-09 NA        
-#> 5 <NA>   <NA>  <NA>   <NA>   End o… 7,166 t… <NA>     <NA>  <NA>  <NA>  <NA>  NA         NA        
+#> 5 <NA>   <NA>  <NA>   <NA>   End o… 6,916 t… <NA>     <NA>  <NA>  <NA>  <NA>  NA         NA        
 #> 6 <NA>   <NA>  <NA>   <NA>   <NA>   <NA>     <NA>     <NA>  <NA>  <NA>  <NA>  NA         NA
 glimpse(sample_frac(milr))
-#> Observations: 7,168
+#> Observations: 6,918
 #> Variables: 13
-#> $ id    <chr> "005063", "000322", "012244", "012088", "007872", "011002", "001413", "008789", "0…
-#> $ type  <fct> A, A, A, A, L, L, L, L, L, A, L, A, A, A, A, A, A, A, A, A, A, L, L, A, L, A, A, L…
-#> $ last  <chr> "NIEMELA", "MATHEWSON", "HEMOND", "FULTS", "WAYNE WESTLAND COMMUNITY SCHOOLS", "NO…
-#> $ first <chr> "JOHN", "WILLIAM", "ADRIAN", "PAIGE", NA, NA, NA, NA, NA, "JEFF", NA, "KEN", "MURR…
-#> $ mi    <chr> "D", "C", NA, NA, NA, NA, NA, NA, NA, NA, NA, "J", "E", "J", "H", "MELVILLE", "G",…
-#> $ sig   <chr> NA, NA, NA, NA, "DENNIS O CAWTHORNE", "JAY DUPREY", "LEIGH GREDEN", "LINDA PIERCE"…
-#> $ addr  <chr> "417 SEYMOUR, STE 1 %COUNTY ROAD ASSOC OF MI", "1675 GREEN RD", "712 HALL BLVD", "…
-#> $ city  <chr> "LANSING", "ANN ARBOR", "MASON", "LANSING", "LANSING", "NOVI", "LANSING", "NOVI", …
-#> $ state <chr> "MI", "MI", "MI", "MI", "MI", "MI", "MI", "MI", NA, "MI", "MI", "NJ", "MI", "MI", …
-#> $ zip   <chr> "48933", "48105", "48854", "48933", "48933", "48376", "48933", "48375", "00000", "…
-#> $ phone <chr> "5174821189", "7346623246", "5178976016", "5177038601", "5173711400", "2483802111"…
-#> $ reg   <date> 1991-01-15, 1983-10-20, 2012-09-27, 2012-04-23, 2000-02-24, 2009-04-22, 1984-01-1…
-#> $ term  <date> 2013-10-31, 2018-08-28, 2012-12-31, NA, NA, 2010-01-20, NA, 2008-01-02, NA, 2018-…
+#> $ id    <chr> "013020", "012165", "011903", "009133", "009545", "013733", "010804", "009122", "0…
+#> $ type  <fct> A, A, A, A, A, A, A, A, A, A, A, A, A, A, L, A, A, A, A, A, L, A, L, A, A, A, A, A…
+#> $ last  <chr> "CRITCHFIELD", "NEWMAN", "TRUSCOTT ROSSMAN GROUP LLC", "FEDEWA", "BRADY", "OBRIEN"…
+#> $ first <chr> "BROOK", "DAVID", NA, "JANICE", "MICHAEL", "MICHAEL", "JOSEPH", "ANITA", "MICHAEL"…
+#> $ mi    <chr> "A", "L", NA, "M", NA, "G", NA, NA, "J", NA, NA, "C", "C", NA, NA, "J", NA, NA, NA…
+#> $ sig   <chr> NA, NA, "ELLEN MONTI", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "PETER J JASKOS…
+#> $ addr  <chr> "135 S LASALLE ST IL4-135-07-43", "41650 GARDENBROOK RD, STE 175", "124 W ALLEGAN,…
+#> $ city  <chr> "CHICAGO", "NOVI", "LANSING", "LANSING", "NORTHVILLE", "LANSING", "MILWAUKEE", "LA…
+#> $ state <chr> "IL", "MI", "MI", "MI", "MI", "MI", "WI", "MI", "MI", "MI", "CA", "MI", "MI", "DC"…
+#> $ zip   <chr> "60603", "483751320", "48933", "489121270", "48167", "48933", "53201", "48933", "4…
+#> $ phone <chr> "3128284902", "2485961006", "5174879320", "5173727770", "2482334837", "5173671242"…
+#> $ reg   <date> 2015-04-01, 2012-07-02, 2011-11-04, 2004-03-10, 2005-04-29, 2017-05-15, 2008-11-0…
+#> $ term  <date> 2015-12-31, 2017-08-07, NA, 2007-08-15, NA, NA, 2014-12-31, 2008-11-30, NA, NA, 2…
 ```
 
 As we can see from `tail()`, the last two rows still need to be removed.
@@ -211,19 +223,19 @@ col_stats(milr, n_distinct)
 #> # A tibble: 13 x 4
 #>    col   class      n        p
 #>    <chr> <chr>  <int>    <dbl>
-#>  1 id    <chr>   7167 1.000   
-#>  2 type  <fct>      3 0.000419
-#>  3 last  <chr>   6103 0.851   
-#>  4 first <chr>    906 0.126   
-#>  5 mi    <chr>    189 0.0264  
-#>  6 sig   <chr>   2606 0.364   
-#>  7 addr  <chr>   4554 0.635   
-#>  8 city  <chr>    726 0.101   
-#>  9 state <chr>     44 0.00614 
-#> 10 zip   <chr>   1361 0.190   
-#> 11 phone <chr>   3787 0.528   
-#> 12 reg   <date>  3528 0.492   
-#> 13 term  <date>  1260 0.176
+#>  1 id    <chr>   6917 1.00    
+#>  2 type  <fct>      3 0.000434
+#>  3 last  <chr>   5911 0.854   
+#>  4 first <chr>    884 0.128   
+#>  5 mi    <chr>    184 0.0266  
+#>  6 sig   <chr>   2534 0.366   
+#>  7 addr  <chr>   4396 0.635   
+#>  8 city  <chr>    710 0.103   
+#>  9 state <chr>     44 0.00636 
+#> 10 zip   <chr>   1324 0.191   
+#> 11 phone <chr>   3650 0.528   
+#> 12 reg   <date>  3464 0.501   
+#> 13 term  <date>  1186 0.171
 ```
 
 ``` r
@@ -241,16 +253,16 @@ col_stats(milr, count_na)
 #>  1 id    <chr>      0 0       
 #>  2 type  <fct>      0 0       
 #>  3 last  <chr>      0 0       
-#>  4 first <chr>   3489 0.487   
-#>  5 mi    <chr>   5501 0.768   
-#>  6 sig   <chr>   3680 0.514   
+#>  4 first <chr>   3380 0.489   
+#>  5 mi    <chr>   5325 0.770   
+#>  6 sig   <chr>   3539 0.512   
 #>  7 addr  <chr>      0 0       
 #>  8 city  <chr>      0 0       
-#>  9 state <chr>     20 0.00279 
-#> 10 zip   <chr>     17 0.00237 
-#> 11 phone <chr>    491 0.0685  
-#> 12 reg   <date>     2 0.000279
-#> 13 term  <date>  3015 0.421
+#>  9 state <chr>     20 0.00289 
+#> 10 zip   <chr>     17 0.00246 
+#> 11 phone <chr>    481 0.0695  
+#> 12 reg   <date>     2 0.000289
+#> 13 term  <date>  3024 0.437
 ```
 
 There are no duplicate rows in the database.
@@ -264,12 +276,12 @@ The database contains both outside lobbyist and lobbying agents.
 
 ![](../plots/plot_agent-1.png)<!-- -->
 
-42% of lobbyists in the database have a termination date, meaning only
-58% of the records identify active lobbyists.
+44% of lobbyists in the database have a termination date, meaning only
+56% of the records identify active lobbyists.
 
 ``` r
 prop_na(milr$term)
-#> [1] 0.4207368
+#> [1] 0.437247
 ```
 
 We can add the registration year using `lubridate::year()` on the date
@@ -295,45 +307,44 @@ non-numeric) format.
 milr <- mutate(milr, phone_norm = normal_phone(phone))
 ```
 
-    #> # A tibble: 3,787 x 2
+    #> # A tibble: 3,650 x 2
     #>    phone      phone_norm    
     #>    <chr>      <chr>         
-    #>  1 3177687078 (317) 768-7078
-    #>  2 3126517932 (312) 651-7932
-    #>  3 2486452000 (248) 645-2000
-    #>  4 8109873101 (810) 987-3101
-    #>  5 2123763112 (212) 376-3112
-    #>  6 7038718500 (703) 871-8500
-    #>  7 5174841525 (517) 484-1525
-    #>  8 2485590840 (248) 559-0840
-    #>  9 8006764065 (800) 676-4065
-    #> 10 5187962769 (518) 796-2769
-    #> # … with 3,777 more rows
+    #>  1 6147925703 (614) 792-5703
+    #>  2 8028603933 (802) 860-3933
+    #>  3 2484510324 (248) 451-0324
+    #>  4 5172678934 (517) 267-8934
+    #>  5 2485122501 (248) 512-2501
+    #>  6 3134967521 (313) 496-7521
+    #>  7 7035548511 (703) 554-8511
+    #>  8 5174822896 (517) 482-2896
+    #>  9 6163366750 (616) 336-6750
+    #> 10 5172855195 (517) 285-5195
+    #> # … with 3,640 more rows
 
 ### Address
 
 We can use `campfin::normal_address()` to improve the consistency in the
-`addr`
-variable.
+`addr` variable.
 
 ``` r
 milr <- mutate(milr, addr_norm = normal_address(addr, abbs = usps_street))
 ```
 
-    #> # A tibble: 4,553 x 2
-    #>    addr                                            addr_norm                                       
-    #>    <chr>                                           <chr>                                           
-    #>  1 7031 ORCHARD LAKE RD STE 105                    7031 ORCHARD LAKE ROAD SUITE 105                
-    #>  2 110 W MICHIGAN AVE SUITE 700                    110 WEST MICHIGAN AVENUE SUITE 700              
-    #>  3 ONE KELLOGG SQUARE 5S                           ONE KELLOGG SQUARE 5S                           
-    #>  4 2164 COMMONS PKWY %MI ACADEMY OF FMLY PHYSICIA… 2164 COMMONS PARKWAY MI ACADEMY OF FMLY PHYSICI…
-    #>  5 1118 E CHAMBERS ST                              1118 EAST CHAMBERS STREET                       
-    #>  6 11727 FRUEHAUF DR % DEANNA DUKE                 11727 FRUEHAUF DRIVE DEANNA DUKE                
-    #>  7 8118 CUTLER RD                                  8118 CUTLER ROAD                                
-    #>  8 110 W MICHIGAN AVE, STE 1200                    110 WEST MICHIGAN AVENUE SUITE 1200             
-    #>  9 301 ARMSTRONG RD ATTN: JACK BRUSEWITZ           301 ARMSTRONG ROAD ATTN JACK BRUSEWITZ          
-    #> 10 2591 ALDEN COURT                                2591 ALDEN COURT                                
-    #> # … with 4,543 more rows
+    #> # A tibble: 4,395 x 2
+    #>    addr                                    addr_norm                             
+    #>    <chr>                                   <chr>                                 
+    #>  1 171 MONROE AVE NW SUITE 410             171 MONROE AVE NW STE 410             
+    #>  2 901 44TH ST SE GH-4C-02                 901 44TH ST SE GH 4C 02               
+    #>  3 504 SPRUCE ST % RIO TINTO               504 SPRUCE ST RIO TINTO               
+    #>  4 430 W ALLEGAN ST                        430 W ALLEGAN ST                      
+    #>  5 208 N CAPITOL AVE 1ST FLOOR             208 N CAPITOL AVE 1ST FL              
+    #>  6 727 AIRPORT BOULEVARD                   727 AIRPORT BLVD                      
+    #>  7 600 S WAGNER RD                         600 S WAGNER RD                       
+    #>  8 ONE AMERICAN RD RM 630-E5 FORD MOTOR CO ONE AMERICAN RD RM 630 E5 FRD MOTOR CO
+    #>  9 29777 TELEGRAPH RD STE 4400             29777 TELEGRAPH RD STE 4400           
+    #> 10 PO BOX 26416                            PO BOX 26416                          
+    #> # … with 4,385 more rows
 
 ### ZIP
 
@@ -341,20 +352,20 @@ milr <- mutate(milr, addr_norm = normal_address(addr, abbs = usps_street))
 milr <- mutate(milr, zip_norm = normal_zip(zip, na_rep = TRUE))
 ```
 
-    #> # A tibble: 1,361 x 2
+    #> # A tibble: 1,324 x 2
     #>    zip       zip_norm
     #>    <chr>     <chr>   
-    #>  1 33308     33308   
-    #>  2 48179     48179   
-    #>  3 97415     97415   
-    #>  4 28217     28217   
-    #>  5 48309     48309   
-    #>  6 75201     75201   
-    #>  7 49707     49707   
-    #>  8 46410     46410   
-    #>  9 488643986 48864   
-    #> 10 33408     33408   
-    #> # … with 1,351 more rows
+    #>  1 48075     48075   
+    #>  2 49401     49401   
+    #>  3 80301     80301   
+    #>  4 20035     20035   
+    #>  5 78733     78733   
+    #>  6 05401     05401   
+    #>  7 945830716 94583   
+    #>  8 60064     60064   
+    #>  9 10080     10080   
+    #> 10 49032     49032   
+    #> # … with 1,314 more rows
 
 ``` r
 progress_table(
@@ -365,8 +376,8 @@ progress_table(
 #> # A tibble: 2 x 6
 #>   stage    prop_in n_distinct prop_na n_out n_diff
 #>   <chr>      <dbl>      <dbl>   <dbl> <dbl>  <dbl>
-#> 1 zip        0.920       1361 0.00237   571    299
-#> 2 zip_norm   0.999       1114 0.00293     9      9
+#> 1 zip        0.922       1324 0.00246   535    286
+#> 2 zip_norm   0.999       1090 0.00304     8      8
 ```
 
 ### State
@@ -460,9 +471,9 @@ many_city <- c(valid_city, extra_city, valid_locality)
 
 | stage      | prop\_in | n\_distinct | prop\_na | n\_out | n\_diff |
 | :--------- | -------: | ----------: | -------: | -----: | ------: |
-| city\_raw  |    0.982 |         725 |    0.000 |    126 |      71 |
-| city\_norm |    0.991 |         715 |    0.000 |     61 |      50 |
-| city\_swap |    0.998 |         678 |    0.005 |     14 |      12 |
+| city\_raw  |    0.977 |         709 |    0.000 |    160 |      65 |
+| city\_norm |    0.951 |         699 |    0.000 |    340 |     142 |
+| city\_swap |    0.997 |         669 |    0.005 |     18 |      13 |
 
 ## Export
 
