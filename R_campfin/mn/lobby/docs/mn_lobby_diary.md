@@ -1,7 +1,7 @@
 Minnesota Lobbyists
 ================
 Kiernan Nicholls
-2019-12-17 16:38:11
+2020-01-21 16:16:18
 
   - [Project](#project)
   - [Objectives](#objectives)
@@ -118,8 +118,7 @@ relationships into a single data frame. We can run that script now if
 needed.
 
 ``` r
-raw_dir <- here("mn", "lobby", "data", "raw")
-dir_create(raw_dir)
+raw_dir <- dir_create(here("mn", "lobby", "data", "raw"))
 scrape_file <- dir_ls(raw_dir, glob = "*lob_scrape.csv$")
 scrape_script <- here("mn", "lobby", "code", "scrape_mn_lobby.R")
 if (!file_exists(path = scrape_file)) {
@@ -266,18 +265,18 @@ mnlr <- mutate_at(
 ```
 
     #> # A tibble: 3,354 x 4
-    #>    lb_street          a_street                 lb_street_norm           a_street_norm              
-    #>    <chr>              <chr>                    <chr>                    <chr>                      
-    #>  1 100 Empire Dr Ste… 100 Empire Dr Ste 202    100 EMPIRE DRIVE SUITE … 100 EMPIRE DRIVE SUITE 202 
-    #>  2 750 Otto Ave #2549 17025 Hwy 12 NE          750 OTTO AVENUE 2549     17025 HIGHWAY 12 NORTHEAST 
-    #>  3 525 Park St Ste 2… 901 Marquette Ave 7th F… 525 PARK STREET SUITE 2… 901 MARQUETTE AVENUE 7TH F…
-    #>  4 4525 Douglas Ave   2355 Hwy 36 West Ste 400 4525 DOUGLAS AVENUE      2355 HIGHWAY 36 WEST SUITE…
-    #>  5 90 S 7th St #2200… 4248 Park Glen Rd        90 SOUTH 7TH STREET 220… 4248 PARK GLEN ROAD        
-    #>  6 701 City Center Dr 720 City Center Dr       701 CITY CENTER DRIVE    720 CITY CENTER DRIVE      
-    #>  7 168 6th St E Unit… 4111 E 37th St N         168 6TH STREET EAST UNI… 4111 EAST 37TH STREET NORTH
-    #>  8 6965 Oakbrook St … 10710 Midlothian Turnpi… 6965 OAKBROOK STREET SO… 10710 MIDLOTHIAN TURNPIKE …
-    #>  9 17444 Park Ave SE  8170 33rd Ave S MS 2110… 17444 PARK AVENUE SOUTH… 8170 33RD AVENUE SOUTH MS …
-    #> 10 114 Mackubin St S… 2400 W 64th St           114 MACKUBIN STREET SUI… 2400 WEST 64TH STREET      
+    #>    lb_street            a_street                     lb_street_norm       a_street_norm            
+    #>    <chr>                <chr>                        <chr>                <chr>                    
+    #>  1 100 Empire Dr Ste 2… 100 Empire Dr Ste 202        100 EMPIRE DR STE 2… 100 EMPIRE DR STE 202    
+    #>  2 750 Otto Ave #2549   17025 Hwy 12 NE              750 OTTO AVE 2549    17025 HWY 12 NE          
+    #>  3 525 Park St Ste 210  901 Marquette Ave 7th Flr    525 PARK ST STE 210  901 MARQUETTE AVE 7TH FLR
+    #>  4 4525 Douglas Ave     2355 Hwy 36 West Ste 400     4525 DOUGLAS AVE     2355 HWY 36 W STE 400    
+    #>  5 90 S 7th St #2200 W… 4248 Park Glen Rd            90 S 7TH ST 2200 WFC 4248 PARK GLN RD         
+    #>  6 701 City Center Dr   720 City Center Dr           701 CITY CTR DR      720 CITY CTR DR          
+    #>  7 168 6th St E Unit 3… 4111 E 37th St N             168 6TH ST E UNIT 3… 4111 E 37TH ST N         
+    #>  8 6965 Oakbrook St SE  10710 Midlothian Turnpike S… 6965 OAKBROOK ST SE  10710 MIDLOTHIAN TPKE ST…
+    #>  9 17444 Park Ave SE    8170 33rd Ave S MS 21106R    17444 PARK AVE SE    8170 33RD AVE S MS 21106R
+    #> 10 114 Mackubin St Ste… 2400 W 64th St               114 MACKUBIN ST STE… 2400 W 64TH ST           
     #> # … with 3,344 more rows
 
 ### ZIP
@@ -417,11 +416,11 @@ kable(progress, digits = 3)
 | type | stage      | prop\_in | n\_distinct | prop\_na | n\_out | n\_diff |
 | :--: | :--------- | -------: | ----------: | -------: | -----: | ------: |
 |  lb  | city       |    0.593 |         219 |    0.000 |   2223 |      32 |
-|  lb  | city\_norm |    0.970 |         216 |    0.000 |    164 |      22 |
-|  lb  | city\_swap |    0.970 |         214 |    0.001 |    163 |      22 |
+|  lb  | city\_norm |    0.575 |         216 |    0.000 |   2321 |      56 |
+|  lb  | city\_swap |    0.963 |         216 |    0.001 |    203 |      26 |
 |  a   | city       |    0.704 |         381 |    0.006 |   1605 |      43 |
-|  a   | city\_norm |    0.953 |         378 |    0.006 |    254 |      31 |
-|  a   | city\_swap |    0.954 |         373 |    0.011 |    246 |      27 |
+|  a   | city\_norm |    0.652 |         378 |    0.006 |   1887 |      86 |
+|  a   | city\_swap |    0.943 |         376 |    0.011 |    306 |      34 |
 
 ![](../plots/plot_prop-1.png)<!-- -->
 
@@ -430,8 +429,7 @@ kable(progress, digits = 3)
 ## Export
 
 ``` r
-proc_dir <- here("mn", "lobby", "data", "processed")
-dir_create(proc_dir)
+proc_dir <- dir_create(here("mn", "lobby", "data", "processed"))
 write_csv(
   x = mnlr,
   path = glue("{proc_dir}/mn_lobbyists.csv"),
@@ -489,3 +487,42 @@ mnle %>%
 ```
 
 ![](../plots/plot_lob_amount-1.png)<!-- -->
+
+Since this database will be uploaded separately from the lobbyist
+registration containing the phone number and addresses of principal
+clients, we will have to add these columns so that the expenditure
+records will show up when this information is searched.
+
+``` r
+a_info <- mnlr %>% 
+  select(starts_with("a_")) %>% 
+  select(a_id, a_website, a_contact, a_street_norm, a_city_norm, a_state, a_zip_norm)
+mnle <- left_join(mnle, a_info, by = "a_id")
+```
+
+``` r
+col_stats(mnle, count_na)
+#> # A tibble: 12 x 4
+#>    col           class     n        p
+#>    <chr>         <chr> <int>    <dbl>
+#>  1 a_name        <chr>     0 0       
+#>  2 a_id          <chr>     0 0       
+#>  3 year          <dbl>     0 0       
+#>  4 gen_amount    <dbl>    12 0.00254 
+#>  5 lob_amount    <dbl>    12 0.00254 
+#>  6 total_amount  <dbl>    12 0.00254 
+#>  7 a_website     <chr>     4 0.000847
+#>  8 a_contact     <chr>    20 0.00424 
+#>  9 a_street_norm <chr>    20 0.00424 
+#> 10 a_city_norm   <chr>    20 0.00424 
+#> 11 a_state       <chr>    20 0.00424 
+#> 12 a_zip_norm    <chr>    20 0.00424
+```
+
+``` r
+write_csv(
+  x = mnle,
+  path = glue("{proc_dir}/mn_lobby_expend.csv"),
+  na = ""
+)
+```

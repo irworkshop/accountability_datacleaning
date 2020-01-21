@@ -126,8 +126,7 @@ individual lobbyist page, connecting that lobbyist to all their represented asso
 combining these relationships into a single data frame. We can run that script now if needed.
 
 ```{r source}
-raw_dir <- here("mn", "lobby", "data", "raw")
-dir_create(raw_dir)
+raw_dir <- dir_create(here("mn", "lobby", "data", "raw"))
 scrape_file <- dir_ls(raw_dir, glob = "*lob_scrape.csv$")
 scrape_script <- here("mn", "lobby", "code", "scrape_mn_lobby.R")
 if (!file_exists(path = scrape_file)) {
@@ -374,8 +373,7 @@ progress %>%
 ## Export
 
 ```{r write_csv}
-proc_dir <- here("mn", "lobby", "data", "processed")
-dir_create(proc_dir)
+proc_dir <- dir_create(here("mn", "lobby", "data", "processed"))
 write_csv(
   x = mnlr,
   path = glue("{proc_dir}/mn_lobbyists.csv"),
@@ -429,5 +427,28 @@ mnle %>%
     x = "Amount",
     y = "Count"
   )
+```
+
+Since this database will be uploaded separately from the lobbyist registration containing the
+phone number and addresses of principal clients, we will have to add these columns
+so that the expenditure records will show up when this information is searched.
+
+```{r expends_join}
+a_info <- mnlr %>% 
+  select(starts_with("a_")) %>% 
+  select(a_id, a_website, a_contact, a_street_norm, a_city_norm, a_state, a_zip_norm)
+mnle <- left_join(mnle, a_info, by = "a_id")
+```
+
+```{r}
+col_stats(mnle, count_na)
+```
+
+```{r}
+write_csv(
+  x = mnle,
+  path = glue("{proc_dir}/mn_lobby_expend.csv"),
+  na = ""
+)
 ```
 
