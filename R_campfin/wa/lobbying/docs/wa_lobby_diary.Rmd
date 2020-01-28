@@ -101,12 +101,10 @@ here::here()
 [01]: https://github.com/irworkshop/accountability_datacleaning "TAP repo"
 [02]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects "Rproj"
 
-## Data
+## Registration
 
 Data is obtained from the [Washington Public Disclosure Commission][wpdc] (PDC). The dataset is
 found on the [Washington state OpenData portal][wod]. 
-
-### Records
 
 Each observation represents the relationship between a lobbying agent, their employer, and the
 firm for which they lobby. Each lobbyist can have multiple records, each with another client
@@ -130,8 +128,6 @@ original reports for the purpose of record verification.
 [wpdc]: https://www.pdc.wa.gov/
 [wod]: https://data.wa.gov
 
-### Variables
-
 * `id`: An auto-generated unique identifier representing a relationship between a Lobbyist firm, an
 Agent, and an Employer for a given year.
 * `filer_id`: The unique id assigned to the lobbyist/firm that employs this agent.
@@ -148,12 +144,12 @@ Agent, and an Employer for a given year.
 
 https://data.wa.gov/Politics/Lobbyist-Agents/bp5b-jrti
 
-## Import
+### Import
 
 We can import the file directly from the OpenData portal using `readr::read_csv()`.
 
 ```{r read_raw}
-wa <- read_csv(
+walr <- read_csv(
   file = "https://data.wa.gov/api/views/bp5b-jrti/rows.csv",
   col_types = cols(
     .default = col_character(),
@@ -162,46 +158,46 @@ wa <- read_csv(
 )
 ```
 
-## Explore
+### Explore
 
-### Missing
+#### Missing
 
 Only the `agent_bio` variable is missing any values.
 
 ```{r glimpse_missing}
-glimpse_fun(wa, count_na)
+col_stats(walr, count_na)
 ```
 
 ```{r flag_na}
-wa <- flag_na(wa, -agent_bio)
-sum(wa$na_flag)
-wa <- select(wa, -na_flag)
+walr <- flag_na(walr, -agent_bio)
+sum(walr$na_flag)
+walr <- select(walr, -na_flag)
 ```
 
-### Duplicate
+#### Duplicate
 
 There are no duplicate records
 
 ```{r flag_dupes}
-wa <- flag_dupes(wa, -id)
-sum(wa$dupe_flag)
-wa <- select(wa, -dupe_flag)
+walr <- flag_dupes(walr, -id)
+sum(walr$dupe_flag)
+walr <- select(walr, -dupe_flag)
 ```
 
-## Categorical
+#### Categorical
 
 ```{r glimpse_distinct}
-glimpse_fun(wa, n_distinct)
+col_stats(walr, n_distinct)
 ```
 
-## Continuous
+#### Continuous
 
 ```{r count_year}
-count(wa, employment_year)
+count(walr, employment_year)
 ```
 
 ```{r year_bar, echo=FALSE}
-wa %>% 
+walr %>% 
   count(employment_year) %>% 
   ggplot(aes(x = employment_year, y = n)) +
   geom_col(fill = RColorBrewer::brewer.pal(3, "Dark2")[1]) +
@@ -213,17 +209,17 @@ wa %>%
   )
 ```
 
-## Wrangle
+### Wrangle
 
 ```{r case_change}
-wa <- mutate_at(wa, vars(3, 6, 7, 8), str_to_upper)
-wa <- mutate_at(wa, vars(lobbyist_email), str_to_lower)
+walr <- mutate_at(walr, vars(3, 6, 7, 8), str_to_upper)
+walr <- mutate_at(walr, vars(lobbyist_email), str_to_lower)
 ```
 
-### Telephone
+#### Telephone
 
 ```{r normal_phone}
-wa <- wa %>% 
+walr <- walr %>% 
   mutate(
     phone_norm = normal_phone(
       number = lobbyist_phone,
@@ -236,18 +232,18 @@ wa <- wa %>%
 ```
 
 ```{r view_phone_post, echo=FALSE}
-wa %>% 
+walr %>% 
   select(lobbyist_phone, phone_norm) %>% 
   sample_frac()
 ```
 
-### Separate Address
+#### Separate Address
 
 Using regular expression and our `zipcodes` database, we can extract the ZIP code, state
 abbreviation, and city name from the end of the `lobbyist_address` variable.
 
 ```{r extract_state_zip}
-wa <- wa %>% 
+walr <- walr %>% 
   mutate(
     zip_sep = str_extract(lobbyist_address, "\\d+(?:-\\d{4})?$"),
     state_sep = str_extract(lobbyist_address, "[:alpha:]+(?=\\s+\\d+(?:-\\d{4})?$)"),
@@ -280,14 +276,14 @@ Then, for each row, we attempt to extract every city name (for that row's state)
 the address string sans ZIP code and state.
 
 ```{r city_loop_extract}
-for (row in seq_along(wa$other_sep)) {
-  state <- wa$state_sep[row]
+for (row in seq_along(walr$other_sep)) {
+  state <- walr$state_sep[row]
   for (city in unique(zips2$city[zips2$state == state])) {
-    wa$city_sep[row] <- str_extract(
-      string = wa$other_sep[row],
+    walr$city_sep[row] <- str_extract(
+      string = walr$other_sep[row],
       pattern = glue("\\b{city}\\b")
     )
-    if(!is.na(wa$city_sep[row])) break
+    if(!is.na(walr$city_sep[row])) break
   }
 }
 ```
@@ -295,13 +291,13 @@ for (row in seq_along(wa$other_sep)) {
 For those rows where a state was not extracted, we can simply take the last word from the string.
 
 ```{r last_word_city}
-wa$city_sep[which(is.na(wa$city_sep))] <- word(wa$other_sep[which(is.na(wa$city_sep))], -1)
+walr$city_sep[which(is.na(walr$city_sep))] <- word(walr$other_sep[which(is.na(walr$city_sep))], -1)
 ```
 
 Then, we can remove this `city_sep` from the `other_sep` vector to leave only the street address.
 
 ```{r extract_address}
-wa <- wa %>% 
+walr <- walr %>% 
   mutate(
     address_sep = other_sep %>% 
       str_remove(city_sep) %>% 
@@ -310,41 +306,41 @@ wa <- wa %>%
 ```
 
 ```{r view_address_split, echo=FALSE}
-wa %>% 
+walr %>% 
   select(lobbyist_address, address_sep, city_sep, state_sep, zip_sep) %>% 
   distinct() %>% 
   sample_frac()
 ```
 
-### Normalize Address
+#### Normalize Address
 
 We can normalize the address with `campfin::normal_address()` to reduce inconsistencies and expand
 USPS abbreviations.
 
 ```{r normal_address}
-wa <- wa %>% 
+walr <- walr %>% 
   mutate(
     address_norm = normal_address(
         address = address_sep,
-        add_abbs = usps_street,
+        abbs = usps_street,
         na_rep = TRUE
       )
   )
 ```
 
 ```{r view_address_norm, echo=FALSE}
-wa %>% 
+walr %>% 
   select(starts_with("address")) %>% 
   distinct() %>% 
   sample_frac()
 ```
 
-### Normalize ZIP
+#### Normalize ZIP
 
 We can create normalize, valid 5-digit ZIP codes using `campfin::normal_zip()`.
 
 ```{r normal_zip}
-wa <- wa %>% 
+walr <- walr %>% 
   mutate(
     zip_norm = normal_zip(
       zip = zip_sep,
@@ -355,28 +351,28 @@ wa <- wa %>%
 
 ```{r zip_progress}
 progress_table(
-  wa$zip_sep,
-  wa$zip_norm,
+  walr$zip_sep,
+  walr$zip_norm,
   compare = valid_zip
 )
 ```
 
-### Normalize State
+#### Normalize State
 
-The `state_sep` variable is `r percent(prop_in(wa$state_sep, valid_state))` valid.
+The `state_sep` variable is `r percent(prop_in(walr$state_sep, valid_state))` valid.
 
 ```{r}
-prop_in(wa$state_sep, valid_state)
+prop_in(walr$state_sep, valid_state)
 ```
 
-### Normal City
+#### Normal City
 
 ```{r normal_city}
-wa <- wa %>% 
+walr <- walr %>% 
   mutate(
     city_norm = normal_city(
       city = city_sep,
-      geo_abbs = usps_city,
+      abbs = usps_city,
       na = invalid_city
     )
   ) %>% 
@@ -401,20 +397,20 @@ wa <- wa %>%
 
 ```{r city_progress}
 progress_table(
-  wa$city_sep,
-  wa$city_norm,
-  wa$city_swap,
+  walr$city_sep,
+  walr$city_norm,
+  walr$city_swap,
   compare = valid_city
 )
 ```
 
 ```{r}
-wa %>% 
+walr %>% 
   filter(city_swap %out% valid_city) %>% 
   count(city_swap, sort = TRUE)
 ```
 
-## Export
+### Export
 
 ```{r create_proc_dir}
 proc_dir <- here("wa", "lobbying", "data", "processed")
@@ -422,7 +418,193 @@ dir_create(proc_dir)
 ```
 
 ```{r write_clean}
-wa %>% 
+walr <- walr %>% 
+  select(
+    -zip_sep,
+    -other_sep,
+    -city_sep,
+    -city_norm,
+    -address_sep,
+    -city_match,
+    -match_dist,
+    -match_abb
+  ) %>% 
+  rename(
+    address_clean = address_norm,
+    city_clean = city_swap,
+    state_clean = state_sep,
+    zip_clean = zip_norm,
+    phone_clean = phone_norm
+  )
+ 
+write_csv(
+  x = walr,
+  path = glue("{proc_dir}/wa_lobbyist_clean.csv"),
+  na = ""
+)
+```
+
+## Compensation
+
+The PDC also provdies a second data set titled ["Lobbyist Compensation and Expenses by Source"][ce] 
+which can be found on the same portal.
+
+[ce]: https://data.wa.gov/Politics/Lobbyist-Compensation-and-Expenses-by-Source/9nnw-c693
+
+> This dataset contains compensation and expense summary records from the monthly reports of
+lobbying activity. One record is included for each client that paid compensation or incurred
+expenses during the filing period. If the lobbyist firm themselves incurred any expenses not
+reimbursed by a client, a record is included summarizing the lobbyist firm's expenses. If a
+lobbyist reported no compensation or expenses on the report, no records will be in this dataset.
+Records are included for a period of ten years, beginning in January, 2016.
+
+The data does have a condition of release, which this project meets:
+
+> CONDITION OF RELEASE: This publication and or referenced documents constitutes a list of
+individuals prepared by the Washington State Public Disclosure Commission and may not be used for
+commercial purposes. This list is provided on the condition and with the understanding that the
+persons receiving it agree to this statutorily imposed limitation on its use. See RCW 42.56.070(9)
+and AGO 1975 No. 15.
+
+There are 28 variables in the table:
+
+* `id`: This is the unique identifier for this **dataset.**
+* `report_number`: This is the identifying number of the filed L2...
+* `origin`: This value shows **how** the report was filed: FE = electronically; FP = Paper.
+* `filer_id`: This is the unique lobbyist id for this **lobbyist**
+* `filer_name`: This is the title of the lobbyist or lobbyist firm, as reported when filing..
+* `type`: Shows if this report was filed for an employer or for a lobbyist.
+* `funding_source_id`: This is the unique identifier of the Firm/Emp relationship record...
+* `funding_source_name`: This is the title of the Firm/Employer relationship for this L2.
+* `filing_period`: The filing period for this report.
+* `receipt_date`: The date that the report was filed.
+* `employer_id`: This is the unique employer id for this employer...
+* `employer_name`: This is the title of the employer as reported when filing...
+* `compensation`: This is the sum total of compensation reported for this employer...
+* `sub_lobbyist_compensation`: Payments to other lobbyists hired by the lobbyist or paid by the lobbyist from a portion of the funds received from the employer.
+* `net_compensation`: The compensation the lobbyist received after paying any subcontracted lobbyists.
+* `personal_expenses`: This is the sum total of personal expenses...
+* `entertainment`: This is the sum total of entertainment expenses...
+* `contributions`: This is the sum total of contributions reported...
+* `advertising`: This is the sum total of advertising expenses...
+* `political_ads`: This is the sum total of political ads expenses...
+* `other`: This is the sum total of other expenses...
+* `total_expenses`: This column is a total of all "expenses" incurred by the lobbyist for all employers for a given year...
+* `net_total`: This column is the total of all expenses and compensation, minus sub lobbyist compensation.
+* `employment_registration_id`: The ID of the record that identifies the employment of the lobbyist by their client and any subcontractor.
+* `employment_type`: Signifies a direct or subcontracted employment relationship.
+* `contractor_id`: This is the unique identifier corresponding to contractor records in the dataset.
+* `contractor_name`: This is the contractor name...
+* `url`: A permanent link to a .pdf copy of the original filed report.
+
+https://data.wa.gov/Politics/Lobbyist-Agents/bp5b-jrti
+
+### Import
+
+We can import the file directly from the OpenData portal using `readr::read_csv()`.
+
+```{r read_raw}
+walc <- read_csv(
+  file = "https://data.wa.gov/api/views/9nnw-c693/rows.csv",
+  col_types = cols(
+    .default = col_character(),
+    # filing_period =  col_date("%m/%d/%Y %H:%M:%S %p"),
+    # receipt_date = col_date("%m/%d/%Y %H:%M:%S %p"),
+    compensation = col_number(),
+    sub_lobbyist_compensation = col_number(),
+    net_compensation = col_number(),
+    personal_expenses = col_number(),
+    entertainment = col_number(),
+    contributions = col_number(),
+    advertising = col_number(),
+    political_ads = col_number(),
+    other = col_number(),
+    total_expenses = col_number(),
+    net_total = col_number()
+  )
+)
+```
+
+The dates are a mix of those containing midnight and those without. For the two date columns, we
+can trim off the time and parse as a date column.
+
+```{r parse_dates}
+walc <- walc %>% 
+  mutate_at(
+    .vars = vars(filing_period, receipt_date),
+    .funs = ~mdy(str_sub(., end = 10))
+  )
+```
+
+Since this database will be uploaded separately from the lobbyist registration containing the
+phone number and addresses of lobbyists, we will have to add these columns
+so that the expenditure records will show up when this information is searched.
+
+```{r ex_join}
+lob_info <- distinct(select(walr, filer_id, ends_with("clean")))
+walc <- left_join(walc, lob_info, by = "filer_id")
+```
+
+### Explore
+
+```{r ex_glimpse}
+head(walc)
+tail(walc)
+glimpse(sample_frac(walc))
+```
+
+#### Missing
+
+Very few records are missing the key variables needed to properly identify a compensation record.
+
+```{r ex_glimpse_missing}
+col_stats(walc, count_na)
+```
+
+#### Duplicate
+
+There are no duplicate records
+
+```{r ex_flag_dupes}
+walc <- flag_dupes(walc, -id)
+```
+
+#### Categorical
+
+```{r ex_glimpse_distinct}
+col_stats(walc, n_distinct)
+```
+
+#### Continuous
+
+The number of lobbyists submitting reports remains relatively constant for the last 4 years.
+
+```{r ex_year_bar, echo=FALSE}
+walc %>% 
+  filter(
+    year(filing_period) > 1970,
+    filing_period < today()
+  ) %>% 
+  count(filing_period) %>% 
+  ggplot(aes(x = filing_period, y = n)) +
+  geom_col(fill = RColorBrewer::brewer.pal(3, "Dark2")[1]) +
+  labs(
+    title = "Washington Lobbyists L2 Filings per Period",
+    caption = "Source: Washington Public Disclosure Commission",
+    x = "Filing Period (Month)",
+    y = "Unique Reports"
+  )
+```
+
+### Export
+
+```{r create_proc_dir}
+proc_dir <- here("wa", "lobbying", "data", "processed")
+dir_create(proc_dir)
+```
+
+```{r write_clean}
+walr %>% 
   select(
     -zip_sep,
     -other_sep,
@@ -445,4 +627,3 @@ wa %>%
     na = ""
   )
 ```
-

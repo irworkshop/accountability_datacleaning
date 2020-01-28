@@ -1,12 +1,13 @@
 Michigan Lobbyists
 ================
 Kiernan Nicholls
-2020-01-21 16:03:02
+2020-01-28 13:39:50
 
   - [Project](#project)
   - [Objectives](#objectives)
   - [Packages](#packages)
   - [Data](#data)
+  - [Vars](#vars)
   - [Import](#import)
   - [Explore](#explore)
   - [Wrangle](#wrangle)
@@ -59,6 +60,7 @@ pacman::p_load_gh("irworkshop/campfin")
 pacman::p_load(
   tidyverse, # data manipulation
   lubridate, # datetime strings
+  gluedown, # printing markdown
   magrittr, # pipe opperators
   janitor, # dataframe clean
   refinr, # cluster and merge
@@ -126,6 +128,24 @@ if (!file_exists(lob_path)) {
 }
 ```
 
+## Vars
+
+| Variable | Description                                               |
+| :------- | :-------------------------------------------------------- |
+| `id`     | Unique Bureau ID\# of this Lobbyist or Agent              |
+| `type`   | Type of Lobby (A = Agent, L = Lobbyist)                   |
+| `last`   | Last or Full Name of the Individual or Lobby Organization |
+| `first`  | First Name of the Individual Lobbyist or Agent            |
+| `mi`     | Middle Name of the Individual Lobbyist or Agent           |
+| `sig`    | Official Signatory or Contact Person for this Lobby       |
+| `addr`   | Mailing Street Address of this Lobby                      |
+| `city`   | Mailing City of this Lobby                                |
+| `state`  | Mailing State of this Lobby                               |
+| `zip`    | Mailing Zipcode of this Lobby                             |
+| `phone`  | Phone Number of this Lobby                                |
+| `reg`    | Date this Lobby became an Active Lobbyist or Agent        |
+| `term`   | Date this Lobby Terminated all Lobbying activity          |
+
 ## Import
 
 As described on the [data
@@ -159,10 +179,7 @@ milr <- read_delim(
   file = lob_path,
   delim = "\t",
   skip = 2,
-  col_names = c(
-    "id", "type", "last", "first", "mi", "sig", "addr", 
-    "city", "state", "zip", "phone", "reg", "term"
-  ),
+  col_names = var_names,
   col_types = cols(
     .default = col_character(),
     type = col_factor(),
@@ -198,25 +215,25 @@ tail(milr)
 glimpse(sample_frac(milr))
 #> Observations: 6,918
 #> Variables: 13
-#> $ id    <chr> "013020", "012165", "011903", "009133", "009545", "013733", "010804", "009122", "0…
-#> $ type  <fct> A, A, A, A, A, A, A, A, A, A, A, A, A, A, L, A, A, A, A, A, L, A, L, A, A, A, A, A…
-#> $ last  <chr> "CRITCHFIELD", "NEWMAN", "TRUSCOTT ROSSMAN GROUP LLC", "FEDEWA", "BRADY", "OBRIEN"…
-#> $ first <chr> "BROOK", "DAVID", NA, "JANICE", "MICHAEL", "MICHAEL", "JOSEPH", "ANITA", "MICHAEL"…
-#> $ mi    <chr> "A", "L", NA, "M", NA, "G", NA, NA, "J", NA, NA, "C", "C", NA, NA, "J", NA, NA, NA…
-#> $ sig   <chr> NA, NA, "ELLEN MONTI", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "PETER J JASKOS…
-#> $ addr  <chr> "135 S LASALLE ST IL4-135-07-43", "41650 GARDENBROOK RD, STE 175", "124 W ALLEGAN,…
-#> $ city  <chr> "CHICAGO", "NOVI", "LANSING", "LANSING", "NORTHVILLE", "LANSING", "MILWAUKEE", "LA…
-#> $ state <chr> "IL", "MI", "MI", "MI", "MI", "MI", "WI", "MI", "MI", "MI", "CA", "MI", "MI", "DC"…
-#> $ zip   <chr> "60603", "483751320", "48933", "489121270", "48167", "48933", "53201", "48933", "4…
-#> $ phone <chr> "3128284902", "2485961006", "5174879320", "5173727770", "2482334837", "5173671242"…
-#> $ reg   <date> 2015-04-01, 2012-07-02, 2011-11-04, 2004-03-10, 2005-04-29, 2017-05-15, 2008-11-0…
-#> $ term  <date> 2015-12-31, 2017-08-07, NA, 2007-08-15, NA, NA, 2014-12-31, 2008-11-30, NA, NA, 2…
+#> $ id    <chr> "004429", "006434", "013479", "013487", "011130", "014794", "000262", "009571", "0…
+#> $ type  <fct> A, A, A, L, L, A, A, L, L, L, A, A, A, L, L, A, L, L, L, L, L, L, L, A, L, A, L, L…
+#> $ last  <chr> "OWEN", "MERCHANT", "HOFFMAN", "GERALD R FORD INTERNATIONAL AIRPORT AUTHORITY", "X…
+#> $ first <chr> "GARY", "BRUCE", "HARVEY", NA, NA, "MICHAEL", "PETER", NA, NA, NA, "PAUL", "SCOTT"…
+#> $ mi    <chr> "M", NA, "J", NA, NA, NA, "H", NA, NA, NA, NA, "B", "C", NA, NA, "M", NA, NA, NA, …
+#> $ sig   <chr> NA, NA, NA, "REBECCA L BECHLER", "CARLOS J COE", NA, NA, "VINCE BRENNAN", "LAURIE …
+#> $ addr  <chr> "120 N WASHINGTON SQ, STE 110", "415 STOCKBRIDGE AVE", "501 SOUTH BRIDGE STREET", …
+#> $ city  <chr> "LANSING", "KALAMAZOO", "GRAND LEDGE", "GRAND RAPIDS", "KYLE", "LANSING", "LANSING…
+#> $ state <chr> "MI", "MI", "MI", "MI", "TX", "MI", "MI", "MI", "WI", "MI", "MI", "MI", "MI", "MI"…
+#> $ zip   <chr> "48933", "49001", "48837", "49512", "78640", "48933", "489331816", "48040", "54494…
+#> $ phone <chr> "5174846216", "2693378711", "5174187298", "6162336050", "5122688191", "5178530537"…
+#> $ reg   <date> 1989-01-03, 1995-09-03, 2016-08-01, 2016-09-01, 2009-08-27, 2020-01-14, 1983-10-2…
+#> $ term  <date> NA, 2013-04-30, NA, NA, 2011-10-01, NA, NA, 2005-06-30, NA, NA, 2010-12-31, NA, N…
 ```
 
 As we can see from `tail()`, the last two rows still need to be removed.
 
 The `id` variable is unique to each lobbyist, so we can use it to remove
-the invalid rows.
+the summary rows at the bottom of the file.
 
 ``` r
 col_stats(milr, n_distinct)
@@ -310,16 +327,16 @@ milr <- mutate(milr, phone_norm = normal_phone(phone))
     #> # A tibble: 3,650 x 2
     #>    phone      phone_norm    
     #>    <chr>      <chr>         
-    #>  1 6147925703 (614) 792-5703
-    #>  2 8028603933 (802) 860-3933
-    #>  3 2484510324 (248) 451-0324
-    #>  4 5172678934 (517) 267-8934
-    #>  5 2485122501 (248) 512-2501
-    #>  6 3134967521 (313) 496-7521
-    #>  7 7035548511 (703) 554-8511
-    #>  8 5174822896 (517) 482-2896
-    #>  9 6163366750 (616) 336-6750
-    #> 10 5172855195 (517) 285-5195
+    #>  1 5186262752 (518) 626-2752
+    #>  2 7343972790 (734) 397-2790
+    #>  3 2312063283 (231) 206-3283
+    #>  4 2487096706 (248) 709-6706
+    #>  5 5172428860 (517) 242-8860
+    #>  6 5173359907 (517) 335-9907
+    #>  7 8102573088 (810) 257-3088
+    #>  8 2024293525 (202) 429-3525
+    #>  9 6177471600 (617) 747-1600
+    #> 10 7158423267 (715) 842-3267
     #> # … with 3,640 more rows
 
 ### Address
@@ -332,18 +349,18 @@ milr <- mutate(milr, addr_norm = normal_address(addr, abbs = usps_street))
 ```
 
     #> # A tibble: 4,395 x 2
-    #>    addr                                    addr_norm                             
-    #>    <chr>                                   <chr>                                 
-    #>  1 171 MONROE AVE NW SUITE 410             171 MONROE AVE NW STE 410             
-    #>  2 901 44TH ST SE GH-4C-02                 901 44TH ST SE GH 4C 02               
-    #>  3 504 SPRUCE ST % RIO TINTO               504 SPRUCE ST RIO TINTO               
-    #>  4 430 W ALLEGAN ST                        430 W ALLEGAN ST                      
-    #>  5 208 N CAPITOL AVE 1ST FLOOR             208 N CAPITOL AVE 1ST FL              
-    #>  6 727 AIRPORT BOULEVARD                   727 AIRPORT BLVD                      
-    #>  7 600 S WAGNER RD                         600 S WAGNER RD                       
-    #>  8 ONE AMERICAN RD RM 630-E5 FORD MOTOR CO ONE AMERICAN RD RM 630 E5 FRD MOTOR CO
-    #>  9 29777 TELEGRAPH RD STE 4400             29777 TELEGRAPH RD STE 4400           
-    #> 10 PO BOX 26416                            PO BOX 26416                          
+    #>    addr                                             addr_norm                                   
+    #>    <chr>                                            <chr>                                       
+    #>  1 234 W BARAGA AVE                                 234 W BARAGA AVE                            
+    #>  2 2716 N TENAYA WAY % ANN TINKER                   2716 N TENAYA WAY ANN TINKER                
+    #>  3 125 W 55TH ST LVL 15                             125 W 55TH ST LVL 15                        
+    #>  4 1777 COLORADO DR                                 1777 COLORADO DR                            
+    #>  5 707 W MILWAUKEE  5TH FLOOR ATTN BROOKE BLACKWELL 707 W MILWAUKEE 5TH FL ATTN BROOKE BLACKWELL
+    #>  6 255 E KELLOGG BLVD, STE 102 % GOFF PUBLIC        255 E KELLOGG BLVD STE 102 GOFF PUBLIC      
+    #>  7 212 E CESAR E CHAVEZ AVE % CLARK HILL PLC        212 E CESAR E CHAVEZ AVE CLARK HL PLC       
+    #>  8 801 PENNSYLVANIA AVE NW SUITE 700                801 PENNSYLVANIA AVE NW STE 700             
+    #>  9 PO BOX 294                                       PO BOX 294                                  
+    #> 10 280 PARK AVENUE 3RD FLOOR                        280 PARK AVE 3RD FL                         
     #> # … with 4,385 more rows
 
 ### ZIP
@@ -355,16 +372,16 @@ milr <- mutate(milr, zip_norm = normal_zip(zip, na_rep = TRUE))
     #> # A tibble: 1,324 x 2
     #>    zip       zip_norm
     #>    <chr>     <chr>   
-    #>  1 48075     48075   
-    #>  2 49401     49401   
-    #>  3 80301     80301   
-    #>  4 20035     20035   
-    #>  5 78733     78733   
-    #>  6 05401     05401   
-    #>  7 945830716 94583   
-    #>  8 60064     60064   
-    #>  9 10080     10080   
-    #> 10 49032     49032   
+    #>  1 481977099 48197   
+    #>  2 551640596 55164   
+    #>  3 488040100 48804   
+    #>  4 49203     49203   
+    #>  5 60646     60646   
+    #>  6 48228     48228   
+    #>  7 48218     48218   
+    #>  8 06426     06426   
+    #>  9 49682     49682   
+    #> 10 94965     94965   
     #> # … with 1,314 more rows
 
 ``` r
@@ -472,8 +489,8 @@ many_city <- c(valid_city, extra_city, valid_locality)
 | stage      | prop\_in | n\_distinct | prop\_na | n\_out | n\_diff |
 | :--------- | -------: | ----------: | -------: | -----: | ------: |
 | city\_raw  |    0.977 |         709 |    0.000 |    160 |      65 |
-| city\_norm |    0.951 |         699 |    0.000 |    340 |     142 |
-| city\_swap |    0.997 |         669 |    0.005 |     18 |      13 |
+| city\_norm |    0.979 |         699 |    0.000 |    146 |      64 |
+| city\_swap |    0.989 |         665 |    0.005 |     75 |      19 |
 
 ## Export
 

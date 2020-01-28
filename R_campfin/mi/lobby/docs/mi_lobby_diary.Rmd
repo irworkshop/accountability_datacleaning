@@ -75,6 +75,7 @@ pacman::p_load_gh("irworkshop/campfin")
 pacman::p_load(
   tidyverse, # data manipulation
   lubridate, # datetime strings
+  gluedown, # printing markdown
   magrittr, # pipe opperators
   janitor, # dataframe clean
   refinr, # cluster and merge
@@ -140,6 +141,36 @@ if (!file_exists(lob_path)) {
 }
 ```
 
+## Vars
+
+```{r vars, echo=FALSE}
+var_names <- c(
+    "id", "type", "last", "first", "mi", "sig", "addr", 
+    "city", "state", "zip", "phone", "reg", "term"
+  )
+vars <- tribble(
+  ~Name, ~Description,
+  "Bureau Lobby ID#", "Unique Bureau ID# of this Lobbyist or Agent",
+  "Lobby Type", "Type of Lobby (A = Agent, L = Lobbyist)",
+  "Lobby Last Name or Organization", "Last or Full Name of the Individual or Lobby Organization",
+  "Lobby Individual First Name", "First Name of the Individual Lobbyist or Agent",
+  "Lobby Individual Middle Name", "Middle Name of the Individual Lobbyist or Agent",
+  "Lobby Signatory", "Official Signatory or Contact Person for this Lobby",
+  "Lobby Mailing Address", "Mailing Street Address of this Lobby",
+  "Lobby Mailing City", "Mailing City of this Lobby",
+  "Lobby Mailing State", "Mailing State of this Lobby",
+  "Lobby Mailing Zipcode", "Mailing Zipcode of this Lobby",
+  "Lobby Phone#", "Phone Number of this Lobby",
+  "Lobby Active Date", "Date this Lobby became an Active Lobbyist or Agent",
+  "Lobby Termination Date", "Date this Lobby Terminated all Lobbying activity" 
+)
+vars %>% 
+  mutate(Variable = md_code(var_names)) %>% 
+  select(Variable, Description) %>% 
+  kable(format = "markdown")
+```
+
+
 ## Import
 
 As described on the [data website][raw]:
@@ -169,10 +200,7 @@ milr <- read_delim(
   file = lob_path,
   delim = "\t",
   skip = 2,
-  col_names = c(
-    "id", "type", "last", "first", "mi", "sig", "addr", 
-    "city", "state", "zip", "phone", "reg", "term"
-  ),
+  col_names = var_names,
   col_types = cols(
     .default = col_character(),
     type = col_factor(),
@@ -192,7 +220,8 @@ glimpse(sample_frac(milr))
 
 As we can see from `tail()`, the last two rows still need to be removed.
 
-The `id` variable is unique to each lobbyist, so we can use it to remove the invalid rows.
+The `id` variable is unique to each lobbyist, so we can use it to remove the summary rows at the
+bottom of the file.
 
 ```{r n_distinct}
 col_stats(milr, n_distinct)
