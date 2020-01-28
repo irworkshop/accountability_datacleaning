@@ -1,17 +1,13 @@
 Michigan Lobbyists
 ================
 Kiernan Nicholls
-2020-01-28 13:39:50
+2020-01-28 15:18:16
 
   - [Project](#project)
   - [Objectives](#objectives)
   - [Packages](#packages)
-  - [Data](#data)
-  - [Vars](#vars)
-  - [Import](#import)
-  - [Explore](#explore)
-  - [Wrangle](#wrangle)
-  - [Export](#export)
+  - [Registration](#registration)
+  - [Contributions](#contributions)
 
 <!-- Place comments regarding knitting here -->
 
@@ -89,7 +85,7 @@ here::here()
 #> [1] "/home/kiernan/R/accountability_datacleaning/R_campfin"
 ```
 
-## Data
+## Registration
 
 Data is obtained from the [Michigan Secretary of
 State](https://www.michigan.gov/sos/). The data is provided by NICUSA,
@@ -128,7 +124,7 @@ if (!file_exists(lob_path)) {
 }
 ```
 
-## Vars
+### Vars
 
 | Variable | Description                                               |
 | :------- | :-------------------------------------------------------- |
@@ -146,7 +142,7 @@ if (!file_exists(lob_path)) {
 | `reg`    | Date this Lobby became an Active Lobbyist or Agent        |
 | `term`   | Date this Lobby Terminated all Lobbying activity          |
 
-## Import
+### Import
 
 As described on the [data
 website](https://miboecfr.nicusa.com/cgi-bin/cfr/lobby_srch_res.cgi):
@@ -189,7 +185,7 @@ milr <- read_delim(
 )
 ```
 
-## Explore
+### Explore
 
 ``` r
 head(milr)
@@ -310,12 +306,12 @@ milr <- mutate(milr, year = year(reg))
 
 ![](../plots/year_plot-1.png)<!-- -->
 
-## Wrangle
+### Wrangle
 
 To improve the searchability and consistency of the database, we can
 perform some very basic and confident text normalization.
 
-### Phone
+#### Phone
 
 We can convert the phone numbers into a standard charatcer (i.e.,
 non-numeric) format.
@@ -339,7 +335,7 @@ milr <- mutate(milr, phone_norm = normal_phone(phone))
     #> 10 7158423267 (715) 842-3267
     #> # … with 3,640 more rows
 
-### Address
+#### Address
 
 We can use `campfin::normal_address()` to improve the consistency in the
 `addr` variable.
@@ -363,7 +359,7 @@ milr <- mutate(milr, addr_norm = normal_address(addr, abbs = usps_street))
     #> 10 280 PARK AVENUE 3RD FLOOR                        280 PARK AVE 3RD FL                         
     #> # … with 4,385 more rows
 
-### ZIP
+#### ZIP
 
 ``` r
 milr <- mutate(milr, zip_norm = normal_zip(zip, na_rep = TRUE))
@@ -397,7 +393,7 @@ progress_table(
 #> 2 zip_norm   0.999       1090 0.00304     8      8
 ```
 
-### State
+#### State
 
 The `state` variable does not need to be cleaned.
 
@@ -406,7 +402,7 @@ prop_in(milr$state, valid_state)
 #> [1] 1
 ```
 
-### City
+#### City
 
 ``` r
 milr <- mutate(milr, city_norm = normal_city(city, abbs = usps_city, na = invalid_city))
@@ -492,7 +488,7 @@ many_city <- c(valid_city, extra_city, valid_locality)
 | city\_norm |    0.979 |         699 |    0.000 |    146 |      64 |
 | city\_swap |    0.989 |         665 |    0.005 |     75 |      19 |
 
-## Export
+### Export
 
 ``` r
 proc_dir <- here("mi", "lobby", "data", "processed")
@@ -502,7 +498,148 @@ dir_create(proc_dir)
 ``` r
 write_csv(
   x = milr,
-  path = glue("{proc_dir}/mi_lobby_reg.csv"),
+  path = path(proc_dir, "mi_lobby_reg.csv"),
+  na = ""
+)
+```
+
+## Contributions
+
+``` r
+exp_url <- "https://miboecfr.nictusa.com/cfr/dumpall/miloball.sh"
+exp_path <- url2path(exp_url, raw_dir)
+if (!file_exists(exp_path)) {
+  download.file(
+    url = exp_url,
+    destfile = exp_path,
+    method = "curl",
+    extra = "--insecure"
+  )
+}
+```
+
+``` r
+mile <- read_delim(
+  file = exp_path,
+  delim = "\t",
+  skip = 2,
+  col_names = exp_names,
+  escape_backslash = FALSE,
+  escape_double = FALSE,
+  col_types = cols(
+    .default = col_character(),
+    rpt_year = col_integer(),
+    exp_date = col_date_usa(),
+    exp_amt = col_double(),
+    ytd_fb = col_double()
+  )
+) %>% 
+  filter(!is.na(rpt_year))
+```
+
+``` r
+head(mile)
+#> # A tibble: 6 x 17
+#>   rpt_year rpt_type lob_last lob_first lob_mi lob_type lob_id exp_type po_title po_last po_first
+#>      <int> <chr>    <chr>    <chr>     <chr>  <chr>    <chr>  <chr>    <chr>    <chr>   <chr>   
+#> 1     2001 SR       MICHIGA… <NA>      <NA>   L        1519   Financi… REPRESE… MORTIM… MICKEY  
+#> 2     2001 SR       APPLE I… <NA>      <NA>   L        8030   Financi… EXECUTI… BRANDE… JIM     
+#> 3     2001 SR       DETROIT… <NA>      <NA>   L        2349   Financi… REPRESE… ALLEN   JASON   
+#> 4     2001 SR       DETROIT… <NA>      <NA>   L        2349   Financi… REPRESE… BISBEE  CLARK   
+#> 5     2001 SR       DETROIT… <NA>      <NA>   L        2349   Financi… SENATOR  BULLARD WILLIS  
+#> 6     2001 SR       DETROIT… <NA>      <NA>   L        2349   Financi… SENATOR  BENNETT LOREN   
+#> # … with 6 more variables: po_mi <chr>, lob_why <chr>, exp_date <date>, exp_amt <dbl>,
+#> #   ytd_fb <dbl>, doc_id <chr>
+tail(mile)
+#> # A tibble: 6 x 17
+#>   rpt_year rpt_type lob_last lob_first lob_mi lob_type lob_id exp_type po_title po_last po_first
+#>      <int> <chr>    <chr>    <chr>     <chr>  <chr>    <chr>  <chr>    <chr>    <chr>   <chr>   
+#> 1     2019 SR       ASTELLA… <NA>      <NA>   L        14127  Group F… SENATOR… <NA>    <NA>    
+#> 2     2019 WR       FORD MO… <NA>      <NA>   L        535    Group F… REPRESE… <NA>    <NA>    
+#> 3     2019 WR       MICHIGA… <NA>      <NA>   L        730    Group F… ALL SEN… <NA>    <NA>    
+#> 4     2019 WR       MICHIGA… <NA>      <NA>   L        325    Group F… HOUSE D… <NA>    <NA>    
+#> 5     2019 WR       MICHIGA… <NA>      <NA>   L        325    Group F… HOUSE D… <NA>    <NA>    
+#> 6     2019 WR       MICHIGA… <NA>      <NA>   L        325    Group F… FULL HO… <NA>    <NA>    
+#> # … with 6 more variables: po_mi <chr>, lob_why <chr>, exp_date <date>, exp_amt <dbl>,
+#> #   ytd_fb <dbl>, doc_id <chr>
+glimpse(sample_frac(mile))
+#> Observations: 14,661
+#> Variables: 17
+#> $ rpt_year  <int> 2008, 2017, 2014, 2013, 2003, 2019, 2009, 2009, 2012, 2010, 2015, 2012, 2001, …
+#> $ rpt_type  <chr> "SR", "WR", "SR", "SR", "WR", "SR", "SR", "SR", "SR", "SR", "SR", "WR", "SR", …
+#> $ lob_last  <chr> "SPROLES GOVERNMENTAL CONSULTING LLC", "MICHIGAN BELL TELEPHONE (AT AND T MICH…
+#> $ lob_first <chr> NA, NA, NA, "GARY", "ANDREW", "MARC", NA, NA, NA, "EDWARD", NA, NA, NA, NA, NA…
+#> $ lob_mi    <chr> NA, NA, NA, "E", NA, "R", NA, NA, NA, "J", NA, NA, NA, NA, NA, NA, NA, "T", NA…
+#> $ lob_type  <chr> "A", "L", "L", "A", "A", "A", "L", "A", "A", "A", "L", "L", "L", "A", "L", "L"…
+#> $ lob_id    <chr> "10159", "346", "240", "11340", "8794", "11626", "7414", "27", "11621", "3082"…
+#> $ exp_type  <chr> "Individual Food & Beverage", "Individual Food & Beverage", "Travel & Lodging"…
+#> $ po_title  <chr> "SENATOR", "REPRESENTATIVE", "REPRESENTATIVE", "REPRESENTATIVE", "SENATE MAJOR…
+#> $ po_last   <chr> "PATTERSON", "WITTENBERG", "CRAWFORD", "KNEZEK", "ZAMBIASKI", "KOLESZAR", "BRO…
+#> $ po_first  <chr> "BRUCE", "ROBERT", "HUGH", "DAVID", "JEN", "MATT", "CAMERON", "PAM", "MIKE", "…
+#> $ po_mi     <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
+#> $ lob_why   <chr> NA, NA, "WINTER CONVENTION SPEAKER AND PANELIST TRAVEL AND LODGING", NA, NA, N…
+#> $ exp_date  <date> NA, NA, 2014-02-07, NA, NA, NA, NA, NA, NA, NA, NA, NA, 2001-05-31, NA, NA, 2…
+#> $ exp_amt   <dbl> 204.00, 6.39, 1393.00, 159.26, 137.90, 126.85, 56.62, 235.42, 15.00, 28.22, 10…
+#> $ ytd_fb    <dbl> 204.00, 6.39, NA, 159.26, NA, 126.85, 180.32, 235.42, 15.00, 28.22, 109.02, 31…
+#> $ doc_id    <chr> "152803", "235514", "203134", "194276", "115402", "250450", "161716", "161806"…
+```
+
+``` r
+col_stats(mile, count_na)
+#> # A tibble: 17 x 4
+#>    col       class      n       p
+#>    <chr>     <chr>  <int>   <dbl>
+#>  1 rpt_year  <int>      0 0      
+#>  2 rpt_type  <chr>      0 0      
+#>  3 lob_last  <chr>      0 0      
+#>  4 lob_first <chr>  11412 0.778  
+#>  5 lob_mi    <chr>  12796 0.873  
+#>  6 lob_type  <chr>      0 0      
+#>  7 lob_id    <chr>      0 0      
+#>  8 exp_type  <chr>      0 0      
+#>  9 po_title  <chr>     54 0.00368
+#> 10 po_last   <chr>   2215 0.151  
+#> 11 po_first  <chr>   2259 0.154  
+#> 12 po_mi     <chr>  14556 0.993  
+#> 13 lob_why   <chr>  11920 0.813  
+#> 14 exp_date  <date> 11928 0.814  
+#> 15 exp_amt   <dbl>    283 0.0193 
+#> 16 ytd_fb    <dbl>   3000 0.205  
+#> 17 doc_id    <chr>      0 0
+```
+
+``` r
+col_stats(mile, n_distinct)
+#> # A tibble: 17 x 4
+#>    col       class      n        p
+#>    <chr>     <chr>  <int>    <dbl>
+#>  1 rpt_year  <int>     19 0.00130 
+#>  2 rpt_type  <chr>      2 0.000136
+#>  3 lob_last  <chr>    585 0.0399  
+#>  4 lob_first <chr>    127 0.00866 
+#>  5 lob_mi    <chr>     32 0.00218 
+#>  6 lob_type  <chr>      2 0.000136
+#>  7 lob_id    <chr>    602 0.0411  
+#>  8 exp_type  <chr>      4 0.000273
+#>  9 po_title  <chr>   1294 0.0883  
+#> 10 po_last   <chr>    936 0.0638  
+#> 11 po_first  <chr>    506 0.0345  
+#> 12 po_mi     <chr>     33 0.00225 
+#> 13 lob_why   <chr>   1191 0.0812  
+#> 14 exp_date  <date>  1450 0.0989  
+#> 15 exp_amt   <dbl>   8723 0.595   
+#> 16 ytd_fb    <dbl>   7400 0.505   
+#> 17 doc_id    <chr>   2540 0.173
+```
+
+![](../plots/lob_exp_amt-1.png)<!-- -->
+
+![](../plots/lob_exp_year-1.png)<!-- -->
+
+``` r
+write_csv(
+  x = mile,
+  path = path(proc_dir, "mi_lobby_exp.csv"),
   na = ""
 )
 ```
