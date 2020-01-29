@@ -1,0 +1,188 @@
+---
+title: "Michigan Contributions"
+author: "Kiernan Nicholls"
+date: "`r Sys.time()`"
+output:
+  github_document: 
+    df_print: tibble
+    toc: true
+    toc_dept: 2
+editor_options: 
+  chunk_output_type: console
+---
+
+<!-- Place comments regarding knitting here -->
+
+```{r setup, include=FALSE, purl=FALSE}
+library(knitr)
+opts_chunk$set(
+  eval = TRUE,
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  error = FALSE,
+  collapse = TRUE,
+  comment = "#>",
+  fig.path = "../plots/",
+  fig.width = 10,
+  dpi = 300
+)
+options(width = 99)
+set.seed(5)
+```
+
+```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
+fs::dir_create(here::here("mi", "contribs", "docs"))
+```
+
+## Project
+
+The Accountability Project is an effort to cut across data silos and give journalists, policy
+professionals, activists, and the public at large a simple way to search across huge volumes of
+public data about people and organizations.
+
+Our goal is to standardizing public data on a few key fields by thinking of each dataset row as a
+transaction. For each transaction there should be (at least) 3 variables:
+
+1. All **parties** to a transaction
+2. The **date** of the transaction
+3. The **amount** of money involved
+
+## Objectives
+
+This document describes the process used to complete the following objectives:
+
+1. How many records are in the database?
+1. Check for duplicates
+1. Check ranges
+1. Is there anything blank or missing?
+1. Check for consistency issues
+1. Create a five-digit ZIP Code called `zip`
+1. Create a `year` field from the transaction date
+1. Make sure there is data on both parties to a transaction
+
+## Packages
+
+The following packages are needed to collect, manipulate, visualize, analyze, and communicate
+these results. The `pacman` package will facilitate their installation and attachment.
+
+The IRW's `campfin` package will also have to be installed from GitHub. This package contains
+functions custom made to help facilitate the processing of campaign finance data.
+
+```{r load_packages, message=FALSE, warning=FALSE, error=FALSE}
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load_gh("irworkshop/campfin")
+pacman::p_load(
+  tidyverse, # data manipulation
+  lubridate, # datetime strings
+  magrittr, # pipe opperators
+  gluedown, # printing markdown
+  janitor, # dataframe clean
+  refinr, # cluster and merge
+  scales, # format strings
+  knitr, # knit documents
+  rvest, # read html pages
+  vroom, # read files fast
+  glue, # combine strings
+  here, # relative storage
+  fs # search storage 
+)
+```
+
+This document should be run as part of the `R_campfin` project, which lives as a sub-directory of
+the more general, language-agnostic [`irworkshop/accountability_datacleaning`][01] GitHub
+repository.
+
+The `R_campfin` project uses the [RStudio projects][02] feature and should be run as such. The
+project also uses the dynamic `here::here()` tool for file paths relative to _your_ machine.
+
+```{r where_here}
+# where does this document knit?
+here::here()
+```
+
+[01]: https://github.com/irworkshop/accountability_datacleaning "TAP repo"
+[02]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects "Rproj"
+
+## Data
+
+This data is obtained from the Michigan Board of Elections (BOE) Campaign
+Finance Reporting (CFR) system. The data is provided as annual ZIP archives.
+
+```{r key_page, echo=FALSE}
+key_url <- "https://miboecfr.nictusa.com/cfr/dumpall/cfrdetail/ReadMe_CONTRIBUTIONS.html"
+key_page <- read_html(key_url)
+```
+
+```{r key_desc, results='asis', echo=FALSE}
+key_page %>% 
+  html_node("p") %>% 
+  html_text() %>% 
+  md_quote()
+```
+
+```{r key_vars, results='asis', echo=FALSE}
+key_page %>% 
+  html_node("table") %>% 
+  html_table() %>% 
+  as_tibble() %>% 
+  mutate(
+    X1 = md_code(X1),
+    X2 = str_trim(str_squish(str_trunc(X2, 100)))
+  ) %>% 
+  md_table(col.names = c("Variable", "Description"))
+```
+
+## Import
+
+### Download
+
+```{r download_raw}
+raw_dir <- dir_create(here("mi", "contribs", "data", "raw"))
+raw_base <- "https://miboecfr.nictusa.com/cfr/dumpall/cfrdetail/"
+raw_page <- read_html(raw_base)
+raw_urls <- raw_page %>% 
+  html_node("table") %>% 
+  html_nodes("a") %>% 
+  html_attr("href") %>% 
+  str_subset("contributions") %>% 
+  str_c(raw_base, ., sep = "/")
+raw_paths <- path(raw_dir, basename(raw_urls))
+if (!all(this_file_new(raw_paths))) {
+  download.file(raw_urls, raw_paths)
+}
+```
+
+```{r download_raw2, include=FALSE, eval=FALSE}
+write_zip <- function(url, dir) {
+  path <- fs::path(dir, basename(url))
+  r <- httr::GET(url, httr::write_disk(path, overwrite = TRUE))
+}
+map(raw_urls, write_zip, raw_dir)
+```
+
+### Read
+
+```{r mic_names}
+mic_names <- str_split(read_lines(raw_paths[1])[1], "\t")[[1]]
+mic_names <- mic_names[-length(mic_names)]
+mic_names[length(mic_names)] <- "runtime"
+```
+
+```{r read_tsv}
+mic <- vroom(
+  file = raw_paths,
+  delim = "\t",
+  skip = 1,
+  col_names = mic_names,
+  col_types = cols(
+    .default = col_character(),
+    page_no = col_integer(),
+    doc_stmnt_year = col_integer(),
+    received_date = col_date_usa(),
+    amount = col_double(),
+    aggregate = col_double(),
+    runtime = col_skip()
+  )
+)
+```
