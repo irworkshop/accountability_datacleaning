@@ -1,13 +1,7 @@
 Michigan Contributions
 ================
 Kiernan Nicholls
-2020-01-29 13:29:27
-
-  - [Project](#project)
-  - [Objectives](#objectives)
-  - [Packages](#packages)
-  - [Data](#data)
-  - [Import](#import)
+2020-01-29 23:23:21
 
 <!-- Place comments regarding knitting here -->
 
@@ -144,4 +138,304 @@ raw_paths <- path(raw_dir, basename(raw_urls))
 if (!all(this_file_new(raw_paths))) {
   download.file(raw_urls, raw_paths)
 }
+```
+
+### Read
+
+``` r
+mic_names <- str_split(read_lines(raw_paths[1])[1], "\t")[[1]]
+mic_names <- mic_names[-length(mic_names)]
+mic_names[length(mic_names)] <- "runtime"
+```
+
+``` r
+mic <- vroom(
+  file = raw_paths,
+  delim = "\t",
+  skip = 1,
+  col_names = mic_names,
+  col_types = cols(
+    .default = col_character(),
+    page_no = col_integer(),
+    doc_stmnt_year = col_integer(),
+    received_date = col_date_usa(),
+    amount = col_double(),
+    aggregate = col_double(),
+    runtime = col_skip()
+  )
+)
+```
+
+``` r
+mic <- map_dfr(
+  .x = raw_paths,
+  .f = read_delim,
+  escape_double = FALSE,
+  escape_backslash = FALSE,
+  delim = "\t",
+  skip = 1,
+  col_names = mic_names,
+  col_types = cols(
+    .default = col_character(),
+    page_no = col_integer(),
+    doc_stmnt_year = col_integer(),
+    received_date = col_date_usa(),
+    amount = col_double(),
+    aggregate = col_double(),
+    runtime = col_skip()
+  )
+)
+```
+
+## Explore
+
+``` r
+head(mic)
+#> # A tibble: 6 x 25
+#>   doc_seq_no page_no contribution_id cont_detail_id doc_stmnt_year doc_type_desc com_legal_name
+#>   <chr>        <int> <chr>           <chr>                   <int> <chr>         <chr>         
+#> 1 148736           1 1               0                        1998 ANNUAL CS     COMMITTEE TO …
+#> 2 148736           1 2               0                        1998 ANNUAL CS     COMMITTEE TO …
+#> 3 148736           1 3               0                        1998 ANNUAL CS     COMMITTEE TO …
+#> 4 148736           1 4               0                        1998 ANNUAL CS     COMMITTEE TO …
+#> 5 148736           2 1               0                        1998 ANNUAL CS     COMMITTEE TO …
+#> 6 148736           2 2               0                        1998 ANNUAL CS     COMMITTEE TO …
+#> # … with 18 more variables: common_name <chr>, cfr_com_id <chr>, com_type <chr>,
+#> #   can_first_name <chr>, can_last_name <chr>, contribtype <chr>, f_name <chr>,
+#> #   l_name_or_org <chr>, address <chr>, city <chr>, state <chr>, zip <chr>, occupation <chr>,
+#> #   employer <chr>, received_date <date>, amount <dbl>, aggregate <dbl>, extra_desc <chr>
+tail(mic)
+#> # A tibble: 6 x 25
+#>   doc_seq_no page_no contribution_id cont_detail_id doc_stmnt_year doc_type_desc com_legal_name
+#>   <chr>        <int> <chr>           <chr>                   <int> <chr>         <chr>         
+#> 1 490075           0 4221            0                        2020 ANNUAL CS     COMMITTEE TO …
+#> 2 490075           0 4223            0                        2020 ANNUAL CS     COMMITTEE TO …
+#> 3 490075           0 4226            0                        2020 ANNUAL CS     COMMITTEE TO …
+#> 4 490075           0 4229            0                        2020 ANNUAL CS     COMMITTEE TO …
+#> 5 490075           0 4232            0                        2020 ANNUAL CS     COMMITTEE TO …
+#> 6 490075           0 4235            0                        2020 ANNUAL CS     COMMITTEE TO …
+#> # … with 18 more variables: common_name <chr>, cfr_com_id <chr>, com_type <chr>,
+#> #   can_first_name <chr>, can_last_name <chr>, contribtype <chr>, f_name <chr>,
+#> #   l_name_or_org <chr>, address <chr>, city <chr>, state <chr>, zip <chr>, occupation <chr>,
+#> #   employer <chr>, received_date <date>, amount <dbl>, aggregate <dbl>, extra_desc <chr>
+glimpse(mic)
+#> Observations: 15,998,081
+#> Variables: 25
+#> $ doc_seq_no      <chr> "148736", "148736", "148736", "148736", "148736", "148736", "148736", "1…
+#> $ page_no         <int> 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 5, 5, 5, 5, 6, 6, 6, 1, 1, …
+#> $ contribution_id <chr> "1", "2", "3", "4", "1", "2", "3", "4", "1", "2", "3", "4", "1", "2", "3…
+#> $ cont_detail_id  <chr> "0", "0", "0", "0", "0", "0", "0", "0", "0", "0", "0", "0", "0", "0", "0…
+#> $ doc_stmnt_year  <int> 1998, 1998, 1998, 1998, 1998, 1998, 1998, 1998, 1998, 1998, 1998, 1998, …
+#> $ doc_type_desc   <chr> "ANNUAL CS", "ANNUAL CS", "ANNUAL CS", "ANNUAL CS", "ANNUAL CS", "ANNUAL…
+#> $ com_legal_name  <chr> "COMMITTEE TO ELECT JUD GILBERT", "COMMITTEE TO ELECT JUD GILBERT", "COM…
+#> $ common_name     <chr> "COMM TO ELECT JUD GILBERT", "COMM TO ELECT JUD GILBERT", "COMM TO ELECT…
+#> $ cfr_com_id      <chr> "506799", "506799", "506799", "506799", "506799", "506799", "506799", "5…
+#> $ com_type        <chr> "CAN", "CAN", "CAN", "CAN", "CAN", "CAN", "CAN", "CAN", "CAN", "CAN", "C…
+#> $ can_first_name  <chr> "JUDSON", "JUDSON", "JUDSON", "JUDSON", "JUDSON", "JUDSON", "JUDSON", "J…
+#> $ can_last_name   <chr> "GILBERT II", "GILBERT II", "GILBERT II", "GILBERT II", "GILBERT II", "G…
+#> $ contribtype     <chr> "DIRECT                        ", "DIRECT                        ", "DIR…
+#> $ f_name          <chr> "JUDSON              ", "MARY                ", NA, "DAN                …
+#> $ l_name_or_org   <chr> "GILBERT                             ", "GILBERT                        …
+#> $ address         <chr> "1405 ST CLAIR RIVER DR", "1405 ST CLAIR RIVER DR", "PO BO 27158", "9780…
+#> $ city            <chr> "ALGONAC             ", "ALGONAC             ", "LASNING             ", …
+#> $ state           <chr> "MI", "MI", "MI", "MI", "MI", "MI", "MI", "MI", "MI", "MI", "MI", "MI", …
+#> $ zip             <chr> "48001     ", "48001     ", "48909     ", "48001     ", "48054     ", "4…
+#> $ occupation      <chr> "FUNERAL DIRECTOR", "RETIRED", NA, "RETIRED", NA, "FUNERAL DIRECTOR", "R…
+#> $ employer        <chr> "GILBERT FUNERAL HOME INC", NA, NA, NA, NA, "GILBERT FUNERAL HOME INC", …
+#> $ received_date   <date> 1997-07-17, 1997-07-17, 1997-08-29, 1997-09-08, 1997-09-07, 1997-09-09,…
+#> $ amount          <dbl> 500, 500, 1000, 500, 500, 3500, 100, 500, 500, 100, 100, 100, 100, 250, …
+#> $ aggregate       <dbl> 500, 500, 1000, 500, 500, 3500, 100, 500, 500, 100, 200, 100, 100, 250, …
+#> $ extra_desc      <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
+```
+
+``` r
+summary(mic$amount)
+#>    Min. 1st Qu.  Median    Mean 3rd Qu.    Max.    NA's 
+#> -195000       3       7      95      20 9175000    4664
+```
+
+![](../plots/amount_histogram-1.png)<!-- -->
+
+``` r
+mic <- mutate(mic, received_year = year(received_date))
+```
+
+``` r
+min(mic$received_date, na.rm = TRUE)
+#> [1] "999-01-14"
+sum(mic$received_year < 1998, na.rm = TRUE)
+#> [1] 27478
+max(mic$received_date, na.rm = TRUE)
+#> [1] "2206-06-01"
+sum(mic$received_date > today(), na.rm = TRUE)
+#> [1] 4
+```
+
+![](../plots/year_bar-1.png)<!-- -->
+
+## Wrangle
+
+### Address
+
+``` r
+mic <- mic %>% 
+  mutate(
+    address_norm = normal_address(
+      address = address,
+      abbs = usps_street,
+      na_rep = TRUE
+    )
+  )
+```
+
+``` r
+mic %>% 
+  select(contains("address")) %>% 
+  distinct() %>% 
+  sample_n(10)
+#> # A tibble: 10 x 2
+#>    address              address_norm                 
+#>    <chr>                <chr>                        
+#>  1 1885 S COLLEGE       1885 SOUTH COLLEGE           
+#>  2 1912 LARDIE RD       1912 LARDIE ROAD             
+#>  3 28 S MICHIGAN RD     28 SOUTH MICHIGAN ROAD       
+#>  4 3261 S. SHOREVIEW    3261 SOUTH SHOREVIEW         
+#>  5 501 HAROLD STREET    501 HAROLD STREET            
+#>  6 1784 STANWICK CT SE  1784 STANWICK COURT SOUTHEAST
+#>  7 2530 DEEP OAK CT     2530 DEEP OAK COURT          
+#>  8 5267 WRIGHT WAY E    5267 WRIGHT WAY EAST         
+#>  9 2749 EAST M-21       2749 EAST M 21               
+#> 10 3000 DUNE RIDGE PATH 3000 DUNE RIDGE PATH
+```
+
+### ZIP
+
+``` r
+mic <- mic %>% 
+  mutate(
+    zip_norm = normal_zip(
+      zip = zip,
+      na_rep = TRUE
+    )
+  )
+```
+
+``` r
+progress_table(
+  mic$zip,
+  mic$zip_norm,
+  compare = valid_zip
+)
+#> # A tibble: 2 x 6
+#>   stage    prop_in n_distinct prop_na    n_out n_diff
+#>   <chr>      <dbl>      <dbl>   <dbl>    <dbl>  <dbl>
+#> 1 zip        0         487271 0.00159 15972619 487271
+#> 2 zip_norm   0.997      27123 0.00163    40151   2136
+```
+
+### State
+
+``` r
+mic <- mic %>% 
+  mutate(
+    state_norm = normal_state(
+      state = state,
+      abbreviate = TRUE,
+      na_rep = TRUE,
+      valid = valid_state
+    )
+  )
+```
+
+``` r
+progress_table(
+  mic$state,
+  mic$state_norm,
+  compare = valid_state
+)
+#> # A tibble: 2 x 6
+#>   stage      prop_in n_distinct prop_na n_out n_diff
+#>   <chr>        <dbl>      <dbl>   <dbl> <dbl>  <dbl>
+#> 1 state         1.00        129 0.00107  4996     70
+#> 2 state_norm    1            59 0.00138     0      1
+```
+
+### City
+
+``` r
+mic <- mic %>% 
+  mutate(
+    city_norm = normal_city(
+      city = city, 
+      abbs = usps_city,
+      states = c("MI", "DC", "MICHIGAN"),
+      na = invalid_city,
+      na_rep = TRUE
+    )
+  )
+```
+
+``` r
+mic <- mic %>% 
+  rename(city_raw = city) %>% 
+  left_join(
+    y = zipcodes,
+    by = c(
+      "state_norm" = "state",
+      "zip_norm" = "zip"
+    )
+  ) %>% 
+  rename(city_match = city) %>% 
+  mutate(
+    match_abb = is_abbrev(city_norm, city_match),
+    match_dist = str_dist(city_norm, city_match),
+    city_swap = if_else(
+      condition = match_abb | match_dist == 1,
+      true = city_match,
+      false = city_norm
+    )
+  )
+```
+
+``` r
+progress_table(
+  mic$city_raw,
+  mic$city_norm,
+  mic$city_swap,
+  compare = valid_city
+)
+#> # A tibble: 3 x 6
+#>   stage       prop_in n_distinct  prop_na    n_out n_diff
+#>   <chr>         <dbl>      <dbl>    <dbl>    <dbl>  <dbl>
+#> 1 city_raw  0.0000126      27298 0.000989 15982052  27284
+#> 2 city_norm 0.944          25282 0.00148    895070  13435
+#> 3 city_swap 0.955          17194 0.00531    720512   5367
+```
+
+## Conclude
+
+1.  There are `nrow(df)` records in the database.
+2.  There are `sum(mic$dupe_flag)` duplicate records in the database.
+3.  The range and distribution of `amount` and `date` seem reasonable.
+4.  There are `sum(mic$na_flag)` records missing either recipient or
+    date.
+5.  Consistency in goegraphic data has been improved with
+    `campfin::normal_*()`.
+6.  The 5-digit `zip_norm` variable has been created with
+    `campfin::normal_zip(mic$zip)`.
+7.  The 4-digit `year` variable has been created with
+    `lubridate::year()`.
+
+## Export
+
+``` r
+proc_dir <- dir_create(here("mi", "contribs", "data", "processed"))
+```
+
+``` r
+mic %>% 
+  write_csv(
+    path = glue("{proc_dir}/df_type_clean.csv"),
+    na = ""
+  )
 ```
