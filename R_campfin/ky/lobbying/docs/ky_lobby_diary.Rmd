@@ -151,7 +151,7 @@ contain the lobbyist name table information.
 kylr <- str_subset(kylr, "Kentucky Registered Legislative Agents", negate = TRUE)
 kylr <- str_subset(kylr, "\\w+\\s\\d{1,2},\\s\\d{4}", negate = TRUE)
 kylr <- str_subset(kylr, "Legislative Agents/Employer\tPhone\tContact\tAddress", negate = TRUE)
-kylr <- str_subset(kylr, "\\d{1,2}/\\d{1,2}/\\d{4}\t\\d{2}", negate = TRUE)
+kylr <- str_subset(kylr, "\\d{1,2}/\\d{1,2}/\\d{4}\t\\d{1,2}", negate = TRUE)
 kylr <- str_replace_all(kylr, "\"", "\'")
 ```
 
@@ -490,8 +490,7 @@ glimpse(kylr)
 We can now export this wrangled and normalized data set.
 
 ```{r proc_dir}
-proc_dir <- here("ky", "lobbying", "data", "processed")
-dir_create(proc_dir)
+proc_dir <- dir_create(here("ky", "lobbying", "data", "processed"))
 ```
 
 ```{r proc_write}
@@ -596,11 +595,13 @@ so that the compensation records will show up when this information is searched.
 ```{r comp_join}
 lob_info <- kylr %>% 
   select(starts_with("lob_")) %>% 
-  select(lob_first, lob_last, ends_with("_norm"))
+  select(lob_first, lob_last, ends_with("_norm")) %>% 
+  distinct()
 
 pri_info <- kylr %>% 
   select(starts_with("pri_")) %>% 
-  select(pri_name, ends_with("_norm"))
+  select(pri_name, ends_with("_norm")) %>% 
+  distinct()
 
 kylc <- kylc %>% 
   left_join(lob_info, by = c("lob_last", "lob_first")) %>% 
