@@ -184,11 +184,32 @@ mic_names[1:3] <- c("doc_id", "page_no", "cont_id")
 mic_names[length(mic_names)] <- "runtime"
 ```
 
-```{r read_tsv}
+```{r read_tsv, eval=FALSE}
 mic <- vroom(
   file = raw_paths,
   delim = "\t",
   skip = 1,
+  col_names = mic_names,
+  col_types = cols(
+    .default = col_character(),
+    page_no = col_integer(),
+    doc_stmnt_year = col_integer(),
+    received_date = col_date_usa(),
+    amount = col_double(),
+    aggregate = col_double(),
+    runtime = col_skip()
+  )
+)
+```
+
+```{r read_map}
+mic <- map_dfr(
+  .x = raw_paths,
+  .f = read_delim,
+  delim = "\t",
+  skip = 1,
+  escape_backslash = FALSE, 
+  escape_double = FALSE,
   col_names = mic_names,
   col_types = cols(
     .default = col_character(),
