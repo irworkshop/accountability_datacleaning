@@ -170,6 +170,7 @@ summary(df$amount)
 df %>%
   ggplot(aes(amount)) +
   geom_histogram() +
+  scale_y_continuous(labels = comma) +
   scale_x_continuous(
     breaks = c(1 %o% 10^(0:6)),
     labels = dollar,
@@ -205,7 +206,7 @@ sum(df$date > today())
 df <- df %>% 
   # combine street addr
   unite(
-    col = adress_full,
+    col = address_full,
     starts_with("address"),
     sep = " ",
     remove = FALSE,
@@ -214,11 +215,19 @@ df <- df %>%
   # normalize combined addr
   mutate(
     address_norm = normal_address(
-      address = adress_full,
+      address = address_full,
       abbs = usps_street,
       na_rep = TRUE
     )
-  )
+  ) %>% 
+  select(-address_full)
+```
+
+```{r address_view}
+df %>% 
+  select(contains("address")) %>% 
+  distinct() %>% 
+  sample_frac()
 ```
 
 ### ZIP
@@ -330,7 +339,7 @@ df %>%
     
   ) %>% 
   write_csv(
-    path = glue("{proc_dir}/df_type_clean.csv"),
+    path = path(proc_dir, "df_type_clean.csv"),
     na = ""
   )
 ```
