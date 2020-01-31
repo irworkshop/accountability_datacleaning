@@ -89,20 +89,21 @@ pacman::p_load(
 )
 ```
 
-This document should be run as part of the `R_campfin` project, which lives as a sub-directory of
-the more general, language-agnostic [`irworkshop/accountability_datacleaning`][01] GitHub
-repository.
+This document should be run as part of the `R_campfin` project, which lives as a
+sub-directory of the more general, language-agnostic
+[`irworkshop/accountability_datacleaning`][repo] GitHub repository.
 
-The `R_campfin` project uses the [RStudio projects][02] feature and should be run as such. The
-project also uses the dynamic `here::here()` tool for file paths relative to _your_ machine.
+The `R_campfin` project uses the [RStudio projects][rproj] feature and should be
+run as such. The project also uses the dynamic `here::here()` tool for file
+paths relative to _your_ machine.
 
 ```{r where_here}
 # where does this document knit?
 here::here()
 ```
 
-[01]: https://github.com/irworkshop/accountability_datacleaning "TAP repo"
-[02]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects "Rproj"
+[repo]: https://github.com/irworkshop/accountability_datacleaning
+[rproj]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects
 
 ## Data
 
@@ -136,7 +137,7 @@ key_page %>%
   as_tibble() %>% 
   mutate(
     X1 = md_code(X1),
-    X2 = str_trim(str_squish(str_trunc(X2, 100)))
+    X2 = str_trim(str_squish(str_trunc(X2, 90)))
   ) %>% 
   md_table(col.names = c("Variable", "Description"))
 ```
@@ -177,6 +178,10 @@ map(raw_urls, write_zip, raw_dir)
 
 ### Read
 
+Since the larger files are split with the column header only in the first, we
+will have to read these headers separately. The last column only records the
+time the files are downloaded.
+
 ```{r mic_names}
 mic_names <- str_split(read_lines(raw_paths[1])[1], "\t")[[1]]
 mic_names <- mic_names[-length(mic_names)]
@@ -184,7 +189,10 @@ mic_names[1:3] <- c("doc_id", "page_no", "cont_id")
 mic_names[length(mic_names)] <- "runtime"
 ```
 
-```{r read_tsv, eval=FALSE}
+Using `vroom::vroom()`, we can read all `r length(dir_ls(raw_dir))` archive
+files at once.
+
+```{r read_tsv, eval=TRUE}
 mic <- vroom(
   file = raw_paths,
   delim = "\t",
@@ -202,7 +210,7 @@ mic <- vroom(
 )
 ```
 
-```{r read_map}
+```{r read_map, echo=FALSE, eval=FALSE}
 mic <- map_dfr(
   .x = raw_paths,
   .f = read_delim,
@@ -223,6 +231,12 @@ mic <- map_dfr(
 )
 ```
 
+Some of the columns have an inconsistent number of spacing, which we can trim.
+
+```{r str_trim, eval=FALSE}
+mic <- mutate_if(mic, is_character, str_trim)
+```
+
 ## Explore
 
 ```{r glimpse}
@@ -238,7 +252,7 @@ summary(mic$amount)
 ```{r amount_histogram, echo=FALSE}
 mic %>%
   ggplot(aes(amount)) +
-  geom_histogram(fill = RColorBrewer::brewer.pal(3, "Dark2")[3]) +
+  geom_histogram(fill = dark2["purple"]) +
   scale_y_continuous(labels = comma) +
   scale_x_continuous(
     breaks = c(1 %o% 10^(0:6)),
@@ -251,6 +265,22 @@ mic %>%
     caption = "Source: Michigan Board of Elections",
     x = "Amount",
     y = "Count"
+  )
+```
+
+```{r}
+mic %>% 
+  filter(amount > 1, amount < 1000000) %>% 
+  ggplot(aes(x = com_type, y = amount, fill = com_type)) +
+  geom_violin(draw_quantiles = TRUE, scale = "width", ) +
+  scale_y_continuous(labels = dollar, trans = "log10") +
+  scale_fill_brewer(palette = "Dark2", guide = FALSE) +
+  labs(
+    title = "Michigan Contribution Amount Distribution by Committee Type",
+    subtitle = "from 1998 to 2020",
+    caption = "Source: Michigan Board of Elections",
+    x = "Committee Type",
+    y = "Amount"
   )
 ```
 
@@ -286,14 +316,14 @@ mic$received_year[which(mic$received_year > 2020)] <- c(2011, 2006)
 mic %>% 
   count(received_year) %>% 
   ggplot(aes(received_year, n)) +
-  geom_col(fill = RColorBrewer::brewer.pal(3, "Dark2")[3]) +
+  geom_col(fill = dark2["purple"]) +
   coord_cartesian(xlim = c(1998, 2020)) +
   scale_y_continuous(labels = comma) +
   labs(
-    title = "Michigan Contributions Recieved by Year",
+    title = "Michigan Contributions Received by Year",
     subtitle = "from 1998 to 2020",
     caption = "Source: Michigan Board of Elections",
-    x = "Year Recieved",
+    x = "Year Received",
     y = "Count"
   )
 ```
@@ -369,11 +399,13 @@ progress_table(
 The `campfin::normal_state()` function will make valid 2-digit USPS state
 abbreviations.
 
-```{r}
+```{r state_fix}
 mic <- mutate(mic, state_norm = state)
-state_zip <- mic$state_norm == str_sub(mic$zip, end = 2)
-mi_zip <- mic$zip %in% zipcodes$zip[zipcodes$state_norm == "MI"]
+# state is first 2 of zip from MI
+state_zip <- mic$state_norm == str_sub(mic$zip_norm, end = 2)
+mi_zip <- mic$zip_norm %in% zipcodes$zip[zipcodes$state == "MI"]
 mic$state_norm[which(state_zip & mi_zip)] <- "MI"
+# state is invalid but close to MI
 ends_mi <- str_detect(mic$state_norm, "(^M|I$)")
 out_state <- mic$state_norm %out% c(valid_state, "MX", "MB")
 mic$state_norm[which(out_state & ends_mi)] <- "MI"
@@ -386,7 +418,7 @@ mic <- mutate(
     state = state_norm,
     abbreviate = TRUE,
     na_rep = TRUE,
-    valid = NULL
+    valid = valid_state
   )
 )
 ```
@@ -413,7 +445,7 @@ removes punctuation, and expands common abbreviations.
 mic <- mutate(
   .data = mic,
   city_norm = normal_city(
-    city = str_remove(city, "\\sTOWNSHIP$"), 
+    city = city, 
     abbs = usps_city,
     states = c("MI", "DC", "MICHIGAN"),
     na = invalid_city,
@@ -577,7 +609,7 @@ valid_locality <- check$guess[check$check_city_flag]
 ```
 
 Then we can perform some simple comparisons between the queried city and the
-returned city. If they are extremelly similar, we can accept those returned
+returned city. If they are extremely similar, we can accept those returned
 locality strings and add them to our list of accepted additional localities.
 
 ```{r check_compare}
@@ -634,7 +666,7 @@ progress %>%
 
 More importantly, the number of distinct values decreased each stage. We were
 able to confidently change many distinct invalid values to their valid
-equivilent.
+equivalent.
 
 ```{r distinct_bar}
 progress %>% 
@@ -667,7 +699,7 @@ progress %>%
 1. There are `sum(mic$dupe_flag)` duplicate records in the database.
 1. The range and distribution of `amount` and `date` seem reasonable.
 1. There are `sum(mic$na_flag)` records missing either recipient or date.
-1. Consistency in goegraphic data has been improved with `campfin::normal_*()`.
+1. Consistency in geographic data has been improved with `campfin::normal_*()`.
 1. The 5-digit `zip_norm` variable has been created with `campfin::normal_zip(mic$zip)`.
 1. The 4-digit `year` variable has been created with `lubridate::year()`.
 

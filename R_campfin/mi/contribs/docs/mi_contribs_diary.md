@@ -1,7 +1,7 @@
 Michigan Contributions
 ================
 Kiernan Nicholls
-2020-01-30 13:20:03
+2020-01-30 20:14:43
 
 <!-- Place comments regarding knitting here -->
 
@@ -66,11 +66,11 @@ pacman::p_load(
 
 This document should be run as part of the `R_campfin` project, which
 lives as a sub-directory of the more general, language-agnostic
-[`irworkshop/accountability_datacleaning`](https://github.com/irworkshop/accountability_datacleaning "TAP repo")
+[`irworkshop/accountability_datacleaning`](https://github.com/irworkshop/accountability_datacleaning)
 GitHub repository.
 
 The `R_campfin` project uses the [RStudio
-projects](https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects "Rproj")
+projects](https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects)
 feature and should be run as such. The project also uses the dynamic
 `here::here()` tool for file paths relative to *your* machine.
 
@@ -97,34 +97,34 @@ The CFR also provides a README file with a record layout.
 > In these cases the column header row will only exist in the first (00)
 > file.
 
-| Variable          | Description                                                                                      |
-| :---------------- | :----------------------------------------------------------------------------------------------- |
-| `doc_seq_no`      | Unique BOE document sequence number of the filed campaign statement                              |
-| `page_no`         | If filed on paper, the physical page number the transaction appears on, otherwise zero           |
-| `contribution_id` | Unique number of the transaction, within the campaign statement and amendments                   |
-| `cont_detail_id`  | Unique number used to further break down some types of transactions with supplemental informati… |
-| `doc_stmnt_year`  | The calendar year that this statement was required by the BOE                                    |
-| `doc_type_desc`   | The type of statement that this contribution is attached to                                      |
-| `com_legal_name`  | Legal Name of the committee receiving the contribution                                           |
-| `common_name`     | Commonly known shorter name of the committee. May be deprecated in the future.                   |
-| `cfr_com_id`      | Unique committee ID\# of the receiving committee in the BOE database                             |
-| `com_type`        | Type of committee receiving the contribution                                                     |
-| `can_first_name`  | First name of the candidate (if applicable) benefitting from the contribution                    |
-| `can_last_name`   | Last name of the candidate (if applicable) benefitting from the contribution                     |
-| `contribtype`     | Type of contribution received                                                                    |
-| `f_name`          | First name of the individual contributor                                                         |
-| `l_name`          | Last name of the contributor OR the name of the organization that made the contribution          |
-| `address`         | Street address of the contributor                                                                |
-| `city`            | City of the contributor                                                                          |
-| `state`           | State of the contributor                                                                         |
-| `zip`             | Zipcode of the contributor                                                                       |
-| `occupation`      | Occupation of the contributor                                                                    |
-| `employer`        | Employer of the contributor                                                                      |
-| `received_date`   | Date the contribution was received                                                               |
-| `amount`          | Dollar amount or value of the contribution                                                       |
-| `aggregate`       | Cumulative dollar amount of contributions made to this committee during this period up to the d… |
-| `extra_desc`      | Extra descriptive information for the transaction                                                |
-| `RUNTIME`         | Indicates the time these transactions were exported from the BOE database. Header only.          |
+| Variable          | Description                                                                             |
+| :---------------- | :-------------------------------------------------------------------------------------- |
+| `doc_seq_no`      | Unique BOE document sequence number of the filed campaign statement                     |
+| `page_no`         | If filed on paper, the physical page number the transaction appears on, otherwise zero  |
+| `contribution_id` | Unique number of the transaction, within the campaign statement and amendments          |
+| `cont_detail_id`  | Unique number used to further break down some types of transactions with supplemental … |
+| `doc_stmnt_year`  | The calendar year that this statement was required by the BOE                           |
+| `doc_type_desc`   | The type of statement that this contribution is attached to                             |
+| `com_legal_name`  | Legal Name of the committee receiving the contribution                                  |
+| `common_name`     | Commonly known shorter name of the committee. May be deprecated in the future.          |
+| `cfr_com_id`      | Unique committee ID\# of the receiving committee in the BOE database                    |
+| `com_type`        | Type of committee receiving the contribution                                            |
+| `can_first_name`  | First name of the candidate (if applicable) benefitting from the contribution           |
+| `can_last_name`   | Last name of the candidate (if applicable) benefitting from the contribution            |
+| `contribtype`     | Type of contribution received                                                           |
+| `f_name`          | First name of the individual contributor                                                |
+| `l_name`          | Last name of the contributor OR the name of the organization that made the contribution |
+| `address`         | Street address of the contributor                                                       |
+| `city`            | City of the contributor                                                                 |
+| `state`           | State of the contributor                                                                |
+| `zip`             | Zipcode of the contributor                                                              |
+| `occupation`      | Occupation of the contributor                                                           |
+| `employer`        | Employer of the contributor                                                             |
+| `received_date`   | Date the contribution was received                                                      |
+| `amount`          | Dollar amount or value of the contribution                                              |
+| `aggregate`       | Cumulative dollar amount of contributions made to this committee during this period u…  |
+| `extra_desc`      | Extra descriptive information for the transaction                                       |
+| `RUNTIME`         | Indicates the time these transactions were exported from the BOE database. Header only. |
 
 ## Import
 
@@ -154,12 +154,18 @@ if (!all(this_file_new(raw_paths))) {
 
 ### Read
 
+Since the larger files are split with the column header only in the
+first, we will have to read these headers separately. The last column
+only records the time the files are downloaded.
+
 ``` r
 mic_names <- str_split(read_lines(raw_paths[1])[1], "\t")[[1]]
 mic_names <- mic_names[-length(mic_names)]
 mic_names[1:3] <- c("doc_id", "page_no", "cont_id")
 mic_names[length(mic_names)] <- "runtime"
 ```
+
+Using `vroom::vroom()`, we can read all 46 archive files at once.
 
 ``` r
 mic <- vroom(
@@ -179,25 +185,11 @@ mic <- vroom(
 )
 ```
 
+Some of the columns have an inconsistent number of spacing, which we can
+trim.
+
 ``` r
-mic <- map_dfr(
-  .x = raw_paths,
-  .f = read_delim,
-  delim = "\t",
-  skip = 1,
-  escape_backslash = FALSE, 
-  escape_double = FALSE,
-  col_names = mic_names,
-  col_types = cols(
-    .default = col_character(),
-    page_no = col_integer(),
-    doc_stmnt_year = col_integer(),
-    received_date = col_date_usa(),
-    amount = col_double(),
-    aggregate = col_double(),
-    runtime = col_skip()
-  )
-)
+mic <- mutate_if(mic, is_character, str_trim)
 ```
 
 ## Explore
@@ -246,13 +238,13 @@ glimpse(mic)
 #> $ com_type       <chr> "CAN", "CAN", "CAN", "CAN", "CAN", "CAN", "CAN", "CAN", "CAN", "CAN", "CA…
 #> $ can_first_name <chr> "JUDSON", "JUDSON", "JUDSON", "JUDSON", "JUDSON", "JUDSON", "JUDSON", "JU…
 #> $ can_last_name  <chr> "GILBERT II", "GILBERT II", "GILBERT II", "GILBERT II", "GILBERT II", "GI…
-#> $ contribtype    <chr> "DIRECT                        ", "DIRECT                        ", "DIRE…
-#> $ f_name         <chr> "JUDSON              ", "MARY                ", NA, "DAN                 …
-#> $ l_name_or_org  <chr> "GILBERT                             ", "GILBERT                         …
+#> $ contribtype    <chr> "DIRECT", "DIRECT", "DIRECT", "DIRECT", "DIRECT", "LOAN FROM A PERSON", "…
+#> $ f_name         <chr> "JUDSON", "MARY", NA, "DAN", "RAY", "JUDSON S", "GILBERT", "JOHN R", "LEE…
+#> $ l_name_or_org  <chr> "GILBERT", "GILBERT", "MICHIGAN FUNERAL DIRECTORS ASSOC", "MORE", "GILBER…
 #> $ address        <chr> "1405 ST CLAIR RIVER DR", "1405 ST CLAIR RIVER DR", "PO BO 27158", "9780 …
-#> $ city           <chr> "ALGONAC             ", "ALGONAC             ", "LASNING             ", "…
+#> $ city           <chr> "ALGONAC", "ALGONAC", "LASNING", "PEARL BEACH", "CHINA", "ALGONAC", "ROYA…
 #> $ state          <chr> "MI", "MI", "MI", "MI", "MI", "MI", "MI", "MI", "MI", "MI", "MI", "MI", "…
-#> $ zip            <chr> "48001     ", "48001     ", "48909     ", "48001     ", "48054     ", "48…
+#> $ zip            <chr> "48001", "48001", "48909", "48001", "48054", "48001", "48067", "48001", "…
 #> $ occupation     <chr> "FUNERAL DIRECTOR", "RETIRED", NA, "RETIRED", NA, "FUNERAL DIRECTOR", "RE…
 #> $ employer       <chr> "GILBERT FUNERAL HOME INC", NA, NA, NA, NA, "GILBERT FUNERAL HOME INC", N…
 #> $ received_date  <date> 1997-07-17, 1997-07-17, 1997-08-29, 1997-09-08, 1997-09-07, 1997-09-09, …
@@ -264,10 +256,28 @@ glimpse(mic)
 ``` r
 summary(mic$amount)
 #>    Min. 1st Qu.  Median    Mean 3rd Qu.    Max.    NA's 
-#> -195000       3       7      95      20 9175000    4664
+#> -195000       3       7      95      20 9175000    4636
 ```
 
 ![](../plots/amount_histogram-1.png)<!-- -->
+
+``` r
+mic %>% 
+  filter(amount > 1, amount < 1000000) %>% 
+  ggplot(aes(x = com_type, y = amount, fill = com_type)) +
+  geom_violin(draw_quantiles = TRUE, scale = "width", ) +
+  scale_y_continuous(labels = dollar, trans = "log10") +
+  scale_fill_brewer(palette = "Dark2", guide = FALSE) +
+  labs(
+    title = "Michigan Contribution Amount Distribution by Committee Type",
+    subtitle = "from 1998 to 2020",
+    caption = "Source: Michigan Board of Elections",
+    x = "Committee Type",
+    y = "Amount"
+  )
+```
+
+![](../plots/unnamed-chunk-1-1.png)<!-- -->
 
 We can add a new `received_year` variable using `lubridate::year()`.
 
@@ -330,44 +340,44 @@ mic <- mutate(
 ```
 
     #> # A tibble: 10 x 2
-    #>    address              address_norm       
-    #>    <chr>                <chr>              
-    #>  1 1885 S COLLEGE       1885 S COLLEGE     
-    #>  2 1912 LARDIE RD       1912 LARDIE RD     
-    #>  3 28 S MICHIGAN RD     28 S MICHIGAN RD   
-    #>  4 3261 S. SHOREVIEW    3261 S SHOREVIEW   
-    #>  5 501 HAROLD STREET    501 HAROLD ST      
-    #>  6 1784 STANWICK CT SE  1784 STANWICK CT SE
-    #>  7 2530 DEEP OAK CT     2530 DEEP OAK CT   
-    #>  8 5267 WRIGHT WAY E    5267 WRIGHT WAY E  
-    #>  9 2749 EAST M-21       2749 E M 21        
-    #> 10 3000 DUNE RIDGE PATH 3000 DUNE RDG PATH
+    #>    address              address_norm      
+    #>    <chr>                <chr>             
+    #>  1 6450 HIGHLAND        6450 HIGHLAND     
+    #>  2 N607 COUNTY ROAD 15C N607 COUNTY RD 15C
+    #>  3 18589 LUMPKIN        18589 LUMPKIN     
+    #>  4 13868 LACHENE        13868 LACHENE     
+    #>  5 201 BROOKSIDE DRIVE  201 BROOKSIDE DR  
+    #>  6 123 60TH ST SE       123 60TH ST SE    
+    #>  7 23731 W LAKE CIR     23731 W LK CIR    
+    #>  8 5061 WATERS RD       5061 WATERS RD    
+    #>  9 8085 N EVERETT RD    8085 N EVERETT RD 
+    #> 10 2715 VERONICA        2715 VERONICA
 
 This process also automatically removed a number of invalid values.
 
 ``` r
 prop_na(mic$address)
-#> [1] 0.0009947473
+#> [1] 0.0009999292
 prop_na(mic$address_norm)
 #> [1] 0.001430094
 mic %>% 
   select(contains("address")) %>% 
   filter(!is.na(address), is.na(address_norm)) %>% 
   count(address, sort = TRUE)
-#> # A tibble: 73 x 2
-#>    address                     n
-#>    <chr>                   <int>
-#>  1 "NOT KNOWN"              2789
-#>  2 "UNKNOWN"                2090
-#>  3 "NULL"                    719
-#>  4 "INFORMATION REQUESTED"   246
-#>  5 " UNKNOWN"                228
-#>  6 "P.O. BOX"                146
-#>  7 "REQUESTED"               129
-#>  8 "PO BOX"                   85
-#>  9 " NA"                      83
-#> 10 "N/A"                      73
-#> # … with 63 more rows
+#> # A tibble: 71 x 2
+#>    address                   n
+#>    <chr>                 <int>
+#>  1 NOT KNOWN              2789
+#>  2 UNKNOWN                2318
+#>  3 NULL                    719
+#>  4 INFORMATION REQUESTED   246
+#>  5 P.O. BOX                146
+#>  6 REQUESTED               129
+#>  7 PO BOX                   85
+#>  8 N/A                      73
+#>  9 XXXXXX                   38
+#> 10 NONE                     37
+#> # … with 61 more rows
 ```
 
 ### ZIP
@@ -397,8 +407,8 @@ progress_table(
 #> # A tibble: 2 x 6
 #>   stage    prop_in n_distinct prop_na    n_out n_diff
 #>   <chr>      <dbl>      <dbl>   <dbl>    <dbl>  <dbl>
-#> 1 zip        0         487341 0.00160 15991563 487341
-#> 2 zip_norm   0.997      27125 0.00164    40178   2137
+#> 1 zip      0.00755     487338 0.00160 15870780 485182
+#> 2 zip_norm 0.997        27125 0.00165    40001   2137
 ```
 
 ### State
@@ -408,9 +418,11 @@ state abbreviations.
 
 ``` r
 mic <- mutate(mic, state_norm = state)
-state_zip <- mic$state_norm == str_sub(mic$zip, end = 2)
-mi_zip <- mic$zip %in% zipcodes$zip[zipcodes$state_norm == "MI"]
+# state is first 2 of zip from MI
+state_zip <- mic$state_norm == str_sub(mic$zip_norm, end = 2)
+mi_zip <- mic$zip_norm %in% zipcodes$zip[zipcodes$state == "MI"]
 mic$state_norm[which(state_zip & mi_zip)] <- "MI"
+# state is invalid but close to MI
 ends_mi <- str_detect(mic$state_norm, "(^M|I$)")
 out_state <- mic$state_norm %out% c(valid_state, "MX", "MB")
 mic$state_norm[which(out_state & ends_mi)] <- "MI"
@@ -423,7 +435,7 @@ mic <- mutate(
     state = state_norm,
     abbreviate = TRUE,
     na_rep = TRUE,
-    valid = NULL
+    valid = valid_state
   )
 )
 ```
@@ -437,8 +449,8 @@ progress_table(
 #> # A tibble: 2 x 6
 #>   stage      prop_in n_distinct prop_na n_out n_diff
 #>   <chr>        <dbl>      <dbl>   <dbl> <dbl>  <dbl>
-#> 1 state         1.00        129 0.00107  4998     70
-#> 2 state_norm    1.00        107 0.00117  3297     49
+#> 1 state         1.00        128 0.00107  4998     69
+#> 2 state_norm    1            59 0.00138     0      1
 ```
 
 ### City
@@ -455,7 +467,7 @@ capitalization, removes punctuation, and expands common abbreviations.
 mic <- mutate(
   .data = mic,
   city_norm = normal_city(
-    city = str_remove(city, "\\sTOWNSHIP$"), 
+    city = city, 
     abbs = usps_city,
     states = c("MI", "DC", "MICHIGAN"),
     na = invalid_city,
@@ -465,18 +477,18 @@ mic <- mutate(
 ```
 
     #> # A tibble: 10 x 2
-    #>    city                   city_norm       
-    #>    <chr>                  <chr>           
-    #>  1 "INKSTER             " INKSTER         
-    #>  2 "RIVER RIDGE         " RIVER RIDGE     
-    #>  3 "CENTRAL ISLIP       " CENTRAL ISLIP   
-    #>  4 "HASTINGS HUDSON     " HASTINGS HUDSON 
-    #>  5 "CASTLE SHANN        " CASTLE SHANN    
-    #>  6 "ANGEL FIRE          " ANGEL FIRE      
-    #>  7 "PT JEFFERSON        " POINT JEFFERSON 
-    #>  8 "CUT AND SHOOT       " CUT AND SHOOT   
-    #>  9 "FORT MYERS BEACH    " FORT MYERS BEACH
-    #> 10 "BRININGHAM          " BRININGHAM
+    #>    city              city_norm          
+    #>    <chr>             <chr>              
+    #>  1 GRS PT FMS        GRS POINT FMS      
+    #>  2 M?NCHEN           M NCHEN            
+    #>  3 NORTH FT MYERS    NORTH FORT MYERS   
+    #>  4 ST. HELENA ISLAND SAINT HELENA ISLAND
+    #>  5 N. JUDSON         NORTH JUDSON       
+    #>  6 MADISON HTS..     MADISON HEIGHTS    
+    #>  7 MT CLEMONS        MOUNT CLEMONS      
+    #>  8 JEFFERSON TWP     JEFFERSON TOWNSHIP 
+    #>  9 FORT  GRATIOT     FORT GRATIOT       
+    #> 10 ST. CLAIR BEACH   SAINT CLAIR BEACH
 
 #### Swap
 
@@ -632,7 +644,7 @@ valid_locality <- check$guess[check$check_city_flag]
 ```
 
 Then we can perform some simple comparisons between the queried city and
-the returned city. If they are extremelly similar, we can accept those
+the returned city. If they are extremely similar, we can accept those
 returned locality strings and add them to our list of accepted
 additional localities.
 
@@ -656,10 +668,10 @@ mic$city_refine <- str_remove(mic$city_refine, "\\sTOWNSHIP$")
 mic %>% 
   filter(city_refine %out% many_city) %>% 
   count(city_refine, sort = TRUE)
-#> # A tibble: 3,935 x 2
+#> # A tibble: 3,937 x 2
 #>    city_refine            n
 #>    <chr>              <int>
-#>  1 <NA>               85088
+#>  1 <NA>               85074
 #>  2 ORCHARD LAKE        6535
 #>  3 FRMGTN HILLS        4544
 #>  4 GROSSE POINTE FARM  3323
@@ -669,15 +681,15 @@ mic %>%
 #>  8 GROSSE PTE FARMS    2499
 #>  9 GRS POINT WDS       1941
 #> 10 GROSSE PTE PARKS    1875
-#> # … with 3,925 more rows
+#> # … with 3,927 more rows
 ```
 
-| stage        | prop\_in | n\_distinct | prop\_na |   n\_out | n\_diff |
-| :----------- | -------: | ----------: | -------: | -------: | ------: |
-| city\_raw    |    0.000 |       27309 |    0.001 | 15995975 |   27283 |
-| city\_norm   |    0.976 |       25317 |    0.001 |   384990 |   12485 |
-| city\_swap   |    0.986 |       17285 |    0.005 |   216841 |    4379 |
-| city\_refine |    0.994 |       16693 |    0.005 |    88057 |    3935 |
+| stage        | prop\_in | n\_distinct | prop\_na | n\_out | n\_diff |
+| :----------- | -------: | ----------: | -------: | -----: | ------: |
+| city\_raw    |    0.947 |       27294 |    0.001 | 848492 |   14497 |
+| city\_norm   |    0.976 |       25321 |    0.001 | 384986 |   12487 |
+| city\_swap   |    0.986 |       17290 |    0.005 | 216841 |    4382 |
+| city\_refine |    0.994 |       16695 |    0.005 |  88061 |    3937 |
 
 You can see how the percentage of valid values increased with each
 stage.
@@ -686,7 +698,7 @@ stage.
 
 More importantly, the number of distinct values decreased each stage. We
 were able to confidently change many distinct invalid values to their
-valid equivilent.
+valid equivalent.
 
 ``` r
 progress %>% 
@@ -721,7 +733,7 @@ progress %>%
 3.  The range and distribution of `amount` and `date` seem reasonable.
 4.  There are `sum(mic$na_flag)` records missing either recipient or
     date.
-5.  Consistency in goegraphic data has been improved with
+5.  Consistency in geographic data has been improved with
     `campfin::normal_*()`.
 6.  The 5-digit `zip_norm` variable has been created with
     `campfin::normal_zip(mic$zip)`.
