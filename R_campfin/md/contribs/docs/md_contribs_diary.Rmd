@@ -1,0 +1,453 @@
+---
+title: "Maryland Contributions"
+author: "Kiernan Nicholls"
+date: "`r Sys.time()`"
+output:
+  github_document: 
+    df_print: tibble
+    toc: true
+    toc_dept: 2
+editor_options: 
+  chunk_output_type: console
+---
+
+<!-- Place comments regarding knitting here -->
+
+```{r setup, include=FALSE, purl=FALSE}
+library(knitr)
+opts_chunk$set(
+  eval = TRUE,
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  error = FALSE,
+  collapse = TRUE,
+  comment = "#>",
+  fig.path = "../plots/",
+  fig.width = 10,
+  dpi = 300
+)
+options(width = 99)
+set.seed(5)
+```
+
+```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
+fs::dir_create(here::here("md", "contribs", "docs"))
+```
+
+## Project
+
+The Accountability Project is an effort to cut across data silos and give
+journalists, policy professionals, activists, and the public at large a simple
+way to search across huge volumes of public data about people and organizations.
+
+Our goal is to standardizing public data on a few key fields by thinking of each
+dataset row as a transaction. For each transaction there should be (at least) 3
+variables:
+
+1. All **parties** to a transaction.
+2. The **date** of the transaction.
+3. The **amount** of money involved.
+
+## Objectives
+
+This document describes the process used to complete the following objectives:
+
+1. How many records are in the database?
+1. Check for entirely duplicated records.
+1. Check ranges of continuous variables.
+1. Is there anything blank or missing?
+1. Check for consistency issues.
+1. Create a five-digit ZIP Code called `zip`.
+1. Create a `year` field from the transaction date.
+1. Make sure there is data on both parties to a transaction.
+
+## Packages
+
+The following packages are needed to collect, manipulate, visualize, analyze,
+and communicate these results. The `pacman` package will facilitate their
+installation and attachment.
+
+The IRW's `campfin` package will also have to be installed from GitHub. This
+package contains functions custom made to help facilitate the processing of
+campaign finance data.
+
+```{r load_packages, message=FALSE, warning=FALSE, error=FALSE}
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load_gh("irworkshop/campfin")
+pacman::p_load(
+  tidyverse, # data manipulation
+  lubridate, # datetime strings
+  magrittr, # pipe operators
+  janitor, # dataframe clean
+  refinr, # cluster and merge
+  scales, # format strings
+  knitr, # knit documents
+  vroom, # read files fast
+  glue, # combine strings
+  here, # relative storage
+  fs # search storage 
+)
+```
+
+This document should be run as part of the `R_campfin` project, which lives as a
+sub-directory of the more general, language-agnostic
+[`irworkshop/accountability_datacleaning`][tap] GitHub repository.
+
+The `R_campfin` project uses the [RStudio projects][rproj] feature and should be
+run as such. The project also uses the dynamic `here::here()` tool for file
+paths relative to _your_ machine.
+
+```{r where_here}
+# where does this document knit?
+here::here()
+```
+
+[tap]: https://github.com/irworkshop/accountability_datacleaning
+[rproj]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects
+
+## Data
+
+## Import
+
+### Download
+
+```{r raw_dir}
+raw_dir <- dir_create(here("md", "contribs", "data", "raw"))
+```
+
+```{r raw_download, eval=FALSE}
+tmp_csv <- file_temp(ext = "csv")
+response <- GET(
+  url = "https://campaignfinance.maryland.gov/Public/ExportCsv",
+  write_disk(tmp_csv, overwrite = TRUE),
+  query = list(
+    page = "1",
+    orderBy = "~",
+    filter = "~",
+    `Grid-size` = 15,
+    theme = "vista"
+  )
+)
+```
+
+### Read
+
+```{r raw_lines, eval=FALSE}
+read_lines(tmp_csv) %>% 
+  str_remove(",$") %>% 
+  str_replace_all("\"", "\'") %>% 
+  write_lines(tmp_csv)
+```
+
+```{r echo=FALSE}
+tmp_csv <- "~/Desktop/tmp.csv"
+```
+
+```{r raw_read}
+mdc <- read_delim(
+  file = tmp_csv,
+  delim = ",",
+  escape_backslash = FALSE,
+  escape_double = FALSE,
+  col_types = cols(
+    .default = col_character(),
+    `Contribution Date` = col_date_usa(),
+    `Contribution Amount` = col_double()
+  )
+)
+```
+
+```{r raw_rename, echo=FALSE}
+names(mdc) <- c(
+  "committee", "period", "date", "name", "address", "type", 
+  "method", "amount", "employer", "occupation", "office", "fund"
+)
+```
+
+## Wrangle
+
+```{r address_split}
+mdc %>% 
+  select(address) %>% 
+  separate(
+    col = address,
+    into = c(glue("address{1:10}"), "city", "state_zip", "extra"),
+    sep = "\\s{2,}",
+    extra = "merge",
+    fill = "left"
+  ) %>% 
+  unite(
+    starts_with("address"),
+    col = "address",
+    na.rm = TRUE
+  ) %>% 
+  select(-extra) %>% 
+  separate(
+    col = state_zip,
+    into = c("state", "zip"),
+    sep = "\\s(?=\\d)"
+  )
+```
+
+
+## Explore
+
+```{r glimpse}
+head(mdc)
+tail(mdc)
+glimpse(sample_frac(mdc))
+```
+
+### Missing
+
+```{r count_na}
+col_stats(mdc, count_na)
+```
+
+```{r flag_na}
+mdc <- mdc %>% flag_na(payee, filer, date, amount)
+```
+
+### Duplicates
+
+```{r flag_dupes}
+mdc <- flag_dupes(mdc, -id)
+```
+
+### Categorical
+
+```{r n_distinct}
+col_stats(mdc, n_distinct)
+```
+
+### Continuous
+
+#### Amounts
+
+```{r ammount_summary}
+summary(mdc$amount)
+mean(mdc$amount <= 0)
+```
+
+```{r amount_histogram, echo=FALSE}
+mdc %>%
+  ggplot(aes(amount)) +
+  geom_histogram() +
+  scale_y_continuous(labels = comma) +
+  scale_x_continuous(
+    breaks = c(1 %o% 10^(0:6)),
+    labels = dollar,
+    trans = "log10"
+  ) +
+  labs(
+    title = "State Data Amount Distribution",
+    subtitle = "from 2000 to 2019",
+    caption = "Source: State Agency Name",
+    x = "Amount",
+    y = "Count"
+  )
+```
+
+#### Dates
+
+```{r date_year}
+mdc <- mutate(mdc, year = year(date))
+```
+
+```{r date_range}
+min(mdc$date)
+sum(mdc$year < 2000)
+max(mdc$date)
+sum(mdc$date > today())
+```
+
+## Normalize
+
+### Address
+
+```{r address_norm}
+mdc <- mdc %>% 
+  # combine street addr
+  unite(
+    col = address_full,
+    starts_with("address"),
+    sep = " ",
+    remove = FALSE,
+    na.rm = TRUE
+  ) %>% 
+  # normalize combined addr
+  mutate(
+    address_norm = normal_address(
+      address = address_full,
+      abbs = usps_street,
+      na_rep = TRUE
+    )
+  ) %>% 
+  select(-address_full)
+```
+
+```{r address_view}
+mdc %>% 
+  select(contains("address")) %>% 
+  distinct() %>% 
+  sample_n(10)
+```
+
+### ZIP
+
+```{r zip_norm}
+mdc <- mdc %>% 
+  mutate(
+    zip_norm = normal_zip(
+      zip = zip,
+      na_rep = TRUE
+    )
+  )
+```
+
+```{r zip_progress}
+progress_table(
+  mdc$zip,
+  mdc$zip_norm,
+  compare = valid_zip
+)
+```
+
+### State
+
+```{r state_norm}
+mdc <- mdc %>% 
+  mutate(
+    state_norm = normal_state(
+      state = state,
+      abbreviate = TRUE,
+      na_rep = TRUE,
+      valid = valid_state
+    )
+  )
+```
+
+```{r state_view}
+mdc %>% 
+  filter(state != state_norm) %>% 
+  count(state, sort = TRUE)
+```
+
+```{r state_progress}
+progress_table(
+  mdc$state,
+  mdc$state_norm,
+  compare = valid_state
+)
+```
+
+### City
+
+```{r city_norm}
+mdc <- mdc %>% 
+  mutate(
+    city_norm = normal_city(
+      city = city, 
+      abbs = usps_city,
+      states = c("DF", "DC", "DATA FRAME"),
+      na = invalid_city,
+      na_rep = TRUE
+    )
+  )
+```
+
+```{r city_swap}
+mdc <- mdc %>% 
+  left_join(
+    y = zipcodes,
+    by = c(
+      "state_norm" = "state",
+      "zip_norm" = "zip"
+    )
+  ) %>% 
+  rename(city_match = city) %>% 
+  mutate(
+    match_abb = is_abbrev(city_norm, city_match),
+    match_dist = str_dist(city_norm, city_match),
+    city_swap = if_else(
+      condition = match_abb | match_dist == 1,
+      true = city_match,
+      false = city_norm
+    )
+  ) %>% 
+  select(
+    -city_match,
+    -match_dist,
+    -match_abb
+  )
+```
+
+```{r refine_city}
+good_refine <- mdc %>% 
+  mutate(
+    city_refine = city_swap %>% 
+      key_collision_merge() %>% 
+      n_gram_merge(numgram = 1)
+  ) %>% 
+  filter(city_refine != city_swap) %>% 
+  inner_join(
+    y = zipcodes,
+    by = c(
+      "city_refine" = "city",
+      "state_norm" = "state",
+      "zip_norm" = "zip"
+    )
+  )
+```
+
+```{r view_city_refines, echo=FALSE}
+good_refine %>%
+  count(
+    state_norm, 
+    zip_norm, 
+    city_swap, 
+    city_refine,
+    sort = TRUE
+  )
+```
+
+```{r join_refine}
+mdc <- mdc %>% 
+  left_join(good_refine) %>% 
+  mutate(city_refine = coalesce(city_refine, city_swap))
+```
+
+```{r city_progress}
+progress_table(
+  mdc$city,
+  mdc$city_norm,
+  mdc$city_swap,
+  mdc$city_refine,
+  compare = valid_city
+)
+```
+
+## Conclude
+
+1. There are `r nrow(mdc)` records in the database.
+1. There are `r sum(mdc$dupe_flag)` duplicate records in the database.
+1. The range and distribution of `amount` and `date` seem reasonable.
+1. There are `r sum(mdc$na_flag)` records missing either recipient or date.
+1. Consistency in goegraphic data has been improved with `campfin::normal_*()`.
+1. The 4-digit `year` variable has been created with `lubridate::year()`.
+
+## Export
+
+```{r proc_dir}
+proc_dir <- dir_create(here("md", "contribs", "data", "processed"))
+```
+
+```{r write_clean}
+write_csv(
+  x = df,
+  path = path(proc_dir, "df_type_clean.csv"),
+  na = ""
+)
+```
+
