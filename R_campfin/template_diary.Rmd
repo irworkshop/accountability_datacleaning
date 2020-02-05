@@ -78,7 +78,7 @@ pacman::p_load_gh("irworkshop/campfin")
 pacman::p_load(
   tidyverse, # data manipulation
   lubridate, # datetime strings
-  magrittr, # pipe opperators
+  magrittr, # pipe operators
   janitor, # dataframe clean
   refinr, # cluster and merge
   scales, # format strings
@@ -133,7 +133,7 @@ df <- read_delim(
 ```{r glimpse}
 head(df)
 tail(df)
-glimpse(sample_frac(df))
+glimpse(sample_n(df, 20))
 ```
 
 ### Missing
@@ -144,12 +144,14 @@ col_stats(df, count_na)
 
 ```{r flag_na}
 df <- df %>% flag_na(payee, filer, date, amount)
+mean(df$na_flag)
 ```
 
 ### Duplicates
 
 ```{r flag_dupes}
-df <- flag_dupes(df, -id)
+df <- flag_dupes(df, everything())
+mean(df$dupe_flag)
 ```
 
 ### Categorical
@@ -162,8 +164,9 @@ col_stats(df, n_distinct)
 
 #### Amounts
 
-```{r summary_amount}
+```{r ammount_summary}
 summary(df$amount)
+mean(df$amount <= 0)
 ```
 
 ```{r amount_histogram, echo=FALSE}
@@ -307,7 +310,7 @@ df <- df %>%
     match_abb = is_abbrev(city_norm, city_match),
     match_dist = str_dist(city_norm, city_match),
     city_swap = if_else(
-      condition = match_abb | match_dist == 1,
+      condition = !is.na(match_dist) & match_abb | match_dist == 1,
       true = city_match,
       false = city_norm
     )
@@ -366,6 +369,10 @@ progress_table(
 
 ## Conclude
 
+```{r clean_glimpse}
+glimpse(sample_n(inc, 20))
+```
+
 1. There are `r nrow(df)` records in the database.
 1. There are `r sum(df$dupe_flag)` duplicate records in the database.
 1. The range and distribution of `amount` and `date` seem reasonable.
@@ -375,14 +382,14 @@ progress_table(
 
 ## Export
 
-```{r proc_dir}
-proc_dir <- dir_create(here("df", "type", "data", "processed"))
+```{r clean_dir}
+clean_dir <- dir_create(here("df", "type", "data", "clean"))
 ```
 
 ```{r write_clean}
 write_csv(
   x = df,
-  path = path(proc_dir, "df_type_clean.csv"),
+  path = path(clean_dir, "df_type_clean.csv"),
   na = ""
 )
 ```
