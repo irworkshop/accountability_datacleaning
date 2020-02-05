@@ -185,8 +185,11 @@ if (!all(this_file_new(raw_paths))) {
 Then, we will unzip each file and delete the original.
 
 ```{r raw_unzip}
-raw_paths <- as_fs_path(map_chr(raw_paths, unzip, exdir = raw_dir))
-dir_ls(raw_dir, regexp = ".zip$") %>% file_delete()
+if (length(dir_ls(raw_dir, regexp = ".csv$")) == 0) {
+  raw_paths <- as_fs_path(map_chr(raw_paths, unzip, exdir = raw_dir))
+} else {
+  raw_paths <- dir_ls(raw_dir, regexp = ".csv$")
+}
 ```
 
 ### Read
@@ -356,3 +359,334 @@ inc %>%
   )
 ```
 
+#### Dates
+
+```{r date_year}
+inc <- mutate(
+  .data = inc,
+  date = as_date(date),
+  year = year(date),
+  year = case_when(
+    year < 1998 ~ 1998,
+    year > 2020 ~ 2020,
+    year %>% between(1998, 2020) ~ year
+  )
+)
+```
+
+```{r year_bar}
+inc %>% 
+  count(year) %>% 
+  mutate(even = is_even(year)) %>% 
+  ggplot(aes(x = year, y = n)) +
+  geom_col(aes(fill = even)) + 
+  scale_fill_brewer(palette = "Dark2") +
+  scale_y_continuous(labels = comma) +
+  scale_x_continuous(breaks = seq(1998, 2020, by = 2)) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "Indiana Contributions by Year",
+    caption = "Source: Indiana Election Division",
+    fill = "Election Year",
+    x = "Year Made",
+    y = "Count"
+  )
+```
+
+## Wrangle
+
+To improve the searchability of the database, we will perform some consistent,
+confident string normalization. For geographic variables like city names and
+ZIP codes, the corresponding `campfin::normal_*()` functions are taylor made to 
+facilitate this process.
+
+### Address
+
+For the street `addresss` variable, the `campfin::normal_address()` function
+will force consistence case, remove punctuation, and abbreviation official 
+USPS suffixes.
+
+```{r address_norm}
+inc <- inc %>%
+  mutate(
+    address_norm = normal_address(
+      address = address,
+      abbs = usps_street,
+      na_rep = TRUE
+    )
+  )
+```
+
+We can see how this process improved consistency.
+
+```{r address_view}
+inc %>% 
+  select(contains("address")) %>% 
+  distinct() %>% 
+  sample_n(10)
+```
+
+### ZIP
+
+For ZIP codes, the `campfin::normal_zip()` function will attempt to create
+valied _five_ digit codes by removing the ZIP+4 suffix and returning leading
+zeroes dropped by other programs like Microsoft Excel.
+
+```{r zip_norm}
+inc <- inc %>% 
+  mutate(
+    zip_norm = normal_zip(
+      zip = zip,
+      na_rep = TRUE
+    )
+  )
+```
+
+```{r zip_progress}
+progress_table(
+  inc$zip,
+  inc$zip_norm,
+  compare = valid_zip
+)
+```
+
+### State
+
+Valid two digit state abbreviations can be made using the 
+`campfin::normal_state()` function.
+
+```{r state_norm}
+inc <- inc %>% 
+  mutate(
+    state_norm = normal_state(
+      state = state,
+      abbreviate = TRUE,
+      na_rep = TRUE,
+      valid = NULL
+    )
+  )
+```
+
+```{r state_view}
+inc %>% 
+  filter(state != state_norm) %>% 
+  count(state, state_norm, sort = TRUE)
+```
+
+We can further improve these values by checking the state abbreviation against
+the _expected_ abbreviation for that record's `zip_norm` variable. If the 
+invalid abbreviation is only 1 letter off the expected value, we can confidently
+repair these typos.
+
+```{r state_swap}
+inc <- inc %>% 
+  left_join(
+    y = select(zipcodes, -city), 
+    by = c("zip_norm" = "zip"),
+    suffix = c("_raw", "_match")
+  ) %>% 
+  mutate(
+    match_dist = str_dist(state_raw, state_match),
+    state_norm = if_else(
+      condition = !is.na(state_match) & match_dist == 1,
+      true = state_match,
+      false = state_norm
+    )
+  ) %>% 
+  rename(state = state_raw)
+
+inc %>% 
+  filter(match_dist == 1) %>% 
+  count(state, state_norm, sort = TRUE)
+```
+
+```{r state_select, echo=FALSE}
+inc <- inc %>% 
+  select(
+    -state_match,
+    -match_dist,
+  )
+```
+
+```{r state_progress}
+progress_table(
+  inc$state,
+  inc$state_norm,
+  compare = valid_state
+)
+```
+
+### City
+
+Cities are the most difficult geographic variable to normalize, simply due to
+the wide variety of valid cities and formats. The `campfin::normal_city()` 
+function is a good start, again converting case, removing punctuation, but
+_expanding_ USPS abbreviations. We can also remove `invalid_city` values.
+
+```{r city_invalid, echo=FALSE}
+invalid_city <- c(
+  invalid_city,
+  "CITY OMITTED ON REPORT",
+  "OMITTED ON REPORT",
+  "OMITTED FROM REPORT"
+)
+```
+
+```{r city_norm}
+inc <- inc %>% 
+  mutate(
+    city_norm = normal_city(
+      city = city, 
+      abbs = usps_city,
+      states = c("IN", "DC", "INDIANA"),
+      na = invalid_city,
+      na_rep = TRUE
+    )
+  )
+```
+
+Again, we can further improve normalization by comparing our normalized value
+agaist the _expected_ value for that record's state abbreviation and ZIP code.
+If the normalized value is either an abbreviation for or very similar to the
+expected value, we can confidently swap those two.
+
+```{r city_swap}
+inc <- inc %>% 
+  rename(city_raw = city) %>% 
+  left_join(
+    y = zipcodes,
+    by = c(
+      "state_norm" = "state",
+      "zip_norm" = "zip"
+    )
+  ) %>% 
+  rename(city_match = city) %>% 
+  mutate(
+    match_abb = is_abbrev(city_norm, city_match),
+    match_dist = str_dist(city_norm, city_match),
+    city_swap = if_else(
+      condition = !is.na(city_match) & match_abb | match_dist <= 2,
+      true = city_match,
+      false = city_norm
+    )
+  ) %>% 
+  select(
+    -city_match,
+    -match_dist,
+    -match_abb
+  )
+```
+
+```{r city_other}
+many_city <- c(valid_city, extra_city)
+inc %>% 
+  count(city_swap, state_norm, sort = TRUE) %>% 
+  filter(!is.na(city_swap), city_swap %out% many_city)
+```
+
+```{r city_replace}
+inc <- inc %>% 
+  mutate(
+    city_swap = city_swap %>% 
+      str_replace("^INDY$", "INDIANAPOLIS") %>% 
+      str_replace("^INDPLS$", "INDIANAPOLIS") %>% 
+      str_replace("^ABBOTT PARKS$", "ABBOTT PARK") %>% 
+      str_replace("^OVERLAND PARKS$", "OVERLAND PARK") %>% 
+      str_remove("\\sIN$")
+  )
+```
+
+```{r city_progress, echo=FALSE}
+progress <- progress_table(
+  str_to_upper(inc$city_raw),
+  inc$city_norm,
+  inc$city_swap,
+  compare = many_city
+) %>% mutate(stage = as_factor(stage))
+```
+
+```{r progress_print, echo=FALSE}
+kable(progress, digits = 3)
+```
+
+You can see how the percentage of valid values increased with each stage.
+
+```{r progress_bar, echo=FALSE}
+progress %>% 
+  ggplot(aes(x = stage, y = prop_in)) +
+  geom_hline(yintercept = 0.99) +
+  geom_col(fill = RColorBrewer::brewer.pal(3, "Dark2")[3]) +
+  coord_cartesian(ylim = c(0.75, 1)) +
+  scale_y_continuous(labels = percent) +
+  labs(
+    title = "Indiana City Normalization Progress",
+    subtitle = "Raw at 21.5% before converted to uppercase",
+    x = "Stage",
+    y = "Percent Valid"
+  )
+```
+
+More importantly, the number of distinct values decreased each stage. We were
+able to confidently change many distinct invalid values to their valid
+equivalent.
+
+```{r distinct_bar}
+progress %>% 
+  select(
+    stage, 
+    all = n_distinct,
+    bad = n_diff
+  ) %>% 
+  mutate(good = all - bad) %>% 
+  pivot_longer(c("good", "bad")) %>% 
+  mutate(name = name == "good") %>% 
+  ggplot(aes(x = stage, y = value)) +
+  geom_col(aes(fill = name)) +
+  scale_fill_brewer(palette = "Dark2", direction = -1) +
+  scale_y_continuous(labels = comma) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "Indiana City Normalization Progress",
+    subtitle = "Distinct values, valid and invalid",
+    x = "Stage",
+    y = "Percent Valid",
+    fill = "Valid"
+  )
+  
+```
+
+## Conclude
+
+```{r clean_glimpse}
+glimpse(sample_n(inc, 20))
+```
+
+1. There are `r comma(nrow(inc))` records in the database.
+1. There are `r comma(sum(inc$dupe_flag))` duplicate records in the database 
+(`r percent(mean(inc$dupe_flag), accuracy = 0.01)`).
+1. The range and distribution of `amount` and `date` seem reasonable.
+1. There are `r comma(sum(inc$na_flag))` records missing a contributor or 
+recipient name, date, or amount (`r percent(mean(inc$na_flag), accuracy = 0.01)`).
+1. Consistency in goegraphic data has been improved with `campfin::normal_*()`.
+1. The 4-digit `year` variable has been created with `lubridate::year()`.
+
+## Export
+
+```{r clean_dir}
+clean_dir <- dir_create(here("in", "contribs", "data", "clean"))
+```
+
+```{r clean_write}
+inc <- inc %>% 
+  select(
+    -city_norm,
+    city_norm = city_swap
+  ) %>% 
+  rename_all(~str_replace(., "_norm", "_clean"))
+
+write_csv(
+  x = inc,
+  path = path(clean_dir, "in_contribs_clean.csv"),
+  na = ""
+)
+```

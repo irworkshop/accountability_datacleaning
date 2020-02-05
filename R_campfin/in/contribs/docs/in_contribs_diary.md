@@ -1,7 +1,7 @@
 Indiana Contributions
 ================
 Kiernan Nicholls
-2020-02-04 17:35:40
+2020-02-05 13:10:34
 
   - [Project](#project)
   - [Objectives](#objectives)
@@ -9,6 +9,9 @@ Kiernan Nicholls
   - [Data](#data)
   - [Import](#import)
   - [Explore](#explore)
+  - [Wrangle](#wrangle)
+  - [Conclude](#conclude)
+  - [Export](#export)
 
 <!-- Place comments regarding knitting here -->
 
@@ -190,8 +193,11 @@ if (!all(this_file_new(raw_paths))) {
 Then, we will unzip each file and delete the original.
 
 ``` r
-raw_paths <- as_fs_path(map_chr(raw_paths, unzip, exdir = raw_dir))
-dir_ls(raw_dir, regexp = ".zip$") %>% file_delete()
+if (length(dir_ls(raw_dir, regexp = ".csv$")) == 0) {
+  raw_paths <- as_fs_path(map_chr(raw_paths, unzip, exdir = raw_dir))
+} else {
+  raw_paths <- dir_ls(raw_dir, regexp = ".csv$")
+}
 ```
 
 ### Read
@@ -397,3 +403,396 @@ mean(inc$amount <= 0)
 ![](../plots/amount_histogram-1.png)<!-- -->
 
 ![](../plots/amount_comm_violin-1.png)<!-- -->
+
+#### Dates
+
+``` r
+inc <- mutate(
+  .data = inc,
+  date = as_date(date),
+  year = year(date),
+  year = case_when(
+    year < 1998 ~ 1998,
+    year > 2020 ~ 2020,
+    year %>% between(1998, 2020) ~ year
+  )
+)
+```
+
+``` r
+inc %>% 
+  count(year) %>% 
+  mutate(even = is_even(year)) %>% 
+  ggplot(aes(x = year, y = n)) +
+  geom_col(aes(fill = even)) + 
+  scale_fill_brewer(palette = "Dark2") +
+  scale_y_continuous(labels = comma) +
+  scale_x_continuous(breaks = seq(1998, 2020, by = 2)) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "Indiana Contributions by Year",
+    caption = "Source: Indiana Election Division",
+    fill = "Election Year",
+    x = "Year Made",
+    y = "Count"
+  )
+```
+
+![](../plots/year_bar-1.png)<!-- -->
+
+## Wrangle
+
+To improve the searchability of the database, we will perform some
+consistent, confident string normalization. For geographic variables
+like city names and ZIP codes, the corresponding `campfin::normal_*()`
+functions are taylor made to facilitate this process.
+
+### Address
+
+For the street `addresss` variable, the `campfin::normal_address()`
+function will force consistence case, remove punctuation, and
+abbreviation official USPS suffixes.
+
+``` r
+inc <- inc %>%
+  mutate(
+    address_norm = normal_address(
+      address = address,
+      abbs = usps_street,
+      na_rep = TRUE
+    )
+  )
+```
+
+We can see how this process improved consistency.
+
+``` r
+inc %>% 
+  select(contains("address")) %>% 
+  distinct() %>% 
+  sample_n(10)
+#> # A tibble: 10 x 2
+#>    address                             address_norm                    
+#>    <chr>                               <chr>                           
+#>  1 7014 Shay Ct                        7014 SHAY CT                    
+#>  2 3420 LAWRENCE BANER RD              3420 LAWRENCE BANER RD          
+#>  3 510 Paris Drive                     510 PARIS DR                    
+#>  4 8542 N. Harper Road                 8542 N HARPER RD                
+#>  5 327 CAROLYN COURT                   327 CAROLYN CT                  
+#>  6 600 E 96th St #585                  600 E 96 TH ST 585              
+#>  7 2562 W MAYBELLE AVENUE              2562 W MAYBELLE AVE             
+#>  8 1275 Pennsylvania Ave., NW Suite700 1275 PENNSYLVANIA AVE NW STE 700
+#>  9 607 Glade Place                     607 GLADE PLACE                 
+#> 10 4444 Knolltop Dr                    4444 KNOLLTOP DR
+```
+
+### ZIP
+
+For ZIP codes, the `campfin::normal_zip()` function will attempt to
+create valied *five* digit codes by removing the ZIP+4 suffix and
+returning leading zeroes dropped by other programs like Microsoft Excel.
+
+``` r
+inc <- inc %>% 
+  mutate(
+    zip_norm = normal_zip(
+      zip = zip,
+      na_rep = TRUE
+    )
+  )
+```
+
+``` r
+progress_table(
+  inc$zip,
+  inc$zip_norm,
+  compare = valid_zip
+)
+#> # A tibble: 2 x 6
+#>   stage    prop_in n_distinct prop_na  n_out n_diff
+#>   <chr>      <dbl>      <dbl>   <dbl>  <dbl>  <dbl>
+#> 1 zip        0.915      38859  0.0328 129256  26037
+#> 2 zip_norm   0.997      14997  0.0342   4947   1513
+```
+
+### State
+
+Valid two digit state abbreviations can be made using the
+`campfin::normal_state()` function.
+
+``` r
+inc <- inc %>% 
+  mutate(
+    state_norm = normal_state(
+      state = state,
+      abbreviate = TRUE,
+      na_rep = TRUE,
+      valid = NULL
+    )
+  )
+```
+
+``` r
+inc %>% 
+  filter(state != state_norm) %>% 
+  count(state, state_norm, sort = TRUE)
+#> # A tibble: 123 x 3
+#>    state state_norm     n
+#>    <chr> <chr>      <int>
+#>  1 In    IN          3721
+#>  2 Un    UN           886
+#>  3 in    IN           500
+#>  4 D.    D            111
+#>  5 Va    VA           102
+#>  6 Oh    OH            91
+#>  7 Il    IL            85
+#>  8 Ky    KY            53
+#>  9 Fl    FL            43
+#> 10 iN    IN            33
+#> # … with 113 more rows
+```
+
+We can further improve these values by checking the state abbreviation
+against the *expected* abbreviation for that record’s `zip_norm`
+variable. If the invalid abbreviation is only 1 letter off the expected
+value, we can confidently repair these typos.
+
+``` r
+inc <- inc %>% 
+  left_join(
+    y = select(zipcodes, -city), 
+    by = c("zip_norm" = "zip"),
+    suffix = c("_raw", "_match")
+  ) %>% 
+  mutate(
+    match_dist = str_dist(state_raw, state_match),
+    state_norm = if_else(
+      condition = !is.na(state_match) & match_dist == 1,
+      true = state_match,
+      false = state_norm
+    )
+  ) %>% 
+  rename(state = state_raw)
+
+inc %>% 
+  filter(match_dist == 1) %>% 
+  count(state, state_norm, sort = TRUE)
+#> # A tibble: 213 x 3
+#>    state state_norm     n
+#>    <chr> <chr>      <int>
+#>  1 In    IN          3633
+#>  2 IN    IL          1136
+#>  3 IL    IN           150
+#>  4 IN    TN           131
+#>  5 D.    DC           107
+#>  6 Oh    OH            90
+#>  7 Il    IL            83
+#>  8 Ky    KY            52
+#>  9 NY    NJ            52
+#> 10 Fl    FL            42
+#> # … with 203 more rows
+```
+
+``` r
+progress_table(
+  inc$state,
+  inc$state_norm,
+  compare = valid_state
+)
+#> # A tibble: 2 x 6
+#>   stage      prop_in n_distinct prop_na n_out n_diff
+#>   <chr>        <dbl>      <dbl>   <dbl> <dbl>  <dbl>
+#> 1 state        0.996        284  0.0229  6622    226
+#> 2 state_norm   0.999        138  0.0229  1189     82
+```
+
+### City
+
+Cities are the most difficult geographic variable to normalize, simply
+due to the wide variety of valid cities and formats. The
+`campfin::normal_city()` function is a good start, again converting
+case, removing punctuation, but *expanding* USPS abbreviations. We can
+also remove `invalid_city` values.
+
+``` r
+inc <- inc %>% 
+  mutate(
+    city_norm = normal_city(
+      city = city, 
+      abbs = usps_city,
+      states = c("IN", "DC", "INDIANA"),
+      na = invalid_city,
+      na_rep = TRUE
+    )
+  )
+```
+
+Again, we can further improve normalization by comparing our normalized
+value agaist the *expected* value for that record’s state abbreviation
+and ZIP code. If the normalized value is either an abbreviation for or
+very similar to the expected value, we can confidently swap those two.
+
+``` r
+inc <- inc %>% 
+  rename(city_raw = city) %>% 
+  left_join(
+    y = zipcodes,
+    by = c(
+      "state_norm" = "state",
+      "zip_norm" = "zip"
+    )
+  ) %>% 
+  rename(city_match = city) %>% 
+  mutate(
+    match_abb = is_abbrev(city_norm, city_match),
+    match_dist = str_dist(city_norm, city_match),
+    city_swap = if_else(
+      condition = !is.na(city_match) & match_abb | match_dist <= 2,
+      true = city_match,
+      false = city_norm
+    )
+  ) %>% 
+  select(
+    -city_match,
+    -match_dist,
+    -match_abb
+  )
+```
+
+``` r
+many_city <- c(valid_city, extra_city)
+inc %>% 
+  count(city_swap, state_norm, sort = TRUE) %>% 
+  filter(!is.na(city_swap), city_swap %out% many_city)
+#> # A tibble: 921 x 3
+#>    city_swap        state_norm     n
+#>    <chr>            <chr>      <int>
+#>  1 INDY             IN          1193
+#>  2 ABBOTT PARKS     IL           636
+#>  3 DEER PARKS       IL           228
+#>  4 OVERLAND PARKS   KS           193
+#>  5 FARMINGTON HILLS MI           112
+#>  6 INDIANAPOLIS IN  IN            69
+#>  7 INDPLS           IN            69
+#>  8 COLLEGE PARKS    GA            62
+#>  9 SHELBY TOWNSHIP  MI            60
+#> 10 WAUSATOSA        WI            57
+#> # … with 911 more rows
+```
+
+``` r
+inc <- inc %>% 
+  mutate(
+    city_swap = city_swap %>% 
+      str_replace("^INDY$", "INDIANAPOLIS") %>% 
+      str_replace("^INDPLS$", "INDIANAPOLIS") %>% 
+      str_replace("^ABBOTT PARKS$", "ABBOTT PARK") %>% 
+      str_replace("^OVERLAND PARKS$", "OVERLAND PARK") %>% 
+      str_remove("\\sIN$")
+  )
+```
+
+| stage      | prop\_in | n\_distinct | prop\_na | n\_out | n\_diff |
+| :--------- | -------: | ----------: | -------: | -----: | ------: |
+| city\_raw) |    0.955 |       12943 |    0.026 |  69418 |    6642 |
+| city\_norm |    0.976 |       11346 |    0.029 |  36242 |    5087 |
+| city\_swap |    0.998 |        7167 |    0.041 |   3614 |     897 |
+
+You can see how the percentage of valid values increased with each
+stage.
+
+![](../plots/progress_bar-1.png)<!-- -->
+
+More importantly, the number of distinct values decreased each stage. We
+were able to confidently change many distinct invalid values to their
+valid equivalent.
+
+``` r
+progress %>% 
+  select(
+    stage, 
+    all = n_distinct,
+    bad = n_diff
+  ) %>% 
+  mutate(good = all - bad) %>% 
+  pivot_longer(c("good", "bad")) %>% 
+  mutate(name = name == "good") %>% 
+  ggplot(aes(x = stage, y = value)) +
+  geom_col(aes(fill = name)) +
+  scale_fill_brewer(palette = "Dark2", direction = -1) +
+  scale_y_continuous(labels = comma) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "Indiana City Normalization Progress",
+    subtitle = "Distinct values, valid and invalid",
+    x = "Stage",
+    y = "Percent Valid",
+    fill = "Valid"
+  )
+```
+
+![](../plots/distinct_bar-1.png)<!-- -->
+
+## Conclude
+
+``` r
+glimpse(sample_n(inc, 20))
+#> Observations: 20
+#> Variables: 25
+#> $ file           <int> 866, 5001, 4376, 1312, 3447, 26, 790, 116, 3268, 4479, 3450, 1772, 1772, …
+#> $ committee_type <chr> "Political Action", "Political Action", "Candidate", "Political Action", …
+#> $ committee      <chr> "INDIANA MORTGAGE BANKERS POLITICAL ACTION COMMITTEE", "COCA-COLA ENTERPR…
+#> $ candidate_name <chr> NA, NA, "Peggy McDaniel Welch", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
+#> $ type           <chr> "Corporation", "Individual", "Corporation", "Individual", "Individual", "…
+#> $ name           <chr> "Regions Bank", "CARL LEE", "Humana", "Huy NGUYEN", "Michael Curtis", "Sa…
+#> $ address        <chr> "One Indiana Square", "P O BOX 701447", "P. O. Box 1438", "1307 W Pinecre…
+#> $ city_raw       <chr> "Indianapolis", "SAN ANTONIO", "Louisville", "Peoria", "Seattle", "Bloomi…
+#> $ state          <chr> "IN", "TX", "KY", "IL", "WA", "IN", "KY", "IN", "IN", "IN", NA, "IN", "KY…
+#> $ zip            <chr> "46204", "78270", "40201-1438", "61614", "98134", "47403", "40220", "4620…
+#> $ occupation     <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "Manufacturing", "Manufacturi…
+#> $ method         <chr> "Direct", "Direct", "Direct", "Direct", "Direct", "Direct", "Direct", "Mi…
+#> $ description    <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
+#> $ amount         <dbl> 100.00, 10.00, 250.00, 10.00, 25.00, 50.00, 25.00, 3000.00, 65.00, 23.08,…
+#> $ date           <date> 2015-01-07, 2006-12-20, 2001-12-31, 2003-11-25, 2012-12-18, 2006-06-03, …
+#> $ received_by    <chr> "Gary Avery", "GENE RACKLEY", "Helga Gustin", "Gary Vest", NA, "IDP", "Mi…
+#> $ amended        <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FAL…
+#> $ na_flag        <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FAL…
+#> $ dupe_flag      <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FAL…
+#> $ year           <dbl> 2015, 2006, 2001, 2003, 2012, 2006, 2013, 2008, 2014, 2014, 2006, 2017, 2…
+#> $ address_norm   <chr> "ONE INDIANA SQ", "PO BOX 701447", "PO BOX 1438", "1307 W PINECREST DR", …
+#> $ zip_norm       <chr> "46204", "78270", "40201", "61614", "98134", "47403", "40220", "46204", "…
+#> $ state_norm     <chr> "IN", "TX", "KY", "IL", "WA", "IN", "KY", "IN", "IN", "IN", NA, "IN", "KY…
+#> $ city_norm      <chr> "INDIANAPOLIS", "SAN ANTONIO", "LOUISVILLE", "PEORIA", "SEATTLE", "BLOOMI…
+#> $ city_swap      <chr> "INDIANAPOLIS", "SAN ANTONIO", "LOUISVILLE", "PEORIA", "SEATTLE", "BLOOMI…
+```
+
+1.  There are 1,567,340 records in the database.
+2.  There are 7,149 duplicate records in the database (0.46%).
+3.  The range and distribution of `amount` and `date` seem reasonable.
+4.  There are 21,699 records missing a contributor or recipient name,
+    date, or amount (1.38%).
+5.  Consistency in goegraphic data has been improved with
+    `campfin::normal_*()`.
+6.  The 4-digit `year` variable has been created with
+    `lubridate::year()`.
+
+## Export
+
+``` r
+clean_dir <- dir_create(here("in", "contribs", "data", "clean"))
+```
+
+``` r
+inc <- inc %>% 
+  select(
+    -city_norm,
+    city_norm = city_swap
+  ) %>% 
+  rename_all(~str_replace(., "_norm", "_clean"))
+
+write_csv(
+  x = inc,
+  path = path(clean_dir, "in_contribs_clean.csv"),
+  na = ""
+)
+```
