@@ -1,5 +1,5 @@
 ---
-title: "State Data"
+title: "{State} {Type}"
 author: "First Last"
 date: "`r Sys.time()`"
 output:
@@ -32,7 +32,7 @@ set.seed(5)
 ```
 
 ```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
-fs::dir_create(here::here("df", "data", "docs"))
+fs::dir_create(here::here("{st}", "{type}", "docs"))
 ```
 
 ## Project
@@ -113,7 +113,7 @@ here::here()
 ### Download
 
 ```{r raw_dir}
-raw_dir <- dir_create(here("df", "type", "data", "raw"))
+raw_dir <- dir_create(here("{st}", "{type}", "data", "raw"))
 ```
 
 ```{r raw_download}
@@ -123,7 +123,7 @@ download.file()
 ### Read
 
 ```{r raw_read}
-df <- read_delim(
+st <- read_delim(
   file = dir_ls(raw_dir)
 )
 ```
@@ -131,33 +131,39 @@ df <- read_delim(
 ## Explore
 
 ```{r glimpse}
-head(df)
-tail(df)
-glimpse(sample_n(df, 20))
+head(st)
+tail(st)
+glimpse(sample_n(st, 20))
 ```
 
 ### Missing
 
-```{r count_na}
-col_stats(df, count_na)
+```{r na_count}
+col_stats(st, count_na)
 ```
 
-```{r flag_na}
-df <- df %>% flag_na(payee, filer, date, amount)
-mean(df$na_flag)
+```{r na_flag}
+st <- st %>% flag_na(date, last, amount, committee)
+sum(st$na_flag)
 ```
 
 ### Duplicates
 
-```{r flag_dupes}
-df <- flag_dupes(df, everything())
-mean(df$dupe_flag)
+```{r dupe_flag}
+st <- flag_dupes(st, -id)
+sum(st$dupe_flag)
+```
+
+```{r dupe_view}
+st %>% 
+  filter(dupe_flag) %>% 
+  select(date, last, amount, committee)
 ```
 
 ### Categorical
 
 ```{r n_distinct}
-col_stats(df, n_distinct)
+col_stats(st, n_distinct)
 ```
 
 ### Continuous
@@ -165,14 +171,14 @@ col_stats(df, n_distinct)
 #### Amounts
 
 ```{r ammount_summary}
-summary(df$amount)
-mean(df$amount <= 0)
+summary(st$amount)
+mean(st$amount <= 0)
 ```
 
 ```{r amount_histogram, echo=FALSE}
 df %>%
   ggplot(aes(amount)) +
-  geom_histogram() +
+  geom_histogram(fill = dark2["purple"]) +
   scale_y_continuous(labels = comma) +
   scale_x_continuous(
     breaks = c(1 %o% 10^(0:6)),
@@ -180,9 +186,9 @@ df %>%
     trans = "log10"
   ) +
   labs(
-    title = "State Data Amount Distribution",
+    title = "{State} {Data} Amount Distribution",
     subtitle = "from 2000 to 2019",
-    caption = "Source: State Agency Name",
+    caption = "Source: {source}",
     x = "Amount",
     y = "Count"
   )
@@ -191,22 +197,50 @@ df %>%
 #### Dates
 
 ```{r date_year}
-df <- mutate(df, year = year(date))
+st <- mutate(st, year = year(date))
 ```
 
 ```{r date_range}
-min(df$date)
-sum(df$year < 2000)
-max(df$date)
-sum(df$date > today())
+min(st$date)
+sum(st$year < 2000)
+max(st$date)
+sum(st$date > today())
+```
+
+```{r year_bar}
+st %>% 
+  count(year) %>% 
+  mutate(even = is_even(year)) %>% 
+  ggplot(aes(x = year, y = n)) +
+  geom_col(aes(fill = even)) + 
+  scale_fill_brewer(palette = "Dark2") +
+  scale_y_continuous(labels = comma) +
+  scale_x_continuous(breaks = seq(2000, 2020, by = 2)) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "{State} {Type} by Year",
+    caption = "Source: {Source}",
+    fill = "Election Year",
+    x = "Year Made",
+    y = "Count"
+  )
 ```
 
 ## Wrangle
 
+To improve the searchability of the database, we will perform some consistent,
+confident string normalization. For geographic variables like city names and
+ZIP codes, the corresponding `campfin::normal_*()` functions are taylor made to 
+facilitate this process.
+
 ### Address
 
+For the street `addresss` variable, the `campfin::normal_address()` function
+will force consistence case, remove punctuation, and abbreviation official 
+USPS suffixes.
+
 ```{r address_norm}
-df <- df %>% 
+st <- st %>% 
   # combine street addr
   unite(
     col = address_full,
@@ -227,7 +261,7 @@ df <- df %>%
 ```
 
 ```{r address_view}
-df %>% 
+st %>% 
   select(contains("address")) %>% 
   distinct() %>% 
   sample_n(10)
@@ -235,8 +269,12 @@ df %>%
 
 ### ZIP
 
+For ZIP codes, the `campfin::normal_zip()` function will attempt to create
+valied _five_ digit codes by removing the ZIP+4 suffix and returning leading
+zeroes dropped by other programs like Microsoft Excel.
+
 ```{r zip_norm}
-df <- df %>% 
+st <- st %>% 
   mutate(
     zip_norm = normal_zip(
       zip = zip,
@@ -247,16 +285,19 @@ df <- df %>%
 
 ```{r zip_progress}
 progress_table(
-  df$zip,
-  df$zip_norm,
+  st$zip,
+  st$zip_norm,
   compare = valid_zip
 )
 ```
 
 ### State
 
+Valid two digit state abbreviations can be made using the 
+`campfin::normal_state()` function.
+
 ```{r state_norm}
-df <- df %>% 
+st <- st %>% 
   mutate(
     state_norm = normal_state(
       state = state,
@@ -268,36 +309,53 @@ df <- df %>%
 ```
 
 ```{r state_view}
-df %>% 
+st %>% 
   filter(state != state_norm) %>% 
   count(state, sort = TRUE)
 ```
 
 ```{r state_progress}
 progress_table(
-  df$state,
-  df$state_norm,
+  st$state,
+  st$state_norm,
   compare = valid_state
 )
 ```
 
 ### City
 
+Cities are the most difficult geographic variable to normalize, simply due to
+the wide variety of valid cities and formats.
+
+#### Normal
+
+The `campfin::normal_city()` function is a good start, again converting case,
+removing punctuation, but _expanding_ USPS abbreviations. We can also remove
+`invalid_city` values.
+
 ```{r city_norm}
-df <- df %>% 
+st <- st %>% 
   mutate(
     city_norm = normal_city(
       city = city, 
       abbs = usps_city,
-      states = c("DF", "DC", "DATA FRAME"),
+      states = c("{ST}", "DC", "{STATE}"),
       na = invalid_city,
       na_rep = TRUE
     )
   )
 ```
 
+#### Swap
+
+We can further improve normalization by comparing our normalized value
+agaist the _expected_ value for that record's state abbreviation and ZIP code.
+If the normalized value is either an abbreviation for or very similar to the
+expected value, we can confidently swap those two.
+
 ```{r city_swap}
-df <- df %>% 
+st <- st %>% 
+  rename(city_raw = city) %>% 
   left_join(
     y = zipcodes,
     by = c(
@@ -322,8 +380,17 @@ df <- df %>%
   )
 ```
 
+#### Refine
+
+The [OpenRefine] algorithms can be used to group similar strings and replace the
+less common versions with their most common counterpart. This can greatly 
+reduce inconsistency, but with low confidence; we will only keep any refined
+strings that have a valid city/state/zip combination.
+
+[or]: https://openrefine.org/
+
 ```{r refine_city}
-good_refine <- df %>% 
+good_refine <- st %>% 
   mutate(
     city_refine = city_swap %>% 
       key_collision_merge() %>% 
@@ -351,45 +418,99 @@ good_refine %>%
   )
 ```
 
+Then we can join the refined values back to the database.
+
 ```{r join_refine}
-df <- df %>% 
+st <- st %>% 
   left_join(good_refine) %>% 
   mutate(city_refine = coalesce(city_refine, city_swap))
 ```
 
-```{r city_progress}
-progress_table(
-  df$city,
-  df$city_norm,
-  df$city_swap,
-  df$city_refine,
-  compare = valid_city
-)
+#### Progress
+
+```{r city_progress, echo=FALSE}
+many_city <- c(valid_city, extra_city)
+progress <- progress_table(
+  str_to_upper(st$city_raw),
+  st$city_norm,
+  st$city_swap,
+  compare = many_city
+) %>% mutate(stage = as_factor(stage))
+```
+
+```{r progress_print, echo=FALSE}
+kable(progress, digits = 3)
+```
+
+You can see how the percentage of valid values increased with each stage.
+
+```{r progress_bar, echo=FALSE}
+progress %>% 
+  ggplot(aes(x = stage, y = prop_in)) +
+  geom_hline(yintercept = 0.99) +
+  geom_col(fill = dark2["purple"]) +
+  coord_cartesian(ylim = c(0.75, 1)) +
+  scale_y_continuous(labels = percent) +
+  labs(
+    title = "{State} City Normalization Progress",
+    subtitle = "Raw at {percent} before conversion to uppercase",
+    x = "Stage",
+    y = "Percent Valid"
+  )
+```
+
+More importantly, the number of distinct values decreased each stage. We were
+able to confidently change many distinct invalid values to their valid
+equivalent.
+
+```{r distinct_bar}
+progress %>% 
+  select(
+    stage, 
+    all = n_distinct,
+    bad = n_diff
+  ) %>% 
+  mutate(good = all - bad) %>% 
+  pivot_longer(c("good", "bad")) %>% 
+  mutate(name = name == "good") %>% 
+  ggplot(aes(x = stage, y = value)) +
+  geom_col(aes(fill = name)) +
+  scale_fill_brewer(palette = "Dark2", direction = -1) +
+  scale_y_continuous(labels = comma) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "{State} City Normalization Progress",
+    subtitle = "Distinct values, valid and invalid",
+    x = "Stage",
+    y = "Percent Valid",
+    fill = "Valid"
+  )
+  
 ```
 
 ## Conclude
 
 ```{r clean_glimpse}
-glimpse(sample_n(inc, 20))
+glimpse(sample_n(st, 20))
 ```
 
-1. There are `r nrow(df)` records in the database.
-1. There are `r sum(df$dupe_flag)` duplicate records in the database.
+1. There are `r nrow(st)` records in the database.
+1. There are `r sum(st$dupe_flag)` duplicate records in the database.
 1. The range and distribution of `amount` and `date` seem reasonable.
-1. There are `r sum(df$na_flag)` records missing either recipient or date.
+1. There are `r sum(st$na_flag)` records missing either recipient or date.
 1. Consistency in goegraphic data has been improved with `campfin::normal_*()`.
 1. The 4-digit `year` variable has been created with `lubridate::year()`.
 
 ## Export
 
 ```{r clean_dir}
-clean_dir <- dir_create(here("df", "type", "data", "clean"))
+clean_dir <- dir_create(here("{st}", "{type}", "data", "clean"))
 ```
 
 ```{r write_clean}
 write_csv(
   x = df,
-  path = path(clean_dir, "df_type_clean.csv"),
+  path = path(clean_dir, "{st}_{type}_clean.csv"),
   na = ""
 )
 ```
