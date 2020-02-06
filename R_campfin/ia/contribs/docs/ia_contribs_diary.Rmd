@@ -1,0 +1,574 @@
+---
+title: "Iowa Contributions"
+author: "Kiernan Nicholls"
+date: "`r Sys.time()`"
+output:
+  github_document: 
+    df_print: tibble
+    toc: true
+    toc_dept: 2
+editor_options: 
+  chunk_output_type: console
+---
+
+<!-- Place comments regarding knitting here -->
+
+```{r setup, include=FALSE, purl=FALSE}
+library(knitr)
+opts_chunk$set(
+  eval = TRUE,
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  error = FALSE,
+  collapse = TRUE,
+  comment = "#>",
+  fig.path = "../plots/",
+  fig.width = 10,
+  dpi = 300
+)
+options(width = 99)
+set.seed(5)
+```
+
+```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
+fs::dir_create(here::here("ia", "contribs", "docs"))
+```
+
+## Project
+
+The Accountability Project is an effort to cut across data silos and give
+journalists, policy professionals, activists, and the public at large a simple
+way to search across huge volumes of public data about people and organizations.
+
+Our goal is to standardizing public data on a few key fields by thinking of each
+dataset row as a transaction. For each transaction there should be (at least) 3
+variables:
+
+1. All **parties** to a transaction.
+2. The **date** of the transaction.
+3. The **amount** of money involved.
+
+## Objectives
+
+This document describes the process used to complete the following objectives:
+
+1. How many records are in the database?
+1. Check for entirely duplicated records.
+1. Check ranges of continuous variables.
+1. Is there anything blank or missing?
+1. Check for consistency issues.
+1. Create a five-digit ZIP Code called `zip`.
+1. Create a `year` field from the transaction date.
+1. Make sure there is data on both parties to a transaction.
+
+## Packages
+
+The following packages are needed to collect, manipulate, visualize, analyze,
+and communicate these results. The `pacman` package will facilitate their
+installation and attachment.
+
+The IRW's `campfin` package will also have to be installed from GitHub. This
+package contains functions custom made to help facilitate the processing of
+campaign finance data.
+
+```{r load_packages, message=FALSE, warning=FALSE, error=FALSE}
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load_gh("irworkshop/campfin")
+pacman::p_load(
+  tidyverse, # data manipulation
+  lubridate, # datetime strings
+  jsonlite, # import json api
+  magrittr, # pipe operators
+  gluedown, # print markdown
+  janitor, # dataframe clean
+  refinr, # cluster and merge
+  scales, # format strings
+  rvest, # read html pages
+  knitr, # knit documents
+  vroom, # read files fast
+  glue, # combine strings
+  here, # relative storage
+  fs # search storage 
+)
+```
+
+This document should be run as part of the `R_campfin` project, which lives as a
+sub-directory of the more general, language-agnostic
+[`irworkshop/accountability_datacleaning`][tap] GitHub repository.
+
+The `R_campfin` project uses the [RStudio projects][rproj] feature and should be
+run as such. The project also uses the dynamic `here::here()` tool for file
+paths relative to _your_ machine.
+
+```{r where_here}
+# where does this document knit?
+here::here()
+```
+
+[tap]: https://github.com/irworkshop/accountability_datacleaning
+[rproj]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects
+
+## Data
+
+Data is obtained from the [Iowa Ethics and Campaign Disclosure Board][iae].
+
+> In order to accomplish its Mission, the Board will enforce the provisions of
+the "Campaign Disclosure Act" in Iowa Code chapter 68A, the "Government Ethics
+and Lobbying Act" in Iowa Code chapter 68B, the reporting of gifts and bequests
+received by agencies under Iowa Code section 8.7, and the Board's administrative
+rules in Chapter 351 of the Iowa Administrative Code.
+
+[iae]: https://ethics.iowa.gov/
+
+## Import
+
+The Board provides the file through the [state open data portal][odp] under the
+title "Iowa Campaign Contributions Received." The data can be accessed as a
+tabular CSV file or through a number of direct APIs.
+
+The database was created June 18, 2015 and last updated December 10, 2019.
+
+[odp]: https://data.iowa.gov/
+
+> This dataset contains information on contributions and in kind donations made
+by organizations and individuals to state-wide, legislative or local candidate
+committees, state PACs, county central committees, state parties, and state and
+local ballot issue committees in Iowa. Data is available beginning in 2003 for
+all reports filed electronically, and some paper filed reports.
+
+> Data is provided through reports submitted by candidate committees, state
+political committees, federal/out-of-state political committees, county central
+committees, ballot issue committees and organizations making contributions or
+independent expenditures. Quality of the data provided in the dataset is
+dependent upon the accuracy of the data reported electronically.
+
+The Board also provides a disclaimer on the completness of the database:
+
+> Data on paper filed reports is not available except for the following:
+contributions to individual candidates between 2003 and 2006 from political and
+party committees; contributions to individual candidates 2007 on; contributions
+to party committees between 2003 and 2007 from political and candidate
+committees; contributions from State Political Committees to candidates between
+2003 and 2004; contributions from Federal/Out-of-State Political Committees over
+$50 from 2005 on; and contributions from county central committees from 2008 on.
+
+The database license is as follows:
+
+> Pursuant to Iowa Code section 68B.32A(7), the information obtained from
+statements or reports filed with the board under Iowa Code chapter 68A, Iowa
+Code chapter 68B, Iowa Code section 8.7, or rules adopted by the board shall not
+be copied or otherwise used for any commercial purpose. For purposes of this
+rule, "commercial purposes" shall include solicitations by a business or
+charitable organization. Information used in newspapers, magazines, books, or
+other similar communications, so long as the principal purpose of such
+communications is for providing information to the public and not for other
+commercial purpose, and for soliciting political campaign contributions is
+permissable.
+
+### Read
+
+These fixed files can be read into a single data frame with `purrr::map_df()`
+and `readr::read_delim()`.
+
+```{r raw_read}
+iac <- read_csv(
+  file = "https://data.iowa.gov/api/views/smfg-ds7h/rows.csv",
+  na = c("", "N/A", "NA", "n/a", "na"),
+  col_types = cols(
+    .default = col_character(),
+    Date = col_date_usa(),
+    `Contribution Amount` = col_double()
+  )
+)
+```
+
+```{r raw_rename, echo=FALSE}
+iac <- iac %>% 
+  clean_names("snake") %>%
+  rename(
+    comm_cd = committee_code,
+    comm_nm = committee_name,
+    type = transaction_type,
+    cont_comm_cd = contributing_committee_code,
+    cont_org = contributing_organization,
+    first = first_name,
+    mi = middle_initial,
+    last = last_name,
+    address1 = address_line_1,
+    address2 = address_line_2,
+    zip = zip_code,
+    amount = contribution_amount,
+    id = transaction_id,
+  ) %>% 
+  mutate(last = coalesce(last, cont_org)) %>% 
+  select(-cont_org, -cont_comm_cd)
+```
+
+## Explore
+
+```{r glimpse}
+head(iac)
+tail(iac)
+glimpse(sample_n(iac, 20))
+```
+
+### Missing
+
+```{r na_count}
+col_stats(iac, count_na)
+```
+
+```{r na_flag}
+iac <- iac %>% flag_na(date, last, amount, comm_nm)
+sum(iac$na_flag)
+```
+
+### Duplicates
+
+```{r dupe_flag}
+iac <- flag_dupes(iac, -id)
+sum(iac$dupe_flag)
+```
+
+```{r dupe_view}
+iac %>% 
+  filter(dupe_flag) %>% 
+  select(date, last, amount, comm_nm)
+```
+  
+### Categorical
+
+```{r n_distinct}
+col_stats(iac, n_distinct)
+```
+
+```{r rec_type_bar, echo=FALSE}
+explore_plot(
+  data = iac,
+  var = type,
+  title = "Iowa Contribution Recipient Types"
+)
+```
+
+### Continuous
+
+#### Amounts
+
+```{r ammount_summary}
+summary(iac$amount)
+mean(iac$amount <= 0)
+```
+
+```{r amount_histogram, echo=FALSE}
+iac %>%
+  ggplot(aes(amount)) +
+  geom_histogram(fill = dark2["purple"], bins = 20) +
+  scale_y_continuous(labels = comma) +
+  scale_x_continuous(
+    breaks = c(1 %o% 10^(0:6)),
+    labels = dollar,
+    trans = "log10"
+  ) +
+  labs(
+    title = "Iowa Contribution Distribution",
+    caption = "Source: Iowa Election Division",
+    x = "Amount",
+    y = "Count"
+  )
+```
+
+```{r amount_comm_violin, echo=FALSE}
+iac %>%
+  ggplot(aes(x = type, y = amount)) +
+  geom_violin(aes(fill = type)) +
+  scale_fill_brewer(palette = "Dark2", guide = FALSE) +
+  scale_y_continuous(
+    breaks = c(1 %o% 10^(0:6)),
+    labels = dollar,
+    trans = "log10"
+  ) +
+  labs(
+    title = "Iowa Contribution Distribution",
+    subtitle = "by type, direct or in-kind",
+    caption = "Source: Iowa Election Division",
+    x = "Amount",
+    y = "Count"
+  )
+```
+
+#### Dates
+
+```{r date_year}
+iac <- mutate(iac, year = year(date))
+```
+
+```{r year_bar}
+iac %>% 
+  count(year) %>% 
+  mutate(even = is_even(year)) %>% 
+  ggplot(aes(x = year, y = n)) +
+  geom_col(aes(fill = even)) + 
+  scale_fill_brewer(palette = "Dark2") +
+  scale_y_continuous(labels = comma) +
+  scale_x_continuous(breaks = seq(1998, 2020, by = 2)) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "Iowa Contributions by Year",
+    caption = "Source: Iowa Election Division",
+    fill = "Election Year",
+    x = "Year Made",
+    y = "Count"
+  )
+```
+
+## Wrangle
+
+To improve the searchability of the database, we will perform some consistent,
+confident string normalization. For geographic variables like city names and
+ZIP codes, the corresponding `campfin::normal_*()` functions are taylor made to 
+facilitate this process.
+
+### Address
+
+For the street `addresss` variable, the `campfin::normal_address()` function
+will force consistence case, remove punctuation, and abbreviation official 
+USPS suffixes.
+
+```{r address_norm}
+iac <- iac %>%
+  unite(
+    starts_with("address"),
+    col = address_full,
+    sep = " ",
+    remove = FALSE,
+    na.rm = TRUE
+  ) %>% 
+  mutate(
+    address_norm = normal_address(
+      address = address_full,
+      abbs = usps_street,
+      na_rep = TRUE
+    )
+  ) %>% 
+  select(-address_full)
+```
+
+We can see how this process improved consistency.
+
+```{r address_view}
+iac %>% 
+  select(contains("address")) %>% 
+  distinct() %>% 
+  sample_n(10)
+```
+
+### ZIP
+
+For ZIP codes, the `campfin::normal_zip()` function will attempt to create
+valied _five_ digit codes by removing the ZIP+4 suffix and returning leading
+zeroes dropped by other programs like Microsoft Excel.
+
+```{r zip_norm}
+iac <- iac %>% 
+  mutate(
+    zip_norm = normal_zip(
+      zip = zip,
+      na_rep = TRUE
+    )
+  )
+```
+
+```{r zip_progress}
+progress_table(
+  iac$zip,
+  iac$zip_norm,
+  compare = valid_zip
+)
+```
+
+### State
+
+Very little needs to be done to clean the `state` variable.
+
+```{r state_repair}
+x <- iac$state
+length(x)
+prop_in(x, valid_state)
+count_out(x, valid_state)
+st_zip <- iac$zip %in% zipcodes$zip[zipcodes$state == "IA"]
+st_out <- x %out% valid_state
+st_rx <- str_detect(x, "^[Ii]|[Aa]$")
+st_na <- !is.na(x)
+# has ia zip, ia regex, not valid, not na
+x[st_zip & st_rx & st_out & st_na] <- "IA"
+length(x)
+iac <- mutate(iac, state_norm = x)
+```
+
+### City
+
+Cities are the most difficult geographic variable to normalize, simply due to
+the wide variety of valid cities and formats. The `campfin::normal_city()` 
+function is a good start, again converting case, removing punctuation, but
+_expanding_ USPS abbreviations. We can also remove `invalid_city` values.
+
+```{r city_norm}
+iac <- iac %>% 
+  mutate(
+    city_norm = normal_city(
+      city = city, 
+      abbs = usps_city,
+      states = c("IA", "DC", "IOWA"),
+      na = invalid_city,
+      na_rep = TRUE
+    )
+  )
+```
+
+Again, we can further improve normalization by comparing our normalized value
+agaist the _expected_ value for that record's state abbreviation and ZIP code.
+If the normalized value is either an abbreviation for or very similar to the
+expected value, we can confidently swap those two.
+
+```{r city_swap}
+iac <- iac %>% 
+  rename(city_raw = city) %>% 
+  left_join(
+    y = zipcodes,
+    by = c(
+      "state_norm" = "state",
+      "zip_norm" = "zip"
+    )
+  ) %>% 
+  rename(city_match = city) %>% 
+  mutate(
+    match_abb = is_abbrev(city_norm, city_match),
+    match_dist = str_dist(city_norm, city_match),
+    city_swap = if_else(
+      condition = !is.na(city_match) & match_abb | match_dist == 1,
+      true = city_match,
+      false = city_norm
+    )
+  ) %>% 
+  select(
+    -city_match,
+    -match_dist,
+    -match_abb
+  )
+```
+
+```{r city_other}
+many_city <- c(valid_city, extra_city)
+iac %>% 
+  count(city_swap, state_norm, sort = TRUE) %>% 
+  filter(!is.na(city_swap), city_swap %out% many_city)
+```
+
+```{r city_replace}
+iac <- iac %>% 
+  mutate(
+    city_swap = city_swap %>% 
+      str_replace("^OVERLAND PARKS$", "OVERLAND PARK") %>% 
+      str_replace("\\sPK$", "PARK") %>% 
+      str_remove("\\sD\\sC$") %>% 
+      str_remove("\\sIN$") %>% 
+      na_if("UNITEMIZED") %>% 
+      na_if("IA")
+  )
+```
+
+```{r city_progress, echo=FALSE}
+progress <- progress_table(
+  str_to_upper(iac$city_raw),
+  iac$city_norm,
+  iac$city_swap,
+  compare = many_city
+) %>% mutate(stage = as_factor(stage))
+```
+
+```{r progress_print, echo=FALSE}
+kable(progress, digits = 3)
+```
+
+You can see how the percentage of valid values increased with each stage.
+
+```{r progress_bar, echo=FALSE}
+progress %>% 
+  ggplot(aes(x = stage, y = prop_in)) +
+  geom_hline(yintercept = 0.99) +
+  geom_col(fill = RColorBrewer::brewer.pal(3, "Dark2")[3]) +
+  coord_cartesian(ylim = c(0.75, 1)) +
+  scale_y_continuous(labels = percent) +
+  labs(
+    title = "Iowa City Normalization Progress",
+    subtitle = "Raw at 21.5% before converted to uppercase",
+    x = "Stage",
+    y = "Percent Valid"
+  )
+```
+
+More importantly, the number of distinct values decreased each stage. We were
+able to confidently change many distinct invalid values to their valid
+equivalent.
+
+```{r distinct_bar}
+progress %>% 
+  select(
+    stage, 
+    all = n_distinct,
+    bad = n_diff
+  ) %>% 
+  mutate(good = all - bad) %>% 
+  pivot_longer(c("good", "bad")) %>% 
+  mutate(name = name == "good") %>% 
+  ggplot(aes(x = stage, y = value)) +
+  geom_col(aes(fill = name)) +
+  scale_fill_brewer(palette = "Dark2", direction = -1) +
+  scale_y_continuous(labels = comma) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "Iowa City Normalization Progress",
+    subtitle = "Distinct values, valid and invalid",
+    x = "Stage",
+    y = "Percent Valid",
+    fill = "Valid"
+  )
+  
+```
+
+## Conclude
+
+```{r clean_glimpse}
+glimpse(sample_n(iac, 20))
+```
+
+1. There are `r comma(nrow(iac))` records in the database.
+1. There are `r comma(sum(iac$dupe_flag))` duplicate records in the database 
+(`r percent(mean(iac$dupe_flag), accuracy = 0.01)`).
+1. The range and distribution of `amount` and `date` seem reasonable.
+1. There are `r comma(sum(iac$na_flag))` records missing a contributor or 
+recipient name, date, or amount (`r percent(mean(iac$na_flag), accuracy = 0.01)`).
+1. Consistency in goegraphic data has been improved with `campfin::normal_*()`.
+1. The 4-digit `year` variable has been created with `lubridate::year()`.
+
+## Export
+
+```{r clean_dir}
+clean_dir <- dir_create(here("in", "contribs", "data", "clean"))
+```
+
+```{r clean_write}
+iac <- iac %>% 
+  select(
+    -city_norm,
+    city_norm = city_swap
+  ) %>% 
+  rename_all(~str_replace(., "_norm", "_clean"))
+
+write_csv(
+  x = iac,
+  path = path(clean_dir, "in_contribs_clean.csv"),
+  na = ""
+)
+```
