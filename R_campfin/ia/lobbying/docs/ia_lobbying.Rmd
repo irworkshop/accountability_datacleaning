@@ -193,7 +193,7 @@ ia_lobby_cl <- dir_ls(raw_dir_cl, glob = "*.xlsx")  %>%
 Since all the lobbyists were jumbled together, we turn the lobbyists column into a vector, and then use `unnest_longer()` to unnest all the elements in the vector to keep each in individual row. 
 ```{r unnest}
 ia_lobby_cl <- ia_lobby_cl %>% 
-  mutate(lobbyist = str_split(lobbyists, pattern = ",")) %>% 
+  mutate(lobbyist = str_split(lobbyists, pattern = ", ")) %>% 
   unnest_longer(lobbyist)
 ```
 
@@ -515,6 +515,8 @@ ia_lobby <- ia_lobby_cl %>%
   rename(client = cl_client,
          lb_zip5 = lb_zip_norm,
          cl_zip5 = cl_zip_norm) 
+
+ia_lobby %>% col_stats(count_na)
 ```
 
 ## Export
