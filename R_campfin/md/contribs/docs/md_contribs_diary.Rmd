@@ -108,6 +108,20 @@ here::here()
 
 ## Data
 
+Data is obtained from the Maryland [Campaign Reporting System][crs].
+
+[crs]: https://campaignfinance.maryland.gov/Public/ViewReceipts?theme=vista
+
+> A contribution is money or anything of value given to a political committee to
+promote or assist in promoting the success or defeat of a candidate, political
+party, or question. A contribution can be made by any individual or by an
+entity, including a corporation or other business entity, a political club, a
+federal committee, or a labor union...
+
+> A person may contribute directly or indirectly no more than $6,000 to one
+political committee, and a total of $24,000 to all political committees, during
+the four-year cycle.
+
 ## Import
 
 ### Download
@@ -116,37 +130,37 @@ here::here()
 raw_dir <- dir_create(here("md", "contribs", "data", "raw"))
 ```
 
-```{r raw_download, eval=FALSE}
-tmp_csv <- file_temp(ext = "csv")
-response <- GET(
-  url = "https://campaignfinance.maryland.gov/Public/ExportCsv",
-  write_disk(tmp_csv, overwrite = TRUE),
-  query = list(
-    page = "1",
-    orderBy = "~",
-    filter = "~",
-    `Grid-size` = 15,
-    theme = "vista"
+```{r raw_download}
+raw_csv <- path(raw_dir, "ContributionsList.csv")
+if (!file_exists(raw_csv)) {
+  response <- GET(
+    url = "https://campaignfinance.maryland.gov/Public/ExportCsv",
+    write_disk(raw_csv, overwrite = TRUE),
+    query = list(
+      page = "1",
+      orderBy = "~",
+      filter = "~",
+      `Grid-size` = 15,
+      theme = "vista"
+    )
   )
-)
+}
 ```
 
 ### Read
 
-```{r raw_lines, eval=FALSE}
-read_lines(tmp_csv) %>% 
-  str_remove(",$") %>% 
+```{r raw_lines}
+fix_csv <- file_temp(ext = "csv")
+read_file(raw_csv) %>% 
+  str_remove_all("(?<!((Electoral|Administrative|,),))\n") %>% 
   str_replace_all("\"", "\'") %>% 
-  write_lines(tmp_csv)
-```
-
-```{r echo=FALSE}
-tmp_csv <- "~/Desktop/tmp.csv"
+  str_remove_all(",(?=\n|\n$)") %>% 
+  write_lines(fix_csv)
 ```
 
 ```{r raw_read}
 mdc <- read_delim(
-  file = tmp_csv,
+  file = fix_csv,
   delim = ",",
   escape_backslash = FALSE,
   escape_double = FALSE,
@@ -159,6 +173,7 @@ mdc <- read_delim(
 ```
 
 ```{r raw_rename, echo=FALSE}
+mdc <- remove_empty(mdc, "cols") 
 names(mdc) <- c(
   "committee", "period", "date", "name", "address", "type", 
   "method", "amount", "employer", "occupation", "office", "fund"
@@ -168,11 +183,15 @@ names(mdc) <- c(
 ## Wrangle
 
 ```{r address_split}
-mdc %>% 
-  select(address) %>% 
+mdc <- mdc %>%
+  mutate(
+    address = address %>% 
+      str_remove("-(\\s+|\\d{4})$") %>% 
+      str_trim()
+  ) %>% 
   separate(
     col = address,
-    into = c(glue("address{1:10}"), "city", "state_zip", "extra"),
+    into = c(glue("address{1:10}"), "city", "state_zip"),
     sep = "\\s{2,}",
     extra = "merge",
     fill = "left"
@@ -180,23 +199,35 @@ mdc %>%
   unite(
     starts_with("address"),
     col = "address",
-    na.rm = TRUE
+    na.rm = TRUE,
+    sep = " "
   ) %>% 
-  select(-extra) %>% 
+  mutate_if(is_character, na_if, "") %>% 
   separate(
     col = state_zip,
     into = c("state", "zip"),
-    sep = "\\s(?=\\d)"
+    sep = "\\s(?=\\d)",
+    extra = "merge",
+    fill = "right"
   )
 ```
 
+```{r}
+zip_states <- str_which(mdc$state, "\\d+(?:-\\d+|\\s+)?$")
+mdc$zip[zip_states] <- mdc$state[zip_states]
+mdc$state[zip_states] %>% 
+  str_remove_all("\\d+") %>% 
+  str_remove_all("[:punct:]") %>% 
+  str_trim() %>% 
+  na_if("") -> mdc$state[zip_states]
+```
 
 ## Explore
 
 ```{r glimpse}
 head(mdc)
 tail(mdc)
-glimpse(sample_frac(mdc))
+glimpse(sample_n(mdc, 20))
 ```
 
 ### Missing
@@ -206,19 +237,49 @@ col_stats(mdc, count_na)
 ```
 
 ```{r flag_na}
-mdc <- mdc %>% flag_na(payee, filer, date, amount)
+mdc <- mdc %>% flag_na(date, name, amount, committee)
+percent(mean(mdc$na_flag), accuracy = 0.01)
+sum(mdc$na_flag)
 ```
 
 ### Duplicates
 
 ```{r flag_dupes}
-mdc <- flag_dupes(mdc, -id)
+mdc <- flag_dupes(mdc, everything())
+percent(mean(mdc$dupe_flag), accuracy = 0.01)
+mdc %>% 
+  filter(dupe_flag) %>% 
+  select(date, name, amount, committee)
 ```
 
 ### Categorical
 
 ```{r n_distinct}
 col_stats(mdc, n_distinct)
+```
+
+```{r type_bar}
+explore_plot(
+  data = mdc,
+  var = type,
+  title = "Maryland Contributions by Contributor Type"
+)
+```
+
+```{r type_bar}
+explore_plot(
+  data = mdc,
+  var = method,
+  title = "Maryland Contributions by Method"
+)
+```
+
+```{r type_bar}
+explore_plot(
+  data = filter(mdc, !is.na(occupation)),
+  var = occupation,
+  title = "Maryland Contributions by Contributor Occupation"
+)
 ```
 
 ### Continuous
@@ -233,7 +294,7 @@ mean(mdc$amount <= 0)
 ```{r amount_histogram, echo=FALSE}
 mdc %>%
   ggplot(aes(amount)) +
-  geom_histogram() +
+  geom_histogram(fill = dark2["purple"]) +
   scale_y_continuous(labels = comma) +
   scale_x_continuous(
     breaks = c(1 %o% 10^(0:6)),
@@ -241,9 +302,8 @@ mdc %>%
     trans = "log10"
   ) +
   labs(
-    title = "State Data Amount Distribution",
-    subtitle = "from 2000 to 2019",
-    caption = "Source: State Agency Name",
+    title = "Maryland Contribution Amount Distribution",
+    caption = "Source: Maryland Campaign Reporting System",
     x = "Amount",
     y = "Count"
   )
@@ -262,36 +322,45 @@ max(mdc$date)
 sum(mdc$date > today())
 ```
 
+```{r year_bar, echo=FALSE}
+mdc %>% 
+  count(year) %>% 
+  mutate(even = is_even(year)) %>% 
+  ggplot(aes(x = year, y = n)) +
+  geom_col(aes(fill = even)) +
+  scale_fill_brewer(palette = "Dark2") +
+  scale_y_continuous(labels = comma) +
+  scale_x_continuous(breaks = seq(2000, 2020, by = 2)) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "Maryland Contribution by Year",
+    caption = "Source: Maryland Campaign Reporting System",
+    fill = "Election Year",
+    x = "Year",
+    y = "Count"
+  )
+```
+
 ## Normalize
 
 ### Address
 
 ```{r address_norm}
 mdc <- mdc %>% 
-  # combine street addr
-  unite(
-    col = address_full,
-    starts_with("address"),
-    sep = " ",
-    remove = FALSE,
-    na.rm = TRUE
-  ) %>% 
-  # normalize combined addr
   mutate(
     address_norm = normal_address(
-      address = address_full,
+      address = address,
       abbs = usps_street,
       na_rep = TRUE
     )
-  ) %>% 
-  select(-address_full)
+  )
 ```
 
 ```{r address_view}
 mdc %>% 
   select(contains("address")) %>% 
   distinct() %>% 
-  sample_n(10)
+  sample_n(20)
 ```
 
 ### ZIP
@@ -323,7 +392,7 @@ mdc <- mdc %>%
       state = state,
       abbreviate = TRUE,
       na_rep = TRUE,
-      valid = valid_state
+      valid = NULL
     )
   )
 ```
