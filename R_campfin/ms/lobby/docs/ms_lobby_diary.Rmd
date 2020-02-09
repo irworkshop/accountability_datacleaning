@@ -142,19 +142,23 @@ information.
 [03]: https://www.sos.ms.gov/Elections-Voting/Documents/2019%20Lobbying%20Guide.pdf
 This Rmd file documents the MS registration data only, whereas the expenditure data is wrangled in a separate data diary.
 
+[Mississippi Secretary of State](https://sos.ms.gov/elec/portal/msel2/page/search/portal.aspx) makes lobbyist and client registry searchable and downloadable from 2010 to 2020.
+
 ```{r lobbyists, eval = FALSE}
+ms_url_lb <- glue("https://sos.ms.gov/elec/portal/msel2/Config/Mississippi/Elections/Controls/SosWeb/Lobbyist/LobbyistSearchControls/HandlerWrap.aspx?type=1&year={2009:2020}&lastName=&firstName=&clientName=")
 
-ms_url_1 <- glue("https://sos.ms.gov/elec/Config/Mississippi/Elections/Handlers/Export{c('Client','Lobbyist')}")
-ms_url_2 <- glue("DirectoryToExcel.ashx?type=1&year={2009:2019}&lastName=&firstName=&clientName=, ")
+ms_url_cl <-  glue("https://sos.ms.gov/elec/portal/msel2/Config/Mississippi/Elections/Controls/SosWeb/Lobbyist/LobbyistSearchControls/HandlerWrap.aspx?type=3&year={2010:2020}&lastName=&firstName=&clientName=")
+  
 
-ms_url <- ms_url_1 %>% map(str_c,ms_url_2) %>% unlist()
-
-dest_file <- glue("{raw_dir}/ms_lobby_{c('cl','lb')}") %>% map(glue,"_{2009:2019}.xls") %>% unlist()
-
+dest_file_lb <- glue("{raw_dir}/ms_lobby_lb_{2010:2019}.xls")
+dest_file_cl <- glue("{raw_dir}/ms_lobby_cl_{2010:2019}.xls")
 if (!all_files_new(raw_dir)) {
     download.file(
-      url = ms_url,
-      destfile = dest_file)
+      url = ms_url_cl,
+      destfile = dest_file_cl)
+  download.file(
+      url = ms_url_lb,
+      destfile = dest_file_lb)
   Sys.sleep(1)
 }
 
@@ -184,21 +188,22 @@ lobbying cycle:
 
 ## Reading
 We discovered that the xls files are actually structured as html tables. We'll use the `rvest` package to read these files.
+Also, although 2010 is the earliest year available, the lobbyist dataset only contains one row, and the client dataset contains none. We'll remove them in our directory and read the rest.
 ```{r read csv}
-ms_cl_files <- list.files(raw_dir, pattern = "ms_lobby_cl.*", recursive = TRUE, full.names = TRUE)
-ms_lb_files <- list.files(raw_dir, pattern = "ms_lobby_lb.*", recursive = TRUE, full.names = TRUE)
+ms_cl_files <- dir_ls(raw_dir, regexp= "Client.*")
+ms_lb_files <- dir_ls(raw_dir, regexp = "Lobbyist.*")
 # Create function to read a html table
 read_web_tb <- function(file){
   df <- read_html(file) %>% html_node("table") %>% html_table(header = T)
   return(df)
 }
 
-ms_lobby_cl <- ms_cl_files %>% map(read_web_tb) %>% 
+ms_lobby_cl <- ms_cl_files %>% map_dfr(read_web_tb, .id = "file") %>% 
                    bind_rows() %>% 
                    clean_names()
 
 
-ms_lobby_lb <- ms_lb_files %>% map(read_web_tb) %>% 
+ms_lobby_lb <- ms_lb_files %>% map_dfr(read_web_tb, .id = "file") %>% 
                    bind_rows() %>% 
                    clean_names()
 ```
@@ -215,12 +220,18 @@ ms_lobby_cl <- flag_dupes(ms_lobby_cl, dplyr::everything())
 ### Year
 ```{r create year}
 ms_lobby_lb <- ms_lobby_lb %>% mutate (date = registration_date %>% as.Date(format = "%b %d %Y %I:%M%p"),
-                                       year = year(date))
+                                       year = str_extract(date,"\\d{4}")) %>% 
+  select(-file)
+
+ms_lobby_cl <- ms_lobby_cl %>% mutate (date = registration_date %>% as.Date(format = "%b %d %Y %I:%M%p"),
+                                       year = str_extract(date,"\\d{4}")) %>% 
+  select(-file)
 ```
 
 
 ```{r }
 ms_lobby_lb %>% 
+  mutate(year = as.numeric(year)) %>% 
   group_by(year) %>% 
   ggplot(aes(year)) +
   scale_x_continuous(breaks = 2010:2019) +
@@ -233,7 +244,7 @@ ms_lobby_lb %>%
   )
 ```
 ### Missing
-There's almost no empty fields in the two data frames. 
+There's not a single empty field in the two data frames. 
 ```{r count_na}
 ms_lobby_cl  %>% col_stats(count_na)
 ms_lobby_lb  %>% col_stats(count_na)
@@ -264,15 +275,19 @@ ms_lobby_cl <- ms_lobby_cl %>%
 
 
 ### ZIP 
-The ZIP code fields need a little bit cleaning.
+The ZIP code fields need a little bit cleaning. After cleaning, it reaches 100% validity.
 ```{r client normal zip}
 prop_in(ms_lobby_lb$postal_code, valid_zip, na.rm = TRUE) %>% percent()
+prop_in(ms_lobby_cl$postal_code, valid_zip, na.rm = TRUE) %>% percent()
 
 ms_lobby_lb <- ms_lobby_lb %>% 
   mutate(zip5 = normal_zip(postal_code))
   
 ms_lobby_cl <- ms_lobby_cl %>% 
   mutate(zip5 = normal_zip(postal_code))
+
+prop_in(ms_lobby_lb$zip5, valid_zip, na.rm = TRUE) %>% percent()
+prop_in(ms_lobby_cl$zip5, valid_zip, na.rm = TRUE) %>% percent()
 ```
 
 ### State
@@ -337,7 +352,7 @@ ms_lobby_cl <- ms_lobby_cl %>%
     match_abb = is_abbrev(city_norm, city_match),
     match_dist = str_dist(city_norm, city_match),
     city_swap = if_else(
-      condition = match_abb | match_dist == 1,
+      condition = match_abb | match_dist == 1 | is.na(match_dist),
       true = city_match,
       false = city_norm
     )
@@ -411,31 +426,53 @@ _invalid_ values from `r length(setdiff(ms_lobby_cl$city_norm, valid_place))` to
 `r length(setdiff(ms_lobby_cl$city_swap, valid_place))`
 
 ## Join
-We'll join the two data frames together. Since there're no duplicate columns, we will delete the `dupe_flag` columns and add suffixes to each dataset's column names.
+First， we noticed that the lobbyist fields in the client directory is jumbled together. We'll separate them first using `unnest_longer()`.
+
+```{r client pre}
+ms_lobby_cl <- ms_lobby_cl %>% 
+  mutate(lobbyist = str_match(description, "Lobbyist: (\\D+) ;\\s")[,2]) 
+
+count_na(ms_lobby_cl$lobbyist)
+# remove suffixes and titles
+ms_lobby_cl <- ms_lobby_cl %>% 
+  mutate(lobbyist = lobbyist %>% str_remove("^Dr. |^Mr. |^Mrs. |^Ms. |^Rev. |\\sEsq.$| \\sII.$|, Sr.|, III.$|\\W*Jr.$") %>% trimws(),
+         first_name = str_match(lobbyist, "(^\\S+)\\s")[,2],
+         last_name = str_match(lobbyist, "\\s(\\S+)$")[,2])
+
+count_na(ms_lobby_cl$first_name)
+count_na(ms_lobby_cl$last_name)
+```
+After the process above, no fields of names is left empty.
 ```{r join pre}
+ms_lobby_cl <- ms_lobby_cl %>% mutate_if(is.character, str_to_upper)
+ms_lobby_lb <- ms_lobby_lb %>% mutate_if(is.character, str_to_upper)
+
 ms_lobby_lb$dupe_flag %>% tabyl()
 ms_lobby_cl$dupe_flag %>% tabyl()
 
 ms_lobby_cl <- ms_lobby_cl %>% 
   select(-c(dupe_flag,
-            city_norm)) %>% 
+            city_norm,
+            lobbyist)) %>% 
   rename(city_clean = city_swap) %>% 
-  rename_at(.vars = vars(-(starts_with("client"))),
+  rename_at(.vars = vars(-c(first_name, last_name,starts_with("client"))),
     .funs = ~str_c("client_",.))
 ```
 
 ```{r join}
 ms_lobby_reg <- ms_lobby_cl %>% 
-  right_join(ms_lobby_lb,
+  full_join(ms_lobby_lb %>% filter(!dupe_flag),
             by = c("client_name" = "client_name",
             "client_certification_number" = "certification_number",
-            "client_registration_date" = "registration_date"))
+            "last_name" = "last_name")) %>% 
+  select(-first_name.x) %>% 
+  rename(first_name = first_name.y)
 ```
 
 
 ## Export
 
-```{r writeean}
+```{r write clean}
 clean_dir <- here("ms", "lobby", "data", "processed","reg")
 dir_create(clean_dir)
 ms_lobby_reg %>% 
@@ -447,6 +484,8 @@ ms_lobby_reg %>%
     path = glue("{clean_dir}/ms_lobby_reg.csv"),
     na = ""
   )
+
+col_stats(ms_lobby_reg, count_na)
 ```
 
-
+We can see that there are over 1,000 columns from each dataframe that doesn't have corresponding information from another one.

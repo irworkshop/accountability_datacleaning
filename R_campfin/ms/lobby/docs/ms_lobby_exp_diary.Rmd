@@ -141,11 +141,11 @@ information.
 
 After inespecting the client reports and lobbyist reports, we discovered that the client reports are cleaner without empty columns ("N/A" lobbyists and $0.00 expenses). Thus, we'll join the client reports to the registry.
 
-```{r lobbyists, eval = FALSE}
+```{r lobbyists}
 
-ms_url<- glue("https://sos.ms.gov/elec/Config/Mississippi/Elections/Handlers/ExportClientReportsToExcel.ashx?type=5&year={2009:2019}&firstName=&lastName=&clientName=&salaryBeginRange=&salaryEndRange=,")
+ms_url<- glue("https://sos.ms.gov/elec/Config/Mississippi/Elections/Handlers/ExportClientReportsToExcel.ashx?type=5&year={2009:2020}&firstName=&lastName=&clientName=&salaryBeginRange=&salaryEndRange=,")
 
-dest_file <- glue("{raw_dir}/ms_lobby_exp_{2009:2019}.xls")
+dest_file <- glue("{raw_dir}/ms_lobby_exp_{2009:2020}.xls")
 
 if (!all_files_new(raw_dir)) {
     download.file(
@@ -275,7 +275,6 @@ ms_lobby_exp <- ms_lobby_exp %>%
   mutate(lobbyist = lobbyist %>% str_remove("^MR.\\s|^MRS.\\s|^MS.\\s|^HON.\\s|"))
 ```
 
-
 ```{r join}
   ms_lobby_reg <-  ms_lobby_reg %>% 
   select(client_name,
@@ -298,13 +297,17 @@ ms_lobby_exp <- ms_lobby_exp %>%
            str_remove("^MR.\\s|^MRS.\\s|^MS.\\s|^HON.\\s|"))
 
 ms_lobby_reg <- ms_lobby_reg %>% 
-  flag_dupes(year, client_name, lobbyist) 
+  flag_dupes(year, client_name, lobbyist) %>% 
+  filter(!dupe_flag) %>% 
+  select(-dupe_flag)
 
 ms_lobby_exp_clean <- ms_lobby_exp %>% 
-  left_join(ms_lobby_reg %>% filter(!dupe_flag),
+  left_join(ms_lobby_reg,
             by = c("entity_name" = "client_name",
             "lobbyist" = "lobbyist",
             "cycle_year" = "year"))
+
+ms_lobby_exp_clean %>% col_stats(count_na)
 ```
 
 
@@ -314,7 +317,7 @@ ms_lobby_exp_clean <- ms_lobby_exp %>%
 clean_dir <- here("ms", "lobby", "data", "processed","exp")
 dir_create(clean_dir)
 
-ms_lobby_reg %>% 
+ms_lobby_exp_clean %>% 
   select(-dupe_flag) %>% 
   write_csv(
     path = glue("{clean_dir}/ms_lobby_exp_clean.csv"),
