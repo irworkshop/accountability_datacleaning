@@ -1,5 +1,5 @@
 ---
-title: "New Hampshire Lobbying Registration Diary"
+title: "Missouri Lobbying Registraruib Diary"
 author: "Yanqi Xu"
 date: "`r Sys.time()`"
 output:
@@ -32,7 +32,7 @@ set.seed(5)
 ```
 
 ```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
-fs::dir_create(here::here("nh", "lobby", "docs"))
+fs::dir_create(here::here("mo", "lobby", "docs"))
 ```
 
 ## Project
@@ -61,6 +61,7 @@ This document describes the process used to complete the following objectives:
 1. Create a five-digit ZIP Code called `zip`.
 1. Create a `year` field from the transaction date.
 1. Make sure there is data on both parties to a transaction.
+
 
 ## Packages
 
@@ -110,64 +111,62 @@ here::here()
 [rproj]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects "Rproj"
 
 ## Data
-The lobbying registration data of New Hampshire is obtained by a class of Computer-Assisted-Reporting students at the Missouri School of Journalism supervised by Prof. David Herzog. The class contributed to sourcing data for the Accountability Project by direct download or public records request. The dataset is as current as 2019. 
+
 ## Import
 
 ### Setting up Raw Data Directory
 
 ```{r raw_dir}
-raw_dir <- dir_create(here("nh", "lobby", "data", "raw"))
+raw_dir <- dir_create(here("mo", "lobby", "data", "raw"))
 ```
 
 ### Read
 We can see that the date is formatted in Excel and we need to use `excel_numeric_to_date`
 ```{r raw_read}
-nh_lob_reg <- read_excel(
-  path = dir_ls(raw_dir), skip = 1
-)
-
-nh_lob_reg <- nh_lob_reg %>% mutate(DATE = excel_numeric_to_date(nh_lob_reg$DATE, date_system = "modern"))
+mo_lob_reg <- read_csv(
+  file = dir_ls(raw_dir)
+) %>% clean_names()
 ```
 
 ## Explore
 
 ```{r glimpse}
-head(nh_lob_reg)
-tail(nh_lob_reg)
-glimpse(sample_n(nh_lob_reg, 20))
+head(mo_lob_reg)
+tail(mo_lob_reg)
+glimpse(sample_n(mo_lob_reg, 20))
 ```
 
 ### Missing
 
 ```{r na_count}
-col_stats(nh_lob_reg, count_na)
+col_stats(mo_lob_reg, count_na)
 ```
 
 ```{r na_flag}
-nh_lob_reg <- nh_lob_reg %>% flag_na(EMPLOYERNAME, FIRMADDR)
-sum(nh_lob_reg$na_flag)
+mo_lob_reg <- mo_lob_reg %>% flag_na(company_name)
+sum(mo_lob_reg$na_flag)
 ```
 
 ### Duplicates
 
 ```{r dupe_flag}
-nh_lob_reg <- flag_dupes(nh_lob_reg, dplyr::everything())
-sum(nh_lob_reg$dupe_flag)
+mo_lob_reg <- flag_dupes(mo_lob_reg, dplyr::everything())
+sum(mo_lob_reg$dupe_flag)
 ```
 
 ### Categorical
 
-```{r n_dinh_lob_reginct}
-col_stats(nh_lob_reg, n_distinct)
+```{r n_dimo_lob_reginct}
+col_stats(mo_lob_reg, n_distinct)
 ```
 
 Visualize number of lobbyists registered each year.
 
 ```{r create year}
-nh_lob_reg <- nh_lob_reg %>% 
+mo_lob_reg <- mo_lob_reg %>% 
   mutate(YEAR = year(DATE))
 
-nh_lob_reg$YEAR %>% tabyl()
+mo_lob_reg$YEAR %>% tabyl()
 ```
 We can see that most of the data is from 2019.
 
@@ -176,12 +175,12 @@ We can see that most of the data is from 2019.
 
 
 ```{r date_range}
-min(nh_lob_reg$DATE)
-max(nh_lob_reg$DATE)
+min(mo_lob_reg$DATE)
+max(mo_lob_reg$DATE)
 ```
 
 ```{r year_bar}
-nh_lob_reg %>% 
+mo_lob_reg %>% 
   count(YEAR) %>% 
   mutate(even = is_even(YEAR)) %>% 
   ggplot(aes(x = YEAR, y = n)) +
@@ -191,8 +190,8 @@ nh_lob_reg %>%
   scale_x_continuous(breaks = seq(2000, 2020, by = 2)) +
   theme(legend.position = "bottom") +
   labs(
-    title = "New Hampshire Lobbyists by Year",
-    caption = "Source: New Hampshire Secretary of State: Lobbyists",
+    title = "Missouri Lobbyists by Year",
+    caption = "Source: Missouri Ethics Commission,
     fill = "Election Year",
     x = "Year",
     y = "Count"
@@ -208,7 +207,7 @@ facilitate this process.
 ### Phone
 We can see that for both lobbyists and clients, the `PHONE` column actually contains both phones and emails. We separate them here using regex. The result yields no `NA` fields.
 ```{r separate phone}
-nh_lob_reg <-  nh_lob_reg %>% 
+mo_lob_reg <-  mo_lob_reg %>% 
   mutate(EMAIL_clean = str_match(PHONE, "^E-(.+)\\sW-")[,2],         PHONE_clean = str_match(PHONE, "\\sW-(.+)$")[,2] %>% normal_phone()
          )
 ```
@@ -217,20 +216,20 @@ nh_lob_reg <-  nh_lob_reg %>%
 First, we will separate the columns `CSZ` into three: `CITY`, `STATE` and `ZIP`, which will be normalized in the following steps
 
 ```{r separate csz}
-nh_lob_reg <-  nh_lob_reg %>% 
+mo_lob_reg <-  mo_lob_reg %>% 
   mutate(CITY = str_match(CSZ, "^(\\D+),\\s")[,2],
          STATE = str_match(CSZ, ",  (\\w{2})   ")[,2] %>% str_trim(),
          ZIP = str_match(CSZ, "   (.+$)")[,2]
          )
 ```
 ```{r separate firmcsz}
-nh_lob_reg <-  nh_lob_reg %>% 
+mo_lob_reg <-  mo_lob_reg %>% 
   mutate(FIRM_CITY = str_match(FIRMCSZ, "^(\\D+),\\s")[,2],
          FIRM_STATE = str_match(FIRMCSZ, ",  (\\w{2})   ")[,2] %>% str_trim(),
          FIRM_ZIP = str_match(FIRMCSZ, "   (.+$)")[,2]
          )
 
-col_stats(nh_lob_reg, count_na)
+col_stats(mo_lob_reg, count_na)
 ```
 
 Running the `count_na`commands show that every cell in the three columns inherited from `CSZ` is accounted for.
@@ -240,8 +239,9 @@ Running the `count_na`commands show that every cell in the three columns inherit
 For the street `addresss` variable, the `campfin::normal_address()` function
 will force consistence case, remove punctuation, and abbreviation official 
 USPS suffixes.
+
 ```{r address_norm}
-nh_lob_reg <- nh_lob_reg %>% 
+mo_lob_reg <- mo_lob_reg %>% 
   # normalize combined addr
   mutate(
     ADDRESS_norm = normal_address(
@@ -258,7 +258,7 @@ nh_lob_reg <- nh_lob_reg %>%
 ```
 
 ```{r address_view}
-nh_lob_reg %>% 
+mo_lob_reg %>% 
   select(contains("ADDR")) %>% 
   distinct() %>% 
   sample_n(10)
@@ -271,7 +271,7 @@ valied _five_ digit codes by removing the ZIP+4 suffix and returning leading
 zeroes dropped by other programs like Microsoft Excel.
 
 ```{r zip_norm}
-nh_lob_reg <- nh_lob_reg %>% 
+mo_lob_reg <- mo_lob_reg %>% 
   mutate(
     ZIP5 = normal_zip(
       zip = ZIP,
@@ -286,10 +286,10 @@ nh_lob_reg <- nh_lob_reg %>%
 
 ```{r zip_progress}
 progress_table(
-  nh_lob_reg$ZIP,
-  nh_lob_reg$ZIP5,
-  nh_lob_reg$FIRM_ZIP,
-  nh_lob_reg$FIRM_ZIP5,
+  mo_lob_reg$ZIP,
+  mo_lob_reg$ZIP5,
+  mo_lob_reg$FIRM_ZIP,
+  mo_lob_reg$FIRM_ZIP5,
   compare = valid_zip
 )
 ```
@@ -300,7 +300,7 @@ Valid two digit state abbreviations can be made using the
 `campfin::normal_state()` function.
 
 ```{r state_norm}
-nh_lob_reg <- nh_lob_reg %>% 
+mo_lob_reg <- mo_lob_reg %>% 
   mutate(
     STATE_norm = normal_state(
       state = STATE,
@@ -318,21 +318,21 @@ nh_lob_reg <- nh_lob_reg %>%
 ```
 
 ```{r state_view}
-nh_lob_reg %>% 
+mo_lob_reg %>% 
   filter(STATE != STATE_norm) %>% 
   count(STATE, sort = TRUE)
 ```
 
 ```{r firm_state_view}
-nh_lob_reg %>% 
+mo_lob_reg %>% 
   filter(FIRM_STATE != FIRM_STATE_norm) %>% 
   count(FIRM_STATE, sort = TRUE)
 ```
 
 ```{r state_progress}
 progress_table(
-  nh_lob_reg$STATE,
-  nh_lob_reg$STATE_norm,
+  mo_lob_reg$STATE,
+  mo_lob_reg$STATE_norm,
   compare = valid_state
 )
 ```
@@ -344,12 +344,12 @@ the wide variety of valid cities and formats.
 
 #### Normal
 
-The `campfin::normal_city()` function is a good nh_lob_regart, again converting case,
+The `campfin::normal_city()` function is a good mo_lob_regart, again converting case,
 removing punctuation, but _expanding_ USPS abbreviations. We can also remove
 `invalid_city` values.
 
 ```{r city_norm}
-nh_lob_reg <- nh_lob_reg %>% 
+mo_lob_reg <- mo_lob_reg %>% 
   mutate(
     CITY_norm = normal_city(
       city = CITY, 
@@ -376,7 +376,7 @@ If the normalized value is either an abbreviation for or very similar to the
 expected value, we can confidently swap those two.
 
 ```{r city_swap}
-nh_lob_reg <- nh_lob_reg %>% 
+mo_lob_reg <- mo_lob_reg %>% 
   left_join(
     y = zipcodes,
     by = c(
@@ -402,7 +402,7 @@ nh_lob_reg <- nh_lob_reg %>%
 ```
 
 ```{r firm_city_swap}
-nh_lob_reg <- nh_lob_reg %>% 
+mo_lob_reg <- mo_lob_reg %>% 
   left_join(
     y = zipcodes,
     by = c(
@@ -433,12 +433,12 @@ After the two normalization steps, the percentage of valid cities is at 100%.
 ```{r city_progress, echo=FALSE}
 many_city <- c(valid_city, extra_city)
 progress <- progress_table(
-  nh_lob_reg$CITY,
-  nh_lob_reg$FIRM_CITY,
-  nh_lob_reg$CITY_norm,
-  nh_lob_reg$FIRM_CITY_norm,
-  nh_lob_reg$CITY_swap,
-nh_lob_reg$FIRM_CITY_swap,
+  mo_lob_reg$CITY,
+  mo_lob_reg$FIRM_CITY,
+  mo_lob_reg$CITY_norm,
+  mo_lob_reg$FIRM_CITY_norm,
+  mo_lob_reg$CITY_swap,
+mo_lob_reg$FIRM_CITY_swap,
   compare = many_city
 ) %>% mutate(stage = as_factor(stage))
 ```
@@ -457,7 +457,7 @@ progress %>%
   coord_cartesian(ylim = c(0.75, 1)) +
   scale_y_continuous(labels = percent) +
   labs(
-    title = "New Hampshire City Normalization Progress",
+    title = "Missouri City Normalization Progress",
     x = "stage",
     y = "Percent Valid"
   )
@@ -495,13 +495,13 @@ progress %>%
 ## Conclude
 
 ```{r clean_glimpse}
-glimpse(sample_n(nh_lob_reg, 20))
+glimpse(sample_n(mo_lob_reg, 20))
 ```
 
-1. There are `r nrow(nh_lob_reg)` records in the database.
-1. There are `r sum(nh_lob_reg$dupe_flag)` duplicate records in the database.
+1. There are `r nrow(mo_lob_reg)` records in the database.
+1. There are `r sum(mo_lob_reg$dupe_flag)` duplicate records in the database.
 1. The range and distribution of `amount` and `date` seem reasonable.
-1. There are `r sum(nh_lob_reg$na_flag)` records missing either recipient or date.
+1. There are `r sum(mo_lob_reg$na_flag)` records missing either recipient or date.
 1. Consistency in goegraphic data has been improved with `campfin::normal_*()`.
 1. The 4-digit `YEAR` variable has been created with `lubridate::year()`.
 
@@ -513,8 +513,8 @@ clean_dir <- dir_create(here("nh", "lobby", "data", "reg","clean"))
 
 ```{r write_clean}
 write_csv(
-  x = nh_lob_reg %>% rename(CITY_clean = CITY_swap) %>% rename( FIRM_CITY_clean = FIRM_CITY_swap),
-  path = path(clean_dir, "nh_lob_reg_clean.csv"),
+  x = mo_lob_reg %>% rename(CITY_clean = CITY_swap) %>% rename( FIRM_CITY_clean = FIRM_CITY_swap),
+  path = path(clean_dir, "mo_lob_reg_clean.csv"),
   na = ""
 )
 ```

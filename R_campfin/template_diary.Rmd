@@ -349,7 +349,7 @@ st <- st %>%
 #### Swap
 
 We can further improve normalization by comparing our normalized value
-agaist the _expected_ value for that record's state abbreviation and ZIP code.
+against the _expected_ value for that record's state abbreviation and ZIP code.
 If the normalized value is either an abbreviation for or very similar to the
 expected value, we can confidently swap those two.
 
