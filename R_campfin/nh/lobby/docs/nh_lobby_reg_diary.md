@@ -1,20 +1,20 @@
-New Hampshire Lobbying Reginh\_lob\_regration Diary
+New Hampshire Lobbying Registration Diary
 ================
 Yanqi Xu
-2020-02-08 23:38:26
+2020-02-10 18:37:09
 
 <!-- Place comments regarding knitting here -->
 
 ## Project
 
 The Accountability Project is an effort to cut across data silos and
-give journalinh\_lob\_regs, policy professionals, activinh\_lob\_regs,
-and the public at large a simple way to search across huge volumes of
-public data about people and organizations.
+give journalists, policy professionals, activists, and the public at
+large a simple way to search across huge volumes of public data about
+people and organizations.
 
-Our goal is to nh\_lob\_regandardizing public data on a few key fields
-by thinking of each dataset row as a transaction. For each transaction
-there should be (at leanh\_lob\_reg) 3 variables:
+Our goal is to standardizing public data on a few key fields by thinking
+of each dataset row as a transaction. For each transaction there should
+be (at least) 3 variables:
 
 1.  All **parties** to a transaction.
 2.  The **date** of the transaction.
@@ -29,7 +29,7 @@ objectives:
 2.  Check for entirely duplicated records.
 3.  Check ranges of continuous variables.
 4.  Is there anything blank or missing?
-5.  Check for consinh\_lob\_regency issues.
+5.  Check for consistency issues.
 6.  Create a five-digit ZIP Code called `zip`.
 7.  Create a `year` field from the transaction date.
 8.  Make sure there is data on both parties to a transaction.
@@ -38,39 +38,41 @@ objectives:
 
 The following packages are needed to collect, manipulate, visualize,
 analyze, and communicate these results. The `pacman` package will
-facilitate their innh\_lob\_regallation and attachment.
+facilitate their installation and attachment.
 
-The IRW’s `campfin` package will also have to be innh\_lob\_regalled
-from GitHub. This package contains functions cunh\_lob\_regom made to
-help facilitate the processing of campaign finance data.
+The IRW’s `campfin` package will also have to be installed from GitHub.
+This package contains functions custom made to help facilitate the
+processing of campaign finance data.
 
 ``` r
-if (!require("pacman")) innh_lob_regall.packages("pacman")
+if (!require("pacman")) install.packages("pacman")
 pacman::p_load_gh("irworkshop/campfin")
 pacman::p_load(
+  readxl, #read excek files
+  rvest, # used to scrape website and get html elements
   tidyverse, # data manipulation
-  readxl, # read excel files
-  lubridate, # datetime nh_lob_regrings
-  magrittr, # pipe operators
+  stringdist, # calculate distances between strings
+  lubridate, # datetime strings
+  magrittr, # pipe opperators
   janitor, # dataframe clean
-  refinr, # clunh_lob_reger and merge
-  scales, # format nh_lob_regrings
+  refinr, # cluster and merge
+  scales, # format strings
   knitr, # knit documents
-  vroom, # read files fanh_lob_reg
-  glue, # combine nh_lob_regrings
-  here, # relative nh_lob_regorage
-  fs # search nh_lob_regorage 
+  vroom, # read files fast
+  httr, # http queries
+  glue, # combine strings
+  here, # relative storage
+  fs # search storage 
 )
 ```
 
 This document should be run as part of the `R_campfin` project, which
-lives as a sub-directory of the more general,
-language-agnonh\_lob\_regic
+lives as a sub-directory of the more general, language-agnostic
 [`irworkshop/accountability_datacleaning`](https://github.com/irworkshop/accountability_datacleaning)
 GitHub repository.
 
-The `R_campfin` project uses the [Rnh\_lob\_regudio
-projects](https://support.rnh_lob_regudio.com/hc/en-us/articles/200526207-Using-Projects)
+The `R_campfin` project uses the [Rstudio
+projects](https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects "Rproj")
 feature and should be run as such. The project also uses the dynamic
 `here::here()` tool for file paths relative to *your* machine.
 
@@ -82,7 +84,11 @@ here::here()
 
 ## Data
 
-## Import
+The lobbying registration data of New Hampshire is obtained by a class
+of Computer-Assisted-Reporting students at the Missouri School of
+Journalism supervised by Prof. David Herzog. The class contributed to
+sourcing data for the Accountability Project by direct download or
+public records request. The dataset is as current as 2019. \#\# Import
 
 ### Setting up Raw Data Directory
 
@@ -167,30 +173,16 @@ sum(nh_lob_reg$na_flag)
 ### Duplicates
 
 ``` r
-flag_dupes(nh_lob_reg, dplyr::everything())
-#> # A tibble: 1,100 x 11
-#>    NAME   EMPLOYERNAME  ADDRESS  FIRMNAME CSZ   FIRMADDR DATE       PHONE FIRMCSZ na_flag dupe_flag
-#>    <chr>  <chr>         <chr>    <chr>    <chr> <chr>    <date>     <chr> <chr>   <lgl>   <lgl>    
-#>  1 GARY … THE ASSOCIAT… 48 GRAN… THE ASS… BOW,… 48 GRAN… 2018-12-31 E-ga… BOW,  … FALSE   FALSE    
-#>  2 WILL … SOCIETY FOR … 54 PORT… SOCIETY… CONC… 54 PORT… 2018-12-13 E-wa… CONCOR… FALSE   FALSE    
-#>  3 STEVE… NEW HAMPSHIR… 125 AIR… NEW HAM… CONC… 125 AIR… 2018-12-20 E-sa… CONCOR… FALSE   FALSE    
-#>  4 SARAH… COMMUNITY BR… 70 PEMB… COMMUNI… CONC… 70 PEMB… 2019-01-07 E-sa… CONCOR… FALSE   FALSE    
-#>  5 WALTE… CONSUMER TEC… 1919 SO… CONSUME… ARLI… 1919 SO… 2019-02-11 E-wa… ARLING… FALSE   FALSE    
-#>  6 DANIE… SIGMA CONSUL… 1 ESSEY… EXELON … BOW,… 300 EXE… 2019-04-24 E-da… KENNET… FALSE   FALSE    
-#>  7 ARNOL… AMERICAN FRI… 4 PARK … AMERICA… CONC… 4 PARK … 2018-12-05 E-aa… CONCOR… FALSE   FALSE    
-#>  8 ANDRE… PFIZER INC    28 LIBE… PFIZER … SAUS… 28 LIBE… 2018-12-19 E-pf… SAUSAL… FALSE   FALSE    
-#>  9 WILLI… RATH YOUNG A… PO BOX … FIDELIT… CONC… 82 DEVO… 2019-01-04 E-wf… BOSTON… FALSE   FALSE    
-#> 10 STEPH… NEW ENGLAND … 7 TECHN… NEW ENG… CHEL… 7 TECHN… 2019-03-15 E-sa… CHELMS… FALSE   FALSE    
-#> # … with 1,090 more rows
+nh_lob_reg <- flag_dupes(nh_lob_reg, dplyr::everything())
 sum(nh_lob_reg$dupe_flag)
-#> [1] 0
+#> [1] 1
 ```
 
 ### Categorical
 
 ``` r
 col_stats(nh_lob_reg, n_distinct)
-#> # A tibble: 10 x 4
+#> # A tibble: 11 x 4
 #>    col          class      n       p
 #>    <chr>        <chr>  <int>   <dbl>
 #>  1 NAME         <chr>    418 0.38   
@@ -203,6 +195,7 @@ col_stats(nh_lob_reg, n_distinct)
 #>  8 PHONE        <chr>    432 0.393  
 #>  9 FIRMCSZ      <chr>    291 0.265  
 #> 10 na_flag      <lgl>      2 0.00182
+#> 11 dupe_flag    <lgl>      2 0.00182
 ```
 
 Visualize number of lobbyists registered each year.
@@ -254,12 +247,12 @@ nh_lob_reg %>%
 ## Wrangle
 
 To improve the searchability of the database, we will perform some
-consistent, confident nh\_lob\_regring normalization. For geographic
-variables like city names and ZIP codes, the corresponding
-`campfin::normal_*()` functions are taylor made to facilitate this
-process. \#\#\# Phone We can see that for both lobbyists and clients,
-the `PHONE` column actually contains both phones and emails. We separate
-them here using regex. The result yields no `NA` fields.
+consistent, confident string normalization. For geographic variables
+like city names and ZIP codes, the corresponding `campfin::normal_*()`
+functions are taylor made to facilitate this process. \#\#\# Phone We
+can see that for both lobbyists and clients, the `PHONE` column actually
+contains both phones and emails. We separate them here using regex. The
+result yields no `NA` fields.
 
 ``` r
 nh_lob_reg <-  nh_lob_reg %>% 
@@ -286,7 +279,7 @@ nh_lob_reg <-  nh_lob_reg %>%
          )
 
 col_stats(nh_lob_reg, count_na)
-#> # A tibble: 19 x 4
+#> # A tibble: 20 x 4
 #>    col          class      n       p
 #>    <chr>        <chr>  <int>   <dbl>
 #>  1 NAME         <chr>      0 0      
@@ -299,15 +292,16 @@ col_stats(nh_lob_reg, count_na)
 #>  8 PHONE        <chr>      0 0      
 #>  9 FIRMCSZ      <chr>      0 0      
 #> 10 na_flag      <lgl>      0 0      
-#> 11 YEAR         <dbl>      0 0      
-#> 12 EMAIL_clean  <chr>      0 0      
-#> 13 PHONE_clean  <chr>      0 0      
-#> 14 CITY         <chr>      0 0      
-#> 15 STATE        <chr>      0 0      
-#> 16 ZIP          <chr>      0 0      
-#> 17 FIRM_CITY    <chr>      0 0      
-#> 18 FIRM_STATE   <chr>      0 0      
-#> 19 FIRM_ZIP     <chr>      0 0
+#> 11 dupe_flag    <lgl>      0 0      
+#> 12 YEAR         <dbl>      0 0      
+#> 13 EMAIL_clean  <chr>      0 0      
+#> 14 PHONE_clean  <chr>      0 0      
+#> 15 CITY         <chr>      0 0      
+#> 16 STATE        <chr>      0 0      
+#> 17 ZIP          <chr>      0 0      
+#> 18 FIRM_CITY    <chr>      0 0      
+#> 19 FIRM_STATE   <chr>      0 0      
+#> 20 FIRM_ZIP     <chr>      0 0
 ```
 
 Running the `count_na`commands show that every cell in the three columns
@@ -315,9 +309,9 @@ inherited from `CSZ` is accounted for.
 
 ### Address
 
-For the nh\_lob\_regreet `addresss` variable, the
-`campfin::normal_address()` function will force consinh\_lob\_regence
-case, remove punctuation, and abbreviation official USPS suffixes.
+For the street `addresss` variable, the `campfin::normal_address()`
+function will force consistence case, remove punctuation, and
+abbreviation official USPS suffixes.
 
 ``` r
 nh_lob_reg <- nh_lob_reg %>% 
@@ -447,8 +441,8 @@ progress_table(
 
 ### City
 
-Cities are the monh\_lob\_reg difficult geographic variable to
-normalize, simply due to the wide variety of valid cities and formats.
+Cities are the most difficult geographic variable to normalize, simply
+due to the wide variety of valid cities and formats.
 
 #### Normal
 
@@ -479,10 +473,9 @@ nh_lob_reg <- nh_lob_reg %>%
 #### Swap
 
 We can further improve normalization by comparing our normalized value
-againh\_lob\_reg the *expected* value for that record’s state
-abbreviation and ZIP code. If the normalized value is either an
-abbreviation for or very similar to the expected value, we can
-confidently swap those two.
+against the *expected* value for that record’s state abbreviation and
+ZIP code. If the normalized value is either an abbreviation for or very
+similar to the expected value, we can confidently swap those two.
 
 ``` r
 nh_lob_reg <- nh_lob_reg %>% 
@@ -589,7 +582,7 @@ progress %>%
 ``` r
 glimpse(sample_n(nh_lob_reg, 20))
 #> Observations: 20
-#> Variables: 29
+#> Variables: 30
 #> $ NAME              <chr> "DAVID A.  JUVET", "BRUCE A.  BERKE", "JAMES  DEMERS", "KYLE  BAKER", …
 #> $ EMPLOYERNAME      <chr> "BUSINESS AND INDUSTRY ASSOC OF NH", "SHEEHAN PHINNEY CAPITOL GROUP", …
 #> $ ADDRESS           <chr> "122 N MAIN ST", "2 EAGLE SQ", "72 NORTH MAIN ST  STE 301", "PO BOX 15…
@@ -600,6 +593,7 @@ glimpse(sample_n(nh_lob_reg, 20))
 #> $ PHONE             <chr> "E-djuvet@biaofnh.com W-(603) 224-5388", "E-bberke@sheehan.com W-(603)…
 #> $ FIRMCSZ           <chr> "CONCORD,  NH   03301-", "CANOWAY,  NH   03818-", "CHICAGO,  IL   6065…
 #> $ na_flag           <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, …
+#> $ dupe_flag         <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, …
 #> $ YEAR              <dbl> 2018, 2018, 2019, 2019, 2019, 2018, 2018, 2018, 2018, 2019, 2019, 2019…
 #> $ EMAIL_clean       <chr> "djuvet@biaofnh.com", "bberke@sheehan.com", "james.demers@demers-blais…
 #> $ PHONE_clean       <chr> "(603) 224-5388", "(603) 228-2370", "(603) 228-1498", "(603) 410-4320"…
@@ -622,7 +616,7 @@ glimpse(sample_n(nh_lob_reg, 20))
 ```
 
 1.  There are 1100 records in the database.
-2.  There are 0 duplicate records in the database.
+2.  There are 1 duplicate records in the database.
 3.  The range and distribution of `amount` and `date` seem reasonable.
 4.  There are 12 records missing either recipient or date.
 5.  Consistency in goegraphic data has been improved with

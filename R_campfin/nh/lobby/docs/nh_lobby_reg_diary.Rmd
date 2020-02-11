@@ -1,6 +1,6 @@
 ---
 title: "New Hampshire Lobbying Registration Diary"
-author: "Yanqi Xu"
+author: "Yanqi Xu"  
 date: "`r Sys.time()`"
 output:
   github_document: 
@@ -76,6 +76,7 @@ campaign finance data.
 if (!require("pacman")) install.packages("pacman")
 pacman::p_load_gh("irworkshop/campfin")
 pacman::p_load(
+  readxl, #read excek files
   rvest, # used to scrape website and get html elements
   tidyverse, # data manipulation
   stringdist, # calculate distances between strings
