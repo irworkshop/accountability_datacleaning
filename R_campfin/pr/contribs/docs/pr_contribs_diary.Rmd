@@ -1,0 +1,516 @@
+---
+title: "Puerto Rico Contributions"
+author: "Kiernan Nicholls"
+date: "`r Sys.time()`"
+output:
+  github_document: 
+    df_print: tibble
+    toc: true
+    toc_dept: 2
+editor_options: 
+  chunk_output_type: console
+---
+
+<!-- Place comments regarding knitting here -->
+
+```{r setup, include=FALSE, purl=FALSE}
+library(knitr)
+opts_chunk$set(
+  eval = TRUE,
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  error = FALSE,
+  collapse = TRUE,
+  comment = "#>",
+  fig.path = "../plots/",
+  fig.width = 10,
+  dpi = 300
+)
+options(width = 99)
+set.seed(5)
+```
+
+```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
+fs::dir_create(here::here("pr", "contribs", "docs"))
+```
+
+## Project
+
+The Accountability Project is an effort to cut across data silos and give
+journalists, policy professionals, activists, and the public at large a simple
+way to search across huge volumes of public data about people and organizations.
+
+Our goal is to standardizing public data on a few key fields by thinking of each
+dataset row as a transaction. For each transaction there should be (at least) 3
+variables:
+
+1. All **parties** to a transaction.
+2. The **date** of the transaction.
+3. The **amount** of money involved.
+
+## Objectives
+
+This document describes the process used to complete the following objectives:
+
+1. How many records are in the database?
+1. Check for entirely duplicated records.
+1. Check ranges of continuous variables.
+1. Is there anything blank or missing?
+1. Check for consistency issues.
+1. Create a five-digit ZIP Code called `zip`.
+1. Create a `year` field from the transaction date.
+1. Make sure there is data on both parties to a transaction.
+
+## Packages
+
+The following packages are needed to collect, manipulate, visualize, analyze,
+and communicate these results. The `pacman` package will facilitate their
+installation and attachment.
+
+The IRW's `campfin` package will also have to be installed from GitHub. This
+package contains functions custom made to help facilitate the processing of
+campaign finance data.
+
+```{r load_packages, message=FALSE, warning=FALSE, error=FALSE}
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load_gh("irworkshop/campfin")
+pacman::p_load(
+  tidyverse, # data manipulation
+  lubridate, # datetime strings
+  janitor, # dataframe clean
+  refinr, # cluster and merge
+  scales, # format strings
+  knitr, # knit documents
+  vroom, # read files fast
+  glue, # combine strings
+  here, # relative storage
+  fs # search storage 
+)
+```
+
+This document should be run as part of the `R_campfin` project, which lives as a
+sub-directory of the more general, language-agnostic
+[`irworkshop/accountability_datacleaning`][tap] GitHub repository.
+
+The `R_campfin` project uses the [RStudio projects][rproj] feature and should be
+run as such. The project also uses the dynamic `here::here()` tool for file
+paths relative to _your_ machine.
+
+```{r where_here}
+# where does this document knit?
+here::here()
+```
+
+[tap]: https://github.com/irworkshop/accountability_datacleaning
+[rproj]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects
+
+## Data
+
+Data is obtained from the Puerto Rico [Oficina del Contralor Electoral][oce],
+the Comptroller's Office (OCE).
+
+> Descripción: La Ley Núm. 222 de 18 de noviembre de 2011, según enmendada,
+mejor conocida como “Ley para la Fiscalización del Financiamiento de Campañas
+Políticas en Puerto Rico”, crea la Oficina del Contralor Electoral, a fin de
+establecer el marco legal y administrativo que regirá la legalidad, examen y
+evaluación de donativos y gastos para fines electorales.
+
+Translation via Google Translate: 
+
+> _Description: Act No. 222 of November 18, 2011, as amended, better known as the
+“Law for the Control of Political Campaign Financing in Puerto Rico,” creates
+the Office of the Electoral Comptroller, in order to establish the legal
+framework and administrative that will govern the legality, examination and
+evaluation of donations and expenses for electoral purposes._
+
+[oce]: http://oce.pr.gov/
+
+The data is accessed through the [Puerto Rico OpenData portal][odp]. The data
+was first uploaded on September 28, 2016 and last updated February 14, 2019.
+
+There are 166,000 rows and 11 columns (translated):
+
+* `Candidate`: Name of the candidate, party or campaign committee.
+* `Candidature`: Description of the candidate, party or campaign committee.
+* `Acronym`: Acronym of the political party or type of committee:
+    * "CI" = Independent Candidate
+    * "CGI" = Independent Expenditure Committee
+* `Amount`: Amount of money contributed.
+* `Method`: Donation form.
+* `Donor`: Full name of the donor.
+* `City`: City where the donor resides.
+* `Date`: Date the donation was generated (day / month / year).
+* `Event`: Description of the election year or event.
+* `Zip Code`: Donor zip code.
+* `Location 1`: Donation coordinates based on the donor's zip code.
+
+[odp]: https://data.oce.pr.gov
+
+## Import
+
+The data can be imported from the OpenData portal as a flat text file or via
+the SODA API.
+
+### Read
+
+```{r raw_dir}
+raw_dir <- dir_create(here("pr", "contribs", "data", "raw"))
+```
+
+```{r raw_read}
+prc <- read_csv(
+  file = "https://data.oce.pr.gov/api/views/kdwd-nb6g/rows.csv",
+  skip = 1,
+  col_names = c("cand", "type", "code", "amount", "method", "donor", 
+                "city", "date", "event", "zip", "coord"),
+  col_types = cols(
+    .default = col_character(),
+    amount = col_double(),
+    date = col_date("%d/%m/%Y")
+  )
+)
+```
+
+```{r raw_coords}
+prc <- prc %>% 
+  extract(
+    col = coord,
+    into = c("lat", "long"),
+    regex = "(\\d*\\.\\d*), (-\\d*\\.\\d*)",
+    remove = TRUE,
+    convert = TRUE
+  )
+```
+
+## Explore
+
+```{r glimpse}
+head(prc)
+tail(prc)
+glimpse(sample_n(prc, 20))
+```
+
+### Missing
+
+```{r na_count}
+col_stats(prc, count_na)
+```
+
+```{r na_flag}
+prc <- prc %>% flag_na(date, donor, amount, cand)
+mean(prc$na_flag)
+```
+
+```{r na_view}
+prc %>% 
+  filter(na_flag) %>% 
+  select(date, donor, amount, cand) %>% 
+  sample_frac()
+```
+
+### Duplicates
+
+```{r dupe_flag}
+prc <- flag_dupes(prc, everything())
+mean(prc$dupe_flag)
+```
+
+```{r dupe_view}
+prc %>% 
+  filter(dupe_flag) %>% 
+  select(date, donor, amount, cand)
+```
+
+### Categorical
+
+```{r n_distinct}
+col_stats(prc, n_distinct)
+```
+
+```{r bar_code, echo=FALSE}
+explore_plot(
+  data = filter(prc, !is.na(code)),
+  var = code,
+  title = "Puerto Rico Contribution Recipient Type"
+)
+```
+
+```{r bar_method, echo=FALSE}
+explore_plot(
+  data = filter(prc, !is.na(method)),
+  var = method,
+  title = "Puerto Rico Contribution Method"
+) + theme(axis.text.x = element_text(angle = 10, vjust = 0.5))
+```
+
+```{r bar_event, echo=FALSE}
+explore_plot(
+  data = filter(prc, !is.na(event)),
+  var = event,
+  title = "Puerto Rico Contribution Event",
+  flip = TRUE
+)
+```
+
+### Continuous
+
+#### Amounts
+
+```{r ammount_summary}
+summary(prc$amount)
+mean(prc$amount <= 0)
+```
+
+```{r amount_histogram, echo=FALSE}
+prc %>%
+  filter(amount > 1) %>% 
+  ggplot(aes(amount)) +
+  geom_histogram(fill = dark2["purple"], bins = 20) +
+  scale_y_continuous(labels = comma) +
+  scale_x_continuous(
+    breaks = c(1 %o% 10^(0:6)),
+    labels = dollar,
+    trans = "log10"
+  ) +
+  labs(
+    title = "Puerto Rico Contributions Amount Distribution",
+    subtitle = "from 2000 to 2019",
+    caption = "Source: {source}",
+    x = "Amount",
+    y = "Count"
+  )
+```
+
+#### Dates
+
+```{r date_year}
+prc <- mutate(prc, year = year(date))
+```
+
+```{r date_range}
+min(prc$date)
+sum(prc$year < 2000)
+max(prc$date)
+sum(prc$date > today())
+```
+
+```{r year_bar, echo=FALSE}
+prc %>% 
+  count(year) %>% 
+  mutate(even = is_even(year)) %>% 
+  ggplot(aes(x = year, y = n)) +
+  geom_col(aes(fill = even)) + 
+  scale_fill_brewer(palette = "Dark2") +
+  scale_y_continuous(labels = comma) +
+  scale_x_continuous(breaks = seq(2000, 2020, by = 2)) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "Puerto Rico Contributions by Year",
+    caption = "Source: {source}",
+    fill = "Election Year",
+    x = "Year Made",
+    y = "Count"
+  )
+```
+
+## Wrangle
+
+To improve the searchability of the database, we will perform some consistent,
+confident string normalization. For geographic variables like city names and
+ZIP codes, the corresponding `campfin::normal_*()` functions are tailor made to 
+facilitate this process.
+
+The database does not contain addresses or states. We can add the later using
+the `zip` variable, once it is cleaned.
+
+### ZIP
+
+For ZIP codes, the `campfin::normal_zip()` function will attempt to create
+valid _five_ digit codes by removing the ZIP+4 suffix and returning leading
+zeroes dropped by other programs like Microsoft Excel.
+
+```{r zip_norm}
+prc <- prc %>% 
+  mutate(
+    zip_norm = normal_zip(
+      zip = zip,
+      na_rep = TRUE
+    )
+  )
+```
+
+```{r zip_progress}
+progress_table(
+  prc$zip,
+  prc$zip_norm,
+  compare = valid_zip
+)
+```
+
+Now we can add the state for each ZIP code.
+
+```{r zip_join}
+prc <- left_join(
+  x = prc,
+  y = select(zipcodes, -city), 
+  by = c("zip_norm" = "zip")
+)
+prc %>% 
+  select(zip, state) %>% 
+  col_stats(count_na)
+```
+
+### City
+
+Cities are the most difficult geographic variable to normalize, simply due to
+the wide variety of valid cities and formats.
+
+#### Normal
+
+The `campfin::normal_city()` function is a good start, again converting case,
+removing punctuation, but _expanding_ USPS abbreviations. We can also remove
+`invalid_city` values.
+
+```{r city_norm}
+prc <- prc %>% 
+  mutate(
+    city_norm = normal_city(
+      city = city, 
+      abbs = usps_city,
+      states = c("PR", "DC", "PUERTO RICO"),
+      na = invalid_city,
+      na_rep = TRUE
+    )
+  )
+```
+
+#### Swap
+
+We can further improve normalization by comparing our normalized value
+against the _expected_ value for that record's state abbreviation and ZIP code.
+If the normalized value is either an abbreviation for or very similar to the
+expected value, we can confidently swap those two.
+
+```{r city_swap}
+prc <- prc %>% 
+  rename(city_raw = city) %>% 
+  left_join(
+    y = zipcodes,
+    by = c("state", "zip_norm" = "zip")
+  ) %>% 
+  rename(city_match = city) %>% 
+  mutate(
+    match_abb = is_abbrev(city_norm, city_match),
+    match_dist = str_dist(city_norm, city_match),
+    city_swap = if_else(
+      condition = !is.na(match_dist) & match_abb | match_dist == 1,
+      true = city_match,
+      false = city_norm
+    )
+  ) %>% 
+  select(
+    -city_match,
+    -match_dist,
+    -match_abb
+  )
+```
+
+#### Progress
+
+```{r city_progress, echo=FALSE}
+many_city <- c(valid_city, extra_city)
+progress <- progress_table(
+  str_to_upper(prc$city_raw),
+  prc$city_norm,
+  prc$city_swap,
+  compare = many_city
+) %>% mutate(stage = as_factor(stage))
+kable(progress, digits = 3)
+```
+
+You can see how the percentage of valid values increased with each stage.
+
+```{r progress_bar, echo=FALSE}
+raw_in <- prop_in(prc$city_raw, valid_city)
+progress %>% 
+  ggplot(aes(x = stage, y = prop_in)) +
+  geom_hline(yintercept = 0.99) +
+  geom_col(fill = dark2["purple"]) +
+  coord_cartesian(ylim = c(0.90, 1)) +
+  scale_y_continuous(labels = percent) +
+  labs(
+    title = "Puerto Rico City Normalization Progress",
+    subtitle = glue("Raw at {raw_in} before conversion to uppercase"),
+    x = "Stage",
+    y = "Percent Valid"
+  )
+```
+
+More importantly, the number of distinct values decreased each stage. We were
+able to confidently change many distinct invalid values to their valid
+equivalent.
+
+```{r distinct_bar}
+progress %>% 
+  select(
+    stage, 
+    all = n_distinct,
+    bad = n_diff
+  ) %>% 
+  mutate(good = all - bad) %>% 
+  pivot_longer(c("good", "bad")) %>% 
+  mutate(name = name == "good") %>% 
+  ggplot(aes(x = stage, y = value)) +
+  geom_col(aes(fill = name)) +
+  scale_fill_brewer(palette = "Dark2", direction = -1) +
+  scale_y_continuous(labels = comma) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "Puerto Rico City Normalization Progress",
+    subtitle = "Distinct values, valid and invalid",
+    x = "Stage",
+    y = "Percent Valid",
+    fill = "Valid"
+  )
+  
+```
+
+## Conclude
+
+```{r clean_select}
+prc <- prc %>% 
+  select(
+    -city_norm,
+    city = city_raw,
+    city_clean = city_swap,
+    state_match = state,
+    zip_clean = zip_norm,
+  )
+```
+
+```{r clean_glimpse}
+glimpse(sample_n(prc, 20))
+```
+
+1. There are `r nrow(prc)` records in the database.
+1. There are `r sum(prc$dupe_flag)` duplicate records in the database.
+1. The range and distribution of `amount` and `date` seem reasonable.
+1. There are `r sum(prc$na_flag)` records missing either recipient or date.
+1. Consistency in geographic data has been improved with `campfin::normal_*()`.
+1. The 4-digit `year` variable has been created with `lubridate::year()`.
+
+## Export
+
+```{r clean_dir}
+clean_dir <- dir_create(here("pr", "contribs", "data", "clean"))
+```
+
+```{r write_clean}
+write_csv(
+  x = prc,
+  path = path(clean_dir, "pr_contribs_clean.csv"),
+  na = ""
+)
+```
+
