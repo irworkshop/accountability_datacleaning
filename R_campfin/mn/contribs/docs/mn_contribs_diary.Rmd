@@ -109,27 +109,53 @@ here::here()
 
 ## Data
 
+The data is obtained from the [Minnesota Campaign Finance Board (CFB)][cfb].
+
+> The Campaign Finance and Public Disclosure Board was established by the state
+legislature in 1974 and is charged with the administration of Minnesota
+Statutes, Chapter 10A, the Campaign Finance and Public Disclosure Act, as well
+as portions of Chapter 211B, the Fair Campaign Practices act.
+
+> The Board's four major programs are campaign finance registration and
+disclosure, public subsidy administration, lobbyist registration and disclosure,
+and economic interest disclosure by public officials. The Board has six members,
+appointed by the Governor on a bi-partisan basis for staggered four-year terms.
+The appointments must be confirmed by a three-fifths vote of the members of each
+house of the legislature.
+
+[cfb]: https://cfb.mn.gov/
+
+The CFB provides [direct data download][data] for all campaign finance data.
+
+[data]: https://cfb.mn.gov/reports-and-data/self-help/data-downloads/campaign-finance/
+
 ## Import
+
+To import the file for processing, we will first have save the file locally
+and then read the flat file.
 
 ### Download
 
-```{r raw_dir}
-raw_dir <- dir_create(here("mn", "contribs", "data", "raw"))
-```
+We can download the file to disk with the `httr::GET()` and `httr::write_disk()`
+functions. These functions make the HTTP requests one would make when clicking
+on the download link on the CFB page. 
 
 ```{r raw_download}
+raw_dir <- dir_create(here("mn", "contribs", "data", "raw"))
 raw_file <- path(raw_dir, "all_contribs.csv")
 if (!file_exists(raw_file)) {
   GET(
     url = "https://cfb.mn.gov/",
-    path = c("reports-and-data", "self-help", "data-downloads", "campaign-finance")
-    query = list(download = -2113865252)
+    path = c("reports-and-data", "self-help", "data-downloads", "campaign-finance"),
+    query = list(download = -2113865252),
     write_disk(raw_file, overwrite = TRUE),
   )
 }
 ```
 
 ### Read
+
+We can read this flat file with the `vroom::vroom()` function.
 
 ```{r raw_read}
 mnc <- vroom(
@@ -148,7 +174,7 @@ mnc <- vroom(
 )
 ```
 
-```{r raw_rename}
+```{r raw_rename, echo=FALSE}
 mnc <- mnc %>% 
   rename(
     rec_num = recipient_reg_num,
@@ -176,6 +202,8 @@ mnc <- mnc %>%
 
 ## Explore
 
+The file has `r comma(nrow(mnc))` records of `r ncol(mnc)` variables.
+
 ```{r glimpse}
 head(mnc)
 tail(mnc)
@@ -183,6 +211,9 @@ glimpse(sample_n(mnc, 20))
 ```
 
 ### Missing
+
+We should flag any variable missing the key variables needed to identify a 
+unique contribution.
 
 ```{r na_count}
 col_stats(mnc, count_na)
@@ -193,7 +224,16 @@ mnc <- mnc %>% flag_na(rec_name, con_name, date, amount)
 sum(mnc$na_flag)
 ```
 
+```{r na_view}
+mnc %>% 
+  filter(na_flag) %>% 
+  select(rec_name, con_name, date, amount) %>% 
+  sample_frac()
+```
+
 ### Duplicates
+
+Similarly, we can flag all records that are duplicated at least one other time.
 
 ```{r dupe_flag}
 mnc <- flag_dupes(mnc, everything())
@@ -203,23 +243,63 @@ sum(mnc$dupe_flag)
 ```{r dupe_view}
 mnc %>% 
   filter(dupe_flag) %>% 
-  select(date, last, amount, committee)
+  select(rec_name, con_name, date, amount)
 ```
 
 ### Categorical
 
-```{r n_distinct}
+We can explore the distribution of categorical variables.
+
+```{r distinct_count}
 col_stats(mnc, n_distinct)
+```
+
+```{r bar_rec_type, echo=FALSE}
+explore_plot(
+  data = filter(mnc, !is.na(rec_type)),
+  var = rec_type,
+  title = "Minnesota Contributions by Recipient Type"
+)
+```
+
+```{r bar_rec_sub, echo=FALSE}
+explore_plot(
+  data = filter(mnc, !is.na(rec_sub)),
+  var = rec_sub,
+  title = "Minnesota Contributions by Recipient Sub-Type"
+)
+```
+
+```{r bar_con_type, echo=FALSE}
+explore_plot(
+  data = filter(mnc, !is.na(con_type)),
+  var = con_type,
+  title = "Minnesota Contributions by Contributor Type"
+)
+```
+
+```{r cat_count, echo=FALSE}
+count(mnc, receipt)
+count(mnc, in_kind)
 ```
 
 ### Continuous
 
+The range of continuous variables should be checked to identify any egregious
+outliers or strange distributions.
+
 #### Amounts
+
+The range of the `amount` variable is reasonable, with very few contributions
+at or less than zero dollars.
 
 ```{r ammount_summary}
 summary(mnc$amount)
-mean(mnc$amount <= 0)
+sum(mnc$amount <= 0)
 ```
+
+As we'd expect, the contribution `amount` are log-normally distributed around 
+the median value of `r dollar(median(mnc$amount))`.
 
 ```{r hist_amount, echo=FALSE}
 mnc %>%
@@ -233,8 +313,7 @@ mnc %>%
   ) +
   labs(
     title = "Minnesota Contributions Amount Distribution",
-    subtitle = "from 2000 to 2019",
-    caption = "Source: {source}",
+    caption = "Source: MC CFB",
     x = "Amount",
     y = "Count"
   )
@@ -242,9 +321,17 @@ mnc %>%
 
 #### Dates
 
+Since the `year` variable already exists, there is no need to create one. Any of
+these which do not match seems to fall near begining of the year.
+
 ```{r date_year}
-mnc <- mutate(mnc, year = year(date))
+mean(mnc$year == year(mnc$date))
+mnc %>% 
+  filter(year != year(date)) %>% 
+  count(month = month(date))
 ```
+
+No further cleaning of the date variable is needed.
 
 ```{r date_range}
 min(mnc$date)
@@ -274,272 +361,18 @@ mnc %>%
 
 ## Wrangle
 
-To improve the searchability of the database, we will perform some consistent,
-confident string normalization. For geographic variables like city names and
-ZIP codes, the corresponding `campfin::normal_*()` functions are tailor made to 
-facilitate this process.
+The database does _not_ contain the full range of geographic variables we'd
+expect. There is only a ZIP code. We can use this `zip` variable to add the
+`city` and `state` variables, but not an `address`. These variables will _not_
+be accurate to the data provided by the state.
 
-### Address
-
-For the street `addresss` variable, the `campfin::normal_address()` function
-will force consistence case, remove punctuation, and abbreviate official 
-USPS suffixes.
-
-```{r address_norm}
+```{r zip_join}
 mnc <- mnc %>% 
-  unite(
-    col = address_full,
-    starts_with("address"),
-    sep = " ",
-    remove = FALSE,
-    na.rm = TRUE
-  ) %>% 
-  mutate(
-    address_norm = normal_address(
-      address = address_full,
-      abbs = usps_street,
-      na_rep = TRUE
-    )
-  ) %>% 
-  select(-address_full)
-```
-
-```{r address_view}
-mnc %>% 
-  select(contains("address")) %>% 
-  distinct() %>% 
-  sample_n(10)
-```
-
-### ZIP
-
-For ZIP codes, the `campfin::normal_zip()` function will attempt to create
-valid _five_ digit codes by removing the ZIP+4 suffix and returning leading
-zeroes dropped by other programs like Microsoft Excel.
-
-```{r zip_norm}
-mnc <- mnc %>% 
-  mutate(
-    zip_norm = normal_zip(
-      zip = zip,
-      na_rep = TRUE
-    )
-  )
-```
-
-```{r zip_progress}
-progress_table(
-  mnc$zip,
-  mnc$zip_norm,
-  compare = valid_zip
-)
-```
-
-### State
-
-Valid two digit state abbreviations can be made using the 
-`campfin::normal_state()` function.
-
-```{r state_norm}
-mnc <- mnc %>% 
-  mutate(
-    state_norm = normal_state(
-      state = state,
-      abbreviate = TRUE,
-      na_rep = TRUE,
-      valid = valid_state
-    )
-  )
-```
-
-```{r state_view}
-mnc %>% 
-  filter(state != state_norm) %>% 
-  count(state, sort = TRUE)
-```
-
-```{r state_progress}
-progress_table(
-  mnc$state,
-  mnc$state_norm,
-  compare = valid_state
-)
-```
-
-### City
-
-Cities are the most difficult geographic variable to normalize, simply due to
-the wide variety of valid cities and formats.
-
-#### Normal
-
-The `campfin::normal_city()` function is a good start, again converting case,
-removing punctuation, but _expanding_ USPS abbreviations. We can also remove
-`invalid_city` values.
-
-```{r city_norm}
-mnc <- mnc %>% 
-  mutate(
-    city_norm = normal_city(
-      city = city, 
-      abbs = usps_city,
-      states = c("MN", "DC", "MINNESOTA"),
-      na = invalid_city,
-      na_rep = TRUE
-    )
-  )
-```
-
-#### Swap
-
-We can further improve normalization by comparing our normalized value
-against the _expected_ value for that record's state abbreviation and ZIP code.
-If the normalized value is either an abbreviation for or very similar to the
-expected value, we can confidently swap those two.
-
-```{r city_swap}
-mnc <- mnc %>% 
-  rename(city_raw = city) %>% 
-  left_join(
-    y = zipcodes,
-    by = c(
-      "state_norm" = "state",
-      "zip_norm" = "zip"
-    )
-  ) %>% 
-  rename(city_match = city) %>% 
-  mutate(
-    match_abb = is_abbrev(city_norm, city_match),
-    match_dist = str_dist(city_norm, city_match),
-    city_swap = if_else(
-      condition = !is.na(match_dist) & match_abb | match_dist == 1,
-      true = city_match,
-      false = city_norm
-    )
-  ) %>% 
-  select(
-    -city_match,
-    -match_dist,
-    -match_abb
-  )
-```
-
-#### Refine
-
-The [OpenRefine] algorithms can be used to group similar strings and replace the
-less common versions with their most common counterpart. This can greatly 
-reduce inconsistency, but with low confidence; we will only keep any refined
-strings that have a valid city/state/zip combination.
-
-[or]: https://openrefine.org/
-
-```{r city_refine}
-good_refine <- mnc %>% 
-  mutate(
-    city_refine = city_swap %>% 
-      key_collision_merge() %>% 
-      n_gram_merge(numgram = 1)
-  ) %>% 
-  filter(city_refine != city_swap) %>% 
-  inner_join(
-    y = zipcodes,
-    by = c(
-      "city_refine" = "city",
-      "state_norm" = "state",
-      "zip_norm" = "zip"
-    )
-  )
-```
-
-```{r city_count, echo=FALSE}
-good_refine %>%
-  count(
-    state_norm, 
-    zip_norm, 
-    city_swap, 
-    city_refine,
-    sort = TRUE
-  )
-```
-
-Then we can join the refined values back to the database.
-
-```{r city_join}
-mnc <- mnc %>% 
-  left_join(good_refine) %>% 
-  mutate(city_refine = coalesce(city_refine, city_swap))
-```
-
-#### Progress
-
-```{r city_progress, echo=FALSE}
-many_city <- c(valid_city, extra_city)
-progress <- progress_table(
-  str_to_upper(mnc$city_raw),
-  mnc$city_norm,
-  mnc$city_swap,
-  compare = many_city
-) %>% mutate(stage = as_factor(stage))
-kable(progress, digits = 3)
-```
-
-You can see how the percentage of valid values increased with each stage.
-
-```{r bar_progress, echo=FALSE}
-raw_in <- percent(prop_in(mnc$city_raw, valid_city))
-progress %>% 
-  ggplot(aes(x = stage, y = prop_in)) +
-  geom_hline(yintercept = 0.99) +
-  geom_col(fill = dark2["purple"]) +
-  coord_cartesian(ylim = c(0.75, 1)) +
-  scale_y_continuous(labels = percent) +
-  labs(
-    title = "Minnesota City Normalization Progress",
-    subtitle = glue("Raw at {raw_in} before conversion to uppercase"),
-    x = "Stage",
-    y = "Percent Valid"
-  )
-```
-
-More importantly, the number of distinct values decreased each stage. We were
-able to confidently change many distinct invalid values to their valid
-equivalent.
-
-```{r bar_distinct, echo=FALSE}
-progress %>% 
-  select(
-    stage, 
-    all = n_distinct,
-    bad = n_diff
-  ) %>% 
-  mutate(good = all - bad) %>% 
-  pivot_longer(c("good", "bad")) %>% 
-  mutate(name = name == "good") %>% 
-  ggplot(aes(x = stage, y = value)) +
-  geom_col(aes(fill = name)) +
-  scale_fill_brewer(palette = "Dark2", direction = -1) +
-  scale_y_continuous(labels = comma) +
-  theme(legend.position = "bottom") +
-  labs(
-    title = "Minnesota City Normalization Progress",
-    subtitle = "Distinct values, valid and invalid",
-    x = "Stage",
-    y = "Distinct Values",
-    fill = "Valid"
-  )
+  left_join(zipcodes, by = c("con_zip" = "zip")) %>% 
+  rename_at(vars(19:20), ~str_replace(., "(.*)$", "cont_\\1_match"))
 ```
 
 ## Conclude
-
-```{r clean_select}
-mnc <- mnc %>% 
-  select(
-    -city_norm,
-    -city_swap,
-    city_clean = city_refine
-  ) %>% 
-  rename_all(~str_replace(., "_norm", "_clean"))
-```
 
 ```{r clean_glimpse}
 glimpse(sample_n(mnc, 20))
