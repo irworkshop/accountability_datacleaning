@@ -195,14 +195,19 @@ if (!this_file_new(zip_path)) {
 ```
 
 ```{r unzip_path}
-unzip(zip_path, exdir = raw_dir)
-unzip(id_path, exdir = raw_dir)
+if (length(dir_ls(raw_dir)) != 8) {
+  unzip(zip_path, exdir = raw_dir)
+  unzip(id_path, exdir = raw_dir)
+}
 ```
 
 ### Read
 
-```{r filerec, echo=FALSE}
-raw_dir %>% 
+We will have to read the `EFSRECB.TXT` file to determine the column names and
+formats for the `ALL_REPORTS.out` file, which has no header.
+
+```{r efsrecb, echo=FALSE}
+efsrecb <- raw_dir %>% 
   path("EFSRECB.TXT") %>% 
   read_lines() %>% 
   extract(13:42) %>% 
@@ -210,16 +215,84 @@ raw_dir %>%
   enframe(name = NULL) %>% 
   separate(
     col = value,
-    into = c("field", "location", "type", "format", "efs import"),
+    into = c("field", "location", "type", "format"),
     sep = "\\s{2,}",
     extra = "merge"
-  )
+  ) %>% 
+  mutate_at(vars(field), str_to_lower)
+print(efsrecb, n = Inf)
 ```
+
+We will also have to read the entire file as a string and use regular expression
+to search for any newlines (`\n`), commas (`,`), or double-quoutes (`"`) found
+_inside_ a quoted cell of the CSV. We can remove and replace these characters
+and write the new file to the `/tmp` directory.
+
+```{r raw_fix}
+raw_file <- path(raw_dir, "ALL_REPORTS.out")
+fix_file <- path_temp("FIX_REPORTS.out")
+
+if (!file_exists(fix_file)) {
+  read_lines(raw_file) %>% 
+  str_conv(encoding = "ASCII") %>% 
+  # replace non-carriage newline
+  str_replace_all("(?<!\r)\n", " ") %>%
+  # remove non-delim commas
+  str_remove_all(",(?!\")") %>% 
+  # replace not field double quotes
+  str_replace_all("(?<!^|,|\r\n)\"(?!,|\r\n|$)", "\'") %>% 
+  write_lines(fix_file)
+}
+```
+
+This `/tmp` file can then be read using `readr::read_delim()`.
 
 ```{r raw_read}
 nyc <- read_delim(
-  file = dir_ls(raw_dir)
+  file = fix_file,
+  col_names = str_remove(efsrecb$field, "_\\d+$"),
+  delim = ",",
+  escape_double = FALSE,
+  escape_backslash = FALSE,
+  col_types = cols(
+    .default = col_character(),
+    date1 = col_date_usa(),
+    date2 = col_date_usa(),
+    check_date = col_date_usa(),
+    amount = col_double(),
+    amount2 = col_double(),
+    crerec_date = col_datetime("%m/%d/%Y %H:%M:%S")
+  )
 )
+```
+
+This file contains _all_ campaign finance transactions. If we consult
+`EFSSHCED.TXT`, we determine which record types correspond to contributions.
+
+```{r efssched, echo=FALSE}
+efssched <- raw_dir %>% 
+  path("EFSSCHED.TXT") %>% 
+  read_lines() %>% 
+  extract(60:78) %>% 
+  str_trim() %>% 
+  enframe(name = NULL) %>% 
+  separate(
+    col = value,
+    into = c("chkbox", "report_type"),
+    sep = "\\s-\\s{2}",
+    extra = "merge"
+  ) %>% 
+  mutate(contrib = str_detect(report_type, "Contrib"))
+print(efssched, n = Inf)
+```
+
+Then we can filter our data frame to include only those records using the 
+`transaction_code` variable.
+
+```{r raw_filter}
+nyc <- nyc %>% 
+  filter(transaction_code %in% efssched$chkbox[efssched$contrib]) %>% 
+  remove_empty("cols")
 ```
 
 ### Join
@@ -240,7 +313,7 @@ filerec <- raw_dir %>%
   unnest(cols = c(FIELD, LOCATION, TYPE))
 ```
 
-```{r}
+```{r codes_parse, echo=FALSE}
 codes_all <- str_trim(read_lines(file = path(raw_dir, "CODES.TXT")))
 codes_all <- na.omit(na_if(codes_all, ""))
 codes_office <- codes_all %>% 
@@ -289,22 +362,21 @@ codes_report <- codes_all %>%
 ```
 
 ```{r zip_path}
-commcand <- vroom(
+commcand <- read_delim(
   file = path(raw_dir, "COMMCAND.txt"),
   delim = ",",
   escape_backslash = FALSE,
   escape_double = FALSE,
-  .name_repair = make_clean_names,
-  col_names = filerec$FIELD,
+  col_names = str_to_lower(filerec$FIELD),
   col_types = cols(
     .default = col_character(),
-    OFFICE = col_integer(),
-    DISTRICT = col_integer()
+    office = col_integer(),
+    district = col_integer()
   )
 )
 ```
 
-```{r join_codes}
+```{r join_codes, echo=FALSE}
 commcand <- commcand %>%
   # join codes
   left_join(codes_office) %>% 
@@ -316,6 +388,87 @@ commcand <- commcand %>%
   left_join(codes_comm) %>% 
   mutate(committee_type = committee_name) %>% 
   select(-committee_name)
+```
+
+```{r join_contribs}
+prop_in(nyc$filer_id, commcand$filer_id)
+nyc <- left_join(
+  x = nyc,
+  y = commcand,
+  by = "filer_id",
+  suffix = c("_con", "_rec")
+)
+
+nyc <- rename_prefix(
+  df = nyc,
+  suffix = c("_con", "_rec"),
+  punct = TRUE
+)
+```
+
+```{r raw_rename, echo=FALSE}
+# rename for clarify and brevity
+nyc <- nyc %>% 
+  rename(
+    tran_code = transaction_code,
+    e_year = e_year,
+    t3_trid = t3_trid,
+    date = date1,
+    date2 = date2,
+    contrib_code = contrib_code,
+    contrib_type = contrib_type_code,
+    con_corp = corp,
+    con_first = first_name,
+    con_mid = mid_init,
+    con_last = last_name,
+    con_addr = addr_1,
+    con_state = con_state,
+    con_zip = con_zip,
+    check_no = check_no,
+    check_date = check_date,
+    amount = amount,
+    amount2 = amount2,
+    descr = description,
+    recpt_code = other_recpt_code,
+    purpose1 = purpose_code1,
+    purpose2 = purpose_code2,
+    explan = explanation,
+    xfer = xfer_type,
+    chkbox = chkbox,
+    crerec_uid = crerec_uid,
+    crerec_date = crerec_date,
+    rec_name = filer_name,
+    rec_type = filer_type,
+    status = status,
+    comm_type = committee_type,
+    office = office,
+    district = district,
+    treas_first = treas_first_name,
+    treas_last = treas_last_name,
+    rec_addr = address,
+    rec_city = rec_city,
+    rec_state = rec_state,
+    rec_zip = rec_zip
+  )
+```
+
+```{r raw_select, echo=FALSE}
+nyc <- nyc %>% 
+  # see EFSSCHED.txt
+  # remove non contrib cols
+  select(
+    -date2,
+    -contrib_type,
+    -check_date,
+    -amount2,
+    -descr,
+    -recpt_code,
+    -purpose1,
+    -purpose2,
+    -explan,
+    -xfer,
+    -chkbox
+  )
 ```
 
 ## Explore
@@ -332,22 +485,23 @@ glimpse(sample_n(nyc, 20))
 col_stats(nyc, count_na)
 ```
 
+_Very_ few records are missing the date, amount, or the name of the contributor
+or recipient. We can flag the few that are with `campfin::flag_na()`.
+
 ```{r na_flag}
-nyc <- nyc %>% flag_na(date, last, amount, committee)
-sum(nyc$na_flag)
-```
+nyc <- nyc %>% 
+  unite(
+    con_first, con_mid, con_last, con_corp,
+    col = con_name,
+    sep = " ",
+    remove = FALSE,
+    na.rm = TRUE
+  ) %>% 
+  flag_na(
+    date, con_name, amount, rec_name
+  )
 
-### Duplicates
-
-```{r dupe_flag}
-nyc <- flag_dupes(nyc, -id)
-sum(nyc$dupe_flag)
-```
-
-```{r dupe_view}
-nyc %>% 
-  filter(dupe_flag) %>% 
-  select(date, last, amount, committee)
+percent(mean(nyc$na_flag), 0.01)
 ```
 
 ### Categorical
@@ -356,17 +510,26 @@ nyc %>%
 col_stats(nyc, n_distinct)
 ```
 
+```{r explore_plot, echo=FALSE, fig.keep=FALSE}
+explore_plot(nyc, freport_id)
+explore_plot(nyc, tran_code)
+explore_plot(nyc, rec_type)
+explore_plot(nyc, status)
+explore_plot(nyc, comm_type, nbar = 4)
+```
+
 ### Continuous
 
 #### Amounts
 
 ```{r ammount_summary}
 summary(nyc$amount)
-mean(nyc$amount <= 0)
+mean(nyc$amount <= 0, na.rm = TRUE)
 ```
 
 ```{r hist_amount, echo=FALSE}
 nyc %>%
+  filter(amount > 1) %>% 
   ggplot(aes(amount)) +
   geom_histogram(fill = dark2["purple"]) +
   scale_y_continuous(labels = comma) +
@@ -378,7 +541,7 @@ nyc %>%
   labs(
     title = "New York Contributions Amount Distribution",
     subtitle = "from 2000 to 2019",
-    caption = "Source: {source}",
+    caption = "Source: NYSBOE",
     x = "Amount",
     y = "Count"
   )
@@ -390,11 +553,21 @@ nyc %>%
 nyc <- mutate(nyc, year = year(date))
 ```
 
-```{r date_range}
-min(nyc$date)
-sum(nyc$year < 2000)
-max(nyc$date)
-sum(nyc$date > today())
+```{r date_fix}
+nyc$year %>% 
+  str_replace_all("^([0-9])$", "200\\1") %>% 
+  str_replace_all("^(1[0-9])$", "20\\1") %>% 
+  str_replace_all("^99$", "1999") %>% 
+  str_replace_all("^999$", "1999") %>% 
+  str_replace("^2(\\d{2})$", "20\\1") %>% 
+  str_replace("^10(\\d{2})$", "20\\1") %>%
+  str_replace("^190(\\d{1})$", "200\\1") %>%
+  str_replace("^1899$", "1999") %>% 
+  as.integer() -> nyc$year
+```
+
+```{r date_invalid}
+nyc$year[!between(nyc$year, 1990, 2020)] <- NA
 ```
 
 ```{r bar_year, echo=FALSE}
@@ -405,11 +578,12 @@ nyc %>%
   geom_col(aes(fill = even)) + 
   scale_fill_brewer(palette = "Dark2") +
   scale_y_continuous(labels = comma) +
-  scale_x_continuous(breaks = seq(2000, 2020, by = 2)) +
+  scale_x_continuous(breaks = seq(1999, 2020, by = 2)) +
+  coord_cartesian(xlim = c(1999, 2020)) +
   theme(legend.position = "bottom") +
   labs(
     title = "New York Contributions by Year",
-    caption = "Source: {source}",
+    caption = "Source: NYSBOE",
     fill = "Election Year",
     x = "Year Made",
     y = "Count"
@@ -430,27 +604,18 @@ will force consistence case, remove punctuation, and abbreviate official
 USPS suffixes.
 
 ```{r address_norm}
-nyc <- nyc %>% 
-  unite(
-    col = address_full,
-    starts_with("address"),
-    sep = " ",
-    remove = FALSE,
-    na.rm = TRUE
-  ) %>% 
-  mutate(
-    address_norm = normal_address(
-      address = address_full,
-      abbs = usps_street,
-      na_rep = TRUE
-    )
-  ) %>% 
-  select(-address_full)
+nyc <- mutate_at(
+  .tbl = nyc,
+  .vars = vars(ends_with("addr")),
+  .funs = list(norm = normal_address),
+  abbs = usps_street,
+  na_rep = TRUE
+)
 ```
 
 ```{r address_view}
 nyc %>% 
-  select(contains("address")) %>% 
+  select(contains("addr")) %>% 
   distinct() %>% 
   sample_n(10)
 ```
