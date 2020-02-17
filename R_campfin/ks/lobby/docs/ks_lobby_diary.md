@@ -1,7 +1,7 @@
 Kansas Lobbyists
 ================
 Kiernan Nicholls
-2019-12-18 12:59:37
+2020-01-21 10:29:09
 
   - [Project](#project)
   - [Objectives](#objectives)
@@ -145,7 +145,8 @@ kslr <- dir_ls(raw_dir, glob = "*.html$") %>%
   mutate_all(str_squish) %>% 
   na_if("") %>% 
   select(-starts_with("x")) %>% 
-  mutate(client = "")
+  mutate(client = "") %>% 
+  mutate_at(vars(registration_date), parse_date, "%m/%d/%Y")
 ```
 
 As you can see, the clients of each lobbyist are not listed as a
@@ -155,18 +156,18 @@ each lobbyist.
 ``` r
 kslr
 #> # A tibble: 2,655 x 8
-#>    name    addr_1_addr_2   city_state_zip   phone   fax     email_address  registration_date client
-#>    <chr>   <chr>           <chr>            <chr>   <chr>   <chr>          <chr>             <chr> 
-#>  1 ALDERS… 2101 S.W. 21ST… TOPEKA, KS 66604 (785) … (785) … boba@alderson… 11/2/2018         ""    
-#>  2 * CASE… * CASEY'S GENE… * CASEY'S GENER… * CASE… * CASE… * CASEY'S GEN… * CASEY'S GENERA… ""    
-#>  3 * KANS… * KANSAS MANUF… * KANSAS MANUFA… * KANS… * KANS… * KANSAS MANU… * KANSAS MANUFAC… ""    
-#>  4 * ONE … * ONE CALL CON… * ONE CALL CONC… * ONE … * ONE … * ONE CALL CO… * ONE CALL CONCE… ""    
-#>  5 <NA>    <NA>            <NA>             <NA>    <NA>    <NA>           <NA>              ""    
-#>  6 ALLEN,… 5317 SW 11TH T… TOPEKA, KS 66604 (785) … <NA>    sallen5948@ou… 12/27/2018        ""    
-#>  7 * KRITC * KRITC         * KRITC          * KRITC * KRITC * KRITC        * KRITC           ""    
-#>  8 <NA>    <NA>            <NA>             <NA>    <NA>    <NA>           <NA>              ""    
-#>  9 ANDERS… 2910 SW TOPEKA… TOPEKA, KS 66611 (778) … (785) … leslie@k4ad.o… 6/18/2019         ""    
-#> 10 * KANS… * KANSAS ASSOC… * KANSAS ASSOCI… * KANS… * KANS… * KANSAS ASSO… * KANSAS ASSOCIA… ""    
+#>    name     addr_1_addr_2   city_state_zip   phone   fax     email_address  registration_da… client
+#>    <chr>    <chr>           <chr>            <chr>   <chr>   <chr>          <date>           <chr> 
+#>  1 ALDERSO… 2101 S.W. 21ST… TOPEKA, KS 66604 (785) … (785) … boba@alderson… 2018-11-02       ""    
+#>  2 * CASEY… * CASEY'S GENE… * CASEY'S GENER… * CASE… * CASE… * CASEY'S GEN… NA               ""    
+#>  3 * KANSA… * KANSAS MANUF… * KANSAS MANUFA… * KANS… * KANS… * KANSAS MANU… NA               ""    
+#>  4 * ONE C… * ONE CALL CON… * ONE CALL CONC… * ONE … * ONE … * ONE CALL CO… NA               ""    
+#>  5 <NA>     <NA>            <NA>             <NA>    <NA>    <NA>           NA               ""    
+#>  6 ALLEN, … 5317 SW 11TH T… TOPEKA, KS 66604 (785) … <NA>    sallen5948@ou… 2018-12-27       ""    
+#>  7 * KRITC  * KRITC         * KRITC          * KRITC * KRITC * KRITC        NA               ""    
+#>  8 <NA>     <NA>            <NA>             <NA>    <NA>    <NA>           NA               ""    
+#>  9 ANDERSO… 2910 SW TOPEKA… TOPEKA, KS 66611 (778) … (785) … leslie@k4ad.o… 2019-06-18       ""    
+#> 10 * KANSA… * KANSAS ASSOC… * KANSAS ASSOCI… * KANS… * KANS… * KANSAS ASSO… NA               ""    
 #> # … with 2,645 more rows
 ```
 
@@ -255,23 +256,23 @@ prop_in(kslr$zip_sep, valid_zip)
 head(kslr)
 #> # A tibble: 6 x 10
 #>   name   address   city_sep state_sep zip_sep phone  fax    email_address registration_da… client  
-#>   <chr>  <chr>     <chr>    <chr>     <chr>   <chr>  <chr>  <chr>         <chr>            <chr>   
-#> 1 ALDER… 2101 SOU… TOPEKA   KS        66604   (785)… (785)… boba@alderso… 11/2/2018        CASEY'S…
-#> 2 ALDER… 2101 SOU… TOPEKA   KS        66604   (785)… (785)… boba@alderso… 11/2/2018        KANSAS …
-#> 3 ALDER… 2101 SOU… TOPEKA   KS        66604   (785)… (785)… boba@alderso… 11/2/2018        ONE CAL…
-#> 4 ALLEN… 5317 SOU… TOPEKA   KS        66604   (785)… <NA>   sallen5948@o… 12/27/2018       KRITC   
-#> 5 ANDER… 2910 SOU… TOPEKA   KS        66611   (778)… (785)… leslie@k4ad.… 6/18/2019        KANSAS …
-#> 6 ANGLE… 455 SOUT… TOPEKA   KS        66605   (785)… <NA>   scott@kacap.… 12/20/2018       KANSAS …
+#>   <chr>  <chr>     <chr>    <chr>     <chr>   <chr>  <chr>  <chr>         <date>           <chr>   
+#> 1 ALDER… 2101 SOU… TOPEKA   KS        66604   (785)… (785)… boba@alderso… 2018-11-02       CASEY'S…
+#> 2 ALDER… 2101 SOU… TOPEKA   KS        66604   (785)… (785)… boba@alderso… 2018-11-02       KANSAS …
+#> 3 ALDER… 2101 SOU… TOPEKA   KS        66604   (785)… (785)… boba@alderso… 2018-11-02       ONE CAL…
+#> 4 ALLEN… 5317 SOU… TOPEKA   KS        66604   (785)… <NA>   sallen5948@o… 2018-12-27       KRITC   
+#> 5 ANDER… 2910 SOU… TOPEKA   KS        66611   (778)… (785)… leslie@k4ad.… 2019-06-18       KANSAS …
+#> 6 ANGLE… 455 SOUT… TOPEKA   KS        66605   (785)… <NA>   scott@kacap.… 2018-12-20       KANSAS …
 tail(kslr)
 #> # A tibble: 6 x 10
 #>   name   address   city_sep  state_sep zip_sep phone  fax    email_address registration_da… client 
-#>   <chr>  <chr>     <chr>     <chr>     <chr>   <chr>  <chr>  <chr>         <chr>            <chr>  
-#> 1 YOUNG… 800 SOUT… TOPEKA    KS        66612   (785)… (785)… jyounger@kap… 12/7/2018        KAPA-K…
-#> 2 ZAKOU… 7400 WES… OVERLAND… KS        66210   (913)… (913)… jim@smizak-l… 7/8/2019         KANSAS…
-#> 3 ZALEN… 1038 LAK… ALTAMONT  MO        64620   (913)… <NA>   szalensk@its… 11/20/2018       JOHNSO…
-#> 4 ZEHR,… 217 SOUT… TOPEKA    KS        66603   (785)… (785)… debra@leadin… 10/8/2018        LEADIN…
-#> 5 ZENZ,… 1 EMBARC… SAN FRAN… CA        94111   (415)… (973)… lobbying@pru… 10/5/2018        QMA LLC
-#> 6 ZIMME… 1540 SOU… TOPEKA    KS        66611   (816)… <NA>   zjeff53@yaho… 3/21/2019        CBD AM…
+#>   <chr>  <chr>     <chr>     <chr>     <chr>   <chr>  <chr>  <chr>         <date>           <chr>  
+#> 1 YOUNG… 800 SOUT… TOPEKA    KS        66612   (785)… (785)… jyounger@kap… 2018-12-07       KAPA-K…
+#> 2 ZAKOU… 7400 WES… OVERLAND… KS        66210   (913)… (913)… jim@smizak-l… 2019-07-08       KANSAS…
+#> 3 ZALEN… 1038 LAK… ALTAMONT  MO        64620   (913)… <NA>   szalensk@its… 2018-11-20       JOHNSO…
+#> 4 ZEHR,… 217 SOUT… TOPEKA    KS        66603   (785)… (785)… debra@leadin… 2018-10-08       LEADIN…
+#> 5 ZENZ,… 1 EMBARC… SAN FRAN… CA        94111   (415)… (973)… lobbying@pru… 2018-10-05       QMA LLC
+#> 6 ZIMME… 1540 SOU… TOPEKA    KS        66611   (816)… <NA>   zjeff53@yaho… 2019-03-21       CBD AM…
 glimpse(sample_frac(kslr))
 #> Observations: 1,543
 #> Variables: 10
@@ -283,25 +284,25 @@ glimpse(sample_frac(kslr))
 #> $ phone             <chr> "(785) 354-1354", "(785) 235-9000", "(614) 464-7475", "(785) 232-2557"…
 #> $ fax               <chr> "(785) 354-8092", "(785) 235-9002", NA, "(785) 232-1703", NA, NA, "(41…
 #> $ email_address     <chr> "wbdamron@gmail.com", "mikemurray@capitoladvantage.biz", "sstetson@mul…
-#> $ registration_date <chr> "12/29/2018", "12/27/2018", "12/31/2018", "12/18/2018", "1/9/2019", "1…
+#> $ registration_date <date> 2018-12-29, 2018-12-27, 2018-12-31, 2018-12-18, 2019-01-09, 2018-11-2…
 #> $ client            <chr> "KANSAS GAS SERVICE", "CAPITOL ADVANTAGE LLC", "CGI TECHNOLOGIES Term …
 ```
 
 ``` r
-glimpse_fun(kslr, count_na)
+col_stats(kslr, count_na)
 #> # A tibble: 10 x 4
-#>    col               type      n     p
-#>    <chr>             <chr> <dbl> <dbl>
-#>  1 name              <chr>     0 0    
-#>  2 address           <chr>     0 0    
-#>  3 city_sep          <chr>     0 0    
-#>  4 state_sep         <chr>     0 0    
-#>  5 zip_sep           <chr>     0 0    
-#>  6 phone             <chr>     0 0    
-#>  7 fax               <chr>   748 0.485
-#>  8 email_address     <chr>     0 0    
-#>  9 registration_date <chr>     0 0    
-#> 10 client            <chr>     0 0
+#>    col               class      n     p
+#>    <chr>             <chr>  <int> <dbl>
+#>  1 name              <chr>      0 0    
+#>  2 address           <chr>      0 0    
+#>  3 city_sep          <chr>      0 0    
+#>  4 state_sep         <chr>      0 0    
+#>  5 zip_sep           <chr>      0 0    
+#>  6 phone             <chr>      0 0    
+#>  7 fax               <chr>    748 0.485
+#>  8 email_address     <chr>      0 0    
+#>  9 registration_date <date>     0 0    
+#> 10 client            <chr>      0 0
 ```
 
 ## Export

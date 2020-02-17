@@ -151,7 +151,7 @@ contain the lobbyist name table information.
 kylr <- str_subset(kylr, "Kentucky Registered Legislative Agents", negate = TRUE)
 kylr <- str_subset(kylr, "\\w+\\s\\d{1,2},\\s\\d{4}", negate = TRUE)
 kylr <- str_subset(kylr, "Legislative Agents/Employer\tPhone\tContact\tAddress", negate = TRUE)
-kylr <- str_subset(kylr, "\\d{1,2}/\\d{1,2}/\\d{4}\t\\d{2}", negate = TRUE)
+kylr <- str_subset(kylr, "\\d{1,2}/\\d{1,2}/\\d{4}\t\\d{1,2}", negate = TRUE)
 kylr <- str_replace_all(kylr, "\"", "\'")
 ```
 
@@ -490,78 +490,131 @@ glimpse(kylr)
 We can now export this wrangled and normalized data set.
 
 ```{r proc_dir}
-proc_dir <- here("ky", "lobbying", "data", "processed")
-dir_create(proc_dir)
+proc_dir <- dir_create(here("ky", "lobbying", "data", "processed"))
 ```
 
 ```{r proc_write}
-kylr %>% 
+kylr <- kylr %>% 
   # swap over norm
   select(-ends_with("city_norm")) %>%
   rename(
     lob_city_norm = lob_city_swap,
     pri_city_norm = pri_city_swap
-  ) %>% 
-  write_csv(
-    path = glue("{proc_dir}/ky_lobby_reg.csv"),
-    na = ""
   )
+
+write_csv(
+  x = kylr,
+  path = glue("{proc_dir}/ky_lobby_reg.csv"),
+  na = ""
+)
 ```
 
 # Compensation
 
-We can also download lobbyist compensation data for the past two years. We can directly read both
-files into a single data frame with `purrr:map_dfr()`.
+We can also download lobbyist compensation data for the past two years. These files can be read
+by reading the lines of each, manipulating them slightly, and passing them back into 
+`readr::read_delim()`.
 
 ```{r comp_read}
-kylc <- map_dfr(
+# read lines from both years
+kylc_lines <- map(
+  .f = read_lines,
   .x = c(
     "https://klec.ky.gov/Reports/Reports/LAComp.txt",
     "https://klec.ky.gov/Reports/Reports/LACompPrior.txt"
-  ),
-  .f = read_delim,
-  delim = ";",
-  skip = 2,
-  col_types = cols(
-    `Legislative Agent` = col_character(),
-    `Report Period` = col_character(),
-    Employer = col_character(),
-    Compensation = col_number()
   )
 )
-```
 
-Repeat column headers can be removed, names converted to snake case, date columns separated and
-converted to date objects, and character columns converted to a consistent case.
+kylc_lines <- as_vector(kylc_lines)
+# remove headers
+kylc_lines <- str_subset(kylc_lines, "^Legislative\\sAgent\\sCompensation$", negate = TRUE)
+kylc_lines <- str_subset(kylc_lines, "^\\w+\\s\\d{1,2},\\s\\d{4}$", negate = TRUE)
+# remove repeated col headers
+kylc_names <- kylc_lines[[1]]
+kylc_lines <- str_subset(kylc_lines, kylc_names, negate = TRUE)
+kylc_names <- make_clean_names(str_split(kylc_names, ";", simplify = TRUE))
+kylc_names <- c("lob_name", "report_period", "pri_name", "compensation")
+# identify overflow lines
+overflow <- which(str_count(kylc_lines, ";") < 3)
+# collapse with previous line
+kylc_lines[overflow - 1] <- str_replace(
+  string = kylc_lines[overflow - 1], 
+  pattern = "(\\s)(?=;\\$)", 
+  replacement = glue("\\1{kylc_lines[overflow]}")
+)
+# remove overflow lines
+kylc_lines <- kylc_lines[-overflow]
 
-```{r comp_wrangle}
-kylc <- kylc %>% 
-  filter(
-    `Legislative Agent` != "Legislative Agent",
-    `Report Period` != "Report Period",
-    `Employer` != "Employer",
-    `Compensation` != "Compensation"
-  ) %>% 
-  clean_names("snake") %>% 
+# reas as tabular 
+kylc <- 
+  read_delim(
+    file = kylc_lines,
+    delim = ";",
+    escape_double = FALSE,
+    escape_backslash = FALSE,
+    col_names = kylc_names,
+    col_types = cols(
+      .default = col_character(),
+      compensation = col_number()
+    )
+  ) %>%
+  # split start and end dates
   separate(
     col = report_period,
     into = c("start_date", "end_date"),
     sep = "\\s"
   ) %>% 
+  # convert both to date cols
   mutate_at(
     .vars = vars(ends_with("date")),
-    .funs = parse_date,
-    format = "%m/%d/%Y"
+    .funs = lubridate::mdy
   ) %>% 
   mutate_if(
     .predicate = is_character,
-    .funs = ~str_trim(str_to_upper(str_replace(., "\"", "\'")))
-    )
+    .funs = str_normal,
+    punct = FALSE
+  ) %>% 
+  separate(
+    col = lob_name,
+    into = c("lob_last", "lob_first"),
+    sep = "\\s",
+    extra = "merge" 
+  )
 ```
 
 ```{r comp_glimpse}
 head(kylc)
 tail(kylc)
+glimpse(sample_frac(kylc))
+```
+
+Since this database will be uploaded separately from the lobbyist registration containing the
+phone number and addresses of lobbyists and principal clients, we will have to add these columns
+so that the compensation records will show up when this information is searched.
+
+```{r comp_join}
+lob_info <- kylr %>% 
+  select(starts_with("lob_")) %>% 
+  select(lob_first, lob_last, ends_with("_norm")) %>% 
+  distinct()
+
+pri_info <- kylr %>% 
+  select(starts_with("pri_")) %>% 
+  select(pri_name, ends_with("_norm")) %>% 
+  distinct()
+
+kylc <- kylc %>% 
+  left_join(lob_info, by = c("lob_last", "lob_first")) %>% 
+  left_join(pri_info, by = "pri_name")
+```
+
+We can see that most of these new columns were joined successfully.
+
+```{r comp_na}
+col_stats(kylc, count_na)
+```
+
+```{r comp_glimpse_new}
 glimpse(sample_frac(kylc))
 ```
 

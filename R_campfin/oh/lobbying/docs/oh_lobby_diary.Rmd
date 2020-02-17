@@ -189,7 +189,7 @@ ohlr <- ohlr %>%
   mutate(
     address_norm = normal_address(
       address = address_full,
-      add_abbs = usps_street,
+      abbs = usps_street,
       na_rep = TRUE
     )
   ) %>% 
@@ -245,15 +245,15 @@ progress_table(
 )
 ```
 
-### City
+### Citye
 
 ```{r city_normal}
 ohlr <- ohlr %>% 
   mutate(
     city_norm = normal_city(
       city = city, 
-      geo_abbs = usps_city,
-      st_abbs = c("OH", "DC", "OHIO"),
+      abbs = usps_city,
+      states = c("OH", "DC", "OHIO"),
       na = invalid_city,
       na_rep = TRUE
     )
@@ -315,7 +315,7 @@ ohlr <- mutate(ohlr, year = year(today()))
 ## Export
 
 ```{r create_proc_dir}
-proc_dir <- here("oh", "lobbying", "reg", "data", "processed")
+proc_dir <- here("oh", "lobbying", "data", "processed")
 dir_create(proc_dir)
 ```
 
@@ -327,7 +327,7 @@ ohlr %>%
     -match_dist
   ) %>% 
   write_csv(
-    path = glue("{proc_dir}/oh_lobby_reg_clean.csv"),
+    path = glue("{proc_dir}/oh_lobby_reg.csv"),
     na = ""
   )
 ```

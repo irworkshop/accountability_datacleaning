@@ -1,0 +1,655 @@
+---
+title: "Idaho Contributions"
+author: "Kiernan Nicholls"
+date: "`r Sys.time()`"
+output:
+  github_document: 
+    df_print: tibble
+    toc: true
+    toc_dept: 2
+editor_options: 
+  chunk_output_type: console
+---
+
+<!-- Place comments regarding knitting here -->
+
+```{r setup, include=FALSE, purl=FALSE}
+library(knitr)
+opts_chunk$set(
+  eval = TRUE,
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  error = FALSE,
+  collapse = TRUE,
+  comment = "#>",
+  fig.path = "../plots/",
+  fig.width = 10,
+  dpi = 300
+)
+options(width = 99)
+set.seed(5)
+```
+
+```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
+fs::dir_create(here::here("id", "contribs", "docs"))
+```
+
+## Project
+
+The Accountability Project is an effort to cut across data silos and give
+journalists, policy professionals, activists, and the public at large a simple
+way to search across huge volumes of public data about people and organizations.
+
+Our goal is to standardizing public data on a few key fields by thinking of each
+dataset row as a transaction. For each transaction there should be (at least) 3
+variables:
+
+1. All **parties** to a transaction
+2. The **date** of the transaction
+3. The **amount** of money involved
+
+## Objectives
+
+This document describes the process used to complete the following objectives:
+
+1. How many records are in the database?
+1. Check for duplicates
+1. Check ranges
+1. Is there anything blank or missing?
+1. Check for consistency issues
+1. Create a five-digit ZIP Code called `zip`
+1. Create a `year` field from the transaction date
+1. Make sure there is data on both parties to a transaction
+
+## Packages
+
+The following packages are needed to collect, manipulate, visualize, analyze,
+and communicate these results. The `pacman` package will facilitate their
+installation and attachment.
+
+The IRW's `campfin` package will also have to be installed from GitHub. This
+package contains functions custom made to help facilitate the processing of
+campaign finance data.
+
+```{r load_packages, message=FALSE, warning=FALSE, error=FALSE}
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load_gh("irworkshop/campfin")
+pacman::p_load(
+  tidyverse, # data manipulation
+  snakecase, # column naming
+  lubridate, # datetime strings
+  magrittr, # pipe opperators
+  gluedown, # printing markdown
+  janitor, # dataframe clean
+  refinr, # cluster and merge
+  scales, # format strings
+  readxl, # read excel files
+  knitr, # knit documents
+  rvest, # read html pages
+  vroom, # read files fast
+  glue, # combine strings
+  here, # relative storage
+  fs # search storage 
+)
+```
+
+This document should be run as part of the `R_campfin` project, which lives as a
+sub-directory of the more general, language-agnostic
+[`irworkshop/accountability_datacleaning`][repo] GitHub repository.
+
+The `R_campfin` project uses the [RStudio projects][rproj] feature and should be
+run as such. The project also uses the dynamic `here::here()` tool for file
+paths relative to _your_ machine.
+
+```{r where_here}
+# where does this document knit?
+here::here()
+```
+
+[repo]: https://github.com/irworkshop/accountability_datacleaning
+[rproj]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects
+
+## Data
+
+This data is obtained from the Michigan [Board of Elections (BOE)][boe] 
+[Campaign Finance Reporting (CFR)][cfr] system. The data is provided as 
+[annual ZIP archive files][data] for the years 1998 through 2020. These files
+are updated nightly.
+
+[boe]: https://www.michigan.gov/sos/0,4670,7-127-1633---,00.html
+[cfr]: https://www.michigan.gov/sos/0,4670,7-127-1633_8723---,00.html
+[data]: https://miboecfr.nictusa.com/cfr/dumpall/cfrdetail/
+
+## Import
+
+To import the data for processing, we will have to download each archive file
+and read them together into a single data frame object.
+
+### Download
+
+We will scrape the download page for every archive link, then downloading each
+to a local directory.
+
+```{r download_raw}
+raw_dir <- dir_create(here("id", "contribs", "data", "raw"))
+raw_base <- "https://sos.idaho.gov/elect/finance/downloads.html"
+raw_page <- read_html(raw_base)
+raw_urls <- raw_page %>% 
+  html_node("table") %>% 
+  html_nodes("a") %>% 
+  html_attr("href") %>% 
+  str_subset("con") %>%
+  str_subset("^2") %>% 
+  str_c(dirname(raw_base), ., sep = "/")
+raw_paths <- path(raw_dir, basename(raw_urls))
+if (!all(this_file_new(raw_paths))) {
+  for(i in seq_along(raw_urls)) {
+    download.file(raw_urls[i], raw_paths[i])
+    Sys.sleep(runif(1))
+  }
+}
+```
+
+### Read
+
+Each file has a different column order and names. We will first use 
+`purrr::map()` to use `readxl::read_excel()` and create a list of data frames.
+
+```{r read_excel}
+idc <- map(
+  .x = raw_paths,
+  .f = read_excel,
+  col_types = "text"
+)
+```
+
+Since the variety of column names is so great, we will have to chain together
+a number of `stringr::str_replace()` functions to create some consistency.
+
+```{r rename}
+consistent_names <- function(nm) {
+  nm %>% 
+    to_snake_case() %>% 
+    str_replace("contributor_", "contr_") %>% 
+    str_replace("contrib_", "contr_") %>% 
+    str_replace("contr_name", "contr_last") %>% 
+    str_replace("^first_name$", "cand_first") %>% 
+    str_replace("^last_name$", "cand_last") %>% 
+    str_replace("^middle_name$", "cand_mi") %>% 
+    str_replace("suf$", "suffix") %>% 
+    str_replace("_mid$", "_mi") %>% 
+    str_replace("middle", "mi") %>% 
+    str_replace("_cp$", "_type") %>% 
+    str_remove("_name$") %>% 
+    str_replace("zipcode", "zip") %>% 
+    str_replace("_st$", "_state") %>% 
+    str_replace("mailing", "address") %>% 
+    str_replace("line_1", "address_1") %>% 
+    str_replace("line_2", "address_2") %>% 
+    str_remove("^contr_") %>% 
+    str_remove("^contributing_") %>% 
+    str_remove("^contribution_") %>% 
+    str_replace("^address$", "address_1")
+}
+
+new_names <- idc %>% 
+  map(names) %>% 
+  map(consistent_names)
+
+for (i in seq_along(idc)) {
+  names(idc[[i]]) <- new_names[[i]]
+}
+```
+
+Now that each individual data frame has similar column names, we can use
+`dplyr::bind_rows()` to bind all `r length(idc)` data frames together.
+
+```{r bind_rows}
+idc <- bind_rows(idc, .id = "file")
+```
+
+Then, we can apply `readr::parse_guess()` to every column that were previously
+all read as character vectors.
+
+```{r parse_guess}
+idc <- mutate_all(idc, parse_guess)
+```
+
+We also need to reorder and recode these variables to be consistent across each
+year.
+
+```{r reorder, echo=FALSE}
+idc <- idc %>% 
+  mutate(
+    last = coalesce(last, committee_company)
+  ) %>% 
+  select(
+    file,
+    party,
+    cand_first,
+    cand_mi,
+    cand_last,
+    cand_suffix,
+    committee,
+    office,
+    district,
+    type,
+    amount,
+    date,
+    last,
+    first,
+    mi,
+    suffix,
+    address_1,
+    address_2,
+    city,
+    state,
+    zip,
+    country,
+    election,
+    election_type,
+  )
+```
+
+```{r recode}
+idc <- idc %>% 
+  mutate_if(is_character, str_to_upper) %>% 
+  mutate(
+    office = office %>% 
+      str_replace("REPRESENTATIVE", "REP."),
+    cand_suffix = cand_suffix %>% 
+      str_remove_all("[:punct:]"),
+    party = party %>% 
+      str_replace("OTHER", "OTH") %>% 
+      str_replace("REPUBLICAN", "REP") %>% 
+      str_replace("DEMOCRATIC", "DEM") %>% 
+      str_replace("INDEPENDENT", "IND") %>% 
+      str_replace("LIBERTARIAN", "LIB") %>% 
+      str_replace("CONSTITUTION", "CON") %>% 
+      str_replace("NON-PARTISAN", "NON"),
+    type = type %>% 
+      str_replace("COMPANY", "C") %>% 
+      str_replace("PERSON", "P") %>% 
+      str_replace("LOAN", "L") %>% 
+      str_replace("IN KIND", "I"),
+    election = election %>% 
+      str_replace("GENERAL", "G") %>% 
+      str_replace("PRIMARY", "P")
+  )
+
+count_na(idc$date) # 1276
+slash_dates <- str_which(idc$date, "\\d+/\\d+/\\d{4}")
+idc$date[slash_dates] <- as.character(mdy(idc$date[slash_dates]))
+excel_dates <- str_which(idc$date, "[:punct:]", negate = TRUE)
+idc$date[excel_dates] %>% 
+  as.numeric() %>% 
+  excel_numeric_to_date() %>% 
+  as.character() -> idc$date[excel_dates]
+
+idc$date <- as_date(idc$date)
+count_na(idc$date) # 1276
+```
+
+## Explore
+
+```{r glimpse}
+head(idc)
+tail(idc)
+glimpse(sample_frac(idc))
+```
+
+We should first identify which columns are missing the kinds of key information
+we need to properly identify all parties to a contribution. We can do this
+with `campfin::flag_na()` after creating a new
+
+```{r count_na}
+col_stats(idc, count_na)
+```
+
+```{r flag_na}
+idc <- idc %>% 
+  # combine cand and comm names in new col
+  mutate(recip = coalesce(cand_last, committee)) %>% 
+  flag_na(last, recip, date, amount)
+
+sum(idc$na_flag)
+mean(idc$na_flag)
+```
+
+Records that are entirely duplicated at least once across all columns should
+also be identified with `campfin::flag_dupes()`. The first occurrence of the
+record is not flagged, but all subsequent duplicates are. Not all these records
+are true duplicates, since it is technically possible to make the same
+contribution to the same person on the same day for the same amount.
+
+```{r flag_dupes}
+idc <- flag_dupes(idc, everything(), .check = TRUE)
+sum(idc$dupe_flag)
+mean(idc$dupe_flag)
+idc %>% 
+  filter(dupe_flag) %>% 
+  select(recip, last, date, amount)
+```
+
+### Categorical
+
+```{r n_distinct}
+col_stats(idc, n_distinct)
+```
+
+```{r bar_office, echo=FALSE}
+explore_plot(
+  data = filter(idc, !is.na(office)),
+  var = office,
+  title = "Idaho Contributions by Office",
+  caption = "Source: Idaho Elections Office"
+) + theme(axis.text.x = element_text(angle = 10, vjust = 0.7))
+```
+
+```{r bar_party, echo=FALSE}
+explore_plot(
+  data = filter(idc, !is.na(party)),
+  var = party,
+  title = "Idaho Contributions by Office",
+  caption = "Source: Idaho Elections Office"
+)
+```
+
+```{r type_party, echo=FALSE}
+explore_plot(
+  data = filter(idc, !is.na(type)),
+  var = type,
+  title = "Idaho Contributions by Office",
+  caption = "Source: Idaho Elections Office"
+)
+```
+
+### Amounts
+
+```{r summary_amount}
+summary(idc$amount)
+sum(idc$amount <= 0)
+```
+
+```{r amount_histogram, echo=FALSE}
+idc %>%
+  ggplot(aes(amount)) +
+  geom_histogram(fill = dark2["purple"]) +
+  scale_y_continuous(labels = comma) +
+  scale_x_continuous(
+    breaks = c(1 %o% 10^(0:6)),
+    labels = dollar,
+    trans = "log10"
+  ) +
+  labs(
+    title = "Idaho Contributions Amount Distribution",
+    subtitle = "from 2000 to 2019",
+    caption = "Source: Idaho Elections Office",
+    x = "Amount",
+    y = "Count"
+  )
+```
+
+```{r amount_violin, echo=FALSE}
+idc %>%
+  filter(
+    amount > 1,
+    amount < 1e6,
+    party %in% most_common(idc$party, 4)
+  ) %>% 
+  ggplot(aes(x = party, y = amount)) +
+  geom_violin(aes(fill = party)) +
+  scale_fill_brewer(palette = "Dark2", guide = FALSE) +
+  scale_y_continuous(
+    breaks = c(1 %o% 10^(0:6)),
+    labels = dollar,
+    trans = "log10"
+  ) +
+  labs(
+    title = "Idaho Contributions Amount Distribution",
+    subtitle = "from 2000 to 2019, by Party",
+    caption = "Source: Idaho Elections Office",
+    x = "Amount",
+    y = "Count"
+  )
+```
+
+### Dates
+
+```{r year_add}
+idc <- mutate(idc, year = year(date))
+```
+
+```{r date_range}
+min(idc$date, na.rm = TRUE)
+max(idc$date, na.rm = TRUE)
+idc <- mutate(idc, date_flag = date > today() | year < 1999 | is.na(date))
+count_na(idc$date) # 1276
+sum(idc$date_flag) # 1339 = 63
+mean(idc$date_flag)
+```
+
+```{r date_replace}
+x <- idc$date[idc$date_flag & !is.na(idc$date)]
+x <- str_replace(x, "^202(?=[^2])", "201")
+x <- str_replace(x, "^19([^9])", "199")
+x <- str_replace(x, "^2([^2])", "20")
+x <- str_replace(x, "2061", "2016")
+x[which(x > today() | year(x) < 1999)] <- NA
+idc$date[idc$date_flag & !is.na(idc$date)] <- as_date(x)
+idc <- mutate(
+  .data = idc,
+  date_flag = date > today() | year < 1999 | is.na(date),
+  year = year(date)
+)
+count_na(idc$date) # 1307
+sum(idc$date_flag) # 1307
+```
+
+For some reason there no records from 2005 to 2010.
+
+```{r year_bar, echo=FALSE}
+idc %>% 
+  count(year) %>% 
+  ggplot(aes(x = year, y = n)) +
+  geom_col(fill = dark2["orange"]) +
+  scale_y_continuous(label = comma) +
+  labs(
+    title = "Idaho Contributions by Year",
+    caption = "Source: Idaho Elections Office",
+    x = "Year Made",
+    y = "Count"
+  )
+idc %>% 
+  count(year) %>% 
+  ggplot(aes(x = year, y = n)) +
+  geom_col(fill = dark2["orange"]) +
+  scale_y_continuous(label = comma, trans = "log10") +
+  labs(
+    title = "Idaho Contributions by Year",
+    caption = "Source: Idaho Elections Office",
+    x = "Year Made",
+    y = "Count"
+  )
+```
+
+We know these files were
+read by comparing the `file` variable to the urls downloaded. For the records
+loaded from the file downloaded from 2008, the year of the `date` variable seems
+to primarily be from 2003 and 2004.
+
+```{r file_year}
+idc %>% 
+  filter(file %in% str_which(raw_urls, "2008")) %>% 
+  count(year = year(date))
+```
+
+
+
+## Wrangle
+
+### Address
+
+```{r address_norm}
+idc <- idc %>% 
+  # combine street addr
+  unite(
+    col = address_full,
+    starts_with("address"),
+    sep = " ",
+    remove = FALSE,
+    na.rm = TRUE
+  ) %>% 
+  # normalize combined addr
+  mutate(
+    address_norm = normal_address(
+      address = address_full,
+      abbs = usps_street,
+      na_rep = TRUE
+    )
+  ) %>% 
+  select(-address_full)
+```
+
+```{r address_view}
+idc %>% 
+  select(contains("address")) %>% 
+  distinct() %>% 
+  sample_frac()
+```
+
+### ZIP
+
+```{r zip_norm}
+idc <- idc %>% 
+  mutate(
+    zip_norm = normal_zip(
+      zip = zip,
+      na_rep = TRUE
+    )
+  )
+```
+
+```{r zip_progress}
+progress_table(
+  idc$zip,
+  idc$zip_norm,
+  compare = valid_zip
+)
+```
+
+### State
+
+```{r state_norm}
+idc <- idc %>% 
+  mutate(
+    state_norm = normal_state(
+      state = state,
+      abbreviate = TRUE,
+      na_rep = TRUE,
+      valid = NULL
+    )
+  )
+```
+
+```{r state_progress}
+progress_table(
+  idc$state,
+  idc$state_norm,
+  compare = valid_state
+)
+```
+
+### City
+
+```{r city_norm}
+idc <- idc %>% 
+  mutate(
+    city_norm = normal_city(
+      city = city, 
+      abbs = usps_city,
+      states = c("ID", "DC", "IDAHO"),
+      na = invalid_city,
+      na_rep = TRUE
+    )
+  )
+```
+
+```{r city_swap}
+idc <- idc %>%
+  rename(city_raw = city) %>% 
+  left_join(
+    y = zipcodes,
+    by = c(
+      "state_norm" = "state",
+      "zip_norm" = "zip"
+    )
+  ) %>% 
+  rename(city_match = city) %>% 
+  mutate(
+    match_abb = is_abbrev(city_norm, city_match),
+    match_dist = str_dist(city_norm, city_match),
+    city_swap = if_else(
+      condition = match_abb | match_dist == 1,
+      true = city_match,
+      false = city_norm
+    )
+  ) %>% 
+  select(
+    -match_abb,
+    -match_dist,
+    -city_match
+  )
+```
+
+```{r city_progress}
+many_city <- c(valid_city, extra_city)
+progress_table(
+  idc$city_raw,
+  idc$city_norm,
+  idc$city_swap,
+  compare = many_city
+)
+```
+
+```{r view_city}
+idc %>% 
+  filter(city_swap %out% many_city) %>% 
+  count(city_swap, sort = TRUE)
+```
+
+## Conclude
+
+1. There are `r comma(nrow(idc))` records in the database.
+1. There are `r comma(sum(idc$dupe_flag))` duplicate records in the database.
+1. The range and distribution of `amount` and `date` seem reasonable.
+1. There are `r comma(sum(idc$na_flag))` records missing either recipient or date.
+1. Consistency in goegraphic data has been improved with `campfin::normal_*()`.
+1. The 5-digit `zip_norm` variable has been created with `campfin::normal_zip(df$zip)`.
+1. The 4-digit `year` variable has been created with `lubridate::year()`.
+
+## Export
+
+```{r create_proc_dir}
+proc_dir <- dir_create(here("id", "contribs", "data", "processed"))
+```
+
+```{r write_clean}
+idc <- idc %>% 
+  select(
+    -city_norm,
+    city_norm = city_swap
+  ) %>%
+  rename_at(
+    .vars = vars(ends_with("norm")),
+    .funs = ~str_replace(., "_(.*)", "_clean")
+  )
+
+write_csv(
+  x = idc,
+  path = path(proc_dir, "id_contribs_clean.csv"),
+  na = ""
+)
+```
+

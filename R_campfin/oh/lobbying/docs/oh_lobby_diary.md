@@ -1,7 +1,7 @@
 Ohio Lobbyists
 ================
 Kiernan Nicholls
-2019-10-15 12:00:34
+2020-01-21 16:36:58
 
   - [Project](#project)
   - [Objectives](#objectives)
@@ -133,34 +133,34 @@ head(ohlr)
 #>   <chr>     <chr>      <chr>   <chr>          <chr> <chr> <chr>   <chr> <chr>        
 #> 1 Abbott    Catharine  100 E.… INTEROFFICE -… Colu… OH    43215   614-… Ohio Casino …
 #> 2 Abrams    Mike       155 E.… <NA>           Colu… OH    43215   614-… Ohio Hospita…
-#> 3 Abu-Absi  Laura      37 W. … <NA>           Colu… OH    43215   614-… Ohio Job and…
-#> 4 Acton     Amy        246 N … <NA>           Colu… OH    43215   614-… Department o…
-#> 5 Acton     Dan        410 Co… <NA>           Hami… OH    45013   513-… Ohio Real Es…
-#> 6 Acton     Dan        410 Co… <NA>           Hami… OH    45013   513-… Investment P…
+#> 3 Abrams    Mike       155 E.… <NA>           Colu… OH    43215   614-… Ohio Hospita…
+#> 4 Abu-Absi  Laura      37 W. … <NA>           Colu… OH    43215   614-… Ohio Job and…
+#> 5 Abu-Absi  Laura      37 W. … <NA>           Colu… OH    43215   614-… Ohio Job and…
+#> 6 Acton     Amy        246 N … <NA>           Colu… OH    43215   614-… Department o…
 #> # … with 1 more variable: employer_name_2 <chr>
 tail(ohlr)
 #> # A tibble: 6 x 10
 #>   last_name first_name address address_line_2 city  state zipcode phone employer_name
 #>   <chr>     <chr>      <chr>   <chr>          <chr> <chr> <chr>   <chr> <chr>        
-#> 1 Zelman    Susan Tave 3168 B… <NA>           Colu… OH    43209   614 … Jason Learni…
-#> 2 Zimmerman Robert A   200 Pu… <NA>           Clev… OH    44114   216-… Sisters of C…
-#> 3 Zimmerman Robert A   200 Pu… <NA>           Clev… OH    44114   216-… NaphCare     
-#> 4 Zimpher   William    30 Eas… INTEROFFICE -… Colu… OH    43215   614-… Office of Bu…
-#> 5 Zinn      Jennifer   390 Wo… <NA>           West… OH    43082   614-… OCSEA AFSCME…
+#> 1 Zimmerman Robert A   200 Pu… <NA>           Clev… OH    44114   216-… Sisters of C…
+#> 2 Zimpher   William    30 Eas… INTEROFFICE -… Colu… OH    43215   614-… Office of Bu…
+#> 3 Zinn      Jennifer   390 Wo… <NA>           West… OH    43082   614-… OCSEA AFSCME…
+#> 4 Zucal     Ethan      2045 M… <NA>           Colu… OH    43229   614-… Ohio Departm…
+#> 5 Zwissler  Catherine… P.O. B… <NA>           Buck… OH    43008   614-… Specialty Co…
 #> 6 Zwissler  Catherine… P.O. B… <NA>           Buck… OH    43008   614-… Specialty Co…
 #> # … with 1 more variable: employer_name_2 <chr>
 glimpse(sample_frac(ohlr))
-#> Observations: 4,701
+#> Observations: 6,939
 #> Variables: 10
-#> $ last_name       <chr> "Siekman", "Lynaugh", "Jones", "Herf", "Sanders", "Gardner", "Weir", "Sh…
-#> $ first_name      <chr> "Pamela", "Brandon", "Belinda M", "Lori A", "Joshua", "Randy", "Ian", "B…
-#> $ address         <chr> "4597 Neiswander Square", "1299 Avondale Ave.", "37 West Broad Street, S…
-#> $ address_line_2  <chr> NA, NA, NA, NA, NA, "INTEROFFICE - BOR", NA, NA, NA, NA, NA, NA, NA, NA,…
-#> $ city            <chr> "New Albany", "Columbus", "Columbus", "Columbus", "Columbus", "Columbus"…
+#> $ last_name       <chr> "Davidson", "O'Donnell", "Tucker", "Fiore", "Brinkman", "O'Reilly", "Kov…
+#> $ first_name      <chr> "Drew", "Terrence", "Mark D", "Anthonio C", "Kristen L", "Kelly C", "Rob…
+#> $ address         <chr> "37 W. Broad Street, Suite 325", "150 E. Gay Street, Suite 2400", "41 So…
+#> $ address_line_2  <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
+#> $ city            <chr> "Columbus", "Columbus", "Columbus", "Columbus", "Granville", "Columbus",…
 #> $ state           <chr> "OH", "OH", "OH", "OH", "OH", "OH", "OH", "OH", "OH", "OH", "OH", "OH", …
-#> $ zipcode         <chr> "43054", "43212", "43215", "43215", "43215", "43215", "43220", "43123", …
-#> $ phone           <chr> "614-738-5116", "614-946-7965", "614-224-3855", "614-462-2667", "614-621…
-#> $ employer_name   <chr> "Community Bus Services, Inc", "Standard Wellness Company, LLC", "Columb…
+#> $ zipcode         <chr> "43215", "43215-4291", "43215-3506", "43215", "43023", "43215-3413", "43…
+#> $ phone           <chr> "614-228-9800", "614-744-2583", "614-223-9300", "614-462-5428", "614-271…
+#> $ employer_name   <chr> "CNA", "Compton Point, Inc.", "Ohio State Building & Construction Trades…
 #> $ employer_name_2 <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
 ```
 
@@ -173,16 +173,16 @@ glimpse_fun(ohlr, count_na)
 #> # A tibble: 10 x 4
 #>    col             type      n     p
 #>    <chr>           <chr> <dbl> <dbl>
-#>  1 last_name       chr       0 0    
-#>  2 first_name      chr       0 0    
-#>  3 address         chr       0 0    
-#>  4 address_line_2  chr    4486 0.954
-#>  5 city            chr       0 0    
-#>  6 state           chr       0 0    
-#>  7 zipcode         chr       0 0    
-#>  8 phone           chr       0 0    
-#>  9 employer_name   chr       0 0    
-#> 10 employer_name_2 chr    4669 0.993
+#>  1 last_name       <chr>     0 0    
+#>  2 first_name      <chr>     0 0    
+#>  3 address         <chr>     0 0    
+#>  4 address_line_2  <chr>  6718 0.968
+#>  5 city            <chr>     0 0    
+#>  6 state           <chr>     0 0    
+#>  7 zipcode         <chr>     0 0    
+#>  8 phone           <chr>     0 0    
+#>  9 employer_name   <chr>     0 0    
+#> 10 employer_name_2 <chr>  6896 0.994
 ```
 
 ``` r
@@ -221,7 +221,7 @@ ohlr <- ohlr %>%
   mutate(
     address_norm = normal_address(
       address = address_full,
-      add_abbs = usps_street,
+      abbs = usps_street,
       na_rep = TRUE
     )
   ) %>% 
@@ -233,20 +233,20 @@ ohlr %>%
   select(starts_with("address")) %>% 
   distinct() %>% 
   sample_frac()
-#> # A tibble: 1,275 x 3
-#>    address                           address_line_2   address_norm                                 
-#>    <chr>                             <chr>            <chr>                                        
-#>  1 111 Liberty St., Suite 100        <NA>             111 LIBERTY STREET SUITE 100                 
-#>  2 7777 Bainbridge Road              <NA>             7777 BAINBRIDGE ROAD                         
-#>  3 41 South High Street, Suite 2240  <NA>             41 SOUTH HIGH STREET SUITE 2240              
-#>  4 21 West Broad St., Ste. 800       <NA>             21 WEST BROAD STREET SUITE 800               
-#>  5 400 East Campus View Boulevard (… INTEROFFICE - O… 400 EAST CAMPUS VIEW BOULEVARD 3AD INTEROFFI…
-#>  6 2201 Townley Road                 <NA>             2201 TOWNLEY ROAD                            
-#>  7 100 E. Broad St., 20th Floor      INTEROFFICE - C… 100 EAST BROAD STREET 20TH FLOOR INTEROFFICE…
-#>  8 77 South High St., 2nd Flr.       <NA>             77 SOUTH HIGH STREET 2ND FLR                 
-#>  9 801 Kingsmill Parkway             <NA>             801 KINGSMILL PARKWAY                        
-#> 10 41 S. High St. #2245              <NA>             41 SOUTH HIGH STREET 2245                    
-#> # … with 1,265 more rows
+#> # A tibble: 1,240 x 3
+#>    address                      address_line_2             address_norm                            
+#>    <chr>                        <chr>                      <chr>                                   
+#>  1 600 Superior Avenue E., Ste… <NA>                       600 SUPERIOR AVE E STE 2100             
+#>  2 213 W. Liberty St., Ste. 200 <NA>                       213 W LIBERTY ST STE 200                
+#>  3 10 W Broad Street #1150      <NA>                       10 W BROAD ST 1150                      
+#>  4 8591 Woodbury Rd             <NA>                       8591 WOODBURY RD                        
+#>  5 545 East Town Street         <NA>                       545 E TOWN ST                           
+#>  6 24000 Honda Parkway          <NA>                       24000 HONDA PKWY                        
+#>  7 250 E. Broad St., #1400      INTEROFFICE - Public Defe… 250 E BROAD ST 1400 INTEROFFICE PUBLIC …
+#>  8 37 W. Broad St., Ste. 325    <NA>                       37 W BROAD ST STE 325                   
+#>  9 180 East Broad St. 12th Flo… INTEROFFICE - PUCO         180 E BROAD ST 12TH FL INTEROFFICE PUCO 
+#> 10 36 East Seventh Street, Ste… <NA>                       36 E SEVENTH ST STE 1510                
+#> # … with 1,230 more rows
 ```
 
 ### ZIP
@@ -270,8 +270,8 @@ progress_table(
 #> # A tibble: 2 x 6
 #>   stage    prop_in n_distinct prop_na n_out n_diff
 #>   <chr>      <dbl>      <dbl>   <dbl> <dbl>  <dbl>
-#> 1 zipcode    0.884        376       0   546    110
-#> 2 zip_norm   0.999        290       0     3      3
+#> 1 zipcode    0.882        360       0   816    103
+#> 2 zip_norm   0.999        276       0     5      3
 ```
 
 ### State
@@ -297,19 +297,19 @@ progress_table(
 #> # A tibble: 2 x 6
 #>   stage      prop_in n_distinct prop_na n_out n_diff
 #>   <chr>        <dbl>      <dbl>   <dbl> <dbl>  <dbl>
-#> 1 state        0.999         28       0     6      2
-#> 2 state_norm   1             26       0     0      0
+#> 1 state            1         25       0     0      0
+#> 2 state_norm       1         25       0     0      0
 ```
 
-### City
+### Citye
 
 ``` r
 ohlr <- ohlr %>% 
   mutate(
     city_norm = normal_city(
       city = city, 
-      geo_abbs = usps_city,
-      st_abbs = c("OH", "DC", "OHIO"),
+      abbs = usps_city,
+      states = c("OH", "DC", "OHIO"),
       na = invalid_city,
       na_rep = TRUE
     )
@@ -346,39 +346,40 @@ progress_table(
   compare = valid_city
 )
 #> # A tibble: 3 x 6
-#>   stage     prop_in n_distinct  prop_na n_out n_diff
-#>   <chr>       <dbl>      <dbl>    <dbl> <dbl>  <dbl>
-#> 1 city_raw)   0.988        182 0           56     22
-#> 2 city_norm   0.989        182 0           54     20
-#> 3 city_swap   0.989        180 0.000851    50     17
+#>   stage     prop_in n_distinct prop_na n_out n_diff
+#>   <chr>       <dbl>      <dbl>   <dbl> <dbl>  <dbl>
+#> 1 city_raw)   0.988        171 0          83     20
+#> 2 city_norm   0.973        171 0         188     37
+#> 3 city_swap   0.988        171 0.00101    80     18
 ```
 
 ``` r
 ohlr %>% 
   filter(city_swap %out% valid_city) %>% 
   count(state_norm, city_swap, city_match, sort = TRUE)
-#> # A tibble: 19 x 4
-#>    state_norm city_swap            city_match     n
-#>    <chr>      <chr>                <chr>      <int>
-#>  1 OH         UPPER ARLINGTON      COLUMBUS      16
-#>  2 OH         BEXLEY               COLUMBUS       9
-#>  3 OH         GAHANNA              COLUMBUS       8
-#>  4 OH         FAIRLAWN             AKRON          3
-#>  5 OH         LAKELINE             EASTLAKE       2
-#>  6 OH         MARBLE CLIFF         COLUMBUS       2
-#>  7 OH         <NA>                 <NA>           2
-#>  8 CA         <NA>                 <NA>           1
-#>  9 MA         BEVERLY FARMS        BEVERLY        1
-#> 10 MA         <NA>                 <NA>           1
-#> 11 OH         CINNCINATI           CINCINNATI     1
-#> 12 OH         COPLEY               AKRON          1
-#> 13 OH         FAIRVIEW PARK        CLEVELAND      1
-#> 14 OH         LIBERTY TOWNSHIP     HAMILTON       1
-#> 15 OH         SOUTH EUCLID         CLEVELAND      1
-#> 16 OH         UNIVERSITY HEIGHTS   CLEVELAND      1
-#> 17 OH         WARRENSVILLE HEIGHTS CLEVELAND      1
-#> 18 PA         MCMURRAY             CANONSBURG     1
-#> 19 PA         WYOMISSING           READING        1
+#> # A tibble: 20 x 4
+#>    state_norm city_swap        city_match        n
+#>    <chr>      <chr>            <chr>         <int>
+#>  1 OH         UPPER ARLINGTON  COLUMBUS         28
+#>  2 OH         BEXLEY           COLUMBUS         14
+#>  3 OH         GAHANNA          COLUMBUS         11
+#>  4 OH         MORELAND HLS     CHAGRIN FALLS     9
+#>  5 OH         FAIRLAWN         AKRON             4
+#>  6 OH         <NA>             <NA>              4
+#>  7 MA         <NA>             <NA>              2
+#>  8 OH         BRK PARK         BROOKPARK         2
+#>  9 OH         LAKELINE         EASTLAKE          2
+#> 10 CA         <NA>             <NA>              1
+#> 11 MA         BEVERLY FARMS    BEVERLY           1
+#> 12 OH         COPLEY           AKRON             1
+#> 13 OH         FAIRVIEW PARK    CLEVELAND         1
+#> 14 OH         GRV CITY         COLUMBUS          1
+#> 15 OH         LIBERTY TWP      HAMILTON          1
+#> 16 OH         S EUCLID         CLEVELAND         1
+#> 17 OH         UNIVERSITY HTS   CLEVELAND         1
+#> 18 OH         WARRENSVILLE HTS CLEVELAND         1
+#> 19 PA         MCMURRAY         CANONSBURG        1
+#> 20 PA         WYOMISSING       READING           1
 ```
 
 ### Year
@@ -389,7 +390,7 @@ ohlr <- mutate(ohlr, year = year(today()))
 
 ## Conclude
 
-1.  There are 4,701 records in the database.
+1.  There are 6,939 records in the database.
 2.  There are no duplicate records in the database.
 3.  There are no records missing any pertinent information.
 4.  Consistency in goegraphic data has been improved with
@@ -402,7 +403,7 @@ ohlr <- mutate(ohlr, year = year(today()))
 ## Export
 
 ``` r
-proc_dir <- here("oh", "lobbying", "reg", "data", "processed")
+proc_dir <- here("oh", "lobbying", "data", "processed")
 dir_create(proc_dir)
 ```
 
@@ -414,7 +415,7 @@ ohlr %>%
     -match_dist
   ) %>% 
   write_csv(
-    path = glue("{proc_dir}/oh_lobby_reg_clean.csv"),
+    path = glue("{proc_dir}/oh_lobby_reg.csv"),
     na = ""
   )
 ```

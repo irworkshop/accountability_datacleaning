@@ -1,5 +1,5 @@
 ---
-title: "State Data"
+title: "{State} {Type}"
 author: "First Last"
 date: "`r Sys.time()`"
 output:
@@ -16,7 +16,7 @@ editor_options:
 ```{r setup, include=FALSE, purl=FALSE}
 library(knitr)
 opts_chunk$set(
-  eval = FALSE,
+  eval = TRUE,
   echo = TRUE,
   warning = FALSE,
   message = FALSE,
@@ -32,50 +32,53 @@ set.seed(5)
 ```
 
 ```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
-fs::dir_create(here::here("df", "data", "docs"))
+fs::dir_create(here::here("{st}", "{type}", "docs"))
 ```
 
 ## Project
 
-The Accountability Project is an effort to cut across data silos and give journalists, policy
-professionals, activists, and the public at large a simple way to search across huge volumes of
-public data about people and organizations.
+The Accountability Project is an effort to cut across data silos and give
+journalists, policy professionals, activists, and the public at large a simple
+way to search across huge volumes of public data about people and organizations.
 
-Our goal is to standardizing public data on a few key fields by thinking of each dataset row as a
-transaction. For each transaction there should be (at least) 3 variables:
+Our goal is to standardizing public data on a few key fields by thinking of each
+dataset row as a transaction. For each transaction there should be (at least) 3
+variables:
 
-1. All **parties** to a transaction
-2. The **date** of the transaction
-3. The **amount** of money involved
+1. All **parties** to a transaction.
+2. The **date** of the transaction.
+3. The **amount** of money involved.
 
 ## Objectives
 
 This document describes the process used to complete the following objectives:
 
 1. How many records are in the database?
-1. Check for duplicates
-1. Check ranges
+1. Check for entirely duplicated records.
+1. Check ranges of continuous variables.
 1. Is there anything blank or missing?
-1. Check for consistency issues
-1. Create a five-digit ZIP Code called `ZIP5`
-1. Create a `YEAR` field from the transaction date
-1. Make sure there is data on both parties to a transaction
+1. Check for consistency issues.
+1. Create a five-digit ZIP Code called `zip`.
+1. Create a `year` field from the transaction date.
+1. Make sure there is data on both parties to a transaction.
 
 ## Packages
 
-The following packages are needed to collect, manipulate, visualize, analyze, and communicate
-these results. The `pacman` package will facilitate their installation and attachment.
+The following packages are needed to collect, manipulate, visualize, analyze,
+and communicate these results. The `pacman` package will facilitate their
+installation and attachment.
 
-The IRW's `campfin` package will also have to be installed from GitHub. This package contains
-functions custom made to help facilitate the processing of campaign finance data.
+The IRW's `campfin` package will also have to be installed from GitHub. This
+package contains functions custom made to help facilitate the processing of
+campaign finance data.
 
-```{r load_packages, message=FALSE, dfrning=FALSE, error=FALSE}
+```{r load_packages, message=FALSE, warning=FALSE, error=FALSE}
 if (!require("pacman")) install.packages("pacman")
 pacman::p_load_gh("irworkshop/campfin")
 pacman::p_load(
   tidyverse, # data manipulation
   lubridate, # datetime strings
-  magrittr, # pipe opperators
+  magrittr, # pipe operators
   janitor, # dataframe clean
   refinr, # cluster and merge
   scales, # format strings
@@ -87,46 +90,40 @@ pacman::p_load(
 )
 ```
 
-This document should be run as part of the `R_campfin` project, which lives as a sub-directory of
-the more general, language-agnostic [`irworkshop/accountability_datacleaning`][01] GitHub
-repository.
+This document should be run as part of the `R_campfin` project, which lives as a
+sub-directory of the more general, language-agnostic
+[`irworkshop/accountability_datacleaning`][tap] GitHub repository.
 
-The `R_campfin` project uses the [RStudio projects][02] feature and should be run as such. The
-project also uses the dynamic `here::here()` tool for file paths relative to _your_ machine.
+The `R_campfin` project uses the [RStudio projects][rproj] feature and should be
+run as such. The project also uses the dynamic `here::here()` tool for file
+paths relative to _your_ machine.
 
 ```{r where_here}
 # where does this document knit?
 here::here()
 ```
 
-[01]: https://github.com/irworkshop/accountability_datacleaning "TAP repo"
-[02]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects "Rproj"
+[tap]: https://github.com/irworkshop/accountability_datacleaning
+[rproj]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects
 
 ## Data
-
-### About
-
-### Variables
 
 ## Import
 
 ### Download
 
-```{r create_raw_dir}
-raw_dir <- here("df", "type", "data", "raw")
-dir_create(raw_dir)
+```{r raw_dir}
+raw_dir <- dir_create(here("{st}", "{type}", "data", "raw"))
 ```
 
-```{r download_raw}
-download.file(
-  
-)
+```{r raw_download}
+download.file()
 ```
 
 ### Read
 
-```{r read_raw}
-df <- read_delim(
+```{r raw_read}
+st <- read_delim(
   file = dir_ls(raw_dir)
 )
 ```
@@ -134,54 +131,64 @@ df <- read_delim(
 ## Explore
 
 ```{r glimpse}
-head(df)
-tail(df)
-glimpse(sample_frac(df))
+head(st)
+tail(st)
+glimpse(sample_n(st, 20))
 ```
 
 ### Missing
 
-```{r glimpse_na}
-glimpse_fun(df, count_na)
+```{r na_count}
+col_stats(st, count_na)
 ```
 
-```{r flag_na}
-df <- df %>% flag_na(payee, filer, date, amount)
+```{r na_flag}
+st <- st %>% flag_na(date, last, amount, committee)
+sum(st$na_flag)
 ```
 
 ### Duplicates
 
-```{r flag_dupes}
-df <- flag_dupes(df, -id)
+```{r dupe_flag}
+st <- flag_dupes(st, -id)
+sum(st$dupe_flag)
+```
+
+```{r dupe_view}
+st %>% 
+  filter(dupe_flag) %>% 
+  select(date, last, amount, committee)
 ```
 
 ### Categorical
 
-```{r glimpse_distinct}
-glimpse_fun(df, n_distinct)
+```{r n_distinct}
+col_stats(st, n_distinct)
 ```
 
 ### Continuous
 
 #### Amounts
 
-```{r summary_amount}
-summary(df$amount)
+```{r ammount_summary}
+summary(st$amount)
+mean(st$amount <= 0)
 ```
 
 ```{r amount_histogram, echo=FALSE}
 df %>%
   ggplot(aes(amount)) +
-  geom_histogram() +
+  geom_histogram(fill = dark2["purple"]) +
+  scale_y_continuous(labels = comma) +
   scale_x_continuous(
     breaks = c(1 %o% 10^(0:6)),
     labels = dollar,
     trans = "log10"
   ) +
   labs(
-    title = "State Data Amount Distribution",
+    title = "{State} {Data} Amount Distribution",
     subtitle = "from 2000 to 2019",
-    caption = "Source: State Agency Name",
+    caption = "Source: {source}",
     x = "Amount",
     y = "Count"
   )
@@ -189,27 +196,54 @@ df %>%
 
 #### Dates
 
-```{r year_add}
-df <- mutate(df, year = year(date))
+```{r date_year}
+st <- mutate(st, year = year(date))
 ```
 
 ```{r date_range}
-min(df$date)
-sum(df$year < 2000)
-max(df$date)
-sum(df$date > today())
+min(st$date)
+sum(st$year < 2000)
+max(st$date)
+sum(st$date > today())
+```
+
+```{r year_bar}
+st %>% 
+  count(year) %>% 
+  mutate(even = is_even(year)) %>% 
+  ggplot(aes(x = year, y = n)) +
+  geom_col(aes(fill = even)) + 
+  scale_fill_brewer(palette = "Dark2") +
+  scale_y_continuous(labels = comma) +
+  scale_x_continuous(breaks = seq(2000, 2020, by = 2)) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "{State} {Type} by Year",
+    caption = "Source: {Source}",
+    fill = "Election Year",
+    x = "Year Made",
+    y = "Count"
+  )
 ```
 
 ## Wrangle
 
+To improve the searchability of the database, we will perform some consistent,
+confident string normalization. For geographic variables like city names and
+ZIP codes, the corresponding `campfin::normal_*()` functions are taylor made to 
+facilitate this process.
+
 ### Address
 
+For the street `addresss` variable, the `campfin::normal_address()` function
+will force consistence case, remove punctuation, and abbreviation official 
+USPS suffixes.
+
 ```{r address_norm}
-packageVersion("tidyr")
-df <- df %>% 
+st <- st %>% 
   # combine street addr
   unite(
-    col = adress_full,
+    col = address_full,
     starts_with("address"),
     sep = " ",
     remove = FALSE,
@@ -218,17 +252,29 @@ df <- df %>%
   # normalize combined addr
   mutate(
     address_norm = normal_address(
-      address = adress_full,
-      add_abbs = usps_street,
+      address = address_full,
+      abbs = usps_street,
       na_rep = TRUE
     )
-  )
+  ) %>% 
+  select(-address_full)
+```
+
+```{r address_view}
+st %>% 
+  select(contains("address")) %>% 
+  distinct() %>% 
+  sample_n(10)
 ```
 
 ### ZIP
 
+For ZIP codes, the `campfin::normal_zip()` function will attempt to create
+valied _five_ digit codes by removing the ZIP+4 suffix and returning leading
+zeroes dropped by other programs like Microsoft Excel.
+
 ```{r zip_norm}
-df <- df %>% 
+st <- st %>% 
   mutate(
     zip_norm = normal_zip(
       zip = zip,
@@ -239,16 +285,19 @@ df <- df %>%
 
 ```{r zip_progress}
 progress_table(
-  df$zip,
-  df$zip_norm,
+  st$zip,
+  st$zip_norm,
   compare = valid_zip
 )
 ```
 
 ### State
 
+Valid two digit state abbreviations can be made using the 
+`campfin::normal_state()` function.
+
 ```{r state_norm}
-df <- df %>% 
+st <- st %>% 
   mutate(
     state_norm = normal_state(
       state = state,
@@ -259,31 +308,54 @@ df <- df %>%
   )
 ```
 
+```{r state_view}
+st %>% 
+  filter(state != state_norm) %>% 
+  count(state, sort = TRUE)
+```
+
 ```{r state_progress}
 progress_table(
-  df$state,
-  df$state_norm,
+  st$state,
+  st$state_norm,
   compare = valid_state
 )
 ```
 
 ### City
 
+Cities are the most difficult geographic variable to normalize, simply due to
+the wide variety of valid cities and formats.
+
+#### Normal
+
+The `campfin::normal_city()` function is a good start, again converting case,
+removing punctuation, but _expanding_ USPS abbreviations. We can also remove
+`invalid_city` values.
+
 ```{r city_norm}
-df <- df %>% 
+st <- st %>% 
   mutate(
     city_norm = normal_city(
       city = city, 
-      geo_abbs = usps_city,
-      st_abbs = c("DF", "DC", "DATA FRAME"),
+      abbs = usps_city,
+      states = c("{ST}", "DC", "{STATE}"),
       na = invalid_city,
       na_rep = TRUE
     )
   )
 ```
 
+#### Swap
+
+We can further improve normalization by comparing our normalized value
+against the _expected_ value for that record's state abbreviation and ZIP code.
+If the normalized value is either an abbreviation for or very similar to the
+expected value, we can confidently swap those two.
+
 ```{r city_swap}
-df <- df %>% 
+st <- st %>% 
+  rename(city_raw = city) %>% 
   left_join(
     y = zipcodes,
     by = c(
@@ -296,47 +368,150 @@ df <- df %>%
     match_abb = is_abbrev(city_norm, city_match),
     match_dist = str_dist(city_norm, city_match),
     city_swap = if_else(
-      condition = match_abb | match_dist == 1,
+      condition = !is.na(match_dist) & match_abb | match_dist == 1,
       true = city_match,
       false = city_norm
+    )
+  ) %>% 
+  select(
+    -city_match,
+    -match_dist,
+    -match_abb
+  )
+```
+
+#### Refine
+
+The [OpenRefine] algorithms can be used to group similar strings and replace the
+less common versions with their most common counterpart. This can greatly 
+reduce inconsistency, but with low confidence; we will only keep any refined
+strings that have a valid city/state/zip combination.
+
+[or]: https://openrefine.org/
+
+```{r refine_city}
+good_refine <- st %>% 
+  mutate(
+    city_refine = city_swap %>% 
+      key_collision_merge() %>% 
+      n_gram_merge(numgram = 1)
+  ) %>% 
+  filter(city_refine != city_swap) %>% 
+  inner_join(
+    y = zipcodes,
+    by = c(
+      "city_refine" = "city",
+      "state_norm" = "state",
+      "zip_norm" = "zip"
     )
   )
 ```
 
-```{r city_progress}
-progress_table(
-  df$city,
-  df$city_norm,
-  df$city_swap,
-  compare = valid_city
-)
+```{r view_city_refines, echo=FALSE}
+good_refine %>%
+  count(
+    state_norm, 
+    zip_norm, 
+    city_swap, 
+    city_refine,
+    sort = TRUE
+  )
+```
+
+Then we can join the refined values back to the database.
+
+```{r join_refine}
+st <- st %>% 
+  left_join(good_refine) %>% 
+  mutate(city_refine = coalesce(city_refine, city_swap))
+```
+
+#### Progress
+
+```{r city_progress, echo=FALSE}
+many_city <- c(valid_city, extra_city)
+progress <- progress_table(
+  str_to_upper(st$city_raw),
+  st$city_norm,
+  st$city_swap,
+  compare = many_city
+) %>% mutate(stage = as_factor(stage))
+```
+
+```{r progress_print, echo=FALSE}
+kable(progress, digits = 3)
+```
+
+You can see how the percentage of valid values increased with each stage.
+
+```{r progress_bar, echo=FALSE}
+progress %>% 
+  ggplot(aes(x = stage, y = prop_in)) +
+  geom_hline(yintercept = 0.99) +
+  geom_col(fill = dark2["purple"]) +
+  coord_cartesian(ylim = c(0.75, 1)) +
+  scale_y_continuous(labels = percent) +
+  labs(
+    title = "{State} City Normalization Progress",
+    subtitle = "Raw at {percent} before conversion to uppercase",
+    x = "Stage",
+    y = "Percent Valid"
+  )
+```
+
+More importantly, the number of distinct values decreased each stage. We were
+able to confidently change many distinct invalid values to their valid
+equivalent.
+
+```{r distinct_bar}
+progress %>% 
+  select(
+    stage, 
+    all = n_distinct,
+    bad = n_diff
+  ) %>% 
+  mutate(good = all - bad) %>% 
+  pivot_longer(c("good", "bad")) %>% 
+  mutate(name = name == "good") %>% 
+  ggplot(aes(x = stage, y = value)) +
+  geom_col(aes(fill = name)) +
+  scale_fill_brewer(palette = "Dark2", direction = -1) +
+  scale_y_continuous(labels = comma) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "{State} City Normalization Progress",
+    subtitle = "Distinct values, valid and invalid",
+    x = "Stage",
+    y = "Percent Valid",
+    fill = "Valid"
+  )
+  
 ```
 
 ## Conclude
 
-1. There are `nrow(df)` records in the database.
-1. There are `sum(df$dupe_flag)` duplicate records in the database.
+```{r clean_glimpse}
+glimpse(sample_n(st, 20))
+```
+
+1. There are `r nrow(st)` records in the database.
+1. There are `r sum(st$dupe_flag)` duplicate records in the database.
 1. The range and distribution of `amount` and `date` seem reasonable.
-1. There are `sum(df$na_flag)` records missing either recipient or date.
+1. There are `r sum(st$na_flag)` records missing either recipient or date.
 1. Consistency in goegraphic data has been improved with `campfin::normal_*()`.
-1. The 5-digit `zip_norm` variable has been created with `campfin::normal_zip(df$zip)`.
 1. The 4-digit `year` variable has been created with `lubridate::year()`.
 
 ## Export
 
-```{r create_proc_dir}
-proc_dir <- here("df", "type", "data", "processed")
-dir_create(proc_dir)
+```{r clean_dir}
+clean_dir <- dir_create(here("{st}", "{type}", "data", "clean"))
 ```
 
 ```{r write_clean}
-df %>% 
-  select(
-    
-  ) %>% 
-  write_csv(
-    path = glue("{proc_dir}/df_type_clean.csv"),
-    na = ""
-  )
+write_csv(
+  x = df,
+  path = path(clean_dir, "{st}_{type}_clean.csv"),
+  na = ""
+)
 ```
 

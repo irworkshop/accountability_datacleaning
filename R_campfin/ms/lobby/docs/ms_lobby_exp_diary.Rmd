@@ -6,7 +6,7 @@ output:
   github_document: 
     df_print: tibble
     toc: true
-    toc_dept: 2
+    toc_dept: 3
 editor_options: 
   chunk_output_type: console
 ---
@@ -110,73 +110,10 @@ raw_dir <- here("ms", "lobby", "data", "raw","exp")
 
 dir_create(raw_dir)
 ```
-According to [The Secretary of State’s Office] [03], 
-
-> Mississippi law defines “lobbying” as:
- influencing or attempting to influence legislative or executive action through oral or
-written communication;
- solicitation of others to influence legislative or executive action;
- paying or promising to pay anything of value directly or indirectly related to
-legislative or executive action. (Miss. Code Ann. § 5-8-3(k)).  
-
-> Mississippi law defines a “lobbyist’s client” as:
- an entity or person in whose behalf the lobbyist influences or attempts to influence
-legislative or executive action.  
-
-> Mississippi law defines a “lobbyist” as an individual who:
- is employed and receives payments, or who contracts for economic consideration,
-including reimbursement for reasonable travel and living expenses, for the purpose of
-lobbying;
- represents a legislative or public official or public employee, or who represents a
-person, organization, association or other group, for the purpose of lobbying; or is a sole proprietor, owner, part owner, or shareholder in a business, who has a
-pecuniary interest in legislative or executive action, who engages in lobbying
-activities. (Miss. Code Ann. § 5-8-3(l)).  
-
-> Mississippi law excludes certain individuals from the definition of “lobbyist” and
-“lobbyist’s client” who are exempt from the registration and reporting requirements of the
-Lobbying Law Reform Act of 1994. See, Miss. Code Ann. § 5-8-7 at Appendix D for further
-information. 
+We downloaded the lobbyist compensation data from [The Secretary of State’s Office] [03], and the data is as current as 2019.
 
 [03]: https://www.sos.ms.gov/Elections-Voting/Documents/2019%20Lobbying%20Guide.pdf
 
-After inespecting the client reports and lobbyist reports, we discovered that the client reports are cleaner without empty columns ("N/A" lobbyists and $0.00 expenses). Thus, we'll join the client reports to the registry.
-
-```{r lobbyists, eval = FALSE}
-
-ms_url<- glue("https://sos.ms.gov/elec/Config/Mississippi/Elections/Handlers/ExportClientReportsToExcel.ashx?type=5&year={2009:2019}&firstName=&lastName=&clientName=&salaryBeginRange=&salaryEndRange=,")
-
-dest_file <- glue("{raw_dir}/ms_lobby_exp_{2009:2019}.xls")
-
-if (!all_files_new(raw_dir)) {
-    download.file(
-      url = ms_url,
-      destfile = dest_file)
-  Sys.sleep(1)
-}
-
-```
-
-Then, we'll merge each dataset into a master dataset. Note that there's actually no data available in csv prior to 2011. 
-[Miss.
-Code Ann. §§ 5-8-1, et seq.][03] regulates lobbyists registration as such.  
-
-> Current lobbying reporting processes applicable to all lobbyists and their respective
-clients in the State of Mississippi are the result of the Lobbying Law Reform Act of 1994. (Miss.
-Code Ann. §§ 5-8-1, et seq.). Unless excepted from the statutory definition of “lobbyist,” every
-lobbyist and lobbyist’s client must file a registration statement with the Secretary of State’s
-Office within five (5) calendar days after becoming a lobbyist or lobbyist’s client, or beginning
-to lobby on behalf of a new client.   
-> The Mississippi lobbying cycle begins on January 1 and
-ends on December 31 of each calendar year and registration is required each calendar year.
-All lobbying reports for the cycle are filed electronically with the Secretary of State’s
-Office. Mississippi statute requires all registered lobbyists to file three (3) reports during the
-lobbying cycle:  
-  - Legislative Mid-Session Report due on February 25th  
-  - Legislative End-of-Session Report due within ten (10) days after sine die  
-  - Annual Report of Expenditures due no later than January 30th  
-  (Miss. Code Ann. § 5-8-11(5)(6)).  
-  Registered lobbyists’ clients file one (1) report, the Annual Report, with the Secretary
-  of State’s Office during the lobbying cycle. 
 
 ## Reading
 We discovered that the xls files are actually structured as html tables. We'll use the `rvest` package to read these files.
@@ -264,20 +201,17 @@ ms_lobby_exp  %>% col_stats(count_na)
 ## Join
 We'll join the expenditure data with the registration data frame that we cleaned before. 
 
+
 ```{r}
 reg_dir <- here("ms", "lobby", "data", "processed","reg")
 ms_lobby_reg <- read_csv(glue("{reg_dir}/ms_lobby_reg.csv"))
 ```
 
-We'll also clean up the lobbyist names to get rid of titles.
-```{r clean name}
-ms_lobby_exp <- ms_lobby_exp %>% 
-  mutate(lobbyist = lobbyist %>% str_remove("^MR.\\s|^MRS.\\s|^MS.\\s|^HON.\\s|"))
-```
+However, we will see that the first_name, and last_name in the `ms_lob_reg` dataframe don't constitue the full name to be matched in the expenditure record. So we will generate `first_name` and `last_name` fields in `ms_lob_exp` to be matched with their counterparts in the `reg`.
 
 
-```{r join}
-  ms_lobby_reg <-  ms_lobby_reg %>% 
+```{r join pre}
+ms_lobby_reg <-  ms_lobby_reg %>% 
   select(client_name,
          client_telephone_norm,
          client_fax,
@@ -285,7 +219,7 @@ ms_lobby_exp <- ms_lobby_exp %>%
          client_city_clean,
          client_state,
          client_zip5,
-         client_certification_number,
+         certification_number,
          client_description,
          first_name,
          last_name,
@@ -293,29 +227,37 @@ ms_lobby_exp <- ms_lobby_exp %>%
          city_clean,
          state,
          zip5,
-         year) %>% 
-  mutate(lobbyist = str_match( ms_lobby_reg$client_description, "LOBBYIST: (.+) ;")[,2] %>% 
-           str_remove("^MR.\\s|^MRS.\\s|^MS.\\s|^HON.\\s|"))
+         year)
 
-ms_lobby_reg <- ms_lobby_reg %>% 
-  flag_dupes(year, client_name, lobbyist) 
+ms_lobby_reg <- flag_dupes(ms_lobby_reg, dplyr::everything())
+```
+Since the registration information will not have an impact on the data integrity of the expenditure dataframe to which it's about to be joined, we can safely deduplicate it.
+
+```{r join}
+ms_lobby_exp <- ms_lobby_exp %>% 
+  mutate(lobbyist_trim = lobbyist %>% str_remove("^DR. |^MR. |^MRS. |^MS. |^REV. |\\sESQ.$| \\sII.$|, SR.|, III.$|, III|, II|\\W*JR.$") %>% trimws() %>% str_squish(),
+         first_name = str_match(lobbyist_trim, "(^\\S+)\\s")[,2],
+         last_name = str_match(lobbyist_trim, "\\s(\\S+)$")[,2])
 
 ms_lobby_exp_clean <- ms_lobby_exp %>% 
-  left_join(ms_lobby_reg %>% filter(!dupe_flag),
+  left_join(ms_lobby_reg %>% filter(!dupe_flag) %>% select(-dupe_flag),
             by = c("entity_name" = "client_name",
-            "lobbyist" = "lobbyist",
+            "first_name" = "first_name",
+            "last_name" = "last_name",
             "cycle_year" = "year"))
-```
 
+ms_lobby_exp_clean %>% col_stats(count_na)
+```
+There are thousands of records missing address information because they don't a match in the `reg` dataframe.
 
 ## Export
 
-```{r writeean}
+```{r write clean}
 clean_dir <- here("ms", "lobby", "data", "processed","exp")
 dir_create(clean_dir)
 
-ms_lobby_reg %>% 
-  select(-dupe_flag) %>% 
+ms_lobby_exp_clean %>% 
+  select(-c(dupe_flag, lobbyist_trim)) %>% 
   write_csv(
     path = glue("{clean_dir}/ms_lobby_exp_clean.csv"),
     na = ""

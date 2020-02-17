@@ -75,6 +75,7 @@ pacman::p_load_gh("irworkshop/campfin")
 pacman::p_load(
   tidyverse, # data manipulation
   lubridate, # datetime strings
+  gluedown, # printing markdown
   magrittr, # pipe opperators
   janitor, # dataframe clean
   refinr, # cluster and merge
@@ -102,7 +103,7 @@ here::here()
 [01]: https://github.com/irworkshop/accountability_datacleaning "TAP repo"
 [02]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects "Rproj"
 
-## Data
+## Registration
 
 Data is obtained from the [Michigan Secretary of State][sos]. The data is provided by NICUSA, Inc.,
 which provides information technology services for the SOS. 
@@ -127,17 +128,49 @@ dir_create(raw_dir)
 ```
 
 ```{r raw_curl}
-lob_url <- "https://miboecfr.nicusa.com/cfr/dumpdata/aaa4NaO5g/mi_lobby.sh"
+# changes from time to time
+lob_url <- "https://miboecfr.nictusa.com/cfr/dumpdata/aaa51aybN/mi_lobby.sh"
 lob_path <- url2path(lob_url, raw_dir)
-download.file(
-  url = lob_url,
-  destfile = lob_path,
-  method = "curl",
-  extra = "--insecure"
-)
+if (!file_exists(lob_path)) {
+  download.file(
+    url = lob_url,
+    destfile = lob_path,
+    method = "curl",
+    extra = "--insecure"
+  )
+}
 ```
 
-## Import
+### Vars
+
+```{r vars, echo=FALSE}
+var_names <- c(
+    "id", "type", "last", "first", "mi", "sig", "addr", 
+    "city", "state", "zip", "phone", "reg", "term"
+  )
+vars <- tribble(
+  ~Name, ~Description,
+  "Bureau Lobby ID#", "Unique Bureau ID# of this Lobbyist or Agent",
+  "Lobby Type", "Type of Lobby (A = Agent, L = Lobbyist)",
+  "Lobby Last Name or Organization", "Last or Full Name of the Individual or Lobby Organization",
+  "Lobby Individual First Name", "First Name of the Individual Lobbyist or Agent",
+  "Lobby Individual Middle Name", "Middle Name of the Individual Lobbyist or Agent",
+  "Lobby Signatory", "Official Signatory or Contact Person for this Lobby",
+  "Lobby Mailing Address", "Mailing Street Address of this Lobby",
+  "Lobby Mailing City", "Mailing City of this Lobby",
+  "Lobby Mailing State", "Mailing State of this Lobby",
+  "Lobby Mailing Zipcode", "Mailing Zipcode of this Lobby",
+  "Lobby Phone#", "Phone Number of this Lobby",
+  "Lobby Active Date", "Date this Lobby became an Active Lobbyist or Agent",
+  "Lobby Termination Date", "Date this Lobby Terminated all Lobbying activity" 
+)
+vars %>% 
+  mutate(Variable = md_code(var_names)) %>% 
+  select(Variable, Description) %>% 
+  kable(format = "markdown")
+```
+
+### Import
 
 As described on the [data website][raw]:
 
@@ -166,10 +199,7 @@ milr <- read_delim(
   file = lob_path,
   delim = "\t",
   skip = 2,
-  col_names = c(
-    "id", "type", "last", "first", "mi", "sig", "addr", 
-    "city", "state", "zip", "phone", "reg", "term"
-  ),
+  col_names = var_names,
   col_types = cols(
     .default = col_character(),
     type = col_factor(),
@@ -179,7 +209,7 @@ milr <- read_delim(
 )
 ```
 
-## Explore
+### Explore
 
 ```{r raw_glimpse}
 head(milr)
@@ -189,7 +219,8 @@ glimpse(sample_frac(milr))
 
 As we can see from `tail()`, the last two rows still need to be removed.
 
-The `id` variable is unique to each lobbyist, so we can use it to remove the invalid rows.
+The `id` variable is unique to each lobbyist, so we can use it to remove the summary rows at the
+bottom of the file.
 
 ```{r n_distinct}
 col_stats(milr, n_distinct)
@@ -247,12 +278,12 @@ milr %>%
   )
 ```
 
-## Wrangle
+### Wrangle
 
 To improve the searchability and consistency of the database, we can perform some very basic and
 confident text normalization.
 
-### Phone
+#### Phone
 
 We can convert the phone numbers into a standard charatcer (i.e., non-numeric) format.
 
@@ -267,7 +298,7 @@ milr %>%
   sample_frac()
 ```
 
-### Address
+#### Address
 
 We can use `campfin::normal_address()` to improve the consistency in the `addr` variable.
 
@@ -282,7 +313,7 @@ milr %>%
   sample_frac()
 ```
 
-### ZIP
+#### ZIP
 
 ```{r zip_norm}
 milr <- mutate(milr, zip_norm = normal_zip(zip, na_rep = TRUE))
@@ -303,7 +334,7 @@ progress_table(
 )
 ```
 
-### State
+#### State
 
 The `state` variable does not need to be cleaned.
 
@@ -311,7 +342,7 @@ The `state` variable does not need to be cleaned.
 prop_in(milr$state, valid_state)
 ```
 
-### City
+#### City
 
 ```{r city_norm}
 milr <- mutate(milr, city_norm = normal_city(city, abbs = usps_city, na = invalid_city))
@@ -404,7 +435,7 @@ progress <- progress_table(
 kable(progress, digits = 3)
 ```
 
-## Export
+### Export
 
 ```{r proc_dir}
 proc_dir <- here("mi", "lobby", "data", "processed")
@@ -414,7 +445,117 @@ dir_create(proc_dir)
 ```{r proc_write}
 write_csv(
   x = milr,
-  path = glue("{proc_dir}/mi_lobby_reg.csv"),
+  path = path(proc_dir, "mi_lobby_reg.csv"),
+  na = ""
+)
+```
+
+## Contributions
+
+```{r}
+exp_url <- "https://miboecfr.nictusa.com/cfr/dumpall/miloball.sh"
+exp_path <- url2path(exp_url, raw_dir)
+if (!file_exists(exp_path)) {
+  download.file(
+    url = exp_url,
+    destfile = exp_path,
+    method = "curl",
+    extra = "--insecure"
+  )
+}
+```
+
+```{r echo=FALSE}
+exp_names <- c(
+  "rpt_year",
+  "rpt_type",
+  "lob_last",
+  "lob_first",
+  "lob_mi",
+  "lob_type",
+  "lob_id",
+  "exp_type",
+  "po_title",
+  "po_last",
+  "po_first",
+  "po_mi",
+  "lob_why",
+  "exp_date",
+  "exp_amt",
+  "ytd_fb",
+  "doc_id"
+)
+```
+
+```{r}
+mile <- read_delim(
+  file = exp_path,
+  delim = "\t",
+  skip = 2,
+  col_names = exp_names,
+  escape_backslash = FALSE,
+  escape_double = FALSE,
+  col_types = cols(
+    .default = col_character(),
+    rpt_year = col_integer(),
+    exp_date = col_date_usa(),
+    exp_amt = col_double(),
+    ytd_fb = col_double()
+  )
+) %>% 
+  filter(!is.na(rpt_year))
+```
+
+```{r}
+head(mile)
+tail(mile)
+glimpse(sample_frac(mile))
+```
+
+```{r}
+col_stats(mile, count_na)
+```
+
+```{r}
+col_stats(mile, n_distinct)
+```
+
+```{r lob_exp_amt, echo=FALSE}
+mile %>%
+  ggplot(aes(exp_amt)) +
+  geom_histogram(aes(fill = lob_type)) +
+  scale_fill_brewer(palette = "Dark2", guide = FALSE) +
+  scale_x_continuous(
+    breaks = c(1 %o% 10^(0:6)),
+    labels = dollar,
+    trans = "log10"
+  ) +
+  labs(
+    title = "Michigan Lobbyist Expense Amounts",
+    x = "Amount",
+    y = "Count"
+  ) +
+  facet_wrap(~lob_type, ncol = 1)
+```
+
+```{r lob_exp_year, echo=FALSE}
+mile %>% 
+  count(rpt_year) %>% 
+  mutate(odd = !is_even(rpt_year)) %>% 
+  ggplot(aes(rpt_year, n)) +
+  geom_col(aes(fill = odd)) +
+  scale_fill_brewer(palette = "Dark2", guide = FALSE) +
+  labs(
+    title = "Michigan Lobbyist Expense Counts per Year",
+    x = "Report Year",
+    y = "Count"
+  )
+```
+
+```{r}
+write_csv(
+  x = mile,
+  path = path(proc_dir, "mi_lobby_exp.csv"),
   na = ""
 )
 ```
