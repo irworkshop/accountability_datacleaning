@@ -285,6 +285,8 @@ reg_dir <- here("ct", "lobby", "data", "processed","reg")
 ct_reg <- read_csv(glue("{reg_dir}/ct_lobby_reg.csv"),col_types = cols(.default = col_character()))
 
 ct_reg <- ct_reg %>% 
+  # Remove some nonessential columns where communicator is "`"
+  filter(communicator_name_clean != "1") %>% 
   mutate(session = case_when(str_detect(client_year, "2013|2014") ~ "2013-2014",
                              str_detect(client_year, "2015|2016") ~ "2015-2016",
                              str_detect(client_year, "2017|2018") ~ "2017-2018",
@@ -293,13 +295,13 @@ ct_reg <- ct_reg %>%
 ct_join <- ct_reg %>% 
   select(client_name,client_year, lobbyist_first_name,lobbyist_last_name,lobbyist_year, session,client_phone,client_city_clean,client_email, client_zip, client_state, lobbyist_city_clean, lobbyist_address_clean, lobbyist_state, lobbyist_zip, lobbyist_email) %>% 
   # we can safely de-dupe the rows where only the lobbyist_year is different from one another 
-  flag_dupes(-c(lobbyist_year)) %>% 
+  flag_dupes(-lobbyist_year) %>% 
   filter(!dupe_flag)
 
 ct_count <- ct_join %>% count(client_name, lobbyist_first_name, lobbyist_last_name, session) %>% arrange(desc(n))
   #count(client_name, lobbyist_first_name, lobbyist_last_name)
 ```
-Our goal is to reduce the number of rows in the `ct_reg` table to `r nrow(ct_count)`, which is the total number of ct_reg tows (each row represents a distinct relationship between a client and a lobbyist for a session).
+Our goal is to reduce the number of rows in the `ct_reg` table to `r nrow(ct_count)`, which is the total number of ct_reg rows (each row represents a distinct relationship between a client and a lobbyist for a session).
 
 ```{r de dupe}
 ct_join <- ct_join %>% 
@@ -327,17 +329,19 @@ ct_dedupe[[i]] <- ct_dedupe[[i]] %>%
 ct_deduped <- ct_dedupe %>% plyr::ldply() %>% select(-c(row_sum,early_more_info,n))
 # first remove all the double entries
 ct_join<- ct_join %>% filter(n != 2) %>% 
-  unite(remove = T, col = "communicator", lobbyist_first_name, lobbyist_last_name,sep = " ", na.rm = TRUE) %>% 
+  unite(remove = F, col = "communicator", lobbyist_first_name, lobbyist_last_name,sep = " ", na.rm = TRUE) %>% select(-n) %>% 
 #then add the ones we're keeping back
   bind_rows(ct_deduped) %>% 
   rename(client = client_name)
 ```
 
 ```{r join com & reg }
-ctlc <- ctlc %>% 
+ctlc_clean <- ctlc %>% 
   mutate_if(is.character, str_to_upper) %>% 
   left_join(ct_join, by = c("client", "communicator", "session")) 
-         
+
+col_stats(ctlc_clean, count_na)         
+
 sample_frac(ctlc)
 ```
 

@@ -212,13 +212,16 @@ ct_reg <- flag_dupes(ct_reg, dplyr::everything())
 
 ```{r }
 ct_reg %>% 
-  group_by(year) %>% 
-  ggplot(aes(year)) +
+  count(year) %>% 
+  mutate(even = is_even(year)) %>% 
+  ggplot(aes(x = year, y = n)) +
+  geom_col(aes(fill = even)) +
+  scale_fill_brewer(palette = "Dark2") +
   scale_x_continuous(breaks = 2013:2019) +
-  geom_bar(fill = RColorBrewer::brewer.pal(3, "Dark2")[1]) +
   labs(
     title = "Connecticut Lobbyists Registration by Year",
     caption = "Source: CT Office of State Ethics",
+    fill = "Election Year",
     x = "Year",
     y = "Count"
   )
@@ -233,7 +236,7 @@ ct_cl  %>% col_stats(count_na)
 Few values are missing from the lobbyists database.
 
 ## Wrangling
-We'll wrangle the two datasets to extract information such as address, city, ZIP, state, phone for both lobbyists and their clients, as well as authorization date. The lobbyists registry has the one-to-one relationship between lobbyists and clients, so we will use `ct_cl` as the main data frame and join the clients' information from the `ct_lob` data frame.
+We'll wrangle the two datasets to extract information such as address, city, ZIP, state, phone for both lobbyists and their clients, as well as authorization date. The lobbyists registry has the one-to-one relationship between lobbyists and clients, so we will use `ct_lob` as the main data frame and join the clients' information from the `ct_cl` data frame.
 
 ### Phone
 ```{r normal phone}
@@ -419,9 +422,8 @@ _invalid_ values from `r length(setdiff(ct_lob$city_norm, valid_place))` to only
 `r length(setdiff(ct_lob$city_swap, valid_place))`
 
 ## Join
-We'll join the two data frames together. Since there're no duplicate columns, we will delete the `dupe_flag` columns and add suffixes to each dataset's column names.
+We'll join the two data frames together. 
 ```{r join pre}
-ct_cl$dupe_flag %>% tabyl()
 ct_lob$dupe_flag %>% tabyl()
 
 ct_lob <- ct_lob %>% 
@@ -432,7 +434,7 @@ ct_lob <- ct_lob %>%
   rename_all(.funs = ~str_c("lobbyist_",.))
 
 ct_cl <- ct_cl %>% 
-  select(-c(city_norm, dupe_flag)) %>% 
+  select(-city_norm) %>% 
   rename(city_clean = city_swap) %>% 
   rename_at(.vars = vars(-starts_with("client_"))
             ,.funs = ~ str_c("client_", .))
@@ -446,8 +448,7 @@ consistent.
 ```{r join}
 ct_reg <- ct_reg %>% select(-dupe_flag)
 
-ct_reg <- ct_cl %>% 
-  filter(!dupe_flag) %>% 
+ct_reg <- ct_cl %>% filter(!dupe_flag) %>% 
   right_join(ct_reg,
             by = c("client_name" = "client_name",
             "client_registration_date" = "registration_date"))

@@ -6,7 +6,7 @@ output:
   github_document: 
     df_print: tibble
     toc: true
-    toc_dept: 2
+    toc_dept: 3
 editor_options: 
   chunk_output_type: console
 ---
@@ -145,13 +145,13 @@ This Rmd file documents the MS registration data only, whereas the expenditure d
 [Mississippi Secretary of State](https://sos.ms.gov/elec/portal/msel2/page/search/portal.aspx) makes lobbyist and client registry searchable and downloadable from 2010 to 2020.
 
 ```{r lobbyists, eval = FALSE}
-ms_url_lb <- glue("https://sos.ms.gov/elec/portal/msel2/Config/Mississippi/Elections/Controls/SosWeb/Lobbyist/LobbyistSearchControls/HandlerWrap.aspx?type=1&year={2009:2020}&lastName=&firstName=&clientName=")
+ms_url_lb <- glue("https://sos.ms.gov/elec/portal/msel2/Config/Mississippi/Elections/Controls/SosWeb/Lobbyist/LobbyistSearchControls/HandlerWrap.aspx?type=1&year={2010:2020}&lastName=&firstName=&clientName=")
 
 ms_url_cl <-  glue("https://sos.ms.gov/elec/portal/msel2/Config/Mississippi/Elections/Controls/SosWeb/Lobbyist/LobbyistSearchControls/HandlerWrap.aspx?type=3&year={2010:2020}&lastName=&firstName=&clientName=")
   
 
-dest_file_lb <- glue("{raw_dir}/ms_lobby_lb_{2010:2019}.xls")
-dest_file_cl <- glue("{raw_dir}/ms_lobby_cl_{2010:2019}.xls")
+dest_file_lb <- glue("{raw_dir}/ms_lobby_lb_{2010:2020}.xls")
+dest_file_cl <- glue("{raw_dir}/ms_lobby_cl_{2010:2020}.xls")
 if (!all_files_new(raw_dir)) {
     download.file(
       url = ms_url_cl,
@@ -229,12 +229,12 @@ ms_lobby_cl <- ms_lobby_cl %>% mutate (date = registration_date %>% as.Date(form
 ```
 
 
-```{r }
+```{r echo=FALSE}
 ms_lobby_lb %>% 
   mutate(year = as.numeric(year)) %>% 
   group_by(year) %>% 
   ggplot(aes(year)) +
-  scale_x_continuous(breaks = 2010:2019) +
+  scale_x_continuous(breaks = 2010:2020) +
   geom_bar(fill = RColorBrewer::brewer.pal(3, "Dark2")[1]) +
   labs(
     title = "Mississippi Lobbyists Registration by Year",
@@ -249,7 +249,6 @@ There's not a single empty field in the two data frames.
 ms_lobby_cl  %>% col_stats(count_na)
 ms_lobby_lb  %>% col_stats(count_na)
 ```
-Few values are missing from the lobbyists database.
 
 ## Wrangling
 We'll wrangle the two datasets to extract information such as address, city, ZIP, state, phone for both lobbyists and their clients, as well as authorization date. The lobbyists registry has the one-to-one relationship between lobbyists and clients, so we will use `ms_lobby_lb` as the main data frame and join the clients' information from the `ms_lobby_cl` data frame.
@@ -426,66 +425,44 @@ _invalid_ values from `r length(setdiff(ms_lobby_cl$city_norm, valid_place))` to
 `r length(setdiff(ms_lobby_cl$city_swap, valid_place))`
 
 ## Join
-First， we noticed that the lobbyist fields in the client directory is jumbled together. We'll separate them first using `unnest_longer()`.
-
-```{r client pre}
-ms_lobby_cl <- ms_lobby_cl %>% 
-  mutate(lobbyist = str_match(description, "Lobbyist: (\\D+) ;\\s")[,2]) 
-
-count_na(ms_lobby_cl$lobbyist)
-# remove suffixes and titles
-ms_lobby_cl <- ms_lobby_cl %>% 
-  mutate(lobbyist = lobbyist %>% str_remove("^Dr. |^Mr. |^Mrs. |^Ms. |^Rev. |\\sEsq.$| \\sII.$|, Sr.|, III.$|\\W*Jr.$") %>% trimws(),
-         first_name = str_match(lobbyist, "(^\\S+)\\s")[,2],
-         last_name = str_match(lobbyist, "\\s(\\S+)$")[,2])
-
-count_na(ms_lobby_cl$first_name)
-count_na(ms_lobby_cl$last_name)
-```
-After the process above, no fields of names is left empty.
 ```{r join pre}
 ms_lobby_cl <- ms_lobby_cl %>% mutate_if(is.character, str_to_upper)
 ms_lobby_lb <- ms_lobby_lb %>% mutate_if(is.character, str_to_upper)
 
-ms_lobby_lb$dupe_flag %>% tabyl()
-ms_lobby_cl$dupe_flag %>% tabyl()
-
 ms_lobby_cl <- ms_lobby_cl %>% 
-  select(-c(dupe_flag,
-            city_norm,
-            lobbyist)) %>% 
+  select(-city_norm) %>% 
   rename(city_clean = city_swap) %>% 
-  rename_at(.vars = vars(-c(first_name, last_name,starts_with("client"))),
+  rename_at(.vars = vars(-c(starts_with("client"))),
     .funs = ~str_c("client_",.))
 ```
 
 ```{r join}
 ms_lobby_reg <- ms_lobby_cl %>% 
-  full_join(ms_lobby_lb %>% filter(!dupe_flag),
+  full_join(ms_lobby_lb,
             by = c("client_name" = "client_name",
             "client_certification_number" = "certification_number",
-            "last_name" = "last_name")) %>% 
-  select(-first_name.x) %>% 
-  rename(first_name = first_name.y)
+            "client_year" = "year"))
 ```
 
+Finally, we will remove the iterative columns created during the normalization process, and inspect the output `ms_lob_reg` dataframe.
+```{r inspect output}
+ms_lobby_reg <- ms_lobby_reg %>% 
+  select(-city_norm) %>% 
+  rename(city_clean = city_swap,
+         year = client_year,
+         certification_number = client_certification_number)
 
+col_stats(ms_lobby_reg, count_na)
+```
+There are only a few instances of client record and lobbyist record not matching. 
 ## Export
 
 ```{r write clean}
 clean_dir <- here("ms", "lobby", "data", "processed","reg")
 dir_create(clean_dir)
-ms_lobby_reg %>% 
-  select(-c(dupe_flag,
-            city_norm)) %>% 
-  mutate_if(is.character, str_to_upper) %>% 
-  rename(city_clean = city_swap) %>% 
-  write_csv(
+  write_csv(x = ms_lobby_reg,
     path = glue("{clean_dir}/ms_lobby_reg.csv"),
     na = ""
   )
-
-col_stats(ms_lobby_reg, count_na)
 ```
 
-We can see that there are over 1,000 columns from each dataframe that doesn't have corresponding information from another one.
