@@ -109,15 +109,41 @@ here::here()
 
 ## Data
 
+Data is obtained from the Massachusetts [Office of Campaign and Political 
+Finance (OCPF)][https://www.ocpf.us/]. 
+
+> The Office of Campaign and Political Finance is an independent state agency
+that administers Massachusetts General Law [Chapter 55][55] the campaign finance
+law, and [Chapter 55C][55c], the limited public financing program for statewide
+candidates. Established in 1973, OCPF is the depository for disclosure reports
+filed by candidates and political committees under M.G.L. Chapter 55.
+
+[55]: https://www.ocpf.us/Legal/CampaignFinanceLaw
+[55C]: https://www.ocpf.us/Legal/PublicFinancingLaw
+
 ## Import
+
+We can import data by downloading "" from the [OCPF Data Download page][dl].
+
+[dl]: https://www.ocpf.us/Data
 
 ### Download
 
-```{r raw_dir}
-raw_dir <- dir_create(here("ma", "contribs", "data", "raw"))
-```
+The data is provided as an archived [Microsoft Access (MDB) file][mdb]. This
+file is updated nightly at 3:00am.
+
+> Download a zipped Microsoft Access 2000 format (`.mdb`) database that includes
+report summaries, receipts, expenditures, in-kind contributions, liabilities,
+assets disposed, savings accounts, credit card reports, reimbursement reports
+and subvendor reports.
+
+[mdb]: http://ocpf2.blob.core.windows.net/downloads/data/campaign-finance-reports.zip
+
+We can download this archive and extract the file to the `ma/contribs/data/raw`
+directory.
 
 ```{r raw_download}
+raw_dir <- dir_create(here("ma", "contribs", "data", "raw"))
 zip_url <- "http://ocpf2.blob.core.windows.net/downloads/data/campaign-finance-reports.zip"
 zip_file <- url2path(zip_url, raw_dir) 
 mdb_file <- if (!this_file_new(zip_file)) {
@@ -128,22 +154,37 @@ mdb_file <- if (!this_file_new(zip_file)) {
 }
 ```
 
+Using the `system2()` function, we can utilize the [`mdbtools`][tools] command
+line tool to list the tables contained in the Access file. The `mdbtools` CLI
+program is free, open-source, and can be downloaded on Linux systems using APT.
+
+```{bash eval=FALSE}
+sudo apt install mdbtools
+```
+
+[tools]: https://github.com/brianb/mdbtools
+
 ```{r raw_tables, results='asis'}
 mdb_tables <- system2("mdb-tables", args = mdb_file, stdout = TRUE)
-mdb_tables <- str_split(mdb_tables, "\\s")[[1]]
-md_bullet(mdb_tables)
+mdb_tables <- str_split(str_trim(mdb_tables), "\\s")[[1]]
+md_bullet(md_code(mdb_tables))
 ```
 
 ### Read
 
-```{r}
+The using `mdbtools` via `system2(stdout = TRUE)` write the database table to a
+local CSV file which is then imported into R with `readr::read_csv()`.
+
+```{r read_mdb}
 read_mdb <- function(file, table, ...) {
-  readr::read_csv(
-    file = system2("mdb-export", args = c(file, table), stdout = TRUE),
-    ...
-  )
+  out_file <- fs::path_temp(table)
+  system2("mdb-export", c(file, table), stdout = out_file)
+  readr::read_csv(out_file, ...)
 }
 ```
+
+We can use this method to first read the `UPLOAD_CURRENT_RECEIPTS` file, which
+contains all contributions made to Massachusetts political committees.
 
 ```{r raw_read}
 mac <- read_mdb(
@@ -174,6 +215,12 @@ mac <- mac %>%
 ```{r echo=FALSE}
 gc()
 ```
+
+The records of the receipts file are provided to OCPF on reports, identified by
+the `rpt_id` variable. The receipt records themselves do not contain the
+information on the committee recipients of each contribution. The information on
+the recieving committee are contained in the `UPLOAD_MASTER` database. We can
+read that table using the same method as above.
 
 ```{r master_read}
 master <- read_mdb(
@@ -213,6 +260,10 @@ master <- master %>%
   )
 ```
 
+The records of this file contain the identifying information for the recieving
+committees making each report. We can use `dplyr::inner_join()` to join this
+table with the contributions table along the `rpt_id` variable.
+
 ```{r master_join}
 mac <- inner_join(mac, master, by = "rpt_id")
 ```
@@ -223,5 +274,499 @@ mac <- inner_join(mac, master, by = "rpt_id")
 head(mac)
 tail(mac)
 glimpse(sample_n(mac, 20))
+```
+
+### Missing
+
+We should flag any records missing one of the key variables needed to properly
+identify a unique contribution.
+
+```{r na_count}
+col_stats(mac, count_na)
+```
+
+We can first `dplyr::coalesce()` the contributor and recipient variables to
+only flag records missing _any_ kind of name.
+
+```{r na_flag}
+mac <- mac %>% 
+  mutate(
+    contrib_any = coalesce(first, last),
+    recip_any = coalesce(comm_name, cand_name)
+  ) %>% 
+  flag_na(contrib_any, recip_any, date, amount)
+```
+
+The only variable missing from theses columns is the coalesced contributor name.
+
+```{r na_view}
+mac %>% 
+  filter(na_flag) %>% 
+  select(contrib_any, recip_any, date, amount) %>% 
+  col_stats(count_na)
+```
+
+For all records with a `cont_type` of "OTHER", there is no given contributor
+name. We can remove these flags.
+
+```{r na_remove}
+prop_na(mac$contrib_any[which(mac$cont_type != "OTHER")])
+prop_na(mac$contrib_any[which(mac$cont_type == "OTHER")])
+mac$na_flag[which(mac$cont_type == "OTHER")] <- FALSE
+# very few remain
+percent(mean(mac$na_flag), accuracy = 0.01)
+```
+
+### Duplicates
+
+On a more powerful computer, we could also flag duplicate rows.
+
+```{r dupe_flag, eval=FALSE}
+mac <- flag_dupes(mac, -id, -line, -guid, )
+percent(mean(mac$dupe_flag), accuracy = 0.1)
+```
+
+```{r dupe_view, eval=FALSE}
+mac %>%
+  filter(dupe_flag) %>%
+  select(date, last, amount, committee)
+```
+
+### Categorical
+
+```{r n_distinct}
+col_stats(mac, n_distinct)
+```
+
+```{r bar_type, echo=FALSE}
+explore_plot(
+  data = mac,
+  var = cont_type,
+  title = "Massachusetts Contributor Types"
+)
+```
+
+```{r bar_method, echo=FALSE}
+explore_plot(
+  data = mac,
+  var = tender,
+  title = "Massachusetts Contribution Method"
+)
+```
+
+```{r bar_report, echo=FALSE}
+explore_plot(
+  data = mac,
+  var = report_type,
+  title = "Massachusetts Contribution Report Types"
+) + theme(axis.text.x = element_text(angle = 15, vjust = 0.5))
+```
+
+```{r bar_category, echo=FALSE}
+explore_plot(
+  data = mac,
+  var = category,
+  title = "Massachusetts Contribution Categories"
+)
+```
+
+```{r bar_amendment, echo=FALSE}
+explore_plot(
+  data = mac,
+  var = amendment,
+  title = "Massachusetts Contribution Amendments"
+)
+```
+
+### Continuous
+
+#### Amounts
+
+```{r ammount_summary}
+summary(mac$amount)
+mean(mac$amount <= 0)
+```
+
+```{r amount_histogram, echo=FALSE}
+mac %>%
+  ggplot(aes(amount)) +
+  geom_histogram(fill = dark2["purple"]) +
+  scale_y_continuous(labels = comma) +
+  scale_x_continuous(
+    breaks = c(1 %o% 10^(0:6)),
+    labels = dollar,
+    trans = "log10"
+  ) +
+  labs(
+    title = "Massachusetts Contributions Amount Distribution",
+    subtitle = "from 2000 to 2019",
+    caption = "Source: MA OCPF",
+    x = "Amount",
+    y = "Count"
+  )
+```
+
+#### Dates
+
+The actual year a contribution was made sometimes differs from the year in which
+it was reported. The later is identified int eh `rpt_year` variable but  we will
+create a new `year` variable from `date` using `lubridate::year()`. This will
+more accurately identify the contribution.
+
+```{r date_year}
+mac <- mutate(mac, year = year(date))
+```
+
+```{r}
+mac %>%
+  count(year) %>%
+  mutate(even = is_even(year)) %>% 
+  ggplot(aes(x = year, y = n)) +
+  geom_col(aes(fill = even)) +
+  coord_cartesian(xlim = c(2000, 2020)) +
+  scale_fill_brewer(palette = "Dark2") +
+  scale_x_continuous(breaks = seq(2000, 2020, by = 2)) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "Massachusetts Contributions by Year",
+    caption = "Source: MA OCPF",
+    fill = "Election Year",
+    x = "Amount",
+    y = "Count"
+  )
+```
+
+```{r month_grid, echo=FALSE}
+# janurary contribs 
+mac %>% 
+  filter(year != rpt_year) %>% 
+  count(month = month(date), rpt_month = month(filing_date)) %>% 
+  ggplot(aes(x = month, y = rpt_month)) +
+  geom_tile(aes(fill = n)) +
+  scale_x_continuous(breaks = 1:12) +
+  scale_y_continuous(breaks = 1:12) +
+  coord_flip() +
+  scale_fill_viridis_c() +
+  labs(
+    x = "Month Made",
+    y = "Month Reported",
+    fill = "Count"
+  )
+```
+
+```{r date_range}
+min(mac$date)
+sum(mac$year < 2001)
+max(mac$date)
+sum(mac$date > today())
+```
+
+```{r year_bar}
+mac %>%
+  count(year) %>%
+  mutate(even = is_even(year)) %>%
+  ggplot(aes(x = year, y = n)) +
+  geom_col(aes(fill = even)) +
+  scale_fill_brewer(palette = "Dark2") +
+  scale_y_continuous(labels = comma) +
+  scale_x_continuous(breaks = seq(2000, 2020, by = 2)) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "Massachusetts Contributions by Year",
+    caption = "Source: MA OCPF",
+    fill = "Election Year",
+    x = "Year Made",
+    y = "Count"
+  )
+```
+
+## Wrangle
+
+To improve the searchability of the database, we will perform some consistent,
+confident string normalization. For geographic variables like city names and
+ZIP codes, the corresponding `campfin::normal_*()` functions are taylor made to
+facilitate this process.
+
+### Address
+
+For the street `addresss` variable, the `campfin::normal_address()` function
+will force consistence case, remove punctuation, and abbreviate official
+USPS suffixes.
+
+```{r address_norm}
+mac <- mac %>%
+  mutate(
+    address_norm = normal_address(
+      address = address,
+      abbs = usps_street,
+      na_rep = TRUE
+    )
+  )
+```
+
+```{r address_view}
+mac %>%
+  select(contains("address")) %>%
+  distinct() %>%
+  sample_n(10)
+```
+
+### ZIP
+
+For ZIP codes, the `campfin::normal_zip()` function will attempt to create
+valied _five_ digit codes by removing the ZIP+4 suffix and returning leading
+zeroes dropped by other programs like Microsoft Excel.
+
+```{r zip_norm}
+mac <- mac %>%
+  mutate(
+    zip_norm = normal_zip(
+      zip = zip,
+      na_rep = TRUE
+    )
+  )
+```
+
+```{r zip_progress}
+progress_table(
+  mac$zip,
+  mac$zip_norm,
+  compare = valid_zip
+)
+```
+
+### State
+
+Valid two digit state abbreviations can be made using the
+`campfin::normal_state()` function.
+
+```{r state_norm}
+mac <- mac %>%
+  mutate(
+    state_norm = normal_state(
+      state = state,
+      abbreviate = TRUE,
+      na_rep = TRUE,
+      valid = NULL
+    )
+  )
+```
+
+```{r state_view}
+mac %>%
+  filter(state != state_norm) %>%
+  count(state, sort = TRUE)
+```
+
+```{r state_progress}
+progress_table(
+  mac$state,
+  mac$state_norm,
+  compare = valid_state
+)
+```
+
+### City
+
+Cities are the most difficult geographic variable to normalize, simply due to
+the wide variety of valid cities and formats.
+
+#### Normal
+
+The `campfin::normal_city()` function is a good start, again converting case,
+removing punctuation, but _expanding_ USPS abbreviations. We can also remove
+`invalid_city` values.
+
+```{r city_norm}
+mac <- mac %>%
+  mutate(
+    city_norm = normal_city(
+      city = city,
+      abbs = usps_city,
+      states = c("MA", "DC", "MASSACHUSETTS"),
+      na = invalid_city,
+      na_rep = TRUE
+    )
+  )
+```
+
+#### Swap
+
+We can further improve normalization by comparing our normalized value
+agaist the _expected_ value for that record's state abbreviation and ZIP code.
+If the normalized value is either an abbreviation for or very similar to the
+expected value, we can confidently swap those two.
+
+```{r city_swap}
+mac <- mac %>%
+  rename(city_raw = city) %>%
+  left_join(
+    y = zipcodes,
+    by = c(
+      "state_norm" = "state",
+      "zip_norm" = "zip"
+    )
+  ) %>%
+  rename(city_match = city) %>%
+  mutate(
+    match_abb = is_abbrev(city_norm, city_match),
+    match_dist = str_dist(city_norm, city_match),
+    city_swap = if_else(
+      condition = !is.na(match_dist) & match_abb | match_dist == 1,
+      true = city_match,
+      false = city_norm
+    )
+  ) %>%
+  select(
+    -city_match,
+    -match_dist,
+    -match_abb
+  )
+```
+
+#### Refine
+
+The [OpenRefine] algorithms can be used to group similar strings and replace the
+less common versions with their most common counterpart. This can greatly
+reduce inconsistency, but with low confidence; we will only keep any refined
+strings that have a valid city/state/zip combination.
+
+[or]: https://openrefine.org/
+
+```{r refine_city}
+good_refine <- mac %>%
+  mutate(
+    city_refine = city_swap %>%
+      key_collision_merge() %>%
+      n_gram_merge(numgram = 1)
+  ) %>%
+  filter(city_refine != city_swap) %>%
+  inner_join(
+    y = zipcodes,
+    by = c(
+      "city_refine" = "city",
+      "state_norm" = "state",
+      "zip_norm" = "zip"
+    )
+  ) %>% 
+  select(
+    id, 
+    city_swap, 
+    city_refine
+  )
+```
+
+```{r view_city_refines, echo=FALSE}
+good_refine %>% 
+  count(city_swap, city_refine, sort = TRUE)
+```
+
+Then we can join the refined values back to the database.
+
+```{r join_refine}
+mac <- mac %>%
+  left_join(good_refine) %>%
+  mutate(city_refine = coalesce(city_refine, city_swap))
+```
+
+#### Progress
+
+```{r city_progress, echo=FALSE}
+many_city <- c(valid_city, extra_city)
+progress <- progress_table(
+  str_to_upper(mac$city_raw),
+  mac$city_norm,
+  mac$city_swap,
+  mac$city_refine,
+  compare = many_city
+) %>% mutate(stage = as_factor(stage))
+```
+  
+```{r progress_print, echo=FALSE}
+kable(progress, digits = 3)
+```
+
+You can see how the percentage of valid values increased with each stage.
+
+```{r progress_bar, echo=FALSE}
+raw_in <- percent(prop_in(mac$city_raw, valid_city))
+progress %>%
+  ggplot(aes(x = stage, y = prop_in)) +
+  geom_hline(yintercept = 0.99) +
+  geom_col(fill = dark2["purple"]) +
+  coord_cartesian(ylim = c(0.90, 1)) +
+  scale_y_continuous(labels = percent) +
+  labs(
+    title = "Massachusetts City Normalization Progress",
+    subtitle = glue("Raw at {raw_in} before conversion to uppercase"),
+    x = "Stage",
+    y = "Percent Valid"
+  )
+```
+
+More importantly, the number of distinct values decreased each stage. We were
+able to confidently change many distinct invalid values to their valid
+equivalent.
+
+```{r distinct_bar}
+progress %>%
+  select(
+    stage,
+    all = n_distinct,
+    bad = n_diff
+  ) %>%
+  mutate(good = all - bad) %>%
+  pivot_longer(c("good", "bad")) %>%
+  mutate(name = name == "good") %>%
+  ggplot(aes(x = stage, y = value)) +
+  geom_col(aes(fill = name)) +
+  scale_fill_brewer(palette = "Dark2", direction = -1) +
+  scale_y_continuous(labels = comma) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "Massachusetts City Normalization Progress",
+    subtitle = "Distinct values, valid and invalid",
+    x = "Stage",
+    y = "Percent Valid",
+    fill = "Valid"
+  )
+
+```
+
+## Conclude
+
+```{r city_remove}
+mac <- mac %>% 
+  select(
+    -city_norm,
+    -city_swap,
+    city_clean = city_refine
+  ) %>% 
+  rename_all(~str_replace(., "_norm", "_clean"))
+```
+
+```{r clean_glimpse}
+glimpse(sample_n(mac, 20))
+```
+
+1. There are `r comma(nrow(mac))` records in the database.
+1. There are `r comma(sum(mac$dupe_flag))` duplicate records in the database.
+1. The range and distribution of `amount` and `date` seem reasonable.
+1. There are `r comma(sum(mac$na_flag))` records missing either recipient or date.
+1. Consistency in goegraphic data has been improved with `campfin::normal_*()`.
+1. The 4-digit `year` variable has been created with `lubridate::year()`.
+
+## Export
+
+```{r clean_dir}
+clean_dir <- dir_create(here("ma", "contribs", "data", "clean"))
+```
+
+```{r write_clean}
+write_csv(
+  x = mac,
+  path = path(clean_dir, "ma_contribs_clean.csv"),
+  na = ""
+)
 ```
 

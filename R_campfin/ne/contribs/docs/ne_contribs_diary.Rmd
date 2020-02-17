@@ -1,0 +1,213 @@
+---
+title: "Nebraska Contributions"
+author: "Kiernan Nicholls"
+date: "`r Sys.time()`"
+output:
+  github_document: 
+    df_print: tibble
+    toc: true
+    toc_dept: 2
+editor_options: 
+  chunk_output_type: console
+---
+
+<!-- Place comments regarding knitting here -->
+
+```{r setup, include=FALSE, purl=FALSE}
+library(knitr)
+opts_chunk$set(
+  eval = TRUE,
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  error = FALSE,
+  collapse = TRUE,
+  comment = "#>",
+  fig.path = "../plots/",
+  fig.width = 10,
+  dpi = 300
+)
+options(width = 99)
+set.seed(5)
+```
+
+```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
+fs::dir_create(here::here("ne", "contribs", "docs"))
+```
+
+## Project
+
+The Accountability Project is an effort to cut across data silos and give
+journalists, policy professionals, activists, and the public at large a simple
+way to search across huge volumes of public data about people and organizations.
+
+Our goal is to standardizing public data on a few key fields by thinking of each
+dataset row as a transaction. For each transaction there should be (at least) 3
+variables:
+
+1. All **parties** to a transaction.
+2. The **date** of the transaction.
+3. The **amount** of money involved.
+
+## Objectives
+
+This document describes the process used to complete the following objectives:
+
+1. How many records are in the database?
+1. Check for entirely duplicated records.
+1. Check ranges of continuous variables.
+1. Is there anything blank or missing?
+1. Check for consistency issues.
+1. Create a five-digit ZIP Code called `zip`.
+1. Create a `year` field from the transaction date.
+1. Make sure there is data on both parties to a transaction.
+
+## Packages
+
+The following packages are needed to collect, manipulate, visualize, analyze,
+and communicate these results. The `pacman` package will facilitate their
+installation and attachment.
+
+The IRW's `campfin` package will also have to be installed from GitHub. This
+package contains functions custom made to help facilitate the processing of
+campaign finance data.
+
+```{r load_packages, message=FALSE, warning=FALSE, error=FALSE}
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load_gh("irworkshop/campfin")
+pacman::p_load(
+  tidyverse, # data manipulation
+  lubridate, # datetime strings
+  gluedown, # print markdown
+  magrittr, # pipe operators
+  janitor, # dataframe clean
+  refinr, # cluster and merge
+  scales, # format strings
+  knitr, # knit documents
+  vroom, # read files fast
+  glue, # combine strings
+  here, # relative storage
+  fs # search storage 
+)
+```
+
+This document should be run as part of the `R_campfin` project, which lives as a
+sub-directory of the more general, language-agnostic
+[`irworkshop/accountability_datacleaning`][tap] GitHub repository.
+
+The `R_campfin` project uses the [RStudio projects][rproj] feature and should be
+run as such. The project also uses the dynamic `here::here()` tool for file
+paths relative to _your_ machine.
+
+```{r where_here}
+# where does this document knit?
+here::here()
+```
+
+[tap]: https://github.com/irworkshop/accountability_datacleaning
+[rproj]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects
+
+## Data
+
+Data is obtained from the [Nebraska Accountability and Disclosure Commission (NADC)][nadc].
+
+> This site includes the campaign statements filed with the Commission by
+candidates for state and local offices, political action committees or PACs,
+political parties, and ballot question committees. Campaign statements disclose
+the amount and sources of contributions to the committee and the amount purposes
+of expenditures by the committee.
+
+[nadc]: http://www.nadc.nebraska.gov/
+
+The data itself can be downloaded from the [Campaign Statements Search][search]
+page, where there is a [direct download link][dl].
+
+[search]: http://www.nadc.nebraska.gov/ccdb/search.cgi
+[dl]: http://www.nebraska.gov/nadc_data/nadc_data.zip
+
+## Import
+
+To import the file for processing, we will simply download the ZIP archive,
+extract the appropriate files, and read them into R.
+
+### Download
+
+```{r raw_download}
+raw_dir <- dir_create(here("ne", "contribs", "data", "raw"))
+raw_url <- "http://www.nebraska.gov/nadc_data/nadc_data.zip"
+raw_zip <- path(raw_dir, basename(raw_url))
+download.file(raw_url, raw_zip)
+as_tibble(unzip(raw_zip, list = TRUE))
+```
+
+```{r raw_unzip}
+raw_files <- unzip(raw_zip, exdir = raw_dir)
+zip_dir <- path(raw_dir, "nadc_data")
+dir_ls(zip_dir) %>% file_move(raw_dir)
+raw_all <- dir_ls(raw_dir, regexp = "txt$")
+dir_delete(zip_dir)
+file_delete(raw_zip)
+```
+
+### Read
+
+The records of interest are spread across a number of seperate files, the 
+descriptions of which are contained in the `nadc_tables.rtf` file. Furthermore,
+the variables describing filing committees are contained in additional files.
+We find read all these files and use a combination of `dplyr::left_join()` and
+`dplyr::bind_rows()` to create a single table with all the data we want.
+
+From reading the tables document, it seems like these files would contain the
+relevant data:
+
+* `FORMA1` – Statement of Organization of a Political Committee:
+* `FORMB1` – Campaign Statement for Candidate and Ballot Question Committee:
+* `FORMB1AB` – All Data from form B-1 schedule A and B, Contributions:
+    * `Committee ID` – Use to link with `FORMb1`, along with Date Received
+* `FORMB2` – From B-2 Campaign Statement Political Party Committees:
+* `FORMB2A` – Form B-2 Contributions:
+* `FORMB4` – Campaign Statement for Independent Committees:
+* `FORMB4A` – Form B-4 Schedule A:
+    * `Committee ID`  - Use to link with `FORMB4`, along with Date Received
+* `FORMB5` – Report of Late contributions:
+* `FORMB7` – Report of Political Contributions of Corporation, Union or Other:
+* `FORMB72` – Form B-7 Direct contributions:
+* `FORMB73` – Form B-7 Indirect contributions:
+* `FORMB9` – Out of State Contribution Report:
+* `FORMB9A` – Form B-9 Schedule A, contributions:
+    * `Form B9 ID` – Use to link with `FORMB9`
+
+First we will read _every_ file into a list of data frames with `purrr::mpa()`
+and `vroom::vroom()`.
+
+```{r all_read}
+nadc <- map(
+  .x = raw_all,
+  .f = vroom,
+  .name_repair = make_clean_names,
+  delim = "|",
+  escape_double = FALSE,
+  escape_backslash = FALSE,
+  col_types = cols(.default = "c")
+)
+```
+
+```{r all_spec_rm, echo=FALSE}
+for (i in seq_along(nadc)) {
+  attr(nadc[[i]], "spec") <- NULL
+}
+```
+
+Then we can go about renaming, binding, and joining these various data frames.
+
+```{r all_rename}
+names(nadc) <- 
+  names(nadc) %>% 
+  basename() %>% 
+  path_ext_remove() %>% 
+  str_remove("form")
+```
+
+```{r all_glimpse}
+glimpse(nadc)
+```
