@@ -1,5 +1,5 @@
 ---
-title: "New York Lobbying Registration Diary"
+title: "Missouri Lobbying Registration Diary"
 author: "Yanqi Xu"
 date: "`r Sys.time()`"
 output:
@@ -32,7 +32,7 @@ set.seed(5)
 ```
 
 ```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
-fs::dir_create(here::here("ny", "lobby", "docs"))
+fs::dir_create(here::here("mo", "lobby", "docs"))
 ```
 
 ## Project
@@ -111,106 +111,166 @@ here::here()
 [rproj]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects "Rproj"
 
 ## Data
-The [New York State Joint Commission on Public Ethics](https://jcope.ny.gov/lobbying-datasets) makes Registered Lobbyist Disclosures from 2011 to 2018 available for download. The 2018 data and prior year's data exist in two separate files.
-A [data dictionary](https://jcope.ny.gov/system/files/documents/2018/04/nysjcoperegisteredlobbyistdisclosuresdatadictionary.pdf) is also available.
+The [Missouri Ethics Commission](https://jcope.ny.gov/lobbying-datasets) makes lobbyist expenditure data from 2004 to 2020 available for download. Note that data for 2019 onward exists in a separate search. The 2018 data and prior year's data exist in two separate files.
 
 ## Import
 
 ### Setting up Raw Data Directory
 
 ```{r raw_dir}
-raw_dir <- dir_create(here("ny", "lobby", "data", "raw"))
+raw_dir <- dir_create(here("mo", "lobby", "data", "raw","exp"))
 ```
 
 ### Read
-Note that for years prior to 2018, data was originally stored as a "xlsb" file, and we converted it to `xlsx` in Excel.
+After opening the files in a text editor, we can see that they are actually html tables despite the xls extension. 
 ```{r raw_read}
-ny_lob <- dir_ls(raw_dir, glob = "*.xlsx")  %>% map_dfr(read_xlsx) %>% clean_names()
+
+read_web_tb <- function(file){
+  df <- read_html(file) %>% html_node("table") %>% html_table()
+  return(df)
+}
+
+mo_lob_exp <- list.files(raw_dir, full.names = T)  %>% map_dfr(read_web_tb) %>% clean_names()
 ```
+
+Most of the columns are read as text, and we will change the column types.
+
+```{r col_type}
+mo_lob_exp <- mo_lob_exp %>% 
+  mutate(amount = str_remove(amount, "\\$") %>% as.numeric(),
+         )
+```
+
 
 ## Explore
 
 ```{r glimpse}
-head(ny_lob)
-tail(ny_lob)
-glimpse(sample_n(ny_lob, 20))
+head(mo_lob_exp)
+tail(mo_lob_exp)
+glimpse(sample_n(mo_lob_exp, 20))
 ```
 
 ### Missing
 
 ```{r na_count}
-col_stats(ny_lob, count_na)
+col_stats(mo_lob_exp, count_na)
 ```
-There are many fields missing,m especially for fields in columns after `total_reimbursed`.
+No field is missing.
 
 ### Duplicates
 Running the following commands shows that there are over a thousand entries with totally identical information. Since each of them contain `total_compensation` and `total_reimbursed` for a certain period, there should be only one such entry for each corresponding time period. We will note that in the `dupe_flag` column.
 ```{r dupe_flag}
-ny_lob <- flag_dupes(ny_lob, dplyr::everything())
-sum(ny_lob$dupe_flag)
+mo_lob_exp <- flag_dupes(mo_lob_exp, dplyr::everything())
+sum(mo_lob_exp$dupe_flag)
 ```
+
 
 ### Categorical
-
-```{r n_diny_lobinct}
-col_stats(ny_lob, n_distinct)
+First, we will create a `year` variable.
+```{r year}
+mo_lob_exp <- mo_lob_exp %>% 
+  mutate(date = as.Date(date, format = "%m/%d/%Y"),
+         year = year(date))
 ```
 
-#### No. of registrations
-Visualize number of lobbyists registered each year.
+
+#### No. of expenditures
+Visualize number of expenses each year.
 ```{r year_bar, echo=FALSE}
-ny_lob %>% 
-  count(reporting_year) %>% 
-  mutate(even = is_even(reporting_year)) %>% 
-  ggplot(aes(x = reporting_year, y = n)) +
+mo_lob_exp %>% 
+  count(year) %>% 
+  mutate(even = is_even(year)) %>% 
+  ggplot(aes(x = year, y = n)) +
   geom_col(aes(fill = even)) + 
   scale_fill_brewer(palette = "Dark2") +
   scale_y_continuous(labels = comma) +
-  scale_x_continuous(breaks = seq(2011, 2018, by = 2)) +
+  scale_x_continuous(breaks = seq(2004, 2019, by = 2)) +
   theme(legend.position = "bottom") +
   labs(
-    title = "New York Lobbyists by Year",
-    caption = "Source: New York Joint Commission on Public Ethics",
+    title = "Missouri Lobbyist Expenditures by Year",
+    caption = "Source: Missouri Ethics Commission",
     fill = "Election Year",
     x = "Year",
     y = "Count"
   )
 ```
 
+### Continuous
 
-#### Client Type
+
+First, let's take a look at the distribution of the amount
+```{r histogram}
+ mo_lob_exp %>%
+  ggplot(aes(amount)) +
+  geom_histogram(fill = RColorBrewer::brewer.pal(3, "Dark2")[3]) +
+  geom_vline(xintercept = median(mo_lob_exp$amount[mo_lob_exp$amount!= 0], na.rm = TRUE), linetype = 2) +
+  scale_x_continuous(
+    breaks = c(1 %o% 10^(0:6)),
+    labels = dollar,
+    trans = "log10"
+  ) +
+  labs(
+    title = "Missouri Lobbying Expenditures Distribution",
+    subtitle = "attributable expenses made by lobbyists from 2004 to 2019",
+    caption = "Source: Missouri Ethics Commission",
+    x = "Amount",
+    y = "Count"
+  )
+```
+
+
+#### Expenditure Type
 
 ```{r client times, echo=FALSE}
-ny_lob %>% 
-count(client_business_nature) %>% arrange(desc(n)) %>% top_n(6) %>% 
-  ggplot(aes(x = reorder(client_business_nature,n), y = n)) +
+mo_lob_exp %>% 
+group_by(expenditure_type) %>% 
+  summarize(median_exp = median(amount, na.rm = T)) %>% 
+  arrange(desc(median_exp))  %>% 
+  ggplot(aes(x = reorder(expenditure_type,median_exp), y = median_exp)) +
   geom_col(fill = RColorBrewer::brewer.pal(3, "Dark2")[3]) +
-  scale_y_continuous(labels = comma) +
+  scale_y_continuous(labels = dollar ) +
   scale_x_discrete(labels = wrap_format(10)) +
     theme(legend.position = "bottom") +
   labs(
-    title = "Number of Lobbyists Hired by Client Type",
-    caption = "Source: New York Joint Commission on Public Ethics",
+    title = "Median Expenses by Client Type",
+    caption = "Source: Missouri Ethics Commission",
     fill = "Election Year",
     x = "Client Type",
     y = "Count"
   )
 ```
 
-```{r client type, echo=FALSE}
-ny_lob %>% filter(!dupe_flag) %>% 
-  group_by(client_name) %>% 
-  summarize(median = median(total_compensation + total_e_xpenses + total_reimbrused)) %>% arrange(desc(median)) %>% top_n(8) %>% 
-  ggplot(aes(x = reorder(client_name, median), y = median)) +
+```{r expense type, echo=FALSE}
+mo_lob_exp %>% filter(!dupe_flag) %>% 
+  group_by(description) %>% 
+  summarize(total = sum(amount)) %>% arrange(desc(total)) %>% top_n(8) %>% 
+  ggplot(aes(x = reorder(description, total), y = total)) +
   geom_col() +
-  scale_y_continuous(labels = comma) +
+  scale_y_continuous(labels = dollar ) +
   scale_x_discrete(labels = wrap_format(10)) +
     theme(legend.position = "bottom") +
   labs(
-    title = "Top-spending Clients (measured by median expenditure)",
-    caption = "Source: New York Joint Commission on Public Ethics",
-    x = "Client",
-    y = "Median total expenditures to lobbyists"
+    title = "Top Expense Types",
+    caption = "Source: Missouri Ethics Commission",
+    x = "Expense Description",
+    y = "Total"
+  )
+```
+
+```{r client type, echo=FALSE}
+mo_lob_exp %>% filter(!dupe_flag) %>% 
+  group_by(public_official) %>% 
+  summarize(median = median(amount)) %>% arrange(desc(median)) %>% top_n(8) %>% 
+  ggplot(aes(x = reorder(public_official, median), y = median)) +
+  geom_col() +
+  scale_y_continuous(labels = dollar ) +
+  scale_x_discrete(labels = wrap_format(10)) +
+    theme(legend.position = "bottom") +
+  labs(
+    title = "Top public officials targeted in lobbying expenditures (measured by median expenditure)",
+    caption = "Source: Missouri Ethics Commission",
+    x = "Public Officials",
+    y = "Median expenditures made by lobbyists"
   )
 ```
 
@@ -230,7 +290,7 @@ will force consistence case, remove punctuation, and abbreviation official
 USPS suffixes.
 
 ```{r address_norm}
-ny_lob <- ny_lob %>% 
+mo_lob_exp <- mo_lob_exp %>% 
     # combine street addr
   unite(
     col = lobbyist_address,
@@ -253,7 +313,7 @@ ny_lob <- ny_lob %>%
 ```
 
 ```{r address_view}
-ny_lob %>% 
+mo_lob_exp %>% 
   select(contains("address")) %>% 
   distinct() %>% 
   sample_n(10) %>% 
@@ -267,7 +327,7 @@ valied _five_ digit codes by removing the ZIP+4 suffix and returning leading
 zeroes dropped by other programs like Microsoft Excel.
 
 ```{r zip_norm}
-ny_lob <- ny_lob %>% 
+mo_lob_exp <- mo_lob_exp %>% 
     mutate_at(.vars = vars(ends_with('zip')), 
               .funs = list(norm = ~ normal_zip(.))) %>% 
   rename(lobbyist_zip5 = lobbyist_zip_norm,
@@ -276,10 +336,10 @@ ny_lob <- ny_lob %>%
 
 ```{r zip_progress}
 progress_table(
-  ny_lob$lobbyist_zip,
-  ny_lob$lobbyist_zip5,
-  ny_lob$client_zip,
-  ny_lob$client_zip5,
+  mo_lob_exp$lobbyist_zip,
+  mo_lob_exp$lobbyist_zip5,
+  mo_lob_exp$client_zip,
+  mo_lob_exp$client_zip5,
   compare = valid_zip
 )
 ```
@@ -290,30 +350,30 @@ Valid two digit state abbreviations can be made using the
 `campfin::normal_state()` function.
 
 ```{r state_norm}
-ny_lob <- ny_lob %>% 
+mo_lob_exp <- mo_lob_exp %>% 
    mutate_at(.vars = vars(ends_with('state')), .funs = list(norm = ~ normal_state(.,abbreviate = TRUE,
       na_rep = TRUE,
       valid = valid_state)))
 ```
 
 ```{r state_view}
-ny_lob %>% 
+mo_lob_exp %>% 
   filter(lobbyist_state != lobbyist_state_norm) %>% 
   count(lobbyist_state, sort = TRUE)
 ```
 
 ```{r firm_state_view}
-ny_lob %>% 
+mo_lob_exp %>% 
   filter(client_state != client_state_norm) %>% 
   count(client_state, sort = TRUE)
 ```
 
 ```{r state_progress}
 progress_table(
-  ny_lob$lobbyist_state,
-  ny_lob$lobbyist_state_norm,
-  ny_lob$client_state,
-  ny_lob$client_state_norm,
+  mo_lob_exp$lobbyist_state,
+  mo_lob_exp$lobbyist_state_norm,
+  mo_lob_exp$client_state,
+  mo_lob_exp$client_state_norm,
   compare = valid_state
 )
 ```
@@ -324,19 +384,19 @@ Cities are the most difficult geographic variable to normalize, simply due to
 the wide variety of valid cities and formats.
 #### Normal
 
-The `campfin::normal_city()` function is a good ny_lobart, again converting case,
+The `campfin::normal_city()` function is a good mo_lob_expart, again converting case,
 removing punctuation, but _expanding_ USPS abbreviations. We can also remove
 `invalid_city` values.
 
 ```{r city_norm}
-ny_lob <- ny_lob %>% 
+mo_lob_exp <- mo_lob_exp %>% 
       mutate_at(.vars = vars(ends_with('city')), .funs = list(norm = ~ normal_city(.,abbs = usps_city,
       states = usps_state,
       na = invalid_city,
       na_rep = TRUE)))
 
-prop_in(ny_lob$lobbyist_city_norm, valid_city, na.rm = T)
-prop_in(ny_lob$client_city_norm, valid_city, na.rm = T)
+prop_in(mo_lob_exp$lobbyist_city_norm, valid_city, na.rm = T)
+prop_in(mo_lob_exp$client_city_norm, valid_city, na.rm = T)
 ```
 
 #### Swap
@@ -347,7 +407,7 @@ If the normalized value is either an abbreviation for or very similar to the
 expected value, we can confidently swap those two.
 
 ```{r city_swap lobbyist}
-ny_lob <- ny_lob %>% 
+mo_lob_exp <- mo_lob_exp %>% 
   left_join(
     y = zipcodes,
     by = c(
@@ -373,7 +433,7 @@ ny_lob <- ny_lob %>%
 ```
 
 ```{r city_swap clients}
-ny_lob <- ny_lob %>% 
+mo_lob_exp <- mo_lob_exp %>% 
   left_join(
     y = zipcodes,
     by = c(
@@ -404,12 +464,12 @@ After the two normalization steps, the percentage of valid cities is at 100%.
 ```{r city_progress, echo=FALSE}
 many_city <- c(valid_city, extra_city)
 progress <- progress_table(
-  ny_lob$lobbyist_city,
-  ny_lob$client_city,
-  ny_lob$lobbyist_city_norm,
-  ny_lob$client_city_norm,
-  ny_lob$lobbyist_city_swap,
-ny_lob$client_city_swap,
+  mo_lob_exp$lobbyist_city,
+  mo_lob_exp$client_city,
+  mo_lob_exp$lobbyist_city_norm,
+  mo_lob_exp$client_city_norm,
+  mo_lob_exp$lobbyist_city_swap,
+mo_lob_exp$client_city_swap,
   compare = many_city
 ) %>% mutate(stage = as_factor(stage))
 ```
@@ -428,7 +488,7 @@ progress %>%
   coord_cartesian(ylim = c(0.75, 1)) +
   scale_y_continuous(labels = percent) +
   labs(
-    title = "New York City Normalization Progress",
+    title = "Missouri City Normalization Progress",
     x = "stage",
     y = "Percent Valid"
   )
@@ -466,26 +526,26 @@ progress %>%
 ## Conclude
 
 ```{r clean_glimpse}
-glimpse(sample_n(ny_lob, 20))
+glimpse(sample_n(mo_lob_exp, 20))
 ```
 
-1. There are `r nrow(ny_lob)` records in the database.
-1. There are `r sum(ny_lob$dupe_flag)` duplicate records in the database.
+1. There are `r nrow(mo_lob_exp)` records in the database.
+1. There are `r sum(mo_lob_exp$dupe_flag)` duplicate records in the database.
 1. The range and distribution of `amount` and `date` seem reasonable.
-1. There are `r sum(ny_lob$na_flag)` records missing either recipient or date.
+1. There are `r sum(mo_lob_exp$na_flag)` records missing either recipient or date.
 1. Consistency in goegraphic data has been improved with `campfin::normal_*()`.
 1. The 4-digit `YEAR` variable has been created with `lubridate::year()`.
 
 ## Export
 
 ```{r clean_dir}
-clean_dir <- dir_create(here("ny", "lobby", "data", "reg","clean"))
+clean_dir <- dir_create(here("mo", "lobby", "data", "reg","clean"))
 ```
 
 ```{r write_clean}
 write_csv(
-  x = ny_lob %>% rename(lobbyist_city_clean = lobbyist_city_swap) %>% rename( client_city_clean = client_city_swap),
-  path = path(clean_dir, "ny_lob_clean.csv"),
+  x = mo_lob_exp %>% rename(lobbyist_city_clean = lobbyist_city_swap) %>% rename( client_city_clean = client_city_swap),
+  path = path(clean_dir, "mo_lob_exp_clean.csv"),
   na = ""
 )
 ```

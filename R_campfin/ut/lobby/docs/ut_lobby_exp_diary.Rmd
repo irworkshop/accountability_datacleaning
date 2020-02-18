@@ -110,10 +110,7 @@ project also uses the dynamic `here::here()` tool for file paths relative to _yo
 Set the download directory first.
 ```{r create raw_dir}
 # create a directory for the raw data
-raw_dir <- here("ut", "lobby", "data", "raw","reg")
-# create a docs directory for this diary
-doc_dir <- here("ut", "lobby", "docs")
-dir_create(c(raw_dir, doc_dir))
+raw_dir <- dir_create(here("ut", "lobby", "data", "raw","exp"))
 ```
 According to [Utah Code 36-11 & Utah Code 36-11a] [03], 
 
@@ -148,345 +145,63 @@ https://elections.utah.gov/Media/Default/Lobbyist/2019%20Lobbyist/2019%20State%2
 
 [03]: https://elections.utah.gov/Media/Default/Lobbyist/2019%20Lobbyist/Lobbyist%20Frequently%20Asked%20Questions%202019%20(updated%20after%20session).pdf
 
-This Rmd file documents the wrangling process of UT registration data only, whereas the expenditure data is wrangled in a separate data diary.
+This Rmd file documents the wrangling process of UT expedenditure data only, whereas the registration data is wrangled in a separate data diary.
 
 
-To generate a master dataset, we will need to download relationship data from [Utah Lieutenant Governor's Office](https://lobbyist.utah.gov/Search/LobbyistByPrincipal). By setting the filters to "ALL", we can get the information from earch year.
+ [Utah Lieutenant Governor's Office](https://lobbyist.utah.gov/Search/AdvancedSearch) makes available quarterly reports by lobbysits. We will see that only data from 2013 to 2019 is not empty.
 
 ## Reading
-We can read the xls file here.
+We can read the csv file here.
 ```{r read csv}
-ct_lob <- list.files(raw_dir, pattern = "Client.*", recursive = TRUE, full.names = TRUE) %>% 
-  map_dfr(read_csv) %>% clean_names() %>% mutate_if(is.character, str_to_upper) %>% 
-  mutate(street_address_2 = street_address_2 %>% na_if("-"))
-  
-ct_cl <- list.files(raw_dir, pattern = "ct_cl.*", recursive = TRUE, full.names = TRUE) %>% 
-  map_dfr(read_csv, col_types = cols(.default = col_character())) %>% clean_names() %>% mutate_if(is.character, str_to_upper) 
+ut_lob_exp <- dir_ls(raw_dir, glob= "*.csv") %>% 
+  map_dfr(read_csv, .id = "file") %>% clean_names() %>% mutate_if(is.character, str_to_upper) %>% 
+  mutate(year = str_extract(file, "\\d{4}"))
 
-ct_reg <- dir_ls(raw_dir, regexp = "reg_by") %>% 
-  map_dfr(read_csv, col_types = cols(.default = col_character())) %>%  clean_names() %>% mutate_if(is.character, str_to_upper) %>% 
-  mutate(business_organization = business_organization %>% na_if("-"))
+col_stats(ut_lob_exp, count_na)
 ```
 
-###Columns
-#### Year
-Here we read everything as strings, and we will need to convert them back to numeric or datetime objects.
-```{r create year}}
-ct_reg <- ct_reg %>% mutate (registration_date = registration_date %>% as.Date(format = "%m/%d/%Y"),
-                                       year = year(registration_date))
-                             
+We can see that the geographical columns are overwhelmingly empty, and we will join such information from the registration data.
 
-ct_lob <- ct_lob %>% mutate (registration_date = registration_date %>% as.Date(format = "%m/%d/%Y"),
-                                       year = year(registration_date))
-
-ct_cl <- ct_cl %>% mutate(registration_date = registration_date %>% as.Date(format = "%m/%d/%Y"),
-                          year = year(registration_date),
-                          term_date = as.Date(term_date, format = "%m/%d/%Y"))
-
-```
-#### Name
-We will replace the fields that said `1` for `communicator_name` and `comm_type` in `ct_reg` with `NA`s.
-```{r full name}
-ct_reg <- ct_reg %>% mutate(communicator_status = str_match(communicator_name, " [(]TERMINATED: .+[)]") %>% 
-                              str_remove("[(]") %>% str_remove("[)]"),
-                            communicator_name_clean = str_remove(communicator_name,  " [(]TERMINATED: .+[)]"),
-                            communicator_status = communicator_status %>% trimws())
-
-ct_reg <- ct_reg %>% 
-  mutate(first_name = str_match(communicator_name_clean, ",(.[^,]+$)")[,2],
-         last_name = str_remove(communicator_name_clean, str_c(",",first_name)))
-
-ct_reg <- ct_reg %>% 
-  mutate(comm_type = na_if(x = comm_type, y = "1"),
-         communicator_name = na_if(x = communicator_name, y = "1"))
-```
-
-## Explore
-
-### Duplicates
-
-We'll use the `flag_dupes()` function to see if there are records identical to one another and flag the duplicates. A new variable `dupe_flag` will be created.
-
-```{r flag dupe}
-ct_lob <- flag_dupes(ct_lob, dplyr::everything())
-ct_cl <- flag_dupes(ct_cl, dplyr::everything())
-ct_reg <- flag_dupes(ct_reg, dplyr::everything())
-```
-
-
-```{r }
-ct_reg %>% 
-  group_by(year) %>% 
-  ggplot(aes(year)) +
-  scale_x_continuous(breaks = 2013:2019) +
-  geom_bar(fill = RColorBrewer::brewer.pal(3, "Dark2")[1]) +
-  labs(
-    title = "Connecticut Lobbyists Registration by Year",
-    caption = "Source: CT Office of State Ethics",
-    x = "Year",
-    y = "Count"
-  )
-```
-
-### Missing
-There's almost no empty fields in the two data frames. 
-```{r count_na}
-ct_lob  %>% col_stats(count_na)
-ct_cl  %>% col_stats(count_na)
-```
-Few values are missing from the lobbyists database.
-
-## Wrangling
-We'll wrangle the two datasets to extract information such as address, city, ZIP, state, phone for both lobbyists and their clients, as well as authorization date. The lobbyists registry has the one-to-one relationship between lobbyists and clients, so we will use `ct_cl` as the main data frame and join the clients' information from the `ct_lob` data frame.
-
-### Phone
-```{r normal phone}
-ct_cl <- ct_cl %>% mutate(phone_norm = normal_phone(phone))
-```
-
-### Address
-```{r normal address}
-ct_cl <- ct_cl %>%
-  unite(
-  address_1,
-  address_2,
-  col = address_combined,
-  sep = " ",
-  remove = FALSE,
-  na.rm = TRUE
-  ) %>%
-  mutate(address_clean = normal_address(
-  address = address_combined,
-  abbs = usps_city,
-  na_rep = TRUE
-  )) %>% 
-  select(-address_combined)
-  
-  ct_lob <- ct_lob %>%
-unite(
-  street_address_1,
-  street_address_2,
-  col = address_combined,
-  sep = " ",
-  remove = FALSE,
-  na.rm = TRUE
-  ) %>% 
-    mutate(address_clean = normal_address(
-      address = address_combined,
-  abbs = usps_city,
-  na_rep = TRUE
-  )) %>% 
-    select(-address_combined)
-```
-
-
-### ZIP 
-The ZIP code fields are pretty clean.
-```{r client normal zip}
-prop_in(ct_cl$zip, valid_zip, na.rm = TRUE) %>% percent()
-prop_in(ct_lob$zip, valid_zip, na.rm = TRUE) %>% percent()
-```
-
-### State
-Running the following commands tells us the state fields are clean.
-```{r clients clean state}
-prop_in(ct_cl$state, valid_state, na.rm = TRUE) %>% percent()
-prop_in(ct_lob$state, valid_state, na.rm = TRUE) %>% percent()
-```
-### City
-The city fields in both data frames use upper-case letters and lower-case letters inconsistently. We'll convert everything to upper case.
-```{r}
-prop_in(ct_cl$city, valid_city, na.rm = TRUE) %>% percent()
-prop_in(ct_lob$city, valid_city, na.rm = TRUE) %>% percent()
-```
-
-#### Normalize
-```{r lb norm_city, collapse = TRUE}
-ct_cl <- ct_cl %>% mutate(city_norm = normal_city(city = city,
-                                            abbs = usps_city,
-                                            states = c(valid_state),
-                                            na = invalid_city,
-                                            na_rep = TRUE))
-n_distinct(ct_cl$city)
-n_distinct(ct_cl$city_norm)
-
-prop_in(ct_cl$city, valid_city, na.rm = TRUE)
-prop_in(ct_cl$city_norm, valid_city, na.rm = TRUE)
-```
-
-```{r cl norm_city, collapse = TRUE}
-ct_lob <- ct_lob %>% mutate(city_norm = normal_city(city = city,
-                                            abbs = usps_city,
-                                            states = c(valid_state),
-                                            na = invalid_city,
-                                            na_rep = TRUE))
-n_distinct(ct_lob$city)
-n_distinct(ct_lob$city_norm)
-
-prop_in(ct_lob$city, valid_city, na.rm = TRUE)
-prop_in(ct_lob$city_norm, valid_city, na.rm = TRUE)
-```
-
-#### Swap
-Then, we will compare these normalized `city_norm` values to the _expected_ city value for that
-vendor's ZIP code. If the [levenshtein distance][09] is less than 3, we can confidently swap these
-two values.
-
-[09]: https://en.wikipedia.org/wiki/Levenshtein_distance
-
-```{r cl swap_city}
-ct_lob <- ct_lob %>% 
-  left_join(
-    y = zipcodes,
-    by = c(
-      "state" = "state",
-      "zip" = "zip"
-    )
-  ) %>% 
-  rename(city_match = city.y,
-         city = city.x) %>% 
-  mutate(
-    match_abb = is_abbrev(city_norm, city_match),
-    match_dist = str_dist(city_norm, city_match),
-    city_swap = if_else(
-      condition = match_abb | match_dist == 1,
-      true = city_match,
-      false = city_norm
-    )
-  ) %>% 
-  select(
-    -city_match,
-    -match_dist,
-    -match_abb
-  )
-
-prop_in(ct_lob$city_swap, valid_city, na.rm = TRUE) %>% percent()
-```
-
-```{r lb swap_city}
-ct_cl <- ct_cl %>% 
-  left_join(
-    y = zipcodes,
-    by = c(
-      "state" = "state",
-      "zip" = "zip"
-    )
-  ) %>% 
-  rename(city_match = city.y,
-         city = city.x) %>% 
-  mutate(
-    match_abb = is_abbrev(city_norm, city_match),
-    match_dist = str_dist(city_norm, city_match),
-    city_swap = if_else(
-      condition = match_abb | match_dist == 1,
-      true = city_match,
-      false = city_norm
-    )
-  ) %>% 
-  select(
-    -city_match,
-    -match_dist,
-    -match_abb
-  )
-
-prop_in(ct_cl$city_swap, valid_city, na.rm = TRUE) %>% percent()
-```
-
-Besides the `valid_city` vector, there is another vector of `extra_city` that contains other locales. We'll incorporate that in our comparison.
-
-```{r valid_place check, echo=FALSE}
-valid_place <- c(valid_city, extra_city) %>% unique()
-
-progress_table(
-  ct_lob$city,
-  ct_lob$city_norm,
-  ct_lob$city_swap,
-  compare = valid_place
-)
-
-progress_table(
-  ct_cl$city,
-  ct_cl$city_norm,
-  ct_cl$city_swap,
-  compare = valid_place
-)
-```
-
-This is a very fast way to increase the valid proportion in the lobbyist data frame to
-`r percent(prop_in(ct_cl$city_swap, extra_city, na.rm = TRUE))` and reduce the number of distinct
-_invalid_ values from `r length(setdiff(ct_cl$city_norm, valid_place))` to only
-`r length(setdiff(ct_cl$city_swap, valid_place))`
-
-Similarly, the valid proportion in the  clients data frame  was bumped up to
-`r percent(prop_in(ct_lob$city_swap, extra_city, na.rm = TRUE))` and reduce the number of distinct
-_invalid_ values from `r length(setdiff(ct_lob$city_norm, valid_place))` to only
-`r length(setdiff(ct_lob$city_swap, valid_place))`
 
 ## Join
-We'll join the two data frames together. Since there're no duplicate columns, we will delete the `dupe_flag` columns and add suffixes to each dataset's column names.
-```{r join pre}
-ct_cl$dupe_flag %>% tabyl()
-ct_lob$dupe_flag %>% tabyl()
-
-ct_lob <- ct_lob %>% 
-  filter(!dupe_flag) %>% 
-  select(-c(dupe_flag,
-            city_norm)) %>% 
-  rename(city_clean = city_swap) %>% 
-  rename_all(.funs = ~str_c("lobbyist_",.))
-
-ct_cl <- ct_cl %>% 
-  select(-c(city_norm, dupe_flag)) %>% 
-  rename(city_clean = city_swap) %>% 
-  rename_at(.vars = vars(-starts_with("client_"))
-            ,.funs = ~ str_c("client_", .))
-
-ct_cl <- ct_cl %>% flag_dupes(client_name, client_registration_date)
-ct_lob <- ct_lob %>% flag_dupes(lobbyist_first_name, lobbyist_last_name, lobbyist_year, lobbyist_organisation_name)
-
+First, read the processed reg file.
+```{r read reg}
+reg_dir <- here("ut", "lobby", "data", "processed","reg")
+ut_lob_reg <- dir_ls(reg_dir) %>% read_csv()
 ```
-After the join, we can see that all the clients' id information is accounted for. After the join, we can see the total numbers of NA columns are consistent, and we are not introducting extraneous entries. The numbers of NA columns are also
-consistent. 
+Also note that since the expenditure data doesn't contain the clients' information, and the address in the registration data's ID fields are likely for companies, since it differs within lobbyist from principal to principal.
+```{r prep join}
+ut_lob_reg <- ut_lob_reg %>% 
+  unite(col = lobb,
+    c(last_name, first_name),
+    sep = ", ",
+    remove = FALSE,
+    na.rm = TRUE
+  ) %>% 
+  filter(!dupe_flag) %>% 
+  select(zip5, city_clean)
+```
+
 ```{r join}
-ct_reg <- ct_reg %>% select(-dupe_flag)
-
-ct_reg <- ct_cl %>% 
-  filter(!dupe_flag) %>% 
-  right_join(ct_reg,
-            by = c("client_name" = "client_name",
-            "client_registration_date" = "registration_date"))
-
-col_stats(ct_reg, count_na)
-
-ct_reg <- ct_reg %>% mutate(join = coalesce(business_organization, client_name))
-  #the lobbyhist_organisation name usually reflects the business organization field in ct_reg, but corresponds to client_name when they are in-house lobbyists
-
-
-ct_join<- ct_lob %>% 
-  filter(!dupe_flag) %>% 
-  select(-dupe_flag) %>%
-  right_join(ct_reg,
-            by = c( 'lobbyist_last_name' ='last_name',
-                    'lobbyist_first_name' ='first_name',
-                   'lobbyist_year' = 'year',
-                   'lobbyist_organisation_name' = "join"))
-
-col_stats(ct_join, count_na)
-
-sample_frac(ct_join)
+ut_lob_exp_clean <- ut_lob_exp %>% 
+  select(-file) %>% 
+  left_join(ut_lob_reg, by = c(
+    ""
+  ))
 ```
+
 
 
 ## Export
 
 ```{r write clean}
-clean_dir <- here("ct", "lobby", "data", "processed","reg")
+clean_dir <- here("ut", "lobby", "data", "processed","exp")
 dir_create(clean_dir)
-ct_join %>% 
-  select(-c(dupe_flag)) %>% 
+ut_lob_exp %>% 
+  select(-file) %>% 
   mutate_if(is.character, str_to_upper) %>% 
   write_csv(
-    path = glue("{clean_dir}/ct_lobby_reg.csv"),
+    path = glue("{clean_dir}/ut_lobby_exp_clean.csv"),
     na = ""
   )
 ```
