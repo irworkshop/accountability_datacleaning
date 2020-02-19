@@ -1,14 +1,7 @@
 Ohio Contributions
 ================
 Kiernan Nicholls
-2020-02-18 16:16:41
-
-  - [Project](#project)
-  - [Objectives](#objectives)
-  - [Packages](#packages)
-  - [Data](#data)
-  - [Import](#import)
-  - [Explore](#explore)
+2020-02-19 16:56:01
 
 <!-- Place comments regarding knitting here -->
 
@@ -166,15 +159,13 @@ wget <- function(url, dir) {
     )
   )
 }
-
-quiet_wget <- quietly(wget)
 ```
 
 ``` r
 raw_dir <- dir_create(here("oh", "contribs", "data", "raw"))
 raw_urls <- paste0(ftp_base, ftp_params)
 if (length(dir_ls(raw_dir)) < 82) {
-  map(raw_urls, quiet_wget, raw_dir)
+  map(raw_urls, wget, raw_dir)
 }
 raw_paths <- dir_ls(raw_dir)
 ```
@@ -195,16 +186,18 @@ We can read all 82 raw CSV files into a single data frame using
 
 ``` r
 ohc <- map_df(
-  .x = sample(raw_paths, 2),
+  .x = raw_paths,
   .f = read_csv,
   na = c("", "NA", "N/A"),
   col_types = cols(.default = "c")
 )
+```
 
-# ohc <- ohc %>% 
-#   mutate_at(vars(FILE_DATE), parse_date, "%m/%d/%Y") %>% 
-#   mutate_at(vars(AMOUNT), parse_double) %>% 
-#   mutate_at(vars(MASTER_KEY, RPT_YEAR, REPORT_KEY, DISTRICT), parse_integer) 
+``` r
+ohc <- ohc %>% 
+  mutate_at(vars(FILE_DATE), parse_date, "%m/%d/%Y") %>% 
+  mutate_at(vars(AMOUNT), parse_double) %>% 
+  mutate_at(vars(MASTER_KEY, RPT_YEAR, REPORT_KEY, DISTRICT), parse_integer) 
 ```
 
 ## Explore
@@ -212,61 +205,61 @@ ohc <- map_df(
 ``` r
 head(ohc)
 #> # A tibble: 6 x 28
-#>   com_name pac_no master_key rpt_year rpt_key rpt_desc desc  first middle last  suffix non_ind
-#>   <chr>    <chr>  <chr>      <chr>    <chr>   <chr>    <chr> <chr> <chr>  <chr> <chr>  <chr>  
-#> 1 ALLSTAT… C0004… 1096       1993     274228  FEDERAL  31-A… <NA>  <NA>   <NA>  <NA>   ARONOF…
-#> 2 REYNOLD… C0004… 1108       1993     279724  FEDERAL  31-A… <NA>  <NA>   <NA>  <NA>   CITIZE…
-#> 3 REYNOLD… C0004… 1108       1993     279724  FEDERAL  31-A… <NA>  <NA>   <NA>  <NA>   SENATO…
-#> 4 BAYER C… C0004… 1109       1993     271834  FEDERAL  31-A… <NA>  <NA>   <NA>  <NA>   DRAKE …
-#> 5 NRA POL… C0005… 1117       1993     262396  FEDERAL  31-A… <NA>  <NA>   <NA>  <NA>   SCHMIT…
-#> 6 WASTE M… C0011… 1213       1993     257725  FEDERAL  31-A… <NA>  <NA>   <NA>  <NA>   CORDRA…
-#> # … with 16 more variables: address <chr>, city <chr>, state <chr>, zip <chr>, date <chr>,
-#> #   amount <chr>, event <chr>, occupation <chr>, inkind <chr>, other_type <chr>, rcv_event <chr>,
-#> #   cand_first <chr>, cand_last <chr>, office <chr>, district <chr>, party <chr>
+#>   com_name master_key rpt_desc rpt_year rpt_key desc  first middle last  suffix non_ind pac_no
+#>   <chr>         <int> <chr>       <int>   <int> <chr> <chr> <chr>  <chr> <chr>  <chr>   <chr> 
+#> 1 FRIENDS…          2 PRE-GEN…     1994  133090 31-E… LAWR… <NA>   ABBO… <NA>   <NA>    <NA>  
+#> 2 FRIENDS…          2 PRE-GEN…     1994  133090 31-E… GLENN <NA>   ABEL  <NA>   <NA>    <NA>  
+#> 3 FRIENDS…          2 PRE-PRI…     1994  133054 31-A… PETE  <NA>   ABELE <NA>   <NA>    <NA>  
+#> 4 FRIENDS…          2 PRE-GEN…     1994  133090 31-E… BARB… <NA>   ABER  <NA>   <NA>    <NA>  
+#> 5 FRIENDS…          2 PRE-GEN…     1994  133090 31-E… BARB… <NA>   ABER  <NA>   <NA>    <NA>  
+#> 6 FRIENDS…          2 PRE-GEN…     1994  133090 31-J… MARL… <NA>   ACH   <NA>   <NA>    <NA>  
+#> # … with 16 more variables: address <chr>, city <chr>, state <chr>, zip <chr>, date <date>,
+#> #   amount <dbl>, event <chr>, occupation <chr>, inkind <chr>, other_type <chr>, rcv_event <chr>,
+#> #   cand_first <chr>, cand_last <chr>, office <chr>, district <int>, party <chr>
 tail(ohc)
 #> # A tibble: 6 x 28
-#>   com_name pac_no master_key rpt_year rpt_key rpt_desc desc  first middle last  suffix non_ind
-#>   <chr>    <chr>  <chr>      <chr>    <chr>   <chr>    <chr> <chr> <chr>  <chr> <chr>  <chr>  
-#> 1 FRIENDS… <NA>   14303      2014     181258… ANNUAL … 31-A… GARY  S      HORT… <NA>   <NA>   
-#> 2 FRIENDS… <NA>   14303      2014     181258… ANNUAL … 31-A… GARY  S      HORT… <NA>   <NA>   
-#> 3 FRIENDS… <NA>   14303      2014     181258… ANNUAL … 31-A… PATR… A      LIPPS <NA>   <NA>   
-#> 4 FRIENDS… <NA>   14303      2014     181258… ANNUAL … 31-A… PHIL… SCOTT  LIPPS <NA>   <NA>   
-#> 5 FRIENDS… <NA>   14303      2014     181258… ANNUAL … 31-A… FRANK R      MCCA… <NA>   <NA>   
-#> 6 FRIENDS… <NA>   14303      2014     181258… ANNUAL … 31-A… HOLLY M      TODD  <NA>   <NA>   
-#> # … with 16 more variables: address <chr>, city <chr>, state <chr>, zip <chr>, date <chr>,
-#> #   amount <chr>, event <chr>, occupation <chr>, inkind <chr>, other_type <chr>, rcv_event <chr>,
-#> #   cand_first <chr>, cand_last <chr>, office <chr>, district <chr>, party <chr>
+#>   com_name master_key rpt_desc rpt_year rpt_key desc  first middle last  suffix non_ind pac_no
+#>   <chr>         <int> <chr>       <int>   <int> <chr> <chr> <chr>  <chr> <chr>  <chr>   <chr> 
+#> 1 SHELBY …      15088 SEMIANN…     2019  3.52e8 31-C… <NA>  <NA>   <NA>  <NA>   MUTUAL… <NA>  
+#> 2 SHELBY …      15088 SEMIANN…     2019  3.52e8 31-C… <NA>  <NA>   <NA>  <NA>   MUTUAL… <NA>  
+#> 3 SHELBY …      15088 SEMIANN…     2019  3.52e8 31-C… <NA>  <NA>   <NA>  <NA>   OHIO D… <NA>  
+#> 4 SHELBY …      15088 SEMIANN…     2019  3.52e8 31-C… <NA>  <NA>   <NA>  <NA>   OHIO D… <NA>  
+#> 5 WARREN …      15222 SEMIANN…     2019  3.55e8 31-A… DON   <NA>   MAGEE <NA>   <NA>    <NA>  
+#> 6 WARREN …      15222 SEMIANN…     2019  3.55e8 31-A… DON   <NA>   MAGEE <NA>   <NA>    <NA>  
+#> # … with 16 more variables: address <chr>, city <chr>, state <chr>, zip <chr>, date <date>,
+#> #   amount <dbl>, event <chr>, occupation <chr>, inkind <chr>, other_type <chr>, rcv_event <chr>,
+#> #   cand_first <chr>, cand_last <chr>, office <chr>, district <int>, party <chr>
 glimpse(sample_n(ohc, 20))
-#> Rows: 20
-#> Columns: 28
-#> $ com_name   <chr> "REALTORS PAC", "FRIENDS OF FITZGERALD", "CITIZENS FOR PEPPER COMMITTEE", "OH…
-#> $ pac_no     <chr> "CP401", NA, NA, "OH534", "CP127", NA, "OH259", "OH299", NA, "OH259", "OH607"…
-#> $ master_key <chr> "1515", "8069", "12865", "1925", "1467", "12856", "1793", "1814", "8069", "17…
-#> $ rpt_year   <chr> "1993", "2014", "2014", "1993", "1993", "2014", "1993", "1993", "2014", "1993…
-#> $ rpt_key    <chr> "327763", "170249284", "173190694", "513943", "321037", "169565554", "476563"…
-#> $ rpt_desc   <chr> "PRE-GENERAL", "AUGUST MONTHLY", "SEPTEMBER MONTHLY", "PRE-GENERAL", "ANNUAL …
+#> Observations: 20
+#> Variables: 28
+#> $ com_name   <chr> "OHIO EDUCATION ASSOC FUND FOR CHILDREN AND PUBLIC EDUCATION", "REALTORS PAC"…
+#> $ master_key <int> 1814, 1515, 6542, 1577, 1780, 10285, 1683, 2047, 1814, 12856, 1745, 1527, 715…
+#> $ rpt_desc   <chr> "ANNUAL   (JANUARY)", "PRE-PRIMARY", "POST-PRIMARY", "POST-GENERAL", "PRE-GEN…
+#> $ rpt_year   <int> 2006, 2002, 2017, 2005, 2004, 2009, 1998, 2009, 2010, 2010, 2002, 2011, 2002,…
+#> $ rpt_key    <int> 881980, 696520, 308242843, 928573, 834430, 280957, 584986, 1013395, 75248659,…
 #> $ desc       <chr> "31-A  Stmt of Contribution", "31-A  Stmt of Contribution", "31-A  Stmt of Co…
-#> $ first      <chr> "CHARYL", "CATHERINE", "GUS", "GEORGE", "LINDA", "LINDA", "HOWAN", "LINDA", "…
-#> $ middle     <chr> NA, "R.", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "J", "H", NA, "ROBERT", NA,…
-#> $ last       <chr> "HYRE", "MATISI", "PERDIKAKIS", "MAIER", "WENSOLE", "STARSKY", "HSU", "HORWAT…
-#> $ suffix     <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA
+#> $ first      <chr> "TANYA", "VICTORIA S", "CHANDLER", "CARL", "BOB", "JEAN", "DAPHNE", "ELIZABET…
+#> $ middle     <chr> "R", NA, NA, "J", NA, "B.", NA, NA, "R", NA, "C", NA, "W", NA, NA, NA, NA, NA…
+#> $ last       <chr> "SCHMIDT", "MILLER", "MYERS", "JOHNSON", "WRIGHT", "JOHNS", "REAVES", "SOLOSA…
+#> $ suffix     <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "JR", NA, NA, NA, NA, NA, NA,…
 #> $ non_ind    <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA
-#> $ address    <chr> "25 S. PLUM ST.", "PO BOX 87", "8306 SUNFISH LN", "1122 ORRVILLE N.W.", "1051…
-#> $ city       <chr> "TROY", "STEWART", "MAINEVILLE", "MASSILLON", "LIMA", "AVENTURA", "DUBLIN", "…
-#> $ state      <chr> "OH", "OH", "OH", "OH", "OH", "FL", "OH", "OH", "OH", "OH", "OH", "OH", "OH",…
-#> $ zip        <chr> "45373", "45778-0087", "45039-8980", "44647", "0", "33180-2404", "43017", "44…
-#> $ date       <chr> "06/28/1993", "08/11/2014", "10/02/2014", "05/15/1993", "12/17/1993", "06/16/…
-#> $ amount     <chr> "10", "500", "250", "12", "1", "150", "3.75", "28", "15", "3.75", "1000", "6.…
-#> $ event      <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "01/21/1993", NA, "04/14/2014", NA, N…
-#> $ occupation <chr> NA, "WORTHINGTON CENTER PSYCHIATRIST", "GUS PERDIKAKIS ASSOCIATES INC PRESIDE…
-#> $ inkind     <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA
+#> $ pac_no     <chr> "OH299", "CP401", "PCE", "CP718", "OH214", NA, "LA766", "OH723", "OH299", NA,…
+#> $ address    <chr> "2911 LATONIA BLVD", "265 EAST JEFFERSON STREET", "1245 KEVROB DR.", "1219 LE…
+#> $ city       <chr> "TOLEDO", "JEFFERSON", "ZANESVILLE", "THIBODAUX", "GEORGETOWN", "CINCINNATI",…
+#> $ state      <chr> "OH", "OH", "OH", "LA", "KY", "OH", "OH", "ID", "OH", "NY", "OH", "OH", "OH",…
+#> $ zip        <chr> "43606", "44047", "43701", "70301", "40324", "45226-2013", "43227", "83705-11…
+#> $ date       <date> 2006-12-15, 2002-02-25, 2017-04-26, 2005-11-09, 2004-09-07, 2009-05-26, 1998…
+#> $ amount     <dbl> 1.00, 10.00, 1.00, 5.00, 2.00, 25.00, 1.00, 25.00, 1.00, 50.00, 8.06, 1.00, 2…
+#> $ event      <chr> NA, NA, NA, NA, NA, "05/15/2009", NA, NA, NA, NA, NA, NA, NA, NA, NA, "02/18/…
+#> $ occupation <chr> "SYLVANIA CITY SD", "REAL ESTATE SALESPERSON", NA, "THE LOUISIANA COCA-COLA B…
+#> $ inkind     <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "SNACKS",…
 #> $ other_type <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA
-#> $ rcv_event  <chr> "N", NA, NA, "N", "N", NA, "N", "N", NA, "N", "N", "N", NA, NA, NA, NA, NA, N…
-#> $ cand_first <chr> NA, "EDWARD", "DAVID", NA, NA, "JOHN", NA, NA, "EDWARD", NA, NA, NA, "MICHELE…
-#> $ cand_last  <chr> NA, "FITZGERALD", "PEPPER", NA, NA, "KASICH", NA, NA, "FITZGERALD", NA, NA, N…
-#> $ office     <chr> NA, "GOVERNOR", "ATTORNEY GENERAL", NA, NA, "GOVERNOR", NA, NA, "GOVERNOR", N…
-#> $ district   <chr> NA, "0", "0", NA, NA, "0", NA, NA, "0", NA, NA, NA, "58", "0", "0", "19", "33…
-#> $ party      <chr> NA, "DEMOCRAT", "DEMOCRAT", NA, NA, "REPUBLICAN", NA, NA, "DEMOCRAT", NA, NA,…
+#> $ rcv_event  <chr> NA, NA, NA, NA, NA, NA, "N", "N", NA, NA, NA, NA, NA, "N", NA, NA, NA, "N", N…
+#> $ cand_first <chr> NA, NA, NA, NA, NA, "TED", NA, NA, NA, "JOHN", NA, NA, "JOHN", NA, "CATHERINE…
+#> $ cand_last  <chr> NA, NA, NA, NA, NA, "STRICKLAND", NA, NA, NA, "KASICH", NA, NA, "WHITE", NA, …
+#> $ office     <chr> NA, NA, NA, NA, NA, "GOVERNOR", NA, NA, NA, "GOVERNOR", NA, NA, "HOUSE", NA, …
+#> $ district   <int> NA, NA, NA, NA, NA, 0, NA, NA, NA, 0, NA, NA, 38, NA, 24, 33, NA, NA, 17, NA
+#> $ party      <chr> NA, NA, NA, NA, NA, "DEMOCRAT", NA, NA, NA, "REPUBLICAN", NA, NA, "REPUBLICAN…
 ```
 
 ### Missing
@@ -274,36 +267,36 @@ glimpse(sample_n(ohc, 20))
 ``` r
 col_stats(ohc, count_na)
 #> # A tibble: 28 x 4
-#>    col        class      n        p
-#>    <chr>      <chr>  <int>    <dbl>
-#>  1 com_name   <chr>      0 0       
-#>  2 pac_no     <chr> 136703 0.499   
-#>  3 master_key <chr>      0 0       
-#>  4 rpt_year   <chr>      0 0       
-#>  5 rpt_key    <chr>      0 0       
-#>  6 rpt_desc   <chr>      0 0       
-#>  7 desc       <chr>      0 0       
-#>  8 first      <chr>  21501 0.0785  
-#>  9 middle     <chr> 238700 0.872   
-#> 10 last       <chr>  21605 0.0789  
-#> 11 suffix     <chr> 270081 0.986   
-#> 12 non_ind    <chr> 252185 0.921   
-#> 13 address    <chr>   4376 0.0160  
-#> 14 city       <chr>   4269 0.0156  
-#> 15 state      <chr>   4510 0.0165  
-#> 16 zip        <chr>   1426 0.00521 
-#> 17 date       <chr>     66 0.000241
-#> 18 amount     <chr>     35 0.000128
-#> 19 event      <chr> 226632 0.828   
-#> 20 occupation <chr> 163510 0.597   
-#> 21 inkind     <chr> 268513 0.981   
-#> 22 other_type <chr> 271324 0.991   
-#> 23 rcv_event  <chr> 144755 0.529   
-#> 24 cand_first <chr> 127356 0.465   
-#> 25 cand_last  <chr> 127340 0.465   
-#> 26 office     <chr> 127340 0.465   
-#> 27 district   <chr> 127340 0.465   
-#> 28 party      <chr> 127340 0.465
+#>    col        class        n           p
+#>    <chr>      <chr>    <int>       <dbl>
+#>  1 com_name   <chr>        4 0.000000427
+#>  2 master_key <int>        0 0          
+#>  3 rpt_desc   <chr>        0 0          
+#>  4 rpt_year   <int>        0 0          
+#>  5 rpt_key    <int>        0 0          
+#>  6 desc       <chr>        0 0          
+#>  7 first      <chr>   550651 0.0588     
+#>  8 middle     <chr>  5152147 0.550      
+#>  9 last       <chr>   530994 0.0567     
+#> 10 suffix     <chr>  9211439 0.984      
+#> 11 non_ind    <chr>  8829315 0.943      
+#> 12 pac_no     <chr>  2091508 0.223      
+#> 13 address    <chr>    80516 0.00860    
+#> 14 city       <chr>    76745 0.00820    
+#> 15 state      <chr>    68728 0.00734    
+#> 16 zip        <chr>    65148 0.00696    
+#> 17 date       <date>    7991 0.000854   
+#> 18 amount     <dbl>     3112 0.000332   
+#> 19 event      <chr>  8434654 0.901      
+#> 20 occupation <chr>  3596587 0.384      
+#> 21 inkind     <chr>  9288439 0.992      
+#> 22 other_type <chr>  9307540 0.994      
+#> 23 rcv_event  <chr>  6615014 0.707      
+#> 24 cand_first <chr>  7232931 0.773      
+#> 25 cand_last  <chr>  7232528 0.772      
+#> 26 office     <chr>  7232510 0.772      
+#> 27 district   <int>  7276605 0.777      
+#> 28 party      <chr>  7232917 0.773
 ```
 
 ``` r
@@ -317,7 +310,404 @@ ohc <- ohc %>%
   flag_na(date, con_name, amount, com_name)
 
 sum(ohc$na_flag)
-#> [1] 101
+#> [1] 10708
 percent(mean(ohc$na_flag), 0.01)
-#> [1] "0.04%"
+#> [1] "0.11%"
+```
+
+### Continuous
+
+#### Amounts
+
+``` r
+summary(ohc$amount)
+#>     Min.  1st Qu.   Median     Mean  3rd Qu.     Max.     NA's 
+#>   -50000        2        8      270       50 17295083     3112
+mean(ohc$amount <= 0, na.rm = TRUE)
+#> [1] 0.0008497321
+```
+
+![](../plots/hist_amount-1.png)<!-- -->
+
+#### Dates
+
+``` r
+ohc <- mutate(ohc, year = year(date))
+```
+
+``` r
+min(ohc$date, na.rm = TRUE)
+#> [1] "10-05-07"
+sum(ohc$year < 1990, na.rm = TRUE)
+#> [1] 1025
+max(ohc$date, na.rm = TRUE)
+#> [1] "9999-03-31"
+sum(ohc$date > today(), na.rm = TRUE)
+#> [1] 1331
+```
+
+![](../plots/bar_year-1.png)<!-- -->
+
+## Wrangle
+
+To improve the searchability of the database, we will perform some
+consistent, confident string normalization. For geographic variables
+like city names and ZIP codes, the corresponding `campfin::normal_*()`
+functions are tailor made to facilitate this process.
+
+### Address
+
+For the street `addresss` variable, the `campfin::normal_address()`
+function will force consistence case, remove punctuation, and abbreviate
+official USPS suffixes.
+
+``` r
+ohc <- mutate(
+  .data = ohc,
+  address_norm = normal_address(
+    address = address,
+    abbs = usps_street,
+    na_rep = TRUE
+  )
+)
+```
+
+``` r
+ohc %>% 
+  select(contains("address")) %>% 
+  distinct() %>% 
+  sample_n(10)
+#> # A tibble: 10 x 2
+#>    address               address_norm       
+#>    <chr>                 <chr>              
+#>  1 1789 S.R. 412         1789 S R 412       
+#>  2 9875 WATKINS RD       9875 WATKINS RD    
+#>  3 1462 S. PLAINVIEW DR. 1462 S PLAINVIEW DR
+#>  4 313 COOPER AVE        313 COOPER AVE     
+#>  5 5545 SAXON DR.        5545 SAXON DR      
+#>  6 36 MARIGOLD CT.       36 MARIGOLD CT     
+#>  7 216 SPRUCEWOOD        216 SPRUCEWOOD     
+#>  8 2230 PATTERSON        2230 PATTERSON     
+#>  9 2540 FENWICK RD       2540 FENWICK RD    
+#> 10 5185 HAMPTON COURT    5185 HAMPTON CT
+```
+
+### ZIP
+
+For ZIP codes, the `campfin::normal_zip()` function will attempt to
+create valid *five* digit codes by removing the ZIP+4 suffix and
+returning leading zeroes dropped by other programs like Microsoft Excel.
+
+``` r
+ohc <- mutate(
+  .data = ohc,
+  zip_norm = normal_zip(
+    zip = zip,
+    na_rep = TRUE
+  )
+)
+```
+
+``` r
+progress_table(
+  ohc$zip,
+  ohc$zip_norm,
+  compare = valid_zip
+)
+#> # A tibble: 2 x 6
+#>   stage    prop_in n_distinct prop_na   n_out n_diff
+#>   <chr>      <dbl>      <dbl>   <dbl>   <dbl>  <dbl>
+#> 1 zip        0.822     331160 0.00696 1658540 310775
+#> 2 zip_norm   0.998      26999 0.0232    14459   2978
+```
+
+### State
+
+``` r
+ohc <- mutate(ohc, state_norm = state)
+ohc$state_norm[which(ohc$state == "0H")] <- "OH"
+ohc$state_norm[which(ohc$state == "IH")] <- "OH"
+ohc$state_norm[which(ohc$state == "PH")] <- "OH"
+ohc$state_norm[which(ohc$state == "O")]  <- "OH"
+```
+
+### City
+
+Cities are the most difficult geographic variable to normalize, simply
+due to the wide variety of valid cities and formats.
+
+#### Normal
+
+The `campfin::normal_city()` function is a good start, again converting
+case, removing punctuation, but *expanding* USPS abbreviations. We can
+also remove `invalid_city` values.
+
+``` r
+ohc <- mutate(
+  .data = ohc,
+  city_norm = normal_city(
+    city = city, 
+    abbs = usps_city,
+    states = c("OH", "DC", "OHIO"),
+    na = invalid_city,
+    na_rep = TRUE
+  )
+)
+```
+
+#### Swap
+
+We can further improve normalization by comparing our normalized value
+against the *expected* value for that record’s state abbreviation and
+ZIP code. If the normalized value is either an abbreviation for or very
+similar to the expected value, we can confidently swap those two.
+
+``` r
+ohc <- ohc %>% 
+  rename(city_raw = city) %>% 
+  left_join(
+    y = zipcodes,
+    by = c(
+      "state_norm" = "state",
+      "zip_norm" = "zip"
+    )
+  ) %>% 
+  rename(city_match = city) %>% 
+  mutate(
+    match_abb = is_abbrev(city_norm, city_match),
+    match_dist = str_dist(city_norm, city_match),
+    city_swap = if_else(
+      condition = !is.na(match_dist) & match_abb | match_dist == 1,
+      true = city_match,
+      false = city_norm
+    )
+  ) %>% 
+  select(
+    -city_match,
+    -match_dist,
+    -match_abb
+  )
+```
+
+#### Refine
+
+The \[OpenRefine\] algorithms can be used to group similar strings and
+replace the less common versions with their most common counterpart.
+This can greatly reduce inconsistency, but with low confidence; we will
+only keep any refined strings that have a valid city/state/zip
+combination.
+
+``` r
+good_refine <- ohc %>% 
+  mutate(
+    city_refine = city_swap %>% 
+      key_collision_merge() %>% 
+      n_gram_merge(numgram = 1)
+  ) %>% 
+  filter(city_refine != city_swap) %>% 
+  inner_join(
+    y = zipcodes,
+    by = c(
+      "city_refine" = "city",
+      "state_norm" = "state",
+      "zip_norm" = "zip"
+    )
+  )
+```
+
+    #> # A tibble: 496 x 5
+    #>    state_norm zip_norm city_swap       city_refine        n
+    #>    <chr>      <chr>    <chr>           <chr>          <int>
+    #>  1 MI         48177    SAMIARA         SAMARIA          107
+    #>  2 OH         45239    CINCINATTI      CINCINNATI       101
+    #>  3 OH         44094    WILLOUGHBY HI   WILLOUGHBY        98
+    #>  4 OH         45245    CINCINATTI      CINCINNATI        61
+    #>  5 OH         44094    WILLOUGHBY HILL WILLOUGHBY        48
+    #>  6 NY         11733    SETAUKET        EAST SETAUKET     42
+    #>  7 OH         44721    NO CANTON       CANTON            33
+    #>  8 OH         43334    MERANGO         MARENGO           23
+    #>  9 OH         45247    CINCINATTI      CINCINNATI        21
+    #> 10 OH         44413    PALESTINE       EAST PALESTINE    20
+    #> # … with 486 more rows
+
+Then we can join the refined values back to the database.
+
+``` r
+ohc <- ohc %>% 
+  left_join(good_refine) %>% 
+  mutate(city_refine = coalesce(city_refine, city_swap))
+```
+
+#### Check
+
+We can use the `campfin::check_city()` function to pass the remaining
+unknown `city_refine` values (and their `state_norm`) to the Google
+Geocode API. The function returns the name of the city or locality which
+most associated with those values.
+
+This is an easy way to both check for typos and check whether an unknown
+`city_refine` value is actually a completely acceptable neighborhood,
+census designated place, or some other locality not found in our
+`valid_city` vector from our `zipcodes` database.
+
+First, we’ll filter out any known valid city and aggregate the remaining
+records by their city and state. Then, we will only query those unknown
+cities which appear at least ten times.
+
+``` r
+ohc_out <- ohc %>% 
+  filter(city_refine %out% c(valid_city, extra_city)) %>% 
+  count(city_refine, state_norm, sort = TRUE) %>% 
+  drop_na() %>% 
+  slice(1:1000)
+
+sum(ohc_out$n) / nrow(ohc)
+#> [1] 0.01065614
+```
+
+Passing these values to `campfin::check_city()` with `purrr::pmap_dfr()`
+will return a single tibble of the rows returned by each city/state
+combination.
+
+First, we’ll check to see if the API query has already been done and a
+file exist on disk. If such a file exists, we can read it using
+`readr::read_csv()`. If not, the query will be sent and the file will be
+written using `readr::write_csv()`.
+
+``` r
+check_file <- here("oh", "contribs", "data", "api_check.csv")
+if (file_exists(check_file)) {
+  # checked for saved file
+  check <- read_csv(check_file)
+} else {
+  check <- pmap_dfr(
+    .l = list(
+      ohc_out$city_refine, 
+      ohc_out$state_norm
+    ), 
+    .f = check_city, 
+    key = Sys.getenv("GEOCODE_KEY"), 
+    guess = TRUE
+  ) %>% 
+    mutate(guess = coalesce(guess_city, guess_place)) %>% 
+    select(-guess_city, -guess_place)
+  # save for replication
+  write_csv(check, check_file)
+}
+```
+
+Any city/state combination with a `check_city_flag` equal to `TRUE`
+returned a matching city string from the API, indicating this
+combination is valid enough to be ignored.
+
+``` r
+valid_locality <- unique(check$guess[check$check_city_flag])
+```
+
+Then we can perform some simple comparisons between the queried city and
+the returned city. If they are extremely similar, we can accept those
+returned locality strings and add them to our list of accepted
+additional localities.
+
+``` r
+valid_locality <- check %>% 
+  filter(!check_city_flag) %>% 
+  mutate(
+    abb = is_abbrev(original_city, guess),
+    dist = str_dist(original_city, guess)
+  ) %>%
+  filter(abb | dist <= 3) %>% 
+  pull(guess) %>% 
+  c(valid_locality)
+```
+
+#### Progress
+
+| stage        | prop\_in | n\_distinct | prop\_na | n\_out | n\_diff |
+| :----------- | -------: | ----------: | -------: | -----: | ------: |
+| city\_raw    |    0.961 |       31944 |    0.008 | 362468 |   20132 |
+| city\_norm   |    0.982 |       29555 |    0.008 | 165110 |   17657 |
+| city\_swap   |    0.992 |       18550 |    0.026 |  74484 |    6738 |
+| city\_refine |    0.992 |       18147 |    0.026 |  72761 |    6336 |
+
+You can see how the percentage of valid values increased with each
+stage.
+
+![](../plots/bar_progress-1.png)<!-- -->
+
+More importantly, the number of distinct values decreased each stage. We
+were able to confidently change many distinct invalid values to their
+valid equivalent.
+
+![](../plots/bar_distinct-1.png)<!-- -->
+
+## Conclude
+
+``` r
+ohc <- ohc %>% 
+  select(
+    -city_norm,
+    -city_swap,
+    city_clean = city_refine
+  ) %>% 
+  rename_all(~str_replace(., "_norm", "_clean"))
+```
+
+``` r
+glimpse(sample_n(ohc, 20))
+#> Observations: 20
+#> Variables: 31
+#> $ com_name      <chr> "FRIENDS OF ARMOND BUDISH", "OHIO EDUCATION ASSOC FUND FOR CHILDREN AND PU…
+#> $ master_key    <int> 10794, 1814, 1814, 1814, 1814, 11818, 1515, 7100, 104, 1814, 1806, 2047, 7…
+#> $ rpt_desc      <chr> "ANNUAL   (JANUARY)", "PRE-GENERAL", "PRE-PRIMARY", "PRE-PRIMARY", "POST-P…
+#> $ rpt_year      <int> 2009, 2010, 2005, 2018, 2011, 2009, 2006, 2019, 1998, 2008, 2001, 2008, 20…
+#> $ rpt_key       <int> 253984, 89637310, 951322, 317571556, 104952505, 82716199, 856306, 34917184…
+#> $ desc          <chr> "31-A  Stmt of Contribution", "31-A  Stmt of Contribution", "31-A  Stmt of…
+#> $ con_name      <chr> "BERTHA M WEIL", "JENNIFER A MCMAHON", "PHIL A UNKEFER", "PATRICIA R NAEEM…
+#> $ suffix        <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
+#> $ pac_no        <chr> NA, "OH299", "OH299", "OH299", "OH299", NA, "CP401", "CP1037", NA, "OH299"…
+#> $ address       <chr> "23511 CHAGRIN BLVD.", "3845 LOGAN THORNVILLE RD NE", "8100 ALBERTA BEACH …
+#> $ city_raw      <chr> "BEACHWOOD", "RUSHVILLE", "LOUISVILLE", "COLUMBUS", "ELYRIA", "STRONGSVILL…
+#> $ state         <chr> "OH", "OH", "OH", "OH", "OH", "OH", "OH", "OH", "OH", "OH", "OH", "WA", "O…
+#> $ zip           <chr> "44122", "43150", "44641", "43224", "44035", "44136", "43606-2570", "43065…
+#> $ date          <date> 2009-12-19, 2010-08-06, 2005-01-04, 2018-03-02, 2011-05-09, 2009-09-19, 2…
+#> $ amount        <dbl> 50.00, 1.00, 1.00, 2.00, 2.00, 1000.00, 20.00, 2.00, 250.00, 2.00, 25.00, …
+#> $ event         <chr> NA, NA, NA, NA, NA, NA, NA, NA, "08/18/1998", NA, NA, NA, NA, NA, NA, NA, …
+#> $ occupation    <chr> "RETIRED", "PICKERINGTON LOCAL SD", "OEA", "GROVEPORT MADISON LOCAL SD", "…
+#> $ inkind        <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
+#> $ other_type    <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
+#> $ rcv_event     <chr> "N", NA, NA, NA, NA, NA, NA, NA, "N", NA, NA, "N", NA, NA, "N", NA, "N", N…
+#> $ cand_first    <chr> "ARMOND", NA, NA, NA, NA, "SUSAN", NA, NA, "BETTY", NA, NA, NA, "CHRISTOPH…
+#> $ cand_last     <chr> "BUDISH", NA, NA, NA, NA, "HAVERKOS", NA, NA, "MONTGOMERY", NA, NA, NA, "W…
+#> $ office        <chr> "HOUSE", NA, NA, NA, NA, "STATE BOARD OF EDUCATION", NA, NA, "ATTORNEY GEN…
+#> $ district      <int> 8, NA, NA, NA, NA, 3, NA, NA, 0, NA, NA, NA, 10, NA, NA, NA, NA, NA, NA, NA
+#> $ party         <chr> "DEMOCRAT", NA, NA, NA, NA, "NON-PARTISAN", NA, NA, "REPUBLICAN", NA, NA, …
+#> $ na_flag       <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALS…
+#> $ year          <dbl> 2009, 2010, 2005, 2018, 2011, 2009, 2006, 2019, 1998, 2008, 2001, 2008, 20…
+#> $ address_clean <chr> "23511 CHAGRIN BLVD", "3845 LOGAN THORNVILLE RD NE", "8100 ALBERTA BCH ST …
+#> $ zip_clean     <chr> "44122", "43150", "44641", "43224", "44035", "44136", "43606", "43065", "4…
+#> $ state_clean   <chr> "OH", "OH", "OH", "OH", "OH", "OH", "OH", "OH", "OH", "OH", "OH", "WA", "O…
+#> $ city_clean    <chr> "BEACHWOOD", "RUSHVILLE", "LOUISVILLE", "COLUMBUS", "ELYRIA", "STRONGSVILL…
+```
+
+1.  There are 9,362,773 records in the database.
+2.  The range and distribution of `amount` and `date` seem reasonable.
+3.  There are 10,708 records missing a key variable.
+4.  Consistency in geographic data has been improved with
+    `campfin::normal_*()`.
+5.  The 4-digit `year` variable has been created with
+    `lubridate::year()`.
+
+## Export
+
+``` r
+clean_dir <- dir_create(here("oh", "contribs", "data", "clean"))
+```
+
+``` r
+write_csv(
+  x = ohc,
+  path = path(clean_dir, "oh_contribs_clean.csv"),
+  na = ""
+)
 ```

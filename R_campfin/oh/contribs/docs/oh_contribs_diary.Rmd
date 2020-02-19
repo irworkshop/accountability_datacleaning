@@ -185,15 +185,13 @@ wget <- function(url, dir) {
     )
   )
 }
-
-quiet_wget <- quietly(wget)
 ```
 
 ```{r raw_download}
 raw_dir <- dir_create(here("oh", "contribs", "data", "raw"))
 raw_urls <- paste0(ftp_base, ftp_params)
 if (length(dir_ls(raw_dir)) < 82) {
-  map(raw_urls, quiet_wget, raw_dir)
+  map(raw_urls, wget, raw_dir)
 }
 raw_paths <- dir_ls(raw_dir)
 ```
@@ -212,23 +210,12 @@ We can read all `r length(raw_paths)` raw CSV files into a single data frame
 using `purrr::map_df()` and `readr::read_csv()`.
 
 ```{r raw_read}
-ohc <- map(
-  .x = sample(raw_paths, 10),
+ohc <- map_df(
+  .x = raw_paths,
   .f = read_csv,
   na = c("", "NA", "N/A"),
   col_types = cols(.default = "c")
 )
-```
-
-```{r include=FALSE}
-names(ohc) %>% 
-  path_ext_remove() %>% 
-  str_extract("(?<=/raw/)(.*)$") %>% 
-  str_to_lower() -> names(ohc)
-```
-
-```{r}
-ohc <- bind_rows(ohc)
 ```
 
 ```{r raw_parse}
@@ -286,26 +273,7 @@ ohc <- ohc %>%
   flag_na(date, con_name, amount, com_name)
 
 sum(ohc$na_flag)
-percent(mean(ohc$na_flag), 0.01) %>% 
-```
-
-### Duplicates
-
-```{r dupe_flag}
-ohc <- flag_dupes(ohc, everything())
-sum(ohc$dupe_flag)
-```
-
-```{r dupe_view}
-ohc %>% 
-  filter(dupe_flag) %>% 
-  select(date, last, amount, committee)
-```
-
-### Categorical
-
-```{r n_distinct}
-col_stats(ohc, n_distinct)
+percent(mean(ohc$na_flag), 0.01)
 ```
 
 ### Continuous
@@ -314,11 +282,12 @@ col_stats(ohc, n_distinct)
 
 ```{r ammount_summary}
 summary(ohc$amount)
-mean(ohc$amount <= 0)
+mean(ohc$amount <= 0, na.rm = TRUE)
 ```
 
 ```{r hist_amount, echo=FALSE}
 ohc %>%
+  filter(amount > 1) %>% 
   ggplot(aes(amount)) +
   geom_histogram(fill = dark2["purple"]) +
   scale_y_continuous(labels = comma) +
@@ -328,9 +297,7 @@ ohc %>%
     trans = "log10"
   ) +
   labs(
-    title = "Ohio Contributions Amount Distribution",
-    subtitle = "from 2000 to 2019",
-    caption = "Source: {source}",
+    title = "Ohio Contribution Amount Distribution",
     x = "Amount",
     y = "Count"
   )
@@ -343,10 +310,10 @@ ohc <- mutate(ohc, year = year(date))
 ```
 
 ```{r date_range}
-min(ohc$date)
-sum(ohc$year < 2000)
-max(ohc$date)
-sum(ohc$date > today())
+min(ohc$date, na.rm = TRUE)
+sum(ohc$year < 1990, na.rm = TRUE)
+max(ohc$date, na.rm = TRUE)
+sum(ohc$date > today(), na.rm = TRUE)
 ```
 
 ```{r bar_year, echo=FALSE}
@@ -357,7 +324,8 @@ ohc %>%
   geom_col(aes(fill = even)) + 
   scale_fill_brewer(palette = "Dark2") +
   scale_y_continuous(labels = comma) +
-  scale_x_continuous(breaks = seq(2000, 2020, by = 2)) +
+  scale_x_continuous(breaks = seq(1990, 2020, by = 2)) +
+  coord_cartesian(xlim = c(1990, 2020)) +
   theme(legend.position = "bottom") +
   labs(
     title = "Ohio Contributions by Year",
@@ -382,22 +350,14 @@ will force consistence case, remove punctuation, and abbreviate official
 USPS suffixes.
 
 ```{r address_norm}
-ohc <- ohc %>% 
-  unite(
-    col = address_full,
-    starts_with("address"),
-    sep = " ",
-    remove = FALSE,
-    na.rm = TRUE
-  ) %>% 
-  mutate(
-    address_norm = normal_address(
-      address = address_full,
-      abbs = usps_street,
-      na_rep = TRUE
-    )
-  ) %>% 
-  select(-address_full)
+ohc <- mutate(
+  .data = ohc,
+  address_norm = normal_address(
+    address = address,
+    abbs = usps_street,
+    na_rep = TRUE
+  )
+)
 ```
 
 ```{r address_view}
@@ -414,13 +374,13 @@ valid _five_ digit codes by removing the ZIP+4 suffix and returning leading
 zeroes dropped by other programs like Microsoft Excel.
 
 ```{r zip_norm}
-ohc <- ohc %>% 
-  mutate(
-    zip_norm = normal_zip(
-      zip = zip,
-      na_rep = TRUE
-    )
+ohc <- mutate(
+  .data = ohc,
+  zip_norm = normal_zip(
+    zip = zip,
+    na_rep = TRUE
   )
+)
 ```
 
 ```{r zip_progress}
@@ -433,33 +393,12 @@ progress_table(
 
 ### State
 
-Valid two digit state abbreviations can be made using the 
-`campfin::normal_state()` function.
-
-```{r state_norm}
-ohc <- ohc %>% 
-  mutate(
-    state_norm = normal_state(
-      state = state,
-      abbreviate = TRUE,
-      na_rep = TRUE,
-      valid = valid_state
-    )
-  )
-```
-
-```{r state_view}
-ohc %>% 
-  filter(state != state_norm) %>% 
-  count(state, sort = TRUE)
-```
-
-```{r state_progress}
-progress_table(
-  ohc$state,
-  ohc$state_norm,
-  compare = valid_state
-)
+```{r}
+ohc <- mutate(ohc, state_norm = state)
+ohc$state_norm[which(ohc$state == "0H")] <- "OH"
+ohc$state_norm[which(ohc$state == "IH")] <- "OH"
+ohc$state_norm[which(ohc$state == "PH")] <- "OH"
+ohc$state_norm[which(ohc$state == "O")]  <- "OH"
 ```
 
 ### City
@@ -474,16 +413,16 @@ removing punctuation, but _expanding_ USPS abbreviations. We can also remove
 `invalid_city` values.
 
 ```{r city_norm}
-ohc <- ohc %>% 
-  mutate(
-    city_norm = normal_city(
-      city = city, 
-      abbs = usps_city,
-      states = c("OH", "DC", "OHIO"),
-      na = invalid_city,
-      na_rep = TRUE
-    )
+ohc <- mutate(
+  .data = ohc,
+  city_norm = normal_city(
+    city = city, 
+    abbs = usps_city,
+    states = c("OH", "DC", "OHIO"),
+    na = invalid_city,
+    na_rep = TRUE
   )
+)
 ```
 
 #### Swap
@@ -529,7 +468,7 @@ strings that have a valid city/state/zip combination.
 
 [or]: https://openrefine.org/
   
-  ```{r city_refine}
+```{r city_refine}
 good_refine <- ohc %>% 
   mutate(
     city_refine = city_swap %>% 
@@ -566,14 +505,95 @@ ohc <- ohc %>%
   mutate(city_refine = coalesce(city_refine, city_swap))
 ```
 
+#### Check
+
+We can use the `campfin::check_city()` function to pass the remaining unknown
+`city_refine` values (and their `state_norm`) to the Google Geocode API. The
+function returns the name of the city or locality which most associated with
+those values.
+
+This is an easy way to both check for typos and check whether an unknown
+`city_refine` value is actually a completely acceptable neighborhood, census
+designated place, or some other locality not found in our `valid_city` vector
+from our `zipcodes` database.
+
+First, we'll filter out any known valid city and aggregate the remaining records
+by their city and state. Then, we will only query those unknown cities which
+appear at least ten times.
+
+```{r check_filter}
+ohc_out <- ohc %>% 
+  filter(city_refine %out% c(valid_city, extra_city)) %>% 
+  count(city_refine, state_norm, sort = TRUE) %>% 
+  drop_na() %>% 
+  slice(1:1000)
+
+sum(ohc_out$n) / nrow(ohc)
+```
+
+Passing these values to `campfin::check_city()` with `purrr::pmap_dfr()` will
+return a single tibble of the rows returned by each city/state combination.
+
+First, we'll check to see if the API query has already been done and a file
+exist on disk. If such a file exists, we can read it using `readr::read_csv()`.
+If not, the query will be sent and the file will be written using
+`readr::write_csv()`.
+
+```{r check_send}
+check_file <- here("oh", "contribs", "data", "api_check.csv")
+if (file_exists(check_file)) {
+  # checked for saved file
+  check <- read_csv(check_file)
+} else {
+  check <- pmap_dfr(
+    .l = list(
+      ohc_out$city_refine, 
+      ohc_out$state_norm
+    ), 
+    .f = check_city, 
+    key = Sys.getenv("GEOCODE_KEY"), 
+    guess = TRUE
+  ) %>% 
+    mutate(guess = coalesce(guess_city, guess_place)) %>% 
+    select(-guess_city, -guess_place)
+  # save for replication
+  write_csv(check, check_file)
+}
+```
+
+Any city/state combination with a `check_city_flag` equal to `TRUE` returned a
+matching city string from the API, indicating this combination is valid enough
+to be ignored.
+
+```{r check_accept}
+valid_locality <- unique(check$guess[check$check_city_flag])
+```
+
+Then we can perform some simple comparisons between the queried city and the
+returned city. If they are extremely similar, we can accept those returned
+locality strings and add them to our list of accepted additional localities.
+
+```{r check_compare}
+valid_locality <- check %>% 
+  filter(!check_city_flag) %>% 
+  mutate(
+    abb = is_abbrev(original_city, guess),
+    dist = str_dist(original_city, guess)
+  ) %>%
+  filter(abb | dist <= 3) %>% 
+  pull(guess) %>% 
+  c(valid_locality)
+```
+
 #### Progress
 
 ```{r city_progress, echo=FALSE}
-many_city <- c(valid_city, extra_city)
+many_city <- c(valid_city, extra_city, valid_locality)
 progress <- progress_table(
-  str_to_upper(ohc$city_raw),
+  ohc$city_raw,
   ohc$city_norm,
   ohc$city_swap,
+  ohc$city_refine,
   compare = many_city
 ) %>% mutate(stage = as_factor(stage))
 kable(progress, digits = 3)
@@ -642,9 +662,8 @@ glimpse(sample_n(ohc, 20))
 ```
 
 1. There are `r comma(nrow(ohc))` records in the database.
-1. There are `r comma(sum(ohc$dupe_flag))` duplicate records in the database.
 1. The range and distribution of `amount` and `date` seem reasonable.
-1. There are `r comma(sum(ohc$na_flag))` records missing ....
+1. There are `r comma(sum(ohc$na_flag))` records missing a key variable.
 1. Consistency in geographic data has been improved with `campfin::normal_*()`.
 1. The 4-digit `year` variable has been created with `lubridate::year()`.
 
