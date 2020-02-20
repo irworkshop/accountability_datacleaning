@@ -1,0 +1,726 @@
+---
+title: "Pennsylvania Contributions"
+author: "Kiernan Nicholls"
+date: "`r Sys.time()`"
+output:
+  github_document: 
+    df_print: tibble
+    toc: true
+    toc_dept: 2
+editor_options: 
+  chunk_output_type: console
+---
+
+<!-- Place comments regarding knitting here -->
+
+```{r setup, include=FALSE, purl=FALSE}
+library(knitr)
+opts_chunk$set(
+  eval = TRUE,
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  error = FALSE,
+  collapse = TRUE,
+  comment = "#>",
+  fig.path = "../plots/",
+  fig.width = 10,
+  dpi = 300
+)
+options(width = 99)
+set.seed(5)
+```
+
+```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
+fs::dir_create(here::here("pa", "contribs", "docs"))
+```
+
+## Project
+
+The Accountability Project is an effort to cut across data silos and give
+journalists, policy professionals, activists, and the public at large a simple
+way to search across huge volumes of public data about people and organizations.
+
+Our goal is to standardizing public data on a few key fields by thinking of each
+dataset row as a transaction. For each transaction there should be (at least) 3
+variables:
+
+1. All **parties** to a transaction.
+2. The **date** of the transaction.
+3. The **amount** of money involved.
+
+## Objectives
+
+This document describes the process used to complete the following objectives:
+
+1. How many records are in the database?
+1. Check for entirely duplicated records.
+1. Check ranges of continuous variables.
+1. Is there anything blank or missing?
+1. Check for consistency issues.
+1. Create a five-digit ZIP Code called `zip`.
+1. Create a `year` field from the transaction date.
+1. Make sure there is data on both parties to a transaction.
+
+## Packages
+
+The following packages are needed to collect, manipulate, visualize, analyze,
+and communicate these results. The `pacman` package will facilitate their
+installation and attachment.
+
+The IRW's `campfin` package will also have to be installed from GitHub. This
+package contains functions custom made to help facilitate the processing of
+campaign finance data.
+
+```{r load_packages, message=FALSE, warning=FALSE, error=FALSE}
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load_gh("irworkshop/campfin")
+pacman::p_load(
+  tidyverse, # data manipulation
+  lubridate, # datetime strings
+  gluedown, # format markdown
+  magrittr, # pipe operators
+  janitor, # dataframe clean
+  refinr, # cluster and merge
+  scales, # format strings
+  knitr, # knit documents
+  vroom, # read files fast
+  glue, # combine strings
+  httr, # make http requests
+  here, # relative storage
+  fs # search storage 
+)
+```
+
+This document should be run as part of the `R_campfin` project, which lives as a
+sub-directory of the more general, language-agnostic
+[`irworkshop/accountability_datacleaning`][tap] GitHub repository.
+
+The `R_campfin` project uses the [RStudio projects][rproj] feature and should be
+run as such. The project also uses the dynamic `here::here()` tool for file
+paths relative to _your_ machine.
+
+```{r where_here}
+# where does this document knit?
+here::here()
+```
+
+[tap]: https://github.com/irworkshop/accountability_datacleaning
+[rproj]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects
+
+## Data
+
+Data is from the [Pennsylvania Election and Campaign Finance System (ECF)][ecf].
+
+[ecf]: https://www.dos.pa.gov/VotingElections/CandidatesCommittees/CampaignFinance/Pages/default.aspx
+
+The ECF provides a [Full Campaign Finance Export][data]. From this page,
+files are organized as annual directories containing files for contributions,
+debt, expenditures, filer information, and receipts.
+
+[data]: https://www.dos.pa.gov/VotingElections/CandidatesCommittees/CampaignFinance/Resources/Pages/FullCampaignFinanceExport.aspx
+
+The ECF also provides a `readme.txt` file, which can be 
+
+```{r vars_read}
+pa_host <- "https://www.dos.pa.gov/VotingElections"
+pa_dir <- "CandidatesCommittees/CampaignFinance/Resources/Documents"
+readme_file <- "readme.txt"
+readme_url <- paste(pa_host, pa_dir, readme_file, sep = "/")
+```
+
+```{r vars_print, echo=FALSE}
+readme <- readme_url %>% 
+  read_lines(skip = 4) %>% 
+  str_c(collapse = "\r\n") %>% 
+  str_split("\\W(?=\\w+\r\n-+)") %>% 
+  pluck(1) %>%
+  map(
+    ~read_lines(.) %>% 
+      str_trim() %>%
+      str_remove("(?<=\\))(.*)$") %>% 
+      enframe(name = NULL) %>% 
+      separate(
+        col = value, 
+        into = c("col", "type"), 
+        sep = "\t+",
+        extra = "merge",
+        fill = "right"
+      ) %>% 
+      na_if("") %>% 
+      drop_na() %>% 
+      mutate(col = str_to_lower(col))
+  ) %>% 
+  set_names(c("contribs", "debt", "expense", "filer", "receipt"))
+
+
+readme$contribs %>% 
+  mutate(col = as.character(md_code(col))) %>% 
+  kable()
+
+readme$filer %>% 
+  mutate(col = as.character(md_code(col))) %>% 
+  kable()
+```
+
+## Import
+
+To import the files into R, we will have to first download the annual ZIP 
+archive file containing all campaign finance transactions. Then we can extract
+the contributions file and read them all into a single file for processing.
+
+### Download
+
+Each ZIP archive is simply named as the 4-digit year for the files within.
+We can download each ZIP to the `/data/raw` directory.
+
+```{r raw_download}
+zip_names <- paste(2000:2020, "zip", sep = ".")
+zip_urls <- paste(pa_host, pa_dir, zip_names, sep = "/")
+raw_dir <- dir_create(here("pa", "contribs", "data", "raw"))
+zip_paths <- path(raw_dir, zip_names)
+if (!all_files_new(raw_dir)) {
+  download.file(zip_urls, zip_paths)
+}
+```
+
+Then we will unzip the annual directory from each archive.
+
+```{r raw_unzip}
+if (all(dir_ls(raw_dir) %in% zip_paths)) {
+  for (zip in zip_paths) {
+    unzip(zip, exdir = raw_dir)
+  }
+}
+```
+
+For each year, there is a file for contribution and a file for the information
+on the recipients of those contributions, who file the reports containing the
+data. We will identify the path of each file type in new vectors, which can then
+be read together.
+
+```{r con_move}
+con_paths <- dir_ls(
+  path = raw_dir, 
+  recurse = TRUE, 
+  regexp = "contrib[\\.|_]"
+)
+
+fil_paths <- dir_ls(
+  path = raw_dir, 
+  recurse = TRUE, 
+  regexp = "filer[\\.|_]"
+)
+```
+
+### Fix
+
+To properly read so many records, we need to first perform some manipulation of
+the text files. Each "cell" of character type columns are surrounded in double
+quotation marks (`"`) to help prevent misreading. Howver, some of the text in
+these cells itself contains double quotes or newline characters (`\n`).
+
+We need to read each file as a character string and use regular expressions to
+identify these erroneous characters and remove or replace them.
+
+```{r raw_fix}
+fix_check <- here("pa", "contribs", "data", "fixed.txt")
+# do not repeat if done
+if (!file_exists(fix_check)) {
+  # for all contrib and filer files
+  for (file in c(con_paths, fil_paths)) {
+    # read raw file
+    read_file(file) %>% 
+      # force conversion to simple
+      str_conv(encoding = "ASCII") %>% 
+      # replace non-carriage newline
+      str_replace_all("(?<!\r)\n", " ") %>%
+      # replace not-field double quotes
+      str_replace_all("(?<!^|,|\r\n)\"(?!,|\r\n|$)", "\'") %>% 
+      # replace non-delim commas
+      str_remove_all(",(?!\"|\\d|\\.\\d+|-(\\d|\\.))") %>% 
+      # overwrite raw file
+      write_file(file)
+    # check progress
+    message(paste(basename(file), "done"))
+    # clean garbage memory
+    gc()
+  }
+  # note this has done
+  file_create(fix_check)
+}
+```
+
+### Read
+
+Now that each text file has been cleaned of irregularies, they can each be
+properly read into R.
+
+First, we will read all the annual contribution files into a single data frame
+using `vroom::vroom()`. We need to use the column names and types listed in the
+`readme.txt` file we downloaded earlier.
+
+```{r raw_read}
+pac <- vroom(
+  file = con_paths,
+  delim = ",",
+  escape_backslash = FALSE, 
+  escape_double = FALSE,
+  col_names = readme$contribs$col,
+  col_types = cols(
+    .default = col_skip(),
+    filerid = col_character(),
+    eyear = col_integer(),
+    cycle = col_integer(),
+    section = col_character(),
+    contributor = col_character(),
+    address1 = col_character(),
+    address2 = col_character(),
+    city = col_character(),
+    state = col_character(),
+    zipcode = col_character(),
+    occupation = col_character(),
+    ename = col_character(),
+    contdate1 = col_date("%Y%m%d"),
+    contamt1 = col_double()
+  )
+)
+```
+
+Then we can read the fixed filers files.
+
+```{r read_fils}
+filers <- vroom(
+  file = fil_paths,
+  delim = ",",
+  escape_backslash = FALSE, 
+  escape_double = FALSE,
+  col_names = readme$filer$col,
+  col_types = cols(
+    .default = col_skip(),
+    eyear = col_integer(),
+    filerid = col_character(),
+    filertype = col_character(),
+    filername = col_character(),
+    office = col_character(),
+    district = col_character(),
+    party = col_character(),
+    address1 = col_character(),
+    address2 = col_character(),
+    city = col_character(),
+    state = col_character(),
+    zipcode = col_character(),
+    county = col_character(),
+    phone = col_character(),
+  )
+)
+```
+
+```{r}
+pac <- left_join(
+  x = pac,
+  y = filers,
+  by = c("filerid", "eyear"),
+  suffix = c("_con", "_fil")
+)
+
+pac <- rename_prefix(
+  df = pac,
+  suffix = c("_con", "_fil"),
+  punct = TRUE
+)
+```
+
+## Explore
+
+```{r glimpse}
+head(pac)
+tail(pac)
+glimpse(sample_n(pac, 20))
+```
+
+### Missing
+
+```{r na_count}
+col_stats(pac, count_na)
+```
+
+```{r na_flag}
+pac <- pac %>% flag_na(date, last, amount, committee)
+sum(pac$na_flag)
+```
+
+### Duplicates
+
+```{r dupe_flag}
+pac <- flag_dupes(pac, -id)
+sum(pac$dupe_flag)
+```
+
+```{r dupe_view}
+pac %>% 
+  filter(dupe_flag) %>% 
+  select(date, last, amount, committee)
+```
+
+### Categorical
+
+```{r n_distinct}
+col_stats(pac, n_distinct)
+```
+
+### Continuous
+
+#### Amounts
+
+```{r ammount_summary}
+summary(pac$amount)
+mean(pac$amount <= 0)
+```
+
+```{r hist_amount, echo=FALSE}
+pac %>%
+  ggplot(aes(amount)) +
+  geom_histogram(fill = dark2["purple"]) +
+  scale_y_continuous(labels = comma) +
+  scale_x_continuous(
+    breaks = c(1 %o% 10^(0:6)),
+    labels = dollar,
+    trans = "log10"
+  ) +
+  labs(
+    title = "Pennsylvania Contributions Amount Distribution",
+    subtitle = "from 2000 to 2019",
+    caption = "Source: {source}",
+    x = "Amount",
+    y = "Count"
+  )
+```
+
+#### Dates
+
+```{r date_year}
+pac <- mutate(pac, year = year(date))
+```
+
+```{r date_range}
+min(pac$date)
+sum(pac$year < 2000)
+max(pac$date)
+sum(pac$date > today())
+```
+
+```{r bar_year, echo=FALSE}
+pac %>% 
+  count(year) %>% 
+  mutate(even = is_even(year)) %>% 
+  ggplot(aes(x = year, y = n)) +
+  geom_col(aes(fill = even)) + 
+  scale_fill_brewer(palette = "Dark2") +
+  scale_y_continuous(labels = comma) +
+  scale_x_continuous(breaks = seq(2000, 2020, by = 2)) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "Pennsylvania Contributions by Year",
+    caption = "Source: {source}",
+    fill = "Election Year",
+    x = "Year Made",
+    y = "Count"
+  )
+```
+
+## Wrangle
+
+To improve the searchability of the database, we will perform some consistent,
+confident string normalization. For geographic variables like city names and
+ZIP codes, the corresponding `campfin::normal_*()` functions are tailor made to 
+facilitate this process.
+
+### Address
+
+For the street `addresss` variable, the `campfin::normal_address()` function
+will force consistence case, remove punctuation, and abbreviate official 
+USPS suffixes.
+
+```{r address_norm}
+pac <- pac %>% 
+  unite(
+    col = address_full,
+    starts_with("address"),
+    sep = " ",
+    remove = FALSE,
+    na.rm = TRUE
+  ) %>% 
+  mutate(
+    address_norm = normal_address(
+      address = address_full,
+      abbs = usps_street,
+      na_rep = TRUE
+    )
+  ) %>% 
+  select(-address_full)
+```
+
+```{r address_view}
+pac %>% 
+  select(contains("address")) %>% 
+  distinct() %>% 
+  sample_n(10)
+```
+
+### ZIP
+
+For ZIP codes, the `campfin::normal_zip()` function will attempt to create
+valid _five_ digit codes by removing the ZIP+4 suffix and returning leading
+zeroes dropped by other programs like Microsoft Excel.
+
+```{r zip_norm}
+pac <- pac %>% 
+  mutate(
+    zip_norm = normal_zip(
+      zip = zip,
+      na_rep = TRUE
+    )
+  )
+```
+
+```{r zip_progress}
+progress_table(
+  pac$zip,
+  pac$zip_norm,
+  compare = valid_zip
+)
+```
+
+### State
+
+Valid two digit state abbreviations can be made using the 
+`campfin::normal_state()` function.
+
+```{r state_norm}
+pac <- pac %>% 
+  mutate(
+    state_norm = normal_state(
+      state = state,
+      abbreviate = TRUE,
+      na_rep = TRUE,
+      valid = valid_state
+    )
+  )
+```
+
+```{r state_view}
+pac %>% 
+  filter(state != state_norm) %>% 
+  count(state, sort = TRUE)
+```
+
+```{r state_progress}
+progress_table(
+  pac$state,
+  pac$state_norm,
+  compare = valid_state
+)
+```
+
+### City
+
+Cities are the most difficult geographic variable to normalize, simply due to
+the wide variety of valid cities and formats.
+
+#### Normal
+
+The `campfin::normal_city()` function is a good start, again converting case,
+removing punctuation, but _expanding_ USPS abbreviations. We can also remove
+`invalid_city` values.
+
+```{r city_norm}
+pac <- pac %>% 
+  mutate(
+    city_norm = normal_city(
+      city = city, 
+      abbs = usps_city,
+      states = c("PA", "DC", "PENNSYLVANIA"),
+      na = invalid_city,
+      na_rep = TRUE
+    )
+  )
+```
+
+#### Swap
+
+We can further improve normalization by comparing our normalized value
+against the _expected_ value for that record's state abbreviation and ZIP code.
+If the normalized value is either an abbreviation for or very similar to the
+expected value, we can confidently swap those two.
+
+```{r city_swap}
+pac <- pac %>% 
+  rename(city_raw = city) %>% 
+  left_join(
+    y = zipcodes,
+    by = c(
+      "state_norm" = "state",
+      "zip_norm" = "zip"
+    )
+  ) %>% 
+  rename(city_match = city) %>% 
+  mutate(
+    match_abb = is_abbrev(city_norm, city_match),
+    match_dist = str_dist(city_norm, city_match),
+    city_swap = if_else(
+      condition = !is.na(match_dist) & match_abb | match_dist == 1,
+      true = city_match,
+      false = city_norm
+    )
+  ) %>% 
+  select(
+    -city_match,
+    -match_dist,
+    -match_abb
+  )
+```
+
+#### Refine
+
+The [OpenRefine] algorithms can be used to group similar strings and replace the
+less common versions with their most common counterpart. This can greatly 
+reduce inconsistency, but with low confidence; we will only keep any refined
+strings that have a valid city/state/zip combination.
+
+[or]: https://openrefine.org/
+
+```{r city_refine}
+good_refine <- pac %>% 
+  mutate(
+    city_refine = city_swap %>% 
+      key_collision_merge() %>% 
+      n_gram_merge(numgram = 1)
+  ) %>% 
+  filter(city_refine != city_swap) %>% 
+  inner_join(
+    y = zipcodes,
+    by = c(
+      "city_refine" = "city",
+      "state_norm" = "state",
+      "zip_norm" = "zip"
+    )
+  )
+```
+
+```{r city_count, echo=FALSE}
+good_refine %>%
+  count(
+    state_norm, 
+    zip_norm, 
+    city_swap, 
+    city_refine,
+    sort = TRUE
+  )
+```
+
+Then we can join the refined values back to the database.
+
+```{r city_join}
+pac <- pac %>% 
+  left_join(good_refine) %>% 
+  mutate(city_refine = coalesce(city_refine, city_swap))
+```
+
+#### Progress
+
+```{r city_progress, echo=FALSE}
+many_city <- c(valid_city, extra_city)
+progress <- progress_table(
+  str_to_upper(pac$city_raw),
+  pac$city_norm,
+  pac$city_swap,
+  compare = many_city
+) %>% mutate(stage = as_factor(stage))
+kable(progress, digits = 3)
+```
+
+You can see how the percentage of valid values increased with each stage.
+
+```{r bar_progress, echo=FALSE}
+raw_in <- percent(prop_in(pac$city_raw, valid_city))
+progress %>% 
+  ggplot(aes(x = stage, y = prop_in)) +
+  geom_hline(yintercept = 0.99) +
+  geom_col(fill = dark2["purple"]) +
+  coord_cartesian(ylim = c(0.75, 1)) +
+  scale_y_continuous(labels = percent) +
+  labs(
+    title = "Pennsylvania City Normalization Progress",
+    subtitle = glue("Raw at {raw_in} before conversion to uppercase"),
+    x = "Stage",
+    y = "Percent Valid"
+  )
+```
+
+More importantly, the number of distinct values decreased each stage. We were
+able to confidently change many distinct invalid values to their valid
+equivalent.
+
+```{r bar_distinct, echo=FALSE}
+progress %>% 
+  select(
+    stage, 
+    all = n_distinct,
+    bad = n_diff
+  ) %>% 
+  mutate(good = all - bad) %>% 
+  pivot_longer(c("good", "bad")) %>% 
+  mutate(name = name == "good") %>% 
+  ggplot(aes(x = stage, y = value)) +
+  geom_col(aes(fill = name)) +
+  scale_fill_brewer(palette = "Dark2", direction = -1) +
+  scale_y_continuous(labels = comma) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "Pennsylvania City Normalization Progress",
+    subtitle = "Distinct values, valid and invalid",
+    x = "Stage",
+    y = "Distinct Values",
+    fill = "Valid"
+  )
+```
+
+## Conclude
+
+```{r clean_select}
+pac <- pac %>% 
+  select(
+    -city_norm,
+    -city_swap,
+    city_clean = city_refine
+  ) %>% 
+  rename_all(~str_replace(., "_norm", "_clean"))
+```
+
+```{r clean_glimpse}
+glimpse(sample_n(pac, 20))
+```
+
+1. There are `r comma(nrow(pac))` records in the database.
+1. There are `r comma(sum(pac$dupe_flag))` duplicate records in the database.
+1. The range and distribution of `amount` and `date` seem reasonable.
+1. There are `r comma(sum(pac$na_flag))` records missing ....
+1. Consistency in geographic data has been improved with `campfin::normal_*()`.
+1. The 4-digit `year` variable has been created with `lubridate::year()`.
+
+## Export
+
+```{r clean_dir}
+clean_dir <- dir_create(here("pa", "contribs", "data", "clean"))
+```
+
+```{r clean_write}
+write_csv(
+  x = pac,
+  path = path(clean_dir, "pa_contribs_clean.csv"),
+  na = ""
+)
+```
+
+
