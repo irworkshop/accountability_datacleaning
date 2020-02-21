@@ -261,8 +261,9 @@ using `vroom::vroom()`. We need to use the column names and types listed in the
 `readme.txt` file we downloaded earlier.
 
 ```{r raw_read}
-pac <- vroom(
-  file = con_paths,
+pac <- map_df(
+  .x = con_paths,
+  .f = read_delim,
   delim = ",",
   escape_backslash = FALSE, 
   escape_double = FALSE,
@@ -290,8 +291,9 @@ pac <- vroom(
 Then we can read the fixed filers files.
 
 ```{r read_fils}
-filers <- vroom(
-  file = fil_paths,
+filers <- map_df(
+  .x = fil_paths,
+  .f = read_delim,
   delim = ",",
   escape_backslash = FALSE, 
   escape_double = FALSE,
@@ -316,7 +318,7 @@ filers <- vroom(
 )
 ```
 
-```{r}
+```{r raw_join}
 pac <- left_join(
   x = pac,
   y = filers,
@@ -329,6 +331,19 @@ pac <- rename_prefix(
   suffix = c("_con", "_fil"),
   punct = TRUE
 )
+```
+
+```{r raw_rename}
+pac <- pac %>% 
+  rename(
+    con_zip = con_zipcode,
+    date = contdate1,
+    amount = contamt1,
+    fil_type = filertype,
+    filer = filername,
+    fil_zip = fil_zipcode,
+    fil_phone = phone
+  )
 ```
 
 ## Explore
@@ -346,27 +361,22 @@ col_stats(pac, count_na)
 ```
 
 ```{r na_flag}
-pac <- pac %>% flag_na(date, last, amount, committee)
-sum(pac$na_flag)
-```
-
-### Duplicates
-
-```{r dupe_flag}
-pac <- flag_dupes(pac, -id)
-sum(pac$dupe_flag)
-```
-
-```{r dupe_view}
-pac %>% 
-  filter(dupe_flag) %>% 
-  select(date, last, amount, committee)
+pac <- pac %>% flag_na(date, contributor, amount, filer)
+percent(mean(pac$na_flag), 0.01)
 ```
 
 ### Categorical
 
 ```{r n_distinct}
 col_stats(pac, n_distinct)
+```
+
+```{r distinct_plot, fig.keep=FALSE}
+explore_plot(mutate(pac, cycle = as.factor(cycle)), cycle)
+explore_plot(pac, section)
+explore_plot(pac, fil_type)
+explore_plot(filter(pac, !is.na(office)), office)
+explore_plot(filter(pac, !is.na(party)), party)
 ```
 
 ### Continuous
@@ -390,8 +400,7 @@ pac %>%
   ) +
   labs(
     title = "Pennsylvania Contributions Amount Distribution",
-    subtitle = "from 2000 to 2019",
-    caption = "Source: {source}",
+    subtitle = "from 2000 to 2020",
     x = "Amount",
     y = "Count"
   )
