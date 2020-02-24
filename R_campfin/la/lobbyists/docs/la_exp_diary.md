@@ -1,7 +1,7 @@
 Louisiana Lobbying Expenditure Data Diary
 ================
 Yanqi Xu
-2020-01-14 12:46:18
+2020-02-24 12:09:14
 
 -   [Project](#project)
 -   [Objectives](#objectives)
@@ -75,7 +75,7 @@ The `R_campfin` project uses the \[RStudio projects\]\[02\] feature and should b
 Data sources
 ============
 
-The data was obtained from the Louisiana Ethics Administration Program via a public record request. Expenditures are as current as December 9, 2020.
+The data was obtained from the Louisiana Ethics Administration Program via a public records request. Expenditures are as current as December 9, 2020.
 
 ``` r
 # where dfs this document knit?
@@ -192,15 +192,15 @@ la_reg <- read_csv(file.path(here("la", "lobbyists", "data", "processed", "reg")
 
 la_exp <- la_exp %>% mutate(year = as.numeric(year(date_filed)))
 
-la_reg <- la_reg %>% select(unique_id, first_name, middle, last_name, m_street_norm, m_city_clean, m_state_norm, year_registered) %>% 
+la_reg <- la_reg %>% select(unique_id, first_name, middle, last_name, m_street_norm, m_city_clean, m_state_norm, m_zip,year_registered) %>% 
   rename(year = year_registered,
          lob_first_name = first_name,
          lob_middle = middle,
          lob_last_name = last_name)
-la_reg <- flag_dupes(la_reg, dplyr::everything())
+la_reg <- flag_dupes(la_reg, dplyr::everything(), .both = FALSE)
   # unite(first_name, middle, col = lob_first_middle, na.rm = TRUE, remove = FALSE, sep = " ") %>% 
   # unite(last_name, lob_first_middle, col = lob_full_name, na.rm = TRUE, remove = FALSE, sep = ", ") %>% 
-la_exp <- la_reg %>% filter(!dupe_flag) %>% 
+la_exp <- la_reg %>% filter(!dupe_flag) %>% select(-dupe_flag) %>% 
 right_join(la_exp, by = c('unique_id', 'year'))
 ```
 
@@ -245,6 +245,7 @@ Writing
 clean_exp_dir <- here("la", "lobbyists", "data", "processed", "exp")
 dir_create(clean_exp_dir)
 la_exp %>%
+  rename(m_zip5 = m_zip) %>% 
   write_csv(path = glue("{clean_exp_dir}/la_exp_clean.csv"),
             na = "")
 ```
