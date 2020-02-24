@@ -148,7 +148,8 @@ readme <- readme_url %>%
         fill = "right"
       ) %>% 
       na_if("") %>% 
-      drop_na()
+      drop_na() %>% 
+      mutate(col = str_to_lower(col))
   ) %>% 
   set_names(c("contribs", "debt", "expense", "filer", "receipt"))
 
@@ -223,7 +224,7 @@ We need to read each file as a character string and use regular expressions to
 identify these erroneous characters and remove or replace them.
 
 ```{r raw_fix}
-fix_check <- here("pa", "contribs", "fixed.txt")
+fix_check <- here("pa", "contribs", "data", "fixed.txt")
 # do not repeat if done
 if (!file_exists(fix_check)) {
   # for all contrib and filer files
@@ -236,6 +237,8 @@ if (!file_exists(fix_check)) {
       str_replace_all("(?<!\r)\n", " ") %>%
       # replace not-field double quotes
       str_replace_all("(?<!^|,|\r\n)\"(?!,|\r\n|$)", "\'") %>% 
+      # replace non-delim commas
+      str_remove_all(",(?!\"|\\d|\\.\\d+|-(\\d|\\.))") %>% 
       # overwrite raw file
       write_file(file)
     # check progress
@@ -254,17 +257,17 @@ Now that each text file has been cleaned of irregularies, they can each be
 properly read into R.
 
 First, we will read all the annual contribution files into a single data frame
-using `purrr::map_df()` and `readr::read_csv()`. We need to use the column
-names and types listed in the `readme.txt` file we downloaded earlier.
+using `vroom::vroom()`. We need to use the column names and types listed in the
+`readme.txt` file we downloaded earlier.
 
 ```{r raw_read}
 pac <- map_df(
-  .x = sample(con_paths, 2),
+  .x = con_paths,
   .f = read_delim,
   delim = ",",
   escape_backslash = FALSE, 
   escape_double = FALSE,
-  col_names = str_to_lower(readme$contribs$col),
+  col_names = readme$contribs$col,
   col_types = cols(
     .default = col_skip(),
     filerid = col_character(),
@@ -285,6 +288,64 @@ pac <- map_df(
 )
 ```
 
+Then we can read the fixed filers files.
+
+```{r read_fils}
+filers <- map_df(
+  .x = fil_paths,
+  .f = read_delim,
+  delim = ",",
+  escape_backslash = FALSE, 
+  escape_double = FALSE,
+  col_names = readme$filer$col,
+  col_types = cols(
+    .default = col_skip(),
+    eyear = col_integer(),
+    filerid = col_character(),
+    filertype = col_character(),
+    filername = col_character(),
+    office = col_character(),
+    district = col_character(),
+    party = col_character(),
+    address1 = col_character(),
+    address2 = col_character(),
+    city = col_character(),
+    state = col_character(),
+    zipcode = col_character(),
+    county = col_character(),
+    phone = col_character(),
+  )
+)
+```
+
+```{r raw_join}
+pac <- left_join(
+  x = pac,
+  y = filers,
+  by = c("filerid", "eyear"),
+  suffix = c("_con", "_fil")
+)
+
+pac <- rename_prefix(
+  df = pac,
+  suffix = c("_con", "_fil"),
+  punct = TRUE
+)
+```
+
+```{r raw_rename}
+pac <- pac %>% 
+  rename(
+    con_zip = con_zipcode,
+    date = contdate1,
+    amount = contamt1,
+    fil_type = filertype,
+    filer = filername,
+    fil_zip = fil_zipcode,
+    fil_phone = phone
+  )
+```
+
 ## Explore
 
 ```{r glimpse}
@@ -300,27 +361,22 @@ col_stats(pac, count_na)
 ```
 
 ```{r na_flag}
-pac <- pac %>% flag_na(date, last, amount, committee)
-sum(pac$na_flag)
-```
-
-### Duplicates
-
-```{r dupe_flag}
-pac <- flag_dupes(pac, -id)
-sum(pac$dupe_flag)
-```
-
-```{r dupe_view}
-pac %>% 
-  filter(dupe_flag) %>% 
-  select(date, last, amount, committee)
+pac <- pac %>% flag_na(date, contributor, amount, filer)
+percent(mean(pac$na_flag), 0.01)
 ```
 
 ### Categorical
 
 ```{r n_distinct}
 col_stats(pac, n_distinct)
+```
+
+```{r distinct_plot, fig.keep=FALSE}
+explore_plot(mutate(pac, cycle = as.factor(cycle)), cycle)
+explore_plot(pac, section)
+explore_plot(pac, fil_type)
+explore_plot(filter(pac, !is.na(office)), office)
+explore_plot(filter(pac, !is.na(party)), party)
 ```
 
 ### Continuous
@@ -344,8 +400,7 @@ pac %>%
   ) +
   labs(
     title = "Pennsylvania Contributions Amount Distribution",
-    subtitle = "from 2000 to 2019",
-    caption = "Source: {source}",
+    subtitle = "from 2000 to 2020",
     x = "Amount",
     y = "Count"
   )
