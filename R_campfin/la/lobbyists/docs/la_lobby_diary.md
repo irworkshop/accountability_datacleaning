@@ -92,7 +92,7 @@ The [Louisiana Board of Ethics](http://ethics.la.gov/LobbyistLists.aspx) makes a
 
 [La. Stat. Ann. § 24:53.](http://ethics.la.gov/Pub/Laws/Title24LegislativeLobbying.pdf) regulates lobbyists registration as such. &gt; Each lobbyist shall register with the board as soon as possible after employment as a lobbyist or after the first action requiring his registration as a lobbyist, whichever occurs first, and in any event not later than five days after employment as a lobbyist or not later than five days after the first action requiring his registration as a lobbyist, whichever occurs first.
 
-The authorization data is obtained by IRW through an open record request to the Louisiana Ethics Administration Program. The data is as current as July 10, 2020.
+The authorization data is obtained by IRW through an open record request to the Louisiana Ethics Administration Program. The data is as current as January 10, 2020.
 
 Reading
 =======
