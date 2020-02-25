@@ -589,8 +589,8 @@ pac <- mutate_at(
 
 ```{r state_view}
 pac %>% 
-  filter(con_state != con_state_norm) %>% 
-  count(state, sort = TRUE)
+  count(con_state, con_state_norm, sort = TRUE) %>% 
+  filter(con_state != con_state_norm)
 ```
 
 ```{r state_progress}
@@ -758,12 +758,12 @@ kable(progress, digits = 3)
 You can see how the percentage of valid values increased with each stage.
 
 ```{r city_final_prop}
-prop_in(pac$con_city_refine)
-prop_in(pac$fil_city_swap)
+prop_in(pac$con_city_refine, valid_city)
+prop_in(pac$fil_city_swap, valid_city)
 ```
 
 ```{r bar_progress, echo=FALSE}
-raw_in <- percent(prop_in(pac$city_raw, valid_city))
+raw_in <- percent(prop_in(pac$con_city, valid_city))
 progress %>% 
   ggplot(aes(x = stage, y = prop_in)) +
   geom_hline(yintercept = 0.99) +
@@ -817,10 +817,11 @@ pac <- pac %>%
   select(
     -con_city_norm,
     -con_city_swap,
-    co_city_clean = con_city_refine
+    con_city_clean = con_city_refine
   ) %>% 
   select(
     -fil_city_norm,
+    fil_city_clean = fil_city_swap
   ) %>% 
   rename_all(~str_replace(., "_norm", "_clean"))
 ```
