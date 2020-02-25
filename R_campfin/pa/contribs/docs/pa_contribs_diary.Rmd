@@ -148,7 +148,8 @@ readme <- readme_url %>%
         fill = "right"
       ) %>% 
       na_if("") %>% 
-      drop_na()
+      drop_na() %>% 
+      mutate(col = str_to_lower(col))
   ) %>% 
   set_names(c("contribs", "debt", "expense", "filer", "receipt"))
 
@@ -174,12 +175,14 @@ Each ZIP archive is simply named as the 4-digit year for the files within.
 We can download each ZIP to the `/data/raw` directory.
 
 ```{r raw_download}
-zip_names <- paste(2000:2020, "zip", sep = ".")
+zip_names <- paste(2008:2020, "zip", sep = ".")
 zip_urls <- paste(pa_host, pa_dir, zip_names, sep = "/")
 raw_dir <- dir_create(here("pa", "contribs", "data", "raw"))
 zip_paths <- path(raw_dir, zip_names)
-if (!all_files_new(raw_dir)) {
+fix_check <- here("pa", "contribs", "data", "fixed.txt")
+if (length(dir_ls(raw_dir, regexp = "zip")) < 10) {
   download.file(zip_urls, zip_paths)
+  file_delete(fix_check)
 }
 ```
 
@@ -223,7 +226,6 @@ We need to read each file as a character string and use regular expressions to
 identify these erroneous characters and remove or replace them.
 
 ```{r raw_fix}
-fix_check <- here("pa", "contribs", "fixed.txt")
 # do not repeat if done
 if (!file_exists(fix_check)) {
   # for all contrib and filer files
@@ -236,6 +238,8 @@ if (!file_exists(fix_check)) {
       str_replace_all("(?<!\r)\n", " ") %>%
       # replace not-field double quotes
       str_replace_all("(?<!^|,|\r\n)\"(?!,|\r\n|$)", "\'") %>% 
+      # replace non-delim commas
+      str_remove_all(",(?!\"|\\d|\\.\\d+|-(\\d|\\.))") %>% 
       # overwrite raw file
       write_file(file)
     # check progress
@@ -253,18 +257,46 @@ if (!file_exists(fix_check)) {
 Now that each text file has been cleaned of irregularies, they can each be
 properly read into R.
 
-First, we will read all the annual contribution files into a single data frame
-using `purrr::map_df()` and `readr::read_csv()`. We need to use the column
-names and types listed in the `readme.txt` file we downloaded earlier.
+If this has already beem done, it's easier to read the single file that was
+written at the end of the initial process. If we read this single file, we can
+skip the chunks below reading for the first time.
 
-```{r raw_read}
+```{r pac_read}
+pac_files <- path(raw_dir, sprintf("pac%s.csv", 1:10))
+no_pac <- !all(file_exists(pac_files))
+if (!no_pac) {
+  pac <- vroom(
+    file = pac_files,
+    delim = "|",
+    escape_backslash = TRUE, 
+    col_names = TRUE,
+    col_types = cols(
+      filerid = col_double(),
+      eyear = col_double(),
+      cycle = col_double(),
+      date = col_date(),
+      amount = col_double(),
+      fil_type = col_double(),
+      district = col_integer(),
+      fil_address2 = col_logical(),
+      fil_phone = col_logical()
+    )
+  )
+}
+```
+
+First, we will read all the annual contribution files into a single data frame
+using `vroom::vroom()`. We need to use the column names and types listed in the
+`readme.txt` file we downloaded earlier.
+
+```{r raw_read, eval=no_pac}
 pac <- map_df(
-  .x = sample(con_paths, 2),
+  .x = con_paths,
   .f = read_delim,
   delim = ",",
   escape_backslash = FALSE, 
   escape_double = FALSE,
-  col_names = str_to_lower(readme$contribs$col),
+  col_names = readme$contribs$col,
   col_types = cols(
     .default = col_skip(),
     filerid = col_character(),
@@ -285,6 +317,98 @@ pac <- map_df(
 )
 ```
 
+Then we can read the fixed filers files.
+
+```{r fil_read, eval=no_pac}
+filers <- map_df(
+  .x = fil_paths,
+  .f = read_delim,
+  delim = ",",
+  escape_backslash = FALSE, 
+  escape_double = FALSE,
+  col_names = readme$filer$col,
+  col_types = cols(
+    .default = col_skip(),
+    eyear = col_integer(),
+    filerid = col_character(),
+    filertype = col_character(),
+    filername = col_character(),
+    office = col_character(),
+    district = col_character(),
+    party = col_character(),
+    address1 = col_character(),
+    address2 = col_character(),
+    city = col_character(),
+    state = col_character(),
+    zipcode = col_character(),
+    county = col_character(),
+    phone = col_character(),
+  )
+)
+```
+
+```{r fil_slice, eval=no_pac}
+filers <- filers %>% 
+  group_by(filerid, eyear) %>% 
+  slice(1) %>% 
+  ungroup()
+```
+
+```{r raw_join, eval=no_pac}
+# 13,135,695
+pac <- left_join(
+  x = pac,
+  y = filers,
+  by = c("filerid", "eyear"),
+  suffix = c("_con", "_fil")
+)
+
+rm(filers)
+
+pac <- rename_prefix(
+  df = pac,
+  suffix = c("_con", "_fil"),
+  punct = TRUE
+)
+```
+
+```{r raw_rename, eval=no_pac}
+pac <- pac %>% 
+  rename(
+    con_zip = con_zipcode,
+    date = contdate1,
+    amount = contamt1,
+    fil_type = filertype,
+    filer = filername,
+    fil_zip = fil_zipcode,
+    fil_phone = phone
+  )
+```
+
+We will save a copy of this new file to the disk that can easily be read if
+needed.
+
+```{r raw_write, eval=no_pac}
+n <- 10
+x <- nrow(pac)/n
+for (i in seq(1, n)) {
+  write_delim(
+    x = pac[1:x, ],
+    path = path(raw_dir, sprintf("pac%s.csv", i)),
+    delim = "|",
+    quote_escape = "backslash"
+  )
+  pac <- pac[-(1:x), ]
+  gc(full = TRUE)
+  Sys.sleep(60)
+  message(percent(i/n))
+}
+```
+
+```{r include=FALSE}
+gc(full = TRUE)
+```
+
 ## Explore
 
 ```{r glimpse}
@@ -300,32 +424,11 @@ col_stats(pac, count_na)
 ```
 
 ```{r na_flag}
-pac <- pac %>% flag_na(date, last, amount, committee)
-sum(pac$na_flag)
+pac <- pac %>% flag_na(date, contributor, amount, filer)
+percent(mean(pac$na_flag), 0.01)
 ```
 
-### Duplicates
-
-```{r dupe_flag}
-pac <- flag_dupes(pac, -id)
-sum(pac$dupe_flag)
-```
-
-```{r dupe_view}
-pac %>% 
-  filter(dupe_flag) %>% 
-  select(date, last, amount, committee)
-```
-
-### Categorical
-
-```{r n_distinct}
-col_stats(pac, n_distinct)
-```
-
-### Continuous
-
-#### Amounts
+### Amounts
 
 ```{r ammount_summary}
 summary(pac$amount)
@@ -334,8 +437,9 @@ mean(pac$amount <= 0)
 
 ```{r hist_amount, echo=FALSE}
 pac %>%
+  filter(!is.na(amount), amount > 1) %>% 
   ggplot(aes(amount)) +
-  geom_histogram(fill = dark2["purple"]) +
+  geom_histogram(fill = dark2["purple"], bins = 20) +
   scale_y_continuous(labels = comma) +
   scale_x_continuous(
     breaks = c(1 %o% 10^(0:6)),
@@ -344,43 +448,46 @@ pac %>%
   ) +
   labs(
     title = "Pennsylvania Contributions Amount Distribution",
-    subtitle = "from 2000 to 2019",
-    caption = "Source: {source}",
+    subtitle = "from 2008 to 2020",
     x = "Amount",
     y = "Count"
   )
 ```
 
-#### Dates
+### Dates
 
 ```{r date_year}
 pac <- mutate(pac, year = year(date))
 ```
 
 ```{r date_range}
-min(pac$date)
-sum(pac$year < 2000)
-max(pac$date)
-sum(pac$date > today())
+min(pac$date, na.rm = TRUE)
+sum(pac$year < 2008, na.rm = TRUE)
+max(pac$date, na.rm = TRUE)
+sum(pac$date > today(), na.rm = TRUE)
 ```
 
 ```{r bar_year, echo=FALSE}
 pac %>% 
   count(year) %>% 
-  mutate(even = is_even(year)) %>% 
+  mutate(odd = !is_even(year)) %>% 
   ggplot(aes(x = year, y = n)) +
-  geom_col(aes(fill = even)) + 
+  geom_col(aes(fill = odd)) + 
   scale_fill_brewer(palette = "Dark2") +
   scale_y_continuous(labels = comma) +
   scale_x_continuous(breaks = seq(2000, 2020, by = 2)) +
+  coord_cartesian(xlim = c(2008, 2020)) +
   theme(legend.position = "bottom") +
   labs(
     title = "Pennsylvania Contributions by Year",
-    caption = "Source: {source}",
     fill = "Election Year",
     x = "Year Made",
     y = "Count"
   )
+```
+
+```{r include=FALSE}
+gc(full = TRUE)
 ```
 
 ## Wrangle
@@ -396,23 +503,23 @@ For the street `addresss` variable, the `campfin::normal_address()` function
 will force consistence case, remove punctuation, and abbreviate official 
 USPS suffixes.
 
-```{r address_norm}
+```{r con_address_norm}
 pac <- pac %>% 
   unite(
-    col = address_full,
-    starts_with("address"),
+    col = con_address_full,
+    starts_with("con_address"),
     sep = " ",
     remove = FALSE,
     na.rm = TRUE
   ) %>% 
   mutate(
-    address_norm = normal_address(
-      address = address_full,
+    con_address_norm = normal_address(
+      address = con_address_full,
       abbs = usps_street,
       na_rep = TRUE
     )
   ) %>% 
-  select(-address_full)
+  select(-con_address_full)
 ```
 
 ```{r address_view}
@@ -422,6 +529,25 @@ pac %>%
   sample_n(10)
 ```
 
+```{r fil_address_norm}
+pac <- pac %>% 
+  unite(
+    col = fil_address_full,
+    starts_with("fil_address"),
+    sep = " ",
+    remove = FALSE,
+    na.rm = TRUE
+  ) %>% 
+  mutate(
+    fil_address_norm = normal_address(
+      address = fil_address_full,
+      abbs = usps_street,
+      na_rep = TRUE
+    )
+  ) %>% 
+  select(-fil_address_full)
+```
+
 ### ZIP
 
 For ZIP codes, the `campfin::normal_zip()` function will attempt to create
@@ -429,19 +555,18 @@ valid _five_ digit codes by removing the ZIP+4 suffix and returning leading
 zeroes dropped by other programs like Microsoft Excel.
 
 ```{r zip_norm}
-pac <- pac %>% 
-  mutate(
-    zip_norm = normal_zip(
-      zip = zip,
-      na_rep = TRUE
-    )
-  )
+pac <- mutate_at(
+  .tbl = pac,
+  .vars = vars(ends_with("zip")),
+  .funs = list(norm = normal_zip),
+  na_rep = TRUE
+)
 ```
 
 ```{r zip_progress}
 progress_table(
-  pac$zip,
-  pac$zip_norm,
+  pac$con_zip,
+  pac$con_zip_norm,
   compare = valid_zip
 )
 ```
@@ -452,29 +577,32 @@ Valid two digit state abbreviations can be made using the
 `campfin::normal_state()` function.
 
 ```{r state_norm}
-pac <- pac %>% 
-  mutate(
-    state_norm = normal_state(
-      state = state,
-      abbreviate = TRUE,
-      na_rep = TRUE,
-      valid = valid_state
-    )
-  )
+pac <- mutate_at(
+  .tbl = pac,
+  .vars = vars(ends_with("state")),
+  .funs = list(norm = normal_state),
+  abbreviate = TRUE,
+  na_rep = TRUE,
+  valid = valid_state
+)
 ```
 
 ```{r state_view}
 pac %>% 
-  filter(state != state_norm) %>% 
+  filter(con_state != con_state_norm) %>% 
   count(state, sort = TRUE)
 ```
 
 ```{r state_progress}
 progress_table(
-  pac$state,
-  pac$state_norm,
+  pac$con_state,
+  pac$con_state_norm,
   compare = valid_state
 )
+```
+
+```{r include=FALSE}
+gc(full = TRUE)
 ```
 
 ### City
@@ -489,16 +617,15 @@ removing punctuation, but _expanding_ USPS abbreviations. We can also remove
 `invalid_city` values.
 
 ```{r city_norm}
-pac <- pac %>% 
-  mutate(
-    city_norm = normal_city(
-      city = city, 
-      abbs = usps_city,
-      states = c("PA", "DC", "PENNSYLVANIA"),
-      na = invalid_city,
-      na_rep = TRUE
-    )
-  )
+pac <- mutate_at(
+  .tbl = pac,
+  .vars = vars(ends_with("city")),
+  .funs = list(norm = normal_city),
+  abbs = usps_city,
+  states = c("PA", "DC", "PENNSYLVANIA"),
+  na = invalid_city,
+  na_rep = TRUE
+)
 ```
 
 #### Swap
@@ -508,24 +635,23 @@ against the _expected_ value for that record's state abbreviation and ZIP code.
 If the normalized value is either an abbreviation for or very similar to the
 expected value, we can confidently swap those two.
 
-```{r city_swap}
+```{r con_city_swap}
 pac <- pac %>% 
-  rename(city_raw = city) %>% 
   left_join(
     y = zipcodes,
     by = c(
-      "state_norm" = "state",
-      "zip_norm" = "zip"
+      "con_state_norm" = "state",
+      "con_zip_norm" = "zip"
     )
   ) %>% 
   rename(city_match = city) %>% 
   mutate(
-    match_abb = is_abbrev(city_norm, city_match),
-    match_dist = str_dist(city_norm, city_match),
-    city_swap = if_else(
+    match_abb = is_abbrev(con_city_norm, city_match),
+    match_dist = str_dist(con_city_norm, city_match),
+    con_city_swap = if_else(
       condition = !is.na(match_dist) & match_abb | match_dist == 1,
       true = city_match,
-      false = city_norm
+      false = con_city_norm
     )
   ) %>% 
   select(
@@ -533,6 +659,36 @@ pac <- pac %>%
     -match_dist,
     -match_abb
   )
+```
+
+```{r fil_city_swap}
+pac <- pac %>% 
+  left_join(
+    y = zipcodes,
+    by = c(
+      "fil_state_norm" = "state",
+      "fil_zip_norm" = "zip"
+    )
+  ) %>% 
+  rename(city_match = city) %>% 
+  mutate(
+    match_abb = is_abbrev(fil_city_norm, city_match),
+    match_dist = str_dist(fil_city_norm, city_match),
+    fil_city_swap = if_else(
+      condition = !is.na(match_dist) & match_abb | match_dist == 1,
+      true = city_match,
+      false = fil_city_norm
+    )
+  ) %>% 
+  select(
+    -city_match,
+    -match_dist,
+    -match_abb
+  )
+```
+
+```{r include=FALSE}
+gc(full = TRUE)
 ```
 
 #### Refine
@@ -547,17 +703,17 @@ strings that have a valid city/state/zip combination.
 ```{r city_refine}
 good_refine <- pac %>% 
   mutate(
-    city_refine = city_swap %>% 
+    con_city_refine = con_city_swap %>% 
       key_collision_merge() %>% 
       n_gram_merge(numgram = 1)
   ) %>% 
-  filter(city_refine != city_swap) %>% 
+  filter(con_city_refine != con_city_swap) %>% 
   inner_join(
     y = zipcodes,
     by = c(
-      "city_refine" = "city",
-      "state_norm" = "state",
-      "zip_norm" = "zip"
+      "con_city_refine" = "city",
+      "con_state_norm" = "state",
+      "con_zip_norm" = "zip"
     )
   )
 ```
@@ -565,10 +721,10 @@ good_refine <- pac %>%
 ```{r city_count, echo=FALSE}
 good_refine %>%
   count(
-    state_norm, 
-    zip_norm, 
-    city_swap, 
-    city_refine,
+    con_state_norm, 
+    con_zip_norm, 
+    con_city_swap, 
+    con_city_refine,
     sort = TRUE
   )
 ```
@@ -578,7 +734,11 @@ Then we can join the refined values back to the database.
 ```{r city_join}
 pac <- pac %>% 
   left_join(good_refine) %>% 
-  mutate(city_refine = coalesce(city_refine, city_swap))
+  mutate(city_refine = coalesce(con_city_refine, con_city_swap))
+```
+
+```{r include=FALSE}
+gc(full = TRUE)
 ```
 
 #### Progress
@@ -586,15 +746,21 @@ pac <- pac %>%
 ```{r city_progress, echo=FALSE}
 many_city <- c(valid_city, extra_city)
 progress <- progress_table(
-  str_to_upper(pac$city_raw),
-  pac$city_norm,
-  pac$city_swap,
+  pac$con_city,
+  pac$con_city_norm,
+  pac$con_city_swap,
+  pac$con_city_refine,
   compare = many_city
 ) %>% mutate(stage = as_factor(stage))
 kable(progress, digits = 3)
 ```
 
 You can see how the percentage of valid values increased with each stage.
+
+```{r city_final_prop}
+prop_in(pac$con_city_refine)
+prop_in(pac$fil_city_swap)
+```
 
 ```{r bar_progress, echo=FALSE}
 raw_in <- percent(prop_in(pac$city_raw, valid_city))
@@ -640,14 +806,21 @@ progress %>%
   )
 ```
 
+```{r include=FALSE}
+gc(full = TRUE)
+```
+
 ## Conclude
 
 ```{r clean_select}
 pac <- pac %>% 
   select(
-    -city_norm,
-    -city_swap,
-    city_clean = city_refine
+    -con_city_norm,
+    -con_city_swap,
+    co_city_clean = con_city_refine
+  ) %>% 
+  select(
+    -fil_city_norm,
   ) %>% 
   rename_all(~str_replace(., "_norm", "_clean"))
 ```
@@ -657,9 +830,8 @@ glimpse(sample_n(pac, 20))
 ```
 
 1. There are `r comma(nrow(pac))` records in the database.
-1. There are `r comma(sum(pac$dupe_flag))` duplicate records in the database.
 1. The range and distribution of `amount` and `date` seem reasonable.
-1. There are `r comma(sum(pac$na_flag))` records missing ....
+1. There are `r percent(mean(pac$na_flag), 0.01)` records missing key variables.
 1. Consistency in geographic data has been improved with `campfin::normal_*()`.
 1. The 4-digit `year` variable has been created with `lubridate::year()`.
 
@@ -676,5 +848,3 @@ write_csv(
   na = ""
 )
 ```
-
-
