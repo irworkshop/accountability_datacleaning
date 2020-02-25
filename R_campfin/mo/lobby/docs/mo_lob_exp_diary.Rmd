@@ -122,46 +122,49 @@ raw_dir <- dir_create(here("mo", "lobby", "data", "raw","exp"))
 ```
 
 ### Read
-After opening the files in a text editor, we can see that they are actually html tables despite the xls extension. 
+The `xlsx` files we obtained actually contain two tabs, one for `individual/solicitation` and the other for `group`. The columns are slightly dififerent, and we will read them separately. 
 ```{r raw_read}
-
-read_web_tb <- function(file){
-  df <- read_html(file) %>% html_node("table") %>% html_table()
-  return(df)
-}
-
-mo_lob_exp <- list.files(raw_dir, full.names = T)  %>% map_dfr(read_web_tb) %>% clean_names()
+mo_lob_exp <- dir_ls(raw_dir) %>% str_subset("200.|201[^9]")  %>% map_dfr(read_xlsx, sheet = 1) %>% clean_names()
+mo_lob_grp <- dir_ls(raw_dir) %>% str_subset("200.|201[^9]") %>% map_dfr(read_xlsx, sheet = 2) %>% clean_names()
 ```
-
-Most of the columns are read as text, and we will change the column types.
-
-```{r col_type}
-mo_lob_exp <- mo_lob_exp %>% 
-  mutate(amount = str_remove(amount, "\\$") %>% as.numeric(),
-         )
-```
-
-
 ## Explore
 
 ```{r glimpse}
 head(mo_lob_exp)
 tail(mo_lob_exp)
 glimpse(sample_n(mo_lob_exp, 20))
+
+head(mo_lob_grp)
+tail(mo_lob_grp)
+glimpse(sample_n(mo_lob_grp, 20))
 ```
 
 ### Missing
-
+Not many fields have missing records. However, we can convert the `NULL` entries to _NAs_.
 ```{r na_count}
 col_stats(mo_lob_exp, count_na)
+col_stats(mo_lob_exp, count_na)
+
+mo_lob_grp <- mo_lob_grp %>% 
+  mutate(amend_reason = na_if(amend_reason, "NULL"),
+         description = na_if(description, "NULL"))
+
+mo_lob_exp <- mo_lob_exp %>% 
+  mutate(amend_reason = na_if(amend_reason, "NULL"),
+         description = na_if(description, "NULL"))
 ```
-No field is missing.
+
 
 ### Duplicates
 Running the following commands shows that there are over a thousand entries with totally identical information. Since each of them contain `total_compensation` and `total_reimbursed` for a certain period, there should be only one such entry for each corresponding time period. We will note that in the `dupe_flag` column.
 ```{r dupe_flag}
 mo_lob_exp <- flag_dupes(mo_lob_exp, dplyr::everything())
 sum(mo_lob_exp$dupe_flag)
+```
+
+```{r dupe_flag grp}
+mo_lob_grp <- flag_dupes(mo_lob_grp, dplyr::everything())
+sum(mo_lob_grp$dupe_flag)
 ```
 
 
@@ -173,11 +176,17 @@ mo_lob_exp <- mo_lob_exp %>%
          year = year(date))
 ```
 
+```{r year}
+mo_lob_grp <- mo_lob_grp %>% 
+  mutate(date = as.Date(date, format = "%m/%d/%Y"),
+         year = year(date))
+```
 
 #### No. of expenditures
 Visualize number of expenses each year.
+We can see that some of the year variable is not valid, with values greater than 2200. We will manually filter these entries out before visualizing the data. 
 ```{r year_bar, echo=FALSE}
-mo_lob_exp %>% 
+exp_no_ind <- mo_lob_exp %>% 
   count(year) %>% 
   mutate(even = is_even(year)) %>% 
   ggplot(aes(x = year, y = n)) +
@@ -187,7 +196,7 @@ mo_lob_exp %>%
   scale_x_continuous(breaks = seq(2004, 2019, by = 2)) +
   theme(legend.position = "bottom") +
   labs(
-    title = "Missouri Lobbyist Expenditures by Year",
+    title = "Missouri Lobbyist Expenditures by Year (Individuals and Solicitations)",
     caption = "Source: Missouri Ethics Commission",
     fill = "Election Year",
     x = "Year",
@@ -195,27 +204,25 @@ mo_lob_exp %>%
   )
 ```
 
-### Continuous
-
-
-First, let's take a look at the distribution of the amount
-```{r histogram}
- mo_lob_exp %>%
-  ggplot(aes(amount)) +
-  geom_histogram(fill = RColorBrewer::brewer.pal(3, "Dark2")[3]) +
-  geom_vline(xintercept = median(mo_lob_exp$amount[mo_lob_exp$amount!= 0], na.rm = TRUE), linetype = 2) +
-  scale_x_continuous(
-    breaks = c(1 %o% 10^(0:6)),
-    labels = dollar,
-    trans = "log10"
-  ) +
+```{r year bar group}
+exp_no_grp <- mo_lob_grp %>% 
+  count(year) %>% 
+  mutate(even = is_even(year)) %>% 
+  ggplot(aes(x = year, y = n)) +
+  geom_col(aes(fill = even)) + 
+  scale_fill_brewer(palette = "Dark2") +
+  scale_y_continuous(labels = comma) +
+  scale_x_continuous(breaks = seq(2004, 2019, by = 2)) +
+  theme(legend.position = "bottom") +
   labs(
-    title = "Missouri Lobbying Expenditures Distribution",
-    subtitle = "attributable expenses made by lobbyists from 2004 to 2019",
+    title = "Missouri Lobbyist Expenditures by Year (Groups)",
     caption = "Source: Missouri Ethics Commission",
-    x = "Amount",
+    fill = "Election Year",
+    x = "Year",
     y = "Count"
   )
+
+exp_no_grp + exp_no_ind + plot_layout(nrow = 2)
 ```
 
 
@@ -271,6 +278,62 @@ mo_lob_exp %>% filter(!dupe_flag) %>%
     caption = "Source: Missouri Ethics Commission",
     x = "Public Officials",
     y = "Median expenditures made by lobbyists"
+  )
+```
+
+
+### Continuous
+
+
+First, let's take a look at the distribution of the amount by expenditure type
+```{r}
+mo_lob_exp %>% 
+  filter(amount > 1, amount < 1000000) %>% 
+  ggplot(aes(x = type, y = amount, fill = type)) +
+  geom_violin(draw_quantiles = TRUE, scale = "width", ) +
+  scale_y_continuous(labels = dollar, trans = "log10") +
+  scale_fill_brewer(palette = "Dark2", guide = FALSE) +
+  labs(
+    title = "Missouri Contribution Amount Distribution by Expenditure Type (to Individuals and Solicitations)",
+    subtitle = "from 2004 to 2020",
+    caption = "Source: Missouri Ethics Commission",
+    x = "Expenditure Type",
+    y = "Amount"
+  )
+```
+
+```{r echo=FALSE}
+mo_lob_grp %>% 
+  filter(amount > 1, amount < 1000000) %>% 
+  ggplot(aes(x = type, y = amount, fill = type)) +
+  geom_violin(draw_quantiles = TRUE, scale = "width", ) +
+  scale_y_continuous(labels = dollar, trans = "log10") +
+  scale_fill_brewer(palette = "Dark2", guide = FALSE) +
+  labs(
+    title = "Missouri Contribution Amount Distribution by Expenditure Type (to Groups)",
+    subtitle = "from 2004 to 2020",
+    caption = "Source: Missouri Ethics Commission",
+    x = "Expenditure Type",
+    y = "Amount"
+  )
+```
+
+```{r histogram}
+ mo_lob_exp %>%
+  ggplot(aes(amount)) +
+  geom_histogram(fill = RColorBrewer::brewer.pal(3, "Dark2")[3]) +
+  geom_vline(xintercept = median(mo_lob_exp$amount[mo_lob_exp$amount!= 0], na.rm = TRUE), linetype = 2) +
+  scale_x_continuous(
+    breaks = c(1 %o% 10^(0:6)),
+    labels = dollar,
+    trans = "log10"
+  ) +
+  labs(
+    title = "Missouri Lobbying Expenditures Distribution",
+    subtitle = "attributable expenses made by lobbyists from 2004 to 2020",
+    caption = "Source: Missouri Ethics Commission",
+    x = "Amount",
+    y = "Count"
   )
 ```
 

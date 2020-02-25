@@ -1,0 +1,465 @@
+---
+title: "Idaho Lobbying Expenditure Diary"
+author: "Yanqi Xu"
+date: "`r Sys.time()`"
+output:
+  github_document: 
+    df_print: tibble
+    toc: true
+    toc_dept: 2
+editor_options: 
+  chunk_output_type: console
+---
+
+<!-- Place comments regarding knitting here -->
+
+```{r setup, include=FALSE, purl=FALSE}
+library(knitr)
+opts_chunk$set(
+  eval = TRUE,
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  error = FALSE,
+  collapse = TRUE,
+  comment = "#>",
+  fig.path = "../plots/",
+  fig.width = 10,
+  dpi = 300
+)
+options(width = 99)
+set.seed(5)
+```
+
+```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
+fs::dir_create(here::here("id", "lobby", "docs"))
+```
+
+## Project
+
+The Accountability Project is an effort to cut across data silos and give
+journalists, policy professionals, activists, and the public at large a simple
+way to search across huge volumes of public data about people and organizations.
+
+Our goal is to standardizing public data on a few key fields by thinking of each
+dataset row as a transaction. For each transaction there should be (at least) 3
+variables:
+
+1. All **parties** to a transaction.
+2. The **date** of the transaction.
+3. The **amount** of money involved.
+
+## Objectives
+
+This document describes the process used to complete the following objectives:
+
+1. How many records are in the database?
+1. Check for entirely duplicated records.
+1. Check ranges of continuous variables.
+1. Is there anything blank or missing?
+1. Check for consistency issues.
+1. Create a five-digit ZIP Code called `zip`.
+1. Create a `year` field from the transaction date.
+1. Make sure there is data on both parties to a transaction.
+
+
+## Packages
+
+The following packages are needed to collect, manipulate, visualize, analyze,
+and communicate these results. The `pacman` package will facilitate their
+installation and attachment.
+
+The IRW's `campfin` package will also have to be installed from GitHub. This
+package contains functions custom made to help facilitate the processing of
+campaign finance data.
+
+```{r load_packages, message=FALSE, dfrning=FALSE, error=FALSE}
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load_current_gh("irworkshop/campfin")
+pacman::p_load(
+  readxl, # read excel files
+  rvest, # used to scrape website and get html elements
+  tidyverse, # data manipulation
+  stringdist, # calculate distances between strings
+  lubridate, # datetime strings
+  magrittr, # pipe opperators
+  janitor, # dataframe clean
+  refinr, # cluster and merge
+  scales, # format strings
+  knitr, # knit documents
+  vroom, # read files fast
+  httr, # http queries
+  glue, # combine strings
+  here, # relative storage
+  fs # search storage 
+)
+```
+
+This document should be run as part of the `R_campfin` project, which lives as a
+sub-directory of the more general, language-agnostic
+[`irworkshop/accountability_datacleaning`][tap] GitHub repository.
+
+The `R_campfin` project uses the [Rstudio projects][rproj] feature and should be
+run as such. The project also uses the dynamic `here::here()` tool for file
+paths relative to _your_ machine.
+
+```{r where_here}
+# where does this document knit?
+here::here()
+```
+
+[tap]: https://github.com/irworkshop/accountability_datacleaning
+[rproj]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects "Rproj"
+
+## Data
+The lobbying registration data can be downloaded from the [Idaho Secretary of State's website](https://sos.idaho.gov/elections-division/lobbyist-information/). Data for 2020 and 2019 can be accessed through direct download. The website has two views by lobbyist and by employer, but they are essentially powered by the same data backend. Data prior to 2018 can also be downloaded in a separate tab.
+
+This data is downloaded on Feb. 19, 2020.
+
+## Import
+
+### Setting up Raw Data Directory
+
+```{r raw_dir}
+raw_dir <- dir_create(here("id", "lobby", "data", "raw", "exp"))
+```
+
+### Download
+We can scrape the [LOBBYIST INFORMATION - FINANCIAL DISCLOSURE](https://sos.idaho.gov/elect/lobbyist/disclosures.html) website for the urls to the download link. Note that we only need the links to xls, which are even-numbered in the vector. For consistency purposes, we are using the layout arranged by lobbyists.
+
+```{r}
+id_all_urls <- read_html('https://sos.idaho.gov/elect/lobbyist/disclosures.html') %>% html_node("table") %>% html_nodes('a') %>% html_attr("href")
+
+id_urls <- id_all_urls %>% str_subset("lob|Lob") %>% str_subset("xls|xlsx")
+
+id_lob_urls <- str_c("https://sos.idaho.gov/elect/lobbyist/", id_urls)
+
+if (!all_files_new(raw_dir)) {
+  for (url in id_lob_urls) {
+    download.file(
+      url = url,
+      destfile = glue("{raw_dir}/ia_lb_{str_extract_all(url, '[[:digit:]]')}")
+    )
+  }
+}
+```
+
+
+### Read
+```{r raw_read}
+id_lob_exp <- dir_ls(raw_dir) %>% map_dfr(read_excel) %>% clean_names() %>% 
+  mutate_if(is.character, str_to_upper)
+```
+
+
+## Explore
+
+```{r glimpse}
+head(id_lob_exp)
+tail(id_lob_exp)
+glimpse(sample_n(id_lob_exp, 20))
+```
+
+### Missing
+No record is missing key fields.
+```{r na_count}
+col_stats(id_lob_exp, count_na)
+```
+
+
+### Duplicates
+There isn't any duplicate columns. 
+```{r dupe_flag}
+id_lob_exp <- flag_dupes(id_lob_exp, dplyr::everything())
+sum(id_lob_exp$dupe_flag)
+```
+
+### Categorical
+
+The year column is missing in this dataframe. 
+
+```{r create year}
+id_lob_exp <- id_lob_exp %>% 
+  mutate(year = year(date_filed))
+```
+
+
+#### Dates
+
+
+```{r date_range}
+min(id_lob_exp$date_filed)
+max(id_lob_exp$date_filed)
+```
+
+## Wrangle
+
+
+To improve the searchability of the database, we will perform some consistent,
+confident string normalization. For geographic variables like city names and
+ZIP codes, the corresponding `campfin::normal_*()` functions are taylor made to 
+facilitate this process.
+
+### Address
+Some of the `temporary_address` field is character "N/A", which we can replace with just _NA_ using `na_if()`.
+
+```{r temp address replace}
+id_lob_exp <- id_lob_exp %>% 
+  mutate(temporary_address = na_if(temporary_address, "N/A"))
+```
+
+
+We can see that the `address` variables is the full address including city, state and ZIP codes. We will separate them with regex.
+
+```{r sep org add}
+id_lob_exp <- id_lob_exp %>% 
+ mutate(permanent_zip = str_extract(permanent_address, "\\d{5}$"),
+        permanent_state = str_match(permanent_address,
+                                         "\\s([A-Z]{2}),\\s\\d{5}$")[,2])
+
+count_na(id_lob_exp$permanent_state)
+
+id_lob_exp <- id_lob_exp %>% 
+  mutate(permanent_city = {str_remove(permanent_address, "\\s[A-Z]{2},\\s\\d{5}$") %>% 
+      str_match("\\s(\\D+)\\s$|NEW YORK|SALT LAKE CITY")}[,2])
+
+
+      permanent_address_sep = str_remove(permanent_address, "\\s(\\D[^,]+)\\s[A-Z]{2},\\s\\d{5}$")
+  )
+```
+
+```{r sep emp add}
+id_lob_exp <- id_lob_exp %>% 
+  mutate(employer_zip = str_extract(employer_address, "\\d{5}$"),
+         employer_state = str_match(employer_address,
+                                        "\\s([A-Z]{2}),\\s\\d{5}$")[,2])
+
+count_na(id_lob_exp$employer_state)
+
+id_lob_exp <- id_lob_exp %>% 
+  mutate(employer_city = {str_remove(employer_address, "\\s[A-Z]{2},\\s\\d{5}$") %>% 
+      str_match("\\s(\\D[^,]+),$")}[,2],
+      employer_address_sep = str_remove(employer_address, "\\s(\\D[^,]+),\\s[A-Z]{2},\\s\\d{5}$")
+  )
+```
+
+For the street `addresss` variable, the `campfin::normal_address()` function
+will force consistence case, remove punctuation, and abbreviation official 
+USPS suffixes.
+
+```{r normal_address}
+id_lob_exp <-  id_lob_exp %>% 
+    mutate_at(.vars = vars(ends_with('sep')), .funs = list(norm = ~ normal_address(.,abbs = usps_street,
+      na_rep = TRUE)))
+```
+
+```{r address_view}
+id_lob_exp %>% 
+  select(contains("address")) %>% 
+  distinct() %>% 
+  sample_n(10)
+```
+
+### ZIP
+
+For ZIP codes, the `campfin::normal_zip()` function will attempt to create
+valied _five_ digit codes by removing the ZIP+4 suffix and returning leading
+zeroes dropped by other programs like Microsoft Excel.
+
+```{r zip_norm}
+prop_in(id_lob_exp$organization_zip, valid_zip, na.rm = T)
+prop_in(id_lob_exp$employer_zip, valid_zip, na.rm = T)
+
+id_lob_exp <- id_lob_exp %>% 
+  mutate_at(.vars = vars(ends_with('zip')), .funs = list(norm = ~ normal_zip(.,
+      na_rep = TRUE))) %>% 
+  rename(organization_zip5 = organization_zip_norm,
+         employer_zip5 = employer_zip_norm)
+
+prop_in(id_lob_exp$organization_zip5, valid_zip, na.rm = T)
+prop_in(id_lob_exp$employer_zip5, valid_zip, na.rm = T)
+```
+
+### State
+
+After checking the percentage of state fields that are valid, we can see that these fields are clean.
+
+```{r state_norm}
+prop_in(id_lob_exp$organization_state, valid_state, na.rm = T)
+prop_in(id_lob_exp$employer_state, valid_state, na.rm = T)
+```
+
+### City
+
+Cities are the most difficult geographic variable to normalize, simply due to
+the wide variety of valid cities and formats.
+
+#### Normal
+
+The `campfin::normal_city()` function is a good id_lob_expart, again converting case,
+removing punctuation, but _expanding_ USPS abbreviations. We can also remove
+`invalid_city` values.
+
+```{r city_norm}
+prop_in(id_lob_exp$organization_city, valid_city, na.rm = T)
+prop_in(id_lob_exp$employer_city, valid_city, na.rm = T)
+
+id_lob_exp <- id_lob_exp %>% 
+  mutate_at(.vars = vars(ends_with('city')), .funs = list(norm = ~ normal_city(.,abbs = usps_city,
+                                                                               states = usps_state,
+                                                                               na = invalid_city,
+                                                                               na_rep = TRUE)))
+prop_in(id_lob_exp$organization_city_norm, valid_city, na.rm = T)
+prop_in(id_lob_exp$employer_city_norm, valid_city, na.rm = T)
+```
+
+#### Swap
+
+We can further improve normalization by comparing our normalized value
+against the _expected_ value for that record's state abbreviation and ZIP code.
+If the normalized value is either an abbreviation for or very similar to the
+expected value, we can confidently swap those two.
+
+```{r org city_swap}
+id_lob_exp <- id_lob_exp %>% 
+  left_join(
+    y = zipcodes,
+    by = c(
+      "organization_state" = "state",
+      "organization_zip5" = "zip"
+    )
+  ) %>% 
+  rename(organization_city_match = city) %>% 
+  mutate(
+    match_abb = is_abbrev(organization_city_norm, organization_city_match),
+    match_dist = str_dist(organization_city_norm, organization_city_match),
+    organization_city_swap = if_else(
+      condition = !is.na(match_dist) & match_abb | match_dist == 1,
+      true = organization_city_match,
+      false = organization_city_norm
+    )
+  ) %>% 
+  select(
+    -organization_city_match,
+    -match_dist,
+    -match_abb
+  )
+```
+
+```{r emp_city_swap}
+id_lob_exp <- id_lob_exp %>% 
+  left_join(
+    y = zipcodes,
+    by = c(
+      "employer_state" = "state",
+      "employer_zip5" = "zip"
+    )
+  ) %>% 
+  rename(employer_city_match = city) %>% 
+  mutate(
+    match_abb = is_abbrev(employer_city_norm, employer_city_match),
+    match_dist = str_dist(employer_city_norm, employer_city_match),
+    employer_city_swap = if_else(
+      condition = !is.na(match_dist) & match_abb | match_dist == 1,
+      true = employer_city_match,
+      false = employer_city_norm
+    )
+  ) %>% 
+  select(
+    -employer_city_match,
+    -match_dist,
+    -match_abb
+  )
+```
+
+After the two normalization steps, the percentage of valid cities is at 100%.
+#### Progress
+
+```{r city_progress, echo=FALSE}
+many_city <- c(valid_city, extra_city)
+progress <- progress_table(
+  id_lob_exp$organization_city,
+  id_lob_exp$employer_city,
+  id_lob_exp$organization_city_norm,
+  id_lob_exp$employer_city_norm,
+  id_lob_exp$organization_city_swap,
+id_lob_exp$employer_city_swap,
+  compare = many_city
+) %>% mutate(stage = as_factor(stage))
+```
+
+```{r progress_print, echo=FALSE}
+kable(progress, digits = 3)
+```
+
+You can see how the percentage of valid values increased with each stage.
+
+```{r progress_bar, echo=FALSE}
+progress %>% 
+  ggplot(aes(x = stage, y = prop_in)) +
+  geom_hline(yintercept = 0.99) +
+  geom_col(fill = dark2["purple"]) +
+  coord_cartesian(ylim = c(0.75, 1)) +
+  scale_y_continuous(labels = percent) +
+  labs(
+    title = "Missouri City Normalization Progress",
+    x = "stage",
+    y = "Percent Valid"
+  )
+```
+
+More importantly, the number of distinct values decreased each stage. We were
+able to confidently change many distinct invalid values to their valid
+equivalent.
+
+```{r distinct_bar}
+progress %>% 
+  select(
+    stage, 
+    all = n_distinct,
+    bad = n_diff
+  ) %>% 
+  mutate(good = all - bad) %>% 
+  pivot_longer(c("good", "bad")) %>% 
+  mutate(name = name == "good") %>% 
+  ggplot(aes(x = stage, y = value)) +
+  geom_col(aes(fill = name)) +
+  scale_fill_brewer(palette = "Dark2", direction = -1) +
+  scale_y_continuous(labels = comma) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "NH City Normalization Progress",
+    subtitle = "Distinct values, valid and invalid",
+    x = "stage",
+    y = "Percent Valid",
+    fill = "Valid"
+  )
+  
+```
+
+## Conclude
+
+```{r clean_glimpse}
+glimpse(sample_n(id_lob_exp, 20))
+```
+
+1. There are `r nrow(id_lob_exp)` records in the database.
+1. There are `r sum(id_lob_exp$dupe_flag)` duplicate records in the database.
+1. The range and distribution of `amount` and `date` seem reasonable.
+1. There are `r sum(id_lob_exp$na_flag)` records missing either recipient or date.
+1. Consistency in goegraphic data has been improved with `campfin::normal_*()`.
+1. The 4-digit `YEAR` variable has been created with `lubridate::year()`.
+
+## Export
+
+```{r clean_dir}
+clean_dir <- dir_create(here("id", "lobby", "data", "reg","clean"))
+```
+
+```{r write_clean}
+write_csv(
+  x = id_lob_exp %>% rename(CITY_clean = CITY_swap) %>% rename( FIRM_CITY_clean = FIRM_CITY_swap),
+  path = path(clean_dir, "id_lob_exp_clean.csv"),
+  na = ""
+)
+```

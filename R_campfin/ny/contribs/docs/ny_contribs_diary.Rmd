@@ -74,7 +74,7 @@ campaign finance data.
 
 ```{r load_packages, message=FALSE, warning=FALSE, error=FALSE}
 if (!require("pacman")) install.packages("pacman")
-pacman::p_load_gh("irworkshop/campfin")
+pacman::p_load_current_gh("irworkshop/campfin")
 pacman::p_load(
   tidyverse, # data manipulation
   lubridate, # datetime strings
