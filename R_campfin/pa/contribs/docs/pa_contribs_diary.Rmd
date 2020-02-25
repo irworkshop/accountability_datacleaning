@@ -175,7 +175,7 @@ Each ZIP archive is simply named as the 4-digit year for the files within.
 We can download each ZIP to the `/data/raw` directory.
 
 ```{r raw_download}
-zip_names <- paste(2008:2020, "zip", sep = ".")
+zip_names <- paste(2000:2020, "zip", sep = ".")
 zip_urls <- paste(pa_host, pa_dir, zip_names, sep = "/")
 raw_dir <- dir_create(here("pa", "contribs", "data", "raw"))
 zip_paths <- path(raw_dir, zip_names)
@@ -734,17 +734,98 @@ Then we can join the refined values back to the database.
 ```{r city_join}
 pac <- pac %>% 
   left_join(good_refine) %>% 
-  mutate(city_refine = coalesce(con_city_refine, con_city_swap))
+  mutate(con_city_refine = coalesce(con_city_refine, con_city_swap))
 ```
 
 ```{r include=FALSE}
 gc(full = TRUE)
 ```
 
+#### Check
+
+We can use the `campfin::check_city()` function to pass the remaining unknown
+`city_refine` values (and their `state_norm`) to the Google Geocode API. The
+function returns the name of the city or locality which most associated with
+those values.
+
+This is an easy way to both check for typos and check whether an unknown
+`city_refine` value is actually a completely acceptable neighborhood, census
+designated place, or some other locality not found in our `valid_city` vector
+from our `zipcodes` database.
+
+First, we'll filter out any known valid city and aggregate the remaining records
+by their city and state. Then, we will only query those unknown cities which
+appear at least ten times.
+
+```{r check_filter}
+pac_out <- pac %>% 
+  filter(con_city_refine %out% c(valid_city, extra_city)) %>% 
+  count(con_city_refine, con_state_norm, sort = TRUE) %>% 
+  drop_na() %>% 
+  head(1000)
+```
+
+Passing these values to `campfin::check_city()` with `purrr::pmap_dfr()` will
+return a single tibble of the rows returned by each city/state combination.
+
+First, we'll check to see if the API query has already been done and a file
+exist on disk. If such a file exists, we can read it using `readr::read_csv()`.
+If not, the query will be sent and the file will be written using
+`readr::write_csv()`.
+
+```{r check_send}
+check_file <- here("pa", "contribs", "data", "api_check.csv")
+if (file_exists(check_file)) {
+  check <- read_csv(
+    file = check_file
+  )
+} else {
+  check <- pmap_dfr(
+    .l = list(
+      pac_out$con_city_refine, 
+      pac_out$con_state_norm
+    ), 
+    .f = check_city, 
+    key = Sys.getenv("GEOCODE_KEY"), 
+    guess = TRUE
+  ) %>% 
+    mutate(guess = coalesce(guess_city, guess_place)) %>% 
+    select(-guess_city, -guess_place)
+  write_csv(
+    x = check,
+    path = check_file
+  )
+}
+```
+
+Any city/state combination with a `check_city_flag` equal to `TRUE` returned a
+matching city string from the API, indicating this combination is valid enough
+to be ignored.
+
+```{r check_accept}
+valid_locality <- check$guess[check$check_city_flag]
+```
+
+Then we can perform some simple comparisons between the queried city and the
+returned city. If they are extremely similar, we can accept those returned
+locality strings and add them to our list of accepted additional localities.
+
+```{r check_compare}
+valid_locality <- check %>% 
+  filter(!check_city_flag) %>% 
+  mutate(
+    abb = is_abbrev(original_city, guess),
+    dist = str_dist(original_city, guess)
+  ) %>%
+  filter(abb | dist <= 3) %>% 
+  pull(guess) %>% 
+  c(valid_locality)
+```
+
 #### Progress
 
 ```{r city_progress, echo=FALSE}
-many_city <- c(valid_city, extra_city)
+many_city <- c(valid_city, extra_city, valid_locality)
 progress <- progress_table(
   pac$con_city,
   pac$con_city_norm,
