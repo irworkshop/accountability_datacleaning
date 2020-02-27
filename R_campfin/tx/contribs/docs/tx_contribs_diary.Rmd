@@ -146,7 +146,7 @@ At the top of this file is a table of contents.
 readme[seq(13, 47, 2)][-2] %>% 
   str_remove("\\sholders") %>% 
   read_table() %>% 
-  clean_names()
+  clean_names() %>% 
   mutate(
     file_name_s = file_name_s %>% 
       str_trunc(30) %>% 
@@ -168,7 +168,7 @@ creating duplicates, because they are supposed to be re-reported on the next
 regular campaign finance report. Files: `contribs_##.csv`, `cont_ss.csv`, 
 `cont_t.csv`
 
-```{r print_expend_data, results='asis', echo=FALSE}
+```{r print_contrib_data, results='asis', echo=FALSE}
 readme[130:168] %>%
   str_subset("^(\\s|-){10,}", negate = TRUE) %>% 
   read_table() %>% 
@@ -180,7 +180,7 @@ readme[130:168] %>%
 ### Download
 
 ```{r raw_paths}
-raw_dir <- dir_create(here("tx", "expends", "data", "raw"))
+raw_dir <- dir_create(here("tx", "contribs", "data", "raw"))
 zip_url <- "https://www.ethics.state.tx.us/data/search/cf/TEC_CF_CSV.zip"
 zip_path <- path(raw_dir, basename(zip_url))
 ```
