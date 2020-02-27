@@ -6,7 +6,7 @@ output:
   github_document: 
     df_print: tibble
     toc: true
-    toc_dept: 2
+    toc_dept: 3
 editor_options: 
   chunk_output_type: console
 ---
@@ -121,10 +121,10 @@ political advertising...
 for state officials, candidates, political committees, lobbyists, and certain
 district and county judicial officers.
 
-Data is ontained from the [Campaign Finance section of the TEC website][cf]. An
-entire database can be downloaded as [a ZIP file][zip]. The contents of that ZIP
-and the layout of the files within are outlined in the [`CFS-ReadMe.txt`][rm]
-file.
+Data is ontained from the [Campaign Finance section of the TEC website][cf]. The
+entire database can be downloaded as [a ZIP archive][zip]. The contents of that
+ZIP and the layout of the files within are outlined in the
+[`CFS-ReadMe.txt`][rm] file.
 
 > This zip package contains detailed information from campaign finance reports
 filed electronically with the Texas Ethics Commission beginning July 1, 2000.
@@ -144,18 +144,16 @@ At the top of this file is a table of contents.
 
 ```{r print_key, results='asis', echo=FALSE}
 readme[seq(13, 47, 2)][-2] %>% 
-  str_trim() %>% 
-  str_split(pattern = "\\s{2,}") %>%
-  map(str_c, collapse = "|") %>%
-  str_trim("both") %>% 
-  str_c(collapse = "\n") %>%
-  read_delim(delim = "|") %>% 
+  str_remove("\\sholders") %>% 
+  read_table() %>% 
+  clean_names()
   mutate(
-    `File Name(s)` = `File Name(s)` %>% 
+    file_name_s = file_name_s %>% 
+      str_trunc(30) %>% 
       str_split(",\\s") %>% 
       map(md_code) %>% 
       map_chr(str_c, collapse = ", "),
-    `File Contents` = str_trunc(`File Contents`, width = 30)
+    file_contents = str_trunc(file_contents, width = 50)
   ) %>% 
   md_table()
 ```
@@ -171,30 +169,12 @@ regular campaign finance report. Files: `contribs_##.csv`, `cont_ss.csv`,
 `cont_t.csv`
 
 ```{r print_expend_data, results='asis', echo=FALSE}
-layout <- readme[130:168] %>%
-  str_remove("#") %>% 
-  str_trim() %>% 
-  extract(-2) %>% 
-  str_split(pattern = "\\s{2,}") %>%
-  map(str_c, collapse = "|") %>%
-  str_remove("\\d+") %>% 
-  str_trim("both") %>% 
-  str_c(collapse = "\n") %>%
-  read_delim(delim = "|") %>%
-  mutate(`Len Description` = coalesce(`Len Description`, Mask)) %>% 
-  separate(
-    col = `Len Description`,
-    sep = " ",
-    into = c("Len", "Description"),
-    extra = "merge",
-    convert = TRUE
-  ) %>%
-  select(1, 2, 5) %>% 
-  mutate(`Field Name` = make_clean_names(`Field Name`)) %>%
-  mutate_at(vars(Type), str_remove_all, "[^A-z]")
-
-layout$`Field Name` <- md_code(layout$`Field Name`)
-kable(layout)
+readme[130:168] %>%
+  str_subset("^(\\s|-){10,}", negate = TRUE) %>% 
+  read_table() %>% 
+  clean_names() %>% 
+  mutate_at(vars(field_name), ~md_code(make_clean_names(.))) %>% 
+  md_table()
 ```
 
 ### Download
@@ -207,30 +187,48 @@ zip_path <- path(raw_dir, basename(zip_url))
 
 The ZIP file is fairly large, so check the file size before downloading.
 
-```{r head_raw, collapse=TRUE}
-url_file_size(zip_url)
+```{r raw_size, collapse=TRUE}
+# size of file
+(zip_size <- url_file_size(zip_url))
+```
+
+If you have the `speedtest` package, we can automatically calulcate how long it
+will take to download such a large file.
+
+```{r raw_time}
+# install.packages("remotes")
+# remotes::install_github("hrbrmstr/speedtest")
+if (require("speedtest", quietly = TRUE)) {
+  # test download speec
+  config <- spd_config()
+  servers <- spd_servers(config = config)
+  closest_servers <- spd_closest_servers(servers, config = config)
+  speed <- spd_download_test(closest_servers[1, ], config = config)
+  # seconds to download
+  ((as.numeric(zip_size)/1e+6) / (speed$mean / 8))
+}
 ```
 
 If the file hasn't been downloaded yet, do so now.
 
-```{r download_raw}
+```{r raw_download}
 if (!this_file_new(zip_path)) {
-  download.file(zip_url, zip_file)
+  download.file(zip_url, zip_path)
 }
 ```
 
 ### Unzip
 
-There are `r nrow(unzip(zip_file, list = T))` CSV files inside the ZIP archive.
+There are `r nrow(unzip(zip_path, list = T))` CSV files inside the ZIP archive.
 We can list the content and extract only those pertaining to contributions.
 
-```{r list_zip}
+```{r zip_list}
 (zip_contents <- 
   unzip(zip_path, list = TRUE) %>% 
   as_tibble() %>% 
   clean_names() %>% 
   mutate(
-    length = number_bytes(length),
+    length = as_fs_bytes(length),
     date = as_date(date)
   ))
 
@@ -241,10 +239,10 @@ length(zip_contribs)
 If the files haven't been extracted, we can do so now. There are 
 `r length(zip_contribs)` contribution files to extract.
 
-```{r unzip_zip}
+```{r zip_extract}
 if (not(all(file_exists(path(raw_dir, zip_contribs))))) {
   unzip(
-    zipfile = zip_file,
+    zipfile = zip_path,
     files = zip_contribs,
     exdir = raw_dir
   )
@@ -277,11 +275,18 @@ txc <- vroom(
 )
 ```
 
-```{r raw_select}
+To ensure the file has been read correctly, we can check that a categorical
+variable has very few distinct values.
+
+```{r raw_check}
+n_distinct(txc$record_type)
+```
+
+```{r raw_select, echo=FALSE}
 col_na <- map_dbl(txc, ~mean(is.na(.)))
 txc <- txc %>% 
   select(
-    -record,
+    -record_type,
     -names(col_na)[col_na > 0.99]
   ) %>% 
   rename_all(
@@ -301,14 +306,14 @@ txc <- txc %>%
     received_date = received_dt,
     filer = fil_name,
     date = dt,
-    con_type = con_persent_type,
-    con_org = con_organization,
-    con_zip = con_postal_code,
-    con_job = con_job_title,
-    pac = con_oos_pac
+    type = persent_type,
+    org = organization,
+    zip = postal_code,
+    job = job_title,
+    pac = oos_pac
   ) %>% 
   mutate_if(
-    .predicate = ~all(unique(.) %in% c("Y", "N")),
+    .predicate = ~all(unique(.) %in% c("Y", "N", NA)),
     .funs = ~equals(., "Y")
   )
 ```
@@ -341,17 +346,8 @@ txc <- txc %>%
 mean(txc$na_flag)
 ```
 
-### Duplicates
-
-```{r dupe_flag}
-txc <- flag_dupes(txc, -id)
-sum(txc$dupe_flag)
-```
-
-```{r dupe_view}
-txc %>% 
-  filter(dupe_flag) %>% 
-  select(date, last, amount, committee)
+```{r include=FALSE}
+gc(reset = TRUE, full = TRUE)
 ```
 
 ### Categorical
@@ -360,19 +356,57 @@ txc %>%
 col_stats(txc, n_distinct)
 ```
 
-### Continuous
+```{r bar_form}
+explore_plot(
+  data = filter(txc, !is.na(form)),
+  var = form,
+  title = "Texas Contributions by Form",
+  caption = "Source: TEC"
+)
+```
 
-#### Amounts
+```{r bar_sched}
+explore_plot(
+  data = filter(txc, !is.na(shced)),
+  var = shced,
+  title = "Texas Contributions by Schedule",
+  caption = "Source: TEC"
+)
+```
+
+```{r bar_filer}
+explore_plot(
+  data = filter(txc, !is.na(fil_type)),
+  var = fil_type,
+  title = "Texas Contributions by Filer Type",
+  caption = "Source: TEC"
+)
+```
+
+```{r bar_contributor}
+explore_plot(
+  data = filter(txc, !is.na(type)),
+  var = type,
+  title = "Texas Contributions by Contributor Type",
+  caption = "Source: TEC"
+)
+```
+
+### Amounts
+
+`r percent(mean(txc$amount <= 0), 0.01)`  of contrbutions have an `amount` less
+than or euqal to zero.
 
 ```{r ammount_summary}
 summary(txc$amount)
-mean(txc$amount <= 0)
+percent(mean(txc$amount <= 0), 0.01)
 ```
 
 ```{r hist_amount, echo=FALSE}
 txc %>%
+  filter(amount > 1, amount < 1e6) %>% 
   ggplot(aes(amount)) +
-  geom_histogram(fill = dark2["purple"]) +
+  geom_histogram(fill = dark2["purple"], bins = 20) +
   scale_y_continuous(labels = comma) +
   scale_x_continuous(
     breaks = c(1 %o% 10^(0:6)),
@@ -382,23 +416,105 @@ txc %>%
   labs(
     title = "Texas Contributions Amount Distribution",
     subtitle = "from 2000 to 2019",
-    caption = "Source: {source}",
+    caption = "Source: TEC",
     x = "Amount",
     y = "Count"
   )
 ```
 
-#### Dates
+```{r violin_amount_fil, echo=FALSE}
+txc %>%
+  filter(fil_type %in% most_common(fil_type, 4)) %>% 
+  filter(amount > 1, amount < 1e4) %>% 
+  ggplot(
+    mapping = aes(
+      y = amount,
+      x = reorder(
+        fil_type, 
+        X = amount, 
+        FUN = median, 
+        na.rm = TRUE
+      )
+    )
+  ) +
+  geom_violin(
+    mapping = aes(fill = fil_type),
+    trim = TRUE,
+    draw_quantiles = c(0.25, 0.5, 0.75),
+    scale = "count",
+    adjust = 2
+  ) +
+  scale_fill_brewer(palette = "Dark2", guide = FALSE) +
+  scale_y_continuous(
+    breaks = c(1 %o% 10^(0:6)),
+    labels = dollar,
+    trans = "log10"
+  ) +
+  labs(
+    title = "Texas Contributions Amount Distribution by Filer Type",
+    subtitle = "from 2000 to 2019, adjusted to count",
+    caption = "Source: TEC",
+    x = "Amount",
+    y = "Count"
+  )
+```
+
+```{r violin_amount_con, echo=FALSE}
+txc %>%
+  filter(amount > 1, amount < 1e4, !is.na(type)) %>% 
+  ggplot(
+    mapping = aes(
+      y = amount,
+      x = reorder(
+        type, 
+        X = amount, 
+        FUN = median, 
+        na.rm = TRUE
+      )
+    )
+  ) +
+  geom_violin(
+    mapping = aes(fill = type),
+    trim = TRUE,
+    draw_quantiles = c(0.25, 0.5, 0.75),
+    scale = "area",
+    adjust = 2
+  ) +
+  scale_fill_brewer(palette = "Dark2", guide = FALSE) +
+  scale_y_continuous(
+    breaks = c(1 %o% 10^(0:6)),
+    labels = dollar,
+    trans = "log10"
+  ) +
+  labs(
+    title = "Texas Contributions Amount Distribution by Contributor Type",
+    subtitle = "from 2000 to 2019, adjusted to area",
+    caption = "Source: TEC",
+    x = "Amount",
+    y = "Count"
+  )
+```
+
+```{r include=FALSE}
+gc(reset = TRUE, full = TRUE)
+```
+
+### Dates
+
+We can create a new `year` variable from `date` using `lubridate::year()`.
 
 ```{r date_year}
 txc <- mutate(txc, year = year(date))
 ```
 
+The `date` column is very clean, with no dates out of the expected range.
+
 ```{r date_range}
-min(txc$date)
-sum(txc$year < 2000)
-max(txc$date)
-sum(txc$date > today())
+count_na(txc$date)
+min(txc$date, na.rm = TRUE)
+sum(txc$year < 2000, na.rm = TRUE)
+max(txc$date, na.rm = TRUE)
+sum(txc$date > today(), na.rm = TRUE)
 ```
 
 ```{r bar_year, echo=FALSE}
@@ -410,14 +526,19 @@ txc %>%
   scale_fill_brewer(palette = "Dark2") +
   scale_y_continuous(labels = comma) +
   scale_x_continuous(breaks = seq(2000, 2020, by = 2)) +
+  coord_cartesian(xlim = c(2000, 2020)) +
   theme(legend.position = "bottom") +
   labs(
     title = "Texas Contributions by Year",
-    caption = "Source: {source}",
+    caption = "Source: TEC",
     fill = "Election Year",
     x = "Year Made",
     y = "Count"
   )
+```
+
+```{r include=FALSE}
+gc(reset = TRUE, full = TRUE)
 ```
 
 ## Wrangle
@@ -427,37 +548,7 @@ confident string normalization. For geographic variables like city names and
 ZIP codes, the corresponding `campfin::normal_*()` functions are tailor made to 
 facilitate this process.
 
-### Address
-
-For the street `addresss` variable, the `campfin::normal_address()` function
-will force consistence case, remove punctuation, and abbreviate official 
-USPS suffixes.
-
-```{r address_norm}
-txc <- txc %>% 
-  unite(
-    col = address_full,
-    starts_with("address"),
-    sep = " ",
-    remove = FALSE,
-    na.rm = TRUE
-  ) %>% 
-  mutate(
-    address_norm = normal_address(
-      address = address_full,
-      abbs = usps_street,
-      na_rep = TRUE
-    )
-  ) %>% 
-  select(-address_full)
-```
-
-```{r address_view}
-txc %>% 
-  select(contains("address")) %>% 
-  distinct() %>% 
-  sample_n(10)
-```
+For this database, there are no street addresses.
 
 ### ZIP
 
@@ -495,7 +586,7 @@ txc <- txc %>%
       state = state,
       abbreviate = TRUE,
       na_rep = TRUE,
-      valid = valid_state
+      valid = NULL
     )
   )
 ```
@@ -503,7 +594,7 @@ txc <- txc %>%
 ```{r state_view}
 txc %>% 
   filter(state != state_norm) %>% 
-  count(state, sort = TRUE)
+  count(state, state_norm, sort = TRUE)
 ```
 
 ```{r state_progress}
@@ -512,6 +603,10 @@ progress_table(
   txc$state_norm,
   compare = valid_state
 )
+```
+
+```{r include=FALSE}
+gc(reset = TRUE, full = TRUE)
 ```
 
 ### City
@@ -560,7 +655,7 @@ txc <- txc %>%
     match_abb = is_abbrev(city_norm, city_match),
     match_dist = str_dist(city_norm, city_match),
     city_swap = if_else(
-      condition = !is.na(match_dist) & match_abb | match_dist == 1,
+      condition = !is.na(match_dist) & (match_abb | match_dist == 1),
       true = city_match,
       false = city_norm
     )
@@ -572,12 +667,16 @@ txc <- txc %>%
   )
 ```
 
+```{r include=FALSE}
+gc(reset = TRUE, full = TRUE)
+```
+
 #### Refine
 
-The [OpenRefine] algorithms can be used to group similar strings and replace the
-less common versions with their most common counterpart. This can greatly 
+The [OpenRefine][or] algorithms can be used to group similar strings and replace
+the less common versions with their most common counterpart. This can greatly
 reduce inconsistency, but with low confidence; we will only keep any refined
-strings that have a valid city/state/zip combination.
+strings that have a valid city/state/ZIP combination.
 
 [or]: https://openrefine.org/
 
@@ -618,17 +717,103 @@ txc <- txc %>%
   mutate(city_refine = coalesce(city_refine, city_swap))
 ```
 
+```{r include=FALSE}
+gc(reset = TRUE, full = TRUE)
+```
+
+#### Check
+
+We can use the `campfin::check_city()` function to pass the remaining unknown
+`city_refine` values (and their `state_norm`) to the Google Geocode API. The
+function returns the name of the city or locality which most associated with
+those values.
+
+This is an easy way to both check for typos and check whether an unknown
+`city_refine` value is actually a completely acceptable neighborhood, census
+designated place, or some other locality not found in our `valid_city` vector
+from our `zipcodes` database.
+
+First, we'll filter out any known valid city and aggregate the remaining records
+by their city and state. Then, we will only query those unknown cities which
+appear at least ten times.
+
+```{r check_filter}
+tac_out <- txc %>% 
+  filter(city_refine %out% c(valid_city, extra_city)) %>% 
+  count(city_refine, state_norm, sort = TRUE) %>% 
+  drop_na() %>% 
+  filter(n > 1)
+```
+
+Passing these values to `campfin::check_city()` with `purrr::pmap_dfr()` will
+return a single tibble of the rows returned by each city/state combination.
+
+First, we'll check to see if the API query has already been done and a file
+exist on disk. If such a file exists, we can read it using `readr::read_csv()`.
+If not, the query will be sent and the file will be written using
+`readr::write_csv()`.
+
+```{r check_send}
+check_file <- here("tx", "contribs", "data", "api_check.csv")
+if (file_exists(check_file)) {
+  check <- read_csv(
+    file = check_file
+  )
+} else {
+  check <- pmap_dfr(
+    .l = list(
+      tac_out$city_refine, 
+      tac_out$state_norm
+    ), 
+    .f = check_city, 
+    key = Sys.getenv("GEOCODE_KEY"), 
+    guess = TRUE
+  ) %>% 
+    mutate(guess = coalesce(guess_city, guess_place)) %>% 
+    select(-guess_city, -guess_place)
+  write_csv(
+    x = check,
+    path = check_file
+  )
+}
+```
+
+Any city/state combination with a `check_city_flag` equal to `TRUE` returned a
+matching city string from the API, indicating this combination is valid enough
+to be ignored.
+
+```{r check_accept}
+valid_locality <- check$guess[check$check_city_flag]
+```
+
+Then we can perform some simple comparisons between the queried city and the
+returned city. If they are extremely similar, we can accept those returned
+locality strings and add them to our list of accepted additional localities.
+
+```{r check_compare}
+valid_locality <- check %>% 
+  filter(!check_city_flag) %>% 
+  mutate(
+    abb = is_abbrev(original_city, guess),
+    dist = str_dist(original_city, guess)
+  ) %>%
+  filter(abb | dist <= 3) %>% 
+  pull(guess) %>% 
+  append(valid_locality)
+```
+
 #### Progress
 
 ```{r city_progress, echo=FALSE}
-many_city <- c(valid_city, extra_city)
+many_city <- c(valid_city, extra_city, valid_locality)
 progress <- progress_table(
   str_to_upper(txc$city_raw),
   txc$city_norm,
   txc$city_swap,
+  txc$city_refine,
   compare = many_city
 ) %>% mutate(stage = as_factor(stage))
-kable(progress, digits = 3)
+kable(progress, digits = 4)
 ```
 
 You can see how the percentage of valid values increased with each stage.
@@ -694,9 +879,8 @@ glimpse(sample_n(txc, 20))
 ```
 
 1. There are `r comma(nrow(txc))` records in the database.
-1. There are `r comma(sum(txc$dupe_flag))` duplicate records in the database.
 1. The range and distribution of `amount` and `date` seem reasonable.
-1. There are `r comma(sum(txc$na_flag))` records missing ....
+1. There are `r comma(sum(txc$na_flag))` records missing key variables.
 1. Consistency in geographic data has been improved with `campfin::normal_*()`.
 1. The 4-digit `year` variable has been created with `lubridate::year()`.
 
@@ -713,4 +897,3 @@ write_csv(
   na = ""
 )
 ```
-
