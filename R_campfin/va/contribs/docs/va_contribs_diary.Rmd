@@ -1,6 +1,6 @@
 ---
-title: "{State} {Type}"
-author: "First Last"
+title: "Virginia Contributions"
+author: "Kiernan Nicholls"
 date: "`r Sys.time()`"
 output:
   github_document: 
@@ -32,7 +32,7 @@ set.seed(5)
 ```
 
 ```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
-fs::dir_create(here::here("{st}", "{type}", "docs"))
+fs::dir_create(here::here("va", "contribs", "docs"))
 ```
 
 ## Project
@@ -78,12 +78,14 @@ pacman::p_load_gh("irworkshop/campfin")
 pacman::p_load(
   tidyverse, # data manipulation
   lubridate, # datetime strings
+  gluedown, # print markdown
   magrittr, # pipe operators
   janitor, # dataframe clean
   refinr, # cluster and merge
   scales, # format strings
   knitr, # knit documents
   vroom, # read files fast
+  rvest, # read html pages
   glue, # combine strings
   here, # relative storage
   fs # search storage 
@@ -108,54 +110,231 @@ here::here()
 
 ## Data
 
+Data is obtained from the Virginia [Department of Elections (DOE)][doe] State
+Board of Elections (SBE).
+
+> The State Board of Elections is the regulatory board for the Department of
+Elections. It is authorized to prescribe standard forms for voter registration
+and elections, and to supervise, coordinate, and adopt regulations governing the
+work of local electoral boards, registrars, and officers of election.
+
+[doe]: https://www.elections.virginia.gov/index.html
+
+The SBE has candidates and committess file ten types of reports:
+
+```{r raw_scheds, echo=FALSE}
+"https://www.elections.virginia.gov/candidatepac-info/campaign-finance-disclosure-forms/" %>% 
+  read_html(url) %>% 
+  html_node(".schedules_table") %>% 
+  html_table() %>% 
+  as_vector() %>% 
+  enframe(NULL) %>% 
+  separate(
+    col = value,
+    into = c("sched", "desc"),
+    sep = "\\s–\\s"
+  ) %>% 
+  mutate_at(vars(desc), str_trunc, width = 80) %>% 
+  kable(col.names = c("Schedule", "Description"))
+```
+
+We are interested in schedule's A and B.
+
 ## Import
+
+The data itself is hosted on an SBE server and organized in montly directories.
+
+```{r raw_list}
+sbe_url <- "https://apps.elections.virginia.gov/SBE_CSV/CF/"
+sbe_list <- read_html(sbe_url)
+```
+
+```{r raw_show, echo=FALSE}
+sbe_table <- sbe_list %>% 
+  html_node("pre") %>% 
+  html_text() %>% 
+  str_remove("(.*)\\]") %>% 
+  str_remove("10/24/2018 12:45 PM          168 web.config") %>% 
+  str_replace_all("(?<=<dir> (\\d{4}|\\d{4}_\\d{2}))(?=(\\s+)?\\d{1,2}/)", "\n") %>% 
+  str_split("\n") %>% 
+  extract2(1) %>% 
+  str_trim() %>% 
+  enframe(NULL) %>% 
+  separate(
+    col = value,
+    into = c("date", "dir"),
+    sep = "\\s+<dir>\\s+"
+  ) %>% 
+  tail(11) %>% 
+  slice(-1)
+
+sbe_table$dir <- md_link(
+  sbe_table$dir,
+  paste0("https://apps.elections.virginia.gov/SBE_CSV/CF/", sbe_table$dir)
+)
+
+kable(sbe_table)
+```
 
 ### Download
 
-```{r raw_dir}
-raw_dir <- dir_create(here("{st}", "{type}", "data", "raw"))
+From this list of directories, we can extract each `<href>` HTML tag. These
+tags provide the directory names.
+
+```{r sbe_dirs_get, results='asis'}
+raw_dir <- dir_create(here("va", "contribs", "data", "raw"))
+sbe_base <- "https://apps.elections.virginia.gov"
+sbe_dirs <- sbe_list %>% 
+  html_nodes("a") %>% 
+  html_attr("href") %>% 
+  str_subset("\\d")
 ```
 
-```{r raw_download}
-download.file()
+```{r sbe_dirs_list, echo=FALSE}
+sbe_dirs %>% 
+  tail() %>% 
+  md_code() %>% 
+  md_bullet()
 ```
+
+Then we can navigate to each of these directories and look for file names
+containing "ScheduleA" or "ScheduleB" (these file names are somewhat 
+inconsistent).
+
+```{r sbe_names_get}
+sbe_names <- character()
+for (dir in sbe_dirs) {
+  sbe_names <- sbe_base %>% 
+    str_c(dir) %>% 
+    read_html() %>% 
+    html_nodes("a") %>% 
+    html_attr("href") %>% 
+    str_subset("Schedule(A|B)") %>% 
+    append(sbe_names)
+}
+
+```
+
+```{r sbe_paths_list, echo=FALSE}
+sbe_names %>% 
+  tail() %>% 
+  md_code() %>% 
+  md_bullet()
+```
+
+Using these server paths, we can build local paths to save each file to.
+
+```{r raw_paths_build}
+raw_urls <- str_c(sbe_base, sbe_names)
+raw_names <- basename(str_replace(raw_urls, "/(?=[^/]*$)", "_"))
+raw_paths <- path(raw_dir, raw_names)
+```
+
+```{r raw_paths_list, echo=FALSE}
+raw_paths %>%
+  tail() %>% 
+  str_remove("(.*)(?=/va)") %>% 
+  md_code() %>% 
+  md_bullet()
+```
+
+If these paths don't already exist, we can download them now.
+
+```{r raw_download}
+if (not(all(file_exists(raw_paths)))) {
+  download.file(raw_urls, raw_paths)
+}
+```
+
+### Organize
+
+```{r}
+all <- map(
+  .x = raw_paths,
+  .f = read_delim,
+  delim = ",",
+  escape_backslash = FALSE, 
+  escape_double = FALSE,
+  col_types = cols(
+    .default = col_character()
+  )
+)
+
+all %>% 
+  map_dbl(.f = ncol) %>% 
+  set_names(value = basename(raw_paths)) %>% 
+  enframe(name = "file", value = "ncol") %>% 
+  group_split(ncol)
+```
+
+### Fix
+
+Some of these files cannot be read perfecly. We can use `stringr` to solve three
+problems with each file:
+
+1. Delimiters (`,`) inside cells.
+2. Double-quotes (`"`) inside cells.
+3. Newlines (`\n`) inside cells.
+
+```{r raw_fix}
+for (p in raw_paths) {
+  top <- read_lines(p, n_max = 2)
+  # if cells are quoted
+  if (str_detect(top[2], "\",\"")) {
+    read_file(p) %>%
+      # comma w/out quote before & after
+      str_remove_all("(?<!\"),(?!\")") %>% 
+      # quote w/out comma before & after
+      str_replace_all("(?<!^|\r\n|,)\"(?!,|\r\n|$)", "\'") %>% 
+      # new line without carriage return
+      str_replace_all("(?<!\r)\n", " ") %>% 
+      write_file(p)
+  }
+  message(basename(p))
+}
+```
+
 
 ### Read
 
 ```{r raw_read}
-st <- read_delim(
-  file = dir_ls(raw_dir)
+vac <- map(
+  .x = sample(raw_paths, 3),
+  .f = read_csv,
+  col_types = cols(
+    .default = col_character()
+  )
 )
 ```
 
 ## Explore
 
 ```{r glimpse}
-head(st)
-tail(st)
-glimpse(sample_n(st, 20))
+head(vac)
+tail(vac)
+glimpse(sample_n(vac, 20))
 ```
 
 ### Missing
 
 ```{r na_count}
-col_stats(st, count_na)
+col_stats(vac, count_na)
 ```
 
 ```{r na_flag}
-st <- st %>% flag_na(date, last, amount, committee)
-sum(st$na_flag)
+vac <- vac %>% flag_na(date, last, amount, committee)
+sum(vac$na_flag)
 ```
 
 ### Duplicates
 
 ```{r dupe_flag}
-st <- flag_dupes(st, -id)
-sum(st$dupe_flag)
+vac <- flag_dupes(vac, -id)
+sum(vac$dupe_flag)
 ```
 
 ```{r dupe_view}
-st %>% 
+vac %>% 
   filter(dupe_flag) %>% 
   select(date, last, amount, committee)
 ```
@@ -163,7 +342,7 @@ st %>%
 ### Categorical
 
 ```{r n_distinct}
-col_stats(st, n_distinct)
+col_stats(vac, n_distinct)
 ```
 
 ### Continuous
@@ -171,12 +350,12 @@ col_stats(st, n_distinct)
 #### Amounts
 
 ```{r ammount_summary}
-summary(st$amount)
-mean(st$amount <= 0)
+summary(vac$amount)
+mean(vac$amount <= 0)
 ```
 
-```{r amount_histogram, echo=FALSE}
-df %>%
+```{r hist_amount, echo=FALSE}
+vac %>%
   ggplot(aes(amount)) +
   geom_histogram(fill = dark2["purple"]) +
   scale_y_continuous(labels = comma) +
@@ -186,7 +365,7 @@ df %>%
     trans = "log10"
   ) +
   labs(
-    title = "{State} {Data} Amount Distribution",
+    title = "Virginia Contributions Amount Distribution",
     subtitle = "from 2000 to 2019",
     caption = "Source: {source}",
     x = "Amount",
@@ -197,18 +376,18 @@ df %>%
 #### Dates
 
 ```{r date_year}
-st <- mutate(st, year = year(date))
+vac <- mutate(vac, year = year(date))
 ```
 
 ```{r date_range}
-min(st$date)
-sum(st$year < 2000)
-max(st$date)
-sum(st$date > today())
+min(vac$date)
+sum(vac$year < 2000)
+max(vac$date)
+sum(vac$date > today())
 ```
 
-```{r year_bar}
-st %>% 
+```{r bar_year, echo=FALSE}
+vac %>% 
   count(year) %>% 
   mutate(even = is_even(year)) %>% 
   ggplot(aes(x = year, y = n)) +
@@ -218,8 +397,8 @@ st %>%
   scale_x_continuous(breaks = seq(2000, 2020, by = 2)) +
   theme(legend.position = "bottom") +
   labs(
-    title = "{State} {Type} by Year",
-    caption = "Source: {Source}",
+    title = "Virginia Contributions by Year",
+    caption = "Source: {source}",
     fill = "Election Year",
     x = "Year Made",
     y = "Count"
@@ -230,18 +409,17 @@ st %>%
 
 To improve the searchability of the database, we will perform some consistent,
 confident string normalization. For geographic variables like city names and
-ZIP codes, the corresponding `campfin::normal_*()` functions are taylor made to 
+ZIP codes, the corresponding `campfin::normal_*()` functions are tailor made to 
 facilitate this process.
 
 ### Address
 
 For the street `addresss` variable, the `campfin::normal_address()` function
-will force consistence case, remove punctuation, and abbreviation official 
+will force consistence case, remove punctuation, and abbreviate official 
 USPS suffixes.
 
 ```{r address_norm}
-st <- st %>% 
-  # combine street addr
+vac <- vac %>% 
   unite(
     col = address_full,
     starts_with("address"),
@@ -249,7 +427,6 @@ st <- st %>%
     remove = FALSE,
     na.rm = TRUE
   ) %>% 
-  # normalize combined addr
   mutate(
     address_norm = normal_address(
       address = address_full,
@@ -261,7 +438,7 @@ st <- st %>%
 ```
 
 ```{r address_view}
-st %>% 
+vac %>% 
   select(contains("address")) %>% 
   distinct() %>% 
   sample_n(10)
@@ -270,11 +447,11 @@ st %>%
 ### ZIP
 
 For ZIP codes, the `campfin::normal_zip()` function will attempt to create
-valied _five_ digit codes by removing the ZIP+4 suffix and returning leading
+valid _five_ digit codes by removing the ZIP+4 suffix and returning leading
 zeroes dropped by other programs like Microsoft Excel.
 
 ```{r zip_norm}
-st <- st %>% 
+vac <- vac %>% 
   mutate(
     zip_norm = normal_zip(
       zip = zip,
@@ -285,8 +462,8 @@ st <- st %>%
 
 ```{r zip_progress}
 progress_table(
-  st$zip,
-  st$zip_norm,
+  vac$zip,
+  vac$zip_norm,
   compare = valid_zip
 )
 ```
@@ -297,7 +474,7 @@ Valid two digit state abbreviations can be made using the
 `campfin::normal_state()` function.
 
 ```{r state_norm}
-st <- st %>% 
+vac <- vac %>% 
   mutate(
     state_norm = normal_state(
       state = state,
@@ -309,15 +486,15 @@ st <- st %>%
 ```
 
 ```{r state_view}
-st %>% 
+vac %>% 
   filter(state != state_norm) %>% 
   count(state, sort = TRUE)
 ```
 
 ```{r state_progress}
 progress_table(
-  st$state,
-  st$state_norm,
+  vac$state,
+  vac$state_norm,
   compare = valid_state
 )
 ```
@@ -334,12 +511,12 @@ removing punctuation, but _expanding_ USPS abbreviations. We can also remove
 `invalid_city` values.
 
 ```{r city_norm}
-st <- st %>% 
+vac <- vac %>% 
   mutate(
     city_norm = normal_city(
       city = city, 
       abbs = usps_city,
-      states = c("{ST}", "DC", "{STATE}"),
+      states = c("VA", "DC", "VIRGINIA"),
       na = invalid_city,
       na_rep = TRUE
     )
@@ -354,7 +531,7 @@ If the normalized value is either an abbreviation for or very similar to the
 expected value, we can confidently swap those two.
 
 ```{r city_swap}
-st <- st %>% 
+vac <- vac %>% 
   rename(city_raw = city) %>% 
   left_join(
     y = zipcodes,
@@ -368,7 +545,7 @@ st <- st %>%
     match_abb = is_abbrev(city_norm, city_match),
     match_dist = str_dist(city_norm, city_match),
     city_swap = if_else(
-      condition = !is.na(match_dist) & (match_abb | match_dist == 1),
+      condition = !is.na(match_dist) & match_abb | match_dist == 1,
       true = city_match,
       false = city_norm
     )
@@ -389,8 +566,8 @@ strings that have a valid city/state/zip combination.
 
 [or]: https://openrefine.org/
 
-```{r refine_city}
-good_refine <- st %>% 
+```{r city_refine}
+good_refine <- vac %>% 
   mutate(
     city_refine = city_swap %>% 
       key_collision_merge() %>% 
@@ -407,7 +584,7 @@ good_refine <- st %>%
   )
 ```
 
-```{r view_city_refines, echo=FALSE}
+```{r city_count, echo=FALSE}
 good_refine %>%
   count(
     state_norm, 
@@ -420,8 +597,8 @@ good_refine %>%
 
 Then we can join the refined values back to the database.
 
-```{r join_refine}
-st <- st %>% 
+```{r city_join}
+vac <- vac %>% 
   left_join(good_refine) %>% 
   mutate(city_refine = coalesce(city_refine, city_swap))
 ```
@@ -431,20 +608,18 @@ st <- st %>%
 ```{r city_progress, echo=FALSE}
 many_city <- c(valid_city, extra_city)
 progress <- progress_table(
-  str_to_upper(st$city_raw),
-  st$city_norm,
-  st$city_swap,
+  str_to_upper(vac$city_raw),
+  vac$city_norm,
+  vac$city_swap,
   compare = many_city
 ) %>% mutate(stage = as_factor(stage))
-```
-
-```{r progress_print, echo=FALSE}
 kable(progress, digits = 3)
 ```
 
 You can see how the percentage of valid values increased with each stage.
 
-```{r progress_bar, echo=FALSE}
+```{r bar_progress, echo=FALSE}
+raw_in <- percent(prop_in(vac$city_raw, valid_city))
 progress %>% 
   ggplot(aes(x = stage, y = prop_in)) +
   geom_hline(yintercept = 0.99) +
@@ -452,8 +627,8 @@ progress %>%
   coord_cartesian(ylim = c(0.75, 1)) +
   scale_y_continuous(labels = percent) +
   labs(
-    title = "{State} City Normalization Progress",
-    subtitle = "Raw at {percent} before conversion to uppercase",
+    title = "Virginia City Normalization Progress",
+    subtitle = glue("Raw at {raw_in} before conversion to uppercase"),
     x = "Stage",
     y = "Percent Valid"
   )
@@ -463,7 +638,7 @@ More importantly, the number of distinct values decreased each stage. We were
 able to confidently change many distinct invalid values to their valid
 equivalent.
 
-```{r distinct_bar}
+```{r bar_distinct, echo=FALSE}
 progress %>% 
   select(
     stage, 
@@ -479,38 +654,47 @@ progress %>%
   scale_y_continuous(labels = comma) +
   theme(legend.position = "bottom") +
   labs(
-    title = "{State} City Normalization Progress",
+    title = "Virginia City Normalization Progress",
     subtitle = "Distinct values, valid and invalid",
     x = "Stage",
-    y = "Percent Valid",
+    y = "Distinct Values",
     fill = "Valid"
   )
-  
 ```
 
 ## Conclude
 
-```{r clean_glimpse}
-glimpse(sample_n(st, 20))
+```{r clean_select}
+vac <- vac %>% 
+  select(
+    -city_norm,
+    -city_swap,
+    city_clean = city_refine
+  ) %>% 
+  rename_all(~str_replace(., "_norm", "_clean"))
 ```
 
-1. There are `r nrow(st)` records in the database.
-1. There are `r sum(st$dupe_flag)` duplicate records in the database.
+```{r clean_glimpse}
+glimpse(sample_n(vac, 20))
+```
+
+1. There are `r comma(nrow(vac))` records in the database.
+1. There are `r comma(sum(vac$dupe_flag))` duplicate records in the database.
 1. The range and distribution of `amount` and `date` seem reasonable.
-1. There are `r sum(st$na_flag)` records missing either recipient or date.
-1. Consistency in goegraphic data has been improved with `campfin::normal_*()`.
+1. There are `r comma(sum(vac$na_flag))` records missing ....
+1. Consistency in geographic data has been improved with `campfin::normal_*()`.
 1. The 4-digit `year` variable has been created with `lubridate::year()`.
 
 ## Export
 
 ```{r clean_dir}
-clean_dir <- dir_create(here("{st}", "{type}", "data", "clean"))
+clean_dir <- dir_create(here("va", "contribs", "data", "clean"))
 ```
 
-```{r write_clean}
+```{r clean_write}
 write_csv(
-  x = df,
-  path = path(clean_dir, "{st}_{type}_clean.csv"),
+  x = vac,
+  path = path(clean_dir, "va_contribs_clean.csv"),
   na = ""
 )
 ```
