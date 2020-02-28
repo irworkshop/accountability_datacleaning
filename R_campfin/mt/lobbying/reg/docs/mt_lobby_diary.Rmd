@@ -120,7 +120,7 @@ as an excel doc or [here][pdf] as a PDF.
 
 ### Download
 
-We can download the excel version of the file.
+The Montana Commissioner of Political Practices makes lobbying registration data available through 
 
 ```{r create_raw_dir}
 raw_dir <- here("mt", "lobbying", "reg", "data", "raw")
@@ -128,12 +128,52 @@ dir_create(raw_dir)
 ```
 
 ```{r download_raw}
-mtlr_base <- "https://politicalpractices.mt.gov/Portals/144"
-mtlr_folders <- str_c("2019 Communication assets", "PDFs for website", sep = "/")
-mtlr_file <- "2019 list of principals and lobbyists for website.xlsx"
-mtlr_url <- str_c(mtlr_base, mtlr_folders, mtlr_file, sep = "/")
-mtlr_path <- url2path(mtlr_url, raw_dir)
-download.file(url = mtlr_url, destfile = mtlr_path)
+
+raw_urls <- glue("https://app.mt.gov/cgi-bin/camptrack/lobbysearch/lobbySearch.cgi?ACTION=LOBBYDOWNLOAD&SESSION={seq(2010,2020, by = 2)}&Download+File=Download+File")
+
+dest_file = glue("{raw_dir}/mtlr_{seq(2010,2020, by = 2)}.zip")
+
+if (!all_files_new(raw_dir)) {
+    download.file(
+      url = raw_urls,
+      destfile = dest_file)
+}
+```
+Before we unzip the file, we can view it's contents.
+
+```{r list_key}
+zip_content <- as_tibble(
+  .name_repair = make_clean_names,
+  x = unzip(
+    zipfile = dest_file,
+    list = TRUE
+  )
+)
+
+dir_ls(raw_dir, glob = "*.zip") %>% 
+  map_dfr(unzip,list = TRUE) %>% 
+  clean_names()
+
+dir_ls(raw_dir, glob = "*.zip") %>% map(unzip,
+    exdir = raw_dir)
+
+# wget <- function(url, dir) {
+#   system2(
+#     command = "wget",
+#     args = c(
+#       "--no-verbose", 
+#       "--content-disposition", 
+#       url, 
+#       paste("-P", raw_dir)
+#     )
+#   )
+# }
+# 
+# if (!all_files_new(raw_dir)) {
+#   map(raw_urls, wget, raw_dir)
+# }
+# 
+# raw_paths <- dir_ls(raw_dir)
 ```
 
 ### Read
@@ -141,7 +181,17 @@ download.file(url = mtlr_url, destfile = mtlr_path)
 Using the `readxl::read_excel()` function, we can import this file as a dataframe.
 
 ```{r read_raw}
-mtlr <- read_excel(mtlr_path, skip = 2)
+mtlr <- vroom(
+  file = dir_ls(raw_dir, glob = "*.csv"),
+  delim = ",",
+  col_names = TRUE,
+  na = "",
+  quote = "\"",
+  escape_double = TRUE,
+  .name_repair = make_clean_names,
+  col_types = cols(
+  )
+)
 ```
 
 ## Pivot

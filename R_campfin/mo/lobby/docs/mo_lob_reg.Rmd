@@ -126,19 +126,19 @@ raw_dir <- dir_create(here("mo", "lobby", "data", "raw", "reg"))
 ```{r raw_read}
 mo_lob <- read_xlsx(
   path = dir_ls(raw_dir, regexp = "Data.xlsx")
-) %>% clean_names()
+) %>% clean_names() %>% mutate_if(is.character, str_conv, encoding = "UTF-8") %>% mutate_if(is.character, str_to_upper)
 
 mo_prin <- read_xlsx(
   path = dir_ls(raw_dir, regexp = "Data.xlsx"), sheet = 3
-) %>% clean_names() 
+) %>% clean_names() %>% mutate_if(is.character, str_conv, encoding = "UTF-8") %>% mutate_if(is.character, str_to_upper)
 
 mo_prin_new <- read_xlsx(
   path = dir_ls(raw_dir) %>% str_subset("2019"), sheet = 2
-) %>% clean_names()
+) %>% clean_names() %>% mutate_if(is.character, str_conv, encoding = "UTF-8") %>% mutate_if(is.character, str_to_upper)
 
 mo_lob_new <- read_xlsx(
   path = dir_ls(raw_dir) %>% str_subset("2019")
-) %>% clean_names()
+) %>% clean_names() %>% mutate_if(is.character, str_conv, encoding = "UTF-8") %>% mutate_if(is.character, str_to_upper)
 ```
 
 
@@ -152,14 +152,10 @@ mo_lob_reg <- mo_lob_reg %>%
   mutate(year = year(rec_date))
 
 mo_lob_reg$year %>% tabyl()
-
-mo_lob_new <- mo_lob_new %>% 
-  arrange(desc(registration_year)) %>% 
-  flag_dupes(-c(registration_year, date_registration), .both = F)
 ```
 
 ### Join
-We can see that each `lob_id` responds to one lobbyist, so it's a unique id, which we can use to join the `mo_lob` and `mo_prin` dataframes.
+For years prior to 2019, we can see that each `lob_id` responds to one lobbyist, so it's a unique id, which we can use to join the `mo_lob` and `mo_prin` dataframes.
 
 ```{r}
 mo_prin_new <- mo_prin_new %>% 
@@ -167,12 +163,25 @@ mo_prin_new <- mo_prin_new %>%
 
 mo_prin_new <- mo_prin_new %>% 
   rename_at(.vars = vars(-c(mecid_l, p_name)), .funs = ~ str_c("p_",.))
-
-mo_lob_reg_new <- mo_lob_new %>% mutate(date_registration = as.character(date_registration)) %>% 
-  right_join(mo_prin_new %>% mutate(p_relationship_from = as.character(p_relationship_from)), 
-            by = c("mecid_l" = "mecid_l", 
-                  "date_registration" = "p_relationship_from"))
 ```
+From 2019 onward, however, each `mecid_l` can correspond to multiple years, for which we'll just aggregate with the earliest year. Note that some lobbyists terminate their status and re-register within a year as well.
+
+```{r}
+mo_min_date <- mo_lob_new %>% group_by(mecid_l) %>% summarize(date_min = min(date_registration))
+
+mo_lob_new <- mo_lob_new %>% 
+  left_join(mo_min_date, by = "mecid_l")
+
+mo_lob_filter <- mo_lob_new %>% 
+  filter(date_registration == date_min) %>% 
+  select(-date_min)
+```
+We can see that one record `mecid_l` "L200260" doesn't have a corresponding record in the principal dataframe. As a result, we will just left join the `mo_lob_filter` with the `mo_prin_new` dataframe.
+```{r}
+mo_lob_reg_new <- mo_lob_filter %>% 
+  left_join(mo_prin_new, by = "mecid_l")
+```
+
 
 ### Column Specs
 We can see that the `rec_date` and `ent_date` are date columns, while `term_date` is read as character. We'll convert it to POSIXct objects (dates). We can see that the date is formatted in Excel and we need to use `excel_numeric_to_date`
@@ -181,7 +190,7 @@ mo_lob_reg <- mo_lob_reg %>%
   mutate(term_date = na_if(term_date, "NULL") %>% as.numeric() %>% excel_numeric_to_date(date_system = "modern"))
 
 mo_lob_reg_new <- mo_lob_reg_new %>% 
-  mutate(term_date = na_if(date_determined, "NULL") %>% as.numeric() %>% excel_numeric_to_date(date_system = "modern"))
+  mutate(date_terminated = na_if(date_terminated, "NULL") %>% as.numeric() %>% excel_numeric_to_date(date_system = "modern"))
 ```
 
 ```{r na_if cols}
@@ -208,6 +217,7 @@ glimpse(sample_n(mo_lob_reg_new, 20))
 
 ```{r na_count}
 col_stats(mo_lob_reg, count_na)
+col_stats(mo_lob_reg_new, count_na)
 ```
 
 ```{r na_flag}
@@ -229,9 +239,10 @@ mo_prin_new$dupe_flag %>% tabyl()
 
 ```{r n_dimo_lob_reginct}
 col_stats(mo_lob_reg, n_distinct)
+col_stats(mo_lob_reg_new, n_distinct)
 ```
 
-Visualize number of lobbyists registered each year.
+It was not until 2007 that lobbyist were required to register every year. Prior to that a lobbyist could register and never have to register again.
 
 #### Dates
 
@@ -281,10 +292,36 @@ mo_lob_reg <- mo_lob_reg %>%
     mutate_at(.vars = vars(ends_with('full')), .funs = list(norm = ~ normal_address(.,abbs = usps_street,
       na_rep = TRUE))) %>% 
   select(-ends_with("address"))
+
+mo_lob_reg_new <- mo_lob_reg_new %>% 
+    # combine street addr
+  unite(
+    col = p_address_full,
+    c(p_address1, p_address2),
+    sep = " ",
+    remove = FALSE,
+    na.rm = TRUE
+  ) %>% 
+    unite(
+    col = address_full,
+    starts_with("address"),
+    sep = " ",
+    remove = FALSE,
+    na.rm = TRUE
+  ) %>% 
+  # normalize combined addr
+    mutate_at(.vars = vars(ends_with('full')), .funs = list(norm = ~ normal_address(.,abbs = usps_street,
+      na_rep = TRUE))) %>% 
+  select(-ends_with("address"))
 ```
 
 ```{r address_view}
 mo_lob_reg %>% 
+  select(contains("address")) %>% 
+  distinct() %>% 
+  sample_n(10)
+
+mo_lob_reg_new %>% 
   select(contains("address")) %>% 
   distinct() %>% 
   sample_n(10)
@@ -308,6 +345,18 @@ mo_lob_reg <- mo_lob_reg %>%
       na_rep = TRUE
     )
   )
+
+mo_lob_reg_new <- mo_lob_reg_new %>% 
+  mutate(
+    zip5 = normal_zip(
+      zip = zip,
+      na_rep = TRUE
+    ),
+    p_zip5 = normal_zip(
+      zip = p_zip,
+      na_rep = TRUE
+    )
+  )
 ```
 
 ```{r zip_progress}
@@ -316,6 +365,14 @@ progress_table(
   mo_lob_reg$zip5,
   mo_lob_reg$p_zip,
   mo_lob_reg$p_zip5,
+  compare = valid_zip
+)
+
+progress_table(
+  mo_lob_reg_new$zip,
+  mo_lob_reg_new$zip5,
+  mo_lob_reg_new$p_zip,
+  mo_lob_reg_new$p_zip5,
   compare = valid_zip
 )
 ```
@@ -328,8 +385,10 @@ Valid two digit state abbreviations can be made using the
 ```{r state_norm}
 prop_in(mo_lob_reg$state, valid_state, na.rm = T)
 prop_in(mo_lob_reg$p_state, valid_state, na.rm = T)
+prop_in(mo_lob_reg_new$state, valid_state, na.rm = T)
+prop_in(mo_lob_reg_new$p_state, valid_state, na.rm = T)
 ```
-
+We can see that the state fields in the new dataframe are clean and don't need extra cleaning.
 ```{r}
 mo_lob_reg <- mo_lob_reg %>% 
   mutate_at(.vars = vars(ends_with('state')), .funs = list(norm = ~ normal_state(., na_rep = T)))
@@ -351,7 +410,7 @@ We can see that the "M)" in `p_state` should be MO based on the full address and
 
 ```{r manual state}
 mo_lob_reg$p_state_norm <- mo_lob_reg$p_state_norm %>% 
-  str_replace("^M$", "MO")
+  str_replace("^M\\)$", "MO")
 ```
 
 
@@ -378,7 +437,15 @@ removing punctuation, but _expanding_ USPS abbreviations. We can also remove
 prop_in(mo_lob_reg$p_city, valid_city, na.rm = T)
 prop_in(mo_lob_reg$city, valid_city, na.rm = T)
 
+prop_in(mo_lob_reg_new$p_city, valid_city, na.rm = T)
+prop_in(mo_lob_reg_new$city, valid_city, na.rm = T)
+
 mo_lob_reg <- mo_lob_reg %>% 
+  mutate_at(.vars = vars(ends_with('city')), .funs = list(norm = ~ normal_city(.,abbs = usps_city,
+                                                                               states = usps_state,
+                                                                               na = invalid_city,
+                                                                               na_rep = TRUE)))
+mo_lob_reg_new <- mo_lob_reg_new %>% 
   mutate_at(.vars = vars(ends_with('city')), .funs = list(norm = ~ normal_city(.,abbs = usps_city,
                                                                                states = usps_state,
                                                                                na = invalid_city,
@@ -386,6 +453,8 @@ mo_lob_reg <- mo_lob_reg %>%
 
 prop_in(mo_lob_reg$p_city_norm, valid_city, na.rm = T)
 prop_in(mo_lob_reg$city_norm, valid_city, na.rm = T)
+prop_in(mo_lob_reg_new$p_city_norm, valid_city, na.rm = T)
+prop_in(mo_lob_reg_new$city_norm, valid_city, na.rm = T)
 ```
 
 #### Swap
@@ -422,6 +491,34 @@ mo_lob_reg <- mo_lob_reg %>%
   )
 ```
 
+```{r}
+mo_lob_reg_new <- mo_lob_reg_new %>% 
+  left_join(
+    y = zipcodes,
+    by = c(
+      "state" = "state",
+      "zip5" = "zip"
+    )
+  ) %>% 
+ rename(city_match = city.y,
+         city = city.x) %>% 
+  mutate(
+    match_abb = is_abbrev(city_norm, city_match),
+    match_dist = str_dist(city_norm, city_match),
+    city_swap = if_else(
+      condition = match_abb | match_dist == 1 | is.na(match_dist),
+      true = city_match,
+      false = city_norm
+    )
+  ) %>% 
+  select(
+    -city_match,
+    -match_dist,
+    -match_abb
+  )
+```
+
+
 ```{r p_city_swap}
 mo_lob_reg <- mo_lob_reg %>% 
   left_join(
@@ -449,9 +546,37 @@ mo_lob_reg <- mo_lob_reg %>%
   )
 ```
 
-After the two normalization steps, the percentage of valid cities is at 100%.
-#### Progress
+```{r new p_city_swap}
+mo_lob_reg_new <- mo_lob_reg_new %>% 
+  left_join(
+    y = zipcodes,
+    by = c(
+      "p_state" = "state",
+      "p_zip5" = "zip"
+    )
+  ) %>% 
+  rename(p_city_match = city.y,
+         city = city.x) %>% 
+  mutate(
+    match_abb = is_abbrev(p_city_norm, p_city_match),
+    match_dist = str_dist(p_city_norm, p_city_match),
+    p_city_swap = if_else(
+      condition = !is.na(match_dist) & match_abb | match_dist == 1,
+      true = p_city_match,
+      false =p_city_norm
+    )
+  ) %>% 
+  select(
+    -p_city_match,
+    -match_dist,
+    -match_abb
+  )
+```
 
+After the two normalization steps, the percentage of valid cities is close to 100%.
+
+#### Progress
+We can see the city normalization progress for 
 ```{r city_progress, echo=FALSE}
 many_city <- c(valid_city, extra_city)
 progress <- progress_table(
@@ -463,10 +588,22 @@ progress <- progress_table(
 mo_lob_reg$p_city_swap,
   compare = many_city
 ) %>% mutate(stage = as_factor(stage))
+
+kable(progress, digits = 3)
 ```
 
+For the new data from 2019 onward.
 ```{r progress_print, echo=FALSE}
-kable(progress, digits = 3)
+progress_new <- progress_table(
+  mo_lob_reg_new$city,
+  mo_lob_reg_new$p_city,
+  mo_lob_reg_new$city_norm,
+  mo_lob_reg_new$p_city_norm,
+  mo_lob_reg_new$city_swap,
+  mo_lob_reg_new$p_city_swap,
+  compare = many_city
+) %>% mutate(stage = as_factor(stage))
+kable(progress_new)
 ```
 
 You can see how the percentage of valid values increased with each stage.
@@ -479,8 +616,8 @@ progress %>%
   coord_cartesian(ylim = c(0.75, 1)) +
   scale_y_continuous(labels = percent) +
   labs(
-    title = "Missouri city Normalization Progress",
-    x = "stage",
+    title = "Missouri City Normalization Progress",
+    x = "Stage",
     y = "Percent Valid"
   )
 ```
@@ -505,9 +642,9 @@ progress %>%
   scale_y_continuous(labels = comma) +
   theme(legend.position = "bottom") +
   labs(
-    title = "MO city Normalization Progress",
+    title = "MO City Normalization Progress",
     subtitle = "Distinct values, valid and invalid",
-    x = "stage",
+    x = "Stage",
     y = "Percent Valid",
     fill = "Valid"
   )
@@ -518,6 +655,7 @@ progress %>%
 
 ```{r clean_glimpse}
 glimpse(sample_n(mo_lob_reg, 20))
+
 ```
 
 1. There are `r nrow(mo_lob_reg)` records in the database.
@@ -538,12 +676,25 @@ mo_lob_reg <- mo_lob_reg %>%
             )) %>% 
   rename(city_clean = city_swap,
             p_city_clean = p_city_swap)
+
+mo_lob_reg_new <- mo_lob_reg_new %>% 
+  select(-c(p_city_norm,
+            city_norm
+            )) %>% 
+  rename(city_clean = city_swap,
+            p_city_clean = p_city_swap)
 ```
 
 ```{r write_clean}
 write_csv(
   x = mo_lob_reg,
-  path = path(clean_dir, "mo_lob_reg_clean.csv"),
+  path = path(clean_dir, "mo_lob_reg_before2019.csv"),
+  na = ""
+)
+
+write_csv(
+  x = mo_lob_reg_new,
+  path = path(clean_dir, "mo_lob_reg_after2019.csv"),
   na = ""
 )
 ```

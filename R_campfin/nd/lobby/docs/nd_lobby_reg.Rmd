@@ -125,17 +125,17 @@ The [North Dakota Secretary of State] [03] makes available a listing of all lobb
 
 
 # Reading
-The files were downloaded Dec. 3, 2019.
+The files were downloaded Feb 27, 2020.
 ```{r download registry csv}
 nd_lobby_reg_url <- glue("https://firststop.sos.nd.gov/api/list/csv/{2015:2019}")
 
+dest_file <- glue("{reg_dir}/nd_lob_{basename(nd_lobby_reg_url)}.csv")
+
 if (!all_files_new(reg_dir)) {
-  for (url in nd_lobby_reg_url) {
     download.file(
-      url = url,
-      destfile = glue("{reg_dir}/nd_lobbyists_{basename(url)}.csv")
+      url = nd_lobby_reg_url,
+      destfile = dest_file
     )
-  }
 }
 ```
 
