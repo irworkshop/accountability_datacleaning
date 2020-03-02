@@ -1,0 +1,639 @@
+---
+title: "Alaska Contributions"
+author: "Kiernan Nicholls"
+date: "`r Sys.time()`"
+output:
+  github_document: 
+    df_print: tibble
+    toc: true
+    toc_dept: 2
+editor_options: 
+  chunk_output_type: console
+---
+
+<!-- Place comments regarding knitting here -->
+
+```{r setup, include=FALSE, purl=FALSE}
+library(knitr)
+opts_chunk$set(
+  eval = TRUE,
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  error = FALSE,
+  collapse = TRUE,
+  comment = "#>",
+  fig.path = "../plots/",
+  fig.width = 10,
+  dpi = 300
+)
+options(width = 99)
+set.seed(5)
+```
+
+```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
+fs::dir_create(here::here("ak", "contribs", "docs"))
+```
+
+## Project
+
+The Accountability Project is an effort to cut across data silos and give
+journalists, policy professionals, activists, and the public at large a simple
+way to search across huge volumes of public data about people and organizations.
+
+Our goal is to standardizing public data on a few key fields by thinking of each
+dataset row as a transaction. For each transaction there should be (at least) 3
+variables:
+
+1. All **parties** to a transaction.
+2. The **date** of the transaction.
+3. The **amount** of money involved.
+
+## Objectives
+
+This document describes the process used to complete the following objectives:
+
+1. How many records are in the database?
+1. Check for entirely duplicated records.
+1. Check ranges of continuous variables.
+1. Is there anything blank or missing?
+1. Check for consistency issues.
+1. Create a five-digit ZIP Code called `zip`.
+1. Create a `year` field from the transaction date.
+1. Make sure there is data on both parties to a transaction.
+
+## Packages
+
+The following packages are needed to collect, manipulate, visualize, analyze,
+and communicate these results. The `pacman` package will facilitate their
+installation and attachment.
+
+The IRW's `campfin` package will also have to be installed from GitHub. This
+package contains functions custom made to help facilitate the processing of
+campaign finance data.
+
+```{r load_packages, message=FALSE, warning=FALSE, error=FALSE}
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load_gh("irworkshop/campfin")
+pacman::p_load(
+  tidyverse, # data manipulation
+  lubridate, # datetime strings
+  magrittr, # pipe operators
+  janitor, # dataframe clean
+  refinr, # cluster and merge
+  scales, # format strings
+  knitr, # knit documents
+  vroom, # read files fast
+  glue, # combine strings
+  httr, # http requests
+  here, # relative storage
+  fs # search storage 
+)
+```
+
+This document should be run as part of the `R_campfin` project, which lives as a
+sub-directory of the more general, language-agnostic
+[`irworkshop/accountability_datacleaning`][tap] GitHub repository.
+
+The `R_campfin` project uses the [RStudio projects][rproj] feature and should be
+run as such. The project also uses the dynamic `here::here()` tool for file
+paths relative to _your_ machine.
+
+```{r where_here}
+# where does this document knit?
+here::here()
+```
+
+[tap]: https://github.com/irworkshop/accountability_datacleaning
+[rproj]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects
+
+## Data
+
+Data is obtained from the [Alaska Public Offices Commission (APOC)][apoc]. 
+
+[apoc]: https://aws.state.ak.us/ApocReports/Campaign/#
+
+## Import
+
+### Download
+
+From the [APOC income search][search], we can search "Any" report year without
+any additional parameters to return all income reports. From that search page
+we can "Export" _all_ results as a tab-delimited text file. We can do that by
+hand since the `httr::GET()` request below does not have all the cookies needed.
+
+[search]: https://aws.state.ak.us/ApocReports/CampaignDisclosure/CDIncome.aspx
+
+```{r raw_dir}
+raw_dir <- dir_create(here("ak", "contribs", "data", "raw"))
+```
+
+```{r raw_get, eval=FALSE}
+httr::GET(
+  url = str_c(
+    "https://aws.state.ak.us",
+    "ApocReports",
+    "CampaignDisclosure",
+    "CDIncome.aspx",
+    sep = "/"
+  ),
+  query = list(
+    exportAll = "True",
+    exportFormat = "TXT",
+    isExport = "True"
+  ),
+  write_disk(
+    path = path(raw_dir, "CD_Transactions_03-02-2020.TXT")
+  )
+)
+```
+
+### Read
+
+This tab-delimited text file can be read with `readr::read_tsv()`.
+
+```{r raw_read}
+raw_file <- dir_ls(raw_dir)
+ak_names <- raw_file %>% 
+  read_lines(n_max = 1) %>% 
+  str_split("\t") %>% 
+  pluck(1) %>% 
+  make_clean_names()
+
+akc <- raw_file %>%
+  # skip col name line
+  read_lines(skip = 1) %>%
+  # startrs with id num
+  str_subset("^\\d") %>% 
+  # remove trailing delim
+  str_remove("\t$") %>% 
+  # read with names as tsv
+  read_delim(
+    delim = "\t",
+    na = c("", "NA", "N/A"),
+    escape_backslash = FALSE,
+    escape_double = TRUE,
+    col_names = ak_names,
+    col_types = cols(
+      .default = col_character(),
+      date = col_date_usa(),
+      amount = col_number(),
+      report_year = col_integer(),
+      submitted = col_date_usa()
+    )
+  )
+```
+
+```{r echo=FALSE}
+akc <- akc %>% 
+  select(-x) %>% 
+  rename(
+    id = result,
+    tran_type = transaction_type,
+    pay_type = payment_type,
+    pay_detail = payment_detail,
+    last = last_business_name,
+    first = first_name,
+    expend_purpose = purpose_of_expenditure,
+    filer = name
+  )
+```
+
+## Explore
+
+```{r glimpse}
+head(akc)
+tail(akc)
+glimpse(sample_n(akc, 20))
+```
+
+### Missing
+
+```{r na_count}
+col_stats(akc, count_na)
+```
+
+```{r na_flag}
+akc <- akc %>% flag_na(date, last, amount, filer)
+sum(akc$na_flag)
+```
+
+### Duplicates
+
+Quite a few records are entirely duplicated. We will not remove these records,
+as they may very well be valid repetitions, but we can flag them with 
+`campfin::flag_dupes()`.
+
+```{r dupe_flag}
+akc <- flag_dupes(akc, -id, .check = TRUE)
+percent(mean(akc$dupe_flag), 0.1)
+```
+
+```{r dupe_view}
+akc %>% 
+  filter(dupe_flag) %>% 
+  select(date, last, amount, filer)
+```
+
+### Categorical
+
+```{r n_distinct}
+col_stats(akc, n_distinct)
+```
+
+```{r bar_payment, echo=FALSE}
+explore_plot(
+  data = filter(akc, !is.na(pay_type)),
+  var = pay_type,
+  title = "Alaska Contributions by Payment Type"
+)
+```
+
+```{r bar_report, echo=FALSE}
+explore_plot(
+  data = filter(akc, !is.na(report_type)),
+  var = report_type,
+  title = "Alaska Contributions by Report Type"
+)
+```
+
+```{r bar_election, echo=FALSE}
+explore_plot(
+  data = filter(akc, !is.na(election_type)),
+  var = election_type,
+  title = "Alaska Contributions by Election Type"
+)
+```
+
+```{r bar_office, echo=FALSE}
+explore_plot(
+  data = filter(akc, !is.na(office)),
+  var = office,
+  title = "Alaska Contributions by Office"
+)
+```
+
+```{r bar_filer, echo=FALSE}
+explore_plot(
+  data = filter(akc, !is.na(filer_type)),
+  var = filer_type,
+  title = "Alaska Contributions by Filer Type",
+  nbar = 2
+)
+```
+
+### Continuous
+
+#### Amounts
+
+```{r ammount_summary}
+summary(akc$amount)
+mean(akc$amount <= 0, na.rm = TRUE)
+```
+
+```{r hist_amount, echo=FALSE}
+akc %>%
+  filter(amount > 1, amount < 1e4) %>% 
+  ggplot(aes(amount)) +
+  geom_histogram(fill = dark2["purple"], bins = 10) +
+  scale_y_continuous(labels = comma) +
+  scale_x_continuous(
+    breaks = c(1 %o% 10^(0:6)),
+    labels = dollar,
+    trans = "log10"
+  ) +
+  labs(
+    title = "Alaska Contributions Amount Distribution",
+    caption = "Source: APOC",
+    x = "Amount",
+    y = "Count"
+  )
+```
+
+#### Dates
+
+```{r date_year}
+akc <- akc %>% 
+  mutate(
+    date = date %>% 
+      str_replace("^210(?=\\d-)", "201") %>% 
+      as_date(),
+    year = year(date)
+  )
+
+```
+
+```{r date_range}
+min(akc$date, na.rm = TRUE)
+sum(akc$year < 2000, na.rm = TRUE)
+max(akc$date, na.rm = TRUE)
+sum(akc$date > today(), na.rm = TRUE)
+```
+
+```{r bar_year, echo=FALSE}
+akc %>% 
+  count(year) %>% 
+  mutate(even = is_even(year)) %>% 
+  ggplot(aes(x = year, y = n)) +
+  geom_col(aes(fill = even)) + 
+  scale_fill_brewer(palette = "Dark2") +
+  scale_y_continuous(labels = comma) +
+  scale_x_continuous(breaks = seq(2014, 2020, by = 2)) +
+  coord_cartesian(xlim = c(2014, 2020)) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "Alaska Contributions by Year",
+    caption = "Source: APOC",
+    fill = "Even Year",
+    x = "Year Made",
+    y = "Count"
+  )
+```
+
+## Wrangle
+
+To improve the searchability of the database, we will perform some consistent,
+confident string normalization. For geographic variables like city names and
+ZIP codes, the corresponding `campfin::normal_*()` functions are tailor made to 
+facilitate this process.
+
+### Address
+
+For the street `addresss` variable, the `campfin::normal_address()` function
+will force consistence case, remove punctuation, and abbreviate official 
+USPS suffixes.
+
+```{r address_norm}
+akc <- akc %>% 
+  mutate(
+    address_norm = normal_address(
+      address = address,
+      abbs = usps_street,
+      na_rep = TRUE
+    )
+  )
+```
+
+```{r address_view}
+akc %>% 
+  select(contains("address")) %>% 
+  distinct() %>% 
+  sample_n(10)
+```
+
+### ZIP
+
+For ZIP codes, the `campfin::normal_zip()` function will attempt to create
+valid _five_ digit codes by removing the ZIP+4 suffix and returning leading
+zeroes dropped by other programs like Microsoft Excel.
+
+```{r zip_norm}
+akc <- akc %>% 
+  mutate(
+    zip_norm = normal_zip(
+      zip = zip,
+      na_rep = TRUE
+    )
+  )
+```
+
+```{r zip_progress}
+progress_table(
+  akc$zip,
+  akc$zip_norm,
+  compare = valid_zip
+)
+```
+
+### State
+
+Valid two digit state abbreviations can be made using the 
+`campfin::normal_state()` function.
+
+```{r state_norm}
+akc <- akc %>% 
+  mutate(
+    state_norm = normal_state(
+      state = state,
+      abbreviate = TRUE,
+      na_rep = TRUE,
+      valid = valid_state
+    )
+  )
+```
+
+```{r state_view}
+akc %>% 
+  filter(state != state_norm) %>% 
+  count(state, state_norm, sort = TRUE)
+```
+
+```{r state_progress}
+progress_table(
+  akc$state,
+  akc$state_norm,
+  compare = valid_state
+)
+```
+
+### City
+
+Cities are the most difficult geographic variable to normalize, simply due to
+the wide variety of valid cities and formats.
+
+#### Normal
+
+The `campfin::normal_city()` function is a good start, again converting case,
+removing punctuation, but _expanding_ USPS abbreviations. We can also remove
+`invalid_city` values.
+
+```{r city_norm}
+akc <- akc %>% 
+  mutate(
+    city_norm = normal_city(
+      city = city, 
+      abbs = usps_city,
+      states = c("AK", "DC", "ALASKA"),
+      na = invalid_city,
+      na_rep = TRUE
+    )
+  )
+```
+
+#### Swap
+
+We can further improve normalization by comparing our normalized value
+against the _expected_ value for that record's state abbreviation and ZIP code.
+If the normalized value is either an abbreviation for or very similar to the
+expected value, we can confidently swap those two.
+
+```{r city_swap}
+akc <- akc %>% 
+  rename(city_raw = city) %>% 
+  left_join(
+    y = zipcodes,
+    by = c(
+      "state_norm" = "state",
+      "zip_norm" = "zip"
+    )
+  ) %>% 
+  rename(city_match = city) %>% 
+  mutate(
+    match_abb = is_abbrev(city_norm, city_match),
+    match_dist = str_dist(city_norm, city_match),
+    city_swap = if_else(
+      condition = !is.na(match_dist) & (match_abb | match_dist == 1),
+      true = city_match,
+      false = city_norm
+    )
+  ) %>% 
+  select(
+    -city_match,
+    -match_dist,
+    -match_abb
+  )
+```
+
+#### Refine
+
+The [OpenRefine] algorithms can be used to group similar strings and replace the
+less common versions with their most common counterpart. This can greatly 
+reduce inconsistency, but with low confidence; we will only keep any refined
+strings that have a valid city/state/zip combination.
+
+[or]: https://openrefine.org/
+
+```{r city_refine}
+good_refine <- akc %>% 
+  mutate(
+    city_refine = city_swap %>% 
+      key_collision_merge() %>% 
+      n_gram_merge(numgram = 1)
+  ) %>% 
+  filter(city_refine != city_swap) %>% 
+  inner_join(
+    y = zipcodes,
+    by = c(
+      "city_refine" = "city",
+      "state_norm" = "state",
+      "zip_norm" = "zip"
+    )
+  )
+```
+
+```{r city_count, echo=FALSE}
+good_refine %>%
+  count(
+    state_norm, 
+    zip_norm, 
+    city_swap, 
+    city_refine,
+    sort = TRUE
+  )
+```
+
+Then we can join the refined values back to the database.
+
+```{r city_join}
+akc <- akc %>% 
+  left_join(good_refine) %>% 
+  mutate(city_refine = coalesce(city_refine, city_swap))
+```
+
+#### Progress
+
+```{r city_progress, echo=FALSE}
+many_city <- c(valid_city, extra_city)
+progress <- progress_table(
+  str_to_upper(akc$city_raw),
+  akc$city_norm,
+  akc$city_swap,
+  akc$city_refine,
+  compare = many_city
+) %>% mutate(stage = as_factor(stage))
+kable(progress, digits = 3)
+```
+
+You can see how the percentage of valid values increased with each stage.
+
+```{r bar_progress, echo=FALSE}
+raw_in <- percent(prop_in(akc$city_raw, valid_city))
+progress %>% 
+  ggplot(aes(x = stage, y = prop_in)) +
+  geom_hline(yintercept = 0.99) +
+  geom_col(fill = dark2["purple"]) +
+  coord_cartesian(ylim = c(0.75, 1)) +
+  scale_y_continuous(labels = percent) +
+  labs(
+    title = "Alaska City Normalization Progress",
+    subtitle = glue("Raw at {raw_in} before conversion to uppercase"),
+    x = "Stage",
+    y = "Percent Valid"
+  )
+```
+
+More importantly, the number of distinct values decreased each stage. We were
+able to confidently change many distinct invalid values to their valid
+equivalent.
+
+```{r bar_distinct, echo=FALSE}
+progress %>% 
+  select(
+    stage, 
+    all = n_distinct,
+    bad = n_diff
+  ) %>% 
+  mutate(good = all - bad) %>% 
+  pivot_longer(c("good", "bad")) %>% 
+  mutate(name = name == "good") %>% 
+  ggplot(aes(x = stage, y = value)) +
+  geom_col(aes(fill = name)) +
+  scale_fill_brewer(palette = "Dark2", direction = -1) +
+  scale_y_continuous(labels = comma) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "Alaska City Normalization Progress",
+    subtitle = "Distinct values, valid and invalid",
+    x = "Stage",
+    y = "Distinct Values",
+    fill = "Valid"
+  )
+```
+
+## Conclude
+
+```{r clean_select}
+akc <- akc %>% 
+  select(
+    -city_norm,
+    -city_swap,
+    city_clean = city_refine
+  ) %>% 
+  rename_all(~str_replace(., "_norm", "_clean"))
+```
+
+```{r clean_glimpse}
+glimpse(sample_n(akc, 20))
+```
+
+1. There are `r comma(nrow(akc))` records in the database.
+1. There are `r comma(sum(akc$dupe_flag))` duplicate records in the database.
+1. The range and distribution of `amount` and `date` seem reasonable.
+1. There are `r comma(sum(akc$na_flag))` records missing key variables.
+1. Consistency in geographic data has been improved with `campfin::normal_*()`.
+1. The 4-digit `year` variable has been created with `lubridate::year()`.
+
+## Export
+
+```{r clean_dir}
+clean_dir <- dir_create(here("ak", "contribs", "data", "clean"))
+```
+
+```{r clean_write}
+write_csv(
+  x = akc,
+  path = path(clean_dir, "ak_contribs_clean.csv"),
+  na = ""
+)
+```
+
