@@ -84,6 +84,7 @@ pacman::p_load(
   scales, # format strings
   knitr, # knit documents
   vroom, # read files fast
+  httr, # http requests
   glue, # combine strings
   here, # relative storage
   fs # search storage 
@@ -108,7 +109,7 @@ here::here()
 
 ## Data
 
-Data is obtained from the Maryland [Campaign Reporting System][crs].
+Data is obtained from the Maryland [Campaign Reporting System (CRS)][crs].
 
 [crs]: https://campaignfinance.maryland.gov/Public/ViewReceipts?theme=vista
 
@@ -122,9 +123,16 @@ federal committee, or a labor union...
 political committee, and a total of $24,000 to all political committees, during
 the four-year cycle.
 
-## Import
+## Download
 
-### Download
+As of now, this `GET()` request fails to return anything but an empty file. To
+download the file manually, go to the [CRS search poral][search] and run a
+query for everything from January 1st 2000 to January of the 2020.
+
+This will return a list of 5,407,055 results which can be downloaded as a CSV
+file to the disk.
+
+[search]: https://campaignfinance.maryland.gov/Public/ViewReceipts?theme=vista
 
 ```{r raw_dir}
 raw_dir <- dir_create(here("md", "contribs", "data", "raw"))
@@ -147,7 +155,10 @@ if (!file_exists(raw_csv)) {
 }
 ```
 
-### Read
+## Read
+
+To properly read the file into R, we first have to do some simple string
+processing to the text file.
 
 ```{r raw_lines}
 fix_csv <- file_temp(ext = "csv")
@@ -159,6 +170,7 @@ read_file(raw_csv) %>%
 ```
 
 ```{r raw_read}
+# 5,407,055
 mdc <- read_delim(
   file = fix_csv,
   delim = ",",
@@ -172,54 +184,92 @@ mdc <- read_delim(
 )
 ```
 
-```{r raw_rename, echo=FALSE}
-mdc <- remove_empty(mdc, "cols") 
-names(mdc) <- c(
-  "committee", "period", "date", "name", "address", "type", 
-  "method", "amount", "employer", "occupation", "office", "fund"
-)
+```{r raw_rename}
+mdc <- mdc %>% 
+  remove_empty("cols") %>% 
+  rename(
+    committee = `Receiving Committee`,
+    period = `Filing Period`,
+    date = `Contribution Date`,
+    name = `Contributor Name`,
+    address = `Contributor Address`,
+    type = `Contributor Type`,
+    method = `Contribution Type`,
+    amount = `Contribution Amount`,
+    employer = `Employer Name`,
+    occupation = `Employer Occupation`,
+    office = `Office`,
+    fund = `Fundtype`
+  )
 ```
 
 ## Wrangle
 
-```{r address_split}
+To better map the columns of the database, we will have to `separate()` the
+`address` column into it's components.
+
+```{r sep_address}
 mdc <- mdc %>%
   mutate(
-    address = address %>% 
-      str_remove("-(\\s+|\\d{4})$") %>% 
-      str_trim()
+    address = str_trim(str_remove(address, "-(\\s+|\\d+)$"))
   ) %>% 
   separate(
     col = address,
-    into = c(glue("address{1:10}"), "city", "state_zip"),
+    into = c(glue("split_addr{1:10}"), "city_sep", "state_zip"),
     sep = "\\s{2,}",
+    remove = FALSE,
     extra = "merge",
     fill = "left"
   ) %>% 
   unite(
-    starts_with("address"),
-    col = "address",
+    starts_with("split_addr"),
+    col = "address_sep",
     na.rm = TRUE,
     sep = " "
   ) %>% 
   mutate_if(is_character, na_if, "") %>% 
   separate(
     col = state_zip,
-    into = c("state", "zip"),
+    into = c("state_sep", "zip_sep"),
     sep = "\\s(?=\\d)",
+    extra = "merge",
+    fill = "right"
+  ) %>% 
+  separate(
+    col = name,
+    into = c("last", "first"),
+    sep = "\\s{2}",
     extra = "merge",
     fill = "right"
   )
 ```
 
-```{r}
-zip_states <- str_which(mdc$state, "\\d+(?:-\\d+|\\s+)?$")
-mdc$zip[zip_states] <- mdc$state[zip_states]
-mdc$state[zip_states] %>% 
+This process does not work for the few addresses missing a state abbreviation or
+some other geographic variable within the string. We can identify any extracted
+ZIP codes in the new `state` column and adjust their position appropriately.
+
+```{r sep_view}
+mdc %>% 
+  select("address", ends_with("_sep")) %>% 
+  filter(state_sep %out% valid_state, !is.na(state_sep)) %>% 
+  sample_frac()
+```
+
+```{r sep_fix}
+# identify zips in state
+zip_states <- str_which(mdc$state_sep, "\\d+(?:-\\d+|\\s+)?$")
+# shift those cols left
+mdc[zip_states, ] %>% select("address", ends_with("_sep"))
+mdc$zip_sep[zip_states] <- mdc$state_sep[zip_states]
+mdc$state_sep[zip_states] %>% 
   str_remove_all("\\d+") %>% 
   str_remove_all("[:punct:]") %>% 
   str_trim() %>% 
-  na_if("") -> mdc$state[zip_states]
+  na_if("") -> mdc$state_sep[zip_states]
+```
+
+```{r}
+
 ```
 
 ## Explore
@@ -237,19 +287,22 @@ col_stats(mdc, count_na)
 ```
 
 ```{r flag_na}
-mdc <- mdc %>% flag_na(date, name, amount, committee)
-percent(mean(mdc$na_flag), accuracy = 0.01)
+mdc <- mdc %>% flag_na(date, last, amount, committee)
+percent(mean(mdc$na_flag), 0.01)
 sum(mdc$na_flag)
 ```
 
 ### Duplicates
 
+There are quite a lot of duplicate records in the database. We can flag these
+variables with `campfin::flag_dupes()` but not remove them.
+
 ```{r flag_dupes}
 mdc <- flag_dupes(mdc, everything())
-percent(mean(mdc$dupe_flag), accuracy = 0.01)
+percent(mean(mdc$dupe_flag), 0.01)
 mdc %>% 
   filter(dupe_flag) %>% 
-  select(date, name, amount, committee)
+  select(date, last, amount, committee)
 ```
 
 ### Categorical
@@ -258,28 +311,44 @@ mdc %>%
 col_stats(mdc, n_distinct)
 ```
 
-```{r type_bar}
+```{r period_bar, echo=FALSE}
 explore_plot(
-  data = mdc,
+  data = filter(mdc, !is.na(period)),
+  var = period,
+  title = "Maryland Contributions by Period"
+) + scale_x_discrete(label = function(x) str_trunc(x, width = 15))
+```
+
+```{r type_bar, echo=FALSE}
+explore_plot(
+  data = filter(mdc, !is.na(type)),
   var = type,
   title = "Maryland Contributions by Contributor Type"
-)
+) + scale_x_discrete(label = function(x) str_trunc(x, width = 15))
 ```
 
-```{r type_bar}
+```{r method_bar, echo=FALSE}
 explore_plot(
-  data = mdc,
+  data = filter(mdc, !is.na(method)),
   var = method,
   title = "Maryland Contributions by Method"
-)
+) + scale_x_discrete(label = function(x) str_trunc(x, width = 15))
 ```
 
-```{r type_bar}
+```{r occupation_bar, echo=FALSE}
 explore_plot(
   data = filter(mdc, !is.na(occupation)),
   var = occupation,
   title = "Maryland Contributions by Contributor Occupation"
-)
+) + scale_x_discrete(label = function(x) str_trunc(x, width = 15))
+```
+
+```{r office_bar, echo=FALSE}
+explore_plot(
+  data = filter(mdc, !is.na(office)),
+  var = office,
+  title = "Maryland Contributions by Office"
+) + scale_x_discrete(label = function(x) str_trunc(x, width = 15))
 ```
 
 ### Continuous
@@ -288,13 +357,14 @@ explore_plot(
 
 ```{r ammount_summary}
 summary(mdc$amount)
-mean(mdc$amount <= 0)
+sum(mdc$amount <= 0)
 ```
 
 ```{r amount_histogram, echo=FALSE}
 mdc %>%
+  filter(amount > 1, amount < 1e5) %>% 
   ggplot(aes(amount)) +
-  geom_histogram(fill = dark2["purple"]) +
+  geom_histogram(fill = dark2["purple"], bins = 15) +
   scale_y_continuous(labels = comma) +
   scale_x_continuous(
     breaks = c(1 %o% 10^(0:6)),
@@ -330,7 +400,8 @@ mdc %>%
   geom_col(aes(fill = even)) +
   scale_fill_brewer(palette = "Dark2") +
   scale_y_continuous(labels = comma) +
-  scale_x_continuous(breaks = seq(2000, 2020, by = 2)) +
+  scale_x_continuous(breaks = seq(2004, 2020, by = 2)) +
+  coord_cartesian(xlim = c(2004, 2020)) +
   theme(legend.position = "bottom") +
   labs(
     title = "Maryland Contribution by Year",
@@ -349,7 +420,7 @@ mdc %>%
 mdc <- mdc %>% 
   mutate(
     address_norm = normal_address(
-      address = address,
+      address = address_sep,
       abbs = usps_street,
       na_rep = TRUE
     )
@@ -358,7 +429,7 @@ mdc <- mdc %>%
 
 ```{r address_view}
 mdc %>% 
-  select(contains("address")) %>% 
+  select(contains("address_")) %>% 
   distinct() %>% 
   sample_n(20)
 ```
@@ -369,15 +440,16 @@ mdc %>%
 mdc <- mdc %>% 
   mutate(
     zip_norm = normal_zip(
-      zip = zip,
-      na_rep = TRUE
+      zip = zip_sep,
+      na_rep = TRUE,
+      na = c("", "Null Zip Code")
     )
   )
 ```
 
 ```{r zip_progress}
 progress_table(
-  mdc$zip,
+  mdc$zip_sep,
   mdc$zip_norm,
   compare = valid_zip
 )
@@ -385,11 +457,17 @@ progress_table(
 
 ### State
 
+```{r}
+mdc %>% 
+  count(state_sep, sort = TRUE) %>% 
+  filter(state_sep %out% valid_state)
+```
+
 ```{r state_norm}
 mdc <- mdc %>% 
   mutate(
     state_norm = normal_state(
-      state = state,
+      state = state_sep,
       abbreviate = TRUE,
       na_rep = TRUE,
       valid = NULL
