@@ -84,7 +84,6 @@ pacman::p_load(
   scales, # format strings
   knitr, # knit documents
   vroom, # read files fast
-  httr, # http requests
   glue, # combine strings
   here, # relative storage
   fs # search storage 
@@ -161,12 +160,14 @@ To properly read the file into R, we first have to do some simple string
 processing to the text file.
 
 ```{r raw_lines}
-fix_csv <- file_temp(ext = "csv")
-read_file(raw_csv) %>% 
-  str_remove_all("(?<!((Electoral|Administrative|,),))\n") %>% 
-  str_replace_all("\"", "\'") %>% 
-  str_remove_all(",(?=\n|\n$)") %>% 
-  write_lines(fix_csv)
+fix_csv <- path(here("md", "contribs", "data"), "fix_file.csv")
+if (!file_exists(fix_csv)) {
+  read_file(raw_csv) %>% 
+    str_remove_all("(?<!((Electoral|Administrative|,),))\n") %>% 
+    str_replace_all("\"", "\'") %>% 
+    str_remove_all(",(?=\n|\n$)") %>% 
+    write_lines(fix_csv)
+}
 ```
 
 ```{r raw_read}
@@ -176,6 +177,7 @@ mdc <- read_delim(
   delim = ",",
   escape_backslash = FALSE,
   escape_double = FALSE,
+  na = c("", "NA", "N/A", "NULL", "Not Included"),
   col_types = cols(
     .default = col_character(),
     `Contribution Date` = col_date_usa(),
@@ -203,7 +205,7 @@ mdc <- mdc %>%
   )
 ```
 
-## Wrangle
+## Separate
 
 To better map the columns of the database, we will have to `separate()` the
 `address` column into it's components.
@@ -211,7 +213,11 @@ To better map the columns of the database, we will have to `separate()` the
 ```{r sep_address}
 mdc <- mdc %>%
   mutate(
-    address = str_trim(str_remove(address, "-(\\s+|\\d+)$"))
+    address = address %>% 
+      str_remove("-(\\s+|\\d+)$") %>% 
+      # address in DC with quad in sep col
+      str_replace("(\\s{2})(?=(NW|NE|SW|SE)\\.?\\s{2})", " ") %>% 
+      str_replace("(\\s{2})(?=(N.W.|N.E.|S.W.|S.E.)\\.?\\s{2})", " ")
   ) %>% 
   separate(
     col = address,
@@ -255,6 +261,10 @@ mdc %>%
   sample_frac()
 ```
 
+```{r}
+mdc <- mutate_if(mdc, is_character, na_if, "Null Zip Code")
+```
+
 ```{r sep_fix}
 # identify zips in state
 zip_states <- str_which(mdc$state_sep, "\\d+(?:-\\d+|\\s+)?$")
@@ -266,10 +276,70 @@ mdc$state_sep[zip_states] %>%
   str_remove_all("[:punct:]") %>% 
   str_trim() %>% 
   na_if("") -> mdc$state_sep[zip_states]
+mdc[zip_states, ] %>% select("address", ends_with("_sep"))
 ```
 
 ```{r}
+addr_city <- which(str_starts(mdc$city_sep, "\\d") & is.na(mdc$address_sep))
+mdc[addr_city, ] %>% select("address", ends_with("_sep"))
+mdc$address_sep[addr_city] <- mdc$city_sep[addr_city]
+mdc$city_sep[addr_city] <- NA
+```
 
+```{r}
+addr_state <- which(str_starts(mdc$state_sep, "\\d") & is.na(mdc$address_sep))
+mdc[addr_state, ] %>% select("address", ends_with("_sep"))
+mdc$address_sep[addr_state] <- mdc$state_sep[addr_state]
+mdc$state_sep[addr_state] <- NA
+```
+
+```{r}
+city_state <- which(nchar(mdc$state_sep) > 2 & is.na(mdc$city_sep))
+mdc[city_state, ] %>% select("address", ends_with("_sep"))
+city_abb <- str_extract(mdc$state_sep[city_state], "(?<=\\s)[:upper:]{2}$")
+city_name <- str_remove(mdc$state_sep[city_state], "\\s[:upper:]{2}$")
+mdc$city_sep[city_state] <- city_name
+mdc$state_sep[city_state] <- city_abb
+mdc$state_sep[city_state] <- NA
+```
+
+```{r}
+bad_st <- str_to_upper(mdc$state_sep) %out% valid_state
+nan_st <- !is.na(mdc$state_sep)
+add_st <- str_ends(mdc$city_sep, "\\d")
+addr2_city <- which(bad_st & nan_st & add_st)
+
+mdc$address_sep[addr2_city] <- mdc$address_sep[addr2_city] %>% 
+  paste(mdc$city_sep[addr2_city]) %>% 
+  str_remove("NA\\s")
+mdc$city_sep[addr2_city] <- mdc$state_sep[addr2_city]
+mdc$state_sep[addr2_city] <- str_extract(mdc$state_sep[addr2_city], "[:upper:]{2}$")
+```
+
+```{r}
+mdc %>% 
+  filter(
+    str_to_upper(state_sep) %out% valid_state,
+    !is.na(state_sep)
+  ) %>% 
+  select("address", ends_with("_sep"))
+```
+
+```{r}
+mdc <- mutate_if(mdc, is_character, ~str_squish(str_trim(.)))
+```
+
+```{r echo=FALSE}
+rm(
+  zip_states,
+  addr_city,
+  addr_state,
+  city_state,
+  bad_st,
+  nan_st,
+  add_st,
+  addr2_city
+)
 ```
 
 ## Explore
@@ -357,14 +427,13 @@ explore_plot(
 
 ```{r ammount_summary}
 summary(mdc$amount)
-sum(mdc$amount <= 0)
+mean(mdc$amount <= 0)
 ```
 
-```{r amount_histogram, echo=FALSE}
+```{r hist_amount, echo=FALSE}
 mdc %>%
-  filter(amount > 1, amount < 1e5) %>% 
   ggplot(aes(amount)) +
-  geom_histogram(fill = dark2["purple"], bins = 15) +
+  geom_histogram(fill = dark2["purple"]) +
   scale_y_continuous(labels = comma) +
   scale_x_continuous(
     breaks = c(1 %o% 10^(0:6)),
@@ -372,8 +441,9 @@ mdc %>%
     trans = "log10"
   ) +
   labs(
-    title = "Maryland Contribution Amount Distribution",
-    caption = "Source: Maryland Campaign Reporting System",
+    title = "Maryland Contributions Amount Distribution",
+    subtitle = "from 2000 to 2019",
+    caption = "Source: {source}",
     x = "Amount",
     y = "Count"
   )
@@ -400,8 +470,8 @@ mdc %>%
   geom_col(aes(fill = even)) +
   scale_fill_brewer(palette = "Dark2") +
   scale_y_continuous(labels = comma) +
-  scale_x_continuous(breaks = seq(2004, 2020, by = 2)) +
-  coord_cartesian(xlim = c(2004, 2020)) +
+  scale_x_continuous(breaks = seq(2005, 2020, by = 2)) +
+  coord_cartesian(xlim = c(2005, 2020)) +
   theme(legend.position = "bottom") +
   labs(
     title = "Maryland Contribution by Year",
@@ -412,9 +482,18 @@ mdc %>%
   )
 ```
 
-## Normalize
+## Wrangle
+
+To improve the searchability of the database, we will perform some consistent,
+confident string normalization. For geographic variables like city names and
+ZIP codes, the corresponding `campfin::normal_*()` functions are tailor made to 
+facilitate this process.
 
 ### Address
+
+For the street `addresss` variable, the `campfin::normal_address()` function
+will force consistence case, remove punctuation, and abbreviate official 
+USPS suffixes.
 
 ```{r address_norm}
 mdc <- mdc %>% 
@@ -429,12 +508,16 @@ mdc <- mdc %>%
 
 ```{r address_view}
 mdc %>% 
-  select(contains("address_")) %>% 
+  select(contains("address")) %>% 
   distinct() %>% 
-  sample_n(20)
+  sample_n(10)
 ```
 
 ### ZIP
+
+For ZIP codes, the `campfin::normal_zip()` function will attempt to create
+valid _five_ digit codes by removing the ZIP+4 suffix and returning leading
+zeroes dropped by other programs like Microsoft Excel.
 
 ```{r zip_norm}
 mdc <- mdc %>% 
@@ -457,6 +540,9 @@ progress_table(
 
 ### State
 
+Valid two digit state abbreviations can be made using the 
+`campfin::normal_state()` function.
+
 ```{r}
 mdc %>% 
   count(state_sep, sort = TRUE) %>% 
@@ -470,20 +556,20 @@ mdc <- mdc %>%
       state = state_sep,
       abbreviate = TRUE,
       na_rep = TRUE,
-      valid = NULL
+      valid = valid_state
     )
   )
 ```
 
 ```{r state_view}
 mdc %>% 
-  filter(state != state_norm) %>% 
-  count(state, sort = TRUE)
+  filter(state_sep != state_norm) %>% 
+  count(state_sep, state_norm, sort = TRUE)
 ```
 
 ```{r state_progress}
 progress_table(
-  mdc$state,
+  mdc$state_sep,
   mdc$state_norm,
   compare = valid_state
 )
@@ -491,18 +577,34 @@ progress_table(
 
 ### City
 
+Cities are the most difficult geographic variable to normalize, simply due to
+the wide variety of valid cities and formats.
+
+#### Normal
+
+The `campfin::normal_city()` function is a good start, again converting case,
+removing punctuation, but _expanding_ USPS abbreviations. We can also remove
+`invalid_city` values.
+
 ```{r city_norm}
 mdc <- mdc %>% 
   mutate(
     city_norm = normal_city(
-      city = city, 
+      city = city_sep %>% str_remove("(?<=Baltimore)\\sCity$"), 
       abbs = usps_city,
-      states = c("DF", "DC", "DATA FRAME"),
+      states = c("MD", "DC", "MARYLAND"),
       na = invalid_city,
       na_rep = TRUE
     )
   )
 ```
+
+#### Swap
+
+We can further improve normalization by comparing our normalized value
+against the _expected_ value for that record's state abbreviation and ZIP code.
+If the normalized value is either an abbreviation for or very similar to the
+expected value, we can confidently swap those two.
 
 ```{r city_swap}
 mdc <- mdc %>% 
@@ -518,7 +620,7 @@ mdc <- mdc %>%
     match_abb = is_abbrev(city_norm, city_match),
     match_dist = str_dist(city_norm, city_match),
     city_swap = if_else(
-      condition = match_abb | match_dist == 1,
+      condition = !is.na(match_dist) & (match_abb | match_dist == 1),
       true = city_match,
       false = city_norm
     )
@@ -530,7 +632,16 @@ mdc <- mdc %>%
   )
 ```
 
-```{r refine_city}
+#### Refine
+
+The [OpenRefine] algorithms can be used to group similar strings and replace the
+less common versions with their most common counterpart. This can greatly 
+reduce inconsistency, but with low confidence; we will only keep any refined
+strings that have a valid city/state/zip combination.
+
+[or]: https://openrefine.org/
+
+```{r city_refine}
 good_refine <- mdc %>% 
   mutate(
     city_refine = city_swap %>% 
@@ -548,7 +659,7 @@ good_refine <- mdc %>%
   )
 ```
 
-```{r view_city_refines, echo=FALSE}
+```{r city_count, echo=FALSE}
 good_refine %>%
   count(
     state_norm, 
@@ -559,42 +670,206 @@ good_refine %>%
   )
 ```
 
-```{r join_refine}
+Then we can join the refined values back to the database.
+
+```{r city_join}
 mdc <- mdc %>% 
   left_join(good_refine) %>% 
   mutate(city_refine = coalesce(city_refine, city_swap))
 ```
 
-```{r city_progress}
-progress_table(
-  mdc$city,
+#### Check
+
+We can use the `campfin::check_city()` function to pass the remaining unknown
+`city_refine` values (and their `state_norm`) to the Google Geocode API. The
+function returns the name of the city or locality which most associated with
+those values.
+
+This is an easy way to both check for typos and check whether an unknown
+`city_refine` value is actually a completely acceptable neighborhood, census
+designated place, or some other locality not found in our `valid_city` vector
+from our `zipcodes` database.
+
+First, we'll filter out any known valid city and aggregate the remaining records
+by their city and state. Then, we will only query those unknown cities which
+appear at least ten times.
+
+```{r check_filter}
+mdc_out <- mdc %>% 
+  filter(city_refine %out% c(valid_city, extra_city)) %>% 
+  count(city_refine, state_norm, sort = TRUE) %>% 
+  drop_na() %>% 
+  slice(1:500)
+```
+
+Passing these values to `campfin::check_city()` with `purrr::pmap_dfr()` will
+return a single tibble of the rows returned by each city/state combination.
+
+First, we'll check to see if the API query has already been done and a file
+exist on disk. If such a file exists, we can read it using `readr::read_csv()`.
+If not, the query will be sent and the file will be written using
+`readr::write_csv()`.
+
+```{r check_send}
+check_file <- here("md", "contribs", "data", "api_check.csv")
+if (file_exists(check_file)) {
+  check <- read_csv(
+    file = check_file
+  )
+} else {
+  check <- pmap_dfr(
+    .l = list(
+      mdc_out$city_refine, 
+      mdc_out$state_norm
+    ), 
+    .f = check_city, 
+    key = Sys.getenv("GEOCODE_KEY"), 
+    guess = TRUE
+  ) %>% 
+    mutate(guess = coalesce(guess_city, guess_place)) %>% 
+    select(-guess_city, -guess_place)
+  write_csv(
+    x = check,
+    path = check_file
+  )
+}
+```
+
+Any city/state combination with a `check_city_flag` equal to `TRUE` returned a
+matching city string from the API, indicating this combination is valid enough
+to be ignored.
+
+```{r check_accept}
+valid_locality <- check$guess[check$check_city_flag]
+```
+
+Then we can perform some simple comparisons between the queried city and the
+returned city. If they are extremely similar, we can accept those returned
+locality strings and add them to our list of accepted additional localities.
+
+```{r check_compare}
+valid_locality <- check %>% 
+  filter(!check_city_flag) %>% 
+  mutate(
+    abb = is_abbrev(original_city, guess),
+    dist = str_dist(original_city, guess)
+  ) %>%
+  filter(abb | dist <= 3) %>% 
+  pull(guess) %>% 
+  c(valid_locality)
+```
+
+#### Progress
+
+```{r city_remains}
+many_city <- c(valid_city, extra_city, valid_locality)
+mdc %>% 
+  filter(city_refine %out% many_city) %>% 
+  count(city_refine, sort = TRUE)
+```
+
+```{r city_fix}
+mdc <- mdc %>% 
+  mutate(
+    city_refine = city_refine %>% 
+      str_replace("^BALTO$", "BALTIMORE")
+  )
+```
+
+```{r city_progress, echo=FALSE}
+progress <- progress_table(
+  str_to_upper(mdc$city_sep),
   mdc$city_norm,
   mdc$city_swap,
   mdc$city_refine,
-  compare = valid_city
-)
+  compare = many_city
+) %>% mutate(stage = as_factor(stage))
+kable(progress, digits = 3)
+```
+
+You can see how the percentage of valid values increased with each stage.
+
+```{r bar_progress, echo=FALSE}
+raw_in <- percent(prop_in(mdc$city_sep, valid_city))
+progress %>% 
+  ggplot(aes(x = stage, y = prop_in)) +
+  geom_hline(yintercept = 0.99) +
+  geom_col(fill = dark2["purple"]) +
+  coord_cartesian(ylim = c(0.75, 1)) +
+  scale_y_continuous(labels = percent) +
+  labs(
+    title = "Maryland City Normalization Progress",
+    subtitle = glue("Raw at {raw_in} before conversion to uppercase"),
+    x = "Stage",
+    y = "Percent Valid"
+  )
+```
+
+More importantly, the number of distinct values decreased each stage. We were
+able to confidently change many distinct invalid values to their valid
+equivalent.
+
+```{r bar_distinct, echo=FALSE}
+progress %>% 
+  select(
+    stage, 
+    all = n_distinct,
+    bad = n_diff
+  ) %>% 
+  mutate(good = all - bad) %>% 
+  pivot_longer(c("good", "bad")) %>% 
+  mutate(name = name == "good") %>% 
+  ggplot(aes(x = stage, y = value)) +
+  geom_col(aes(fill = name)) +
+  scale_fill_brewer(palette = "Dark2", direction = -1) +
+  scale_y_continuous(labels = comma) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "Maryland City Normalization Progress",
+    subtitle = "Distinct values, valid and invalid",
+    x = "Stage",
+    y = "Distinct Values",
+    fill = "Valid"
+  )
 ```
 
 ## Conclude
 
-1. There are `r nrow(mdc)` records in the database.
-1. There are `r sum(mdc$dupe_flag)` duplicate records in the database.
+```{r clean_select}
+mdc <- mdc %>% 
+  select(
+    -city_norm,
+    -city_swap,
+    city_clean = city_refine
+  ) %>% 
+  rename_all(~str_replace(., "_norm", "_clean"))
+```
+
+```{r clean_glimpse}
+glimpse(sample_n(mdc, 20))
+```
+
+1. There are `r comma(nrow(mdc))` records in the database.
+1. There are `r comma(sum(mdc$dupe_flag))` duplicate records in the database.
 1. The range and distribution of `amount` and `date` seem reasonable.
-1. There are `r sum(mdc$na_flag)` records missing either recipient or date.
-1. Consistency in goegraphic data has been improved with `campfin::normal_*()`.
+1. There are `r comma(sum(mdc$na_flag))` records missing ....
+1. Consistency in geographic data has been improved with `campfin::normal_*()`.
 1. The 4-digit `year` variable has been created with `lubridate::year()`.
 
 ## Export
 
-```{r proc_dir}
-proc_dir <- dir_create(here("md", "contribs", "data", "processed"))
+```{r clean_dir}
+clean_dir <- dir_create(here("md", "contribs", "data", "clean"))
 ```
 
-```{r write_clean}
-write_csv(
-  x = df,
-  path = path(proc_dir, "df_type_clean.csv"),
-  na = ""
-)
+```{r clean_write}
+md_file <- path(clean_dir, "md_contribs_clean.csv")
+write_csv(mdc, path = md_file, na = "")
+```
+
+## Encoding
+
+```{r check_encoding}
+Encoding(md_file)
 ```
 
