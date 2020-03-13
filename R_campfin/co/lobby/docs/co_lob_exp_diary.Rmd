@@ -1,0 +1,557 @@
+---
+title: "Colorado Lobbying Expenditure Data Diary"
+author: "Yanqi Xu"  
+date: "`r Sys.time()`"
+output:
+  github_document: 
+    df_print: tibble
+    toc: true
+    toc_dept: 2
+editor_options: 
+  chunk_output_type: console
+---
+
+<!-- Place comments regarding knitting here -->
+
+```{r setup, include=FALSE, purl=FALSE}
+library(knitr)
+opts_chunk$set(
+  eval = TRUE,
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  error = FALSE,
+  collapse = TRUE,
+  comment = "#>",
+  fig.path = "../plots/",
+  fig.width = 10,
+  dpi = 300
+)
+options(width = 99)
+set.seed(5)
+```
+
+```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
+fs::dir_create(here::here("co", "lobby", "docs"))
+```
+
+## Project
+
+The Accountability Project is an effort to cut across data silos and give
+journalists, policy professionals, activists, and the public at large a simple
+way to search across huge volumes of public data about people and organizations.
+
+Our goal is to standardizing public data on a few key fields by thinking of each
+dataset row as a transaction. For each transaction there should be (at least) 3
+variables:
+
+1. All **parties** to a transaction.
+2. The **date** of the transaction.
+3. The **amount** of money involved.
+
+## Objectives
+
+This document describes the process used to complete the following objectives:
+
+1. How many records are in the database?
+1. Check for entirely duplicated records.
+1. Check ranges of continuous variables.
+1. Is there anything blank or missing?
+1. Check for consistency issues.
+1. Create a five-digit ZIP Code called `zip`.
+1. Create a `year` field from the transaction date.
+1. Make sure there is data on both parties to a transaction.
+
+
+## Packages
+
+The following packages are needed to collect, manipulate, visualize, analyze,
+and communicate these results. The `pacman` package will facilitate their
+installation and attachment.
+
+The IRW's `campfin` package will also have to be installed from GitHub. This
+package contains functions custom made to help facilitate the processing of
+campaign finance data.
+
+```{r load_packages, message=FALSE, dfrning=FALSE, error=FALSE}
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load_current_gh("irworkshop/campfin")
+pacman::p_load(
+  readxl, # read excel files
+  rvest, # used to scrape website and get html elements
+  tidyverse, # data manipulation
+  stringdist, # calculate distances between strings
+  lubridate, # datetime strings
+  magrittr, # pipe opperators
+  janitor, # dataframe clean
+  refinr, # cluster and merge
+  scales, # format strings
+  knitr, # knit documents
+  vroom, # read files fast
+  httr, # http queries
+  glue, # combine strings
+  here, # relative storage
+  fs # search storage 
+)
+```
+
+This document should be run as part of the `R_campfin` project, which lives as a
+sub-directory of the more general, language-agnostic
+[`irworkshop/accountability_datacleaning`][tap] GitHub repository.
+
+The `R_campfin` project uses the [Rstudio projects][rproj] feature and should be
+run as such. The project also uses the dynamic `here::here()` tool for file
+paths relative to _your_ machine.
+
+```{r where_here}
+# where does this document knit?
+here::here()
+```
+
+[tap]: https://github.com/irworkshop/accountability_datacleaning
+[rproj]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects "Rproj"
+[03]: https://data.colorado.gov/Lobbyist/Directory-of-Lobbyists-in-Colorado/bqa5-gr84
+
+
+## Data
+
+Lobbyist data is obtained from the [Colorado Open Data Portal][03]. The data is as current as March 11, 2020.
+
+> About:   
+Information for each registered lobbyist, including contact details, and their associated income and expenses as summarized by month and associated report date for the State of Colorado dating back to 1995 provided by the Colorado Department of State (CDOS).
+
+
+## Import
+
+### Setting up Raw Data Directory
+
+```{r raw_dir}
+raw_dir <- dir_create(here("co", "lobby", "data", "raw", "exp"))
+```
+### Download from web
+```{r download, eval=FALSE}
+summary_url <- 'https://data.colorado.gov/api/views/bqa5-gr84/rows.csv?accessType=DOWNLOAD'
+exp_url <- 'https://data.colorado.gov/api/views/eqsm-7ah7/rows.csv?accessType=DOWNLOAD'
+  
+urls <- c(summary_url, exp_url)
+wget <- function(url, dir) {
+  system2(
+    command = "wget",
+    args = c(
+      "--no-verbose",
+      "--content-disposition",
+      url,
+      paste("-P", raw_dir)
+    )
+  )
+}
+
+if (!all_files_new(raw_dir)) {
+  map(urls, wget, raw_dir)
+}
+```
+
+### Read
+> Description:  
+Expenses and income summarized by month associated with lobbying activities. In a reporting month, income is reported based on the date that it is actually received. For example, in the event that a payment is made cumulatively over a three month period, they must report the full three month payment when the payment was received. If a lobbyist has multiple payments received by various clients, each dollar amount is reported separately by each client. If a lobbyist receives multiple payments on multiple bills from a single client, the monthly income report will be the total of what the client is paying the lobbyist for all of lobbying activities on the multiple bills. The statute specifies that lobbyists report the total amount they receive from the client, so in some cases the monthly dollar amount reported by a lobbyist is the total amount received may reflect a payment paid for a number of bills and activities. The payments are not itemized by bills or activities. In this dataset income is summarized by month.
+
+> Each row represents: 	Lobbyist name, id, address, and income and expense by month
+
+According to Colorado data portal, this dataset can be joined to: 
+> Bill Information and Position with Income of Lobbyist in Colorado, Characterization of Lobbyist Clients in Colorado, Directory of Lobbyist Clients in Colorado, Expenses for Lobbyists in Colorado, Subcontractors for Lobbyists in Colorado based on "primaryLobbyistId"
+
+```{r raw_read}
+cole <- read_csv(dir_ls(raw_dir, regexp = "Directory.+"), 
+                 col_types = cols(.default = col_character())) %>% 
+  clean_names()
+
+co_exp <- read_csv(dir_ls(raw_dir, regexp = "Expenses.+"), 
+                 col_types = cols(.default = col_character())) %>% 
+  clean_names()
+```
+
+## Explore
+
+```{r glimpse}
+head(cole)
+tail(cole)
+
+head(co_exp)
+tail(co_exp)
+```
+
+
+### Missing
+All records seem to be pretty complete. 
+```{r na_count}
+col_stats(cole, count_na)
+col_stats(co_exp, count_na)
+```
+
+We'll flag records without lobbyists' addresses.
+
+```{r flag na}
+cole <- cole %>% 
+  flag_na(lobbyist_address1)
+
+co_exp <- co_exp %>% 
+  flag_na(lobbyist_address1, expenditure_amount)
+```
+
+
+### Duplicates
+There isn't any duplicate column. 
+```{r dupe_flag}
+cole <- flag_dupes(cole, dplyr::everything())
+sum(cole$dupe_flag)
+
+co_exp <- flag_dupes(co_exp, dplyr::everything())
+sum(co_exp$dupe_flag)
+```
+
+### Categorical
+
+Since this registration is good for Oct 2019 to Oct. 2020, we will create a year column.
+
+```{r create year current}
+cole <- cole %>% 
+  mutate(year = 2020L)
+```
+
+
+
+#### Dates
+Since the dates are all read as characters, we will convert them back in to date objects. We can add a year variable to the dataframe based on the registration date.
+
+After examining the results, we can clearly see that there're some human errors when entering the date. 
+
+```{r date_range}
+co_exp <- co_exp %>% 
+   mutate_at(.vars = vars(ends_with('date')), as.Date, format = "%m/%d/%Y %H:%M:%S %p") %>% 
+   mutate(year = year(expenditure_receipt_date))
+
+min(co_exp$expenditure_receipt_date, na.rm = T)
+max(co_exp$expenditure_receipt_date, na.rm = T)
+```
+
+#### Year
+We can see the distribution of the `year` variable as such.
+```{r year distribute}
+tabyl(co_exp$year)
+```
+
+
+```{r year count, echo=FALSE}
+co_exp %>% 
+  mutate(year = as.numeric(year)) %>% 
+  filter(year < 2021 & year > 1994) %>% 
+  count(year) %>% 
+  mutate(even = is_even(year)) %>% 
+  ggplot(aes(x = year, y = n)) +
+  geom_col(aes(fill = even)) + 
+  scale_fill_brewer(palette = "Dark2") +
+  scale_y_continuous(labels = comma) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "Colorado Lobbyist Expenses by year",
+    caption = "Source: Colorado Secretary of State via data.colorado.gov",
+    fill = "Election year",
+    x = "year",
+    y = "Count"
+  )
+```
+
+
+### Continuous
+We can examine the amounts in both the summary and the expenditure database
+```{r cont}
+cole <- cole %>% 
+  mutate_at(.vars = vars(starts_with('total_monthly')), .funs = as.numeric)
+
+co_exp <- co_exp %>% 
+  mutate(expenditure_amount = as.numeric(expenditure_amount))
+
+summary(cole$total_monthly_income)
+summary(cole$total_monthly_expenses)
+
+summary(co_exp$expenditure_amount)
+```
+
+
+### Wrangle
+To improve the searchability of the database, we will perform some consistent,
+confident string normalization. For geographic variables like city names and
+ZIP codes, the corresponding `campfin::normal_*()` functions are taylor made to
+facilitate this process.
+
+
+### Address
+
+For the street `addresss` variable, the `campfin::normal_address()` function
+will force consistence case, remove punctuation, and abbreviation official 
+USPS suffixes.
+
+```{r address_norm}
+cole <- cole %>% 
+    # combine street addr
+  unite(
+    col = lobbyist_address,
+    starts_with("lobbyist_address"),
+    sep = " ",
+    remove = FALSE,
+    na.rm = TRUE
+  ) %>% 
+  # normalize combined addr
+    mutate(lobbyist_address_norm = normal_address(lobbyist_address,abbs = usps_street,
+      na_rep = TRUE)) %>% 
+  select(-ends_with("address"))
+
+co_exp <- co_exp %>% 
+    # combine street addr
+  unite(
+    col = lobbyist_address,
+    starts_with("lobbyist_address"),
+    sep = " ",
+    remove = FALSE,
+    na.rm = TRUE
+  ) %>% 
+  # normalize combined addr
+    mutate(lobbyist_address_norm = normal_address(lobbyist_address,abbs = usps_street,
+      na_rep = TRUE)) %>% 
+  select(-ends_with("address"))
+```
+
+```{r address_view}
+cole %>% 
+  select(contains("address")) %>% 
+  distinct() %>% 
+  sample_n(10) %>% 
+  glimpse()
+
+co_exp %>% 
+  select(contains("address")) %>% 
+  distinct() %>% 
+  sample_n(10) %>% 
+  glimpse()
+```
+
+### ZIP
+
+For ZIP codes, the `campfin::normal_zip()` function will attempt to create
+valied _five_ digit codes by removing the ZIP+4 suffix and returning leading
+zeroes dropped by other programs like Microsoft Excel.
+
+```{r zip_norm}
+cole <- cole %>% 
+    mutate(lobbyist_zip_norm = normal_zip(lobbyist_zip, na_rep = T)) %>% 
+  rename(lobbyist_zip5 = lobbyist_zip_norm)
+
+co_exp <- co_exp %>% 
+    mutate(lobbyist_zip_norm = normal_zip(lobbyist_zip, na_rep = T)) %>% 
+  rename(lobbyist_zip5 = lobbyist_zip_norm)
+```
+
+```{r zip_progress}
+progress_table(
+  cole$lobbyist_zip,
+  cole$lobbyist_zip5,
+  compare = valid_zip
+)
+
+progress_table(
+  co_exp$lobbyist_zip,
+  co_exp$lobbyist_zip5,
+  compare = valid_zip
+)
+```
+
+### State
+
+By examining the percentage of lobbyist_state that are considered valid, we can see that the variable in both datasets doesn't need to be normalized.
+
+```{r state_norm}
+prop_in(cole$lobbyist_state, valid_state, na.rm = T)
+prop_in(co_exp$lobbyist_state, valid_state, na.rm = T)
+```
+
+### City
+
+Cities are the most difficult geographic variable to normalize, simply due to
+the wide variety of valid cities and formats.
+#### Normal
+
+The `campfin::normal_city()` function is a good coleart, again converting case,
+removing punctuation, but _expanding_ USPS abbreviations. We can also remove
+`invalid_city` values.
+
+```{r city_norm}
+cole <- cole %>% 
+      mutate(lobbyist_city_norm = normal_city(lobbyist_city,abbs = usps_city,
+      states = usps_state,
+      na = invalid_city,
+      na_rep = TRUE))
+
+prop_in(cole$lobbyist_city_norm, valid_city, na.rm = T)
+
+co_exp <- co_exp %>% 
+      mutate(lobbyist_city_norm = normal_city(lobbyist_city,abbs = usps_city,
+      states = usps_state,
+      na = invalid_city,
+      na_rep = TRUE))
+
+prop_in(co_exp$lobbyist_city_norm, valid_city, na.rm = T)
+```
+
+#### Swap
+
+We can further improve normalization by comparing our normalized value
+against the _expected_ value for that record's state abbreviation and ZIP code.
+If the normalized value is either an abbreviation for or very similar to the
+expected value, we can confidently swap those two.
+
+```{r city_swap lobbyist}
+cole <- cole %>% 
+  left_join(
+    y = zipcodes,
+    by = c(
+      "lobbyist_state" = "state",
+      "lobbyist_zip5" = "zip"
+    )
+  ) %>% 
+  rename(lobbyist_city_match = city) %>% 
+  mutate(
+    match_abb = is_abbrev(lobbyist_city_norm, lobbyist_city_match),
+    match_dist = str_dist(lobbyist_city_norm, lobbyist_city_match),
+    lobbyist_city_swap = if_else(
+      condition = !is.na(match_dist) & match_abb | match_dist == 1,
+      true = lobbyist_city_match,
+      false = lobbyist_city_norm
+    )
+  ) %>% 
+  select(
+    -lobbyist_city_match,
+    -match_dist,
+    -match_abb
+  )
+
+co_exp <- co_exp %>% 
+  left_join(
+    y = zipcodes,
+    by = c(
+      "lobbyist_state" = "state",
+      "lobbyist_zip5" = "zip"
+    )
+  ) %>% 
+  rename(lobbyist_city_match = city) %>% 
+  mutate(
+    match_abb = is_abbrev(lobbyist_city_norm, lobbyist_city_match),
+    match_dist = str_dist(lobbyist_city_norm, lobbyist_city_match),
+    lobbyist_city_swap = if_else(
+      condition = !is.na(match_dist) & match_abb | match_dist == 1,
+      true = lobbyist_city_match,
+      false = lobbyist_city_norm
+    )
+  ) %>% 
+  select(
+    -lobbyist_city_match,
+    -match_dist,
+    -match_abb
+  )
+```
+
+
+After the two normalization steps, the percentage of valid cities is close to 100% for both datasets. 
+
+#### Progress
+
+```{r city_progress, echo=FALSE}
+many_city <- c(valid_city, extra_city)
+progress <- progress_table(
+  cole$lobbyist_city,
+  cole$lobbyist_city_norm,
+  cole$lobbyist_city_swap,
+  compare = many_city
+) %>% mutate(stage = as_factor(stage))
+
+progress_exp <- progress_table(
+  co_exp$lobbyist_city,
+  co_exp$lobbyist_city_norm,
+  co_exp$lobbyist_city_swap,
+  compare = many_city
+) %>% mutate(stage = as_factor(stage))
+```
+
+
+```{r progress_print, echo=FALSE}
+kable(progress, digits = 3, caption = 'CO Lobbyists Summary Data Normalization Progress')
+kable(progress_exp, digits = 3, caption = 'CO Lobbyists Expenditure Data Normalization Progress')
+```
+
+You can see how the percentage of valid values increased with each stage.
+
+```{r progress_bar, echo=FALSE}
+progress %>% 
+  ggplot(aes(x = stage, y = prop_in)) +
+  geom_hline(yintercept = 0.99) +
+  geom_col(fill = dark2["purple"]) +
+  coord_cartesian(ylim = c(0.75, 1)) +
+  scale_y_continuous(labels = percent) +
+  labs(
+    title = "Colorado Lobbyists Summary Normalization Progress",
+    x = "stage",
+    y = "Percent Valid"
+  )
+
+
+progress_exp %>% 
+  ggplot(aes(x = stage, y = prop_in)) +
+  geom_hline(yintercept = 0.99) +
+  geom_col(fill = dark2["purple"]) +
+  coord_cartesian(ylim = c(0.75, 1)) +
+  scale_y_continuous(labels = percent) +
+  labs(
+    title = "Colorado Lobbyists' Expenditures Normalization Progress",
+    x = "stage",
+    y = "Percent Valid"
+  )
+```
+
+More importantly, the number of distinct values decreased each stage. We were
+able to confidently change many distinct invalid values to their valid
+equivalent.
+
+
+## Conclude
+
+```{r clean_glimpse}
+glimpse(sample_n(cole, 20))
+glimpse(sample_n(co_exp, 20))
+```
+
+1. There are `r nrow(cole)` records in the summary database and `r nrow(co_exp)` in the expenditure database.
+1. There're `r sum(cole$dupe_flag)` duplicate records in the summary database and `r sum(co_exp$dupe_flag)` in the expenditure database.
+1. The range and distribution of `amount` and `date` seem reasonable.
+1. There are `r sum(co_exp$na_flag)` records missing either address or expenditure amount.
+1. Consistency in goegraphic data has been improved with `campfin::normal_*()`.
+1. The 4-digit `year` variable has been created with `lubridate::year()`.
+
+## Export
+
+```{r clean_dir}
+clean_dir <- dir_create(here("co", "lobby", "data", "exp","clean"))
+```
+
+```{r write_clean}
+write_csv(
+  x = cole %>% rename( lobbyist_city_clean = lobbyist_city_swap),
+  path = path(clean_dir, "co_lob_summary_clean.csv"),
+  na = ""
+)
+
+
+write_csv(
+  x = co_exp %>% rename(lobbyist_city_clean = lobbyist_city_swap),
+  path = path(clean_dir, "co_lob_.csv"),
+  na = ""
+)
+```

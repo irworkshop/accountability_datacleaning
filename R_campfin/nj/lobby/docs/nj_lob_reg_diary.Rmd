@@ -32,7 +32,7 @@ set.seed(5)
 ```
 
 ```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
-fs::dir_create(here::here("sc", "lobby", "docs"))
+fs::dir_create(here::here("nj", "lobby", "docs"))
 ```
 
 ## Project
@@ -102,63 +102,40 @@ here::here()
 
 [01]: https://github.com/irworkshop/accountability_datacleaning "TAP repo"
 [02]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects "Rproj"
-[03]: https://apps.sc.gov/PublicReporting/Index.aspx
-[04]: https://apps.sc.gov/LobbyingActivity/LAIndex.aspx
+[03]: https://www.elec.state.nj.us/forcandidates/gaa_pub_info.htm
+[04]: https://www3-elec.mwg.state.nj.us/ELEC_AGAA/entitysearch.aspx
 
 ## Data
 
-Lobbyist data is obtained from the [South Carolina State Ethics Commission][03].
+Lobbyist data is obtained from the [New Jersey Election Law Enforcement Commission][03].
 
-> #### Welcome
-> Registrations for both lobbyists and their respective lobbyist's principals are available online
-for viewing. Disclosure for both lobbyists and their respective lobbyist's principals will also be
-available at the conclusion of the first disclosure period, June 30, 2009, for the period, January
-1, 2009 through May 31, 2009.
+> #### Download
+> "View Quarterly Reports and Quarterly Summary" -> "Entity Search" -> "Search" -> "Download Records"
 
-The [lobbying activity page][04], we can see the files that can be retrieved:
+The [Entity Search page][04], we can see a table is generated and can be retrieved:
 
+The data is downloaded on March 11, 2020.
 
-> #### Lobbying Activity
-> Welcome to the State Ethics Commission Online Public Disclosure and Accountability Reporting
-System for Lobbying Activity. Registrations for both lobbyists and their respective lobbyist's
-principals are available online for viewing.
-> 
-> Disclosure for both lobbyists and their respective lobbyist's principals are available for the
-period June 30, 2009 through the present.
-> 
-> These filings can be accessed by searching individual reports by lobbyist and lobbyist’s
-principal names and by complete list of current lobbyist and lobbyist’s principal registrations.
-
-> #### List Reports
-View a list of lobbyists, lobbyists' principals or their contact information.
-> 
-> * [Lobbyists and Their Principals](https://apps.sc.gov/LobbyingActivity/SelectLobbyistGroup.aspx)
-> * [Download Lobbyist Contacts (CSV file)](https://apps.sc.gov/LobbyingActivity/DisplayCsv.aspx)
-> * [Individual Lobbyist Lookup](https://apps.sc.gov/LobbyingActivity/SearchLobbyistContact.aspx)
-> * [Lobbyists' Principals and Their Lobbyists](https://apps.sc.gov/LobbyingActivity/SelectLobbyistPrincipalGroup.aspx)
-> * [Download Lobbyist's Principal Contacts (CSV file)](https://apps.sc.gov/LobbyingActivity/DisplayCsv.aspx)
-> * [Individual Lobbyist's Principal Lookup](https://apps.sc.gov/LobbyingActivity/SearchLPContact.aspx)
-> * [Year End Compilation Report](https://apps.sc.gov/LobbyingActivity/CompilationReport.aspx)
 
 First, we must download a reporting linking lobbyists to their principals.
 
 ```{r raw_dir}
-raw_dir <- here("sc", "lobby", "data", "raw", "reg")
-dir_create(raw_dir)
+raw_dir <- dir_create(here("nj", "lobby", "data", "raw", "reg"))
 ```
 
 
 ```{r eval=FALSE}
 # not working
-sclr <- read_csv(dir_ls(raw_dir))
+njlr <- read_csv(dir_ls(raw_dir))
 ```
 
-Then, we can download separate lists of lobbyists and principal contacts.
+Then, we can see that the date columns are all read as text, and we'll convert them back to date objects with `as.Date`.
 
-```{r eval=FALSE}
-# not working
-POST("https://apps.sc.gov/LobbyingActivity/DisplayCsv.aspx")
+```{r convert date}
+njlr <- njlr %>% 
+  mutate_at(vars(ends_with("date")), as.Date, format = "%m/%d/%Y")
 ```
+
 
 ## Import
 
