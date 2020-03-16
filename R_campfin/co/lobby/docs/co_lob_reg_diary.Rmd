@@ -101,22 +101,14 @@ here::here()
 
 [01]: https://github.com/irworkshop/accountability_datacleaning "TAP repo"
 [02]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects "Rproj"
-[03]: https://www.elec.state.nj.us/forcandidates/gaa_pub_info.htm
-[04]: https://www3-elec.mwg.state.nj.us/ELEC_AGAA/entitysearch.aspx
+[03]: https://data.colorado.gov/Lobbyist/Directory-of-Lobbyist-Clients-in-Colorado/35k5-cv8s
 
 ## Data
 
-Lobbyist data is obtained from the [New Jersey Election Law Enforcement Commission][03].
+Lobbyist data is obtained from the [Colorado Open Data Portal][03]. The data is as current as March 11, 2020.
 
-> #### Download
-> "View Quarterly Reports and Quarterly Summary" -> "Entity Search" -> "Search" -> "Download Records"
-
-The [Entity Search page][04], we can see a table is generated and can be retrieved:
-
-The data is downloaded on March 11, 2020.
-
-
-First, we must download a reporting linking lobbyists to their principals.
+> About:   
+Lobbyist name and address and the names and addresses of their associated clients provided by the Colorado Department of State (CDOS).
 
 ```{r raw_dir}
 raw_dir <- dir_create(here("co", "lobby", "data", "raw", "reg"))
