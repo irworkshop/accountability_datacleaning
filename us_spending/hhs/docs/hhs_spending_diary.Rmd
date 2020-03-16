@@ -1,6 +1,6 @@
 ---
-title: "{State} {Type}"
-author: "First Last"
+title: "Health and Human Services Spending"
+author: "Kiernan Nicholls"
 date: "`r Sys.time()`"
 output:
   github_document: 
@@ -91,11 +91,11 @@ pacman::p_load(
 )
 ```
 
-This document should be run as part of the `R_campfin` project, which lives as a
-sub-directory of the more general, language-agnostic
+This document should be run as part of the `us_spending` project, which lives as
+a sub-directory of the more general, language-agnostic
 [`irworkshop/accountability_datacleaning`][tap] GitHub repository.
 
-The `R_campfin` project uses the [RStudio projects][rproj] feature and should be
+The `us_spending` project uses the [RStudio projects][rproj] feature and should be
 run as such. The project also uses the dynamic `here::here()` tool for file
 paths relative to _your_ machine.
 
@@ -118,14 +118,16 @@ transaction data for full fiscal years. They’re a great way to get a view into
 broad spending trends and, best of all, the files are already prepared — you can
 access them instantaneously.
 
+Data can be obtained from the archive as annual files for each agency.
+
 ## Download
 
-If the zip archive has not been downloaded, we can do so now.
+If the zip archives have not been downloaded, we can do so now.
 
 ```{r download}
-archive_url <- "https://files.usaspending.gov/award_data_archive/"
+spend_url <- "https://files.usaspending.gov/award_data_archive/"
 hhs_files <- glue("FY{2008:2020}_075_Contracts_Full_20200205.zip")
-hhs_urls <- paste0(archive_url, hhs_files)
+hhs_urls <- str_c(spend_url, hhs_files)
 raw_dir <- dir_create(here("hhs", "data", "raw"))
 hhs_paths <- path(raw_dir, hhs_files)
 if (!all(file_exists(hhs_paths))) {
@@ -162,10 +164,9 @@ dict <- dict %>%
 
 dict %>% 
   head(10) %>% 
-  mutate_at(vars(definition), str_trunc, 69) %>% 
+  mutate_at(vars(definition), str_trunc, 75) %>% 
   kable()
 ```
-
 
 ## Read
 
@@ -177,47 +178,53 @@ hhs <- vroom(
   delim = ",",
   escape_backslash = FALSE,
   escape_double = FALSE,
+  guess_max = 0,
+  na = c("", "NA", "NAN", "*"),
   col_types = cols(
-    .default = col_skip(),
+    .default = col_character(),
     action_date_fiscal_year = col_integer(),
     action_date = col_date(),
-    modification_number = col_integer(),
-    parent_award_agency_id = col_integer(),
-    parent_award_agency_name = col_character(),
-    total_dollars_obligated = col_double(),
-    awarding_agency_code = col_integer(),
-    awarding_agency_name = col_character(),
-    awarding_sub_agency_code = col_integer(),
-    awarding_sub_agency_name = col_character(),
-    awarding_office_code = col_integer(),
-    awarding_office_name = col_character(),
-    recipient_name = col_character(),
-    recipient_parent_name = col_character(),
-    recipient_country_name = col_character(),
-    recipient_address_line_1 = col_character(),
-    recipient_city_name = col_character(),
-    recipient_state_code = col_character(),
-    recipient_zip_4_code = col_character(),
-    recipient_phone_number = col_character(),
-    primary_place_of_performance_city_name = col_character(),
-    primary_place_of_performance_state_code = col_character(),
-    primary_place_of_performance_zip_4 = col_character(),
-    award_type_code = col_character(),
-    award_description = col_character()
+    federal_action_obligation = col_double()
   )
 )
 ```
 
-```{r}
-# properly read
-count(hhs, awarding_sub_agency_name, sort = TRUE)
+We can count a discrete categorical variable to ensure the file was read
+properly. If there was an error reading one of the text files, the columns will
+likely shift.
+
+```{r raw_check}
+count(hhs, foreign_funding, sort = TRUE)
 ```
 
-```{r}
-# filter to only cdc
-# cdc <- filter(cdc, parent_award_agency_id == 7523)
-```
+Using the dictionary, we can select and rename only the 19 variables we want.
 
+```{r raw_select}
+hhs <- hhs %>% 
+  select(
+    key = contract_transaction_unique_key,
+    id = award_id_piid,
+    fy = action_date_fiscal_year,
+    date = action_date,
+    amount = federal_action_obligation,
+    # agency_code = awarding_agency_code,
+    agency = awarding_agency_name,
+    # sub_code = awarding_sub_agency_code,
+    sub_agency = awarding_sub_agency_name,
+    # office_code = awarding_office_code,
+    office = awarding_office_name,
+    recipient = recipient_name,
+    parent = recipient_parent_name,
+    address1 = recipient_address_line_1,
+    address2 = recipient_address_line_2,
+    city = recipient_city_name,
+    state = recipient_state_code,
+    zip = recipient_zip_4_code,
+    place = primary_place_of_performance_zip_4,
+    type = award_type_code,
+    desc = award_description
+  )
+```
 
 ## Explore
 
@@ -227,32 +234,95 @@ tail(hhs)
 glimpse(sample_n(hhs, 20))
 ```
 
-```{r}
+## Missing
+
+There are only a handful of records missing one of the key variables we need
+to identify a unique spending transaction.
+
+```{r na_count}
+col_stats(hhs, count_na)
+```
+
+```{r na_flag}
+hhs <- hhs %>% flag_na(date, agency, amount, recipient)
+sum(hhs$na_flag)
+mean(hhs$na_flag)
+```
+
+## Duplicates
+
+There are a number of records that could potentially be duplicates of one 
+another. Much of them have an `amount` value of zero, so they might not be
+true duplicates. We can flag them nonetheless.
+
+```{r dupe_flag}
+hhs <- flag_dupes(hhs, -key)
+sum(hhs$dupe_flag)
+```
+
+```{r dupe_view}
+hhs %>% 
+  filter(dupe_flag) %>% 
+  select(date, agency, amount, recipient)
+```
+
+```{r dupe_hist, echo=FALSE}
+hhs %>% 
+  filter(dupe_flag) %>% 
+  ggplot(aes(x = amount)) +
+  geom_histogram(fill = dark2["purple"], bins = 15)+
+  scale_x_continuous(trans = "log10", labels = dollar) +
+  labs(
+    title = "Health and Human Services Spending Duplicates",
+    caption = "Source: USASpending.gov",
+    x = "Amount",
+    y = "Count"
+  )
+```
+
+## Amount
+
+_Many_ spending transactions have a value of zero.
+
+```{r amount}
+summary(hhs$amount)
+mean(hhs$amount <= 0)
+```
+
+```{r bar_quart_spend, echo=FALSE}
 hhs %>%
-  mutate(y = year(action_date), q = quarter(action_date)) %>%
+  mutate(y = year(date), q = quarter(date)) %>%
   group_by(y, q) %>%
-  summarise(sum = sum(total_dollars_obligated, na.rm = TRUE) / 1e9) %>% 
+  summarise(sum = sum(amount, na.rm = TRUE) / 1e9) %>% 
+  filter(y > 2007) %>% 
   ggplot(aes(x = q, y = sum)) +
   geom_col(aes(fill = sum)) +
   scale_fill_viridis_c(end = 0.75, guide = FALSE) +
   scale_y_continuous(labels = dollar) +
   facet_wrap(~y, nrow = 1) +
-  theme(
-    panel.grid.minor.x = element_blank()
-  ) +
+  theme(panel.grid.minor.x = element_blank()) +
   labs(
-    title = "Department of Health and Human Services Spending",
+    title = "Health and Human Services Spending Amounts",
     caption = "Source: USASpending.gov",
     x = "Quarter",
     y = "Obligated Spending (Billion USD)"
   )
 ```
 
-## Conclude
+## Wrangle
 
-```{r clean_glimpse}
-# glimpse(sample_n(hhs, 20))
+We do not need to normaliza any of the geographic variable much. We can trim the
+`zip` variable and that is it.
+
+```{r geo_check}
+sample(hhs$address1, 6)
+progress_table(hhs$state, compare = valid_state)
+hhs <- mutate_at(hhs, vars(zip, place), normal_zip)
+progress_table(hhs$zip, compare = valid_zip)
+progress_table(hhs$city, compare = c(valid_city, extra_city))
 ```
+
+## Conclude
 
 1. There are `r nrow(hhs)` records in the database.
 1. There are `r sum(hhs$dupe_flag)` duplicate records in the database.

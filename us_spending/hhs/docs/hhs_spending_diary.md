@@ -1,7 +1,7 @@
-{State} {Type}
+Health and Human Services Spending
 ================
-First Last
-2020-03-13 17:04:00
+Kiernan Nicholls
+2020-03-16 11:42:47
 
   - [Project](#project)
   - [Objectives](#objectives)
@@ -11,6 +11,10 @@ First Last
   - [Layout](#layout)
   - [Read](#read)
   - [Explore](#explore)
+  - [Missing](#missing)
+  - [Duplicates](#duplicates)
+  - [Amount](#amount)
+  - [Wrangle](#wrangle)
   - [Conclude](#conclude)
   - [Export](#export)
 
@@ -74,12 +78,12 @@ pacman::p_load(
 )
 ```
 
-This document should be run as part of the `R_campfin` project, which
+This document should be run as part of the `us_spending` project, which
 lives as a sub-directory of the more general, language-agnostic
 [`irworkshop/accountability_datacleaning`](https://github.com/irworkshop/accountability_datacleaning)
 GitHub repository.
 
-The `R_campfin` project uses the [RStudio
+The `us_spending` project uses the [RStudio
 projects](https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects)
 feature and should be run as such. The project also uses the dynamic
 `here::here()` tool for file paths relative to *your* machine.
@@ -100,14 +104,16 @@ Archive](https://www.usaspending.gov/#/download_center/award_data_archive).
 > get a view into broad spending trends and, best of all, the files are
 > already prepared — you can access them instantaneously.
 
+Data can be obtained from the archive as annual files for each agency.
+
 ## Download
 
-If the zip archive has not been downloaded, we can do so now.
+If the zip archives have not been downloaded, we can do so now.
 
 ``` r
-archive_url <- "https://files.usaspending.gov/award_data_archive/"
+spend_url <- "https://files.usaspending.gov/award_data_archive/"
 hhs_files <- glue("FY{2008:2020}_075_Contracts_Full_20200205.zip")
-hhs_urls <- paste0(archive_url, hhs_files)
+hhs_urls <- str_c(spend_url, hhs_files)
 raw_dir <- dir_create(here("hhs", "data", "raw"))
 hhs_paths <- path(raw_dir, hhs_files)
 if (!all(file_exists(hhs_paths))) {
@@ -145,22 +151,22 @@ dict <- dict %>%
 
 dict %>% 
   head(10) %>% 
-  mutate_at(vars(definition), str_trunc, 69) %>% 
+  mutate_at(vars(definition), str_trunc, 75) %>% 
   kable()
 ```
 
-| award\_element                       | definition                                                          |
-| :----------------------------------- | :------------------------------------------------------------------ |
-| award\_id\_piid                      | The unique identifier of the specific award being reported.         |
-| modification\_number                 | The identifier of an action being reported that indicates the spec… |
-| transaction\_number                  | Tie Breaker for legal, unique transactions that would otherwise ha… |
-| parent\_award\_agency\_id            | Identifier used to link agency in FPDS-NG to referenced IDV inform… |
-| parent\_award\_agency\_name          | Name of the agency associated with the code in the Referenced IDV … |
-| parent\_award\_modification\_number  | When reporting orders under Indefinite Delivery Vehicles (IDV) suc… |
-| federal\_action\_obligation          | Amount of Federal government’s obligation, de-obligation, or liabi… |
-| total\_dollars\_obligated            | This is a system generated element providing the sum of all the am… |
-| base\_and\_exercised\_options\_value | The change (from this transaction only) to the current contract va… |
-| current\_total\_value\_of\_award     | Total amount obligated to date on an award. For a contract, this a… |
+| award\_element                       | definition                                                                |
+| :----------------------------------- | :------------------------------------------------------------------------ |
+| award\_id\_piid                      | The unique identifier of the specific award being reported.               |
+| modification\_number                 | The identifier of an action being reported that indicates the specific s… |
+| transaction\_number                  | Tie Breaker for legal, unique transactions that would otherwise have the… |
+| parent\_award\_agency\_id            | Identifier used to link agency in FPDS-NG to referenced IDV information.  |
+| parent\_award\_agency\_name          | Name of the agency associated with the code in the Referenced IDV Agency… |
+| parent\_award\_modification\_number  | When reporting orders under Indefinite Delivery Vehicles (IDV) such as a… |
+| federal\_action\_obligation          | Amount of Federal government’s obligation, de-obligation, or liability f… |
+| total\_dollars\_obligated            | This is a system generated element providing the sum of all the amounts … |
+| base\_and\_exercised\_options\_value | The change (from this transaction only) to the current contract value (i… |
+| current\_total\_value\_of\_award     | Total amount obligated to date on an award. For a contract, this amount … |
 
 ## Read
 
@@ -173,167 +179,230 @@ hhs <- vroom(
   delim = ",",
   escape_backslash = FALSE,
   escape_double = FALSE,
+  guess_max = 0,
+  na = c("", "NA", "NAN", "*"),
   col_types = cols(
-    .default = col_skip(),
+    .default = col_character(),
     action_date_fiscal_year = col_integer(),
     action_date = col_date(),
-    modification_number = col_integer(),
-    parent_award_agency_id = col_integer(),
-    parent_award_agency_name = col_character(),
-    total_dollars_obligated = col_double(),
-    awarding_agency_code = col_integer(),
-    awarding_agency_name = col_character(),
-    awarding_sub_agency_code = col_integer(),
-    awarding_sub_agency_name = col_character(),
-    awarding_office_code = col_integer(),
-    awarding_office_name = col_character(),
-    recipient_name = col_character(),
-    recipient_parent_name = col_character(),
-    recipient_country_name = col_character(),
-    recipient_address_line_1 = col_character(),
-    recipient_city_name = col_character(),
-    recipient_state_code = col_character(),
-    recipient_zip_4_code = col_character(),
-    recipient_phone_number = col_character(),
-    primary_place_of_performance_city_name = col_character(),
-    primary_place_of_performance_state_code = col_character(),
-    primary_place_of_performance_zip_4 = col_character(),
-    award_type_code = col_character(),
-    award_description = col_character()
+    federal_action_obligation = col_double()
   )
 )
 ```
 
-``` r
-# properly read
-count(hhs, awarding_sub_agency_name, sort = TRUE)
-#> # A tibble: 17 x 2
-#>    awarding_sub_agency_name                                             n
-#>    <chr>                                                            <int>
-#>  1 NATIONAL INSTITUTES OF HEALTH                                   420971
-#>  2 INDIAN HEALTH SERVICE                                           240478
-#>  3 CENTERS FOR DISEASE CONTROL AND PREVENTION                      133245
-#>  4 OFFICE OF THE ASSISTANT SECRETARY FOR ADMINISTRATION (ASA)       75625
-#>  5 FOOD AND DRUG ADMINISTRATION                                     69285
-#>  6 CENTERS FOR MEDICARE AND MEDICAID SERVICES                       38918
-#>  7 HEALTH RESOURCES AND SERVICES ADMINISTRATION                     31746
-#>  8 AGENCY FOR HEALTHCARE RESEARCH AND QUALITY                        5309
-#>  9 OFFICE OF ASSISTANT SECRETARY FOR PREPAREDNESS AND RESPONSE       4878
-#> 10 SUBSTANCE ABUSE AND MENTAL HEALTH SERVICES ADMINISTRATION         4007
-#> 11 OFFICE OF ASSISTANT SECRETARY FOR ADMINISTRATION AND MANAGEMENT   3873
-#> 12 OFFICE OF THE INSPECTOR GENERAL                                    472
-#> 13 PROGRAM SUPPORT CENTER                                             118
-#> 14 OFFICE OF ASST SECRETARY FOR HEALTH EXCEPT NATIONAL CENTERS         15
-#> 15 AGENCY FOR HEALTH CARE POLICY AND RESEARCH                           3
-#> 16 OFFICE OF THE SECRETARY OF HEALTH AND HUMAN SERVICES                 2
-#> 17 HEALTH AND HUMAN SERVICES, DEPARTMENT OF                             1
-```
+We can count a discrete categorical variable to ensure the file was read
+properly. If there was an error reading one of the text files, the
+columns will likely shift.
 
 ``` r
-# filter to only cdc
-# cdc <- filter(cdc, parent_award_agency_id == 7523)
+count(hhs, foreign_funding, sort = TRUE)
+#> # A tibble: 4 x 2
+#>   foreign_funding      n
+#>   <chr>            <int>
+#> 1 <NA>            583355
+#> 2 X               439958
+#> 3 B                 5484
+#> 4 A                  149
+```
+
+Using the dictionary, we can select and rename only the 19 variables we
+want.
+
+``` r
+hhs <- hhs %>% 
+  select(
+    key = contract_transaction_unique_key,
+    id = award_id_piid,
+    fy = action_date_fiscal_year,
+    date = action_date,
+    amount = federal_action_obligation,
+    # agency_code = awarding_agency_code,
+    agency = awarding_agency_name,
+    # sub_code = awarding_sub_agency_code,
+    sub_agency = awarding_sub_agency_name,
+    # office_code = awarding_office_code,
+    office = awarding_office_name,
+    recipient = recipient_name,
+    parent = recipient_parent_name,
+    address1 = recipient_address_line_1,
+    address2 = recipient_address_line_2,
+    city = recipient_city_name,
+    state = recipient_state_code,
+    zip = recipient_zip_4_code,
+    place = primary_place_of_performance_zip_4,
+    type = award_type_code,
+    desc = award_description
+  )
 ```
 
 ## Explore
 
 ``` r
 head(hhs)
-#> # A tibble: 6 x 25
-#>   modification_nu… parent_award_ag… parent_award_ag… total_dollars_o… action_date action_date_fis…
-#>              <int>            <int> <chr>                       <dbl> <date>                 <int>
-#> 1               21               NA <NA>                    33640675. 2008-09-30              2008
-#> 2               25               NA <NA>                          NA  2008-09-30              2008
-#> 3                0             7530 CENTERS FOR MED…              NA  2008-09-30              2008
-#> 4                0               NA <NA>                          NA  2008-09-30              2008
-#> 5                2               NA <NA>                          NA  2008-09-30              2008
-#> 6                7               NA <NA>                          NA  2008-09-30              2008
-#> # … with 19 more variables: awarding_agency_code <int>, awarding_agency_name <chr>,
-#> #   awarding_sub_agency_code <int>, awarding_sub_agency_name <chr>, awarding_office_code <int>,
-#> #   awarding_office_name <chr>, recipient_name <chr>, recipient_parent_name <chr>,
-#> #   recipient_country_name <chr>, recipient_address_line_1 <chr>, recipient_city_name <chr>,
-#> #   recipient_state_code <chr>, recipient_zip_4_code <chr>, recipient_phone_number <chr>,
-#> #   primary_place_of_performance_city_name <chr>, primary_place_of_performance_state_code <chr>,
-#> #   primary_place_of_performance_zip_4 <chr>, award_type_code <chr>, award_description <chr>
+#> # A tibble: 6 x 18
+#>   key   id       fy date        amount agency sub_agency office recipient parent address1 address2
+#>   <chr> <chr> <int> <date>       <dbl> <chr>  <chr>      <chr>  <chr>     <chr>  <chr>    <chr>   
+#> 1 7529… HHSN…  2008 2008-09-30  1.95e5 DEPAR… NATIONAL … OD OM… TRIANGLE… TRIAN… 505 20T… <NA>    
+#> 2 7529… HHSN…  2008 2008-09-30  1.19e3 DEPAR… NATIONAL … OD OM… TRIANGLE… TRIAN… 505 20T… <NA>    
+#> 3 7530… HHSM…  2008 2008-09-30  2.98e5 DEPAR… CENTERS F… DEPT … GROUP HE… EMBLE… 441 9TH… <NA>    
+#> 4 7530… HHSM…  2008 2008-09-30  1.00e3 DEPAR… CENTERS F… DEPT … QUALITY … VIRGI… 3001 CH… <NA>    
+#> 5 7529… HHSN…  2008 2008-09-30  1.09e6 DEPAR… NATIONAL … NIDDK… CSR, INC. CSR  … 2107 WI… <NA>    
+#> 6 7555… HHSP…  2008 2008-09-30 -1.86e5 DEPAR… OFFICE OF… DEPT … HEALTHCA… HEALT… 63 MIDD… <NA>    
+#> # … with 6 more variables: city <chr>, state <chr>, zip <chr>, place <chr>, type <chr>, desc <chr>
 tail(hhs)
-#> # A tibble: 6 x 25
-#>   modification_nu… parent_award_ag… parent_award_ag… total_dollars_o… action_date action_date_fis…
-#>              <int>            <int> <chr>                       <dbl> <date>                 <int>
-#> 1               NA               NA <NA>                       54396. 2019-10-01              2020
-#> 2                0               NA <NA>                           0  2019-10-01              2020
-#> 3               NA               NA <NA>                           0  2019-10-01              2020
-#> 4               NA             7529 NATIONAL INSTIT…        38614662. 2019-10-01              2020
-#> 5               NA             4732 FEDERAL ACQUISI…            2923. 2019-10-01              2020
-#> 6               NA               NA <NA>                      452641. 2019-10-01              2020
-#> # … with 19 more variables: awarding_agency_code <int>, awarding_agency_name <chr>,
-#> #   awarding_sub_agency_code <int>, awarding_sub_agency_name <chr>, awarding_office_code <int>,
-#> #   awarding_office_name <chr>, recipient_name <chr>, recipient_parent_name <chr>,
-#> #   recipient_country_name <chr>, recipient_address_line_1 <chr>, recipient_city_name <chr>,
-#> #   recipient_state_code <chr>, recipient_zip_4_code <chr>, recipient_phone_number <chr>,
-#> #   primary_place_of_performance_city_name <chr>, primary_place_of_performance_state_code <chr>,
-#> #   primary_place_of_performance_zip_4 <chr>, award_type_code <chr>, award_description <chr>
+#> # A tibble: 6 x 18
+#>   key   id       fy date       amount agency sub_agency office recipient parent address1 address2
+#>   <chr> <chr> <int> <date>      <dbl> <chr>  <chr>      <chr>  <chr>     <chr>  <chr>    <chr>   
+#> 1 7529… HHSN…  2020 2019-10-01 1.84e4 DEPAR… NATIONAL … NATIO… PLANON C… PLANO… 45 BRAI… <NA>    
+#> 2 7529… 75N9…  2020 2019-10-01 0.     DEPAR… NATIONAL … NATIO… SOFT COM… SOFT … 5400 TE… <NA>    
+#> 3 7555… HHSP…  2020 2019-10-01 0.     DEPAR… OFFICE OF… PROGR… CW GOVER… CW GO… 4300 WI… <NA>    
+#> 4 7570… HHSP…  2020 2019-10-01 5.80e6 DEPAR… OFFICE OF… PROGR… DELOITTE… DELOI… 1725 DU… <NA>    
+#> 5 7526… HHSH…  2020 2019-10-01 1.03e3 DEPAR… HEALTH RE… HRSA … CELLCO P… VERIZ… ONE VER… <NA>    
+#> 6 7529… HHSN…  2020 2019-10-01 1.68e4 DEPAR… NATIONAL … NATIO… ILLUMINA… ILLUM… 5200 IL… <NA>    
+#> # … with 6 more variables: city <chr>, state <chr>, zip <chr>, place <chr>, type <chr>, desc <chr>
 glimpse(sample_n(hhs, 20))
 #> Observations: 20
-#> Variables: 25
-#> $ modification_number                     <int> 6, 14, 0, 0, 1, 1, 0, 0, 0, 8, 0, 0, 5, 0, 1, 8,…
-#> $ parent_award_agency_id                  <int> NA, 7529, 7529, 7529, 7527, NA, NA, NA, NA, NA, …
-#> $ parent_award_agency_name                <chr> NA, "NATIONAL INSTITUTES OF HEALTH", "NATIONAL I…
-#> $ total_dollars_obligated                 <dbl> NA, NA, 81547.07, 0.00, 5626.50, NA, NA, NA, NA,…
-#> $ action_date                             <date> 2009-04-07, 2014-04-29, 2016-08-04, 2013-12-06,…
-#> $ action_date_fiscal_year                 <int> 2009, 2014, 2016, 2014, 2018, 2013, 2010, 2015, …
-#> $ awarding_agency_code                    <int> 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, …
-#> $ awarding_agency_name                    <chr> "DEPARTMENT OF HEALTH AND HUMAN SERVICES (HHS)",…
-#> $ awarding_sub_agency_code                <int> 7570, 7529, 7527, 7529, 7527, 7527, 7527, 7523, …
-#> $ awarding_sub_agency_name                <chr> "OFFICE OF THE ASSISTANT SECRETARY FOR ADMINISTR…
-#> $ awarding_office_code                    <int> 233, 271, NA, 263, NA, 244, 239, 200, 200, 267, …
-#> $ awarding_office_name                    <chr> "DEPT OF HHS/OFF AST SEC HLTH EXPT NATL CNTR", "…
-#> $ recipient_name                          <chr> "WV HEALTH INFORMATION NETWORK", "KELLY SERVICES…
-#> $ recipient_parent_name                   <chr> "WV HEALTH INFORMATION NETWORK", "KELLY SERVICES…
-#> $ recipient_country_name                  <chr> "UNITED STATES OF AMERICA", "UNITED STATES OF AM…
-#> $ recipient_address_line_1                <chr> "100 DEE DRIVE", "999 W BIG BEAVER RD", "4179 BU…
-#> $ recipient_city_name                     <chr> "CHARLESTON", "TROY", "FREMONT", "PHILADELPHIA",…
-#> $ recipient_state_code                    <chr> "WV", "MI", "CA", "PA", "CA", "MT", "MN", "OH", …
-#> $ recipient_zip_4_code                    <chr> "25311", "48084", "945386355", "191042857", "921…
-#> $ recipient_phone_number                  <chr> NA, "2482445257", "5103534070", "2155683100", "2…
-#> $ primary_place_of_performance_city_name  <chr> "CHARLESTON", "TROY", "POLACCA", "PHILADELPHIA",…
-#> $ primary_place_of_performance_state_code <chr> "WV", "MI", "AZ", "PA", "AZ", "MT", "MN", "OH", …
-#> $ primary_place_of_performance_zip_4      <chr> "253111600", "480844716", "860424000", "19104285…
-#> $ award_type_code                         <chr> "D", "C", "C", "C", "C", "B", "B", "B", NA, "D",…
-#> $ award_description                       <chr> "OTHER ADMINISTRATIVE SUPPORT SVCS", "IGF::OT::I…
+#> Variables: 18
+#> $ key        <chr> "7555_-NONE-_HHSP23320074107EC_6_-NONE-_0", "7529_7529_HHSN27100208_14_HHSN27…
+#> $ id         <chr> "HHSP23320074107EC", "HHSN27100208", "HHSI247201600037W", "HHSN26300822", "HH…
+#> $ fy         <int> 2009, 2014, 2016, 2014, 2018, 2013, 2010, 2015, 2012, 2011, 2015, 2012, 2016,…
+#> $ date       <date> 2009-04-07, 2014-04-29, 2016-08-04, 2013-12-06, 2018-09-24, 2013-08-14, 2010…
+#> $ amount     <dbl> 184003.17, 0.00, 81547.07, 5115.00, -134191.10, -3152.35, 20000.00, 60000.00,…
+#> $ agency     <chr> "DEPARTMENT OF HEALTH AND HUMAN SERVICES (HHS)", "DEPARTMENT OF HEALTH AND HU…
+#> $ sub_agency <chr> "OFFICE OF THE ASSISTANT SECRETARY FOR ADMINISTRATION (ASA)", "NATIONAL INSTI…
+#> $ office     <chr> "DEPT OF HHS/OFF AST SEC HLTH EXPT NATL CNTR", "NIH, NIDA, OD OM OA OFC ACQUI…
+#> $ recipient  <chr> "WV HEALTH INFORMATION NETWORK", "KELLY SERVICES, INC.", "NEW TECH SOLUTIONS,…
+#> $ parent     <chr> "WV HEALTH INFORMATION NETWORK", "KELLY SERVICES, INC.", "NEW TECH SOLUTIONS …
+#> $ address1   <chr> "100 DEE DRIVE", "999 W BIG BEAVER RD", "4179 BUSINESS CENTER DR", "2929 ARCH…
+#> $ address2   <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA
+#> $ city       <chr> "CHARLESTON", "TROY", "FREMONT", "PHILADELPHIA", "SAN DIEGO", "BILLINGS", "PA…
+#> $ state      <chr> "WV", "MI", "CA", "PA", "CA", "MT", "MN", "OH", "FL", "UT", "PA", "MD", "PA",…
+#> $ zip        <chr> "25311", "48084", "945386355", "191042857", "921303077", "591010124", "564704…
+#> $ place      <chr> "253111600", "480844716", "860424000", "191042851", "850165319", "590430070",…
+#> $ type       <chr> "D", "C", "C", "C", "C", "B", "B", "B", NA, "D", "B", "B", "D", "C", "D", "D"…
+#> $ desc       <chr> "OTHER ADMINISTRATIVE SUPPORT SVCS", "IGF::OT::IGF - OTHER FUNCTIONS - PROGRA…
+```
+
+## Missing
+
+There are only a handful of records missing one of the key variables we
+need to identify a unique spending transaction.
+
+``` r
+col_stats(hhs, count_na)
+#> # A tibble: 18 x 4
+#>    col        class        n          p
+#>    <chr>      <chr>    <int>      <dbl>
+#>  1 key        <chr>        0 0         
+#>  2 id         <chr>        0 0         
+#>  3 fy         <int>        0 0         
+#>  4 date       <date>       0 0         
+#>  5 amount     <dbl>        0 0         
+#>  6 agency     <chr>        0 0         
+#>  7 sub_agency <chr>        0 0         
+#>  8 office     <chr>        5 0.00000486
+#>  9 recipient  <chr>      315 0.000306  
+#> 10 parent     <chr>     2155 0.00209   
+#> 11 address1   <chr>     1089 0.00106   
+#> 12 address2   <chr>  1016058 0.987     
+#> 13 city       <chr>      837 0.000813  
+#> 14 state      <chr>    12020 0.0117    
+#> 15 zip        <chr>     1895 0.00184   
+#> 16 place      <chr>    85236 0.0828    
+#> 17 type       <chr>    78955 0.0767    
+#> 18 desc       <chr>     3527 0.00343
 ```
 
 ``` r
-hhs %>%
-  mutate(y = year(action_date), q = quarter(action_date)) %>%
-  group_by(y, q) %>%
-  summarise(sum = sum(total_dollars_obligated, na.rm = TRUE) / 1e9) %>% 
-  ggplot(aes(x = q, y = sum)) +
-  geom_col(aes(fill = sum)) +
-  scale_fill_viridis_c(end = 0.75, guide = FALSE) +
-  scale_y_continuous(labels = dollar) +
-  facet_wrap(~y, nrow = 1) +
-  theme(
-    panel.grid.minor.x = element_blank()
-  ) +
-  labs(
-    title = "Department of Health and Human Services Spending",
-    caption = "Source: USASpending.gov",
-    x = "Quarter",
-    y = "Obligated Spending (Billion USD)"
-  )
+hhs <- hhs %>% flag_na(date, agency, amount, recipient)
+sum(hhs$na_flag)
+#> [1] 315
+mean(hhs$na_flag)
+#> [1] 0.0003061385
 ```
 
-![](../plots/unnamed-chunk-3-1.png)<!-- -->
+## Duplicates
+
+There are a number of records that could potentially be duplicates of
+one another. Much of them have an `amount` value of zero, so they might
+not be true duplicates. We can flag them nonetheless.
+
+``` r
+hhs <- flag_dupes(hhs, -key)
+sum(hhs$dupe_flag)
+#> [1] 3246
+```
+
+``` r
+hhs %>% 
+  filter(dupe_flag) %>% 
+  select(date, agency, amount, recipient)
+#> # A tibble: 3,246 x 4
+#>    date       agency                                       amount recipient                        
+#>    <date>     <chr>                                         <dbl> <chr>                            
+#>  1 2008-09-30 DEPARTMENT OF HEALTH AND HUMAN SERVICES (HH…      0 ADVERTISING IDEAS, INC           
+#>  2 2008-09-30 DEPARTMENT OF HEALTH AND HUMAN SERVICES (HH…      0 UNIFIRST CORPORATION             
+#>  3 2008-09-30 DEPARTMENT OF HEALTH AND HUMAN SERVICES (HH…      0 ADVERTISING IDEAS, INC           
+#>  4 2008-09-30 DEPARTMENT OF HEALTH AND HUMAN SERVICES (HH…      0 EN POINTE TECHNOLOGIES INCORPORA…
+#>  5 2008-09-30 DEPARTMENT OF HEALTH AND HUMAN SERVICES (HH…      0 MATHESON TRI-GAS, INC            
+#>  6 2008-09-30 DEPARTMENT OF HEALTH AND HUMAN SERVICES (HH…      0 INX INC                          
+#>  7 2008-09-30 DEPARTMENT OF HEALTH AND HUMAN SERVICES (HH…      0 EN POINTE TECHNOLOGIES INCORPORA…
+#>  8 2008-09-30 DEPARTMENT OF HEALTH AND HUMAN SERVICES (HH…      0 INX INC                          
+#>  9 2008-09-30 DEPARTMENT OF HEALTH AND HUMAN SERVICES (HH…      0 MATHESON TRI-GAS, INC            
+#> 10 2008-09-30 DEPARTMENT OF HEALTH AND HUMAN SERVICES (HH…      0 UNIFIRST CORPORATION             
+#> # … with 3,236 more rows
+```
+
+![](../plots/dupe_hist-1.png)<!-- -->
+
+## Amount
+
+*Many* spending transactions have a value of zero.
+
+``` r
+summary(hhs$amount)
+#>       Min.    1st Qu.     Median       Mean    3rd Qu.       Max. 
+#> -309023311          0       5970     253511      31034  690144920
+mean(hhs$amount <= 0)
+#> [1] 0.3556008
+```
+
+![](../plots/bar_quart_spend-1.png)<!-- -->
+
+## Wrangle
+
+We do not need to normaliza any of the geographic variable much. We can
+trim the `zip` variable and that is it.
+
+``` r
+sample(hhs$address1, 6)
+#> [1] "4025 HANCOCK ST. STE. 100"        "10813 S RIVER FRONT PKWY STE 135"
+#> [3] "15 HAMPSHIRE ST"                  "180 N STETSON AVE FL 49"         
+#> [5] "2303 LINDBERG ST"                 "6082 FRANCONIA RD STE C"
+progress_table(hhs$state, compare = valid_state)
+#> # A tibble: 1 x 6
+#>   stage prop_in n_distinct prop_na n_out n_diff
+#>   <chr>   <dbl>      <dbl>   <dbl> <dbl>  <dbl>
+#> 1 state       1         57  0.0117     0      1
+hhs <- mutate_at(hhs, vars(zip, place), normal_zip)
+progress_table(hhs$zip, compare = valid_zip)
+#> # A tibble: 1 x 6
+#>   stage prop_in n_distinct prop_na n_out n_diff
+#>   <chr>   <dbl>      <dbl>   <dbl> <dbl>  <dbl>
+#> 1 zip     0.994       9732 0.00184  6522    711
+progress_table(hhs$city, compare = c(valid_city, extra_city))
+#> # A tibble: 1 x 6
+#>   stage prop_in n_distinct  prop_na n_out n_diff
+#>   <chr>   <dbl>      <dbl>    <dbl> <dbl>  <dbl>
+#> 1 city    0.986       5173 0.000813 14675    789
+```
 
 ## Conclude
 
-``` r
-# glimpse(sample_n(hhs, 20))
-```
-
 1.  There are 1028946 records in the database.
-2.  There are 0 duplicate records in the database.
+2.  There are 3246 duplicate records in the database.
 3.  The range and distribution of `amount` and `date` seem reasonable.
-4.  There are 0 records missing either recipient or date.
+4.  There are 315 records missing either recipient or date.
 5.  Consistency in goegraphic data has been improved with
     `campfin::normal_*()`.
 6.  The 4-digit `year` variable has been created with
