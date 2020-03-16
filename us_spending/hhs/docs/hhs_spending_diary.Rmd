@@ -124,14 +124,27 @@ Data can be obtained from the archive as annual files for each agency.
 
 If the zip archives have not been downloaded, we can do so now.
 
-```{r download}
+```{r full_path}
 spend_url <- "https://files.usaspending.gov/award_data_archive/"
 hhs_files <- glue("FY{2008:2020}_075_Contracts_Full_20200205.zip")
 hhs_urls <- str_c(spend_url, hhs_files)
 raw_dir <- dir_create(here("hhs", "data", "raw"))
 hhs_paths <- path(raw_dir, hhs_files)
-if (!all(file_exists(hhs_paths))) {
+```
+
+We also need to add the records for spending made since this file was last
+updated. This information can be found in the "delta" file released alongside
+the "full" spending file.
+
+```{r delta_path}
+delta_url <- str_c(spend_url, "FY(All)_075_Contracts_Delta_20200313.zip")
+delta_path <- path(raw_dir, basename(delta_url))
+```
+
+```{r download}
+if (!all(file_exists(c(hhs_paths, delta_path)))) {
   download.file(hhs_urls, hhs_paths)
+  download.file(delta_url, delta_path)
 }
 ```
 
@@ -172,7 +185,7 @@ dict %>%
 
 This archive file can be directly read as a data frame with `vroom::vroom()`.
 
-```{r read}
+```{r read_full}
 hhs <- vroom(
   file = hhs_paths,
   delim = ",",
@@ -187,6 +200,37 @@ hhs <- vroom(
     federal_action_obligation = col_double()
   )
 )
+```
+
+We need to read the delta file separately because it has a few additional
+variables.
+
+```{r read_delta}
+delta <- vroom(
+  file = delta_path,
+  delim = ",",
+  escape_backslash = FALSE,
+  escape_double = FALSE,
+  guess_max = 0,
+  na = c("", "NA", "NAN", "*"),
+  col_types = cols(
+    .default = col_character(),
+    action_date_fiscal_year = col_integer(),
+    action_date = col_date(),
+    federal_action_obligation = col_double()
+  )
+)
+```
+
+Then the two data frames can be bound together into a single file.
+
+```{r read_names}
+setdiff(names(delta), names(hhs))
+```
+
+```{r read_bind}
+hhs <- bind_rows(list(full = hhs, delta = delta), .id = "source")
+rm(delta)
 ```
 
 We can count a discrete categorical variable to ensure the file was read
@@ -222,7 +266,9 @@ hhs <- hhs %>%
     zip = recipient_zip_4_code,
     place = primary_place_of_performance_zip_4,
     type = award_type_code,
-    desc = award_description
+    desc = award_description,
+    correct_delete = correction_delete_ind,
+    source,
   )
 ```
 

@@ -1,7 +1,7 @@
 Health and Human Services Spending
 ================
 Kiernan Nicholls
-2020-03-16 11:42:47
+2020-03-16 14:48:20
 
   - [Project](#project)
   - [Objectives](#objectives)
@@ -116,8 +116,21 @@ hhs_files <- glue("FY{2008:2020}_075_Contracts_Full_20200205.zip")
 hhs_urls <- str_c(spend_url, hhs_files)
 raw_dir <- dir_create(here("hhs", "data", "raw"))
 hhs_paths <- path(raw_dir, hhs_files)
-if (!all(file_exists(hhs_paths))) {
+```
+
+We also need to add the records for spending made since this file was
+last updated. This information can be found in the “delta” file released
+alongside the “full” spending file.
+
+``` r
+delta_url <- str_c(spend_url, "FY(All)_075_Contracts_Delta_20200313.zip")
+delta_path <- path(raw_dir, basename(delta_url))
+```
+
+``` r
+if (!all(file_exists(c(hhs_paths, delta_path)))) {
   download.file(hhs_urls, hhs_paths)
+  download.file(delta_url, delta_path)
 }
 ```
 
@@ -190,6 +203,42 @@ hhs <- vroom(
 )
 ```
 
+We need to read the delta file separately because it has a few
+additional variables.
+
+``` r
+delta <- vroom(
+  file = delta_path,
+  delim = ",",
+  escape_backslash = FALSE,
+  escape_double = FALSE,
+  guess_max = 0,
+  na = c("", "NA", "NAN", "*"),
+  col_types = cols(
+    .default = col_character(),
+    action_date_fiscal_year = col_integer(),
+    action_date = col_date(),
+    federal_action_obligation = col_double()
+  )
+)
+```
+
+Then the two data frames can be bound together into a single file.
+
+``` r
+setdiff(names(delta), names(hhs))
+#>  [1] "correction_delete_ind"                       "agency_id"                                  
+#>  [3] "government_furnished_property_code"          "government_furnished_property"              
+#>  [5] "alaskan_native_corporation_owned_firm"       "native_hawaiian_organization_owned_firm"    
+#>  [7] "tribally_owned_firm"                         "receives_financial_assistance"              
+#>  [9] "receives_contracts_and_financial_assistance" "foreign_owned"
+```
+
+``` r
+hhs <- bind_rows(list(full = hhs, delta = delta), .id = "source")
+rm(delta)
+```
+
 We can count a discrete categorical variable to ensure the file was read
 properly. If there was an error reading one of the text files, the
 columns will likely shift.
@@ -199,10 +248,10 @@ count(hhs, foreign_funding, sort = TRUE)
 #> # A tibble: 4 x 2
 #>   foreign_funding      n
 #>   <chr>            <int>
-#> 1 <NA>            583355
-#> 2 X               439958
-#> 3 B                 5484
-#> 4 A                  149
+#> 1 <NA>            583448
+#> 2 X               466935
+#> 3 B                 5904
+#> 4 A                  155
 ```
 
 Using the dictionary, we can select and rename only the 19 variables we
@@ -231,7 +280,9 @@ hhs <- hhs %>%
     zip = recipient_zip_4_code,
     place = primary_place_of_performance_zip_4,
     type = award_type_code,
-    desc = award_description
+    desc = award_description,
+    correct_delete = correction_delete_ind,
+    source,
   )
 ```
 
@@ -239,7 +290,7 @@ hhs <- hhs %>%
 
 ``` r
 head(hhs)
-#> # A tibble: 6 x 18
+#> # A tibble: 6 x 20
 #>   key   id       fy date        amount agency sub_agency office recipient parent address1 address2
 #>   <chr> <chr> <int> <date>       <dbl> <chr>  <chr>      <chr>  <chr>     <chr>  <chr>    <chr>   
 #> 1 7529… HHSN…  2008 2008-09-30  1.95e5 DEPAR… NATIONAL … OD OM… TRIANGLE… TRIAN… 505 20T… <NA>    
@@ -248,39 +299,43 @@ head(hhs)
 #> 4 7530… HHSM…  2008 2008-09-30  1.00e3 DEPAR… CENTERS F… DEPT … QUALITY … VIRGI… 3001 CH… <NA>    
 #> 5 7529… HHSN…  2008 2008-09-30  1.09e6 DEPAR… NATIONAL … NIDDK… CSR, INC. CSR  … 2107 WI… <NA>    
 #> 6 7555… HHSP…  2008 2008-09-30 -1.86e5 DEPAR… OFFICE OF… DEPT … HEALTHCA… HEALT… 63 MIDD… <NA>    
-#> # … with 6 more variables: city <chr>, state <chr>, zip <chr>, place <chr>, type <chr>, desc <chr>
+#> # … with 8 more variables: city <chr>, state <chr>, zip <chr>, place <chr>, type <chr>,
+#> #   desc <chr>, correct_delete <chr>, source <chr>
 tail(hhs)
-#> # A tibble: 6 x 18
+#> # A tibble: 6 x 20
 #>   key   id       fy date       amount agency sub_agency office recipient parent address1 address2
 #>   <chr> <chr> <int> <date>      <dbl> <chr>  <chr>      <chr>  <chr>     <chr>  <chr>    <chr>   
-#> 1 7529… HHSN…  2020 2019-10-01 1.84e4 DEPAR… NATIONAL … NATIO… PLANON C… PLANO… 45 BRAI… <NA>    
-#> 2 7529… 75N9…  2020 2019-10-01 0.     DEPAR… NATIONAL … NATIO… SOFT COM… SOFT … 5400 TE… <NA>    
-#> 3 7555… HHSP…  2020 2019-10-01 0.     DEPAR… OFFICE OF… PROGR… CW GOVER… CW GO… 4300 WI… <NA>    
-#> 4 7570… HHSP…  2020 2019-10-01 5.80e6 DEPAR… OFFICE OF… PROGR… DELOITTE… DELOI… 1725 DU… <NA>    
-#> 5 7526… HHSH…  2020 2019-10-01 1.03e3 DEPAR… HEALTH RE… HRSA … CELLCO P… VERIZ… ONE VER… <NA>    
-#> 6 7529… HHSN…  2020 2019-10-01 1.68e4 DEPAR… NATIONAL … NATIO… ILLUMINA… ILLUM… 5200 IL… <NA>    
-#> # … with 6 more variables: city <chr>, state <chr>, zip <chr>, place <chr>, type <chr>, desc <chr>
+#> 1 7523… 75D3…    NA NA             NA <NA>   <NA>       <NA>   <NA>      <NA>   <NA>     <NA>    
+#> 2 7523… 75D3…    NA NA             NA <NA>   <NA>       <NA>   <NA>      <NA>   <NA>     <NA>    
+#> 3 7530… 75FC…    NA NA             NA <NA>   <NA>       <NA>   <NA>      <NA>   <NA>     <NA>    
+#> 4 7530… 75FC…    NA NA             NA <NA>   <NA>       <NA>   <NA>      <NA>   <NA>     <NA>    
+#> 5 7555… HHSP…    NA NA             NA <NA>   <NA>       <NA>   <NA>      <NA>   <NA>     <NA>    
+#> 6 7555… HHSP…    NA NA             NA <NA>   <NA>       <NA>   <NA>      <NA>   <NA>     <NA>    
+#> # … with 8 more variables: city <chr>, state <chr>, zip <chr>, place <chr>, type <chr>,
+#> #   desc <chr>, correct_delete <chr>, source <chr>
 glimpse(sample_n(hhs, 20))
 #> Observations: 20
-#> Variables: 18
-#> $ key        <chr> "7555_-NONE-_HHSP23320074107EC_6_-NONE-_0", "7529_7529_HHSN27100208_14_HHSN27…
-#> $ id         <chr> "HHSP23320074107EC", "HHSN27100208", "HHSI247201600037W", "HHSN26300822", "HH…
-#> $ fy         <int> 2009, 2014, 2016, 2014, 2018, 2013, 2010, 2015, 2012, 2011, 2015, 2012, 2016,…
-#> $ date       <date> 2009-04-07, 2014-04-29, 2016-08-04, 2013-12-06, 2018-09-24, 2013-08-14, 2010…
-#> $ amount     <dbl> 184003.17, 0.00, 81547.07, 5115.00, -134191.10, -3152.35, 20000.00, 60000.00,…
-#> $ agency     <chr> "DEPARTMENT OF HEALTH AND HUMAN SERVICES (HHS)", "DEPARTMENT OF HEALTH AND HU…
-#> $ sub_agency <chr> "OFFICE OF THE ASSISTANT SECRETARY FOR ADMINISTRATION (ASA)", "NATIONAL INSTI…
-#> $ office     <chr> "DEPT OF HHS/OFF AST SEC HLTH EXPT NATL CNTR", "NIH, NIDA, OD OM OA OFC ACQUI…
-#> $ recipient  <chr> "WV HEALTH INFORMATION NETWORK", "KELLY SERVICES, INC.", "NEW TECH SOLUTIONS,…
-#> $ parent     <chr> "WV HEALTH INFORMATION NETWORK", "KELLY SERVICES, INC.", "NEW TECH SOLUTIONS …
-#> $ address1   <chr> "100 DEE DRIVE", "999 W BIG BEAVER RD", "4179 BUSINESS CENTER DR", "2929 ARCH…
-#> $ address2   <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA
-#> $ city       <chr> "CHARLESTON", "TROY", "FREMONT", "PHILADELPHIA", "SAN DIEGO", "BILLINGS", "PA…
-#> $ state      <chr> "WV", "MI", "CA", "PA", "CA", "MT", "MN", "OH", "FL", "UT", "PA", "MD", "PA",…
-#> $ zip        <chr> "25311", "48084", "945386355", "191042857", "921303077", "591010124", "564704…
-#> $ place      <chr> "253111600", "480844716", "860424000", "191042851", "850165319", "590430070",…
-#> $ type       <chr> "D", "C", "C", "C", "C", "B", "B", "B", NA, "D", "B", "B", "D", "C", "D", "D"…
-#> $ desc       <chr> "OTHER ADMINISTRATIVE SUPPORT SVCS", "IGF::OT::IGF - OTHER FUNCTIONS - PROGRA…
+#> Variables: 20
+#> $ key            <chr> "7555_-NONE-_HHSP23320074107EC_6_-NONE-_0", "7527_7529_HHSI247201600037W_…
+#> $ id             <chr> "HHSP23320074107EC", "HHSI247201600037W", "HHSN26300822", "HHSI2392010004…
+#> $ fy             <int> 2009, 2016, 2014, 2010, 2020, 2011, 2019, 2019, 2015, 2018, 2020, 2015, 2…
+#> $ date           <date> 2009-04-07, 2016-08-04, 2013-12-06, 2010-07-19, 2019-12-17, 2010-11-10, …
+#> $ amount         <dbl> 184003.17, 81547.07, 5115.00, 20000.00, -374.00, 0.00, 0.00, 22555.00, 12…
+#> $ agency         <chr> "DEPARTMENT OF HEALTH AND HUMAN SERVICES (HHS)", "DEPARTMENT OF HEALTH AN…
+#> $ sub_agency     <chr> "OFFICE OF THE ASSISTANT SECRETARY FOR ADMINISTRATION (ASA)", "INDIAN HEA…
+#> $ office         <chr> "DEPT OF HHS/OFF AST SEC HLTH EXPT NATL CNTR", "PHOENIX AREA INDIAN HEALT…
+#> $ recipient      <chr> "WV HEALTH INFORMATION NETWORK", "NEW TECH SOLUTIONS, INC.", "WOODCOCK WA…
+#> $ parent         <chr> "WV HEALTH INFORMATION NETWORK", "NEW TECH SOLUTIONS  INC.", "WOODCOCK WA…
+#> $ address1       <chr> "100 DEE DRIVE", "4179 BUSINESS CENTER DR", "2929 ARCH ST 12TH FL", "1095…
+#> $ address2       <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
+#> $ city           <chr> "CHARLESTON", "FREMONT", "PHILADELPHIA", "PARK RAPIDS", "TROY", "SALT LAK…
+#> $ state          <chr> "WV", "CA", "PA", "MN", "MI", "UT", "AK", "MD", "NC", "CA", "UT", "IL", "…
+#> $ zip            <chr> "25311", "945386355", "191042857", "564704580", "480844716", "841129023",…
+#> $ place          <chr> "253111600", "860424000", "191042851", "565699612", "480844718", "8410218…
+#> $ type           <chr> "D", "C", "C", "B", "C", "D", "C", "A", "B", "C", "C", "C", "A", NA, "C",…
+#> $ desc           <chr> "OTHER ADMINISTRATIVE SUPPORT SVCS", "IGF::OT::IGF IT/SERVER EQUIPMENT FO…
+#> $ correct_delete <chr> NA, NA, NA, NA, NA, NA, "C", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
+#> $ source         <chr> "full", "full", "full", "full", "delta", "full", "delta", "full", "full",…
 ```
 
 ## Missing
@@ -290,35 +345,37 @@ need to identify a unique spending transaction.
 
 ``` r
 col_stats(hhs, count_na)
-#> # A tibble: 18 x 4
-#>    col        class        n          p
-#>    <chr>      <chr>    <int>      <dbl>
-#>  1 key        <chr>        0 0         
-#>  2 id         <chr>        0 0         
-#>  3 fy         <int>        0 0         
-#>  4 date       <date>       0 0         
-#>  5 amount     <dbl>        0 0         
-#>  6 agency     <chr>        0 0         
-#>  7 sub_agency <chr>        0 0         
-#>  8 office     <chr>        5 0.00000486
-#>  9 recipient  <chr>      315 0.000306  
-#> 10 parent     <chr>     2155 0.00209   
-#> 11 address1   <chr>     1089 0.00106   
-#> 12 address2   <chr>  1016058 0.987     
-#> 13 city       <chr>      837 0.000813  
-#> 14 state      <chr>    12020 0.0117    
-#> 15 zip        <chr>     1895 0.00184   
-#> 16 place      <chr>    85236 0.0828    
-#> 17 type       <chr>    78955 0.0767    
-#> 18 desc       <chr>     3527 0.00343
+#> # A tibble: 20 x 4
+#>    col            class        n         p
+#>    <chr>          <chr>    <int>     <dbl>
+#>  1 key            <chr>        0 0        
+#>  2 id             <chr>        0 0        
+#>  3 fy             <int>       93 0.0000880
+#>  4 date           <date>      93 0.0000880
+#>  5 amount         <dbl>       93 0.0000880
+#>  6 agency         <chr>       93 0.0000880
+#>  7 sub_agency     <chr>       93 0.0000880
+#>  8 office         <chr>       98 0.0000928
+#>  9 recipient      <chr>      409 0.000387 
+#> 10 parent         <chr>     2296 0.00217  
+#> 11 address1       <chr>     1184 0.00112  
+#> 12 address2       <chr>  1043507 0.988    
+#> 13 city           <chr>      932 0.000882 
+#> 14 state          <chr>    12235 0.0116   
+#> 15 zip            <chr>     1994 0.00189  
+#> 16 place          <chr>    86978 0.0823   
+#> 17 type           <chr>    80491 0.0762   
+#> 18 desc           <chr>     3624 0.00343  
+#> 19 correct_delete <chr>  1041743 0.986    
+#> 20 source         <chr>        0 0
 ```
 
 ``` r
 hhs <- hhs %>% flag_na(date, agency, amount, recipient)
 sum(hhs$na_flag)
-#> [1] 315
+#> [1] 409
 mean(hhs$na_flag)
-#> [1] 0.0003061385
+#> [1] 0.0003871486
 ```
 
 ## Duplicates
@@ -330,14 +387,14 @@ not be true duplicates. We can flag them nonetheless.
 ``` r
 hhs <- flag_dupes(hhs, -key)
 sum(hhs$dupe_flag)
-#> [1] 3246
+#> [1] 3369
 ```
 
 ``` r
 hhs %>% 
   filter(dupe_flag) %>% 
   select(date, agency, amount, recipient)
-#> # A tibble: 3,246 x 4
+#> # A tibble: 3,369 x 4
 #>    date       agency                                       amount recipient                        
 #>    <date>     <chr>                                         <dbl> <chr>                            
 #>  1 2008-09-30 DEPARTMENT OF HEALTH AND HUMAN SERVICES (HH…      0 ADVERTISING IDEAS, INC           
@@ -350,7 +407,7 @@ hhs %>%
 #>  8 2008-09-30 DEPARTMENT OF HEALTH AND HUMAN SERVICES (HH…      0 INX INC                          
 #>  9 2008-09-30 DEPARTMENT OF HEALTH AND HUMAN SERVICES (HH…      0 MATHESON TRI-GAS, INC            
 #> 10 2008-09-30 DEPARTMENT OF HEALTH AND HUMAN SERVICES (HH…      0 UNIFIRST CORPORATION             
-#> # … with 3,236 more rows
+#> # … with 3,359 more rows
 ```
 
 ![](../plots/dupe_hist-1.png)<!-- -->
@@ -361,10 +418,10 @@ hhs %>%
 
 ``` r
 summary(hhs$amount)
-#>       Min.    1st Qu.     Median       Mean    3rd Qu.       Max. 
-#> -309023311          0       5970     253511      31034  690144920
+#>       Min.    1st Qu.     Median       Mean    3rd Qu.       Max.       NA's 
+#> -309023311          0       5950     252181      31108  690144920         93
 mean(hhs$amount <= 0)
-#> [1] 0.3556008
+#> [1] NA
 ```
 
 ![](../plots/bar_quart_spend-1.png)<!-- -->
@@ -376,33 +433,33 @@ trim the `zip` variable and that is it.
 
 ``` r
 sample(hhs$address1, 6)
-#> [1] "4025 HANCOCK ST. STE. 100"        "10813 S RIVER FRONT PKWY STE 135"
-#> [3] "15 HAMPSHIRE ST"                  "180 N STETSON AVE FL 49"         
-#> [5] "2303 LINDBERG ST"                 "6082 FRANCONIA RD STE C"
+#> [1] "350 MAIN ST RM 427"                     "6440 S MILLROCK DR STE 175"            
+#> [3] "1295 WALT WHITMAN RD"                   "12111 PKLAWN DR"                       
+#> [5] "3400 N CHARLES ST W400 WYMAN PARK BLDG" "1400 NORTH GILBERT RD"
 progress_table(hhs$state, compare = valid_state)
 #> # A tibble: 1 x 6
 #>   stage prop_in n_distinct prop_na n_out n_diff
 #>   <chr>   <dbl>      <dbl>   <dbl> <dbl>  <dbl>
-#> 1 state       1         57  0.0117     0      1
+#> 1 state       1         57  0.0116     0      1
 hhs <- mutate_at(hhs, vars(zip, place), normal_zip)
 progress_table(hhs$zip, compare = valid_zip)
 #> # A tibble: 1 x 6
 #>   stage prop_in n_distinct prop_na n_out n_diff
 #>   <chr>   <dbl>      <dbl>   <dbl> <dbl>  <dbl>
-#> 1 zip     0.994       9732 0.00184  6522    711
+#> 1 zip     0.994       9741 0.00189  6607    711
 progress_table(hhs$city, compare = c(valid_city, extra_city))
 #> # A tibble: 1 x 6
 #>   stage prop_in n_distinct  prop_na n_out n_diff
 #>   <chr>   <dbl>      <dbl>    <dbl> <dbl>  <dbl>
-#> 1 city    0.986       5173 0.000813 14675    789
+#> 1 city    0.986       5178 0.000882 14856    790
 ```
 
 ## Conclude
 
-1.  There are 1028946 records in the database.
-2.  There are 3246 duplicate records in the database.
+1.  There are 1056442 records in the database.
+2.  There are 3369 duplicate records in the database.
 3.  The range and distribution of `amount` and `date` seem reasonable.
-4.  There are 315 records missing either recipient or date.
+4.  There are 409 records missing either recipient or date.
 5.  Consistency in goegraphic data has been improved with
     `campfin::normal_*()`.
 6.  The 4-digit `year` variable has been created with
