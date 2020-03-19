@@ -1,5 +1,5 @@
 ---
-title: "Nursing Home Compare Data Diary -- Ownership"
+title: "Nursing Home Compare Data Diary -- infection"
 author: "Yanqi Xu"
 date: "`r Sys.time()`"
 output:
@@ -113,89 +113,33 @@ The master flat file is obtained from the [Medicare.gov][03]. The data is as cur
 raw_dir <- dir_create(here("nursing_home","data", "raw"))
 ```
 
-```{r download, eval=FALSE}
-landing_url <- 'https://data.medicare.gov/views/bg9k-emty/files/6ef81c64-2ebd-4ece-93af-8e462427939a?content_type=&filename=NursingHomeCompare_Revised_Flatfiles.zip'
 
-zip_path <- path(raw_dir,str_extract(landing_url,"(?<=filename\\=).+"))
+We can also generate a table of Deficiency Tag Number (`tag`) and Text definition of deficiency (`tag_desc`).
 
-if (!all_files_new(raw_dir)) {
-   download.file(url = landing_url, destfile = zip_path)
-}
+Tag numbers corresponding to infection-control deficiencies include `0441` (Have a program that investigates, controls and keeps infection from spreading), which later became `0880` (Provide and implement an infection prevention and control program), and a related code `0882`. See [USA Today's OpenNews Post explaning the code](https://source.opennews.org/articles/covid-19-story-recipe-analyzing-nursing-home-data/)
 
-emgc_prp <- 'https://data.medicare.gov/api/views/9ezk-fzua/rows.csv?accessType=DOWNLOAD&sorting=true'
+```{r read infection dict}
+health <- read_csv(file = dir_ls(raw_dir, recurse = T, regexp = "Health+")) %>% clean_names()
 
-wget <- function(url, dir) {
-  system2(
-    command = "wget",
-    args = c(
-      "--no-verbose",
-      "--content-disposition",
-      url
-    )
-  )
-}
+health_dict <- read_xlsx(dir_ls(docs, recurse = T,regexp = "DataMedicareGov.+"),
+                        sheet = "HealthDeficiencies")
 
-wget(emgc_prp, raw_dir)
-```
+kable(health_dict)
 
-```{r handle zip}
-zip_contents <- 
-  unzip(zip_path, list = TRUE) %>% 
-  as_tibble() %>% 
-  clean_names()
-
-zip_data <- str_subset(zip_contents$name, "csv")
-
-zip_others <- setdiff(zip_contents$name, zip_data)
-
-if (not(all(file_exists(path(raw_dir, zip_data))))) {
-  unzip(
-    zipfile = zip_path,
-    files = zip_data,
-    exdir = raw_dir
-  )
-}
-
-if (not(all(file_exists(path(docs, zip_others))))) {
-  unzip(
-    zipfile = zip_path,
-    files = zip_others,
-    exdir = docs
-  )
-}
-```
-
-
-The abbreiviation information is stored in `NHC_DataDictionary_SNFQRP.pdf` and the record layouts are contained in `DataMedicareGov_MetadataAllTabs_v23.xlsx`. 
-
-Secondly, we'll read the health deficiency data that contains the infection-control related citations. We can also view the record layout from the `HealthDeficiencies` sheet `DataMedicareGov_MetadataAllTabs_v23.xlsx`.
-
-```{r read owner}
-owner <- read_csv(str_subset(path(raw_dir, zip_data),"Owner.+")) %>% clean_names()
-```
-
-
-```{r read owner dict}
-owner_dict <- read_xlsx(str_subset(path(docs, zip_others),"DataMedicareGov"),
-                        sheet = "Ownership")
-
-kable(owner_dict)
+infection <- health %>% 
+  filter(tag == "0880" | tag == "0441")
 ```
 
 ### Missing
-
+The infection-control table has ost of the information available. 
 ```{r na_count}
-col_stats(owner, count_na)
-```
-We'll flag the records without any owner name (`r sum(owner$na_flag)` entries).
-```{r na_flag}
-owner <- owner %>% flag_na(owner_name)
+col_stats(infection, count_na)
 ```
 
 ### Duplicates
 We can see there's no duplicate entry.
 ```{r dupe_flag}
-owner <- flag_dupes(owner, dplyr::everything())
+infection <- flag_dupes(infection, dplyr::everything())
 ```
 
 ## Wrangle
@@ -203,26 +147,6 @@ To improve the searchability of the database, we will perform some consistent,
 confident string normalization. For geographic variables like city names and
 ZIP codes, the corresponding `campfin::normal_*()` functions are taylor made to
 facilitate this process.
-### Date
-From the record layout, we can see that we can clean the `association_date`with either an `NA` or an acutal date without the word "wince". 
-```{r clean date}
-owner <- owner %>% 
-  mutate(association_date_clean = na_if(association_date, "No Date Provided") %>% 
-           str_remove("since\\s") %>% 
-           as.Date("%m/%d/%Y"))
-```
-### Percentage
-We can also clean the `owner_percentage` field.
-
-```{r clean perc}
-owner <- owner %>% 
-  mutate(owner_percentage_clean = owner_percentage %>% 
-           na_if("NOT APPLICABLE") %>% 
-           na_if("NO PERCENTAGE PROVIDED") %>% 
-           str_remove("%") %>% 
-           as.numeric())
-
-```
 
 ### Address
 
@@ -231,7 +155,7 @@ will force consistence case, remove punctuation, and abbreviation official
 USPS suffixes.
 
 ```{r address_norm}
-owner <- owner %>% 
+infection <- infection %>% 
     mutate(address_norm = normal_address(address,abbs = usps_street,
       na_rep = TRUE))
 ```
@@ -243,12 +167,12 @@ valied _five_ digit codes by removing the ZIP+4 suffix and returning leading
 zeroes dropped by other programs like Microsoft Excel.
 
 ```{r zip_norm}
-prop_in(owner$zip, valid_zip, na.rm = T)
+prop_in(infection$zip, valid_zip, na.rm = T)
 
-owner <- owner %>% 
+infection <- infection %>% 
     mutate(zip5 = normal_zip(zip, na_rep = T))
 
-prop_in(owner$zip5, valid_zip, na.rm = T)
+prop_in(infection$zip5, valid_zip, na.rm = T)
 ```
 
 ### State
@@ -256,7 +180,7 @@ prop_in(owner$zip5, valid_zip, na.rm = T)
 The two digit state abbreviations are all valid.
 
 ```{r state_norm}
-prop_in(owner$state, valid_state, na.rm = T)
+prop_in(infection$state, valid_state, na.rm = T)
 ```
 
 ### City
@@ -265,18 +189,18 @@ Cities are the most difficult geographic variable to normalize, simply due to
 the wide variety of valid cities and formats.
 #### Normal
 
-The `campfin::normal_city()` function is a good ownerart, again converting case,
+The `campfin::normal_city()` function is a good infectionart, again converting case,
 removing punctuation, but _expanding_ USPS abbreviations. We can also remove
 `invalid_city` values.
 
 ```{r city_norm}
-owner <- owner %>% 
+infection <- infection %>% 
       mutate(city_norm = normal_city(city,abbs = usps_city,
       states = usps_state,
       na = invalid_city,
       na_rep = TRUE))
 
-prop_in(owner$city_norm, valid_city, na.rm = T)
+prop_in(infection$city_norm, valid_city, na.rm = T)
 ```
 
 #### Swap
@@ -287,7 +211,7 @@ If the normalized value is either an abbreviation for or very similar to the
 expected value, we can confidently swap those two.
 
 ```{r city_swap lobbyist}
-owner <- owner %>% 
+infection <- infection %>% 
   rename(city_raw = city) %>% 
   left_join(
     y = zipcodes,
@@ -320,9 +244,9 @@ After the two normalization steps, the percentage of valid cities is at 100%.
 ```{r city_progress, echo=FALSE}
 many_city <- c(valid_city, extra_city)
 progress <- progress_table(
-  owner$city_raw,
-  owner$city_norm,
-  owner$city_swap,
+  infection$city_raw,
+  infection$city_norm,
+  infection$city_swap,
   compare = many_city
 ) %>% mutate(stage = as_factor(stage))
 ```
@@ -341,7 +265,7 @@ progress %>%
   coord_cartesian(ylim = c(0.75, 1)) +
   scale_y_continuous(labels = percent) +
   labs(
-    title = "Nursing Home Compare Ownership City Normalization Progress",
+    title = "Nursing Home Compare Health Deficiency Citations Table City Normalization Progress",
     x = "stage",
     y = "Percent Valid"
   )
@@ -367,7 +291,7 @@ progress %>%
   scale_y_continuous(labels = comma) +
   theme(legend.position = "bottom") +
   labs(
-    title = "Nursing Home Compare Ownership City Normalization Progress",
+    title = "Nursing Home Compare Health Deficiency Citations Table City Normalization Progress",
     subtitle = "Distinct values, valid and invalid",
     x = "stage",
     y = "Percent Valid",
@@ -380,43 +304,46 @@ progress %>%
 ### Categorical
 
 #### Year
-We can see that the data is pretty up to date. However, there're some fileds indicating the annual registration was recorded in `2055`, which is presumably a human error. 
+
 ```{r check year}
-owner <- owner %>% 
-  mutate(year = year(association_date_clean))
-tabyl(owner$year)
+infection <- infection %>% 
+  mutate(year = year(survey_date_output))
+tabyl(infection$year)
 ```
 
 
 ## Conclude
 
 ```{r clean_glimpse}
-glimpse(sample_n(owner, 20))
+glimpse(sample_n(infection, 20))
 ```
 
-1. There are `r nrow(owner)` records in the database.
-1. There are `r sum(owner$dupe_flag)` duplicate records in the database.
+1. There are `r nrow(infection)` records in the database.
+1. There are 0 duplicate records in the database.
 1. The range and distribution of `year` seems mostly reasonable except for a few entries.
-1. There are `r sum(owner$na_flag)` records missing either recipient or date.
+1. There are 0 records missing either recipient or date.
 1. Consistency in goegraphic data has been improved with `campfin::normal_*()`.
 1. The 4-digit `year` variable has been created with `lubridate::year()`.
 
 ## Export
 
 ```{r clean_dir}
-clean_dir <- dir_create(path(raw_dir, "processed"))
+clean_dir <- dir_create(here("nursing_home","data", "processed"))
 ```
 
 ```{r write_clean}
 write_csv(
-  x = owner %>% 
+  x = infection %>% 
     mutate_if(is.character, str_to_upper) %>% 
     select(-city_norm) %>% 
     rename(city_clean = city_swap),
-  path = path(clean_dir, "nursing_owner_clean.csv"),
+  path = path(clean_dir, "nursing_infection_clean.csv"),
+  na = ""
+)
+
+write_csv(
+  x = health_dict %>% clean_names(),
+  path = path(docs, "nursing_infection_dict.csv"),
   na = ""
 )
 ```
-
-
-
