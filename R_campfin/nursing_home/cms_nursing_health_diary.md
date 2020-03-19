@@ -1,4 +1,4 @@
-Nursing Home Compare Data Diary – infectionship
+Nursing Home Compare Data Diary – infection
 ================
 Yanqi Xu
 2020-03-19 12:19:14
