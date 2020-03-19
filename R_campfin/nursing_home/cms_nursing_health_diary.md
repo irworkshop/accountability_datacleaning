@@ -1,7 +1,11 @@
 Nursing Home Compare Data Diary – infection
 ================
 Yanqi Xu
+<<<<<<< HEAD
 2020-03-19 12:31:27
+=======
+2020-03-19 12:19:14
+>>>>>>> 6353ae7a0c8672ecd3918f3c6f4c7bd714609298
 
 <!-- Place comments regarding knitting here -->
 
@@ -81,9 +85,17 @@ here::here()
 
 ## Data
 
+<<<<<<< HEAD
 The master flat file is obtained from the
 [Medicare.gov](https://www.medicare.gov/nursinghomecompare/Data/About.html).
 The data is as current as March 16, 2020.
+=======
+The Emergency Preparedness file is obtained from the
+[Medicare.gov](https://data.medicare.gov/Nursing-Home-Compare/Emergency-Preparedness-Deficiencies/9ezk-fzua).
+The data is as current as March 16, 2020. First, we will read the
+infectionship data. We can also view the record layout from the
+`infectionship` sheet `DataMedicareGov_MetadataAllTabs_v23.xlsx`.
+>>>>>>> 6353ae7a0c8672ecd3918f3c6f4c7bd714609298
 
 ``` r
 raw_dir <- dir_create(here("nursing_home","data", "raw"))
