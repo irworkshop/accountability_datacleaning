@@ -1,7 +1,7 @@
-Health and Human Services Spending
+Health and Human Services Contracts
 ================
 Kiernan Nicholls
-2020-03-17 18:59:53
+2020-03-19 11:26:55
 
   - [Project](#project)
   - [Objectives](#objectives)
@@ -92,7 +92,7 @@ here::here()
 
 ## Data
 
-The data is obtained from the [USA Spending Award Data
+Contracts data is obtained from the [USA Spending Award Data
 Archive](https://www.usaspending.gov/#/download_center/award_data_archive).
 
 > Welcome to the Award Data Archive, which features major agencies’
@@ -110,12 +110,19 @@ We first need to construct both the URLs and local paths of the archive
 files.
 
 ``` r
-zip_dir <- dir_create(here("data", "raw", "zip"))
+zip_dir <- dir_create(here("contracts", "data", "zip"))
 base_url <- "https://files.usaspending.gov/award_data_archive/"
-spend_files <- glue("FY{2008:2020}_All_Contracts_Full_20200313.zip")
-spend_urls <- str_c(base_url, spend_files)
-spend_zips <- path(zip_dir, spend_files)
+con_files <- glue("FY{2008:2020}_All_Contracts_Full_20200313.zip")
+con_urls <- str_c(base_url, con_files)
+con_zips <- path(zip_dir, con_files)
 ```
+
+    #> [1] "https://files.usaspending.gov/award_data_archive/FY2008_All_Contracts_Full_20200313.zip"
+    #> [2] "https://files.usaspending.gov/award_data_archive/FY2009_All_Contracts_Full_20200313.zip"
+    #> [3] "https://files.usaspending.gov/award_data_archive/FY2010_All_Contracts_Full_20200313.zip"
+    #> [1] "~/contracts/data/zip/FY2008_All_Contracts_Full_20200313.zip"
+    #> [2] "~/contracts/data/zip/FY2009_All_Contracts_Full_20200313.zip"
+    #> [3] "~/contracts/data/zip/FY2010_All_Contracts_Full_20200313.zip"
 
 We also need to add the record for spending made since this file was
 last updated. This information can be found in the “delta” file released
@@ -136,23 +143,26 @@ delta_url <- str_c(base_url, delta_file)
 delta_zip <- path(zip_dir, delta_file)
 ```
 
-If the zip archives have not been downloaded, we can do so now.
+If the archive files have not been downloaded, we can do so now.
 
 ``` r
-if (!all(file_exists(c(spend_zips, delta_zip)))) {
-  download.file(spend_urls, spend_zips)
+if (!all(file_exists(c(con_zips, delta_zip)))) {
+  download.file(con_urls, con_zips)
   download.file(delta_url, delta_zip)
 }
 ```
 
 ## Extract
 
+We can extract the text files from the annual archives into a new
+directory.
+
 ``` r
-csv_dir <- dir_create(here("data", "raw", "csv"))
+csv_dir <- dir_create(here("contracts", "data", "csv"))
 if (length(dir_ls(csv_dir)) == 0) {
-  map(c(spend_zips, delta_zip), unzip, exdir = csv_dir)
+  map(c(con_zips, delta_zip), unzip, exdir = csv_dir)
 }
-spend_paths <- dir_ls(csv_dir, regexp = "FY\\d+.*csv")
+con_paths <- dir_ls(csv_dir, regexp = "FY\\d+.*csv")
 delta_paths <- dir_ls(csv_dir, regexp = "FY\\(All\\).*csv")
 ```
 
@@ -174,7 +184,7 @@ dict <- read_excel(
   .name_repair = make_clean_names
 )
 
-usa_names <- read_csv(spend_paths[which.min(file_size(spend_paths))], n_max = 0)
+usa_names <- read_csv(con_paths[which.min(file_size(con_paths))], n_max = 0)
 usa_names <- names(usa_names)
 # get cols from hhs data
 mean(usa_names %in% dict$award_element)
@@ -219,9 +229,9 @@ This whole process is found in the `us_spending_read.R` script in this
 same directory, which can be executed as an R script.
 
 ``` r
-if (!file_exists("done.txt") | !file_exists("us_spend_checks.csv")) {
-  for (f in spend_paths) {
-    source(here("docs", "us_spending_read.R"), local = FALSE)
+if (!file_exists("done.txt") | !file_exists("us_con_checks.csv")) {
+  for (f in con_paths) {
+    source(here("contracts", "docs", "us_spending_read.R"), local = FALSE)
   }
   file_create("done.txt")
 }
@@ -237,7 +247,7 @@ The `us_spending_read.R` script creates a number of progress files while
 looping through each raw file. We can read these files now the check
 variuous stats about the individual files.
 
-First we will read `us_spend_checks.csv`, which contains information on
+First we will read `us_con_checks.csv`, which contains information on
 the number of rows, columns, unique types, missing, and zero values.
 
 In total, there are 50,870,104 rows of 21 columns.
@@ -272,7 +282,7 @@ checks %>%
 | 2020 | 1584114 |   21 |     5 |  46 | 0.1565 |
 
 We also checked the normalization of the various geograophic variables
-and saved the data to a `us_spend_geo.csv` file.
+and saved the data to a `us_con_geo.csv` file.
 
 In total, there are 50,870,104 rows of 21 columns.
 
