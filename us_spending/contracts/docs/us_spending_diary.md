@@ -1,7 +1,7 @@
 Health and Human Services Contracts
 ================
 Kiernan Nicholls
-2020-03-19 11:26:55
+2020-03-19 11:30:39
 
   - [Project](#project)
   - [Objectives](#objectives)
@@ -229,11 +229,8 @@ This whole process is found in the `us_spending_read.R` script in this
 same directory, which can be executed as an R script.
 
 ``` r
-if (!file_exists("done.txt") | !file_exists("us_con_checks.csv")) {
-  for (f in con_paths) {
-    source(here("contracts", "docs", "us_spending_read.R"), local = FALSE)
-  }
-  file_create("done.txt")
+for (f in con_paths) {
+  source(here("contracts", "docs", "us_spending_read.R"), local = FALSE)
 }
 ```
 
