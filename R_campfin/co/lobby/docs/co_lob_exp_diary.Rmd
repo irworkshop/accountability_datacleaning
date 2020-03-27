@@ -211,24 +211,19 @@ sum(co_exp$dupe_flag)
 
 ### Categorical
 
-Since this registration is good for Oct 2019 to Oct. 2020, we will create a year column.
-
-```{r create year current}
-cole <- cole %>% 
-  mutate(year = 2020L)
-```
-
-
-
 #### Dates
 Since the dates are all read as characters, we will convert them back in to date objects. We can add a year variable to the dataframe based on the registration date.
 
 After examining the results, we can clearly see that there're some human errors when entering the date. 
 
 ```{r date_range}
-co_exp <- co_exp %>% 
+cole <- cole%>% 
    mutate_at(.vars = vars(ends_with('date')), as.Date, format = "%m/%d/%Y %H:%M:%S %p") %>% 
-   mutate(year = year(expenditure_receipt_date))
+   mutate(year = year(report_due_date))
+
+co_exp <- co_exp%>% 
+   mutate_at(.vars = vars(ends_with('date')), as.Date, format = "%m/%d/%Y %H:%M:%S %p") %>% 
+   mutate(year = year(report_due_date))
 
 min(co_exp$expenditure_receipt_date, na.rm = T)
 max(co_exp$expenditure_receipt_date, na.rm = T)
@@ -237,12 +232,12 @@ max(co_exp$expenditure_receipt_date, na.rm = T)
 #### Year
 We can see the distribution of the `year` variable as such.
 ```{r year distribute}
-tabyl(co_exp$year)
+tabyl(co_exp$fiscal_year)
 ```
 
 
 ```{r year count, echo=FALSE}
-co_exp %>% 
+cole %>% 
   mutate(year = as.numeric(year)) %>% 
   filter(year < 2021 & year > 1994) %>% 
   count(year) %>% 
@@ -533,7 +528,6 @@ glimpse(sample_n(co_exp, 20))
 1. The range and distribution of `amount` and `date` seem reasonable.
 1. There are `r sum(co_exp$na_flag)` records missing either address or expenditure amount.
 1. Consistency in goegraphic data has been improved with `campfin::normal_*()`.
-1. The 4-digit `year` variable has been created with `lubridate::year()`.
 
 ## Export
 
@@ -551,7 +545,7 @@ write_csv(
 
 write_csv(
   x = co_exp %>% rename(lobbyist_city_clean = lobbyist_city_swap),
-  path = path(clean_dir, "co_lob_.csv"),
+  path = path(clean_dir, "co_lob_exp_clean.csv"),
   na = ""
 )
 ```

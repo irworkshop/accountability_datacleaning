@@ -1,0 +1,21 @@
+variable_name_column_headers_on_access_tables_and_csv_downloadable_files,label_column_headers_on_csv_display_files,description,format_values
+PROVNUM,Federal Provider Number,Provider Number,6 alphanumeric characters
+PROVNAME,Provider Name,Provider Name,text
+address,Provider Address,Provider Address,text
+city,Provider City,Provider City,text
+state,Provider State,Provider State,2-character postal abbreviation
+zip,Provider Zip Code,Provider Zip Code,5-digit zip code
+survey_date_output,Survey Date,Date of Health Inspection Survey,date
+SurveyType,Survey Type,Type of survey: Health or Fire Safety,text (Health)
+DEFPREF,Deficiency Prefix,The alphabetic character that is assigned to a series of data tags that apply to a provider,text (F)
+CATEGORY,Deficiency Category,Category of Health Deficiency,text
+TAG,Deficiency Tag Number,Deficiency Tag Number,4-digit tag code
+TAG_DESC,Deficiency Description,Text definition of deficiency,text
+SCOPE,Scope Severity Code,Indicates the level of harm to the resident(s) involved and the scope of the problem within the nursing home.,text
+DEFSTAT,Deficiency Corrected,"Indicates whether the deficiency has been corrected, a plan of correction has been devised, or the deficiency has yet to be corrected",text
+statdate,Correction Date,Date the deficiency was corrected,date
+cycle,Inspection Cycle,"The inspection cycle of deficiency for display on Nursing Home Compare, where 1 is the most recent cycle. Standard inspection cycles are counted sequentially into the past, complaint inspection cycles are counted annually into the past. If a defiency is found on a co-occurring standard and complaint inspection, it is assigned to the standard cycle.  Citations from Health Inspections occurring on or after 11/28/2017 are not currently used in calculating the health inspection rating; thus, the ""cycle"" on this table may be different from the rating cycle. Please refer to the 5-star Technical Users Guide for further information.",integer
+standard,Standard Deficiency,Indicates that the deficiency was found on a standard inspection,Y/N
+complaint,Complaint Deficiency,Indicates that the deficiency was found on a complaint inspection,Y/N
+LOCATION,Location,Location of facility,only on displayed version of file; renders as latitude and longitude
+FILEDATE,Processing Date,Date the data were retrieved,date

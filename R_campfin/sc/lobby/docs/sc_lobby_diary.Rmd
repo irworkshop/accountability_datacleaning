@@ -1,5 +1,5 @@
 ---
-title: "South Carolina"
+title: "South Carolina Lobbying Registration Data Diary"
 author: "Yanqi Xu"
 date: "`r Sys.time()`"
 output:
@@ -16,7 +16,7 @@ editor_options:
 ```{r setup, include=FALSE, purl=FALSE}
 library(knitr)
 opts_chunk$set(
-  eval = FALSE,
+  eval = TRUE,
   echo = TRUE,
   warning = FALSE,
   message = FALSE,
@@ -140,27 +140,24 @@ View a list of lobbyists, lobbyists' principals or their contact information.
 > * [Individual Lobbyist's Principal Lookup](https://apps.sc.gov/LobbyingActivity/SearchLPContact.aspx)
 > * [Year End Compilation Report](https://apps.sc.gov/LobbyingActivity/CompilationReport.aspx)
 
-First, we must download a reporting linking lobbyists to their principals.
+First, we must download a reporting linking lobbyists to their principals. We will download the `Lobbyists and Their Principals` table. Go to Public Disclosure > Lobbying Activity > List of Lobbyist > Type: All Lobbyist, and then hit Continue. A csv file is available for download. We'll name it `lob_prin.csv`.
+
+Then we can download the `Lobbyists' Principals and Their Lobbyists`
+Go to Public Disclosure > Lobbying Activity > List of Lobbyists' Principals > Type: All Lobbyists' Principals, and then hit Continue. A csv file is available for download. We'll name it `prin_lob.csv`.
+
+Both tables are downloaded on March 18, 2020. 
 
 ```{r raw_dir}
 raw_dir <- here("sc", "lobby", "data", "raw", "reg")
 dir_create(raw_dir)
 ```
 
-
-```{r eval=FALSE}
-# not working
+```{r}
 sclr <- read_csv(dir_ls(raw_dir))
 ```
 
-Then, we can download separate lists of lobbyists and principal contacts.
 
-```{r eval=FALSE}
-# not working
-POST("https://apps.sc.gov/LobbyingActivity/DisplayCsv.aspx")
-```
-
-## Import
+### Import
 
 Using these three files, we can create a single data frame listing lobbyists and those for whom
 they lobby.
@@ -168,7 +165,7 @@ they lobby.
 ```{r read_lobs}
 lobs <- 
   # read as string
-  read_lines(file = in_raw("sc_lobs.csv")) %>%
+  read_lines(file = path(raw_dir, "lob_prin.csv")) %>%
   extract(-2) %>% 
   # fix quote enclosure
   str_replace("\"Eye\"", "'Eye'") %>%
@@ -193,7 +190,7 @@ names(lobs) <- names(lobs) %>%
 ```{r read_pris}
 pris <- 
   read_delim(
-    file = in_raw("sc_pris.csv"),
+    file = path(raw_dir, "prin_lob.csv"),
     delim = ",",
     escape_backslash = FALSE,
     escape_double = FALSE,
@@ -209,44 +206,263 @@ names(pris) <- names(pris) %>%
   str_c("pri", ., sep = "_")
 ```
 
-```{r read_xref}
-xref <- read_delim(
-    file = in_raw("sc_xref.csv"),
-    delim = ",",
-    escape_backslash = FALSE,
-    escape_double = FALSE,
-    col_types = cols(.default = "c"),
-    na = c("", " ")
-  ) %>% 
-  remove_empty("cols") %>% 
-  clean_names("snake") %>% 
-  rename(
-    lob_last = lastname,
-    lob_first = firstname,
-    lob_address = address,
-    lob_city = city,
-    lob_state = state,
-    lob_zip = zipcode,
-    lob_phone = phone,
-    pri_name = principal_name,
-    lob_mi = middle_init,
-    lob_suffix = suffix
-    )
-```
-
 ```{r join_xref}
-sclr <- xref %>% 
-  left_join(pris, by = "pri_name") %>% 
-  select(
-    starts_with("lob"), 
-    starts_with("pri")
-  )
+sclr <- lobs %>% 
+  left_join(pris, by = c("lob_principal" = "pri_principal",
+                         "lob_lastname" = "pri_last",
+                         "lob_firstname" = "pri_first",
+                         "lob_middle" = "pri_middle",
+                         "lob_suffix" = "pri_suffix"))
 ```
+By examining the count of `NA` before and after the join, we can see that all lobbyist records were accounted for from the `pris` dataframe.
+```{r join stats}
+col_stats(lobs, count_na)
+col_stats(sclr, count_na)
 
-```{r}
 prop_in(
-  x = str_normal(paste(lobs$lob_first, lobs$lob_last)),
-  y = str_normal(paste(xref$lob_first, xref$lob_last)),
+  x = str_normal(paste(lobs$lob_firstname, lobs$lob_lastname)),
+  y = str_normal(paste(sclr$lob_firstname, sclr$lob_lastname)),
 )
 ```
 
+## Explore
+
+### Duplicaes
+We can see that there's no duplicate rows in this dataset. 
+```{r}
+sclr %>% flag_dupes(dplyr::everything())
+```
+
+
+
+## Wrangle
+To improve the searchability of the database, we will perform some consistent,
+confident string normalization. For geographic variables like city names and
+ZIP codes, the corresponding `campfin::normal_*()` functions are taylor made to
+facilitate this process.
+
+
+### Address
+
+For the street `addresss` variable, the `campfin::normal_address()` function
+will force consistence case, remove punctuation, and abbreviation official 
+USPS suffixes.
+
+```{r address_norm}
+sclr <- sclr %>% 
+  mutate_at(.vars = vars(ends_with('address')), 
+            .funs = list(norm = ~ normal_address(.,
+,abbs = usps_street,
+      na_rep = TRUE)))
+```
+
+```{r address_view}
+sclr %>% 
+  select(contains("address")) %>% 
+  distinct() %>% 
+  sample_n(10) %>% 
+  glimpse()
+```
+
+### ZIP
+
+For ZIP codes, the `campfin::normal_zip()` function will attempt to create
+valied _five_ digit codes by removing the ZIP+4 suffix and returning leading
+zeroes dropped by other programs like Microsoft Excel.
+
+```{r zip_norm}
+sclr <- sclr %>% 
+    mutate_at(.vars = vars(ends_with('zip')), .funs = list(norm = ~ normal_zip(.,na_rep = T))) %>% 
+    rename(lob_zip5 = lob_zip_norm,
+           pri_zip5 = pri_zip_norm)
+
+```
+
+```{r zip_progress}
+progress_table(
+  sclr$lob_zip,
+  sclr$lob_zip5,
+  sclr$pri_zip,
+  sclr$pri_zip5,
+  compare = valid_zip
+)
+```
+
+### State
+
+By examining the percentage of lobbyist_state that are considered valid, we can see that the `state` variable in both datasets doesn't need to be normalized.
+
+```{r state_norm}
+prop_in(sclr$lob_state, valid_state, na.rm = T)
+prop_in(sclr$pri_state, valid_state, na.rm = T)
+```
+
+### City
+
+Cities are the most difficult geographic variable to normalize, simply due to
+the wide variety of valid cities and formats.
+#### Normal
+
+The `campfin::normal_city()` function is a good sclrart, again converting case,
+removing punctuation, but _expanding_ USPS abbreviations. We can also remove
+`invalid_city` values.
+
+```{r city_norm}
+sclr <- sclr %>% 
+  mutate_at(.vars = vars(ends_with('city')), .funs = list(norm = ~ normal_city(.,
+      abbs = usps_city,
+      states = usps_state,
+      na = invalid_city,
+      na_rep = TRUE)))
+
+prop_in(sclr$lob_city_norm, valid_city, na.rm = T)
+prop_in(sclr$pri_city_norm, valid_city, na.rm = T)
+```
+
+#### Swap
+
+We can further improve normalization by comparing our normalized value
+against the _expected_ value for that record's state abbreviation and ZIP code.
+If the normalized value is either an abbreviation for or very similar to the
+expected value, we can confidently swap those two.
+
+```{r city_swap lobbyist}
+sclr <- sclr %>% 
+  left_join(
+    y = zipcodes,
+    by = c(
+      "lob_state" = "state",
+      "lob_zip5" = "zip"
+    )
+  ) %>% 
+  rename(lob_city_match = city) %>% 
+  mutate(
+    match_abb = is_abbrev(lob_city_norm, lob_city_match),
+    match_dist = str_dist(lob_city_norm, lob_city_match),
+    lob_city_swap = if_else(
+      condition = !is.na(match_dist) & match_abb | match_dist == 1,
+      true = lob_city_match,
+      false = lob_city_norm
+    )
+  ) %>% 
+  select(
+    -lob_city_match,
+    -match_dist,
+    -match_abb
+  )
+
+sclr <- sclr %>% 
+  left_join(
+    y = zipcodes,
+    by = c(
+      "pri_state" = "state",
+      "pri_zip5" = "zip"
+    )
+  ) %>% 
+  rename(pri_city_match = city) %>% 
+  mutate(
+    match_abb = is_abbrev(pri_city_norm, pri_city_match),
+    match_dist = str_dist(pri_city_norm, pri_city_match),
+    pri_city_swap = if_else(
+      condition = !is.na(match_dist) & match_abb | match_dist == 1,
+      true = pri_city_match,
+      false = pri_city_norm
+    )
+  ) %>% 
+  select(
+    -pri_city_match,
+    -match_dist,
+    -match_abb
+  )
+```
+
+### Manual
+There are still some remaining `pri_city_swap` fields that don't match our list of known cities.
+
+```{r check_filter}
+many_city <- c(valid_city, extra_city)
+
+sclr_out <- sclr %>% 
+  filter(pri_city_swap %out% many_city) %>% 
+  count(pri_city_swap, pri_state, sort = TRUE) %>% 
+  drop_na()
+```
+
+```{r}
+sclr <- sclr %>% 
+  mutate(pri_city_swap = str_replace(pri_city_swap,"^COLUMBIA SC$", "COLUMBIA"))
+```
+
+After the two normalization steps, the percentage of valid cities is close to 100% for both datasets. 
+
+#### Progress
+
+```{r city_progress, echo=FALSE}
+progress <- progress_table(
+  sclr$lob_city,
+  sclr$lob_city_norm,
+  sclr$lob_city_swap,
+  sclr$pri_city,
+  sclr$pri_city_norm,
+  sclr$pri_city_swap,
+  compare = many_city
+) %>% mutate(stage = as_factor(stage))
+```
+
+
+```{r progress_print, echo=FALSE}
+kable(progress, digits = 3, caption = 'SC Lobbyists Registration City Normalization Progress')
+```
+
+You can see how the percentage of valid values increased with each stage.
+
+```{r progress_bar, echo=FALSE}
+progress %>% 
+  ggplot(aes(x = stage, y = prop_in)) +
+  geom_hline(yintercept = 0.99) +
+  geom_col(fill = dark2["purple"]) +
+  coord_cartesian(ylim = c(0.75, 1)) +
+  scale_y_continuous(labels = percent) +
+  labs(
+    title = "South Carolina Lobbyists Summary Normalization Progress",
+    x = "stage",
+    y = "Percent Valid"
+  )
+
+```
+
+More importantly, the number of distinct values decreased each stage. We were
+able to confidently change many distinct invalid values to their valid
+equivalent.
+
+
+## Conclude
+
+```{r clean_glimpse}
+glimpse(sample_n(sclr, 20))
+```
+
+1. There are `r nrow(sclr)` records in the database.
+1. There're `r sum(sclr$dupe_flag)` duplicate records.
+1. The range and distribution of `amount` and `date` seem reasonable.
+1. There are `r sum(sclr$na_flag)` records missing either address or expenditure amount.
+1. Consistency in goegraphic data has been improved with `campfin::normal_*()`.
+1. This dataset doesn't contain `date` columns.
+
+## Export
+
+```{r clean_dir}
+clean_dir <- dir_create(here("sc", "lobby", "data", "reg","clean"))
+```
+
+```{r write_clean}
+write_csv(
+  x = sclr %>% 
+    select(-c(lob_city_norm, pri_city_norm)) %>% 
+    rename( lob_city_clean = lob_city_swap,
+                       pri_city_clean = pri_city_swap),
+  path = path(clean_dir, "sc_lob_reg_clean.csv"),
+  na = ""
+)
+
+```

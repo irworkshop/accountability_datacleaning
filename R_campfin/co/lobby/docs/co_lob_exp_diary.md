@@ -1,7 +1,7 @@
 Colorado Lobbying Expenditure Data Diary
 ================
 Yanqi Xu
-2020-03-13 19:21:35
+2020-03-25 17:19:54
 
 <!-- Place comments regarding knitting here -->
 
@@ -306,14 +306,6 @@ sum(co_exp$dupe_flag)
 
 ### Categorical
 
-Since this registration is good for Oct 2019 to Oct. 2020, we will
-create a year column.
-
-``` r
-cole <- cole %>% 
-  mutate(year = 2020L)
-```
-
 #### Dates
 
 Since the dates are all read as characters, we will convert them back in
@@ -324,9 +316,13 @@ After examining the results, we can clearly see that there’re some human
 errors when entering the date.
 
 ``` r
-co_exp <- co_exp %>% 
+cole <- cole%>% 
    mutate_at(.vars = vars(ends_with('date')), as.Date, format = "%m/%d/%Y %H:%M:%S %p") %>% 
-   mutate(year = year(expenditure_receipt_date))
+   mutate(year = year(report_due_date))
+
+co_exp <- co_exp%>% 
+   mutate_at(.vars = vars(ends_with('date')), as.Date, format = "%m/%d/%Y %H:%M:%S %p") %>% 
+   mutate(year = year(report_due_date))
 
 min(co_exp$expenditure_receipt_date, na.rm = T)
 #> [1] "0002-05-03"
@@ -339,21 +335,21 @@ max(co_exp$expenditure_receipt_date, na.rm = T)
 We can see the distribution of the `year` variable as such.
 
 ``` r
-tabyl(co_exp$year)
-#> # A tibble: 55 x 4
-#>    `co_exp$year`     n   percent valid_percent
-#>            <dbl> <dbl>     <dbl>         <dbl>
-#>  1             2     2 0.0000296     0.0000555
-#>  2             6     1 0.0000148     0.0000278
-#>  3             7     6 0.0000888     0.000167 
-#>  4             8     2 0.0000296     0.0000555
-#>  5            10     7 0.000104      0.000194 
-#>  6            11    11 0.000163      0.000305 
-#>  7           131     1 0.0000148     0.0000278
-#>  8           207     1 0.0000148     0.0000278
-#>  9           209     1 0.0000148     0.0000278
-#> 10          1111     1 0.0000148     0.0000278
-#> # … with 45 more rows
+tabyl(co_exp$fiscal_year)
+#> # A tibble: 26 x 3
+#>    `co_exp$fiscal_year`     n percent
+#>    <chr>                <dbl>   <dbl>
+#>  1 1995                  3743  0.0554
+#>  2 1996                  6855  0.101 
+#>  3 1997                  6898  0.102 
+#>  4 1998                  6783  0.100 
+#>  5 1999                  6252  0.0925
+#>  6 2000                  6532  0.0967
+#>  7 2001                  6475  0.0958
+#>  8 2002                  4085  0.0604
+#>  9 2003                  2751  0.0407
+#> 10 2004                  2797  0.0414
+#> # … with 16 more rows
 ```
 
 ![](../plots/year%20count-1.png)<!-- -->
@@ -643,10 +639,10 @@ glimpse(sample_n(cole, 20))
 #> $ total_monthly_expenses                       <dbl> 172.76, 0.00, NA, 3316.67, NA, NA, 0.00, NA…
 #> $ report_month                                 <chr> "September", "January", "May", "March", "Ap…
 #> $ fiscal_year                                  <chr> "2000", "1996", "2008", "1997", "2017", "20…
-#> $ report_due_date                              <chr> "10/15/1999 12:00:00 AM", "02/15/1996 12:00…
+#> $ report_due_date                              <date> 1999-10-15, 1996-02-15, 2008-06-16, 1997-0…
 #> $ na_flag                                      <lgl> FALSE, TRUE, FALSE, FALSE, FALSE, FALSE, FA…
 #> $ dupe_flag                                    <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, F…
-#> $ year                                         <int> 2020, 2020, 2020, 2020, 2020, 2020, 2020, 2…
+#> $ year                                         <dbl> 1999, 1996, 2008, 1997, 2017, 2008, 1996, 2…
 #> $ lobbyist_address_norm                        <chr> "3000 E CEDAR AVE 3", NA, "1099 18 TH ST", …
 #> $ lobbyist_zip5                                <chr> "80209", NA, "80202", "80112", "80203", "80…
 #> $ lobbyist_city_norm                           <chr> "DENVER", NA, "DENVER", "ENGLEWOOD", "DENVE…
@@ -674,7 +670,7 @@ glimpse(sample_n(co_exp, 20))
 #> $ report_due_date                 <date> 2009-05-15, 1998-05-15, 1997-02-15, 2004-12-15, 1996-04…
 #> $ na_flag                         <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, …
 #> $ dupe_flag                       <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, …
-#> $ year                            <dbl> 2009, 1998, NA, 2004, 1996, NA, NA, NA, NA, NA, 1998, NA…
+#> $ year                            <dbl> 2009, 1998, 1997, 2004, 1996, 1998, 2001, 1997, 1998, 19…
 #> $ lobbyist_address_norm           <chr> "495 UINTA WAY STE 240", "1539 MONROE ST", "PO BOX 3489"…
 #> $ lobbyist_zip5                   <chr> "80230", "80206", "80155", "80202", "80124", "80944", "8…
 #> $ lobbyist_city_norm              <chr> "DENVER", "DENVER", "ENGLEWOOD", "DENVER", "LITTLETON", …
@@ -689,8 +685,6 @@ glimpse(sample_n(co_exp, 20))
 4.  There are 9979 records missing either address or expenditure amount.
 5.  Consistency in goegraphic data has been improved with
     `campfin::normal_*()`.
-6.  The 4-digit `year` variable has been created with
-    `lubridate::year()`.
 
 ## Export
 
@@ -708,7 +702,7 @@ write_csv(
 
 write_csv(
   x = co_exp %>% rename(lobbyist_city_clean = lobbyist_city_swap),
-  path = path(clean_dir, "co_lob_.csv"),
+  path = path(clean_dir, "co_lob_exp_clean.csv"),
   na = ""
 )
 ```

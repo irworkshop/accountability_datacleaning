@@ -112,7 +112,7 @@ here::here()
 [rproj]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects "Rproj"
 
 ## Data
-The current lobbyist data is available for download at [Maryland Ethics Commission](https://lobby-ethics.maryland.gov/public_access/current_lobbyist_list) for registrations after Nov. 2019. Data prior to Nov. 2019 has a different data structures (missing address fields), and can be accessed at a different [endpoint](https://lobby-ethics.maryland.gov/public_access?utf8=%E2%9C%93&filters%5Breport_type%5D=Registrations+for+Lobbying+Years+ending+October+31%2C+2019+and+earlier&filters%5Bdate_selection%5D=Lobbying+Year&filters%5Blr_lobbying_year%5D=&filters%5Blr_date_start%5D_date=&filters%5Blr_date_start%5D=&filters%5Blr_date_end%5D_date=&filters%5Blr_date_end%5D=&filters%5Bsearch_query%5D=&commit=Search).
+The current lobbyist data is available for download at [Maryland Ethics Commission](https://lobby-ethics.maryland.gov/public_access?utf8=%E2%9C%93&filters%5Breport_type%5D=Activity+Reports&filters%5Bdate_selection%5D=Lobbying+Year&filters%5Bar_lobbying_year%5D=2019&filters%5Bar_date_start%5D_date=&filters%5Bar_date_start%5D=&filters%5Bar_date_end%5D_date=&filters%5Bar_date_end%5D=&filters%5Bsearch_query%5D=&filters%5Bemployer_name%5D=&commit=Search) for activity reports after Nov. 2019. Data prior to Nov. 2019 has a different data structures (missing address fields), and can be accessed at different endpoints by year.
 
 ## Import
 

@@ -1,0 +1,261 @@
+---
+title: "New York Payroll Dictionary"
+author: "Yanqi Xu"
+date: "`r Sys.time()`"
+output:
+  github_document: 
+    df_print: tibble
+    toc: true
+    toc_dept: 2
+editor_options: 
+  chunk_output_type: console
+---
+
+<!-- Place comments regarding knitting here -->
+
+```{r setup, include=FALSE, purl=FALSE}
+library(knitr)
+opts_chunk$set(
+  eval = TRUE,
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  error = FALSE,
+  collapse = TRUE,
+  comment = "#>",
+  fig.path = "../plots/",
+  fig.width = 10,
+  dpi = 300
+)
+options(width = 99)
+set.seed(5)
+```
+
+```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
+fs::dir_create(here::here("ny", "payroll", "docs"))
+```
+
+## Project
+
+The Accountability Project is an effort to cut across data silos and give journalists, policy
+professionals, activists, and the public at large a simple way to search across huge volumes of
+public data about people and organizations.
+
+Our goal is to standardizing public data on a few key fields by thinking of each dataset row as a
+transaction. For each transaction there should be (at least) 3 variables:
+
+1. All **parties** to a transaction
+2. The **date** of the transaction
+3. The **amount** of money involved
+
+## Objectives
+
+This document describes the process used to complete the following objectives:
+
+1. How many records are in the database?
+1. Check for duplicates
+1. Check ranges
+1. Is there anything blank or missing?
+1. Check for consistency issues
+1. Create a five-digit ZIP Code called `ZIP5`
+1. Create a `YEAR` field from the transaction date
+1. Make sure there is data on both parties to a transaction
+
+## Packages
+
+The following packages are needed to collect, manipulate, visualize, analyze, and communicate
+these results. The `pacman` package will facilitate their installation and attachment.
+
+The IRW's `campfin` package will also have to be installed from GitHub. This package contains
+functions custom made to help facilitate the processing of campaign finance data.
+
+```{r load_packages, message=FALSE, dfrning=FALSE, error=FALSE}
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load_gh("irworkshop/campfin")
+pacman::p_load(
+  readxl, # read excel files
+  tidyverse, # data manipulation
+  lubridate, # datetime strings
+  gluedown, # printing markdown
+  magrittr, # pipe opperators
+  janitor, # dataframe clean
+  refinr, # cluster and merge
+  scales, # format strings
+  knitr, # knit documents
+  vroom, # read files fast
+  glue, # combine strings
+  here, # relative storage
+  fs # search storage 
+)
+```
+
+This document should be run as part of the `R_campfin` project, which lives as a sub-directory of
+the more general, language-agnostic [`irworkshop/accountability_datacleaning`][01] GitHub
+repository.
+
+The `R_campfin` project uses the [RStudio projects][02] feature and should be run as such. The
+project also uses the dynamic `here::here()` tool for file paths relative to _your_ machine.
+
+```{r where_here}
+# where does this document knit?
+here::here()
+```
+
+[01]: https://github.com/irworkshop/accountability_datacleaning "TAP repo"
+[02]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects "Rproj"
+
+## Registration
+
+Data is obtained from the [New York City's data portal][data portal]. According to the website, the data was created Date Created October 31, 2015 and Last Updated on January 14, 2020. It comes from Office of Payroll Administration and is updated annually.
+
+> Data is collected because of public interest in how the City’s budget is being spent on salary and overtime pay for all municipal employees. Data is input into the City's Personnel Management System (“PMS”) by the respective user Agencies. Each record represents the following statistics for every city employee: Agency, Last Name, First Name, Middle Initial, Agency Start Date, Work Location Borough, Job Title Description, Leave Status as of the close of the FY (June 30th), Base Salary, Pay Basis, Regular Hours Paid, Regular Gross Paid, Overtime Hours worked, Total Overtime Paid, and Total Other Compensation (i.e. lump sum and/or retro payments). This data can be used to analyze how the City's financial resources are allocated and how much of the City's budget is being devoted to overtime. The reader of this data should be aware that increments of salary increases received over the course of any one fiscal year will not be reflected. All that is captured, is the employee's final base and gross salary at the end of the fiscal year.
+
+> NOTE: As a part of FISA-OPA’s routine process for reviewing and releasing Citywide Payroll Data, data for some agencies (specifically NYC Police Department (NYPD) and the District Attorneys’ Offices (Manhattan, Kings, Queens, Richmond, Bronx, and Special Narcotics)) have been redacted since they are exempt from disclosure pursuant to the Freedom of Information Law, POL § 87(2)(f), on the ground that disclosure of the information could endanger the life and safety of the public servants listed thereon. They are further exempt from disclosure pursuant to POL § 87(2)(e)(iii), on the ground that any release of the information would identify confidential sources or disclose confidential information relating to a criminal investigation, and POL § 87(2)(e)(iv), on the ground that disclosure would reveal non-routine criminal investigative techniques or procedures.
+
+[data portal]: https://data.ny.gov/City-Government/Citywide-Payroll-Data-Fiscal-Year-/k397-673e
+
+```{r raw_dir}
+raw_dir <- dir_create(here("ny", "payroll", "data", "raw"))
+data_dir <- here("ny", "payroll", "data")
+```
+
+### Import
+Besides the raw data, a data dictionary is also available for [download](https://data.ny.gov/api/views/k397-673e/files/6a4a6c57-7579-4d51-a7e2-9698ef6f96e3?download=true&filename=Open-Data-Dictionary-Citywide_Payroll.FINAL.XLSX).
+
+```{r raw_read}
+nyp <- dir_ls(raw_dir) %>% read_csv() 
+# change column names into snake case, i.e. snake_case
+nyp <- nyp %>% clean_names()
+```
+
+### Explore
+
+```{r raw_glimpse}
+head(nyp)
+tail(nyp)
+glimpse(sample_frac(nyp))
+```
+
+
+As we can see from `tail()`, the last two rows still need to be removed.
+
+We can also view the data ditcionary.
+
+```{r dictionary}
+dict <- dir_ls(data_dir, glob = "*.XLSX") %>% read_xlsx(sheet = 2, skip = 1)
+```
+
+```{r kable dict, echo=FALSE}
+kable(dict)
+```
+
+Then we can take a look at the _NA_ fields and number of distinct values for each column. 
+```{r n_distinct}
+col_stats(nyp, count_na)
+col_stats(nyp, n_distinct)
+```
+We'll use the `campfin:flag_dupe()` function to flag the records without any names and title description
+```{r flag na}
+nyp <- nyp %>% 
+  flag_na(first_name, last_name, title_description)
+```
+
+
+```{r count_na}
+col_stats(nyp, count_na)
+```
+
+There are no duplicate rows in the database.
+
+```{r duplicated}
+nyp <- flag_dupes(nyp, dplyr::everything())
+sum(nyp$dupe_flag)
+```
+
+
+```{r year_plot, echo=FALSE}
+nyp %>% 
+  count(fiscal_year) %>% 
+  ggplot(aes(x = fiscal_year, y = n)) +
+  geom_col(fill = RColorBrewer::brewer.pal(3, "Dark2")[3]) +
+  labs(
+    title = "New Year Staff Payroll Head Counts per Year",
+    x = "Fiscal Year",
+    y = "Staffers"
+  )
+```
+
+
+## Wrangle
+
+### State
+
+We can add the state column.
+
+```{r add state}
+nyp <- nyp %>% 
+  mutate(state = "NY")
+```
+
+### Date
+
+The column `agency_start_date` is read as character. Here we can use `as.Date` and specify the `format` argument to turn this column into dates.
+
+```{r change date}
+nyp <- nyp %>% 
+  mutate(agency_start_date = as.Date(agency_start_date, format = "%m/%d/%Y"))
+```
+
+### Total Gross Pay 
+
+According to the data dictionary, Total gross pay is the sum of `regular_gross_paid`, `total_ot_paid` and `total_other_pay`, so we will need to generate a new column that we will use for The Public Accountability Project. 
+```{r add gross pay}
+nyp <- nyp %>% 
+  mutate(total_gross_pay = sum(regular_gross_paid, total_ot_paid, total_other_pay))
+```
+
+We can plot the distribution of total compensations by different departments.
+```{r dept violin}
+nyp %>% 
+  filter(total_gross_pay >= 1, amount < 1e5) %>% 
+  ggplot(aes(x = reorder(party, total_gross_pay), y = total_gross_pay)) + 
+  geom_violin(aes(fill = agency_name)) + 
+  scale_y_continuous(
+    breaks = c(1 %o% 10^(0:5)),
+    labels = dollar,
+    trans = "log10"
+  ) +
+  scale_fill_manual(
+    guide = FALSE,
+    values = c(
+      "brown", 
+      "royalblue", 
+      "forestgreen", 
+      "gold",
+      "mediumpurple", 
+      "#999999", 
+      "firebrick",
+      "black"
+    )
+  ) +
+  labs(
+    title = "New York State Salary Distribution",
+    caption = "Source: ",
+    y = "Amount",
+    x = "Department"
+  )
+```
+
+### Export
+
+```{r proc_dir}
+proc_dir <- dir_create(here("ny", "payroll", "data", "processed"))
+```
+
+```{r proc_write}
+write_csv(
+  x = nyp,
+  path = path(proc_dir, "ny_payroll_clean.csv"),
+  na = ""
+)
+```

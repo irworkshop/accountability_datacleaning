@@ -1,6 +1,6 @@
 Nursing Home Compare Data Diary
 ================
-Yanqi Xu
+Yanqi Xu  
 2020-03-16 17:55:45
 
 <!-- Place comments regarding knitting here -->

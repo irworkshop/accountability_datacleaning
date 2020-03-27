@@ -1,0 +1,258 @@
+---
+title: "South Carolina Lobbying Expenditure Diary"
+author: "Yanqi Xu"
+date: "`r Sys.time()`"
+output:
+  github_document: 
+    df_print: tibble
+    toc: true
+    toc_dept: 2
+editor_options: 
+  chunk_output_type: console
+---
+
+<!-- Place comments regarding knitting here -->
+
+```{r setup, include=FALSE, purl=FALSE}
+library(knitr)
+opts_chunk$set(
+  eval = TRUE,
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  error = FALSE,
+  collapse = TRUE,
+  comment = "#>",
+  fig.path = "../plots/",
+  fig.width = 10,
+  dpi = 300
+)
+options(width = 99)
+set.seed(5)
+```
+
+```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
+fs::dir_create(here::here("sc", "lobby", "docs"))
+```
+
+## Project
+
+The Accountability Project is an effort to cut across data silos and give
+journalists, policy professionals, activists, and the public at large a simple
+way to search across huge volumes of public data about people and organizations.
+
+Our goal is to standardizing public data on a few key fields by thinking of each
+dataset row as a transaction. For each transaction there should be (at least) 3
+variables:
+
+1. All **parties** to a transaction.
+2. The **date** of the transaction.
+3. The **amount** of money involved.
+
+## Objectives
+
+This document describes the process used to complete the following objectives:
+
+1. How many records are in the database?
+1. Check for entirely duplicated records.
+1. Check ranges of continuous variables.
+1. Is there anything blank or missing?
+1. Check for consistency issues.
+1. Create a five-digit ZIP Code called `zip`.
+1. Create a `year` field from the transaction date.
+1. Make sure there is data on both parties to a transaction.
+
+
+## Packages
+
+The following packages are needed to collect, manipulate, visualize, analyze,
+and communicate these results. The `pacman` package will facilitate their
+installation and attachment.
+
+The IRW's `campfin` package will also have to be installed from GitHub. This
+package contains functions custom made to help facilitate the processing of
+campaign finance data.
+
+```{r load_packages, message=FALSE, dfrning=FALSE, error=FALSE}
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load_current_gh("irworkshop/campfin")
+pacman::p_load(
+  readxl, # read excel files
+  rvest, # used to scrape website and get html elements
+  tidyverse, # data manipulation
+  stringdist, # calculate distances between strings
+  lubridate, # datetime strings
+  magrittr, # pipe opperators
+  janitor, # dataframe clean
+  refinr, # cluster and merge
+  scales, # format strings
+  knitr, # knit documents
+  vroom, # read files fast
+  httr, # http queries
+  glue, # combine strings
+  here, # relative storage
+  fs # search storage 
+)
+```
+
+This document should be run as part of the `R_campfin` project, which lives as a
+sub-directory of the more general, language-agnostic
+[`irworkshop/accountability_datacleaning`][tap] GitHub repository.
+
+The `R_campfin` project uses the [Rstudio projects][rproj] feature and should be
+run as such. The project also uses the dynamic `here::here()` tool for file
+paths relative to _your_ machine.
+
+```{r where_here}
+# where does this document knit?
+here::here()
+```
+
+[tap]: https://github.com/irworkshop/accountability_datacleaning
+[rproj]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects "Rproj"
+
+## Data
+Lobbyist data is obtained from the [South Carolina State Ethics Commission][03].
+
+> #### Welcome
+> Registrations for both lobbyists and their respective lobbyist's principals are available online
+for viewing. Disclosure for both lobbyists and their respective lobbyist's principals will also be
+available at the conclusion of the first disclosure period, June 30, 2009, for the period, January
+1, 2009 through May 31, 2009.
+
+The [lobbying activity page][04], we can see the files that can be retrieved:
+
+
+> #### Lobbying Activity
+> Welcome to the State Ethics Commission Online Public Disclosure and Accountability Reporting
+System for Lobbying Activity. Registrations for both lobbyists and their respective lobbyist's
+principals are available online for viewing.
+> 
+> Disclosure for both lobbyists and their respective lobbyist's principals are available for the
+period June 30, 2009 through the present.
+> 
+> These filings can be accessed by searching individual reports by lobbyist and lobbyist’s
+principal names and by complete list of current lobbyist and lobbyist’s principal registrations.
+
+> #### List Reports
+View a list of lobbyists, lobbyists' principals or their contact information.
+> 
+> * [Lobbyists and Their Principals](https://apps.sc.gov/LobbyingActivity/SelectLobbyistGroup.aspx)
+> * [Download Lobbyist Contacts (CSV file)](https://apps.sc.gov/LobbyingActivity/DisplayCsv.aspx)
+> * [Individual Lobbyist Lookup](https://apps.sc.gov/LobbyingActivity/SearchLobbyistContact.aspx)
+> * [Lobbyists' Principals and Their Lobbyists](https://apps.sc.gov/LobbyingActivity/SelectLobbyistPrincipalGroup.aspx)
+> * [Download Lobbyist's Principal Contacts (CSV file)](https://apps.sc.gov/LobbyingActivity/DisplayCsv.aspx)
+> * [Individual Lobbyist's Principal Lookup](https://apps.sc.gov/LobbyingActivity/SearchLPContact.aspx)
+> * [Year End Compilation Report](https://apps.sc.gov/LobbyingActivity/CompilationReport.aspx)
+
+This data diary handles processing of the lobbyist compensation and expenditure data, which can be accessed from the `Year End Compilation Report` by year.
+
+
+## Import
+
+### Setting up Raw Data Directory
+
+```{r raw_dir}
+raw_dir <- dir_create(here("sc", "lobby", "data", "raw", "exp"))
+```
+### Download
+We can see that though 2007 and 2008 were selectable in the drowdown menu, there's actually no data.
+
+### Read
+```{r raw_read}
+read_exp <- function(file_path){
+  df <- read_lines(file_path) %>% 
+  str_replace_all("(?<!^|,)\"(?!$|,)", "'") %>% 
+  read_delim(",", escape_backslash = FALSE, escape_double = FALSE)
+  #get rid of the extraneous column 'X27'
+  df <- df %>% select(-ncol(df))
+  df <- df %>% 
+    clean_names() %>% 
+    mutate(year = str_extract(file_path, "\\d{4}"))
+}
+
+scle <- map_dfr(dir_ls(raw_dir), read_exp)
+```
+
+
+## Explore
+
+```{r glimpse}
+head(scle)
+tail(scle)
+glimpse(sample_n(scle, 20))
+```
+
+
+### Missing
+There're no missing fields 
+```{r na_count}
+col_stats(scle, count_na)
+```
+
+### Duplicates
+There `r sum(scle$dupe_flag)` duplicate columns. 
+```{r dupe_flag}
+scle <- flag_dupes(scle, dplyr::everything())
+sum(scle$dupe_flag)
+```
+
+### Continuous
+All the amount columns are character columns that contain special characters like "$" and ",".We will turn them into numeric columns.
+
+```{r col type}
+scle <- scle %>% 
+  mutate_at(.vars = vars(-c(lobbyist, lobbyists_principal, year, dupe_flag)), .funs = str_remove_all,"\\$|,") %>% 
+  mutate_at(.vars = vars(-c(lobbyist, lobbyists_principal, year, dupe_flag)), .funs = as.numeric) %>% 
+  mutate_if(is.character, str_to_upper)
+```
+
+```{r plot top receipients ecoh}
+scle%>% 
+  group_by(lobbyists_principal) %>% 
+  summarize(med = median(total_income_and_expenditures_calendar_year_total)) %>% 
+  arrange(desc(med)) %>% 
+  top_n(10) %>% 
+  ggplot(aes(x = reorder(lobbyists_principal,med),
+         y = med)) +
+  geom_col(fill = RColorBrewer::brewer.pal(3, "Dark2")[3]) +
+  theme(legend.position = "none") +
+  scale_x_discrete(labels = wrap_format(15)) +
+  scale_y_continuous(labels = dollar) +
+  coord_flip() +
+  theme_minimal() +
+  labs(
+    title = "Top 10 Highest-spending Lobbying Principals",
+    subtitle = "(Measued by median total compensation and expenditures to lobbyists)",
+    caption = "Source: South Carolina State Ethics Commission",
+    x = "median expenses",
+    y = 'dollar'
+  )
+  
+```
+
+## Conclude
+
+```{r clean_glimpse}
+glimpse(sample_n(scle, 20))
+```
+
+1. There are `r nrow(scle)` records in the database.
+1. There's no duplicate record in the database.
+1. The range and distribution of `amount` and `date` seem reasonable.
+1. There are `r sum(scle$na_flag)` records missing either recipient or date.
+1. Consistency in goegraphic data has been improved with `campfin::normal_*()`.
+
+## Export
+
+```{r clean_dir}
+clean_dir <- dir_create(here("sc", "lobby", "data", "processed","exp"))
+```
+
+```{r write_clean}
+write_csv(
+  x = scle,
+  path = path(clean_dir, "sc_lob_exp_clean.csv"),
+  na = ""
+)
+```

@@ -1,0 +1,218 @@
+---
+title: "Arkansas Lobbying Expenditure Diary"
+author: "Yanqi Xu"
+date: "`r Sys.time()`"
+output:
+  github_document: 
+    df_print: tibble
+    toc: true
+    toc_dept: 2
+editor_options: 
+  chunk_output_type: console
+---
+
+<!-- Place comments regarding knitting here -->
+
+```{r setup, include=FALSE, purl=FALSE}
+library(knitr)
+opts_chunk$set(
+  eval = TRUE,
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  error = FALSE,
+  collapse = TRUE,
+  comment = "#>",
+  fig.path = "../plots/",
+  fig.width = 10,
+  dpi = 300
+)
+options(width = 99)
+set.seed(5)
+```
+
+```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
+fs::dir_create(here::here("ar", "lobby", "docs"))
+```
+
+## Project
+
+The Accountability Project is an effort to cut across data silos and give journalists, policy
+professionals, activists, and the public at large a simple way to search across huge volumes of
+public data about people and organizations.
+
+Our goal is to standardizing public data on a few key fields by thinking of each dataset row as a
+transaction. For each transaction there should be (at least) 3 variables:
+
+1. All **parties** to a transaction
+2. The **date** of the transaction
+3. The **amount** of money involved
+
+## Objectives
+
+This document describes the process used to complete the following objectives:
+
+1. How many records are in the database?
+1. Check for duplicates
+1. Check ranges
+1. Is there anything blank or missing?
+1. Check for consistency issues
+1. Create a five-digit ZIP Code called `ZIP5`
+1. Create a `YEAR` field from the transaction date
+1. Make sure there is data on both parties to a transaction
+
+## Packages
+
+The following packages are needed to collect, manipulate, visualize, analyze, and communicate
+these results. The `pacman` package will facilitate their installation and attachment.
+
+The IRW's `campfin` package will also have to be installed from GitHub. This package contains
+functions custom made to help facilitate the processing of campaign finance data.
+
+```{r load_packages, message=FALSE, dfrning=FALSE, error=FALSE}
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load_gh("irworkshop/campfin")
+pacman::p_load(
+  tidyverse, # data manipulation
+  lubridate, # datetime strings
+  gluedown, # printing markdown
+  magrittr, # pipe opperators
+  janitor, # dataframe clean
+  refinr, # cluster and merge
+  scales, # format strings
+  knitr, # knit documents
+  vroom, # read files fast
+  glue, # combine strings
+  here, # relative storage
+  fs # search storage 
+)
+```
+
+This document should be run as part of the `R_campfin` project, which lives as a sub-directory of
+the more general, language-agnostic [`irworkshop/accountability_datacleaning`][01] GitHub
+repository.
+
+The `R_campfin` project uses the [RStudio projects][02] feature and should be run as such. The
+project also uses the dynamic `here::here()` tool for file paths relative to _your_ machine.
+
+```{r where_here}
+# where does this document knit?
+here::here()
+```
+
+[01]: https://github.com/irworkshop/accountability_datacleaning "TAP repo"
+[02]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects "Rproj"
+
+## Expenditures
+
+Data is obtained from the [Arkansas Secretary of State][sos]. We can export expenditure by year with the [Financial Disclosure Archive Search][download] for 2008-2017 data. From 2017 onwards, the data exists in a different system.
+
+> This tool allows you to access archived Financial Disclosure reports filed both on paper and online with the Secretary of State's office, including Statement of Financial Interest Reports, Extra Income Disclosures, Disclosure by the Members of the General Assembly, Contribution and Expenditure Reports, Political Action Committee Reports and Lobbyist Reports.
+
+[sos]: https://www.sos.arkansas.gov/elections/financial-disclosure/
+[download]: https://www.sos.arkansas.gov/lobbyist_search/index.php/search/advanced/new
+
+```{r raw_dir}
+raw_dir <-dir_create(here("ar", "lobby", "data", "raw"))
+```
+
+
+### Fix
+
+To properly read so many records, we need to first perform some manipulation of
+the text files. Each "cell" of character type columns are surrounded in double
+quotation marks (`"`) to help prevent misreading. Howver, some of the text in
+these cells itself contains double quotes or newline characters (`\n`).
+
+We need to read each file as a character string and use regular expressions to
+identify these erroneous characters and remove or replace them.
+
+```{r raw_fix}
+fix_check <- here("ar", "lobby", "data", "fixed.txt")
+  fixed_dir <- dir_create(path(raw_dir, "fixed"))
+# do not repeat if done
+if (!file_exists(fix_check)) {
+  # for all contrib and filer files
+  for (file in dir_ls(raw_dir, glob = "*.xls")) {
+    # read raw file
+    read_file(file) %>% 
+      # force conversion to simple
+      str_conv(encoding = "ASCII") %>% 
+      # replace newlines followed by a non-numeric character with a "/" 
+      str_replace_all("\n(?=[:alpha:])","/") %>% 
+      # replace newlines followed by a $ with a "\t"
+      str_replace_all("\n\\$","\t") %>% 
+      # replace all newlines NOT followed by "20xx"  with a space
+      str_replace_all("\n(?!20)", " ") %>% 
+      # overwrite raw file
+      write_file(path(fixed_dir, basename(file)))
+    # check progress
+    message(paste(basename(file), "done"))
+    # clean garbage memory
+    gc()
+  }
+  # note this has done
+  file_create(fix_check)
+}
+```
+
+
+### Import
+
+
+```{r raw_read}
+arle <- map_dfr(dir_ls(fixed_dir), 
+            read_delim,
+            delim = "\t", 
+            escape_double = FALSE, 
+            trim_ws = TRUE, 
+            col_types = cols(.default = col_character())) %>% 
+  clean_names()
+```
+
+We'll do some cleaning with regard to column types.
+```{r col type}
+arle <- arle %>% 
+  mutate(filing_date = as.Date(filing_date, format = "%m-%d-%y")) %>% 
+  # get rid of the dollar signs and commas in the amount collumns
+  mutate_at(.vars = vars(ends_with("amount")), .funs = list(norm = ~ str_remove_all(.,"\\$|,"))) %>% 
+  mutate_at(.vars = vars(ends_with("norm")), .funs = as.numeric)
+```
+
+
+### Explore
+
+```{r raw_glimpse}
+head(arle)
+tail(arle)
+glimpse(sample_frac(arle))
+```
+
+As we can see from `tail()`, the last two rows still need to be removed.
+
+
+#### Missing
+
+```{r n_distinct}
+col_stats(arle, count_na)
+col_stats(arle, n_distinct)
+```
+
+We can see that for some lobbying firms, the payment to each lobbyist is not specified.
+
+There are no duplicate rows in the database.
+#### Duplicates
+There are many duplicate records in the dataset and identical records are BOTH flagged with `dupe_flag`.
+```{r duplicated}
+arle <- flag_dupes(arle, dplyr::everything())
+sum(arle$dupe_flag)
+```
+
+```{r}
+write_csv(
+  x = arle,
+  path = path(proc_dir, "ar_lobby_exp_early.csv"),
+  na = ""
+)
+```
+
