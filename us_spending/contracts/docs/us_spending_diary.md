@@ -1,7 +1,7 @@
 Health and Human Services Spending
 ================
 Kiernan Nicholls
-2020-03-27 13:51:42
+2020-03-27 19:32:11
 
   - [Project](#project)
   - [Objectives](#objectives)
@@ -144,7 +144,7 @@ We first need to construct both the URLs and local paths to the archive
 files.
 
 ``` r
-zip_dir <- dir_create(here("data", "zip"))
+zip_dir <- dir_create(here("contracts", "data", "zip"))
 base_url <- "https://files.usaspending.gov/award_data_archive/"
 con_files <- glue("FY{2008:2020}_All_Contracts_Full_20200313.zip")
 con_urls <- str_c(base_url, con_files)
@@ -154,9 +154,9 @@ con_zips <- path(zip_dir, con_files)
     #> [1] "https://files.usaspending.gov/award_data_archive/FY2008_All_Contracts_Full_20200313.zip"
     #> [2] "https://files.usaspending.gov/award_data_archive/FY2009_All_Contracts_Full_20200313.zip"
     #> [3] "https://files.usaspending.gov/award_data_archive/FY2010_All_Contracts_Full_20200313.zip"
-    #> [1] "~/data/zip/FY2008_All_Contracts_Full_20200313.zip"
-    #> [2] "~/data/zip/FY2009_All_Contracts_Full_20200313.zip"
-    #> [3] "~/data/zip/FY2010_All_Contracts_Full_20200313.zip"
+    #> [1] "~/contracts/data/zip/FY2008_All_Contracts_Full_20200313.zip"
+    #> [2] "~/contracts/data/zip/FY2009_All_Contracts_Full_20200313.zip"
+    #> [3] "~/contracts/data/zip/FY2010_All_Contracts_Full_20200313.zip"
 
 We also need to add the records for spending and corrections made since
 this file was last updated. This is information is crucial, as it
@@ -193,7 +193,7 @@ We can extract the text files from the annual archives into a new
 directory.
 
 ``` r
-raw_dir <- dir_create(here("data", "raw"))
+raw_dir <- dir_create(here("contracts", "data", "raw"))
 if (length(dir_ls(raw_dir)) == 0) {
   future_map(con_zips, unzip, exdir = raw_dir)
   future_map(delta_zip, unzip, exdir = raw_dir)
@@ -211,7 +211,7 @@ The USA Spending website also provides a comprehensive data dictionary
 which covers the many variables in this file.
 
 ``` r
-dict_file <- path(here("data"), "dict.xlsx")
+dict_file <- path(here("contracts", "data"), "dict.xlsx")
 if (!file_exists(dict_file)) {
   download.file(
     url = "https://files.usaspending.gov/docs/Data_Dictionary_Crosswalk.xlsx",
@@ -228,7 +228,7 @@ dict <- read_excel(
 usa_names <- names(vroom(con_paths[which.min(file_size(con_paths))], n_max = 0))
 # get cols from hhs data
 mean(usa_names %in% dict$award_element)
-#> [1] 0.8949275
+#> [1] 0.825
 dict %>% 
   filter(award_element %in% usa_names) %>% 
   select(award_element, definition) %>% 
@@ -241,16 +241,16 @@ dict %>%
 
 | award\_element                       | definition                                                                |
 | :----------------------------------- | :------------------------------------------------------------------------ |
-| award\_id\_piid                      | The unique identifier of the specific award being reported.               |
 | modification\_number                 | The identifier of an action being reported that indicates the specific s… |
 | transaction\_number                  | Tie Breaker for legal, unique transactions that would otherwise have the… |
 | parent\_award\_agency\_id            | Identifier used to link agency in FPDS-NG to referenced IDV information.  |
 | parent\_award\_agency\_name          | Name of the agency associated with the code in the Referenced IDV Agency… |
 | parent\_award\_modification\_number  | When reporting orders under Indefinite Delivery Vehicles (IDV) such as a… |
-| federal\_action\_obligation          | Amount of Federal government’s obligation, de-obligation, or liability f… |
 | total\_dollars\_obligated            | This is a system generated element providing the sum of all the amounts … |
 | base\_and\_exercised\_options\_value | The change (from this transaction only) to the current contract value (i… |
 | current\_total\_value\_of\_award     | Total amount obligated to date on an award. For a contract, this amount … |
+| base\_and\_all\_options\_value       | The change (from this transaction only) to the potential contract value … |
+| potential\_total\_value\_of\_award   | Total amount that could be obligated on a contract, if the base and all … |
 
 ## Read
 
@@ -262,7 +262,7 @@ length(con_paths)
 #> [1] 57
 # total file sizes
 sum(file_size(con_paths))
-#> 84.9G
+#> 87.1G
 # avail local memory
 as_fs_bytes(str_extract(system("free", intern = TRUE)[2], "\\d+"))
 #> 31.4M
@@ -287,11 +287,9 @@ clear_memory <- function(n = 10) {
 ```
 
 ``` r
-read_start <- Sys.time()
 # track progress in text file
-prog_path <- file_create("read_prog.txt")
+prog_path <- file_create(here("contracts", "read_prog.txt"))
 for (f in c(con_paths, delta_paths)) {
-  loop_start <- Sys.time()
   prog_files <- read_lines(prog_path)
   n <- str_remove(basename(f), "_All_Contracts_(Full|Delta)_\\d+")
   if (f %in% prog_files) {
@@ -386,21 +384,21 @@ for (f in c(con_paths, delta_paths)) {
     zip = round(mean(usc$zip %in% valid_zip), 4)
   )
   message(paste(n, "checking done"))
-  # save tweaked file
-  vroom_write(usc, f)
+  # save manipulated file
+  vroom_write(x = usc, path = f, delim = ",", na = "")
   # save the checks as line in csv
-  write_csv(check[1, ], "spend_check.csv", append = TRUE)
+  spend_path <- here("contracts", "spend_check.csv")
+  write_csv(check[1, ], spend_path, append = TRUE)
   # save the file as line in txt
   write_lines(f, prog_path, append = TRUE)
   # reset for next
   rm(usc, check)
-  Sys.sleep(60)
-  clear_memory()
+  clear_memory(n = 100)
   p <- paste(match(f, con_paths), length(con_paths), sep = "/")
   message(paste(n, "writing done:", p, file_size(f)))
   # check progress
-  Sys.time() - read_start
-  Sys.time() - loop_start
+  beepr::beep("fanfare")
+  Sys.sleep(30)
 }
 ```
 
@@ -413,7 +411,7 @@ all_paths <- dir_ls(raw_dir)
 length(all_paths)
 #> [1] 61
 sum(file_size(all_paths))
-#> 91.6G
+#> 93.5G
 ```
 
 Now we can read the `spend_check.csv` text file to see the statistics
@@ -507,10 +505,3 @@ And here we have the total checks for every file.
 | `FY(All)_2.csv` | 1000000 |  282 | 2000-10-01 | 2020-03-11 |       9 |  49397 | 89%  | 89%   | 90% |
 | `FY(All)_3.csv` | 1000000 |  282 | 2000-10-01 | 2020-01-08 |       6 |  16524 | 94%  | 95%   | 96% |
 | `FY(All)_4.csv` |  539641 |  282 | 2000-10-01 | 2020-01-08 |       2 |  17118 | 97%  | 96%   | 97% |
-
-We are going to rename the files for clarity on the source.
-
-``` r
-new_paths <- str_replace(all_paths, "_All_", "_US_")
-file_move(all_paths, new_paths)
-```

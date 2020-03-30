@@ -162,7 +162,7 @@ Archives can be obtained for individual agencies or for _all_ agencies.
 We first need to construct both the URLs and local paths to the archive files.
 
 ```{r full_path}
-zip_dir <- dir_create(here("data", "zip"))
+zip_dir <- dir_create(here("contracts", "data", "zip"))
 base_url <- "https://files.usaspending.gov/award_data_archive/"
 con_files <- glue("FY{2008:2020}_All_Contracts_Full_20200313.zip")
 con_urls <- str_c(base_url, con_files)
@@ -207,7 +207,7 @@ if (!all(file_exists(c(con_zips, delta_zip)))) {
 We can extract the text files from the annual archives into a new directory.
 
 ```{r extract, results='hide'}
-raw_dir <- dir_create(here("data", "raw"))
+raw_dir <- dir_create(here("contracts", "data", "raw"))
 if (length(dir_ls(raw_dir)) == 0) {
   future_map(con_zips, unzip, exdir = raw_dir)
   future_map(delta_zip, unzip, exdir = raw_dir)
@@ -225,7 +225,7 @@ The USA Spending website also provides a comprehensive data dictionary which
 covers the many variables in this file.
 
 ```{r dictionary}
-dict_file <- path(here("data"), "dict.xlsx")
+dict_file <- path(here("contracts", "data"), "dict.xlsx")
 if (!file_exists(dict_file)) {
   download.file(
     url = "https://files.usaspending.gov/docs/Data_Dictionary_Crosswalk.xlsx",
@@ -278,7 +278,7 @@ We are not going to use the delta file to correct, delete, and update the
 original transactions. We are instead going to upload the separetely so that
 the changed versions appear alongside the original in all search results. We
 will tag all records with the file they originate from.
-
+  
 ```{r clear_memory}
 clear_memory <- function(n = 10) {
   for (i in 1:n) {
@@ -288,11 +288,9 @@ clear_memory <- function(n = 10) {
 ```
 
 ```{r con_read}
-read_start <- Sys.time()
 # track progress in text file
-prog_path <- file_create("read_prog.txt")
+prog_path <- file_create(here("contracts", "read_prog.txt"))
 for (f in c(con_paths, delta_paths)) {
-  loop_start <- Sys.time()
   prog_files <- read_lines(prog_path)
   n <- str_remove(basename(f), "_All_Contracts_(Full|Delta)_\\d+")
   if (f %in% prog_files) {
@@ -387,21 +385,21 @@ for (f in c(con_paths, delta_paths)) {
     zip = round(mean(usc$zip %in% valid_zip), 4)
   )
   message(paste(n, "checking done"))
-  # save tweaked file
-  vroom_write(usc, f)
+  # save manipulated file
+  vroom_write(x = usc, path = f, delim = ",", na = "")
   # save the checks as line in csv
-  write_csv(check[1, ], "spend_check.csv", append = TRUE)
+  spend_path <- here("contracts", "spend_check.csv")
+  write_csv(check[1, ], spend_path, append = TRUE)
   # save the file as line in txt
   write_lines(f, prog_path, append = TRUE)
   # reset for next
   rm(usc, check)
-  Sys.sleep(60)
-  clear_memory()
+  clear_memory(n = 100)
   p <- paste(match(f, con_paths), length(con_paths), sep = "/")
   message(paste(n, "writing done:", p, file_size(f)))
   # check progress
-  Sys.time() - read_start
-  Sys.time() - loop_start
+  beepr::beep("fanfare")
+  Sys.sleep(30)
 }
 ```
 
@@ -421,7 +419,7 @@ from each file.
 
 ```{r check_read, echo=FALSE}
 all_checks <- read_csv(
-  file = here("spend_check.csv"),
+  file = here("contracts", "spend_check.csv"),
   col_names = c(
     "file", "nrow", "ncol", "types", "fiscal", "start", 
     "end", "missing", "zero", "city", "state", "zip"
@@ -448,6 +446,19 @@ all_checks %>%
   )
 ```
 
+```{r year_bar}
+all_checks %>% 
+  group_by(fiscal) %>% 
+  summarise(nrow = sum(nrow)) %>% 
+  ggplot(aes(fiscal, nrow)) + 
+  geom_col(fill = dark2["purple"]) +
+  labs(
+    title = "US Spending Transactions by Year",
+    x = "Fiscal Year",
+    y = "Unique Transactions"
+  )
+```
+
 And here we have the total checks for every file.
 
 ```{r check_print, echo=FALSE}
@@ -457,11 +468,3 @@ all_checks %>%
   mutate_at(vars(1), gluedown::md_code) %>% 
   kable()
 ```
-
-We are going to rename the files for clarity on the source.
-
-```{r file_rename}
-new_paths <- str_replace(all_paths, "_All_", "_US_")
-file_move(all_paths, new_paths)
-```
-
