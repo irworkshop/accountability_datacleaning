@@ -376,13 +376,14 @@ for (f in c(con_paths, delta_paths)) {
     ncol = ncol(usc),
     types = n_distinct(usc$type),
     fiscal = fy,
+    sum = sum(usc$amount, na.rm = TRUE),
     start = min(usc$date, na.rm = TRUE),
     end = max(usc$date, na.rm = TRUE),
     miss = sum(usc$na_flag, na.rm = TRUE),
     zero = sum(usc$amount <= 0, na.rm = TRUE),
-    city = round(mean(usc$city %in% c(valid_city, extra_city)), 4),
-    state = round(mean(usc$state %in% valid_state), 4),
-    zip = round(mean(usc$zip %in% valid_zip), 4)
+    city = round(prop_in(usc$city, c(valid_city, extra_city)), 4),
+    state = round(prop_in(usc$state, valid_state), 4),
+    zip = round(prop_in(usc$zip, valid_zip), 4)
   )
   message(paste(n, "checking done"))
   # save manipulated file
@@ -413,7 +414,6 @@ length(all_paths)
 sum(file_size(all_paths))
 ```
 
-
 Now we can read the `spend_check.csv` text file to see the statistics saved
 from each file.
 
@@ -421,8 +421,8 @@ from each file.
 all_checks <- read_csv(
   file = here("contracts", "spend_check.csv"),
   col_names = c(
-    "file", "nrow", "ncol", "types", "fiscal", "start", 
-    "end", "missing", "zero", "city", "state", "zip"
+    "file", "nrow", "ncol", "types", "fiscal", "sum",
+    "start", "end", "missing", "zero", "city", "state", "zip"
   )
 )
 ```
@@ -436,6 +436,7 @@ all_checks %>%
     nrow = sum(nrow),
     ncol = mean(ncol),
     type = mean(types),
+    sum = scientific(sum(sum)),
     start = min(start),
     end = max(end),
     missing = sum(missing)/sum(nrow),
@@ -463,8 +464,9 @@ And here we have the total checks for every file.
 
 ```{r check_print, echo=FALSE}
 all_checks %>% 
-  select(-types, -fiscal) %>% 
-  mutate_at(vars(8:10), scales::percent) %>% 
+  mutate_at(vars(file), str_replace, "us_contracts_", "FY") %>% 
+  select(-types, -fiscal, -ncol, -sum) %>% 
+  mutate_at(vars("city", "state", "zip"), scales::percent, 0.1) %>% 
   mutate_at(vars(1), gluedown::md_code) %>% 
   kable()
 ```
