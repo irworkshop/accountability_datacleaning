@@ -1,7 +1,8 @@
 ---
-title: "New York Payroll Dictionary"
+title: "New York Payroll Data Diary"
 author: "Yanqi Xu"
-date: "`r Sys.time()`"
+date: "`r format(Sys.time())`"
+always_allow_html: true
 output:
   github_document: 
     df_print: tibble
@@ -73,6 +74,7 @@ functions custom made to help facilitate the processing of campaign finance data
 if (!require("pacman")) install.packages("pacman")
 pacman::p_load_gh("irworkshop/campfin")
 pacman::p_load(
+  kableExtra, # create styled kable
   readxl, # read excel files
   tidyverse, # data manipulation
   lubridate, # datetime strings
@@ -104,9 +106,9 @@ here::here()
 [01]: https://github.com/irworkshop/accountability_datacleaning "TAP repo"
 [02]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects "Rproj"
 
-## Registration
+## Data
 
-Data is obtained from the [New York City's data portal][data portal]. According to the website, the data was created Date Created October 31, 2015 and Last Updated on January 14, 2020. It comes from Office of Payroll Administration and is updated annually.
+Data is obtained from the [New York City's data portal][data portal]. According to the website, the data was created October 31, 2015 and Last Updated on January 14, 2020. It comes from the Office of Payroll Administration and is updated annually.
 
 > Data is collected because of public interest in how the City’s budget is being spent on salary and overtime pay for all municipal employees. Data is input into the City's Personnel Management System (“PMS”) by the respective user Agencies. Each record represents the following statistics for every city employee: Agency, Last Name, First Name, Middle Initial, Agency Start Date, Work Location Borough, Job Title Description, Leave Status as of the close of the FY (June 30th), Base Salary, Pay Basis, Regular Hours Paid, Regular Gross Paid, Overtime Hours worked, Total Overtime Paid, and Total Other Compensation (i.e. lump sum and/or retro payments). This data can be used to analyze how the City's financial resources are allocated and how much of the City's budget is being devoted to overtime. The reader of this data should be aware that increments of salary increases received over the course of any one fiscal year will not be reflected. All that is captured, is the employee's final base and gross salary at the end of the fiscal year.
 
@@ -127,64 +129,25 @@ nyp <- dir_ls(raw_dir) %>% read_csv()
 # change column names into snake case, i.e. snake_case
 nyp <- nyp %>% clean_names()
 ```
-
-### Explore
-
+### Inspect
+We can take a look at the top, bottom and a random sample of the dataset.
 ```{r raw_glimpse}
 head(nyp)
 tail(nyp)
 glimpse(sample_frac(nyp))
 ```
 
-
-As we can see from `tail()`, the last two rows still need to be removed.
-
 We can also view the data ditcionary.
 
 ```{r dictionary}
-dict <- dir_ls(data_dir, glob = "*.XLSX") %>% read_xlsx(sheet = 2, skip = 1)
+dict <- dir_ls(data_dir, glob = "*.XLSX") %>% read_xlsx(sheet = 2, skip = 1, col_types = "text")
 ```
 
-```{r kable dict, echo=FALSE}
-kable(dict)
+```{r dict kable, echo=FALSE}
+options(knitr.kable.NA = '')
+kable(dict) %>% 
+  kable_styling("striped")
 ```
-
-Then we can take a look at the _NA_ fields and number of distinct values for each column. 
-```{r n_distinct}
-col_stats(nyp, count_na)
-col_stats(nyp, n_distinct)
-```
-We'll use the `campfin:flag_dupe()` function to flag the records without any names and title description
-```{r flag na}
-nyp <- nyp %>% 
-  flag_na(first_name, last_name, title_description)
-```
-
-
-```{r count_na}
-col_stats(nyp, count_na)
-```
-
-There are no duplicate rows in the database.
-
-```{r duplicated}
-nyp <- flag_dupes(nyp, dplyr::everything())
-sum(nyp$dupe_flag)
-```
-
-
-```{r year_plot, echo=FALSE}
-nyp %>% 
-  count(fiscal_year) %>% 
-  ggplot(aes(x = fiscal_year, y = n)) +
-  geom_col(fill = RColorBrewer::brewer.pal(3, "Dark2")[3]) +
-  labs(
-    title = "New Year Staff Payroll Head Counts per Year",
-    x = "Fiscal Year",
-    y = "Staffers"
-  )
-```
-
 
 ## Wrangle
 
@@ -211,42 +174,77 @@ nyp <- nyp %>%
 According to the data dictionary, Total gross pay is the sum of `regular_gross_paid`, `total_ot_paid` and `total_other_pay`, so we will need to generate a new column that we will use for The Public Accountability Project. 
 ```{r add gross pay}
 nyp <- nyp %>% 
-  mutate(total_gross_pay = sum(regular_gross_paid, total_ot_paid, total_other_pay))
+  mutate(total_gross_pay = regular_gross_paid + total_ot_paid + total_other_pay)
 ```
 
-We can plot the distribution of total compensations by different departments.
-```{r dept violin}
+## Explore
+### Duplicates
+Then we can take a look at the _NA_ fields and number of distinct values for each column. 
+```{r n_distinct}
+col_stats(nyp, count_na)
+col_stats(nyp, n_distinct) 
+```
+### Missing
+We'll use the `campfin:flag_na()` function to flag the records without any names and title description
+```{r flag na}
+nyp <- nyp %>% 
+  flag_na(first_name, last_name, title_description)
+```
+
+There are no duplicate rows in the database.
+
+```{r duplicated}
+nyp <- flag_dupes(nyp, dplyr::everything())
+```
+
+### Categorical
+```{r year_plot, echo=FALSE}
 nyp %>% 
-  filter(total_gross_pay >= 1, amount < 1e5) %>% 
-  ggplot(aes(x = reorder(party, total_gross_pay), y = total_gross_pay)) + 
-  geom_violin(aes(fill = agency_name)) + 
-  scale_y_continuous(
-    breaks = c(1 %o% 10^(0:5)),
-    labels = dollar,
-    trans = "log10"
-  ) +
-  scale_fill_manual(
-    guide = FALSE,
-    values = c(
-      "brown", 
-      "royalblue", 
-      "forestgreen", 
-      "gold",
-      "mediumpurple", 
-      "#999999", 
-      "firebrick",
-      "black"
-    )
-  ) +
+  count(fiscal_year) %>% 
+  ggplot(aes(x = fiscal_year, y = n)) +
+  geom_col(fill = RColorBrewer::brewer.pal(3, "Dark2")[3]) +
   labs(
-    title = "New York State Salary Distribution",
-    caption = "Source: ",
-    y = "Amount",
-    x = "Department"
+    title = "New York City Staff Payroll Head Counts per Year",
+    x = "Fiscal Year",
+    y = "Staffers",
+    caption = "Source: NYC Office of Payroll Administration via data.ny.gov"
   )
 ```
 
-### Export
+### Continuous
+```{r}
+nyp %>% 
+  ggplot(aes(total_gross_pay)) +
+  geom_histogram(fill = RColorBrewer::brewer.pal(3, "Dark2")[1]) +
+  geom_vline(xintercept = median(nyp$total_gross_pay[nyp$total_gross_pay != 0], na.rm = TRUE), linetype = 2) +
+  scale_y_continuous(labels = comma) +
+  scale_x_continuous(
+    breaks = c(1 %o% 10^(0:6)),
+    labels = dollar,
+    trans = "log10"
+  ) +
+  labs(
+    title = "New York City Payroll Amount Distribution",
+    caption = "Source: NYC Office of Payroll Administration via data.ny.gov",
+    x = "Amount",
+    y = "Count"
+  ) +
+  theme_minimal()
+```
+
+
+## Conclude
+
+```{r clean_glimpse}
+glimpse(sample_n(nyp, 20))
+```
+
+1. There are `r nrow(nyp)` records in the database.
+1. There are no duplicate records in the database.
+1. The range and distribution of `year` seems mostly reasonable.
+1. There are `r sum(nyp$na_flag)` records missing either recipient or date.
+
+## Export
 
 ```{r proc_dir}
 proc_dir <- dir_create(here("ny", "payroll", "data", "processed"))
