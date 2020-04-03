@@ -1,0 +1,354 @@
+---
+title: "New York Contracts"
+author: "Kiernan Nicholls"
+date: "`r Sys.time()`"
+output:
+  github_document: 
+    df_print: tibble
+    toc: true
+    toc_dept: 2
+editor_options: 
+  chunk_output_type: console
+---
+
+<!-- Place comments regarding knitting here -->
+
+```{r setup, include=FALSE, purl=FALSE}
+library(knitr)
+opts_chunk$set(
+  eval = TRUE,
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  error = FALSE,
+  collapse = TRUE,
+  comment = "#>",
+  fig.path = "../plots/",
+  fig.width = 10,
+  dpi = 300
+)
+options(width = 99)
+set.seed(5)
+```
+
+```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
+fs::dir_create(here::here("nyc", "contracts", "docs"))
+```
+
+## Project
+
+The Accountability Project is an effort to cut across data silos and give
+journalists, policy professionals, activists, and the public at large a simple
+way to search across huge volumes of public data about people and organizations.
+
+Our goal is to standardizing public data on a few key fields by thinking of each
+dataset row as a transaction. For each transaction there should be (at least) 3
+variables:
+
+1. All **parties** to a transaction.
+2. The **date** of the transaction.
+3. The **amount** of money involved.
+
+## Objectives
+
+This document describes the process used to complete the following objectives:
+
+1. How many records are in the database?
+1. Check for entirely duplicated records.
+1. Check ranges of continuous variables.
+1. Is there anything blank or missing?
+1. Check for consistency issues.
+1. Create a five-digit ZIP Code called `zip`.
+1. Create a `year` field from the transaction date.
+1. Make sure there is data on both parties to a transaction.
+
+## Software
+
+This data is processed using the free, open-source statistical computing
+language R, which can be [installed from CRAN][cran] for various opperating
+systems. For example, R can be installed from the apt package repository on
+Ubuntu.
+
+```bash
+sudo apt update
+sudo apt -y upgrade
+sudo apt -y install r-base
+```
+
+[cran]: https://cran.r-project.org/
+
+The following additional R packages are needed to collect, manipulate,
+visualize, analyze, and communicate these results. The `pacman` package will
+facilitate their installation and attachment.
+
+The IRW's `campfin` package will also have to be installed from GitHub. This
+package contains functions custom made to help facilitate the processing of
+campaign finance data.
+
+```{r load_packages, message=FALSE, warning=FALSE, error=FALSE}
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load_gh("irworkshop/campfin")
+pacman::p_load(
+  tidyverse, # data manipulation
+  lubridate, # datetime strings
+  magrittr, # pipe operators
+  gluedown, # print markdown
+  janitor, # dataframe clean
+  refinr, # cluster and merge
+  scales, # format strings
+  readxl, # read excel
+  knitr, # knit documents
+  vroom, # read files fast
+  furrr, # parallel map
+  glue, # combine strings
+  here, # relative storage
+  httr, # http requests
+  pryr, # memory usage
+  fs # search storage 
+)
+```
+
+This document should be run as part of the `us_spending` project, which lives as
+a sub-directory of the more general, language-agnostic [`irworkshop/tap`][tap]
+GitHub repository.
+
+The `us_spending` project uses the [RStudio projects][rproj] feature and should
+be run as such. The project also uses the dynamic `here::here()` tool for file
+paths relative to _your_ machine.
+
+```{r where_here}
+# where does this document knit?
+here::here()
+```
+
+[tap]: https://github.com/irworkshop/accountability_datacleaning
+[rproj]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects
+
+## Data
+
+Contracts data is obtained from the New York City 
+[Office of Citywide Purchasing (OCP)][ocp] via the city's [OpenData portal][od].
+In light of the ongoing COVID-19 outbreak in New York City, our typical efforts
+to ensure a portal contains all relevant data were not made. While the number of
+records is fairly small, the amount of data seems consitent year to year and up
+to date.
+
+[od]: https://opendata.cityofnewyork.us/
+
+## Import
+
+We can import [the data][data] directly from the OpenData portal.
+
+[data]: https://data.cityofnewyork.us/City-Government/Recent-Contract-Awards/qyyg-4tf5
+[ocp]: https://www1.nyc.gov/site/dcas/business/working-with-citywide-procurement.page
+
+First, we simply download using an `httr::GET()` request to the portal site.
+
+```{r raw_path}
+raw_url <- "https://data.cityofnewyork.us/api/views/qyyg-4tf5/rows.csv"
+raw_dir <- dir_create(here("nyc", "contracts", "data", "raw"))
+raw_path <- path(raw_dir, "Recent_Contract_Awards.csv")
+```
+
+```{r raw_get}
+if (!file_exists(raw_path)) {
+  GET(
+    url = raw_url,
+    write_disk(raw_path, overwrite = TRUE),
+    query = list(accessType = "DOWNLOAD")
+  )
+}
+```
+
+Then the local raw text file can be read into memory with `vroom::vroom()`. 
+
+```{r raw_read}
+nyc <- vroom(
+  file = raw_path,
+  .name_repair = make_clean_names,
+  escape_double = FALSE,
+  escape_backslash = FALSE,
+  na = c("", "NA", "......"),
+  col_types = cols(
+    .default = col_character(),
+    StartDate = col_date_usa(),
+    EndDate = col_date_usa(),
+    ContractAmount = col_double()
+  )
+)
+```
+
+A number of columns contain no informatio and can be removed.
+
+```{r raw_remove}
+nyc <- remove_empty(nyc, "cols")
+```
+
+## Wrangle
+
+The `vendor_address` string contains both the street address, the city, state,
+and ZIP code. We will have to extract the last two for their own variables.
+
+```{r addr_wrangle}
+# copy address in new column
+nyc <- mutate(nyc, addr = str_to_upper(vendor_address))
+# remove periods in abbrevs
+nyc$addr <- str_remove_all(nyc$addr, "\\.(?=\\S)")
+# extract and remove zip from end
+nyc <- mutate(nyc, zip = normal_zip(str_extract(addr, "\\d+(?:-\\d{4})?$")))
+nyc$addr <- str_trim(str_remove(nyc$addr, "[:punct:]?\\s?\\d+(?:-\\d{4})?$"))
+# abbrev full states at end of addr
+rx_abbs <- valid_state
+names(rx_abbs) <- glue("{valid_name}$")
+nyc$addr <- str_replace_all(nyc$addr, rx_abbs)
+# extract upper abbs from end
+nyc <- mutate(nyc, state = str_extract(addr, "(?<=\\W)[:upper:]{2}$"))
+# remove abbs and extra from end
+nyc$addr <- str_remove(nyc$addr, "[:punct:]?\\s[:upper:]{2}$")
+nyc <- relocate(nyc, state, zip, .after = addr)
+nyc$addr <- nyc$addr %>% 
+  # normalize remaining addr
+  str_normal(punct = FALSE) %>% 
+  # abbreviate street abbs
+  abbrev_full(usps_street)
+```
+
+```{r addr_view}
+nyc %>% 
+  select(vendor_address, addr, state, zip) %>% 
+  distinct() %>% 
+  sample_n(20)
+```
+
+## Explore
+
+```{r glimpse}
+head(nyc)
+tail(nyc)
+glimpse(sample_n(nyc, 20))
+```
+
+A number of records are missing one or more key variables.
+
+```{r na_count}
+col_stats(nyc, count_na)
+```
+
+We can flag these records with `campfin::flag_na()`.
+
+```{r na_flag}
+nyc <- flag_na(nyc, agency_name, vendor_name, start_date, contract_amount)
+percent(mean(nyc$na_flag), 0.01)
+```
+
+We can also use `campfin::dupe_flag()` to flag duplicate records. In this case,
+there are none!
+
+```{r dupe_flag, warning=TRUE}
+nyc <- flag_dupes(nyc, everything(), .check = TRUE)
+sum(nyc$dupe_flag)
+```
+
+We can also count and plot some of the categorical values.
+
+```{r n_distinct}
+col_stats(nyc, n_distinct)
+```
+
+```{r bar-type, fig.keep=FALSE}
+explore_plot(nyc, category_description)
+explore_plot(nyc, special_case_reason_description)
+```
+
+### Continuous
+
+We should also check to ensure the amount and dates are the reasonable.
+
+Only a few records of a `contract_amount` value less than or equal to zero.
+
+```{r ammount_summary}
+summary(nyc$contract_amount)
+mean(nyc$contract_amount <= 0, na.rm = TRUE) # less than zero
+```
+
+The amounts are logarithmically normal, as we'd expect with something like this.
+
+```{r hist_amount, echo=FALSE}
+nyc %>%
+  filter(contract_amount >= 1e3) %>% 
+  ggplot(aes(contract_amount)) +
+  geom_histogram(fill = dark2["purple"], bins = 30) +
+  scale_y_continuous(labels = comma) +
+  scale_x_continuous(
+    breaks = c(1 %o% 10^(2:8)),
+    labels = dollar,
+    trans = "log10"
+  ) +
+  labs(
+    title = "New York Contracts Amount Distribution",
+    caption = "Source: NYC OCP",
+    x = "Amount",
+    y = "Count"
+  )
+```
+
+Most of the `start_date` and `end_date` values are the same. We will use the
+year of the `start_date` to create a new 4 digit `year` variable.
+
+```{r date_year}
+mean(nyc$start_date == nyc$end_date) # mostly same
+nyc <- mutate(nyc, year = year(start_date))
+```
+
+No records have bad dates in the distant past or future.
+
+```{r date_range}
+min(nyc$start_date)
+sum(nyc$year < 2002)
+max(nyc$end_date)
+sum(nyc$end_date > today())
+```
+
+There are a fairly constant number of contracts per year.
+
+```{r bar_year, echo=FALSE}
+nyc %>% 
+  count(year) %>% 
+  ggplot(aes(x = year, y = n)) +
+  geom_col(fill = dark2["purple"]) + 
+  scale_fill_brewer(palette = "Dark2") +
+  scale_y_continuous(labels = comma) +
+  scale_x_continuous(breaks = seq(2000, 2020, by = 2)) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "New York Contracts by Year",
+    caption = "Source: NYC OCP",
+    x = "Year Made",
+    y = "Count"
+  )
+```
+
+## Export
+
+```{r clean_glimpse}
+glimpse(sample_n(nyc, 20))
+```
+
+1. There are `r comma(nrow(nyc))` records in the database.
+1. There are `r comma(sum(nyc$dupe_flag))` duplicate records in the database.
+1. The range and distribution of amount and dates seem mostly reasonable.
+1. The 4-digit `year` variable has been created with `lubridate::year()`.
+
+```{r clean_write}
+clean_dir <- dir_create(here("nyc", "contracts", "data", "clean"))
+clean_path <- path(clean_dir, "nyc_contracts_clean.csv")
+write_csv(nyc, path = clean_path, na = "")
+```
+
+## Encoding
+
+```{r check_encoding}
+file_size(clean_path)
+guess_encoding(clean_path)
+```
+
