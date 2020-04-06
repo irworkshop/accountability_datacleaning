@@ -33,12 +33,13 @@ set.seed(5)
 
 ## Project
 
-The Accountability Project is an effort to cut across data silos and give journalists, policy
-professionals, activists, and the public at large a simple way to search across huge volumes of
-public data about people and organizations.
+The Accountability Project is an effort to cut across data silos and give
+journalists, policy professionals, activists, and the public at large a simple
+way to search across huge volumes of public data about people and organizations.
 
-Our goal is to standardizing public data on a few key fields by thinking of each dataset row as a
-transaction. For each transaction there should be (at least) 3 variables:
+Our goal is to standardizing public data on a few key fields by thinking of each
+dataset row as a transaction. For each transaction there should be (at least) 3
+variables:
 
 1. All **parties** to a transaction
 2. The **date** of the transaction
@@ -46,11 +47,13 @@ transaction. For each transaction there should be (at least) 3 variables:
 
 ## Packages
 
-The following packages are needed to collect, manipulate, visualize, analyze, and communicate
-these results. The `pacman` package will facilitate their installation and attachment.
+The following packages are needed to collect, manipulate, visualize, analyze,
+and communicate these results. The `pacman` package will facilitate their
+installation and attachment.
 
-The IRW's `campfin` package will also have to be installed from GitHub. This package contains
-functions custom made to help facilitate the processing of campaign finance data.
+The IRW's `campfin` package will also have to be installed from GitHub. This
+package contains functions custom made to help facilitate the processing of
+campaign finance data.
 
 ```{r load_packages, message=FALSE, dfrning=FALSE, error=FALSE}
 if (!require("pacman")) install.packages("pacman")
@@ -70,64 +73,57 @@ pacman::p_load(
 )
 ```
 
-This document should be run as part of the `R_campfin` project, which lives as a sub-directory of
-the more general, language-agnostic [`irworkshop/accountability_datacleaning`][01] GitHub
+This document should be run as part of the `R_campfin` project, which lives as a
+sub-directory of the more general, language-agnostic
+[`irworkshop/accountability_datacleaning`][01] GitHub
 repository.
 
-The `R_campfin` project uses the [RStudio projects][02] feature and should be run as such. The
-project also uses the dynamic `here::here()` tool for file paths relative to _your_ machine.
+The `R_campfin` project uses the [RStudio projects][02] feature and should be
+run as such. The project also uses the dynamic `here::here()` tool for file
+paths relative to _your_ machine.
 
 ```{r where_here, collapse=TRUE}
 # where does this document knit?
 here::here()
 ```
 
-[01]: https://github.com/irworkshop/accountability_datacleaning "TAP repo"
-[02]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects "Rproj"
+[01]: https://github.com/irworkshop/accountability_datacleaning
+[02]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects
 
 ## Data
 
-Data is obtained from the California Secretary of State's [Cal-Access database][03].
+Data from the California Secretary of State's [Cal-Access database][03].
 
-> Cal-Access provides financial information supplied by state candidates, donors, lobbyists, and
-others. Simply start by selecting either Campaign Finance Activity, Lobbying Activity, or
-Cal-Access Resources and we will guide you to the information.
-
-The [Political Reform Division][04] (PRD) collects the data regarding expenditures made.
-
-> The Political Reform Division administers provisions of California's Political Reform Act,
-including... that the voters may be fully informed and the activities of lobbyists should be
-regulated and their finances disclosed..."
-
-> * Receive campaign disclosure statements (itemizing contributions received and expenditures made)
-filed by individuals and committees raising or spending campaign funds to support or oppose state
-candidates or ballot measures. (Local campaign committees file their itemized disclosure statements
-with local filing officers).
+> Cal-Access provides financial information supplied by state candidates,
+donors, lobbyists, and others. Simply start by selecting either Campaign Finance
+Activity, Lobbying Activity, or Cal-Access Resources and we will guide you to
+the information.
 
 ### About
 
-All California campaign finance data can be downloaded in a single file. As described on PRD
-website:
+All California campaign finance data can be downloaded in a single file. As
+described on PRD website:
 
 > ### Raw Data for Campaign Finance and Lobbying Activity  
-> In addition to presenting California campaign finance and lobbying activity on the user-friendly
-[CAL-ACCESS website][05], the Secretary of State provides the raw data to allow people with 
-technical expertise to create their own databases.
+> In addition to presenting California campaign finance and lobbying activity on
+the user-friendly [CAL-ACCESS website][05], the Secretary of State provides the
+raw data to allow people with technical expertise to create their own databases.
 > 
-> The raw data is presented in tab-delimited text files from corresponding tables in the CAL-ACCESS
-database. Users can uncompress and extract the data with standard software such as PKZIP, WinZip,
-or MacZip. The Secretary of State does not provide technical support to users who want to download
-and analyze CAL-ACCESS data in this advanced way. However, the Secretary of State offers guides to
-the CAL-ACCESS data structure and fields.
+> The raw data is presented in tab-delimited text files from corresponding
+tables in the CAL-ACCESS database. Users can uncompress and extract the data
+with standard software such as PKZIP, WinZip, or MacZip. The Secretary of State
+does not provide technical support to users who want to download and analyze
+CAL-ACCESS data in this advanced way. However, the Secretary of State offers
+guides to the CAL-ACCESS data structure and fields.
 
 > ### Download Files  
 * [Guides to CAL-ACCESS data structure and fields (ZIP)][06]
 * [CAL-ACCESS raw data (ZIP)][07]
 > 
-> All CAL-ACCESS users should keep in mind that campaign finance and lobbying activity information
-changes often. The raw data extracts are updated once a day. Campaign finance and lobbying activity
-filings can also be obtained in hard copy by contacting the Secretary of State's Political Reform
-Division.
+> All CAL-ACCESS users should keep in mind that campaign finance and lobbying
+activity information changes often. The raw data extracts are updated once a
+day. Campaign finance and lobbying activity filings can also be obtained in hard
+copy by contacting the Secretary of State's Political Reform Division.
 
 [03]: https://www.sos.ca.gov/
 [04]: https://www.sos.ca.gov/campaign-lobbying/about-political-reform-division/
@@ -137,12 +133,12 @@ Division.
 
 ### Variables
 
-Using the data key provided by Cal-Access, we can find the expenditure file and understand it's 
-contents.
+Using the data key provided by Cal-Access, we can find the lobbyists file and
+understand it's contents.
 
 ```{r check_key}
 key_url <- "https://campaignfinance.cdn.sos.ca.gov/calaccess-documentation.zip"
-url_file_size(key_url, format = TRUE)
+url_file_size(key_url)
 ```
 
 If they ZIP file containing the documentation files has not yet been downloaded, we can do so now.
@@ -189,9 +185,9 @@ zip_file <- str_c(raw_dir, basename(zip_url), sep = "/")
 The ZIP file is extremelly large, and will take quite some time 
 
 ```{r file_size}
-url_file_size(zip_url, format = TRUE)
+url_file_size(zip_url)
 if (requireNamespace("speedtest", quietly = TRUE)) {
-  speedtest::spd_test()
+  # speedtest::spd_test()
 }
 ```
 
@@ -433,7 +429,7 @@ x_cols <- x_cols[which(x_cols > 5)]
 # parse checkbox cols
 calr <- mutate_at(
   .tbl = calr,
-  .vars = vars(x_cols),
+  .vars = vars(all_of(x_cols)),
   .funs = equals, "X"
 )
 ```
@@ -458,6 +454,27 @@ inner_join(
 ```
 
 ## Wrangle
+
+### Year
+
+```{r year_add}
+calr <- mutate(calr, year = year(rpt_date))
+calr$year[which(calr$year < 2000)] <- NA
+calr$year[which(calr$year > 2020)] <- NA
+```
+
+```{r year_bar, echo=FALSE}
+calr %>% 
+  count(year) %>% 
+  ggplot(aes(year, n)) + 
+  geom_col(fill = dark2["purple"]) +
+  scale_y_continuous(labels = comma) +
+  labs(
+    title = "California Lobbyist Registrations per Year",
+    x = "Year",
+    y = "Records"
+  )
+```
 
 ### ZIP
 
@@ -529,12 +546,13 @@ calr <- calr %>%
     match_abb = is_abbrev(firm_city_norm, firm_city_match),
     match_dist = str_dist(firm_city_norm, firm_city_match),
     firm_city_swap = if_else(
-      condition = match_abb | match_dist == 1,
+      condition = !is.na(firm_city_match) & (match_abb | match_dist == 1),
       true = firm_city_match,
       false = firm_city_norm
     )
   ) %>% 
   select(
+    -firm_city_match,
     -match_abb,
     -match_dist,
   )
@@ -555,12 +573,13 @@ calr <- calr %>%
     match_abb = is_abbrev(mail_city_norm, mail_city_match),
     match_dist = str_dist(mail_city_norm, mail_city_match),
     mail_city_swap = if_else(
-      condition = match_abb | match_dist == 1,
+      condition = !is.na(mail_city_match) & (match_abb | match_dist == 1),
       true = mail_city_match,
       false = mail_city_norm
     )
   ) %>% 
   select(
+    -mail_city_match,
     -match_abb,
     -match_dist,
   )
@@ -574,23 +593,28 @@ progress_table(
   calr$mail_city,
   calr$mail_city_norm,
   calr$mail_city_swap,
-  compare = valid_city
+  compare = c(valid_city, extra_city)
 )
 ```
 
 ## Export
 
 ```{r}
-proc_dir <- dir_create(here("ca", "lobby", "data", "processed"))
-write_csv(
-  x = calr,
-  path = glue("{proc_dir}/ca_lobby_reg.csv"),
-  na = ""
-)
+calr <- calr %>% 
+  select(-ends_with("_city_norm")) %>% 
+  rename_all(str_replace, "_swap", "_norm") %>% 
+  rename_all(str_replace, "_norm", "_clean")
 ```
 
 ```{r}
-# no git
-dir_delete(key_dir)
+clean_dir <- dir_create(here("ca", "lobby", "data", "clean"))
+clean_path <- path(clean_dir, "ca_lobby_reg.csv")
+write_csv(calr, path = clean_path, na = "")
+```
+
+```{r}
+dir_delete(key_dir) # no git
+file_size(clean_path)
+guess_encoding(clean_path)
 ```
 
