@@ -145,7 +145,12 @@ head(kylr)
 ```
 
 First, we need to remove the header and footer from each page and keep only those lines which
-contain the lobbyist name table information.
+contain the lobbyist name table information. We will save the date.
+
+```{r raw_date}
+lob_date <- mdy(kylr[2])
+lob_year <- year(lob_date)
+```
 
 ```{r raw_trim}
 kylr <- str_subset(kylr, "Kentucky Registered Legislative Agents", negate = TRUE)
@@ -481,19 +486,21 @@ progress_table(
 )
 ```
 
+Now we only have to add back the year and date from the text file.
+
+```{r year_add}
+kylr <- mutate(kylr, lob_year, lob_date)
+```
+
 ## Export
 
-```{r proc_glimpse}
+```{r clean_glimpse}
 glimpse(kylr)
 ```
 
 We can now export this wrangled and normalized data set.
 
-```{r proc_dir}
-proc_dir <- dir_create(here("ky", "lobbying", "data", "processed"))
-```
-
-```{r proc_write}
+```{r clean_trim}
 kylr <- kylr %>% 
   # swap over norm
   select(-ends_with("city_norm")) %>%
@@ -501,12 +508,17 @@ kylr <- kylr %>%
     lob_city_norm = lob_city_swap,
     pri_city_norm = pri_city_swap
   )
+```
 
-write_csv(
-  x = kylr,
-  path = glue("{proc_dir}/ky_lobby_reg.csv"),
-  na = ""
-)
+```{r clean_write}
+clean_dir <- dir_create(here("ky", "lobbying", "data", "clean"))
+clean_path <- path(clean_dir, "ky_lobby_reg.csv")
+write_csv(kylr, path = clean_path, na = "")
+```
+
+```{r clean_check}
+file_size(clean_path)
+guess_encoding(clean_path)
 ```
 
 # Compensation
@@ -618,13 +630,18 @@ col_stats(kylc, count_na)
 glimpse(sample_frac(kylc))
 ```
 
-This compensation database can also be written to disk.
+This compensation database can also be written to disk after adding year.
 
-```{r comp_write}
-write_csv(
-  x = kylc,
-  path = glue("{proc_dir}/ky_lobby_comp.csv"),
-  na = ""
-)
+```{r com_year}
+kylc <- mutate(kylc, year = year(start_date))
 ```
 
+```{r comp_write}
+comp_path <- path(clean_dir, "ky_lobby_comp.csv")
+write_csv(kylc, path = comp_path, na = "")
+```
+
+```{r comp_check}
+file_size(comp_path)
+guess_encoding(comp_path)
+```

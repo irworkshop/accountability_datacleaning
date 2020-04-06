@@ -1,7 +1,19 @@
 Kentucky Lobbyists
 ================
 Kiernan Nicholls
-2020-01-30 16:03:06
+2020-04-06 16:38:56
+
+  - [Project](#project)
+  - [Objectives](#objectives)
+  - [Packages](#packages)
+  - [Registration](#registration)
+      - [Data](#data)
+      - [Import](#import)
+      - [Wrangle](#wrangle)
+      - [Normal](#normal)
+      - [State](#state)
+      - [Export](#export)
+  - [Compensation](#compensation)
 
 <!-- Place comments regarding knitting here -->
 
@@ -76,7 +88,7 @@ feature and should be run as such. The project also uses the dynamic
 ``` r
 # where does this document knit?
 here::here()
-#> [1] "/home/kiernan/R/accountability_datacleaning/R_campfin"
+#> [1] "/home/kiernan/Code/accountability_datacleaning/R_campfin"
 ```
 
 # Registration
@@ -120,14 +132,20 @@ kylr <- read_rtf(file = lob_url)
 ```
 
     #> [1] "Kentucky Registered Legislative Agents"                                                           
-    #> [2] "January 27, 2020"                                                                                 
+    #> [2] "April 3, 2020"                                                                                    
     #> [3] "Legislative Agents/Employer\tPhone\tContact\tAddress"                                             
     #> [4] "Abbott, Elizabeth \t859-200-5159\t936 Vernon Avenue, , Winston Salem NC 27106"                    
     #> [5] "Kentuckians for the Commonwealth\t859-276-0563\tBrown, Morgan Q\tP.O. Box 1450, , London KY 40743"
     #> [6] "Abell, Kelley \t502-216-9990\tP. O. Box 70331, , Louisville KY 40270"
 
 First, we need to remove the header and footer from each page and keep
-only those lines which contain the lobbyist name table information.
+only those lines which contain the lobbyist name table information. We
+will save the date.
+
+``` r
+lob_date <- mdy(kylr[2])
+lob_year <- year(lob_date)
+```
 
 ``` r
 kylr <- str_subset(kylr, "Kentucky Registered Legislative Agents", negate = TRUE)
@@ -333,20 +351,20 @@ kylr <- mutate_at(
 )
 ```
 
-    #> # A tibble: 427 x 2
+    #> # A tibble: 463 x 2
     #>    lob_phone    lob_phone_norm
     #>    <chr>        <chr>         
-    #>  1 804-484-8606 (804) 484-8606
-    #>  2 202-905-2025 (202) 905-2025
-    #>  3 502-569-3600 (502) 569-3600
-    #>  4 859-258-3600 (859) 258-3600
-    #>  5 502-893-0788 (502) 893-0788
-    #>  6 502-227-8043 (502) 227-8043
-    #>  7 270-779-0991 (270) 779-0991
-    #>  8 859-278-0569 (859) 278-0569
-    #>  9 859-254-0000 (859) 254-0000
-    #> 10 606-878-2161 (606) 878-2161
-    #> # … with 417 more rows
+    #>  1 859-420-8919 (859) 420-8919
+    #>  2 502-657-6010 (502) 657-6010
+    #>  3 502-301-2936 (502) 301-2936
+    #>  4 502-607-8670 (502) 607-8670
+    #>  5 502-855-8206 (502) 855-8206
+    #>  6 859-301-2111 (859) 301-2111
+    #>  7 502-227-7275 (502) 227-7275
+    #>  8 415-689-6800 (415) 689-6800
+    #>  9 270-282-4553 (270) 282-4553
+    #> 10 502-895-8167 (502) 895-8167
+    #> # … with 453 more rows
 
 ### Address
 
@@ -362,20 +380,20 @@ kylr <- mutate_at(
 )
 ```
 
-    #> # A tibble: 482 x 2
-    #>    lob_addr                                           lob_addr_norm                                
-    #>    <chr>                                              <chr>                                        
-    #>  1 1285 ISLAND FORD ROAD                              1285 IS FRD RD                               
-    #>  2 205 B CAPITAL AVE.                                 205 B CAPITAL AVE                            
-    #>  3 2001 MERCER RD.                                    2001 MERCER RD                               
-    #>  4 999 NIELD RD.                                      999 NIELD RD                                 
-    #>  5 130 W. NEW CIRCLE RD. SUITE 170                    130 W NEW CIR RD STE 170                     
-    #>  6 707 VIRGINIA STREET EAST SUITE 1300                707 VIRGINIA ST E STE 1300                   
-    #>  7 MML&K 305 ANN ST. SUITE 308                        MML K 305 ANN ST STE 308                     
-    #>  8 464 CHENAULT ROAD                                  464 CHENAULT RD                              
-    #>  9 205 W. THIRD STREET COMMONWEALTH ALLIANCES         205 W THIRD ST COMMONWEALTH ALLIANCES        
-    #> 10 87 C. MICHAEL DAVENPORT BLVD. KY. ASSN. OF SCHOOL… 87 C MICHAEL DAVENPORT BLVD KY ASSN OF SCHOO…
-    #> # … with 472 more rows
+    #> # A tibble: 519 x 2
+    #>    lob_addr                                          lob_addr_norm                                 
+    #>    <chr>                                             <chr>                                         
+    #>  1 127 W. MAIN ST. EQUUS BLDG. HCM GOVERNMENT RELAT… 127 W MAIN ST EQUUS BLDG HCM GOVERNMENT RELAT…
+    #>  2 269 REGENCY CIRCLE STE. B                         269 REGENCY CIR STE B                         
+    #>  3 111 DARBYSHIRE CIRCLE                             111 DARBYSHIRE CIR                            
+    #>  4 8607 GARY WAY                                     8607 GARY WAY                                 
+    #>  5 334 E. BROADWAY STE. 325                          334 E BROADWAY STE 325                        
+    #>  6 104 E. SEVENTH STREET                             104 E SEVENTH ST                              
+    #>  7 1285 ISLAND FORD ROAD                             1285 IS FRD RD                                
+    #>  8 10710 MIDLOTHIAN TURNPIKE STE. 430                10710 MIDLOTHIAN TPKE STE 430                 
+    #>  9 250 W. MAIN ST. STE. 2800                         250 W MAIN ST STE 2800                        
+    #> 10 P. O. BOX 1070                                    PO BOX 1070                                   
+    #> # … with 509 more rows
 
 ### ZIP
 
@@ -393,10 +411,10 @@ kylr <- mutate_at(
     #> # A tibble: 4 x 6
     #>   stage        prop_in n_distinct prop_na n_out n_diff
     #>   <chr>          <dbl>      <dbl>   <dbl> <dbl>  <dbl>
-    #> 1 lob_zip        0.976        169       0    59     20
-    #> 2 lob_zip_norm   1.00         153       0     1      1
-    #> 3 pri_zip        0.935        324       0   160     44
-    #> 4 pri_zip_norm   0.997        299       0     8      3
+    #> 1 lob_zip        0.977        183       0    61     20
+    #> 2 lob_zip_norm   1.00         167       0     1      1
+    #> 3 pri_zip        0.937        345       0   165     45
+    #> 4 pri_zip_norm   0.997        320       0     8      3
 
 ## State
 
@@ -405,20 +423,20 @@ USPS abbreviations.
 
 ``` r
 count(kylr, lob_state, sort = TRUE)
-#> # A tibble: 22 x 2
+#> # A tibble: 23 x 2
 #>    lob_state     n
 #>    <chr>     <int>
-#>  1 KY         2366
+#>  1 KY         2516
 #>  2 OH           15
-#>  3 DC           11
-#>  4 CA            9
-#>  5 TN            8
-#>  6 VA            7
+#>  3 CA           14
+#>  4 DC           14
+#>  5 VA           11
+#>  6 TN            8
 #>  7 IL            6
-#>  8 IN            5
-#>  9 MI            4
-#> 10 NY            3
-#> # … with 12 more rows
+#>  8 IN            6
+#>  9 NY            6
+#> 10 MI            4
+#> # … with 13 more rows
 prop_in(kylr$lob_state, valid_state)
 #> [1] 1
 # USPS store, manually checked
@@ -506,22 +524,28 @@ complete normality.
     #> # A tibble: 3 x 6
     #>   stage         prop_in n_distinct  prop_na n_out n_diff
     #>   <chr>           <dbl>      <dbl>    <dbl> <dbl>  <dbl>
-    #> 1 lob_city        0.998         81 0            4      4
-    #> 2 lob_city_norm   0.999         80 0            2      2
-    #> 3 lob_city_swap   1.00          81 0.000816     1      2
+    #> 1 lob_city        0.998         90 0            4      4
+    #> 2 lob_city_norm   0.999         89 0            2      2
+    #> 3 lob_city_swap   1.00          90 0.000763     1      2
     #> # A tibble: 3 x 6
     #>   stage         prop_in n_distinct prop_na n_out n_diff
     #>   <chr>           <dbl>      <dbl>   <dbl> <dbl>  <dbl>
-    #> 1 pri_city        0.978        168 0          55     11
-    #> 2 pri_city_norm   0.995        167 0          12      5
-    #> 3 pri_city_swap   0.998        166 0.00816     5      3
+    #> 1 pri_city        0.974        181 0          67     12
+    #> 2 pri_city_norm   0.995        180 0          12      4
+    #> 3 pri_city_swap   1.00         179 0.00763     1      2
+
+Now we only have to add back the year and date from the text file.
+
+``` r
+kylr <- mutate(kylr, lob_year, lob_date)
+```
 
 ## Export
 
 ``` r
 glimpse(kylr)
-#> Observations: 2,451
-#> Variables: 24
+#> Rows: 2,620
+#> Columns: 26
 #> $ lob_last       <chr> "ABBOTT", "ABELL", "ABELL", "ABELL", "ABELL", "ABELL", "ABELL", "ABELL", …
 #> $ lob_first      <chr> "ELIZABETH", "KELLEY", "KELLEY", "KELLEY", "KELLEY", "KELLEY", "KELLEY", …
 #> $ lob_phone      <chr> "859-200-5159", "502-216-9990", "502-216-9990", "502-216-9990", "502-216-…
@@ -534,7 +558,7 @@ glimpse(kylr)
 #> $ pri_contact    <chr> "BROWN, MORGAN Q", "RANKIN, MIKE", "KRAUSE, DR. MIRIAM", "TESTA, JOSEPH",…
 #> $ pri_addr       <chr> "P.O. BOX 1450", "12401 TYLER WOODS COURT", "4123 DUTCHMANS LN. SUITE 414…
 #> $ pri_city       <chr> "LONDON", "LOUISVILLE", "LOUISVILLE", "WASHINGTON", "LOUISVILLE", "WASHIN…
-#> $ pri_state      <chr> "KY", "KY", "KY", "DC", "KY", "DC", "KY", "KY", "MO", "DC", "KY", "KY", "…
+#> $ pri_state      <chr> "KY", "KY", "KY", "DC", "KY", "DC", "KY", "KY", "MO", "TN", "DC", "KY", "…
 #> $ pri_zip        <chr> "40743", "40299", "40207", "20004", "40223", "20001", "40222", "40223", "…
 #> $ lob_phone_norm <chr> "(859) 200-5159", "(502) 216-9990", "(502) 216-9990", "(502) 216-9990", "…
 #> $ pri_phone_norm <chr> "(859) 276-0563", "(502) 494-2929", "(502) 649-2584", "(202) 434-0155", "…
@@ -546,13 +570,11 @@ glimpse(kylr)
 #> $ pri_city_norm  <chr> "LONDON", "LOUISVILLE", "LOUISVILLE", "WASHINGTON", "LOUISVILLE", "WASHIN…
 #> $ lob_city_swap  <chr> "WINSTON SALEM", "LOUISVILLE", "LOUISVILLE", "LOUISVILLE", "LOUISVILLE", …
 #> $ pri_city_swap  <chr> "LONDON", "LOUISVILLE", "LOUISVILLE", "WASHINGTON", "LOUISVILLE", "WASHIN…
+#> $ lob_year       <dbl> 2020, 2020, 2020, 2020, 2020, 2020, 2020, 2020, 2020, 2020, 2020, 2020, 2…
+#> $ lob_date       <date> 2020-04-03, 2020-04-03, 2020-04-03, 2020-04-03, 2020-04-03, 2020-04-03, …
 ```
 
 We can now export this wrangled and normalized data set.
-
-``` r
-proc_dir <- dir_create(here("ky", "lobbying", "data", "processed"))
-```
 
 ``` r
 kylr <- kylr %>% 
@@ -562,12 +584,23 @@ kylr <- kylr %>%
     lob_city_norm = lob_city_swap,
     pri_city_norm = pri_city_swap
   )
+```
 
-write_csv(
-  x = kylr,
-  path = glue("{proc_dir}/ky_lobby_reg.csv"),
-  na = ""
-)
+``` r
+clean_dir <- dir_create(here("ky", "lobbying", "data", "clean"))
+clean_path <- path(clean_dir, "ky_lobby_reg.csv")
+write_csv(kylr, path = clean_path, na = "")
+```
+
+``` r
+file_size(clean_path)
+#> 770K
+guess_encoding(clean_path)
+#> # A tibble: 2 x 2
+#>   encoding   confidence
+#>   <chr>           <dbl>
+#> 1 UTF-8            0.8 
+#> 2 ISO-8859-1       0.28
 ```
 
 # Compensation
@@ -648,12 +681,12 @@ head(kylc)
 #> # A tibble: 6 x 6
 #>   lob_last lob_first start_date end_date   pri_name                                    compensation
 #>   <chr>    <chr>     <date>     <date>     <chr>                                              <dbl>
-#> 1 ABBOTT   ELIZABETH 2019-01-01 2019-01-31 KENTUCKIANS FOR THE COMMONWEALTH                    421.
-#> 2 ABBOTT   ELIZABETH 2019-02-01 2019-02-28 KENTUCKIANS FOR THE COMMONWEALTH                    444.
-#> 3 ABBOTT   ELIZABETH 2019-03-01 2019-03-31 KENTUCKIANS FOR THE COMMONWEALTH                    170.
-#> 4 ABELL    KELLEY    2019-01-01 2019-01-31 AMERICAN ASSN. FOR MARRIAGE & FAMILY THERA…        1000 
-#> 5 ABELL    KELLEY    2019-01-01 2019-01-31 AMERICAN COLLEGE OF OBSTETRICIAN/GYNECOLOG…         500 
-#> 6 ABELL    KELLEY    2019-01-01 2019-01-31 AMERICAN EXPRESS TRAVEL REL. SERVICES, INC.        1125
+#> 1 ABBOTT   ELIZABETH 2020-01-01 2020-01-31 KENTUCKIANS FOR THE COMMONWEALTH                    19.1
+#> 2 ABBOTT   ELIZABETH 2020-02-01 2020-02-29 KENTUCKIANS FOR THE COMMONWEALTH                   132. 
+#> 3 ABELL    KELLEY    2020-01-01 2020-01-31 AMERICAN ASSN. FOR MARRIAGE & FAMILY THERA…        500  
+#> 4 ABELL    KELLEY    2020-01-01 2020-01-31 AMERICAN COLLEGE OF OBSTETRICIAN/GYNECOLOG…        650  
+#> 5 ABELL    KELLEY    2020-01-01 2020-01-31 AMERICAN EXPRESS TRAVEL REL. SERVICES, INC.       1125  
+#> 6 ABELL    KELLEY    2020-01-01 2020-01-31 APERTURE CREDENTIALING, LLC                       1500
 tail(kylc)
 #> # A tibble: 6 x 6
 #>   lob_last lob_first start_date end_date   pri_name                                    compensation
@@ -665,14 +698,14 @@ tail(kylc)
 #> 5 ZIBART   DARLENE   2019-03-01 2019-03-31 KY SOCIETY OF CERTIFIED PUBLIC ACCOUNTANTS        1046. 
 #> 6 ZIBART   DARLENE   2019-05-01 2019-08-31 KY SOCIETY OF CERTIFIED PUBLIC ACCOUNTANTS         272
 glimpse(sample_frac(kylc))
-#> Observations: 11,105
-#> Variables: 6
-#> $ lob_last     <chr> "SCHUSTER", "NOLAN", "WHITEHOUSE", "COOPER", "ALLEN", "BROWN", "LAMBERT", "…
-#> $ lob_first    <chr> "SHEILA A", "CHRIS", "DAVID M", "JOHN P", "JAMES 'JITTER' W", "SHERMAN A", …
-#> $ start_date   <date> 2019-01-01, 2019-01-01, 2019-09-01, 2019-02-01, 2019-09-01, 2019-02-01, 20…
-#> $ end_date     <date> 2019-01-31, 2019-01-31, 2019-12-31, 2019-02-28, 2019-12-31, 2019-02-28, 20…
-#> $ pri_name     <chr> "KY NURSES ASSOCIATION", "NUCOR CORP.", "ELI LILLY AND COMPANY", "TOYOTA MO…
-#> $ compensation <dbl> 1000.00, 1500.00, 10800.00, 6000.00, 41666.68, 375.00, 50.00, 275.00, 5000.…
+#> Rows: 15,268
+#> Columns: 6
+#> $ lob_last     <chr> "JENNINGS", "PRYOR", "WILSON", "SANFORD", "GILLETT,", "OWENS", "BIAGI", "PR…
+#> $ lob_first    <chr> "M. PATRICK", "J. RONALD", "MARC A", "ANETHA D", "II DONALD K", "ELIZABETH …
+#> $ start_date   <date> 2019-03-01, 2019-04-01, 2019-03-01, 2019-03-01, 2020-02-01, 2019-01-01, 20…
+#> $ end_date     <date> 2019-03-31, 2019-04-30, 2019-03-31, 2019-03-31, 2020-02-29, 2019-01-31, 20…
+#> $ pri_name     <chr> "KY CARES 2018", "DXC MS LLC", "CARESOURCE MANAGEMENT SERVICES CO.", "HOME …
+#> $ compensation <dbl> 1400.00, 6000.00, 1666.67, 5499.00, 280.00, 250.00, 10000.00, 3000.00, 666.…
 ```
 
 Since this database will be uploaded separately from the lobbyist
@@ -709,42 +742,54 @@ col_stats(kylc, count_na)
 #>  4 end_date       <date>     0 0     
 #>  5 pri_name       <chr>      0 0     
 #>  6 compensation   <dbl>      0 0     
-#>  7 lob_phone_norm <chr>   1409 0.127 
-#>  8 lob_addr_norm  <chr>   1409 0.127 
-#>  9 lob_zip_norm   <chr>   1409 0.127 
-#> 10 lob_city_norm  <chr>   1416 0.128 
-#> 11 pri_phone_norm <chr>    900 0.0810
-#> 12 pri_addr_norm  <chr>    900 0.0810
-#> 13 pri_zip_norm   <chr>    900 0.0810
-#> 14 pri_city_norm  <chr>    996 0.0897
+#>  7 lob_phone_norm <chr>   1692 0.111 
+#>  8 lob_addr_norm  <chr>   1692 0.111 
+#>  9 lob_zip_norm   <chr>   1692 0.111 
+#> 10 lob_city_norm  <chr>   1703 0.112 
+#> 11 pri_phone_norm <chr>    960 0.0629
+#> 12 pri_addr_norm  <chr>    960 0.0629
+#> 13 pri_zip_norm   <chr>    960 0.0629
+#> 14 pri_city_norm  <chr>   1094 0.0717
 ```
 
 ``` r
 glimpse(sample_frac(kylc))
-#> Observations: 11,105
-#> Variables: 14
-#> $ lob_last       <chr> "BUSICK", "HIGDON", "MCCARTHY,", "COOPER", "BUSHART", "CRESS,", "MILLIGAN…
-#> $ lob_first      <chr> "JEFFERY M", "JAMES M", "III JOHN T", "JOHN P", "WILLIAM MACK", "JR. LLOY…
-#> $ start_date     <date> 2019-04-01, 2019-03-01, 2019-04-01, 2019-05-01, 2019-02-01, 2019-02-01, …
-#> $ end_date       <date> 2019-04-30, 2019-03-31, 2019-04-30, 2019-08-31, 2019-02-28, 2019-02-28, …
-#> $ pri_name       <chr> "KY STATE UNIVERSITY", "MERCK SHARP & DOHME CORP. & ITS AFFILIATES", "FOR…
-#> $ compensation   <dbl> 250.00, 1470.00, 840.00, 11666.00, 2666.00, 880.88, 125.00, 600.00, 1000.…
-#> $ lob_phone_norm <chr> "(502) 875-0081", "(502) 875-1176", NA, "(502) 223-8967", "(859) 595-0911…
-#> $ lob_addr_norm  <chr> "113 W MAIN ST", "MML K 305 ANN ST STE 308", NA, "225 CAPITOL AVE", "514 …
-#> $ lob_zip_norm   <chr> "40601", "40601", NA, "40601", "40391", NA, "40601", NA, "40601", "40601"…
-#> $ lob_city_norm  <chr> "FRANKFORT", "FRANKFORT", NA, "FRANKFORT", "WINCHESTER", NA, "FRANKFORT",…
-#> $ pri_phone_norm <chr> "(502) 597-5054", "(415) 389-6800", "(202) 962-5392", "(314) 577-3076", "…
-#> $ pri_addr_norm  <chr> "400 E MAIN ST HUME HALL", "NIELSEN MERKSAMER ET AL 2350 KERNER BLVD STE …
-#> $ pri_zip_norm   <chr> "40601", "94901", "20004", "32218", "40391", "40507", "40362", "40202", "…
-#> $ pri_city_norm  <chr> "FRANKFORT", "SAN RAFAEL", "WASHINGTON", "JACKSONVILLE", "WINCHESTER", "L…
+#> Rows: 15,268
+#> Columns: 14
+#> $ lob_last       <chr> "PAYTON", "MAY,", "MILLER", "MARTIN", "SANDERS", "BUSICK", "MILLER", "GEO…
+#> $ lob_first      <chr> "KEVIN W", "III WILLIAM H", "DUSTIN S", "ANDREW 'SKIPPER'", "RICHIE", "JE…
+#> $ start_date     <date> 2019-04-01, 2019-01-01, 2020-01-01, 2019-05-01, 2019-04-01, 2019-05-01, …
+#> $ end_date       <date> 2019-04-30, 2019-01-31, 2020-01-31, 2019-08-31, 2019-04-30, 2019-08-31, …
+#> $ pri_name       <chr> "KY PHYSICAL THERAPY ASSOCIATION", "OLDCASTLE MATERIALS, INC.", "MOUNTAIN…
+#> $ compensation   <dbl> 1066.66, 1750.00, 1000.00, 1200.00, 1666.64, 658.27, 1875.00, 60.00, 1000…
+#> $ lob_phone_norm <chr> "(502) 223-2181", NA, "(502) 226-3975", "(502) 875-0081", "(502) 223-8967…
+#> $ lob_addr_norm  <chr> "TOP SHELF LBBY 302 SHELBY ST", NA, "229 SHELBY ST", "11007 GREENOCK CT",…
+#> $ lob_zip_norm   <chr> "40601", NA, "40601", "40243", "40601", "40601", "40601", NA, "40207", "4…
+#> $ lob_city_norm  <chr> "FRANKFORT", NA, "FRANKFORT", "LOUISVILLE", "FRANKFORT", "FRANKFORT", "FR…
+#> $ pri_phone_norm <chr> "(859) 485-2812", "(512) 861-7100", "(859) 986-2373", "(502) 636-4571", N…
+#> $ pri_addr_norm  <chr> "15847 TEAL RD", "11714 WILSON PARKE AVE STE 155", "433 CHESTNUT ST", "60…
+#> $ pri_zip_norm   <chr> "41092", "78726", "40403", "40222", NA, "41017", "40223", NA, "40207", NA…
+#> $ pri_city_norm  <chr> "VERONA", "AUSTIN", "BEREA", "LOUISVILLE", NA, "FORT MITCHELL", "LOUISVIL…
 ```
 
-This compensation database can also be written to disk.
+This compensation database can also be written to disk after adding
+year.
 
 ``` r
-write_csv(
-  x = kylc,
-  path = glue("{proc_dir}/ky_lobby_comp.csv"),
-  na = ""
-)
+kylc <- mutate(kylc, year = year(start_date))
+```
+
+``` r
+comp_path <- path(clean_dir, "ky_lobby_comp.csv")
+write_csv(kylc, path = comp_path, na = "")
+```
+
+``` r
+file_size(comp_path)
+#> 2.54M
+guess_encoding(comp_path)
+#> # A tibble: 1 x 2
+#>   encoding confidence
+#>   <chr>         <dbl>
+#> 1 ASCII             1
 ```
