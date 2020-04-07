@@ -1,7 +1,15 @@
 Nebraska Lobbyists
 ================
 Kiernan Nicholls
-2019-11-21 13:08:12
+2020-04-07 15:18:07
+
+  - [Project](#project)
+  - [Objectives](#objectives)
+  - [Packages](#packages)
+  - [Data](#data)
+  - [Import](#import)
+  - [Wrangle](#wrangle)
+  - [Export](#export)
 
 <!-- Place comments regarding knitting here -->
 
@@ -65,18 +73,18 @@ pacman::p_load(
 
 This document should be run as part of the `R_campfin` project, which
 lives as a sub-directory of the more general, language-agnostic
-[`irworkshop/accountability_datacleaning`](https://github.com/irworkshop/accountability_datacleaning "TAP repo")
+[`irworkshop/accountability_datacleaning`](https://github.com/irworkshop/accountability_datacleaning)
 GitHub repository.
 
 The `R_campfin` project uses the [RStudio
-projects](https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects "Rproj")
+projects](https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects)
 feature and should be run as such. The project also uses the dynamic
 `here::here()` tool for file paths relative to *your* machine.
 
 ``` r
 # where does this document knit?
 here::here()
-#> [1] "/home/kiernan/R/accountability_datacleaning/R_campfin"
+#> [1] "/home/kiernan/Code/accountability_datacleaning/R_campfin"
 ```
 
 ## Data
@@ -107,8 +115,7 @@ Each of these data files comes in PDF format only.
 
 We will have to use the `pdftools` package to read these files and
 extract the text content. We are first interested in the list of
-registered lobbyists by principal
-clients.
+registered lobbyists by principal clients.
 
 ``` r
 pdf_file <- "https://nebraskalegislature.gov/FloorDocs/Current/PDF/Lobby/principallist.pdf"
@@ -121,51 +128,51 @@ character string list element.
 ``` r
 nelr <- pdf_text(pdf_file)
 cat(nelr[[1]])
-#>                                                        CLERK OF THE LEGISLATURE'S OFFICE
-#>                                                       PRINCIPALS AND REGISTERED LOBBYISTS
-#>                                                     CURRENT SESSION - AS OF NOVEMBER 12, 2019
-#> Principal and Lobbyist                                    WD              Address                                                       Phone
-#> 21st Century Agricultural Opportunities Coalition                         7365 North 122nd Avenue Circle, Omaha, NE 68142               (402)740-8338
-#>    O'Hara Lindsay & Associates, Inc.                                         1320 K Street, Lincoln, NE 68508                           (402)474-6200
-#> 3M COMPANY                                                                225-4N-14, St. Paul, MN 55144-100                             (651)503-4554
-#>    Bromm Nielsen & Mines                                                     635 S 14th Suite 315, Lincoln, NE 68508                    (402)327-1603
-#> 4 Lanes 4 Nebraska                                                        609 W Norfolk Avenue, Norfolk, NE 68701                       (402)434-8040
-#>    Husch Blackwell Strategies                                                1327 H Street, Lincoln, NE 68508                           (402)434-8040
-#> AAA Nebraska and The Auto Club Group                                      910 N. 96th Street, Omaha, NE 68114                           (402)938-3806
-#>    White, Rosemary                                                           910 N. 96th Street, Omaha, NE 68114                        (402)938-3806
-#> AARP Nebraska                                                             301 S. 13th Street Suite 201, Lincoln, NE 68508               (402)323-5421
-#>    American Communications Group, Inc.                                       1141 H Street, Suite B, Lincoln, NE 68508                  (402)475-0727
-#>    Benjamin, Connie                                       WD                 301 South 13th Street, Suite 201, Lincoln, NE 68508        (402)323-5421
-#>    Decamp, Suzan                                                             301 South 13th Street, Suite 201, Lincoln, NE 68508        (402)323-5424
-#>    DeLong, Danny                                                             P.O. Box 501, Beatrice, NE 68310                           (402)323-5424
-#>    Holmquist, David                                                          301 S. 13th Street, Suite 201, Lincoln, NE 68508           (402)323-5424
-#>    Lassen, Robert                                                            301 S. 13th Street, Suite 201, Lincoln, NE 68508           (402)323-5424
-#>    Nathan, Robbie                                                            301 S. 13th Street, Suite 201, Lincoln, NE 68508           (402)323-5424
-#>    Potter, Tim                                            WD                 301 South 13th Street, Suite 201, Lincoln, NE 68508        (402)323-5424
-#>    Ragland, Jina                                                             301 S. 13th St. Ste. 201, Lincoln, NE 68508                (402)323-2524
-#>    Ryan, June                                                                301 S 13th Street, Suite 201, Lincoln, NE 68508            (402)323-5424
-#>    Ward, Kathryn                                                             301 S. 13th Street, Suite 201, Lincoln, NE 68508           (402)323-5424
-#> ABATE of Nebraska, Inc.                                                   PO Box 22764, Lincoln, NE 68542-2764                          (402)489-0651
-#>    Jensen Rogert Associates, Inc.                                            625 S. 14th Street, Suite A, Lincoln, NE 68508             (402)436-2165
-#> ACLU Nebraska                                                             134 S. 13th Street, #1010, Lincoln, NE 68508                  (402)476-8091
-#>    Conrad, Danielle                                                          134 S. 13th Street, #1010, Lincoln, NE 68508               (402)476-8091
-#>    Eickholt, Christopher/Spike                                               134 South 13th Street Suite #505, Lincoln, NE 68508        (402)310-5663
-#>    Godinez, Rosangela                                                        134 South 13th Street, #1010, Lincoln, NE 68508            (402)476-8091
-#>    Miller, Amy A.                                                            134 S. 13th Street, #1010, Lincoln, NE 68508               (402)476-8091
-#>    Radcliffe, Walter H. of Radcliffe and Associates                          625 S. 14th Street, Suite 100, Lincoln, NE 68508           (402)476-7272
-#>    Richters, Rebecca S.                                                      134 South 13th Street, #1010, Lincoln, NE 68508            (402)476-8091
-#> ACT, Inc.                                                                 c/o 2350 Kerner Blvd., Ste. 250, San Rafael, CA 94901         (415)389-6800
-#>    Clark, John                                            WD                 c/o 2350 Kerner Blvd., Ste. 250, San Rafael, CA 94901      (415)389-6800
-#> Adams Central Public Schools                                              1090 S. Adams Central Road, Box 1088, Hastings, NE 68902-1088 (402)463-3285
-#>    Nowka & Edwards                                                           1233 Lincoln Mall, Suite 201, Lincoln, NE 68508            (402)476-1440
-#> Advance America c/o MultiState Associates, Inc.                           515 King Street, Suite 300, Alexandria, VA 22314              (703)684-1110
-#>    Radcliffe, Walter H. of Radcliffe and Associates                          625 S. 14th Street, Suite 100, Lincoln, NE 68508           (402)476-7272
-#> Advanced Power Alliance                                                   610 Brazos Street, Suite 210, Austin, TX 78701                (512)651-0291
-#>    American Communications Group, Inc.                                       1141 H Street, Suite B, Lincoln, NE 68508                  (402)475-0727
-#> Advantage Capital                                                         190 Carondelet Plaza, St. Louis, MO 63105                     (314)882-6168
-#>    Kelley Plucker, LLC                                                       2804 S 87th Avenue, Omaha, NE 68124                        (402)397-1898
-#> Advocates for Behavioral Health                                           14302 FNB Parkway, Omaha, NE 68154                            (402)691-9518
-#> 11/12/2019             01:30 pm                     Lobbyist Registration, Room 2014 State Capitol, Lincoln NE 68509 (402) 471-2608               1
+#>                                                            CLERK OF THE LEGISLATURE'S OFFICE
+#>                                                           PRINCIPALS AND REGISTERED LOBBYISTS
+#>                                                           CURRENT SESSION - AS OF MARCH 12, 2020
+#> Principal and Lobbyist                                        WD              Address                                                       Phone
+#> 3M COMPANY                                                                    225-4N-14, St. Paul, MN 55144-100                             (651)503-4554
+#>    Bromm Nielsen & Mines                                                         635 S 14th Suite 315, Lincoln, NE 68508                    (402)327-1603
+#> 4 Lanes 4 Nebraska                                                            1327 H St., Ste. 101, Lincoln, NE 68508                       (402)434-8040
+#>    Husch Blackwell Strategies                                                    1327 H Street, Lincoln, NE 68508                           (402)434-8040
+#> AAA Nebraska and The Auto Club Group                                          910 N. 96th Street, Omaha, NE 68114                           (402)938-3806
+#>    White, Rosemary                                                               910 N. 96th Street, Omaha, NE 68114                        (402)938-3806
+#> AARP Nebraska                                                                 301 S. 13th Street Suite 201, Lincoln, NE 68508               (402)323-5421
+#>    American Communications Group, Inc.                                           1141 H Street, Suite B, Lincoln, NE 68508                  (402)475-0727
+#>    Decamp, Suzan                                                                 301 South 13th Street, Suite 201, Lincoln, NE 68508        (402)323-5424
+#>    DeLong, Danny                                                                 P.O. Box 501, Beatrice, NE 68310                           (402)323-5424
+#>    Holmquist, David                                                              301 S. 13th Street, Suite 201, Lincoln, NE 68508           (402)323-5424
+#>    Lassen, Robert                                                                301 S. 13th Street, Suite 201, Lincoln, NE 68508           (402)323-5424
+#>    Nathan, Robbie                                                                301 S. 13th Street, Suite 201, Lincoln, NE 68508           (402)323-5424
+#>    Potter, Tim                                                                   301 South 13th Street, Suite 201, Lincoln, NE 68508        (402)323-5424
+#>    Ragland, Jina                                                                 301 S. 13th St. Ste. 201, Lincoln, NE 68508                (402)323-2524
+#>    Stubbendieck, Todd                                                            301 S. 13th Street Suite 201, Lincoln, NE 68508            (402)323-5421
+#>    Ward, Kathryn                                                                 301 S. 13th Street, Suite 201, Lincoln, NE 68508           (402)323-5424
+#> ACLU Nebraska                                                                 134 S. 13th Street, #1010, Lincoln, NE 68508                  (402)476-8091
+#>    Conrad, Danielle                                                              134 S. 13th Street, #1010, Lincoln, NE 68508               (402)476-8091
+#>    Eickholt, Christopher/Spike                                                   134 South 13th Street Suite #505, Lincoln, NE 68508        (402)310-5663
+#>    Godinez, Rosangela                                                            134 South 13th Street, #1010, Lincoln, NE 68508            (402)476-8091
+#>    Radcliffe, Walter H. of Radcliffe Gilbertson & Brady                          625 S. 14th Street, Suite 100, Lincoln, NE 68508           (402)476-7272
+#>    Richters, Rebecca S.                                                          134 South 13th Street, #1010, Lincoln, NE 68508            (402)476-8091
+#>    Sipple, Adam                                                                  134 South 13th Streeet, #1010, Lincoln, NE 68508           (402)476-8091106
+#> ACT, Inc.                                                                     c/o 2350 Kerner Blvd., Ste. 250, San Rafael, CA 94901         (415)389-6800
+#>    Lawrence, Katherine                                                           c/o 2350 Kerner Blvd., Ste. 250, San Rafael, CA 94901      (415)389-6800
+#> Adams Central Public Schools                                                  1090 S. Adams Central Road, Box 1088, Hastings, NE 68902-1088 (402)463-3285
+#>    Nowka & Edwards                                                               1233 Lincoln Mall, Suite 201, Lincoln, NE 68508            (402)476-1440
+#> Advance America                                                               135 North Church Street, Spartanburg, SC 29306                (573)424-0760
+#>    Townsend, Julie                                                               135 North Church Street, Spartanburg, SC 29306             (573)424-0760
+#> Advance America c/o MultiState Associates, Inc.                               515 King Street, Suite 300, Alexandria, VA 22314              (703)684-1110
+#>    Radcliffe, Walter H. of Radcliffe Gilbertson & Brady                          625 S. 14th Street, Suite 100, Lincoln, NE 68508           (402)476-7272
+#> Advanced Power Alliance                                                       610 Brazos Street, Suite 210, Austin, TX 78701                (512)651-0291
+#>    American Communications Group, Inc.                                           1141 H Street, Suite B, Lincoln, NE 68508                  (402)475-0727
+#> Advantage Capital                                                             190 Carondelet Plaza, St. Louis, MO 63105                     (314)882-6168
+#>    Kelley Plucker, LLC                                                           2804 S 87th Avenue, Omaha, NE 68124                        (402)397-1898
+#> Advocates for Behavioral Health                                               14302 FNB Parkway, Omaha, NE 68154                            (402)691-9518
+#>    Peetz & Company                                                               1233 Lincoln Mall, Suite 202, Lincoln, NE 68508            (402)438-4960
+#> Aflac                                                                         1932 Wynnton Road, Columbus, GA 31999                         (706)596-3855
+#>    Bromm Nielsen & Mines                                                         635 S 14th Suite 315, Lincoln, NE 68508                    (402)327-1603
+#> 03/12/2020             09:45 am                         Lobbyist Registration, Room 2014 State Capitol, Lincoln NE 68509 (402) 471-2608               1
 ```
 
 We can define a function that uses the `stringr` and `tibble` packages
@@ -174,6 +181,13 @@ data frame. The file is structured so that lobbyists are listed below
 each of their principals, indented by 3 spaces. We can use that
 structure to identify which rows are lobbyists, then split the string
 into three columns.
+
+Before this, we will need to note the date of the file.
+
+``` r
+lob_date <- mdy(str_extract(nelr[[1]], "(?<=AS OF )\\w+ \\d{1,2}, \\d{4}"))
+lob_year <- year(lob_date)
+```
 
 ``` r
 pdf_table <- function(page) {
@@ -226,20 +240,20 @@ nelr <- nelr %>%
   )
 ```
 
-    #> # A tibble: 901 x 6
-    #>    lob_name         lob_geo             lob_phone  pri_name            pri_geo           pri_phone 
-    #>    <chr>            <chr>               <chr>      <chr>               <chr>             <chr>     
-    #>  1 O'Hara Lindsay … 1320 K Street, Lin… (402)474-… 21st Century Agric… 7365 North 122nd… (402)740-…
-    #>  2 Bromm Nielsen &… 635 S 14th Suite 3… (402)327-… 3M COMPANY          225-4N-14, St. P… (651)503-…
-    #>  3 Husch Blackwell… 1327 H Street, Lin… (402)434-… 4 Lanes 4 Nebraska  609 W Norfolk Av… (402)434-…
-    #>  4 White, Rosemary  910 N. 96th Street… (402)938-… AAA Nebraska and T… 910 N. 96th Stre… (402)938-…
-    #>  5 American Commun… 1141 H Street, Sui… (402)475-… AARP Nebraska       301 S. 13th Stre… (402)323-…
-    #>  6 Benjamin, Connie 301 South 13th Str… (402)323-… AARP Nebraska       301 S. 13th Stre… (402)323-…
-    #>  7 Decamp, Suzan    301 South 13th Str… (402)323-… AARP Nebraska       301 S. 13th Stre… (402)323-…
-    #>  8 DeLong, Danny    P.O. Box 501, Beat… (402)323-… AARP Nebraska       301 S. 13th Stre… (402)323-…
-    #>  9 Holmquist, David 301 S. 13th Street… (402)323-… AARP Nebraska       301 S. 13th Stre… (402)323-…
-    #> 10 Lassen, Robert   301 S. 13th Street… (402)323-… AARP Nebraska       301 S. 13th Stre… (402)323-…
-    #> # … with 891 more rows
+    #> # A tibble: 809 x 6
+    #>    lob_name         lob_geo              lob_phone   pri_name         pri_geo            pri_phone 
+    #>    <chr>            <chr>                <chr>       <chr>            <chr>              <chr>     
+    #>  1 Bromm Nielsen &… 635 S 14th Suite 31… (402)327-1… 3M COMPANY       225-4N-14, St. Pa… (651)503-…
+    #>  2 Husch Blackwell… 1327 H Street, Linc… (402)434-8… 4 Lanes 4 Nebra… 1327 H St., Ste. … (402)434-…
+    #>  3 White, Rosemary  910 N. 96th Street,… (402)938-3… AAA Nebraska an… 910 N. 96th Stree… (402)938-…
+    #>  4 American Commun… 1141 H Street, Suit… (402)475-0… AARP Nebraska    301 S. 13th Stree… (402)323-…
+    #>  5 Decamp, Suzan    301 South 13th Stre… (402)323-5… AARP Nebraska    301 S. 13th Stree… (402)323-…
+    #>  6 DeLong, Danny    P.O. Box 501, Beatr… (402)323-5… AARP Nebraska    301 S. 13th Stree… (402)323-…
+    #>  7 Holmquist, David 301 S. 13th Street,… (402)323-5… AARP Nebraska    301 S. 13th Stree… (402)323-…
+    #>  8 Lassen, Robert   301 S. 13th Street,… (402)323-5… AARP Nebraska    301 S. 13th Stree… (402)323-…
+    #>  9 Nathan, Robbie   301 S. 13th Street,… (402)323-5… AARP Nebraska    301 S. 13th Stree… (402)323-…
+    #> 10 Potter, Tim      301 South 13th Stre… (402)323-5… AARP Nebraska    301 S. 13th Stree… (402)323-…
+    #> # … with 799 more rows
 
 ## Wrangle
 
@@ -314,20 +328,20 @@ nelr <- nelr %>%
   )
 ```
 
-    #> # A tibble: 546 x 2
-    #>    pri_address                       pri_address_norm                    
-    #>    <chr>                             <chr>                               
-    #>  1 1999 Shepard Road                 1999 SHEPARD ROAD                   
-    #>  2 625 S 14th St Suite A             625 SOUTH 14TH STREET SUITE A       
-    #>  3 1600 S. 48th Street               1600 SOUTH 48TH STREET              
-    #>  4 1400 K St NW #400                 1400 K STREET NORTHWEST 400         
-    #>  5 9019 South 72nd Street            9019 SOUTH 72ND STREET              
-    #>  6 701 P St. Ste. 305 P.O. Box 80410 701 P STREET SUITE 305 P O BOX 80410
-    #>  7 7521 Main Street Suite 103        7521 MAIN STREET SUITE 103          
-    #>  8 6949 South 110th St.              6949 SOUTH 110TH STREET             
-    #>  9 12611 W Blackstone Lane           12611 WEST BLACKSTONE LANE          
-    #> 10 8200 Dodge Street                 8200 DODGE STREET                   
-    #> # … with 536 more rows
+    #> # A tibble: 514 x 2
+    #>    pri_address                               pri_address_norm                       
+    #>    <chr>                                     <chr>                                  
+    #>  1 1650 Farnam Street                        1650 FARNAM ST                         
+    #>  2 PO Box 406                                PO BOX 406                             
+    #>  3 6601 Pioneers Boulevard Ste 1             6601 PIONEERS BLVD STE 1               
+    #>  4 8055 O Street Suite 300                   8055 O ST STE 300                      
+    #>  5 66455 Ponderrosa Road                     66455 PONDERROSA RD                    
+    #>  6 9019 South 72nd Street                    9019 S 72 ND ST                        
+    #>  7 215 Centennial Mall South Suite 310       215 CENTENNIAL MALL S STE 310          
+    #>  8 C/O Morrow Willnauer 1299 Farnam Ste. 250 CO MORROW WILLNAUER 1299 FARNAM STE 250
+    #>  9 P.O. Box 200                              PO BOX 200                             
+    #> 10 1321 Jones St.                            1321 JONES ST                          
+    #> # … with 504 more rows
 
 ### ZIP
 
@@ -343,10 +357,10 @@ nelr <- nelr %>%
     #> # A tibble: 4 x 6
     #>   stage        prop_in n_distinct prop_na n_out n_diff
     #>   <chr>          <dbl>      <dbl>   <dbl> <dbl>  <dbl>
-    #> 1 lob_zip        0.979        138 0.00444    19     15
-    #> 2 lob_zip_norm   1            127 0.00444     0      1
-    #> 3 pri_zip        0.930        251 0.0144     62     45
-    #> 4 pri_zip_norm   0.993        224 0.0144      6      6
+    #> 1 lob_zip        0.974        110 0.00371    21     15
+    #> 2 lob_zip_norm   1             98 0.00371     0      1
+    #> 3 pri_zip        0.931        238 0.0136     55     39
+    #> 4 pri_zip_norm   0.995        213 0.0136      4      5
 
 ### State
 
@@ -354,9 +368,9 @@ The `*_state` components do not need to be wrangled.
 
 ``` r
 prop_in(nelr$lob_state, valid_state)
-#> [1] 0.9955605
+#> [1] 0.9950556
 prop_in(nelr$pri_state, valid_state)
-#> [1] 0.9955605
+#> [1] 0.9975278
 ```
 
 ### City
@@ -425,42 +439,54 @@ nelr <- nelr %>%
     #> # A tibble: 3 x 6
     #>   stage         prop_in n_distinct prop_na n_out n_diff
     #>   <chr>           <dbl>      <dbl>   <dbl> <dbl>  <dbl>
-    #> 1 lob_city      0.00222         80 0.00111   898     78
-    #> 2 lob_city_norm 0.996           78 0.00111     4      5
-    #> 3 lob_city_swap 1               77 0.00666     0      1
+    #> 1 lob_city        0             57 0.00124   808     57
+    #> 2 lob_city_norm   0.996         56 0.00124     3      4
+    #> 3 lob_city_swap   1             55 0.00618     0      1
 
     #> # A tibble: 3 x 6
     #>   stage         prop_in n_distinct prop_na n_out n_diff
     #>   <chr>           <dbl>      <dbl>   <dbl> <dbl>  <dbl>
-    #> 1 pri_city      0.00667        132 0.00111   894    128
-    #> 2 pri_city_norm 0.978          126 0.00111    20      9
-    #> 3 pri_city_swap 0.998          121 0.0266      2      3
+    #> 1 pri_city      0.00124        129 0.00124   807    128
+    #> 2 pri_city_norm 0.978          125 0.00124    18      6
+    #> 3 pri_city_swap 1              121 0.0247      0      1
 
 ## Export
 
 ``` r
-proc_dir <- here("ne", "lobbying", "data", "processed")
-dir_create(proc_dir)
-```
-
-``` r
-nelr %>% 
+nelr <- nelr %>% 
   select(
     lob_name,
-    lob_geo,
     lob_addr = lob_address_norm,
     lob_city = lob_city_swap,
     lob_state,
     lob_zip = lob_zip_norm,
     pri_name,
-    pri_geo,
     pri_addr = pri_address_norm,
     pri_city = pri_city_swap,
     pri_state,
     pri_zip = pri_zip_norm,
   ) %>% 
-  write_csv(
-    path = glue("{proc_dir}/ne_lobbyist_clean.csv"),
-    na = ""
+  mutate(
+    date = lob_date, 
+    year = lob_year,
+    .before = lob_name
   )
+```
+
+``` r
+clean_dir <- dir_create(here("ne", "lobbying", "data", "clean"))
+clean_path <- path(clean_dir, "ne_lobbyist_clean.csv")
+write_csv(nelr, clean_path, na = "")
+```
+
+``` r
+nrow(nelr)
+#> [1] 809
+file_size(clean_path)
+#> 115K
+guess_encoding(clean_path)
+#> # A tibble: 1 x 2
+#>   encoding confidence
+#>   <chr>         <dbl>
+#> 1 ASCII             1
 ```
