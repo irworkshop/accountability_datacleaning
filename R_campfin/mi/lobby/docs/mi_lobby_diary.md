@@ -1,7 +1,7 @@
 Michigan Lobbyists
 ================
 Kiernan Nicholls
-2020-01-28 15:18:16
+2020-04-06 16:57:06
 
   - [Project](#project)
   - [Objectives](#objectives)
@@ -82,7 +82,7 @@ feature and should be run as such. The project also uses the dynamic
 ``` r
 # where does this document knit?
 here::here()
-#> [1] "/home/kiernan/R/accountability_datacleaning/R_campfin"
+#> [1] "/home/kiernan/Code/accountability_datacleaning/R_campfin"
 ```
 
 ## Registration
@@ -112,7 +112,7 @@ dir_create(raw_dir)
 
 ``` r
 # changes from time to time
-lob_url <- "https://miboecfr.nictusa.com/cfr/dumpdata/aaa51aybN/mi_lobby.sh"
+lob_url <- "https://miboecfr.nictusa.com/cfr/dumpdata/aaaMxayCb/mi_lobby.sh"
 lob_path <- url2path(lob_url, raw_dir)
 if (!file_exists(lob_path)) {
   download.file(
@@ -190,40 +190,40 @@ milr <- read_delim(
 ``` r
 head(milr)
 #> # A tibble: 6 x 13
-#>   id     type  last     first mi    sig    addr       city  state zip   phone reg        term      
-#>   <chr>  <fct> <chr>    <chr> <chr> <chr>  <chr>      <chr> <chr> <chr> <chr> <date>     <date>    
-#> 1 014673 A     (RADKE)… JODI  L     <NA>   PO BOX 784 LOVE… CO    80539 9702… 2019-09-12 NA        
-#> 2 009995 L     2630 FE… <NA>  <NA>  RICHA… 721 NORTH… LANS… MI    4890… 5173… 2006-09-01 2008-11-30
-#> 3 011388 L     3 CLICK… <NA>  <NA>  A EDW… 805 15TH … WASH… DC    20005 2026… 2010-07-12 2010-12-31
-#> 4 012438 L     3 REASO… <NA>  <NA>  RENAE… 201 TOWNS… LANS… MI    48933 5173… 2013-05-15 2014-07-31
-#> 5 009088 L     3M COMP… <NA>  <NA>  DAVID… 515 KING … ALEX… VA    22314 7036… 2003-01-01 NA        
-#> 6 010670 L     3M ELEC… <NA>  <NA>  DAVID… 1838 GUNN… ODES… FL    33556 8137… 2008-06-09 2014-10-20
+#>   id     type  last      first  mi    sig   addr      city  state zip   phone reg        term      
+#>   <chr>  <fct> <chr>     <chr>  <chr> <chr> <chr>     <chr> <chr> <chr> <chr> <date>     <date>    
+#> 1 014673 A     (RADKE) … JODI   L     <NA>  PO BOX 7… LOVE… CO    80539 9702… 2019-09-12 NA        
+#> 2 012102 A     A L CANA… <NA>   <NA>  ALAN… PO BOX 3… EAST… MI    48826 5172… 2012-05-01 NA        
+#> 3 013358 A     AARON     RICHA… <NA>  <NA>  201 TOWN… LANS… MI    48933 5173… 2016-04-12 NA        
+#> 4 013523 A     AASHEIM   JOHAN  <NA>  <NA>  101 S WA… LANS… MI    48933 5178… 2016-09-20 NA        
+#> 5 013910 A     ABLER     GREGO… M     <NA>  110 W MI… LANS… MI    48933 5173… 2017-11-06 NA        
+#> 6 012557 A     ABOOD     JEFFR… LANCE <NA>  470 NORT… BIRM… MI    48009 2486… 2013-11-01 NA
 tail(milr)
 #> # A tibble: 6 x 13
-#>   id     type  last   first  mi     sig      addr     city  state zip   phone reg        term      
-#>   <chr>  <fct> <chr>  <chr>  <chr>  <chr>    <chr>    <chr> <chr> <chr> <chr> <date>     <date>    
-#> 1 000151 A     ZURVA… DAVID  S      <NA>     620 S C… LANS… MI    4890… 5174… 1983-10-17 2009-01-30
-#> 2 012240 A     ZWART  STEVEN J      <NA>     PO BOX … BAY … MI    4870… 9896… 2012-09-18 2013-12-31
-#> 3 009589 A     ZWARTZ ROBERT <NA>   <NA>     175 W J… CHIC… IL    60604 3124… 2005-06-21 2010-08-05
-#> 4 006811 A     ZYBLE  DAVID  A      <NA>     1 CORPO… LANS… MI    48951 5173… 1996-12-09 NA        
-#> 5 <NA>   <NA>  <NA>   <NA>   End o… 6,916 t… <NA>     <NA>  <NA>  <NA>  <NA>  NA         NA        
-#> 6 <NA>   <NA>  <NA>   <NA>   <NA>   <NA>     <NA>     <NA>  <NA>  <NA>  <NA>  NA         NA
+#>   id     type  last   first  mi     sig       addr    city  state zip   phone reg        term      
+#>   <chr>  <fct> <chr>  <chr>  <chr>  <chr>     <chr>   <chr> <chr> <chr> <chr> <date>     <date>    
+#> 1 009479 A     ZIMNY  TABIT… <NA>   <NA>      121 W … LANS… MI    48933 5174… 2005-03-14 NA        
+#> 2 014039 A     ZUBAR… ILYA   <NA>   <NA>      777 WO… DETR… MI    48226 3136… 2018-02-14 NA        
+#> 3 010290 A     ZUHLKE DAVID  J      <NA>      826 MU… LANS… MI    48917 5174… 2007-07-23 NA        
+#> 4 006811 A     ZYBLE  DAVID  A      <NA>      1 CORP… LANS… MI    48951 5173… 1996-12-09 NA        
+#> 5 <NA>   <NA>  <NA>   <NA>   End o… 1,473 to… <NA>    <NA>  <NA>  <NA>  <NA>  NA         NA        
+#> 6 <NA>   <NA>  <NA>   <NA>   <NA>   <NA>      <NA>    <NA>  <NA>  <NA>  <NA>  NA         NA
 glimpse(sample_frac(milr))
-#> Observations: 6,918
-#> Variables: 13
-#> $ id    <chr> "004429", "006434", "013479", "013487", "011130", "014794", "000262", "009571", "0…
-#> $ type  <fct> A, A, A, L, L, A, A, L, L, L, A, A, A, L, L, A, L, L, L, L, L, L, L, A, L, A, L, L…
-#> $ last  <chr> "OWEN", "MERCHANT", "HOFFMAN", "GERALD R FORD INTERNATIONAL AIRPORT AUTHORITY", "X…
-#> $ first <chr> "GARY", "BRUCE", "HARVEY", NA, NA, "MICHAEL", "PETER", NA, NA, NA, "PAUL", "SCOTT"…
-#> $ mi    <chr> "M", NA, "J", NA, NA, NA, "H", NA, NA, NA, NA, "B", "C", NA, NA, "M", NA, NA, NA, …
-#> $ sig   <chr> NA, NA, NA, "REBECCA L BECHLER", "CARLOS J COE", NA, NA, "VINCE BRENNAN", "LAURIE …
-#> $ addr  <chr> "120 N WASHINGTON SQ, STE 110", "415 STOCKBRIDGE AVE", "501 SOUTH BRIDGE STREET", …
-#> $ city  <chr> "LANSING", "KALAMAZOO", "GRAND LEDGE", "GRAND RAPIDS", "KYLE", "LANSING", "LANSING…
-#> $ state <chr> "MI", "MI", "MI", "MI", "TX", "MI", "MI", "MI", "WI", "MI", "MI", "MI", "MI", "MI"…
-#> $ zip   <chr> "48933", "49001", "48837", "49512", "78640", "48933", "489331816", "48040", "54494…
-#> $ phone <chr> "5174846216", "2693378711", "5174187298", "6162336050", "5122688191", "5178530537"…
-#> $ reg   <date> 1989-01-03, 1995-09-03, 2016-08-01, 2016-09-01, 2009-08-27, 2020-01-14, 1983-10-2…
-#> $ term  <date> NA, 2013-04-30, NA, NA, 2011-10-01, NA, NA, 2005-06-30, NA, NA, 2010-12-31, NA, N…
+#> Rows: 1,475
+#> Columns: 13
+#> $ id    <chr> "014243", "013214", "014806", "000009", "004393", "010122", "012745", "010764", "0…
+#> $ type  <fct> A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A…
+#> $ last  <chr> "MADDIPATI", "KAPLAN RUDOLPH", "BZDOK", "KHEDER", "MCLAUCHLAN", "SIKKEMA", "RABENO…
+#> $ first <chr> "SRIKANTH", "ROCHELLE", "CHRISTOPHER", "NOBLE", "MICHAEL", "KENNETH", "JOHN", "BRA…
+#> $ mi    <chr> NA, NA, NA, "P", "D", "R", NA, NA, "S", NA, NA, NA, "E", NA, NA, "D", NA, NA, NA, …
+#> $ sig   <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "GABRIEL TS SCHNEI…
+#> $ addr  <chr> "ONE ENERGY PLAZA", "550 W MERRILL STREET SUITE 200", "420 E FRONT ST", "201 N WAS…
+#> $ city  <chr> "JACKSON", "BIRMINGHAM", "TRAVERSE CITY", "LANSING", "DETROIT", "GRANDVILLE", "LAN…
+#> $ state <chr> "MI", "MI", "MI", "MI", "MI", "MI", "MI", "MI", "MI", "MI", "CA", "IL", "MI", "MI"…
+#> $ zip   <chr> "49201", "48009", "49686", "48933", "48201", "49418", "48933", "48933", "48906", "…
+#> $ phone <chr> "5177880635", "2485590840", "2319460044", "5174822896", "3134716082", "6165341879"…
+#> $ reg   <date> 2018-10-03, 2015-10-19, 2020-01-20, 1983-10-07, 1988-10-28, 2007-02-05, 2014-06-0…
+#> $ term  <date> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
 ```
 
 As we can see from `tail()`, the last two rows still need to be removed.
@@ -236,19 +236,19 @@ col_stats(milr, n_distinct)
 #> # A tibble: 13 x 4
 #>    col   class      n        p
 #>    <chr> <chr>  <int>    <dbl>
-#>  1 id    <chr>   6917 1.00    
-#>  2 type  <fct>      3 0.000434
-#>  3 last  <chr>   5911 0.854   
-#>  4 first <chr>    884 0.128   
-#>  5 mi    <chr>    184 0.0266  
-#>  6 sig   <chr>   2534 0.366   
-#>  7 addr  <chr>   4396 0.635   
-#>  8 city  <chr>    710 0.103   
-#>  9 state <chr>     44 0.00636 
-#> 10 zip   <chr>   1324 0.191   
-#> 11 phone <chr>   3650 0.528   
-#> 12 reg   <date>  3464 0.501   
-#> 13 term  <date>  1186 0.171
+#>  1 id    <chr>   1474 0.999   
+#>  2 type  <fct>      2 0.00136 
+#>  3 last  <chr>   1284 0.871   
+#>  4 first <chr>    530 0.359   
+#>  5 mi    <chr>     80 0.0542  
+#>  6 sig   <chr>    104 0.0705  
+#>  7 addr  <chr>    999 0.677   
+#>  8 city  <chr>    198 0.134   
+#>  9 state <chr>     30 0.0203  
+#> 10 zip   <chr>    338 0.229   
+#> 11 phone <chr>    883 0.599   
+#> 12 reg   <date>  1110 0.753   
+#> 13 term  <date>     1 0.000678
 ```
 
 ``` r
@@ -266,16 +266,16 @@ col_stats(milr, count_na)
 #>  1 id    <chr>      0 0       
 #>  2 type  <fct>      0 0       
 #>  3 last  <chr>      0 0       
-#>  4 first <chr>   3380 0.489   
-#>  5 mi    <chr>   5325 0.770   
-#>  6 sig   <chr>   3539 0.512   
+#>  4 first <chr>    106 0.0720  
+#>  5 mi    <chr>    914 0.621   
+#>  6 sig   <chr>   1368 0.929   
 #>  7 addr  <chr>      0 0       
 #>  8 city  <chr>      0 0       
-#>  9 state <chr>     20 0.00289 
-#> 10 zip   <chr>     17 0.00246 
-#> 11 phone <chr>    481 0.0695  
-#> 12 reg   <date>     2 0.000289
-#> 13 term  <date>  3024 0.437
+#>  9 state <chr>      1 0.000679
+#> 10 zip   <chr>      1 0.000679
+#> 11 phone <chr>    102 0.0692  
+#> 12 reg   <date>     1 0.000679
+#> 13 term  <date>  1473 1
 ```
 
 There are no duplicate rows in the database.
@@ -289,12 +289,12 @@ The database contains both outside lobbyist and lobbying agents.
 
 ![](../plots/plot_agent-1.png)<!-- -->
 
-44% of lobbyists in the database have a termination date, meaning only
-56% of the records identify active lobbyists.
+100% of lobbyists in the database have a termination date, meaning only
+0% of the records identify active lobbyists.
 
 ``` r
 prop_na(milr$term)
-#> [1] 0.437247
+#> [1] 1
 ```
 
 We can add the registration year using `lubridate::year()` on the date
@@ -320,20 +320,20 @@ non-numeric) format.
 milr <- mutate(milr, phone_norm = normal_phone(phone))
 ```
 
-    #> # A tibble: 3,650 x 2
+    #> # A tibble: 883 x 2
     #>    phone      phone_norm    
     #>    <chr>      <chr>         
-    #>  1 5186262752 (518) 626-2752
-    #>  2 7343972790 (734) 397-2790
-    #>  3 2312063283 (231) 206-3283
-    #>  4 2487096706 (248) 709-6706
-    #>  5 5172428860 (517) 242-8860
-    #>  6 5173359907 (517) 335-9907
-    #>  7 8102573088 (810) 257-3088
-    #>  8 2024293525 (202) 429-3525
-    #>  9 6177471600 (617) 747-1600
-    #> 10 7158423267 (715) 842-3267
-    #> # … with 3,640 more rows
+    #>  1 6468228057 (646) 822-8057
+    #>  2 2482983425 (248) 298-3425
+    #>  3 3175653274 (317) 565-3274
+    #>  4 7349452636 (734) 945-2636
+    #>  5 5179995414 (517) 999-5414
+    #>  6 5174873376 (517) 487-3376
+    #>  7 6467431330 (646) 743-1330
+    #>  8 8012623942 (801) 262-3942
+    #>  9 2487374477 (248) 737-4477
+    #> 10 <NA>       <NA>          
+    #> # … with 873 more rows
 
 #### Address
 
@@ -344,20 +344,20 @@ We can use `campfin::normal_address()` to improve the consistency in the
 milr <- mutate(milr, addr_norm = normal_address(addr, abbs = usps_street))
 ```
 
-    #> # A tibble: 4,395 x 2
-    #>    addr                                             addr_norm                                   
-    #>    <chr>                                            <chr>                                       
-    #>  1 234 W BARAGA AVE                                 234 W BARAGA AVE                            
-    #>  2 2716 N TENAYA WAY % ANN TINKER                   2716 N TENAYA WAY ANN TINKER                
-    #>  3 125 W 55TH ST LVL 15                             125 W 55TH ST LVL 15                        
-    #>  4 1777 COLORADO DR                                 1777 COLORADO DR                            
-    #>  5 707 W MILWAUKEE  5TH FLOOR ATTN BROOKE BLACKWELL 707 W MILWAUKEE 5TH FL ATTN BROOKE BLACKWELL
-    #>  6 255 E KELLOGG BLVD, STE 102 % GOFF PUBLIC        255 E KELLOGG BLVD STE 102 GOFF PUBLIC      
-    #>  7 212 E CESAR E CHAVEZ AVE % CLARK HILL PLC        212 E CESAR E CHAVEZ AVE CLARK HL PLC       
-    #>  8 801 PENNSYLVANIA AVE NW SUITE 700                801 PENNSYLVANIA AVE NW STE 700             
-    #>  9 PO BOX 294                                       PO BOX 294                                  
-    #> 10 280 PARK AVENUE 3RD FLOOR                        280 PARK AVE 3RD FL                         
-    #> # … with 4,385 more rows
+    #> # A tibble: 998 x 2
+    #>    addr                                          addr_norm                                 
+    #>    <chr>                                         <chr>                                     
+    #>  1 108 WILMOT RD  MS #1844                       108 WILMOT RD MS 1844                     
+    #>  2 120 W OTTAWA ST                               120 W OTTAWA ST                           
+    #>  3 332 TOWNSEND ST                               332 TOWNSEND ST                           
+    #>  4 PO BOX 63                                     PO BOX 63                                 
+    #>  5 185 CALAIS COURT SE                           185 CALAIS CT SE                          
+    #>  6 111 S CAPITOL AVE 6TH FL %STATE BUDGET OFFICE 111 S CAPITOL AVE 6 TH FL STATE BUDGET OFC
+    #>  7 4647 MERIDIAN RD                              4647 MERIDIAN RD                          
+    #>  8 200 RENAISSANCE CENTER STE 3900               200 RENAISSANCE CTR STE 3900              
+    #>  9 347 N WEST TORCH LAKE DRIVE                   347 N W TORCH LK DR                       
+    #> 10 PO BOX 8647 % CITY OF ANN ARBOR               PO BOX 8647 CITY OF ANN ARBOR             
+    #> # … with 988 more rows
 
 #### ZIP
 
@@ -365,20 +365,20 @@ milr <- mutate(milr, addr_norm = normal_address(addr, abbs = usps_street))
 milr <- mutate(milr, zip_norm = normal_zip(zip, na_rep = TRUE))
 ```
 
-    #> # A tibble: 1,324 x 2
-    #>    zip       zip_norm
-    #>    <chr>     <chr>   
-    #>  1 481977099 48197   
-    #>  2 551640596 55164   
-    #>  3 488040100 48804   
-    #>  4 49203     49203   
-    #>  5 60646     60646   
-    #>  6 48228     48228   
-    #>  7 48218     48218   
-    #>  8 06426     06426   
-    #>  9 49682     49682   
-    #> 10 94965     94965   
-    #> # … with 1,314 more rows
+    #> # A tibble: 338 x 2
+    #>    zip   zip_norm
+    #>    <chr> <chr>   
+    #>  1 60091 60091   
+    #>  2 77002 77002   
+    #>  3 63040 63040   
+    #>  4 48909 48909   
+    #>  5 89128 89128   
+    #>  6 49083 49083   
+    #>  7 48864 48864   
+    #>  8 46204 46204   
+    #>  9 48875 48875   
+    #> 10 48603 48603   
+    #> # … with 328 more rows
 
 ``` r
 progress_table(
@@ -387,10 +387,10 @@ progress_table(
   compare = valid_zip
 )
 #> # A tibble: 2 x 6
-#>   stage    prop_in n_distinct prop_na n_out n_diff
-#>   <chr>      <dbl>      <dbl>   <dbl> <dbl>  <dbl>
-#> 1 zip        0.922       1324 0.00246   535    286
-#> 2 zip_norm   0.999       1090 0.00304     8      8
+#>   stage    prop_in n_distinct  prop_na n_out n_diff
+#>   <chr>      <dbl>      <dbl>    <dbl> <dbl>  <dbl>
+#> 1 zip        0.951        338 0.000679    72     48
+#> 2 zip_norm   0.999        300 0.000679     2      3
 ```
 
 #### State
@@ -405,7 +405,14 @@ prop_in(milr$state, valid_state)
 #### City
 
 ``` r
-milr <- mutate(milr, city_norm = normal_city(city, abbs = usps_city, na = invalid_city))
+milr <- mutate(
+  .data = milr, 
+  city_norm = normal_city(
+    city = city, 
+    abbs = usps_city, 
+    na = invalid_city
+  )
+)
 ```
 
 ``` r
@@ -423,10 +430,15 @@ milr <- milr %>%
     match_abb = is_abbrev(city_norm, city_match),
     match_dist = str_dist(city_norm, city_match),
     city_swap = if_else(
-      condition = match_abb | match_dist == 1,
+      condition = !is.na(city_match) & (match_abb | match_dist == 1),
       true = city_match,
       false = city_norm
     )
+  ) %>% 
+  select(
+    -city_match,
+    -match_abb,
+    -match_dist
   )
 ```
 
@@ -438,69 +450,31 @@ out <- milr %>%
 ```
 
 ``` r
-check_file <- here("mi", "lobby", "data", "api_check.csv")
-if (file_exists(check_file)) {
-  check <- read_csv(
-    file = check_file
-  )
-} else {
-  check <- pmap_dfr(
-    .l = list(
-      out$city_swap, 
-      out$state
-    ), 
-    .f = check_city, 
-    key = Sys.getenv("GEOCODE_KEY"), 
-    guess = TRUE
-  ) %>% 
-    mutate(guess = coalesce(guess_city, guess_place)) %>% 
-    select(-guess_city, -guess_place)
-  write_csv(
-    x = check,
-    path = check_file
-  )
-}
-```
-
-``` r
-valid_locality <- check$guess[check$check_city_flag]
-```
-
-``` r
-valid_locality <- check %>% 
-  filter(!check_city_flag) %>% 
-  mutate(
-    abb = is_abbrev(original_city, guess),
-    dist = str_dist(original_city, guess)
-  ) %>%
-  filter(abb | dist <= 3) %>% 
-  pull(guess) %>% 
-  c(valid_locality)
-```
-
-``` r
-many_city <- c(valid_city, extra_city, valid_locality)
+many_city <- c(valid_city, extra_city)
 ```
 
 | stage      | prop\_in | n\_distinct | prop\_na | n\_out | n\_diff |
 | :--------- | -------: | ----------: | -------: | -----: | ------: |
-| city\_raw  |    0.977 |         709 |    0.000 |    160 |      65 |
-| city\_norm |    0.979 |         699 |    0.000 |    146 |      64 |
-| city\_swap |    0.989 |         665 |    0.005 |     75 |      19 |
+| city\_raw  |    0.988 |         197 |        0 |     17 |      11 |
+| city\_norm |    0.993 |         195 |        0 |     10 |       5 |
+| city\_swap |    0.994 |         194 |        0 |      9 |       4 |
 
 ### Export
 
 ``` r
-proc_dir <- here("mi", "lobby", "data", "processed")
-dir_create(proc_dir)
+clean_dir <- dir_create(here("mi", "lobby", "data", "clean"))
+clean_path <- path(clean_dir, "mi_lobby_reg.csv")
+write_csv(milr, path = clean_path, na = "")
 ```
 
 ``` r
-write_csv(
-  x = milr,
-  path = path(proc_dir, "mi_lobby_reg.csv"),
-  na = ""
-)
+file_size(clean_path)
+#> 248K
+guess_encoding(clean_path)
+#> # A tibble: 1 x 2
+#>   encoding confidence
+#>   <chr>         <dbl>
+#> 1 ASCII             1
 ```
 
 ## Contributions
@@ -554,34 +528,34 @@ tail(mile)
 #> # A tibble: 6 x 17
 #>   rpt_year rpt_type lob_last lob_first lob_mi lob_type lob_id exp_type po_title po_last po_first
 #>      <int> <chr>    <chr>    <chr>     <chr>  <chr>    <chr>  <chr>    <chr>    <chr>   <chr>   
-#> 1     2019 SR       ASTELLA… <NA>      <NA>   L        14127  Group F… SENATOR… <NA>    <NA>    
-#> 2     2019 WR       FORD MO… <NA>      <NA>   L        535    Group F… REPRESE… <NA>    <NA>    
-#> 3     2019 WR       MICHIGA… <NA>      <NA>   L        730    Group F… ALL SEN… <NA>    <NA>    
-#> 4     2019 WR       MICHIGA… <NA>      <NA>   L        325    Group F… HOUSE D… <NA>    <NA>    
-#> 5     2019 WR       MICHIGA… <NA>      <NA>   L        325    Group F… HOUSE D… <NA>    <NA>    
-#> 6     2019 WR       MICHIGA… <NA>      <NA>   L        325    Group F… FULL HO… <NA>    <NA>    
+#> 1     2019 WR       KELLEY … <NA>      <NA>   L        7414   Group F… SENATOR… <NA>    <NA>    
+#> 2     2019 WR       KELLEY … <NA>      <NA>   L        7414   Group F… SENATOR… <NA>    <NA>    
+#> 3     2019 WR       KELLEY … <NA>      <NA>   L        7414   Group F… SENATOR… <NA>    <NA>    
+#> 4     2019 WR       KELLEY … <NA>      <NA>   L        7414   Group F… SENATOR… <NA>    <NA>    
+#> 5     2019 WR       BRESLIN  MATTHEW   T      A        11498  Group F… REPRESE… <NA>    <NA>    
+#> 6     2019 WR       TAYLOR … MORENO    <NA>   A        14647  Group F… REPRESE… <NA>    <NA>    
 #> # … with 6 more variables: po_mi <chr>, lob_why <chr>, exp_date <date>, exp_amt <dbl>,
 #> #   ytd_fb <dbl>, doc_id <chr>
 glimpse(sample_frac(mile))
-#> Observations: 14,661
-#> Variables: 17
-#> $ rpt_year  <int> 2008, 2017, 2014, 2013, 2003, 2019, 2009, 2009, 2012, 2010, 2015, 2012, 2001, …
-#> $ rpt_type  <chr> "SR", "WR", "SR", "SR", "WR", "SR", "SR", "SR", "SR", "SR", "SR", "WR", "SR", …
-#> $ lob_last  <chr> "SPROLES GOVERNMENTAL CONSULTING LLC", "MICHIGAN BELL TELEPHONE (AT AND T MICH…
-#> $ lob_first <chr> NA, NA, NA, "GARY", "ANDREW", "MARC", NA, NA, NA, "EDWARD", NA, NA, NA, NA, NA…
-#> $ lob_mi    <chr> NA, NA, NA, "E", NA, "R", NA, NA, NA, "J", NA, NA, NA, NA, NA, NA, NA, "T", NA…
-#> $ lob_type  <chr> "A", "L", "L", "A", "A", "A", "L", "A", "A", "A", "L", "L", "L", "A", "L", "L"…
-#> $ lob_id    <chr> "10159", "346", "240", "11340", "8794", "11626", "7414", "27", "11621", "3082"…
-#> $ exp_type  <chr> "Individual Food & Beverage", "Individual Food & Beverage", "Travel & Lodging"…
-#> $ po_title  <chr> "SENATOR", "REPRESENTATIVE", "REPRESENTATIVE", "REPRESENTATIVE", "SENATE MAJOR…
-#> $ po_last   <chr> "PATTERSON", "WITTENBERG", "CRAWFORD", "KNEZEK", "ZAMBIASKI", "KOLESZAR", "BRO…
-#> $ po_first  <chr> "BRUCE", "ROBERT", "HUGH", "DAVID", "JEN", "MATT", "CAMERON", "PAM", "MIKE", "…
+#> Rows: 15,122
+#> Columns: 17
+#> $ rpt_year  <int> 2013, 2019, 2008, 2013, 2001, 2008, 2007, 2004, 2016, 2013, 2007, 2011, 2014, …
+#> $ rpt_type  <chr> "SR", "WR", "SR", "SR", "SR", "WR", "WR", "SR", "SR", "WR", "WR", "WR", "SR", …
+#> $ lob_last  <chr> "MICHIGAN BELL TELEPHONE (AT AND T MICHIGAN)", "MICHIGAN BELL TELEPHONE (AT AN…
+#> $ lob_first <chr> NA, NA, NA, NA, NA, NA, NA, NA, "JAMES", NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
+#> $ lob_mi    <chr> NA, NA, NA, NA, NA, NA, NA, NA, "L", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
+#> $ lob_type  <chr> "L", "L", "A", "L", "L", "A", "A", "A", "A", "A", "L", "L", "L", "L", "L", "L"…
+#> $ lob_id    <chr> "346", "346", "27", "346", "2349", "119", "119", "27", "7397", "27", "325", "8…
+#> $ exp_type  <chr> "Individual Food & Beverage", "Individual Food & Beverage", "Individual Food &…
+#> $ po_title  <chr> "REPRESENTATIVE", "REPRESENTATIVE", "REPRESENTATIVE", "REPRESENTATIVE", "REPRE…
+#> $ po_last   <chr> "VICTORY", "COLEMAN", "CORRIVEAU", "NATHAN", "GODCHAUX", "ANGERER", "MELTZER",…
+#> $ po_first  <chr> "ROGER", "KEVIN", "MARC", "DAVID", "PATRICIA", "KATHY", "KIMBERLY", "JASON", "…
 #> $ po_mi     <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
-#> $ lob_why   <chr> NA, NA, "WINTER CONVENTION SPEAKER AND PANELIST TRAVEL AND LODGING", NA, NA, N…
-#> $ exp_date  <date> NA, NA, 2014-02-07, NA, NA, NA, NA, NA, NA, NA, NA, NA, 2001-05-31, NA, NA, 2…
-#> $ exp_amt   <dbl> 204.00, 6.39, 1393.00, 159.26, 137.90, 126.85, 56.62, 235.42, 15.00, 28.22, 10…
-#> $ ytd_fb    <dbl> 204.00, 6.39, NA, 159.26, NA, 126.85, 180.32, 235.42, 15.00, 28.22, 109.02, 31…
-#> $ doc_id    <chr> "152803", "235514", "203134", "194276", "115402", "250450", "161716", "161806"…
+#> $ lob_why   <chr> NA, NA, NA, NA, "ROUNDTABLE DISCUSSION", NA, NA, NA, NA, NA, NA, NA, NA, "LUNC…
+#> $ exp_date  <date> NA, NA, NA, NA, 2001-05-31, NA, NA, NA, NA, NA, NA, NA, NA, 2010-12-14, NA, 2…
+#> $ exp_amt   <dbl> 20.39, NA, 435.07, 45.82, 939.35, 78.00, 156.00, 176.23, 74.86, 233.65, 4.50, …
+#> $ ytd_fb    <dbl> NA, 18.18, 435.07, NA, NA, 78.00, 156.00, 176.23, 74.86, 708.74, 4.50, 146.77,…
+#> $ doc_id    <chr> "194195", "254702", "152954", "194195", "96839", "156326", "148826", "120145",…
 ```
 
 ``` r
@@ -592,19 +566,19 @@ col_stats(mile, count_na)
 #>  1 rpt_year  <int>      0 0      
 #>  2 rpt_type  <chr>      0 0      
 #>  3 lob_last  <chr>      0 0      
-#>  4 lob_first <chr>  11412 0.778  
-#>  5 lob_mi    <chr>  12796 0.873  
+#>  4 lob_first <chr>  11754 0.777  
+#>  5 lob_mi    <chr>  13157 0.870  
 #>  6 lob_type  <chr>      0 0      
 #>  7 lob_id    <chr>      0 0      
 #>  8 exp_type  <chr>      0 0      
-#>  9 po_title  <chr>     54 0.00368
-#> 10 po_last   <chr>   2215 0.151  
-#> 11 po_first  <chr>   2259 0.154  
-#> 12 po_mi     <chr>  14556 0.993  
-#> 13 lob_why   <chr>  11920 0.813  
-#> 14 exp_date  <date> 11928 0.814  
-#> 15 exp_amt   <dbl>    283 0.0193 
-#> 16 ytd_fb    <dbl>   3000 0.205  
+#>  9 po_title  <chr>     54 0.00357
+#> 10 po_last   <chr>   2269 0.150  
+#> 11 po_first  <chr>   2313 0.153  
+#> 12 po_mi     <chr>  15016 0.993  
+#> 13 lob_why   <chr>  12272 0.812  
+#> 14 exp_date  <date> 12280 0.812  
+#> 15 exp_amt   <dbl>    317 0.0210 
+#> 16 ytd_fb    <dbl>   3110 0.206  
 #> 17 doc_id    <chr>      0 0
 ```
 
@@ -613,23 +587,23 @@ col_stats(mile, n_distinct)
 #> # A tibble: 17 x 4
 #>    col       class      n        p
 #>    <chr>     <chr>  <int>    <dbl>
-#>  1 rpt_year  <int>     19 0.00130 
-#>  2 rpt_type  <chr>      2 0.000136
-#>  3 lob_last  <chr>    585 0.0399  
-#>  4 lob_first <chr>    127 0.00866 
-#>  5 lob_mi    <chr>     32 0.00218 
-#>  6 lob_type  <chr>      2 0.000136
-#>  7 lob_id    <chr>    602 0.0411  
-#>  8 exp_type  <chr>      4 0.000273
-#>  9 po_title  <chr>   1294 0.0883  
-#> 10 po_last   <chr>    936 0.0638  
-#> 11 po_first  <chr>    506 0.0345  
-#> 12 po_mi     <chr>     33 0.00225 
-#> 13 lob_why   <chr>   1191 0.0812  
-#> 14 exp_date  <date>  1450 0.0989  
-#> 15 exp_amt   <dbl>   8723 0.595   
-#> 16 ytd_fb    <dbl>   7400 0.505   
-#> 17 doc_id    <chr>   2540 0.173
+#>  1 rpt_year  <int>     19 0.00126 
+#>  2 rpt_type  <chr>      2 0.000132
+#>  3 lob_last  <chr>    593 0.0392  
+#>  4 lob_first <chr>    130 0.00860 
+#>  5 lob_mi    <chr>     32 0.00212 
+#>  6 lob_type  <chr>      2 0.000132
+#>  7 lob_id    <chr>    611 0.0404  
+#>  8 exp_type  <chr>      4 0.000265
+#>  9 po_title  <chr>   1314 0.0869  
+#> 10 po_last   <chr>    950 0.0628  
+#> 11 po_first  <chr>    520 0.0344  
+#> 12 po_mi     <chr>     33 0.00218 
+#> 13 lob_why   <chr>   1239 0.0819  
+#> 14 exp_date  <date>  1496 0.0989  
+#> 15 exp_amt   <dbl>   8955 0.592   
+#> 16 ytd_fb    <dbl>   7629 0.504   
+#> 17 doc_id    <chr>   2583 0.171
 ```
 
 ![](../plots/lob_exp_amt-1.png)<!-- -->
@@ -639,7 +613,7 @@ col_stats(mile, n_distinct)
 ``` r
 write_csv(
   x = mile,
-  path = path(proc_dir, "mi_lobby_exp.csv"),
+  path = path(clean_dir, "mi_lobby_exp.csv"),
   na = ""
 )
 ```
