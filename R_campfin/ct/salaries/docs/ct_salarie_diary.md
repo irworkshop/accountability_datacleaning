@@ -92,8 +92,8 @@ Comptroller and is updated annually.
 > period. Data used in the Open Payroll application
 
 ``` r
-raw_dir <- dir_create(here("ct", "payroll", "data", "raw"))
-data_dir <- here("ct", "payroll", "data")
+raw_dir <- dir_create(here("ct", "salaries", "data", "raw"))
+data_dir <- here("ct", "salaries", "data")
 ```
 
 ### Download
@@ -511,14 +511,14 @@ glimpse(sample_n(ctp, 20))
 ## Export
 
 ``` r
-proc_dir <- dir_create(here("ct", "payroll", "data", "processed"))
+proc_dir <- dir_create(here("ct", "salaries", "data", "processed"))
 ```
 
 ``` r
 write_csv(
   x = ctp %>% rename(city_clean = city_swap) %>% 
     select(-city_norm),
-  path = path(proc_dir, "ct_payroll_clean.csv"),
+  path = path(proc_dir, "ct_salaries_clean.csv"),
   na = ""
 )
 ```

@@ -33,7 +33,7 @@ set.seed(5)
 ```
 
 ```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
-fs::dir_create(here::here("ct", "payroll", "docs"))
+fs::dir_create(here::here("ct", "salaries", "docs"))
 ```
 
 ## Project
@@ -114,8 +114,8 @@ Data is obtained from the [State of Connecitut's data portal][data portal]. Acco
 [data portal]: https://data.ct.gov/Government/State-Employee-Payroll-Data-Calendar-Year-2015-thr/virr-yb6n
 
 ```{r raw_dir}
-raw_dir <- dir_create(here("ct", "payroll", "data", "raw"))
-data_dir <- here("ct", "payroll", "data")
+raw_dir <- dir_create(here("ct", "salaries", "data", "raw"))
+data_dir <- here("ct", "salaries", "data")
 ```
 
 ### Download
@@ -368,7 +368,7 @@ glimpse(sample_n(ctp, 20))
 ## Export
 
 ```{r proc_dir}
-proc_dir <- dir_create(here("ct", "payroll", "data", "processed"))
+proc_dir <- dir_create(here("ct", "salaries", "data", "processed"))
 ```
 
 
@@ -376,7 +376,7 @@ proc_dir <- dir_create(here("ct", "payroll", "data", "processed"))
 write_csv(
   x = ctp %>% rename(city_clean = city_swap) %>% 
     select(-city_norm),
-  path = path(proc_dir, "ct_payroll_clean.csv"),
+  path = path(proc_dir, "ct_salaries_clean.csv"),
   na = ""
 )
 ```

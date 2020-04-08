@@ -377,7 +377,7 @@ Cities are the most difficult geographic variable to normalize, simply due to th
 
 #### Normal
 
-The `campfin::normal_city()` function is a good md\_lob\_regart, again converting case, removing punctuation, but *expanding* USPS abbreviations. We can also remove `invalid_city` values.
+The `campfin::normal_city()` function is a good start, again converting case, removing punctuation, but *expanding* USPS abbreviations. We can also remove `invalid_city` values.
 
 ``` r
 prop_in(md_lob_reg$organization_city, valid_city, na.rm = T)

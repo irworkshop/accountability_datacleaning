@@ -45,7 +45,7 @@ Our goal is to standardizing public data on a few key fields by thinking of each
 transaction. For each transaction there should be (at least) 3 variables:
 
 1. All **parties** to a transaction
-2. The **date** of the transaction
+2. The **** of the transaction
 3. The **amount** of money involved
 
 ## Objectives
@@ -58,7 +58,7 @@ This document describes the process used to complete the following objectives:
 1. Is there anything blank or missing?
 1. Check for consistency issues
 1. Create a five-digit ZIP Code called `ZIP5`
-1. Create a `YEAR` field from the transaction date
+1. Create a `YEAR` field from the transaction 
 1. Make sure there is data on both parties to a transaction
 
 ## Packages
@@ -76,7 +76,7 @@ pacman::p_load(
   pdftools, # wrangle PDFs
   readxl, # read excel files
   tidyverse, # data manipulation
-  lubridate, # datetime strings
+  lubri, # datetime strings
   gluedown, # printing markdown
   magrittr, # pipe opperators
   janitor, # dataframe clean
@@ -107,11 +107,22 @@ here::here()
 
 ## Registration
 
-Data is obtained from the [State of New Jersey's data portal][data portal]. According to the website, the data was created Created July 11, 2014 and Last Updated on February, 2020. It comes from NJ Office of Management and Budget.
+Data is obtained from the [State of New Jersey's data portal][data portal]. According to the website, the data was created Created July 11, 2014 and Last Updated on February 4, 2020. It comes from the NJ Office of Management and Budget. Note that the office has not confirmed the validity of the data.
 
 > This dataset contains data for State employees paid through the Centralized Payroll System. The data reflects payroll payments made to the employee for the calendar year through the date indicated. There are two types of records: MASTER and DETAIL. There is at least one MASTER and one DETAIL record per employee. Multiple DETAIL records for an employee will appear in the file for a specific year if the employee is paid by more than one department/agency or by more than one section during that calendar year. The sums for all of the departments/agencies appear in the columns with prefix “MASTER”. Additional information is in the attached dataset summary PDF (available on the [About] tab under "Attachments").
 
-[data portal]: https://data.ny.gov/City-Government/Citywide-Payroll-Data-Fiscal-Year-/k397-673e
+> This payroll data for public employees is updated quarterly and displayed by calendar year. It includes Executive Branch departments, the Legislature, the Judiciary and independent authorities. Employees on leave are also listed, though they may not have received State or authority pay during all or part of the year.
+
+According to the website, there're two additional query tools, [Agency Payroll Explorer](https://data.nj.gov/payroll_explorer) and [Authority Payroll Explorer](https://data.nj.gov/authority_explorer).
+
+For Agency Payroll:  
+
+> This data is for employees paid by Departments and Agencies through the State’s Central Payroll System. All employees will have a master record and one or more detail records. The master record aggregates detail records that represent multiple payroll types and payments to the same employee by multiple agencies. It is updated quarterly.
+
+For Authoritative Payroll:
+> This data is for employees paid by independent Authorities. There is one record per employee per authority. If an employee has worked or works for two or more authorities in the same calendar year, there will be two or more independent records for that employee. It is updated quarterly.
+
+[data portal]: https://data.nj.gov/Government-Finance/YourMoney-Agency-Payroll/iqwc-r2w7
 
 ```{r raw_dir}
 # raw_dir stores the raw data file
@@ -138,7 +149,7 @@ dict_lines <- pdf_text(dict_pdf) %>% read_lines()
 # find the index of rows where "Column Name" show up
 start_index <- which(str_detect(dict_lines, "Column Name"))
 #21 45 93
-# extra lines to get rid of, 4 lines at a time
+# extra lines to get rid of, 4 lines at a time, plus the last line
 to_elim <- c(start_index-3, start_index-2, start_index-1,start_index)
 dict_lines <- dict_lines[-to_elim]
 # get rid of all lines before the first valid line, here it's supposed to be start_index [1] + 1, but remember we removed 4 lines
@@ -146,10 +157,10 @@ dict_lines <- dict_lines[(start_index[1]-3):(length(dict_lines)-1)]
 # Separate the lines into a dataframe of two columns
 dict <- dict_lines %>% read_fwf(fwf_widths(c(29,100), 
                                            c("Column Name", "Column Description")
-                                           )
-                                )
+                                           ))
 # This syntax works for all dataframes with rows spanning multiple columns, it's basically a group_by and summarize function with lambda 
-dict <- dict %>% group_by(`Column Name`) %>% summarise_all(list(~ paste(., collapse = " ")))
+dict <- dict %>% 
+  fill(`Column Name`) %>% group_by(`Column Name`) %>% summarise_all(list(~ paste(., collapse = " ")))
 ```
 
 ```{r dict kable, echo=FALSE}
@@ -169,7 +180,7 @@ njp <- njp %>%
     # December 31 2019 is spelled out full month[space]date[space]four-digit year
     # ORIGINAL_EMPLOYMENT_DTE's format is different, e.g. 2/6/2006
     ORIGINAL_EMPLOYMENT_DTE = as.Date(ORIGINAL_EMPLOYMENT_DTE, format = "%m/%d/%Y")) %>% 
-  mutate_at(.vars = c(
+  mutate_at(.vars = vars(c(
     SALARY_HOURLY_RATE, 
     REGULAR_PAY,
     SUPPLEMENTAL_PAY,
@@ -180,7 +191,7 @@ njp <- njp %>%
     RETROACTIVE_PAY,
     LUMP_SUM_PAY,
     YTD_EARNINGS,
-    CASH_IN_LIEU_MAINTENANCE),
+    CASH_IN_LIEU_MAINTENANCE)),
     .funs = as.numeric
   )
 ```
@@ -199,34 +210,35 @@ Then we can take a look at the _NA_ fields and number of distinct values for eac
 col_stats(njp, count_na)
 col_stats(njp, n_distinct) 
 ```
-We'll use the `campfin:flag_dupe()` function to flag the records without any names and title description
-```{r flag na}
-njp <- njp %>% 
-  flag_na(first_name, last_name, title_description)
-```
 
-
-```{r count_na}
-col_stats(njp, count_na)
-```
-
-There are no duplicate rows in the database.
-
-```{r duplicated}
-njp <- flag_dupes(njp, dplyr::everything())
-sum(njp$dupe_flag)
-```
-
-
+#### Categorical
 ```{r year_plot, echo=FALSE}
 njp %>% 
-  count(calendar_year) %>% 
-  ggplot(aes(x = calendar_year, y = n)) +
+  count(CALENDAR_YEAR) %>% 
+  ggplot(aes(x = CALENDAR_YEAR, y = n)) +
   geom_col(fill = RColorBrewer::brewer.pal(3, "Dark2")[3]) +
   labs(
     title = "New Jersey Staff Payroll Head Counts per Year",
     x = "Fiscal Year",
-    y = "Staffers"
+    y = "Staffers",
+    caption = "Source: NJ Office of Management and Budget via data.nj.gov"
+  )
+```
+
+#### Continuous
+We'll only include the `MASTER_YTD_EARNINGS` as the total continuous variable, because this column is the most comprehensive and represents the true gross earnings. 
+```{r}
+njp %>% 
+  ggplot(aes(MASTER_YTD_EARNINGS)) + 
+  geom_histogram(na.rm = TRUE, fill = RColorBrewer::brewer.pal(3, "Dark2")[1]) +
+  geom_vline(xintercept =  median(njp$MASTER_YTD_EARNINGS[njp$MASTER_YTD_EARNINGS != 0], na.rm = TRUE), linetype = 2) +
+  theme_minimal() +
+  scale_y_continuous(labels = comma) +
+  scale_x_continuous(labels = dollar) +
+    labs(
+    title = "New Jersey Staff Payroll Amount Distribution",
+    y = "count",
+    caption = "Source: NJ Office of Management and Budget via data.nj.gov"
   )
 ```
 
@@ -251,39 +263,10 @@ glimpse(sample_n(njp, 20))
 1. There are `r nrow(njp)` records in the database.
 1. There are `r sum(njp$dupe_flag)` duplicate records in the database.
 1. The range and distribution of `year` seems mostly reasonable except for a few entries.
-1. There are `r sum(njp$na_flag)` records missing either recipient or date.
+1. There are `r sum(njp$na_flag)` records missing either recipient or .
 1. Consistency in goegraphic data has been improved with `campfin::normal_*()`.
 
 We can plot the distribution of total compensations by different departments.
-```{r dept violin, include=FALSE, eval=FALSE}
-njp %>% 
-  ggplot(aes(x = reorder(agency_name, total_gross_pay), y = total_gross_pay)) + 
-  geom_violin(aes(fill = agency_name)) + 
-  scale_y_continuous(
-    breaks = c(1 %o% 10^(0:5)),
-    labels = dollar,
-    trans = "log10"
-  ) +
-  scale_fill_manual(
-    guide = FALSE,
-    values = c(
-      "brown", 
-      "royalblue", 
-      "forestgreen", 
-      "gold",
-      "mediumpurple", 
-      "#999999", 
-      "firebrick",
-      "black"
-    )
-  ) +
-  labs(
-    title = "New Jersey State Salary Distribution",
-    caption = "Source: ",
-    y = "Amount",
-    x = "Department"
-  )
-```
 
 ### Export
 
@@ -294,7 +277,7 @@ proc_dir <- dir_create(here("nj", "payroll", "data", "processed"))
 ```{r proc_write}
 write_csv(
   x = njp,
-  path = path(proc_dir, "ny_payroll_clean.csv"),
+  path = path(proc_dir, "nj_salaries_clean.csv"),
   na = ""
 )
 ```
