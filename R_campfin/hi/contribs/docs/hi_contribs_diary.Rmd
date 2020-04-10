@@ -120,7 +120,7 @@ We can read both files into a single data frame with `purrr::map_df()` and `read
 hic <- map_df(
   .x = c(
     "https://data.hawaii.gov/api/views/jexd-xbcg/rows.csv", # Candidates
-    "https://data.hawaii.gov/api/views/rajm-32md/rows.csv" # Noncandidate Committees
+    "https://data.hawaii.gov/api/views/rajm-32md/rows.csv" # Committees
   ),
   .f = read_csv,
   .id = "reg_type",
@@ -465,7 +465,7 @@ hic <- hic %>%
     match_abb = is_abbrev(city_norm, city_match),
     match_dist = str_dist(city_norm, city_match),
     city_swap = if_else(
-      condition = match_abb | match_dist == 1,
+      condition = !is.na(city_match) & (match_abb | match_dist == 1),
       true = city_match,
       false = city_norm
     )
