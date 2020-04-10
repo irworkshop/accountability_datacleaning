@@ -130,7 +130,7 @@ raw_dir <- dir_create(here("ar", "contribs", "data", "raw"))
 
 ```{r raw_get, eval=FALSE}
 # does not work
-raw_url <- "https://financial-disclosures.sos.arkansas.gov/modules/partials/public/dataDownload.html"
+  raw_url <- "https://financial-disclosures.sos.arkansas.gov/modules/partials/public/dataDownload.html"
 raw_page <- httr::GET(raw_url, query = list(v = "20180912.0"))
 raw_page$cookies %>% 
   read_html() %>% 
@@ -146,26 +146,42 @@ raw_files <- dir_ls(raw_dir)
 
 ### Read
 
-```{r read_raw}
-arc <- map_df(
-  raw_files,
-  read_delim,
+```{r raw_fix}
+read_lines(raw_files[2]) %>% 
+  str_remove_all(",\\s(?=$)") %>%
+  str_replace_all("\"s", "'s") %>% 
+  str_replace_all('(?<!,)"(\\w+)"(?!,)', "'\\1'") %>% 
+  write_lines(raw_files[2])
+```
+
+```{r raw_read}
+arc <- vroom(
+  file = raw_files,
   delim = ",",
-  escape_backslash = FALSE,
+  guess_max = 0,
   escape_double = FALSE,
+  escape_backslash = FALSE,
+  .name_repair = make_clean_names,
   col_types = cols(
     .default = col_character(),
     `Receipt Amount` = col_double(),
     `Receipt Date` = col_date("%m/%d/%Y  %H:%M:%S %p"),
-    `Filed Date` = col_date("%m/%d/%Y  %H:%M:%S %p")
+    `Filed Date` = col_date("%m/%d/%Y  %H:%M:%S %p")    
   )
 )
+```
 
-arc <- arc %>% 
+We can check to ensure the file was properly read by counting the number of
+values from a discrete variable like `amended`.
+
+```{r raw_check}
+count(arc, amended)
+```
+
+```{r raw_rename}
+arc <- arc %>%
   remove_empty("cols") %>% 
-  clean_names("snake") %>% 
-  rename_all(str_remove, "^receipt_") %>% 
-  rename_all(str_remove, "_name$") %>% 
+  rename_all(str_remove, "(^receipt_)|(_name$)") %>% 
   mutate_if(is_binary, to_logical)
 ```
 
@@ -193,7 +209,7 @@ mean(arc$na_flag)
 ### Duplicates
 
 ```{r flag_dupes, warning=TRUE}
-arc <- flag_dupes(arc, everything())
+arc <- flag_dupes(arc, everything(), .check = TRUE)
 ```
 
 ### Categorical
@@ -204,15 +220,16 @@ col_stats(arc, n_distinct)
 
 ```{r source_bar}
 explore_plot(
-  data = filter(arc, !is.na(source_type)),
+  data = arc,
   var = source_type,
+  nbar = 4,
   title = "Arkansas Contribution Source Types",
 )
 ```
 
 ```{r committee_bar}
 explore_plot(
-  data = filter(arc, !is.na(committee_type)),
+  data = arc,
   var = committee_type,
   title = "Arkansas Contribution Recipient Types",
 )
@@ -225,13 +242,14 @@ The vast majority of contributions are less than $100 with nearly
 
 ```{r summary_amount}
 summary(arc$amount)
-mean(arc$amount < 1)
+percent(mean(arc$amount < 1))
 ```
 
 ```{r amount_histogram, echo=FALSE}
 arc %>%
+  filter(amount > 1) %>% 
   ggplot(aes(amount)) +
-  geom_histogram(fill = dark2["purple"]) +
+  geom_histogram(fill = dark2["purple"], bins = 20) +
   scale_y_continuous(labels = comma) +
   scale_x_continuous(
     breaks = c(1 %o% 10^(0:6)),
@@ -239,15 +257,16 @@ arc %>%
     trans = "log10"
   ) +
   labs(
-    title = "State Data Amount Distribution",
+    title = "Arkansas Amount Distribution",
     subtitle = glue("from {min(arc$date)} to {max(arc$date)}"),
-    caption = "Source: State Agency Name",
     x = "Amount",
     y = "Count"
   )
 ```
 
 ### Dates
+
+We can use the `year()` function to create a 4-digit year from the `date`. 
 
 ```{r date_year}
 arc <- mutate(arc, year = year(date))
@@ -259,13 +278,25 @@ max(arc$date)
 sum(arc$date > today())
 ```
 
+```{r year_bar, echo=FALSE}
+arc %>% 
+  count(year) %>%
+  ggplot(aes(year, n)) + 
+  geom_col(fill = dark2["orange"]) +
+  scale_y_continuous(labels = comma) +
+  labs(
+    title = "Arkansas Year Count",
+    x = "Year",
+    y = "Count"
+  )
+```
+
 ## Wrangle
 
 ### Address
 
 ```{r address_norm}
 arc <- arc %>% 
-  # combine street addr
   unite(
     col = address_full,
     starts_with("address"),
@@ -273,7 +304,6 @@ arc <- arc %>%
     remove = FALSE,
     na.rm = TRUE
   ) %>% 
-  # normalize combined addr
   mutate(
     address_norm = normal_address(
       address = address_full,
@@ -329,7 +359,7 @@ arc <- arc %>%
 ```{r state_view}
 arc %>% 
   filter(state != state_norm) %>% 
-  count(state, sort = TRUE)
+  count(state, state_norm, sort = TRUE)
 ```
 
 ```{r state_progress}
@@ -379,7 +409,7 @@ arc <- arc %>%
     match_abb = is_abbrev(city_norm, city_match),
     match_dist = str_dist(city_norm, city_match),
     city_swap = if_else(
-      condition = match_abb | match_dist == 1,
+      condition = !is.na(city_match) & (match_abb | match_dist == 1),
       true = city_match,
       false = city_norm
     )
@@ -388,13 +418,14 @@ arc <- arc %>%
     -city_match,
     -match_dist,
     -match_abb
-  )
+  ) %>% 
+  rename(city = city_raw)
 ```
 
 ```{r city_progress, echo=FALSE}
 many_city <- c(valid_city, extra_city)
 progress <- progress_table(
-  str_to_upper(arc$city_raw),
+  str_to_upper(arc$city),
   arc$city_norm,
   arc$city_swap,
   compare = many_city
@@ -459,10 +490,6 @@ progress %>%
 
 ## Export
 
-```{r clean_dir}
-proc_dir <- dir_create(here("ar", "contribs", "data", "processed"))
-```
-
 ```{r clean_rename}
 arc <- arc %>% 
   select(
@@ -470,7 +497,7 @@ arc <- arc %>%
     city_norm = city_swap
   ) %>% 
   rename_all(
-    str_replace, "norm", "clean"
+    str_replace, "_norm", "_clean"
   )
 ```
 
@@ -479,10 +506,8 @@ glimpse(arc)
 ```
 
 ```{r clean_write}
-write_csv(
-  x = arc,
-  path = path(proc_dir, "ar_contribs_clean.csv"),
-  na = ""
-)
+clean_dir <- dir_create(here("ar", "contribs", "data", "clean"))
+clean_path <- path(clean_dir, "ar_contribs_clean.csv")
+write_csv(x = arc, path = clean_path, na = "")
+file_size(clean_path)
 ```
-
