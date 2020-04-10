@@ -1,7 +1,7 @@
 Arkansas Contributions
 ================
 Kiernan Nicholls
-2020-02-03 12:29:44
+2020-04-10 12:30:19
 
   - [Project](#project)
   - [Objectives](#objectives)
@@ -125,7 +125,7 @@ raw_dir <- dir_create(here("ar", "contribs", "data", "raw"))
 
 ``` r
 # does not work
-raw_url <- "https://financial-disclosures.sos.arkansas.gov/modules/partials/public/dataDownload.html"
+  raw_url <- "https://financial-disclosures.sos.arkansas.gov/modules/partials/public/dataDownload.html"
 raw_page <- httr::GET(raw_url, query = list(v = "20180912.0"))
 raw_page$cookies %>% 
   read_html() %>% 
@@ -142,25 +142,46 @@ raw_files <- dir_ls(raw_dir)
 ### Read
 
 ``` r
-arc <- map_df(
-  raw_files,
-  read_delim,
+read_lines(raw_files[2]) %>% 
+  str_remove_all(",\\s(?=$)") %>%
+  str_replace_all("\"s", "'s") %>% 
+  str_replace_all('(?<!,)"(\\w+)"(?!,)', "'\\1'") %>% 
+  write_lines(raw_files[2])
+```
+
+``` r
+arc <- vroom(
+  file = raw_files,
   delim = ",",
-  escape_backslash = FALSE,
+  guess_max = 0,
   escape_double = FALSE,
+  escape_backslash = FALSE,
+  .name_repair = make_clean_names,
   col_types = cols(
     .default = col_character(),
     `Receipt Amount` = col_double(),
     `Receipt Date` = col_date("%m/%d/%Y  %H:%M:%S %p"),
-    `Filed Date` = col_date("%m/%d/%Y  %H:%M:%S %p")
+    `Filed Date` = col_date("%m/%d/%Y  %H:%M:%S %p")    
   )
 )
+```
 
-arc <- arc %>% 
+We can check to ensure the file was properly read by counting the number
+of values from a discrete variable like `amended`.
+
+``` r
+count(arc, amended)
+#> # A tibble: 2 x 2
+#>   amended      n
+#>   <chr>    <int>
+#> 1 N       254045
+#> 2 Y          437
+```
+
+``` r
+arc <- arc %>%
   remove_empty("cols") %>% 
-  clean_names("snake") %>% 
-  rename_all(str_remove, "^receipt_") %>% 
-  rename_all(str_remove, "_name$") %>% 
+  rename_all(str_remove, "(^receipt_)|(_name$)") %>% 
   mutate_if(is_binary, to_logical)
 ```
 
@@ -171,12 +192,12 @@ head(arc)
 #> # A tibble: 6 x 23
 #>   org_id amount date       last  first middle suffix address1 address2 city  state zip  
 #>   <chr>   <dbl> <date>     <chr> <chr> <chr>  <chr>  <chr>    <chr>    <chr> <chr> <chr>
-#> 1 219790   1000 2017-07-18 Step… <NA>  <NA>   <NA>   623 Gar… <NA>     Fort… AR    72901
-#> 2 220792     50 2017-07-10 Bazz… Chir… L      <NA>   5718 Ca… <NA>     Bent… AR    7201…
-#> 3 220792    250 2017-07-10 Amer… <NA>  <NA>   <NA>   425 W. … <NA>     Litt… AR    72203
-#> 4 220792    250 2017-07-10 Whol… <NA>  <NA>   <NA>   PO Box … <NA>     Litt… AR    72203
-#> 5 219790    500 2017-07-17 Walk… Will… <NA>   <NA>   21 Rive… <NA>     Fort… AR    72903
-#> 6 219790    500 2017-08-17 Dunk  Ken   <NA>   <NA>   4387 Ca… <NA>     Spri… AR    72764
+#> 1 219790    500 2017-07-17 Walk… Will… <NA>   <NA>   21 Rive… <NA>     Fort… AR    72903
+#> 2 219790    500 2017-08-17 Dunk  Ken   <NA>   <NA>   4387 Ca… <NA>     Spri… AR    72764
+#> 3 219790   1000 2017-07-17 Step… W.    R.     JR.    9 Sunse… <NA>     Litt… AR    72207
+#> 4 219790   1000 2017-07-18 Step… <NA>  <NA>   <NA>   623 Gar… <NA>     Fort… AR    72901
+#> 5 219790   1000 2017-08-01 Cella Char… <NA>   <NA>   226 Mer… <NA>     St. … MO    63105
+#> 6 220792     50 2017-07-10 Bazz… Chir… L      <NA>   5718 Ca… <NA>     Bent… AR    7201…
 #> # … with 11 more variables: description <chr>, id <chr>, filed_date <date>, source_type <chr>,
 #> #   type <chr>, committee_type <chr>, candidate <chr>, amended <lgl>, employer <chr>,
 #> #   occupation <chr>, occupation_comment <lgl>
@@ -184,41 +205,41 @@ tail(arc)
 #> # A tibble: 6 x 23
 #>   org_id amount date       last  first middle suffix address1 address2 city  state zip  
 #>   <chr>   <dbl> <date>     <chr> <chr> <chr>  <chr>  <chr>    <chr>    <chr> <chr> <chr>
-#> 1 354389    100 2019-12-09 Godf… Dani… <NA>   <NA>   500 Jan… <NA>     Spri… AR    72762
-#> 2 354389    750 2019-12-01 Fran… <NA>  <NA>   <NA>   801 E C… <NA>     Ozark AR    72949
-#> 3 354389   1000 2019-12-01 Bond  Bobby <NA>   <NA>   1205 S.… <NA>     Ozark AR    72949
-#> 4 355356    250 2019-10-08 Heff… Kyle  <NA>   <NA>   5208 S … <NA>     Roge… AR    72758
-#> 5 359159   1000 2019-12-19 Jobs… <NA>  <NA>   <NA>   12227 F… <NA>     Litt… AR    72212
-#> 6 359159   2000 2019-12-11 Arka… <NA>  <NA>   <NA>   11224 E… <NA>     Litt… AR    72211
+#> 1 362760   46.5 2020-01-10 <NA>  <NA>  <NA>   <NA>   <NA>     <NA>     <NA>  ME    <NA> 
+#> 2 362760   46.5 2020-01-11 <NA>  <NA>  <NA>   <NA>   <NA>     <NA>     <NA>  ME    <NA> 
+#> 3 362760   46.5 2020-01-29 <NA>  <NA>  <NA>   <NA>   <NA>     <NA>     <NA>  ME    <NA> 
+#> 4 362760  100   2020-02-06 Efurd Paul  Alan   <NA>   1200 Ch… <NA>     Char… AR    72933
+#> 5 362760  385   2020-02-13 Efurd Paul  Alan   <NA>   1200 Ch… <NA>     Char… AR    72933
+#> 6 362760  809.  2020-01-06 Efurd Paul  Alan   <NA>   1200 Ch… <NA>     Char… AR    72933
 #> # … with 11 more variables: description <chr>, id <chr>, filed_date <date>, source_type <chr>,
 #> #   type <chr>, committee_type <chr>, candidate <chr>, amended <lgl>, employer <chr>,
 #> #   occupation <chr>, occupation_comment <lgl>
 glimpse(sample_n(arc, 20))
-#> Observations: 20
-#> Variables: 23
-#> $ org_id             <chr> "242205", "229720", "276101", "221220", "223411", "242222", "254950",…
-#> $ amount             <dbl> 1.00, 200.00, 3.00, 5.00, 15.26, 111.11, 5.00, 0.02, 60.00, 36.96, 50…
-#> $ date               <date> 2019-01-18, 2018-04-24, 2019-01-11, 2019-01-08, 2019-07-21, 2019-05-…
-#> $ last               <chr> NA, "Edwards", NA, NA, NA, NA, NA, NA, "Sicari", "BURNS", "Rawlings",…
-#> $ first              <chr> NA, "C. Dennis", NA, NA, NA, NA, NA, NA, "Catherine", "JOHN", "Jonath…
-#> $ middle             <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "J", NA, NA, NA, NA, NA, NA, …
+#> Rows: 20
+#> Columns: 23
+#> $ org_id             <chr> "242205", "225822", "242205", "222836", "223411", "242205", "242205",…
+#> $ amount             <dbl> 0.34, 500.00, 10.33, 96.15, 15.26, 7.25, 8.00, 0.01, 2.17, 50.00, 25.…
+#> $ date               <date> 2019-01-18, 2018-06-20, 2019-03-07, 2019-05-03, 2019-05-21, 2019-01-…
+#> $ last               <chr> NA, "American Electric Power Committee for Responsible Government", N…
+#> $ first              <chr> NA, NA, NA, "Merrill J.", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
+#> $ middle             <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
 #> $ suffix             <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
-#> $ address1           <chr> NA, "P.O. Box 241433", NA, NA, NA, NA, NA, NA, "2 Daltrui Dr", "2521 …
+#> $ address1           <chr> NA, "400 W. Capitol Ave, Suite 1610", NA, "8735 Henderson Road", NA, …
 #> $ address2           <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
-#> $ city               <chr> NA, "Little Rock", NA, NA, NA, NA, NA, NA, "Hillsborough", "Lees Summ…
-#> $ state              <chr> "ME", "AR", "ME", "ME", "ME", "ME", "ME", "ME", "NJ", "MO", "TN", "ME…
-#> $ zip                <chr> NA, "72202", NA, NA, NA, NA, NA, NA, "08844", "64063-3443", "37350", …
+#> $ city               <chr> NA, "Little Rock", NA, "Tampa", NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
+#> $ state              <chr> "ME", "AR", "ME", "FL", "ME", "ME", "ME", "ME", "ME", "ME", "ME", "ME…
+#> $ zip                <chr> NA, "72201", NA, "33634", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
 #> $ description        <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
-#> $ id                 <chr> "1608614", "488018", "1639355", "1514515", "1947283", "1848969", "128…
-#> $ filed_date         <date> 2019-04-17, 2018-05-16, 2019-04-15, 2019-04-08, 2019-10-10, 2019-07-…
-#> $ source_type        <chr> "Non-itemized", "Individual", "Non-itemized", "Non-itemized", "Non-it…
+#> $ id                 <chr> "1622130", "491817", "1725427", "1739588", "1796607", "1621212", "167…
+#> $ filed_date         <date> 2019-04-17, NA, 2019-04-17, NA, NA, 2019-04-17, 2019-04-17, 2019-04-…
+#> $ source_type        <chr> "Non-itemized", "Bus, Org, or Unlisted PAC", "Non-itemized", "Individ…
 #> $ type               <chr> "Contributions", "Contributions", "Contributions", "Contributions", "…
 #> $ committee_type     <chr> "Political Action Committee", "Candidate (CC&E)", "Political Action C…
-#> $ candidate          <chr> NA, "LaTonya Laird Austin", NA, NA, NA, NA, NA, NA, NA, NA, "Jared He…
+#> $ candidate          <chr> NA, "Larry R Teague", NA, NA, NA, NA, NA, NA, NA, "C Brandt Smith", N…
 #> $ amended            <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE,…
-#> $ employer           <chr> NA, "unknown", NA, NA, NA, NA, NA, NA, "Johnson & Johnson", "ELCO of …
-#> $ occupation         <chr> NA, "Clergy/Faith-based", NA, NA, NA, NA, NA, NA, "Insurance Industry…
-#> $ occupation_comment <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE,…
+#> $ employer           <chr> NA, NA, NA, "WellCare Health Plans, Inc.", NA, NA, NA, NA, NA, NA, NA…
+#> $ occupation         <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "Heal…
+#> $ occupation_comment <lgl> NA, FALSE, NA, NA, NA, NA, NA, NA, NA, NA, FALSE, NA, NA, NA, NA, NA,…
 ```
 
 ### Missing
@@ -226,47 +247,47 @@ glimpse(sample_n(arc, 20))
 ``` r
 col_stats(arc, count_na)
 #> # A tibble: 23 x 4
-#>    col                class       n          p
-#>    <chr>              <chr>   <int>      <dbl>
-#>  1 org_id             <chr>       0 0         
-#>  2 amount             <dbl>       0 0         
-#>  3 date               <date>      0 0         
-#>  4 last               <chr>  172881 0.681     
-#>  5 first              <chr>  181902 0.716     
-#>  6 middle             <chr>  236249 0.930     
-#>  7 suffix             <chr>  252782 0.995     
-#>  8 address1           <chr>  172911 0.681     
-#>  9 address2           <chr>  250528 0.986     
-#> 10 city               <chr>  172854 0.681     
-#> 11 state              <chr>       0 0         
-#> 12 zip                <chr>  172849 0.681     
-#> 13 description        <chr>  252591 0.995     
-#> 14 id                 <chr>       0 0         
-#> 15 filed_date         <date>      0 0         
-#> 16 source_type        <chr>       0 0         
-#> 17 type               <chr>       0 0         
-#> 18 committee_type     <chr>       0 0         
-#> 19 candidate          <chr>  192976 0.760     
-#> 20 amended            <lgl>       0 0         
-#> 21 employer           <chr>  183032 0.721     
-#> 22 occupation         <chr>  193440 0.762     
-#> 23 occupation_comment <lgl>       1 0.00000394
+#>    col                class       n     p
+#>    <chr>              <chr>   <int> <dbl>
+#>  1 org_id             <chr>       0 0    
+#>  2 amount             <dbl>       0 0    
+#>  3 date               <date>      0 0    
+#>  4 last               <chr>  171372 0.673
+#>  5 first              <chr>  180992 0.711
+#>  6 middle             <chr>  236782 0.930
+#>  7 suffix             <chr>  253182 0.995
+#>  8 address1           <chr>  171400 0.674
+#>  9 address2           <chr>  251144 0.987
+#> 10 city               <chr>  171343 0.673
+#> 11 state              <chr>       0 0    
+#> 12 zip                <chr>  171338 0.673
+#> 13 description        <chr>  252877 0.994
+#> 14 id                 <chr>       0 0    
+#> 15 filed_date         <date> 111757 0.439
+#> 16 source_type        <chr>       0 0    
+#> 17 type               <chr>       0 0    
+#> 18 committee_type     <chr>       0 0    
+#> 19 candidate          <chr>  186526 0.733
+#> 20 amended            <lgl>       0 0    
+#> 21 employer           <chr>  182150 0.716
+#> 22 occupation         <chr>  191206 0.751
+#> 23 occupation_comment <lgl>  205391 0.807
 ```
 
 ``` r
 arc <- arc %>% flag_na(last, date, amount)
 arc$na_flag[arc$source_type == "Non-itemized"] <- FALSE
 sum(arc$na_flag)
-#> [1] 609
+#> [1] 575
 mean(arc$na_flag)
-#> [1] 0.002397761
+#> [1] 0.002259492
 ```
 
 ### Duplicates
 
 ``` r
-arc <- flag_dupes(arc, everything())
-#> Warning in flag_dupes(arc, everything()): no duplicate rows, column not created
+arc <- flag_dupes(arc, everything(), .check = TRUE)
+#> Warning in flag_dupes(arc, everything(), .check = TRUE): no duplicate rows, column not created
 ```
 
 ### Categorical
@@ -276,36 +297,37 @@ col_stats(arc, n_distinct)
 #> # A tibble: 24 x 4
 #>    col                class       n          p
 #>    <chr>              <chr>   <int>      <dbl>
-#>  1 org_id             <chr>     788 0.00310   
-#>  2 amount             <dbl>    5125 0.0202    
-#>  3 date               <date>    929 0.00366   
-#>  4 last               <chr>   14329 0.0564    
-#>  5 first              <chr>    6108 0.0240    
-#>  6 middle             <chr>     776 0.00306   
-#>  7 suffix             <chr>      10 0.0000394 
-#>  8 address1           <chr>   35618 0.140     
-#>  9 address2           <chr>    1050 0.00413   
-#> 10 city               <chr>    3389 0.0133    
-#> 11 state              <chr>      75 0.000295  
-#> 12 zip                <chr>    6600 0.0260    
-#> 13 description        <chr>     809 0.00319   
-#> 14 id                 <chr>  253976 1.00      
-#> 15 filed_date         <date>    500 0.00197   
-#> 16 source_type        <chr>      10 0.0000394 
+#>  1 org_id             <chr>     792 0.00311   
+#>  2 amount             <dbl>    5080 0.0200    
+#>  3 date               <date>    974 0.00383   
+#>  4 last               <chr>   14534 0.0571    
+#>  5 first              <chr>    6405 0.0252    
+#>  6 middle             <chr>     815 0.00320   
+#>  7 suffix             <chr>      10 0.0000393 
+#>  8 address1           <chr>   37777 0.148     
+#>  9 address2           <chr>    1066 0.00419   
+#> 10 city               <chr>    3286 0.0129    
+#> 11 state              <chr>      76 0.000299  
+#> 12 zip                <chr>    6295 0.0247    
+#> 13 description        <chr>     924 0.00363   
+#> 14 id                 <chr>  254471 1.00      
+#> 15 filed_date         <date>    348 0.00137   
+#> 16 source_type        <chr>      10 0.0000393 
 #> 17 type               <chr>       3 0.0000118 
-#> 18 committee_type     <chr>       5 0.0000197 
-#> 19 candidate          <chr>     567 0.00223   
-#> 20 amended            <lgl>       2 0.00000787
-#> 21 employer           <chr>   13224 0.0521    
-#> 22 occupation         <chr>      34 0.000134  
-#> 23 occupation_comment <lgl>       2 0.00000787
-#> 24 na_flag            <lgl>       2 0.00000787
+#> 18 committee_type     <chr>       5 0.0000196 
+#> 19 candidate          <chr>     574 0.00226   
+#> 20 amended            <lgl>       2 0.00000786
+#> 21 employer           <chr>   13855 0.0544    
+#> 22 occupation         <chr>      33 0.000130  
+#> 23 occupation_comment <lgl>       2 0.00000786
+#> 24 na_flag            <lgl>       2 0.00000786
 ```
 
 ``` r
 explore_plot(
-  data = filter(arc, !is.na(source_type)),
+  data = arc,
   var = source_type,
+  nbar = 4,
   title = "Arkansas Contribution Source Types",
 )
 ```
@@ -314,7 +336,7 @@ explore_plot(
 
 ``` r
 explore_plot(
-  data = filter(arc, !is.na(committee_type)),
+  data = arc,
   var = committee_type,
   title = "Arkansas Contribution Recipient Types",
 )
@@ -330,14 +352,17 @@ being less than $1.
 ``` r
 summary(arc$amount)
 #>      Min.   1st Qu.    Median      Mean   3rd Qu.      Max. 
-#>       0.0       2.0       9.9     183.6      60.0 1699814.8
-mean(arc$amount < 1)
-#> [1] 0.1666581
+#>       0.0       2.0      10.0     166.1      71.5 1699814.8
+percent(mean(arc$amount < 1))
+#> [1] "17%"
 ```
 
 ![](../plots/amount_histogram-1.png)<!-- -->
 
 ### Dates
+
+We can use the `year()` function to create a 4-digit year from the
+`date`.
 
 ``` r
 arc <- mutate(arc, year = year(date))
@@ -347,10 +372,12 @@ arc <- mutate(arc, year = year(date))
 min(arc$date)
 #> [1] "2015-01-06"
 max(arc$date)
-#> [1] "2020-01-31"
+#> [1] "2020-04-03"
 sum(arc$date > today())
 #> [1] 0
 ```
+
+![](../plots/year_bar-1.png)<!-- -->
 
 ## Wrangle
 
@@ -358,7 +385,6 @@ sum(arc$date > today())
 
 ``` r
 arc <- arc %>% 
-  # combine street addr
   unite(
     col = address_full,
     starts_with("address"),
@@ -366,7 +392,6 @@ arc <- arc %>%
     remove = FALSE,
     na.rm = TRUE
   ) %>% 
-  # normalize combined addr
   mutate(
     address_norm = normal_address(
       address = address_full,
@@ -383,20 +408,20 @@ arc %>%
   select(contains("address")) %>% 
   distinct() %>% 
   sample_frac()
-#> # A tibble: 35,933 x 3
-#>    address1              address2  address_norm          
-#>    <chr>                 <chr>     <chr>                 
-#>  1 320 Main Street       <NA>      320 MAIN ST           
-#>  2 2713 Calico Creek     <NA>      2713 CALICO CRK       
-#>  3 20 Rocky Top Cir      <NA>      20 ROCKY TOP CIR      
-#>  4 4922 Panorama Circle  <NA>      4922 PANORAMA CIR     
-#>  5 1213 S 55TH ST        <NA>      1213 S 55TH ST        
-#>  6 3355 Hwy 167          <NA>      3355 HWY 167          
-#>  7 1250 Lafayette 31     <NA>      1250 LAFAYETTE 31     
-#>  8 307 Leatherwood Dr.   <NA>      307 LEATHERWOOD DR    
-#>  9 2795 Batesville Blvd. <NA>      2795 BATESVILLE BLVD  
-#> 10 1401 W. Capitol       Suite 245 1401 W CAPITOL STE 245
-#> # … with 35,923 more rows
+#> # A tibble: 38,121 x 3
+#>    address1                  address2 address_norm      
+#>    <chr>                     <chr>    <chr>             
+#>  1 310 N Washington          <NA>     310 N WASHINGTON  
+#>  2 5 Ranch Valley Dr         <NA>     5 RNCH VLY DR     
+#>  3 114 Rocky Branch Cove     <NA>     114 ROCKY BR CV   
+#>  4 P. O. BOX 21440           <NA>     PO BOX 21440      
+#>  5 25 Jacob Pl               <NA>     25 JACOB PL       
+#>  6 798 Aurelia Street        <NA>     798 AURELIA ST    
+#>  7 12 Tanglewood Ln          <NA>     12 TANGLEWOOD LN  
+#>  8 34 Oakmont Dr             <NA>     34 OAKMONT DR     
+#>  9 1021 South Janelle Avenue <NA>     1021 S JANELLE AVE
+#> 10 904 Cedar St              <NA>     904 CEDAR ST      
+#> # … with 38,111 more rows
 ```
 
 ### ZIP
@@ -420,8 +445,8 @@ progress_table(
 #> # A tibble: 2 x 6
 #>   stage    prop_in n_distinct prop_na n_out n_diff
 #>   <chr>      <dbl>      <dbl>   <dbl> <dbl>  <dbl>
-#> 1 zip        0.880       6600   0.681  9733   3069
-#> 2 zip_norm   0.998       4736   0.681   191     98
+#> 1 zip        0.883       6295   0.673  9689   3056
+#> 2 zip_norm   0.997       4485   0.673   227    104
 ```
 
 ### State
@@ -441,25 +466,25 @@ arc <- arc %>%
 ``` r
 arc %>% 
   filter(state != state_norm) %>% 
-  count(state, sort = TRUE)
-#> # A tibble: 15 x 2
-#>    state     n
-#>    <chr> <int>
-#>  1 Ar       94
-#>  2 oH       32
-#>  3 tx       20
-#>  4 dc       15
-#>  5 aR       13
-#>  6 fL        7
-#>  7 oK        5
-#>  8 dC        2
-#>  9 Ne        2
-#> 10 ar        1
-#> 11 Fl        1
-#> 12 iN        1
-#> 13 pa        1
-#> 14 rI        1
-#> 15 Wa        1
+  count(state, state_norm, sort = TRUE)
+#> # A tibble: 15 x 3
+#>    state state_norm     n
+#>    <chr> <chr>      <int>
+#>  1 Ar    AR           111
+#>  2 oH    OH            34
+#>  3 tx    TX            21
+#>  4 dc    DC            19
+#>  5 aR    AR            14
+#>  6 fL    FL             7
+#>  7 oK    OK             5
+#>  8 ar    AR             3
+#>  9 dC    DC             2
+#> 10 Ne    NE             2
+#> 11 Fl    FL             1
+#> 12 iN    IN             1
+#> 13 pa    PA             1
+#> 14 rI    RI             1
+#> 15 Wa    WA             1
 ```
 
 ``` r
@@ -471,8 +496,8 @@ progress_table(
 #> # A tibble: 2 x 6
 #>   stage      prop_in n_distinct   prop_na n_out n_diff
 #>   <chr>        <dbl>      <dbl>     <dbl> <dbl>  <dbl>
-#> 1 state        0.999         75 0           204     21
-#> 2 state_norm   1             55 0.0000315     0      1
+#> 1 state        0.999         76 0           239     22
+#> 2 state_norm   1             55 0.0000629     0      1
 ```
 
 ### City
@@ -514,7 +539,7 @@ arc <- arc %>%
     match_abb = is_abbrev(city_norm, city_match),
     match_dist = str_dist(city_norm, city_match),
     city_swap = if_else(
-      condition = match_abb | match_dist == 1,
+      condition = !is.na(city_match) & (match_abb | match_dist == 1),
       true = city_match,
       false = city_norm
     )
@@ -523,14 +548,15 @@ arc <- arc %>%
     -city_match,
     -match_dist,
     -match_abb
-  )
+  ) %>% 
+  rename(city = city_raw)
 ```
 
 | Stage      | Prop in | N distinct | Prop NA | N out | N diff |
 | :--------- | ------: | ---------: | ------: | ----: | -----: |
-| city\_raw) |   0.976 |       3038 |   0.681 |  1958 |    467 |
-| city\_norm |   0.981 |       2931 |   0.681 |  1567 |    386 |
-| city\_swap |   0.990 |       2690 |   0.682 |   774 |    120 |
+| city)      |   0.973 |       2923 |   0.673 |  2236 |    494 |
+| city\_norm |   0.984 |       2813 |   0.674 |  1337 |    372 |
+| city\_swap |   0.991 |       2567 |   0.674 |   751 |    121 |
 
 ![](../plots/progress_bar-1.png)<!-- -->
 
@@ -538,11 +564,11 @@ arc <- arc %>%
 
 ## Conclude
 
-1.  There are 253,987 records in the database.
+1.  There are 254,482 records in the database.
 2.  There are 0 duplicate records in the database.
 3.  The range of `date` is good, but a number of `amount` are less than
     $1.
-4.  There are 609 records missing the contributor or date.
+4.  There are 575 records missing the contributor or date.
 5.  Consistency in goegraphic data has been improved with
     `campfin::normal_*()`.
 6.  The 5-digit `zip_norm` variable has been made with
@@ -552,59 +578,55 @@ arc <- arc %>%
 ## Export
 
 ``` r
-proc_dir <- dir_create(here("ar", "contribs", "data", "processed"))
-```
-
-``` r
 arc <- arc %>% 
   select(
     -city_norm,
     city_norm = city_swap
   ) %>% 
   rename_all(
-    str_replace, "norm", "clean"
+    str_replace, "_norm", "_clean"
   )
 ```
 
 ``` r
 glimpse(arc)
-#> Observations: 253,987
-#> Variables: 29
-#> $ org_id             <chr> "219790", "220792", "220792", "220792", "219790", "219790", "220792",…
-#> $ amount             <dbl> 1000, 50, 250, 250, 500, 500, 250, 300, 1000, 50, 2700, 250, 250, 100…
-#> $ date               <date> 2017-07-18, 2017-07-10, 2017-07-10, 2017-07-10, 2017-07-17, 2017-08-…
-#> $ last               <chr> "Stephens Energy PAC", "Bazzelle", "American Electric Power", "Wholes…
-#> $ first              <chr> NA, "Chirie", NA, NA, "William", "Ken", NA, NA, "Charles", "Charlene"…
-#> $ middle             <chr> NA, "L", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "R.", NA, NA, NA…
-#> $ suffix             <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "JR.", NA, NA, NA…
-#> $ address1           <chr> "623 Garrison Avenue", "5718 Catalina Ave", "425 W. Capitol Ave", "PO…
-#> $ address2           <chr> NA, NA, NA, NA, NA, NA, "Suite 1200", NA, NA, NA, "Suite 180", NA, NA…
-#> $ city_raw           <chr> "Fort Smith", "Benton", "Little Rock", "Little Rock", "Fort Smith", "…
-#> $ state              <chr> "AR", "AR", "AR", "AR", "AR", "AR", "AR", "AR", "MO", "AR", "AR", "AR…
-#> $ zip                <chr> "72901", "72019-6667", "72203", "72203", "72903", "72764", "20004", "…
+#> Rows: 254,482
+#> Columns: 29
+#> $ org_id             <chr> "219790", "219790", "219790", "219790", "219790", "220792", "220792",…
+#> $ amount             <dbl> 500.00, 500.00, 1000.00, 1000.00, 1000.00, 50.00, 50.00, 200.00, 250.…
+#> $ date               <date> 2017-07-17, 2017-08-17, 2017-07-17, 2017-07-18, 2017-08-01, 2017-07-…
+#> $ last               <chr> "Walker", "Dunk", "Stephens", "Stephens Energy PAC", "Cella", "Bazzel…
+#> $ first              <chr> "William", "Ken", "W.", NA, "Charles", "Chirie", "Charlene", NA, NA, …
+#> $ middle             <chr> NA, NA, "R.", NA, NA, "L", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
+#> $ suffix             <chr> NA, NA, "JR.", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
+#> $ address1           <chr> "21 Riverlyn Drive", "4387 Catherine Street", "9 Sunset Circle", "623…
+#> $ address2           <chr> NA, NA, NA, NA, NA, NA, NA, "Ste 205", NA, NA, NA, "1401 W Capitol Av…
+#> $ city               <chr> "Fort Smith", "Springdale", "Little Rock", "Fort Smith", "St. Louis",…
+#> $ state              <chr> "AR", "AR", "AR", "AR", "MO", "AR", "AR", "AR", "AR", "AR", "AR", "AR…
+#> $ zip                <chr> "72903", "72764", "72207", "72901", "63105", "72019-6667", "72956", "…
 #> $ description        <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
-#> $ id                 <chr> "3148", "7446", "7462", "7451", "3149", "3150", "7469", "7470", "3350…
-#> $ filed_date         <date> 2017-10-09, 2017-10-11, 2017-10-11, 2017-10-11, 2017-10-09, 2017-10-…
-#> $ source_type        <chr> "Bus, Org, or Unlisted PAC", "Individual", "Bus, Org, or Unlisted PAC…
+#> $ id                 <chr> "3149", "3150", "3147", "3148", "3350", "7446", "7447", "7456", "7462…
+#> $ filed_date         <date> 2017-10-09, 2017-10-09, 2017-10-09, 2017-10-09, 2017-10-09, NA, NA, …
+#> $ source_type        <chr> "Individual", "Individual", "Individual", "Bus, Org, or Unlisted PAC"…
 #> $ type               <chr> "Contributions", "Contributions", "Contributions", "Contributions", "…
 #> $ committee_type     <chr> "Candidate (CC&E)", "Candidate (CC&E)", "Candidate (CC&E)", "Candidat…
-#> $ candidate          <chr> "Gary Don Stubblefield", "Aaron Michel Pilkington", "Aaron Michel Pil…
+#> $ candidate          <chr> "Gary Don Stubblefield", "Gary Don Stubblefield", "Gary Don Stubblefi…
 #> $ amended            <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE,…
-#> $ employer           <chr> NA, NA, NA, NA, "The Stephens Group, LLC", "Simplex Grinnell Security…
-#> $ occupation         <chr> NA, "Healthcare/Medical", NA, NA, "Financial/Investment", "General Bu…
-#> $ occupation_comment <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE,…
+#> $ employer           <chr> "The Stephens Group, LLC", "Simplex Grinnell Security Systems", "The …
+#> $ occupation         <chr> "Financial/Investment", "General Business", "Financial/Investment", N…
+#> $ occupation_comment <lgl> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
 #> $ na_flag            <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE,…
 #> $ year               <dbl> 2017, 2017, 2017, 2017, 2017, 2017, 2017, 2017, 2017, 2017, 2017, 201…
-#> $ address_clean      <chr> "623 GARRISON AVE", "5718 CATALINA AVE", "425 W CAPITOL AVE", "PO BOX…
-#> $ zip_clean          <chr> "72901", "72019", "72203", "72203", "72903", "72764", "20004", "72023…
-#> $ state_clean        <chr> "AR", "AR", "AR", "AR", "AR", "AR", "AR", "AR", "MO", "AR", "AR", "AR…
-#> $ city_clean         <chr> "FORT SMITH", "BENTON", "LITTLE ROCK", "LITTLE ROCK", "FORT SMITH", "…
+#> $ address_clean      <chr> "21 RIVERLYN DR", "4387 CATHERINE ST", "9 SUNSET CIR", "623 GARRISON …
+#> $ zip_clean          <chr> "72903", "72764", "72207", "72901", "63105", "72019", "72956", "72201…
+#> $ state_clean        <chr> "AR", "AR", "AR", "AR", "MO", "AR", "AR", "AR", "AR", "AR", "AR", "AR…
+#> $ city_clean         <chr> "FORT SMITH", "SPRINGDALE", "LITTLE ROCK", "FORT SMITH", "SAINT LOUIS…
 ```
 
 ``` r
-write_csv(
-  x = arc,
-  path = path(proc_dir, "ar_contribs_clean.csv"),
-  na = ""
-)
+clean_dir <- dir_create(here("ar", "contribs", "data", "clean"))
+clean_path <- path(clean_dir, "ar_contribs_clean.csv")
+write_csv(x = arc, path = clean_path, na = "")
+file_size(clean_path)
+#> 40.3M
 ```
