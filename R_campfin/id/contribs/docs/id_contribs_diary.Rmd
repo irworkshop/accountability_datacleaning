@@ -142,12 +142,10 @@ raw_urls <- raw_page %>%
   str_subset("con") %>%
   str_subset("^2") %>% 
   str_c(dirname(raw_base), ., sep = "/")
-raw_paths <- path(raw_dir, basename(raw_urls))
-if (!all(this_file_new(raw_paths))) {
-  for(i in seq_along(raw_urls)) {
-    download.file(raw_urls[i], raw_paths[i])
-    Sys.sleep(runif(1))
-  }
+raw_paths <- basename(str_replace(raw_urls, "(?<=\\d)/", "_"))
+raw_paths <- path(raw_dir, raw_paths)
+if (!all_files_new(raw_dir)) {
+  download.file(raw_urls, raw_paths)
 }
 ```
 
@@ -190,7 +188,8 @@ consistent_names <- function(nm) {
     str_remove("^contr_") %>% 
     str_remove("^contributing_") %>% 
     str_remove("^contribution_") %>% 
-    str_replace("^address$", "address_1")
+    str_replace("^address$", "address_1") %>% 
+    str_replace("^election_type$", "election")
 }
 
 new_names <- idc %>% 
@@ -247,8 +246,7 @@ idc <- idc %>%
     state,
     zip,
     country,
-    election,
-    election_type,
+    election
   )
 ```
 
@@ -277,8 +275,14 @@ idc <- idc %>%
       str_replace("GENERAL", "G") %>% 
       str_replace("PRIMARY", "P")
   )
+```
 
-count_na(idc$date) # 1276
+```{r check}
+count(idc, election)
+```
+
+```{r dates}
+count_na(idc$date) # 782
 slash_dates <- str_which(idc$date, "\\d+/\\d+/\\d{4}")
 idc$date[slash_dates] <- as.character(mdy(idc$date[slash_dates]))
 excel_dates <- str_which(idc$date, "[:punct:]", negate = TRUE)
@@ -288,7 +292,7 @@ idc$date[excel_dates] %>%
   as.character() -> idc$date[excel_dates]
 
 idc$date <- as_date(idc$date)
-count_na(idc$date) # 1276
+count_na(idc$date) # 782
 ```
 
 ## Explore
@@ -369,13 +373,14 @@ explore_plot(
 
 ```{r summary_amount}
 summary(idc$amount)
-sum(idc$amount <= 0)
+mean(idc$amount <= 0)
 ```
 
 ```{r amount_histogram, echo=FALSE}
 idc %>%
+  filter(amount > 1) %>% 
   ggplot(aes(amount)) +
-  geom_histogram(fill = dark2["purple"]) +
+  geom_histogram(fill = dark2["purple"], bins = 20) +
   scale_y_continuous(labels = comma) +
   scale_x_continuous(
     breaks = c(1 %o% 10^(0:6)),
@@ -399,7 +404,7 @@ idc %>%
     party %in% most_common(idc$party, 4)
   ) %>% 
   ggplot(aes(x = party, y = amount)) +
-  geom_violin(aes(fill = party)) +
+  geom_violin(aes(fill = party), adjust = 2) +
   scale_fill_brewer(palette = "Dark2", guide = FALSE) +
   scale_y_continuous(
     breaks = c(1 %o% 10^(0:6)),
@@ -425,8 +430,8 @@ idc <- mutate(idc, year = year(date))
 min(idc$date, na.rm = TRUE)
 max(idc$date, na.rm = TRUE)
 idc <- mutate(idc, date_flag = date > today() | year < 1999 | is.na(date))
-count_na(idc$date) # 1276
-sum(idc$date_flag) # 1339 = 63
+count_na(idc$date) # 782
+sum(idc$date_flag) # 835 = 53
 mean(idc$date_flag)
 ```
 
@@ -443,8 +448,8 @@ idc <- mutate(
   date_flag = date > today() | year < 1999 | is.na(date),
   year = year(date)
 )
-count_na(idc$date) # 1307
-sum(idc$date_flag) # 1307
+count_na(idc$date) # 807
+sum(idc$date_flag) # 807
 ```
 
 For some reason there no records from 2005 to 2010.
@@ -474,18 +479,15 @@ idc %>%
   )
 ```
 
-We know these files were
-read by comparing the `file` variable to the urls downloaded. For the records
-loaded from the file downloaded from 2008, the year of the `date` variable seems
-to primarily be from 2003 and 2004.
+We know these files were read by comparing the `file` variable to the urls
+downloaded. For the records loaded from the file downloaded from 2008, the year
+of the `date` variable seems to primarily be from 2003 and 2004.
 
 ```{r file_year}
 idc %>% 
   filter(file %in% str_which(raw_urls, "2008")) %>% 
   count(year = year(date))
 ```
-
-
 
 ## Wrangle
 
@@ -496,7 +498,7 @@ idc <- idc %>%
   # combine street addr
   unite(
     col = address_full,
-    starts_with("address"),
+    starts_with("address_"),
     sep = " ",
     remove = FALSE,
     na.rm = TRUE
@@ -631,11 +633,7 @@ idc %>%
 
 ## Export
 
-```{r create_proc_dir}
-proc_dir <- dir_create(here("id", "contribs", "data", "processed"))
-```
-
-```{r write_clean}
+```{r}
 idc <- idc %>% 
   select(
     -city_norm,
@@ -644,12 +642,13 @@ idc <- idc %>%
   rename_at(
     .vars = vars(ends_with("norm")),
     .funs = ~str_replace(., "_(.*)", "_clean")
-  )
-
-write_csv(
-  x = idc,
-  path = path(proc_dir, "id_contribs_clean.csv"),
-  na = ""
-)
+  ) %>% 
+  rename(city = city_raw)
 ```
 
+```{r create_proc_dir}
+clean_dir <- dir_create(here("id", "contribs", "data", "clean"))
+clean_path <- path(clean_dir, "id_contribs_clean.csv")
+write_csv(idc, path = clean_path, na = "")
+file_size(clean_path)
+```

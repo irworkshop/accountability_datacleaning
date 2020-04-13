@@ -1,7 +1,7 @@
 Idaho Contributions
 ================
 Kiernan Nicholls
-2020-01-31 16:34:37
+2020-04-13 17:00:33
 
   - [Project](#project)
   - [Objectives](#objectives)
@@ -89,7 +89,7 @@ feature and should be run as such. The project also uses the dynamic
 ``` r
 # where does this document knit?
 here::here()
-#> [1] "/home/kiernan/R/accountability_datacleaning/R_campfin"
+#> [1] "/home/kiernan/Code/accountability_datacleaning/R_campfin"
 ```
 
 ## Data
@@ -123,12 +123,10 @@ raw_urls <- raw_page %>%
   str_subset("con") %>%
   str_subset("^2") %>% 
   str_c(dirname(raw_base), ., sep = "/")
-raw_paths <- path(raw_dir, basename(raw_urls))
-if (!all(this_file_new(raw_paths))) {
-  for(i in seq_along(raw_urls)) {
-    download.file(raw_urls[i], raw_paths[i])
-    Sys.sleep(runif(1))
-  }
+raw_paths <- basename(str_replace(raw_urls, "(?<=\\d)/", "_"))
+raw_paths <- path(raw_dir, raw_paths)
+if (!all_files_new(raw_dir)) {
+  download.file(raw_urls, raw_paths)
 }
 ```
 
@@ -173,7 +171,8 @@ consistent_names <- function(nm) {
     str_remove("^contr_") %>% 
     str_remove("^contributing_") %>% 
     str_remove("^contribution_") %>% 
-    str_replace("^address$", "address_1")
+    str_replace("^address$", "address_1") %>% 
+    str_replace("^election_type$", "election")
 }
 
 new_names <- idc %>% 
@@ -227,9 +226,21 @@ idc <- idc %>%
       str_replace("GENERAL", "G") %>% 
       str_replace("PRIMARY", "P")
   )
+```
 
-count_na(idc$date) # 1276
-#> [1] 1276
+``` r
+count(idc, election)
+#> # A tibble: 3 x 2
+#>   election      n
+#>   <chr>     <int>
+#> 1 G         38147
+#> 2 P         46091
+#> 3 <NA>     390894
+```
+
+``` r
+count_na(idc$date) # 782
+#> [1] 782
 slash_dates <- str_which(idc$date, "\\d+/\\d+/\\d{4}")
 idc$date[slash_dates] <- as.character(mdy(idc$date[slash_dates]))
 excel_dates <- str_which(idc$date, "[:punct:]", negate = TRUE)
@@ -239,15 +250,15 @@ idc$date[excel_dates] %>%
   as.character() -> idc$date[excel_dates]
 
 idc$date <- as_date(idc$date)
-count_na(idc$date) # 1276
-#> [1] 1276
+count_na(idc$date) # 782
+#> [1] 782
 ```
 
 ## Explore
 
 ``` r
 head(idc)
-#> # A tibble: 6 x 24
+#> # A tibble: 6 x 23
 #>    file party cand_first cand_mi cand_last cand_suffix committee office district type  amount
 #>   <dbl> <chr> <chr>      <chr>   <chr>     <chr>       <chr>     <chr>     <dbl> <chr>  <dbl>
 #> 1     1 DEM   CHRISTOPH… G       ABERNATHY <NA>        <NA>      STATE…       29 <NA>    1000
@@ -256,11 +267,11 @@ head(idc)
 #> 4     1 DEM   CHRISTOPH… G       ABERNATHY <NA>        <NA>      STATE…       29 <NA>     200
 #> 5     1 DEM   CHRISTOPH… G       ABERNATHY <NA>        <NA>      STATE…       29 <NA>     286
 #> 6     1 DEM   CHRISTOPH… G       ABERNATHY <NA>        <NA>      STATE…       29 <NA>     500
-#> # … with 13 more variables: date <date>, last <chr>, first <chr>, mi <chr>, suffix <chr>,
+#> # … with 12 more variables: date <date>, last <chr>, first <chr>, mi <chr>, suffix <chr>,
 #> #   address_1 <chr>, address_2 <chr>, city <chr>, state <chr>, zip <chr>, country <chr>,
-#> #   election <chr>, election_type <chr>
+#> #   election <chr>
 tail(idc)
-#> # A tibble: 6 x 24
+#> # A tibble: 6 x 23
 #>    file party cand_first cand_mi cand_last cand_suffix committee office district type  amount
 #>   <dbl> <chr> <chr>      <chr>   <chr>     <chr>       <chr>     <chr>     <dbl> <chr>  <dbl>
 #> 1    20 UNK   <NA>       <NA>    <NA>      <NA>        WELLS FA… <NA>         NA C         10
@@ -269,36 +280,35 @@ tail(idc)
 #> 4    20 UNK   <NA>       <NA>    <NA>      <NA>        WELLS FA… <NA>         NA C       2000
 #> 5    20 UNK   <NA>       <NA>    <NA>      <NA>        WELLS FA… <NA>         NA C          0
 #> 6    20 UNK   <NA>       <NA>    <NA>      <NA>        WELLS FA… <NA>         NA C          0
-#> # … with 13 more variables: date <date>, last <chr>, first <chr>, mi <chr>, suffix <chr>,
+#> # … with 12 more variables: date <date>, last <chr>, first <chr>, mi <chr>, suffix <chr>,
 #> #   address_1 <chr>, address_2 <chr>, city <chr>, state <chr>, zip <chr>, country <chr>,
-#> #   election <chr>, election_type <chr>
+#> #   election <chr>
 glimpse(sample_frac(idc))
-#> Observations: 418,656
-#> Variables: 24
-#> $ file          <dbl> 4, 1, 6, 2, 13, 5, 2, 12, 12, 5, 15, 6, 13, 2, 1, 15, 8, 5, 15, 1, 4, 8, 7…
-#> $ party         <chr> "OTH", "REP", "OTH", "OTH", "DEM", "DEM", "OTH", "UNK", "DEM", "DEM", "DEM…
-#> $ cand_first    <chr> NA, "TOM", NA, NA, "ELAINE", "JANIE", NA, NA, NA, "BRANDEN", "DAVID", NA, …
-#> $ cand_mi       <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, "J", NA, NA, "C.", NA, NA, NA, NA, "D"…
-#> $ cand_last     <chr> NA, "KEALEY", NA, NA, "SMITH", "WARD-ENGELKING", NA, NA, NA, "DURST", "LAN…
-#> $ cand_suffix   <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
-#> $ committee     <chr> "FEAPAC (FARMERS EMPLOYEES AND AGENTS POLITICAL ACTION COMMITTEE)", NA, "B…
-#> $ office        <chr> NA, "STATE TREASURER", NA, NA, "STATE REP., POSITION B", "STATE SENATOR", …
-#> $ district      <dbl> NA, NA, NA, NA, 30, 18, NA, NA, NA, NA, 16, NA, 15, NA, NA, 19, NA, 26, 12…
-#> $ type          <chr> "P", NA, "P", NA, "C", "P", NA, "C", "C", "P", "C", "P", "C", NA, NA, "C",…
-#> $ amount        <dbl> 5.0, 250.0, 10.0, 200.0, 200.0, 60.0, 10.0, 40.0, 100.0, 709.8, 100.0, 5.0…
-#> $ date          <date> 2015-10-15, 2017-12-27, 2013-10-01, 2017-07-04, 2004-08-12, 2014-08-19, 2…
-#> $ last          <chr> "NOORDA-STRADINGER", "CREIGHTON", "MCCULLOGH", "WEIBER", "AMERICAN ECOLOGY…
-#> $ first         <chr> "DEVERY", "SKIP", "JJ", "TRISHA", NA, "BETTY", "BENJAMIN", "CATHY", "JANET…
-#> $ mi            <chr> NA, NA, NA, NA, NA, NA, "ROBERT", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
-#> $ suffix        <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
-#> $ address_1     <chr> "804 REDMAN ST", "2181 S. PEBBLECREEK LN", "9989 W DYLAN CT", "4980 COLLIS…
-#> $ address_2     <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
-#> $ city          <chr> "CHUBBUCK", "BOISE", "STAR", "BOISE", "BOISE", "BOISE", "HAYDEN", "BOISE",…
-#> $ state         <chr> "ID", "ID", "ID", "ID", "ID", "ID", "ID", "ID", "ID", "ID", "ID", "ID", "I…
-#> $ zip           <chr> "83202", "83706", "83669", "83703", "83706", "83713", "83835", "83709", "8…
-#> $ country       <chr> "USA", "USA", "USA", "USA", NA, "USA", "USA", NA, NA, "USA", NA, "USA", NA…
-#> $ election      <chr> NA, NA, NA, NA, NA, "G", NA, NA, NA, "P", NA, NA, NA, NA, NA, NA, NA, "G",…
-#> $ election_type <chr> NA, "P", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "P", NA, NA, NA, …
+#> Rows: 475,132
+#> Columns: 23
+#> $ file        <dbl> 4, 1, 6, 2, 11, 17, 5, 2, 10, 10, 5, 13, 6, 11, 2, 1, 13, 8, 16, 5, 13, 1, 4…
+#> $ party       <chr> "OTH", "REP", "OTH", "OTH", "DEM", "REP", "DEM", "OTH", "UNK", "UNK", "DEM",…
+#> $ cand_first  <chr> NA, "TOM", NA, NA, "BOB", "JOHN", "JANIE", NA, NA, NA, "BRANDEN", "DEAN", NA…
+#> $ cand_mi     <chr> NA, NA, NA, NA, NA, "C.", NA, NA, NA, NA, "J", "L.", NA, "L.", NA, NA, NA, N…
+#> $ cand_last   <chr> NA, "KEALEY", NA, NA, "SOLOMON", "ANDREASON", "WARD-ENGELKING", NA, NA, NA, …
+#> $ cand_suffix <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
+#> $ committee   <chr> "FEAPAC (FARMERS EMPLOYEES AND AGENTS POLITICAL ACTION COMMITTEE)", NA, "BOI…
+#> $ office      <chr> NA, "STATE TREASURER", NA, NA, "STATE REP., POSITION A", "STATE SENATOR", "S…
+#> $ district    <dbl> NA, NA, NA, NA, 11, 15, 18, NA, NA, NA, NA, 26, NA, 26, NA, NA, 17, NA, NA, …
+#> $ type        <chr> "P", NA, "P", NA, "C", "C", "P", NA, "C", "C", "P", "C", "P", "C", NA, NA, "…
+#> $ amount      <dbl> 5.0, 250.0, 10.0, 200.0, 500.0, 100.0, 60.0, 10.0, 30.0, 10.0, 709.8, 300.0,…
+#> $ date        <date> 2015-10-15, 2017-12-27, 2013-10-01, 2017-07-04, 2008-11-01, 2002-05-31, 201…
+#> $ last        <chr> "NOORDA-STRADINGER", "CREIGHTON", "MCCULLOGH", "WEIBER", "FAMILIES FOR A BET…
+#> $ first       <chr> "DEVERY", "SKIP", "JJ", "TRISHA", NA, NA, "BETTY", "BENJAMIN", "ROBERT", "LO…
+#> $ mi          <chr> NA, NA, NA, NA, NA, NA, NA, "ROBERT", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
+#> $ suffix      <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
+#> $ address_1   <chr> "804 REDMAN ST", "2181 S. PEBBLECREEK LN", "9989 W DYLAN CT", "4980 COLLISET…
+#> $ address_2   <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
+#> $ city        <chr> "CHUBBUCK", "BOISE", "STAR", "BOISE", "BOISE", "BOISE", "BOISE", "HAYDEN", "…
+#> $ state       <chr> "ID", "ID", "ID", "ID", "ID", "ID", "ID", "ID", "ID", "ID", "ID", "DC", "ID"…
+#> $ zip         <chr> "83202", "83706", "83669", "83703", "83703", "83702", "83713", "83835", "838…
+#> $ country     <chr> "USA", "USA", "USA", "USA", NA, NA, "USA", "USA", NA, NA, "USA", NA, "USA", …
+#> $ election    <chr> NA, "P", NA, NA, NA, NA, "G", NA, NA, NA, "P", NA, NA, NA, NA, "P", NA, NA, …
 ```
 
 We should first identify which columns are missing the kinds of key
@@ -307,33 +317,32 @@ We can do this with `campfin::flag_na()` after creating a new
 
 ``` r
 col_stats(idc, count_na)
-#> # A tibble: 24 x 4
-#>    col           class       n         p
-#>    <chr>         <chr>   <int>     <dbl>
-#>  1 file          <dbl>       0 0        
-#>  2 party         <chr>       0 0        
-#>  3 cand_first    <chr>  247380 0.591    
-#>  4 cand_mi       <chr>  364160 0.870    
-#>  5 cand_last     <chr>  247362 0.591    
-#>  6 cand_suffix   <chr>  417858 0.998    
-#>  7 committee     <chr>  171294 0.409    
-#>  8 office        <chr>  247362 0.591    
-#>  9 district      <dbl>  292983 0.700    
-#> 10 type          <chr>   75127 0.179    
-#> 11 amount        <dbl>       0 0        
-#> 12 date          <date>   1276 0.00305  
-#> 13 last          <chr>     210 0.000502 
-#> 14 first         <chr>   96327 0.230    
-#> 15 mi            <chr>  393171 0.939    
-#> 16 suffix        <chr>  418093 0.999    
-#> 17 address_1     <chr>    1905 0.00455  
-#> 18 address_2     <chr>  403543 0.964    
-#> 19 city          <chr>    1078 0.00257  
-#> 20 state         <chr>      29 0.0000693
-#> 21 zip           <chr>    4045 0.00966  
-#> 22 country       <chr>  150370 0.359    
-#> 23 election      <chr>  372603 0.890    
-#> 24 election_type <chr>  380471 0.909
+#> # A tibble: 23 x 4
+#>    col         class       n        p
+#>    <chr>       <chr>   <int>    <dbl>
+#>  1 file        <dbl>       0 0       
+#>  2 party       <chr>     717 0.00151 
+#>  3 cand_first  <chr>  271011 0.570   
+#>  4 cand_mi     <chr>  409038 0.861   
+#>  5 cand_last   <chr>  270975 0.570   
+#>  6 cand_suffix <chr>  474552 0.999   
+#>  7 committee   <chr>  204157 0.430   
+#>  8 office      <chr>  270975 0.570   
+#>  9 district    <dbl>  345562 0.727   
+#> 10 type        <chr>   75127 0.158   
+#> 11 amount      <dbl>       0 0       
+#> 12 date        <date>    782 0.00165 
+#> 13 last        <chr>     208 0.000438
+#> 14 first       <chr>  103142 0.217   
+#> 15 mi          <chr>  439519 0.925   
+#> 16 suffix      <chr>  474371 0.998   
+#> 17 address_1   <chr>    1379 0.00290 
+#> 18 address_2   <chr>  460019 0.968   
+#> 19 city        <chr>     967 0.00204 
+#> 20 state       <chr>      78 0.000164
+#> 21 zip         <chr>    2897 0.00610 
+#> 22 country     <chr>  206846 0.435   
+#> 23 election    <chr>  390894 0.823
 ```
 
 ``` r
@@ -343,9 +352,9 @@ idc <- idc %>%
   flag_na(last, recip, date, amount)
 
 sum(idc$na_flag)
-#> [1] 1280
+#> [1] 808
 mean(idc$na_flag)
-#> [1] 0.003057403
+#> [1] 0.00170058
 ```
 
 Records that are entirely duplicated at least once across all columns
@@ -358,62 +367,61 @@ day for the same amount.
 ``` r
 idc <- flag_dupes(idc, everything(), .check = TRUE)
 sum(idc$dupe_flag)
-#> [1] 2410
+#> [1] 5986
 mean(idc$dupe_flag)
-#> [1] 0.005756516
+#> [1] 0.0125986
 idc %>% 
   filter(dupe_flag) %>% 
   select(recip, last, date, amount)
-#> # A tibble: 2,410 x 4
+#> # A tibble: 5,986 x 4
 #>    recip     last                                                   date       amount
 #>    <chr>     <chr>                                                  <date>      <dbl>
 #>  1 ABERNATHY IRON WORKERS DISTRICT COUNCIL OF THE PACIFIC NORTHWEST 2018-07-05    500
-#>  2 ABERNATHY LANDON                                                 2018-06-12    500
-#>  3 ADDIS     ADDIS                                                  2018-09-30      0
-#>  4 AHLQUIST  SCARLETT IV                                            2017-09-14   1000
-#>  5 AHLQUIST  WRIGHT                                                 2017-08-24   1000
-#>  6 AHRENS    ACKERMAN                                               2017-09-30    100
-#>  7 AHRENS    BILLETT                                                2018-05-03     50
-#>  8 AHRENS    SCHWAB                                                 2018-03-29     40
-#>  9 BALUKOFF  MEADOWS                                                2018-01-30     50
-#> 10 BEDKE     IHCA                                                   2017-12-18    500
-#> # … with 2,400 more rows
+#>  2 ABERNATHY IRON WORKERS DISTRICT COUNCIL OF THE PACIFIC NORTHWEST 2018-07-05    500
+#>  3 ABERNATHY LANDON                                                 2018-06-12    500
+#>  4 ABERNATHY LANDON                                                 2018-06-12    500
+#>  5 ADDIS     ADDIS                                                  2018-09-30      0
+#>  6 ADDIS     ADDIS                                                  2018-09-30      0
+#>  7 AHLQUIST  SCARLETT IV                                            2017-09-14   1000
+#>  8 AHLQUIST  SCARLETT IV                                            2017-09-14   1000
+#>  9 AHLQUIST  WRIGHT                                                 2017-08-24   1000
+#> 10 AHLQUIST  WRIGHT                                                 2017-08-24   1000
+#> # … with 5,976 more rows
 ```
 
 ### Categorical
 
 ``` r
 col_stats(idc, n_distinct)
-#> # A tibble: 27 x 4
-#>    col           class      n          p
-#>    <chr>         <chr>  <int>      <dbl>
-#>  1 file          <dbl>     20 0.0000478 
-#>  2 party         <chr>     11 0.0000263 
-#>  3 cand_first    <chr>    528 0.00126   
-#>  4 cand_mi       <chr>    104 0.000248  
-#>  5 cand_last     <chr>    841 0.00201   
-#>  6 cand_suffix   <chr>      5 0.0000119 
-#>  7 committee     <chr>    436 0.00104   
-#>  8 office        <chr>     16 0.0000382 
-#>  9 district      <dbl>     36 0.0000860 
-#> 10 type          <chr>      7 0.0000167 
-#> 11 amount        <dbl>   8338 0.0199    
-#> 12 date          <date>  4454 0.0106    
-#> 13 last          <chr>  33770 0.0807    
-#> 14 first         <chr>  12901 0.0308    
-#> 15 mi            <chr>    632 0.00151   
-#> 16 suffix        <chr>      6 0.0000143 
-#> 17 address_1     <chr>  70577 0.169     
-#> 18 address_2     <chr>   1526 0.00364   
-#> 19 city          <chr>   2614 0.00624   
-#> 20 state         <chr>     72 0.000172  
-#> 21 zip           <chr>   8307 0.0198    
-#> 22 country       <chr>      8 0.0000191 
-#> 23 election      <chr>      3 0.00000717
-#> 24 election_type <chr>      3 0.00000717
-#> 25 recip         <chr>   1275 0.00305   
-#> 26 na_flag       <lgl>      2 0.00000478
-#> 27 dupe_flag     <lgl>      2 0.00000478
+#> # A tibble: 26 x 4
+#>    col         class       n          p
+#>    <chr>       <chr>   <int>      <dbl>
+#>  1 file        <dbl>      20 0.0000421 
+#>  2 party       <chr>      13 0.0000274 
+#>  3 cand_first  <chr>     648 0.00136   
+#>  4 cand_mi     <chr>     137 0.000288  
+#>  5 cand_last   <chr>    1091 0.00230   
+#>  6 cand_suffix <chr>       5 0.0000105 
+#>  7 committee   <chr>     517 0.00109   
+#>  8 office      <chr>      16 0.0000337 
+#>  9 district    <dbl>      36 0.0000758 
+#> 10 type        <chr>       7 0.0000147 
+#> 11 amount      <dbl>   12111 0.0255    
+#> 12 date        <date>   7182 0.0151    
+#> 13 last        <chr>   47290 0.0995    
+#> 14 first       <chr>   19848 0.0418    
+#> 15 mi          <chr>    1020 0.00215   
+#> 16 suffix      <chr>      12 0.0000253 
+#> 17 address_1   <chr>  108191 0.228     
+#> 18 address_2   <chr>    1526 0.00321   
+#> 19 city        <chr>    3372 0.00710   
+#> 20 state       <chr>      91 0.000192  
+#> 21 zip         <chr>   10006 0.0211    
+#> 22 country     <chr>       8 0.0000168 
+#> 23 election    <chr>       3 0.00000631
+#> 24 recip       <chr>    1606 0.00338   
+#> 25 na_flag     <lgl>       2 0.00000421
+#> 26 dupe_flag   <lgl>       2 0.00000421
 ```
 
 ![](../plots/bar_office-1.png)<!-- -->
@@ -427,9 +435,9 @@ col_stats(idc, n_distinct)
 ``` r
 summary(idc$amount)
 #>      Min.   1st Qu.    Median      Mean   3rd Qu.      Max. 
-#> -100000.0      20.0      94.0     327.8     200.0 2000000.0
-sum(idc$amount <= 0)
-#> [1] 1272
+#> -100000.0      20.0      90.0     352.1     200.0 2000000.0
+mean(idc$amount <= 0)
+#> [1] 0.002727663
 ```
 
 ![](../plots/amount_histogram-1.png)<!-- -->
@@ -448,12 +456,12 @@ min(idc$date, na.rm = TRUE)
 max(idc$date, na.rm = TRUE)
 #> [1] "3831-12-01"
 idc <- mutate(idc, date_flag = date > today() | year < 1999 | is.na(date))
-count_na(idc$date) # 1276
-#> [1] 1276
-sum(idc$date_flag) # 1339 = 63
-#> [1] 1339
+count_na(idc$date) # 782
+#> [1] 782
+sum(idc$date_flag) # 835 = 53
+#> [1] 835
 mean(idc$date_flag)
-#> [1] 0.00319833
+#> [1] 0.001757406
 ```
 
 ``` r
@@ -469,10 +477,10 @@ idc <- mutate(
   date_flag = date > today() | year < 1999 | is.na(date),
   year = year(date)
 )
-count_na(idc$date) # 1307
-#> [1] 1307
-sum(idc$date_flag) # 1307
-#> [1] 1307
+count_na(idc$date) # 807
+#> [1] 807
+sum(idc$date_flag) # 807
+#> [1] 807
 ```
 
 For some reason there no records from 2005 to 2010.
@@ -488,20 +496,17 @@ and 2004.
 idc %>% 
   filter(file %in% str_which(raw_urls, "2008")) %>% 
   count(year = year(date))
-#> # A tibble: 11 x 2
-#>     year     n
-#>    <dbl> <int>
-#>  1  2000     1
-#>  2  2001     6
-#>  3  2002    18
-#>  4  2003  7891
-#>  5  2004 19964
-#>  6  2005    28
-#>  7  2006     3
-#>  8  2007     2
-#>  9  2008     3
-#> 10  2014     1
-#> 11    NA   114
+#> # A tibble: 8 x 2
+#>    year     n
+#>   <dbl> <int>
+#> 1  2002     2
+#> 2  2004     9
+#> 3  2005     5
+#> 4  2006     8
+#> 5  2007  8642
+#> 6  2008 22103
+#> 7  2009    51
+#> 8    NA    32
 ```
 
 ## Wrangle
@@ -513,7 +518,7 @@ idc <- idc %>%
   # combine street addr
   unite(
     col = address_full,
-    starts_with("address"),
+    starts_with("address_"),
     sep = " ",
     remove = FALSE,
     na.rm = TRUE
@@ -534,20 +539,20 @@ idc %>%
   select(contains("address")) %>% 
   distinct() %>% 
   sample_frac()
-#> # A tibble: 71,702 x 3
-#>    address_1               address_2 address_norm        
-#>    <chr>                   <chr>     <chr>               
-#>  1 10051 W PRESERVER ST    <NA>      10051 W PRESERVER ST
-#>  2 3105 STONEBRIDGE CIRCLE <NA>      3105 STONEBRIDGE CIR
-#>  3 PO BOX 385              <NA>      PO BOX 385          
-#>  4 107 E IDAHO ST          <NA>      107 E IDAHO ST      
-#>  5 7611 E. LEWIS LN.       <NA>      7611 E LEWIS LN     
-#>  6 3481 N. 3000 E.         <NA>      3481 N 3000 E       
-#>  7 5137 FREE AVE           <NA>      5137 FREE AVE       
-#>  8 147 STAGECOACH RD       <NA>      147 STAGECOACH RD   
-#>  9 2348 E 200 N            <NA>      2348 E 200 N        
-#> 10 7350 S EISENMAN RD      <NA>      7350 S EISENMAN RD  
-#> # … with 71,692 more rows
+#> # A tibble: 109,474 x 3
+#>    address_1             address_2 address_norm       
+#>    <chr>                 <chr>     <chr>              
+#>  1 3706 SHERWOOD DR.     <NA>      3706 SHERWOOD DR   
+#>  2 2025 E 17TH           <NA>      2025 E 17 TH       
+#>  3 1384 E GRIFFITH CT    <NA>      1384 E GRIFFITH CT 
+#>  4 HC 75 BOX 139 B       <NA>      HC 75 BOX 139 B    
+#>  5 5400 N RIFFLE WAY     <NA>      5400 N RIFFLE WAY  
+#>  6 753 HOMER AVE.        <NA>      753 HOMER AVE      
+#>  7 4304 W DEER TRAIL LN  <NA>      4304 W DEER TRL LN 
+#>  8 36 HILLSIDE RANCH RD  <NA>      36 HILLSIDE RNCH RD
+#>  9 9901 GLENROCK         <NA>      9901 GLENROCK      
+#> 10 2375 E. REMINSTON RD. <NA>      2375 E REMINSTON RD
+#> # … with 109,464 more rows
 ```
 
 ### ZIP
@@ -571,8 +576,8 @@ progress_table(
 #> # A tibble: 2 x 6
 #>   stage    prop_in n_distinct prop_na n_out n_diff
 #>   <chr>      <dbl>      <dbl>   <dbl> <dbl>  <dbl>
-#> 1 zip        0.937       8307 0.00966 25968   4706
-#> 2 zip_norm   0.999       4065 0.00967   506    145
+#> 1 zip        0.945      10006 0.00610 26136   5348
+#> 2 zip_norm   0.999       5293 0.00610   551    356
 ```
 
 ### State
@@ -596,10 +601,10 @@ progress_table(
   compare = valid_state
 )
 #> # A tibble: 2 x 6
-#>   stage      prop_in n_distinct   prop_na n_out n_diff
-#>   <chr>        <dbl>      <dbl>     <dbl> <dbl>  <dbl>
-#> 1 state         1.00         72 0.0000693   125     17
-#> 2 state_norm    1.00         66 0.000246     51     11
+#>   stage      prop_in n_distinct  prop_na n_out n_diff
+#>   <chr>        <dbl>      <dbl>    <dbl> <dbl>  <dbl>
+#> 1 state         1.00         91 0.000164   114     36
+#> 2 state_norm    1.00         79 0.000276    61     24
 ```
 
 ### City
@@ -655,37 +660,37 @@ progress_table(
 #> # A tibble: 3 x 6
 #>   stage     prop_in n_distinct prop_na n_out n_diff
 #>   <chr>       <dbl>      <dbl>   <dbl> <dbl>  <dbl>
-#> 1 city_raw    0.953       2614 0.00257 19729    395
-#> 2 city_norm   0.992       2549 0.00259  3316    351
-#> 3 city_swap   0.997       2308 0.0127   1401    102
+#> 1 city_raw    0.954       3372 0.00204 21885    717
+#> 2 city_norm   0.957       3275 0.00204 20515    610
+#> 3 city_swap   0.997       2805 0.00884  1381    167
 ```
 
 ``` r
 idc %>% 
   filter(city_swap %out% many_city) %>% 
   count(city_swap, sort = TRUE)
-#> # A tibble: 102 x 2
-#>    city_swap                   n
-#>    <chr>                   <int>
-#>  1 <NA>                     5297
-#>  2 HAYDEN LAKE               570
-#>  3 DALTON GARDENS            264
-#>  4 OVERLAND PARKS             81
-#>  5 LAKE FOREST PARKS          56
-#>  6 PRIEST LAKE                49
-#>  7 HIDDEN SPRINGS             43
-#>  8 RESEARCH TRIANGLE PARKS    26
-#>  9 KCDA                       24
-#> 10 CHUBUCK                    20
-#> # … with 92 more rows
+#> # A tibble: 167 x 2
+#>    city_swap                  n
+#>    <chr>                  <int>
+#>  1 <NA>                    4199
+#>  2 HAYDEN LAKE              630
+#>  3 DALTON GARDENS           285
+#>  4 PRIEST LAKE               49
+#>  5 WINSTONSALEM              34
+#>  6 HIDDEN SPRINGS            33
+#>  7 RESEARCH TRIANGLE PARK    26
+#>  8 CHUBUCK                   20
+#>  9 COEUR DALENE              17
+#> 10 COUER DALENE              16
+#> # … with 157 more rows
 ```
 
 ## Conclude
 
-1.  There are 418,656 records in the database.
-2.  There are 2,410 duplicate records in the database.
+1.  There are 475,132 records in the database.
+2.  There are 5,986 duplicate records in the database.
 3.  The range and distribution of `amount` and `date` seem reasonable.
-4.  There are 1,280 records missing either recipient or date.
+4.  There are 808 records missing either recipient or date.
 5.  Consistency in goegraphic data has been improved with
     `campfin::normal_*()`.
 6.  The 5-digit `zip_norm` variable has been created with
@@ -696,10 +701,6 @@ idc %>%
 ## Export
 
 ``` r
-proc_dir <- dir_create(here("id", "contribs", "data", "processed"))
-```
-
-``` r
 idc <- idc %>% 
   select(
     -city_norm,
@@ -708,11 +709,14 @@ idc <- idc %>%
   rename_at(
     .vars = vars(ends_with("norm")),
     .funs = ~str_replace(., "_(.*)", "_clean")
-  )
+  ) %>% 
+  rename(city = city_raw)
+```
 
-write_csv(
-  x = idc,
-  path = path(proc_dir, "id_contribs_clean.csv"),
-  na = ""
-)
+``` r
+clean_dir <- dir_create(here("id", "contribs", "data", "clean"))
+clean_path <- path(clean_dir, "id_contribs_clean.csv")
+write_csv(idc, path = clean_path, na = "")
+file_size(clean_path)
+#> 90.8M
 ```
