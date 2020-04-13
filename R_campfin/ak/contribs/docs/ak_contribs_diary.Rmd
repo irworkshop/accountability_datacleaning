@@ -126,6 +126,7 @@ hand since the `httr::GET()` request below does not have all the cookies needed.
 
 ```{r raw_dir}
 raw_dir <- dir_create(here("ak", "contribs", "data", "raw"))
+raw_path <- path(raw_dir, glue("CD_Transactions_{format(today(), '%m-%d-%Y')}.CSV"))
 ```
 
 ```{r raw_get, eval=FALSE}
@@ -139,49 +140,47 @@ httr::GET(
   ),
   query = list(
     exportAll = "True",
-    exportFormat = "TXT",
+    exportFormat = "CSV",
     isExport = "True"
   ),
-  write_disk(
-    path = path(raw_dir, "CD_Transactions_03-02-2020.TXT")
-  )
+  write_disk(raw_path)
 )
+```
+
+```{r raw_names}
+ak_names <- names(clean_names(read_csv(raw_path, n_max = 0)))
 ```
 
 ### Read
 
 This tab-delimited text file can be read with `readr::read_tsv()`.
 
-```{r raw_read}
-raw_file <- dir_ls(raw_dir)
-ak_names <- raw_file %>% 
-  read_lines(n_max = 1) %>% 
-  str_split("\t") %>% 
-  pluck(1) %>% 
-  make_clean_names()
-
-akc <- raw_file %>%
-  # skip col name line
-  read_lines(skip = 1) %>%
-  # startrs with id num
+```{r raw_fix}
+fix_path <- file_temp(ext = "csv")
+read_lines(raw_path, skip = 1) %>% 
+  str_remove(",(?=$)") %>% 
   str_subset("^\\d") %>% 
-  # remove trailing delim
-  str_remove("\t$") %>% 
-  # read with names as tsv
-  read_delim(
-    delim = "\t",
-    na = c("", "NA", "N/A"),
-    escape_backslash = FALSE,
-    escape_double = TRUE,
-    col_names = ak_names,
-    col_types = cols(
-      .default = col_character(),
-      date = col_date_usa(),
-      amount = col_number(),
-      report_year = col_integer(),
-      submitted = col_date_usa()
-    )
+  write_lines(fix_path)
+```
+
+```{r raw_read}
+akc <- vroom(
+  file = fix_path,
+  delim = ",",
+  na = c("", "NA", "N/A"),
+  escape_backslash = FALSE,
+  escape_double = FALSE,
+  .name_repair = make_clean_names,
+  num_threads = 1,
+  col_names = ak_names,
+  col_types = cols(
+    .default = col_character(),
+    date = col_date_usa(),
+    amount = col_number(),
+    report_year = col_integer(),
+    submitted = col_date_usa()
   )
+)
 ```
 
 ```{r echo=FALSE}
@@ -197,6 +196,10 @@ akc <- akc %>%
     expend_purpose = purpose_of_expenditure,
     filer = name
   )
+```
+
+```{r raw_check}
+count(akc, tran_type)
 ```
 
 ## Explore
