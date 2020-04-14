@@ -473,7 +473,6 @@ progress %>%
     y = "Percent Valid",
     fill = "Valid"
   )
-  
 ```
 
 ## Conclude
@@ -504,13 +503,6 @@ glimpse(sample_n(prc, 20))
 
 ```{r clean_dir}
 clean_dir <- dir_create(here("pr", "contribs", "data", "clean"))
+clean_path <- path(clean_dir, "pr_contribs_clean.csv")
+write_csv(prc, path = clean_path, na = "")
 ```
-
-```{r write_clean}
-write_csv(
-  x = prc,
-  path = path(clean_dir, "pr_contribs_clean.csv"),
-  na = ""
-)
-```
-

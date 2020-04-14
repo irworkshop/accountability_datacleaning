@@ -1,7 +1,7 @@
 Puerto Rico Contributions
 ================
 Kiernan Nicholls
-2020-02-12 12:30:43
+2020-04-14 15:02:21
 
   - [Project](#project)
   - [Objectives](#objectives)
@@ -189,8 +189,8 @@ tail(prc)
 #> 5 RAMON LUI… Senador … PPD     1000 Cheque  PRAXAIR… Otra … 2016-02-29 2016 - Añ… 06813  NA    NA  
 #> 6 RAMON LUI… Senador … PPD     1000 Cheque  PRAXAIR… Otra … 2016-02-29 2016 - Añ… 06813  NA    NA
 glimpse(sample_n(prc, 20))
-#> Observations: 20
-#> Variables: 12
+#> Rows: 20
+#> Columns: 12
 #> $ cand   <chr> "LUIS FORTUÑO BURSET", "THOMAS RIVERA SCHATZ", "RICARDO ROSSELLO NEVARES", "ALEJA…
 #> $ type   <chr> "Gobernador", "Senador por Acumulación", "Gobernador", "Gobernador", "Senador por…
 #> $ code   <chr> "PNP", "PNP", "PNP", "PPD", "PPD", "PIP", "PIP", "PNP", "PNP", "PPD", "PPD", "PIP…
@@ -443,7 +443,7 @@ prc <- prc %>%
     match_abb = is_abbrev(city_norm, city_match),
     match_dist = str_dist(city_norm, city_match),
     city_swap = if_else(
-      condition = !is.na(match_dist) & match_abb | match_dist == 1,
+      condition = !is.na(match_dist) & (match_abb | match_dist == 1),
       true = city_match,
       false = city_norm
     )
@@ -460,8 +460,8 @@ prc <- prc %>%
 | stage      | prop\_in | n\_distinct | prop\_na | n\_out | n\_diff |
 | :--------- | -------: | ----------: | -------: | -----: | ------: |
 | city\_raw) |    0.975 |         826 |     0.01 |   4021 |     179 |
-| city\_norm |    0.976 |         820 |     0.01 |   3978 |     169 |
-| city\_swap |    0.995 |         754 |     0.02 |    845 |      90 |
+| city\_norm |    0.976 |         820 |     0.01 |   3973 |     165 |
+| city\_swap |    0.991 |         786 |     0.01 |   1522 |     106 |
 
 You can see how the percentage of valid values increased with each
 stage.
@@ -513,8 +513,8 @@ prc <- prc %>%
 
 ``` r
 glimpse(sample_n(prc, 20))
-#> Observations: 20
-#> Variables: 18
+#> Rows: 20
+#> Columns: 18
 #> $ cand        <chr> "JOSE \"JOSIAN\" SANTIAGO RIVERA", "HECTOR O'NEILL GARCIA", "PARTIDO NUEVO P…
 #> $ type        <chr> "Alcalde de Comerío", "Alcalde de Guaynabo", "Partido", "Alcalde de Carolina…
 #> $ code        <chr> "PPD", "PNP", "PNP", "PPD", "PNP", "PNP", "PIP", "PIP", "PPD", "PPD", "PNP",…
@@ -548,12 +548,6 @@ glimpse(sample_n(prc, 20))
 
 ``` r
 clean_dir <- dir_create(here("pr", "contribs", "data", "clean"))
-```
-
-``` r
-write_csv(
-  x = prc,
-  path = path(clean_dir, "pr_contribs_clean.csv"),
-  na = ""
-)
+clean_path <- path(clean_dir, "pr_contribs_clean.csv")
+write_csv(prc, path = clean_path, na = "")
 ```
