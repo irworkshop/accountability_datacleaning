@@ -1,7 +1,7 @@
 Massachusetts Contributions
 ================
 Kiernan Nicholls
-2020-02-11 14:16:29
+2020-04-14 11:15:33
 
   - [Project](#project)
   - [Objectives](#objectives)
@@ -195,8 +195,8 @@ mac <- read_mdb(
 ```
 
     #>             used  (Mb) gc trigger   (Mb)  max used   (Mb)
-    #> Ncells   9285005 495.9   19491885 1041.0   9468514  505.7
-    #> Vcells 113801431 868.3  223694967 1706.7 217136381 1656.7
+    #> Ncells   9402506 502.2   19527687 1042.9   9524747  508.7
+    #> Vcells 115618821 882.2  227308690 1734.3 220644084 1683.4
 
 The records of the receipts file are provided to OCPF on reports,
 identified by the `rpt_id` variable. The receipt records themselves do
@@ -250,50 +250,50 @@ tail(mac)
 #> # A tibble: 6 x 33
 #>   id    rpt_id line  date       cont_type first last  address city  state zip   occupation employer
 #>   <chr> <chr>  <chr> <date>     <chr>     <chr> <chr> <chr>   <chr> <chr> <chr> <chr>      <chr>   
-#> 1 1368… 730809 1368… 2020-01-27 OTHER     <NA>  Shee… 32 Ste… Spri… MA    01104 <NA>       <NA>    
-#> 2 1368… 730810 1368… 2020-02-10 Individu… Jess… Sizer 78 Pet… Palm… MA    01069 Town Coun… Town of…
-#> 3 1368… 730811 1368… 2020-02-10 Individu… Maur… Glynn 8 Vide… Quin… MA    02169 Attorney/… Murphy …
-#> 4 1368… 730811 1368… 2020-02-10 Individu… Will… Kenn… 1245 A… Bost… MA    02124 Attorney   Nutter,…
-#> 5 1368… 730811 1368… 2020-02-10 Individu… Lorr… Ahern 3510 O… Pomp… FL    33069 Retired    Retired 
-#> 6 1368… 730812 1368… 2020-02-06 Individu… Joan… Daup… 8 Shre… Nort… MA    01536 Retired    Retired 
+#> 1 1376… 736487 1376… 2020-03-30 Individu… Jill  Gold… 25 Lar… Newt… MA    02468 Consultant Goldenb…
+#> 2 1376… 736487 1376… 2020-03-30 Individu… Judi… Shub… 38 Dov… Well… MA    02482 <NA>       <NA>    
+#> 3 1376… 736487 1376… 2020-03-30 Individu… Paul  Nees… 18 Tim… Mill… MA    02054 <NA>       <NA>    
+#> 4 1376… 736488 1376… 2020-04-13 Individu… James Mart… 38 Oxf… Long… MA    0110… Attorney   Robinso…
+#> 5 1376… 736489 1376… 2020-04-13 Individu… Arle… Rodr… 11 Vis… Cent… MA    0263… Vice Pres… STCC    
+#> 6 1376… 736490 1376… 2020-04-13 Individu… Will… Togn… 870 Lo… Long… MA    0110… <NA>       <NA>    
 #> # … with 20 more variables: officer <chr>, cont_id <chr>, amount <dbl>, tender <chr>, guid <chr>,
 #> #   rpt_year <int>, filing_date <dttm>, start_date <date>, end_date <date>, cpf_id <chr>,
 #> #   report_type <chr>, cand_name <chr>, office <chr>, district <chr>, comm_name <chr>,
 #> #   comm_city <chr>, comm_state <chr>, comm_zip <chr>, category <chr>, amendment <lgl>
 glimpse(sample_n(mac, 20))
-#> Observations: 20
-#> Variables: 33
-#> $ id          <chr> "5525050", "6720886", "12605049", "9037819", "5608601", "7461888", "12059493…
-#> $ rpt_id      <chr> "10275", "68960", "661683", "208741", "14950", "109030", "611669", "188874",…
-#> $ line        <chr> "5525050", "6720886", "12605049", "9037819", "5608601", "7461888", "12059493…
-#> $ date        <date> 2002-10-24, 2006-09-13, 2018-07-09, 2014-09-20, 2002-09-04, 2010-03-11, 201…
+#> Rows: 20
+#> Columns: 33
+#> $ id          <chr> "5525050", "6720886", "12605050", "9037795", "5608601", "7461695", "12059006…
+#> $ rpt_id      <chr> "10275", "68960", "661684", "208741", "14950", "109026", "611669", "188874",…
+#> $ line        <chr> "5525050", "6720886", "12605050", "9037795", "5608601", "7461695", "12059006…
+#> $ date        <date> 2002-10-24, 2006-09-13, 2018-07-05, 2014-08-23, 2002-09-04, 2010-03-11, 201…
 #> $ cont_type   <chr> "OTHER", "Individual", "Individual", "Individual", "Individual", "Individual…
-#> $ first       <chr> "SEIU Loc 509 Seg", "RICHARD", "Brian", "Jonathan", "Richard", "KWABENA", "S…
-#> $ last        <chr> "Union", "WAITT", "Cady", "Howe", "Battin", "ABBOA OFFEI", "Tocco", "Sweeney…
-#> $ address     <chr> "Post Office Box 509", "3 BUTTERWORTH RD", "50 Atherton St", "159 South Main…
-#> $ city        <chr> "Cambridge", "Wilmington", "Roxbury", "Milford", "Lexington", "BOSTON", "Bos…
-#> $ state       <chr> "MA", "MA", "MA", "MA", "MA", "MA", "MA", "MA", "MA", "MA", "MA", "MA", "MA"…
-#> $ zip         <chr> "02139", "01887-3841", "02118", "01757", "02421", "02111-2725", "02113-2114"…
-#> $ occupation  <chr> "Union Segregated Fund", "CIVIL ENGINEER", NA, "corrections officer", "senio…
-#> $ employer    <chr> "-------------", "INFO REQ", NA, "Massachusetts Dept of Corrections", "MIT",…
+#> $ first       <chr> "SEIU Loc 509 Seg", "RICHARD", "Richard A.", "Timothy", "Richard", "Jane", N…
+#> $ last        <chr> "Union", "WAITT", "Galvin", "Gonsalves", "Battin", "O'Connor", "Elevator Con…
+#> $ address     <chr> "Post Office Box 509", "3 BUTTERWORTH RD", "37 Eagle Dr", "159 South Main St…
+#> $ city        <chr> "Cambridge", "Wilmington", "Fairfield", "Milford", "Lexington", "Shrewsbury"…
+#> $ state       <chr> "MA", "MA", "CT", "MA", "MA", "MA", "MA", "MA", "RI", "MA", "MA", "MA", "MA"…
+#> $ zip         <chr> "02139", "01887-3841", "06825-1965", "01757", "02421", "01545", "02122-2611"…
+#> $ occupation  <chr> "Union Segregated Fund", "CIVIL ENGINEER", "Real Estate", "corrections offic…
+#> $ employer    <chr> "-------------", "INFO REQ", "Commonwealth Ventures LLC", "Massachusetts Dep…
 #> $ officer     <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
 #> $ cont_id     <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
-#> $ amount      <dbl> 15000.0, 250.0, 75.0, 5.0, 30.0, 400.0, 200.0, 100.0, 100.0, 150.0, 100.0, 7…
-#> $ tender      <chr> "Check", "Check", "Check", "Unknown", "Check", "Check", "Unknown", "Unknown"…
+#> $ amount      <dbl> 15000.00, 250.00, 500.00, 5.00, 30.00, 25.00, 500.00, 300.00, 200.00, 125.00…
+#> $ tender      <chr> "Check", "Check", "Credit Card", "Unknown", "Check", "Check", "Unknown", "Un…
 #> $ guid        <chr> "{c0dd1523-6227-4b2d-559e-1f456763f279}", "{f9605602-5b0d-4f14-79ad-2a610c95…
 #> $ rpt_year    <int> 2002, 2006, 2018, 2014, 2002, 2010, 2016, 2013, 2012, 2011, 2013, 2020, 2013…
-#> $ filing_date <dttm> 2002-11-05 12:49:38, 2007-09-04 11:47:27, 2018-07-10 10:01:26, 2014-10-27 1…
+#> $ filing_date <dttm> 2002-11-05 12:49:38, 2007-09-04 11:47:27, 2018-07-10 10:13:00, 2014-10-27 1…
 #> $ start_date  <date> NA, NA, NA, 2014-08-23, NA, NA, 2016-01-01, 2013-07-01, NA, 2011-07-01, NA,…
-#> $ end_date    <date> 2002-10-24, 2006-09-13, 2018-07-09, 2014-10-17, 2002-09-04, 2010-03-11, 201…
-#> $ cpf_id      <chr> "30914", "14376", "17006", "80690", "13821", "14376", "11853", "14191", "130…
+#> $ end_date    <date> 2002-10-24, 2006-09-13, 2018-07-05, 2014-10-17, 2002-09-04, 2010-03-11, 201…
+#> $ cpf_id      <chr> "30914", "14376", "13173", "80690", "13821", "13256", "11853", "14191", "130…
 #> $ report_type <chr> "Deposit Report", "Deposit Report", "Deposit Report", "Pre-election Report (…
-#> $ cand_name   <chr> "Shannon P. O'Brien", "Deval L. Patrick", "Edward J. Stamas", "MA Correction…
-#> $ office      <chr> "Constitutional", "Constitutional", "Statewide", "Unknown/ N/A", "Constituti…
-#> $ district    <chr> "Governor", "Governor", "Auditor", "Unknown/ N/A", "Governor", "Governor", "…
-#> $ comm_name   <chr> "The Shannon O'Brien Committee", "The Deval Patrick Committee", "Stamas Comm…
-#> $ comm_city   <chr> NA, NA, "North Amherst", "Milford", NA, NA, "Boston", "W. Springfield", NA, …
-#> $ comm_state  <chr> NA, NA, "MA", "MA", NA, NA, "MA", "MA", NA, "MA", NA, "MA", "MA", "MA", "MA"…
-#> $ comm_zip    <chr> NA, NA, "01059", "01757", NA, NA, "02137", "01090", NA, "01095", NA, "01748"…
+#> $ cand_name   <chr> "Shannon P. O'Brien", "Deval L. Patrick", "Martin J. Walsh", "MA Correction …
+#> $ office      <chr> "Constitutional", "Constitutional", "Mayoral", "Unknown/ N/A", "Constitution…
+#> $ district    <chr> "Governor", "Governor", "Boston", "Unknown/ N/A", "Governor", "Treasurer of …
+#> $ comm_name   <chr> "The Shannon O'Brien Committee", "The Deval Patrick Committee", NA, "MA Corr…
+#> $ comm_city   <chr> NA, NA, NA, "Milford", NA, "Shrewsbury", "Boston", "W. Springfield", NA, "Wi…
+#> $ comm_state  <chr> NA, NA, NA, "MA", NA, "MA", "MA", "MA", NA, "MA", NA, "MA", "MA", "MA", "MA"…
+#> $ comm_zip    <chr> NA, NA, NA, "01757", NA, "01545", "02137", "01090", NA, "01095", NA, "01748"…
 #> $ category    <chr> "D", "D", "D", "P", "D", "D", "N", "N", "D", "N", "D", "P", "P", "D", "N", "…
 #> $ amendment   <lgl> FALSE, TRUE, FALSE, FALSE, TRUE, FALSE, TRUE, FALSE, FALSE, FALSE, FALSE, FA…
 ```
@@ -313,32 +313,32 @@ col_stats(mac, count_na)
 #>  3 line        <chr>        0 0          
 #>  4 date        <date>       0 0          
 #>  5 cont_type   <chr>        0 0          
-#>  6 first       <chr>   211806 0.0657     
-#>  7 last        <chr>    34917 0.0108     
-#>  8 address     <chr>   120383 0.0374     
-#>  9 city        <chr>   102329 0.0318     
-#> 10 state       <chr>    57470 0.0178     
-#> 11 zip         <chr>   143084 0.0444     
-#> 12 occupation  <chr>  1385557 0.430      
-#> 13 employer    <chr>  1395998 0.433      
-#> 14 officer     <chr>  3195114 0.991      
-#> 15 cont_id     <chr>  3130464 0.971      
+#>  6 first       <chr>   212828 0.0650     
+#>  7 last        <chr>    34920 0.0107     
+#>  8 address     <chr>   121287 0.0370     
+#>  9 city        <chr>   103224 0.0315     
+#> 10 state       <chr>    69604 0.0212     
+#> 11 zip         <chr>   144847 0.0442     
+#> 12 occupation  <chr>  1394838 0.426      
+#> 13 employer    <chr>  1400655 0.427      
+#> 14 officer     <chr>  3248948 0.992      
+#> 15 cont_id     <chr>  3184098 0.972      
 #> 16 amount      <dbl>        0 0          
 #> 17 tender      <chr>        0 0          
 #> 18 guid        <chr>        0 0          
 #> 19 rpt_year    <int>        0 0          
 #> 20 filing_date <dttm>       0 0          
-#> 21 start_date  <date> 1763317 0.547      
+#> 21 start_date  <date> 1817102 0.555      
 #> 22 end_date    <date>       0 0          
 #> 23 cpf_id      <chr>        0 0          
 #> 24 report_type <chr>        0 0          
-#> 25 cand_name   <chr>        1 0.000000310
-#> 26 office      <chr>      206 0.0000639  
-#> 27 district    <chr>      206 0.0000639  
-#> 28 comm_name   <chr>    87674 0.0272     
-#> 29 comm_city   <chr>   913803 0.284      
-#> 30 comm_state  <chr>   914037 0.284      
-#> 31 comm_zip    <chr>   913887 0.284      
+#> 25 cand_name   <chr>        1 0.000000305
+#> 26 office      <chr>      206 0.0000629  
+#> 27 district    <chr>      206 0.0000629  
+#> 28 comm_name   <chr>    89267 0.0272     
+#> 29 comm_city   <chr>   915428 0.279      
+#> 30 comm_state  <chr>   915638 0.279      
+#> 31 comm_zip    <chr>   915488 0.279      
 #> 32 category    <chr>        0 0          
 #> 33 amendment   <lgl>        0 0
 ```
@@ -377,9 +377,9 @@ contributor name. We can remove these flags.
 
 ``` r
 prop_na(mac$contrib_any[which(mac$cont_type != "OTHER")])
-#> [1] 0.0003695842
+#> [1] 0.0003633966
 prop_na(mac$contrib_any[which(mac$cont_type == "OTHER")])
-#> [1] 0.3200422
+#> [1] 0.3176711
 mac$na_flag[which(mac$cont_type == "OTHER")] <- FALSE
 # very few remain
 percent(mean(mac$na_flag), accuracy = 0.01)
@@ -408,42 +408,42 @@ col_stats(mac, n_distinct)
 #> # A tibble: 36 x 4
 #>    col         class        n           p
 #>    <chr>       <chr>    <int>       <dbl>
-#>  1 id          <chr>  3222668 1          
-#>  2 rpt_id      <chr>   149625 0.0464     
-#>  3 line        <chr>  3222668 1          
-#>  4 date        <date>    6954 0.00216    
-#>  5 cont_type   <chr>        3 0.000000931
-#>  6 first       <chr>   115052 0.0357     
-#>  7 last        <chr>   237565 0.0737     
-#>  8 address     <chr>   887175 0.275      
-#>  9 city        <chr>    15797 0.00490    
-#> 10 state       <chr>      303 0.0000940  
-#> 11 zip         <chr>   128856 0.0400     
-#> 12 occupation  <chr>    87004 0.0270     
-#> 13 employer    <chr>   264298 0.0820     
-#> 14 officer     <chr>     7568 0.00235    
-#> 15 cont_id     <chr>     6770 0.00210    
-#> 16 amount      <dbl>    30345 0.00942    
-#> 17 tender      <chr>        8 0.00000248 
-#> 18 guid        <chr>  3219417 0.999      
-#> 19 rpt_year    <int>       24 0.00000745 
-#> 20 filing_date <dttm>  149551 0.0464     
-#> 21 start_date  <date>    1555 0.000483   
-#> 22 end_date    <date>    6178 0.00192    
-#> 23 cpf_id      <chr>     4311 0.00134    
-#> 24 report_type <chr>       72 0.0000223  
-#> 25 cand_name   <chr>     4529 0.00141    
-#> 26 office      <chr>       59 0.0000183  
-#> 27 district    <chr>      325 0.000101   
-#> 28 comm_name   <chr>     5791 0.00180    
-#> 29 comm_city   <chr>      689 0.000214   
-#> 30 comm_state  <chr>       33 0.0000102  
-#> 31 comm_zip    <chr>      891 0.000276   
-#> 32 category    <chr>        8 0.00000248 
-#> 33 amendment   <lgl>        2 0.000000621
-#> 34 contrib_any <chr>   156101 0.0484     
-#> 35 recip_any   <chr>     5962 0.00185    
-#> 36 na_flag     <lgl>        2 0.000000621
+#>  1 id          <chr>  3276608 1          
+#>  2 rpt_id      <chr>   151852 0.0463     
+#>  3 line        <chr>  3276608 1          
+#>  4 date        <date>    7017 0.00214    
+#>  5 cont_type   <chr>        3 0.000000916
+#>  6 first       <chr>   115600 0.0353     
+#>  7 last        <chr>   238464 0.0728     
+#>  8 address     <chr>   890959 0.272      
+#>  9 city        <chr>    15845 0.00484    
+#> 10 state       <chr>      305 0.0000931  
+#> 11 zip         <chr>   129225 0.0394     
+#> 12 occupation  <chr>    87574 0.0267     
+#> 13 employer    <chr>   265231 0.0809     
+#> 14 officer     <chr>     7587 0.00232    
+#> 15 cont_id     <chr>     6776 0.00207    
+#> 16 amount      <dbl>    30555 0.00933    
+#> 17 tender      <chr>        8 0.00000244 
+#> 18 guid        <chr>  3273342 0.999      
+#> 19 rpt_year    <int>       24 0.00000732 
+#> 20 filing_date <dttm>  151776 0.0463     
+#> 21 start_date  <date>    1560 0.000476   
+#> 22 end_date    <date>    6241 0.00190    
+#> 23 cpf_id      <chr>     4342 0.00133    
+#> 24 report_type <chr>       72 0.0000220  
+#> 25 cand_name   <chr>     4565 0.00139    
+#> 26 office      <chr>       59 0.0000180  
+#> 27 district    <chr>      325 0.0000992  
+#> 28 comm_name   <chr>     5812 0.00177    
+#> 29 comm_city   <chr>      689 0.000210   
+#> 30 comm_state  <chr>       33 0.0000101  
+#> 31 comm_zip    <chr>      892 0.000272   
+#> 32 category    <chr>        8 0.00000244 
+#> 33 amendment   <lgl>        2 0.000000610
+#> 34 contrib_any <chr>   156825 0.0479     
+#> 35 recip_any   <chr>     5984 0.00183    
+#> 36 na_flag     <lgl>        2 0.000000610
 ```
 
 ![](../plots/bar_type-1.png)<!-- -->
@@ -463,9 +463,9 @@ col_stats(mac, n_distinct)
 ``` r
 summary(mac$amount)
 #>     Min.  1st Qu.   Median     Mean  3rd Qu.     Max. 
-#>   -94729       26      100      387      200 12588840
+#>   -94729       25      100      382      200 12588840
 mean(mac$amount <= 0)
-#> [1] 0.007535682
+#> [1] 0.007515394
 ```
 
 ![](../plots/amount_histogram-1.png)<!-- -->
@@ -569,16 +569,16 @@ mac %>%
 #> # A tibble: 10 x 2
 #>    address                         address_norm              
 #>    <chr>                           <chr>                     
-#>  1 17820 Tipton Ave.               17820 TIPTON AVE          
-#>  2 62 Lake Street                  62 LK ST                  
-#>  3 1 PELICAN REACH                 1 PELICAN REACH           
-#>  4 24 Lochstead Avenue             24 LOCHSTEAD AVE          
+#>  1 Po Box 130251                   PO BOX 130251             
+#>  2 97 Gulf Road                    97 GULF RD                
+#>  3 9 GARDNER RD, 1                 9 GARDNER RD 1            
+#>  4 506 Out of the Way Rd           506 OUT OF THE WAY RD     
 #>  5 20 Marks Rd.                    20 MARKS RD               
-#>  6 92 Barberry Drive               92 BARBERRY DR            
-#>  7 76 Empire St., #1               76 EMPIRE ST 1            
-#>  8 160 W. Brookline St. #1         160 W BROOKLINE ST 1      
+#>  6 1563 Fall River Avenue          1563 FALL RIV AVE         
+#>  7 128 Marlborough Street #3       128 MARLBOROUGH ST 3      
+#>  8 135 Clarendon Street #10W       135 CLARENDON ST 10 W     
 #>  9 30 Rockfeller Plaza, 31st Floor 30 ROCKFELLER PLZ 31 ST FL
-#> 10 114 MOTT STREET 1ST FL          114 MOTT ST 1 ST FL
+#> 10 18 LEE STREET                   18 LEE ST
 ```
 
 ### ZIP
@@ -606,8 +606,8 @@ progress_table(
 #> # A tibble: 2 x 6
 #>   stage    prop_in n_distinct prop_na  n_out n_diff
 #>   <chr>      <dbl>      <dbl>   <dbl>  <dbl>  <dbl>
-#> 1 zip        0.861     128856  0.0444 426777 117358
-#> 2 zip_norm   0.999      13737  0.0445   4490   1565
+#> 1 zip        0.860     129225  0.0442 439922 117699
+#> 2 zip_norm   0.999      13769  0.0443   4543   1569
 ```
 
 ### State
@@ -631,20 +631,20 @@ mac <- mac %>%
 mac %>%
   filter(state != state_norm) %>%
   count(state, sort = TRUE)
-#> # A tibble: 126 x 2
+#> # A tibble: 128 x 2
 #>    state     n
 #>    <chr> <int>
-#>  1 ma     2047
-#>  2 Ma     1674
-#>  3 nh      211
-#>  4 ri      165
-#>  5 ct      163
-#>  6 Fl      146
-#>  7 ny      116
-#>  8 ca      105
+#>  1 ma     2057
+#>  2 Ma     1679
+#>  3 nh      213
+#>  4 ri      166
+#>  5 ct      165
+#>  6 Fl      149
+#>  7 ny      117
+#>  8 ca      108
 #>  9 Ca       89
-#> 10 fl       78
-#> # … with 116 more rows
+#> 10 fl       80
+#> # … with 118 more rows
 ```
 
 ``` r
@@ -656,8 +656,8 @@ progress_table(
 #> # A tibble: 2 x 6
 #>   stage      prop_in n_distinct prop_na n_out n_diff
 #>   <chr>        <dbl>      <dbl>   <dbl> <dbl>  <dbl>
-#> 1 state        0.998        303  0.0178  6043    241
-#> 2 state_norm   1.00         171  0.0179   433    110
+#> 1 state        0.998        305  0.0212  6080    243
+#> 2 state_norm   1.00         171  0.0213   433    110
 ```
 
 ### City
@@ -706,7 +706,7 @@ mac <- mac %>%
     match_abb = is_abbrev(city_norm, city_match),
     match_dist = str_dist(city_norm, city_match),
     city_swap = if_else(
-      condition = !is.na(match_dist) & match_abb | match_dist == 1,
+      condition = !is.na(match_dist) & (match_abb | match_dist == 1),
       true = city_match,
       false = city_norm
     )
@@ -749,20 +749,20 @@ good_refine <- mac %>%
   )
 ```
 
-    #> # A tibble: 106 x 3
+    #> # A tibble: 107 x 3
     #>    city_swap         city_refine         n
     #>    <chr>             <chr>           <int>
-    #>  1 SO BOSTON         BOSTON            284
+    #>  1 SO BOSTON         BOSTON            296
     #>  2 LITTLETON COMPTON LITTLE COMPTON     18
     #>  3 NO DARTHMOUTH     NORTH DARTMOUTH    17
-    #>  4 CINCINATTI        CINCINNATI         15
+    #>  4 CINCINATTI        CINCINNATI         16
     #>  5 NEW YORK NY       NEW YORK            8
     #>  6 NORTH HAMPTON     NORTHAMPTON         6
     #>  7 SAN FRANSICO      SAN FRANCISCO       6
-    #>  8 CENTER FALLS      CENTRAL FALLS       4
-    #>  9 MARRIETA          MARIETTA            4
-    #> 10 MARSHFIELD HILLS  MARSHFIELD          4
-    #> # … with 96 more rows
+    #>  8 HADLEY `          HADLEY              5
+    #>  9 CENTER FALLS      CENTRAL FALLS       4
+    #> 10 MARRIETA          MARIETTA            4
+    #> # … with 97 more rows
 
 Then we can join the refined values back to the database.
 
@@ -776,10 +776,10 @@ mac <- mac %>%
 
 | stage        | prop\_in | n\_distinct | prop\_na | n\_out | n\_diff |
 | :----------- | -------: | ----------: | -------: | -----: | ------: |
-| city\_raw)   |    0.983 |       11530 |    0.032 |  52397 |    5532 |
-| city\_norm   |    0.984 |       10536 |    0.032 |  49183 |    4593 |
-| city\_swap   |    0.993 |        7136 |    0.050 |  22812 |    1221 |
-| city\_refine |    0.993 |        7035 |    0.050 |  22337 |    1121 |
+| city\_raw)   |    0.983 |       11568 |    0.032 |  53463 |    5560 |
+| city\_norm   |    0.988 |       10571 |    0.032 |  37737 |    4533 |
+| city\_swap   |    0.992 |        8407 |    0.032 |  26189 |    2381 |
+| city\_refine |    0.992 |        8312 |    0.032 |  25696 |    2287 |
 
 You can see how the percentage of valid values increased with each
 stage.
@@ -830,55 +830,55 @@ mac <- mac %>%
 
 ``` r
 glimpse(sample_n(mac, 20))
-#> Observations: 20
-#> Variables: 41
-#> $ id            <chr> "7183828", "11825679", "7986405", "6406880", "5595184", "8791761", "574841…
-#> $ rpt_id        <chr> "96127", "593426", "135568", "52239", "14087", "193993", "19760", "721064"…
-#> $ line          <chr> "7183828", "11825679", "7986405", "6406880", "5595184", "8791761", "574841…
-#> $ date          <date> 2008-02-29, 2016-12-07, 2010-08-27, 2006-07-20, 2002-09-10, 2014-04-11, 2…
+#> Rows: 20
+#> Columns: 41
+#> $ id            <chr> "7183828", "11825706", "7986481", "13732961", "6406880", "5595157", "87909…
+#> $ rpt_id        <chr> "96127", "593426", "135568", "733674", "52239", "14087", "193881", "19760"…
+#> $ line          <chr> "7183828", "11825706", "7986481", "13732961", "6406880", "5595157", "87909…
+#> $ date          <date> 2008-02-29, 2016-12-07, 2010-04-07, 2020-03-09, 2006-07-20, 2002-10-01, 2…
 #> $ cont_type     <chr> "Individual", "Individual", "Individual", "Individual", "Individual", "Ind…
-#> $ first         <chr> "FRANCIS X", "Annalisa M", "Vivian", "James", "Mary Ellen", "Jody", "Jenni…
-#> $ last          <chr> "BELLOTTI", "Piroli", "Mann", "Abreu", "Grossman", "Trunfio", "Hunt", "Ngu…
-#> $ address       <chr> "120 HILLSIDE AVE", "177 FRANKLIN ST", "109 Broad Street, no. 506", "57 Ho…
-#> $ city_raw      <chr> "WOLLASTON", "QUINCY", "Weymouth", "Fall River", "Waban", "Salem", "Marlbo…
+#> $ first         <chr> "FRANCIS X", "Christopher C", "Richard", "William", "James", "Harry R", "J…
+#> $ last          <chr> "BELLOTTI", "Reed", "Peterson", "Thibeault", "Abreu", "Collings", "Salema"…
+#> $ address       <chr> "120 HILLSIDE AVE", "6 Bass River Road", "20 Old Wharf Waye", "85-87 Bosto…
+#> $ city_raw      <chr> "WOLLASTON", "Beverly", "Marshfield", "Everett", "Fall River", "Boston", "…
 #> $ state         <chr> "MA", "MA", "MA", "MA", "MA", "MA", "MA", "MA", "MA", "MA", "MA", "MA", "M…
-#> $ zip           <chr> "02170", "02169", "02188", "02723", "02468", "01970-1030", "01752", "02189…
-#> $ occupation    <chr> "LOBBYIST", "SERVICE REPRESENTATIVE", NA, "Social Worker", "Treasurer", "E…
-#> $ employer      <chr> "LOBBYIST", "Verizon New England Inc.", NA, "Dept. Mental Health", "MassEn…
+#> $ zip           <chr> "02170", "01915", "02050", "02149", "02723", "02116", "01056", "01752", "0…
+#> $ occupation    <chr> "LOBBYIST", "SPLICE-SERVICE TECHNICIAN", NA, "Owner", "Social Worker", NA,…
+#> $ employer      <chr> "LOBBYIST", "Verizon New England Inc.", NA, "Great Northern Demolition", "…
 #> $ officer       <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
 #> $ cont_id       <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
-#> $ amount        <dbl> 100.0, 1.0, 25.0, 200.0, 250.0, 250.0, 100.0, 2.0, 250.0, 25.0, 100.0, 500…
-#> $ tender        <chr> "Unknown", "Check", "Unknown", "Unknown", "Unknown", "Check", "Unknown", "…
-#> $ guid          <chr> "{8e8599fa-3bb6-4093-d287-4f7c60389958}", "{8d90f004-b7bc-e611-e280-030050…
-#> $ rpt_year      <int> 2008, 2016, 2010, 2006, 2002, 2014, 2004, 2019, 2017, 2010, 2017, 2010, 20…
-#> $ filing_date   <dttm> 2009-06-26 14:59:36, 2016-12-07 15:00:00, 2011-05-31 12:49:05, 2006-09-08…
-#> $ start_date    <date> 2008-01-01, NA, 2010-01-01, 2006-01-01, 2002-08-31, NA, 2004-01-01, NA, N…
-#> $ end_date      <date> 2008-08-29, 2016-12-07, 2010-08-27, 2006-09-01, 2002-10-18, 2014-04-11, 2…
-#> $ cpf_id        <chr> "13651", "80530", "11677", "10106", "12530", "13182", "13065", "80224", "1…
-#> $ report_type   <chr> "Pre-primary Report (ND)", "Deposit Report", "Pre-primary Report (ND)", "P…
+#> $ amount        <dbl> 100.00, 0.25, 25.00, 1000.00, 200.00, 150.00, 200.00, 100.00, 2.00, 50.00,…
+#> $ tender        <chr> "Unknown", "Check", "Unknown", "Check", "Unknown", "Unknown", "Check", "Un…
+#> $ guid          <chr> "{8e8599fa-3bb6-4093-d287-4f7c60389958}", "{8d900b05-b7bc-e611-e280-030050…
+#> $ rpt_year      <int> 2008, 2016, 2010, 2020, 2006, 2002, 2014, 2004, 2019, 2017, 2010, 2017, 20…
+#> $ filing_date   <dttm> 2009-06-26 14:59:36, 2016-12-07 15:00:00, 2011-05-31 12:49:05, 2020-03-09…
+#> $ start_date    <date> 2008-01-01, NA, 2010-01-01, NA, 2006-01-01, 2002-08-31, NA, 2004-01-01, N…
+#> $ end_date      <date> 2008-08-29, 2016-12-07, 2010-08-27, 2020-03-09, 2006-09-01, 2002-10-18, 2…
+#> $ cpf_id        <chr> "13651", "80530", "11677", "15031", "10106", "12530", "12894", "13065", "8…
+#> $ report_type   <chr> "Pre-primary Report (ND)", "Deposit Report", "Pre-primary Report (ND)", "D…
 #> $ cand_name     <chr> "Paul J. Donato", "Int'l Brotherhood of Electrical Workers Local Union 222…
-#> $ office        <chr> "House", "N/A", "Senate", "House", "House", "Statewide", "House", "N/A", "…
-#> $ district      <chr> "35th Middlesex", "No office", "Plymouth & Norfolk", "7th Bristol", "8th S…
+#> $ office        <chr> "House", "N/A", "Senate", "Senate", "House", "House", "Municipal", "House"…
+#> $ district      <chr> "35th Middlesex", "No office", "Plymouth & Norfolk", "Middlesex & Suffolk"…
 #> $ comm_name     <chr> "Donato Committee", "Int'l Brotherhood of Electrical Workers Local Union 2…
-#> $ comm_city     <chr> "Medford", "Dorchester", "Hingham", "Fall River", "Boston", NA, "Marlborou…
-#> $ comm_state    <chr> "MA", "MA", "MA", "MA", "MA", NA, "MA", "MA", "MA", NA, "MA", NA, "NY", "M…
-#> $ comm_zip      <chr> "02155", "02124", "02043", "02724", "02101", NA, "01752", "01752", "02466"…
-#> $ category      <chr> "N", "P", "N", "N", "N", "D", "N", "P", "D", "D", "N", "D", "P", "N", "N",…
-#> $ amendment     <lgl> TRUE, FALSE, TRUE, FALSE, TRUE, FALSE, TRUE, FALSE, FALSE, FALSE, TRUE, TR…
-#> $ contrib_any   <chr> "FRANCIS X", "Annalisa M", "Vivian", "James", "Mary Ellen", "Jody", "Jenni…
+#> $ comm_city     <chr> "Medford", "Dorchester", "Hingham", "Boston", "Fall River", "Boston", NA, …
+#> $ comm_state    <chr> "MA", "MA", "MA", "MA", "MA", "MA", NA, "MA", "MA", NA, NA, "MA", NA, "MA"…
+#> $ comm_zip      <chr> "02155", "02124", "02043", "02110", "02724", "02101", NA, "01752", "01752"…
+#> $ category      <chr> "N", "P", "N", "N", "N", "N", "D", "N", "P", "D", "D", "N", "D", "B", "N",…
+#> $ amendment     <lgl> TRUE, FALSE, TRUE, FALSE, FALSE, TRUE, FALSE, TRUE, FALSE, FALSE, FALSE, T…
+#> $ contrib_any   <chr> "FRANCIS X", "Christopher C", "Richard", "William", "James", "Harry R", "J…
 #> $ recip_any     <chr> "Donato Committee", "Int'l Brotherhood of Electrical Workers Local Union 2…
 #> $ na_flag       <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALS…
-#> $ year          <dbl> 2008, 2016, 2010, 2006, 2002, 2014, 2004, 2019, 2017, 2010, 2017, 2010, 20…
-#> $ address_clean <chr> "120 HILLSIDE AVE", "177 FRANKLIN ST", "109 BROAD ST NO 506", "57 HORTON S…
-#> $ zip_clean     <chr> "02170", "02169", "02188", "02723", "02468", "01970", "01752", "02189", "0…
+#> $ year          <dbl> 2008, 2016, 2010, 2020, 2006, 2002, 2014, 2004, 2019, 2017, 2010, 2017, 20…
+#> $ address_clean <chr> "120 HILLSIDE AVE", "6 BASS RIV RD", "20 OLD WHARF WAYE", "8587 BOSTON ST"…
+#> $ zip_clean     <chr> "02170", "01915", "02050", "02149", "02723", "02116", "01056", "01752", "0…
 #> $ state_clean   <chr> "MA", "MA", "MA", "MA", "MA", "MA", "MA", "MA", "MA", "MA", "MA", "MA", "M…
-#> $ city_clean    <chr> "WOLLASTON", "QUINCY", "WEYMOUTH", "FALL RIVER", "WABAN", "SALEM", "MARLBO…
+#> $ city_clean    <chr> "WOLLASTON", "BEVERLY", "MARSHFIELD", "EVERETT", "FALL RIVER", "BOSTON", "…
 ```
 
-1.  There are 3,222,668 records in the database.
+1.  There are 3,276,608 records in the database.
 2.  There are 0 duplicate records in the database.
 3.  The range and distribution of `amount` and `date` seem reasonable.
-4.  There are 1,155 records missing either recipient or date.
+4.  There are 1,155 records missing a recipient or date.
 5.  Consistency in goegraphic data has been improved with
     `campfin::normal_*()`.
 6.  The 4-digit `year` variable has been created with
@@ -888,12 +888,13 @@ glimpse(sample_n(mac, 20))
 
 ``` r
 clean_dir <- dir_create(here("ma", "contribs", "data", "clean"))
-```
-
-``` r
-write_csv(
-  x = mac,
-  path = path(clean_dir, "ma_contribs_clean.csv"),
-  na = ""
-)
+clean_path <- path(clean_dir, "ma_contribs_clean.csv")
+write_csv(mac, clean_path, na = "")
+file_size(clean_path)
+#> 1.28G
+guess_encoding(clean_path)
+#> # A tibble: 1 x 2
+#>   encoding confidence
+#>   <chr>         <dbl>
+#> 1 ASCII             1
 ```
