@@ -27,8 +27,10 @@ opts_chunk$set(
   fig.width = 10,
   dpi = 300
 )
-options(width = 99)
-set.seed(5)
+if (!interactive()) {
+  options(width = 99)
+  set.seed(5)
+}
 ```
 
 ```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
