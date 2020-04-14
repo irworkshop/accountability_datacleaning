@@ -27,8 +27,10 @@ opts_chunk$set(
   fig.width = 10,
   dpi = 300
 )
-options(width = 99)
-set.seed(5)
+if (!interactive()) {
+  options(width = 99)
+  set.seed(5)
+}
 ```
 
 ```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
@@ -447,7 +449,7 @@ ohc <- ohc %>%
     match_abb = is_abbrev(city_norm, city_match),
     match_dist = str_dist(city_norm, city_match),
     city_swap = if_else(
-      condition = !is.na(match_dist) & match_abb | match_dist == 1,
+      condition = !is.na(match_dist) & (match_abb | match_dist == 1),
       true = city_match,
       false = city_norm
     )
@@ -671,12 +673,8 @@ glimpse(sample_n(ohc, 20))
 
 ```{r clean_dir}
 clean_dir <- dir_create(here("oh", "contribs", "data", "clean"))
-```
-
-```{r clean_write}
-write_csv(
-  x = ohc,
-  path = path(clean_dir, "oh_contribs_clean.csv"),
-  na = ""
-)
+clean_path <- path(clean_dir, "oh_contribs_clean.csv")
+write_csv(ohc, clean_path, na = "")
+file_size(clean_path)
+guess_encoding(clean_path)
 ```

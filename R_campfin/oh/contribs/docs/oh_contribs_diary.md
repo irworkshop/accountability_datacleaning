@@ -1,7 +1,17 @@
 Ohio Contributions
 ================
 Kiernan Nicholls
-2020-02-19 16:56:01
+2020-04-14 14:26:41
+
+  - [Project](#project)
+  - [Objectives](#objectives)
+  - [Packages](#packages)
+  - [Data](#data)
+  - [Import](#import)
+  - [Explore](#explore)
+  - [Wrangle](#wrangle)
+  - [Conclude](#conclude)
+  - [Export](#export)
 
 <!-- Place comments regarding knitting here -->
 
@@ -181,7 +191,7 @@ raw_paths <- dir_ls(raw_dir)
 > advised that a database application be utilized to load and work with
 > the data available at this site…
 
-We can read all 82 raw CSV files into a single data frame using
+We can read all 85 raw CSV files into a single data frame using
 `purrr::map_df()` and `readr::read_csv()`.
 
 ``` r
@@ -220,39 +230,39 @@ tail(ohc)
 #> # A tibble: 6 x 28
 #>   com_name master_key rpt_desc rpt_year rpt_key desc  first middle last  suffix non_ind pac_no
 #>   <chr>         <int> <chr>       <int>   <int> <chr> <chr> <chr>  <chr> <chr>  <chr>   <chr> 
-#> 1 SHELBY …      15088 SEMIANN…     2019  3.52e8 31-C… <NA>  <NA>   <NA>  <NA>   MUTUAL… <NA>  
-#> 2 SHELBY …      15088 SEMIANN…     2019  3.52e8 31-C… <NA>  <NA>   <NA>  <NA>   MUTUAL… <NA>  
-#> 3 SHELBY …      15088 SEMIANN…     2019  3.52e8 31-C… <NA>  <NA>   <NA>  <NA>   OHIO D… <NA>  
-#> 4 SHELBY …      15088 SEMIANN…     2019  3.52e8 31-C… <NA>  <NA>   <NA>  <NA>   OHIO D… <NA>  
-#> 5 WARREN …      15222 SEMIANN…     2019  3.55e8 31-A… DON   <NA>   MAGEE <NA>   <NA>    <NA>  
-#> 6 WARREN …      15222 SEMIANN…     2019  3.55e8 31-A… DON   <NA>   MAGEE <NA>   <NA>    <NA>  
+#> 1 LIBERTA…      12841 PRE-PRI…     2020  3.61e8 31-A… MATT… <NA>   YODER <NA>   <NA>    <NA>  
+#> 2 LIBERTA…      12841 PRE-PRI…     2020  3.61e8 31-A… MATT… <NA>   YODER <NA>   <NA>    <NA>  
+#> 3 LIBERTA…      12841 PRE-PRI…     2020  3.61e8 31-A… DAN   <NA>   ZINK  <NA>   <NA>    <NA>  
+#> 4 LIBERTA…      12842 PRE-PRI…     2020  3.61e8 31-A… PATR… <NA>   GLAS… <NA>   <NA>    <NA>  
+#> 5 LIBERTA…      12842 PRE-PRI…     2020  3.61e8 31-A… PATR… <NA>   GLAS… <NA>   <NA>    <NA>  
+#> 6 MAHONIN…      13141 PRE-PRI…     2020  3.62e8 31-C… <NA>  <NA>   <NA>  <NA>   CHEMIC… <NA>  
 #> # … with 16 more variables: address <chr>, city <chr>, state <chr>, zip <chr>, date <date>,
 #> #   amount <dbl>, event <chr>, occupation <chr>, inkind <chr>, other_type <chr>, rcv_event <chr>,
 #> #   cand_first <chr>, cand_last <chr>, office <chr>, district <int>, party <chr>
 glimpse(sample_n(ohc, 20))
-#> Observations: 20
-#> Variables: 28
+#> Rows: 20
+#> Columns: 28
 #> $ com_name   <chr> "OHIO EDUCATION ASSOC FUND FOR CHILDREN AND PUBLIC EDUCATION", "REALTORS PAC"…
-#> $ master_key <int> 1814, 1515, 6542, 1577, 1780, 10285, 1683, 2047, 1814, 12856, 1745, 1527, 715…
-#> $ rpt_desc   <chr> "ANNUAL   (JANUARY)", "PRE-PRIMARY", "POST-PRIMARY", "POST-GENERAL", "PRE-GEN…
+#> $ master_key <int> 1814, 1515, 2110, 1577, 1780, 10285, 1683, 2047, 1814, 12856, 1745, 1508, 715…
+#> $ rpt_desc   <chr> "PRE-PRIMARY", "PRE-PRIMARY", "PRE-PRIMARY", "POST-PRIMARY", "PRE-GENERAL", "…
 #> $ rpt_year   <int> 2006, 2002, 2017, 2005, 2004, 2009, 1998, 2009, 2010, 2010, 2002, 2011, 2002,…
-#> $ rpt_key    <int> 881980, 696520, 308242843, 928573, 834430, 280957, 584986, 1013395, 75248659,…
+#> $ rpt_key    <int> 866809, 696520, 303069463, 811093, 834430, 280957, 584986, 1013395, 89637310,…
 #> $ desc       <chr> "31-A  Stmt of Contribution", "31-A  Stmt of Contribution", "31-A  Stmt of Co…
-#> $ first      <chr> "TANYA", "VICTORIA S", "CHANDLER", "CARL", "BOB", "JEAN", "DAPHNE", "ELIZABET…
-#> $ middle     <chr> "R", NA, NA, "J", NA, "B.", NA, NA, "R", NA, "C", NA, "W", NA, NA, NA, NA, NA…
-#> $ last       <chr> "SCHMIDT", "MILLER", "MYERS", "JOHNSON", "WRIGHT", "JOHNS", "REAVES", "SOLOSA…
+#> $ first      <chr> "ROBYN", "WARREN D", "CHARLES", "DONALD", "MARY ANN", "JEAN", "DAPHNE", "DONN…
+#> $ middle     <chr> "L", NA, "M", "H", NA, "B.", NA, NA, "A", NA, "J", NA, "W", NA, NA, NA, NA, N…
+#> $ last       <chr> "SCHMIEDEBUSCH", "MILLER", "ROESCH", "JOHNSON", "WRIGHT", "JOHNS", "REAVES", …
 #> $ suffix     <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "JR", NA, NA, NA, NA, NA, NA,…
 #> $ non_ind    <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA
-#> $ pac_no     <chr> "OH299", "CP401", "PCE", "CP718", "OH214", NA, "LA766", "OH723", "OH299", NA,…
-#> $ address    <chr> "2911 LATONIA BLVD", "265 EAST JEFFERSON STREET", "1245 KEVROB DR.", "1219 LE…
-#> $ city       <chr> "TOLEDO", "JEFFERSON", "ZANESVILLE", "THIBODAUX", "GEORGETOWN", "CINCINNATI",…
-#> $ state      <chr> "OH", "OH", "OH", "LA", "KY", "OH", "OH", "ID", "OH", "NY", "OH", "OH", "OH",…
-#> $ zip        <chr> "43606", "44047", "43701", "70301", "40324", "45226-2013", "43227", "83705-11…
-#> $ date       <date> 2006-12-15, 2002-02-25, 2017-04-26, 2005-11-09, 2004-09-07, 2009-05-26, 1998…
-#> $ amount     <dbl> 1.00, 10.00, 1.00, 5.00, 2.00, 25.00, 1.00, 25.00, 1.00, 50.00, 8.06, 1.00, 2…
-#> $ event      <chr> NA, NA, NA, NA, NA, "05/15/2009", NA, NA, NA, NA, NA, NA, NA, NA, NA, "02/18/…
-#> $ occupation <chr> "SYLVANIA CITY SD", "REAL ESTATE SALESPERSON", NA, "THE LOUISIANA COCA-COLA B…
-#> $ inkind     <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "SNACKS",…
+#> $ pac_no     <chr> "OH299", "CP401", "OH868", "CP718", "OH214", NA, "LA766", "OH723", "OH299", N…
+#> $ address    <chr> "223 OTTAWA GLANDORF RD", "2277 ANNANDALE PL", "7347 WETHERINGTON DRIVE", "84…
+#> $ city       <chr> "OTTAWA", "XENIA", "WEST CHESTER", "CINCINNATI", "HUBBARD", "CINCINNATI", "CO…
+#> $ state      <chr> "OH", "OH", "OH", "OH", "OH", "OH", "OH", "OH", "OH", "OH", "OH", "OH", "OH",…
+#> $ zip        <chr> "45875", "45385-9122", "45069", "45247", "44425", "45226-2013", "43227", "431…
+#> $ date       <date> 2006-01-23, 2002-02-05, NA, 2005-05-19, 2004-05-03, 2009-05-26, 1998-07-27, …
+#> $ amount     <dbl> 1.00, 20.00, 340.00, 20.00, 14.00, 25.00, 1.00, 50.00, 1.00, 50.00, 14.85, 20…
+#> $ event      <chr> NA, NA, NA, NA, NA, "05/15/2009", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
+#> $ occupation <chr> "OEA", "REAL ESTATE SALESPERSON", "DINSMORE & SHOHL LLP", "COCA-COLA BOTTLING…
+#> $ inkind     <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA
 #> $ other_type <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA
 #> $ rcv_event  <chr> NA, NA, NA, NA, NA, NA, "N", "N", NA, NA, NA, NA, NA, "N", NA, NA, NA, "N", N…
 #> $ cand_first <chr> NA, NA, NA, NA, NA, "TED", NA, NA, NA, "JOHN", NA, NA, "JOHN", NA, "CATHERINE…
@@ -269,34 +279,34 @@ col_stats(ohc, count_na)
 #> # A tibble: 28 x 4
 #>    col        class        n           p
 #>    <chr>      <chr>    <int>       <dbl>
-#>  1 com_name   <chr>        4 0.000000427
+#>  1 com_name   <chr>        4 0.000000424
 #>  2 master_key <int>        0 0          
 #>  3 rpt_desc   <chr>        0 0          
 #>  4 rpt_year   <int>        0 0          
 #>  5 rpt_key    <int>        0 0          
 #>  6 desc       <chr>        0 0          
-#>  7 first      <chr>   550651 0.0588     
-#>  8 middle     <chr>  5152147 0.550      
-#>  9 last       <chr>   530994 0.0567     
-#> 10 suffix     <chr>  9211439 0.984      
-#> 11 non_ind    <chr>  8829315 0.943      
-#> 12 pac_no     <chr>  2091508 0.223      
-#> 13 address    <chr>    80516 0.00860    
-#> 14 city       <chr>    76745 0.00820    
-#> 15 state      <chr>    68728 0.00734    
-#> 16 zip        <chr>    65148 0.00696    
-#> 17 date       <date>    7991 0.000854   
-#> 18 amount     <dbl>     3112 0.000332   
-#> 19 event      <chr>  8434654 0.901      
-#> 20 occupation <chr>  3596587 0.384      
-#> 21 inkind     <chr>  9288439 0.992      
-#> 22 other_type <chr>  9307540 0.994      
-#> 23 rcv_event  <chr>  6615014 0.707      
-#> 24 cand_first <chr>  7232931 0.773      
-#> 25 cand_last  <chr>  7232528 0.772      
-#> 26 office     <chr>  7232510 0.772      
-#> 27 district   <int>  7276605 0.777      
-#> 28 party      <chr>  7232917 0.773
+#>  7 first      <chr>   552458 0.0586     
+#>  8 middle     <chr>  5178990 0.549      
+#>  9 last       <chr>   532799 0.0565     
+#> 10 suffix     <chr>  9283553 0.984      
+#> 11 non_ind    <chr>  8900172 0.943      
+#> 12 pac_no     <chr>  2100351 0.223      
+#> 13 address    <chr>    80916 0.00858    
+#> 14 city       <chr>    77125 0.00817    
+#> 15 state      <chr>    69291 0.00734    
+#> 16 zip        <chr>    65559 0.00695    
+#> 17 date       <date>    8001 0.000848   
+#> 18 amount     <dbl>     3113 0.000330   
+#> 19 event      <chr>  8505369 0.901      
+#> 20 occupation <chr>  3611206 0.383      
+#> 21 inkind     <chr>  9360987 0.992      
+#> 22 other_type <chr>  9380197 0.994      
+#> 23 rcv_event  <chr>  6687801 0.709      
+#> 24 cand_first <chr>  7296516 0.773      
+#> 25 cand_last  <chr>  7296113 0.773      
+#> 26 office     <chr>  7296095 0.773      
+#> 27 district   <int>  7340190 0.778      
+#> 28 party      <chr>  7296502 0.773
 ```
 
 ``` r
@@ -310,7 +320,7 @@ ohc <- ohc %>%
   flag_na(date, con_name, amount, com_name)
 
 sum(ohc$na_flag)
-#> [1] 10708
+#> [1] 10719
 percent(mean(ohc$na_flag), 0.01)
 #> [1] "0.11%"
 ```
@@ -322,9 +332,9 @@ percent(mean(ohc$na_flag), 0.01)
 ``` r
 summary(ohc$amount)
 #>     Min.  1st Qu.   Median     Mean  3rd Qu.     Max.     NA's 
-#>   -50000        2        8      270       50 17295083     3112
+#>   -50000        2        8      269       50 17295083     3113
 mean(ohc$amount <= 0, na.rm = TRUE)
-#> [1] 0.0008497321
+#> [1] 0.0008462452
 ```
 
 ![](../plots/hist_amount-1.png)<!-- -->
@@ -339,11 +349,11 @@ ohc <- mutate(ohc, year = year(date))
 min(ohc$date, na.rm = TRUE)
 #> [1] "10-05-07"
 sum(ohc$year < 1990, na.rm = TRUE)
-#> [1] 1025
+#> [1] 1032
 max(ohc$date, na.rm = TRUE)
 #> [1] "9999-03-31"
 sum(ohc$date > today(), na.rm = TRUE)
-#> [1] 1331
+#> [1] 1345
 ```
 
 ![](../plots/bar_year-1.png)<!-- -->
@@ -386,7 +396,7 @@ ohc %>%
 #>  4 313 COOPER AVE        313 COOPER AVE     
 #>  5 5545 SAXON DR.        5545 SAXON DR      
 #>  6 36 MARIGOLD CT.       36 MARIGOLD CT     
-#>  7 216 SPRUCEWOOD        216 SPRUCEWOOD     
+#>  7 1465 BRADFORD DR      1465 BRADFORD DR   
 #>  8 2230 PATTERSON        2230 PATTERSON     
 #>  9 2540 FENWICK RD       2540 FENWICK RD    
 #> 10 5185 HAMPTON COURT    5185 HAMPTON CT
@@ -417,8 +427,8 @@ progress_table(
 #> # A tibble: 2 x 6
 #>   stage    prop_in n_distinct prop_na   n_out n_diff
 #>   <chr>      <dbl>      <dbl>   <dbl>   <dbl>  <dbl>
-#> 1 zip        0.822     331160 0.00696 1658540 310775
-#> 2 zip_norm   0.998      26999 0.0232    14459   2978
+#> 1 zip        0.822     332007 0.00695 1669680 311601
+#> 2 zip_norm   0.998      27025 0.0230    14539   2988
 ```
 
 ### State
@@ -477,7 +487,7 @@ ohc <- ohc %>%
     match_abb = is_abbrev(city_norm, city_match),
     match_dist = str_dist(city_norm, city_match),
     city_swap = if_else(
-      condition = !is.na(match_dist) & match_abb | match_dist == 1,
+      condition = !is.na(match_dist) & (match_abb | match_dist == 1),
       true = city_match,
       false = city_norm
     )
@@ -515,7 +525,7 @@ good_refine <- ohc %>%
   )
 ```
 
-    #> # A tibble: 496 x 5
+    #> # A tibble: 502 x 5
     #>    state_norm zip_norm city_swap       city_refine        n
     #>    <chr>      <chr>    <chr>           <chr>          <int>
     #>  1 MI         48177    SAMIARA         SAMARIA          107
@@ -528,7 +538,7 @@ good_refine <- ohc %>%
     #>  8 OH         43334    MERANGO         MARENGO           23
     #>  9 OH         45247    CINCINATTI      CINCINNATI        21
     #> 10 OH         44413    PALESTINE       EAST PALESTINE    20
-    #> # … with 486 more rows
+    #> # … with 492 more rows
 
 Then we can join the refined values back to the database.
 
@@ -562,7 +572,7 @@ ohc_out <- ohc %>%
   slice(1:1000)
 
 sum(ohc_out$n) / nrow(ohc)
-#> [1] 0.01065614
+#> [1] 0.01102123
 ```
 
 Passing these values to `campfin::check_city()` with `purrr::pmap_dfr()`
@@ -625,10 +635,10 @@ valid_locality <- check %>%
 
 | stage        | prop\_in | n\_distinct | prop\_na | n\_out | n\_diff |
 | :----------- | -------: | ----------: | -------: | -----: | ------: |
-| city\_raw    |    0.961 |       31944 |    0.008 | 362468 |   20132 |
-| city\_norm   |    0.982 |       29555 |    0.008 | 165110 |   17657 |
-| city\_swap   |    0.992 |       18550 |    0.026 |  74484 |    6738 |
-| city\_refine |    0.992 |       18147 |    0.026 |  72761 |    6336 |
+| city\_raw    |    0.958 |       32026 |    0.008 | 389429 |   20385 |
+| city\_norm   |    0.978 |       29632 |    0.008 | 202886 |   17926 |
+| city\_swap   |    0.987 |       21070 |    0.008 | 118060 |    9368 |
+| city\_refine |    0.988 |       20673 |    0.008 | 116329 |    8972 |
 
 You can see how the percentage of valid values increased with each
 stage.
@@ -655,25 +665,25 @@ ohc <- ohc %>%
 
 ``` r
 glimpse(sample_n(ohc, 20))
-#> Observations: 20
-#> Variables: 31
+#> Rows: 20
+#> Columns: 31
 #> $ com_name      <chr> "FRIENDS OF ARMOND BUDISH", "OHIO EDUCATION ASSOC FUND FOR CHILDREN AND PU…
-#> $ master_key    <int> 10794, 1814, 1814, 1814, 1814, 11818, 1515, 7100, 104, 1814, 1806, 2047, 7…
-#> $ rpt_desc      <chr> "ANNUAL   (JANUARY)", "PRE-GENERAL", "PRE-PRIMARY", "PRE-PRIMARY", "POST-P…
+#> $ master_key    <int> 10794, 1814, 1814, 1814, 1814, 11818, 1515, 6542, 104, 1814, 1806, 2047, 7…
+#> $ rpt_desc      <chr> "ANNUAL   (JANUARY)", "SEMIANNUAL   (JULY)", "PRE-PRIMARY", "POST-GENERAL"…
 #> $ rpt_year      <int> 2009, 2010, 2005, 2018, 2011, 2009, 2006, 2019, 1998, 2008, 2001, 2008, 20…
-#> $ rpt_key       <int> 253984, 89637310, 951322, 317571556, 104952505, 82716199, 856306, 34917184…
+#> $ rpt_key       <int> 253984, 83113495, 951322, 338901025, 112182547, 82716199, 856306, 34953849…
 #> $ desc          <chr> "31-A  Stmt of Contribution", "31-A  Stmt of Contribution", "31-A  Stmt of…
-#> $ con_name      <chr> "BERTHA M WEIL", "JENNIFER A MCMAHON", "PHIL A UNKEFER", "PATRICIA R NAEEM…
+#> $ con_name      <chr> "BERTHA M WEIL", "WENDY LOWE", "PHIL A UNKEFER", "CHRISTOPHER L MCMANUS", …
 #> $ suffix        <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
-#> $ pac_no        <chr> NA, "OH299", "OH299", "OH299", "OH299", NA, "CP401", "CP1037", NA, "OH299"…
-#> $ address       <chr> "23511 CHAGRIN BLVD.", "3845 LOGAN THORNVILLE RD NE", "8100 ALBERTA BEACH …
-#> $ city_raw      <chr> "BEACHWOOD", "RUSHVILLE", "LOUISVILLE", "COLUMBUS", "ELYRIA", "STRONGSVILL…
-#> $ state         <chr> "OH", "OH", "OH", "OH", "OH", "OH", "OH", "OH", "OH", "OH", "OH", "WA", "O…
-#> $ zip           <chr> "44122", "43150", "44641", "43224", "44035", "44136", "43606-2570", "43065…
-#> $ date          <date> 2009-12-19, 2010-08-06, 2005-01-04, 2018-03-02, 2011-05-09, 2009-09-19, 2…
-#> $ amount        <dbl> 50.00, 1.00, 1.00, 2.00, 2.00, 1000.00, 20.00, 2.00, 250.00, 2.00, 25.00, …
+#> $ pac_no        <chr> NA, "OH299", "OH299", "OH299", "OH299", NA, "CP401", "PCE", NA, "OH299", "…
+#> $ address       <chr> "23511 CHAGRIN BLVD.", "1424 CLAY ST", "8100 ALBERTA BEACH ST NE", "139 W …
+#> $ city_raw      <chr> "BEACHWOOD", "ZANESVILLE", "LOUISVILLE", "COLUMBUS", "DUBLIN", "STRONGSVIL…
+#> $ state         <chr> "OH", "OH", "OH", "OH", "OH", "OH", "OH", "OH", "OH", "OH", "OH", "CT", "O…
+#> $ zip           <chr> "44122", "43701", "44641", "43214", "43017", "44136", "45440-3657", "44121…
+#> $ date          <date> 2009-12-19, 2010-06-28, 2005-02-15, 2018-11-19, 2011-07-18, 2009-09-19, 2…
+#> $ amount        <dbl> 50.00, 1.00, 1.00, 2.00, 5.00, 1000.00, 20.00, 1.00, 250.00, 2.00, 25.00, …
 #> $ event         <chr> NA, NA, NA, NA, NA, NA, NA, NA, "08/18/1998", NA, NA, NA, NA, NA, NA, NA, …
-#> $ occupation    <chr> "RETIRED", "PICKERINGTON LOCAL SD", "OEA", "GROVEPORT MADISON LOCAL SD", "…
+#> $ occupation    <chr> "RETIRED", "ZANESVILLE CITY SD", "OEA", "DUBLIN CITY SD", "DUBLIN CITY SD"…
 #> $ inkind        <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
 #> $ other_type    <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
 #> $ rcv_event     <chr> "N", NA, NA, NA, NA, NA, NA, NA, "N", NA, NA, "N", NA, NA, "N", NA, "N", N…
@@ -684,15 +694,15 @@ glimpse(sample_n(ohc, 20))
 #> $ party         <chr> "DEMOCRAT", NA, NA, NA, NA, "NON-PARTISAN", NA, NA, "REPUBLICAN", NA, NA, …
 #> $ na_flag       <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALS…
 #> $ year          <dbl> 2009, 2010, 2005, 2018, 2011, 2009, 2006, 2019, 1998, 2008, 2001, 2008, 20…
-#> $ address_clean <chr> "23511 CHAGRIN BLVD", "3845 LOGAN THORNVILLE RD NE", "8100 ALBERTA BCH ST …
-#> $ zip_clean     <chr> "44122", "43150", "44641", "43224", "44035", "44136", "43606", "43065", "4…
-#> $ state_clean   <chr> "OH", "OH", "OH", "OH", "OH", "OH", "OH", "OH", "OH", "OH", "OH", "WA", "O…
-#> $ city_clean    <chr> "BEACHWOOD", "RUSHVILLE", "LOUISVILLE", "COLUMBUS", "ELYRIA", "STRONGSVILL…
+#> $ address_clean <chr> "23511 CHAGRIN BLVD", "1424 CLAY ST", "8100 ALBERTA BCH ST NE", "139 W DOM…
+#> $ zip_clean     <chr> "44122", "43701", "44641", "43214", "43017", "44136", "45440", "44121", "4…
+#> $ state_clean   <chr> "OH", "OH", "OH", "OH", "OH", "OH", "OH", "OH", "OH", "OH", "OH", "CT", "O…
+#> $ city_clean    <chr> "BEACHWOOD", "ZANESVILLE", "LOUISVILLE", "COLUMBUS", "DUBLIN", "STRONGSVIL…
 ```
 
-1.  There are 9,362,773 records in the database.
+1.  There are 9,435,607 records in the database.
 2.  The range and distribution of `amount` and `date` seem reasonable.
-3.  There are 10,708 records missing a key variable.
+3.  There are 10,719 records missing a key variable.
 4.  Consistency in geographic data has been improved with
     `campfin::normal_*()`.
 5.  The 4-digit `year` variable has been created with
@@ -702,12 +712,23 @@ glimpse(sample_n(ohc, 20))
 
 ``` r
 clean_dir <- dir_create(here("oh", "contribs", "data", "clean"))
-```
-
-``` r
-write_csv(
-  x = ohc,
-  path = path(clean_dir, "oh_contribs_clean.csv"),
-  na = ""
-)
+clean_path <- path(clean_dir, "oh_contribs_clean.csv")
+write_csv(ohc, clean_path, na = "")
+file_size(clean_path)
+#> 2.2G
+guess_encoding(clean_path)
+#> # A tibble: 11 x 3
+#>    encoding   language confidence
+#>    <chr>      <chr>         <dbl>
+#>  1 ISO-8859-2 "ro"           0.38
+#>  2 ISO-8859-1 "fr"           0.35
+#>  3 ISO-8859-9 "tr"           0.26
+#>  4 UTF-8      ""             0.15
+#>  5 UTF-16BE   ""             0.1 
+#>  6 UTF-16LE   ""             0.1 
+#>  7 Shift_JIS  "ja"           0.1 
+#>  8 GB18030    "zh"           0.1 
+#>  9 EUC-JP     "ja"           0.1 
+#> 10 EUC-KR     "ko"           0.1 
+#> 11 Big5       "zh"           0.1
 ```
