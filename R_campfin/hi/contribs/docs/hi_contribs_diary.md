@@ -1,7 +1,7 @@
 Hawaii Contributions
 ================
 Kiernan Nicholls
-2020-01-17 17:13:59
+2020-04-13 15:54:16
 
   - [Project](#project)
   - [Objectives](#objectives)
@@ -60,8 +60,8 @@ pacman::p_load_gh("irworkshop/campfin")
 pacman::p_load(
   tidyverse, # data manipulation
   lubridate, # datetime strings
-  magrittr, # pipe opperators
-  janitor, # dataframe clean
+  magrittr, # pipe operators
+  janitor, # data frame clean
   refinr, # cluster and merge
   scales, # format strings
   knitr, # knit documents
@@ -74,18 +74,18 @@ pacman::p_load(
 
 This document should be run as part of the `R_campfin` project, which
 lives as a sub-directory of the more general, language-agnostic
-[`irworkshop/accountability_datacleaning`](https://github.com/irworkshop/accountability_datacleaning "TAP repo")
+[`irworkshop/accountability_datacleaning`](https://github.com/irworkshop/accountability_datacleaning)
 GitHub repository.
 
 The `R_campfin` project uses the [RStudio
-projects](https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects "Rproj")
+projects](https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects)
 feature and should be run as such. The project also uses the dynamic
 `here::here()` tool for file paths relative to *your* machine.
 
 ``` r
 # where does this document knit?
 here::here()
-#> [1] "/home/kiernan/R/accountability_datacleaning/R_campfin"
+#> [1] "/home/kiernan/Code/accountability_datacleaning/R_campfin"
 ```
 
 ## Data
@@ -107,7 +107,7 @@ and `readr::read_csv()`.
 hic <- map_df(
   .x = c(
     "https://data.hawaii.gov/api/views/jexd-xbcg/rows.csv", # Candidates
-    "https://data.hawaii.gov/api/views/rajm-32md/rows.csv" # Noncandidate Committees
+    "https://data.hawaii.gov/api/views/rajm-32md/rows.csv" # Committees
   ),
   .f = read_csv,
   .id = "reg_type",
@@ -157,19 +157,19 @@ hic <- hic %>%
 
 ## Explore
 
-The data base has 247,581 rows of 26 variables.
+The data base has 254,927 rows of 26 variables.
 
 ``` r
 head(hic)
 #> # A tibble: 6 x 26
 #>   date       reg_id reg_type reg_name cont_type cont_name amount aggregate employer occupation
 #>   <date>     <chr>  <chr>    <chr>    <chr>     <chr>      <dbl>     <dbl> <chr>    <chr>     
-#> 1 2010-08-23 CC105… Candida… Abercro… Individu… Kamau, A…     25       125 N/A      Retired   
-#> 2 2016-08-24 CC110… Candida… Agustin… Individu… Chong Jr…   1000      1000 None     Retired   
-#> 3 2014-10-29 CC110… Candida… Ahu, El… Individu… Tesoro, …    200       400 <NA>     <NA>      
-#> 4 2007-06-21 CC101… Candida… Aiona, … Individu… Hartman,…    500       500 Self     Business …
-#> 5 2007-06-19 CC101… Candida… Aiona, … Individu… Moriguch…   1000      1000 None     Retired   
-#> 6 2008-06-19 CC101… Candida… Aiona, … Individu… Boyd, Vi…    100       150 Retired  Retired   
+#> 1 2014-09-18 CC110… Candida… Abbett,… Candidate Abbett, …    100      435. <NA>     <NA>      
+#> 2 2010-06-30 CC105… Candida… Abercro… Other En… Earthwor…   2000     2000  <NA>     <NA>      
+#> 3 2013-09-19 CC105… Candida… Abercro… Individu… Barlow, …   3000     3000  Aloha G… Member    
+#> 4 2013-06-21 CC105… Candida… Abercro… Other En… Aloha Go…   2000     2000  <NA>     <NA>      
+#> 5 2009-05-19 CC105… Candida… Abercro… Noncandi… Alexande…   2000     2000  <NA>     <NA>      
+#> 6 2012-06-18 CC105… Candida… Abercro… Individu… Nekota, …   1000     1000  DR Hort… Attorney  
 #> # … with 16 more variables: address_1 <chr>, address_2 <chr>, city <chr>, state <chr>, zip <chr>,
 #> #   monetary <lgl>, category <chr>, description <chr>, office <chr>, district <chr>, county <chr>,
 #> #   party <chr>, election_period <chr>, mapping_location <chr>, in_state <lgl>, range <chr>
@@ -177,43 +177,43 @@ tail(hic)
 #> # A tibble: 6 x 26
 #>   date       reg_id reg_type reg_name cont_type cont_name amount aggregate employer occupation
 #>   <date>     <chr>  <chr>    <chr>    <chr>     <chr>      <dbl>     <dbl> <chr>    <chr>     
-#> 1 2012-06-06 NC205… Noncand… ZIC PAC  Noncandi… ZIC PAC     1500      2600 <NA>     <NA>      
-#> 2 2014-09-24 NC205… Noncand… ZIC PAC  Noncandi… ZIC PAC     3400      6400 <NA>     <NA>      
-#> 3 2014-06-18 NC205… Noncand… ZIC PAC  Noncandi… ZIC PAC     3000      3000 <NA>     <NA>      
-#> 4 2010-11-02 NC202… Noncand… ZIC PAC  Noncandi… ZIC PAC     3000      3000 <NA>     <NA>      
-#> 5 2015-10-21 NC205… Noncand… ZIC PAC  Noncandi… ZIC PAC      500       500 <NA>     <NA>      
-#> 6 2011-07-27 NC205… Noncand… ZIC PAC  Noncandi… ZIC PAC     1000      1100 <NA>     <NA>      
+#> 1 2016-10-24 NC206… Noncand… Save Ou… Individu… Uyemura,… 1.00e3     1000  KMJ Rea… Broker    
+#> 2 2012-08-07 NC201… Noncand… Plumber… Individu… FAJOTINA… 1.58e1      231. TRANE P… REFRIGERA…
+#> 3 2010-10-20 NC202… Noncand… Republi… Vendor /… Eli Lilly 5.00e2      500  <NA>     <NA>      
+#> 4 2010-05-30 NC202… Noncand… Republi… Individu… DeFranci… 3.75e2      375  America… Chief Pub…
+#> 5 2010-11-02 NC201… Noncand… Plumber… Individu… OKUBO, W… 9.12e0      231. R M NAK… PLUMBER   
+#> 6 2018-08-21 NC201… Noncand… Realtor… Individu… Fukumae,… 3.33e1      392. Marcus … Member    
 #> # … with 16 more variables: address_1 <chr>, address_2 <chr>, city <chr>, state <chr>, zip <chr>,
 #> #   monetary <lgl>, category <chr>, description <chr>, office <chr>, district <chr>, county <chr>,
 #> #   party <chr>, election_period <chr>, mapping_location <chr>, in_state <lgl>, range <chr>
 glimpse(sample_frac(hic))
-#> Observations: 247,581
-#> Variables: 26
-#> $ date             <date> 2017-10-24, 2012-11-25, 2015-12-31, 2018-07-23, 2010-06-10, 2016-04-25…
-#> $ reg_id           <chr> "CC10171", "NC20456", "NC20134", "CC10243", "CC10330", "NC20024", "CC10…
-#> $ reg_type         <chr> "Candidate", "Noncandidate", "Noncandidate", "Candidate", "Candidate", …
-#> $ reg_name         <chr> "Dela Cruz, Donovan", "Cattlemen's Action Legislative Fund (\"CALF\")",…
-#> $ cont_type        <chr> "Noncandidate Committee", "Vendor / Business", "Individual", "Other Ent…
-#> $ cont_name        <chr> "HGEA Political Contribution Account", "Kapuniani Ranch", "BAKER, ALFRE…
-#> $ amount           <dbl> 1000.00, 250.00, 124.79, 250.00, 125.00, 20.00, 1000.00, 7.00, 104.82, …
-#> $ aggregate        <dbl> 1500.00, 250.00, 124.79, 600.00, 125.00, 360.00, 1000.00, 182.00, 104.8…
-#> $ employer         <chr> NA, NA, "HEIDE & COOK, LLC", NA, NA, "Central Pacific Home Loan", "none…
-#> $ occupation       <chr> NA, NA, "REFRIGERATION FITTER", NA, NA, "Assistant Controller", "Retire…
-#> $ address_1        <chr> "P.O. Box 2930", "PO Box 6753", "91-1083 HANALOA STREET", "1259 Aala St…
-#> $ address_2        <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "Apt 2701", NA, "Apt 26…
-#> $ city             <chr> "Honolulu", "Kamuela", "EWA BEACH", "Honolulu", "Kihei", "Aiea", "San F…
-#> $ state            <chr> "HI", "HI", "HI", "HI", "HI", "HI", "CA", "HI", "HI", "HI", "HI", "HI",…
-#> $ zip              <chr> "96802", "96743", "96706", "96817", "96753", "96701", "94105", "96793",…
-#> $ monetary         <lgl> TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, FALSE, TRUE, TRUE…
-#> $ category         <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, "Advertising", NA, NA, NA, NA, NA, …
-#> $ description      <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, "PRIZES FOR KEIKI FUN RUN", NA, NA,…
-#> $ office           <chr> "Senate", NA, NA, "House", "Maui Council", NA, "Lt. Governor", NA, NA, …
-#> $ district         <chr> "22", NA, NA, "42", "Upcountry", NA, NA, NA, NA, NA, NA, "4", NA, "1", …
-#> $ county           <chr> NA, NA, NA, NA, "Maui", NA, NA, NA, NA, "Kauai", NA, "Honolulu", NA, NA…
-#> $ party            <chr> "Democrat", NA, NA, "Democrat", "Non-Partisan", NA, "Democrat", NA, NA,…
-#> $ election_period  <chr> "2016-2018", "2012-2014", "2014-2016", "2016-2018", "2008-2010", "2014-…
-#> $ mapping_location <chr> NA, NA, "91-1083 HANALOA STREET\nEWA BEACH, HI 96706\n(21.322527, -158.…
-#> $ in_state         <lgl> TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, FALSE, TRUE, TRUE, TRUE, TRUE, TRUE…
+#> Rows: 254,927
+#> Columns: 26
+#> $ date             <date> 2010-04-07, 2010-04-16, 2017-05-16, 2016-10-05, 2014-03-27, 2017-06-30…
+#> $ reg_id           <chr> "CC10573", "CC10283", "NC20007", "CC11190", "CC10147", "NC20134", "NC20…
+#> $ reg_type         <chr> "Candidate", "Candidate", "Noncandidate", "Candidate", "Candidate", "No…
+#> $ reg_name         <chr> "Mee-Lee, Matthew", "Arakawa, Alan", "Alexander & Baldwin, Inc. HiPAC",…
+#> $ cont_type        <chr> "Individual", "Other Entity", "Individual", "Individual", "Individual",…
+#> $ cont_name        <chr> "Lee, Wendell", "Keiki Time", "Chin, Rodney", "Mossman, Ipo", "Ohori, Y…
+#> $ amount           <dbl> 500.00, 420.00, 88.00, 150.00, 160.00, 171.82, 20.83, 500.00, 500.00, 2…
+#> $ aggregate        <dbl> 600.00, 420.00, 264.00, 150.00, 200.00, 193.56, 374.94, 500.00, 500.00,…
+#> $ employer         <chr> NA, NA, "Alexander & Baldwin", NA, NA, "DORVIN D LEIS CO INC", "Central…
+#> $ occupation       <chr> NA, NA, "Mgr, Keahua Farm", NA, NA, "REFRIGERATION FITTER", "Banking", …
+#> $ address_1        <chr> "98-856 Leihulu Place", "340 Hana Hwy Unit B", "956 Makaala Dr.", "2747…
+#> $ address_2        <chr> "Aiea, HI  96701", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "Kuli Puu Pl…
+#> $ city             <chr> "Aiea", "Kihei", "Wailuku", "Kihei", "Wahiawa", "KULA", "Honolulu", "Ka…
+#> $ state            <chr> "HI", "HI", "HI", "HI", "HI", "HI", "HI", "HI", "HI", "HI", "HI", "HI",…
+#> $ zip              <chr> "96701", "96732", "96793", "96753", "96786", "96790", "96816", "96734",…
+#> $ monetary         <lgl> TRUE, FALSE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE…
+#> $ category         <chr> NA, "Other", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
+#> $ description      <chr> NA, "Donation of \"Emily\" baby crib - Silent Auction", NA, NA, NA, NA,…
+#> $ office           <chr> "House", "Maui Council", NA, "Maui Council", "Governor", NA, NA, "Gover…
+#> $ district         <chr> "24", "Kahului", NA, "Upcountry", NA, NA, NA, NA, NA, NA, "48", "11", "…
+#> $ county           <chr> NA, "Maui", NA, "Maui", NA, NA, NA, NA, "Honolulu", NA, NA, NA, NA, NA,…
+#> $ party            <chr> "Democrat", "Non-Partisan", NA, "Democrat", "Democrat", NA, NA, "Indepe…
+#> $ election_period  <chr> "2008-2010", "2008-2010", "2016-2018", "2014-2016", "2012-2014", "2016-…
+#> $ mapping_location <chr> "98-856 Leihulu Place\nAiea, HI 96701\n(21.404586, -157.933857)", "340 …
+#> $ in_state         <lgl> TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE,…
 #> $ range            <chr> "0-1000", "0-1000", "0-1000", "0-1000", "0-1000", "0-1000", "0-1000", "…
 ```
 
@@ -232,22 +232,22 @@ col_stats(hic, count_na)
 #>  6 cont_name        <chr>       0 0         
 #>  7 amount           <dbl>       0 0         
 #>  8 aggregate        <dbl>       0 0         
-#>  9 employer         <chr>  106065 0.428     
-#> 10 occupation       <chr>  104408 0.422     
-#> 11 address_1        <chr>      18 0.0000727 
-#> 12 address_2        <chr>  234469 0.947     
-#> 13 city             <chr>       5 0.0000202 
+#>  9 employer         <chr>  107782 0.423     
+#> 10 occupation       <chr>  106089 0.416     
+#> 11 address_1        <chr>      18 0.0000706 
+#> 12 address_2        <chr>  241392 0.947     
+#> 13 city             <chr>       5 0.0000196 
 #> 14 state            <chr>       0 0         
 #> 15 zip              <chr>       0 0         
-#> 16 monetary         <lgl>      39 0.000158  
-#> 17 category         <chr>  239842 0.969     
-#> 18 description      <chr>  239845 0.969     
-#> 19 office           <chr>   88227 0.356     
-#> 20 district         <chr>  154282 0.623     
-#> 21 county           <chr>  203823 0.823     
-#> 22 party            <chr>   88227 0.356     
-#> 23 election_period  <chr>       1 0.00000404
-#> 24 mapping_location <chr>   42284 0.171     
+#> 16 monetary         <lgl>      39 0.000153  
+#> 17 category         <chr>  246979 0.969     
+#> 18 description      <chr>  246982 0.969     
+#> 19 office           <chr>   92016 0.361     
+#> 20 district         <chr>  159563 0.626     
+#> 21 county           <chr>  208950 0.820     
+#> 22 party            <chr>   92016 0.361     
+#> 23 election_period  <chr>       1 0.00000392
+#> 24 mapping_location <chr>   43250 0.170     
 #> 25 in_state         <lgl>       0 0         
 #> 26 range            <chr>       0 0
 ```
@@ -261,8 +261,29 @@ a unique contribution.
 hic <- flag_dupes(hic, everything())
 ```
 
-There are 119 rows that are complete duplicated of another. They are
+There are 213 rows that are complete duplicated of another. They are
 flagged.
+
+``` r
+hic %>% 
+  filter(dupe_flag) %>% 
+  select(date, reg_name, cont_name, amount) %>% 
+  arrange(date)
+#> # A tibble: 213 x 4
+#>    date       reg_name                   cont_name          amount
+#>    <date>     <chr>                      <chr>               <dbl>
+#>  1 2008-02-21 Democratic Party of Hawaii Dowling, Everett     1000
+#>  2 2008-02-21 Democratic Party of Hawaii Dowling, Everett     1000
+#>  3 2008-02-21 Democratic Party of Hawaii Engesser, Thea J.     100
+#>  4 2008-02-21 Democratic Party of Hawaii Engesser, Thea J.     100
+#>  5 2008-03-25 Democratic Party of Hawaii Hawaii Link           100
+#>  6 2008-03-25 Democratic Party of Hawaii Hawaii Link           100
+#>  7 2008-03-26 Democratic Party of Hawaii Morey, Lee F.         100
+#>  8 2008-03-26 Democratic Party of Hawaii Morey, Lee F.         100
+#>  9 2008-03-30 Democratic Party of Hawaii Kong Kee, FLorence    100
+#> 10 2008-03-30 Democratic Party of Hawaii Thorp, David H.       100
+#> # … with 203 more rows
+```
 
 ### Categorical
 
@@ -271,33 +292,33 @@ col_stats(hic, n_distinct)
 #> # A tibble: 27 x 4
 #>    col              class      n          p
 #>    <chr>            <chr>  <int>      <dbl>
-#>  1 date             <date>  4270 0.0172    
-#>  2 reg_id           <chr>   1543 0.00623   
-#>  3 reg_type         <chr>      2 0.00000808
-#>  4 reg_name         <chr>   1456 0.00588   
-#>  5 cont_type        <chr>      9 0.0000364 
-#>  6 cont_name        <chr>  67890 0.274     
-#>  7 amount           <dbl>  16204 0.0654    
-#>  8 aggregate        <dbl>  29831 0.120     
-#>  9 employer         <chr>  14992 0.0606    
-#> 10 occupation       <chr>   7345 0.0297    
-#> 11 address_1        <chr>  70634 0.285     
-#> 12 address_2        <chr>   4145 0.0167    
-#> 13 city             <chr>   3450 0.0139    
-#> 14 state            <chr>     57 0.000230  
-#> 15 zip              <chr>   6148 0.0248    
-#> 16 monetary         <lgl>      3 0.0000121 
-#> 17 category         <chr>     23 0.0000929 
-#> 18 description      <chr>   5256 0.0212    
-#> 19 office           <chr>     13 0.0000525 
-#> 20 district         <chr>     68 0.000275  
-#> 21 county           <chr>      5 0.0000202 
-#> 22 party            <chr>      7 0.0000283 
-#> 23 election_period  <chr>     11 0.0000444 
-#> 24 mapping_location <chr>  60646 0.245     
-#> 25 in_state         <lgl>      2 0.00000808
-#> 26 range            <chr>      3 0.0000121 
-#> 27 dupe_flag        <lgl>      2 0.00000808
+#>  1 date             <date>  4447 0.0174    
+#>  2 reg_id           <chr>   1564 0.00614   
+#>  3 reg_type         <chr>      2 0.00000785
+#>  4 reg_name         <chr>   1476 0.00579   
+#>  5 cont_type        <chr>      9 0.0000353 
+#>  6 cont_name        <chr>  69299 0.272     
+#>  7 amount           <dbl>  16818 0.0660    
+#>  8 aggregate        <dbl>  31016 0.122     
+#>  9 employer         <chr>  15484 0.0607    
+#> 10 occupation       <chr>   7578 0.0297    
+#> 11 address_1        <chr>  72072 0.283     
+#> 12 address_2        <chr>   4246 0.0167    
+#> 13 city             <chr>   3480 0.0137    
+#> 14 state            <chr>     57 0.000224  
+#> 15 zip              <chr>   6210 0.0244    
+#> 16 monetary         <lgl>      3 0.0000118 
+#> 17 category         <chr>     29 0.000114  
+#> 18 description      <chr>   5400 0.0212    
+#> 19 office           <chr>     13 0.0000510 
+#> 20 district         <chr>     68 0.000267  
+#> 21 county           <chr>      5 0.0000196 
+#> 22 party            <chr>      7 0.0000275 
+#> 23 election_period  <chr>     11 0.0000431 
+#> 24 mapping_location <chr>  62290 0.244     
+#> 25 in_state         <lgl>      2 0.00000785
+#> 26 range            <chr>      3 0.0000118 
+#> 27 dupe_flag        <lgl>      2 0.00000785
 ```
 
 ``` r
@@ -391,7 +412,7 @@ explore_plot(
 ``` r
 summary(hic$amount)
 #>      Min.   1st Qu.    Median      Mean   3rd Qu.      Max. 
-#>  -59078.3      82.8     200.0     779.0     500.0 3000000.0
+#>  -59078.3      84.5     200.0     783.6     500.0 3000000.0
 ```
 
 ![](../plots/amount_histogram-1.png)<!-- -->
@@ -412,7 +433,7 @@ min(hic$date)
 sum(hic$year < 2000)
 #> [1] 0
 max(hic$date)
-#> [1] "2019-12-26"
+#> [1] "2020-01-28"
 sum(hic$date > today())
 #> [1] 0
 ```
@@ -447,20 +468,20 @@ hic %>%
   select(starts_with("address")) %>% 
   distinct() %>% 
   sample_frac()
-#> # A tibble: 73,374 x 3
-#>    address_1                      address_2          address_norm                                  
-#>    <chr>                          <chr>              <chr>                                         
-#>  1 130 Kaiko Place                <NA>               130 KAIKO PLACE                               
-#>  2 161 Wailea Ike Place, Ste. B1… <NA>               161 WAILEA IKE PLACE SUITE B102               
-#>  3 Re-Elect Congressman Kucinich… 550 East Walnut S… RE ELECT CONGRESSMAN KUCINICH COMMITTEE 550 E…
-#>  4 4875 Nonou Rd                  <NA>               4875 NONOU ROAD                               
-#>  5 700 Bishop St Ste 1600         <NA>               700 BISHOP STREET SUITE 1600                  
-#>  6 120 dodge avenue               <NA>               120 DODGE AVENUE                              
-#>  7 P.O. Box 61732                 <NA>               PO BOX 61732                                  
-#>  8 104 Waterford Place            <NA>               104 WATERFORD PLACE                           
-#>  9 92-115 Oloa Place              <NA>               92 115 OLOA PLACE                             
-#> 10 1360 S Beretania Ste 200       <NA>               1360 SOUTH BERETANIA SUITE 200                
-#> # … with 73,364 more rows
+#> # A tibble: 74,931 x 3
+#>    address_1                       address_2 address_norm                
+#>    <chr>                           <chr>     <chr>                       
+#>  1 250 N Waiehu Beach Road         <NA>      250 N WAIEHU BCH RD         
+#>  2 310 Hale Kai Street             <NA>      310 HALE KAI ST             
+#>  3 1314 S King St., Ste 321        <NA>      1314 S KING ST STE 321      
+#>  4 1367 Kapiolani Blvd. Suite 1005 <NA>      1367 KAPIOLANI BLVD STE 1005
+#>  5 1094 Mokuhano St                <NA>      1094 MOKUHANO ST            
+#>  6 3432 B1 Kalihi St.              <NA>      3432 B 1 KALIHI ST          
+#>  7 336 Hollybrook Road             <NA>      336 HOLLYBROOK RD           
+#>  8 900 Fort Street Mall, No. 1115  <NA>      900 FT ST MALL NO 1115      
+#>  9 1319 Punahou Street, Suite 1140 <NA>      1319 PUNAHOU ST STE 1140    
+#> 10 1253 S. Beretania St., #3307    <NA>      1253 S BERETANIA ST 3307    
+#> # … with 74,921 more rows
 ```
 
 ### ZIP
@@ -484,8 +505,8 @@ progress_table(
 #> # A tibble: 2 x 6
 #>   stage    prop_in n_distinct prop_na n_out n_diff
 #>   <chr>      <dbl>      <dbl>   <dbl> <dbl>  <dbl>
-#> 1 zip        0.958       6148 0       10338   2842
-#> 2 zip_norm   0.998       3613 0.00179   388    128
+#> 1 zip        0.959       6210 0       10562   2880
+#> 2 zip_norm   0.998       3640 0.00182   399    131
 ```
 
 ### State
@@ -497,16 +518,16 @@ count_vec(hic$state)
 #> # A tibble: 57 x 2
 #>    value      n
 #>    <chr>  <int>
-#>  1 HI    230499
-#>  2 CA      5112
-#>  3 DC      1389
-#>  4 MO      1332
-#>  5 WA       921
-#>  6 VA       895
-#>  7 TX       839
-#>  8 FL       761
-#>  9 NY       581
-#> 10 IL       569
+#>  1 HI    237361
+#>  2 CA      5266
+#>  3 DC      1465
+#>  4 MO      1373
+#>  5 WA       939
+#>  6 VA       936
+#>  7 TX       855
+#>  8 FL       775
+#>  9 IL       592
+#> 10 NY       589
 #> # … with 47 more rows
 ```
 
@@ -540,7 +561,7 @@ hic <- hic %>%
     match_abb = is_abbrev(city_norm, city_match),
     match_dist = str_dist(city_norm, city_match),
     city_swap = if_else(
-      condition = match_abb | match_dist == 1,
+      condition = !is.na(city_match) & (match_abb | match_dist == 1),
       true = city_match,
       false = city_norm
     )
@@ -563,53 +584,53 @@ progress_table(
 #> # A tibble: 3 x 6
 #>   stage     prop_in n_distinct   prop_na  n_out n_diff
 #>   <chr>       <dbl>      <dbl>     <dbl>  <dbl>  <dbl>
-#> 1 city        0.200       3450 0.0000202 197993   2818
-#> 2 city_norm   0.982       2603 0.00193     4440    780
-#> 3 city_swap   0.993       2093 0.00605     1762    276
+#> 1 city        0.203       3480 0.0000196 203105   2839
+#> 2 city_norm   0.974       2606 0.00198     6653    774
+#> 3 city_swap   0.993       2150 0.00198     1897    310
 ```
 
 ## Conclude
 
 ``` r
 glimpse(sample_frac(hic))
-#> Observations: 247,581
-#> Variables: 32
-#> $ date             <date> 2017-10-12, 2014-08-04, 2017-05-19, 2019-01-14, 2010-09-16, 2014-04-07…
-#> $ reg_id           <chr> "NC20132", "CC10568", "NC20075", "CC10186", "NC20016", "CC10529", "CC11…
-#> $ reg_type         <chr> "Noncandidate", "Candidate", "Noncandidate", "Candidate", "Noncandidate…
-#> $ reg_name         <chr> "Patsy T. Mink PAC", "Martin, Ernest", "Hawaiian Telcom Good Government…
-#> $ cont_type        <chr> "Individual", "Noncandidate Committee", "Individual", "Individual", "In…
-#> $ cont_name        <chr> "Saito, Gary K.", "HDR, Inc. Political Action Committee", "Robinson, El…
-#> $ amount           <dbl> 200.00, 1000.00, 15.00, 250.00, 10.00, 150.00, 1500.00, 20.00, 1000.00,…
-#> $ aggregate        <dbl> 200.00, 3000.00, 225.00, 250.00, 120.00, 150.00, 1500.00, 145.00, 1000.…
-#> $ employer         <chr> "self-employed", NA, "Hawaiian Telcom, Inc.", "retired", "Bank of Hawai…
-#> $ occupation       <chr> "chiropractor", NA, "Director - Wholesale Markets", "retired", "Senior …
-#> $ address_1        <chr> "98-1827 C Kaahumanu Street", "8404 Indian Hills Dr", "1177 Bishop Stre…
+#> Rows: 254,927
+#> Columns: 32
+#> $ date             <date> 2014-10-10, 2018-02-15, 2018-07-13, 2016-09-26, 2016-05-05, 2013-12-31…
+#> $ reg_id           <chr> "CC10290", "CC10148", "CC10147", "NC20024", "CC10254", "NC20134", "CC11…
+#> $ reg_type         <chr> "Candidate", "Candidate", "Candidate", "Noncandidate", "Candidate", "No…
+#> $ reg_name         <chr> "Brower, Tom", "Inouye, Lorraine", "Ige, David", "Central Pacific Bank …
+#> $ cont_type        <chr> "Individual", "Individual", "Individual", "Individual", "Other Entity",…
+#> $ cont_name        <chr> "Burns, Thomas", "Agasa, Ioana", "Goda, Alan M.", "Fukuyama, Gwen Y.", …
+#> $ amount           <dbl> 200.00, 250.00, 1000.00, 10.00, 100.00, 82.20, 200.00, 200.00, 1000.00,…
+#> $ aggregate        <dbl> 200.00, 250.00, 2500.00, 230.00, 125.00, 156.44, 200.00, 200.00, 3000.0…
+#> $ employer         <chr> NA, NA, "Kobayashi, Sugita, & Goda", "Central Pacific Bank", NA, "HEIDE…
+#> $ occupation       <chr> NA, NA, "Attorney", "Banking", NA, "REFRIGERATION FITTER", NA, NA, "Par…
+#> $ address_1        <chr> "6584 Hawaii Kai Drive", "230 Kapualani St", "127 Dowsett Avenue", "389…
 #> $ address_2        <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
-#> $ city             <chr> "Aiea", "Omaha", "Honolulu", "Aiea", "Honolulu", "Honolulu", "Honolulu"…
-#> $ state            <chr> "HI", "NE", "HI", "HI", "HI", "HI", "HI", "HI", "HI", "HI", "HI", "HI",…
-#> $ zip              <chr> "96701", "68114", "96813", "96701", "96846", "96839", "96817", "96793",…
-#> $ monetary         <lgl> TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE,…
-#> $ category         <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "Food & Beverag…
-#> $ description      <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "6 Cases of Ste…
-#> $ office           <chr> NA, "Senate", NA, "House", NA, "Governor", "Hawaii Council", "Maui Coun…
-#> $ district         <chr> NA, "22", NA, "25", NA, NA, "3", "11", "At-Large", NA, "Maui", NA, NA, …
-#> $ county           <chr> NA, NA, NA, NA, NA, NA, "Hawaii", "Maui", NA, NA, NA, NA, NA, NA, "Hawa…
-#> $ party            <chr> NA, "Democrat", NA, "Democrat", NA, "Democrat", "Non-Partisan", "Non-Pa…
-#> $ election_period  <chr> "2016-2018", "2012-2014", "2016-2018", "2018-2020", "2008-2010", "2012-…
-#> $ mapping_location <chr> "98-1827 C Kaahumanu Street\nAiea, HI 96701\n(21.410658, -157.945678)",…
-#> $ in_state         <lgl> TRUE, FALSE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE…
-#> $ range            <chr> "0-1000", "0-1000", "0-1000", "0-1000", "0-1000", "0-1000", ">1000", "0…
+#> $ city             <chr> "Honolulu", "Hilo", "Honolulu", "Kahului", "St. Louis", "EWA BEACH", "K…
+#> $ state            <chr> "HI", "HI", "HI", "HI", "MO", "HI", "HI", "HI", "HI", "HI", "HI", "HI",…
+#> $ zip              <chr> "96825", "96720", "96817-1109", "96732-2848", "63118", "96707", "96746"…
+#> $ monetary         <lgl> TRUE, TRUE, TRUE, TRUE, FALSE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE…
+#> $ category         <chr> NA, NA, NA, NA, "Food & Beverages", NA, NA, NA, NA, NA, NA, NA, NA, NA,…
+#> $ description      <chr> NA, NA, NA, NA, "Beer for Fundraiser", NA, NA, NA, NA, NA, NA, NA, NA, …
+#> $ office           <chr> "House", "Senate", "Governor", NA, "Senate", NA, "Kauai Council", "Hous…
+#> $ district         <chr> "22", "4", NA, NA, "14", NA, "At-Large", "9", NA, NA, NA, "Kahului", NA…
+#> $ county           <chr> NA, NA, NA, NA, NA, NA, "Kauai", NA, NA, NA, NA, "Maui", NA, NA, NA, NA…
+#> $ party            <chr> "Democrat", "Democrat", "Democrat", NA, "Democrat", NA, "Democrat", "De…
+#> $ election_period  <chr> "2012-2014", "2016-2018", "2016-2018", "2014-2016", "2014-2016", "2012-…
+#> $ mapping_location <chr> "6584 Hawaii Kai Drive\nHonolulu, HI 96825\n(21.292122, -157.711319)", …
+#> $ in_state         <lgl> TRUE, TRUE, TRUE, TRUE, FALSE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE…
+#> $ range            <chr> "0-1000", "0-1000", "0-1000", "0-1000", "0-1000", "0-1000", "0-1000", "…
 #> $ dupe_flag        <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, F…
-#> $ year             <dbl> 2017, 2014, 2017, 2019, 2010, 2014, 2016, 2008, 2010, 2017, 2014, 2016,…
-#> $ address_norm     <chr> "98 1827 C KAAHUMANU STREET", "8404 INDIAN HILLS DRIVE", "1177 BISHOP S…
-#> $ zip_norm         <chr> "96701", "68114", "96813", "96701", "96846", "96839", "96817", "96793",…
-#> $ city_norm        <chr> "AIEA", "OMAHA", "HONOLULU", "AIEA", "HONOLULU", "HONOLULU", "HONOLULU"…
-#> $ city_swap        <chr> "AIEA", "OMAHA", "HONOLULU", "AIEA", "HONOLULU", "HONOLULU", "HONOLULU"…
+#> $ year             <dbl> 2014, 2018, 2018, 2016, 2016, 2013, 2018, 2008, 2010, 2008, 2018, 2012,…
+#> $ address_norm     <chr> "6584 HAWAII KAI DR", "230 KAPUALANI ST", "127 DOWSETT AVE", "389 S LAN…
+#> $ zip_norm         <chr> "96825", "96720", "96817", "96732", "63118", "96707", "96746", "96732",…
+#> $ city_norm        <chr> "HONOLULU", "HILO", "HONOLULU", "KAHULUI", "SAINT LOUIS", "EWA BEACH", …
+#> $ city_swap        <chr> "HONOLULU", "HILO", "HONOLULU", "KAHULUI", "SAINT LOUIS", "EWA BEACH", …
 ```
 
-1.  There are 247581 records in the database.
-2.  There are 119 duplicate records in the database.
+1.  There are 254927 records in the database.
+2.  There are 213 duplicate records in the database.
 3.  The range and distribution of `amount` and `date` seem reasonable.
 4.  There are 0 records missing either recipient or date.
 5.  Consistency in geographic data has been improved with
@@ -622,17 +643,22 @@ glimpse(sample_frac(hic))
 ## Export
 
 ``` r
-proc_dir <- dir_create(here("df", "type", "data", "processed"))
-```
-
-``` r
-hic %>% 
+hic <- hic %>% 
   select(
     -city_norm,
     city_norm = city_swap
-  ) %>% 
-  write_csv(
-    path = glue("{proc_dir}/hi_cont_clean.csv"),
-    na = ""
   )
+```
+
+``` r
+clean_dir <- dir_create(here("hi", "contribs", "data", "processed"))
+clean_path <- path(clean_dir, "hi_cont_clean.csv")
+write_csv(hic, path = clean_path, na = "")
+file_size(clean_path)
+#> 73.8M
+guess_encoding(clean_path)
+#> # A tibble: 1 x 2
+#>   encoding confidence
+#>   <chr>         <dbl>
+#> 1 ASCII             1
 ```
