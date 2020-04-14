@@ -32,7 +32,7 @@ set.seed(5)
 ```
 
 ```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
-fs::dir_create(here::here("co", "lobby", "docs"))
+fs::dir_create(here::here("in", "lobby", "docs"))
 ```
 
 ## Project
@@ -155,17 +155,18 @@ in_1112_fs <- dir_ls(raw_dir) %>% str_subset('2011|2012')
 in_1319_fs <- dir_ls(raw_dir) %>% str_subset('2013|2014|2015|2016|2017|2019')
 
 # Get the vector of column names by reading in the 2019 file and accessing its column headers
-names_inlr <- names(inle_csv)
+names_inle <- names(inle_csv)
 
 
 #for (in_file in dir_ls(raw_dir) %>% str_subset('xl')) {
   
 read_inxl <- function(in_file) {
-df <- read_excel(in_file, col_types = "text",range = cell_cols(1:29))
+df <- read_excel(in_file,range = cell_cols(1:29), col_types = "text")
+                 #, col_types = c(rep("text",4), rep("numeric",25)))
 # find the index of the first row whose first column (year) is not blank
  start_index <- which(!is.na(df[,1]))[1]
     df <- df[start_index:nrow(df),]
-    names(df) <- names_inlr
+    names(df) <- names_inle
         # we also need to fill down the  lobbyist column and year column that are often shared by multiple clients
     df <- df %>% 
       mutate(year_clean = str_extract(in_file, "\\d{4}"),
@@ -183,8 +184,8 @@ start_index <- which(rowSums(is.na(df)) == 0)[1]
     df <- df[start_index:nrow(df),]
     df <- df %>% 
       add_column(year = str_extract(in_file, "\\d{4}"),.before = 1) %>% 
-      add_column(terminated = NA, .after = 2) 
-    names(df) <- names_inlr
+      add_column(terminated = NA, .after = 3) 
+    names(df) <- names_inle
     
     df <- df %>% 
       mutate(year_clean = str_extract(in_file, "\\d{4}"),
@@ -199,7 +200,7 @@ inle_csv <- inle_csv %>%
              lobbyist_clean = lobbyist) %>% 
       fill(year_clean, lobbyist_clean)
 
-in_1319 <- map_dfr(in_1317_fs, read_inxl) %>% 
+in_1319 <- map_dfr(in_1319_fs, read_inxl) %>% 
   bind_rows(inle_csv)
 
 in_1112 <- map_dfr(in_1112_fs, read_1112_inxl)
@@ -207,14 +208,78 @@ in_1112 <- map_dfr(in_1112_fs, read_1112_inxl)
 inle <- read_inxl(dir_ls(raw_dir) %>% str_subset("2010")) %>% 
   bind_rows(in_1112) %>% 
   bind_rows(in_1319)
-
 ```
 
-We'll do some basic cleaning by turning all text columns to uppercase and transform column names to snake case.
-```{r clean}
+Next, we can see that the file strutures for 2008 and 2009 are different from the one later on. The main difference is that: 
+1. The grand_totals for each year is in its own row.
+2. The `first_period_*` and `second_period_*` columns use the same column for each category, but there's a `PD` column for period. 
+
+
+We will transform the data accordingly.
+```{r transform 0809}
+read_0809_inxl <- function(in_file){
+  # Step 1: move the orphan columns to the right
+  df <- read_excel(in_file, col_types = "text")
+  # fix year-end
+  df <- df %>% 
+    # create a new column total_gross filled with all net figure columns from the left
+    mutate(grand_totals = `Net Figure`) %>% 
+    rename_all(.funs = str_to_lower) 
+    
+  #identify the index of all columns that only have three valid fields (the Year-End rows), the year-end field, the actual net figure field, and the grand_total field that we just added
+  grand_total_index <- which(rowSums(!is.na(df))== 3)
+  # replace all other rows' grand_total as NA
+  other_index <- setdiff(1:nrow(df), grand_total_index) 
+  df$grand_totals[other_index] <- NA_integer_
+  # Fill the NA_interger_ with actual total_gross from the bottom
+  df <- df %>% 
+    fill(grand_totals, .direction = "up")
+  # After this step problem 1 is fixed.
+  
+  # Step 2. Pivot_wider based on pd
+  # We'll remove the orphan rows.
+  df <- df[-grand_total_index,]
+  
+    # create a new column that fills down column names
+  df <- df %>% 
+    add_column(year = NA_character_,.before = 1) %>% 
+    mutate(year_clean = str_extract(in_file,"\\d{4}")) %>% 
+    mutate(lobbyist_clean = `lobbyist name`) %>% 
+    fill(lobbyist_clean)
+  
+  x <- df %>% filter(pd == 1)
+  x <- x %>% select(-pd)
+  names(x) <- c("year","lobbyist", "client", names_inle %>% str_subset("first"),"grand_totals", "year_clean","lobbyist_clean")
+  
+  y <- df %>% filter(pd == 2)
+  y <- y %>% select(-pd)
+  names(y) <- c("year","lobbyist", "client", names_inle[17:length(names_inle)], "year_clean","lobbyist_clean")
+  
+  combined <- x %>% left_join(y, by = c("year","lobbyist_clean","client", "grand_totals","year_clean")) %>%
+    select(-grand_totals, grand_totals) %>% 
+    select(-lobbyist.y) %>% 
+    rename(lobbyist = lobbyist.x) %>% 
+    select(-lobbyist_clean, lobbyist_clean)
+  
+  return(combined)
+}
+
+in_0809 <- map_dfr(in_0809_fs, read_0809_inxl) %>% 
+  add_column(terminated = NA_character_, .after = 3) %>% 
+  na_if("na")
+
 inle <- inle %>% 
+  bind_rows(in_0809)
+```
+
+
+We'll do some basic cleaning by turning all text columns to uppercase. We also need to get rid of the commas in supposedly numeric columns, which we deliberately read as plain text at first.
+```{r clean}
+inle <-inle %>% 
   mutate_if(is.character, str_to_upper) %>% 
-  clean_names()
+  clean_names() %>% 
+  mutate_at(.vars = vars(-c("year", "lobbyist", "terminated", "client", "lobbyist_clean")), 
+              .funs=funs(as.numeric(str_remove_all(.,"\\$|,|`"))))
 ```
 
 ```{r examine}
@@ -230,7 +295,7 @@ col_stats(inle, count_na)
 ```
 
 ```{r na_flag}
-inle <- inle %>% flag_na(client, lobbyist)
+inle <- inle %>% flag_na(client, lobbyist_clean)
 sum(inle$na_flag)
 ```
 
@@ -241,7 +306,25 @@ inle <- flag_dupes(inle, dplyr::everything())
 sum(inle$dupe_flag)
 ```
 ### Categorical
-
+All the numeric columns are read as plain text. We will clean these columns with `stringr::str_remove()`.
+```{r conv num}
+inle %>% 
+  ggplot(aes(grand_totals)) +
+  geom_histogram(fill = dark2["purple"]) +
+  scale_y_continuous(labels = comma) +
+  scale_x_continuous(
+    breaks = c(1 %o% 10^(0:5)),
+    labels = dollar,
+    trans = "log10"
+  ) +
+  labs(
+    title = "Indiana Contributions Amount Distribution",
+    subtitle = "from 2008 to 2019",
+    caption = "Source: Indiana Lobby Registration Commission",
+    x = "Amount",
+    y = "Count"
+  )
+```
 
 ### Wrangle
 To improve the searchability of the database, we will perform some consistent,
@@ -276,3 +359,4 @@ write_csv(
 )
 ```
 
+We did a little spot check for the data and it checks out.
