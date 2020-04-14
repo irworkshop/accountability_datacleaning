@@ -380,11 +380,7 @@ iac <- iac %>%
 ```
 
 ```{r zip_progress}
-progress_table(
-  iac$zip,
-  iac$zip_norm,
-  compare = valid_zip
-)
+progress_table(iac$zip, iac$zip_norm, compare = valid_zip)
 ```
 
 ### State
@@ -554,21 +550,19 @@ recipient name, date, or amount (`r percent(mean(iac$na_flag), accuracy = 0.01)`
 
 ## Export
 
-```{r clean_dir}
-clean_dir <- dir_create(here("in", "contribs", "data", "clean"))
-```
-
-```{r clean_write}
+```{r clean_trim}
 iac <- iac %>% 
   select(
     -city_norm,
     city_norm = city_swap
   ) %>% 
   rename_all(~str_replace(., "_norm", "_clean"))
+```
 
-write_csv(
-  x = iac,
-  path = path(clean_dir, "in_contribs_clean.csv"),
-  na = ""
-)
+```{r clean_write}
+clean_dir <- dir_create(here("ia", "contribs", "data", "clean"))
+clean_path <- path(clean_dir, "ia_contribs_clean.csv")
+write_csv(iac, path = clean_path, na = "")
+file_size(clean_path)
+guess_encoding(clean_path)
 ```
