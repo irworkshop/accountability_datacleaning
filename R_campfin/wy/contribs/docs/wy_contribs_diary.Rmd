@@ -349,7 +349,7 @@ wyc <- wyc %>%
     match_abb = is_abbrev(city_norm, city_match),
     match_dist = str_dist(city_norm, city_match),
     city_swap = if_else(
-      condition = !is.na(match_dist) & match_abb | match_dist == 1,
+      condition = !is.na(match_dist) & (match_abb | match_dist == 1),
       true = city_match,
       false = city_norm
     )
@@ -489,13 +489,8 @@ glimpse(sample_n(wyc, 20))
 
 ```{r clean_dir}
 clean_dir <- dir_create(here("wy", "contribs", "data", "clean"))
+clean_path <- path(clean_dir, "wy_contribs_clean.csv")
+write_csv(wyc, clean_path, na = "")
+file_size(clean_path)
+guess_encoding(clean_path)
 ```
-
-```{r clean_write}
-write_csv(
-  x = wyc,
-  path = path(clean_dir, "wy_contribs_clean.csv"),
-  na = ""
-)
-```
-
