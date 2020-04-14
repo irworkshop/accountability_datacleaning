@@ -1,7 +1,7 @@
 Alaska Contributions
 ================
 Kiernan Nicholls
-2020-03-02 15:25:41
+2020-04-13 15:10:33
 
   - [Project](#project)
   - [Objectives](#objectives)
@@ -107,6 +107,7 @@ results as a tab-delimited text file. We can do that by hand since the
 
 ``` r
 raw_dir <- dir_create(here("ak", "contribs", "data", "raw"))
+raw_path <- path(raw_dir, glue("CD_Transactions_{format(today(), '%m-%d-%Y')}.CSV"))
 ```
 
 ``` r
@@ -120,13 +121,15 @@ httr::GET(
   ),
   query = list(
     exportAll = "True",
-    exportFormat = "TXT",
+    exportFormat = "CSV",
     isExport = "True"
   ),
-  write_disk(
-    path = path(raw_dir, "CD_Transactions_03-02-2020.TXT")
-  )
+  write_disk(raw_path)
 )
+```
+
+``` r
+ak_names <- names(clean_names(read_csv(raw_path, n_max = 0)))
 ```
 
 ### Read
@@ -134,35 +137,45 @@ httr::GET(
 This tab-delimited text file can be read with `readr::read_tsv()`.
 
 ``` r
-raw_file <- dir_ls(raw_dir)
-ak_names <- raw_file %>% 
-  read_lines(n_max = 1) %>% 
-  str_split("\t") %>% 
-  pluck(1) %>% 
-  make_clean_names()
-
-akc <- raw_file %>%
-  # skip col name line
-  read_lines(skip = 1) %>%
-  # startrs with id num
+fix_path <- file_temp(ext = "csv")
+read_lines(raw_path, skip = 1) %>% 
+  str_remove(",(?=$)") %>% 
   str_subset("^\\d") %>% 
-  # remove trailing delim
-  str_remove("\t$") %>% 
-  # read with names as tsv
-  read_delim(
-    delim = "\t",
-    na = c("", "NA", "N/A"),
-    escape_backslash = FALSE,
-    escape_double = TRUE,
-    col_names = ak_names,
-    col_types = cols(
-      .default = col_character(),
-      date = col_date_usa(),
-      amount = col_number(),
-      report_year = col_integer(),
-      submitted = col_date_usa()
-    )
+  write_lines(fix_path)
+```
+
+``` r
+akc <- vroom(
+  file = fix_path,
+  delim = ",",
+  na = c("", "NA", "N/A"),
+  escape_backslash = FALSE,
+  escape_double = FALSE,
+  .name_repair = make_clean_names,
+  num_threads = 1,
+  col_names = ak_names,
+  col_types = cols(
+    .default = col_character(),
+    date = col_date_usa(),
+    amount = col_number(),
+    report_year = col_integer(),
+    submitted = col_date_usa()
   )
+)
+```
+
+``` r
+count(akc, tran_type)
+#> # A tibble: 7 x 2
+#>   tran_type                                                                                       n
+#>   <chr>                                                                                       <int>
+#> 1 "000.00\",ASEA/AFSCME Local 52 PAC,,2601 Denali Street,Anchorage,Alaska,USA,USA,PAC,PAC,,…      1
+#> 2 "Havelock & Duffy\",,,Year Start Report,2020 - State Primary Election,State Primary,,,Can…      1
+#> 3 "Inc\",,,Year Start Report,2020 - State Primary Election,State Primary,,,Candidate,Matt C…      1
+#> 4 "Income"                                                                                   261787
+#> 5 "Sachse"                                                                                        1
+#> 6 "STE 306\",Juneau,Alaska,99801,USA,PAC,PAC,,,Year Start Report,2018 - State Primary Elect…      1
+#> 7  <NA>                                                                                           8
 ```
 
 ## Explore
@@ -185,43 +198,43 @@ tail(akc)
 #> # A tibble: 6 x 25
 #>   id    date       tran_type pay_type pay_detail amount last  first address city  state zip  
 #>   <chr> <date>     <chr>     <chr>    <chr>       <dbl> <chr> <chr> <chr>   <chr> <chr> <chr>
-#> 1 4349… 2016-09-13 Income    Check    10997       18.4  "GUR… T     "2740 … "FAI… Alas… 99709
-#> 2 4349… 2016-09-13 Income    Check    10997       14    "GUT… L     "1974 … "JUN… Alas… 99801
-#> 3 4349… 2016-09-13 Income    Check    10997        3.78 "HAL… J     "409 N… "FAI… Alas… 99701
-#> 4 4349… 2016-09-13 Income    Check    10997       17.0  "HAM… S     "505 K… "FAI… Alas… 99701
-#> 5 4349… 2016-09-13 Income    Check    10997       17.0  "HAR… J     "695 E… "FAI… Alas… 99712
-#> 6 4350… 2016-09-13 Income    Check    10997       15.7  "HAR… D     "974 M… "NOR… Alas… 99705
+#> 1 4249… 2017-10-20 Income    Cash     <NA>          100 Voli… Evel… 1705 T… Anch… Alas… 99508
+#> 2 4249… 2017-10-19 Income    Cash     <NA>          100 Wade  Scott PO Box… Two … Alas… 99716
+#> 3 4249… 2017-09-12 Income    Cash     <NA>          100 Wagn… Rich… P.O. B… Fair… Alas… 99707
+#> 4 4249… 2017-10-23 Income    Credit … <NA>          200 Wagn… Rich… P.O. B… Fair… Alas… 99707
+#> 5 4249… 2017-10-17 Income    Credit … <NA>          100 Walk… Darl… P.O. B… Homer Alas… 99603
+#> 6 4250… 2017-09-29 Income    Cash     <NA>          100 Walk… Nick  16060 … Anch… Alas… 99515
 #> # … with 13 more variables: country <chr>, occupation <chr>, employer <chr>, expend_purpose <chr>,
 #> #   report_type <chr>, election_name <chr>, election_type <chr>, municipality <chr>, office <chr>,
 #> #   filer_type <chr>, filer <chr>, report_year <int>, submitted <date>
 glimpse(sample_n(akc, 20))
 #> Rows: 20
 #> Columns: 25
-#> $ id             <chr> "110435", "18635", "177009", "52945", "334911", "432430", "167710", "7876…
-#> $ date           <date> 2018-02-28, 2019-03-07, 2018-06-15, 2019-09-17, 2017-07-17, 2016-08-31, …
+#> $ id             <chr> "183258", "37685", "319043", "72048", "128207", "305235", "309734", "1344…
+#> $ date           <date> 2018-05-16, 2019-03-18, 2019-01-09, 2019-08-20, 2019-11-05, 2018-11-08, …
 #> $ tran_type      <chr> "Income", "Income", "Income", "Income", "Income", "Income", "Income", "In…
-#> $ pay_type       <chr> "Payroll Deduction", "Payroll Deduction", "Credit Card", "Payroll Deducti…
-#> $ pay_detail     <chr> "Payroll deduction", NA, NA, NA, NA, "Payroll Deduction", NA, "Payroll De…
-#> $ amount         <dbl> 19.00, 11.90, 100.00, 9.40, 18.31, 2.00, 50.00, 2.00, 0.84, 25.00, 100.00…
-#> $ last           <chr> "Ingram", "GEARY", "Hackley", "Sheen", "POLLARD     ", "JONES", "Avellane…
-#> $ first          <chr> "Joshua Nathan", "RYAN", "Patricia", "Courtney", "TIMOTHY        ", "BRON…
-#> $ address        <chr> "11824 Inspiration Drive", "6400 EAST 9TH AVENUE", "4550 E. 135th Ave.", …
-#> $ city           <chr> "Eagle River", "ANCHORAGE", "Anchorage", "Fairbanks", "WASILLA           …
-#> $ state          <chr> "Alabama", "Alaska", "Alaska", "Alaska", "Alaska", "Alaska", "Alaska", "A…
-#> $ zip            <chr> "99577", "99504", "9516", "99701", "99687", "99504", "99506", "99802", "9…
+#> $ pay_type       <chr> "Payroll Deduction", "Payroll Deduction", "Check", "Payroll Deduction", "…
+#> $ pay_detail     <chr> NA, "Payroll Deduction", "6444", NA, NA, "Individual", NA, "Individual", …
+#> $ amount         <dbl> 13.76, 5.00, 400.00, 1.00, 5.00, 10.00, 14.28, 10.00, 8.96, 3.00, 12.64, …
+#> $ last           <chr> "ASHENFELTER", "SUMRALL", "HUTCHINGS SALES & SERVICE", "Murphy", "Sides",…
+#> $ first          <chr> "JASON", "SEAN", NA, "Michael", "Daniel Jacob", "Jacob", "J", "Joseph", "…
+#> $ address        <chr> "3240 PENLAND PKWY #123", "1312 WOODSIDE DR", "P O BOX 895", "P.O. Box 24…
+#> $ city           <chr> "ANCHORAGE", "KETCHIKAN", "SOLDOTNA", "ANC", "Wasilla", "Anchorage", "POR…
+#> $ state          <chr> "Alaska", "Alaska", "Alaska", "Alaska", "Alaska", "Alaska", "Texas", "Ala…
+#> $ zip            <chr> "99508", "99901", "99669", "99524", "99654", "99509", "77651", "99501", "…
 #> $ country        <chr> "USA", "USA", "USA", "USA", "USA", "USA", "USA", "USA", "USA", "USA", "US…
-#> $ occupation     <chr> "Municipality of Anchorage", "Fitter", "Retired", "Operator", "Laborer", …
-#> $ employer       <chr> "Fire Fighter", "Mechanical Builders Inc.", NA, "Fairbanks City", "QAP   …
-#> $ expend_purpose <chr> NA, NA, NA, NA, NA, NA, "Donation", NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
-#> $ report_type    <chr> "Thirty Day Report", "Seven Day Report", "Thirty Day Report", "Seven Day …
-#> $ election_name  <chr> "2018 - Anchorage Municipal Election", "2019 - Anchorage Municipal Electi…
-#> $ election_type  <chr> "Anchorage Municipal", "Anchorage Municipal", "State Primary", NA, NA, NA…
-#> $ municipality   <chr> "Anchorage, City and Borough", "Anchorage, City and Borough", NA, NA, NA,…
-#> $ office         <chr> NA, NA, NA, NA, NA, NA, "House", NA, NA, NA, NA, NA, "Governor", NA, NA, …
-#> $ filer_type     <chr> "Group", "Group", "Candidate", "Group", "Group", "Group", "Candidate", "G…
-#> $ filer          <chr> "IAFF Local 1264 PAC", "Local367PAC", "JASON GRENN", "IUOE Local 302 PAC …
-#> $ report_year    <int> 2018, 2019, 2018, 2019, 2017, 2016, 2018, 2019, 2017, 2017, 2018, 2017, 2…
-#> $ submitted      <date> 2018-03-01, 2019-03-26, 2018-09-04, 2019-09-23, 2018-02-14, 2016-09-06, …
+#> $ occupation     <chr> "Laborer", NA, "RENTALS", "Fire Fighter", "Municipality of Anchorage", "L…
+#> $ employer       <chr> "HOUSTON CONTRACTING", "SOA", "RENTALS", "AFD", "Fire Fighter", "State of…
+#> $ expend_purpose <chr> NA, NA, "DONATION", NA, NA, "PAC Contributions", NA, "PAC Contribution", …
+#> $ report_type    <chr> "Thirty Day Report", "Seven Day Report", "Thirty Day Report", "Thirty Day…
+#> $ election_name  <chr> "2018 - Anchorage Municipal Special Election", "2019 - Anchorage Municipa…
+#> $ election_type  <chr> "Special Municipal", "Anchorage Municipal", "Special Municipal", NA, NA, …
+#> $ municipality   <chr> "Anchorage, City and Borough", "Anchorage, City and Borough", "Soldotna, …
+#> $ office         <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "Governor", "Mayor", NA, NA, …
+#> $ filer_type     <chr> "Group", "Group", "Group", "Group", "Group", "Group", "Group", "Group", "…
+#> $ filer          <chr> "Laborers' International Union of North America, 341 PAC", "Alaska State …
+#> $ report_year    <int> 2018, 2019, 2018, 2019, 2019, 2018, 2018, 2019, 2019, 2017, 2019, 2018, 2…
+#> $ submitted      <date> 2018-07-09, 2019-03-25, 2019-02-02, 2019-09-03, 2020-02-15, 2019-01-09, …
 ```
 
 ### Missing
@@ -229,39 +242,39 @@ glimpse(sample_n(akc, 20))
 ``` r
 col_stats(akc, count_na)
 #> # A tibble: 25 x 4
-#>    col            class       n          p
-#>    <chr>          <chr>   <int>      <dbl>
-#>  1 id             <chr>       0 0         
-#>  2 date           <date>      8 0.0000187 
-#>  3 tran_type      <chr>       1 0.00000234
-#>  4 pay_type       <chr>       2 0.00000467
-#>  5 pay_detail     <chr>  195872 0.458     
-#>  6 amount         <dbl>      20 0.0000467 
-#>  7 last           <chr>      24 0.0000561 
-#>  8 first          <chr>    7702 0.0180    
-#>  9 address        <chr>    1823 0.00426   
-#> 10 city           <chr>    1812 0.00423   
-#> 11 state          <chr>      36 0.0000841 
-#> 12 zip            <chr>    1825 0.00426   
-#> 13 country        <chr>      25 0.0000584 
-#> 14 occupation     <chr>  124415 0.291     
-#> 15 employer       <chr>   50476 0.118     
-#> 16 expend_purpose <chr>  365497 0.854     
-#> 17 report_type    <chr>     149 0.000348  
-#> 18 election_name  <chr>      64 0.000150  
-#> 19 election_type  <chr>  162155 0.379     
-#> 20 municipality   <chr>  261180 0.610     
-#> 21 office         <chr>  359854 0.841     
-#> 22 filer_type     <chr>      73 0.000171  
-#> 23 filer          <chr>      67 0.000157  
-#> 24 report_year    <int>     448 0.00105   
-#> 25 submitted      <date>    448 0.00105
+#>    col            class       n         p
+#>    <chr>          <chr>   <int>     <dbl>
+#>  1 id             <chr>       0 0        
+#>  2 date           <date>     13 0.0000497
+#>  3 tran_type      <chr>       8 0.0000306
+#>  4 pay_type       <chr>       8 0.0000306
+#>  5 pay_detail     <chr>  134617 0.514    
+#>  6 amount         <dbl>      12 0.0000458
+#>  7 last           <chr>      16 0.0000611
+#>  8 first          <chr>    5513 0.0211   
+#>  9 address        <chr>     869 0.00332  
+#> 10 city           <chr>     833 0.00318  
+#> 11 state          <chr>      32 0.000122 
+#> 12 zip            <chr>     881 0.00337  
+#> 13 country        <chr>      12 0.0000458
+#> 14 occupation     <chr>   60635 0.232    
+#> 15 employer       <chr>   29163 0.111    
+#> 16 expend_purpose <chr>  222678 0.851    
+#> 17 report_type    <chr>    1350 0.00516  
+#> 18 election_name  <chr>      28 0.000107 
+#> 19 election_type  <chr>   85876 0.328    
+#> 20 municipality   <chr>  144271 0.551    
+#> 21 office         <chr>  203550 0.778    
+#> 22 filer_type     <chr>      29 0.000111 
+#> 23 filer          <chr>      29 0.000111 
+#> 24 report_year    <int>     240 0.000917 
+#> 25 submitted      <date>    240 0.000917
 ```
 
 ``` r
 akc <- akc %>% flag_na(date, last, amount, filer)
 sum(akc$na_flag)
-#> [1] 82
+#> [1] 35
 ```
 
 ### Duplicates
@@ -273,27 +286,27 @@ them with `campfin::flag_dupes()`.
 ``` r
 akc <- flag_dupes(akc, -id, .check = TRUE)
 percent(mean(akc$dupe_flag), 0.1)
-#> [1] "8.2%"
+#> [1] "12.6%"
 ```
 
 ``` r
 akc %>% 
   filter(dupe_flag) %>% 
   select(date, last, amount, filer)
-#> # A tibble: 35,176 x 4
-#>    date       last         amount filer                  
-#>    <date>     <chr>         <dbl> <chr>                  
-#>  1 2020-01-30 "Hacker"         25 Forrest Dunbar         
-#>  2 2020-01-30 "Hacker"         25 Forrest Dunbar         
-#>  3 2019-12-21 "Ristenpart"   1000 Austin A Quinn-Davidson
-#>  4 2019-12-21 "Ristenpart"   1000 Austin A Quinn-Davidson
-#>  5 2019-12-23 "Noble"          50 Sharon Jackson         
-#>  6 2019-12-23 "Noble"          50 Sharon Jackson         
-#>  7 2019-08-12 "Hallden"        25 Janice L Park          
-#>  8 2019-08-12 "Hallden"        25 Janice L Park          
-#>  9 2019-11-06 "Spohnholz "     50 Janice L Park          
-#> 10 2019-11-06 "Spohnholz "     50 Janice L Park          
-#> # … with 35,166 more rows
+#> # A tibble: 33,000 x 4
+#>    date       last         amount filer          
+#>    <date>     <chr>         <dbl> <chr>          
+#>  1 2020-01-30 Hacker           25 Forrest Dunbar 
+#>  2 2020-01-30 Hacker           25 Forrest Dunbar 
+#>  3 2019-09-03 Shields         499 Jamin L. Burton
+#>  4 2019-10-02 Maili            20 Jamin L. Burton
+#>  5 2019-10-02 Blake            15 Jamin L. Burton
+#>  6 2019-10-27 Burton           10 Jamin L. Burton
+#>  7 2019-10-28 Krueger          10 Jamin L. Burton
+#>  8 2019-10-28 Dault            20 Jamin L. Burton
+#>  9 2019-10-29 Aki              20 Jamin L. Burton
+#> 10 2019-11-03 Aube-Trammel     50 Jamin L. Burton
+#> # … with 32,990 more rows
 ```
 
 ### Categorical
@@ -303,33 +316,33 @@ col_stats(akc, n_distinct)
 #> # A tibble: 27 x 4
 #>    col            class       n          p
 #>    <chr>          <chr>   <int>      <dbl>
-#>  1 id             <chr>  427926 1.00      
-#>  2 date           <date>   1667 0.00390   
-#>  3 tran_type      <chr>       8 0.0000187 
-#>  4 pay_type       <chr>      14 0.0000327 
-#>  5 pay_detail     <chr>   19260 0.0450    
-#>  6 amount         <dbl>    5915 0.0138    
-#>  7 last           <chr>   30931 0.0723    
-#>  8 first          <chr>   16124 0.0377    
-#>  9 address        <chr>   66473 0.155     
-#> 10 city           <chr>    4450 0.0104    
-#> 11 state          <chr>      84 0.000196  
-#> 12 zip            <chr>    9151 0.0214    
-#> 13 country        <chr>      34 0.0000795 
-#> 14 occupation     <chr>   13684 0.0320    
-#> 15 employer       <chr>   19455 0.0455    
-#> 16 expend_purpose <chr>    5414 0.0127    
-#> 17 report_type    <chr>      19 0.0000444 
-#> 18 election_name  <chr>      73 0.000171  
-#> 19 election_type  <chr>      21 0.0000491 
-#> 20 municipality   <chr>      31 0.0000724 
-#> 21 office         <chr>      23 0.0000537 
-#> 22 filer_type     <chr>      14 0.0000327 
-#> 23 filer          <chr>     667 0.00156   
-#> 24 report_year    <int>       7 0.0000164 
-#> 25 submitted      <date>    640 0.00150   
-#> 26 na_flag        <lgl>       2 0.00000467
-#> 27 dupe_flag      <lgl>       2 0.00000467
+#>  1 id             <chr>  261795 1.00      
+#>  2 date           <date>   1353 0.00517   
+#>  3 tran_type      <chr>       7 0.0000267 
+#>  4 pay_type       <chr>      14 0.0000535 
+#>  5 pay_detail     <chr>   14299 0.0546    
+#>  6 amount         <dbl>    4787 0.0183    
+#>  7 last           <chr>   22706 0.0867    
+#>  8 first          <chr>   10395 0.0397    
+#>  9 address        <chr>   46077 0.176     
+#> 10 city           <chr>    3572 0.0136    
+#> 11 state          <chr>      73 0.000279  
+#> 12 zip            <chr>    7866 0.0300    
+#> 13 country        <chr>      24 0.0000917 
+#> 14 occupation     <chr>    9201 0.0351    
+#> 15 employer       <chr>   12452 0.0476    
+#> 16 expend_purpose <chr>    3038 0.0116    
+#> 17 report_type    <chr>      40 0.000153  
+#> 18 election_name  <chr>      72 0.000275  
+#> 19 election_type  <chr>      32 0.000122  
+#> 20 municipality   <chr>      45 0.000172  
+#> 21 office         <chr>      35 0.000134  
+#> 22 filer_type     <chr>      28 0.000107  
+#> 23 filer          <chr>     709 0.00271   
+#> 24 report_year    <int>       6 0.0000229 
+#> 25 submitted      <date>    447 0.00171   
+#> 26 na_flag        <lgl>       2 0.00000764
+#> 27 dupe_flag      <lgl>       2 0.00000764
 ```
 
 ![](../plots/bar_payment-1.png)<!-- -->
@@ -349,9 +362,9 @@ col_stats(akc, n_distinct)
 ``` r
 summary(akc$amount)
 #>      Min.   1st Qu.    Median      Mean   3rd Qu.      Max.      NA's 
-#>       0.0       5.0       6.5     124.7      25.0 1450000.0        20
+#>       0.0       5.0      10.0     160.4      50.0 1450000.0        12
 mean(akc$amount <= 0, na.rm = TRUE)
-#> [1] 0.002091547
+#> [1] 0.002360689
 ```
 
 ![](../plots/hist_amount-1.png)<!-- -->
@@ -374,9 +387,9 @@ min(akc$date, na.rm = TRUE)
 sum(akc$year < 2000, na.rm = TRUE)
 #> [1] 0
 max(akc$date, na.rm = TRUE)
-#> [1] "2020-03-06"
+#> [1] "2020-08-09"
 sum(akc$date > today(), na.rm = TRUE)
-#> [1] 143
+#> [1] 1
 ```
 
 ![](../plots/bar_year-1.png)<!-- -->
@@ -411,18 +424,18 @@ akc %>%
   distinct() %>% 
   sample_n(10)
 #> # A tibble: 10 x 2
-#>    address                        address_norm               
-#>    <chr>                          <chr>                      
-#>  1 "1553 A St. Apartment 407"     1553 A ST APT 407          
-#>  2 "8892 E Kokopeli Cir, Unit 19" 8892 E KOKOPELI CIR UNIT 19
-#>  3 "1326 K St."                   1326 K ST                  
-#>  4 "11404 Discovery Park Drive "  11404 DISCOVERY PARK DR    
-#>  5 "1434 Bannister Dr."           1434 BANNISTER DR          
-#>  6 "2030 E 75TH AVE UNIT B"       2030 E 75 TH AVE UNIT B    
-#>  7 "1115 sw 2nd Ave"              1115 SW 2 ND AVE           
-#>  8 "PO Box 3371"                  PO BOX 3371                
-#>  9 "13350 W La Reata Ave"         13350 W LA REATA AVE       
-#> 10 "PO Box 140350"                PO BOX 140350
+#>    address             address_norm      
+#>    <chr>               <chr>             
+#>  1 3215 Timberline Ct  3215 TIMBERLINE CT
+#>  2 1093 Park Dr        1093 PARK DR      
+#>  3 3109 E. 87th Street 3109 E 87 TH ST   
+#>  4 6321 Brown Tree     6321 BROWN TREE   
+#>  5 220 Capstan Drive   220 CAPSTAN DR    
+#>  6 P.O. Box 246        PO BOX 246        
+#>  7 8511 FLAMINGO DRIVE 8511 FLAMINGO DR  
+#>  8 PO Box 58080        PO BOX 58080      
+#>  9 628 Pleasure Dr     628 PLEASURE DR   
+#> 10 P.O. BOX 10546      PO BOX 10546
 ```
 
 ### ZIP
@@ -450,8 +463,8 @@ progress_table(
 #> # A tibble: 2 x 6
 #>   stage    prop_in n_distinct prop_na n_out n_diff
 #>   <chr>      <dbl>      <dbl>   <dbl> <dbl>  <dbl>
-#> 1 zip        0.974       9151 0.00426 11156   4583
-#> 2 zip_norm   0.999       5308 0.00646   544    208
+#> 1 zip        0.967       7866 0.00337  8565   3764
+#> 2 zip_norm   0.999       4743 0.00549   356    136
 ```
 
 ### State
@@ -476,18 +489,18 @@ akc %>%
   filter(state != state_norm) %>% 
   count(state, state_norm, sort = TRUE)
 #> # A tibble: 53 x 3
-#>    state        state_norm      n
-#>    <chr>        <chr>       <int>
-#>  1 Alaska       AK         408929
-#>  2 Washington   WA           2645
-#>  3 California   CA           2523
-#>  4 New York     NY           1051
-#>  5 Texas        TX           1046
-#>  6 Oregon       OR            948
-#>  7 Florida      FL            855
-#>  8 Arizona      AZ            835
-#>  9 Pennsylvania PA            588
-#> 10 Colorado     CO            521
+#>    state         state_norm      n
+#>    <chr>         <chr>       <int>
+#>  1 Alaska        AK         247517
+#>  2 Washington    WA           2139
+#>  3 California    CA           2071
+#>  4 New York      NY            784
+#>  5 Oregon        OR            692
+#>  6 Texas         TX            691
+#>  7 Florida       FL            592
+#>  8 Arizona       AZ            530
+#>  9 Pennsylvania  PA            445
+#> 10 Massachusetts MA            433
 #> # … with 43 more rows
 ```
 
@@ -498,10 +511,10 @@ progress_table(
   compare = valid_state
 )
 #> # A tibble: 2 x 6
-#>   stage        prop_in n_distinct   prop_na  n_out n_diff
-#>   <chr>          <dbl>      <dbl>     <dbl>  <dbl>  <dbl>
-#> 1 state      0.0000187         84 0.0000841 427889     78
-#> 2 state_norm 1                 55 0.000168       0      1
+#>   stage        prop_in n_distinct  prop_na  n_out n_diff
+#>   <chr>          <dbl>      <dbl>    <dbl>  <dbl>  <dbl>
+#> 1 state      0.0000306         73 0.000122 261760     68
+#> 2 state_norm 1                 55 0.000202      0      1
 ```
 
 ### City
@@ -588,22 +601,15 @@ good_refine <- akc %>%
   )
 ```
 
-    #> # A tibble: 13 x 5
-    #>    state_norm zip_norm city_swap           city_refine             n
-    #>    <chr>      <chr>    <chr>               <chr>               <int>
-    #>  1 AK         99929    WRANGLER            WRANGELL                7
-    #>  2 AK         99639    NILICHIK            NINILCHIK               2
-    #>  3 AK         99802    JUEANU              JUNEAU                  2
-    #>  4 AK         99501    ANCHORAGEANCHORAGE  ANCHORAGE               1
-    #>  5 AK         99503    ANCHORAGEANCHORAGE  ANCHORAGE               1
-    #>  6 AK         99507    ANCHORAGEANCHORAGE  ANCHORAGE               1
-    #>  7 AK         99518    ANCHORAGENCHORAGE   ANCHORAGE               1
-    #>  8 AK         99586    GOKANA              GAKONA                  1
-    #>  9 AK         99801    JUNUEA              JUNEAU                  1
-    #> 10 AK         99826    GASTUVUS            GUSTAVUS                1
-    #> 11 FL         33855    INDIAN LAKES ESTATE INDIAN LAKE ESTATES     1
-    #> 12 TX         76262    RONAOAKE            ROANOKE                 1
-    #> 13 TX         76262    RONOAKE             ROANOKE                 1
+    #> # A tibble: 6 x 5
+    #>   state_norm zip_norm city_swap          city_refine     n
+    #>   <chr>      <chr>    <chr>              <chr>       <int>
+    #> 1 AK         99639    NILICHIK           NINILCHIK       3
+    #> 2 TX         76262    RONAOAKE           ROANOKE         2
+    #> 3 TX         76262    RONOAKE            ROANOKE         2
+    #> 4 AK         99507    ANCHORAGEANCHORAGE ANCHORAGE       1
+    #> 5 AK         99652    BIG LAKE AK        BIG LAKE        1
+    #> 6 AK         99826    GASTUVUS           GUSTAVUS        1
 
 Then we can join the refined values back to the database.
 
@@ -617,10 +623,10 @@ akc <- akc %>%
 
 | stage        | prop\_in | n\_distinct | prop\_na | n\_out | n\_diff |
 | :----------- | -------: | ----------: | -------: | -----: | ------: |
-| city\_raw)   |    0.872 |        3942 |    0.004 |  54673 |    1163 |
-| city\_norm   |    0.954 |        3418 |    0.005 |  19470 |     561 |
-| city\_swap   |    0.996 |        3143 |    0.005 |   1519 |     242 |
-| city\_refine |    0.996 |        3132 |    0.005 |   1498 |     231 |
+| city\_raw)   |    0.957 |        3119 |    0.003 |  11253 |     504 |
+| city\_norm   |    0.959 |        3041 |    0.004 |  10568 |     408 |
+| city\_swap   |    0.996 |        2856 |    0.004 |   1007 |     180 |
+| city\_refine |    0.996 |        2850 |    0.004 |    997 |     174 |
 
 You can see how the percentage of valid values increased with each
 stage.
@@ -649,44 +655,44 @@ akc <- akc %>%
 glimpse(sample_n(akc, 20))
 #> Rows: 20
 #> Columns: 32
-#> $ id             <chr> "199881", "247925", "105606", "22016", "157076", "184539", "237587", "381…
-#> $ date           <date> 2018-10-10, 2017-06-26, 2017-12-29, 2019-06-11, 2018-06-28, 2018-08-20, …
+#> $ id             <chr> "337936", "77558", "242296", "327292", "406697", "414561", "211815", "184…
+#> $ date           <date> 2018-02-06, 2019-09-12, 2018-08-16, 2019-01-18, 2017-04-04, 2017-12-25, …
 #> $ tran_type      <chr> "Income", "Income", "Income", "Income", "Income", "Income", "Income", "In…
-#> $ pay_type       <chr> "Cash", "Credit Card", "Credit Card", "Payroll Deduction", "Credit Card",…
-#> $ pay_detail     <chr> NA, NA, NA, NA, NA, NA, "Live Auction Item", "5165", NA, NA, NA, NA, "Pay…
-#> $ amount         <dbl> 100.0, 100.0, 500.0, 18.9, 50.0, 25.0, 750.0, 150.0, 2.0, 19.0, 5.0, 19.0…
-#> $ last           <chr> "Andersen", "Gosewich", "Clark", "BARNETT     ", "Crossett", "Madden", "H…
-#> $ first          <chr> "Terry", "Joan", "Catherine", "BRANDI         ", "Celia", "Camilla", "Rub…
-#> $ address        <chr> "PO Box 80810", "744 Lotus Blossom Street", "PO Box 665", "521 HOLLYBROOK…
-#> $ city_raw       <chr> "Fairbanks", "Encinitas", "Nome", "NEW WHITELAND           ", "Anchorage"…
-#> $ state          <chr> "Alaska", "California", "Alaska", "Indiana", "Alaska", "Alaska", "Alaska"…
-#> $ zip            <chr> "99708", "92024", "99762", "46184", "99507", "99516-4164", "99611", "9950…
+#> $ pay_type       <chr> "Credit Card", "Payroll Deduction", "Payroll Deduction", "Payroll Deducti…
+#> $ pay_detail     <chr> NA, NA, NA, "Payroll Deduction", NA, NA, NA, NA, NA, "Payroll Deduction",…
+#> $ amount         <dbl> 200.00, 18.41, 12.35, 5.00, 25.00, 3.00, 100.00, 19.00, 30.00, 2.00, 2.00…
+#> $ last           <chr> "Libbey", "SCOGGINS", "Eskew", "LANSANG", "Danner", "Crelan", "Larweth", …
+#> $ first          <chr> "Karol", "DEREK", "Brandon", "KATHERINE", "Dawn", "Keeva", "Larry", "Patr…
+#> $ address        <chr> "14901 Wildien Drive", "7680 VIRDA LEE CIRCLE", "12373 S Russian Cr Rd", …
+#> $ city_raw       <chr> "Anchorage", "ANCHORAGE", "Kodiak", "ANCHORAGE", "Girdwood", "Stamford", …
+#> $ state          <chr> "Alaska", "Alaska", "Alaska", "Alaska", "Alaska", "Connecticut", "Alaska"…
+#> $ zip            <chr> "99516", "99507", "99615", "99502", "99587", "6906", "99705", "99517", "9…
 #> $ country        <chr> "USA", "USA", "USA", "USA", "USA", "USA", "USA", "USA", "USA", "USA", "US…
-#> $ occupation     <chr> "Pipefitter", "Retired", "Probation Officer", "Laborer", "Business planne…
-#> $ employer       <chr> "UA, Local 375", "Retired", "State of Alaska", "GRANITE CONSTRUCTION  ", …
-#> $ expend_purpose <chr> NA, NA, NA, NA, NA, NA, "Lincoln Day Event (2/17/18) Live Auction Item: D…
-#> $ report_type    <chr> "Seven Day Report", "Year Start Report", "Year Start Report", "105 Day Re…
-#> $ election_name  <chr> "2018 - State General Election ", "2018 - State Primary Election ", "2018…
-#> $ election_type  <chr> "State General", "State Primary", "State Primary", "Anchorage Municipal",…
-#> $ municipality   <chr> NA, NA, NA, "Anchorage, City and Borough", NA, NA, "Anchorage, City and B…
-#> $ office         <chr> NA, NA, "Governor", NA, "House", "Governor", NA, "Assembly", NA, NA, NA, …
-#> $ filer_type     <chr> "Group", "Candidate", "Candidate", "Group", "Candidate", "Candidate", "Gr…
-#> $ filer          <chr> "Putting Alaskans First PAC", "Kathryn Dodge", "Michael J. Dunleavy", "La…
-#> $ report_year    <int> 2018, 2018, 2018, 2019, 2018, 2018, 2018, 2016, 2018, 2019, 2019, 2019, 2…
-#> $ submitted      <date> 2018-10-30, 2019-02-15, 2018-02-15, 2019-07-09, 2018-07-23, 2018-10-02, …
+#> $ occupation     <chr> "Retired", "Laborer", "Operator", "MOTOR VEHICLE CUSTOMER SERVICES REPRES…
+#> $ employer       <chr> NA, "QAP", "Brechan Enterprise Inc.", "SOA", "Glacier City Realty Inc.", …
+#> $ expend_purpose <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "July 2018 Payroll", NA, NA, …
+#> $ report_type    <chr> "Thirty Day Report", "Seven Day Report", "Thirty Day Report", "Year End R…
+#> $ election_name  <chr> "2018 - Anchorage Municipal Election", "-", "-", "-", "2017 - Anchorage M…
+#> $ election_type  <chr> "Anchorage Municipal", NA, NA, NA, "Anchorage Municipal", NA, "State Prim…
+#> $ municipality   <chr> "Anchorage, City and Borough", NA, NA, NA, "Anchorage, City and Borough",…
+#> $ office         <chr> "Mayor", NA, NA, NA, NA, NA, NA, NA, "Assembly", NA, NA, NA, NA, "Senate"…
+#> $ filer_type     <chr> "Candidate", "Group", "Group", "Group", "Group", "Group", "Group", "Group…
+#> $ filer          <chr> "Ethan Berkowitz", "Laborers' International Union of North America, 341 P…
+#> $ report_year    <int> 2018, 2019, 2018, 2018, 2017, 2017, 2018, 2018, 2019, 2018, 2018, 2018, 2…
+#> $ submitted      <date> 2019-02-15, 2019-09-23, 2018-09-04, 2019-02-14, 2017-10-26, 2018-01-10, …
 #> $ na_flag        <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FAL…
-#> $ dupe_flag      <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, TRUE, FALS…
-#> $ year           <dbl> 2018, 2017, 2017, 2019, 2018, 2018, 2018, 2016, 2018, 2019, 2019, 2019, 2…
-#> $ address_clean  <chr> "PO BOX 80810", "744 LOTUS BLOSSOM ST", "PO BOX 665", "521 HOLLYBROOK DR"…
-#> $ zip_clean      <chr> "99708", "92024", "99762", "46184", "99507", "99516", "99611", "99502", "…
-#> $ state_clean    <chr> "AK", "CA", "AK", "IN", "AK", "AK", "AK", "AK", "AK", "AK", "WA", "AK", "…
-#> $ city_clean     <chr> "FAIRBANKS", "ENCINITAS", "NOME", "NEW WHITELAND", "ANCHORAGE", "ANCHORAG…
+#> $ dupe_flag      <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FAL…
+#> $ year           <dbl> 2018, 2019, 2018, 2019, 2017, 2017, 2018, 2018, 2019, 2019, 2018, 2018, 2…
+#> $ address_clean  <chr> "14901 WILDIEN DR", "7680 VIRDA LEE CIR", "12373 S RUSSIAN CR RD", "9224 …
+#> $ zip_clean      <chr> "99516", "99507", "99615", "99502", "99587", "06906", "99705", "99517", "…
+#> $ state_clean    <chr> "AK", "AK", "AK", "AK", "AK", "CT", "AK", "AK", "AK", "AK", "AK", "AK", "…
+#> $ city_clean     <chr> "ANCHORAGE", "ANCHORAGE", "KODIAK", "ANCHORAGE", "GIRDWOOD", "STAMFORD", …
 ```
 
-1.  There are 427,933 records in the database.
-2.  There are 35,176 duplicate records in the database.
+1.  There are 261,800 records in the database.
+2.  There are 33,000 duplicate records in the database.
 3.  The range and distribution of `amount` and `date` seem reasonable.
-4.  There are 82 records missing key variables.
+4.  There are 35 records missing key variables.
 5.  Consistency in geographic data has been improved with
     `campfin::normal_*()`.
 6.  The 4-digit `year` variable has been created with

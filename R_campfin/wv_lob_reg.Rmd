@@ -1,5 +1,5 @@
 ---
-title: "Idaho Lobbying Registration Diary"
+title: "West West Virginia Lobbying Expenditure Diary"
 author: "Yanqi Xu"
 date: "`r Sys.time()`"
 output:
@@ -32,7 +32,7 @@ set.seed(5)
 ```
 
 ```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
-fs::dir_create(here::here("id", "lobby", "docs"))
+fs::dir_create(here::here("wv", "lobby", "docs"))
 ```
 
 ## Project
@@ -110,133 +110,129 @@ here::here()
 
 [tap]: https://github.com/irworkshop/accountability_datacleaning
 [rproj]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects "Rproj"
+[guide]: http://ethics.dls.West Virginia.gov/LDS%20Guide.pdf
 
 ## Data
-The lobbying registration data can be downloaded from the [Idaho Secretary of State's website](https://sos.idaho.gov/elections-division/lobbyist-information/). Data for 2020 and 2019 can be accessed through direct download. The website has two views by lobbyist and by employer, but they are essentially powered by the same data backend.
+Lobbyist data is obtained via a public record request from the [West Virginia State Ethics Commission][03].
 
-This data is downloaded on Feb. 18, 2020.
+The Commonwealth's [Disclosure Information Guide](guide) explains the different schedules and reporting requirements.
+
+This data diary handles processing of the lobbyist compensation and expenditure data.
 
 ## Import
 
 ### Setting up Raw Data Directory
 
 ```{r raw_dir}
-raw_dir <- dir_create(here("id", "lobby", "data", "raw", "reg"))
+raw_dir <- dir_create(here("wv", "lobby", "data", "raw","reg"))
 ```
 
 ### Read
 ```{r raw_read}
-id_lob_reg <- dir_ls(raw_dir) %>% map_dfr(read_excel) %>% clean_names() %>% 
-  mutate_if(is.character, str_to_upper)
+vale <- dir_ls(raw_dir, regexp = "Lobbyist Disclosures 16-17") %>% read_xlsx() %>% 
+  clean_names()
+
+vale <- map_dfr(raw_dir, read_xlsx) %>% clean_names()
+
 ```
 
 
 ## Explore
 
 ```{r glimpse}
-head(id_lob_reg)
-tail(id_lob_reg)
-glimpse(sample_n(id_lob_reg, 20))
+head(vale)
+tail(vale)
+glimpse(sample_n(vale, 20))
 ```
+
 
 ### Missing
-No record is missing key fields.
+There're no missing fields 
 ```{r na_count}
-col_stats(id_lob_reg, count_na)
+col_stats(vale, count_na)
 ```
-
 
 ### Duplicates
-There isn't any duplicate columns. 
+There `r sum(vale$dupe_flag)` duplicate columns. 
 ```{r dupe_flag}
-id_lob_reg <- flag_dupes(id_lob_reg, dplyr::everything())
-sum(id_lob_reg$dupe_flag)
+vale <- flag_dupes(vale, dplyr::everything())
+sum(vale$dupe_flag)
 ```
 
-### Categorical
+### Continuous
+All the amount columns are character columns that contain special characters like "$" and ",".We will turn them into numeric columns.
 
-The year column is missing in this dataframe. 
-
-```{r create year}
-id_lob_reg <- id_lob_reg %>% 
-  mutate(year = year(date_filed))
+```{r col type}
+vale <- vale %>% 
+  mutate_at(.vars = vars(-c(lobbyist, lobbyists_principal, year, dupe_flag)), .funs = str_remove_all,"\\$|,") %>% 
+  mutate_at(.vars = vars(-c(lobbyist, lobbyists_principal, year, dupe_flag)), .funs = as.numeric) %>% 
+  mutate_if(is.character, str_to_upper)
 ```
 
-
-#### Dates
-
-
-```{r date_range}
-min(id_lob_reg$date_filed)
-max(id_lob_reg$date_filed)
+```{r plot top receipients ecoh}
+vale%>% 
+  group_by(lobbyists_principal) %>% 
+  summarize(med = median(total_income_and_expenditures_calendar_year_total)) %>% 
+  arrange(desc(med)) %>% 
+  top_n(10) %>% 
+  ggplot(aes(x = reorder(lobbyists_principal,med),
+         y = med)) +
+  geom_col(fill = RColorBrewer::brewer.pal(3, "Dark2")[3]) +
+  theme(legend.position = "none") +
+  scale_x_discrete(labels = wrap_format(15)) +
+  scale_y_continuous(labels = dollar) +
+  coord_flip() +
+  theme_minimal() +
+  labs(
+    title = "Top 10 Highest-spending Lobbying Principals",
+    subtitle = "(Measued by median total compensation and expenditures to lobbyists)",
+    caption = "Source: West Virginia State Ethics Commission",
+    x = "median expenses",
+    y = 'dollar'
+  )
+  
 ```
 
 ## Wrangle
-
-
 To improve the searchability of the database, we will perform some consistent,
 confident string normalization. For geographic variables like city names and
 ZIP codes, the corresponding `campfin::normal_*()` functions are taylor made to 
 facilitate this process.
 
+### Phone
+We can normalize the phone numbers.
+
+```{r normal_phone}
+wvlr <- wvlr %>% 
+      mutate_at(.vars = vars(ends_with('phone')), .funs = list(norm = ~ normal_phone(.)))
+```
+
 ### Address
-Some of the `temporary_address` field is character "N/A", which we can replace with just _NA_ using `na_if()`.
 
-```{r temp address replace}
-id_lob_reg <- id_lob_reg %>% 
-  mutate(temporary_address = na_if(temporary_address, "N/A"))
-```
-
-
-We can see that the `address` variables is the full address including city, state and ZIP codes. We will separate them with regex.
-
-```{r sep org add}
-id_lob_reg <- id_lob_reg %>% 
- mutate(permanent_zip = str_extract(permanent_address, "\\d{5}$"),
-        permanent_state = str_match(permanent_address,
-                                         "\\s([A-Z]{2}),\\s\\d{5}$")[,2])
-
-count_na(id_lob_reg$permanent_state)
-
-id_lob_reg <- id_lob_reg %>% 
-  mutate(permanent_city = {str_remove(permanent_address, "\\s[A-Z]{2},\\s\\d{5}$") %>% 
-      str_match("\\s(\\D+)\\s$|NEW YORK|SALT LAKE CITY")}[,2])
-
-
-      permanent_address_sep = str_remove(permanent_address, "\\s(\\D[^,]+)\\s[A-Z]{2},\\s\\d{5}$")
-  )
-```
-
-```{r sep emp add}
-id_lob_reg <- id_lob_reg %>% 
-  mutate(employer_zip = str_extract(employer_address, "\\d{5}$"),
-         employer_state = str_match(employer_address,
-                                        "\\s([A-Z]{2}),\\s\\d{5}$")[,2])
-
-count_na(id_lob_reg$employer_state)
-
-id_lob_reg <- id_lob_reg %>% 
-  mutate(employer_city = {str_remove(employer_address, "\\s[A-Z]{2},\\s\\d{5}$") %>% 
-      str_match("\\s(\\D[^,]+),$")}[,2],
-      employer_address_sep = str_remove(employer_address, "\\s(\\D[^,]+),\\s[A-Z]{2},\\s\\d{5}$")
-  )
-```
-
-For the street `addresss` variable, the `campfin::normal_address()` function
-will force consistence case, remove punctuation, and abbreviation official 
-USPS suffixes.
-
-```{r normal_address}
-id_lob_reg <-  id_lob_reg %>% 
-    mutate_at(.vars = vars(ends_with('sep')), .funs = list(norm = ~ normal_address(.,abbs = usps_street,
-      na_rep = TRUE)))
-```
-
-```{r address_view}
-id_lob_reg %>% 
-  select(contains("address")) %>% 
-  distinct() %>% 
-  sample_n(10)
+For the street `addresss` variable, the `campfin::normal_address()`
+function will force consistence case, remove punctuation, and
+abbreviation official USPS suffixes.
+```{r norm address}
+wvlr <- wvlr %>% 
+    # combine street addr
+  unite(
+    col = lobbyist_address,
+    starts_with("lobbyist_address_line"),
+    sep = " ",
+    remove = FALSE,
+    na.rm = TRUE
+  ) %>% 
+    unite(
+    col = principal_address,
+    starts_with("principal_authorizing_officer_address_line"),
+    sep = " ",
+    remove = FALSE,
+    na.rm = TRUE
+  ) %>% 
+  # normalize combined addr
+    mutate_at(.vars = vars(ends_with('address')), .funs = list(norm = ~ normal_address(.,abbs = usps_street,
+      na_rep = TRUE))) %>% 
+  select(-ends_with("address"))
 ```
 
 ### ZIP
@@ -246,26 +242,10 @@ valied _five_ digit codes by removing the ZIP+4 suffix and returning leading
 zeroes dropped by other programs like Microsoft Excel.
 
 ```{r zip_norm}
-prop_in(id_lob_reg$organization_zip, valid_zip, na.rm = T)
-prop_in(id_lob_reg$employer_zip, valid_zip, na.rm = T)
-
-id_lob_reg <- id_lob_reg %>% 
-  mutate_at(.vars = vars(ends_with('zip')), .funs = list(norm = ~ normal_zip(.,
-      na_rep = TRUE))) %>% 
-  rename(organization_zip5 = organization_zip_norm,
-         employer_zip5 = employer_zip_norm)
-
-prop_in(id_lob_reg$organization_zip5, valid_zip, na.rm = T)
-prop_in(id_lob_reg$employer_zip5, valid_zip, na.rm = T)
-```
-
-### state
-
-After checking the percentage of state fields that are valid, we can see that these fields are clean.
-
-```{r state_norm}
-prop_in(id_lob_reg$organization_state, valid_state, na.rm = T)
-prop_in(id_lob_reg$employer_state, valid_state, na.rm = T)
+wvlr <- wvlr %>% 
+    mutate_at(.vars = vars(ends_with('zip')), 
+              .funs = list(norm = ~ normal_zip(.))) %>% 
+  rename(lobbyist_address_zip5 = lobbyist_address_zip_norm)
 ```
 
 ### City
@@ -275,21 +255,21 @@ the wide variety of valid cities and formats.
 
 #### Normal
 
-The `campfin::normal_city()` function is a good id_lob_regart, again converting case,
+The `campfin::normal_city()` function is a good start, again converting case,
 removing punctuation, but _expanding_ USPS abbreviations. We can also remove
 `invalid_city` values.
 
 ```{r city_norm}
-prop_in(id_lob_reg$organization_city, valid_city, na.rm = T)
-prop_in(id_lob_reg$employer_city, valid_city, na.rm = T)
+prop_in(wvlr$lobbyist_address_city, valid_city, na.rm = T)
+prop_in(wvlr$employer_city, valid_city, na.rm = T)
 
-id_lob_reg <- id_lob_reg %>% 
+wvlr <- wvlr %>% 
   mutate_at(.vars = vars(ends_with('city')), .funs = list(norm = ~ normal_city(.,abbs = usps_city,
                                                                                states = usps_state,
                                                                                na = invalid_city,
                                                                                na_rep = TRUE)))
-prop_in(id_lob_reg$organization_city_norm, valid_city, na.rm = T)
-prop_in(id_lob_reg$employer_city_norm, valid_city, na.rm = T)
+prop_in(wvlr$lobbyist_address_city_norm, valid_city, na.rm = T)
+prop_in(wvlr$employer_city_norm, valid_city, na.rm = T)
 ```
 
 #### Swap
@@ -300,33 +280,32 @@ If the normalized value is either an abbreviation for or very similar to the
 expected value, we can confidently swap those two.
 
 ```{r org city_swap}
-id_lob_reg <- id_lob_reg %>% 
+wvlr <- wvlr %>% 
   left_join(
     y = zipcodes,
     by = c(
-      "organization_state" = "state",
-      "organization_zip5" = "zip"
+      "lobbyist_address_state" = "state",
     )
   ) %>% 
-  rename(organization_city_match = city) %>% 
+  rename(lobbyist_address_city_match = city) %>% 
   mutate(
-    match_abb = is_abbrev(organization_city_norm, organization_city_match),
-    match_dist = str_dist(organization_city_norm, organization_city_match),
-    organization_city_swap = if_else(
+    match_abb = is_abbrev(lobbyist_address_city_norm, lobbyist_address_city_match),
+    match_dist = str_dist(lobbyist_address_city_norm, lobbyist_address_city_match),
+    lobbyist_address_city_swap = if_else(
       condition = !is.na(match_dist) & match_abb | match_dist == 1,
-      true = organization_city_match,
-      false = organization_city_norm
+      true = lobbyist_address_city_match,
+      false = lobbyist_address_city_norm
     )
   ) %>% 
   select(
-    -organization_city_match,
+    -lobbyist_address_city_match,
     -match_dist,
     -match_abb
   )
 ```
 
 ```{r emp_city_swap}
-id_lob_reg <- id_lob_reg %>% 
+wvlr <- wvlr %>% 
   left_join(
     y = zipcodes,
     by = c(
@@ -357,12 +336,12 @@ After the two normalization steps, the percentage of valid cities is at 100%.
 ```{r city_progress, echo=FALSE}
 many_city <- c(valid_city, extra_city)
 progress <- progress_table(
-  id_lob_reg$organization_city,
-  id_lob_reg$employer_city,
-  id_lob_reg$organization_city_norm,
-  id_lob_reg$employer_city_norm,
-  id_lob_reg$organization_city_swap,
-id_lob_reg$employer_city_swap,
+  wvlr$lobbyist_address_city,
+  wvlr$employer_city,
+  wvlr$lobbyist_address_city_norm,
+  wvlr$employer_city_norm,
+  wvlr$lobbyist_address_city_swap,
+wvlr$employer_city_swap,
   compare = many_city
 ) %>% mutate(stage = as_factor(stage))
 ```
@@ -381,7 +360,7 @@ progress %>%
   coord_cartesian(ylim = c(0.75, 1)) +
   scale_y_continuous(labels = percent) +
   labs(
-    title = "Missouri City Normalization Progress",
+    title = "VA City Normalization Progress",
     x = "stage",
     y = "Percent Valid"
   )
@@ -407,7 +386,7 @@ progress %>%
   scale_y_continuous(labels = comma) +
   theme(legend.position = "bottom") +
   labs(
-    title = "NH City Normalization Progress",
+    title = "VA City Normalization Progress",
     subtitle = "Distinct values, valid and invalid",
     x = "stage",
     y = "Percent Valid",
@@ -416,29 +395,29 @@ progress %>%
   
 ```
 
+
 ## Conclude
 
 ```{r clean_glimpse}
-glimpse(sample_n(id_lob_reg, 20))
+glimpse(sample_n(wvlr, 20))
 ```
 
-1. There are `r nrow(id_lob_reg)` records in the database.
-1. There are `r sum(id_lob_reg$dupe_flag)` duplicate records in the database.
+1. There are `r nrow(vale)` records in the database.
+1. There's no duplicate record in the database.
 1. The range and distribution of `amount` and `date` seem reasonable.
-1. There are `r sum(id_lob_reg$na_flag)` records missing either recipient or date.
+1. There are `r sum(vale$na_flag)` records missing either recipient or date.
 1. Consistency in goegraphic data has been improved with `campfin::normal_*()`.
-1. The 4-digit `YEAR` variable has been created with `lubridate::year()`.
 
 ## Export
 
 ```{r clean_dir}
-clean_dir <- dir_create(here("id", "lobby", "data", "reg","clean"))
+clean_dir <- dir_create(here("wv", "lobby", "data", "processed","exp"))
 ```
 
 ```{r write_clean}
 write_csv(
-  x = id_lob_reg %>% rename(CITY_clean = CITY_swap) %>% rename( FIRM_CITY_clean = FIRM_CITY_swap),
-  path = path(clean_dir, "id_lob_reg_clean.csv"),
+  x = vale,
+  path = path(clean_dir, "sc_lob_exp_clean.csv"),
   na = ""
 )
 ```

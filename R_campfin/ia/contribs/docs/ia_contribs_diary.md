@@ -1,7 +1,7 @@
 Iowa Contributions
 ================
 Kiernan Nicholls
-2020-02-05 16:44:32
+2020-04-14 10:21:01
 
   - [Project](#project)
   - [Objectives](#objectives)
@@ -195,8 +195,8 @@ tail(iac)
 #> 6 {D63… 2020-02-04 14603   Commit… CON   Kym   <NA>  Gall… 4606 Ki… <NA>     des … IA    50311
 #> # … with 1 more variable: amount <dbl>
 glimpse(sample_n(iac, 20))
-#> Observations: 20
-#> Variables: 14
+#> Rows: 20
+#> Columns: 14
 #> $ id       <chr> "{24120520-0804-8611-2723-000000000000}", "{3CE5657E-1EBD-4C5D-AEF2-DEC1018FB11…
 #> $ date     <date> 2005-08-15, 2018-09-18, 2012-05-22, 2011-01-11, 2018-04-08, 2006-07-28, 2018-1…
 #> $ comm_cd  <chr> "5111", "2425", "1963", "6125", "2415", "6449", "2386", "6432", "5152", "1762",…
@@ -487,7 +487,7 @@ iac <- iac %>%
     match_abb = is_abbrev(city_norm, city_match),
     match_dist = str_dist(city_norm, city_match),
     city_swap = if_else(
-      condition = !is.na(city_match) & match_abb | match_dist == 1,
+      condition = !is.na(city_match) & (match_abb | match_dist == 1),
       true = city_match,
       false = city_norm
     )
@@ -504,20 +504,20 @@ many_city <- c(valid_city, extra_city)
 iac %>% 
   count(city_swap, state_norm, sort = TRUE) %>% 
   filter(!is.na(city_swap), city_swap %out% many_city)
-#> # A tibble: 1,139 x 3
+#> # A tibble: 1,331 x 3
 #>    city_swap            state_norm     n
 #>    <chr>                <chr>      <int>
-#>  1 OVERLAND PARKS       KS           642
+#>  1 DMNODATA             <NA>         486
 #>  2 RESEARCH TRIANGLE PK NC           318
-#>  3 ELK RUN HEIGHTS      IA           179
-#>  4 UNITEMIZED           IA           114
-#>  5 WASHINGTON D C       DC            83
-#>  6 FARMINGTON HILLS     MI            80
-#>  7 P B GARDENS          FL            77
-#>  8 SAINT LOUIS PARKS    MN            67
-#>  9 NEW YORK CITY        NY            58
-#> 10 IA                   IA            55
-#> # … with 1,129 more rows
+#>  3 UNITEMIZED           IA           189
+#>  4 ELK RUN HEIGHTS      IA           187
+#>  5 DMNODATA             IA           132
+#>  6 WASHINGTON D C       DC            83
+#>  7 FARMINGTON HILLS     MI            80
+#>  8 P B GARDENS          FL            77
+#>  9 ANYTOWN              IA            76
+#> 10 LECLAIRE             IA            60
+#> # … with 1,321 more rows
 ```
 
 ``` r
@@ -536,8 +536,8 @@ iac <- iac %>%
 | stage      | prop\_in | n\_distinct | prop\_na | n\_out | n\_diff |
 | :--------- | -------: | ----------: | -------: | -----: | ------: |
 | city\_raw) |    0.966 |       12784 |    0.004 |  60375 |    5283 |
-| city\_norm |    0.985 |       11894 |    0.014 |  26029 |    4436 |
-| city\_swap |    0.998 |        8619 |    0.030 |   3610 |    1126 |
+| city\_norm |    0.987 |       11895 |    0.014 |  23145 |    4339 |
+| city\_swap |    0.997 |        8864 |    0.014 |   4729 |    1303 |
 
 You can see how the percentage of valid values increased with each
 stage.
@@ -578,8 +578,8 @@ progress %>%
 
 ``` r
 glimpse(sample_n(iac, 20))
-#> Observations: 20
-#> Variables: 22
+#> Rows: 20
+#> Columns: 22
 #> $ id           <chr> "{58069CFA-5C8D-4692-8170-2E91B6FB7CC5}", "{AF8984AC-5B20-459F-B9FC-DCFEC46…
 #> $ date         <date> 2016-07-21, 2014-10-10, 2010-08-23, 2016-02-03, 2014-03-27, 2006-11-24, 20…
 #> $ comm_cd      <chr> "9156", "5152", "5140", "6237", "6056", "6021", "9048", "13729", "1535", "1…
