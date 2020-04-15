@@ -105,7 +105,7 @@ here::here()
 [01]: https://github.com/irworkshop/accountability_datacleaning "TAP repo"
 [02]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects "Rproj"
 
-## Registration
+## About
 
 Data is obtained from the [State of New Jersey's data portal][data portal]. According to the website, the data was created Created July 11, 2014 and Last Updated on February 4, 2020. It comes from the NJ Office of Management and Budget. Note that the office has not confirmed the validity of the data.
 

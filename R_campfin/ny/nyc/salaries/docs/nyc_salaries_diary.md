@@ -1,4 +1,4 @@
-New York Payroll Data Diary
+New York City Payroll Data Diary
 ================
 Yanqi Xu
 2020-04-02 10:59:23
@@ -803,7 +803,7 @@ proc_dir <- dir_create(here("ny", "payroll", "data", "processed"))
 ``` r
 write_csv(
   x = nyp,
-  path = path(proc_dir, "ny_payroll_clean.csv"),
+  path = path(proc_dir, "nyc_payroll_clean.csv"),
   na = ""
 )
 ```

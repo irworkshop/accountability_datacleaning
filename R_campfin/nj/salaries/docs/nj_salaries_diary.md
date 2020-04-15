@@ -6,7 +6,7 @@ Yanqi Xu
   - [Project](#project)
   - [Objectives](#objectives)
   - [Packages](#packages)
-  - [Registration](#registration)
+  - [About](#about)
   - [Wrangle](#wrangle)
   - [Conclude](#conclude)
 
@@ -88,7 +88,7 @@ here::here()
 #> [1] "/Users/yanqixu/code/accountability_datacleaning/R_campfin"
 ```
 
-## Registration
+## About
 
 Data is obtained from the [State of New Jersey’s data
 portal](https://data.nj.gov/Government-Finance/YourMoney-Agency-Payroll/iqwc-r2w7).
