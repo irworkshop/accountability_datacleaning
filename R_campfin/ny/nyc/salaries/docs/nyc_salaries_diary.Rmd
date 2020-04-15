@@ -33,7 +33,7 @@ set.seed(5)
 ```
 
 ```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
-fs::dir_create(here::here("ny", "payroll", "docs"))
+fs::dir_create(here::here("ny", "nyc", "salaries", "docs"))
 ```
 
 ## Project
@@ -117,8 +117,8 @@ Data is obtained from the [New York City's data portal][data portal]. According 
 [data portal]: https://data.ny.gov/City-Government/Citywide-Payroll-Data-Fiscal-Year-/k397-673e
 
 ```{r raw_dir}
-raw_dir <- dir_create(here("ny", "payroll", "data", "raw"))
-data_dir <- here("ny", "payroll", "data")
+raw_dir <- dir_create(here("ny", "nyc","salaries", "data", "raw"))
+data_dir <- here("ny", "nyc","salaries", "data")
 ```
 
 ### Import
@@ -158,6 +158,14 @@ We can add the state column.
 ```{r add state}
 nyp <- nyp %>% 
   mutate(state = "NY")
+```
+
+### City
+
+We can add the city column "New York City" as well
+```{r add city}
+nyp <- nyp %>% 
+  mutate(city = "NEW YORK CITY")
 ```
 
 ### Date
@@ -247,13 +255,13 @@ glimpse(sample_n(nyp, 20))
 ## Export
 
 ```{r proc_dir}
-proc_dir <- dir_create(here("ny", "payroll", "data", "processed"))
+proc_dir <- dir_create(here("ny", "nyc", "salaries", "data", "processed"))
 ```
 
 ```{r proc_write}
 write_csv(
   x = nyp,
-  path = path(proc_dir, "ny_payroll_clean.csv"),
+  path = path(proc_dir, "nyc_salaries_clean.csv"),
   na = ""
 )
 ```

@@ -1,7 +1,16 @@
-New York City Payroll Data Diary
+New York Payroll Data Diary
 ================
 Yanqi Xu
-2020-04-02 10:59:23
+2020-04-15 11:32:00
+
+  - [Project](#project)
+  - [Objectives](#objectives)
+  - [Packages](#packages)
+  - [Data](#data)
+  - [Wrangle](#wrangle)
+  - [Explore](#explore)
+  - [Conclude](#conclude)
+  - [Export](#export)
 
 <!-- Place comments regarding knitting here -->
 
@@ -122,8 +131,8 @@ Administration and is updated annually.
 > procedures.
 
 ``` r
-raw_dir <- dir_create(here("ny", "payroll", "data", "raw"))
-data_dir <- here("ny", "payroll", "data")
+raw_dir <- dir_create(here("ny", "nyc","salaries", "data", "raw"))
+data_dir <- here("ny", "nyc","salaries", "data")
 ```
 
 ### Import
@@ -191,8 +200,7 @@ glimpse(sample_frac(nyp))
 #> $ total_other_pay            <dbl> 0.00, 17901.17, 2388.75, 0.00, 0.00, 0.00, 12716.08, 0.00, 0.…
 ```
 
-We can also view the data
-ditcionary.
+We can also view the data ditcionary.
 
 ``` r
 dict <- dir_ls(data_dir, glob = "*.XLSX") %>% read_xlsx(sheet = 2, skip = 1, col_types = "text")
@@ -637,6 +645,15 @@ nyp <- nyp %>%
   mutate(state = "NY")
 ```
 
+### City
+
+We can add the city column “New York City” as well
+
+``` r
+nyp <- nyp %>% 
+  mutate(city = "NEW YORK CITY")
+```
+
 ### Date
 
 The column `agency_start_date` is read as character. Here we can use
@@ -669,7 +686,7 @@ for each column.
 
 ``` r
 col_stats(nyp, count_na)
-#> # A tibble: 19 x 4
+#> # A tibble: 20 x 4
 #>    col                        class        n         p
 #>    <chr>                      <chr>    <int>     <dbl>
 #>  1 fiscal_year                <dbl>        0 0        
@@ -690,9 +707,10 @@ col_stats(nyp, count_na)
 #> 16 total_ot_paid              <dbl>        0 0        
 #> 17 total_other_pay            <dbl>        0 0        
 #> 18 state                      <chr>        0 0        
-#> 19 total_gross_pay            <dbl>        0 0
+#> 19 city                       <chr>        0 0        
+#> 20 total_gross_pay            <dbl>        0 0
 col_stats(nyp, n_distinct) 
-#> # A tibble: 19 x 4
+#> # A tibble: 20 x 4
 #>    col                        class        n           p
 #>    <chr>                      <chr>    <int>       <dbl>
 #>  1 fiscal_year                <dbl>        6 0.00000180 
@@ -713,7 +731,8 @@ col_stats(nyp, n_distinct)
 #> 16 total_ot_paid              <dbl>   706694 0.212      
 #> 17 total_other_pay            <dbl>   659463 0.198      
 #> 18 state                      <chr>        1 0.000000300
-#> 19 total_gross_pay            <dbl>  2255830 0.677
+#> 19 city                       <chr>        1 0.000000300
+#> 20 total_gross_pay            <dbl>  2255830 0.677
 ```
 
 ### Missing
@@ -765,7 +784,7 @@ nyp %>%
 ``` r
 glimpse(sample_n(nyp, 20))
 #> Rows: 20
-#> Columns: 21
+#> Columns: 22
 #> $ fiscal_year                <dbl> 2018, 2016, 2017, 2018, 2018, 2017, 2018, 2014, 2019, 2017, 2…
 #> $ payroll_number             <dbl> 827, NA, NA, 742, 841, NA, 744, 827, 56, NA, NA, 56, 826, 836…
 #> $ agency_name                <chr> "DEPARTMENT OF SANITATION", "DEPT OF ED PEDAGOGICAL", "DEPART…
@@ -784,6 +803,7 @@ glimpse(sample_n(nyp, 20))
 #> $ total_ot_paid              <dbl> 7141.86, 0.00, 9405.51, 0.00, 381.01, 0.00, 0.00, 18260.06, 4…
 #> $ total_other_pay            <dbl> 3242.94, 0.00, 11379.02, 0.00, 64.04, 0.00, 0.00, 15257.30, 2…
 #> $ state                      <chr> "NY", "NY", "NY", "NY", "NY", "NY", "NY", "NY", "NY", "NY", "…
+#> $ city                       <chr> "NEW YORK CITY", "NEW YORK CITY", "NEW YORK CITY", "NEW YORK …
 #> $ total_gross_pay            <dbl> 43066.68, 83382.24, 105080.44, 1000.00, 14291.57, 94753.94, 3…
 #> $ na_flag                    <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE…
 #> $ dupe_flag                  <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE…
@@ -797,13 +817,13 @@ glimpse(sample_n(nyp, 20))
 ## Export
 
 ``` r
-proc_dir <- dir_create(here("ny", "payroll", "data", "processed"))
+proc_dir <- dir_create(here("ny", "nyc", "salaries", "data", "processed"))
 ```
 
 ``` r
 write_csv(
   x = nyp,
-  path = path(proc_dir, "nyc_payroll_clean.csv"),
+  path = path(proc_dir, "nyc_salaries_clean.csv"),
   na = ""
 )
 ```
