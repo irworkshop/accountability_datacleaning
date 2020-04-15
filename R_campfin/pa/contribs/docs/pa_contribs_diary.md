@@ -1,7 +1,17 @@
 Pennsylvania Contributions
 ================
 Kiernan Nicholls
-2020-02-25 08:51:14
+2020-04-14 16:53:12
+
+  - [Project](#project)
+  - [Objectives](#objectives)
+  - [Packages](#packages)
+  - [Data](#data)
+  - [Import](#import)
+  - [Explore](#explore)
+  - [Wrangle](#wrangle)
+  - [Conclude](#conclude)
+  - [Export](#export)
 
 <!-- Place comments regarding knitting here -->
 
@@ -427,8 +437,8 @@ tail(pac)
 #> #   fil_address2 <lgl>, fil_city <chr>, fil_state <chr>, fil_zip <chr>, county <chr>,
 #> #   fil_phone <lgl>
 glimpse(sample_n(pac, 20))
-#> Observations: 20
-#> Variables: 26
+#> Rows: 20
+#> Columns: 26
 #> $ filerid      <dbl> 20140370, 20130163, 7900366, 2003124, 8600316, 9500123, 8600316, 2008178, 2…
 #> $ eyear        <dbl> 2015, 2016, 2019, 2003, 2004, 2008, 2010, 2009, 2017, 2013, 2011, 2001, 201…
 #> $ cycle        <dbl> 7, 7, 1, 3, 4, 2, 5, 4, 7, 4, 7, 5, 5, 4, 4, 4, 3, 7, 7, 9
@@ -709,7 +719,7 @@ pac <- pac %>%
     match_abb = is_abbrev(con_city_norm, city_match),
     match_dist = str_dist(con_city_norm, city_match),
     con_city_swap = if_else(
-      condition = !is.na(match_dist) & match_abb | match_dist == 1,
+      condition = !is.na(match_dist) & (match_abb | match_dist == 1),
       true = city_match,
       false = con_city_norm
     )
@@ -735,7 +745,7 @@ pac <- pac %>%
     match_abb = is_abbrev(fil_city_norm, city_match),
     match_dist = str_dist(fil_city_norm, city_match),
     fil_city_swap = if_else(
-      condition = !is.na(match_dist) & match_abb | match_dist == 1,
+      condition = !is.na(match_dist) & (match_abb | match_dist == 1),
       true = city_match,
       false = fil_city_norm
     )
@@ -883,19 +893,19 @@ valid_locality <- check %>%
 
 | stage             | prop\_in | n\_distinct | prop\_na |   n\_out | n\_diff |
 | :---------------- | -------: | ----------: | -------: | -------: | ------: |
-| con\_city         |    0.299 |       49871 |    0.005 | 12486067 |   37404 |
-| con\_city\_norm   |    0.977 |       32313 |    0.005 |   411741 |   18072 |
-| con\_city\_swap   |    0.988 |       20691 |    0.015 |   215229 |    6480 |
-| con\_city\_refine |    0.988 |       20267 |    0.015 |   213058 |    6058 |
+| con\_city         |    0.299 |       49871 |    0.005 | 12500450 |   37544 |
+| con\_city\_norm   |    0.974 |       32313 |    0.005 |   465218 |   18305 |
+| con\_city\_swap   |    0.985 |       22068 |    0.005 |   274272 |    8021 |
+| con\_city\_refine |    0.985 |       21652 |    0.005 |   272101 |    7607 |
 
 You can see how the percentage of valid values increased with each
 stage.
 
 ``` r
 prop_in(pac$con_city_refine, valid_city)
-#> [1] 0.9517437
+#> [1] 0.951022
 prop_in(pac$fil_city_swap, valid_city)
-#> [1] 0.9408746
+#> [1] 0.9409172
 ```
 
 ![](../plots/bar_progress-1.png)<!-- -->
@@ -924,8 +934,8 @@ pac <- pac %>%
 
 ``` r
 glimpse(sample_n(pac, 20))
-#> Observations: 20
-#> Variables: 36
+#> Rows: 20
+#> Columns: 36
 #> $ filerid           <dbl> 9700200, 9800247, 2000083, 9000082, 9100286, 9900235, 2002403, 8200581…
 #> $ eyear             <dbl> 2014, 2012, 2001, 2015, 2018, 2007, 2009, 2019, 2010, 2004, 2007, 2018…
 #> $ cycle             <dbl> 4, 5, 7, 7, 4, 4, 7, 4, 2, 1, 7, 4, 4, 7, 7, 5, 2, 7, 3, 6
@@ -976,12 +986,13 @@ glimpse(sample_n(pac, 20))
 
 ``` r
 clean_dir <- dir_create(here("pa", "contribs", "data", "clean"))
-```
-
-``` r
-write_csv(
-  x = pac,
-  path = path(clean_dir, "pa_contribs_clean.csv"),
-  na = ""
-)
+clean_path <- path(clean_dir, "pa_contribs_clean.csv")
+write_csv(pac, clean_path, na = "")
+file_size(clean_path)
+#> 4.85G
+guess_encoding(clean_path)
+#> # A tibble: 1 x 2
+#>   encoding confidence
+#>   <chr>         <dbl>
+#> 1 ASCII             1
 ```
