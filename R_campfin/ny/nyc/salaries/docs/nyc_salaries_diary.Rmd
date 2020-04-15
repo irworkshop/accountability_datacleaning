@@ -160,6 +160,14 @@ nyp <- nyp %>%
   mutate(state = "NY")
 ```
 
+### City
+
+We can add the city column "New York City" as well
+```{r add city}
+nyp <- nyp %>% 
+  mutate(city = "NEW YORK CITY")
+```
+
 ### Date
 
 The column `agency_start_date` is read as character. Here we can use `as.Date` and specify the `format` argument to turn this column into dates.
@@ -247,7 +255,7 @@ glimpse(sample_n(nyp, 20))
 ## Export
 
 ```{r proc_dir}
-proc_dir <- dir_create(here("ny", "salaries", "data", "processed"))
+proc_dir <- dir_create(here("ny", "nyc", "salaries", "data", "processed"))
 ```
 
 ```{r proc_write}
