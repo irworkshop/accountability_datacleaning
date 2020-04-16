@@ -77,7 +77,7 @@ campaign finance data.
 if (!require("pacman")) install.packages("pacman")
 pacman::p_load_gh("irworkshop/campfin")
 pacman::p_load(
-  rvest, # used to scrape website and get html elements
+  readxl, # read excel files
   tidyverse, # data manipulation
   stringdist, # calculate distances between strings
   lubridate, # datetime strings
@@ -152,10 +152,14 @@ The important fields are almost complete.
 col_stats(rilr_new, count_na)
 col_stats(rilr_old, count_na)
 ```
-
+In the old data, there're some records missing fields `relationship` and `business type`, which we will flag with `campfin::flag_dupe()`
+```{r}
+rilr_old <- rilr_old %>% flag_na(business_type, relationship)
+```
 
 ### Duplicates
 There're some duplicate records in the new dataset, and we will flag them with `dupe_fla`. Note that if two entries are identical, both entries are flagged.
+The old registration data doesn't have any duplicate rows.
 ```{r dupe_flag}
 rilr_new <- flag_dupes(rilr_new, dplyr::everything())
 sum(rilr_new$dupe_flag)
@@ -171,7 +175,7 @@ col_stats(rilr_old, n_distinct)
 ```
 
 Visualize number of lobbyists registered each year. 
-First, we will create a 
+First, we will create a `year` field from the relationship date.
 
 ```{r create year}
 rilr_old <- rilr_old %>% 
@@ -180,7 +184,6 @@ rilr_old$year %>% tabyl()
 
 rilr_new$year %>% tabyl()
 ```
-We can see that most of the data is from 2019.
 
 
 #### Dates
@@ -190,9 +193,6 @@ Data from 2016 onward doesn't have dates.
 ```{r date_range}
 min(rilr_old$relationship_date)
 max(rilr_old$relationship_date)
-
-min(rilr_old$)
-max(rilr_old$)
 ```
 
 ```{r year_bar}
@@ -233,7 +233,7 @@ USPS suffixes.
 
 ```{r address_norm}
 rilr_new <- rilr_new %>% 
-  unite(starts_with("address"),col = "address_full", remove = F) %>% 
+  unite(starts_with("address"),col = "address_full", remove = F,na.rm = TRUE) %>% 
   # normalize combined addr
   mutate(
     address_norm = normal_address(
@@ -242,13 +242,15 @@ rilr_new <- rilr_new %>%
       na_rep = TRUE
     ))
 ```
-The old file didn't have any address fields.
+We can see sample records for addresses normalized before and after.
 ```{r address_view}
 rilr_new %>% 
   select(contains("ADDR")) %>% 
   distinct() %>% 
   sample_n(10)
 ```
+
+The old file didn't have any address fields.
 
 ### zip
 
@@ -274,27 +276,18 @@ progress_table(
 )
 ```
 
-### state
+### State
 
 Valid two digit state abbreviations can be made using the 
 `campfin::normal_state()` function.
-The state field is almost clean
+The state field is almost clean. So we'll leave them as is.
 ```{r state_norm}
 prop_in(rilr_new$state, valid_state)
 ```
 
-```{r firm_state_view}
-rilr_new %>% 
-  filter(FIRM_STATE != FIRM_STATE_norm) %>% 
-  count(FIRM_STATE, sort = TRUE)
-```
-
-```{r state_progress}
-progress_table(
-  rilr_new$STATE,
-  rilr_new$STATE_norm,
-  compare = valid_state
-)
+```{r norm state}
+rilr_new <- rilr_new %>% 
+  mutate(state_norm = normal_state(state,na_rep = TRUE))
 ```
 
 ### city
@@ -360,22 +353,22 @@ rilr_new <- rilr_new %>%
   left_join(
     y = zipcodes,
     by = c(
-      "FIRM_STATE_norm" = "state",
-      "FIRM_zip5" = "zip"
+      "state_norm" = "state",
+      "zip5" = "zip"
     )
   ) %>% 
-  rename(FIRM_city_match = city) %>% 
+  rename(city_match = city) %>% 
   mutate(
-    match_abb = is_abbrev(FIRM_city_norm, FIRM_city_match),
-    match_dist = str_dist(FIRM_city_norm, FIRM_city_match),
-    FIRM_city_swap = if_else(
-      condition = !is.na(match_dist) & match_abb | match_dist == 1,
-      true = FIRM_city_match,
-      false =FIRM_city_norm
+    match_abb = is_abbrev(city_norm, city_match),
+    match_dist = str_dist(city_norm, city_match),
+    city_swap = if_else(
+      condition = !is.na(match_dist) & (match_abb | match_dist == 1),
+      true = city_match,
+      false =city_norm
     )
   ) %>% 
   select(
-    -FIRM_city_match,
+    -city_match,
     -match_dist,
     -match_abb
   )
@@ -387,12 +380,9 @@ After the two normalization steps, the percentage of valid cities is at 100%.
 ```{r city_progress, echo=FALSE}
 many_city <- c(valid_city, extra_city)
 progress <- progress_table(
-  rilr_new$city,
-  rilr_new$FIRM_city,
+  rilr_new$city_raw,
   rilr_new$city_norm,
-  rilr_new$FIRM_city_norm,
   rilr_new$city_swap,
-rilr_new$FIRM_city_swap,
   compare = many_city
 ) %>% mutate(stage = as_factor(stage))
 ```
@@ -411,40 +401,12 @@ progress %>%
   coord_cartesian(ylim = c(0.75, 1)) +
   scale_y_continuous(labels = percent) +
   labs(
-    title = "Rhode Island city Normalization Progress",
-    x = "stage",
+    title = "Rhode Island City Normalization Progress",
+    x = "Stage",
     y = "Percent Valid"
   )
 ```
 
-More importantly, the number of distinct values decreased each stage. We were
-able to confidently change many distinct invalid values to their valid
-equivalent.
-
-```{r distinct_bar}
-progress %>% 
-  select(
-    stage, 
-    all = n_distinct,
-    bad = n_diff
-  ) %>% 
-  mutate(good = all - bad) %>% 
-  pivot_longer(c("good", "bad")) %>% 
-  mutate(name = name == "good") %>% 
-  ggplot(aes(x = stage, y = value)) +
-  geom_col(aes(fill = name)) +
-  scale_fill_brewer(palette = "Dark2", direction = -1) +
-  scale_y_continuous(labels = comma) +
-  theme(legend.position = "bottom") +
-  labs(
-    title = "RI city Normalization Progress",
-    subtitle = "Distinct values, valid and invalid",
-    x = "stage",
-    y = "Percent Valid",
-    fill = "Valid"
-  )
-  
-```
 
 ## Conclude
 
@@ -452,10 +414,10 @@ progress %>%
 glimpse(sample_n(rilr_new, 20))
 ```
 
-1. There are `r nrow(rilr_new)` records in the database.
-1. There are `r sum(rilr_new$dupe_flag)` duplicate records in the database.
-1. The range and distribution of `amount` and `date` seem reasonable.
-1. There are `r sum(rilr_new$na_flag)` records missing either recipient or date.
+1. There are `r nrow(rilr_new)` records in the newer database and `r nrow(rilr_old)` in the old one.
+1. There are `r sum(rilr_new$dupe_flag)` duplicate records in the new database and none in the old one.
+1. The range and distribution of and `date` seem reasonable.
+1. There are `r sum(rilr_old$na_flag)` records missing relationship and business type in the old data.
 1. Consistency in goegraphic data has been improved with `campfin::normal_*()`.
 1. The 4-digit `YEAR` variable has been created with `lubridate::year()`.
 
@@ -467,8 +429,15 @@ clean_dir <- dir_create(here("ri", "lobby", "data", "reg","clean"))
 
 ```{r write_clean}
 write_csv(
-  x = rilr_new %>% rename(city_clean = city_swap) %>% rename( FIRM_city_clean = FIRM_city_swap),
+  x = rilr_new %>% rename(city_clean = city_swap) %>% select(-c(address_full,city_norm)),
   path = path(clean_dir, "rilr_new_clean.csv"),
   na = ""
 )
+
+write_csv(
+  x = rilr_old,
+  path = path(clean_dir, "rilr_old_clean.csv"),
+  na = ""
+)
+
 ```

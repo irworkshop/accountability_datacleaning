@@ -142,7 +142,7 @@ Communicator Lobbyists:
  	If a communicator lobbyist makes unreimbursed expenditures of $10 or more for the benefit of a public official, a member of his/her staff, or his/her immediate family, that lobbyist must also file on the client lobbyists schedule (either monthly or quarterly).
 
 [03]: https://www.oseapps.ct.gov/NewLobbyist/PublicReports/LobbyistFAQ.aspx
-This Rmd file documents the data processing workflow for CT lobbying compensation only, whereas the registration data is wrangled in a separate data diary.
+This Rmd file documents the data processing workflow for CT lobbying compensation only, whereas the registration data is wrangled in a separate data diary. The data is last downloaded on April 15, 2020.
 
 ## Import
 
@@ -196,6 +196,21 @@ glimpse(sample_frac(ctlc))
 ctlc <- distinct(ctlc)
 ```
 
+### Missing
+
+The data file doesn't seem to miss any important fields.
+```{r na_count}
+col_stats(ctlc, count_na)
+```
+
+### Duplicates
+We can see there's no duplicate entry.
+```{r dupe_flag}
+ctlc <- flag_dupes(ctlc, dplyr::everything())
+sum(ctlc$dupe_flag)
+```
+
+
 ### Session
 The original data doesn't contain fields indicative of time. We'll use the file name to identify the legislative sessions they correspond to by creating a variable `session`.
 ```{r session}
@@ -221,6 +236,8 @@ ctlc %>%
     caption = "Source: Connecticut Office of State"
   ) 
 ```
+
+### Continuous
 We can use the data to find out who are the top spenders, and how their payment amounts are distributed.
 ```{r top comp, echo=FALSE}
 top5 <- ctlc %>% 
@@ -262,21 +279,6 @@ ctlc %>% filter(client %in% top5$client) %>%
   )
 ```
 
-```{r sankey plot, echo=FALSE, eval=FALSE}
-links <- ctlc %>% filter(client %in% top5$client) %>% select(client, communicator,total) %>% group_by(client, communicator) %>% summarize(sum = sum(total))
-  
-nodes <- data.frame("client"=links %>% pull(client) %>% unique())
-
-links_copy <- data.frame(links$client, links$communicator, links$sum, rowid = match(links$client, nodes$client))
-
-links_copy <- links_copy %>% select(rowid, links.communicator, links.sum) 
-
-sankeyNetwork(Links = links_copy, Nodes = nodes,
- Source = "rowid", Target = "links.communicator",
- Value = "links.sum", NodeID = "client",
- fontSize= 12, nodeWidth = 30)
-```
-
 
 We'll need the ID information from the registration list that we previously processed. Note that the registration data is arranged by year and not session, so a session may include multiple `client-communicator` intances.Since duplicates will be joined multiple times to the actual compensation data frame, and thus we do not wish to introduce duplicates in this joined data frame. We will de-dupe the registration data for each year and prioritize years that have more comprehensive information than the other year of the same session. That is, we will create a column `na_count` counting the `NA` values of each row and only maintain the intance with a smaller `na_count` value.
 
@@ -293,7 +295,7 @@ ct_reg <- ct_reg %>%
                              str_detect(client_year, "2019|2020") ~ "2019-2020"))
 
 ct_join <- ct_reg %>% 
-  select(client_name,client_year, lobbyist_first_name,lobbyist_last_name,lobbyist_year, session,client_phone,client_city_clean,client_email, client_zip, client_state, lobbyist_city_clean, lobbyist_address_clean, lobbyist_state, lobbyist_zip, lobbyist_email) %>% 
+  select(client_name,client_year, lobbyist_first_name,lobbyist_last_name,lobbyist_year,client_address_clean, session,client_phone,client_city_clean,client_email, client_zip, client_state, lobbyist_city_clean, lobbyist_address_clean, lobbyist_state, lobbyist_zip, lobbyist_email) %>% 
   # we can safely de-dupe the rows where only the lobbyist_year is different from one another 
   flag_dupes(-lobbyist_year) %>% 
   filter(!dupe_flag)
@@ -329,7 +331,7 @@ ct_dedupe[[i]] <- ct_dedupe[[i]] %>%
 ct_deduped <- ct_dedupe %>% plyr::ldply() %>% select(-c(row_sum,early_more_info,n))
 # first remove all the double entries
 ct_join<- ct_join %>% filter(n != 2) %>% 
-  unite(remove = F, col = "communicator", lobbyist_first_name, lobbyist_last_name,sep = " ", na.rm = TRUE) %>% select(-n) %>% 
+  unite(remove = T, col = "communicator", lobbyist_first_name, lobbyist_last_name,sep = " ", na.rm = TRUE) %>% select(-n) %>% 
 #then add the ones we're keeping back
   bind_rows(ct_deduped) %>% 
   rename(client = client_name)
@@ -345,13 +347,20 @@ col_stats(ctlc_clean, count_na)
 sample_frac(ctlc)
 ```
 
+1. There are `r nrow(ctlc)` records in the database.
+1. There are `r sum(ctlc$dupe_flag)` duplicate records in the database.
+1. The range and distribution of `year` seems mostly reasonable except for a few entries.
+1. Consistency in goegraphic data has been improved with `campfin::normal_*()`.
+1. The 4-digit `year` variable has been created with `lubridate::year()`.
+
+
 ## Export
 
 ```{r write clean}
 clean_dir <- here("ct", "lobby", "data", "processed","exp")
 dir_create(clean_dir)
-ctlc %>% 
-  select(-dupe_flag) %>% 
+ctlc_clean %>% 
+  select(-c(lobbyist_first_name, lobbyist_last_name)) %>% 
   mutate_if(is.character, str_to_upper) %>% 
   write_csv(
     path = glue("{clean_dir}/ct_lobby_exp.csv"),
