@@ -1,7 +1,17 @@
 Michigan Contributions
 ================
 Kiernan Nicholls
-2020-01-30 20:14:43
+2020-04-14 12:44:01
+
+  - [Project](#project)
+  - [Objectives](#objectives)
+  - [Packages](#packages)
+  - [Data](#data)
+  - [Import](#import)
+  - [Explore](#explore)
+  - [Wrangle](#wrangle)
+  - [Conclude](#conclude)
+  - [Export](#export)
 
 <!-- Place comments regarding knitting here -->
 
@@ -77,7 +87,7 @@ feature and should be run as such. The project also uses the dynamic
 ``` r
 # where does this document knit?
 here::here()
-#> [1] "/home/kiernan/R/accountability_datacleaning/R_campfin"
+#> [1] "/home/kiernan/Code/accountability_datacleaning/R_campfin"
 ```
 
 ## Data
@@ -148,7 +158,13 @@ raw_urls <- raw_page %>%
   str_c(raw_base, ., sep = "/")
 raw_paths <- path(raw_dir, basename(raw_urls))
 if (!all(this_file_new(raw_paths))) {
-  download.file(raw_urls, raw_paths)
+  for (i in seq_along(raw_paths)) {
+    if (file_exists(raw_paths[i])) {
+      skip(); message("file exists")
+    } else {
+      download.file(raw_urls[i], raw_paths[i])
+    }
+  }
 }
 ```
 
@@ -165,7 +181,7 @@ mic_names[1:3] <- c("doc_id", "page_no", "cont_id")
 mic_names[length(mic_names)] <- "runtime"
 ```
 
-Using `vroom::vroom()`, we can read all 46 archive files at once.
+Using `vroom::vroom()`, we can read all 47 archive files at once.
 
 ``` r
 mic <- vroom(
@@ -213,19 +229,19 @@ tail(mic)
 #> # A tibble: 6 x 25
 #>   doc_id page_no cont_id cont_detail_id doc_stmnt_year doc_type_desc com_legal_name common_name
 #>   <chr>    <int> <chr>   <chr>                   <int> <chr>         <chr>          <chr>      
-#> 1 490208       0 4768    0                        2020 ANNUAL CS     BRAD PAQUETTE… BRAD PAQUE…
-#> 2 490208       0 4770    0                        2020 ANNUAL CS     BRAD PAQUETTE… BRAD PAQUE…
-#> 3 490208       0 4771    0                        2020 ANNUAL CS     BRAD PAQUETTE… BRAD PAQUE…
-#> 4 490208       0 4772    0                        2020 ANNUAL CS     BRAD PAQUETTE… BRAD PAQUE…
-#> 5 490208       0 4773    0                        2020 ANNUAL CS     BRAD PAQUETTE… BRAD PAQUE…
-#> 6 490208       0 4774    0                        2020 ANNUAL CS     BRAD PAQUETTE… BRAD PAQUE…
+#> 1 492595       0 248623… 0                        2020 AMENDED ANNU… COMMITTEE TO … COMMITTEE …
+#> 2 492596       0 6754    0                        2020 APRIL QUARTE… WASHTENAW COU… WASHTENAW …
+#> 3 492622       0 4119    0                        2020 APRIL QUARTE… STATE POLICE … MSP COA    
+#> 4 492622       0 4120    0                        2020 APRIL QUARTE… STATE POLICE … MSP COA    
+#> 5 492630       0 4127    0                        2020 APRIL QUARTE… SECOND CONGRE… SECOND CON…
+#> 6 492630       0 4128    0                        2020 APRIL QUARTE… SECOND CONGRE… SECOND CON…
 #> # … with 17 more variables: cfr_com_id <chr>, com_type <chr>, can_first_name <chr>,
 #> #   can_last_name <chr>, contribtype <chr>, f_name <chr>, l_name_or_org <chr>, address <chr>,
 #> #   city <chr>, state <chr>, zip <chr>, occupation <chr>, employer <chr>, received_date <date>,
 #> #   amount <dbl>, aggregate <dbl>, extra_desc <chr>
 glimpse(mic)
-#> Observations: 16,017,134
-#> Variables: 25
+#> Rows: 16,521,043
+#> Columns: 25
 #> $ doc_id         <chr> "148736", "148736", "148736", "148736", "148736", "148736", "148736", "14…
 #> $ page_no        <int> 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 5, 5, 5, 5, 6, 6, 6, 1, 1, 1…
 #> $ cont_id        <chr> "1", "2", "3", "4", "1", "2", "3", "4", "1", "2", "3", "4", "1", "2", "3"…
@@ -256,7 +272,7 @@ glimpse(mic)
 ``` r
 summary(mic$amount)
 #>    Min. 1st Qu.  Median    Mean 3rd Qu.    Max.    NA's 
-#> -195000       3       7      95      20 9175000    4636
+#> -195000       3       6      93      20 9175000    4636
 ```
 
 ![](../plots/amount_histogram-1.png)<!-- -->
@@ -277,7 +293,7 @@ mic %>%
   )
 ```
 
-![](../plots/unnamed-chunk-1-1.png)<!-- -->
+![](../plots/amount_violin-1.png)<!-- -->
 
 We can add a new `received_year` variable using `lubridate::year()`.
 
@@ -340,26 +356,26 @@ mic <- mutate(
 ```
 
     #> # A tibble: 10 x 2
-    #>    address              address_norm      
-    #>    <chr>                <chr>             
-    #>  1 6450 HIGHLAND        6450 HIGHLAND     
-    #>  2 N607 COUNTY ROAD 15C N607 COUNTY RD 15C
-    #>  3 18589 LUMPKIN        18589 LUMPKIN     
-    #>  4 13868 LACHENE        13868 LACHENE     
-    #>  5 201 BROOKSIDE DRIVE  201 BROOKSIDE DR  
-    #>  6 123 60TH ST SE       123 60TH ST SE    
-    #>  7 23731 W LAKE CIR     23731 W LK CIR    
-    #>  8 5061 WATERS RD       5061 WATERS RD    
-    #>  9 8085 N EVERETT RD    8085 N EVERETT RD 
+    #>    address              address_norm        
+    #>    <chr>                <chr>               
+    #>  1 6450 HIGHLAND        6450 HIGHLAND       
+    #>  2 N607 COUNTY ROAD 15C N 607 COUNTY RD 15 C
+    #>  3 18589 LUMPKIN        18589 LUMPKIN       
+    #>  4 13868 LACHENE        13868 LACHENE       
+    #>  5 201 BROOKSIDE DRIVE  201 BROOKSIDE DR    
+    #>  6 123 60TH ST SE       123 60 TH ST SE     
+    #>  7 13846 FOX TRAIL DR   13846 FOX TRL DR    
+    #>  8 5061 WATERS RD       5061 WATERS RD      
+    #>  9 8085 N EVERETT RD    8085 N EVERETT RD   
     #> 10 2715 VERONICA        2715 VERONICA
 
 This process also automatically removed a number of invalid values.
 
 ``` r
 prop_na(mic$address)
-#> [1] 0.0009999292
+#> [1] 0.0009724568
 prop_na(mic$address_norm)
-#> [1] 0.001430094
+#> [1] 0.001389924
 mic %>% 
   select(contains("address")) %>% 
   filter(!is.na(address), is.na(address_norm)) %>% 
@@ -368,15 +384,15 @@ mic %>%
 #>    address                   n
 #>    <chr>                 <int>
 #>  1 NOT KNOWN              2789
-#>  2 UNKNOWN                2318
+#>  2 UNKNOWN                2320
 #>  3 NULL                    719
-#>  4 INFORMATION REQUESTED   246
+#>  4 INFORMATION REQUESTED   249
 #>  5 P.O. BOX                146
 #>  6 REQUESTED               129
-#>  7 PO BOX                   85
+#>  7 PO BOX                   86
 #>  8 N/A                      73
-#>  9 XXXXXX                   38
-#> 10 NONE                     37
+#>  9 NONE                     38
+#> 10 XXXXXX                   38
 #> # … with 61 more rows
 ```
 
@@ -388,7 +404,7 @@ suffixes.
 
 ``` r
 sample(mic$zip, 5)
-#> [1] "48111-0000" "20001-3886" "15236-0000" "48188-0000" "48637-0000"
+#> [1] "48111-0000" "49007-4942" "48030-0000" "15236-0000" "48182-0000"
 mic <- mutate(
   .data = mic,
   zip_norm = normal_zip(
@@ -407,8 +423,8 @@ progress_table(
 #> # A tibble: 2 x 6
 #>   stage    prop_in n_distinct prop_na    n_out n_diff
 #>   <chr>      <dbl>      <dbl>   <dbl>    <dbl>  <dbl>
-#> 1 zip      0.00755     487338 0.00160 15870780 485182
-#> 2 zip_norm 0.997        27125 0.00165    40001   2137
+#> 1 zip      0.00732     491123 0.00155 16374598 488967
+#> 2 zip_norm 0.998        27206 0.00160    40494   2152
 ```
 
 ### State
@@ -449,8 +465,8 @@ progress_table(
 #> # A tibble: 2 x 6
 #>   stage      prop_in n_distinct prop_na n_out n_diff
 #>   <chr>        <dbl>      <dbl>   <dbl> <dbl>  <dbl>
-#> 1 state         1.00        128 0.00107  4998     69
-#> 2 state_norm    1            59 0.00138     0      1
+#> 1 state         1.00        128 0.00104  5037     69
+#> 2 state_norm    1            59 0.00134     0      1
 ```
 
 ### City
@@ -477,18 +493,18 @@ mic <- mutate(
 ```
 
     #> # A tibble: 10 x 2
-    #>    city              city_norm          
-    #>    <chr>             <chr>              
-    #>  1 GRS PT FMS        GRS POINT FMS      
-    #>  2 M?NCHEN           M NCHEN            
-    #>  3 NORTH FT MYERS    NORTH FORT MYERS   
-    #>  4 ST. HELENA ISLAND SAINT HELENA ISLAND
-    #>  5 N. JUDSON         NORTH JUDSON       
-    #>  6 MADISON HTS..     MADISON HEIGHTS    
-    #>  7 MT CLEMONS        MOUNT CLEMONS      
-    #>  8 JEFFERSON TWP     JEFFERSON TOWNSHIP 
-    #>  9 FORT  GRATIOT     FORT GRATIOT       
-    #> 10 ST. CLAIR BEACH   SAINT CLAIR BEACH
+    #>    city                city_norm          
+    #>    <chr>               <chr>              
+    #>  1 WINDZOR ONT  N9A6W9 WINDZOR ONT NAW    
+    #>  2 SECHELT BC 3A4 VON  SECHELT BC A VON   
+    #>  3 MT.  PLEASANT       MOUNT PLEASANT     
+    #>  4 UNIVERSITY HTS      UNIVERSITY HEIGHTS 
+    #>  5 ROYAL PLM BCH       ROYAL PLM BEACH    
+    #>  6 S. CLAIR SHORES     SOUTH CLAIR SHORES 
+    #>  7 AUGUSTA TWP         AUGUSTA TOWNSHIP   
+    #>  8 CLNTON TWP          CLNTON TOWNSHIP    
+    #>  9 CARROLLTON TWP.     CARROLLTON TOWNSHIP
+    #> 10 ST. MICHAELS        SAINT MICHAELS
 
 #### Swap
 
@@ -513,7 +529,7 @@ mic <- mic %>%
     match_abb = is_abbrev(city_norm, city_match),
     match_dist = str_dist(city_norm, city_match),
     city_swap = if_else(
-      condition = match_abb | match_dist == 1,
+      condition = !is.na(city_match) & (match_abb | match_dist == 1),
       true = city_match,
       false = city_norm
     )
@@ -552,20 +568,20 @@ good_refine <- mic %>%
   )
 ```
 
-    #> # A tibble: 408 x 5
+    #> # A tibble: 410 x 5
     #>    state_norm zip_norm city_swap          city_refine         n
     #>    <chr>      <chr>    <chr>              <chr>           <int>
-    #>  1 MI         48094    WASHINGTON TOWNSHI WASHINGTON        714
-    #>  2 MI         48021    EAST POINT         EASTPOINTE        378
+    #>  1 MI         48094    WASHINGTON TOWNSHI WASHINGTON        740
+    #>  2 MI         48021    EAST POINT         EASTPOINTE        506
     #>  3 MD         20910    SLIVER SPRINGS     SILVER SPRING     180
     #>  4 MI         48879    SAINT JOHNSON      SAINT JOHNS       159
     #>  5 WI         54151    NIARAGA            NIAGARA           104
     #>  6 MI         48094    WASHINGTON TOWNS   WASHINGTON         98
-    #>  7 MI         48027    GOODLES            GOODELLS           69
-    #>  8 MI         48322    WEST BLOOMFIELD TO WEST BLOOMFIELD    62
-    #>  9 MI         48759    SEBAWING           SEBEWAING          61
-    #> 10 MI         48095    WASHINGTON TOWNSHI WASHINGTON         60
-    #> # … with 398 more rows
+    #>  7 MI         48095    WASHINGTON TOWNSHI WASHINGTON         78
+    #>  8 MI         48027    GOODLES            GOODELLS           69
+    #>  9 MI         48324    WEST BLOOMFIELD TW WEST BLOOMFIELD    68
+    #> 10 MI         48322    WEST BLOOMFIELD TO WEST BLOOMFIELD    62
+    #> # … with 400 more rows
 
 We can join these good refined values back to the original data and use
 them over their incorrect `city_swap` counterparts in a new
@@ -668,28 +684,28 @@ mic$city_refine <- str_remove(mic$city_refine, "\\sTOWNSHIP$")
 mic %>% 
   filter(city_refine %out% many_city) %>% 
   count(city_refine, sort = TRUE)
-#> # A tibble: 3,937 x 2
-#>    city_refine            n
-#>    <chr>              <int>
-#>  1 <NA>               85074
-#>  2 ORCHARD LAKE        6535
-#>  3 FRMGTN HILLS        4544
-#>  4 GROSSE POINTE FARM  3323
-#>  5 GROSSE PTE WOODS    3230
-#>  6 GROSSE POINTE WOOD  3111
-#>  7 BURTCHVILLE         2865
-#>  8 GROSSE PTE FARMS    2499
-#>  9 GRS POINT WDS       1941
-#> 10 GROSSE PTE PARKS    1875
-#> # … with 3,927 more rows
+#> # A tibble: 5,114 x 2
+#>    city_refine               n
+#>    <chr>                 <int>
+#>  1 FARMINGTON HILLS     143903
+#>  2 GROSSE POINTE WOODS   26523
+#>  3 GROSSE POINTE FARMS   25082
+#>  4 GROSSE POINTE PARK    23562
+#>  5 ORCHARD LAKE           6622
+#>  6 GROSSE POINTE SHORES   4786
+#>  7 FRMGTN HILLS           4544
+#>  8 GROSSE POINTE FARM     3422
+#>  9 GROSSE POINTE WOOD     3330
+#> 10 GROSSE PTE WOODS       3250
+#> # … with 5,104 more rows
 ```
 
-| stage        | prop\_in | n\_distinct | prop\_na | n\_out | n\_diff |
-| :----------- | -------: | ----------: | -------: | -----: | ------: |
-| city\_raw    |    0.947 |       27294 |    0.001 | 848492 |   14497 |
-| city\_norm   |    0.976 |       25321 |    0.001 | 384986 |   12487 |
-| city\_swap   |    0.986 |       17290 |    0.005 | 216841 |    4382 |
-| city\_refine |    0.994 |       16695 |    0.005 |  88061 |    3937 |
+| stage        | prop\_in | n\_distinct | prop\_na |  n\_out | n\_diff |
+| :----------- | -------: | ----------: | -------: | ------: | ------: |
+| city\_raw    |    0.932 |       27592 |    0.001 | 1116767 |   15058 |
+| city\_norm   |    0.957 |       25584 |    0.001 |  701748 |   13006 |
+| city\_swap   |    0.968 |       18283 |    0.001 |  522856 |    5676 |
+| city\_refine |    0.980 |       17686 |    0.001 |  333091 |    5114 |
 
 You can see how the percentage of valid values increased with each
 stage.
@@ -728,28 +744,38 @@ progress %>%
 
 ## Conclude
 
-1.  There are `nrow(df)` records in the database.
-2.  There are `sum(mic$dupe_flag)` duplicate records in the database.
+1.  There are `comma(nrow(mic))` records in the database.
+2.  There are `comma(sum(mic$dupe_flag))` duplicate records in the
+    database.
 3.  The range and distribution of `amount` and `date` seem reasonable.
-4.  There are `sum(mic$na_flag)` records missing either recipient or
-    date.
-5.  Consistency in geographic data has been improved with
+4.  There are `comma(sum(mic$na_flag))` records missing a key variable.
+5.  Consistency in geographic data was improved with
     `campfin::normal_*()`.
-6.  The 5-digit `zip_norm` variable has been created with
-    `campfin::normal_zip(mic$zip)`.
-7.  The 4-digit `year` variable has been created with
-    `lubridate::year()`.
+6.  The 5-digit `zip_norm` variable was created with
+    `campfin::normal_zip()`.
+7.  The 4-digit `year` variable was created with `lubridate::year()`.
 
 ## Export
 
 ``` r
-proc_dir <- dir_create(here("mi", "contribs", "data", "processed"))
-```
-
-``` r
-write_csv(
-  x = mic,
-  path = path(proc_dir, "mi_contribs_clean.csv"),
-  na = ""
-)
+clean_dir <- dir_create(here("mi", "contribs", "data", "clean"))
+clean_path <- path(clean_dir, "mi_contribs_clean.csv")
+write_csv(mic, clean_path, na = "")
+file_size(clean_path)
+#> 4.48G
+guess_encoding(clean_path)
+#> # A tibble: 11 x 3
+#>    encoding   language confidence
+#>    <chr>      <chr>         <dbl>
+#>  1 ISO-8859-2 "ro"           0.44
+#>  2 ISO-8859-1 "fr"           0.35
+#>  3 ISO-8859-9 "tr"           0.26
+#>  4 UTF-8      ""             0.15
+#>  5 UTF-16BE   ""             0.1 
+#>  6 UTF-16LE   ""             0.1 
+#>  7 Shift_JIS  "ja"           0.1 
+#>  8 GB18030    "zh"           0.1 
+#>  9 EUC-JP     "ja"           0.1 
+#> 10 EUC-KR     "ko"           0.1 
+#> 11 Big5       "zh"           0.1
 ```

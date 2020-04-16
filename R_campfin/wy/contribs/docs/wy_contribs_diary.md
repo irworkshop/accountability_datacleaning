@@ -1,7 +1,7 @@
 Wyoming Contributions
 ================
 Kiernan Nicholls
-2020-02-28 13:19:36
+2020-04-14 15:05:29
 
   - [Project](#project)
   - [Objectives](#objectives)
@@ -131,35 +131,35 @@ head(wyc)
 #> # A tibble: 6 x 8
 #>   contributor_name recipient_name recipient_type contribution_ty… date       filing_status amount
 #>   <chr>            <chr>          <chr>          <chr>            <date>     <chr>          <dbl>
-#> 1 ALLEY, ALEXIS  … WY REALTORS P… POLITICAL ACT… MONETARY         2019-12-30 FILED             15
-#> 2 ANDERSON, MISTY… WY REALTORS P… POLITICAL ACT… MONETARY         2019-12-30 FILED             15
-#> 3 ANDERSON, RYAN … CHEYENNE PAC   POLITICAL ACT… MONETARY         2019-12-30 FILED             60
-#> 4 ANDERSON, RYAN … FFFWY FIRE PAC POLITICAL ACT… MONETARY         2019-12-30 FILED            172
-#> 5 ANSON, BENJAMIN… WY REALTORS P… POLITICAL ACT… MONETARY         2019-12-30 FILED             15
-#> 6 BASSETT, CABOT … CHEYENNE PAC   POLITICAL ACT… MONETARY         2019-12-30 FILED             12
+#> 1 ESCH, AMANDA  (… COMMITTEE TO … CANDIDATE COM… MONETARY         2019-12-30 FILED            200
+#> 2 UNION PACIFIC C… JIM ANDERSON … CANDIDATE COM… MONETARY         2019-12-30 FILED            300
+#> 3 WALLESCH, BRITN… COMMITTEE TO … CANDIDATE COM… MONETARY         2019-12-30 FILED            200
+#> 4 WILMETTI, JENNI… COMMITTEE TO … CANDIDATE COM… MONETARY         2019-12-30 FILED            250
+#> 5 SHINKLE, LEVI J… COMMITTEE TO … CANDIDATE COM… LOAN             2019-12-27 AMEND - ADD      100
+#> 6 UNION PACIFIC C… PERKINS FOR S… CANDIDATE COM… MONETARY         2019-12-27 FILED            300
 #> # … with 1 more variable: city_state_zip <chr>
 tail(wyc)
 #> # A tibble: 6 x 8
 #>   contributor_name recipient_name recipient_type contribution_ty… date       filing_status amount
 #>   <chr>            <chr>          <chr>          <chr>            <date>     <chr>          <dbl>
-#> 1 FRANK PEASLEY (… PLATTE REPUBL… PARTY COMMITT… MONETARY         2009-01-01 FILED           300 
-#> 2 MATHEWSON, PAM … ALBANY DEMOCR… PARTY COMMITT… IN-KIND          2009-01-01 FILED            80 
-#> 3 MEASOM, FRAN  (… TETON DEMOCRA… PARTY COMMITT… MONETARY         2009-01-01 FILED            40 
-#> 4 <NA>             BIG HORN DEMO… PARTY COMMITT… UN-ITEMIZED      2009-01-01 FILED           566.
-#> 5 <NA>             FREMONT REPUB… PARTY COMMITT… UN-ITEMIZED      2009-01-01 FILED           370 
-#> 6 <NA>             PARK REPUBLIC… PARTY COMMITT… UN-ITEMIZED      2008-12-16 PUBLISHED       281.
+#> 1 BUNCE, WILLIAM … MICHELI FOR G… CANDIDATE COM… MONETARY         2009-04-08 FILED           1000
+#> 2 COSNER, BARNEY … MICHELI FOR G… CANDIDATE COM… MONETARY         2009-04-08 FILED           1000
+#> 3 MICHELI, MATTHE… MICHELI FOR G… CANDIDATE COM… MONETARY         2009-04-08 FILED           4010
+#> 4 PARK, GORDON L … MICHELI FOR G… CANDIDATE COM… MONETARY         2009-04-08 FILED            100
+#> 5 THOMPSON, DOUGL… MICHELI FOR G… CANDIDATE COM… MONETARY         2009-04-08 FILED            100
+#> 6 MICHELI, RON  (… MICHELI FOR G… CANDIDATE COM… MONETARY         2009-03-15 FILED           1000
 #> # … with 1 more variable: city_state_zip <chr>
 glimpse(sample_n(wyc, 20))
 #> Rows: 20
 #> Columns: 8
-#> $ contributor_name  <chr> "VECKER, SUSAN  (SAN FRANCISCO)", "MATSON, KAREN  (LANDER)", "WATTS, S…
-#> $ recipient_name    <chr> "MARY FOR WYOMING", "WY PUBLIC EMPLOYEES ASSN. PAC", "ACTBLUE WYOMING"…
-#> $ recipient_type    <chr> "CANDIDATE COMMITTEE", "POLITICAL ACTION COMMITTEE", "POLITICAL ACTION…
-#> $ contribution_type <chr> "MONETARY", "MONETARY", "MONETARY", "UN-ITEMIZED", "IN-KIND", "MONETAR…
-#> $ date              <date> 2018-06-20, 2015-12-21, 2014-10-14, 2013-03-01, 2017-03-25, 2016-09-2…
+#> $ contributor_name  <chr> "MCCOMB, THEO  (DOUG;AS)", "WY EDUCATION ASSN. PAC FOR EDUCATION (CHEY…
+#> $ recipient_name    <chr> "MEAD FOR GOVERNOR", "DAVE CLARENDON ", "RUTH ANN FOR HOUSE", "KATHLEE…
+#> $ recipient_type    <chr> "CANDIDATE COMMITTEE", "CANDIDATE", "CANDIDATE COMMITTEE", "CANDIDATE"…
+#> $ contribution_type <chr> "MONETARY", "MONETARY", "MONETARY", "MONETARY", "MONETARY", "MONETARY"…
+#> $ date              <date> 2014-08-27, 2018-06-18, 2010-10-07, 2010-07-23, 2016-08-03, 2016-06-1…
 #> $ filing_status     <chr> "FILED", "FILED", "FILED", "FILED", "FILED", "FILED", "FILED", "FILED"…
-#> $ amount            <dbl> 500, 14, 100, 10, 50, 100, 40, 150, 100, 25, 500, 300, 100, 110, 20, 5…
-#> $ city_state_zip    <chr> "SAN FRANCISCO, CA 94133", "LANDER, WY 82520", "PARADISE VALLEY, AZ 85…
+#> $ amount            <dbl> 50, 600, 125, 250, 100, 100, 100, 50, 1000, 200, 25, 200, 500, 25, 100…
+#> $ city_state_zip    <chr> "DOUG;AS, WY 82633", "CHEYENNE, WY 82001", "WILSON, WY 83014", "WRIGHT…
 ```
 
 ### Missing
@@ -169,20 +169,20 @@ col_stats(wyc, count_na)
 #> # A tibble: 8 x 4
 #>   col               class      n      p
 #>   <chr>             <chr>  <int>  <dbl>
-#> 1 contributor_name  <chr>   2862 0.0260
+#> 1 contributor_name  <chr>    790 0.0178
 #> 2 recipient_name    <chr>      0 0     
 #> 3 recipient_type    <chr>      0 0     
 #> 4 contribution_type <chr>      0 0     
 #> 5 date              <date>     0 0     
 #> 6 filing_status     <chr>      0 0     
 #> 7 amount            <dbl>      0 0     
-#> 8 city_state_zip    <chr>   2732 0.0248
+#> 8 city_state_zip    <chr>    757 0.0171
 ```
 
 ``` r
 wyc <- wyc %>% flag_na(date, contributor_name, amount, recipient_name)
 mean(wyc$na_flag)
-#> [1] 0.02601298
+#> [1] 0.01779961
 ```
 
 ### Duplicates
@@ -190,27 +190,27 @@ mean(wyc$na_flag)
 ``` r
 wyc <- flag_dupes(wyc, everything(), .check = TRUE)
 mean(wyc$dupe_flag)
-#> [1] 0.04087364
+#> [1] 0.009665863
 ```
 
 ``` r
 wyc %>% 
   filter(dupe_flag) %>% 
   select(date, contributor_name, amount, recipient_name)
-#> # A tibble: 4,497 x 4
-#>    date       contributor_name           amount recipient_name 
-#>    <date>     <chr>                       <dbl> <chr>          
-#>  1 2019-10-23 COLLIER, WILL  (GILLETTE)     100 WY REALTORS PAC
-#>  2 2019-10-23 COLLIER, WILL  (GILLETTE)     100 WY REALTORS PAC
-#>  3 2019-09-19 BELUS, MAXINE  (CLEARMONT)    100 WY REALTORS PAC
-#>  4 2019-09-19 BELUS, MAXINE  (CLEARMONT)    100 WY REALTORS PAC
-#>  5 2019-09-19 DELACH, SHEILA  (CASPER)      100 WY REALTORS PAC
-#>  6 2019-09-19 DELACH, SHEILA  (CASPER)      100 WY REALTORS PAC
-#>  7 2019-09-19 KORNKVEN, JOHN A  (CASPER)    100 WY REALTORS PAC
-#>  8 2019-09-19 KORNKVEN, JOHN A  (CASPER)    100 WY REALTORS PAC
-#>  9 2019-09-19 LEVER, GARY P  (CASPER)       100 WY REALTORS PAC
-#> 10 2019-09-19 LEVER, GARY P  (CASPER)       100 WY REALTORS PAC
-#> # … with 4,487 more rows
+#> # A tibble: 429 x 4
+#>    date       contributor_name                                amount recipient_name          
+#>    <date>     <chr>                                            <dbl> <chr>                   
+#>  1 2018-10-11 FFFWY FIRE PAC (CHEYENNE)                         500  "RYAN FOR WYOMING"      
+#>  2 2018-10-11 FFFWY FIRE PAC (CHEYENNE)                         500  "RYAN FOR WYOMING"      
+#>  3 2018-10-11 FFFWY FIRE PAC (CHEYENNE)                         500  "RYAN FOR WYOMING"      
+#>  4 2018-10-05 SCHNEIDER, DIANE  (DENVER)                         25  "FRIENDS OF MARK GORDON"
+#>  5 2018-10-05 SCHNEIDER, DIANE  (DENVER)                         25  "FRIENDS OF MARK GORDON"
+#>  6 2018-10-04 CAMPBELL (GILLETTE)                               257. "TIMOTHY HALLINAN "     
+#>  7 2018-10-04 CAMPBELL (GILLETTE)                               257. "TIMOTHY HALLINAN "     
+#>  8 2018-10-04 CAMPBELL (GILLETTE)                               257. "TIMOTHY HALLINAN "     
+#>  9 2018-10-04 WYOMING MINING ASSOCIATION PAC (WMA) (CHEYENNE)   100  "TOM WALTERS "          
+#> 10 2018-10-04 WYOMING MINING ASSOCIATION PAC (WMA) (CHEYENNE)   100  "TOM WALTERS "          
+#> # … with 419 more rows
 ```
 
 ### Categorical
@@ -220,16 +220,16 @@ col_stats(wyc, n_distinct)
 #> # A tibble: 10 x 4
 #>    col               class      n         p
 #>    <chr>             <chr>  <int>     <dbl>
-#>  1 contributor_name  <chr>  39783 0.362    
-#>  2 recipient_name    <chr>    693 0.00630  
-#>  3 recipient_type    <chr>      4 0.0000364
-#>  4 contribution_type <chr>      5 0.0000454
-#>  5 date              <date>  3529 0.0321   
-#>  6 filing_status     <chr>      4 0.0000364
-#>  7 amount            <dbl>   4210 0.0383   
-#>  8 city_state_zip    <chr>   4258 0.0387   
-#>  9 na_flag           <lgl>      2 0.0000182
-#> 10 dupe_flag         <lgl>      2 0.0000182
+#>  1 contributor_name  <chr>  21554 0.486    
+#>  2 recipient_name    <chr>    591 0.0133   
+#>  3 recipient_type    <chr>      2 0.0000451
+#>  4 contribution_type <chr>      5 0.000113 
+#>  5 date              <date>  2026 0.0456   
+#>  6 filing_status     <chr>      4 0.0000901
+#>  7 amount            <dbl>   1872 0.0422   
+#>  8 city_state_zip    <chr>   2768 0.0624   
+#>  9 na_flag           <lgl>      2 0.0000451
+#> 10 dupe_flag         <lgl>      2 0.0000451
 ```
 
 ### Continuous
@@ -239,9 +239,9 @@ col_stats(wyc, n_distinct)
 ``` r
 summary(wyc$amount)
 #>      Min.   1st Qu.    Median      Mean   3rd Qu.      Max. 
-#>       0.0      20.0      55.0     366.5     150.0 2177032.0
+#>       0.0      50.0     100.0     678.7     300.0 2177032.0
 mean(wyc$amount <= 0)
-#> [1] 0.0008452855
+#> [1] 2.253115e-05
 ```
 
 ![](../plots/hist_amount-1.png)<!-- -->
@@ -254,7 +254,7 @@ wyc <- mutate(wyc, year = year(date))
 
 ``` r
 min(wyc$date)
-#> [1] "2008-12-16"
+#> [1] "2009-03-15"
 sum(wyc$year < 2000)
 #> [1] 0
 max(wyc$date)
@@ -320,8 +320,8 @@ progress_table(
 #> # A tibble: 2 x 6
 #>   stage    prop_in n_distinct prop_na n_out n_diff
 #>   <chr>      <dbl>      <dbl>   <dbl> <dbl>  <dbl>
-#> 1 zip        0.994       2892  0.0262   651    332
-#> 2 zip_norm   0.994       2889  0.0262   648    329
+#> 1 zip        0.996       2050  0.0182   155    121
+#> 2 zip_norm   0.996       2049  0.0183   154    120
 ```
 
 This new variable does not improve anything on the original, so it does
@@ -381,7 +381,7 @@ wyc <- wyc %>%
     match_abb = is_abbrev(city_norm, city_match),
     match_dist = str_dist(city_norm, city_match),
     city_swap = if_else(
-      condition = !is.na(match_dist) & match_abb | match_dist == 1,
+      condition = !is.na(match_dist) & (match_abb | match_dist == 1),
       true = city_match,
       false = city_norm
     )
@@ -415,16 +415,12 @@ good_refine <- wyc %>%
   )
 ```
 
-    #> # A tibble: 7 x 5
+    #> # A tibble: 3 x 5
     #>   state zip   city_swap             city_refine          n
     #>   <chr> <chr> <chr>                 <chr>            <int>
-    #> 1 SD    57717 BELLE FROUCHE         BELLE FOURCHE        1
-    #> 2 WI    54494 WISCONSIN RAPIDSAOIDS WISCONSIN RAPIDS     1
-    #> 3 WY    82001 CHENEYHE              CHEYENNE             1
-    #> 4 WY    82009 CHEYYEN               CHEYENNE             1
-    #> 5 WY    82433 MEETETSEE             MEETEETSE            1
-    #> 6 WY    82633 OUGLASD               DOUGLAS              1
-    #> 7 WY    82720 HULLET                HULETT               1
+    #> 1 WI    54494 WISCONSIN RAPIDSAOIDS WISCONSIN RAPIDS     1
+    #> 2 WY    82001 CHENEYHE              CHEYENNE             1
+    #> 3 WY    82633 OUGLASD               DOUGLAS              1
 
 Then we can join the refined values back to the database.
 
@@ -438,9 +434,9 @@ wyc <- wyc %>%
 
 | stage      | prop\_in | n\_distinct | prop\_na | n\_out | n\_diff |
 | :--------- | -------: | ----------: | -------: | -----: | ------: |
-| city\_raw) |    0.975 |        2157 |    0.025 |   2663 |     666 |
-| city\_norm |    0.986 |        2000 |    0.026 |   1486 |     493 |
-| city\_swap |    0.995 |        1606 |    0.036 |    551 |     115 |
+| city\_raw) |    0.961 |        1595 |    0.017 |   1700 |     424 |
+| city\_norm |    0.980 |        1493 |    0.018 |    877 |     307 |
+| city\_swap |    0.991 |        1283 |    0.018 |    383 |      83 |
 
 You can see how the percentage of valid values increased with each
 stage.
@@ -469,26 +465,26 @@ wyc <- wyc %>%
 glimpse(sample_n(wyc, 20))
 #> Rows: 20
 #> Columns: 14
-#> $ contributor_name  <chr> "GABLE, RAY AND DENISE  (LARAMIE)", "SHEARER, SANDRA L  (CODY)", "MANI…
-#> $ recipient_name    <chr> "GUERIN FOR SENATE", "WY REALTORS PAC", "COMMITTEE TO ELECT RITA MEYER…
-#> $ recipient_type    <chr> "CANDIDATE COMMITTEE", "POLITICAL ACTION COMMITTEE", "CANDIDATE COMMIT…
+#> $ contributor_name  <chr> "BLACK, SUZI  (BUFFALO)", "ACTBLUE (SOMERVILLE)", "RAY, ROBERT  (CHEYE…
+#> $ recipient_name    <chr> "MARY FOR WYOMING", "AMY SIMPSON 4 HOUSE", "MARY FOR WYOMING", "DOUGLA…
+#> $ recipient_type    <chr> "CANDIDATE COMMITTEE", "CANDIDATE COMMITTEE", "CANDIDATE COMMITTEE", "…
 #> $ contribution_type <chr> "MONETARY", "MONETARY", "MONETARY", "MONETARY", "MONETARY", "MONETARY"…
-#> $ date              <date> 2010-06-16, 2019-01-22, 2010-02-18, 2010-05-24, 2010-10-20, 2018-07-1…
+#> $ date              <date> 2018-03-24, 2016-10-04, 2017-08-26, 2014-07-28, 2018-07-15, 2018-09-0…
 #> $ filing_status     <chr> "FILED", "FILED", "FILED", "FILED", "FILED", "FILED", "FILED", "FILED"…
-#> $ amount            <dbl> 50.00, 25.00, 500.00, 25.00, 100.00, 100.00, 460.00, 74.00, 1000.00, 1…
-#> $ city_raw          <chr> "LARAMIE", "CODY", "LARAMIE", "LARAMIE", "CHEYENNE", "LARAMIE", NA, "L…
-#> $ state             <chr> "WY", "WY", "WY", "WY", "WY", "WY", NA, "WY", "WY", "WY", "WY", "WY", …
-#> $ zip               <chr> "82070", "82414", "82072", "82070", "82009", "82073", NA, "82070", "83…
-#> $ na_flag           <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, TRUE, FALSE, FALSE, FALSE, F…
+#> $ amount            <dbl> 50.00, 25.00, 50.00, 100.00, 50.00, 50.00, 100.00, 100.00, 100.00, 200…
+#> $ city_raw          <chr> "BUFFALO", "SOMERVILLE", "CHEYEN", "DOUGLAS", "GILLETTE", "SHERIDAN", …
+#> $ state             <chr> "WY", "MA", "WY", "WY", "WY", "WY", "WY", "WY", "WY", "TX", "WY", "WY"…
+#> $ zip               <chr> "82834", "02144", "82009", "82633", "82718", "82801", "82939", "82003"…
+#> $ na_flag           <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, …
 #> $ dupe_flag         <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, …
-#> $ year              <dbl> 2010, 2019, 2010, 2010, 2010, 2018, 2012, 2018, 2014, 2014, 2018, 2014…
-#> $ city_clean        <chr> "LARAMIE", "CODY", "LARAMIE", "LARAMIE", "CHEYENNE", "LARAMIE", NA, "L…
+#> $ year              <dbl> 2018, 2016, 2017, 2014, 2018, 2018, 2010, 2014, 2012, 2010, 2012, 2012…
+#> $ city_clean        <chr> "BUFFALO", "SOMERVILLE", "CHEYENNE", "DOUGLAS", "GILLETTE", "SHERIDAN"…
 ```
 
-1.  There are 110,022 records in the database.
-2.  There are 4,497 duplicate records in the database.
+1.  There are 44,383 records in the database.
+2.  There are 429 duplicate records in the database.
 3.  The range and distribution of `amount` and `date` seem reasonable.
-4.  There are 2,862 records missing ….
+4.  There are 790 records missing ….
 5.  Consistency in geographic data has been improved with
     `campfin::normal_*()`.
 6.  The 4-digit `year` variable has been created with
@@ -498,12 +494,15 @@ glimpse(sample_n(wyc, 20))
 
 ``` r
 clean_dir <- dir_create(here("wy", "contribs", "data", "clean"))
-```
-
-``` r
-write_csv(
-  x = wyc,
-  path = path(clean_dir, "wy_contribs_clean.csv"),
-  na = ""
-)
+clean_path <- path(clean_dir, "wy_contribs_clean.csv")
+write_csv(wyc, clean_path, na = "")
+file_size(clean_path)
+#> 6.15M
+guess_encoding(clean_path)
+#> # A tibble: 3 x 2
+#>   encoding   confidence
+#>   <chr>           <dbl>
+#> 1 UTF-8            0.8 
+#> 2 ISO-8859-1       0.35
+#> 3 ISO-8859-2       0.26
 ```

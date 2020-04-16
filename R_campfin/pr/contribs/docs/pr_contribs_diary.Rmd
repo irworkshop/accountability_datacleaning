@@ -404,7 +404,7 @@ prc <- prc %>%
     match_abb = is_abbrev(city_norm, city_match),
     match_dist = str_dist(city_norm, city_match),
     city_swap = if_else(
-      condition = !is.na(match_dist) & match_abb | match_dist == 1,
+      condition = !is.na(match_dist) & (match_abb | match_dist == 1),
       true = city_match,
       false = city_norm
     )
@@ -473,7 +473,6 @@ progress %>%
     y = "Percent Valid",
     fill = "Valid"
   )
-  
 ```
 
 ## Conclude
@@ -504,13 +503,6 @@ glimpse(sample_n(prc, 20))
 
 ```{r clean_dir}
 clean_dir <- dir_create(here("pr", "contribs", "data", "clean"))
+clean_path <- path(clean_dir, "pr_contribs_clean.csv")
+write_csv(prc, path = clean_path, na = "")
 ```
-
-```{r write_clean}
-write_csv(
-  x = prc,
-  path = path(clean_dir, "pr_contribs_clean.csv"),
-  na = ""
-)
-```
-

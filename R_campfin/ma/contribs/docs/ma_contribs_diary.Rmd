@@ -612,7 +612,7 @@ mac <- mac %>%
     match_abb = is_abbrev(city_norm, city_match),
     match_dist = str_dist(city_norm, city_match),
     city_swap = if_else(
-      condition = !is.na(match_dist) & match_abb | match_dist == 1,
+      condition = !is.na(match_dist) & (match_abb | match_dist == 1),
       true = city_match,
       false = city_norm
     )
@@ -752,7 +752,7 @@ glimpse(sample_n(mac, 20))
 1. There are `r comma(nrow(mac))` records in the database.
 1. There are `r comma(sum(mac$dupe_flag))` duplicate records in the database.
 1. The range and distribution of `amount` and `date` seem reasonable.
-1. There are `r comma(sum(mac$na_flag))` records missing either recipient or date.
+1. There are `r comma(sum(mac$na_flag))` records missing a recipient or date.
 1. Consistency in goegraphic data has been improved with `campfin::normal_*()`.
 1. The 4-digit `year` variable has been created with `lubridate::year()`.
 
@@ -760,13 +760,8 @@ glimpse(sample_n(mac, 20))
 
 ```{r clean_dir}
 clean_dir <- dir_create(here("ma", "contribs", "data", "clean"))
+clean_path <- path(clean_dir, "ma_contribs_clean.csv")
+write_csv(mac, clean_path, na = "")
+file_size(clean_path)
+guess_encoding(clean_path)
 ```
-
-```{r write_clean}
-write_csv(
-  x = mac,
-  path = path(clean_dir, "ma_contribs_clean.csv"),
-  na = ""
-)
-```
-

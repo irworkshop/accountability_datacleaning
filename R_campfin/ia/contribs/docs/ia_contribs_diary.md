@@ -1,7 +1,7 @@
 Iowa Contributions
 ================
 Kiernan Nicholls
-2020-04-14 10:21:01
+2020-04-14 10:34:04
 
   - [Project](#project)
   - [Objectives](#objectives)
@@ -411,11 +411,7 @@ iac <- iac %>%
 ```
 
 ``` r
-progress_table(
-  iac$zip,
-  iac$zip_norm,
-  compare = valid_zip
-)
+progress_table(iac$zip, iac$zip_norm, compare = valid_zip)
 #> # A tibble: 2 x 6
 #>   stage    prop_in n_distinct  prop_na  n_out n_diff
 #>   <chr>      <dbl>      <dbl>    <dbl>  <dbl>  <dbl>
@@ -617,20 +613,33 @@ glimpse(sample_n(iac, 20))
 ## Export
 
 ``` r
-clean_dir <- dir_create(here("in", "contribs", "data", "clean"))
-```
-
-``` r
 iac <- iac %>% 
   select(
     -city_norm,
     city_norm = city_swap
   ) %>% 
   rename_all(~str_replace(., "_norm", "_clean"))
+```
 
-write_csv(
-  x = iac,
-  path = path(clean_dir, "in_contribs_clean.csv"),
-  na = ""
-)
+``` r
+clean_dir <- dir_create(here("ia", "contribs", "data", "clean"))
+clean_path <- path(clean_dir, "ia_contribs_clean.csv")
+write_csv(iac, path = clean_path, na = "")
+file_size(clean_path)
+#> 345M
+guess_encoding(clean_path)
+#> # A tibble: 11 x 3
+#>    encoding   language confidence
+#>    <chr>      <chr>         <dbl>
+#>  1 ISO-8859-1 "pt"           0.44
+#>  2 ISO-8859-2 "ro"           0.44
+#>  3 ISO-8859-9 "tr"           0.26
+#>  4 UTF-8      ""             0.15
+#>  5 UTF-16BE   ""             0.1 
+#>  6 UTF-16LE   ""             0.1 
+#>  7 Shift_JIS  "ja"           0.1 
+#>  8 GB18030    "zh"           0.1 
+#>  9 EUC-JP     "ja"           0.1 
+#> 10 EUC-KR     "ko"           0.1 
+#> 11 Big5       "zh"           0.1
 ```
