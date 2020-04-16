@@ -27,8 +27,10 @@ opts_chunk$set(
   fig.width = 10,
   dpi = 300
 )
-options(width = 99)
-set.seed(5)
+if (!interactive()) {
+  options(width = 99)
+  set.seed(5)
+}
 ```
 
 ```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
@@ -114,42 +116,42 @@ here::here()
 
 ```{r raw_download}
 raw_dir <- dir_create(here("ct", "contribs", "data", "raw"))
-raw_base <- "http://seec.ct.gov/ecrisreporting/Data/eCrisDownloads/exportdatafiles/"
+seec <- "http://seec.ct.gov/ecrisreporting/Data/eCrisDownloads/exportdatafiles/"
 raw_names <- glue("Receipts{2008:2020}CalendarYearPartyPACCommittees.CSV")
-raw_urls <- str_c(raw_base, raw_names)
+raw_urls <- str_c(seec, raw_names)
 raw_paths <- path(raw_dir, raw_names)
-download.file(raw_urls, raw_paths)
+if (!all(this_file_new(raw_paths))) {
+  download.file(raw_urls, raw_paths)
+}
 ```
 
 ### Read
 
 ```{r raw_read}
-ctc <- map(
+ctc <- map_dfr(
   .x = raw_paths,
-  .f = read_delim,
+  .f = vroom,
   delim = ",",
+  .name_repair = make_clean_names,
   na = c("", "NA", "N/A", "NULL"),
   escape_backslash = FALSE,
   escape_double = FALSE,
   col_types = cols(
     .default = col_character(),
-    # `Transaction Date` = col_date_usa(),
-    # `File To State` = col_date_usa(),
-    `Amount` = col_double(),
-    `Committee ID` = col_integer(),
-    # `Period Start` = col_date_usa(),
-    # `Period End` = col_date_usa()
+    Amount = col_double(),
+    `Transaction Date` = col_date_usa(),
+    `File To State` = col_date_usa(),
+    `Period Start` = col_date_usa(),
+    `Period End` = col_date_usa(),
   )
 )
-
-ctc <- map(ctc, ~clean_names(remove_empty(., "cols")))
-ctc <- bind_rows(ctc)
 ```
 
 ```{r raw_rename, echo=FALSE}
 ctc <- ctc %>% 
   rename(
     contributor = contributor_name,
+    office = office_sought,
     rec_type = receipt_type,
     fil_type = committee_type,
     date = transaction_date,
@@ -246,14 +248,23 @@ ctc %>%
 #### Dates
 
 ```{r date_year}
-ctc <- mutate(ctc, year = year(date))
+ctc <- ctc %>% 
+  mutate(
+    date = date %>% 
+      as.character() %>% 
+      str_replace("^2(\\d{2}-)", "20\\1") %>% 
+      str_replace("^(1)(?=\\d{3}-)", "2") %>% 
+      as.Date(),
+    year = year(date)
+  )
 ```
 
 ```{r date_range}
-min(ctc$date)
-sum(ctc$year < 2000)
-max(ctc$date)
-sum(ctc$date > today())
+min(ctc$date, na.rm = TRUE)
+sum(ctc$year < 2000, na.rm = TRUE)
+max(ctc$date, na.rm = TRUE)
+sum(ctc$date > today(), na.rm = TRUE)
+ctc$year[which(ctc$year > 2020)] <- NA
 ```
 
 ```{r bar_year, echo=FALSE}
@@ -265,6 +276,7 @@ ctc %>%
   scale_fill_brewer(palette = "Dark2") +
   scale_y_continuous(labels = comma) +
   scale_x_continuous(breaks = seq(2000, 2020, by = 2)) +
+  coord_cartesian(xlim = c(2008, 2020)) +
   theme(legend.position = "bottom") +
   labs(
     title = "Connecticut Contributions by Year",
@@ -289,22 +301,14 @@ will force consistence case, remove punctuation, and abbreviate official
 USPS suffixes.
 
 ```{r address_norm}
-ctc <- ctc %>% 
-  unite(
-    col = address_full,
-    starts_with("address"),
-    sep = " ",
-    remove = FALSE,
-    na.rm = TRUE
-  ) %>% 
+ctc <- ctc %>%
   mutate(
     address_norm = normal_address(
-      address = address_full,
+      address = address,
       abbs = usps_street,
       na_rep = TRUE
     )
-  ) %>% 
-  select(-address_full)
+  )
 ```
 
 ```{r address_view}
@@ -358,7 +362,7 @@ ctc <- ctc %>%
 ```{r state_view}
 ctc %>% 
   filter(state != state_norm) %>% 
-  count(state, sort = TRUE)
+  count(state, state_norm, sort = TRUE)
 ```
 
 ```{r state_progress}
@@ -415,7 +419,7 @@ ctc <- ctc %>%
     match_abb = is_abbrev(city_norm, city_match),
     match_dist = str_dist(city_norm, city_match),
     city_swap = if_else(
-      condition = !is.na(match_dist) & match_abb | match_dist == 1,
+      condition = !is.na(match_dist) & (match_abb | match_dist == 1),
       true = city_match,
       false = city_norm
     )
@@ -559,13 +563,8 @@ glimpse(sample_n(ctc, 20))
 
 ```{r clean_dir}
 clean_dir <- dir_create(here("ct", "contribs", "data", "clean"))
+clean_path <- path(clean_dir, "ct_contribs_clean.csv")
+write_csv(ctc, clean_path, na = "")
+file_size(clean_path)
+guess_encoding(clean_path)
 ```
-
-```{r clean_write}
-write_csv(
-  x = ctc,
-  path = path(clean_dir, "ct_contribs_clean.csv"),
-  na = ""
-)
-```
-
