@@ -117,7 +117,7 @@ The lobbying registration data of New Hampshire is obtained by a class of Comput
 ### Setting up Raw Data Directory
 
 ```{r raw_dir}
-raw_dir <- dir_create(here("nh", "lobby", "data", "raw"))
+raw_dir <- dir_create(here("nh", "lobby", "data", "raw", "reg"))
 ```
 
 ### Read
@@ -509,12 +509,13 @@ glimpse(sample_n(nh_lob_reg, 20))
 ## Export
 
 ```{r clean_dir}
-clean_dir <- dir_create(here("nh", "lobby", "data", "reg","clean"))
+clean_dir <- dir_create(here("nh", "lobby", "data", "processed","reg"))
 ```
 
 ```{r write_clean}
 write_csv(
-  x = nh_lob_reg %>% rename(CITY_clean = CITY_swap) %>% rename( FIRM_CITY_clean = FIRM_CITY_swap),
+  x = nh_lob_reg %>% rename(CITY_clean = CITY_swap) %>% rename( FIRM_CITY_clean = FIRM_CITY_swap) %>% 
+    select(-c(CITY_norm , FIRM_CITY_norm)),
   path = path(clean_dir, "nh_lob_reg_clean.csv"),
   na = ""
 )

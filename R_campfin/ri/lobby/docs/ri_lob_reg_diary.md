@@ -1,7 +1,7 @@
 Rhode Island Lobbying Registration Diary
 ================
 Yanqi Xu
-2020-04-16 17:47:03
+2020-04-21 23:12:55
 
   - [Project](#project)
   - [Objectives](#objectives)
@@ -647,6 +647,16 @@ glimpse(sample_n(rilr_new, 20))
 
 ``` r
 clean_dir <- dir_create(here("ri", "lobby", "data", "reg","clean"))
+```
+
+In order to map the two files on our site, we’ll manually change the
+headers of both datasets so that they’re standardized. We’ll prioritize
+headers of newer datasets.
+
+``` r
+rilr_old <- rilr_old %>% 
+  rename(entities = entity_name,
+        firms = lobby_firm_name) 
 ```
 
 ``` r

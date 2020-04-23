@@ -476,6 +476,15 @@ glimpse(sample_n(ny_lob, 20))
 1. Consistency in goegraphic data has been improved with `campfin::normal_*()`.
 1. The 4-digit `YEAR` variable has been created with `lubridate::year()`.
 
+
+## Reshape
+When we map the columns for The Accountability Project, we can reshape the data so that each record is an individual lobbyist. Right now it's arranged by lobbying firms, with all lobbyist in the same line.
+```{r}
+ny_lob_clean <- ny_lob %>% 
+  mutate(individual_lobbyist_registered = str_split(additional_lobbyist_lr, pattern = ", ")) %>% 
+  unnest_longer(individual_lobbyist_registered)
+```
+
 ## Export
 
 ```{r clean_dir}
@@ -484,7 +493,7 @@ clean_dir <- dir_create(here("ny", "lobby", "data", "reg","clean"))
 
 ```{r write_clean}
 write_csv(
-  x = ny_lob %>% rename(lobbyist_city_clean = lobbyist_city_swap) %>% rename( client_city_clean = client_city_swap),
+  x = ny_lob_clean  %>% rename(lobbyist_city_clean = lobbyist_city_swap) %>% rename( client_city_clean = client_city_swap),
   path = path(clean_dir, "ny_lob_clean.csv"),
   na = ""
 )

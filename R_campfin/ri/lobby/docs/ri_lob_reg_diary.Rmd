@@ -427,6 +427,15 @@ glimpse(sample_n(rilr_new, 20))
 clean_dir <- dir_create(here("ri", "lobby", "data", "reg","clean"))
 ```
 
+In order to map the two files on our site, we'll manually change the headers of both datasets so that they're standardized. 
+We'll prioritize headers of newer datasets. 
+
+```{r}
+rilr_old <- rilr_old %>% 
+  rename(entities = entity_name,
+        firms = lobby_firm_name) 
+```
+
 ```{r write_clean}
 write_csv(
   x = rilr_new %>% rename(city_clean = city_swap) %>% select(-c(address_full,city_norm)),
