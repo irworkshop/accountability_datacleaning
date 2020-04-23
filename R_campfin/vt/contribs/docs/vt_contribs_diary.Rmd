@@ -1,5 +1,5 @@
 ---
-title: "Wisconsin Contributions"
+title: "Vermont Contributions"
 author: "Kiernan Nicholls"
 date: "`r Sys.time()`"
 output:
@@ -34,7 +34,7 @@ if (!interactive()) {
 ```
 
 ```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
-fs::dir_create(here::here("wi", "contribs", "docs"))
+fs::dir_create(here::here("vt", "contribs", "docs"))
 ```
 
 ## Project
@@ -80,7 +80,6 @@ pacman::p_load_gh("irworkshop/campfin")
 pacman::p_load(
   tidyverse, # data manipulation
   lubridate, # datetime strings
-  gluedown, # print markdown
   magrittr, # pipe operators
   janitor, # dataframe clean
   refinr, # cluster and merge
@@ -111,141 +110,113 @@ here::here()
 
 ## Data
 
-Data is from the Wisconsin Secretary of State's Campaign Finance System (CIFS).
-
-> Wyoming's Campaign Finance Information System (WYCFIS) exists to provide a
-mechanism for online filing of campaign finance information and to provide full
-disclosure to the public. This website contains detailed financial records and
-related information that candidates, committees, organizations and parties are
-required by law to disclose.
-
 ## Import
 
-Using the CIFS [contribution search portal][search], we can run a search for all
-contributions from "All Filing Periods" from the dates 2000-01-01 to 
-`r today()`. Those search results need to be manually exported as the
-`ReceiptsList.csv` file.
-
-> To view contributions to a committee, go to the CFIS Home Page, on the left
-hand side, and click View Receipts. A pop up letting you know that this
-information cannot be used for solicitation purposes will appear – click
-Continue. Type in a committee’s ID in the field titled ID, or start typing the
-name of the candidate in the Registrant Name field and click on the correct
-committee name when it appears. Type in any additional information you would
-like to search for, including a name of a contributor or amount of contribution.
-To view all contributions, remove the filing period by clicking, in the Filing
-Period Name field, and scroll all the way to the top and select All Filing
-Periods. Click Search and all of the contributions fitting your search criteria
-will appear. If you would like to export these into Excel, scroll all the way to
-the bottom and on the right hand side, click the XLS icon.
-
-[search]: https://cfis.wi.gov/Public/Registration.aspx?page=ReceiptList#
-
-Infuriatingly, the site only lets users export 65,000 records at a time. We
-have manually exported 91 files.
-
-```{r raw_dir}
-raw_dir <- dir_create(here("wi", "contribs", "data", "raw"))
-raw_files <- as_tibble(dir_info(raw_dir))
-sum(raw_files$size)
-raw_files %>% 
-  select(path, size, modification_time) %>% 
-  mutate(across(path, basename))
+```{r raw_path}
+raw_dir <- dir_create(here("vt", "contribs", "data", "raw"))
+raw_file <- path(raw_dir, "ViewContributionsList.csv")
+raw_need <- !file_exists(raw_file)
 ```
 
-The files can be read into a single data frame with `vroom::vroom()`.
-
-```{r raw_read}
-wic <- vroom(
-  file = raw_files$path,
-  delim = ",",
-  escape_double = FALSE,
-  escape_backslash = FALSE,
-  col_types = cols(.default = "c")
+```{r raw_get, eval=raw_need}
+POST(
+  url = "https://campaignfinance.vermont.gov/Public/ViewReceipts",
+  write_disk(raw_file),
+  query = list(
+    ContributorType = "",
+    ContributionType = "",
+    ContributorName = "",
+    FirstName = "",
+    Employer = "",
+    FilingPeriodName = "",
+    OccupationTitle = "",
+    GabId = "",
+    OfficeTypeCode = "",
+    DistrictID = "",
+    OfficeID = "",
+    StartDate = "01/01/2000",
+    # use current date
+    EndDate = format(Sys.Date(), "%m/%d/%Y"),
+    AmountRangeFrom = "",
+    AmountRangeTo = "",
+    OutOfState = "on",
+    MemberId = "",
+    PageIndex = "1",
+    Election = "",
+    AggAmountRangeFrom = "",
+    AggAmountRangeTo = ""
+  )
 )
 ```
 
-We can check the number of rows against the total reported by our empty search.
-We can also count the number of distinct values from a discrete column.
-
-```{r raw_check}
-nrow(wic) == 5866891 # check col count
-count(wic, ContributorType) # check distinct col
-prop_na(wic$`72 Hr. Reports`) # empty column
-```
-
-The file appears to have been read correctly. We just need to parse, rename, and
-remove some of the columns.
-
-```{r raw_names}
-raw_names <- names(wic)[c(-19, -21)]
-```
-
-```{r raw_parse}
-wic <- wic %>% 
-  clean_names("snake") %>% 
-  remove_empty("cols") %>% 
-  select(-x72_hr_reports) %>% 
-  mutate(across(transaction_date, mdy)) %>% 
-  mutate(across(contribution_amount, parse_double)) %>% 
-  mutate(across(segregated_fund_flag, parse_logical)) %>% 
-  rename(
-    date = transaction_date,
-    period = filing_period_name,
-    con_name = contributor_name,
-    amount = contribution_amount,
-    addr1 = address_line1,
-    addr2 = address_line2,
-    state = state_code,
-    emp_name = employer_name,
-    emp_addr = employer_address,
-    con_type = contributor_type,
-    rec_name = receiving_committee_name,
-    seg_fund = segregated_fund_flag
+```{r raw_read}
+vtc <- read_delim(
+  file = raw_file,
+  delim = ",",
+  escape_backslash = FALSE,
+  escape_double = FALSE,
+  # using anon as NA
+  na = c("", "NA", "Anonymous"),
+  col_types = cols(
+    .default = col_character(),
+    `Transaction Date` = col_date("%m/%d/%Y %H:%M:%S %p"),
+    `Reporting Period` = col_date("%m/%d/%Y %H:%M:%S %p"),
+    Amount = col_double(),
+    `Total Contribution Amount` = col_double()
   )
+)
+```
+
+```{r raw_rename}
+vtc <- vtc %>% 
+  mutate(across(is.character, str_squish)) %>% 
+  rename(
+  date = `Transaction Date`,
+  con_type = `Contributor Type`,
+  con_name = `Contributor Name`,
+  address_raw = `Contributor Address`,
+  rec_name = `Receiving Registrant`,
+  rec_type = `Receiving Registrant Type`,
+  office = `Office`,
+  cycle = `Election Cycle`,
+  period = `Reporting Period`,
+  type = `Contribution Type`,
+  amount = `Amount`,
+  total = `Total Contribution Amount`,
+  comment = `Comments`,
+  in_kind = `In-kind Sub Category`,
+  city_raw = `Town/City`,
+  state_raw = `Town State`
+)
 ```
 
 ## Explore
 
 ```{r glimpse}
-glimpse(wic)
-tail(wic)
+glimpse(vtc)
+tail(vtc)
 ```
 
 ### Missing
 
-Very few important records are missing a value.
-
 ```{r na_count}
-col_stats(wic, count_na)
+col_stats(vtc, count_na)
 ```
-
-We can flag these few records with `campfin::flag_na()`.
 
 ```{r na_flag}
-wic <- wic %>% flag_na(date, con_name, amount, rec_name)
-percent(mean(wic$na_flag), 0.0001)
-```
-
-```{r na_view}
-wic %>% 
-  filter(na_flag) %>% 
-  select(date, con_name, amount, rec_name)
+vtc <- vtc %>% flag_na(date, con_name, amount, rec_name)
+sum(vtc$na_flag)
 ```
 
 ### Duplicates
 
-Quite a few more records are duplicated. While it's possible for the same person
-to make a contribution of the same amount on the same day, we will still flag
-these records with `campfin::flag_dupes()`.
-
 ```{r dupe_flag}
-wic <- flag_dupes(wic, everything())
-percent(mean(wic$dupe_flag), 0.01)
+vtc <- flag_dupes(vtc, everything())
+sum(vtc$dupe_flag)
 ```
 
 ```{r dupe_view}
-wic %>% 
+vtc %>% 
   filter(dupe_flag) %>% 
   select(date, con_name, amount, rec_name)
 ```
@@ -253,12 +224,13 @@ wic %>%
 ### Categorical
 
 ```{r n_distinct}
-col_stats(wic, n_distinct)
+col_stats(vtc, n_distinct)
 ```
 
-```{r n_count}
-count(wic, seg_fund, sort = TRUE)
-count(wic, con_type, sort = TRUE)
+```{r distinct_plots}
+explore_plot(vtc, con_type)
+explore_plot(vtc, rec_type)
+explore_plot(filter(vtc, !is.na(in_kind)), in_kind)
 ```
 
 ### Continuous
@@ -266,14 +238,16 @@ count(wic, con_type, sort = TRUE)
 #### Amounts
 
 ```{r ammount_summary}
-summary(wic$amount)
-mean(wic$amount <= 0)
+summary(vtc$amount)
+mean(vtc$amount == vtc$total, na.rm = TRUE)
+mean(vtc$amount <= 0, na.rm = TRUE)
 ```
 
 ```{r hist_amount, echo=FALSE}
-wic %>%
+vtc %>%
+  filter(amount > 1) %>% 
   ggplot(aes(amount)) +
-  geom_histogram(fill = dark2["purple"]) +
+  geom_histogram(fill = dark2["purple"], bins = 20) +
   scale_y_continuous(labels = comma) +
   scale_x_continuous(
     breaks = c(1 %o% 10^(0:6)),
@@ -281,9 +255,9 @@ wic %>%
     trans = "log10"
   ) +
   labs(
-    title = "Wisconsin Contributions Amount Distribution",
+    title = "Vermont Contributions Amount Distribution",
     subtitle = "from 2000 to 2019",
-    caption = "Source: {source}",
+    caption = "Source: Vermont Campaign Finance System",
     x = "Amount",
     y = "Count"
   )
@@ -291,35 +265,30 @@ wic %>%
 
 #### Dates
 
-We can use `lubridate::year()` to add a calendar year from the date.
-
 ```{r date_year}
-wic <- mutate(wic, year = year(date))
+vtc <- mutate(vtc, year = year(date))
 ```
 
-The `date` and new `year` columns are very clean.
-
 ```{r date_range}
-min(wic$date)
-sum(wic$year < 2000)
-max(wic$date)
-sum(wic$date > today())
+min(vtc$date, na.rm = TRUE)
+sum(vtc$year < 2000, na.rm = TRUE)
+max(vtc$date, na.rm = TRUE)
+vtc$date[which(vtc$date > today())]
 ```
 
 ```{r bar_year, echo=FALSE}
-wic %>%
+vtc %>% 
   count(year) %>% 
-  filter(year >= 2008) %>% 
   mutate(even = is_even(year)) %>% 
   ggplot(aes(x = year, y = n)) +
   geom_col(aes(fill = even)) + 
   scale_fill_brewer(palette = "Dark2") +
   scale_y_continuous(labels = comma) +
-  scale_x_continuous(breaks = seq(2008, 2020, by = 2)) +
+  scale_x_continuous(breaks = seq(2013, 2020, by = 1)) +
   theme(legend.position = "bottom") +
   labs(
-    title = "Wisconsin Contributions by Year",
-    caption = "Source: {source}",
+    title = "Vermont Contributions by Year",
+    caption = "Source: Vermont Campaign Finance System",
     fill = "Election Year",
     x = "Year Made",
     y = "Count"
@@ -333,6 +302,69 @@ confident string normalization. For geographic variables like city names and
 ZIP codes, the corresponding `campfin::normal_*()` functions are tailor made to 
 facilitate this process.
 
+It seems as though the `city` and `state` variable are extracted (poorly) from
+the `con_address` variable.
+
+```{r, wrangle_view}
+vtc %>% 
+  select(address_raw, city_raw, state_raw) %>% 
+  distinct() %>% 
+  sample_n(20)
+```
+
+IT is not clear why this separation was successful for some records but resulted
+in empty values for others. We can try and do our own separation.
+
+```{r wrangle_sep}
+vtc <- vtc %>% 
+  separate(
+    col = address_raw,
+    into = c(glue("addr_sep{1:10}"), "city_sep", "zip_state"),
+    sep = ",\\s",
+    extra = "merge",
+    fill = "left",
+    remove = FALSE,
+  ) %>% 
+  unite(
+    starts_with("addr_sep"),
+    col = "addr_sep",
+    sep = " ",
+    na.rm = TRUE
+  ) %>% 
+  mutate_at(vars(addr_sep), na_if, "") %>% 
+  separate(
+    col = zip_state,
+    into = c("state_sep", "zip_sep"),
+    sep = "\\s(?=\\d)",
+    remove = TRUE
+  )
+```
+
+This separation worked well and improves over the existing variables.
+
+```{r wrangle_post}
+vtc %>% 
+  select(ends_with("raw"), ends_with("sep")) %>% 
+  distinct() %>% 
+  sample_n(20)
+```
+
+For the few separated values missing, we can look to the original values.
+
+```{r wrangle_missing}
+vtc %>% 
+  select(ends_with("raw"), ends_with("sep")) %>% 
+  filter(is.na(city_sep) | is.na(state_sep))
+```
+
+```{r wrangle_merge}
+vtc <- vtc %>% 
+  mutate(
+    city_sep = coalesce(city_sep, city_raw),
+    state_sep = coalesce(state_sep, state_raw)
+  )
+```
+
 ### Address
 
 For the street `addresss` variable, the `campfin::normal_address()` function
@@ -340,27 +372,19 @@ will force consistence case, remove punctuation, and abbreviate official
 USPS suffixes.
 
 ```{r address_norm}
-wic <- wic %>% 
-  unite(
-    starts_with("addr"),
-    col = addr_full,
-    sep = " ",
-    remove = FALSE,
-    na.rm = TRUE
-  ) %>% 
+vtc <- vtc %>% 
   mutate(
     addr_norm = normal_address(
-      address = addr_full,
+      address = addr_sep,
       abbs = usps_street,
       na_rep = TRUE
     )
-  ) %>% 
-  select(-addr_full)
+  )
 ```
 
 ```{r address_view}
-wic %>% 
-  select(starts_with("addr")) %>% 
+vtc %>% 
+  select(contains("addr_")) %>% 
   distinct() %>% 
   sample_n(10)
 ```
@@ -372,10 +396,10 @@ valid _five_ digit codes by removing the ZIP+4 suffix and returning leading
 zeroes dropped by other programs like Microsoft Excel.
 
 ```{r zip_norm}
-wic <- wic %>% 
+vtc <- vtc %>% 
   mutate(
     zip_norm = normal_zip(
-      zip = zip,
+      zip = zip_sep,
       na_rep = TRUE
     )
   )
@@ -383,8 +407,8 @@ wic <- wic %>%
 
 ```{r zip_progress}
 progress_table(
-  wic$zip,
-  wic$zip_norm,
+  vtc$zip_sep,
+  vtc$zip_norm,
   compare = valid_zip
 )
 ```
@@ -395,10 +419,10 @@ Valid two digit state abbreviations can be made using the
 `campfin::normal_state()` function.
 
 ```{r state_norm}
-wic <- wic %>% 
+vtc <- vtc %>% 
   mutate(
     state_norm = normal_state(
-      state = state,
+      state = state_sep,
       abbreviate = TRUE,
       na_rep = TRUE,
       valid = valid_state
@@ -407,15 +431,15 @@ wic <- wic %>%
 ```
 
 ```{r state_view}
-wic %>% 
-  filter(state != state_norm) %>% 
-  count(state, state_norm, sort = TRUE)
+vtc %>% 
+  filter(state_sep != state_norm) %>% 
+  count(state_sep, state_norm, sort = TRUE)
 ```
 
 ```{r state_progress}
 progress_table(
-  wic$state,
-  wic$state_norm,
+  vtc$state_sep,
+  vtc$state_norm,
   compare = valid_state
 )
 ```
@@ -432,16 +456,16 @@ removing punctuation, but _expanding_ USPS abbreviations. We can also remove
 `invalid_city` values.
 
 ```{r city_norm}
-wic <- mutate(
-  .data = wic,
-  city_norm = normal_city(
-    city = city, 
-    abbs = usps_city,
-    states = c("WI", "DC", "WISCONSIN"),
-    na = invalid_city,
-    na_rep = TRUE
+vtc <- vtc %>% 
+  mutate(
+    city_norm = normal_city(
+      city = city_sep, 
+      abbs = usps_city,
+      states = c("VT", "DC", "VERMONT"),
+      na = invalid_city,
+      na_rep = TRUE
+    )
   )
-)
 ```
 
 #### Swap
@@ -452,8 +476,7 @@ If the normalized value is either an abbreviation for or very similar to the
 expected value, we can confidently swap those two.
 
 ```{r city_swap}
-wic <- wic %>% 
-  rename(city_raw = city) %>% 
+vtc <- vtc %>% 
   left_join(
     y = zipcodes,
     by = c(
@@ -463,11 +486,9 @@ wic <- wic %>%
   ) %>% 
   rename(city_match = city) %>% 
   mutate(
-    # check for abb or small diff
     match_abb = is_abbrev(city_norm, city_match),
     match_dist = str_dist(city_norm, city_match),
     city_swap = if_else(
-      # if nan and either condition
       condition = !is.na(match_dist) & (match_abb | match_dist == 1),
       true = city_match,
       false = city_norm
@@ -482,15 +503,15 @@ wic <- wic %>%
 
 #### Refine
 
-The [OpenRefine][or] algorithms can be used to group similar strings and replace
-the less common versions with their most common counterpart. This can greatly
+The [OpenRefine] algorithms can be used to group similar strings and replace the
+less common versions with their most common counterpart. This can greatly 
 reduce inconsistency, but with low confidence; we will only keep any refined
 strings that have a valid city/state/zip combination.
 
 [or]: https://openrefine.org/
 
 ```{r city_refine}
-good_refine <- wic %>% 
+good_refine <- vtc %>% 
   mutate(
     city_refine = city_swap %>% 
       key_collision_merge() %>% 
@@ -508,7 +529,6 @@ good_refine <- wic %>%
 ```
 
 ```{r city_count, echo=FALSE}
-nrow(good_refine)
 good_refine %>%
   count(
     state_norm, 
@@ -522,33 +542,19 @@ good_refine %>%
 Then we can join the refined values back to the database.
 
 ```{r city_join}
-wic <- wic %>% 
+vtc <- vtc %>% 
   left_join(good_refine) %>% 
   mutate(city_refine = coalesce(city_refine, city_swap))
-```
-
-There are one or two more very common values we can adjust by hand.
-
-```{r city_fix}
-wic <- wic %>% 
-  mutate(
-    city_refine = city_refine %>% 
-      na_if("WORK AT HOME") %>% 
-      na_if("WI") %>% 
-      str_replace("^NYC$", "NEW YORK") %>% 
-      str_replace("TRIANGLE PA$", "TRIANGLE PARK")
-  )
 ```
 
 #### Progress
 
 ```{r city_progress, echo=FALSE}
-many_city <- c(valid_city, extra_city, "RESEARCH TRIANGLE PARK")
+many_city <- c(valid_city, extra_city)
 progress <- progress_table(
-  str_to_upper(wic$city_raw),
-  wic$city_norm,
-  wic$city_swap,
-  wic$city_refine,
+  str_to_upper(vtc$city_sep),
+  vtc$city_norm,
+  vtc$city_swap,
   compare = many_city
 ) %>% mutate(stage = as_factor(stage))
 kable(progress, digits = 3)
@@ -557,7 +563,7 @@ kable(progress, digits = 3)
 You can see how the percentage of valid values increased with each stage.
 
 ```{r bar_progress, echo=FALSE}
-raw_in <- percent(prop_in(wic$city_raw, valid_city))
+raw_in <- percent(prop_in(vtc$city_raw, valid_city))
 progress %>% 
   ggplot(aes(x = stage, y = prop_in)) +
   geom_hline(yintercept = 0.99) +
@@ -565,7 +571,7 @@ progress %>%
   coord_cartesian(ylim = c(0.75, 1)) +
   scale_y_continuous(labels = percent) +
   labs(
-    title = "Wisconsin City Normalization Progress",
+    title = "Vermont City Normalization Progress",
     subtitle = glue("Raw at {raw_in} before conversion to uppercase"),
     x = "Stage",
     y = "Percent Valid"
@@ -592,7 +598,7 @@ progress %>%
   scale_y_continuous(labels = comma) +
   theme(legend.position = "bottom") +
   labs(
-    title = "Wisconsin City Normalization Progress",
+    title = "Vermont City Normalization Progress",
     subtitle = "Distinct values, valid and invalid",
     x = "Stage",
     y = "Distinct Values",
@@ -600,88 +606,35 @@ progress %>%
   )
 ```
 
-## Export
+## Conclude
 
 ```{r clean_select}
-wic <- wic %>% 
+vtc <- vtc %>% 
   select(
     -city_norm,
     -city_swap,
     city_clean = city_refine
   ) %>% 
-  rename_all(~str_replace(., "_norm", "_clean")) %>% 
-  rename(city = city_raw)
+  rename_all(~str_replace(., "_norm", "_clean"))
 ```
 
 ```{r clean_glimpse}
-glimpse(sample_n(wic, 20))
+glimpse(sample_n(vtc, 20))
 ```
 
-1. There are `r comma(nrow(wic))` records in the database.
-1. There are `r comma(sum(wic$dupe_flag))` duplicate records in the database.
+1. There are `r comma(nrow(vtc))` records in the database.
+1. There are `r comma(sum(vtc$dupe_flag))` duplicate records in the database.
 1. The range and distribution of `amount` and `date` seem reasonable.
-1. There are `r comma(sum(wic$na_flag))` records missing a key variable.
+1. There are `r comma(sum(vtc$na_flag))` records missing ....
 1. Consistency in geographic data has been improved with `campfin::normal_*()`.
 1. The 4-digit `year` variable has been created with `lubridate::year()`.
 
+## Export
+
 ```{r clean_dir}
-clean_dir <- dir_create(here("wi", "contribs", "data", "clean"))
-clean_path <- path(clean_dir, "wi_contribs_clean.csv")
-write_csv(wic, clean_path, na = "")
+clean_dir <- dir_create(here("vt", "contribs", "data", "clean"))
+clean_path <- path(clean_dir, "vt_contribs_clean.csv")
+write_csv(vtc, clean_path, na = "")
 file_size(clean_path)
 guess_encoding(clean_path)
 ```
-
-## Dictionary
-
-```{r dict_make, echo=FALSE}
-dict_raw <- tibble(
-  var = md_code(names(wic)),
-  # raw = c(md_code(raw_names), rep("", 7)),
-  type = md_code(map_chr(wic, rlang::as_label)),
-  def = c(
-    "Date contribution was made",
-    "Election during which contribution was made",
-    "Contributor full name",
-    "Contribution amount or correction",
-    "Contributor street address",
-    "Contributor secondary address",
-    "Contributor city name",
-    "Contributor 2-digit state abbreviation",
-    "Contributor ZIP+4 code",
-    "Contributor occupation",
-    "Contributor employer name",
-    "Contributor employer address",
-    "Contributor type",
-    "Recipient committee name",
-    "Recipient ethics & campaign finance ID",
-    "Contribution condiut (method)",
-    "Recipient election office sought",
-    "Comment (typically check date)",
-    "PAC segregated fund sourced",
-    "Flag for missing date, amount, or name",
-    "Flag for completely duplicated record",
-    "Calendar year of contribution date",
-    "Normalized combined street address",
-    "Normalized 5-digit ZIP code",
-    "Normalized 2-digit state abbreviation",
-    "Normalized city name"
-  )
-)
-```
-
-```{r dict_md, echo=FALSE}
-(dict_md <- kable(
-  x = dict_raw,
-  format = "markdown",
-  col.names = c("Column", "Type", "Definition")
-))
-```
-
-```{r dict_write}
-write_lines(
-  x = c("# Wisconsin Contributions Data Dictionary\n", dict_md),
-  path = here("wi", "contribs", "wi_contribs_dict.md"),
-)
-```
-

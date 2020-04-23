@@ -1,0 +1,280 @@
+---
+title: "Washington Contracts"
+author: "Kiernan Nicholls"
+date: "`r Sys.time()`"
+output:
+  github_document: 
+    df_print: tibble
+    toc: true
+    toc_dept: 2
+editor_options: 
+  chunk_output_type: console
+---
+
+<!-- Place comments regarding knitting here -->
+
+```{r setup, include=FALSE, purl=FALSE}
+library(knitr)
+opts_chunk$set(
+  eval = TRUE,
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  error = FALSE,
+  collapse = TRUE,
+  comment = "#>",
+  fig.path = "../plots/",
+  fig.width = 10,
+  dpi = 300
+)
+if (!interactive()) {
+  options(width = 99)
+  set.seed(5)
+}
+```
+
+```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
+fs::dir_create(here::here("wa", "contracts", "docs"))
+```
+
+## Project
+
+The Accountability Project is an effort to cut across data silos and give
+journalists, policy professionals, activists, and the public at large a simple
+way to search across huge volumes of public data about people and organizations.
+
+Our goal is to standardizing public data on a few key fields by thinking of each
+dataset row as a transaction. For each transaction there should be (at least) 3
+variables:
+
+1. All **parties** to a transaction.
+2. The **date** of the transaction.
+3. The **amount** of money involved.
+
+## Objectives
+
+This document describes the process used to complete the following objectives:
+
+1. How many records are in the database?
+1. Check for entirely duplicated records.
+1. Check ranges of continuous variables.
+1. Is there anything blank or missing?
+1. Check for consistency issues.
+1. Create a five-digit ZIP Code called `zip`.
+1. Create a `year` field from the transaction date.
+1. Make sure there is data on both parties to a transaction.
+
+## Packages
+
+The following packages are needed to collect, manipulate, visualize, analyze,
+and communicate these results. The `pacman` package will facilitate their
+installation and attachment.
+
+The IRW's `campfin` package will also have to be installed from GitHub. This
+package contains functions custom made to help facilitate the processing of
+campaign finance data.
+
+```{r load_packages, message=FALSE, warning=FALSE, error=FALSE}
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load_gh("irworkshop/campfin")
+pacman::p_load(
+  tidyverse, # data manipulation
+  lubridate, # datetime strings
+  magrittr, # pipe operators
+  jsonlite, # parse json files
+  janitor, # dataframe clean
+  refinr, # cluster and merge
+  scales, # format strings
+  knitr, # knit documents
+  vroom, # read files fast
+  glue, # combine strings
+  here, # relative storage
+  fs # search storage 
+)
+```
+
+This document should be run as part of the `R_campfin` project, which lives as a
+sub-directory of the more general, language-agnostic
+[`irworkshop/accountability_datacleaning`][tap] GitHub repository.
+
+The `R_campfin` project uses the [RStudio projects][rproj] feature and should be
+run as such. The project also uses the dynamic `here::here()` tool for file
+paths relative to _your_ machine.
+
+```{r where_here}
+# where does this document knit?
+here::here()
+```
+
+[tap]: https://github.com/irworkshop/accountability_datacleaning
+[rproj]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects
+
+## Data
+
+The contracts [data] is from the Washington state [Department of Enterprise 
+Services][des]. The data can be retrieved from the Washington OpenData portal
+under the title "Master Contract Sales Data by Customer, Contract, Vendor" in
+the "Procurements and Contracts" category. The data file was last updated on
+January 21, 2020. As of writing, due to the ongoing Covid-19 pandemic, our
+typical efforts to verify this OpenData source as the most updated were not 
+made. 
+
+[data]: https://data.wa.gov/Procurements-and-Contracts/Master-Contract-Sales-Data-by-Customer-Contract-Ve/n8q6-4twj
+[des]: https://des.wa.gov/
+
+## Import
+
+We can import the text file directly into R from the OpenData portal URL.
+
+```{r raw_read}
+wac <- vroom(
+  file = "https://data.wa.gov/api/views/n8q6-4twj/rows.csv",
+  .name_repair = make_clean_names,
+  col_types = cols(
+    `Calendar Year` = col_integer(),
+    `Q1 Sales Reported` = col_double(),
+    `Q2 Sales Reported` = col_double(),
+    `Q3 Sales Reported` = col_double(),
+    `Q4 Sales Reported` = col_double(),
+  )
+)
+```
+
+Then we can convert some quasi-logical variables to a true logical type.
+
+```{r raw_convert}
+count(wac, vet_owned)
+wac <- mutate_at(
+  .tbl = wac,
+  .vars = vars(12:15),
+  .funs = equals, "Y"
+)
+```
+
+## Explore
+
+```{r glimpse}
+head(wac)
+tail(wac)
+glimpse(wac)
+```
+
+### Missing
+
+```{r na_count}
+col_stats(wac, count_na)
+```
+
+About 6% of transactions are missing the customer name.
+
+```{r na_flag}
+wac <- wac %>% flag_na(customer_name, vendor_name)
+percent(mean(wac$na_flag), 0.01)
+```
+
+### Duplicates
+
+There are also a small handful of duplicate records, all also missing a name.
+
+```{r dupe_flag}
+wac <- flag_dupes(wac, everything())
+sum(wac$dupe_flag)
+```
+
+```{r dupe_view}
+wac %>% 
+  filter(dupe_flag) %>% 
+  select(customer_name, vendor_name, calendar_year)
+```
+
+### Categorical
+
+```{r distinct_each}
+col_stats(wac, n_distinct)
+```
+
+```{r distinct_cound}
+wac %>% 
+  select(12:15) %>% 
+  map(~mutate(count(data.frame(x = .x), x), p = n/sum(n)))
+```
+
+### Amounts
+
+The amount paid to each vendor for a contract is broken up into fiscal quarters.
+We will sum the quarters to find the total annual spending.
+
+```{r amouunt_sum}
+wac <- wac %>% 
+  rowwise() %>% 
+  mutate(amount = sum(c_across(ends_with("sales_reported"))))
+```
+
+```{r ammount_summary}
+summary(wac$amount)
+percent(mean(wac$amount <= 0), 0.01)
+```
+
+```{r hist_amount, echo=FALSE}
+wac %>%
+  ggplot(aes(amount)) +
+  geom_histogram(fill = dark2["purple"]) +
+  scale_y_continuous(labels = comma) +
+  scale_x_continuous(
+    breaks = c(1 %o% 10^(0:6)),
+    labels = dollar,
+    trans = "log10"
+  ) +
+  labs(
+    title = "Washington Contracts Amount Distribution",
+    subtitle = "from 2000 to 2019",
+    caption = "Source: WA DES",
+    x = "Amount",
+    y = "Count"
+  )
+```
+
+### Dates
+
+The data goes back to `r min(wac$calendar_year)` and the number of contracts is
+fairly consistent year to year.
+
+```{r bar_year, echo=FALSE}
+wac %>% 
+  count(calendar_year) %>% 
+  ggplot(aes(x = calendar_year, y = n)) +
+  geom_col(fill = dark2["orange"]) + 
+  scale_y_continuous(labels = comma) +
+  scale_x_continuous() +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "Washington Contracts by Year",
+    caption = "Source: WA DES",
+    fill = "Election Year",
+    x = "Year Made",
+    y = "Count"
+  )
+```
+
+## Conclude
+
+```{r clean_glimpse}
+glimpse(wac)
+```
+
+1. There are `r comma(nrow(wac))` records in the database.
+1. There are `r comma(sum(wac$dupe_flag))` duplicate records in the database.
+1. The range and distribution of `amount` and `date` seem reasonable.
+1. There are `r comma(sum(wac$na_flag))` records missing a name.
+1. There is no geographic data to normalize.
+1. The 4-digit `calendar_year` variable already exists.
+
+## Export
+
+```{r clean_dir}
+clean_dir <- dir_create(here("wa", "contracts", "data", "clean"))
+clean_path <- path(clean_dir, "wa_Contracts_clean.csv")
+write_csv(wac, clean_path, na = "")
+file_size(clean_path)
+guess_encoding(clean_path)
+```
