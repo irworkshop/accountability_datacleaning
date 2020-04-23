@@ -802,6 +802,6 @@ guess_encoding(clean_path)
 ``` r
 write_lines(
   x = c("# Wisconsin Contributions Data Dictionary\n", dict_md),
-  path = here("wi", "wi_dict.md"),
+  path = here("wi", "contribs", "wi_contribs_dict.md"),
 )
 ```
