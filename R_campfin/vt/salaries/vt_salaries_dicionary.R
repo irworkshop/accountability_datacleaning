@@ -9,7 +9,7 @@ json_url <- "https://data.vermont.gov/api/views/69uf-6qeu.json"
 json_list <- fromJSON(json_url)
 # the useful meta data about the table is from JSON
 json_cols <- json_list$columns
-# get the second to 8th columns of this dictionary
-dictionary <- json_cols[,2:8]
+# get the second to 6th columns of this dictionary
+dictionary <- json_cols[,2:6]
 # kable will convert df to markdown tables
 kable(dictionary)
