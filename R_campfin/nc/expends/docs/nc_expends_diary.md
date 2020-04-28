@@ -1,7 +1,7 @@
 North Carolina Expenditures
 ================
 Kiernan Nicholls
-2019-11-04 16:11:01
+2020-04-28 13:33:09
 
 ## Project
 
@@ -47,7 +47,6 @@ if (!require("pacman")) install.packages("pacman")
 pacman::p_load_gh("irworkshop/campfin")
 pacman::p_load(
   tidyverse, # data manipulation
-  RSelenium, # remote browser
   lubridate, # datetime strings
   magrittr, # pipe opperators
   tidytext, # text analysis
@@ -75,7 +74,7 @@ tool for file paths relative to *your* machine.
 ``` r
 # where does this document knit?
 here::here()
-#> [1] "/home/kiernan/R/accountability_datacleaning/R_campfin"
+#> [1] "/home/kiernan/Code/accountability_datacleaning/R_campfin"
 ```
 
 ## Data
@@ -93,15 +92,14 @@ SBoE).
 >   - all political party groups and political action committees;  
 >   - all groups organized to support or oppose a referendum;  
 >   - every person or group participating in activities that support or
->     oppose the nomination or  
->   - election of one or more clearly identified candidates, or a
->     political party or a referendum.
+>     oppose the nomination or election of one or more clearly
+>     identified candidates, or a political party or a referendum.
 
 ### Download
 
 To download the data, perform a [Transaction Entity
 Search](https://cf.ncsbe.gov/CFTxnLkup/) for type “Expenditure” from
-2008-01-01 to 2019-11-04.
+2008-01-01 to 2020-04-28.
 
 > This page allows for searching through the NC SBoE Campaign Finance
 > database of transactions that committees have received (Receipts) or
@@ -111,15 +109,14 @@ Search](https://cf.ncsbe.gov/CFTxnLkup/) for type “Expenditure” from
 > website the following day.
 
 ``` r
-raw_dir <- here("nc", "expends", "data", "raw")
-dir_create(raw_dir) 
+raw_dir <- dir_create(here("nc", "expends", "data", "raw")) 
 ```
 
 ### Read
 
 ``` r
 nc <- read_csv(
-  file = glue("{raw_dir}/transinq_results.csv"),
+  file = path(raw_dir, "transinq_results.csv"),
   na = c("NA", "", "Not Available"),
   skip = 1,
   col_names = c(
@@ -168,12 +165,12 @@ head(nc)
     #> # A tibble: 6 x 25
     #>   payee_name payee_street1 payee_street2 payee_city payee_state payee_zip profession employer
     #>   <chr>      <chr>         <chr>         <chr>      <chr>       <chr>     <chr>      <chr>   
-    #> 1 <NA>       1100 WATERMA… <NA>          RALEIGH    NC          27609     <NA>       <NA>    
-    #> 2 <NA>       THE COMMITTE… <NA>          RALEIGH    NC          27611     <NA>       <NA>    
-    #> 3 <NA>       3353 RIVER RD <NA>          COLUMBUS   NC          28722     <NA>       <NA>    
-    #> 4 <NA>       PO BOX 2012   <NA>          RALEIGH    NC          27603     <NA>       <NA>    
-    #> 5 <NA>       <NA>          <NA>          <NA>       <NA>        <NA>      <NA>       <NA>    
-    #> 6 <NA>       <NA>          <NA>          <NA>       NE          <NA>      <NA>       <NA>    
+    #> 1 AGGREGATE… <NA>          <NA>          <NA>       <NA>        <NA>      <NA>       <NA>    
+    #> 2 AGGREGATE… <NA>          <NA>          <NA>       <NA>        <NA>      <NA>       <NA>    
+    #> 3 AGGREGATE… <NA>          <NA>          <NA>       <NA>        <NA>      <NA>       <NA>    
+    #> 4 AGGREGATE… <NA>          <NA>          <NA>       <NA>        <NA>      <NA>       <NA>    
+    #> 5 AGGREGATE… <NA>          <NA>          <NA>       <NA>        <NA>      <NA>       <NA>    
+    #> 6 AGGREGATE… <NA>          <NA>          <NA>       <NA>        <NA>      <NA>       <NA>    
     #> # … with 17 more variables: transction_type <chr>, comm_name <chr>, comm_id <chr>,
     #> #   comm_street1 <chr>, comm_street2 <chr>, comm_city <chr>, comm_state <chr>, comm_zip <chr>,
     #> #   report_name <chr>, date <date>, account_code <chr>, amount <dbl>, form_of_payment <chr>,
@@ -186,12 +183,12 @@ tail(nc)
     #> # A tibble: 6 x 25
     #>   payee_name payee_street1 payee_street2 payee_city payee_state payee_zip profession employer
     #>   <chr>      <chr>         <chr>         <chr>      <chr>       <chr>     <chr>      <chr>   
-    #> 1 ZWELI'S K… 4600 DURHAM … STE 26        DURHAM     NC          27707-26… <NA>       <NA>    
-    #> 2 BARRY D Z… 5423 17TH AV… <NA>          BROOKLYN   NY          11204     EXECUTIVE  AMTRUST…
-    #> 3 MICHAEL Z… 2754 COMMONW… <NA>          CHARLOTTE  NC          28205     FIELD ORG… GREEN P…
-    #> 4 MICHAEL Z… 2754 COMMONW… <NA>          CHARLOTTE  NC          28205     FIELD ORG… GREEN P…
-    #> 5 MICHAEL Z… 2754 COMMONW… <NA>          CHARLOTTE  NC          28205     FIELD ORG… GREEN P…
-    #> 6 ZZZ        718 ATLANTIC… <NA>          ATLANTIC … NC          28512     <NA>       <NA>    
+    #> 1 DAVID ZWE… 2907 WOODSTO… <NA>          SILVER SP… MD          20910     PHYSICIAN  MONTG C…
+    #> 2 CASSIE ZW… 507 PINE HUR… <NA>          HAMPSTEAD  NC          28443-38… REAL ESTA… CENTURY…
+    #> 3 STEPHEN Z… 141 HERMANCE… <NA>          MOORESVIL… NC          28117     MANUFACTU… PROFILE…
+    #> 4 TATIANA Z… 562 LINDLEY … <NA>          GREENSBORO NC          27410     RETIRED    RETIRED 
+    #> 5 MAUREEN M… 2704 WESTHAM… <NA>          RALEIGH    NC          27604-48… ATTORNEY   PARKER …
+    #> 6 LISA ZYWI… 1229 CANTERB… <NA>          RALEIGH    NC          27608     FINANCIAL… RETIRED 
     #> # … with 17 more variables: transction_type <chr>, comm_name <chr>, comm_id <chr>,
     #> #   comm_street1 <chr>, comm_street2 <chr>, comm_city <chr>, comm_state <chr>, comm_zip <chr>,
     #> #   report_name <chr>, date <date>, account_code <chr>, amount <dbl>, form_of_payment <chr>,
@@ -201,30 +198,30 @@ tail(nc)
 glimpse(sample_frac(nc))
 ```
 
-    #> Observations: 631,559
-    #> Variables: 25
-    #> $ payee_name      <chr> "TAVERNA AGORA", "AGGREGATED NON-MEDIA EXPENDITURE", "MR. KEVIN DANIELS"…
-    #> $ payee_street1   <chr> "326 HILLSBOROUGH ST", NA, "1903 LIVE OAK STREET", "PO BOX 20550", "200 …
-    #> $ payee_street2   <chr> NA, NA, "#1009", NA, NA, NA, "BUILDING TWO", NA, NA, NA, "APT 381", NA, …
-    #> $ payee_city      <chr> "RALEIGH", NA, "BEAUFORT", "ROHESTER", "WILSON", "NAGS HEAD", "DALLAS", …
-    #> $ payee_state     <chr> "NC", NA, "NC", "NY", "NC", "NC", "TX", "NC", "NC", NA, "NC", "NC", NA, …
-    #> $ payee_zip       <chr> "27603-1726", NA, "28516-7994", "14602", "27893", "27959-9998", "75254",…
-    #> $ profession      <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "AUDIT P…
-    #> $ employer        <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "ERNST &…
-    #> $ transction_type <chr> "OPERATING EXP", "OPERATING EXP", "OPERATING EXP", "OPERATING EXP", "OPE…
-    #> $ comm_name       <chr> "PAUL LOWE FOR NC SENATE", "CATHERINE WHITEFORD FOR NC HOUSE", "NORTH CA…
-    #> $ comm_id         <chr> "STA-R6XPTX-C-001", "STA-73EB7Q-C-001", "STA-C4184N-C-001", "STA-C1F0ED-…
-    #> $ comm_street1    <chr> "P O BOX 20262", "6218 DIXON DRIVE", "PO BOX 12905", "P O BOX 13479", "P…
-    #> $ comm_street2    <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
-    #> $ comm_city       <chr> "WINSTON-SALEM", "RALEIGH", "RALEIGH", "DURHAM", "WILSON", "SOUTHERN SHO…
+    #> Rows: 176,806
+    #> Columns: 25
+    #> $ payee_name      <chr> "AGGREGATED INDIVIDUAL CONTRIBUTION", "AGGREGATED INDIVIDUAL CONTRIBUTIO…
+    #> $ payee_street1   <chr> NA, NA, "1652 LAWRENCE CIRCLE", "5500 MCNEELY DR #103", "3005 VALLEYSTON…
+    #> $ payee_street2   <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "# 1…
+    #> $ payee_city      <chr> NA, NA, "DAYTONA BEACH", "RALEIGH", "CARY", NA, "HILLSBOROUGH", NA, "CAR…
+    #> $ payee_state     <chr> NA, NA, "FL", "NC", "NC", NA, "NC", NA, "NC", "NC", "NC", "NC", "MD", "N…
+    #> $ payee_zip       <chr> NA, NA, "32117", "27612", "27519", NA, "27278-9566", NA, "27519-6355", "…
+    #> $ profession      <chr> NA, NA, NA, NA, "NOT EMPLOYED", NA, "REAL ESTATE BROKER", NA, "REAL ESTA…
+    #> $ employer        <chr> NA, NA, "RETIRED", NA, "NOT EMPLOYED", NA, "COLDWELL BANKER HPW", NA, "K…
+    #> $ transction_type <chr> "INDIVIDUAL", "INDIVIDUAL", "INDIVIDUAL", "OPERATING EXP", "INDIVIDUAL",…
+    #> $ comm_name       <chr> "CAMPAIGN TO ELECT DONNA ENSLEY", "NC ASSN OF ELECTRIC COOPERATIVES RURA…
+    #> $ comm_id         <chr> "BUN-7957B9-C-001", "STA-C3341N-C-001", "STA-C0498N-C-002", "STA-53C1KP-…
+    #> $ comm_street1    <chr> "2385 HENDERSONVILLE RD.", "P. O. BOX 26566", "434 FAYETTEVILLE ST   SUI…
+    #> $ comm_street2    <chr> NA, NA, NA, NA, NA, NA, "SUITE 1109", NA, "SUITE 1109", NA, NA, "SUITE 1…
+    #> $ comm_city       <chr> "ARDEN", "RALEIGH", "RALEIGH", "MORGANTON", "RALEIGH", "RALEIGH", "GREEN…
     #> $ comm_state      <chr> "NC", "NC", "NC", "NC", "NC", "NC", "NC", "NC", "NC", "NC", "NC", "NC", …
-    #> $ comm_zip        <chr> "27120", "27609", "27605", "27709", "27893", "27949", "27601", "27615", …
-    #> $ report_name     <chr> "2015 YEAR END SEMI-ANNUAL (AMENDMENT)", "2018 THIRD QUARTER (AMENDMENT)…
-    #> $ date            <date> 2015-10-28, 2018-09-02, 2018-02-06, 2014-11-05, 2018-01-16, 2012-04-11,…
+    #> $ comm_zip        <chr> "28704", "27611", "27601", "28680", "27601", "27601", "27407", "27601", …
+    #> $ report_name     <chr> "2020 FIRST QUARTER", "2019 YEAR END SEMI-ANNUAL (AMENDMENT)", "2020 FIR…
+    #> $ date            <date> 2020-01-21, 2019-12-19, 2020-02-03, 2020-01-16, 2020-01-21, 2020-01-15,…
     #> $ account_code    <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
-    #> $ amount          <dbl> 308.40, 18.13, 1000.00, 118.60, 195.00, 70.00, 106.55, 8500.00, 1000.00,…
-    #> $ form_of_payment <chr> "DEBIT CARD", "DEBIT CARD", "CHECK", "CHECK", "CHECK", "CHECK", "DRAFT",…
-    #> $ purpose         <chr> "CATERING FOR FUNDRAISER", "MEAL FOR VOLUNTEERS", NA, "TELEPHONE AND INT…
+    #> $ amount          <dbl> 25.00, 25.00, 50.00, 130.00, 50.00, 0.50, 17.50, 0.40, 17.50, 100.00, 11…
+    #> $ form_of_payment <chr> "CHECK", "CHECK", "CHECK", "CHECK", "CREDIT CARD", NA, "CHECK", NA, "CHE…
+    #> $ purpose         <chr> NA, NA, NA, "DONATION - 26 BIBLES", NA, NA, NA, NA, NA, NA, NA, NA, NA, …
     #> $ referendum_name <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
     #> $ declaration     <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
     #> $ supports        <lgl> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
@@ -236,33 +233,33 @@ glimpse_fun(nc, count_na)
 ```
 
     #> # A tibble: 25 x 4
-    #>    col             type       n        p
-    #>    <chr>           <chr>  <dbl>    <dbl>
-    #>  1 payee_name      chr      393 0.000622
-    #>  2 payee_street1   chr   165695 0.262   
-    #>  3 payee_street2   chr   591574 0.937   
-    #>  4 payee_city      chr   153824 0.244   
-    #>  5 payee_state     chr   132232 0.209   
-    #>  6 payee_zip       chr   169894 0.269   
-    #>  7 profession      chr   567057 0.898   
-    #>  8 employer        chr   573582 0.908   
-    #>  9 transction_type chr      672 0.00106 
-    #> 10 comm_name       chr      672 0.00106 
-    #> 11 comm_id         chr      672 0.00106 
-    #> 12 comm_street1    chr      976 0.00155 
-    #> 13 comm_street2    chr   588039 0.931   
-    #> 14 comm_city       chr      672 0.00106 
-    #> 15 comm_state      chr      672 0.00106 
-    #> 16 comm_zip        chr      672 0.00106 
-    #> 17 report_name     chr      672 0.00106 
-    #> 18 date            date     672 0.00106 
-    #> 19 account_code    chr   631559 1       
-    #> 20 amount          dbl      680 0.00108 
-    #> 21 form_of_payment chr    34135 0.0540  
-    #> 22 purpose         chr    94658 0.150   
-    #> 23 referendum_name chr   600332 0.951   
-    #> 24 declaration     chr   600357 0.951   
-    #> 25 supports        lgl   600357 0.951
+    #>    col             type        n         p
+    #>    <chr>           <chr>   <dbl>     <dbl>
+    #>  1 payee_name      <chr>       4 0.0000226
+    #>  2 payee_street1   <chr>   76497 0.433    
+    #>  3 payee_street2   <chr>  168520 0.953    
+    #>  4 payee_city      <chr>   76194 0.431    
+    #>  5 payee_state     <chr>   73211 0.414    
+    #>  6 payee_zip       <chr>   76833 0.435    
+    #>  7 profession      <chr>   98219 0.556    
+    #>  8 employer        <chr>  100429 0.568    
+    #>  9 transction_type <chr>       3 0.0000170
+    #> 10 comm_name       <chr>       3 0.0000170
+    #> 11 comm_id         <chr>       3 0.0000170
+    #> 12 comm_street1    <chr>       3 0.0000170
+    #> 13 comm_street2    <chr>  155191 0.878    
+    #> 14 comm_city       <chr>       3 0.0000170
+    #> 15 comm_state      <chr>       3 0.0000170
+    #> 16 comm_zip        <chr>       3 0.0000170
+    #> 17 report_name     <chr>       3 0.0000170
+    #> 18 date            <date>      3 0.0000170
+    #> 19 account_code    <chr>  176806 1        
+    #> 20 amount          <dbl>       3 0.0000170
+    #> 21 form_of_payment <chr>   19991 0.113    
+    #> 22 purpose         <chr>  153945 0.871    
+    #> 23 referendum_name <chr>  176727 1.00     
+    #> 24 declaration     <chr>  176727 1.00     
+    #> 25 supports        <lgl>  176727 1.00
 
 There seems to be a regular block of records missing the variables
 needed to properly identify a transaction. We can flag those
@@ -273,13 +270,13 @@ nc <- nc %>% flag_na(payee_name, comm_name, date, amount)
 sum(nc$na_flag)
 ```
 
-    #> [1] 756
+    #> [1] 5
 
 ``` r
 percent(mean(nc$na_flag))
 ```
 
-    #> [1] "0.120%"
+    #> [1] "0%"
 
 ### Duplicates
 
@@ -293,13 +290,13 @@ nc <- flag_dupes(nc, everything())
 sum(nc$dupe_flag)
 ```
 
-    #> [1] 20074
+    #> [1] 58532
 
 ``` r
 percent(mean(nc$dupe_flag))
 ```
 
-    #> [1] "3.18%"
+    #> [1] "33%"
 
 ### Categorical
 
@@ -313,33 +310,33 @@ glimpse_fun(nc, n_distinct)
     #> # A tibble: 27 x 4
     #>    col             type       n          p
     #>    <chr>           <chr>  <dbl>      <dbl>
-    #>  1 payee_name      chr    99439 0.157     
-    #>  2 payee_street1   chr    89561 0.142     
-    #>  3 payee_street2   chr     4359 0.00690   
-    #>  4 payee_city      chr     4483 0.00710   
-    #>  5 payee_state     chr       74 0.000117  
-    #>  6 payee_zip       chr    16317 0.0258    
-    #>  7 profession      chr     3742 0.00593   
-    #>  8 employer        chr     6383 0.0101    
-    #>  9 transction_type chr       10 0.0000158 
-    #> 10 comm_name       chr     4150 0.00657   
-    #> 11 comm_id         chr     4154 0.00658   
-    #> 12 comm_street1    chr     3765 0.00596   
-    #> 13 comm_street2    chr      183 0.000290  
-    #> 14 comm_city       chr      547 0.000866  
-    #> 15 comm_state      chr       36 0.0000570 
-    #> 16 comm_zip        chr     1035 0.00164   
-    #> 17 report_name     chr      297 0.000470  
-    #> 18 date            date    4235 0.00671   
-    #> 19 account_code    chr        1 0.00000158
-    #> 20 amount          dbl    77775 0.123     
-    #> 21 form_of_payment chr        9 0.0000143 
-    #> 22 purpose         chr   125834 0.199     
-    #> 23 referendum_name chr      378 0.000599  
-    #> 24 declaration     chr        3 0.00000475
-    #> 25 supports        lgl        3 0.00000475
-    #> 26 na_flag         lgl        2 0.00000317
-    #> 27 dupe_flag       lgl        2 0.00000317
+    #>  1 payee_name      <chr>  55379 0.313     
+    #>  2 payee_street1   <chr>  51389 0.291     
+    #>  3 payee_street2   <chr>   2188 0.0124    
+    #>  4 payee_city      <chr>   2704 0.0153    
+    #>  5 payee_state     <chr>     57 0.000322  
+    #>  6 payee_zip       <chr>  20591 0.116     
+    #>  7 profession      <chr>   7280 0.0412    
+    #>  8 employer        <chr>  16468 0.0931    
+    #>  9 transction_type <chr>     21 0.000119  
+    #> 10 comm_name       <chr>   1467 0.00830   
+    #> 11 comm_id         <chr>   1466 0.00829   
+    #> 12 comm_street1    <chr>   1370 0.00775   
+    #> 13 comm_street2    <chr>     83 0.000469  
+    #> 14 comm_city       <chr>    291 0.00165   
+    #> 15 comm_state      <chr>     23 0.000130  
+    #> 16 comm_zip        <chr>    556 0.00314   
+    #> 17 report_name     <chr>     38 0.000215  
+    #> 18 date            <date>   143 0.000809  
+    #> 19 account_code    <chr>      1 0.00000566
+    #> 20 amount          <dbl>  10289 0.0582    
+    #> 21 form_of_payment <chr>      9 0.0000509 
+    #> 22 purpose         <chr>   7426 0.0420    
+    #> 23 referendum_name <chr>     29 0.000164  
+    #> 24 declaration     <chr>      3 0.0000170 
+    #> 25 supports        <lgl>      3 0.0000170 
+    #> 26 na_flag         <lgl>      2 0.0000113 
+    #> 27 dupe_flag       <lgl>      2 0.0000113
 
 We can use `campfin::explore_plot()` to explore the distribution of the
 least distinct categorical variables.
@@ -358,7 +355,8 @@ variable.
 
 ### Continuous
 
-We should also check the range and distribution of continuous variables.
+We should also check the range and distribution of continuous
+    variables.
 
 #### Amounts
 
@@ -366,14 +364,14 @@ We should also check the range and distribution of continuous variables.
 summary(nc$amount)
 ```
 
-    #>    Min. 1st Qu.  Median    Mean 3rd Qu.    Max.    NA's 
-    #>  -31961      28     105    1130     500 3201000     680
+    #>      Min.   1st Qu.    Median      Mean   3rd Qu.      Max.      NA's 
+    #>   -5000.0       3.0      20.8     315.4     100.0 1162020.0         3
 
 ``` r
 sum(nc$amount <= 0, na.rm = TRUE)
 ```
 
-    #> [1] 1479
+    #> [1] 165
 
 ![](../plots/amount_histogram-1.png)<!-- -->
 
@@ -390,15 +388,15 @@ nc <- mutate(nc, year = year(date))
 ```
 
 The `date` variable is very clean, with 0 records before 2008 and 0
-records after 2019-11-04.
+records after 2020-04-28.
 
 ``` r
 min(nc$date, na.rm = TRUE)
-#> [1] "2008-01-01"
+#> [1] "2019-11-05"
 sum(nc$year < 2008, na.rm = TRUE)
 #> [1] 0
 max(nc$date, na.rm = TRUE)
-#> [1] "2019-08-15"
+#> [1] "2020-04-27"
 sum(nc$date > today(), na.rm = TRUE)
 #> [1] 0
 ```
@@ -440,7 +438,7 @@ nc <- nc %>%
   mutate_at(
    .vars = vars(ends_with("street")),
    .funs = list(norm = normal_address),
-   add_abbs = usps_street,
+   abbs = usps_street,
    na = invalid_city,
    na_rep = TRUE
   ) %>% 
@@ -479,8 +477,8 @@ progress_table(
     #> # A tibble: 2 x 6
     #>   stage            prop_in n_distinct prop_na n_out n_diff
     #>   <chr>              <dbl>      <dbl>   <dbl> <dbl>  <dbl>
-    #> 1 payee_state        1.000         73   0.209    29     16
-    #> 2 payee_state_norm   1             58   0.209     0      1
+    #> 1 payee_state         1.00         57   0.414     4      3
+    #> 2 payee_state_norm    1            55   0.414     0      1
 
 ### Zip
 
@@ -505,12 +503,12 @@ progress_table(
 ```
 
     #> # A tibble: 4 x 6
-    #>   stage          prop_in n_distinct prop_na n_out n_diff
-    #>   <chr>            <dbl>      <dbl>   <dbl> <dbl>  <dbl>
-    #> 1 payee_zip        0.787      16317 0.269   98233  12356
-    #> 2 payee_zip_norm   0.996       5030 0.270    1722    582
-    #> 3 comm_zip         0.901       1035 0.00106 62481    280
-    #> 4 comm_zip_norm    0.999        793 0.00114   547     13
+    #>   stage          prop_in n_distinct   prop_na n_out n_diff
+    #>   <chr>            <dbl>      <dbl>     <dbl> <dbl>  <dbl>
+    #> 1 payee_zip        0.673      20591 0.435     32653  17545
+    #> 2 payee_zip_norm   0.998       3717 0.435       245    148
+    #> 3 comm_zip         0.849        556 0.0000170 26698     94
+    #> 4 comm_zip_norm    0.998        485 0.0000170   294      7
 
 ### City
 
@@ -519,8 +517,8 @@ nc <- nc %>%
   mutate_at(
    .vars = vars(ends_with("city")),
    .funs = list(norm = normal_city),
-   geo_abbs = usps_city,
-   st_abbs = c("NC", "DC"),
+   abbs = usps_city,
+   states = c("NC", "DC"),
    na = invalid_city,
    na_rep = TRUE
   )
@@ -553,7 +551,7 @@ nc <- nc %>%
     match_abb = is_abbrev(payee_city_norm, payee_city_match),
     match_dist = str_dist(payee_city_norm, payee_city_match),
     payee_city_swap = if_else(
-      condition = match_abb | match_dist <= 1,
+      condition = !is.na(payee_city_match) & (match_abb | match_dist <= 1),
       true = payee_city_match,
       false = payee_city_norm
     )
@@ -563,7 +561,7 @@ nc <- nc %>%
     match_abb = is_abbrev(comm_city_norm, comm_city_match),
     match_dist = str_dist(comm_city_norm, comm_city_match),
     comm_city_swap = if_else(
-      condition = match_abb | match_dist <= 2,
+      condition = !is.na(comm_city_match) & (match_abb | match_dist <= 1),
       true = comm_city_match,
       false = comm_city_norm
     )
@@ -582,9 +580,9 @@ progress_table(
     #> # A tibble: 3 x 6
     #>   stage           prop_in n_distinct prop_na n_out n_diff
     #>   <chr>             <dbl>      <dbl>   <dbl> <dbl>  <dbl>
-    #> 1 payee_city        0.965       4483   0.244 16547   2367
-    #> 2 payee_city_norm   0.978       4170   0.244 10414   2039
-    #> 3 payee_city_swap   0.990       2497   0.276  4639    474
+    #> 1 payee_city        0.963       2704   0.431  3761    740
+    #> 2 payee_city_norm   0.966       2600   0.431  3429    624
+    #> 3 payee_city_swap   0.983       2226   0.431  1691    249
 
 ``` r
 progress_table(
@@ -596,11 +594,11 @@ progress_table(
 ```
 
     #> # A tibble: 3 x 6
-    #>   stage          prop_in n_distinct prop_na n_out n_diff
-    #>   <chr>            <dbl>      <dbl>   <dbl> <dbl>  <dbl>
-    #> 1 comm_city        0.975        547 0.00106 15640     66
-    #> 2 comm_city_norm   0.990        535 0.00106  6607     53
-    #> 3 comm_city_swap   0.996        502 0.00317  2787     21
+    #>   stage          prop_in n_distinct   prop_na n_out n_diff
+    #>   <chr>            <dbl>      <dbl>     <dbl> <dbl>  <dbl>
+    #> 1 comm_city        0.988        291 0.0000170  2134     24
+    #> 2 comm_city_norm   0.991        287 0.0000170  1678     18
+    #> 3 comm_city_swap   0.998        276 0.0000170   436      5
 
 ![](../plots/progress_bar-1.png)<!-- -->
 
@@ -636,10 +634,10 @@ progress %>%
 
 ## Conclude
 
-1.  There are 631559 records in the database
-2.  There are 20074 (3.18%) duplicate records
+1.  There are 176806 records in the database
+2.  There are 58532 (33%) duplicate records
 3.  The range and distribution of `amount` and `date` are reasonable
-4.  There are 756 (0.120%) records missing names
+4.  There are 5 (0%) records missing names
 5.  Consistency in geographic data has been improved with
     `campfin::normal_*()`
 6.  The 5-digit `zip_norm` variable has been created with
@@ -647,58 +645,25 @@ progress %>%
 7.  The 4-digit `year` variable has been created with
     `lubridate::year()`
 
-## Lookup
-
-``` r
-nc_payee_city_lookup <- read_csv(here("nc", "expends", "data", "nc_payee_city_lookup.csv"))
-nc_comm_city_lookup <- read_csv(here("nc", "expends", "data", "nc_comm_city_lookup.csv"))
-nc <- nc %>% 
-  left_join(nc_payee_city_lookup) %>% 
-  left_join(nc_comm_city_lookup)
-```
-
-``` r
-progress_table(
-  nc$payee_city,
-  nc$payee_city_norm,
-  nc$payee_city_swap,
-  nc$payee_city_clean,
-  compare = valid_city
-)
-```
-
-    #> # A tibble: 4 x 6
-    #>   stage            prop_in n_distinct prop_na n_out n_diff
-    #>   <chr>              <dbl>      <dbl>   <dbl> <dbl>  <dbl>
-    #> 1 payee_city         0.965       4483   0.244 16547   2367
-    #> 2 payee_city_norm    0.978       4170   0.244 10414   2039
-    #> 3 payee_city_swap    0.990       2497   0.276  4639    474
-    #> 4 payee_city_clean   0.991       2252   0.277  4246    250
-
 ## Export
 
 ``` r
-proc_dir <- here("nc", "expends", "data", "processed")
-dir_create(proc_dir)
+proc_dir <- dir_create(here("nc", "expends", "data", "processed"))
 ```
 
 ``` r
 nc %>% select(
-  -payee_city_clean,
-  -comm_city_clean,
   -payee_city_match,
   -comm_city_match,
   -match_abb,
   -match_dist,
-  -payee_city_swap,
-  -comm_city_swap
 ) -> nc
 
-names(nc) %>% str_replace("_norm$", "_clean") -> names(nc)
+names(nc) %>% str_replace("_(norm|swap)$", "_clean") -> names(nc)
 
 write_csv(
   x = nc,
   na = "",
-  path = glue("{proc_dir}/nc_expends_clean.csv")
+  path = path(raw_dir, "nc_expends_2020-04-28.csv")
 )
 ```
