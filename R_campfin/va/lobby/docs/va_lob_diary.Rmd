@@ -113,7 +113,7 @@ here::here()
 [guide]: http://ethics.dls.virginia.gov/LDS%20Guide.pdf
 
 ## Data
-Lobbyist data is obtained via a public record request from the [Virginia State Ethics Commission][03].
+Lobbyist data is obtained via a public record request from the [Virginia State Ethics Commission][03] in April of 2020.
 
 The Commonwealth's [Disclosure Information Guide](guide) explains the different schedules and reporting requirements.
 
@@ -129,48 +129,47 @@ raw_dir <- dir_create(here("va", "lobby", "data", "raw"))
 
 ### Read
 ```{r raw_read}
-vale <- dir_ls(raw_dir, regexp = "Lobbyist Disclosures 16-17") %>% read_xlsx() %>% 
+valr <- dir_ls(raw_dir, regexp = "Lobbyist Disclosures") %>% map_df(read_xlsx) %>% 
   clean_names()
-
-vale <- map_dfr(raw_dir, read_xlsx) %>% clean_names()
-
 ```
 
 
 ## Explore
 
 ```{r glimpse}
-head(vale)
-tail(vale)
-glimpse(sample_n(vale, 20))
+head(valr)
+tail(valr)
+glimpse(sample_n(valr, 20))
 ```
 
 
 ### Missing
-There're no missing fields 
 ```{r na_count}
-col_stats(vale, count_na)
+col_stats(valr, count_na)
+```
+We will use `campfin::flag_na()` to create a column `na_flag` to highlight records missing a `client` and `lobbyist_compensation_amount`.
+```{r na flag}
+valr <- valr %>% 
+  flag_na(principal_name, lobbyist_compensation_amount)
 ```
 
+
 ### Duplicates
-There `r sum(vale$dupe_flag)` duplicate columns. 
+There's no duplicate records found. 
 ```{r dupe_flag}
-vale <- flag_dupes(vale, dplyr::everything())
-sum(vale$dupe_flag)
+valr <- flag_dupes(valr, dplyr::everything())
 ```
 
 ### Continuous
 All the amount columns are character columns that contain special characters like "$" and ",".We will turn them into numeric columns.
 
 ```{r col type}
-vale <- vale %>% 
-  mutate_at(.vars = vars(-c(lobbyist, lobbyists_principal, year, dupe_flag)), .funs = str_remove_all,"\\$|,") %>% 
-  mutate_at(.vars = vars(-c(lobbyist, lobbyists_principal, year, dupe_flag)), .funs = as.numeric) %>% 
+valr <- valr %>% 
   mutate_if(is.character, str_to_upper)
 ```
 
 ```{r plot top receipients ecoh}
-vale%>% 
+valr%>% 
   group_by(lobbyists_principal) %>% 
   summarize(med = median(total_income_and_expenditures_calendar_year_total)) %>% 
   arrange(desc(med)) %>% 
@@ -223,12 +222,19 @@ valr <- valr %>%
     na.rm = TRUE
   ) %>% 
     unite(
-    col = principal_address,
+    col =  principal_authorizing_officer_address,
     starts_with("principal_authorizing_officer_address_line"),
     sep = " ",
     remove = FALSE,
     na.rm = TRUE
   ) %>% 
+  unite(
+    col = incorporated_filer_address,
+    starts_with("incorporated_filer_address_line"),
+    sep = " ",
+    remove = FALSE,
+    na.rm = TRUE
+  )
   # normalize combined addr
     mutate_at(.vars = vars(ends_with('address')), .funs = list(norm = ~ normal_address(.,abbs = usps_street,
       na_rep = TRUE))) %>% 
@@ -269,7 +275,7 @@ valr <- valr %>%
                                                                                na = invalid_city,
                                                                                na_rep = TRUE)))
 prop_in(valr$lobbyist_address_city_norm, valid_city, na.rm = T)
-prop_in(valr$employer_city_norm, valid_city, na.rm = T)
+prop_in(valr$principal_authorizing_officer_address_city_norm, valid_city, na.rm = T)
 ```
 
 #### Swap
@@ -368,7 +374,7 @@ progress %>%
 
 More importantly, the number of distinct values decreased each stage. We were
 able to confidently change many distinct invalid values to their valid
-equivalent.
+equivalrnt.
 
 ```{r distinct_bar}
 progress %>% 
@@ -402,10 +408,10 @@ progress %>%
 glimpse(sample_n(valr, 20))
 ```
 
-1. There are `r nrow(vale)` records in the database.
+1. There are `r nrow(valr)` records in the database.
 1. There's no duplicate record in the database.
 1. The range and distribution of `amount` and `date` seem reasonable.
-1. There are `r sum(vale$na_flag)` records missing either recipient or date.
+1. There are `r sum(valr$na_flag)` records missing either recipient or date.
 1. Consistency in goegraphic data has been improved with `campfin::normal_*()`.
 
 ## Export
@@ -416,7 +422,7 @@ clean_dir <- dir_create(here("va", "lobby", "data", "processed","exp"))
 
 ```{r write_clean}
 write_csv(
-  x = vale,
+  x = valr,
   path = path(clean_dir, "sc_lob_exp_clean.csv"),
   na = ""
 )
