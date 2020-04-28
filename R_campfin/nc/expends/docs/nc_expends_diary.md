@@ -1,7 +1,7 @@
 North Carolina Expenditures
 ================
 Kiernan Nicholls
-2020-04-28 13:33:09
+2020-04-28 14:31:22
 
 ## Project
 
@@ -648,22 +648,44 @@ progress %>%
 ## Export
 
 ``` r
-proc_dir <- dir_create(here("nc", "expends", "data", "processed"))
+nc <- nc %>% 
+  select(
+  -payee_city_match,
+  -comm_city_match,
+  -payee_city_norm,
+  -comm_city_norm,
+  -match_abb,
+  -match_dist,
+)
+
+nc <- nc %>% 
+  rename_all(str_replace, "_(norm|swap)$", "_clean")
 ```
 
 ``` r
-nc %>% select(
-  -payee_city_match,
-  -comm_city_match,
-  -match_abb,
-  -match_dist,
-) -> nc
-
-names(nc) %>% str_replace("_(norm|swap)$", "_clean") -> names(nc)
-
-write_csv(
-  x = nc,
-  na = "",
-  path = path(raw_dir, "nc_expends_2020-04-28.csv")
-)
+clean_dir <- dir_create(here("nc", "expends", "data", "clean"))
+clean_path <- path(clean_dir, glue("nc_expends_{today()}.csv"))
+write_csv(nc, clean_path, na = "")
+file_size(clean_path)
 ```
+
+    #> 48.6M
+
+``` r
+guess_encoding(clean_path)
+```
+
+    #> # A tibble: 11 x 3
+    #>    encoding   language confidence
+    #>    <chr>      <chr>         <dbl>
+    #>  1 ISO-8859-2 "ro"           0.28
+    #>  2 ISO-8859-1 "nl"           0.25
+    #>  3 ISO-8859-9 "tr"           0.25
+    #>  4 UTF-8      ""             0.15
+    #>  5 UTF-16BE   ""             0.1 
+    #>  6 UTF-16LE   ""             0.1 
+    #>  7 Shift_JIS  "ja"           0.1 
+    #>  8 GB18030    "zh"           0.1 
+    #>  9 EUC-JP     "ja"           0.1 
+    #> 10 EUC-KR     "ko"           0.1 
+    #> 11 Big5       "zh"           0.1

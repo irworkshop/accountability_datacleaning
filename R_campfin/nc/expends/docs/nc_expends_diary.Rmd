@@ -753,24 +753,25 @@ progress %>%
 
 ## Export
 
-```{r proc_dir}
-proc_dir <- dir_create(here("nc", "expends", "data", "processed"))
-```
-
-```{r write_clean}
-nc %>% select(
+```{r clean_rename}
+nc <- nc %>% 
+  select(
   -payee_city_match,
   -comm_city_match,
+  -payee_city_norm,
+  -comm_city_norm,
   -match_abb,
   -match_dist,
-) -> nc
-
-names(nc) %>% str_replace("_(norm|swap)$", "_clean") -> names(nc)
-
-write_csv(
-  x = nc,
-  na = "",
-  path = path(raw_dir, "nc_expends_2020-04-28.csv")
 )
+
+nc <- nc %>% 
+  rename_all(str_replace, "_(norm|swap)$", "_clean")
 ```
 
+```{r clean_write}
+clean_dir <- dir_create(here("nc", "expends", "data", "clean"))
+clean_path <- path(clean_dir, glue("nc_expends_{today()}.csv"))
+write_csv(nc, clean_path, na = "")
+file_size(clean_path)
+guess_encoding(clean_path)
+```
