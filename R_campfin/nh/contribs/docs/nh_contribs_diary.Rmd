@@ -1,0 +1,782 @@
+---
+title: "New Hampshire Contributions"
+author: "Kiernan Nicholls"
+date: "`r Sys.time()`"
+output:
+  github_document: 
+    df_print: tibble
+    toc: true
+    toc_dept: 3
+editor_options: 
+  chunk_output_type: console
+---
+
+<!-- Place comments regarding knitting here -->
+
+```{r setup, include=FALSE, purl=FALSE}
+library(knitr)
+opts_chunk$set(
+  eval = TRUE,
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  error = FALSE,
+  collapse = TRUE,
+  comment = "#>",
+  fig.path = "../plots/",
+  fig.width = 10,
+  dpi = 300
+)
+if (!interactive()) {
+  options(width = 99)
+  set.seed(5)
+}
+```
+
+```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
+doc_dir <- fs::dir_create(here::here("nh", "contribs", "docs"))
+```
+
+## Project
+
+The Accountability Project is an effort to cut across data silos and give
+journalists, policy professionals, activists, and the public at large a simple
+way to search across huge volumes of public data about people and organizations.
+
+Our goal is to standardizing public data on a few key fields by thinking of each
+dataset row as a transaction. For each transaction there should be (at least) 3
+variables:
+
+1. All **parties** to a transaction.
+2. The **date** of the transaction.
+3. The **amount** of money involved.
+
+## Objectives
+
+This document describes the process used to complete the following objectives:
+
+1. How many records are in the database?
+1. Check for entirely duplicated records.
+1. Check ranges of continuous variables.
+1. Is there anything blank or missing?
+1. Check for consistency issues.
+1. Create a five-digit ZIP Code called `zip`.
+1. Create a `year` field from the transaction date.
+1. Make sure there is data on both parties to a transaction.
+
+## Packages
+
+The following packages are needed to collect, manipulate, visualize, analyze,
+and communicate these results. The `pacman` package will facilitate their
+installation and attachment.
+
+The IRW's `campfin` package will also have to be installed from GitHub. This
+package contains functions custom made to help facilitate the processing of
+campaign finance data.
+
+```{r load_packages, message=FALSE, warning=FALSE, error=FALSE}
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load_gh("irworkshop/campfin")
+pacman::p_load(
+  tidyverse, # data manipulation
+  lubridate, # datetime strings
+  gluedown, # printing markdown
+  magrittr, # pipe operators
+  janitor, # clean data frames
+  refinr, # cluster and merge
+  scales, # format strings
+  knitr, # knit documents
+  vroom, # read files fast
+  rvest, # html scraping
+  glue, # combine strings
+  here, # relative paths
+  httr, # http requests
+  fs # local storage 
+)
+```
+
+This document should be run as part of the `R_campfin` project, which lives as a
+sub-directory of the more general, language-agnostic
+[`irworkshop/accountability_datacleaning`][tap] GitHub repository.
+
+The `R_campfin` project uses the [RStudio projects][rproj] feature and should be
+run as such. The project also uses the dynamic `here::here()` tool for file
+paths relative to _your_ machine.
+
+```{r where_here}
+# where does this document knit?
+here::here()
+```
+
+[tap]: https://github.com/irworkshop/accountability_datacleaning
+[rproj]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects
+
+## Data
+
+Contribution data can be obtained from the New Hampshire Secreyary of State's
+[Campaign Finance System][cfs]. Each record represents a single monetary 
+contribution or correction reported by the recieving committee or candidate.
+
+Importantly, it seems as though not all contributions can be obtained from this
+online portal: 
+
+> NOTE: Use of the CFS is not mandatory; therefor, reports filed by candidates
+and committees who have not registered and filed on the CFS are not searchable.
+You may; however, search the "reports" and view them in pdf format.
+
+[cfs]: https://cfs.sos.nh.gov/
+
+## Download
+
+To download the file, we will have to run an empty search on the CFS search
+portal for all contributions from 2000 to `r today()`. This can be done manually
+or with the an `httr::POST()` (provided you have the right cookies).
+
+> Search for receipts reported on all campaign finance reports filed with the
+Secretary of State, who have registered and filed their reports using the
+Campaign Finance System (CFS).
+
+> Search results are returned in a grid view and can be sorted within each
+column by using the arrow at the top of the column or exported to your local
+computer in Excel or CSV format, by clicking on the appropriate button in the
+lower right hand corner of the grid.
+
+```{r raw_dir}
+raw_dir <- dir_create(here("nh", "contribs", "data", "raw"))
+raw_path <- path(raw_dir, "ViewContributionsList.csv")
+raw_gone <- !file_exists(raw_path)
+```
+
+```{r raw_download, eval=FALSE}
+POST(
+  url = "https://cfs.sos.nh.gov/Public/ViewReceipts",
+  write_disk(raw_path, overwrite = FALSE),
+  query = list(
+    ContributorType = "",
+    ContributionType = "",
+    ContributorName = "",
+    FirstName = "",
+    Employer = "",
+    FilingPeriodName = "",
+    OccupationTitle = "",
+    GabId = "",
+    OfficeTypeCode = "",
+    DistrictID = "",
+    OfficeID = "",
+    StartDate = "1/1/2000",
+    EndDate = format(Sys.Date(), "%m/%d/%Y"),
+    AmountRangeFrom = "",
+    AmountRangeTo = "",
+    OutOfState = "on",
+    MemberId = "",
+    PageIndex = "1",
+    Election = "",
+    AggAmountRangeFrom = "",
+    CFID = "",
+    AggAmountRangeTo = ""
+  )
+```
+
+## Read
+
+There are a handful of issues with the raw text file which can be fixed using
+regular expressions.
+
+```{r raw_fix}
+# read lines as vector
+nhl <- read_lines(raw_path)
+# remove trailing comma from every line
+nhl <- str_remove(nhl, ",$")
+# add empty field for some ID at start
+no_id <- str_starts(nhl, "\\d{1,2}/\\d{1,2}/\\d{4}")
+nhl[no_id] <- str_replace(nhl[no_id], "^(.*)?$", ",\\1")
+# collapse split line
+nhl[53100] <- str_c(nhl[53100], nhl[53101])
+nhl[53101] <- NA
+# save to temp file
+fix_path <- file_temp(ext = "csv")
+write_lines(na.omit(nhl), fix_path)
+```
+
+Then this fixed temp file can be read and parsed into R.
+
+```{r raw_read}
+# 73,717
+nhc <- read_delim(
+  file = fix_path,
+  delim = ",",
+  escape_backslash = FALSE,
+  escape_double = FALSE,
+  col_types = cols(
+    .default = col_character(),
+    `Transaction Date` = col_date("%m/%d/%Y %H:%M:%S %p"),
+    `Amount` = col_double(),
+    `Reporting Period` = col_date("%m/%d/%Y %H:%M:%S %p"),
+    `Total Contribution Amount` = col_double()
+  )
+)
+```
+
+For convenience, the column names will be shorted and converted to snake case.
+
+```{r raw_rename}
+raw_names <- names(nhc)
+nhc <- nhc %>% 
+  rename(
+    date = `Transaction Date`,
+    con_type = `Contributor Type`,
+    contributor = `Contributor Name`,
+    geo_full = `Contributor Address`,
+    recipient = `Receiving Registrant`,
+    rec_type = `Receiving Registrant Type`,
+    cycle = `Election Cycle`,
+    period = `Reporting Period`,
+    method = `Contribution Type`,
+    total = `Total Contribution Amount`,
+    in_kind = `In-kind Sub Category`,
+    city_old = `Town/City`,
+    state_old = `Town State`,
+    occupation = `Occupation`,
+    employer = `Employer Name`
+  ) %>% 
+  clean_names("snake")
+```
+
+We can also remove all excess white space from character variables.
+
+```{r raw_trim}
+nhc <- mutate(nhc, across(is.character, str_squish))
+```
+
+## Explore
+
+```{r glimpse}
+glimpse(nhc)
+tail(nhc)
+```
+
+### Missing
+
+```{r na_count}
+col_stats(nhc, count_na)
+```
+
+_Very_ few records are missing a name, date, or amount.
+
+```{r na_flag}
+nhc <- nhc %>% flag_na(date, contributor, amount, recipient)
+sum(nhc$na_flag)
+```
+
+```{r na_view}
+nhc %>% 
+  filter(na_flag) %>% 
+  select(date, contributor, amount, recipient)
+```
+
+### Duplicates
+
+There are however a large number of duplicate records. We can flag every record
+that has duplicate values across every column.
+
+```{r dupe_flag}
+nhc <- flag_dupes(nhc, everything())
+percent(mean(nhc$dupe_flag), 0.01)
+```
+
+```{r dupe_view}
+nhc %>% 
+  filter(dupe_flag) %>% 
+  select(date, contributor, amount, recipient) %>% 
+  arrange(date, contributor)
+```
+
+If we count the contributor and recipient names, we see most of these duplicates
+are unitemized contributions handled through a PAC or service like ActBlue.
+
+```{r dupe_count}
+nhc %>% 
+  filter(dupe_flag) %>% 
+  count(contributor, recipient, sort = TRUE) %>% 
+  mutate(p = n/sum(n))
+```
+
+### Categorical
+
+```{r n_distinct}
+col_stats(nhc, n_distinct)
+```
+
+```{r distinct_bars}
+explore_plot(nhc, con_type)
+explore_plot(nhc, rec_type)
+explore_plot(nhc, cycle, nbar = 5)
+explore_plot(nhc, method)
+explore_plot(nhc, in_kind)
+```
+
+
+### Amounts
+
+```{r ammount_summary}
+summary(nhc$amount)
+sum(nhc$amount <= 0.01)
+```
+
+```{r hist_amount, echo=FALSE}
+nhc %>%
+  filter(amount >= 1) %>% 
+  ggplot(aes(amount)) +
+  geom_histogram(fill = dark2["purple"]) +
+  scale_y_continuous(labels = comma) +
+  scale_x_continuous(
+    breaks = c(1 %o% 10^(0:6)),
+    labels = dollar,
+    trans = "log10"
+  ) +
+  labs(
+    title = "New Hampshire Contributions Amount Distribution",
+    subtitle = "from 2000 to 2019",
+    caption = "Source: {source}",
+    x = "Amount",
+    y = "Count"
+  )
+```
+
+### Dates
+
+We can add the calendar year from `date` with `lubridate::year()`
+
+```{r date_year}
+nhc <- mutate(nhc, year = year(date))
+```
+
+```{r date_range}
+min(nhc$date)
+sum(nhc$year < 2000)
+max(nhc$date)
+sum(nhc$date > today())
+```
+
+```{r bar_year, echo=FALSE}
+nhc %>% 
+  count(year) %>% 
+  mutate(even = is_even(year)) %>% 
+  ggplot(aes(x = year, y = n)) +
+  geom_col(aes(fill = even)) + 
+  scale_fill_brewer(palette = "Dark2") +
+  scale_y_continuous(labels = comma) +
+  scale_x_continuous(breaks = seq(2016, 2020)) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "New Hampshire Contributions by Year",
+    caption = "Source: {source}",
+    fill = "Election Year",
+    x = "Year Made",
+    y = "Count"
+  )
+```
+
+## Wrangle
+
+To improve the searchability of the database, we will perform some consistent,
+confident string normalization. For geographic variables like city names and
+ZIP codes, the corresponding `campfin::normal_*()` functions are tailor made to 
+facilitate this process.
+
+First, we notice that the vast majority of the existing `city_old` and 
+`state_old` variables are missing.
+
+```{r old_count}
+prop_na(nhc$city_old)
+prop_na(nhc$state_old)
+nhc %>% 
+  select(geo_full, city_old, state_old) %>% 
+  filter(!is.na(city_old) & !is.na(state_old))
+```
+
+However, the city and state values are present in the full contributor address
+line, which can be split into it's components with `tidyr::separate()`.
+
+```{r old_sep}
+nhc <- nhc %>% 
+  mutate(across(geo_full, na_in, c("UnItemized", "Unitemized"))) %>% 
+  separate(
+    col = geo_full,
+    into = c(glue("addr{1:10}"), "city", "state_zip"),
+    sep = "\\s?,\\s",
+    remove = FALSE,
+    fill = "left",
+    extra = "merge"
+  ) %>% 
+  unite(
+    col = addr,
+    starts_with("addr"),
+    sep = " ",
+    remove = TRUE,
+    na.rm = TRUE
+  ) %>% 
+  mutate(across(addr, na_if, "")) %>% 
+  separate(
+    col = state_zip,
+    into = c("state", "zip"),
+    sep = "\\s(?=\\d)",
+    remove = TRUE
+  ) %>% 
+  mutate(
+    city = coalesce(city, city_old),
+    state = coalesce(state, state_old)
+  )
+```
+
+```{r old_view}
+nhc %>% 
+  select(geo_full, addr, city, state, zip) %>% 
+  distinct() %>% 
+  sample_n(20)
+```
+
+### Address
+
+For the street `addresss` variable, the `campfin::normal_address()` function
+will force consistence case, remove punctuation, and abbreviate official 
+USPS suffixes.
+
+```{r address_norm}
+nhc <- nhc %>% 
+  mutate(
+    addr_norm = normal_address(
+      address = addr,
+      abbs = usps_street,
+      na_rep = TRUE
+    )
+  )
+```
+
+```{r address_view}
+nhc %>% 
+  select(starts_with("addr")) %>% 
+  distinct() %>% 
+  sample_n(10)
+```
+
+### ZIP
+
+For ZIP codes, the `campfin::normal_zip()` function will attempt to create
+valid _five_ digit codes by removing the ZIP+4 suffix and returning leading
+zeroes dropped by other programs like Microsoft Excel.
+
+```{r zip_norm}
+nhc <- nhc %>% 
+  mutate(
+    zip_norm = normal_zip(
+      zip = zip,
+      na_rep = TRUE
+    )
+  )
+```
+
+```{r zip_progress}
+progress_table(
+  nhc$zip,
+  nhc$zip_norm,
+  compare = valid_zip
+)
+```
+
+### State
+
+Valid two digit state abbreviations can be made using the 
+`campfin::normal_state()` function.
+
+```{r state_norm}
+nhc <- nhc %>% 
+  mutate(
+    state_norm = normal_state(
+      state = state,
+      abbreviate = TRUE,
+      na_rep = TRUE,
+      valid = valid_state
+    )
+  )
+```
+
+```{r state_view}
+nhc %>% 
+  filter(state != state_norm) %>% 
+  count(state, state_norm, sort = TRUE)
+```
+
+```{r state_progress}
+progress_table(
+  nhc$state,
+  nhc$state_norm,
+  compare = valid_state
+)
+```
+
+### City
+
+Cities are the most difficult geographic variable to normalize, simply due to
+the wide variety of valid cities and formats.
+
+#### Normal
+
+The `campfin::normal_city()` function is a good start, again converting case,
+removing punctuation, but _expanding_ USPS abbreviations. We can also remove
+`invalid_city` values.
+
+```{r city_norm}
+nhc <- nhc %>% 
+  mutate(
+    city_norm = normal_city(
+      city = city, 
+      abbs = usps_city,
+      states = c("NH", "DC", "NEW HAMPSHIRE"),
+      na = invalid_city,
+      na_rep = TRUE
+    )
+  )
+```
+
+#### Swap
+
+We can further improve normalization by comparing our normalized value
+against the _expected_ value for that record's state abbreviation and ZIP code.
+If the normalized value is either an abbreviation for or very similar to the
+expected value, we can confidently swap those two.
+
+```{r city_swap}
+nhc <- nhc %>% 
+  rename(city_raw = city) %>% 
+  left_join(
+    y = zipcodes,
+    by = c(
+      "state_norm" = "state",
+      "zip_norm" = "zip"
+    )
+  ) %>% 
+  rename(city_match = city) %>% 
+  mutate(
+    match_abb = is_abbrev(city_norm, city_match),
+    match_dist = str_dist(city_norm, city_match),
+    city_swap = if_else(
+      condition = !is.na(match_dist) & (match_abb | match_dist == 1),
+      true = city_match,
+      false = city_norm
+    )
+  ) %>% 
+  select(
+    -city_match,
+    -match_dist,
+    -match_abb
+  )
+```
+
+#### Refine
+
+The [OpenRefine] algorithms can be used to group similar strings and replace the
+less common versions with their most common counterpart. This can greatly 
+reduce inconsistency, but with low confidence; we will only keep any refined
+strings that have a valid city/state/zip combination.
+
+[or]: https://openrefine.org/
+
+```{r city_refine}
+good_refine <- nhc %>% 
+  mutate(
+    city_refine = city_swap %>% 
+      key_collision_merge() %>% 
+      n_gram_merge(numgram = 1)
+  ) %>% 
+  filter(city_refine != city_swap) %>% 
+  inner_join(
+    y = zipcodes,
+    by = c(
+      "city_refine" = "city",
+      "state_norm" = "state",
+      "zip_norm" = "zip"
+    )
+  )
+```
+
+```{r city_count, echo=FALSE}
+good_refine %>%
+  count(
+    state_norm, 
+    zip_norm, 
+    city_swap, 
+    city_refine,
+    sort = TRUE
+  )
+```
+
+Then we can join the refined values back to the database.
+
+```{r city_join}
+nhc <- nhc %>% 
+  left_join(good_refine) %>% 
+  mutate(city_refine = coalesce(city_refine, city_swap))
+```
+
+#### Progress
+
+```{r city_progress, echo=FALSE}
+many_city <- c(valid_city, extra_city)
+progress <- progress_table(
+  str_to_upper(nhc$city_raw),
+  nhc$city_norm,
+  nhc$city_swap,
+  nhc$city_refine,
+  compare = many_city
+) %>% mutate(stage = as_factor(stage))
+kable(progress, digits = 3)
+```
+
+You can see how the percentage of valid values increased with each stage.
+
+```{r bar_progress, echo=FALSE}
+raw_in <- percent(prop_in(nhc$city_raw, valid_city))
+progress %>% 
+  ggplot(aes(x = stage, y = prop_in)) +
+  geom_hline(yintercept = 0.99) +
+  geom_col(fill = dark2["purple"]) +
+  coord_cartesian(ylim = c(0.75, 1)) +
+  scale_y_continuous(labels = percent) +
+  labs(
+    title = "New Hampshire City Normalization Progress",
+    subtitle = glue("Raw at {raw_in} before conversion to uppercase"),
+    x = "Stage",
+    y = "Percent Valid"
+  )
+```
+
+More importantly, the number of distinct values decreased each stage. We were
+able to confidently change many distinct invalid values to their valid
+equivalent.
+
+```{r bar_distinct, echo=FALSE}
+progress %>% 
+  select(
+    stage, 
+    all = n_distinct,
+    bad = n_diff
+  ) %>% 
+  mutate(good = all - bad) %>% 
+  pivot_longer(c("good", "bad")) %>% 
+  mutate(name = name == "good") %>% 
+  ggplot(aes(x = stage, y = value)) +
+  geom_col(aes(fill = name)) +
+  scale_fill_brewer(palette = "Dark2", direction = -1) +
+  scale_y_continuous(labels = comma) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "New Hampshire City Normalization Progress",
+    subtitle = "Distinct values, valid and invalid",
+    x = "Stage",
+    y = "Distinct Values",
+    fill = "Valid"
+  )
+```
+
+## Conclude
+
+Before exporting, we can remove the intermediary normalization columns and
+rename all added variables with the `_clean` suffix.
+
+```{r clean_select}
+nhc <- nhc %>% 
+  select(
+    -city_norm,
+    -city_swap,
+    city_clean = city_refine
+  ) %>% 
+  rename_all(~str_replace(., "_norm", "_clean")) %>% 
+  rename_all(~str_remove(., "_raw")) %>% 
+  select(-addr, -city, -state, -zip)
+```
+
+```{r clean_glimpse}
+glimpse(sample_frac(nhc))
+```
+
+1. There are `r comma(nrow(nhc))` records in the database.
+1. There are `r comma(sum(nhc$dupe_flag))` duplicate records in the database.
+1. The range and distribution of `amount` and `date` seem reasonable.
+1. There are `r comma(sum(nhc$na_flag))` records missing key variables.
+1. Consistency in geographic data has been improved with `campfin::normal_*()`.
+1. The 4-digit `year` variable has been created with `lubridate::year()`.
+
+## Export
+
+Now the file can be saved on disk for upload to the Accountability server.
+
+```{r clean_dir}
+clean_dir <- dir_create(here("nh", "contribs", "data", "clean"))
+clean_path <- path(clean_dir, "nh_contribs_clean.csv")
+write_csv(nhc, clean_path, na = "")
+file_size(clean_path)
+```
+
+The encoding of the exported file should be UTF-8 or ASCII.
+
+```{r clean_encode}
+enc <- system2("file", args = paste("-i", clean_path), stdout = TRUE)
+str_replace_all(enc, clean_path, basename)
+```
+
+## Dictionary
+
+The following table describes the variables in our final exported file:
+
+```{r dict_make, echo=FALSE}
+dict_raw <- tibble(
+  var = md_code(names(nhc)),
+  type = md_code(map_chr(nhc, typeof)),
+  def = c(
+    "Recipient unique ID",
+    "Date contribution was made",
+    "Contributor type",
+    "Contributor name",
+    "Contributor full address",
+    "Recipient committee name",
+    "Recipient type",
+    "Recipient office sought",
+    "Election county",
+    "Election cycle",
+    "Contribution period reported",
+    "Contribution method",
+    "Contribution amount or correction",
+    "Total ammount contributor given",
+    "Contribution comments",
+    "Contribution In-Kind category",
+    "Original contributor city",
+    "Original contributor state",
+    "Contributor occupation",
+    "Contributor employer name",
+    "Flag for missing date, amount, or name",
+    "Flag for completely duplicated record",
+    "Calendar year of contribution date",
+    "Separated & normalized combined street address",
+    "Separated & normalized 5-digit ZIP code",
+    "Separated & normalized state abbreviation",
+    "Separated & normalized city name"
+  )
+)
+```
+
+```{r dict_md, echo=FALSE}
+(dict_md <- kable(
+  x = dict_raw,
+  format = "markdown",
+  col.names = c("Column", "Type", "Definition")
+))
+```
+
+```{r dict_write}
+write_lines(
+  x = c("# New Hampshire Contributions Data Dictionary\n", dict_md),
+  path = here("nh", "contribs", "nh_contribs_dict.md"),
+)
+```
+
