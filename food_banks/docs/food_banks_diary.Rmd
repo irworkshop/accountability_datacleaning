@@ -118,6 +118,20 @@ fb_xml <- xml2::read_xml("https://ws2.feedingamerica.org/fawebservice.asmx/GetAl
 
 fb_file <- XML::xmlParse(fb_xml)
 
+fb <- fb_file %>% 
+  xmlToDataFrame()
+
+fb <-  fb %>% 
+  tibble::rowid_to_column()
+
+fb_random <- fb %>% 
+  sample_n(30)
+  
+fb_random <- fb_random %>% 
+  select(rowid, OrganizationID,FullName,AgencyURL,MailAddress,everything())
+
+fb_random %>% write_csv("../food_banks/fb_random.csv")
+
 xpath_names <- fb_xml %>% xml_find_all( '//*') %>% xml_path()
 
 folded <- fb_xml %>% xml_find_all("//ListFipsCounty")

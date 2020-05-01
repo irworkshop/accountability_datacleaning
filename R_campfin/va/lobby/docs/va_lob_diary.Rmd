@@ -251,8 +251,22 @@ zeroes dropped by other programs like Microsoft Excel.
 valr <- valr %>% 
     mutate_at(.vars = vars(ends_with('zip')), 
               .funs = list(norm = ~ normal_zip(.))) %>% 
-  rename(lobbyist_address_zip5 = lobbyist_address_zip_norm)
+  rename_at( vars(ends_with( "zip_norm") ), list( ~ gsub("zip_norm", "zip5",.)))
 ```
+
+```{r zip progress}
+kable(valr %>% 
+  progress_table(
+  valr$lobbyist_address_zip,
+  valr$lobbyist_address_zip5,
+  valr$incorportated_filer_address_zip,
+  valr$incorportated_filer_address_zip5,
+  valr$principal_authorizing_officer_address_zip,
+  valr$principal_authorizing_officer_address_zip5,
+  compare = valid_zip
+))
+```
+
 
 ### City
 
