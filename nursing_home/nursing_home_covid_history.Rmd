@@ -156,23 +156,9 @@ top20 <- infected_table %>%
   arrange(desc(def_count)) %>% 
   head(20)
 
-top20$provnum <- reorder(top20$provnum, top20$def_count)
-top20$provname <- reorder(top20$provname, top20$def_count)
-
-top20 %>% 
-  ggplot(aes(x = provname,y = def_count,fill = ownership_type)) +
-  geom_col() +
-  scale_x_discrete(labels =  wrap_format(8))+
-  scale_y_continuous()+
-  scale_fill_brewer(palette = "Dark2") + 
-  labs(
-    title = "COVID-19-Impacted Nursing Homes'with Most Previous Disease Control Deficiencies",
-    caption = "Source: CMS, The Washington Post",
-    x = "Nursing Home Name",
-    y = "Total disease-control-related deficiencies"
-  ) +
-  theme_bw()
+top20 %>% kable()
 ```
+
 ### Group by Owners
 The ownership data is obtained from [CMS][03] and wrangled by a staff member of the Investigative Reporting Workshop. The data diary can be accessed [here](https://github.com/irworkshop/accountability_datacleaning/blob/master/nursing_home/docs/cms_nursing_diary.md#Data).
 
@@ -208,15 +194,18 @@ infected_owner_dedupe %>%
           head(20) %>% 
     ggplot(aes(x = reorder(owner_name,def_count_by_owner),y = def_count_by_owner)) +
   geom_col(fill = "#66c2a5") +
-  scale_x_discrete(labels =  wrap_format(8))+
+  scale_x_discrete()+
   scale_y_continuous()+
+  theme(axis.text= element_text(size=8)) +
   labs(
     title = "COVID-19-Impacted Nursing Homes with Most Previous Disease Control Deficiencies by Owners",
     caption = "Source: CMS, The Washington Post",
     x = "Owner Name",
     y = "Total number of disease-control-related deficiencies at owned nursing homes"
   ) +
-  theme_bw()
+  coord_flip() +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0))
   
 ```
 
@@ -231,18 +220,18 @@ proc_dir <- dir_create(path(data_dir,"processed"))
 
 1. Table 1: Table of all COVID-19-impacted nursing homes with one added column counting total numbers of disease control dificiencies
 ```{r glimpse infected_table}
-glimpse(infected_table %>% sample_frac())
+infected_table %>% sample_frac()
 infected_table %>% write_csv(path = path(proc_dir,"infected_counts.csv"), na = "")
 ```
 2. Table 2: Table of all COVID-19-impacted nursing homes and each of their disease-control related deficiencies detail table.
 ```{r}
-glimpse(infected_table %>% sample_frac())
+infected_table %>% sample_frac()
 infected_explore %>% write_csv(path = path(proc_dir,"infected_details.csv"), na = "")
 ```
-3. Table 3: This is essentially table 2, with additional owner information, types, first_association date etc.
+3. Table 3: This is essentially table 2, with additional owner information from the ownership data from CMS, including types, first_association date, and etc.
 Note that if a nursing home has one deficiency but multiple owner rows, it will show up multiple times.
 ```{r}
-glimpse(infected_owner %>% sample_frac())
+infected_owner %>% sample_frac()
 
 infected_owner %>% write_csv(path = path(proc_dir,"infected_owners.csv"), na = "")
 ```

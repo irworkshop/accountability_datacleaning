@@ -1,7 +1,7 @@
 COVID-19-Hit Nursing Home Disease Control History
 ================
 Yanqi Xu
-2020-05-01 16:44:31
+2020-05-01 17:20:44
 
   - [Project](#project)
   - [Objectives](#objectives)
@@ -171,26 +171,35 @@ top20 <- infected_table %>%
   arrange(desc(def_count)) %>% 
   head(20)
 
-top20$provnum <- reorder(top20$provnum, top20$def_count)
-top20$provname <- reorder(top20$provname, top20$def_count)
-
-top20 %>% 
-  ggplot(aes(x = provname,y = def_count,fill = ownership_type)) +
-  geom_col() +
-  scale_x_discrete(labels =  wrap_format(8))+
-  scale_y_continuous()+
-  scale_fill_brewer(palette = "Dark2") + 
-  labs(
-    title = "COVID-19-Impacted Nursing Homes'with Most Previous Disease Control Deficiencies",
-    caption = "Source: CMS, The Washington Post",
-    x = "Nursing Home Name",
-    y = "Total disease-control-related deficiencies"
-  ) +
-  theme_bw()
+top20 %>% kable()
 ```
 
-![](../plots/infected%20vis-1.png)<!-- --> \#\#\# Group by Owners The
-ownership data is obtained from
+| provnum | def\_count | provname                                           | county      | state | ownership\_type |
+| :------ | ---------: | :------------------------------------------------- | :---------- | :---- | :-------------- |
+| 056078  |          7 | LAKEVIEW TERRACE                                   | Los Angeles | CA    | For profit      |
+| 145969  |          7 | APERION CARE FOREST PARK                           | Cook        | IL    | For profit      |
+| 555397  |          7 | COUNTRY VILLA REHABILITATION CENTER                | Los Angeles | CA    | For profit      |
+| 056294  |          6 | SAN JOAQUIN NURSING CENTER AND REHABILITATION CENT | Kern        | CA    | For profit      |
+| 056334  |          6 | BEACHWOOD POST-ACUTE & REHAB                       | Los Angeles | CA    | For profit      |
+| 145334  |          6 | LANDMARK OF DES PLAINES REHAB                      | Cook        | IL    | For profit      |
+| 145424  |          6 | LANDMARK OF RICHTON PARK REHAB & NSG CTR           | Cook        | IL    | For profit      |
+| 145453  |          6 | ALDEN TERRACE OF MCHENRY REHAB                     | Mc Henry    | IL    | For profit      |
+| 145555  |          6 | EDWARDSVILLE NSG & REHAB CTR                       | Madison     | IL    | For profit      |
+| 145881  |          6 | UPTOWN HEALTH CENTER                               | Cook        | IL    | For profit      |
+| 365933  |          6 | BUCKEYE TERRACE REHABILITATION AND NURSING CENTER  | Franklin    | OH    | For profit      |
+| 055409  |          5 | COMMUNITY CARE AND REHABILITATION CENTER           | Riverside   | CA    | For profit      |
+| 055430  |          5 | WHITTIER HILLS HEALTH CARE CTR                     | Los Angeles | CA    | For profit      |
+| 055750  |          5 | AMBERWOOD GARDENS                                  | Santa Clara | CA    | For profit      |
+| 056129  |          5 | BURBANK HEALTHCARE & REHAB                         | Los Angeles | CA    | For profit      |
+| 056380  |          5 | COUNTRY VILLA LOS FELIZ NURSING CENTER             | Los Angeles | CA    | For profit      |
+| 065222  |          5 | BOULDER MANOR                                      | Boulder     | CO    | For profit      |
+| 145208  |          5 | BRIDGEVIEW HEALTH CARE CENTER                      | Cook        | IL    | For profit      |
+| 145662  |          5 | ELEVATE CARE NILES                                 | Cook        | IL    | For profit      |
+| 145963  |          5 | ALDEN ESTATES OF ORLAND PARK                       | Cook        | IL    | For profit      |
+
+### Group by Owners
+
+The ownership data is obtained from
 [CMS](https://www.medicare.gov/nursinghomecompare/Data/About.html) and
 wrangled by a staff member of the Investigative Reporting Workshop. The
 data diary can be accessed
@@ -236,15 +245,18 @@ infected_owner_dedupe %>%
           head(20) %>% 
     ggplot(aes(x = reorder(owner_name,def_count_by_owner),y = def_count_by_owner)) +
   geom_col(fill = "#66c2a5") +
-  scale_x_discrete(labels =  wrap_format(8))+
+  scale_x_discrete()+
   scale_y_continuous()+
+  theme(axis.text= element_text(size=8)) +
   labs(
     title = "COVID-19-Impacted Nursing Homes with Most Previous Disease Control Deficiencies by Owners",
     caption = "Source: CMS, The Washington Post",
     x = "Owner Name",
     y = "Total number of disease-control-related deficiencies at owned nursing homes"
   ) +
-  theme_bw()
+  coord_flip() +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0))
 ```
 
 ![](../plots/explore%20owner-1.png)<!-- -->
@@ -264,15 +276,21 @@ proc_dir <- dir_create(path(data_dir,"processed"))
 <!-- end list -->
 
 ``` r
-glimpse(infected_table %>% sample_frac())
-#> Rows: 2,747
-#> Columns: 6
-#> $ provnum        <chr> "315320", "115628", "395628", "115711", "075201", "055856", "335757", "10…
-#> $ def_count      <dbl> 2, 0, 1, 0, 2, 1, 0, 4, 3, 3, 2, 2, 1, 3, 2, 1, 0, 3, 1, 0, 4, 3, 4, 3, 1…
-#> $ provname       <chr> "COMPLETE CARE AT HOLIDAY CITY", "PRUITTHEALTH - PALMYRA", "RENAISSANCE H…
-#> $ county         <chr> "Ocean", "Dougherty", "Philadelphia", "Decatur", "New Haven", "Los Angele…
-#> $ state          <chr> "NJ", "GA", "PA", "GA", "CT", "CA", "NY", "FL", "PA", "CA", "MA", "MA", "…
-#> $ ownership_type <chr> "For profit", "For profit", "For profit", "Government", "For profit", "Fo…
+infected_table %>% sample_frac()
+#> # A tibble: 2,747 x 6
+#>    provnum def_count provname                                    county        state ownership_type
+#>    <chr>       <dbl> <chr>                                       <chr>         <chr> <chr>         
+#>  1 315320          2 COMPLETE CARE AT HOLIDAY CITY               Ocean         NJ    For profit    
+#>  2 115628          0 PRUITTHEALTH - PALMYRA                      Dougherty     GA    For profit    
+#>  3 395628          1 RENAISSANCE HEALTHCARE & REHABILITATION CE… Philadelphia  PA    For profit    
+#>  4 115711          0 MEMORIAL MANOR NURSING HOME                 Decatur       GA    Government    
+#>  5 075201          2 REGALCARE AT WEST HAVEN                     New Haven     CT    For profit    
+#>  6 055856          1 HIGH VALLEY LODGE                           Los Angeles   CA    For profit    
+#>  7 335757          0 HARRIS HILL NURSING FACILITY, L L C         Erie          NY    For profit    
+#>  8 105895          4 CONSULATE HEALTH CARE OF ST PETERSBURG      Pinellas      FL    For profit    
+#>  9 395015          3 BRIGHTON REHABILITATION AND WELLNESS CENTER Beaver        PA    For profit    
+#> 10 555476          3 APPLE VALLEY POST ACUTE CENTER              San Bernardi… CA    For profit    
+#> # … with 2,737 more rows
 infected_table %>% write_csv(path = path(proc_dir,"infected_counts.csv"), na = "")
 ```
 
@@ -282,61 +300,52 @@ infected_table %>% write_csv(path = path(proc_dir,"infected_counts.csv"), na = "
 <!-- end list -->
 
 ``` r
-glimpse(infected_table %>% sample_frac())
-#> Rows: 2,747
-#> Columns: 6
-#> $ provnum        <chr> "115002", "225272", "225505", "555443", "235726", "555165", "185194", "07…
-#> $ def_count      <dbl> 1, 4, 1, 1, 0, 1, 0, 1, 1, 0, 0, 3, 1, 1, 1, 2, 0, 2, 2, 2, 0, 1, 2, 1, 3…
-#> $ provname       <chr> "A.G. RHODES HOME WESLEY WOODS", "BEAR HILL HEALTHCARE AND REHABILITATION…
-#> $ county         <chr> "De Kalb", "Middlesex", "Essex", "San Bernardino", "Oakland", "Los Angele…
-#> $ state          <chr> "GA", "MA", "MA", "CA", "MI", "CA", "KY", "CT", "NY", "MA", "DC", "CA", "…
-#> $ ownership_type <chr> "Non profit", "For profit", "For profit", "For profit", "For profit", "Fo…
+infected_table %>% sample_frac()
+#> # A tibble: 2,747 x 6
+#>    provnum def_count provname                                     county       state ownership_type
+#>    <chr>       <dbl> <chr>                                        <chr>        <chr> <chr>         
+#>  1 115002          1 A.G. RHODES HOME WESLEY WOODS                De Kalb      GA    Non profit    
+#>  2 225272          4 BEAR HILL HEALTHCARE AND REHABILITATION CEN… Middlesex    MA    For profit    
+#>  3 225505          1 ROYAL WOOD MILL CENTER                       Essex        MA    For profit    
+#>  4 555443          1 HI-DESERT MEDICAL CENTER D/P SNF             San Bernard… CA    For profit    
+#>  5 235726          0 WELLBRIDGE OF CLARKSTON                      Oakland      MI    For profit    
+#>  6 555165          1 HIGHLAND PARK SKILLED NURSING AND WELLNESS … Los Angeles  CA    For profit    
+#>  7 185194          0 THE FORUM AT BROOKSIDE                       Jefferson    KY    For profit    
+#>  8 075251          1 TOUCHPOINTS AT FARMINGTON                    Hartford     CT    For profit    
+#>  9 335539          1 OUR LADY OF CONSOLATION NURSING AND REHAB C… Suffolk      NY    Non profit    
+#> 10 225464          0 GLOUCESTER HEALTHCARE                        Essex        MA    For profit    
+#> # … with 2,737 more rows
 infected_explore %>% write_csv(path = path(proc_dir,"infected_details.csv"), na = "")
 ```
 
 3.  Table 3: This is essentially table 2, with additional owner
-    information, types, first\_association date etc. Note that if a
-    nursing home has one deficiency but multiple owner rows, it will
-    show up multiple times.
+    information from the ownership data from CMS, including types,
+    first\_association date, and etc. Note that if a nursing home has
+    one deficiency but multiple owner rows, it will show up multiple
+    times.
 
 <!-- end list -->
 
 ``` r
-glimpse(infected_owner %>% sample_frac())
-#> Rows: 48,909
-#> Columns: 32
-#> $ x1                     <dbl> 1217, 1209, 726, 1191, 2292, 1915, 1695, 574, 1659, 591, 1994, 57…
-#> $ provname               <chr> "ST JAMES WELLNESS REHAB VILLAS", "MEMORIAL CARE CENTER", "UNITY …
-#> $ county                 <chr> "Will", "St. Clair", "Miami-Dade", "Macon", "Washoe", "Durham", "…
-#> $ state                  <chr> "IL", "IL", "FL", "IL", "NV", "NC", "MD", "DC", "MD", "DE", "NJ",…
-#> $ ownership_type         <chr> "For profit", "For profit", "For profit", "For profit", "For prof…
-#> $ provnum                <chr> "145611", "145102", "105510", "145422", "295043", "345551", "2153…
-#> $ address                <chr> "1251 EAST RICHTON ROAD", "4315 MEMORIAL DRIVE", "1404 NW 22ND ST…
-#> $ city_raw               <chr> "CRETE", "BELLEVILLE", "MIAMI", "DECATUR", "RENO", NA, "SALISBURY…
-#> $ zip                    <dbl> 60417, 62226, 33142, 62521, 89509, NA, 21801, 20005, 20895, 19805…
-#> $ survey_date_output     <date> 2018-02-01, 2016-10-27, 2018-02-02, 2017-08-24, 2017-09-06, NA, …
-#> $ surveytype             <chr> "HEALTH", "HEALTH", "HEALTH", "HEALTH", "HEALTH", NA, "HEALTH", "…
-#> $ defpref                <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, NA, FALSE, FALSE, FALSE, FALSE…
-#> $ category               <chr> "ENVIRONMENTAL DEFICIENCIES", "ENVIRONMENTAL DEFICIENCIES", "ENVI…
-#> $ tag                    <chr> "0880", "0441", "0880", "0441", "0441", NA, "0441", "0880", "0441…
-#> $ tag_desc               <chr> "PROVIDE AND IMPLEMENT AN INFECTION PREVENTION AND CONTROL PROGRA…
-#> $ scope                  <chr> "D", "E", "E", "E", "D", NA, "F", "F", "D", "E", NA, "F", "F", "D…
-#> $ defstat                <chr> "DEFICIENT, PROVIDER HAS DATE OF CORRECTION", "DEFICIENT, PROVIDE…
-#> $ statdate               <date> 2018-02-02, 2016-11-18, 2018-04-02, 2017-09-08, 2017-10-13, NA, …
-#> $ cycle                  <dbl> 2, 3, 2, 3, 3, NA, 3, 1, 3, 1, NA, 2, 2, 3, 2, 1, 2, 3, 2, 1, 2, …
-#> $ standard               <chr> "Y", "Y", "Y", "Y", "Y", NA, "Y", "Y", "Y", "Y", NA, "Y", "Y", "Y…
-#> $ complaint              <chr> "N", "N", "N", "N", "N", NA, "N", "N", "Y", "Y", NA, "N", "N", "N…
-#> $ filedate               <date> 2020-02-01, 2020-02-01, 2020-02-01, 2020-02-01, 2020-02-01, NA, …
-#> $ address_norm           <chr> "1251 E RICHTON RD", "4315 MEMORIAL DR", "1404 NW 22 ND ST", "179…
-#> $ zip5                   <dbl> 60417, 62226, 33142, 62521, 89509, NA, 21801, 20005, 20895, 19805…
-#> $ city_clean             <chr> "CRETE", "BELLEVILLE", "MIAMI", "DECATUR", "RENO", NA, "SALISBURY…
-#> $ year                   <dbl> 2018, 2016, 2018, 2017, 2017, NA, 2016, 2019, 2017, 2019, NA, 201…
-#> $ def_boolean            <dbl> 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,…
-#> $ owner_name             <chr> "MIRETZKY, STEVEN", "MCMANUS, MICHAEL", "STEPHEN ROSENBERG 2009 D…
-#> $ owner_type             <chr> "INDIVIDUAL", "INDIVIDUAL", "ORGANIZATION", "INDIVIDUAL", "INDIVI…
-#> $ owner_percentage_clean <dbl> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
-#> $ role_desc              <chr> "DIRECTOR", "MANAGING EMPLOYEE", "5% OR GREATER INDIRECT OWNERSHI…
-#> $ association_date_clean <date> 2014-04-01, 2012-05-21, 2012-12-31, 2014-01-01, 2018-08-10, 2008…
+infected_owner %>% sample_frac()
+#> # A tibble: 48,909 x 32
+#>       x1 provname county state ownership_type provnum address city_raw   zip survey_date_out…
+#>    <dbl> <chr>    <chr>  <chr> <chr>          <chr>   <chr>   <chr>    <dbl> <date>          
+#>  1  1217 ST JAME… Will   IL    For profit     145611  1251 E… CRETE    60417 2018-02-01      
+#>  2  1209 MEMORIA… St. C… IL    For profit     145102  4315 M… BELLEVI… 62226 2016-10-27      
+#>  3   726 UNITY H… Miami… FL    For profit     105510  1404 N… MIAMI    33142 2018-02-02      
+#>  4  1191 FAIR HA… Macon  IL    For profit     145422  1790 S… DECATUR  62521 2017-08-24      
+#>  5  2292 LAKESID… Washoe NV    For profit     295043  3101 P… RENO     89509 2017-09-06      
+#>  6  1915 PRUITTH… Durham NC    For profit     345551  <NA>    <NA>        NA NA              
+#>  7  1695 ANCHORA… Wicom… MD    For profit     215339  105 TI… SALISBU… 21801 2016-11-18      
+#>  8   574 HEALTH … The D… DC    For profit     095021  1330 M… WASHING… 20005 2019-05-30      
+#>  9  1659 KENSING… Montg… MD    For profit     215043  3000 M… KENSING… 20895 2017-02-21      
+#> 10   591 HILLSID… New C… DE    For profit     085013  810 SO… WILMING… 19805 2019-01-16      
+#> # … with 48,899 more rows, and 22 more variables: surveytype <chr>, defpref <lgl>, category <chr>,
+#> #   tag <chr>, tag_desc <chr>, scope <chr>, defstat <chr>, statdate <date>, cycle <dbl>,
+#> #   standard <chr>, complaint <chr>, filedate <date>, address_norm <chr>, zip5 <dbl>,
+#> #   city_clean <chr>, year <dbl>, def_boolean <dbl>, owner_name <chr>, owner_type <chr>,
+#> #   owner_percentage_clean <dbl>, role_desc <chr>, association_date_clean <date>
 
 infected_owner %>% write_csv(path = path(proc_dir,"infected_owners.csv"), na = "")
 ```
