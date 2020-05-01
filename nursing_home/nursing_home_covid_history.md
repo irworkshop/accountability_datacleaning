@@ -1,7 +1,7 @@
 COVID-19-Hit Nursing Home Disease Control History
 ================
 Yanqi Xu
-2020-05-01 17:20:44
+2020-05-01 19:52:39
 
   - [Project](#project)
   - [Objectives](#objectives)
@@ -300,21 +300,24 @@ infected_table %>% write_csv(path = path(proc_dir,"infected_counts.csv"), na = "
 <!-- end list -->
 
 ``` r
-infected_table %>% sample_frac()
-#> # A tibble: 2,747 x 6
-#>    provnum def_count provname                                     county       state ownership_type
-#>    <chr>       <dbl> <chr>                                        <chr>        <chr> <chr>         
-#>  1 115002          1 A.G. RHODES HOME WESLEY WOODS                De Kalb      GA    Non profit    
-#>  2 225272          4 BEAR HILL HEALTHCARE AND REHABILITATION CEN… Middlesex    MA    For profit    
-#>  3 225505          1 ROYAL WOOD MILL CENTER                       Essex        MA    For profit    
-#>  4 555443          1 HI-DESERT MEDICAL CENTER D/P SNF             San Bernard… CA    For profit    
-#>  5 235726          0 WELLBRIDGE OF CLARKSTON                      Oakland      MI    For profit    
-#>  6 555165          1 HIGHLAND PARK SKILLED NURSING AND WELLNESS … Los Angeles  CA    For profit    
-#>  7 185194          0 THE FORUM AT BROOKSIDE                       Jefferson    KY    For profit    
-#>  8 075251          1 TOUCHPOINTS AT FARMINGTON                    Hartford     CT    For profit    
-#>  9 335539          1 OUR LADY OF CONSOLATION NURSING AND REHAB C… Suffolk      NY    Non profit    
-#> 10 225464          0 GLOUCESTER HEALTHCARE                        Essex        MA    For profit    
-#> # … with 2,737 more rows
+infected_explore %>% sample_frac()
+#> # A tibble: 4,497 x 27
+#>       x1 provname county state ownership_type provnum address city_raw   zip survey_date_out…
+#>    <dbl> <chr>    <chr>  <chr> <chr>          <chr>   <chr>   <chr>    <dbl> <date>          
+#>  1  1892 THE EST… Wright MN    For profit     245336  433 CO… DELANO   55328 2018-08-16      
+#>  2   297 CEDAR M… San B… CA    For profit     555494  11970 … YUCAIPA  92399 2018-12-21      
+#>  3  1523 MATTAPA… Suffo… MA    For profit     225532  405 RI… MATTAPAN  2126 2019-01-16      
+#>  4  1714 MEDILOD… Genes… MI    For profit     235226  11941 … GRAND B… 48439 2019-04-05      
+#>  5  1490 ALLIANC… Plymo… MA    Non profit     225259  804 PL… BROCKTON  2301 2016-05-09      
+#>  6   570 FOX HIL… Tolla… CT    For profit     075183  <NA>    <NA>        NA NA              
+#>  7  2729 WILLOW … Yakima WA    For profit     505367  4007 T… YAKIMA   98908 2018-02-16      
+#>  8  1184 TERRACE… Lake   IL    For profit     146159  1615 S… WAUKEGAN 60087 2019-01-30      
+#>  9  2506 GLENDOR… Wayne  OH    For profit     366036  <NA>    <NA>        NA NA              
+#> 10   839 PLEASAN… Candl… GA    For profit     115411  <NA>    <NA>        NA NA              
+#> # … with 4,487 more rows, and 17 more variables: surveytype <chr>, defpref <lgl>, category <chr>,
+#> #   tag <chr>, tag_desc <chr>, scope <chr>, defstat <chr>, statdate <date>, cycle <dbl>,
+#> #   standard <chr>, complaint <chr>, filedate <date>, address_norm <chr>, zip5 <dbl>,
+#> #   city_clean <chr>, year <dbl>, def_boolean <dbl>
 infected_explore %>% write_csv(path = path(proc_dir,"infected_details.csv"), na = "")
 ```
 
@@ -331,16 +334,16 @@ infected_owner %>% sample_frac()
 #> # A tibble: 48,909 x 32
 #>       x1 provname county state ownership_type provnum address city_raw   zip survey_date_out…
 #>    <dbl> <chr>    <chr>  <chr> <chr>          <chr>   <chr>   <chr>    <dbl> <date>          
-#>  1  1217 ST JAME… Will   IL    For profit     145611  1251 E… CRETE    60417 2018-02-01      
-#>  2  1209 MEMORIA… St. C… IL    For profit     145102  4315 M… BELLEVI… 62226 2016-10-27      
-#>  3   726 UNITY H… Miami… FL    For profit     105510  1404 N… MIAMI    33142 2018-02-02      
-#>  4  1191 FAIR HA… Macon  IL    For profit     145422  1790 S… DECATUR  62521 2017-08-24      
-#>  5  2292 LAKESID… Washoe NV    For profit     295043  3101 P… RENO     89509 2017-09-06      
-#>  6  1915 PRUITTH… Durham NC    For profit     345551  <NA>    <NA>        NA NA              
-#>  7  1695 ANCHORA… Wicom… MD    For profit     215339  105 TI… SALISBU… 21801 2016-11-18      
-#>  8   574 HEALTH … The D… DC    For profit     095021  1330 M… WASHING… 20005 2019-05-30      
-#>  9  1659 KENSING… Montg… MD    For profit     215043  3000 M… KENSING… 20895 2017-02-21      
-#> 10   591 HILLSID… New C… DE    For profit     085013  810 SO… WILMING… 19805 2019-01-16      
+#>  1   754 HEARTLA… Palm … FL    Non profit     105755  <NA>    <NA>        NA NA              
+#>  2   179 PALAZZO… Los A… CA    For profit     056456  5400 F… LOS ANG… 90029 2019-01-25      
+#>  3   616 GOLFCRE… Browa… FL    For profit     105009  600 NO… HOLLYWO… 33020 2017-07-13      
+#>  4  2406 BUCKEYE… Frank… OH    For profit     365933  140 N … WESTERV… 43081 2018-07-23      
+#>  5   629 SPRINGT… Browa… FL    For profit     105686  <NA>    <NA>        NA NA              
+#>  6   767 STRATFO… Palm … FL    For profit     105851  6343 V… BOCA RA… 33433 2019-06-27      
+#>  7  1300 ST ANTH… Jeffe… LA    For profit     195570  6001 A… METAIRIE 70003 2018-04-12      
+#>  8   638 GOVERNO… Clay   FL    For profit     105663  803 OA… GREEN C… 32043 2017-03-02      
+#>  9  1261 SIGNATU… Jacks… KY    For profit     185249  96 HIG… ANNVILLE 40402 2019-09-25      
+#> 10  1589 HERITAG… Balti… MD    For profit     215135  7232 G… DUNDALK  21222 2019-01-22      
 #> # … with 48,899 more rows, and 22 more variables: surveytype <chr>, defpref <lgl>, category <chr>,
 #> #   tag <chr>, tag_desc <chr>, scope <chr>, defstat <chr>, statdate <date>, cycle <dbl>,
 #> #   standard <chr>, complaint <chr>, filedate <date>, address_norm <chr>, zip5 <dbl>,

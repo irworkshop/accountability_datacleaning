@@ -297,7 +297,6 @@ progress %>%
     y = "Percent Valid",
     fill = "Valid"
   )
-  
 ```
 
 ## Explore
