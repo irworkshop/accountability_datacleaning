@@ -122,7 +122,8 @@ debt, expenditures, filer information, and receipts.
 
 [data]: https://www.dos.pa.gov/VotingElections/CandidatesCommittees/CampaignFinance/Resources/Pages/FullCampaignFinanceExport.aspx
 
-The ECF also provides a `readme.txt` file, which can be 
+The ECF also provides a `readme.txt` file, which we can read to better
+understand the data we will be downloading.
 
 ```{r vars_read}
 pa_host <- "https://www.dos.pa.gov/VotingElections"
@@ -130,6 +131,9 @@ pa_dir <- "CandidatesCommittees/CampaignFinance/Resources/Documents"
 readme_file <- "readme.txt"
 readme_url <- paste(pa_host, pa_dir, readme_file, sep = "/")
 ```
+
+This text file provides the column names and types for the each of the data
+files included in the raw download.
 
 ```{r vars_print, echo=FALSE}
 readme <- readme_url %>% 
@@ -154,15 +158,24 @@ readme <- readme_url %>%
       mutate(col = str_to_lower(col))
   ) %>% 
   set_names(c("contribs", "debt", "expense", "filer", "receipt"))
+```
 
+Here are the columns included in the contributions data set:
 
+```{r vars_contrib}
 readme$contribs %>% 
   mutate(col = as.character(md_code(col))) %>% 
-  kable()
+  kable(col.names = c("Columns", "Type"))
+```
 
+There are no variables providing information on the recipients, those committees
+which _filed_ the reports containing each contribution. That data is provided in
+a separate file.
+
+```{r vars_filer}
 readme$filer %>% 
   mutate(col = as.character(md_code(col))) %>% 
-  kable()
+  kable(col.names = c("Columns", "Type"))
 ```
 
 ## Import 
@@ -217,11 +230,21 @@ fil_paths <- dir_ls(
 )
 ```
 
+The file names are a little different year to year, but they all have the same
+format.
+
+```{r con_list, echo=FALSE}
+con_paths %>% 
+  str_replace("(.*)/R_campfin", "~") %>% 
+  md_code() %>% 
+  md_bullet()
+```
+
 ### Fix
 
 To properly read so many records, we need to first perform some manipulation of
 the text files. Each "cell" of character type columns are surrounded in double
-quotation marks (`"`) to help prevent misreading. Howver, some of the text in
+quotation marks (`"`) to help prevent misreading. However, some of the text in
 these cells itself contains double quotes or newline characters (`\n`).
 
 We need to read each file as a character string and use regular expressions to
@@ -247,7 +270,7 @@ if (!file_exists(fix_check)) {
     # check progress
     message(paste(basename(file), "done"))
     # clean garbage memory
-    gc()
+    flush_memory()
   }
   # note this has done
   file_create(fix_check)
@@ -256,10 +279,10 @@ if (!file_exists(fix_check)) {
 
 ### Read
 
-Now that each text file has been cleaned of irregularies, they can each be
+Now that each text file has been cleaned of irregularities, they can each be
 properly read into R.
 
-If this has already beem done, it's easier to read the single file that was
+If this has already been done, it's easier to read the single file that was
 written at the end of the initial process. If we read this single file, we can
 skip the chunks below reading for the first time.
 
@@ -270,7 +293,7 @@ if (!no_pac) {
   pac <- vroom(
     file = pac_files,
     delim = "|",
-    escape_backslash = TRUE, 
+    escape_backslash = TRUE,
     col_names = TRUE,
     col_types = cols(
       filerid = col_double(),
@@ -285,6 +308,13 @@ if (!no_pac) {
     )
   )
 }
+```
+
+If there are no consolidated contribution files from cleaning, we will have to
+read and join the files from scratch.
+
+```{r pac_check}
+print(no_pac) # if TRUE must redo
 ```
 
 First, we will read all the annual contribution files into a single data frame
@@ -319,7 +349,7 @@ pac <- map_df(
 )
 ```
 
-Then we can read the fixed filers files.
+Then we can read the fixed filer files to describe the recipients.
 
 ```{r fil_read, eval=no_pac}
 filers <- map_df(
@@ -349,12 +379,21 @@ filers <- map_df(
 )
 ```
 
+We only want to join a single filer to each contribution listed in the data.
+We can group by the unique filer ID and a filing year and select only one
+copy of the data.
+
 ```{r fil_slice, eval=no_pac}
+nrow(filers)
 filers <- filers %>% 
   group_by(filerid, eyear) %>% 
   slice(1) %>% 
   ungroup()
+nrow(filers)
 ```
+
+Now the filer information can be added to the contribution data with a 
+`dplyr::left_join()` along the unique filer ID and election year.
 
 ```{r raw_join, eval=no_pac}
 # 13,135,695
@@ -388,7 +427,7 @@ pac <- pac %>%
 ```
 
 We will save a copy of this new file to the disk that can easily be read if
-needed.
+needed. This is the step that is done above for the `no_pac` check.
 
 ```{r raw_write, eval=no_pac}
 n <- 10
@@ -401,45 +440,120 @@ for (i in seq(1, n)) {
     quote_escape = "backslash"
   )
   pac <- pac[-(1:x), ]
-  gc(full = TRUE)
+  flush_memory()
   Sys.sleep(60)
   message(percent(i/n))
 }
 ```
 
 ```{r include=FALSE}
-gc(full = TRUE)
+flush_memory()
 ```
 
 ## Explore
 
+We should first check the top and bottom of the read data frame to ensure the
+file was read correctly. This view also helps simply understand the format.
+
 ```{r glimpse}
+glimpse(pac)
 head(pac)
-tail(pac)
-glimpse(sample_n(pac, 20))
+```
+
+Checking the number of distinct values of a discrete variable is another good
+way to ensure the file was read properly.
+
+```{r read_check}
+count(pac, fil_type)
 ```
 
 ### Missing
 
+We should first check the number of missing values in each column.
+
 ```{r na_count}
 col_stats(pac, count_na)
 ```
+
+Any record missing a date, name, or amount should be flagged. These variables
+are key to identifying transactions.
 
 ```{r na_flag}
 pac <- pac %>% flag_na(date, contributor, amount, filer)
 percent(mean(pac$na_flag), 0.01)
 ```
 
+### Duplicates
+
+We can check for records that are entirely duplicated across every variable
+using `duplicated()`. This process is memory inefficient, so we will split our
+data frame into a list of 100,000 row chunks and check each chunk at a tinme,
+appending our duplicate rows to a local text file.
+
+```{r dupe_write}
+dupe_file <- here("pa", "contribs", "dupes.txt")
+if (!file_exists(dupe_file)) {
+  file_create(dupe_file)
+  n <- 1e5 # rows per chunk
+  nr <- nrow(pac)
+  # split file into chunks
+  pas <- split(pac, rep(1:ceiling(nr/n), each = n, length.out = nr))
+  pb <- txtProgressBar(min = 0, max = length(pas), style = 3)
+  for (i in seq_along(pas)) {
+    d1 <- duplicated(pas[[i]], fromLast = FALSE) # check from front
+    # d2 <- duplicated(pas[[i]], fromLast = TRUE)
+    write_lines(d1, dupe_file, append = TRUE) # append to disk
+    rm(d1); pas[[i]] <- NA # remove for memory
+    Sys.sleep(10)
+    flush_memory()
+    setTxtProgressBar(pb, i)
+  }
+  rm(pas, pb)
+  flush_memory()
+}
+```
+
+We can now read that file as a vector and add it as a new `dupe_flag` variable.
+
+```{r dupe_read}
+dupes <- as.logical(read_lines(dupe_file))
+length(dupes) == nrow(pac)
+pac <- mutate(pac, dupe_flag = dupes)
+percent(mean(pac$dupe_flag), 0.01)
+```
+
+To upload this duplicates text file to GitHub, we will convert it to an string
+of binary integers and compress it.
+
+```{r dupe_compress, eval=FALSE}
+write_lines(as.integer(dupes), dupe_file)
+tar(
+  tarfile = here("pa", "contribs", "dupes.tar.xz"),
+  files = dupe_file,
+  compression = "xz",
+  tar = "tar"
+)
+file_delete(dupe_file)
+rm(dupes)
+```
+
 ### Amounts
 
+The range and distribution of the contribution `amount` should be checked. We
+also want to note what percentage of the values are zero or below.
+
 ```{r ammount_summary}
-summary(pac$amount)
+unlist(map(summary(pac$amount), dollar))
 mean(pac$amount <= 0)
+```
+
+```{r amount_max}
+glimpse(pac[which.max(pac$amount), ])
 ```
 
 ```{r hist_amount, echo=FALSE}
 pac %>%
-  filter(!is.na(amount), amount > 1) %>% 
+  filter(!is.na(amount), amount >= 1, amount <= 1e6) %>% 
   ggplot(aes(amount)) +
   geom_histogram(fill = dark2["purple"], bins = 20) +
   scale_y_continuous(labels = comma) +
@@ -450,24 +564,59 @@ pac %>%
   ) +
   labs(
     title = "Pennsylvania Contributions Amount Distribution",
-    subtitle = "from 2008 to 2020",
+    subtitle = "from 2000 to 2020",
     x = "Amount",
     y = "Count"
   )
 ```
 
+```{r violin_amount_party, echo=FALSE}
+pac %>%
+  filter(amount >= 1, amount <= 1e6) %>% 
+  filter(party %in% most_common(party, 3) | is.na(party)) %>% 
+  ggplot(aes(party, amount)) +
+  geom_violin(
+    mapping = aes(fill = party),
+    trim = TRUE,
+    draw_quantiles = c(0.25, 0.5, 0.75),
+    scale = "area",
+    adjust = 2
+  ) +
+  scale_fill_brewer(
+    palette = "Dark2", 
+    guide = FALSE,
+    na.value = "#3d4043"
+  ) +
+  scale_y_continuous(
+    breaks = c(1 %o% 10^(0:6)),
+    labels = dollar,
+    trans = "log10"
+  ) +
+  labs(
+    title = "Pennsylvania Contributions Amount by Party",
+    x = "Amount",
+    y = "Count"
+  )
+```
 ### Dates
+
+We can add the calendar year a contribution was made using `lubridate::year()`. 
 
 ```{r date_year}
 pac <- mutate(pac, year = year(date))
 ```
 
+There are a handful of missing or irregular dates.
+
 ```{r date_range}
+percent(prop_na(pac$date), 0.01)
 min(pac$date, na.rm = TRUE)
-sum(pac$year < 2008, na.rm = TRUE)
+sum(pac$year < 2000, na.rm = TRUE)
 max(pac$date, na.rm = TRUE)
 sum(pac$date > today(), na.rm = TRUE)
 ```
+
+The bulk of transactions occur between 2000 and 2020.
 
 ```{r bar_year, echo=FALSE}
 pac %>% 
@@ -478,7 +627,7 @@ pac %>%
   scale_fill_brewer(palette = "Dark2") +
   scale_y_continuous(labels = comma) +
   scale_x_continuous(breaks = seq(2000, 2020, by = 2)) +
-  coord_cartesian(xlim = c(2008, 2020)) +
+  coord_cartesian(xlim = c(2000, 2020)) +
   theme(legend.position = "bottom") +
   labs(
     title = "Pennsylvania Contributions by Year",
@@ -489,7 +638,7 @@ pac %>%
 ```
 
 ```{r include=FALSE}
-gc(full = TRUE)
+flush_memory()
 ```
 
 ## Wrangle
@@ -501,7 +650,7 @@ facilitate this process.
 
 ### Address
 
-For the street `addresss` variable, the `campfin::normal_address()` function
+For the street `*_addresss` variables, the `campfin::normal_address()` function
 will force consistence case, remove punctuation, and abbreviate official 
 USPS suffixes.
 
@@ -530,6 +679,8 @@ pac %>%
   distinct() %>% 
   sample_n(10)
 ```
+
+We will repeat the process for filer addresses.
 
 ```{r fil_address_norm}
 pac <- pac %>% 
@@ -591,8 +742,8 @@ pac <- mutate_at(
 
 ```{r state_view}
 pac %>% 
-  count(con_state, con_state_norm, sort = TRUE) %>% 
-  filter(con_state != con_state_norm)
+  filter(con_state != con_state_norm) %>% 
+  count(con_state, con_state_norm, sort = TRUE)
 ```
 
 ```{r state_progress}
@@ -604,7 +755,7 @@ progress_table(
 ```
 
 ```{r include=FALSE}
-gc(full = TRUE)
+flush_memory()
 ```
 
 ### City
@@ -690,13 +841,13 @@ pac <- pac %>%
 ```
 
 ```{r include=FALSE}
-gc(full = TRUE)
+flush_memory()
 ```
 
 #### Refine
 
-The [OpenRefine] algorithms can be used to group similar strings and replace the
-less common versions with their most common counterpart. This can greatly 
+The [OpenRefine][or] algorithms can be used to group similar strings and replace
+the less common versions with their most common counterpart. This can greatly
 reduce inconsistency, but with low confidence; we will only keep any refined
 strings that have a valid city/state/zip combination.
 
@@ -740,7 +891,7 @@ pac <- pac %>%
 ```
 
 ```{r include=FALSE}
-gc(full = TRUE)
+flush_memory()
 ```
 
 #### Check
@@ -890,7 +1041,7 @@ progress %>%
 ```
 
 ```{r include=FALSE}
-gc(full = TRUE)
+flush_memory()
 ```
 
 ## Conclude
@@ -906,7 +1057,7 @@ pac <- pac %>%
     -fil_city_norm,
     fil_city_clean = fil_city_swap
   ) %>% 
-  rename_all(~str_replace(., "_norm", "_clean"))
+  rename_all(~str_replace(., "_norm", "_clean"))  
 ```
 
 ```{r clean_glimpse}
@@ -927,4 +1078,67 @@ clean_path <- path(clean_dir, "pa_contribs_clean.csv")
 write_csv(pac, clean_path, na = "")
 file_size(clean_path)
 guess_encoding(clean_path)
+```
+
+## Dictionary
+
+```{r dict_make, echo=FALSE}
+dict_raw <- tibble(
+  var = md_code(names(pac)),
+  type = map_chr(pac, typeof),
+  def = c(
+    "Filer unique filer ID",
+    "Election year",
+    "Election cycle",
+    "Election section",
+    "Contributor full name",
+    "Contributor street address",
+    "Contributor secondary address",
+    "Contributor city name",
+    "Contributor state abbreviation",
+    "Contributor ZIP+4 code",
+    "Contributor occupation",
+    "Contributor employer name",
+    "Date contribution made",
+    "Contribution amount or correction",
+    "Filer type",
+    "Filer committee name",
+    "Filer office sought",
+    "District election held",
+    "Filer political party",
+    "Filer street address",
+    "Filer secondary address",
+    "Filer city name",
+    "Filer 2-digit state abbreviation",
+    "Filer ZIP+4 code",
+    "County election held in",
+    "Filer telephone number",
+    "Flag for missing date, amount, or name",
+    "Flag for completely duplicated record",
+    "Calendar year of contribution date",
+    "Normalized contributor street address",
+    "Normalized Filer street address",
+    "Normalized contributor 5-digit ZIP code",
+    "Normalized Filer 5-digit ZIP code",
+    "Normalized contributor state abbreviation",
+    "Normalized Filer state abbreviation",
+    "Normalized Filer city name",
+    "Normalized contributor city name"
+  )
+)
+```
+
+```{r dict_md, echo=FALSE}
+(dict_md <- kable(
+  x = dict_raw,
+  format = "markdown",
+  col.names = c("Column", "Type", "Definition")
+))
+```
+
+```{r dict_write}
+write_lines(
+  x = c("# Pennsylvania Contributions Data Dictionary\n", dict_md),
+  path = here("pa", "contribs", "pa_contribs_dict.md"),
+)
 ```
