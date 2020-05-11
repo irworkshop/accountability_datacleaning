@@ -116,20 +116,23 @@ here::here()
 A list of contracts by fiscal year can be obtained from the District of Columbia
 [Contracts and Procurement Transparency Portal][cptp]. A search can be run for
 results by fiscal years 2016 through 2021. This search can then be exported as
-a single CSV file which we can read into R.
+a single CSV file which we can read into R. The same thing can be done on the 
+[purchase orders portal][pop].
 
 [cptp]: https://contracts.ocp.dc.gov/contracts/search
+[pop]: https://contracts.ocp.dc.gov/purchase/search
 
 ## Read
 
 ```{r raw_dir}
 raw_dir <- dir_create(here("dc", "contracts", "data", "raw"))
-raw_path <- path(raw_dir, "ContractAwards.csv")
 ```
 
-```{r raw_read}
+First, we will read the contract awards file.
+
+```{r raw_read_con}
 dcc <- vroom(
-  file = raw_path,
+  file = path(raw_dir, "ContractAwards.csv"),
   delim = ",",
   .name_repair = make_clean_names,
   col_types = cols(
@@ -142,8 +145,51 @@ dcc <- vroom(
 )
 ```
 
-```{r echo=FALSE}
-dcc <- rename(dcc, vendor = vendor_supplier)
+Then the we will read the purchase orders file.
+
+```{r raw_read_po}
+dcp <- vroom(
+  file = path(raw_dir, "PurchaseOrders.csv"),
+  delim = ",",
+  .name_repair = make_clean_names,
+  col_types = cols(
+    .default = col_character(),
+    `Total Amount` = col_number(),
+    `Order Date` = col_date_usa(),
+  )
+)
+```
+
+After making some column names match, the two data frames can be bound together
+into a single data frame. For contracts, the `award_date` will be used as a 
+single date, paired with the `order_date` for purchase orders. The purchase
+order `total_amount` will be paired with the contract's single `amount`.
+
+```{r raw_rename_con}
+dcc <- rename(
+  .data = dcc,
+  id = contract_number,
+  vendor = vendor_supplier,
+  date = award_date
+)
+```
+
+```{r raw_rename_po}
+dcp <- rename(
+  .data = dcp,
+  amount = total_amount,
+  id = po_number,
+  vendor = vendor_supplier,
+  date = order_date
+)
+```
+
+After the two data frames are bound together, columns not found in both files
+(e.g., a contract's `start_date`) will be filed with `NA` for records from the 
+other data type.
+
+```{r raw_bind}
+dcc <- bind_rows(contract = dcc, purchase = dcp, .id = "type")
 ```
 
 ## Explore
@@ -165,31 +211,31 @@ col_stats(dcc, count_na)
 These records can be flagged with `campfin::flag_na()`.
 
 ```{r na_flag}
-dcc <- dcc %>% flag_na(award_date, vendor, amount, agency)
+dcc <- dcc %>% flag_na(date, vendor, amount, agency)
 percent(mean(dcc$na_flag), 0.01)
 ```
 
 ```{r na_view}
 dcc %>% 
   filter(na_flag) %>% 
-  select(award_date, vendor, amount, agency)
+  select(date, vendor, amount, agency, type)
 ```
 
 ### Duplicates
 
-Ignoring the `contract_number` variable, there are a handful of completely
-duplicated records. These can be flagged with `campfin::flag_dupes()`.
+Ignoring the `id` variable, there are a handful of completely duplicated 
+records. These can be flagged with `campfin::flag_dupes()`.
 
 ```{r dupe_flag, warning=TRUE}
-dcc <- flag_dupes(dcc, -contract_number)
-sum(dcc$dupe_flag)
+dcc <- flag_dupes(dcc, -id)
+percent(mean(dcc$dupe_flag), 0.01)
 ```
 
 ```{r dupe_view}
 dcc %>% 
   filter(dupe_flag) %>% 
-  select(award_date, vendor, amount, agency) %>% 
-  arrange(award_date)
+  select(date, vendor, amount, agency, type) %>% 
+  arrange(date)
 ```
 
 ### Categorical
@@ -218,7 +264,7 @@ glimpse(dcc[c(which.min(dcc$amount), which.max(dcc$amount)), ])
 
 ```{r hist_amount, echo=FALSE}
 dcc %>%
-  filter(amount >= 1e3) %>% 
+  filter(amount >= 1) %>% 
   ggplot(aes(amount)) +
   geom_histogram(fill = dark2["purple"]) +
   scale_y_continuous(labels = comma) +
@@ -238,35 +284,35 @@ dcc %>%
 
 #### Dates
 
-We can add the calendar year from `award_date` with `lubridate::year()`
+We can add the calendar year from `date` with `lubridate::year()`
 
 ```{r date_year}
-dcc <- mutate(dcc, award_year = year(award_date))
+dcc <- mutate(dcc, year = year(date))
 ```
 
 Aside from a few of contracts awarded much earlier, the date columns are clean.
 
 ```{r date_range}
-count_na(dcc$award_date)
-min(dcc$award_date, na.rm = TRUE)
-sum(dcc$award_year < 2016, na.rm = TRUE)
-max(dcc$award_date, na.rm = TRUE)
-sum(dcc$award_date > today(), na.rm = TRUE)
+count_na(dcc$date)
+min(dcc$date, na.rm = TRUE)
+sum(dcc$year < 2012, na.rm = TRUE)
+max(dcc$date, na.rm = TRUE)
+sum(dcc$date > today(), na.rm = TRUE)
 ```
 
 ```{r bar_year, echo=FALSE}
 dcc %>% 
-  count(award_year) %>% 
-  ggplot(aes(x = award_year, y = n)) +
-  geom_col(fill = dark2["orange"]) + 
+  count(year, type) %>% 
+  ggplot(aes(x = year, y = n)) +
+  geom_col(aes(fill = type)) + 
   scale_fill_brewer(palette = "Dark2") +
   scale_y_continuous(labels = comma) +
   scale_x_continuous(breaks = seq(2008, 2020)) +
   theme(legend.position = "bottom") +
   labs(
-    title = "District Of Columbia Contracts by Year",
+    title = "District Of Columbia Contracts & Purchases by Year",
     caption = "Source: Contracts and Procurement Transparency Portal",
-    fill = "Election Year",
+    fill = "Transaction Type",
     x = "Year Made",
     y = "Count"
   )
@@ -304,20 +350,26 @@ str_replace_all(enc, clean_path, basename)
 The following table describes the variables in our final exported file:
 
 ```{r dict_make, echo=FALSE}
+both <- rep(TRUE, ncol(dcc))
+both[c(5:7, 12)] <- FALSE
+both[13:15] <- NA
 dict_raw <- tibble(
   var = md_code(names(dcc)),
   type = md_code(map_chr(dcc, typeof)),
+  both = both,
   def = c(
+    "Transaction type (contract or purchae)",
     "Unique contract number",
     "Contract title",
     "Awarding agency name",
     "Option period awarded",
     "Contract start date",
     "Contract end date",
-    "Contract awarded date",
+    "Contract awarded date, purchase made date",
     "National Institute of Governmental Purchasing code",
     "Recipient vendor name",
-    "Contract amount awarded",
+    "Contract amount awarded, total purchase amount",
+    "Purchase order fiscal year",
     "Flag for missing date, amount, or name",
     "Flag for completely duplicated record",
     "Calendar year contract awarded"
@@ -329,7 +381,7 @@ dict_raw <- tibble(
 (dict_md <- kable(
   x = dict_raw,
   format = "markdown",
-  col.names = c("Column", "Type", "Definition")
+  col.names = c("Column", "Found in both", "Type", "Definition")
 ))
 ```
 
