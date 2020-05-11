@@ -1,7 +1,18 @@
 New York Lobbying Registration Diary
 ================
 Yanqi Xu
-2020-02-12 17:42:26
+2020-05-07 15:41:31
+
+  - [Project](#project)
+  - [Objectives](#objectives)
+  - [Packages](#packages)
+  - [Data](#data)
+  - [Import](#import)
+  - [Explore](#explore)
+  - [Wrangle](#wrangle)
+  - [Conclude](#conclude)
+  - [Rename](#rename)
+  - [Export](#export)
 
 <!-- Place comments regarding knitting here -->
 
@@ -48,6 +59,7 @@ processing of campaign finance data.
 if (!require("pacman")) install.packages("pacman")
 pacman::p_load_gh("irworkshop/campfin")
 pacman::p_load(
+  pdftools, #wrangle pdf files
   readxl, #read excel files
   rvest, # used to scrape website and get html elements
   tidyverse, # data manipulation
@@ -87,7 +99,11 @@ here::here()
 The [New York State Joint Commission on Public
 Ethics](https://jcope.ny.gov/lobbying-datasets) makes Registered
 Lobbyist Disclosures from 2011 to 2018 available for download. The 2018
-data and prior year’s data exist in two separate files. \#\# Import
+data and prior year’s data exist in two separate files. A [data
+dictionary](https://jcope.ny.gov/system/files/documents/2018/04/nysjcoperegisteredlobbyistdisclosuresdatadictionary.pdf)
+is also available.
+
+## Import
 
 ### Setting up Raw Data Directory
 
@@ -98,11 +114,11 @@ raw_dir <- dir_create(here("ny", "lobby", "data", "raw"))
 ### Read
 
 Note that for years prior to 2018, data was originally stored as a
-“xlsb” file, and we converted it to `xlsx` in
-Excel.
+“xlsb” file, and we converted it to `xlsx` in Excel.
 
 ``` r
 ny_lob <- dir_ls(raw_dir, glob = "*.xlsx")  %>% map_dfr(read_xlsx) %>% clean_names()
+col_num <- ncol(ny_lob)
 ```
 
 ## Explore
@@ -149,8 +165,8 @@ tail(ny_lob)
 #> #   lobbyist_subjects_2 <chr>, person_1 <chr>, person_2 <chr>, procurement_number_1 <chr>,
 #> #   procurement_number_2 <chr>, procurement_subjects_1 <chr>, procurement_subjects_2 <lgl>
 glimpse(sample_n(ny_lob, 20))
-#> Observations: 20
-#> Variables: 39
+#> Rows: 20
+#> Columns: 39
 #> $ reporting_year          <dbl> 2015, 2011, 2018, 2013, 2014, 2017, 2018, 2014, 2013, 2013, 2017…
 #> $ reporting_period        <chr> "MJ", "ND", "MJ", "JA", "MJ", "JF", "ND", "ND", "MA", "MJ", "JA"…
 #> $ lobbyist_name           <chr> "SMYTH, A. ADVOCACY", "TLM ASSOCIATES LLC", "GETO & DE MILLY, IN…
@@ -359,8 +375,8 @@ ny_lob %>%
   distinct() %>% 
   sample_n(10) %>% 
   glimpse()
-#> Observations: 10
-#> Variables: 6
+#> Rows: 10
+#> Columns: 6
 #> $ lobbyist_address_1    <chr> "12 SHERIDAN AVENUE", "111 WASHINGTON AVENUE", "THE WOOLWORTH BUIL…
 #> $ lobbyist_address_2    <chr> NA, NA, "233 BROADWAY, SUITE 2310", "SUITE 302", "6TH FLOOR", "SUI…
 #> $ client_addresss1      <chr> "1911 LORINGS CROSSING", "111 WASHINGTON AVENUE", "2928 41ST AVENU…
@@ -400,7 +416,7 @@ progress_table(
 #> 4 client_zip5     0.995       2081       0   915     39
 ```
 
-### state
+### State
 
 Valid two digit state abbreviations can be made using the
 `campfin::normal_state()` function.
@@ -462,9 +478,9 @@ ny_lob <- ny_lob %>%
       na_rep = TRUE)))
 
 prop_in(ny_lob$lobbyist_city_norm, valid_city, na.rm = T)
-#> [1] 0.9850472
+#> [1] 0.9888982
 prop_in(ny_lob$client_city_norm, valid_city, na.rm = T)
-#> [1] 0.9557785
+#> [1] 0.9663208
 ```
 
 #### Swap
@@ -527,17 +543,16 @@ ny_lob <- ny_lob %>%
 ```
 
 After the two normalization steps, the percentage of valid cities is at
-100%. \#\#\#\#
-Progress
+100%. \#\#\#\# Progress
 
 | stage                | prop\_in | n\_distinct | prop\_na | n\_out | n\_diff |
 | :------------------- | -------: | ----------: | -------: | -----: | ------: |
 | lobbyist\_city       |    0.967 |         454 |    0.000 |   6330 |      36 |
 | client\_city         |    0.974 |        1367 |    0.000 |   4987 |     215 |
-| lobbyist\_city\_norm |    0.992 |         444 |    0.000 |   1472 |      32 |
-| client\_city\_norm   |    0.968 |        1340 |    0.000 |   6260 |     205 |
+| lobbyist\_city\_norm |    0.996 |         444 |    0.000 |    729 |      24 |
+| client\_city\_norm   |    0.978 |        1340 |    0.000 |   4190 |     184 |
 | lobbyist\_city\_swap |    0.998 |         437 |    0.014 |    373 |      14 |
-| client\_city\_swap   |    0.990 |        1216 |    0.021 |   1857 |      67 |
+| client\_city\_swap   |    0.991 |        1213 |    0.021 |   1774 |      60 |
 
 You can see how the percentage of valid values increased with each
 stage.
@@ -578,8 +593,8 @@ progress %>%
 
 ``` r
 glimpse(sample_n(ny_lob, 20))
-#> Observations: 20
-#> Variables: 50
+#> Rows: 20
+#> Columns: 50
 #> $ reporting_year          <dbl> 2011, 2013, 2017, 2018, 2016, 2015, 2011, 2018, 2016, 2015, 2012…
 #> $ reporting_period        <chr> "ND", "ND", "SO", "MJ", "JA", "SO", "MJ", "ND", "JF", "MJ", "JA"…
 #> $ lobbyist_name           <chr> "LYNCH, PATRICIA ASSOCIATES, INC.", "NORTHEAST GOVERNMENT CONSUL…
@@ -632,6 +647,15 @@ glimpse(sample_n(ny_lob, 20))
 #> $ client_city_swap        <chr> "STONY BROOK", "AUSTIN", "WILMINGTON", "MORRISTOWN", "ALBANY", "…
 ```
 
+## Rename
+
+``` r
+ny_lob <- ny_lob  %>% 
+  rename(lobbyist_city_clean = lobbyist_city_swap) %>% 
+  rename( client_city_clean = client_city_swap) %>% 
+  select(-c(lobbyist_city_norm, client_city_norm))
+```
+
 1.  There are 192941 records in the database.
 2.  There are 1384 duplicate records in the database.
 3.  The range and distribution of `amount` and `date` seem reasonable.
@@ -644,13 +668,69 @@ glimpse(sample_n(ny_lob, 20))
 ## Export
 
 ``` r
-clean_dir <- dir_create(here("ny", "lobby", "data", "reg","clean"))
+clean_dir <- dir_create(here("ny", "lobby", "data", "processed","reg"))
 ```
 
 ``` r
 write_csv(
-  x = ny_lob %>% rename(lobbyist_city_clean = lobbyist_city_swap) %>% rename( client_city_clean = client_city_swap),
-  path = path(clean_dir, "ny_lob_clean.csv"),
+  x = ny_lob,
+  path = path(clean_dir, "ny_lob_early.csv"),
   na = ""
 )
 ```
+
+### Dictionary
+
+Here we’ll generate the data dictionary provided by [NYS
+JCOPE](https://jcope.ny.gov/system/files/documents/2018/04/nysjcoperegisteredlobbyistdisclosuresdatadictionary.pdf)
+|Data Label                           |Data Type |Data Description                                                                                                                                                                                                                                                                                                                                       |
+|:------------------------------------|:---------|:------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+|Additional Lobbyist LBR              |`Text`    |Additional Lobbyist Listed on the Principal Lobbyist Bi- monthly Report.                                                                                                                                                                                                                                                                               |
+|Additional Lobbyist LR               |`Text`    |Additional Lobbyist Listed on the Principal Lobbyist Registration                                                                                                                                                                                                                                                                                      |
+|Client Address1                      |`Text`    |Client Address 1                                                                                                                                                                                                                                                                                                                                       |
+|Client Address2                      |`Text`    |Client Address 2                                                                                                                                                                                                                                                                                                                                       |
+|Client Business Nature               |`Text`    |Description of Client Business, selected by Lobbyist Registering for this Client                                                                                                                                                                                                                                                                       |
+|Client City                          |`Text`    |Client City                                                                                                                                                                                                                                                                                                                                            |
+|Client Name                          |`Text`    |Lobbying Client Name                                                                                                                                                                                                                                                                                                                                   |
+|Client Phone                         |`Text`    |Client Phone                                                                                                                                                                                                                                                                                                                                           |
+|Client State                         |`Text`    |Client State                                                                                                                                                                                                                                                                                                                                           |
+|Client Zip                           |`Text`    |Client Zip                                                                                                                                                                                                                                                                                                                                             |
+|Government Level                     |`Text`    |State = (S), Local = (L), Both = (B)                                                                                                                                                                                                                                                                                                                   |
+|Lobbying Type                        |`Text`    |Procurement = (P), Non-Procurement = (N), Both =(B)                                                                                                                                                                                                                                                                                                    |
+|Lobbyist Address1                    |`Text`    |Lobbyist Address 1                                                                                                                                                                                                                                                                                                                                     |
+|Lobbyist Address2                    |`Text`    |Lobbyist Address 2                                                                                                                                                                                                                                                                                                                                     |
+|Lobbyist City                        |`Text`    |Lobbyist City                                                                                                                                                                                                                                                                                                                                          |
+|Lobbyist Email                       |`Text`    |Lobbyist E-mail Note: Though this column is in the data dictionary provided by NYS JCOPE, it is actually not in the original data.                                                                                                                                                                                                                     |
+|Lobbyist Name                        |`Text`    |Name of Lobbyist                                                                                                                                                                                                                                                                                                                                       |
+|Lobbyist Phone                       |`Text`    |Lobbyist Phone                                                                                                                                                                                                                                                                                                                                         |
+|Lobbyist State                       |`Text`    |Lobbyist State                                                                                                                                                                                                                                                                                                                                         |
+|Lobbyist Type                        |`Text`    |Retained = (R), Employed = (E), Designated = (D)                                                                                                                                                                                                                                                                                                       |
+|Lobbyist Zip                         |`Text`    |Lobbyist Zip                                                                                                                                                                                                                                                                                                                                           |
+|LR Party First Name                  |`Text`    |First name of person listed on the lobbyist profile                                                                                                                                                                                                                                                                                                    |
+|Reporting Period                     |`Text`    |January - February (JF), March-April (MA), May - June (MJ), July-August (JA), September - October (SA), November - December (ND)                                                                                                                                                                                                                       |
+|Reporting Year                       |`Text`    |Filing Year responsible for filing the Lobbyist Registration and Bimonthly Reports. In the case of an individual principal lobbyist, this person is the individual listed in the principal lobbyist name field. In the case of an organization, this person is the organization’s chief administrative officer.                                        |
+|Lobbyist Responsible Party Last Name |`Text`    |Last name of person listed on the lobbyist profile responsible for filing the Lobbyist Registration and Bimonthly Reports. In the case of an individual principal lobbyist, this person is the individual listed in the principal lobbyist name field. In the case of an organization, this person is the organization’s chief administrative officer. |
+|Total Expenses                       |`Text`    |Summary of Expenses reported for the period                                                                                                                                                                                                                                                                                                            |
+|Total Compensation                   |`Text`    |Summary of Compensation reported for the period                                                                                                                                                                                                                                                                                                        |
+|Total Reimbursed                     |`Text`    |Summary of Reimbursed Expenses reported for the period                                                                                                                                                                                                                                                                                                 |
+|Bill Details 1                       |`Text`    |Bill, Rule, Regulation, Rate Number or brief description relative to the introduction or intended introduction of legislation or a resolution lobbied                                                                                                                                                                                                  |
+|Bill Details 2                       |`Text`    |Bill, Rule, Regulation, Rate Number or brief description relative to the introduction or intended introduction of legislation or a resolution lobbied                                                                                                                                                                                                  |
+|Procurement Details 1                |`Text`    |Title and Identifying # of procurement contracts and documents lobbied.                                                                                                                                                                                                                                                                                |
+|Procurement Details 2                |`Text`    |Title and Identifying # of procurement contracts and documents lobbied.                                                                                                                                                                                                                                                                                |
+|Lobbyist Subjects 1                  |`Text`    |Subjects lobbied                                                                                                                                                                                                                                                                                                                                       |
+|Lobbyist Subjects 2                  |`Text`    |Subjects lobbied                                                                                                                                                                                                                                                                                                                                       |
+|Person 1                             |`Text`    |Person, State Agency, Municipality, or Legislative Body lobbied.                                                                                                                                                                                                                                                                                       |
+|Person 2                             |`Text`    |Person, State Agency, Municipality, or Legislative Body lobbied. Number or Subject Matter of Executive Order of                                                                                                                                                                                                                                        |
+|Procurement Number 1                 |`Text`    |Governor/Municipality lobbied. Number or Subject Matter of Executive Order of                                                                                                                                                                                                                                                                          |
+|Procurement Number 2                 |`Text`    |Governor/Municipality lobbied.                                                                                                                                                                                                                                                                                                                         |
+|Procurement Subjects 1               |`Text`    |Subject Matter of and Tribes involved in tribal-state compacts, etc. lobbied.                                                                                                                                                                                                                                                                          |
+|Procurement Subjects 2               |`Text`    |Subject Matter of and Tribes involved in tribal-state compacts, etc. lobbied.                                                                                                                                                                                                                                                                          |
+|dupe_flag                            |`Logical` |Indivator of whether this has another idential record (Both flagged), generated by flag_dupe                                                                                                                                                                                                                                                           |
+|lobbyist_address_norm                |`Text`    |Normalized combined lobbying firms street address                                                                                                                                                                                                                                                                                                      |
+|client_address_norm                  |`Text`    |Normalized combined client street address                                                                                                                                                                                                                                                                                                              |
+|lobbyist_zip5                        |`Text`    |Normalzed 5-digit lobbyist zip field from`lobbyist_zip`                                                                                                                                                                                                                                                                                                |
+|client_zip5                          |`Text`    |Normalzed 5-digit client zip field from`client_zip`                                                                                                                                                                                                                                                                                                    |
+|lobbyist_state_norm                  |`Text`    |Normalized state field from`lobbyist_state`                                                                                                                                                                                                                                                                                                            |
+|client_state_norm                    |`Text`    |Normalized State field from`client_state`                                                                                                                                                                                                                                                                                                              |
+|lobbyist_city_clean                  |`Text`    |Normalized city  (valid locale) field from`lobbyist_city`                                                                                                                                                                                                                                                                                              |
+|client_city_clean                    |`Text`    |Normalized city (valid locale) field from`client_city`                                                                                                                                                                                                                                                                                                 |
