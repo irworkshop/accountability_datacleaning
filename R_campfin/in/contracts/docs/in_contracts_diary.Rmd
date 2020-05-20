@@ -1,0 +1,334 @@
+---
+title: "Indiana Contracts"
+author: "Kiernan Nicholls"
+date: "`r Sys.time()`"
+output:
+  github_document: 
+    df_print: tibble
+    toc: true
+    toc_dept: 2
+editor_options: 
+  chunk_output_type: console
+---
+
+<!-- Place comments regarding knitting here -->
+
+```{r setup, include=FALSE, purl=FALSE}
+library(knitr)
+opts_chunk$set(
+  eval = TRUE,
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  error = FALSE,
+  collapse = TRUE,
+  comment = "#>",
+  fig.path = "../plots/",
+  fig.width = 10,
+  dpi = 300
+)
+if (!interactive()) {
+  options(width = 99)
+  set.seed(5)
+}
+```
+
+```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
+doc_dir <- fs::dir_create(here::here("in", "contracts", "docs"))
+```
+
+## Project
+
+The Accountability Project is an effort to cut across data silos and give
+journalists, policy professionals, activists, and the public at large a simple
+way to search across huge volumes of public data about people and organizations.
+
+Our goal is to standardizing public data on a few key fields by thinking of each
+dataset row as a transaction. For each transaction there should be (at least) 3
+variables:
+
+1. All **parties** to a transaction.
+2. The **date** of the transaction.
+3. The **amount** of money involved.
+
+## Objectives
+
+This document describes the process used to complete the following objectives:
+
+1. How many records are in the database?
+1. Check for entirely duplicated records.
+1. Check ranges of continuous variables.
+1. Is there anything blank or missing?
+1. Check for consistency issues.
+1. Create a five-digit ZIP Code called `zip`.
+1. Create a `year` field from the transaction date.
+1. Make sure there is data on both parties to a transaction.
+
+## Packages
+
+The following packages are needed to collect, manipulate, visualize, analyze,
+and communicate these results. The `pacman` package will facilitate their
+installation and attachment.
+
+The IRW's `campfin` package will also have to be installed from GitHub. This
+package contains functions custom made to help facilitate the processing of
+campaign finance data.
+
+```{r load_packages, message=FALSE, warning=FALSE, error=FALSE}
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load_gh("irworkshop/campfin")
+pacman::p_load(
+  tidyverse, # data manipulation
+  lubridate, # datetime strings
+  gluedown, # printing markdown
+  magrittr, # pipe operators
+  janitor, # clean data frames
+  refinr, # cluster and merge
+  scales, # format strings
+  knitr, # knit documents
+  vroom, # read files fast
+  rvest, # html scraping
+  glue, # combine strings
+  here, # relative paths
+  httr, # http requests
+  fs # local storage 
+)
+```
+
+This document should be run as part of the `R_campfin` project, which lives as a
+sub-directory of the more general, language-agnostic
+[`irworkshop/accountability_datacleaning`][tap] GitHub repository.
+
+The `R_campfin` project uses the [RStudio projects][rproj] feature and should be
+run as such. The project also uses the dynamic `here::here()` tool for file
+paths relative to _your_ machine.
+
+```{r where_here}
+# where does this document knit?
+here::here()
+```
+
+[tap]: https://github.com/irworkshop/accountability_datacleaning
+[rproj]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects
+
+## Data
+
+Contracts can be exported from the [State of Indiana Public Contract Search][s]
+found on the [Indiana Transparency Portal][t]. The portal limits the number of
+returned search results to 1,000 so queries must be split from January through
+June and from July through December. Search results can then be exported as
+Microsoft Excel files.
+
+[s]: https://fs.gmis.in.gov/psp/guest/SUPPLIER/ERP/c/SOI_CUSTOM_APPS.SOI_PUBLIC_CNTRCTS.GBL
+[t]: https://www.in.gov/itp/
+
+```{r raw_dir}
+raw_dir <- dir_create(here("in", "contracts", "data", "raw"))
+raw_paths <- dir_ls(raw_dir)
+```
+
+## Read
+
+The Excel files can then all be read into a single data frame using the
+`readxl::read_excel()` and `purrr::map_df()` functions.
+
+```{r raw_read}
+inc <- map_df(
+  .x = dir_ls("~/Downloads/in_contracts/"),
+  .f = readxl::read_excel,
+  .name_repair = make_clean_names
+)
+```
+
+The date columns must be parsed after the fact. We can also remove empty and
+useless columns.
+
+```{r raw_parse}
+inc <- inc %>% 
+  mutate(across(ends_with("date"), parse_date, "%m/%d/%Y")) %>% 
+  remove_empty("cols") %>% 
+  remove_constant()
+```
+
+## Explore
+
+```{r glimpse}
+glimpse(inc)
+tail(inc)
+```
+
+### Missing
+
+```{r na_count}
+col_stats(inc, count_na)
+```
+
+```{r na_flag}
+inc <- inc %>% flag_na(start_date, agency, amount, vendor_name)
+sum(inc$na_flag)
+```
+
+```{r na_view}
+inc %>% 
+  filter(na_flag) %>% 
+  select(start_date, agency, amount, vendor_name)
+```
+
+### Duplicates
+
+```{r dupe_flag}
+inc <- flag_dupes(inc, everything())
+sum(inc$dupe_flag)
+```
+
+```{r dupe_view}
+inc %>% 
+  filter(dupe_flag) %>% 
+  select(start_date, agency, amount, vendor_name)
+```
+
+### Categorical
+
+```{r n_distinct}
+col_stats(inc, n_distinct)
+add_prop(count(inc, action_type, sort = TRUE))
+```
+
+### Continuous
+
+#### Amounts
+
+```{r ammount_summary}
+noquote(map_chr(summary(inc$amount), dollar))
+mean(inc$amount <= 0)
+```
+
+```{r hist_amount, echo=FALSE}
+inc %>%
+  filter(amount >= 1) %>% 
+  ggplot(aes(amount)) +
+  geom_histogram(fill = dark2["purple"]) +
+  scale_y_continuous(labels = comma) +
+  scale_x_continuous(
+    breaks = c(1 %o% 10^(0:6)),
+    labels = dollar,
+    trans = "log10"
+  ) +
+  labs(
+    title = "Indiana Contracts Amount Distribution",
+    subtitle = "from 2000 to 2019",
+    caption = "Source: {source}",
+    x = "Amount",
+    y = "Count"
+  )
+```
+
+#### Dates
+
+We can add the calendar year from `date` with `lubridate::year()`
+
+```{r date_year}
+inc <- mutate(inc, start_year = year(start_date))
+```
+
+```{r date_range}
+min(inc$start_date)
+sum(inc$start_year < 2000)
+max(inc$start_date)
+sum(inc$start_date > today())
+```
+
+```{r}
+add_prop(count(inc, start_year))
+```
+
+```{r bar_year, echo=FALSE}
+inc %>% 
+  count(start_year) %>% 
+  mutate(even = is_even(start_year)) %>% 
+  ggplot(aes(x = start_year, y = n)) +
+  geom_col(fill = dark2["orange"]) + 
+  scale_fill_brewer(palette = "Dark2") +
+  scale_y_continuous(labels = comma) +
+  coord_cartesian(xlim = c(2015, 2020)) +
+  scale_x_continuous(breaks = seq(2000, 2020, by = 2)) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "Indiana Contracts by Year",
+    caption = "Source: {source}",
+    fill = "Election Year",
+    x = "Year Made",
+    y = "Count"
+  )
+```
+
+## Wrangle
+
+The only geographic variable in need of cleaning is the ZIP code which contains
+a handful of ZIP+4 codes, which we can trim to create 5-digit ZIP codes.
+
+```{r zip_norm}
+inc <- mutate(inc, across(zip_code, normal_zip))
+prop_in(inc$zip_code, valid_zip)
+```
+
+## Conclude
+
+1. There are `r comma(nrow(inc))` records in the database.
+1. There are `r comma(sum(inc$dupe_flag))` duplicate records in the database.
+1. The range and distribution of `amount` and `date` seem reasonable.
+1. There are `r comma(sum(inc$na_flag))` records missing key variables.
+1. Consistency in geographic data has been improved with `campfin::normal_*()`.
+1. The 4-digit `start_year` variable has been created with `lubridate::year()`.
+
+## Export
+
+Now the file can be saved on disk for upload to the Accountability server.
+
+```{r clean_dir}
+clean_dir <- dir_create(here("in", "contracts", "data", "clean"))
+clean_path <- path(clean_dir, "in_contracts_clean.csv")
+write_csv(inc, clean_path, na = "")
+file_size(clean_path)
+mutate(file_encoding(clean_path), across(path, basename))
+```
+
+## Dictionary
+
+The following table describes the variables in our final exported file:
+
+```{r dict_make, echo=FALSE}
+dict_raw <- tibble(
+  var = md_code(names(inc)),
+  type = md_code(map_chr(inc, typeof)),
+  def = c(
+    "Contract amount",
+    "Unique contract ID",
+    "Contract amendment number",
+    "Contract action type (New, Amendment, Renewal)",
+    "Contract start date",
+    "Contract end date",
+    "Spending agency name",
+    "Recieving vendor name",
+    "Vendor 5-digit ZIP code",
+    "Flag for missing date, amount, or name",
+    "Flag for completely duplicated record",
+    "Calendar year contract started"
+  )
+)
+```
+
+```{r dict_md, echo=FALSE}
+(dict_md <- kable(
+  x = dict_raw,
+  format = "markdown",
+  col.names = c("Column", "Type", "Definition")
+))
+```
+
+```{r dict_write}
+write_lines(
+  x = c("# Indiana Contracts Data Dictionary\n", dict_md),
+  path = here("in", "contracts", "in_contracts_dict.md"),
+)
+```
