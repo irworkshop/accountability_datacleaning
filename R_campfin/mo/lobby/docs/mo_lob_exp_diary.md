@@ -1,33 +1,38 @@
 Missouri Lobbying Expenditure Diary
 ================
 Yanqi Xu
-2020-02-28 14:57:46
+2020-05-20 12:58:40
 
--   [Project](#project)
--   [Objectives](#objectives)
--   [Packages](#packages)
--   [Data](#data)
--   [Import](#import)
--   [Explore](#explore)
--   [Conclude](#conclude)
--   [Export](#export)
+  - [Project](#project)
+  - [Objectives](#objectives)
+  - [Packages](#packages)
+  - [Data](#data)
+  - [Import](#import)
+  - [Explore](#explore)
+  - [Conclude](#conclude)
+  - [Export](#export)
 
 <!-- Place comments regarding knitting here -->
-Project
--------
 
-The Accountability Project is an effort to cut across data silos and give journalists, policy professionals, activists, and the public at large a simple way to search across huge volumes of public data about people and organizations.
+## Project
 
-Our goal is to standardizing public data on a few key fields by thinking of each dataset row as a transaction. For each transaction there should be (at least) 3 variables:
+The Accountability Project is an effort to cut across data silos and
+give journalists, policy professionals, activists, and the public at
+large a simple way to search across huge volumes of public data about
+people and organizations.
+
+Our goal is to standardizing public data on a few key fields by thinking
+of each dataset row as a transaction. For each transaction there should
+be (at least) 3 variables:
 
 1.  All **parties** to a transaction.
 2.  The **date** of the transaction.
 3.  The **amount** of money involved.
 
-Objectives
-----------
+## Objectives
 
-This document describes the process used to complete the following objectives:
+This document describes the process used to complete the following
+objectives:
 
 1.  How many records are in the database?
 2.  Check for entirely duplicated records.
@@ -38,12 +43,15 @@ This document describes the process used to complete the following objectives:
 7.  Create a `year` field from the transaction date.
 8.  Make sure there is data on both parties to a transaction.
 
-Packages
---------
+## Packages
 
-The following packages are needed to collect, manipulate, visualize, analyze, and communicate these results. The `pacman` package will facilitate their installation and attachment.
+The following packages are needed to collect, manipulate, visualize,
+analyze, and communicate these results. The `pacman` package will
+facilitate their installation and attachment.
 
-The IRW's `campfin` package will also have to be installed from GitHub. This package contains functions custom made to help facilitate the processing of campaign finance data.
+The IRW’s `campfin` package will also have to be installed from GitHub.
+This package contains functions custom made to help facilitate the
+processing of campaign finance data.
 
 ``` r
 if (!require("pacman")) install.packages("pacman")
@@ -67,25 +75,44 @@ pacman::p_load(
 )
 ```
 
-This document should be run as part of the `R_campfin` project, which lives as a sub-directory of the more general, language-agnostic [`irworkshop/accountability_datacleaning`](https://github.com/irworkshop/accountability_datacleaning) GitHub repository.
+This document should be run as part of the `R_campfin` project, which
+lives as a sub-directory of the more general, language-agnostic
+[`irworkshop/accountability_datacleaning`](https://github.com/irworkshop/accountability_datacleaning)
+GitHub repository.
 
-The `R_campfin` project uses the [Rstudio projects](https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects "Rproj") feature and should be run as such. The project also uses the dynamic `here::here()` tool for file paths relative to *your* machine.
+The `R_campfin` project uses the [Rstudio
+projects](https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects "Rproj")
+feature and should be run as such. The project also uses the dynamic
+`here::here()` tool for file paths relative to *your* machine.
 
 ``` r
 # where does this document knit?
 here::here()
-#> [1] "/Users/soc/accountability/accountability_datacleaning/R_campfin"
+#> [1] "/Users/yanqixu/code/accountability_datacleaning/R_campfin"
 ```
 
-Data
-----
+## Data
 
-The [Missouri Ethics Commission](https://jcope.ny.gov/lobbying-datasets) makes lobbyist expenditure data from 2004 to 2020 available for download. Note that data for 2019 onward exists in a separate search. The 2018 data and prior year's data exist in two separate files.
+The [Missouri Ethics Commission](https://www.mec.mo.gov/mec/Lobbying/Lob_ExpSrch.aspx)
+makes lobbyist expenditure data from 2004 to 2020 available for
+download. Note that data for 2019 onward exists in a separate search.
+The 2018 data and prior year’s data exist in two separate files.
 
-The `mo_lob_exp` data captures expenditures reported by a lobbyist made on behalf of any group or individual including a state public official, their employee/ staff, spouse/child, a department head and their staff, and a local elected official in a municipality with a budget over $10 million.
+The `mo_lob_exp` data captures expenditures reported by a lobbyist made
+on behalf of any group or individual including a state public official,
+their employee/ staff, spouse/child, a department head and their staff,
+and a local elected official in a municipality with a budget over $10
+million.
 
-Import
-------
+According to the Ethics Commission, the recipient field is always the
+person who received the gift. If that person is an
+employee/staff/spouse/child of a public official the actual recipient is
+listed in the recipient field and the name of the associated public
+official is listed in the public official field. If the recipient of the
+gift is the public official their name is then listed in the recipient
+field only.
+
+## Import
 
 ### Setting up Raw Data Directory
 
@@ -95,7 +122,9 @@ raw_dir <- dir_create(here("mo", "lobby", "data", "raw","exp"))
 
 ### Read
 
-The `xlsx` files we obtained actually contain two tabs, one for `individual/solicitation` and the other for `group`. The columns are slightly dififerent, and we will read them separately.
+The `xlsx` files we obtained actually contain two tabs, one for
+`individual/solicitation` and the other for `group`. The columns are
+slightly dififerent, and we will read them separately.
 
 ``` r
 mo_lob_exp <- dir_ls(raw_dir) %>% str_subset("200.|201[^9]")  %>% map_dfr(read_xlsx, sheet = 1) %>% clean_names() %>% mutate_if(is.character, str_to_upper)
@@ -106,10 +135,14 @@ mo_lob_19 <- dir_ls(raw_dir) %>% str_subset("2019") %>% map_dfr(read_xlsx) %>% c
 
 According to the Missouri Ethics Commission,
 
-> The recipient field is always the person who received the gift. If that person is an employee/staff/spouse/child of a public official the actual recipient is listed in the recipient field and the name of the associated public official is listed in the public official field. If the recipient of the gift is the public official their name is then listed in the recipient field only.
+> The recipient field is always the person who received the gift. If
+> that person is an employee/staff/spouse/child of a public official the
+> actual recipient is listed in the recipient field and the name of the
+> associated public official is listed in the public official field. If
+> the recipient of the gift is the public official their name is then
+> listed in the recipient field only.
 
-Explore
--------
+## Explore
 
 ``` r
 head(mo_lob_exp)
@@ -137,8 +170,8 @@ tail(mo_lob_exp)
 #> # … with 9 more variables: date <dttm>, type <chr>, description <chr>, amount <dbl>,
 #> #   principal <chr>, amend_reason <chr>, ind_id <dbl>, amend_ind_id <dbl>, expenditure_type <chr>
 glimpse(sample_n(mo_lob_exp, 20))
-#> Observations: 20
-#> Variables: 15
+#> Rows: 20
+#> Columns: 15
 #> $ lob_id           <chr> "L000523", "L000299", "L000159", "L000349", "L001075C", "L001839A", "L0…
 #> $ lob_first_name   <chr> "D SCOTT", "WILLIAM A", "TERRY W", "STEVE", "DONALD C", "SHARON GEUEA",…
 #> $ lob_last_name    <chr> "PENMAN", "GAMBLE", "BRIGGS", "JACKSON", "OTTO JR", "JONES", "BURCH", "…
@@ -180,8 +213,8 @@ tail(mo_lob_grp)
 #> # … with 6 more variables: description <chr>, amount <dbl>, principal <chr>, amend_reason <chr>,
 #> #   gro_id <dbl>, amend_gro_id <dbl>
 glimpse(sample_n(mo_lob_grp, 20))
-#> Observations: 20
-#> Variables: 13
+#> Rows: 20
+#> Columns: 13
 #> $ lob_id         <chr> "L000127", "L000580", "L003084", "L002248A", "L000299", "L001096", "L0005…
 #> $ lob_first_name <chr> "SAM", "JORGEN", "SUSAN HENDERSON", "CHARLES G", "WILLIAM A", "BETH M", "…
 #> $ lob_last_name  <chr> "BARBEE", "SCHLEMEIER", "MOORE", "SIMINO", "GAMBLE", "WHEELER", "SCRUGGS"…
@@ -199,7 +232,8 @@ glimpse(sample_n(mo_lob_grp, 20))
 
 ### Missing
 
-Not many fields have missing records. However, we can convert the `NULL` entries to *NAs*.
+Not many fields have missing records. However, we can convert the `NULL`
+entries to *NAs*.
 
 ``` r
 col_stats(mo_lob_exp, count_na)
@@ -264,7 +298,11 @@ mo_lob_grp <- mo_lob_grp %>%
 
 ### Duplicates
 
-Running the following commands shows that there are over a thousand entries with totally identical information. Since each of them contain `total_compensation` and `total_reimbursed` for a certain period, there should be only one such entry for each corresponding time period. We will note that in the `dupe_flag` column.
+Running the following commands shows that there are over a thousand
+entries with totally identical information. Since each of them contain
+`total_compensation` and `total_reimbursed` for a certain period, there
+should be only one such entry for each corresponding time period. We
+will note that in the `dupe_flag` column.
 
 ``` r
 mo_lob_exp <- flag_dupes(mo_lob_exp, dplyr::everything())
@@ -295,9 +333,12 @@ mo_lob_19 <- mo_lob_19 %>%
   mutate(year = year(expenditure_date))
 ```
 
-#### No. of expenditures
+#### No. of expenditures
 
-Visualize number of expenses each year. We can see that some of the year variable is not valid, with values greater than 2200. We will manually filter these entries out before visualizing the data. ![](../plots/year_bar-1.png)
+Visualize number of expenses each year. We can see that some of the year
+variable is not valid, with values greater than 2200. We will manually
+filter these entries out before visualizing the data.
+![](../plots/year_bar-1.png)<!-- -->
 
 ``` r
  mo_lob_grp %>% 
@@ -320,39 +361,39 @@ Visualize number of expenses each year. We can see that some of the year variabl
   )
 ```
 
-![](../plots/year%20bar%20group-1.png)
+![](../plots/year%20bar%20group-1.png)<!-- -->
 
 #### Expenditure Type
 
-![](../plots/client%20types-1.png)
+![](../plots/client%20types-1.png)<!-- -->
 
-![](../plots/expense%20type%20grp-1.png)
+![](../plots/expense%20type%20grp-1.png)<!-- -->
 
-![](../plots/expense%20type-1.png)
+![](../plots/expense%20type-1.png)<!-- -->
 
-![](../plots/client%20type-1.png)
+![](../plots/client%20type-1.png)<!-- -->
 
-![](../plots/prin%20top-1.png)
+![](../plots/prin%20top-1.png)<!-- -->
 
 ### Continuous
 
-First, let's take a look at the distribution of the amount by expenditure type
+First, let’s take a look at the distribution of the amount by
+expenditure type
 
-![](../plots/unnamed-chunk-1-1.png)
+![](../plots/unnamed-chunk-1-1.png)<!-- -->
 
-![](../plots/unnamed-chunk-2-1.png)
+![](../plots/unnamed-chunk-2-1.png)<!-- -->
 
-![](../plots/histogram-1.png)
+![](../plots/histogram-1.png)<!-- -->
 
-![](../plots/grp%20histogram-1.png)
+![](../plots/grp%20histogram-1.png)<!-- -->
 
-Conclude
---------
+## Conclude
 
 ``` r
 glimpse(sample_n(mo_lob_exp, 20))
-#> Observations: 20
-#> Variables: 18
+#> Rows: 20
+#> Columns: 18
 #> $ lob_id           <chr> "L001855", "L000299", "L001988", "L000993", "L001708", "L002043", "L000…
 #> $ lob_first_name   <chr> "STEPHEN C.", "WILLIAM A", "NIKKI R", "JAMES P", "CHRIS", "SANDY", "J C…
 #> $ lob_last_name    <chr> "KNORR", "GAMBLE", "STRONG", "BROWN", "LIESE", "HOWARD", "STRAUB", "GAM…
@@ -372,8 +413,8 @@ glimpse(sample_n(mo_lob_exp, 20))
 #> $ dupe_flag        <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, F…
 #> $ year             <dbl> 2006, 2012, 2015, 2013, 2015, 2015, 2006, 2004, 2017, 2007, 2013, 2014,…
 glimpse(sample_n(mo_lob_grp, 20))
-#> Observations: 20
-#> Variables: 16
+#> Rows: 20
+#> Columns: 16
 #> $ lob_id         <chr> "L000128", "L003105", "L002808", "L000299", "L000179", "L003122", "L00070…
 #> $ lob_first_name <chr> "JOHN E", "CHRIS", "MARK F", "WILLIAM A", "CALVIN W", "MIKE", "PHIL", "JO…
 #> $ lob_last_name  <chr> "BARDGETT JR", "ROEPE", "HABBAS", "GAMBLE", "CALL", "LODEWEGEN", "WRIGHT"…
@@ -390,19 +431,42 @@ glimpse(sample_n(mo_lob_grp, 20))
 #> $ na_flag        <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FAL…
 #> $ dupe_flag      <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FAL…
 #> $ year           <dbl> 2005, 2013, 2016, 2013, 2006, 2014, 2011, 2007, 2010, 2006, 2013, 2010, 2…
+glimpse(sample_n(mo_lob_19,20))
+#> Rows: 20
+#> Columns: 16
+#> $ lob_id               <chr> "L190118", "L190136", "L190118", "L001839", "L002988", "L003399", "…
+#> $ lob_first_name       <chr> "PATRICK", "KEVIN", "PATRICK", "SHARON", "BRAD", "RYAN", "JERRY", "…
+#> $ lob_last_name        <chr> "BROWN", "ROY", "BROWN", "JONES", "BATES", "STAUFFER", "HOBBS", "SC…
+#> $ report               <dttm> 2019-04-01, 2019-03-01, 2019-04-01, 2019-01-01, 2019-01-01, 2019-0…
+#> $ public_official      <chr> "LYDA KREWSON - ELECTED LOCAL GOVERNMENT OFFICIAL", NA, NA, NA, NA,…
+#> $ recipient            <chr> "JAMIE WILSON - EMPLOYEE/STAFF", NA, "CHRISTINE INGRASSIA - ELECTED…
+#> $ group                <chr> NA, "ENTIRE MISSOURI SENATE", NA, NA, "ENTIRE MISSOURI SENATE", NA,…
+#> $ expenditure_date     <dttm> 2019-04-09, 2019-03-25, 2019-04-09, 2019-01-28, 2019-01-04, 2019-0…
+#> $ expenditure_category <chr> "MEALS, FOOD, & BEVERAGE", "OTHER", "MEALS, FOOD, & BEVERAGE", "OTH…
+#> $ description          <chr> "FOOD AT BALLPARK", "EMAIL ACTION ALERT", "FOOD AT BALLGAME", "MATA…
+#> $ prin_amount          <dbl> 76.84, 300.00, 76.84, 5.00, 91.03, 2.77, 4.49, 4.69, 4.49, 52.50, 2…
+#> $ p_name               <chr> "UNION ELECTRIC CO. DBA AMERENUE, AMEREN SERVICES, AMEREN CORP.", "…
+#> $ amend_reason         <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "REQUIRED REPORTING", "NO E…
+#> $ report_group_id      <dbl> 3209, 4333, 3209, 1069, 816, 9329, 1307, 12119, 3291, 3567, 1299, 9…
+#> $ expenditure_type     <chr> "INDIVIDUAL", "GROUP", "INDIVIDUAL", "INDIVIDUAL", "GROUP", "INDIVI…
+#> $ year                 <dbl> 2019, 2019, 2019, 2019, 2019, 2019, 2019, 2019, 2019, 2019, 2019, 2…
 ```
 
-1.  There are 145776 records in the individual/solicitation database, and 24882 in the group database.
-2.  There are 46 duplicate records in the individual/solicitation database, and 0 in the group database.
-3.  The range and distribution of `amount` and `date` seem reasonable with a few anomalies.
-4.  There are 0 records missing recipient, principal, amount or date, and 0 records missing group, principal, amount or date.
-5.  The 4-digit `YEAR` variable has been created with `lubridate::year()`.
+1.  There are 145776 records in the individual/solicitation database,
+    and 24882 in the group database.
+2.  There are 46 duplicate records in the individual/solicitation
+    database, and 0 in the group database.
+3.  The range and distribution of `amount` and `date` seem reasonable
+    with a few anomalies.
+4.  There are 0 records missing recipient, principal, amount or date,
+    and 0 records missing group, principal, amount or date.
+5.  The 4-digit `YEAR` variable has been created with
+    `lubridate::year()`.
 
-Export
-------
+## Export
 
 ``` r
-clean_dir <- dir_create(here("mo", "lobby", "data", "reg","clean"))
+clean_dir <- dir_create(here("mo", "lobby", "data", "processed","exp"))
 ```
 
 ``` r

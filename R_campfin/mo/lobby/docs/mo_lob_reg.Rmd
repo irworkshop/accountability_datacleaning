@@ -112,7 +112,7 @@ here::here()
 [rproj]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects "Rproj"
 
 ## Data
-The workshop obtained the MO lobbying registration data through a Sunshine Request to the Missouri Ethics Commission. The data is as current as Feb. 14, 2020. Note that the file structure changed in 2019, since which a table of all current lobbyists is available, so we will process these two datasets separately. 
+The workshop obtained the MO lobbying registration data through a Sunshine Request to the Missouri Ethics Commission. The data is current as of Feb. 14, 2020. Note that the file structure changed in 2019, since which a table of all current lobbyists is available, so we will process these two datasets separately. 
 
 ## Import
 
@@ -222,7 +222,9 @@ col_stats(mo_lob_reg_new, count_na)
 
 ```{r na_flag}
 mo_lob_reg <- mo_lob_reg %>% flag_na(p_name, p_address)
+mo_lob_reg_new <- mo_lob_reg_new %>% flag_na(company_name, address1)
 sum(mo_lob_reg$na_flag)
+sum(mo_lob_reg_new$na_flag)
 ```
 
 ### Duplicates
@@ -654,22 +656,6 @@ progress %>%
 ## Conclude
 
 ```{r clean_glimpse}
-glimpse(sample_n(mo_lob_reg, 20))
-
-```
-
-1. There are `r nrow(mo_lob_reg)` records in the database.
-1. There are `r sum(mo_lob_reg$dupe_flag)` duplicate records in the database.
-1. The range and distribution of `amount` and `date` seem reasonable.
-1. There are `r sum(mo_lob_reg$na_flag)` records missing either recipient or date.
-1. Consistency in goegraphic data has been improved with `campfin::normal_*()`.
-1. The 4-digit `year` variable has been created with `lubridate::year()`.
-
-## Export
-
-```{r clean_dir}
-clean_dir <- dir_create(here("mo", "lobby", "data", "processed", "reg","clean"))
-
 mo_lob_reg <- mo_lob_reg %>% 
   select(-c(p_city_norm,
             city_norm
@@ -683,6 +669,28 @@ mo_lob_reg_new <- mo_lob_reg_new %>%
             )) %>% 
   rename(city_clean = city_swap,
             p_city_clean = p_city_swap)
+```
+### Glimpse
+We can take a quick look at the datasets. There's no publicly available data dictionary. 
+However, the Ethics Commission provided the following explanation: 
+"The LobID field is the unique identifier for joining the lobbyist list and principal list together.
+Rec_date is the date we received the registration in the office and ent_date is the data it was entered into the database. These dates are used internally to determine what reports the lobbyist need to file. The 2019 to present data is a little different. We just have a date lobbying began and the date of registration because all registrations are now done electronically."
+```{r}
+glimpse(sample_n(mo_lob_reg, 20))
+glimpse(sample_n(mo_lob_reg_new, 20))
+```
+
+1. There are `r nrow(mo_lob_reg)` records for the 1999-2018 data and `r nrow(mo_lob_reg_new)` in the new database from 2019 onwards.
+1. There are no duplicate records in both data sets. 
+1. The range and distribution of `date` seem reasonable.
+1. There are `r sum(mo_lob_reg$na_flag)` records missing either principal name or address.
+1. Consistency in goegraphic data has been improved with `campfin::normal_*()`.
+1. The 4-digit `year` variable has been created with `lubridate::year()`.
+
+## Export
+
+```{r clean_dir}
+clean_dir <- dir_create(here("mo", "lobby", "data", "processed", "reg","clean"))
 ```
 
 ```{r write_clean}

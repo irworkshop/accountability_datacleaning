@@ -1,34 +1,39 @@
 Missouri Lobbying Registration Diary
 ================
 Yanqi Xu
-2020-02-25 17:09:06
+2020-05-07 20:46:47
 
--   [Project](#project)
--   [Objectives](#objectives)
--   [Packages](#packages)
--   [Data](#data)
--   [Import](#import)
--   [Explore](#explore)
--   [Wrangle](#wrangle)
--   [Conclude](#conclude)
--   [Export](#export)
+  - [Project](#project)
+  - [Objectives](#objectives)
+  - [Packages](#packages)
+  - [Data](#data)
+  - [Import](#import)
+  - [Explore](#explore)
+  - [Wrangle](#wrangle)
+  - [Conclude](#conclude)
+  - [Export](#export)
 
 <!-- Place comments regarding knitting here -->
-Project
--------
 
-The Accountability Project is an effort to cut across data silos and give journalists, policy professionals, activists, and the public at large a simple way to search across huge volumes of public data about people and organizations.
+## Project
 
-Our goal is to standardizing public data on a few key fields by thinking of each dataset row as a transaction. For each transaction there should be (at least) 3 variables:
+The Accountability Project is an effort to cut across data silos and
+give journalists, policy professionals, activists, and the public at
+large a simple way to search across huge volumes of public data about
+people and organizations.
+
+Our goal is to standardizing public data on a few key fields by thinking
+of each dataset row as a transaction. For each transaction there should
+be (at least) 3 variables:
 
 1.  All **parties** to a transaction.
 2.  The **date** of the transaction.
 3.  The **amount** of money involved.
 
-Objectives
-----------
+## Objectives
 
-This document describes the process used to complete the following objectives:
+This document describes the process used to complete the following
+objectives:
 
 1.  How many records are in the database?
 2.  Check for entirely duplicated records.
@@ -39,12 +44,15 @@ This document describes the process used to complete the following objectives:
 7.  Create a `year` field from the transaction date.
 8.  Make sure there is data on both parties to a transaction.
 
-Packages
---------
+## Packages
 
-The following packages are needed to collect, manipulate, visualize, analyze, and communicate these results. The `pacman` package will facilitate their installation and attachment.
+The following packages are needed to collect, manipulate, visualize,
+analyze, and communicate these results. The `pacman` package will
+facilitate their installation and attachment.
 
-The IRW's `campfin` package will also have to be installed from GitHub. This package contains functions custom made to help facilitate the processing of campaign finance data.
+The IRW’s `campfin` package will also have to be installed from GitHub.
+This package contains functions custom made to help facilitate the
+processing of campaign finance data.
 
 ``` r
 if (!require("pacman")) install.packages("pacman")
@@ -68,23 +76,31 @@ pacman::p_load(
 )
 ```
 
-This document should be run as part of the `R_campfin` project, which lives as a sub-directory of the more general, language-agnostic [`irworkshop/accountability_datacleaning`](https://github.com/irworkshop/accountability_datacleaning) GitHub repository.
+This document should be run as part of the `R_campfin` project, which
+lives as a sub-directory of the more general, language-agnostic
+[`irworkshop/accountability_datacleaning`](https://github.com/irworkshop/accountability_datacleaning)
+GitHub repository.
 
-The `R_campfin` project uses the [Rstudio projects](https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects "Rproj") feature and should be run as such. The project also uses the dynamic `here::here()` tool for file paths relative to *your* machine.
+The `R_campfin` project uses the [Rstudio
+projects](https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects "Rproj")
+feature and should be run as such. The project also uses the dynamic
+`here::here()` tool for file paths relative to *your* machine.
 
 ``` r
 # where does this document knit?
 here::here()
-#> [1] "/Users/soc/accountability/accountability_datacleaning/R_campfin"
+#> [1] "/Users/yanqixu/code/accountability_datacleaning/R_campfin"
 ```
 
-Data
-----
+## Data
 
-The workshop obtained the MO lobbying registration data through a Sunshine Request to the Missouri Ethics Commission. The data is as current as Feb. 14, 2020. Note that the file structure changed in 2019, since which a table of all current lobbyists is available, so we will process these two datasets separately.
+The workshop obtained the MO lobbying registration data through a
+Sunshine Request to the Missouri Ethics Commission. The data is current
+as of Feb. 14, 2020. Note that the file structure changed in 2019, since
+which a table of all current lobbyists is available, so we will process
+these two datasets separately.
 
-Import
-------
+## Import
 
 ### Setting up Raw Data Directory
 
@@ -114,7 +130,10 @@ mo_lob_new <- read_xlsx(
 
 #### Year
 
-Sometimes in the current lobbyist list, there will be 2019 and 2020 registrations while everything else is the same. We can safely flag the earlier ones as duplicates and go with the new registration when joining it with the principal data.
+Sometimes in the current lobbyist list, there will be 2019 and 2020
+registrations while everything else is the same. We can safely flag the
+earlier ones as duplicates and go with the new registration when joining
+it with the principal data.
 
 ``` r
 mo_lob_reg <- mo_prin %>% 
@@ -142,7 +161,9 @@ mo_lob_reg$year %>% tabyl()
 
 ### Join
 
-For years prior to 2019, we can see that each `lob_id` responds to one lobbyist, so it's a unique id, which we can use to join the `mo_lob` and `mo_prin` dataframes.
+For years prior to 2019, we can see that each `lob_id` responds to one
+lobbyist, so it’s a unique id, which we can use to join the `mo_lob` and
+`mo_prin` dataframes.
 
 ``` r
 mo_prin_new <- mo_prin_new %>% 
@@ -152,7 +173,10 @@ mo_prin_new <- mo_prin_new %>%
   rename_at(.vars = vars(-c(mecid_l, p_name)), .funs = ~ str_c("p_",.))
 ```
 
-From 2019 onward, however, each `mecid_l` can correspond to multiple years, for which we'll just aggregate with the earliest year. Note that some lobbyists terminate their status and re-register within a year as well.
+From 2019 onward, however, each `mecid_l` can correspond to multiple
+years, for which we’ll just aggregate with the earliest year. Note that
+some lobbyists terminate their status and re-register within a year as
+well.
 
 ``` r
 mo_min_date <- mo_lob_new %>% group_by(mecid_l) %>% summarize(date_min = min(date_registration))
@@ -165,7 +189,9 @@ mo_lob_filter <- mo_lob_new %>%
   select(-date_min)
 ```
 
-We can see that one record `mecid_l` "L200260" doesn't have a corresponding record in the principal dataframe. As a result, we will just left join the `mo_lob_filter` with the `mo_prin_new` dataframe.
+We can see that one record `mecid_l` “L200260” doesn’t have a
+corresponding record in the principal dataframe. As a result, we will
+just left join the `mo_lob_filter` with the `mo_prin_new` dataframe.
 
 ``` r
 mo_lob_reg_new <- mo_lob_filter %>% 
@@ -174,7 +200,10 @@ mo_lob_reg_new <- mo_lob_filter %>%
 
 ### Column Specs
 
-We can see that the `rec_date` and `ent_date` are date columns, while `term_date` is read as character. We'll convert it to POSIXct objects (dates). We can see that the date is formatted in Excel and we need to use `excel_numeric_to_date`
+We can see that the `rec_date` and `ent_date` are date columns, while
+`term_date` is read as character. We’ll convert it to POSIXct objects
+(dates). We can see that the date is formatted in Excel and we need to
+use `excel_numeric_to_date`
 
 ``` r
 mo_lob_reg <- mo_lob_reg %>% 
@@ -192,8 +221,7 @@ mo_lob_reg_new <- mo_lob_reg_new %>%
   mutate_if(is.character, na_if, "NULL")
 ```
 
-Explore
--------
+## Explore
 
 ``` r
 head(mo_lob_reg)
@@ -225,8 +253,8 @@ tail(mo_lob_reg)
 #> #   elec_loc <dbl>, state_emp <dbl>, rec_date <dttm>, ent_date <dttm>, term_date <date>,
 #> #   year <dbl>
 glimpse(sample_n(mo_lob_reg, 20))
-#> Observations: 20
-#> Variables: 27
+#> Rows: 20
+#> Columns: 27
 #> $ lob_id      <chr> "L001758", "L001705", "L002808", "L000863", "L001759", "L000299", "L003115",…
 #> $ p_name      <chr> "MISSOURI ASSOCIATION OF NURSE ANESTHETISTS", "GAMBLE & SCHLEMEIER", "GARDNE…
 #> $ p_address   <chr> "1753 WALTERS WAY", "PO BOX 1865", "1414 E PRIMROSE, SUITE 100", "415 E HIGH…
@@ -286,8 +314,8 @@ tail(mo_lob_reg_new)
 #> #   p_address1 <chr>, p_address2 <chr>, p_city <chr>, p_state <chr>, p_zip <chr>,
 #> #   p_relationship_from <dttm>, p_relationship_to <chr>, p_year <dbl>
 glimpse(sample_n(mo_lob_reg_new, 20))
-#> Observations: 20
-#> Variables: 29
+#> Rows: 20
+#> Columns: 29
 #> $ mecid_l             <chr> "L000723", "L004137", "L003963", "L002244", "L000535", "L003748", "L…
 #> $ first_name          <chr> "KYNA", "MATTHEW", "TONY", "JEAN PAUL", "THOMAS", "KELLI", "JEFFREY"…
 #> $ middle_name         <chr> NA, "J", NA, NA, "P", NA, "MICHAEL", NA, "THOMAS", NA, NA, NA, NA, N…
@@ -390,13 +418,16 @@ col_stats(mo_lob_reg_new, count_na)
 
 ``` r
 mo_lob_reg <- mo_lob_reg %>% flag_na(p_name, p_address)
+mo_lob_reg_new <- mo_lob_reg_new %>% flag_na(company_name, address1)
 sum(mo_lob_reg$na_flag)
 #> [1] 786
+sum(mo_lob_reg_new$na_flag)
+#> [1] 1006
 ```
 
 ### Duplicates
 
-We can see there's no duplicate entry.
+We can see there’s no duplicate entry.
 
 ``` r
 mo_lob_reg <- flag_dupes(mo_lob_reg, dplyr::everything())
@@ -448,7 +479,7 @@ col_stats(mo_lob_reg, n_distinct)
 #> 27 year        <dbl>     27 0.00113  
 #> 28 na_flag     <lgl>      2 0.0000835
 col_stats(mo_lob_reg_new, n_distinct)
-#> # A tibble: 29 x 4
+#> # A tibble: 30 x 4
 #>    col                 class      n        p
 #>    <chr>               <chr>  <int>    <dbl>
 #>  1 mecid_l             <chr>   1156 0.130   
@@ -479,10 +510,13 @@ col_stats(mo_lob_reg_new, n_distinct)
 #> 26 p_zip               <chr>    829 0.0931  
 #> 27 p_relationship_from <dttm>  3999 0.449   
 #> 28 p_relationship_to   <chr>    342 0.0384  
-#> 29 p_year              <dbl>     23 0.00258
+#> 29 p_year              <dbl>     23 0.00258 
+#> 30 na_flag             <lgl>      2 0.000225
 ```
 
-It was not until 2007 that lobbyist were required to register every year. Prior to that a lobbyist could register and never have to register again.
+It was not until 2007 that lobbyist were required to register every
+year. Prior to that a lobbyist could register and never have to register
+again.
 
 #### Dates
 
@@ -506,14 +540,18 @@ max(mo_lob_reg_new$date_terminated, na.rm = T)
 #> [1] "2020-01-07"
 ```
 
-Wrangle
--------
+## Wrangle
 
-To improve the searchability of the database, we will perform some consistent, confident string normalization. For geographic variables like city names and ZIP codes, the corresponding `campfin::normal_*()` functions are taylor made to facilitate this process.
+To improve the searchability of the database, we will perform some
+consistent, confident string normalization. For geographic variables
+like city names and ZIP codes, the corresponding `campfin::normal_*()`
+functions are taylor made to facilitate this process.
 
 ### Address
 
-For the street `addresss` variable, the `campfin::normal_address()` function will force consistence case, remove punctuation, and abbreviation official USPS suffixes.
+For the street `addresss` variable, the `campfin::normal_address()`
+function will force consistence case, remove punctuation, and
+abbreviation official USPS suffixes.
 
 ``` r
 mo_lob_reg <- mo_lob_reg %>% 
@@ -600,7 +638,9 @@ mo_lob_reg_new %>%
 
 ### ZIP
 
-For ZIP codes, the `campfin::normal_zip()` function will attempt to create valied *five* digit codes by removing the ZIP+4 suffix and returning leading zeroes dropped by other programs like Microsoft Excel.
+For ZIP codes, the `campfin::normal_zip()` function will attempt to
+create valied *five* digit codes by removing the ZIP+4 suffix and
+returning leading zeroes dropped by other programs like Microsoft Excel.
 
 ``` r
 mo_lob_reg <- mo_lob_reg %>% 
@@ -662,7 +702,8 @@ progress_table(
 
 ### State
 
-Valid two digit state abbreviations can be made using the `campfin::normal_state()` function.
+Valid two digit state abbreviations can be made using the
+`campfin::normal_state()` function.
 
 ``` r
 prop_in(mo_lob_reg$state, valid_state, na.rm = T)
@@ -675,7 +716,8 @@ prop_in(mo_lob_reg_new$p_state, valid_state, na.rm = T)
 #> [1] 1
 ```
 
-We can see that the state fields in the new dataframe are clean and don't need extra cleaning.
+We can see that the state fields in the new dataframe are clean and
+don’t need extra cleaning.
 
 ``` r
 mo_lob_reg <- mo_lob_reg %>% 
@@ -701,7 +743,8 @@ mo_lob_reg %>%
 #> 2 M)          1
 ```
 
-We can see that the "M)" in `p_state` should be MO based on the full address and city. We can manually change it.
+We can see that the “M)” in `p_state` should be MO based on the full
+address and city. We can manually change it.
 
 ``` r
 mo_lob_reg$p_state_norm <- mo_lob_reg$p_state_norm %>% 
@@ -723,11 +766,14 @@ progress_table(
 
 ### city
 
-Cities are the most difficult geographic variable to normalize, simply due to the wide variety of valid cities and formats.
+Cities are the most difficult geographic variable to normalize, simply
+due to the wide variety of valid cities and formats.
 
 #### Normal
 
-The `campfin::normal_city()` function is a good mo\_lob\_regart, again converting case, removing punctuation, but *expanding* USPS abbreviations. We can also remove `invalid_city` values.
+The `campfin::normal_city()` function is a good mo\_lob\_regart, again
+converting case, removing punctuation, but *expanding* USPS
+abbreviations. We can also remove `invalid_city` values.
 
 ``` r
 prop_in(mo_lob_reg$p_city, valid_city, na.rm = T)
@@ -763,7 +809,10 @@ prop_in(mo_lob_reg_new$city_norm, valid_city, na.rm = T)
 
 #### Swap
 
-We can further improve normalization by comparing our normalized value against the *expected* value for that record's state abbreviation and ZIP code. If the normalized value is either an abbreviation for or very similar to the expected value, we can confidently swap those two.
+We can further improve normalization by comparing our normalized value
+against the *expected* value for that record’s state abbreviation and
+ZIP code. If the normalized value is either an abbreviation for or very
+similar to the expected value, we can confidently swap those two.
 
 ``` r
 mo_lob_reg <- mo_lob_reg %>% 
@@ -873,37 +922,41 @@ mo_lob_reg_new <- mo_lob_reg_new %>%
   )
 ```
 
-After the two normalization steps, the percentage of valid cities is close to 100%.
+After the two normalization steps, the percentage of valid cities is
+close to 100%.
 
 #### Progress
 
 We can see the city normalization progress for
 
-| stage         |  prop\_in|  n\_distinct|  prop\_na|  n\_out|  n\_diff|
-|:--------------|---------:|------------:|---------:|-------:|--------:|
-| city          |     0.882|          413|     0.000|    2834|       45|
-| p\_city       |     0.780|         1138|     0.033|    5101|      325|
-| city\_norm    |     0.992|          404|     0.000|     200|       27|
-| p\_city\_norm |     0.986|          995|     0.033|     331|      167|
-| city\_swap    |     0.993|          385|     0.001|     163|       11|
-| p\_city\_swap |     0.995|          868|     0.043|     124|       58|
+| stage         | prop\_in | n\_distinct | prop\_na | n\_out | n\_diff |
+| :------------ | -------: | ----------: | -------: | -----: | ------: |
+| city          |    0.882 |         413 |    0.000 |   2834 |      45 |
+| p\_city       |    0.780 |        1138 |    0.033 |   5101 |     325 |
+| city\_norm    |    0.992 |         404 |    0.000 |    200 |      27 |
+| p\_city\_norm |    0.986 |         995 |    0.033 |    331 |     167 |
+| city\_swap    |    0.993 |         385 |    0.001 |    163 |      11 |
+| p\_city\_swap |    0.995 |         868 |    0.043 |    124 |      58 |
 
 For the new data from 2019 onward.
 
-| stage         |   prop\_in|  n\_distinct|   prop\_na|  n\_out|  n\_diff|
-|:--------------|----------:|------------:|----------:|-------:|--------:|
-| city          |  0.9198113|          189|  0.0000000|     714|       25|
-| p\_city       |  0.7945636|          471|  0.0001123|    1829|       33|
-| city\_norm    |  0.9940476|          179|  0.0000000|      53|       12|
-| p\_city\_norm |  0.9909019|          461|  0.0001123|      81|       13|
-| city\_swap    |  0.9949404|          173|  0.0011231|      45|       10|
-| p\_city\_swap |  0.9984111|          454|  0.0104447|      14|        9|
+| stage         |  prop\_in | n\_distinct |  prop\_na | n\_out | n\_diff |
+| :------------ | --------: | ----------: | --------: | -----: | ------: |
+| city          | 0.9198113 |         189 | 0.0000000 |    714 |      25 |
+| p\_city       | 0.7945636 |         471 | 0.0001123 |   1829 |      33 |
+| city\_norm    | 0.9940476 |         179 | 0.0000000 |     53 |      12 |
+| p\_city\_norm | 0.9909019 |         461 | 0.0001123 |     81 |      13 |
+| city\_swap    | 0.9949404 |         173 | 0.0011231 |     45 |      10 |
+| p\_city\_swap | 0.9984111 |         454 | 0.0104447 |     14 |       9 |
 
-You can see how the percentage of valid values increased with each stage.
+You can see how the percentage of valid values increased with each
+stage.
 
-![](../plots/progress_bar-1.png)
+![](../plots/progress_bar-1.png)<!-- -->
 
-More importantly, the number of distinct values decreased each stage. We were able to confidently change many distinct invalid values to their valid equivalent.
+More importantly, the number of distinct values decreased each stage. We
+were able to confidently change many distinct invalid values to their
+valid equivalent.
 
 ``` r
 progress %>% 
@@ -929,15 +982,37 @@ progress %>%
   )
 ```
 
-![](../plots/distinct_bar-1.png)
+![](../plots/distinct_bar-1.png)<!-- -->
 
-Conclude
---------
+## Conclude
+
+``` r
+mo_lob_reg <- mo_lob_reg %>% 
+  select(-c(p_city_norm,
+            city_norm
+            )) %>% 
+  rename(city_clean = city_swap,
+            p_city_clean = p_city_swap)
+
+mo_lob_reg_new <- mo_lob_reg_new %>% 
+  select(-c(p_city_norm,
+            city_norm
+            )) %>% 
+  rename(city_clean = city_swap,
+            p_city_clean = p_city_swap)
+```
+
+### Glimpse
+
+We can take a quick look at the datasets. There's no publicly available data dictionary. 
+However, the Ethics Commission provided the following explanation:
+"The LobID field is the unique identifier for joining the lobbyist list and principal list together.
+Rec_date is the date we received the registration in the office and ent_date is the data it was entered into the database. These dates are used internally to determine what reports the lobbyist need to file. The 2019 to present data is a little different. We just have a date lobbying began and the date of registration because all registrations are now done electronically."
 
 ``` r
 glimpse(sample_n(mo_lob_reg, 20))
-#> Observations: 20
-#> Variables: 38
+#> Rows: 20
+#> Columns: 36
 #> $ lob_id              <chr> "L003194", "L001642A", "L000231", "L002591", "L002918", "L000830", "…
 #> $ p_name              <chr> "THE DOE RUN COMPANY", "MISSOURI BEER WHOLESALERS ASSOCIATION", "GEN…
 #> $ p_address_full      <chr> "1801 PARK 270 DRIVE, SUITE 300", "11116 S. TOWNE SQUARE, SUITE 306"…
@@ -972,38 +1047,65 @@ glimpse(sample_n(mo_lob_reg, 20))
 #> $ p_zip5              <chr> "63146", "63123", "48265", "65201", "63103", "64063", "65102", "5030…
 #> $ p_state_norm        <chr> "MO", "MO", "MI", "MO", "MO", "MO", "MO", "IA", "MO", "MO", "MO", "M…
 #> $ state_norm          <chr> "MO", "MO", "MO", "MO", "MO", "MO", "MO", "MO", "MO", "MO", "MO", "M…
-#> $ p_city_norm         <chr> "SAINT LOUIS", "SAINT LOUIS", "DETROIT", "COLUMBIA", "SAINT LOUIS", …
-#> $ city_norm           <chr> "SAINT LOUIS", "JEFFERSON CITY", "JEFFERSON CITY", "SAINT CHARLES", …
-#> $ city_swap           <chr> "SAINT LOUIS", "JEFFERSON CITY", "JEFFERSON CITY", "SAINT CHARLES", …
-#> $ p_city_swap         <chr> "SAINT LOUIS", "SAINT LOUIS", "DETROIT", "COLUMBIA", "SAINT LOUIS", …
+#> $ city_clean          <chr> "SAINT LOUIS", "JEFFERSON CITY", "JEFFERSON CITY", "SAINT CHARLES", …
+#> $ p_city_clean        <chr> "SAINT LOUIS", "SAINT LOUIS", "DETROIT", "COLUMBIA", "SAINT LOUIS", …
+glimpse(sample_n(mo_lob_reg_new, 20))
+#> Rows: 20
+#> Columns: 38
+#> $ mecid_l             <chr> "L190197", "L001993", "L003258", "L002396", "L001615", "L003875", "L…
+#> $ first_name          <chr> "SAGI", "WILLIAM", "JASON", "JAMES", "KELVIN", "KAYCEE", "CHRISTOPHE…
+#> $ middle_name         <chr> NA, NA, "MATTHEW", "C.", NA, NA, NA, "LANE", "D", NA, NA, "R.", NA, …
+#> $ nickname            <chr> NA, NA, NA, NA, NA, NA, "CHRIS'", NA, NA, NA, NA, NA, NA, NA, NA, NA…
+#> $ last_name           <chr> "RUDNICK", "RAY", "ZAMKUS", "BOWERS", "SIMMONS", "NAIL", "MOODY", "G…
+#> $ company_name        <chr> "ASSOCIATED STUDENTS OF THE UNIVERSITY OF MISSOURI", "MISSOURI COUNC…
+#> $ address_full        <chr> "309 UNIVERSITY HALL", "3550 AMAZONAS DRIVE", "1320 ELMERINE AVE", "…
+#> $ address1            <chr> "309 UNIVERSITY HALL", "3550 AMAZONAS DRIVE", "1320 ELMERINE AVE", "…
+#> $ address2            <chr> NA, NA, NA, "SUITE 300", NA, NA, "P.O. BOX 1108", NA, NA, "SUITE 100…
+#> $ city                <chr> "COLUMBIA", "JEFFERSON CITY", "JEFFERSON CITY", "KANSAS CITY", "JEFF…
+#> $ state               <chr> "MO", "MO", "MO", "MO", "MO", "MO", "MO", "MO", "MO", "MO", "MO", "M…
+#> $ zip                 <chr> "65211", "65109", "65101", "64111", "65101", "65102", "65102", "6510…
+#> $ is_executive        <dbl> 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 0, 1
+#> $ is_legislative      <dbl> 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 0, 1
+#> $ is_judicial         <dbl> 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0
+#> $ is_local            <dbl> 0, 0, 1, 1, 1, 0, 1, 0, 1, 0, 0, 1, 1, 1, 1, 0, 1, 0, 1, 0
+#> $ is_state_emp        <dbl> 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+#> $ date_lob_began      <dttm> 2020-01-01, 2004-12-06, 2011-12-08, 2007-01-05, 2002-03-08, 2016-02…
+#> $ registration_year   <dbl> 2020, 2019, 2019, 2019, 2019, 2019, 2019, 2019, 2019, 2019, 2019, 20…
+#> $ date_registration   <dttm> 2019-12-07 10:45:57, 2019-01-04 11:09:59, 2018-12-29 12:00:03, 2018…
+#> $ date_terminated     <date> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
+#> $ p_name              <chr> "ASSOCIATED STUDENTS OF THE UNIVERSITY OF MISSOURI", "MISSOURI COUNC…
+#> $ p_address_full      <chr> "309 UNIVERSITY HALL", "3550 AMAZONAS DRIVE", "612 E. CAPITOL AVENUE…
+#> $ p_address1          <chr> "309 UNIVERSITY HALL", "3550 AMAZONAS DRIVE", "612 E. CAPITOL AVENUE…
+#> $ p_address2          <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "SUITE 201", NA, NA,…
+#> $ p_city              <chr> "COLUMBIA", "JEFFERSON CITY", "JEFFERSON CITY", "MISSION", "KANSAS C…
+#> $ p_state             <chr> "MO", "MO", "MO", "KS", "MO", "MO", "NY", "MO", "MO", "DC", "MO", "M…
+#> $ p_zip               <chr> "65211", "65109", "65101", "66202", "64108", "64057", "10018", "6511…
+#> $ p_relationship_from <dttm> 2020-01-01 00:00:00, 2019-01-04 11:09:59, 2019-03-07 00:00:00, 2018…
+#> $ p_relationship_to   <chr> NA, "43818.49929537037", "43624", NA, NA, NA, NA, NA, NA, "43622", N…
+#> $ p_year              <dbl> 2020, 2019, 2019, 2018, 2019, 2016, 2015, 2019, 2001, 2018, 2011, 20…
+#> $ na_flag             <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, TRUE, FALSE, FALSE,…
+#> $ address_full_norm   <chr> "309 UNIVERSITY HALL", "3550 AMAZONAS DR", "1320 ELMERINE AVE", "451…
+#> $ p_address_full_norm <chr> "309 UNIVERSITY HALL", "3550 AMAZONAS DR", "612 E CAPITOL AVE", "572…
+#> $ zip5                <chr> "65211", "65109", "65101", "64111", "65101", "65102", "65102", "6510…
+#> $ p_zip5              <chr> "65211", "65109", "65101", "66202", "64108", "64057", "10018", "6511…
+#> $ city_clean          <chr> "COLUMBIA", "JEFFERSON CITY", "JEFFERSON CITY", "KANSAS CITY", "JEFF…
+#> $ p_city_clean        <chr> "COLUMBIA", "JEFFERSON CITY", "JEFFERSON CITY", "MISSION", "KANSAS C…
 ```
 
-1.  There are 23961 records in the database.
-2.  There are 0 duplicate records in the database.
-3.  The range and distribution of `amount` and `date` seem reasonable.
-4.  There are 786 records missing either recipient or date.
-5.  Consistency in goegraphic data has been improved with `campfin::normal_*()`.
-6.  The 4-digit `year` variable has been created with `lubridate::year()`.
+1.  There are 23961 records for the 1999-2018 data and 8904 in the new
+    database from 2019 onwards.
+2.  There are no duplicate records in both data sets.
+3.  The range and distribution of `date` seem reasonable.
+4.  There are 786 records missing either principal name or address.
+5.  Consistency in goegraphic data has been improved with
+    `campfin::normal_*()`.
+6.  The 4-digit `year` variable has been created with
+    `lubridate::year()`.
 
-Export
-------
+## Export
 
 ``` r
 clean_dir <- dir_create(here("mo", "lobby", "data", "processed", "reg","clean"))
-
-mo_lob_reg <- mo_lob_reg %>% 
-  select(-c(p_city_norm,
-            city_norm
-            )) %>% 
-  rename(city_clean = city_swap,
-            p_city_clean = p_city_swap)
-
-mo_lob_reg_new <- mo_lob_reg_new %>% 
-  select(-c(p_city_norm,
-            city_norm
-            )) %>% 
-  rename(city_clean = city_swap,
-            p_city_clean = p_city_swap)
 ```
 
 ``` r

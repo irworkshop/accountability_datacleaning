@@ -111,9 +111,11 @@ here::here()
 [rproj]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects "Rproj"
 
 ## Data
-The [Missouri Ethics Commission](https://jcope.ny.gov/lobbying-datasets) makes lobbyist expenditure data from 2004 to 2020 available for download. Note that data for 2019 onward exists in a separate search. The 2018 data and prior year's data exist in two separate files.
+The [Missouri Ethics Commission](https://www.mec.mo.gov/mec/Lobbying/Lob_ExpSrch.aspx) makes lobbyist expenditure data from 2004 to 2020 available for download. Note that data for 2019 onward exists in a separate search. The 2018 data and prior year's data exist in two separate files.
 
 The `mo_lob_exp` data captures expenditures reported by a lobbyist made on behalf of any group or individual including a state public official, their employee/ staff, spouse/child, a department head and their staff, and a local elected official in a municipality with a budget over $10 million.
+
+According to the Ethics Commission, the recipient field is always the person who received the gift. If that person is an employee/staff/spouse/child of a public official the actual recipient is listed in the recipient field and the name of the associated public official is listed in the public official field. If the recipient of the gift is the public official their name is then listed in the recipient field only.
 
 ## Import
 
@@ -435,6 +437,7 @@ mo_lob_exp %>%
 ```{r clean_glimpse}
 glimpse(sample_n(mo_lob_exp, 20))
 glimpse(sample_n(mo_lob_grp, 20))
+glimpse(sample_n(mo_lob_19,20))
 ```
 
 1. There are `r nrow(mo_lob_exp)` records in the individual/solicitation database, and `r nrow(mo_lob_grp)` in the group database.
@@ -446,7 +449,7 @@ glimpse(sample_n(mo_lob_grp, 20))
 ## Export
 
 ```{r clean_dir}
-clean_dir <- dir_create(here("mo", "lobby", "data", "reg","clean"))
+clean_dir <- dir_create(here("mo", "lobby", "data", "processed","exp"))
 ```
 
 ```{r write_clean}
