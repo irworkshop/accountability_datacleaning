@@ -81,6 +81,7 @@ pacman::p_load(
   tidyverse, # data manipulation
   lubridate, # datetime strings
   gluedown, # printing markdown
+  pdftools, # read pdf files
   magrittr, # pipe operators
   janitor, # clean data frames
   refinr, # cluster and merge
@@ -160,6 +161,85 @@ idc <- idc %>%
   mutate(across(contract_amount, parse_number))
 ```
 
+The data recieved lists buying agencies only by their abbreviations. A telephone
+directory was provided upon request to convert these abbreviations to full
+agency names. Using `pdftools::pdf_text()`, we can read the lines of this
+directory and parse the text into a proper data frame.
+
+We will need a new function to split the two-column lines of text on the page.
+
+```{r str_insert}
+str_insert <- function(string, insert, n) {
+  lhs <- sprintf("^(.{%s})(.*)$", n - 1)
+  rhs <- stringr::str_c('\\1', insert, '\\2')
+  stringr::str_replace(string, lhs, rhs)
+}
+```
+
+We can read the lines of text into a character vector and replace the padding
+full stops with white space so the lines can be read with `readr::read_table()`.
+
+```{r abb_read}
+tel_paths <- dir_ls(here("id", "contracts"), regexp = "tel")
+tel_text <- str_split(pdf_text(tel_paths[1]), "\n")[[1]][4:57]
+tel_text <- unlist(str_split(str_insert(tel_text, "\n", 80), "\\s+\n"))[-1]
+tel_abbs <- tel_text %>% 
+  str_trim("left") %>% 
+  str_replace_all("\\.{2,}", str_dup(" ", 50)) %>% 
+  read_table(col_names = TRUE) %>% 
+  clean_names()
+```
+
+Then, the same can be done for the second page of the telephone directory. Then
+we can bind the two pages together into a single data frame.
+
+```{r abb_add}
+tel_paths <- dir_ls(here("id", "contracts"), regexp = "tel")
+tel_text <- str_split(pdf_text(tel_paths[2]), "\n")[[1]][4:57]
+tel_text <- unlist(str_split(str_insert(tel_text, "\n", 80), "\\s+\n"))[-1]
+tel_abbs <- tel_text %>% 
+  str_trim("left") %>% 
+  str_replace_all("\\.{2,}", str_dup(" ", 50)) %>% 
+  read_table(col_names = TRUE) %>% 
+  clean_names() %>% 
+  bind_rows(tel_abbs)
+```
+
+That data frame of abbreviation translations can be used to define the full
+names of the buying agencies. Not all agency abbreviations are found in this
+directory.
+
+```{r abb_join}
+idc <- left_join(idc, tel_abbs, by = c("agency" = "abbreviation"))
+```
+
+```{r abb_count}
+idc %>% 
+  count(agency, agency_name, sort = TRUE) %>%
+  add_prop() %>% 
+  mutate(t = cumsum(p))
+```
+
+`r percent(prop_na(idc$agency_name))` of this new `agency_name` variable is
+`NA`, meaning an abbreviation was not found in the telephone directory. They
+make up a relatively small amount of the overal records.
+
+```{r abb_na}
+idc %>% 
+  count(agency, agency_name, sort = TRUE) %>%
+  add_prop() %>% 
+  filter(is.na(agency_name))
+```
+
+For these records missing an agency name, we can just use the abbreviation given
+to us.
+
+```{r abb_coal}
+idc <- idc %>% 
+  rename(agency_abb = agency) %>% 
+  mutate(agency_name = coalesce(agency_name, agency_abb))
+```
+
 ## Explore
 
 ```{r glimpse}
@@ -179,14 +259,14 @@ Any record missing a variable needed to identify the transaction will be flagged
 with `campfin::flag_na()`.
 
 ```{r na_flag}
-idc <- idc %>% flag_na(issue, agency, contract_amount, vendor)
+idc <- idc %>% flag_na(issue, agency_name, contract_amount, vendor)
 sum(idc$na_flag)
 ```
 
 ```{r na_view}
 idc %>% 
   filter(na_flag) %>% 
-  select(contract_number, issue, agency, contract_amount, vendor)
+  select(contract_number, issue, agency_name, contract_amount, vendor)
 ```
 
 ### Duplicates
@@ -202,7 +282,7 @@ sum(idc$dupe_flag)
 ```{r dupe_view}
 idc %>% 
   filter(dupe_flag) %>% 
-  select(contract_number, issue, agency, contract_amount, vendor)
+  select(contract_number, issue, agency_name, contract_amount, vendor)
 ```
 
 ### Categorical
@@ -214,7 +294,7 @@ col_stats(idc, n_distinct)
 ```{r distinct_plots}
 explore_plot(idc, rev)
 explore_plot(idc, buyer)
-explore_plot(idc, agency)
+explore_plot(idc, agency_name) + scale_x_truncate()
 explore_plot(idc, dept)
 explore_plot(idc, status)
 explore_plot(idc, number_options)
