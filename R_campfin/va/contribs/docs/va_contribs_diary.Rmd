@@ -120,11 +120,11 @@ work of local electoral boards, registrars, and officers of election.
 
 [doe]: https://www.elections.virginia.gov/index.html
 
-The SBE has candidates and committess file ten types of reports:
+The SBE has candidates and committees file ten types of reports:
 
 ```{r raw_scheds, echo=FALSE}
-"https://www.elections.virginia.gov/candidatepac-info/campaign-finance-disclosure-forms/" %>% 
-  read_html(url) %>% 
+url <- "https://www.elections.virginia.gov/candidatepac-info/campaign-finance-disclosure-forms/" 
+read_html(url) %>% 
   html_node(".schedules_table") %>% 
   html_table() %>% 
   as_vector() %>% 
@@ -142,7 +142,7 @@ We are interested in schedule's A and B.
 
 ## Import
 
-The data itself is hosted on an SBE server and organized in montly directories.
+The data itself is hosted on an SBE server and organized in monthly directories.
 
 ```{r raw_list}
 sbe_url <- "https://apps.elections.virginia.gov/SBE_CSV/CF/"
@@ -154,19 +154,12 @@ sbe_table <- sbe_list %>%
   html_node("pre") %>% 
   html_text() %>% 
   str_remove("(.*)\\]") %>% 
-  str_remove("10/24/2018 12:45 PM          168 web.config") %>% 
-  str_replace_all("(?<=<dir> (\\d{4}|\\d{4}_\\d{2}))(?=(\\s+)?\\d{1,2}/)", "\n") %>% 
-  str_split("\n") %>% 
-  extract2(1) %>% 
-  str_trim() %>% 
-  enframe(NULL) %>% 
-  separate(
-    col = value,
-    into = c("date", "dir"),
-    sep = "\\s+<dir>\\s+"
-  ) %>% 
-  tail(11) %>% 
-  slice(-1)
+  str_remove("10/24/2018  1:45 PM\\s+168 web.config") %>% 
+  str_replace_all("(?<=<dir> (\\d{4}|\\d{4}_\\d{2}))(?=(\\s+)?\\d{1,2}/)", "\n") %>%
+  read_table(col_names = FALSE) %>% 
+  unite(datetime, 1:3, sep = " ") %>% 
+  rename(type = X4, dir = X5) %>% 
+  mutate(across(datetime, mdy_hms))
 
 sbe_table$dir <- md_link(
   sbe_table$dir,
@@ -212,7 +205,6 @@ for (dir in sbe_dirs) {
     str_subset("Schedule(A|B)") %>% 
     append(sbe_names)
 }
-
 ```
 
 ```{r sbe_paths_list, echo=FALSE}
@@ -241,18 +233,23 @@ raw_paths %>%
 If these paths don't already exist, we can download them now.
 
 ```{r raw_download}
-if (not(all(file_exists(raw_paths)))) {
-  download.file(raw_urls, raw_paths)
+for (i in seq_along(raw_urls)) {
+  if (file_exists(raw_paths[i])) {
+    next()
+  } else {
+    download.file(raw_urls[i], raw_paths[i])
+  }
 }
 ```
 
 ### Organize
 
-```{r}
+```{r raw_cols}
 all <- map(
   .x = raw_paths,
   .f = read_delim,
   delim = ",",
+  n_max = 2,
   escape_backslash = FALSE, 
   escape_double = FALSE,
   col_types = cols(
@@ -260,51 +257,58 @@ all <- map(
   )
 )
 
-all %>% 
+all <- all %>% 
   map_dbl(.f = ncol) %>% 
-  set_names(value = basename(raw_paths)) %>% 
-  enframe(name = "file", value = "ncol") %>% 
-  group_split(ncol)
+  set_names(value = raw_paths) %>% 
+  enframe(name = "file", value = "ncol")
 ```
-
-### Fix
-
-Some of these files cannot be read perfecly. We can use `stringr` to solve three
-problems with each file:
-
-1. Delimiters (`,`) inside cells.
-2. Double-quotes (`"`) inside cells.
-3. Newlines (`\n`) inside cells.
-
-```{r raw_fix}
-for (p in raw_paths) {
-  top <- read_lines(p, n_max = 2)
-  # if cells are quoted
-  if (str_detect(top[2], "\",\"")) {
-    read_file(p) %>%
-      # comma w/out quote before & after
-      str_remove_all("(?<!\"),(?!\")") %>% 
-      # quote w/out comma before & after
-      str_replace_all("(?<!^|\r\n|,)\"(?!,|\r\n|$)", "\'") %>% 
-      # new line without carriage return
-      str_replace_all("(?<!\r)\n", " ") %>% 
-      write_file(p)
-  }
-  message(basename(p))
-}
-```
-
-
-### Read
 
 ```{r raw_read}
-vac <- map(
-  .x = sample(raw_paths, 3),
-  .f = read_csv,
+vac <- map_df(
+  .x = all$file[all$ncol <= 24],
+  .f = read_delim,
+  delim = ",",
+  escape_backslash = FALSE, 
+  escape_double = FALSE,
   col_types = cols(
-    .default = col_character()
+    .default = col_character(),
+    IsIndividual = col_logical(),
+    TransactionDate = col_character(),
+    Amount = col_double(),
+    TotalToDate = col_double()
   )
 )
+```
+
+```{r raw_rename, echo=FALSE}
+vac <- vac %>% 
+  clean_names("snake") %>% 
+  rename(
+    last_name = last_or_company_name,
+    comm_id = committee_contact_id,
+    emp_name = name_of_employer,
+    occupation = occupation_or_type_of_business,
+    emp_place = primary_city_and_state_of_employment_or_business,
+    state = state_code,
+    zip = zip_code,
+    address1 = address_line1,
+    address2 = address_line2,
+    date = transaction_date,
+    total = total_to_date,
+    sched_id = schedule_id,
+    sched_a = schedule_a_id,
+    sched_b = schedule_b_id,
+    valuation = valuation_basis,
+    product = product_or_service
+  )
+```
+
+The data column is a mix of `%m/%d/%Y` and `%Y-%m-%d` formats.
+
+```{r raw_dates}
+vac_mdy <- str_which(vac$date, "^\\d{2}/")
+vac$date[vac_mdy] <- as.character(mdy(vac$date[vac_mdy]))
+vac$date <- parse_datetime(vac$date)
 ```
 
 ## Explore
@@ -322,7 +326,7 @@ col_stats(vac, count_na)
 ```
 
 ```{r na_flag}
-vac <- vac %>% flag_na(date, last, amount, committee)
+vac <- vac %>% flag_na(date, last_name, amount, committee)
 sum(vac$na_flag)
 ```
 

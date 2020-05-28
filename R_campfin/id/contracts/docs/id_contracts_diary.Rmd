@@ -1,0 +1,432 @@
+---
+title: "Idaho Contracts"
+author: "Kiernan Nicholls"
+date: "`r Sys.time()`"
+output:
+  github_document: 
+    df_print: tibble
+    toc: true
+    toc_dept: 2
+editor_options: 
+  chunk_output_type: console
+---
+
+<!-- Place comments regarding knitting here -->
+
+```{r setup, include=FALSE, purl=FALSE}
+library(knitr)
+opts_chunk$set(
+  eval = TRUE,
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  error = FALSE,
+  collapse = TRUE,
+  comment = "#>",
+  fig.path = "../plots/",
+  fig.width = 10,
+  dpi = 300
+)
+if (!interactive()) {
+  options(width = 99)
+  set.seed(5)
+}
+```
+
+```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
+doc_dir <- fs::dir_create(here::here("id", "contracts", "docs"))
+```
+
+## Project
+
+The Accountability Project is an effort to cut across data silos and give
+journalists, policy professionals, activists, and the public at large a simple
+way to search across huge volumes of public data about people and organizations.
+
+Our goal is to standardizing public data on a few key fields by thinking of each
+dataset row as a transaction. For each transaction there should be (at least) 3
+variables:
+
+1. All **parties** to a transaction.
+2. The **date** of the transaction.
+3. The **amount** of money involved.
+
+## Objectives
+
+This document describes the process used to complete the following objectives:
+
+1. How many records are in the database?
+1. Check for entirely duplicated records.
+1. Check ranges of continuous variables.
+1. Is there anything blank or missing?
+1. Check for consistency issues.
+1. Create a five-digit ZIP Code called `zip`.
+1. Create a `year` field from the transaction date.
+1. Make sure there is data on both parties to a transaction.
+
+## Packages
+
+The following packages are needed to collect, manipulate, visualize, analyze,
+and communicate these results. The `pacman` package will facilitate their
+installation and attachment.
+
+The IRW's `campfin` package will also have to be installed from GitHub. This
+package contains functions custom made to help facilitate the processing of
+campaign finance data.
+
+```{r load_packages, message=FALSE, warning=FALSE, error=FALSE}
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load_gh("irworkshop/campfin")
+pacman::p_load(
+  tidyverse, # data manipulation
+  lubridate, # datetime strings
+  gluedown, # printing markdown
+  pdftools, # read pdf files
+  magrittr, # pipe operators
+  janitor, # clean data frames
+  refinr, # cluster and merge
+  scales, # format strings
+  readxl, # read excel files
+  knitr, # knit documents
+  vroom, # read files fast
+  rvest, # html scraping
+  glue, # combine strings
+  here, # relative paths
+  httr, # http requests
+  fs # local storage 
+)
+```
+
+This document should be run as part of the `R_campfin` project, which lives as a
+sub-directory of the more general, language-agnostic
+[`irworkshop/accountability_datacleaning`][tap] GitHub repository.
+
+The `R_campfin` project uses the [RStudio projects][rproj] feature and should be
+run as such. The project also uses the dynamic `here::here()` tool for file
+paths relative to _your_ machine.
+
+```{r where_here}
+# where does this document knit?
+here::here()
+```
+
+[tap]: https://github.com/irworkshop/accountability_datacleaning
+[rproj]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects
+
+## Data
+
+Bulk contracts data for the state of Idaho was received via a Idaho Public
+Records Act request.
+
+```{r raw_dir}
+raw_dir <- dir_create(here("id", "contracts", "data", "raw"))
+raw_zip <- path(raw_dir, "Response.zip")
+file_size(raw_zip)
+```
+
+The archive contains a number of excel files listing contracts by fiscal year.
+
+```{r raw_list}
+as_tibble(unzip(raw_zip, list = TRUE))
+```
+
+We only require the master contracts list.
+
+```{r raw_unzip}
+raw_path <- unzip(
+  zipfile = raw_zip, 
+  files = "Response/Master List 5-19-20.xlsx",
+  exdir = raw_dir
+)
+```
+
+## Read
+
+That master excel file can be read as a data frame.
+
+```{r raw_read}
+idc <- read_excel(
+  path = raw_path,
+  col_types = "text"
+)
+```
+
+Then we can parse date and numeric columns after the fact.
+
+```{r raw_parse}
+idc <- idc %>% 
+  clean_names("snake") %>% 
+  na_if("N/A") %>% 
+  mutate(across(c(9:11, 15), ~excel_numeric_to_date(as.numeric(.)))) %>% 
+  mutate(across(contract_amount, parse_number))
+```
+
+The data recieved lists buying agencies only by their abbreviations. A telephone
+directory was provided upon request to convert these abbreviations to full
+agency names. Using `pdftools::pdf_text()`, we can read the lines of this
+directory and parse the text into a proper data frame.
+
+We will need a new function to split the two-column lines of text on the page.
+
+```{r str_insert}
+str_insert <- function(string, insert, n) {
+  lhs <- sprintf("^(.{%s})(.*)$", n - 1)
+  rhs <- stringr::str_c('\\1', insert, '\\2')
+  stringr::str_replace(string, lhs, rhs)
+}
+```
+
+We can read the lines of text into a character vector and replace the padding
+full stops with white space so the lines can be read with `readr::read_table()`.
+
+```{r abb_read}
+tel_paths <- dir_ls(here("id", "contracts"), regexp = "tel")
+tel_text <- str_split(pdf_text(tel_paths[1]), "\n")[[1]][4:57]
+tel_text <- unlist(str_split(str_insert(tel_text, "\n", 80), "\\s+\n"))[-1]
+tel_abbs <- tel_text %>% 
+  str_trim("left") %>% 
+  str_replace_all("\\.{2,}", str_dup(" ", 50)) %>% 
+  read_table(col_names = TRUE) %>% 
+  clean_names()
+```
+
+Then, the same can be done for the second page of the telephone directory. Then
+we can bind the two pages together into a single data frame.
+
+```{r abb_add}
+tel_paths <- dir_ls(here("id", "contracts"), regexp = "tel")
+tel_text <- str_split(pdf_text(tel_paths[2]), "\n")[[1]][4:57]
+tel_text <- unlist(str_split(str_insert(tel_text, "\n", 80), "\\s+\n"))[-1]
+tel_abbs <- tel_text %>% 
+  str_trim("left") %>% 
+  str_replace_all("\\.{2,}", str_dup(" ", 50)) %>% 
+  read_table(col_names = TRUE) %>% 
+  clean_names() %>% 
+  bind_rows(tel_abbs)
+```
+
+That data frame of abbreviation translations can be used to define the full
+names of the buying agencies. Not all agency abbreviations are found in this
+directory.
+
+```{r abb_join}
+idc <- left_join(idc, tel_abbs, by = c("agency" = "abbreviation"))
+```
+
+```{r abb_count}
+idc %>% 
+  count(agency, agency_name, sort = TRUE) %>%
+  add_prop() %>% 
+  mutate(t = cumsum(p))
+```
+
+`r percent(prop_na(idc$agency_name))` of this new `agency_name` variable is
+`NA`, meaning an abbreviation was not found in the telephone directory. They
+make up a relatively small amount of the overal records.
+
+```{r abb_na}
+idc %>% 
+  count(agency, agency_name, sort = TRUE) %>%
+  add_prop() %>% 
+  filter(is.na(agency_name))
+```
+
+For these records missing an agency name, we can just use the abbreviation given
+to us.
+
+```{r abb_coal}
+idc <- idc %>% 
+  rename(agency_abb = agency) %>% 
+  mutate(agency_name = coalesce(agency_name, agency_abb))
+```
+
+## Explore
+
+```{r glimpse}
+glimpse(idc)
+tail(idc)
+```
+
+### Missing
+
+Columns vary in their number of missing values.
+
+```{r na_count}
+col_stats(idc, count_na)
+```
+
+Any record missing a variable needed to identify the transaction will be flagged
+with `campfin::flag_na()`.
+
+```{r na_flag}
+idc <- idc %>% flag_na(issue, agency_name, contract_amount, vendor)
+sum(idc$na_flag)
+```
+
+```{r na_view}
+idc %>% 
+  filter(na_flag) %>% 
+  select(contract_number, issue, agency_name, contract_amount, vendor)
+```
+
+### Duplicates
+
+Ignoring the supposedly unique `contract_number`, there are a handful of
+duplicated records.
+
+```{r dupe_flag}
+idc <- flag_dupes(idc, -contract_number)
+sum(idc$dupe_flag)
+```
+
+```{r dupe_view}
+idc %>% 
+  filter(dupe_flag) %>% 
+  select(contract_number, issue, agency_name, contract_amount, vendor)
+```
+
+### Categorical
+
+```{r distinct_count}
+col_stats(idc, n_distinct)
+```
+
+```{r distinct_plots}
+explore_plot(idc, rev)
+explore_plot(idc, buyer)
+explore_plot(idc, agency_name) + scale_x_truncate()
+explore_plot(idc, dept)
+explore_plot(idc, status)
+explore_plot(idc, number_options)
+explore_plot(idc, number_years)
+explore_plot(idc, product_or_service)
+```
+
+### Amounts
+
+```{r ammount_summary}
+noquote(map_chr(summary(idc$contract_amount), dollar))
+prop_na(idc$contract_amount)
+mean(idc$contract_amount <= 0, na.rm = TRUE)
+```
+
+Here are the minimum and maximum contract amount values.
+
+```{r amount_minmax}
+idc[which.min(idc$contract_amount), ] %>% 
+  mutate(across(contract_amount, dollar)) %>% 
+  glimpse()
+idc[which.max(idc$contract_amount), ] %>% 
+  mutate(across(contract_amount, dollar)) %>% 
+  glimpse()
+```
+
+```{r hist_amount, echo=FALSE}
+idc %>%
+  filter(contract_amount > 1) %>% 
+  ggplot(aes(contract_amount)) +
+  geom_histogram(fill = dark2["purple"]) +
+  scale_y_continuous(labels = comma) +
+  scale_x_continuous(
+    breaks = c(1 %o% 10^(0:6)),
+    labels = dollar,
+    trans = "log10"
+  ) +
+  labs(
+    title = "Idaho Contracts Amount Distribution",
+    x = "Amount",
+    y = "Count"
+  )
+```
+
+### Dates
+
+We can add the calendar year from `date` with `lubridate::year()`
+
+```{r date_year}
+idc <- mutate(idc, year = year(start))
+```
+
+```{r date_range}
+min(idc$start, na.rm = TRUE)
+sum(idc$year < 2000, na.rm = TRUE)
+max(idc$start, na.rm = TRUE)
+sum(idc$start > today(), na.rm = TRUE)
+```
+
+```{r}
+idc %>% 
+  filter(year > 2020) %>% 
+  count(year, sort = TRUE)
+```
+
+```{r}
+idc <- mutate(idc, across(start, str_replace, "^(29)", "20"))
+idc <- mutate(idc, year = year(start))
+```
+
+```{r bar_year, echo=FALSE}
+idc %>% 
+  count(year) %>% 
+  mutate(even = is_even(year)) %>% 
+  ggplot(aes(x = year, y = n)) +
+  geom_col(aes(fill = even)) + 
+  scale_fill_brewer(palette = "Dark2", guide = FALSE) +
+  scale_y_continuous(labels = comma) +
+  scale_x_continuous(breaks = seq(2000, 2020, by = 2)) +
+  coord_cartesian(xlim = c(2002, 2020)) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "Idaho Contracts by Year",
+    x = "Start Year",
+    y = "Count"
+  )
+```
+
+## Conclude
+
+1. There are `r comma(nrow(idc))` records in the database.
+1. There are `r comma(sum(idc$dupe_flag))` duplicate records in the database.
+1. The range and distribution of `amount` and `date` seem reasonable.
+1. There are `r comma(sum(idc$na_flag))` records missing key variables.
+1. The 4-digit `year` variable has been created with `lubridate::year()`.
+
+## Export
+
+Now the file can be saved on disk for upload to the Accountability server.
+
+```{r clean_dir}
+clean_dir <- dir_create(here("id", "contracts", "data", "clean"))
+clean_path <- path(clean_dir, "id_contracts_clean.csv")
+write_csv(idc, clean_path, na = "")
+file_size(clean_path)
+mutate(file_encoding(clean_path), across(path, basename))
+```
+
+## Dictionary
+
+The following table describes the variables in our final exported file:
+
+```{r dict_make, echo=FALSE}
+dict_raw <- tibble(
+  var = md_code(names(idc)),
+  type = map_chr(idc, typeof),
+  def = ""
+)
+```
+
+```{r dict_md, echo=FALSE}
+(dict_md <- kable(
+  x = dict_raw,
+  format = "markdown",
+  col.names = c("Column", "Type", "Definition")
+))
+```
+
+```{r dict_write}
+write_lines(
+  x = c("# Idaho Contracts Data Dictionary\n", dict_md),
+  path = here("id", "contracts", "id_contracts_dict.md"),
+)
+```
+

@@ -1,0 +1,337 @@
+---
+title: "HHS Provider Relief Fund"
+author: "Kiernan Nicholls"
+date: "`r Sys.time()`"
+output:
+  github_document: 
+    df_print: tibble
+    toc: true
+    toc_dept: 2
+editor_options: 
+  chunk_output_type: console
+---
+
+<!-- Place comments regarding knitting here -->
+
+```{r setup, include=FALSE, purl=FALSE}
+library(knitr)
+opts_chunk$set(
+  eval = TRUE,
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  error = FALSE,
+  collapse = TRUE,
+  comment = "#>",
+  fig.path = "../plots/",
+  fig.width = 10,
+  dpi = 300
+)
+if (!interactive()) {
+  options(width = 99)
+  set.seed(5)
+}
+```
+
+```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
+doc_dir <- fs::dir_create(here::here("us", "covid", "hhs_relief", "docs"))
+```
+
+## Project
+
+The Accountability Project is an effort to cut across data silos and give
+journalists, policy professionals, activists, and the public at large a simple
+way to search across huge volumes of public data about people and organizations.
+
+Our goal is to standardizing public data on a few key fields by thinking of each
+dataset row as a transaction. For each transaction there should be (at least) 3
+variables:
+
+1. All **parties** to a transaction.
+2. The **date** of the transaction.
+3. The **amount** of money involved.
+
+## Objectives
+
+This document describes the process used to complete the following objectives:
+
+1. How many records are in the database?
+1. Check for entirely duplicated records.
+1. Check ranges of continuous variables.
+1. Is there anything blank or missing?
+1. Check for consistency issues.
+1. Create a five-digit ZIP Code called `zip`.
+1. Create a `year` field from the transaction date.
+1. Make sure there is data on both parties to a transaction.
+
+## Packages
+
+The following packages are needed to collect, manipulate, visualize, analyze,
+and communicate these results. The `pacman` package will facilitate their
+installation and attachment.
+
+The IRW's `campfin` package will also have to be installed from GitHub. This
+package contains functions custom made to help facilitate the processing of
+campaign finance data.
+
+```{r load_packages, message=FALSE, warning=FALSE, error=FALSE}
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load_gh("irworkshop/campfin")
+pacman::p_load(
+  tidyverse, # data manipulation
+  lubridate, # datetime strings
+  gluedown, # printing markdown
+  magrittr, # pipe operators
+  janitor, # clean data frames
+  refinr, # cluster and merge
+  scales, # format strings
+  knitr, # knit documents
+  vroom, # read files fast
+  rvest, # html scraping
+  glue, # combine strings
+  here, # relative paths
+  httr, # http requests
+  fs # local storage 
+)
+```
+
+This document should be run as part of the `R_campfin` project, which lives as a
+sub-directory of the more general, language-agnostic
+[`irworkshop/accountability_datacleaning`][tap] GitHub repository.
+
+The `R_campfin` project uses the [RStudio projects][rproj] feature and should be
+run as such. The project also uses the dynamic `here::here()` tool for file
+paths relative to _your_ machine.
+
+```{r where_here}
+# where does this document knit?
+here::here()
+```
+
+[tap]: https://github.com/irworkshop/accountability_datacleaning
+[rproj]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects
+
+## Data
+
+Data regarding the monetary relief given to healthcare providers is published by
+the [Health Resources and Services Administration (HRSA)][hrsa]. The data is
+updated every Tuesday and Thursday.
+
+[hrsa]: https://www.hrsa.gov/
+
+Per the [dataset description page][dd]:
+
+> The bipartisan CARES Act and the Paycheck Protection Program and Health Care
+Enhancement Act provided $175 billion in relief funds to hospitals and other
+healthcare providers on the front lines of the coronavirus response. Payments
+from the $50 billion general distribution, the $12 billion targeted allocation
+to high impact areas, and the $10 billion targeted allocation to rural providers
+are being distributed by the Department of Health and Human Services through the
+Health Resources and Services Administration. This dataset represents the list
+of providers that received a payment from the General Distribution, High Impact
+Targeted Allocation and/or the Rural Targeted Allocation of the Provider Relief
+Fund and who have attested to receiving one or more payments and agreed to the
+Terms and Conditions as of May 13, 2020.
+>
+> In addition to the list of providers who received funds from the General
+Distribution, HRSA has provided an additional list of providers
+(https://data.cdc.gov/Administrative/Provider-Relief-Fund-COVID-19-High-Impact-Payments/b58h-s9zx).
+
+[dd]: https://data.cdc.gov/Administrative/HHS-Provider-Relief-Fund/kh8y-3es6
+
+Each record is a payment:
+
+> Each row is a provider (aligned with billing TIN) that has received and
+accepted at least one payment. If a provider received 2 payments and accepted
+both, both payments are included. If a provider received two payments and only
+accepted one payment, only the accepted payment is included. If and when
+additional data are available, this data portal will be updated here.
+
+## Read
+
+```{r raw_read}
+hhspr <-  vroom(
+  file = "https://data.cdc.gov/api/views/kh8y-3es6/rows.csv",
+  .name_repair = make_clean_names,
+  col_types = cols(
+    `Provider Name` = col_character(),
+    State = col_character(), 
+    City = col_character(),
+    Payment = col_number()
+  )
+)
+```
+
+```{r raw_rename, echo=FALSE}
+hhspr <- rename(hhspr, provider = provider_name)
+```
+
+## Explore
+
+We will add a column with a constant agency name.
+
+```{r name_add}
+hhspr <- mutate(
+  .data = hhspr, 
+  .before = provider,
+  agency = "Health Resources and Services Administration"
+)
+```
+
+The data is a 5-column table with payment recipients arranged alphabetically.
+
+```{r glimpse}
+glimpse(hhspr)
+tail(hhspr)
+```
+
+### Missing
+
+No records are missing any values.
+
+```{r na_count}
+col_stats(hhspr, count_na)
+```
+
+### Duplicates
+
+There are no duplicate records.
+
+```{r dupe_flag, warning=TRUE}
+hhspr <- flag_dupes(hhspr, everything())
+```
+
+### Amounts
+
+The `payment` values range from `r dollar(min(hhspr$payment))` to
+`r dollar(max(hhspr$payment))`.
+
+```{r ammount_summary}
+noquote(map_chr(summary(hhspr$payment), dollar))
+mean(hhspr$payment <= 0) # no negatives
+```
+
+Here are the smallest and largest payments:
+
+```{r amount_minmax}
+hhspr[which.min(hhspr$payment), ]
+hhspr[which.max(hhspr$payment), ]
+```
+
+The distribution of `payment` is logarithmically-normally distributed, a typical
+distribution for large payments.
+
+```{r hist_amount, echo=FALSE}
+hhspr %>%
+  ggplot(aes(payment)) +
+  geom_histogram(fill = dark2["purple"]) +
+  scale_y_continuous(labels = comma) +
+  scale_x_continuous(
+    breaks = c(1 %o% 10^(0:6)),
+    labels = dollar,
+    trans = "log10"
+  ) +
+  labs(
+    title = "United States Expenditures Amount Distribution",
+    subtitle = "from 2000 to 2019",
+    caption = "Source: {source}",
+    x = "Amount",
+    y = "Count"
+  )
+```
+
+### Dates
+
+There are no dates in the database. We will have to manually add the current
+calendar year.
+
+```{r year_add}
+hhspr <- mutate(hhspr, year = year(today()))
+```
+
+## Geography
+
+All of the `state` values are valid abbreviations.
+
+```{r state_check}
+percent(prop_in(hhspr$state, valid_state), 0.01)
+add_prop(count(hhspr, state, sort = TRUE))
+```
+
+_Most_ of the city values are known to be valid as well.
+
+```{r city_check}
+many_city <- c(valid_city, extra_city)
+percent(prop_in(hhspr$city, many_city), 0.01)
+```
+
+The only different between the `city` column and our list of known cities is
+the abbreviations.
+
+```{r city_count}
+hhspr %>% 
+  filter(city %out% many_city) %>% 
+  count(city, state, sort = TRUE) %>% 
+  add_prop(n = n)
+```
+
+```{r city_norm}
+hhspr <- mutate(hhspr, across(city, normal_city, abbs = usps_city))
+percent(prop_in(hhspr$city, many_city), 0.01)
+```
+
+## Conclude
+
+1. There are `r comma(nrow(hhspr))` records in the database.
+1. There are `r comma(sum(hhspr$dupe_flag))` duplicate records in the database.
+1. The range and distribution of `amount` seems reasonable.
+1. There are `r comma(sum(hhspr$na_flag))` records missing key variables.
+1. Consistency in geographic data is high.
+1. The 4-digit `year` variable has been created with `lubridate::year()`.
+
+## Export
+
+Now the file can be saved on disk for upload to the Accountability server.
+
+```{r clean_dir}
+clean_dir <- dir_create(here("us", "covid", "hhs_relief", "data", "clean"))
+clean_path <- path(clean_dir, "hhs_provider_relief.csv")
+write_csv(hhspr, clean_path, na = "")
+file_size(clean_path)
+mutate(file_encoding(clean_path), across(path, basename))
+```
+
+## Dictionary
+
+The following table describes the variables in our final exported file:
+
+```{r dict_make, echo=FALSE}
+dict_raw <- tibble(
+  var = md_code(names(hhspr)),
+  type = md_code(map_chr(hhspr, typeof)),
+  def = c(
+    "Distributing agency name",
+    "Provider name associated with the billing TIN to whom the payment was issued",
+    "Provider city name (with expanded abbreviations)",
+    "Provider state abbreviation",
+    "The cumulative payment that the provider has received AND attested to",
+    "Current calendar year"
+  )
+)
+```
+
+```{r dict_md, echo=FALSE}
+(dict_md <- kable(
+  x = dict_raw,
+  format = "markdown",
+  col.names = c("Column", "Type", "Definition")
+))
+```
+
+```{r dict_write}
+write_lines(
+  x = c("# HHS Provider Relief Data Dictionary\n", dict_md),
+  path = here("us", "covid", "hhs_relief_dict.md"),
+)
+```
+
