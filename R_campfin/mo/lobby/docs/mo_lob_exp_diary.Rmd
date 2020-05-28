@@ -169,29 +169,6 @@ mo_lob_19 <- mo_lob_19 %>%
   mutate_if(is.character, na_if, "NULL") %>% 
   mutate_if(is.character, na_if, "N/A")
 ```
-We will flag records missing recipient/group, principal, amount.
-```{r fla_na}
-mo_lob_exp <- mo_lob_exp %>% 
-  flag_na(c(recipient, principal, amount,date))
-
-mo_lob_grp <- mo_lob_grp %>% 
-  flag_na(c(group, principal, amount,date))
-```
-
-
-
-### Duplicates
-Running the following commands shows that there are over a thousand entries with totally identical information. Since each of them contain `total_compensation` and `total_reimbursed` for a certain period, there should be only one such entry for each corresponding time period. We will note that in the `dupe_flag` column.
-```{r dupe_flag}
-mo_lob_exp <- flag_dupes(mo_lob_exp, dplyr::everything())
-sum(mo_lob_exp$dupe_flag)
-```
-
-```{r dupe_flag grp}
-mo_lob_grp <- flag_dupes(mo_lob_grp, dplyr::everything())
-sum(mo_lob_grp$dupe_flag)
-```
-
 
 ### Categorical
 First, we will create a `year` variable.
@@ -278,7 +255,7 @@ group_by(expenditure_type) %>%
 ```
 
 ```{r expense type grp, echo=FALSE}
-mo_lob_exp %>% filter(!dupe_flag) %>% 
+mo_lob_exp %>% 
       bind_rows(mo_lob_19 %>% filter(expenditure_type == "INDIVIDUAL") %>% count(year)) %>% 
   group_by(description) %>% 
   summarize(total = sum(amount)) %>% arrange(desc(total)) %>% top_n(8) %>% 
@@ -296,7 +273,7 @@ mo_lob_exp %>% filter(!dupe_flag) %>%
 ```
 
 ```{r expense type, echo=FALSE}
-mo_lob_grp %>% filter(!dupe_flag) %>% 
+mo_lob_grp %>% 
       bind_rows(mo_lob_19 %>% filter(expenditure_type == "GROUP") %>% count(year)) %>% 
   group_by(description) %>% 
   summarize(total = sum(amount)) %>% arrange(desc(total)) %>% top_n(8) %>% 
@@ -314,7 +291,7 @@ mo_lob_grp %>% filter(!dupe_flag) %>%
 ```
 
 ```{r client type, echo=FALSE}
-mo_lob_exp %>% filter(!dupe_flag) %>% 
+mo_lob_exp %>% 
   mutate(target = coalesce(public_official, recipient)) %>% 
   group_by(target) %>% 
   summarize(median = median(amount)) %>% arrange(desc(median)) %>% top_n(8) %>% 
@@ -332,7 +309,7 @@ mo_lob_exp %>% filter(!dupe_flag) %>%
 ```
 
 ```{r prin top, echo=FALSE}
-mo_lob_exp %>% filter(!dupe_flag) %>% 
+mo_lob_exp %>% 
   group_by(principal) %>% 
   summarize(median = median(amount)) %>% arrange(desc(median)) %>% top_n(8) %>% 
   ggplot(aes(x = reorder(principal, median), y = median)) +
@@ -430,14 +407,77 @@ mo_lob_exp %>%
     y = "Count"
   )
 ```
+### Separate recipient name and title
+```{r}
 
+mo_lob_19 <- mo_lob_19 %>% 
+  separate(col = recipient, into = c("recipient_name","recipient_title"), sep = " - ", remove = FALSE) %>% 
+  mutate_at(.vars = c("recipient_name","recipient_title"), .funs = trimws) %>% 
+  rename(principal_name = p_name) %>% 
+  separate(col = public_official, into = c("public_official_name","public_official_title"), sep = " - ", remove = FALSE) %>% 
+  mutate_at(.vars = c("public_official_name","public_official_title"), .funs = trimws)
+
+mo_lob_exp <- mo_lob_exp %>% 
+  mutate(recipient_name = str_extract(recipient,"^.+(?=\\s-\\s)"),
+         recipient_title = str_remove(recipient, "^.+\\s-\\s")) %>% 
+  mutate(public_official_name = str_extract(public_official,"^.+(?=\\s-\\s)"),
+         public_official_title = str_remove(public_official, "^.+\\s-\\s")) %>% 
+  mutate_at(.vars = c("recipient_name","recipient_title"), .funs = trimws) %>% 
+  mutate_at(.vars = c("public_official_name","public_official_title"), .funs = trimws)
+```
+Then we'll reshape the early data and combine them into one.
+```{r reshape}
+mo_lob_exp_rs <- mo_lob_exp %>% 
+  rename(expenditure_date = date, expenditure_category = type) %>% 
+  add_column(group= rep(NA_character_,nrow(.)), .after = "recipient_title") %>% 
+  add_column(gro_id= rep(NA_integer_,nrow(.)), .after = "group") %>% 
+  add_column(amend_gro_id= rep(NA_integer_,nrow(.)), .after = "gro_id")
+
+grp_add <- setdiff(names(mo_lob_exp), names(mo_lob_grp))
+
+
+mo_lob_grp_rs <- mo_lob_grp %>% 
+    rename(expenditure_category = type,
+         expenditure_date = date) %>% 
+  add_column(public_official = rep(NA_character_,nrow(.)), .before = "group") %>% 
+  add_column(recipient = rep(NA_character_,nrow(.)), .before = "group") %>% 
+  add_column(ind_id = rep(NA_character_,nrow(.)), .before = "gro_id") %>% 
+  add_column(amend_ind_id = rep(NA_character_,nrow(.)), .before = "gro_id") %>% 
+  add_column(recipient_name = rep(NA_character_,nrow(.)), .before = "year") %>% 
+  add_column(recipient_title = rep(NA_character_,nrow(.)), .before = "year") %>% 
+  add_column(public_official_name = rep(NA_character_,nrow(.)), .before = "year") %>% 
+  add_column(public_official_title = rep(NA_character_,nrow(.)), .before = "year") %>% 
+  add_column(expenditure_type= rep("GROUP",nrow(.)), .after = "expenditure_date")
+  #mutate(gro_id = as.character(gro_id))
+  
+mo_lob_combine <- mo_lob_exp_rs %>% bind_rows(mo_lob_grp_rs)
+
+mo_lob_combine <- mo_lob_combine %>% rename(principal_name = principal,
+                                            prin_amount = amount)
+```
+Rename and create new columns for 2019
+```{r}
+mo_lob_19_rs <- mo_lob_19 %>% 
+  add_column(ind_id = rep(NA_character_,nrow(.)), .after = "amend_reason") %>% 
+  add_column(amend_ind_id = rep(NA_character_,nrow(.)), .after = "ind_id") %>% 
+  add_column(gro_id = rep(NA_character_,nrow(.)), .after = "amend_reason") %>% 
+  add_column(amend_gro_id = rep(NA_character_,nrow(.)), .after = "gro_id") %>% 
+  mutate(expenditure_date = as.Date(expenditure_date))
+
+mo_lob_final <- mo_lob_combine %>% bind_rows(mo_lob_19_rs)
+```
+
+### Duplicates
+Running the following commands shows that there are over a thousand entries with totally identical information. Since each of them contain `total_compensation` and `total_reimbursed` for a certain period, there should be only one such entry for each corresponding time period. We will note that in the `dupe_flag` column.
+```{r dupe_flag}
+mo_lob_final <- flag_dupes(mo_lob_final, dplyr::everything())
+sum(mo_lob_final$dupe_flag)
+```
 
 ## Conclude
 
 ```{r clean_glimpse}
-glimpse(sample_n(mo_lob_exp, 20))
-glimpse(sample_n(mo_lob_grp, 20))
-glimpse(sample_n(mo_lob_19,20))
+glimpse(sample_n(mo_lob_final, 20))
 ```
 
 1. There are `r nrow(mo_lob_exp)` records in the individual/solicitation database, and `r nrow(mo_lob_grp)` in the group database.
@@ -454,20 +494,8 @@ clean_dir <- dir_create(here("mo", "lobby", "data", "processed","exp"))
 
 ```{r write_clean}
 write_csv(
-  x = mo_lob_exp,
-  path = path(clean_dir, "mo_lob_exp_clean.csv"),
-  na = ""
-)
-
-write_csv(
-  x = mo_lob_grp,
-  path = path(clean_dir, "mo_lob_grp_clean.csv"),
-  na = ""
-)
-
-write_csv(
-  x = mo_lob_19,
-  path = path(clean_dir, "mo_lob_exp_new.csv"),
+  x = mo_lob_final,
+  path = path(clean_dir, "mo_lob_exp_combined_clean.csv"),
   na = ""
 )
 ```

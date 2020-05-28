@@ -1,7 +1,7 @@
 Missouri Lobbying Expenditure Diary
 ================
 Yanqi Xu
-2020-05-20 12:58:40
+2020-05-20 17:01:04
 
   - [Project](#project)
   - [Objectives](#objectives)
@@ -93,10 +93,11 @@ here::here()
 
 ## Data
 
-The [Missouri Ethics Commission](https://www.mec.mo.gov/mec/Lobbying/Lob_ExpSrch.aspx)
-makes lobbyist expenditure data from 2004 to 2020 available for
-download. Note that data for 2019 onward exists in a separate search.
-The 2018 data and prior year’s data exist in two separate files.
+The [Missouri Ethics
+Commission](https://www.mec.mo.gov/mec/Lobbying/Lob_ExpSrch.aspx) makes
+lobbyist expenditure data from 2004 to 2020 available for download. Note
+that data for 2019 onward exists in a separate search. The 2018 data and
+prior year’s data exist in two separate files.
 
 The `mo_lob_exp` data captures expenditures reported by a lobbyist made
 on behalf of any group or individual including a state public official,
@@ -286,36 +287,6 @@ mo_lob_19 <- mo_lob_19 %>%
   mutate_if(is.character, na_if, "N/A")
 ```
 
-We will flag records missing recipient/group, principal, amount.
-
-``` r
-mo_lob_exp <- mo_lob_exp %>% 
-  flag_na(c(recipient, principal, amount,date))
-
-mo_lob_grp <- mo_lob_grp %>% 
-  flag_na(c(group, principal, amount,date))
-```
-
-### Duplicates
-
-Running the following commands shows that there are over a thousand
-entries with totally identical information. Since each of them contain
-`total_compensation` and `total_reimbursed` for a certain period, there
-should be only one such entry for each corresponding time period. We
-will note that in the `dupe_flag` column.
-
-``` r
-mo_lob_exp <- flag_dupes(mo_lob_exp, dplyr::everything())
-sum(mo_lob_exp$dupe_flag)
-#> [1] 46
-```
-
-``` r
-mo_lob_grp <- flag_dupes(mo_lob_grp, dplyr::everything())
-sum(mo_lob_grp$dupe_flag)
-#> [1] 12
-```
-
 ### Categorical
 
 First, we will create a `year` variable.
@@ -386,75 +357,122 @@ expenditure type
 
 ![](../plots/histogram-1.png)<!-- -->
 
-![](../plots/grp%20histogram-1.png)<!-- -->
+![](../plots/grp%20histogram-1.png)<!-- --> \#\#\# Separate recipient
+name and title
+
+``` r
+
+mo_lob_19 <- mo_lob_19 %>% 
+  separate(col = recipient, into = c("recipient_name","recipient_title"), sep = " - ", remove = FALSE) %>% 
+  mutate_at(.vars = c("recipient_name","recipient_title"), .funs = trimws) %>% 
+  rename(principal_name = p_name) %>% 
+  separate(col = public_official, into = c("public_official_name","public_official_title"), sep = " - ", remove = FALSE) %>% 
+  mutate_at(.vars = c("public_official_name","public_official_title"), .funs = trimws)
+
+mo_lob_exp <- mo_lob_exp %>% 
+  mutate(recipient_name = str_extract(recipient,"^.+(?=\\s-\\s)"),
+         recipient_title = str_remove(recipient, "^.+\\s-\\s")) %>% 
+  mutate(public_official_name = str_extract(public_official,"^.+(?=\\s-\\s)"),
+         public_official_title = str_remove(public_official, "^.+\\s-\\s")) %>% 
+  mutate_at(.vars = c("recipient_name","recipient_title"), .funs = trimws) %>% 
+  mutate_at(.vars = c("public_official_name","public_official_title"), .funs = trimws)
+```
+
+Then we’ll reshape the early data and combine them into one.
+
+``` r
+mo_lob_exp_rs <- mo_lob_exp %>% 
+  rename(expenditure_date = date, expenditure_category = type) %>% 
+  add_column(group= rep(NA_character_,nrow(.)), .after = "recipient_title") %>% 
+  add_column(gro_id= rep(NA_integer_,nrow(.)), .after = "group") %>% 
+  add_column(amend_gro_id= rep(NA_integer_,nrow(.)), .after = "gro_id")
+
+grp_add <- setdiff(names(mo_lob_exp), names(mo_lob_grp))
+
+
+mo_lob_grp_rs <- mo_lob_grp %>% 
+    rename(expenditure_category = type,
+         expenditure_date = date) %>% 
+  add_column(public_official = rep(NA_character_,nrow(.)), .before = "group") %>% 
+  add_column(recipient = rep(NA_character_,nrow(.)), .before = "group") %>% 
+  add_column(ind_id = rep(NA_character_,nrow(.)), .before = "gro_id") %>% 
+  add_column(amend_ind_id = rep(NA_character_,nrow(.)), .before = "gro_id") %>% 
+  add_column(recipient_name = rep(NA_character_,nrow(.)), .before = "year") %>% 
+  add_column(recipient_title = rep(NA_character_,nrow(.)), .before = "year") %>% 
+  add_column(public_official_name = rep(NA_character_,nrow(.)), .before = "year") %>% 
+  add_column(public_official_title = rep(NA_character_,nrow(.)), .before = "year") %>% 
+  add_column(expenditure_type= rep("GROUP",nrow(.)), .after = "expenditure_date")
+  #mutate(gro_id = as.character(gro_id))
+  
+mo_lob_combine <- mo_lob_exp_rs %>% bind_rows(mo_lob_grp_rs)
+
+mo_lob_combine <- mo_lob_combine %>% rename(principal_name = principal,
+                                            prin_amount = amount)
+```
+
+Rename and create new columns for 2019
+
+``` r
+mo_lob_19_rs <- mo_lob_19 %>% 
+  add_column(ind_id = rep(NA_character_,nrow(.)), .after = "amend_reason") %>% 
+  add_column(amend_ind_id = rep(NA_character_,nrow(.)), .after = "ind_id") %>% 
+  add_column(gro_id = rep(NA_character_,nrow(.)), .after = "amend_reason") %>% 
+  add_column(amend_gro_id = rep(NA_character_,nrow(.)), .after = "gro_id") %>% 
+  mutate(expenditure_date = as.Date(expenditure_date))
+
+mo_lob_final <- mo_lob_combine %>% bind_rows(mo_lob_19_rs)
+```
+
+### Duplicates
+
+Running the following commands shows that there are over a thousand
+entries with totally identical information. Since each of them contain
+`total_compensation` and `total_reimbursed` for a certain period, there
+should be only one such entry for each corresponding time period. We
+will note that in the `dupe_flag` column.
+
+``` r
+mo_lob_final <- flag_dupes(mo_lob_final, dplyr::everything())
+sum(mo_lob_final$dupe_flag)
+#> [1] 518
+```
 
 ## Conclude
 
 ``` r
-glimpse(sample_n(mo_lob_exp, 20))
+glimpse(sample_n(mo_lob_final, 20))
 #> Rows: 20
-#> Columns: 18
-#> $ lob_id           <chr> "L001855", "L000299", "L001988", "L000993", "L001708", "L002043", "L000…
-#> $ lob_first_name   <chr> "STEPHEN C.", "WILLIAM A", "NIKKI R", "JAMES P", "CHRIS", "SANDY", "J C…
-#> $ lob_last_name    <chr> "KNORR", "GAMBLE", "STRONG", "BROWN", "LIESE", "HOWARD", "STRAUB", "GAM…
-#> $ report           <dttm> 2006-04-01, 2012-01-01, 2015-05-01, 2013-05-01, 2015-07-01, 2015-01-01…
-#> $ public_official  <chr> NA, NA, "EGGLESTON, J - REPRESENTATIVE", NA, "GOSEN, DON  - REPRESENTAT…
-#> $ recipient        <chr> "PRATT, BRYAN - REPRESENTATIVE", "SCHARNHORST, DWIGHT D. - REPRESENTATI…
-#> $ date             <date> 2006-04-11, 2012-01-24, 2015-05-05, 2013-05-06, 2015-07-09, 2015-01-23…
-#> $ type             <chr> "MEALS, FOOD, & BEVERAGE", "MEALS, FOOD, & BEVERAGE", "MEALS, FOOD, & B…
-#> $ description      <chr> NA, "NON-ALCOHOLIC BEVERAGES", "END OF SESSION MEAL", NA, NA, "CHAMBER …
-#> $ amount           <dbl> 35.65, 26.00, 11.87, 30.15, 103.41, 10.00, 18.75, 72.00, 75.00, 29.98, …
-#> $ principal        <chr> "UNIVERSITY OF MISSOURI", "MISSOURI BEVERAGE ASSOCIATION", "MISSOURI HE…
-#> $ amend_reason     <chr> NA, NA, NA, NA, "NEW ENTRY", NA, NA, NA, NA, NA, NA, NA, NA, "NEW ENTRY…
-#> $ ind_id           <dbl> 3066, 19753, 54992, 36239, 57400, 49425, 40, 1535, 75248, 1384, 33247, …
-#> $ amend_ind_id     <dbl> 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
-#> $ expenditure_type <chr> "INDIVIDUAL", "INDIVIDUAL", "INDIVIDUAL", "INDIVIDUAL", "INDIVIDUAL", "…
-#> $ na_flag          <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, F…
-#> $ dupe_flag        <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, F…
-#> $ year             <dbl> 2006, 2012, 2015, 2013, 2015, 2015, 2006, 2004, 2017, 2007, 2013, 2014,…
-glimpse(sample_n(mo_lob_grp, 20))
-#> Rows: 20
-#> Columns: 16
-#> $ lob_id         <chr> "L000128", "L003105", "L002808", "L000299", "L000179", "L003122", "L00070…
-#> $ lob_first_name <chr> "JOHN E", "CHRIS", "MARK F", "WILLIAM A", "CALVIN W", "MIKE", "PHIL", "JO…
-#> $ lob_last_name  <chr> "BARDGETT JR", "ROEPE", "HABBAS", "GAMBLE", "CALL", "LODEWEGEN", "WRIGHT"…
-#> $ report         <dttm> 2005-02-01, 2013-08-01, 2016-05-01, 2013-02-01, 2006-02-01, 2014-01-01, …
-#> $ group          <chr> "APPROPRIATIONS - GENERAL ADMINISTRATION - STANDING", "HOUSE MINORITY CAU…
-#> $ date           <date> 2005-02-01, 2013-08-24, 2016-05-04, 2013-02-26, 2006-02-28, 2014-01-14, …
-#> $ type           <chr> "MEALS, FOOD, & BEVERAGE", "MEALS, FOOD, & BEVERAGE", "MEALS, FOOD, & BEV…
-#> $ description    <chr> NA, "CAUCUS MEETING", "SENATE CRAB BOIL EVENT", "MISSOURI STATE CAPITOL, …
-#> $ amount         <dbl> 94.97, 2500.00, 655.00, 80.26, 15.00, 160.33, 188.08, -1581.00, 250.00, 1…
-#> $ principal      <chr> "JOHN BARDGETT & ASSOCIATES, INC.", "FAIR ENERGY RATE ACTION FUND", "MISS…
-#> $ amend_reason   <chr> NA, NA, NA, NA, NA, NA, NA, "MISCALCULATED THE AMOUNT", NA, NA, NA, NA, N…
-#> $ gro_id         <dbl> 404, 6840, 9562, 5776, 470, 7099, 1935, 1555, 774, 771, 6716, 1482, 8093,…
-#> $ amend_gro_id   <dbl> 0, 0, 0, 0, 0, 0, 0, 1552, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
-#> $ na_flag        <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FAL…
-#> $ dupe_flag      <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FAL…
-#> $ year           <dbl> 2005, 2013, 2016, 2013, 2006, 2014, 2011, 2007, 2010, 2006, 2013, 2010, 2…
-glimpse(sample_n(mo_lob_19,20))
-#> Rows: 20
-#> Columns: 16
-#> $ lob_id               <chr> "L190118", "L190136", "L190118", "L001839", "L002988", "L003399", "…
-#> $ lob_first_name       <chr> "PATRICK", "KEVIN", "PATRICK", "SHARON", "BRAD", "RYAN", "JERRY", "…
-#> $ lob_last_name        <chr> "BROWN", "ROY", "BROWN", "JONES", "BATES", "STAUFFER", "HOBBS", "SC…
-#> $ report               <dttm> 2019-04-01, 2019-03-01, 2019-04-01, 2019-01-01, 2019-01-01, 2019-0…
-#> $ public_official      <chr> "LYDA KREWSON - ELECTED LOCAL GOVERNMENT OFFICIAL", NA, NA, NA, NA,…
-#> $ recipient            <chr> "JAMIE WILSON - EMPLOYEE/STAFF", NA, "CHRISTINE INGRASSIA - ELECTED…
-#> $ group                <chr> NA, "ENTIRE MISSOURI SENATE", NA, NA, "ENTIRE MISSOURI SENATE", NA,…
-#> $ expenditure_date     <dttm> 2019-04-09, 2019-03-25, 2019-04-09, 2019-01-28, 2019-01-04, 2019-0…
-#> $ expenditure_category <chr> "MEALS, FOOD, & BEVERAGE", "OTHER", "MEALS, FOOD, & BEVERAGE", "OTH…
-#> $ description          <chr> "FOOD AT BALLPARK", "EMAIL ACTION ALERT", "FOOD AT BALLGAME", "MATA…
-#> $ prin_amount          <dbl> 76.84, 300.00, 76.84, 5.00, 91.03, 2.77, 4.49, 4.69, 4.49, 52.50, 2…
-#> $ p_name               <chr> "UNION ELECTRIC CO. DBA AMERENUE, AMEREN SERVICES, AMEREN CORP.", "…
-#> $ amend_reason         <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "REQUIRED REPORTING", "NO E…
-#> $ report_group_id      <dbl> 3209, 4333, 3209, 1069, 816, 9329, 1307, 12119, 3291, 3567, 1299, 9…
-#> $ expenditure_type     <chr> "INDIVIDUAL", "GROUP", "INDIVIDUAL", "INDIVIDUAL", "GROUP", "INDIVI…
-#> $ year                 <dbl> 2019, 2019, 2019, 2019, 2019, 2019, 2019, 2019, 2019, 2019, 2019, 2…
+#> Columns: 25
+#> $ lob_id                <chr> "L001855", "L000299", "L001988", "L000993", "L001708", "L000404", …
+#> $ lob_first_name        <chr> "STEPHEN C.", "WILLIAM A", "NIKKI R", "JAMES P", "CHRIS", "CHRISTI…
+#> $ lob_last_name         <chr> "KNORR", "GAMBLE", "STRONG", "BROWN", "LIESE", "LEPPER", "HOWARD",…
+#> $ report                <dttm> 2006-04-01, 2012-01-01, 2015-05-01, 2013-05-01, 2015-07-01, 2005-…
+#> $ public_official       <chr> NA, NA, "EGGLESTON, J - REPRESENTATIVE", NA, "GOSEN, DON  - REPRES…
+#> $ recipient             <chr> "PRATT, BRYAN - REPRESENTATIVE", "SCHARNHORST, DWIGHT D. - REPRESE…
+#> $ expenditure_date      <date> 2006-04-11, 2012-01-24, 2015-05-05, 2013-05-06, 2015-07-09, 2005-…
+#> $ expenditure_category  <chr> "MEALS, FOOD, & BEVERAGE", "MEALS, FOOD, & BEVERAGE", "MEALS, FOOD…
+#> $ description           <chr> NA, "NON-ALCOHOLIC BEVERAGES", "END OF SESSION MEAL", NA, NA, NA, …
+#> $ prin_amount           <dbl> 35.65, 26.00, 11.87, 30.15, 103.41, 338.99, 10.00, 18.75, 72.00, 7…
+#> $ principal_name        <chr> "UNIVERSITY OF MISSOURI", "MISSOURI BEVERAGE ASSOCIATION", "MISSOU…
+#> $ amend_reason          <chr> NA, NA, NA, NA, "NEW ENTRY", NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
+#> $ ind_id                <dbl> 3066, 19753, 54992, 36239, 57400, NA, 49425, 40, 1535, 75248, 1384…
+#> $ amend_ind_id          <dbl> 0, 0, 0, 0, 0, NA, 0, 0, 0, 0, 0, NA, 0, 0, 0, NA, 0, 0, NA, 0
+#> $ expenditure_type      <chr> "INDIVIDUAL", "INDIVIDUAL", "INDIVIDUAL", "INDIVIDUAL", "INDIVIDUA…
+#> $ year                  <dbl> 2006, 2012, 2015, 2013, 2015, 2005, 2015, 2006, 2004, 2017, 2007, …
+#> $ recipient_name        <chr> "PRATT, BRYAN", "SCHARNHORST, DWIGHT D.", "CATHIE EGGLESTON", "PAC…
+#> $ recipient_title       <chr> "REPRESENTATIVE", "REPRESENTATIVE", "SPOUSE OR CHILD", "REPRESENTA…
+#> $ group                 <chr> NA, NA, NA, NA, NA, "FINANCIAL INSTITUTIONS, STANDING", NA, NA, NA…
+#> $ gro_id                <dbl> NA, NA, NA, NA, NA, 1610, NA, NA, NA, NA, NA, 1559, NA, NA, NA, 93…
+#> $ amend_gro_id          <dbl> NA, NA, NA, NA, NA, 0, NA, NA, NA, NA, NA, 0, NA, NA, NA, 0, NA, N…
+#> $ public_official_name  <chr> NA, NA, "EGGLESTON, J", NA, "GOSEN, DON", NA, NA, NA, "SENATOR CAL…
+#> $ public_official_title <chr> NA, NA, "REPRESENTATIVE", NA, "REPRESENTATIVE", NA, NA, NA, "PUBLI…
+#> $ report_group_id       <dbl> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
+#> $ dupe_flag             <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FAL…
 ```
 
 1.  There are 145776 records in the individual/solicitation database,
     and 24882 in the group database.
-2.  There are 46 duplicate records in the individual/solicitation
+2.  There are 0 duplicate records in the individual/solicitation
     database, and 0 in the group database.
 3.  The range and distribution of `amount` and `date` seem reasonable
     with a few anomalies.
@@ -471,20 +489,8 @@ clean_dir <- dir_create(here("mo", "lobby", "data", "processed","exp"))
 
 ``` r
 write_csv(
-  x = mo_lob_exp,
-  path = path(clean_dir, "mo_lob_exp_clean.csv"),
-  na = ""
-)
-
-write_csv(
-  x = mo_lob_grp,
-  path = path(clean_dir, "mo_lob_grp_clean.csv"),
-  na = ""
-)
-
-write_csv(
-  x = mo_lob_19,
-  path = path(clean_dir, "mo_lob_exp_new.csv"),
+  x = mo_lob_final,
+  path = path(clean_dir, "mo_lob_exp_combined_clean.csv"),
   na = ""
 )
 ```
