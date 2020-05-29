@@ -145,7 +145,8 @@ ri_post <- POST(
 This query returns an HTML page which can be scraped with `rvest::html_table()`.
 
 ```{r raw_read}
-ric <- content(ri_post) %>% 
+ric <- ri_post %>% 
+  content() %>% 
   html_node("table") %>% 
   html_table() %>% 
   as_tibble() %>% 
@@ -278,7 +279,7 @@ mutate(file_encoding(clean_path), across(path, path.abbrev))
 Using the duckr R package, we can wrap around the [duck] commnand line tool to
 upload the file to the IRW S3 server.
 
-```{r clean_upload}
+```{r clean_upload, eval=FALSE}
 # remotes::install_github("kiernann/duckr")
 s3_dir <- "s3:/publicaccountability/csv/"
 s3_path <- path(s3_dir, basename(clean_path))

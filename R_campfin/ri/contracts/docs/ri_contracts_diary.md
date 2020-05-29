@@ -1,7 +1,7 @@
 Rhode Island Contracts
 ================
 Kiernan Nicholls
-2020-05-29 11:05:00
+2020-05-29 14:27:26
 
   - [Project](#project)
   - [Objectives](#objectives)
@@ -127,7 +127,8 @@ This query returns an HTML page which can be scraped with
 `rvest::html_table()`.
 
 ``` r
-ric <- content(ri_post) %>% 
+ric <- ri_post %>% 
+  content() %>% 
   html_node("table") %>% 
   html_table() %>% 
   as_tibble() %>% 
