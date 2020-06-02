@@ -1,0 +1,459 @@
+---
+title: "North Carolina Salaries"
+author: "Kiernan Nicholls"
+date: "`r Sys.time()`"
+output:
+  github_document: 
+    df_print: tibble
+    toc: true
+    toc_dept: 2
+editor_options: 
+  chunk_output_type: console
+---
+
+<!-- Place comments regarding knitting here -->
+
+```{r setup, include=FALSE, purl=FALSE}
+library(knitr)
+opts_chunk$set(
+  eval = TRUE,
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  error = FALSE,
+  collapse = TRUE,
+  comment = "#>",
+  fig.path = "../plots/",
+  fig.width = 10,
+  dpi = 300
+)
+if (!interactive()) {
+  options(width = 99)
+  set.seed(5)
+}
+```
+
+```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
+doc_dir <- fs::dir_create(here::here("nc", "salary", "docs"))
+```
+
+## Project
+
+The Accountability Project is an effort to cut across data silos and give
+journalists, policy professionals, activists, and the public at large a simple
+way to search across huge volumes of public data about people and organizations.
+
+Our goal is to standardizing public data on a few key fields by thinking of each
+dataset row as a transaction. For each transaction there should be (at least) 3
+variables:
+
+1. All **parties** to a transaction.
+2. The **date** of the transaction.
+3. The **amount** of money involved.
+
+## Objectives
+
+This document describes the process used to complete the following objectives:
+
+1. How many records are in the database?
+1. Check for entirely duplicated records.
+1. Check ranges of continuous variables.
+1. Is there anything blank or missing?
+1. Check for consistency issues.
+1. Create a five-digit ZIP Code called `zip`.
+1. Create a `year` field from the transaction date.
+1. Make sure there is data on both parties to a transaction.
+
+## Packages
+
+The following packages are needed to collect, manipulate, visualize, analyze,
+and communicate these results. The `pacman` package will facilitate their
+installation and attachment.
+
+The IRW's `campfin` package will also have to be installed from GitHub. This
+package contains functions custom made to help facilitate the processing of
+campaign finance data.
+
+```{r load_packages, message=FALSE, warning=FALSE, error=FALSE}
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load_gh("irworkshop/campfin")
+pacman::p_load(
+  docxtractr, # read docx tables
+  tidyverse, # data manipulation
+  lubridate, # datetime strings
+  gluedown, # printing markdown
+  magrittr, # pipe operators
+  janitor, # clean data frames
+  refinr, # cluster and merge
+  readxl, # read excel files
+  scales, # format strings
+  knitr, # knit documents
+  vroom, # read files fast
+  rvest, # html scraping
+  glue, # combine strings
+  here, # relative paths
+  httr, # http requests
+  fs # local storage 
+)
+```
+
+This document should be run as part of the `R_campfin` project, which lives as a
+sub-directory of the more general, language-agnostic
+[`irworkshop/accountability_datacleaning`][tap] GitHub repository.
+
+The `R_campfin` project uses the [RStudio projects][rproj] feature and should be
+run as such. The project also uses the dynamic `here::here()` tool for file
+paths relative to _your_ machine.
+
+```{r where_here}
+# where does this document knit?
+here::here()
+```
+
+[tap]: https://github.com/irworkshop/accountability_datacleaning
+[rproj]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects
+
+## Data
+
+Salary data for the state of North Carolina was obtained via an records request
+from the [Office of the State Controller](https://www.osc.nc.gov/) in the 
+[Division of Administration](https://ncadmin.nc.gov/). The data was provided via
+an expiring download link to a ZIP archive. A record layout and county code book
+was also provided as separate attachments.
+
+## Download
+
+We can download the cloud-hosted archive, but this link will likely be dead in
+the future. IRW can provide the underlying data upon request.
+
+```{r raw_download}
+raw_dir <- dir_create(here("nc", "salary", "data", "raw"))
+raw_url <- "https://osc.cloud.nc.gov/PublicInformation/PIR-20-71.zip"
+raw_zip <- path(raw_dir, basename(raw_url))
+if (!file_exists(raw_zip)) {
+  download.file(raw_url, raw_zip)
+}
+```
+
+## Extract
+
+The ZIP archive itself contains a number of subsequent ZIP archives.
+
+```{r zip_list}
+(zip_files <- raw_zip %>% 
+  unzip(list = TRUE) %>% 
+  as_tibble(.name_repair = tolower) %>% 
+  mutate(across(length, as_fs_bytes)) %>% 
+  mutate(across(name, as_fs_path)))
+```
+
+We can extract only the file containing the latest salary data.
+
+```{r zip_extract}
+raw_path <- unzip(
+  zipfile = raw_zip, 
+  files = zip_files$name[11], 
+  exdir = raw_dir,
+  junkpaths = TRUE
+)
+```
+
+This file itself is another ZIP archive containing a single text file. We do not
+need to unzip this file, as the contents can be read directly.
+
+```{r zip_raw}
+raw_path %>% 
+  unzip(list = TRUE) %>% 
+  as_tibble(.name_repair = tolower) %>% 
+  mutate(across(length, as_fs_bytes)) %>% 
+  mutate(across(name, as_fs_path))
+```
+
+## Read
+
+The text file containing salaries is a fixed-width file (FWF) with each column
+found at unique line position. We can use the record layout Word document
+provided by the OSC to define the columns and their positions.
+
+```{r raw_layout}
+doc_path <- dir_ls(here("nc", "salary"), regexp = "docx")
+layout <- docx_extract_all_tbls(read_docx(doc_path))[[1]]
+(layout <- layout %>% 
+  select(start = 1, end = 3, field = 4, length = 5, desciption = 6) %>% 
+  map_df(parse_guess))
+```
+
+We can use this information in `readr::read_fwf()` to parse the text file as a 
+data frame for exploration.
+
+```{r raw_read}
+ncs <- read_fwf(
+  file = raw_path,
+  col_positions = fwf_cols(
+    area = c(1, 40),
+    name = c(41, 80),
+    type = c(81, 110),
+    age = c(111, 112),
+    date = c(113, 122),
+    agency_date = c(123, 132),
+    pos_id = c(133, 140),
+    pos_title = c(141, 180),
+    job_title = c(181, 220),
+    info_date = c(221, 230),
+    info_desc = c(231, 290),
+    raise_date = c(291, 300),
+    raise_desc = c(301, 360),
+    raise_change = c(361, 375),
+    salary = c(376, 390),
+    county_code = c(391, 393)
+  ),
+  na = c("00000000", "", "NA"),
+  col_types = cols(
+    .default = col_character(),
+    age = col_integer(), # two with * digit
+    date = col_date("%m%d%Y"),
+    agency_date = col_date("%m%d%Y"),
+    info_date = col_date("%m%d%Y"),
+    raise_date = col_date("%m%d%Y"),
+    salary = col_double()
+  )
+)
+```
+
+The `last_salary_change` column has a number of negative change values with the
+negative symbol at the end of the string, preventing them from being initially
+parsed as negative numbers with `col_double()`. We can use regular expressions
+to manipulate the column and then properly parse.
+
+```{r raw_negatives}
+head(str_subset(ncs$raise_change, "-$"))
+mean(str_detect(ncs$raise_change, "-$"), na.rm = TRUE)
+ncs$raise_change %>% 
+  str_replace("(.*)(-)$", "\\2\\1") %>% 
+  parse_number() -> ncs$raise_change
+mean(ncs$raise_change < 0, na.rm = TRUE)
+```
+
+We can also use the county codes excel file to get the county names associated
+with the county codes found in the salaries data. First, we need to read the
+excel sheet as a data frame.
+
+```{r code_read}
+code_path <- dir_ls(here("nc", "salary"), regexp = "xls")
+codes <- read_excel(
+  path = code_path,
+  col_names = c("county_name", "county_code", "source"),
+  col_types = "text",
+  .name_repair = make_clean_names
+)
+codes <- select(codes, 1:2)
+codes$county_code <- str_pad(
+  string = codes$county_code,
+  width = 3, 
+  side = "left", 
+  pad = "0"
+)
+```
+
+Then join the two tables together.
+
+```{r code_join}
+ncs <- left_join(ncs, codes)
+```
+
+## Explore
+
+Here we have the top and bottom of the data frame, it appears as though the
+entire file has been properly read.
+
+```{r glimpse}
+glimpse(ncs)
+tail(ncs)
+```
+
+### Missing
+
+Most columns are missing some amount of values; we can flag any records missing
+one of the key variables needed to identify a transaction.
+
+```{r na_count}
+col_stats(ncs, count_na)
+```
+
+```{r na_flag}
+ncs <- mutate(ncs, job_pos = coalesce(job_title, pos_title))
+ncs <- ncs %>% flag_na(date, name, salary, area, job_pos)
+mean(ncs$na_flag)
+```
+
+```{r na_view}
+ncs %>% 
+  filter(na_flag) %>% 
+  select(date, name, salary, area, job_pos)
+```
+
+`r percent(mean(ncs$type[ncs$na_flag] == "National Guard", na.rm = T))` of these
+records missing a hire date, name, salary, area, or job/position title belong
+to National Guard members, but it's not entirely contained in a single employee
+type.
+
+```{r na_type}
+ncs %>% 
+  filter(na_flag) %>% 
+  count(type, sort = TRUE) %>% 
+  add_prop()
+```
+
+### Duplicates
+
+There are only a handful of entirely duplicated records.
+
+```{r dupe_flag}
+ncs <- flag_dupes(ncs, everything())
+sum(ncs$dupe_flag)
+```
+
+```{r dupe_view}
+ncs %>% 
+  filter(dupe_flag) %>% 
+  select(date, name, salary, area, job_pos)
+```
+
+### Categorical
+
+```{r distinct_count}
+col_stats(ncs, n_distinct)
+```
+
+```{r distinct_plots, echo=FALSE}
+explore_plot(ncs, type)
+explore_plot(ncs, info_desc) + scale_x_truncate()
+explore_plot(ncs, county_name)
+```
+
+### Amounts
+
+A significant amount of employees have a current salary less than or equal to
+$1.
+
+```{r amount_summary}
+summary(ncs$salary)
+mean(ncs$salary <= 1, na.rm = TRUE)
+```
+
+Here is the employee with the highest salary.
+
+```{r amount_max}
+ncs[which.max(ncs$salary), ] %>% 
+  mutate(across(salary, dollar)) %>% 
+  glimpse()
+```
+
+```{r hist_amount, echo=FALSE}
+ncs %>%
+  ggplot(aes(salary)) +
+  geom_histogram(fill = dark2["purple"], bins = 30) +
+  scale_y_continuous(labels = comma) +
+  scale_x_continuous(labels = dollar, breaks = seq(0, 4e5, by = 5e4)) +
+  labs(
+    title = "North Carolina Salary Distribution",
+    caption = "Source: NC DOA OCS",
+    x = "Salary",
+    y = "Count"
+  )
+```
+
+### Dates
+
+Over `r percent(prop_na(ncs$date))` of all hire `date` values are missing.
+Again, most of these missing values belong to members of the National Guard or
+temporary employees,
+
+```{r date_missing}
+ncs %>% 
+  filter(is.na(date)) %>% 
+  count(type, sort = TRUE) %>% 
+  add_prop() %>% 
+  mutate(c = cumsum(p))
+```
+
+We can add the calendar year from `date` with `lubridate::year()`
+
+```{r date_year}
+ncs <- mutate(ncs, year = year(date))
+```
+
+```{r date_range}
+min(ncs$date, na.rm = TRUE)
+sum(ncs$year < 2000, na.rm = TRUE)
+max(ncs$date, na.rm = TRUE)
+sum(ncs$date > today(), na.rm = TRUE)
+```
+
+State employees have hire dates going back to `r min(ncs$date, na.rm = TRUE)`.
+
+```{r bar_year, echo=FALSE}
+ncs %>% 
+  filter(year <= 2020, year >=1965) %>% 
+  count(year) %>% 
+  mutate(even = is_even(year)) %>% 
+  ggplot(aes(x = year, y = n)) +
+  geom_col(fill = dark2["orange"]) + 
+  scale_fill_brewer(palette = "Dark2") +
+  scale_y_continuous(labels = comma) +
+  scale_x_continuous(breaks = seq(1945, 2020, by = 5)) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "North Carolina Hired Employees by Year",
+    caption = "Source: NC DOA OCS",
+    x = "Year Hired",
+    y = "Employee Count"
+  )
+```
+
+## Wrangle
+
+Before exporting, we will add the 2-letter state abbreviation.
+
+```{r state_add}
+ncs <- mutate(ncs, state = "NC", .before = area)
+```
+
+## Conclude
+
+1. There are `r comma(nrow(ncs))` records in the database.
+1. There are `r comma(sum(ncs$dupe_flag))` duplicate records in the database.
+1. The range and distribution of `salary` and `date` seem reasonable, aside from
+the $1 salaries.
+1. There are `r comma(sum(ncs$na_flag))` records missing key variables.
+1. There are no geographic variables in need of normalization.
+1. The 4-digit `year` variable has been created with `lubridate::year()`.
+
+## Export
+
+Now the file can be saved on disk for upload to the Accountability server.
+
+```{r clean_dir}
+clean_dir <- dir_create(here("nc", "salary", "data", "clean"))
+clean_path <- path(clean_dir, "nc_salary_clean.csv")
+write_csv(ncs, clean_path, na = "")
+file_size(clean_path)
+mutate(file_encoding(clean_path), across(path, path.abbrev))
+```
+
+## Upload
+
+Using the [duckr] R package, we can wrap around the [duck] command line tool to
+upload the file to the IRW server.
+
+[duckr]: https://github.com/kiernann/duckr
+[duck]: https://duck.sh/
+
+```{r clean_upload, eval=FALSE}
+# remotes::install_github("kiernann/duckr")
+s3_dir <- "s3:/publicaccountability/csv/"
+s3_path <- path(s3_dir, basename(clean_path))
+if (require(duckr)) {
+  duckr::duck_upload(clean_path, s3_path)
+}
+```
