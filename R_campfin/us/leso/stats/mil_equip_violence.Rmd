@@ -1,0 +1,232 @@
+---
+title: "Fatal Shootings and Military Equipment"
+author: "Kiernan Nicholls"
+date: "`r Sys.time()`"
+output:
+  github_document: 
+    df_print: tibble
+    toc: true
+    toc_dept: 2
+editor_options: 
+  chunk_output_type: console
+---
+
+<!-- Place comments regarding knitting here -->
+
+```{r setup, include=FALSE, purl=FALSE}
+library(knitr)
+opts_chunk$set(
+  eval = TRUE,
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  error = FALSE,
+  collapse = TRUE,
+  comment = "#>",
+  fig.path = "../plots/",
+  fig.width = 10,
+  dpi = 300
+)
+if (!interactive()) {
+  options(width = 99)
+  set.seed(5)
+}
+```
+
+```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
+doc_dir <- fs::dir_create(here::here("us", "leso", "docs"))
+```
+
+## Packages
+
+```{r load_packages, message=FALSE, warning=FALSE, error=FALSE}
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load_gh("irworkshop/campfin")
+pacman::p_load(
+  tidyverse, # data manipulation
+  lubridate, # datetime strings
+  gluedown, # printing markdown
+  magrittr, # pipe operators
+  janitor, # clean data frames
+  refinr, # cluster and merge
+  readxl, # read excel files
+  scales, # format strings
+  knitr, # knit documents
+  vroom, # read files fast
+  rvest, # html scraping
+  usmap, # plot us maps
+  glue, # combine strings
+  here, # relative paths
+  httr, # http requests
+  fs # local storage 
+)
+```
+
+## Police Violence
+
+We can download a database of fatal police shootings from the Washington Post's
+[Fatal Force project][fatal].
+
+>  After Michael Brown, an unarmed black man, was killed in 2014 by police in
+Ferguson, Mo., a Post investigation found that the FBI undercounted fatal police
+shootings by more than half. This is because reporting by police departments is
+voluntary and many departments fail to do so.
+> 
+> The Post’s data relies primarily on news accounts, social media postings and
+police reports. Analysis of more than five years of data reveals that the number
+and circumstances of fatal shootings and the overall demographics of the victims
+have remained relatively constant.
+
+[db]: https://github.com/washingtonpost/data-police-shootings
+[fatal]: https://www.washingtonpost.com/graphics/investigations/police-shootings-database/
+
+```{r github_url, echo=FALSE}
+github_url <- function(user, repo, file, branch = "master") {
+  str_c(
+    url = "https://raw.githubusercontent.com",
+    user = user, 
+    repo = repo,
+    branch = branch,
+    file = file,
+    sep = "/"
+  )
+}
+```
+
+```{r fatal_url}
+fatal_url <- github_url(
+  user = "washingtonpost", 
+  repo = "data-police-shootings",
+  file = "fatal-police-shootings-data.csv"
+)
+```
+
+The Fatal Force database can be read directly from GitHub with `vroom::vroom()`.
+
+```{r fatal_read}
+fatal <- vroom(
+  file = fatal_url,
+  col_types = cols(
+    .default = col_character(),
+    id = col_integer(),
+    date = col_date(),
+    age = col_double(),
+    signs_of_mental_illness = col_logical(),
+    body_camera = col_logical()
+  )
+)
+```
+
+```{r fatal_glimpse}
+glimpse(fatal)
+```
+
+## Equipment Transfers
+
+The [1033 program][1033] allows for the Department of Defense (DOD) to transfer
+excess military equipment to civilian law enforcement agencies.
+
+[1033]: https://en.wikipedia.org/wiki/1033_program
+
+> The program has been criticized over the years by local media, by the Office
+of the Inspector General, U.S. Department of Defense in 2003, and by the GAO
+which found waste, fraud and abuse. It was not until media coverage of police
+during August 2014 Ferguson unrest that the program drew nationwide public
+attention; the Ferguson Police Department had equipment obtained through the
+1033 program.
+
+An Excel spreadsheet of equipment transfers can be downloaded from the Defense
+Logistic Agency's [electronic reading room][err].
+
+[err]: https://www.dla.mil/DispositionServices/FOIA/EFOIALibrary/
+
+```{r raw_dir}
+mil_url <- str_c(
+  url = "https://www.dla.mil/Portals/104/Documents/DispositionServices/LESO/",
+  file = "DISP_AllStatesAndTerritories_06302018.xlsx"
+)
+mil_path <- file_temp(ext = "xlsx")
+download.file(mil_url, mil_path)
+```
+
+The Excel spreadsheet lists transfers to police departments to each state in
+separate states. We can combine `purrr::map_df()` and `readxl::read_excel()` to
+read all the sheets into a single data frame of transfers.
+
+```{r raw_read}
+mil_equip <- mil_path %>%
+  readxl::excel_sheets() %>%
+  purrr::set_names() %>%
+  purrr::map_df(
+    .f = readxl::read_excel,
+    .name_repair = make_clean_names,
+    path = mil_path
+  )
+```
+
+## Compare
+
+We will compare states on their number of fatal police shootings from 2015 to
+2020 and the monetary value of military equipment transfers from 1990 to 2018;
+our assumption being that value is a useful proxy for the lethality of the
+equipment. Our null hypothesis holds that there will be no relationship between the value of transfers per capita and the number of fatal shootings per capita.
+
+To normalize our shooting and transfer values between states, we will use a
+database of 2020 state populations from my 'usa' package.
+
+```{r pops}
+pops <- usa::states %>% 
+  left_join(usa::facts) %>% 
+  select(state = abb, population)
+```
+
+We will first calculate the total equipment transfer values per capita for each
+state. We have not removed any equipment from the 1033 database, which includes
+ammunition, small arms and, armored vehicles but also clothing and supplies.
+
+```{r weapons}
+mil_equip <- mil_equip %>% 
+  group_by(state) %>% 
+  summarise(value = sum(acquisition_value), items = n()) %>% 
+  left_join(pops, by = "state") %>% 
+  mutate(val_per = value/population) %>% 
+  select(-population)
+```
+
+We can then combine our normalized equipment values to fatal shootings per
+capita. 
+
+```{r compare}
+compare <- fatal %>% 
+  count(state, name = "deaths") %>% 
+  left_join(pops) %>% 
+  mutate(deaths_100k = deaths/(population/1e5)) %>% 
+  select(-population) %>% 
+  left_join(mil_equip, by = "state")
+```
+
+Using linear regression, we can determine there is in fact a relationship
+between the military equipment received by the police departments in a state and
+that state's number of fatal police shootings per capita.
+
+```{r lm}
+lm_mil <- lm(deaths_100k ~ val_per, data = compare)
+summary(lm_mil)
+```
+
+With a p-value of `r round(summary(lm_mil)$coefficients[,4][2], 4)`, we are able
+to reject our null hypothesis at a 95% confidence interval.
+
+```{r states_plot}
+compare %>% 
+  ggplot(aes(x = val_per, y = deaths_100k)) +
+  # geom_smooth(method = "lm") +
+  geom_label(aes(label = state)) +
+  scale_x_continuous(labels = scales::dollar) +
+  labs(
+    title = "Militarization of Police via the 1033 Program",
+    x = "Military Equipment Value per capita (1990-2020)",
+    y = "Fatal Police Shootings per capita centum (2015-2018)"
+  )
+```
+
