@@ -151,7 +151,7 @@ There are two files pertaining to the 1033 program:
 We will be downloading the first file for now.
 
 ```{r raw_dir}
-raw_dir <- dir_create(here("us", "lobby", "data", "raw"))
+raw_dir <- dir_create(here("us", "leso", "data", "raw"))
 raw_url <- "https://www.dla.mil/Portals/104/Documents/DispositionServices/LESO/"
 raw_name <- "DISP_AllStatesAndTerritories_06302018.xlsx"
 raw_url <- str_c(raw_url, raw_name)
@@ -359,11 +359,11 @@ leso <- mutate(
 Now the file can be saved on disk for upload to the Accountability server.
 
 ```{r clean_dir}
-clean_dir <- dir_create(here("us", "lobby", "data", "clean"))
-clean_path <- path(clean_dir, "us_lobby_clean.csv")
+clean_dir <- dir_create(here("us", "leso", "data", "clean"))
+clean_path <- path(clean_dir, "us_1033_transfers.csv")
 write_csv(leso, clean_path, na = "")
 file_size(clean_path)
-file_encoding(clean_path)
+mutate(file_encoding(clean_path), across(path, path.abbrev))
 ```
 
 ## Upload
@@ -374,7 +374,7 @@ upload the file to the IRW server.
 [duckr]: https://github.com/kiernann/duckr
 [duck]: https://duck.sh/
 
-```{r clean_upload, eval=FALSE}
+```{r clean_upload, eval=TRUE}
 # remotes::install_github("kiernann/duckr")
 s3_dir <- "s3:/publicaccountability/csv/"
 s3_path <- path(s3_dir, basename(clean_path))

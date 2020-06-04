@@ -1,7 +1,7 @@
 United States Law Enforcement 1033 Transfers
 ================
 Kiernan Nicholls
-2020-06-03 16:47:08
+2020-06-04 12:35:47
 
   - [Project](#project)
   - [Objectives](#objectives)
@@ -132,7 +132,7 @@ There are two files pertaining to the 1033 program:
 We will be downloading the first file for now.
 
 ``` r
-raw_dir <- dir_create(here("us", "lobby", "data", "raw"))
+raw_dir <- dir_create(here("us", "leso", "data", "raw"))
 raw_url <- "https://www.dla.mil/Portals/104/Documents/DispositionServices/LESO/"
 raw_name <- "DISP_AllStatesAndTerritories_06302018.xlsx"
 raw_url <- str_c(raw_url, raw_name)
@@ -387,16 +387,16 @@ Now the file can be saved on disk for upload to the Accountability
 server.
 
 ``` r
-clean_dir <- dir_create(here("us", "lobby", "data", "clean"))
-clean_path <- path(clean_dir, "us_lobby_clean.csv")
+clean_dir <- dir_create(here("us", "leso", "data", "clean"))
+clean_path <- path(clean_dir, "us_1033_transfers.csv")
 write_csv(leso, clean_path, na = "")
 file_size(clean_path)
 #> 21M
-file_encoding(clean_path)
+mutate(file_encoding(clean_path), across(path, path.abbrev))
 #> # A tibble: 1 x 3
-#>   path                                                                        mime          charset
-#>   <fs::path>                                                                  <chr>         <chr>  
-#> 1 /home/kiernan/Code/accountability_datacleaning/R_campfin/us/lobby/data/cle… application/… us-asc…
+#>   path                                       mime            charset 
+#>   <chr>                                      <chr>           <chr>   
+#> 1 ~/us/leso/data/clean/us_1033_transfers.csv application/csv us-ascii
 ```
 
 ## Upload
