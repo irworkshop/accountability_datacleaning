@@ -82,7 +82,8 @@ pacman::p_load(
   lubridate, # datetime strings
   magrittr, # pipe operators
   jsonlite, # parse json files
-  janitor, # dataframe clean
+  janitor, # data frame clean
+  batman, # parse logicals
   refinr, # cluster and merge
   scales, # format strings
   knitr, # knit documents
@@ -114,7 +115,7 @@ here::here()
 The contracts [data] is from the Washington state [Department of Enterprise 
 Services][des]. The data can be retrieved from the Washington OpenData portal
 under the title "Master Contract Sales Data by Customer, Contract, Vendor" in
-the "Procurements and Contracts" category. The data file was last updated on
+the "Procurement and Contracts" category. The data file was last updated on
 January 21, 2020. As of writing, due to the ongoing Covid-19 pandemic, our
 typical efforts to verify this OpenData source as the most updated were not 
 made. 
@@ -146,7 +147,7 @@ Then we can convert some quasi-logical variables to a true logical type.
 count(wac, vet_owned)
 wac <- mutate_at(
   .tbl = wac,
-  .vars = vars(12:15),
+  .vars = vars(12:14),
   .funs = equals, "Y"
 )
 ```
@@ -154,9 +155,8 @@ wac <- mutate_at(
 ## Explore
 
 ```{r glimpse}
-head(wac)
-tail(wac)
 glimpse(wac)
+tail(wac)
 ```
 
 ### Missing
@@ -193,7 +193,7 @@ wac %>%
 col_stats(wac, n_distinct)
 ```
 
-```{r distinct_cound}
+```{r distinct_count}
 wac %>% 
   select(12:15) %>% 
   map(~mutate(count(data.frame(x = .x), x), p = n/sum(n)))
@@ -237,7 +237,7 @@ wac %>%
 ### Dates
 
 The data goes back to `r min(wac$calendar_year)` and the number of contracts is
-fairly consistent year to year.
+extremely consistent year to year.
 
 ```{r bar_year, echo=FALSE}
 wac %>% 
