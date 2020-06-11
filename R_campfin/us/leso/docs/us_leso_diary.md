@@ -1,7 +1,7 @@
 United States Law Enforcement 1033 Transfers
 ================
 Kiernan Nicholls
-2020-06-04 12:35:47
+2020-06-10 14:21:47
 
   - [Project](#project)
   - [Objectives](#objectives)
@@ -14,6 +14,7 @@ Kiernan Nicholls
   - [Conclude](#conclude)
   - [Export](#export)
   - [Upload](#upload)
+  - [Dictionary](#dictionary)
 
 <!-- Place comments regarding knitting here -->
 
@@ -134,7 +135,7 @@ We will be downloading the first file for now.
 ``` r
 raw_dir <- dir_create(here("us", "leso", "data", "raw"))
 raw_url <- "https://www.dla.mil/Portals/104/Documents/DispositionServices/LESO/"
-raw_name <- "DISP_AllStatesAndTerritories_06302018.xlsx"
+raw_name <- "DISP_AllStatesAndTerritories_03312020.xlsx"
 raw_url <- str_c(raw_url, raw_name)
 raw_path <- path(raw_dir, raw_name)
 ```
@@ -178,28 +179,30 @@ leso <- rename(
 
 ``` r
 glimpse(leso)
-#> Rows: 154,780
-#> Columns: 10
-#> $ to_state   <chr> "AL", "AL", "AL", "AL", "AL", "AL", "AL", "AL", "AL", "AL", "AL", "AL", "AL",…
-#> $ to_station <chr> "ABBEVILLE POLICE DEPT", "ABBEVILLE POLICE DEPT", "ABBEVILLE POLICE DEPT", "A…
-#> $ nsn        <chr> "6115-01-285-3012", "6230-01-439-3732", "7125-01-466-0952", "2530-01-558-2138…
-#> $ item       <chr> "GENERATOR SET,DIESEL ENGINE", "FLOODLIGHT SET,ELECTRIC", "CABINET,STORAGE", …
-#> $ quantity   <dbl> 2, 1, 4, 1, 1, 3, 9, 10, 1, 10, 1, 1, 1, 1, 10, 1, 1, 3, 4, 1, 1, 7, 1, 2, 1,…
-#> $ ui         <chr> "Each", "Each", "Each", "Assembly", "Each", "Kit", "Each", "Each", "Each", "E…
-#> $ value      <dbl> 9922.25, 12000.00, 860.74, 2015.00, 331680.00, 1298.00, 335.00, 160.18, 0.00,…
-#> $ demil_code <chr> "A", "A", "A", "A", "Q", "A", "D", "A", "D", "D", "C", "Q", "C", "Q", "D", "A…
-#> $ demil_ic   <chr> "7", "1", "1", "1", "6", "1", "1", "1", NA, "1", "1", "6", "1", "3", "1", "1"…
-#> $ date       <dttm> 2018-02-12, 2018-01-31, 2018-01-24, 2018-01-24, 2017-11-14, 2018-04-12, 2016…
+#> Rows: 141,068
+#> Columns: 11
+#> $ to_state     <chr> "AL", "AL", "AL", "AL", "AL", "AL", "AL", "AL", "AL", "AL", "AL", "AL", "AL…
+#> $ to_station   <chr> "ABBEVILLE POLICE DEPT", "ABBEVILLE POLICE DEPT", "ABBEVILLE POLICE DEPT", …
+#> $ nsn          <chr> "2320-01-371-9584", "1005-01-587-7175", "2320-01-371-9584", "2355-01-553-46…
+#> $ item         <chr> "TRUCK,UTILITY", "MOUNT,RIFLE", "TRUCK,UTILITY", "MINE RESISTANT VEHICLE", …
+#> $ quantity     <dbl> 1, 10, 1, 1, 9, 1, 1, 10, 10, 1, 1, 1, 1, 1, 10, 3, 12, 5, 11, 1, 1, 10, 1,…
+#> $ ui           <chr> "Each", "Each", "Each", "Each", "Each", "Each", "Each", "Each", "Kit", "Eac…
+#> $ value        <dbl> 62627.00, 1626.00, 62627.00, 658000.00, 321.00, 245.88, 600.00, 884.00, 146…
+#> $ demil_code   <chr> "C", "D", "C", "C", "D", "D", "D", "D", "D", "A", "A", "Q", "D", "D", "D", …
+#> $ demil_ic     <chr> "1", "1", "1", "1", "1", NA, "7", "1", "1", NA, NA, "3", "1", "1", "1", "1"…
+#> $ date         <dttm> 2016-09-29, 2016-09-19, 2016-09-29, 2016-11-09, 2016-09-14, 2016-06-02, 20…
+#> $ station_type <chr> "State", "State", "State", "State", "State", "State", "State", "State", "St…
 tail(leso)
-#> # A tibble: 6 x 10
-#>   to_state to_station   nsn     item   quantity ui    value demil_code demil_ic date               
-#>   <chr>    <chr>        <chr>   <chr>     <dbl> <chr> <dbl> <chr>      <chr>    <dttm>             
-#> 1 PR       VIEQUES POL… 2320-0… TRUCK…        1 Each  50458 C          1        2012-04-04 00:00:00
-#> 2 PR       VIEQUES POL… 2320-0… TRUCK…        1 Each  43376 Q          6        2011-11-08 00:00:00
-#> 3 PR       VIEQUES POL… 2320-0… TRUCK…        1 Each  50458 C          1        2011-10-28 00:00:00
-#> 4 PR       VIEQUES POL… 2320-0… TRUCK…        1 Each  41061 Q          6        2012-04-04 00:00:00
-#> 5 PR       VIEQUES POL… 2320-0… TRUCK…        1 Each  50458 C          1        2011-10-28 00:00:00
-#> 6 PR       VIEQUES POL… 2320-0… TRUCK…        1 Each  41061 Q          6        2012-04-04 00:00:00
+#> # A tibble: 6 x 11
+#>   to_state to_station nsn   item  quantity ui    value demil_code demil_ic date               
+#>   <chr>    <chr>      <chr> <chr>    <dbl> <chr> <dbl> <chr>      <chr>    <dttm>             
+#> 1 PR       VILLALBA … 2320… TRUC…        1 Each  41447 C          1        2011-11-01 00:00:00
+#> 2 VI       VIRGIN IS… 1005… RIFL…        1 Each    138 D          1        1996-08-20 00:00:00
+#> 3 VI       VIRGIN IS… 1005… RIFL…        1 Each    138 D          1        1996-08-20 00:00:00
+#> 4 VI       VIRGIN IS… 1005… RIFL…        1 Each    138 D          1        1996-08-20 00:00:00
+#> 5 VI       VIRGIN IS… 1005… RIFL…        1 Each    138 D          1        1996-08-20 00:00:00
+#> 6 VI       VIRGIN IS… 1005… RIFL…        1 Each    138 D          1        1996-08-20 00:00:00
+#> # … with 1 more variable: station_type <chr>
 ```
 
 ### Missing
@@ -208,19 +211,20 @@ Only one variable is missing any values. Nothing needs to be flagged.
 
 ``` r
 col_stats(leso, count_na)
-#> # A tibble: 10 x 4
-#>    col        class      n      p
-#>    <chr>      <chr>  <int>  <dbl>
-#>  1 to_state   <chr>      0 0     
-#>  2 to_station <chr>      0 0     
-#>  3 nsn        <chr>      0 0     
-#>  4 item       <chr>      0 0     
-#>  5 quantity   <dbl>      0 0     
-#>  6 ui         <chr>      0 0     
-#>  7 value      <dbl>      0 0     
-#>  8 demil_code <chr>      0 0     
-#>  9 demil_ic   <chr>   9374 0.0606
-#> 10 date       <dttm>     0 0
+#> # A tibble: 11 x 4
+#>    col          class      n      p
+#>    <chr>        <chr>  <int>  <dbl>
+#>  1 to_state     <chr>      0 0     
+#>  2 to_station   <chr>      0 0     
+#>  3 nsn          <chr>      0 0     
+#>  4 item         <chr>      0 0     
+#>  5 quantity     <dbl>      0 0     
+#>  6 ui           <chr>      0 0     
+#>  7 value        <dbl>      0 0     
+#>  8 demil_code   <chr>      0 0     
+#>  9 demil_ic     <chr>   8905 0.0631
+#> 10 date         <dttm>     0 0     
+#> 11 station_type <chr>      0 0
 ```
 
 ### Duplicates
@@ -231,7 +235,7 @@ and flag these records with `campfin::flag_dupes()`.
 ``` r
 leso <- flag_dupes(leso, everything())
 mean(leso$dupe_flag)
-#> [1] 0.7102856
+#> [1] 0.7121246
 ```
 
 It looks like most of these duplicates are simply multiple items
@@ -242,20 +246,20 @@ leso %>%
   filter(dupe_flag) %>% 
   select(date, to_station, value, quantity, item) %>% 
   arrange(date)
-#> # A tibble: 109,938 x 5
-#>    date                to_station                    value quantity item                 
-#>    <dttm>              <chr>                         <dbl>    <dbl> <chr>                
-#>  1 1990-05-03 00:00:00 BLAINE CTY SHERIFF DEPT         138        1 RIFLE,7.62 MILLIMETER
-#>  2 1990-05-03 00:00:00 BLAINE CTY SHERIFF DEPT         138        1 RIFLE,7.62 MILLIMETER
-#>  3 1990-05-03 00:00:00 BLAINE CTY SHERIFF DEPT         138        1 RIFLE,7.62 MILLIMETER
-#>  4 1990-05-03 00:00:00 BLAINE CTY SHERIFF DEPT         138        1 RIFLE,7.62 MILLIMETER
-#>  5 1990-05-03 00:00:00 BLAINE CTY SHERIFF DEPT         138        1 RIFLE,7.62 MILLIMETER
-#>  6 1990-05-03 00:00:00 BROADWATER CTY SHERIFF OFFICE   138        1 RIFLE,7.62 MILLIMETER
-#>  7 1990-05-03 00:00:00 BROADWATER CTY SHERIFF OFFICE   138        1 RIFLE,7.62 MILLIMETER
-#>  8 1990-05-03 00:00:00 BROADWATER CTY SHERIFF OFFICE   138        1 RIFLE,7.62 MILLIMETER
-#>  9 1990-05-03 00:00:00 BROADWATER CTY SHERIFF OFFICE   138        1 RIFLE,7.62 MILLIMETER
-#> 10 1990-05-03 00:00:00 BROADWATER CTY SHERIFF OFFICE   138        1 RIFLE,7.62 MILLIMETER
-#> # … with 109,928 more rows
+#> # A tibble: 100,458 x 5
+#>    date                to_station               value quantity item                 
+#>    <dttm>              <chr>                    <dbl>    <dbl> <chr>                
+#>  1 1990-05-03 00:00:00 BLAINE CTY SHERIFF DEPT    138        1 RIFLE,7.62 MILLIMETER
+#>  2 1990-05-03 00:00:00 BLAINE CTY SHERIFF DEPT    138        1 RIFLE,7.62 MILLIMETER
+#>  3 1990-05-03 00:00:00 BLAINE CTY SHERIFF DEPT    138        1 RIFLE,7.62 MILLIMETER
+#>  4 1990-05-03 00:00:00 BLAINE CTY SHERIFF DEPT    138        1 RIFLE,7.62 MILLIMETER
+#>  5 1990-05-03 00:00:00 BLAINE CTY SHERIFF DEPT    138        1 RIFLE,7.62 MILLIMETER
+#>  6 1990-05-03 00:00:00 DANIELS CTY SHERIFF DEPT   138        1 RIFLE,7.62 MILLIMETER
+#>  7 1990-05-03 00:00:00 DANIELS CTY SHERIFF DEPT   138        1 RIFLE,7.62 MILLIMETER
+#>  8 1990-05-03 00:00:00 DANIELS CTY SHERIFF DEPT   138        1 RIFLE,7.62 MILLIMETER
+#>  9 1990-05-03 00:00:00 DILLON POLICE DEPT         138        1 RIFLE,7.62 MILLIMETER
+#> 10 1990-05-03 00:00:00 DILLON POLICE DEPT         138        1 RIFLE,7.62 MILLIMETER
+#> # … with 100,448 more rows
 ```
 
 ``` r
@@ -264,18 +268,18 @@ leso %>%
   count(quantity, sort = TRUE) %>% 
   add_prop()
 #> # A tibble: 38 x 3
-#>    quantity      n        p
-#>       <dbl>  <int>    <dbl>
-#>  1        1 108555 0.987   
-#>  2        2    404 0.00367 
-#>  3       10    240 0.00218 
-#>  4        4    151 0.00137 
-#>  5        3    102 0.000928
-#>  6        5     97 0.000882
-#>  7        6     68 0.000619
-#>  8       20     62 0.000564
-#>  9        8     41 0.000373
-#> 10       25     30 0.000273
+#>    quantity     n        p
+#>       <dbl> <int>    <dbl>
+#>  1        1 99206 0.988   
+#>  2        2   353 0.00351 
+#>  3       10   252 0.00251 
+#>  4        4   153 0.00152 
+#>  5        3   104 0.00104 
+#>  6        5    87 0.000866
+#>  7        6    62 0.000617
+#>  8       20    39 0.000388
+#>  9        8    26 0.000259
+#> 10       12    20 0.000199
 #> # … with 28 more rows
 ```
 
@@ -285,27 +289,28 @@ of 1.
 ``` r
 leso$dupe_flag[which(leso$quantity == 1)] <- FALSE
 mean(leso$dupe_flag)
-#> [1] 0.008935263
+#> [1] 0.008875152
 ```
 
 ### Categorical
 
 ``` r
 col_stats(leso, n_distinct)
-#> # A tibble: 11 x 4
-#>    col        class      n         p
-#>    <chr>      <chr>  <int>     <dbl>
-#>  1 to_state   <chr>     52 0.000336 
-#>  2 to_station <chr>   6147 0.0397   
-#>  3 nsn        <chr>  11372 0.0735   
-#>  4 item       <chr>   5312 0.0343   
-#>  5 quantity   <dbl>    302 0.00195  
-#>  6 ui         <chr>     39 0.000252 
-#>  7 value      <dbl>   9057 0.0585   
-#>  8 demil_code <chr>      7 0.0000452
-#>  9 demil_ic   <chr>      9 0.0000581
-#> 10 date       <dttm>  4562 0.0295   
-#> 11 dupe_flag  <lgl>      2 0.0000129
+#> # A tibble: 12 x 4
+#>    col          class      n          p
+#>    <chr>        <chr>  <int>      <dbl>
+#>  1 to_state     <chr>     53 0.000376  
+#>  2 to_station   <chr>   5682 0.0403    
+#>  3 nsn          <chr>  10287 0.0729    
+#>  4 item         <chr>   4911 0.0348    
+#>  5 quantity     <dbl>    280 0.00198   
+#>  6 ui           <chr>     33 0.000234  
+#>  7 value        <dbl>   9356 0.0663    
+#>  8 demil_code   <chr>      7 0.0000496 
+#>  9 demil_ic     <chr>      8 0.0000567 
+#> 10 date         <dttm>  4773 0.0338    
+#> 11 station_type <chr>      1 0.00000709
+#> 12 dupe_flag    <lgl>      2 0.0000142
 ```
 
 ``` r
@@ -325,9 +330,9 @@ explore_plot(leso, demil_ic)
 ``` r
 summary(leso$value)
 #>     Min.  1st Qu.   Median     Mean  3rd Qu.     Max. 
-#>        0      134      499    10576      749 22000000
+#>        0      138      499    11592      749 22000000
 mean(leso$value <= 0)
-#> [1] 0.005569195
+#> [1] 0.001084583
 ```
 
 ![](../plots/hist_amount-1.png)<!-- -->
@@ -344,11 +349,11 @@ leso <- mutate(leso, year = year(date))
 
 ``` r
 min(leso$date)
-#> [1] "1990-05-03 UTC"
+#> [1] "1980-01-01 09:07:07 UTC"
 sum(leso$year < 1990)
-#> [1] 0
+#> [1] 1
 max(leso$date)
-#> [1] "2018-11-05 UTC"
+#> [1] "2020-04-21 UTC"
 sum(leso$date > today())
 #> [1] 0
 ```
@@ -372,8 +377,8 @@ leso <- mutate(
 
 ## Conclude
 
-1.  There are 154,780 records in the database.
-2.  There are 1,383 duplicate records in the database.
+1.  There are 141,068 records in the database.
+2.  There are 1,252 duplicate records in the database.
 3.  The range and distribution of `amount` and `date` seem reasonable.
 4.  There are 0 records missing key variables.
 5.  There are no geographic variables other than the 2-letter state
@@ -391,7 +396,7 @@ clean_dir <- dir_create(here("us", "leso", "data", "clean"))
 clean_path <- path(clean_dir, "us_1033_transfers.csv")
 write_csv(leso, clean_path, na = "")
 file_size(clean_path)
-#> 21M
+#> 19.9M
 mutate(file_encoding(clean_path), across(path, path.abbrev))
 #> # A tibble: 1 x 3
 #>   path                                       mime            charset 
@@ -413,3 +418,47 @@ if (require(duckr)) {
   duckr::duck_upload(clean_path, s3_path)
 }
 ```
+
+## Dictionary
+
+The following table describes the variables in our final exported file:
+
+| Column         | Type        | Definition                                      |
+| :------------- | :---------- | :---------------------------------------------- |
+| `from_state`   | `character` | Manually added department “styate”              |
+| `from_dept`    | `character` | Manually added department name                  |
+| `to_state`     | `character` | Recieving station state                         |
+| `to_station`   | `character` | Recieving station name                          |
+| `nsn`          | `character` | Item’s unique “National Stock Number”           |
+| `item`         | `character` | Item name                                       |
+| `quantity`     | `double`    | Quantity of items transfered                    |
+| `ui`           | `character` | Units of item transfered                        |
+| `value`        | `double`    | Value of equipment transfered†                  |
+| `demil_code`   | `character` | Required level of destruction before transfer\* |
+| `demil_ic`     | `character` | Integrity Code\*                                |
+| `date`         | `double`    | Date transfer was shipped                       |
+| `station_type` | `character` | Recieving station type (all “State”)            |
+| `dupe_flag`    | `logical`   | Flag indicating duplicate non-single transfer   |
+| `year`         | `double`    | Calendar year shipped                           |
+
+> †That figure can be misleading. The cost associated with the LESO/1033
+> Program property is based on original acquisition value, i.e. what the
+> procuring agency, normally a branch of the military, paid for the item
+> at the time it was procured. Many of the items available in the excess
+> property inventory were procured decades ago, so the current value,
+> with depreciation, would be difficult (and not cost-effective) to
+> determine. The original acquisition value is the only cost component
+> available in current data systems. Using the initial acquisition
+> value, the total amount transferred since the program’s inception in
+> 1990 is $7.4 billion.
+
+> \*DEMIL code indicates the degree of required physical destruction,
+> identifies items requiring specialized capabilities or procedures, and
+> identifies items which do not require DEMIL but may require Trade
+> Security Controls. It is used throughout the life-cycle to identify
+> control requirements required before release from DoD control. The
+> DEMIL codes below are listed as the Highest Severity to the Lowest
+> Severity in DEMIL coding. DEMIL Integrity Code appear adjacent to the
+> DEMIL Code in FLIS that identify the validity of an item’s DEMIL code.
+> For additional information on DEMIL codes or DEMIL Integrity Codes,
+> see DOD 4160.28 DEMIL Program or DOD 4100.39M FLIS Manual.

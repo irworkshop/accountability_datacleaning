@@ -153,7 +153,7 @@ We will be downloading the first file for now.
 ```{r raw_dir}
 raw_dir <- dir_create(here("us", "leso", "data", "raw"))
 raw_url <- "https://www.dla.mil/Portals/104/Documents/DispositionServices/LESO/"
-raw_name <- "DISP_AllStatesAndTerritories_06302018.xlsx"
+raw_name <- "DISP_AllStatesAndTerritories_03312020.xlsx"
 raw_url <- str_c(raw_url, raw_name)
 raw_path <- path(raw_dir, raw_name)
 ```
@@ -322,6 +322,7 @@ leso %>%
   geom_col(fill = dark2["orange"]) + 
   scale_y_continuous(labels = comma) +
   scale_x_continuous(breaks = seq(1990, 2020, by = 2)) +
+  coord_cartesian(xlim = c(1990, 2020)) +
   labs(
     title = "Military Equipment Transfers by Year",
     caption = "Source: US DLA",
@@ -382,3 +383,59 @@ if (require(duckr)) {
   duckr::duck_upload(clean_path, s3_path)
 }
 ```
+
+## Dictionary
+
+The following table describes the variables in our final exported file:
+
+```{r dict_make, echo=FALSE}
+dict_raw <- tibble(
+  var = md_code(names(leso)),
+  type = md_code(map_chr(leso, typeof)),
+  def = c(
+    "Manually added department \"styate\"",
+    "Manually added department name",
+    "Recieving station state",
+    "Recieving station name",
+    "Item's unique \"National Stock Number\"",
+    "Item name",
+    "Quantity of items transfered",
+    "Units of item transfered",
+    "Value of equipment transfered†",
+    "Required level of destruction before transfer*",
+    "Integrity Code*",
+    "Date transfer was shipped",
+    "Recieving station type (all \"State\")",
+    "Flag indicating duplicate non-single transfer",
+    "Calendar year shipped"
+  )
+)
+```
+
+```{r dict_md, echo=FALSE}
+(dict_md <- kable(
+  x = dict_raw,
+  format = "markdown",
+  col.names = c("Column", "Type", "Definition")
+))
+```
+
+> †That figure can be misleading. The cost associated with the LESO/1033 Program
+property is based on original acquisition value, i.e. what the procuring agency,
+normally a branch of the military, paid for the item at the time it was
+procured. Many of the items available in the excess property inventory were
+procured decades ago, so the current value, with depreciation, would be
+difficult (and not cost-effective) to determine. The original acquisition value
+is the only cost component available in current data systems. Using the initial
+acquisition value, the total amount transferred since the program’s inception in
+1990 is $7.4 billion.
+
+> *DEMIL code indicates the degree of required physical destruction, identifies
+items requiring specialized capabilities or procedures, and identifies items
+which do not require DEMIL but may require Trade Security Controls. It is used
+throughout the life-cycle to identify control requirements required before
+release from DoD control.  The DEMIL codes below are listed as the Highest
+Severity to the Lowest Severity in DEMIL coding. DEMIL Integrity Code appear
+adjacent to the DEMIL Code in FLIS that identify the validity of an item’s DEMIL
+code. For additional information on DEMIL codes or DEMIL Integrity Codes, see
+DOD 4160.28 DEMIL Program or DOD 4100.39M FLIS Manual.
