@@ -27,8 +27,10 @@ opts_chunk$set(
   fig.width = 10,
   dpi = 300
 )
-# options(width = 99)
-set.seed(5)
+if (!interactive()) {
+  options(width = 99)
+  set.seed(5)
+}
 ```
 
 ```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
@@ -164,7 +166,7 @@ We first need to construct both the URLs and local paths to the archive files.
 ```{r full_path}
 zip_dir <- dir_create(here("us", "assist", "data", "zip"))
 base_url <- "https://files.usaspending.gov/award_data_archive/"
-fin_files <- glue("FY{year(today())}_All_Assistance_Full_20200513.zip")
+fin_files <- glue("FY{year(today())}_All_Assistance_Full_20200612.zip")
 fin_urls <- str_c(base_url, fin_files)
 fin_zips <- path(zip_dir, fin_files)
 ```
@@ -188,7 +190,7 @@ whether a record has been modified (C), deleted (D), or added (blank). To
 download data prior to FY 2008, visit our Custom Award Data page.
 
 ```{r delta_path}
-delta_file <- "FY(All)_All_Assistance_Delta_20200513.zip"
+delta_file <- "FY(All)_All_Assistance_Delta_20200612.zip"
 delta_url <- str_c(base_url, delta_file)
 delta_zip <- path(zip_dir, delta_file)
 ```
@@ -460,13 +462,18 @@ all_checks %>%
 ```
 
 ```{r year_bar}
-all_checks %>% 
+per_day <- all_checks %>% 
   group_by(fiscal) %>% 
   summarise(nrow = sum(nrow)) %>% 
-  ggplot(aes(fiscal, nrow)) + 
+  mutate(per = nrow/365)
+per_day$per[13] <- per_day$nrow[13]/yday(today())
+per_day %>% 
+  ggplot(aes(fiscal, per)) + 
   geom_col(fill = dark2["purple"]) +
+  scale_y_continuous(labels = comma) +
   labs(
-    title = "US Spending Transactions by Year",
+    title = "US Spending Transactions per day by year",
+    subtitle = glue("As of {today()}"),
     x = "Fiscal Year",
     y = "Unique Transactions"
   )
@@ -476,8 +483,37 @@ And here we have the total checks for every file.
 
 ```{r check_print, echo=FALSE}
 all_checks %>% 
-  select(-fiscal, -missing, -ncol) %>% 
-  mutate_at(vars("city", "state", "zip"), scales::percent, 0.1) %>% 
-  mutate_at(vars(1), gluedown::md_code) %>% 
+  mutate(across(file, ~md_code(str_replace(., "us_contracts_", "FY")))) %>% 
+  select(-types, -fiscal, -ncol) %>% 
+  mutate(zero = zero/nrow) %>% 
+  mutate(across(c("city", "state", "zip", "zero"), scales::percent, 0.1)) %>% 
+  mutate(across(nrow, comma)) %>% 
   kable()
+```
+
+## Delta
+
+These 2020 files contain _all_ records of contracts made in the 2020 fiscal
+year as of June 12. This means records that were previously only listed in th
+Delta files are now incorporated in the regular dataset. To ensure the TAP
+database is both comprehensive and absent of needless duplicates, we will
+remove the previous delta file and replace it only with those records not now
+found in the regular data.
+
+We will have to manually download the old delta files and read them into a 
+single data frame. Then, we can filter out duplicate records and create a new
+file of old delta records, mostly corrections to pre-2020 records.
+
+```{r old_delta}
+new_delta_path <- path(raw_dir, "us_assist_delta-old.csv")
+old_delta <- vroom(dir_ls(here("us", "assist", "data", "old")))
+nrow(old_delta)
+new_keys <- dir_ls(raw_dir, regex = "\\d.csv$") %>% 
+  map(vroom, col_types = cols(.default = "c")) %>% 
+  map_df(select, key)
+new_keys <- unique(as_vector(new_keys))
+length(new_keys)
+mean(old_delta$key %in% new_keys)
+old_delta <- filter(old_delta, key %out% new_keys)
+nrow(old_delta)
 ```
