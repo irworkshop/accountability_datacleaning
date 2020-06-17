@@ -153,13 +153,17 @@ We will be downloading the first file for now.
 ```{r raw_dir}
 raw_dir <- dir_create(here("us", "leso", "data", "raw"))
 raw_url <- "https://www.dla.mil/Portals/104/Documents/DispositionServices/LESO/"
-raw_name <- "DISP_AllStatesAndTerritories_03312020.xlsx"
+raw_name <- c(
+  "DISP_AllStatesAndTerritories_03312020.xlsx",
+  "DISP_AllStatesAndTerritories_12312019.xlsx",
+  "DISP_AllStatesAndTerritories_09302019.xlsx"
+)
 raw_url <- str_c(raw_url, raw_name)
 raw_path <- path(raw_dir, raw_name)
 ```
 
 ```{r raw_download}
-if (!file_exists(raw_path)) {
+if (!all(file_exists(raw_path))) {
   download.file(raw_url, raw_path)
 }
 ```
@@ -171,25 +175,70 @@ separate states. We can combine `purrr::map_df()` and `readxl::read_excel()` to
 read all the sheets into a single data frame of transfers.
 
 ```{r raw_read}
-leso <- raw_path %>%
-  readxl::excel_sheets() %>%
-  purrr::set_names() %>%
-  purrr::map_df(
-    .f = read_excel,
-    .name_repair = make_clean_names,
-    path = raw_path
-  )
+leso <- rep(list(NA), length(raw_path))
+for (i in seq_along(raw_path)) {
+  leso[[i]] <- raw_path[i] %>%
+    readxl::excel_sheets() %>%
+    purrr::set_names() %>%
+    purrr::map_df(
+      .f = read_excel,
+      .name_repair = make_clean_names,
+      path = raw_path[i]
+    )
+}
 ```
 
 ```{r raw_rename}
-leso <- rename(
-  .data = leso,
+leso <- map(
+  .x = leso,
+  .f = rename,
   to_station = station_name_lea,
   to_state = state,
   item = item_name,
   value = acquisition_value,
   date = ship_date
 )
+```
+
+Some equipment transfers are represented with a single row and a larger
+`quantity` value. Others have many rows with a `quantity` of 1 (particularly)
+with items like "RIFLE,5.56 MILLIMETER" (the most common item transferred).
+
+```{r raw_view_single}
+leso[[i]] %>% 
+  filter(quantity == 1) %>% 
+  arrange(to_station, date, item)
+```
+
+We can group these single rows together and create a new `quant_sum` value by
+counting all the single rows together. The same applies for the `value`
+variable.
+
+This will reduce the number of rows but the total quantity and value should
+be the same before and after.
+
+```{r raw_sum}
+sum(map_dbl(leso, nrow))
+for (i in seq_along(leso)) {
+  pre <- sum(leso[[i]]$value)
+  leso[[i]] <- leso[[i]] %>% 
+    group_by_all() %>% 
+    mutate(
+      quantity = sum(quantity, na.rm = TRUE),
+      value = sum(value, na.rm = TRUE)
+    ) %>% 
+    slice(1) %>% 
+    ungroup()
+  post <- sum(leso[[i]]$value)
+  message(pre == post)
+}
+```
+
+Now that we have been able to group together these single-quantity records, we
+can bind together the three different files and remove duplicate rows.
+
+```{r raw_bind}
+leso <- distinct(bind_rows(leso))
 ```
 
 ## Explore
@@ -205,40 +254,6 @@ Only one variable is missing any values. Nothing needs to be flagged.
 
 ```{r na_count}
 col_stats(leso, count_na)
-```
-
-### Duplicates
-
-There are quite a lot of duplicate records in the database. We can find and flag
-these records with `campfin::flag_dupes()`.
-
-```{r dupe_flag}
-leso <- flag_dupes(leso, everything())
-mean(leso$dupe_flag)
-```
-
-It looks like most of these duplicates are simply multiple items transferred in
-the same shipment with a `quantity` of 1.
-
-```{r dupe_view}
-leso %>% 
-  filter(dupe_flag) %>% 
-  select(date, to_station, value, quantity, item) %>% 
-  arrange(date)
-```
-
-```{r dupe_quantity}
-leso %>% 
-  filter(dupe_flag) %>% 
-  count(quantity, sort = TRUE) %>% 
-  add_prop()
-```
-
-We will remove the `dupe_flag` variable for any record with a `quantity` of 1.
-
-```{r dupe_remove}
-leso$dupe_flag[which(leso$quantity == 1)] <- FALSE
-mean(leso$dupe_flag)
 ```
 
 ### Categorical
@@ -286,17 +301,17 @@ per_cap <- leso %>%
     left_join(usa::states %>% select(name, abb), by = c("state" = "abb")) %>% 
     left_join(usa::facts %>% select(name, population)) %>% 
     mutate(val_per_cap = sum/population)
-  plot_usmap(data = per_cap, values = "val_per_cap", color = "black") + 
-    theme(legend.position = "right") +
-    scale_fill_viridis_c(
-      name = "Per Capita Value", 
-      label = scales::dollar,
-      direction = -1
-    ) +
-    labs(
-      title = "1033 Transfer Values per Capita",
-      subtitle = "All transfers since 1990 using 2010 population"
-    )
+plot_usmap(data = per_cap, values = "val_per_cap", color = "black") + 
+  theme(legend.position = "right") +
+  scale_fill_viridis_c(
+    name = "Per Capita Value", 
+    label = scales::dollar,
+    direction = -1
+  ) +
+  labs(
+    title = "1033 Transfer Values per Capita",
+    subtitle = "All transfers since 1990 using 2010 population"
+  )
 ```
 
 ### Dates
@@ -393,7 +408,7 @@ dict_raw <- tibble(
   var = md_code(names(leso)),
   type = md_code(map_chr(leso, typeof)),
   def = c(
-    "Manually added department \"styate\"",
+    "Manually added department \"state\"",
     "Manually added department name",
     "Recieving station state",
     "Recieving station name",
@@ -402,11 +417,10 @@ dict_raw <- tibble(
     "Quantity of items transfered",
     "Units of item transfered",
     "Value of equipment transfered†",
-    "Required level of destruction before transfer*",
+    "Required level of destruction*",
     "Integrity Code*",
     "Date transfer was shipped",
-    "Recieving station type (all \"State\")",
-    "Flag indicating duplicate non-single transfer",
+    "Recieving station type",
     "Calendar year shipped"
   )
 )

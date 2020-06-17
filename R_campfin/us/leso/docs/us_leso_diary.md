@@ -1,7 +1,7 @@
 United States Law Enforcement 1033 Transfers
 ================
 Kiernan Nicholls
-2020-06-10 14:21:47
+2020-06-17 11:21:18
 
   - [Project](#project)
   - [Objectives](#objectives)
@@ -135,13 +135,17 @@ We will be downloading the first file for now.
 ``` r
 raw_dir <- dir_create(here("us", "leso", "data", "raw"))
 raw_url <- "https://www.dla.mil/Portals/104/Documents/DispositionServices/LESO/"
-raw_name <- "DISP_AllStatesAndTerritories_03312020.xlsx"
+raw_name <- c(
+  "DISP_AllStatesAndTerritories_03312020.xlsx",
+  "DISP_AllStatesAndTerritories_12312019.xlsx",
+  "DISP_AllStatesAndTerritories_09302019.xlsx"
+)
 raw_url <- str_c(raw_url, raw_name)
 raw_path <- path(raw_dir, raw_name)
 ```
 
 ``` r
-if (!file_exists(raw_path)) {
+if (!all(file_exists(raw_path))) {
   download.file(raw_url, raw_path)
 }
 ```
@@ -154,19 +158,23 @@ state in separate states. We can combine `purrr::map_df()` and
 of transfers.
 
 ``` r
-leso <- raw_path %>%
-  readxl::excel_sheets() %>%
-  purrr::set_names() %>%
-  purrr::map_df(
-    .f = read_excel,
-    .name_repair = make_clean_names,
-    path = raw_path
-  )
+leso <- rep(list(NA), length(raw_path))
+for (i in seq_along(raw_path)) {
+  leso[[i]] <- raw_path[i] %>%
+    readxl::excel_sheets() %>%
+    purrr::set_names() %>%
+    purrr::map_df(
+      .f = read_excel,
+      .name_repair = make_clean_names,
+      path = raw_path[i]
+    )
+}
 ```
 
 ``` r
-leso <- rename(
-  .data = leso,
+leso <- map(
+  .x = leso,
+  .f = rename,
   to_station = station_name_lea,
   to_state = state,
   item = item_name,
@@ -175,33 +183,91 @@ leso <- rename(
 )
 ```
 
+Some equipment transfers are represented with a single row and a larger
+`quantity` value. Others have many rows with a `quantity` of 1
+(particularly) with items like “RIFLE,5.56 MILLIMETER” (the most common
+item transferred).
+
+``` r
+leso[[i]] %>% 
+  filter(quantity == 1) %>% 
+  arrange(to_station, date, item)
+#> # A tibble: 116,469 x 10
+#>    to_state to_station   nsn    item   quantity ui    value demil_code demil_ic date               
+#>    <chr>    <chr>        <chr>  <chr>     <dbl> <chr> <dbl> <chr>      <chr>    <dttm>             
+#>  1 AR       14TH JUDICI… 1005-… RIFLE…        1 Each    499 D          1        1998-08-24 00:00:00
+#>  2 AR       14TH JUDICI… 1005-… RIFLE…        1 Each    499 D          1        1998-08-24 00:00:00
+#>  3 AR       14TH JUDICI… 1005-… RIFLE…        1 Each    499 D          1        1998-08-24 00:00:00
+#>  4 AR       14TH JUDICI… 1005-… RIFLE…        1 Each    499 D          1        1998-08-24 00:00:00
+#>  5 AR       14TH JUDICI… 1005-… RIFLE…        1 Each    499 D          1        1998-08-24 00:00:00
+#>  6 AR       14TH JUDICI… 1005-… RIFLE…        1 Each    499 D          1        1998-08-24 00:00:00
+#>  7 SC       ABBEVILLE C… 1005-… RIFLE…        1 Each    749 D          1        2017-09-18 00:00:00
+#>  8 SC       ABBEVILLE C… 1005-… RIFLE…        1 Each    749 D          1        2017-09-18 00:00:00
+#>  9 SC       ABBEVILLE C… 1005-… RIFLE…        1 Each    749 D          1        2017-09-18 00:00:00
+#> 10 SC       ABBEVILLE C… 1005-… RIFLE…        1 Each    749 D          1        2017-09-18 00:00:00
+#> # … with 116,459 more rows
+```
+
+We can group these single rows together and create a new `quant_sum`
+value by counting all the single rows together. The same applies for the
+`value` variable.
+
+This will reduce the number of rows but the total quantity and value
+should be the same before and after.
+
+``` r
+sum(map_dbl(leso, nrow))
+#> [1] 429088
+for (i in seq_along(leso)) {
+  pre <- sum(leso[[i]]$value)
+  leso[[i]] <- leso[[i]] %>% 
+    group_by_all() %>% 
+    mutate(
+      quantity = sum(quantity, na.rm = TRUE),
+      value = sum(value, na.rm = TRUE)
+    ) %>% 
+    slice(1) %>% 
+    ungroup()
+  post <- sum(leso[[i]]$value)
+  message(pre == post)
+}
+```
+
+Now that we have been able to group together these single-quantity
+records, we can bind together the three different files and remove
+duplicate rows.
+
+``` r
+leso <- distinct(bind_rows(leso))
+```
+
 ## Explore
 
 ``` r
 glimpse(leso)
-#> Rows: 141,068
+#> Rows: 128,802
 #> Columns: 11
-#> $ to_state     <chr> "AL", "AL", "AL", "AL", "AL", "AL", "AL", "AL", "AL", "AL", "AL", "AL", "AL…
-#> $ to_station   <chr> "ABBEVILLE POLICE DEPT", "ABBEVILLE POLICE DEPT", "ABBEVILLE POLICE DEPT", …
-#> $ nsn          <chr> "2320-01-371-9584", "1005-01-587-7175", "2320-01-371-9584", "2355-01-553-46…
-#> $ item         <chr> "TRUCK,UTILITY", "MOUNT,RIFLE", "TRUCK,UTILITY", "MINE RESISTANT VEHICLE", …
-#> $ quantity     <dbl> 1, 10, 1, 1, 9, 1, 1, 10, 10, 1, 1, 1, 1, 1, 10, 3, 12, 5, 11, 1, 1, 10, 1,…
+#> $ to_state     <chr> "AK", "AK", "AK", "AK", "AK", "AK", "AK", "AK", "AK", "AK", "AK", "AK", "AK…
+#> $ to_station   <chr> "ALASKA DEPT OF PUBLIC SAFETY", "ALASKA DEPT OF PUBLIC SAFETY", "ALASKA DEP…
+#> $ nsn          <chr> "1005-00-073-9421", "1005-00-073-9421", "1005-00-589-1271", "1005-01-630-95…
+#> $ item         <chr> "RIFLE,5.56 MILLIMETER", "RIFLE,5.56 MILLIMETER", "RIFLE,7.62 MILLIMETER", …
+#> $ quantity     <dbl> 4, 56, 4, 8, 50, 1, 1, 58, 2, 5, 1, 3, 2, 1, 2, 4, 1, 1, 4, 3, 2, 1, 8, 5, …
 #> $ ui           <chr> "Each", "Each", "Each", "Each", "Each", "Each", "Each", "Each", "Kit", "Eac…
-#> $ value        <dbl> 62627.00, 1626.00, 62627.00, 658000.00, 321.00, 245.88, 600.00, 884.00, 146…
-#> $ demil_code   <chr> "C", "D", "C", "C", "D", "D", "D", "D", "D", "A", "A", "Q", "D", "D", "D", …
-#> $ demil_ic     <chr> "1", "1", "1", "1", "1", NA, "7", "1", "1", NA, NA, "3", "1", "1", "1", "1"…
-#> $ date         <dttm> 2016-09-29, 2016-09-19, 2016-09-29, 2016-11-09, 2016-09-14, 2016-06-02, 20…
+#> $ value        <dbl> 1996.00, 27944.00, 552.00, 13.56, 13.56, 10508.00, 129477.00, 2280.00, 450.…
+#> $ demil_code   <chr> "D", "D", "D", "D", "D", "F", "D", "C", "B", "Q", "A", "A", "A", "A", "A", …
+#> $ demil_ic     <chr> "1", "1", "1", "1", "1", "1", NA, "1", "3", "3", "1", "1", NA, NA, NA, "1",…
+#> $ date         <dttm> 2002-08-26, 1998-01-22, 2000-04-04, 2017-04-04, 2017-04-04, 2016-09-26, 20…
 #> $ station_type <chr> "State", "State", "State", "State", "State", "State", "State", "State", "St…
 tail(leso)
 #> # A tibble: 6 x 11
-#>   to_state to_station nsn   item  quantity ui    value demil_code demil_ic date               
-#>   <chr>    <chr>      <chr> <chr>    <dbl> <chr> <dbl> <chr>      <chr>    <dttm>             
-#> 1 PR       VILLALBA … 2320… TRUC…        1 Each  41447 C          1        2011-11-01 00:00:00
-#> 2 VI       VIRGIN IS… 1005… RIFL…        1 Each    138 D          1        1996-08-20 00:00:00
-#> 3 VI       VIRGIN IS… 1005… RIFL…        1 Each    138 D          1        1996-08-20 00:00:00
-#> 4 VI       VIRGIN IS… 1005… RIFL…        1 Each    138 D          1        1996-08-20 00:00:00
-#> 5 VI       VIRGIN IS… 1005… RIFL…        1 Each    138 D          1        1996-08-20 00:00:00
-#> 6 VI       VIRGIN IS… 1005… RIFL…        1 Each    138 D          1        1996-08-20 00:00:00
+#>   to_state to_station nsn   item  quantity ui     value demil_code demil_ic date               
+#>   <chr>    <chr>      <chr> <chr>    <dbl> <chr>  <dbl> <chr>      <chr>    <dttm>             
+#> 1 WY       WASHAKIE … 2320… TRUC…        1 Each  192513 C          1        2018-03-12 00:00:00
+#> 2 WY       WESTON CO… 1005… RIFL…        7 Each     966 D          1        1993-09-01 00:00:00
+#> 3 WY       WY GAME  … 1005… RIFL…       10 Each    2060 D          1        2008-06-09 00:00:00
+#> 4 WY       WY STATE … 1005… RIFL…        1 Each     138 D          1        1993-10-12 00:00:00
+#> 5 WY       WY STATE … 1005… RIFL…        1 Each     138 D          1        1995-01-10 00:00:00
+#> 6 WY       WY STATE … 1005… RIFL…        5 Each     690 D          1        1991-09-16 00:00:00
 #> # … with 1 more variable: station_type <chr>
 ```
 
@@ -212,105 +278,39 @@ Only one variable is missing any values. Nothing needs to be flagged.
 ``` r
 col_stats(leso, count_na)
 #> # A tibble: 11 x 4
-#>    col          class      n      p
-#>    <chr>        <chr>  <int>  <dbl>
-#>  1 to_state     <chr>      0 0     
-#>  2 to_station   <chr>      0 0     
-#>  3 nsn          <chr>      0 0     
-#>  4 item         <chr>      0 0     
-#>  5 quantity     <dbl>      0 0     
-#>  6 ui           <chr>      0 0     
-#>  7 value        <dbl>      0 0     
-#>  8 demil_code   <chr>      0 0     
-#>  9 demil_ic     <chr>   8905 0.0631
-#> 10 date         <dttm>     0 0     
-#> 11 station_type <chr>      0 0
-```
-
-### Duplicates
-
-There are quite a lot of duplicate records in the database. We can find
-and flag these records with `campfin::flag_dupes()`.
-
-``` r
-leso <- flag_dupes(leso, everything())
-mean(leso$dupe_flag)
-#> [1] 0.7121246
-```
-
-It looks like most of these duplicates are simply multiple items
-transferred in the same shipment with a `quantity` of 1.
-
-``` r
-leso %>% 
-  filter(dupe_flag) %>% 
-  select(date, to_station, value, quantity, item) %>% 
-  arrange(date)
-#> # A tibble: 100,458 x 5
-#>    date                to_station               value quantity item                 
-#>    <dttm>              <chr>                    <dbl>    <dbl> <chr>                
-#>  1 1990-05-03 00:00:00 BLAINE CTY SHERIFF DEPT    138        1 RIFLE,7.62 MILLIMETER
-#>  2 1990-05-03 00:00:00 BLAINE CTY SHERIFF DEPT    138        1 RIFLE,7.62 MILLIMETER
-#>  3 1990-05-03 00:00:00 BLAINE CTY SHERIFF DEPT    138        1 RIFLE,7.62 MILLIMETER
-#>  4 1990-05-03 00:00:00 BLAINE CTY SHERIFF DEPT    138        1 RIFLE,7.62 MILLIMETER
-#>  5 1990-05-03 00:00:00 BLAINE CTY SHERIFF DEPT    138        1 RIFLE,7.62 MILLIMETER
-#>  6 1990-05-03 00:00:00 DANIELS CTY SHERIFF DEPT   138        1 RIFLE,7.62 MILLIMETER
-#>  7 1990-05-03 00:00:00 DANIELS CTY SHERIFF DEPT   138        1 RIFLE,7.62 MILLIMETER
-#>  8 1990-05-03 00:00:00 DANIELS CTY SHERIFF DEPT   138        1 RIFLE,7.62 MILLIMETER
-#>  9 1990-05-03 00:00:00 DILLON POLICE DEPT         138        1 RIFLE,7.62 MILLIMETER
-#> 10 1990-05-03 00:00:00 DILLON POLICE DEPT         138        1 RIFLE,7.62 MILLIMETER
-#> # … with 100,448 more rows
-```
-
-``` r
-leso %>% 
-  filter(dupe_flag) %>% 
-  count(quantity, sort = TRUE) %>% 
-  add_prop()
-#> # A tibble: 38 x 3
-#>    quantity     n        p
-#>       <dbl> <int>    <dbl>
-#>  1        1 99206 0.988   
-#>  2        2   353 0.00351 
-#>  3       10   252 0.00251 
-#>  4        4   153 0.00152 
-#>  5        3   104 0.00104 
-#>  6        5    87 0.000866
-#>  7        6    62 0.000617
-#>  8       20    39 0.000388
-#>  9        8    26 0.000259
-#> 10       12    20 0.000199
-#> # … with 28 more rows
-```
-
-We will remove the `dupe_flag` variable for any record with a `quantity`
-of 1.
-
-``` r
-leso$dupe_flag[which(leso$quantity == 1)] <- FALSE
-mean(leso$dupe_flag)
-#> [1] 0.008875152
+#>    col          class      n     p
+#>    <chr>        <chr>  <int> <dbl>
+#>  1 to_state     <chr>      0 0    
+#>  2 to_station   <chr>      0 0    
+#>  3 nsn          <chr>      0 0    
+#>  4 item         <chr>      0 0    
+#>  5 quantity     <dbl>      0 0    
+#>  6 ui           <chr>      0 0    
+#>  7 value        <dbl>      0 0    
+#>  8 demil_code   <chr>      0 0    
+#>  9 demil_ic     <chr>  16655 0.129
+#> 10 date         <dttm>     0 0    
+#> 11 station_type <chr>  54810 0.426
 ```
 
 ### Categorical
 
 ``` r
 col_stats(leso, n_distinct)
-#> # A tibble: 12 x 4
-#>    col          class      n          p
-#>    <chr>        <chr>  <int>      <dbl>
-#>  1 to_state     <chr>     53 0.000376  
-#>  2 to_station   <chr>   5682 0.0403    
-#>  3 nsn          <chr>  10287 0.0729    
-#>  4 item         <chr>   4911 0.0348    
-#>  5 quantity     <dbl>    280 0.00198   
-#>  6 ui           <chr>     33 0.000234  
-#>  7 value        <dbl>   9356 0.0663    
-#>  8 demil_code   <chr>      7 0.0000496 
-#>  9 demil_ic     <chr>      8 0.0000567 
-#> 10 date         <dttm>  4773 0.0338    
-#> 11 station_type <chr>      1 0.00000709
-#> 12 dupe_flag    <lgl>      2 0.0000142
+#> # A tibble: 11 x 4
+#>    col          class      n         p
+#>    <chr>        <chr>  <int>     <dbl>
+#>  1 to_state     <chr>     53 0.000411 
+#>  2 to_station   <chr>   6397 0.0497   
+#>  3 nsn          <chr>  12927 0.100    
+#>  4 item         <chr>   5846 0.0454   
+#>  5 quantity     <dbl>    331 0.00257  
+#>  6 ui           <chr>     37 0.000287 
+#>  7 value        <dbl>  15988 0.124    
+#>  8 demil_code   <chr>      7 0.0000543
+#>  9 demil_ic     <chr>      9 0.0000699
+#> 10 date         <dttm>  4870 0.0378   
+#> 11 station_type <chr>      2 0.0000155
 ```
 
 ``` r
@@ -330,9 +330,9 @@ explore_plot(leso, demil_ic)
 ``` r
 summary(leso$value)
 #>     Min.  1st Qu.   Median     Mean  3rd Qu.     Max. 
-#>        0      138      499    11592      749 22000000
+#>        0      120      584    28394     4493 51000000
 mean(leso$value <= 0)
-#> [1] 0.001084583
+#> [1] 0.001645937
 ```
 
 ![](../plots/hist_amount-1.png)<!-- -->
@@ -351,11 +351,11 @@ leso <- mutate(leso, year = year(date))
 min(leso$date)
 #> [1] "1980-01-01 09:07:07 UTC"
 sum(leso$year < 1990)
-#> [1] 1
+#> [1] 2
 max(leso$date)
-#> [1] "2020-04-21 UTC"
+#> [1] "2020-12-30 UTC"
 sum(leso$date > today())
-#> [1] 0
+#> [1] 1
 ```
 
 ![](../plots/bar_year-1.png)<!-- -->
@@ -377,8 +377,8 @@ leso <- mutate(
 
 ## Conclude
 
-1.  There are 141,068 records in the database.
-2.  There are 1,252 duplicate records in the database.
+1.  There are 128,802 records in the database.
+2.  There are 0 duplicate records in the database.
 3.  The range and distribution of `amount` and `date` seem reasonable.
 4.  There are 0 records missing key variables.
 5.  There are no geographic variables other than the 2-letter state
@@ -396,7 +396,7 @@ clean_dir <- dir_create(here("us", "leso", "data", "clean"))
 clean_path <- path(clean_dir, "us_1033_transfers.csv")
 write_csv(leso, clean_path, na = "")
 file_size(clean_path)
-#> 19.9M
+#> 17.2M
 mutate(file_encoding(clean_path), across(path, path.abbrev))
 #> # A tibble: 1 x 3
 #>   path                                       mime            charset 
@@ -423,23 +423,22 @@ if (require(duckr)) {
 
 The following table describes the variables in our final exported file:
 
-| Column         | Type        | Definition                                      |
-| :------------- | :---------- | :---------------------------------------------- |
-| `from_state`   | `character` | Manually added department “styate”              |
-| `from_dept`    | `character` | Manually added department name                  |
-| `to_state`     | `character` | Recieving station state                         |
-| `to_station`   | `character` | Recieving station name                          |
-| `nsn`          | `character` | Item’s unique “National Stock Number”           |
-| `item`         | `character` | Item name                                       |
-| `quantity`     | `double`    | Quantity of items transfered                    |
-| `ui`           | `character` | Units of item transfered                        |
-| `value`        | `double`    | Value of equipment transfered†                  |
-| `demil_code`   | `character` | Required level of destruction before transfer\* |
-| `demil_ic`     | `character` | Integrity Code\*                                |
-| `date`         | `double`    | Date transfer was shipped                       |
-| `station_type` | `character` | Recieving station type (all “State”)            |
-| `dupe_flag`    | `logical`   | Flag indicating duplicate non-single transfer   |
-| `year`         | `double`    | Calendar year shipped                           |
+| Column         | Type        | Definition                            |
+| :------------- | :---------- | :------------------------------------ |
+| `from_state`   | `character` | Manually added department “state”     |
+| `from_dept`    | `character` | Manually added department name        |
+| `to_state`     | `character` | Recieving station state               |
+| `to_station`   | `character` | Recieving station name                |
+| `nsn`          | `character` | Item’s unique “National Stock Number” |
+| `item`         | `character` | Item name                             |
+| `quantity`     | `double`    | Quantity of items transfered          |
+| `ui`           | `character` | Units of item transfered              |
+| `value`        | `double`    | Value of equipment transfered†        |
+| `demil_code`   | `character` | Required level of destruction\*       |
+| `demil_ic`     | `character` | Integrity Code\*                      |
+| `date`         | `double`    | Date transfer was shipped             |
+| `station_type` | `character` | Recieving station type                |
+| `year`         | `double`    | Calendar year shipped                 |
 
 > †That figure can be misleading. The cost associated with the LESO/1033
 > Program property is based on original acquisition value, i.e. what the
