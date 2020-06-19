@@ -172,6 +172,35 @@ discrete variable.
 count(njl, agent_status)
 ```
 
+The only information we need to add from one of the other files is the agent's
+termination date. This can be found in the `Agent.csv` file.
+
+```{r raw_agent}
+agent <- vroom(
+  file = path(raw_dir, "Agent.csv"),
+  delim = ",",
+  col_select = c(agent_name, firm_name, active_date, agent_term_date),
+  col_types = cols(
+    .default = col_character(),
+    active_date = col_date_usa(),
+    agent_term_date = col_date_usa()
+  )
+)
+```
+
+```{r agent_rename, echo=FALSE}
+agent <- distinct(agent)
+agent <- rename(agent, term_date = agent_term_date)
+```
+
+This termination date can then be joined to the index data frame using the
+agent's full name.
+
+```{r raw_join}
+mean(njl$agent_name %in% agent$agent_name)
+njl <- left_join(njl, agent)
+```
+
 ## Explore
 
 ```{r glimpse}
@@ -458,6 +487,7 @@ dict_raw <- tibble(
     "Firm telephone number",
     "Client entity name",
     "Firm full name (w/ address)",
+    "Date lobbyist was terminated",
     "Flag indicating missing variable",
     "Calendar year lobbyist active",
     "Normalized firm business address",

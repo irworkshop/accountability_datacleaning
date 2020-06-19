@@ -1,7 +1,7 @@
 New Jersey Lobbyists
 ================
 Kiernan Nicholls
-2020-06-19 12:05:04
+2020-06-19 12:34:17
 
   - [Project](#project)
   - [Objectives](#objectives)
@@ -164,12 +164,37 @@ count(njl, agent_status)
 #> 2 T            51876
 ```
 
+The only information we need to add from one of the other files is the
+agent’s termination date. This can be found in the `Agent.csv` file.
+
+``` r
+agent <- vroom(
+  file = path(raw_dir, "Agent.csv"),
+  delim = ",",
+  col_select = c(agent_name, firm_name, active_date, agent_term_date),
+  col_types = cols(
+    .default = col_character(),
+    active_date = col_date_usa(),
+    agent_term_date = col_date_usa()
+  )
+)
+```
+
+This termination date can then be joined to the index data frame using
+the agent’s full name.
+
+``` r
+mean(njl$agent_name %in% agent$agent_name)
+#> [1] 1
+njl <- left_join(njl, agent)
+```
+
 ## Explore
 
 ``` r
 glimpse(njl)
 #> Rows: 79,427
-#> Columns: 10
+#> Columns: 11
 #> $ agent_name    <chr> "Goldfarb, David", "Goldfarb, David", "Goldfarb, David", "Ballezzi, Thomas…
 #> $ firm_id       <chr> "1", "1", "1", "2", "2", "2", "2", "2", "2", "2", "2", "2", "2", "2", "2",…
 #> $ firm_name     <chr> "Katz Martin & Co", "Katz Martin & Co", "Katz Martin & Co", "Casino Associ…
@@ -180,8 +205,9 @@ glimpse(njl)
 #> $ phone_number  <chr> "609-393-7799", "609-393-7799", "609-393-7799", NA, NA, NA, NA, NA, NA, NA…
 #> $ client_name   <chr> "Allstate Insurance Co", "General Electric Co", "Tobacco & Candy Dist Asso…
 #> $ firm_fullname <chr> "Katz Martin & Co<br/>196 W State St    Trenton,NJ 08608", "Katz Martin & …
+#> $ term_date     <date> 2001-02-01, 2001-02-01, 2001-02-01, 1995-01-03, 1995-01-03, 1995-01-03, 1…
 tail(njl)
-#> # A tibble: 6 x 10
+#> # A tibble: 6 x 11
 #>   agent_name firm_id firm_name agent_status active_date badge_number firm_address phone_number
 #>   <chr>      <chr>   <chr>     <chr>        <date>      <chr>        <chr>        <chr>       
 #> 1 Kovach, S… 2502    Health P… A            2020-03-20  2502-3       901 Market … 215-991-4063
@@ -190,14 +216,14 @@ tail(njl)
 #> 4 Dick, And… 2504    Electrif… A            2020-05-26  2504-1       2003 Edmund… <NA>        
 #> 5 Head, Rob… 2505    Lockheed… A            2020-05-14  2505-2       2121 Crysta… <NA>        
 #> 6 Marrone, … 2505    Lockheed… A            2020-05-14  2505-1       2121 Crysta… <NA>        
-#> # … with 2 more variables: client_name <chr>, firm_fullname <chr>
+#> # … with 3 more variables: client_name <chr>, firm_fullname <chr>, term_date <date>
 ```
 
 ### Missing
 
 ``` r
 col_stats(njl, count_na)
-#> # A tibble: 10 x 4
+#> # A tibble: 11 x 4
 #>    col           class      n        p
 #>    <chr>         <chr>  <int>    <dbl>
 #>  1 agent_name    <chr>      0 0       
@@ -210,6 +236,7 @@ col_stats(njl, count_na)
 #>  8 phone_number  <chr>   4826 0.0608  
 #>  9 client_name   <chr>     26 0.000327
 #> 10 firm_fullname <chr>     36 0.000453
+#> 11 term_date     <date> 27551 0.347
 ```
 
 ``` r
@@ -251,7 +278,7 @@ njl <- flag_dupes(njl, everything())
 
 ``` r
 col_stats(njl, n_distinct)
-#> # A tibble: 11 x 4
+#> # A tibble: 12 x 4
 #>    col           class      n         p
 #>    <chr>         <chr>  <int>     <dbl>
 #>  1 agent_name    <chr>   4385 0.0552   
@@ -264,7 +291,8 @@ col_stats(njl, n_distinct)
 #>  8 phone_number  <chr>   1751 0.0220   
 #>  9 client_name   <chr>   8500 0.107    
 #> 10 firm_fullname <chr>   2186 0.0275   
-#> 11 na_flag       <lgl>      2 0.0000252
+#> 11 term_date     <date>  2207 0.0278   
+#> 12 na_flag       <lgl>      2 0.0000252
 ```
 
 ### Dates
@@ -470,7 +498,7 @@ njl <- njl %>%
 ``` r
 glimpse(sample_n(njl, 20))
 #> Rows: 20
-#> Columns: 16
+#> Columns: 17
 #> $ agent_name    <chr> "Maer, William J", "Parlett, Elizabeth", "Fennessy, Conor", "Ryou, Patrici…
 #> $ firm_id       <chr> "433", "551", "2114", "939", "721", "365", "1247", "1247", "1553", "75", "…
 #> $ firm_name     <chr> "Public Strategies Impact LLC", "MWW Group", "Mercury Public Affairs", "De…
@@ -481,6 +509,7 @@ glimpse(sample_n(njl, 20))
 #> $ phone_number  <chr> "609-393-7799", NA, NA, "201-928-1100", "609-392-3100", "609-396-8838", "6…
 #> $ client_name   <chr> "University of Medicine and Dentistry of NJ", "NJ CURE/NJ PURE", "Careingt…
 #> $ firm_fullname <chr> "Public Strategies Impact LLC<br/>414 River View Plz  Trenton,NJ 08611-342…
+#> $ term_date     <date> NA, 2005-07-19, NA, 2009-11-12, 2018-04-23, NA, 2003-09-17, 2003-07-10, 2…
 #> $ na_flag       <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALS…
 #> $ year          <dbl> 2003, 2004, 2014, 2006, 1991, 2003, 2001, 2001, 2006, 1994, 2016, 2003, 20…
 #> $ addr_clean    <chr> "414 RIV VW PLZ", "222 W STATE ST STE 306", "222 W STATE ST STE 301", "61 …
@@ -508,7 +537,7 @@ clean_dir <- dir_create(here("nj", "lobby", "data", "clean"))
 clean_path <- path(clean_dir, "nj_lobby_clean.csv")
 write_csv(njl, clean_path, na = "")
 file_size(clean_path)
-#> 20.7M
+#> 21.3M
 file_encoding(clean_path) %>% 
   mutate(across(path, path.abbrev))
 #> # A tibble: 1 x 3
@@ -548,6 +577,7 @@ The following table describes the variables in our final exported file:
 | `phone_number`  | `character` | Firm telephone number             |
 | `client_name`   | `character` | Client entity name                |
 | `firm_fullname` | `character` | Firm full name (w/ address)       |
+| `term_date`     | `double`    | Date lobbyist was terminated      |
 | `na_flag`       | `logical`   | Flag indicating missing variable  |
 | `year`          | `double`    | Calendar year lobbyist active     |
 | `addr_clean`    | `character` | Normalized firm business address  |
