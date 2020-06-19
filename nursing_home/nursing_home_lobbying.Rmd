@@ -144,6 +144,17 @@ ahca_st <- c(ahca_states[1:cutoff],"NJ", ahca_states[(cutoff +1):length(ahca_sta
 ahca_members <- tibble(member = str_to_upper(ahca_names), state = ahca_st)
 
 write_csv(ahca_members, path = path(data_dir, "ahca_members.csv"))
+
+
+x <- ahca_table %>% html_text()
+x <- x[-20]
+ahca_members[,3] <- x
+names(ahca_members)[3] <- "text"
+ahca_members <- ahca_members %>% mutate(x_stripped = x %>% str_to_upper() %>% str_remove(ahca_members$member))
+address_ruff <- ahca_table_ele %>% html_nodes("td") %>% as.character()  %>%  str_extract("(?<=<br>).+(?=<br>.+PH)") %>% na.omit()
+address <- address_ruff %>% gsub(pattern = '<.*?>', replacement = "|",.)
+ahca_members <- ahca_members %>% mutate(city = str_)
+#before <- ahca_table_ele %>% html_nodes("td") %>% html_node("b") %>% as.character()
 ```
 
 

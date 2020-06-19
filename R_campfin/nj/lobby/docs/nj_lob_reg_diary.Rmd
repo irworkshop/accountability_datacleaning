@@ -1,5 +1,5 @@
 ---
-title: "South Carolina"
+title: "New Jersey Lobbying Registration"
 author: "Yanqi Xu"
 date: "`r Sys.time()`"
 output:
@@ -109,15 +109,17 @@ here::here()
 
 Lobbyist data is obtained from the [New Jersey Election Law Enforcement Commission][03].
 
-> #### Download
+#### Download
 > "View Quarterly Reports and Quarterly Summary" -> "Entity Search" -> "Search" -> "Download Records"
 
 The [Entity Search page][04], we can see a table is generated and can be retrieved:
 
-The data is downloaded on March 11, 2020.
+The data is downloaded on June 12, 2020.
 
 
-First, we must download a reporting linking lobbyists to their principals.
+First, we must download a reporting linking lobbyists to their principals.This information is included in the Index of Registered Entities.
+
+Then we can join this table with another table `Agent Name` which contains lobbyists address information, as well as the `Lobbying Entity/Business` table which lists all geographical data of lobbying firms.
 
 ```{r raw_dir}
 raw_dir <- dir_create(here("nj", "lobby", "data", "raw", "reg"))
@@ -125,46 +127,22 @@ raw_dir <- dir_create(here("nj", "lobby", "data", "raw", "reg"))
 
 
 ```{r eval=FALSE}
-# not working
-njlr <- read_csv(dir_ls(raw_dir))
+njlr <- read_csv(dir_ls(raw_dir, regexp = "Index.+"))
+nj_lob <- read_csv(dir_ls(raw_dir, regexp = "Agent.csv"))
 ```
-
-Then, we can see that the date columns are all read as text, and we'll convert them back to date objects with `as.Date`.
-
-```{r convert date}
-njlr <- njlr %>% 
-  mutate_at(vars(ends_with("date")), as.Date, format = "%m/%d/%Y")
-```
-
 
 ## Import
 
-Using these three files, we can create a single data frame listing lobbyists and those for whom
-they lobby.
+We can separate the firm address into address, city, state and ZIP.
 
 ```{r read_lobs}
-lobs <- 
-  # read as string
-  read_lines(file = in_raw("sc_lobs.csv")) %>%
-  extract(-2) %>% 
-  # fix quote enclosure
-  str_replace("\"Eye\"", "'Eye'") %>%
-  # pass as delim file
-  read_delim(
-    delim = ",",
-    escape_backslash = FALSE,
-    escape_double = FALSE,
-    na = c("", " ")
-  ) %>%
-  # clean shape
-  remove_empty("cols") %>% 
-  clean_names("snake")
+njlr <- njlr %>%
+  mutate(firm_address = str_extract(Firm_Address, "^[^,]+(?=\\s*,)"),
+         city_state_zip = str_remove(Firm_Address, "^[^,]+(\\s*,)"))
 
-# clarify col names
-names(lobs) <- names(lobs) %>% 
-  str_remove("_(.*)") %>% 
-  str_remove("code$") %>% 
-  str_c("lob", ., sep = "_")
+njlr <- njlr %>% 
+  separate(col = city_state_zip, into = c("city","state_zip"),sep = ",", remove = F) %>% 
+  separate(col = state_zip, into = c("state","zip"),sep = "\\s", remove = F)
 ```
 
 ```{r read_pris}

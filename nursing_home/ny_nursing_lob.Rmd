@@ -1,0 +1,20 @@
+---
+title: "NY nursing lob"
+output: html_document
+---
+
+```{r filter ahca}
+nys <- ny_lob_early %>% filter(client_name == "HEALTH FACILITIES ASSOCIATION (NYS)")
+```
+
+```{r}
+x <- nys %>% select(reporting_year, reporting_period, lobbyist_name, bill_details_1, bill_detqails_2, total_e_xpenses, total_compensation, total_reimbrused, everything())
+
+y <- x %>% filter(reporting_year < 2017)
+
+y <- y %>%  filter(reporting_year > 2011) %>% mutate(assemb = str_extract(bill_details_1,
+                                                                          "(?<=ASSEMBLY BILLS:).+(?=&#x0D;\r\n)")) %>%  mutate(assemb2 = str_extract(assemb,".+(?=SENATE BILLS)")) 
+
+y <- y %>% mutate(assemb_final = coalesce(assemb2, assemb))
+```
+
