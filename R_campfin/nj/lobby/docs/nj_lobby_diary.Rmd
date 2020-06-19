@@ -161,9 +161,8 @@ njl <- vroom(
 )
 ```
 
-```{r raw_rename, echo=FALSE}
-njl <- select(njl, -firm_address, -phone_number2)
-njl <- rename(njl, firm_phone = phone_number)
+```{r raw_select, echo=FALSE}
+njl <- select(njl, -phone_number2)
 ```
 
 We can confirm the file was read properly by counting the distinct values of a
@@ -171,46 +170,6 @@ discrete variable.
 
 ```{r raw_check}
 count(njl, agent_status)
-```
-
-Next, we'll want to read the file containing additional information regarding
-the lobbying agents.
-
-```{r agents_read}
-agents <- vroom(
-  file = path(raw_dir, "Agent.csv"),
-  delim = ",",
-  .name_repair = make_clean_names,
-  col_types = cols(
-    .default = col_character(),
-    active_date = col_date_usa(),
-    agent_term_date = col_date_usa(),
-    Agent_eff_term_date = col_date_usa()
-  )
-)
-```
-
-To prepare to join the files together, we need to adjust some variable names.
-
-```{r agents_rename}
-agents <- rename(
-  .data = agents,
-  agent_last = last_name,
-  agent_id = agent_firm_id,
-  firm_addr = address,
-  firm_city = city,
-  firm_state = state,
-  firm_zip = zip,
-  agent_term = agent_term_date,
-  agent_eff = agent_eff_term_date
-)
-```
-
-Then the two data frames can be joined together.
-
-```{r agents_join}
-mean(agents$agent_name %in% njl$agent_name)
-njl <- left_join(njl, agents)
 ```
 
 ## Explore
@@ -286,6 +245,28 @@ njl %>%
 
 ## Wrangle
 
+First, we must `tidyr::separate()` the single `firm_address` variable into it's
+component pieces.
+
+```{r address_sep}
+njl <- njl %>% 
+  separate(
+    col = firm_address,
+    into = c("addr_sep", "city_sep", "state_zip"),
+    sep = "([:blank:]+)?,",
+    remove = FALSE,
+    extra = "merge",
+    fill = "left"
+  ) %>% 
+  separate(
+    col = state_zip,
+    into = c("state_sep", "zip_sep"),
+    sep = "\\s+(?=\\d)",
+    remove = TRUE,
+    extra = "merge"
+  )
+```
+
 To improve the searchability of the database, we will perform some consistent,
 confident string normalization. For geographic variables like city names and
 ZIP codes, the corresponding `campfin::normal_*()` functions are tailor made to 
@@ -300,8 +281,8 @@ USPS suffixes.
 ```{r address_norm}
 njl <- mutate(
    .data = njl,
-   firm_addr_norm = normal_address(
-     address = firm_addr,
+   addr_norm = normal_address(
+     address = addr_sep,
      abbs = usps_street,
      na = invalid_city
    )
@@ -310,7 +291,7 @@ njl <- mutate(
 
 ```{r address_view}
 njl %>% 
-  select(contains("addr")) %>% 
+  select(addr_sep, addr_norm) %>% 
   distinct() %>% 
   sample_n(10)
 ```
@@ -324,8 +305,8 @@ zeroes dropped by other programs like Microsoft Excel.
 ```{r zip_norm}
 njl <- mutate(
   .data = njl,
-  firm_zip_norm = normal_zip(
-    zip = firm_zip,
+  zip_norm = normal_zip(
+    zip = zip_sep,
     na_rep = TRUE
   )
 )
@@ -333,8 +314,8 @@ njl <- mutate(
 
 ```{r zip_progress}
 progress_table(
-  njl$firm_zip,
-  njl$firm_zip_norm,
+  njl$zip_sep,
+  njl$zip_norm,
   compare = valid_zip
 )
 ```
@@ -347,8 +328,8 @@ Valid two digit state abbreviations can be made using the
 ```{r state_norm}
 njl <- njl %>% 
   mutate(
-    firm_state_norm = normal_state(
-      state = firm_state,
+    state_norm = normal_state(
+      state = state_sep,
       abbreviate = TRUE,
       na_rep = TRUE,
       valid = valid_state
@@ -358,14 +339,14 @@ njl <- njl %>%
 
 ```{r state_view}
 njl %>% 
-  filter(firm_state != firm_state_norm) %>% 
-  count(firm_state, firm_state_norm, sort = TRUE)
+  filter(state_sep != state_norm) %>% 
+  count(state_sep, state_norm, sort = TRUE)
 ```
 
 ```{r state_progress}
 progress_table(
-  njl$firm_state,
-  njl$firm_state_norm,
+  njl$state_sep,
+  njl$state_norm,
   compare = valid_state
 )
 ```
@@ -384,8 +365,8 @@ removing punctuation, but _expanding_ USPS abbreviations. We can also remove
 ```{r city_norm}
 njl <- njl %>% 
   mutate(
-    firm_city_norm = normal_city(
-      city = firm_city, 
+    city_norm = normal_city(
+      city = city_sep, 
       abbs = usps_city,
       states = c("NJ", "DC", "NEW JERSEY"),
       na = invalid_city,
@@ -399,8 +380,8 @@ njl <- njl %>%
 ```{r city_progress, echo=FALSE}
 many_city <- c(valid_city, extra_city)
 progress <- progress_table(
-  str_to_upper(njl$firm_city),
-  njl$firm_city_norm,
+  str_to_upper(njl$city_sep),
+  njl$city_norm,
   compare = many_city
 ) %>% mutate(stage = as_factor(stage))
 kable(progress, digits = 3)
@@ -414,7 +395,7 @@ rename all added variables with the `_clean` suffix.
 ```{r clean_select}
 njl <- njl %>% 
   rename_all(~str_replace(., "_norm", "_clean")) %>% 
-  rename_all(~str_remove(., "_raw"))
+  select(-ends_with("_sep"))
 ```
 
 ```{r clean_glimpse}
@@ -473,17 +454,10 @@ dict_raw <- tibble(
     "A = active, T = terminated",
     "Date lobbyist became active",
     "Lobbyist badge number",
+    "Full firm address",
     "Firm telephone number",
     "Client entity name",
     "Firm full name (w/ address)",
-    "Agent last name",
-    "Unique agent ID",
-    "Firm business address",
-    "Firm business city",
-    "Firm business state",
-    "Firm business ZIP code",
-    "Agent date terminated",
-    "Agent termination effective",
     "Flag indicating missing variable",
     "Calendar year lobbyist active",
     "Normalized firm business address",

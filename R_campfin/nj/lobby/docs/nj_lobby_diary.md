@@ -1,7 +1,7 @@
 New Jersey Lobbyists
 ================
 Kiernan Nicholls
-2020-06-16 14:26:06
+2020-06-19 12:05:04
 
   - [Project](#project)
   - [Objectives](#objectives)
@@ -164,90 +164,40 @@ count(njl, agent_status)
 #> 2 T            51876
 ```
 
-Next, we’ll want to read the file containing additional information
-regarding the lobbying agents.
-
-``` r
-agents <- vroom(
-  file = path(raw_dir, "Agent.csv"),
-  delim = ",",
-  .name_repair = make_clean_names,
-  col_types = cols(
-    .default = col_character(),
-    active_date = col_date_usa(),
-    agent_term_date = col_date_usa(),
-    Agent_eff_term_date = col_date_usa()
-  )
-)
-```
-
-To prepare to join the files together, we need to adjust some variable
-names.
-
-``` r
-agents <- rename(
-  .data = agents,
-  agent_last = last_name,
-  agent_id = agent_firm_id,
-  firm_addr = address,
-  firm_city = city,
-  firm_state = state,
-  firm_zip = zip,
-  agent_term = agent_term_date,
-  agent_eff = agent_eff_term_date
-)
-```
-
-Then the two data frames can be joined together.
-
-``` r
-mean(agents$agent_name %in% njl$agent_name)
-#> [1] 1
-njl <- left_join(njl, agents)
-```
-
 ## Explore
 
 ``` r
 glimpse(njl)
 #> Rows: 79,427
-#> Columns: 17
+#> Columns: 10
 #> $ agent_name    <chr> "Goldfarb, David", "Goldfarb, David", "Goldfarb, David", "Ballezzi, Thomas…
 #> $ firm_id       <chr> "1", "1", "1", "2", "2", "2", "2", "2", "2", "2", "2", "2", "2", "2", "2",…
 #> $ firm_name     <chr> "Katz Martin & Co", "Katz Martin & Co", "Katz Martin & Co", "Casino Associ…
 #> $ agent_status  <chr> "T", "T", "T", "T", "T", "T", "T", "T", "T", "T", "T", "T", "T", "T", "T",…
 #> $ active_date   <date> 1999-03-15, 1999-03-15, 1999-03-15, 1994-01-11, 1994-01-11, 1994-01-11, 1…
 #> $ badge_number  <chr> "1-1", "1-1", "1-1", "2-5", "2-5", "2-5", "2-5", "2-1", "2-1", "2-1", "2-1…
-#> $ firm_phone    <chr> "609-393-7799", "609-393-7799", "609-393-7799", NA, NA, NA, NA, NA, NA, NA…
+#> $ firm_address  <chr> "196 W State St    ,Trenton,NJ 08608", "196 W State St    ,Trenton,NJ 0860…
+#> $ phone_number  <chr> "609-393-7799", "609-393-7799", "609-393-7799", NA, NA, NA, NA, NA, NA, NA…
 #> $ client_name   <chr> "Allstate Insurance Co", "General Electric Co", "Tobacco & Candy Dist Asso…
 #> $ firm_fullname <chr> "Katz Martin & Co<br/>196 W State St    Trenton,NJ 08608", "Katz Martin & …
-#> $ agent_last    <chr> "Goldfarb", "Goldfarb", "Goldfarb", "Ballezzi", "Ballezzi", "Ballezzi", "B…
-#> $ agent_id      <chr> "4790", "4790", "4790", "4590", "4590", "4590", "4590", "4594", "4594", "4…
-#> $ firm_addr     <chr> "196 W State St", "196 W State St", "196 W State St", NA, NA, NA, NA, NA, …
-#> $ firm_city     <chr> "Trenton", "Trenton", "Trenton", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
-#> $ firm_state    <chr> "NJ", "NJ", "NJ", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
-#> $ firm_zip      <chr> "08608", "08608", "08608", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
-#> $ agent_term    <date> 2001-02-01, 2001-02-01, 2001-02-01, 1995-01-03, 1995-01-03, 1995-01-03, 1…
-#> $ agent_eff     <date> NA, NA, NA, 1994-01-04, 1994-01-04, 1994-01-04, 1994-01-04, 1994-01-01, 1…
 tail(njl)
-#> # A tibble: 6 x 17
-#>   agent_name firm_id firm_name agent_status active_date badge_number firm_phone client_name
-#>   <chr>      <chr>   <chr>     <chr>        <date>      <chr>        <chr>      <chr>      
-#> 1 Kovach, S… 2502    Health P… A            2020-03-20  2502-3       215-991-4… Health Par…
-#> 2 Pritchett… 2502    Health P… A            2020-03-13  2502-2       215-991-4… Health Par…
-#> 3 Osborne, … 2503    Deloitte… A            2020-03-11  2503-1       215-405-7… Deloitte S…
-#> 4 Dick, And… 2504    Electrif… A            2020-05-26  2504-1       <NA>       Electrify …
-#> 5 Head, Rob… 2505    Lockheed… A            2020-05-14  2505-2       <NA>       Lockheed M…
-#> 6 Marrone, … 2505    Lockheed… A            2020-05-14  2505-1       <NA>       Lockheed M…
-#> # … with 9 more variables: firm_fullname <chr>, agent_last <chr>, agent_id <chr>, firm_addr <chr>,
-#> #   firm_city <chr>, firm_state <chr>, firm_zip <chr>, agent_term <date>, agent_eff <date>
+#> # A tibble: 6 x 10
+#>   agent_name firm_id firm_name agent_status active_date badge_number firm_address phone_number
+#>   <chr>      <chr>   <chr>     <chr>        <date>      <chr>        <chr>        <chr>       
+#> 1 Kovach, S… 2502    Health P… A            2020-03-20  2502-3       901 Market … 215-991-4063
+#> 2 Pritchett… 2502    Health P… A            2020-03-13  2502-2       901 Market … 215-991-4063
+#> 3 Osborne, … 2503    Deloitte… A            2020-03-11  2503-1       30 N Third … 215-405-7715
+#> 4 Dick, And… 2504    Electrif… A            2020-05-26  2504-1       2003 Edmund… <NA>        
+#> 5 Head, Rob… 2505    Lockheed… A            2020-05-14  2505-2       2121 Crysta… <NA>        
+#> 6 Marrone, … 2505    Lockheed… A            2020-05-14  2505-1       2121 Crysta… <NA>        
+#> # … with 2 more variables: client_name <chr>, firm_fullname <chr>
 ```
 
 ### Missing
 
 ``` r
 col_stats(njl, count_na)
-#> # A tibble: 17 x 4
+#> # A tibble: 10 x 4
 #>    col           class      n        p
 #>    <chr>         <chr>  <int>    <dbl>
 #>  1 agent_name    <chr>      0 0       
@@ -256,17 +206,10 @@ col_stats(njl, count_na)
 #>  4 agent_status  <chr>      0 0       
 #>  5 active_date   <date>     0 0       
 #>  6 badge_number  <chr>      0 0       
-#>  7 firm_phone    <chr>   4826 0.0608  
-#>  8 client_name   <chr>     26 0.000327
-#>  9 firm_fullname <chr>     36 0.000453
-#> 10 agent_last    <chr>      0 0       
-#> 11 agent_id      <chr>      0 0       
-#> 12 firm_addr     <chr>     34 0.000428
-#> 13 firm_city     <chr>     33 0.000415
-#> 14 firm_state    <chr>     34 0.000428
-#> 15 firm_zip      <chr>     36 0.000453
-#> 16 agent_term    <date> 27551 0.347   
-#> 17 agent_eff     <date> 44431 0.559
+#>  7 firm_address  <chr>     36 0.000453
+#>  8 phone_number  <chr>   4826 0.0608  
+#>  9 client_name   <chr>     26 0.000327
+#> 10 firm_fullname <chr>     36 0.000453
 ```
 
 ``` r
@@ -308,7 +251,7 @@ njl <- flag_dupes(njl, everything())
 
 ``` r
 col_stats(njl, n_distinct)
-#> # A tibble: 18 x 4
+#> # A tibble: 11 x 4
 #>    col           class      n         p
 #>    <chr>         <chr>  <int>     <dbl>
 #>  1 agent_name    <chr>   4385 0.0552   
@@ -317,18 +260,11 @@ col_stats(njl, n_distinct)
 #>  4 agent_status  <chr>      2 0.0000252
 #>  5 active_date   <date>  2770 0.0349   
 #>  6 badge_number  <chr>   5188 0.0653   
-#>  7 firm_phone    <chr>   1751 0.0220   
-#>  8 client_name   <chr>   8500 0.107    
-#>  9 firm_fullname <chr>   2186 0.0275   
-#> 10 agent_last    <chr>   3168 0.0399   
-#> 11 agent_id      <chr>   5188 0.0653   
-#> 12 firm_addr     <chr>   2003 0.0252   
-#> 13 firm_city     <chr>    550 0.00692  
-#> 14 firm_state    <chr>     39 0.000491 
-#> 15 firm_zip      <chr>    846 0.0107   
-#> 16 agent_term    <date>  2207 0.0278   
-#> 17 agent_eff     <date>  1111 0.0140   
-#> 18 na_flag       <lgl>      2 0.0000252
+#>  7 firm_address  <chr>   2089 0.0263   
+#>  8 phone_number  <chr>   1751 0.0220   
+#>  9 client_name   <chr>   8500 0.107    
+#> 10 firm_fullname <chr>   2186 0.0275   
+#> 11 na_flag       <lgl>      2 0.0000252
 ```
 
 ### Dates
@@ -352,6 +288,28 @@ sum(njl$active_date > today())
 
 ## Wrangle
 
+First, we must `tidyr::separate()` the single `firm_address` variable
+into it’s component pieces.
+
+``` r
+njl <- njl %>% 
+  separate(
+    col = firm_address,
+    into = c("addr_sep", "city_sep", "state_zip"),
+    sep = "([:blank:]+)?,",
+    remove = FALSE,
+    extra = "merge",
+    fill = "left"
+  ) %>% 
+  separate(
+    col = state_zip,
+    into = c("state_sep", "zip_sep"),
+    sep = "\\s+(?=\\d)",
+    remove = TRUE,
+    extra = "merge"
+  )
+```
+
 To improve the searchability of the database, we will perform some
 consistent, confident string normalization. For geographic variables
 like city names and ZIP codes, the corresponding `campfin::normal_*()`
@@ -366,8 +324,8 @@ official USPS suffixes.
 ``` r
 njl <- mutate(
    .data = njl,
-   firm_addr_norm = normal_address(
-     address = firm_addr,
+   addr_norm = normal_address(
+     address = addr_sep,
      abbs = usps_street,
      na = invalid_city
    )
@@ -376,22 +334,22 @@ njl <- mutate(
 
 ``` r
 njl %>% 
-  select(contains("addr")) %>% 
+  select(addr_sep, addr_norm) %>% 
   distinct() %>% 
   sample_n(10)
 #> # A tibble: 10 x 2
-#>    firm_addr                      firm_addr_norm                
-#>    <chr>                          <chr>                         
-#>  1 511 Sea Girt Ave               511 SEA GIRT AVE              
-#>  2 162 West State Street          162 W STATE ST                
-#>  3 449 Sergeantsville Rd          449 SERGEANTSVILLE RD         
-#>  4 1204 Whitney Ave Apt 503       1204 WHITNEY AVE APT 503      
-#>  5 3126 Cloverly Dr               3126 CLOVERLY DR              
-#>  6 1 Glen Eagles Dr               1 GLN EAGLES DR               
-#>  7 3000 Arthur St NE              3000 ARTHUR ST NE             
-#>  8 2211 Whitehorse Mercerville Rd 2211 WHITEHORSE MERCERVILLE RD
-#>  9 1901 North Olden Ave  Ste 8    1901 N OLDEN AVE STE 8        
-#> 10 200 North Glebe Rd Ste 730     200 N GLEBE RD STE 730
+#>    addr_sep                   addr_norm               
+#>    <chr>                      <chr>                   
+#>  1 365 W Passaic St Suite 130 365 W PASSAIC ST STE 130
+#>  2 12 Forrest Ave.            12 FORREST AVE          
+#>  3 449 Sergeantsville Rd      449 SERGEANTSVILLE RD   
+#>  4 410 Essex Ave              410 ESSEX AVE           
+#>  5 3126 Cloverly Dr           3126 CLOVERLY DR        
+#>  6 20 Green Meadow Ln         20 GRN MDW LN           
+#>  7 PO Box 253                 PO BOX 253              
+#>  8 PO Box 280                 PO BOX 280              
+#>  9 550 Broad St  Ste 910      550 BROAD ST STE 910    
+#> 10 90 Bergen St Ste 5100      90 BERGEN ST STE 5100
 ```
 
 ### ZIP
@@ -403,8 +361,8 @@ returning leading zeroes dropped by other programs like Microsoft Excel.
 ``` r
 njl <- mutate(
   .data = njl,
-  firm_zip_norm = normal_zip(
-    zip = firm_zip,
+  zip_norm = normal_zip(
+    zip = zip_sep,
     na_rep = TRUE
   )
 )
@@ -412,15 +370,15 @@ njl <- mutate(
 
 ``` r
 progress_table(
-  njl$firm_zip,
-  njl$firm_zip_norm,
+  njl$zip_sep,
+  njl$zip_norm,
   compare = valid_zip
 )
 #> # A tibble: 2 x 6
-#>   stage         prop_in n_distinct  prop_na n_out n_diff
-#>   <chr>           <dbl>      <dbl>    <dbl> <dbl>  <dbl>
-#> 1 firm_zip        0.835        846 0.000453 13067    212
-#> 2 firm_zip_norm   1.00         688 0.000453    12      9
+#>   stage    prop_in n_distinct  prop_na n_out n_diff
+#>   <chr>      <dbl>      <dbl>    <dbl> <dbl>  <dbl>
+#> 1 zip_sep    0.835        847 0.000453 13068    213
+#> 2 zip_norm   1.00         689 0.000453    12      9
 ```
 
 ### State
@@ -431,8 +389,8 @@ Valid two digit state abbreviations can be made using the
 ``` r
 njl <- njl %>% 
   mutate(
-    firm_state_norm = normal_state(
-      state = firm_state,
+    state_norm = normal_state(
+      state = state_sep,
       abbreviate = TRUE,
       na_rep = TRUE,
       valid = valid_state
@@ -442,29 +400,29 @@ njl <- njl %>%
 
 ``` r
 njl %>% 
-  filter(firm_state != firm_state_norm) %>% 
-  count(firm_state, firm_state_norm, sort = TRUE)
+  filter(state_sep != state_norm) %>% 
+  count(state_sep, state_norm, sort = TRUE)
 #> # A tibble: 5 x 3
-#>   firm_state firm_state_norm     n
-#>   <chr>      <chr>           <int>
-#> 1 Va         VA                  7
-#> 2 De         DE                  3
-#> 3 Ca         CA                  1
-#> 4 Pa         PA                  1
-#> 5 Tx         TX                  1
+#>   state_sep state_norm     n
+#>   <chr>     <chr>      <int>
+#> 1 Va        VA             7
+#> 2 De        DE             3
+#> 3 Ca        CA             1
+#> 4 Pa        PA             1
+#> 5 Tx        TX             1
 ```
 
 ``` r
 progress_table(
-  njl$firm_state,
-  njl$firm_state_norm,
+  njl$state_sep,
+  njl$state_norm,
   compare = valid_state
 )
 #> # A tibble: 2 x 6
-#>   stage           prop_in n_distinct  prop_na n_out n_diff
-#>   <chr>             <dbl>      <dbl>    <dbl> <dbl>  <dbl>
-#> 1 firm_state         1.00         39 0.000428    13      6
-#> 2 firm_state_norm    1            34 0.000428     0      1
+#>   stage      prop_in n_distinct  prop_na n_out n_diff
+#>   <chr>        <dbl>      <dbl>    <dbl> <dbl>  <dbl>
+#> 1 state_sep    0.997         61 0.000453   258     28
+#> 2 state_norm   1             34 0.00354      0      1
 ```
 
 ### City
@@ -481,8 +439,8 @@ also remove `invalid_city` values.
 ``` r
 njl <- njl %>% 
   mutate(
-    firm_city_norm = normal_city(
-      city = firm_city, 
+    city_norm = normal_city(
+      city = city_sep, 
       abbs = usps_city,
       states = c("NJ", "DC", "NEW JERSEY"),
       na = invalid_city,
@@ -493,10 +451,10 @@ njl <- njl %>%
 
 #### Progress
 
-| stage            | prop\_in | n\_distinct | prop\_na | n\_out | n\_diff |
-| :--------------- | -------: | ----------: | -------: | -----: | ------: |
-| firm\_city)      |    0.996 |         547 |        0 |    355 |      46 |
-| firm\_city\_norm |    0.996 |         540 |        0 |    330 |      36 |
+| stage      | prop\_in | n\_distinct | prop\_na | n\_out | n\_diff |
+| :--------- | -------: | ----------: | -------: | -----: | ------: |
+| city\_sep) |    0.992 |         576 |    0.000 |    600 |      77 |
+| city\_norm |    0.993 |         559 |    0.001 |    571 |      57 |
 
 ## Conclude
 
@@ -506,36 +464,29 @@ and rename all added variables with the `_clean` suffix.
 ``` r
 njl <- njl %>% 
   rename_all(~str_replace(., "_norm", "_clean")) %>% 
-  rename_all(~str_remove(., "_raw"))
+  select(-ends_with("_sep"))
 ```
 
 ``` r
 glimpse(sample_n(njl, 20))
 #> Rows: 20
-#> Columns: 23
-#> $ agent_name       <chr> "Maer, William J", "Parlett, Elizabeth", "Fennessy, Conor", "Ryou, Patr…
-#> $ firm_id          <chr> "433", "551", "2114", "939", "721", "365", "1247", "1247", "1553", "75"…
-#> $ firm_name        <chr> "Public Strategies Impact LLC", "MWW Group", "Mercury Public Affairs", …
-#> $ agent_status     <chr> "A", "T", "A", "T", "T", "A", "T", "T", "T", "T", "A", "A", "A", "A", "…
-#> $ active_date      <date> 2003-09-26, 2004-09-07, 2014-10-01, 2006-05-24, 1991-09-12, 2003-09-10…
-#> $ badge_number     <chr> "433-18", "551-41", "2114-1", "939-30", "721-1", "365-18", "1247-10", "…
-#> $ firm_phone       <chr> "609-393-7799", NA, NA, "201-928-1100", "609-392-3100", "609-396-8838",…
-#> $ client_name      <chr> "University of Medicine and Dentistry of NJ", "NJ CURE/NJ PURE", "Carei…
-#> $ firm_fullname    <chr> "Public Strategies Impact LLC<br/>414 River View Plz  Trenton,NJ 08611-…
-#> $ agent_last       <chr> "Maer", "Parlett", "Fennessy", "Ryou", "Martin", "Gaburo", "Hodes", "Fr…
-#> $ agent_id         <chr> "2963", "2796", "4028", "6204", "3051", "2887", "5982", "5987", "6040",…
-#> $ firm_addr        <chr> "414 River View Plz", "222 West State St Suite 306", "222 W State St Su…
-#> $ firm_city        <chr> "Trenton", "Trenton", "Trenton", "Paramus", "Trenton", "Trenton", "Tren…
-#> $ firm_state       <chr> "NJ", "NJ", "NJ", "NJ", "NJ", "NJ", "NJ", "NJ", "NJ", "NJ", "NJ", "NJ",…
-#> $ firm_zip         <chr> "08611-3420", "08608", "08608", "07652", "08608", "08608", "08611", "08…
-#> $ agent_term       <date> NA, 2005-07-19, NA, 2009-11-12, 2018-04-23, NA, 2003-09-17, 2003-07-10…
-#> $ agent_eff        <date> NA, 2005-07-01, NA, 2009-11-03, 2017-12-31, NA, NA, NA, 2007-11-16, NA…
-#> $ na_flag          <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, F…
-#> $ year             <dbl> 2003, 2004, 2014, 2006, 1991, 2003, 2001, 2001, 2006, 1994, 2016, 2003,…
-#> $ firm_addr_clean  <chr> "414 RIV VW PLZ", "222 W STATE ST STE 306", "222 W STATE ST STE 301", "…
-#> $ firm_zip_clean   <chr> "08611", "08608", "08608", "07652", "08608", "08608", "08611", "08611",…
-#> $ firm_state_clean <chr> "NJ", "NJ", "NJ", "NJ", "NJ", "NJ", "NJ", "NJ", "NJ", "NJ", "NJ", "NJ",…
-#> $ firm_city_clean  <chr> "TRENTON", "TRENTON", "TRENTON", "PARAMUS", "TRENTON", "TRENTON", "TREN…
+#> Columns: 16
+#> $ agent_name    <chr> "Maer, William J", "Parlett, Elizabeth", "Fennessy, Conor", "Ryou, Patrici…
+#> $ firm_id       <chr> "433", "551", "2114", "939", "721", "365", "1247", "1247", "1553", "75", "…
+#> $ firm_name     <chr> "Public Strategies Impact LLC", "MWW Group", "Mercury Public Affairs", "De…
+#> $ agent_status  <chr> "A", "T", "A", "T", "T", "A", "T", "T", "T", "T", "A", "A", "A", "A", "T",…
+#> $ active_date   <date> 2003-09-26, 2004-09-07, 2014-10-01, 2006-05-24, 1991-09-12, 2003-09-10, 2…
+#> $ badge_number  <chr> "433-18", "551-41", "2114-1", "939-30", "721-1", "365-18", "1247-10", "124…
+#> $ firm_address  <chr> "414 River View Plz  ,Trenton,NJ 08611-3420", "222 West State St Suite 306…
+#> $ phone_number  <chr> "609-393-7799", NA, NA, "201-928-1100", "609-392-3100", "609-396-8838", "6…
+#> $ client_name   <chr> "University of Medicine and Dentistry of NJ", "NJ CURE/NJ PURE", "Careingt…
+#> $ firm_fullname <chr> "Public Strategies Impact LLC<br/>414 River View Plz  Trenton,NJ 08611-342…
+#> $ na_flag       <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALS…
+#> $ year          <dbl> 2003, 2004, 2014, 2006, 1991, 2003, 2001, 2001, 2006, 1994, 2016, 2003, 20…
+#> $ addr_clean    <chr> "414 RIV VW PLZ", "222 W STATE ST STE 306", "222 W STATE ST STE 301", "61 …
+#> $ zip_clean     <chr> "08611", "08608", "08608", "07652", "08608", "08608", "08611", "08611", "0…
+#> $ state_clean   <chr> "NJ", "NJ", "NJ", "NJ", "NJ", "NJ", "NJ", "NJ", "NJ", "NJ", "NJ", "NJ", "N…
+#> $ city_clean    <chr> "TRENTON", "TRENTON", "TRENTON", "PARAMUS", "TRENTON", "TRENTON", "TRENTON…
 ```
 
 1.  There are 79,427 records in the database.
@@ -557,7 +508,7 @@ clean_dir <- dir_create(here("nj", "lobby", "data", "clean"))
 clean_path <- path(clean_dir, "nj_lobby_clean.csv")
 write_csv(njl, clean_path, na = "")
 file_size(clean_path)
-#> 22.3M
+#> 20.7M
 file_encoding(clean_path) %>% 
   mutate(across(path, path.abbrev))
 #> # A tibble: 1 x 3
@@ -585,28 +536,21 @@ if (require(duckr)) {
 
 The following table describes the variables in our final exported file:
 
-| Column             | Type        | Definition                        |
-| :----------------- | :---------- | :-------------------------------- |
-| `agent_name`       | `character` | Lobbyist full name                |
-| `firm_id`          | `character` | Unique firm ID                    |
-| `firm_name`        | `character` | Firm name                         |
-| `agent_status`     | `character` | A = active, T = terminated        |
-| `active_date`      | `double`    | Date lobbyist became active       |
-| `badge_number`     | `character` | Lobbyist badge number             |
-| `firm_phone`       | `character` | Firm telephone number             |
-| `client_name`      | `character` | Client entity name                |
-| `firm_fullname`    | `character` | Firm full name (w/ address)       |
-| `agent_last`       | `character` | Agent last name                   |
-| `agent_id`         | `character` | Unique agent ID                   |
-| `firm_addr`        | `character` | Firm business address             |
-| `firm_city`        | `character` | Firm business city                |
-| `firm_state`       | `character` | Firm business state               |
-| `firm_zip`         | `character` | Firm business ZIP code            |
-| `agent_term`       | `double`    | Agent date terminated             |
-| `agent_eff`        | `double`    | Agent termination effective       |
-| `na_flag`          | `logical`   | Flag indicating missing variable  |
-| `year`             | `double`    | Calendar year lobbyist active     |
-| `firm_addr_clean`  | `character` | Normalized firm business address  |
-| `firm_zip_clean`   | `character` | Normalized firm business city     |
-| `firm_state_clean` | `character` | Normalized firm business state    |
-| `firm_city_clean`  | `character` | Normalized firm business ZIP code |
+| Column          | Type        | Definition                        |
+| :-------------- | :---------- | :-------------------------------- |
+| `agent_name`    | `character` | Lobbyist full name                |
+| `firm_id`       | `character` | Unique firm ID                    |
+| `firm_name`     | `character` | Firm name                         |
+| `agent_status`  | `character` | A = active, T = terminated        |
+| `active_date`   | `double`    | Date lobbyist became active       |
+| `badge_number`  | `character` | Lobbyist badge number             |
+| `firm_address`  | `character` | Full firm address                 |
+| `phone_number`  | `character` | Firm telephone number             |
+| `client_name`   | `character` | Client entity name                |
+| `firm_fullname` | `character` | Firm full name (w/ address)       |
+| `na_flag`       | `logical`   | Flag indicating missing variable  |
+| `year`          | `double`    | Calendar year lobbyist active     |
+| `addr_clean`    | `character` | Normalized firm business address  |
+| `zip_clean`     | `character` | Normalized firm business city     |
+| `state_clean`   | `character` | Normalized firm business state    |
+| `city_clean`    | `character` | Normalized firm business ZIP code |
