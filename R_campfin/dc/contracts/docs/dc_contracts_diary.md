@@ -1,7 +1,7 @@
 District Of Columbia Contracts
 ================
 Kiernan Nicholls
-2020-05-11 13:09:35
+2020-05-28 12:04:29
 
   - [Project](#project)
   - [Objectives](#objectives)
@@ -9,6 +9,7 @@ Kiernan Nicholls
   - [Data](#data)
   - [Read](#read)
   - [Explore](#explore)
+  - [Wrangle](#wrangle)
   - [Conclude](#conclude)
   - [Export](#export)
   - [Dictionary](#dictionary)
@@ -403,6 +404,15 @@ sum(dcc$date > today(), na.rm = TRUE)
 
 ![](../plots/bar_year-1.png)<!-- -->
 
+## Wrangle
+
+There are no geographic variables, but we can add a 2-digit state
+abbreviation for the spending agency.
+
+``` r
+dcc <- mutate(dcc, state = "DC", .after = agency)
+```
+
 ## Conclude
 
 1.  There are 154,293 records in the database.
@@ -425,15 +435,12 @@ clean_dir <- dir_create(here("dc", "contracts", "data", "clean"))
 clean_path <- path(clean_dir, "dc_contracts_clean.csv")
 write_csv(dcc, clean_path, na = "")
 file_size(clean_path)
-#> 19.3M
-```
-
-The encoding of the exported file should be UTF-8 or ASCII.
-
-``` r
-enc <- system2("file", args = paste("-i", clean_path), stdout = TRUE)
-str_replace_all(enc, clean_path, basename)
-#> [1] "dc_contracts_clean.csv: application/csv; charset=utf-8"
+#> 19.7M
+mutate(file_encoding(clean_path), across(path, path.abbrev))
+#> # A tibble: 1 x 3
+#>   path                                             mime            charset
+#>   <chr>                                            <chr>           <chr>  
+#> 1 ~/dc/contracts/data/clean/dc_contracts_clean.csv application/csv utf-8
 ```
 
 ## Dictionary
@@ -446,17 +453,18 @@ The following table describes the variables in our final exported file:
 | `id`            | `character`   | TRUE  | Unique contract number                             |
 | `title`         | `character`   | TRUE  | Contract title                                     |
 | `agency`        | `character`   | TRUE  | Awarding agency name                               |
+| `state`         | `character`   | FALSE | Awarding agency state location                     |
 | `option_period` | `character`   | FALSE | Option period awarded                              |
 | `start_date`    | `double`      | FALSE | Contract start date                                |
-| `end_date`      | `double`      | FALSE | Contract end date                                  |
+| `end_date`      | `double`      | TRUE  | Contract end date                                  |
 | `date`          | `double`      | TRUE  | Contract awarded date, purchase made date          |
 | `nigp_code`     | `character`   | TRUE  | National Institute of Governmental Purchasing code |
 | `vendor`        | `character`   | TRUE  | Recipient vendor name                              |
-| `amount`        | `double`      | TRUE  | Contract amount awarded, total purchase amount     |
-| `fiscal_year`   | `character`   | FALSE | Purchase order fiscal year                         |
+| `amount`        | `double`      | FALSE | Contract amount awarded, total purchase amount     |
+| `fiscal_year`   | `character`   | NA    | Purchase order fiscal year                         |
 | `na_flag`       | `logical`     | NA    | Flag for missing date, amount, or name             |
 | `dupe_flag`     | `logical`     | NA    | Flag for completely duplicated record              |
-| `year`          | `double`      | NA    | Calendar year contract awarded                     |
+| `year`          | `double`      | TRUE  | Calendar year contract awarded                     |
 
 ``` r
 write_lines(

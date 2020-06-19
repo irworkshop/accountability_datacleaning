@@ -318,6 +318,15 @@ dcc %>%
   )
 ```
 
+## Wrangle
+
+There are no geographic variables, but we can add a 2-digit state abbreviation
+for the spending agency. 
+
+```{r state_add}
+dcc <- mutate(dcc, state = "DC", .after = agency)
+```
+
 ## Conclude
 
 1. There are `r comma(nrow(dcc))` records in the database.
@@ -336,13 +345,7 @@ clean_dir <- dir_create(here("dc", "contracts", "data", "clean"))
 clean_path <- path(clean_dir, "dc_contracts_clean.csv")
 write_csv(dcc, clean_path, na = "")
 file_size(clean_path)
-```
-
-The encoding of the exported file should be UTF-8 or ASCII.
-
-```{r clean_encode}
-enc <- system2("file", args = paste("-i", clean_path), stdout = TRUE)
-str_replace_all(enc, clean_path, basename)
+mutate(file_encoding(clean_path), across(path, path.abbrev))
 ```
 
 ## Dictionary
@@ -362,6 +365,7 @@ dict_raw <- tibble(
     "Unique contract number",
     "Contract title",
     "Awarding agency name",
+    "Awarding agency state location",
     "Option period awarded",
     "Contract start date",
     "Contract end date",

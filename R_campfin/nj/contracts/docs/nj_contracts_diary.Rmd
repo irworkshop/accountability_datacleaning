@@ -1,0 +1,676 @@
+---
+title: "New Jersey Contracts"
+author: "Kiernan Nicholls"
+date: "`r Sys.time()`"
+output:
+  github_document: 
+    df_print: tibble
+    toc: true
+    toc_dept: 2
+editor_options: 
+  chunk_output_type: console
+---
+
+<!-- Place comments regarding knitting here -->
+
+```{r setup, include=FALSE, purl=FALSE}
+library(knitr)
+opts_chunk$set(
+  eval = TRUE,
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  error = FALSE,
+  collapse = TRUE,
+  comment = "#>",
+  fig.path = "../plots/",
+  fig.width = 10,
+  dpi = 300
+)
+if (!interactive()) {
+  options(width = 99)
+  set.seed(5)
+}
+```
+
+```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
+doc_dir <- fs::dir_create(here::here("nj", "contracts", "docs"))
+```
+
+## Project
+
+The Accountability Project is an effort to cut across data silos and give
+journalists, policy professionals, activists, and the public at large a simple
+way to search across huge volumes of public data about people and organizations.
+
+Our goal is to standardizing public data on a few key fields by thinking of each
+dataset row as a transaction. For each transaction there should be (at least) 3
+variables:
+
+1. All **parties** to a transaction.
+2. The **date** of the transaction.
+3. The **amount** of money involved.
+
+## Objectives
+
+This document describes the process used to complete the following objectives:
+
+1. How many records are in the database?
+1. Check for entirely duplicated records.
+1. Check ranges of continuous variables.
+1. Is there anything blank or missing?
+1. Check for consistency issues.
+1. Create a five-digit ZIP Code called `zip`.
+1. Create a `year` field from the transaction date.
+1. Make sure there is data on both parties to a transaction.
+
+## Packages
+
+The following packages are needed to collect, manipulate, visualize, analyze,
+and communicate these results. The `pacman` package will facilitate their
+installation and attachment.
+
+The IRW's `campfin` package will also have to be installed from GitHub. This
+package contains functions custom made to help facilitate the processing of
+campaign finance data.
+
+```{r load_packages, message=FALSE, warning=FALSE, error=FALSE}
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load_gh("irworkshop/campfin")
+pacman::p_load(
+  tidyverse, # data manipulation
+  lubridate, # datetime strings
+  tabulizer, # read pdf tables
+  gluedown, # printing markdown
+  magrittr, # pipe operators
+  janitor, # clean data frames
+  refinr, # cluster and merge
+  scales, # format strings
+  knitr, # knit documents
+  vroom, # read files fast
+  rvest, # html scraping
+  glue, # combine strings
+  here, # relative paths
+  httr, # http requests
+  fs # local storage 
+)
+```
+
+This document should be run as part of the `R_campfin` project, which lives as a
+sub-directory of the more general, language-agnostic
+[`irworkshop/accountability_datacleaning`][tap] GitHub repository.
+
+The `R_campfin` project uses the [RStudio projects][rproj] feature and should be
+run as such. The project also uses the dynamic `here::here()` tool for file
+paths relative to _your_ machine.
+
+```{r where_here}
+# where does this document knit?
+here::here()
+```
+
+[tap]: https://github.com/irworkshop/accountability_datacleaning
+[rproj]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects
+
+## Data
+
+Data was provided by the [New Jersey Office of the State Comptroller][compt] via
+[an open records request][req] filed by MuckRock News, under to the New Jersey
+Open Public Records Act, on behalf of the Investigative Reporting Workshop.
+
+The data was provided to MuckRock in the form of a single PDF file that was
+then hosted on their website for download.
+
+[compt]: https://www.nj.gov/comptroller/
+[req]: https://www.muckrock.com/foi/new-jersey-229/state-contracts-office-of-the-state-comptroller-91636/
+
+## Download
+
+We can download the PDF data from MuckRock for processing.
+
+```{r raw_download}
+raw_dir <- dir_create(here("nj", "contracts", "data", "raw"))
+pdf_url <- "https://cdn.muckrock.com/foia_files/2020/05/08/Morisy_Response.pdf"
+pdf_path <- path(raw_dir, basename(pdf_url))
+download.file(pdf_url, pdf_path)
+```
+
+## Read
+
+Reading this data is not a very simple process. There are three different table
+formats in the single PDF file:
+
+1. 14-column, whitespace separated table on pages 1 through 9
+2. 13-column, cell border separated table on pages 10 through 27
+3. 15-column, cell border separated table on pages 28 through 65
+
+The three table types take up different dimensions on the page. We can use
+[Tabula](https://tabula.technology/) to identify the tables on the PDF pages
+and convert them to CSV files that can be easily read as data frames and 
+combined into a single file.
+
+### Table 1
+
+For the first table, we will use the `tabulizer` package to extract the
+whitespace separated tables as a CSV file.
+
+```{r t1_extract}
+t1_dir <- dir_create(path_temp("t1"))
+extract_tables(
+  file = pdf_path,
+  pages = 1:9,
+  guess = TRUE,
+  output = "tsv",
+  method = "stream",
+  outdir = t1_dir
+)
+```
+
+The table extraction results in `r length(dir_ls(t1_dir))` CSV files.
+
+```{r t1_list}
+t1_paths <- dir_ls(t1_dir)
+md_list(md_code(t1_paths))
+```
+
+These CSV files can be read as data frames in a list. By reading each data frame
+without column headers, we can then convert the initial row to a single header
+and combined the subsequent data frame list elements.
+
+```{r t1_read}
+t1 <- t1_paths %>% 
+  map_df(
+    read_tsv,
+    col_names = FALSE,
+    col_types = cols(.default = "c")
+  ) %>% 
+  row_to_names(row_number = 1) %>% 
+  clean_names(case = "snake") %>% 
+  type_convert(
+    col_types = cols(
+      .default = col_character(),
+      creation_date = col_date("%m/%d/%y"),
+      budget_fiscal_year = col_integer(),
+      quantity = col_number(),
+      unit_price_amount = col_number()
+    )
+  )
+```
+
+```{r t1_rename, echo=FALSE}
+t1 <- rename(
+  .data = t1,
+  fy = budget_fiscal_year,
+  date = creation_date,
+  po = purchase_order_number,
+  vendor = vendor_name,
+  contact = vendor_contact,
+  addr = address_line_1,
+  state = state_code,
+  zip = zip_code,
+  price = unit_price_amount,
+  line = order_line_number,
+  desc1 = order_line_description1,
+  desc2 = order_line_description2
+)
+```
+
+```{r t1_head}
+head(t1)
+```
+
+### Table 2
+
+Table two is in a different structure, with columns not in a fixed position
+separated by whitespace but rather contained within a cell border line. We can
+extract these tables using Tabula's "lattice" method.
+
+```{r t2_extract}
+t2_dir <- dir_create(path_temp("t2"))
+extract_tables(
+  file = pdf_path,
+  pages = 10:27,
+  guess = TRUE,
+  output = "tsv",
+  method = "lattice",
+  outdir = t2_dir
+)
+```
+
+```{r t2_list}
+t2_paths <- dir_ls(t2_dir)
+```
+
+```{r t2_read}
+t2 <- t2_paths %>% 
+  map(
+    read_tsv, 
+    col_names = FALSE, 
+    col_types = cols(.default = "c")
+  ) %>% 
+  map(remove_empty, "cols") %>% 
+  map_df(set_names, LETTERS[1:13]) %>% 
+  row_to_names(row_number = 1) %>% 
+  clean_names("snake") %>% 
+  type_convert(
+    col_types = cols(
+      .default = col_character(),
+      sent_date = col_date("%b %d, %Y"),
+      quantity = col_number(),
+      unit_cost = col_number()
+    )
+  )
+```
+
+```{r t2_rename, echo=FALSE}
+t2 <- t2 %>% 
+  select(
+    -org_name,
+    -department_name
+  ) %>% 
+  rename(
+    po = po_number,
+    date = sent_date,
+    desc1 = item_description,
+    price = unit_cost,
+    vendor = vendor_name,
+    id = vendor_nbr,
+    addr = address_line_1
+  )
+```
+
+```{r t2_head}
+head(t2)
+```
+
+### Table 3
+
+```{r t3_extract}
+t3_dir <- dir_create(path_temp("t3"))
+extract_tables(
+  file = pdf_path,
+  pages = 28:65,
+  guess = TRUE,
+  output = "tsv",
+  method = "lattice",
+  outdir = t3_dir
+)
+```
+
+```{r t3_list}
+t3_paths <- dir_ls(t3_dir)
+```
+
+```{r t3_read}
+t3 <- t3_paths %>% 
+  map_df(
+    read_tsv,
+    col_names = FALSE,
+    col_types = cols(.default = "c")
+  ) %>% 
+  row_to_names(row_number = 1) %>% 
+  clean_names(case = "snake") %>% 
+  mutate(across(
+    .cols = where(is.character), 
+    .fns = ~str_replace(., "\r", " ")
+  )) %>% 
+  type_convert(
+    col_types = cols(
+      .default = col_character(),
+      sent_date = col_date("%b %d, %Y"),
+      quantity = col_number(),
+      unit_cost = col_number()
+    )
+  )
+```
+
+```{r t3_rename, echo=FALSE}
+t3 <- t3 %>% 
+  select(
+    -org_name,
+    -department_name
+  ) %>% 
+  rename(
+    po = po_number,
+    date = sent_date,
+    desc1 = item_description,
+    price = unit_cost,
+    vendor = vendor_name,
+    id = vendor_nbr,
+    addr = address_line_1,
+    contact = contact_name,
+    email = email_address
+  )
+```
+
+```{r t3_head}
+head(t3)
+```
+
+### Bind
+
+Once each of the table types is read into separate data frames, we can bind them
+all into a single data frame once column names are aligned.
+
+```{r raw_bind}
+njc <- bind_rows(
+  a = t1,
+  b = t2,
+  c = t3,
+  .id = "type"
+)
+```
+
+```{r raw_case}
+njc <- mutate(
+  .data = njc,
+  across(
+  .cols = where(is.character),
+  .fns = str_to_upper
+  )
+)
+```
+
+The three tables stem from format changes between years.
+
+```{r raw_year_count}
+count(njc, type, year = year(date))
+```
+
+Once bound together, the differences between existing columns creates some
+columns filled with `NA` values for those records belonging to a table type
+without said column.
+
+## Explore
+
+```{r glimpse}
+glimpse(njc)
+tail(njc)
+```
+
+### Missing
+
+The only missing values stem from the column differences so no individual
+records need to be flagged.
+
+```{r na_count}
+col_stats(njc, count_na)
+```
+
+### Duplicates
+
+There are no duplicate records.
+
+```{r dupe_flag, warning=TRUE}
+njc <- flag_dupes(njc, everything())
+```
+
+### Categorical
+
+```{r distinct_count}
+col_stats(njc, n_distinct)
+```
+
+```{r distinct_plots}
+explore_plot(njc, type)
+explore_plot(njc, vendor) + scale_x_truncate()
+```
+
+### Amounts
+
+```{r ammount_summary}
+summary(njc$price)
+mean(njc$price <= 0)
+```
+
+Most contracts are for items with a relatively low unit price.
+
+```{r hist_amount, echo=FALSE}
+njc %>%
+  ggplot(aes(price)) +
+  geom_histogram(fill = dark2["purple"]) +
+  scale_y_continuous(labels = comma) +
+  scale_x_continuous(
+    breaks = c(1 %o% 10^(0:6)),
+    labels = dollar,
+    trans = "log10"
+  ) +
+  labs(
+    title = "New Jersey Contracts Amount Distribution",
+    caption = "Source: NJ Comptroller",
+    x = "Amount",
+    y = "Count"
+  )
+```
+
+```{r amount_max}
+glimpse(njc[which.max(njc$price),])
+```
+
+### Dates
+
+We can add the calendar year from `date` with `lubridate::year()`
+
+```{r date_year}
+njc <- mutate(njc, year = year(date))
+```
+
+```{r date_range}
+min(njc$date)
+sum(njc$year < 2000)
+max(njc$date)
+sum(njc$date > today())
+```
+
+```{r bar_year, echo=FALSE}
+njc %>% 
+  count(year) %>% 
+  mutate(even = is_even(year)) %>% 
+  ggplot(aes(x = year, y = n)) +
+  geom_col(fill = dark2["purple"]) + 
+  scale_fill_brewer(palette = "Dark2") +
+  scale_y_continuous(labels = comma) +
+  scale_x_continuous(breaks = 2015:2020) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "New Jersey Contracts by Year",
+    caption = "Source: NJ Comptroller",
+    x = "Year Made",
+    y = "Count"
+  )
+```
+
+## Wrangle
+
+To improve the searchability of the database, we will perform some consistent,
+confident string normalization. For geographic variables like city names and
+ZIP codes, the corresponding `campfin::normal_*()` functions are tailor made to 
+facilitate this process.
+
+### Address
+
+For the street `addresss` variable, the `campfin::normal_address()` function
+will force consistence case, remove punctuation, and abbreviate official 
+USPS suffixes.
+
+```{r address_norm}
+njc <- mutate(
+  .data = njc,
+  addr_norm = normal_address(
+    address = addr,
+    abbs = usps_street,
+    na_rep = TRUE
+  )
+)
+```
+
+```{r address_view}
+njc %>% 
+  select(starts_with("addr")) %>% 
+  distinct() %>% 
+  sample_n(10)
+```
+
+### ZIP
+
+The ZIP code does not need to be normalized.
+
+```{r zip_check}
+percent(prop_in(njc$zip, valid_zip))
+```
+
+### State
+
+Only one small change needs to be made to the `state` variable.
+
+```{r state_check}
+percent(prop_in(njc$state, valid_state), 0.001)
+```
+
+```{r state_compare}
+njc %>% 
+  filter(state %out% valid_state) %>% 
+  count(state, zip) %>% 
+  left_join(zipcodes, by = "zip")
+```
+
+```{r state_fix}
+njc <- mutate(njc, across(state, str_remove_all, "\\s"))
+percent(prop_in(njc$state, valid_state), 0.001)
+```
+
+### City
+
+The `campfin::normal_city()` function is a good start, again converting case,
+removing punctuation, but _expanding_ USPS abbreviations. We can also remove
+`invalid_city` values.
+
+```{r city_pre}
+many_city <- c(valid_city, extra_city)
+percent(prop_in(njc$city, many_city), 0.01)
+```
+
+```{r city_norm}
+njc <- mutate(
+  .data = njc,
+  city_norm = normal_city(
+    city = city, 
+    abbs = usps_city,
+    states = c("NJ", "DC", "NEW JERSEY"),
+    na = invalid_city,
+    na_rep = TRUE
+  )
+)
+```
+
+```{r city_out_count}
+njc %>% 
+  filter(city_norm %out% many_city) %>% 
+  count(city_norm, state, zip, sort = TRUE)
+```
+
+```{r city_replace}
+njc <- mutate(
+  .data = njc,
+  city_norm = city_norm %>% 
+    str_replace("^NY$", "NEW YORK") %>% 
+    str_replace("(?<=\\s)PA$", "PARK") %>% 
+    str_replace("(?<=\\s)VL$", "VALLEY") %>% 
+    str_replace("(?<=\\s)LAK$", "LAKE") %>% 
+    str_replace("^SOMSERSET$", "SOMERSET")
+)
+```
+
+```{r city_post}
+percent(prop_in(njc$city_norm, many_city), 0.01)
+```
+
+## Conclude
+
+Before exporting, we can remove the intermediary normalization columns and
+rename all added variables with the `_clean` suffix.
+
+```{r clean_select}
+njc <- rename_all(njc, ~str_replace(., "_norm", "_clean"))
+```
+
+```{r clean_glimpse}
+glimpse(sample_n(njc, 20))
+```
+
+1. There are `r comma(nrow(njc))` records in the database.
+1. There are `r comma(sum(njc$dupe_flag))` duplicate records in the database.
+1. The range and distribution of `price` and `date` seem reasonable.
+1. There are `r comma(sum(njc$na_flag))` records missing key variables.
+1. Consistency in geographic data has been improved with `campfin::normal_*()`.
+1. The 4-digit `year` variable has been created with `lubridate::year()`.
+
+## Export
+
+Now the file can be saved on disk for upload to the Accountability server.
+
+```{r clean_dir}
+clean_dir <- dir_create(here("nj", "contracts", "data", "clean"))
+clean_path <- path(clean_dir, "nj_contracts_clean.csv")
+write_csv(njc, clean_path, na = "")
+file_size(clean_path)
+file_encoding(clean_path)
+```
+
+## Upload
+
+Using the [duckr] R package, we can wrap around the [duck] command line tool to
+upload the file to the IRW server.
+
+[duckr]: https://github.com/kiernann/duckr
+[duck]: https://duck.sh/
+
+```{r clean_upload, eval=FALSE}
+# remotes::install_github("kiernann/duckr")
+s3_dir <- "s3:/publicaccountability/csv/"
+s3_path <- path(s3_dir, basename(clean_path))
+if (require(duckr)) {
+  duckr::duck_upload(clean_path, s3_path)
+}
+```
+
+## Dictionary
+
+The following table describes the variables in our final exported file:
+
+```{r dict_make, echo=FALSE}
+dict_raw <- tibble(
+  var = md_code(names(njc)),
+  type = md_code(map_chr(njc, typeof)),
+  def = c(
+    "PDF Table type (year format)",
+    "Fiscal year",
+    "Date sent or created",
+    "Purchase order number",
+    "Vendor name",
+    "Vendor contact name",
+    "Vendor street address",
+    "Vendor city name",
+    "Vendor state abbreviation",
+    "Vendor state 5-digit ZIP code",
+    "Quantity of item purchased",
+    "Unit price of item",
+    "Order item line number",
+    "Item description",
+    "Secondary description",
+    "Unique vendor ID",
+    "Vendor contact email",
+    "Calendar year of purchase",
+    "Normalized street address",
+    "Normalized city name"
+  )
+)
+```
+
+```{r dict_md, echo=FALSE}
+(dict_md <- kable(
+  x = dict_raw,
+  format = "markdown",
+  col.names = c("Column", "Type", "Definition")
+))
+```

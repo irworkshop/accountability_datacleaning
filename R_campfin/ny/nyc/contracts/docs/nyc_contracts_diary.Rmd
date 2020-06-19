@@ -220,6 +220,12 @@ nyc %>%
   sample_n(20)
 ```
 
+We can also add "NY" as the state for spending agencies.
+
+```{r state_add}
+nyc <- mutate(nyc, agency_state = "NY", .after = agency_name)
+```
+
 ## Explore
 
 ```{r glimpse}
@@ -337,18 +343,23 @@ glimpse(sample_n(nyc, 20))
 1. There are `r comma(nrow(nyc))` records in the database.
 1. There are `r comma(sum(nyc$dupe_flag))` duplicate records in the database.
 1. The range and distribution of amount and dates seem mostly reasonable.
+1. Geographic variables were extracted from a single string or added manually.
 1. The 4-digit `year` variable has been created with `lubridate::year()`.
 
 ```{r clean_write}
 clean_dir <- dir_create(here("nyc", "contracts", "data", "clean"))
 clean_path <- path(clean_dir, "nyc_contracts_clean.csv")
 write_csv(nyc, path = clean_path, na = "")
-```
-
-## Encoding
-
-```{r check_encoding}
 file_size(clean_path)
-guess_encoding(clean_path)
+file_encoding(clean_path)
 ```
 
+## Upload
+
+```{r clean_upload}
+s3_dir <- "s3:/publicaccountability/csv/"
+s3_url <- path(s3_dir, basename(clean_path))
+if (require(duckr)) {
+  duckr::duck_upload(clean_path, s3_url)
+}
+```

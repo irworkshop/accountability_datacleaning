@@ -1,5 +1,0 @@
-/home/kiernan/Code/accountability_datacleaning/R_campfin/us/contracts/data/raw/FY2020_All_Contracts_Full_20200514_1.csv
-/home/kiernan/Code/accountability_datacleaning/R_campfin/us/contracts/data/raw/FY2020_All_Contracts_Full_20200514_2.csv
-/home/kiernan/Code/accountability_datacleaning/R_campfin/us/contracts/data/raw/FY2020_All_Contracts_Full_20200514_3.csv
-/home/kiernan/Code/accountability_datacleaning/R_campfin/us/contracts/data/raw/FY(All)_All_Contracts_Delta_20200514_1.csv
-/home/kiernan/Code/accountability_datacleaning/R_campfin/us/contracts/data/raw/FY(All)_All_Contracts_Delta_20200514_2.csv

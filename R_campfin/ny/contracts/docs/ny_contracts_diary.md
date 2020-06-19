@@ -1,7 +1,7 @@
 New York Contracts
 ================
 Kiernan Nicholls
-2020-04-02 11:16:25
+2020-05-28 13:27:56
 
   - [Project](#project)
   - [Objectives](#objectives)
@@ -9,8 +9,9 @@ Kiernan Nicholls
   - [Data](#data)
   - [Import](#import)
   - [Explore](#explore)
+  - [Wrangle](#wrangle)
   - [Export](#export)
-  - [Encoding](#encoding)
+  - [Upload](#upload)
 
 <!-- Place comments regarding knitting here -->
 
@@ -100,7 +101,7 @@ feature and should be run as such. The project also uses the dynamic
 ``` r
 # where does this document knit?
 here::here()
-#> [1] "/home/kiernan/Code/accountability_datacleaning/us_spending"
+#> [1] "/home/kiernan/Code/accountability_datacleaning/R_campfin"
 ```
 
 ## Data
@@ -209,15 +210,15 @@ tail(nyc)
 glimpse(sample_n(nyc, 20))
 #> Rows: 20
 #> Columns: 9
-#> $ type        <chr> "Amendment", "Original", "Original", "Amendment", "Amendm…
-#> $ vendor      <chr> "PLEASANTVILLE VILLAGE OF", "BUFFALO NIAGARA WATERKEEPER …
-#> $ department  <chr> "Department of Transportation", "Department of State", "D…
-#> $ contract    <chr> "D009785", "C007112", "C035427", "C031218", "C004158", "L…
-#> $ amount      <dbl> 16224.00, 550000.00, 6173.00, 100000.00, 125000.00, 58246…
-#> $ start       <date> NA, 2012-06-25, 2017-01-01, NA, NA, 2013-05-15, NA, NA, …
-#> $ end         <date> 2015-06-30, 2014-06-24, 2021-12-31, NA, NA, 2022-06-30, …
-#> $ description <chr> "SNOW & ICE EXTENSION FOR THE 2014/2015 SEASON", "Local W…
-#> $ approved    <date> 2013-09-11, 2012-10-15, 2018-09-28, 2018-09-05, 2013-05-…
+#> $ type        <chr> "Amendment", "Original", "Original", "Amendment", "Origin…
+#> $ vendor      <chr> "PHILIPS NORTH AMERICA LLC", "BUFFALO CITY OF", "FUND FOR…
+#> $ department  <chr> "Office of General Services - Purchasing (P) Contracts", …
+#> $ contract    <chr> "PC64282", "D033949", "C490041", "C009056", "CM100205AB",…
+#> $ amount      <dbl> 0.00, 44000.00, 200000.00, 0.00, 2845266.67, 300000.00, 0…
+#> $ start       <date> NA, 2012-12-11, 2012-07-01, NA, 2018-02-01, 2014-03-25, …
+#> $ end         <date> 2013-11-30, 2013-12-31, 2013-06-30, 2014-11-21, 2023-09-…
+#> $ description <chr> "Renewal", "City of Buffalo Bridge Bearing Replacement an…
+#> $ approved    <date> 2012-10-24, 2013-02-06, 2013-01-04, 2014-07-08, 2018-03-…
 ```
 
 The only variables missing from any records are the `start` and `end`
@@ -233,8 +234,8 @@ col_stats(nyc, count_na)
 #> 3 department  <chr>      0 0    
 #> 4 contract    <chr>      0 0    
 #> 5 amount      <dbl>      0 0    
-#> 6 start       <date> 88796 0.565
-#> 7 end         <date> 25430 0.162
+#> 6 start       <date> 89725 0.565
+#> 7 end         <date> 25946 0.164
 #> 8 description <chr>      0 0    
 #> 9 approved    <date>     0 0
 ```
@@ -276,16 +277,16 @@ col_stats(nyc, n_distinct)
 #> # A tibble: 10 x 4
 #>    col         class      n         p
 #>    <chr>       <chr>  <int>     <dbl>
-#>  1 type        <chr>      3 0.0000191
-#>  2 vendor      <chr>  19787 0.126    
-#>  3 department  <chr>    298 0.00190  
-#>  4 contract    <chr>  72799 0.463    
-#>  5 amount      <dbl>  81676 0.520    
-#>  6 start       <date>  3905 0.0249   
-#>  7 end         <date>  5587 0.0356   
-#>  8 description <chr>  80518 0.513    
-#>  9 approved    <date>  3384 0.0215   
-#> 10 dupe_flag   <lgl>      2 0.0000127
+#>  1 type        <chr>      3 0.0000189
+#>  2 vendor      <chr>  19877 0.125    
+#>  3 department  <chr>    298 0.00188  
+#>  4 contract    <chr>  73274 0.462    
+#>  5 amount      <dbl>  82511 0.520    
+#>  6 start       <date>  3938 0.0248   
+#>  7 end         <date>  5614 0.0354   
+#>  8 description <chr>  81453 0.513    
+#>  9 approved    <date>  3425 0.0216   
+#> 10 dupe_flag   <lgl>      2 0.0000126
 ```
 
 ``` r
@@ -294,7 +295,7 @@ explore_plot(nyc, type)
 
 ![](../plots/bar-type-1.png)<!-- -->
 
-#### Amounts
+### Amounts
 
 ``` r
 enframe(map_chr(summary(nyc$amount), dollar))
@@ -302,15 +303,15 @@ enframe(map_chr(summary(nyc$amount), dollar))
 #>   name    value          
 #>   <chr>   <chr>          
 #> 1 Min.    -$3,275,535,265
-#> 2 1st Qu. $300           
-#> 3 Median  $81,300        
-#> 4 Mean    $4,046,549     
+#> 2 1st Qu. $287.10        
+#> 3 Median  $81,461.61     
+#> 4 Mean    $4,019,577     
 #> 5 3rd Qu. $350,000       
 #> 6 Max.    $24,448,378,431
 mean(nyc$amount <= 0)
-#> [1] 0.2452464
+#> [1] 0.2453301
 median(nyc$amount)
-#> [1] 81300
+#> [1] 81461.61
 ```
 
 Here is the largest contract.
@@ -333,7 +334,7 @@ glimpse(nyc[which.min(nyc$amount), ])
 
 ![](../plots/hist_amount-1.png)<!-- -->
 
-#### Dates
+### Dates
 
 We can add a 4 digit `year` variable taken from the approval date.
 
@@ -348,35 +349,45 @@ the records begin.
 min(nyc$approved)
 #> [1] "1986-05-10"
 mean(nyc$year < 2012)
-#> [1] 0.01782406
+#> [1] 0.01764602
 max(nyc$approved)
-#> [1] "2020-03-30"
+#> [1] "2020-05-26"
 sum(nyc$approved > today())
 #> [1] 0
 ```
 
 ![](../plots/bar_year-1.png)<!-- -->
 
+## Wrangle
+
+There are no geographic variables, but we can add a 2-digit state
+abbreviation for the spending agency.
+
+``` r
+nyc <- mutate(nyc, state = "NY", .after = department)
+```
+
 ## Export
 
 ``` r
 glimpse(sample_n(nyc, 20))
 #> Rows: 20
-#> Columns: 11
-#> $ type        <chr> "Original", "Original", "Original", "Original", "Original…
-#> $ vendor      <chr> "TOMPKINS COUNTY OF", "SHARAN BUILDERS INC", "POWER LINE …
-#> $ department  <chr> "Department of Transportation", "Office of General Servic…
-#> $ contract    <chr> "K07306GG", "DEC607C", "D214270", "C024529", "C16031GG", …
-#> $ amount      <dbl> 134503.00, 75000.00, 215212.00, 874359.00, 119468.00, 485…
-#> $ start       <date> 2017-09-01, 2014-04-01, 2013-11-20, 2014-01-01, 2016-08-…
-#> $ end         <date> 2027-09-11, 2014-07-30, 2014-10-31, 2018-12-31, 2017-07-…
-#> $ description <chr> "CONTINUOUS AVIATION SYSTEM", "REPAIR STUCCO IN DANGER OF…
-#> $ approved    <date> 2018-02-09, 2014-05-12, 2013-11-20, 2014-05-20, 2017-02-…
+#> Columns: 12
+#> $ type        <chr> "Amendment", "Amendment", "Original", "Original", "Amendm…
+#> $ vendor      <chr> "H&L CONTRACTING LLC", "THOMAS NOVELLI CONTRACTING CORP",…
+#> $ department  <chr> "Department of Transportation", "Office of Parks Recreati…
+#> $ state       <chr> "NY", "NY", "NY", "NY", "NY", "NY", "NY", "NY", "NY", "NY…
+#> $ contract    <chr> "D263752", "D005228", "C40603GG", "D027456", "D034650", "…
+#> $ amount      <dbl> 16485.66, 99400.00, 300500.00, 100000.00, -2.72, 300000.0…
+#> $ start       <date> NA, NA, 2014-12-16, 2006-06-01, NA, 2016-04-01, 2008-05-…
+#> $ end         <date> NA, NA, 2019-12-15, 2011-12-31, 2016-11-15, 2018-03-31, …
+#> $ description <chr> "CO#4 Cut and Weld Existing Cover Plates", "CO#1 Sanitary…
+#> $ approved    <date> 2019-06-10, 2018-03-16, 2015-06-12, 2013-07-18, 2016-11-…
 #> $ dupe_flag   <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, F…
-#> $ year        <dbl> 2018, 2014, 2013, 2014, 2017, 2012, 2017, 2016, 2012, 201…
+#> $ year        <dbl> 2019, 2018, 2015, 2013, 2016, 2016, 2012, 2013, 2014, 201…
 ```
 
-1.  There are 157,091 records in the database.
+1.  There are 158,676 records in the database.
 2.  There are 12 duplicate records in the database.
 3.  The range and distribution of `amount` and `date` seem mostly
     reasonable.
@@ -387,21 +398,25 @@ glimpse(sample_n(nyc, 20))
 
 ``` r
 clean_dir <- dir_create(here("ny", "contracts", "data", "clean"))
-```
-
-``` r
-clean_path <- path(clean_dir, "ny_contribs_clean.csv")
-write_csv(nyc, path = clean_path, na = "")
-```
-
-## Encoding
-
-``` r
+clean_path <- path(clean_dir, "ny_contracts_clean.csv")
+write_csv(nyc, clean_path, na = "")
 file_size(clean_path)
-#> 24.9M
-guess_encoding(clean_path)
-#> # A tibble: 1 x 2
-#>   encoding confidence
-#>   <chr>         <dbl>
-#> 1 ASCII             1
+#> 25.6M
+mutate(file_encoding(clean_path), across(path, path.abbrev))
+#> # A tibble: 1 x 3
+#>   path                                             mime            charset 
+#>   <chr>                                            <chr>           <chr>   
+#> 1 ~/ny/contracts/data/clean/ny_contracts_clean.csv application/csv us-ascii
+```
+
+## Upload
+
+``` r
+s3_dir <- "s3:/publicaccountability/csv/"
+if (require(duckr)) {
+  duckr::duck_upload(
+    url = path(s3_dir, basename(clean_path)),
+    path = clean_path
+  )
+}
 ```
