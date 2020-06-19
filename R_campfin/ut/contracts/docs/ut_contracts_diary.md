@@ -1,7 +1,7 @@
 Utah Contracts
 ================
 Kiernan Nicholls
-2020-06-19 11:15:20
+2020-06-19 11:25:25
 
   - [Project](#project)
   - [Objectives](#objectives)
@@ -196,7 +196,7 @@ glimpse(utc)
 #> $ type            <int> 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, …
 #> $ contract_name   <chr> "810; Wesco", "810; Wesco", "To Provide 336 Trafic Control Cabinets & Co…
 #> $ contract_number <chr> "139505", "139505", "139687", "139687", "MA142", "149554", "MA1822", "MA…
-#> $ deptartment     <chr> "Dept of Transportation", "Dept of Transportation", "Dept of Transportat…
+#> $ department      <chr> "Dept of Transportation", "Dept of Transportation", "Dept of Transportat…
 #> $ agency          <chr> "DOT Construction Management", "DOT Construction Management", "DOT Const…
 #> $ division        <chr> "DOT Federal Construction - New", "DOT Federal Construction - New", "DOT…
 #> $ category        <chr> "Capital Expenditure", "Capital Expenditure", "Capital Expenditure", "Ca…
@@ -216,7 +216,7 @@ tail(utc)
 #> 5 5565… 2017-05-04 2.77e3            11 45586           2017 PRC81017650000… Traffic Ma… DO810…
 #> 6 5565… 2017-05-04 1.25e2            11 45586           2017 PRC41017000000… Clothing &… DO410…
 #> # … with 12 more variables: type <int>, contract_name <chr>, contract_number <chr>,
-#> #   deptartment <chr>, agency <chr>, division <chr>, category <chr>, subcategory <chr>,
+#> #   department <chr>, agency <chr>, division <chr>, category <chr>, subcategory <chr>,
 #> #   fund1 <chr>, fund2 <chr>, vendor_id <chr>, vendor_name <chr>
 ```
 
@@ -242,7 +242,7 @@ col_stats(utc, count_na)
 #> 10 type            <int>      0 0     
 #> 11 contract_name   <chr>      0 0     
 #> 12 contract_number <chr>      0 0     
-#> 13 deptartment     <chr>      0 0     
+#> 13 department      <chr>      0 0     
 #> 14 agency          <chr>      0 0     
 #> 15 division        <chr>      0 0     
 #> 16 category        <chr>      0 0     
@@ -336,7 +336,7 @@ col_stats(utc, n_distinct)
 #> 10 type            <int>        1 0.000000728
 #> 11 contract_name   <chr>    39846 0.0290     
 #> 12 contract_number <chr>    33742 0.0246     
-#> 13 deptartment     <chr>       39 0.0000284  
+#> 13 department      <chr>       39 0.0000284  
 #> 14 agency          <chr>      243 0.000177   
 #> 15 division        <chr>      848 0.000618   
 #> 16 category        <chr>       10 0.00000728 
@@ -414,7 +414,7 @@ glimpse(utc[which.max(utc$amount), ])
 #> $ type            <int> 1
 #> $ contract_name   <chr> "063 LEGISLATURE APPROVAL BLDG HAFB PERSONNELMIDA"
 #> $ contract_number <chr> "161806"
-#> $ deptartment     <chr> "Governor's Office of Economic Development"
+#> $ department      <chr> "Governor's Office of Economic Development"
 #> $ agency          <chr> "GOV ED Pass Through"
 #> $ division        <chr> "GOV ED Pass Through"
 #> $ category        <chr> "Other Charges/Pass Through"
@@ -439,7 +439,7 @@ glimpse(utc[which.min(utc$amount), ])
 #> $ type            <int> 1
 #> $ contract_name   <chr> "400   Waterford Institute, Inc.   (Amd #9)"
 #> $ contract_number <chr> "096300"
-#> $ deptartment     <chr> "Utah State Board of Education"
+#> $ department      <chr> "Utah State Board of Education"
 #> $ agency          <chr> "PED Initiative Programs"
 #> $ division        <chr> "PED Upstart Early Childhood Education"
 #> $ category        <chr> "Current Expense"
@@ -546,4 +546,4 @@ The following table describes the variables in our final exported file:
 | `type`            | `integer`   | Contract type (all 1)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | `contract_name`   | `character` | Contract name                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | `contract_number` | `character` | Contract number                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| `deptartment`     | `character` | Spending department (`org1)              \| \|`state`\|`character`\|Spending state (all UT)                  \| \|`agency`\|`character`\|Spending agency (`org2`)                 \| \|`division`\|`character`\|Spending division/use (`org3`)           \| \|`category`\|`character`\|Contract category (`cat1`)               \| \|`subcategory`\|`character`\|Contract subcategory (`cat2`)            \| \|`fund1`\|`character`\|Contract fund source (`fund1`)           \| \|`fund2`\|`character`\|Contract fund secondary source (`fund2`) \| \|`vendor\_id`\|`character`\|Unique vendor ID                         \| \|`vendor\_name`\|`character`\|Vendor name                              \| \|`dupe\_flag`\|`logical`\|Flag indicating duplicate record         \| \|`year`\|`double\` |
+| `department`      | `character` | Spending department (`org1)              \| \|`state`\|`character`\|Spending state (all UT)                  \| \|`agency`\|`character`\|Spending agency (`org2`)                 \| \|`division`\|`character`\|Spending division/use (`org3`)           \| \|`category`\|`character`\|Contract category (`cat1`)               \| \|`subcategory`\|`character`\|Contract subcategory (`cat2`)            \| \|`fund1`\|`character`\|Contract fund source (`fund1`)           \| \|`fund2`\|`character`\|Contract fund secondary source (`fund2`) \| \|`vendor\_id`\|`character`\|Unique vendor ID                         \| \|`vendor\_name`\|`character`\|Vendor name                              \| \|`dupe\_flag`\|`logical`\|Flag indicating duplicate record         \| \|`year`\|`double\` |

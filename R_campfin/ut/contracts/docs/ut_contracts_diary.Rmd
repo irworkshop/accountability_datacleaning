@@ -174,7 +174,7 @@ utc <- utc %>%
   select(-fiscal_period_date, -cat3) %>% 
   rename(
     date = posting_date,
-    deptartment = org1,
+    department = org1,
     agency = org2,
     division = org3,
     category = cat1,
@@ -265,7 +265,7 @@ flush_memory()
 ```
 
 ```{r distinct_plots, echo=FALSE}
-explore_plot(utc, deptartment) + scale_x_truncate()
+explore_plot(utc, department) + scale_x_truncate()
 explore_plot(utc, agency) + scale_x_truncate()
 explore_plot(utc, category) + scale_x_truncate()
 explore_plot(utc, subcategory) + scale_x_truncate()
