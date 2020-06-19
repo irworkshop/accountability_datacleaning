@@ -119,6 +119,10 @@ was originally uploaded September 12, 2018 and last updated on December 15, \
 2019. The Open Data [data file][odf] has the cryptic title "Latest 6 Years" and
 no additional metadata.
 
+After contacting the Division of Purchasing, it was explained that this file
+actually contains almost all payments made by the state accounting system, 
+including biweekly payroll, jury duty compensation, etc.
+
 [utdp]: https://purchasing.utah.gov/
 [odp]: https://opendata.utah.gov
 [odf]: https://opendata.utah.gov/dataset/Latest-6-Years/545s-5tnq
@@ -178,11 +182,16 @@ utc <- utc %>%
   )
 ```
 
-```{r raw_sample, eval=FALSE}
-if (interactive()) {
-  utc <- sample_frac(utc, size = 0.05)
-  flush_memory()
-}
+After reading the entire file, we can filter out any records not directly
+related to contracts using the `contract_name` and `vendor_name` values.
+After this filter, most rows are removed and we are left only with valid
+contracts, most of which have a `vendor_name`.
+
+```{r raw_filter}
+nrow(utc)
+utc <- filter(utc, !is.na(contract_name))
+count(utc, vendor_name, sort = TRUE)
+nrow(utc)
 ```
 
 ## Explore
@@ -194,17 +203,11 @@ tail(utc)
 
 ### Missing
 
-If a column is missing any values, it seems to be missing _most_ values.
+After this filter, we are left with very few records missing any key values.
 
 ```{r na_count}
 col_stats(utc, count_na)
 ```
-
-Since we included "Not Applicable" as a true `NA` value when reading the file,
-around `r percent(prop_na(utc$vendor_name))` of `vendor_name` values are
-missing.
-
-There is no need to flag the records in these variables.
 
 ### Duplicates
 
@@ -212,64 +215,37 @@ Flagging duplicates in a file this size requires breaking the data frame into
 chunks and writing the duplicate rows to a local file.
 
 ```{r dupe_flag}
-dupe_file <- here("ut", "contracts", "dupes.txt")
-dupe_tar <- here("ut", "contracts", "dupes.tar.xz")
-if (!(file_exists(dupe_file) | file_exists(dupe_tar))) {
-  file_create(dupe_file)
-  n <- 1e5 # rows per chunk
-  nr <- nrow(utc)
-  # split file into chunks
-  uts <- utc %>% 
-    select(-ends_with("id")) %>% 
-    split(rep(1:ceiling(nr/n), each = n, length.out = nr))
-  pb <- txtProgressBar(0, length(uts), style = 3)
-  for (i in seq_along(uts)) {
-    # check dupes from both ends
-    d <- as.integer(duplicated(uts[[i]], fromLast = TRUE))
-    # append to disk
-    write_lines(d, dupe_file, append = TRUE)
-    uts[[i]] <- NA
-    setTxtProgressBar(pb, i)
-    Sys.sleep(10)
-    flush_memory()
-  }
-  rm(uts)
+dupe_file <- file_temp(ext = "txt")
+n <- 1e5 # rows per chunk
+nr <- nrow(utc)
+# split file into chunks
+uts <- utc %>% 
+  select(-ends_with("id")) %>% 
+  split(rep(1:ceiling(nr/n), each = n, length.out = nr))
+pb <- txtProgressBar(0, length(uts), style = 3)
+for (i in seq_along(uts)) {
+  # check dupes from both ends
+  d <- as.integer(duplicated(uts[[i]], fromLast = TRUE))
+  # append to disk
+  write_lines(d, dupe_file, append = TRUE)
+  uts[[i]] <- NA
+  setTxtProgressBar(pb, i)
+  Sys.sleep(10)
+  flush_memory()
 }
+rm(uts)
 ```
-
-We can greatly compress this external text file indicating duplicate rows.
-
-```{r dupe_tar, eval=FALSE}
-if (!file_exists(dupe_tar)) {
-  tar(
-    tarfile = dupe_tar,
-    files = dupe_file,
-    compression = "xz",
-    compression_level = 9,
-    tar = "tar"
-  )
-  file_delete(dupe_file)
-}
-```
-
-And then delete the uncompressed text file.
 
 This local file can be read, checked, and added as a new variable if needed.
 
 ```{r dupe_read}
-dupes <- read_lines(dupe_tar)
-dupes[1] <- "0"
-dupes <- as.logical(as.integer(dupes[-length(dupes)]))
-if (sum(dupes, na.rm = TRUE) > 1) {
-  percent(mean(dupes), 0.1)
-  utc <- mutate(utc, dupe_flag = dupes)
-  utc %>% 
-    filter(dupe_flag) %>% 
-    select(id, date, agency, amount, vendor_name)
-} else {
-  file_delete(dupe_file)
-  message("no duplicates")
-}
+dupes <- as.logical(as.integer(read_lines(dupe_file)))
+percent(mean(dupes), 0.1)
+utc <- mutate(utc, dupe_flag = dupes)
+utc %>% 
+  filter(dupe_flag) %>% 
+  select(id, date, agency, amount, vendor_name) %>% 
+  arrange(date)
 rm(dupes)
 ```
 

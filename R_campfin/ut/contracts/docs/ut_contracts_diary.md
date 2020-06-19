@@ -1,7 +1,7 @@
 Utah Contracts
 ================
 Kiernan Nicholls
-2020-06-09 14:24:08
+2020-06-19 11:15:20
 
   - [Project](#project)
   - [Objectives](#objectives)
@@ -104,6 +104,10 @@ originally uploaded September 12, 2018 and last updated on December
 file](https://opendata.utah.gov/dataset/Latest-6-Years/545s-5tnq) has
 the cryptic title “Latest 6 Years” and no additional metadata.
 
+After contacting the Division of Purchasing, it was explained that this
+file actually contains almost all payments made by the state accounting
+system, including biweekly payroll, jury duty compensation, etc.
+
 ## Read
 
 The data file is large and must be downloaded before it can be read.
@@ -146,50 +150,71 @@ utc <- vroom(
 )
 ```
 
+After reading the entire file, we can filter out any records not
+directly related to contracts using the `contract_name` and
+`vendor_name` values. After this filter, most rows are removed and we
+are left only with valid contracts, most of which have a `vendor_name`.
+
 ``` r
-if (interactive()) {
-  utc <- sample_frac(utc, size = 0.05)
-  flush_memory()
-}
+nrow(utc)
+#> [1] 29160793
+utc <- filter(utc, !is.na(contract_name))
+count(utc, vendor_name, sort = TRUE)
+#> # A tibble: 8,115 x 2
+#>    vendor_name                        n
+#>    <chr>                          <int>
+#>  1 NICHOLAS  &  COMPANY           55952
+#>  2 W W GRAINGER INC               44336
+#>  3 OFFICE DEPOT BSD INC           38577
+#>  4 WCEC ENGINEERS INC             34909
+#>  5 <NA>                           32168
+#>  6 Superior Service Transport Inc 29528
+#>  7 SKAGGS COMPANIES INC           21925
+#>  8 ENTERPRISE RENT A CAR          20166
+#>  9 VERIZON WIRELESS               20118
+#> 10 G & K SERVICES INC             18345
+#> # … with 8,105 more rows
+nrow(utc)
+#> [1] 1373119
 ```
 
 ## Explore
 
 ``` r
 glimpse(utc)
-#> Rows: 29,160,793
+#> Rows: 1,373,119
 #> Columns: 21
-#> $ id              <chr> "556564208", "556564210", "556564211", "556564213", "556564215", "556564…
+#> $ id              <chr> "556564211", "556564213", "556564304", "556564306", "556564312", "556564…
 #> $ date            <date> 2017-05-04, 2017-05-04, 2017-05-04, 2017-05-04, 2017-05-04, 2017-05-04,…
-#> $ amount          <dbl> 164.00, 34.27, 9.82, 135.18, 33.60, 5990.65, 232.40, 807.04, 2709.96, 42…
+#> $ amount          <dbl> 9.82, 135.18, 836.09, 11513.91, 13.38, 560.00, 7718.49, 183.97, 7178.61,…
 #> $ fiscal_period   <int> 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, …
 #> $ batch_id        <chr> "45586", "45586", "45586", "45586", "45586", "45586", "45586", "45586", …
 #> $ fiscal_year     <int> 2017, 2017, 2017, 2017, 2017, 2017, 2017, 2017, 2017, 2017, 2017, 2017, …
-#> $ entity_trans_id <chr> "GAX27017P400000003033-27011", "GAX27017P400000003033-21011", "PRC810176…
-#> $ description     <chr> "Professional & Technical Services-Medical", "Professional & Technical S…
-#> $ ref_id          <chr> NA, NA, "DO810170411000015602-111", "DO810170411000015602-111", NA, NA, …
+#> $ entity_trans_id <chr> "PRC810176500000000599-1111", "PRC810176500000000599-1111", "PRC81017650…
+#> $ description     <chr> "Traffic Management Systems", "Traffic Management Systems", "Traffic Man…
+#> $ ref_id          <chr> "DO810170411000015602-111", "DO810170411000015602-111", "DO8101704030000…
 #> $ type            <int> 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, …
-#> $ contract_name   <chr> NA, NA, "810; Wesco", "810; Wesco", NA, NA, NA, NA, NA, NA, NA, NA, NA, …
-#> $ contract_number <chr> NA, NA, "139505", "139505", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
-#> $ deptartment     <chr> "Dept of Health", "Dept of Health", "Dept of Transportation", "Dept of T…
-#> $ agency          <chr> "DOH Disease Control & Prevention", "DOH Disease Control & Prevention", …
-#> $ division        <chr> "Health Promotion", "Health Promotion", "DOT Federal Construction - New"…
-#> $ category        <chr> "Current Expense", "Current Expense", "Capital Expenditure", "Capital Ex…
-#> $ subcategory     <chr> "Services", "Services", "Infrastructures", "Infrastructures", "Special D…
-#> $ fund1           <chr> "General Fund", "General Fund", "Special Revenue Fund", "Special Revenue…
-#> $ fund2           <chr> "(GF) General Fund Unrestricted", "(GF) General Fund Unrestricted", "(DO…
-#> $ vendor_id       <chr> "5564280", "5564280", "507591", "507591", "375969", "466165", "466165", …
-#> $ vendor_name     <chr> "SUMMIT PHYSICIAN SPECIALISTS", "SUMMIT PHYSICIAN SPECIALISTS", "WESCO D…
+#> $ contract_name   <chr> "810; Wesco", "810; Wesco", "To Provide 336 Trafic Control Cabinets & Co…
+#> $ contract_number <chr> "139505", "139505", "139687", "139687", "MA142", "149554", "MA1822", "MA…
+#> $ deptartment     <chr> "Dept of Transportation", "Dept of Transportation", "Dept of Transportat…
+#> $ agency          <chr> "DOT Construction Management", "DOT Construction Management", "DOT Const…
+#> $ division        <chr> "DOT Federal Construction - New", "DOT Federal Construction - New", "DOT…
+#> $ category        <chr> "Capital Expenditure", "Capital Expenditure", "Capital Expenditure", "Ca…
+#> $ subcategory     <chr> "Infrastructures", "Infrastructures", "Infrastructures", "Infrastructure…
+#> $ fund1           <chr> "Special Revenue Fund", "Special Revenue Fund", "Special Revenue Fund", …
+#> $ fund2           <chr> "(DOT) Transportation Fund Unrestricted", "(DOT) Transportation Fund Unr…
+#> $ vendor_id       <chr> "507591", "507591", "475297", "475297", "376773", "672731", "452727", "4…
+#> $ vendor_name     <chr> "WESCO DISTRIBUTION INC", "WESCO DISTRIBUTION INC", "ECONOLITE CONTROL P…
 tail(utc)
 #> # A tibble: 6 x 21
 #>   id    date       amount fiscal_period batch_id fiscal_year entity_trans_id description ref_id
 #>   <chr> <date>      <dbl>         <int> <chr>          <int> <chr>           <chr>       <chr> 
-#> 1 5565… 2017-05-04 1.49e3            11 45586           2017 PRC56017550000… Other Cont… PO560…
-#> 2 5565… 2017-05-04 2.05e4            11 45586           2017 GAX81017640000… Trust & Ag… <NA>  
-#> 3 5565… 2017-05-04 3.72e1            11 45586           2017 GAX27017P40000… Profession… <NA>  
-#> 4 5565… 2017-05-04 3.44e1            11 45586           2017 GAX27017P40000… Profession… <NA>  
-#> 5 5565… 2017-05-04 3.95e1            11 45586           2017 GAX27017P40000… Profession… <NA>  
-#> 6 5565… 2017-05-04 3.95e1            11 45586           2017 GAX27017P40000… Profession… <NA>  
+#> 1 5565… 2017-05-04 2.34e2            11 45586           2017 PRC41017000000… Clothing &… DO410…
+#> 2 5565… 2017-05-04 7.00e1            11 45586           2017 PRC41017000000… Clothing &… DO410…
+#> 3 5565… 2017-05-04 3.24e5            11 45586           2017 PRC55017000000… Infrastruc… -00   
+#> 4 5565… 2017-05-04 2.01e2            11 45586           2017 PRC81017650000… Traffic Ma… DO810…
+#> 5 5565… 2017-05-04 2.77e3            11 45586           2017 PRC81017650000… Traffic Ma… DO810…
+#> 6 5565… 2017-05-04 1.25e2            11 45586           2017 PRC41017000000… Clothing &… DO410…
 #> # … with 12 more variables: type <int>, contract_name <chr>, contract_number <chr>,
 #> #   deptartment <chr>, agency <chr>, division <chr>, category <chr>, subcategory <chr>,
 #> #   fund1 <chr>, fund2 <chr>, vendor_id <chr>, vendor_name <chr>
@@ -197,40 +222,36 @@ tail(utc)
 
 ### Missing
 
-If a column is missing any values, it seems to be missing *most* values.
+After this filter, we are left with very few records missing any key
+values.
 
 ``` r
 col_stats(utc, count_na)
 #> # A tibble: 21 x 4
-#>    col             class         n            p
-#>    <chr>           <chr>     <int>        <dbl>
-#>  1 id              <chr>         0 0           
-#>  2 date            <date>        0 0           
-#>  3 amount          <dbl>         0 0           
-#>  4 fiscal_period   <int>         0 0           
-#>  5 batch_id        <chr>         0 0           
-#>  6 fiscal_year     <int>         0 0           
-#>  7 entity_trans_id <chr>         0 0           
-#>  8 description     <chr>         0 0           
-#>  9 ref_id          <chr>   9981655 0.342       
-#> 10 type            <int>         0 0           
-#> 11 contract_name   <chr>  27787674 0.953       
-#> 12 contract_number <chr>  27473613 0.942       
-#> 13 deptartment     <chr>         0 0           
-#> 14 agency          <chr>         0 0           
-#> 15 division        <chr>         2 0.0000000686
-#> 16 category        <chr>         0 0           
-#> 17 subcategory     <chr>         0 0           
-#> 18 fund1           <chr>         0 0           
-#> 19 fund2           <chr>         0 0           
-#> 20 vendor_id       <chr>         0 0           
-#> 21 vendor_name     <chr>  22764076 0.781
+#>    col             class      n      p
+#>    <chr>           <chr>  <int>  <dbl>
+#>  1 id              <chr>      0 0     
+#>  2 date            <date>     0 0     
+#>  3 amount          <dbl>      0 0     
+#>  4 fiscal_period   <int>      0 0     
+#>  5 batch_id        <chr>      0 0     
+#>  6 fiscal_year     <int>      0 0     
+#>  7 entity_trans_id <chr>      0 0     
+#>  8 description     <chr>      0 0     
+#>  9 ref_id          <chr>  88261 0.0643
+#> 10 type            <int>      0 0     
+#> 11 contract_name   <chr>      0 0     
+#> 12 contract_number <chr>      0 0     
+#> 13 deptartment     <chr>      0 0     
+#> 14 agency          <chr>      0 0     
+#> 15 division        <chr>      0 0     
+#> 16 category        <chr>      0 0     
+#> 17 subcategory     <chr>      0 0     
+#> 18 fund1           <chr>      0 0     
+#> 19 fund2           <chr>      0 0     
+#> 20 vendor_id       <chr>      0 0     
+#> 21 vendor_name     <chr>  32168 0.0234
 ```
-
-Since we included “Not Applicable” as a true `NA` value when reading the
-file, around 78% of `vendor_name` values are missing.
-
-There is no need to flag the records in these variables.
 
 ### Duplicates
 
@@ -238,80 +259,55 @@ Flagging duplicates in a file this size requires breaking the data frame
 into chunks and writing the duplicate rows to a local file.
 
 ``` r
-dupe_file <- here("ut", "contracts", "dupes.txt")
-dupe_tar <- here("ut", "contracts", "dupes.tar.xz")
-if (!(file_exists(dupe_file) | file_exists(dupe_tar))) {
-  file_create(dupe_file)
-  n <- 1e5 # rows per chunk
-  nr <- nrow(utc)
-  # split file into chunks
-  uts <- utc %>% 
-    select(-ends_with("id")) %>% 
-    split(rep(1:ceiling(nr/n), each = n, length.out = nr))
-  pb <- txtProgressBar(0, length(uts), style = 3)
-  for (i in seq_along(uts)) {
-    # check dupes from both ends
-    d <- as.integer(duplicated(uts[[i]], fromLast = TRUE))
-    # append to disk
-    write_lines(d, dupe_file, append = TRUE)
-    uts[[i]] <- NA
-    setTxtProgressBar(pb, i)
-    Sys.sleep(10)
-    flush_memory()
-  }
-  rm(uts)
+dupe_file <- file_temp(ext = "txt")
+n <- 1e5 # rows per chunk
+nr <- nrow(utc)
+# split file into chunks
+uts <- utc %>% 
+  select(-ends_with("id")) %>% 
+  split(rep(1:ceiling(nr/n), each = n, length.out = nr))
+pb <- txtProgressBar(0, length(uts), style = 3)
+#>   |                                                                                                 |                                                                                         |   0%
+for (i in seq_along(uts)) {
+  # check dupes from both ends
+  d <- as.integer(duplicated(uts[[i]], fromLast = TRUE))
+  # append to disk
+  write_lines(d, dupe_file, append = TRUE)
+  uts[[i]] <- NA
+  setTxtProgressBar(pb, i)
+  Sys.sleep(10)
+  flush_memory()
 }
+#>   |                                                                                                 |======                                                                                   |   7%  |                                                                                                 |=============                                                                            |  14%  |                                                                                                 |===================                                                                      |  21%  |                                                                                                 |=========================                                                                |  29%  |                                                                                                 |================================                                                         |  36%  |                                                                                                 |======================================                                                   |  43%  |                                                                                                 |============================================                                             |  50%  |                                                                                                 |===================================================                                      |  57%  |                                                                                                 |=========================================================                                |  64%  |                                                                                                 |================================================================                         |  71%  |                                                                                                 |======================================================================                   |  79%  |                                                                                                 |============================================================================             |  86%  |                                                                                                 |===================================================================================      |  93%  |                                                                                                 |=========================================================================================| 100%
+rm(uts)
 ```
-
-We can greatly compress this external text file indicating duplicate
-rows.
-
-``` r
-if (!file_exists(dupe_tar)) {
-  tar(
-    tarfile = dupe_tar,
-    files = dupe_file,
-    compression = "xz",
-    compression_level = 9,
-    tar = "tar"
-  )
-  file_delete(dupe_file)
-}
-```
-
-And then delete the uncompressed text file.
 
 This local file can be read, checked, and added as a new variable if
 needed.
 
 ``` r
-dupes <- read_lines(dupe_tar)
-dupes[1] <- "0"
-dupes <- as.logical(as.integer(dupes[-length(dupes)]))
-if (sum(dupes, na.rm = TRUE) > 1) {
-  percent(mean(dupes), 0.1)
-  utc <- mutate(utc, dupe_flag = dupes)
-  utc %>% 
-    filter(dupe_flag) %>% 
-    select(id, date, agency, amount, vendor_name)
-} else {
-  file_delete(dupe_file)
-  message("no duplicates")
-}
-#> # A tibble: 3,583,984 x 5
-#>    id        date       agency                           amount vendor_name                 
-#>    <chr>     <date>     <chr>                             <dbl> <chr>                       
-#>  1 556564233 2017-05-04 DOH Disease Control & Prevention   39.5 SUMMIT PHYSICIAN SPECIALISTS
-#>  2 556564235 2017-05-04 DOH Disease Control & Prevention   39.5 SUMMIT PHYSICIAN SPECIALISTS
-#>  3 556564237 2017-05-04 DOH Disease Control & Prevention   37.2 SUMMIT PHYSICIAN SPECIALISTS
-#>  4 556564239 2017-05-04 DOH Disease Control & Prevention   37.2 SUMMIT PHYSICIAN SPECIALISTS
-#>  5 556564264 2017-05-04 DOH Disease Control & Prevention   37.2 SUMMIT PHYSICIAN SPECIALISTS
-#>  6 556564266 2017-05-04 DOH Disease Control & Prevention   34.4 SUMMIT PHYSICIAN SPECIALISTS
-#>  7 556564268 2017-05-04 DOH Disease Control & Prevention   39.5 SUMMIT PHYSICIAN SPECIALISTS
-#>  8 556564269 2017-05-04 DOH Disease Control & Prevention   49.0 SUMMIT PHYSICIAN SPECIALISTS
-#>  9 556564271 2017-05-04 DOH Disease Control & Prevention   35.0 SUMMIT PHYSICIAN SPECIALISTS
-#> 10 556564273 2017-05-04 DOH Disease Control & Prevention   49.0 SUMMIT PHYSICIAN SPECIALISTS
-#> # … with 3,583,974 more rows
+dupes <- as.logical(as.integer(read_lines(dupe_file)))
+percent(mean(dupes), 0.1)
+#> [1] "13.8%"
+utc <- mutate(utc, dupe_flag = dupes)
+utc %>% 
+  filter(dupe_flag) %>% 
+  select(id, date, agency, amount, vendor_name) %>% 
+  arrange(date)
+#> # A tibble: 189,189 x 5
+#>    id       date       agency                            amount vendor_name                        
+#>    <chr>    <date>     <chr>                              <dbl> <chr>                              
+#>  1 2242711… 2013-07-01 DOH Executive Director             6873. R & R INDUSTRIAL PARK LC           
+#>  2 2242716… 2013-07-01 DOH Executive Director             6873. R & R INDUSTRIAL PARK LC           
+#>  3 2242716… 2013-07-01 DOH Executive Director             6873. R & R INDUSTRIAL PARK LC           
+#>  4 2242711… 2013-07-01 DOH Executive Director             6873. R & R INDUSTRIAL PARK LC           
+#>  5 2242716… 2013-07-01 DOH Executive Director             6873. R & R INDUSTRIAL PARK LC           
+#>  6 2242776… 2013-07-02 DNR DWR Cooperative Environment…   2000. BUREAU OF LAND MANAGEMENT ATTN STA…
+#>  7 2242713… 2013-07-08 DOH Medicaid Mandatory Services    1800  CADURX INC                         
+#>  8 2242839… 2013-07-09 DPS Driver License Division        2609. WORTHINGTON LEAVITT INVESTMENT LLC 
+#>  9 2242895… 2013-07-10 DAS Risk Management              126723. MORETON & COMPANY                  
+#> 10 2242895… 2013-07-10 DAS Risk Management               37500  MORETON & COMPANY                  
+#> # … with 189,179 more rows
 rm(dupes)
 ```
 
@@ -326,30 +322,30 @@ explored.
 ``` r
 col_stats(utc, n_distinct)
 #> # A tibble: 22 x 4
-#>    col             class         n            p
-#>    <chr>           <chr>     <int>        <dbl>
-#>  1 id              <chr>  29160793 1           
-#>  2 date            <date>     2078 0.0000713   
-#>  3 amount          <dbl>   1545756 0.0530      
-#>  4 fiscal_period   <int>        13 0.000000446 
-#>  5 batch_id        <chr>       114 0.00000391  
-#>  6 fiscal_year     <int>         7 0.000000240 
-#>  7 entity_trans_id <chr>  25694102 0.881       
-#>  8 description     <chr>       617 0.0000212   
-#>  9 ref_id          <chr>   2179944 0.0748      
-#> 10 type            <int>         1 0.0000000343
-#> 11 contract_name   <chr>     39847 0.00137     
-#> 12 contract_number <chr>     34141 0.00117     
-#> 13 deptartment     <chr>        56 0.00000192  
-#> 14 agency          <chr>       413 0.0000142   
-#> 15 division        <chr>      1606 0.0000551   
-#> 16 category        <chr>        13 0.000000446 
-#> 17 subcategory     <chr>        52 0.00000178  
-#> 18 fund1           <chr>        14 0.000000480 
-#> 19 fund2           <chr>       547 0.0000188   
-#> 20 vendor_id       <chr>    100951 0.00346     
-#> 21 vendor_name     <chr>     62767 0.00215     
-#> 22 dupe_flag       <lgl>         2 0.0000000686
+#>    col             class        n           p
+#>    <chr>           <chr>    <int>       <dbl>
+#>  1 id              <chr>  1373119 1          
+#>  2 date            <date>    1741 0.00127    
+#>  3 amount          <dbl>   344168 0.251      
+#>  4 fiscal_period   <int>       13 0.00000947 
+#>  5 batch_id        <chr>       92 0.0000670  
+#>  6 fiscal_year     <int>        7 0.00000510 
+#>  7 entity_trans_id <chr>  1303205 0.949      
+#>  8 description     <chr>      371 0.000270   
+#>  9 ref_id          <chr>   193004 0.141      
+#> 10 type            <int>        1 0.000000728
+#> 11 contract_name   <chr>    39846 0.0290     
+#> 12 contract_number <chr>    33742 0.0246     
+#> 13 deptartment     <chr>       39 0.0000284  
+#> 14 agency          <chr>      243 0.000177   
+#> 15 division        <chr>      848 0.000618   
+#> 16 category        <chr>       10 0.00000728 
+#> 17 subcategory     <chr>       43 0.0000313  
+#> 18 fund1           <chr>        8 0.00000583 
+#> 19 fund2           <chr>      111 0.0000808  
+#> 20 vendor_id       <chr>    10101 0.00736    
+#> 21 vendor_name     <chr>     8115 0.00591    
+#> 22 dupe_flag       <lgl>        2 0.00000146
 ```
 
 ![](../plots/distinct_plots-1.png)<!-- -->![](../plots/distinct_plots-2.png)<!-- -->![](../plots/distinct_plots-3.png)<!-- -->![](../plots/distinct_plots-4.png)<!-- -->![](../plots/distinct_plots-5.png)<!-- -->![](../plots/distinct_plots-6.png)<!-- -->![](../plots/distinct_plots-7.png)<!-- -->
@@ -360,15 +356,15 @@ We should also check the distribution of contract `amount` values.
 
 ``` r
 noquote(map_chr(summary(utc$amount), dollar))
-#>            Min.         1st Qu.          Median            Mean         3rd Qu.            Max. 
-#> -$3,495,849,460          $11.92          $62.31       $6,571.96         $309.41  $3,039,734,218
+#>        Min.     1st Qu.      Median        Mean     3rd Qu.        Max. 
+#> -$7,181,703      $50.97     $244.47   $9,509.14   $1,671.20 $21,500,000
 ```
 
 A significant amount of the `amount` values are negative.
 
 ``` r
 percent(mean(utc$amount < 0), 0.1)
-#> [1] "7.6%"
+#> [1] "0.9%"
 ```
 
 Most of the negative values are from purchasing cards. Negative values
@@ -379,20 +375,20 @@ utc %>%
   filter(amount < 0) %>%
   count(description, sort = TRUE) %>% 
   add_prop()
-#> # A tibble: 555 x 3
-#>    description                                                n      p
-#>    <chr>                                                  <int>  <dbl>
-#>  1 Purchasing Card Current Expenses                      814994 0.369 
-#>  2 Payroll Cost Additive-Indirect Costs                   94919 0.0430
-#>  3 Payroll Cost Additive-Paid Leave Used                  58938 0.0267
-#>  4 Unemployment & Workers Compensation Insurance          48383 0.0219
-#>  5 FICA/Medicare                                          48067 0.0218
-#>  6 Health, Dental, Life & Long-Term Disability Insurance  46860 0.0212
-#>  7 State Retirement                                       46379 0.0210
-#>  8 Cancellation                                           42911 0.0194
-#>  9 State Leave Pool                                       42299 0.0192
-#> 10 Leave Paid                                             32392 0.0147
-#> # … with 545 more rows
+#> # A tibble: 157 x 3
+#>    description                                                   n      p
+#>    <chr>                                                     <int>  <dbl>
+#>  1 Motor Vehicles-Operating Supplies, Maintenance & Repairs   2050 0.167 
+#>  2 Other Equipment-Operating Supplies, Maintenance & Repairs  1132 0.0921
+#>  3 Buildings & Grounds-Operating Supplies, Maint & Repairs     948 0.0771
+#>  4 Rental of Equipment-Except Data Processing & Photocopy      782 0.0636
+#>  5 Food                                                        692 0.0563
+#>  6 Office Supplies                                             685 0.0557
+#>  7 Internal Service Fund-Unchanged Merchandise for Resale      618 0.0503
+#>  8 Laundry, Linen & Dry Cleaning Services                      419 0.0341
+#>  9 Clothing & Uniforms                                         407 0.0331
+#> 10 Wireless Communication Service                              406 0.0330
+#> # … with 147 more rows
 ```
 
 The amounts are logarithmically-normally distributed with reasonable
@@ -406,52 +402,52 @@ Here are the smallest and largest contracts:
 glimpse(utc[which.max(utc$amount), ])
 #> Rows: 1
 #> Columns: 22
-#> $ id              <chr> "324260633"
-#> $ date            <date> 2014-09-24
-#> $ amount          <dbl> 3039734218
-#> $ fiscal_period   <int> 13
-#> $ batch_id        <chr> "23005"
-#> $ fiscal_year     <int> 2014
-#> $ entity_trans_id <chr> "JVA1004F000001124-1001"
-#> $ description     <chr> "No Description"
-#> $ ref_id          <chr> NA
+#> $ id              <chr> "493281065"
+#> $ date            <date> 2016-06-30
+#> $ amount          <dbl> 21500000
+#> $ fiscal_period   <int> 12
+#> $ batch_id        <chr> "38473"
+#> $ fiscal_year     <int> 2016
+#> $ entity_trans_id <chr> "PRC063690000000000298-1111"
+#> $ description     <chr> "Special Grants"
+#> $ ref_id          <chr> "-00"
 #> $ type            <int> 1
-#> $ contract_name   <chr> NA
-#> $ contract_number <chr> NA
-#> $ deptartment     <chr> "State Treasurer"
-#> $ agency          <chr> "Investment Trust Fund"
-#> $ division        <chr> "(TRS) Public Treasurer's Investment Fund"
-#> $ category        <chr> "No Category"
-#> $ subcategory     <chr> "No Category"
-#> $ fund1           <chr> "Investment Trust Fund"
-#> $ fund2           <chr> "(TRS) Public Treasurer's Investment Fund"
-#> $ vendor_id       <chr> "375787"
-#> $ vendor_name     <chr> NA
+#> $ contract_name   <chr> "063 LEGISLATURE APPROVAL BLDG HAFB PERSONNELMIDA"
+#> $ contract_number <chr> "161806"
+#> $ deptartment     <chr> "Governor's Office of Economic Development"
+#> $ agency          <chr> "GOV ED Pass Through"
+#> $ division        <chr> "GOV ED Pass Through"
+#> $ category        <chr> "Other Charges/Pass Through"
+#> $ subcategory     <chr> "Direct Payments To Other Government Units"
+#> $ fund1           <chr> "General Fund"
+#> $ fund2           <chr> "(GF) General Fund Unrestricted"
+#> $ vendor_id       <chr> "519033"
+#> $ vendor_name     <chr> "MILITARY INSTALLATION DEVELOPMENT AUTHORITY"
 #> $ dupe_flag       <lgl> FALSE
 glimpse(utc[which.min(utc$amount), ])
 #> Rows: 1
 #> Columns: 22
-#> $ id              <chr> "711656240"
-#> $ date            <date> 2019-10-16
-#> $ amount          <dbl> -3495849460
-#> $ fiscal_period   <int> 13
-#> $ batch_id        <chr> "62613"
-#> $ fiscal_year     <int> 2019
-#> $ entity_trans_id <chr> "JVA10019F0001343-9001"
-#> $ description     <chr> "Trust & Agency-Refunds of Disbursements"
-#> $ ref_id          <chr> NA
+#> $ id              <chr> "593531977"
+#> $ date            <date> 2018-02-27
+#> $ amount          <dbl> -7181703
+#> $ fiscal_period   <int> 8
+#> $ batch_id        <chr> "50234"
+#> $ fiscal_year     <int> 2018
+#> $ entity_trans_id <chr> "PRC400185000000001234-1111"
+#> $ description     <chr> "Professional & Technical Services-Non-medical"
+#> $ ref_id          <chr> "-10"
 #> $ type            <int> 1
-#> $ contract_name   <chr> NA
-#> $ contract_number <chr> NA
-#> $ deptartment     <chr> "State Treasurer"
-#> $ agency          <chr> "Investment Trust Fund"
-#> $ division        <chr> "(TRS) Public Treasurer's Investment Fund"
-#> $ category        <chr> "Trust & Agency Disbursements"
-#> $ subcategory     <chr> "Trust & Agency"
-#> $ fund1           <chr> "Investment Trust Fund"
-#> $ fund2           <chr> "(TRS) Public Treasurer's Investment Fund"
-#> $ vendor_id       <chr> "5748198"
-#> $ vendor_name     <chr> NA
+#> $ contract_name   <chr> "400   Waterford Institute, Inc.   (Amd #9)"
+#> $ contract_number <chr> "096300"
+#> $ deptartment     <chr> "Utah State Board of Education"
+#> $ agency          <chr> "PED Initiative Programs"
+#> $ division        <chr> "PED Upstart Early Childhood Education"
+#> $ category        <chr> "Current Expense"
+#> $ subcategory     <chr> "Services"
+#> $ fund1           <chr> "Special Revenue Fund"
+#> $ fund2           <chr> "(PED) Education Fund"
+#> $ vendor_id       <chr> "476065"
+#> $ vendor_name     <chr> "Waterford Institute, Inc."
 #> $ dupe_flag       <lgl> FALSE
 ```
 
@@ -471,7 +467,7 @@ min(utc$date)
 sum(utc$year < 2013)
 #> [1] 0
 max(utc$date)
-#> [1] "2019-11-12"
+#> [1] "2019-11-05"
 sum(utc$date > today())
 #> [1] 0
 ```
@@ -491,8 +487,8 @@ utc <- mutate(utc, state = "UT", .before = agency)
 
 ## Conclude
 
-1.  There are 29,160,793 records in the database.
-2.  There are 3,583,984 duplicate records in the database.
+1.  There are 1,373,119 records in the database.
+2.  There are 189,189 duplicate records in the database.
 3.  The range and distribution of `amount` and `date` seem reasonable.
 4.  There are 0 records missing key variables.
 5.  There are no geographic variables to normalize, `state` was added.
@@ -509,7 +505,7 @@ clean_dir <- dir_create(here("ut", "contracts", "data", "clean"))
 clean_path <- path(clean_dir, "ut_contracts_clean.csv")
 vroom_write(utc, clean_path, na = "", delim = ",")
 file_size(clean_path)
-#> 8.29G
+#> 490M
 file_encoding(clean_path)
 #> # A tibble: 1 x 3
 #>   path                                                                        mime          charset
