@@ -433,7 +433,7 @@ dict_raw <- tibble(
     "Contract type (all 1)",
     "Contract name",
     "Contract number",
-    "Spending department (`org1)",
+    "Spending department (`org1`)",
     "Spending state (all UT)",
     "Spending agency (`org2`)",
     "Spending division/use (`org3`)",

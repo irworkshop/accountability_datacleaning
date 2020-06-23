@@ -1,7 +1,7 @@
 HHS Provider Relief Fund
 ================
 Kiernan Nicholls
-2020-05-22 14:35:27
+2020-06-23 13:13:58
 
   - [Project](#project)
   - [Objectives](#objectives)
@@ -162,23 +162,23 @@ alphabetically.
 
 ``` r
 glimpse(hhspr)
-#> Rows: 179,305
+#> Rows: 210,155
 #> Columns: 5
 #> $ agency   <chr> "Health Resources and Services Administration", "Health Resources and Services …
-#> $ provider <chr> "Eastern Aleutian Tribes, Inc.", "Elizabeth Watney", "A Joint Effort Physical T…
+#> $ provider <chr> "Elizabeth Watney", "A Joint Effort Physical Therapy Inc", "Aa Pain Clinic, Inc…
 #> $ state    <chr> "AK", "AK", "AK", "AK", "AK", "AK", "AK", "AK", "AK", "AK", "AK", "AK", "AK", "…
-#> $ city     <chr> "ADAK", "ANCHOR POINT", "ANCHORAGE", "ANCHORAGE", "ANCHORAGE", "ANCHORAGE", "AN…
-#> $ payment  <dbl> 2538, 724, 5953, 69976, 33655, 2813, 8781, 27497, 10823, 50053, 217156, 39435, …
+#> $ city     <chr> "ANCHOR POINT", "ANCHORAGE", "ANCHORAGE", "ANCHORAGE", "ANCHORAGE", "ANCHORAGE"…
+#> $ payment  <dbl> 724, 5953, 69976, 1181, 33655, 6301, 9327, 10555, 8781, 28000, 4616, 10823, 129…
 tail(hhspr)
 #> # A tibble: 6 x 5
-#>   agency                                       provider                      state city    payment
-#>   <chr>                                        <chr>                         <chr> <chr>     <dbl>
-#> 1 Health Resources and Services Administration Peak Physical Therapy Inc     WY    WILSON     9302
-#> 2 Health Resources and Services Administration Cloud Peak Chiropractic, P.C. WY    WORLAND    2961
-#> 3 Health Resources and Services Administration Cloud Peak Counseling Center  WY    WORLAND    3083
-#> 4 Health Resources and Services Administration County Of Washakie            WY    WORLAND   13861
-#> 5 Health Resources and Services Administration Washakie Medical Center       WY    WORLAND  769007
-#> 6 Health Resources and Services Administration Worland Pharmacy Inc          WY    WORLAND     137
+#>   agency                          provider                                     state city   payment
+#>   <chr>                           <chr>                                        <chr> <chr>    <dbl>
+#> 1 Health Resources and Services … Cloud Peak Chiropractic, P.C.                WY    WORLA…    2961
+#> 2 Health Resources and Services … Cloud Peak Counseling Center                 WY    WORLA…    3083
+#> 3 Health Resources and Services … County Of Washakie                           WY    WORLA…   13861
+#> 4 Health Resources and Services … Urological Services Of Northern Wyoming Pro… WY    WORLA…    8883
+#> 5 Health Resources and Services … Worland Pharmacy Inc                         WY    WORLA…     137
+#> 6 Health Resources and Services … Worland Physical Therapy                     WY    WORLA…   11498
 ```
 
 ### Missing
@@ -197,23 +197,14 @@ col_stats(hhspr, count_na)
 #> 5 payment  <dbl>     0     0
 ```
 
-### Duplicates
-
-There are no duplicate records.
-
-``` r
-hhspr <- flag_dupes(hhspr, everything())
-#> Warning in flag_dupes(hhspr, everything()): no duplicate rows, column not created
-```
-
 ### Amounts
 
-The `payment` values range from $1 to $180,264,488.
+The `payment` values range from $1 to $567,285,060.
 
 ``` r
 noquote(map_chr(summary(hhspr$payment), dollar))
 #>         Min.      1st Qu.       Median         Mean      3rd Qu.         Max. 
-#>           $1       $1,960       $9,462     $190,115      $43,502 $180,264,488
+#>           $1       $1,910       $9,740     $266,501      $46,724 $567,285,060
 mean(hhspr$payment <= 0) # no negatives
 #> [1] 0
 ```
@@ -225,12 +216,12 @@ hhspr[which.min(hhspr$payment), ]
 #> # A tibble: 1 x 5
 #>   agency                                       provider                       state city  payment
 #>   <chr>                                        <chr>                          <chr> <chr>   <dbl>
-#> 1 Health Resources and Services Administration Your Doctor'S After Hours, Llc GA    MACON       1
+#> 1 Health Resources and Services Administration Your Doctor'S After Hours, Llc GA    GRAY        1
 hhspr[which.max(hhspr$payment), ]
 #> # A tibble: 1 x 5
-#>   agency                                       provider       state city      payment
-#>   <chr>                                        <chr>          <chr> <chr>       <dbl>
-#> 1 Health Resources and Services Administration Dignity Health AZ    PHOENIX 180264488
+#>   agency                                  provider                           state city     payment
+#>   <chr>                                   <chr>                              <chr> <chr>      <dbl>
+#> 1 Health Resources and Services Administ… The New York And Presbyterian Hos… NY    NEW YO…   5.67e8
 ```
 
 The distribution of `payment` is logarithmically-normally distributed, a
@@ -258,16 +249,16 @@ add_prop(count(hhspr, state, sort = TRUE))
 #> # A tibble: 55 x 3
 #>    state     n      p
 #>    <chr> <int>  <dbl>
-#>  1 CA    19665 0.110 
-#>  2 TX    14104 0.0787
-#>  3 NY    13776 0.0768
-#>  4 FL    12433 0.0693
-#>  5 NJ     7734 0.0431
-#>  6 PA     7292 0.0407
-#>  7 IL     7098 0.0396
-#>  8 MI     6465 0.0361
-#>  9 OH     5853 0.0326
-#> 10 GA     4885 0.0272
+#>  1 CA    23286 0.111 
+#>  2 TX    16815 0.0800
+#>  3 NY    16153 0.0769
+#>  4 FL    14444 0.0687
+#>  5 NJ     8877 0.0422
+#>  6 IL     8494 0.0404
+#>  7 PA     8346 0.0397
+#>  8 MI     7411 0.0353
+#>  9 OH     6890 0.0328
+#> 10 GA     5749 0.0274
 #> # … with 45 more rows
 ```
 
@@ -276,7 +267,7 @@ add_prop(count(hhspr, state, sort = TRUE))
 ``` r
 many_city <- c(valid_city, extra_city)
 percent(prop_in(hhspr$city, many_city), 0.01)
-#> [1] "98.13%"
+#> [1] "98.14%"
 ```
 
 The only different between the `city` column and our list of known
@@ -287,31 +278,33 @@ hhspr %>%
   filter(city %out% many_city) %>% 
   count(city, state, sort = TRUE) %>% 
   add_prop(n = n)
-#> # A tibble: 1,247 x 4
+#> # A tibble: 1,464 x 4
 #>    city             state     n      p
 #>    <chr>            <chr> <int>  <dbl>
-#>  1 ST PETERSBURG    FL      156 0.0465
-#>  2 FARMINGTON HILLS MI      129 0.0385
-#>  3 ST LOUIS         MO       99 0.0295
-#>  4 PORT ST LUCIE    FL       80 0.0238
-#>  5 ST GEORGE        UT       63 0.0188
-#>  6 SHELBY TOWNSHIP  MI       61 0.0182
-#>  7 ST AUGUSTINE     FL       60 0.0179
-#>  8 FT LAUDERDALE    FL       58 0.0173
-#>  9 MANALAPAN        NJ       56 0.0167
-#> 10 LUTHERVILLE      MD       45 0.0134
-#> # … with 1,237 more rows
+#>  1 ST PETERSBURG    FL      164 0.0420
+#>  2 FARMINGTON HILLS MI      146 0.0374
+#>  3 ST LOUIS         MO      127 0.0325
+#>  4 PORT ST LUCIE    FL       97 0.0248
+#>  5 ST GEORGE        UT       74 0.0190
+#>  6 ST AUGUSTINE     FL       72 0.0184
+#>  7 MANALAPAN        NJ       66 0.0169
+#>  8 SHELBY TOWNSHIP  MI       63 0.0161
+#>  9 FT LAUDERDALE    FL       60 0.0154
+#> 10 LUTHERVILLE      MD       49 0.0126
+#> # … with 1,454 more rows
 ```
 
 ``` r
 hhspr <- mutate(hhspr, across(city, normal_city, abbs = usps_city))
 percent(prop_in(hhspr$city, many_city), 0.01)
-#> [1] "99.00%"
+#> [1] "99.02%"
 ```
+
+We can also add “US” as the state spending the money.
 
 ## Conclude
 
-1.  There are 179,305 records in the database.
+1.  There are 210,155 records in the database.
 2.  There are 0 duplicate records in the database.
 3.  The range and distribution of `amount` seems reasonable.
 4.  There are 0 records missing key variables.
@@ -329,30 +322,23 @@ clean_dir <- dir_create(here("us", "covid", "hhs_relief", "data", "clean"))
 clean_path <- path(clean_dir, "hhs_provider_relief.csv")
 write_csv(hhspr, clean_path, na = "")
 file_size(clean_path)
-#> 16.5M
-mutate(file_encoding(clean_path), across(path, basename))
+#> 19.3M
+mutate(file_encoding(clean_path), across(path, path.abbrev))
 #> # A tibble: 1 x 3
-#>   path                    mime            charset 
-#>   <chr>                   <chr>           <chr>   
-#> 1 hhs_provider_relief.csv application/csv us-ascii
+#>   path                                                     mime            charset 
+#>   <chr>                                                    <chr>           <chr>   
+#> 1 ~/us/covid/hhs_relief/data/clean/hhs_provider_relief.csv application/csv us-ascii
 ```
 
 ## Dictionary
 
 The following table describes the variables in our final exported file:
 
-| Column     | Type        | Definition                                                                   |
-| :--------- | :---------- | :--------------------------------------------------------------------------- |
-| `agency`   | `character` | Distributing agency name                                                     |
-| `provider` | `character` | Provider name associated with the billing TIN to whom the payment was issued |
-| `state`    | `character` | Provider city name (with expanded abbreviations)                             |
-| `city`     | `character` | Provider state abbreviation                                                  |
-| `payment`  | `double`    | The cumulative payment that the provider has received AND attested to        |
-| `year`     | `double`    | Current calendar year                                                        |
-
-``` r
-write_lines(
-  x = c("# HHS Provider Relief Data Dictionary\n", dict_md),
-  path = here("us", "covid", "hhs_relief_dict.md"),
-)
-```
+| Column     | Type        | Definition                                       |
+| :--------- | :---------- | :----------------------------------------------- |
+| `agency`   | `character` | Distributing agency name                         |
+| `provider` | `character` | Provider name associated with the billing TIN    |
+| `state`    | `character` | Provider state abbreviation                      |
+| `city`     | `character` | Provider city name (with expanded abbreviations) |
+| `payment`  | `double`    | The cumulative payment that the provider         |
+| `year`     | `double`    | Current calendar year                            |
