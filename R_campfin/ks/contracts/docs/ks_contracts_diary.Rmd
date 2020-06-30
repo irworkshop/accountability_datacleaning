@@ -83,7 +83,6 @@ pacman::p_load(
   gluedown, # printing markdown
   magrittr, # pipe operators
   janitor, # clean data frames
-  batman, # parse logicals
   refinr, # cluster and merge
   scales, # format strings
   knitr, # knit documents
@@ -114,32 +113,110 @@ here::here()
 
 ## Data
 
-A list of statewide contracts can be obtained from the Kansas Department of
-Administration's [Office of Facilities and Procurement Management (OFPM)][ofpm].
+Data is retrieved from the [KanView Download Center][dlc]:
 
-[ofpm]: https://www.admin.ks.gov/offices/ofpm
+> KanView is an online solution that brings better visibility, openness, and
+accountability to Kansas State Government. KanView contains data related to
+Government spending and income, allowing Kansas taxpayers an inside look at
+Government financial activity.
+
+> The State of Kansas government operates on a fiscal year basis defined as July
+1 through June 30. KanView presents data beginning with FY 2006 and each
+completed fiscal year therafter. For detailed transactions please visit the
+[Data Download Center][dlc].
+
+The Download Center provides three types of data: Agency expenditures and
+revenues, vendor payments, and employee compensation. We are interested in the
+payments made from the state to outside vendors.
+
+>  Vendor Payments: “Checkbook” payments made to vendors are available through
+KanView. Download results will show payments made to vendors from all state
+agencies and include the following key data elements: fiscal year, agency
+(Business Unit), account description, funding, vendor name, document number,
+payment date and amount. Due to data volumes, downloads are available on a
+monthly or quarterly basis per each download request. Select the Fiscal Year,
+then select either the quarter or month. If month is selected KanView ignores
+any selection of a specific quarter.
+
+[dlc]: http://kanview.ks.gov/DataDownload.aspx
 
 ## Download
 
-The HTML table of contracts can be requested with `httr::GET()`.
+Vendor payment data can be downloaded in files by fiscal year (July 1 to June
+30). We can download the files manually from the Download Center, or we can
+make a series of `POST()` requests via curl. 
 
 ```{r raw_dir}
 raw_dir <- dir_create(here("ks", "contracts", "data", "raw"))
-ks_get <- GET("https://da.ks.gov/purch/Contracts/Default.aspx/statewide")
-ks_table <- html_table(html_nodes(content(ks_get), "table")[[9]])
+```
+
+```{r}
+raw_curl <- read_file(here("ks", "contracts", "raw_curl.txt"))
+if (length(dir_ls(raw_dir)) == 0) {
+  for (year in 2011:2019) {
+    message("------", year, "------")
+    raw_path <- path(raw_dir, glue("VendorData_{year}.csv"))
+    raw_curl %>% 
+      str_replace("(?<=VendorYearList\\=)\\d{4}", as.character(year)) %>% 
+      system(intern = TRUE) %>% 
+      write_lines(raw_path)
+  }
+}
+```
+
+```{r raw_info, results='asis'}
+raw_info <- dir_info(raw_dir)
+raw_info$path %>% 
+  path.abbrev() %>% 
+  md_code() %>% 
+  md_bullet()
 ```
 
 ## Read
 
-That HTML table can then be parsed into a data frame of contracts.
-
 ```{r raw_read}
-ksc <- ks_table %>%
-  as_tibble(.name_repair = make_clean_names) %>% 
-  na_if("") %>% 
-  mutate(across(ends_with("date"), parse_date, "%m/%d/%Y")) %>% 
-  rename(available = political_subdivision_availability) %>% 
-  mutate(across(available, to_logical))
+ksc <- map_df(
+  .x = raw_info$path,
+  .f = read_delim,
+  delim = ",",
+  na = "",
+  trim_ws = TRUE,
+  guess_max = 0,
+  escape_backslash = FALSE,
+  escape_double = FALSE,
+  col_types = cols(
+    .default = col_character(),
+    Fiscal_Year = col_integer(),
+    # Payment_Date = col_date("%Y%m%d"),
+    Amount = col_double(),
+    X9 = col_skip()
+  )
+)
+```
+
+```{r raw_rename, echo=FALSE}
+old_names <- names(ksc)
+ksc <- ksc %>% 
+  clean_names("snake") %>% 
+  rename(
+    fiscal = fiscal_year,
+    agency = business_unit_descr,
+    account = account_descr,
+    fund = fund_code_descr,
+    vendor = vendor_name,
+    document = document_number,
+    date = payment_date
+  )
+```
+
+```{r raw_date}
+x <- ksc$date
+mdy_dates <- str_detect(x, "/")
+x[mdy_dates] <- as.character(mdy(x[mdy_dates]))
+x[!mdy_dates] <- as.character(ymd(x[!mdy_dates]))
+ksc$date <- parse_date(x)
+count_na(ksc$date)
+rm(x)
 ```
 
 ## Explore
@@ -149,3 +226,210 @@ glimpse(ksc)
 tail(ksc)
 ```
 
+### Missing
+
+The only variable missing any values is the `fund` code.
+
+```{r na_count}
+col_stats(ksc, count_na)
+```
+
+This variable was not recorded from 2011 to 2013.
+
+```{r na_year}
+ksc %>% 
+  group_by(fiscal) %>% 
+  summarise(prop_na = percent(prop_na(fund)))
+```
+
+### Duplicates
+
+```{r dupe_write}
+tmp_files <- dir_ls(tempdir())
+dupe_file <- if (any(str_detect(tmp_files, "dupes"))) {
+  str_subset(tmp_files, "dupes")
+} else {
+  file_temp(pattern = "dupes")
+}
+if (!file_exists(dupe_file)) {
+  file_create(dupe_file)
+  n <- 1e5 # rows per chunk
+  nr <- nrow(ksc)
+  # split file into chunks
+  kss <- split(ksc, rep(1:ceiling(nr/n), each = n, length.out = nr))
+  pb <- txtProgressBar(max = length(kss), style = 3)
+  for (i in seq_along(kss)) {
+    # check dupes from both ends
+    d1 <- duplicated(kss[[i]], fromLast = FALSE)
+    d2 <- duplicated(kss[[i]], fromLast = TRUE)
+    # append to disk
+    write_lines(d1 | d2, dupe_file, append = TRUE)
+    rm(d1, d2)
+    kss[[i]] <- NA
+    Sys.sleep(10)
+    flush_memory()
+    setTxtProgressBar(pb, i)
+  }
+  rm(kss)
+}
+```
+
+```{r dupe_read}
+ksc <- mutate(ksc, dupe_flag = as.logical(read_lines(dupe_file)))
+sum(ksc$dupe_flag)
+```
+
+```{r dupe_view}
+ksc %>% 
+  filter(dupe_flag) %>% 
+  select(date, vendor, amount, agency)
+```
+
+### Categorical
+
+```{r distinct_count}
+col_stats(ksc, n_distinct)
+```
+
+```{r distinct_plots}
+explore_plot(ksc, agency) + scale_x_truncate()
+```
+
+### Amounts
+
+```{r ammount_summary}
+summary(ksc$amount)
+mean(ksc$amount <= 0)
+```
+
+```{r hist_amount, echo=FALSE}
+ksc %>%
+  ggplot(aes(amount)) +
+  geom_histogram(fill = dark2["purple"]) +
+  scale_y_continuous(labels = comma) +
+  scale_x_continuous(
+    breaks = c(1 %o% 10^(0:6)),
+    labels = dollar,
+    trans = "log10"
+  ) +
+  labs(
+    title = "Kansas Vendor Payment Amount Distribution",
+    x = "Amount",
+    y = "Count"
+  )
+```
+
+### Dates
+
+We can add the calendar year from `date` with `lubridate::year()`
+
+```{r date_year}
+ksc <- mutate(ksc, year = year(date))
+```
+
+```{r date_range}
+min(ksc$date)
+sum(ksc$year < 2000)
+max(ksc$date)
+sum(ksc$date > today())
+```
+
+```{r bar_year, echo=FALSE}
+ksc %>% 
+  count(year) %>% 
+  mutate(even = is_even(year)) %>% 
+  ggplot(aes(x = year, y = n)) +
+  geom_col(fill = dark2["purple"]) + 
+  scale_fill_brewer(palette = "Dark2") +
+  scale_y_continuous(labels = comma) +
+  scale_x_continuous(breaks = 2011:2019) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "Kansas Vendor Payments by Year",
+    fill = "Election Year",
+    x = "Year Made",
+    y = "Count"
+  )
+```
+
+## Wrangle
+
+```{r state_add}
+ksc <- mutate(ksc, agency_state = "KS", .after = agency)
+```
+
+## Conclude
+
+```{r clean_glimpse}
+glimpse(sample_n(ksc, 20))
+```
+
+1. There are `r comma(nrow(ksc))` records in the database.
+1. There are `r comma(sum(ksc$dupe_flag))` duplicate records in the database.
+1. The range and distribution of `amount` and `date` seem reasonable.
+1. There are `r comma(sum(ksc$na_flag))` records missing key variables.
+1. Consistency in geographic data has been improved with `campfin::normal_*()`.
+1. The 4-digit `year` variable has been created with `lubridate::year()`.
+
+## Export
+
+Now the file can be saved on disk for upload to the Accountability server.
+
+```{r clean_dir}
+clean_dir <- dir_create(here("ks", "contracts", "data", "clean"))
+clean_path <- path(clean_dir, "ks_contracts_clean.csv")
+write_csv(ksc, clean_path, na = "")
+file_size(clean_path)
+file_encoding(clean_path) %>% 
+  mutate(across(path, path.abbrev))
+```
+
+## Upload
+
+Using the [duckr] R package, we can wrap around the [duck] comand line tool to
+upload the file to the IRW server.
+
+[duckr]: https://github.com/kiernann/duckr
+[duck]: https://duck.sh/
+
+```{r clean_upload, eval=FALSE}
+# remotes::install_github("kiernann/duckr")
+s3_dir <- "s3:/publicaccountability/csv/"
+s3_path <- path(s3_dir, basename(clean_path))
+if (require(duckr)) {
+  duckr::duck_upload(clean_path, s3_path)
+}
+```
+
+## Dictionary
+
+The following table describes the variables in our final exported file:
+
+```{r dict_make, echo=FALSE}
+dict_raw <- tibble(
+  var = md_code(names(ksc)),
+  old = c(md_code(old_names), rep("", ncol(ksc) - length(old_names))),
+  type = md_code(map_chr(ksc, typeof)),
+  def = c(
+    "Fiscal year paid",
+    "Spending agency",
+    "Agency state (KS)",
+    "Funds source account",
+    "Fund name",
+    "Vendor name",
+    "Document number",
+    "Daid paid",
+    "Payment amount",
+    "Duplicate record",
+    "Calendar year paid"
+  )
+)
+```
+
+```{r dict_md, echo=FALSE}
+(dict_md <- kable(
+  x = dict_raw,
+  format = "markdown",
+  col.names = c("Column", "Original Name", "Type", "Definition")
+))
+```
