@@ -1,0 +1,586 @@
+---
+title: "New Jersey Lobbyying Expenditures"
+author: "Yanqi Xu"
+date: "`r Sys.time()`"
+output:
+  github_document: 
+    df_print: tibble
+    toc: true
+    toc_dept: 2
+editor_options: 
+  chunk_output_type: console
+---
+
+<!-- Place comments regarding knitting here -->
+
+```{r setup, include=FALSE, purl=FALSE}
+library(knitr)
+opts_chunk$set(
+  eval = TRUE,
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  error = FALSE,
+  collapse = TRUE,
+  comment = "#>",
+  fig.path = "../plots/",
+  fig.width = 10,
+  dpi = 300
+)
+if (!interactive()) {
+  options(width = 99)
+  set.seed(5)
+}
+```
+
+```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
+doc_dir <- fs::dir_create(here::here("nj", "lobby", "docs"))
+```
+
+## Project
+
+The Accountability Project is an effort to cut across data silos and give
+journalists, policy professionals, activists, and the public at large a simple
+way to search across huge volumes of public data about people and organizations.
+
+Our goal is to standardizing public data on a few key fields by thinking of each
+dataset row as a transaction. For each transaction there should be (at least) 3
+variables:
+
+1. All **parties** to a transaction.
+2. The **date** of the transaction.
+3. The **amount** of money involved.
+
+## Objectives
+
+This document describes the process used to complete the following objectives:
+
+1. How many records are in the database?
+1. Check for entirely duplicated records.
+1. Check ranges of continuous variables.
+1. Is there anything blank or missing?
+1. Check for consistency issues.
+1. Create a five-digit ZIP Code called `zip`.
+1. Create a `year` field from the transaction date.
+1. Make sure there is data on both parties to a transaction.
+
+## Packages
+
+The following packages are needed to collect, manipulate, visualize, analyze,
+and communicate these results. The `pacman` package will facilitate their
+installation and attachment.
+
+The IRW's `campfin` package will also have to be installed from GitHub. This
+package contains functions custom made to help facilitate the processing of
+campaign finance data.
+
+```{r load_packages, message=FALSE, warning=FALSE, error=FALSE}
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load_gh("irworkshop/campfin")
+pacman::p_load(
+  tidyverse, # data manipulation
+  readxl, #read excel files
+  lubridate, # datetime strings
+  gluedown, # printing markdown
+  magrittr, # pipe operators
+  janitor, # clean data frames
+  refinr, # cluster and merge
+  scales, # format strings
+  knitr, # knit documents
+  vroom, # read files fast
+  rvest, # html scraping
+  glue, # combine strings
+  here, # relative paths
+  httr, # http requests
+  fs # local storage 
+)
+```
+
+This document should be run as part of the `R_campfin` project, which lives as a
+sub-directory of the more general, language-agnostic
+[`irworkshop/accountability_datacleaning`][tap] GitHub repository.
+
+The `R_campfin` project uses the [RStudio projects][rproj] feature and should be
+run as such. The project also uses the dynamic `here::here()` tool for file
+paths relative to _your_ machine.
+
+```{r where_here}
+# where does this document knit?
+here::here()
+```
+
+[tap]: https://github.com/irworkshop/accountability_datacleaning
+[rproj]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects
+
+## Data
+
+Lobbying data is obtained from the [Election Law Enforcement Commission][elec].
+
+> The Election Law Enforcement Commission (ELEC) is dedicated to administering
+“The New Jersey Campaign Contributions and Expenditures Reporting Act‚” “The
+Gubernatorial‚ Legislative Disclosure Statement Act‚” “Legislative and
+Governmental Process Activities Disclosure Act‚” and parts of several other
+laws.
+
+According to ELEC, the overall expenditures associated with lobbying were reported by year, and can be found 
+in the annual reports.
+
+ELEC [provides a portal][portal] for each year's summary data. We can download ["All 2019 Summary Data Download Excel Spreadsheet"][2009] and for [previous years on the archive page][prev].
+
+
+[elec]: https://www.elec.state.nj.us/
+[portal]: https://www.elec.state.nj.us/publicinformation/gaa_annual.htm
+[2009]: https://www.elec.state.nj.us/pdffiles/Lobby2019/Lobby2019.xlsx
+[prev]: https://www.elec.state.nj.us/publicinformation/lobby_statistics_archive.htm
+
+### Download
+We can set up the raw directory.
+```{r}
+raw_dir <- dir_create(here("nj", "lobby", "data", "raw","exp"))
+```
+
+
+```{r raw_dir, eval = FALSE}
+exp_xlsx_urls <- glue("https://www.elec.state.nj.us/pdffiles/Lobby{c(1997:1998,2014:2019)}/Lobby{c(1997:1998,2014:2019)}.xlsx")
+exp_xls_urls <- glue("https://www.elec.state.nj.us/pdffiles/Lobby{c(1999:2013)}/Lobby{str_sub(c(1999:2013),start = 3L, end = 4L)}.xls")
+
+exp_urls <- c(exp_xls_urls, exp_xlsx_urls)
+wget <- function(url, dir) {
+  system2(
+    command = "wget",
+    args = c(
+      "--no-verbose",
+      "--content-disposition",
+      url,
+      paste("-P", raw_dir)
+    )
+  )
+}
+
+if (!all_files_new(raw_dir)) {
+  map(exp_urls, wget, raw_dir)
+}
+```
+We can view the file details here.
+```{r}
+raw_info <- as_tibble(dir_info(raw_dir))
+```
+
+### Read
+There are a lot of individual sheets in each spreadsheet for each year. These tables are generated from different schedules of disclosure forms filed by lobbyists.
+According to the ELEC forms [factsheet](https://www.elec.state.nj.us/pdffiles/Lobbying/quickfacts.pdf)
+
+
+> Form L1-L
+Annual Report for use by a Represented Entity. A Represented Entity is any person, partnership, committee,
+association, trade association, corporation, labor union, or any other organization that employs, retains,
+designates, engages, or otherwise uses the services of a Governmental Affairs Agent to influence legislation,
+regulations, governmental processes, or to communicate with the general public.
+Form L1-A
+Annual Report for use by a lobbying firm, a law firm, a public relations firm, or other business that employs
+or engages a Governmental Affairs Agent(s). A Governmental Affairs Agent is the individual(s) who
+communicates with, or provides a benefit to, the State officials covered by the Act.
+Form L1-G
+Annual Report for use by a person whose only lobbying activity is communication with the general public,
+referred to as “grassroots lobbying.” Note that “person” includes an individual, partnership, committee,
+association, corporation, and any other organization or group of persons.
+Form L-2
+For use by a Represented Entity designating a Governmental Affairs Agent to file an Annual Report on its
+behalf. Also for use by a person who engages in communication with the general public who designates a
+Governmental Affairs Agent to file an Annual Report on its behalf. Note that “person” includes an individual,
+partnership, committee, association, corporation, and any other organization or group of persons. The
+compensation paid to the Governmental Affairs Agent or Governmental Affairs Agent Firm must be reported.
+Form L-3
+For use by an out-of-state person or entity for the purpose of consenting to service of process.
+
+
+Since the data structure is consistent for each year and we will combine all the records into a single table, we will create a function to work with a table first and map that function to each year's spreadsheets.
+
+#### Expenditures
+We'll deal with "Summary Expend by Category" tables first, which captures expenditures of different categories. 
+
+> SCHEDULE B - SALARY & COMPENSATION
+PURPOSE: To report the salary and compensation paid by the Represented Entity to its Governmental Affairs Agent(s). Include the
+reimbursement of an Agent's expenses in amounts reported.
+For the Governmental Affairs Agents who are employees of the Represented Entity named on page 1, question 1, please
+report the salary and other compensation paid. NOTE: Only the pro rata share of each employee's salary and
+compensation need be included if the employee spends only a portion of his/her time lobbying.
+
+> SCHEDULE C - SUPPORT PERSONNEL
+PURPOSE: To report the costs of support personnel who, over the course of the reporting year, individually spend 450 or more
+hours supporting the activities of the Represented Entity or Governmental Affairs Agent(s).
+After determining to which person(s) this applies, report the pro rata share of those costs which are attributable to
+supporting the activities of the Represented Entity or Governmental Affairs Agent(s) in influencing legislation, regulations,
+governmental processes, or communicating with the general public.
+
+> SCHEDULES D-1 & D-2 - ASSESSMENTS (A), MEMBERSHIP FEES (M), OR DUES (D)
+Schedule D-1 - Specific Intent
+PURPOSE: To report the amount of assessments, membership fees, or dues paid by the Represented Entity. If the assessments, membership
+fees, or dues were paid by the Represented Entity with the specific intent to influence legislation, regulations, governmental
+processes, or to communicate with the general public, please provide the information below:
+PART I – For assessments, membership fees, or dues exceeding $100 for the calendar year:
+PART II – For assessments, membership fees, or dues $100 or less for the calendar year:
+
+> Schedule D-2 - Major Purpose
+PURPOSE: To report the pro rata amount of assessments, membership fees, or dues paid by the Represented Entity. If the assessments,
+membership fees, or dues were paid by the Represented Entity to an entity whose major purpose is to influence legislation,
+regulations, governmental processes, or to communicate with the general public, and, was not reported on Schedule D-1, ''Specific
+Intent,'' please provide the information below:
+PART I – For assessments, membership fees, or dues exceeding $100 for the calendar year:
+PART II – For assessments, membership fees, or dues $100 or less for the calendar year:
+
+> SCHEDULE E - COMMUNICATION EXPENSES
+PURPOSE: To report the costs of the preparation and distribution of materials related to influencing legislation, regulations,
+governmental processes, and conducting communications with the general public.
+
+> SCHEDULE F - TRAVEL/LODGING
+NAME OF GOVERNMENTAL AFFAIRS AGENT AMOUNT
+PURPOSE: To report the travel and lodging costs of the Governmental Affairs Agents who are employees of the Represented Entity named on page 1, question 1, related to influencing legislation, regulations, governmental processes, or communicating with the general public.
+
+> SCHEDULE G-1 ITEMIZATION OF BENEFITS WHICH EXCEEDED $25 PER DAY OR $200 PER CALENDAR
+YEAR TO STATE OFFICIALS AND THEIR IMMEDIATE FAMILY MEMBERS
+PURPOSE: To report detailed information concerning benefits passed to State officials covered by the Act, as well as the immediate
+family members of these officials. If the value of a benefit exceeded $25 per day or $200 per calendar year, report below.
+(Select one description item for each entry from the drop down list. When selecting "O - Other", enter a description in the space provided.
+
+Schedule G-1 is represented in the data as "benefits passing".
+The summary expenditure table is, according to the spreadsheet,an
+> ALPHABETICAL LISTING OF REPRESENTED ENTITIES, GOVERNMENTAL AFFAIRS AGENTS AND PERSONS COMMUNICATING WITH THE GENERAL PUBLIC  -                   SUMMARY OF EXPENDITURES BY CATEGORY
+
+According to NJ ELEC, the `total_expenditures` field is the sum of `in-house salaries`, `support_personnel`, `assessments_membership_fees_and_dues`, `communication_expenses`, `travel_and_lodging` as well as `benefits_passing`. The `total_receipts` captures the amount paid to lobbying firms for their lobbying efforts, and the compensation to each individual lobbyist also likely come from such receipts. 
+
+In the past, the L form likely corresponds to the L1-L forms, which are forms filed by lobbying entities(clients), while the A form likely corresponds to the L1-A forms, which are filed by lobbying firms. 
+
+Note that due to the particular structure of the original data, it's not possible to determine one-to-one relationship between the client and lobbying firms. We'll just arrange the data by filer, which can contain both clients(usually with a 0 or NA `total_receipts` amount. 
+
+```{r raw_read}
+read_exp <- function(short_path){
+  path <- path(raw_dir,short_path)
+  year_on_file <- str_extract(short_path,"(?<=by)\\d{2,}(?=.xls)")
+  year <- if_else(condition = nchar(year_on_file) == 2,
+                  true = case_when(
+                    year_on_file == "99" ~ "1999",
+                    TRUE ~ paste0("20",year_on_file)
+                  ),
+                  false = year_on_file)
+# spreadsheet lob00's data structure is slightly different from others
+  target_sheet <- if_else(condition = year %in% c("2000","1997","1999"), true = 1L, false = 4L)
+    # we use the "Summary Expend by Category" tab
+  if (year %in% c("2016","2018","2019")) {
+    
+  df <- read_excel(path, sheet = target_sheet,col_types = "text",skip = 2) %>% clean_names()
+  } else if(year == "1998"){
+    df <- read_excel(path, sheet = target_sheet,col_types = "text",skip = 7,col_names = c("form","date","lobbyist_or_legislative_agent`","in_house_salaries","support_personnel","assessments_membership_fees_dues","communication_expenses","travel_and_lodging","benefit_passing","total_expenditures","reimbursed","compensation_paid_to_outside_agents")) %>% clean_names()
+  } else{
+    df <- read_excel(path, sheet = target_sheet,col_types = "text") %>% clean_names()
+  }
+  #the last row is the total value, and we will remove that.
+  #df <-  df[1:nrow(df)-1,] 
+  df <- df %>% mutate(year = year)
+  if (year == "1998"){
+    df <- df %>% rename(reimbursed_benefits = reimbursed)
+  } else if (year %in% as.character(c(2001:2010))){
+    df <- df %>% rename(assessments_membership_fees_dues = assessment_membership_fees_dues,
+                        travel_and_lodging = travel_lodging)
+  } else if (year %in% as.character(c(2011:2019))) {
+    df <- df %>% rename(assessments_membership_fees_dues = assesments_membership_fees_dues,
+                        support_personnel = support_personel)
+  }
+if (year %in% as.character(c(1997:2005))) {
+  df <- df %>% rename(
+                      filer = lobbyist_or_legislative_agent)
+}
+  if (year %in% as.character(c(2001:2005))) {
+  df <- df %>% rename(
+                      compensation_paid_to_outside_agents = out_of_house_salaries)
+  }
+
+  
+  if (year %in% c("2000","1999")) {
+  df <- df %>% rename(
+    reimbursed_benefits = reimbursed,
+    in_house_salaries = in_house,
+    compensation_paid_to_outside_agents = out_of_house,
+    support_personnel = support,
+    communication_expense = communi,
+    travel_and_lodging = travel,
+    benefit_passing = benefit,
+    total_expenditures = e_total,
+    total_receipts = r_total,
+    assessments_membership_fees_dues = assessment
+  )  
+    #select(-c(r_total, e_total,address))
+  } else if(year == "1997") {
+     df <- df %>% rename(
+    in_house_salaries = in_house,
+    total_receipts = receipts,
+    compensation_paid_to_outside_agents= out_of_house,
+    support_personnel = support,
+    travel_and_lodging = travel_lodging,
+    communication_expenses = communications,
+    total_expenditures = expenditures,
+    assessments_membership_fees_dues = assessment
+  )
+  }
+      if (year %in% as.character(c(1999:2010))) {
+  df <- df %>% rename(communication_expenses = communication_expense
+                      )
+}
+  return(df)
+}
+
+njle <- list.files(raw_dir)%>% map_dfr(read_exp) %>% rename(filing_date = date)
+```
+NJ ELEC also provides a [guide](https://www.elec.state.nj.us/download/lobby/Annual_Lobbying.pdf) to each form.
+
+We'll need to convert the years in excel numeric format to dates
+```{r}
+  njle <- njle %>% mutate(
+                      date_clean = if_else(nchar(filing_date)==5,
+                                     true = excel_numeric_to_date(as.numeric(filing_date)),
+                                     false = as.Date(filing_date, format = "%m/%d/%y")))
+```
+We also need to remove the rows of total values.
+```{r}
+njle <- njle %>% filter(!is.na(form))
+```
+
+
+## Explore
+```{r glimpse}
+glimpse(njle)
+tail(njle)
+```
+
+### Missing
+
+```{r na_count}
+col_stats(njle, count_na)
+```
+
+```{r na_flag}
+njl <- njle %>% flag_na(filer, filing_date, total_expenditures)
+sum(njle$na_flag)
+```
+
+```{r na_view}
+njl %>% 
+  filter(na_flag) %>% 
+  select(filer, filing_date, total_expenditures)
+```
+
+### Duplicates
+
+There are no duplicate records.
+
+```{r dupe_flag, warning=TRUE}
+njl <- flag_dupes(njle, everything())
+```
+
+### Categorical
+
+```{r distinct_count}
+col_stats(njle, n_distinct)
+```
+
+### Dates
+
+We can examine the validity of `date_clean`
+```{r date_range}
+min(njle$date_clean)
+max(njle$date_clean)
+sum(njle$date_clean > today())
+```
+
+```{r bar_year, echo=FALSE}
+njle <- njle %>% mutate(year = as.integer(year))
+
+njle %>%
+  count(year) %>% 
+  mutate(even = is_even(year)) %>% 
+  ggplot(aes(x = year, y = n)) +
+  geom_col(fill = dark2["purple"]) + 
+  scale_fill_brewer(palette = "Dark2") +
+  scale_y_continuous(labels = comma) +
+  scale_x_continuous(breaks = seq(1980, 2020, by = 2)) +
+  coord_cartesian(xlim = c(1989, 2020)) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "New Jersey Lobbyists Expenditures by Year",
+    caption = "Source: NJ ELEC",
+    x = "Year Made",
+    y = "Count"
+  )
+```
+
+## Wrangle
+
+The address field only exists in certain datasets of certain years, but we can separate them by the comma delimiter.
+
+```{r address_sep}
+njle <- njle %>% 
+  separate(
+    col = address,
+    into = c("addr_sep", "city_sep", "state_zip"),
+    sep = "([:blank:]+)?,",
+    remove = FALSE,
+    extra = "merge",
+    fill = "left"
+  )
+
+st_regex <- valid_state %>% paste0(collapse = "|")
+
+njle <- njle %>% 
+  mutate(state_sep = 
+    str_extract(state_zip,st_regex),
+    zip_sep = str_remove(state_zip, state_sep) %>% str_remove(",") %>% str_trim()
+  )
+```
+
+To improve the searchability of the database, we will perform some consistent,
+confident string normalization. For geographic variables like city names and
+ZIP codes, the corresponding `campfin::normal_*()` functions are tailor made to 
+facilitate this process.
+
+### Address
+
+For the street `addresss` variable, the `campfin::normal_address()` function
+will force consistence case, remove punctuation, and abbreviate official 
+USPS suffixes.
+
+```{r address_norm}
+njle <- mutate(
+   .data = njle,
+   addr_norm = normal_address(
+     address = addr_sep,
+     abbs = usps_street,
+     na = invalid_city
+   )
+ )
+```
+
+```{r address_view}
+njle %>% 
+  select(addr_sep, addr_norm) %>% 
+  distinct() %>% 
+  sample_n(10)
+```
+
+### ZIP
+
+For ZIP codes, the `campfin::normal_zip()` function will attempt to create
+valid _five_ digit codes by removing the ZIP+4 suffix and returning leading
+zeroes dropped by other programs like Microsoft Excel.
+
+```{r zip_norm}
+njle <- mutate(
+  .data = njle,
+  zip_norm = normal_zip(
+    zip = zip_sep,
+    na_rep = TRUE
+  )
+)
+```
+
+```{r zip_progress}
+progress_table(
+  njle$zip_sep,
+  njle$zip_norm,
+  compare = valid_zip
+)
+```
+
+### State
+The two-letter state abbreviations are all valid and don't need to be normalized. 
+
+```{r state_norm}
+prop_in(njle$state_sep, valid_state, na.rm = T)
+```
+
+### City
+
+Cities are the most difficult geographic variable to normalize, simply due to
+the wide variety of valid cities and formats.
+
+#### Normal
+
+The `campfin::normal_city()` function is a good start, again converting case,
+removing punctuation, but _expanding_ USPS abbreviations. We can also remove
+`invalid_city` values.
+
+```{r city_norm}
+njle <- njle %>% 
+  mutate(
+    city_norm = normal_city(
+      city = city_sep, 
+      abbs = usps_city,
+      states = usps_state,
+      na = invalid_city,
+      na_rep = TRUE
+    )
+  )
+```
+
+#### Progress
+
+```{r city_progress, echo=FALSE}
+many_city <- c(valid_city, extra_city)
+progress <- progress_table(
+  str_to_upper(njle$city_sep),
+  njle$city_norm,
+  compare = many_city
+) %>% mutate(stage = as_factor(stage))
+kable(progress, digits = 3)
+```
+
+## Conclude
+
+Before exporting, we can remove the intermediary normalization columns and
+rename all added variables with the `_clean` suffix.
+
+```{r clean_select}
+njle <- njle %>% 
+  rename_all(~str_replace(., "_norm", "_clean")
+             ) %>%
+  rename(state_clean = state_sep) %>% 
+  select(-state_zip)
+```
+
+```{r clean_glimpse}
+glimpse(sample_n(njle, 20))
+```
+
+1. There are `r comma(nrow(njle))` records in the database.
+1. There are `r comma(sum(njle$dupe_flag))` duplicate records in the database.
+1. The range and distribution of `amount` and `date` seem reasonable.
+1. There are `r comma(sum(njle$na_flag))` records missing key variables.
+1. Consistency in geographic data has been improved with `campfin::normal_*()`.
+1. The 4-digit `year` variable has been created with `lubridate::year()`.
+
+## Export
+
+Now the file can be saved on disk for upload to the Accountability server.
+
+```{r clean_dir}
+clean_dir <- dir_create(here("nj", "lobby", "data", "clean"))
+clean_path <- path(clean_dir, "nj_lobby_exp_clean.csv")
+write_csv(njle, clean_path, na = "")
+file_size(clean_path)
+```
+
+## Upload
+
+Using the [duckr] R package, we can wrap around the [duck] command line tool to
+upload the file to the IRW server.
+
+[duckr]: https://github.com/kiernann/duckr
+[duck]: https://duck.sh/
+
+```{r clean_upload, eval=FALSE}
+# remotes::install_github("kiernann/duckr")
+s3_dir <- "s3:/publicaccountability/csv/"
+s3_path <- path(s3_dir, basename(clean_path))
+if (require(duckr)) {
+  duckr::duck_upload(clean_path, s3_path)
+}
+```
