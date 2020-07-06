@@ -1,0 +1,718 @@
+---
+title: "Paycheck Protection Program Loans"
+author: "Kiernan Nicholls"
+date: "`r Sys.time()`"
+output:
+  github_document: 
+    df_print: tibble
+    toc: true
+    toc_dept: 2
+editor_options: 
+  chunk_output_type: console
+---
+
+<!-- Place comments regarding knitting here -->
+
+```{r setup, include=FALSE, purl=FALSE}
+library(knitr)
+opts_chunk$set(
+  eval = TRUE,
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  error = FALSE,
+  collapse = TRUE,
+  comment = "#>",
+  fig.path = "../plots/",
+  fig.width = 10,
+  dpi = 300
+)
+if (!interactive()) {
+  options(width = 99)
+  set.seed(5)
+}
+```
+
+```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
+doc_dir <- fs::dir_create(here::here("us", "covid", "ppp", "docs"))
+```
+
+## Project
+
+The Accountability Project is an effort to cut across data silos and give
+journalists, policy professionals, activists, and the public at large a simple
+way to search across huge volumes of public data about people and organizations.
+
+Our goal is to standardizing public data on a few key fields by thinking of each
+dataset row as a transaction. For each transaction there should be (at least) 3
+variables:
+
+1. All **parties** to a transaction.
+2. The **date** of the transaction.
+3. The **amount** of money involved.
+
+## Objectives
+
+This document describes the process used to complete the following objectives:
+
+1. How many records are in the database?
+1. Check for entirely duplicated records.
+1. Check ranges of continuous variables.
+1. Is there anything blank or missing?
+1. Check for consistency issues.
+1. Create a five-digit ZIP Code called `zip`.
+1. Create a `year` field from the transaction date.
+1. Make sure there is data on both parties to a transaction.
+
+## Packages
+
+The following packages are needed to collect, manipulate, visualize, analyze,
+and communicate these results. The `pacman` package will facilitate their
+installation and attachment.
+
+The IRW's `campfin` package will also have to be installed from GitHub. This
+package contains functions custom made to help facilitate the processing of
+campaign finance data.
+
+```{r load_packages, message=FALSE, warning=FALSE, error=FALSE}
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load_gh("irworkshop/campfin")
+pacman::p_load(
+  tidyverse, # data manipulation
+  lubridate, # datetime strings
+  gluedown, # printing markdown
+  janitor, # clean data frames
+  refinr, # cluster and merge
+  scales, # format strings
+  knitr, # knit documents
+  vroom, # read files fast
+  rvest, # html scraping
+  glue, # combine strings
+  here, # relative paths
+  httr, # http requests
+  fs # local storage 
+)
+```
+
+This document should be run as part of the `R_campfin` project, which lives as a
+sub-directory of the more general, language-agnostic
+[`irworkshop/accountability_datacleaning`][tap] GitHub repository.
+
+The `R_campfin` project uses the [RStudio projects][rproj] feature and should be
+run as such. The project also uses the dynamic `here::here()` tool for file
+paths relative to _your_ machine.
+
+```{r where_here}
+# where does this document knit?
+here::here()
+```
+
+[tap]: https://github.com/irworkshop/accountability_datacleaning
+[rproj]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects
+
+## Data
+
+Paycheck Protection Loan Data is released by the Small Business Administration
+on their public Box cloud storage server. The data released at the beginning of
+June does _not_ contain exact loan amounts, only five ranges. For any loans
+less than the smallest range of $150,000 loans are aggregated and provided as
+separate files.
+
+> #### Key Aspects of PPP Loan Data
+> In releasing PPP loan data to the public, SBA is maintaining a balance between
+providing transparency to American taxpayers and protecting small businesses’
+confidential business information, such as payroll, and personally identifiable
+information. Small businesses are the driving force of American economic
+stability and are essential to America economic rebound from the pandemic. SBA
+is committed to ensuring that any release of PPP loan data does not harm small
+businesses or their employees...
+
+> #### PPP Is A Delegated Loan Making Process
+> PPP loans are not made by SBA. PPP loans are made by lending institutions and
+then guaranteed by SBA. Accordingly, borrowers apply to lenders and self-certify
+that they are eligible for PPP loans. The self- certification includes a good
+faith certification that the borrower has economic need requiring the loan and
+that the borrower has applied the affiliation rules and is a small business. The
+lender then reviews the borrower’s application, and if all the paperwork is in
+order, approves the loan and submits it to SBA...
+
+> #### Cancelled Loans Do Not Appear In The PPP Loan Data
+The public PPP data includes only active loans. Loans that were cancelled for
+any reason are not included in the public data release.
+
+## Download
+
+We can download PPP loan data from the SBA Box server as a ZIP archive.
+
+```{r raw_dir}
+raw_dir <- dir_create(here("us", "covid", "ppp", "data", "raw"))
+raw_zip <- path(raw_dir, "All Data by State.zip")
+```
+
+We can extract all files from the archive to a `data/raw/` directory.
+
+```{r raw_unzip}
+raw_path <- unzip(
+  zipfile = raw_zip, 
+  exdir = raw_dir,
+  junkpaths = TRUE
+)
+```
+
+```{r raw_relist, echo=FALSE}
+raw_path <- dir_ls(raw_dir, glob = "*.csv")
+```
+
+Loan data is divided into one `foia_150k_plus.csv` file and
+57 `foia_up_to_150k_*.csv` files for each state and territory.
+
+```{r raw_info}
+raw_dir %>% 
+  dir_info(regexp = "csv$") %>% 
+  select(path, size, modification_time) %>% 
+  mutate(across(path, basename)) %>% 
+  as_tibble()
+```
+
+## Read
+
+We can read all these files into a single data frame using `purrr::map_df()`
+and `readr::read_csv()`. There is a slight difference in columns across the
+state files and single file; for large loans there is only a `loan_range` value
+but for smaller loans broken down by state, there is a `loan_amount` instead.
+When we merge these two files together, `NA` values will be used for any record
+from a file without a given variable.
+
+```{r raw_map}
+ppp <- map_df(
+  .x = raw_path, 
+  .f = read_csv,
+  .id = "file",
+  na = c("", "N/A", "Unanswered"),
+  col_types = cols(
+    .default = col_character(),
+    LoanRange = col_factor(),
+    LoanAmount = col_double(),
+    DateApproved = col_date_usa(),
+    JobsRetained = col_integer()
+  )
+)
+```
+
+```{r raw_parse}
+ppp <- ppp %>% 
+  clean_names("snake") %>% 
+  relocate(loan_amount, .before = loan_range) %>% 
+  mutate(across(non_profit, ~!(is.na(.)))) %>% 
+  mutate(across(file, basename)) %>% 
+  relocate(file, .after = last_col())
+```
+
+## Explore
+
+```{r glimpse}
+glimpse(ppp)
+tail(ppp)
+```
+
+### Missing
+
+Variables differ in their degree of missing values.
+
+```{r na_count}
+col_stats(ppp, count_na)
+```
+
+No files are missing any values they aren't supposed to be missing. For loans
+up to $150,000 (the ones aggregated by ZIP code in the individual state files),
+there is no `business_name` variable.
+
+### Duplicates
+
+There are a small amount of duplicate records in the database, all of which can
+be flagged with a new logical variable.
+
+```{r dupe_flag}
+d1 <- duplicated(ppp, fromLast = FALSE)
+d2 <- duplicated(ppp, fromLast = TRUE)
+ppp <- mutate(ppp, dupe_flag = d1 | d2)
+percent(mean(ppp$dupe_flag), 0.01)
+rm(d1, d2); flush_memory()
+```
+
+```{r dupe_view}
+ppp %>% 
+  filter(dupe_flag) %>% 
+  select(loan_range, business_name, lender, date_approved)
+```
+
+### Categorical
+
+```{r distinct_count}
+col_stats(ppp, n_distinct)
+```
+
+```{r distinct_plots}
+explore_plot(ppp, business_type) + scale_x_truncate()
+explore_plot(ppp, gender)
+explore_plot(ppp, veteran)
+explore_plot(ppp, non_profit)
+```
+
+### Amounts
+
+Since the amount values for loans over $150,000 are given as a range, we can't
+combine them with the exact `loan_amount` given for aggregated records.
+
+```{r ammount_summary}
+summary(ppp$loan_amount)
+mean(ppp$loan_amount <= 0, na.rm = TRUE)
+```
+
+```{r hist_amount, echo=FALSE}
+ppp %>%
+  ggplot(aes(loan_amount)) +
+  geom_histogram(fill = dark2["purple"]) +
+  scale_y_continuous(labels = comma) +
+  scale_x_continuous(
+    breaks = c(1 %o% 10^(0:6)),
+    labels = dollar,
+    trans = "log10"
+  ) +
+  labs(
+    title = "United States PPP Loan Amount Distribution",
+    subtitle = "For loans under $150,000 aggregated by ZIP code",
+    caption = "Source: Small Business Administration",
+    x = "aggregated Amount",
+    y = "Count"
+  )
+```
+
+```{r amount_range, echo=FALSE}
+ppp %>% 
+  filter(!is.na(loan_range)) %>% 
+  count(loan_range) %>% 
+  mutate(across(loan_range, fct_rev)) %>% 
+  ggplot(aes(loan_range, n)) +
+  geom_col(fill = dark2["purple"]) +
+  scale_y_continuous(labels = comma) +
+  labs(
+    title = "United States PPP Loan Range Distribution",
+    subtitle = "For loans over $150,000 to exact businesses",
+    caption = "Source: Small Business Administration",
+    x = "Loan Range",
+    y = "Count"
+  )
+```
+
+We can combine these two variables into a new one using the minimum value
+from ranges and the exact value from aggregates.
+
+```{r amount_extract}
+ppp <- ppp %>% 
+  extract(
+    # extract number
+    col = loan_range, 
+    into = "amount_min", 
+    regex = "(\\d+(?:,\\d+)?)(?=-)",
+    remove = FALSE,
+  ) %>% 
+  mutate(
+    # add zeroes
+    amount_min = case_when(
+      str_detect(amount_min, ",") ~ amount_min,
+      !str_detect(amount_min, ",") ~ str_c(amount_min, ",000,000")
+    ),
+    # combine with exact amounts
+    amount_min = coalesce(parse_number(amount_min), loan_amount)
+  )
+```
+
+```{r amount_hist_min, echo=FALSE}
+ppp %>%
+  ggplot(aes(amount_min)) +
+  geom_histogram(fill = dark2["purple"]) +
+  scale_y_continuous(
+    labels = comma,
+    trans = "log10"
+  ) +
+  scale_x_continuous(
+    breaks = c(1 %o% 10^(0:6)),
+    labels = dollar,
+    trans = "log10"
+  ) +
+  labs(
+    title = "United States PPP Loan Amount Distribution",
+    subtitle = "Combined aggregated amount and minimum range amount",
+    caption = "Source: Small Business Administration",
+    x = "Amount with Minimum Range",
+    y = "Count"
+  )
+```
+
+### Dates
+
+We can add the calendar year from `date_approved` with `lubridate::year()`
+
+```{r date_year}
+ppp <- mutate(ppp, year_approved = year(date_approved))
+```
+
+```{r date_range}
+min(ppp$date_approved)
+sum(ppp$year_approved < 2020)
+max(ppp$date_approved)
+sum(ppp$date_approved > today())
+```
+
+```{r bar_month, echo=FALSE}
+ppp %>% 
+  count(m = month(date_approved, label = TRUE)) %>% 
+  ggplot(aes(x = m, y = n)) +
+  geom_col(fill = dark2["purple"]) + 
+  scale_fill_brewer(palette = "Dark2") +
+  scale_y_continuous(labels = comma) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "United States PPP Loans by Month",
+    caption = "Source: Small Business Administration",
+    x = "Month Approved",
+    y = "Count"
+  )
+```
+
+## Wrangle
+
+To improve the searchability of the database, we will perform some consistent,
+confident string normalization. For geographic variables like city names and
+ZIP codes, the corresponding `campfin::normal_*()` functions are tailor made to 
+facilitate this process.
+
+### Address
+
+For the street `addresss` variable, the `campfin::normal_address()` function
+will force consistence case, remove punctuation, and abbreviate official 
+USPS suffixes.
+
+```{r address_norm}
+ppp <- ppp %>% 
+  mutate(
+    address_norm = normal_address(
+      address = address,
+      abbs = usps_street,
+      na_rep = TRUE
+    )
+  )
+```
+
+```{r address_view}
+ppp %>% 
+  select(starts_with("address")) %>% 
+  distinct() %>% 
+  sample_n(10)
+```
+
+### ZIP
+
+The `zip` variable is already extremely clean.
+
+```{r zip_progress}
+progress_table(ppp$zip, compare = valid_zip)
+```
+
+### State
+
+The `state` variable is also entirely clean, aside from two values.
+
+For these values of "XX" with a valid `zip` variable, we can use the matched
+state abbreviation instead.
+
+```{r state_match}
+ppp %>% 
+  filter(state %out% valid_state) %>% 
+  count(state, zip, city, sort = TRUE) %>% 
+  left_join(zipcodes, by = "zip")
+```
+
+```{r state_join}
+state_match <- select(zipcodes, zip, state_norm = state)
+ppp <- left_join(ppp, state_match, by = "zip")
+ppp$state_norm[ppp$state != "XX"] <- NA
+ppp <- mutate(ppp, state_norm = coalesce(state_norm, state))
+ppp$state_norm <- str_replace(ppp$state_norm, "FI", "FL")
+```
+
+```{r state_progress}
+sum(ppp$state == "XX")
+sum(ppp$state_norm == "XX")
+ppp %>% 
+  filter(state == "XX") %>% 
+  count(state_norm, sort = TRUE)
+```
+
+### City
+
+Cities are the most difficult geographic variable to normalize, simply due to
+the wide variety of valid cities and formats.
+
+#### Normal
+
+The `campfin::normal_city()` function is a good start, again converting case,
+removing punctuation, but _expanding_ USPS abbreviations. We can also remove
+`invalid_city` values.
+
+```{r city_norm}
+ppp <- ppp %>% 
+  mutate(
+    city_norm = normal_city(
+      city = city, 
+      abbs = usps_city,
+      states = "DC",
+      na = invalid_city,
+      na_rep = TRUE
+    )
+  )
+```
+
+#### Swap
+
+We can further improve normalization by comparing our normalized value
+against the _expected_ value for that record's state abbreviation and ZIP code.
+If the normalized value is either an abbreviation for or very similar to the
+expected value, we can confidently swap those two.
+
+```{r city_swap}
+ppp <- ppp %>% 
+  rename(city_raw = city) %>% 
+  left_join(
+    y = zipcodes,
+    by = c(
+      "state_norm" = "state",
+      "zip" = "zip"
+    )
+  ) %>% 
+  rename(city_match = city) %>% 
+  mutate(
+    match_abb = is_abbrev(city_norm, city_match),
+    match_dist = str_dist(city_norm, city_match),
+    city_swap = if_else(
+      condition = !is.na(match_dist) & (match_abb | match_dist == 1),
+      true = city_match,
+      false = city_norm
+    )
+  ) %>% 
+  select(
+    -city_match,
+    -match_dist,
+    -match_abb
+  )
+```
+
+#### Refine
+
+The [OpenRefine][or] algorithms can be used to group similar strings and replace
+the less common versions with their most common counterpart. This can greatly
+reduce inconsistency, but with low confidence; we will only keep any refined
+strings that have a valid city/state/zip combination.
+
+[or]: https://openrefine.org/
+
+```{r city_refine}
+good_refine <- ppp %>% 
+  mutate(
+    city_refine = city_swap %>% 
+      key_collision_merge() %>% 
+      n_gram_merge(numgram = 1)
+  ) %>% 
+  filter(city_refine != city_swap) %>% 
+  inner_join(
+    y = zipcodes,
+    by = c(
+      "city_refine" = "city",
+      "state_norm" = "state",
+      "zip" = "zip"
+    )
+  )
+```
+
+```{r city_count, echo=FALSE}
+good_refine %>%
+  count(
+    state_norm, 
+    zip, 
+    city_swap, 
+    city_refine,
+    sort = TRUE
+  )
+```
+
+Then we can join the refined values back to the database.
+
+```{r city_join}
+ppp <- ppp %>% 
+  left_join(good_refine) %>% 
+  mutate(city_refine = coalesce(city_refine, city_swap))
+```
+
+#### Progress
+
+```{r city_progress, echo=FALSE}
+many_city <- c(valid_city, extra_city)
+progress <- progress_table(
+  str_to_upper(ppp$city_raw),
+  ppp$city_norm,
+  ppp$city_swap,
+  ppp$city_refine,
+  compare = many_city
+) %>% mutate(stage = as_factor(stage))
+kable(progress, digits = 3)
+```
+
+You can see how the percentage of valid values increased with each stage.
+
+```{r bar_progress, echo=FALSE}
+raw_in <- percent(prop_in(ppp$city_raw, valid_city))
+progress %>% 
+  ggplot(aes(x = stage, y = prop_in)) +
+  geom_hline(yintercept = 0.99) +
+  geom_col(fill = dark2["purple"]) +
+  coord_cartesian(ylim = c(0.75, 1)) +
+  scale_y_continuous(labels = percent) +
+  labs(
+    title = "United States City Normalization Progress",
+    subtitle = glue("Raw at {raw_in} before conversion to uppercase"),
+    x = "Stage",
+    y = "Percent Valid"
+  )
+```
+
+More importantly, the number of distinct values decreased each stage. We were
+able to confidently change many distinct invalid values to their valid
+equivalent.
+
+```{r bar_distinct, echo=FALSE}
+progress %>% 
+  select(
+    stage, 
+    all = n_distinct,
+    bad = n_diff
+  ) %>% 
+  mutate(good = all - bad) %>% 
+  pivot_longer(c("good", "bad")) %>% 
+  mutate(name = name == "good") %>% 
+  ggplot(aes(x = stage, y = value)) +
+  geom_col(aes(fill = name)) +
+  scale_fill_brewer(palette = "Dark2", direction = -1) +
+  scale_y_continuous(labels = comma) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "United States City Normalization Progress",
+    subtitle = "Distinct values, valid and invalid",
+    x = "Stage",
+    y = "Distinct Values",
+    fill = "Valid"
+  )
+```
+
+## Conclude
+
+Before exporting, we can remove the intermediary normalization columns and
+rename all added variables with the `_clean` suffix.
+
+```{r clean_select}
+ppp <- ppp %>% 
+  select(
+    -city_norm,
+    -city_swap,
+    city_clean = city_refine
+  ) %>% 
+  rename_all(~str_replace(., "_norm", "_clean")) %>% 
+  rename_all(~str_remove(., "_raw"))
+```
+
+```{r clean_glimpse}
+glimpse(sample_n(ppp, 20))
+```
+
+1. There are `r comma(nrow(ppp))` records in the database.
+1. There are `r comma(sum(ppp$dupe_flag))` duplicate records in the database.
+1. The range and distribution of `amount` and `date` seem reasonable.
+1. There are `r comma(sum(ppp$na_flag))` records missing key variables.
+1. Consistency in geographic data has been improved with `campfin::normal_*()`.
+1. The 4-digit `year` variable has been created with `lubridate::year()`.
+
+## Export
+
+Now the file can be saved on disk for upload to the Accountability server.
+The data frame will be split into two files, the original file types for loans
+over and under $150,000.
+
+```{r clean_paths}
+clean_dir <- dir_create(here("us", "covid", "ppp", "data", "clean"))
+clean_path <- path(clean_dir, "sba_ppp_loans.csv")
+write_csv(ppp, clean_path, na = "")
+file_size(clean_path)
+file_encoding(clean_path)
+```
+
+## Upload
+
+Using the [duckr] R package, we can wrap around the [duck] command line tool to
+upload the file to the IRW server.
+
+[duckr]: https://github.com/kiernann/duckr
+[duck]: https://duck.sh/
+
+```{r clean_upload, eval=FALSE}
+# remotes::install_github("kiernann/duckr")
+s3_dir <- "s3:/publicaccountability/csv/"
+s3_path <- path(s3_dir, basename(clean_path))
+if (require(duckr)) {
+  duckr::duck_upload(clean_path, s3_path)
+}
+```
+
+## Dictionary
+
+The following table describes the variables in our final exported file:
+
+```{r dict_make, echo=FALSE}
+dict_raw <- tibble(
+  var = md_code(names(ppp)),
+  type = md_code(map_chr(ppp, typeof)),
+  def = c(
+    "Aggregated loan amount (under $150,000)",
+    "Loan range (over $150,000)",
+    "Combined loan amount with range minimum",
+    "Recipient business name",
+    "Recipient business address",
+    "Recipient business city name",
+    "Recipient business state abbreviation",
+    "Recipient business ZIP code",
+    "North American Industry Classification System",
+    "Recipient business type",
+    "Recipient owner race or ethnicity",
+    "Recipient owner gender",
+    "Recipient owner veteran status",
+    "Recipient business is non-profit",
+    "Individual jobs retained by loan",
+    "Date loan approved",
+    "Lending institution name",
+    "Loan recipient location code",
+    "Source file name",
+    "Flag indicating duplicate record",
+    "Calendar year approved",
+    "Normalized recipient address",
+    "Normalized recipient state",
+    "Normalized recipient city"
+  )
+)
+```
+
+```{r dict_md, echo=FALSE}
+(dict_md <- kable(
+  x = dict_raw,
+  format = "markdown",
+  col.names = c("Column", "Type", "Definition")
+))
+```
