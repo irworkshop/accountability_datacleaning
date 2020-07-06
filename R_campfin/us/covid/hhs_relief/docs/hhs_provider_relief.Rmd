@@ -193,14 +193,6 @@ No records are missing any values.
 col_stats(hhspr, count_na)
 ```
 
-### Duplicates
-
-There are no duplicate records.
-
-```{r dupe_flag, warning=TRUE}
-hhspr <- flag_dupes(hhspr, everything())
-```
-
 ### Amounts
 
 The `payment` values range from `r dollar(min(hhspr$payment))` to
@@ -280,6 +272,8 @@ hhspr <- mutate(hhspr, across(city, normal_city, abbs = usps_city))
 percent(prop_in(hhspr$city, many_city), 0.01)
 ```
 
+We can also add "US" as the state spending the money.
+
 ## Conclude
 
 1. There are `r comma(nrow(hhspr))` records in the database.
@@ -298,7 +292,7 @@ clean_dir <- dir_create(here("us", "covid", "hhs_relief", "data", "clean"))
 clean_path <- path(clean_dir, "hhs_provider_relief.csv")
 write_csv(hhspr, clean_path, na = "")
 file_size(clean_path)
-mutate(file_encoding(clean_path), across(path, basename))
+mutate(file_encoding(clean_path), across(path, path.abbrev))
 ```
 
 ## Dictionary
@@ -311,10 +305,10 @@ dict_raw <- tibble(
   type = md_code(map_chr(hhspr, typeof)),
   def = c(
     "Distributing agency name",
-    "Provider name associated with the billing TIN to whom the payment was issued",
-    "Provider city name (with expanded abbreviations)",
+    "Provider name associated with the billing TIN",
     "Provider state abbreviation",
-    "The cumulative payment that the provider has received AND attested to",
+    "Provider city name (with expanded abbreviations)",
+    "The cumulative payment that the provider",
     "Current calendar year"
   )
 )
@@ -327,11 +321,3 @@ dict_raw <- tibble(
   col.names = c("Column", "Type", "Definition")
 ))
 ```
-
-```{r dict_write}
-write_lines(
-  x = c("# HHS Provider Relief Data Dictionary\n", dict_md),
-  path = here("us", "covid", "hhs_relief_dict.md"),
-)
-```
-

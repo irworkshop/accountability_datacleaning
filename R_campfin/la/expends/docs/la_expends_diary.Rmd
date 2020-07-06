@@ -1,0 +1,699 @@
+---
+title: "Louisiana Expenditures"
+author: "Kiernan Nicholls"
+date: "`r Sys.time()`"
+output:
+  github_document: 
+    df_print: tibble
+    toc: true
+    toc_dept: 2
+editor_options: 
+  chunk_output_type: console
+---
+
+<!-- Place comments regarding knitting here -->
+
+```{r setup, include=FALSE, purl=FALSE}
+library(knitr)
+opts_chunk$set(
+  eval = TRUE,
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  error = FALSE,
+  collapse = TRUE,
+  comment = "#>",
+  fig.path = "../plots/",
+  fig.width = 10,
+  dpi = 300
+)
+if (!interactive()) {
+  options(width = 99)
+  set.seed(5)
+}
+```
+
+```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
+doc_dir <- fs::dir_create(here::here("la", "expends", "docs"))
+```
+
+## Project
+
+The Accountability Project is an effort to cut across data silos and give
+journalists, policy professionals, activists, and the public at large a simple
+way to search across huge volumes of public data about people and organizations.
+
+Our goal is to standardizing public data on a few key fields by thinking of each
+dataset row as a transaction. For each transaction there should be (at least) 3
+variables:
+
+1. All **parties** to a transaction.
+2. The **date** of the transaction.
+3. The **amount** of money involved.
+
+## Objectives
+
+This document describes the process used to complete the following objectives:
+
+1. How many records are in the database?
+1. Check for entirely duplicated records.
+1. Check ranges of continuous variables.
+1. Is there anything blank or missing?
+1. Check for consistency issues.
+1. Create a five-digit ZIP Code called `zip`.
+1. Create a `year` field from the transaction date.
+1. Make sure there is data on both parties to a transaction.
+
+## Packages
+
+The following packages are needed to collect, manipulate, visualize, analyze,
+and communicate these results. The `pacman` package will facilitate their
+installation and attachment.
+
+The IRW's `campfin` package will also have to be installed from GitHub. This
+package contains functions custom made to help facilitate the processing of
+campaign finance data.
+
+```{r load_packages, message=FALSE, warning=FALSE, error=FALSE}
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load_gh("irworkshop/campfin")
+pacman::p_load(
+  tidyverse, # data manipulation
+  lubridate, # datetime strings
+  gluedown, # printing markdown
+  magrittr, # pipe operators
+  janitor, # clean data frames
+  refinr, # cluster and merge
+  scales, # format strings
+  knitr, # knit documents
+  vroom, # read files fast
+  rvest, # html scraping
+  glue, # combine strings
+  here, # relative paths
+  httr, # http requests
+  fs # local storage 
+)
+```
+
+This document should be run as part of the `R_campfin` project, which lives as a
+sub-directory of the more general, language-agnostic
+[`irworkshop/accountability_datacleaning`][tap] GitHub repository.
+
+The `R_campfin` project uses the [RStudio projects][rproj] feature and should be
+run as such. The project also uses the dynamic `here::here()` tool for file
+paths relative to _your_ machine.
+
+```{r where_here}
+# where does this document knit?
+here::here()
+```
+
+[tap]: https://github.com/irworkshop/accountability_datacleaning
+[rproj]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects
+
+## Data
+
+Expenditures records is from the [Louisiana Ethics Administration's][lea]:
+
+>  The mission of the Ethics Administration Program is to administer and to
+enforce Louisiana’s conflicts of interest legislation, campaign finance
+registration and reporting requirements and lobbyist registration and disclosure
+laws to achieve compliance by governmental officials, public employees,
+candidates, and lobbyists and to provide public access to disclosed information.
+
+We can search expenditure records from the LEA's expenditures search portal:
+
+> * [Campaign Finance Expenditures][portal]  
+>     Choose this option to sort and view campaign expense records.  
+>     Expenditures may appear multiple times in the search.  
+
+[lea]: http://ethics.la.gov/AboutTheBoard.aspx
+[portal]: http://www.ethics.la.gov/CampaignFinanceSearch/SearchEfilingExpenditures.aspx
+
+## Download
+
+We can search for expenditures between two dates, however the number of results
+that can be returned at a time is 100,000.
+
+>  Due to the high volume of contribution receipts, these search results are
+limited to the top 100,000 of 1,285,753 records that match your search criteria
+and sorting selection.
+
+To circumvent this cap, we perform multiple searches between the start and end
+of the years between 2000 and 2020. The [cURL] commands to download these chunks
+are stored in the `raw_curl.sh` text file. We can run these commands one by one
+and save the returned files locally.
+
+[cURL]: https://en.wikipedia.org/wiki/CURL
+
+```{r raw_dir}
+raw_dir <- dir_create(here("la", "expends", "data", "raw"))
+raw_path <- path(raw_dir, "la_exp_raw.csv")
+raw_curl <- read_lines(here("la", "expends", "raw_curl.sh"))
+```
+
+```{r raw_curl, eval=FALSE}
+for (i in seq_along(raw_curl)) {
+  out_path <- path(raw_dir, glue("SearchResults-{seq(2000, 2020)[i]}.csv"))
+  write_lines(system(raw_curl[i], intern = TRUE), out_path)
+  flush_memory(); Sys.sleep(5)
+}
+```
+
+```{r raw_paths}
+raw_info <- dir_info(raw_dir)
+nrow(raw_info)
+sum(raw_info$size)
+as_tibble(raw_info) %>% 
+  select(path, size, modification_time) %>% 
+  mutate(across(path, path.abbrev))
+```
+
+## Read
+
+All of these yearly files can be read into a single data frame with `vroom()`.
+
+```{r raw_read}
+lae <- vroom(
+  file = raw_info$path,
+  escape_backslash = FALSE,
+  escape_double = FALSE,
+  trim_ws = TRUE,
+  id = "file",
+  num_threads = 1,
+  .name_repair = make_clean_names,
+  col_types = cols(
+    .default = col_character(),
+    ExpenditureDate = col_date_usa(),
+    ExpenditureAmt = col_number()
+  )
+)
+```
+
+```{r raw_parse}
+old_names <- names(lae)
+lae <- lae %>% 
+  mutate(across(file, path.abbrev)) %>% 
+  mutate(across(where(is.character), str_squish)) %>% 
+  rename_all(str_remove, "_name$") %>% 
+  rename_all(str_remove, "^filer_") %>% 
+  rename_all(str_remove, "^report_") %>% 
+  rename_all(str_remove, "^recipient_") %>% 
+  rename_all(str_remove, "^expenditure_") %>% 
+  rename_all(str_remove, "^candidate_") %>% 
+  rename(amount = amt)
+```
+
+## Explore
+
+```{r glimpse}
+glimpse(lae)
+tail(lae)
+```
+
+### Missing
+
+Columns vary in their degree of missing values.
+
+```{r na_count}
+col_stats(lae, count_na)
+```
+
+We can flag any record missing a key variable like a name or date.
+
+```{r na_flag}
+lae <- lae %>% flag_na(date, last, amount, recipient)
+sum(lae$na_flag)
+```
+
+All such records are missing a beneficiary.
+
+```{r na_view}
+lae %>% 
+  filter(na_flag) %>% 
+  select(date, last, amount, recipient)
+```
+
+```{r na_recount}
+lae %>% 
+  filter(na_flag) %>% 
+  select(date, last, amount, recipient) %>% 
+  col_stats(count_na)
+```
+
+### Duplicates
+
+We can flag any record that's duplicated at least once across all variables.
+
+```{r dupe_flag}
+d1 <- duplicated(lae, fromLast = FALSE)
+d2 <- duplicated(lae, fromLast = TRUE)
+lae <- mutate(lae, dupe_flag = d1 | d2)
+rm(d1, d2); flush_memory()
+```
+
+Over `r percent(mean(lae$dupe_flag))` of records are such duplicates
+
+```{r dupe_count}
+percent(mean(lae$dupe_flag), 0.01)
+```
+
+```{r dupe_view}
+lae %>% 
+  filter(dupe_flag) %>% 
+  select(date, last, amount, recipient, number)
+```
+
+### Categorical
+
+```{r distinct_count}
+col_stats(lae, n_distinct)
+```
+
+```{r distinct_plots, echo=FALSE}
+explore_plot(lae, code)
+explore_plot(lae, type)
+explore_plot(lae, schedule)
+explore_plot(lae, schedule)
+```
+
+### Amounts
+
+```{r ammount_summary}
+summary(lae$amount)
+mean(lae$amount <= 0)
+```
+
+```{r hist_amount, echo=FALSE}
+lae %>%
+  filter(amount >= 1) %>% 
+  ggplot(aes(amount)) +
+  geom_histogram(fill = dark2["purple"], bins = 20) +
+  scale_y_continuous(labels = comma) +
+  scale_x_continuous(
+    breaks = c(1 %o% 10^(0:6)),
+    labels = dollar,
+    trans = "log10"
+  ) +
+  labs(
+    title = "Louisiana Expenditures Amount Distribution",
+    caption = "Source: {source}",
+    x = "Amount",
+    y = "Count"
+  )
+```
+
+### Dates
+
+We can add the calendar year from `date` with `lubridate::year()`
+
+```{r date_year}
+lae <- mutate(lae, year = year(date))
+```
+
+```{r date_range}
+min(lae$date)
+sum(lae$year < 2000)
+max(lae$date)
+sum(lae$date > today())
+```
+
+```{r bar_year, echo=FALSE}
+lae %>% 
+  count(year) %>% 
+  mutate(even = !is_even(year)) %>% 
+  ggplot(aes(x = year, y = n)) +
+  geom_col(aes(fill = even)) + 
+  scale_fill_brewer(palette = "Dark2") +
+  scale_y_continuous(labels = comma) +
+  scale_x_continuous(breaks = seq(2000, 2020, by = 2)) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "Louisiana Expenditures by Year",
+    caption = "Source: {source}",
+    fill = "Election Year",
+    x = "Year Made",
+    y = "Count"
+  )
+```
+
+## Wrangle
+
+To improve the searchability of the database, we will perform some consistent,
+confident string normalization. For geographic variables like city names and
+ZIP codes, the corresponding `campfin::normal_*()` functions are tailor made to 
+facilitate this process.
+
+### Address
+
+For the street `addresss` variable, the `campfin::normal_address()` function
+will force consistence case, remove punctuation, and abbreviate official 
+USPS suffixes.
+
+```{r address_norm}
+lae <- lae %>% 
+  unite(
+    col = addr_full,
+    starts_with("addr"),
+    sep = " ",
+    remove = FALSE,
+    na.rm = TRUE
+  ) %>% 
+  mutate(
+    addr_norm = normal_address(
+      address = addr_full,
+      abbs = usps_street,
+      na_rep = TRUE
+    )
+  ) %>% 
+  select(-addr_full)
+```
+
+```{r address_view}
+lae %>% 
+  select(contains("addr")) %>% 
+  distinct() %>% 
+  sample_n(10)
+```
+
+### ZIP
+
+For ZIP codes, the `campfin::normal_zip()` function will attempt to create
+valid _five_ digit codes by removing the ZIP+4 suffix and returning leading
+zeroes dropped by other programs like Microsoft Excel.
+
+```{r zip_norm}
+lae <- lae %>% 
+  mutate(
+    zip_norm = normal_zip(
+      zip = zip,
+      na_rep = TRUE
+    )
+  )
+```
+
+```{r zip_progress}
+progress_table(
+  lae$zip,
+  lae$zip_norm,
+  compare = valid_zip
+)
+```
+
+### State
+
+Valid two digit state abbreviations can be made using the 
+`campfin::normal_state()` function.
+
+```{r state_norm}
+lae <- lae %>% 
+  mutate(
+    state_norm = normal_state(
+      state = state,
+      abbreviate = TRUE,
+      na_rep = TRUE,
+      valid = NULL
+    )
+  )
+```
+
+```{r state_view}
+lae %>% 
+  filter(state != state_norm) %>% 
+  count(state, state_norm, sort = TRUE)
+```
+
+```{r state_progress}
+progress_table(
+  lae$state,
+  lae$state_norm,
+  compare = valid_state
+)
+```
+
+### City
+
+Cities are the most difficult geographic variable to normalize, simply due to
+the wide variety of valid cities and formats.
+
+#### Normal
+
+The `campfin::normal_city()` function is a good start, again converting case,
+removing punctuation, but _expanding_ USPS abbreviations. We can also remove
+`invalid_city` values.
+
+```{r city_norm}
+lae <- lae %>% 
+  mutate(
+    city_norm = normal_city(
+      city = city, 
+      abbs = usps_city,
+      states = c("LA", "DC", "LOUISIANA"),
+      na = invalid_city,
+      na_rep = TRUE
+    )
+  )
+```
+
+#### Swap
+
+We can further improve normalization by comparing our normalized value
+against the _expected_ value for that record's state abbreviation and ZIP code.
+If the normalized value is either an abbreviation for or very similar to the
+expected value, we can confidently swap those two.
+
+```{r city_swap}
+lae <- lae %>% 
+  rename(city_raw = city) %>% 
+  left_join(
+    y = zipcodes,
+    by = c(
+      "state_norm" = "state",
+      "zip_norm" = "zip"
+    )
+  ) %>% 
+  rename(city_match = city) %>% 
+  mutate(
+    match_abb = is_abbrev(city_norm, city_match),
+    match_dist = str_dist(city_norm, city_match),
+    city_swap = if_else(
+      condition = !is.na(match_dist) & (match_abb | match_dist == 1),
+      true = city_match,
+      false = city_norm
+    )
+  ) %>% 
+  select(
+    -city_match,
+    -match_dist,
+    -match_abb
+  )
+```
+
+#### Refine
+
+The [OpenRefine][or] algorithms can be used to group similar strings and replace
+the less common versions with their most common counterpart. This can greatly
+reduce inconsistency, but with low confidence; we will only keep any refined
+strings that have a valid city/state/zip combination.
+
+[or]: https://openrefine.org/
+
+```{r city_refine}
+good_refine <- lae %>% 
+  mutate(
+    city_refine = city_swap %>% 
+      key_collision_merge() %>% 
+      n_gram_merge(numgram = 1)
+  ) %>% 
+  filter(city_refine != city_swap) %>% 
+  inner_join(
+    y = zipcodes,
+    by = c(
+      "city_refine" = "city",
+      "state_norm" = "state",
+      "zip_norm" = "zip"
+    )
+  )
+```
+
+```{r city_count, echo=FALSE}
+good_refine %>%
+  count(
+    state_norm, 
+    zip_norm, 
+    city_swap, 
+    city_refine,
+    sort = TRUE
+  )
+```
+
+Then we can join the refined values back to the database.
+
+```{r city_join}
+lae <- lae %>% 
+  left_join(good_refine) %>% 
+  mutate(city_refine = coalesce(city_refine, city_swap))
+```
+
+#### Progress
+
+```{r city_progress, echo=FALSE}
+many_city <- c(valid_city, extra_city)
+progress <- progress_table(
+  str_to_upper(lae$city_raw),
+  lae$city_norm,
+  lae$city_swap,
+  lae$city_refine,
+  compare = many_city
+) %>% mutate(stage = as_factor(stage))
+kable(progress, digits = 3)
+```
+
+You can see how the percentage of valid values increased with each stage.
+
+```{r bar_progress, echo=FALSE}
+raw_in <- percent(prop_in(lae$city_raw, valid_city))
+progress %>% 
+  ggplot(aes(x = stage, y = prop_in)) +
+  geom_hline(yintercept = 0.99) +
+  geom_col(fill = dark2["purple"]) +
+  coord_cartesian(ylim = c(0.75, 1)) +
+  scale_y_continuous(labels = percent) +
+  labs(
+    title = "Louisiana City Normalization Progress",
+    subtitle = glue("Raw at {raw_in} before conversion to uppercase"),
+    x = "Stage",
+    y = "Percent Valid"
+  )
+```
+
+More importantly, the number of distinct values decreased each stage. We were
+able to confidently change many distinct invalid values to their valid
+equivalent.
+
+```{r bar_distinct, echo=FALSE}
+progress %>% 
+  select(
+    stage, 
+    all = n_distinct,
+    bad = n_diff
+  ) %>% 
+  mutate(good = all - bad) %>% 
+  pivot_longer(c("good", "bad")) %>% 
+  mutate(name = name == "good") %>% 
+  ggplot(aes(x = stage, y = value)) +
+  geom_col(aes(fill = name)) +
+  scale_fill_brewer(palette = "Dark2", direction = -1) +
+  scale_y_continuous(labels = comma) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "Louisiana City Normalization Progress",
+    subtitle = "Distinct values, valid and invalid",
+    x = "Stage",
+    y = "Distinct Values",
+    fill = "Valid"
+  )
+```
+
+## Conclude
+
+Before exporting, we can remove the intermediary normalization columns and
+rename all added variables with the `_clean` suffix.
+
+```{r clean_select}
+lae <- lae %>% 
+  select(
+    -city_norm,
+    -city_swap,
+    city_clean = city_refine
+  ) %>% 
+  rename_all(~str_replace(., "_norm", "_clean")) %>% 
+  rename_all(~str_remove(., "_raw"))
+```
+
+```{r clean_glimpse}
+glimpse(sample_frac(lae))
+```
+
+1. There are `r comma(nrow(lae))` records in the database.
+1. There are `r comma(sum(lae$dupe_flag))` duplicate records in the database.
+1. The range and distribution of `amount` and `date` seem reasonable.
+1. There are `r comma(sum(lae$na_flag))` records missing key variables.
+1. Consistency in geographic data has been improved with `campfin::normal_*()`.
+1. The 4-digit `year` variable has been created with `lubridate::year()`.
+
+## Export
+
+Now the file can be saved on disk for upload to the Accountability server.
+
+```{r clean_dir}
+clean_dir <- dir_create(here("la", "expends", "data", "clean"))
+clean_path <- path(clean_dir, "la_expends_clean.csv")
+write_csv(lae, clean_path, na = "")
+file_size(clean_path)
+file_encoding(clean_path) %>% 
+  mutate(across(path, path.abbrev))
+```
+
+## Upload
+
+Using the [duckr] R package, we can wrap around the [duck] command line tool to
+upload the file to the IRW server.
+
+[duckr]: https://github.com/kiernann/duckr
+[duck]: https://duck.sh/
+
+```{r clean_upload, eval=FALSE}
+# remotes::install_github("kiernann/duckr")
+s3_dir <- "s3:/publicaccountability/csv/"
+s3_path <- path(s3_dir, basename(clean_path))
+if (require(duckr)) {
+  duckr::duck_upload(clean_path, s3_path)
+}
+```
+
+## Dictionary
+
+The following table describes the variables in our final exported file:
+
+```{r dict_make, echo=FALSE}
+dict_raw <- tibble(
+  var = md_code(names(lae)),
+  old = c(md_code(old_names), rep("", ncol(lae) - length(old_names))),
+  type = md_code(map_chr(lae, typeof)),
+  def = c(
+    "Source file path",
+    "Spending candidate last name",
+    "Spending candidate first name",
+    "Expenditure code",
+    "Expenditure type",
+    "Expenditure number",
+    "Schedule reported on",
+    "Recipient vendor name",
+    "Recipient street address",
+    "Recipient secondary address",
+    "Recipient city name",
+    "Recipient state abbreviation",
+    "Recipient ZIP+4 code",
+    "Expenditure description",
+    "Expenditure other beneficiary name",
+    "Date contribution was made",
+    "Contribution amount or correction",
+    "Flag for missing date, amount, or name",
+    "Flag for completely duplicated record",
+    "Calendar year of contribution date",
+    "Normalized combined street address",
+    "Normalized 5-digit ZIP code",
+    "Normalized 2-digit state abbreviation",
+    "Normalized city name"
+  )
+)
+```
+
+```{r dict_md, echo=FALSE}
+(dict_md <- kable(
+  x = dict_raw,
+  format = "markdown",
+  col.names = c("Column", "Original name", "Type", "Definition")
+))
+```
