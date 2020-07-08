@@ -577,7 +577,7 @@ upload the file to the IRW server.
 [duck]: https://duck.sh/
 
 ```{r clean_upload, eval=FALSE}
-# remotes::install_github("kiernann/duckr")
+remotes::install_github("kiernann/duckr")
 s3_dir <- "s3:/publicaccountability/csv/"
 s3_path <- path(s3_dir, basename(clean_path))
 if (require(duckr)) {

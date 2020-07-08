@@ -1,5 +1,5 @@
 ---
-title: "Illinois Lobbyists Registration Data Diary"
+title: "Illinois Lobbyists Expenditures Data Diary"
 author: "Yanqi Xu"
 date: "`r Sys.time()`"
 output:
@@ -34,7 +34,7 @@ if (!interactive()) {
 ```
 
 ```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
-doc_dir <- fs::dir_create(here::here("il", "lobbying", "docs"))
+doc_dir <- fs::dir_create(here::here("nj", "lobby", "docs"))
 ```
 
 ## Project
@@ -134,10 +134,9 @@ raw_dir <- dir_create(here("il", "lobbying", "data", "raw"))
 raw_info <- as_tibble(dir_info(raw_dir))
 raw_info %>% 
   select(path, size, modification_time)
-  
 ```
 
-First, we will read the `LR_LOBBING_ENT.csv` file containing the relationships
+First, we will read the `LR_EXPENDITURES.csv` file containing the relationships
 between lobbying agents, their firms, and the client entities they represent.
 
 According to the [IL SOS](https://www.cyberdriveillinois.com/departments/index/lobbyist/lobbyist_search.html), 
@@ -158,85 +157,168 @@ entity should not list themselves as their own sub-client.
 The exclusive lobbyist corresponds to in-house lobbyists in other states, while the contractual lobbyists likely work for lobbying firms contracted by entities. 
 
 ```{r raw_read}
-illr<- as_tibble(read.csv(file = path(raw_dir, "LR_LOBBYING_ENT.csv"), stringsAsFactors = FALSE, fileEncoding = 'UTF-16LE'))
+utf_convert <- function(path, out) {
+  system(glue("iconv -f UTF-16LE -t UTF-8 {path} -o {out}"))
+}
+tmp <- file_temp(ext = "csv")
+utf_convert(path(raw_dir,"LR_EXPENDITURES.csv"), tmp)
+
+x <- str_squish(read_lines(tmp))
+sum(is.na(x)) # before
+for (i in rev(seq_along(x)[-1])) { # go from back
+  if (str_starts(x[i], "\\d+,\\d{4},\\d+")) {
+    next() # skip if good
+  } else { # collapse if bad
+    x[i - 1] <- str_c(x[i - 1], x[i])
+    x[i] <- NA_character_
+  }
+}
+sum(is.na(x)) # after
+write_lines(na.omit(x), tmp)
+
+ille <- vroom(
+  file = tmp,
+  delim = ",",
+  escape_backslash = FALSE,
+  escape_double = TRUE,
+  num_threads = 1,
+  .name_repair = make_clean_names,
+  col_types = cols(
+    .default = col_character(),
+    YEAR = col_integer(),
+    REPORT_PERIOD = col_double(),
+    EXPENDITURE_DATE = col_date("%Y%m%d"),
+    EXPENDITURE_AMOUNT = col_double(),
+    DATE_CREATED = col_datetime("%Y-%m-%d-%H.%M.%S"),
+    DATE_UPDATED = col_datetime("%Y-%m-%d-%H.%M.%S")
+  )
+)
 ```
 
-```{r read, echo=F, eval=FALSE}
-#illr_lob <- as_tibble(read.csv(file = path(raw_dir, "LR_LOBBYIST.csv"), stringsAsFactors = FALSE, fileEncoding = 'UTF-16LE'))
-#illr_sub <- as_tibble(read.csv(file = path(raw_dir, "LR_SUB_CLIENTS.csv"), stringsAsFactors = FALSE, fileEncoding = 'UTF-16LE'))
-#illr_contr <- as_tibble(read.csv(file = path(raw_dir, "LR_CONTRACT_CLIENT.csv"), stringsAsFactors = FALSE, fileEncoding = 'UTF-16LE'))
-```
-
-The `illr` table contains all the relationships between clients and their agents
-```{r}
-illr <- illr %>% clean_names()
-```
 
 ## Explore
 
 ```{r glimpse}
-glimpse(illr)
-tail(illr)
+glimpse(ille)
+tail(ille)
 ```
 
 ### Missing
-A quick look at the dataset's date fields tells us that this dataset is mostly complete.
 ```{r na_count}
-col_stats(illr, count_na)
+col_stats(ille, count_na)
 ```
-
+We will use the `campfin::flag_na()` function to flag records missing the `lobbyist_id` field. 
+```{r}
+ille <- ille %>% flag_na(lobbyist_id)
+```
 
 ### Duplicates
 
-There are no duplicate records.
+We will flag entries that are identical. They may be duplicates.
 
 ```{r dupe_flag, warning=TRUE}
-illr <- flag_dupes(illr, everything())
+ille <- flag_dupes(ille, everything())
+sum(ille$dupe_flag)
 ```
 
 ### Categorical
 
 ```{r distinct_count}
-col_stats(illr, n_distinct)
+col_stats(ille, n_distinct)
 ```
 
 ### Dates
 Most of the dates were read as strings. We'll need to manually convert them to date types.
 ```{r date conv}
-illr <- illr %>%
-  mutate_at(.vars = vars(ends_with("dt")), .funs = as.character) %>% 
-  mutate_at(.vars = vars(ends_with("dt")),.funs = as.Date,format="%Y%m%d")
+ille <- ille %>%
+  mutate(expenditure_date_clean = as.Date(expenditure_date, format = "%Y%m%d")) %>% 
+  mutate_at(.vars = vars(starts_with("date")),.funs = as_datetime)
 ```
 
-
+```{r date_range}
+min(ille$expenditure_date_clean)
+max(ille$expenditure_date_clean)
+sum(ille$expenditure_date_clean > today())
+```
 
 ```{r bar_year, echo=FALSE}
-illr %>% 
-  count(ent_reg_year) %>% 
-  mutate(even = is_even(ent_reg_year)) %>% 
-  ggplot(aes(x = ent_reg_year, y = n)) +
+ille %>% 
+  count(year) %>% 
+  mutate(even = is_even(year)) %>% 
+  ggplot(aes(x = year, y = n)) +
   geom_col(fill = dark2["purple"]) + 
   scale_fill_brewer(palette = "Dark2") +
   scale_y_continuous(labels = comma) +
-  scale_x_continuous(breaks = seq(2000, 2020, by = 2)) +
-  coord_cartesian(xlim = c(2000, 2020)) +
+  scale_x_continuous(breaks = seq(1980, 2020, by = 2)) +
+  coord_cartesian(xlim = c(1989, 2020)) +
   theme(legend.position = "bottom") +
   labs(
-    title = "Illinois Lobbyists Registered by Year",
+    title = "Illinois Lobbying Expenditures by Year",
     caption = "Source: IL SOS",
     x = "Year Made",
     y = "Count"
   )
 ```
 
-## Wrangle
-We can see that the agents' names have extraneous white spaces, which can be removed by `str_trim()`
-```{r name trim}
-illr <-  illr %>% 
-  mutate_at(.vars = vars(ends_with("name")),.funs = str_trim)
+```{r}
+ille %>% 
+filter(amount >= 1, amount < 1e5) %>% 
+  ggplot(aes(x = reorder(party, amount), y = amount)) + 
+  geom_violin(aes(fill = party)) + 
+  scale_y_continuous(
+    breaks = c(1 %o% 10^(0:5)),
+    labels = dollar,
+    trans = "log10"
+  ) +
+  scale_fill_manual(
+    guide = FALSE,
+    values = c(
+      "brown", 
+      "royalblue", 
+      "forestgreen", 
+      "gold",
+      "mediumpurple", 
+      "#999999", 
+      "firebrick",
+      "black"
+    )
+  ) +
+  labs(
+    title = "Washington State Campaign Expenditures",
+    caption = "Source: data.wa.gov/d/tijg-9zyp",
+    y = "Amount",
+    x = "Party"
+  )
 ```
 
 
+## Join
+
+Since this relational table only contains lobbyists' and entities' IDs, we will need to manually join such fields from `LR_LOBBYIST.csv` and `il_lob_reg.csv`. 
+
+First, we will join the `lobbyist_id` from `LR_LOBBYIST.csv`. 
+```{r join lob id}
+illr_lob <- as_tibble(read.csv(file = path(raw_dir, "LR_LOBBYIST.csv"), stringsAsFactors = FALSE, fileEncoding = 'UTF-16LE')) %>% clean_names()
+reg_dir <- here("il", "lobbying", "data", "clean","reg")
+illr <- read_csv(file = dir_ls(reg_dir))
+```
+We will also need to match the year field. 
+```{r}
+illr_lob <- illr_lob %>% select(lobbyist_id, lobbyist_lname, lobbyist_fname, ent_reg_year)
+
+ille <-  ille %>% mutate(year= as.numeric(year)) %>% 
+left_join(illr_lob, by = c("year" = "ent_reg_year", "lobbyist_id"))
+
+illr_join <- illr %>% select(ent_id, ent_reg_year, ent_name, ent_address_clean, ent_city_clean, ent_st_abbr_clean, ent_zip_clean)
+
+ille <- ille %>% mutate(entity_id = as.numeric(entity_id)) %>% 
+  left_join(illr_join, by = c("year" = "ent_reg_year", "entity_id"="ent_id"))
+```
+
+
+
+
+### Wrangle
 
 To improve the searchability of the database, we will perform some consistent,
 confident string normalization. For geographic variables like city names and
@@ -250,7 +332,7 @@ will force consistence case, remove punctuation, and abbreviate official
 USPS suffixes.
 
 ```{r address_norm}
-illr <- illr %>% 
+ille <- ille %>% 
       # combine street addr
   unite(
     col = ent_address,
@@ -267,7 +349,7 @@ illr <- illr %>%
     na.rm = TRUE
   )
 
-illr <- illr %>% mutate_at(
+ille <- ille %>% mutate_at(
    .vars = vars(ends_with('address')), 
    .funs = list(norm = ~ normal_address(
     .,
@@ -278,11 +360,11 @@ illr <- illr %>% mutate_at(
 ```
 
 ```{r address_view}
-illr %>% 
+ille %>% 
   select(ends_with("address"), ends_with("address_norm")) %>% 
   distinct() %>% 
   sample_n(10)
-illr <- illr %>% select(-ends_with("address"))
+ille <- ille %>% select(-ends_with("address"))
 ```
 
 ### ZIP
@@ -292,7 +374,7 @@ valid _five_ digit codes by removing the ZIP+4 suffix and returning leading
 zeroes dropped by other programs like Microsoft Excel.
 
 ```{r zip_norm}
-illr <- illr %>% mutate_at(
+ille <- ille %>% mutate_at(
   .vars = vars(ends_with("zip")),
   .funs = list(norm = ~ normal_zip(
     .,
@@ -304,10 +386,10 @@ illr <- illr %>% mutate_at(
 
 ```{r zip_progress}
 progress_table(
-  illr$ent_zip,
-  illr$ent_zip_norm,
-  illr$agent_zip,
-  illr$agent_zip_norm,
+  ille$ent_zip,
+  ille$ent_zip_norm,
+  ille$agent_zip,
+  ille$agent_zip_norm,
   compare = valid_zip
 )
 ```
@@ -318,7 +400,7 @@ Valid two digit state abbreviations can be made using the
 `campfin::normal_state()` function.
 
 ```{r state_norm}
-illr <- illr %>% 
+ille <- ille %>% 
   mutate_at(
     .vars = vars(ends_with("st_abbr")),
   .funs = list(norm = ~ normal_state(
@@ -333,10 +415,10 @@ illr <- illr %>%
 
 ```{r state_progress}
 progress_table(
-  illr$ent_st_abbr,
-  illr$ent_st_abbr_norm,
-  illr$agent_st_abbr,
-  illr$agent_st_abbr_norm,
+  ille$ent_st_abbr,
+  ille$ent_st_abbr_norm,
+  ille$agent_st_abbr,
+  ille$agent_st_abbr_norm,
   compare = valid_state
 )
 ```
@@ -353,7 +435,7 @@ removing punctuation, but _expanding_ USPS abbreviations. We can also remove
 `invalid_city` values.
 
 ```{r city_norm}
-illr <- illr %>% 
+ille <- ille %>% 
   mutate_at(
     .vars = vars(ends_with("city")),
   .funs = list(norm = ~ normal_city(
@@ -375,7 +457,7 @@ If the normalized value is either an abbreviation for or very similar to the
 expected value, we can confidently swap those two.
 
 ```{r city_swap lobbyist}
-illr <- illr %>% 
+ille <- ille %>% 
   left_join(
     y = zipcodes,
     by = c(
@@ -406,18 +488,18 @@ illr <- illr %>%
 ```{r city_progress, echo=FALSE}
 many_city <- c(valid_city, extra_city)
 progress <- progress_table(
-  str_to_upper(illr$ent_city),
-  illr$ent_city_norm,
-  illr$ent_city_swap,
-    str_to_upper(illr$agent_city),
-  illr$agent_city_norm,
+  str_to_upper(ille$ent_city),
+  ille$ent_city_norm,
+  ille$ent_city_swap,
+    str_to_upper(ille$agent_city),
+  ille$agent_city_norm,
   compare = many_city
 ) %>% mutate(stage = as_factor(stage))
 kable(progress, digits = 3)
 ```
 
 ```{r}
-illr <- illr %>% 
+ille <- ille %>% 
   select(-ent_city_norm) %>% 
   rename(ent_city_norm = ent_city_swap)
 ```
@@ -428,18 +510,18 @@ Before exporting, we can remove the intermediary normalization columns and
 rename all added variables with the `_clean` suffix.
 
 ```{r clean_select}
-illr <- illr %>% 
+ille <- ille %>% 
   rename_all(~str_replace(., "_norm", "_clean")) 
 ```
 
 ```{r clean_glimpse}
-glimpse(sample_n(illr, 20))
+glimpse(sample_n(ille, 20))
 ```
 
-1. There are `r comma(nrow(illr))` records in the database.
+1. There are `r comma(nrow(ille))` records in the database.
 1. There are no duplicate records in the database.
 1. The range and distribution of `amount` and `date` seem reasonable.
-1. There are `r comma(sum(illr$na_flag))` records missing key variables.
+1. There are `r comma(sum(ille$na_flag))` records missing key variables.
 1. Consistency in geographic data has been improved with `campfin::normal_*()`.
 1. The 4-digit `year` variable has been created with `lubridate::year()`.
 
@@ -450,7 +532,7 @@ Now the file can be saved on disk for upload to the Accountability server.
 ```{r clean_dir}
 clean_dir <- dir_create(here("il", "lobbying", "data", "clean","reg"))
 clean_path <- path(clean_dir, "il_lobby_reg_clean.csv")
-write_csv(illr, clean_path, na = "")
+write_csv(ille, clean_path, na = "")
 file_size(clean_path)
 ```
 
