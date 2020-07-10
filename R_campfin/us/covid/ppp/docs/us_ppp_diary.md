@@ -1,7 +1,7 @@
 Paycheck Protection Program Loans
 ================
 Kiernan Nicholls
-2020-07-06 16:15:58
+2020-07-09 17:50:06
 
   - [Project](#project)
   - [Objectives](#objectives)
@@ -159,16 +159,16 @@ raw_dir %>%
 #> # A tibble: 58 x 3
 #>    path                          size modification_time  
 #>    <chr>                  <fs::bytes> <dttm>             
-#>  1 foia_150k_plus.csv         124.95M 2020-07-06 16:16:02
-#>  2 foia_up_to_150k_AK.csv        1.2M 2020-07-06 16:15:59
-#>  3 foia_up_to_150k_AL.csv       7.22M 2020-07-06 16:15:59
-#>  4 foia_up_to_150k_AR.csv       4.75M 2020-07-06 16:16:00
-#>  5 foia_up_to_150k_AS.csv      25.43K 2020-07-06 16:15:59
-#>  6 foia_up_to_150k_AZ.csv       9.35M 2020-07-06 16:16:00
-#>  7 foia_up_to_150k_CA.csv      64.38M 2020-07-06 16:16:01
-#>  8 foia_up_to_150k_CO.csv      11.73M 2020-07-06 16:16:00
-#>  9 foia_up_to_150k_CT.csv       7.15M 2020-07-06 16:15:59
-#> 10 foia_up_to_150k_DC.csv        1.3M 2020-07-06 16:15:59
+#>  1 foia_150k_plus.csv         124.95M 2020-07-09 17:50:10
+#>  2 foia_up_to_150k_AK.csv        1.2M 2020-07-09 17:50:08
+#>  3 foia_up_to_150k_AL.csv       7.22M 2020-07-09 17:50:08
+#>  4 foia_up_to_150k_AR.csv       4.75M 2020-07-09 17:50:08
+#>  5 foia_up_to_150k_AS.csv      25.43K 2020-07-09 17:50:08
+#>  6 foia_up_to_150k_AZ.csv       9.35M 2020-07-09 17:50:09
+#>  7 foia_up_to_150k_CA.csv      64.38M 2020-07-09 17:50:10
+#>  8 foia_up_to_150k_CO.csv      11.73M 2020-07-09 17:50:08
+#>  9 foia_up_to_150k_CT.csv       7.15M 2020-07-09 17:50:08
+#> 10 foia_up_to_150k_DC.csv        1.3M 2020-07-09 17:50:08
 #> # … with 48 more rows
 ```
 
@@ -382,30 +382,30 @@ mean(ppp$loan_amount <= 0, na.rm = TRUE)
 
 ![](../plots/amount_range-1.png)<!-- -->
 
-We can combine these two variables into a new one using the minimum
-value from ranges and the exact value from aggregates.
+We can combine these two variables into a single one for mapping on the
+site. A new logical `range_flag` value will be added to indicate any
+record above $150,000 and thus containing only a loan range.
 
 ``` r
-ppp <- ppp %>% 
-  extract(
-    # extract number
-    col = loan_range, 
-    into = "amount_min", 
-    regex = "(\\d+(?:,\\d+)?)(?=-)",
-    remove = FALSE,
+ppp <- ppp %>%
+  # combine the two columns
+  unite(
+    col = amount_range,
+    starts_with("loan_"),
+    na.rm = TRUE,
+    remove = FALSE
   ) %>% 
+  # convert range text to numbers
   mutate(
-    # add zeroes
-    amount_min = case_when(
-      str_detect(amount_min, ",") ~ amount_min,
-      !str_detect(amount_min, ",") ~ str_c(amount_min, ",000,000")
-    ),
-    # combine with exact amounts
-    amount_min = coalesce(parse_number(amount_min), loan_amount)
-  )
+    amount_range = amount_range %>% 
+      str_remove("\\w\\s\\$") %>% 
+      str_remove("\\smillion") %>% 
+      str_replace_all("(?<=^|-)(\\d{1,2})(?!\\d)", "\\1,000,000") %>% 
+      str_remove_all(",")
+  ) %>% 
+  # flag any column using ranges
+  mutate(range_flag = !is.na(loan_range))
 ```
-
-![](../plots/amount_hist_min-1.png)<!-- -->
 
 ### Dates
 
@@ -696,10 +696,10 @@ ppp <- ppp %>%
 ``` r
 glimpse(sample_n(ppp, 20))
 #> Rows: 20
-#> Columns: 24
+#> Columns: 25
+#> $ amount_range   <chr> "20800", "24500", "42495", "20047", "150000-350000", "20207", "23700", "5…
 #> $ loan_amount    <dbl> 20800, 24500, 42495, 20047, NA, 20207, 23700, 51922, NA, 66000, 3983, NA,…
 #> $ loan_range     <fct> NA, NA, NA, NA, "e $150,000-350,000", NA, NA, NA, "e $150,000-350,000", N…
-#> $ amount_min     <dbl> 20800, 24500, 42495, 20047, 150000, 20207, 23700, 51922, 150000, 66000, 3…
 #> $ business_name  <chr> NA, NA, NA, NA, "PENNSYLVANIA PAIN SPECIALISTS, PC", NA, NA, NA, "ALLEGHE…
 #> $ address        <chr> NA, NA, NA, NA, "163 North Commerce Way", NA, NA, NA, "495 WATERFRONT DR"…
 #> $ city           <chr> "NEWBURGH", "LIBBY", "JACKSONVILLE", "FRANKFORT", "BETHLEHEM", "BENSALEM"…
@@ -717,6 +717,7 @@ glimpse(sample_n(ppp, 20))
 #> $ cd             <chr> "NY - 18", "MT - 00", "FL - 01", "MI - 01", "PA - 15", "PA - 01", "CO - 0…
 #> $ file           <chr> "foia_up_to_150k_NY.csv", "foia_up_to_150k_MT.csv", "foia_up_to_150k_FL.c…
 #> $ dupe_flag      <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FAL…
+#> $ range_flag     <lgl> FALSE, FALSE, FALSE, FALSE, TRUE, FALSE, FALSE, FALSE, TRUE, FALSE, FALSE…
 #> $ year_approved  <dbl> 2020, 2020, 2020, 2020, 2020, 2020, 2020, 2020, 2020, 2020, 2020, 2020, 2…
 #> $ address_clean  <chr> NA, NA, NA, NA, "163 N COMMERCE WAY", NA, NA, NA, "495 WATERFRONT DR", NA…
 #> $ state_clean    <chr> "NY", "MT", "FL", "MI", "PA", "PA", "CO", "NV", "PA", "CA", "CA", "TN", "…
@@ -743,7 +744,7 @@ clean_dir <- dir_create(here("us", "covid", "ppp", "data", "clean"))
 clean_path <- path(clean_dir, "sba_ppp_loans.csv")
 write_csv(ppp, clean_path, na = "")
 file_size(clean_path)
-#> 849M
+#> 881M
 file_encoding(clean_path)
 #> # A tibble: 1 x 3
 #>   path                                                                      mime            charset
@@ -772,9 +773,9 @@ The following table describes the variables in our final exported file:
 
 | Column           | Type        | Definition                                    |
 | :--------------- | :---------- | :-------------------------------------------- |
+| `amount_range`   | `character` | Combined loan amount with range               |
 | `loan_amount`    | `double`    | Aggregated loan amount (under $150,000)       |
 | `loan_range`     | `integer`   | Loan range (over $150,000)                    |
-| `amount_min`     | `double`    | Combined loan amount with range minimum       |
 | `business_name`  | `character` | Recipient business name                       |
 | `address`        | `character` | Recipient business address                    |
 | `city`           | `character` | Recipient business city name                  |
@@ -792,6 +793,7 @@ The following table describes the variables in our final exported file:
 | `cd`             | `character` | Loan recipient location code                  |
 | `file`           | `character` | Source file name                              |
 | `dupe_flag`      | `logical`   | Flag indicating duplicate record              |
+| `range_flag`     | `logical`   | Flag indicating range amount                  |
 | `year_approved`  | `double`    | Calendar year approved                        |
 | `address_clean`  | `character` | Normalized recipient address                  |
 | `state_clean`    | `character` | Normalized recipient state                    |
