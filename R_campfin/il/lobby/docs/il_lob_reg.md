@@ -109,7 +109,7 @@ There’re six relational tables which can be joined by IDs.
 The results data was manually exported to the `data/raw/` directory.
 
 ``` r
-raw_dir <- dir_create(here("il", "lobbying", "data", "raw"))
+raw_dir <- dir_create(here("il", "lobby", "data", "raw"))
 raw_info <- as_tibble(dir_info(raw_dir))
 raw_info %>% 
   select(path, size, modification_time)
@@ -761,7 +761,7 @@ Now the file can be saved on disk for upload to the Accountability
 server.
 
 ``` r
-clean_dir <- dir_create(here("il", "lobbying", "data", "clean","reg"))
+clean_dir <- dir_create(here("il", "lobby", "data", "clean","reg"))
 clean_path <- path(clean_dir, "il_lobby_reg_clean.csv")
 write_csv(illr, clean_path, na = "")
 file_size(clean_path)

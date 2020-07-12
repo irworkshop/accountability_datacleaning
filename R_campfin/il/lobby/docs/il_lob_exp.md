@@ -1,7 +1,7 @@
 Illinois Lobbyists Expenditures Data Diary
 ================
 Yanqi Xu
-2020-07-12 16:16:56
+2020-07-12 16:26:59
 
   - [Project](#project)
   - [Objectives](#objectives)
@@ -109,7 +109,7 @@ There’re six relational tables which can be joined by IDs.
 The results data was manually exported to the `data/raw/` directory.
 
 ``` r
-raw_dir <- dir_create(here("il", "lobbying", "data", "raw"))
+raw_dir <- dir_create(here("il", "lobby", "data", "raw"))
 raw_info <- as_tibble(dir_info(raw_dir))
 raw_info %>% 
   select(path, size, modification_time)
@@ -412,7 +412,7 @@ First, we will join the `lobbyist_id` from `LR_LOBBYIST.csv`.
 
 ``` r
 illr_lob <- as_tibble(read.csv(file = path(raw_dir, "LR_LOBBYIST.csv"), stringsAsFactors = FALSE, fileEncoding = 'UTF-16LE')) %>% clean_names()
-reg_dir <- here("il", "lobbying", "data", "clean","reg")
+reg_dir <- here("il", "lobby", "data", "clean","reg")
 illr <- read_csv(file = dir_ls(reg_dir))
 ```
 
@@ -502,7 +502,7 @@ Now the file can be saved on disk for upload to the Accountability
 server.
 
 ``` r
-clean_dir <- dir_create(here("il", "lobbying", "data", "clean","exp"))
+clean_dir <- dir_create(here("il", "lobby", "data", "clean","exp"))
 clean_path <- path(clean_dir, "il_lobby_exp_clean.csv")
 write_csv(ille, clean_path, na = "")
 file_size(clean_path)

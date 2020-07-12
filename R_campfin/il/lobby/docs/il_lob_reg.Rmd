@@ -34,7 +34,7 @@ if (!interactive()) {
 ```
 
 ```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
-doc_dir <- fs::dir_create(here::here("il", "lobbying", "docs"))
+doc_dir <- fs::dir_create(here::here("il", "lobby", "docs"))
 ```
 
 ## Project
@@ -448,7 +448,7 @@ glimpse(sample_n(illr, 20))
 Now the file can be saved on disk for upload to the Accountability server.
 
 ```{r clean_dir}
-clean_dir <- dir_create(here("il", "lobbying", "data", "clean","reg"))
+clean_dir <- dir_create(here("il", "lobby", "data", "clean","reg"))
 clean_path <- path(clean_dir, "il_lobby_reg_clean.csv")
 write_csv(illr, clean_path, na = "")
 file_size(clean_path)

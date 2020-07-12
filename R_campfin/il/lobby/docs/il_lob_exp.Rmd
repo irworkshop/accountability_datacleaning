@@ -34,7 +34,7 @@ if (!interactive()) {
 ```
 
 ```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
-doc_dir <- fs::dir_create(here::here("nj", "lobby", "docs"))
+doc_dir <- fs::dir_create(here::here("il", "lobby", "docs"))
 ```
 
 ## Project
@@ -130,7 +130,7 @@ Lobbying data is obtained from the Illinois Secretary of State via a public reco
 The results data was manually exported to the `data/raw/` directory.
 
 ```{r raw_dir}
-raw_dir <- dir_create(here("il", "lobbying", "data", "raw"))
+raw_dir <- dir_create(here("il", "lobby", "data", "raw"))
 raw_info <- as_tibble(dir_info(raw_dir))
 raw_info %>% 
   select(path, size, modification_time)
@@ -303,7 +303,7 @@ Since this relational table only contains lobbyists' and entities' IDs, we will 
 First, we will join the `lobbyist_id` from `LR_LOBBYIST.csv`. 
 ```{r join lob id}
 illr_lob <- as_tibble(read.csv(file = path(raw_dir, "LR_LOBBYIST.csv"), stringsAsFactors = FALSE, fileEncoding = 'UTF-16LE')) %>% clean_names()
-reg_dir <- here("il", "lobbying", "data", "clean","reg")
+reg_dir <- here("il", "lobby", "data", "clean","reg")
 illr <- read_csv(file = dir_ls(reg_dir))
 ```
 We will also need to match the year field. 
@@ -342,7 +342,7 @@ glimpse(sample_n(ille, 20))
 Now the file can be saved on disk for upload to the Accountability server.
 
 ```{r clean_dir}
-clean_dir <- dir_create(here("il", "lobbying", "data", "clean","exp"))
+clean_dir <- dir_create(here("il", "lobby", "data", "clean","exp"))
 clean_path <- path(clean_dir, "il_lobby_exp_clean.csv")
 write_csv(ille, clean_path, na = "")
 file_size(clean_path)
