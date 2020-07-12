@@ -116,11 +116,12 @@ here::here()
 Lobbying data is obtained from the Illinois Secretary of State via a public record request. The data is as current as of June 26, 2020. There're six relational tables which can be joined by IDs. 
 
 
-1. `Agent.csv` for lobbyist names and addresses.
-2. `BillSearch.csv` for lobbying activity on certain bills.
-3. `Client.csv` for client names.
-4. `Firm.csv` for firm names and addresses.
-5. `IndexClient.csv` for agent, firm, client relationships.
+1. `LR_EXPENDITURES.csv` for expenditures by lobbyists on behalf of their clients
+2. `LR_EXCL_LOBBYIST.csv` for exclusive (in-house) lobbyists.
+3. `LR_CONTRACT_CLIENT.csv` for outside lobbyists.
+4. `LR_SUB_CLIENTS.csv` for sub-client entities.
+5. `LR_LOBBYING_ENT.csv` for agent, firm, client relationships.
+6. `LR_LOBBYIST.csv` for agent names and registrations.
 
 [elec]: https://www.elec.state.nj.us/
 [portal]: https://www3-elec.mwg.state.nj.us/ELEC_AGAA/EntitySearch.aspx
