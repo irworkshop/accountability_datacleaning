@@ -320,6 +320,11 @@ ille <- ille %>% mutate(entity_id = as.numeric(entity_id)) %>%
 
 ille <- ille %>% mutate(across(.cols = c(lobbyist_lname,lobbyist_fname),.fns = str_trim))
 ```
+There are some records missing lobbyists' names, but mostly because they're missing a valid `lobbyist_id`.
+```{r}
+lob_miss <-  ille %>% filter(is.na(lobbyist_fname))
+lob_miss$lobbyist_id %>% tabyl()
+```
 
 ## Conclude
 

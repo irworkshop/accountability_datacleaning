@@ -305,49 +305,29 @@ ppp %>%
   )
 ```
 
-We can combine these two variables into a new one using the minimum value
-from ranges and the exact value from aggregates.
+We can combine these two variables into a single one for mapping on the site.
+A new logical `range_flag` value will be added to indicate any record above
+$150,000 and thus containing only a loan range.
 
-```{r amount_extract}
-ppp <- ppp %>% 
-  extract(
-    # extract number
-    col = loan_range, 
-    into = "amount_min", 
-    regex = "(\\d+(?:,\\d+)?)(?=-)",
-    remove = FALSE,
+```{r amount_combine}
+ppp <- ppp %>%
+  # combine the two columns
+  unite(
+    col = amount_range,
+    starts_with("loan_"),
+    na.rm = TRUE,
+    remove = FALSE
   ) %>% 
+  # convert range text to numbers
   mutate(
-    # add zeroes
-    amount_min = case_when(
-      str_detect(amount_min, ",") ~ amount_min,
-      !str_detect(amount_min, ",") ~ str_c(amount_min, ",000,000")
-    ),
-    # combine with exact amounts
-    amount_min = coalesce(parse_number(amount_min), loan_amount)
-  )
-```
-
-```{r amount_hist_min, echo=FALSE}
-ppp %>%
-  ggplot(aes(amount_min)) +
-  geom_histogram(fill = dark2["purple"]) +
-  scale_y_continuous(
-    labels = comma,
-    trans = "log10"
-  ) +
-  scale_x_continuous(
-    breaks = c(1 %o% 10^(0:6)),
-    labels = dollar,
-    trans = "log10"
-  ) +
-  labs(
-    title = "United States PPP Loan Amount Distribution",
-    subtitle = "Combined aggregated amount and minimum range amount",
-    caption = "Source: Small Business Administration",
-    x = "Amount with Minimum Range",
-    y = "Count"
-  )
+    amount_range = amount_range %>% 
+      str_remove("\\w\\s\\$") %>% 
+      str_remove("\\smillion") %>% 
+      str_replace_all("(?<=^|-)(\\d{1,2})(?!\\d)", "\\1,000,000") %>% 
+      str_remove_all(",")
+  ) %>% 
+  # flag any column using ranges
+  mutate(range_flag = !is.na(loan_range))
 ```
 
 ### Dates
@@ -681,9 +661,9 @@ dict_raw <- tibble(
   var = md_code(names(ppp)),
   type = md_code(map_chr(ppp, typeof)),
   def = c(
+    "Combined loan amount with range",
     "Aggregated loan amount (under $150,000)",
     "Loan range (over $150,000)",
-    "Combined loan amount with range minimum",
     "Recipient business name",
     "Recipient business address",
     "Recipient business city name",
@@ -701,6 +681,7 @@ dict_raw <- tibble(
     "Loan recipient location code",
     "Source file name",
     "Flag indicating duplicate record",
+    "Flag indicating range amount",
     "Calendar year approved",
     "Normalized recipient address",
     "Normalized recipient state",

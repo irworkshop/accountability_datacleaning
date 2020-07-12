@@ -1,7 +1,7 @@
 Illinois Lobbyists Expenditures Data Diary
 ================
 Yanqi Xu
-2020-07-12 14:26:20
+2020-07-12 16:16:56
 
   - [Project](#project)
   - [Objectives](#objectives)
@@ -392,7 +392,7 @@ filter(expenditure_amount >= 1, expenditure_amount < 1e5) %>%
     )
   ) +
   labs(
-    title = "Illinois State Expenditures by Category",
+    title = "Illinois State Lobbying Expenditures by Category",
     caption = "Source: IL SOS",
     y = "Amount",
     x = "Category"
@@ -428,6 +428,23 @@ illr_join <- illr %>% select(ent_id, ent_reg_year, ent_name, ent_address_clean, 
 
 ille <- ille %>% mutate(entity_id = as.numeric(entity_id)) %>% 
   left_join(illr_join, by = c("year" = "ent_reg_year", "entity_id"="ent_id"))
+
+ille <- ille %>% mutate(across(.cols = c(lobbyist_lname,lobbyist_fname),.fns = str_trim))
+```
+
+There are some records missing lobbyists’ names, but mostly because
+they’re missing a valid `lobbyist_id`.
+
+``` r
+lob_miss <-  ille %>% filter(is.na(lobbyist_fname))
+lob_miss$lobbyist_id %>% tabyl()
+#> # A tibble: 4 x 3
+#>       .     n  percent
+#>   <dbl> <dbl>    <dbl>
+#> 1     0 13510 0.999   
+#> 2  6071     5 0.000370
+#> 3  7411     3 0.000222
+#> 4  8149     5 0.000370
 ```
 
 ## Conclude
@@ -465,8 +482,8 @@ glimpse(sample_n(ille, 20))
 #> $ na_flag                    <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE…
 #> $ dupe_flag                  <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE…
 #> $ expenditure_date_clean     <date> 2011-03-30, 2013-03-12, 2011-09-06, 2015-03-02, 2012-05-22, …
-#> $ lobbyist_lname             <chr> "BODEWES                            ", "BARRY                …
-#> $ lobbyist_fname             <chr> "ANDREW              ", "LAWRENCE            ", "STEVEN      …
+#> $ lobbyist_lname             <chr> "BODEWES", "BARRY", "DAVIS", "ROWEN", "MCCLAIN", "PEPPER", "K…
+#> $ lobbyist_fname             <chr> "ANDREW", "LAWRENCE", "STEVEN", "VERNON", "MICHAEL", "DONOVAN…
 #> $ ent_name                   <chr> "LEINENWEBER BARONI & DAFFADA CONSULTING LLC", "ILLINOIS LIFE…
 #> $ ent_address_clean          <chr> "203 N LASALLE ST STE 1620", "600 S SECOND STE 401", "PO BOX …
 #> $ ent_city_clean             <chr> "CHICAGO", "SPRINGFIELD", "BETHALTO", "HARTFORD", "QUINCY", "…
@@ -489,7 +506,7 @@ clean_dir <- dir_create(here("il", "lobbying", "data", "clean","exp"))
 clean_path <- path(clean_dir, "il_lobby_exp_clean.csv")
 write_csv(ille, clean_path, na = "")
 file_size(clean_path)
-#> 21.2M
+#> 19.3M
 ```
 
 ## Upload
