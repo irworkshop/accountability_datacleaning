@@ -156,12 +156,11 @@ entity should not list themselves as their own sub-client.
 
 The exclusive lobbyist corresponds to in-house lobbyists in other states, while the contractual lobbyists likely work for lobbying firms contracted by entities. 
 
-```{r raw_read}
-utf_convert <- function(path, out) {
-  system(glue("iconv -f UTF-16LE -t UTF-8 {path} -o {out}"))
+```{r raw_read, eval=FALSE}
+utf_convert <- function(path) {
+  system(glue("iconv -f UTF-16LE -t UTF-8 {path}"), intern = TRUE)
 }
-tmp <- file_temp(ext = "csv")
-utf_convert(path(raw_dir,"LR_EXPENDITURES.csv"), tmp)
+tmp <- utf_convert(path(raw_dir,"LR_EXPENDITURES.csv"))
 
 x <- str_squish(read_lines(tmp))
 sum(is.na(x)) # before
@@ -174,10 +173,14 @@ for (i in rev(seq_along(x)[-1])) { # go from back
   }
 }
 sum(is.na(x)) # after
-write_lines(na.omit(x), tmp)
 
+
+write_lines(na.omit(x), path(raw_dir,"LR_EXPENDITURES_conv.csv"))
+```
+
+```{r read}
 ille <- vroom(
-  file = tmp,
+  file = path(raw_dir,"LR_EXPENDITURES_conv.csv"),
   delim = ",",
   escape_backslash = FALSE,
   escape_double = TRUE,
@@ -249,8 +252,8 @@ ille %>%
   geom_col(fill = dark2["purple"]) + 
   scale_fill_brewer(palette = "Dark2") +
   scale_y_continuous(labels = comma) +
-  scale_x_continuous(breaks = seq(1980, 2020, by = 2)) +
-  coord_cartesian(xlim = c(1989, 2020)) +
+  scale_x_continuous(breaks = seq(2006, 2020, by = 2)) +
+  coord_cartesian(xlim = c(2006, 2020)) +
   theme(legend.position = "bottom") +
   labs(
     title = "Illinois Lobbying Expenditures by Year",
@@ -261,10 +264,11 @@ ille %>%
 ```
 
 ```{r}
+
 ille %>% 
-filter(amount >= 1, amount < 1e5) %>% 
-  ggplot(aes(x = reorder(party, amount), y = amount)) + 
-  geom_violin(aes(fill = party)) + 
+filter(expenditure_amount >= 1, expenditure_amount < 1e5) %>% 
+  ggplot(aes(x = reorder(expenditure_category, expenditure_amount), y = expenditure_amount)) + 
+  geom_violin(aes(fill = expenditure_category)) + 
   scale_y_continuous(
     breaks = c(1 %o% 10^(0:5)),
     labels = dollar,
@@ -279,16 +283,16 @@ filter(amount >= 1, amount < 1e5) %>%
       "gold",
       "mediumpurple", 
       "#999999", 
-      "firebrick",
-      "black"
+      "cornflowerblue"
     )
   ) +
   labs(
-    title = "Washington State Campaign Expenditures",
-    caption = "Source: data.wa.gov/d/tijg-9zyp",
+    title = "Illinois State Lobbying Expenditures by Category",
+    caption = "Source: IL SOS",
     y = "Amount",
-    x = "Party"
-  )
+    x = "Category"
+  ) +
+  theme_minimal()
 ```
 
 
@@ -306,213 +310,18 @@ We will also need to match the year field.
 ```{r}
 illr_lob <- illr_lob %>% select(lobbyist_id, lobbyist_lname, lobbyist_fname, ent_reg_year)
 
-ille <-  ille %>% mutate(year= as.numeric(year)) %>% 
+ille <-  ille %>% mutate(year= as.numeric(year), lobbyist_id = as.numeric(lobbyist_id)) %>% 
 left_join(illr_lob, by = c("year" = "ent_reg_year", "lobbyist_id"))
 
 illr_join <- illr %>% select(ent_id, ent_reg_year, ent_name, ent_address_clean, ent_city_clean, ent_st_abbr_clean, ent_zip_clean)
 
 ille <- ille %>% mutate(entity_id = as.numeric(entity_id)) %>% 
   left_join(illr_join, by = c("year" = "ent_reg_year", "entity_id"="ent_id"))
-```
 
-
-
-
-### Wrangle
-
-To improve the searchability of the database, we will perform some consistent,
-confident string normalization. For geographic variables like city names and
-ZIP codes, the corresponding `campfin::normal_*()` functions are tailor made to 
-facilitate this process.
-
-### Address
-
-For the street `addresss` variable, the `campfin::normal_address()` function
-will force consistence case, remove punctuation, and abbreviate official 
-USPS suffixes.
-
-```{r address_norm}
-ille <- ille %>% 
-      # combine street addr
-  unite(
-    col = ent_address,
-    starts_with("ent_addr"),
-    sep = " ",
-    remove = FALSE,
-    na.rm = TRUE
-  ) %>% 
-    unite(
-    col = agent_address,
-    starts_with("agent_addr"),
-    sep = " ",
-    remove = FALSE,
-    na.rm = TRUE
-  )
-
-ille <- ille %>% mutate_at(
-   .vars = vars(ends_with('address')), 
-   .funs = list(norm = ~ normal_address(
-    .,
-     abbs = usps_street,
-     na = invalid_city
-   )
- ))
-```
-
-```{r address_view}
-ille %>% 
-  select(ends_with("address"), ends_with("address_norm")) %>% 
-  distinct() %>% 
-  sample_n(10)
-ille <- ille %>% select(-ends_with("address"))
-```
-
-### ZIP
-
-For ZIP codes, the `campfin::normal_zip()` function will attempt to create
-valid _five_ digit codes by removing the ZIP+4 suffix and returning leading
-zeroes dropped by other programs like Microsoft Excel.
-
-```{r zip_norm}
-ille <- ille %>% mutate_at(
-  .vars = vars(ends_with("zip")),
-  .funs = list(norm = ~ normal_zip(
-    .,
-    na_rep = TRUE
-  )
-)
-)
-```
-
-```{r zip_progress}
-progress_table(
-  ille$ent_zip,
-  ille$ent_zip_norm,
-  ille$agent_zip,
-  ille$agent_zip_norm,
-  compare = valid_zip
-)
-```
-
-### State
-
-Valid two digit state abbreviations can be made using the 
-`campfin::normal_state()` function.
-
-```{r state_norm}
-ille <- ille %>% 
-  mutate_at(
-    .vars = vars(ends_with("st_abbr")),
-  .funs = list(norm = ~ normal_state(
-      .,
-      abbreviate = TRUE,
-      na_rep = TRUE,
-      valid = valid_state
-    )
-  )
-  )
-```
-
-```{r state_progress}
-progress_table(
-  ille$ent_st_abbr,
-  ille$ent_st_abbr_norm,
-  ille$agent_st_abbr,
-  ille$agent_st_abbr_norm,
-  compare = valid_state
-)
-```
-
-### City
-
-Cities are the most difficult geographic variable to normalize, simply due to
-the wide variety of valid cities and formats.
-
-#### Normal
-
-The `campfin::normal_city()` function is a good start, again converting case,
-removing punctuation, but _expanding_ USPS abbreviations. We can also remove
-`invalid_city` values.
-
-```{r city_norm}
-ille <- ille %>% 
-  mutate_at(
-    .vars = vars(ends_with("city")),
-  .funs = list(norm = ~ normal_city(
-      ., 
-      abbs = usps_city,
-      states = valid_state,
-      na = invalid_city,
-      na_rep = TRUE
-    )
-  )
-  )
-```
-
-#### Swap
-
-We can further improve normalization by comparing our normalized value
-against the _expected_ value for that record's state abbreviation and ZIP code.
-If the normalized value is either an abbreviation for or very similar to the
-expected value, we can confidently swap those two.
-
-```{r city_swap lobbyist}
-ille <- ille %>% 
-  left_join(
-    y = zipcodes,
-    by = c(
-      "ent_st_abbr_norm" = "state",
-      "ent_zip_norm" = "zip"
-    )
-  ) %>% 
-  rename(ent_city_match = city) %>% 
-  mutate(
-    match_abb = is_abbrev(ent_city_norm, ent_city_match),
-    match_dist = str_dist(ent_city_norm, ent_city_match),
-    ent_city_swap = if_else(
-      condition = !is.na(match_dist) & match_abb | match_dist == 1,
-      true = ent_city_match,
-      false = ent_city_norm
-    )
-  ) %>% 
-  select(
-    -ent_city_match,
-    -match_dist,
-    -match_abb
-  )
-```
-
-
-#### Progress
-
-```{r city_progress, echo=FALSE}
-many_city <- c(valid_city, extra_city)
-progress <- progress_table(
-  str_to_upper(ille$ent_city),
-  ille$ent_city_norm,
-  ille$ent_city_swap,
-    str_to_upper(ille$agent_city),
-  ille$agent_city_norm,
-  compare = many_city
-) %>% mutate(stage = as_factor(stage))
-kable(progress, digits = 3)
-```
-
-```{r}
-ille <- ille %>% 
-  select(-ent_city_norm) %>% 
-  rename(ent_city_norm = ent_city_swap)
+ille <- ille %>% mutate(across(.cols = c(lobbyist_lname,lobbyist_fname),.fns = str_trim))
 ```
 
 ## Conclude
-
-Before exporting, we can remove the intermediary normalization columns and
-rename all added variables with the `_clean` suffix.
-
-```{r clean_select}
-ille <- ille %>% 
-  rename_all(~str_replace(., "_norm", "_clean")) 
-```
 
 ```{r clean_glimpse}
 glimpse(sample_n(ille, 20))
@@ -522,16 +331,14 @@ glimpse(sample_n(ille, 20))
 1. There are no duplicate records in the database.
 1. The range and distribution of `amount` and `date` seem reasonable.
 1. There are `r comma(sum(ille$na_flag))` records missing key variables.
-1. Consistency in geographic data has been improved with `campfin::normal_*()`.
-1. The 4-digit `year` variable has been created with `lubridate::year()`.
 
 ## Export
 
 Now the file can be saved on disk for upload to the Accountability server.
 
 ```{r clean_dir}
-clean_dir <- dir_create(here("il", "lobbying", "data", "clean","reg"))
-clean_path <- path(clean_dir, "il_lobby_reg_clean.csv")
+clean_dir <- dir_create(here("il", "lobbying", "data", "clean","exp"))
+clean_path <- path(clean_dir, "il_lobby_exp_clean.csv")
 write_csv(ille, clean_path, na = "")
 file_size(clean_path)
 ```

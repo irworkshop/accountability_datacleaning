@@ -1,5 +1,5 @@
 ---
-title: "Virginia Lobbying Expenditure Diary"
+title: "Virginia Lobbying Diary"
 author: "Yanqi Xu"
 date: "`r Sys.time()`"
 output:
@@ -113,7 +113,7 @@ here::here()
 [guide]: http://ethics.dls.virginia.gov/LDS%20Guide.pdf
 
 ## Data
-Lobbyist data is obtained via a public record request from the [Virginia State Ethics Commission][03] in April of 2020.
+Lobbyist data is obtained via a public record request from the [Virginia Conflict of Interest and Ethics Advisory Council](https://www.commonwealth.virginia.gov/va-government/lobbyists/) on April 2 (2016-2017) and 24 (2018-2019) of 2020.
 
 The Commonwealth's [Disclosure Information Guide](guide) explains the different schedules and reporting requirements.
 
@@ -170,11 +170,11 @@ valr <- valr %>%
 
 ```{r plot top receipients ecoh}
 valr%>% 
-  group_by(lobbyists_principal) %>% 
-  summarize(med = median(total_income_and_expenditures_calendar_year_total)) %>% 
+  group_by(lobbyist_first_name, lobbyist_last_name) %>% 
+  summarize(med = median(lobbyist_compensation_amount)) %>% 
   arrange(desc(med)) %>% 
-  top_n(10) %>% 
-  ggplot(aes(x = reorder(lobbyists_principal,med),
+  head(10) %>% 
+  ggplot(aes(x = reorder(str_c(lobbyist_first_name, lobbyist_last_name, sep = " "),med),
          y = med)) +
   geom_col(fill = RColorBrewer::brewer.pal(3, "Dark2")[3]) +
   theme(legend.position = "none") +
@@ -183,9 +183,9 @@ valr%>%
   coord_flip() +
   theme_minimal() +
   labs(
-    title = "Top 10 Highest-spending Lobbying Principals",
-    subtitle = "(Measued by median total compensation and expenditures to lobbyists)",
-    caption = "Source: Virginia State Ethics Commission",
+    title = "Top 10 highest-paid lobbyists",
+    subtitle = "(Measued by median compensation)",
+    caption = "Source: Virginia Conflict of Interest and Ethics Advisory Council",
     x = "median expenses",
     y = 'dollar'
   )
@@ -236,6 +236,7 @@ valr <- valr %>%
     na.rm = TRUE
   )
   # normalize combined addr
+valr <- valr %>% 
     mutate_at(.vars = vars(ends_with('address')), .funs = list(norm = ~ normal_address(.,abbs = usps_street,
       na_rep = TRUE))) %>% 
   select(-ends_with("address"))
@@ -279,9 +280,10 @@ The `campfin::normal_city()` function is a good start, again converting case,
 removing punctuation, but _expanding_ USPS abbreviations. We can also remove
 `invalid_city` values.
 
+The current data file lacks the `city` field for `principa_authorizing_officer`, so we are unable to normalize that field.
+
 ```{r city_norm}
 prop_in(valr$lobbyist_address_city, valid_city, na.rm = T)
-prop_in(valr$employer_city, valid_city, na.rm = T)
 
 valr <- valr %>% 
   mutate_at(.vars = vars(ends_with('city')), .funs = list(norm = ~ normal_city(.,abbs = usps_city,
@@ -289,7 +291,6 @@ valr <- valr %>%
                                                                                na = invalid_city,
                                                                                na_rep = TRUE)))
 prop_in(valr$lobbyist_address_city_norm, valid_city, na.rm = T)
-prop_in(valr$principal_authorizing_officer_address_city_norm, valid_city, na.rm = T)
 ```
 
 #### Swap
@@ -305,6 +306,7 @@ valr <- valr %>%
     y = zipcodes,
     by = c(
       "lobbyist_address_state" = "state",
+      "lobbyist_address_zip5" = "zip"
     )
   ) %>% 
   rename(lobbyist_address_city_match = city) %>% 
@@ -324,31 +326,6 @@ valr <- valr %>%
   )
 ```
 
-```{r emp_city_swap}
-valr <- valr %>% 
-  left_join(
-    y = zipcodes,
-    by = c(
-      "employer_state" = "state",
-      "employer_zip5" = "zip"
-    )
-  ) %>% 
-  rename(employer_city_match = city) %>% 
-  mutate(
-    match_abb = is_abbrev(employer_city_norm, employer_city_match),
-    match_dist = str_dist(employer_city_norm, employer_city_match),
-    employer_city_swap = if_else(
-      condition = !is.na(match_dist) & match_abb | match_dist == 1,
-      true = employer_city_match,
-      false = employer_city_norm
-    )
-  ) %>% 
-  select(
-    -employer_city_match,
-    -match_dist,
-    -match_abb
-  )
-```
 
 After the two normalization steps, the percentage of valid cities is at 100%.
 #### Progress
@@ -357,11 +334,10 @@ After the two normalization steps, the percentage of valid cities is at 100%.
 many_city <- c(valid_city, extra_city)
 progress <- progress_table(
   valr$lobbyist_address_city,
-  valr$employer_city,
   valr$lobbyist_address_city_norm,
-  valr$employer_city_norm,
   valr$lobbyist_address_city_swap,
-valr$employer_city_swap,
+  valr$incorporated_filer_address_city,
+  valr$incorporated_filer_address_city_norm,
   compare = many_city
 ) %>% mutate(stage = as_factor(stage))
 ```
@@ -436,8 +412,8 @@ clean_dir <- dir_create(here("va", "lobby", "data", "processed","exp"))
 
 ```{r write_clean}
 write_csv(
-  x = valr,
-  path = path(clean_dir, "sc_lob_exp_clean.csv"),
+  x = valr %>% rename(lobbyist_address_city_clean = lobbyist_address_city_swap),
+  path = path(clean_dir, "va_lob_clean.csv"),
   na = ""
 )
 ```

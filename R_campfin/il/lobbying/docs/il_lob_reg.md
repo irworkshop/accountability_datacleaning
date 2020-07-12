@@ -1,7 +1,7 @@
 Illinois Lobbyists Registration Data Diary
 ================
 Yanqi Xu
-2020-07-08 16:18:09
+2020-07-08 17:22:28
 
   - [Project](#project)
   - [Objectives](#objectives)
@@ -119,7 +119,7 @@ raw_info %>%
 #> 1 /Users/yanqixu/code/accountability_datacleaning/R_campfin/il/lobby…    36.98M 2020-06-26 07:31:18
 #> 2 /Users/yanqixu/code/accountability_datacleaning/R_campfin/il/lobby…    410.7K 2020-06-26 07:31:02
 #> 3 /Users/yanqixu/code/accountability_datacleaning/R_campfin/il/lobby…    78.43M 2020-06-26 07:31:26
-#> 4 /Users/yanqixu/code/accountability_datacleaning/R_campfin/il/lobby…         0 2020-07-08 16:08:05
+#> 4 /Users/yanqixu/code/accountability_datacleaning/R_campfin/il/lobby…    14.77M 2020-07-08 17:09:51
 #> 5 /Users/yanqixu/code/accountability_datacleaning/R_campfin/il/lobby…    68.39M 2020-06-26 07:31:24
 #> 6 /Users/yanqixu/code/accountability_datacleaning/R_campfin/il/lobby…    37.56M 2020-06-26 07:31:18
 #> 7 /Users/yanqixu/code/accountability_datacleaning/R_campfin/il/lobby…     1.66M 2020-06-26 07:31:04
