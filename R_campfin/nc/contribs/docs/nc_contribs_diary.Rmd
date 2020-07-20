@@ -147,7 +147,8 @@ raw_url <- "https://cf.ncsbe.gov/CFTxnLkup/ExportResults/"
 raw_export <- paste(raw_url, raw_param, sep = "?")
 for (y in 2000:2020) {
   date_to <- sprintf("12/31%s", y)
-  raw_path <- path(raw_dir, sprintf("transinq_results-%s.csv", y))
+  raw_path <- path(raw_dir, glue("transinq_results-{y}.csv"))
+  if (file.exists(raw_path)) next()
   POST(raw_export, write_disk(raw_path, overwrite = TRUE))
   message(y)
 }
@@ -166,6 +167,7 @@ raw_files %>%
 The annual files can be read into a single data frame with `vroom::vroom().`
 
 ```{r raw_read}
+# 9,178,441
 ncc <- vroom(
   file = raw_files$path,
   delim = ",",
@@ -740,11 +742,4 @@ dict_raw <- tibble(
   format = "markdown",
   col.names = c("Column", "Type", "Definition")
 ))
-```
-
-```{r dict_write}
-write_lines(
-  x = c("# North Carolina Contributions Data Dictionary\n", dict_md),
-  path = here("nc", "contribs", "wi_contribs_dict.md"),
-)
 ```

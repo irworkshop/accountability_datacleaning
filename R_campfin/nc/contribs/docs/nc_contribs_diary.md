@@ -1,7 +1,18 @@
 North Carolina Contributions
 ================
 Kiernan Nicholls
-2020-04-27 18:34:37
+2020-07-20 10:48:39
+
+  - [Project](#project)
+  - [Objectives](#objectives)
+  - [Packages](#packages)
+  - [Data](#data)
+  - [Download](#download)
+  - [Read](#read)
+  - [Explore](#explore)
+  - [Wrangle](#wrangle)
+  - [Export](#export)
+  - [Dictionary](#dictionary)
 
 <!-- Place comments regarding knitting here -->
 
@@ -78,7 +89,7 @@ feature and should be run as such. The project also uses the dynamic
 ``` r
 # where does this document knit?
 here::here()
-#> [1] "/home/kiernan/Code/accountability_datacleaning/R_campfin"
+#> [1] "/home/kiernan/Code/tap/R_campfin"
 ```
 
 ## Data
@@ -109,7 +120,8 @@ raw_url <- "https://cf.ncsbe.gov/CFTxnLkup/ExportResults/"
 raw_export <- paste(raw_url, raw_param, sep = "?")
 for (y in 2000:2020) {
   date_to <- sprintf("12/31%s", y)
-  raw_path <- path(raw_dir, sprintf("transinq_results-%s.csv", y))
+  raw_path <- path(raw_dir, glue("transinq_results-{y}.csv"))
+  if (file.exists(raw_path)) next()
   POST(raw_export, write_disk(raw_path, overwrite = TRUE))
   message(y)
 }
@@ -143,6 +155,7 @@ The annual files can be read into a single data frame with
 `vroom::vroom().`
 
 ``` r
+# 9,178,441
 ncc <- vroom(
   file = raw_files$path,
   delim = ",",
@@ -165,15 +178,15 @@ count(ncc, `Form of Payment`)
 #> # A tibble: 9 x 2
 #>   `Form of Payment`               n
 #>   <chr>                       <int>
-#> 1 Cash                       628892
-#> 2 Check                     2880997
-#> 3 Credit Card                611727
-#> 4 Debit Card                 140173
-#> 5 Draft                     2915519
-#> 6 Electronic Funds Transfer  252392
-#> 7 In Kind                     97067
-#> 8 Money Order                  9793
-#> 9 <NA>                      1422016
+#> 1 Cash                       636073
+#> 2 Check                     2913021
+#> 3 Credit Card                708548
+#> 4 Debit Card                 141092
+#> 5 Draft                     2960577
+#> 6 Electronic Funds Transfer  263512
+#> 7 In Kind                     98725
+#> 8 Money Order                  9907
+#> 9 <NA>                      1446986
 ```
 
 For conveyance we will rename the variables.
@@ -220,7 +233,7 @@ ncc <- arrange(ncc, date)
 
 ``` r
 glimpse(ncc)
-#> Rows: 8,958,576
+#> Rows: 9,178,441
 #> Columns: 23
 #> $ con_name    <chr> "Aggregated Individual Contribution", "Aggregated Individual Contribution", …
 #> $ con_addr1   <chr> NA, NA, NA, NA, NA, "BOX 75670", "PO BOX 10805", "1924 WILTON CIR", "6804 SP…
@@ -249,12 +262,12 @@ tail(ncc)
 #> # A tibble: 6 x 23
 #>   con_name con_addr1 con_addr2 con_city con_state con_zip con_job con_emp con_type rec_name rec_id
 #>   <chr>    <chr>     <chr>     <chr>    <chr>     <chr>   <chr>   <chr>   <chr>    <chr>    <chr> 
-#> 1 PAPER    <NA>      <NA>      <NA>     <NA>      <NA>    <NA>    <NA>    <NA>     <NA>     <NA>  
-#> 2 CARTRID… <NA>      <NA>      <NA>     <NA>      <NA>    <NA>    <NA>    <NA>     <NA>     <NA>  
-#> 3 THUMB D… <NA>      <NA>      <NA>     <NA>      <NA>    <NA>    <NA>    <NA>     <NA>     <NA>  
-#> 4 Paid By… <NA>      <NA>      <NA>     <NA>      <NA>    <NA>    <NA>    <NA>     <NA>     <NA>  
-#> 5 <NA>     <NA>      <NA>      <NA>     <NA>      <NA>    <NA>    <NA>    <NA>     <NA>     <NA>  
-#> 6 <NA>     <NA>      <NA>      <NA>     <NA>      <NA>    <NA>    <NA>    <NA>     <NA>     <NA>  
+#> 1 SEND SP… <NA>      <NA>      <NA>     <NA>      <NA>    <NA>    <NA>    <NA>     <NA>     <NA>  
+#> 2 <NA>     <NA>      <NA>      <NA>     <NA>      <NA>    <NA>    <NA>    <NA>     <NA>     <NA>  
+#> 3 PAPER    <NA>      <NA>      <NA>     <NA>      <NA>    <NA>    <NA>    <NA>     <NA>     <NA>  
+#> 4 CARTRID… <NA>      <NA>      <NA>     <NA>      <NA>    <NA>    <NA>    <NA>     <NA>     <NA>  
+#> 5 THUMB D… <NA>      <NA>      <NA>     <NA>      <NA>    <NA>    <NA>    <NA>     <NA>     <NA>  
+#> 6 Paid By… <NA>      <NA>      <NA>     <NA>      <NA>    <NA>    <NA>    <NA>     <NA>     <NA>  
 #> # … with 12 more variables: rec_addr1 <chr>, rec_addr2 <chr>, rec_city <chr>, rec_state <chr>,
 #> #   rec_zip <chr>, report <chr>, date <date>, amount <dbl>, method <chr>, purpose <chr>,
 #> #   candidate <chr>, declaration <chr>
@@ -269,29 +282,29 @@ col_stats(ncc, count_na)
 #> # A tibble: 23 x 4
 #>    col         class        n        p
 #>    <chr>       <chr>    <int>    <dbl>
-#>  1 con_name    <chr>     3064 0.000342
-#>  2 con_addr1   <chr>  4223832 0.471   
-#>  3 con_addr2   <chr>  8716506 0.973   
-#>  4 con_city    <chr>  4194956 0.468   
-#>  5 con_state   <chr>  3976578 0.444   
-#>  6 con_zip     <chr>  4238892 0.473   
-#>  7 con_job     <chr>  5439398 0.607   
-#>  8 con_emp     <chr>  5553636 0.620   
-#>  9 con_type    <chr>     1152 0.000129
-#> 10 rec_name    <chr>     1152 0.000129
-#> 11 rec_id      <chr>     1152 0.000129
-#> 12 rec_addr1   <chr>     3779 0.000422
-#> 13 rec_addr2   <chr>  7344201 0.820   
-#> 14 rec_city    <chr>     1152 0.000129
-#> 15 rec_state   <chr>     1152 0.000129
-#> 16 rec_zip     <chr>     1153 0.000129
-#> 17 report      <chr>     1152 0.000129
-#> 18 date        <date>    1152 0.000129
-#> 19 amount      <dbl>     1169 0.000130
-#> 20 method      <chr>  1422016 0.159   
-#> 21 purpose     <chr>  8015708 0.895   
-#> 22 candidate   <chr>  8927202 0.996   
-#> 23 declaration <chr>  8927227 0.997
+#>  1 con_name    <chr>     3073 0.000335
+#>  2 con_addr1   <chr>  4355632 0.475   
+#>  3 con_addr2   <chr>  8931110 0.973   
+#>  4 con_city    <chr>  4326723 0.471   
+#>  5 con_state   <chr>  4096410 0.446   
+#>  6 con_zip     <chr>  4370817 0.476   
+#>  7 con_job     <chr>  5569516 0.607   
+#>  8 con_emp     <chr>  5674726 0.618   
+#>  9 con_type    <chr>     1150 0.000125
+#> 10 rec_name    <chr>     1150 0.000125
+#> 11 rec_id      <chr>     1150 0.000125
+#> 12 rec_addr1   <chr>     3777 0.000412
+#> 13 rec_addr2   <chr>  7546546 0.822   
+#> 14 rec_city    <chr>     1150 0.000125
+#> 15 rec_state   <chr>     1150 0.000125
+#> 16 rec_zip     <chr>     1151 0.000125
+#> 17 report      <chr>     1150 0.000125
+#> 18 date        <date>    1150 0.000125
+#> 19 amount      <dbl>     1167 0.000127
+#> 20 method      <chr>  1446986 0.158   
+#> 21 purpose     <chr>  8247041 0.899   
+#> 22 candidate   <chr>  9147129 0.997   
+#> 23 declaration <chr>  9147154 0.997
 ```
 
 This is likely due to the lack of individual information for those
@@ -303,20 +316,20 @@ ncc %>%
   select(con_name, con_state) %>% 
   count(con_name, sort = TRUE) %>% 
   mutate(p = n/sum(n))
-#> # A tibble: 15,856 x 3
+#> # A tibble: 15,857 x 3
 #>    con_name                                 n         p
 #>    <chr>                                <int>     <dbl>
-#>  1 Aggregated Individual Contribution 3804174 0.957    
-#>  2 Aggregated Non-Media Expenditure    136745 0.0344   
-#>  3 <NA>                                  2960 0.000744 
-#>  4 BB&T                                   378 0.0000951
-#>  5 AGGREGATED NON-MEDIA EXPENDITURE       302 0.0000759
-#>  6 AIC                                    203 0.0000510
-#>  7 AGGREGATED NON-MEDIA EXPENDITURES      201 0.0000505
-#>  8 PAYPAL                                 179 0.0000450
-#>  9 US POSTAL SERVICE                      171 0.0000430
-#> 10 BANK OF AMERICA                        164 0.0000412
-#> # … with 15,846 more rows
+#>  1 Aggregated Individual Contribution 3927685 0.959    
+#>  2 Aggregated Non-Media Expenditure    133064 0.0325   
+#>  3 <NA>                                  2969 0.000725 
+#>  4 BB&T                                   380 0.0000928
+#>  5 AGGREGATED NON-MEDIA EXPENDITURE       302 0.0000737
+#>  6 AIC                                    203 0.0000496
+#>  7 AGGREGATED NON-MEDIA EXPENDITURES      201 0.0000491
+#>  8 PAYPAL                                 179 0.0000437
+#>  9 US POSTAL SERVICE                      171 0.0000417
+#> 10 BANK OF AMERICA                        164 0.0000400
+#> # … with 15,847 more rows
 ```
 
 We can flag any kind of non-aggrigate record missing a name or number.
@@ -324,7 +337,7 @@ We can flag any kind of non-aggrigate record missing a name or number.
 ``` r
 ncc <- ncc %>% flag_na(date, con_name, amount, rec_name)
 percent(mean(ncc$na_flag), 0.001)
-#> [1] "0.042%"
+#> [1] "0.041%"
 ```
 
 ### Duplicates
@@ -366,8 +379,8 @@ ncc <- mutate(ncc, dupe_flag = dupe_vec)
 rm(dupe_vec)
 gc(reset = TRUE, full = TRUE)
 #>             used   (Mb) gc trigger   (Mb)  max used   (Mb)
-#> Ncells   3495257  186.7    7215231  385.4   3495257  186.7
-#> Vcells 227313288 1734.3  378597312 2888.5 227313288 1734.3
+#> Ncells   3606432  192.7   10603034  566.3   3606432  192.7
+#> Vcells 232867238 1776.7  676098998 5158.3 232867238 1776.7
 ```
 
 A *huge* percentage of the overall records in this database are
@@ -380,7 +393,7 @@ percent(mean(ncc$dupe_flag))
 ncc %>% 
   filter(dupe_flag) %>% 
   count(date, con_name, amount, rec_name, rec_id, report, sort = TRUE)
-#> # A tibble: 243,514 x 7
+#> # A tibble: 254,633 x 7
 #>    date       con_name             amount rec_name             rec_id     report                  n
 #>    <date>     <chr>                 <dbl> <chr>                <chr>      <chr>               <int>
 #>  1 2014-02-10 Aggregated Individu…      2 EMPLOYEES POLITICAL… STA-C3404… 2014 First Quarter   9238
@@ -393,7 +406,7 @@ ncc %>%
 #>  8 2013-12-05 Aggregated Individu…      2 EMPLOYEES POLITICAL… STA-C3404… 2013 Year End Semi…  9005
 #>  9 2014-08-05 Aggregated Individu…      2 EMPLOYEES POLITICAL… STA-C3404… 2014 Third Quarter   8932
 #> 10 2013-11-05 Aggregated Individu…      2 EMPLOYEES POLITICAL… STA-C3404… 2013 Year End Semi…  8854
-#> # … with 243,504 more rows
+#> # … with 254,623 more rows
 ```
 
 ### Categorical
@@ -403,31 +416,31 @@ col_stats(ncc, n_distinct)
 #> # A tibble: 25 x 4
 #>    col         class       n           p
 #>    <chr>       <chr>   <int>       <dbl>
-#>  1 con_name    <chr>  865218 0.0966     
-#>  2 con_addr1   <chr>  785565 0.0877     
-#>  3 con_addr2   <chr>   30538 0.00341    
-#>  4 con_city    <chr>   22887 0.00255    
-#>  5 con_state   <chr>     161 0.0000180  
-#>  6 con_zip     <chr>  151822 0.0169     
-#>  7 con_job     <chr>  101232 0.0113     
-#>  8 con_emp     <chr>  246408 0.0275     
-#>  9 con_type    <chr>      24 0.00000268 
-#> 10 rec_name    <chr>    6281 0.000701   
-#> 11 rec_id      <chr>    6370 0.000711   
-#> 12 rec_addr1   <chr>    5618 0.000627   
-#> 13 rec_addr2   <chr>     249 0.0000278  
-#> 14 rec_city    <chr>     725 0.0000809  
-#> 15 rec_state   <chr>      43 0.00000480 
-#> 16 rec_zip     <chr>    1290 0.000144   
-#> 17 report      <chr>     503 0.0000561  
-#> 18 date        <date>   7387 0.000825   
-#> 19 amount      <dbl>  115912 0.0129     
-#> 20 method      <chr>       9 0.00000100 
-#> 21 purpose     <chr>  223547 0.0250     
-#> 22 candidate   <chr>     433 0.0000483  
-#> 23 declaration <chr>       3 0.000000335
-#> 24 na_flag     <lgl>       2 0.000000223
-#> 25 dupe_flag   <lgl>       2 0.000000223
+#>  1 con_name    <chr>  880278 0.0959     
+#>  2 con_addr1   <chr>  800779 0.0872     
+#>  3 con_addr2   <chr>   30952 0.00337    
+#>  4 con_city    <chr>   23230 0.00253    
+#>  5 con_state   <chr>     164 0.0000179  
+#>  6 con_zip     <chr>  155625 0.0170     
+#>  7 con_job     <chr>  103736 0.0113     
+#>  8 con_emp     <chr>  252563 0.0275     
+#>  9 con_type    <chr>      24 0.00000261 
+#> 10 rec_name    <chr>    6356 0.000692   
+#> 11 rec_id      <chr>    6430 0.000701   
+#> 12 rec_addr1   <chr>    5686 0.000619   
+#> 13 rec_addr2   <chr>     252 0.0000275  
+#> 14 rec_city    <chr>     729 0.0000794  
+#> 15 rec_state   <chr>      43 0.00000468 
+#> 16 rec_zip     <chr>    1291 0.000141   
+#> 17 report      <chr>     503 0.0000548  
+#> 18 date        <date>   7492 0.000816   
+#> 19 amount      <dbl>  115315 0.0126     
+#> 20 method      <chr>       9 0.000000981
+#> 21 purpose     <chr>  221451 0.0241     
+#> 22 candidate   <chr>     420 0.0000458  
+#> 23 declaration <chr>       3 0.000000327
+#> 24 na_flag     <lgl>       2 0.000000218
+#> 25 dupe_flag   <lgl>       2 0.000000218
 ```
 
 ![](../plots/distinct_bars-1.png)<!-- -->![](../plots/distinct_bars-2.png)<!-- -->![](../plots/distinct_bars-3.png)<!-- -->
@@ -439,11 +452,11 @@ col_stats(ncc, n_distinct)
 ``` r
 summary(ncc$amount)
 #>     Min.  1st Qu.   Median     Mean  3rd Qu.     Max.     NA's 
-#>  -200000        2       10      282       60 10222018     1169
+#>  -200000        2       10      279       60 10222018     1167
 mean(ncc$amount <= 0, na.rm = TRUE)
-#> [1] 0.000862973
+#> [1] 0.0008457849
 mean(ncc$amount <= 5, na.rm = TRUE) # itemized
-#> [1] 0.4284839
+#> [1] 0.4281291
 ```
 
 ![](../plots/hist_amount-1.png)<!-- -->
@@ -461,13 +474,13 @@ Aside from a handful of missing values, the range of dates is clean.
 
 ``` r
 prop_na(ncc$date)
-#> [1] 0.0001285919
+#> [1] 0.0001252936
 min(ncc$date, na.rm = TRUE)
 #> [1] "2000-01-01"
 sum(ncc$year < 2000, na.rm = TRUE)
 #> [1] 0
 max(ncc$date, na.rm = TRUE)
-#> [1] "2020-04-13"
+#> [1] "2020-07-20"
 sum(ncc$date > today(), na.rm = TRUE)
 #> [1] 0
 ```
@@ -566,10 +579,10 @@ progress_table(
 #> # A tibble: 4 x 6
 #>   stage        prop_in n_distinct  prop_na   n_out n_diff
 #>   <chr>          <dbl>      <dbl>    <dbl>   <dbl>  <dbl>
-#> 1 con_zip        0.701     151822 0.473    1411526 138031
-#> 2 con_zip_norm   0.997      20045 0.474      14983   3153
-#> 3 rec_zip        0.801       1290 0.000129 1778320    397
-#> 4 rec_zip_norm   0.993        945 0.000208   61054     20
+#> 1 con_zip        0.700     155625 0.476    1442602 141513
+#> 2 con_zip_norm   0.997      20328 0.477      15114   3175
+#> 3 rec_zip        0.801       1291 0.000125 1823186    396
+#> 4 rec_zip_norm   0.993        946 0.000203   62978     20
 ```
 
 ### State
@@ -594,15 +607,15 @@ ncc %>%
 #> # A tibble: 15 x 3
 #>    con_state con_state_norm     n
 #>    <chr>     <chr>          <int>
-#>  1 nc        NC               346
+#>  1 nc        NC               370
 #>  2 Fl        FL               325
-#>  3 Nc        NC               219
-#>  4 Va        VA                27
+#>  3 Nc        NC               237
+#>  4 Va        VA                28
 #>  5 Sc        SC                14
 #>  6 Ga        GA                 9
 #>  7 Ne        NE                 9
-#>  8 Ar        AR                 2
-#>  9 Ca        CA                 2
+#>  8 Ca        CA                 3
+#>  9 Ar        AR                 2
 #> 10 Co        CO                 2
 #> 11 Tx        TX                 2
 #> 12 Vi        VI                 2
@@ -622,10 +635,10 @@ progress_table(
 #> # A tibble: 4 x 6
 #>   stage          prop_in n_distinct  prop_na n_out n_diff
 #>   <chr>            <dbl>      <dbl>    <dbl> <dbl>  <dbl>
-#> 1 con_state         1.00        161 0.444     1658     99
-#> 2 con_state_norm    1            62 0.444        0      1
-#> 3 rec_state         1            43 0.000129     0      1
-#> 4 rec_state_norm    1            43 0.000129     0      1
+#> 1 con_state         1.00        164 0.446     1725    102
+#> 2 con_state_norm    1            62 0.446        0      1
+#> 3 rec_state         1            43 0.000125     0      1
+#> 4 rec_state_norm    1            43 0.000125     0      1
 ```
 
 ### City
@@ -710,12 +723,12 @@ good_refine <- ncc %>%
   )
 ```
 
-    #> [1] 735
-    #> # A tibble: 305 x 5
+    #> [1] 760
+    #> # A tibble: 312 x 5
     #>    con_state_norm con_zip_norm con_city_swap con_city_refine     n
     #>    <chr>          <chr>        <chr>         <chr>           <int>
-    #>  1 NC             27526        FUQAUYVARINA  FUQUAY VARINA      39
-    #>  2 NC             27214        BROWN SUMMITT BROWNS SUMMIT      31
+    #>  1 NC             27526        FUQAUYVARINA  FUQUAY VARINA      49
+    #>  2 NC             27214        BROWN SUMMITT BROWNS SUMMIT      33
     #>  3 NC             27522        CREEDMORE     CREEDMOOR          25
     #>  4 CA             95825        SACRAMANETO   SACRAMENTO         23
     #>  5 CA             94025        MANELO PARK   MENLO PARK         18
@@ -724,7 +737,7 @@ good_refine <- ncc %>%
     #>  8 NC             28117        MORRISVILLE   MOORESVILLE        14
     #>  9 NC             28303        FAYETEVIILE   FAYETTEVILLE       13
     #> 10 IL             60197        CORAL STREAM  CAROL STREAM       11
-    #> # … with 295 more rows
+    #> # … with 302 more rows
 
 Then we can join the refined values back to the database.
 
@@ -738,10 +751,10 @@ ncc <- ncc %>%
 
 | stage             | prop\_in | n\_distinct | prop\_na | n\_out | n\_diff |
 | :---------------- | -------: | ----------: | -------: | -----: | ------: |
-| con\_city)        |    0.974 |       17655 |    0.468 | 124306 |    9878 |
-| con\_city\_norm   |    0.979 |       16467 |    0.469 | 102346 |    8654 |
-| con\_city\_swap   |    0.995 |       11185 |    0.469 |  21645 |    3380 |
-| con\_city\_refine |    0.996 |       10951 |    0.469 |  20900 |    3151 |
+| con\_city)        |    0.974 |       17880 |    0.471 | 126480 |    9990 |
+| con\_city\_norm   |    0.978 |       16672 |    0.472 | 104315 |    8747 |
+| con\_city\_swap   |    0.995 |       11343 |    0.472 |  22172 |    3424 |
+| con\_city\_refine |    0.996 |       11103 |    0.472 |  21400 |    3189 |
 
 You can see how the percentage of valid values increased with each
 stage.
@@ -802,10 +815,10 @@ glimpse(sample_n(ncc, 20))
 #> $ con_city_clean  <chr> NA, NA, "RALEIGH", "CHARLOTTE", NA, NA, NA, "RALEIGH", "RALEIGH", "HIGH …
 ```
 
-1.  There are 8,958,634 records in the database.
-2.  There are 3,637,407 duplicate records in the database.
+1.  There are 9,178,501 records in the database.
+2.  There are 3,746,335 duplicate records in the database.
 3.  The range and distribution of `amount` and `date` seem reasonable.
-4.  There are 3,752 records missing ….
+4.  There are 3,761 records missing ….
 5.  Consistency in geographic data has been improved with
     `campfin::normal_*()`.
 6.  The 4-digit `year` variable has been created with
@@ -818,7 +831,7 @@ clean_dir <- dir_create(here("nc", "contribs", "data", "clean"))
 clean_path <- path(clean_dir, "nc_contribs_clean.csv")
 write_csv(ncc, clean_path, na = "")
 file_size(clean_path)
-#> 2.39G
+#> 2.44G
 guess_encoding(clean_path)
 #> # A tibble: 1 x 2
 #>   encoding confidence
@@ -864,10 +877,3 @@ guess_encoding(clean_path)
 | `rec_state_clean` | `<chr>`  | Normalized recipient 2-digit state abbreviation   |
 | `rec_city_clean`  | `<chr>`  | Normalized recipient city name                    |
 | `con_city_clean`  | `<chr>`  | Normalized contributor city name                  |
-
-``` r
-write_lines(
-  x = c("# North Carolina Contributions Data Dictionary\n", dict_md),
-  path = here("nc", "contribs", "wi_contribs_dict.md"),
-)
-```
