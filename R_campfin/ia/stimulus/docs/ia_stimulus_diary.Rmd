@@ -1,0 +1,359 @@
+---
+title: "Iowa Stimulus"
+author: "Kiernan Nicholls"
+date: "`r Sys.time()`"
+output:
+  github_document: 
+    df_print: tibble
+    toc: true
+    toc_dept: 2
+editor_options: 
+  chunk_output_type: console
+---
+
+<!-- Place comments regarding knitting here -->
+
+```{r setup, include=FALSE, purl=FALSE}
+library(knitr)
+opts_chunk$set(
+  eval = TRUE,
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  error = FALSE,
+  collapse = TRUE,
+  comment = "#>",
+  fig.path = "../plots/",
+  fig.width = 10,
+  dpi = 300
+)
+if (!interactive()) {
+  options(width = 99)
+  set.seed(5)
+}
+```
+
+```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
+doc_dir <- fs::dir_create(here::here("ia", "stimulus", "docs"))
+```
+
+## Project
+
+The Accountability Project is an effort to cut across data silos and give
+journalists, policy professionals, activists, and the public at large a simple
+way to search across huge volumes of public data about people and organizations.
+
+Our goal is to standardizing public data on a few key fields by thinking of each
+dataset row as a transaction. For each transaction there should be (at least) 3
+variables:
+
+1. All **parties** to a transaction.
+2. The **date** of the transaction.
+3. The **amount** of money involved.
+
+## Objectives
+
+This document describes the process used to complete the following objectives:
+
+1. How many records are in the database?
+1. Check for entirely duplicated records.
+1. Check ranges of continuous variables.
+1. Is there anything blank or missing?
+1. Check for consistency issues.
+1. Create a five-digit ZIP Code called `zip`.
+1. Create a `year` field from the transaction date.
+1. Make sure there is data on both parties to a transaction.
+
+## Packages
+
+The following packages are needed to collect, manipulate, visualize, analyze,
+and communicate these results. The `pacman` package will facilitate their
+installation and attachment.
+
+The IRW's `campfin` package will also have to be installed from GitHub. This
+package contains functions custom made to help facilitate the processing of
+campaign finance data.
+
+```{r load_packages, message=FALSE, warning=FALSE, error=FALSE}
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load_gh("irworkshop/campfin")
+pacman::p_load(
+  tidyverse, # data manipulation
+  lubridate, # datetime strings
+  tabulizer, # scrape pdf tables
+  gluedown, # printing markdown
+  magrittr, # pipe operators
+  janitor, # clean data frames
+  refinr, # cluster and merge
+  scales, # format strings
+  knitr, # knit documents
+  vroom, # read files fast
+  rvest, # html scraping
+  glue, # combine strings
+  here, # relative paths
+  httr, # http requests
+  fs # local storage 
+)
+```
+
+This document should be run as part of the `R_campfin` project, which lives as a
+sub-directory of the more general, language-agnostic
+[`irworkshop/accountability_datacleaning`][tap] GitHub repository.
+
+The `R_campfin` project uses the [RStudio projects][rproj] feature and should be
+run as such. The project also uses the dynamic `here::here()` tool for file
+paths relative to _your_ machine.
+
+```{r where_here}
+# where does this document knit?
+here::here()
+```
+
+[tap]: https://github.com/irworkshop/accountability_datacleaning
+[rproj]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects
+
+## Data
+
+Stimulus data comes from the Iowa Economic Development Authority.
+
+> Governor Reynolds launched the Iowa Small Business Relief Program to provide
+financial assistance to small businesses economically impacted by the COVID-19
+pandemic. The program offers eligible small businesses grants ranging from
+$5,000-$25,000 in addition to offering Iowa businesses a deferral of sales and
+use or withholding taxes due and waiver of penalty and interest. The application
+window closed March 31. IEDA will not open a new round of applications.
+
+> $24 million was appropriated and disbursed for the Small Business Relief
+program April 7-10. On April 23, Governor Reynolds announced additional funding
+through the federal CARES Act to assist more eligible businesses that applied
+during the March application period.
+
+## Download
+
+We can scrape the IEDA website to obtain the links of PDF reports.
+
+```{r raw_dir}
+raw_dir <- dir_create(here("ia", "stimulus", "data", "raw"))
+```
+
+```{r raw_get}
+home <- "https://www.iowaeconomicdevelopment.com/aspx/general/dynamicpage.aspx"
+raw_get <- GET(home, query = list(id = 205))
+```
+
+```{r raw_links}
+raw_urls <- content(raw_get) %>% 
+  html_nodes("a") %>% 
+  html_attr("href") %>% 
+  str_subset("sbrg-recipientslist_\\d+.pdf") %>% 
+  str_c("https://www.iowaeconomicdevelopment.com", .)
+```
+
+Those `r length(raw_urls)` PDF files can be downloaded locally.
+
+```{r raw_download}
+raw_paths <- path(raw_dir, basename(raw_urls))
+if (!all(file_exists(raw_paths))) {
+  download.file(raw_urls, raw_paths)
+}
+```
+
+```{r raw_size}
+sum(file_size(raw_paths))
+```
+
+## Read
+
+Using the `tabulizer::extract_tables()` function, we can scrape the PDF pages
+for the tables containing our data.
+
+```{r raw_scrape}
+mid_area <- c(50, 0, 700, 600)
+ias <- rep(list(NA), length(raw_paths))
+for (i in seq_along(raw_paths)) {
+  # extract date from file name
+  file_date <- mdy(str_extract(raw_paths[i], "\\d+"))
+  # create list of table areas
+  n_pgs <- get_n_pages(raw_paths[i])
+  pg_areas <- rep(list(mid_area), n_pgs)
+  # first and last have smaller tables
+  pg_areas[[1]][1] <- 100
+  pg_areas[[n_pgs]][1] <- 100
+  # scrape all tables
+  ias[[i]] <- raw_paths[i] %>% 
+    extract_tables(area = pg_areas) %>% 
+    map(row_to_names, 1) %>% 
+    map_df(as_tibble) %>%
+    set_names(c("business", "county", "amount")) %>% 
+    # remove total row from end
+    slice(-nrow(.)) %>%
+    # filter out double headers
+    filter(str_detect(amount, "\\d")) %>% 
+    # parse numeric column
+    mutate(across(3, parse_number)) %>% 
+    # add row and date from file
+    mutate(round = i, date = file_date, .before = 1)
+}
+```
+
+The tables from each file can be combined into a single data frame.
+
+```{r raw_bind}
+ias <- bind_rows(ias)
+ias <- mutate(ias, across(where(is.character), str_to_upper))
+```
+
+## Explore
+
+```{r glimpse}
+head(ias)
+tail(ias)
+```
+
+### Missing
+
+There are no missing values.
+
+```{r na_count}
+col_stats(ias, count_na)
+```
+
+### Duplicates
+
+There are no duplicate records.
+
+```{r dupe_flag}
+any(duplicated(ias))
+```
+
+### Categorical
+
+```{r distinct_count}
+col_stats(ias, n_distinct)
+```
+
+```{r distinct_plots}
+explore_plot(ias, county)
+```
+
+### Amounts
+
+We see the minimum and maximum are in line with the statutory values.
+
+```{r ammount_summary}
+noquote(map_chr(summary(ias$amount), dollar))
+```
+
+```{r hist_amount, echo=FALSE}
+ias %>%
+  ggplot(aes(amount)) +
+  geom_histogram(fill = dark2["purple"]) +
+  scale_y_continuous(labels = comma) +
+  scale_x_continuous(labels = dollar) +
+  labs(
+    title = "Iowa Stimulus Amount Distribution",
+    caption = "Source: {source}",
+    x = "Amount",
+    y = "Count"
+  )
+```
+
+### Dates
+
+We can add the calendar year from `date` with `lubridate::year()`
+
+```{r date_year}
+ias <- mutate(ias, year = year(date))
+```
+
+```{r date_range}
+min(ias$date)
+max(ias$date)
+sum(ias$date > today())
+```
+
+## Wrangle
+
+We need to manually add the state, agency, and funding program name.
+
+```{r agency_add}
+ias <- ias %>% 
+  mutate(
+    .data = ias,
+    .before = business,
+    state = "IA",
+    agency = "IOWA ECONOMIC DEVELOPMENT AUTHORITY"
+  )
+```
+
+## Conclude
+
+```{r clean_tail}
+head(ias)
+```
+
+1. There are `r comma(nrow(ias))` records in the database.
+1. There are `r comma(sum(ias$dupe_flag))` duplicate records in the database.
+1. The range and distribution of `amount` and `date` seem reasonable.
+1. There are `r comma(sum(ias$na_flag))` records missing key variables.
+1. Consistency in geographic data has been improved with `campfin::normal_*()`.
+1. The 4-digit `year` variable has been created with `lubridate::year()`.
+
+## Export
+
+Now the file can be saved on disk for upload to the Accountability server.
+
+```{r clean_dir}
+clean_dir <- dir_create(here("ia", "stimulus", "data", "clean"))
+clean_path <- path(clean_dir, "ia_stimulus_clean.csv")
+write_csv(ias, clean_path, na = "")
+file_size(clean_path)
+file_encoding(clean_path) %>% 
+  mutate(across(path, path.abbrev))
+```
+
+## Upload
+
+Using the [duckr] R package, we can wrap around the [duck] command line tool to
+upload the file to the IRW server.
+
+[duckr]: https://github.com/kiernann/duckr
+[duck]: https://duck.sh/
+
+```{r clean_upload, eval=FALSE}
+# remotes::install_github("kiernann/duckr")
+s3_dir <- "s3:/publicaccountability/csv/"
+s3_path <- path(s3_dir, basename(clean_path))
+if (require(duckr)) {
+  duckr::duck_upload(clean_path, s3_path)
+}
+```
+
+## Dictionary
+
+The following table describes the variables in our final exported file:
+
+```{r dict_make, echo=FALSE}
+dict_raw <- tibble(
+  var = md_code(names(ias)),
+  type = md_code(map_chr(ias, typeof)),
+  def = c(
+    "Stimulus funding round",
+    "Date reported with file",
+    "Funding state abbreviation",
+    "Funding agency name",
+    "Recipient business name",
+    "Recipient county name",
+    "Loan amount ($5,000 to $25,000)",
+    "Year loan given"
+  )
+)
+```
+
+```{r dict_md, echo=FALSE}
+(dict_md <- kable(
+  x = dict_raw,
+  format = "markdown",
+  col.names = c("Column", "Type", "Definition")
+))
+```
