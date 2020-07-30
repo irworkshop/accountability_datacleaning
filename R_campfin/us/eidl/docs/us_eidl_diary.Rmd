@@ -311,6 +311,17 @@ confident string normalization. For geographic variables like city names and
 ZIP codes, the corresponding `campfin::normal_*()` functions are tailor made to 
 facilitate this process.
 
+We will also manually add the disbursing agency and governing body.
+
+```{r govt_add}
+eidl <- mutate(
+  .data = eidl,
+  .before = borrower,
+  govt = "US",
+  agency = "SMALL BUSINESS ADMINISTRATION"
+)
+```
+
 ### Address
 
 For the street `addresss` variable, the `campfin::normal_address()` function
@@ -633,6 +644,8 @@ dict_raw <- tibble(
   def = c(
     "Whether the loan went to a business (2) or a home (1)",
     "Disaster declaration numbers (to join with the DISLOOK)",
+    "Disburing government abbreviation (US)",
+    "Disbursing agency name (SBA)",
     "The name of business/homeowner(s) receiving loan guarantees",
     "The mailing address of the business/home",
     "The city of the business/home",

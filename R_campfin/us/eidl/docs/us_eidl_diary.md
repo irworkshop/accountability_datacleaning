@@ -1,7 +1,7 @@
 United States Economic Injury Disaster Loans Diary
 ================
 Kiernan Nicholls
-2020-07-30 13:38:19
+2020-07-30 15:27:46
 
   - [Project](#project)
   - [Objectives](#objectives)
@@ -361,6 +361,17 @@ consistent, confident string normalization. For geographic variables
 like city names and ZIP codes, the corresponding `campfin::normal_*()`
 functions are tailor made to facilitate this process.
 
+We will also manually add the disbursing agency and governing body.
+
+``` r
+eidl <- mutate(
+  .data = eidl,
+  .before = borrower,
+  govt = "US",
+  agency = "SMALL BUSINESS ADMINISTRATION"
+)
+```
+
 ### Address
 
 For the street `addresss` variable, the `campfin::normal_address()`
@@ -635,9 +646,11 @@ eidl <- eidl %>%
 ``` r
 glimpse(sample_n(eidl, 50))
 #> Rows: 50
-#> Columns: 19
+#> Columns: 21
 #> $ loan_type     <fct> 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 1, 1, 1, 1, 1, 2, 1, 2, 1, 1, 1, 1,…
 #> $ diaster_id    <chr> "262906", "363508", "101768", "269702", "296111", "133678", "289408", "282…
+#> $ govt          <chr> "US", "US", "US", "US", "US", "US", "US", "US", "US", "US", "US", "US", "U…
+#> $ agency        <chr> "SMALL BUSINESS ADMINISTRATION", "SMALL BUSINESS ADMINISTRATION", "SMALL B…
 #> $ borrower      <chr> "ROBERT T & TERESA FAITEL", "JOHN C AND WILLA L DAVIS", "Mitchell Rick", "…
 #> $ address       <chr> "2510  HACIENDA DR", "180  BALDWIN CT", "25295  STEPP RD", "20027 SEPTO ST…
 #> $ city          <chr> "SANTA BARBARA", "PORT CHARLOTTE", "ROBERT", "CHATSWORTH", "MILWAUKEE", "B…
@@ -676,7 +689,7 @@ clean_dir <- dir_create(here("us", "eidl", "data", "clean"))
 clean_path <- path(clean_dir, "us_eidl_ire-2018.csv")
 write_csv(eidl, clean_path, na = "")
 file_size(clean_path)
-#> 171M
+#> 209M
 file_encoding(clean_path) %>% 
   mutate(across(path, path.abbrev))
 #> # A tibble: 1 x 3
@@ -708,6 +721,8 @@ The following table describes the variables in our final exported file:
 | :-------------- | :---------- | :------------------------------------------------------------- |
 | `loan_type`     | `integer`   | Whether the loan went to a business (2) or a home (1)          |
 | `diaster_id`    | `character` | Disaster declaration numbers (to join with the DISLOOK)        |
+| `govt`          | `character` | Disburing government abbreviation (US)                         |
+| `agency`        | `character` | Disbursing agency name (SBA)                                   |
 | `borrower`      | `character` | The name of business/homeowner(s) receiving loan guarantees    |
 | `address`       | `character` | The mailing address of the business/home                       |
 | `city`          | `character` | The city of the business/home                                  |
