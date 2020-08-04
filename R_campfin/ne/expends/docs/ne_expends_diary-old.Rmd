@@ -1,0 +1,580 @@
+---
+title: "Nebraska Expenditures"
+author: "Kiernan Nicholls"
+date: "`r Sys.time()`"
+output:
+  github_document: 
+    df_print: tibble
+    toc: true
+    toc_dept: 2
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE, purl=FALSE}
+library(knitr)
+opts_chunk$set(
+  eval = TRUE,
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  error = FALSE,
+  comment = "#>",
+  fig.path = "../plots/",
+  fig.width = 10,
+  dpi = 300
+)
+options(width = 99)
+```
+
+## Project
+
+The Accountability Project is an effort to cut across data silos and give journalists, policy
+professionals, activists, and the public at large a simple way to search across huge volumes of
+public data about people and organizations.
+
+Our goal is to standardizing public data on a few key fields by thinking of each dataset row as a
+transaction. For each transaction there should be (at least) 3 variables:
+
+1. All **parties** to a transaction
+2. The **date** of the transaction
+3. The **amount** of money involved
+
+## Objectives
+
+This document describes the process used to complete the following objectives:
+
+1. How many records are in the database?
+1. Check for duplicates
+1. Check ranges
+1. Is there anything blank or missing?
+1. Check for consistency issues
+1. Create a five-digit ZIP Code called `ZIP5`
+1. Create a `YEAR` field from the transaction date
+1. Make sure there is data on both parties to a transaction
+
+## Packages
+
+The following packages are needed to collect, manipulate, visualize, analyze, and communicate
+these results. The `pacman` package will facilitate their installation and attachment.
+
+The IRW's `campfin` package will also have to be installed from GitHub. This package contains
+functions custom made to help facilitate the processing of campaign finance data.
+
+```{r load_packages, message=FALSE, dfrning=FALSE, error=FALSE}
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load_current_gh("kiernann/campfin")
+pacman::p_load(
+  stringdist, # levenshtein value
+  RSelenium, # remote browser
+  tidyverse, # data manipulation
+  lubridate, # datetime strings
+  tidytext, # text analysis
+  tidytext, # text analysis
+  magrittr, # pipe opperators
+  janitor, # dataframe clean
+  refinr, # cluster and merge
+  scales, # format strings
+  knitr, # knit documents
+  vroom, # read files fast
+  glue, # combine strings
+  here, # relative storage
+  fs # search storage 
+)
+```
+
+This document should be run as part of the `R_campfin` project, which lives as a sub-directory of
+the more general, language-agnostic [`irworkshop/accountability_datacleaning`][01] GitHub
+repository.
+
+The `R_campfin` project uses the [RStudio projects][02] feature and should be run as such. The
+project also uses the dynamic `here::here()` tool for file paths relative to _your_ machine.
+
+```{r where_here, collapse=TRUE}
+# where dfs this document knit?
+here::here()
+```
+
+## Data
+
+Data is obtained by from the Nebraska Accountability and Disclosure Commission's (NADC) 
+[Open Data portal][03]. From this portal, we will download the [Campaign Statements Data][04].
+
+> A weekly export of the campaign filings based upon the paper records filed with the Nebraska
+Accountability and Disclosure Commission.
+
+The [NADC home][04] page explains the role and resources provided by the Commission.
+
+> This site includes the campaign statements filed with the Commission by candidates for state and
+local offices, political action committees or PACs, political parties, and ballot question
+committees. Campaign statements disclose the amount and sources of contributions to the committee
+and the amount purposes of expenditures by the committee. The site also includes Reports of
+Contributions filed with the Commission by corporations, unions, limited liability companies,
+limited partnerships, and by industry, trade or professional associations. Reports of Contributions
+disclose contributions and expenditures made to support or oppose candidates or ballot questions.
+Forms, instructional materials and a list of committees may be accessed through this site. To
+access the information described in this paragraph, click on the tab above marked CAMPAIGN FINANCE.
+
+Navigating to the [campaign finance section of the website][05], the exact filing requirements are
+layed out.
+
+> Candidates for state and local office are subject to the campaign finance provisions of the
+Nebraska Political Accountability and Disclosure Act (NPADA). Those seeking election to federal
+office are not subject to the NPADA. Once a candidate raises, receives or expends $5,000 or more in
+a calendar year, he or she is required to register the committee with the Commission by filing a
+Statement of Organization and paying a filing fee of $100. Once the candidate committee is formed,
+the committee must file periodic campaign statements.
+
+specifically, there are **three** kinds of filings that must be made by general candidates:
+
+1. > Statement of Organization - This document registers the Committee with the Commission. It
+discloses the name of the committee, the name of the candidate, the office sought and the name of
+the treasurer.
+
+2. > Campaign Statement - this document provides a summary of the financial activity of the
+committee. It discloses the name of contributors of more than \$250 and the amounts of the
+contributions. It discloses expenditures of more than \$250.
+
+3. > Report of Late Contributions - this document discloses contributions of $1,000 or more
+received by the committee during 14 days immediately preceding the election. Information reported
+as late contributions are also reported on subsequent campaign statements.
+
+Aside from general candidates, the NADC also explains that political committees must also file.
+
+> There are **two** types of committees that are commonly referred to as political action
+committees or PACs. One type of PAC is a political committee sponsored by a corporation, union or
+other type of organization. Another type of PAC is a political committee which is not sponsored by
+another group. PACs are required to register with the Commission and file periodic campaign
+statements disclosing receipts and expenditures.
+
+1. > State and county political party committees with certain levels of financial activity,
+register with the Commission and file periodic campaign statements.
+
+2. > A ballot question committee is a political committee formed for the purpose of supporting or
+opposing the qualification, passage or defeat of a ballot question. The committee must register
+with the Commission within 10 days after raising, receiving or expending $5,000 or more in a
+calendar year. Once registered, ballot questions committees file periodic campaign statements
+disclosing receipts and expenditures.
+
+Finally, regarding the specific data in question, the NADC identifies the source:
+
+> The campaign filings displayed on this website are based upon the paper records filed with the
+Nebraska Accountability and Disclosure Commission. While every effort has been made to ensure
+accurate data input, errors may occur. Anyone noting an error is encouraged to contact this office.
+
+In any discrepancy between the information displayed on this website and the official records on file with the Commission, the official records of the Commission take precedence.
+
+## Import
+
+The campaign statements data is provided as a series of text files organized in a relational
+database management system (DRMS).
+
+### Download
+
+The data is provided as a ZIP file, which can be downloaded locally.
+
+```{r raw_dir}
+raw_dir <- here("ne", "expends", "data", "raw")
+dir_create(raw_dir)
+```
+
+```{r download_raw}
+zip_url <- "http://www.nebraska.gov/nadc_data/nadc_data.zip"
+zip_file <- str_c(raw_dir, basename(zip_url), sep = "/")
+download.file(
+  url = zip_url,
+  destfile = zip_file
+)
+```
+
+There are `r nrow(unzip(zip_file, list = T))` files contained in a single folder (`/nadc_data`) 
+inside the ZIP archive.
+
+```{r list_raw, results='asis', echo=FALSE}
+zip_contents <- unzip(zip_file, list = TRUE)$Name
+for (file in zip_contents) {
+    cat("*", file, "\n")
+}
+```
+
+We can then unzip the archive to the same `/raw` directory.
+
+```{r unzip_raw}
+unzip(
+  zipfile = zip_file,
+  exdir = raw_dir
+)
+```
+
+The archive contains a single folder, inside which are the many TXT files we need.
+
+```{r nadc_dir}
+nadc_dir <- here("ne", "expends", "data", "raw", "nadc_data")
+```
+
+### Read
+
+The first file in the folder, `DATE_UPDATED.TXT` contains the time the files were last updated.
+
+```{r date_updated, collapse=TRUE}
+read_lines(file = glue("{nadc_dir}/DATE_UPDATED.TXT")) %>% 
+  str_remove_all("[:alpha:]") %>% 
+  as_datetime() %>% 
+  subtract(now())
+```
+
+To work with the relational database managment system, we are going to read every text file into a 
+single list comprised of separate data frames by using `purrr::map()` and `readr::read_delim()`.
+
+```{r map_read}
+ne <- 
+  dir_ls(
+    path = nadc_dir,
+    type = "file",
+    glob = "*.txt$"
+  ) %>% 
+  map(
+    read_delim,
+    delim = "|",
+    escape_double = FALSE,
+    escape_backslash = FALSE,
+    col_types = cols(.default = "c")
+  ) %>% 
+  map(clean_names)
+
+# set names equal to form
+names(ne) <- tools::file_path_sans_ext(basename(names(ne)))
+```
+
+Before we can prepare the file for indexing, we need to locate the exact data we're interested in.
+The content, structure, and relationship of each file is described in the
+`/nadc_data/nadc_tables.rtf` rich text file. The files correspond to the _forms_ through which
+candidates and committees report their contributions, expenditures, etc. Each type of filter uses a
+different form, so all expenditures are split among a few files (corresponding to a few forms).
+Each form typically also has a section (schedule) where _expenditures_ are reported.
+
+#### Form B-1
+
+[Form B-1][06] covers Candiate and Ballot Question Committees, where Section 1 of Schedule D asks
+the candidate/committee to:
+
+> List all payees who were paid more than $250 during this reporting period. If multiple payments
+to the same payee totaled more than $250 throughout this reporting period, those expenditures must
+be listed. Reporting period refers to your entry on Page 1 under Item 4. Expenditures to the same
+payee over separate reporting periods should not be accumulated. Expenditures to the same payee
+must be listed under the same name. If the committee reimburses the candidate or engages the
+services of an advertising agency or another agent of the committee for expenses they incurred on
+behalf of the committee, list the payments the committee made to the candidate or agent and also
+list the payments which were made by the candidate or agent on behalf of the committee. (E.g., If
+the candidate makes payments to a newspaper for advertising and is reimbursed by the committee,
+report the payments made to the candidate but also list the payments made by the candidate to the
+newspaper. Include the name of the newspaper, and the date of each of the expenditures by the
+candidate and list the amount only in the “purpose” box along with the description of the
+expenditure.)
+
+The form also defines the NADC conception of expenditure:
+
+> Expenditure: A payment, donation, loan, pledge, or promise of payment of money or anything of
+ascertainable monetary value for goods, materials, services, or facilities in assistance of, or in
+opposition to, the nomination or election of a candidate, or the qualification, passage, or defeat
+of a ballot question.  (An offer or tender of an expenditure is not an expenditure if expressly and
+unconditionally rejected or returned.)  Expenditure shall include a contribution or a transfer of
+anything of ascertainable monetary value for purposes of influencing the nomination or election of
+any candidate or the qualification, passage or defeat of a ballot question.
+
+```{r head_b1d1}
+glimpse(ne$formb1d)
+```
+
+#### Form B-2
+
+[form B-2][07] covers Political Party Committees, where Item 5 of that form asks the party to:
+
+> List expenditures of any amount which were made to or for the benefit of candidates or ballot
+questions. If your committee made multiple contributions in support or opposition to the same
+candidate or ballot question committee, also list the total accumulated contributions given for the
+election. Expenditures made in support of more than one candidate or ballot question committee must
+be allocated (E.g. the purchase of a newspaper ad advocating support or opposition to more than one
+candidate or ballot question).
+
+```{r head_b2b}
+glimpse(ne$formb2b)
+```
+
+#### Form B-4
+
+[form B-4][08] covers Independent Committees, where Section 1 of Schedule B asks the committee to: 
+
+> Indicate the total amount of expenditures, for or against each Nebraska candidate or ballot
+question (B.Q.) or other allowed committee (including a political party), during this reporting
+period and the total for the calendar year to date. An expenditure made in support of more than one
+candidate or ballot question must be apportioned reasonably among the candidates or ballot
+questions supported or opposed. "Expenditure" for the purpose of this schedule includes direct and
+in-kind contributions, loans, independent expenditures, and all other disbursements of funds made
+in support of or in opposition to Nebraska state and local candidates and ballot questions.
+
+```{r head_b4b1}
+glimpse(ne$formb4b1)
+```
+
+#### Bind
+
+We can bind these three data frames together to create a single data frame of expenditures by
+candidates, ballot committees, political committees, and party committees. Then we can clean and
+parse this combined data frame.
+
+Before we bind these tables together, we need to rename some variables and add additional
+information from other forms so we can identify the parties on both sides of each expenditure.
+
+```{r fix_b1d}
+fixed_b1d <- ne$formb1d %>% 
+  # add from b1
+  select(-committee_name) %>% 
+  map_dfr(str_trim)
+```
+
+```{r fix_b2b}
+fixed_b2b <- ne$formb2b %>%
+  remove_empty("cols") %>% 
+  rename(
+    committee_payee_id = committee_id_expenditure_is_for,
+    # this file has last cols shifted left
+    committee_payee_name = report_id,
+  ) %>% 
+  left_join(
+    ne$forma1 %>% select(starts_with("committee")), 
+    by = c("committee_payee_id" = "committee_id_number")
+  ) %>% 
+  select(-committee_name)
+```
+
+```{r fix_b4b1}
+fixed_b4b1 <- ne$formb4b1 %>%
+  remove_empty("cols") %>% 
+  rename(
+    committee_payee_id = committee_expenditure_id,
+    # this file has last cols shifted left
+    committee_payee_name = report_id,
+  ) %>%
+  # add committee geo info
+  left_join(
+    ne$forma1 %>% select(starts_with("committee")), 
+    by = c("committee_payee_id" = "committee_id_number")
+  ) %>% 
+  select(
+    -committee_name,
+    -form_id_number
+  )
+```
+
+```{r bind_expends}
+ne_exp <- 
+  bind_rows(
+    fixed_b1d, 
+    fixed_b2b, 
+    fixed_b4b1
+  ) %>% 
+  na_if("0") %>% 
+  mutate(
+    date_received = parse_date(date_received, "%m/%d/%Y"),
+    expenditure_date = parse_date(expenditure_date, "%m/%d/%Y"),
+    oppose_clean = parse_logical(support_oppose),
+    amount_clean = parse_number(coalesce(amount, in_kind)),
+    inkind_clean = !is.na(in_kind),
+    payee_name_clean = coalesce(payee_name, committee_payee_name)
+  )
+```
+
+## Explore
+
+```{r glimpse}
+head(ne_exp)
+tail(ne_exp)
+glimpse(sample_frac(ne_exp))
+```
+
+### Missing
+
+```{r glimpse_na}
+glimpse_fun(ne_exp, count_na)
+```
+
+Since the combined data frame comes from three different sources, it's difficult to identify what
+are expected missing values and those that should be flagged. `na_flag` will equal `TRUE` when a 
+record has either (1) no `amount_clean` (`amount` or `in_kind`) _or_ (2) no `payee_name_clean`
+(`payee_name` for individuals or `payee_committee_name` for others).
+
+```{r flag_na, collapse=TRUE}
+sum(is.na(ne_exp$payee_name) & is.na(ne_exp$committee_payee_name))
+
+ne_exp <- ne_exp %>% 
+  mutate(na_flag = is.na(amount_clean) | is.na(payee_name_clean))
+
+sum(ne_exp$na_flag)
+percent(mean(ne_exp$na_flag))
+```
+
+### Duplicates
+
+We can use `campfin::flag_dupes()` to create a new `dupe_flag` logical variable, identifying every
+duplicate row _after_ the initial occurance.
+
+```{r get_dupes, collapse=TRUE}
+ne_exp <- flag_dupes(ne_exp)
+sum(ne_exp$dupe_flag)
+```
+
+```{r view_dupes}
+filter(ne_exp, dupe_flag)
+```
+
+### Categorical
+
+```{r glimpse_distinct}
+glimpse_fun(ne_exp, n_distinct)
+```
+
+```{r words_bar, echo=FALSE, fig.height=10}
+ne_exp %>% 
+  unnest_tokens(word, expenditure_purpose) %>% 
+  anti_join(stop_words) %>% 
+  count(word, sort = TRUE) %>% 
+  head(25) %>% 
+  drop_na() %>% 
+  ggplot(
+    mapping = aes(
+      x = reorder(word, n),
+      y = n
+    )
+  ) +
+  geom_col() +
+  coord_flip() +
+  labs(
+    title = "Nebraska Expenditure Purpose",
+    x = "Word",
+    y = "Count"
+  )
+```
+
+```{r nature_bar, echo=FALSE}
+explore_plot(
+  palette = "Dark2",
+  nbar = 5,
+  data = ne_exp,
+  var = nature_of_expenditure,
+  title = "Nebraska Expenditure Nature",
+  x = "Word",
+  y = "Count"
+)
+```
+
+### Continuous
+
+#### Amounts
+
+```{r amount_range, collapse=TRUE}
+summary(ne$amount)
+sum(ne$amount < 0, na.rm = TRUE)
+```
+
+```{r}
+ne_exp %>% 
+  ggplot(aes(amount_clean)) +
+  geom_histogram() +
+  scale_x_continuous(
+    trans = "log10",
+    labels = dollar
+  ) +
+  labs(
+    title = "Nebraska Expenditure Amount Distribution",
+    x = "Word",
+    y = "Count"
+  )
+```
+
+#### Dates
+
+```{r add_year}
+ne_exp <- mutate(ne_exp, expenditure_year = year(expenditure_date))
+```
+
+```{r date_range, collapse=TRUE}
+min(ne_exp$expenditure_date)
+sum(ne_exp$expenditure_year < 1999)
+max(ne_exp$expenditure_date)
+sum(ne_exp$expenditure_date > today())
+```
+
+```{r flag_dates, collapse=TRUE}
+ne_exp <- ne_exp %>% 
+  mutate(
+    date_flag = or(expenditure_year < 1999, expenditure_year > 2019),
+    date_clean = as_date(ifelse(date_flag, NA, expenditure_date)),
+    year_clean = year(date_clean)
+  )
+
+sum(ne_exp$date_flag)
+```
+
+## Wrangle
+
+### Address
+
+There is very little consistency in the format of `payee_address`.
+
+```{r sample_address}
+# Mon Aug  5 17:19:45 2019 ------------------------------
+sample(
+  x = na.omit(ne_exp$payee_address),
+  size = 20
+)
+```
+
+```{r extract_zip}
+ne_exp <- ne_exp %>% 
+  mutate(
+    zip_clean = payee_address %>% 
+      str_extract(rx_zip) %>% 
+      normal_zip(na_rep = TRUE)
+  )
+```
+
+```{r extract_state}
+ne_exp <- ne_exp %>% 
+  mutate(
+    state_clean = payee_address %>% 
+      str_extract(rx_state) %>%
+      normal_state(
+        abbreviate = TRUE,
+        na = na_city,
+        na_rep = TRUE,
+        valid = geo$state
+      )
+  )
+```
+
+## Conclude 
+
+## Export
+
+```{r work_dir}
+work_dir <- here("ne", "expends", "data", "working")
+dir_create(work_dir)
+```
+
+```{r write_clean}
+ne_exp %>% 
+  write_csv(
+    na = "",
+    path = glue("{work_dir}/ne_expends_working.csv")
+  )
+```
+
+[01]: https://github.com/irworkshop/accountability_datacleaning "tap"
+[02]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects "rproj"
+[03]: http://www.nebraska.gov/government/open-data/ "portal"
+[04]: http://www.nadc.nebraska.gov/index.html "nadc"
+[05]: http://www.nadc.nebraska.gov/cf/index.html "nadc_cf"
+[06]: http://www.nadc.nebraska.gov/docs/B-1-2018.doc "b-1"
+[07]: http://www.nadc.nebraska.gov/docs/B-2-2018.doc "b-2"
+[08]: http://www.nadc.nebraska.gov/docs/B-4-2018.doc "b-4"

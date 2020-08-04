@@ -224,21 +224,21 @@ all_paths <- as_fs_path(unzip(
 ))
 ```
 
-## Join
-
-There are `r length(dir_ls(raw_dir, recurse = TRUE))` files in the data and
-documentation ZIP archives. 
-
-The `r md_code(exp_name)` file contains records of expenditures made by
-campaigns, but it lacks some of the variables needed to fully identify both
-parties to each transactions. We will need to join records with 
-
 ## Read
 
-```{r raw_read}
+```{r raw_lines}
 expn_path <- str_subset(all_paths, "EXPN")
+expn_lines <- read_lines(expn_path)
+good_lines <- str_count(x, "\t") == 52
+sum(good_lines)
+expn_tmp <- file_temp(ext = "tsv")
+write_lines(expn_lines[good_lines], expn_tmp)
+rm(expn_lines, good_lines); flush_memory()
+```
+
+```{r raw_read}
 expn_cd <- read_delim(
-  file = expn_path,
+  file = expn_tmp,
   delim = "\t",
   escape_backslash = FALSE,
   escape_double = FALSE,
@@ -246,8 +246,6 @@ expn_cd <- read_delim(
   locale = locale(tz = "US/Pacific"),
   col_types = cols(
     .default = col_character(),
-    FILING_ID = col_integer(),
-    AMEND_ID = col_integer(),
     EXPN_DATE = col_date("%m/%d/%Y %H:%M:%S %p"),
     AMOUNT = col_double(),
     CUM_YTD = col_double(),
@@ -256,6 +254,15 @@ expn_cd <- read_delim(
   )
 )
 ```
+
+## Join
+
+There are `r length(dir_ls(raw_dir, recurse = TRUE))` files in the data and
+documentation ZIP archives. 
+
+The `r md_code(exp_name)` file contains records of expenditures made by
+campaigns, but it lacks some of the variables needed to fully identify both
+parties to each transactions. We will need to join records with 
 
 ## Explore
 
