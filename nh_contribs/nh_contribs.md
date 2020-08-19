@@ -1,6 +1,6 @@
 ## New Hampshire campaign contributions
 
-Number of records:
+Number of records:59,758
 
 Note: Only contributions starting in 2016 are available electronically.
 
