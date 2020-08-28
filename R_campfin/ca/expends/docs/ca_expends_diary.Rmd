@@ -113,156 +113,151 @@ here::here()
 
 ## Data
 
-Data is obtained from the Secretary of State's [Cal-Access database][03].
+Instead of getting California campaign expenditure data from the Secretary of
+State's official [Cal-Access database][cala], we will instead be using the clean
+version published by the [California Civic Data Coalition (CCDC)][ccdc].
 
-> Cal-Access provides financial information supplied by state candidates,
-donors, lobbyists, and others. Simply start by selecting either Campaign Finance
-Activity, Lobbying Activity, or Cal-Access Resources and we will guide you to
-the information.
+>  The coalition was formed in 2014 by Ben Welsh and Agustin Armendariz to lead
+the development of open-source software that makes California's public data
+easier to access and analyze. The effort has drawn hundreds of contributions
+from developers and journalists at dozens of news organizations.
+> 
+> Our primary focus is refining CAL-ACCESS, the jumbled, dirty and difficult
+government database that tracks campaign finance and lobbying activity in
+California politics.
 
-The [Political Reform Division][04] (PRD) collects the data regarding expenditures made.
+The CCDC provides a [single file][ex] for state campaign expenditures. The page
+contains a list of variables found in the data along with their definitions.
 
-> The Political Reform Division administers provisions of California's Political
-Reform Act, including the law's most fundamental purpose of ensuring that
-"receipts and expenditures in election campaigns should be fully and truthfully
-disclosed in order that the voters may be fully informed and the activities of
-lobbyists should be regulated and their finances disclosed..."
-
-> * Receive campaign disclosure statements (itemizing contributions received and
-expenditures made) filed by individuals and committees raising or spending
-campaign funds to support or oppose state candidates or ballot measures. (Local
-campaign committees file their itemized disclosure statements with local filing
-officers).
-
-[03]: https://www.sos.ca.gov/
-[04]: https://www.sos.ca.gov/campaign-lobbying/about-political-reform-division/
-
-## Documentation
-
-Using the data key provided by Cal-Access, we can find the expenditure file and understand it's 
-contents.
-
-```{r key_size}
-raw_dir <- dir_create(here("ca", "expends", "data", "raw"))
-key_url <- "https://campaignfinance.cdn.sos.ca.gov/calaccess-documentation.zip"
-key_file <- str_c(raw_dir, basename(key_url), sep = "/")
-url_file_size(key_url)
+```{r raw_dict, echo=FALSE}
+cae_dict <- read_csv(here("ca", "expends", "ca_exp_dict.tsv"))
+cae_dict$column <- md_code(cae_dict$column)
+kable(cae_dict)
 ```
 
-If they ZIP file containing the documentation files has not yet been downloaded, we can do so now.
-
-```{r key_download}
-download.file(key_url, key_file)
-```
-
-Before we unzip the file, we can view it's contents.
-
-```{r key_list}
-key_content <- unzip(key_file, list = TRUE) %>% 
-  as_tibble(.name_repair = make_clean_names) %>% 
-  mutate(across(length, as_fs_bytes)) %>% 
-  mutate(across(name, as_fs_path))
-```
-
-```{r key_extract}
-key_files <- as_fs_path(unzip(key_file, exdir = raw_dir))
-```
+[cala]: http://cal-access.sos.ca.gov/
+[ccdc]: https://www.californiacivicdata.org
+[ex]: https://calaccess.californiacivicdata.org/documentation/raw-files/expn-cd/
 
 ## Download
 
-All California campaign finance data can be downloaded in a single file. As described on PRD
-website:
+We can download the CCDC expenditures file directly, ignoring all the other
+data typically included in the Cal-Access database.
 
-> ### Raw Data for Campaign Finance and Lobbying Activity > In addition to
-presenting California campaign finance and lobbying activity on the
-user-friendly [CAL-ACCESS website][05], the Secretary of State provides the raw
-data to allow people with technical expertise to create their own databases. 
->
-> The raw data is presented in tab-delimited text files from corresponding
-tables in the CAL-ACCESS database. Users can uncompress and extract the data
-with standard software such as PKZIP, WinZip, or MacZip. The Secretary of State
-does not provide technical support to users who want to download and analyze
-CAL-ACCESS data in this advanced way. However, the Secretary of State offers
-guides to the CAL-ACCESS data structure and fields.
-
-> ### Download Files  
-* [Guides to CAL-ACCESS data structure and fields (ZIP)][06]
-* [CAL-ACCESS raw data (ZIP)][07]
-> 
-> All CAL-ACCESS users should keep in mind that campaign finance and lobbying
-activity information changes often. The raw data extracts are updated once a
-day. Campaign finance and lobbying activity filings can also be obtained in hard
-copy by contacting the Secretary of State's Political Reform Division.
-
-[05]: http://cal-access.sos.ca.gov/
-[06]: https://campaignfinance.cdn.sos.ca.gov/calaccess-documentation.zip
-[07]: https://campaignfinance.cdn.sos.ca.gov/dbwebexport.zip
-
-```{r zip_check}
-zip_url <- "https://campaignfinance.cdn.sos.ca.gov/dbwebexport.zip"
-zip_file <- path(raw_dir, basename(zip_url))
-url_file_size(zip_url)
-```
-
-```{r zip_download}
-if (!this_file_new(zip_file)) {
-  download.file(zip_url, zip_file)
+```{r raw_download}
+raw_dir <- here("ca", "expends", "data", "raw")
+raw_source <- "https://s3-us-west-2.amazonaws.com/django-calaccess" 
+raw_url <- str_c(raw_source, "latest", "expn_cd.csv", sep = "/")
+raw_path <- path(raw_dir, basename(raw_url))
+if (!file_exists(raw_path)) {
+  download.file(raw_url, raw_path)
 }
 ```
 
-```{r zip_list}
-zip_contents <- unzip(zip_file, list = TRUE) %>% 
-  as_tibble(.name_repair = make_clean_names) %>% 
-  mutate(across(length, as_fs_bytes)) %>% 
-  mutate(across(name, as_fs_path))
-```
+> ### Errata
+> The raw data provided by the state contains errors in how some values are
+escaped, quoted and delimited. The result is a small number of records in the
+latest download were lost when we prepared files for download. However, only 638
+records out of 7,219,803 total rows were lost (you can download them [here][e]).
 
-```{r zip_extract}
-all_paths <- as_fs_path(unzip(
-  zipfile = zip_file,
-  exdir = raw_dir
-))
+[e]: https://s3-us-west-2.amazonaws.com/django-calaccess/2020-08-26_09-50-41/expn_cd.errors.csv
+
+```{r raw_errata, echo=FALSE}
+errata_url <- str_c(
+  raw_source, "2020-08-26_09-50-41", 
+  "expn_cd.errors.csv", sep = "/"
+)
+cae_errata <- read_csv(errata_url)
+print(cae_errata)
 ```
 
 ## Read
 
-```{r raw_lines}
-expn_path <- str_subset(all_paths, "EXPN")
-expn_lines <- read_lines(expn_path)
-good_lines <- str_count(x, "\t") == 52
-sum(good_lines)
-expn_tmp <- file_temp(ext = "tsv")
-write_lines(expn_lines[good_lines], expn_tmp)
-rm(expn_lines, good_lines); flush_memory()
-```
+Once downloaded, we can read the expenditures file directly, using the variable
+dictionary to define the column types.
 
 ```{r raw_read}
-expn_cd <- read_delim(
-  file = expn_tmp,
-  delim = "\t",
-  escape_backslash = FALSE,
-  escape_double = FALSE,
-  guess_max = 0,
-  locale = locale(tz = "US/Pacific"),
+# 7,217,483 rows
+cae <- vroom(
+  file = raw_path,
+  delim = ",",
+  escape_double = TRUE,
+  .name_repair = make_clean_names,
   col_types = cols(
     .default = col_character(),
-    EXPN_DATE = col_date("%m/%d/%Y %H:%M:%S %p"),
+    AMEND_ID = col_integer(),
     AMOUNT = col_double(),
-    CUM_YTD = col_double(),
     CUM_OTH = col_double(),
+    CUM_YTD = col_double(),
+    EXPN_DATE = col_date("%m/%d/%Y %H:%M:%S %p"),
+    FILING_ID = col_integer(),
     LINE_ITEM = col_integer()
   )
 )
 ```
 
-## Join
+The expenditures data does not include any identifying information on the filers
+of the forms, the committees making the expenditures. There is are three
+variables for _candidate_ names, but the vast majority are empty.
 
-There are `r length(dir_ls(raw_dir, recurse = TRUE))` files in the data and
-documentation ZIP archives. 
+```{r raw_missing}
+prop_na(cae$cand_naml)
+```
 
-The `r md_code(exp_name)` file contains records of expenditures made by
-campaigns, but it lacks some of the variables needed to fully identify both
-parties to each transactions. We will need to join records with 
+```{r}
+cae <- cae %>% 
+  select_if(~prop_na(.) < 0.95) %>% 
+  select(-starts_with("cand_")) %>% 
+  rename(date = expn_date)
+```
+
+To get this information, we can download the cover page data from the 
+[campaign-disclosure forms][cvr]. These forms contains the filer names and
+addresses. We can also download this file from the CCDC and read the same way.
+
+[cvr]: https://calaccess.californiacivicdata.org/documentation/raw-files/cvr-campaign-disclosure-cd/
+
+```{r fil_download}
+cvr_url <- str_c(raw_source, "cvr_campaign_disclosure_cd.csv", sep = "/")
+cvr_path <- path(raw_dir, basename(cvr_url))
+if (!file_exists(cvr_path)) {
+  download.file(cvr_url, cvr_path)
+}
+```
+
+```{r cvr_read}
+cvr <- vroom(
+  file = cvr_path,
+  delim = ",",
+  escape_double = TRUE,
+  .name_repair = make_clean_names,
+  col_types = cols(
+    .default = col_character(),
+    AMEND_ID = col_integer(),
+    FILING_ID = col_integer(),
+    RPT_DATE = col_date("%m/%d/%Y %H:%M:%S %p")
+  )
+)
+```
+
+The CVR data has `r comma(nrow(cvr))` rows and `r ncol(cvr)` columns, only a few
+of which are useful to us. We also only want those records identifying those
+who have filed expenditure data. We also want to ensure only one version of
+filer information for each unique `filing_id`.
+
+```{r cvr_filter}
+cvr <- cvr %>% 
+  select(filing_id, amend_id, starts_with("filer"), rpt_date) %>% 
+  filter(filing_id %in% cae$filing_id) %>% 
+  select_if(~prop_na(.) < 0.95)
+```
+
+We can then use this new data to identify the parties in the expenditures table
+using the unique `filing_id` and `amend_id`. We will remove the useless 
+
+```{r cvr_join}
+cae <- left_join(cae, cvr)
+```
 
 ## Explore
 
@@ -273,32 +268,95 @@ tail(cae)
 
 ### Missing
 
+Columns vary in their degree of missing values. We can flag any values missing
+from key variables used to identify the transaction.
+
 ```{r na_count}
 col_stats(cae, count_na)
 ```
 
 ```{r na_flag}
-cae <- cae %>% flag_na(date, last, amount, committee)
-sum(cae$na_flag)
+cae <- cae %>% 
+  # unite names
+  unite(
+    col = payee_cmbn, 
+    starts_with("payee_nam"), 
+    sep = " ", 
+    remove = FALSE,
+    na.rm = TRUE
+  ) %>%
+    unite(
+    col = filer_cmbn, 
+    starts_with("filer_nam"), 
+    sep = " ", 
+    remove = FALSE,
+    na.rm = TRUE
+  ) %>%
+  # use report date for those missing
+  mutate(date = coalesce(date, rpt_date)) %>% 
+  # flag missing records
+  flag_na(date, payee_cmbn, amount, filer_cmbn) %>% 
+  # remove combined names
+  select(-ends_with("_cmbn"))
+```
+
+```{r na_prop}
+mean(cae$na_flag)
 ```
 
 ```{r na_view}
 cae %>% 
   filter(na_flag) %>% 
-  select(date, last, amount, committee)
+  select(date, payee_naml, amount, filer_naml) %>% 
+  sample_frac()
+```
+
+```{r na_recount}
+cae %>% 
+  filter(na_flag) %>% 
+  select(date, payee_naml, amount, filer_naml) %>% 
+  col_stats(count_na)
 ```
 
 ### Duplicates
 
-```{r dupe_flag}
-cae <- flag_dupes(cae, -id)
-sum(cae$dupe_flag)
+```{r dupe_write}
+dupe_file <- here("ca", "expends", "dupes.txt")
+if (!file_exists(dupe_file)) {
+  file_create(dupe_file)
+  n <- 1e5 # rows per chunk
+  nr <- nrow(cae)
+  # split file into chunks
+  cas <- split(
+    x = arrange(cae, payee_naml), 
+    f = rep(x = 1:ceiling(nr/n), each = n, length.out = nr)
+  )
+  pb <- txtProgressBar(max = length(cas), style = 3)
+  for (i in seq_along(cas)) {
+    # check dupes from both ends
+    d1 <- duplicated(cas[[i]], fromLast = FALSE)
+    d2 <- duplicated(cas[[i]], fromLast = TRUE)
+    # append to disk
+    write_lines(d1 | d2, dupe_file, append = TRUE)
+    rm(d1, d2)
+    cas[[i]] <- NA
+    Sys.sleep(1); flush_memory()
+    setTxtProgressBar(pb, value = i)
+  }
+  rm(cas)
+}
 ```
+
+```{r dupe_read}
+cae <- mutate(cae, dupe_flag = as.logical(read_lines(dupe_file)))
+```
+
+After all that work, there are `r comma(sum(cae$dupe_flag))` duplicate records
 
 ```{r dupe_view}
 cae %>% 
   filter(dupe_flag) %>% 
-  select(date, last, amount, committee)
+  select(date, payee_naml, amount, filer_naml)
 ```
 
 ### Categorical
@@ -307,19 +365,23 @@ cae %>%
 col_stats(cae, n_distinct)
 ```
 
-```{r distinct_plots}
-explore_plot(cae, type)
+```{r distinct_plots, echo=FALSE}
+explore_plot(cae, form_type)
+explore_plot(cae, entity_cd)
+explore_plot(cae, office_cd)
+explore_plot(cae, juris_cd)
 ```
 
 ### Amounts
 
 ```{r ammount_summary}
-summary(cae$amount)
-mean(cae$amount <= 0)
+summary(cae$amount) %>% map_chr(dollar)
+mean(cae$amount <= 0, na.rm = TRUE)
 ```
 
 ```{r hist_amount, echo=FALSE}
 cae %>%
+  filter(amount >= 1) %>% 
   ggplot(aes(amount)) +
   geom_histogram(fill = dark2["purple"]) +
   scale_y_continuous(labels = comma) +
@@ -329,8 +391,8 @@ cae %>%
     trans = "log10"
   ) +
   labs(
-    title = "California Contracts Amount Distribution",
-    caption = "Source: {source}",
+    title = "California Expenditures Amount Distribution",
+    caption = "Source: californiacivicdata.org",
     x = "Amount",
     y = "Count"
   )
@@ -344,15 +406,23 @@ We can add the calendar year from `date` with `lubridate::year()`
 cae <- mutate(cae, year = year(date))
 ```
 
+There are a number of dates with impossibly low or high values.
+
 ```{r date_range}
-min(cae$date)
-sum(cae$year < 2000)
-max(cae$date)
-sum(cae$date > today())
+min(cae$date, na.rm = TRUE)
+sum(cae$year < 1999, na.rm = TRUE)
+max(cae$date, na.rm = TRUE)
+sum(cae$date > today(), na.rm = TRUE)
+```
+
+```{r date_flag}
+cae <- mutate(cae, date_flag = date > today() | year < 1999 | is.na(date))
+percent(mean(cae$date_flag, na.rm = TRUE), 0.001)
 ```
 
 ```{r bar_year, echo=FALSE}
 cae %>% 
+  filter(!date_flag) %>% 
   count(year) %>% 
   mutate(even = is_even(year)) %>% 
   ggplot(aes(x = year, y = n)) +
@@ -363,7 +433,7 @@ cae %>%
   theme(legend.position = "bottom") +
   labs(
     title = "California Expenditures by Year",
-    caption = "Source: {source}",
+    caption = "Source: californiacivicdata.org",
     fill = "Election Year",
     x = "Year Made",
     y = "Count"
@@ -377,38 +447,6 @@ confident string normalization. For geographic variables like city names and
 ZIP codes, the corresponding `campfin::normal_*()` functions are tailor made to 
 facilitate this process.
 
-### Address
-
-For the street `addresss` variable, the `campfin::normal_address()` function
-will force consistence case, remove punctuation, and abbreviate official 
-USPS suffixes.
-
-```{r address_norm}
-cae <- cae %>% 
-  unite(
-    col = address_full,
-    starts_with("address"),
-    sep = " ",
-    remove = FALSE,
-    na.rm = TRUE
-  ) %>% 
-  mutate(
-    address_norm = normal_address(
-      address = address_full,
-      abbs = usps_street,
-      na_rep = TRUE
-    )
-  ) %>% 
-  select(-address_full)
-```
-
-```{r address_view}
-cae %>% 
-  select(contains("address")) %>% 
-  distinct() %>% 
-  sample_n(10)
-```
-
 ### ZIP
 
 For ZIP codes, the `campfin::normal_zip()` function will attempt to create
@@ -416,19 +454,19 @@ valid _five_ digit codes by removing the ZIP+4 suffix and returning leading
 zeroes dropped by other programs like Microsoft Excel.
 
 ```{r zip_norm}
-cae <- cae %>% 
-  mutate(
-    zip_norm = normal_zip(
-      zip = zip,
-      na_rep = TRUE
-    )
+cae <- mutate(
+  .data = cae, across(
+    .cols = ends_with("_zip4"),
+    .fns = list(norm = normal_zip),
+    na_rep = TRUE
   )
+)
 ```
 
 ```{r zip_progress}
 progress_table(
-  cae$zip,
-  cae$zip_norm,
+  cae$payee_zip4,
+  cae$payee_zip4_norm,
   compare = valid_zip
 )
 ```
@@ -439,27 +477,26 @@ Valid two digit state abbreviations can be made using the
 `campfin::normal_state()` function.
 
 ```{r state_norm}
-cae <- cae %>% 
-  mutate(
-    state_norm = normal_state(
-      state = state,
-      abbreviate = TRUE,
-      na_rep = TRUE,
-      valid = valid_state
-    )
+cae <- mutate(
+  .data = cae, across(
+    .cols = ends_with("_st"),
+    .fns = list(norm = normal_state),
+    abbreviate = TRUE,
+    na_rep = TRUE,
   )
+)
 ```
 
 ```{r state_view}
 cae %>% 
-  filter(state != state_norm) %>% 
-  count(state, state_norm, sort = TRUE)
+  filter(payee_st != payee_st_norm) %>% 
+  count(payee_st, payee_st_norm, sort = TRUE)
 ```
 
 ```{r state_progress}
 progress_table(
-  cae$state,
-  cae$state_norm,
+  cae$payee_st,
+  cae$payee_st_norm,
   compare = valid_state
 )
 ```
@@ -476,16 +513,16 @@ removing punctuation, but _expanding_ USPS abbreviations. We can also remove
 `invalid_city` values.
 
 ```{r city_norm}
-cae <- cae %>% 
-  mutate(
-    city_norm = normal_city(
-      city = city, 
-      abbs = usps_city,
+cae <- mutate(
+  .data = cae, across(
+    .cols = ends_with("_city"),
+    .fns = list(norm = normal_city),
+    abbs = usps_city,
       states = c("CA", "DC", "CALIFORNIA"),
       na = invalid_city,
       na_rep = TRUE
-    )
   )
+)
 ```
 
 #### Swap
@@ -497,22 +534,21 @@ expected value, we can confidently swap those two.
 
 ```{r city_swap}
 cae <- cae %>% 
-  rename(city_raw = city) %>% 
   left_join(
     y = zipcodes,
     by = c(
-      "state_norm" = "state",
-      "zip_norm" = "zip"
+      "payee_st_norm" = "state",
+      "payee_zip4_norm" = "zip"
     )
   ) %>% 
   rename(city_match = city) %>% 
   mutate(
-    match_abb = is_abbrev(city_norm, city_match),
-    match_dist = str_dist(city_norm, city_match),
-    city_swap = if_else(
+    match_abb = is_abbrev(payee_city_norm, city_match),
+    match_dist = str_dist(payee_city_norm, city_match),
+    payee_city_swap = if_else(
       condition = !is.na(match_dist) & (match_abb | match_dist == 1),
       true = city_match,
-      false = city_norm
+      false = payee_city_norm
     )
   ) %>% 
   select(
@@ -534,17 +570,17 @@ strings that have a valid city/state/zip combination.
 ```{r city_refine}
 good_refine <- cae %>% 
   mutate(
-    city_refine = city_swap %>% 
+    payee_city_refine = payee_city_swap %>% 
       key_collision_merge() %>% 
       n_gram_merge(numgram = 1)
   ) %>% 
-  filter(city_refine != city_swap) %>% 
+  filter(payee_city_refine != payee_city_swap) %>% 
   inner_join(
     y = zipcodes,
     by = c(
-      "city_refine" = "city",
-      "state_norm" = "state",
-      "zip_norm" = "zip"
+      "payee_city_refine" = "city",
+      "payee_st_norm" = "state",
+      "payee_zip4_norm" = "zip"
     )
   )
 ```
@@ -552,10 +588,10 @@ good_refine <- cae %>%
 ```{r city_count, echo=FALSE}
 good_refine %>%
   count(
-    state_norm, 
-    zip_norm, 
-    city_swap, 
-    city_refine,
+    payee_st_norm, 
+    payee_zip4_norm, 
+    payee_city_swap, 
+    payee_city_refine,
     sort = TRUE
   )
 ```
@@ -565,7 +601,7 @@ Then we can join the refined values back to the database.
 ```{r city_join}
 cae <- cae %>% 
   left_join(good_refine) %>% 
-  mutate(city_refine = coalesce(city_refine, city_swap))
+  mutate(payee_city_refine = coalesce(payee_city_refine, payee_city_swap))
 ```
 
 #### Progress
@@ -573,10 +609,12 @@ cae <- cae %>%
 ```{r city_progress, echo=FALSE}
 many_city <- c(valid_city, extra_city)
 progress <- progress_table(
-  str_to_upper(cae$city_raw),
-  cae$city_norm,
-  cae$city_swap,
-  cae$city_refine,
+  str_to_upper(cae$payee_city),
+  str_to_upper(cae$filer_city),
+  cae$payee_city_norm,
+  cae$filer_city_norm,
+  cae$payee_city_swap,
+  cae$payee_city_refine,
   compare = many_city
 ) %>% mutate(stage = as_factor(stage))
 kable(progress, digits = 3)
@@ -585,7 +623,7 @@ kable(progress, digits = 3)
 You can see how the percentage of valid values increased with each stage.
 
 ```{r bar_progress, echo=FALSE}
-raw_in <- percent(prop_in(cae$city_raw, valid_city))
+raw_in <- percent(prop_in(cae$payee_city, valid_city))
 progress %>% 
   ggplot(aes(x = stage, y = prop_in)) +
   geom_hline(yintercept = 0.99) +
@@ -636,9 +674,9 @@ rename all added variables with the `_clean` suffix.
 ```{r clean_select}
 cae <- cae %>% 
   select(
-    -city_norm,
-    -city_swap,
-    city_clean = city_refine
+    -payee_city_norm,
+    -payee_city_swap,
+    payee_city_clean = payee_city_refine
   ) %>% 
   rename_all(~str_replace(., "_norm", "_clean")) %>% 
   rename_all(~str_remove(., "_raw"))
@@ -683,55 +721,4 @@ s3_path <- path(s3_dir, basename(clean_path))
 if (require(duckr)) {
   duckr::duck_upload(clean_path, s3_path)
 }
-```
-
-## Dictionary
-
-The following table describes the variables in our final exported file:
-
-```{r dict_make, echo=FALSE}
-dict_raw <- tibble(
-  var = md_code(names(cae)),
-  type = md_code(map_chr(cae, typeof)),
-  def = c(
-    "Date contribution was made",
-    "Contribution amount or correction",
-    "Contributor name",
-    "Contributor unique ID",
-    "Contributor street address",
-    "Contributor secondary address",
-    "Contributor city name",
-    "Contributor state abbreviation",
-    "Contributor ZIP+4 code",
-    "Contributor occupation",
-    "Contributor employer name",
-    "Contributor type",
-    "Recipient committee name",
-    "Recipient unique ID",
-    "Contribution method",
-    "Recipient election or office sought",
-    "Flag for missing date, amount, or name",
-    "Flag for completely duplicated record",
-    "Calendar year of contribution date",
-    "Normalized combined street address",
-    "Normalized 5-digit ZIP code",
-    "Normalized 2-digit state abbreviation",
-    "Normalized city name"
-  )
-)
-```
-
-```{r dict_md, echo=FALSE}
-(dict_md <- kable(
-  x = dict_raw,
-  format = "markdown",
-  col.names = c("Column", "Type", "Definition")
-))
-```
-
-```{r dict_write}
-write_lines(
-  x = c("# California Contracts Data Dictionary\n", dict_md),
-  path = here("ca", "expends", "ca_expends_dict.md"),
-)
 ```

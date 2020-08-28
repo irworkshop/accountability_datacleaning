@@ -1,0 +1,54 @@
+column,type,unique,definition
+AGENT_NAMF,String,FALSE,Agent of Ind. Contractor's First name
+AGENT_NAML,String,FALSE,Agent of Ind. Contractor's Last name (Sched G)
+AGENT_NAMS,String,FALSE,Agent of Ind. Contractor's Suffix
+AGENT_NAMT,String,FALSE,Agent of Ind. Contractor's Prefix or Title
+AMEND_ID,Integer,TRUE,Amendment identification number (0 is the original filing).
+AMOUNT,Double,FALSE,Amount of Payment
+BAKREF_TID,String,FALSE,Back Reference to a Tran_ID of a 'parent' record
+BAL_JURIS,String,FALSE,Ballot measure's jurisdiction
+BAL_NAME,String,FALSE,Ballot Measure Name
+BAL_NUM,String,FALSE,Ballot Number or Letter
+CAND_NAMF,String,FALSE,Candidate's First name
+CAND_NAML,String,FALSE,Candidate's Last name
+CAND_NAMS,String,FALSE,Candidate's Suffix
+CAND_NAMT,String,FALSE,Candidate's Prefix or Title
+CMTE_ID,String,FALSE,"Committee ID (If [COM/RCP] & no ID#, Treas info Req.)"
+CUM_OTH,Double,FALSE,Cumulative / 'Other' (No Cumulative on Sched E & G)
+CUM_YTD,Double,FALSE,Cumulative / Year-to-date amount (No Cumulative on Sched E & G)
+DIST_NO,String,FALSE,Office District Number (Req. if Juris_Cd=[SEN/ASM/BOE]
+ENTITY_CD,String,FALSE,Entity Code describing payee
+EXPN_CHKNO,String,FALSE,Check Number (Optional)
+EXPN_CODE,String,FALSE,The type of expenditure
+EXPN_DATE,Date,FALSE,Date of Expenditure (Note: Date not on Sched E & G)
+EXPN_DSCR,String,FALSE,Purpose of expense and/or description/explanation
+FILING_ID,Integer,TRUE,Unique filing identification number
+FORM_TYPE,String,TRUE,Name of the source filing form or schedule
+G_FROM_E_F,String,FALSE,Back Reference from Sched G to Sched 'E' or 'F'?
+JURIS_CD,String,FALSE,Office Jurisdiction Code
+JURIS_DSCR,String,FALSE,Office Jurisdiction Description (Req. if Juris_Cd=[CIT/CTY/LOC/OTH]
+LINE_ITEM,Integer,TRUE,Line item number of this record
+MEMO_CODE,String,FALSE,Memo Amount? (Date/Amount are informational only).
+MEMO_REFNO,String,FALSE,Reference to text contained in a TEXT record.
+OFF_S_H_CD,String,FALSE,Office is sought or held code
+OFFIC_DSCR,String,FALSE,Office Sought Description (Req. if Office_Cd=OTH)
+OFFICE_CD,String,FALSE,Identifies the office being sought
+PAYEE_CITY,String,FALSE,Payee City
+PAYEE_NAMF,String,FALSE,Payee's First name
+PAYEE_NAML,String,FALSE,Payee's Last name
+PAYEE_NAMS,String,FALSE,Payee's Suffix
+PAYEE_NAMT,String,FALSE,Payee's Prefix or Title
+PAYEE_ST,String,FALSE,State code
+PAYEE_ZIP4,String,FALSE,Zip+4
+REC_TYPE,String,TRUE,Record Type Value: EXPN
+SUP_OPP_CD,String,FALSE,Support or opposition code
+TRAN_ID,String,FALSE,Permanent value unique to this item
+TRES_CITY,String,FALSE,Treasurer City
+TRES_NAMF,String,FALSE,Treasurer's First name (Req if [COM/RCP] & no ID#)
+TRES_NAML,String,FALSE,Treasurer's Last name (Req if [COM/RCP] & no ID#)
+TRES_NAMS,String,FALSE,Treasurer's Suffix
+TRES_NAMT,String,FALSE,Treasurer's Prefix or Title
+TRES_ST,String,FALSE,Treasurer State
+TRES_ZIP4,String,FALSE,Treasurer ZIP+4
+XREF_MATCH,String,FALSE,X = Related item on other Sched has same Tran_ID
+XREF_SCHNM,String,FALSE,Related item is included on Sched 'C' or 'H2'
