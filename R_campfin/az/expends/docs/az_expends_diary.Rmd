@@ -77,6 +77,7 @@ campaign finance data.
 ```{r load_packages, message=FALSE, warning=FALSE, error=FALSE}
 if (!require("pacman")) install.packages("pacman")
 pacman::p_load_gh("irworkshop/campfin")
+pacman::p_load_gh("kiernann/mdbr")
 pacman::p_load(
   tidyverse, # data manipulation
   lubridate, # datetime strings
@@ -125,49 +126,142 @@ mdb_file <- path(raw_dir, "CFS_Export.mdb")
 ```
 
 ```{r raw_download}
-file_size(raw_file)
+file_size(mdb_file)
 ```
 
 ## Read
 
-Microsoft Access Database (`.mdb`) files can not be easily read into R as data
-frames. Instead, we will use a free and open source [`mdbtools`][mdbtools] 
-command line tool to parse the tables as text files.
-
-The `mdbtools` package can be installed on Debian based systems like so:
+The Microsoft Access database provided by the state cannot easily be read into
+R like one might with a text file. We can use the [mdbr] package to access the
+open source [MDB Tools][mdbtools] command line utility. This package can list
+the tables in a database and read them as data frames.
 
 [mdbtools]: https://github.com/brianb/mdbtools
+[mdbr]: https://github.com/kiernann/mdbr
+
+To use the mdbr package, MDB Tools must first be installed. The `mdbtools`
+utility can be installed from the command line on Debian systems:
 
 ```bash
 # https://github.com/brianb/mdbtools
 sudo apt install mdbtools
 ```
 
-```{r}
-mdb_tables <- system2("mdb-tables", args = mdb_file, stdout = TRUE)
-mdb_tables <- str_split(str_trim(mdb_tables), "\\s")[[1]]
-md_bullet(md_code(mdb_tables))
+We can use the `mdb_tableS()` function to list all the tables in the database.
+
+```{r mdb_tables}
+az_tables <- mdb_tables(mdb_file)
 ```
 
-The using `mdbtools` via `system2(stdout = TRUE)` write the database table to a
-local CSV file which is then imported into R with `readr::read_csv()`.
+|Table                  |Description                                     |Rows |
+|:----------------------|:-----------------------------------------------|:----|
+|`BallotMeasures`       |Information on ballot measures voted on         |50   |
+|`Categories`           |Category names with codes                       |71   |
+|`Counties`             |County names with codes                         |15   |
+|`Cycles`               |Election cycle start and dates with codes       |15   |
+|`EntityTypes`          |Filing entity type names with codes             |43   |
+|`IncomeExpenseNeutral` |Filing type with codes                          |3    |
+|`Names`                |The names and addresses of recipients      |1,197,512 |
+|`Offices`              |Office names sought with codes                  |70   |
+|`Parties`              |Political party names with codes                |6    |
+|`ReportNames`          |Filing report type, usual a time of year        |237  |
+|`Reports`              |All of the reports filed by committees       |143,497 |
+|`ReportTypes`          |Report types with codes                         |8    |
+|`TransactionTypes`     |Transaction type name and `IncomeExpenseNeutral` |159 |
+|`Committees`           |Names, IDs, and addresses of filing committees |4,556 |
+|`Transactions`         |All expenditures with amounts and dates    |6,241,937 |
 
-```{r read_mdb}
-read_mdb <- function(file, table, ...) {
-  out_file <- fs::path_temp(table)
-  system2("mdb-export", c(file, table), stdout = out_file)
-  readr::read_csv(out_file, ...)
+These tables can be read with `read_mdb()`, which uses `readr::read_csv()`. We
+will read every table into a single list of multiple data frames.
+
+```{r mdb_read}
+a <- rep(list(NA), length(az_tables))
+names(a) <- make_clean_names(az_tables)
+for (i in seq_along(az_tables)) {
+  a[[i]] <- read_mdb(mdb_file, az_tables[i])
+}
+```
+
+## Join
+
+These many data frames can then be joined together to create a single collection
+of transactions between parties.
+
+```{r echo=FALSE}
+az_rename <- function(string) {
+  string %>%
+    make_clean_names("snake") %>% 
+    str_replace("transaction_", "tx_") %>% 
+    str_replace("modifies_", "mod_") %>% 
+    str_replace("address", "addr") %>% 
+    str_replace("committee_", "com_") %>% 
+    str_replace("financial_institution", "fin_inst") %>% 
+    str_replace("candidate_", "cand_") %>% 
+    str_replace("organization_", "org_") %>% 
+    str_replace("termination_", "term_") %>% 
+    str_replace("physical_", "com_") %>% 
+    str_replace("_relationship", "_rel") %>% 
+    str_replace("_relationship", "_rel") %>% 
+    str_replace("cand_other_party_name", "cand_other") %>% 
+    str_replace("benefits_ballot_measure", "ben_ballot") %>% 
+    str_remove("_name")
 }
 ```
 
 ```{r}
-x <- read_mdb(
-  file = mdb_file,
-  table = "Categories",
-  col_types = cols(
-    .default = col_character()
-  )
+a$committees <- select(
+  .data = a$committees, CommitteeID, NameID, 
+  starts_with("Candidate"), -CandidateOtherPartyName
 )
+```
+
+```{r}
+a$names <- select(a$names, -NameGroupID, -CountyID, Zip = ZipCode)
+```
+
+```{r raw_join}
+aze <- a$transactions %>% # 6,241,937
+  # Transaction type, category info -------------------------------------------
+  left_join(a$transaction_types, by = "TransactionTypeID") %>% 
+  select(-TransactionTypeID) %>% 
+  left_join(a$income_expense_neutral, by = "IncomeExpenseNeutralID") %>% 
+  select(-IncomeExpenseNeutralID, TransactionMethod = IncomeExpenseNeutral) %>% 
+  left_join(a$categories, by = "CategoryID") %>% 
+  select(-CategoryID, -SubjectCommitteeID) %>%
+  # Spending COMMITTEE info ---------------------------------------------------
+  rename(PayeeID = NameID) %>% # expenditure recipient
+  relocate(CommitteeID, .after = last_col()) %>% 
+  left_join(a$committees, by = "CommitteeID") %>% 
+  # COMMITTEE party, county, office, cycle ------------------------------------
+  # join by ID, remove ID and rename columns
+  left_join(a$parties, by = c("CandidatePartyID" = "PartyID")) %>% 
+  select(-CandidatePartyID, CandidateParty = PartyName) %>% 
+  left_join(a$offices, by = c("CandidateOfficeID" = "OfficeID")) %>% 
+  select(-CandidateOfficeID, CandidateOffice = OfficeName) %>% 
+  left_join(a$counties, by = c("CandidateCountyID" = "CountyID")) %>% 
+  select(-CandidateCountyID, CandidateCounty = CountyName) %>%
+  left_join(select(a$cycles, 1:2), by = c("CandidateCycleID" = "CycleID")) %>% 
+  select(-CandidateCycleID, CandidateCycle = CycleName) %>%
+  # CANDIDATE name and info ---------------------------------------------------
+  left_join(a$names, by = "NameID") %>% 
+  rename(CandidateID = NameID) %>% 
+  left_join(a$entity_types, by = "EntityTypeID") %>% 
+  select(-EntityTypeID, CandidateType = EntityTypeName) %>% 
+  rename_with(~paste0("Candidate", .), .cols = 21:last_col(1)) %>% 
+  # PAYEE name and info -------------------------------------------------------
+  relocate(PayeeID, .after = last_col()) %>% 
+  left_join(a$names, by = c("PayeeID" = "NameID")) %>% 
+  left_join(a$entity_types, by = "EntityTypeID") %>% 
+  select(-EntityTypeID, PayeeType = EntityTypeName) %>% 
+  rename_with(~paste0("Payee", .), .cols = 33:last_col(1)) %>% 
+  select(-14) %>% 
+  rename_with(.fn = az_rename) %>% 
+  rename(date = tx_date) %>% 
+  mutate(across(ends_with("date"), as_date))
+```
+
+```{r}
+rm(a); flush_memory()
 ```
 
 ## Explore
@@ -184,27 +278,50 @@ col_stats(aze, count_na)
 ```
 
 ```{r na_flag}
-aze <- aze %>% flag_na(date, last, amount, committee)
+key_vars <- c("date", "payee_last", "amount", "cand_last")
+aze <- flag_na(aze, all_of(key_vars))
 sum(aze$na_flag)
 ```
 
 ```{r na_view}
 aze %>% 
   filter(na_flag) %>% 
-  select(date, last, amount, committee)
+  select(all_of(key_vars)) %>% 
+  sample_frac()
 ```
 
 ### Duplicates
 
-```{r dupe_flag}
-aze <- flag_dupes(aze, -id)
-sum(aze$dupe_flag)
+```{r dupe_write}
+dupe_file <- here("az", "expends", "dupes.txt")
+if (!file_exists(dupe_file)) {
+  file_create(dupe_file)
+  # split file into monthly chunks
+  azs <- aze %>% 
+    mutate(month = month(date), year = year(date)) %>% 
+    group_split(month, year, .keep = FALSE)
+  pb <- txtProgressBar(max = length(azs), style = 3)
+  for (i in seq_along(azs)) {
+    # check dupes from both ends
+    d1 <- duplicated(azs[[i]], fromLast = FALSE)
+    d2 <- duplicated(azs[[i]], fromLast = TRUE)
+    # append to disk
+    write_lines(d1 | d2, dupe_file, append = TRUE)
+    rm(d1, d2)
+    azs[[i]] <- NA
+    Sys.sleep(1); flush_memory(1)
+    setTxtProgressBar(pb, value = i)
+  }
+  rm(azs)
+}
 ```
 
-```{r dupe_view}
-aze %>% 
-  filter(dupe_flag) %>% 
-  select(date, last, amount, committee)
+```{r dupe_read}
+aze <- mutate(aze, dupe_flag = as.logical(read_lines(dupe_file)))
+if (sum(aze$dupe_flag) == 0) {
+  file_delete(dupe_file)
+  aze <- select(aze, -dupe_flag)
+}
 ```
 
 ### Categorical
@@ -213,8 +330,15 @@ aze %>%
 col_stats(aze, n_distinct)
 ```
 
-```{r distinct_plots}
-explore_plot(aze, type)
+```{r distinct_plots, echo=FALSE}
+explore_plot(aze, account_type)
+explore_plot(aze, tx_method)
+explore_plot(aze, category)
+explore_plot(aze, cand_party)
+explore_plot(aze, cand_office) + scale_x_truncate()
+explore_plot(aze, cand_county)
+explore_plot(aze, cand_type) + scale_x_truncate()
+explore_plot(aze, payee_type) + scale_x_truncate()
 ```
 
 ### Amounts
@@ -226,6 +350,7 @@ mean(aze$amount <= 0)
 
 ```{r hist_amount, echo=FALSE}
 aze %>%
+  filter(amount >= 1) %>% 
   ggplot(aes(amount)) +
   geom_histogram(fill = dark2["purple"]) +
   scale_y_continuous(labels = comma) +
@@ -236,7 +361,7 @@ aze %>%
   ) +
   labs(
     title = "Arizona Contracts Amount Distribution",
-    caption = "Source: {source}",
+    caption = "Source:  Arizona Secretary of State",
     x = "Amount",
     y = "Count"
   )
@@ -269,7 +394,7 @@ aze %>%
   theme(legend.position = "bottom") +
   labs(
     title = "Arizona Expenditures by Year",
-    caption = "Source: {source}",
+    caption = "Source:  Arizona Secretary of State",
     fill = "Election Year",
     x = "Year Made",
     y = "Count"
@@ -292,27 +417,32 @@ USPS suffixes.
 ```{r address_norm}
 aze <- aze %>% 
   unite(
-    col = address_full,
-    starts_with("address"),
+    col = payee_addr,
+    starts_with("payee_addr"),
     sep = " ",
     remove = FALSE,
     na.rm = TRUE
   ) %>% 
-  mutate(
-    address_norm = normal_address(
-      address = address_full,
-      abbs = usps_street,
-      na_rep = TRUE
-    )
+  unite(
+    col = cand_addr,
+    starts_with("cand_addr"),
+    sep = " ",
+    remove = FALSE,
+    na.rm = TRUE
   ) %>% 
-  select(-address_full)
+  mutate(across(
+    .cols = ends_with("_addr"),
+    .fns = list(norm = normal_address),
+    abbs = usps_street,
+    na_rep = TRUE
+  )) %>% 
+  select(-ends_with("_addr"))
 ```
 
 ```{r address_view}
 aze %>% 
-  select(contains("address")) %>% 
-  distinct() %>% 
-  sample_n(10)
+  sample_n(10) %>% 
+  select(contains("_addr"))
 ```
 
 ### ZIP
@@ -322,19 +452,19 @@ valid _five_ digit codes by removing the ZIP+4 suffix and returning leading
 zeroes dropped by other programs like Microsoft Excel.
 
 ```{r zip_norm}
-aze <- aze %>% 
-  mutate(
-    zip_norm = normal_zip(
-      zip = zip,
-      na_rep = TRUE
-    )
+aze <- mutate(
+  .data = aze, across(
+    .cols = ends_with("_zip"),
+    .fns = list(norm = normal_zip),
+    na_rep = TRUE
   )
+)
 ```
 
 ```{r zip_progress}
 progress_table(
-  aze$zip,
-  aze$zip_norm,
+  aze$payee_zip,
+  aze$payee_zip_norm,
   compare = valid_zip
 )
 ```
@@ -345,27 +475,26 @@ Valid two digit state abbreviations can be made using the
 `campfin::normal_state()` function.
 
 ```{r state_norm}
-aze <- aze %>% 
-  mutate(
-    state_norm = normal_state(
-      state = state,
-      abbreviate = TRUE,
-      na_rep = TRUE,
-      valid = valid_state
-    )
+aze <- mutate(
+  .data = aze, across(
+    .cols = ends_with("_state"),
+    .fns = list(norm = normal_state),
+    abbreviate = TRUE,
+    na_rep = TRUE,
   )
+)
 ```
 
 ```{r state_view}
 aze %>% 
-  filter(state != state_norm) %>% 
-  count(state, state_norm, sort = TRUE)
+  filter(payee_state != payee_state_norm) %>% 
+  count(payee_state, payee_state_norm, sort = TRUE)
 ```
 
 ```{r state_progress}
 progress_table(
-  aze$state,
-  aze$state_norm,
+  aze$payee_state,
+  aze$payee_state_norm,
   compare = valid_state
 )
 ```
@@ -382,16 +511,16 @@ removing punctuation, but _expanding_ USPS abbreviations. We can also remove
 `invalid_city` values.
 
 ```{r city_norm}
-aze <- aze %>% 
-  mutate(
-    city_norm = normal_city(
-      city = city, 
-      abbs = usps_city,
+aze <- mutate(
+  .data = aze, across(
+    .cols = ends_with("_city"),
+    .fns = list(norm = normal_city),
+    abbs = usps_city,
       states = c("AZ", "DC", "ARIZONA"),
       na = invalid_city,
       na_rep = TRUE
-    )
   )
+)
 ```
 
 #### Swap
@@ -403,22 +532,21 @@ expected value, we can confidently swap those two.
 
 ```{r city_swap}
 aze <- aze %>% 
-  rename(city_raw = city) %>% 
   left_join(
     y = zipcodes,
     by = c(
-      "state_norm" = "state",
-      "zip_norm" = "zip"
+      "payee_state_norm" = "state",
+      "payee_zip_norm" = "zip"
     )
   ) %>% 
   rename(city_match = city) %>% 
   mutate(
-    match_abb = is_abbrev(city_norm, city_match),
-    match_dist = str_dist(city_norm, city_match),
-    city_swap = if_else(
+    match_abb = is_abbrev(payee_city_norm, city_match),
+    match_dist = str_dist(payee_city_norm, city_match),
+    payee_city_swap = if_else(
       condition = !is.na(match_dist) & (match_abb | match_dist == 1),
       true = city_match,
-      false = city_norm
+      false = payee_city_norm
     )
   ) %>% 
   select(
@@ -440,17 +568,17 @@ strings that have a valid city/state/zip combination.
 ```{r city_refine}
 good_refine <- aze %>% 
   mutate(
-    city_refine = city_swap %>% 
+    payee_city_refine = payee_city_swap %>% 
       key_collision_merge() %>% 
       n_gram_merge(numgram = 1)
   ) %>% 
-  filter(city_refine != city_swap) %>% 
+  filter(payee_city_refine != payee_city_swap) %>% 
   inner_join(
     y = zipcodes,
     by = c(
-      "city_refine" = "city",
-      "state_norm" = "state",
-      "zip_norm" = "zip"
+      "payee_city_refine" = "city",
+      "payee_state_norm" = "state",
+      "payee_zip_norm" = "zip"
     )
   )
 ```
@@ -458,10 +586,10 @@ good_refine <- aze %>%
 ```{r city_count, echo=FALSE}
 good_refine %>%
   count(
-    state_norm, 
-    zip_norm, 
-    city_swap, 
-    city_refine,
+    payee_state_norm, 
+    payee_zip_norm, 
+    payee_city_swap, 
+    payee_city_refine,
     sort = TRUE
   )
 ```
@@ -470,19 +598,43 @@ Then we can join the refined values back to the database.
 
 ```{r city_join}
 aze <- aze %>% 
-  left_join(good_refine) %>% 
-  mutate(city_refine = coalesce(city_refine, city_swap))
+  left_join(good_refine, by = names(aze)) %>% 
+  mutate(payee_city_refine = coalesce(payee_city_refine, payee_city_swap))
 ```
 
 #### Progress
 
-```{r city_progress, echo=FALSE}
+```{r city_recheck}
 many_city <- c(valid_city, extra_city)
+aze %>% 
+  filter(payee_city_refine %out% many_city) %>% 
+  count(payee_city_refine, payee_state_norm, payee_zip_norm, sort = TRUE) %>% 
+  drop_na()
+```
+
+```{r city_remove}
+aze$payee_city_refine <- na_in(
+  x = aze$payee_city_refine, 
+  y = c("<MISSING VALUE>", "AZ")
+)
+```
+
+```{r city_increase}
+many_city <- c(
+  many_city,
+  "FARMINGTON HILLS",
+  "SHELBY TOWNSHIP",
+  "SADDLEBROOKE",
+  "DESERT HILLS"
+)
+```
+
+```{r city_progress, echo=FALSE}
 progress <- progress_table(
-  str_to_upper(aze$city_raw),
-  aze$city_norm,
-  aze$city_swap,
-  aze$city_refine,
+  str_to_upper(aze$payee_city),
+  aze$payee_city_norm,
+  aze$payee_city_swap,
+  aze$payee_city_refine,
   compare = many_city
 ) %>% mutate(stage = as_factor(stage))
 kable(progress, digits = 3)
@@ -491,7 +643,7 @@ kable(progress, digits = 3)
 You can see how the percentage of valid values increased with each stage.
 
 ```{r bar_progress, echo=FALSE}
-raw_in <- percent(prop_in(aze$city_raw, valid_city))
+raw_in <- percent(prop_in(aze$payee_city, valid_city))
 progress %>% 
   ggplot(aes(x = stage, y = prop_in)) +
   geom_hline(yintercept = 0.99) +
@@ -542,9 +694,9 @@ rename all added variables with the `_clean` suffix.
 ```{r clean_select}
 aze <- aze %>% 
   select(
-    -city_norm,
-    -city_swap,
-    city_clean = city_refine
+    -payee_city_norm,
+    -payee_city_swap,
+    payee_city_clean = payee_city_refine
   ) %>% 
   rename_all(~str_replace(., "_norm", "_clean")) %>% 
   rename_all(~str_remove(., "_raw"))
@@ -589,55 +741,4 @@ s3_path <- path(s3_dir, basename(clean_path))
 if (require(duckr)) {
   duckr::duck_upload(clean_path, s3_path)
 }
-```
-
-## Dictionary
-
-The following table describes the variables in our final exported file:
-
-```{r dict_make, echo=FALSE}
-dict_raw <- tibble(
-  var = md_code(names(aze)),
-  type = md_code(map_chr(aze, typeof)),
-  def = c(
-    "Date contribution was made",
-    "Contribution amount or correction",
-    "Contributor name",
-    "Contributor unique ID",
-    "Contributor street address",
-    "Contributor secondary address",
-    "Contributor city name",
-    "Contributor state abbreviation",
-    "Contributor ZIP+4 code",
-    "Contributor occupation",
-    "Contributor employer name",
-    "Contributor type",
-    "Recipient committee name",
-    "Recipient unique ID",
-    "Contribution method",
-    "Recipient election or office sought",
-    "Flag for missing date, amount, or name",
-    "Flag for completely duplicated record",
-    "Calendar year of contribution date",
-    "Normalized combined street address",
-    "Normalized 5-digit ZIP code",
-    "Normalized 2-digit state abbreviation",
-    "Normalized city name"
-  )
-)
-```
-
-```{r dict_md, echo=FALSE}
-(dict_md <- kable(
-  x = dict_raw,
-  format = "markdown",
-  col.names = c("Column", "Type", "Definition")
-))
-```
-
-```{r dict_write}
-write_lines(
-  x = c("# Arizona Contracts Data Dictionary\n", dict_md),
-  path = here("az", "expends", "az_expends_dict.md"),
-)
 ```
