@@ -1,0 +1,585 @@
+---
+title: "South Dakota Contracts"
+author: "Kiernan Nicholls"
+date: "`r Sys.time()`"
+output:
+  github_document: 
+    df_print: tibble
+    toc: true
+    toc_dept: 2
+editor_options: 
+  chunk_output_type: console
+---
+
+<!-- Place comments regarding knitting here -->
+
+```{r setup, include=FALSE, purl=FALSE}
+library(knitr)
+opts_chunk$set(
+  eval = TRUE,
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  error = FALSE,
+  collapse = TRUE,
+  comment = "#>",
+  fig.path = "../plots/",
+  fig.width = 10,
+  dpi = 300
+)
+if (!interactive()) {
+  options(width = 99)
+  set.seed(5)
+}
+```
+
+```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
+doc_dir <- fs::dir_create(here::here("sd", "contracts", "docs"))
+```
+
+## Project
+
+The Accountability Project is an effort to cut across data silos and give
+journalists, policy professionals, activists, and the public at large a simple
+way to search across huge volumes of public data about people and organizations.
+
+Our goal is to standardizing public data on a few key fields by thinking of each
+dataset row as a transaction. For each transaction there should be (at least) 3
+variables:
+
+1. All **parties** to a transaction.
+2. The **date** of the transaction.
+3. The **amount** of money involved.
+
+## Objectives
+
+This document describes the process used to complete the following objectives:
+
+1. How many records are in the database?
+1. Check for entirely duplicated records.
+1. Check ranges of continuous variables.
+1. Is there anything blank or missing?
+1. Check for consistency issues.
+1. Create a five-digit ZIP Code called `zip`.
+1. Create a `year` field from the transaction date.
+1. Make sure there is data on both parties to a transaction.
+
+## Packages
+
+The following packages are needed to collect, manipulate, visualize, analyze,
+and communicate these results. The `pacman` package will facilitate their
+installation and attachment.
+
+The IRW's `campfin` package will also have to be installed from GitHub. This
+package contains functions custom made to help facilitate the processing of
+campaign finance data.
+
+```{r load_packages, message=FALSE, warning=FALSE, error=FALSE}
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load_gh("irworkshop/campfin")
+pacman::p_load(
+  tidyverse, # data manipulation
+  lubridate, # datetime strings
+  gluedown, # printing markdown
+  pdftools, # pdf file info
+  magrittr, # pipe operators
+  janitor, # clean data frames
+  pbapply, # timer progress bar
+  refinr, # cluster and merge
+  scales, # format strings
+  knitr, # knit documents
+  vroom, # read files fast
+  rvest, # html scraping
+  glue, # combine strings
+  here, # relative paths
+  httr, # http requests
+  fs # local storage 
+)
+```
+
+This document should be run as part of the `R_campfin` project, which lives as a
+sub-directory of the more general, language-agnostic
+[`irworkshop/accountability_datacleaning`][tap] GitHub repository.
+
+The `R_campfin` project uses the [RStudio projects][rproj] feature and should be
+run as such. The project also uses the dynamic `here::here()` tool for file
+paths relative to _your_ machine.
+
+```{r where_here}
+# where does this document knit?
+here::here()
+```
+
+[tap]: https://github.com/irworkshop/accountability_datacleaning
+[rproj]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects
+
+## Data
+
+Contract and grant data can be found on the [South Dakota Open Data Portal][od].
+There are 33 different departments whose contracts can be searched.
+
+> ### Grants and Contracts
+> As required by [SDCL 1-56-10][sdcl1] and [SDCL 1-27-46][sdcl2]  
+> As of 8/31/2020 10:08:04 AM 
+
+[sdcl1]: http://sdlegislature.gov/Statutes/Codified_Laws/DisplayStatute.aspx?Type=Statute&Statute=1-56-10
+[sdcl2]: http://sdlegislature.gov/Statutes/Codified_Laws/DisplayStatute.aspx?Type=Statute&Statute=1-27-46
+
+## Read
+
+[od]: https://open.sd.gov/contracts.aspx
+
+The drop-down options for these departments can be scraped from the website.
+
+```{r raw_options}
+sd_url <- "https://open.sd.gov/contracts.aspx"
+sd_options <- read_html(sd_url) %>% 
+  html_nodes("#ddl_DoA > option") %>% 
+  html_attr("value") %>% 
+  str_replace("\\s", "\\+")
+```
+
+We will then pass those drop down options to a length `curl` command saved in
+a text file.
+
+```{r raw_cmd}
+sd_curl <- read_lines(here("sd", "contracts", "sd_curl.sh"))
+str_trunc(sd_curl, width = 90)
+```
+
+This `curl` command will return an HTML page with a table that can be saved.
+
+```{r raw_dir}
+raw_dir <- dir_create(here("sd", "contracts", "data", "raw"))
+```
+
+```{r}
+for (option in sd_options[-1]) {
+  sd_path <- path(raw_dir, option) %>% 
+    path_ext_set("csv")
+  if (file_exists(sd_path)) {
+    next()
+  } else {
+    data <- glue(sd_curl) %>% 
+      system(intern = TRUE) %>% 
+      paste(collapse = "\n") %>% 
+      read_html() %>% 
+      html_node("#budgettransfer")
+    if (!is.na(data)) {
+      write_csv(html_table(data), sd_path)
+    }
+  }
+}
+```
+
+All of these tables are now saved and can be read into a single data frame.
+
+```{r raw_info}
+raw_info <- dir_info(raw_dir)
+sum(raw_info$size)
+select(raw_info, path, size, modification_time) %>% 
+  mutate(across(path, path.abbrev))
+```
+
+```{r raw_read}
+sdc <- map_df(
+  .x = raw_info$path,
+  .f = read_csv,
+  col_types = cols(
+    .default = col_character(),
+    # amount = col_number()
+  )
+)
+```
+
+```{r raw_rename}
+names(sdc) <- c("id", "desc", "vendor", "agency", "amount")
+```
+
+There are some contracts without a set amount. For others, the amount can only
+be found by looking at the contract PDF.
+
+```{r raw_amount}
+count(sdc, amount, sort = TRUE)
+sdc <- mutate(sdc, no_amount = str_starts(amount, "\\$", negate = TRUE))
+sdc <- mutate(sdc, across(amount, parse_number))
+```
+
+The agency name can also be separated from the agency code.
+
+```{r raw_agency_codes}
+sdc <- separate(
+  data = sdc,
+  col = agency,
+  into = c("code", "agency"),
+  sep = "\\s-\\s",
+  remove = TRUE
+)
+```
+
+We should also add a consistent column with the spending state abbreviation.
+
+```{r raw_state}
+sdc <- mutate(sdc, govt = "SD", .after = agency)
+```
+
+## Details
+
+Every contract has it's own HTML page, identified using the unique contract
+number. On that page is the city and state of the vendor, the solicitation type,
+and a PDF copy of the contract documents; the creation date of this contract
+can be used as a stand-in for the contract start date.
+
+The date taken from the document metadata does not necessarily reflect the
+date the contract was signed or took effect.
+
+We can read each of these pages individually to find the details. The details
+scraped will be written to a text file.
+
+```{r detail_scrape, eval=TRUE}
+# save data to text file lookup table by ID
+detail_file <- here("sd", "contracts", "data", "vendor_details.csv")
+if (file_exists(detail_file)) {
+  done_ids <- read_csv(detail_file)$id
+  mean(sdc$id %in% done_ids)
+} else {
+  write_lines(paste(names(sdd), collapse = ","), detail_file)
+  done_ids <- ""
+}
+
+sd_ids <- sdc$id[which(sdc$id %out% done_ids)]
+sdd <- list( # initialize empty text file
+  id = NA_character_, # lookup by ID
+  created = as.Date(NA), modified = as.Date(NA), # dates from PDF
+  city = NA_character_, state = NA_character_, # geo from HTML
+  solicit = NA_character_, type = NA_character_
+)
+
+for (id in sd_ids) { # check page for every ID
+  a <- GET( # make HTTP request using unique ID
+    url = "https://open.sd.gov/contractsDocShow.aspx",
+    query = list(DocID = sdd$id <- id)
+  )
+  b <- content(a)
+  c <- html_node(b, "#contractsdetail")
+  if (status_code(a) != 200 | is.na(c)) {
+    next() # skip if bad page or no table
+  } else { # otherwise save parts to details
+    # download PDF for document date ----------------------------------------
+    pdf_url <- c %>%
+      html_nodes("a") %>%
+      html_attr("href") %>%
+      str_subset("pdf$") %>%
+      str_extract("(?<=Document\\=)(.*)")
+    pdf_url <- pdf_url[1]
+    if (length(pdf_url) != 0 & isFALSE(is.na(pdf_url))) {
+      pdf_get <- GET(pdf_url) # store pdf binary in memory
+      if (pdf_get$headers[["content-type"]] == "application/pdf") {
+        pdf_dates <- pdf_info(content(pdf_get)) # read doc metadata
+        sdd$created <- pdf_dates$created  # save doc dates
+        sdd$modified <- pdf_dates$modified
+      }
+    }
+    # read html table for details -------------------------------------------
+    d <- distinct(html_table(c))
+    e <- d[[2]]
+    names(e) <- make_clean_names(str_extract(d[[1]], "(.*)(?=:)"))
+    sdd$city <- unname(e["city"])[1]
+    sdd$state <- unname(e["state"])[1]
+    sdd$solicit <- unname(e["solicitation_type"])[1]
+    sdd$type <- str_to_lower(str_remove_all(d[1, 1], "\\W"))
+  }
+  # write data to new line in text file
+  write_csv(as_tibble(sdd), detail_file, append = TRUE)
+}
+```
+
+This text file can be read into a new lookup data frame, with the PDF document
+information and HTML details by unique contract number.
+
+```{r detail_read}
+sdd <- read_csv(detail_file)
+sdd <- relocate(sdd, type, .after = id)
+sample_n(sdd, 10)
+```
+
+This table can be joined to our contracts data with the amount and party names.
+
+```{r detail_join}
+ncol(sdc)
+sdc <- left_join(sdc, sdd, by = "id")
+ncol(sdc)
+```
+
+## Explore
+
+```{r glimpse}
+glimpse(sdc)
+tail(sdc)
+```
+
+### Missing
+
+There are no contracts missing a vendor or agency name. The only contracts
+missing dates are those without PDF document versions of the contract files.
+We have already marked those contracts without any amount value, so we don't
+need to flag those separately.
+
+```{r na_count}
+col_stats(sdc, count_na)
+```
+
+### Duplicates
+
+If we ignore the supposedly unique `id` variable, there are a couple hundred
+duplicate records. These can be flagged with a new logical variable using the
+`campfin::flag_dupes()` function.
+
+```{r dupe_flag}
+sdc <- flag_dupes(sdc, -id)
+sum(sdc$dupe_flag)
+```
+
+```{r dupe_view}
+sdc %>% 
+  filter(dupe_flag) %>% 
+  select(id, created, vendor, amount, agency)
+```
+
+Quite a few of these duplicate records are missing an amount value. These could
+possibly be recurring contracts, but we will flag them regardless.
+
+```{r dupe_na}
+sdc %>% 
+  filter(dupe_flag) %>% 
+  select(id, created, vendor, amount, agency) %>% 
+  col_stats(count_na)
+```
+
+### Categorical
+
+```{r distinct_count}
+col_stats(sdc, n_distinct)
+```
+
+```{r distinct_plots}
+explore_plot(sdc, type)
+explore_plot(sdc, agency) + scale_x_truncate()
+explore_plot(sdc, solicit) + scale_x_truncate()
+explore_plot(sdc, no_amount)
+```
+
+### Amounts
+
+```{r ammount_summary}
+summary(sdc$amount)
+mean(sdc$amount <= 0, na.rm = TRUE)
+```
+
+```{r hist_amount, echo=FALSE}
+sdc %>%
+  ggplot(aes(amount)) +
+  geom_histogram(fill = dark2["purple"]) +
+  scale_y_continuous(labels = comma) +
+  scale_x_continuous(
+    breaks = c(1 %o% 10^(0:6)),
+    labels = dollar,
+    trans = "log10"
+  ) +
+  labs(
+    title = "South Dakota Contracts Amount Distribution",
+    caption = "Source: Open SD",
+    x = "Amount",
+    y = "Count"
+  )
+```
+
+### Dates
+
+```{r date_copy}
+sdc <- mutate(sdc, date = created)
+```
+
+```{r date_fix}
+prop_na(sdc$date)
+min(sdc$date, na.rm = TRUE) 
+max(sdc$date, na.rm = TRUE)
+```
+
+There are `r sum(sdc$date > today(), na.rm = TRUE)` contracts whose PDF copy
+has a creation date of February 7... 2106. Looking at these documents, they
+contain signature dates anywhere from June 2015 to May 2019. This document date
+can not confidently be used as proxy for the contract.
+
+```{r date_count}
+count(sdc, created, sort = TRUE)
+```
+
+We can `NA` these dates and add the calendar year from with `lubridate::year()`.
+
+```{r date_year}
+sdc$date[sdc$date > today()] <- NA
+sdc <- mutate(sdc, year = year(date))
+```
+
+The database seems to contain _active_ contracts, so it makes sense that most
+of the metadata dates would be from the last few years.
+
+```{r bar_year, echo=FALSE}
+sdc %>% 
+  count(year) %>% 
+  mutate(even = is_even(year)) %>% 
+  ggplot(aes(x = year, y = n)) +
+  geom_col(aes(fill = even)) + 
+  scale_fill_brewer(palette = "Dark2") +
+  scale_y_continuous(labels = comma) +
+  scale_x_continuous(breaks = seq(2014, 2020, by = 2)) +
+  coord_cartesian(xlim = c(2014, 2020)) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "South Dakota Contracts by Year",
+    caption = "Source: Open SD",
+    fill = "Election Year",
+    x = "Year Made",
+    y = "Count"
+  )
+```
+
+## State
+
+The `state` data scraped from the website is very clean. All the "invalid"
+abbreviations are actually Canadian provinces.
+
+```{r state_check}
+prop_in(sdc$state, valid_state)
+setdiff(sdc$state, valid_state)
+sum(sdc$state == "--", na.rm = TRUE)
+sdc$state <- na_if(sdc$state, "--")
+```
+
+## City
+
+Cities are the most difficult geographic variable to normalize, simply due to
+the wide variety of valid cities and formats. The `campfin::normal_city()` 
+function is a good start, again converting case, removing punctuation, but
+_expanding_ USPS abbreviations. We can also remove `invalid_city` values.
+
+```{r city_norm}
+sdc <- sdc %>% 
+  mutate(
+    city_norm = normal_city(
+      city = city, 
+      abbs = usps_city,
+      states = c("SD", "DC", "SOUTH DAKOTA"),
+      na = invalid_city,
+      na_rep = TRUE
+    )
+  )
+```
+
+```{r city_other}
+many_city <- c(valid_city, extra_city)
+sdc %>% 
+  count(city_norm, state, sort = TRUE) %>% 
+  filter(!is.na(city_norm), city_norm %out% many_city)
+```
+
+```{r city_progress, echo=FALSE}
+progress <- progress_table(
+  sdc$city,
+  sdc$city_norm,
+  compare = many_city
+) %>% mutate(stage = as_factor(stage))
+```
+
+```{r progress_print, echo=FALSE}
+kable(progress, digits = 3)
+```
+
+## Conclude
+
+```{r clean_glimpse}
+glimpse(sample_n(sdc, 50))
+```
+
+```{r final_view}
+sdc %>% 
+  select(date,  agency, govt, amount, vendor, state) %>% 
+  sample_n(10)
+```
+
+1. There are `r comma(nrow(sdc))` records in the database.
+1. There are `r comma(sum(sdc$dupe_flag))` duplicate records in the database.
+1. The range and distribution of `amount` and `date` seem reasonable.
+1. There are `r comma(sum(sdc$no_amount))` records missing an amount.
+1. Consistency in geographic data has been improved with `campfin::normal_*()`.
+1. The 4-digit `year` variable has been created with `lubridate::year()`.
+
+## Export
+
+Now the file can be saved on disk for upload to the Accountability server.
+
+```{r clean_dir}
+clean_dir <- dir_create(here("sd", "contracts", "data", "clean"))
+clean_path <- path(clean_dir, "sd_contracts_clean.csv")
+write_csv(sdc, clean_path, na = "")
+file_size(clean_path)
+file_encoding(clean_path) %>% 
+  mutate(across(path, path.abbrev))
+```
+
+## Upload
+
+Using the [duckr] R package, we can wrap around the [duck] command line tool to
+upload the file to the IRW server.
+
+[duckr]: https://github.com/kiernann/duckr
+[duck]: https://duck.sh/
+
+```{r clean_upload, eval=FALSE}
+# remotes::install_github("kiernann/duckr")
+s3_dir <- "s3:/publicaccountability/csv/"
+s3_path <- path(s3_dir, basename(clean_path))
+if (require(duckr)) {
+  duckr::duck_upload(clean_path, s3_path)
+}
+```
+
+## Dictionary
+
+The following table describes the variables in our final exported file:
+
+```{r dict_make, echo=FALSE}
+dict_raw <- tibble(
+  var = md_code(names(sdc)),
+  type = md_code(map_chr(sdc, typeof)),
+  def = c(
+    "Unique contract number",
+    "Contract description",
+    "Awardee vendor name",
+    "Spending agency code",
+    "Spendy agency name",
+    "Spending government",
+    "Contract or grant amount",
+    "Flag for missing amount",
+    "Type (contract or grant)",
+    "PDF document creation date",
+    "PDF document modification date",
+    "Vendor city name",
+    "Vendor state abbreviation",
+    "Solicitation type",
+    "Flag indicating duplicate",
+    "Modified contract date",
+    "Contract/document year",
+    "Normalized vendor city name"
+  )
+)
+```
+
+```{r dict_md, echo=FALSE}
+(dict_md <- kable(
+  x = dict_raw,
+  format = "markdown",
+  col.names = c("Column", "Type", "Definition")
+))
+```
