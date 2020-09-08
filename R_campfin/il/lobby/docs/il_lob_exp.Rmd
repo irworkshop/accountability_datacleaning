@@ -327,6 +327,98 @@ lob_miss <-  ille %>% filter(is.na(lobbyist_fname))
 lob_miss$lobbyist_id %>% tabyl()
 ```
 
+
+## Wrangle
+We can see that the agents' names have extraneous white spaces, which can be removed by `str_trim()`
+```{r name trim}
+illr <-  illr %>% 
+  mutate_at(.vars = vars(ends_with("name")),.funs = str_trim)
+```
+
+
+
+To improve the searchability of the database, we will perform some consistent,
+confident string normalization. For geographic variables like city names and
+ZIP codes, the corresponding `campfin::normal_*()` functions are tailor made to 
+facilitate this process.
+
+### Address
+
+For the street `addresss` variable, the `campfin::normal_address()` function
+will force consistence case, remove punctuation, and abbreviate official 
+USPS suffixes.
+
+```{r address_norm}
+ille <- ille %>% mutate(
+   vendor_address_clean = 
+   normal_address(
+    vendor_address,
+     abbs = usps_street,
+     na = invalid_city
+   )
+ )
+```
+
+```{r address_view}
+ille %>% 
+  select(ends_with("address"), ends_with("address_clean")) %>% 
+  distinct() %>% 
+  sample_n(10)
+```
+
+### ZIP
+
+The zipcode field for vendors is missing.
+
+### State
+The `vendor_state` field is pretty clean and doesn't need to be normalized. 
+```{r}
+prop_in(ille$vendor_state, valid_state, na.rm=T)
+```
+
+
+### City
+
+Cities are the most difficult geographic variable to normalize, simply due to
+the wide variety of valid cities and formats.
+
+#### Normal
+
+The `campfin::normal_city()` function is a good start, again converting case,
+removing punctuation, but _expanding_ USPS abbreviations. We can also remove
+`invalid_city` values.
+
+```{r city_norm}
+ille <- ille %>% 
+  mutate( vendor_city_norm = normal_city(
+      vendor_city, 
+      abbs = usps_city,
+      states = valid_state,
+      na = invalid_city,
+      na_rep = TRUE
+    )
+  )
+```
+
+We can manually change some irregular city fields.
+```{r}
+ille <- ille %>% 
+  mutate(vendor_city_clean = vendor_city_norm %>% str_replace("SPLFD", "SPRINGFIELD") %>% str_replace("SPFLD", "SPRINGFIELD") %>% str_replace("SPRINGFIELD ILLINOIS", "SPRINGFIELD") %>% str_replace("SPRINGFILED ", "SPRINGFIELD") %>% str_replace("JERUSALAM", "JERUSALEM") )
+```
+
+
+```{r city_progress, echo=FALSE}
+many_city <- c(valid_city, extra_city,"LELAND GROVE")
+progress <- progress_table(
+  str_to_upper(ille$vendor_city),
+str_to_upper(ille$vendor_city_norm),
+str_to_upper(ille$vendor_city_clean),
+  compare = many_city
+) %>% mutate(stage = as_factor(stage))
+kable(progress, digits = 3)
+```
+
+
 ## Conclude
 
 ```{r clean_glimpse}
