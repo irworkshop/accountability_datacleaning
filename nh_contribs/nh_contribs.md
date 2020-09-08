@@ -1,8 +1,9 @@
 ## New Hampshire campaign contributions
 
-Number of records:
+Number of records: 59,758
 
-Note: Only contributions starting in 2016 are available electronically.
+Note: Only contributions starting in 2016 are available electronically. 
+These steps prepare the data for upload to TAP, including adding YEAR, a five-digit ZIP code, a clean version of the city and state and a flag for records that are unitemized.
 
 
 --ADD NEW COLUMNS  

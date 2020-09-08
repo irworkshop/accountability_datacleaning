@@ -1,0 +1,724 @@
+---
+title: "California Expenditures"
+author: "Kiernan Nicholls"
+date: "`r Sys.time()`"
+output:
+  github_document: 
+    df_print: tibble
+    toc: true
+    toc_dept: 2
+editor_options: 
+  chunk_output_type: console
+---
+
+<!-- Place comments regarding knitting here -->
+
+```{r setup, include=FALSE, purl=FALSE}
+library(knitr)
+opts_chunk$set(
+  eval = TRUE,
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  error = FALSE,
+  collapse = TRUE,
+  comment = "#>",
+  fig.path = "../plots/",
+  fig.width = 10,
+  dpi = 300
+)
+if (!interactive()) {
+  options(width = 99)
+  set.seed(5)
+}
+```
+
+```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
+doc_dir <- fs::dir_create(here::here("ca", "expends", "docs"))
+```
+
+## Project
+
+The Accountability Project is an effort to cut across data silos and give
+journalists, policy professionals, activists, and the public at large a simple
+way to search across huge volumes of public data about people and organizations.
+
+Our goal is to standardizing public data on a few key fields by thinking of each
+dataset row as a transaction. For each transaction there should be (at least) 3
+variables:
+
+1. All **parties** to a transaction.
+2. The **date** of the transaction.
+3. The **amount** of money involved.
+
+## Objectives
+
+This document describes the process used to complete the following objectives:
+
+1. How many records are in the database?
+1. Check for entirely duplicated records.
+1. Check ranges of continuous variables.
+1. Is there anything blank or missing?
+1. Check for consistency issues.
+1. Create a five-digit ZIP Code called `zip`.
+1. Create a `year` field from the transaction date.
+1. Make sure there is data on both parties to a transaction.
+
+## Packages
+
+The following packages are needed to collect, manipulate, visualize, analyze,
+and communicate these results. The `pacman` package will facilitate their
+installation and attachment.
+
+The IRW's `campfin` package will also have to be installed from GitHub. This
+package contains functions custom made to help facilitate the processing of
+campaign finance data.
+
+```{r load_packages, message=FALSE, warning=FALSE, error=FALSE}
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load_gh("irworkshop/campfin")
+pacman::p_load(
+  tidyverse, # data manipulation
+  lubridate, # datetime strings
+  gluedown, # printing markdown
+  magrittr, # pipe operators
+  janitor, # clean data frames
+  refinr, # cluster and merge
+  scales, # format strings
+  knitr, # knit documents
+  vroom, # read files fast
+  rvest, # html scraping
+  glue, # combine strings
+  here, # relative paths
+  httr, # http requests
+  fs # local storage 
+)
+```
+
+This document should be run as part of the `R_campfin` project, which lives as a
+sub-directory of the more general, language-agnostic
+[`irworkshop/accountability_datacleaning`][tap] GitHub repository.
+
+The `R_campfin` project uses the [RStudio projects][rproj] feature and should be
+run as such. The project also uses the dynamic `here::here()` tool for file
+paths relative to _your_ machine.
+
+```{r where_here}
+# where does this document knit?
+here::here()
+```
+
+[tap]: https://github.com/irworkshop/accountability_datacleaning
+[rproj]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects
+
+## Data
+
+Instead of getting California campaign expenditure data from the Secretary of
+State's official [Cal-Access database][cala], we will instead be using the clean
+version published by the [California Civic Data Coalition (CCDC)][ccdc].
+
+>  The coalition was formed in 2014 by Ben Welsh and Agustin Armendariz to lead
+the development of open-source software that makes California's public data
+easier to access and analyze. The effort has drawn hundreds of contributions
+from developers and journalists at dozens of news organizations.
+> 
+> Our primary focus is refining CAL-ACCESS, the jumbled, dirty and difficult
+government database that tracks campaign finance and lobbying activity in
+California politics.
+
+The CCDC provides a [single file][ex] for state campaign expenditures. The page
+contains a list of variables found in the data along with their definitions.
+
+```{r raw_dict, echo=FALSE}
+cae_dict <- read_csv(here("ca", "expends", "ca_exp_dict.tsv"))
+cae_dict$column <- md_code(cae_dict$column)
+kable(cae_dict)
+```
+
+[cala]: http://cal-access.sos.ca.gov/
+[ccdc]: https://www.californiacivicdata.org
+[ex]: https://calaccess.californiacivicdata.org/documentation/raw-files/expn-cd/
+
+## Download
+
+We can download the CCDC expenditures file directly, ignoring all the other
+data typically included in the Cal-Access database.
+
+```{r raw_download}
+raw_dir <- here("ca", "expends", "data", "raw")
+raw_source <- "https://s3-us-west-2.amazonaws.com/django-calaccess" 
+raw_url <- str_c(raw_source, "latest", "expn_cd.csv", sep = "/")
+raw_path <- path(raw_dir, basename(raw_url))
+if (!file_exists(raw_path)) {
+  download.file(raw_url, raw_path)
+}
+```
+
+> ### Errata
+> The raw data provided by the state contains errors in how some values are
+escaped, quoted and delimited. The result is a small number of records in the
+latest download were lost when we prepared files for download. However, only 638
+records out of 7,219,803 total rows were lost (you can download them [here][e]).
+
+[e]: https://s3-us-west-2.amazonaws.com/django-calaccess/2020-08-26_09-50-41/expn_cd.errors.csv
+
+```{r raw_errata, echo=FALSE}
+errata_url <- str_c(
+  raw_source, "2020-08-26_09-50-41", 
+  "expn_cd.errors.csv", sep = "/"
+)
+cae_errata <- read_csv(errata_url)
+print(cae_errata)
+```
+
+## Read
+
+Once downloaded, we can read the expenditures file directly, using the variable
+dictionary to define the column types.
+
+```{r raw_read}
+# 7,217,483 rows
+cae <- vroom(
+  file = raw_path,
+  delim = ",",
+  escape_double = TRUE,
+  .name_repair = make_clean_names,
+  col_types = cols(
+    .default = col_character(),
+    AMEND_ID = col_integer(),
+    AMOUNT = col_double(),
+    CUM_OTH = col_double(),
+    CUM_YTD = col_double(),
+    EXPN_DATE = col_date("%m/%d/%Y %H:%M:%S %p"),
+    FILING_ID = col_integer(),
+    LINE_ITEM = col_integer()
+  )
+)
+```
+
+The expenditures data does not include any identifying information on the filers
+of the forms, the committees making the expenditures. There is are three
+variables for _candidate_ names, but the vast majority are empty.
+
+```{r raw_missing}
+prop_na(cae$cand_naml)
+```
+
+```{r}
+cae <- cae %>% 
+  select_if(~prop_na(.) < 0.95) %>% 
+  select(-starts_with("cand_")) %>% 
+  rename(date = expn_date)
+```
+
+To get this information, we can download the cover page data from the 
+[campaign-disclosure forms][cvr]. These forms contains the filer names and
+addresses. We can also download this file from the CCDC and read the same way.
+
+[cvr]: https://calaccess.californiacivicdata.org/documentation/raw-files/cvr-campaign-disclosure-cd/
+
+```{r fil_download}
+cvr_url <- str_c(raw_source, "cvr_campaign_disclosure_cd.csv", sep = "/")
+cvr_path <- path(raw_dir, basename(cvr_url))
+if (!file_exists(cvr_path)) {
+  download.file(cvr_url, cvr_path)
+}
+```
+
+```{r cvr_read}
+cvr <- vroom(
+  file = cvr_path,
+  delim = ",",
+  escape_double = TRUE,
+  .name_repair = make_clean_names,
+  col_types = cols(
+    .default = col_character(),
+    AMEND_ID = col_integer(),
+    FILING_ID = col_integer(),
+    RPT_DATE = col_date("%m/%d/%Y %H:%M:%S %p")
+  )
+)
+```
+
+The CVR data has `r comma(nrow(cvr))` rows and `r ncol(cvr)` columns, only a few
+of which are useful to us. We also only want those records identifying those
+who have filed expenditure data. We also want to ensure only one version of
+filer information for each unique `filing_id`.
+
+```{r cvr_filter}
+cvr <- cvr %>% 
+  select(filing_id, amend_id, starts_with("filer"), rpt_date) %>% 
+  filter(filing_id %in% cae$filing_id) %>% 
+  select_if(~prop_na(.) < 0.95)
+```
+
+We can then use this new data to identify the parties in the expenditures table
+using the unique `filing_id` and `amend_id`. We will remove the useless 
+
+```{r cvr_join}
+cae <- left_join(cae, cvr)
+```
+
+## Explore
+
+```{r glimpse}
+glimpse(cae)
+tail(cae)
+```
+
+### Missing
+
+Columns vary in their degree of missing values. We can flag any values missing
+from key variables used to identify the transaction.
+
+```{r na_count}
+col_stats(cae, count_na)
+```
+
+```{r na_flag}
+cae <- cae %>% 
+  # unite names
+  unite(
+    col = payee_cmbn, 
+    starts_with("payee_nam"), 
+    sep = " ", 
+    remove = FALSE,
+    na.rm = TRUE
+  ) %>%
+    unite(
+    col = filer_cmbn, 
+    starts_with("filer_nam"), 
+    sep = " ", 
+    remove = FALSE,
+    na.rm = TRUE
+  ) %>%
+  # use report date for those missing
+  mutate(date = coalesce(date, rpt_date)) %>% 
+  # flag missing records
+  flag_na(date, payee_cmbn, amount, filer_cmbn) %>% 
+  # remove combined names
+  select(-ends_with("_cmbn"))
+```
+
+```{r na_prop}
+mean(cae$na_flag)
+```
+
+```{r na_view}
+cae %>% 
+  filter(na_flag) %>% 
+  select(date, payee_naml, amount, filer_naml) %>% 
+  sample_frac()
+```
+
+```{r na_recount}
+cae %>% 
+  filter(na_flag) %>% 
+  select(date, payee_naml, amount, filer_naml) %>% 
+  col_stats(count_na)
+```
+
+### Duplicates
+
+```{r dupe_write}
+dupe_file <- here("ca", "expends", "dupes.txt")
+if (!file_exists(dupe_file)) {
+  file_create(dupe_file)
+  n <- 1e5 # rows per chunk
+  nr <- nrow(cae)
+  # split file into chunks
+  cas <- split(
+    x = arrange(cae, payee_naml), 
+    f = rep(x = 1:ceiling(nr/n), each = n, length.out = nr)
+  )
+  pb <- txtProgressBar(max = length(cas), style = 3)
+  for (i in seq_along(cas)) {
+    # check dupes from both ends
+    d1 <- duplicated(cas[[i]], fromLast = FALSE)
+    d2 <- duplicated(cas[[i]], fromLast = TRUE)
+    # append to disk
+    write_lines(d1 | d2, dupe_file, append = TRUE)
+    rm(d1, d2)
+    cas[[i]] <- NA
+    Sys.sleep(1); flush_memory()
+    setTxtProgressBar(pb, value = i)
+  }
+  rm(cas)
+}
+```
+
+```{r dupe_read}
+cae <- mutate(cae, dupe_flag = as.logical(read_lines(dupe_file)))
+```
+
+After all that work, there are `r comma(sum(cae$dupe_flag))` duplicate records
+
+```{r dupe_view}
+cae %>% 
+  filter(dupe_flag) %>% 
+  select(date, payee_naml, amount, filer_naml)
+```
+
+### Categorical
+
+```{r distinct_count}
+col_stats(cae, n_distinct)
+```
+
+```{r distinct_plots, echo=FALSE}
+explore_plot(cae, form_type)
+explore_plot(cae, entity_cd)
+explore_plot(cae, office_cd)
+explore_plot(cae, juris_cd)
+```
+
+### Amounts
+
+```{r ammount_summary}
+summary(cae$amount) %>% map_chr(dollar)
+mean(cae$amount <= 0, na.rm = TRUE)
+```
+
+```{r hist_amount, echo=FALSE}
+cae %>%
+  filter(amount >= 1) %>% 
+  ggplot(aes(amount)) +
+  geom_histogram(fill = dark2["purple"]) +
+  scale_y_continuous(labels = comma) +
+  scale_x_continuous(
+    breaks = c(1 %o% 10^(0:6)),
+    labels = dollar,
+    trans = "log10"
+  ) +
+  labs(
+    title = "California Expenditures Amount Distribution",
+    caption = "Source: californiacivicdata.org",
+    x = "Amount",
+    y = "Count"
+  )
+```
+
+### Dates
+
+We can add the calendar year from `date` with `lubridate::year()`
+
+```{r date_year}
+cae <- mutate(cae, year = year(date))
+```
+
+There are a number of dates with impossibly low or high values.
+
+```{r date_range}
+min(cae$date, na.rm = TRUE)
+sum(cae$year < 1999, na.rm = TRUE)
+max(cae$date, na.rm = TRUE)
+sum(cae$date > today(), na.rm = TRUE)
+```
+
+```{r date_flag}
+cae <- mutate(cae, date_flag = date > today() | year < 1999 | is.na(date))
+percent(mean(cae$date_flag, na.rm = TRUE), 0.001)
+```
+
+```{r bar_year, echo=FALSE}
+cae %>% 
+  filter(!date_flag) %>% 
+  count(year) %>% 
+  mutate(even = is_even(year)) %>% 
+  ggplot(aes(x = year, y = n)) +
+  geom_col(aes(fill = even)) + 
+  scale_fill_brewer(palette = "Dark2") +
+  scale_y_continuous(labels = comma) +
+  scale_x_continuous(breaks = seq(2000, 2020, by = 2)) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "California Expenditures by Year",
+    caption = "Source: californiacivicdata.org",
+    fill = "Election Year",
+    x = "Year Made",
+    y = "Count"
+  )
+```
+
+## Wrangle
+
+To improve the searchability of the database, we will perform some consistent,
+confident string normalization. For geographic variables like city names and
+ZIP codes, the corresponding `campfin::normal_*()` functions are tailor made to 
+facilitate this process.
+
+### ZIP
+
+For ZIP codes, the `campfin::normal_zip()` function will attempt to create
+valid _five_ digit codes by removing the ZIP+4 suffix and returning leading
+zeroes dropped by other programs like Microsoft Excel.
+
+```{r zip_norm}
+cae <- mutate(
+  .data = cae, across(
+    .cols = ends_with("_zip4"),
+    .fns = list(norm = normal_zip),
+    na_rep = TRUE
+  )
+)
+```
+
+```{r zip_progress}
+progress_table(
+  cae$payee_zip4,
+  cae$payee_zip4_norm,
+  compare = valid_zip
+)
+```
+
+### State
+
+Valid two digit state abbreviations can be made using the 
+`campfin::normal_state()` function.
+
+```{r state_norm}
+cae <- mutate(
+  .data = cae, across(
+    .cols = ends_with("_st"),
+    .fns = list(norm = normal_state),
+    abbreviate = TRUE,
+    na_rep = TRUE,
+  )
+)
+```
+
+```{r state_view}
+cae %>% 
+  filter(payee_st != payee_st_norm) %>% 
+  count(payee_st, payee_st_norm, sort = TRUE)
+```
+
+```{r state_progress}
+progress_table(
+  cae$payee_st,
+  cae$payee_st_norm,
+  compare = valid_state
+)
+```
+
+### City
+
+Cities are the most difficult geographic variable to normalize, simply due to
+the wide variety of valid cities and formats.
+
+#### Normal
+
+The `campfin::normal_city()` function is a good start, again converting case,
+removing punctuation, but _expanding_ USPS abbreviations. We can also remove
+`invalid_city` values.
+
+```{r city_norm}
+cae <- mutate(
+  .data = cae, across(
+    .cols = ends_with("_city"),
+    .fns = list(norm = normal_city),
+    abbs = usps_city,
+      states = c("CA", "DC", "CALIFORNIA"),
+      na = invalid_city,
+      na_rep = TRUE
+  )
+)
+```
+
+#### Swap
+
+We can further improve normalization by comparing our normalized value
+against the _expected_ value for that record's state abbreviation and ZIP code.
+If the normalized value is either an abbreviation for or very similar to the
+expected value, we can confidently swap those two.
+
+```{r city_swap}
+cae <- cae %>% 
+  left_join(
+    y = zipcodes,
+    by = c(
+      "payee_st_norm" = "state",
+      "payee_zip4_norm" = "zip"
+    )
+  ) %>% 
+  rename(city_match = city) %>% 
+  mutate(
+    match_abb = is_abbrev(payee_city_norm, city_match),
+    match_dist = str_dist(payee_city_norm, city_match),
+    payee_city_swap = if_else(
+      condition = !is.na(match_dist) & (match_abb | match_dist == 1),
+      true = city_match,
+      false = payee_city_norm
+    )
+  ) %>% 
+  select(
+    -city_match,
+    -match_dist,
+    -match_abb
+  )
+```
+
+#### Refine
+
+The [OpenRefine][or] algorithms can be used to group similar strings and replace
+the less common versions with their most common counterpart. This can greatly
+reduce inconsistency, but with low confidence; we will only keep any refined
+strings that have a valid city/state/zip combination.
+
+[or]: https://openrefine.org/
+
+```{r city_refine}
+good_refine <- cae %>% 
+  mutate(
+    payee_city_refine = payee_city_swap %>% 
+      key_collision_merge() %>% 
+      n_gram_merge(numgram = 1)
+  ) %>% 
+  filter(payee_city_refine != payee_city_swap) %>% 
+  inner_join(
+    y = zipcodes,
+    by = c(
+      "payee_city_refine" = "city",
+      "payee_st_norm" = "state",
+      "payee_zip4_norm" = "zip"
+    )
+  )
+```
+
+```{r city_count, echo=FALSE}
+good_refine %>%
+  count(
+    payee_st_norm, 
+    payee_zip4_norm, 
+    payee_city_swap, 
+    payee_city_refine,
+    sort = TRUE
+  )
+```
+
+Then we can join the refined values back to the database.
+
+```{r city_join}
+cae <- cae %>% 
+  left_join(good_refine) %>% 
+  mutate(payee_city_refine = coalesce(payee_city_refine, payee_city_swap))
+```
+
+#### Progress
+
+```{r city_progress, echo=FALSE}
+many_city <- c(valid_city, extra_city)
+progress <- progress_table(
+  str_to_upper(cae$payee_city),
+  str_to_upper(cae$filer_city),
+  cae$payee_city_norm,
+  cae$filer_city_norm,
+  cae$payee_city_swap,
+  cae$payee_city_refine,
+  compare = many_city
+) %>% mutate(stage = as_factor(stage))
+kable(progress, digits = 3)
+```
+
+You can see how the percentage of valid values increased with each stage.
+
+```{r bar_progress, echo=FALSE}
+raw_in <- percent(prop_in(cae$payee_city, valid_city))
+progress %>% 
+  ggplot(aes(x = stage, y = prop_in)) +
+  geom_hline(yintercept = 0.99) +
+  geom_col(fill = dark2["purple"]) +
+  coord_cartesian(ylim = c(0.75, 1)) +
+  scale_y_continuous(labels = percent) +
+  labs(
+    title = "California City Normalization Progress",
+    subtitle = glue("Raw at {raw_in} before conversion to uppercase"),
+    x = "Stage",
+    y = "Percent Valid"
+  )
+```
+
+More importantly, the number of distinct values decreased each stage. We were
+able to confidently change many distinct invalid values to their valid
+equivalent.
+
+```{r bar_distinct, echo=FALSE}
+progress %>% 
+  select(
+    stage, 
+    all = n_distinct,
+    bad = n_diff
+  ) %>% 
+  mutate(good = all - bad) %>% 
+  pivot_longer(c("good", "bad")) %>% 
+  mutate(name = name == "good") %>% 
+  ggplot(aes(x = stage, y = value)) +
+  geom_col(aes(fill = name)) +
+  scale_fill_brewer(palette = "Dark2", direction = -1) +
+  scale_y_continuous(labels = comma) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "California City Normalization Progress",
+    subtitle = "Distinct values, valid and invalid",
+    x = "Stage",
+    y = "Distinct Values",
+    fill = "Valid"
+  )
+```
+
+## Conclude
+
+Before exporting, we can remove the intermediary normalization columns and
+rename all added variables with the `_clean` suffix.
+
+```{r clean_select}
+cae <- cae %>% 
+  select(
+    -payee_city_norm,
+    -payee_city_swap,
+    payee_city_clean = payee_city_refine
+  ) %>% 
+  rename_all(~str_replace(., "_norm", "_clean")) %>% 
+  rename_all(~str_remove(., "_raw"))
+```
+
+```{r clean_glimpse}
+glimpse(sample_n(cae, 50))
+```
+
+1. There are `r comma(nrow(cae))` records in the database.
+1. There are `r comma(sum(cae$dupe_flag))` duplicate records in the database.
+1. The range and distribution of `amount` and `date` seem reasonable.
+1. There are `r comma(sum(cae$na_flag))` records missing key variables.
+1. Consistency in geographic data has been improved with `campfin::normal_*()`.
+1. The 4-digit `year` variable has been created with `lubridate::year()`.
+
+## Export
+
+Now the file can be saved on disk for upload to the Accountability server.
+
+```{r clean_dir}
+clean_dir <- dir_create(here("ca", "expends", "data", "clean"))
+clean_path <- path(clean_dir, "ca_expends_clean.csv")
+write_csv(cae, clean_path, na = "")
+file_size(clean_path)
+file_encoding(clean_path) %>% 
+  mutate(across(path, path.abbrev))
+```
+
+## Upload
+
+Using the [duckr] R package, we can wrap around the [duck] command line tool to
+upload the file to the IRW server.
+
+[duckr]: https://github.com/kiernann/duckr
+[duck]: https://duck.sh/
+
+```{r clean_upload, eval=FALSE}
+# remotes::install_github("kiernann/duckr")
+s3_dir <- "s3:/publicaccountability/csv/"
+s3_path <- path(s3_dir, basename(clean_path))
+if (require(duckr)) {
+  duckr::duck_upload(clean_path, s3_path)
+}
+```

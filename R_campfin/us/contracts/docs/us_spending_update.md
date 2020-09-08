@@ -1,7 +1,7 @@
 Federal Contracts Update
 ================
 Kiernan Nicholls
-2020-06-15 13:04:57
+2020-07-17 10:58:55
 
   - [Project](#project)
   - [Objectives](#objectives)
@@ -101,7 +101,7 @@ feature and should be run as such. The project also uses the dynamic
 ``` r
 # where does this document knit?
 here::here()
-#> [1] "/home/kiernan/Code/accountability_datacleaning/R_campfin"
+#> [1] "/home/kiernan/Code/tap/R_campfin"
 ```
 
 ## Data
@@ -148,14 +148,14 @@ files.
 ``` r
 zip_dir <- dir_create(here("us", "contracts", "data", "zip"))
 base_url <- "https://files.usaspending.gov/award_data_archive/"
-con_date <- as.Date("2020-06-12") # today()
+con_date <- as.Date("2020-07-13") # today()
 con_files <- glue("FY2020_All_Contracts_Full_{format(con_date, '%Y%m%d')}.zip")
 con_urls <- str_c(base_url, con_files)
 con_zips <- path(zip_dir, con_files)
 ```
 
-    #> [1] "https://files.usaspending.gov/award_data_archive/FY2020_All_Contracts_Full_20200612.zip"
-    #> [1] "~/us/contracts/data/zip/FY2020_All_Contracts_Full_20200612.zip"
+    #> [1] "https://files.usaspending.gov/award_data_archive/FY2020_All_Contracts_Full_20200713.zip"
+    #> [1] "~/us/contracts/data/zip/FY2020_All_Contracts_Full_20200713.zip"
 
 We also need to add the records for spending and corrections made since
 this file was last updated. This is information is crucial, as it
@@ -172,7 +172,7 @@ contains the most recent data. This information can be found in the
 > download data prior to FY 2008, visit our Custom Award Data page.
 
 ``` r
-delta_file <- "FY(All)_All_Contracts_Delta_20200612.zip"
+delta_file <- "FY(All)_All_Contracts_Delta_20200713.zip"
 delta_url <- str_c(base_url, delta_file)
 delta_zip <- path(zip_dir, delta_file)
 ```
@@ -200,8 +200,8 @@ if (length(dir_ls(raw_dir)) == 0) {
 ```
 
 ``` r
-con_paths <- dir_ls(raw_dir, regexp = "FY\\d+.*csv")
-delta_paths <- dir_ls(raw_dir, regexp = "FY\\(All\\).*csv")
+con_paths <- dir_ls(raw_dir, regexp = "FY\\d+.*20200714_\\d.csv")
+delta_paths <- dir_ls(raw_dir, regexp = "FY\\(All\\).*20200714_\\d.csv")
 ```
 
 ## Layout
@@ -261,7 +261,7 @@ length(con_paths)
 #> [1] 4
 # total file sizes
 sum(file_size(con_paths))
-#> 5.91G
+#> 6.87G
 # avail local memory
 as_fs_bytes(str_extract(system("free", intern = TRUE)[2], "\\d+"))
 #> 31.4M
@@ -404,14 +404,14 @@ for (f in c(con_paths, delta_paths)) {
 
 ## Check
 
-In the end, 6 files were read and checked.
+In the end, 5 files were read and checked.
 
 ``` r
-all_paths <- dir_ls(raw_dir)
+all_paths <- dir_ls(raw_dir, regexp = "20200714")
 length(all_paths)
-#> [1] 6
+#> [1] 5
 sum(file_size(all_paths))
-#> 7.68G
+#> 8.44G
 ```
 
 Now we can read the `spend_check.csv` text file to see the statistics
@@ -436,9 +436,9 @@ all_checks %>%
     zip = mean(zip)
   )
 #> # A tibble: 1 x 11
-#>       nrow  ncol  type sum      start      end             missing  zero  city state   zip
-#>      <dbl> <dbl> <dbl> <chr>    <date>     <date>            <dbl> <dbl> <dbl> <dbl> <dbl>
-#> 1 58588984  41.6  4.97 7.13e+12 2000-10-01 2020-06-10 0.0000000171 0.174 0.966  1.00 0.982
+#>       nrow  ncol  type sum     start      end             missing  zero  city state   zip
+#>      <dbl> <dbl> <dbl> <chr>   <date>     <date>            <dbl> <dbl> <dbl> <dbl> <dbl>
+#> 1 58988837  41.6  4.97 7.2e+12 2000-10-01 2020-07-11 0.0000000170 0.174 0.966  1.00 0.982
 ```
 
 ``` r
@@ -525,11 +525,11 @@ And here we have the total checks for every file.
 | `FYdelta-2.csv` | 1,000,000 | 2000-10-01 | 2020-03-11 |       0 | 4.9%  | 89.1% | 100.0% | 97.5% |
 | `FYdelta-3.csv` | 1,000,000 | 2000-10-01 | 2020-01-08 |       0 | 1.7%  | 94.5% | 100.0% | 98.8% |
 | `FYdelta-4.csv` | 539,641   | 2000-10-01 | 2020-01-08 |       0 | 3.2%  | 96.6% | 100.0% | 97.9% |
-| `FY2020_1.csv`  | 1,000,000 | 2020-02-18 | 2020-06-10 |       0 | 16.7% | 98.7% | 100.0% | 99.0% |
-| `FY2020_2.csv`  | 1,000,000 | 2019-12-18 | 2020-02-18 |       1 | 12.1% | 97.9% | 100.0% | 98.7% |
-| `FY2020_3.csv`  | 1,000,000 | 2019-10-16 | 2019-12-18 |       0 | 13.1% | 97.9% | 100.0% | 98.7% |
-| `FY2020_4.csv`  | 207,575   | 2019-10-01 | 2019-10-16 |       0 | 14.6% | 97.8% | 100.0% | 98.6% |
-| `FY(All)_1.csv` | 971,664   | 2000-10-01 | 2020-06-10 |       0 | 13.0% | 97.8% | 100.0% | 98.6% |
+| `FY2020_1.csv`  | 1,000,000 | 2020-03-17 | 2020-07-11 |       0 | 18.3% | 98.6% | 100.0% | 99.0% |
+| `FY2020_2.csv`  | 1,000,000 | 2020-01-24 | 2020-03-17 |       0 | 12.5% | 98.0% | 100.0% | 98.7% |
+| `FY2020_3.csv`  | 1,000,000 | 2019-11-19 | 2020-01-27 |       1 | 12.6% | 97.8% | 100.0% | 98.6% |
+| `FY2020_4.csv`  | 722,494   | 2019-10-01 | 2019-11-19 |       0 | 13.5% | 97.8% | 100.0% | 98.7% |
+| `FY(All)_1.csv` | 856,598   | 2000-11-03 | 2020-07-11 |       0 | 12.9% | 98.2% | 100.0% | 98.7% |
 
 ## Delta
 
@@ -548,20 +548,20 @@ records.
 ``` r
 new_delta_path <- path(raw_dir, "us_contracts_delta-old.csv")
 old_delta <- vroom(dir_ls(here("us", "contracts", "data", "old")))
-nrow(old_delta)
-#> [1] 3539641
+comma(nrow(old_delta))
+#> [1] "3,539,641"
 new_keys <- dir_ls(raw_dir, regex = "\\d.csv$") %>% 
   map(vroom, col_types = cols(.default = "c")) %>% 
   map_df(select, key)
 new_keys <- unique(as_vector(new_keys))
 comma(length(new_keys))
-#> [1] "3,518,477"
+#> [1] "3,924,871"
 percent(mean(old_delta$key %in% new_keys), 0.1)
-#> [1] "31.9%"
+#> [1] "32.0%"
 old_delta <- filter(old_delta, key %out% new_keys)
-nrow(old_delta)
-#> [1] 2411159
+comma(nrow(old_delta))
+#> [1] "2,405,527"
 new_delta_path <- path(raw_dir, "us_contracts_delta-old.csv")
 flush_memory()
-vroom_write(old_delta, new_delta_path, delim = ",", na = "")
+write_csv(old_delta, new_delta_path, na = "")
 ```

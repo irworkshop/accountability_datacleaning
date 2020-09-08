@@ -1,17 +1,19 @@
-State Data
+Mississippi Expenditures
 ================
-First Last
-2019-09-16 12:13:07
+Kiernan Nicholls
+2020-08-03 10:41:43
 
   - [Project](#project)
   - [Objectives](#objectives)
   - [Packages](#packages)
   - [Data](#data)
-  - [Import](#import)
+  - [Download](#download)
+  - [Read](#read)
   - [Explore](#explore)
-  - [Wrangle](#wrangle)
   - [Conclude](#conclude)
   - [Export](#export)
+  - [Upload](#upload)
+  - [Dictionary](#dictionary)
 
 <!-- Place comments regarding knitting here -->
 
@@ -26,9 +28,9 @@ Our goal is to standardizing public data on a few key fields by thinking
 of each dataset row as a transaction. For each transaction there should
 be (at least) 3 variables:
 
-1.  All **parties** to a transaction
-2.  The **date** of the transaction
-3.  The **amount** of money involved
+1.  All **parties** to a transaction.
+2.  The **date** of the transaction.
+3.  The **amount** of money involved.
 
 ## Objectives
 
@@ -36,13 +38,13 @@ This document describes the process used to complete the following
 objectives:
 
 1.  How many records are in the database?
-2.  Check for duplicates
-3.  Check ranges
+2.  Check for entirely duplicated records.
+3.  Check ranges of continuous variables.
 4.  Is there anything blank or missing?
-5.  Check for consistency issues
-6.  Create a five-digit ZIP Code called `ZIP5`
-7.  Create a `YEAR` field from the transaction date
-8.  Make sure there is data on both parties to a transaction
+5.  Check for consistency issues.
+6.  Create a five-digit ZIP Code called `zip`.
+7.  Create a `year` field from the transaction date.
+8.  Make sure there is data on both parties to a transaction.
 
 ## Packages
 
@@ -56,210 +58,270 @@ processing of campaign finance data.
 
 ``` r
 if (!require("pacman")) install.packages("pacman")
-pacman::p_load_gh("kiernann/campfin")
+pacman::p_load_gh("irworkshop/campfin")
 pacman::p_load(
-  stringdist, # levenshtein value
-  RSelenium, # remote browser
   tidyverse, # data manipulation
   lubridate, # datetime strings
-  magrittr, # pipe opperators
-  janitor, # dataframe clean
+  gluedown, # printing markdown
+  magrittr, # pipe operators
+  janitor, # clean data frames
+  readxl, # read excel files
   refinr, # cluster and merge
   scales, # format strings
-  readxl, # read excel file
   knitr, # knit documents
   vroom, # read files fast
+  rvest, # html scraping
   glue, # combine strings
-  here, # relative storage
-  fs # search storage 
+  here, # relative paths
+  httr, # http requests
+  fs # local storage 
 )
 ```
 
 This document should be run as part of the `R_campfin` project, which
 lives as a sub-directory of the more general, language-agnostic
-[`irworkshop/accountability_datacleaning`](https://github.com/irworkshop/accountability_datacleaning "TAP repo")
+[`irworkshop/accountability_datacleaning`](https://github.com/irworkshop/accountability_datacleaning)
 GitHub repository.
 
 The `R_campfin` project uses the [RStudio
-projects](https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects "Rproj")
+projects](https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects)
 feature and should be run as such. The project also uses the dynamic
 `here::here()` tool for file paths relative to *your* machine.
 
 ``` r
-# where dfs this document knit?
+# where does this document knit?
 here::here()
-#> [1] "/home/ubuntu/R/accountability_datacleaning/R_campfin"
+#> [1] "/home/kiernan/Code/tap/R_campfin"
 ```
 
 ## Data
 
-### About
+Expenditure data is retrieving from the Mississippi Secretary of State’s
+campaign finance portal. The portal only contains records from October
+2016 and onwards.
 
-### Variables
+> (Disclosures submitted prior to 10/1/2016 are located on the
+> [Secretary of State’s Campaign Finance Filings
+> Search](http://www.sos.ms.gov/Elections-Voting/Pages/Campaign-Finance-Search.aspx).)
 
-## Import
+## Download
 
-### Download
+We can run an empty search using the start date and current dates and
+use the portal’s export feature to save a Microsoft Excel file.
 
 ``` r
-raw_dir <- here("ms", "expends", "data", "raw")
-dir_create(raw_dir)
+raw_dir <- dir_create(here("ms", "expends", "data", "raw"))
 ```
 
-### Read
+``` r
+ms_post <- POST(
+  url = "https://cfportal.sos.ms.gov/online/portal/cf/page/cf-search/Portal.aspx",
+  encode = "json",
+  body = list(
+    AmountPaid = "",
+    BeginDate = "10/1/2016",
+    CandidateName = "",
+    CommitteeName = "",
+    Description = "",
+    EndDate = format(today(), "%m/%d/%Y"),
+    EntityName = ""
+  )
+)
+```
 
 ``` r
-ms <- read_excel(
-  path = dir_ls(raw_dir),
-  .name_repair = make_clean_names,
+raw_path <- path(raw_dir, "MS_Expenditures.xlsx")
+```
+
+## Read
+
+The Excel file can be read with `readr::read_excel()`.
+
+``` r
+mse <- read_excel(
+  path = raw_path, skip = 1,
+  col_names = c("filer", "payee", "date", "report", "amount"),
   col_types = c("text", "text", "date", "text", "numeric")
 )
+```
+
+``` r
+mse <- mse %>% 
+  relocate(report, .after = last_col()) %>% 
+  mutate(across(date, as_date))
 ```
 
 ## Explore
 
 ``` r
-head(ms)
+glimpse(mse)
+#> Rows: 15,124
+#> Columns: 5
+#> $ filer  <chr> "Friends of Abe Hudson, Jr.", "Committee to Elect Mark Maples", "Committee to Ele…
+#> $ payee  <chr> "Coalesce", "Facebook Ads", "Facebook Ads", "Facebook Ads", "SCOTT LEES", "Tiffan…
+#> $ date   <date> 2019-06-06, 2018-11-05, 2018-11-06, 2018-11-29, 2017-09-06, 2019-04-28, 2019-04-…
+#> $ amount <dbl> 100.00, 200.00, 200.00, 148.40, 1200.00, 400.00, 400.00, 299.23, 130.62, 226.48, …
+#> $ report <chr> "Friends of Abe Hudson, Jr. State/District 7/10/2019 Periodic Report", "Committee…
+tail(mse)
 #> # A tibble: 6 x 5
-#>   filer           paid_to           date_received       report_type                          amount
-#>   <chr>           <chr>             <dttm>              <chr>                                 <dbl>
-#> 1 Friends of Abe… Coalesce          2019-06-06 00:00:00 Friends of Abe Hudson, Jr. State/Di…   100 
-#> 2 Committee to E… Facebook Ads      2018-11-05 00:00:00 Committee to Elect Mark Maples Judi…   200 
-#> 3 Committee to E… Facebook Ads      2018-11-06 00:00:00 Committee to Elect Mark Maples Judi…   200 
-#> 4 Committee to E… Facebook Ads      2018-11-29 00:00:00 Committee to Elect Mark Maples Judi…   148.
-#> 5 Forward Missis… SCOTT LEES        2017-09-06 00:00:00 Forward Mississippi PAC State/Distr…  1200 
-#> 6 Friends of Abe… Tiffany Robinson… 2019-04-28 00:00:00 Friends of Abe Hudson, Jr. State/Di…   400
-tail(ms)
-#> # A tibble: 6 x 5
-#>   filer            paid_to       date_received       report_type                             amount
-#>   <chr>            <chr>         <dttm>              <chr>                                    <dbl>
-#> 1 Friends of Cher… Zack Ball     2019-07-27 00:00:00 Friends of Cheramie (Mitchell) 8/8/201…  250  
-#> 2 Cassandra Welch… Zavien Magee  2019-07-10 00:00:00 Cassandra Welchlin 7/30/2019 Primary P…   90  
-#> 3 Cassandra Welch… Zavien Magee  2019-07-19 00:00:00 Cassandra Welchlin 7/30/2019 Primary P…  200  
-#> 4 David Lee Brewer Zazzle.com    2018-02-24 00:00:00 David Lee Brewer Judicial 5/10/2018 Pe…   30.9
-#> 5 Friends of Abe … Zeminski Dot… 2019-08-15 00:00:00 Friends of Abe Hudson, Jr. 7/30/2019 P…  101. 
-#> 6 Mississippi Lea… Zintzo Consu… 2019-08-06 00:00:00 Mississippi Leadership Fund 8/20/2019 … 1530
-glimpse(sample_frac(ms))
-#> Observations: 10,002
-#> Variables: 5
-#> $ filer         <chr> "Delbert Hosemann", "Friends to Elect Jimmy McClure", "Philip Gunn Campaig…
-#> $ paid_to       <chr> "Copey Grantham", "North MS Herald", "CLINTON CHAMBER", "FRIENDS TO ELECT …
-#> $ date_received <dttm> 2019-05-01, 2018-11-05, 2018-02-01, 2019-06-23, 2018-10-12, 2016-08-25, 2…
-#> $ report_type   <chr> "Delbert Hosemann State/District 6/10/2019 Periodic Report", "Friends to E…
-#> $ amount        <dbl> 1500.00, 1052.50, 600.00, 9.38, 14353.72, 25.00, 166.75, 250.00, 31.34, 25…
+#>   filer               payee         date       amount report                                       
+#>   <chr>               <chr>         <date>      <dbl> <chr>                                        
+#> 1 Mississippi Leader… Zintzo Consu… 2019-08-06   1530 Mississippi Leadership Fund 8/20/2019 Primar…
+#> 2 Mississippi Leader… Zintzo Consu… 2019-08-06   1530 Mississippi Leadership Fund State/District 1…
+#> 3 Mississippi Leader… Zintzo Consu… 2019-09-13    510 Mississippi Leadership Fund State/District 1…
+#> 4 Mississippi Leader… Zintzo Consu… 2019-09-13    510 Mississippi Leadership Fund State/District 1…
+#> 5 Mississippi Leader… Zintzo Consu… 2019-11-15   1050 Mississippi Leadership Fund 12/6/2019 Termin…
+#> 6 Committee to Elect… Zykimbreia F… 2019-10-01   1000 Committee to Elect Brandon Rue State/Distric…
 ```
 
 ### Missing
 
-``` r
-glimpse_fun(ms, count_na)
-#> # A tibble: 5 x 4
-#>   col           type      n     p
-#>   <chr>         <chr> <dbl> <dbl>
-#> 1 filer         chr       0     0
-#> 2 paid_to       chr       0     0
-#> 3 date_received dttm      0     0
-#> 4 report_type   chr       0     0
-#> 5 amount        dbl       0     0
-```
+There are no missing values.
 
 ``` r
-ms <- flag_na(ms, everything())
-sum(ms$na_flag)
-#> [1] 0
+col_stats(mse, count_na)
+#> # A tibble: 5 x 4
+#>   col    class      n     p
+#>   <chr>  <chr>  <int> <dbl>
+#> 1 filer  <chr>      0     0
+#> 2 payee  <chr>      0     0
+#> 3 date   <date>     0     0
+#> 4 amount <dbl>      0     0
+#> 5 report <chr>      0     0
 ```
 
 ### Duplicates
 
-``` r
-ms <- flag_dupes(ms, everything())
-sum(ms$dupe_flag)
-#> [1] 95
-```
-
-### Categorical
+Duplicate values can be flagged.
 
 ``` r
-glimpse_fun(ms, n_distinct)
-#> # A tibble: 7 x 4
-#>   col           type      n         p
-#>   <chr>         <chr> <dbl>     <dbl>
-#> 1 filer         chr     287 0.0287   
-#> 2 paid_to       chr    3420 0.342    
-#> 3 date_received dttm   1048 0.105    
-#> 4 report_type   chr     989 0.0989   
-#> 5 amount        dbl    3755 0.375    
-#> 6 na_flag       lgl       1 0.0001000
-#> 7 dupe_flag     lgl       2 0.000200
+mse <- flag_dupes(mse, everything())
+sum(mse$dupe_flag)
+#> [1] 390
 ```
 
-### Continuous
-
-#### Amounts
+There are 390
 
 ``` r
-summary(ms$amount)
-#>     Min.  1st Qu.   Median     Mean  3rd Qu.     Max. 
-#>      0.0    100.0    313.3   1237.5   1000.0 450000.0
-sum(ms$amount <= 0)
-#> [1] 7
+mse %>% 
+  filter(dupe_flag) %>% 
+  select(date, filer, amount, payee)
+#> # A tibble: 390 x 4
+#>    date       filer                      amount payee            
+#>    <date>     <chr>                       <dbl> <chr>            
+#>  1 2019-09-16 Friends of Abe Hudson, Jr.    50  Abe Hudson       
+#>  2 2019-09-16 Friends of Abe Hudson, Jr.    50  Abe Hudson       
+#>  3 2019-10-03 Philip Gunn Campaign          70  AMERICAN AIRLINES
+#>  4 2019-10-03 Philip Gunn Campaign          70  AMERICAN AIRLINES
+#>  5 2018-10-12 Ottowa E. Carter, Jr.        508. Ashley Carter    
+#>  6 2018-10-12 Ottowa E. Carter, Jr.        508. Ashley Carter    
+#>  7 2019-05-17 Friends of Joel Bomgar       894. Avignon LLC      
+#>  8 2019-05-17 Friends of Joel Bomgar       894. Avignon LLC      
+#>  9 2019-10-04 Friends of Joel Bomgar       894. Avignon LLC      
+#> 10 2019-10-04 Friends of Joel Bomgar       894. Avignon LLC      
+#> # … with 380 more rows
 ```
 
-![](../plots/amount_histogram-1.png)<!-- -->
-
-#### Dates
+### Amounts
 
 ``` r
-ms <- mutate(ms, year_received = year(date_received))
+summary(mse$amount)
+#>    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+#>       0     100     350    2298    1000 1250000
+percent(mean(mse$amount <= 0), 0.01)
+#> [1] "0.05%"
+```
+
+![](../plots/hist_amount-1.png)<!-- -->
+
+### Dates
+
+We can add the calendar year from `date` with `lubridate::year()`
+
+``` r
+mse <- mutate(mse, year = year(date))
 ```
 
 ``` r
-min(ms$date_received)
-#> [1] "2008-07-16 UTC"
-max(ms$date_received)
-#> [1] "3016-03-30 UTC"
-sum(ms$date_received > today())
-#> [1] 7
+min(mse$date)
+#> [1] "2016-10-01"
+sum(mse$year < 2000)
+#> [1] 0
+max(mse$date)
+#> [1] "2020-07-09"
+sum(mse$date > today())
+#> [1] 0
 ```
 
-``` r
-ms <- mutate(ms, date_clean = date_received)
-ms$date_clean[which(ms$date_received > today() | ms$year_received < 2016)] <- NA
-ms <- mutate(ms, year_received = year(date_clean))
-```
-
-![](../plots/year_bar-1.png)<!-- -->
-
-## Wrangle
-
-``` r
-ms <- as_tibble(map_if(ms, is_character, str_to_upper))
-```
+![](../plots/bar_year-1.png)<!-- -->
 
 ## Conclude
 
-1.  There are 10002 records in the database.
-2.  There are 95 duplicate records.
-3.  There are 0 records missing a value.
-4.  The range and distribution of the `amount` variable seems
-    reasonable.
-5.  The `date_clean` variable has been created by removing 7 values from
-    the future.
-6.  The database does not contain geographic data.
-7.  The 4-digit `year` variable has been created with
+``` r
+glimpse(sample_n(mse, 50))
+#> Rows: 50
+#> Columns: 7
+#> $ filer     <chr> "Trey Bowman", "Ottowa E. Carter, Jr.", "Robert Dambrino", "Mississippi Poultr…
+#> $ payee     <chr> "TeleSouth Media", "Shounder Jenkins", "Premium Consulting Group", "Carl Micke…
+#> $ date      <date> 2019-07-15, 2018-11-06, 2019-03-11, 2019-07-09, 2018-12-06, 2019-05-29, 2019-…
+#> $ amount    <dbl> 588.00, 100.00, 470.00, 500.00, 92.47, 250.00, 95.92, 12.00, 2500.00, 76.77, 1…
+#> $ report    <chr> "Trey Bowman 7/30/2019 Primary Pre-Election Form Filing", "Ottowa E. Carter, J…
+#> $ dupe_flag <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, TRUE, FALSE, FALSE, FALSE, TRUE, FAL…
+#> $ year      <dbl> 2019, 2018, 2019, 2019, 2018, 2019, 2019, 2019, 2019, 2016, 2018, 2019, 2018, …
+```
+
+1.  There are 15,124 records in the database.
+2.  There are 390 duplicate records in the database.
+3.  The range and distribution of `amount` and `date` seem reasonable.
+4.  There are 0 records missing key variables.
+5.  There are no geographic variables.
+6.  The 4-digit `year` variable has been created with
     `lubridate::year()`.
 
 ## Export
 
-``` r
-proc_dir <- here("ms", "expends", "data", "processed")
-dir_create(proc_dir)
-```
+Now the file can be saved on disk for upload to the Accountability
+server.
 
 ``` r
-write_csv(
-  x = ms, 
-  path = glue("{proc_dir}/ms_expends_clean.csv"),
-  na = ""
-)
+clean_dir <- dir_create(here("ms", "expends", "data", "clean"))
+clean_path <- path(clean_dir, "ms_expends_clean.csv")
+write_csv(mse, clean_path, na = "")
+file_size(clean_path)
+#> 1.97M
+file_encoding(clean_path) %>% 
+  mutate(across(path, path.abbrev))
+#> # A tibble: 1 x 3
+#>   path                                         mime            charset 
+#>   <chr>                                        <chr>           <chr>   
+#> 1 ~/ms/expends/data/clean/ms_expends_clean.csv application/csv us-ascii
 ```
+
+## Upload
+
+Using the [duckr](https://github.com/kiernann/duckr) R package, we can
+wrap around the [duck](https://duck.sh/) command line tool to upload the
+file to the IRW server.
+
+``` r
+# remotes::install_github("kiernann/duckr")
+s3_dir <- "s3:/publicaccountability/csv/"
+s3_path <- path(s3_dir, basename(clean_path))
+if (require(duckr)) {
+  duckr::duck_upload(clean_path, s3_path)
+}
+```
+
+## Dictionary
+
+The following table describes the variables in our final exported file:
+
+| Column      | Type        | Definition                       |
+| :---------- | :---------- | :------------------------------- |
+| `filer`     | `character` | Filer committee name             |
+| `payee`     | `character` | Receiving payee name             |
+| `date`      | `double`    | Expenditure date                 |
+| `amount`    | `double`    | Expenditure amount               |
+| `report`    | `character` | Report name                      |
+| `dupe_flag` | `logical`   | Flag indicating duplicate record |
+| `year`      | `double`    | Calendar year of date            |

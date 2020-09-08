@@ -1,0 +1,744 @@
+---
+title: "Arizona Expenditures"
+author: "Kiernan Nicholls"
+date: "`r Sys.time()`"
+output:
+  github_document: 
+    df_print: tibble
+    toc: true
+    toc_dept: 2
+editor_options: 
+  chunk_output_type: console
+---
+
+<!-- Place comments regarding knitting here -->
+
+```{r setup, include=FALSE, purl=FALSE}
+library(knitr)
+opts_chunk$set(
+  eval = TRUE,
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  error = FALSE,
+  collapse = TRUE,
+  comment = "#>",
+  fig.path = "../plots/",
+  fig.width = 10,
+  dpi = 300
+)
+if (!interactive()) {
+  options(width = 99)
+  set.seed(5)
+}
+```
+
+```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
+doc_dir <- fs::dir_create(here::here("az", "expends", "docs"))
+```
+
+## Project
+
+The Accountability Project is an effort to cut across data silos and give
+journalists, policy professionals, activists, and the public at large a simple
+way to search across huge volumes of public data about people and organizations.
+
+Our goal is to standardizing public data on a few key fields by thinking of each
+dataset row as a transaction. For each transaction there should be (at least) 3
+variables:
+
+1. All **parties** to a transaction.
+2. The **date** of the transaction.
+3. The **amount** of money involved.
+
+## Objectives
+
+This document describes the process used to complete the following objectives:
+
+1. How many records are in the database?
+1. Check for entirely duplicated records.
+1. Check ranges of continuous variables.
+1. Is there anything blank or missing?
+1. Check for consistency issues.
+1. Create a five-digit ZIP Code called `zip`.
+1. Create a `year` field from the transaction date.
+1. Make sure there is data on both parties to a transaction.
+
+## Packages
+
+The following packages are needed to collect, manipulate, visualize, analyze,
+and communicate these results. The `pacman` package will facilitate their
+installation and attachment.
+
+The IRW's `campfin` package will also have to be installed from GitHub. This
+package contains functions custom made to help facilitate the processing of
+campaign finance data.
+
+```{r load_packages, message=FALSE, warning=FALSE, error=FALSE}
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load_gh("irworkshop/campfin")
+pacman::p_load_gh("kiernann/mdbr")
+pacman::p_load(
+  tidyverse, # data manipulation
+  lubridate, # datetime strings
+  gluedown, # printing markdown
+  magrittr, # pipe operators
+  janitor, # clean data frames
+  refinr, # cluster and merge
+  scales, # format strings
+  knitr, # knit documents
+  vroom, # read files fast
+  rvest, # html scraping
+  glue, # combine strings
+  here, # relative paths
+  httr, # http requests
+  fs # local storage 
+)
+```
+
+This document should be run as part of the `R_campfin` project, which lives as a
+sub-directory of the more general, language-agnostic
+[`irworkshop/accountability_datacleaning`][tap] GitHub repository.
+
+The `R_campfin` project uses the [RStudio projects][rproj] feature and should be
+run as such. The project also uses the dynamic `here::here()` tool for file
+paths relative to _your_ machine.
+
+```{r where_here}
+# where does this document knit?
+here::here()
+```
+
+[tap]: https://github.com/irworkshop/accountability_datacleaning
+[rproj]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects
+
+## Data
+
+Expenditures data for the state of Arizona was retrieved under open records law 
+Arizona Rev. Stat. Ann. Secs. 39-121 to 39-122. After a $25 fee was paid to the
+state by the Investigative Reporting Workshop we were given access to the
+state's file sharing website from which a Microsoft Access Database was
+downloaded.
+
+```{r raw_dir}
+raw_dir <- dir_create(here("az", "expends", "data", "raw"))
+mdb_file <- path(raw_dir, "CFS_Export.mdb")
+```
+
+```{r raw_download}
+file_size(mdb_file)
+```
+
+## Read
+
+The Microsoft Access database provided by the state cannot easily be read into
+R like one might with a text file. We can use the [mdbr] package to access the
+open source [MDB Tools][mdbtools] command line utility. This package can list
+the tables in a database and read them as data frames.
+
+[mdbtools]: https://github.com/brianb/mdbtools
+[mdbr]: https://github.com/kiernann/mdbr
+
+To use the mdbr package, MDB Tools must first be installed. The `mdbtools`
+utility can be installed from the command line on Debian systems:
+
+```bash
+# https://github.com/brianb/mdbtools
+sudo apt install mdbtools
+```
+
+We can use the `mdb_tableS()` function to list all the tables in the database.
+
+```{r mdb_tables}
+az_tables <- mdb_tables(mdb_file)
+```
+
+|Table                  |Description                                     |Rows |
+|:----------------------|:-----------------------------------------------|:----|
+|`BallotMeasures`       |Information on ballot measures voted on         |50   |
+|`Categories`           |Category names with codes                       |71   |
+|`Counties`             |County names with codes                         |15   |
+|`Cycles`               |Election cycle start and dates with codes       |15   |
+|`EntityTypes`          |Filing entity type names with codes             |43   |
+|`IncomeExpenseNeutral` |Filing type with codes                          |3    |
+|`Names`                |The names and addresses of recipients      |1,197,512 |
+|`Offices`              |Office names sought with codes                  |70   |
+|`Parties`              |Political party names with codes                |6    |
+|`ReportNames`          |Filing report type, usual a time of year        |237  |
+|`Reports`              |All of the reports filed by committees       |143,497 |
+|`ReportTypes`          |Report types with codes                         |8    |
+|`TransactionTypes`     |Transaction type name and `IncomeExpenseNeutral` |159 |
+|`Committees`           |Names, IDs, and addresses of filing committees |4,556 |
+|`Transactions`         |All expenditures with amounts and dates    |6,241,937 |
+
+These tables can be read with `read_mdb()`, which uses `readr::read_csv()`. We
+will read every table into a single list of multiple data frames.
+
+```{r mdb_read}
+a <- rep(list(NA), length(az_tables))
+names(a) <- make_clean_names(az_tables)
+for (i in seq_along(az_tables)) {
+  a[[i]] <- read_mdb(mdb_file, az_tables[i])
+}
+```
+
+## Join
+
+These many data frames can then be joined together to create a single collection
+of transactions between parties.
+
+```{r echo=FALSE}
+az_rename <- function(string) {
+  string %>%
+    make_clean_names("snake") %>% 
+    str_replace("transaction_", "tx_") %>% 
+    str_replace("modifies_", "mod_") %>% 
+    str_replace("address", "addr") %>% 
+    str_replace("committee_", "com_") %>% 
+    str_replace("financial_institution", "fin_inst") %>% 
+    str_replace("candidate_", "cand_") %>% 
+    str_replace("organization_", "org_") %>% 
+    str_replace("termination_", "term_") %>% 
+    str_replace("physical_", "com_") %>% 
+    str_replace("_relationship", "_rel") %>% 
+    str_replace("_relationship", "_rel") %>% 
+    str_replace("cand_other_party_name", "cand_other") %>% 
+    str_replace("benefits_ballot_measure", "ben_ballot") %>% 
+    str_remove("_name")
+}
+```
+
+```{r}
+a$committees <- select(
+  .data = a$committees, CommitteeID, NameID, 
+  starts_with("Candidate"), -CandidateOtherPartyName
+)
+```
+
+```{r}
+a$names <- select(a$names, -NameGroupID, -CountyID, Zip = ZipCode)
+```
+
+```{r raw_join}
+aze <- a$transactions %>% # 6,241,937
+  # Transaction type, category info -------------------------------------------
+  left_join(a$transaction_types, by = "TransactionTypeID") %>% 
+  select(-TransactionTypeID) %>% 
+  left_join(a$income_expense_neutral, by = "IncomeExpenseNeutralID") %>% 
+  select(-IncomeExpenseNeutralID, TransactionMethod = IncomeExpenseNeutral) %>% 
+  left_join(a$categories, by = "CategoryID") %>% 
+  select(-CategoryID, -SubjectCommitteeID) %>%
+  # Spending COMMITTEE info ---------------------------------------------------
+  rename(PayeeID = NameID) %>% # expenditure recipient
+  relocate(CommitteeID, .after = last_col()) %>% 
+  left_join(a$committees, by = "CommitteeID") %>% 
+  # COMMITTEE party, county, office, cycle ------------------------------------
+  # join by ID, remove ID and rename columns
+  left_join(a$parties, by = c("CandidatePartyID" = "PartyID")) %>% 
+  select(-CandidatePartyID, CandidateParty = PartyName) %>% 
+  left_join(a$offices, by = c("CandidateOfficeID" = "OfficeID")) %>% 
+  select(-CandidateOfficeID, CandidateOffice = OfficeName) %>% 
+  left_join(a$counties, by = c("CandidateCountyID" = "CountyID")) %>% 
+  select(-CandidateCountyID, CandidateCounty = CountyName) %>%
+  left_join(select(a$cycles, 1:2), by = c("CandidateCycleID" = "CycleID")) %>% 
+  select(-CandidateCycleID, CandidateCycle = CycleName) %>%
+  # CANDIDATE name and info ---------------------------------------------------
+  left_join(a$names, by = "NameID") %>% 
+  rename(CandidateID = NameID) %>% 
+  left_join(a$entity_types, by = "EntityTypeID") %>% 
+  select(-EntityTypeID, CandidateType = EntityTypeName) %>% 
+  rename_with(~paste0("Candidate", .), .cols = 21:last_col(1)) %>% 
+  # PAYEE name and info -------------------------------------------------------
+  relocate(PayeeID, .after = last_col()) %>% 
+  left_join(a$names, by = c("PayeeID" = "NameID")) %>% 
+  left_join(a$entity_types, by = "EntityTypeID") %>% 
+  select(-EntityTypeID, PayeeType = EntityTypeName) %>% 
+  rename_with(~paste0("Payee", .), .cols = 33:last_col(1)) %>% 
+  select(-14) %>% 
+  rename_with(.fn = az_rename) %>% 
+  rename(date = tx_date) %>% 
+  mutate(across(ends_with("date"), as_date))
+```
+
+```{r}
+rm(a); flush_memory()
+```
+
+## Explore
+
+```{r glimpse}
+glimpse(aze)
+tail(aze)
+```
+
+### Missing
+
+```{r na_count}
+col_stats(aze, count_na)
+```
+
+```{r na_flag}
+key_vars <- c("date", "payee_last", "amount", "cand_last")
+aze <- flag_na(aze, all_of(key_vars))
+sum(aze$na_flag)
+```
+
+```{r na_view}
+aze %>% 
+  filter(na_flag) %>% 
+  select(all_of(key_vars)) %>% 
+  sample_frac()
+```
+
+### Duplicates
+
+```{r dupe_write}
+dupe_file <- here("az", "expends", "dupes.txt")
+if (!file_exists(dupe_file)) {
+  file_create(dupe_file)
+  # split file into monthly chunks
+  azs <- aze %>% 
+    mutate(month = month(date), year = year(date)) %>% 
+    group_split(month, year, .keep = FALSE)
+  pb <- txtProgressBar(max = length(azs), style = 3)
+  for (i in seq_along(azs)) {
+    # check dupes from both ends
+    d1 <- duplicated(azs[[i]], fromLast = FALSE)
+    d2 <- duplicated(azs[[i]], fromLast = TRUE)
+    # append to disk
+    write_lines(d1 | d2, dupe_file, append = TRUE)
+    rm(d1, d2)
+    azs[[i]] <- NA
+    Sys.sleep(1); flush_memory(1)
+    setTxtProgressBar(pb, value = i)
+  }
+  rm(azs)
+}
+```
+
+```{r dupe_read}
+aze <- mutate(aze, dupe_flag = as.logical(read_lines(dupe_file)))
+if (sum(aze$dupe_flag) == 0) {
+  file_delete(dupe_file)
+  aze <- select(aze, -dupe_flag)
+}
+```
+
+### Categorical
+
+```{r distinct_count}
+col_stats(aze, n_distinct)
+```
+
+```{r distinct_plots, echo=FALSE}
+explore_plot(aze, account_type)
+explore_plot(aze, tx_method)
+explore_plot(aze, category)
+explore_plot(aze, cand_party)
+explore_plot(aze, cand_office) + scale_x_truncate()
+explore_plot(aze, cand_county)
+explore_plot(aze, cand_type) + scale_x_truncate()
+explore_plot(aze, payee_type) + scale_x_truncate()
+```
+
+### Amounts
+
+```{r ammount_summary}
+summary(aze$amount)
+mean(aze$amount <= 0)
+```
+
+```{r hist_amount, echo=FALSE}
+aze %>%
+  filter(amount >= 1) %>% 
+  ggplot(aes(amount)) +
+  geom_histogram(fill = dark2["purple"]) +
+  scale_y_continuous(labels = comma) +
+  scale_x_continuous(
+    breaks = c(1 %o% 10^(0:6)),
+    labels = dollar,
+    trans = "log10"
+  ) +
+  labs(
+    title = "Arizona Contracts Amount Distribution",
+    caption = "Source:  Arizona Secretary of State",
+    x = "Amount",
+    y = "Count"
+  )
+```
+
+### Dates
+
+We can add the calendar year from `date` with `lubridate::year()`
+
+```{r date_year}
+aze <- mutate(aze, year = year(date))
+```
+
+```{r date_range}
+min(aze$date)
+sum(aze$year < 2000)
+max(aze$date)
+sum(aze$date > today())
+```
+
+```{r bar_year, echo=FALSE}
+aze %>% 
+  count(year) %>% 
+  mutate(even = is_even(year)) %>% 
+  ggplot(aes(x = year, y = n)) +
+  geom_col(aes(fill = even)) + 
+  scale_fill_brewer(palette = "Dark2") +
+  scale_y_continuous(labels = comma) +
+  scale_x_continuous(breaks = seq(2000, 2020, by = 2)) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "Arizona Expenditures by Year",
+    caption = "Source:  Arizona Secretary of State",
+    fill = "Election Year",
+    x = "Year Made",
+    y = "Count"
+  )
+```
+
+## Wrangle
+
+To improve the searchability of the database, we will perform some consistent,
+confident string normalization. For geographic variables like city names and
+ZIP codes, the corresponding `campfin::normal_*()` functions are tailor made to 
+facilitate this process.
+
+### Address
+
+For the street `addresss` variable, the `campfin::normal_address()` function
+will force consistence case, remove punctuation, and abbreviate official 
+USPS suffixes.
+
+```{r address_norm}
+aze <- aze %>% 
+  unite(
+    col = payee_addr,
+    starts_with("payee_addr"),
+    sep = " ",
+    remove = FALSE,
+    na.rm = TRUE
+  ) %>% 
+  unite(
+    col = cand_addr,
+    starts_with("cand_addr"),
+    sep = " ",
+    remove = FALSE,
+    na.rm = TRUE
+  ) %>% 
+  mutate(across(
+    .cols = ends_with("_addr"),
+    .fns = list(norm = normal_address),
+    abbs = usps_street,
+    na_rep = TRUE
+  )) %>% 
+  select(-ends_with("_addr"))
+```
+
+```{r address_view}
+aze %>% 
+  sample_n(10) %>% 
+  select(contains("_addr"))
+```
+
+### ZIP
+
+For ZIP codes, the `campfin::normal_zip()` function will attempt to create
+valid _five_ digit codes by removing the ZIP+4 suffix and returning leading
+zeroes dropped by other programs like Microsoft Excel.
+
+```{r zip_norm}
+aze <- mutate(
+  .data = aze, across(
+    .cols = ends_with("_zip"),
+    .fns = list(norm = normal_zip),
+    na_rep = TRUE
+  )
+)
+```
+
+```{r zip_progress}
+progress_table(
+  aze$payee_zip,
+  aze$payee_zip_norm,
+  compare = valid_zip
+)
+```
+
+### State
+
+Valid two digit state abbreviations can be made using the 
+`campfin::normal_state()` function.
+
+```{r state_norm}
+aze <- mutate(
+  .data = aze, across(
+    .cols = ends_with("_state"),
+    .fns = list(norm = normal_state),
+    abbreviate = TRUE,
+    na_rep = TRUE,
+  )
+)
+```
+
+```{r state_view}
+aze %>% 
+  filter(payee_state != payee_state_norm) %>% 
+  count(payee_state, payee_state_norm, sort = TRUE)
+```
+
+```{r state_progress}
+progress_table(
+  aze$payee_state,
+  aze$payee_state_norm,
+  compare = valid_state
+)
+```
+
+### City
+
+Cities are the most difficult geographic variable to normalize, simply due to
+the wide variety of valid cities and formats.
+
+#### Normal
+
+The `campfin::normal_city()` function is a good start, again converting case,
+removing punctuation, but _expanding_ USPS abbreviations. We can also remove
+`invalid_city` values.
+
+```{r city_norm}
+aze <- mutate(
+  .data = aze, across(
+    .cols = ends_with("_city"),
+    .fns = list(norm = normal_city),
+    abbs = usps_city,
+      states = c("AZ", "DC", "ARIZONA"),
+      na = invalid_city,
+      na_rep = TRUE
+  )
+)
+```
+
+#### Swap
+
+We can further improve normalization by comparing our normalized value
+against the _expected_ value for that record's state abbreviation and ZIP code.
+If the normalized value is either an abbreviation for or very similar to the
+expected value, we can confidently swap those two.
+
+```{r city_swap}
+aze <- aze %>% 
+  left_join(
+    y = zipcodes,
+    by = c(
+      "payee_state_norm" = "state",
+      "payee_zip_norm" = "zip"
+    )
+  ) %>% 
+  rename(city_match = city) %>% 
+  mutate(
+    match_abb = is_abbrev(payee_city_norm, city_match),
+    match_dist = str_dist(payee_city_norm, city_match),
+    payee_city_swap = if_else(
+      condition = !is.na(match_dist) & (match_abb | match_dist == 1),
+      true = city_match,
+      false = payee_city_norm
+    )
+  ) %>% 
+  select(
+    -city_match,
+    -match_dist,
+    -match_abb
+  )
+```
+
+#### Refine
+
+The [OpenRefine][or] algorithms can be used to group similar strings and replace
+the less common versions with their most common counterpart. This can greatly
+reduce inconsistency, but with low confidence; we will only keep any refined
+strings that have a valid city/state/zip combination.
+
+[or]: https://openrefine.org/
+
+```{r city_refine}
+good_refine <- aze %>% 
+  mutate(
+    payee_city_refine = payee_city_swap %>% 
+      key_collision_merge() %>% 
+      n_gram_merge(numgram = 1)
+  ) %>% 
+  filter(payee_city_refine != payee_city_swap) %>% 
+  inner_join(
+    y = zipcodes,
+    by = c(
+      "payee_city_refine" = "city",
+      "payee_state_norm" = "state",
+      "payee_zip_norm" = "zip"
+    )
+  )
+```
+
+```{r city_count, echo=FALSE}
+good_refine %>%
+  count(
+    payee_state_norm, 
+    payee_zip_norm, 
+    payee_city_swap, 
+    payee_city_refine,
+    sort = TRUE
+  )
+```
+
+Then we can join the refined values back to the database.
+
+```{r city_join}
+aze <- aze %>% 
+  left_join(good_refine, by = names(aze)) %>% 
+  mutate(payee_city_refine = coalesce(payee_city_refine, payee_city_swap))
+```
+
+#### Progress
+
+```{r city_recheck}
+many_city <- c(valid_city, extra_city)
+aze %>% 
+  filter(payee_city_refine %out% many_city) %>% 
+  count(payee_city_refine, payee_state_norm, payee_zip_norm, sort = TRUE) %>% 
+  drop_na()
+```
+
+```{r city_remove}
+aze$payee_city_refine <- na_in(
+  x = aze$payee_city_refine, 
+  y = c("<MISSING VALUE>", "AZ")
+)
+```
+
+```{r city_increase}
+many_city <- c(
+  many_city,
+  "FARMINGTON HILLS",
+  "SHELBY TOWNSHIP",
+  "SADDLEBROOKE",
+  "DESERT HILLS"
+)
+```
+
+```{r city_progress, echo=FALSE}
+progress <- progress_table(
+  str_to_upper(aze$payee_city),
+  aze$payee_city_norm,
+  aze$payee_city_swap,
+  aze$payee_city_refine,
+  compare = many_city
+) %>% mutate(stage = as_factor(stage))
+kable(progress, digits = 3)
+```
+
+You can see how the percentage of valid values increased with each stage.
+
+```{r bar_progress, echo=FALSE}
+raw_in <- percent(prop_in(aze$payee_city, valid_city))
+progress %>% 
+  ggplot(aes(x = stage, y = prop_in)) +
+  geom_hline(yintercept = 0.99) +
+  geom_col(fill = dark2["purple"]) +
+  coord_cartesian(ylim = c(0.75, 1)) +
+  scale_y_continuous(labels = percent) +
+  labs(
+    title = "Arizona City Normalization Progress",
+    subtitle = glue("Raw at {raw_in} before conversion to uppercase"),
+    x = "Stage",
+    y = "Percent Valid"
+  )
+```
+
+More importantly, the number of distinct values decreased each stage. We were
+able to confidently change many distinct invalid values to their valid
+equivalent.
+
+```{r bar_distinct, echo=FALSE}
+progress %>% 
+  select(
+    stage, 
+    all = n_distinct,
+    bad = n_diff
+  ) %>% 
+  mutate(good = all - bad) %>% 
+  pivot_longer(c("good", "bad")) %>% 
+  mutate(name = name == "good") %>% 
+  ggplot(aes(x = stage, y = value)) +
+  geom_col(aes(fill = name)) +
+  scale_fill_brewer(palette = "Dark2", direction = -1) +
+  scale_y_continuous(labels = comma) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "Arizona City Normalization Progress",
+    subtitle = "Distinct values, valid and invalid",
+    x = "Stage",
+    y = "Distinct Values",
+    fill = "Valid"
+  )
+```
+
+## Conclude
+
+Before exporting, we can remove the intermediary normalization columns and
+rename all added variables with the `_clean` suffix.
+
+```{r clean_select}
+aze <- aze %>% 
+  select(
+    -payee_city_norm,
+    -payee_city_swap,
+    payee_city_clean = payee_city_refine
+  ) %>% 
+  rename_all(~str_replace(., "_norm", "_clean")) %>% 
+  rename_all(~str_remove(., "_raw"))
+```
+
+```{r clean_glimpse}
+glimpse(sample_n(aze, 50))
+```
+
+1. There are `r comma(nrow(aze))` records in the database.
+1. There are `r comma(sum(aze$dupe_flag))` duplicate records in the database.
+1. The range and distribution of `amount` and `date` seem reasonable.
+1. There are `r comma(sum(aze$na_flag))` records missing key variables.
+1. Consistency in geographic data has been improved with `campfin::normal_*()`.
+1. The 4-digit `year` variable has been created with `lubridate::year()`.
+
+## Export
+
+Now the file can be saved on disk for upload to the Accountability server.
+
+```{r clean_dir}
+clean_dir <- dir_create(here("az", "expends", "data", "clean"))
+clean_path <- path(clean_dir, "az_expends_clean.csv")
+write_csv(aze, clean_path, na = "")
+file_size(clean_path)
+file_encoding(clean_path) %>% 
+  mutate(across(path, path.abbrev))
+```
+
+## Upload
+
+Using the [duckr] R package, we can wrap around the [duck] command line tool to
+upload the file to the IRW server.
+
+[duckr]: https://github.com/kiernann/duckr
+[duck]: https://duck.sh/
+
+```{r clean_upload, eval=FALSE}
+# remotes::install_github("kiernann/duckr")
+s3_dir <- "s3:/publicaccountability/csv/"
+s3_path <- path(s3_dir, basename(clean_path))
+if (require(duckr)) {
+  duckr::duck_upload(clean_path, s3_path)
+}
+```

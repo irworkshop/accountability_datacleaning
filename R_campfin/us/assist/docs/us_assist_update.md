@@ -1,7 +1,7 @@
 Federal Financial Assistance Update
 ================
 Kiernan Nicholls
-2020-06-15 14:31:26
+2020-07-17 12:18:32
 
   - [Project](#project)
   - [Objectives](#objectives)
@@ -101,7 +101,7 @@ feature and should be run as such. The project also uses the dynamic
 ``` r
 # where does this document knit?
 here::here()
-#> [1] "/home/kiernan/Code/accountability_datacleaning/R_campfin"
+#> [1] "/home/kiernan/Code/tap/R_campfin"
 ```
 
 ## Data
@@ -148,13 +148,13 @@ files.
 ``` r
 zip_dir <- dir_create(here("us", "assist", "data", "zip"))
 base_url <- "https://files.usaspending.gov/award_data_archive/"
-fin_files <- glue("FY{year(today())}_All_Assistance_Full_20200612.zip")
+fin_files <- "FY2020_All_Assistance_Full_20200713.zip"
 fin_urls <- str_c(base_url, fin_files)
 fin_zips <- path(zip_dir, fin_files)
 ```
 
-    #> [1] "https://files.usaspending.gov/award_data_archive/FY2020_All_Assistance_Full_20200612.zip"
-    #> [1] "~/us/assist/data/zip/FY2020_All_Assistance_Full_20200612.zip"
+    #> [1] "https://files.usaspending.gov/award_data_archive/FY2020_All_Assistance_Full_20200713.zip"
+    #> [1] "~/us/assist/data/zip/FY2020_All_Assistance_Full_20200713.zip"
 
 We also need to add the records for spending and corrections made since
 this file was last updated. This is information is crucial, as it
@@ -171,7 +171,7 @@ contains the most recent data. This information can be found in the
 > download data prior to FY 2008, visit our Custom Award Data page.
 
 ``` r
-delta_file <- "FY(All)_All_Assistance_Delta_20200612.zip"
+delta_file <- "FY(All)_All_Assistance_Delta_20200713.zip"
 delta_url <- str_c(base_url, delta_file)
 delta_zip <- path(zip_dir, delta_file)
 ```
@@ -187,7 +187,7 @@ downloading.
 #> # A tibble: 1 x 2
 #>   url                                            size
 #>   <chr>                                   <fs::bytes>
-#> 1 FY2020_All_Assistance_Full_20200612.zip        519M
+#> 1 FY2020_All_Assistance_Full_20200713.zip        567M
 ```
 
 ``` r
@@ -254,7 +254,7 @@ dict <- read_excel(
 usa_names <- names(vroom(fin_paths[which.min(file_size(fin_paths))], n_max = 0))
 # get cols from hhs data
 mean(usa_names %in% dict$award_element)
-#> [1] 0.5425532
+#> [1] NaN
 dict %>% 
   filter(award_element %in% usa_names) %>% 
   select(award_element, definition) %>% 
@@ -265,18 +265,8 @@ dict %>%
   kable()
 ```
 
-| award\_element                              | definition                                                                |
-| :------------------------------------------ | :------------------------------------------------------------------------ |
-| modification\_number                        | The identifier of an action being reported that indicates the specific s… |
-| award\_id\_uri                              | Unique Record Identifier. An agency defined identifier that (when provid… |
-| sai\_number                                 | A number assigned by state (as opposed to federal) review agencies to th… |
-| non\_federal\_funding\_amount               | The amount of the award funded by non-Federal source(s), in dollars. Pro… |
-| face\_value\_of\_loan                       | The face value of the direct loan or loan guarantee.                      |
-| period\_of\_performance\_start\_date        | The date on which, for the award referred to by the action being reporte… |
-| period\_of\_performance\_current\_end\_date | The current date on which, for the award referred to by the action being… |
-| awarding\_agency\_code                      | A department or establishment of the Government as used in the Treasury … |
-| awarding\_office\_code                      | Identifier of the level n organization that awarded, executed or is othe… |
-| funding\_agency\_code                       | The 3-digit CGAC agency code of the department or establishment of the G… |
+| award\_element | definition |
+| :------------- | :--------- |
 
 ## Read
 
@@ -285,10 +275,10 @@ them all at once into a single data file for exploration and wrangling.
 
 ``` r
 length(fin_paths)
-#> [1] 6
+#> [1] 0
 # total file sizes
 sum(file_size(fin_paths))
-#> 5.15G
+#> 0
 # avail local memory
 as_fs_bytes(str_extract(system("free", intern = TRUE)[2], "\\d+"))
 #> 31.4M
@@ -421,14 +411,14 @@ for (f in c(fin_paths, delta_paths)) {
 
 ## Check
 
-In the end, 7 files were read and checked.
+In the end, 8 files were read and checked.
 
 ``` r
 all_paths <- dir_ls(raw_dir)
 length(all_paths)
-#> [1] 7
+#> [1] 8
 sum(file_size(all_paths))
-#> 5.59G
+#> 5.97G
 ```
 
 Now we can read the `spend_check.csv` text file to see the statistics
@@ -454,11 +444,14 @@ all_checks %>%
 #> # A tibble: 1 x 10
 #>       nrow  ncol  type start      end        missing  zero  city state   zip
 #>      <dbl> <dbl> <dbl> <date>     <date>       <dbl> <dbl> <dbl> <dbl> <dbl>
-#> 1 66849136  34.5  9.96 2002-04-08 2020-09-30 0.00556 0.242 0.991  1.00 0.999
+#> 1 61879267  29.3  9.94 2006-01-25 2020-09-30 0.00395 0.244 0.991  1.00 0.999
 ```
 
 ``` r
 per_day <- all_checks %>% 
+  group_by(file) %>% 
+  arrange(desc(nrow)) %>% 
+  slice(1) %>% 
   group_by(fiscal) %>% 
   summarise(nrow = sum(nrow)) %>% 
   mutate(per = nrow/365)
@@ -543,19 +536,13 @@ And here we have the total checks for every file.
 | `FY2020_5.csv`  | 74,967    | 2019-10-01 | 2019-10-04 |       0 | 27.3% | 99.5% | 100.0% | 100.0% |
 | `FY(All)_1.csv` | 985,905   | 2007-07-13 | 2020-09-30 |       0 | 41.3% | 99.7% | 100.0% | 100.0% |
 | `FY(All)_1.csv` | 985,905   | 2007-07-13 | 2020-09-30 |       0 | 41.3% | 99.7% | 100.0% | 100.0% |
-| `FY2020_1.csv`  | 1,000,000 | 2020-01-31 | 2020-09-30 |   36486 | 35.5% | 99.8% | 100.0% | 100.0% |
-| `FY2020_2.csv`  | 1,000,000 | 2019-11-27 | 2020-01-31 |   37374 | 40.0% | 99.7% | 100.0% | 100.0% |
-| `FY2020_3.csv`  | 1,000,000 | 2019-10-09 | 2019-11-27 |   93002 | 25.0% | 99.6% | 100.0% | 100.0% |
-| `FY2020_4.csv`  | 1,000,000 | 2019-10-08 | 2019-10-09 |    1549 | 0.8%  | 99.4% | 100.0% | 100.0% |
-| `FY2020_5.csv`  | 906,004   | 2019-10-01 | 2019-10-08 |    7933 | 3.7%  | 99.4% | 100.0% | 100.0% |
-| `FY(All)_1.csv` | 441,374   | 2002-04-08 | 2020-05-11 |    6745 | 38.3% | 99.8% | 100.0% | 100.0% |
-| `FY2020_1.csv`  | 1,000,000 | 2020-02-26 | 2020-09-30 |   28742 | 27.2% | 99.7% | 100.0% | 100.0% |
-| `FY2020_2.csv`  | 1,000,000 | 2019-12-20 | 2020-02-26 |   32847 | 38.9% | 99.8% | 100.0% | 100.0% |
-| `FY2020_3.csv`  | 1,000,000 | 2019-10-31 | 2019-12-20 |   72964 | 28.5% | 99.6% | 100.0% | 100.0% |
-| `FY2020_4.csv`  | 1,000,000 | 2019-10-08 | 2019-10-31 |   39582 | 12.4% | 99.5% | 100.0% | 100.0% |
-| `FY2020_5.csv`  | 1,000,000 | 2019-10-08 | 2019-10-08 |    1095 | 0.4%  | 99.4% | 100.0% | 100.0% |
-| `FY2020_6.csv`  | 327,464   | 2019-10-01 | 2019-10-08 |    7231 | 9.5%  | 99.5% | 100.0% | 100.0% |
-| `FY(All)_1.csv` | 432,293   | 2010-09-30 | 2020-06-10 |    6117 | 14.8% | 99.7% | 100.0% | 100.0% |
+| `FY2020_1.csv`  | 1,000,000 | 2020-03-18 | 2020-09-30 |   43897 | 25.6% | 99.7% | 100.0% | 100.0% |
+| `FY2020_2.csv`  | 1,000,000 | 2020-01-07 | 2020-03-18 |   37265 | 43.5% | 99.8% | 100.0% | 100.0% |
+| `FY2020_3.csv`  | 1,000,000 | 2019-11-11 | 2020-01-07 |   54806 | 33.0% | 99.7% | 100.0% | 100.0% |
+| `FY2020_4.csv`  | 1,000,000 | 2019-10-09 | 2019-11-11 |   62183 | 16.6% | 99.5% | 100.0% | 100.0% |
+| `FY2020_5.csv`  | 1,000,000 | 2019-10-08 | 2019-10-09 |    1397 | 0.6%  | 99.4% | 100.0% | 100.0% |
+| `FY2020_6.csv`  | 701,666   | 2019-10-01 | 2019-10-08 |    7675 | 4.7%  | 99.4% | 100.0% | 100.0% |
+| `FY(All)_1.csv` | 435,600   | 2006-01-25 | 2020-07-10 |   37432 | 28.8% | 99.8% | 100.0% | 100.0% |
 
 ## Delta
 
@@ -581,10 +568,11 @@ new_keys <- dir_ls(raw_dir, regex = "\\d.csv$") %>%
   map_df(select, key)
 new_keys <- unique(as_vector(new_keys))
 length(new_keys)
-#> [1] 4773661
+#> [1] 4939470
 mean(old_delta$key %in% new_keys)
-#> [1] 0.9931058
+#> [1] 0.9930642
 old_delta <- filter(old_delta, key %out% new_keys)
 nrow(old_delta)
-#> [1] 6797
+#> [1] 6838
+write_csv(old_delta, new_delta_path, na = "")
 ```
