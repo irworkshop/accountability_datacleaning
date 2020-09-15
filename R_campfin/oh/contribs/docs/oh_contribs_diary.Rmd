@@ -80,16 +80,18 @@ pacman::p_load_gh("irworkshop/campfin")
 pacman::p_load(
   tidyverse, # data manipulation
   lubridate, # datetime strings
-  magrittr, # pipe operators
-  janitor, # dataframe clean
+  gluedown, # printing markdown
+  janitor, # clean data frames
   refinr, # cluster and merge
   scales, # format strings
+  aws.s3, # upload to AWS
   knitr, # knit documents
-  rvest, # read html pages
   vroom, # read files fast
+  rvest, # html scraping
   glue, # combine strings
-  here, # relative storage
-  fs # search storage 
+  here, # relative paths
+  httr, # http requests
+  fs # local storage 
 )
 ```
 
@@ -117,7 +119,7 @@ a file transfer page (FTP) to download data in bulk rather than via searches.
 >  Welcome to the Ohio Secretary of State's Campaign Finance File Transfer Page.
 This page was developed to allow users to obtain large sets of data faster than
 the normal query process. At this page you can download files of pre-queried
-data, such as all candidate contributions for a particular year or a list of all
+data, such as all candidate Contributions for a particular year or a list of all
 active political action committees registered with the Secretary of State. In
 addition, campaign finance data filed prior to 2000 is available only on this
 site. These files contain all relevant and frequently requested information. If
@@ -140,7 +142,7 @@ boxes for whichever you chose telling the computer where you want the files
 saved. The end result will be a `.csv` file that you can open in Microsoft Excel
 or some other database application.
 
-We can download all the contribution files by reading the FTP website itself
+We can download all the Expenditure files by reading the FTP website itself
 and scraping each of the "Download" links in the table. This process needs to
 be repeated for candidates, PACs, and parties.
 
@@ -168,7 +170,7 @@ for (i in seq_along(t)) {
     html_nodes("a") %>%
     html_attr("href") %>%
     str_subset("f\\?p") %>%
-    extract(con_index) %>%
+    `[`(con_index) %>%
     append(ftp_params)
 }
 ```
@@ -192,10 +194,18 @@ wget <- function(url, dir) {
 ```{r raw_download}
 raw_dir <- dir_create(here("oh", "contribs", "data", "raw"))
 raw_urls <- paste0(ftp_base, ftp_params)
-if (length(dir_ls(raw_dir)) < 82) {
+if (length(dir_ls(raw_dir)) < 84) {
   map(raw_urls, wget, raw_dir)
 }
-raw_paths <- dir_ls(raw_dir)
+```
+
+```{r raw_info}
+raw_info <- dir_info(raw_dir)
+sum(raw_info$size)
+(raw_files <- raw_info %>%
+  select(file_path = path, size, modification_time) %>% 
+  mutate(file_id = as.character(row_number()), .before = 1) %>% 
+  mutate(across(file_path, basename)))
 ```
 
 ### Read
@@ -208,28 +218,39 @@ file to be loaded because of a limit on the number of available rows. For this
 reason, it is advised that a database application be utilized to load and work
 with the data available at this site...
 
-We can read all `r length(raw_paths)` raw CSV files into a single data frame
-using `purrr::map_df()` and `readr::read_csv()`.
+We can read all `r nrow(raw_info)` raw CSV files into a single data frame
+using `purrr::map_df()` and `readr::read_csv()`. There are some columns that
+only exist in the files containing contributions from a PAC, party, etc. Most
+columns are shared across all files, so when we join them together into a single
+data frame, empty rows will be created for those unique columns.
 
 ```{r raw_read}
 ohc <- map_df(
-  .x = raw_paths,
+  .x = raw_info$path,
   .f = read_csv,
+  .id = "file_id",
   na = c("", "NA", "N/A"),
-  col_types = cols(.default = "c")
+  col_types = cols(
+    .default = col_character(),
+    MASTER_KEY = col_integer(),
+    RPT_YEAR = col_integer(),
+    REPORT_KEY = col_integer(),
+    FILE_DATE = col_date_usa(),
+    AMOUNT = col_double(),
+    EVENT_DATE = col_date_usa(),
+    INKIND = col_logical(),
+    DISTRICT = col_integer()
+  )
 )
 ```
 
-```{r raw_parse}
-ohc <- ohc %>% 
-  mutate_at(vars(FILE_DATE), parse_date, "%m/%d/%Y") %>% 
-  mutate_at(vars(AMOUNT), parse_double) %>% 
-  mutate_at(vars(MASTER_KEY, RPT_YEAR, REPORT_KEY, DISTRICT), parse_integer) 
-```
-
 ```{r raw_rename, echo=FALSE}
+old_names <- names(ohc)[-1]
 ohc <- ohc %>% 
-  clean_names() %>% 
+  clean_names() %>%
+  left_join(raw_files[, 1:2]) %>% 
+  select(-file_id) %>% 
+  mutate(across(rcv_event, `==`, "Y")) %>% 
   rename(
     rpt_desc = report_description,
     rpt_key = report_key,
@@ -239,59 +260,173 @@ ohc <- ohc %>%
     last = last_name,
     suffix = suffix_name,
     non_ind = non_individual,
-    pac_no = pac_reg_no,
     date = file_date,
     event = event_date,
-    occupation = emp_occupation,
-    inkind = inkind_description,
-    other_type = other_income_type,
     cand_first = candidate_first_name,
     cand_last = candidate_last_name
   )
 ```
 
+We can identify the transaction year and filer type from the source file name.
+
+```{r fil_types}
+fil_types <- ohc %>% 
+  count(file_path, sort = TRUE) %>% 
+  extract(
+    col = file_path,
+    into = c("file_type", "file_year"),
+    regex = "(?:ALL_)?(\\w{3})_CON_(\\d{4})\\.CSV",
+    remove = FALSE,
+    convert = TRUE
+  ) %>% 
+  mutate(
+    file_type = file_type %>% 
+      str_replace("CAC", "CAN") %>% 
+      str_replace("PPC", "PAR")
+  )
+```
+
+```{r fil_plot, echo=FALSE}
+fil_types %>% 
+  ggplot(aes(x = file_year, y = n)) +
+  geom_col(aes(fill = file_type)) +
+  scale_fill_brewer(palette = "Dark2", name = "Filer Type") +
+  theme(legend.position = "bottom") +
+  scale_y_continuous(labels = comma) +
+  scale_x_continuous(breaks = seq(1990, 2020, by = 2)) +
+  labs(
+    title = "Contributions by Filter Type",
+    x = "File Year",
+    y = "Count"
+  )
+```
+
+```{r fil_join}
+ohc <- left_join(ohc, fil_types[, -4], by = "file_path")
+```
+
 ## Explore
 
+There are `r comma(nrow(ohc))` rows of `r ncol(ohc)` columns.
+
 ```{r glimpse}
-head(ohc)
+glimpse(ohc)
 tail(ohc)
-glimpse(sample_n(ohc, 20))
 ```
 
 ### Missing
+
+Columns vary in their degree of missing values.
 
 ```{r na_count}
 col_stats(ohc, count_na)
 ```
 
+We can flag records missing a name, date, or amount after uniting the multiple
+contributor name columns into a single variable.
+
 ```{r na_flag}
 ohc <- ohc %>% 
   unite(
-    first, middle, last, non_ind,
-    col = con_name,
+    first, middle, last, suffix, non_ind,
+    col = pay_name,
     sep = " ",
+    remove = FALSE,
     na.rm = TRUE
   ) %>% 
-  flag_na(date, con_name, amount, com_name)
-
-sum(ohc$na_flag)
-percent(mean(ohc$na_flag), 0.01)
+  mutate(across(pay_name, na_if, "")) %>% 
+  relocate(pay_name, .after = last_col()) %>% 
+  flag_na(date, pay_name, amount, com_name)
 ```
 
-### Continuous
+`r percent(mean(ohc$na_flag), 0.01)` of rows are missing a key variable.
 
-#### Amounts
+```{r na_prop}
+mean(ohc$na_flag)
+ohc %>% 
+  filter(na_flag) %>% 
+  select(date, pay_name, amount, com_name)
+```
 
-```{r ammount_summary}
+### Duplicate
+
+There are actually quite a few duplicate values in the data. While it's possible
+for the same person to contribute the same amount to the same committee on the
+same day, we can flag these values anyway.
+
+```{r dupe_id}
+ohc <- mutate(ohc, row = row_number(), .before = 1)
+```
+
+```{r dupe_write}
+dupe_file <- here("oh", "contribs", "dupes.txt")
+if (!file_exists(dupe_file)) {
+  ohs <- keep(group_split(ohc, date), ~nrow(.) > 1)
+  pb <- txtProgressBar(max = length(ohs), style = 3)
+  for (i in seq_along(ohs)) {
+    # check dupes from both ends
+    d1 <- duplicated(ohs[[i]][, -1], fromLast = FALSE)
+    d2 <- duplicated(ohs[[i]][, -1], fromLast = TRUE)
+    # append to disk
+    dupes <- tibble(row = ohs[[i]]$row, dupe_flag = d1 | d2)
+    dupes <- filter(dupes, dupe_flag)
+    write_csv(dupes, dupe_file, append = file_exists(dupe_file))
+    rm(d1, d2, dupes)
+    ohs[[i]] <- NA
+    if (i %% 100 == 0) {
+      Sys.sleep(1)
+      flush_memory(1)
+    }
+    setTxtProgressBar(pb, value = i)
+  }
+  rm(ohs)
+}
+```
+
+```{r dupe_read}
+dupes <- read_csv(dupe_file)
+ohc <- ohc %>% 
+  left_join(dupes) %>% 
+  select(-row) %>% 
+  mutate(dupe_flag = !is.na(dupe_flag))
+```
+
+After all that work, there are `r comma(sum(ohc$dupe_flag))` duplicate records
+
+`r percent(mean(ohc$dupe_flag), 0.1)` of rows are duplicated at least once.
+
+```{r dupe_view}
+ohc %>% 
+  filter(dupe_flag, date > "2010-01-01") %>% 
+  arrange(pay_name) %>% 
+  select(date, pay_name, amount, com_name)
+```
+
+```{r echo=FALSE}
+rm(dupes)
+```
+
+### Amounts
+
+```{r amount_summary}
 summary(ohc$amount)
+prop_na(ohc$amount)
 mean(ohc$amount <= 0, na.rm = TRUE)
 ```
 
+There are the smallest and largest transactions.
+
+```{r amount_minmax}
+glimpse(ohc[c(which.min(ohc$amount), which.max(ohc$amount)), ])
+```
+
+The `amount` values are logarithmically normally distributed.
+
 ```{r hist_amount, echo=FALSE}
 ohc %>%
-  filter(amount > 1) %>% 
+  filter(amount > 1, amount <= 1e6) %>% 
   ggplot(aes(amount)) +
-  geom_histogram(fill = dark2["purple"]) +
+  geom_histogram(fill = dark2["purple"], bins = 20) +
   scale_y_continuous(labels = comma) +
   scale_x_continuous(
     breaks = c(1 %o% 10^(0:6)),
@@ -305,11 +440,15 @@ ohc %>%
   )
 ```
 
-#### Dates
+### Dates
+
+We can create a new column with a 4-digit year from the `date`.
 
 ```{r date_year}
 ohc <- mutate(ohc, year = year(date))
 ```
+
+There are few `date` values with typos making them really small or large.
 
 ```{r date_range}
 min(ohc$date, na.rm = TRUE)
@@ -318,8 +457,20 @@ max(ohc$date, na.rm = TRUE)
 sum(ohc$date > today(), na.rm = TRUE)
 ```
 
+For dates outside the expected range, we will rely instead on the file year.
+
+```{r date_flag}
+ohc <- mutate(
+  .data = ohc, 
+  date_flag = is.na(date) | date > today() | year < 1990,
+  year = if_else(date_flag, file_year, as.integer(year))
+)
+mean(ohc$date_flag)
+```
+
 ```{r bar_year, echo=FALSE}
 ohc %>% 
+  filter(!date_flag) %>% 
   count(year) %>% 
   mutate(even = is_even(year)) %>% 
   ggplot(aes(x = year, y = n)) +
@@ -327,7 +478,6 @@ ohc %>%
   scale_fill_brewer(palette = "Dark2") +
   scale_y_continuous(labels = comma) +
   scale_x_continuous(breaks = seq(1990, 2020, by = 2)) +
-  coord_cartesian(xlim = c(1990, 2020)) +
   theme(legend.position = "bottom") +
   labs(
     title = "Ohio Contributions by Year",
@@ -352,8 +502,8 @@ will force consistence case, remove punctuation, and abbreviate official
 USPS suffixes.
 
 ```{r address_norm}
-ohc <- mutate(
-  .data = ohc,
+oh_addr_norm <- tibble(
+  address = unique(ohc$address),
   address_norm = normal_address(
     address = address,
     abbs = usps_street,
@@ -362,11 +512,12 @@ ohc <- mutate(
 )
 ```
 
-```{r address_view}
-ohc %>% 
-  select(contains("address")) %>% 
-  distinct() %>% 
-  sample_n(10)
+```{r address_join}
+ohc <- left_join(ohc, oh_addr_norm, by = "address")
+```
+
+```{r address_view, echo=FALSE}
+oh_addr_norm
 ```
 
 ### ZIP
@@ -395,12 +546,16 @@ progress_table(
 
 ### State
 
-```{r}
-ohc <- mutate(ohc, state_norm = state)
+```{r state_norm}
+prop_in(ohc$state, valid_state)
+ohc <- mutate(ohc, state_norm = normal_state(state))
 ohc$state_norm[which(ohc$state == "0H")] <- "OH"
 ohc$state_norm[which(ohc$state == "IH")] <- "OH"
 ohc$state_norm[which(ohc$state == "PH")] <- "OH"
 ohc$state_norm[which(ohc$state == "O")]  <- "OH"
+ohc$state_norm[str_which(ohc$state, "^O\\W$")]  <- "OH"
+ohc$state_norm[str_which(ohc$state, "^\\WH$")]  <- "OH"
+prop_in(ohc$state_norm, valid_state)
 ```
 
 ### City
@@ -421,7 +576,7 @@ ohc <- mutate(
     city = city, 
     abbs = usps_city,
     states = c("OH", "DC", "OHIO"),
-    na = invalid_city,
+    na = c(invalid_city, "UNAVAILABLE"),
     na_rep = TRUE
   )
 )
@@ -485,7 +640,8 @@ good_refine <- ohc %>%
       "state_norm" = "state",
       "zip_norm" = "zip"
     )
-  )
+  ) %>% 
+  distinct()
 ```
 
 ```{r city_count, echo=FALSE}
@@ -502,95 +658,36 @@ good_refine %>%
 Then we can join the refined values back to the database.
 
 ```{r city_join}
+row_pre <- nrow(ohc)
 ohc <- ohc %>% 
-  left_join(good_refine) %>% 
+  left_join(good_refine, by = names(ohc)) %>% 
   mutate(city_refine = coalesce(city_refine, city_swap))
 ```
 
-#### Check
-
-We can use the `campfin::check_city()` function to pass the remaining unknown
-`city_refine` values (and their `state_norm`) to the Google Geocode API. The
-function returns the name of the city or locality which most associated with
-those values.
-
-This is an easy way to both check for typos and check whether an unknown
-`city_refine` value is actually a completely acceptable neighborhood, census
-designated place, or some other locality not found in our `valid_city` vector
-from our `zipcodes` database.
-
-First, we'll filter out any known valid city and aggregate the remaining records
-by their city and state. Then, we will only query those unknown cities which
-appear at least ten times.
-
-```{r check_filter}
-ohc_out <- ohc %>% 
-  filter(city_refine %out% c(valid_city, extra_city)) %>% 
-  count(city_refine, state_norm, sort = TRUE) %>% 
-  drop_na() %>% 
-  slice(1:1000)
-
-sum(ohc_out$n) / nrow(ohc)
-```
-
-Passing these values to `campfin::check_city()` with `purrr::pmap_dfr()` will
-return a single tibble of the rows returned by each city/state combination.
-
-First, we'll check to see if the API query has already been done and a file
-exist on disk. If such a file exists, we can read it using `readr::read_csv()`.
-If not, the query will be sent and the file will be written using
-`readr::write_csv()`.
-
-```{r check_send}
-check_file <- here("oh", "contribs", "data", "api_check.csv")
-if (file_exists(check_file)) {
-  # checked for saved file
-  check <- read_csv(check_file)
-} else {
-  check <- pmap_dfr(
-    .l = list(
-      ohc_out$city_refine, 
-      ohc_out$state_norm
-    ), 
-    .f = check_city, 
-    key = Sys.getenv("GEOCODE_KEY"), 
-    guess = TRUE
-  ) %>% 
-    mutate(guess = coalesce(guess_city, guess_place)) %>% 
-    select(-guess_city, -guess_place)
-  # save for replication
-  write_csv(check, check_file)
+```{r city_stop}
+if (row_pre != nrow(ohc)) {
+  stop("extra rows were added")
 }
-```
-
-Any city/state combination with a `check_city_flag` equal to `TRUE` returned a
-matching city string from the API, indicating this combination is valid enough
-to be ignored.
-
-```{r check_accept}
-valid_locality <- unique(check$guess[check$check_city_flag])
-```
-
-Then we can perform some simple comparisons between the queried city and the
-returned city. If they are extremely similar, we can accept those returned
-locality strings and add them to our list of accepted additional localities.
-
-```{r check_compare}
-valid_locality <- check %>% 
-  filter(!check_city_flag) %>% 
-  mutate(
-    abb = is_abbrev(original_city, guess),
-    dist = str_dist(original_city, guess)
-  ) %>%
-  filter(abb | dist <= 3) %>% 
-  pull(guess) %>% 
-  c(valid_locality)
 ```
 
 #### Progress
 
+```{r city_recheck}
+many_city <- c(valid_city, extra_city)
+ohc %>% 
+  filter(city_refine %out% many_city) %>% 
+  count(city_refine, state_norm, zip_norm, sort = TRUE) %>% 
+  drop_na() %>% 
+  left_join(
+    y = zipcodes, 
+    by = c(
+      "zip_norm" = "zip", 
+      "state_norm" = "state"
+    )
+  )
+```
+
 ```{r city_progress, echo=FALSE}
-many_city <- c(valid_city, extra_city, valid_locality)
 progress <- progress_table(
   ohc$city_raw,
   ohc$city_norm,
@@ -656,11 +753,12 @@ ohc <- ohc %>%
     -city_swap,
     city_clean = city_refine
   ) %>% 
+  rename_all(~str_remove(., "_raw")) %>% 
   rename_all(~str_replace(., "_norm", "_clean"))
 ```
 
 ```{r clean_glimpse}
-glimpse(sample_n(ohc, 20))
+glimpse(sample_n(ohc, 50))
 ```
 
 1. There are `r comma(nrow(ohc))` records in the database.
@@ -673,8 +771,94 @@ glimpse(sample_n(ohc, 20))
 
 ```{r clean_dir}
 clean_dir <- dir_create(here("oh", "contribs", "data", "clean"))
-clean_path <- path(clean_dir, "oh_contribs_clean.csv")
+clean_path <- path(clean_dir, "oh_expends_clean.csv")
 write_csv(ohc, clean_path, na = "")
 file_size(clean_path)
-guess_encoding(clean_path)
+file_encoding(clean_path) %>% 
+  mutate(across(path, path.abbrev))
+```
+
+## Upload
+
+We can use the `aws.s3::put_object()` to upload the text file to the IRW server.
+
+```{r s3_upload, eval=TRUE}
+s3_path <- path("csv", basename(clean_path))
+if (!object_exists(s3_path, "publicaccountability")) {
+  put_object(
+    file = clean_path,
+    object = s3_path, 
+    bucket = "publicaccountability",
+    acl = "public-read",
+    multipart = TRUE,
+    show_progress = TRUE
+  )
+}
+```
+
+```{r s3_size}
+r <- head_object(s3_path, "publicaccountability")
+as_fs_bytes(attr(r, "content-length"))
+```
+
+## Dictionary
+
+The following table describes the variables in our final exported file:
+
+```{r dict_make, echo=FALSE}
+dict_raw <- tibble(
+  var = md_code(names(ohc)),
+  old = c(md_code(old_names), rep("",  ncol(ohc) - length(old_names))),
+  type = md_code(map_chr(ohc, typeof)),
+  def = c(
+    "Spending committee name",
+    "Master key",
+    "Year report filed",
+    "Unique report key",
+    "Type of report filed",
+    "Description of report",
+    "Full contributor name",
+    "Contributor first name",
+    "Contributor middle name",
+    "Contributor last name",
+    "Contributor name suffix",
+    "Contributor non-individual name",
+    "PAC registration number",
+    "Contributor street address",
+    "Contributor city name",
+    "Contributor state abbreviation",
+    "Contributor ZIP+4 code",
+    "Date contribution made",
+    "Contribution amount",
+    "Date fundraising event hosted",
+    "Employeer occupation",
+    "Non-contribution income type",
+    "Flag indicating RCV(?) event",
+    "Receiving candidate first name",
+    "Receiving candidate last name",
+    "Office sought by candidate",
+    "District sought by candidate",
+    "Candidate political party",
+    "Data source file name",
+    "Data source file type (Candidate, PAC, Party)",
+    "Data source file year",
+    "Combined paying contributior name",
+    "Flag for missing date, amount, or name",
+    "Flag for completely duplicated record",
+    "Calendar year of contribution date",
+    "Flag indicating past or future date",
+    "Normalized combined street address",
+    "Normalized 5-digit ZIP code",
+    "Normalized state abbreviation",
+    "Normalized city name"
+  )
+)
+```
+
+```{r dict_md, echo=FALSE}
+(dict_md <- kable(
+  x = dict_raw,
+  format = "markdown",
+  col.names = c("Column", "Original", "Type", "Definition")
+))
 ```
