@@ -1,7 +1,7 @@
 Ohio Contributions
 ================
 Kiernan Nicholls
-2020-09-14 23:01:07
+2020-09-15 12:44:11
 
   - [Project](#project)
   - [Objectives](#objectives)
@@ -126,7 +126,7 @@ State](https://www.ohiosos.gov/). The OH SOS offers a file transfer page
 > saved. The end result will be a `.csv` file that you can open in
 > Microsoft Excel or some other database application.
 
-We can download all the Expenditure files by reading the FTP website
+We can download all the Contribution files by reading the FTP website
 itself and scraping each of the “Download” links in the table. This
 process needs to be repeated for candidates, PACs, and parties.
 
@@ -895,16 +895,16 @@ glimpse(sample_n(ohc, 50))
 
 ``` r
 clean_dir <- dir_create(here("oh", "contribs", "data", "clean"))
-clean_path <- path(clean_dir, "oh_expends_clean.csv")
+clean_path <- path(clean_dir, "oh_contribs_clean.csv")
 write_csv(ohc, clean_path, na = "")
 file_size(clean_path)
 #> 3.11G
 file_encoding(clean_path) %>% 
   mutate(across(path, path.abbrev))
 #> # A tibble: 1 x 3
-#>   path                                          mime            charset 
-#>   <chr>                                         <chr>           <chr>   
-#> 1 ~/oh/contribs/data/clean/oh_expends_clean.csv application/csv us-ascii
+#>   path                                           mime            charset 
+#>   <chr>                                          <chr>           <chr>   
+#> 1 ~/oh/contribs/data/clean/oh_contribs_clean.csv application/csv us-ascii
 ```
 
 ## Upload

@@ -81,7 +81,6 @@ pacman::p_load(
   tidyverse, # data manipulation
   lubridate, # datetime strings
   gluedown, # printing markdown
-  magrittr, # pipe operators
   janitor, # clean data frames
   refinr, # cluster and merge
   scales, # format strings
@@ -171,7 +170,7 @@ for (i in seq_along(t)) {
     html_nodes("a") %>%
     html_attr("href") %>%
     str_subset("f\\?p") %>%
-    extract(con_index) %>%
+    `[`(con_index) %>%
     append(ftp_params)
 }
 ```
@@ -267,6 +266,44 @@ ohe <- ohe %>%
   )
 ```
 
+We can identify the transaction year and filer type from the source file name.
+
+```{r fil_types}
+fil_types <- ohe %>% 
+  count(file_path, sort = TRUE) %>% 
+  extract(
+    col = file_path,
+    into = c("file_type", "file_year"),
+    regex = "(?:ALL_)?(\\w{3})_EXP_(\\d{4})\\.CSV",
+    remove = FALSE,
+    convert = TRUE
+  ) %>% 
+  mutate(
+    file_type = file_type %>% 
+      str_replace("CAC", "CAN") %>% 
+      str_replace("PPC", "PAR")
+  )
+```
+
+```{r fil_plot, echo=FALSE}
+fil_types %>% 
+  ggplot(aes(x = file_year, y = n)) +
+  geom_col(aes(fill = file_type)) +
+  scale_fill_brewer(palette = "Dark2", name = "Filer Type") +
+  theme(legend.position = "bottom") +
+  scale_y_continuous(labels = comma) +
+  scale_x_continuous(breaks = seq(1990, 2020, by = 2)) +
+  labs(
+    title = "Contributions by Filter Type",
+    x = "File Year",
+    y = "Count"
+  )
+```
+
+```{r fil_join}
+ohe <- left_join(ohe, fil_types[, -4], by = "file_path")
+```
+
 ## Explore
 
 There are `r comma(nrow(ohe))` rows of `r ncol(ohe)` columns.
@@ -291,14 +328,14 @@ contributor name columns into a single variable.
 ohe <- ohe %>% 
   unite(
     first, middle, last, suffix, non_ind,
-    col = con_name,
+    col = pay_name,
     sep = " ",
     remove = FALSE,
     na.rm = TRUE
   ) %>% 
   mutate(across(where(is.character), na_if, "")) %>% 
-  relocate(con_name, .after = last_col()) %>% 
-  flag_na(date, con_name, amount, com_name)
+  relocate(pay_name, .after = last_col()) %>% 
+  flag_na(date, pay_name, amount, com_name)
 ```
 
 `r percent(mean(ohe$na_flag), 0.01)` of rows are missing a key variable.
@@ -307,7 +344,7 @@ ohe <- ohe %>%
 sum(ohe$na_flag)
 ohe %>% 
   filter(na_flag) %>% 
-  select(date, con_name, amount, com_name)
+  select(date, pay_name, amount, com_name)
 ```
 
 ### Duplicate
@@ -328,8 +365,8 @@ rm(d1, d2); flush_memory()
 ```{r dupe_view}
 ohe %>% 
   filter(dupe_flag) %>% 
-  arrange(date, con_name) %>% 
-  select(date, con_name, amount, com_name)
+  arrange(date, pay_name) %>% 
+  select(date, pay_name, amount, com_name)
 ```
 
 ### Amounts
@@ -730,6 +767,8 @@ dict_raw <- tibble(
     "District sought by candidate",
     "Candidate political party",
     "Data source file name",
+    "Data source file type",
+    "Data source file year",
     "Flag for missing date, amount, or name",
     "Flag for completely duplicated record",
     "Calendar year of contribution date",

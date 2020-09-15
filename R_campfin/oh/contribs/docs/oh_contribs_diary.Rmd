@@ -142,7 +142,7 @@ boxes for whichever you chose telling the computer where you want the files
 saved. The end result will be a `.csv` file that you can open in Microsoft Excel
 or some other database application.
 
-We can download all the Expenditure files by reading the FTP website itself
+We can download all the Contribution files by reading the FTP website itself
 and scraping each of the "Download" links in the table. This process needs to
 be repeated for candidates, PACs, and parties.
 
@@ -771,7 +771,7 @@ glimpse(sample_n(ohc, 50))
 
 ```{r clean_dir}
 clean_dir <- dir_create(here("oh", "contribs", "data", "clean"))
-clean_path <- path(clean_dir, "oh_expends_clean.csv")
+clean_path <- path(clean_dir, "oh_contribs_clean.csv")
 write_csv(ohc, clean_path, na = "")
 file_size(clean_path)
 file_encoding(clean_path) %>% 

@@ -1,7 +1,7 @@
 Ohio Expenditures
 ================
 Kiernan Nicholls
-2020-09-10 14:44:48
+2020-09-15 14:55:47
 
   - [Project](#project)
   - [Objectives](#objectives)
@@ -63,7 +63,6 @@ pacman::p_load(
   tidyverse, # data manipulation
   lubridate, # datetime strings
   gluedown, # printing markdown
-  magrittr, # pipe operators
   janitor, # clean data frames
   refinr, # cluster and merge
   scales, # format strings
@@ -155,7 +154,7 @@ for (i in seq_along(t)) {
     html_nodes("a") %>%
     html_attr("href") %>%
     str_subset("f\\?p") %>%
-    extract(con_index) %>%
+    `[`(con_index) %>%
     append(ftp_params)
 }
 ```
@@ -187,12 +186,12 @@ if (length(dir_ls(raw_dir)) < 84) {
 ``` r
 raw_info <- dir_info(raw_dir)
 sum(raw_info$size)
-#> 261M
+#> 283M
 (raw_files <- raw_info %>%
   select(file_path = path, size, modification_time) %>% 
   mutate(file_id = as.character(row_number()), .before = 1) %>% 
   mutate(across(file_path, basename)))
-#> # A tibble: 84 x 4
+#> # A tibble: 92 x 4
 #>    file_id file_path                   size modification_time  
 #>    <chr>   <chr>                <fs::bytes> <dttm>             
 #>  1 1       ALL_CAN_EXP_1994.CSV       1.44M 2020-09-10 10:19:18
@@ -205,7 +204,7 @@ sum(raw_info$size)
 #>  8 8       ALL_CAN_EXP_2001.CSV       3.03M 2020-09-10 10:19:14
 #>  9 9       ALL_CAN_EXP_2002.CSV       6.67M 2020-09-10 10:19:13
 #> 10 10      ALL_CAN_EXP_2003.CSV       3.55M 2020-09-10 10:19:13
-#> # … with 74 more rows
+#> # … with 82 more rows
 ```
 
 ### Read
@@ -219,7 +218,7 @@ sum(raw_info$size)
 > advised that a database application be utilized to load and work with
 > the data available at this site…
 
-We can read all 84 raw CSV files into a single data frame using
+We can read all 92 raw CSV files into a single data frame using
 `purrr::map_df()` and `readr::read_csv()`. There are some columns that
 only exist in the files containing contributions from a PAC, party, etc.
 Most columns are shared across all files, so when we join them together
@@ -246,14 +245,40 @@ ohe <- map_df(
 )
 ```
 
+We can identify the transaction year and filer type from the source file
+name.
+
+``` r
+fil_types <- ohe %>% 
+  count(file_path, sort = TRUE) %>% 
+  extract(
+    col = file_path,
+    into = c("file_type", "file_year"),
+    regex = "(?:ALL_)?(\\w{3})_EXP_(\\d{4})\\.CSV",
+    remove = FALSE,
+    convert = TRUE
+  ) %>% 
+  mutate(
+    file_type = file_type %>% 
+      str_replace("CAC", "CAN") %>% 
+      str_replace("PPC", "PAR")
+  )
+```
+
+![](../plots/fil_plot-1.png)<!-- -->
+
+``` r
+ohe <- left_join(ohe, fil_types[, -4], by = "file_path")
+```
+
 ## Explore
 
-There are 1,323,045 rows of 26 columns.
+There are 1,443,191 rows of 28 columns.
 
 ``` r
 glimpse(ohe)
-#> Rows: 1,323,045
-#> Columns: 26
+#> Rows: 1,443,191
+#> Columns: 28
 #> $ com_name   <chr> "OHIOANS WITH SHERROD BROWN", "OHIOANS WITH SHERROD BROWN", "FRIENDS OF GOVER…
 #> $ master_key <int> 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,…
 #> $ rpt_year   <int> 1994, 1994, 1994, 1994, 1994, 1994, 1994, 1994, 1994, 1994, 1994, 1994, 1994,…
@@ -280,8 +305,10 @@ glimpse(ohe)
 #> $ district   <int> 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,…
 #> $ party      <chr> "DEMOCRAT", "DEMOCRAT", "REPUBLICAN", "REPUBLICAN", "REPUBLICAN", "REPUBLICAN…
 #> $ file_path  <chr> "ALL_CAN_EXP_1994.CSV", "ALL_CAN_EXP_1994.CSV", "ALL_CAN_EXP_1994.CSV", "ALL_…
+#> $ file_type  <chr> "CAN", "CAN", "CAN", "CAN", "CAN", "CAN", "CAN", "CAN", "CAN", "CAN", "CAN", …
+#> $ file_year  <int> 1994, 1994, 1994, 1994, 1994, 1994, 1994, 1994, 1994, 1994, 1994, 1994, 1994,…
 tail(ohe)
-#> # A tibble: 6 x 26
+#> # A tibble: 6 x 28
 #>   com_name master_key rpt_year rpt_key rpt_desc desc  first middle last  suffix non_ind address
 #>   <chr>         <int>    <int>   <int> <chr>    <chr> <chr> <chr>  <chr> <chr>  <chr>   <chr>  
 #> 1 COLUMBI…      13710     2020  3.67e8 SEMIANN… 31-M… <NA>  <NA>   <NA>  <NA>   OHIO E… P. O. …
@@ -290,9 +317,9 @@ tail(ohe)
 #> 4 COLUMBI…      13710     2020  3.67e8 SEMIANN… 31-M… <NA>  <NA>   <NA>  <NA>   TIME W… P O BO…
 #> 5 WARREN …      15222     2020  3.65e8 POST-PR… 31-B… <NA>  <NA>   <NA>  <NA>   ERIN R… 1379 W…
 #> 6 WARREN …      15222     2020  3.65e8 POST-PR… 31-B… <NA>  <NA>   <NA>  <NA>   MORGAN… 2172 B…
-#> # … with 14 more variables: city <chr>, state <chr>, zip <chr>, date <date>, amount <dbl>,
+#> # … with 16 more variables: city <chr>, state <chr>, zip <chr>, date <date>, amount <dbl>,
 #> #   event <date>, purpose <chr>, inkind <lgl>, cand_first <chr>, cand_last <chr>, office <chr>,
-#> #   district <int>, party <chr>, file_path <chr>
+#> #   district <int>, party <chr>, file_path <chr>, file_type <chr>, file_year <int>
 ```
 
 ### Missing
@@ -301,7 +328,7 @@ Columns vary in their degree of missing values.
 
 ``` r
 col_stats(ohe, count_na)
-#> # A tibble: 26 x 4
+#> # A tibble: 28 x 4
 #>    col        class        n        p
 #>    <chr>      <chr>    <int>    <dbl>
 #>  1 com_name   <chr>        0 0       
@@ -310,26 +337,28 @@ col_stats(ohe, count_na)
 #>  4 rpt_key    <int>        0 0       
 #>  5 rpt_desc   <chr>        0 0       
 #>  6 desc       <chr>        0 0       
-#>  7 first      <chr>  1123558 0.849   
-#>  8 middle     <chr>  1298217 0.981   
-#>  9 last       <chr>  1122207 0.848   
-#> 10 suffix     <chr>  1316851 0.995   
-#> 11 non_ind    <chr>   203383 0.154   
-#> 12 address    <chr>    71985 0.0544  
-#> 13 city       <chr>    50928 0.0385  
-#> 14 state      <chr>    48619 0.0367  
-#> 15 zip        <chr>    58702 0.0444  
-#> 16 date       <date>    1642 0.00124 
-#> 17 amount     <dbl>      399 0.000302
-#> 18 event      <date> 1276249 0.965   
-#> 19 purpose    <chr>    49072 0.0371  
-#> 20 inkind     <lgl>  1094444 0.827   
-#> 21 cand_first <chr>   678846 0.513   
-#> 22 cand_last  <chr>   678755 0.513   
-#> 23 office     <chr>   678755 0.513   
-#> 24 district   <int>   683117 0.516   
-#> 25 party      <chr>   519090 0.392   
-#> 26 file_path  <chr>        0 0
+#>  7 first      <chr>  1234202 0.855   
+#>  8 middle     <chr>  1416416 0.981   
+#>  9 last       <chr>  1233067 0.854   
+#> 10 suffix     <chr>  1436782 0.996   
+#> 11 non_ind    <chr>   212882 0.148   
+#> 12 address    <chr>    98034 0.0679  
+#> 13 city       <chr>    76268 0.0528  
+#> 14 state      <chr>    73973 0.0513  
+#> 15 zip        <chr>    84486 0.0585  
+#> 16 date       <date>    1723 0.00119 
+#> 17 amount     <dbl>      402 0.000279
+#> 18 event      <date> 1395391 0.967   
+#> 19 purpose    <chr>    72643 0.0503  
+#> 20 inkind     <lgl>  1214590 0.842   
+#> 21 cand_first <chr>   798992 0.554   
+#> 22 cand_last  <chr>   798901 0.554   
+#> 23 office     <chr>   798901 0.554   
+#> 24 district   <int>   803263 0.557   
+#> 25 party      <chr>   599166 0.415   
+#> 26 file_path  <chr>        0 0       
+#> 27 file_type  <chr>        0 0       
+#> 28 file_year  <int>        0 0
 ```
 
 We can flag records missing a name, date, or amount after uniting the
@@ -339,26 +368,26 @@ multiple contributor name columns into a single variable.
 ohe <- ohe %>% 
   unite(
     first, middle, last, suffix, non_ind,
-    col = con_name,
+    col = pay_name,
     sep = " ",
     remove = FALSE,
     na.rm = TRUE
   ) %>% 
   mutate(across(where(is.character), na_if, "")) %>% 
-  relocate(con_name, .after = last_col()) %>% 
-  flag_na(date, con_name, amount, com_name)
+  relocate(pay_name, .after = last_col()) %>% 
+  flag_na(date, pay_name, amount, com_name)
 ```
 
-0.30% of rows are missing a key variable.
+0.28% of rows are missing a key variable.
 
 ``` r
 sum(ohe$na_flag)
-#> [1] 3910
+#> [1] 4083
 ohe %>% 
   filter(na_flag) %>% 
-  select(date, con_name, amount, com_name)
-#> # A tibble: 3,910 x 4
-#>    date       con_name   amount com_name                      
+  select(date, pay_name, amount, com_name)
+#> # A tibble: 4,083 x 4
+#>    date       pay_name   amount com_name                      
 #>    <date>     <chr>       <dbl> <chr>                         
 #>  1 1994-03-31 <NA>         0.6  KEST CAMPAIGN COMMITTEE       
 #>  2 1994-11-02 <NA>        12.0  BYRNE FOR STATE SCHOOL BOARD  
@@ -370,7 +399,7 @@ ohe %>%
 #>  8 1995-09-30 <NA>        25    BURKE FOR SENATE              
 #>  9 1995-03-09 <NA>         3.5  FRIENDS OF BOB HAGAN          
 #> 10 1995-05-11 <NA>        40    BOB BOGGS LEGISLATIVE FUND    
-#> # … with 3,900 more rows
+#> # … with 4,073 more rows
 ```
 
 ### Duplicate
@@ -386,15 +415,15 @@ ohe <- mutate(ohe, dupe_flag = d1 | d2)
 rm(d1, d2); flush_memory()
 ```
 
-2.2% of rows are duplicated at least once.
+2.4% of rows are duplicated at least once.
 
 ``` r
 ohe %>% 
   filter(dupe_flag) %>% 
-  arrange(date, con_name) %>% 
-  select(date, con_name, amount, com_name)
-#> # A tibble: 28,577 x 4
-#>    date       con_name                amount com_name                         
+  arrange(date, pay_name) %>% 
+  select(date, pay_name, amount, com_name)
+#> # A tibble: 34,310 x 4
+#>    date       pay_name                amount com_name                         
 #>    <date>     <chr>                    <dbl> <chr>                            
 #>  1 1990-01-02 DOLPHIN COMPUTER SYSTEM   64.2 VOINOVICH COMMITTEE  THE         
 #>  2 1990-01-02 DOLPHIN COMPUTER SYSTEM   64.2 VOINOVICH COMMITTEE  THE         
@@ -406,7 +435,7 @@ ohe %>%
 #>  8 1990-03-01 MARGO ROTH              1000   FRIENDS OF FISHER COMMITTEE (LEE)
 #>  9 1990-03-01 MARGO ROTH              1000   FRIENDS OF FISHER COMMITTEE (LEE)
 #> 10 1990-03-19 FIFTH THIRD BANK          12.2 FRIENDS OF GOVERNOR TAFT         
-#> # … with 28,567 more rows
+#> # … with 34,300 more rows
 ```
 
 ### Amounts
@@ -414,11 +443,11 @@ ohe %>%
 ``` r
 summary(ohe$amount)
 #>     Min.  1st Qu.   Median     Mean  3rd Qu.     Max.     NA's 
-#>  -150000       50      200     1880      500 23916946      399
+#>  -150000       50      200     1911      522 23916946      402
 prop_na(ohe$amount)
-#> [1] 0.000301577
+#> [1] 0.0002785494
 mean(ohe$amount <= 0, na.rm = TRUE)
-#> [1] 0.003094554
+#> [1] 0.003382338
 ```
 
 There are the smallest and largest transactions.
@@ -426,7 +455,7 @@ There are the smallest and largest transactions.
 ``` r
 glimpse(ohe[c(which.min(ohe$amount), which.max(ohe$amount)), ])
 #> Rows: 2
-#> Columns: 29
+#> Columns: 31
 #> $ com_name   <chr> "UNITED FOOD & COMMERCIAL WORKERS ACTIVE BALLOT CLUB", "REPUBLICAN NATIONAL S…
 #> $ master_key <int> 1011, 5009
 #> $ rpt_year   <int> 2008, 2000
@@ -453,7 +482,9 @@ glimpse(ohe[c(which.min(ohe$amount), which.max(ohe$amount)), ])
 #> $ district   <int> NA, NA
 #> $ party      <chr> NA, "5"
 #> $ file_path  <chr> "ALL_PAC_EXP_2008.CSV", "ALL_PAR_EXP_2000.CSV"
-#> $ con_name   <chr> "OHIO DEMOCRATIC PARTY", "EXPENDITURES NET PERTAINING TO OHIO"
+#> $ file_type  <chr> "PAC", "PAR"
+#> $ file_year  <int> 2008, 2000
+#> $ pay_name   <chr> "OHIO DEMOCRATIC PARTY", "EXPENDITURES NET PERTAINING TO OHIO"
 #> $ na_flag    <lgl> FALSE, TRUE
 #> $ dupe_flag  <lgl> FALSE, FALSE
 ```
@@ -477,11 +508,11 @@ large.
 min(ohe$date, na.rm = TRUE)
 #> [1] "10-03-02"
 sum(ohe$year < 1990, na.rm = TRUE)
-#> [1] 354
+#> [1] 408
 max(ohe$date, na.rm = TRUE)
 #> [1] "9898-08-21"
 sum(ohe$date > today(), na.rm = TRUE)
-#> [1] 330
+#> [1] 365
 ```
 
 ![](../plots/bar_year-1.png)<!-- -->
@@ -514,7 +545,7 @@ oh_addr_norm <- tibble(
 ohe <- left_join(ohe, oh_addr_norm, by = "address")
 ```
 
-    #> # A tibble: 243,177 x 2
+    #> # A tibble: 249,699 x 2
     #>    address                address_norm        
     #>    <chr>                  <chr>               
     #>  1 1127 EUCLID AVE. #1100 1127 EUCLID AVE 1100
@@ -527,7 +558,7 @@ ohe <- left_join(ohe, oh_addr_norm, by = "address")
     #>  8 P.O. BOX 182375        PO BOX 182375       
     #>  9 457 MORGAN ST.         457 MORGAN ST       
     #> 10 1638 TANGLEWOOD DR.    1638 TANGLEWOOD DR  
-    #> # … with 243,167 more rows
+    #> # … with 249,689 more rows
 
 ### ZIP
 
@@ -552,17 +583,17 @@ progress_table(
   compare = valid_zip
 )
 #> # A tibble: 2 x 6
-#>   stage    prop_in n_distinct prop_na n_out n_diff
-#>   <chr>      <dbl>      <dbl>   <dbl> <dbl>  <dbl>
-#> 1 zip        0.923      19060  0.0444 96935  11451
-#> 2 zip_norm   0.992       9390  0.0613 10056   1359
+#>   stage    prop_in n_distinct prop_na  n_out n_diff
+#>   <chr>      <dbl>      <dbl>   <dbl>  <dbl>  <dbl>
+#> 1 zip        0.922      19971  0.0585 106374  12071
+#> 2 zip_norm   0.991       9856  0.0740  12605   1527
 ```
 
 ### State
 
 ``` r
 prop_in(ohe$state, valid_state)
-#> [1] 0.9992946
+#> [1] 0.9993106
 ohe <- mutate(ohe, state_norm = state)
 ohe$state_norm[which(ohe$state == "0H")] <- "OH"
 ohe$state_norm[which(ohe$state == "IH")] <- "OH"
@@ -571,7 +602,7 @@ ohe$state_norm[which(ohe$state == "O")]  <- "OH"
 ohe$state_norm[str_which(ohe$state, "^O\\W$")]  <- "OH"
 ohe$state_norm[str_which(ohe$state, "^\\WH$")]  <- "OH"
 prop_in(ohe$state_norm, valid_state)
-#> [1] 0.9994609
+#> [1] 0.9994866
 ```
 
 ### City
@@ -658,20 +689,20 @@ good_refine <- ohe %>%
   )
 ```
 
-    #> # A tibble: 137 x 5
+    #> # A tibble: 144 x 5
     #>    state_norm zip_norm city_swap    city_refine       n
     #>    <chr>      <chr>    <chr>        <chr>         <int>
     #>  1 OH         45263    CINCINATTI   CINCINNATI       40
     #>  2 OH         45208    CINCINATTI   CINCINNATI       24
-    #>  3 OH         45249    CINCINATTI   CINCINNATI       15
-    #>  4 OH         45202    CINCINATTI   CINCINNATI       13
-    #>  5 CA         94110    SAN FRANSICO SAN FRANCISCO    11
-    #>  6 OH         45214    CINCINATTI   CINCINNATI       11
-    #>  7 OH         45274    CINCINATTI   CINCINNATI       11
-    #>  8 AZ         85072    PHONIEX      PHOENIX          10
-    #>  9 GA         30101    ARCHWORTH    ACWORTH          10
-    #> 10 OH         44320    AKRONAKRON   AKRON             9
-    #> # … with 127 more rows
+    #>  3 OH         45202    CINCINATTI   CINCINNATI       17
+    #>  4 OH         45177    WILLIMGTON   WILMINGTON       15
+    #>  5 OH         45249    CINCINATTI   CINCINNATI       15
+    #>  6 CA         94110    SAN FRANSICO SAN FRANCISCO    11
+    #>  7 OH         45214    CINCINATTI   CINCINNATI       11
+    #>  8 OH         45274    CINCINATTI   CINCINNATI       11
+    #>  9 AZ         85072    PHONIEX      PHOENIX          10
+    #> 10 GA         30101    ARCHWORTH    ACWORTH          10
+    #> # … with 134 more rows
 
 Then we can join the refined values back to the database.
 
@@ -685,10 +716,10 @@ ohe <- ohe %>%
 
 | stage        | prop\_in | n\_distinct | prop\_na | n\_out | n\_diff |
 | :----------- | -------: | ----------: | -------: | -----: | ------: |
-| city\_raw    |    0.963 |        8542 |    0.038 |  46667 |    5021 |
-| city\_norm   |    0.982 |        7890 |    0.039 |  22672 |    4316 |
-| city\_swap   |    0.992 |        5751 |    0.039 |   9781 |    2188 |
-| city\_refine |    0.993 |        5663 |    0.039 |   9408 |    2101 |
+| city\_raw    |    0.964 |        8768 |    0.053 |  48690 |    5165 |
+| city\_norm   |    0.983 |        8092 |    0.053 |  23810 |    4436 |
+| city\_swap   |    0.993 |        5881 |    0.053 |  10239 |    2234 |
+| city\_refine |    0.993 |        5787 |    0.053 |   9823 |    2141 |
 
 You can see how the percentage of valid values increased with each
 stage.
@@ -717,46 +748,48 @@ ohe <- ohe %>%
 ``` r
 glimpse(sample_n(ohe, 20))
 #> Rows: 20
-#> Columns: 34
+#> Columns: 36
 #> $ com_name      <chr> "CITIZENS FOR JIM PETRO", "OHIO ASSOCIATION OF AREA AGENCIES ON AGING PAC"…
-#> $ master_key    <int> 30, 11763, 1500, 568, 14744, 10285, 344, 6541, 1814, 13702, 12721, 6089, 5…
-#> $ rpt_year      <int> 2000, 2009, 2004, 2002, 2018, 2007, 2019, 2015, 2008, 2012, 2018, 2006, 20…
-#> $ rpt_key       <int> 129166, 1064053, 800842, 169666, 318473689, 236806, 350974738, 185479105, …
-#> $ rpt_desc      <chr> "ANNUAL   (JANUARY)", "PRE-PRIMARY", "PRE-GENERAL", "PRE-GENERAL", "PRE-PR…
+#> $ master_key    <int> 30, 11763, 1500, 568, 1821, 14744, 10285, 6168, 6167, 344, 6168, 6541, 181…
+#> $ rpt_year      <int> 2000, 2009, 2004, 2002, 2013, 2018, 2007, 2016, 2013, 2019, 2016, 2015, 20…
+#> $ rpt_key       <int> 129166, 1064053, 800842, 169666, 139073113, 318473689, 236806, 204114544, …
+#> $ rpt_desc      <chr> "ANNUAL   (JANUARY)", "PRE-PRIMARY", "PRE-GENERAL", "PRE-GENERAL", "SEMIAN…
 #> $ desc          <chr> "31-F  FR Expenditures", "31-B  Stmt of Expenditures", "31-B  Stmt of Expe…
-#> $ first         <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "RASHANDA"…
-#> $ middle        <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "D.", …
-#> $ last          <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "LEE", "MO…
+#> $ first         <chr> NA, NA, NA, NA, NA, NA, NA, NA, "NICHOLAS", NA, NA, NA, NA, NA, NA, NA, "M…
+#> $ middle        <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
+#> $ last          <chr> NA, NA, NA, NA, NA, NA, NA, NA, "BUIS", NA, NA, NA, NA, NA, NA, NA, "MCCOY…
 #> $ suffix        <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
 #> $ non_ind       <chr> "FRIENDS OF BILL BUNNING", "FRIENDS OF DALE MILLER", "PADGETT FOR OHIO", "…
 #> $ address       <chr> "361 HILLTOP BLVD.", "4300 WEST 143 RD. ST", "871 WALNUT ST", "8187 TR 90"…
-#> $ city          <chr> "CANFIELD", "CLEVELAND", "COSHOCTON", "ADA", "MASSILLON", "MADISON", "AKRO…
-#> $ state         <chr> "OH", "OH", "OH", "OH", "OH", "WI", "OH", "OH", "OH", "OH", "OH", "OH", "O…
-#> $ zip           <chr> "44406", "44135", "43812", "45810", "44646", "53707-1042", "44303", "43220…
-#> $ date          <date> 2000-11-15, 2009-04-13, 2004-06-24, 2002-07-19, 2018-03-01, 2007-01-30, 2…
-#> $ amount        <dbl> 75.00, 500.00, 500.00, 125.00, 1089.38, 16.43, 96.78, 250.00, 2500.00, 480…
-#> $ event         <date> NA, NA, NA, NA, 2018-03-01, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
+#> $ city          <chr> "CANFIELD", "CLEVELAND", "COSHOCTON", "ADA", "COLUMBUS", "MASSILLON", "MAD…
+#> $ state         <chr> "OH", "OH", "OH", "OH", "OH", "OH", "WI", "OH", "OH", "OH", "OH", "OH", "O…
+#> $ zip           <chr> "44406", "44135", "43812", "45810", "43228", "44646", "53707-1042", "44039…
+#> $ date          <date> 2000-11-15, 2009-04-13, 2004-06-24, 2002-07-19, 2013-02-15, 2018-03-01, 2…
+#> $ amount        <dbl> 75.00, 500.00, 500.00, 125.00, 87.98, 1089.38, 16.43, 11707.30, 3595.44, 9…
+#> $ event         <date> NA, NA, NA, NA, NA, 2018-03-01, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
 #> $ purpose       <chr> "TICKETS", "CAMPAIGN CONTRIBUTION", "CONTRIBUTION", "CENTURY CLUB DINNER",…
-#> $ inkind        <lgl> NA, NA, NA, FALSE, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, FALSE, NA, NA, …
-#> $ cand_first    <chr> "JIM", NA, NA, "JAMES", "JAMES", "TED", "RANDALL", "JON", NA, "LORI", "JOE…
-#> $ cand_last     <chr> "PETRO", NA, NA, "HOOPS", "HAAVISTO", "STRICKLAND", "GARDNER", "HUSTED", N…
-#> $ office        <chr> "AUDITOR", NA, NA, "HOUSE", "HOUSE", "GOVERNOR", "SENATE", "SECRETARY OF S…
-#> $ district      <int> 0, NA, NA, 75, 49, 0, 2, 0, NA, 4, NA, NA, NA, NA, 0, NA, 38, 0, NA, 28
-#> $ party         <chr> "REPUBLICAN", NA, NA, "REPUBLICAN", "REPUBLICAN", "DEMOCRAT", "REPUBLICAN"…
+#> $ inkind        <lgl> NA, NA, NA, FALSE, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
+#> $ cand_first    <chr> "JIM", NA, NA, "JAMES", NA, "JAMES", "TED", NA, NA, "RANDALL", NA, "JON", …
+#> $ cand_last     <chr> "PETRO", NA, NA, "HOOPS", NA, "HAAVISTO", "STRICKLAND", NA, NA, "GARDNER",…
+#> $ office        <chr> "AUDITOR", NA, NA, "HOUSE", NA, "HOUSE", "GOVERNOR", NA, NA, "SENATE", NA,…
+#> $ district      <int> 0, NA, NA, 75, NA, 49, 0, NA, NA, 2, NA, 0, NA, 4, NA, NA, NA, NA, 0, NA
+#> $ party         <chr> "REPUBLICAN", NA, NA, "REPUBLICAN", "5", "REPUBLICAN", "DEMOCRAT", "5", "1…
 #> $ file_path     <chr> "ALL_CAN_EXP_2000.CSV", "ALL_PAC_EXP_2009.CSV", "ALL_PAC_EXP_2004.CSV", "A…
-#> $ con_name      <chr> "FRIENDS OF BILL BUNNING", "FRIENDS OF DALE MILLER", "PADGETT FOR OHIO", "…
+#> $ file_type     <chr> "CAN", "PAC", "PAC", "CAN", "PAR", "CAN", "CAN", "PAR", "PAR", "CAN", "PAR…
+#> $ file_year     <int> 2000, 2009, 2004, 2002, 2013, 2018, 2007, 2016, 2013, 2019, 2016, 2015, 20…
+#> $ pay_name      <chr> "FRIENDS OF BILL BUNNING", "FRIENDS OF DALE MILLER", "PADGETT FOR OHIO", "…
 #> $ na_flag       <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALS…
 #> $ dupe_flag     <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALS…
-#> $ year          <dbl> 2000, 2009, 2004, 2002, 2018, 2007, 2019, 2015, 2008, 2012, 2018, 2006, 20…
-#> $ address_clean <chr> "361 HILLTOP BLVD", "4300 W 143 RD ST", "871 WALNUT ST", "8187 TR 90", "12…
-#> $ zip_clean     <chr> "44406", "44135", "43812", "45810", "44646", "53707", "44303", "43220", "4…
-#> $ state_clean   <chr> "OH", "OH", "OH", "OH", "OH", "WI", "OH", "OH", "OH", "OH", "OH", "OH", "O…
-#> $ city_clean    <chr> "CANFIELD", "CLEVELAND", "COSHOCTON", "ADA", "MASSILLON", "MADISON", "AKRO…
+#> $ year          <dbl> 2000, 2009, 2004, 2002, 2013, 2018, 2007, 2016, 2013, 2019, 2016, 2015, 20…
+#> $ address_clean <chr> "361 HILLTOP BLVD", "4300 W 143 RD ST", "871 WALNUT ST", "8187 TR 90", "33…
+#> $ zip_clean     <chr> "44406", "44135", "43812", "45810", "43228", "44646", "53707", "44039", "4…
+#> $ state_clean   <chr> "OH", "OH", "OH", "OH", "OH", "OH", "WI", "OH", "OH", "OH", "OH", "OH", "O…
+#> $ city_clean    <chr> "CANFIELD", "CLEVELAND", "COSHOCTON", "ADA", "COLUMBUS", "MASSILLON", "MAD…
 ```
 
-1.  There are 1,323,047 records in the database.
+1.  There are 1,443,193 records in the database.
 2.  The range and distribution of `amount` and `date` seem reasonable.
-3.  There are 3,910 records missing a key variable.
+3.  There are 4,083 records missing a key variable.
 4.  Consistency in geographic data has been improved with
     `campfin::normal_*()`.
 5.  The 4-digit `year` variable has been created with
@@ -769,7 +802,7 @@ clean_dir <- dir_create(here("oh", "expends", "data", "clean"))
 clean_path <- path(clean_dir, "oh_expends_clean.csv")
 write_csv(ohe, clean_path, na = "")
 file_size(clean_path)
-#> 380M
+#> 425M
 file_encoding(clean_path) %>% 
   mutate(across(path, path.abbrev))
 #> # A tibble: 1 x 3
@@ -799,7 +832,7 @@ if (!object_exists(s3_path, "publicaccountability")) {
 
 ``` r
 as_fs_bytes(object_size(s3_path, "publicaccountability"))
-#> 380M
+#> 425M
 ```
 
 ## Dictionary
@@ -834,7 +867,9 @@ The following table describes the variables in our final exported file:
 | `district`      | `DISTRICT`             | `integer`   | Office sought by candidate             |
 | `party`         | `PARTY`                | `character` | District sought by candidate           |
 | `file_path`     |                        | `character` | Candidate political party              |
-| `con_name`      |                        | `character` | Data source file name                  |
+| `file_type`     |                        | `character` | Data source file name                  |
+| `file_year`     |                        | `integer`   | Data source file type                  |
+| `pay_name`      |                        | `character` | Data source file year                  |
 | `na_flag`       |                        | `logical`   | Flag for missing date, amount, or name |
 | `dupe_flag`     |                        | `logical`   | Flag for completely duplicated record  |
 | `year`          |                        | `double`    | Calendar year of contribution date     |
