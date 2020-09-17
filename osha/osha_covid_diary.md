@@ -1,7 +1,7 @@
 OSHA COVID-19 Weekly Reports
 ================
 Yanqi Xu
-2020-09-17 17:41:23
+2020-09-17 17:45:59
 
   - [Project](#project)
   - [Objectives](#objectives)
@@ -101,9 +101,10 @@ of complaints and removed workers from unsafe work places.
 The OSHA data is cumulative, so we only need the most recent file, which
 can be obtained from the
 [OSHA](https://www.osha.gov/foia/archived-covid-19-data). According to
-an OSHA spokesperson, \>Upon receiving a complaint, OSHA opens an
-investigation, and, if necessary, that investigation would include an
-onsite inspection. OSHA investigates all complaints.
+a DOL spokesperson, 
+> Upon receiving a complaint, OSHA opens an
+> investigation, and, if necessary, that investigation would include an
+> onsite inspection. OSHA investigates all complaints.
 
 > Open inspections are those in which OSHA is conducting an
 > investigation. The agency has six months to complete an investigation.
@@ -166,10 +167,12 @@ dir_ls(raw_dir) %>% file_info()
 osha <- read_xlsx(dir_ls(raw_dir))
 ```
 
-According to DOL spokesperson, \> The activity ID (ACT ID) is the unique
-identifier for the complaint. On the Inspection Information page, users
-are able to select specific inspections when the activity numbers are
-known which identify the inspections.
+According to a DOL spokesperson, 
+
+> The activity ID (ACT ID) is the unique
+> identifier for the complaint. On the Inspection Information page, users
+> are able to select specific inspections when the activity numbers are
+> known which identify the inspections.
 
 > The inspection ID identifies whether the complaint resulted in an
 > inspection. The “Insp ID” column is only used when a complaint results
@@ -458,7 +461,8 @@ file exist on disk. If such a file exists, we can read it using
 written using `readr::write_csv()`.
 
 ``` r
-check_file <- path(raw_dir %>% str_remove("/raw"),"api_check.csv")
+clean_dir <- dir_create(path(raw_dir %>% str_remove("/raw"), "processed"))
+check_file <- path(clean_dir,"api_check.csv")
 if (file_exists(check_file)) {
   check <- read_csv(
     file = check_file
@@ -557,9 +561,9 @@ sum(osha$receipt_date > today())
 We can see the frequencies of complaints made for each month
 ![](../plots/month-1.png)<!-- -->
 
-#### Geographical
+#### Industry
 
-We can also see where cases occur.
+We can also see where cases occur most frequently.
 
 Using the NASIC indicators, we can also see which industries have the
 most number of closed complaints.
@@ -646,10 +650,6 @@ osha <- osha %>%
     select(-c(city_norm,state,city_raw,address)) %>% 
     rename(city_clean = city_swap) %>% 
     rename_all(~str_replace(., "_norm", "_clean"))
-```
-
-``` r
-clean_dir <- dir_create(path(raw_dir %>% str_remove("/raw"), "processed"))
 ```
 
 ``` r

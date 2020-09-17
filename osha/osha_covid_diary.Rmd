@@ -111,8 +111,8 @@ here::here()
 
 ### Download
 The OSHA data is cumulative, so we only need the most recent file, which can be obtained from the [OSHA][03]. 
-According to an OSHA spokesperson,
->Upon receiving a complaint, OSHA opens an investigation, and, if necessary, that investigation would include an onsite inspection. OSHA investigates all complaints.
+According to a DOL spokesperson,  
+> Upon receiving a complaint, OSHA opens an investigation, and, if necessary, that investigation would include an onsite inspection. OSHA investigates all complaints.
 
 > Open inspections are those in which OSHA is conducting an investigation. The agency has six months to complete an investigation. Additional details about open complaints are not available until the investigation is complete. The case file remains open throughout the inspection process and is not closed until the agency is satisfied that abatement has occurred.
 
@@ -153,7 +153,7 @@ osha <- read_xlsx(dir_ls(raw_dir))
 ```
 
 
-According to DOL spokesperson, 
+According to a DOL spokesperson,   
 > The activity ID (ACT ID) is the unique identifier for the complaint. On the Inspection Information page, users are able to select specific inspections when the activity numbers are known which identify the inspections.
 
 > The inspection ID identifies whether the complaint resulted in an inspection.  The “Insp ID” column is only used when a complaint results in an inspection. Otherwise, the complaint will be handled using OSHA’s phone/fax investigation procedures and the “Insp ID” field will be left blank.Inspections are identified by number under the “Insp ID” column on the spreadsheet. Limited data on these open inspections can be found through a search on the Inspection Information page. For closed complaints, the OSHA Area Office reviews responses from employers regarding actions taken to address the complaint items and determines whether further action is warranted.
@@ -357,7 +357,8 @@ If not, the query will be sent and the file will be written using
 `readr::write_csv()`.
 
 ```{r check_send}
-check_file <- path(raw_dir %>% str_remove("/raw"),"api_check.csv")
+clean_dir <- dir_create(path(raw_dir %>% str_remove("/raw"), "processed"))
+check_file <- path(clean_dir,"api_check.csv")
 if (file_exists(check_file)) {
   check <- read_csv(
     file = check_file
@@ -483,8 +484,8 @@ osha %>%
   )
 ```
 
-#### Geographical
-We can also see where cases occur.
+#### Industry
+We can also see where cases occur most frequently.
 ```{r geo, echo=FALSE, eval=FALSE}
   osha %>% 
   mutate(month = month(receipt_date)) %>% 
@@ -586,11 +587,6 @@ osha <- osha %>%
     select(-c(city_norm,state,city_raw,address)) %>% 
     rename(city_clean = city_swap) %>% 
     rename_all(~str_replace(., "_norm", "_clean"))
-```
-
-
-```{r clean_dir}
-clean_dir <- dir_create(path(raw_dir %>% str_remove("/raw"), "processed"))
 ```
 
 ```{r write_clean}
