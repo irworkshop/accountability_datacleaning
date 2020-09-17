@@ -1,0 +1,646 @@
+---
+title: "OSHA COVID-19 Weekly Reports"
+author: "Yanqi Xu"
+date: "`r Sys.time()`"
+output:
+  github_document: 
+    df_print: tibble
+    toc: true
+    toc_dept: 2
+editor_options: 
+  chunk_output_type: console
+---
+
+<!-- Place comments regarding knitting here -->
+
+```{r setup, include=FALSE, purl=FALSE}
+library(knitr)
+opts_chunk$set(
+  eval = TRUE,
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  error = FALSE,
+  collapse = TRUE,
+  comment = "#>",
+  fig.path = "../plots/",
+  fig.width = 10,
+  dpi = 300
+)
+options(width = 99)
+options(knitr.kable.NA = '')
+set.seed(5)
+```
+
+```{r create_docs_dir, echo=FALSE}
+docs <- fs::dir_create(here::here("nursing_home", "docs"))
+```
+
+## Project
+
+The Accountability Project is an effort to cut across data silos and give journalists, policy
+professionals, activists, and the public at large a simple way to search across huge volumes of
+public data about people and organizations.
+
+Our goal is to standardizing public data on a few key fields by thinking of each dataset row as a
+transaction. For each transaction there should be (at least) 3 variables:
+
+1. All **parties** to a transaction
+2. The **date** of the transaction
+3. The **amount** of money involved
+
+## Objectives
+
+This document describes the process used to complete the following objectives:
+
+1. How many records are in the database?
+1. Check for duplicates
+1. Check ranges
+1. Is there anything blank or missing?
+1. Check for consistency issues
+1. Create a five-digit ZIP Code called `ZIP5`
+1. Create a `YEAR` field from the transaction date
+1. Make sure there is data on both parties to a transaction
+
+## Packages
+
+The following packages are needed to collect, manipulate, visualize, analyze, and communicate
+these results. The `pacman` package will facilitate their installation and attachment.
+
+The IRW's `campfin` package will also have to be installed from GitHub. This package contains
+functions custom made to help facilitate the processing of campaign finance data.
+
+```{r load_packages, message=FALSE, dfrning=FALSE, error=FALSE}
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load_gh("irworkshop/campfin")
+pacman::p_load(
+  readxl, # read excel
+  tidyverse, # data manipulation
+  lubridate, # datetime strings
+  magrittr, # pipe opperators
+  janitor, # dataframe clean
+  refinr, # cluster and merge
+  scales, # format strings
+  knitr, # knit documents
+  vroom, # read files fast
+  glue, # combine strings
+  here, # relative storage
+  fs, # search storage 
+  gluedown # make small multiples
+)
+```
+
+This document should be run as part of the `R_campfin` project, which lives as a sub-directory of
+the more general, language-agnostic [`irworkshop/accountability_datacleaning`][01] GitHub
+repository.
+
+The `R_campfin` project uses the [RStudio projects][02] feature and should be run as such. The
+project also uses the dynamic `here::here()` tool for file paths relative to _your_ machine.
+
+```{r where_here}
+# where does this document knit?
+here::here()
+```
+
+[01]: https://github.com/irworkshop/accountability_datacleaning "TAP repo"
+[02]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects "Rproj"
+[03]: https://www.osha.gov/foia/archived-covid-19-data
+
+## Data
+[OSHA](https://www.osha.gov/enforcement/covid-19-data#complaints_referrals) lists its COVID responses. Since the outbreak, it has received thousands of complaints and removed workers from unsafe work places. 
+
+### Download
+The OSHA data is cumulative, so we only need the most recent file, which can be obtained from the [OSHA][03]. 
+According to an OSHA spokesperson,
+>Upon receiving a complaint, OSHA opens an investigation, and, if necessary, that investigation would include an onsite inspection. OSHA investigates all complaints.
+
+> Open inspections are those in which OSHA is conducting an investigation. The agency has six months to complete an investigation. Additional details about open complaints are not available until the investigation is complete. The case file remains open throughout the inspection process and is not closed until the agency is satisfied that abatement has occurred.
+
+> Complaints are listed as “closed/final” if they were valid complaints. A valid complaint must state the reason for the inspection request. There must be reasonable grounds to believe that either a violation of the Act or OSHA standard that exposes employees to physical harm exists, serious injury or death exists. A complaint cannot be marked as closed unless one of these activities has occurred. Any valid complaint must be closed either through the phone/fax/email process or by opening a formal inspection.Complaints are closed based on the exchange of information between the employer and OSHA. The Area Office reviews responses from employers regarding actions taken to address the complaint items and determine whether further action is warranted. 
+
+```{r raw_dir}
+raw_dir <- dir_create(here() %>% str_remove("/R_campfin") %>% path("osha/data/raw"))
+```
+
+```{r download, eval=FALSE}
+landing_url <- 'https://www.osha.gov/foia/archived-covid-19-data'
+
+file_path <- read_html(landing_url) %>% 
+  html_nodes(css = "article > div > div > p:nth-child(7) > span > a:nth-child(1)") %>% html_attr("href")
+
+closed_url <- paste0("https://www.osha.gov/",file_path)
+
+
+wget <- function(url, dir) {
+  system2(
+    command = "wget",
+    args = c(
+      "--no-verbose",
+      "--content-disposition",
+      url
+    )
+  )
+}
+
+if (!all_files_new(raw_dir)) {
+   wget(closed_url, raw_dir)
+}
+```
+### Read 
+```{r read xlsx}
+dir_ls(raw_dir) %>% file_info()
+osha <- read_xlsx(dir_ls(raw_dir))
+```
+
+
+According to DOL spokesperson, 
+> The activity ID (ACT ID) is the unique identifier for the complaint. On the Inspection Information page, users are able to select specific inspections when the activity numbers are known which identify the inspections.
+
+> The inspection ID identifies whether the complaint resulted in an inspection.  The “Insp ID” column is only used when a complaint results in an inspection. Otherwise, the complaint will be handled using OSHA’s phone/fax investigation procedures and the “Insp ID” field will be left blank.Inspections are identified by number under the “Insp ID” column on the spreadsheet. Limited data on these open inspections can be found through a search on the Inspection Information page. For closed complaints, the OSHA Area Office reviews responses from employers regarding actions taken to address the complaint items and determines whether further action is warranted.
+
+> The reporting ID (RID) identifies the OSHA office or organizational unit responsible for the inspection. The Primary/Site NAICS is the identification code for a specific industry. For the RID, the first two digits represent the region (01 through 10) and the third digit indicates if it is a State Plan or Federal office. All State Plan offices have a ‘5’ as the third digit, whereas any other number indicates a Federal office. State Plans are OSHA-approved workplace safety and health programs operated by individual states or U.S. territories. There are currently 22 State Plans covering both private sector and state and local government workers, and there are six State Plans covering only state and local government workers.
+
+
+Hence we can separate the last column into two, and identify whether the case is handled by a federal or state program by the RID. We will also separate the `Establishment Name Site City-State-Zip` into name, address, city, state and zip.
+
+More information about OSHA's state plans can be found on its [website](https://www.osha.gov/stateplans).
+#### Separate
+We'll first separate the the last column.
+```{r sep last}
+osha <- osha %>% 
+  separate(col = `No Alleged Hazards/No Emp Exposed`,into = c("number_of_alleged_hazards","number_of_workers_exposed"),remove = F,sep = "/\r\n") %>% 
+  clean_names() %>% 
+  mutate_at(.vars = vars(starts_with("number_of_")),as.numeric)
+```
+### Name
+The name and adress are separated by 
+```{r clean name}
+osha <- osha %>% 
+  separate(col=establishment_name_site_city_state_zip,sep = "\r\n",
+          remove = F,
+  into=c("establishment_name","address_full"))
+```
+### Address
+```{r sep zip}
+osha <- osha %>% 
+  mutate(zip = str_extract(address_full,"\\d{5}$"),
+         state = address_full %>% str_remove(",\\s\\d{5}$") %>% str_extract("(?<=\\s)[^,]+$"),
+         address_city = address_full %>% str_remove(paste0(state,", ",zip)),
+         city = str_extract(address_city,"(?<=,\\s)[^,]+(?=,\\s$)"),
+         address = address_city %>% str_remove(paste0(", ",city,",")) %>% str_trim()) %>% 
+  select(-c(address_full, address_city))
+```
+
+#### Extract Federal/State plans
+More information about state plans coverage and federal jurisdiciton can be found on [OSHA's information page](https://www.osha.gov/stateplans).
+
+```{r create fed/local}
+osha <- osha %>% 
+  mutate(office = if_else(condition = str_detect(rid, "-5\\d{2}-"),
+                          true = "state",
+                          false = "federal"))
+```
+### Missing
+
+```{r na_count}
+col_stats(osha, count_na)
+```
+
+We can quickly look at the cases with missing `city` and `zip`. Then we are able to determine that these cases reported no specific locations. 
+
+```{r}
+osha %>% filter(is.na(zip)) %>% glimpse()
+```
+We'll flag the cases without hazard description and location.
+```{r na_flag}
+osha <- osha %>% flag_na(hazard_desc_and_location)
+```
+
+### Duplicates
+We can see there's no duplicate entry.
+```{r dupe_flag}
+osha <- flag_dupes(osha, dplyr::everything())
+```
+
+## Wrangle
+To improve the searchability of the database, we will perform some consistent,
+confident string normalization. For geographic variables like city names and
+ZIP codes, the corresponding `campfin::normal_*()` functions are taylor made to
+facilitate this process.
+
+
+### ZIP
+
+For ZIP codes, the `campfin::normal_zip()` function will attempt to create
+valied _five_ digit codes by removing the ZIP+4 suffix and returning leading
+zeroes dropped by other programs like Microsoft Excel.
+
+
+We can see that the ZIPcodes are normal and don't need to be further normalized. 
+```{r zip_norm}
+prop_in(osha$zip, valid_zip, na.rm = T)
+```
+
+### Address
+
+For the street `addresss` variable, the `campfin::normal_address()` function
+will force consistence case, remove punctuation, and abbreviation official 
+USPS suffixes.
+
+```{r address_norm}
+osha <- osha %>% 
+    mutate(address_norm = normal_address(address,abbs = usps_street,
+      na_rep = TRUE))
+```
+
+### State
+
+The state column uses full names of states, and we will conform it to IRW conventions of two-letter abbreviations.
+
+```{r state_norm}
+osha <- osha %>% 
+    mutate(
+    state_norm = normal_state(
+      state = state,
+      abbreviate = TRUE,
+      na_rep = TRUE,
+      valid = valid_state
+    ))
+prop_in(osha$state_norm, valid_state, na.rm = T)
+```
+
+### City
+
+Cities are the most difficult geographic variable to normalize, simply due to
+the wide variety of valid cities and formats.
+#### Normal
+
+The `campfin::normal_city()` function is a good oshaart, again converting case,
+removing punctuation, but _expanding_ USPS abbreviations. We can also remove
+`invalid_city` values.
+
+```{r city_norm}
+osha <- osha %>% 
+      mutate(city_norm = normal_city(city,abbs = usps_city,
+      states = usps_state,
+      na = invalid_city,
+      na_rep = TRUE))
+
+prop_in(osha$city, valid_city, na.rm = T)
+prop_in(osha$city_norm, valid_city, na.rm = T)
+```
+
+#### Swap
+
+We can further improve normalization by comparing our normalized value
+against the _expected_ value for that record's state abbreviation and ZIP code.
+If the normalized value is either an abbreviation for or very similar to the
+expected value, we can confidently swap those two.
+
+```{r city_swap}
+osha <- osha %>% 
+  rename(city_raw = city) %>% 
+  left_join(
+    y = zipcodes,
+    by = c(
+      "state_norm" = "state",
+      "zip" = "zip"
+    )
+  ) %>% 
+  rename(city_match = city) %>% 
+  mutate(
+    match_abb = is_abbrev(city_norm, city_match),
+    match_dist = str_dist(city_norm, city_match),
+    city_swap = if_else(
+      condition = !is.na(match_dist) & (match_abb | match_dist == 1),
+      true = city_match,
+      false = city_norm
+    )
+  ) %>% 
+  select(
+    -city_match,
+    -match_dist,
+    -match_abb
+  )
+```
+
+#### Check
+
+We can use the `campfin::check_city()` function to pass the remaining unknown
+`city_refine` values (and their `state_norm`) to the Google Geocode API. The
+function returns the name of the city or locality which most associated with
+those values.
+
+This is an easy way to both check for typos and check whether an unknown
+`city` value is actually a completely acceptable neighborhood, census
+designated place, or some other locality not found in our `valid_city` vector
+from our `zipcodes` database.
+
+First, we'll filter out any known valid city and aggregate the remaining records
+by their city and state. Then, we will only query those unknown cities which
+appear at least ten times.
+
+```{r check_filter}
+osha_out <- osha %>% 
+  filter(city_swap %out% c(valid_city, extra_city)) %>% 
+  count(city_swap, state_norm, zip,sort = TRUE) %>% 
+  drop_na() %>% 
+  filter(n > 1)
+```
+
+Passing these values to `campfin::check_city()` with `purrr::pmap_dfr()` will
+return a single tibble of the rows returned by each city/state combination.
+
+First, we'll check to see if the API query has already been done and a file
+exist on disk. If such a file exists, we can read it using `readr::read_csv()`.
+If not, the query will be sent and the file will be written using
+`readr::write_csv()`.
+
+```{r check_send}
+check_file <- path(raw_dir %>% str_remove("/raw"),"api_check.csv")
+if (file_exists(check_file)) {
+  check <- read_csv(
+    file = check_file
+  )
+} else {
+  check <- pmap_dfr(
+    .l = list(
+      osha_out$city_swap, 
+      osha_out$state_norm,
+      osha_out$zip
+    ), 
+    .f = check_city, 
+    key = Sys.getenv("GEOCODE_KEY"), 
+    guess = TRUE
+  ) %>% 
+    mutate(guess = coalesce(guess_city, guess_place)) %>% 
+    select(-guess_city, -guess_place)
+  write_csv(
+    x = check,
+    path = check_file
+  )
+}
+```
+
+Any city/state combination with a `check_city_flag` equal to `TRUE` returned a
+matching city string from the API, indicating this combination is valid enough
+to be ignored.
+
+```{r check_accept}
+valid_locality <- check$guess[check$check_city_flag]
+```
+
+
+After the two normalization steps, the percentage of valid cities is at 100%.
+#### Progress
+
+```{r city_progress, echo=FALSE}
+many_city <- c(valid_city, extra_city,valid_locality)
+progress <- progress_table(
+  osha$city_raw,
+  osha$city_norm,
+  osha$city_swap,
+  compare = many_city
+) %>% mutate(stage = as_factor(stage))
+```
+
+```{r progress_print, echo=FALSE}
+kable(progress, digits = 3)
+```
+
+You can see how the percentage of valid values increased with each stage.
+
+```{r progress_bar, echo=FALSE}
+progress %>% 
+  ggplot(aes(x = stage, y = prop_in)) +
+  geom_hline(yintercept = 0.99) +
+  geom_col(fill = dark2["purple"]) +
+  coord_cartesian(ylim = c(0.75, 1)) +
+  scale_y_continuous(labels = percent) +
+  labs(
+    title = "OSHA Complaints City Normalization Progress",
+    x = "Stage",
+    y = "Percent Valid"
+  )
+```
+
+More importantly, the number of distinct values decreased each stage. We were
+able to confidently change many distinct invalid values to their valid
+equivalent.
+
+```{r distinct_bar}
+progress %>% 
+  select(
+    stage, 
+    all = n_distinct,
+    bad = n_diff
+  ) %>% 
+  mutate(good = all - bad) %>% 
+  pivot_longer(c("good", "bad")) %>% 
+  mutate(name = name == "good") %>% 
+  ggplot(aes(x = stage, y = value)) +
+  geom_col(aes(fill = name)) +
+  scale_fill_brewer(palette = "Dark2", direction = -1) +
+  scale_y_continuous(labels = comma) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "OSHA Complaints City Normalization Progress",
+    subtitle = "Distinct values, valid and invalid",
+    x = "stage",
+    y = "Percent Valid",
+    fill = "Valid"
+  )
+  
+```
+
+## Explore
+### Date
+We can examine the date range of the receipt date.
+```{r date range}
+min(osha$receipt_date)
+max(osha$receipt_date)
+sum(osha$receipt_date > today())
+```
+
+### Categorical
+
+#### Month
+We can see the frequencies of complaints made for each month
+```{r month, echo=FALSE}
+this_year <- year(osha$receipt_date)
+osha %>% 
+  mutate(inspected = !is.na(insp_id)) %>% 
+  ggplot(aes(x = month(receipt_date,label = T),  fill =  inspected)) +
+  geom_bar()+ 
+  scale_fill_brewer(palette = "Dark2") +
+  scale_y_continuous(labels = comma) +
+  theme(legend.position = "bottom") +
+  theme_bw() +
+  labs(
+    title = "OSHA closed complaints by month of receipt",
+    x = glue("month in {this_year}"),
+    y = "count"
+  )
+```
+
+#### Geographical
+We can also see where cases occur.
+```{r geo, echo=FALSE, eval=FALSE}
+  osha %>% 
+  mutate(month = month(receipt_date)) %>% 
+  filter(state_norm %out% c("VI","PR")) %>% 
+ count(month,state_norm) %>% 
+  # facet_wrap(~state_norm)
+  ggplot(aes(x = month, y = n)) +
+   facet_geo(~ state_norm,grid = "us_state_grid2", label = "name") +  
+  geom_col()
+  scale_fill_brewer(palette = "Dark2") +
+  scale_y_continuous(labels = comma) +
+  theme(legend.position = "bottom") +
+  theme_bw() +
+  labs(
+    title = "OSHA closed complaints by month of receipt",
+    x = glue("month in {this_year}"),
+    y = "count"
+  )
+ 
+```
+Using the NASIC indicators, we can also see which industries have the most number of closed complaints.
+```{r nasic}
+osha %>% 
+  count(primary_site_naics) %>% top_n(8) %>% arrange(desc(n)) %>% 
+  mutate(industry = case_when(
+    str_detect(primary_site_naics,"622110") ~ "General Medical and Surgical Hospitals",
+ str_detect(primary_site_naics,"623110") ~ "Nursing Care Facilities (Skilled Nursing Facilities)",
+ str_detect(primary_site_naics,"491110") ~ "Postal Service",
+ str_detect(primary_site_naics,"621111") ~ "Offices of Physicians (except Mental Health Specialists)",
+ str_detect(primary_site_naics,"445110") ~ "Supermarkets and Other Grocery (except Convenience) Stores",
+ str_detect(primary_site_naics,"493110") ~ "General Warehousing and Storage",
+ str_detect(primary_site_naics,"722511") ~ "Full-Service Restaurants",
+ str_detect(primary_site_naics,"621210") ~ "Offices of Dentists",
+  )) %>% 
+  ggplot(aes(x= reorder(industry,-n),y=n)) +
+  geom_col(fill="indianred") +
+  scale_x_discrete(labels = wrap_format(10)) +
+  theme_bw() +
+  theme(legend.position = "bottom") +
+  labs(title = "Closed OSHA complaints by industry",
+       caption = "Source: OSHA weekly reports summary",
+       x = "industry",
+       y = "count"
+       )
+```
+
+
+#### Continuous
+We can see the distribution of the number of hazards and workers exposed.
+```{r haz, echo=FALSE}
+min_month <- min(osha$receipt_date)
+max_month <- max(osha$receipt_date)
+
+osha %>% 
+  ggplot(aes(number_of_workers_exposed)) +
+  geom_histogram(fill = "cornflowerblue") +
+  scale_y_continuous(labels = comma) +
+  scale_x_continuous() +
+  labs(
+    title = "Closed OSHA complaints number of hazard distribution",
+    subtitle = glue("from {min_month} to {max_month}"),
+    caption = "Source: OSHA",
+    x = "Number of hazards",
+    y = "Count"
+  )
+
+osha %>% 
+  ggplot(aes(number_of_workers_exposed)) +
+  geom_histogram(fill = "lightsalmon") +
+  scale_y_continuous(labels = comma) +
+  scale_x_continuous() +
+  labs(
+    title = "Closed OSHA complaints number of workers exposed distribution",
+    subtitle = glue("from {min_month} to {max_month}"),
+    caption = "Source: OSHA",
+    x = "Number of hazards",
+    y = "Count"
+  )
+```
+
+
+## Conclude
+
+```{r clean_glimpse}
+glimpse(sample_n(osha, 20))
+```
+
+1. There are `r nrow(osha)` records in the database.
+1. There are `r sum(osha$dupe_flag)` duplicate records in the database.
+1. The range and distribution of `year` seems mostly reasonable except for a few entries.
+1. There are `r sum(osha$na_flag)` records missing either recipient or date.
+1. Consistency in goegraphic data has been improved with `campfin::normal_*()`.
+1. The 4-digit `year` variable has been created with `lubridate::year()`.
+
+## Export
+
+```{r}
+osha <- osha %>% 
+    select(-c(city_norm,state,city_raw,address)) %>% 
+    rename(city_clean = city_swap) %>% 
+    rename_all(~str_replace(., "_norm", "_clean"))
+```
+
+
+```{r clean_dir}
+clean_dir <- dir_create(path(raw_dir %>% str_remove("/raw"), "processed"))
+```
+
+```{r write_clean}
+write_csv(
+  x = osha,
+  path = path(clean_dir, "osha_covid_complaints_clean.csv"),
+  na = ""
+)
+```
+
+## Dictionary
+
+The following table describes the variables in our final exported file:
+
+```{r dict_make, echo=FALSE}
+dict_raw <- tibble(
+  var = md_code(names(osha)),
+  type = md_code(map_chr(osha, typeof)),
+  def = c(
+"Reporting ID: the OSHA office or organizational unit responsible for the inspection",
+"Actiity ID: unique identifier for the complaint",
+"Establishment name and addresses",
+"Establishment name separated from above",
+"County of the establishment",
+"North American Standard Industrial Classification Code identifying industry",
+"Date the complaint was received",
+"Receipt type",
+"Formality",
+"ID of the ensuing inspection",
+"Additional Code (here indicating a COVID-19 flag)",
+"Hazard description and location",
+"Number of alleged hazards and number of employees exposed",
+"Number of alleged hazards separated from the previous column",
+"Number of alleged hazards separated as above",
+"ZIP code of establishment",
+"Logical variable indicating if the hazard description and location is missing",
+"OSHA response office based on RID created by IRW",
+"Normalized street address",
+"Normalized two-letter state abbreviation",
+"Normalized city"
+  )
+)
+```
+
+```{r dict_md, echo=FALSE}
+(dict_md <- kable(
+  x = dict_raw,
+  format = "markdown",
+  col.names = c("Column", "Type", "Definition")
+))
+```
+
+

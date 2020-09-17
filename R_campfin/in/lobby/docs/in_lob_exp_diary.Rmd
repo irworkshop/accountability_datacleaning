@@ -74,6 +74,8 @@ if (!require("pacman")) install.packages("pacman")
 pacman::p_load_gh("irworkshop/campfin")
 pacman::p_load(
   readxl, # read excel
+  httr, # GET request
+  rvest, # scrape web page
   tidyverse, # data manipulation
   lubridate, # datetime strings
   magrittr, # pipe opperators
@@ -115,9 +117,11 @@ raw_dir <- dir_create(here("in", "lobby", "data", "raw", "exp"))
 ```{r download, eval=FALSE}
 landing_url <- 'https://www.in.gov/ilrc/2335.htm'
 
-urls <- GET(landing_url) %>% content() %>% html_nodes("a") %>% html_attr("href")
+urls <- GET(landing_url) %>% content() %>% html_nodes("a")
 
 comp_urls <- paste0('https://www.in.gov',urls[str_detect(urls, 'Compensated Lobbyist Total')] %>% html_attr('href'))
+
+emp_urls <- paste0('https://www.in.gov',urls[str_detect(urls, 'Employer Lobbyist Total')] %>% html_attr('href'))
 
 wget <- function(url, dir) {
   system2(
@@ -126,7 +130,7 @@ wget <- function(url, dir) {
       "--no-verbose",
       "--content-disposition",
       url,
-      paste("-P", raw_dir)
+      paste("-P", dir)
     )
   )
 }
@@ -135,6 +139,10 @@ if (!all_files_new(raw_dir)) {
   map(comp_urls, wget, raw_dir)
 }
 
+emp_dir <- dir_create(path(raw_dir,"emp"))
+if (!all_files_new(emp_dir)) {
+  map(emp_urls, wget, emp_dir)
+}
 ```
 
 ### Read
@@ -210,6 +218,84 @@ inle <- read_inxl(dir_ls(raw_dir) %>% str_subset("2010")) %>%
   bind_rows(in_1319)
 ```
 
+```{r read csv}
+emp_dir <- path(raw_dir,"emp")
+inle_csv <- read_csv(dir_ls(emp_dir) %>% str_subset('csv'), 
+                 col_types = cols(.default = col_character())) %>% 
+  clean_names() 
+
+in_0809_fs <- dir_ls(emp_dir) %>% str_subset('2008|2009')
+
+in_1112_fs <- dir_ls(emp_dir) %>% str_subset('2011|2012')
+
+in_1319_fs <- dir_ls(emp_dir) %>% str_subset('2013|2014|2015|2016|2017|2019') %>% .[1:6]
+
+# Get the vector of column names by reading in the 2019 file and accessing its column headers
+names_inle <- names(inle_csv)
+
+
+#for (in_file in dir_ls(raw_dir) %>% str_subset('xl')) {
+  
+read_inxl <- function(in_file) {
+df <- read_excel(in_file,col_types = "text")
+                 #, col_types = c(rep("text",4), rep("numeric",25)))
+# find the index of the first row whose first column (year) is not blank
+ start_index <- which(str_detect(df %>% pull(var = 1),"\\d{4,}"))[1]
+    df <- df[start_index:nrow(df),]
+    names(df) <- names_inle
+    #remove rows that count totals
+    df <- df %>% 
+      filter(!is.na(lobbyist))
+        # we also need to fill down the  lobbyist column and year column that are often shared by multiple clients
+    df <- df %>% 
+      mutate(year_clean = str_extract(in_file, "\\d{4}"))
+    return(df)
+}
+
+
+read_1112_inxl <- function(in_file) {
+  # for 2011 and 2012
+df <- read_excel(in_file, col_types = "text")
+# find the index of the first row that has zero blanks
+#start_index <- which(!is.na(df$YEAR))[1]
+    #df <- df[start_index:nrow(df),]
+
+if (str_detect(in_file,"2012")) {
+  df <- df %>% 
+          add_column(YEAR = NA_character_,
+                     .before = 1)
+}
+df <- df[4:nrow(df),]
+    df <- df %>% 
+      add_column(terminated = NA_character_, .after = 3) 
+    names(df) <- names_inle
+    df <- df %>% 
+      mutate(year_clean = str_extract(in_file, "\\d{4}"))
+    #remove the rows that count totals
+    df <- df[rowSums(is.na(df))!=21,]
+    
+    return(df)
+}
+
+# inle_csv <- inle_csv %>% 
+#       mutate(year_clean = year,
+#              lobbyist_clean = lobbyist) %>% 
+#       fill(year_clean, lobbyist_clean)
+
+in_1319 <- map_dfr(in_1319_fs[1:6], read_inxl)
+  # bind_rows(inle_csv)
+
+in_1112 <- map_dfr(in_1112_fs, read_1112_inxl)
+
+in_2010_fs <- dir_ls(emp_dir,regexp = "2010.+")
+
+in_2010 <- read_inxl(in_2010_fs)
+
+inle_emp <- read_inxl(dir_ls(emp_dir) %>% str_subset("2010")) %>% 
+  bind_rows(in_1112) %>% 
+  bind_rows(in_1319)
+```
+
 Next, we can see that the file strutures for 2008 and 2009 are different from the one later on. The main difference is that: 
 1. The grand_totals for each year is in its own row.
 2. The `first_period_*` and `second_period_*` columns use the same column for each category, but there's a `PD` column for period. 
@@ -243,13 +329,11 @@ read_0809_inxl <- function(in_file){
     # create a new column that fills down column names
   df <- df %>% 
     add_column(year = NA_character_,.before = 1) %>% 
-    mutate(year_clean = str_extract(in_file,"\\d{4}")) %>% 
-    mutate(lobbyist_clean = `lobbyist name`) %>% 
-    fill(lobbyist_clean)
+    mutate(year_clean = str_extract(in_file,"\\d{4}"))
   
-  x <- df %>% filter(pd == 1)
-  x <- x %>% select(-pd)
-  names(x) <- c("year","lobbyist", "client", names_inle %>% str_subset("first"),"grand_totals", "year_clean","lobbyist_clean")
+  x <- df %>% filter(period == 1)
+  x <- x %>% select(-period)
+  names(x) <- c("year","lobbyist", "client", names_inle %>% str_subset("first"),"grand_totals", "year_clean")
   
   y <- df %>% filter(pd == 2)
   y <- y %>% select(-pd)
