@@ -1,7 +1,7 @@
 OSHA COVID-19 Weekly Reports
 ================
 Yanqi Xu
-2020-09-17 17:45:59
+2020-09-18 12:34:23
 
   - [Project](#project)
   - [Objectives](#objectives)
@@ -100,11 +100,11 @@ of complaints and removed workers from unsafe work places.
 
 The OSHA data is cumulative, so we only need the most recent file, which
 can be obtained from the
-[OSHA](https://www.osha.gov/foia/archived-covid-19-data). According to
-a DOL spokesperson, 
-> Upon receiving a complaint, OSHA opens an
-> investigation, and, if necessary, that investigation would include an
-> onsite inspection. OSHA investigates all complaints.
+[OSHA](https://www.osha.gov/foia/archived-covid-19-data). According to a
+DOL spokesperson,  
+\> Upon receiving a complaint, OSHA opens an investigation, and, if
+necessary, that investigation would include an onsite inspection. OSHA
+investigates all complaints.
 
 > Open inspections are those in which OSHA is conducting an
 > investigation. The agency has six months to complete an investigation.
@@ -167,12 +167,11 @@ dir_ls(raw_dir) %>% file_info()
 osha <- read_xlsx(dir_ls(raw_dir))
 ```
 
-According to a DOL spokesperson, 
-
-> The activity ID (ACT ID) is the unique
-> identifier for the complaint. On the Inspection Information page, users
-> are able to select specific inspections when the activity numbers are
-> known which identify the inspections.
+According to a DOL spokesperson,  
+\> The activity ID (ACT ID) is the unique identifier for the complaint.
+On the Inspection Information page, users are able to select specific
+inspections when the activity numbers are known which identify the
+inspections.
 
 > The inspection ID identifies whether the complaint resulted in an
 > inspection. The “Insp ID” column is only used when a complaint results
@@ -554,6 +553,15 @@ sum(osha$receipt_date > today())
 #> [1] 0
 ```
 
+### Year
+
+We’ll create a `year` field for the receipt date.
+
+``` r
+osha <- osha %>% 
+  add_column(year = year(osha$receipt_date),.after = "receipt_date")
+```
+
 ### Categorical
 
 #### Month
@@ -605,7 +613,7 @@ exposed. ![](../plots/haz-1.png)<!-- -->![](../plots/haz-2.png)<!-- -->
 ``` r
 glimpse(sample_n(osha, 20))
 #> Rows: 20
-#> Columns: 25
+#> Columns: 26
 #> $ rid                                    <chr> "06-277-00", "05-518-00", "10-553-50", "09-506-14…
 #> $ act_id                                 <chr> "C-1563258", "C-1594245", "C-1571532", "C-1554802…
 #> $ establishment_name_site_city_state_zip <chr> "Langley Management Company, Inc.\r\nAll loan loc…
@@ -613,6 +621,7 @@ glimpse(sample_n(osha, 20))
 #> $ county                                 <chr> "TULSA", "HENDRICKS", "YAKIMA", "ALAMEDA", "SUFFO…
 #> $ primary_site_naics                     <chr> "561110 /\r\n561110", "493110 /\r\n493110", "9211…
 #> $ receipt_date                           <dttm> 2020-03-31, 2020-05-11, 2020-04-10, 2020-03-17, …
+#> $ year                                   <dbl> 2020, 2020, 2020, 2020, 2020, 2020, 2020, 2020, 2…
 #> $ receipt_type                           <chr> "Phone", "Email", "Phone", "Phone", "Online", "On…
 #> $ formality                              <chr> "Nonformal", "Formal", "Nonformal", "Nonformal", …
 #> $ insp_id                                <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
@@ -673,6 +682,7 @@ The following table describes the variables in our final exported file:
 | `county`                                 | `character` | County of the establishment                                                         |
 | `primary_site_naics`                     | `character` | North American Standard Industrial Classification Code identifying industry         |
 | `receipt_date`                           | `double`    | Date the complaint was received                                                     |
+| `year`                                   | `double`    | Year of the complaint                                                               |
 | `receipt_type`                           | `character` | Receipt type                                                                        |
 | `formality`                              | `character` | Formality                                                                           |
 | `insp_id`                                | `character` | ID of the ensuing inspection                                                        |

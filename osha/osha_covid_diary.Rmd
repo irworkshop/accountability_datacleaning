@@ -462,6 +462,12 @@ min(osha$receipt_date)
 max(osha$receipt_date)
 sum(osha$receipt_date > today())
 ```
+### Year
+We'll create a `year` field for the receipt date.
+```{r year}
+osha <- osha %>% 
+  add_column(year = year(osha$receipt_date),.after = "receipt_date")
+```
 
 ### Categorical
 
@@ -613,6 +619,7 @@ dict_raw <- tibble(
 "County of the establishment",
 "North American Standard Industrial Classification Code identifying industry",
 "Date the complaint was received",
+"Year of the complaint",
 "Receipt type",
 "Formality",
 "ID of the ensuing inspection",
