@@ -541,7 +541,6 @@ Using the `aws.s3` package, we can upload the file to the IRW server.
 
 ```{r upload,eval=FALSE}
 s3_path <- path("csv", basename(clean_path))
-s3_path_early <- path("csv", basename(early_path))
 put_object(
   file = clean_path,
   object = s3_path, 
@@ -550,16 +549,7 @@ put_object(
   multipart = TRUE,
   show_progress = TRUE
 )
-put_object(
-  file = early_path,
-  object = s3_path_early, 
-  bucket = "publicaccountability",
-  acl = "public-read",
-  multipart = TRUE,
-  show_progress = TRUE
-)
 as_fs_bytes(object_size(s3_path, "publicaccountability"))
-as_fs_bytes(object_size(s3_path_early, "publicaccountability"))
 ```
 
 ## Dictionary

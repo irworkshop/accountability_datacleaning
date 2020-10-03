@@ -124,7 +124,7 @@ We can set up the raw directory.
 ```{r}
 raw_dir <- dir_create(here("ga", "lobby", "data", "raw","exp"))
 ```
-We can download the data files by year from 2016 to 2020. The 2020 data file is downloaded on September 29. 
+We can download the data files by year from 2006 to 2020. The 2020 data file is downloaded on September 29. 
 
 
 

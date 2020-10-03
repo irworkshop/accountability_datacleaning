@@ -27,8 +27,10 @@ opts_chunk$set(
   fig.width = 10,
   dpi = 300
 )
-options(width = 99)
-set.seed(5)
+if (!interactive()) {
+  options(width = 99)
+  set.seed(5)
+}
 ```
 
 ```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
@@ -80,6 +82,7 @@ pacman::p_load(
   lubridate, # datetime strings
   magrittr, # pipe operators
   janitor, # dataframe clean
+  aws.s3, # upload to aws s3
   refinr, # cluster and merge
   scales, # format strings
   knitr, # knit documents
@@ -113,79 +116,87 @@ Data is obtained from the [Alaska Public Offices Commission (APOC)][apoc].
 
 [apoc]: https://aws.state.ak.us/ApocReports/Campaign/#
 
-## Import
+## Download
 
-### Download
-
-From the [APOC income search][search], we can search "Any" report year without
-any additional parameters to return all income reports. From that search page
-we can "Export" _all_ results as a tab-delimited text file. We can do that by
-hand since the `httr::GET()` request below does not have all the cookies needed.
+Using the [APOC income search][search], we need to search for "All Completed
+Forms", "Any Names", and "Any" type. Exporting "Any" report year only returns
+roughly 400,000 results despite 1,411,206 results being listed in the search.
+We can export all of the results if we instead search and export individually
+by report year. As of now, this needs to be done by hand.
 
 [search]: https://aws.state.ak.us/ApocReports/CampaignDisclosure/CDIncome.aspx
 
+```{r line_count}
+line_count <- function(path) {
+  as.numeric(str_extract(system(paste("wc -l", path), intern = TRUE), "^\\d+"))
+}
+```
+
 ```{r raw_dir}
 raw_dir <- dir_create(here("ak", "contribs", "data", "raw"))
-raw_path <- path(raw_dir, glue("CD_Transactions_{format(today(), '%m-%d-%Y')}.CSV"))
+raw_info <- dir_info(raw_dir)
+sum(raw_info$size)
+raw_info %>% 
+  select(path, size, modification_time) %>% 
+  rowwise() %>% 
+  mutate(lines = line_count(path)) %>% 
+  mutate(across(path, basename))
 ```
 
 ```{r raw_get, eval=FALSE}
 httr::GET(
-  url = str_c(
-    "https://aws.state.ak.us",
-    "ApocReports",
-    "CampaignDisclosure",
-    "CDIncome.aspx",
-    sep = "/"
-  ),
+  # does not work
+  url = "https://aws.state.ak.us/ApocReports/CampaignDisclosure/CDIncome.aspx",
+  write_disk(raw_path)
   query = list(
     exportAll = "True",
     exportFormat = "CSV",
     isExport = "True"
   ),
-  write_disk(raw_path)
 )
 ```
 
+## Read
+
+The exported delimited text files have two aspects we need to adjust for; 1)
+There is a column called `--------` that is empty in every file, and 2) there
+is an extra comma at the end of each line. We can read this extra column at the
+end as a new `null` column.
+
 ```{r raw_names}
-ak_names <- names(clean_names(read_csv(raw_path, n_max = 0)))
+ak_names <- make_clean_names(read_names(raw_info$path[1]))
 ```
 
-### Read
-
-This tab-delimited text file can be read with `readr::read_tsv()`.
-
-```{r raw_fix}
-fix_path <- file_temp(ext = "csv")
-read_lines(raw_path, skip = 1) %>% 
-  str_remove(",(?=$)") %>% 
-  str_subset("^\\d") %>% 
-  write_lines(fix_path)
-```
+All the files can be read into a single data frame using `vroom::vroom()`.
 
 ```{r raw_read}
+# 1,411,206 items
 akc <- vroom(
-  file = fix_path,
+  file = raw_info$path,
+  skip = 1,
   delim = ",",
-  na = c("", "NA", "N/A"),
-  escape_backslash = FALSE,
-  escape_double = FALSE,
-  .name_repair = make_clean_names,
+  id = "file",
   num_threads = 1,
-  col_names = ak_names,
+  na = c("", "NA", "N/A"),
+  escape_double = FALSE,
+  escape_backslash = FALSE,
+  col_names = c(ak_names, "null"),
   col_types = cols(
     .default = col_character(),
     date = col_date_usa(),
     amount = col_number(),
     report_year = col_integer(),
-    submitted = col_date_usa()
+    submitted = col_date_usa(),
+    null = col_logical()
   )
 )
 ```
 
 ```{r echo=FALSE}
 akc <- akc %>% 
-  select(-x) %>% 
+  select(-x, -null) %>% 
+  relocate(file, .after = last_col()) %>% 
+  mutate(across(file, basename)) %>% 
   rename(
     id = result,
     tran_type = transaction_type,
@@ -193,10 +204,18 @@ akc <- akc %>%
     pay_detail = payment_detail,
     last = last_business_name,
     first = first_name,
-    expend_purpose = purpose_of_expenditure,
+    purpose = purpose_of_expenditure,
     filer = name
   )
 ```
+
+We successfully read the same number of rows as search results.
+
+```{r raw_rows}
+nrow(akc) == 1411206
+```
+
+`r percent(mean(akc$tran_type == "Income"))` of rows have an "Income" type.
 
 ```{r raw_check}
 count(akc, tran_type)
@@ -204,101 +223,109 @@ count(akc, tran_type)
 
 ## Explore
 
+There are `r comma(nrow(akc))` rows of `r ncol(akc)` columns.
+
 ```{r glimpse}
+glimpse(akc)
 head(akc)
-tail(akc)
-glimpse(sample_n(akc, 20))
 ```
 
 ### Missing
+
+Columns vary in their degree of missing values.
 
 ```{r na_count}
 col_stats(akc, count_na)
 ```
 
+We can flag any rows that are missing a name, date, or amount needed to identify
+a transaction.
+
 ```{r na_flag}
-akc <- akc %>% flag_na(date, last, amount, filer)
+key_vars <- c("date", "last", "amount", "filer")
+akc <- flag_na(akc, all_of(key_vars))
 sum(akc$na_flag)
+```
+
+All of these missing key values are the `last` name of the contributor.
+
+```{r na_view}
+akc %>% 
+  filter(na_flag) %>% 
+  select(all_of(key_vars)) %>% 
+  sample_frac()
+```
+
+```{r na_recount}
+akc %>% 
+  filter(na_flag) %>% 
+  select(all_of(key_vars)) %>% 
+  col_stats(count_na)
 ```
 
 ### Duplicates
 
-Quite a few records are entirely duplicated. We will not remove these records,
-as they may very well be valid repetitions, but we can flag them with 
-`campfin::flag_dupes()`.
+Ignoring the supposedly unique `id` variable, quite a few records are entirely
+duplicated. We will not remove these records, as they may very well be valid
+repetitions, but we can flag them with a new logical variable.
 
 ```{r dupe_flag}
-akc <- flag_dupes(akc, -id, .check = TRUE)
+d1 <- duplicated(akc[, -1], fromLast = TRUE)
+d2 <- duplicated(akc[, -1], fromLast = FALSE)
+akc <- mutate(akc, dupe_flag = (d1 | d2))
 percent(mean(akc$dupe_flag), 0.1)
+rm(d1, d2); flush_memory()
 ```
 
 ```{r dupe_view}
 akc %>% 
   filter(dupe_flag) %>% 
-  select(date, last, amount, filer)
+  select(id, all_of(key_vars))
 ```
 
 ### Categorical
+
+Columns also vary in their degree of distinctiveness. Some character columns 
+like `first` name are obviously mostly distinct, others like `office` only have
+a few unique values, which we can count.
 
 ```{r n_distinct}
 col_stats(akc, n_distinct)
 ```
 
-```{r bar_payment, echo=FALSE}
-explore_plot(
-  data = filter(akc, !is.na(pay_type)),
-  var = pay_type,
-  title = "Alaska Contributions by Payment Type"
-)
+```{r bar_categorical, echo=FALSE}
+explore_plot(akc, pay_type)
+explore_plot(akc, report_type)
+explore_plot(akc, election_type)
+explore_plot(akc, office)
+explore_plot(akc, filer_type)
 ```
 
-```{r bar_report, echo=FALSE}
-explore_plot(
-  data = filter(akc, !is.na(report_type)),
-  var = report_type,
-  title = "Alaska Contributions by Report Type"
-)
+### Amounts
+
+```{r amount_summary}
+noquote(map_chr(summary(akc$amount), dollar))
+percent(mean(akc$amount <= 0), 0.01)
 ```
 
-```{r bar_election, echo=FALSE}
-explore_plot(
-  data = filter(akc, !is.na(election_type)),
-  var = election_type,
-  title = "Alaska Contributions by Election Type"
-)
-```
+There are only `r comma(n_distinct(akc$amount))` values, which is an order of
+magnitude less than we might expect from a distribution of values from a dataset
+of this size.
 
-```{r bar_office, echo=FALSE}
-explore_plot(
-  data = filter(akc, !is.na(office)),
-  var = office,
-  title = "Alaska Contributions by Office"
-)
-```
+In fact, more than half of all `amount` values are \$2, \$5, \$50, \$100, or 
+\$500 dollars even.
 
-```{r bar_filer, echo=FALSE}
-explore_plot(
-  data = filter(akc, !is.na(filer_type)),
-  var = filer_type,
-  title = "Alaska Contributions by Filer Type",
-  nbar = 2
-)
-```
-
-### Continuous
-
-#### Amounts
-
-```{r ammount_summary}
-summary(akc$amount)
-mean(akc$amount <= 0, na.rm = TRUE)
+```{r amount_count}
+akc %>% 
+  count(amount, sort = TRUE) %>% 
+  add_prop(sum = TRUE)
 ```
 
 ```{r hist_amount, echo=FALSE}
 akc %>%
-  filter(amount > 1, amount < 1e4) %>% 
+  filter(amount >= 1) %>% 
   ggplot(aes(amount)) +
-  geom_histogram(fill = dark2["purple"], bins = 10) +
+  geom_histogram(fill = dark2["purple"], bins = 20) +
   scale_y_continuous(labels = comma) +
   scale_x_continuous(
     breaks = c(1 %o% 10^(0:6)),
@@ -313,36 +340,40 @@ akc %>%
   )
 ```
 
-#### Dates
+### Dates
 
 ```{r date_year}
-akc <- akc %>% 
-  mutate(
-    date = date %>% 
-      str_replace("^210(?=\\d-)", "201") %>% 
-      as_date(),
-    year = year(date)
-  )
-
+akc <- mutate(
+  .data = akc,
+  date_clean = date %>% 
+    # fix bad years with regex
+    str_replace("^(210)(?=\\d-)", "201") %>% 
+    str_replace("^(202)(?=[13-9])", "201") %>% 
+    str_replace("^(29)(?=\\d-)", "20") %>% 
+    str_replace("^(291)(?=\\d-)", "201") %>% 
+    str_replace("^(301)(?=\\d-)", "201") %>% 
+    as_date(),
+  year_clean = year(date_clean)
+)
 ```
 
 ```{r date_range}
-min(akc$date, na.rm = TRUE)
-sum(akc$year < 2000, na.rm = TRUE)
-max(akc$date, na.rm = TRUE)
-sum(akc$date > today(), na.rm = TRUE)
+min(akc$date_clean)
+sum(akc$year_clean < 2011)
+max(akc$date_clean)
+sum(akc$date_clean > today())
 ```
 
 ```{r bar_year, echo=FALSE}
 akc %>% 
-  count(year) %>% 
-  mutate(even = is_even(year)) %>% 
-  ggplot(aes(x = year, y = n)) +
+  count(year_clean) %>% 
+  mutate(even = is_even(year_clean)) %>% 
+  ggplot(aes(x = year_clean, y = n)) +
   geom_col(aes(fill = even)) + 
   scale_fill_brewer(palette = "Dark2") +
   scale_y_continuous(labels = comma) +
-  scale_x_continuous(breaks = seq(2014, 2020, by = 2)) +
-  coord_cartesian(xlim = c(2014, 2020)) +
+  scale_x_continuous(breaks = seq(2011, 2020)) +
+  coord_cartesian(xlim = c(2011, 2020)) +
   theme(legend.position = "bottom") +
   labs(
     title = "Alaska Contributions by Year",
@@ -420,15 +451,41 @@ akc <- akc %>%
       state = state,
       abbreviate = TRUE,
       na_rep = TRUE,
-      valid = valid_state
+      valid = NULL
     )
   )
 ```
 
-```{r state_view}
+```{r state_changes}
 akc %>% 
   filter(state != state_norm) %>% 
   count(state, state_norm, sort = TRUE)
+```
+
+```{r state_view}
+akc %>% 
+  filter(state_norm %out% valid_state) %>% 
+  count(state, state_norm, sort = TRUE) %>% 
+  print(n = Inf)
+```
+
+```{r state_fix}
+akc <- akc %>% 
+  mutate(
+    state_norm = state_norm %>% 
+      na_in("NONE") %>% 
+      str_replace("^ALBERTA$", "AB") %>% 
+      str_replace("^BRITISH COLUMBIA$", "BC") %>% 
+      str_replace("^NEW ZEALAND$", "NZ") %>% 
+      str_replace("^NZL$", "NZ") %>% 
+      str_replace("^ONTARIO$", "ON") %>% 
+      str_replace("^PHILIPPINES$", "PH") %>% 
+      str_replace("^PHILLIPINES$", "PH") %>% 
+      str_replace("^SURRY HILLS$", "NSW") %>% 
+      str_replace("^EUROPE$", "EU") %>% 
+      str_remove("\\s\\w+ CANADA") %>% 
+      str_squish()
+  )
 ```
 
 ```{r state_progress}
@@ -539,7 +596,7 @@ Then we can join the refined values back to the database.
 
 ```{r city_join}
 akc <- akc %>% 
-  left_join(good_refine) %>% 
+  left_join(good_refine, by = names(.)) %>% 
   mutate(city_refine = coalesce(city_refine, city_swap))
 ```
 
@@ -630,13 +687,33 @@ glimpse(sample_n(akc, 20))
 
 ```{r clean_dir}
 clean_dir <- dir_create(here("ak", "contribs", "data", "clean"))
+clean_path <- path(clean_dir, "ak_contribs_clean.csv")
+write_csv(akc, clean_path, na = "")
+(clean_size <- file_size(clean_path))
+file_encoding(clean_path) %>% 
+  mutate(across(path, path.abbrev))
 ```
 
-```{r clean_write}
-write_csv(
-  x = akc,
-  path = path(clean_dir, "ak_contribs_clean.csv"),
-  na = ""
-)
+## Upload
+
+We can use the `aws.s3::put_object()` to upload the text file to the IRW server.
+
+```{r s3_upload, eval=TRUE}
+s3_path <- path("csv", basename(clean_path))
+if (!object_exists(s3_path, "publicaccountability")) {
+  put_object(
+    file = clean_path,
+    object = s3_path, 
+    bucket = "publicaccountability",
+    acl = "public-read",
+    multipart = TRUE,
+    show_progress = TRUE
+  )
+}
 ```
 
+```{r s3_size}
+r <- head_object(s3_path, "publicaccountability")
+(s3_size <- as_fs_bytes(attr(r, "content-length")))
+unname(s3_size == clean_size)
+```
