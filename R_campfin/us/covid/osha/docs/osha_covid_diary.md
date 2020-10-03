@@ -1,7 +1,7 @@
 OSHA COVID-19 Weekly Reports
 ================
 Yanqi Xu
-2020-09-21 11:02:22
+2020-09-23 13:47:26
 
   - [Project](#project)
   - [Objectives](#objectives)
@@ -60,6 +60,7 @@ pacman::p_load_gh("irworkshop/campfin")
 pacman::p_load(
   rvest, #read_html
   readxl, # read excel
+  geofacet, # ggplot
   tidyverse, # data manipulation
   lubridate, # datetime strings
   magrittr, # pipe opperators
@@ -88,7 +89,7 @@ feature and should be run as such. The project also uses the dynamic
 ``` r
 # where does this document knit?
 here::here()
-#> [1] "/Users/yanqixu/code/accountability_datacleaning"
+#> [1] "/Users/yanqixu/code/accountability_datacleaning/R_campfin"
 ```
 
 ## Data
@@ -102,10 +103,11 @@ of complaints and removed workers from unsafe work places.
 The OSHA data is cumulative, so we only need the most recent file, which
 can be obtained from the
 [OSHA](https://www.osha.gov/foia/archived-covid-19-data). According to a
-DOL spokesperson,  
-\> Upon receiving a complaint, OSHA opens an investigation, and, if
-necessary, that investigation would include an onsite inspection. OSHA
-investigates all complaints.
+DOL spokesperson,
+
+> Upon receiving a complaint, OSHA opens an investigation, and, if
+> necessary, that investigation would include an onsite inspection. OSHA
+> investigates all complaints.
 
 > Open inspections are those in which OSHA is conducting an
 > investigation. The agency has six months to complete an investigation.
@@ -127,7 +129,7 @@ investigates all complaints.
 > the complaint items and determine whether further action is warranted.
 
 ``` r
-raw_dir <- dir_create(here() %>% str_remove("/R_campfin") %>% path("osha/data/raw"))
+raw_dir <- dir_create(here::here("us","covid","osha","data","raw"))
 ```
 
 ``` r
@@ -170,11 +172,12 @@ file_date <- str_extract(dir_ls(raw_dir),"(?<=through_).+(?=\\.xlsx)") %>%   as.
 osha <- read_xlsx(dir_ls(raw_dir))
 ```
 
-According to a DOL spokesperson,  
-\> The activity ID (ACT ID) is the unique identifier for the complaint.
-On the Inspection Information page, users are able to select specific
-inspections when the activity numbers are known which identify the
-inspections.
+According to a DOL spokesperson,
+
+> The activity ID (ACT ID) is the unique identifier for the complaint.
+> On the Inspection Information page, users are able to select specific
+> inspections when the activity numbers are known which identify the
+> inspections.
 
 > The inspection ID identifies whether the complaint resulted in an
 > inspection. The “Insp ID” column is only used when a complaint results
@@ -563,6 +566,8 @@ We’ll create a `year` field for the receipt date.
 ``` r
 osha <- osha %>% 
   add_column(year = year(osha$receipt_date),.after = "receipt_date")
+
+this_year <- year(osha$receipt_date)
 ```
 
 ### Categorical
@@ -570,40 +575,13 @@ osha <- osha %>%
 #### Month
 
 We can see the frequencies of complaints made for each month
-![](../plots/month-1.png)<!-- -->
 
 #### Industry
 
-We can also see where cases occur most frequently.
-
-Using the NASIC indicators, we can also see which industries have the
-most number of closed complaints.
-
-``` r
-osha %>% 
-  count(primary_site_naics) %>% top_n(8) %>% arrange(desc(n)) %>% 
-  mutate(industry = case_when(
-    str_detect(primary_site_naics,"622110") ~ "General Medical and Surgical Hospitals",
- str_detect(primary_site_naics,"623110") ~ "Nursing Care Facilities (Skilled Nursing Facilities)",
- str_detect(primary_site_naics,"491110") ~ "Postal Service",
- str_detect(primary_site_naics,"621111") ~ "Offices of Physicians (except Mental Health Specialists)",
- str_detect(primary_site_naics,"445110") ~ "Supermarkets and Other Grocery (except Convenience) Stores",
- str_detect(primary_site_naics,"493110") ~ "General Warehousing and Storage",
- str_detect(primary_site_naics,"722511") ~ "Full-Service Restaurants",
- str_detect(primary_site_naics,"621210") ~ "Offices of Dentists",
-  )) %>% 
-  ggplot(aes(x= reorder(industry,-n),y=n)) +
-  geom_col(fill="indianred") +
-  scale_x_discrete(labels = wrap_format(10)) +
-  theme_bw() +
-  theme(legend.position = "bottom") +
-  labs(title = "Closed OSHA complaints by industry",
-       caption = "Source: OSHA weekly reports summary",
-       x = "industry",
-       y = "count"
-       )
-```
-
+We can also see where cases occur most frequently. We can see that the
+cases are mostly concentrated in a few states.
+![](../plots/geo-1.png)<!-- --> Using the NASIC indicators, we can also
+see which industries have the most number of closed complaints.
 ![](../plots/nasic-1.png)<!-- -->
 
 #### Continuous

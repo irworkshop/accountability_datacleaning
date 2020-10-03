@@ -76,6 +76,7 @@ pacman::p_load_gh("irworkshop/campfin")
 pacman::p_load(
   rvest, #read_html
   readxl, # read excel
+  geofacet, # ggplot
   tidyverse, # data manipulation
   lubridate, # datetime strings
   magrittr, # pipe opperators
@@ -113,6 +114,7 @@ here::here()
 ### Download
 The OSHA data is cumulative, so we only need the most recent file, which can be obtained from the [OSHA][03]. 
 According to a DOL spokesperson,  
+
 > Upon receiving a complaint, OSHA opens an investigation, and, if necessary, that investigation would include an onsite inspection. OSHA investigates all complaints.
 
 > Open inspections are those in which OSHA is conducting an investigation. The agency has six months to complete an investigation. Additional details about open complaints are not available until the investigation is complete. The case file remains open throughout the inspection process and is not closed until the agency is satisfied that abatement has occurred.
@@ -157,6 +159,7 @@ osha <- read_xlsx(dir_ls(raw_dir))
 
 
 According to a DOL spokesperson,   
+
 > The activity ID (ACT ID) is the unique identifier for the complaint. On the Inspection Information page, users are able to select specific inspections when the activity numbers are known which identify the inspections.
 
 > The inspection ID identifies whether the complaint resulted in an inspection.  The “Insp ID” column is only used when a complaint results in an inspection. Otherwise, the complaint will be handled using OSHA’s phone/fax investigation procedures and the “Insp ID” field will be left blank.Inspections are identified by number under the “Insp ID” column on the spreadsheet. Limited data on these open inspections can be found through a search on the Inspection Information page. For closed complaints, the OSHA Area Office reviews responses from employers regarding actions taken to address the complaint items and determines whether further action is warranted.
@@ -470,53 +473,60 @@ We'll create a `year` field for the receipt date.
 ```{r year}
 osha <- osha %>% 
   add_column(year = year(osha$receipt_date),.after = "receipt_date")
+
+this_year <- year(osha$receipt_date)
 ```
 
 ### Categorical
 
 #### Month
 We can see the frequencies of complaints made for each month
-```{r month, echo=FALSE}
-this_year <- year(osha$receipt_date)
+```{r month, echo=FALSE, eval=FALSE}
 osha %>% 
-  mutate(inspected = !is.na(insp_id)) %>% 
-  ggplot(aes(x = month(receipt_date,label = T),  fill =  inspected)) +
+  mutate(case_status = case_when(
+    !is.na(insp_id) ~ "valid with an inspection completed",
+    is.na(insp_id) ~ "valid without an inspection")) %>% 
+  ggplot(aes(x = month(receipt_date,label = T),  fill =  case_status)) +
   geom_bar()+ 
   scale_fill_brewer(palette = "Dark2") +
+  scale_x_discrete() + 
   scale_y_continuous(labels = comma) +
   theme(legend.position = "bottom") +
   theme_bw() +
   labs(
     title = "OSHA closed complaints by month of receipt",
     x = glue("month in {this_year}"),
-    y = "count"
+    y = "count",
+    caption = "Source: OSHA weekly reports"
   )
 ```
 
 #### Industry
-We can also see where cases occur most frequently.
-```{r geo, echo=FALSE, eval=FALSE}
+We can also see where cases occur most frequently. We can see that the cases are mostly concentrated in a few states. 
+```{r geo, echo=FALSE}
   osha %>% 
   mutate(month = month(receipt_date)) %>% 
-  filter(state_norm %out% c("VI","PR")) %>% 
+  filter(state_norm %out% c("VI","PR")&!is.na(state_norm)) %>% 
  count(month,state_norm) %>% 
-  # facet_wrap(~state_norm)
   ggplot(aes(x = month, y = n)) +
-   facet_geo(~ state_norm,grid = "us_state_grid2", label = "name") +  
-  geom_col()
-  scale_fill_brewer(palette = "Dark2") +
+  geom_col(fill = "steelblue") +
+  facet_geo(~ state_norm,grid = "us_state_grid2") +  
+  #facet_wrap(~state_norm) +
+  #scale_fill_brewer(palette = "Dark2") +
+  scale_x_continuous(breaks = seq(from = 1, to = 10, by = 3)) + 
   scale_y_continuous(labels = comma) +
   theme(legend.position = "bottom") +
   theme_bw() +
   labs(
     title = "OSHA closed complaints by month of receipt",
     x = glue("month in {this_year}"),
-    y = "count"
+    y = "count of closed complaints",
+    caption = "Source: OSHA weekly reports"
   )
  
 ```
 Using the NASIC indicators, we can also see which industries have the most number of closed complaints.
-```{r nasic}
+```{r nasic, echo=FALSE}
 osha %>% 
   count(primary_site_naics) %>% top_n(8) %>% arrange(desc(n)) %>% 
   mutate(industry = case_when(
@@ -528,6 +538,7 @@ osha %>%
  str_detect(primary_site_naics,"493110") ~ "General Warehousing and Storage",
  str_detect(primary_site_naics,"722511") ~ "Full-Service Restaurants",
  str_detect(primary_site_naics,"621210") ~ "Offices of Dentists",
+ TRUE ~ "Others"
   )) %>% 
   ggplot(aes(x= reorder(industry,-n),y=n)) +
   geom_col(fill="indianred") +
@@ -535,9 +546,9 @@ osha %>%
   theme_bw() +
   theme(legend.position = "bottom") +
   labs(title = "Closed OSHA complaints by industry",
-       caption = "Source: OSHA weekly reports summary",
        x = "industry",
-       y = "count"
+       y = "count",
+       caption = "Source: OSHA weekly reports"
        )
 ```
 
