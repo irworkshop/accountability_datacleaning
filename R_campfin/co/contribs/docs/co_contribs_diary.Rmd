@@ -27,8 +27,7 @@ opts_chunk$set(
   fig.width = 10,
   dpi = 300
 )
-inter <- !interactive()
-if (inter) {
+if (!interactive()) {
   options(width = 99)
   set.seed(5)
 }
@@ -81,15 +80,19 @@ pacman::p_load_gh("irworkshop/campfin")
 pacman::p_load(
   tidyverse, # data manipulation
   lubridate, # datetime strings
+  gluedown, # printing markdown
   magrittr, # pipe operators
-  janitor, # dataframe clean
+  janitor, # clean data frames
+  aws.s3, # upload to aws s3
   refinr, # cluster and merge
   scales, # format strings
   knitr, # knit documents
   vroom, # read files fast
+  rvest, # html scraping
   glue, # combine strings
-  here, # relative storage
-  fs # search storage 
+  here, # relative paths
+  httr, # http requests
+  fs # local storage 
 )
 ```
 
@@ -161,6 +164,38 @@ county candidates and committees.
 
 TRACER also provides a PDF [spreadsheet key][key].
 
+|Field Name            |Description                                            |
+|:---------------------|:------------------------------------------------------|
+|`CO_ID`               |Alphanumeric committee ID for the recipient committee. |
+|`CONTRIBUTION AMOUNT` |Contribution Amount.                                   |
+|`CONTRIBUTION DATE`   |Contribution Receipt Date.                             |
+|`LAST NAME`           |Last Name (or entity name) of Contributor              |
+|`FIRST NAME`          |Contributor First Name                                 |
+|`MI`                  |Contributor Middle Initial                             |
+|`SUFFIX`              |Contributor Name Suffix                                |
+|`ADDRESS 1`           |Street, PO Box, or other directional information       |
+|`ADDRESS 2`           |Suite/Apartment number, directional information        |
+|`CITY`                |City.                                                  |
+|`STATE`               |State.                                                 |
+|`ZIP`                 |Zip Code.                                              |
+|`EXPLANATION`         |Description provided for the contribution.             |
+|`RECORD ID`           |Contribution internal ID issued by the SOS.            |
+|`FILED DATE`          |                                                       |
+|`CONTRIBUTION TYPE`   |Contribution Type.                                     |
+|`RECEIPT TYPE`        |                                                       |
+|`CONTRIBUTOR TYPE`    |                                                       |
+|`ELECTIONEERING`      |YES or blank                                           |
+|`COMMITTEE TYPE`      |                                                       |
+|`COMMITTEE NAME`      |Name of the recipient committee.                       |
+|`CANDIDATE NAME`      |Name of the recipient candidate..                      |
+|`EMPLOYER`            |Contributor's employer.                                |
+|`OCCUPATION`          |Contributor's occupation in cases from list.           |
+|`AMENDED`             |Amendment was filed for this record. (Y/N)             |
+|`AMENDMENT`           |Record is an amendment to a previously file. (Y/N)     |
+|`AMENDED RECORD ID`   |Original record ID that was amended.                   |
+|`JURISDICTION`        |This is the jurisdiction name.                         |
+|`OCCUPATION COMMENTS` |If ‘Other’ is chosen for the occupation.               |
+
 [key]: http://tracer.sos.colorado.gov/PublicSite/Resources/DownloadDataFileKey.pdf
 
 ## Import
@@ -170,7 +205,7 @@ We can download the annual ZIP archives directly from TRACER.
 ```{r raw_dir}
 raw_dir <- dir_create(here("co", "contribs", "data", "raw"))
 raw_base <- "http://tracer.sos.colorado.gov/PublicSite/Docs/BulkDataDownloads/"
-raw_urls <- str_c(raw_base, glue("{2000:2019}_ContributionData.csv.zip"))
+raw_urls <- str_c(raw_base, glue("{2000:2020}_ContributionData.csv.zip"))
 raw_paths <- path(raw_dir, basename(raw_urls))
 if (!all_files_new(raw_dir)) {
   download.file(raw_urls, raw_paths)
@@ -184,17 +219,13 @@ with single-quotes.
 
 ```{r raw_fix}
 fix_dir <- dir_create(path(dirname(raw_dir), "fix"))
-if (!all_files_new(fix_dir)) {
-  for (r in raw_paths) {
-    f <- path(fix_dir, path_ext_remove(basename(r)))
-    read_lines(r) %>% 
-      str_replace_all('(?<!,(?!\\s)|\n|^)"(?!,(?!\\s)|\n|$)', "'") %>% 
-      write_lines(f)
-    message(f)
-    if (str_detect(r, "2011")) {
-      
-    }
-  }
+for (r in raw_paths) {
+  f <- path(fix_dir, path_ext_remove(basename(r)))
+  read_lines(r) %>% 
+    str_replace_all('(?<!,(?!\\s)|\n|^)"(?!,(?!\\s)|\n|$)', "'") %>% 
+    str_replace_all('\n(?!"\\d+",)', " ") %>% 
+    write_lines(f)
+  message(path.abbrev(f))
 }
 fix_paths <- dir_ls(fix_dir)
 ```
@@ -216,6 +247,10 @@ coc <- vroom(
 )
 ```
 
+```{r raw_move}
+coc <- relocate(coc, source, .after = last_col())
+```
+
 We can ensure these files were properly read by counting the distinct values of 
 a discrete variable like the binary `amended` variable. There should only be two
 values.
@@ -227,47 +262,104 @@ count(coc, amended, sort = TRUE)
 These binary variable should be converted to logical.
 
 ```{r raw_parse}
+old_names <- names(coc)
 coc <- coc %>% 
-  mutate_at(vars(amended, amendment), ~equals(., "Y")) %>% 
-  mutate_at(vars(source), basename) %>% 
-  mutate_at(vars(ends_with("date")), as_date) %>% 
-  rename_all(str_remove, "contribution_")
+  mutate(across(c(amended, amendment), equals, "Y")) %>% 
+  mutate(across(electioneering, ~!is.na(.))) %>% 
+  mutate(across(source, basename)) %>% 
+  mutate(across(ends_with("date"), as_date)) %>% 
+  rename_all(str_remove, "contribution_") %>% 
+  rename_all(str_remove, "_name") %>% 
+  rename(
+    amend_id = amended_record_id,
+    cont_type = contributor_type,
+    comm_type = committee_type
+  )
 ```
 
 ## Explore
 
+There are `r comma(nrow(coc))` records with `r ncol(coc)` columns.
+
 ```{r glimpse}
-nrow(coc)
-head(coc)
+glimpse(coc)
 tail(coc)
-glimpse(sample_n(coc, 20))
 ```
 
 ### Missing
+
+Columns vary in their degree of missing values.
 
 ```{r na_count}
 col_stats(coc, count_na)
 ```
 
+After creating a single contributor name variable, we can flag any record
+missing a name, date, or amount.
+
 ```{r na_flag}
 coc <- coc %>% 
   unite(
-    col = cont_name,
-    last_name, mi, first_name,
+    col = contributor,
+    first, mi, last,
     sep = " ",
     na.rm = TRUE,
     remove = FALSE
   ) %>% 
-  flag_na(date, cont_name, amount, committee_name) %>% 
-  select(-cont_name)
+  relocate(contributor, .after = last_col()) %>% 
+  mutate(across(contributor, na_if, "")) %>% 
+  flag_na(date, contributor, amount, committee)
+```
 
-sum(coc$na_flag)
+`r percent(mean(coc$na_flag), 0.1)` of records are missing some value.
+
+```{r na_check <- }
+mean(coc$na_flag)
+```
+
+All of these records are missing the contributor `last` name. 
+
+```{r na_view}
+coc %>% 
+  filter(na_flag) %>% 
+  select(date, contributor, amount, committee)
+```
+
+Practically all of these values are "Non-Itemized" contributions.
+
+```{r na_type_count}
+coc %>% 
+  filter(na_flag) %>% 
+  count(type, sort = TRUE) %>% 
+  add_prop()
+```
+
+```{r na_type_bar, echo=FALSE}
+coc %>% 
+  count(na_flag, type, sort = TRUE) %>% 
+  filter(type %in% most_common(type)) %>% 
+  ggplot(aes(type, n)) +
+  geom_col(aes(fill = type)) +
+  facet_wrap(~na_flag, scales = "free", ncol = 1) +
+  scale_y_continuous(trans = "log10", labels = comma) +
+  scale_fill_brewer(palette = "Dark2", guide = FALSE) +
+  labs(
+    title = "Colorado Contributions Missing Names by Type",
+    x = "Contribution type",
+    y = "Count"
+  )
 ```
 
 ### Duplicates
 
 ```{r dupe_flag}
-coc <- flag_dupes(coc, -record_id, .check = TRUE)
+d1 <- duplicated(select(coc, -record_id), fromLast = FALSE)
+d2 <- duplicated(select(coc, -record_id), fromLast = TRUE)
+coc <- mutate(coc, dupe_flag = d1 | d2)
+rm(d1, d2); flush_memory()
+```
+
+```{r dupe_count}
 percent(mean(coc$dupe_flag), 0.01)
 ```
 
@@ -275,7 +367,14 @@ percent(mean(coc$dupe_flag), 0.01)
 coc %>% 
   filter(dupe_flag) %>% 
   arrange(date) %>% 
-  select(date, last_name, amount, committee_name)
+  select(date, last, amount, committee) %>% 
+  arrange(desc(date))
+```
+
+Most duplicate records are also missing a key value.
+
+```{r dupe_na}
+mean(coc$dupe_flag[coc$na_flag])
 ```
 
 ### Categorical
@@ -284,9 +383,13 @@ coc %>%
 col_stats(coc, n_distinct)
 ```
 
-```{r fig.keep=FALSE}
-explore_plot(filter(coc, !is.na(receipt_type)), receipt_type)
-explore_plot(filter(coc, !is.na(committee_type)), committee_type)
+```{r echo=FALSE}
+explore_plot(coc, source) + scale_x_truncate()
+explore_plot(coc, receipt_type) + scale_x_truncate()
+explore_plot(coc, comm_type) + scale_x_truncate()
+explore_plot(coc, comm_type) + scale_x_truncate()
+explore_plot(coc, occupation) + scale_x_truncate()
+explore_plot(coc, jurisdiction) + scale_x_truncate()
 ```
 
 ### Continuous
@@ -300,9 +403,9 @@ mean(coc$amount <= 0, na.rm = TRUE)
 
 ```{r hist_amount, echo=FALSE}
 coc %>%
-  filter(amount > 1) %>% 
+  filter(amount > 1, amount < 1e6) %>% 
   ggplot(aes(amount)) +
-  geom_histogram(fill = dark2["purple"]) +
+  geom_histogram(fill = dark2["purple"], bins = 20) +
   scale_y_continuous(labels = comma) +
   scale_x_continuous(
     breaks = c(1 %o% 10^(0:6)),
@@ -426,9 +529,15 @@ coc <- coc %>%
       state = state,
       abbreviate = TRUE,
       na_rep = TRUE,
-      valid = valid_state
+      valid = NULL
     )
   )
+```
+
+```{r}
+coc %>% 
+  filter(state_norm %out% valid_state) %>% 
+  count(state, state_norm, sort = TRUE)
 ```
 
 ```{r state_progress}
@@ -540,17 +649,18 @@ Then we can join the refined values back to the database.
 
 ```{r city_join}
 coc <- coc %>% 
-  left_join(good_refine) %>% 
+  left_join(good_refine, by = names(.)) %>% 
   mutate(city_refine = coalesce(city_refine, city_swap))
 ```
 
 #### Progress
 
 ```{r city_view}
-many_city <- c(valid_city, extra_city)
+many_city <- c(valid_city, extra_city, "PUEBLO WEST", "CASTLE PINES")
+coc$city_refine <- na_if(coc$city_refine, "UNKNOWNCITY")
 coc %>% 
-  filter(city_swap %out% many_city) %>% 
-  count(city_swap, sort = TRUE)
+  filter(city_refine %out% many_city) %>% 
+  count(city_refine, state_norm, sort = TRUE)
 ```
 
 ```{r city_progress, echo=FALSE}
@@ -558,6 +668,7 @@ progress <- progress_table(
   str_to_upper(coc$city),
   coc$city_norm,
   coc$city_swap,
+  coc$city_refine,
   compare = many_city
 ) %>% mutate(stage = as_factor(stage))
 kable(progress, digits = 3)
@@ -566,7 +677,7 @@ kable(progress, digits = 3)
 You can see how the percentage of valid values increased with each stage.
 
 ```{r bar_progress, echo=FALSE}
-raw_in <- percent(prop_in(coc$city_raw, valid_city))
+raw_in <- percent(prop_in(coc$city, valid_city))
 progress %>% 
   ggplot(aes(x = stage, y = prop_in)) +
   geom_hline(yintercept = 0.99) +
@@ -611,6 +722,9 @@ progress %>%
 
 ## Conclude
 
+Before exporting, we can remove the intermediary normalization columns and
+rename all added variables with the `_clean` suffix.
+
 ```{r clean_select}
 coc <- coc %>% 
   select(
@@ -618,26 +732,49 @@ coc <- coc %>%
     -city_swap,
     city_clean = city_refine
   ) %>% 
-  rename_all(~str_replace(., "_norm", "_clean"))
+  rename_all(~str_replace(., "_norm", "_clean")) %>% 
+  rename_all(~str_remove(., "_raw"))
 ```
 
 ```{r clean_glimpse}
-glimpse(sample_n(coc, 20))
+glimpse(sample_frac(coc))
 ```
 
 1. There are `r comma(nrow(coc))` records in the database.
 1. There are `r comma(sum(coc$dupe_flag))` duplicate records in the database.
 1. The range and distribution of `amount` and `date` seem reasonable.
-1. There are `r comma(sum(coc$na_flag))` records missing ....
+1. There are `r comma(sum(coc$na_flag))` records missing key variables.
 1. Consistency in geographic data has been improved with `campfin::normal_*()`.
 1. The 4-digit `year` variable has been created with `lubridate::year()`.
 
 ## Export
+
+Now the file can be saved on disk for upload to the Accountability server.
 
 ```{r clean_dir}
 clean_dir <- dir_create(here("co", "contribs", "data", "clean"))
 clean_path <- path(clean_dir, "co_contribs_clean.csv")
 write_csv(coc, clean_path, na = "")
 file_size(clean_path)
-guess_encoding(clean_path)
+file_encoding(clean_path) %>% 
+  mutate(across(path, path.abbrev))
+```
+
+## Upload
+
+We can use the `aws.s3::put_object()` to upload the text file to the IRW server.
+
+```{r s3_upload, eval=FALSE}
+s3_path <- path("csv", basename(clean_path))
+if (!object_exists(s3_path, "publicaccountability")) {
+  put_object(
+    file = clean_path,
+    object = s3_path, 
+    bucket = "publicaccountability",
+    acl = "public-read",
+    show_progress = TRUE,
+    multipart = TRUE
+  )
+}
+as_fs_bytes(object_size(s3_path, "publicaccountability"))
 ```
