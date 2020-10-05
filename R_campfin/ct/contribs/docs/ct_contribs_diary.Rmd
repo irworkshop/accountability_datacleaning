@@ -80,15 +80,19 @@ pacman::p_load_gh("irworkshop/campfin")
 pacman::p_load(
   tidyverse, # data manipulation
   lubridate, # datetime strings
+  gluedown, # printing markdown
   magrittr, # pipe operators
-  janitor, # dataframe clean
+  janitor, # clean data frames
+  aws.s3, # upload to aws s3
   refinr, # cluster and merge
   scales, # format strings
   knitr, # knit documents
   vroom, # read files fast
+  rvest, # html scraping
   glue, # combine strings
-  here, # relative storage
-  fs # search storage 
+  here, # relative paths
+  httr, # http requests
+  fs # local storage 
 )
 ```
 
@@ -110,45 +114,236 @@ here::here()
 
 ## Data
 
-## Import
+Campaign contribution data for the state of Connecticut is managed by the
+[State Elections Enforcement Commission (SEEC)][seec]. The data can be obtained
+from the SEEC [Campaign Reporting Information System (eCRIS)][ecris] public
+[search portal][search].
 
-### Download
+> This page allows the public to search, browse and download information from
+campaign finance reports filed by committees with the SEEC’s Disclosure and
+Audit Unit. The term committees for purposes of this summary includes: Candidate
+committees, Exploratory committees, Party committees and Political Action
+committees (also known as PACs). We shall refer to all four distinct committee
+types as political committees in order to accent the political nature of their
+purpose in relationship to the financing of election campaigns for elective
+public office in Connecticut.The Commission strives to offer fast and easy
+public access to the filings by committees.
+
+The SEEC also provides a [bulk download page][bulk] with annual CSV files.
+
+> Receipts Data for Party, Political, Candidate and Exploratory Committees
+(e-filed in eCRIS and paper report transactions were entered by the State
+Election Enforcement Comission staff using a data entry module.)
+
+[seec]: https://portal.ct.gov/seec
+[ecris]: https://seec.ct.gov/Portal/eCRIS/eCRISlanding
+[search]: https://seec.ct.gov/Portal/eCRIS/eCrisSearch
+[bulk]: https://seec.ct.gov/Portal/eCRIS/CurPreYears
+
+## Download
+
+We can scrape this page and find any CSV files containing contribution receipts.
+
+```{r raw_list}
+# read the seec cris page
+read_html("https://seec.ct.gov/Portal/eCRIS/CurPreYears") %>% 
+  # grab all urls on the page
+  html_nodes("a") %>% html_attr("href") %>% 
+  # filter the receit csv files
+  str_subset("Receipts.*(csv|CSV)$") -> raw_urls
+```
+
+These URLs will be downloaded to the local raw directory.
 
 ```{r raw_download}
 raw_dir <- dir_create(here("ct", "contribs", "data", "raw"))
-seec <- "http://seec.ct.gov/ecrisreporting/Data/eCrisDownloads/exportdatafiles/"
-raw_names <- glue("Receipts{2008:2020}CalendarYearPartyPACCommittees.CSV")
-raw_urls <- str_c(seec, raw_names)
-raw_paths <- path(raw_dir, raw_names)
-if (!all(this_file_new(raw_paths))) {
-  download.file(raw_urls, raw_paths)
+raw_paths <- path(raw_dir, basename(raw_urls))
+for (i in seq_along(raw_urls)) {
+  if (!file_exists(raw_paths[i])) {
+    download.file(
+      url = raw_urls[i], 
+      destfile = raw_paths[i]
+    )
+  }
 }
 ```
 
-### Read
+## Read
 
-```{r raw_read}
-ctc <- map_dfr(
-  .x = raw_paths,
-  .f = vroom,
+There are three types of files, with each varying slightly year to year:
+
+1. Party and PAC receipts
+    1. 2008-2013 (23 columns)
+    2. 2014-2020 (35 columns)
+2. Candidate exploratory committee receipts
+    1. 2008-2013 (23 columns)
+    2. 2014-2015 (37 columns)
+    3. 2016-2020 (41 columns)
+3. General committee receipts
+    1. 2002-2007 (26 columns)
+
+We will have to do some work to read these files into a single data frame and
+match the columns.
+
+### Older files
+
+The oldest files have 26 columns with capitalized names. The 2006 receipts file
+lacks column names, so we will read it last and then combine it separately to
+the other years.
+
+```{r old_files, results='asis'}
+old_files <- str_subset(raw_paths, "Cifs_Receipts")
+md_bullet(md_code(basename(old_files)))
+```
+
+```{r old_read}
+ct_old <- map_df(
+  .x = old_files[-2],
+  .f = read_delim,
+  .id = "source_file",
   delim = ",",
-  .name_repair = make_clean_names,
-  na = c("", "NA", "N/A", "NULL"),
-  escape_backslash = FALSE,
+  escape_backslash = FALSE, 
   escape_double = FALSE,
   col_types = cols(
     .default = col_character(),
-    Amount = col_double(),
-    `Transaction Date` = col_date_usa(),
-    `File To State` = col_date_usa(),
-    `Period Start` = col_date_usa(),
-    `Period End` = col_date_usa(),
+    # FILED_TO_STATE_DATE = col_date_usa(),
+    # SUBMITTED_DATE = col_date_usa(),
+    # CONTRIB_DATE = col_date_usa(),
+    CONTRIB_AMOUNT = col_double(),
+    LOAN_AMOUNT = col_double(),
+    INTEREST_EARNED_AMOUNT = col_double()
   )
 )
 ```
 
-```{r raw_rename, echo=FALSE}
-ctc <- ctc %>% 
+```{r old_fix}
+ct_2006 <- read_delim(
+  file = old_files[2],
+  delim = ",",
+  escape_backslash = FALSE,
+  escape_double = FALSE,
+  col_names = names(ct_old)[-1],
+  col_types = spec(ct_old)
+)
+```
+
+```{r old_identify}
+ct_old <- relocate(ct_old, source_file, .after = last_col())
+ct_old$source_file <- basename(old_files[as.integer(ct_old$source_file)])
+ct_2006 <- mutate(ct_2006, source_file = basename(raw_paths[2]))
+```
+
+```{r old_bind}
+ct_old <- ct_old %>% 
+  bind_rows(ct_2006) %>% 
+  clean_names("snake") %>% 
+  mutate(across(source_file, basename))
+```
+
+These files include `r comma(nrow(ct_old))` columns of `r ncol(ct_old)` columns.
+
+```{r echo=FALSE}
+ct_old <- ct_old %>% 
+  rename(
+    committee = committee_name,
+    fil_type = registration_type,
+    fil_sub = committee_sub_type,
+    trans_sub = trans_subcategoryde,
+    trans_type = transaction_type_des,
+    filed = filed_to_state_date,
+    trans_name = trans_display_name,
+    is_contrib = is_contribution,
+    submitted = submitted_date,
+    fil_id = contrib_comid,
+    comm_to = committees_committeename,
+    method = contrib_method_code,
+    date = contrib_date,
+    amount = contrib_amount,
+    loan = loan_amount,
+    inkind_desc = in_kind_contrib_desc,
+    inkind_est = in_kind_est_value,
+    interest = interest_earned_amount,
+    occupation = occup_desc,
+    occup_desc = other_occup_desc,
+    first = first_name,
+    middle = middle_name,
+    last = last_name,
+    zip = zip_code
+  )
+```
+
+We can create a single column for the contributor name to make the later files.
+
+```{r old_unite}
+ct_old <- ct_old %>% 
+  unite(
+    col = contributor,
+    first, middle, last,
+    sep = " ",
+    remove = FALSE,
+    na.rm = TRUE
+  ) %>% 
+  relocate(
+    contributor,
+    .after = last_col()
+  ) %>% 
+  mutate(
+    contributor = na_if(contributor, ""),
+    date_clean = mdy(date)
+  )
+```
+
+### Candidate files
+
+After 2007, contribution receipts were divided between filer types. We can now
+read all of the contributions made to candidate exploratory committees.
+
+```{r cand_files, results='asis'}
+cand_files <- str_subset(raw_paths, "Candidate")
+md_bullet(md_code(basename(cand_files)))
+```
+
+```{r cand_read}
+ct_cand <- map(
+  .x = cand_files,
+  .f = read_delim,
+  delim = ",",
+  na = c("", "NA", "N/A", "NULL", "NO"),
+  escape_double = TRUE,
+  col_types = cols(
+    .default = col_character(),
+    `Amount` = col_number(),
+    # use lubridate::mdy() instead
+    # `Transaction Date` = col_date_usa()
+  )
+)
+```
+
+The number of columns in a file increased over time.
+
+```{r cand_length}
+map_dbl(ct_cand, length)
+```
+
+However, all the columns present in the old files are present in the newer ones.
+Only additional columns are added over time.
+
+```{r cand_cols, echo=FALSE}
+cand_names <- names(ct_cand[[1]])
+map_dbl(ct_cand, ~mean(names(.) %in% cand_names))
+```
+
+That means we can safely `bind_rows()` and create a single dataframe.
+
+```{r cand_bind}
+ct_cand <- bind_rows(ct_cand, .id = "source_file")
+ct_cand <- relocate(ct_cand, source_file, .after = last_col())
+ct_cand$source_file <- basename(cand_files[as.integer(ct_cand$source_file)])
+```
+
+```{r cand_rename, echo=FALSE}
+ct_cand <- ct_cand %>% 
+  clean_names("snake") %>% 
   rename(
     contributor = contributor_name,
     office = office_sought,
@@ -157,8 +352,8 @@ ctc <- ctc %>%
     date = transaction_date,
     filed = file_to_state,
     receipt = receipt_state,
-    contract_exec = contractor_executive_branch,
-    contract_leg = contractor_legislative_branch,
+    con_exec = contractor_executive_branch,
+    con_leg = contractor_legislative_branch,
     source = data_source,
     refiled = refiled_electronically,
     address = street_address,
@@ -167,14 +362,133 @@ ctc <- ctc %>%
     fil_id = committee_id,
     sec_letter = section_letter,
     sec_name = section_name,
-    period_start = period_start,
-    period_end = period_end,
     first = contributor_first_name,
     middle = contributor_middle_initial,
     last = contributor_last_name,
     report_id = report_id,
     method = payment_method
   )
+```
+
+```{r try_date}
+try_date <- function(date) {
+  out <- suppressWarnings(parse_date_time(date, orders = c("mdy", "dmy")))
+  out <- as_date(out)
+  return(out)
+}
+```
+
+```{r cand_dates}
+date_cols <- which(map_lgl(ct_cand, ~str_detect(.[1], "\\d+/\\d+/\\d")))
+ct_cand <- mutate(ct_cand, date_clean = try_date(date))
+```
+
+### PAC files
+
+After 2007, contribution receipts were divided between filer types. We can now
+read all of the contributions made to candidate exploratory committees.
+
+```{r pac_files, results='asis'}
+pac_files <- str_subset(raw_paths, "PAC")
+md_bullet(md_code(basename(pac_files)))
+```
+
+```{r pac_read}
+ct_pac <- map(
+  .x = pac_files,
+  .f = read_delim,
+  delim = ",",
+  na = c("", "NA", "N/A", "NULL", "UNKNOWN"),
+  escape_double = TRUE,
+  col_types = cols(
+    .default = col_character(),
+    `Amount` = col_number(),
+    # use lubridate::mdy() instead
+    # `Transaction Date` = col_date_usa()
+  )
+)
+```
+
+The number of columns in a file increased over time.
+
+```{r pac_length}
+map_dbl(ct_pac, length)
+```
+
+However, all the columns present in the old files are present in the newer ones.
+Only additional columns are added over time.
+
+```{r pac_cols, echo=FALSE}
+cand_names <- names(ct_pac[[1]])
+map_dbl(ct_pac, ~mean(names(.) %in% cand_names))
+```
+
+That means we can safely `bind_rows()` and create a single dataframe.
+
+```{r pac_bind}
+ct_pac <- map(ct_pac, clean_names)
+ct_pac <- bind_rows(ct_pac, .id = "source_file")
+ct_pac <- relocate(ct_pac, source_file, .after = last_col())
+ct_pac$source_file <- basename(cand_files[as.integer(ct_pac$source_file)])
+```
+
+```{r pac_rename, echo=FALSE}
+ct_pac <- ct_pac %>% 
+  rename(
+    contributor = contributor_name,
+    office = office_sought,
+    rec_type = receipt_type,
+    fil_type = committee_type,
+    date = transaction_date,
+    filed = file_to_state,
+    receipt = receipt_state,
+    con_exec = contractor_executive_branch,
+    con_leg = contractor_legislative_branch,
+    source = data_source,
+    refiled = refiled_electronically,
+    address = street_address,
+    event = fundraising_event,
+    report = report_name,
+    fil_id = committee_id,
+    sec_letter = section_letter,
+    sec_name = section_name,
+    first = contributor_first_name,
+    middle = contributor_middle_initial,
+    last = contributor_last_name,
+    report_id = report_id,
+    method = payment_method
+  )
+```
+
+```{r pac_dates}
+ct_pac <- mutate(ct_pac, date_clean = try_date(date))
+```
+
+### Bind files
+
+Now we can combine these three different file type dataframes together. There
+is sufficient overlap in the columns for our purposes.
+
+```{r bind_names}
+prop_in(names(ct_pac), names(ct_cand))
+prop_in(names(ct_old), names(ct_cand))
+intersect(names(ct_cand), names(ct_old))
+```
+
+```{r bind_rows}
+ctc <- bind_rows(ct_cand, ct_pac, ct_old, .id = "source_type")
+ctc <- relocate(ctc, source_type, .after = last_col())
+ctc$source_type <- c("PAC", "CAND", "OLD")[as.numeric(ctc$source_type)]
+ctc <- mutate(ctc, across(where(is.character), str_squish))
+```
+
+Here, we see how each of the three file types has 
+
+```{r bind_view}
+key_vars <- c("contributor", "date_clean", "amount", "committee")
+ctc %>% 
+  select(all_of(key_vars), source_type) %>% 
+  sample_n(20)
 ```
 
 ## Explore
@@ -185,7 +499,7 @@ tail(ctc)
 glimpse(sample_n(ctc, 20))
 ```
 
-### Missing
+## Missing
 
 While most of the files from 2008 to 2020 share the same ~20 columns, some of
 the more recent files have an additional ~10 columns. Those files will
@@ -201,11 +515,34 @@ files but simply repeat the information from `contributor`.
 Even from the main variables, quite a few are missing values.
 
 ```{r na_flag}
-ctc <- ctc %>% flag_na(date, contributor, amount, committee)
+ctc <- flag_na(ctc, all_of(key_vars))
 percent(mean(ctc$na_flag), 0.1)
 ```
 
-### Duplicates
+```{r na_view}
+ctc %>% 
+  filter(na_flag) %>% 
+  select(all_of(key_vars)) %>% 
+  sample_frac()
+```
+
+Most of these records missing values are missing a date.
+
+```{r na_recount}
+ctc %>% 
+  filter(na_flag) %>% 
+  select(all_of(key_vars)) %>% 
+  col_stats(count_na)
+```
+
+Not much of these missing values were created when parsing the date.
+
+```{r na_date}
+prop_na(ctc$date)
+prop_na(ctc$date_clean)
+```
+
+## Duplicates
 
 ```{r dupe_flag}
 ctc <- flag_dupes(ctc, everything())
@@ -215,12 +552,10 @@ percent(mean(ctc$dupe_flag), 0.1)
 ```{r dupe_view}
 ctc %>% 
   filter(dupe_flag) %>% 
-  select(date, contributor, amount, committee)
+  select(all_of(key_vars))
 ```
 
-### Continuous
-
-#### Amounts
+## Amounts
 
 ```{r ammount_summary}
 summary(ctc$amount)
@@ -231,7 +566,7 @@ mean(ctc$amount <= 0, na.rm = TRUE)
 ctc %>%
   filter(amount > 1, amount < 1e4) %>% 
   ggplot(aes(amount)) +
-  geom_histogram(fill = dark2["purple"], bins = 20) +
+  geom_histogram(fill = dark2["purple"], bins = 10) +
   scale_y_continuous(labels = comma) +
   scale_x_continuous(
     breaks = c(1 %o% 10^(0:6)),
@@ -245,42 +580,42 @@ ctc %>%
   )
 ```
 
-#### Dates
+```{r amount_cents}
+ctc %>% 
+  count(cents = amount %% 1, sort = TRUE) %>% 
+  add_prop()
+```
+
+## Dates
 
 ```{r date_year}
-ctc <- ctc %>% 
-  mutate(
-    date = date %>% 
-      as.character() %>% 
-      str_replace("^2(\\d{2}-)", "20\\1") %>% 
-      str_replace("^(1)(?=\\d{3}-)", "2") %>% 
-      as.Date(),
-    year = year(date)
-  )
+ctc <- mutate(ctc, year_clean = year(date_clean))
 ```
 
 ```{r date_range}
-min(ctc$date, na.rm = TRUE)
-sum(ctc$year < 2000, na.rm = TRUE)
-max(ctc$date, na.rm = TRUE)
-sum(ctc$date > today(), na.rm = TRUE)
-ctc$year[which(ctc$year > 2020)] <- NA
+min(ctc$date_clean, na.rm = TRUE)
+sum(ctc$year_clean < 2000, na.rm = TRUE)
+max(ctc$date_clean, na.rm = TRUE)
+sum(ctc$date_clean > today(), na.rm = TRUE)
+ctc$year_clean[which(ctc$year_clean > 2020)] <- NA
+ctc$year_clean[which(ctc$year_clean < 1998)] <- NA
 ```
 
 ```{r bar_year, echo=FALSE}
 ctc %>% 
-  count(year) %>% 
-  mutate(even = is_even(year)) %>% 
-  ggplot(aes(x = year, y = n)) +
+  filter(!is.na(year_clean)) %>% 
+  count(year_clean) %>% 
+  mutate(even = is_even(year_clean)) %>% 
+  ggplot(aes(x = year_clean, y = n)) +
   geom_col(aes(fill = even)) + 
   scale_fill_brewer(palette = "Dark2") +
   scale_y_continuous(labels = comma) +
   scale_x_continuous(breaks = seq(2000, 2020, by = 2)) +
-  coord_cartesian(xlim = c(2008, 2020)) +
+  coord_cartesian(xlim = c(1998, 2020)) +
   theme(legend.position = "bottom") +
   labs(
     title = "Connecticut Contributions by Year",
-    caption = "Source: {source}",
+    caption = "Source: SEEC eCRIS",
     fill = "Election Year",
     x = "Year Made",
     y = "Count"
@@ -433,8 +768,8 @@ ctc <- ctc %>%
 
 #### Refine
 
-The [OpenRefine] algorithms can be used to group similar strings and replace the
-less common versions with their most common counterpart. This can greatly 
+The [OpenRefine][or] algorithms can be used to group similar strings and replace
+the less common versions with their most common counterpart. This can greatly
 reduce inconsistency, but with low confidence; we will only keep any refined
 strings that have a valid city/state/zip combination.
 
@@ -473,7 +808,7 @@ Then we can join the refined values back to the database.
 
 ```{r city_join}
 ctc <- ctc %>% 
-  left_join(good_refine) %>% 
+  left_join(good_refine, by = names(.)) %>% 
   mutate(city_refine = coalesce(city_refine, city_swap))
 ```
 
@@ -485,6 +820,7 @@ progress <- progress_table(
   str_to_upper(ctc$city_raw),
   ctc$city_norm,
   ctc$city_swap,
+  ctc$city_refine,
   compare = many_city
 ) %>% mutate(stage = as_factor(stage))
 kable(progress, digits = 3)
@@ -545,26 +881,49 @@ ctc <- ctc %>%
     -city_swap,
     city_clean = city_refine
   ) %>% 
-  rename_all(~str_replace(., "_norm", "_clean"))
+  rename_all(~str_replace(., "_norm", "_clean")) %>% 
+  rename_all(~str_remove(., "_raw"))
 ```
 
 ```{r clean_glimpse}
-glimpse(sample_n(ctc, 20))
+glimpse(sample_n(ctc, 50))
 ```
 
 1. There are `r comma(nrow(ctc))` records in the database.
 1. There are `r comma(sum(ctc$dupe_flag))` duplicate records in the database.
 1. The range and distribution of `amount` and `date` seem reasonable.
-1. There are `r comma(sum(ctc$na_flag))` records missing ....
+1. There are `r comma(sum(ctc$na_flag))` records missing key variables.
 1. Consistency in geographic data has been improved with `campfin::normal_*()`.
 1. The 4-digit `year` variable has been created with `lubridate::year()`.
 
 ## Export
+
+Now the file can be saved on disk for upload to the Accountability server.
 
 ```{r clean_dir}
 clean_dir <- dir_create(here("ct", "contribs", "data", "clean"))
 clean_path <- path(clean_dir, "ct_contribs_clean.csv")
 write_csv(ctc, clean_path, na = "")
 file_size(clean_path)
-guess_encoding(clean_path)
+file_encoding(clean_path) %>% 
+  mutate(across(path, path.abbrev))
+```
+
+## Upload
+
+We can use the `aws.s3::put_object()` to upload the text file to the IRW server.
+
+```{r s3_upload, eval=FALSE}
+s3_path <- path("csv", basename(clean_path))
+if (!object_exists(s3_path, "publicaccountability")) {
+  put_object(
+    file = clean_path,
+    object = s3_path, 
+    bucket = "publicaccountability",
+    acl = "public-read",
+    show_progress = TRUE,
+    multipart = TRUE
+  )
+}
+as_fs_bytes(object_size(s3_path, "publicaccountability"))
 ```
