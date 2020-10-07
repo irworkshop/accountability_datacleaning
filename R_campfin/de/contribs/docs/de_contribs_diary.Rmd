@@ -80,23 +80,21 @@ pacman::p_load_gh("irworkshop/campfin")
 pacman::p_load(
   tidyverse, # data manipulation
   lubridate, # datetime strings
-  gluedown, # print markdown
+  gluedown, # printing markdown
   magrittr, # pipe operators
-  janitor, # dataframe clean
-  batman, # parse logical
+  janitor, # clean data frames
+  batman, # parse na and lgl
+  aws.s3, # upload to aws s3
   refinr, # cluster and merge
   scales, # format strings
   knitr, # knit documents
   vroom, # read files fast
+  rvest, # html scraping
   glue, # combine strings
-  here, # relative storage
+  here, # relative paths
   httr, # http requests
-  fs # search storage 
+  fs # local storage 
 )
-```
-
-```{r include=FALSE}
-filter <- dplyr::filter
 ```
 
 This document should be run as part of the `R_campfin` project, which lives as a
@@ -146,39 +144,79 @@ of one responsible party for the organization.
 [search]: https://cfrs.elections.delaware.gov/Public/ViewReceipts
 [faq]: https://cfrs.elections.delaware.gov/Public/FAQ
 
-## Import
+## Download
 
-### Download
+We can use the search portal to find all record from 1975 to the current date.
 
 ```{r raw_dir}
 raw_dir <- dir_create(here("de", "contribs", "data", "raw"))
 raw_path <- path(raw_dir, "ViewContributionsList.csv")
-raw_exist <- !file_exists(raw_path) # eval next if not
 ```
 
-While we can replicate a download using `httr::GET()`, the initial export is
-more easily done through the search portal. The cookies from that search can
-then be passed to `httr::set_cookies()` to replicate.
+First, we submit an `httr::POST()` request with all fields but the dates empty.
 
-```{r raw_download, eval=FALSE}
-de_get <- GET( # eval=raw_exist
-  url = "https://cfrs.elections.delaware.gov/Public/ExportCSVNew",
-  write_disk(raw_path, overwrite = TRUE),
-  set_cookies(
-      `__cfduid` = "d9c63dde432a4aa70b00dcefcac063e421588180459",
-      `ASP.NET_SessionId` = "wybexmghashkv3jnz1b4vcbs"
-  ),
-  query = list(
-    `page` = "1",
-    `orderBy` = "~",
-    `filter` = "~",
-    `Grid-size` = "15",
-    `theme` = "vista"
+```{r raw_post}
+de_post <- POST(
+  url = "https://cfrs.elections.delaware.gov/Public/ViewReceipts",
+  body = list(
+    hdnTP = "",
+    txtContributorName = "",
+    txtFirstName = "",
+    txtStreet = "",
+    txtTown = "",
+    MemberId = "",
+    FilingYear = "",
+    FilingPeriodName = "",
+    ContributorType = "",
+    ContributionType = "",
+    ddlState = "",
+    txtZipCode = "",
+    txtZipExt = "",
+    dtStartDate = "01/01/1975",
+    dtEndDate = format(today(), "%m/%d/%Y"),
+    txtAmountRangeFrom = "",
+    txtAmountRangeTo = "",
+    ddlOffice = "",
+    ddlCounty = "",
+    ddlOfficeSought = "",
+    ddljurisdiction = "",
+    txtReceivingRegistrant = "",
+    ddlEmployerOccupation = "",
+    hdnFixedAssets = "",
+    btnSearch = "Search",
+    hdnddlOffice = "",
+    hdnddlCounty = "",
+    hdnddlOfficeSought = "",
+    hdnddljurisdiction = ""
   )
 )
 ```
 
-### Read
+Then, we use the cookies from that POST to make an `httr::GET()` request.
+
+```{r raw_cookies}
+de_cook <- cookies(de_post)$value
+names(de_cook) <- cookies(de_post)$name
+```
+
+```{r raw_get}
+if (!file_exists(raw_path) | file_size(raw_path) < "50M") {
+  de_get <- GET(
+    url = "https://cfrs.elections.delaware.gov/Public/ExportCSVNew",
+    set_cookies(de_cook),
+    write_disk(raw_path, overwrite = TRUE),
+    query = list(
+      `page` = "1",
+      `orderBy` = "~",
+      `filter` = "~",
+      `Grid-size` = "15",
+      `theme` = "vista"
+    )
+  )
+}
+```
+
+## Read
 
 Some errors with new line (`\n`) and double quote (`"`) characters needs to be
 fixed with regular expressions and saved to a new text file.
@@ -195,6 +233,7 @@ read_file(raw_path) %>%
 The fixed file can be read with `readr::read_delim()`.
 
 ```{r raw_read}
+# 304,202 rows
 dec <- read_delim(
   file = fix_path,
   delim = ",",
@@ -211,7 +250,7 @@ dec <- read_delim(
 For convenience, we can rename some character and remove empty columns.
 
 ```{r raw_clean}
-raw_names <- names(dec)
+old_names <- names(dec)
 dec <- dec %>% 
   clean_names("snake") %>% 
   remove_empty("cols") %>% 
@@ -229,7 +268,7 @@ dec <- dec %>%
   rename_all(str_remove, "contribution_")
 ```
 
-Check the distinct values of a discrete variable to checking file reading.
+Check the distinct values of a discrete variable to verify file reading.
 
 ```{r raw_check}
 count(dec, fixed_asset)
@@ -251,8 +290,25 @@ col_stats(dec, count_na)
 Records missing a date, amount, or name need to be flagged.
 
 ```{r na_flag}
-dec <- dec %>% flag_na(date, contributor, amount, recipient)
+key_vars <- c("date", "contributor", "amount", "recipient")
+dec <- flag_na(dec, all_of(key_vars))
 percent(mean(dec$na_flag), 0.001)
+```
+
+All of these records are missing the contributor name.
+
+```{r na_view}
+dec %>% 
+  filter(na_flag) %>% 
+  select(all_of(key_vars)) %>% 
+  sample_frac()
+```
+
+```{r na_recount}
+dec %>% 
+  filter(na_flag) %>% 
+  select(all_of(key_vars)) %>% 
+  col_stats(count_na)
 ```
 
 ### Duplicates
@@ -267,13 +323,11 @@ percent(mean(dec$dupe_flag), 0.001)
 ```{r dupe_view}
 dec %>% 
   filter(dupe_flag) %>% 
-  select(date, contributor, amount, recipient) %>% 
+  select(all_of(key_vars)) %>% 
   arrange(date)
 ```
 
-### Continuous
-
-#### Amounts
+## Amounts
 
 ```{r ammount_summary}
 summary(dec$amount)
@@ -282,6 +336,7 @@ mean(dec$amount <= 0, na.rm = TRUE)
 
 ```{r hist_amount, echo=FALSE}
 dec %>%
+  filter(!is.na(amount), amount >= 1) %>% 
   ggplot(aes(amount)) +
   geom_histogram(fill = dark2["purple"]) +
   scale_y_continuous(labels = comma) +
@@ -299,7 +354,7 @@ dec %>%
   )
 ```
 
-#### Dates
+## Dates
 
 The calendar year can be added from the `date` column with `lubridate::year()`.
 
@@ -320,6 +375,7 @@ sum(dec$date > today(), na.rm = TRUE)
 ```{r bar_year, echo=FALSE}
 dec %>% 
   count(year) %>% 
+  filter(year > 2003) %>% 
   mutate(even = is_even(year)) %>% 
   ggplot(aes(x = year, y = n)) +
   geom_col(aes(fill = even)) + 
@@ -532,18 +588,20 @@ Then we can join the refined values back to the database.
 
 ```{r city_join}
 dec <- dec %>% 
-  left_join(good_refine) %>% 
+  left_join(good_refine, by = names(.)) %>% 
   mutate(city_refine = coalesce(city_refine, city_swap))
 ```
 
 #### Progress
 
+A lot of the remaining invalid cities are really parts of the address.
+
 ```{r city_remain}
 many_city <- c(valid_city, extra_city)
+many_city <- c(many_city, usps_street$full, usps_street$abb, "DE")
 dec %>% 
   filter(city_refine %out% many_city) %>% 
-  count(city_refine, sort = TRUE) %>% 
-  print(n = 30)
+  count(city_refine, sort = TRUE)
 ```
 
 ```{r city_manual}
@@ -625,7 +683,7 @@ dec <- dec %>%
 ```
 
 ```{r clean_glimpse}
-glimpse(sample_n(dec, 20))
+glimpse(sample_n(dec, 100))
 ```
 
 1. There are `r comma(nrow(dec))` records in the database.
@@ -641,8 +699,38 @@ glimpse(sample_n(dec, 20))
 clean_dir <- dir_create(here("de", "contribs", "data", "clean"))
 clean_path <- path(clean_dir, "de_contribs_clean.csv")
 write_csv(dec, clean_path, na = "")
-file_size(clean_path)
-guess_encoding(clean_path)
+(clean_size <- file_size(clean_path))
+file_encoding(clean_path) %>% 
+  mutate(across(path, path.abbrev))
+```
+
+The file strings need to be converted to ASCII.
+
+```{r clean_conv}
+read_lines(clean_path) %>% 
+  iconv(to = "ASCII", sub = "byte") %>% 
+  write_lines(clean_path)
+```
+
+## Upload
+
+We can use the `aws.s3::put_object()` to upload the text file to the IRW server.
+
+```{r s3_upload, eval=TRUE}
+s3_path <- path("csv", basename(clean_path))
+if (!object_exists(s3_path, "publicaccountability")) {
+  put_object(
+    file = clean_path,
+    object = s3_path, 
+    bucket = "publicaccountability",
+    acl = "public-read",
+    show_progress = TRUE,
+    multipart = TRUE
+  )
+}
+s3_head <- head_object(s3_path, "publicaccountability")
+(s3_size <- as_fs_bytes(attr(s3_head, "content-length")))
+unname(s3_size == clean_size)
 ```
 
 ## Dictionary
@@ -650,7 +738,7 @@ guess_encoding(clean_path)
 ```{r dict_make, echo=FALSE}
 dict_raw <- tibble(
   var = md_code(names(dec)),
-  # raw = c(md_code(raw_names), rep("", 7)),
+  old = c(md_code(old_names), rep("", ncol(dec) - length(old_names))),
   type = md_code(map_chr(dec, typeof)),
   def = c(
     "Date contribution was made",
@@ -685,13 +773,6 @@ dict_raw <- tibble(
 (dict_md <- kable(
   x = dict_raw,
   format = "markdown",
-  col.names = c("Column", "Type", "Definition")
+  col.names = c("Column", "Original", "Type", "Definition")
 ))
-```
-
-```{r dict_write}
-write_lines(
-  x = c("# Deleware Contributions Data Dictionary\n", dict_md),
-  path = here("de", "contribs", "de_contribs_dict.md"),
-)
 ```

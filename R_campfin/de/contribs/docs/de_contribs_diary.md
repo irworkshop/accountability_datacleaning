@@ -1,7 +1,22 @@
 Delaware Contributions
 ================
 Kiernan Nicholls
-2020-04-29 15:43:02
+2020-10-07 13:01:34
+
+  - [Project](#project)
+  - [Objectives](#objectives)
+  - [Packages](#packages)
+  - [Data](#data)
+  - [Download](#download)
+  - [Read](#read)
+  - [Explore](#explore)
+  - [Amounts](#amounts)
+  - [Dates](#dates)
+  - [Wrangle](#wrangle)
+  - [Conclude](#conclude)
+  - [Export](#export)
+  - [Upload](#upload)
+  - [Dictionary](#dictionary)
 
 <!-- Place comments regarding knitting here -->
 
@@ -50,18 +65,20 @@ pacman::p_load_gh("irworkshop/campfin")
 pacman::p_load(
   tidyverse, # data manipulation
   lubridate, # datetime strings
-  gluedown, # print markdown
+  gluedown, # printing markdown
   magrittr, # pipe operators
-  janitor, # dataframe clean
-  batman, # parse logical
+  janitor, # clean data frames
+  batman, # parse na and lgl
+  aws.s3, # upload to aws s3
   refinr, # cluster and merge
   scales, # format strings
   knitr, # knit documents
   vroom, # read files fast
+  rvest, # html scraping
   glue, # combine strings
-  here, # relative storage
+  here, # relative paths
   httr, # http requests
-  fs # search storage 
+  fs # local storage 
 )
 ```
 
@@ -78,7 +95,7 @@ feature and should be run as such. The project also uses the dynamic
 ``` r
 # where does this document knit?
 here::here()
-#> [1] "/home/kiernan/Code/accountability_datacleaning/R_campfin"
+#> [1] "/home/kiernan/Code/tap/R_campfin"
 ```
 
 ## Data
@@ -112,39 +129,82 @@ defines exactly what expenditures are reported.
 > the report shall also include the name and address of one responsible
 > party for the organization.
 
-## Import
+## Download
 
-### Download
+We can use the search portal to find all record from 1975 to the current
+date.
 
 ``` r
 raw_dir <- dir_create(here("de", "contribs", "data", "raw"))
 raw_path <- path(raw_dir, "ViewContributionsList.csv")
-raw_exist <- !file_exists(raw_path) # eval next if not
 ```
 
-While we can replicate a download using `httr::GET()`, the initial
-export is more easily done through the search portal. The cookies from
-that search can then be passed to `httr::set_cookies()` to replicate.
+First, we submit an `httr::POST()` request with all fields but the dates
+empty.
 
 ``` r
-de_get <- GET( # eval=raw_exist
-  url = "https://cfrs.elections.delaware.gov/Public/ExportCSVNew",
-  write_disk(raw_path, overwrite = TRUE),
-  set_cookies(
-      `__cfduid` = "d9c63dde432a4aa70b00dcefcac063e421588180459",
-      `ASP.NET_SessionId` = "wybexmghashkv3jnz1b4vcbs"
-  ),
-  query = list(
-    `page` = "1",
-    `orderBy` = "~",
-    `filter` = "~",
-    `Grid-size` = "15",
-    `theme` = "vista"
+de_post <- POST(
+  url = "https://cfrs.elections.delaware.gov/Public/ViewReceipts",
+  body = list(
+    hdnTP = "",
+    txtContributorName = "",
+    txtFirstName = "",
+    txtStreet = "",
+    txtTown = "",
+    MemberId = "",
+    FilingYear = "",
+    FilingPeriodName = "",
+    ContributorType = "",
+    ContributionType = "",
+    ddlState = "",
+    txtZipCode = "",
+    txtZipExt = "",
+    dtStartDate = "01/01/1975",
+    dtEndDate = format(today(), "%m/%d/%Y"),
+    txtAmountRangeFrom = "",
+    txtAmountRangeTo = "",
+    ddlOffice = "",
+    ddlCounty = "",
+    ddlOfficeSought = "",
+    ddljurisdiction = "",
+    txtReceivingRegistrant = "",
+    ddlEmployerOccupation = "",
+    hdnFixedAssets = "",
+    btnSearch = "Search",
+    hdnddlOffice = "",
+    hdnddlCounty = "",
+    hdnddlOfficeSought = "",
+    hdnddljurisdiction = ""
   )
 )
 ```
 
-### Read
+Then, we use the cookies from that POST to make an `httr::GET()`
+request.
+
+``` r
+de_cook <- cookies(de_post)$value
+names(de_cook) <- cookies(de_post)$name
+```
+
+``` r
+if (!file_exists(raw_path) | file_size(raw_path) < "50M") {
+  de_get <- GET(
+    url = "https://cfrs.elections.delaware.gov/Public/ExportCSVNew",
+    set_cookies(de_cook),
+    write_disk(raw_path, overwrite = TRUE),
+    query = list(
+      `page` = "1",
+      `orderBy` = "~",
+      `filter` = "~",
+      `Grid-size` = "15",
+      `theme` = "vista"
+    )
+  )
+}
+```
+
+## Read
 
 Some errors with new line (`\n`) and double quote (`"`) characters needs
 to be fixed with regular expressions and saved to a new text file.
@@ -161,6 +221,7 @@ read_file(raw_path) %>%
 The fixed file can be read with `readr::read_delim()`.
 
 ``` r
+# 304,202 rows
 dec <- read_delim(
   file = fix_path,
   delim = ",",
@@ -177,7 +238,7 @@ dec <- read_delim(
 For convenience, we can rename some character and remove empty columns.
 
 ``` r
-raw_names <- names(dec)
+old_names <- names(dec)
 dec <- dec %>% 
   clean_names("snake") %>% 
   remove_empty("cols") %>% 
@@ -195,50 +256,49 @@ dec <- dec %>%
   rename_all(str_remove, "contribution_")
 ```
 
-Check the distinct values of a discrete variable to checking file
-reading.
+Check the distinct values of a discrete variable to verify file reading.
 
 ``` r
 count(dec, fixed_asset)
 #> # A tibble: 1 x 2
 #>   fixed_asset      n
 #>   <lgl>        <int>
-#> 1 FALSE       284440
+#> 1 FALSE       304014
 ```
 
 ## Explore
 
 ``` r
 glimpse(dec)
-#> Rows: 284,440
+#> Rows: 304,014
 #> Columns: 17
-#> $ date        <date> 2013-01-24, 2013-01-24, 2013-01-24, 2013-01-24, 2013-01-24, 2013-01-24, 201…
-#> $ contributor <chr> "Douglas M Beatson", "Stephen F Freebery", "Lee Ann A Blessing", "Timothy A …
-#> $ addr1       <chr> "120 Fairhill Dr", "12 Van Dyke Drive", "5218 New Kent Rd", "227 E State St"…
+#> $ date        <date> 2004-02-02, 2004-09-22, 2004-09-17, 2004-09-17, 2004-09-22, 2004-09-22, 200…
+#> $ contributor <chr> "Inc  Caldera   Management", "Conset-vancy/LLC  Rehoboth   Bay", "lingua  Ja…
+#> $ addr1       <chr> "4260 Hwy 1", "1207 Delaware AveWilinin too/DE 19806", "28 The Circle.George…
 #> $ addr2       <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
-#> $ city        <chr> "Wilmington", "New Castle", "Wilmington", "Kennett Square", "Ridley Park", "…
-#> $ state       <chr> "DE", "DE", "DE", "PA", "PA", "DE", "DE", "DE", "DE", "PA", "DE", "PA", "DE"…
-#> $ zip         <chr> "19808", "19720", "19808", "19348", "19078", "19806", "19702", "19701", "198…
+#> $ city        <chr> "Rehoboth", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "Phila.", "Newark", …
+#> $ state       <chr> "DE", "DE", "DE", "DE", "DE", "DE", "DE", "DE", "DE", "DE", "DE", "DE", "PA"…
+#> $ zip         <chr> "19971", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
 #> $ type        <chr> "Individual", "Individual", "Individual", "Individual", "Individual", "Indiv…
-#> $ employer    <chr> "Patterson-Schwartz & Assoc.\tNH", "Joe Tucker Realty", "Coldwell Banker Pre…
-#> $ occupation  <chr> "Real Estate", "Real Estate", "Real Estate", "Real Estate", "Real Estate", "…
-#> $ method      <chr> "Check", "Check", "Check", "Check", "Check", "Check", "Check", "Check", "Che…
-#> $ amount      <dbl> 35, 35, 35, 35, 35, 35, 35, 35, 35, 5, 35, 35, 35, 35, 35, 35, 35, 10, 35, 3…
-#> $ cf_id       <chr> "02000483", "02000483", "02000483", "02000483", "02000483", "02000483", "020…
-#> $ recipient   <chr> "Delaware Association of Realtors DEL-PAC", "Delaware Association of Realtor…
-#> $ period      <chr> "2013  Annual", "2013  Annual", "2013  Annual", "2013  Annual", "2013  Annua…
-#> $ office      <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
+#> $ employer    <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
+#> $ occupation  <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
+#> $ method      <chr> "Data Conversion", "Data Conversion", "Data Conversion", "Data Conversion", …
+#> $ amount      <dbl> 600.00, 600.00, 500.00, 500.00, 250.00, 600.00, 600.00, 120.00, 500.00, 600.…
+#> $ cf_id       <chr> "01000086", "01000086", "01000086", "01000086", "01000086", "01000086", "010…
+#> $ recipient   <chr> "Friends To Elect Finley B. Jones Jr.", "Friends To Elect Finley B. Jones Jr…
+#> $ period      <chr> "2004 2004 General 11/02/2004 30 Day", "2004 2004 General 11/02/2004 30 Day"…
+#> $ office      <chr> "District 02 (County Council)", "District 02 (County Council)", "District 02…
 #> $ fixed_asset <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE,…
 tail(dec)
 #> # A tibble: 6 x 17
 #>   date       contributor addr1 addr2 city  state zip   type  employer occupation method amount
 #>   <date>     <chr>       <chr> <chr> <chr> <chr> <chr> <chr> <chr>    <chr>      <chr>   <dbl>
-#> 1 2008-08-15 Clifford L… Laur… <NA>  <NA>  DE    <NA>  Cand… <NA>     <NA>       Data …   855 
-#> 2 2008-08-13 Thurmon  M… Peli… <NA>  Long… DE    19966 Indi… <NA>     <NA>       Data …   235.
-#> 3 2005-10-12 Small Dona… Misc. <NA>  <NA>  <NA>  <NA>  Indi… <NA>     <NA>       Data …   925 
-#> 4 2008-08-26 Cannon  Jo… 117 … <NA>  Rd.   DE    19711 Indi… <NA>     <NA>       Data …    25 
-#> 5 2008-10-08 Stephan  J… 2606… <NA>  <NA>  DE    <NA>  Indi… <NA>     <NA>       Data …   100 
-#> 6 2008-10-12 Rappa  She… 235 … <NA>  Hock… DE    19707 Indi… <NA>     <NA>       Data …  2000 
+#> 1 2020-06-09 David Dani… 215 … <NA>  Town… DE    "197… Indi… <NA>     <NA>       Check     100
+#> 2 2020-02-18 Melanie Be… 7 Du… <NA>  Midd… DE    "197… Indi… <NA>     <NA>       Check     200
+#> 3 2020-01-10 Saul Ewing… 1500… <NA>  Phil… PA    "191… Indi… <NA>     <NA>       Check     600
+#> 4 2020-04-30 Jeff Nause  110 … <NA>  Midd… DE    "197… Indi… <NA>     <NA>       Check     500
+#> 5 2020-08-19 EPB Associ… 107 … <NA>  Wilm… DE    "198… Indi… <NA>     <NA>       Check     600
+#> 6 2020-09-02 Total of C… <NA>  <NA>  <NA>  <NA>   <NA> Tota… <NA>     <NA>       Check     650
 #> # … with 5 more variables: cf_id <chr>, recipient <chr>, period <chr>, office <chr>,
 #> #   fixed_asset <lgl>
 ```
@@ -251,30 +311,68 @@ col_stats(dec, count_na)
 #>    col         class       n         p
 #>    <chr>       <chr>   <int>     <dbl>
 #>  1 date        <date>      0 0        
-#>  2 contributor <chr>      22 0.0000773
-#>  3 addr1       <chr>   10428 0.0367   
-#>  4 addr2       <chr>  276194 0.971    
-#>  5 city        <chr>   22899 0.0805   
-#>  6 state       <chr>    9931 0.0349   
-#>  7 zip         <chr>   21318 0.0749   
+#>  2 contributor <chr>      23 0.0000757
+#>  3 addr1       <chr>   13227 0.0435   
+#>  4 addr2       <chr>  294660 0.969    
+#>  5 city        <chr>   25699 0.0845   
+#>  6 state       <chr>   12729 0.0419   
+#>  7 zip         <chr>   24115 0.0793   
 #>  8 type        <chr>       0 0        
-#>  9 employer    <chr>  262348 0.922    
-#> 10 occupation  <chr>  259679 0.913    
+#>  9 employer    <chr>  279182 0.918    
+#> 10 occupation  <chr>  275917 0.908    
 #> 11 method      <chr>       0 0        
 #> 12 amount      <dbl>       0 0        
 #> 13 cf_id       <chr>       0 0        
 #> 14 recipient   <chr>       0 0        
 #> 15 period      <chr>       0 0        
-#> 16 office      <chr>  121522 0.427    
+#> 16 office      <chr>  126888 0.417    
 #> 17 fixed_asset <lgl>       0 0
 ```
 
 Records missing a date, amount, or name need to be flagged.
 
 ``` r
-dec <- dec %>% flag_na(date, contributor, amount, recipient)
+key_vars <- c("date", "contributor", "amount", "recipient")
+dec <- flag_na(dec, all_of(key_vars))
 percent(mean(dec$na_flag), 0.001)
 #> [1] "0.008%"
+```
+
+All of these records are missing the contributor name.
+
+``` r
+dec %>% 
+  filter(na_flag) %>% 
+  select(all_of(key_vars)) %>% 
+  sample_frac()
+#> # A tibble: 23 x 4
+#>    date       contributor  amount recipient                        
+#>    <date>     <chr>         <dbl> <chr>                            
+#>  1 2009-04-16 <NA>         5000   IHC Group PAC                    
+#>  2 2012-12-31 <NA>        17651.  Mobley 2012 Campaign             
+#>  3 2006-10-30 <NA>            0   Friends of Jeanine Kleimo        
+#>  4 2017-06-27 <NA>           93.9 Committee to Elect Timothy Conrad
+#>  5 2010-09-27 <NA>          600   Committee to Elect Rebecca Walker
+#>  6 2009-07-24 <NA>         5000   IHC Group PAC                    
+#>  7 2009-04-16 <NA>         5000   IHC Group PAC                    
+#>  8 2009-04-16 <NA>         5000   IHC Group PAC                    
+#>  9 2012-05-15 <NA>         7110.  Ted Becker for Lewes City Council
+#> 10 2009-07-24 <NA>         5000   IHC Group PAC                    
+#> # … with 13 more rows
+```
+
+``` r
+dec %>% 
+  filter(na_flag) %>% 
+  select(all_of(key_vars)) %>% 
+  col_stats(count_na)
+#> # A tibble: 4 x 4
+#>   col         class      n     p
+#>   <chr>       <chr>  <int> <dbl>
+#> 1 date        <date>     0     0
+#> 2 contributor <chr>     23     1
+#> 3 amount      <dbl>      0     0
+#> 4 recipient   <chr>      0     0
 ```
 
 ### Duplicates
@@ -284,15 +382,15 @@ The same can be done for records entirely duplicated more than once.
 ``` r
 dec <- flag_dupes(dec, everything())
 percent(mean(dec$dupe_flag), 0.001)
-#> [1] "1.701%"
+#> [1] "2.099%"
 ```
 
 ``` r
 dec %>% 
   filter(dupe_flag) %>% 
-  select(date, contributor, amount, recipient) %>% 
+  select(all_of(key_vars)) %>% 
   arrange(date)
-#> # A tibble: 4,838 x 4
+#> # A tibble: 6,380 x 4
 #>    date       contributor                       amount recipient                        
 #>    <date>     <chr>                              <dbl> <chr>                            
 #>  1 2004-01-13 Fraternal Order of Police Lodge 1   2000 F O P LODGE #1 PAC COMMITTEE     
@@ -305,24 +403,22 @@ dec %>%
 #>  8 2004-03-01 AIA Delaware PAC                     100 James M. Baker Campaign Committee
 #>  9 2004-03-04 Andrea Levine  Richard   &           100 James M. Baker Campaign Committee
 #> 10 2004-03-04 Andrea Levine  Richard   &           100 James M. Baker Campaign Committee
-#> # … with 4,828 more rows
+#> # … with 6,370 more rows
 ```
 
-### Continuous
-
-#### Amounts
+## Amounts
 
 ``` r
 summary(dec$amount)
 #>    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
-#>   -5577      35     100     567     300 8331771
+#>   -5577      35     100     552     300 8331771
 mean(dec$amount <= 0, na.rm = TRUE)
-#> [1] 0.002088314
+#> [1] 0.001953857
 ```
 
 ![](../plots/hist_amount-1.png)<!-- -->
 
-#### Dates
+## Dates
 
 The calendar year can be added from the `date` column with
 `lubridate::year()`.
@@ -342,7 +438,7 @@ min(dec$date, na.rm = TRUE)
 sum(dec$year < 2000, na.rm = TRUE)
 #> [1] 0
 max(dec$date, na.rm = TRUE)
-#> [1] "2020-03-14"
+#> [1] "2020-10-04"
 sum(dec$date > today(), na.rm = TRUE)
 #> [1] 0
 ```
@@ -387,18 +483,18 @@ dec %>%
   distinct() %>% 
   sample_n(10)
 #> # A tibble: 10 x 3
-#>    addr1                     addr2 addr_norm              
-#>    <chr>                     <chr> <chr>                  
-#>  1 2 ASHBURN DRIVE           <NA>  2 ASHBURN DR           
-#>  2 5704 Bradley Blvd         <NA>  5704 BRADLEY BLVD      
-#>  3 4 Blackstone Lane Malvern <NA>  4 BLACKSTONE LN MALVERN
-#>  4 2812 Landon Dr.           <NA>  2812 LANDON DR         
-#>  5 102 Lansing Ave.          <NA>  102 LANSING AVE        
-#>  6 131 Clear Creek Drive     <NA>  131 CLEAR CRK DR       
-#>  7 2 Foxhill Lane Wilmington <NA>  2 FOXHILL LN WILMINGTON
-#>  8 2208 Highland             <NA>  2208 HIGHLAND          
-#>  9 47 Haggis St.             <NA>  47 HAGGIS ST           
-#> 10 1803 Stark Dr Crofton     <NA>  1803 STARK DR CROFTON
+#>    addr1                             addr2        addr_norm                 
+#>    <chr>                             <chr>        <chr>                     
+#>  1 1410 William Penn Ln              <NA>         1410 WILLIAM PENN LN      
+#>  2 200 CONTINENTAL DRIVE             <NA>         200 CONTINENTAL DR        
+#>  3 105 Front St. Wyoming DE          <NA>         105 FRNT ST WYOMING DE    
+#>  4 522 Greenhill Ave                 <NA>         522 GREENHILL AVE         
+#>  5 908 N Dupont Road                 <NA>         908 N DUPONT RD           
+#>  6 304 Detjen Drive    Hockessin  DE <NA>         304 DETJEN DR HOCKESSIN DE
+#>  7 901 Tatnall St.                   Second Floor 901 TATNALL ST SECOND FL  
+#>  8 PO Box 308                        <NA>         PO BOX 308                
+#>  9 222Delaware #1200                 <NA>         222 DELAWARE 1200         
+#> 10 180 Merion Rd.                    <NA>         180 MERION RD
 ```
 
 ### ZIP
@@ -426,8 +522,8 @@ progress_table(
 #> # A tibble: 2 x 6
 #>   stage    prop_in n_distinct prop_na n_out n_diff
 #>   <chr>      <dbl>      <dbl>   <dbl> <dbl>  <dbl>
-#> 1 zip        0.676      13174  0.0749 85340   9053
-#> 2 zip_norm   0.997       5246  0.0755   895    311
+#> 1 zip        0.653      14167  0.0793 97162   9981
+#> 2 zip_norm   0.997       5545  0.0798   949    328
 ```
 
 ### State
@@ -476,8 +572,8 @@ progress_table(
 #> # A tibble: 2 x 6
 #>   stage      prop_in n_distinct prop_na n_out n_diff
 #>   <chr>        <dbl>      <dbl>   <dbl> <dbl>  <dbl>
-#> 1 state        0.986         88  0.0349  3729     35
-#> 2 state_norm   1             54  0.0349     0      1
+#> 1 state        0.987         88  0.0419  3729     35
+#> 2 state_norm   1             54  0.0419     0      1
 ```
 
 ### City
@@ -564,72 +660,54 @@ good_refine <- dec %>%
   )
 ```
 
-    #> [1] 82
-    #> # A tibble: 64 x 5
+    #> [1] 80
+    #> # A tibble: 61 x 5
     #>    state_norm zip_norm city_swap        city_refine        n
     #>    <chr>      <chr>    <chr>            <chr>          <int>
     #>  1 CA         92037    JOLLA            LA JOLLA           4
     #>  2 DE         19710    MONTCHANIN CT    MONTCHANIN         3
-    #>  3 DE         19904    DOVER DE         DOVER              3
-    #>  4 NY         11733    SETAUKET         EAST SETAUKET      3
-    #>  5 CA         92625    CORONADO DEL MAR CORONA DEL MAR     2
-    #>  6 CA         94023    ALTOS            LOS ALTOS          2
-    #>  7 CA         94109    FRANCISCO        SAN FRANCISCO      2
-    #>  8 CA         94121    FRANCISCO        SAN FRANCISCO      2
-    #>  9 CA         94131    FRANCISCO        SAN FRANCISCO      2
-    #> 10 DE         19801    WILMINGONT       WILMINGTON         2
-    #> # … with 54 more rows
+    #>  3 DE         19801    WILMINGONT       WILMINGTON         3
+    #>  4 DE         19904    DOVER DE         DOVER              3
+    #>  5 NY         11733    SETAUKET         EAST SETAUKET      3
+    #>  6 CA         92625    CORONADO DEL MAR CORONA DEL MAR     2
+    #>  7 CA         94023    ALTOS            LOS ALTOS          2
+    #>  8 CA         94109    FRANCISCO        SAN FRANCISCO      2
+    #>  9 CA         94121    FRANCISCO        SAN FRANCISCO      2
+    #> 10 CA         94131    FRANCISCO        SAN FRANCISCO      2
+    #> # … with 51 more rows
 
 Then we can join the refined values back to the database.
 
 ``` r
 dec <- dec %>% 
-  left_join(good_refine) %>% 
+  left_join(good_refine, by = names(.)) %>% 
   mutate(city_refine = coalesce(city_refine, city_swap))
 ```
 
 #### Progress
 
+A lot of the remaining invalid cities are really parts of the address.
+
 ``` r
 many_city <- c(valid_city, extra_city)
+many_city <- c(many_city, usps_street$full, usps_street$abb, "DE")
 dec %>% 
   filter(city_refine %out% many_city) %>% 
-  count(city_refine, sort = TRUE) %>% 
-  print(n = 30)
-#> # A tibble: 1,090 x 2
+  count(city_refine, sort = TRUE)
+#> # A tibble: 1,040 x 2
 #>    city_refine      n
 #>    <chr>        <int>
-#>  1 <NA>         24138
-#>  2 DE            1723
-#>  3 ROAD           970
-#>  4 SQUARE         716
-#>  5 RD             556
-#>  6 LONG NECK      523
-#>  7 SUITE          450
-#>  8 SAINT          444
-#>  9 DRIVE          421
-#> 10 WILM           410
-#> 11 DR             275
-#> 12 NECK           230
-#> 13 DEWEY BEACH    209
-#> 14 VIEW           194
-#> 15 MEETING        130
-#> 16 VEGAS          129
-#> 17 CITY           120
-#> 18 ND FLOOR       110
-#> 19 SHEPARDSTOWN    93
-#> 20 WAY             90
-#> 21 STATION         86
-#> 22 CHURCH          84
-#> 23 CYNWYD          80
-#> 24 COURT           79
-#> 25 MAWR            79
-#> 26 CT              76
-#> 27 PA              76
-#> 28 TOWNSHIP        73
-#> 29 NORTHWEST       62
-#> 30 STE             61
-#> # … with 1,060 more rows
+#>  1 <NA>         26943
+#>  2 LONG NECK      543
+#>  3 SAINT          444
+#>  4 WILM           412
+#>  5 DEWEY BEACH    230
+#>  6 MEETING        130
+#>  7 VEGAS          129
+#>  8 CITY           120
+#>  9 ND FLOOR       110
+#> 10 SHEPARDSTOWN    93
+#> # … with 1,030 more rows
 ```
 
 ``` r
@@ -642,10 +720,10 @@ dec <- dec %>%
 
 | stage        | prop\_in | n\_distinct | prop\_na | n\_out | n\_diff |
 | :----------- | -------: | ----------: | -------: | -----: | ------: |
-| city\_raw)   |    0.892 |        5473 |    0.081 |  28344 |    2772 |
-| city\_norm   |    0.909 |        4562 |    0.085 |  23587 |    1829 |
-| city\_swap   |    0.956 |        3881 |    0.085 |  11509 |    1131 |
-| city\_refine |    0.958 |        3838 |    0.085 |  11030 |    1089 |
+| city\_raw)   |    0.920 |        5668 |    0.085 |  22241 |    2775 |
+| city\_norm   |    0.938 |        4743 |    0.089 |  17260 |    1824 |
+| city\_swap   |    0.981 |        4013 |    0.089 |   5275 |    1080 |
+| city\_refine |    0.983 |        3971 |    0.089 |   4796 |    1039 |
 
 You can see how the percentage of valid values increased with each
 stage.
@@ -672,39 +750,39 @@ dec <- dec %>%
 ```
 
 ``` r
-glimpse(sample_n(dec, 20))
-#> Rows: 20
+glimpse(sample_n(dec, 100))
+#> Rows: 100
 #> Columns: 24
-#> $ date        <date> 2012-02-22, 2009-06-10, 2019-07-31, 2008-09-01, 2016-03-25, 2019-04-18, 201…
-#> $ contributor <chr> "Stellini  Mark", "Rucker  Willie   B.", "Citizens Bank", "Christman  Jacque…
-#> $ addr1       <chr> "14 Pheasants Ridge North Greenville", "614 N. Front", "PO Box 7000", "118 O…
-#> $ addr2       <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
-#> $ city        <chr> "Greenville", "Street", "Providence", "Dover", "Dover", "Doylestown", "Seafo…
-#> $ state       <chr> "DE", "PA", "RI", "DE", "DE", "PA", "DE", "DE", "de", "DE", "DE", "DE", "DE"…
-#> $ zip         <chr> "19807", "19123", "02940", "19901", "19904", "18901-3208", "19973-    ", "19…
-#> $ type        <chr> "Individual", "Individual", "Business/Group/Organization", "Individual", "Bu…
-#> $ employer    <chr> NA, NA, NA, NA, NA, "self-employed", NA, NA, NA, NA, NA, "Richards  Layton &…
-#> $ occupation  <chr> NA, NA, NA, NA, NA, "Other", NA, NA, NA, NA, NA, "Other", NA, NA, NA, NA, NA…
-#> $ method      <chr> "Data Conversion", "Data Conversion", "Check", "Data Conversion", "Check", "…
-#> $ amount      <dbl> 500.00, 20.00, 0.52, 50.00, 400.00, 100.00, 25.00, 100.00, 100.00, 6.00, 23.…
-#> $ cf_id       <chr> "01001573", "02000550", "02000527", "01001807", "01000020", "02000548", "010…
-#> $ recipient   <chr> "Markell for Delaware", "Teamsters Joint Council No. 53 PAC-DRIVE", "Boilerm…
-#> $ period      <chr> "2012 2012 General 11/06/2012 30 Day", "2008  Annual", "2019  Annual", "2008…
-#> $ office      <chr> "Governor", NA, NA, "District 04 (State Senator)", "District 13 (State Senat…
+#> $ date        <date> 2016-02-25, 2016-12-31, 2012-02-06, 2006-06-30, 2008-10-05, 2019-11-21, 201…
+#> $ contributor <chr> "Walter S Rowland", "KATHRYN R TAYLOR", "Brown  Michael   K.", "Michael  Val…
+#> $ addr1       <chr> "2501 Willard Street", "1005 GREENTREE RD", "364 Butterpat Rd  Hartly DE", "…
+#> $ addr2       <chr> NA, NA, NA, NA, NA, "Michael K Towe", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
+#> $ city        <chr> "Wilmington", "NEWARK", "DE", "Hockessin", NA, "Middletown", "Rehoboth Beach…
+#> $ state       <chr> "DE", "DE", "DE", "DE", "DE", "DE", "DE", "DE", "DE", "DE", "TX", "DE", "PA"…
+#> $ zip         <chr> "19806-    ", "19713-4207", "19953", "19707-1142", "19810", "19709-9179", "1…
+#> $ type        <chr> "Individual", "Individual", "Individual", "Individual", "Individual", "Indiv…
+#> $ employer    <chr> NA, NA, NA, NA, NA, "Keller Williams Realty Central", NA, NA, NA, "mellongro…
+#> $ occupation  <chr> NA, "Education", NA, NA, NA, "Other", NA, NA, NA, "Financial", "Manufacturin…
+#> $ method      <chr> "Check", "Payroll Deductions", "Data Conversion", "Data Conversion", "Data C…
+#> $ amount      <dbl> 113.00, 136.00, 500.00, 6.00, 1200.00, 47.50, 300.00, 300.00, 250.00, 500.00…
+#> $ cf_id       <chr> "01002965", "02000511", "01002283", "02000568", "01001573", "02000483", "010…
+#> $ recipient   <chr> "Lacey Lafferty for Governor 2016", "DSEA Advocacy Fund For Children & Publi…
+#> $ period      <chr> "2016 2016 Primary 09/13/2016 30 Day", "2016  Annual", "2012 2012 General 11…
+#> $ office      <chr> "(Governor)", NA, "District 15 (State Senator)", NA, "Governor", NA, "Distri…
 #> $ fixed_asset <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE,…
 #> $ na_flag     <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE,…
 #> $ dupe_flag   <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE,…
-#> $ year        <dbl> 2012, 2009, 2019, 2008, 2016, 2019, 2018, 2008, 2009, 2010, 2016, 2016, 2006…
-#> $ addr_clean  <chr> "14 PHEASANTS RDG N GREENVILLE", "614 N FRNT", "PO BOX 7000", "118 OVERLOOK …
-#> $ zip_clean   <chr> "19807", "19123", "02940", "19901", "19904", "18901", "19973", "19806", "197…
-#> $ state_clean <chr> "DE", "PA", "RI", "DE", "DE", "PA", "DE", "DE", "DE", "DE", "DE", "DE", "DE"…
-#> $ city_clean  <chr> "GREENVILLE", "STREET", "PROVIDENCE", "DOVER", "DOVER", "DOYLESTOWN", "SEAFO…
+#> $ year        <dbl> 2016, 2016, 2012, 2006, 2008, 2019, 2014, 2016, 2016, 2013, 2014, 2008, 2010…
+#> $ addr_clean  <chr> "2501 WILLARD ST", "1005 GREENTREE RD", "364 BUTTERPAT RD HARTLY DE", "44 RO…
+#> $ zip_clean   <chr> "19806", "19713", "19953", "19707", "19810", "19709", "19971", "19805", "198…
+#> $ state_clean <chr> "DE", "DE", "DE", "DE", "DE", "DE", "DE", "DE", "DE", "DE", "TX", "DE", "PA"…
+#> $ city_clean  <chr> "WILMINGTON", "NEWARK", "DE", "HOCKESSIN", NA, "MIDDLETOWN", "REHOBOTH BEACH…
 ```
 
-1.  There are 284,440 records in the database.
-2.  There are 4,838 duplicate records in the database.
+1.  There are 304,014 records in the database.
+2.  There are 6,380 duplicate records in the database.
 3.  The range and distribution of `amount` and `date` seem reasonable.
-4.  There are 22 records missing ….
+4.  There are 23 records missing ….
 5.  Consistency in geographic data has been improved with
     `campfin::normal_*()`.
 6.  The 4-digit `year` variable has been created with
@@ -716,49 +794,73 @@ glimpse(sample_n(dec, 20))
 clean_dir <- dir_create(here("de", "contribs", "data", "clean"))
 clean_path <- path(clean_dir, "de_contribs_clean.csv")
 write_csv(dec, clean_path, na = "")
-file_size(clean_path)
-#> 67.2M
-guess_encoding(clean_path)
-#> # A tibble: 3 x 2
-#>   encoding   confidence
-#>   <chr>           <dbl>
-#> 1 UTF-8            0.8 
-#> 2 ISO-8859-1       0.47
-#> 3 ISO-8859-2       0.32
+(clean_size <- file_size(clean_path))
+#> 72.2M
+file_encoding(clean_path) %>% 
+  mutate(across(path, path.abbrev))
+#> # A tibble: 1 x 3
+#>   path                                           mime                     charset
+#>   <chr>                                          <chr>                    <chr>  
+#> 1 ~/de/contribs/data/clean/de_contribs_clean.csv application/octet-stream binary
+```
+
+The file strings need to be converted to ASCII.
+
+``` r
+read_lines(clean_path) %>% 
+  iconv(to = "ASCII", sub = "byte") %>% 
+  write_lines(clean_path)
+```
+
+## Upload
+
+We can use the `aws.s3::put_object()` to upload the text file to the IRW
+server.
+
+``` r
+s3_path <- path("csv", basename(clean_path))
+if (!object_exists(s3_path, "publicaccountability")) {
+  put_object(
+    file = clean_path,
+    object = s3_path, 
+    bucket = "publicaccountability",
+    acl = "public-read",
+    show_progress = TRUE,
+    multipart = TRUE
+  )
+}
+s3_head <- head_object(s3_path, "publicaccountability")
+(s3_size <- as_fs_bytes(attr(s3_head, "content-length")))
+#> 72.2M
+unname(s3_size == clean_size)
+#> [1] FALSE
 ```
 
 ## Dictionary
 
-| Column        | Type        | Definition                                        |
-| :------------ | :---------- | :------------------------------------------------ |
-| `date`        | `double`    | Date contribution was made                        |
-| `contributor` | `character` | Contributor full name                             |
-| `addr1`       | `character` | Contributor street address                        |
-| `addr2`       | `character` | Contributor secondary address                     |
-| `city`        | `character` | Contributor city name                             |
-| `state`       | `character` | Contributor 2-digit state abbreviation            |
-| `zip`         | `character` | Contributor ZIP+4 code                            |
-| `type`        | `character` | Contributor type                                  |
-| `employer`    | `character` | Contributor employer name                         |
-| `occupation`  | `character` | Contributor occupation                            |
-| `method`      | `character` | Contribution method                               |
-| `amount`      | `double`    | Contribution amount or correction                 |
-| `cf_id`       | `character` | Unique campaign finance ID                        |
-| `recipient`   | `character` | Recipient committee name                          |
-| `period`      | `character` | Report filing period                              |
-| `office`      | `character` | Office sought by recipient                        |
-| `fixed_asset` | `logical`   | Fix asset flag                                    |
-| `na_flag`     | `logical`   | Flag for missing date, amount, or name            |
-| `dupe_flag`   | `logical`   | Flag for completely duplicated record             |
-| `year`        | `double`    | Calendar year of contribution date                |
-| `addr_clean`  | `character` | Normalized contributor street address             |
-| `zip_clean`   | `character` | Normalized contributor 5-digit ZIP code           |
-| `state_clean` | `character` | Normalized contributor 2-digit state abbreviation |
-| `city_clean`  | `character` | Normalized contributor city name                  |
-
-``` r
-write_lines(
-  x = c("# Deleware Contributions Data Dictionary\n", dict_md),
-  path = here("de", "contribs", "de_contribs_dict.md"),
-)
-```
+| Column        | Original                     | Type        | Definition                                        |
+| :------------ | :--------------------------- | :---------- | :------------------------------------------------ |
+| `date`        | `Contribution Date`          | `double`    | Date contribution was made                        |
+| `contributor` | `Contributor Name`           | `character` | Contributor full name                             |
+| `addr1`       | `Contributor Address Line 1` | `character` | Contributor street address                        |
+| `addr2`       | `Contributor Address Line 2` | `character` | Contributor secondary address                     |
+| `city`        | `Contributor City`           | `character` | Contributor city name                             |
+| `state`       | `Contributor State`          | `character` | Contributor 2-digit state abbreviation            |
+| `zip`         | `Contributor Zip`            | `character` | Contributor ZIP+4 code                            |
+| `type`        | `Contributor Type`           | `character` | Contributor type                                  |
+| `employer`    | `Employer Name`              | `character` | Contributor employer name                         |
+| `occupation`  | `Employer Occupation`        | `character` | Contributor occupation                            |
+| `method`      | `Contribution Type`          | `character` | Contribution method                               |
+| `amount`      | `Contribution Amount`        | `double`    | Contribution amount or correction                 |
+| `cf_id`       | `CF_ID`                      | `character` | Unique campaign finance ID                        |
+| `recipient`   | `Receiving Committee`        | `character` | Recipient committee name                          |
+| `period`      | `Filing Period`              | `character` | Report filing period                              |
+| `office`      | `Office`                     | `character` | Office sought by recipient                        |
+| `fixed_asset` | `Fixed Asset`                | `logical`   | Fix asset flag                                    |
+| `na_flag`     |                              | `logical`   | Flag for missing date, amount, or name            |
+| `dupe_flag`   |                              | `logical`   | Flag for completely duplicated record             |
+| `year`        |                              | `double`    | Calendar year of contribution date                |
+| `addr_clean`  |                              | `character` | Normalized contributor street address             |
+| `zip_clean`   |                              | `character` | Normalized contributor 5-digit ZIP code           |
+| `state_clean` |                              | `character` | Normalized contributor 2-digit state abbreviation |
+| `city_clean`  |                              | `character` | Normalized contributor city name                  |
