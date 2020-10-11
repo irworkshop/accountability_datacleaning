@@ -1,7 +1,7 @@
-Louisiana Contracts
+Louisiana Contribution Data Diary
 ================
 Yanqi Xu
-2020-10-02 21:22:27
+2020-10-02 22:41:18
 
   - [Project](#project)
   - [Objectives](#objectives)
@@ -277,11 +277,12 @@ explore_plot(lac, contribution_type)
 ### Amounts
 
 ``` r
+lac <- lac %>% mutate(contribution_amt = as.numeric(contribution_amt %>% str_remove_all("\\$|,")))
 summary(lac$contribution_amt)
-#>    Length     Class      Mode 
-#>   2485922 character character
+#>    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+#>       0       6      28     350     200 5040303
 mean(lac$contribution_amt <= 0)
-#> [1] 1
+#> [1] 0
 ```
 
 ![](../plots/hist_amount-1.png)<!-- -->
@@ -604,7 +605,7 @@ glimpse(sample_n(lac, 20))
 #> $ contribution_type         <chr> "CONTRIB", "CONTRIB", "CONTRIB", "CONTRIB", "CONTRIB", "CONTRI…
 #> $ contribution_description  <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
 #> $ contribution_date         <date> 2017-01-20, 2013-01-31, 2013-11-30, 2015-12-28, 2011-03-22, 2…
-#> $ contribution_amt          <dbl> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
+#> $ contribution_amt          <dbl> 100.00, 24.68, 3.32, 1.25, 500.00, 6.00, 2.00, 75.00, 500.00, …
 #> $ na_flag                   <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE,…
 #> $ dupe_flag                 <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, TRUE, FALSE, …
 #> $ year                      <dbl> 2017, 2013, 2013, 2015, 2011, 2017, 2013, 2015, 2019, 2013, 20…
@@ -633,7 +634,7 @@ clean_dir <- dir_create(here("la", "contribs", "data", "clean"))
 clean_path <- path(clean_dir, "la_contribs_clean.csv")
 write_csv(lac, clean_path, na = "")
 file_size(clean_path)
-#> 424M
+#> 431M
 file_encoding(clean_path)
 #> # A tibble: 1 x 3
 #>   path                                                                                mime  charset
@@ -679,7 +680,7 @@ The following table describes the variables in our final exported file:
 | `contribution_description`  | `character` | Contribution description               |
 | `contribution_date`         | `double`    | Contribution date                      |
 | `contribution_amt`          | `double`    | Contribution amount or correction      |
-| `na_flag`                   | `logical`   | Flag for missing date, amount, or name |
+| `na_flag`                   | `logical`   | Flag for missing name, city or address |
 | `dupe_flag`                 | `logical`   | Flag for completely duplicated record  |
 | `year`                      | `double`    | Calendar year of contribution date     |
 | `contributor_address_clean` | `character` | Normalized combined street address     |

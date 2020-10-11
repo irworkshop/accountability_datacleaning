@@ -17,7 +17,7 @@
 |`contribution_description`  |`character` |Contribution description               |
 |`contribution_date`         |`double`    |Contribution date                      |
 |`contribution_amt`          |`double`    |Contribution amount or correction      |
-|`na_flag`                   |`logical`   |Flag for missing date, amount, or name |
+|`na_flag`                   |`logical`   |Flag for missing name, city or address |
 |`dupe_flag`                 |`logical`   |Flag for completely duplicated record  |
 |`year`                      |`double`    |Calendar year of contribution date     |
 |`contributor_address_clean` |`character` |Normalized combined street address     |

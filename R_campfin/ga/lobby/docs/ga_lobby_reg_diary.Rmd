@@ -111,7 +111,7 @@ here::here()
 
 [tap]: https://github.com/irworkshop/accountability_datacleaning
 [rproj]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects
-
+[ethics]:https://media.ethics.ga.gov/search/Campaign/Campaign_ByContributions.aspx
 ## Data
 
 Lobbying data is obtained from the [Georgia Government Transparency and Campaign Finance Commission][ethics].
