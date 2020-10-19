@@ -27,8 +27,10 @@ opts_chunk$set(
   fig.width = 10,
   dpi = 300
 )
-options(width = 99)
-set.seed(5)
+if (!interactive()) {
+  options(width = 99)
+  set.seed(5)
+}
 ```
 
 ```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
@@ -82,6 +84,7 @@ pacman::p_load(
   magrittr, # pipe operators
   janitor, # dataframe clean
   refinr, # cluster and merge
+  aws.s3, # aws cloud storage
   scales, # format strings
   knitr, # knit documents
   vroom, # read files fast
@@ -123,8 +126,9 @@ work of local electoral boards, registrars, and officers of election.
 The SBE has candidates and committees file ten types of reports:
 
 ```{r raw_scheds, echo=FALSE}
-url <- "https://www.elections.virginia.gov/candidatepac-info/campaign-finance-disclosure-forms/" 
-read_html(url) %>% 
+"https://www.elections.virginia.gov/candidatepac-info/" %>% 
+  str_c("campaign-finance-disclosure-forms/") %>% 
+  read_html() %>% 
   html_node(".schedules_table") %>% 
   html_table() %>% 
   as_vector() %>% 
@@ -132,15 +136,16 @@ read_html(url) %>%
   separate(
     col = value,
     into = c("sched", "desc"),
-    sep = "\\s–\\s"
+    sep = "–"
   ) %>% 
-  mutate_at(vars(desc), str_trunc, width = 80) %>% 
+  mutate(across(.fns = str_trim)) %>% 
+  mutate(across(desc, str_trunc, width = 80)) %>% 
   kable(col.names = c("Schedule", "Description"))
 ```
 
 We are interested in schedule's A and B.
 
-## Import
+## Download
 
 The data itself is hosted on an SBE server and organized in monthly directories.
 
@@ -155,21 +160,29 @@ sbe_table <- sbe_list %>%
   html_text() %>% 
   str_remove("(.*)\\]") %>% 
   str_remove("10/24/2018  1:45 PM\\s+168 web.config") %>% 
-  str_replace_all("(?<=<dir> (\\d{4}|\\d{4}_\\d{2}))(?=(\\s+)?\\d{1,2}/)", "\n") %>%
+  str_replace_all(
+    pattern = "(?<=<dir> (\\d{4}|\\d{4}_\\d{2}))(?=(\\s+)?\\d{1,2}/)", 
+    replacement = "\n"
+  ) %>%
   read_table(col_names = FALSE) %>% 
   unite(datetime, 1:3, sep = " ") %>% 
   rename(type = X4, dir = X5) %>% 
-  mutate(across(datetime, mdy_hms))
+  mutate(across(datetime, mdy_hms)) %>% 
+  filter(str_detect(dir, "_"))
 
-sbe_table$dir <- md_link(
-  sbe_table$dir,
-  paste0("https://apps.elections.virginia.gov/SBE_CSV/CF/", sbe_table$dir)
-)
-
-kable(sbe_table)
+sbe_table %>% 
+  select(-type) %>% 
+  mutate(
+    dir = md_link(
+      dir,
+      paste0(
+        "https://apps.elections.virginia.gov/SBE_CSV/CF/", 
+        sbe_table$dir
+      )
+    )
+  ) %>% 
+  kable()
 ```
-
-### Download
 
 From this list of directories, we can extract each `<href>` HTML tag. These
 tags provide the directory names.
@@ -180,7 +193,7 @@ sbe_base <- "https://apps.elections.virginia.gov"
 sbe_dirs <- sbe_list %>% 
   html_nodes("a") %>% 
   html_attr("href") %>% 
-  str_subset("\\d")
+  str_subset("\\d_")
 ```
 
 ```{r sbe_dirs_list, echo=FALSE}
@@ -194,6 +207,10 @@ Then we can navigate to each of these directories and look for file names
 containing "ScheduleA" or "ScheduleB" (these file names are somewhat 
 inconsistent).
 
+We also want all of the `Report.csv` files for each month, these files contain
+the information on the reports filed by the committees which contains the
+contributions.
+
 ```{r sbe_names_get}
 sbe_names <- character()
 for (dir in sbe_dirs) {
@@ -202,7 +219,7 @@ for (dir in sbe_dirs) {
     read_html() %>% 
     html_nodes("a") %>% 
     html_attr("href") %>% 
-    str_subset("Schedule(A|B)") %>% 
+    str_subset("(Schedule(A|B))|Report") %>% 
     append(sbe_names)
 }
 ```
@@ -230,44 +247,43 @@ raw_paths %>%
   md_bullet()
 ```
 
-If these paths don't already exist, we can download them now.
+If these paths don't already exist, we can download them now. Each file needs to
+be read so that erroneous double quotations can be removed using regular 
+expressions.
 
 ```{r raw_download}
 for (i in seq_along(raw_urls)) {
   if (file_exists(raw_paths[i])) {
-    next()
+    next("file already downloaded")
   } else {
     download.file(raw_urls[i], raw_paths[i])
+    x <- read_lines(raw_paths[i])
+    if (str_starts(x[1], "#")) {
+      next("file already fixed")
+    } else {
+      x <- str_replace_all(x, "(?<!^|,|\r\n)\"(?!,|\r\n|$)", "'")
+      x <- c("### file fixed", x)
+      write_lines(x, raw_paths[i])
+    }
   }
 }
 ```
 
-### Organize
+## Read
 
-```{r raw_cols}
-all <- map(
-  .x = raw_paths,
-  .f = read_delim,
-  delim = ",",
-  n_max = 2,
-  escape_backslash = FALSE, 
-  escape_double = FALSE,
-  col_types = cols(
-    .default = col_character()
-  )
-)
+We can now read all of the schedule A and B files into a single dataframe.
 
-all <- all %>% 
-  map_dbl(.f = ncol) %>% 
-  set_names(value = raw_paths) %>% 
-  enframe(name = "file", value = "ncol")
+```{r sched_paths}
+sched_paths <- str_subset(raw_paths, "Schedule")
 ```
 
 ```{r raw_read}
 vac <- map_df(
-  .x = all$file[all$ncol <= 24],
+  .x = sched_paths,
   .f = read_delim,
+  .id = "source_file",
   delim = ",",
+  comment = "###",
   escape_backslash = FALSE, 
   escape_double = FALSE,
   col_types = cols(
@@ -280,30 +296,41 @@ vac <- map_df(
 )
 ```
 
+We can also identify the source file for each record.
+
+```{r raw_source}
+vac$source_file <- basename(sched_paths[as.integer(vac$source_file)])
+vac <- relocate(vac, source_file, .after = last_col())
+```
+
 ```{r raw_rename, echo=FALSE}
 vac <- vac %>% 
   clean_names("snake") %>% 
+  remove_empty("cols") %>% 
   rename(
+    rpt_id = report_id,
     last_name = last_or_company_name,
-    comm_id = committee_contact_id,
+    fil_id = committee_contact_id,
     emp_name = name_of_employer,
     occupation = occupation_or_type_of_business,
     emp_place = primary_city_and_state_of_employment_or_business,
     state = state_code,
     zip = zip_code,
-    address1 = address_line1,
-    address2 = address_line2,
+    addr1 = address_line1,
+    addr2 = address_line2,
     date = transaction_date,
     total = total_to_date,
-    sched_id = schedule_id,
     sched_a = schedule_a_id,
     sched_b = schedule_b_id,
     valuation = valuation_basis,
     product = product_or_service
+  ) %>% 
+  select(
+    -report_uid
   )
 ```
 
-The data column is a mix of `%m/%d/%Y` and `%Y-%m-%d` formats.
+The `date` column is a mix of `%m/%d/%Y` and `%Y-%m-%d` formats.
 
 ```{r raw_dates}
 vac_mdy <- str_which(vac$date, "^\\d{2}/")
@@ -311,36 +338,190 @@ vac$date[vac_mdy] <- as.character(mdy(vac$date[vac_mdy]))
 vac$date <- parse_datetime(vac$date)
 ```
 
-## Explore
+Each contribution has a unique ID number for either schedule A or B. We can
+create a single shared ID column.
 
-```{r glimpse}
-head(vac)
-tail(vac)
-glimpse(sample_n(vac, 20))
+```{r rpt_id}
+vac <- vac %>% 
+  mutate(con_id = coalesce(sched_a, sched_b)) %>% 
+  select(-sched_a, -sched_b)
 ```
 
-### Missing
+## Join
+
+Each contribution is reported by the committee to which is was made. The
+information on those reports, including who filed them and when, is contained
+in a separate file every month.
+
+```{r rpt_paths}
+rpt_paths <- str_subset(raw_paths, "Report")
+```
+
+```{r rpt_read}
+rpt <- map_df(
+  .x = rpt_paths,
+  .f = read_delim,
+  .id = "source_file",
+  delim = ",",
+  comment = "###",
+  col_types = cols(
+    .default = col_character(),
+    IsStateWide = col_logical(),
+    IsGeneralAssembly = col_logical(),
+    IsLocal = col_logical(),
+    FilingDate = col_datetime(),
+    StartDate = col_datetime(),
+    EndDate = col_datetime(),
+    IsFinalReport = col_logical(),
+    AmendmentCount = col_integer(),
+    ElectionCycleStartDate = col_datetime(),
+    ElectionCycleEndDate = col_datetime(),
+    BalanceLastReportingPeriod = col_double(),
+    NoActivity = col_logical(),
+    DateOfReferendum = col_datetime(),
+    SubmittedDate = col_datetime(),
+    DueDate = col_datetime(),
+    IsXmlUpload = col_logical()
+  )
+)
+```
+
+```{r rpt_source}
+rpt$source_file <- basename(rpt_paths[as.integer(rpt$source_file)])
+rpt <- relocate(rpt, source_file, .after = last_col())
+```
+
+```{r rpt_rename, echo=FALSE}
+rpt <- rpt %>% 
+  clean_names("snake") %>% 
+  rename_all(str_replace, "committee_", "fil_") %>% 
+  rename_all(str_replace, "submitter_", "fil_") %>% 
+  remove_empty("cols") %>% 
+  remove_constant(na.rm = TRUE) %>% 
+  rename(
+    rpt_id = report_id,
+    is_stwide = is_state_wide,
+    is_assembly = is_general_assembly,
+    cand_name = candidate_name,
+    is_final = is_final_report,
+    addr1 = address_line1,
+    addr2 = address_line2,
+    state = state_code,
+    zip = zip_code,
+    is_amend = is_amendment,
+    amend_count = amendment_count,
+    office = office_sought,
+    elect_start = election_cycle_start_date,
+    elect_end = election_cycle_end_date,
+    balance = balance_last_reporting_period,
+    referendum_date = date_of_referendum
+  ) %>% 
+  select(
+    -report_uid,
+    -is_xml_upload,
+    -balance
+  )
+```
+
+The information on these reports can then be joined using the report ID.
+
+```{r rpt_join}
+vac <- left_join(
+  x = vac, y = rpt,
+  by = "rpt_id",
+  suffix = c("_con", "_fil")
+)
+```
+
+We identify the columns common to both by either being from a contributor
+(`con_*`) or the filer (`fil_*`).
+
+```{r rpt_prefix}
+vac <- rename_prefix(
+  df = vac,
+  suffix = c("_con", "_fil")
+)
+```
+
+## Explore
+
+There are `r comma(nrow(vac))` columns and `r ncol(vac)` columns.
+
+```{r glimpse}
+glimpse(vac)
+tail(vac)
+```
+
+## Missing
+
+Columns vary in their degree of missing values.
 
 ```{r na_count}
 col_stats(vac, count_na)
 ```
 
+We can flag any record missing a key variable, like a date or name, needed to
+identify a transaction and all of it's parties.
+
 ```{r na_flag}
-vac <- vac %>% flag_na(date, last_name, amount, committee)
+key_vars <- c("con_name", "date", "amount", "fil_name")
+vac <- vac %>% 
+  unite(
+    col = con_name,
+    prefix, first_name, middle_name, last_name, suffix,
+    sep = " ",
+    na.rm = TRUE,
+    remove = FALSE
+  ) %>% 
+  mutate(across(where(is_character), na_if, "")) %>% 
+  relocate(con_name, .after = last_col()) %>% 
+  flag_na(all_of(key_vars))
+```
+
+There are `r comma(sum(vac$na_flag))` records missing a key variable.
+
+```{r na_sum}
 sum(vac$na_flag)
+vac %>% 
+  filter(na_flag) %>% 
+  select(all_of(key_vars))
 ```
 
 ### Duplicates
 
-```{r dupe_flag}
-vac <- flag_dupes(vac, -id)
-sum(vac$dupe_flag)
+We can flag any record duplicated at least once, aside from the supposedly
+unique contribution ID.
+
+```{r dupe_find}
+dupe_file <- path(dirname(raw_dir), "dupes.csv")
+if (file_exists(dupe_file)) {
+  dupes <- read_csv(
+    file = dupe_file,
+    col_types = cols(
+      rpt_id = col_character(),
+      con_id = col_character()
+    )
+  )
+  vac <- left_join(vac, dupes)
+} else {
+  d1 <- duplicated(select(vac, -con_id), fromLast = FALSE)
+  flush_memory()
+  d2 <- duplicated(select(vac, -con_id), fromLast = TRUE)
+  flush_memory()
+  vac <- mutate(vac, dupe_flag = d1 | d2)
+  rm(d1, d2)
+}
+```
+
+```{r dupe_count}
+percent(mean(vac$dupe_flag), 0.01)
 ```
 
 ```{r dupe_view}
 vac %>% 
   filter(dupe_flag) %>% 
-  select(date, last, amount, committee)
+  select(all_of(key_vars)) %>% 
+  arrange(date, con_name)
 ```
 
 ### Categorical
@@ -349,9 +530,14 @@ vac %>%
 col_stats(vac, n_distinct)
 ```
 
-### Continuous
+```{r echo=FALSE}
+explore_plot(vac, is_individual)
+explore_plot(vac, fil_type) + scale_x_truncate()
+explore_plot(vac, party, nbar = 4)
+explore_plot(vac, office) + scale_x_truncate()
+```
 
-#### Amounts
+### Amounts
 
 ```{r ammount_summary}
 summary(vac$amount)
@@ -360,8 +546,9 @@ mean(vac$amount <= 0)
 
 ```{r hist_amount, echo=FALSE}
 vac %>%
+  filter(amount >= 1, !is.na(amount)) %>% 
   ggplot(aes(amount)) +
-  geom_histogram(fill = dark2["purple"]) +
+  geom_histogram(fill = dark2["purple"], bins = 20) +
   scale_y_continuous(labels = comma) +
   scale_x_continuous(
     breaks = c(1 %o% 10^(0:6)),
@@ -371,7 +558,7 @@ vac %>%
   labs(
     title = "Virginia Contributions Amount Distribution",
     subtitle = "from 2000 to 2019",
-    caption = "Source: {source}",
+    caption = "Source: VA SBE",
     x = "Amount",
     y = "Count"
   )
@@ -393,20 +580,41 @@ sum(vac$date > today())
 ```{r bar_year, echo=FALSE}
 vac %>% 
   count(year) %>% 
-  mutate(even = is_even(year)) %>% 
+  mutate(even = !is_even(year)) %>% 
   ggplot(aes(x = year, y = n)) +
   geom_col(aes(fill = even)) + 
   scale_fill_brewer(palette = "Dark2") +
   scale_y_continuous(labels = comma) +
-  scale_x_continuous(breaks = seq(2000, 2020, by = 2)) +
+  scale_x_continuous(breaks = seq(2009, 2020, by = 1)) +
+  coord_cartesian(xlim = c(2009, 2020)) +
   theme(legend.position = "bottom") +
   labs(
     title = "Virginia Contributions by Year",
-    caption = "Source: {source}",
+    caption = "Source: VA SBE",
     fill = "Election Year",
     x = "Year Made",
     y = "Count"
   )
+```
+
+There are `r comma(sum(vac$year == 2009))` records with a `year` value of 2009,
+which is before the lowest date of 2012 we would expect.
+
+All of these records came from the same two reports made in January and April
+of 2014. An exact same number of records from each report.
+
+```{r year_source}
+vac %>% 
+  filter(year == 2009) %>% 
+  count(rpt_id, con_source_file, fil_source_file, sort = TRUE)
+```
+
+These transactions were made in 2009 and weren't reported until 2014.
+
+```{r year_filed}
+vac %>% 
+  filter(year == 2009) %>% 
+  count(date, filing_date, sort = TRUE)
 ```
 
 ## Wrangle
@@ -418,32 +626,73 @@ facilitate this process.
 
 ### Address
 
-For the street `addresss` variable, the `campfin::normal_address()` function
+For the street `*_addr` variables, the `campfin::normal_address()` function
 will force consistence case, remove punctuation, and abbreviate official 
 USPS suffixes.
 
-```{r address_norm}
-vac <- vac %>% 
+We will create separate tables of unique, normalized addresses.
+
+```{r con_addr_full}
+con_addr_norm <- vac %>% 
+  select(starts_with("con_addr")) %>% 
+  distinct() %>% 
   unite(
-    col = address_full,
-    starts_with("address"),
+    col = con_addr_full,
+    everything(),
     sep = " ",
     remove = FALSE,
     na.rm = TRUE
   ) %>% 
   mutate(
-    address_norm = normal_address(
-      address = address_full,
+    con_addr_norm = normal_address(
+      address = con_addr_full,
       abbs = usps_street,
       na_rep = TRUE
     )
   ) %>% 
-  select(-address_full)
+  select(-con_addr_full)
+```
+
+```{r con_addr_view, echo=FALSE}
+con_addr_norm
+```
+
+This table can be joined to the original contributions.
+
+```{r con_addr_join}
+vac <- left_join(vac, con_addr_norm)
+```
+
+This process is repeated for filer addresses, of which there are far fewer.
+
+```{r fil_addr_norm}
+fil_addr_norm <- vac %>% 
+  select(starts_with("fil_addr")) %>% 
+  distinct() %>% 
+  unite(
+    col = fil_addr_full,
+    everything(),
+    sep = " ",
+    remove = FALSE,
+    na.rm = TRUE
+  ) %>% 
+  mutate(
+    fil_addr_norm = normal_address(
+      address = fil_addr_full,
+      abbs = usps_street,
+      na_rep = TRUE
+    )
+  ) %>% 
+  select(-fil_addr_full)
+```
+
+```{r fil_addr_join}
+vac <- left_join(vac, fil_addr_norm)
 ```
 
 ```{r address_view}
 vac %>% 
-  select(contains("address")) %>% 
+  select(contains("addr")) %>% 
   distinct() %>% 
   sample_n(10)
 ```
@@ -455,52 +704,32 @@ valid _five_ digit codes by removing the ZIP+4 suffix and returning leading
 zeroes dropped by other programs like Microsoft Excel.
 
 ```{r zip_norm}
-vac <- vac %>% 
-  mutate(
-    zip_norm = normal_zip(
-      zip = zip,
-      na_rep = TRUE
-    )
+vac <- mutate(
+  vac, across(
+    .cols = ends_with("zip"),
+    .fns = list(norm = normal_zip),
+    na_rep = TRUE
   )
+)
 ```
 
 ```{r zip_progress}
 progress_table(
-  vac$zip,
-  vac$zip_norm,
+  vac$con_zip,
+  vac$con_zip_norm,
+  vac$fil_zip,
+  vac$fil_zip_norm,
   compare = valid_zip
 )
 ```
 
 ### State
 
-Valid two digit state abbreviations can be made using the 
-`campfin::normal_state()` function.
+The state variables do not need to be normalized.
 
-```{r state_norm}
-vac <- vac %>% 
-  mutate(
-    state_norm = normal_state(
-      state = state,
-      abbreviate = TRUE,
-      na_rep = TRUE,
-      valid = valid_state
-    )
-  )
-```
-
-```{r state_view}
-vac %>% 
-  filter(state != state_norm) %>% 
-  count(state, sort = TRUE)
-```
-
-```{r state_progress}
-progress_table(
-  vac$state,
-  vac$state_norm,
-  compare = valid_state
-)
+```{r state_check}
+prop_in(vac$con_state, valid_state)
+prop_in(vac$fil_state, valid_state)
 ```
 
 ### City
@@ -515,16 +744,16 @@ removing punctuation, but _expanding_ USPS abbreviations. We can also remove
 `invalid_city` values.
 
 ```{r city_norm}
-vac <- vac %>% 
-  mutate(
-    city_norm = normal_city(
-      city = city, 
-      abbs = usps_city,
-      states = c("VA", "DC", "VIRGINIA"),
-      na = invalid_city,
-      na_rep = TRUE
-    )
+vac <- mutate(
+  vac, across(
+    .cols = ends_with("city"),
+    .fns = list(norm = normal_city),
+    abbs = usps_city,
+    states = c("VA", "DC", "VIRGINIA"),
+    na = invalid_city,
+    na_rep = TRUE
   )
+)
 ```
 
 #### Swap
@@ -534,37 +763,96 @@ against the _expected_ value for that record's state abbreviation and ZIP code.
 If the normalized value is either an abbreviation for or very similar to the
 expected value, we can confidently swap those two.
 
-```{r city_swap}
-vac <- vac %>% 
-  rename(city_raw = city) %>% 
+```{r con_city_swap}
+con_city_swap <- vac %>% 
+  count(
+    con_city_norm, 
+    con_state, 
+    con_zip_norm,
+    sort = TRUE
+  ) %>% 
   left_join(
     y = zipcodes,
     by = c(
-      "state_norm" = "state",
-      "zip_norm" = "zip"
+      "con_state" = "state",
+      "con_zip_norm" = "zip"
     )
   ) %>% 
   rename(city_match = city) %>% 
   mutate(
-    match_abb = is_abbrev(city_norm, city_match),
-    match_dist = str_dist(city_norm, city_match),
-    city_swap = if_else(
+    match_abb = is_abbrev(con_city_norm, city_match),
+    match_dist = str_dist(con_city_norm, city_match),
+    con_city_swap = if_else(
       condition = !is.na(match_dist) & match_abb | match_dist == 1,
       true = city_match,
-      false = city_norm
+      false = con_city_norm
     )
   ) %>% 
   select(
     -city_match,
     -match_dist,
-    -match_abb
+    -match_abb,
+    -n
   )
+```
+
+```{r echo=FALSE}
+con_city_swap %>% 
+  filter(con_city_norm != con_city_swap)
+```
+
+```{r con_city_join}
+vac <- left_join(vac, con_city_swap)
+```
+
+Repeat the process for the filer cities.
+
+```{r fil_city_swap}
+fil_city_swap <- vac %>% 
+  count(
+    fil_city_norm, 
+    fil_state, 
+    fil_zip_norm,
+    sort = TRUE
+  ) %>% 
+  left_join(
+    y = zipcodes,
+    by = c(
+      "fil_state" = "state",
+      "fil_zip_norm" = "zip"
+    )
+  ) %>% 
+  rename(city_match = city) %>% 
+  mutate(
+    match_abb = is_abbrev(fil_city_norm, city_match),
+    match_dist = str_dist(fil_city_norm, city_match),
+    fil_city_swap = if_else(
+      condition = !is.na(match_dist) & match_abb | match_dist == 1,
+      true = city_match,
+      false = fil_city_norm
+    )
+  ) %>% 
+  select(
+    -city_match,
+    -match_dist,
+    -match_abb,
+    -n
+  )
+```
+
+```{r echo=FALSE}
+fil_city_swap %>% 
+  filter(fil_city_norm != fil_city_swap)
+```
+
+```{r fil_city_join}
+vac <- left_join(vac, fil_city_swap)
 ```
 
 #### Refine
 
-The [OpenRefine] algorithms can be used to group similar strings and replace the
-less common versions with their most common counterpart. This can greatly 
+The [OpenRefine][or] algorithms can be used to group similar strings and replace
+the less common versions with their most common counterpart. This can greatly
 reduce inconsistency, but with low confidence; we will only keep any refined
 strings that have a valid city/state/zip combination.
 
@@ -573,28 +861,29 @@ strings that have a valid city/state/zip combination.
 ```{r city_refine}
 good_refine <- vac %>% 
   mutate(
-    city_refine = city_swap %>% 
+    con_city_refine = con_city_swap %>% 
       key_collision_merge() %>% 
       n_gram_merge(numgram = 1)
   ) %>% 
-  filter(city_refine != city_swap) %>% 
+  filter(con_city_refine != con_city_swap) %>% 
   inner_join(
     y = zipcodes,
     by = c(
-      "city_refine" = "city",
-      "state_norm" = "state",
-      "zip_norm" = "zip"
+      "con_city_refine" = "city",
+      "con_state" = "state",
+      "con_zip_norm" = "zip"
     )
   )
 ```
 
 ```{r city_count, echo=FALSE}
+nrow(good_refine)
 good_refine %>%
   count(
-    state_norm, 
-    zip_norm, 
-    city_swap, 
-    city_refine,
+    con_state, 
+    con_zip_norm, 
+    con_city_swap, 
+    con_city_refine,
     sort = TRUE
   )
 ```
@@ -603,27 +892,39 @@ Then we can join the refined values back to the database.
 
 ```{r city_join}
 vac <- vac %>% 
-  left_join(good_refine) %>% 
-  mutate(city_refine = coalesce(city_refine, city_swap))
+  left_join(good_refine, by = names(.)) %>% 
+  mutate(con_city_refine = coalesce(con_city_refine, con_city_swap))
 ```
 
 #### Progress
 
-```{r city_progress, echo=FALSE}
+```{r con_city_progress, echo=FALSE}
 many_city <- c(valid_city, extra_city)
 progress <- progress_table(
-  str_to_upper(vac$city_raw),
-  vac$city_norm,
-  vac$city_swap,
+  str_to_upper(vac$con_city),
+  vac$con_city_norm,
+  vac$con_city_swap,
+  vac$con_city_refine,
   compare = many_city
 ) %>% mutate(stage = as_factor(stage))
 kable(progress, digits = 3)
 ```
 
+```{r fil_city_progress, echo=FALSE}
+progress_table(
+  str_to_upper(vac$fil_city),
+  vac$fil_city_norm,
+  vac$fil_city_swap,
+  compare = many_city
+) %>% 
+  mutate(stage = as_factor(stage)) %>% 
+  kable(digits = 3)
+```
+
 You can see how the percentage of valid values increased with each stage.
 
 ```{r bar_progress, echo=FALSE}
-raw_in <- percent(prop_in(vac$city_raw, valid_city))
+raw_in <- percent(prop_in(vac$con_city, many_city))
 progress %>% 
   ggplot(aes(x = stage, y = prop_in)) +
   geom_hline(yintercept = 0.99) +
@@ -671,35 +972,146 @@ progress %>%
 ```{r clean_select}
 vac <- vac %>% 
   select(
-    -city_norm,
-    -city_swap,
-    city_clean = city_refine
+    -con_city_norm,
+    -con_city_swap,
+    con_city_clean = con_city_refine
+  ) %>% 
+    select(
+    -fil_city_norm,
+    fil_city_clean = fil_city_swap
   ) %>% 
   rename_all(~str_replace(., "_norm", "_clean"))
 ```
 
 ```{r clean_glimpse}
-glimpse(sample_n(vac, 20))
+glimpse(sample_n(vac, 100))
 ```
 
 1. There are `r comma(nrow(vac))` records in the database.
 1. There are `r comma(sum(vac$dupe_flag))` duplicate records in the database.
 1. The range and distribution of `amount` and `date` seem reasonable.
-1. There are `r comma(sum(vac$na_flag))` records missing ....
+1. There are `r comma(sum(vac$na_flag))` records missing key variables.
 1. Consistency in geographic data has been improved with `campfin::normal_*()`.
 1. The 4-digit `year` variable has been created with `lubridate::year()`.
 
 ## Export
 
+Now the file can be saved on disk for upload to the Accountability server.
+
 ```{r clean_dir}
 clean_dir <- dir_create(here("va", "contribs", "data", "clean"))
+clean_path <- path(clean_dir, "va_contribs_clean.csv")
+write_csv(vac, clean_path, na = "")
+(clean_size <- file_size(clean_path))
+file_encoding(clean_path) %>% 
+  mutate(across(path, path.abbrev))
 ```
 
-```{r clean_write}
-write_csv(
-  x = vac,
-  path = path(clean_dir, "va_contribs_clean.csv"),
-  na = ""
+## Upload
+
+We can use the `aws.s3::put_object()` to upload the text file to the IRW server.
+
+```{r s3_upload, eval=FALSE}
+s3_path <- path("csv", basename(clean_path))
+if (!object_exists(s3_path, "publicaccountability")) {
+  put_object(
+    file = clean_path,
+    object = s3_path, 
+    bucket = "publicaccountability",
+    acl = "public-read",
+    show_progress = TRUE,
+    multipart = TRUE
+  )
+}
+s3_head <- head_object(s3_path, "publicaccountability")
+(s3_size <- as_fs_bytes(attr(s3_head, "content-length")))
+unname(s3_size == clean_size)
+```
+
+## Dictionary
+
+The following table describes the variables in our final exported file:
+
+```{r dict_make, echo=FALSE}
+dict_raw <- tibble(
+  var = md_code(names(vac)),
+  type = md_code(map_chr(vac, typeof)),
+  def = c(
+    "Filed report ID number",
+    "Unique Filer ID",
+    "Contributor first name",
+    "Contributor middle name",
+    "Contributor last name",
+    "Contributor name prefix",
+    "Contributor name suffix",
+    "Contributor employer name",
+    "Contributor occipation",
+    "Employer location",
+    "Contributor street address",
+    "Contributor secondary address",
+    "Contributor city name",
+    "Contributor state abbreviation",
+    "Contributor ZIP+4 code",
+    "Flag for individual contributor",
+    "Date contribution was made",
+    "Amount of contribution or correction",
+    "Total amount contributed to date",
+    "In-kind contribution valuation method",
+    "In-kind contribution product",
+    "Contribution source file name",
+    "**Unique** contribution ID",
+    "**Unique** filer code",
+    "Filing committee name",
+    "Filing committee type",
+    "Candidate name",
+    "Flag for statewide race",
+    "Flag for general assembly race",
+    "Flag for local race",
+    "Candidate political party",
+    "Reporting year",
+    "Date report filed",
+    "Date reporting period began",
+    "Date reporting period ended",
+    "Committee street address",
+    "Committee secondary address",
+    "Committee city name",
+    "Committee state abbreviation",
+    "Committee ZIP+4 code",
+    "Type of report filed",
+    "Flag for final election report",
+    "Flag for amended report",
+    "Amended report version count",
+    "Filer phone number",
+    "Filer email address",
+    "Election cycle date/month",
+    "Date election began",
+    "Date election ended",
+    "Office sought by receiving candidate",
+    "District in which election held",
+    "Flag for no activity reported",
+    "Date referendum held",
+    "Date report filed",
+    "Unique account ID hash of filer",
+    "Date report due with state",
+    "Report source file name",
+    "Combined full contributor name",
+    "Flag for missing date, amount, or name",
+    "Flag for completely duplicated record",
+    "Calendar year of contribution date",
+    "Normalized contributor combined address",
+    "Normalized committee combined address",
+    "Normalized contributor 5-digit ZIP code",
+    "Normalized committee 5-digit ZIP code",
+    "Normalized contributor city name",
+    "Normalized committee city name"
+  )
 )
 ```
 
+```{r dict_md, echo=FALSE}
+(dict_md <- kable(
+  x = dict_raw,
+  format = "markdown",
+  col.names = c("Column", "Type", "Definition")
+))
+```
