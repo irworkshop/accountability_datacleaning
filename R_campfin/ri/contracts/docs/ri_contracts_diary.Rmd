@@ -84,6 +84,7 @@ pacman::p_load(
   magrittr, # pipe operators
   janitor, # clean data frames
   aws.s3, # aws bucket storage
+  readxl, # read excel files
   refinr, # cluster and merge
   scales, # format strings
   knitr, # knit documents
@@ -298,7 +299,41 @@ tail(ric)
 
 ### Missing
 
-There are no records missing key variables.
+There is no variable containing the specific state agency receiving the goods or
+services being purchased. A separate Excel spreadsheet was provided by the DOA
+which contains the numeric codes of the agencies, which is contained in the
+`ship_to` code value.
+
+> The ship to location has the agency. The first three characters of the ship to
+should be the agency. Below is one of the ship to in the file.  In the example
+068 would be the agency.
+
+We can read this spreadsheet and join the agency names along this code.
+
+```{r agency_codes}
+agency_codes <- read_excel(
+  skip = 1,
+  path = path(raw_dir, "RIagCodes.xls"),
+  col_names = c("code", "agency")
+)
+```
+
+We can also add the state government abbreviation spending the money.
+
+```{r agency_join}
+ric <- ric %>% 
+  mutate(code = str_sub(ship_to, 1, 3)) %>% 
+  left_join(agency_codes) %>% 
+  relocate(agency, .before = buyer) %>% 
+  mutate(govt = "RI", .before = agency)
+```
+
+```{r agency_count}
+explore_plot(ric, agency) + scale_x_truncate()
+```
+
+Now there are no records missing a key variable needed to identify the parties
+to a transaction.
 
 ```{r na_count}
 col_stats(ric, count_na)
@@ -386,14 +421,6 @@ ric %>%
     x = "Year Made",
     y = "Count"
   )
-```
-
-## Wrangle
-
-We need to manually add the state government abbreviation making the purchase.
-
-```{r state_add}
-ric <- mutate(ric, govt = "RI", .after = buyer)
 ```
 
 ## Conclude

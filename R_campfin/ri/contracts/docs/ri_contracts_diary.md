@@ -1,7 +1,7 @@
 Rhode Island Contracts
 ================
 Kiernan Nicholls
-2020-10-15 11:50:57
+2020-10-20 11:44:39
 
   - [Project](#project)
   - [Objectives](#objectives)
@@ -11,7 +11,6 @@ Kiernan Nicholls
   - [Read](#read)
   - [Join](#join)
   - [Explore](#explore)
-  - [Wrangle](#wrangle)
   - [Conclude](#conclude)
   - [Export](#export)
   - [Upload](#upload)
@@ -67,6 +66,7 @@ pacman::p_load(
   magrittr, # pipe operators
   janitor, # clean data frames
   aws.s3, # aws bucket storage
+  readxl, # read excel files
   refinr, # cluster and merge
   scales, # format strings
   knitr, # knit documents
@@ -317,35 +317,74 @@ tail(ric)
 
 ### Missing
 
-There are no records missing key variables.
+There is no variable containing the specific state agency receiving the
+goods or services being purchased. A separate Excel spreadsheet was
+provided by the DOA which contains the numeric codes of the agencies,
+which is contained in the `ship_to` code value.
+
+> The ship to location has the agency. The first three characters of the
+> ship to should be the agency. Below is one of the ship to in the file.
+> In the example 068 would be the agency.
+
+We can read this spreadsheet and join the agency names along this code.
+
+``` r
+agency_codes <- read_excel(
+  skip = 1,
+  path = path(raw_dir, "RIagCodes.xls"),
+  col_names = c("code", "agency")
+)
+```
+
+We can also add the state government abbreviation spending the money.
+
+``` r
+ric <- ric %>% 
+  mutate(code = str_sub(ship_to, 1, 3)) %>% 
+  left_join(agency_codes) %>% 
+  relocate(agency, .before = buyer) %>% 
+  mutate(govt = "RI", .before = agency)
+```
+
+``` r
+explore_plot(ric, agency) + scale_x_truncate()
+```
+
+![](../plots/agency_count-1.png)<!-- -->
+
+Now there are no records missing a key variable needed to identify the
+parties to a transaction.
 
 ``` r
 col_stats(ric, count_na)
-#> # A tibble: 22 x 4
+#> # A tibble: 25 x 4
 #>    col         class       n      p
 #>    <chr>       <chr>   <int>  <dbl>
 #>  1 created     <date>      0 0     
 #>  2 status      <chr>       0 0     
 #>  3 rev         <int>       0 0     
 #>  4 printed     <date>   6458 0.0285
-#>  5 buyer       <chr>       0 0     
-#>  6 vendor      <chr>       0 0     
-#>  7 on_hold     <chr>  226866 1.00  
-#>  8 vendor_site <chr>       0 0     
-#>  9 need_accept <lgl>       0 0     
-#> 10 amount      <dbl>       0 0     
-#> 11 po_header   <chr>       0 0     
-#> 12 revised     <date> 172629 0.761 
-#> 13 po_number   <chr>       0 0     
-#> 14 line        <dbl>       0 0     
-#> 15 type        <chr>       0 0     
-#> 16 desc        <chr>       0 0     
-#> 17 unit        <chr>       0 0     
-#> 18 price       <dbl>   16061 0.0708
-#> 19 ordered     <dbl>       0 0     
-#> 20 recieved    <dbl>       0 0     
-#> 21 billed      <dbl>       0 0     
-#> 22 ship_to     <chr>       0 0
+#>  5 govt        <chr>       0 0     
+#>  6 agency      <chr>       0 0     
+#>  7 buyer       <chr>       0 0     
+#>  8 vendor      <chr>       0 0     
+#>  9 on_hold     <chr>  226866 1.00  
+#> 10 vendor_site <chr>       0 0     
+#> 11 need_accept <lgl>       0 0     
+#> 12 amount      <dbl>       0 0     
+#> 13 po_header   <chr>       0 0     
+#> 14 revised     <date> 172629 0.761 
+#> 15 po_number   <chr>       0 0     
+#> 16 line        <dbl>       0 0     
+#> 17 type        <chr>       0 0     
+#> 18 desc        <chr>       0 0     
+#> 19 unit        <chr>       0 0     
+#> 20 price       <dbl>   16061 0.0708
+#> 21 ordered     <dbl>       0 0     
+#> 22 recieved    <dbl>       0 0     
+#> 23 billed      <dbl>       0 0     
+#> 24 ship_to     <chr>       0 0     
+#> 25 code        <chr>       0 0
 ```
 
 ### Duplicates
@@ -361,31 +400,34 @@ ric <- flag_dupes(ric, everything())
 
 ``` r
 col_stats(ric, n_distinct)
-#> # A tibble: 22 x 4
+#> # A tibble: 25 x 4
 #>    col         class       n          p
 #>    <chr>       <chr>   <int>      <dbl>
 #>  1 created     <date>   2249 0.00991   
 #>  2 status      <chr>       7 0.0000309 
 #>  3 rev         <int>      22 0.0000970 
 #>  4 printed     <date>   1951 0.00860   
-#>  5 buyer       <chr>      37 0.000163  
-#>  6 vendor      <chr>    9809 0.0432    
-#>  7 on_hold     <chr>       2 0.00000882
-#>  8 vendor_site <chr>      85 0.000375  
-#>  9 need_accept <lgl>       2 0.00000882
-#> 10 amount      <dbl>   65694 0.290     
-#> 11 po_header   <chr>  147434 0.650     
-#> 12 revised     <date>   1778 0.00784   
-#> 13 po_number   <chr>  147434 0.650     
-#> 14 line        <dbl>     216 0.000952  
-#> 15 type        <chr>       3 0.0000132 
-#> 16 desc        <chr>  158534 0.699     
-#> 17 unit        <chr>      75 0.000331  
-#> 18 price       <dbl>   25852 0.114     
-#> 19 ordered     <dbl>   47512 0.209     
-#> 20 recieved    <dbl>   40816 0.180     
-#> 21 billed      <dbl>   47952 0.211     
-#> 22 ship_to     <chr>     454 0.00200
+#>  5 govt        <chr>       1 0.00000441
+#>  6 agency      <chr>      41 0.000181  
+#>  7 buyer       <chr>      37 0.000163  
+#>  8 vendor      <chr>    9809 0.0432    
+#>  9 on_hold     <chr>       2 0.00000882
+#> 10 vendor_site <chr>      85 0.000375  
+#> 11 need_accept <lgl>       2 0.00000882
+#> 12 amount      <dbl>   65694 0.290     
+#> 13 po_header   <chr>  147434 0.650     
+#> 14 revised     <date>   1778 0.00784   
+#> 15 po_number   <chr>  147434 0.650     
+#> 16 line        <dbl>     216 0.000952  
+#> 17 type        <chr>       3 0.0000132 
+#> 18 desc        <chr>  158534 0.699     
+#> 19 unit        <chr>      75 0.000331  
+#> 20 price       <dbl>   25852 0.114     
+#> 21 ordered     <dbl>   47512 0.209     
+#> 22 recieved    <dbl>   40816 0.180     
+#> 23 billed      <dbl>   47952 0.211     
+#> 24 ship_to     <chr>     454 0.00200   
+#> 25 code        <chr>      41 0.000181
 ```
 
 ``` r
@@ -445,27 +487,19 @@ sum(ric$date > today())
 
 ![](../plots/bar_year-1.png)<!-- -->
 
-## Wrangle
-
-We need to manually add the state government abbreviation making the
-purchase.
-
-``` r
-ric <- mutate(ric, govt = "RI", .after = buyer)
-```
-
 ## Conclude
 
 ``` r
 glimpse(sample_n(ric, 50))
 #> Rows: 50
-#> Columns: 25
+#> Columns: 27
 #> $ created     <date> 2016-08-19, 2019-03-05, 2018-02-05, 2018-03-09, 2019-07-26, 2017-10-17, 201…
 #> $ status      <chr> "Approved, Cancelled", "Approved, Closed", "Approved, Closed", "Approved, Cl…
 #> $ rev         <int> 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 0, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1…
 #> $ printed     <date> 2019-10-24, 2019-03-05, 2018-02-05, 2018-03-09, 2019-07-26, 2018-10-18, NA,…
-#> $ buyer       <chr> "Autocreate, *", "Autocreate, *", "Autocreate, *", "Autocreate, *", "Autocre…
 #> $ govt        <chr> "RI", "RI", "RI", "RI", "RI", "RI", "RI", "RI", "RI", "RI", "RI", "RI", "RI"…
+#> $ agency      <chr> "Judicial Department - Constitution", "Behavioral Healthcare , Dev Disabilit…
+#> $ buyer       <chr> "Autocreate, *", "Autocreate, *", "Autocreate, *", "Autocreate, *", "Autocre…
 #> $ vendor      <chr> "HP INC", "ATMED TREATMENT CENTER INC", "RHODE ISLAND SNOW & ICE CO", "COX R…
 #> $ on_hold     <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
 #> $ vendor_site <chr> "13", "01", "01", "99", "01", "01", "99", "01", "01", "01", "01", "99", "99"…
@@ -483,6 +517,7 @@ glimpse(sample_n(ric, 50))
 #> $ recieved    <dbl> 0.00, 76.00, 3409.00, 171.00, 1.00, 1.00, 185.00, 1200.00, 4.00, 4570.00, 2.…
 #> $ billed      <dbl> 1.00, 76.00, 3409.00, 171.00, 1.00, 1.00, 185.00, 1200.00, 4.00, 4570.00, 2.…
 #> $ ship_to     <chr> "09900-003", "07600-003", "07600-006", "08100-004", "07400-026", "07600-012"…
+#> $ code        <chr> "099", "076", "076", "081", "074", "076", "074", "081", "081", "026", "077",…
 #> $ date        <date> 2017-08-18, 2019-03-05, 2018-02-05, 2018-03-09, 2019-07-26, 2017-10-17, 201…
 #> $ year        <dbl> 2017, 2019, 2018, 2018, 2019, 2017, 2014, 2017, 2017, 2015, 2017, 2014, 2014…
 ```
@@ -506,7 +541,7 @@ clean_dir <- dir_create(here("ri", "contracts", "data", "clean"))
 clean_path <- path(clean_dir, "ri_contracts_clean.csv")
 write_csv(ric, clean_path, na = "")
 (clean_size <- file_size(clean_path))
-#> 50.6M
+#> 59.3M
 file_encoding(clean_path) %>% 
   mutate(across(path, path.abbrev))
 #> # A tibble: 1 x 3
