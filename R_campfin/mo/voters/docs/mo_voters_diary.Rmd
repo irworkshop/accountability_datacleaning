@@ -229,6 +229,7 @@ mov <- clean_names(mov, "snake")
 
 ```{r raw_rename}
 mov <- mov %>% 
+  select(-starts_with("mailing_")) %>% 
   rename_all(str_remove, "residential_") %>% 
   rename_all(str_remove, "_new") %>% 
   rename(
@@ -236,6 +237,68 @@ mov <- mov %>%
     birth_date = birthdate,
     reg_date = registration_date
   )
+```
+
+## Old
+
+In 2018, the Workshop received a similar file. We are going to keep any
+registered voters _not_ found in the current MCVR file.
+
+```{r old_read}
+moo <- s3read_using(
+  FUN = readr::read_delim,
+  filename = "MO_VOTERS.csv",
+  object = "csv/MO_VOTERS.csv",
+  bucket = "publicaccountability",
+  delim = ",",
+  escape_backslash = FALSE,
+  escape_double = FALSE,
+  na = c("", "NA", "XXXXX"),
+  col_types = cols(
+    .default = col_character(),
+    Birthdate = col_date_usa(),
+    RegistrationDate = col_date_usa()
+  )
+)
+```
+
+```{r old_rename}
+moo <- moo %>% 
+  clean_names("snake") %>% 
+  select(-year) %>% 
+  rename(
+    zip = zip5,
+    birth_date = birthdate,
+    reg_date = registration_date,
+    state_senate = statesenate
+  )
+```
+
+```{r old_names}
+prop_in(names(moo), names(mov))
+```
+
+Most of the voters in the _old_ data are still found in the new data.
+
+```{r old_overlap}
+prop_in(moo$voter_id, mov$voter_id)
+prop_in(mov$voter_id, moo$voter_id)
+```
+
+Using the unique `voter_id` we will remove any voter found in the newer data.
+
+```{r old_filter}
+nrow(moo)
+moo <- filter(moo, voter_id %out% mov$voter_id)
+nrow(moo)
+```
+
+The unique old data can then be joined to the most recent voter registrations.
+
+```{r old_bind}
+mov <- bind_rows(mov, moo, .id = "source")
+mov <- relocate(mov, source, .after = last_col())
+add_prop(count(mov, source))
 ```
 
 ## Explore
@@ -255,27 +318,64 @@ Columns vary in their degree of missing values.
 col_stats(mov, count_na)
 ```
 
-No records are missing a name or registration date.
-
 ### Duplicates
 
 We can also flag any record completely duplicated across every column.
 
-```{r dupe_flag}
-voter_ids <- mov$voter_id
-mov <- select(mov, -voter_id)
-d1 <- duplicated(mov, fromLast = FALSE)
-d2 <- duplicated(mov, fromLast = TRUE)
-mov <- mov %>% 
-  mutate(voter_id = voter_ids, .before = first_name) %>% 
-  mutate(dupe_flag = d1 | d2)
+```{r dupe_write}
+dupe_file <- here("mo", "voters", "dupes.csv")
+if (!file_exists(dupe_file)) {
+  file_create(dupe_file)
+  write_lines("voter_id,dupe_flag", dupe_file)
+  mos <- mov %>% 
+    select(-voter_id) %>% 
+    group_split(county)
+  split_id <- split(mov$voter_id, mov$county)
+  pb <- txtProgressBar(max = length(mos), style = 3)
+  for (i in seq_along(mos)) {
+    write_csv(
+      path = dupe_file,
+      append = TRUE,
+      col_names = FALSE,
+      x = tibble(
+        voter_id = split_id[[i]],
+        dupe_flag = or(
+          e1 = duplicated(mos[[i]], fromLast = FALSE),
+          e2 = duplicated(mos[[i]], fromLast = TRUE)
+        )
+      )
+    )
+    flush_memory(1)
+    setTxtProgressBar(pb, i)
+  }
+  rm(mos)
+}
 ```
 
+```{r dupe_read}
+dupes <- read_csv(
+  file = dupe_file,
+  col_types = cols(
+    voter_id = col_character(),
+    dupe_flag = col_logical()
+  )
+)
+```
+
+```{r dupe_join}
+nrow(mov)
+mov <- left_join(mov, dupes)
+nrow(mov)
+mov <- mutate(mov, dupe_flag = !is.na(dupe_flag))
+sum(mov$dupe_flag)
+```
+
+We can see that, despite unique IDs, there are duplicate voters.
+
 ```{r dupe_view}
-percent(mean(mov$dupe_flag), 0.001)
 mov %>% 
   filter(dupe_flag) %>% 
-  select(voter_id, first_name, last_name, birth_date, reg_date)
+  select(voter_id, first_name, last_name, birth_date, zip)
 ```
 
 ### Categorical
@@ -286,8 +386,7 @@ col_stats(mov, n_distinct)
 
 ```{r distinct_plots, echo=FALSE}
 explore_plot(mov, county)
-explore_plot(mov, congressional)
-explore_plot(mov, state_senate)
+mov$voter_status[mov$voter_status == "SE-N 02"] <- "Active"
 explore_plot(mov, voter_status)
 ```
 
@@ -301,7 +400,7 @@ mov <- mutate(mov, reg_year = year(reg_date))
 
 ```{r date_range}
 min(mov$reg_date)
-sum(mov$reg_year < 2000)
+mean(mov$reg_year < 2000)
 max(mov$reg_date)
 sum(mov$reg_date > today())
 ```
@@ -351,7 +450,7 @@ mov <- mov %>%
 
 ```{r addr_view}
 mov %>% 
-  select(house_number:non_standard_address, address_norm) %>% 
+  select(address_norm, house_number:non_standard_address) %>% 
   sample_n(20) %>% 
   remove_empty("cols")
 ```
@@ -412,83 +511,6 @@ mov <- mov %>%
   )
 ```
 
-#### Swap
-
-We can further improve normalization by comparing our normalized value
-against the _expected_ value for that record's state abbreviation and ZIP code.
-If the normalized value is either an abbreviation for or very similar to the
-expected value, we can confidently swap those two.
-
-```{r city_swap}
-mov <- mov %>% 
-  rename(city_raw = city) %>% 
-  left_join(
-    y = zipcodes,
-    by = c("state", "zip_norm" = "zip")
-  ) %>% 
-  rename(city_match = city) %>% 
-  mutate(
-    match_abb = is_abbrev(city_norm, city_match),
-    match_dist = str_dist(city_norm, city_match),
-    city_swap = if_else(
-      condition = !is.na(match_dist) & (match_abb | match_dist == 1),
-      true = city_match,
-      false = city_norm
-    )
-  ) %>% 
-  select(
-    -city_match,
-    -match_dist,
-    -match_abb
-  )
-```
-
-#### Refine
-
-The [OpenRefine][or] algorithms can be used to group similar strings and replace
-the less common versions with their most common counterpart. This can greatly
-reduce inconsistency, but with low confidence; we will only keep any refined
-strings that have a valid city/state/zip combination.
-
-[or]: https://openrefine.org/
-
-```{r city_refine}
-good_refine <- mov %>% 
-  mutate(
-    city_refine = city_swap %>% 
-      key_collision_merge() %>% 
-      n_gram_merge(numgram = 1)
-  ) %>% 
-  filter(city_refine != city_swap) %>% 
-  inner_join(
-    y = zipcodes,
-    by = c(
-      "city_refine" = "city",
-      "state",
-      "zip_norm" = "zip"
-    )
-  )
-```
-
-```{r city_count, echo=FALSE}
-good_refine %>%
-  count(
-    state, 
-    zip_norm, 
-    city_swap, 
-    city_refine,
-    sort = TRUE
-  )
-```
-
-Then we can join the refined values back to the database.
-
-```{r city_join}
-mov <- mov %>% 
-  left_join(good_refine) %>% 
-  mutate(city_refine = coalesce(city_refine, city_swap))
-```
-
 #### Progress
 
 Our goal for normalization was to increase the proportion of city values known
@@ -497,59 +519,11 @@ to be valid and reduce the total distinct values by correcting misspellings.
 ```{r city_progress, echo=FALSE}
 many_city <- c(valid_city, extra_city)
 progress <- progress_table(
-  str_to_upper(mov$city_raw),
+  str_to_upper(mov$city),
   mov$city_norm,
-  mov$city_swap,
-  mov$city_refine,
   compare = many_city
 ) %>% mutate(stage = as_factor(stage))
 kable(progress, digits = 3)
-```
-
-You can see how the percentage of valid values increased with each stage.
-
-```{r bar_progress, echo=FALSE}
-raw_in <- percent(prop_in(mov$city_raw, valid_city))
-progress %>% 
-  ggplot(aes(x = stage, y = prop_in)) +
-  geom_hline(yintercept = 0.99) +
-  geom_col(fill = dark2["purple"]) +
-  coord_cartesian(ylim = c(0.75, 1)) +
-  scale_y_continuous(labels = percent) +
-  labs(
-    title = "Missouri City Normalization Progress",
-    subtitle = glue("Raw at {raw_in} before conversion to uppercase"),
-    x = "Stage",
-    y = "Percent Valid"
-  )
-```
-
-More importantly, the number of distinct values decreased each stage. We were
-able to confidently change many distinct invalid values to their valid
-equivalent.
-
-```{r bar_distinct, echo=FALSE}
-progress %>% 
-  select(
-    stage, 
-    all = n_distinct,
-    bad = n_diff
-  ) %>% 
-  mutate(good = all - bad) %>% 
-  pivot_longer(c("good", "bad")) %>% 
-  mutate(name = name == "good") %>% 
-  ggplot(aes(x = stage, y = value)) +
-  geom_col(aes(fill = name)) +
-  scale_fill_brewer(palette = "Dark2", direction = -1) +
-  scale_y_continuous(labels = comma) +
-  theme(legend.position = "bottom") +
-  labs(
-    title = "Missouri City Normalization Progress",
-    subtitle = "Distinct values, valid and invalid",
-    x = "Stage",
-    y = "Distinct Values",
-    fill = "Valid"
-  )
 ```
 
 ## Conclude
@@ -558,14 +532,7 @@ Before exporting, we can remove the intermediary normalization columns and
 rename all added variables with the `_clean` suffix.
 
 ```{r clean_select}
-mov <- mov %>% 
-  select(
-    -city_norm,
-    -city_swap,
-    city_clean = city_refine
-  ) %>% 
-  rename_all(~str_replace(., "_norm", "_clean")) %>% 
-  rename_all(~str_remove(., "_raw"))
+mov <- rename_all(mov, ~str_replace(., "_norm", "_clean"))
 ```
 
 ```{r clean_glimpse}
@@ -611,64 +578,4 @@ if (!object_exists(aws_path, "publicaccountability")) {
 aws_head <- head_object(aws_path, "publicaccountability")
 (aws_size <- as_fs_bytes(attr(aws_head, "content-length")))
 unname(aws_size == clean_size)
-```
-
-## Dictionary
-
-The following table describes the variables in our final exported file:
-
-```{r dict_make, echo=FALSE}
-dict_raw <- tibble(
-  var = md_code(names(mov)),
-  type = md_code(map_chr(mov, typeof)),
-  def = c(
-    "Voter county registered in",
-    "**Unique** Voter ID",
-    "Voter first name",
-    "Voter middle name",
-    "Voter last name",
-    "Voter name suffix",
-    "House number on street",
-    "House number suffix (letter)",
-    "Address direction prefix",
-    "Address street name",
-    "Address street type",
-    "Address direction suffix",
-    "Address unit type",
-    "Address unit number",
-    "Non-standard full address",
-    "Voter residential city",
-    "Voter residential state",
-    "Voter residential ZIP code",
-    "Mailing address full",
-    "Mailing city",
-    "Mailing state",
-    "Mailing ZIP code",
-    "Voter date of birth",
-    "Voter date registered",
-    "Precinct number",
-    "Precinct name",
-    "Precinct split",
-    "Township level name",
-    "Ward number",
-    "Congressional district",
-    "State legislative district",
-    "State senate district",
-    "Voter status (active, inactive)",
-    "Last election voted in",
-    "Flag indicating duplicate record",
-    "Year registered to vote",
-    "Normalized combined address",
-    "Normalized 5-digit ZIP code",
-    "Normalized city name"
-  )
-)
-```
-
-```{r dict_md, echo=FALSE}
-(dict_md <- kable(
-  x = dict_raw,
-  format = "markdown",
-  col.names = c("Column", "Type", "Definition")
-))
 ```

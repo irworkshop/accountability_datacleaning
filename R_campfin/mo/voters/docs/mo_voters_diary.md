@@ -1,13 +1,14 @@
 Missouri Voters
 ================
 Kiernan Nicholls
-2020-10-23 12:38:14
+2020-10-23 15:55:04
 
   - [Project](#project)
   - [Objectives](#objectives)
   - [Packages](#packages)
   - [Data](#data)
   - [Read](#read)
+  - [Old](#old)
   - [Explore](#explore)
       - [Missing](#missing)
       - [Duplicates](#duplicates)
@@ -21,7 +22,6 @@ Kiernan Nicholls
   - [Conclude](#conclude)
   - [Export](#export)
   - [Upload](#upload)
-  - [Dictionary](#dictionary)
 
 <!-- Place comments regarding knitting here -->
 
@@ -281,6 +281,7 @@ mov <- clean_names(mov, "snake")
 
 ``` r
 mov <- mov %>% 
+  select(-starts_with("mailing_")) %>% 
   rename_all(str_remove, "residential_") %>% 
   rename_all(str_remove, "_new") %>% 
   rename(
@@ -290,14 +291,88 @@ mov <- mov %>%
   )
 ```
 
+## Old
+
+In 2018, the Workshop received a similar file. We are going to keep any
+registered voters *not* found in the current MCVR file.
+
+``` r
+moo <- s3read_using(
+  FUN = readr::read_delim,
+  filename = "MO_VOTERS.csv",
+  object = "csv/MO_VOTERS.csv",
+  bucket = "publicaccountability",
+  delim = ",",
+  escape_backslash = FALSE,
+  escape_double = FALSE,
+  na = c("", "NA", "XXXXX"),
+  col_types = cols(
+    .default = col_character(),
+    Birthdate = col_date_usa(),
+    RegistrationDate = col_date_usa()
+  )
+)
+```
+
+``` r
+moo <- moo %>% 
+  clean_names("snake") %>% 
+  select(-year) %>% 
+  rename(
+    zip = zip5,
+    birth_date = birthdate,
+    reg_date = registration_date,
+    state_senate = statesenate
+  )
+```
+
+``` r
+prop_in(names(moo), names(mov))
+#> [1] 1
+```
+
+Most of the voters in the *old* data are still found in the new data.
+
+``` r
+prop_in(moo$voter_id, mov$voter_id)
+#> [1] 0.9233826
+prop_in(mov$voter_id, moo$voter_id)
+#> [1] 0.9068094
+```
+
+Using the unique `voter_id` we will remove any voter found in the newer
+data.
+
+``` r
+nrow(moo)
+#> [1] 4210231
+moo <- filter(moo, voter_id %out% mov$voter_id)
+nrow(moo)
+#> [1] 322577
+```
+
+The unique old data can then be joined to the most recent voter
+registrations.
+
+``` r
+mov <- bind_rows(mov, moo, .id = "source")
+mov <- relocate(mov, source, .after = last_col())
+add_prop(count(mov, source))
+#> # A tibble: 2 x 3
+#>   source       n      p
+#>   <chr>    <int>  <dbl>
+#> 1 1      4287158 0.930 
+#> 2 2       322577 0.0700
+```
+
 ## Explore
 
-There are 4,287,158 rows of 34 columns.
+There are 4,609,735 rows of 31 columns.
 
 ``` r
 glimpse(mov)
-#> Rows: 4,287,158
-#> Columns: 34
+#> Rows: 4,609,735
+#> Columns: 31
 #> $ county               <chr> "Adair", "Adair", "Adair", "Adair", "Adair", "Adair", "Adair", "Ada…
 #> $ voter_id             <chr> "751417626", "460039164", "23351760", "750155978", "23351765", "750…
 #> $ first_name           <chr> "CHRISTIAN", "MIRANDA", "DIANA", "TRACY", "ROBIN", "LEONNA", "ROGER…
@@ -316,10 +391,6 @@ glimpse(mov)
 #> $ city                 <chr> "KIRKSVILLE", "KIRKSVILLE", "KIRKSVILLE", "KIRKSVILLE", "BRASHEAR",…
 #> $ state                <chr> "MO", "MO", "MO", "MO", "MO", "MO", "MO", "MO", "MO", "MO", "MO", "…
 #> $ zip                  <chr> "63501", "63501", "63501", "63501", "63533", "63501", "63501", "635…
-#> $ mailing_address      <chr> NA, NA, NA, "1200 SANTA LUCIA RD", NA, NA, NA, NA, NA, NA, NA, NA, …
-#> $ mailing_city         <chr> NA, NA, NA, "CHULA VISTA", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
-#> $ mailing_state        <chr> NA, NA, NA, "CA", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "MO",…
-#> $ mailing_zip_code     <chr> NA, NA, NA, "91913", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "6…
 #> $ birth_date           <date> 1996-08-28, 1985-11-24, 1946-10-13, 1976-12-16, 1955-03-09, 1958-0…
 #> $ reg_date             <date> 2015-12-14, 2006-03-08, 1980-04-21, 2007-07-10, 1990-10-15, 2010-0…
 #> $ precinct             <chr> "104", "105", "108", "108", "809", "102", "102", "102", "102", "102…
@@ -332,22 +403,22 @@ glimpse(mov)
 #> $ state_senate         <chr> "SE-N 18", "SE-N 18", "SE-N 18", "SE-N 18", "SE-N 18", "SE-N 18", "…
 #> $ voter_status         <chr> "Active", "Active", "Active", "Inactive", "Active", "Active", "Acti…
 #> $ last_election        <chr> "08/04/2020 Primary", "11/06/2018 General", "08/04/2020 Primary", "…
+#> $ source               <chr> "1", "1", "1", "1", "1", "1", "1", "1", "1", "1", "1", "1", "1", "1…
 tail(mov)
-#> # A tibble: 6 x 34
+#> # A tibble: 6 x 31
 #>   county voter_id first_name middle_name last_name suffix house_number house_suffix pre_direction
 #>   <chr>  <chr>    <chr>      <chr>       <chr>     <chr>  <chr>        <chr>        <chr>        
-#> 1 Wright 7509164… KELLIS     JAMES       PARKER    <NA>   7630         <NA>         <NA>         
-#> 2 Wright 7509423… CALLIE     ANNETTE     PARKER    <NA>   7630         <NA>         <NA>         
-#> 3 Wright 7508389… BRITTANY   D           GRAVES    <NA>   10003        <NA>         <NA>         
-#> 4 Wright 7520673… MARTHA     <NA>        RILEY     <NA>   2603         <NA>         <NA>         
-#> 5 Wright 7520733… ELIZABETH  ANN         DANIS     <NA>   2603         <NA>         <NA>         
-#> 6 Wright 37896817 BRIAN      MICHAEL     JARRETT   <NA>   1169         <NA>         N            
-#> # … with 25 more variables: street_name <chr>, street_type <chr>, post_direction <chr>,
+#> 1 Wright 37309118 BERNICE    <NA>        GASPERSON <NA>   8655         <NA>         <NA>         
+#> 2 Wright 7500444… STEVEN     P           RUTZ      <NA>   1503         <NA>         N            
+#> 3 Wright 37312915 NOAH       <NA>        HANCOCK   <NA>   475          <NA>         W            
+#> 4 Wright 49598325 DALE       <NA>        HINTT     <NA>   11270        <NA>         <NA>         
+#> 5 Wright 7506473… ROXANNE    MARY        COLLINS   <NA>   6530         <NA>         <NA>         
+#> 6 Wright 37311115 BUEL       L           JEMES     <NA>   9672         <NA>         <NA>         
+#> # … with 22 more variables: street_name <chr>, street_type <chr>, post_direction <chr>,
 #> #   unit_type <chr>, unit_number <chr>, non_standard_address <chr>, city <chr>, state <chr>,
-#> #   zip <chr>, mailing_address <chr>, mailing_city <chr>, mailing_state <chr>,
-#> #   mailing_zip_code <chr>, birth_date <date>, reg_date <date>, precinct <chr>,
-#> #   precinct_name <chr>, split <chr>, township <chr>, ward <chr>, congressional <chr>,
-#> #   legislative <chr>, state_senate <chr>, voter_status <chr>, last_election <chr>
+#> #   zip <chr>, birth_date <date>, reg_date <date>, precinct <chr>, precinct_name <chr>,
+#> #   split <chr>, township <chr>, ward <chr>, congressional <chr>, legislative <chr>,
+#> #   state_senate <chr>, voter_status <chr>, last_election <chr>, source <chr>
 ```
 
 ### Missing
@@ -356,128 +427,161 @@ Columns vary in their degree of missing values.
 
 ``` r
 col_stats(mov, count_na)
-#> # A tibble: 34 x 4
-#>    col                  class        n           p
-#>    <chr>                <chr>    <int>       <dbl>
-#>  1 county               <chr>        0 0          
-#>  2 voter_id             <chr>        0 0          
-#>  3 first_name           <chr>       39 0.00000910 
-#>  4 middle_name          <chr>   396044 0.0924     
-#>  5 last_name            <chr>        8 0.00000187 
-#>  6 suffix               <chr>  4131626 0.964      
-#>  7 house_number         <chr>    48649 0.0113     
-#>  8 house_suffix         <chr>  4274838 0.997      
-#>  9 pre_direction        <chr>  2992154 0.698      
-#> 10 street_name          <chr>    48674 0.0114     
-#> 11 street_type          <chr>   564690 0.132      
-#> 12 post_direction       <chr>  4253027 0.992      
-#> 13 unit_type            <chr>  3888491 0.907      
-#> 14 unit_number          <chr>  3888505 0.907      
-#> 15 non_standard_address <chr>  4237847 0.988      
-#> 16 city                 <chr>      917 0.000214   
-#> 17 state                <chr>      934 0.000218   
-#> 18 zip                  <chr>      917 0.000214   
-#> 19 mailing_address      <chr>  4027217 0.939      
-#> 20 mailing_city         <chr>  4032480 0.941      
-#> 21 mailing_state        <chr>  4032670 0.941      
-#> 22 mailing_zip_code     <chr>  4032656 0.941      
-#> 23 birth_date           <date>       2 0.000000467
-#> 24 reg_date             <date>       0 0          
-#> 25 precinct             <chr>      917 0.000214   
-#> 26 precinct_name        <chr>      917 0.000214   
-#> 27 split                <chr>      917 0.000214   
-#> 28 township             <chr>   932651 0.218      
-#> 29 ward                 <chr>  1786234 0.417      
-#> 30 congressional        <chr>        2 0.000000467
-#> 31 legislative          <chr>       15 0.00000350 
-#> 32 state_senate         <chr>       10 0.00000233 
-#> 33 voter_status         <chr>        0 0          
-#> 34 last_election        <chr>   746449 0.174
+#> # A tibble: 31 x 4
+#>    col                  class        n          p
+#>    <chr>                <chr>    <int>      <dbl>
+#>  1 county               <chr>        0 0         
+#>  2 voter_id             <chr>        0 0         
+#>  3 first_name           <chr>       43 0.00000933
+#>  4 middle_name          <chr>   423492 0.0919    
+#>  5 last_name            <chr>        8 0.00000174
+#>  6 suffix               <chr>  4440694 0.963     
+#>  7 house_number         <chr>    72852 0.0158    
+#>  8 house_suffix         <chr>  4595759 0.997     
+#>  9 pre_direction        <chr>  3222794 0.699     
+#> 10 street_name          <chr>    72879 0.0158    
+#> 11 street_type          <chr>   620541 0.135     
+#> 12 post_direction       <chr>  4573435 0.992     
+#> 13 unit_type            <chr>  4160252 0.902     
+#> 14 unit_number          <chr>  4160266 0.902     
+#> 15 non_standard_address <chr>  4535998 0.984     
+#> 16 city                 <chr>      981 0.000213  
+#> 17 state                <chr>     1001 0.000217  
+#> 18 zip                  <chr>      974 0.000211  
+#> 19 birth_date           <date>     623 0.000135  
+#> 20 reg_date             <date>       0 0         
+#> 21 precinct             <chr>      974 0.000211  
+#> 22 precinct_name        <chr>   323494 0.0702    
+#> 23 split                <chr>      974 0.000211  
+#> 24 township             <chr>  1017415 0.221     
+#> 25 ward                 <chr>  1894187 0.411     
+#> 26 congressional        <chr>      608 0.000132  
+#> 27 legislative          <chr>       43 0.00000933
+#> 28 state_senate         <chr>       12 0.00000260
+#> 29 voter_status         <chr>   322577 0.0700    
+#> 30 last_election        <chr>  1069026 0.232     
+#> 31 source               <chr>        0 0
 ```
-
-No records are missing a name or registration date.
 
 ### Duplicates
 
 We can also flag any record completely duplicated across every column.
 
 ``` r
-voter_ids <- mov$voter_id
-mov <- select(mov, -voter_id)
-d1 <- duplicated(mov, fromLast = FALSE)
-d2 <- duplicated(mov, fromLast = TRUE)
-mov <- mov %>% 
-  mutate(voter_id = voter_ids, .before = first_name) %>% 
-  mutate(dupe_flag = d1 | d2)
+dupe_file <- here("mo", "voters", "dupes.csv")
+if (!file_exists(dupe_file)) {
+  file_create(dupe_file)
+  write_lines("voter_id,dupe_flag", dupe_file)
+  mos <- mov %>% 
+    select(-voter_id) %>% 
+    group_split(county)
+  split_id <- split(mov$voter_id, mov$county)
+  pb <- txtProgressBar(max = length(mos), style = 3)
+  for (i in seq_along(mos)) {
+    write_csv(
+      path = dupe_file,
+      append = TRUE,
+      col_names = FALSE,
+      x = tibble(
+        voter_id = split_id[[i]],
+        dupe_flag = or(
+          e1 = duplicated(mos[[i]], fromLast = FALSE),
+          e2 = duplicated(mos[[i]], fromLast = TRUE)
+        )
+      )
+    )
+    flush_memory(1)
+    setTxtProgressBar(pb, i)
+  }
+  rm(mos)
+}
 ```
 
 ``` r
-percent(mean(mov$dupe_flag), 0.001)
-#> [1] "0.001%"
+dupes <- read_csv(
+  file = dupe_file,
+  col_types = cols(
+    voter_id = col_character(),
+    dupe_flag = col_logical()
+  )
+)
+```
+
+``` r
+nrow(mov)
+#> [1] 4609735
+mov <- left_join(mov, dupes)
+nrow(mov)
+#> [1] 4609735
+mov <- mutate(mov, dupe_flag = !is.na(dupe_flag))
+sum(mov$dupe_flag)
+#> [1] 71
+```
+
+We can see that, despite unique IDs, there are duplicate voters.
+
+``` r
 mov %>% 
   filter(dupe_flag) %>% 
-  select(voter_id, first_name, last_name, birth_date, reg_date)
-#> # A tibble: 63 x 5
-#>    voter_id  first_name last_name birth_date reg_date  
-#>    <chr>     <chr>      <chr>     <date>     <date>    
-#>  1 750534633 TREISHA    STRINGER  1990-12-06 2020-02-18
-#>  2 752044678 TREISHA    STRINGER  1990-12-06 2020-02-18
-#>  3 752173868 ETINOSA    OMOROGBE  1998-10-21 2020-09-21
-#>  4 752173869 ETINOSA    OMOROGBE  1998-10-21 2020-09-21
-#>  5 752033376 TERI       TURNBULL  1961-01-11 2020-02-10
-#>  6 752033377 TERI       TURNBULL  1961-01-11 2020-02-10
-#>  7 752125335 JANESSA    STEWART   1999-10-10 2020-08-07
-#>  8 752125334 JANESSA    STEWART   1999-10-10 2020-08-07
-#>  9 752140371 NATHANIEL  SKOW      1977-11-03 2020-08-21
-#> 10 752140368 NATHANIEL  SKOW      1977-11-03 2020-08-21
-#> # … with 53 more rows
+  select(voter_id, first_name, last_name, birth_date, zip)
+#> # A tibble: 71 x 5
+#>    voter_id  first_name last_name birth_date zip  
+#>    <chr>     <chr>      <chr>     <date>     <chr>
+#>  1 750534633 TREISHA    STRINGER  1990-12-06 64759
+#>  2 752044678 TREISHA    STRINGER  1990-12-06 64759
+#>  3 752173868 ETINOSA    OMOROGBE  1998-10-21 65201
+#>  4 752173869 ETINOSA    OMOROGBE  1998-10-21 65201
+#>  5 752033376 TERI       TURNBULL  1961-01-11 65020
+#>  6 752033377 TERI       TURNBULL  1961-01-11 65020
+#>  7 752125335 JANESSA    STEWART   1999-10-10 64012
+#>  8 752125334 JANESSA    STEWART   1999-10-10 64012
+#>  9 752140371 NATHANIEL  SKOW      1977-11-03 64012
+#> 10 752140368 NATHANIEL  SKOW      1977-11-03 64012
+#> # … with 61 more rows
 ```
 
 ### Categorical
 
 ``` r
 col_stats(mov, n_distinct)
-#> # A tibble: 35 x 4
+#> # A tibble: 32 x 4
 #>    col                  class        n           p
 #>    <chr>                <chr>    <int>       <dbl>
-#>  1 county               <chr>      116 0.0000271  
-#>  2 voter_id             <chr>  4287158 1          
-#>  3 first_name           <chr>   137322 0.0320     
-#>  4 middle_name          <chr>   122506 0.0286     
-#>  5 last_name            <chr>   223886 0.0522     
-#>  6 suffix               <chr>     1089 0.000254   
-#>  7 house_number         <chr>    41870 0.00977    
-#>  8 house_suffix         <chr>      127 0.0000296  
-#>  9 pre_direction        <chr>        9 0.00000210 
-#> 10 street_name          <chr>    55301 0.0129     
-#> 11 street_type          <chr>      114 0.0000266  
-#> 12 post_direction       <chr>        9 0.00000210 
-#> 13 unit_type            <chr>       32 0.00000746 
-#> 14 unit_number          <chr>    15776 0.00368    
-#> 15 non_standard_address <chr>    33471 0.00781    
-#> 16 city                 <chr>      997 0.000233   
-#> 17 state                <chr>        3 0.000000700
-#> 18 zip                  <chr>    78023 0.0182     
-#> 19 mailing_address      <chr>   114502 0.0267     
-#> 20 mailing_city         <chr>     3824 0.000892   
-#> 21 mailing_state        <chr>       61 0.0000142  
-#> 22 mailing_zip_code     <chr>     5691 0.00133    
-#> 23 birth_date           <date>   31480 0.00734    
-#> 24 reg_date             <date>   23609 0.00551    
-#> 25 precinct             <chr>      903 0.000211   
-#> 26 precinct_name        <chr>     2758 0.000643   
-#> 27 split                <chr>     1817 0.000424   
-#> 28 township             <chr>     1123 0.000262   
-#> 29 ward                 <chr>      960 0.000224   
-#> 30 congressional        <chr>       10 0.00000233 
-#> 31 legislative          <chr>      165 0.0000385  
-#> 32 state_senate         <chr>       36 0.00000840 
-#> 33 voter_status         <chr>        3 0.000000700
-#> 34 last_election        <chr>      551 0.000129   
-#> 35 dupe_flag            <lgl>        2 0.000000467
+#>  1 county               <chr>      116 0.0000252  
+#>  2 voter_id             <chr>  4609734 1.00       
+#>  3 first_name           <chr>   144695 0.0314     
+#>  4 middle_name          <chr>   129055 0.0280     
+#>  5 last_name            <chr>   234791 0.0509     
+#>  6 suffix               <chr>     1115 0.000242   
+#>  7 house_number         <chr>    42079 0.00913    
+#>  8 house_suffix         <chr>      139 0.0000302  
+#>  9 pre_direction        <chr>        9 0.00000195 
+#> 10 street_name          <chr>    55911 0.0121     
+#> 11 street_type          <chr>      119 0.0000258  
+#> 12 post_direction       <chr>       11 0.00000239 
+#> 13 unit_type            <chr>       32 0.00000694 
+#> 14 unit_number          <chr>    17253 0.00374    
+#> 15 non_standard_address <chr>    49794 0.0108     
+#> 16 city                 <chr>     1527 0.000331   
+#> 17 state                <chr>       35 0.00000759 
+#> 18 zip                  <chr>    78026 0.0169     
+#> 19 birth_date           <date>   32205 0.00699    
+#> 20 reg_date             <date>   24318 0.00528    
+#> 21 precinct             <chr>     1600 0.000347   
+#> 22 precinct_name        <chr>     2758 0.000598   
+#> 23 split                <chr>     1860 0.000403   
+#> 24 township             <chr>     1508 0.000327   
+#> 25 ward                 <chr>     1235 0.000268   
+#> 26 congressional        <chr>       24 0.00000521 
+#> 27 legislative          <chr>      169 0.0000367  
+#> 28 state_senate         <chr>       48 0.0000104  
+#> 29 voter_status         <chr>        4 0.000000868
+#> 30 last_election        <chr>      551 0.000120   
+#> 31 source               <chr>        2 0.000000434
+#> 32 dupe_flag            <lgl>        2 0.000000434
 ```
 
-![](../plots/distinct_plots-1.png)<!-- -->![](../plots/distinct_plots-2.png)<!-- -->![](../plots/distinct_plots-3.png)<!-- -->![](../plots/distinct_plots-4.png)<!-- -->
+![](../plots/distinct_plots-1.png)<!-- -->![](../plots/distinct_plots-2.png)<!-- -->
 
 ### Dates
 
@@ -490,8 +594,8 @@ mov <- mutate(mov, reg_year = year(reg_date))
 ``` r
 min(mov$reg_date)
 #> [1] "101-07-16"
-sum(mov$reg_year < 2000)
-#> [1] 1252084
+mean(mov$reg_year < 2000)
+#> [1] 0.2916372
 max(mov$reg_date)
 #> [1] "2020-10-05"
 sum(mov$reg_date > today())
@@ -525,32 +629,33 @@ mov <- mov %>%
 
 ``` r
 mov %>% 
-  select(house_number:non_standard_address, address_norm) %>% 
+  select(address_norm, house_number:non_standard_address) %>% 
   sample_n(20) %>% 
   remove_empty("cols")
-#> # A tibble: 20 x 7
-#>    house_number pre_direction street_name     street_type unit_type unit_number address_norm       
-#>    <chr>        <chr>         <chr>           <chr>       <chr>     <chr>       <chr>              
-#>  1 5414         <NA>          VILLAGE COURTW… LN          <NA>      <NA>        5414 VILLAGE COURT…
-#>  2 3962         <NA>          HIGHWAY JJ      <NA>        <NA>      <NA>        3962 HIGHWAY JJ    
-#>  3 4105         <NA>          DERBY RIDGE     DR          <NA>      <NA>        4105 DERBY RIDGE DR
-#>  4 3582         <NA>          LAKEVIEW HEIGH… DR          <NA>      <NA>        3582 LAKEVIEW HEIG…
-#>  5 625          <NA>          CHELSEA         AVE         <NA>      <NA>        625 CHELSEA AVE    
-#>  6 901          E             PEAR            AVE         <NA>      <NA>        901 E PEAR AVE     
-#>  7 1901         <NA>          CAIRO           DR          <NA>      <NA>        1901 CAIRO DR      
-#>  8 9231         <NA>          OLD BONHOMME    RD          <NA>      <NA>        9231 OLD BONHOMME …
-#>  9 704          <NA>          HEDGEWOOD       CT          <NA>      <NA>        704 HEDGEWOOD CT   
-#> 10 2407         S             OVERTON         AVE         <NA>      <NA>        2407 S OVERTON AVE 
-#> 11 904          <NA>          MASON           ST          <NA>      <NA>        904 MASON ST       
-#> 12 2404         E             MECHANIC        ST          APT       31          2404 E MECHANIC ST…
-#> 13 5919         <NA>          PAMPLIN         PL          <NA>      <NA>        5919 PAMPLIN PL    
-#> 14 2334         SW            RIVER TRAIL     RD          <NA>      <NA>        2334 SW RIVER TRAI…
-#> 15 13720        <NA>          MASON GREEN     CT          <NA>      <NA>        13720 MASON GREEN …
-#> 16 519          <NA>          TIMBER          DR          APT       B           519 TIMBER DR APT B
-#> 17 1407         <NA>          HIGHWAY 19      <NA>        <NA>      <NA>        1407 HIGHWAY 19    
-#> 18 3510         <NA>          BROWNING        AVE         <NA>      <NA>        3510 BROWNING AVE  
-#> 19 16037        E             828             RD          <NA>      <NA>        16037 E 828 RD     
-#> 20 1109         <NA>          ELSDON          DR          <NA>      <NA>        1109 ELSDON DR
+#> # A tibble: 20 x 8
+#>    address_norm house_number pre_direction street_name street_type unit_type unit_number
+#>    <chr>        <chr>        <chr>         <chr>       <chr>       <chr>     <chr>      
+#>  1 3160 ROCK Q… <NA>         <NA>          <NA>        <NA>        <NA>      <NA>       
+#>  2 5414 VILLAG… 5414         <NA>          VILLAGE CO… LN          <NA>      <NA>       
+#>  3 3962 HIGHWA… 3962         <NA>          HIGHWAY JJ  <NA>        <NA>      <NA>       
+#>  4 4105 DERBY … 4105         <NA>          DERBY RIDGE DR          <NA>      <NA>       
+#>  5 3582 LAKEVI… 3582         <NA>          LAKEVIEW H… DR          <NA>      <NA>       
+#>  6 625 CHELSEA… 625          <NA>          CHELSEA     AVE         <NA>      <NA>       
+#>  7 901 E PEAR … 901          E             PEAR        AVE         <NA>      <NA>       
+#>  8 1901 CAIRO … 1901         <NA>          CAIRO       DR          <NA>      <NA>       
+#>  9 9231 OLD BO… 9231         <NA>          OLD BONHOM… RD          <NA>      <NA>       
+#> 10 704 HEDGEWO… 704          <NA>          HEDGEWOOD   CT          <NA>      <NA>       
+#> 11 2407 S OVER… 2407         S             OVERTON     AVE         <NA>      <NA>       
+#> 12 904 MASON ST 904          <NA>          MASON       ST          <NA>      <NA>       
+#> 13 2404 E MECH… 2404         E             MECHANIC    ST          APT       31         
+#> 14 5919 PAMPLI… 5919         <NA>          PAMPLIN     PL          <NA>      <NA>       
+#> 15 2334 SW RIV… 2334         SW            RIVER TRAIL RD          <NA>      <NA>       
+#> 16 13720 MASON… 13720        <NA>          MASON GREEN CT          <NA>      <NA>       
+#> 17 519 TIMBER … 519          <NA>          TIMBER      DR          APT       B          
+#> 18 1407 HIGHWA… 1407         <NA>          HIGHWAY 19  <NA>        <NA>      <NA>       
+#> 19 3510 BROWNI… 3510         <NA>          BROWNING    AVE         <NA>      <NA>       
+#> 20 16037 E 828… 16037        E             828         RD          <NA>      <NA>       
+#> # … with 1 more variable: non_standard_address <chr>
 ```
 
 ### ZIP
@@ -578,8 +683,8 @@ progress_table(
 #> # A tibble: 2 x 6
 #>   stage    prop_in n_distinct  prop_na  n_out n_diff
 #>   <chr>      <dbl>      <dbl>    <dbl>  <dbl>  <dbl>
-#> 1 zip        0.922      78023 0.000214 333636  76967
-#> 2 zip_norm   1.00        1060 0.000215    477      4
+#> 1 zip        0.927      78026 0.000211 334286  76967
+#> 2 zip_norm   1.00        1063 0.000348    504      4
 ```
 
 ### State
@@ -588,12 +693,20 @@ As we would expect, all the Missouri voters live in Missouri.
 
 ``` r
 count(mov, state, sort = TRUE)
-#> # A tibble: 3 x 2
-#>   state          n
-#>   <chr>      <int>
-#> 1 MO       4286223
-#> 2 <NA>         934
-#> 3 O FALLON       1
+#> # A tibble: 35 x 2
+#>    state             n
+#>    <chr>         <int>
+#>  1 MO          4608112
+#>  2 <NA>           1001
+#>  3 DONIPHAN        304
+#>  4 NAYLOR          141
+#>  5 FAIRDEALING      41
+#>  6 KAHOKA           34
+#>  7 GATEWOOD         18
+#>  8 ALEXANDRIA       14
+#>  9 OXLY             14
+#> 10 REVERE           13
+#> # … with 25 more rows
 ```
 
 ### City
@@ -620,97 +733,16 @@ mov <- mov %>%
   )
 ```
 
-#### Swap
-
-We can further improve normalization by comparing our normalized value
-against the *expected* value for that record’s state abbreviation and
-ZIP code. If the normalized value is either an abbreviation for or very
-similar to the expected value, we can confidently swap those two.
-
-``` r
-mov <- mov %>% 
-  rename(city_raw = city) %>% 
-  left_join(
-    y = zipcodes,
-    by = c("state", "zip_norm" = "zip")
-  ) %>% 
-  rename(city_match = city) %>% 
-  mutate(
-    match_abb = is_abbrev(city_norm, city_match),
-    match_dist = str_dist(city_norm, city_match),
-    city_swap = if_else(
-      condition = !is.na(match_dist) & (match_abb | match_dist == 1),
-      true = city_match,
-      false = city_norm
-    )
-  ) %>% 
-  select(
-    -city_match,
-    -match_dist,
-    -match_abb
-  )
-```
-
-#### Refine
-
-The [OpenRefine](https://openrefine.org/) algorithms can be used to
-group similar strings and replace the less common versions with their
-most common counterpart. This can greatly reduce inconsistency, but with
-low confidence; we will only keep any refined strings that have a valid
-city/state/zip combination.
-
-``` r
-good_refine <- mov %>% 
-  mutate(
-    city_refine = city_swap %>% 
-      key_collision_merge() %>% 
-      n_gram_merge(numgram = 1)
-  ) %>% 
-  filter(city_refine != city_swap) %>% 
-  inner_join(
-    y = zipcodes,
-    by = c(
-      "city_refine" = "city",
-      "state",
-      "zip_norm" = "zip"
-    )
-  )
-```
-
-    #> # A tibble: 0 x 5
-    #> # … with 5 variables: state <chr>, zip_norm <chr>, city_swap <chr>, city_refine <chr>, n <int>
-
-Then we can join the refined values back to the database.
-
-``` r
-mov <- mov %>% 
-  left_join(good_refine) %>% 
-  mutate(city_refine = coalesce(city_refine, city_swap))
-```
-
 #### Progress
 
 Our goal for normalization was to increase the proportion of city values
 known to be valid and reduce the total distinct values by correcting
 misspellings.
 
-| stage        | prop\_in | n\_distinct | prop\_na | n\_out | n\_diff |
-| :----------- | -------: | ----------: | -------: | -----: | ------: |
-| city\_raw)   |    0.778 |         997 |        0 | 950839 |      56 |
-| city\_norm   |    0.996 |         997 |        0 |  17850 |      40 |
-| city\_swap   |    0.998 |         995 |        0 |   9204 |      35 |
-| city\_refine |    0.998 |         995 |        0 |   9204 |      35 |
-
-You can see how the percentage of valid values increased with each
-stage.
-
-![](../plots/bar_progress-1.png)<!-- -->
-
-More importantly, the number of distinct values decreased each stage. We
-were able to confidently change many distinct invalid values to their
-valid equivalent.
-
-![](../plots/bar_distinct-1.png)<!-- -->
+| stage      | prop\_in | n\_distinct | prop\_na |  n\_out | n\_diff |
+| :--------- | -------: | ----------: | -------: | ------: | ------: |
+| city)      |    0.777 |        1527 |        0 | 1026936 |     583 |
+| city\_norm |    0.996 |        1024 |        0 |   19571 |      64 |
 
 ## Conclude
 
@@ -718,63 +750,53 @@ Before exporting, we can remove the intermediary normalization columns
 and rename all added variables with the `_clean` suffix.
 
 ``` r
-mov <- mov %>% 
-  select(
-    -city_norm,
-    -city_swap,
-    city_clean = city_refine
-  ) %>% 
-  rename_all(~str_replace(., "_norm", "_clean")) %>% 
-  rename_all(~str_remove(., "_raw"))
+mov <- rename_all(mov, ~str_replace(., "_norm", "_clean"))
 ```
 
 ``` r
 glimpse(sample_n(mov, 50))
 #> Rows: 50
-#> Columns: 39
-#> $ county               <chr> "Jefferson", "Boone", "Pettis", "Gentry", "St. Louis City", "Greene…
-#> $ voter_id             <chr> "13134337", "4628917", "15544030", "750441438", "751358182", "75058…
-#> $ first_name           <chr> "KACI", "JOHNNY", "JULIE", "CINDY", "TAYLOR", "RACHEAL", "JONATHAN"…
-#> $ middle_name          <chr> "JEAN", NA, "A", "S", "ANISE", "LEAH", "S", "JOE", NA, "P", "L", "F…
-#> $ last_name            <chr> "DIXON", "WILLIAMS", "WASSON", "COCHRAN", "BAKER", "BEASLEY", "DAVI…
-#> $ suffix               <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "JR", NA, NA, NA, NA, "MS",…
-#> $ house_number         <chr> "1824", NA, "1205", "307", "3032", "1717", "5039", "1026", "423", "…
+#> Columns: 36
+#> $ county               <chr> "Boone", "Jefferson", "Boone", "Pettis", "Gentry", "St. Louis City"…
+#> $ voter_id             <chr> "1094876", "13134337", "4628917", "15544030", "750441438", "7513581…
+#> $ first_name           <chr> "ROBERT", "KACI", "JOHNNY", "JULIE", "CINDY", "TAYLOR", "RACHEAL", …
+#> $ middle_name          <chr> "LEE", "JEAN", NA, "A", "S", "ANISE", "LEAH", "S", "JOE", NA, "P", …
+#> $ last_name            <chr> "YOUNG", "DIXON", "WILLIAMS", "WASSON", "COCHRAN", "BAKER", "BEASLE…
+#> $ suffix               <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "JR", NA, NA, NA, NA, "…
+#> $ house_number         <chr> "1109", "1824", NA, "1205", "307", "3032", "1717", "5039", "1026", …
 #> $ house_suffix         <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
-#> $ pre_direction        <chr> NA, NA, NA, NA, NA, "E", NA, NA, "W", NA, NA, "S", NA, "E", NA, NA,…
-#> $ street_name          <chr> "WEST", NA, "ELM HILLS", "3 RD.ST", "W NORWOOD", "PRIMROSE", "DURAN…
-#> $ street_type          <chr> "DR", NA, "BLVD", NA, "DR", "ST", "AVE", "DR", "ST", "ST", "PL", "A…
+#> $ pre_direction        <chr> NA, NA, NA, NA, NA, NA, "E", NA, NA, "W", NA, NA, "S", NA, "E", NA,…
+#> $ street_name          <chr> "ELSDON", "WEST", NA, "ELM HILLS", "3 RD.ST", "W NORWOOD", "PRIMROS…
+#> $ street_type          <chr> "DR", "DR", NA, "BLVD", NA, "DR", "ST", "AVE", "DR", "ST", "ST", "P…
 #> $ post_direction       <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
-#> $ unit_type            <chr> NA, NA, NA, NA, NA, "APT", NA, NA, NA, NA, "APT", NA, NA, NA, NA, N…
-#> $ unit_number          <chr> NA, NA, NA, NA, NA, "F-109", NA, NA, NA, NA, "A", NA, NA, NA, NA, N…
-#> $ non_standard_address <chr> NA, "901 WILKES BLVD", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
-#> $ city                 <chr> "HIGH RIDGE", "COLUMBIA", "SEDALIA", "KING CITY", "ST LOUIS", "SPRI…
+#> $ unit_type            <chr> NA, NA, NA, NA, NA, NA, "APT", NA, NA, NA, NA, "APT", NA, NA, NA, N…
+#> $ unit_number          <chr> NA, NA, NA, NA, NA, NA, "F-109", NA, NA, NA, NA, "A", NA, NA, NA, N…
+#> $ non_standard_address <chr> NA, NA, "901 WILKES BLVD", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
+#> $ city                 <chr> "COLUMBIA", "HIGH RIDGE", "COLUMBIA", "SEDALIA", "KING CITY", "ST L…
 #> $ state                <chr> "MO", "MO", "MO", "MO", "MO", "MO", "MO", "MO", "MO", "MO", "MO", "…
-#> $ zip                  <chr> "63049", "65201-0", "65301", "64463", "63115", "65804", "63115", "6…
-#> $ mailing_address      <chr> NA, "PO BOX 10065", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
-#> $ mailing_city         <chr> NA, "COLUMBIA", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
-#> $ mailing_state        <chr> NA, "MO", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
-#> $ mailing_zip_code     <chr> NA, "65205", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
-#> $ birth_date           <date> 1975-06-29, 1957-05-31, 1968-12-27, 1962-05-25, 1997-06-09, 1991-0…
-#> $ reg_date             <date> 2004-09-01, 2007-03-27, 2000-07-17, 2008-10-08, 2015-06-09, 2016-0…
-#> $ precinct             <chr> "71.A", "1A", "47", "9", "01", "411", "01", "5B", "03", "14", "04",…
-#> $ precinct_name        <chr> "71.A Brennan", "1A", "SEDALIA WEST", "JACKSON EAST", "WARD 01", "4…
-#> $ split                <chr> "01", "1A3", "03", "01", "02", "01", "03", "01", "01", "06", "06", …
-#> $ township             <chr> "Rock Township", "MISSOURI", "SEDALIA WEST", "JACKSON TOWNSHIP", NA…
-#> $ ward                 <chr> NA, "WD 01", NA, "KCEW", "0001", "ZN 4", "0001", "WD 05", NA, "0014…
-#> $ congressional        <chr> "CN-N 2", "CN-N 4", "CN-N 4", "CN-N 6", "CN-N 1", "CN-N 7", "CN-N 1…
-#> $ legislative          <chr> "LE-N 097", "LE-N 045", "LE-N 052", "LE-N 002", "LE-N 076", "LE-N 1…
-#> $ state_senate         <chr> "SE-N 22", "SE-N 19", "SE-N 28", "SE-N 12", "SE-N 04", "SE-N 30", "…
-#> $ voter_status         <chr> "Active", "Inactive", "Active", "Active", "Active", "Inactive", "Ac…
-#> $ last_election        <chr> "11/06/2018 General", NA, "08/04/2020 Primary", "08/04/2020 Primary…
+#> $ zip                  <chr> "65203-0", "63049", "65201-0", "65301", "64463", "63115", "65804", …
+#> $ birth_date           <date> 1961-05-17, 1975-06-29, 1957-05-31, 1968-12-27, 1962-05-25, 1997-0…
+#> $ reg_date             <date> 2017-07-15, 2004-09-01, 2007-03-27, 2000-07-17, 2008-10-08, 2015-0…
+#> $ precinct             <chr> "5I", "71.A", "1A", "47", "9", "01", "411", "01", "5B", "03", "14",…
+#> $ precinct_name        <chr> "5I", "71.A Brennan", "1A", "SEDALIA WEST", "JACKSON EAST", "WARD 0…
+#> $ split                <chr> "5I1", "01", "1A3", "03", "01", "02", "01", "03", "01", "01", "06",…
+#> $ township             <chr> "MISSOURI", "Rock Township", "MISSOURI", "SEDALIA WEST", "JACKSON T…
+#> $ ward                 <chr> "WD 05", NA, "WD 01", NA, "KCEW", "0001", "ZN 4", "0001", "WD 05", …
+#> $ congressional        <chr> "CN-N 4", "CN-N 2", "CN-N 4", "CN-N 4", "CN-N 6", "CN-N 1", "CN-N 7…
+#> $ legislative          <chr> "LE-N 046", "LE-N 097", "LE-N 045", "LE-N 052", "LE-N 002", "LE-N 0…
+#> $ state_senate         <chr> "SE-N 19", "SE-N 22", "SE-N 19", "SE-N 28", "SE-N 12", "SE-N 04", "…
+#> $ voter_status         <chr> "Active", "Active", "Inactive", "Active", "Active", "Active", "Inac…
+#> $ last_election        <chr> NA, "11/06/2018 General", NA, "08/04/2020 Primary", "08/04/2020 Pri…
+#> $ source               <chr> "1", "1", "1", "1", "1", "1", "1", "1", "1", "1", "1", "1", "1", "1…
 #> $ dupe_flag            <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALS…
-#> $ reg_year             <dbl> 2004, 2007, 2000, 2008, 2015, 2016, 2016, 1986, 1999, 2014, 2012, 2…
-#> $ address_clean        <chr> "1824 WEST DR", "901 WILKES BLVD", "1205 ELM HILLS BLVD", "307 3 RD…
-#> $ zip_clean            <chr> "63049", "65201", "65301", "64463", "63115", "65804", "63115", "637…
-#> $ city_clean           <chr> "HIGH RIDGE", "COLUMBIA", "SEDALIA", "KING CITY", "SAINT LOUIS", "S…
+#> $ reg_year             <dbl> 2017, 2004, 2007, 2000, 2008, 2015, 2016, 2016, 1986, 1999, 2014, 2…
+#> $ address_clean        <chr> "1109 ELSDON DR", "1824 WEST DR", "901 WILKES BLVD", "1205 ELM HILL…
+#> $ zip_clean            <chr> "65203", "63049", "65201", "65301", "64463", "63115", "65804", "631…
+#> $ city_clean           <chr> "COLUMBIA", "HIGH RIDGE", "COLUMBIA", "SEDALIA", "KING CITY", "SAIN…
 ```
 
-1.  There are 4,287,158 records in the database.
-2.  There are 63 duplicate records in the database.
+1.  There are 4,609,735 records in the database.
+2.  There are 71 duplicate records in the database.
 3.  The range and distribution of `amount` and `date` seem reasonable.
 4.  There are 0 records missing key variables.
 5.  Consistency in geographic data has been improved with
@@ -792,7 +814,7 @@ clean_dir <- dir_create(here("mo", "voters", "data", "clean"))
 clean_path <- path(clean_dir, "mo_voters.csv")
 write_csv(mov, clean_path, na = "")
 (clean_size <- file_size(clean_path))
-#> 981M
+#> 1G
 file_encoding(clean_path) %>% 
   mutate(across(path, path.abbrev))
 #> # A tibble: 1 x 3
@@ -822,49 +844,3 @@ aws_head <- head_object(aws_path, "publicaccountability")
 (aws_size <- as_fs_bytes(attr(aws_head, "content-length")))
 unname(aws_size == clean_size)
 ```
-
-## Dictionary
-
-The following table describes the variables in our final exported file:
-
-| Column                 | Type        | Definition                       |
-| :--------------------- | :---------- | :------------------------------- |
-| `county`               | `character` | Voter county registered in       |
-| `voter_id`             | `character` | **Unique** Voter ID              |
-| `first_name`           | `character` | Voter first name                 |
-| `middle_name`          | `character` | Voter middle name                |
-| `last_name`            | `character` | Voter last name                  |
-| `suffix`               | `character` | Voter name suffix                |
-| `house_number`         | `character` | House number on street           |
-| `house_suffix`         | `character` | House number suffix (letter)     |
-| `pre_direction`        | `character` | Address direction prefix         |
-| `street_name`          | `character` | Address street name              |
-| `street_type`          | `character` | Address street type              |
-| `post_direction`       | `character` | Address direction suffix         |
-| `unit_type`            | `character` | Address unit type                |
-| `unit_number`          | `character` | Address unit number              |
-| `non_standard_address` | `character` | Non-standard full address        |
-| `city`                 | `character` | Voter residential city           |
-| `state`                | `character` | Voter residential state          |
-| `zip`                  | `character` | Voter residential ZIP code       |
-| `mailing_address`      | `character` | Mailing address full             |
-| `mailing_city`         | `character` | Mailing city                     |
-| `mailing_state`        | `character` | Mailing state                    |
-| `mailing_zip_code`     | `character` | Mailing ZIP code                 |
-| `birth_date`           | `double`    | Voter date of birth              |
-| `reg_date`             | `double`    | Voter date registered            |
-| `precinct`             | `character` | Precinct number                  |
-| `precinct_name`        | `character` | Precinct name                    |
-| `split`                | `character` | Precinct split                   |
-| `township`             | `character` | Township level name              |
-| `ward`                 | `character` | Ward number                      |
-| `congressional`        | `character` | Congressional district           |
-| `legislative`          | `character` | State legislative district       |
-| `state_senate`         | `character` | State senate district            |
-| `voter_status`         | `character` | Voter status (active, inactive)  |
-| `last_election`        | `character` | Last election voted in           |
-| `dupe_flag`            | `logical`   | Flag indicating duplicate record |
-| `reg_year`             | `double`    | Year registered to vote          |
-| `address_clean`        | `character` | Normalized combined address      |
-| `zip_clean`            | `character` | Normalized 5-digit ZIP code      |
-| `city_clean`           | `character` | Normalized city name             |
