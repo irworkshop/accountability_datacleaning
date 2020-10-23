@@ -1,0 +1,674 @@
+---
+title: "Missouri Voters"
+author: "Kiernan Nicholls"
+date: "`r Sys.time()`"
+output:
+  github_document: 
+    df_print: tibble
+    toc: true
+    toc_dept: 3
+editor_options: 
+  chunk_output_type: console
+---
+
+<!-- Place comments regarding knitting here -->
+
+```{r setup, include=FALSE, purl=FALSE}
+library(knitr)
+opts_chunk$set(
+  eval = TRUE,
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  error = FALSE,
+  collapse = TRUE,
+  comment = "#>",
+  fig.path = "../plots/",
+  fig.width = 10,
+  dpi = 300
+)
+if (!interactive()) {
+  options(width = 99)
+  set.seed(5)
+}
+```
+
+```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
+doc_dir <- fs::dir_create(here::here("mo", "voters", "docs"))
+```
+
+## Project
+
+The Accountability Project is an effort to cut across data silos and give
+journalists, policy professionals, activists, and the public at large a simple
+way to search across huge volumes of public data about people and organizations.
+
+Our goal is to standardizing public data on a few key fields by thinking of each
+dataset row as a transaction. For each transaction there should be (at least) 3
+variables:
+
+1. All **parties** to a transaction.
+2. The **date** of the transaction.
+3. The **amount** of money involved.
+
+## Objectives
+
+This document describes the process used to complete the following objectives:
+
+1. How many records are in the database?
+1. Check for entirely duplicated records.
+1. Check ranges of continuous variables.
+1. Is there anything blank or missing?
+1. Check for consistency issues.
+1. Create a five-digit ZIP Code called `zip`.
+1. Create a `year` field from the transaction date.
+1. Make sure there is data on both parties to a transaction.
+
+## Packages
+
+The following packages are needed to collect, manipulate, visualize, analyze,
+and communicate these results. The `pacman` package will facilitate their
+installation and attachment.
+
+The IRW's `campfin` package will also have to be installed from GitHub. This
+package contains functions custom made to help facilitate the processing of
+campaign finance data.
+
+```{r load_packages, message=FALSE, warning=FALSE, error=FALSE}
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load_gh("irworkshop/campfin")
+pacman::p_load(
+  tidyverse, # data manipulation
+  lubridate, # datetime strings
+  gluedown, # printing markdown
+  magrittr, # pipe operators
+  janitor, # clean data frames
+  aws.s3, # upload to aws s3
+  refinr, # cluster and merge
+  scales, # format strings
+  knitr, # knit documents
+  vroom, # read files fast
+  rvest, # html scraping
+  glue, # combine strings
+  here, # relative paths
+  httr, # http requests
+  fs # local storage 
+)
+```
+
+This document should be run as part of the `R_campfin` project, which lives as a
+sub-directory of the more general, language-agnostic
+[`irworkshop/accountability_datacleaning`][tap] GitHub repository.
+
+The `R_campfin` project uses the [RStudio projects][rproj] feature and should be
+run as such. The project also uses the dynamic `here::here()` tool for file
+paths relative to _your_ machine.
+
+```{r where_here}
+# where does this document knit?
+here::here()
+```
+
+[tap]: https://github.com/irworkshop/accountability_datacleaning
+[rproj]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects
+
+## Data
+
+Missouri Centralized Voter Registration (MCVR) data was obtained as an open
+record pursuant to Section 115.157, RSMo. from the Elections Division, Office of
+Secretary of State.
+
+The MCVR data was provided as a ZIP archive through a file sharing site.
+
+```{r raw_dir}
+raw_dir <- dir_create(here("mo", "voters", "data", "raw"))
+raw_zip <- path(raw_dir, "Files.zip")
+raw_out <- as_fs_path(unzip(raw_zip, exdir = raw_dir))
+```
+
+The archive contains a README file to explain the data:
+
+```{r readme_about, echo=FALSE, results='asis'}
+readme <- read_lines(raw_out[3])
+md_quote(readme[1:5])
+```
+
+The README also contains a disclaimer:
+
+```{r readme_disclaim, echo=FALSE, results='asis'}
+md_quote(readme[18:21])
+```
+
+And a record layout describing the columns of the file:
+
+```{r readme_layout}
+readme[31:83] %>% 
+  str_replace("(?<=\\d)  ", "\t") %>% 
+  str_replace("\t{2,}", "\t") %>% 
+  read_tsv(col_names = c("Position", "Name", "Description")) %>% 
+  mutate(across(Name, md_code)) %>% 
+  select(-Position) %>% 
+  kable()
+```
+
+## Read
+
+We can read the tab-delimited file as a dataframe.
+
+```{r raw_read}
+mov <- read_delim(
+  file = raw_out[1],
+  delim = "\t",
+  escape_backslash = FALSE,
+  escape_double = FALSE,
+  na = c("", "NA", "XXXXX"),
+  col_types = cols(
+    .default = col_character(),
+    Birthdate = col_date_usa(),
+    `Registration Date` = col_date_usa()
+  )
+)
+```
+
+There are 20 columns at the end of the dataframe containing all of the past
+elections in which each person has voted. We are going to keep the most recent
+election and then save all the columns as a separate data frame. This data frame
+will be kept in a _long_ format, with a row for every election.
+
+```{r voter_split, eval=FALSE}
+hist_file <- path(dirname(raw_dir), "vote_history.csv")
+if (file_exists(hist_file)) {
+  vote_hist <- vroom(
+    file = hist_file,
+    col_types = cols(
+      voter_id = col_character(),
+      order = col_integer(),
+      date = col_date(),
+      election = col_character()
+    )
+  )
+} else {
+  vote_hist <- select(mov, `Voter ID`, starts_with("Voter History"))
+  vote_hist <- pivot_longer(
+    data = vote_hist,
+    cols = starts_with("Voter History"),
+    names_to = "order",
+    values_to = "election"
+  )
+  vote_hist <- vote_hist %>% 
+    clean_names("snake") %>% 
+    filter(!is.na(election))
+  vote_hist <- separate(
+    data = vote_hist,
+    col = election,
+    sep = "(?<=\\d)\\s",
+    into = c("date", "election")
+  )
+  vote_hist <- mutate(
+    .data = vote_hist,
+    order = as.integer(str_extract(order, "\\d+")),
+    date = parse_date(date, "%m/%d/%Y")
+  )
+  write_csv(
+    x = vote_hist,
+    path = hist_file
+  )
+}
+```
+
+We can then remove the election columns.
+
+```{r voter_remove}
+mov <- rename(mov, `Last Election` = `Voter History 1`)
+mov <- select(mov, -starts_with("Voter History"))
+```
+
+```{r clean_names}
+mov <- clean_names(mov, "snake")
+```
+
+```{r raw_rename}
+mov <- mov %>% 
+  rename_all(str_remove, "residential_") %>% 
+  rename_all(str_remove, "_new") %>% 
+  rename(
+    zip = zip_code,
+    birth_date = birthdate,
+    reg_date = registration_date
+  )
+```
+
+## Explore
+
+There are `r scales::comma(nrow(mov))` rows of `r ncol(mov)` columns.
+
+```{r glimpse}
+glimpse(mov)
+tail(mov)
+```
+
+### Missing
+
+Columns vary in their degree of missing values.
+
+```{r na_count}
+col_stats(mov, count_na)
+```
+
+No records are missing a name or registration date.
+
+### Duplicates
+
+We can also flag any record completely duplicated across every column.
+
+```{r dupe_flag}
+voter_ids <- mov$voter_id
+mov <- select(mov, -voter_id)
+d1 <- duplicated(mov, fromLast = FALSE)
+d2 <- duplicated(mov, fromLast = TRUE)
+mov <- mov %>% 
+  mutate(voter_id = voter_ids, .before = first_name) %>% 
+  mutate(dupe_flag = d1 | d2)
+```
+
+```{r dupe_view}
+percent(mean(mov$dupe_flag), 0.001)
+mov %>% 
+  filter(dupe_flag) %>% 
+  select(voter_id, first_name, last_name, birth_date, reg_date)
+```
+
+### Categorical
+
+```{r distinct_count}
+col_stats(mov, n_distinct)
+```
+
+```{r distinct_plots, echo=FALSE}
+explore_plot(mov, county)
+explore_plot(mov, congressional)
+explore_plot(mov, state_senate)
+explore_plot(mov, voter_status)
+```
+
+### Dates
+
+We can add the calendar year from `date` with `lubridate::year()`
+
+```{r date_year}
+mov <- mutate(mov, reg_year = year(reg_date))
+```
+
+```{r date_range}
+min(mov$reg_date)
+sum(mov$reg_year < 2000)
+max(mov$reg_date)
+sum(mov$reg_date > today())
+```
+
+```{r bar_year, echo=FALSE}
+mov %>% 
+  count(reg_year) %>% 
+  mutate(even = is_even(reg_year)) %>% 
+  ggplot(aes(x = reg_year, y = n)) +
+  geom_col(aes(fill = even)) + 
+  scale_fill_brewer(palette = "Dark2") +
+  scale_y_continuous(labels = comma) +
+  scale_x_continuous(breaks = seq(1960, 2020, by = 20)) +
+  coord_cartesian(xlim = c(1960, 2020)) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "Missouri Voters by Registration Year",
+    caption = "Source: MDVR",
+    fill = "Election Year",
+    x = "Year",
+    y = "Count"
+  )
+```
+
+## Wrangle
+
+To improve the searchability of the database, we will perform some consistent,
+confident string normalization. For geographic variables like city names and
+ZIP codes, the corresponding `campfin::normal_*()` functions are tailor made to 
+facilitate this process.
+
+### Address
+
+We can create a single, unified normalized address field.
+
+```{r addr_unite}
+mov <- mov %>% 
+  unite(
+    col = address_norm,
+    house_number:non_standard_address,
+    sep = " ",
+    na.rm = TRUE,
+    remove = FALSE
+  ) %>% 
+  relocate(address_norm, .after = last_col())
+```
+
+```{r addr_view}
+mov %>% 
+  select(house_number:non_standard_address, address_norm) %>% 
+  sample_n(20) %>% 
+  remove_empty("cols")
+```
+
+### ZIP
+
+For ZIP codes, the `campfin::normal_zip()` function will attempt to create
+valid _five_ digit codes by removing the ZIP+4 suffix and returning leading
+zeroes dropped by other programs like Microsoft Excel.
+
+```{r zip_norm}
+mov <- mov %>% 
+  mutate(
+    zip_norm = normal_zip(
+      zip = zip,
+      na_rep = TRUE
+    )
+  )
+```
+
+```{r zip_progress}
+progress_table(
+  mov$zip,
+  mov$zip_norm,
+  compare = valid_zip
+)
+```
+
+### State
+
+As we would expect, all the Missouri voters live in Missouri.
+
+```{r state_count}
+count(mov, state, sort = TRUE)
+```
+
+### City
+
+Cities are the most difficult geographic variable to normalize, simply due to
+the wide variety of valid cities and formats.
+
+#### Normal
+
+The `campfin::normal_city()` function is a good start, again converting case,
+removing punctuation, but _expanding_ USPS abbreviations. We can also remove
+`invalid_city` values.
+
+```{r city_norm}
+mov <- mov %>% 
+  mutate(
+    city_norm = normal_city(
+      city = city, 
+      abbs = usps_city,
+      states = c("MO", "DC", "MISSOURI"),
+      na = invalid_city,
+      na_rep = TRUE
+    )
+  )
+```
+
+#### Swap
+
+We can further improve normalization by comparing our normalized value
+against the _expected_ value for that record's state abbreviation and ZIP code.
+If the normalized value is either an abbreviation for or very similar to the
+expected value, we can confidently swap those two.
+
+```{r city_swap}
+mov <- mov %>% 
+  rename(city_raw = city) %>% 
+  left_join(
+    y = zipcodes,
+    by = c("state", "zip_norm" = "zip")
+  ) %>% 
+  rename(city_match = city) %>% 
+  mutate(
+    match_abb = is_abbrev(city_norm, city_match),
+    match_dist = str_dist(city_norm, city_match),
+    city_swap = if_else(
+      condition = !is.na(match_dist) & (match_abb | match_dist == 1),
+      true = city_match,
+      false = city_norm
+    )
+  ) %>% 
+  select(
+    -city_match,
+    -match_dist,
+    -match_abb
+  )
+```
+
+#### Refine
+
+The [OpenRefine][or] algorithms can be used to group similar strings and replace
+the less common versions with their most common counterpart. This can greatly
+reduce inconsistency, but with low confidence; we will only keep any refined
+strings that have a valid city/state/zip combination.
+
+[or]: https://openrefine.org/
+
+```{r city_refine}
+good_refine <- mov %>% 
+  mutate(
+    city_refine = city_swap %>% 
+      key_collision_merge() %>% 
+      n_gram_merge(numgram = 1)
+  ) %>% 
+  filter(city_refine != city_swap) %>% 
+  inner_join(
+    y = zipcodes,
+    by = c(
+      "city_refine" = "city",
+      "state",
+      "zip_norm" = "zip"
+    )
+  )
+```
+
+```{r city_count, echo=FALSE}
+good_refine %>%
+  count(
+    state, 
+    zip_norm, 
+    city_swap, 
+    city_refine,
+    sort = TRUE
+  )
+```
+
+Then we can join the refined values back to the database.
+
+```{r city_join}
+mov <- mov %>% 
+  left_join(good_refine) %>% 
+  mutate(city_refine = coalesce(city_refine, city_swap))
+```
+
+#### Progress
+
+Our goal for normalization was to increase the proportion of city values known
+to be valid and reduce the total distinct values by correcting misspellings.
+
+```{r city_progress, echo=FALSE}
+many_city <- c(valid_city, extra_city)
+progress <- progress_table(
+  str_to_upper(mov$city_raw),
+  mov$city_norm,
+  mov$city_swap,
+  mov$city_refine,
+  compare = many_city
+) %>% mutate(stage = as_factor(stage))
+kable(progress, digits = 3)
+```
+
+You can see how the percentage of valid values increased with each stage.
+
+```{r bar_progress, echo=FALSE}
+raw_in <- percent(prop_in(mov$city_raw, valid_city))
+progress %>% 
+  ggplot(aes(x = stage, y = prop_in)) +
+  geom_hline(yintercept = 0.99) +
+  geom_col(fill = dark2["purple"]) +
+  coord_cartesian(ylim = c(0.75, 1)) +
+  scale_y_continuous(labels = percent) +
+  labs(
+    title = "Missouri City Normalization Progress",
+    subtitle = glue("Raw at {raw_in} before conversion to uppercase"),
+    x = "Stage",
+    y = "Percent Valid"
+  )
+```
+
+More importantly, the number of distinct values decreased each stage. We were
+able to confidently change many distinct invalid values to their valid
+equivalent.
+
+```{r bar_distinct, echo=FALSE}
+progress %>% 
+  select(
+    stage, 
+    all = n_distinct,
+    bad = n_diff
+  ) %>% 
+  mutate(good = all - bad) %>% 
+  pivot_longer(c("good", "bad")) %>% 
+  mutate(name = name == "good") %>% 
+  ggplot(aes(x = stage, y = value)) +
+  geom_col(aes(fill = name)) +
+  scale_fill_brewer(palette = "Dark2", direction = -1) +
+  scale_y_continuous(labels = comma) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "Missouri City Normalization Progress",
+    subtitle = "Distinct values, valid and invalid",
+    x = "Stage",
+    y = "Distinct Values",
+    fill = "Valid"
+  )
+```
+
+## Conclude
+
+Before exporting, we can remove the intermediary normalization columns and
+rename all added variables with the `_clean` suffix.
+
+```{r clean_select}
+mov <- mov %>% 
+  select(
+    -city_norm,
+    -city_swap,
+    city_clean = city_refine
+  ) %>% 
+  rename_all(~str_replace(., "_norm", "_clean")) %>% 
+  rename_all(~str_remove(., "_raw"))
+```
+
+```{r clean_glimpse}
+glimpse(sample_n(mov, 50))
+```
+
+1. There are `r comma(nrow(mov))` records in the database.
+1. There are `r comma(sum(mov$dupe_flag))` duplicate records in the database.
+1. The range and distribution of `amount` and `date` seem reasonable.
+1. There are `r comma(sum(mov$na_flag))` records missing key variables.
+1. Consistency in geographic data has been improved with `campfin::normal_*()`.
+1. The 4-digit `year` variable has been created with `lubridate::year()`.
+
+## Export
+
+Now the file can be saved on disk for upload to the Accountability server.
+
+```{r clean_dir}
+clean_dir <- dir_create(here("mo", "voters", "data", "clean"))
+clean_path <- path(clean_dir, "mo_voters.csv")
+write_csv(mov, clean_path, na = "")
+(clean_size <- file_size(clean_path))
+file_encoding(clean_path) %>% 
+  mutate(across(path, path.abbrev))
+```
+
+## Upload
+
+We can use the `aws.s3::put_object()` to upload the text file to the IRW server.
+
+```{r s3_upload, eval=FALSE}
+aws_path <- path("csv", basename(clean_path))
+if (!object_exists(aws_path, "publicaccountability")) {
+  put_object(
+    file = clean_path,
+    object = aws_path, 
+    bucket = "publicaccountability",
+    acl = "public-read",
+    show_progress = TRUE,
+    multipart = TRUE
+  )
+}
+aws_head <- head_object(aws_path, "publicaccountability")
+(aws_size <- as_fs_bytes(attr(aws_head, "content-length")))
+unname(aws_size == clean_size)
+```
+
+## Dictionary
+
+The following table describes the variables in our final exported file:
+
+```{r dict_make, echo=FALSE}
+dict_raw <- tibble(
+  var = md_code(names(mov)),
+  type = md_code(map_chr(mov, typeof)),
+  def = c(
+    "Voter county registered in",
+    "**Unique** Voter ID",
+    "Voter first name",
+    "Voter middle name",
+    "Voter last name",
+    "Voter name suffix",
+    "House number on street",
+    "House number suffix (letter)",
+    "Address direction prefix",
+    "Address street name",
+    "Address street type",
+    "Address direction suffix",
+    "Address unit type",
+    "Address unit number",
+    "Non-standard full address",
+    "Voter residential city",
+    "Voter residential state",
+    "Voter residential ZIP code",
+    "Mailing address full",
+    "Mailing city",
+    "Mailing state",
+    "Mailing ZIP code",
+    "Voter date of birth",
+    "Voter date registered",
+    "Precinct number",
+    "Precinct name",
+    "Precinct split",
+    "Township level name",
+    "Ward number",
+    "Congressional district",
+    "State legislative district",
+    "State senate district",
+    "Voter status (active, inactive)",
+    "Last election voted in",
+    "Flag indicating duplicate record",
+    "Year registered to vote",
+    "Normalized combined address",
+    "Normalized 5-digit ZIP code",
+    "Normalized city name"
+  )
+)
+```
+
+```{r dict_md, echo=FALSE}
+(dict_md <- kable(
+  x = dict_raw,
+  format = "markdown",
+  col.names = c("Column", "Type", "Definition")
+))
+```
