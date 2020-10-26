@@ -305,10 +305,65 @@ idc$date <- as_date(idc$date)
 count_na(idc$date) # 782
 ```
 
+## Join
+
+Contributions for 2020 can be downloaded as an Excel file from the Idaho
+Secretary of State's office [campaign public portal][portal].
+
+[portal]: https://elections.sos.idaho.gov/TED/CampaignPublicPortal/Contributions.aspx
+
+```{r new_read}
+idn <- read_excel(
+  path = path(raw_dir, "2020_Contributions.xlsx"),
+  .name_repair = make_clean_names
+)
+```
+
+```{r new_clean, echo=FALSE}
+idn <- idn %>%
+  rename(
+    cand_last = campaign_name,
+    amend = part_of_amendment,
+    con_type = contributor_type,
+    first = first_name,
+    last = last_name,
+    address_1 = address,
+    zip = zip_code
+  ) %>% 
+  mutate(
+    last = coalesce(last, company_name),
+    amend = as.logical(amend),
+    type = type %>% 
+      str_replace("COMPANY", "C") %>% 
+      str_replace("PERSON", "P") %>% 
+      str_replace("LOAN", "L") %>% 
+      str_replace("IN KIND", "I")
+  ) %>% 
+  select(-company_name)
+```
+
+Most of the columns in this data overlap with the columns in the older data.
+
+```{r new_names}
+prop_in(names(idn), names(idc))
+setdiff(names(idn), names(idc))
+```
+
+We can combine the two data sources into a single dataframe.
+
+```{r new_bind}
+idc <- bind_rows(idc, idn, .id = "source_type")
+idc <- relocate(idc, source_type, .after = last_col())
+idc$source_type <- c("old", "new")[as.integer(idc$source_type)]
+count(idc, source_type)
+rm(idn)
+```
+
 ## Explore
 
 ```{r glimpse}
 glimpse(idc)
+head(idc)
 tail(idc)
 ```
 
@@ -470,43 +525,6 @@ idc <- mutate(
 )
 count_na(idc$date) # 807
 sum(idc$date_flag) # 807
-```
-
-For some reason there no records from 2005 to 2010.
-
-```{r year_bar, echo=FALSE}
-idc %>% 
-  count(year) %>% 
-  ggplot(aes(x = year, y = n)) +
-  geom_col(fill = dark2["orange"]) +
-  scale_y_continuous(label = comma) +
-  labs(
-    title = "Idaho Contributions by Year",
-    caption = "Source: Idaho Elections Office",
-    x = "Year Made",
-    y = "Count"
-  )
-idc %>% 
-  count(year) %>% 
-  ggplot(aes(x = year, y = n)) +
-  geom_col(fill = dark2["orange"]) +
-  scale_y_continuous(label = comma, trans = "log10") +
-  labs(
-    title = "Idaho Contributions by Year",
-    caption = "Source: Idaho Elections Office",
-    x = "Year Made",
-    y = "Count"
-  )
-```
-
-We know these files were read by comparing the `file` variable to the urls
-downloaded. For the records loaded from the file downloaded from 2008, the year
-of the `date` variable seems to primarily be from 2003 and 2004.
-
-```{r file_year}
-idc %>% 
-  filter(str_detect(source_file, "2008")) %>% 
-  count(year = year(date))
 ```
 
 ## Wrangle
@@ -684,7 +702,7 @@ file_encoding(clean_path) %>%
 
 We can use the `aws.s3::put_object()` to upload the text file to the IRW server.
 
-```{r aws_upload, eval=FALSE}
+```{r aws_upload, eval=TRUE}
 aws_path <- path("csv", basename(clean_path))
 if (!object_exists(aws_path, "publicaccountability")) {
   put_object(
@@ -733,6 +751,9 @@ dict_raw <- tibble(
     "Contributor country code",
     "Election type code (primary, general)",
     "Source file name",
+    "Flag for amended record (_NEW_)",
+    "Contributor type (_NEW_)",
+    "Source file type (old, new)",
     "Coalesced recipient name",
     "Flag indicating missing value",
     "Flag indicating duplicate value",
