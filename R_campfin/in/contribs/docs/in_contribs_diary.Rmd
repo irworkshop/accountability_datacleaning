@@ -27,8 +27,10 @@ opts_chunk$set(
   fig.width = 10,
   dpi = 300
 )
-options(width = 99)
-set.seed(5)
+if (!interactive()) {
+  options(width = 99)
+  set.seed(5)
+}
 ```
 
 ```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
@@ -82,6 +84,7 @@ pacman::p_load(
   gluedown, # print markdown
   janitor, # dataframe clean
   refinr, # cluster and merge
+  aws.s3, # aws cloud storage
   scales, # format strings
   rvest, # read html pages
   knitr, # knit documents
@@ -140,7 +143,7 @@ since January 1, 1998.
 
 ## Import
 
-The IED provides annuel files for both campaign contributions and expenditures.
+The IED provides annual files for both campaign contributions and expenditures.
 
 > This page provides comma separated value (CSV) downloads of contribution and
 expenditure data for each reporting year in a zipped file format. These files
@@ -196,30 +199,33 @@ if (length(dir_ls(raw_dir, regexp = ".csv$")) == 0) {
 
 There are two problems with each of these files:
 1. When the second line of an address was entered, a `\n` newline character was
-enteted between the two lines _within the same field_. The fields are surrounded
+entered between the two lines _within the same field_. The fields are surrounded
 in double-quotes, but when reading the files these newlines mess things up.
-2. Whenever a string itself contains `"` double-quotes, the first occurance is
+2. Whenever a string itself contains `"` double-quotes, the first occurrence is
 registered as the end of the field itself, which begun with a `"`.
 
 To fix these issues, we will read each file as a single character string and
 use regular expressions to find and replace these errant `\n` and `"` 
 characters. We will then write the edited strings to a new file.
 
-```{r raw_fix}
+```{r fix_raw}
 fix_dir <- dir_create(here("in", "contribs", "data", "fix"))
 if (!any(file_exists(dir_ls(fix_dir)))) {
-  for (file in raw_paths) {
-    read_file(file) %>% 
-      # find newlines not at end of line
-      str_replace_all("(?<!\"(\r|1|0)\")\n(?!\"\\d{1,10}\")", " ") %>%
-      # find quotes not at end of field
-      str_replace_all("(?<!(\n|^|,))\"(?!(,(?=\"))|$|\r)", "\'") %>% 
-      str_trim(side = "both") %>% 
-      # save to disk
-      write_file(path = path(fix_dir, basename(file)))
-    gc()
+  for (f in raw_paths) {
+    x <- read_file(f)
+    # find newlines not at end of line
+    x <- str_replace_all(x, "(?<!\"(\r|1|0)\")\n(?!\"\\d{1,10}\")", " ")
+    # find quotes not at end of field
+    x <- str_replace_all(x, "(?<!(\n|^|,))\"(?!(,(?=\"))|$|\r)", "\'")
+    x <- str_trim(x, side = "both")
+    # save to disk
+    write_file(x, path = path(fix_dir, basename(f)))
+    rm(x); flush_memory(1)
   }
 }
+```
+
+```{r fix_list}
 fix_paths <- dir_ls(fix_dir)
 ```
 
@@ -227,9 +233,10 @@ These fixed files can be read into a single data frame with `purrr::map_df()`
 and `readr::read_delim()`.
 
 ```{r raw_read}
+# 1,642,006
 inc <- map_df(
-  fix_paths,
-  read_delim,
+  .x = fix_paths,
+  .f = read_delim,
   delim = ",",
   quote = "\"",
   na = c("", "n/a", "NA", "N/A"),
@@ -250,7 +257,10 @@ inc <- inc %>%
   clean_names("snake") %>% 
   rename(
     file = file_number,
-    type = contributor_type,
+    candiate = candidate_name,
+    fil_type = committee_type,
+    fil_name = received_by,
+    con_type = contributor_type,
     date = contribution_date,
     method = type
   )
@@ -259,27 +269,41 @@ inc <- inc %>%
 ## Explore
 
 ```{r glimpse}
-head(inc)
+glimpse(inc)
 tail(inc)
-glimpse(sample_n(inc, 20))
 ```
 
 ### Missing
 
-```{r count_na}
+```{r na_count}
 col_stats(inc, count_na)
 ```
 
-```{r flag_na}
-inc <- inc %>% flag_na(committee, name, amount, date)
+```{r na_flag}
+key_vars <- c("committee", "name", "amount", "date")
+inc <- flag_na(inc, all_of(key_vars))
 mean(inc$na_flag)
+```
+
+```{r na_view}
+inc %>% 
+  filter(na_flag) %>% 
+  select(all_of(key_vars)) %>% 
+  sample_n(10)
 ```
 
 ### Duplicates
 
-```{r flag_dupes}
+```{r dupe_flag}
 inc <- flag_dupes(inc, everything())
 mean(inc$dupe_flag)
+```
+
+```{r dupe_view}
+inc %>% 
+  filter(dupe_flag) %>% 
+  select(all_of(key_vars)) %>% 
+  arrange(date, name)
 ```
 
 ### Categorical
@@ -288,28 +312,10 @@ mean(inc$dupe_flag)
 col_stats(inc, n_distinct)
 ```
 
-```{r comm_type_bar, echo=FALSE}
-explore_plot(
-  data = inc,
-  var = committee_type,
-  title = "Indiana Contribution Recipient Types"
-)
-```
-
-```{r cont_type_bar, echo=FALSE}
-explore_plot(
-  data = inc,
-  var = type,
-  title = "Indiana Contribution Contributor Types"
-)
-```
-
-```{r method_bar, echo=FALSE}
-explore_plot(
-  data = filter(inc, !is.na(method)),
-  var = method,
-  title = "Indiana Contribution Contribution Method"
-)
+```{r distinct_plots, echo=FALSE}
+explore_plot(inc, fil_type)
+explore_plot(inc, con_type)
+explore_plot(inc, method)
 ```
 
 ### Continuous
@@ -325,7 +331,7 @@ mean(inc$amount <= 0)
 inc %>%
   filter(amount > 1, amount < 1e6) %>% 
   ggplot(aes(amount)) +
-  geom_histogram(fill = dark2["purple"]) +
+  geom_histogram(fill = dark2["purple"], bins = 20) +
   scale_y_continuous(labels = comma) +
   scale_x_continuous(
     breaks = c(1 %o% 10^(0:6)),
@@ -343,8 +349,8 @@ inc %>%
 ```{r amount_comm_violin, echo=FALSE}
 inc %>%
   filter(amount > 1, amount < 1e6) %>% 
-  ggplot(aes(x = committee_type, y = amount)) +
-  geom_violin(aes(fill = committee_type)) +
+  ggplot(aes(x = fil_type, y = amount)) +
+  geom_violin(aes(fill = fil_type), adjust = 2) +
   scale_fill_brewer(palette = "Dark2", guide = FALSE) +
   scale_y_continuous(
     breaks = c(1 %o% 10^(0:6)),
@@ -377,6 +383,7 @@ inc <- mutate(
 ```{r year_bar}
 inc %>% 
   count(year) %>% 
+  filter(!is.na(year)) %>% 
   mutate(even = is_even(year)) %>% 
   ggplot(aes(x = year, y = n)) +
   geom_col(aes(fill = even)) + 
@@ -429,7 +436,7 @@ inc %>%
 ### ZIP
 
 For ZIP codes, the `campfin::normal_zip()` function will attempt to create
-valied _five_ digit codes by removing the ZIP+4 suffix and returning leading
+valid _five_ digit codes by removing the ZIP+4 suffix and returning leading
 zeroes dropped by other programs like Microsoft Excel.
 
 ```{r zip_norm}
@@ -657,36 +664,105 @@ progress %>%
 
 ## Conclude
 
+Before exporting, we can remove the intermediary normalization columns and
+rename all added variables with the `_clean` suffix.
+
+```{r clean_select}
+inc <- inc %>% 
+  select(
+    -city_norm,
+    city_clean = city_swap
+  ) %>% 
+  rename_all(~str_replace(., "_norm", "_clean")) %>% 
+  rename_all(~str_remove(., "_raw"))
+```
+
 ```{r clean_glimpse}
-glimpse(sample_n(inc, 20))
+glimpse(sample_n(inc, 50))
 ```
 
 1. There are `r comma(nrow(inc))` records in the database.
-1. There are `r comma(sum(inc$dupe_flag))` duplicate records in the database 
-(`r percent(mean(inc$dupe_flag), accuracy = 0.01)`).
+1. There are `r comma(sum(inc$dupe_flag))` duplicate records in the database.
 1. The range and distribution of `amount` and `date` seem reasonable.
-1. There are `r comma(sum(inc$na_flag))` records missing a contributor or 
-recipient name, date, or amount (`r percent(mean(inc$na_flag), accuracy = 0.01)`).
-1. Consistency in goegraphic data has been improved with `campfin::normal_*()`.
+1. There are `r comma(sum(inc$na_flag))` records missing key variables.
+1. Consistency in geographic data has been improved with `campfin::normal_*()`.
 1. The 4-digit `year` variable has been created with `lubridate::year()`.
 
 ## Export
 
+Now the file can be saved on disk for upload to the Accountability server.
+
 ```{r clean_dir}
 clean_dir <- dir_create(here("in", "contribs", "data", "clean"))
+clean_path <- path(clean_dir, "in_contribs_clean.csv")
+write_csv(inc, clean_path, na = "")
+(clean_size <- file_size(clean_path))
+file_encoding(clean_path) %>% 
+  mutate(across(path, path.abbrev))
 ```
 
-```{r clean_write}
-inc <- inc %>% 
-  select(
-    -city_norm,
-    city_norm = city_swap
-  ) %>% 
-  rename_all(~str_replace(., "_norm", "_clean"))
+## Upload
 
-write_csv(
-  x = inc,
-  path = path(clean_dir, "in_contribs_clean.csv"),
-  na = ""
+We can use the `aws.s3::put_object()` to upload the text file to the IRW server.
+
+```{r aws_upload, eval=TRUE}
+aws_path <- path("csv", basename(clean_path))
+if (!object_exists(aws_path, "publicaccountability")) {
+  put_object(
+    file = clean_path,
+    object = aws_path, 
+    bucket = "publicaccountability",
+    acl = "public-read",
+    show_progress = TRUE,
+    multipart = TRUE
+  )
+}
+aws_head <- head_object(aws_path, "publicaccountability")
+(aws_size <- as_fs_bytes(attr(aws_head, "content-length")))
+unname(aws_size == clean_size)
+```
+
+## Dictionary
+
+The following table describes the variables in our final exported file:
+
+```{r dict_make, echo=FALSE}
+dict_raw <- tibble(
+  var = md_code(names(inc)),
+  type = md_code(map_chr(inc, typeof)),
+  def = c(
+    "Source file number",
+    "Type of committee filing",
+    "Recipient filing committee name",
+    "Recipient candidate name",
+    "Contributor type",
+    "Contributor name",
+    "Contributor street address",
+    "Contributor city name",
+    "Contributor state abbreviation",
+    "Contributor ZIP+4 code",
+    "Contributor occupation",
+    "Method contribution made",
+    "Free-form contribution description",
+    "Contribution amount or correction",
+    "Date contribution made",
+    "Name or role of filer",
+    "Flag indicating amended record",
+    "Flag indicating missing values",
+    "Flag indicating duplicate row",
+    "Calendar year contribution made",
+    "Normalized street address",
+    "Normalized 5-digit ZIP code",
+    "Normalized 2-letter state abbreviation",
+    "Normalized city name"
+  )
 )
+```
+
+```{r dict_md, echo=FALSE}
+(dict_md <- kable(
+  x = dict_raw,
+  format = "markdown",
+  col.names = c("Column", "Type", "Definition")
+))
 ```
