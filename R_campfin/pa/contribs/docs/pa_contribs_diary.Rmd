@@ -83,6 +83,7 @@ pacman::p_load(
   gluedown, # format markdown
   magrittr, # pipe operators
   janitor, # dataframe clean
+  aws.s3, # aws cloud storage
   refinr, # cluster and merge
   scales, # format strings
   knitr, # knit documents
@@ -205,8 +206,10 @@ Then we will unzip the annual directory from each archive.
 
 ```{r raw_unzip}
 if (all(dir_ls(raw_dir) %in% zip_paths)) {
-  for (zip in zip_paths) {
-    unzip(zip, exdir = raw_dir)
+  for (z in zip_paths) {
+    out <- unzip(z, exdir = raw_dir, junkpaths = TRUE)
+    y_dir <- dir_create(path(raw_dir, str_extract(z, "\\d{4}")))
+    file_move(out, path(y_dir, basename(out)))
   }
 }
 ```
@@ -220,13 +223,13 @@ be read together.
 con_paths <- dir_ls(
   path = raw_dir, 
   recurse = TRUE, 
-  regexp = "contrib[\\.|_]"
+  regexp = "(C|c)ontrib[\\.|_]"
 )
 
 fil_paths <- dir_ls(
   path = raw_dir, 
   recurse = TRUE, 
-  regexp = "filer[\\.|_]"
+  regexp = "(F|f)iler[\\.|_]"
 )
 ```
 
@@ -254,11 +257,11 @@ identify these erroneous characters and remove or replace them.
 # do not repeat if done
 if (!file_exists(fix_check)) {
   # for all contrib and filer files
-  for (file in c(con_paths, fil_paths)) {
+  for (f in c(con_paths, fil_paths)) {
     # read raw file
-    read_file(file) %>% 
+    read_file(f) %>% 
       # force conversion to simple
-      str_conv(encoding = "ASCII") %>% 
+      iconv(to = "ASCII", sub = "") %>% 
       # replace non-carriage newline
       str_replace_all("(?<!\r)\n", " ") %>%
       # replace not-field double quotes
@@ -266,9 +269,9 @@ if (!file_exists(fix_check)) {
       # replace non-delim commas
       str_remove_all(",(?!\"|\\d|\\.\\d+|-(\\d|\\.))") %>% 
       # overwrite raw file
-      write_file(file)
+      write_file(f)
     # check progress
-    message(paste(basename(file), "done"))
+    message(paste(basename(f), "done"))
     # clean garbage memory
     flush_memory()
   }
@@ -282,46 +285,11 @@ if (!file_exists(fix_check)) {
 Now that each text file has been cleaned of irregularities, they can each be
 properly read into R.
 
-If this has already been done, it's easier to read the single file that was
-written at the end of the initial process. If we read this single file, we can
-skip the chunks below reading for the first time.
-
-```{r pac_read}
-pac_files <- path(raw_dir, sprintf("pac%s.csv", 1:10))
-no_pac <- !all(file_exists(pac_files))
-if (!no_pac) {
-  pac <- vroom(
-    file = pac_files,
-    delim = "|",
-    escape_backslash = TRUE,
-    col_names = TRUE,
-    col_types = cols(
-      filerid = col_double(),
-      eyear = col_double(),
-      cycle = col_double(),
-      date = col_date(),
-      amount = col_double(),
-      fil_type = col_double(),
-      district = col_integer(),
-      fil_address2 = col_logical(),
-      fil_phone = col_logical()
-    )
-  )
-}
-```
-
-If there are no consolidated contribution files from cleaning, we will have to
-read and join the files from scratch.
-
-```{r pac_check}
-print(no_pac) # if TRUE must redo
-```
-
 First, we will read all the annual contribution files into a single data frame
 using `vroom::vroom()`. We need to use the column names and types listed in the
 `readme.txt` file we downloaded earlier.
 
-```{r raw_read, eval=no_pac}
+```{r raw_read}
 pac <- map_df(
   .x = con_paths,
   .f = read_delim,
@@ -351,7 +319,7 @@ pac <- map_df(
 
 Then we can read the fixed filer files to describe the recipients.
 
-```{r fil_read, eval=no_pac}
+```{r fil_read}
 filers <- map_df(
   .x = fil_paths,
   .f = read_delim,
@@ -383,7 +351,7 @@ We only want to join a single filer to each contribution listed in the data.
 We can group by the unique filer ID and a filing year and select only one
 copy of the data.
 
-```{r fil_slice, eval=no_pac}
+```{r fil_slice}
 nrow(filers)
 filers <- filers %>% 
   group_by(filerid, eyear) %>% 
@@ -395,8 +363,8 @@ nrow(filers)
 Now the filer information can be added to the contribution data with a 
 `dplyr::left_join()` along the unique filer ID and election year.
 
-```{r raw_join, eval=no_pac}
-# 13,135,695
+```{r raw_join}
+# 18,386,163
 pac <- left_join(
   x = pac,
   y = filers,
@@ -413,8 +381,9 @@ pac <- rename_prefix(
 )
 ```
 
-```{r raw_rename, eval=no_pac}
+```{r raw_rename}
 pac <- pac %>% 
+  rename_with(~str_replace(., "address", "addr")) %>% 
   rename(
     con_zip = con_zipcode,
     date = contdate1,
@@ -426,24 +395,10 @@ pac <- pac %>%
   )
 ```
 
-We will save a copy of this new file to the disk that can easily be read if
-needed. This is the step that is done above for the `no_pac` check.
+We will also add a temporary unique ID for each transaction.
 
-```{r raw_write, eval=no_pac}
-n <- 10
-x <- nrow(pac)/n
-for (i in seq(1, n)) {
-  write_delim(
-    x = pac[1:x, ],
-    path = path(raw_dir, sprintf("pac%s.csv", i)),
-    delim = "|",
-    quote_escape = "backslash"
-  )
-  pac <- pac[-(1:x), ]
-  flush_memory()
-  Sys.sleep(60)
-  message(percent(i/n))
-}
+```{r raw_id}
+pac <- mutate(pac, tx = row_number())
 ```
 
 ```{r include=FALSE}
@@ -454,6 +409,8 @@ flush_memory()
 
 We should first check the top and bottom of the read data frame to ensure the
 file was read correctly. This view also helps simply understand the format.
+
+There are `r comma(nrow(pac))` rows of `r ncol(pac)` columns.
 
 ```{r glimpse}
 glimpse(pac)
@@ -479,33 +436,59 @@ Any record missing a date, name, or amount should be flagged. These variables
 are key to identifying transactions.
 
 ```{r na_flag}
-pac <- pac %>% flag_na(date, contributor, amount, filer)
+key_vars <- c("date", "contributor", "amount", "filer")
+pac <- flag_na(pac, all_of(key_vars))
 percent(mean(pac$na_flag), 0.01)
+```
+
+```{r na_view}
+pac %>% 
+  filter(na_flag) %>% 
+  select(all_of(key_vars)) %>% 
+  sample_n(10)
+```
+
+All of the records missing a value are missing a `date`.
+
+```{r na_recount}
+pac %>% 
+  filter(na_flag) %>% 
+  select(all_of(key_vars)) %>% 
+  col_stats(count_na)
 ```
 
 ### Duplicates
 
 We can check for records that are entirely duplicated across every variable
 using `duplicated()`. This process is memory inefficient, so we will split our
-data frame into a list of 100,000 row chunks and check each chunk at a tinme,
+data frame into a list of 100,000 row chunks and check each chunk at a time,
 appending our duplicate rows to a local text file.
+
+```{r dupe_id}
+pac <- mutate(pac, tx = row_number())
+```
 
 ```{r dupe_write}
 dupe_file <- here("pa", "contribs", "dupes.txt")
 if (!file_exists(dupe_file)) {
   file_create(dupe_file)
-  n <- 1e5 # rows per chunk
-  nr <- nrow(pac)
-  # split file into chunks
-  pas <- split(pac, rep(1:ceiling(nr/n), each = n, length.out = nr))
-  pb <- txtProgressBar(min = 0, max = length(pas), style = 3)
+  pac <- mutate(pac, group = str_sub(date, end = 7))
+  pa_ids <- split(pac$tx, pac$group)
+  pas <- pac %>% 
+    select(-tx) %>% 
+    group_split(group)
+  pb <- txtProgressBar(max = length(pas), style = 3)
+  pac <- select(pac, -group)
+  flush_memory(1)
   for (i in seq_along(pas)) {
     d1 <- duplicated(pas[[i]], fromLast = FALSE) # check from front
-    # d2 <- duplicated(pas[[i]], fromLast = TRUE)
-    write_lines(d1, dupe_file, append = TRUE) # append to disk
-    rm(d1); pas[[i]] <- NA # remove for memory
+    d2 <- duplicated(pas[[i]], fromLast = TRUE) # check from back
+    dupes <- tibble(tx = pa_ids[[i]], dupe_flag = d1 | d2)
+    dupes <- filter(dupes, dupe_flag == TRUE) # remove non dupes
+    write_csv(dupes, dupe_file, append = TRUE) # append to disk
+    rm(d1, d2, dupes); pas[[i]] <- NA # remove for memory
     Sys.sleep(10)
-    flush_memory()
+    flush_memory(1)
     setTxtProgressBar(pb, i)
   }
   rm(pas, pb)
@@ -513,28 +496,35 @@ if (!file_exists(dupe_file)) {
 }
 ```
 
-We can now read that file as a vector and add it as a new `dupe_flag` variable.
+We can now read that file and join it against the contributions.
 
 ```{r dupe_read}
-dupes <- as.logical(read_lines(dupe_file))
-length(dupes) == nrow(pac)
-pac <- mutate(pac, dupe_flag = dupes)
+dupes <- read_csv(
+  file = dupe_file,
+  col_names = c("tx", "dupe_flag"),
+  col_types = cols(
+    tx = col_double(),
+    dupe_flag = col_logical()
+  )
+)
+comma(nrow(dupes))
+```
+
+```{r dupe_join}
+pac <- left_join(pac, dupes, by = "tx")
+pac <- mutate(pac, dupe_flag = !is.na(dupe_flag))
 percent(mean(pac$dupe_flag), 0.01)
 ```
 
-To upload this duplicates text file to GitHub, we will convert it to an string
-of binary integers and compress it.
-
-```{r dupe_compress, eval=FALSE}
-write_lines(as.integer(dupes), dupe_file)
-tar(
-  tarfile = here("pa", "contribs", "dupes.tar.xz"),
-  files = dupe_file,
-  compression = "xz",
-  tar = "tar"
-)
-file_delete(dupe_file)
+```{r echo=FALSE}
 rm(dupes)
+flush_memory()
+```
+
+```{r dupe_view}
+pac %>% 
+  filter(dupe_flag) %>% 
+  select(tx, all_of(key_vars))
 ```
 
 ### Amounts
@@ -543,12 +533,12 @@ The range and distribution of the contribution `amount` should be checked. We
 also want to note what percentage of the values are zero or below.
 
 ```{r ammount_summary}
-unlist(map(summary(pac$amount), dollar))
+summary(pac$amount)
 mean(pac$amount <= 0)
 ```
 
 ```{r amount_max}
-glimpse(pac[which.max(pac$amount), ])
+glimpse(pac[c(which.min(pac$amount), which.max(pac$amount)), ])
 ```
 
 ```{r hist_amount, echo=FALSE}
@@ -580,7 +570,7 @@ pac %>%
     trim = TRUE,
     draw_quantiles = c(0.25, 0.5, 0.75),
     scale = "area",
-    adjust = 2
+    adjust = 4
   ) +
   scale_fill_brewer(
     palette = "Dark2", 
@@ -598,6 +588,7 @@ pac %>%
     y = "Count"
   )
 ```
+
 ### Dates
 
 We can add the calendar year a contribution was made using `lubridate::year()`. 
@@ -620,7 +611,8 @@ The bulk of transactions occur between 2000 and 2020.
 
 ```{r bar_year, echo=FALSE}
 pac %>% 
-  count(year) %>% 
+  count(year) %>%
+  filter(!is.na(year)) %>% 
   mutate(odd = !is_even(year)) %>% 
   ggplot(aes(x = year, y = n)) +
   geom_col(aes(fill = odd)) + 
@@ -654,51 +646,60 @@ For the street `*_addresss` variables, the `campfin::normal_address()` function
 will force consistence case, remove punctuation, and abbreviate official 
 USPS suffixes.
 
-```{r con_address_norm}
-pac <- pac %>% 
+```{r con_addr_norm}
+norm_addr <- pac %>%
+  count(con_addr1, con_addr2, sort = TRUE) %>% 
+  select(-n) %>% 
   unite(
-    col = con_address_full,
-    starts_with("con_address"),
+    col = con_addr_full,
+    starts_with("con_addr"),
     sep = " ",
     remove = FALSE,
     na.rm = TRUE
   ) %>% 
   mutate(
-    con_address_norm = normal_address(
-      address = con_address_full,
+    con_addr_norm = normal_address(
+      address = con_addr_full,
       abbs = usps_street,
       na_rep = TRUE
     )
   ) %>% 
-  select(-con_address_full)
+  select(-con_addr_full)
 ```
 
-```{r address_view}
-pac %>% 
-  select(contains("address")) %>% 
-  distinct() %>% 
-  sample_n(10)
+```{r addr_join}
+norm_addr
+pac <- left_join(pac, norm_addr)
+rm(norm_addr); flush_memory(1)
 ```
 
 We will repeat the process for filer addresses.
 
-```{r fil_address_norm}
-pac <- pac %>% 
+```{r fil_addr_norm}
+norm_addr <- pac %>% 
+  count(fil_addr1, fil_addr2, sort = TRUE) %>% 
+  select(-n) %>% 
   unite(
-    col = fil_address_full,
-    starts_with("fil_address"),
+    col = fil_addr_full,
+    starts_with("fil_addr"),
     sep = " ",
     remove = FALSE,
     na.rm = TRUE
   ) %>% 
   mutate(
-    fil_address_norm = normal_address(
-      address = fil_address_full,
+    fil_addr_norm = normal_address(
+      address = fil_addr_full,
       abbs = usps_street,
       na_rep = TRUE
     )
   ) %>% 
-  select(-fil_address_full)
+  select(-fil_addr_full)
+```
+
+```{r fil_addr_join}
+norm_addr
+pac <- left_join(pac, norm_addr)
+rm(norm_addr); flush_memory(1)
 ```
 
 ### ZIP
@@ -726,36 +727,11 @@ progress_table(
 
 ### State
 
-Valid two digit state abbreviations can be made using the 
-`campfin::normal_state()` function.
+There is no need to clean the two state variables.
 
-```{r state_norm}
-pac <- mutate_at(
-  .tbl = pac,
-  .vars = vars(ends_with("state")),
-  .funs = list(norm = normal_state),
-  abbreviate = TRUE,
-  na_rep = TRUE,
-  valid = valid_state
-)
-```
-
-```{r state_view}
-pac %>% 
-  filter(con_state != con_state_norm) %>% 
-  count(con_state, con_state_norm, sort = TRUE)
-```
-
-```{r state_progress}
-progress_table(
-  pac$con_state,
-  pac$con_state_norm,
-  compare = valid_state
-)
-```
-
-```{r include=FALSE}
-flush_memory()
+```{r state_check}
+prop_in(pac$con_state, valid_state)
+prop_in(pac$fil_state, valid_state)
 ```
 
 ### City
@@ -769,16 +745,36 @@ The `campfin::normal_city()` function is a good start, again converting case,
 removing punctuation, but _expanding_ USPS abbreviations. We can also remove
 `invalid_city` values.
 
+```{r city_norm_con}
+con_norm_city <- pac %>% 
+  count(con_city, con_state, con_zip_norm, sort = TRUE) %>% 
+  select(-n) %>% 
+  mutate(
+    across(
+      .cols = con_city, 
+      .fns = list(norm = normal_city), 
+      abbs = usps_city,
+      states = c("PA", "DC", "PENNSYLVANIA"),
+      na = invalid_city,
+      na_rep = TRUE
+    )
+  )
+```
+
 ```{r city_norm}
-pac <- mutate_at(
-  .tbl = pac,
-  .vars = vars(ends_with("city")),
-  .funs = list(norm = normal_city),
-  abbs = usps_city,
-  states = c("PA", "DC", "PENNSYLVANIA"),
-  na = invalid_city,
-  na_rep = TRUE
-)
+fil_norm_city <- pac %>% 
+  count(fil_city, fil_state, fil_zip_norm, sort = TRUE) %>% 
+  select(-n) %>% 
+  mutate(
+    across(
+      .cols = fil_city, 
+      .fns = list(norm = normal_city), 
+      abbs = usps_city,
+      states = c("PA", "DC", "PENNSYLVANIA"),
+      na = invalid_city,
+      na_rep = TRUE
+    )
+  )
 ```
 
 #### Swap
@@ -789,11 +785,11 @@ If the normalized value is either an abbreviation for or very similar to the
 expected value, we can confidently swap those two.
 
 ```{r con_city_swap}
-pac <- pac %>% 
+con_norm_city <- con_norm_city %>% 
   left_join(
     y = zipcodes,
     by = c(
-      "con_state_norm" = "state",
+      "con_state" = "state",
       "con_zip_norm" = "zip"
     )
   ) %>% 
@@ -815,11 +811,11 @@ pac <- pac %>%
 ```
 
 ```{r fil_city_swap}
-pac <- pac %>% 
+fil_norm_city <- fil_norm_city %>% 
   left_join(
     y = zipcodes,
     by = c(
-      "fil_state_norm" = "state",
+      "fil_state" = "state",
       "fil_zip_norm" = "zip"
     )
   ) %>% 
@@ -854,7 +850,7 @@ strings that have a valid city/state/zip combination.
 [or]: https://openrefine.org/
 
 ```{r city_refine}
-good_refine <- pac %>% 
+good_refine <- con_norm_city %>% 
   mutate(
     con_city_refine = con_city_swap %>% 
       key_collision_merge() %>% 
@@ -865,7 +861,7 @@ good_refine <- pac %>%
     y = zipcodes,
     by = c(
       "con_city_refine" = "city",
-      "con_state_norm" = "state",
+      "con_state" = "state",
       "con_zip_norm" = "zip"
     )
   )
@@ -874,7 +870,7 @@ good_refine <- pac %>%
 ```{r city_count, echo=FALSE}
 good_refine %>%
   count(
-    con_state_norm, 
+    con_state, 
     con_zip_norm, 
     con_city_swap, 
     con_city_refine,
@@ -885,8 +881,8 @@ good_refine %>%
 Then we can join the refined values back to the database.
 
 ```{r city_join}
-pac <- pac %>% 
-  left_join(good_refine) %>% 
+con_norm_city <- con_norm_city %>% 
+  left_join(good_refine, by = names(.)) %>% 
   mutate(con_city_refine = coalesce(con_city_refine, con_city_swap))
 ```
 
@@ -911,9 +907,9 @@ by their city and state. Then, we will only query those unknown cities which
 appear at least ten times.
 
 ```{r check_filter}
-pac_out <- pac %>% 
+pac_out <- con_norm_city %>% 
   filter(con_city_refine %out% c(valid_city, extra_city)) %>% 
-  count(con_city_refine, con_state_norm, sort = TRUE) %>% 
+  count(con_city_refine, con_state, sort = TRUE) %>% 
   drop_na() %>% 
   head(1000)
 ```
@@ -930,13 +926,17 @@ If not, the query will be sent and the file will be written using
 check_file <- here("pa", "contribs", "data", "api_check.csv")
 if (file_exists(check_file)) {
   check <- read_csv(
-    file = check_file
+    file = check_file,
+    col_types = cols(
+      .default = col_character(),
+      check_city_flag = col_logical()
+    )
   )
 } else {
   check <- pmap_dfr(
     .l = list(
       pac_out$con_city_refine, 
-      pac_out$con_state_norm
+      pac_out$con_state
     ), 
     .f = check_city, 
     key = Sys.getenv("GEOCODE_KEY"), 
@@ -975,12 +975,35 @@ valid_locality <- check %>%
   c(valid_locality)
 ```
 
+```{r}
+valid_locality <- c(valid_locality, "ABBOTT PARK", "RESEARCH TRIANGLE PARK")
+```
+
 #### Progress
+
+```{r con_city_fix}
+con_norm_city <- con_norm_city %>% 
+  mutate(
+    con_city_refine = con_city_refine %>% 
+      na_if("ILLEGIBLE") %>% 
+      str_replace("^PHILA$", "PHILADELPHIA") %>% 
+      str_replace("^PGH$", "PITTSBURGH") %>% 
+      str_replace("^NEW YORK CITY$", "NEW YORK") %>% 
+      str_replace("^H\\sBURG$", "HARRISBURG") %>% 
+      str_replace("^HBG$", "HARRISBURG") %>% 
+      str_replace("^NYC$", "NEW YORK")
+  )
+```
+
+```{r city_rejoin}
+pac <- left_join(pac, con_norm_city)
+pac <- left_join(pac, fil_norm_city)
+```
 
 ```{r city_progress, echo=FALSE}
 many_city <- c(valid_city, extra_city, valid_locality)
 progress <- progress_table(
-  pac$con_city,
+  str_to_upper(pac$con_city),
   pac$con_city_norm,
   pac$con_city_swap,
   pac$con_city_refine,
@@ -992,8 +1015,8 @@ kable(progress, digits = 3)
 You can see how the percentage of valid values increased with each stage.
 
 ```{r city_final_prop}
-prop_in(pac$con_city_refine, valid_city)
-prop_in(pac$fil_city_swap, valid_city)
+prop_in(pac$con_city_refine, many_city)
+prop_in(pac$fil_city_swap, many_city)
 ```
 
 ```{r bar_progress, echo=FALSE}
@@ -1057,11 +1080,12 @@ pac <- pac %>%
     -fil_city_norm,
     fil_city_clean = fil_city_swap
   ) %>% 
-  rename_all(~str_replace(., "_norm", "_clean"))  
+  rename_all(~str_replace(., "_norm", "_clean")) %>% 
+  relocate(ends_with("city_clean"), .after = fil_addr_clean)
 ```
 
 ```{r clean_glimpse}
-glimpse(sample_n(pac, 20))
+glimpse(sample_n(pac, 100))
 ```
 
 1. There are `r comma(nrow(pac))` records in the database.
@@ -1072,20 +1096,46 @@ glimpse(sample_n(pac, 20))
 
 ## Export
 
+Now the file can be saved on disk for upload to the Accountability server.
+
 ```{r clean_dir}
 clean_dir <- dir_create(here("pa", "contribs", "data", "clean"))
 clean_path <- path(clean_dir, "pa_contribs_clean.csv")
 write_csv(pac, clean_path, na = "")
-file_size(clean_path)
-guess_encoding(clean_path)
+(clean_size <- file_size(clean_path))
+file_encoding(clean_path) %>% 
+  mutate(across(path, path.abbrev))
+```
+
+## Upload
+
+We can use the `aws.s3::put_object()` to upload the text file to the IRW server.
+
+```{r aws_upload, eval=FALSE}
+aws_path <- path("csv", basename(clean_path))
+if (!object_exists(aws_path, "publicaccountability")) {
+  put_object(
+    file = clean_path,
+    object = aws_path, 
+    bucket = "publicaccountability",
+    acl = "public-read",
+    show_progress = TRUE,
+    multipart = TRUE
+  )
+}
+aws_head <- head_object(aws_path, "publicaccountability")
+(aws_size <- as_fs_bytes(attr(aws_head, "content-length")))
+unname(aws_size == clean_size)
 ```
 
 ## Dictionary
 
+The following table describes the variables in our final exported file:
+
 ```{r dict_make, echo=FALSE}
 dict_raw <- tibble(
   var = md_code(names(pac)),
-  type = map_chr(pac, typeof),
+  type = md_code(map_chr(pac, typeof)),
   def = c(
     "Filer unique filer ID",
     "Election year",
@@ -1112,15 +1162,14 @@ dict_raw <- tibble(
     "Filer 2-digit state abbreviation",
     "Filer ZIP+4 code",
     "County election held in",
+    "Unique transaction number",
     "Filer telephone number",
     "Flag for missing date, amount, or name",
     "Flag for completely duplicated record",
     "Calendar year of contribution date",
     "Normalized contributor street address",
     "Normalized Filer street address",
-    "Normalized contributor 5-digit ZIP code",
     "Normalized Filer 5-digit ZIP code",
-    "Normalized contributor state abbreviation",
     "Normalized Filer state abbreviation",
     "Normalized Filer city name",
     "Normalized contributor city name"
@@ -1134,11 +1183,4 @@ dict_raw <- tibble(
   format = "markdown",
   col.names = c("Column", "Type", "Definition")
 ))
-```
-
-```{r dict_write}
-write_lines(
-  x = c("# Pennsylvania Contributions Data Dictionary\n", dict_md),
-  path = here("pa", "contribs", "pa_contribs_dict.md"),
-)
 ```
