@@ -1,0 +1,936 @@
+---
+title: "Connecticut Voters"
+author: "Kiernan Nicholls"
+date: "`r date()`"
+output:
+  github_document: 
+    df_print: tibble
+    toc: true
+    toc_dept: 3
+editor_options: 
+  chunk_output_type: console
+---
+
+<!-- Place comments regarding knitting here -->
+
+```{r setup, include=FALSE, purl=FALSE}
+library(knitr)
+opts_chunk$set(
+  eval = TRUE,
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  error = FALSE,
+  collapse = TRUE,
+  comment = "#>",
+  fig.path = "../plots/",
+  fig.width = 10,
+  dpi = 300
+)
+if (!interactive()) {
+  options(width = 95)
+  set.seed(5)
+}
+```
+
+```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
+doc_dir <- fs::dir_create(here::here("ct", "voters", "docs"))
+```
+
+## Project
+
+The Accountability Project is an effort to cut across data silos and give
+journalists, policy professionals, activists, and the public at large a simple
+way to search across huge volumes of public data about people and organizations.
+
+Our goal is to standardizing public data on a few key fields by thinking of each
+dataset row as a transaction. For each transaction there should be (at least) 3
+variables:
+
+1. All **parties** to a transaction.
+2. The **date** of the transaction.
+3. The **amount** of money involved.
+
+## Objectives
+
+This document describes the process used to complete the following objectives:
+
+1. How many records are in the database?
+1. Check for entirely duplicated records.
+1. Check ranges of continuous variables.
+1. Is there anything blank or missing?
+1. Check for consistency issues.
+1. Create a five-digit ZIP Code called `zip`.
+1. Create a `year` field from the transaction date.
+1. Make sure there is data on both parties to a transaction.
+
+## Packages
+
+The following packages are needed to collect, manipulate, visualize, analyze,
+and communicate these results. The `pacman` package will facilitate their
+installation and attachment.
+
+The IRW's `campfin` package will also have to be installed from GitHub. This
+package contains functions custom made to help facilitate the processing of
+campaign finance data.
+
+```{r load_packages, message=FALSE, warning=FALSE, error=FALSE}
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load(
+  tidyverse, # data manipulation
+  lubridate, # datetime strings
+  textreadr, # read doc files
+  gluedown, # printing markdown
+  janitor, # clean data frames
+  campfin, # custom irw tools
+  aws.s3, # aws cloud storage
+  refinr, # cluster & merge
+  scales, # format strings
+  knitr, # knit documents
+  vroom, # fast reading
+  rvest, # scrape html
+  glue, # code strings
+  here, # project paths
+  httr, # http requests
+  fs # local storage 
+)
+```
+
+This document should be run as part of the `R_campfin` project, which lives as a
+sub-directory of the more general, language-agnostic
+[`irworkshop/accountability_datacleaning`][tap] GitHub repository.
+
+The `R_campfin` project uses the [RStudio projects][rproj] feature and should be
+run as such. The project also uses the dynamic `here::here()` tool for file
+paths relative to _your_ machine.
+
+```{r where_here}
+# where does this document knit?
+here::dr_here(show_reason = FALSE)
+```
+
+[tap]: https://github.com/irworkshop/accountability_datacleaning
+[rproj]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects
+
+## Data
+
+The database of registered voters in Connecticut was obtained by Secretary of
+State's office for a fee of $300 and delivered on compact disc.
+
+> The Centralized Voter Registration System is utilized by all towns in
+Connecticut. It is the exclusive means by which a town produces an official
+voter registry list. The system includes information contained in voter
+registration applications, indicates whether eligible voters participated in
+past elections and primaries, and whether they voted in person or by absentee
+ballot. This election history information is required to be updated by all towns
+within 60 days after each election or primary.
+
+> The cost of the file is $300 and can be paid by check or credit card; cash is
+also accepted. We must receive payment before releasing the voter registry file.
+If you have any questions you can contact us by phone at 860-509-6100 or by
+email at LEAD@ct.gov.
+
+## Download
+
+The raw data from the disk can be downloaded from the Workshop's AWS server.
+
+```{r aws_bucket}
+aws_info <- get_bucket_df(
+  bucket = "publicaccountability", 
+  prefix = "FOR_REVIEW/ct_voters"
+)
+```
+
+```{r aws_info, echo=FALSE}
+aws_info <- aws_info %>% 
+  as_tibble() %>% 
+  transmute(
+    path = as_fs_path(Key), 
+    size = as_fs_bytes(Size), 
+    modification_time = parse_datetime(LastModified)
+  )
+print(aws_info)
+```
+
+```{r raw_dir}
+raw_dir <- dir_create(here("ct", "voters", "data", "raw"))
+```
+
+We will save each object to a local directory.
+
+```{r aws_get}
+for (key in aws_info$path[-1]) {
+  p <- path(raw_dir, basename(key))
+  if (!file_exists(p)) {
+    save_object(
+      object = key,
+      bucket = "publicaccountability",
+      file = p
+    )
+  }
+}
+```
+
+```{r raw_info}
+raw_info <- dir_info(raw_dir)
+sum(raw_info$size)
+raw_info %>% 
+  select(path, size, modification_time) %>% 
+  mutate(across(path, path.abbrev))
+```
+
+## About
+
+### Contents
+
+The extract includes a Microsoft Word file describing the contents. 
+
+> The extract is broken into 4 zipped files.  The towns are sequenced
+alphabetically with a corresponding id tax town code(001-169).  The extract
+files both fixed length and comma delimited and are assembled as follows:
+
+| File    | Towns
+|:--------|------------------------------------:|
+| `FILE1` | Andover 001 thru East Hampton 042   |
+| `FILE2` | East Hartford 043 thru 	Monroe 085  |
+| `FILE3` | Montville 086 thru Sherman 127      |
+| `FILE4` | Simsbury 128 thru Woodstock 169     |
+
+### Codes
+
+There's also a file to provide code descriptions.
+
+```{r status_code, echo=FALSE}
+(status_code <- tribble(
+  ~CD_STATUS_CODE, ~CD_STATUS,
+  "A", "Active",
+  "I", "Inactive",
+  "O", "Off"
+))
+```
+
+```{r reason_code, echo=FALSE}
+(reason_code <- tribble(
+  ~CD_OFF_REASON, ~CD_OFF_DESC,
+  "F", "Felon",
+  "D", "Death",
+  "C", "Move Out Of State",
+  "V", "Voter Cancel",
+  "M", "DMV",
+  "R", "Notice-No Reply",
+  "U", "Duplicate",
+  "O", "Canvass - Moved Out",
+  "T", "CVR Returned by Voter",
+  "E", "ED-683 Return by Voter",
+  "B", "Inactive 4 Yrs",
+  "I", "Canvass - Inactive to Off"
+))
+```
+
+```{r spec_code, echo=FALSE}
+(spec_code <- tribble(
+  ~CD_SPEC_CODE, ~CD_SPEC_STATUS,
+  "A", "None –may be used for non displayable addresses",
+  "M", "MILITARY",
+  "I", "INSTITUTION",
+  "O", "OVERSEAS",
+  "X", "OTHER"
+))
+```
+
+```{r elect_code, echo=FALSE}
+(elect_code <- tribble(
+  ~ELECT_TYPE_CODe, ~ELECT_TYPE_DESC,
+  "S", "SPECIAL",
+  "P", "PRIMARY",
+  "R", "REFERENDUM",
+  "E", "GENERAL ELECTION",
+  "D", "DELEGATE CAUCAS",
+  "T", "TOWN COMMITTEE PRIMARY"
+))
+```
+
+```{r absent_flag, echo=FALSE}
+(absent_flag <- tribble(
+  ~ABSENTEE_FLAG, ~ABSENTEE_DESC,
+  "Y", "VOTING USING ABSENTEE BALLOT",
+  "N", "VOTING IN PERSON"
+))
+```
+
+### Towns
+
+The `town.txt` file contains the town names and corresponding numeric codes.
+
+```{r town_codes, echo=FALSE}
+town_codes <- read_lines(str_subset(raw_info$path, "town"))
+(town_codes <- town_codes %>% 
+  str_subset(",") %>% 
+  str_replace("\\s+,\\s+", "\t") %>% 
+  str_remove("\\s+,$") %>% 
+  read_tsv(
+    col_names = c("ID_TOWN", "NM_NAME"),
+    col_types = cols(
+      .default = col_character()
+    )
+  ))
+```
+
+### Columns
+
+The `elctext.txt` file contains a layout key for the voter files.
+
+> THIS FILE REPRESENTS THE RECORD LAYOUT FOR THE FOUR 4 FILE.  
+> "PIC" IS THE LENGTH OF EACH FIELD.  
+> "COMM#" IS A COMMA USED TO DELIMIT EACH FIELD. THIS WILL HELP IN CREATE AN
+EXCEL SPREADSHEET.
+
+```{r raw_cols, echo=FALSE}
+raw_cols <- read_lines(path(raw_dir, "elctext.txt"))[9:94]
+raw_cols <- raw_cols %>% 
+  str_subset("COMM\\d+", negate = TRUE) %>% 
+  read_fwf(
+    col_positions = fwf_cols(
+      column = c(13, 33),
+      length = c(34, 46),
+      desc = c(47, NA)
+    )
+  ) %>% 
+  extract(
+    col = length,
+    into = "length",
+    regex = "PIC X\\((\\d+)\\)",
+    convert = TRUE
+  )
+```
+
+The first 43 columns have unique descriptions.
+
+```{r reg_cols}
+raw_cols$column <- raw_cols$column %>% 
+  make_clean_names(case = "snake") %>% 
+  str_remove("ws_") %>% 
+  str_remove("vtr_")
+
+raw_cols %>% 
+  mutate(across(column, md_code)) %>% 
+  mutate(across(desc, str_to_sentence)) %>% 
+  kable()
+```
+
+The last 60 columns are the same 3 columns repeated _up to_ 20 times. Each
+group of 3 is the date of an election, the type of election, and whether or not
+the voter voted absentee. The columns groups are ordered with the most recent
+election to the first election in which that voter participated.
+
+We need to create column names and lengths for these 60 new columns. We can add
+these to the descriptions of the other columns.
+
+```{r all_cols}
+raw_cols <- bind_rows(
+  raw_cols,
+  tibble(
+    column = paste(
+      rep(c("date", "type", "abstee"), 20),
+      rep(x = 1:20, each = 3), sep = "_elect"
+    ),
+    length = rep(c(10, 1, 1), length.out = length(column)),
+    desc = ""
+  )
+)
+```
+
+## Read
+
+Each file is both comma separated _and_ fixed width. Fixed width files are more
+complicated to read but can be read faster and more safely as each column is at
+the same location for every row. This makes it worth going through the effort to
+read the file as fixed width and _ignore_ the commas.
+
+To build the column position specification needed by `readr::read_fwf()`, we
+can use the column lengths provided in the `elctext.txt` file. We have to 
+shift the lengths of each column to account for the commas between them.
+
+```{r col_positions}
+col_length <- rep(list(c(NA, NA)), nrow(raw_cols))
+for (i in seq_along(raw_cols$length)) {
+  if (i == 1) {
+    # col starting position
+    col_length[[i]][1] <- 0
+  } else {
+    col_length[[i]][1] <- col_length[[i - 1]][2] + 1
+  }
+  # col ending position
+  col_length[[i]][2] <- col_length[[i]][1] + raw_cols$length[i]
+}
+```
+
+We can then separate the start and end positions of each column.
+
+```{r col_vector}
+col_start <- vapply(col_length, `[[`, double(1), 1) + 1
+col_end   <- vapply(col_length, `[[`, double(1), 2)
+```
+
+These numbers can be converted to the data frame expected by a fixed width file.
+
+```{r col_fwf}
+raw_fwf <- fwf_positions(
+  start = col_start,
+  end = col_end,
+  col_names = raw_cols$column
+)
+```
+
+```{r echo=FALSE}
+print(raw_fwf)
+```
+
+Each voter file is a compressed archive. We can extract them to a temporary
+directory to facilitate the file reading.
+
+```{r raw_unzip}
+raw_paths <- str_subset(raw_info$path, "ZIP$")
+tmp_paths <- character()
+for (i in seq_along(raw_paths)) {
+  tmp <- unzip(raw_paths[i], exdir = tempdir(), junkpaths = TRUE)
+  tmp_paths <- append(tmp_paths, tmp)
+}
+```
+
+Then, all the raw temporary files can be read at once into a single data frame.
+
+```{r raw_read}
+ctv <- vroom_fwf(
+  file = tmp_paths,
+  col_positions = raw_fwf,
+  col_types = cols(
+    .default = col_character(),
+    dt_birth = col_date_usa(),
+    dt_accept = col_date_usa()
+  )
+)
+```
+
+```{r raw_count}
+comma(nrow(ctv))
+```
+
+### Old
+
+The same Connecticut voter registration data was previously requested in the
+summer of 2019, similarly processed, and uploaded to the IRW server.
+
+```{r old_date}
+old_head <- head_object("csv/ct_voters.csv", "publicaccountability")
+attr(old_head, "last-modified")
+```
+
+We can downloaded that old file locally.
+
+```{r old_path}
+old_file <- path(raw_dir, "ct_voters_old.csv")
+```
+
+```{r old_save}
+if (!file_exists(old_file)) {
+  save_object(
+    object = "csv/ct_voters.csv",
+    bucket = "publicaccountability",
+    file = old_file,
+    show_progress = TRUE
+  )
+}
+```
+
+It can then be read into a data frame like the newer data.
+
+```{r old_read}
+cto <- vroom(
+  file = old_file,
+  delim = ",",
+  col_select = 1:103,
+  skip = 1,
+  col_names = raw_cols$column,
+  col_types = cols(
+    .default = col_character(),
+    dt_birth = col_date_usa(),
+    dt_accept = col_date_usa()
+  )
+)
+```
+
+```{r old_count}
+comma(nrow(cto))
+max(cto$dt_accept, na.rm = TRUE)
+```
+
+### Join
+
+We want the most comprehensive voter roll possible, so we will keep any voters
+found in the older data but _not_ the newer data. We can use the unique
+`id_voter` column to filter duplicates out.
+
+```{r old_bind}
+cto <- filter(cto, id_voter %out% ctv$id_voter)
+cto$cd_status <- "I"
+ctv <- ctv %>% 
+  bind_rows(cto, .id = "source_file") %>% 
+  arrange(id_voter) %>% 
+  relocate(source_file, .after = dt_accept)
+```
+
+```{r bind_count}
+comma(nrow(ctv))
+```
+
+### Trim
+
+I am going to remove all but the most recent election and convert the voter
+history in a more readable format.
+
+```{r raw_trim}
+vote_hist <- select(ctv, id_voter, 45:103)
+ctv <- select(
+  .data = ctv, 1:44,
+  dt_last = date_elect1,
+  cd_last = type_elect1,
+  abstee_last = abstee_elect1
+)
+```
+
+```{r hist_file}
+hist_file <- path(dirname(raw_dir), "voter_history.tsv.xz")
+```
+
+Instead of 60 columns in groups of 3 per voter, we can create 20 rows of 3
+columns, removing any empty rows in which they did not vote.
+
+```{r hist_pivot}
+if (!file_exists(hist_file)) {
+  vote_hist <- pivot_longer(
+    data = vote_hist,
+    cols = !id_voter,
+    names_to = c(".value", "elect"),
+    names_sep = "_",
+    values_drop_na = TRUE
+  )
+}
+```
+
+```{r hist_read}
+if (!file_exists(hist_file)) {
+  vote_hist <- mutate(
+    .data = vote_hist,
+    elect = as.integer(str_remove_all(elect, "\\D")),
+    date = mdy(date),
+    abstee = (abstee == "Y")
+  )
+}
+```
+
+This separate voter file can be written and compressed.
+
+```{r hist_write}
+if (!file_exists(hist_file)) {
+  vroom_write(vote_hist, xzfile(hist_file))
+}
+```
+
+```{r hist_size}
+file_size(hist_file)
+```
+
+```{r hist_rm, echo=FALSE}
+rm(vote_hist); flush_memory()
+```
+
+## Explore
+
+There are `r scales::comma(nrow(ctv))` rows of `r ncol(ctv)` columns. Each row
+is a single voter registered in Connecticut.
+
+```{r glimpse}
+glimpse(ctv)
+tail(ctv)
+```
+
+### Missing
+
+Columns vary in their degree of missing values.
+
+```{r na_count}
+col_stats(ctv, count_na)
+```
+
+We can flag any record missing a key variable needed to identify a transaction.
+
+```{r na_flag}
+key_vars <- c("nm_last", "dt_birth", "dt_accept")
+ctv <- flag_na(ctv, all_of(key_vars))
+sum(ctv$na_flag)
+```
+
+```{r na_view}
+ctv %>% 
+  filter(na_flag) %>% 
+  select(all_of(key_vars))
+```
+
+All these records are missing a voter birth date.
+
+```{r na_recount}
+ctv %>% 
+  filter(na_flag) %>% 
+  select(all_of(key_vars)) %>% 
+  col_stats(count_na)
+```
+
+### Duplicates
+
+We can also flag any record completely duplicated across every column.
+
+```{r dupe_file}
+dupe_file <- here("ct", "voters", "dupes.csv.xz")
+```
+
+```{r dupe_write}
+if (!file_exists(dupe_file)) {
+  file_create(dupe_file)
+  cts <- ctv %>% 
+    select(-id_voter) %>% 
+    group_split(town_id)
+  split_id <- split(ctv$id_voter, ctv$town_id)
+  pb <- txtProgressBar(max = length(cts), style = 3)
+  for (i in seq_along(cts)) {
+    d1 <- duplicated(cts[[i]], fromLast = FALSE)
+    if (any(d1)) {
+      d2 <- duplicated(cts[[i]], fromLast = TRUE)
+      dupes <- tibble(id_voter = split_id[[i]], dupe_flag = d1 | d2)
+      dupes <- filter(dupes, dupe_flag == TRUE)
+      vroom_write(dupes, xzfile(dupe_file), append = TRUE)
+      rm(d2, dupes)
+    }
+    rm(d1)
+    flush_memory(1)
+    setTxtProgressBar(pb, i)
+  }
+  rm(cts)
+}
+```
+
+```{r dupe_read}
+file_size(dupe_file)
+dupes <- read_tsv(
+  file = xzfile(dupe_file),
+  col_names = c("id_voter", "dupe_flag"),
+  col_types = cols(
+    id_voter = col_character(),
+    dupe_flag = col_logical()
+  )
+)
+dupes <- distinct(dupes)
+```
+
+```{r dupe_join}
+nrow(ctv)
+ctv <- left_join(ctv, dupes, by = "id_voter")
+ctv <- mutate(ctv, dupe_flag = !is.na(dupe_flag))
+sum(ctv$dupe_flag)
+```
+
+We can see that, despite unique IDs, there are duplicate voters.
+
+```{r dupe_view}
+ctv %>% 
+  filter(dupe_flag) %>% 
+  select(id_voter, all_of(key_vars), town_name) %>% 
+  arrange(nm_last)
+```
+
+### Categorical
+
+```{r distinct_count}
+col_stats(ctv, n_distinct)
+```
+
+```{r distinct_plots, echo=FALSE, fig.height=3}
+explore_plot(ctv, cd_status)
+explore_plot(ctv, cd_spec_status)
+explore_plot(ctv, cd_off_reason)
+explore_plot(ctv, dist)
+explore_plot(ctv, prec)
+explore_plot(ctv, congress)
+explore_plot(ctv, cd_party)
+explore_plot(ctv, cd_gender)
+explore_plot(ctv, abstee_last)
+```
+
+### Dates
+
+It looks like January 1st, 1800 is the default year for voters missing a birth
+date. We can remove these values.
+
+```{r date_count}
+count(ctv, dt_accept, sort = TRUE)
+ctv$dt_accept[ctv$dt_accept == "1800-01-01"] <- NA
+```
+
+We can add the year registered from `dt_accept` with `lubridate::year()`.
+
+```{r date_year}
+ctv <- mutate(
+  .data = ctv, 
+  yr_accept = year(dt_accept),
+  yr_birth = year(dt_birth)
+)
+```
+
+```{r date_range}
+min(ctv$dt_accept, na.rm = TRUE)
+max(ctv$dt_accept, na.rm = TRUE)
+```
+
+```{r bar_year, echo=FALSE}
+ctv %>% 
+  filter(!is.na(yr_accept)) %>% 
+  count(yr_accept) %>% 
+  mutate(even = is_even(yr_accept)) %>% 
+  ggplot(aes(x = yr_accept, y = n)) +
+  geom_col(aes(fill = even)) + 
+  scale_fill_brewer(palette = "Dark2") +
+  scale_y_continuous(labels = comma) +
+  scale_x_continuous(breaks = seq(1950, 2020, by = 10)) +
+  coord_cartesian(xlim = c(1950, 2020)) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "Connecticut Voters by Registered Year",
+    caption = "Source: CT SOS",
+    fill = "Election Year",
+    x = "Year Made",
+    y = "Count"
+  )
+```
+
+```{r bar_birth_year, echo=FALSE}
+ctv %>% 
+  filter(!is.na(yr_birth)) %>% 
+  ggplot(aes(x = yr_birth)) +
+  geom_histogram(binwidth = 5, fill = dark2["purple"]) +
+  scale_y_continuous(labels = comma) +
+  scale_x_continuous(breaks = seq(1900, 2005, by = 10)) +
+  coord_cartesian(xlim = c(1900, 2005)) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "Connecticut Voters by Birth Year",
+    caption = "Source: CT SOS",
+    x = "Year Made",
+    y = "Count"
+  )
+```
+
+```{r bar_reg_year, echo=FALSE}
+ctv %>% 
+  filter(!is.na(yr_birth)) %>% 
+  count(yr_birth) %>% 
+  ggplot(aes(x = yr_birth, y = n)) +
+  geom_col() + 
+  scale_y_continuous(labels = comma) +
+  scale_x_continuous(breaks = seq(1900, 2005, by = 10)) +
+  coord_cartesian(xlim = c(1900, 2005)) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "Connecticut Voters by Birth Year",
+    caption = "Source: CT SOS",
+    x = "Year Made",
+    y = "Count"
+  )
+```
+
+## Wrangle
+
+To improve the searchability of the database, we will perform some consistent,
+confident string normalization. For geographic variables like city names and
+ZIP codes, the corresponding `campfin::normal_*()` functions are tailor made to 
+facilitate this process.
+
+### Address
+
+For the street `addresss` variable, the `campfin::normal_address()` function
+will force consistence case, remove punctuation, and abbreviate official 
+USPS suffixes.
+
+```{r address_norm}
+addr_norm_full <- ctv %>% 
+  select(ad_num, nm_street, ad_unit) %>% 
+  distinct() %>% 
+  unite(
+    col = ad_full,
+    everything(),
+    sep = " ",
+    remove = FALSE,
+    na.rm = TRUE
+  ) %>% 
+  mutate(
+    ad_norm = normal_address(
+      address = ad_full,
+      abbs = usps_street,
+      na_rep = TRUE
+    )
+  ) %>% 
+  select(-ad_full)
+```
+
+```{r address_join}
+ctv <- left_join(ctv, addr_norm_full)
+```
+
+```{r address_view}
+ctv %>% 
+  sample_n(10) %>% 
+  select(ad_num, nm_street, ad_unit, ad_norm)
+```
+
+### ZIP
+
+The data has separate `zip5` and `zip4` columns, so we only need to remove a
+handful of invalid "00000" ZIP codes to normalize the data.
+
+```{r zip_norm}
+ctv <- mutate(ctv, zip_norm = na_if(zip5, "00000"))
+```
+
+```{r zip_progress}
+progress_table(
+  ctv$zip5,
+  ctv$zip_norm,
+  compare = valid_zip
+)
+```
+
+### State
+
+The `st` variable does not need to be normalized.
+
+```{r state_check}
+prop_in(ctv$st, valid_state)
+```
+
+### City
+
+Similarly, the `town_name` column only needs to be converted to uppercase. 
+
+```{r town_check}
+ctv <- mutate(ctv, town_norm = str_to_upper(town_name))
+prop_in(ctv$town_norm, valid_city)
+```
+
+## Conclude
+
+Before exporting, we can remove the intermediary normalization columns and
+rename all added variables with the `_clean` suffix.
+
+```{r clean_select}
+ctv <- ctv %>% 
+  rename_all(~str_replace(., "_norm", "_clean")) %>% 
+  relocate(town_clean, .after = ad_clean)
+```
+
+```{r clean_glimpse}
+glimpse(sample_n(ctv, 50))
+```
+
+1. There are `r comma(nrow(ctv))` records in the database.
+1. There are `r comma(sum(ctv$dupe_flag))` duplicate records in the database.
+1. The range and distribution of `amount` and `date` seem reasonable.
+1. There are `r comma(sum(ctv$na_flag))` records missing key variables.
+1. Consistency in geographic data has been improved with `campfin::normal_*()`.
+1. The 4-digit `year` variable has been created with `lubridate::year()`.
+
+## Export
+
+Now the file can be saved on disk for upload to the Accountability server.
+
+```{r clean_dir}
+clean_dir <- dir_create(here("ct", "voters", "data", "clean"))
+clean_path <- path(clean_dir, "ct_voters_clean.csv")
+vroom_write(ctv, clean_path, delim = ",", na = "", progress = TRUE)
+(clean_size <- file_size(clean_path))
+file_encoding(clean_path) %>% 
+  mutate(across(path, path.abbrev))
+```
+
+## Upload
+
+We can use the `aws.s3::put_object()` to upload the text file to the IRW server.
+
+```{r aws_upload, eval=FALSE}
+aws_path <- path("csv", basename(clean_path))
+if (!object_exists(aws_path, "publicaccountability")) {
+  put_object(
+    file = clean_path,
+    object = aws_path, 
+    bucket = "publicaccountability",
+    acl = "public-read",
+    show_progress = TRUE,
+    multipart = TRUE
+  )
+}
+aws_head <- head_object(aws_path, "publicaccountability")
+(aws_size <- as_fs_bytes(attr(aws_head, "content-length")))
+unname(aws_size == clean_size)
+```
+
+## Dictionary
+
+The following table describes the variables in our final exported file:
+
+```{r dict_make, echo=FALSE}
+raw_cols <- filter(raw_cols, desc != "")
+new_cols <- tibble(
+  column = names(ctv)[44:54],
+  length = NA,
+  desc = c(
+    "Source file (new, old)",
+    "Date of last election",
+    "Type of last election",
+    "Voted absentee last election",
+    "Flag indicating missing name",
+    "Flag indicating duplicate row",
+    "Year voter registered",
+    "Year voter born",
+    "Full normalized address",
+    "Uppercase town name",
+    "Normalized ZIP code"
+  )
+)
+```
+
+```{r dict_bind, echo=FALSE}
+all_cols <- bind_rows(raw_cols, new_cols)
+all_cols$length <- as.character(all_cols$length)
+all_cols$length[is.na(all_cols$length)] <- ""
+all_cols <- add_column(all_cols, type = map_chr(ctv, typeof), .before = "desc")
+all_cols <- mutate(all_cols, across(column, md_code))
+```
+
+```{r dict_length, echo=FALSE}
+max_char <- function(x) {
+  x <- iconv(as.character(x), to = "ASCII", sub = "")
+  max(nchar(x), na.rm = TRUE)
+}
+
+all_cols$length[44:54] <- vapply(
+  X = ctv[, 44:54],
+  FUN = max_char,
+  FUN.VALUE = double(1)
+)
+```
+
+```{r dict_md, echo=FALSE}
+(dict_md <- kable(
+  x = all_cols,
+  format = "markdown",
+  col.names = c("Column", "Length", "Type", "Definition")
+))
+```
