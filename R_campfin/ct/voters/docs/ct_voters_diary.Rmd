@@ -860,6 +860,20 @@ file_encoding(clean_path) %>%
   mutate(across(path, path.abbrev))
 ```
 
+```{r clean_iconv}
+tmp <- file_temp(ext = "csv")
+system2(
+  command = "iconv",
+  args = c("-f ASCII", "-t ASCII//IGNORE", paste("-o", tmp), clean_path
+  )
+)
+file_size(clean_path) - file_size(tmp)
+bad_lines <- suppressMessages(tools::showNonASCIIfile(tmp))
+if (length(bad_lines) == 0) {
+  file_move(tmp, clean_path)
+}
+```
+
 ## Upload
 
 We can use the `aws.s3::put_object()` to upload the text file to the IRW server.
