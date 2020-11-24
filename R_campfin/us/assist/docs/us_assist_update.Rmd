@@ -167,7 +167,7 @@ We first need to construct both the URLs and local paths to the archive files.
 ```{r full_path}
 zip_dir <- dir_create(here("us", "assist", "data", "zip"))
 base_url <- "https://files.usaspending.gov/award_data_archive/"
-fin_files <- "FY2020_All_Assistance_Full_20200913.zip"
+fin_files <- "FY2020_All_Assistance_Full_20201008.zip"
 fin_urls <- str_c(base_url, fin_files)
 fin_zips <- path(zip_dir, fin_files)
 ```
@@ -191,7 +191,7 @@ whether a record has been modified (C), deleted (D), or added (blank). To
 download data prior to FY 2008, visit our Custom Award Data page.
 
 ```{r delta_path}
-delta_file <- "FY(All)_All_Assistance_Delta_20200913.zip"
+delta_file <- "FY(All)_All_Assistance_Delta_20201008.zip"
 delta_url <- str_c(base_url, delta_file)
 delta_zip <- path(zip_dir, delta_file)
 ```
@@ -268,6 +268,7 @@ dict <- read_excel(
   path = dict_file, 
   range = "A2:L414",
   na = "N/A",
+  sheet = "Public",
   .name_repair = make_clean_names
 )
 
@@ -417,7 +418,7 @@ for (f in c(fin_paths, delta_paths)) {
   write_lines(f, prog_path, append = TRUE) # save the file as line
   # reset for next
   rm(usc, check) 
-  flush_memory(n = 100)
+  flush_memory(n = 10)
   p <- paste(match(f, fin_paths), length(fin_paths), sep = "/")
   message(paste(n, "writing done:", p, file_size(f)))
   # beepr::beep("fanfare")
@@ -512,9 +513,8 @@ all_checks %>%
 ## Upload
 
 ```{r}
-s3 <- get_bucket_df(bucket = "publicaccountability")
+s3 <- get_bucket_df(bucket = "publicaccountability", prefix = "csv")
 s3 <- as_tibble(s3) %>% 
-  filter(str_starts(Key, "csv/")) %>% 
   transmute(
     path = as_fs_path(Key),
     size = as_fs_bytes(Size),

@@ -1,7 +1,26 @@
 Maine Contributions
 ================
 Kiernan Nicholls
-2020-04-30 15:07:25
+2020-11-03 15:47:58
+
+  - [Project](#project)
+  - [Objectives](#objectives)
+  - [Packages](#packages)
+  - [Data](#data)
+  - [Download](#download)
+  - [Fix](#fix)
+  - [Read](#read)
+  - [Explore](#explore)
+  - [Missing](#missing)
+  - [Duplicates](#duplicates)
+  - [Categorical](#categorical)
+  - [Amounts](#amounts)
+  - [Dates](#dates)
+  - [Wrangle](#wrangle)
+  - [Conclude](#conclude)
+  - [Export](#export)
+  - [Upload](#upload)
+  - [Dictionary](#dictionary)
 
 <!-- Place comments regarding knitting here -->
 
@@ -55,6 +74,7 @@ pacman::p_load(
   magrittr, # pipe operators
   janitor, # dataframe clean
   batman, # parse logical
+  aws.s3, # aws cloud storage
   refinr, # cluster and merge
   scales, # format strings
   knitr, # knit documents
@@ -79,44 +99,85 @@ feature and should be run as such. The project also uses the dynamic
 ``` r
 # where does this document knit?
 here::here()
-#> [1] "/home/kiernan/Code/accountability_datacleaning/R_campfin"
+#> /home/kiernan/Code/tap/R_campfin
 ```
 
 ## Data
 
-## Import
+Data is from the [Maine Ethics
+Commission](https://www.maine.gov/ethics/home)’s [public data
+portal](https://mainecampaignfinance.com/#/index).
 
-### Download
+> The Maine Commission on Governmental Ethics and Election Practices is
+> an independent state agency that administers Maine’s campaign finance
+> laws, the Maine Clean Election Act, and the lobbyist disclosure law.
+> It also issues advisory opinions and conducts investigations regarding
+> legislative ethics.
+
+> This page provides comma separated value (CSV) downloads of
+> contribution, expenditure, and loan data for each reporting year in a
+> zipped file format. These files can be downloaded and imported into
+> other applications (Microsoft Excel, Microsoft Access, etc.)
+
+> This data is extracted from the Maine Ethics Commission database as it
+> existed as of 11/03/2020 02:25 PM
+
+The MEC also provides a [file layout
+key](https://mainecampaignfinance.com/Template/KeyDownloads/ME%20Contributions%20and%20Loans%20File%20Layout.pdf).
+
+## Download
+
+We download files from 2008 to 2020 using a `POST()` request with the
+file year.
 
 ``` r
 raw_dir <- dir_create(here("me", "contribs", "data", "raw"))
+raw_url <- "https://mainecampaignfinance.com/api/DataDownload/CSVDownloadReport"
+```
+
+``` r
+for (y in 2008:2020) {
+  year_path <- path(raw_dir, glue("CON_{y}.csv"))
+  if (!file_exists(year_path)) {
+    POST(
+      url = raw_url,
+      write_disk(year_path),
+      encode = "json",
+      body = list(
+        transactionType = "CON",
+        year = y
+      )
+    )
+  }
+}
+```
+
+``` r
 raw_info <- as_tibble(dir_info(raw_dir))
 sum(raw_info$size)
-#> 93.4M
+#> 99.5M
 raw_info %>% 
   select(path, size, modification_time) %>% 
   mutate(across(path, basename))
 #> # A tibble: 13 x 3
-#>    path                    size modification_time  
-#>    <chr>            <fs::bytes> <dttm>             
-#>  1 CON_2008.csv.csv       2.76M 2020-04-30 11:02:52
-#>  2 CON_2009.csv.csv       13.5M 2020-04-30 11:03:02
-#>  3 CON_2010.csv.csv       7.46M 2020-04-30 10:52:45
-#>  4 CON_2011.csv.csv       2.15M 2020-04-30 10:52:50
-#>  5 CON_2012.csv.csv          8M 2020-04-30 10:52:58
-#>  6 CON_2013.csv.csv       3.58M 2020-04-30 10:53:08
-#>  7 CON_2014.csv.csv      14.18M 2020-04-30 10:53:18
-#>  8 CON_2015.csv.csv       3.83M 2020-04-30 10:53:24
-#>  9 CON_2016.csv.csv       8.32M 2020-04-30 10:53:33
-#> 10 CON_2017.csv.csv       4.89M 2020-04-30 10:53:39
-#> 11 CON_2018.csv.csv       18.8M 2020-04-30 10:54:02
-#> 12 CON_2019.csv.csv       3.97M 2020-04-30 10:54:18
-#> 13 CON_2020.csv.csv       1.93M 2020-04-30 10:54:25
+#>    path                size modification_time  
+#>    <chr>        <fs::bytes> <dttm>             
+#>  1 CON_2008.csv       2.76M 2020-11-03 14:45:14
+#>  2 CON_2009.csv       13.5M 2020-11-03 14:45:19
+#>  3 CON_2010.csv       7.46M 2020-11-03 14:45:21
+#>  4 CON_2011.csv       2.15M 2020-11-03 14:45:22
+#>  5 CON_2012.csv          8M 2020-11-03 14:45:25
+#>  6 CON_2013.csv       3.58M 2020-11-03 14:45:26
+#>  7 CON_2014.csv      14.18M 2020-11-03 14:45:31
+#>  8 CON_2015.csv       3.83M 2020-11-03 14:45:33
+#>  9 CON_2016.csv       8.32M 2020-11-03 14:39:43
+#> 10 CON_2017.csv       4.89M 2020-11-03 14:39:45
+#> 11 CON_2018.csv       18.8M 2020-11-03 14:40:01
+#> 12 CON_2019.csv       3.98M 2020-11-03 14:40:05
+#> 13 CON_2020.csv        8.1M 2020-11-03 14:40:11
 ```
 
-### Read
-
-#### Fix
+## Fix
 
 ``` r
 fix_dir <- dir_create(path(dirname(raw_dir), "fix"))
@@ -166,39 +227,38 @@ for (f in raw_info$path[11:length(raw_info$path)]) {
 ``` r
 fix_info <- as_tibble(dir_info(fix_dir))
 sum(fix_info$size)
-#> 93M
+#> 99.2M
 fix_info %>% 
   select(path, size, modification_time) %>% 
   mutate(across(path, basename))
 #> # A tibble: 13 x 3
-#>    path                        size modification_time  
-#>    <chr>                <fs::bytes> <dttm>             
-#>  1 FIX_CON_2008.csv.csv       2.75M 2020-04-30 14:39:23
-#>  2 FIX_CON_2009.csv.csv      13.45M 2020-04-30 14:39:26
-#>  3 FIX_CON_2010.csv.csv       7.43M 2020-04-30 14:39:28
-#>  4 FIX_CON_2011.csv.csv       2.15M 2020-04-30 14:39:29
-#>  5 FIX_CON_2012.csv.csv       7.97M 2020-04-30 14:39:31
-#>  6 FIX_CON_2013.csv.csv       3.57M 2020-04-30 14:39:32
-#>  7 FIX_CON_2014.csv.csv      14.12M 2020-04-30 14:39:35
-#>  8 FIX_CON_2015.csv.csv       3.82M 2020-04-30 14:39:36
-#>  9 FIX_CON_2016.csv.csv       8.29M 2020-04-30 14:39:38
-#> 10 FIX_CON_2017.csv.csv       4.87M 2020-04-30 14:39:39
-#> 11 FIX_CON_2018.csv.csv      18.72M 2020-04-30 14:39:44
-#> 12 FIX_CON_2019.csv.csv       3.96M 2020-04-30 14:39:45
-#> 13 FIX_CON_2020.csv.csv       1.93M 2020-04-30 14:39:49
+#>    path                    size modification_time  
+#>    <chr>            <fs::bytes> <dttm>             
+#>  1 FIX_CON_2008.csv       2.75M 2020-11-03 15:34:56
+#>  2 FIX_CON_2009.csv      13.45M 2020-11-03 15:35:01
+#>  3 FIX_CON_2010.csv       7.43M 2020-11-03 15:35:03
+#>  4 FIX_CON_2011.csv       2.15M 2020-11-03 15:35:04
+#>  5 FIX_CON_2012.csv       7.97M 2020-11-03 15:35:06
+#>  6 FIX_CON_2013.csv       3.57M 2020-11-03 15:35:07
+#>  7 FIX_CON_2014.csv      14.12M 2020-11-03 15:35:12
+#>  8 FIX_CON_2015.csv       3.82M 2020-11-03 15:35:13
+#>  9 FIX_CON_2016.csv       8.29M 2020-11-03 15:35:16
+#> 10 FIX_CON_2017.csv       4.87M 2020-11-03 15:35:17
+#> 11 FIX_CON_2018.csv      18.72M 2020-11-03 15:35:23
+#> 12 FIX_CON_2019.csv       3.96M 2020-11-03 15:35:24
+#> 13 FIX_CON_2020.csv       8.07M 2020-11-03 15:35:29
 ```
 
-#### Compare
+## Read
 
 ``` r
-old_names <- read_names(path(raw_dir, "CON_2008.csv.csv"))
-new_names <- read_names(path(raw_dir, "CON_2019.csv.csv"))
+old_names <- read_names(path(raw_dir, "CON_2008.csv"))
+new_names <- read_names(path(raw_dir, "CON_2019.csv"))
 ```
 
 The files come in two structures. For files from 2008 to 2017, there are
 `r length(me08)` variables. For the newer files, 2018 and 2019, there
-are `r length(me19)`
-    variables.
+are `r length(me19)` variables.
 
     #>  [1] "OrgID"                     "ReceiptAmount"             "ReceiptDate"              
     #>  [4] "LastName"                  "FirstName"                 "MI"                       
@@ -235,16 +295,11 @@ to_snake_case(old_names) %in% to_snake_case(new_names)
 #> [20] TRUE TRUE TRUE TRUE TRUE TRUE
 ```
 
-We can read each type of file into a separate data frame and then
-combine the two. Any of the new variables. There are 4 rows with a field
-containing double quoation marks. This causes `readr::read_delim()` to
-incorectly shift values right one column. We have no choice but to
-filter out these 4 records or manually edit the text file.
-
 ``` r
-me_old_format <- fix_info$path[1:10] %>% 
+me_old_format <-
   map(
-    read_delim,
+    .x = fix_info$path[1:10],
+    .f = read_delim,
     delim = ",",
     escape_backslash = FALSE,
     escape_double = FALSE,
@@ -262,7 +317,7 @@ me_old_format <- fix_info$path[1:10] %>%
   left_join(
     tibble(
       id = as.character(1:10), 
-      file = basename(fix_info$path[1:10])
+      file = basename(raw_info$path[1:10])
     )
   ) %>% 
   select(-id)
@@ -274,9 +329,10 @@ write_lines(x[-344], fix_info$path[13])
 ```
 
 ``` r
-me_new_format <- fix_info$path[11:13] %>% 
+me_new_format <-
   map(
-    read_delim,
+    .x = fix_info$path[11:13],
+    .f = read_delim,
     delim = ",",
     escape_backslash = FALSE,
     escape_double = TRUE,
@@ -294,7 +350,7 @@ me_new_format <- fix_info$path[11:13] %>%
   left_join(
     tibble(
       id = as.character(1:3), 
-      file = basename(fix_info$path[11:13])
+      file = basename(raw_info$path[11:13])
     )
   ) %>% 
   select(-id)
@@ -317,15 +373,15 @@ count(mec, emp_info_req)
 #>   emp_info_req      n
 #>   <lgl>         <int>
 #> 1 FALSE        273032
-#> 2 TRUE           5638
-#> 3 NA            94786
+#> 2 TRUE           6132
+#> 3 NA           117659
 ```
 
 ## Explore
 
 ``` r
 glimpse(mec)
-#> Rows: 373,456
+#> Rows: 396,823
 #> Columns: 32
 #> $ org_id             <chr> "3752", "3686", "3536", "3600", "3670", "3670", "3579", "3662", "3662…
 #> $ amount             <dbl> 1147.22, 463.45, 100.00, 35.00, 100.00, 100.00, 250.00, 100.00, 100.0…
@@ -352,7 +408,7 @@ glimpse(mec)
 #> $ occupation         <chr> NA, NA, "Nurse", NA, "lawyer", "lawyer", "Boiler Operator", "Self Emp…
 #> $ occupation_comment <chr> NA, NA, "Nurse", NA, "lawyer", "lawyer", "Boiler Operator", "Self Emp…
 #> $ emp_info_req       <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE,…
-#> $ file               <chr> "FIX_CON_2008.csv.csv", "FIX_CON_2008.csv.csv", "FIX_CON_2008.csv.csv…
+#> $ file               <chr> "CON_2008.csv", "CON_2008.csv", "CON_2008.csv", "CON_2008.csv", "CON_…
 #> $ legacy_id          <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
 #> $ office             <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
 #> $ district           <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
@@ -363,12 +419,12 @@ tail(mec)
 #> # A tibble: 6 x 32
 #>   org_id amount date       last  first middle suffix address1 address2 city  state zip   id   
 #>   <chr>   <dbl> <date>     <chr> <chr> <chr>  <chr>  <chr>    <chr>    <chr> <chr> <chr> <chr>
-#> 1 364016    100 2020-04-11 Umph… Robe… <NA>   <NA>   47 Seco… <NA>     Pres… ME    "047… 6934…
-#> 2 364016   1400 2020-03-24 Tran… <NA>  <NA>   <NA>   <NA>     <NA>     <NA>  ME     <NA> 6746…
-#> 3 364356     25 2020-03-30 Nade… Cathy r      <NA>   943 Chi… <NA>     Wins… ME    "049… 6896…
-#> 4 364511     25 2020-04-07 Flem… Anne  Chalm… <NA>   41 BEEC… <NA>     YARM… ME    "040… 6936…
-#> 5 370916     67 2020-03-16 Fect… Just… <NA>   <NA>   7 DAVIS… <NA>     AUGU… ME    "043… 6936…
-#> 6 370916    500 2020-04-20 Samp… Heidi <NA>   <NA>   465 Ken… <NA>     ALFR… ME    "040… 6936…
+#> 1 388390    149 2020-10-13 <NA>  <NA>  <NA>   <NA>   <NA>     <NA>     <NA>  ME    <NA>  7473…
+#> 2 388390    190 2020-09-10 <NA>  <NA>  <NA>   <NA>   <NA>     <NA>     <NA>  ME    <NA>  7472…
+#> 3 388390    220 2020-10-08 <NA>  <NA>  <NA>   <NA>   <NA>     <NA>     <NA>  ME    <NA>  7473…
+#> 4 388390    256 2020-09-14 <NA>  <NA>  <NA>   <NA>   <NA>     <NA>     <NA>  ME    <NA>  7472…
+#> 5 388390    289 2020-09-28 <NA>  <NA>  <NA>   <NA>   <NA>     <NA>     <NA>  ME    <NA>  7473…
+#> 6 388390    310 2020-09-16 <NA>  <NA>  <NA>   <NA>   <NA>     <NA>     <NA>  ME    <NA>  7473…
 #> # … with 19 more variables: filed_date <date>, type <chr>, source_type <chr>,
 #> #   committee_type <chr>, committee <chr>, candidate <chr>, amended <lgl>, description <chr>,
 #> #   employer <chr>, occupation <chr>, occupation_comment <chr>, emp_info_req <lgl>, file <chr>,
@@ -376,45 +432,45 @@ tail(mec)
 #> #   election_type <chr>
 ```
 
-### Missing
+## Missing
 
 ``` r
 mec_missing <- col_stats(mec, count_na)
 #> # A tibble: 32 x 4
 #>    col                class       n          p
 #>    <chr>              <chr>   <int>      <dbl>
-#>  1 org_id             <chr>       1 0.00000268
-#>  2 amount             <dbl>       1 0.00000268
+#>  1 org_id             <chr>       1 0.00000252
+#>  2 amount             <dbl>       1 0.00000252
 #>  3 date               <date>      0 0         
-#>  4 last               <chr>   20991 0.0562    
-#>  5 first              <chr>   79893 0.214     
-#>  6 middle             <chr>  334260 0.895     
-#>  7 suffix             <chr>  371740 0.995     
-#>  8 address1           <chr>   26180 0.0701    
-#>  9 address2           <chr>  366080 0.980     
-#> 10 city               <chr>   25980 0.0696    
-#> 11 state              <chr>   13214 0.0354    
-#> 12 zip                <chr>   26604 0.0712    
+#>  4 last               <chr>   21626 0.0545    
+#>  5 first              <chr>   84686 0.213     
+#>  6 middle             <chr>  355827 0.897     
+#>  7 suffix             <chr>  394979 0.995     
+#>  8 address1           <chr>   28780 0.0725    
+#>  9 address2           <chr>  388985 0.980     
+#> 10 city               <chr>   28580 0.0720    
+#> 11 state              <chr>   13214 0.0333    
+#> 12 zip                <chr>   29204 0.0736    
 #> 13 id                 <chr>       0 0         
-#> 14 filed_date         <date>     30 0.0000803 
+#> 14 filed_date         <date>     30 0.0000756 
 #> 15 type               <chr>       0 0         
-#> 16 source_type        <chr>    3225 0.00864   
-#> 17 committee_type     <chr>       1 0.00000268
-#> 18 committee          <chr>  120294 0.322     
-#> 19 candidate          <chr>  237819 0.637     
+#> 16 source_type        <chr>    3225 0.00813   
+#> 17 committee_type     <chr>       1 0.00000252
+#> 18 committee          <chr>  128659 0.324     
+#> 19 candidate          <chr>  251986 0.635     
 #> 20 amended            <lgl>       0 0         
-#> 21 description        <chr>  330379 0.885     
-#> 22 employer           <chr>   93872 0.251     
-#> 23 occupation         <chr>   86904 0.233     
-#> 24 occupation_comment <chr>  157728 0.422     
-#> 25 emp_info_req       <lgl>   94786 0.254     
+#> 21 description        <chr>  346543 0.873     
+#> 22 employer           <chr>   99427 0.251     
+#> 23 occupation         <chr>   92140 0.232     
+#> 24 occupation_comment <chr>  170528 0.430     
+#> 25 emp_info_req       <lgl>  117659 0.297     
 #> 26 file               <chr>       0 0         
-#> 27 legacy_id          <chr>  277406 0.743     
-#> 28 office             <chr>  373357 1.00      
-#> 29 district           <chr>  373360 1.00      
-#> 30 report             <chr>  277482 0.743     
-#> 31 forgiven_loan      <chr>  373434 1.00      
-#> 32 election_type      <chr>  326825 0.875
+#> 27 legacy_id          <chr>  277406 0.699     
+#> 28 office             <chr>  396675 1.00      
+#> 29 district           <chr>  396679 1.00      
+#> 30 report             <chr>  277679 0.700     
+#> 31 forgiven_loan      <chr>  396800 1.00      
+#> 32 election_type      <chr>  338066 0.852
 ```
 
 Recipients are divided into committees and candidates. To better flag
@@ -432,19 +488,55 @@ mec <- mec %>%
     na.rm = TRUE,
     remove = FALSE
   ) %>% 
-  mutate(across(is.character, na_if, ""))
+  relocate(contributor, recipient, .after = last_col()) %>% 
+  mutate(across(contributor, na_if, ""))
 ```
 
-After uniting and coalescing the contributor and recipient columns, only
-0 records are missing a name, date, or ammount.
+After uniting and coalescing the contributor and recipient columns, 0
+records are missing a name, date, or amount.
 
 ``` r
-mec <- mec %>% flag_na(date, contributor, amount, recipient)
-sum(mec$na_flag)
-#> [1] 20779
+key_vars <- c("date", "contributor", "amount", "recipient")
+mec <- flag_na(mec, all_of(key_vars))
+percent(mean(mec$na_flag), 0.1)
+#> [1] "5.4%"
 ```
 
-### Duplicates
+``` r
+mec %>% 
+  filter(na_flag) %>% 
+  select(all_of(key_vars))
+#> # A tibble: 21,414 x 4
+#>    date       contributor  amount recipient                           
+#>    <date>     <chr>         <dbl> <chr>                               
+#>  1 2008-01-01 <NA>        1147.   Representative Christopher R Barstow
+#>  2 2008-01-01 <NA>         463.   Representative Richard D Blanchard  
+#>  3 2008-01-01 <NA>          35    Representative Donald E Pilon       
+#>  4 2008-01-08 <NA>          15    Mr. Gary L Pelletier                
+#>  5 2008-01-08 <NA>           3.15 Mr. Gary L Pelletier                
+#>  6 2008-01-10 <NA>         400    Ms. Roberta B Beavers               
+#>  7 2008-01-11 <NA>        2020.   Mr. Bradley S Moulton               
+#>  8 2008-01-11 <NA>          25    Ms. Denise Anne Tepler              
+#>  9 2008-01-11 <NA>          50    Ms. Denise Anne Tepler              
+#> 10 2008-01-11 <NA>          10    Ms. Denise Anne Tepler              
+#> # … with 21,404 more rows
+```
+
+``` r
+mec %>% 
+  filter(na_flag) %>% 
+  select(all_of(key_vars)) %>% 
+  col_stats(count_na)
+#> # A tibble: 4 x 4
+#>   col         class      n         p
+#>   <chr>       <chr>  <int>     <dbl>
+#> 1 date        <date>     0 0        
+#> 2 contributor <chr>  21414 1        
+#> 3 amount      <dbl>      1 0.0000467
+#> 4 recipient   <chr>      1 0.0000467
+```
+
+## Duplicates
 
 If we ignore the supposedly (quasi) unique `id` variable, there are a
 number of otherwise completely duplicated records. We can flag them with
@@ -452,15 +544,16 @@ number of otherwise completely duplicated records. We can flag them with
 
 ``` r
 mec <- flag_dupes(mec, -id)
-percent(mean(mec$dupe_flag), 0.01)
-#> [1] "2.45%"
+percent(mean(mec$dupe_flag), 0.1)
+#> [1] "2.5%"
 ```
 
 ``` r
 mec %>% 
   filter(dupe_flag) %>% 
-  select(date, contributor, amount, recipient)
-#> # A tibble: 9,132 x 4
+  select(all_of(key_vars)) %>% 
+  arrange(date, contributor)
+#> # A tibble: 9,725 x 4
 #>    date       contributor amount recipient                
 #>    <date>     <chr>        <dbl> <chr>                    
 #>  1 2008-01-11 <NA>            25 Ms. Denise Anne Tepler   
@@ -473,52 +566,59 @@ mec %>%
 #>  8 2008-01-27 <NA>            25 Mr. Ronald J McAllister  
 #>  9 2008-01-27 <NA>            25 Mr. Ronald J McAllister  
 #> 10 2008-01-29 <NA>            50 Senator Philip L Bartlett
-#> # … with 9,122 more rows
+#> # … with 9,715 more rows
 ```
 
-### Categorical
+A lot of duplicate records are missing the `contributor` column.
+
+``` r
+percent(prop_na(mec$contributor[mec$dupe_flag]), 0.1)
+#> [1] "32.0%"
+```
+
+## Categorical
 
 ``` r
 col_stats(mec, n_distinct)
 #> # A tibble: 36 x 4
 #>    col                class       n          p
 #>    <chr>              <chr>   <int>      <dbl>
-#>  1 org_id             <chr>    3487 0.00934   
-#>  2 amount             <dbl>   15159 0.0406    
-#>  3 date               <date>   4426 0.0119    
-#>  4 contributor        <chr>  173647 0.465     
-#>  5 last               <chr>   97265 0.260     
-#>  6 first              <chr>   18706 0.0501    
-#>  7 middle             <chr>     645 0.00173   
-#>  8 suffix             <chr>      27 0.0000723 
-#>  9 address1           <chr>  153309 0.411     
-#> 10 address2           <chr>    2378 0.00637   
-#> 11 city               <chr>   13745 0.0368    
-#> 12 state              <chr>     117 0.000313  
-#> 13 zip                <chr>   29490 0.0790    
-#> 14 id                 <chr>  356092 0.954     
-#> 15 filed_date         <date>   2244 0.00601   
-#> 16 type               <chr>      12 0.0000321 
-#> 17 source_type        <chr>      33 0.0000884 
-#> 18 committee_type     <chr>       6 0.0000161 
-#> 19 committee          <chr>     773 0.00207   
-#> 20 candidate          <chr>    2924 0.00783   
-#> 21 amended            <lgl>       2 0.00000536
-#> 22 description        <chr>   15529 0.0416    
-#> 23 employer           <chr>   56017 0.150     
-#> 24 occupation         <chr>   15468 0.0414    
-#> 25 occupation_comment <chr>   25044 0.0671    
-#> 26 emp_info_req       <lgl>       3 0.00000803
-#> 27 file               <chr>      13 0.0000348 
-#> 28 legacy_id          <chr>     656 0.00176   
-#> 29 office             <chr>       7 0.0000187 
-#> 30 district           <chr>      49 0.000131  
-#> 31 report             <chr>      45 0.000120  
-#> 32 forgiven_loan      <chr>      14 0.0000375 
-#> 33 election_type      <chr>       3 0.00000803
-#> 34 recipient          <chr>    3648 0.00977   
-#> 35 na_flag            <lgl>       2 0.00000536
-#> 36 dupe_flag          <lgl>       2 0.00000536
+#>  1 org_id             <chr>    3811 0.00960   
+#>  2 amount             <dbl>   15888 0.0400    
+#>  3 date               <date>   4623 0.0117    
+#>  4 last               <chr>  101273 0.255     
+#>  5 first              <chr>   19218 0.0484    
+#>  6 middle             <chr>     729 0.00184   
+#>  7 suffix             <chr>      27 0.0000680 
+#>  8 address1           <chr>  158553 0.400     
+#>  9 address2           <chr>    2519 0.00635   
+#> 10 city               <chr>   14026 0.0353    
+#> 11 state              <chr>     117 0.000295  
+#> 12 zip                <chr>   29953 0.0755    
+#> 13 id                 <chr>  379459 0.956     
+#> 14 filed_date         <date>   2368 0.00597   
+#> 15 type               <chr>      12 0.0000302 
+#> 16 source_type        <chr>      33 0.0000832 
+#> 17 committee_type     <chr>       6 0.0000151 
+#> 18 committee          <chr>     807 0.00203   
+#> 19 candidate          <chr>    3177 0.00801   
+#> 20 amended            <lgl>       2 0.00000504
+#> 21 description        <chr>   17447 0.0440    
+#> 22 employer           <chr>   58004 0.146     
+#> 23 occupation         <chr>   15469 0.0390    
+#> 24 occupation_comment <chr>   25741 0.0649    
+#> 25 emp_info_req       <lgl>       3 0.00000756
+#> 26 file               <chr>      13 0.0000328 
+#> 27 legacy_id          <chr>     662 0.00167   
+#> 28 office             <chr>       9 0.0000227 
+#> 29 district           <chr>      65 0.000164  
+#> 30 report             <chr>      53 0.000134  
+#> 31 forgiven_loan      <chr>      15 0.0000378 
+#> 32 election_type      <chr>       3 0.00000756
+#> 33 contributor        <chr>  180482 0.455     
+#> 34 recipient          <chr>    3921 0.00988   
+#> 35 na_flag            <lgl>       2 0.00000504
+#> 36 dupe_flag          <lgl>       2 0.00000504
 ```
 
 ``` r
@@ -547,21 +647,19 @@ explore_plot(mec, election_type)
 
 ![](../plots/unnamed-chunk-2-4.png)<!-- -->
 
-### Continuous
-
-#### Amounts
+## Amounts
 
 ``` r
 summary(mec$amount)
-#>      Min.   1st Qu.    Median      Mean   3rd Qu.      Max.      NA's 
-#> -508237.3      25.0     100.0     824.4     245.7 2500000.0         1
+#>    Min. 1st Qu.  Median    Mean 3rd Qu.    Max.    NA's 
+#> -508237      25     100     855     230 3200000       1
 percent(mean(mec$amount <= 0, na.rm = TRUE), 0.01)
-#> [1] "0.96%"
+#> [1] "0.91%"
 ```
 
 ![](../plots/hist_amount-1.png)<!-- -->
 
-#### Dates
+## Dates
 
 We can add the calendar year from the `date` column with
 `lubridate::year()`.
@@ -578,7 +676,7 @@ min(mec$date)
 sum(mec$year < 2000)
 #> [1] 0
 max(mec$date)
-#> [1] "2020-04-22"
+#> [1] "2020-10-31"
 sum(mec$date > today())
 #> [1] 0
 ```
@@ -592,6 +690,11 @@ consistent, confident string normalization. For geographic variables
 like city names and ZIP codes, the corresponding `campfin::normal_*()`
 functions are tailor made to facilitate this process.
 
+``` r
+comma(nrow(mec))
+#> [1] "396,823"
+```
+
 ### Address
 
 For the street `addresss` variable, the `campfin::normal_address()`
@@ -599,7 +702,9 @@ function will force consistence case, remove punctuation, and abbreviate
 official USPS suffixes.
 
 ``` r
-mec <- mec %>% 
+norm_addr <- mec %>% 
+  count(address1, address2, sort = TRUE) %>% 
+  select(-n) %>% 
   unite(
     col = address_full,
     starts_with("address"),
@@ -614,27 +719,27 @@ mec <- mec %>%
       na_rep = TRUE
     )
   ) %>% 
-  select(-address_full)
+  select(-address_full) %>% 
+  distinct()
 ```
 
+    #> # A tibble: 159,855 x 3
+    #>    address1           address2 address_norm    
+    #>    <chr>              <chr>    <chr>           
+    #>  1 <NA>               <NA>     <NA>            
+    #>  2 19 Community Drive <NA>     19 COMMUNITY DR 
+    #>  3 19 COMMUNITY DRIVE <NA>     19 COMMUNITY DR 
+    #>  4 35 COMMUNITY DRIVE <NA>     35 COMMUNITY DR 
+    #>  5 .                  <NA>     <NA>            
+    #>  6 186 Ledgemere Road <NA>     186 LEDGEMERE RD
+    #>  7 P.O. Box 15277     <NA>     PO BOX 15277    
+    #>  8 35 Community Drive <NA>     35 COMMUNITY DR 
+    #>  9 70 Sewall Street   <NA>     70 SEWALL ST    
+    #> 10 101 WESTERN AVE    <NA>     101 WESTERN AVE 
+    #> # … with 159,845 more rows
+
 ``` r
-mec %>% 
-  select(contains("address")) %>% 
-  distinct() %>% 
-  sample_n(10)
-#> # A tibble: 10 x 3
-#>    address1               address2          address_norm                  
-#>    <chr>                  <chr>             <chr>                         
-#>  1 710 S PETERSON WAY     <NA>              710 S PETERSON WAY            
-#>  2 23 VILLA RD.           <NA>              23 VILLA RD                   
-#>  3 69 Lamoine Beach Rd    <NA>              69 LAMOINE BCH RD             
-#>  4 SEAPORT BANKING CENTER ONE HARBOR STREET SEAPORT BANKING CTR ONE HBR ST
-#>  5 91 WESTERN AVE         <NA>              91 WESTERN AVE                
-#>  6 113 Kings Hwy          <NA>              113 KINGS HWY                 
-#>  7 ROUTE 102              <NA>              RTE 102                       
-#>  8 766 Stillwater Ave     PO Box 920        766 STILLWATER AVE PO BOX 920 
-#>  9 8501 E TOURMALINE DR   <NA>              8501 E TOURMALINE DR          
-#> 10 14 Edwards St          <NA>              14 EDWARDS ST
+mec <- left_join(mec, norm_addr)
 ```
 
 ### ZIP
@@ -662,8 +767,8 @@ progress_table(
 #> # A tibble: 2 x 6
 #>   stage    prop_in n_distinct prop_na  n_out n_diff
 #>   <chr>      <dbl>      <dbl>   <dbl>  <dbl>  <dbl>
-#> 1 zip        0.624      29490  0.0712 130337  18667
-#> 2 zip_norm   0.993      12990  0.0730   2332    536
+#> 1 zip        0.589      29953  0.0736 151104  19130
+#> 2 zip_norm   0.993      13109  0.0753   2429    560
 ```
 
 ### State
@@ -690,8 +795,8 @@ mec %>%
 #> # A tibble: 35 x 3
 #>    state state_norm     n
 #>    <chr> <chr>      <int>
-#>  1 Me    ME            41
-#>  2 me    ME            21
+#>  1 Me    ME            48
+#>  2 me    ME            22
 #>  3 Ma    MA            17
 #>  4 Va    VA            10
 #>  5 Fl    FL             9
@@ -712,8 +817,8 @@ progress_table(
 #> # A tibble: 2 x 6
 #>   stage      prop_in n_distinct prop_na n_out n_diff
 #>   <chr>        <dbl>      <dbl>   <dbl> <dbl>  <dbl>
-#> 1 state        0.999        117  0.0354   452     58
-#> 2 state_norm   1             59  0.0362     0      1
+#> 1 state        0.999        117  0.0333   460     58
+#> 2 state_norm   1             59  0.0341     0      1
 ```
 
 ### City
@@ -728,7 +833,9 @@ case, removing punctuation, but *expanding* USPS abbreviations. We can
 also remove `invalid_city` values.
 
 ``` r
-mec <- mec %>% 
+norm_city <- mec %>% 
+  count(city, state_norm, zip_norm, sort = TRUE) %>% 
+  select(-n) %>% 
   mutate(
     city_norm = normal_city(
       city = city, 
@@ -737,7 +844,8 @@ mec <- mec %>%
       na = invalid_city,
       na_rep = TRUE
     )
-  )
+  ) %>% 
+  distinct()
 ```
 
 #### Swap
@@ -748,7 +856,7 @@ ZIP code. If the normalized value is either an abbreviation for or very
 similar to the expected value, we can confidently swap those two.
 
 ``` r
-mec <- mec %>% 
+norm_city <- norm_city %>% 
   rename(city_raw = city) %>% 
   left_join(
     y = zipcodes,
@@ -771,19 +879,20 @@ mec <- mec %>%
     -city_match,
     -match_dist,
     -match_abb
-  )
+  ) %>% 
+  rename(city = city_raw)
 ```
 
 #### Refine
 
-The \[OpenRefine\] algorithms can be used to group similar strings and
-replace the less common versions with their most common counterpart.
-This can greatly reduce inconsistency, but with low confidence; we will
-only keep any refined strings that have a valid city/state/zip
-combination.
+The [OpenRefine](https://openrefine.org/) algorithms can be used to
+group similar strings and replace the less common versions with their
+most common counterpart. This can greatly reduce inconsistency, but with
+low confidence; we will only keep any refined strings that have a valid
+city/state/zip combination.
 
 ``` r
-good_refine <- mec %>% 
+good_refine <- norm_city %>% 
   mutate(
     city_refine = city_swap %>% 
       key_collision_merge() %>% 
@@ -800,51 +909,61 @@ good_refine <- mec %>%
   )
 ```
 
-    #> [1] 126
-    #> # A tibble: 68 x 5
+    #> [1] 74
+    #> # A tibble: 67 x 5
     #>    state_norm zip_norm city_swap              city_refine       n
     #>    <chr>      <chr>    <chr>                  <chr>         <int>
-    #>  1 AP         96319    APO AP                 APO              12
-    #>  2 NY         11733    SETAUKET               EAST SETAUKET    11
-    #>  3 NY         11201    BROOKLYN NY            BROOKLYN          8
-    #>  4 ME         04928    CORRINA                CORINNA           6
-    #>  5 OH         45206    CINCINATTI             CINCINNATI        6
-    #>  6 ME         04046    KENNEBUNUNKPORT        KENNEBUNKPORT     5
-    #>  7 ME         04074    SCAROBOURGH            SCARBOROUGH       4
-    #>  8 MI         48640    MIDLAND MI             MIDLAND           3
-    #>  9 NY         11733    SETAUKET EAST SETAUKET EAST SETAUKET     3
-    #> 10 AZ         85027    PHONIEX                PHOENIX           2
-    #> # … with 58 more rows
+    #>  1 NY         11733    SETAUKET               EAST SETAUKET     3
+    #>  2 CA         94102    SAN FRANSICO           SAN FRANCISCO     2
+    #>  3 CA         94118    SAN FRANSICO           SAN FRANCISCO     2
+    #>  4 ME         04046    KENNEBUNUNKPORT        KENNEBUNKPORT     2
+    #>  5 MI         48640    MIDLAND MI             MIDLAND           2
+    #>  6 NY         10028    NEW YORK NY            NEW YORK          2
+    #>  7 AP         96319    APO AP                 APO               1
+    #>  8 AZ         85003    PHOENIXPHOENIX         PHOENIX           1
+    #>  9 AZ         85027    PHONIEX                PHOENIX           1
+    #> 10 CA         90027    LOS ANGELOS ANGELESLES LOS ANGELES       1
+    #> # … with 57 more rows
 
 Then we can join the refined values back to the database.
 
 ``` r
-mec <- mec %>% 
+norm_city <- norm_city %>% 
   left_join(good_refine) %>% 
-  mutate(city_refine = coalesce(city_refine, city_swap))
+  mutate(city_refine = coalesce(city_refine, city_swap)) %>% 
+  distinct()
 ```
 
 #### Progress
+
+``` r
+mec <- left_join(mec, norm_city)
+```
+
+``` r
+comma(nrow(mec))
+#> [1] "396,823"
+```
 
 ``` r
 many_city <- c(valid_city, extra_city)
 mec %>% 
   filter(city_refine %out% many_city) %>% 
   count(city_refine, state_norm, sort = TRUE)
-#> # A tibble: 1,034 x 3
+#> # A tibble: 1,085 x 3
 #>    city_refine         state_norm     n
 #>    <chr>               <chr>      <int>
-#>  1 <NA>                <NA>       13285
-#>  2 <NA>                ME         13059
-#>  3 ARROWSIC            ME           400
-#>  4 WEST BATH           ME           285
-#>  5 VEAZIE              ME           242
-#>  6 WESTPORT ISLAND     ME           147
-#>  7 CARRABASSETT VALLEY ME           106
-#>  8 ABBOTT PARK         IL            91
-#>  9 CHINA VILLAGE       ME            83
-#> 10 OTISFIELD           ME            80
-#> # … with 1,024 more rows
+#>  1 <NA>                ME         15675
+#>  2 <NA>                <NA>       13285
+#>  3 ARROWSIC            ME           451
+#>  4 WEST BATH           ME           298
+#>  5 VEAZIE              ME           268
+#>  6 WESTPORT ISLAND     ME           182
+#>  7 CARRABASSETT VALLEY ME           111
+#>  8 CHINA VILLAGE       ME            97
+#>  9 ABBOTT PARK         IL            93
+#> 10 BOWERBANK           ME            90
+#> # … with 1,075 more rows
 ```
 
 ``` r
@@ -853,10 +972,10 @@ many_city <- c(many_city, "ARROWSIC", "WEST BATH", "VEAZIE")
 
 | stage        | prop\_in | n\_distinct | prop\_na | n\_out | n\_diff |
 | :----------- | -------: | ----------: | -------: | -----: | ------: |
-| city\_raw)   |    0.967 |        9742 |    0.070 |  11451 |    3393 |
-| city\_norm   |    0.980 |        8837 |    0.071 |   7108 |    2433 |
-| city\_swap   |    0.991 |        7449 |    0.071 |   3071 |    1022 |
-| city\_refine |    0.991 |        7390 |    0.071 |   2953 |     966 |
+| city)        |    0.967 |        9921 |    0.072 |  12237 |    3534 |
+| city\_norm   |    0.981 |        8983 |    0.073 |   7027 |    2537 |
+| city\_swap   |    0.991 |        7539 |    0.073 |   3391 |    1071 |
+| city\_refine |    0.991 |        7481 |    0.073 |   3273 |    1016 |
 
 You can see how the percentage of valid values increased with each
 stage.
@@ -883,56 +1002,56 @@ mec <- mec %>%
 ```
 
 ``` r
-glimpse(sample_n(mec, 20))
-#> Rows: 20
+glimpse(sample_n(mec, 100))
+#> Rows: 100
 #> Columns: 41
-#> $ org_id             <chr> "4384", "4061", "2081", "3152", "6553", "351972", "3765", "5664", "86…
-#> $ amount             <dbl> 120, 100, 25, 10, 29, 100, 4144, 10, 15, 45020, 50, 50, 300, 100, 150…
-#> $ date               <date> 2010-04-16, 2008-03-29, 2019-09-05, 2016-05-21, 2014-01-01, 2019-03-…
-#> $ contributor        <chr> "Michael Nee", "Laura  Ragland", "THOMAS HARNETT", "JAMES J WACHTER",…
-#> $ last               <chr> "Nee", "Ragland", "HARNETT", "WACHTER", "RICHARDSON", "Jellison", NA,…
-#> $ first              <chr> "Michael", "Laura ", "THOMAS", "JAMES J", "TIMOTHY", "Linda", NA, NA,…
-#> $ middle             <chr> NA, NA, NA, NA, "J", NA, NA, NA, "R", NA, NA, NA, "M", NA, NA, NA, NA…
+#> $ org_id             <chr> "6023", "3152", "8012", "4402", "5668", "7941", "4392", "5620", "2081…
+#> $ amount             <dbl> 140, 15, 250, 500, 25, 250, 200, 200, 50, 750, 20, 100, 50, 120, 100,…
+#> $ date               <date> 2012-06-13, 2009-08-13, 2014-09-08, 2009-11-01, 2018-10-03, 2014-07-…
+#> $ last               <chr> NA, "MELINO (earmarked contribution for MAINE FREEDOM TO MARRY COALIT…
+#> $ first              <chr> NA, "JOSHUA", "JOSEPH", "Kevin", "Russell", "LUCIEN", NA, "CAROL", "G…
+#> $ middle             <chr> NA, NA, "M", "M", NA, NA, NA, "G", NA, "M", NA, NA, "E", NA, NA, NA, …
 #> $ suffix             <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
-#> $ address1           <chr> "194 Clinton Street", "6 Lake Ave", "52 MARSTON ROAD", "216 FURBEE DR…
-#> $ address2           <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "APT 5", NA, NA, NA, NA, NA, …
-#> $ city               <chr> "Portland", "Windham", "GARDINER", "MASON", "HALLOWELL", "hermon", NA…
-#> $ state              <chr> "ME", "ME", "ME", "OH", "ME", "ME", NA, "ME", "MA", "FL", "ME", "ME",…
-#> $ zip                <chr> "04103", "04062", "04345  ", "45040", "04347", "04402  ", NA, NA, "02…
-#> $ id                 <chr> "60181", "13483", "652608", "297656", "165058", "638281", "23913", "9…
-#> $ filed_date         <date> 2010-05-27, 2008-04-11, 2019-10-02, 2016-06-01, 2014-04-29, 2019-04-…
-#> $ type               <chr> "Monetary (Itemized)", "Monetary (Itemized)", "Monetary (Itemized)", …
-#> $ source_type        <chr> "Individual", "Individual", "Individual", "Individual", "Individual",…
-#> $ committee_type     <chr> "Candidate", "Candidate", "Political Action Committee", "Political Ac…
-#> $ committee          <chr> NA, NA, "ACTBLUE MAINE", "ACTBLUE MAINE", NA, NA, NA, NA, NA, "HORSER…
-#> $ candidate          <chr> "Mr. Bruce L Poliquin", "Mr. Michael Shaughnessy", NA, NA, "MICHAEL H…
+#> $ address1           <chr> NA, "16 TARRYCREST LANE", "242 CEDER STREET", "9 Whippoorwill Lane", …
+#> $ address2           <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
+#> $ city               <chr> NA, "ROCHESTER", "BANGOR", "Durham", "Waterville", "LEWISTON", "BAR H…
+#> $ state              <chr> "ME", "NY", "ME", "ME", "ME", "ME", "ME", "ME", "ME", "ME", "ME", "ME…
+#> $ zip                <chr> NA, "14606", "04401", "04222-5283", "04901  ", "04240", "04609", "041…
+#> $ id                 <chr> "90576", "30150", "203417", "54484", "587312", "172233", "148954", "2…
+#> $ filed_date         <date> 2012-08-17, 2009-10-07, 2014-10-06, 2010-01-19, 2018-10-26, 2014-07-…
+#> $ type               <chr> "Monetary (Unitemized)", "Monetary (Itemized)", "Monetary (Itemized)"…
+#> $ source_type        <chr> "Contributors Giving $50 or less", "Individual", "Individual", "Indiv…
+#> $ committee_type     <chr> "Candidate", "Political Action Committee", "Political Action Committe…
+#> $ committee          <chr> NA, "ActBlue Maine", "BANGOR LEADERSHIP PAC", NA, "Caron for Governor…
+#> $ candidate          <chr> "Mr. Boyd P Marley", NA, NA, "Mr. Matthew C Jacobson", "Alan Caron", …
 #> $ amended            <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE,…
-#> $ description        <chr> NA, NA, NA, NA, NA, "Check", NA, NA, NA, "CONTRIBUTION", "PAC DONATIO…
-#> $ employer           <chr> "SMMC", NA, "STATE OF MAINE", "NOT EMPLOYED", "DEPT. OF VETERANS AFFA…
-#> $ occupation         <chr> "Webmaster", "retired", "Other", "Other", "Other", "Retail Sales", NA…
-#> $ occupation_comment <chr> "Webmaster", "retired", "ATTORNEY", "NOT EMPLOYED", "PHYSICIAN", NA, …
-#> $ emp_info_req       <lgl> FALSE, FALSE, NA, FALSE, FALSE, NA, FALSE, FALSE, FALSE, FALSE, NA, F…
-#> $ file               <chr> "FIX_CON_2010.csv.csv", "FIX_CON_2008.csv.csv", "FIX_CON_2019.csv.csv…
-#> $ legacy_id          <chr> NA, NA, "3152", NA, NA, "0", NA, NA, NA, NA, "652", NA, "10067", NA, …
+#> $ description        <chr> "                ", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
+#> $ employer           <chr> NA, "NONE", "LAW OFFICE OF JOSEPH BALDACCI", "CMMC", "n/a", "SELF - C…
+#> $ occupation         <chr> NA, "NOT EMPLOYED", "Attorney/Legal", "Emergency Medicine Specialist"…
+#> $ occupation_comment <chr> NA, "NOT EMPLOYED", NA, "Emergency Medicine Specialist", NA, NA, NA, …
+#> $ emp_info_req       <lgl> FALSE, FALSE, FALSE, FALSE, TRUE, FALSE, FALSE, NA, NA, FALSE, NA, FA…
+#> $ file               <chr> "CON_2012.csv", "CON_2009.csv", "CON_2014.csv", "CON_2009.csv", "CON_…
+#> $ legacy_id          <chr> NA, NA, NA, NA, "10166", NA, NA, "10067", "3152", NA, "3152", NA, "10…
 #> $ office             <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
 #> $ district           <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
-#> $ report             <chr> NA, NA, "October Quarterly Report", NA, NA, "42-Day Post-General Repo…
+#> $ report             <chr> NA, NA, NA, NA, "11-DAY PRE-GENERAL REPORT", NA, NA, "11-DAY PRE-PRIM…
 #> $ forgiven_loan      <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
-#> $ election_type      <chr> NA, NA, NA, NA, NA, "General", NA, NA, NA, NA, "General", NA, "Primar…
-#> $ recipient          <chr> "Mr. Bruce L Poliquin", "Mr. Michael Shaughnessy", "ACTBLUE MAINE", "…
-#> $ na_flag            <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, TRUE, TRUE, FALSE, FALSE, F…
-#> $ dupe_flag          <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE,…
-#> $ year               <dbl> 2010, 2008, 2019, 2016, 2014, 2019, 2008, 2012, 2016, 2015, 2018, 201…
-#> $ address_clean      <chr> "194 CLINTON ST", "6 LK AVE", "52 MARSTON RD", "216 FURBEE DR E", "2 …
-#> $ zip_clean          <chr> "04103", "04062", "04345", "45040", "04347", "04402", NA, NA, "02043"…
-#> $ state_clean        <chr> "ME", "ME", "ME", "OH", "ME", "ME", NA, "ME", "MA", "FL", "ME", "ME",…
-#> $ city_clean         <chr> "PORTLAND", "WINDHAM", "GARDINER", "MASON", "HALLOWELL", "HERMON", NA…
+#> $ election_type      <chr> NA, NA, NA, NA, "General", NA, NA, "Primary", NA, NA, NA, NA, "Genera…
+#> $ contributor        <chr> NA, "JOSHUA MELINO (earmarked contribution for MAINE FREEDOM TO MARRY…
+#> $ recipient          <chr> "Mr. Boyd P Marley", "ActBlue Maine", "BANGOR LEADERSHIP PAC", "Mr. M…
+#> $ na_flag            <lgl> TRUE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, …
+#> $ dupe_flag          <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, TRUE, FALSE, FALSE, FALSE, …
+#> $ year               <dbl> 2012, 2009, 2014, 2009, 2018, 2014, 2010, 2018, 2018, 2013, 2019, 201…
+#> $ address_clean      <chr> NA, "16 TARRYCREST LN", "242 CEDER ST", "9 WHIPPOORWILL LN", "6 REDIN…
+#> $ zip_clean          <chr> NA, "14606", "04401", "04222", "04901", "04240", "04609", "04101", "0…
+#> $ state_clean        <chr> "ME", "NY", "ME", "ME", "ME", "ME", "ME", "ME", "ME", "ME", "ME", "ME…
+#> $ city_clean         <chr> NA, "ROCHESTER", "BANGOR", "DURHAM", "WATERVILLE", "LEWISTON", "BAR H…
 ```
 
-1.  There are 373,456 records in the database.
-2.  There are 9,132 duplicate records in the database.
+1.  There are 396,823 records in the database.
+2.  There are 9,725 duplicate records in the database.
 3.  The range and distribution of `amount` and `date` seem reasonable.
-4.  There are 20,779 records missing ….
+4.  There are 21,414 records missing ….
 5.  Consistency in geographic data has been improved with
     `campfin::normal_*()`.
 6.  The 4-digit `year` variable has been created with
@@ -944,29 +1063,38 @@ glimpse(sample_n(mec, 20))
 clean_dir <- dir_create(here("me", "contribs", "data", "clean"))
 clean_path <- path(clean_dir, "me_contribs_clean.csv")
 write_csv(mec, clean_path, na = "")
-file_size(clean_path)
-#> 124M
-guess_encoding(clean_path)
-#> # A tibble: 11 x 3
-#>    encoding   language confidence
-#>    <chr>      <chr>         <dbl>
-#>  1 ISO-8859-2 "ro"           0.44
-#>  2 ISO-8859-1 "fr"           0.41
-#>  3 ISO-8859-9 "tr"           0.26
-#>  4 UTF-8      ""             0.15
-#>  5 UTF-16BE   ""             0.1 
-#>  6 UTF-16LE   ""             0.1 
-#>  7 Shift_JIS  "ja"           0.1 
-#>  8 GB18030    "zh"           0.1 
-#>  9 EUC-JP     "ja"           0.1 
-#> 10 EUC-KR     "ko"           0.1 
-#> 11 Big5       "zh"           0.1
+(clean_size <- file_size(clean_path))
+#> 129M
+file_encoding(clean_path) %>% 
+  mutate(across(path, path.abbrev))
+#> # A tibble: 1 x 3
+#>   path                                           mime            charset 
+#>   <chr>                                          <chr>           <chr>   
+#> 1 ~/me/contribs/data/clean/me_contribs_clean.csv application/csv us-ascii
 ```
 
+## Upload
+
+We can use the `aws.s3::put_object()` to upload the text file to the IRW
+server.
+
 ``` r
-enc <- system2("file", args = paste("-i", clean_path), stdout = TRUE)
-str_replace_all(enc, clean_path, basename)
-#> [1] "me_contribs_clean.csv: application/csv; charset=us-ascii"
+aws_path <- path("csv", basename(clean_path))
+if (!object_exists(aws_path, "publicaccountability")) {
+  put_object(
+    file = clean_path,
+    object = aws_path, 
+    bucket = "publicaccountability",
+    acl = "public-read",
+    show_progress = TRUE,
+    multipart = TRUE
+  )
+}
+aws_head <- head_object(aws_path, "publicaccountability")
+(aws_size <- as_fs_bytes(attr(aws_head, "content-length")))
+#> 129M
+unname(aws_size == clean_size)
+#> [1] FALSE
 ```
 
 ## Dictionary
@@ -976,36 +1104,36 @@ str_replace_all(enc, clean_path, basename)
 | `org_id`             | `character` | Recipient unique ID                    |
 | `amount`             | `double`    | Contribution amount                    |
 | `date`               | `double`    | Date contribution was made             |
-| `contributor`        | `character` | Contributor full name                  |
-| `last`               | `character` | Contributor first name                 |
-| `first`              | `character` | Contributor middle name                |
-| `middle`             | `character` | Contributor last name                  |
-| `suffix`             | `character` | Contributor name suffix                |
-| `address1`           | `character` | Contributor street address             |
-| `address2`           | `character` | Contributor secondary address          |
-| `city`               | `character` | Contributor city name                  |
-| `state`              | `character` | Contributor 2-digit state abbreviation |
-| `zip`                | `character` | Contributor ZIP+4 code                 |
-| `id`                 | `character` | Contribution unique ID                 |
-| `filed_date`         | `double`    | Date contribution filed                |
-| `type`               | `character` | Contribution type                      |
-| `source_type`        | `character` | Contribution source                    |
-| `committee_type`     | `character` | Recipient committee type               |
-| `committee`          | `character` | Recipient commttee name                |
-| `candidate`          | `character` | Recipient candidate name               |
-| `amended`            | `logical`   | Contribution amended                   |
-| `description`        | `character` | Contribution description               |
-| `employer`           | `character` | Contributor employer name              |
-| `occupation`         | `character` | Contributor occupation                 |
-| `occupation_comment` | `character` | Occupation comment                     |
-| `emp_info_req`       | `logical`   | Employer information requested         |
-| `file`               | `character` | Source file name                       |
-| `legacy_id`          | `character` | Legacy recipient ID                    |
-| `office`             | `character` | Recipient office sought                |
-| `district`           | `character` | Recipient district election            |
-| `report`             | `character` | Report contribution listed on          |
-| `forgiven_loan`      | `character` | Forgiven loan reason                   |
-| `election_type`      | `character` | Election type                          |
+| `last`               | `character` | Contributor full name                  |
+| `first`              | `character` | Contributor first name                 |
+| `middle`             | `character` | Contributor middle name                |
+| `suffix`             | `character` | Contributor last name                  |
+| `address1`           | `character` | Contributor name suffix                |
+| `address2`           | `character` | Contributor street address             |
+| `city`               | `character` | Contributor secondary address          |
+| `state`              | `character` | Contributor city name                  |
+| `zip`                | `character` | Contributor 2-digit state abbreviation |
+| `id`                 | `character` | Contributor ZIP+4 code                 |
+| `filed_date`         | `double`    | Contribution unique ID                 |
+| `type`               | `character` | Date contribution filed                |
+| `source_type`        | `character` | Contribution type                      |
+| `committee_type`     | `character` | Contribution source                    |
+| `committee`          | `character` | Recipient committee type               |
+| `candidate`          | `character` | Recipient commttee name                |
+| `amended`            | `logical`   | Recipient candidate name               |
+| `description`        | `character` | Contribution amended                   |
+| `employer`           | `character` | Contribution description               |
+| `occupation`         | `character` | Contributor employer name              |
+| `occupation_comment` | `character` | Contributor occupation                 |
+| `emp_info_req`       | `logical`   | Occupation comment                     |
+| `file`               | `character` | Employer information requested         |
+| `legacy_id`          | `character` | Source file name                       |
+| `office`             | `character` | Legacy recipient ID                    |
+| `district`           | `character` | Recipient office sought                |
+| `report`             | `character` | Recipient district election            |
+| `forgiven_loan`      | `character` | Report contribution listed on          |
+| `election_type`      | `character` | Forgiven loan reason                   |
+| `contributor`        | `character` | Election type                          |
 | `recipient`          | `character` | Combined type recipient name           |
 | `na_flag`            | `logical`   | Flag for missing date, amount, or name |
 | `dupe_flag`          | `logical`   | Flag for completely duplicated record  |
@@ -1014,10 +1142,3 @@ str_replace_all(enc, clean_path, basename)
 | `zip_clean`          | `character` | Normalized 5-digit ZIP code            |
 | `state_clean`        | `character` | Normalized 2-digit state abbreviation  |
 | `city_clean`         | `character` | Normalized city name                   |
-
-``` r
-write_lines(
-  x = c("# Maine Contributions Data Dictionary\n", dict_md),
-  path = here("me", "contribs", "me_contribs_dict.md"),
-)
-```

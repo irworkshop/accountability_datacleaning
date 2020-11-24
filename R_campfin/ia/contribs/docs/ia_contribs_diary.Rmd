@@ -27,8 +27,10 @@ opts_chunk$set(
   fig.width = 10,
   dpi = 300
 )
-options(width = 99)
-set.seed(5)
+if (!interactive()) {
+  options(width = 99)
+  set.seed(5)
+}
 ```
 
 ```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
@@ -83,6 +85,7 @@ pacman::p_load(
   gluedown, # print markdown
   janitor, # dataframe clean
   refinr, # cluster and merge
+  aws.s3, # aws cloud storage
   scales, # format strings
   rvest, # read html pages
   knitr, # knit documents
@@ -120,8 +123,6 @@ received by agencies under Iowa Code section 8.7, and the Board's administrative
 rules in Chapter 351 of the Iowa Administrative Code.
 
 [iae]: https://ethics.iowa.gov/
-
-## Import
 
 The Board provides the file through the [state open data portal][odp] under the
 title "Iowa Campaign Contributions Received." The data can be accessed as a
@@ -166,18 +167,27 @@ communications is for providing information to the public and not for other
 commercial purpose, and for soliciting political campaign contributions is
 permissable.
 
-### Read
+## Read
 
 These fixed files can be read into a single data frame with `purrr::map_df()`
 and `readr::read_delim()`.
 
+```{r raw_dir}
+raw_dir <- dir_create(here("ia", "contribs", "data", "raw"))
+raw_url <- "https://data.iowa.gov/api/views/smfg-ds7h/rows.csv"
+raw_path <- path(raw_dir, basename(raw_url))
+if (!this_file_new(raw_path)) {
+  download.file(raw_url, raw_path)
+}
+```
+
 ```{r raw_read}
-iac <- read_csv(
-  file = "https://data.iowa.gov/api/views/smfg-ds7h/rows.csv",
+iac <- vroom(
+  file = raw_path,
   na = c("", "N/A", "NA", "n/a", "na"),
   col_types = cols(
     .default = col_character(),
-    Date = col_date_usa(),
+    `Date` = col_date_usa(),
     `Contribution Amount` = col_double()
   )
 )
@@ -187,73 +197,141 @@ iac <- read_csv(
 iac <- iac %>% 
   clean_names("snake") %>%
   rename(
-    comm_cd = committee_code,
-    comm_nm = committee_name,
+    code = committee_code,
+    committee = committee_name,
     type = transaction_type,
     cont_comm_cd = contributing_committee_code,
     cont_org = contributing_organization,
     first = first_name,
     mi = middle_initial,
     last = last_name,
-    address1 = address_line_1,
-    address2 = address_line_2,
+    addr1 = address_line_1,
+    addr2 = address_line_2,
     zip = zip_code,
     amount = contribution_amount,
-    id = transaction_id,
+    tx = transaction_id,
   ) %>% 
   mutate(last = coalesce(last, cont_org)) %>% 
   select(-cont_org, -cont_comm_cd)
 ```
 
+We can ensure this file was read correctly by counting distinct values of a 
+known discrete variable.
+
+```{r raw_check}
+n_distinct(iac$type) == 2
+```
+
 ## Explore
 
+There are `r comma(nrow(iac))` rows of `r ncol(iac)` columns.
+
 ```{r glimpse}
-head(iac)
+glimpse(iac)
 tail(iac)
-glimpse(sample_n(iac, 20))
 ```
 
 ### Missing
+
+Columns vary in their degree of missing values.
 
 ```{r na_count}
 col_stats(iac, count_na)
 ```
 
+We can flag any record missing a key variable needed to identify a transaction.
+
 ```{r na_flag}
-iac <- iac %>% flag_na(date, last, amount, comm_nm)
+key_vars <- c("date", "last", "amount", "committee")
+iac <- flag_na(iac, all_of(key_vars))
 sum(iac$na_flag)
+```
+
+All of the flagged rows are only missing a contributor `last` name.
+
+```{r na_view}
+iac %>% 
+  filter(na_flag) %>% 
+  select(all_of(key_vars)) %>% 
+  sample_n(10)
+```
+
+```{r na_recount}
+iac %>% 
+  filter(na_flag) %>% 
+  select(all_of(key_vars)) %>% 
+  col_stats(count_na)
 ```
 
 ### Duplicates
 
+We can create a file containing every duplicate record in the data.
+
+```{r dupe_write}
+dupe_file <- path(dirname(raw_dir), "dupes.csv")
+if (!file_exists(dupe_file)) {
+  write_lines("tx,dupe_flag", dupe_file)
+  iac <- mutate(iac, group = str_sub(date, end = 7))
+  ia_tx <- split(iac$tx, iac$group)
+  ias <- iac %>%
+    select(-tx) %>% 
+    group_split(group, .keep = FALSE)
+  pb <- txtProgressBar(max = length(ias), style = 3)
+  for (i in seq_along(ias)) {
+    write_csv(
+      path = dupe_file,
+      append = TRUE,
+      x = tibble(
+        tx = ia_tx[[i]],
+        dupe_flag = or(
+          duplicated(ias[[i]], fromLast = FALSE),
+          duplicated(ias[[i]], fromLast = TRUE)
+        )
+      )
+    )
+    setTxtProgressBar(pb, i)
+    ias[i] <- NA
+    flush_memory(1)
+  }
+}
+```
+
+```{r dupe_read}
+dupes <- read_csv(
+  file = dupe_file,
+  col_types = cols(
+    tx = col_character(),
+    dupe_flag = col_logical()
+  )
+)
+```
+
+This file can then be joined against the contributions using the transaction ID.
+
 ```{r dupe_flag}
-iac <- flag_dupes(iac, -id)
-sum(iac$dupe_flag)
+iac <- left_join(iac, dupes)
+iac <- mutate(iac, dupe_flag = !is.na(dupe_flag))
+percent(mean(iac$dupe_flag), 0.1)
 ```
 
 ```{r dupe_view}
 iac %>% 
   filter(dupe_flag) %>% 
-  select(date, last, amount, comm_nm)
+  select(all_of(key_vars)) %>% 
+  arrange(date, last)
 ```
   
-### Categorical
+## Categorical
 
 ```{r n_distinct}
 col_stats(iac, n_distinct)
 ```
 
 ```{r rec_type_bar, echo=FALSE}
-explore_plot(
-  data = iac,
-  var = type,
-  title = "Iowa Contribution Recipient Types"
-)
+add_prop(count(iac, type))
 ```
 
-### Continuous
-
-#### Amounts
+## Amounts
 
 ```{r ammount_summary}
 summary(iac$amount)
@@ -262,6 +340,7 @@ mean(iac$amount <= 0)
 
 ```{r amount_histogram, echo=FALSE}
 iac %>%
+  filter(!is.na(amount), amount >= 1) %>% 
   ggplot(aes(amount)) +
   geom_histogram(fill = dark2["purple"], bins = 20) +
   scale_y_continuous(labels = comma) +
@@ -280,8 +359,9 @@ iac %>%
 
 ```{r amount_comm_violin, echo=FALSE}
 iac %>%
+  filter(!is.na(amount), amount >= 1) %>% 
   ggplot(aes(x = type, y = amount)) +
-  geom_violin(aes(fill = type)) +
+  geom_violin(aes(fill = type), adjust = 3) +
   scale_fill_brewer(palette = "Dark2", guide = FALSE) +
   scale_y_continuous(
     breaks = c(1 %o% 10^(0:6)),
@@ -297,7 +377,7 @@ iac %>%
   )
 ```
 
-#### Dates
+## Dates
 
 ```{r date_year}
 iac <- mutate(iac, year = year(date))
@@ -336,31 +416,37 @@ will force consistence case, remove punctuation, and abbreviation official
 USPS suffixes.
 
 ```{r address_norm}
-iac <- iac %>%
+addr_norm <- iac %>%
+  select(starts_with("addr")) %>% 
+  distinct() %>% 
   unite(
-    starts_with("address"),
-    col = address_full,
+    everything(),
+    col = addr_full,
     sep = " ",
     remove = FALSE,
     na.rm = TRUE
   ) %>% 
   mutate(
-    address_norm = normal_address(
-      address = address_full,
+    addr_norm = normal_address(
+      address = addr_full,
       abbs = usps_street,
       na_rep = TRUE
     )
   ) %>% 
-  select(-address_full)
+  select(-addr_full)
+```
+
+```{r address_join}
+iac <- left_join(iac, addr_norm)
+rm(addr_norm)
 ```
 
 We can see how this process improved consistency.
 
 ```{r address_view}
 iac %>% 
-  select(contains("address")) %>% 
-  distinct() %>% 
-  sample_n(10)
+  sample_n(10) %>% 
+  select(starts_with("addr"))
 ```
 
 ### ZIP
@@ -380,7 +466,11 @@ iac <- iac %>%
 ```
 
 ```{r zip_progress}
-progress_table(iac$zip, iac$zip_norm, compare = valid_zip)
+progress_table(
+  iac$zip, 
+  iac$zip_norm, 
+  compare = valid_zip
+)
 ```
 
 ### State
@@ -402,6 +492,14 @@ length(x)
 iac <- mutate(iac, state_norm = x)
 ```
 
+```{r state_progress}
+progress_table(
+  iac$state, 
+  iac$state_norm, 
+  compare = valid_state
+)
+```
+
 ### City
 
 Cities are the most difficult geographic variable to normalize, simply due to
@@ -410,7 +508,9 @@ function is a good start, again converting case, removing punctuation, but
 _expanding_ USPS abbreviations. We can also remove `invalid_city` values.
 
 ```{r city_norm}
-iac <- iac %>% 
+ia_city <- iac %>% 
+  count(city, state_norm, zip_norm, sort = TRUE) %>% 
+  select(-n) %>% 
   mutate(
     city_norm = normal_city(
       city = city, 
@@ -423,12 +523,12 @@ iac <- iac %>%
 ```
 
 Again, we can further improve normalization by comparing our normalized value
-agaist the _expected_ value for that record's state abbreviation and ZIP code.
+against the _expected_ value for that record's state abbreviation and ZIP code.
 If the normalized value is either an abbreviation for or very similar to the
 expected value, we can confidently swap those two.
 
 ```{r city_swap}
-iac <- iac %>% 
+ia_city <- ia_city %>% 
   rename(city_raw = city) %>% 
   left_join(
     y = zipcodes,
@@ -456,16 +556,19 @@ iac <- iac %>%
 
 ```{r city_other}
 many_city <- c(valid_city, extra_city)
-iac %>% 
+ia_city %>% 
   count(city_swap, state_norm, sort = TRUE) %>% 
   filter(!is.na(city_swap), city_swap %out% many_city)
 ```
 
 ```{r city_replace}
-iac <- iac %>% 
+ia_city <- ia_city %>% 
   mutate(
     city_swap = city_swap %>% 
       str_replace("^OVERLAND PARKS$", "OVERLAND PARK") %>% 
+      str_replace("^NEW YORK CITY$", "NEW YORK") %>% 
+      str_replace("^NYC$", "NEW YORK") %>% 
+      str_replace("^WASHINGTON D C$", "WASHINGTON") %>% 
       str_replace("\\sPK$", "PARK") %>% 
       str_remove("\\sD\\sC$") %>% 
       str_remove("\\sIN$") %>% 
@@ -474,9 +577,14 @@ iac <- iac %>%
   )
 ```
 
+```{r city_join}
+ia_city <- rename(ia_city, city = city_raw)
+iac <- left_join(iac, ia_city, by = c("city", "state_norm", "zip_norm"))
+```
+
 ```{r city_progress, echo=FALSE}
 progress <- progress_table(
-  str_to_upper(iac$city_raw),
+  str_to_upper(iac$city),
   iac$city_norm,
   iac$city_swap,
   compare = many_city
@@ -535,34 +643,102 @@ progress %>%
 
 ## Conclude
 
+Before exporting, we can remove the intermediary normalization columns and
+rename all added variables with the `_clean` suffix.
+
+```{r clean_select}
+iac <- iac %>% 
+  select(
+    -city_norm,
+    city_clean = city_swap
+  ) %>% 
+  rename_all(~str_replace(., "_norm", "_clean")) %>% 
+  rename_all(~str_remove(., "_raw"))
+```
+
 ```{r clean_glimpse}
-glimpse(sample_n(iac, 20))
+glimpse(sample_n(iac, 50))
 ```
 
 1. There are `r comma(nrow(iac))` records in the database.
-1. There are `r comma(sum(iac$dupe_flag))` duplicate records in the database 
-(`r percent(mean(iac$dupe_flag), accuracy = 0.01)`).
+1. There are `r comma(sum(iac$dupe_flag))` duplicate records in the database.
 1. The range and distribution of `amount` and `date` seem reasonable.
-1. There are `r comma(sum(iac$na_flag))` records missing a contributor or 
-recipient name, date, or amount (`r percent(mean(iac$na_flag), accuracy = 0.01)`).
-1. Consistency in goegraphic data has been improved with `campfin::normal_*()`.
+1. There are `r comma(sum(iac$na_flag))` records missing key variables.
+1. Consistency in geographic data has been improved with `campfin::normal_*()`.
 1. The 4-digit `year` variable has been created with `lubridate::year()`.
 
 ## Export
 
-```{r clean_trim}
-iac <- iac %>% 
-  select(
-    -city_norm,
-    city_norm = city_swap
-  ) %>% 
-  rename_all(~str_replace(., "_norm", "_clean"))
-```
+Now the file can be saved on disk for upload to the Accountability server.
 
-```{r clean_write}
+```{r clean_dir}
 clean_dir <- dir_create(here("ia", "contribs", "data", "clean"))
 clean_path <- path(clean_dir, "ia_contribs_clean.csv")
-write_csv(iac, path = clean_path, na = "")
-file_size(clean_path)
-guess_encoding(clean_path)
+write_csv(iac, clean_path, na = "")
+(clean_size <- file_size(clean_path))
+file_encoding(clean_path) %>% 
+  mutate(across(path, path.abbrev))
+```
+
+## Upload
+
+We can use the `aws.s3::put_object()` to upload the text file to the IRW server.
+
+```{r aws_upload, eval=TRUE}
+aws_path <- path("csv", basename(clean_path))
+if (!object_exists(aws_path, "publicaccountability")) {
+  put_object(
+    file = clean_path,
+    object = aws_path, 
+    bucket = "publicaccountability",
+    acl = "public-read",
+    show_progress = TRUE,
+    multipart = TRUE
+  )
+}
+aws_head <- head_object(aws_path, "publicaccountability")
+(aws_size <- as_fs_bytes(attr(aws_head, "content-length")))
+unname(aws_size == clean_size)
+```
+
+## Dictionary
+
+The following table describes the variables in our final exported file:
+
+```{r dict_make, echo=FALSE}
+dict_raw <- tibble(
+  var = md_code(names(iac)),
+  type = md_code(map_chr(iac, typeof)),
+  def = c(
+    "Unique transaction hash",
+    "Date contribution was made",
+    "Recipient committee code",
+    "Recipient committee name",
+    "Type of contribution (direct, in-kind)",
+    "Contributor first name",
+    "Contributor middle initial",
+    "Contributor last name or organization",
+    "Contributor street address",
+    "Contributor secondary address",
+    "Contributor state abbreviation",
+    "Contributor city name",
+    "Contributor ZIP+4 code",
+    "Amount or correction",
+    "Flag for missing value",
+    "Flag for duplicate row",
+    "Calendar year contribution made",
+    "Normalized street address",
+    "Normalized 5-digit ZIP code",
+    "Normalized 2-letter state abbreviation",
+    "Normalized city name"
+  )
+)
+```
+
+```{r dict_md, echo=FALSE}
+(dict_md <- kable(
+  x = dict_raw,
+  format = "markdown",
+  col.names = c("Column", "Type", "Definition")
+))
 ```

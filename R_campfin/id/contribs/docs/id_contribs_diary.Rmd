@@ -27,8 +27,10 @@ opts_chunk$set(
   fig.width = 10,
   dpi = 300
 )
-options(width = 99)
-set.seed(5)
+if (!interactive()) {
+  options(width = 99)
+  set.seed(5)
+}
 ```
 
 ```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
@@ -82,6 +84,7 @@ pacman::p_load(
   magrittr, # pipe opperators
   gluedown, # printing markdown
   janitor, # dataframe clean
+  aws.s3, # upload to aws s3
   refinr, # cluster and merge
   scales, # format strings
   readxl, # read excel files
@@ -205,14 +208,21 @@ Now that each individual data frame has similar column names, we can use
 `dplyr::bind_rows()` to bind all `r length(idc)` data frames together.
 
 ```{r bind_rows}
-idc <- bind_rows(idc, .id = "file")
+idc <- bind_rows(idc, .id = "source_file")
+idc <- relocate(idc, source_file, .after = last_col())
+idc$source_file <- basename(raw_paths)[as.integer(idc$source_file)]
 ```
 
-Then, we can apply `readr::parse_guess()` to every column that were previously
-all read as character vectors.
+Then, we can use `readr::type_convert()` to parse our character columns.
 
 ```{r parse_guess}
-idc <- mutate_all(idc, parse_guess)
+idc <- type_convert(
+  df = idc,
+  col_types = cols(
+    .default = col_character(),
+    amount = col_double()
+  )
+)
 ```
 
 We also need to reorder and recode these variables to be consistent across each
@@ -224,7 +234,6 @@ idc <- idc %>%
     last = coalesce(last, committee_company)
   ) %>% 
   select(
-    file,
     party,
     cand_first,
     cand_mi,
@@ -246,7 +255,8 @@ idc <- idc %>%
     state,
     zip,
     country,
-    election
+    election,
+    source_file
   )
 ```
 
@@ -295,12 +305,66 @@ idc$date <- as_date(idc$date)
 count_na(idc$date) # 782
 ```
 
+## Join
+
+Contributions for 2020 can be downloaded as an Excel file from the Idaho
+Secretary of State's office [campaign public portal][portal].
+
+[portal]: https://elections.sos.idaho.gov/TED/CampaignPublicPortal/Contributions.aspx
+
+```{r new_read}
+idn <- read_excel(
+  path = path(raw_dir, "2020_Contributions.xlsx"),
+  .name_repair = make_clean_names
+)
+```
+
+```{r new_clean, echo=FALSE}
+idn <- idn %>%
+  rename(
+    cand_last = campaign_name,
+    amend = part_of_amendment,
+    con_type = contributor_type,
+    first = first_name,
+    last = last_name,
+    address_1 = address,
+    zip = zip_code
+  ) %>% 
+  mutate(
+    last = coalesce(last, company_name),
+    amend = as.logical(amend),
+    type = type %>% 
+      str_replace("COMPANY", "C") %>% 
+      str_replace("PERSON", "P") %>% 
+      str_replace("LOAN", "L") %>% 
+      str_replace("IN KIND", "I")
+  ) %>% 
+  select(-company_name)
+```
+
+Most of the columns in this data overlap with the columns in the older data.
+
+```{r new_names}
+prop_in(names(idn), names(idc))
+setdiff(names(idn), names(idc))
+```
+
+We can combine the two data sources into a single dataframe.
+
+```{r new_bind}
+idc <- bind_rows(idc, idn, .id = "source_type")
+idc <- relocate(idc, source_type, .after = last_col())
+idc$source_type <- c("old", "new")[as.integer(idc$source_type)]
+count(idc, source_type)
+rm(idn)
+```
+
 ## Explore
 
 ```{r glimpse}
+glimpse(idc)
 head(idc)
 tail(idc)
-glimpse(sample_frac(idc))
 ```
 
 We should first identify which columns are missing the kinds of key information
@@ -344,36 +408,47 @@ col_stats(idc, n_distinct)
 
 ```{r bar_office, echo=FALSE}
 explore_plot(
-  data = filter(idc, !is.na(office)),
-  var = office,
-  title = "Idaho Contributions by Office",
-  caption = "Source: Idaho Elections Office"
-) + theme(axis.text.x = element_text(angle = 10, vjust = 0.7))
+  data = idc,
+  var = office
+) + 
+  theme(axis.text.x = element_text(angle = 10, vjust = 0.7)) +
+  labs(
+    title = "Idaho Contributions by Office",
+    caption = "Source: Idaho Elections Office"
+  )
 ```
 
 ```{r bar_party, echo=FALSE}
 explore_plot(
-  data = filter(idc, !is.na(party)),
-  var = party,
+  data = idc,
+  var = party
+) +
+  labs(
   title = "Idaho Contributions by Office",
   caption = "Source: Idaho Elections Office"
-)
+  )
 ```
 
 ```{r type_party, echo=FALSE}
 explore_plot(
   data = filter(idc, !is.na(type)),
-  var = type,
-  title = "Idaho Contributions by Office",
-  caption = "Source: Idaho Elections Office"
-)
+  var = type
+) +
+  labs(
+    title = "Idaho Contributions by Office",
+    caption = "Source: Idaho Elections Office"
+  )
 ```
 
 ### Amounts
 
-```{r summary_amount}
+```{r amount_summary}
 summary(idc$amount)
 mean(idc$amount <= 0)
+```
+
+```{r amount_minmax}
+glimpse(idc[c(which.min(idc$amount), which.max(idc$amount)), ])
 ```
 
 ```{r amount_histogram, echo=FALSE}
@@ -450,43 +525,6 @@ idc <- mutate(
 )
 count_na(idc$date) # 807
 sum(idc$date_flag) # 807
-```
-
-For some reason there no records from 2005 to 2010.
-
-```{r year_bar, echo=FALSE}
-idc %>% 
-  count(year) %>% 
-  ggplot(aes(x = year, y = n)) +
-  geom_col(fill = dark2["orange"]) +
-  scale_y_continuous(label = comma) +
-  labs(
-    title = "Idaho Contributions by Year",
-    caption = "Source: Idaho Elections Office",
-    x = "Year Made",
-    y = "Count"
-  )
-idc %>% 
-  count(year) %>% 
-  ggplot(aes(x = year, y = n)) +
-  geom_col(fill = dark2["orange"]) +
-  scale_y_continuous(label = comma, trans = "log10") +
-  labs(
-    title = "Idaho Contributions by Year",
-    caption = "Source: Idaho Elections Office",
-    x = "Year Made",
-    y = "Count"
-  )
-```
-
-We know these files were read by comparing the `file` variable to the urls
-downloaded. For the records loaded from the file downloaded from 2008, the year
-of the `date` variable seems to primarily be from 2003 and 2004.
-
-```{r file_year}
-idc %>% 
-  filter(file %in% str_which(raw_urls, "2008")) %>% 
-  count(year = year(date))
 ```
 
 ## Wrangle
@@ -623,32 +661,116 @@ idc %>%
 
 ## Conclude
 
+Before exporting, we can remove the intermediary normalization columns and
+rename all added variables with the `_clean` suffix.
+
+```{r clean_select}
+idc <- idc %>% 
+  select(
+    -city_norm,
+    city_clean = city_swap
+  ) %>% 
+  rename_all(~str_replace(., "_norm", "_clean")) %>% 
+  rename_all(~str_remove(., "_raw"))
+```
+
+```{r clean_glimpse}
+glimpse(sample_n(idc, 50))
+```
+
 1. There are `r comma(nrow(idc))` records in the database.
 1. There are `r comma(sum(idc$dupe_flag))` duplicate records in the database.
 1. The range and distribution of `amount` and `date` seem reasonable.
-1. There are `r comma(sum(idc$na_flag))` records missing either recipient or date.
-1. Consistency in goegraphic data has been improved with `campfin::normal_*()`.
-1. The 5-digit `zip_norm` variable has been created with `campfin::normal_zip(df$zip)`.
+1. There are `r comma(sum(idc$na_flag))` records missing key variables.
+1. Consistency in geographic data has been improved with `campfin::normal_*()`.
 1. The 4-digit `year` variable has been created with `lubridate::year()`.
 
 ## Export
 
-```{r}
-idc <- idc %>% 
-  select(
-    -city_norm,
-    city_norm = city_swap
-  ) %>%
-  rename_at(
-    .vars = vars(ends_with("norm")),
-    .funs = ~str_replace(., "_(.*)", "_clean")
-  ) %>% 
-  rename(city = city_raw)
-```
+Now the file can be saved on disk for upload to the Accountability server.
 
-```{r create_proc_dir}
+```{r clean_dir}
 clean_dir <- dir_create(here("id", "contribs", "data", "clean"))
 clean_path <- path(clean_dir, "id_contribs_clean.csv")
-write_csv(idc, path = clean_path, na = "")
-file_size(clean_path)
+write_csv(idc, clean_path, na = "")
+(clean_size <- file_size(clean_path))
+file_encoding(clean_path) %>% 
+  mutate(across(path, path.abbrev))
+```
+
+## Upload
+
+We can use the `aws.s3::put_object()` to upload the text file to the IRW server.
+
+```{r aws_upload, eval=TRUE}
+aws_path <- path("csv", basename(clean_path))
+if (!object_exists(aws_path, "publicaccountability")) {
+  put_object(
+    file = clean_path,
+    object = aws_path, 
+    bucket = "publicaccountability",
+    acl = "public-read",
+    show_progress = TRUE,
+    multipart = TRUE
+  )
+}
+aws_head <- head_object(aws_path, "publicaccountability")
+(aws_size <- as_fs_bytes(attr(aws_head, "content-length")))
+unname(aws_size == clean_size)
+```
+
+## Dictionary
+
+The following table describes the variables in our final exported file:
+
+```{r dict_make, echo=FALSE}
+dict_raw <- tibble(
+  var = md_code(names(idc)),
+  type = md_code(map_chr(idc, typeof)),
+  def = c(
+    "Candidate party",
+    "Candidate first name",
+    "Candidate middle name",
+    "Candidate last name",
+    "Candidate name suffix",
+    "Recieving committee name",
+    "Office sought by candidate",
+    "District of election held",
+    "Type of contribution made",
+    "Amount of contribution",
+    "Date contribution made",
+    "Contributor last name",
+    "Contributor first name",
+    "Contributor middle name",
+    "Contributor name suffix",
+    "Contributor street address",
+    "Contributor secondary address",
+    "Contributor city name",
+    "Contributor state abbreviation",
+    "Contributor ZIP+4 code",
+    "Contributor country code",
+    "Election type code (primary, general)",
+    "Source file name",
+    "Flag for amended record (_NEW_)",
+    "Contributor type (_NEW_)",
+    "Source file type (old, new)",
+    "Coalesced recipient name",
+    "Flag indicating missing value",
+    "Flag indicating duplicate value",
+    "Cleaned contribution date",
+    "Calendar year contribution made",
+    "Normalized combined address",
+    "Normalized 5-digit ZIP code",
+    "Normalized 2-letter state code",
+    "Normalized city name"
+  )
+)
+```
+
+```{r dict_md, echo=FALSE}
+(dict_md <- kable(
+  x = dict_raw,
+  format = "markdown",
+  col.names = c("Column", "Type", "Definition")
+))
 ```

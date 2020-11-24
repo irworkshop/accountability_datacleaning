@@ -83,6 +83,8 @@ pacman::p_load(
   gluedown, # printing markdown
   magrittr, # pipe operators
   janitor, # clean data frames
+  aws.s3, # aws bucket storage
+  readxl, # read excel files
   refinr, # cluster and merge
   scales, # format strings
   knitr, # knit documents
@@ -91,6 +93,7 @@ pacman::p_load(
   glue, # combine strings
   here, # relative paths
   httr, # http requests
+  XML, # read xml trees
   fs # local storage 
 )
 ```
@@ -113,50 +116,181 @@ here::here()
 
 ## Data
 
-Rhode Island contracts data can be obtained from the [transparency portal][tp].
-The portal only lists contracts over $1 million.
-
-> RI Purchasing Awards over $1M - (Since July 1, 2012)  
-> Use this form to search awarded bids.
-
-[tp]: http://www.transparency.ri.gov/contracts/
+Rhode Island contracts data was provided to the Investigative Reporting Workshop
+under R.I. General Laws § 38-2-1 et seq., commonly known as the Access to Public
+Records Act. The file was mailed to IRW as a single XML file on a CD.
 
 ## Download
 
-Using `httr::POST()`, we can submit and empty search query.
+The file is hosted on the IRW's AWS server, where it can be downloaded.
 
-```{r raw_post}
-ri_post <- POST(
-  url = "http://www.transparency.ri.gov/contracts/verify.php",
-  query = list(
-    bidno = "",
-    vendname = "",
-    start_date = "",
-    end_date = "",
-    agencyName = "0",
-    Submited = "True",
-    submit = "Search"
+```{r raw_dir}
+raw_dir <- dir_create(here("ri", "contracts", "data", "raw"))
+raw_path <- path(raw_dir, "po_detail.zip")
+aws_path <- path("FOR_REVIEW", "po detail.zip")
+```
+
+```{r raw_save}
+if (!file_exists(raw_path)) {
+  save_object(
+    object = aws_path,
+    bucket = "publicaccountability",
+    file = raw_path
   )
+}
+```
+
+The XML file can be extracted from the ZIP archive.
+
+```{r raw_extract}
+file_size(raw_path)
+raw_zip <- unzip(raw_path, exdir = raw_dir)
+raw_xml <- unzip(raw_zip, exdir = raw_dir)
+file_size(raw_xml)
+```
+
+```{r raw_move}
+raw_xml <- file_move(
+  path = raw_xml,
+  new_path = str_replace_all(raw_xml, "\\s", "_")
 )
 ```
 
 ## Read
 
-This query returns an HTML page which can be scraped with `rvest::html_table()`.
+The XML file contains invalid characters and newlines that prevent it from
+being properly read. We can remove these chracters using a regular expression
+and save it to a new file.
+
+```{r raw_fix}
+raw_fix <- path(raw_dir, "po_fix.xml")
+x <- read_lines(raw_xml)
+x <- str_remove_all(
+  string = str_replace_all(x, "(?<!>)\n", " "),
+  pattern = "[^\u0009\u000a\u000d\u0020-\uD7FF\uE000-\uFFFD]"
+)
+
+write_lines(x, raw_fix)
+```
+
+This XML file is incredibly nested, with only a single layer working as a 
+rectangular dataframe. The `G_HEADERS` tree contains the aggregate level data
+on each contract. We can extract this level of the XML tree and parse it as a
+data frame, which can then be saved to disk as a CSV text file.
+
+```{r raw_parse}
+w <- str_which(x, "LIST_G_HEADERS")
+csv_path <- path(raw_dir, "po_detail.csv")
+if (!file_exists(csv_path)) {
+  write_csv(
+    path = csv_path,
+    x = xmlToDataFrame(
+      doc = xmlParse(
+        file = x[w[1]:w[2]]
+      )
+    )
+  )
+}
+```
+
+```{r echo=FALSE}
+rm(x); flush_memory()
+```
+
+This CSV text file can then be re-read as a dataframe. We are going to ignore
+the column of this CSV that contains the un-structured line-item text.
 
 ```{r raw_read}
-ric <- ri_post %>% 
-  content() %>% 
-  html_node("table") %>% 
-  html_table() %>% 
-  as_tibble() %>% 
-  clean_names() %>% 
-  na_if("N/A") %>% 
-  mutate(across(date, mdy)) %>% 
-  mutate(across(amount, parse_number))
+ric <- read_csv(
+  file = csv_path,
+  col_types = cols(
+    .default = col_character(),
+    CREATION_DATE = col_date("%d-%b-%y"),
+    PRINTED_DATE = col_date("%d-%b-%y"),
+    ACCEPTANCE_DATE = col_date("%d-%b-%y"),
+    REVISED_DATE = col_date("%d-%b-%y"),
+    REV = col_integer(),
+    TYPE = col_skip(),
+    LIST_G_BREAK_LINES = col_skip(),
+    C_AMOUNT_AGR = col_double(),
+    C_AMOUNT_AGR_ROUND = col_skip(),
+    C_AMOUNT_AGR_DISP = col_skip()
+  )
+)
+```
+
+```{r raw_rename}
+ric <- ric %>% 
+  clean_names("snake") %>% 
+  rename(
+    created = creation_date,
+    printed = printed_date,
+    currency = c_currency,
+    accepted = acceptance_date,
+    vendor_site = vendor_site,
+    need_accept = acceptance_required,
+    amount = c_amount_agr,
+    po_header = po_header_id1,
+    revised = revised_date,
+    po_number = po_number,
+    precision = c_fnd_precision
+  ) %>% 
+  mutate(across(need_accept, is.na))
+```
+
+## Join
+
+Each contract contains a `G_BREAK_LINES` node with multiple lines for each 
+shipment or line item withing the contract total. We can extract each of these
+contract details.
+
+```{r join_read}
+a <- read_xml(raw_fix)
+b <- xml_nodes(a, "G_BREAK_LINES")
+c <- tibble(
+  po_header = xml_text(xml_nodes(b, "PO_HEADER_ID")),
+  line = xml_text(xml_nodes(b, "LINE")),
+  type = xml_text(xml_nodes(b, "LINE_TYPE")),
+  desc = xml_text(xml_nodes(b, "ITEM_DESCRIPTION")),
+  unit = xml_text(xml_nodes(b, "UNIT")),
+  price = xml_text(xml_nodes(b, "UNIT_PRICE")),
+  ordered = xml_text(xml_node(b, "QUANTITY_AMOUNT_ORDERED")),
+  recieved = xml_text(xml_node(b, "QUANTITY_AMOUNT_RECEIVED")),
+  canceled = xml_text(xml_node(b, "QUANTITY_AMOUNT_CANCELLED")),
+  billed = xml_text(xml_node(b, "QUANTITY_AMOUNT_BILLED")),
+  ship_to = xml_text(xml_node(b, "SHIP_TO_LOCATION"))
+)
+```
+
+```{r join_parse}
+ric_details <- type_convert(
+  df = c, na = "",
+  col_types = cols(
+    po_header = col_character()
+  )
+)
+```
+
+These details can be joined against the contract information.
+
+We are only interested in those goods or services were actually delivered, so we
+can filter out any canceled contracts.
+
+```{r join_filter}
+ric <- ric %>% 
+  left_join(ric_details) %>% 
+  filter(canceled == 0) %>% 
+  select(-canceled) %>% 
+  remove_empty("cols") %>% 
+  remove_constant()
 ```
 
 ## Explore
+
+There are `r comma(nrow(ric))` rows and `r ncol(ric)` columns. Each record
+represents a single contract or purchase order between the state and an outside
+vendor. There is a `buyer` name for who made the purchase, but no information
+on which state agency they belong to.
 
 ```{r glimpse}
 glimpse(ric)
@@ -165,7 +299,41 @@ tail(ric)
 
 ### Missing
 
-There is only 1 mission value in the entire database.
+There is no variable containing the specific state agency receiving the goods or
+services being purchased. A separate Excel spreadsheet was provided by the DOA
+which contains the numeric codes of the agencies, which is contained in the
+`ship_to` code value.
+
+> The ship to location has the agency. The first three characters of the ship to
+should be the agency. Below is one of the ship to in the file.  In the example
+068 would be the agency.
+
+We can read this spreadsheet and join the agency names along this code.
+
+```{r agency_codes}
+agency_codes <- read_excel(
+  skip = 1,
+  path = path(raw_dir, "RIagCodes.xls"),
+  col_names = c("code", "agency")
+)
+```
+
+We can also add the state government abbreviation spending the money.
+
+```{r agency_join}
+ric <- ric %>% 
+  mutate(code = str_sub(ship_to, 1, 3)) %>% 
+  left_join(agency_codes) %>% 
+  relocate(agency, .before = buyer) %>% 
+  mutate(govt = "RI", .before = agency)
+```
+
+```{r agency_count}
+explore_plot(ric, agency) + scale_x_truncate()
+```
+
+Now there are no records missing a key variable needed to identify the parties
+to a transaction.
 
 ```{r na_count}
 col_stats(ric, count_na)
@@ -173,7 +341,7 @@ col_stats(ric, count_na)
 
 ### Duplicates
 
-There are no duplicate records in the databse.
+There are no duplicate records in the data.
 
 ```{r dupe_flag, warning=TRUE}
 ric <- flag_dupes(ric, everything())
@@ -185,11 +353,10 @@ ric <- flag_dupes(ric, everything())
 col_stats(ric, n_distinct)
 ```
 
-Most of the contract records in this database are made from the Rhode Island
-Department of Transportation, probably due to the $1 million floor.
-
 ```{r distinct_plots}
-explore_plot(ric, agency) + scale_x_truncate()
+explore_plot(ric, status) + scale_x_truncate()
+explore_plot(ric, need_accept) + scale_x_truncate()
+explore_plot(ric, type) + scale_x_truncate()
 ```
 
 ### Amounts
@@ -203,11 +370,12 @@ mean(ric$amount <= 0)
 
 ```{r hist_amount, echo=FALSE}
 ric %>%
+  filter(amount >= 1, !is.na(amount)) %>% 
   ggplot(aes(amount)) +
   geom_histogram(fill = dark2["purple"]) +
   scale_y_continuous(labels = comma) +
   scale_x_continuous(
-    breaks = c(1 %o% 10^(6:8)),
+    breaks = c(1 %o% 10^(1:8)),
     labels = dollar,
     trans = "log10"
   ) +
@@ -223,11 +391,13 @@ ric %>%
 
 We can add the calendar year from `date` with `lubridate::year()`
 
+```{r date_add}
+ric <- mutate(ric, date = coalesce(revised, created))
+```
+
 ```{r date_year}
 ric <- mutate(ric, year = year(date))
 ```
-
-The date range is extremelly clean.
 
 ```{r date_range}
 min(ric$date)
@@ -243,7 +413,7 @@ ric %>%
   ggplot(aes(x = year, y = n)) +
   geom_col(fill = dark2["orange"]) + 
   scale_y_continuous(labels = comma) +
-  scale_x_continuous(breaks = seq(2000, 2020, by = 2)) +
+  scale_x_continuous(breaks = seq(2000, 2020, by = 1)) +
   theme(legend.position = "bottom") +
   labs(
     title = "Rhode Island Contracts by Year",
@@ -255,11 +425,15 @@ ric %>%
 
 ## Conclude
 
+```{r clean_glimpse}
+glimpse(sample_n(ric, 50))
+```
+
 1. There are `r comma(nrow(ric))` records in the database.
 1. There are `r comma(sum(ric$dupe_flag))` duplicate records in the database.
 1. The range and distribution of `amount` and `date` seem reasonable.
 1. There are `r comma(sum(ric$na_flag))` records missing key variables.
-1. There are no geographic variables to normalize.
+1. Consistency in geographic data has been improved with `campfin::normal_*()`.
 1. The 4-digit `year` variable has been created with `lubridate::year()`.
 
 ## Export
@@ -270,49 +444,28 @@ Now the file can be saved on disk for upload to the Accountability server.
 clean_dir <- dir_create(here("ri", "contracts", "data", "clean"))
 clean_path <- path(clean_dir, "ri_contracts_clean.csv")
 write_csv(ric, clean_path, na = "")
-file_size(clean_path)
-mutate(file_encoding(clean_path), across(path, path.abbrev))
+(clean_size <- file_size(clean_path))
+file_encoding(clean_path) %>% 
+  mutate(across(path, path.abbrev))
 ```
 
 ## Upload
 
-Using the duckr R package, we can wrap around the [duck] commnand line tool to
-upload the file to the IRW S3 server.
+We can use the `aws.s3::put_object()` to upload the text file to the IRW server.
 
-```{r clean_upload, eval=FALSE}
-# remotes::install_github("kiernann/duckr")
-s3_dir <- "s3:/publicaccountability/csv/"
-s3_path <- path(s3_dir, basename(clean_path))
-if (require(duckr)) {
-  duckr::duck_upload(clean_path, s3_path)
-}
-```
-
-## Dictionary
-
-The following table describes the variables in our final exported file:
-
-```{r dict_make, echo=FALSE}
-dict_raw <- tibble(
-  var = md_code(names(ric)),
-  type = md_code(map_chr(ric, typeof)),
-  def = c(
-    "Purchase order number",
-    "Bid number",
-    "Vendor name",
-    "Contract award date",
-    "Awarding agency",
-    "Contract description",
-    "Contract amount",
-    "Contract award year"
+```{r s3_upload, eval=FALSE}
+s3_path <- path("csv", basename(clean_path))
+if (!object_exists(s3_path, "publicaccountability")) {
+  put_object(
+    file = clean_path,
+    object = s3_path, 
+    bucket = "publicaccountability",
+    acl = "public-read",
+    show_progress = TRUE,
+    multipart = TRUE
   )
-)
-```
-
-```{r dict_md, echo=FALSE}
-(dict_md <- kable(
-  x = dict_raw,
-  format = "markdown",
-  col.names = c("Column", "Type", "Definition")
-))
+}
+s3_head <- head_object(s3_path, "publicaccountability")
+(s3_size <- as_fs_bytes(attr(s3_head, "content-length")))
+unname(s3_size == clean_size)
 ```

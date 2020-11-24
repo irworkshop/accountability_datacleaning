@@ -1,7 +1,7 @@
 Indiana Contributions
 ================
 Kiernan Nicholls
-2020-02-05 13:10:34
+2020-10-27 19:01:02
 
   - [Project](#project)
   - [Objectives](#objectives)
@@ -12,6 +12,8 @@ Kiernan Nicholls
   - [Wrangle](#wrangle)
   - [Conclude](#conclude)
   - [Export](#export)
+  - [Upload](#upload)
+  - [Dictionary](#dictionary)
 
 <!-- Place comments regarding knitting here -->
 
@@ -64,6 +66,7 @@ pacman::p_load(
   gluedown, # print markdown
   janitor, # dataframe clean
   refinr, # cluster and merge
+  aws.s3, # aws cloud storage
   scales, # format strings
   rvest, # read html pages
   knitr, # knit documents
@@ -87,7 +90,7 @@ feature and should be run as such. The project also uses the dynamic
 ``` r
 # where does this document knit?
 here::here()
-#> [1] "/home/kiernan/Code/accountability_datacleaning/R_campfin"
+#> [1] "/home/kiernan/Code/tap/R_campfin"
 ```
 
 ## Data
@@ -125,7 +128,7 @@ Division](https://campaignfinance.in.gov/PublicSite/Homepage.aspx).
 
 ## Import
 
-The IED provides annuel files for both campaign contributions and
+The IED provides annual files for both campaign contributions and
 expenditures.
 
 > This page provides comma separated value (CSV) downloads of
@@ -203,12 +206,12 @@ if (length(dir_ls(raw_dir, regexp = ".csv$")) == 0) {
 ### Read
 
 There are two problems with each of these files: 1. When the second line
-of an address was entered, a `\n` newline character was enteted between
+of an address was entered, a `\n` newline character was entered between
 the two lines *within the same field*. The fields are surrounded in
 double-quotes, but when reading the files these newlines mess things up.
 2. Whenever a string itself contains `"` double-quotes, the first
-occurance is registered as the end of the field itself, which begun with
-a `"`.
+occurrence is registered as the end of the field itself, which begun
+with a `"`.
 
 To fix these issues, we will read each file as a single character string
 and use regular expressions to find and replace these errant `\n` and
@@ -217,18 +220,21 @@ and use regular expressions to find and replace these errant `\n` and
 ``` r
 fix_dir <- dir_create(here("in", "contribs", "data", "fix"))
 if (!any(file_exists(dir_ls(fix_dir)))) {
-  for (file in raw_paths) {
-    read_file(file) %>% 
-      # find newlines not at end of line
-      str_replace_all("(?<!\"(\r|1|0)\")\n(?!\"\\d{1,10}\")", " ") %>%
-      # find quotes not at end of field
-      str_replace_all("(?<!(\n|^|,))\"(?!(,(?=\"))|$|\r)", "\'") %>% 
-      str_trim(side = "both") %>% 
-      # save to disk
-      write_file(path = path(fix_dir, basename(file)))
-    gc()
+  for (f in raw_paths) {
+    x <- read_file(f)
+    # find newlines not at end of line
+    x <- str_replace_all(x, "(?<!\"(\r|1|0)\")\n(?!\"\\d{1,10}\")", " ")
+    # find quotes not at end of field
+    x <- str_replace_all(x, "(?<!(\n|^|,))\"(?!(,(?=\"))|$|\r)", "\'")
+    x <- str_trim(x, side = "both")
+    # save to disk
+    write_file(x, path = path(fix_dir, basename(f)))
+    rm(x); flush_memory(1)
   }
 }
+```
+
+``` r
 fix_paths <- dir_ls(fix_dir)
 ```
 
@@ -236,9 +242,10 @@ These fixed files can be read into a single data frame with
 `purrr::map_df()` and `readr::read_delim()`.
 
 ``` r
+# 1,642,006
 inc <- map_df(
-  fix_paths,
-  read_delim,
+  .x = fix_paths,
+  .f = read_delim,
   delim = ",",
   quote = "\"",
   na = c("", "n/a", "NA", "N/A"),
@@ -259,7 +266,10 @@ inc <- inc %>%
   clean_names("snake") %>% 
   rename(
     file = file_number,
-    type = contributor_type,
+    candiate = candidate_name,
+    fil_type = committee_type,
+    fil_name = received_by,
+    con_type = contributor_type,
     date = contribution_date,
     method = type
   )
@@ -268,50 +278,38 @@ inc <- inc %>%
 ## Explore
 
 ``` r
-head(inc)
-#> # A tibble: 6 x 17
-#>    file committee_type committee candidate_name type  name  address city  state zip   occupation
-#>   <int> <chr>          <chr>     <chr>          <chr> <chr> <chr>   <chr> <chr> <chr> <chr>     
-#> 1    17 Regular Party  Indiana … <NA>           Borr… Sue … <NA>    <NA>  <NA>  <NA>  <NA>      
-#> 2    17 Regular Party  Indiana … <NA>           Borr… Sue … 200 So… Indi… IN    46227 <NA>      
-#> 3    17 Regular Party  Indiana … <NA>           Corp… 4 Ma… 9800 C… Indi… IN    46256 <NA>      
-#> 4    17 Regular Party  Indiana … <NA>           Corp… Accr… 118 Ko… LaPo… IN    46350 <NA>      
-#> 5    17 Regular Party  Indiana … <NA>           Corp… Accu… Mr. Jo… LaPo… IN    46350 <NA>      
-#> 6    17 Regular Party  Indiana … <NA>           Corp… Ad-V… 712 11… Lawr… IL    62439 <NA>      
-#> # … with 6 more variables: method <chr>, description <chr>, amount <dbl>, date <dttm>,
-#> #   received_by <chr>, amended <lgl>
+glimpse(inc)
+#> Rows: 1,642,006
+#> Columns: 17
+#> $ file        <int> 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, …
+#> $ fil_type    <chr> "Regular Party", "Regular Party", "Regular Party", "Regular Party", "Regular…
+#> $ committee   <chr> "Indiana Republican State Central Committee", "Indiana Republican State Cent…
+#> $ candiate    <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
+#> $ con_type    <chr> "Borrower", "Borrower", "Corporation", "Corporation", "Corporation", "Corpor…
+#> $ name        <chr> "Sue Ann Gilroy Committee", "Sue Ann Gilroy Committee", "4 Marsh P Q, Inc", …
+#> $ address     <chr> NA, "200 South Meridian Suite 400", "9800 Crosspoint Blvd", "118 Koomier Dri…
+#> $ city        <chr> NA, "Indianapolis", "Indianapolis", "LaPorte", "LaPorte", "Lawrence", "Saint…
+#> $ state       <chr> NA, "IN", "IN", "IN", "IN", "IL", "MO", "MO", "IN", "IN", "NJ", "IN", "MI", …
+#> $ zip         <chr> NA, "46227", "46256", "46350", "46350", "62439", "63118-1852", "63118-1852",…
+#> $ occupation  <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
+#> $ method      <chr> "Loan", "Loan", "Direct", "Direct", "Direct", "Direct", "Direct", "Direct", …
+#> $ description <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
+#> $ amount      <dbl> 15319.53, 15319.53, 5000.00, 5000.00, 5000.00, 5000.00, 400.00, 400.00, 2500…
+#> $ date        <dttm> 1999-12-31, 1999-12-31, 2000-06-30, 1999-11-17, 2000-06-09, 2000-09-29, 199…
+#> $ fil_name    <chr> "0", "0", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
+#> $ amended     <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE,…
 tail(inc)
 #> # A tibble: 6 x 17
-#>    file committee_type committee candidate_name type  name  address city  state zip   occupation
-#>   <int> <chr>          <chr>     <chr>          <chr> <chr> <chr>   <chr> <chr> <chr> <chr>     
-#> 1  7329 Candidate      Friends … Ian Russell G… Indi… Bria… 1519 w… Prin… IN    4760  <NA>      
-#> 2  7329 Candidate      Friends … Ian Russell G… Indi… Ian … 1201 E… Prin… IN    47670 Teacher/E…
-#> 3  7329 Candidate      Friends … Ian Russell G… Indi… Ian … 1201 E… Prin… IN    47670 Teacher/E…
-#> 4  7329 Candidate      Friends … Ian Russell G… Indi… Ian … 1201 E… Prin… IN    47670 Teacher/E…
-#> 5  7329 Candidate      Friends … Ian Russell G… Indi… Ian … 1201 E… Prin… IN    47670 Teacher/E…
-#> 6  7329 Candidate      Friends … Ian Russell G… Indi… Jaco… 412 w … Prin… IN    47670 <NA>      
-#> # … with 6 more variables: method <chr>, description <chr>, amount <dbl>, date <dttm>,
-#> #   received_by <chr>, amended <lgl>
-glimpse(sample_n(inc, 20))
-#> Observations: 20
-#> Variables: 17
-#> $ file           <int> 439, 363, 3222, 7054, 4697, 396, 374, 4960, 3970, 790, 1772, 4019, 5429, …
-#> $ committee_type <chr> "Regular Party", "Regular Party", "Political Action", "Candidate", "Polit…
-#> $ committee      <chr> "Marion County Republican Central Committee", "Marion County Democratic C…
-#> $ candidate_name <chr> NA, NA, NA, "Amie Lynne Neiling", NA, NA, NA, "Mitchell Elias Daniels, Jr…
-#> $ type           <chr> "Individual", "Individual", "Individual", "Individual", "Individual", "In…
-#> $ name           <chr> "Bryan J. Collins", "Russell L. Brown", "Dale C Adams", "Mary Lynda Child…
-#> $ address        <chr> "6150 Autumn Ln", "6637 Meadowgreen Dr", "1017 Sunflower Trail", "498 Kno…
-#> $ city           <chr> "Indianapolis", "Indianapolis", "Orlando", "Evans", "Zionsville", "Indian…
-#> $ state          <chr> "IN", "IN", "Fl", "GA", "IN", "IN", "IN", "IN", "IN", "IN", "IN", "IN", "…
-#> $ zip            <chr> "46220", "46236-8004", "32828", "30809", "46077", "46226", "46814", "4681…
-#> $ occupation     <chr> NA, NA, NA, "Not Currently Employed", NA, NA, "Other", NA, NA, "Science/T…
-#> $ method         <chr> "Direct", "Direct", "Direct", "Direct", "Direct", "Direct", "Direct", "Di…
-#> $ description    <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
-#> $ amount         <dbl> 250.0, 10.0, 20.0, 10.0, 60.0, 250.0, 1000.0, 10.0, 100.0, 15.0, 36.0, 5.…
-#> $ date           <dttm> 2001-05-31, 2009-03-26, 2008-02-26, 2018-07-16, 2001-12-27, 2017-08-28, …
-#> $ received_by    <chr> "Buell", "Leslie Barnes", "Bruce McDivitt", "Amie Lynne Neiling", "S. Sho…
-#> $ amended        <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FAL…
+#>    file fil_type committee candiate con_type name  address city  state zip   occupation method
+#>   <int> <chr>    <chr>     <chr>    <chr>    <chr> <chr>   <chr> <chr> <chr> <chr>      <chr> 
+#> 1  6980 Candida… Chris Ch… Christo… <NA>     Lake… <NA>    <NA>  IN    <NA>  <NA>       Direct
+#> 2  6980 Candida… Chris Ch… Christo… <NA>     I-PA… 150 W … Indi… IN    46204 <NA>       Direct
+#> 3  7441 Candida… The Davi… Gary Du… <NA>     Ann … 4131 N… Indi… IN    46208 Retired    Direct
+#> 4  6271 Candida… VoteCarb… Martin … <NA>     Hous… 47 S M… Indi… IN    46204 <NA>       Direct
+#> 5  7073 Candida… Cole for… Aimee R… <NA>     Act … P.O. B… Camb… MA    0223… <NA>       Direct
+#> 6  5295 Candida… Friends … Suzanne… <NA>     <NA>  <NA>    <NA>  <NA>  <NA>  <NA>       Unite…
+#> # … with 5 more variables: description <chr>, amount <dbl>, date <dttm>, fil_name <chr>,
+#> #   amended <lgl>
 ```
 
 ### Missing
@@ -319,31 +317,52 @@ glimpse(sample_n(inc, 20))
 ``` r
 col_stats(inc, count_na)
 #> # A tibble: 17 x 4
-#>    col            class        n         p
-#>    <chr>          <chr>    <int>     <dbl>
-#>  1 file           <int>        0 0        
-#>  2 committee_type <chr>        0 0        
-#>  3 committee      <chr>       33 0.0000211
-#>  4 candidate_name <chr>   962859 0.614    
-#>  5 type           <chr>    17342 0.0111   
-#>  6 name           <chr>    17644 0.0113   
-#>  7 address        <chr>    44350 0.0283   
-#>  8 city           <chr>    40100 0.0256   
-#>  9 state          <chr>    35839 0.0229   
-#> 10 zip            <chr>    51335 0.0328   
-#> 11 occupation     <chr>  1294427 0.826    
-#> 12 method         <chr>        0 0        
-#> 13 description    <chr>  1521771 0.971    
-#> 14 amount         <dbl>        0 0        
-#> 15 date           <dttm>    4154 0.00265  
-#> 16 received_by    <chr>   102507 0.0654   
-#> 17 amended        <lgl>        0 0
+#>    col         class        n         p
+#>    <chr>       <chr>    <int>     <dbl>
+#>  1 file        <int>        0 0        
+#>  2 fil_type    <chr>        0 0        
+#>  3 committee   <chr>       33 0.0000201
+#>  4 candiate    <chr>  1021239 0.622    
+#>  5 con_type    <chr>   119628 0.0729   
+#>  6 name        <chr>    30668 0.0187   
+#>  7 address     <chr>    57874 0.0352   
+#>  8 city        <chr>    53741 0.0327   
+#>  9 state       <chr>    49265 0.0300   
+#> 10 zip         <chr>    66131 0.0403   
+#> 11 occupation  <chr>  1327824 0.809    
+#> 12 method      <chr>        0 0        
+#> 13 description <chr>  1591459 0.969    
+#> 14 amount      <dbl>        0 0        
+#> 15 date        <dttm>    4154 0.00253  
+#> 16 fil_name    <chr>   104617 0.0637   
+#> 17 amended     <lgl>        0 0
 ```
 
 ``` r
-inc <- inc %>% flag_na(committee, name, amount, date)
+key_vars <- c("committee", "name", "amount", "date")
+inc <- flag_na(inc, all_of(key_vars))
 mean(inc$na_flag)
-#> [1] 0.01384448
+#> [1] 0.02114669
+```
+
+``` r
+inc %>% 
+  filter(na_flag) %>% 
+  select(all_of(key_vars)) %>% 
+  sample_n(10)
+#> # A tibble: 10 x 4
+#>    committee                                                  name       amount date               
+#>    <chr>                                                      <chr>       <dbl> <dttm>             
+#>  1 Kleeman for State Representative                           <NA>         50   2018-08-15 00:00:00
+#>  2 Johnson County Republican Central Committee                <NA>       6326   2012-10-12 00:00:00
+#>  3 DAGA Indiana                                               <NA>        100   2020-07-19 00:00:00
+#>  4 Voters for Julie Olthoff                                   <NA>        149.  2014-12-31 00:00:00
+#>  5 Howard County Republican Party                             <NA>        725   2016-10-14 00:00:00
+#>  6 DAGA Indiana                                               <NA>          5   2020-07-13 00:00:00
+#>  7 Sheet Metal Workers Local 20 Voluntary Politital Action F… Ed Mahern     0   NA                 
+#>  8 O'Bannon for Indiana                                       Boyd, Joh… 1000   NA                 
+#>  9 DAGA Indiana                                               <NA>         12.4 2020-07-26 00:00:00
+#> 10 Myers for Governor                                         <NA>         10   2020-09-12 00:00:00
 ```
 
 ### Duplicates
@@ -351,7 +370,28 @@ mean(inc$na_flag)
 ``` r
 inc <- flag_dupes(inc, everything())
 mean(inc$dupe_flag)
-#> [1] 0.004561231
+#> [1] 0.01585317
+```
+
+``` r
+inc %>% 
+  filter(dupe_flag) %>% 
+  select(all_of(key_vars)) %>% 
+  arrange(date, name)
+#> # A tibble: 26,031 x 4
+#>    committee                                   name                      amount date               
+#>    <chr>                                       <chr>                      <dbl> <dttm>             
+#>  1 Hoosiers for Indiana                        Timothy or Dobbie Smith      200 2000-01-18 00:00:00
+#>  2 Hoosiers for Indiana                        Timothy or Dobbie Smith      200 2000-01-18 00:00:00
+#>  3 Hoosiers for Indiana                        William G. Mays              200 2000-01-18 00:00:00
+#>  4 Hoosiers for Indiana                        William G. Mays              200 2000-01-18 00:00:00
+#>  5 Indiana State Nurses Association Nurse PAC  Diana Sullivan                 0 2000-01-24 00:00:00
+#>  6 Indiana State Nurses Association Nurse PAC  Diana Sullivan                 0 2000-01-24 00:00:00
+#>  7 Windler for State Representative District … Wilford and Esther Senes…     50 2000-03-21 00:00:00
+#>  8 Windler for State Representative District … Wilford and Esther Senes…     50 2000-03-21 00:00:00
+#>  9 Windler for State Representative District … Kenny and Judy Goodman        25 2000-03-26 00:00:00
+#> 10 Windler for State Representative District … Kenny and Judy Goodman        25 2000-03-26 00:00:00
+#> # … with 26,021 more rows
 ```
 
 ### Categorical
@@ -359,34 +399,30 @@ mean(inc$dupe_flag)
 ``` r
 col_stats(inc, n_distinct)
 #> # A tibble: 19 x 4
-#>    col            class       n          p
-#>    <chr>          <chr>   <int>      <dbl>
-#>  1 file           <int>    2702 0.00172   
-#>  2 committee_type <chr>       4 0.00000255
-#>  3 committee      <chr>    4262 0.00272   
-#>  4 candidate_name <chr>    1762 0.00112   
-#>  5 type           <chr>      13 0.00000829
-#>  6 name           <chr>  420065 0.268     
-#>  7 address        <chr>  404270 0.258     
-#>  8 city           <chr>   17757 0.0113    
-#>  9 state          <chr>     284 0.000181  
-#> 10 zip            <chr>   38859 0.0248    
-#> 11 occupation     <chr>      33 0.0000211 
-#> 12 method         <chr>      11 0.00000702
-#> 13 description    <chr>    9992 0.00638   
-#> 14 amount         <dbl>   45701 0.0292    
-#> 15 date           <dttm>   9676 0.00617   
-#> 16 received_by    <chr>    7698 0.00491   
-#> 17 amended        <lgl>       2 0.00000128
-#> 18 na_flag        <lgl>       2 0.00000128
-#> 19 dupe_flag      <lgl>       2 0.00000128
+#>    col         class       n          p
+#>    <chr>       <chr>   <int>      <dbl>
+#>  1 file        <int>    2819 0.00172   
+#>  2 fil_type    <chr>       4 0.00000244
+#>  3 committee   <chr>    4381 0.00267   
+#>  4 candiate    <chr>    1853 0.00113   
+#>  5 con_type    <chr>      15 0.00000914
+#>  6 name        <chr>  437880 0.267     
+#>  7 address     <chr>  424103 0.258     
+#>  8 city        <chr>   18757 0.0114    
+#>  9 state       <chr>     285 0.000174  
+#> 10 zip         <chr>   39851 0.0243    
+#> 11 occupation  <chr>      33 0.0000201 
+#> 12 method      <chr>      11 0.00000670
+#> 13 description <chr>   10713 0.00652   
+#> 14 amount      <dbl>   46742 0.0285    
+#> 15 date        <dttm>   9674 0.00589   
+#> 16 fil_name    <chr>    7901 0.00481   
+#> 17 amended     <lgl>       2 0.00000122
+#> 18 na_flag     <lgl>       2 0.00000122
+#> 19 dupe_flag   <lgl>       2 0.00000122
 ```
 
-![](../plots/comm_type_bar-1.png)<!-- -->
-
-![](../plots/cont_type_bar-1.png)<!-- -->
-
-![](../plots/method_bar-1.png)<!-- -->
+![](../plots/distinct_plots-1.png)<!-- -->![](../plots/distinct_plots-2.png)<!-- -->![](../plots/distinct_plots-3.png)<!-- -->
 
 ### Continuous
 
@@ -395,9 +431,9 @@ col_stats(inc, n_distinct)
 ``` r
 summary(inc$amount)
 #>      Min.   1st Qu.    Median      Mean   3rd Qu.      Max. 
-#> -12301513        15        50       718       250  55452555
+#> -12301513        15        50       711       250  55452555
 mean(inc$amount <= 0)
-#> [1] 0.009021655
+#> [1] 0.008631515
 ```
 
 ![](../plots/amount_histogram-1.png)<!-- -->
@@ -422,6 +458,7 @@ inc <- mutate(
 ``` r
 inc %>% 
   count(year) %>% 
+  filter(!is.na(year)) %>% 
   mutate(even = is_even(year)) %>% 
   ggplot(aes(x = year, y = n)) +
   geom_col(aes(fill = even)) + 
@@ -472,24 +509,24 @@ inc %>%
   distinct() %>% 
   sample_n(10)
 #> # A tibble: 10 x 2
-#>    address                             address_norm                    
-#>    <chr>                               <chr>                           
-#>  1 7014 Shay Ct                        7014 SHAY CT                    
-#>  2 3420 LAWRENCE BANER RD              3420 LAWRENCE BANER RD          
-#>  3 510 Paris Drive                     510 PARIS DR                    
-#>  4 8542 N. Harper Road                 8542 N HARPER RD                
-#>  5 327 CAROLYN COURT                   327 CAROLYN CT                  
-#>  6 600 E 96th St #585                  600 E 96 TH ST 585              
-#>  7 2562 W MAYBELLE AVENUE              2562 W MAYBELLE AVE             
-#>  8 1275 Pennsylvania Ave., NW Suite700 1275 PENNSYLVANIA AVE NW STE 700
-#>  9 607 Glade Place                     607 GLADE PLACE                 
-#> 10 4444 Knolltop Dr                    4444 KNOLLTOP DR
+#>    address                 address_norm          
+#>    <chr>                   <chr>                 
+#>  1 23604 River Lake Ct.    23604 RIV LK CT       
+#>  2 3028 Lawson Drive       3028 LAWSON DR        
+#>  3 2101 U.S. 27            2101 U S 27           
+#>  4 1627 K ST NW, SUITE 700 1627 K ST NW STE 700  
+#>  5 7621 W. 450 S.          7621 W 450 S          
+#>  6 11707 EAGLE LAKE COURT  11707 EAGLE LK CT     
+#>  7 67 COLD SPRING CIRCLE   67 COLD SPG CIR       
+#>  8 7014 Shay Ct            7014 SHAY CT          
+#>  9 3420 LAWRENCE BANER RD  3420 LAWRENCE BANER RD
+#> 10 510 Paris Drive         510 PARIS DR
 ```
 
 ### ZIP
 
 For ZIP codes, the `campfin::normal_zip()` function will attempt to
-create valied *five* digit codes by removing the ZIP+4 suffix and
+create valid *five* digit codes by removing the ZIP+4 suffix and
 returning leading zeroes dropped by other programs like Microsoft Excel.
 
 ``` r
@@ -511,8 +548,8 @@ progress_table(
 #> # A tibble: 2 x 6
 #>   stage    prop_in n_distinct prop_na  n_out n_diff
 #>   <chr>      <dbl>      <dbl>   <dbl>  <dbl>  <dbl>
-#> 1 zip        0.915      38859  0.0328 129256  26037
-#> 2 zip_norm   0.997      14997  0.0342   4947   1513
+#> 1 zip        0.917      39851  0.0403 130600  26375
+#> 2 zip_norm   0.997      15768  0.0417   5059   1541
 ```
 
 ### State
@@ -536,20 +573,20 @@ inc <- inc %>%
 inc %>% 
   filter(state != state_norm) %>% 
   count(state, state_norm, sort = TRUE)
-#> # A tibble: 123 x 3
+#> # A tibble: 124 x 3
 #>    state state_norm     n
 #>    <chr> <chr>      <int>
-#>  1 In    IN          3721
-#>  2 Un    UN           886
-#>  3 in    IN           500
-#>  4 D.    D            111
+#>  1 In    IN          3875
+#>  2 Un    UN           934
+#>  3 in    IN           522
+#>  4 D.    D            128
 #>  5 Va    VA           102
-#>  6 Oh    OH            91
-#>  7 Il    IL            85
-#>  8 Ky    KY            53
-#>  9 Fl    FL            43
-#> 10 iN    IN            33
-#> # … with 113 more rows
+#>  6 Oh    OH            96
+#>  7 Il    IL            91
+#>  8 Ky    KY            50
+#>  9 Fl    FL            44
+#> 10 iN    IN            32
+#> # … with 114 more rows
 ```
 
 We can further improve these values by checking the state abbreviation
@@ -577,20 +614,20 @@ inc <- inc %>%
 inc %>% 
   filter(match_dist == 1) %>% 
   count(state, state_norm, sort = TRUE)
-#> # A tibble: 213 x 3
+#> # A tibble: 216 x 3
 #>    state state_norm     n
 #>    <chr> <chr>      <int>
-#>  1 In    IN          3633
-#>  2 IN    IL          1136
-#>  3 IL    IN           150
+#>  1 In    IN          3783
+#>  2 IN    IL          1152
+#>  3 IL    IN           179
 #>  4 IN    TN           131
-#>  5 D.    DC           107
-#>  6 Oh    OH            90
-#>  7 Il    IL            83
-#>  8 Ky    KY            52
-#>  9 NY    NJ            52
-#> 10 Fl    FL            42
-#> # … with 203 more rows
+#>  5 D.    DC           124
+#>  6 Oh    OH            94
+#>  7 Il    IL            89
+#>  8 NY    NJ            56
+#>  9 Ky    KY            49
+#> 10 Fl    FL            43
+#> # … with 206 more rows
 ```
 
 ``` r
@@ -602,8 +639,8 @@ progress_table(
 #> # A tibble: 2 x 6
 #>   stage      prop_in n_distinct prop_na n_out n_diff
 #>   <chr>        <dbl>      <dbl>   <dbl> <dbl>  <dbl>
-#> 1 state        0.996        284  0.0229  6622    226
-#> 2 state_norm   0.999        138  0.0229  1189     82
+#> 1 state        0.996        285  0.0300  6945    227
+#> 2 state_norm   0.999        138  0.0301  1245     82
 ```
 
 ### City
@@ -664,20 +701,20 @@ many_city <- c(valid_city, extra_city)
 inc %>% 
   count(city_swap, state_norm, sort = TRUE) %>% 
   filter(!is.na(city_swap), city_swap %out% many_city)
-#> # A tibble: 921 x 3
+#> # A tibble: 956 x 3
 #>    city_swap        state_norm     n
 #>    <chr>            <chr>      <int>
-#>  1 INDY             IN          1193
-#>  2 ABBOTT PARKS     IL           636
-#>  3 DEER PARKS       IL           228
-#>  4 OVERLAND PARKS   KS           193
-#>  5 FARMINGTON HILLS MI           112
-#>  6 INDIANAPOLIS IN  IN            69
-#>  7 INDPLS           IN            69
-#>  8 COLLEGE PARKS    GA            62
-#>  9 SHELBY TOWNSHIP  MI            60
-#> 10 WAUSATOSA        WI            57
-#> # … with 911 more rows
+#>  1 INDY             IN          1184
+#>  2 ABBOTT PARK      IL           636
+#>  3 FARMINGTON HILLS MI           118
+#>  4 LEE SOUTH SUMMIT MO            74
+#>  5 INDIANAPOLIS IN  IN            69
+#>  6 INDPLS           IN            69
+#>  7 SHELBY TOWNSHIP  MI            60
+#>  8 WAUSATOSA        WI            57
+#>  9 PONTE VEDRA      FL            56
+#> 10 TOBINSPORT       IN            51
+#> # … with 946 more rows
 ```
 
 ``` r
@@ -694,9 +731,9 @@ inc <- inc %>%
 
 | stage      | prop\_in | n\_distinct | prop\_na | n\_out | n\_diff |
 | :--------- | -------: | ----------: | -------: | -----: | ------: |
-| city\_raw) |    0.955 |       12943 |    0.026 |  69418 |    6642 |
-| city\_norm |    0.976 |       11346 |    0.029 |  36242 |    5087 |
-| city\_swap |    0.998 |        7167 |    0.041 |   3614 |     897 |
+| city\_raw) |    0.955 |       13557 |    0.033 |  70700 |    6845 |
+| city\_norm |    0.978 |       11933 |    0.036 |  34128 |    5173 |
+| city\_swap |    0.998 |        7610 |    0.049 |   3370 |     936 |
 
 You can see how the percentage of valid values increased with each
 stage.
@@ -735,64 +772,128 @@ progress %>%
 
 ## Conclude
 
+Before exporting, we can remove the intermediary normalization columns
+and rename all added variables with the `_clean` suffix.
+
 ``` r
-glimpse(sample_n(inc, 20))
-#> Observations: 20
-#> Variables: 25
-#> $ file           <int> 866, 5001, 4376, 1312, 3447, 26, 790, 116, 3268, 4479, 3450, 1772, 1772, …
-#> $ committee_type <chr> "Political Action", "Political Action", "Candidate", "Political Action", …
-#> $ committee      <chr> "INDIANA MORTGAGE BANKERS POLITICAL ACTION COMMITTEE", "COCA-COLA ENTERPR…
-#> $ candidate_name <chr> NA, NA, "Peggy McDaniel Welch", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
-#> $ type           <chr> "Corporation", "Individual", "Corporation", "Individual", "Individual", "…
-#> $ name           <chr> "Regions Bank", "CARL LEE", "Humana", "Huy NGUYEN", "Michael Curtis", "Sa…
-#> $ address        <chr> "One Indiana Square", "P O BOX 701447", "P. O. Box 1438", "1307 W Pinecre…
-#> $ city_raw       <chr> "Indianapolis", "SAN ANTONIO", "Louisville", "Peoria", "Seattle", "Bloomi…
-#> $ state          <chr> "IN", "TX", "KY", "IL", "WA", "IN", "KY", "IN", "IN", "IN", NA, "IN", "KY…
-#> $ zip            <chr> "46204", "78270", "40201-1438", "61614", "98134", "47403", "40220", "4620…
-#> $ occupation     <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "Manufacturing", "Manufacturi…
-#> $ method         <chr> "Direct", "Direct", "Direct", "Direct", "Direct", "Direct", "Direct", "Mi…
-#> $ description    <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
-#> $ amount         <dbl> 100.00, 10.00, 250.00, 10.00, 25.00, 50.00, 25.00, 3000.00, 65.00, 23.08,…
-#> $ date           <date> 2015-01-07, 2006-12-20, 2001-12-31, 2003-11-25, 2012-12-18, 2006-06-03, …
-#> $ received_by    <chr> "Gary Avery", "GENE RACKLEY", "Helga Gustin", "Gary Vest", NA, "IDP", "Mi…
-#> $ amended        <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FAL…
-#> $ na_flag        <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FAL…
-#> $ dupe_flag      <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FAL…
-#> $ year           <dbl> 2015, 2006, 2001, 2003, 2012, 2006, 2013, 2008, 2014, 2014, 2006, 2017, 2…
-#> $ address_norm   <chr> "ONE INDIANA SQ", "PO BOX 701447", "PO BOX 1438", "1307 W PINECREST DR", …
-#> $ zip_norm       <chr> "46204", "78270", "40201", "61614", "98134", "47403", "40220", "46204", "…
-#> $ state_norm     <chr> "IN", "TX", "KY", "IL", "WA", "IN", "KY", "IN", "IN", "IN", NA, "IN", "KY…
-#> $ city_norm      <chr> "INDIANAPOLIS", "SAN ANTONIO", "LOUISVILLE", "PEORIA", "SEATTLE", "BLOOMI…
-#> $ city_swap      <chr> "INDIANAPOLIS", "SAN ANTONIO", "LOUISVILLE", "PEORIA", "SEATTLE", "BLOOMI…
+inc <- inc %>% 
+  select(
+    -city_norm,
+    city_clean = city_swap
+  ) %>% 
+  rename_all(~str_replace(., "_norm", "_clean")) %>% 
+  rename_all(~str_remove(., "_raw"))
 ```
 
-1.  There are 1,567,340 records in the database.
-2.  There are 7,149 duplicate records in the database (0.46%).
+``` r
+glimpse(sample_n(inc, 50))
+#> Rows: 50
+#> Columns: 24
+#> $ file          <int> 3222, 17, 3222, 4479, 4479, 4367, 6174, 866, 5001, 4376, 1312, 3447, 26, 7…
+#> $ fil_type      <chr> "Political Action", "Regular Party", "Political Action", "Political Action…
+#> $ committee     <chr> "Plumbers Steamfitters Local 136 PAC Committee", "Indiana Republican State…
+#> $ candiate      <chr> NA, NA, NA, NA, NA, NA, "John R. Gregg", NA, NA, "Peggy McDaniel Welch", N…
+#> $ con_type      <chr> "Individual", "Other Organization", "Individual", "Individual", "Individua…
+#> $ name          <chr> "Robert A Mann", "Senate Majority Campaign Committee", "Robert F Reisinger…
+#> $ address       <chr> "PO Box 1284", "47 S. Meridian St., 2nd Flr", "2112 Red Bank Road", "11533…
+#> $ city          <chr> "Uniontown", "Indianapolis", "Evansville", "FISHERS", "INDIANAPOLIS", "Sea…
+#> $ state         <chr> "KY", "IN", "IN", "IN", "IN", "WA", "IN", "IN", "TX", "KY", "IL", "WA", "I…
+#> $ zip           <chr> "42461", "46204", "47720", "46037", "46235", "98185", "46201", "46204", "7…
+#> $ occupation    <chr> "Construction/Engineering", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
+#> $ method        <chr> "Direct", "Misc", "Direct", "Direct", "Direct", "Direct", "Direct", "Direc…
+#> $ description   <chr> NA, "Rev for Services Rendered", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
+#> $ amount        <dbl> 7.32, 15770.35, 3.81, 7.58, 5.00, 150.00, 10.00, 100.00, 10.00, 250.00, 10…
+#> $ date          <date> 2016-05-09, 2014-01-22, 2007-02-14, 2015-08-06, 2011-12-06, 2002-12-20, 2…
+#> $ fil_name      <chr> "Wendell Hibdon", "Treasurer", "Bruce McDivitt", "Mr. Steven Rogers", "Mr.…
+#> $ amended       <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALS…
+#> $ na_flag       <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALS…
+#> $ dupe_flag     <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALS…
+#> $ year          <dbl> 2016, 2014, 2007, 2015, 2011, 2002, 2016, 2015, 2006, 2001, 2003, 2012, 20…
+#> $ address_clean <chr> "PO BOX 1284", "47 S MERIDIAN ST 2 ND FLR", "2112 RED BANK RD", "11533 LOC…
+#> $ zip_clean     <chr> "42461", "46204", "47720", "46037", "46235", "98185", "46201", "46204", "7…
+#> $ state_clean   <chr> "KY", "IN", "IN", "IN", "IN", "WA", "IN", "IN", "TX", "KY", "IL", "WA", "I…
+#> $ city_clean    <chr> "UNIONTOWN", "INDIANAPOLIS", "EVANSVILLE", "FISHERS", "INDIANAPOLIS", "SEA…
+```
+
+1.  There are 1,642,006 records in the database.
+2.  There are 26,031 duplicate records in the database.
 3.  The range and distribution of `amount` and `date` seem reasonable.
-4.  There are 21,699 records missing a contributor or recipient name,
-    date, or amount (1.38%).
-5.  Consistency in goegraphic data has been improved with
+4.  There are 34,723 records missing key variables.
+5.  Consistency in geographic data has been improved with
     `campfin::normal_*()`.
 6.  The 4-digit `year` variable has been created with
     `lubridate::year()`.
 
 ## Export
 
+Now the file can be saved on disk for upload to the Accountability
+server.
+
 ``` r
 clean_dir <- dir_create(here("in", "contribs", "data", "clean"))
+clean_path <- path(clean_dir, "in_contribs_clean.csv")
+write_csv(inc, clean_path, na = "")
+(clean_size <- file_size(clean_path))
+#> 360M
+file_encoding(clean_path) %>% 
+  mutate(across(path, path.abbrev))
+#> # A tibble: 1 x 3
+#>   path                                           mime            charset 
+#>   <chr>                                          <chr>           <chr>   
+#> 1 ~/in/contribs/data/clean/in_contribs_clean.csv application/csv us-ascii
 ```
+
+## Upload
+
+We can use the `aws.s3::put_object()` to upload the text file to the IRW
+server.
 
 ``` r
-inc <- inc %>% 
-  select(
-    -city_norm,
-    city_norm = city_swap
-  ) %>% 
-  rename_all(~str_replace(., "_norm", "_clean"))
-
-write_csv(
-  x = inc,
-  path = path(clean_dir, "in_contribs_clean.csv"),
-  na = ""
-)
+aws_path <- path("csv", basename(clean_path))
+if (!object_exists(aws_path, "publicaccountability")) {
+  put_object(
+    file = clean_path,
+    object = aws_path, 
+    bucket = "publicaccountability",
+    acl = "public-read",
+    show_progress = TRUE,
+    multipart = TRUE
+  )
+}
+aws_head <- head_object(aws_path, "publicaccountability")
+(aws_size <- as_fs_bytes(attr(aws_head, "content-length")))
+#> 360M
+unname(aws_size == clean_size)
+#> [1] TRUE
 ```
+
+## Dictionary
+
+The following table describes the variables in our final exported file:
+
+| Column          | Type        | Definition                             |
+| :-------------- | :---------- | :------------------------------------- |
+| `file`          | `integer`   | Source file number                     |
+| `fil_type`      | `character` | Type of committee filing               |
+| `committee`     | `character` | Recipient filing committee name        |
+| `candiate`      | `character` | Recipient candidate name               |
+| `con_type`      | `character` | Contributor type                       |
+| `name`          | `character` | Contributor name                       |
+| `address`       | `character` | Contributor street address             |
+| `city`          | `character` | Contributor city name                  |
+| `state`         | `character` | Contributor state abbreviation         |
+| `zip`           | `character` | Contributor ZIP+4 code                 |
+| `occupation`    | `character` | Contributor occupation                 |
+| `method`        | `character` | Method contribution made               |
+| `description`   | `character` | Free-form contribution description     |
+| `amount`        | `double`    | Contribution amount or correction      |
+| `date`          | `double`    | Date contribution made                 |
+| `fil_name`      | `character` | Name or role of filer                  |
+| `amended`       | `logical`   | Flag indicating amended record         |
+| `na_flag`       | `logical`   | Flag indicating missing values         |
+| `dupe_flag`     | `logical`   | Flag indicating duplicate row          |
+| `year`          | `double`    | Calendar year contribution made        |
+| `address_clean` | `character` | Normalized street address              |
+| `zip_clean`     | `character` | Normalized 5-digit ZIP code            |
+| `state_clean`   | `character` | Normalized 2-letter state abbreviation |
+| `city_clean`    | `character` | Normalized city name                   |

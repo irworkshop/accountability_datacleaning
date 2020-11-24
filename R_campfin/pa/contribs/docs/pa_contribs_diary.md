@@ -1,7 +1,7 @@
 Pennsylvania Contributions
 ================
 Kiernan Nicholls
-2020-05-05 10:43:46
+2020-11-06 14:40:51
 
   - [Project](#project)
   - [Objectives](#objectives)
@@ -12,6 +12,7 @@ Kiernan Nicholls
   - [Wrangle](#wrangle)
   - [Conclude](#conclude)
   - [Export](#export)
+  - [Upload](#upload)
   - [Dictionary](#dictionary)
 
 <!-- Place comments regarding knitting here -->
@@ -88,7 +89,7 @@ feature and should be run as such. The project also uses the dynamic
 ``` r
 # where does this document knit?
 here::here()
-#> [1] "/home/kiernan/Code/accountability_datacleaning/R_campfin"
+#> /home/kiernan/Code/tap/R_campfin
 ```
 
 ## Data
@@ -211,8 +212,10 @@ Then we will unzip the annual directory from each archive.
 
 ``` r
 if (all(dir_ls(raw_dir) %in% zip_paths)) {
-  for (zip in zip_paths) {
-    unzip(zip, exdir = raw_dir)
+  for (z in zip_paths) {
+    out <- unzip(z, exdir = raw_dir, junkpaths = TRUE)
+    y_dir <- dir_create(path(raw_dir, str_extract(z, "\\d{4}")))
+    file_move(out, path(y_dir, basename(out)))
   }
 }
 ```
@@ -226,13 +229,13 @@ in new vectors, which can then be read together.
 con_paths <- dir_ls(
   path = raw_dir, 
   recurse = TRUE, 
-  regexp = "contrib[\\.|_]"
+  regexp = "(C|c)ontrib[\\.|_]"
 )
 
 fil_paths <- dir_ls(
   path = raw_dir, 
   recurse = TRUE, 
-  regexp = "filer[\\.|_]"
+  regexp = "(F|f)iler[\\.|_]"
 )
 ```
 
@@ -256,11 +259,10 @@ the same format.
     #> * `~/pa/contribs/data/raw/2014/contrib_2014.txt`
     #> * `~/pa/contribs/data/raw/2015/contrib_2015.txt`
     #> * `~/pa/contribs/data/raw/2016/contrib_2016.txt`
-    #> * `~/pa/contribs/data/raw/contrib.txt`
-    #> * `~/pa/contribs/data/raw/contrib_2017.txt`
-    #> * `~/pa/contribs/data/raw/contrib_2018_03042019.txt`
-    #> * `~/pa/contribs/data/raw/contrib_2020_02112020.txt`
-    #> * `~/pa/contribs/data/raw/contrib_2020_02122020.txt`
+    #> * `~/pa/contribs/data/raw/2017/contrib_2017.txt`
+    #> * `~/pa/contribs/data/raw/2018/contrib_2018_03042019.txt`
+    #> * `~/pa/contribs/data/raw/2019/contrib.txt`
+    #> * `~/pa/contribs/data/raw/2020/Contrib.txt`
 
 ### Fix
 
@@ -278,11 +280,11 @@ them.
 # do not repeat if done
 if (!file_exists(fix_check)) {
   # for all contrib and filer files
-  for (file in c(con_paths, fil_paths)) {
+  for (f in c(con_paths, fil_paths)) {
     # read raw file
-    read_file(file) %>% 
+    read_file(f) %>% 
       # force conversion to simple
-      str_conv(encoding = "ASCII") %>% 
+      iconv(to = "ASCII", sub = "") %>% 
       # replace non-carriage newline
       str_replace_all("(?<!\r)\n", " ") %>%
       # replace not-field double quotes
@@ -290,9 +292,9 @@ if (!file_exists(fix_check)) {
       # replace non-delim commas
       str_remove_all(",(?!\"|\\d|\\.\\d+|-(\\d|\\.))") %>% 
       # overwrite raw file
-      write_file(file)
+      write_file(f)
     # check progress
-    message(paste(basename(file), "done"))
+    message(paste(basename(f), "done"))
     # clean garbage memory
     flush_memory()
   }
@@ -305,42 +307,6 @@ if (!file_exists(fix_check)) {
 
 Now that each text file has been cleaned of irregularities, they can
 each be properly read into R.
-
-If this has already been done, it’s easier to read the single file that
-was written at the end of the initial process. If we read this single
-file, we can skip the chunks below reading for the first time.
-
-``` r
-pac_files <- path(raw_dir, sprintf("pac%s.csv", 1:10))
-no_pac <- !all(file_exists(pac_files))
-if (!no_pac) {
-  pac <- vroom(
-    file = pac_files,
-    delim = "|",
-    escape_backslash = TRUE,
-    col_names = TRUE,
-    col_types = cols(
-      filerid = col_double(),
-      eyear = col_double(),
-      cycle = col_double(),
-      date = col_date(),
-      amount = col_double(),
-      fil_type = col_double(),
-      district = col_integer(),
-      fil_address2 = col_logical(),
-      fil_phone = col_logical()
-    )
-  )
-}
-```
-
-If there are no consolidated contribution files from cleaning, we will
-have to read and join the files from scratch.
-
-``` r
-print(no_pac) # if TRUE must redo
-#> [1] FALSE
-```
 
 First, we will read all the annual contribution files into a single data
 frame using `vroom::vroom()`. We need to use the column names and types
@@ -410,18 +376,20 @@ only one copy of the data.
 
 ``` r
 nrow(filers)
+#> [1] 142407
 filers <- filers %>% 
   group_by(filerid, eyear) %>% 
   slice(1) %>% 
   ungroup()
 nrow(filers)
+#> [1] 43432
 ```
 
 Now the filer information can be added to the contribution data with a
 `dplyr::left_join()` along the unique filer ID and election year.
 
 ``` r
-# 13,135,695
+# 18,386,163
 pac <- left_join(
   x = pac,
   y = filers,
@@ -440,6 +408,7 @@ pac <- rename_prefix(
 
 ``` r
 pac <- pac %>% 
+  rename_with(~str_replace(., "address", "addr")) %>% 
   rename(
     con_zip = con_zipcode,
     date = contdate1,
@@ -451,24 +420,10 @@ pac <- pac %>%
   )
 ```
 
-We will save a copy of this new file to the disk that can easily be read
-if needed. This is the step that is done above for the `no_pac` check.
+We will also add a temporary unique ID for each transaction.
 
 ``` r
-n <- 10
-x <- nrow(pac)/n
-for (i in seq(1, n)) {
-  write_delim(
-    x = pac[1:x, ],
-    path = path(raw_dir, sprintf("pac%s.csv", i)),
-    delim = "|",
-    quote_escape = "backslash"
-  )
-  pac <- pac[-(1:x), ]
-  flush_memory()
-  Sys.sleep(60)
-  message(percent(i/n))
-}
+pac <- mutate(pac, tx = row_number())
 ```
 
 ## Explore
@@ -477,50 +432,52 @@ We should first check the top and bottom of the read data frame to
 ensure the file was read correctly. This view also helps simply
 understand the format.
 
+There are 18,386,163 rows of 27 columns.
+
 ``` r
 glimpse(pac)
-#> Rows: 17,912,110
-#> Columns: 26
-#> $ filerid      <dbl> 2000006, 2000006, 2000006, 2000006, 2000006, 2000006, 2000006, 2000006, 200…
-#> $ eyear        <dbl> 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 200…
-#> $ cycle        <dbl> 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 6, 3, 2, 2, 2, 2, 2, 2, 2, 2, 2, …
-#> $ section      <chr> "IB", "IB", "IB", "IB", "IB", "IB", "IB", "IB", "IB", "IB", "IB", "IB", "IB…
-#> $ contributor  <chr> "JOSHUA CERVENAK", "LANCE CUNNINGHAM", "JASON HAROLD", "KEITH HILL", "CHIP …
-#> $ con_address1 <chr> "290 LYNBROOK DR N", "3267 N GEORGE ST", NA, "240 ARCH ST", "700 LINDA LANE…
-#> $ con_address2 <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "BOX 3305", NA,…
-#> $ con_city     <chr> "YORK", "EMIGSVILLE", NA, "YORK", "STEVENS", "YORK", "SPRING GROVE", "YORK"…
-#> $ con_state    <chr> "PA", "PA", NA, "PA", "PA", "PA", "PA", "PA", "PA", "PA", "PA", "PA", "PA",…
-#> $ con_zip      <chr> "17402", "17318", NA, "17404", "17578", "17403", "17362", "17403", "17403",…
-#> $ occupation   <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
-#> $ ename        <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
-#> $ date         <date> 2000-07-21, 2000-07-21, 2000-07-21, 2000-07-21, 2000-07-21, 2000-07-21, 20…
-#> $ amount       <dbl> 55, 55, 55, 55, 55, 55, 89, 200, 100, 100, 150, 100, 100, 100, 100, 100, 15…
-#> $ fil_type     <dbl> 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, …
-#> $ filer        <chr> "MACKERETH BEVERLY COM TO ELECT", "MACKERETH BEVERLY COM TO ELECT", "MACKER…
-#> $ office       <chr> "STH", "STH", "STH", "STH", "STH", "STH", "STH", "STH", "STH", "STH", "STH"…
-#> $ district     <int> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
-#> $ party        <chr> "REP", "REP", "REP", "REP", "REP", "REP", "REP", "REP", "REP", "REP", "REP"…
-#> $ fil_address1 <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
-#> $ fil_address2 <lgl> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
-#> $ fil_city     <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
-#> $ fil_state    <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
-#> $ fil_zip      <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
-#> $ county       <chr> "67", "67", "67", "67", "67", "67", "67", "67", "67", "67", "67", "67", "67…
-#> $ fil_phone    <lgl> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
+#> Rows: 18,386,163
+#> Columns: 27
+#> $ filerid     <chr> "2000006", "2000006", "2000006", "2000006", "2000006", "2000006", "2000006",…
+#> $ eyear       <int> 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000…
+#> $ cycle       <int> 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 6, 3, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2…
+#> $ section     <chr> "IB", "IB", "IB", "IB", "IB", "IB", "IB", "IB", "IB", "IB", "IB", "IB", "IB"…
+#> $ contributor <chr> "JOSHUA CERVENAK", "LANCE CUNNINGHAM", "JASON HAROLD", "KEITH HILL", "CHIP P…
+#> $ con_addr1   <chr> "290 LYNBROOK DR N", "3267 N GEORGE ST", NA, "240 ARCH ST", "700 LINDA LANE"…
+#> $ con_addr2   <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "BOX 3305", NA, …
+#> $ con_city    <chr> "YORK", "EMIGSVILLE", NA, "YORK", "STEVENS", "YORK", "SPRING GROVE", "YORK",…
+#> $ con_state   <chr> "PA", "PA", NA, "PA", "PA", "PA", "PA", "PA", "PA", "PA", "PA", "PA", "PA", …
+#> $ con_zip     <chr> "17402", "17318", NA, "17404", "17578", "17403", "17362", "17403", "17403", …
+#> $ occupation  <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
+#> $ ename       <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
+#> $ date        <date> 2000-07-21, 2000-07-21, 2000-07-21, 2000-07-21, 2000-07-21, 2000-07-21, 200…
+#> $ amount      <dbl> 55, 55, 55, 55, 55, 55, 89, 200, 100, 100, 150, 100, 100, 100, 100, 100, 150…
+#> $ fil_type    <chr> "2", "2", "2", "2", "2", "2", "2", "2", "2", "2", "2", "2", "2", "2", "2", "…
+#> $ filer       <chr> "MACKERETH BEVERLY COM TO ELECT", "MACKERETH BEVERLY COM TO ELECT", "MACKERE…
+#> $ office      <chr> "STH", "STH", "STH", "STH", "STH", "STH", "STH", "STH", "STH", "STH", "STH",…
+#> $ district    <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
+#> $ party       <chr> "REP", "REP", "REP", "REP", "REP", "REP", "REP", "REP", "REP", "REP", "REP",…
+#> $ fil_addr1   <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
+#> $ fil_addr2   <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
+#> $ fil_city    <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
+#> $ fil_state   <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
+#> $ fil_zip     <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
+#> $ county      <chr> "67", "67", "67", "67", "67", "67", "67", "67", "67", "67", "67", "67", "67"…
+#> $ fil_phone   <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
+#> $ tx          <int> 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 2…
 head(pac)
-#> # A tibble: 6 x 26
-#>   filerid eyear cycle section contributor con_address1 con_address2 con_city con_state con_zip
-#>     <dbl> <dbl> <dbl> <chr>   <chr>       <chr>        <chr>        <chr>    <chr>     <chr>  
-#> 1 2000006  2000     5 IB      JOSHUA CER… 290 LYNBROO… <NA>         YORK     PA        17402  
-#> 2 2000006  2000     5 IB      LANCE CUNN… 3267 N GEOR… <NA>         EMIGSVI… PA        17318  
-#> 3 2000006  2000     5 IB      JASON HARO… <NA>         <NA>         <NA>     <NA>      <NA>   
-#> 4 2000006  2000     5 IB      KEITH HILL  240 ARCH ST  <NA>         YORK     PA        17404  
-#> 5 2000006  2000     5 IB      CHIP PARKS  700 LINDA L… <NA>         STEVENS  PA        17578  
-#> 6 2000006  2000     5 IB      BRIAN SINN… 201 E CLARK… <NA>         YORK     PA        17403  
-#> # … with 16 more variables: occupation <chr>, ename <chr>, date <date>, amount <dbl>,
-#> #   fil_type <dbl>, filer <chr>, office <chr>, district <int>, party <chr>, fil_address1 <chr>,
-#> #   fil_address2 <lgl>, fil_city <chr>, fil_state <chr>, fil_zip <chr>, county <chr>,
-#> #   fil_phone <lgl>
+#> # A tibble: 6 x 27
+#>   filerid eyear cycle section contributor con_addr1 con_addr2 con_city con_state con_zip occupation
+#>   <chr>   <int> <int> <chr>   <chr>       <chr>     <chr>     <chr>    <chr>     <chr>   <chr>     
+#> 1 2000006  2000     5 IB      JOSHUA CER… 290 LYNB… <NA>      YORK     PA        17402   <NA>      
+#> 2 2000006  2000     5 IB      LANCE CUNN… 3267 N G… <NA>      EMIGSVI… PA        17318   <NA>      
+#> 3 2000006  2000     5 IB      JASON HARO… <NA>      <NA>      <NA>     <NA>      <NA>    <NA>      
+#> 4 2000006  2000     5 IB      KEITH HILL  240 ARCH… <NA>      YORK     PA        17404   <NA>      
+#> 5 2000006  2000     5 IB      CHIP PARKS  700 LIND… <NA>      STEVENS  PA        17578   <NA>      
+#> 6 2000006  2000     5 IB      BRIAN SINN… 201 E CL… <NA>      YORK     PA        17403   <NA>      
+#> # … with 16 more variables: ename <chr>, date <date>, amount <dbl>, fil_type <chr>, filer <chr>,
+#> #   office <chr>, district <chr>, party <chr>, fil_addr1 <chr>, fil_addr2 <chr>, fil_city <chr>,
+#> #   fil_state <chr>, fil_zip <chr>, county <chr>, fil_phone <chr>, tx <int>
 ```
 
 Checking the number of distinct values of a discrete variable is another
@@ -530,12 +487,12 @@ good way to ensure the file was read properly.
 count(pac, fil_type)
 #> # A tibble: 5 x 2
 #>   fil_type        n
-#>      <dbl>    <int>
-#> 1        1    77723
-#> 2        2 17812921
-#> 3        3    11517
-#> 4        4     4096
-#> 5       NA     5853
+#>   <chr>       <int>
+#> 1 1           78264
+#> 2 2        18286640
+#> 3 3           11531
+#> 4 4            4096
+#> 5 <NA>         5632
 ```
 
 ### Missing
@@ -544,44 +501,82 @@ We should first check the number of missing values in each column.
 
 ``` r
 col_stats(pac, count_na)
-#> # A tibble: 26 x 4
-#>    col          class         n         p
-#>    <chr>        <chr>     <int>     <dbl>
-#>  1 filerid      <dbl>         0 0        
-#>  2 eyear        <dbl>         0 0        
-#>  3 cycle        <dbl>         0 0        
-#>  4 section      <chr>      2951 0.000165 
-#>  5 contributor  <chr>       476 0.0000266
-#>  6 con_address1 <chr>     95648 0.00534  
-#>  7 con_address2 <chr>  16376104 0.914    
-#>  8 con_city     <chr>     90999 0.00508  
-#>  9 con_state    <chr>     96639 0.00540  
-#> 10 con_zip      <chr>    131577 0.00735  
-#> 11 occupation   <chr>   9196859 0.513    
-#> 12 ename        <chr>  10623034 0.593    
-#> 13 date         <date>    35472 0.00198  
-#> 14 amount       <dbl>         0 0        
-#> 15 fil_type     <dbl>      5853 0.000327 
-#> 16 filer        <chr>      1036 0.0000578
-#> 17 office       <chr>  16719208 0.933    
-#> 18 district     <int>  17403715 0.972    
-#> 19 party        <chr>  14928496 0.833    
-#> 20 fil_address1 <chr>   1055425 0.0589   
-#> 21 fil_address2 <lgl>  17912110 1        
-#> 22 fil_city     <chr>   1055394 0.0589   
-#> 23 fil_state    <chr>   1054965 0.0589   
-#> 24 fil_zip      <chr>   1057838 0.0591   
-#> 25 county       <chr>  15783825 0.881    
-#> 26 fil_phone    <lgl>  17299520 0.966
+#> # A tibble: 27 x 4
+#>    col         class         n         p
+#>    <chr>       <chr>     <int>     <dbl>
+#>  1 filerid     <chr>         0 0        
+#>  2 eyear       <int>         0 0        
+#>  3 cycle       <int>         0 0        
+#>  4 section     <chr>      3138 0.000171 
+#>  5 contributor <chr>       470 0.0000256
+#>  6 con_addr1   <chr>     92433 0.00503  
+#>  7 con_addr2   <chr>  16694748 0.908    
+#>  8 con_city    <chr>     88737 0.00483  
+#>  9 con_state   <chr>     97257 0.00529  
+#> 10 con_zip     <chr>    132131 0.00719  
+#> 11 occupation  <chr>   9408332 0.512    
+#> 12 ename       <chr>  10843008 0.590    
+#> 13 date        <date>    35760 0.00194  
+#> 14 amount      <dbl>       188 0.0000102
+#> 15 fil_type    <chr>      5632 0.000306 
+#> 16 filer       <chr>       296 0.0000161
+#> 17 office      <chr>  17171607 0.934    
+#> 18 district    <chr>  17855466 0.971    
+#> 19 party       <chr>  15197502 0.827    
+#> 20 fil_addr1   <chr>   1057573 0.0575   
+#> 21 fil_addr2   <chr>  14147237 0.769    
+#> 22 fil_city    <chr>   1054674 0.0574   
+#> 23 fil_state   <chr>   1054245 0.0573   
+#> 24 fil_zip     <chr>   1057100 0.0575   
+#> 25 county      <chr>  16176166 0.880    
+#> 26 fil_phone   <chr>  12806103 0.697    
+#> 27 tx          <int>         0 0
 ```
 
 Any record missing a date, name, or amount should be flagged. These
 variables are key to identifying transactions.
 
 ``` r
-pac <- pac %>% flag_na(date, contributor, amount, filer)
+key_vars <- c("date", "contributor", "amount", "filer")
+pac <- flag_na(pac, all_of(key_vars))
 percent(mean(pac$na_flag), 0.01)
-#> [1] "0.21%"
+#> [1] "0.20%"
+```
+
+``` r
+pac %>% 
+  filter(na_flag) %>% 
+  select(all_of(key_vars)) %>% 
+  sample_n(10)
+#> # A tibble: 10 x 4
+#>    date       contributor           amount filer                                                   
+#>    <date>     <chr>                  <dbl> <chr>                                                   
+#>  1 NA         FRANCES SZYEPULA       120   "WARD 25 DEM CLUB"                                      
+#>  2 NA         PAUL & DORO AMBROSE    200   "FLEAGLE PATRICK ELECT COM"                             
+#>  3 NA         James A. Lenss           0   "McKesson Corporation Employees Political Fund"         
+#>  4 NA         JOHN S. STROEBEL        10   "ROHM & HAAS EMPLOYEES (ROH PAC)"                       
+#>  5 NA         FRIENDS/ANGEL L. ORI… 1500   "WARD 10 EXECUTIVE COM"                                 
+#>  6 NA         G. ROBERT SHEETZ       200   "SHEETZPAC"                                             
+#>  7 NA         SYLVIA PERLMAN         250   "CHELTENHAM TWP DEM PARTY OF"                           
+#>  8 NA         DANDRIDGE ALBERT S      94.2 "MESIROV PENNSYLVANIA FUND"                             
+#>  9 NA         M. SHEIKH DAWOOD         0   "DAWOOD ENGINEERING PAC                                …
+#> 10 NA         HOUSE REP CAMP. COM   6575.  "VAEREWYCK GERRY FRIENDS OF"
+```
+
+All of the records missing a value are missing a `date`.
+
+``` r
+pac %>% 
+  filter(na_flag) %>% 
+  select(all_of(key_vars)) %>% 
+  col_stats(count_na)
+#> # A tibble: 4 x 4
+#>   col         class      n       p
+#>   <chr>       <chr>  <int>   <dbl>
+#> 1 date        <date> 35760 0.982  
+#> 2 contributor <chr>    470 0.0129 
+#> 3 amount      <dbl>    188 0.00516
+#> 4 filer       <chr>    296 0.00813
 ```
 
 ### Duplicates
@@ -589,25 +584,33 @@ percent(mean(pac$na_flag), 0.01)
 We can check for records that are entirely duplicated across every
 variable using `duplicated()`. This process is memory inefficient, so we
 will split our data frame into a list of 100,000 row chunks and check
-each chunk at a tinme, appending our duplicate rows to a local text
-file.
+each chunk at a time, appending our duplicate rows to a local text file.
+
+``` r
+pac <- mutate(pac, tx = row_number())
+```
 
 ``` r
 dupe_file <- here("pa", "contribs", "dupes.txt")
 if (!file_exists(dupe_file)) {
   file_create(dupe_file)
-  n <- 1e5 # rows per chunk
-  nr <- nrow(pac)
-  # split file into chunks
-  pas <- split(pac, rep(1:ceiling(nr/n), each = n, length.out = nr))
-  pb <- txtProgressBar(min = 0, max = length(pas), style = 3)
+  pac <- mutate(pac, group = str_sub(date, end = 7))
+  pa_ids <- split(pac$tx, pac$group)
+  pas <- pac %>% 
+    select(-tx) %>% 
+    group_split(group)
+  pb <- txtProgressBar(max = length(pas), style = 3)
+  pac <- select(pac, -group)
+  flush_memory(1)
   for (i in seq_along(pas)) {
     d1 <- duplicated(pas[[i]], fromLast = FALSE) # check from front
-    # d2 <- duplicated(pas[[i]], fromLast = TRUE)
-    write_lines(d1, dupe_file, append = TRUE) # append to disk
-    rm(d1); pas[[i]] <- NA # remove for memory
+    d2 <- duplicated(pas[[i]], fromLast = TRUE) # check from back
+    dupes <- tibble(tx = pa_ids[[i]], dupe_flag = d1 | d2)
+    dupes <- filter(dupes, dupe_flag == TRUE) # remove non dupes
+    write_csv(dupes, dupe_file, append = TRUE) # append to disk
+    rm(d1, d2, dupes); pas[[i]] <- NA # remove for memory
     Sys.sleep(10)
-    flush_memory()
+    flush_memory(1)
     setTxtProgressBar(pb, i)
   }
   rm(pas, pb)
@@ -615,31 +618,46 @@ if (!file_exists(dupe_file)) {
 }
 ```
 
-We can now read that file as a vector and add it as a new `dupe_flag`
-variable.
+We can now read that file and join it against the contributions.
 
 ``` r
-dupes <- as.logical(read_lines(dupe_file))
-length(dupes) == nrow(pac)
-#> [1] TRUE
-pac <- mutate(pac, dupe_flag = dupes)
-percent(mean(pac$dupe_flag), 0.01)
-#> [1] "0.90%"
+dupes <- read_csv(
+  file = dupe_file,
+  col_names = c("tx", "dupe_flag"),
+  col_types = cols(
+    tx = col_double(),
+    dupe_flag = col_logical()
+  )
+)
+comma(nrow(dupes))
+#> [1] "390,830"
 ```
 
-To upload this duplicates text file to GitHub, we will convert it to an
-string of binary integers and compress it.
+``` r
+pac <- left_join(pac, dupes, by = "tx")
+pac <- mutate(pac, dupe_flag = !is.na(dupe_flag))
+percent(mean(pac$dupe_flag), 0.01)
+#> [1] "2.13%"
+```
 
 ``` r
-write_lines(as.integer(dupes), dupe_file)
-tar(
-  tarfile = here("pa", "contribs", "dupes.tar.xz"),
-  files = dupe_file,
-  compression = "xz",
-  tar = "tar"
-)
-file_delete(dupe_file)
-rm(dupes)
+pac %>% 
+  filter(dupe_flag) %>% 
+  select(tx, all_of(key_vars))
+#> # A tibble: 390,830 x 5
+#>        tx date       contributor            amount filer                                           
+#>     <dbl> <date>     <chr>                   <dbl> <chr>                                           
+#>  1 923573 2003-12-19 Timothy J. Schweers    250    Friends of Don White                            
+#>  2 923586 2003-12-19 Timothy J. Schweers    250    Friends of Don White                            
+#>  3 923854 2003-08-22 DuPont Good Governmen… 250    Friends of Tina Pickett                         
+#>  4 923855 2003-08-22 DuPont Good Governmen… 250    Friends of Tina Pickett                         
+#>  5 923907 2003-05-15 NEW CASTLE AREA SCHOO… 152    PAFT (PA FED TEACH) COM SUPT                    
+#>  6 923908 2003-05-15 NEW CASTLE AREA SCHOO… 152    PAFT (PA FED TEACH) COM SUPT                    
+#>  7 924851 2003-09-12 WESLEY C. SHIPLETT       5    ACE INA Political Action Committee              
+#>  8 925149 2003-09-12 WESLEY C. SHIPLETT       5    ACE INA Political Action Committee              
+#>  9 928290 2003-03-21 Mary J Poverstein        9.13 Prudential Financial Inc. Political Action Comm…
+#> 10 928291 2003-03-21 Mary J Poverstein        9.13 Prudential Financial Inc. Political Action Comm…
+#> # … with 390,820 more rows
 ```
 
 ### Amounts
@@ -649,50 +667,53 @@ checked. We also want to note what percentage of the values are zero or
 below.
 
 ``` r
-unlist(map(summary(pac$amount), dollar))
-#>           Min.        1st Qu.         Median           Mean        3rd Qu.           Max. 
-#>     "-$18,000"          "$10"          "$21"      "$202.49"          "$75" "$114,201,950"
+summary(pac$amount)
+#>      Min.   1st Qu.    Median      Mean   3rd Qu.      Max.      NA's 
+#>    -18000        10        21       203        75 114201950       188
 mean(pac$amount <= 0)
-#> [1] 0.0006837832
+#> [1] NA
 ```
 
 ``` r
-glimpse(pac[which.max(pac$amount), ])
-#> Rows: 1
-#> Columns: 28
-#> $ filerid      <dbl> 20170217
-#> $ eyear        <dbl> 2019
-#> $ cycle        <dbl> 7
-#> $ section      <chr> "IB"
-#> $ contributor  <chr> "CHARLOTTE SWENSON"
-#> $ con_address1 <chr> "212 IDRIS RD"
-#> $ con_address2 <chr> "APT H1"
-#> $ con_city     <chr> "MERION STATION"
-#> $ con_state    <chr> "PA"
-#> $ con_zip      <chr> "190661635"
-#> $ occupation   <chr> NA
-#> $ ename        <chr> NA
-#> $ date         <date> 2019-11-14
-#> $ amount       <dbl> 114201950
-#> $ fil_type     <dbl> 2
-#> $ filer        <chr> "FRIENDS OF JENNIFER O'MARA"
-#> $ office       <chr> "STH"
-#> $ district     <int> 165
-#> $ party        <chr> "DEM"
-#> $ fil_address1 <chr> "618 PROSPECT ROAD"
-#> $ fil_address2 <lgl> NA
-#> $ fil_city     <chr> "SPRINGFIELD"
-#> $ fil_state    <chr> "PA"
-#> $ fil_zip      <chr> "19064"
-#> $ county       <chr> "23"
-#> $ fil_phone    <lgl> NA
-#> $ na_flag      <lgl> FALSE
-#> $ dupe_flag    <lgl> FALSE
+glimpse(pac[c(which.min(pac$amount), which.max(pac$amount)), ])
+#> Rows: 2
+#> Columns: 29
+#> $ filerid     <chr> "7900211", "20170217"
+#> $ eyear       <int> 2003, 2019
+#> $ cycle       <int> 6, 7
+#> $ section     <chr> "ID", "IB"
+#> $ contributor <chr> "JOHN J GALLAGHER", "CHARLOTTE SWENSON"
+#> $ con_addr1   <chr> "1760 MARKET ST STE 1100", "212 IDRIS RD"
+#> $ con_addr2   <chr> NA, "APT H1"
+#> $ con_city    <chr> "PHILA", "MERION STATION"
+#> $ con_state   <chr> "PA", "PA"
+#> $ con_zip     <chr> "19103", "190661635"
+#> $ occupation  <chr> NA, NA
+#> $ ename       <chr> NA, NA
+#> $ date        <date> 2003-10-30, 2019-11-14
+#> $ amount      <dbl> -18000, 114201950
+#> $ fil_type    <chr> "2", "2"
+#> $ filer       <chr> "SPRINGFIELD REP PARTY", "FRIENDS OF JENNIFER O'MARA"
+#> $ office      <chr> NA, "STH"
+#> $ district    <chr> NA, "165"
+#> $ party       <chr> NA, "DEM"
+#> $ fil_addr1   <chr> "359 SEDGEWOOD ROAD", "618 PROSPECT ROAD"
+#> $ fil_addr2   <chr> NA, NA
+#> $ fil_city    <chr> "SPRINGFIELD", "SPRINGFIELD"
+#> $ fil_state   <chr> "PA", "PA"
+#> $ fil_zip     <chr> "19064", "19064"
+#> $ county      <chr> NA, "23"
+#> $ fil_phone   <chr> NA, "2672299356"
+#> $ tx          <dbl> 1073160, 17311033
+#> $ na_flag     <lgl> FALSE, FALSE
+#> $ dupe_flag   <lgl> FALSE, FALSE
 ```
 
 ![](../plots/hist_amount-1.png)<!-- -->
 
-![](../plots/violin_amount_party-1.png)<!-- --> \#\#\# Dates
+![](../plots/violin_amount_party-1.png)<!-- -->
+
+### Dates
 
 We can add the calendar year a contribution was made using
 `lubridate::year()`.
@@ -705,7 +726,7 @@ There are a handful of missing or irregular dates.
 
 ``` r
 percent(prop_na(pac$date), 0.01)
-#> [1] "0.20%"
+#> [1] "0.19%"
 min(pac$date, na.rm = TRUE)
 #> [1] "1900-01-16"
 sum(pac$year < 2000, na.rm = TRUE)
@@ -713,7 +734,7 @@ sum(pac$year < 2000, na.rm = TRUE)
 max(pac$date, na.rm = TRUE)
 #> [1] "9201-01-12"
 sum(pac$date > today(), na.rm = TRUE)
-#> [1] 37
+#> [1] 27
 ```
 
 The bulk of transactions occur between 2000 and 2020.
@@ -734,63 +755,87 @@ function will force consistence case, remove punctuation, and abbreviate
 official USPS suffixes.
 
 ``` r
-pac <- pac %>% 
+norm_addr <- pac %>%
+  count(con_addr1, con_addr2, sort = TRUE) %>% 
+  select(-n) %>% 
   unite(
-    col = con_address_full,
-    starts_with("con_address"),
+    col = con_addr_full,
+    starts_with("con_addr"),
     sep = " ",
     remove = FALSE,
     na.rm = TRUE
   ) %>% 
   mutate(
-    con_address_norm = normal_address(
-      address = con_address_full,
+    con_addr_norm = normal_address(
+      address = con_addr_full,
       abbs = usps_street,
       na_rep = TRUE
     )
   ) %>% 
-  select(-con_address_full)
+  select(-con_addr_full)
 ```
 
 ``` r
-pac %>% 
-  select(contains("address")) %>% 
-  distinct() %>% 
-  sample_n(10)
-#> # A tibble: 10 x 5
-#>    con_address1          con_address2 fil_address1               fil_address2 con_address_norm 
-#>    <chr>                 <chr>        <chr>                      <lgl>        <chr>            
-#>  1 713 WINDSOR COURT     <NA>         434 LACKAWANNA AVE STE 300 NA           713 WINDSOR CT   
-#>  2 10815 N. JUSTIN LANE  <NA>         55 GLENLAKE PARKWAY N.E.   NA           10815 N JUSTIN LN
-#>  3 27 MINE HILL RD       <NA>         27 MINE HILL RD            NA           27 MINE HL RD    
-#>  4 600 Deckers Point Rd  <NA>         157 GREENVIEW DR           NA           600 DECKERS PT RD
-#>  5 136 S WADE AVE        <NA>         107 HAWTHORNE ST           NA           136 S WADE AVE   
-#>  6 31 3rd St             <NA>         848 Main Street            NA           31 3 RD ST       
-#>  7 7218 Hovingham        <NA>         9800 Fredericksburg Road   NA           7218 HOVINGHAM   
-#>  8 P.O. BOX 381          <NA>         PO BOX 555                 NA           PO BOX 381       
-#>  9 799 Denards Mill Road <NA>         1 Coca-Cola Plaza          NA           799 DENARDS ML RD
-#> 10 700 West E Street     <NA>         6800 Cintas Boulevard      NA           700 W E ST
+norm_addr
+#> # A tibble: 1,579,502 x 3
+#>    con_addr1                 con_addr2   con_addr_norm                    
+#>    <chr>                     <chr>       <chr>                            
+#>  1 1719 SPRING GARDEN STREET <NA>        1719 SPG GDN ST                  
+#>  2 929 Long Bridge Drive     <NA>        929 LONG BRG DR                  
+#>  3 1719 Spring Garden Street <NA>        1719 SPG GDN ST                  
+#>  4 1601 Chestnut St          <NA>        1601 CHESTNUT ST                 
+#>  5 One Amgen Center Drive    <NA>        ONE AMGEN CTR DR                 
+#>  6 135 Easton Turnpike       <NA>        135 EASTON TPKE                  
+#>  7 Lilly Corporate Center    <NA>        LILLY CORPORATE CTR              
+#>  8 100 N Riverside           <NA>        100 N RIVERSIDE                  
+#>  9 PO Box 15437              <NA>        PO BOX 15437                     
+#> 10 100 Abbott Park Rd.       D312 AP6D-2 100 ABBOTT PARK RD D 312 AP 6 D 2
+#> # … with 1,579,492 more rows
+pac <- left_join(pac, norm_addr)
+rm(norm_addr); flush_memory(1)
 ```
 
 We will repeat the process for filer addresses.
 
 ``` r
-pac <- pac %>% 
+norm_addr <- pac %>% 
+  count(fil_addr1, fil_addr2, sort = TRUE) %>% 
+  select(-n) %>% 
   unite(
-    col = fil_address_full,
-    starts_with("fil_address"),
+    col = fil_addr_full,
+    starts_with("fil_addr"),
     sep = " ",
     remove = FALSE,
     na.rm = TRUE
   ) %>% 
   mutate(
-    fil_address_norm = normal_address(
-      address = fil_address_full,
+    fil_addr_norm = normal_address(
+      address = fil_addr_full,
       abbs = usps_street,
       na_rep = TRUE
     )
   ) %>% 
-  select(-fil_address_full)
+  select(-fil_addr_full)
+```
+
+``` r
+norm_addr
+#> # A tibble: 8,723 x 3
+#>    fil_addr1                       fil_addr2  fil_addr_norm                    
+#>    <chr>                           <chr>      <chr>                            
+#>  1 <NA>                            <NA>       <NA>                             
+#>  2 702 SW 8TH                      <NA>       702 SW 8 TH                      
+#>  3 501 Third Street NW             <NA>       501 THIRD ST NW                  
+#>  4 101 Constitution Ave NW         Suite 400W 101 CONSTITUTION AVE NW STE 400 W
+#>  5 1719 Spring Garden Street       <NA>       1719 SPG GDN ST                  
+#>  6 1200 WILSON BLVD                <NA>       1200 WILSON BLVD                 
+#>  7 929 Long Bridge Drive           <NA>       929 LONG BRG DR                  
+#>  8 501 THIRD ST  N W               <NA>       501 THIRD ST N W                 
+#>  9 539 S. Main Street              <NA>       539 S MAIN ST                    
+#> 10 One Johnson &amp; Johnson Plaza <NA>       ONE JOHNSON AMP JOHNSON PLZ      
+#> # … with 8,713 more rows
+pac <- left_join(pac, norm_addr)
+rm(norm_addr); flush_memory(1)
 ```
 
 ### ZIP
@@ -815,47 +860,21 @@ progress_table(
   compare = valid_zip
 )
 #> # A tibble: 2 x 6
-#>   stage        prop_in n_distinct prop_na   n_out n_diff
-#>   <chr>          <dbl>      <dbl>   <dbl>   <dbl>  <dbl>
-#> 1 con_zip        0.455     506905 0.00735 9684994 482333
-#> 2 con_zip_norm   0.998      32245 0.00833   43277   4171
+#>   stage        prop_in n_distinct prop_na    n_out n_diff
+#>   <chr>          <dbl>      <dbl>   <dbl>    <dbl>  <dbl>
+#> 1 con_zip        0.451     520254 0.00719 10020414 495552
+#> 2 con_zip_norm   0.998      32444 0.00815    43680   4200
 ```
 
 ### State
 
-Valid two digit state abbreviations can be made using the
-`campfin::normal_state()` function.
+There is no need to clean the two state variables.
 
 ``` r
-pac <- mutate_at(
-  .tbl = pac,
-  .vars = vars(ends_with("state")),
-  .funs = list(norm = normal_state),
-  abbreviate = TRUE,
-  na_rep = TRUE,
-  valid = valid_state
-)
-```
-
-``` r
-pac %>% 
-  filter(con_state != con_state_norm) %>% 
-  count(con_state, con_state_norm, sort = TRUE)
-#> # A tibble: 0 x 3
-#> # … with 3 variables: con_state <chr>, con_state_norm <chr>, n <int>
-```
-
-``` r
-progress_table(
-  pac$con_state,
-  pac$con_state_norm,
-  compare = valid_state
-)
-#> # A tibble: 2 x 6
-#>   stage          prop_in n_distinct prop_na n_out n_diff
-#>   <chr>            <dbl>      <dbl>   <dbl> <dbl>  <dbl>
-#> 1 con_state         1.00         76 0.00540    32     21
-#> 2 con_state_norm    1            56 0.00540     0      1
+prop_in(pac$con_state, valid_state)
+#> [1] 0.9999995
+prop_in(pac$fil_state, valid_state)
+#> [1] 1
 ```
 
 ### City
@@ -870,15 +889,35 @@ case, removing punctuation, but *expanding* USPS abbreviations. We can
 also remove `invalid_city` values.
 
 ``` r
-pac <- mutate_at(
-  .tbl = pac,
-  .vars = vars(ends_with("city")),
-  .funs = list(norm = normal_city),
-  abbs = usps_city,
-  states = c("PA", "DC", "PENNSYLVANIA"),
-  na = invalid_city,
-  na_rep = TRUE
-)
+con_norm_city <- pac %>% 
+  count(con_city, con_state, con_zip_norm, sort = TRUE) %>% 
+  select(-n) %>% 
+  mutate(
+    across(
+      .cols = con_city, 
+      .fns = list(norm = normal_city), 
+      abbs = usps_city,
+      states = c("PA", "DC", "PENNSYLVANIA"),
+      na = invalid_city,
+      na_rep = TRUE
+    )
+  )
+```
+
+``` r
+fil_norm_city <- pac %>% 
+  count(fil_city, fil_state, fil_zip_norm, sort = TRUE) %>% 
+  select(-n) %>% 
+  mutate(
+    across(
+      .cols = fil_city, 
+      .fns = list(norm = normal_city), 
+      abbs = usps_city,
+      states = c("PA", "DC", "PENNSYLVANIA"),
+      na = invalid_city,
+      na_rep = TRUE
+    )
+  )
 ```
 
 #### Swap
@@ -889,11 +928,11 @@ ZIP code. If the normalized value is either an abbreviation for or very
 similar to the expected value, we can confidently swap those two.
 
 ``` r
-pac <- pac %>% 
+con_norm_city <- con_norm_city %>% 
   left_join(
     y = zipcodes,
     by = c(
-      "con_state_norm" = "state",
+      "con_state" = "state",
       "con_zip_norm" = "zip"
     )
   ) %>% 
@@ -915,11 +954,11 @@ pac <- pac %>%
 ```
 
 ``` r
-pac <- pac %>% 
+fil_norm_city <- fil_norm_city %>% 
   left_join(
     y = zipcodes,
     by = c(
-      "fil_state_norm" = "state",
+      "fil_state" = "state",
       "fil_zip_norm" = "zip"
     )
   ) %>% 
@@ -949,7 +988,7 @@ low confidence; we will only keep any refined strings that have a valid
 city/state/zip combination.
 
 ``` r
-good_refine <- pac %>% 
+good_refine <- con_norm_city %>% 
   mutate(
     con_city_refine = con_city_swap %>% 
       key_collision_merge() %>% 
@@ -960,32 +999,32 @@ good_refine <- pac %>%
     y = zipcodes,
     by = c(
       "con_city_refine" = "city",
-      "con_state_norm" = "state",
+      "con_state" = "state",
       "con_zip_norm" = "zip"
     )
   )
 ```
 
-    #> # A tibble: 489 x 5
-    #>    con_state_norm con_zip_norm con_city_swap    con_city_refine        n
-    #>    <chr>          <chr>        <chr>            <chr>              <int>
-    #>  1 MI             48094        WASHINGTON TW    WASHINGTON           164
-    #>  2 IL             60429        EAST HAZEL CREST HAZEL CREST          116
-    #>  3 OH             45202        CINNCINATI       CINCINNATI           112
-    #>  4 MD             20772        UPPER MARLOBOR   UPPER MARLBORO       107
-    #>  5 IN             46184        NEW WHITELAND    WHITELAND            106
-    #>  6 SC             29406        NORTH CHARLESTON CHARLESTON            75
-    #>  7 NY             11746        HUNTINGTON SAINT HUNTINGTON STATION    68
-    #>  8 PA             17036        HUNNMELSTOWN     HUMMELSTOWN           50
-    #>  9 IL             61853        MOHAMET          MAHOMET               48
-    #> 10 MI             48095        WASHINGTON TN    WASHINGTON            48
-    #> # … with 479 more rows
+    #> # A tibble: 495 x 5
+    #>    con_state con_zip_norm con_city_swap     con_city_refine       n
+    #>    <chr>     <chr>        <chr>             <chr>             <int>
+    #>  1 SC        29406        NORTH CHARLESTON  CHARLESTON            4
+    #>  2 PA        17702        SO WILLIAMSPORT   WILLIAMSPORT          3
+    #>  3 CA        92563        MURIETTA          MURRIETA              2
+    #>  4 FL        32082        PONTE VERDE BEACH PONTE VEDRA BEACH     2
+    #>  5 IL        60429        EAST HAZEL CREST  HAZEL CREST           2
+    #>  6 IN        46184        NEW WHITELAND     WHITELAND             2
+    #>  7 MD        21078        HARV DE GRACE     HAVRE DE GRACE        2
+    #>  8 MI        48094        WASHINGTON TW     WASHINGTON            2
+    #>  9 MI        48095        WASHINGTON TN     WASHINGTON            2
+    #> 10 MI        48304        BLOOMFIELDS H     BLOOMFIELD HILLS      2
+    #> # … with 485 more rows
 
 Then we can join the refined values back to the database.
 
 ``` r
-pac <- pac %>% 
-  left_join(good_refine) %>% 
+con_norm_city <- con_norm_city %>% 
+  left_join(good_refine, by = names(.)) %>% 
   mutate(con_city_refine = coalesce(con_city_refine, con_city_swap))
 ```
 
@@ -1006,9 +1045,9 @@ records by their city and state. Then, we will only query those unknown
 cities which appear at least ten times.
 
 ``` r
-pac_out <- pac %>% 
+pac_out <- con_norm_city %>% 
   filter(con_city_refine %out% c(valid_city, extra_city)) %>% 
-  count(con_city_refine, con_state_norm, sort = TRUE) %>% 
+  count(con_city_refine, con_state, sort = TRUE) %>% 
   drop_na() %>% 
   head(1000)
 ```
@@ -1026,13 +1065,17 @@ written using `readr::write_csv()`.
 check_file <- here("pa", "contribs", "data", "api_check.csv")
 if (file_exists(check_file)) {
   check <- read_csv(
-    file = check_file
+    file = check_file,
+    col_types = cols(
+      .default = col_character(),
+      check_city_flag = col_logical()
+    )
   )
 } else {
   check <- pmap_dfr(
     .l = list(
       pac_out$con_city_refine, 
-      pac_out$con_state_norm
+      pac_out$con_state
     ), 
     .f = check_city, 
     key = Sys.getenv("GEOCODE_KEY"), 
@@ -1072,23 +1115,46 @@ valid_locality <- check %>%
   c(valid_locality)
 ```
 
+``` r
+valid_locality <- c(valid_locality, "ABBOTT PARK", "RESEARCH TRIANGLE PARK")
+```
+
 #### Progress
 
-| stage             | prop\_in | n\_distinct | prop\_na |   n\_out | n\_diff |
-| :---------------- | -------: | ----------: | -------: | -------: | ------: |
-| con\_city         |    0.299 |       49871 |    0.005 | 12500384 |   37544 |
-| con\_city\_norm   |    0.974 |       32313 |    0.005 |   465152 |   18305 |
-| con\_city\_swap   |    0.985 |       22068 |    0.005 |   274206 |    8021 |
-| con\_city\_refine |    0.985 |       21652 |    0.005 |   272101 |    7607 |
+``` r
+con_norm_city <- con_norm_city %>% 
+  mutate(
+    con_city_refine = con_city_refine %>% 
+      na_if("ILLEGIBLE") %>% 
+      str_replace("^PHILA$", "PHILADELPHIA") %>% 
+      str_replace("^PGH$", "PITTSBURGH") %>% 
+      str_replace("^NEW YORK CITY$", "NEW YORK") %>% 
+      str_replace("^H\\sBURG$", "HARRISBURG") %>% 
+      str_replace("^HBG$", "HARRISBURG") %>% 
+      str_replace("^NYC$", "NEW YORK")
+  )
+```
+
+``` r
+pac <- left_join(pac, con_norm_city)
+pac <- left_join(pac, fil_norm_city)
+```
+
+| stage             | prop\_in | n\_distinct | prop\_na | n\_out | n\_diff |
+| :---------------- | -------: | ----------: | -------: | -----: | ------: |
+| con\_city)        |    0.971 |       36960 |    0.005 | 539214 |   22777 |
+| con\_city\_norm   |    0.984 |       32607 |    0.005 | 294520 |   18322 |
+| con\_city\_swap   |    0.994 |       22259 |    0.005 | 113150 |    7940 |
+| con\_city\_refine |    0.994 |       21833 |    0.005 | 107253 |    7517 |
 
 You can see how the percentage of valid values increased with each
 stage.
 
 ``` r
-prop_in(pac$con_city_refine, valid_city)
-#> [1] 0.9510219
-prop_in(pac$fil_city_swap, valid_city)
-#> [1] 0.940917
+prop_in(pac$con_city_refine, many_city)
+#> [1] 0.9941348
+prop_in(pac$fil_city_swap, many_city)
+#> [1] 0.9892658
 ```
 
 ![](../plots/bar_progress-1.png)<!-- -->
@@ -1112,55 +1178,55 @@ pac <- pac %>%
     -fil_city_norm,
     fil_city_clean = fil_city_swap
   ) %>% 
-  rename_all(~str_replace(., "_norm", "_clean"))  
+  rename_all(~str_replace(., "_norm", "_clean")) %>% 
+  relocate(ends_with("city_clean"), .after = fil_addr_clean)
 ```
 
 ``` r
-glimpse(sample_n(pac, 20))
-#> Rows: 20
-#> Columns: 37
-#> $ filerid           <dbl> 2010393, 7900366, 2004206, 9800268, 20180327, 8600174, 2008282, 200008…
-#> $ eyear             <dbl> 2017, 2013, 2011, 2001, 2019, 2010, 2013, 2007, 2008, 2001, 2011, 2003…
-#> $ cycle             <dbl> 7, 4, 7, 5, 5, 4, 4, 4, 7, 7, 7, 9, 7, 7, 7, 6, 5, 5, 7, 4
-#> $ section           <chr> "ID", "IB", "IB", "IB", "IB", "IB", "IB", "IB", "IB", "ID", "ID", "IC"…
-#> $ contributor       <chr> "BARBARA CUNNINGHAM", "JACQUELYN L MCCALLA", "Ms Denise Gracik", "DOUG…
-#> $ con_address1      <chr> "1306 LONGMAN DR", "245 SMALLWOOD CT", "14312 Stearns", "18645 BABLER …
-#> $ con_address2      <chr> "APT 302", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
-#> $ con_city          <chr> "SHENANDOAH", "WEST CHESTER", "Overland Park", "WILDWOOD", "PHILADELPH…
-#> $ con_state         <chr> "IA", "PA", "KS", "MO", "PA", "TN", "NJ", "PA", "VA", "GA", "CT", "PA"…
-#> $ con_zip           <chr> "51601", "193801389", "662217544", "630381177", "19134", "37128-629", …
-#> $ occupation        <chr> "EDUCATOR", "Teacher", NA, NA, NA, NA, "Treasury Services Adminis", NA…
-#> $ ename             <chr> "RETIRED", NA, NA, NA, NA, NA, NA, NA, NA, "The Home Depot", "GE Energ…
-#> $ date              <date> 2017-12-31, 2013-06-12, 2011-08-02, 2001-08-23, 2019-10-20, 2010-07-0…
-#> $ amount            <dbl> 400.00, 5.00, 5.00, 2.00, 170.00, 6.50, 3.00, 10.00, 30.00, 20.00, 334…
-#> $ fil_type          <dbl> 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2
-#> $ filer             <chr> "NEA Fund for Children and Public Education NFI", "PSEA-PACE FOR STATE…
-#> $ office            <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "STS", NA, NA, NA, NA, NA,…
-#> $ district          <int> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
-#> $ party             <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "REP", NA, NA, NA, NA, NA,…
-#> $ fil_address1      <chr> "1201 16th Street NW Suite 418", "400 N THIRD STREET", "601 13th Stree…
-#> $ fil_address2      <lgl> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
-#> $ fil_city          <chr> "Washington", "HARRISBURG", "Washington", NA, "PHILADELPHIA", "WASHING…
-#> $ fil_state         <chr> "DC", "PA", "DC", NA, "PA", "DC", "PA", "OH", "PA", "DC", "DC", "PA", …
-#> $ fil_zip           <chr> "20036", "171051724", "20005", NA, "19116", "20001", "19103", "44308",…
-#> $ county            <chr> NA, "22", NA, NA, "51", NA, NA, NA, NA, NA, NA, "32", NA, NA, NA, NA, …
-#> $ fil_phone         <lgl> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, FA…
-#> $ na_flag           <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, …
-#> $ dupe_flag         <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, …
-#> $ year              <dbl> 2017, 2013, 2011, 2001, 2019, 2010, 2013, 2007, 2008, 2001, 2011, 2003…
-#> $ con_address_clean <chr> "1306 LONGMAN DR APT 302", "245 SMALLWOOD CT", "14312 STEARNS", "18645…
-#> $ fil_address_clean <chr> "1201 16 TH ST NW STE 418 NA", "400 N THIRD ST NA", "601 13 TH ST NW N…
-#> $ con_zip_clean     <chr> "51601", "19380", "66221", "63038", "19134", "37128", "08003", "19608"…
-#> $ fil_zip_clean     <chr> "20036", "17105", "20005", NA, "19116", "20001", "19103", "44308", "15…
-#> $ con_state_clean   <chr> "IA", "PA", "KS", "MO", "PA", "TN", "NJ", "PA", "VA", "GA", "CT", "PA"…
-#> $ fil_state_clean   <chr> "DC", "PA", "DC", NA, "PA", "DC", "PA", "OH", "PA", "DC", "DC", "PA", …
-#> $ fil_city_clean    <chr> "WASHINGTON", "HARRISBURG", "WASHINGTON", NA, "PHILADELPHIA", "WASHING…
-#> $ con_city_clean    <chr> "SHENANDOAH", "WEST CHESTER", "OVERLAND PARK", "WILDWOOD", "PHILADELPH…
+glimpse(sample_n(pac, 100))
+#> Rows: 100
+#> Columns: 36
+#> $ filerid        <chr> "9900235", "7900366", "2002281", "9800268", "20120398", "8600174", "20082…
+#> $ eyear          <int> 2017, 2013, 2011, 2001, 2017, 2010, 2013, 2007, 2008, 2001, 2011, 2003, 2…
+#> $ cycle          <int> 7, 4, 7, 5, 7, 4, 4, 4, 3, 7, 7, 9, 7, 7, 7, 6, 5, 5, 7, 4, 7, 7, 7, 7, 7…
+#> $ section        <chr> "IB", "IB", "ID", "IB", "ID", "IB", "IB", "IB", "IB", "ID", "ID", "IC", "…
+#> $ contributor    <chr> "CAROLYN CUNNINGHAM", "AGNES M MASSACESI", "Mrs Anne M Preston", "DOUGLAS…
+#> $ con_addr1      <chr> "3502 E 12TH ST", "26 HILLTOP DR", "19782 Quiet Bay Lane", "18645 BABLER …
+#> $ con_addr2      <chr> " ", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
+#> $ con_city       <chr> "AUSTIN", "TUNKHANNOCK", "Huntington Beach", "WILDWOOD", "Findlay", "Rich…
+#> $ con_state      <chr> "TX", "PA", "CA", "MO", "OH", "VA", "PA", "PA", "PA", "GA", "CT", "PA", "…
+#> $ con_zip        <chr> "787210000", "186576610", "926482625", "630381177", "45840", "23235-232",…
+#> $ occupation     <chr> NA, NA, "Generalist Manager", NA, "SD&amp;P ENGINEER III", NA, "Business …
+#> $ ename          <chr> NA, NA, "Enterprise Rent-A-Car Company of Los Angeles LLC", NA, "MARATHON…
+#> $ date           <date> 2017-05-08, 2013-06-20, 2011-04-15, 2001-08-23, 2017-03-16, 2010-05-26, …
+#> $ amount         <dbl> 5.00, 50.00, 29.00, 2.00, 12.00, 13.00, 2.50, 10.00, 40.00, 20.00, 50.00,…
+#> $ fil_type       <chr> "2", "2", "2", "2", "2", "2", "2", "2", "2", "2", "2", "2", "2", "2", "2"…
+#> $ filer          <chr> "Communication Workers of America", "PSEA-PACE FOR STATE ELECTIONS", "Ent…
+#> $ office         <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "STS", NA, NA, NA, NA, NA, NA…
+#> $ district       <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
+#> $ party          <chr> "OTH", NA, NA, NA, "OTH", NA, NA, NA, NA, NA, NA, "REP", NA, NA, NA, NA, …
+#> $ fil_addr1      <chr> "501 Third Street NW", "400 N THIRD STREET", "600 Corporate Park Drive", …
+#> $ fil_addr2      <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "Suite 900W", NA, NA, NA, "12th F…
+#> $ fil_city       <chr> "Washington", "HARRISBURG", "St. Louis", NA, "Findlay", "WASHINGTON", "Ph…
+#> $ fil_state      <chr> "DC", "PA", "MO", NA, "OH", "DC", "PA", "OH", "PA", "DC", "DC", "PA", "DC…
+#> $ fil_zip        <chr> "20001", "171051724", "63105", NA, "45840", "20001", "19103", "44308", "1…
+#> $ county         <chr> NA, "22", NA, NA, NA, NA, NA, NA, NA, NA, NA, "32", NA, NA, NA, NA, NA, N…
+#> $ fil_phone      <chr> "2024341491", "7172557000", "3145125000", NA, "419-421-21", NA, "21524125…
+#> $ tx             <dbl> 15350838, 9965962, 7573752, 522708, 14377364, 6759148, 9757787, 3330994, …
+#> $ na_flag        <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FAL…
+#> $ dupe_flag      <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FAL…
+#> $ year           <dbl> 2017, 2013, 2011, 2001, 2017, 2010, 2013, 2007, 2008, 2001, 2011, 2003, 2…
+#> $ con_addr_clean <chr> "3502 E 12 TH ST", "26 HILLTOP DR", "19782 QUIET BAY LN", "18645 BABLER M…
+#> $ fil_addr_clean <chr> "501 THIRD ST NW", "400 N THIRD ST", "600 CORPORATE PARK DR", NA, "539 S …
+#> $ con_city_clean <chr> "AUSTIN", "TUNKHANNOCK", "HUNTINGTON BEACH", "WILDWOOD", "FINDLAY", "RICH…
+#> $ fil_city_clean <chr> "WASHINGTON", "HARRISBURG", "SAINT LOUIS", NA, "FINDLAY", "WASHINGTON", "…
+#> $ con_zip_clean  <chr> "78721", "18657", "92648", "63038", "45840", "23235", "19380", "18848", "…
+#> $ fil_zip_clean  <chr> "20001", "17105", "63105", NA, "45840", "20001", "19103", "44308", "15222…
 ```
 
-1.  There are 17,912,168 records in the database.
+1.  There are 18,386,163 records in the database.
 2.  The range and distribution of `amount` and `date` seem reasonable.
-3.  There are 0.21% records missing key variables.
+3.  There are 0.20% records missing key variables.
 4.  Consistency in geographic data has been improved with
     `campfin::normal_*()`.
 5.  The 4-digit `year` variable has been created with
@@ -1168,64 +1234,84 @@ glimpse(sample_n(pac, 20))
 
 ## Export
 
+Now the file can be saved on disk for upload to the Accountability
+server.
+
 ``` r
 clean_dir <- dir_create(here("pa", "contribs", "data", "clean"))
 clean_path <- path(clean_dir, "pa_contribs_clean.csv")
 write_csv(pac, clean_path, na = "")
-file_size(clean_path)
-#> 4.95G
-guess_encoding(clean_path)
-#> # A tibble: 1 x 2
-#>   encoding confidence
-#>   <chr>         <dbl>
-#> 1 ASCII             1
+(clean_size <- file_size(clean_path))
+#> 5.24G
+file_encoding(clean_path) %>% 
+  mutate(across(path, path.abbrev))
+#> # A tibble: 1 x 3
+#>   path                                           mime            charset 
+#>   <chr>                                          <chr>           <chr>   
+#> 1 ~/pa/contribs/data/clean/pa_contribs_clean.csv application/csv us-ascii
+```
+
+## Upload
+
+We can use the `aws.s3::put_object()` to upload the text file to the IRW
+server.
+
+``` r
+aws_path <- path("csv", basename(clean_path))
+if (!object_exists(aws_path, "publicaccountability")) {
+  put_object(
+    file = clean_path,
+    object = aws_path, 
+    bucket = "publicaccountability",
+    acl = "public-read",
+    show_progress = TRUE,
+    multipart = TRUE
+  )
+}
+aws_head <- head_object(aws_path, "publicaccountability")
+(aws_size <- as_fs_bytes(attr(aws_head, "content-length")))
+unname(aws_size == clean_size)
 ```
 
 ## Dictionary
 
-| Column              | Type      | Definition                                |
-| :------------------ | :-------- | :---------------------------------------- |
-| `filerid`           | double    | Filer unique filer ID                     |
-| `eyear`             | double    | Election year                             |
-| `cycle`             | double    | Election cycle                            |
-| `section`           | character | Election section                          |
-| `contributor`       | character | Contributor full name                     |
-| `con_address1`      | character | Contributor street address                |
-| `con_address2`      | character | Contributor secondary address             |
-| `con_city`          | character | Contributor city name                     |
-| `con_state`         | character | Contributor state abbreviation            |
-| `con_zip`           | character | Contributor ZIP+4 code                    |
-| `occupation`        | character | Contributor occupation                    |
-| `ename`             | character | Contributor employer name                 |
-| `date`              | double    | Date contribution made                    |
-| `amount`            | double    | Contribution amount or correction         |
-| `fil_type`          | double    | Filer type                                |
-| `filer`             | character | Filer committee name                      |
-| `office`            | character | Filer office sought                       |
-| `district`          | integer   | District election held                    |
-| `party`             | character | Filer political party                     |
-| `fil_address1`      | character | Filer street address                      |
-| `fil_address2`      | logical   | Filer secondary address                   |
-| `fil_city`          | character | Filer city name                           |
-| `fil_state`         | character | Filer 2-digit state abbreviation          |
-| `fil_zip`           | character | Filer ZIP+4 code                          |
-| `county`            | character | County election held in                   |
-| `fil_phone`         | logical   | Filer telephone number                    |
-| `na_flag`           | logical   | Flag for missing date, amount, or name    |
-| `dupe_flag`         | logical   | Flag for completely duplicated record     |
-| `year`              | double    | Calendar year of contribution date        |
-| `con_address_clean` | character | Normalized contributor street address     |
-| `fil_address_clean` | character | Normalized Filer street address           |
-| `con_zip_clean`     | character | Normalized contributor 5-digit ZIP code   |
-| `fil_zip_clean`     | character | Normalized Filer 5-digit ZIP code         |
-| `con_state_clean`   | character | Normalized contributor state abbreviation |
-| `fil_state_clean`   | character | Normalized Filer state abbreviation       |
-| `fil_city_clean`    | character | Normalized Filer city name                |
-| `con_city_clean`    | character | Normalized contributor city name          |
+The following table describes the variables in our final exported file:
 
-``` r
-write_lines(
-  x = c("# Pennsylvania Contributions Data Dictionary\n", dict_md),
-  path = here("pa", "contribs", "pa_contribs_dict.md"),
-)
-```
+| Column           | Type        | Definition                             |
+| :--------------- | :---------- | :------------------------------------- |
+| `filerid`        | `character` | Filer unique filer ID                  |
+| `eyear`          | `integer`   | Election year                          |
+| `cycle`          | `integer`   | Election cycle                         |
+| `section`        | `character` | Election section                       |
+| `contributor`    | `character` | Contributor full name                  |
+| `con_addr1`      | `character` | Contributor street address             |
+| `con_addr2`      | `character` | Contributor secondary address          |
+| `con_city`       | `character` | Contributor city name                  |
+| `con_state`      | `character` | Contributor state abbreviation         |
+| `con_zip`        | `character` | Contributor ZIP+4 code                 |
+| `occupation`     | `character` | Contributor occupation                 |
+| `ename`          | `character` | Contributor employer name              |
+| `date`           | `double`    | Date contribution made                 |
+| `amount`         | `double`    | Contribution amount or correction      |
+| `fil_type`       | `character` | Filer type                             |
+| `filer`          | `character` | Filer committee name                   |
+| `office`         | `character` | Filer office sought                    |
+| `district`       | `character` | District election held                 |
+| `party`          | `character` | Filer political party                  |
+| `fil_addr1`      | `character` | Filer street address                   |
+| `fil_addr2`      | `character` | Filer secondary address                |
+| `fil_city`       | `character` | Filer city name                        |
+| `fil_state`      | `character` | Filer 2-digit state abbreviation       |
+| `fil_zip`        | `character` | Filer ZIP+4 code                       |
+| `county`         | `character` | County election held in                |
+| `fil_phone`      | `character` | Unique transaction number              |
+| `tx`             | `double`    | Filer telephone number                 |
+| `na_flag`        | `logical`   | Flag for missing date, amount, or name |
+| `dupe_flag`      | `logical`   | Flag for completely duplicated record  |
+| `year`           | `double`    | Calendar year of contribution date     |
+| `con_addr_clean` | `character` | Normalized contributor street address  |
+| `fil_addr_clean` | `character` | Normalized Filer street address        |
+| `con_city_clean` | `character` | Normalized Filer 5-digit ZIP code      |
+| `fil_city_clean` | `character` | Normalized Filer state abbreviation    |
+| `con_zip_clean`  | `character` | Normalized Filer city name             |
+| `fil_zip_clean`  | `character` | Normalized contributor city name       |

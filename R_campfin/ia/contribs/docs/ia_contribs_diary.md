@@ -1,17 +1,22 @@
 Iowa Contributions
 ================
 Kiernan Nicholls
-2020-04-14 10:34:04
+2020-10-28 14:16:38
 
   - [Project](#project)
   - [Objectives](#objectives)
   - [Packages](#packages)
   - [Data](#data)
-  - [Import](#import)
+  - [Read](#read)
   - [Explore](#explore)
+  - [Categorical](#categorical)
+  - [Amounts](#amounts)
+  - [Dates](#dates)
   - [Wrangle](#wrangle)
   - [Conclude](#conclude)
   - [Export](#export)
+  - [Upload](#upload)
+  - [Dictionary](#dictionary)
 
 <!-- Place comments regarding knitting here -->
 
@@ -65,6 +70,7 @@ pacman::p_load(
   gluedown, # print markdown
   janitor, # dataframe clean
   refinr, # cluster and merge
+  aws.s3, # aws cloud storage
   scales, # format strings
   rvest, # read html pages
   knitr, # knit documents
@@ -88,7 +94,7 @@ feature and should be run as such. The project also uses the dynamic
 ``` r
 # where does this document knit?
 here::here()
-#> [1] "/home/kiernan/Code/accountability_datacleaning/R_campfin"
+#> [1] "/home/kiernan/Code/tap/R_campfin"
 ```
 
 ## Data
@@ -102,8 +108,6 @@ Board](https://ethics.iowa.gov/).
 > reporting of gifts and bequests received by agencies under Iowa Code
 > section 8.7, and the Board’s administrative rules in Chapter 351 of
 > the Iowa Administrative Code.
-
-## Import
 
 The Board provides the file through the [state open data
 portal](https://data.iowa.gov/) under the title “Iowa Campaign
@@ -152,168 +156,265 @@ The database license is as follows:
 > other commercial purpose, and for soliciting political campaign
 > contributions is permissable.
 
-### Read
+## Read
 
 These fixed files can be read into a single data frame with
 `purrr::map_df()` and `readr::read_delim()`.
 
 ``` r
-iac <- read_csv(
-  file = "https://data.iowa.gov/api/views/smfg-ds7h/rows.csv",
+raw_dir <- dir_create(here("ia", "contribs", "data", "raw"))
+raw_url <- "https://data.iowa.gov/api/views/smfg-ds7h/rows.csv"
+raw_path <- path(raw_dir, basename(raw_url))
+if (!this_file_new(raw_path)) {
+  download.file(raw_url, raw_path)
+}
+```
+
+``` r
+iac <- vroom(
+  file = raw_path,
   na = c("", "N/A", "NA", "n/a", "na"),
   col_types = cols(
     .default = col_character(),
-    Date = col_date_usa(),
+    `Date` = col_date_usa(),
     `Contribution Amount` = col_double()
   )
 )
 ```
 
-## Explore
+We can ensure this file was read correctly by counting distinct values
+of a known discrete variable.
 
 ``` r
-head(iac)
-#> # A tibble: 6 x 14
-#>   id    date       comm_cd comm_nm type  first mi    last  address1 address2 city  state zip  
-#>   <chr> <date>     <chr>   <chr>   <chr> <chr> <chr> <chr> <chr>    <chr>    <chr> <chr> <chr>
-#> 1 {140… 2003-01-01 6160    Commun… CON   <NA>  <NA>  Unit… 123 str… <NA>     anyw… IA    00000
-#> 2 {150… 2003-01-01 6356    Planne… CON   Alta  <NA>  Price 4888 Sc… <NA>     Bett… IA    52722
-#> 3 {170… 2003-01-01 1040    Citize… CON   <NA>  <NA>  Veri… 1827 An… <NA>     Wate… IA    50701
-#> 4 {060… 2003-01-02 6096    Manufa… CON   Al    <NA>  Streb PO Box … <NA>     Nort… IA    52317
-#> 5 {090… 2003-01-02 6155    Iowans… CON   Stev… J     Pfan… 1204 No… <NA>     Boone IA    50036
-#> 6 {250… 2003-01-02 6063    Iowa D… CON   Nancy <NA>  Urba… 110 N. … <NA>     Mars… IA    50158
-#> # … with 1 more variable: amount <dbl>
+n_distinct(iac$type) == 2
+#> [1] TRUE
+```
+
+## Explore
+
+There are 1,982,775 rows of 14 columns.
+
+``` r
+glimpse(iac)
+#> Rows: 1,982,775
+#> Columns: 14
+#> $ tx        <chr> "{14050320-5718-7824-1750-000000000000}", "{15050320-5015-6938-5245-0000000000…
+#> $ date      <date> 2003-01-01, 2003-01-01, 2003-01-01, 2003-01-02, 2003-01-02, 2003-01-02, 2003-…
+#> $ code      <chr> "6160", "6356", "1040", "6096", "6155", "6063", "9613", "931", "6063", "9613",…
+#> $ committee <chr> "Community Bankers of Iowa Political Action Committee", "Planned Parenthood Ad…
+#> $ type      <chr> "CON", "CON", "CON", "CON", "CON", "CON", "CON", "CON", "CON", "CON", "CON", "…
+#> $ first     <chr> NA, "Alta", NA, "Al", "Steven", "Nancy", "Kathy", NA, "Robert", "Deb", "Jane",…
+#> $ mi        <chr> NA, NA, NA, NA, "J", NA, NA, NA, NA, NA, NA, NA, "F", NA, NA, NA, NA, "E", NA,…
+#> $ last      <chr> "Unitemized", "Price", "Veridian  Credit Union", "Streb", "Pfannes", "Urbanows…
+#> $ addr1     <chr> "123 street", "4888 School House Rd", "1827 Ansborough Ave.", "PO Box 48", "12…
+#> $ addr2     <chr> NA, NA, NA, NA, NA, NA, NA, "400 E. Court Ave., Ste 100", "2829 Westown Parkwa…
+#> $ city      <chr> "anywhere", "Bettendorf", "Waterloo", "North Liberty", "Boone", "Marshalltown"…
+#> $ state     <chr> "IA", "IA", "IA", "IA", "IA", "IA", "IA", "IA", "IA", "IA", "IA", "IA", "NE", …
+#> $ zip       <chr> "00000", "52722", "50701", "52317", "50036", "50158", "52403", "50309-2027", "…
+#> $ amount    <dbl> 261.00, 50.00, 21.78, 400.00, 25.00, 100.00, 15.00, 250.00, 25.00, 15.00, 20.0…
 tail(iac)
 #> # A tibble: 6 x 14
-#>   id    date       comm_cd comm_nm type  first mi    last  address1 address2 city  state zip  
-#>   <chr> <date>     <chr>   <chr>   <chr> <chr> <chr> <chr> <chr>    <chr>    <chr> <chr> <chr>
-#> 1 {6B6… 2020-01-17 14135   Chris … CON   Dan   <NA>  Hunz… 4400 Ti… <NA>     Ames  IA    50014
-#> 2 {4A3… 2020-01-17 14135   Chris … CON   Doug  <NA>  Waite 3001 Se… <NA>     Ames  IA    50010
-#> 3 {7B5… 2020-01-18 9109    Keokuk… CON   <NA>  <NA>  Un-i… 123 str… <NA>     anyw… IA    00000
-#> 4 {6BD… 2020-01-19 2238    Gorman… CON   James <NA>  Norr… 2479 B … <NA>     Red … IA    51566
-#> 5 {984… 2020-01-31 19722   Commit… INK   LeAnn D     Black 900 1st… <NA>     Spen… IA    51301
-#> 6 {D63… 2020-02-04 14603   Commit… CON   Kym   <NA>  Gall… 4606 Ki… <NA>     des … IA    50311
-#> # … with 1 more variable: amount <dbl>
-glimpse(sample_n(iac, 20))
-#> Rows: 20
-#> Columns: 14
-#> $ id       <chr> "{24120520-0804-8611-2723-000000000000}", "{3CE5657E-1EBD-4C5D-AEF2-DEC1018FB11…
-#> $ date     <date> 2005-08-15, 2018-09-18, 2012-05-22, 2011-01-11, 2018-04-08, 2006-07-28, 2018-1…
-#> $ comm_cd  <chr> "5111", "2425", "1963", "6125", "2415", "6449", "2386", "6432", "5152", "1762",…
-#> $ comm_nm  <chr> "Fallon for Governor", "Williams for Iowa House", "Guth for Senate", "Iowa Real…
-#> $ type     <chr> "CON", "CON", "CON", "CON", "CON", "CON", "CON", "CON", "CON", "CON", "CON", "C…
-#> $ first    <chr> "Dennis", NA, "Bonnie", "Matthew", "Linda", NA, "Harris", "WILLIAM", "James", "…
-#> $ mi       <chr> "R", NA, NA, NA, NA, NA, NA, "J", NA, NA, NA, NA, NA, NA, NA, NA, "W", NA, NA, …
-#> $ last     <chr> "Coon", "Iowa Conservation Voters", "Iverson", "Grohe", "Bigley", "Great Plains…
-#> $ address1 <chr> "1438 11th St", "686 Foster Drive", "15195 490th Street", "3424 EP True", "504 …
-#> $ address2 <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA
-#> $ city     <chr> "Des Moines", "Des Moines", "Scarville", "WEst Des Moines", "Mount Vernon", "Pe…
-#> $ state    <chr> "IA", "IA", "IA", "IA", "IA", "IL", "CA", "IL", "MD", "IA", "IA", "IA", "IL", "…
-#> $ zip      <chr> "50314", "50312", "50473", "50265", "52314", "61615", "90069", "61401", "21783"…
-#> $ amount   <dbl> 50.00, 250.00, 12.00, 1000.00, 50.00, 2983.30, 20.18, 2.88, 2.78, 25.00, 25.00,…
+#>   tx      date       code  committee   type  first mi    last  addr1 addr2 city  state zip   amount
+#>   <chr>   <date>     <chr> <chr>       <chr> <chr> <chr> <chr> <chr> <chr> <chr> <chr> <chr>  <dbl>
+#> 1 {6DFE1… 2020-05-22 2563  Reichman f… CON   Jeff… D     Reic… P.O.… <NA>  Mont… IA    52639  140  
+#> 2 {1B669… 2020-06-01 6125  RPAC Iowa … CON   Renee <NA>  Dunk… 3433… <NA>  Cumm… IA    50061   90.9
+#> 3 {7EECA… 2020-06-04 2365  Phil Mille… CON   Barb… <NA>  Royal 4710… <NA>  West… IA    50265   25  
+#> 4 {098BE… 2020-06-25 6021  Credit Uni… CON   Mich… <NA>  Ramos 3421… <NA>  East… IL    61244    1  
+#> 5 {FB17E… 2020-07-07 6021  Credit Uni… CON   Brit… <NA>  McLa… 2413… <NA>  Urba… IA    50322    4  
+#> 6 {C45E7… 2020-05-30 6429  Heavy High… CON   Tracy <NA>  Yans… 3001… <NA>  Bloo… MN    55425   20
 ```
 
 ### Missing
 
+Columns vary in their degree of missing values.
+
 ``` r
 col_stats(iac, count_na)
 #> # A tibble: 14 x 4
-#>    col      class        n        p
-#>    <chr>    <chr>    <int>    <dbl>
-#>  1 id       <chr>        0 0       
-#>  2 date     <date>       0 0       
-#>  3 comm_cd  <chr>        0 0       
-#>  4 comm_nm  <chr>        0 0       
-#>  5 type     <chr>        0 0       
-#>  6 first    <chr>   221630 0.124   
-#>  7 mi       <chr>  1515952 0.849   
-#>  8 last     <chr>      278 0.000156
-#>  9 address1 <chr>     7839 0.00439 
-#> 10 address2 <chr>  1709469 0.957   
-#> 11 city     <chr>     6564 0.00368 
-#> 12 state    <chr>     2766 0.00155 
-#> 13 zip      <chr>     1654 0.000926
-#> 14 amount   <dbl>        0 0
+#>    col       class        n        p
+#>    <chr>     <chr>    <int>    <dbl>
+#>  1 tx        <chr>        0 0       
+#>  2 date      <date>       0 0       
+#>  3 code      <chr>        0 0       
+#>  4 committee <chr>        0 0       
+#>  5 type      <chr>        0 0       
+#>  6 first     <chr>   234264 0.118   
+#>  7 mi        <chr>  1699517 0.857   
+#>  8 last      <chr>      280 0.000141
+#>  9 addr1     <chr>     7979 0.00402 
+#> 10 addr2     <chr>  1901620 0.959   
+#> 11 city      <chr>     6663 0.00336 
+#> 12 state     <chr>     2819 0.00142 
+#> 13 zip       <chr>     1654 0.000834
+#> 14 amount    <dbl>        0 0
+```
+
+We can flag any record missing a key variable needed to identify a
+transaction.
+
+``` r
+key_vars <- c("date", "last", "amount", "committee")
+iac <- flag_na(iac, all_of(key_vars))
+sum(iac$na_flag)
+#> [1] 280
+```
+
+All of the flagged rows are only missing a contributor `last` name.
+
+``` r
+iac %>% 
+  filter(na_flag) %>% 
+  select(all_of(key_vars)) %>% 
+  sample_n(10)
+#> # A tibble: 10 x 4
+#>    date       last  amount committee                                    
+#>    <date>     <chr>  <dbl> <chr>                                        
+#>  1 2010-06-29 <NA>   20    Brenna Bird for County Attorney              
+#>  2 2010-10-18 <NA>   10    Iowans For Miller                            
+#>  3 2010-10-12 <NA>   20    Brenna Bird for County Attorney              
+#>  4 2010-11-30 <NA>    0.98 Upmeyer for House                            
+#>  5 2011-07-15 <NA>  100    Wayne County Democratic Central Committee    
+#>  6 2006-05-03 <NA>   23    Fallon for Governor                          
+#>  7 2004-07-28 <NA>   42    Clay County Republican Central Committee     
+#>  8 2008-01-09 <NA>  199.   Clay County Democratic Central Committee     
+#>  9 2004-10-22 <NA>   55    Clay County Democratic Central Committee     
+#> 10 2011-06-06 <NA>  170    Van Buren County Republican Central Committee
 ```
 
 ``` r
-iac <- iac %>% flag_na(date, last, amount, comm_nm)
-sum(iac$na_flag)
-#> [1] 278
+iac %>% 
+  filter(na_flag) %>% 
+  select(all_of(key_vars)) %>% 
+  col_stats(count_na)
+#> # A tibble: 4 x 4
+#>   col       class      n     p
+#>   <chr>     <chr>  <int> <dbl>
+#> 1 date      <date>     0     0
+#> 2 last      <chr>    280     1
+#> 3 amount    <dbl>      0     0
+#> 4 committee <chr>      0     0
 ```
 
 ### Duplicates
 
+We can create a file containing every duplicate record in the data.
+
 ``` r
-iac <- flag_dupes(iac, -id)
-sum(iac$dupe_flag)
-#> [1] 27848
+dupe_file <- path(dirname(raw_dir), "dupes.csv")
+if (!file_exists(dupe_file)) {
+  write_lines("tx,dupe_flag", dupe_file)
+  iac <- mutate(iac, group = str_sub(date, end = 7))
+  ia_tx <- split(iac$tx, iac$group)
+  ias <- iac %>%
+    select(-tx) %>% 
+    group_split(group, .keep = FALSE)
+  pb <- txtProgressBar(max = length(ias), style = 3)
+  for (i in seq_along(ias)) {
+    write_csv(
+      path = dupe_file,
+      append = TRUE,
+      x = tibble(
+        tx = ia_tx[[i]],
+        dupe_flag = or(
+          duplicated(ias[[i]], fromLast = FALSE),
+          duplicated(ias[[i]], fromLast = TRUE)
+        )
+      )
+    )
+    setTxtProgressBar(pb, i)
+    ias[i] <- NA
+    flush_memory(1)
+  }
+}
+```
+
+``` r
+dupes <- read_csv(
+  file = dupe_file,
+  col_types = cols(
+    tx = col_character(),
+    dupe_flag = col_logical()
+  )
+)
+```
+
+This file can then be joined against the contributions using the
+transaction ID.
+
+``` r
+iac <- left_join(iac, dupes)
+iac <- mutate(iac, dupe_flag = !is.na(dupe_flag))
+percent(mean(iac$dupe_flag), 0.1)
+#> [1] "1.6%"
 ```
 
 ``` r
 iac %>% 
   filter(dupe_flag) %>% 
-  select(date, last, amount, comm_nm)
-#> # A tibble: 27,848 x 4
-#>    date       last                amount comm_nm                                       
+  select(all_of(key_vars)) %>% 
+  arrange(date, last)
+#> # A tibble: 31,894 x 4
+#>    date       last                amount committee                                     
 #>    <date>     <chr>                <dbl> <chr>                                         
 #>  1 2003-01-15 Iowa Health PAC        500 Iowa Democratic Party                         
 #>  2 2003-01-15 Iowa Health PAC        500 Iowa Democratic Party                         
 #>  3 2003-01-17 Pedersen                10 Black Hawk County Republican Central Committee
-#>  4 2003-01-17 unidentified            20 Citizens for Excellence in Government         
-#>  5 2003-01-17 Pedersen                10 Black Hawk County Republican Central Committee
+#>  4 2003-01-17 Pedersen                10 Black Hawk County Republican Central Committee
+#>  5 2003-01-17 unidentified            20 Citizens for Excellence in Government         
 #>  6 2003-01-17 unidentified            20 Citizens for Excellence in Government         
 #>  7 2003-01-29 Smith                  100 Linn Phoenix Club                             
 #>  8 2003-01-29 Smith                  100 Linn Phoenix Club                             
 #>  9 2003-01-31 IDP Federal Account  10000 Iowa Democratic Party                         
 #> 10 2003-01-31 IDP Federal Account  10000 Iowa Democratic Party                         
-#> # … with 27,838 more rows
+#> # … with 31,884 more rows
 ```
 
-### Categorical
+## Categorical
 
 ``` r
 col_stats(iac, n_distinct)
 #> # A tibble: 16 x 4
 #>    col       class        n          p
 #>    <chr>     <chr>    <int>      <dbl>
-#>  1 id        <chr>  1785669 1         
-#>  2 date      <date>    6202 0.00347   
-#>  3 comm_cd   <chr>     4810 0.00269   
-#>  4 comm_nm   <chr>     4910 0.00275   
-#>  5 type      <chr>        2 0.00000112
-#>  6 first     <chr>    83753 0.0469    
-#>  7 mi        <chr>       69 0.0000386 
-#>  8 last      <chr>   124390 0.0697    
-#>  9 address1  <chr>   487673 0.273     
-#> 10 address2  <chr>     6940 0.00389   
-#> 11 city      <chr>    17326 0.00970   
-#> 12 state     <chr>       74 0.0000414 
-#> 13 zip       <chr>    68688 0.0385    
-#> 14 amount    <dbl>    33963 0.0190    
-#> 15 na_flag   <lgl>        2 0.00000112
-#> 16 dupe_flag <lgl>        2 0.00000112
+#>  1 tx        <chr>  1982775 1         
+#>  2 date      <date>    6483 0.00327   
+#>  3 code      <chr>     5110 0.00258   
+#>  4 committee <chr>     5191 0.00262   
+#>  5 type      <chr>        2 0.00000101
+#>  6 first     <chr>    88094 0.0444    
+#>  7 mi        <chr>       69 0.0000348 
+#>  8 last      <chr>   133355 0.0673    
+#>  9 addr1     <chr>   531705 0.268     
+#> 10 addr2     <chr>     7560 0.00381   
+#> 11 city      <chr>    18629 0.00940   
+#> 12 state     <chr>       74 0.0000373 
+#> 13 zip       <chr>    71787 0.0362    
+#> 14 amount    <dbl>    35430 0.0179    
+#> 15 na_flag   <lgl>        2 0.00000101
+#> 16 dupe_flag <lgl>        2 0.00000101
 ```
 
-![](../plots/rec_type_bar-1.png)<!-- -->
+    #> # A tibble: 2 x 3
+    #>   type        n      p
+    #>   <chr>   <int>  <dbl>
+    #> 1 CON   1934948 0.976 
+    #> 2 INK     47827 0.0241
 
-### Continuous
-
-#### Amounts
+## Amounts
 
 ``` r
 summary(iac$amount)
 #>      Min.   1st Qu.    Median      Mean   3rd Qu.      Max. 
-#> -106521.5      16.0      40.0     324.5     100.0 1800000.0
+#> -106521.5      15.0      40.0     321.1     100.0 1800000.0
 mean(iac$amount <= 0)
-#> [1] 0.0009010629
+#> [1] 0.0008876448
 ```
 
 ![](../plots/amount_histogram-1.png)<!-- -->
 
 ![](../plots/amount_comm_violin-1.png)<!-- -->
 
-#### Dates
+## Dates
 
 ``` r
 iac <- mutate(iac, year = year(date))
@@ -354,44 +455,50 @@ function will force consistence case, remove punctuation, and
 abbreviation official USPS suffixes.
 
 ``` r
-iac <- iac %>%
+addr_norm <- iac %>%
+  select(starts_with("addr")) %>% 
+  distinct() %>% 
   unite(
-    starts_with("address"),
-    col = address_full,
+    everything(),
+    col = addr_full,
     sep = " ",
     remove = FALSE,
     na.rm = TRUE
   ) %>% 
   mutate(
-    address_norm = normal_address(
-      address = address_full,
+    addr_norm = normal_address(
+      address = addr_full,
       abbs = usps_street,
       na_rep = TRUE
     )
   ) %>% 
-  select(-address_full)
+  select(-addr_full)
+```
+
+``` r
+iac <- left_join(iac, addr_norm)
+rm(addr_norm)
 ```
 
 We can see how this process improved consistency.
 
 ``` r
 iac %>% 
-  select(contains("address")) %>% 
-  distinct() %>% 
-  sample_n(10)
+  sample_n(10) %>% 
+  select(starts_with("addr"))
 #> # A tibble: 10 x 3
-#>    address1               address2 address_norm      
-#>    <chr>                  <chr>    <chr>             
-#>  1 1920 Willowmere Dr     <NA>     1920 WILLOWMERE DR
-#>  2 5410 SHRIVER AVE       <NA>     5410 SHRIVER AVE  
-#>  3 230 Essex Lane         <NA>     230 ESSEX LN      
-#>  4 411 N. Brookside Drive <NA>     411 N BROOKSIDE DR
-#>  5 1333 330 Ave           <NA>     1333 330 AVE      
-#>  6 135 Bass Rd            <NA>     135 BASS RD       
-#>  7 200 SE Hartford        <NA>     200 SE HARTFORD   
-#>  8 2917 Sportsman Dr      <NA>     2917 SPORTSMAN DR 
-#>  9 111 S 6TH STREET       <NA>     111 S 6 TH ST     
-#> 10 1021 E 10TH STREET     <NA>     1021 E 10 TH ST
+#>    addr1                 addr2 addr_norm         
+#>    <chr>                 <chr> <chr>             
+#>  1 708 Brookridge Ave    <NA>  708 BROOKRIDGE AVE
+#>  2 722 NE 10TH ST        <NA>  722 NE 10 TH ST   
+#>  3 19548 T AVE           <NA>  19548 T AVE       
+#>  4 9713 Mariposa         <NA>  9713 MARIPOSA     
+#>  5 609 W Council Dr      <NA>  609 W COUNCIL DR  
+#>  6 5661 Fluer Dr         <NA>  5661 FLUER DR     
+#>  7 2001 West 10th Street <NA>  2001 W 10 TH ST   
+#>  8 307 OHIO AVENUE       <NA>  307 OHIO AVE      
+#>  9 2128 262nd Ave        <NA>  2128 262 ND AVE   
+#> 10 6919 Vista Drive      <NA>  6919 VIS DR
 ```
 
 ### ZIP
@@ -411,12 +518,16 @@ iac <- iac %>%
 ```
 
 ``` r
-progress_table(iac$zip, iac$zip_norm, compare = valid_zip)
+progress_table(
+  iac$zip, 
+  iac$zip_norm, 
+  compare = valid_zip
+)
 #> # A tibble: 2 x 6
 #>   stage    prop_in n_distinct  prop_na  n_out n_diff
 #>   <chr>      <dbl>      <dbl>    <dbl>  <dbl>  <dbl>
-#> 1 zip        0.849      68688 0.000926 270272  55543
-#> 2 zip_norm   0.998      15961 0.0144     4087    985
+#> 1 zip        0.853      71787 0.000834 290558  57630
+#> 2 zip_norm   0.998      16820 0.0147     4697   1137
 ```
 
 ### State
@@ -426,9 +537,9 @@ Very little needs to be done to clean the `state` variable.
 ``` r
 x <- iac$state
 length(x)
-#> [1] 1785669
+#> [1] 1982775
 prop_in(x, valid_state)
-#> [1] 0.9999764
+#> [1] 0.9999788
 count_out(x, valid_state)
 #> [1] 42
 st_zip <- iac$zip %in% zipcodes$zip[zipcodes$state == "IA"]
@@ -438,8 +549,21 @@ st_na <- !is.na(x)
 # has ia zip, ia regex, not valid, not na
 x[st_zip & st_rx & st_out & st_na] <- "IA"
 length(x)
-#> [1] 1785669
+#> [1] 1982775
 iac <- mutate(iac, state_norm = x)
+```
+
+``` r
+progress_table(
+  iac$state, 
+  iac$state_norm, 
+  compare = valid_state
+)
+#> # A tibble: 2 x 6
+#>   stage      prop_in n_distinct prop_na n_out n_diff
+#>   <chr>        <dbl>      <dbl>   <dbl> <dbl>  <dbl>
+#> 1 state         1.00         74 0.00142    42     19
+#> 2 state_norm    1.00         68 0.00142    32     13
 ```
 
 ### City
@@ -451,7 +575,9 @@ case, removing punctuation, but *expanding* USPS abbreviations. We can
 also remove `invalid_city` values.
 
 ``` r
-iac <- iac %>% 
+ia_city <- iac %>% 
+  count(city, state_norm, zip_norm, sort = TRUE) %>% 
+  select(-n) %>% 
   mutate(
     city_norm = normal_city(
       city = city, 
@@ -464,12 +590,12 @@ iac <- iac %>%
 ```
 
 Again, we can further improve normalization by comparing our normalized
-value agaist the *expected* value for that record’s state abbreviation
+value against the *expected* value for that record’s state abbreviation
 and ZIP code. If the normalized value is either an abbreviation for or
 very similar to the expected value, we can confidently swap those two.
 
 ``` r
-iac <- iac %>% 
+ia_city <- ia_city %>% 
   rename(city_raw = city) %>% 
   left_join(
     y = zipcodes,
@@ -497,30 +623,33 @@ iac <- iac %>%
 
 ``` r
 many_city <- c(valid_city, extra_city)
-iac %>% 
+ia_city %>% 
   count(city_swap, state_norm, sort = TRUE) %>% 
   filter(!is.na(city_swap), city_swap %out% many_city)
-#> # A tibble: 1,331 x 3
-#>    city_swap            state_norm     n
-#>    <chr>                <chr>      <int>
-#>  1 DMNODATA             <NA>         486
-#>  2 RESEARCH TRIANGLE PK NC           318
-#>  3 UNITEMIZED           IA           189
-#>  4 ELK RUN HEIGHTS      IA           187
-#>  5 DMNODATA             IA           132
-#>  6 WASHINGTON D C       DC            83
-#>  7 FARMINGTON HILLS     MI            80
-#>  8 P B GARDENS          FL            77
-#>  9 ANYTOWN              IA            76
-#> 10 LECLAIRE             IA            60
-#> # … with 1,321 more rows
+#> # A tibble: 1,545 x 3
+#>    city_swap        state_norm     n
+#>    <chr>            <chr>      <int>
+#>  1 NEW YORK CITY    NY            27
+#>  2 NYC              NY            20
+#>  3 WASHINGTON D C   DC            17
+#>  4 LECLAIRE         IA            15
+#>  5 JOHNSTNON        IA            12
+#>  6 UNITEMIZED       IA            10
+#>  7 FARMINGTON HILLS MI             9
+#>  8 IA               IA             8
+#>  9 LEMARS           IA             8
+#> 10 DESMOINES        IA             7
+#> # … with 1,535 more rows
 ```
 
 ``` r
-iac <- iac %>% 
+ia_city <- ia_city %>% 
   mutate(
     city_swap = city_swap %>% 
       str_replace("^OVERLAND PARKS$", "OVERLAND PARK") %>% 
+      str_replace("^NEW YORK CITY$", "NEW YORK") %>% 
+      str_replace("^NYC$", "NEW YORK") %>% 
+      str_replace("^WASHINGTON D C$", "WASHINGTON") %>% 
       str_replace("\\sPK$", "PARK") %>% 
       str_remove("\\sD\\sC$") %>% 
       str_remove("\\sIN$") %>% 
@@ -529,11 +658,16 @@ iac <- iac %>%
   )
 ```
 
+``` r
+ia_city <- rename(ia_city, city = city_raw)
+iac <- left_join(iac, ia_city, by = c("city", "state_norm", "zip_norm"))
+```
+
 | stage      | prop\_in | n\_distinct | prop\_na | n\_out | n\_diff |
 | :--------- | -------: | ----------: | -------: | -----: | ------: |
-| city\_raw) |    0.966 |       12784 |    0.004 |  60375 |    5283 |
-| city\_norm |    0.987 |       11895 |    0.014 |  23145 |    4339 |
-| city\_swap |    0.997 |        8864 |    0.014 |   4729 |    1303 |
+| city)      |    0.965 |       13652 |    0.003 |  68317 |    5829 |
+| city\_norm |    0.986 |       12699 |    0.014 |  26413 |    4819 |
+| city\_swap |    0.997 |        9391 |    0.015 |   5887 |    1501 |
 
 You can see how the percentage of valid values increased with each
 stage.
@@ -572,74 +706,122 @@ progress %>%
 
 ## Conclude
 
+Before exporting, we can remove the intermediary normalization columns
+and rename all added variables with the `_clean` suffix.
+
 ``` r
-glimpse(sample_n(iac, 20))
-#> Rows: 20
-#> Columns: 22
-#> $ id           <chr> "{58069CFA-5C8D-4692-8170-2E91B6FB7CC5}", "{AF8984AC-5B20-459F-B9FC-DCFEC46…
-#> $ date         <date> 2016-07-21, 2014-10-10, 2010-08-23, 2016-02-03, 2014-03-27, 2006-11-24, 20…
-#> $ comm_cd      <chr> "9156", "5152", "5140", "6237", "6056", "6021", "9048", "13729", "1535", "1…
-#> $ comm_nm      <chr> "Polk County Republican Central Committee", "Anderson for Iowa", "Governor …
-#> $ type         <chr> "CON", "CON", "CON", "CON", "CON", "CON", "CON", "CON", "CON", "CON", "CON"…
-#> $ first        <chr> "Paul", "Gerald", "Sandra", "Craig", "Craig", "Jenny", "William", "Toby", N…
-#> $ mi           <chr> NA, NA, NA, NA, "A", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "A", NA, N…
-#> $ last         <chr> "Waddell", "Leibowitz", "Benedett", "Jones", "Marquardt", "Lorenz", "Stamme…
-#> $ address1     <chr> "4114 Pleasant St", "75-34 Bell Blvd", "133 Elmridge Road", "1854 W 3RD EXT…
-#> $ address2     <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
-#> $ city_raw     <chr> "Des Moines", "Oakland Gardens", "Waterloo", "Boone", "Paton", "Marion", "D…
-#> $ state        <chr> "IA", "NY", "IA", "IA", "IA", "IA", "IA", "IA", "IA", "IA", "IA", "IA", "NC…
-#> $ zip          <chr> "50312", "11364", "50701", "50036", "50217-0000", "52302", "50063", "52803"…
-#> $ amount       <dbl> 200.00, 15.00, 125.00, 5.00, 50.00, 90.00, 7.00, 65.00, 250.00, 150.00, 57.…
-#> $ na_flag      <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE…
-#> $ dupe_flag    <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE…
-#> $ year         <dbl> 2016, 2014, 2010, 2016, 2014, 2006, 2016, 2015, 2010, 2006, 2019, 2007, 201…
-#> $ address_norm <chr> "4114 PLEASANT ST", "7534 BELL BLVD", "133 ELMRIDGE RD", "1854 W 3 RD EXT S…
-#> $ zip_norm     <chr> "50312", "11364", "50701", "50036", "50217", "52302", "50063", "52803", "50…
-#> $ state_norm   <chr> "IA", "NY", "IA", "IA", "IA", "IA", "IA", "IA", "IA", "IA", "IA", "IA", "NC…
-#> $ city_norm    <chr> "DES MOINES", "OAKLAND GARDENS", "WATERLOO", "BOONE", "PATON", "MARION", "D…
-#> $ city_swap    <chr> "DES MOINES", "OAKLAND GARDENS", "WATERLOO", "BOONE", "PATON", "MARION", "D…
+iac <- iac %>% 
+  select(
+    -city_norm,
+    city_clean = city_swap
+  ) %>% 
+  rename_all(~str_replace(., "_norm", "_clean")) %>% 
+  rename_all(~str_remove(., "_raw"))
 ```
 
-1.  There are 1,785,669 records in the database.
-2.  There are 27,848 duplicate records in the database (1.56%).
+``` r
+glimpse(sample_n(iac, 50))
+#> Rows: 50
+#> Columns: 21
+#> $ tx          <chr> "{FE701D0F-179A-49C5-84A1-3671C85EF799}", "{84767F03-9A30-44AE-8B2E-524485E7…
+#> $ date        <date> 2018-09-04, 2011-10-05, 2016-10-14, 2010-09-09, 2020-01-25, 2013-03-13, 201…
+#> $ code        <chr> "2451", "6021", "1229", "5140", "6021", "6072", "1914", "2523", "6021", "236…
+#> $ committee   <chr> "Westrich for Iowa", "Credit Union PAC", "Winckler for State House", "Govern…
+#> $ type        <chr> "CON", "CON", "CON", "CON", "CON", "CON", "CON", "CON", "CON", "CON", "CON",…
+#> $ first       <chr> "Mary Beth", "Beverly", NA, "Jane", "Liliane", "Paul", "Mike", "Jana", "Fern…
+#> $ mi          <chr> NA, NA, NA, "B", NA, "C", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "A", N…
+#> $ last        <chr> "Hammer", "Long", "Bridge Structural & Ornamental Ironworkers Local 111 PAC"…
+#> $ addr1       <chr> "2357 Timberlane Hights", "431 Teakwood Lane N.E.", "8000 29th St, West", "P…
+#> $ addr2       <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
+#> $ city        <chr> "Ottumwa", "Cedar Rapids", "Rock Island", "New Providence", "Palo", "Delmar"…
+#> $ state       <chr> "IA", "IA", "IL", "IA", "IA", "IA", "IA", "CA", "IA", "IA", "IA", "IA", "NY"…
+#> $ zip         <chr> "52501", "52402", "61201", "50206", "52324", "52037-9346", "52732", "90027",…
+#> $ amount      <dbl> 20.00, 35.00, 250.00, 25.00, 0.50, 15.00, 100.00, 8.34, 10.00, 100.00, 200.0…
+#> $ na_flag     <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE,…
+#> $ dupe_flag   <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE,…
+#> $ year        <dbl> 2018, 2011, 2016, 2010, 2020, 2013, 2010, 2020, 2014, 2017, 2006, 2016, 2014…
+#> $ addr_clean  <chr> "2357 TIMBERLANE HIGHTS", "431 TEAKWOOD LN N E", "8000 29 TH ST W", "PO BOX …
+#> $ zip_clean   <chr> "52501", "52402", "61201", "50206", "52324", "52037", "52732", "90027", "502…
+#> $ state_clean <chr> "IA", "IA", "IL", "IA", "IA", "IA", "IA", "CA", "IA", "IA", "IA", "IA", "NY"…
+#> $ city_clean  <chr> "OTTUMWA", "CEDAR RAPIDS", "ROCK ISLAND", "NEW PROVIDENCE", "PALO", "DELMAR"…
+```
+
+1.  There are 1,982,775 records in the database.
+2.  There are 31,894 duplicate records in the database.
 3.  The range and distribution of `amount` and `date` seem reasonable.
-4.  There are 278 records missing a contributor or recipient name, date,
-    or amount (0.02%).
-5.  Consistency in goegraphic data has been improved with
+4.  There are 280 records missing key variables.
+5.  Consistency in geographic data has been improved with
     `campfin::normal_*()`.
 6.  The 4-digit `year` variable has been created with
     `lubridate::year()`.
 
 ## Export
 
-``` r
-iac <- iac %>% 
-  select(
-    -city_norm,
-    city_norm = city_swap
-  ) %>% 
-  rename_all(~str_replace(., "_norm", "_clean"))
-```
+Now the file can be saved on disk for upload to the Accountability
+server.
 
 ``` r
 clean_dir <- dir_create(here("ia", "contribs", "data", "clean"))
 clean_path <- path(clean_dir, "ia_contribs_clean.csv")
-write_csv(iac, path = clean_path, na = "")
-file_size(clean_path)
-#> 345M
-guess_encoding(clean_path)
-#> # A tibble: 11 x 3
-#>    encoding   language confidence
-#>    <chr>      <chr>         <dbl>
-#>  1 ISO-8859-1 "pt"           0.44
-#>  2 ISO-8859-2 "ro"           0.44
-#>  3 ISO-8859-9 "tr"           0.26
-#>  4 UTF-8      ""             0.15
-#>  5 UTF-16BE   ""             0.1 
-#>  6 UTF-16LE   ""             0.1 
-#>  7 Shift_JIS  "ja"           0.1 
-#>  8 GB18030    "zh"           0.1 
-#>  9 EUC-JP     "ja"           0.1 
-#> 10 EUC-KR     "ko"           0.1 
-#> 11 Big5       "zh"           0.1
+write_csv(iac, clean_path, na = "")
+(clean_size <- file_size(clean_path))
+#> 382M
+file_encoding(clean_path) %>% 
+  mutate(across(path, path.abbrev))
+#> # A tibble: 1 x 3
+#>   path                                           mime            charset 
+#>   <chr>                                          <chr>           <chr>   
+#> 1 ~/ia/contribs/data/clean/ia_contribs_clean.csv application/csv us-ascii
 ```
+
+## Upload
+
+We can use the `aws.s3::put_object()` to upload the text file to the IRW
+server.
+
+``` r
+aws_path <- path("csv", basename(clean_path))
+if (!object_exists(aws_path, "publicaccountability")) {
+  put_object(
+    file = clean_path,
+    object = aws_path, 
+    bucket = "publicaccountability",
+    acl = "public-read",
+    show_progress = TRUE,
+    multipart = TRUE
+  )
+}
+aws_head <- head_object(aws_path, "publicaccountability")
+(aws_size <- as_fs_bytes(attr(aws_head, "content-length")))
+#> 382M
+unname(aws_size == clean_size)
+#> [1] TRUE
+```
+
+## Dictionary
+
+The following table describes the variables in our final exported file:
+
+| Column        | Type        | Definition                             |
+| :------------ | :---------- | :------------------------------------- |
+| `tx`          | `character` | Unique transaction hash                |
+| `date`        | `double`    | Date contribution was made             |
+| `code`        | `character` | Recipient committee code               |
+| `committee`   | `character` | Recipient committee name               |
+| `type`        | `character` | Type of contribution (direct, in-kind) |
+| `first`       | `character` | Contributor first name                 |
+| `mi`          | `character` | Contributor middle initial             |
+| `last`        | `character` | Contributor last name or organization  |
+| `addr1`       | `character` | Contributor street address             |
+| `addr2`       | `character` | Contributor secondary address          |
+| `city`        | `character` | Contributor state abbreviation         |
+| `state`       | `character` | Contributor city name                  |
+| `zip`         | `character` | Contributor ZIP+4 code                 |
+| `amount`      | `double`    | Amount or correction                   |
+| `na_flag`     | `logical`   | Flag for missing value                 |
+| `dupe_flag`   | `logical`   | Flag for duplicate row                 |
+| `year`        | `double`    | Calendar year contribution made        |
+| `addr_clean`  | `character` | Normalized street address              |
+| `zip_clean`   | `character` | Normalized 5-digit ZIP code            |
+| `state_clean` | `character` | Normalized 2-letter state abbreviation |
+| `city_clean`  | `character` | Normalized city name                   |

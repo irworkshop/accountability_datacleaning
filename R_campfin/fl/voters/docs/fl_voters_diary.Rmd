@@ -1,0 +1,1094 @@
+---
+title: "Florida Voters"
+author: "Kiernan Nicholls"
+date: "`r Sys.time()`"
+output:
+  github_document: 
+    df_print: tibble
+    toc: true
+    toc_dept: 3
+editor_options: 
+  chunk_output_type: console
+---
+
+<!-- Place comments regarding knitting here -->
+
+```{r setup, include=FALSE, purl=FALSE}
+library(knitr)
+opts_chunk$set(
+  eval = TRUE,
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  error = FALSE,
+  collapse = TRUE,
+  comment = "#>",
+  fig.path = "../plots/",
+  fig.width = 10,
+  dpi = 300
+)
+if (!interactive()) {
+  options(width = 95)
+  set.seed(5)
+}
+```
+
+```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
+doc_dir <- fs::dir_create(here::here("fl", "voters", "docs"))
+```
+
+## Project
+
+The Accountability Project is an effort to cut across data silos and give
+journalists, policy professionals, activists, and the public at large a simple
+way to search across huge volumes of public data about people and organizations.
+
+Our goal is to standardizing public data on a few key fields by thinking of each
+dataset row as a transaction. For each transaction there should be (at least) 3
+variables:
+
+1. All **parties** to a transaction.
+2. The **date** of the transaction.
+3. The **amount** of money involved.
+
+## Objectives
+
+This document describes the process used to complete the following objectives:
+
+1. How many records are in the database?
+1. Check for entirely duplicated records.
+1. Check ranges of continuous variables.
+1. Is there anything blank or missing?
+1. Check for consistency issues.
+1. Create a five-digit ZIP Code called `zip`.
+1. Create a `year` field from the transaction date.
+1. Make sure there is data on both parties to a transaction.
+
+## Packages
+
+The following packages are needed to collect, manipulate, visualize, analyze,
+and communicate these results. The `pacman` package will facilitate their
+installation and attachment.
+
+The IRW's `campfin` package will also have to be installed from GitHub. This
+package contains functions custom made to help facilitate the processing of
+campaign finance data.
+
+```{r load_packages, message=FALSE, warning=FALSE, error=FALSE}
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load_gh("irworkshop/campfin")
+pacman::p_load(
+  tidyverse, # data manipulation
+  lubridate, # datetime strings
+  gluedown, # printing markdown
+  tabulizer, # scraping pdfs
+  magrittr, # pipe operators
+  janitor, # clean data frames
+  aws.s3, # upload to aws s3
+  refinr, # cluster and merge
+  scales, # format strings
+  knitr, # knit documents
+  vroom, # read files fast
+  rvest, # html scraping
+  glue, # combine strings
+  here, # relative paths
+  httr, # http requests
+  fs # local storage 
+)
+```
+
+This document should be run as part of the `R_campfin` project, which lives as a
+sub-directory of the more general, language-agnostic
+[`irworkshop/accountability_datacleaning`][tap] GitHub repository.
+
+The `R_campfin` project uses the [RStudio projects][rproj] feature and should be
+run as such. The project also uses the dynamic `here::here()` tool for file
+paths relative to _your_ machine.
+
+```{r where_here}
+# where does this document knit?
+here::here()
+```
+
+[tap]: https://github.com/irworkshop/accountability_datacleaning
+[rproj]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects
+
+## Data
+
+[Voter data][voter] for the state of Florida can be obtained from the state
+[Division of Elections][doe]. The file was provided to the Investigative
+Reporting Workshop by mail on a compact disc and uploaded to the Workshop's AWS
+server.
+
+> Voter registration and voting history information is public record under
+Florida law. As a public service, the Division of Elections provides a monthly
+disk on registered voters. The disk contains information extracted from the
+Florida Voter Registration System and data reported by the 67 county Supervisors
+of Elections. The data includes voter registration and voting information on all
+voters registered up to the last day of the month prior to the date the disk
+generated.Further information on the file specifications can be found in the
+[Voter Extract File Layout - PDF][layout].
+
+> In order to receive a copy of the monthly disk, email or mail your request to
+the Division of Elections (see Contact Information below) before 4 pm on the
+respective dates below. Please include in your request, a phone number, an email
+address, and a mailing address to receive the disk by mail.The disks will be
+mailed out or available for pick-up from 9:00 A.M. until 4:00 P.M. on that day.
+A request received after the date and time specified will be filled with next
+month’s extract disk. There is no fee associated with this complimentary disk.
+
+> A standing request may be made to receive all monthly extract disks issued
+subsequently through the end of the calendar year.All standing requests expire
+at the end of the calendar year in which made and must be renewed annually.
+
+[voter]: https://dos.myflorida.com/elections/data-statistics/voter-registration-statistics/voter-extract-disk-request/
+[doe]: https://dos.myflorida.com/elections/
+[layout]: https://dos.myflorida.com/media/696057/voter-extract-file-layout.pdf
+
+## Download
+
+The raw data from the disk can be downloaded from the Workshop's AWS server.
+
+```{r aws_bucket}
+aws_info <- get_bucket_df(
+  bucket = "publicaccountability", 
+  prefix = "FOR_REVIEW/fl_voters"
+)
+```
+
+```{r aws_info, echo=FALSE}
+aws_info <- aws_info %>% 
+  as_tibble() %>% 
+  transmute(
+    path = as_fs_path(Key), 
+    size = as_fs_bytes(Size), 
+    modification_time = parse_datetime(LastModified)
+  )
+print(aws_info)
+```
+
+```{r raw_dir}
+raw_dir <- dir_create(here("fl", "voters", "data", "raw"))
+```
+
+We will save each object to a local directory.
+
+```{r aws_get}
+for (key in aws_info$path[aws_info$size > 0]) {
+  p <- path(raw_dir, basename(key))
+  if (!file_exists(p)) {
+    save_object(
+      object = key,
+      bucket = "publicaccountability",
+      file = p
+    )
+  }
+}
+```
+
+```{r raw_info}
+raw_info <- dir_info(raw_dir)
+raw_pdf <- raw_info$path[1]
+sum(raw_info$size)
+raw_info %>% 
+  select(path, size, modification_time) %>% 
+  mutate(across(path, path.abbrev))
+```
+
+## About
+
+Information about the data is found in the Voter Extract Disk File Layout file:
+
+### Content
+
+> Content: The extract files are created monthly in tab-delimited ASCII text
+file format and contain:
+>
+> 1. Official voter registration information. Data is extracted from the Florida
+Voter Registration System and includes information on voters who are officially
+registered as of the end of the prior month. Public information is included
+except in those cases in which an exemption applies, including if a registered
+voter requested exemption from public disclosure pursuant to Section 119.071,
+Fla. Stat. (Section 97.0585, Fla. Stat.). All information on registered voters
+who are participants in the Attorney General’s Address Confidentiality Program
+pursuant to 741.401 – 741.465, Fla. Stat., is excluded.
+> 
+> 2. Unofficial voting history information. Data is extracted from independently
+reported voting history from the 67 county supervisors of elections. The data is
+captured at a fixed point in time and may not always correspond to information
+in a county’s voter registration file because the voter may have moved to
+another county after voting. You must look to the voter’s registration
+information in that county-specific voter registration file. Disclaimer: The
+Division of Elections cannot warrant the content or accuracy of the unofficial
+voting history extract. The most accurate and current official voting history
+resides with the supervisors of elections. Any discrepancies in this extract
+must be resolved in favor of the official voting records in the county where the
+voter actually voted.
+
+### Format
+
+> The disk contains two zipped (compressed) folders. One folder consists of 67
+county voter registration files; the other consists of 67 county voting history
+files. The files are in tab-delimited ASCII text. To unzip folder and access
+file(s), open the zipped folder and drag the file(s) to a new location. File(s)
+can then be opened using a wide variety of text, spreadsheet, or database
+applications, including MS Access, MS Excel, Open Office, MySQL, and Oracle. The
+naming convention for these files is as follows
+
+|File Type          |File Type  |Individual File Name              |
+|:------------------|:--------  |:---------------------------------|
+|Voter Registration |Compressed |`Voter_Registration_YYYYMMDD.zip` |
+|Voter Registration |Individual |`CountyCode_YYYYMMDD.txt`         |
+|Voting History     |Compressed |`Voter _History_YYYYMMDD.zip`     |
+|Voting History     |Individual |`CountyCode_H_YYYYMMDD.txt`       |
+
+### Layout
+
+The registration table has 38 rows:
+
+```{r raw_cols, echo=FALSE}
+raw_cols <- suppressWarnings(extract_tables(
+  file = raw_pdf,
+  pages = 2,
+  output = "data.frame"
+))
+raw_cols <- raw_cols[[1]][[2]][4:42]
+raw_cols <- raw_cols[-8]
+raw_cols[7] <- "Requested Exemption"
+```
+
+| Field|Name                         | Length|Format             |Protected |
+|-----:|:----------------------------|------:|:------------------|:---------|
+|     1|`County Code`                |      3|See Code Table     |FALSE     |
+|     2|`Voter ID`                   |     10|                   |FALSE     |
+|     3|`Name Last`                  |     30|                   |TRUE      |
+|     4|`Name Suffix`                |      5|                   |TRUE      |
+|     5|`Name First`                 |     30|                   |TRUE      |
+|     6|`Name Middle`                |     30|                   |TRUE      |
+|     7|`Requested exemption`        |      1|Yes or No          |FALSE     |
+|     8|`Residence Address Line 1`   |     50|                   |TRUE      |
+|     9|`Residence Address Line 2`   |     40|                   |TRUE      |
+|    10|`Residence City (USPS)`      |     40|                   |TRUE      |
+|    11|`Residence State`            |      2|State Abbreviation |TRUE      |
+|    12|`Residence Zipcode`          |     10|                   |TRUE      |
+|    13|`Mailing Address Line 1`     |     40|                   |TRUE      |
+|    14|`Mailing Address Line 2`     |     40|                   |TRUE      |
+|    15|`Mailing Address Line 3`     |     40|                   |TRUE      |
+|    16|`Mailing City`               |     40|                   |TRUE      |
+|    17|`Mailing State`              |      2|State Abbreviation |TRUE      |
+|    18|`Mailing Zipcode`            |     12|                   |TRUE      |
+|    19|`Mailing Country`            |     40|                   |TRUE      |
+|    20|`Gender`                     |      1|“F” “M” or “U”     |FALSE     |
+|    21|`Race`                       |      1|See Code Table     |FALSE     |
+|    22|`Birth Date`                 |     10|MM/DD/YYYY         |TRUE      |
+|    23|`Registration Date`          |     10|MM/DD/YYYY         |FALSE     |
+|    24|`Party Affiliation`          |      3|See Code Table     |FALSE     |
+|    25|`Precinct`                   |      6|                   |TRUE      |
+|    26|`Precinct Group`             |      3|                   |TRUE      |
+|    27|`Precinct Split`             |      6|                   |TRUE      |
+|    28|`Precinct Suffix`            |      3|                   |TRUE      |
+|    29|`Voter Status`               |      3|Active or Inactive |FALSE     |
+|    30|`Congressional District`     |      3|                   |TRUE      |
+|    31|`House District`             |      3|                   |TRUE      |
+|    32|`Senate District`            |      3|                   |TRUE      |
+|    33|`County Commission District` |      3|                   |TRUE      |
+|    34|`School Board District`      |      2|                   |TRUE      |
+|    35|`Daytime Area Code`          |      3|                   |TRUE      |
+|    36|`Daytime Phone Number`       |      7|                   |TRUE      |
+|    37|`Daytime Phone Extension`    |      4|                   |TRUE      |
+
+The voter history file has 5 rows:
+
+| Field|Name            | Length|Format                  |
+|-----:|:---------------|------:|:-----------------------|
+|     1|`County Code`   |      3|See Code Table          |
+|     2|`Voter ID`      |     10|                        |
+|     3|`Election Date` |     10|MM/DD/YYYY              |
+|     4|`Election Type` |      3|PPP, PRI, RUN, GEN, OTH |
+|     5|`History Code`  |      1|See Code Tables         |
+
+### Codes
+
+The information PDF contains code tables used to identify the values for any
+variable relying on codes instead of full values.
+
+There are 6 codes in the `History Code` column:
+
+|History Code |History Description             |
+|:------------|:-------------------------------|
+|A            |Voted by Mail                   |
+|B            |Vote-by-Mail Ballot Not Counted |
+|E            |Voted Early                     |
+|N            |Did Not Vote (not required)     |
+|P            |Provisional Ballot Not Counted  |
+|Y            |Voted at Polls                  |
+
+There are 7 codes in the `Race Code` column:
+
+|Race Code |Race Description                  |
+|:---------|:---------------------------------|
+|         1|American Indian or Alaskan Native |
+|         2|Asian Or Pacific Islander         |
+|         3|Black, Not Hispanic               |
+|         4|Hispanic                          |
+|         5|White, Not Hispanic               |
+|         6|Other                             |
+|         7|Multi-racial                      |
+|         9|Unknown                           |
+
+
+There are 10 codes in the `Party Affiliation` column:
+
+|Party Codes |Party Description                            |
+|:-----------|:--------------------------------------------|
+|CPF         |Constitution Party of Florida                |
+|DEM         |Florida Democratic Party                     |
+|ECO         |Ecology Party of Florida                     |
+|GRE         |Green Party of Florida                       |
+|IND         |Independent Party of Florida                 |
+|LPF         |Libertarian Party of Florida                 |
+|NPA         |No Party Affiliation                         |
+|PSL         |Party for Socialism and Liberation - Florida |
+|REF         |Reform Party of Florida                      |
+|REP         |Republican Party of Florida                  |
+
+There are 67 codes in the `County Name` column:
+
+|County Code |County Name  |
+|:-----------|:------------|
+|ALA         |Alachua      |
+|BAK         |Baker        |
+|BAY         |Bay          |
+|BRA         |Bradford     |
+|BRE         |Brevard      |
+|BRO         |Broward      |
+|CAL         |Calhoun      |
+|CHA         |Charlotte    |
+|CIT         |Citrus       |
+|CLA         |Clay         |
+|CLL         |Collier      |
+|CLM         |Columbia     |
+|DAD         |Miami-Dade   |
+|DES         |Desoto       |
+|DIX         |Dixie        |
+|DUV         |Duval        |
+|ESC         |Escambia     |
+|FLA         |Flagler      |
+|FRA         |Franklin     |
+|GAD         |Gadsden      |
+|GIL         |Gilchrist    |
+|GLA         |Glades       |
+|GUL         |Gulf         |
+|HAM         |Hamilton     |
+|HAR         |Hardee       |
+|HEN         |Hendry       |
+|HER         |Hernando     |
+|HIG         |Highlands    |
+|HIL         |Hillsborough |
+|HOL         |Holmes       |
+|IND         |Indian River |
+|JAC         |Jackson      |
+|JEF         |Jefferson    |
+|LAF         |Lafayette    |
+|LAK         |Lake         |
+|LEE         |Lee          |
+|LEO         |Leon         |
+|LEV         |Levy         |
+|LIB         |Liberty      |
+|MAD         |Madison      |
+|MAN         |Manatee      |
+|MRN         |Marion       |
+|MRT         |Martin       |
+|MON         |Monroe       |
+|NAS         |Nassau       |
+|OKA         |Okaloosa     |
+|OKE         |Okeechobee   |
+|ORA         |Orange       |
+|OSC         |Osceola      |
+|PAL         |Palm Beach   |
+|PAS         |Pasco        |
+|PIN         |Pinellas     |
+|POL         |Polk         |
+|PUT         |Putnam       |
+|SAN         |Santa Rosa   |
+|SAR         |Sarasota     |
+|SEM         |Seminole     |
+|STJ         |St. Johns    |
+|STL         |St. Lucie    |
+|SUM         |Sumter       |
+|SUW         |Suwannee     |
+|TAY         |Taylor       |
+|UNI         |Union        |
+|VOL         |Volusia      |
+|WAK         |Wakulla      |
+|WAL         |Walton       |
+|WAS         |Washington   |
+
+## Read
+
+```{r raw_unzip}
+det_dir <- path(raw_dir, "details")
+if (length(dir_ls(det_dir)) != 67) {
+   unzip(
+    zipfile = raw_info$path[2],
+    exdir = det_dir,
+    junkpaths = TRUE
+  )
+} else {
+  dir_ls(det_dir)
+} -> raw_paths
+```
+
+```{r raw_read}
+flv <- vroom(
+  file = raw_paths,
+  delim = "\t",
+  quote = "",
+  guess_max = 0,
+  num_threads = 1,
+  escape_backslash = FALSE,
+  escape_double = FALSE,
+  na = c("", "*"),
+  col_names = make_clean_names(raw_cols),
+  col_types = cols(
+    .default = col_character(),
+    birth_date = col_date("%m/%d/%Y"),
+    registration_date = col_date("%m/%d/%Y")
+  )
+)
+```
+
+```{r raw_rename, echo=FALSE}
+flv <- rename(
+  .data = flv,
+  county      = county_code,
+  req_exempt  = requested_exemption,
+  addr1       = residence_address_line_1,
+  addr2       = residence_address_line_2,
+  city        = residence_city_usps,
+  state       = residence_state,
+  zip         = residence_zipcode,
+  ml_addr1    = mailing_address_line_1,
+  ml_addr2    = mailing_address_line_2,
+  ml_addr3    = mailing_address_line_3,
+  ml_city     = mailing_city,
+  ml_state    = mailing_state,
+  ml_zip      = mailing_zipcode,
+  ml_county   = mailing_country,
+  reg_date    = registration_date,
+  party       = party_affiliation,
+  prct_name   = precinct,
+  prct_group  = precinct_group,
+  prct_split  = precinct_split,
+  prct_suffix = precinct_suffix,
+  status      = voter_status,
+  congress    = congressional_district,
+  house       = house_district,
+  senate      = senate_district,
+  commish      = county_commission_district,
+  school      = school_board_district,
+  phone_area  = daytime_area_code,
+  phone_num   = daytime_phone_number,
+  phone_ext   = daytime_phone_extension,
+  email       = email_address
+)
+```
+
+To check the file has been correctly read, we can count the distinct values in
+a known discrete variable like `party` affiliation. IF the file was ready
+incorrectly due to a delimiter or quote, we would see erroneous values.
+
+```{r raw_check}
+count(flv, party, sort = TRUE)
+```
+
+### Old
+
+```{r old_download}
+old_path <- path(raw_dir, "fl_voters_old.csv")
+if (!file_exists(old_path)) {
+  save_object(
+    file = old_path,
+    object = "csv/FL_VOTERS.csv",
+    bucket = getOption("aws.bucket"),
+    show_progress = TRUE
+  )
+}
+```
+
+```{r old_read}
+flo <- vroom(
+  file = old_path,
+  na = c("", "*", "NA"),
+  col_types = cols(
+    .default = col_character(),
+    dob = col_date("%m/%d/%Y"),
+    reg_date = col_date("%m/%d/%Y")
+  )
+)
+```
+
+```{r old_reverse}
+flo <- flo %>% 
+  # keep only voters not in new data
+  filter(`Voter ID` %out% flv$voter_id) %>% 
+  # remove the added columns
+  select(-CITY_CLEAN, -ZIP5, -BIRTHYEAR, -RACE_TXT, -YEAR) %>% 
+  # spit the combined phone
+  separate(
+    col = PHONE,
+    into = c("area", "num"),
+    sep = "(?<=.{3})(?=.{7})",
+    extra = "merge",
+    fill = "left"
+  ) %>% 
+  # match names to new data
+  set_names(names(flv))
+```
+
+```{r old_inactive}
+add_prop(count(flo, status))
+add_prop(count(flv, status))
+flo <- mutate(flo, status = "INA")
+```
+
+```{r old_bind}
+flv <- bind_rows(flv, flo, .id = "old_flag")
+flv <- mutate(flv, old_flag = (old_flag == 2), req_exempt = (req_exempt == "Y"))
+flv <- relocate(flv, old_flag, .after = email)
+comma(nrow(flv))
+```
+
+## Explore
+
+There are `r scales::comma(nrow(flv))` rows of `r ncol(flv)` columns.
+
+```{r glimpse}
+glimpse(flv)
+tail(flv)
+```
+
+### Missing
+
+Columns vary in their degree of missing values.
+
+```{r na_count}
+col_stats(flv, count_na)
+```
+
+We can flag any record missing a key variable needed to identify a transaction.
+
+```{r na_flag}
+key_vars <- c("name_last", "birth_date", "reg_date")
+flv <- flag_na(flv, all_of(key_vars))
+percent(mean(flv$na_flag), 0.1)
+```
+
+All of these missing rows have no `last_name` or `birth_date`.
+
+```{r na_view}
+flv %>% 
+  filter(na_flag) %>% 
+  select(all_of(key_vars))
+```
+
+```{r na_recount}
+flv %>% 
+  filter(na_flag) %>% 
+  select(all_of(key_vars)) %>% 
+  col_stats(count_na)
+```
+
+### Duplicates
+
+We can also flag any record completely duplicated across every column.
+
+```{r dupe_file}
+dupe_file <- here("fl", "voters", "dupes.csv.xz")
+```
+
+```{r dupe_write}
+if (!file_exists(dupe_file)) {
+  file_create(dupe_file)
+  fls <- flv %>% 
+    select(-voter_id) %>% 
+    group_split(county)
+  split_id <- split(flv$voter_id, flv$county)
+  pb <- txtProgressBar(max = length(fls), style = 3)
+  for (i in seq_along(fls)) {
+    d1 <- duplicated(fls[[i]], fromLast = FALSE)
+    if (any(d1)) {
+      d2 <- duplicated(fls[[i]], fromLast = TRUE)
+      dupes <- tibble(voter_id = split_id[[i]], dupe_flag = d1 | d2)
+      dupes <- filter(dupes, dupe_flag == TRUE)
+      vroom_write(dupes, xzfile(dupe_file), append = TRUE)
+      rm(d2, dupes)
+    }
+    rm(d1)
+    flush_memory(1)
+    setTxtProgressBar(pb, i)
+  }
+  rm(fls)
+}
+```
+
+```{r dupe_read}
+file_size(dupe_file)
+dupes <- read_tsv(
+  file = xzfile(dupe_file),
+  col_names = c("voter_id", "dupe_flag"),
+  col_types = cols(
+    voter_id = col_character(),
+    dupe_flag = col_logical()
+  )
+)
+dupes <- distinct(dupes)
+```
+
+```{r dupe_join}
+nrow(flv)
+flv <- left_join(flv, dupes, by = "voter_id")
+flv <- mutate(flv, dupe_flag = !is.na(dupe_flag))
+sum(flv$dupe_flag)
+```
+
+We can see that, despite unique IDs, there are duplicate voters. All of these
+apparent duplicates are missing many of the key values needed to identify a
+record.
+
+```{r dupe_view}
+flv %>% 
+  filter(dupe_flag) %>% 
+  select(voter_id, all_of(key_vars), gender, party) %>% 
+  arrange(reg_date)
+```
+
+```{r dupe_recount}
+flv %>% 
+  filter(dupe_flag) %>% 
+  col_stats(count_na)
+```
+
+### Categorical
+
+```{r distinct_count}
+col_stats(flv, n_distinct)
+```
+
+```{r distinct_plots, echo=FALSE, fig.height=3}
+fls <- sample_frac(flv, 0.01)
+race_codes <- tribble(
+  ~race,       ~race_name,
+  "1", "Native", "2", "AAPI",
+  "3", "Black",  "4", "Hispanic" ,
+  "5", "White",  "6", "Other",
+  "7", "Multi",  "9", "Unknown"
+)
+explore_plot(fls, county)
+explore_plot(fls, gender)
+explore_plot(left_join(fls, race_codes), race_name)
+explore_plot(fls, party)
+explore_plot(fls, status)
+fls %>% 
+  filter(!is.na(congress)) %>% 
+  mutate(across(congress, as.numeric)) %>% 
+  ggplot(aes(x = congress, fill = congress)) +
+  geom_bar(fill = dark2["purple"]) +
+  scale_x_continuous(breaks = 1:27)
+rm(fls)
+```
+
+### Dates
+
+We can add the calendar year from `date` with `lubridate::year()`
+
+```{r date_year}
+flv <- mutate(flv, reg_year = year(reg_date), birth_year = year(birth_date))
+```
+
+```{r date_range}
+min(flv$reg_date)
+max(flv$reg_date)
+```
+
+```{r bar_year, echo=FALSE}
+flv %>% 
+  count(reg_year) %>% 
+  mutate(
+    type = ifelse(
+      test = reg_year %% 4 == 0,
+      yes = "pres.",
+      no = ifelse(
+        test = reg_year %% 2 == 0,
+        yes = "mid.",
+        no = "off"
+      )
+    )
+  ) %>% 
+  ggplot(aes(x = reg_year, y = n)) +
+  geom_col(aes(fill = type)) + 
+  scale_fill_manual(values = c("#1B9E77", "#666666", "#D95F02")) +
+  scale_y_continuous(labels = comma) +
+  scale_x_continuous(breaks = seq(1960, 2020, by = 10)) +
+  coord_cartesian(xlim = c(1960, 2020)) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "Florida Voters by Registration Year",
+    caption = "Source: FL DOE",
+    fill = "Election Year",
+    x = "Year Registered",
+    y = "Count"
+  )
+```
+
+```{r bar_birth, echo=FALSE}
+flv %>% 
+  ggplot(aes(x = birth_year)) +
+  geom_histogram(binwidth = 2, fill = dark2["orange"]) + 
+  scale_y_continuous(labels = comma) +
+  scale_x_continuous(breaks = seq(1910, 2010, by = 10)) +
+  coord_cartesian(xlim = c(1910, 2010)) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "Florida Voters by Birth Year",
+    caption = "Source: FL DOE",
+    x = "Year Born",
+    y = "Count"
+  )
+```
+
+```{r bar_age, echo=FALSE}
+flv %>% 
+  mutate(
+    age = floor(as.numeric(as.Date("2020-11-03") - birth_date)/365)
+  ) %>%
+  ggplot(aes(x = age)) +
+  geom_histogram(binwidth = 1, fill = dark2["purple"]) + 
+  scale_y_continuous(labels = comma) +
+  scale_x_continuous(breaks = seq(18, 108, by = 5)) +
+  coord_cartesian(xlim = c(18, 108)) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "Florida Voters Age on Election Day 2020",
+    caption = "Source: FL DOE",
+    x = "Age",
+    y = "Count"
+  )
+```
+
+## Wrangle
+
+To improve the searchability of the database, we will perform some consistent,
+confident string normalization. For geographic variables like city names and
+ZIP codes, the corresponding `campfin::normal_*()` functions are tailor made to 
+facilitate this process.
+
+```{r rows_pre}
+comma(nrow(flv))
+```
+
+### Address
+
+For the street `addresss` variable, the `campfin::normal_address()` function
+will force consistence case, remove punctuation, and abbreviate official 
+USPS suffixes.
+
+```{r address_norm}
+addr_file <- path(dirname(raw_dir), "addr.tsv")
+if (!file_exists(addr_file)) {
+  addr_norm <- flv %>% 
+  select(starts_with("addr")) %>% 
+  distinct() %>% 
+  unite(
+    col = addr_full,
+    everything(),
+    sep = " ",
+    remove = FALSE,
+    na.rm = TRUE
+  ) %>% 
+  mutate(
+    addr_norm = normal_address(
+      address = addr_full,
+      abbs = usps_street,
+      na_rep = TRUE
+    )
+  ) %>% 
+  select(-addr_full)
+  vroom_write(addr_norm, addr_file)
+} else {
+  addr_norm <- vroom(addr_file)
+}
+```
+
+```{r addr_join}
+flv <- left_join(flv, addr_norm)
+```
+
+```{r address_view}
+flv %>% 
+  select(starts_with("addr")) %>% 
+  distinct() %>% 
+  sample_n(10)
+```
+
+### ZIP
+
+For ZIP codes, the `campfin::normal_zip()` function will attempt to create
+valid _five_ digit codes by removing the ZIP+4 suffix and returning leading
+zeroes dropped by other programs like Microsoft Excel.
+
+```{r zip_norm}
+flv <- flv %>%
+  mutate(
+    zip_norm = normal_zip(
+      zip = zip,
+      na_rep = TRUE
+    )
+  )
+```
+
+```{r zip_progress}
+progress_table(
+  flv$zip,
+  flv$zip_norm,
+  compare = valid_zip
+)
+```
+
+### State
+
+There are _no_ state values in the voter database. We can assume all the voters
+are from the state of Florida, but we will double check this against the
+normalized ZIP code.
+
+```{r state_check}
+fl_zips <- zipcodes$zip[zipcodes$state == "FL"]
+out_zips <- na.omit(setdiff(flv$zip_norm, fl_zips))
+prop_in(flv$zip_norm, fl_zips)
+zipcodes$state[which(zipcodes$zip %in% out_zips)]
+```
+
+```{r state_add}
+flv <- mutate(
+  .data = flv, 
+  state_norm = if_else(is.na(city) & is.na(zip), NA_character_, "FL")
+)
+```
+
+### City
+
+Cities are the most difficult geographic variable to normalize, simply due to
+the wide variety of valid cities and formats.
+
+#### Normal
+
+The `campfin::normal_city()` function is a good start, again converting case,
+removing punctuation, but _expanding_ USPS abbreviations. We can also remove
+`invalid_city` values.
+
+```{r city_norm}
+norm_city <- flv %>% 
+  count(city, state_norm, zip_norm, sort = TRUE) %>% 
+  select(-n) %>% 
+  mutate(
+    city_norm = normal_city(
+      city = str_replace(city, "^PT ST", "PORT ST"), 
+      abbs = usps_city,
+      states = c("FL", "DC", "FLORIDA"),
+      na = invalid_city,
+      na_rep = TRUE
+    )
+  )
+```
+
+#### Swap
+
+We can further improve normalization by comparing our normalized value
+against the _expected_ value for that record's state abbreviation and ZIP code.
+If the normalized value is either an abbreviation for or very similar to the
+expected value, we can confidently swap those two.
+
+```{r city_swap}
+norm_city <- norm_city %>% 
+  rename(city_raw = city) %>% 
+  left_join(
+    y = zipcodes,
+    by = c(
+      "state_norm" = "state",
+      "zip_norm" = "zip"
+    )
+  ) %>% 
+  rename(city_match = city) %>% 
+  mutate(
+    match_abb = is_abbrev(city_norm, city_match),
+    match_dist = str_dist(city_norm, city_match),
+    city_swap = if_else(
+      condition = !is.na(match_dist) & (match_abb | match_dist == 1),
+      true = city_match,
+      false = city_norm
+    )
+  ) %>% 
+  select(
+    -city_match,
+    -match_dist,
+    -match_abb
+  ) %>% 
+  rename(city = city_raw)
+```
+
+```{r city_join2}
+flv <- left_join(flv, norm_city)
+many_city <- c(valid_city, extra_city)
+prop_in(flv$city_swap, many_city)
+```
+
+#### Progress
+
+```{r city_out}
+flv %>% 
+  filter(city_swap %out% many_city) %>% 
+  count(city, city_swap, state_norm, sort = TRUE) %>% 
+  add_prop()
+```
+
+```{r city_beach}
+beach_city <- c(
+  "HALLANDALE BEACH",
+  "DANIA BEACH",
+  "LAKE WORTH BEACH",
+  "PONTE VEDRA",
+  "SUNNY ISLES BEACH",
+  "HIALEAH GARDENS"
+)
+```
+
+```{r many_beach}
+many_city <- c(many_city, beach_city)
+```
+
+Our goal for normalization was to increase the proportion of city values known
+to be valid and reduce the total distinct values by correcting misspellings.
+
+```{r city_progress, echo=FALSE}
+progress <- progress_table(
+  str_to_upper(flv$city),
+  flv$city_norm,
+  flv$city_swap,
+  compare = many_city
+) %>% mutate(stage = as_factor(stage))
+progress %>% 
+  mutate(across(prop_in, percent, 0.1)) %>% 
+  mutate(across(n_out, comma)) %>% 
+  mutate(across(prop_na, percent, 0.01)) %>% 
+  kable()
+```
+
+You can see how the percentage of valid values increased with each stage.
+
+```{r bar_progress, echo=FALSE}
+raw_in <- percent(prop_in(flv$city, valid_city))
+progress %>% 
+  ggplot(aes(x = stage, y = prop_in)) +
+  geom_hline(yintercept = 0.99) +
+  geom_col(fill = dark2["purple"]) +
+  coord_cartesian(ylim = c(0.75, 1)) +
+  scale_y_continuous(labels = percent) +
+  labs(
+    title = "Florida City Normalization Progress",
+    subtitle = glue("Raw at {raw_in} before conversion to uppercase"),
+    x = "Stage",
+    y = "Percent Valid"
+  )
+```
+
+More importantly, the number of distinct values decreased each stage. We were
+able to confidently change many distinct invalid values to their valid
+equivalent.
+
+```{r bar_distinct, echo=FALSE}
+progress %>% 
+  select(
+    stage, 
+    all = n_distinct,
+    bad = n_diff
+  ) %>% 
+  mutate(good = all - bad) %>% 
+  pivot_longer(c("good", "bad")) %>% 
+  mutate(name = name == "good") %>% 
+  ggplot(aes(x = stage, y = value)) +
+  geom_col(aes(fill = name)) +
+  scale_fill_brewer(palette = "Dark2", direction = -1) +
+  scale_y_continuous(labels = comma) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "Florida City Normalization Progress",
+    subtitle = "Distinct values, valid and invalid",
+    x = "Stage",
+    y = "Distinct Values",
+    fill = "Valid"
+  )
+```
+
+## Conclude
+
+Before exporting, we can remove the intermediary normalization columns and
+rename all added variables with the `_clean` suffix.
+
+```{r clean_select}
+flv <- flv %>% 
+  select(
+    -city_norm,
+    city_clean = city_swap
+  ) %>% 
+  rename_all(~str_replace(., "_norm", "_clean")) %>% 
+  relocate(state_clean, zip_clean, .after = city_clean)
+```
+
+```{r clean_glimpse}
+glimpse(sample_n(flv, 50))
+```
+
+1. There are `r comma(nrow(flv))` records in the database.
+1. There are `r comma(sum(flv$dupe_flag))` duplicate records in the database.
+1. The range and distribution of `amount` and `date` seem reasonable.
+1. There are `r comma(sum(flv$na_flag))` records missing key variables.
+1. Consistency in geographic data has been improved with `campfin::normal_*()`.
+1. The 4-digit `reg_year` variable has been created with `lubridate::year()`.
+
+## Export
+
+Now the file can be saved on disk for upload to the Accountability server.
+
+```{r echo=FALSE}
+flush_memory()
+```
+
+```{r clean_dir}
+clean_dir <- dir_create(here("fl", "voters", "data", "clean"))
+clean_path <- path(clean_dir, "fl_voters_clean.csv")
+write_csv(flv, clean_path, na = "")
+(clean_size <- file_size(clean_path))
+file_encoding(clean_path) %>% 
+  mutate(across(path, path.abbrev))
+```
+
+## Upload
+
+We can use the `aws.s3::put_object()` to upload the text file to the IRW server.
+
+```{r aws_upload, eval=FALSE}
+aws_path <- path("csv", basename(clean_path))
+if (!object_exists(aws_path, "publicaccountability")) {
+  put_object(
+    file = clean_path,
+    object = aws_path, 
+    bucket = "publicaccountability",
+    acl = "public-read",
+    show_progress = TRUE,
+    multipart = TRUE
+  )
+}
+aws_head <- head_object(aws_path, "publicaccountability")
+(aws_size <- as_fs_bytes(attr(aws_head, "content-length")))
+unname(aws_size == clean_size)
+```
