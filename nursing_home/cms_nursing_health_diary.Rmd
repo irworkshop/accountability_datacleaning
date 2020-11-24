@@ -124,6 +124,16 @@ health <- read_csv(file = dir_ls(raw_dir, recurse = T, regexp = "Health+")) %>% 
 health_dict <- read_xlsx(dir_ls(docs, recurse = T,regexp = "DataMedicareGov.+"),
                         sheet = "HealthDeficiencies")
 
+survey_sum <- read_csv(file = dir_ls(raw_dir, recurse = T, regexp = "SurveySummary.+")) %>% clean_names()
+
+in_survey <- survey_sum %>% filter(state == "IN")
+
+nrow(in_survey %>% filter(h_survey_date > as.Date("2019-9-30") & h_survey_date < as.Date("2020-10-01")))
+
+nrow(in_survey %>% filter(h_survey_date > as.Date("2018-9-30") & h_survey_date < as.Date("2019-10-01")))
+
+8x <- in_survey %>% group_by(provnum) %>% filter(h_survey_date == max(h_survey_date))
+
 kable(health_dict)
 
 infection <- health %>% 

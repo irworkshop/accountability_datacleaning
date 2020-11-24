@@ -166,13 +166,13 @@ if (not(all(file_exists(path(docs, zip_others))))) {
 ```
 
 
-The abbreiviation information is stored in `NHC_DataDictionary_SNFQRP.pdf` and the record layouts are contained in `DataMedicareGov_MetadataAllTabs_v23.xlsx`. 
+The abbreviation information is stored in `NHC_DataDictionary_SNFQRP.pdf` and the record layouts are contained in `DataMedicareGov_MetadataAllTabs_v23.xlsx`. 
 
 Secondly, we'll read the health deficiency data that contains the infection-control related citations. We can also view the record layout from the `HealthDeficiencies` sheet `DataMedicareGov_MetadataAllTabs_v23.xlsx`.
 
 ```{r read owner}
-owner <- read_csv(str_subset(path(raw_dir, zip_data),"Owner.+")) %>% clean_names()
-```
+owner <- read_csv(dir_ls(raw_dir,regexp = "Owner.+")) %>% clean_names()
+```                                                                                                              
 
 
 ```{r read owner dict}

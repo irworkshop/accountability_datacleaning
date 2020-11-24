@@ -180,26 +180,29 @@ We can read each file as a data frame into a list of data frames by `read_delim`
 Remember to pay attention to the date the files were last modified. It gives us an idea of how current the data was.`file.info(dir_ls(raw_dir, glob = "*.csv$"))$mtime`. This data is extracted from the West Virginia Campaign Finance database as it existed as of `r file.info(dir_ls(raw_dir, glob = "*.csv$"))$mtime[1]` for `r basename(dir_ls(raw_dir, glob = "*.csv$"))[1]` and `r file.info(dir_ls(raw_dir, glob = "*.csv$"))$mtime[2]` for `r basename(dir_ls(raw_dir, glob = "*.csv$"))[2]`.
 
 ```{r read_raw}
-wv <- 
+wv <-
   dir_ls(
-    path = raw_dir, 
+    path = raw_dir,
     glob = "*.csv"
-  ) %>% 
-  map(
-   read_delim, delim = ",", escape_double = FALSE,
-      escape_backslash = FALSE,
+  ) %>%
+ read_lines() %>% 
+  str_replace_all("(?<=\\s)\"|\"(?=\")|\"(?=\\s)","'") %>% 
+ map(
+    read_delim,delim = ",", escape_double = FALSE,
+    skip = 1,
+   col_names = read_names( dir_ls(
+    path = raw_dir,
+    glob = "*.csv"
+  )[1]),
+      escape_backslash = TRUE,
     col_types = cols(
       .default = col_character(),
-      `Expenditure Amount` = col_number(),
-      `Expenditure Date` = col_date("%m/%d/%Y %I:%M:%S %p"),
-      `Filed Date` = col_date("%m/%d/%Y %I:%M:%S %p"),
-      `Fundraiser Event Date` = col_date("%m/%d/%Y %I:%M:%S %p")
-    )
-  ) %>%
-  bind_rows(.id = "file") %>%
-  mutate(file = basename(file)) %>%
-  rename(city_raw = City) %>% 
-  clean_names()
+      `Expenditure Amount` = col_number()))
+      # `Expenditure Date` = col_date("%m/%d/%Y %I:%M:%S %p"),
+      # `Filed Date` = col_date("%m/%d/%Y %I:%M:%S %p"),
+      # `Fundraiser Event Date` = col_date("%m/%d/%Y %I:%M:%S %p"))) %>%
+  # rename(city_raw = City) %>% 
+  # clean_names()
 ```
 
 

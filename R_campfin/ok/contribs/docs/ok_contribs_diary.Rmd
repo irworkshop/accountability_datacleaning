@@ -1,6 +1,6 @@
 ---
 title: "Data Diary"
-subtitle: "Nevada Contributions"
+subtitle: "Oklahoma Contributions"
 author: "Kiernan Nicholls"
 date: "`r format(Sys.time())`"
 output:
