@@ -768,13 +768,12 @@ df3 %&gt;%
   mutate(ContractLocationState = &#39;WV&#39;) -&gt; #Add the state in which the contract is executed
   df4</code></pre>
 <p>Write final file to CSV.</p>
-<pre class="r"><code>df4[is.na(df4)] &lt;- &#39;&#39; #Ensure the proper encoding for null values is an empty value instead of a NA entry
-
-write_csv(df4, &#39;WestVirginiaContracts.csv&#39;)</code></pre>
+<pre class="r"><code>df4[is.na(df4)] &lt;- &#39;&#39; #Ensure the proper encoding for null values is an empty value instead of a NA entry</code></pre>
+<pre class="r"><code>write_csv(df4, &#39;WestVirginiaContracts.csv&#39;)</code></pre>
 <p><strong>Conclusion</strong></p>
 <ol style="list-style-type: decimal">
 <li>There are 41933 records in the database.</li>
-<li>There are 0 records missing key variables.</li>
+<li>There are 1535 records missing key variables.</li>
 <li>The 4-digit FiscalYear variable has been created with lubridate::year().</li>
 </ol>
 <p>The data is now cleaned and ready for processing into the TAP servers, and then mapped into the website for indexing and searching.</p>
