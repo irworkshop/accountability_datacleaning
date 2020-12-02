@@ -113,20 +113,13 @@ here::here()
 
 ## Data
 
-Paycheck Protection Loan Data is released by the Small Business Administration
-on their public Box cloud storage server. The data released at the beginning of
-June does _not_ contain exact loan amounts, only five ranges. For any loans
-less than the smallest range of $150,000 loans are aggregated and provided as
-separate files.
-
-> #### Key Aspects of PPP Loan Data
-> In releasing PPP loan data to the public, SBA is maintaining a balance between
-providing transparency to American taxpayers and protecting small businesses’
-confidential business information, such as payroll, and personally identifiable
-information. Small businesses are the driving force of American economic
-stability and are essential to America economic rebound from the pandemic. SBA
-is committed to ensuring that any release of PPP loan data does not harm small
-businesses or their employees...
+On December 1, 2020 the Small Business Administration was ordered by the court
+to release more detailed data on loans made through the Paycheck Protection
+Program (PPP), a major facet of the 2020 CARES Act to provide stimulus funding
+during the ongoing COVID-19 pandemic. This detailed release came after the SBA
+initially refused to publish any database, then released only partial data on
+the largest loan recipients. The full database now contains all recipient names,
+addresses, and exact loan amounts.
 
 > #### PPP Is A Delegated Loan Making Process
 > PPP loans are not made by SBA. PPP loans are made by lending institutions and
@@ -145,57 +138,63 @@ any reason are not included in the public data release.
 
 We can download PPP loan data from the SBA Box server as a ZIP archive.
 
+> Owner: Small Business Administration
+> Enterprise Owner: U.S. Small Business Administration
+> Created: Dec 1, 2020, 3:15 PM
+> Modified: Dec 1, 2020, 3:31 PM
+> Size: 210.3 MB
+
 ```{r raw_dir}
 raw_dir <- dir_create(here("us", "covid", "ppp", "data", "raw"))
-raw_zip <- path(raw_dir, "All Data 0808.zip")
+raw_zip <- path(raw_dir, "120120 Paycheck Protection Program Data.zip")
 ```
 
 We can extract all files from the archive to a `data/raw/` directory.
 
 ```{r raw_unzip}
-raw_path <- unzip(
+raw_paths <- unzip(
   zipfile = raw_zip, 
   exdir = raw_dir,
   junkpaths = TRUE
 )
 ```
 
-```{r raw_relist, echo=FALSE}
-raw_path <- dir_ls(raw_dir, glob = "*.csv")
+```{r raw_info}
+raw_info <- raw_paths %>% 
+  map_df(unzip, list = TRUE) %>% 
+  as_tibble() %>% 
+  clean_names() %>% 
+  filter(length > 212)
 ```
 
-Loan data is divided into one `foia_150k_plus.csv` file and
-57 `foia_up_to_150k_*.csv` files for each state and territory.
-
-```{r raw_info}
-raw_dir %>% 
-  dir_info(regexp = "csv$") %>% 
-  select(path, size, modification_time) %>% 
-  mutate(across(path, basename)) %>% 
-  as_tibble()
+```{r raw_unzip2}
+for (i in seq_along(raw_paths)) {
+  raw_paths[i] <- unzip(
+    zipfile = raw_paths[i], 
+    files = raw_info$name[i],
+    exdir = raw_dir
+  )
+}
 ```
 
 ## Read
 
 We can read all these files into a single data frame using `purrr::map_df()`
-and `readr::read_csv()`. There is a slight difference in columns across the
-state files and single file; for large loans there is only a `loan_range` value
-but for smaller loans broken down by state, there is a `loan_amount` instead.
-When we merge these two files together, `NA` values will be used for any record
-from a file without a given variable.
+and `readr::read_delim()`.
 
 ```{r raw_map}
 ppp <- map_df(
-  .x = raw_path, 
-  .f = read_csv,
-  .id = "file",
-  na = c("", "N/A", "Unanswered"),
+  .x = raw_paths, 
+  .f = read_delim,
+  .id = "SourceFile",
+  delim = ",",
+  escape_double = TRUE,
+  na = c("", "N/A"),
   col_types = cols(
     .default = col_character(),
-    # LoanRange = col_factor(),
     LoanAmount = col_double(),
     DateApproved = col_date_usa(),
-    JobsRetained = col_integer()
+    JobsReported = col_integer()
   )
 )
 ```
@@ -203,14 +202,18 @@ ppp <- map_df(
 ```{r raw_parse}
 ppp <- ppp %>% 
   clean_names("snake") %>% 
-  relocate(loan_amount, .before = loan_range) %>% 
-  mutate(across(non_profit, ~!(is.na(.)))) %>% 
-  mutate(across(file, basename)) %>% 
-  mutate(across(loan_range, as.factor)) %>% 
-  relocate(file, .after = last_col())
+  relocate(source_file, .after = last_col()) %>%
+  mutate(
+    source_file = basename(raw_paths)[as.integer(source_file)],
+    non_profit = !is.na(non_profit)
+  )
 ```
 
 ## Explore
+
+There are `r comma(nrow(ppp))` rows of `r ncol(ppp)` columns. Each record is a
+loan issued to a "small" business through a private lending bank and backed by
+the U.S. federal government.
 
 ```{r glimpse}
 glimpse(ppp)
@@ -225,27 +228,95 @@ Variables differ in their degree of missing values.
 col_stats(ppp, count_na)
 ```
 
-No files are missing any values they aren't supposed to be missing. For loans
-up to $150,000 (the ones aggregated by ZIP code in the individual state files),
-there is no `business_name` variable.
+We can flag any record missing a key variable.
+
+```{r na_flag}
+key_vars <- c("business_name", "lender", "date_approved", "loan_amount")
+ppp <- flag_na(ppp, all_of(key_vars))
+```
+
+There are `r sum(ppp$na_flag)` records missing mostly the business name.
+
+```{r na_view}
+ppp %>% 
+  filter(na_flag) %>% 
+  select(all_of(key_vars))
+```
 
 ### Duplicates
 
 There are a small amount of duplicate records in the database, all of which can
 be flagged with a new logical variable.
 
-```{r dupe_flag}
-d1 <- duplicated(ppp, fromLast = FALSE)
-d2 <- duplicated(ppp, fromLast = TRUE)
-ppp <- mutate(ppp, dupe_flag = d1 | d2)
-percent(mean(ppp$dupe_flag), 0.01)
-rm(d1, d2); flush_memory()
+We can also flag any record completely duplicated across every column.
+
+```{r dupe_file}
+dupe_file <- here("us", "covid", "ppp", "dupes.tsv")
 ```
+
+```{r dupe_id}
+ppp <- mutate(ppp, id = row_number(), .after = last_col())
+```
+
+```{r dupe_write}
+if (!file_exists(dupe_file)) {
+  file_create(dupe_file)
+  pps <- ppp %>% 
+    select(-id) %>% 
+    group_split(date_approved)
+  split_id <- split(ppp$id, ppp$date_approved)
+  pb <- txtProgressBar(max = length(pps), style = 3)
+  for (i in seq_along(pps)) {
+    d1 <- duplicated(pps[[i]], fromLast = FALSE)
+    if (any(d1)) {
+      d2 <- duplicated(pps[[i]], fromLast = TRUE)
+      dupes <- tibble(voter_id = split_id[[i]], dupe_flag = d1 | d2)
+      dupes <- filter(dupes, dupe_flag == TRUE)
+      vroom_write(dupes, dupe_file, append = TRUE)
+      rm(d2, dupes)
+    }
+    rm(d1)
+    flush_memory(1)
+    setTxtProgressBar(pb, i)
+  }
+  rm(pps)
+}
+```
+
+```{r dupe_read}
+file_size(dupe_file)
+dupes <- read_tsv(
+  file = dupe_file,
+  col_names = c("id", "dupe_flag"),
+  col_types = cols(
+    id = col_integer(),
+    dupe_flag = col_logical()
+  )
+)
+```
+
+```{r dupe_join}
+nrow(ppp)
+ppp <- left_join(ppp, dupes, by = "id")
+ppp <- mutate(ppp, dupe_flag = !is.na(dupe_flag))
+sum(ppp$dupe_flag)
+ppp <- select(ppp, -id)
+```
+
+We can see that, despite unique IDs, there are duplicate voters. All of these
+apparent duplicates are missing many of the key values needed to identify a
+record.
 
 ```{r dupe_view}
 ppp %>% 
   filter(dupe_flag) %>% 
-  select(loan_range, business_name, lender, date_approved)
+  select(all_of(key_vars), state)
+```
+
+```{r dupe_recount}
+ppp %>% 
+  filter(dupe_flag) %>% 
+  col_stats(count_na)
 ```
 
 ### Categorical
@@ -268,13 +339,15 @@ combine them with the exact `loan_amount` given for aggregated records.
 
 ```{r ammount_summary}
 summary(ppp$loan_amount)
-mean(ppp$loan_amount <= 0, na.rm = TRUE)
+sum(ppp$loan_amount <= 0)
+sum(ppp$loan_amount == 1e7)
 ```
 
 ```{r hist_amount, echo=FALSE}
 ppp %>%
+  filter(loan_amount >= 1) %>% 
   ggplot(aes(loan_amount)) +
-  geom_histogram(fill = dark2["purple"]) +
+  geom_histogram(fill = dark2["purple"], bins = 30) +
   scale_y_continuous(labels = comma) +
   scale_x_continuous(
     breaks = c(1 %o% 10^(0:6)),
@@ -283,53 +356,90 @@ ppp %>%
   ) +
   labs(
     title = "United States PPP Loan Amount Distribution",
-    subtitle = "For loans under $150,000 aggregated by ZIP code",
-    caption = "Source: Small Business Administration",
-    x = "aggregated Amount",
+    caption = "Source: SBA",
+    x = "Loan Amount",
     y = "Count"
   )
 ```
 
-```{r amount_range, echo=FALSE}
-ppp %>% 
-  filter(!is.na(loan_range)) %>% 
-  count(loan_range) %>% 
-  mutate(across(loan_range, fct_rev)) %>% 
-  ggplot(aes(loan_range, n)) +
-  geom_col(fill = dark2["purple"]) +
-  scale_y_continuous(labels = comma) +
-  labs(
-    title = "United States PPP Loan Range Distribution",
-    subtitle = "For loans over $150,000 to exact businesses",
-    caption = "Source: Small Business Administration",
-    x = "Loan Range",
-    y = "Count"
-  )
-```
-
-We can combine these two variables into a single one for mapping on the site.
-A new logical `range_flag` value will be added to indicate any record above
-$150,000 and thus containing only a loan range.
-
-```{r amount_combine}
-ppp <- ppp %>%
-  # combine the two columns
-  unite(
-    col = amount_range,
-    starts_with("loan_"),
-    na.rm = TRUE,
-    remove = FALSE
-  ) %>% 
-  # convert range text to numbers
+```{r violin_amount_lender, echo=FALSE}
+ppp %>%
+  filter(
+    loan_amount > 100, 
+    !is.na(lender)
+    ) %>% 
   mutate(
-    amount_range = amount_range %>% 
-      str_remove("\\w\\s\\$") %>% 
-      str_remove("\\smillion") %>% 
-      str_replace_all("(?<=^|-)(\\d{1,2})(?!\\d)", "\\1,000,000") %>% 
-      str_remove_all(",")
+    lender_other = if_else(
+      condition = lender %in% most_common(lender),
+      true = lender,
+      false = "Other"
+    )
   ) %>% 
-  # flag any column using ranges
-  mutate(range_flag = !is.na(loan_range))
+  ggplot(
+    mapping = aes(
+      y = loan_amount,
+      x = reorder(
+        lender_other, 
+        X = loan_amount, 
+        FUN = median, 
+        na.rm = TRUE
+      )
+    )
+  ) +
+  geom_violin(
+    mapping = aes(fill = lender_other),
+    trim = TRUE,
+    draw_quantiles = c(0.25, 0.5, 0.75),
+    scale = "area",
+    adjust = 2
+  ) +
+  scale_fill_brewer(palette = "Dark2", guide = FALSE) +
+  scale_y_continuous(
+    breaks = c(1 %o% 10^(0:6)),
+    labels = dollar,
+    trans = "log10"
+  ) +
+  coord_cartesian(ylim = c(100, 1e6)) +
+  labs(
+    title = "United States PPP Loan Amount Distribution by Lending Bank",
+    caption = "Source: SBA",
+    x = "Lending Bank",
+    y = "Loan Amount"
+  )
+```
+
+```{r lender_table, echo=FALSE}
+ppp %>%
+  mutate(
+    lender_other = if_else(
+      condition = lender %in% most_common(lender, 19),
+      true = lender,
+      false = "**All Other**"
+    )
+  ) %>% 
+  group_by(lender_other) %>% 
+  summarise(
+    n = n(),
+    mean = floor(mean(loan_amount)),
+    median = floor(median(loan_amount)),
+    sum = sum(loan_amount)
+  ) %>% 
+  mutate(prop = sum/sum(sum)) %>% 
+  arrange(desc(sum)) %>% 
+  mutate(across(sum, scientific, digits = 2, prefix = "$")) %>% 
+  mutate(across(prop, percent)) %>% 
+  mutate(across(n, comma)) %>% 
+  mutate(across(c(mean, median), dollar)) %>% 
+  kable(
+    col.names = c(
+      "Lending Bank",
+      "Loan Count",
+      "Mean Loan",
+      "Median Loan",
+      "Total Loaned",
+      "Proportion"
+    )
+  )
 ```
 
 ### Dates
@@ -631,26 +741,30 @@ over and under $150,000.
 
 ```{r clean_paths}
 clean_dir <- dir_create(here("us", "covid", "ppp", "data", "clean"))
-clean_path <- path(clean_dir, "sba_ppp_loans.csv")
+clean_path <- path(clean_dir, "sba_ppp_full.csv")
 write_csv(ppp, clean_path, na = "")
-file_size(clean_path)
-file_encoding(clean_path)
+(clean_size <- file_size(clean_path))
 ```
 
 ## Upload
 
-```{r upload}
-s3_path <- path("csv", basename(clean_path))
-if (!object_exists(s3_path, "publicaccountability")) {
+We can use the `aws.s3::put_object()` to upload the text file to the IRW server.
+
+```{r aws_upload, eval=FALSE}
+aws_path <- path("csv", basename(clean_path))
+if (!object_exists(aws_path, "publicaccountability")) {
   put_object(
     file = clean_path,
-    object = s3_path, 
+    object = aws_path, 
     bucket = "publicaccountability",
     acl = "public-read",
-    multipart = TRUE,
-    show_progress = TRUE
+    show_progress = TRUE,
+    multipart = TRUE
   )
 }
+aws_head <- head_object(aws_path, "publicaccountability")
+(aws_size <- as_fs_bytes(attr(aws_head, "content-length")))
+unname(aws_size == clean_size)
 ```
 
 ## Dictionary
@@ -662,9 +776,7 @@ dict_raw <- tibble(
   var = md_code(names(ppp)),
   type = md_code(map_chr(ppp, typeof)),
   def = c(
-    "Combined loan amount with range",
-    "Aggregated loan amount (under $150,000)",
-    "Loan range (over $150,000)",
+    "_Exact_ loan amount",
     "Recipient business name",
     "Recipient business address",
     "Recipient business city name",
@@ -681,8 +793,8 @@ dict_raw <- tibble(
     "Lending institution name",
     "Loan recipient location code",
     "Source file name",
+    "Flag indicating missing record",
     "Flag indicating duplicate record",
-    "Flag indicating range amount",
     "Calendar year approved",
     "Normalized recipient address",
     "Normalized recipient state",
