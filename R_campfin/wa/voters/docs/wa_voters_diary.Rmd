@@ -683,6 +683,12 @@ file_encoding(clean_path) %>%
   mutate(across(path, path.abbrev))
 ```
 
+```{r clean_conv}
+wav <- read_lines(clean_path)
+wav <- iconv(wav, to = "ASCII", sub = "")
+write_lines(wav, clean_path)
+```
+
 ## Upload
 
 We can use the `aws.s3::put_object()` to upload the text file to the IRW server.
