@@ -1,0 +1,711 @@
+---
+title: "Washington Voters"
+author: "Kiernan Nicholls"
+date: "`r Sys.time()`"
+output:
+  github_document: 
+    df_print: tibble
+    toc: true
+    toc_dept: 3
+editor_options: 
+  chunk_output_type: console
+---
+
+<!-- Place comments regarding knitting here -->
+
+```{r setup, include=FALSE, purl=FALSE}
+library(knitr)
+opts_chunk$set(
+  eval = TRUE,
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  error = FALSE,
+  collapse = TRUE,
+  comment = "#>",
+  fig.path = "../plots/",
+  fig.width = 10,
+  dpi = 300
+)
+if (!interactive()) {
+  options(width = 95)
+  set.seed(5)
+}
+```
+
+```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
+doc_dir <- fs::dir_create(here::here("wa", "voters", "docs"))
+```
+
+## Project
+
+The Accountability Project is an effort to cut across data silos and give
+journalists, policy professionals, activists, and the public at large a simple
+way to search across huge volumes of public data about people and organizations.
+
+Our goal is to standardizing public data on a few key fields by thinking of each
+dataset row as a transaction. For each transaction there should be (at least) 3
+variables:
+
+1. All **parties** to a transaction.
+2. The **date** of the transaction.
+3. The **amount** of money involved.
+
+## Objectives
+
+This document describes the process used to complete the following objectives:
+
+1. How many records are in the database?
+1. Check for entirely duplicated records.
+1. Check ranges of continuous variables.
+1. Is there anything blank or missing?
+1. Check for consistency issues.
+1. Create a five-digit ZIP Code called `zip`.
+1. Create a `year` field from the transaction date.
+1. Make sure there is data on both parties to a transaction.
+
+## Packages
+
+The following packages are needed to collect, manipulate, visualize, analyze,
+and communicate these results. The `pacman` package will facilitate their
+installation and attachment.
+
+The IRW's `campfin` package will also have to be installed from GitHub. This
+package contains functions custom made to help facilitate the processing of
+campaign finance data.
+
+```{r load_packages, message=FALSE, warning=FALSE, error=FALSE}
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load(
+  tidyverse, # data manipulation
+  lubridate, # datetime strings
+  tabulizer, # read pdf tables
+  gluedown, # printing markdown
+  janitor, # clean data frames
+  campfin, # custom irw tools
+  aws.s3, # aws cloud storage
+  readxl, # read excel files
+  refinr, # cluster & merge
+  scales, # format strings
+  knitr, # knit documents
+  vroom, # fast reading
+  rvest, # scrape html
+  glue, # code strings
+  here, # project paths
+  httr, # http requests
+  fs # local storage 
+)
+```
+
+This document should be run as part of the `R_campfin` project, which lives as a
+sub-directory of the more general, language-agnostic
+[`irworkshop/accountability_datacleaning`][tap] GitHub repository.
+
+The `R_campfin` project uses the [RStudio projects][rproj] feature and should be
+run as such. The project also uses the dynamic `here::here()` tool for file
+paths relative to _your_ machine.
+
+```{r where_here}
+# where does this document knit?
+here::dr_here(show_reason = FALSE)
+```
+
+[tap]: https://github.com/irworkshop/accountability_datacleaning
+[rproj]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects
+
+## Data
+
+The Washington voter registration database (VRDB) can be obtained for free from
+the Washington Secretary of State. The latest VRDB can be [obtained here][erq]
+with an email address. The state also provides [an FAQ][faq] about the VRDB.
+
+> The Secretary of State's Office maintains one statewide list of voters that
+serves as the official list of registered voters for Washington. In January
+2002, the Secretary of State asked the Legislature to authorize the creation of
+a statewide voter registration database. The Legislature and Governor approved
+the request. That same year Congress passed the Help America Vote Act, which
+required states to develop a centralized voter registration database. In
+compliance with the Help America Vote Act, the Washington State Voter
+Registration Database was launched in January 2006.
+
+[erq]: https://www.sos.wa.gov/elections/vrdb/extract-requests.aspx
+[faw]: https://www.sos.wa.gov/elections/vrdb/vrdbfaq.aspx
+
+## Download
+
+The latest file was requested by Kiernan Nicholls on November 20, 2020.
+
+> We have processed your request for the Washington State Voter Registration
+Database. You can find the link to download that file below. This link will only
+be active for 48 hours. If you’re unable to download the file during that time,
+please resubmit your request or contact us at the contact information below and
+we will send you a new link to the file.
+>
+> <https://www.sos.wa.gov/_assets/elections/8736776113.zip>
+
+Since the URL used to access the data provided to the Workshop expires shortly,
+a copy was archive on the Wayback Machine for reproducibility.
+
+```{r raw_dir}
+raw_dir <- dir_create(here("wa", "voters", "data", "raw"))
+wbm_url <- "https://web.archive.org/web/20201123193808/"
+raw_url <- "https://www.sos.wa.gov/_assets/elections/8736776113.zip"
+raw_zip <- path(raw_dir, basename(raw_url))
+```
+
+```{r raw_download, eval=FALSE}
+if (!file_exists(raw_zip)) {
+  download.file(
+    url = str_c(wbm_url, raw_url),
+    destfile = raw_zip
+  )
+}
+```
+
+The contents of the downloaded archive can be extracted locally.
+
+```{r raw_unzip}
+raw_paths <- unzip(raw_zip, exdir = raw_dir)
+```
+
+## About
+
+> You have downloaded the State Voter Registration Database (VRDB) Extract. This
+extract includes all publically available data provided by RCW 29A.08.710 which
+includes voter's name, address, political jurisdiction, gender, date of birth,
+voting record, date of registration, and registration number. No other
+information from voter registration records or files is available for public
+inspection or copying.
+
+> As provided by state law, the voter registration data contained in the file
+you download may be used for political purposes only. Voter registration data
+may not be used for commercial purposes. (RCW 29A.08.720, RCW 29A.08.740 and RCW
+42.56.070(9))
+
+### Format
+
+> Included are two zipped text files: Registered voter files and Voting History.
+Also included is a `Districts_Precincts` file in Microsoft Excel format that
+includes all electoral districts in the state and the precincts that make them
+up.
+>
+> The files included are compressed and will need to be uncompressed. Use WinZip
+or similar software to unzip the files, or (with Windows XP or higher)
+double-click to unzip the files.
+>
+> The data are in vertical bar-delimited format. We no longer offer Microsoft
+Access format because the files are too large.
+>
+> The `Dflag` column was removed from the file starting on June 1, 2018. The
+column was not used and therefore unnecessary for inclusion in the file.
+> 
+> The `CountyVoterID` column was removed from the file starting on August 1,
+2019. The column is no longer used as Washington has transitioned to a unified
+VoterID.
+
+### Layout
+
+```{r pdf_layout, echo=FALSE}
+raw_cols <- extract_tables(
+  file = raw_paths[6],
+  pages = 1:2,
+  output = "data.frame",
+  header = FALSE,
+  area = list(
+    c(353, 29, 717, 529),
+    c(56, 24, 230, 536)
+  )
+)
+
+raw_cols <- raw_cols %>% 
+  bind_rows() %>% 
+  as_tibble() %>% 
+  set_names(c("position", "name", "length", "type", "comments"))
+
+kable(raw_cols)
+```
+
+### Districts
+
+```{r xls_district}
+wa_dist <- read_excel(
+  path = raw_paths[1],
+  .name_repair = make_clean_names
+)
+```
+
+```{r echo=FALSE}
+print(wa_dist)
+```
+
+## Read
+
+```{r raw_txt}
+raw_txt <- path(raw_dir, "202011_VRDB_Extract.txt")
+```
+
+The raw text file uses vertical pipe delimitation to separate columns.
+
+```{r raw_read}
+# 5,236,435
+wav <- read_delim(
+  file = raw_txt,
+  delim = "|",
+  escape_backslash = FALSE,
+  escape_double = FALSE,
+  col_types = cols(
+    .default = col_character(),
+    Birthdate = col_date(),
+    Registrationdate = col_date(),
+    LastVoted = col_date()
+  )
+)
+```
+
+### Old
+
+We want to keep the most comprehensive voter data possible, so we will use the
+file previously requested by 
+
+```{r old_path}
+old_csv <- path(raw_dir, "wa_voters_old.csv")
+old_aws <- "s3://publicaccountability/csv/wa_voters.csv"
+old_head <- head_object(old_aws)
+attr(old_head, "date")
+```
+
+```{r old_save}
+if (!file_exists(old_csv)) {
+  save_object(
+    object = "csv/wa_voters.csv",
+    bucket = "publicaccountability",
+    file = old_csv,
+    show_progress = TRUE
+  )
+}
+```
+
+```{r old_read}
+wao <- read.csv(
+  file = old_csv,
+  na.strings = c("", " "),
+  stringsAsFactors = FALSE,
+  colClasses = "character"
+)
+```
+
+```{r old_compare}
+nrow(wao)
+nrow(wav)
+```
+
+```{r old_ids}
+head(wav$StateVoterID)
+head(wao$StateVoterID)
+```
+
+```{r old_fix_id}
+wao <- mutate(wao, across(StateVoterID, str_remove, "^WA0"))
+prop_in(wao$StateVoterID, wav$StateVoterID)
+```
+
+```{r old_trim}
+wao <- as_tibble(wao) %>% 
+  filter(StateVoterID %out% wav$StateVoterID) %>% 
+  select(-CITY_CLEAN, -YEAR, -BIRTHYEAR, -Title, -CountyVoterID) %>% 
+  rename(RegStUnitNum = RegUnitNum) %>% 
+  type_convert(
+    col_types = cols(
+      .default = col_character(),
+      Birthdate = col_date("%m/%d/%Y"),
+      Registrationdate = col_date("%m/%d/%Y"),
+      LastVoted = col_date("%m/%d/%Y")
+    )
+  )
+```
+
+```{r old_diffnames}
+setdiff(names(wav), names(wao))
+```
+
+### Bind
+
+```{r bind_old}
+wav <- wav %>% 
+  bind_rows(wao, .id = "source_file") %>% 
+  relocate(source_file, .after = last_col()) %>% 
+  mutate(source_file = c("old", "new")[as.integer(source_file)])
+```
+
+```{r bind_recode}
+wav <- mutate(wav, across(StatusCode, str_sub, end = 1))
+```
+
+```{r bind_count}
+nrow(wav)
+```
+
+```{r raw_rename, echo=FALSE}
+wav <- wav %>% 
+  clean_names("snake") %>% 
+  rename(
+    voter_id = state_voter_id,
+    name_first = f_name,
+    name_mid = m_name,
+    name_last = l_name,
+    name_suf = name_suffix,
+    birth_date = birthdate,
+    st_num = reg_st_num,
+    st_frac = reg_st_frac,
+    st_name = reg_st_name,
+    st_type = reg_st_type,
+    unit_type = reg_unit_type,
+    st_pre = reg_st_pre_direction,
+    st_post = reg_st_post_direction,
+    st_unit = reg_st_unit_num,
+    city = reg_city,
+    state = reg_state,
+    zip = reg_zip_code,
+    leg_district = legislative_district,
+    congress_district = congressional_district,
+    reg_date = registrationdate,
+  )
+```
+
+## Explore
+
+There are `r scales::comma(nrow(wav))` rows of `r ncol(wav)` columns. Each row
+is a registered voter in the state of Washington.
+
+```{r glimpse}
+glimpse(wav)
+tail(wav)
+```
+
+### Missing
+
+Columns vary in their degree of missing values.
+
+```{r na_count}
+col_stats(wav, count_na)
+```
+
+We can flag any record missing a key variable needed to identify a transaction.
+
+```{r na_flag}
+key_vars <- c("voter_id", "name_last", "name_first", "reg_date", "birth_date")
+wav <- flag_na(wav, all_of(key_vars))
+sum(wav$na_flag)
+```
+
+There are a small number of voters missing either a first or last name.
+
+```{r na_view}
+wav %>% 
+  filter(na_flag) %>% 
+  select(all_of(key_vars))
+```
+
+### Duplicates
+
+We can also flag any record completely duplicated across every column.
+
+```{r dupe_file}
+dupe_file <- here("wa", "voters", "dupes.tsv")
+```
+
+```{r dupe_write}
+if (!file_exists(dupe_file)) {
+  file_create(dupe_file)
+  was <- wav %>% 
+    select(-voter_id) %>% 
+    group_split(county_code)
+  split_id <- split(wav$voter_id, wav$county_code)
+  pb <- txtProgressBar(max = length(was), style = 3)
+  for (i in seq_along(was)) {
+    d1 <- duplicated(was[[i]], fromLast = FALSE)
+    if (any(d1)) {
+      d2 <- duplicated(was[[i]], fromLast = TRUE)
+      dupes <- tibble(voter_id = split_id[[i]], dupe_flag = d1 | d2)
+      dupes <- filter(dupes, dupe_flag == TRUE)
+      vroom_write(dupes, dupe_file, append = TRUE)
+      rm(d2, dupes)
+    }
+    rm(d1)
+    flush_memory(1)
+    setTxtProgressBar(pb, i)
+  }
+  rm(fls)
+}
+```
+
+```{r dupe_read}
+file_size(dupe_file)
+dupes <- read_tsv(
+  file = dupe_file,
+  col_names = c("voter_id", "dupe_flag"),
+  col_types = cols(
+    voter_id = col_character(),
+    dupe_flag = col_logical()
+  )
+)
+dupes <- distinct(dupes)
+```
+
+```{r dupe_join}
+nrow(wav)
+wav <- left_join(wav, dupes, by = "voter_id")
+wav <- mutate(wav, dupe_flag = !is.na(dupe_flag))
+sum(wav$dupe_flag)
+```
+
+We can see that there are duplicate voters in the database.
+
+```{r dupe_view}
+wav %>% 
+  filter(dupe_flag) %>% 
+  select(voter_id, all_of(key_vars), gender, source_file) %>% 
+  arrange(reg_date)
+```
+
+Most of these duplicates were found in the old data we combined.
+
+```{r dupe_old}
+wav %>% 
+  filter(dupe_flag) %>% 
+  count(source_file, sort = TRUE)
+```
+
+### Categorical
+
+```{r distinct_count}
+col_stats(wav, n_distinct)
+```
+
+```{r distinct_plots, echo=FALSE, fig.height=2}
+explore_plot(wav, gender)
+explore_plot(wav, county_code)
+explore_plot(wav, leg_district)
+wav %>% 
+  count(congress_district) %>% 
+  mutate(across(congress_district, as.integer)) %>% 
+  filter(congress_district > 1) %>% 
+  ggplot(aes(congress_district, n)) + 
+  geom_col(fill = dark2["purple"]) + 
+  scale_x_continuous(breaks = 1:10)
+explore_plot(wav, absentee_type)
+explore_plot(filter(wav, mail_state != "WA"), mail_state) +
+  labs(x = "mail_state (excluding WA)")
+explore_plot(wav, status_code)
+```
+
+### Dates
+
+We can add the calendar year from `date` with `lubridate::year()`
+
+```{r date_year}
+wav <- mutate(
+  .data = wav, 
+  reg_year = year(reg_date),
+  birth_year = year(birth_date)
+)
+```
+
+```{r date_range}
+min(wav$reg_date, na.rm = TRUE)
+sum(wav$reg_date == "1900-01-01", na.rm = TRUE)
+max(wav$reg_date, na.rm = TRUE)
+```
+
+```{r date_unborn}
+wav %>% 
+  select(all_of(key_vars)) %>% 
+  filter(reg_date < birth_date)
+```
+
+```{r bar_birth_year, echo=FALSE}
+wav %>% 
+  ggplot(aes(x = birth_year)) +
+  geom_histogram(binwidth = 1, fill = dark2["purple"]) +
+  scale_y_continuous(labels = comma) +
+  scale_x_continuous(breaks = seq(1900, 2010, by = 10)) +
+  coord_cartesian(xlim = c(1900, 2010)) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "Washington Voters by Birth Year",
+    x = "Year Made",
+    y = "Count"
+  )
+```
+
+```{r bar_reg_year, echo=FALSE}
+wav %>% 
+  filter(!is.na(reg_year)) %>% 
+  count(reg_year) %>% 
+  mutate(
+    type = if_else(
+      condition = reg_year %% 4 == 0,
+      true = "pres.",
+      false = if_else(
+        condition = reg_year %% 2 == 0,
+        true = "mid",
+        false = "non"
+      )
+    )
+  ) %>% 
+  ggplot(aes(x = reg_year, y = n)) +
+  geom_col(aes(fill = type)) +
+  scale_fill_manual(values = c("#1B9E77", "#666666", "#D95F02")) +
+  scale_y_continuous(labels = comma) +
+  scale_x_continuous(breaks = seq(1950, 2020, by = 10)) +
+  coord_cartesian(xlim = c(1950, 2020)) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "Washington Voters by Registration Year",
+    fill = "Election Year Type",
+    x = "Year Made",
+    y = "Count"
+  )
+```
+
+## Wrangle
+
+To improve the searchability of the database, we will perform some consistent,
+confident string normalization. For geographic variables like city names and
+ZIP codes, the corresponding `campfin::normal_*()` functions are tailor made to 
+facilitate this process.
+
+### Address
+
+The various address component variables are already almost entirely in valid
+USPS format, so it's easiest to just map each component variable, rather than
+combine them into a single string and try to use `normal_address()`.
+
+```{r address_norm}
+wav %>% 
+  select(st_num, st_frac, st_pre, st_name, st_type, st_post, st_unit)
+```
+
+```{r address_abb}
+count(wav, st_type, sort = TRUE) %>% add_prop(sum = TRUE)
+```
+
+### ZIP
+
+For ZIP codes, the `campfin::normal_zip()` function will attempt to create
+valid _five_ digit codes by removing the ZIP+4 suffix and returning leading
+zeroes dropped by other programs like Microsoft Excel.
+
+```{r zip_norm}
+wav <- wav %>% 
+  mutate(
+    zip_clean = normal_zip(
+      zip = zip,
+      na_rep = TRUE
+    )
+  )
+```
+
+```{r zip_progress}
+progress_table(
+  wav$zip,
+  wav$zip_clean,
+  compare = valid_zip
+)
+```
+
+### State
+
+As we would expect, all the registered voters in Washington live in Washington.
+
+```{r state_count}
+count(wav, state, sort = TRUE)
+```
+
+### City
+
+The `city` values are already quite normal, with the only unknown cities being
+perfectly valid shorthands for neighborhoods and undesignated places
+
+```{r city_count}
+many_city <- c(valid_city, extra_city)
+wav %>% 
+  count(city, sort = TRUE) %>% 
+  filter(city %out% many_city)
+```
+
+There are four common cities using abbreviations that can be replaced.
+
+```{r city_unabb}
+wav$city[str_which(wav$city, "^SPOKANE VLY")]   <- "SPOKANE VALLEY"
+wav$city[str_which(wav$city, "^BAINBRIDGE IS")] <- "BAINBRIDGE ISLAND"
+wav$city[str_which(wav$city, "^NINE MILE FLS")] <- "NINE MILE FALLS"
+wav$city[str_which(wav$city, "^LAKE FOREST P")] <- "LAKE FOREST PARK"
+```
+
+There are also five common cities with unknown, valid names.
+
+```{r city_add}
+many_city <- c(many_city, 
+  "CAMANO ISLAND", "SEATAC", "SEDRO-WOOLLEY", "EAST WENATCHE", "TULALIP"
+)
+```
+
+With those 9 changes, we are over 99% valid.
+
+```{r city_check}
+percent(prop_in(wav$city, many_city), 0.01)
+```
+
+## Conclude
+
+```{r clean_glimpse}
+glimpse(sample_n(wav, 50))
+```
+
+1. There are `r comma(nrow(wav))` records in the database.
+1. There are `r comma(sum(wav$dupe_flag))` duplicate records in the database.
+1. The range and distribution of `amount` and `date` seem reasonable.
+1. There are `r comma(sum(wav$na_flag))` records missing key variables.
+1. Consistency in geographic data has been improved with `campfin::normal_*()`.
+1. The 4-digit `year` variable has been created with `lubridate::year()`.
+
+## Export
+
+Now the file can be saved on disk for upload to the Accountability server.
+
+```{r clean_dir}
+clean_dir <- dir_create(here("wa", "voters", "data", "clean"))
+clean_path <- path(clean_dir, "wa_voters_clean.csv")
+write_csv(wav, clean_path, na = "")
+(clean_size <- file_size(clean_path))
+file_encoding(clean_path) %>% 
+  mutate(across(path, path.abbrev))
+```
+
+```{r clean_conv}
+wav <- read_lines(clean_path)
+wav <- iconv(wav, to = "ASCII", sub = "")
+write_lines(wav, clean_path)
+```
+
+## Upload
+
+We can use the `aws.s3::put_object()` to upload the text file to the IRW server.
+
+```{r aws_upload, eval=FALSE}
+aws_path <- path("csv", basename(clean_path))
+if (!object_exists(aws_path, "publicaccountability")) {
+  put_object(
+    file = clean_path,
+    object = aws_path, 
+    bucket = "publicaccountability",
+    acl = "public-read",
+    show_progress = TRUE,
+    multipart = TRUE
+  )
+}
+aws_head <- head_object(aws_path, "publicaccountability")
+(aws_size <- as_fs_bytes(attr(aws_head, "content-length")))
+unname(aws_size == clean_size)
+```

@@ -37,7 +37,7 @@ plot(pvh_combined$WorkDate, pvh_combined$avg_qma, main = "Medical Aide Average H
 plot(pvh_combined$WorkDate, pvh_combined$avg_cna, main = "CNA Average Hours by day")
 ```
 
-![](../plots/unnamed-chunk-3-1.png)<!-- -->
+![](./plots/unnamed-chunk-3-1.png)<!-- -->
 
 ## Weekly average
 
@@ -69,7 +69,7 @@ plot(pvh$date_x, pvh$avg_qma, main = "Medical Aide Average Hours per day")
 plot(pvh$date_x, pvh$avg_cna, main = "CNA Average Hours per day")
 ```
 
-![](../plots/unnamed-chunk-5-1.png)<!-- --> \#\#\# Staff-to-patient
+![](./plots/unnamed-chunk-5-1.png)<!-- --> \#\#\# Staff-to-patient
 
 ``` r
 calc_ratio <- function(x) {
@@ -90,7 +90,7 @@ plot(pvh$date_x, pvh$avg_qma_ratio, main = "Medical Aide Average staff-to-patien
 plot(pvh$date_x, pvh$avg_cna_ratio, main = "CNA Average staff-to-patient ratio")
 ```
 
-![](../plots/unnamed-chunk-6-1.png)<!-- -->
+![](./plots/unnamed-chunk-6-1.png)<!-- -->
 
 # total average staffing hours per resident day
 
@@ -102,4 +102,4 @@ ggplot(pvh) + geom_line( aes(x = date_x, y = avg_total)) +
   labs(title = "Overall average caregivers hours per resident/day")
 ```
 
-![](../plots/unnamed-chunk-7-1.png)<!-- -->
+![](./plots/unnamed-chunk-7-1.png)<!-- -->
