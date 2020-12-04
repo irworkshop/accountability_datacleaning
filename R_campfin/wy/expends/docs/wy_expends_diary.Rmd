@@ -99,7 +99,6 @@ here::here()
 
 The data comes from the Wyoming Secretary of State. [Link to the data download][03].
 
-In our last update, we downloaded 11 years worth of data (2008-2018) in 8 columns, Filer Type,	Filer Name,	Payee,	Purpose,	Date,	City,State & ZIP, Filing Status	and Amount. This time we'll download the data for the 2020 election cycle.
 
 [03]: https://www.wycampaignfinance.gov/WYCFWebApplication/GSF_SystemConfiguration/SearchExpenditures.aspx "source"
 
@@ -114,7 +113,7 @@ Wyoming requires all statewide candidates, candidate committees, political actio
 ### Download
 
 Download raw, **immutable** data file. Go to [the download site](https://www.wycampaignfinance.gov/WYCFWebApplication/GSF_SystemConfiguration/SearchExpenditures.aspx), leave the fields blank, and click the "All" tab and hit "Search". After the table is populated, click "Export"
-
+The data is downloaded on Nov. 24, 2020.
 ```{r raw_dir}
 # create a directory for the raw data
 raw_dir <- here("wy", "expends", "data", "raw")
@@ -636,7 +635,7 @@ wy <- wy %>%
 
 ```{r write_clean}
 clean_dir <- here("wy", "expends", "data", "processed")
-clean_path <- glue("{clean_dir}/wy_expends_clean.csv")
+clean_path <- glue("{clean_dir}/wy_expends_clean_update.csv")
 
 dir_create(clean_dir)
 wy %>% 

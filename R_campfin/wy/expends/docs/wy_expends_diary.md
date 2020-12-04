@@ -1,7 +1,7 @@
 Wyoming Campaign Expenditures Data Diary
 ================
 Yanqi Xu
-2020-10-22 12:37:36
+2020-11-24 10:38:53
 
   - [Project](#project)
   - [Objectives](#objectives)
@@ -115,7 +115,8 @@ ZIP, Filing Status and Amount. This time we’ll download the data for the
 Download raw, **immutable** data file. Go to [the download
 site](https://www.wycampaignfinance.gov/WYCFWebApplication/GSF_SystemConfiguration/SearchExpenditures.aspx),
 leave the fields blank, and click the “All” tab and hit “Search”. After
-the table is populated, click “Export”
+the table is populated, click “Export” The data is downloaded on
+Nov. 24, 2020.
 
 ``` r
 # create a directory for the raw data
@@ -135,43 +136,43 @@ head(wy)
 ```
 
     #> # A tibble: 6 x 8
-    #>   filer_type   filer_name      payee      purpose   date       city_state_zip  filing_status amount
-    #>   <chr>        <chr>           <chr>      <chr>     <date>     <chr>           <chr>          <dbl>
-    #> 1 CANDIDATE    "CLARK STITH "  APG OF TH… ADVERTIS… 2020-10-20 ROCK SPRINGS, … FILED            257
-    #> 2 CANDIDATE C… "FRIENDS OF MI… KAIROS CO… ADVERTIS… 2020-10-20 RIVERTON, WY 8… FILED             50
-    #> 3 CANDIDATE    "ALBERT SOMMER… WIND RIVE… IT SERVI… 2020-10-16 PINEDALE, WY 8… FILED            175
-    #> 4 CANDIDATE C… "COMMITTEE TO … UNITED ST… RENT      2020-10-15 <NA>            FILED             46
-    #> 5 CANDIDATE    "JACQUELIN REN… RAWLINS D… ADVERTIS… 2020-10-13 RAWLINS, WY 82… FILED            500
-    #> 6 CANDIDATE    "ALBERT SOMMER… PINEDALE … ADVERTIS… 2020-10-05 PINEDALE, WY 8… FILED            325
+    #>   filer_type   filer_name       payee    purpose     date       city_state_zip filing_status amount
+    #>   <chr>        <chr>            <chr>    <chr>       <date>     <chr>          <chr>          <dbl>
+    #> 1 CANDIDATE    "EVAN J SIMPSON… SVI MED… ADVERTISIN… 2020-11-20 "AFTON, WY 83… AMEND - ADD    230. 
+    #> 2 CANDIDATE    "LIISA ANSELMI-… WDP      OTHER: TEX… 2020-11-19 "CHEYENNE, WY… AMEND - ADD    252  
+    #> 3 CANDIDATE    "RACHEL LYNNE R… POWELL … ADVERTISIN… 2020-11-16 "CODY, WY 824… AMEND - ADD    119. 
+    #> 4 CANDIDATE C… "CINDY FOR DIST… EQUALIT… OTHER: CON… 2020-11-14 "LARAMIE, WY … AMEND - ADD     72.7
+    #> 5 PARTY COMMI… "CAMPBELL REPUB… FIRST I… BANKING     2020-11-13 "GILLETTE, WY… FILED           17  
+    #> 6 PARTY COMMI… "SWEETWATER DEM… WYOMING… ADMINISTRA… 2020-11-13 "WY "          FILED         1200.
 
 ``` r
 tail(wy)
 ```
 
     #> # A tibble: 6 x 8
-    #>   filer_type   filer_name     payee     purpose     date       city_state_zip  filing_status amount
-    #>   <chr>        <chr>          <chr>     <chr>       <date>     <chr>           <chr>          <dbl>
-    #> 1 CANDIDATE C… COMMITTEE TO … DEPARTME… TAXES       2019-01-02 CHEYENNE, WY 8… FILED           51.2
-    #> 2 CANDIDATE C… FRIENDS OF MA… BLACK HI… UTILITIES … 2019-01-02 RAPID CITY, SD… FILED          244. 
-    #> 3 CANDIDATE C… FRIENDS OF MA… GOOGLE A… IT SERVICES 2019-01-02 MOUNTAIN VIEW,… FILED           70  
-    #> 4 CANDIDATE C… FRIENDS OF MA… SPECTRUM… PHONE       2019-01-02 CINCINNATI, OH… FILED          190. 
-    #> 5 CANDIDATE C… LANDEN FOR LE… BIG O TI… OTHER: VEH… 2019-01-02 CASPER, WY 826… FILED         1232. 
-    #> 6 CANDIDATE C… PERKINS FOR S… DREW PER… OTHER: GIF… 2019-01-01 CASPER, WY 826… FILED           66.2
+    #>   filer_type   filer_name       payee   purpose     date       city_state_zip  filing_status amount
+    #>   <chr>        <chr>            <chr>   <chr>       <date>     <chr>           <chr>          <dbl>
+    #> 1 PARTY COMMI… ALBANY DEMOCRAT… ROCKY … UTILITIES … 2008-12-02 "PORTLAND, OR … PUBLISHED      178. 
+    #> 2 PARTY COMMI… ALBANY DEMOCRAT… POSTMA… POSTAGE     2008-11-18 "LARAMIE, WY 8… PUBLISHED       26.4
+    #> 3 PARTY COMMI… PARK REPUBLICAN… KIMI'S… OTHER: FLO… 2008-11-14 "82414, WY "    PUBLISHED       46.7
+    #> 4 PARTY COMMI… PARK REPUBLICAN… KURT H… FOOD AND B… 2008-11-14 "82414, WY "    PUBLISHED       94.6
+    #> 5 PARTY COMMI… PARK REPUBLICAN… SHERRY… FOOD AND B… 2008-11-14 "82414, WY "    PUBLISHED       53.5
+    #> 6 CANDIDATE C… PARTNERS FOR MA… MAX MA… ENTERTAINM… 2008-07-15 "CHEYENNE, WY … PUBLISHED       14.0
 
 ``` r
 glimpse(wy)
 ```
 
-    #> Rows: 2,630
+    #> Rows: 53,395
     #> Columns: 8
-    #> $ filer_type     <chr> "CANDIDATE", "CANDIDATE COMMITTEE", "CANDIDATE", "CANDIDATE COMMITTEE", "…
-    #> $ filer_name     <chr> "CLARK STITH ", "FRIENDS OF MICHAEL V. BAILEY", "ALBERT SOMMERS ", "COMMI…
-    #> $ payee          <chr> "APG OF THE ROCKIES", "KAIROS COMMUNICATIONS", "WIND RIVER WEB SERVICES",…
-    #> $ purpose        <chr> "ADVERTISING - NEWSPAPER", "ADVERTISING - MISC.", "IT SERVICES", "RENT", …
-    #> $ date           <date> 2020-10-20, 2020-10-20, 2020-10-16, 2020-10-15, 2020-10-13, 2020-10-05, …
-    #> $ city_state_zip <chr> "ROCK SPRINGS, WY 82901", "RIVERTON, WY 82501", "PINEDALE, WY 82941", NA,…
-    #> $ filing_status  <chr> "FILED", "FILED", "FILED", "FILED", "FILED", "FILED", "FILED", "FILED", "…
-    #> $ amount         <dbl> 257.00, 50.00, 175.00, 46.00, 500.00, 325.00, 525.00, 12.60, 6.00, 300.00…
+    #> $ filer_type     <chr> "CANDIDATE", "CANDIDATE", "CANDIDATE", "CANDIDATE COMMITTEE", "PARTY COMM…
+    #> $ filer_name     <chr> "EVAN J SIMPSON ", "LIISA ANSELMI-DALTON ", "RACHEL LYNNE RODRIGUEZ-WILLI…
+    #> $ payee          <chr> "SVI MEDIA", "WDP", "POWELL TRIBUNE", "EQUALITY STATE POLICY CENTER", "FI…
+    #> $ purpose        <chr> "ADVERTISING - NEWSPAPER", "OTHER: TEXTING PLATFORM", "ADVERTISING - NEWS…
+    #> $ date           <date> 2020-11-20, 2020-11-19, 2020-11-16, 2020-11-14, 2020-11-13, 2020-11-13, …
+    #> $ city_state_zip <chr> "AFTON, WY 83110", "CHEYENNE, WY 82003", "CODY, WY 82414", "LARAMIE, WY 8…
+    #> $ filing_status  <chr> "AMEND - ADD", "AMEND - ADD", "AMEND - ADD", "AMEND - ADD", "FILED", "FIL…
+    #> $ amount         <dbl> 229.50, 252.00, 119.25, 72.68, 17.00, 1200.40, 471.54, 1725.96, 201.70, 1…
 
 ### Distinct
 
@@ -182,16 +183,16 @@ wy %>% col_stats(n_distinct)
 ```
 
     #> # A tibble: 8 x 4
-    #>   col            class      n        p
-    #>   <chr>          <chr>  <int>    <dbl>
-    #> 1 filer_type     <chr>      2 0.000760
-    #> 2 filer_name     <chr>    167 0.0635  
-    #> 3 payee          <chr>    971 0.369   
-    #> 4 purpose        <chr>    131 0.0498  
-    #> 5 date           <date>   379 0.144   
-    #> 6 city_state_zip <chr>    245 0.0932  
-    #> 7 filing_status  <chr>      4 0.00152 
-    #> 8 amount         <dbl>   1649 0.627
+    #>   col            class      n         p
+    #>   <chr>          <chr>  <int>     <dbl>
+    #> 1 filer_type     <chr>      4 0.0000749
+    #> 2 filer_name     <chr>    806 0.0151   
+    #> 3 payee          <chr>  13118 0.246    
+    #> 4 purpose        <chr>   1975 0.0370   
+    #> 5 date           <date>  3753 0.0703   
+    #> 6 city_state_zip <chr>   1841 0.0345   
+    #> 7 filing_status  <chr>      4 0.0000749
+    #> 8 amount         <dbl>  18079 0.339
 
 We can explore the distribution of the least distinct values with
 `ggplot2::geom_bar()`.
@@ -218,7 +219,7 @@ wy %>% col_stats(count_na)
     #> 3 payee          <chr>      0 0     
     #> 4 purpose        <chr>      0 0     
     #> 5 date           <date>     0 0     
-    #> 6 city_state_zip <chr>     81 0.0308
+    #> 6 city_state_zip <chr>   3319 0.0622
     #> 7 filing_status  <chr>      0 0     
     #> 8 amount         <dbl>      0 0
 
@@ -247,7 +248,7 @@ summary(wy$amount)
 ```
 
     #>     Min.  1st Qu.   Median     Mean  3rd Qu.     Max. 
-    #>     0.45    27.76   100.00   395.51   423.06 55000.00
+    #>      0.0     34.9    109.2    684.5    400.0 482033.0
 
 See how the campaign expenditures were distributed
 
@@ -267,15 +268,15 @@ Distribution of expenses by filer
 
 ### Dates
 
-The dates seem to be reasonable, with records dating back to 1.7897^{4}
-till 1.8414^{4}, 1.8445^{4}, 1.8402289^{4}, 1.847^{4}, 1.8555^{4}
+The dates seem to be reasonable, with records dating back to 1.4075^{4}
+till 1.5561^{4}, 1.6784^{4}, 1.6646274^{4}, 1.7744^{4}, 1.8586^{4}
 
 ``` r
 summary(wy$date)
 ```
 
     #>         Min.      1st Qu.       Median         Mean      3rd Qu.         Max. 
-    #> "2019-01-01" "2020-06-01" "2020-07-02" "2020-05-20" "2020-07-27" "2020-10-20"
+    #> "2008-07-15" "2012-08-09" "2015-12-15" "2015-07-30" "2018-08-01" "2020-11-20"
 
 ``` r
 sum(wy$date > today())
@@ -347,13 +348,13 @@ wy <- wy %>%
 sample(wy$zip, 10)
 ```
 
-    #>  [1] "82401" NA      "20001" NA      NA      NA      NA      "82401" "82801" "82072"
+    #>  [1] "82201" "82414" "82601" NA      "82070" "82636" "82601" NA      "82001" NA
 
 ``` r
 prop_in(wy$zip, valid_zip, na.rm = T)
 ```
 
-    #> [1] 0.9960578
+    #> [1] 0.9961051
 
 ### State
 
@@ -368,13 +369,13 @@ wy <- wy %>%
 count_na(wy$state)
 ```
 
-    #> [1] 81
+    #> [1] 3373
 
 ``` r
 prop_in(wy$state, valid_state, na.rm = T)
 ```
 
-    #> [1] 0.9984308
+    #> [1] 0.9998601
 
 The states are mostly valid and don’t need to be cleaned.
 
@@ -430,16 +431,16 @@ wy$city_raw <- wy$city_raw %>%
 
 ``` r
 count_na(wy$city_raw)
-#> [1] 1038
+#> [1] 14473
 n_distinct(wy$city_raw)
-#> [1] 160
+#> [1] 841
 prop_in(wy$city_raw, valid_city, na.rm = TRUE)
-#> [1] 0.9717337
+#> [1] 0.9764914
 sum(unique(wy$city_raw) %out% valid_city)
-#> [1] 30
+#> [1] 331
 ```
 
-1592 cities were found.
+38922 cities were found.
 
 ``` r
 wy <- wy %>% mutate(city_norm = normal_city(city_raw))
@@ -498,7 +499,7 @@ wy$city_swap <- wy$city_swap %>%
 n_distinct(wy$city_swap)
 ```
 
-    #> [1] 141
+    #> [1] 600
 
 #### Refine
 
@@ -541,10 +542,10 @@ wy <- wy %>%
 
 | stage        | prop\_in | n\_distinct | prop\_na | n\_out | n\_diff |
 | :----------- | -------: | ----------: | -------: | -----: | ------: |
-| city\_raw)   |    0.972 |         160 |    0.395 |     44 |      29 |
-| city\_norm   |    0.975 |         157 |    0.395 |     40 |      26 |
-| city\_swap   |    0.997 |         141 |    0.395 |      5 |       6 |
-| city\_refine |    0.997 |         141 |    0.395 |      5 |       6 |
+| city\_raw)   |    0.978 |         841 |    0.271 |    854 |     315 |
+| city\_norm   |    0.983 |         787 |    0.271 |    674 |     257 |
+| city\_swap   |    0.997 |         600 |    0.271 |    104 |      55 |
+| city\_refine |    0.997 |         600 |    0.271 |    104 |      55 |
 
 Manually change the city\_refine fields due to
 overcorrection/undercorrection.
@@ -564,27 +565,27 @@ wy$city_refine <- wy$city_refine %>%
   str_replace("^PINE$", "PINEDALE")
 ```
 
-This process reduces the number of distinct city value by 19
+This process reduces the number of distinct city value by 245
 
 ``` r
 n_distinct(wy$city_raw)
-#> [1] 160
+#> [1] 841
 n_distinct(wy$city_norm)
-#> [1] 157
+#> [1] 787
 n_distinct(wy$city_swap)
-#> [1] 141
+#> [1] 600
 n_distinct(wy$city_refine)
-#> [1] 141
+#> [1] 596
 ```
 
 Each step of the cleaning process reduces the number of distinct city
-values. There are 1592 entries of cities identified in the original data
-matching the regex with 160 distinct values, after the swap and refine
-processes, there are 1592 entries with 141 distinct values.
+values. There are 38922 entries of cities identified in the original
+data matching the regex with 841 distinct values, after the swap and
+refine processes, there are 38922 entries with 596 distinct values.
 
 ## Conclude
 
-1.  There are 2630 records in the database
+1.  There are 53395 records in the database
 2.  There are 0 records with duplicate filer, recipient, date, *and*
     amount (flagged with `dupe_flag`)
 3.  The ranges for dates and amounts are reasonable
@@ -611,7 +612,7 @@ wy <- wy %>%
 
 ``` r
 clean_dir <- here("wy", "expends", "data", "processed")
-clean_path <- glue("{clean_dir}/wy_expends_clean.csv")
+clean_path <- glue("{clean_dir}/wy_expends_clean_update.csv")
 
 dir_create(clean_dir)
 wy %>% 
@@ -623,7 +624,7 @@ wy %>%
 file_size(clean_path)
 ```
 
-    #> 349K
+    #> 7.45M
 
 ``` r
 file_encoding(clean_path)
