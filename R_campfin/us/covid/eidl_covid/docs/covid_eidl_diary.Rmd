@@ -1,0 +1,893 @@
+---
+title: "COVID-19 Economic Injury Disaster Loans Diary"
+author: "Kiernan Nicholls"
+date: "`r Sys.time()`"
+output:
+  github_document: 
+    df_print: tibble
+    toc: true
+    toc_dept: 3
+editor_options: 
+  chunk_output_type: console
+---
+
+<!-- Place comments regarding knitting here -->
+
+```{r setup, include=FALSE, purl=FALSE}
+library(knitr)
+opts_chunk$set(
+  eval = TRUE,
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  error = FALSE,
+  collapse = TRUE,
+  comment = "#>",
+  fig.path = "../plots/",
+  fig.width = 10,
+  dpi = 300
+)
+if (!interactive()) {
+  options(width = 99)
+  set.seed(5)
+}
+```
+
+```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
+doc_dir <- fs::dir_create(here::here("us", "eidl", "docs"))
+```
+
+## Project
+
+The Accountability Project is an effort to cut across data silos and give
+journalists, policy professionals, activists, and the public at large a simple
+way to search across huge volumes of public data about people and organizations.
+
+Our goal is to standardizing public data on a few key fields by thinking of each
+dataset row as a transaction. For each transaction there should be (at least) 3
+variables:
+
+1. All **parties** to a transaction.
+2. The **date** of the transaction.
+3. The **amount** of money involved.
+
+## Objectives
+
+This document describes the process used to complete the following objectives:
+
+1. How many records are in the database?
+1. Check for entirely duplicated records.
+1. Check ranges of continuous variables.
+1. Is there anything blank or missing?
+1. Check for consistency issues.
+1. Create a five-digit ZIP Code called `zip`.
+1. Create a `year` field from the transaction date.
+1. Make sure there is data on both parties to a transaction.
+
+## Packages
+
+The following packages are needed to collect, manipulate, visualize, analyze,
+and communicate these results. The `pacman` package will facilitate their
+installation and attachment.
+
+The IRW's `campfin` package will also have to be installed from GitHub. This
+package contains functions custom made to help facilitate the processing of
+campaign finance data.
+
+```{r load_packages, message=FALSE, warning=FALSE, error=FALSE}
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load_gh("irworkshop/campfin")
+pacman::p_load(
+  tidyverse, # data manipulation
+  lubridate, # datetime strings
+  gluedown, # printing markdown
+  magrittr, # pipe operators
+  janitor, # clean data frames
+  refinr, # cluster and merge
+  scales, # format strings
+  readxl, # read excel files
+  knitr, # knit documents
+  vroom, # read files fast
+  rvest, # html scraping
+  glue, # combine strings
+  here, # relative paths
+  httr, # http requests
+  fs # local storage 
+)
+```
+
+This document should be run as part of the `R_campfin` project, which lives as a
+sub-directory of the more general, language-agnostic
+[`irworkshop/accountability_datacleaning`][tap] GitHub repository.
+
+The `R_campfin` project uses the [RStudio projects][rproj] feature and should be
+run as such. The project also uses the dynamic `here::here()` tool for file
+paths relative to _your_ machine.
+
+```{r where_here}
+# where does this document knit?
+here::here()
+```
+
+[tap]: https://github.com/irworkshop/accountability_datacleaning
+[rproj]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects
+
+## About
+
+The Small Business Administration's [Economic Injury Disaster Loans][eidl] is a
+program typically given to relieve the economic strain of natural disasters on
+local economies. The loans are meant to cover operating expenses that could
+have been met had the disaster not occurred. The loans have a 3.75% interest
+rate for businesses and 2.75% for nonprofits over a 30 year term.
+
+The EIDL program was expanded during the COVID-19 pandemic:
+
+> In response to the Coronavirus (COVID-19) pandemic, small business owners,
+including agricultural businesses, and nonprofit organizations in all U.S.
+states, Washington D.C., and territories can apply for an Economic Injury
+Disaster Loan. The EIDL program is designed to provide economic relief to
+businesses that are currently experiencing a temporary loss of revenue due to
+coronavirus (COVID-19).
+
+The type of loans offered for COVID-19 applicants differ slightly:
+
+> #### Who can use an SBA disaster loan?
+> 
+> _COVID-19 EIDL_: If you are a small businesses, nonprofit organization of any
+size, or a U.S. agricultural business with 500 or fewer employees that have
+suffered substantial economic injury as a result of the Coronavirus (COVID-19)
+pandemic, you can apply for the COVID-19 EIDL. This loan applies to all
+businesses based in any U.S. state, territory, or the District of Columbia.
+>
+> _ALL OTHER DISASTERS_: Businesses of all sizes located in declared disaster
+areas, private nonprofit organizations, homeowners, and renters affected by
+declared disaster, including civil unrest and natural disasters such as
+hurricanes, flooding, wildfires, etc.
+
+> #### How to use an SBA disaster loan
+> 
+> ###### _COVID-19 EIDL_
+> * For working capital
+> * Normal operating expenses (i.e. continuation of health care benefits, rent,
+utilities, and fixed debt payments).
+>
+> ###### _ALL OTHER DISASTERS_
+> * Losses not covered by insurance or funding from the Federal Emergency
+Management Agency (FEMA) for both personal and business.
+> * Business operating expenses that could have been met had the disaster not
+occurred.
+
+There are _two_ type of loans offered through the EIDL program. Regular loans
+are not forgivable while the _Advance_ loans can be forgiven:
+
+> EIDL Advance was a grant program offered together with the economic injury
+loan program. The amount of the grant was determined by the number of employees
+indicated on the EIDL application: $1,000/employee, up to a maximum of $10,000.
+> 
+> * EIDL Advance does not have to be repaid.
+> * Recipients did not have to be approved for an EIDL loan to receive the EIDL
+Advance.
+> * The amount of the loan Advance was deducted from total loan eligibility.
+> * Businesses who received an EIDL Advance in addition to the Paycheck
+Protection Program (eidl) loan will have the amount of the EIDL Advance
+subtracted from the forgiveness amount of their eidl loan.
+
+[eidl]: https://www.sba.gov/funding-programs/disaster-assistance
+
+## Data
+
+In late November 2020, the Small Business administration was ordered by a 
+federal court to release detailed data on the recipients of Paycheck Protection
+Program and Economic Disaster Injury Loans. On December 1, the SBA complied with
+this request and published the data on their [Box page][box]. The EIDL data is
+separated into regular and advance loan folders. These can both be downloaded
+locally.
+
+[box]: https://sba.app.box.com/s/5myd1nxutoq8wxecx2562baruz774si6
+
+We can download the ZIP archives fro Box locally.
+
+```{r raw_dir}
+raw_dir <- dir_create(here("us", "covid", "eidl_covid", "data", "raw"))
+raw_zip <- path(raw_dir, "120120 EIDL Data.zip")
+adv_zip <- path(raw_dir, "120120 EIDL Advance Data.zip")
+```
+
+We can extract the CSV files from each archive.
+
+```{r eval=FALSE}
+raw_paths <- unzip(raw_zip, exdir = raw_dir, junkpaths = TRUE)
+(raw_info <- raw_paths %>%
+  map_df(unzip, list = TRUE) %>%
+  as_tibble() %>%
+  clean_names() %>%
+  filter(length > 212))
+```
+
+```{r eval=FALSE}
+for (i in seq_along(raw_paths)) {
+  raw_paths[i] <- unzip(
+    zipfile = raw_paths[i],
+    files = raw_info$name[i],
+    exdir = raw_dir,
+    overwrite = FALSE
+  )
+}
+```
+
+The process can be repeated for the advance loan files.
+
+```{r eval=FALSE}
+adv_paths <- unzip(adv_zip, exdir = raw_dir, junkpaths = TRUE)
+(adv_info <- adv_paths %>%
+  map_df(unzip, list = TRUE) %>%
+  as_tibble() %>%
+  clean_names() %>%
+  filter(length > 212))
+```
+
+```{r eval=FALSE}
+for (i in seq_along(adv_paths)) {
+  adv_paths[i] <- unzip(
+    zipfile = adv_paths[i],
+    files = adv_info$name[i],
+    exdir = raw_dir,
+    overwrite = FALSE
+  )
+}
+```
+
+```{r echo=FALSE}
+raw_paths <- dir_ls(raw_dir, regexp = "EIDL through.*csv$")
+adv_paths <- dir_ls(raw_dir, regexp = "EIDL Advance.*csv$")
+```
+
+### Dictionary
+
+We can download an Excel file from the Treasury Depeartment that contains some
+definitions for the variables in the data.
+
+```{r dict_get}
+raw_names <- read_names(raw_paths[1])
+dict_file <- path_temp("IDD-v2.0.xlsx")
+dict_url <- "https://www.publicdebt.treas.gov/files/data-transparency/"
+download.file(
+  url = str_c(dict_url, basename(dict_file)),
+  destfile = dict_file
+)
+```
+
+```{r dict_read}
+dict <- read_excel(
+  path = dict_file,
+  sheet = "D2-Award (Financial Assistance)",
+  .name_repair = make_clean_names,
+  skip = 2
+)
+```
+
+```{r dict_trim, echo=FALSE}
+dict <- dict %>% 
+  filter(str_to_upper(data_element_label) %in% raw_names) %>% 
+  select(
+    column = data_element_label,
+    grouping,
+    example_value,
+    type = valid_data_type,
+    length = max_field_length,
+    definition
+  )
+```
+
+```{r dict_print}
+dict %>% 
+  select(column, definition) %>% 
+  mutate(across(column, md_code)) %>% 
+  kable()
+```
+
+## Read
+
+```{r echo=FALSE}
+eidl_names <- c(
+  "action_type",
+  "action_date",
+  "assist_type",
+  "record_type",
+  "fain",
+  "award_amend",
+  "uri",
+  "correct_delete",
+  "fy_qt_correct",
+  "sai_num",
+  "awardee_name",
+  "awardee_uuid",
+  "addr1",
+  "addr2",
+  "addr3",
+  "city",
+  "state",
+  "zip5",
+  "zip4",
+  "country",
+  "foreign_city",
+  "foreign_prov",
+  "foreign_post",
+  "congress_dist",
+  "business_type",
+  "fund_agency",
+  "fund_sub",
+  "fund_office",
+  "award_agency",
+  "award_sub",
+  "award_office",
+  "cfda_num",
+  "prime_cd",
+  "prime_county",
+  "prime_zip9",
+  "prime_foreign",
+  "prime_congress",
+  "award_desc",
+  "period_start",
+  "period_now",
+  "fed_obligation",
+  "nonfed_amount",
+  "face_value",
+  "og_loan_sub",
+  "biz_fund_id"
+)
+```
+
+```{r raw_read}
+eidl <- map_df(
+  .x = c(raw_paths, adv_paths),
+  .f = read_delim,
+  .id = "source_file",
+  delim = ",",
+  skip = 1,
+  escape_backslash = FALSE,
+  escape_double = FALSE,
+  col_names = eidl_names,
+  col_types = cols(
+    .default = col_character(),
+    action_date = col_date("%Y%m%d"),
+    record_type = col_integer(),
+    award_amend = col_integer(),
+    period_start = col_date("%Y%m%d"),
+    period_now = col_date("%Y%m%d"),
+    fed_obligation = col_double(),
+    nonfed_amount = col_double(),
+    face_value = col_double(),
+    og_loan_sub = col_double()
+  )
+)
+```
+
+```{r eval=FALSE}
+if (interactive()) {
+  eidl <- eidl %>% 
+    remove_constant() %>% 
+    remove_empty("cols")
+}
+```
+
+```{r raw_source}
+eidl <- eidl %>% 
+  relocate(source_file, .after = last_col()) %>% 
+  mutate(advance_loan = str_detect(source_file, "Advance"))
+```
+
+## Explore
+
+There are `r comma(nrow(eidl))` rows of `r ncol(eidl)` rows. Each record
+represents a disaster loan made to a small business.
+
+```{r glimpse}
+nrow_pre <- nrow(eidl)
+glimpse(eidl)
+tail(eidl)
+```
+
+### Missing
+
+Columns vary in their degree of missing values.
+
+```{r na_count}
+col_stats(eidl, count_na)
+```
+
+We can flag any record missing a variable needed to identify the transaction.
+
+```{r na_amount_nonfed}
+unique(eidl$nonfed_amount)
+```
+
+```{r na_amount_view}
+eidl %>% 
+  select(fed_obligation, face_value, og_loan_sub) %>% 
+  sample_n(20)
+```
+
+```{r na_amount_coalesce}
+eidl <- mutate(eidl, amount = coalesce(fed_obligation, face_value))
+```
+
+```{r na_flag}
+key_vars <- c("action_date", "awardee_name", "award_office", "amount")
+eidl <- flag_na(eidl, all_of(key_vars))
+```
+
+```{r na_view}
+sum(eidl$na_flag)
+sum(is.na(eidl$awardee_name))
+eidl %>% 
+  filter(na_flag) %>% 
+  select(all_of(key_vars))
+```
+
+### Duplicates
+
+We can also flag any record completely duplicated across every column.
+
+```{r dupe_file}
+dupe_file <- here("us", "covid", "eidl_covid", "dupes.tsv")
+```
+
+We flag these records by first identifying rows by a unique ID, then splitting
+the data into chunks along a discrete variable and checking each chunk for 
+duplicate rows and saving any duplicate rows to a file.
+
+```{r dupe_id}
+eidl <- mutate(eidl, id = row_number(), .after = last_col())
+```
+
+```{r dupe_write}
+if (!file_exists(dupe_file)) {
+  file_create(dupe_file)
+  eidls <- eidl %>% 
+    select(-id, -fain, ) %>%
+    group_split(action_date)
+  split_id <- split(eidl$id, eidl$action_date)
+  n_done <- 0
+  pb <- txtProgressBar(max = nrow(eidl), style = 3)
+  for (i in seq_along(eidls)) {
+    n_new <- nrow(eidls[[i]])
+    d1 <- duplicated(eidls[[i]], fromLast = FALSE)
+    if (any(d1)) {
+      d2 <- duplicated(eidls[[i]], fromLast = TRUE)
+      dupes <- tibble(voter_id = split_id[[i]], dupe_flag = d1 | d2)
+      dupes <- filter(dupes, dupe_flag == TRUE)
+      vroom_write(dupes, dupe_file, append = TRUE)
+      rm(d2, dupes)
+    }
+    rm(d1)
+    eidls[i] <- list(NA)
+    flush_memory(1)
+    n_done <- n_done + n_new
+    setTxtProgressBar(pb, value = n_done)
+  }
+  rm(eidls)
+}
+```
+
+This file of duplicates can then be read and joined against the original data.
+
+```{r dupe_read}
+file_size(dupe_file)
+dupes <- read_tsv(
+  file = dupe_file,
+  col_names = c("id", "dupe_flag"),
+  col_types = cols(
+    id = col_integer(),
+    dupe_flag = col_logical()
+  )
+)
+```
+
+```{r dupe_join}
+nrow(eidl)
+eidl <- left_join(eidl, dupes, by = "id")
+eidl <- mutate(eidl, dupe_flag = !is.na(dupe_flag))
+sum(eidl$dupe_flag)
+eidl <- select(eidl, -id)
+```
+
+We can see that, despite a supposedly unique `fain`, there are duplicate rows.
+
+```{r dupe_view}
+eidl %>% 
+  filter(dupe_flag) %>% 
+  select(fain, award_amend, all_of(key_vars), city) %>% 
+  arrange(action_date, awardee_name)
+```
+
+### Categorical
+
+```{r distinct_count}
+col_stats(eidl, n_distinct)
+```
+
+```{r distinct_plots, fig.height=2.5}
+explore_plot(eidl, assist_type)
+explore_plot(eidl, award_desc) + scale_x_truncate(40)
+explore_plot(eidl, business_type)
+explore_plot(eidl, fund_office)
+```
+
+### Amounts
+
+```{r amount_summary}
+summary(eidl$amount)
+mean(eidl$amount <= 0)
+```
+
+Most loan `amounts` are one of a few round integer values.
+
+```{r amount_count}
+eidl %>% 
+  count(fed_obligation, face_value, sort = TRUE) %>% 
+  add_prop() %>% 
+  mutate(cp = cumsum(p))
+```
+
+```{r hist_amount, echo=FALSE}
+eidl %>%
+  filter(amount > 500) %>% 
+  mutate(is_face = !is.na(face_value)) %>% 
+  ggplot(aes(amount)) +
+  geom_histogram(fill = dark2["purple"], bins = 20) +
+  scale_y_continuous(labels = comma) +
+  scale_x_continuous(
+    breaks = c(1 %o% 10^(0:6)),
+    labels = dollar,
+    trans = "log10"
+  ) +
+  labs(
+    title = "United States EIDL Amount Distribution",
+    subtitle = "by Federal Obligation (TRUE) or Face Value (FALSE)",
+    caption = "Source: SBA EIDL",
+    x = "Amount",
+    y = "Count"
+  ) +
+  facet_wrap(~is_face, scales = "free_y", ncol = 1)
+```
+
+```{r amount_map, echo=FALSE}
+eidl %>% 
+  group_by(state) %>%
+  summarise(total = sum(amount)) %>% 
+  mutate(across(state, usa::state_convert, to = "name")) %>% 
+  left_join(usa::facts, by = c("state" = "name")) %>% 
+  mutate(per_capita = total / population) %>% 
+  usmap::plot_usmap(regions = "states", data = ., values = "per_capita") +
+  scale_fill_viridis_c() +
+  theme(legend.position = "right") +
+  labs(
+    title = "COVID-19 EIDL Loan Amount per capita by State",
+    fill = "Amount per capita"
+  )
+```
+
+### Dates
+
+We can add the calendar year from `action_date` with `lubridate::year()`.
+
+```{r date_year}
+eidl <- mutate(eidl, action_year = year(action_date))
+```
+
+All of the loans in this database were distributed between April and November.
+
+```{r date_range}
+min(eidl$action_date)
+max(eidl$action_date)
+```
+
+```{r bar_year, echo=FALSE}
+eidl %>% 
+  count(eweek = epiweek(action_date)) %>% 
+  ggplot(aes(x = eweek, y = n)) +
+  geom_col(fill = dark2["orange"]) + 
+  scale_y_continuous(labels = comma) +
+  scale_x_continuous(breaks = seq(0, 50, by = 2)) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "2020 COVID-19 EIDL Loans CDC Epidemiological Week",
+    caption = "Source: SBA EIDL",
+    x = "Week of Year",
+    y = "Count"
+  )
+```
+
+## Wrangle
+
+To improve the searchability of the database, we will perform some consistent,
+confident string normalization. For geographic variables like city names and
+ZIP codes, the corresponding `campfin::normal_*()` functions are tailor made to 
+facilitate this process.
+
+We will also manually add the disbursing office and governing body.
+
+```{r office_codes}
+office_codes <- tribble(
+  ~fund_office, ~office,
+  "732990", "Office of Disaster Assistance",
+  "737610", "Office of Entrepreneurial Development"
+)
+```
+
+```{r office_join}
+eidl <- eidl %>% 
+  mutate(govt = "US", agency = "Small Business Administration") %>% 
+  left_join(office_codes)
+```
+
+```{r office_count}
+count(eidl, fund_office, office)
+```
+
+### Address
+
+For the street `addresss` variable, the `campfin::normal_address()` function
+will force consistence case, remove punctuation, and abbreviate official 
+USPS suffixes.
+
+```{r address_file}
+addr_file <- path(dirname(raw_dir), "addr.tsv")
+```
+
+```{r address_norm}
+if (file_exists(addr_file)) {
+  norm_addr <- read_tsv(addr_file)
+} else {
+  norm_addr <- eidl %>%
+    select(addr1, addr2) %>% 
+    distinct() %>% 
+    unite(
+      col = addr_full,
+      everything(),
+      na.rm = TRUE,
+      remove = FALSE,
+    ) %>% 
+    mutate(
+      addr_norm = normal_address(
+        address = addr_full,
+        abbs = usps_street,
+        na_rep = TRUE
+      )
+    ) %>% 
+    select(-addr_full)
+  write_tsv(distinct(norm_addr), addr_file)
+}
+```
+
+```{r address_view, echo=FALSE}
+sample_n(norm_addr, 10)
+```
+
+```{r address_join}
+eidl <- left_join(eidl, norm_addr)
+```
+
+### ZIP
+
+The business ZIP codes are already split into ZIP and ZIP+4 variables.
+
+```{r zip_progress}
+progress_table(
+  eidl$zip5,
+  compare = valid_zip
+)
+```
+
+### State
+
+All of the `state` values are already valid.
+
+```{r state_progress}
+progress_table(
+  eidl$state,
+  compare = valid_state
+)
+```
+
+### City
+
+Cities are the most difficult geographic variable to normalize, simply due to
+the wide variety of valid cities and formats.
+
+#### Normal
+
+The `campfin::normal_city()` function is a good start, again converting case,
+removing punctuation, but _expanding_ USPS abbreviations. We can also remove
+`invalid_city` values.
+
+```{r city_norm}
+norm_city <- eidl %>% 
+  count(city, state, zip5, sort = TRUE) %>% 
+  select(-n) %>% 
+  mutate(
+    city_norm = normal_city(
+      city = city, 
+      abbs = usps_city,
+      states = "DC",
+      na = invalid_city,
+      na_rep = TRUE
+    )
+  )
+```
+
+#### Swap
+
+We can further improve normalization by comparing our normalized value
+against the _expected_ value for that record's state abbreviation and ZIP code.
+If the normalized value is either an abbreviation for or very similar to the
+expected value, we can confidently swap those two.
+
+```{r city_swap}
+norm_city <- norm_city %>% 
+  rename(city_raw = city) %>% 
+  left_join(
+    y = zipcodes,
+    by = c("state", "zip5" = "zip")
+  ) %>% 
+  rename(city_match = city) %>% 
+  mutate(
+    match_abb = is_abbrev(city_norm, city_match),
+    match_dist = str_dist(city_norm, city_match),
+    city_swap = if_else(
+      condition = !is.na(match_dist) & (match_abb | match_dist == 1),
+      true = city_match,
+      false = city_norm
+    )
+  ) %>% 
+  select(
+    -city_match,
+    -match_dist,
+    -match_abb
+  ) %>% 
+  rename(city = city_raw)
+```
+
+
+#### Progress
+
+```{r city_rejoin}
+eidl <- left_join(eidl, norm_city, by = c("city", "state", "zip5"))
+```
+
+```{r city_change}
+eidl <- mutate(
+  .data = eidl,
+  city_swap = city_swap %>% 
+    str_replace("^NEW YORK CITY$", "NEW YORK")
+)
+```
+
+```{r city_remain}
+many_city <- c(valid_city, extra_city)
+eidl %>% 
+  filter(city_swap %out% many_city) %>% 
+  count(city_swap, state, sort = TRUE) %>% 
+  add_prop(sum = TRUE)
+```
+
+```{r city_progress, echo=FALSE}
+progress <- progress_table(
+  str_to_upper(eidl$city),
+  eidl$city_norm,
+  eidl$city_swap,
+  compare = many_city
+) %>% mutate(stage = as_factor(stage))
+kable(progress, digits = 3)
+```
+
+You can see how the percentage of valid values increased with each stage.
+
+```{r bar_progress, echo=FALSE}
+raw_in <- percent(prop_in(eidl$city, valid_city))
+progress %>% 
+  ggplot(aes(x = stage, y = prop_in)) +
+  geom_hline(yintercept = 0.99) +
+  geom_col(fill = dark2["purple"]) +
+  coord_cartesian(ylim = c(0.75, 1)) +
+  scale_y_continuous(labels = percent) +
+  labs(
+    title = "EIDL City Normalization Progress",
+    subtitle = glue("Raw at {raw_in} before conversion to uppercase"),
+    x = "Stage",
+    y = "Percent Valid"
+  )
+```
+
+More importantly, the number of distinct values decreased each stage. We were
+able to confidently change many distinct invalid values to their valid
+equivalent.
+
+```{r bar_distinct, echo=FALSE}
+progress %>% 
+  select(
+    stage, 
+    all = n_distinct,
+    bad = n_diff
+  ) %>% 
+  mutate(good = all - bad) %>% 
+  pivot_longer(c("good", "bad")) %>% 
+  mutate(name = name == "good") %>% 
+  ggplot(aes(x = stage, y = value)) +
+  geom_col(aes(fill = name)) +
+  scale_fill_brewer(palette = "Dark2", direction = -1) +
+  scale_y_continuous(labels = comma) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "EIDL City Normalization Progress",
+    subtitle = "Distinct values, valid and invalid",
+    x = "Stage",
+    y = "Distinct Values",
+    fill = "Valid"
+  )
+```
+
+## Conclude
+
+Before exporting, we can remove the intermediary normalization columns and
+rename all added variables with the `_clean` suffix.
+
+```{r clean_select}
+eidl <- eidl %>% 
+  select(
+    -city_norm,
+    city_clean = city_swap
+  ) %>% 
+  rename_all(~str_replace(., "_norm", "_clean")) %>% 
+  rename_all(~str_remove(., "_raw"))
+```
+
+```{r clean_glimpse}
+glimpse(sample_n(eidl, 50))
+```
+
+1. There are `r comma(nrow(eidl))` records in the database.
+1. There are `r comma(sum(eidl$dupe_flag))` duplicate records in the database.
+1. The range and distribution of `amount` and `date` seem reasonable.
+1. There are `r comma(sum(eidl$na_flag))` records missing key variables.
+1. Consistency in geographic data has been improved with `campfin::normal_*()`.
+1. The 4-digit `year` variable has been created with `lubridate::year()`.
+
+## Export
+
+Now the file can be saved on disk for upload to the Accountability server.
+
+```{r clean_dir}
+clean_dir <- dir_create(here("us", "covid", "eidl_covid", "data", "clean"))
+clean_path <- path(clean_dir, "us_eidl_covid.csv")
+if (nrow(eidl) != nrow_pre) {
+  stop("rows have been removed or added")
+} else {
+  write_csv(eidl, clean_path, na = "")
+}
+file_size(clean_path)
+file_encoding(clean_path) %>% 
+  mutate(across(path, path.abbrev))
+```
+
+## Upload
+
+We can use the `aws.s3::put_object()` to upload the text file to the IRW server.
+
+```{r aws_upload, eval=FALSE}
+aws_path <- path("csv", basename(clean_path))
+if (!object_exists(aws_path, "publicaccountability")) {
+  put_object(
+    file = clean_path,
+    object = aws_path, 
+    bucket = "publicaccountability",
+    acl = "public-read",
+    show_progress = TRUE,
+    multipart = TRUE
+  )
+}
+aws_head <- head_object(aws_path, "publicaccountability")
+(aws_size <- as_fs_bytes(attr(aws_head, "content-length")))
+unname(aws_size == clean_size)
+```
