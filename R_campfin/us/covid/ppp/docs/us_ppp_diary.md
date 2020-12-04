@@ -1,7 +1,7 @@
 Paycheck Protection Program Loans
 ================
 Kiernan Nicholls
-2020-09-22 15:00:41
+2020-12-02 11:09:25
 
   - [Project](#project)
   - [Objectives](#objectives)
@@ -96,22 +96,14 @@ here::here()
 
 ## Data
 
-Paycheck Protection Loan Data is released by the Small Business
-Administration on their public Box cloud storage server. The data
-released at the beginning of June does *not* contain exact loan amounts,
-only five ranges. For any loans less than the smallest range of $150,000
-loans are aggregated and provided as separate files.
-
-> #### Key Aspects of PPP Loan Data
-> 
-> In releasing PPP loan data to the public, SBA is maintaining a balance
-> between providing transparency to American taxpayers and protecting
-> small businesses’ confidential business information, such as payroll,
-> and personally identifiable information. Small businesses are the
-> driving force of American economic stability and are essential to
-> America economic rebound from the pandemic. SBA is committed to
-> ensuring that any release of PPP loan data does not harm small
-> businesses or their employees…
+On December 1, 2020 the Small Business Administration was ordered by the
+court to release more detailed data on loans made through the Paycheck
+Protection Program (PPP), a major facet of the 2020 CARES Act to provide
+stimulus funding during the ongoing COVID-19 pandemic. This detailed
+release came after the SBA initially refused to publish any database,
+then released only partial data on the largest loan recipients. The full
+database now contains all recipient names, addresses, and exact loan
+amounts.
 
 > #### PPP Is A Delegated Loan Making Process
 > 
@@ -133,68 +125,61 @@ loans are aggregated and provided as separate files.
 
 We can download PPP loan data from the SBA Box server as a ZIP archive.
 
+> Owner: Small Business Administration Enterprise Owner: U.S. Small
+> Business Administration Created: Dec 1, 2020, 3:15 PM Modified: Dec 1,
+> 2020, 3:31 PM Size: 210.3 MB
+
 ``` r
 raw_dir <- dir_create(here("us", "covid", "ppp", "data", "raw"))
-raw_zip <- path(raw_dir, "All Data 0808.zip")
+raw_zip <- path(raw_dir, "120120 Paycheck Protection Program Data.zip")
 ```
 
 We can extract all files from the archive to a `data/raw/` directory.
 
 ``` r
-raw_path <- unzip(
+raw_paths <- unzip(
   zipfile = raw_zip, 
   exdir = raw_dir,
   junkpaths = TRUE
 )
 ```
 
-Loan data is divided into one `foia_150k_plus.csv` file and 57
-`foia_up_to_150k_*.csv` files for each state and territory.
+``` r
+raw_info <- raw_paths %>% 
+  map_df(unzip, list = TRUE) %>% 
+  as_tibble() %>% 
+  clean_names() %>% 
+  filter(length > 212)
+```
 
 ``` r
-raw_dir %>% 
-  dir_info(regexp = "csv$") %>% 
-  select(path, size, modification_time) %>% 
-  mutate(across(path, basename)) %>% 
-  as_tibble()
-#> # A tibble: 58 x 3
-#>    path                                     size modification_time  
-#>    <chr>                             <fs::bytes> <dttm>             
-#>  1 PPP Data 150k plus 080820.csv          123.9M 2020-09-22 15:00:45
-#>  2 PPP Data up to 150k 080820 AK.csv       1.29M 2020-09-22 15:00:44
-#>  3 PPP Data up to 150k 080820 AL.csv       7.66M 2020-09-22 15:00:44
-#>  4 PPP Data up to 150k 080820 AR.csv       4.83M 2020-09-22 15:00:44
-#>  5 PPP Data up to 150k 080820 AS.csv      34.73K 2020-09-22 15:00:46
-#>  6 PPP Data up to 150k 080820 AZ.csv       9.81M 2020-09-22 15:00:44
-#>  7 PPP Data up to 150k 080820 CA.csv      68.62M 2020-09-22 15:00:43
-#>  8 PPP Data up to 150k 080820 CO.csv      12.14M 2020-09-22 15:00:44
-#>  9 PPP Data up to 150k 080820 CT.csv       7.53M 2020-09-22 15:00:43
-#> 10 PPP Data up to 150k 080820 DC.csv       1.41M 2020-09-22 15:00:44
-#> # … with 48 more rows
+for (i in seq_along(raw_paths)) {
+  raw_paths[i] <- unzip(
+    zipfile = raw_paths[i], 
+    files = raw_info$name[i],
+    exdir = raw_dir
+  )
+}
 ```
 
 ## Read
 
 We can read all these files into a single data frame using
-`purrr::map_df()` and `readr::read_csv()`. There is a slight difference
-in columns across the state files and single file; for large loans there
-is only a `loan_range` value but for smaller loans broken down by state,
-there is a `loan_amount` instead. When we merge these two files
-together, `NA` values will be used for any record from a file without a
-given variable.
+`purrr::map_df()` and `readr::read_delim()`.
 
 ``` r
 ppp <- map_df(
-  .x = raw_path, 
-  .f = read_csv,
-  .id = "file",
-  na = c("", "N/A", "Unanswered"),
+  .x = raw_paths, 
+  .f = read_delim,
+  .id = "SourceFile",
+  delim = ",",
+  escape_double = TRUE,
+  na = c("", "N/A"),
   col_types = cols(
     .default = col_character(),
-    # LoanRange = col_factor(),
     LoanAmount = col_double(),
     DateApproved = col_date_usa(),
-    JobsRetained = col_integer()
+    JobsReported = col_integer()
   )
 )
 ```
@@ -202,49 +187,52 @@ ppp <- map_df(
 ``` r
 ppp <- ppp %>% 
   clean_names("snake") %>% 
-  relocate(loan_amount, .before = loan_range) %>% 
-  mutate(across(non_profit, ~!(is.na(.)))) %>% 
-  mutate(across(file, basename)) %>% 
-  mutate(across(loan_range, as.factor)) %>% 
-  relocate(file, .after = last_col())
+  relocate(source_file, .after = last_col()) %>%
+  mutate(
+    source_file = basename(raw_paths)[as.integer(source_file)],
+    non_profit = !is.na(non_profit)
+  )
 ```
 
 ## Explore
 
+There are 5,156,850 rows of 17 columns. Each record is a loan issued to
+a “small” business through a private lending bank and backed by the U.S.
+federal government.
+
 ``` r
 glimpse(ppp)
-#> Rows: 5,212,128
-#> Columns: 18
-#> $ loan_amount    <dbl> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
-#> $ loan_range     <fct> "d $350,000-1 million", "d $350,000-1 million", "d $350,000-1 million", "…
-#> $ business_name  <chr> "AERO BOX LLC", "BOYER CHILDREN'S CLINIC", "KIRTLEY CONSTRUCTION INC", "P…
-#> $ address        <chr> NA, "1850 BOYER AVE E", "1661 MARTIN RANCH RD", "7684 Southrail Road", "2…
-#> $ city           <chr> NA, "SEATTLE", "SAN BERNARDINO", "North Charleston", "Sumter", NA, NA, "S…
-#> $ state          <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "AK", "AK…
-#> $ zip            <chr> NA, "98112", "92407", "29420", "29150", NA, NA, "32259", NA, NA, NA, NA, …
-#> $ naics_code     <chr> "484210", NA, "236115", "561730", "325510", "424210", "721110", "813110",…
-#> $ business_type  <chr> NA, "Non-Profit Organization", "Corporation", "Sole Proprietorship", "Cor…
-#> $ race_ethnicity <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
-#> $ gender         <chr> NA, NA, NA, "Male Owned", NA, NA, NA, NA, NA, NA, "Female Owned", NA, NA,…
-#> $ veteran        <chr> NA, NA, NA, "Non-Veteran", NA, NA, NA, NA, NA, NA, "Non-Veteran", NA, NA,…
-#> $ non_profit     <lgl> FALSE, TRUE, FALSE, FALSE, FALSE, FALSE, FALSE, TRUE, FALSE, FALSE, FALSE…
-#> $ jobs_reported  <chr> NA, "75", "21", "73", "62", NA, NA, "89", NA, NA, "18", "17", "16", "14",…
-#> $ date_approved  <date> 2020-05-03, 2020-05-03, 2020-05-03, 2020-05-03, 2020-05-03, 2020-05-03, …
-#> $ lender         <chr> "The Huntington National Bank", "Bank of America, National Association", …
-#> $ cd             <chr> NA, "WA-07", "CA-31", "SC-01", "SC-05", NA, NA, "FL-04", NA, NA, NA, NA, …
-#> $ file           <chr> "PPP Data 150k plus 080820.csv", "PPP Data 150k plus 080820.csv", "PPP Da…
+#> Rows: 5,156,850
+#> Columns: 17
+#> $ loan_amount    <dbl> 148440.00, 140081.78, 136520.96, 128440.00, 126798.00, 125916.00, 111200.…
+#> $ business_name  <chr> "NOT AVAILABLE", "NORTH CHARLESTON HOSPITALITY GROUP LLC", "Q AND J SERVI…
+#> $ address        <chr> NA, "192 College Park Rd", "301 Old Georgetown Road", NA, "24500 CAPITOL"…
+#> $ city           <chr> NA, "Ladson", "Manning", NA, "REDFORD", "Spartanburg", NA, NA, "PASADENA"…
+#> $ state          <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
+#> $ zip            <chr> NA, "29456", "29102", NA, "48239", "29303", NA, NA, "91101", NA, NA, NA, …
+#> $ naics_code     <chr> "339114", NA, "541990", "339114", NA, "999990", "332710", "238990", "6212…
+#> $ business_type  <chr> NA, "Limited  Liability Company(LLC)", "Limited  Liability Company(LLC)",…
+#> $ race_ethnicity <chr> "Unanswered", "Unanswered", "Unanswered", "Unanswered", "Unanswered", "Un…
+#> $ gender         <chr> "Unanswered", "Unanswered", "Unanswered", "Unanswered", "Male Owned", "Un…
+#> $ veteran        <chr> "Unanswered", "Unanswered", "Unanswered", "Unanswered", "Non-Veteran", "U…
+#> $ non_profit     <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FAL…
+#> $ jobs_reported  <int> 12, 3, 170, 9, 20, 13, 10, NA, 9, NA, 20, NA, NA, NA, NA, NA, 10, 16, 5, …
+#> $ date_approved  <date> 2020-05-01, 2020-05-01, 2020-05-01, 2020-05-01, 2020-05-01, 2020-05-01, …
+#> $ lender         <chr> "Bank of America, National Association", "Synovus Bank", "Synovus Bank", …
+#> $ cd             <chr> NA, "SC-01", "SC-06", NA, "MI-13", "SC-04", NA, NA, "CA-27", NA, NA, NA, …
+#> $ source_file    <chr> "01 PPP sub 150k through 112420.csv", "01 PPP sub 150k through 112420.csv…
 tail(ppp)
-#> # A tibble: 6 x 18
-#>   loan_amount loan_range business_name address city  state zip   naics_code business_type
-#>         <dbl> <fct>      <chr>         <chr>   <chr> <chr> <chr> <chr>      <chr>        
-#> 1        2478 <NA>       <NA>          <NA>    <NA>  <NA>  <NA>  999990     <NA>         
-#> 2        2445 <NA>       <NA>          <NA>    <NA>  <NA>  <NA>  561990     <NA>         
-#> 3        2302 <NA>       <NA>          <NA>    <NA>  <NA>  <NA>  339114     <NA>         
-#> 4        2125 <NA>       <NA>          <NA>    <NA>  <NA>  <NA>  541990     <NA>         
-#> 5        1987 <NA>       <NA>          <NA>    <NA>  <NA>  <NA>  339114     <NA>         
-#> 6        1332 <NA>       <NA>          <NA>    <NA>  <NA>  <NA>  339999     Limited  Lia…
-#> # … with 9 more variables: race_ethnicity <chr>, gender <chr>, veteran <chr>, non_profit <lgl>,
-#> #   jobs_reported <chr>, date_approved <date>, lender <chr>, cd <chr>, file <chr>
+#> # A tibble: 6 x 17
+#>   loan_amount business_name address city  state zip   naics_code business_type race_ethnicity
+#>         <dbl> <chr>         <chr>   <chr> <chr> <chr> <chr>      <chr>         <chr>         
+#> 1      150400 LOU TAUBERT … 125 E.… CASP… WY    82601 448190     Corporation   Unanswered    
+#> 2      150375 ROADWORX, IN… 110 ME… EVAN… WY    82930 237310     Subchapter S… Unanswered    
+#> 3      150000 ROY E PAULSO… 102 N.… CASP… WY    82601 621210     Corporation   White         
+#> 4      150000 SWEETWATER C… 1715 H… GREE… WY    82935 624410     Non-Profit C… Unanswered    
+#> 5      150000 EDEN LIFE CA… 30 N. … SHER… WY    82801 621610     Corporation   Unanswered    
+#> 6      150000 S & S JOHNSO… 7342 G… TETO… WY    83025 722511     Subchapter S… Unanswered    
+#> # … with 8 more variables: gender <chr>, veteran <chr>, non_profit <lgl>, jobs_reported <int>,
+#> #   date_approved <date>, lender <chr>, cd <chr>, source_file <chr>
 ```
 
 ### Missing
@@ -253,65 +241,170 @@ Variables differ in their degree of missing values.
 
 ``` r
 col_stats(ppp, count_na)
-#> # A tibble: 18 x 4
-#>    col            class        n         p
-#>    <chr>          <chr>    <int>     <dbl>
-#>  1 loan_amount    <dbl>   662515 0.127    
-#>  2 loan_range     <fct>  4549613 0.873    
-#>  3 business_name  <chr>  4549618 0.873    
-#>  4 address        <chr>  4549630 0.873    
-#>  5 city           <chr>      201 0.0000386
-#>  6 state          <chr>      165 0.0000317
-#>  7 zip            <chr>      196 0.0000376
-#>  8 naics_code     <chr>   133144 0.0255   
-#>  9 business_type  <chr>     4570 0.000877 
-#> 10 race_ethnicity <chr>  4675327 0.897    
-#> 11 gender         <chr>  4096373 0.786    
-#> 12 veteran        <chr>  4450315 0.854    
-#> 13 non_profit     <lgl>        0 0        
-#> 14 jobs_reported  <chr>   337878 0.0648   
-#> 15 date_approved  <date>       0 0        
-#> 16 lender         <chr>        0 0        
-#> 17 cd             <chr>     1017 0.000195 
-#> 18 file           <chr>        0 0
+#> # A tibble: 17 x 4
+#>    col            class       n         p
+#>    <chr>          <chr>   <int>     <dbl>
+#>  1 loan_amount    <dbl>       0 0        
+#>  2 business_name  <chr>      86 0.0000167
+#>  3 address        <chr>    3116 0.000604 
+#>  4 city           <chr>     201 0.0000390
+#>  5 state          <chr>     165 0.0000320
+#>  6 zip            <chr>     196 0.0000380
+#>  7 naics_code     <chr>  132940 0.0258   
+#>  8 business_type  <chr>    4451 0.000863 
+#>  9 race_ethnicity <chr>       0 0        
+#> 10 gender         <chr>       0 0        
+#> 11 veteran        <chr>       0 0        
+#> 12 non_profit     <lgl>       0 0        
+#> 13 jobs_reported  <int>  336466 0.0652   
+#> 14 date_approved  <date>      0 0        
+#> 15 lender         <chr>       0 0        
+#> 16 cd             <chr>     537 0.000104 
+#> 17 source_file    <chr>       0 0
 ```
 
-No files are missing any values they aren’t supposed to be missing. For
-loans up to $150,000 (the ones aggregated by ZIP code in the individual
-state files), there is no `business_name` variable.
+We can flag any record missing a key variable.
+
+``` r
+key_vars <- c("business_name", "lender", "date_approved", "loan_amount")
+ppp <- flag_na(ppp, all_of(key_vars))
+```
+
+There are 86 records missing mostly the business name.
+
+``` r
+ppp %>% 
+  filter(na_flag) %>% 
+  select(all_of(key_vars))
+#> # A tibble: 86 x 4
+#>    business_name lender                          date_approved loan_amount
+#>    <chr>         <chr>                           <date>              <dbl>
+#>  1 <NA>          Kabbage, Inc.                   2020-06-03          6003 
+#>  2 <NA>          Ameris Bank                     2020-07-23          5000 
+#>  3 <NA>          Fresno First Bank               2020-04-28         70430 
+#>  4 <NA>          NCMIC Finance Corporation       2020-08-04         20832 
+#>  5 <NA>          U.S. Bank, National Association 2020-05-01         20832 
+#>  6 <NA>          First Bank                      2020-07-23         16956.
+#>  7 <NA>          Cross River Bank                2020-05-01         14720 
+#>  8 <NA>          WebBank                         2020-05-01          8797 
+#>  9 <NA>          Cross River Bank                2020-06-28          5587 
+#> 10 <NA>          MBE Capital Partners            2020-08-03          5100 
+#> # … with 76 more rows
+```
 
 ### Duplicates
 
 There are a small amount of duplicate records in the database, all of
 which can be flagged with a new logical variable.
 
+We can also flag any record completely duplicated across every column.
+
 ``` r
-d1 <- duplicated(ppp, fromLast = FALSE)
-d2 <- duplicated(ppp, fromLast = TRUE)
-ppp <- mutate(ppp, dupe_flag = d1 | d2)
-percent(mean(ppp$dupe_flag), 0.01)
-#> [1] "0.21%"
-rm(d1, d2); flush_memory()
+dupe_file <- here("us", "covid", "ppp", "dupes.tsv")
+```
+
+``` r
+ppp <- mutate(ppp, id = row_number(), .after = last_col())
+```
+
+``` r
+if (!file_exists(dupe_file)) {
+  file_create(dupe_file)
+  pps <- ppp %>% 
+    select(-id) %>% 
+    group_split(date_approved)
+  split_id <- split(ppp$id, ppp$date_approved)
+  pb <- txtProgressBar(max = length(pps), style = 3)
+  for (i in seq_along(pps)) {
+    d1 <- duplicated(pps[[i]], fromLast = FALSE)
+    if (any(d1)) {
+      d2 <- duplicated(pps[[i]], fromLast = TRUE)
+      dupes <- tibble(voter_id = split_id[[i]], dupe_flag = d1 | d2)
+      dupes <- filter(dupes, dupe_flag == TRUE)
+      vroom_write(dupes, dupe_file, append = TRUE)
+      rm(d2, dupes)
+    }
+    rm(d1)
+    flush_memory(1)
+    setTxtProgressBar(pb, i)
+  }
+  rm(pps)
+}
+```
+
+``` r
+file_size(dupe_file)
+#> 1.23K
+dupes <- read_tsv(
+  file = dupe_file,
+  col_names = c("id", "dupe_flag"),
+  col_types = cols(
+    id = col_integer(),
+    dupe_flag = col_logical()
+  )
+)
+```
+
+``` r
+nrow(ppp)
+#> [1] 5156850
+ppp <- left_join(ppp, dupes, by = "id")
+ppp <- mutate(ppp, dupe_flag = !is.na(dupe_flag))
+sum(ppp$dupe_flag)
+#> [1] 99
+ppp <- select(ppp, -id)
+```
+
+We can see that, despite unique IDs, there are duplicate voters. All of
+these apparent duplicates are missing many of the key values needed to
+identify a record.
+
+``` r
+ppp %>% 
+  filter(dupe_flag) %>% 
+  select(all_of(key_vars), state)
+#> # A tibble: 99 x 5
+#>    business_name             lender                                 date_approved loan_amount state
+#>    <chr>                     <chr>                                  <date>              <dbl> <chr>
+#>  1 ADVANCED PODIATRY         Wells Fargo Bank, National Association 2020-05-01          24343 AZ   
+#>  2 ADVANCED PODIATRY         Wells Fargo Bank, National Association 2020-05-01          24343 AZ   
+#>  3 YOLANDAFOGLE              Glacier Bank                           2020-05-02          21700 AZ   
+#>  4 YOLANDAFOGLE              Glacier Bank                           2020-05-02          21700 AZ   
+#>  5 CENTRAL ENDODONTICS INC   Wells Fargo Bank, National Association 2020-05-01          56208 CA   
+#>  6 CENTRAL ENDODONTICS INC   Wells Fargo Bank, National Association 2020-05-01          56208 CA   
+#>  7 LA PRECIOSA MARKET        Customers Bank                         2020-04-30          21224 CA   
+#>  8 LA PRECIOSA MARKET        Customers Bank                         2020-04-30          21224 CA   
+#>  9 LAW OFFICE OF L AARON LEE Wells Fargo Bank, National Association 2020-05-01          10953 CA   
+#> 10 LAW OFFICE OF L AARON LEE Wells Fargo Bank, National Association 2020-05-01          10953 CA   
+#> # … with 89 more rows
 ```
 
 ``` r
 ppp %>% 
   filter(dupe_flag) %>% 
-  select(loan_range, business_name, lender, date_approved)
-#> # A tibble: 10,773 x 4
-#>    loan_range        business_name                      lender                        date_approved
-#>    <fct>             <chr>                              <chr>                         <date>       
-#>  1 e $150,000-350,0… JOHNS INCREDIBLE PIZZA             Citizens Bank, National Asso… 2020-04-15   
-#>  2 e $150,000-350,0… JOHNS INCREDIBLE PIZZA             Citizens Bank, National Asso… 2020-04-15   
-#>  3 e $150,000-350,0… JOHNS INCREDIBLE PIZZA             Citizens Bank, National Asso… 2020-04-15   
-#>  4 e $150,000-350,0… THE LEARNING TREE CHILD CARE CENT… TCF National Bank             2020-04-14   
-#>  5 e $150,000-350,0… THE LEARNING TREE CHILD CARE CENT… TCF National Bank             2020-04-14   
-#>  6 e $150,000-350,0… HARCO AVIATION, LLC                Frost Bank                    2020-04-09   
-#>  7 e $150,000-350,0… HARCO AVIATION, LLC                Frost Bank                    2020-04-09   
-#>  8 <NA>              <NA>                               Northrim Bank                 2020-04-27   
-#>  9 <NA>              <NA>                               Northrim Bank                 2020-04-27   
-#> 10 <NA>              <NA>                               Northrim Bank                 2020-04-06   
-#> # … with 10,763 more rows
+  col_stats(count_na)
+#> # A tibble: 19 x 4
+#>    col            class      n      p
+#>    <chr>          <chr>  <int>  <dbl>
+#>  1 loan_amount    <dbl>      0 0     
+#>  2 business_name  <chr>      0 0     
+#>  3 address        <chr>      0 0     
+#>  4 city           <chr>      0 0     
+#>  5 state          <chr>      0 0     
+#>  6 zip            <chr>      0 0     
+#>  7 naics_code     <chr>      4 0.0404
+#>  8 business_type  <chr>      0 0     
+#>  9 race_ethnicity <chr>      0 0     
+#> 10 gender         <chr>      0 0     
+#> 11 veteran        <chr>      0 0     
+#> 12 non_profit     <lgl>      0 0     
+#> 13 jobs_reported  <int>      8 0.0808
+#> 14 date_approved  <date>     0 0     
+#> 15 lender         <chr>      0 0     
+#> 16 cd             <chr>      0 0     
+#> 17 source_file    <chr>      0 0     
+#> 18 na_flag        <lgl>      0 0     
+#> 19 dupe_flag      <lgl>      0 0
 ```
 
 ### Categorical
@@ -319,27 +412,27 @@ ppp %>%
 ``` r
 col_stats(ppp, n_distinct)
 #> # A tibble: 19 x 4
-#>    col            class       n           p
-#>    <chr>          <chr>   <int>       <dbl>
-#>  1 loan_amount    <dbl>  440525 0.0845     
-#>  2 loan_range     <fct>       6 0.00000115 
-#>  3 business_name  <chr>  658125 0.126      
-#>  4 address        <chr>  629734 0.121      
-#>  5 city           <chr>   65901 0.0126     
-#>  6 state          <chr>      59 0.0000113  
-#>  7 zip            <chr>   36675 0.00704    
-#>  8 naics_code     <chr>    1243 0.000238   
-#>  9 business_type  <chr>      18 0.00000345 
-#> 10 race_ethnicity <chr>       9 0.00000173 
-#> 11 gender         <chr>       3 0.000000576
-#> 12 veteran        <chr>       3 0.000000576
-#> 13 non_profit     <lgl>       2 0.000000384
-#> 14 jobs_reported  <chr>     503 0.0000965  
-#> 15 date_approved  <date>    114 0.0000219  
-#> 16 lender         <chr>    4891 0.000938   
-#> 17 cd             <chr>     444 0.0000852  
-#> 18 file           <chr>      58 0.0000111  
-#> 19 dupe_flag      <lgl>       2 0.000000384
+#>    col            class        n           p
+#>    <chr>          <chr>    <int>       <dbl>
+#>  1 loan_amount    <dbl>   704891 0.137      
+#>  2 business_name  <chr>  5004636 0.970      
+#>  3 address        <chr>  4623338 0.897      
+#>  4 city           <chr>    65145 0.0126     
+#>  5 state          <chr>       59 0.0000114  
+#>  6 zip            <chr>    36659 0.00711    
+#>  7 naics_code     <chr>     1243 0.000241   
+#>  8 business_type  <chr>       18 0.00000349 
+#>  9 race_ethnicity <chr>        9 0.00000175 
+#> 10 gender         <chr>        3 0.000000582
+#> 11 veteran        <chr>        3 0.000000582
+#> 12 non_profit     <lgl>        2 0.000000388
+#> 13 jobs_reported  <int>      503 0.0000975  
+#> 14 date_approved  <date>     115 0.0000223  
+#> 15 lender         <chr>     4863 0.000943   
+#> 16 cd             <chr>      444 0.0000861  
+#> 17 source_file    <chr>        6 0.00000116 
+#> 18 na_flag        <lgl>        2 0.000000388
+#> 19 dupe_flag      <lgl>        2 0.000000388
 ```
 
 ``` r
@@ -374,40 +467,40 @@ records.
 
 ``` r
 summary(ppp$loan_amount)
-#>    Min. 1st Qu.  Median    Mean 3rd Qu.    Max.    NA's 
-#>       0    9350   20661   32322   43500  149999  662515
-mean(ppp$loan_amount <= 0, na.rm = TRUE)
-#> [1] 0
+#>     Min.  1st Qu.   Median     Mean  3rd Qu.     Max. 
+#>        0    10617    22880   101409    69500 10000000
+sum(ppp$loan_amount <= 0)
+#> [1] 1
+sum(ppp$loan_amount == 1e7)
+#> [1] 609
 ```
 
 ![](../plots/hist_amount-1.png)<!-- -->
 
-![](../plots/amount_range-1.png)<!-- -->
+![](../plots/violin_amount_lender-1.png)<!-- -->
 
-We can combine these two variables into a single one for mapping on the
-site. A new logical `range_flag` value will be added to indicate any
-record above $150,000 and thus containing only a loan range.
-
-``` r
-ppp <- ppp %>%
-  # combine the two columns
-  unite(
-    col = amount_range,
-    starts_with("loan_"),
-    na.rm = TRUE,
-    remove = FALSE
-  ) %>% 
-  # convert range text to numbers
-  mutate(
-    amount_range = amount_range %>% 
-      str_remove("\\w\\s\\$") %>% 
-      str_remove("\\smillion") %>% 
-      str_replace_all("(?<=^|-)(\\d{1,2})(?!\\d)", "\\1,000,000") %>% 
-      str_remove_all(",")
-  ) %>% 
-  # flag any column using ranges
-  mutate(range_flag = !is.na(loan_range))
-```
+| Lending Bank                                | Loan Count | Mean Loan | Median Loan | Total Loaned | Proportion |
+| :------------------------------------------ | :--------- | :-------- | :---------- | :----------- | :--------- |
+| **All Other**                               | 3,038,714  | $116,510  | $28,258     | $3.5e+11     | 67.701%    |
+| JPMorgan Chase Bank, National Association   | 280,160    | $104,753  | $28,740     | $2.9e+10     | 5.612%     |
+| Bank of America, National Association       | 343,400    | $74,335   | $20,833     | $2.6e+10     | 4.881%     |
+| PNC Bank, National Association              | 73,909     | $175,818  | $42,000     | $1.3e+10     | 2.485%     |
+| Truist Bank d/b/a Branch Banking & Trust Co | 81,942     | $154,069  | $39,400     | $1.3e+10     | 2.414%     |
+| Wells Fargo Bank, National Association      | 194,291    | $54,190   | $18,979     | $1.1e+10     | 2.013%     |
+| TD Bank, National Association               | 85,705     | $99,696   | $25,750     | $8.5e+09     | 1.634%     |
+| KeyBank National Association                | 43,134     | $190,340  | $43,828     | $8.2e+09     | 1.570%     |
+| U.S. Bank, National Association             | 108,038    | $70,185   | $20,832     | $7.6e+09     | 1.450%     |
+| Zions Bank, A Division of                   | 47,824     | $146,447  | $32,500     | $7.0e+09     | 1.339%     |
+| Manufacturers and Traders Trust Company     | 34,649     | $195,095  | $47,100     | $6.8e+09     | 1.293%     |
+| The Huntington National Bank                | 38,484     | $170,698  | $41,100     | $6.6e+09     | 1.256%     |
+| Cross River Bank                            | 194,422    | $33,136   | $19,062     | $6.4e+09     | 1.232%     |
+| Fifth Third Bank                            | 39,922     | $135,623  | $24,832     | $5.4e+09     | 1.035%     |
+| Citizens Bank, National Association         | 50,950     | $95,493   | $23,100     | $4.9e+09     | 0.930%     |
+| Regions Bank                                | 47,190     | $100,287  | $22,316     | $4.7e+09     | 0.905%     |
+| Celtic Bank Corporation                     | 147,223    | $26,214   | $9,941      | $3.9e+09     | 0.738%     |
+| Kabbage, Inc.                               | 161,174    | $18,997   | $11,002     | $3.1e+09     | 0.586%     |
+| Customers Bank                              | 69,295     | $38,286   | $13,544     | $2.7e+09     | 0.507%     |
+| WebBank                                     | 76,424     | $28,601   | $14,000     | $2.2e+09     | 0.418%     |
 
 ### Dates
 
@@ -424,7 +517,7 @@ min(ppp$date_approved)
 sum(ppp$year_approved < 2020)
 #> [1] 0
 max(ppp$date_approved)
-#> [1] "2020-08-08"
+#> [1] "2020-08-09"
 sum(ppp$date_approved > today())
 #> [1] 0
 ```
@@ -461,18 +554,18 @@ ppp %>%
   distinct() %>% 
   sample_n(10)
 #> # A tibble: 10 x 2
-#>    address                      address_norm                
-#>    <chr>                        <chr>                       
-#>  1 1417 GAYLORD ST              1417 GAYLORD ST             
-#>  2 10980 STANCLIFF RD           10980 STANCLIFF RD          
-#>  3 167 S. 400 W.                167 S 400 W                 
-#>  4 330 7th avenue 10th floor    330 7 TH AVE 10 TH FL       
-#>  5 7165 HIGHWAY 17              7165 HWY 17                 
-#>  6 3535 FACTORIA BLVD STE 500   3535 FACTORIA BLVD STE 500  
-#>  7 6904 W 145th St              6904 W 145 TH ST            
-#>  8 8551 Harding                 8551 HARDING                
-#>  9 2973 Unit 1 RIVERSIDE DR     2973 UNIT 1 RIVERSIDE DR    
-#> 10 3300 EDINBOROUGH WAY STE 210 3300 EDINBOROUGH WAY STE 210
+#>    address                  address_norm            
+#>    <chr>                    <chr>                   
+#>  1 1312 LOUISVILLE AVE      1312 LOUISVILLE AVE     
+#>  2 2301 FM 2729             2301 FM 2729            
+#>  3 78 5th Ave               78 5 TH AVE             
+#>  4 766 E. CRESCENT PL       766 E CRES PL           
+#>  5 2521 Gilmer St           2521 GILMER ST          
+#>  6 1701 Forest Ridge Drive  1701 FRST RDG DR        
+#>  7 4010 SAN AMARO DR        4010 SAN AMARO DR       
+#>  8 571 POOLES CREEK RD      571 POOLES CRK RD       
+#>  9 6911 FM 620 N BLDG C-100 6911 FM 620 N BLDG C 100
+#> 10 1216 HIGHLAND ST         1216 HIGHLAND ST
 ```
 
 ### ZIP
@@ -484,7 +577,7 @@ progress_table(ppp$zip, compare = valid_zip)
 #> # A tibble: 1 x 6
 #>   stage prop_in n_distinct   prop_na n_out n_diff
 #>   <chr>   <dbl>      <dbl>     <dbl> <dbl>  <dbl>
-#> 1 zip     0.999      36675 0.0000376  3697    295
+#> 1 zip     0.999      36659 0.0000380  3671    295
 ```
 
 ### State
@@ -619,20 +712,20 @@ good_refine <- ppp %>%
   )
 ```
 
-    #> # A tibble: 838 x 5
+    #> # A tibble: 824 x 5
     #>    state_norm zip   city_swap              city_refine        n
     #>    <chr>      <chr> <chr>                  <chr>          <int>
-    #>  1 SC         29406 NORTH CHARLESTON       CHARLESTON       431
+    #>  1 SC         29406 NORTH CHARLESTON       CHARLESTON       416
     #>  2 NY         11733 SETAUKET               EAST SETAUKET     96
-    #>  3 CA         90292 MARINA DALE REY        MARINA DEL REY    94
+    #>  3 CA         90292 MARINA DALE REY        MARINA DEL REY    93
     #>  4 NY         11733 SETAUKET EAST SETAUKET EAST SETAUKET     32
     #>  5 CA         92625 CORONA DALE MAR        CORONA DEL MAR    29
-    #>  6 IL         60429 EAST HAZEL CREST       HAZEL CREST       18
-    #>  7 IN         46184 NEW WHITELAND          WHITELAND         18
+    #>  6 IN         46184 NEW WHITELAND          WHITELAND         18
+    #>  7 IL         60429 EAST HAZEL CREST       HAZEL CREST       15
     #>  8 HI         96813 HONOLULULULU           HONOLULU           6
     #>  9 IL         60067 PALENTINE              PALATINE           6
     #> 10 HI         96813 HONOLULUNOLULU         HONOLULU           5
-    #> # … with 828 more rows
+    #> # … with 814 more rows
 
 Then we can join the refined values back to the database.
 
@@ -646,10 +739,10 @@ ppp <- ppp %>%
 
 | stage        | prop\_in | n\_distinct | prop\_na | n\_out | n\_diff |
 | :----------- | -------: | ----------: | -------: | -----: | ------: |
-| city\_raw)   |    0.982 |       38208 |        0 |  93507 |   20010 |
-| city\_norm   |    0.988 |       34838 |        0 |  61102 |   16628 |
-| city\_swap   |    0.993 |       25461 |        0 |  35989 |    7215 |
-| city\_refine |    0.993 |       24797 |        0 |  34832 |    6552 |
+| city\_raw)   |    0.982 |       37808 |        0 |  91792 |   19613 |
+| city\_norm   |    0.988 |       34466 |        0 |  59819 |   16259 |
+| city\_swap   |    0.993 |       25311 |        0 |  35381 |    7067 |
+| city\_refine |    0.993 |       24655 |        0 |  34247 |    6412 |
 
 You can see how the percentage of valid values increased with each
 stage.
@@ -681,38 +774,36 @@ ppp <- ppp %>%
 ``` r
 glimpse(sample_n(ppp, 20))
 #> Rows: 20
-#> Columns: 25
-#> $ amount_range   <chr> "5112", "25465", "25600", "104100", "7782", "150000-350000", "20833", "39…
-#> $ loan_amount    <dbl> 5112.00, 25465.00, 25600.00, 104100.00, 7782.00, NA, 20833.00, 3900.00, 2…
-#> $ loan_range     <fct> NA, NA, NA, NA, NA, "e $150,000-350,000", NA, NA, NA, NA, "d $350,000-1 m…
-#> $ business_name  <chr> NA, NA, NA, NA, NA, "MONTE CELLOS CRANBERRY INC", NA, NA, NA, NA, "UPPER …
-#> $ address        <chr> NA, NA, NA, NA, NA, "20325 RT 19", NA, NA, NA, NA, "251 Boot Road", NA, N…
-#> $ city           <chr> "HO HO KUS", "Hartland", "LAKEFIELD", "Sarasota", "DORCHESTER", "CRANBERR…
-#> $ state          <chr> "NJ", "WI", "MN", "FL", "MA", "PA", "OH", "WI", "CA", "NE", "PA", "CA", "…
-#> $ zip            <chr> "07423", "53029", "56150", "34243", "02124", "16066", "44705", "53012", "…
-#> $ naics_code     <chr> "813110", "721199", "236118", "423450", "445120", "561499", "541613", "54…
-#> $ business_type  <chr> "Non-Profit Organization", "Limited  Liability Company(LLC)", "Limited  L…
-#> $ race_ethnicity <chr> NA, NA, NA, NA, "Asian", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
-#> $ gender         <chr> NA, NA, "Male Owned", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
-#> $ veteran        <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "…
-#> $ non_profit     <lgl> TRUE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALS…
-#> $ jobs_reported  <chr> "4", "12", "4", "9", "4", "85", "1", "2", "0", NA, "68", "5", "1", "62", …
-#> $ date_approved  <date> 2020-05-03, 2020-05-12, 2020-04-06, 2020-05-03, 2020-06-23, 2020-04-16, …
-#> $ lender         <chr> "Bank of America, National Association", "Cross River Bank", "First Natio…
-#> $ cd             <chr> "NJ-05", "WI-05", "MN-01", "FL-16", "MA-08", "PA-17", "OH-07", "WI-05", "…
-#> $ file           <chr> "PPP Data up to 150k 080820 NJ.csv", "PPP Data up to 150k 080820 WI.csv",…
+#> Columns: 23
+#> $ loan_amount    <dbl> 36900.0, 37499.0, 15625.0, 21363.0, 12305.0, 18000.0, 16595.0, 79300.0, 5…
+#> $ business_name  <chr> "DUNCANS AUTO & TRUCK REPAIR, INC.", "BAGELSMITH FOOD STORE & DELI INC.",…
+#> $ address        <chr> "2325 S BELT", "172 Perryville Road", "410 S GRAND AVE", "9803 Harwin Dr.…
+#> $ city           <chr> "BELLEVILLE", "hampton", "COVINA", "Houston", "GRAY", "OKLAHOMA CITY", "T…
+#> $ state          <chr> "IL", "NJ", "CA", "TX", "GA", "OK", "CA", "FL", "GA", "CA", "AZ", "IN", "…
+#> $ zip            <chr> "62226", "08827", "91724", "77036", "31032", "73120", "92591", "33907", "…
+#> $ naics_code     <chr> "811111", "722310", "522298", "713990", "561730", "531210", "423220", "52…
+#> $ business_type  <chr> "Corporation", "Corporation", "Corporation", "Subchapter S Corporation", …
+#> $ race_ethnicity <chr> "Unanswered", "Unanswered", "Unanswered", "Unanswered", "Unanswered", "Un…
+#> $ gender         <chr> "Unanswered", "Unanswered", "Unanswered", "Unanswered", "Unanswered", "Un…
+#> $ veteran        <chr> "Unanswered", "Unanswered", "Unanswered", "Veteran", "Unanswered", "Unans…
+#> $ non_profit     <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FAL…
+#> $ jobs_reported  <int> 3, 11, NA, 1, 3, 1, 0, 0, 6, 2, NA, 3, 22, 1, 1, 0, 1, 1, 12, 5
+#> $ date_approved  <date> 2020-04-29, 2020-04-27, 2020-05-01, 2020-04-10, 2020-06-19, 2020-04-28, …
+#> $ lender         <chr> "Bank of Belleville", "Investors Bank", "Wells Fargo Bank, National Assoc…
+#> $ cd             <chr> "IL-12", "NJ-07", "CA-32", "TX-09", "GA-08", "OK-05", "CA-42", "FL-19", "…
+#> $ source_file    <chr> "02 PPP sub 150k through 112420.csv", "04 PPP sub 150k through 112420.csv…
+#> $ na_flag        <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FAL…
 #> $ dupe_flag      <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FAL…
-#> $ range_flag     <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, TRUE, FALSE, FALSE, FALSE, FALSE, TRUE…
 #> $ year_approved  <dbl> 2020, 2020, 2020, 2020, 2020, 2020, 2020, 2020, 2020, 2020, 2020, 2020, 2…
-#> $ address_clean  <chr> NA, NA, NA, NA, NA, "20325 RT 19", NA, NA, NA, NA, "251 BOOT RD", NA, NA,…
-#> $ state_clean    <chr> "NJ", "WI", "MN", "FL", "MA", "PA", "OH", "WI", "CA", "NE", "PA", "CA", "…
-#> $ city_clean     <chr> "HO HO KUS", "HARTLAND", "LAKEFIELD", "SARASOTA", "DORCHESTER", "CRANBERR…
+#> $ address_clean  <chr> "2325 S BELT", "172 PERRYVILLE RD", "410 S GRAND AVE", "9803 HARWIN DR ST…
+#> $ state_clean    <chr> "IL", "NJ", "CA", "TX", "GA", "OK", "CA", "FL", "GA", "CA", "AZ", "IN", "…
+#> $ city_clean     <chr> "BELLEVILLE", "HAMPTON", "COVINA", "HOUSTON", "GRAY", "OKLAHOMA CITY", "T…
 ```
 
-1.  There are 5,212,128 records in the database.
-2.  There are 10,773 duplicate records in the database.
+1.  There are 5,156,850 records in the database.
+2.  There are 99 duplicate records in the database.
 3.  The range and distribution of `amount` and `date` seem reasonable.
-4.  There are 0 records missing key variables.
+4.  There are 86 records missing key variables.
 5.  Consistency in geographic data has been improved with
     `campfin::normal_*()`.
 6.  The 4-digit `year` variable has been created with
@@ -726,31 +817,32 @@ types for loans over and under $150,000.
 
 ``` r
 clean_dir <- dir_create(here("us", "covid", "ppp", "data", "clean"))
-clean_path <- path(clean_dir, "sba_ppp_loans.csv")
+clean_path <- path(clean_dir, "sba_ppp_full.csv")
 write_csv(ppp, clean_path, na = "")
-file_size(clean_path)
-#> 979M
-file_encoding(clean_path)
-#> # A tibble: 1 x 3
-#>   path                                                                      mime            charset
-#>   <fs::path>                                                                <chr>           <chr>  
-#> 1 /home/kiernan/Code/tap/R_campfin/us/covid/ppp/data/clean/sba_ppp_loans.c… application/csv us-asc…
+(clean_size <- file_size(clean_path))
+#> 1.27G
 ```
 
 ## Upload
 
+We can use the `aws.s3::put_object()` to upload the text file to the IRW
+server.
+
 ``` r
-s3_path <- path("csv", basename(clean_path))
-if (!object_exists(s3_path, "publicaccountability")) {
+aws_path <- path("csv", basename(clean_path))
+if (!object_exists(aws_path, "publicaccountability")) {
   put_object(
     file = clean_path,
-    object = s3_path, 
+    object = aws_path, 
     bucket = "publicaccountability",
     acl = "public-read",
-    multipart = TRUE,
-    show_progress = TRUE
+    show_progress = TRUE,
+    multipart = TRUE
   )
 }
+aws_head <- head_object(aws_path, "publicaccountability")
+(aws_size <- as_fs_bytes(attr(aws_head, "content-length")))
+unname(aws_size == clean_size)
 ```
 
 ## Dictionary
@@ -759,9 +851,7 @@ The following table describes the variables in our final exported file:
 
 | Column           | Type        | Definition                                    |
 | :--------------- | :---------- | :-------------------------------------------- |
-| `amount_range`   | `character` | Combined loan amount with range               |
-| `loan_amount`    | `double`    | Aggregated loan amount (under $150,000)       |
-| `loan_range`     | `integer`   | Loan range (over $150,000)                    |
+| `loan_amount`    | `double`    | *Exact* loan amount                           |
 | `business_name`  | `character` | Recipient business name                       |
 | `address`        | `character` | Recipient business address                    |
 | `city`           | `character` | Recipient business city name                  |
@@ -773,13 +863,13 @@ The following table describes the variables in our final exported file:
 | `gender`         | `character` | Recipient owner gender                        |
 | `veteran`        | `character` | Recipient owner veteran status                |
 | `non_profit`     | `logical`   | Recipient business is non-profit              |
-| `jobs_reported`  | `character` | Individual jobs retained by loan              |
+| `jobs_reported`  | `integer`   | Individual jobs retained by loan              |
 | `date_approved`  | `double`    | Date loan approved                            |
 | `lender`         | `character` | Lending institution name                      |
 | `cd`             | `character` | Loan recipient location code                  |
-| `file`           | `character` | Source file name                              |
+| `source_file`    | `character` | Source file name                              |
+| `na_flag`        | `logical`   | Flag indicating missing record                |
 | `dupe_flag`      | `logical`   | Flag indicating duplicate record              |
-| `range_flag`     | `logical`   | Flag indicating range amount                  |
 | `year_approved`  | `double`    | Calendar year approved                        |
 | `address_clean`  | `character` | Normalized recipient address                  |
 | `state_clean`    | `character` | Normalized recipient state                    |
