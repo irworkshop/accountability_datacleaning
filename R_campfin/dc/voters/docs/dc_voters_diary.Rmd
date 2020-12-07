@@ -1,0 +1,442 @@
+---
+title: "District Of Columbia Voters"
+author: "Kiernan Nicholls"
+date: "`r Sys.time()`"
+output:
+  github_document: 
+    df_print: tibble
+    toc: true
+    toc_dept: 3
+editor_options: 
+  chunk_output_type: console
+---
+
+<!-- Place comments regarding knitting here -->
+
+```{r setup, include=FALSE, purl=FALSE}
+library(knitr)
+opts_chunk$set(
+  eval = TRUE,
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  error = FALSE,
+  collapse = TRUE,
+  comment = "#>",
+  fig.path = "../plots/",
+  fig.width = 10,
+  dpi = 300
+)
+if (!interactive()) {
+  options(width = 99)
+  set.seed(5)
+}
+```
+
+```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
+doc_dir <- fs::dir_create(here::here("dc", "voters", "docs"))
+```
+
+## Project
+
+The Accountability Project is an effort to cut across data silos and give
+journalists, policy professionals, activists, and the public at large a simple
+way to search across huge volumes of public data about people and organizations.
+
+Our goal is to standardizing public data on a few key fields by thinking of each
+dataset row as a transaction. For each transaction there should be (at least) 3
+variables:
+
+1. All **parties** to a transaction.
+2. The **date** of the transaction.
+3. The **amount** of money involved.
+
+## Objectives
+
+This document describes the process used to complete the following objectives:
+
+1. How many records are in the database?
+1. Check for entirely duplicated records.
+1. Check ranges of continuous variables.
+1. Is there anything blank or missing?
+1. Check for consistency issues.
+1. Create a five-digit ZIP Code called `zip`.
+1. Create a `year` field from the transaction date.
+1. Make sure there is data on both parties to a transaction.
+
+## Packages
+
+The following packages are needed to collect, manipulate, visualize, analyze,
+and communicate these results. The `pacman` package will facilitate their
+installation and attachment.
+
+The IRW's `campfin` package will also have to be installed from GitHub. This
+package contains functions custom made to help facilitate the processing of
+campaign finance data.
+
+```{r load_packages, message=FALSE, warning=FALSE, error=FALSE}
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load(
+  tidyverse, # data manipulation
+  lubridate, # datetime strings
+  gluedown, # printing markdown
+  janitor, # clean data frames
+  campfin, # custom irw tools
+  aws.s3, # aws cloud storage
+  readxl, # read excel files
+  refinr, # cluster & merge
+  scales, # format strings
+  digest, # hash strings
+  knitr, # knit documents
+  vroom, # fast reading
+  rvest, # scrape html
+  glue, # code strings
+  here, # project paths
+  httr, # http requests
+  fs # local storage 
+)
+```
+
+This document should be run as part of the `R_campfin` project, which lives as a
+sub-directory of the more general, language-agnostic
+[`irworkshop/accountability_datacleaning`][tap] GitHub repository.
+
+The `R_campfin` project uses the [RStudio projects][rproj] feature and should be
+run as such. The project also uses the dynamic `here::here()` tool for file
+paths relative to _your_ machine.
+
+```{r where_here}
+# where does this document knit?
+here::dr_here(show_reason = FALSE)
+```
+
+[tap]: https://github.com/irworkshop/accountability_datacleaning
+[rproj]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects
+
+## Data
+
+The DC voter registration database can be requested from the Board of Elections
+by filling out the [Data Request Form][drf] PDF and submitting it alongside a
+small fee, depending on the requested format.
+
+Data was requested by the Investigative Reporting Workshop and received on
+September 28, 2020. 
+
+[drf]: https://www.dcboe.org/dcboe/media/PDFFiles/Data_Request_Form.pdf
+
+Two files were provided to the IRW:
+
+1. `D.C. Registered Voters (All).xlsx`
+2. `Read Me.txt`
+
+The README file contains a number of tables to describe the data.
+
+```{r readme}
+raw_dir <- here("dc", "voters", "data", "raw")
+readme <- read_lines(file = path(raw_dir, "Read Me.txt"))
+```
+
+#### Columns
+
+```{r raw_cols}
+raw_cols <- read_tsv(
+  file = readme[3:22],
+  col_names = str_split(readme[1], "\t", simplify = TRUE)
+)
+kable(raw_cols)
+```
+
+#### Status
+
+|Code | Meaning         |
+|:----|:----------------|
+| `A` | ACTIVE          |
+| `X` | ACTIVE (ID REQ) | 
+| `F` | FEDERAL ONLY    |
+
+#### History
+
+```{r hist_codes}
+hist_codes <- tribble(
+  ~code, ~action,
+  NA,  "NO VOTING HISTORY",
+  "V", "POLL",
+  "A", "ABSENTEE",
+  "N", "NOT ELIGIBLE TO VOTE",
+  "E", "ELIGIBLE BUT DID NOT VOTE",
+  "Y", "EARLY VOTER"
+)
+```
+
+```{r echo=FALSE}
+kable(hist_codes)
+```
+
+## Read
+
+```{r raw_path}
+raw_path <- dir_ls(raw_dir, regexp = "xlsx$")
+```
+
+This text file can then be easily read as a data frame.
+
+```{r raw_read}
+dcv <- read_excel(raw_path, col_types = "text")
+```
+
+We can ensure the data was properly read by checking the unique values of
+the city column, which should obviously all be Washington.
+
+```{r raw_check}
+n_distinct(dcv$RES_CITY)
+unique(dcv$RES_CITY)
+```
+
+```{r raw_parse}
+dcv <- mutate(dcv, across(REGISTERED, ~excel_numeric_to_date(as.numeric(.))))
+```
+
+The last 50 columns of the file are the voter's behavior in past elections.
+This data will be moved to a new object and converted to a more format that
+is more easily analyzed.
+
+```{r vote_write}
+hist_file <- path(raw_dir, "dc_vote_hist.tsv.xz")
+if (!file_exists(hist_file)) {
+  dcv %>% 
+    select(FIRSTNAME, LASTNAME, REGISTERED, matches("^\\d")) %>%
+    pivot_longer(
+      cols = !1:3,
+      names_to = "date_type",
+      values_to = "vote_code",
+      values_drop_na = TRUE
+    ) %>% 
+    separate(
+      col = date_type,
+      into = c("elect_date", "elect_type"),
+      sep = "-"
+    ) %>% 
+    mutate(across(elect_date, mdy)) %>% 
+    clean_names("snake") %>% 
+    write_tsv(xzfile(hist_file))
+  rm(vote_hist)
+  flush_memory(1)
+}
+```
+
+```{r raw_rename, echo=FALSE}
+dcv <- dcv %>% 
+  select(-matches("^\\d")) %>% 
+  clean_names("snake") %>% 
+  rename_with(~str_remove(., "res_")) %>% 
+  rename(
+    reg_date = registered,
+    last = lastname,
+    first = firstname
+  )
+```
+
+## Explore
+
+There are `r scales::comma(nrow(dcv))` rows of `r ncol(dcv)` columns.
+
+```{r glimpse}
+glimpse(dcv)
+tail(dcv)
+```
+
+### Missing
+
+Columns vary in their degree of missing values.
+
+```{r na_count}
+col_stats(dcv, count_na)
+```
+
+No columns are missing the registration date or last name needed to identify a
+voter.
+
+### Duplicates
+
+We can also flag any record completely duplicated across every column.
+
+```{r dupe_flag}
+d1 <- duplicated(dcv, fromLast = FALSE)
+d2 <- duplicated(dcv, fromLast = TRUE)
+dcv <- mutate(dcv, dupe_flag = d1 | d2)
+sum(dcv$dupe_flag)
+```
+
+```{r dupe_rm, echo=FALSE}
+rm(d1, d2)
+flush_memory(1)
+```
+
+```{r dupe_view}
+dcv %>% 
+  filter(dupe_flag) %>% 
+  select(reg_date, last, party, smd) %>% 
+  arrange(reg_date)
+```
+
+### Categorical
+
+```{r distinct_count}
+col_stats(dcv, n_distinct)
+```
+
+```{r distinct_plots, echo=FALSE, fig.height=2.5}
+explore_plot(dcv, party)
+dcv %>% 
+  count(ward) %>% 
+  ggplot(aes(ward, n)) +
+  geom_col(fill = dark2["purple"]) +
+  scale_y_continuous(labels = comma)
+```
+
+### Dates
+
+We can add the registration year from `reg_date` with `lubridate::year()`.
+
+```{r date_year}
+dcv <- mutate(dcv, reg_year = year(reg_date))
+```
+
+```{r date_range}
+min(dcv$reg_date)
+max(dcv$reg_date)
+sum(dcv$reg_date > today())
+```
+
+```{r bar_year, echo=FALSE}
+dcv %>% 
+  count(reg_year) %>% 
+  mutate(
+    elect_type = case_when(
+      reg_year %% 4 == 0 ~ "pres.",
+      reg_year %% 2 == 0 ~ "mid.",
+      TRUE ~ "none"
+    )
+  ) %>% 
+  ggplot(aes(x = reg_year, y = n)) +
+  geom_col(aes(fill = elect_type)) + 
+  scale_fill_manual(values = c("#1B9E77", "#666666", "#D95F02")) +
+  scale_y_continuous(labels = comma) +
+  scale_x_continuous(breaks = seq(1968, 2020, by = 2)) +
+  theme(legend.position = "bottom") +
+  coord_cartesian(xlim = c(1968, 2020)) +
+  labs(
+    title = "District Of Columbia Voters by Registration Year",
+    fill = "Election Year",
+    x = "Year Made",
+    y = "Count"
+  )
+```
+
+## Wrangle
+
+The `address` variable is already sufficiently normalized and abbreviated,
+we can simply map together all the individual columns.
+
+```{r addr_view}
+dcv %>% 
+  select(house, frac, street, apt) %>% 
+  sample_n(20)
+```
+
+The city, state, and ZIP code variables are easy because it's a single city.
+
+```{r geo_check}
+unique(dcv$city)
+unique(dcv$state)
+prop_in(dcv$zip, valid_zip)
+```
+
+## Conclude
+
+```{r clean_glimpse}
+glimpse(sample_n(dcv, 50))
+```
+
+1. There are `r comma(nrow(dcv))` records in the database.
+1. There are `r comma(sum(dcv$dupe_flag))` duplicate records in the database.
+1. The range and distribution of `amount` and `date` seem reasonable.
+1. There are `r comma(sum(dcv$na_flag))` records missing key variables.
+1. Consistency in geographic data has been improved with `campfin::normal_*()`.
+1. The 4-digit `year` variable has been created with `lubridate::year()`.
+
+## Export
+
+Now the file can be saved on disk for upload to the Accountability server.
+
+```{r clean_dir}
+clean_dir <- dir_create(here("dc", "voters", "data", "clean"))
+clean_path <- path(clean_dir, "dc_voters_clean.csv")
+write_csv(dcv, clean_path, na = "")
+(clean_size <- file_size(clean_path))
+file_encoding(clean_path) %>% 
+  mutate(across(path, path.abbrev))
+```
+
+## Upload
+
+We can use the `aws.s3::put_object()` to upload the text file to the IRW server.
+
+```{r aws_upload, eval=FALSE}
+aws_path <- path("csv", basename(clean_path))
+if (!object_exists(aws_path, "publicaccountability")) {
+  put_object(
+    file = clean_path,
+    object = aws_path, 
+    bucket = "publicaccountability",
+    acl = "public-read",
+    show_progress = TRUE,
+    multipart = TRUE
+  )
+}
+aws_head <- head_object(aws_path, "publicaccountability")
+(aws_size <- as_fs_bytes(attr(aws_head, "content-length")))
+unname(aws_size == clean_size)
+```
+
+## Dictionary
+
+The following table describes the variables in our final exported file:
+
+```{r dict_make, echo=FALSE}
+dict_raw <- tibble(
+  var = md_code(names(dcv)),
+  type = md_code(map_chr(dcv, typeof)),
+  def = c(
+    "Date registered",
+    "Voter last name",
+    "Voter first name",
+    "Voter middle name",
+    "Voter name suffix",
+    "Voter status (Active, Fed, ID Required)",
+    "Political party",
+    "House number",
+    "House fraction",
+    "Apartment number",
+    "Street name",
+    "City name (Washington)",
+    "State (DC)",
+    "ZIP code",
+    "ZIP+4 code",
+    "Precinct number",
+    "Ward number (1-8)",
+    "Advisory Neighborhood Commission code",
+    "Single Member District code",
+    "Flag indicating duplicate record",
+    "Calendar year registered"
+  )
+)
+```
+
+```{r dict_md, echo=FALSE}
+(dict_md <- kable(
+  x = dict_raw,
+  format = "markdown",
+  col.names = c("Column", "Type", "Definition")
+))
+```
