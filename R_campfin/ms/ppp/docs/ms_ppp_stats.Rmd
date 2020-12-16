@@ -1,0 +1,1079 @@
+---
+title: "Mississippi PPP Breakdown"
+author: "Kiernan Nicholls"
+date: "`r date()`"
+output:
+  github_document: 
+    df_print: tibble
+    toc: true
+    toc_dept: 4
+editor_options: 
+  chunk_output_type: console
+---
+
+<!-- Place comments regarding knitting here -->
+
+```{r setup, include=FALSE, purl=FALSE}
+library(knitr)
+opts_chunk$set(
+  eval = TRUE,
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  error = FALSE,
+  collapse = TRUE,
+  comment = "#>",
+  fig.path = "../plots/ms/",
+  fig.width = 12,
+  fig.height = 6,
+  dpi = 300
+)
+if (!interactive()) {
+  options(width = 120)
+  set.seed(5)
+}
+```
+
+```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
+doc_dir <- fs::dir_create(here::here("ms", "ppp", "docs"))
+```
+
+## Data
+
+This is an analysis of Paycheck Protection Program loans in Mississippi.
+
+On December 1, 2020 the Small Business Administration was ordered by the court
+to release more detailed data on loans made through the Paycheck Protection
+Program (PPP), a major facet of the 2020 CARES Act to provide stimulus funding
+during the ongoing COVID-19 pandemic. This detailed release came after the SBA
+initially refused to publish any database, then released only partial data on
+the largest loan recipients. The full database now contains all recipient names,
+addresses, and exact loan amounts.
+
+> #### PPP Is A Delegated Loan Making Process
+> PPP loans are not made by SBA. PPP loans are made by lending institutions and
+then guaranteed by SBA. Accordingly, borrowers apply to lenders and self-certify
+that they are eligible for PPP loans. The self- certification includes a good
+faith certification that the borrower has economic need requiring the loan and
+that the borrower has applied the affiliation rules and is a small business. The
+lender then reviews the borrower’s application, and if all the paperwork is in
+order, approves the loan and submits it to SBA...
+
+> #### Cancelled Loans Do Not Appear In The PPP Loan Data
+The public PPP data includes only active loans. Loans that were cancelled for
+any reason are not included in the public data release.
+
+## Prep
+
+```{r load_packages, message=FALSE, warning=FALSE, error=FALSE, echo=FALSE}
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load(
+  tidyverse, # data manipulation
+  lubridate, # datetime strings
+  patchwork, # combine plots
+  gluedown, # printing markdown
+  janitor, # clean data frames
+  campfin, # custom irw tools
+  aws.s3, # aws cloud storage
+  refinr, # cluster & merge
+  scales, # format strings
+  readxl, # read excel files
+  usmap, # plot us maps
+  knitr, # knit documents
+  vroom, # fast reading
+  rvest, # scrape html
+  glue, # code strings
+  here, # project paths
+  httr, # http requests
+  fs # local storage 
+)
+```
+
+```{r custom_funs, echo=FALSE}
+top_bottom <- function(.data, nnn = 10) {
+  nr = nrow(x = .data)
+  top = seq(from = 1, to = nnn)
+  bot = seq(from = nr - (nnn - 1), to = nr)
+  mutate(
+    .data = .data[c(top, bot), ], 
+    .before = 1,
+    sort = rep(c("head", "tail"), each = nnn)
+  )
+}
+head_tail <- function(data, n = 10) {
+  list(
+    head = head(data, n = n), 
+    tail = tail(data, n = n)
+  )
+}
+str_empty_na <- function(x) {
+  str_remove(str_replace_na(x), "NA")
+}
+solo_types <- c(
+  "Sole Proprietorship",
+  "Independent Contractors",
+  "Self-Employed Individuals"
+)
+```
+
+We can read the normalized PPP data from the IRW S3 server.
+
+```{r clean_find}
+ppp_dir <- here("us", "covid", "ppp")
+ppp_file <- path(ppp_dir, "data", "clean", "sba_ppp_full.csv")
+```
+
+```{r clean_down}
+if (!file_exists(ppp_file)) {
+  save_object(
+    object = "csv/sba_ppp_full.csv",
+    bucket = "publicaccountability",
+    file = ppp_file
+  )
+}
+```
+
+```{r clean_read}
+ppp <- vroom(
+  file = ppp_file,
+  col_types = cols(
+    naics_code = col_character(),
+    zip = col_character()
+  )
+)
+```
+
+```{r clean_rename, echo=FALSE}
+ppp <- ppp %>% 
+  select(-address, -city, -state) %>% 
+  relocate(address_clean, city_clean, state_clean, .before = zip) %>% 
+  rename_with(~str_remove(., "_clean")) %>% 
+  rename(
+    date = date_approved,
+    amount = loan_amount,
+    jobs = jobs_reported,
+    race = race_ethnicity,
+    business = business_name,
+    type = business_type,
+    naics = naics_code
+  ) %>% 
+  arrange(date)
+```
+
+We can add additional variables to identify which records are in Mississippi.
+
+```{r clean_state_id}
+ppp <- ppp %>% 
+  mutate(
+    is_ms = !is.na(state) & state == "MS",
+    ms_lab = ifelse(is_ms, "Miss.", "Other")
+  )
+```
+
+And then create a separate table of Mississippi loans only.
+
+```{r clean_filter}
+ms_ppp <- filter(ppp, is_ms)
+```
+
+## Explore
+
+There are `r comma(nrow(ms_ppp))` loans with `r ncol(ms_ppp)` columns.
+
+Mississippi accounts for `r percent(nrow(ms_ppp)/nrow(ppp), 0.1)` of the total 
+PPP loans, and `r percent(sum(ms_ppp$amount)/sum(ppp$amount), 0.1)` of 
+the total amount disbursed. This is close to the 
+`r percent(usa::facts$population[25]/sum(usa::facts$population), 0.1)` of the
+US population that lives in the state.
+
+## Jobs
+
+We can also explore the number of _jobs_ reportedly retained. These numbers were
+self reported and a significant amount of applications reported zero jobs or
+omitted a number altogether, although the number of missing jobs reportedly
+saved was smaller in Mississippi than the country at large.
+
+```{r jobs_missing}
+ppp %>% 
+  group_by(ms_lab) %>% 
+  summarise(
+    no_job = mean(is.na(jobs)),
+    zero_jobs = mean(jobs == 0, na.rm = TRUE)
+  )
+```
+
+These loans, with missing or invalid jobs reported, does not appear to be tied
+to the time the loan was approved and probably isn't related to confusion.
+
+```{r jobs_missing_time, echo=FALSE}
+ppp %>% 
+  group_by(ms_lab, week = epiweek(date)) %>% 
+  summarise(
+    `No Jobs` = mean(is.na(jobs)),
+    `Zero Jobs` = mean(jobs == 0, na.rm = TRUE)
+  ) %>% 
+  pivot_longer(
+    cols = 3:4
+  ) %>% 
+  ggplot(aes(x = week, y = value)) +
+  geom_col(aes(fill = name)) +
+  scale_y_continuous(labels = percent) +
+  scale_x_continuous(breaks = 14:32) +
+  labs(
+    title = "Loans Missing Reported Jobs Over Time",
+    fill = "Type",
+    x = "Week",
+    y = "Proportion"
+  ) +
+  scale_fill_brewer(palette = "Dark2") +
+  theme(legend.position = "bottom") +
+  facet_wrap(
+    facets = ~ms_lab,
+    ncol = 1,
+    scales = "free_y"
+  )
+```
+
+```{r id_vars, echo=FALSE}
+id_vars <- c(
+  "date", "lender", "amount", "jobs", "business",
+  "address", "city", "state", "zip"
+)
+```
+
+The loans missing job data seem to be tied to the lending bank. In Mississippi,
+**100%** of loans from Wells Fargo were missing job information while **0%** of
+those from PriorityOne Bank were.
+
+```{r jobs_bank_count, echo=FALSE}
+ms_bank_jobs <- ms_ppp %>% 
+  group_by(lender) %>% 
+  summarise(
+    n = n(),
+    no_job = mean(is.na(jobs) | jobs == 0)
+  ) %>% 
+  arrange(desc(n))
+
+data_dir <- dir_create(here("ms", "ppp", "data"))
+write_csv(
+  x = ms_bank_jobs,
+  file = path(data_dir, "ms_ppp_banks_nojobs.csv")
+)
+```
+
+Here are the top ten banks with the greatest and least proportion of their loans
+missing job information.
+
+```{r jobs_bank_view, echo=FALSE}
+ms_bank_jobs %>% 
+  filter(n > 100) %>% 
+  arrange(desc(no_job)) %>%
+  mutate(no_job = percent(no_job, 1)) %>% 
+  mutate(n = comma(n, 1)) %>% 
+  top_bottom(nnn = 10) %>% 
+  kable(
+    col.names = c(
+      "sort", "Lending Bank", "# Loans", "% w/out Jobs"
+    )
+  )
+```
+
+If we ignore this missing data, we can continue to breakdown the reported jobs.
+
+Most loans did go to small businesses saving less than **25** jobs. This was
+true in both Mississippi and the rest of the country.
+
+```{r jobs_small}
+ppp %>% 
+  group_by(is_ms) %>% 
+  summarise(small_jobs = mean(jobs < 25, na.rm = TRUE))
+```
+
+```{r hist_jobs, echo=FALSE, fig.height=10}
+ppp %>%
+  filter(jobs > 0, jobs <= 25) %>% 
+  ggplot(aes(jobs)) +
+  geom_histogram(aes(fill = ms_lab), binwidth = 1) +
+  scale_fill_brewer(palette = "Dark2", guide = FALSE) +
+  scale_y_continuous(labels = comma) +
+  scale_x_continuous(breaks = 1:25) +
+  labs(
+    title = "Mississippi PPP Jobs Reportedly Retained",
+    subtitle = "Excluding missing and zero jobs",
+    caption = "Source: SBA",
+    x = "Amount",
+    y = "Count"
+  ) +
+  facet_wrap(~ms_lab, scales = "free_y", ncol = 1)
+```
+
+`r sum(ms_ppp$jobs == 500, na.rm = TRUE)` businesses in Mississippi
+reportedly retained the max of `r max(ms_ppp$jobs, na.rm = TRUE)` jobs.
+
+```{r jobs_max}
+ms_ppp %>% 
+  filter(jobs == max(jobs, na.rm = TRUE)) %>% 
+  select(all_of(id_vars)) %>%
+  arrange(desc(amount)) %>% 
+  mutate(
+    .keep = "unused",
+    address = paste(
+      address, 
+      paste(city, state, zip), 
+      sep = ", "
+    )
+  ) %>% 
+  mutate(across(amount, ~dollar(., 1))) %>% 
+  select(-date) %>% 
+  kable(
+    col.names = c(
+      # "Date",
+      "Lending Bank",
+      "Amount",
+      "Jobs",
+      "Business Name",
+      "Business Address"
+    )
+  )
+```
+
+From this list, we can see an incredible range of loan amounts for the same 500
+jobs retained, from 
+`r dollar(min(ms_ppp$amount[ms_ppp$jobs == 500], na.rm = TRUE))`
+to 
+`r dollar(max(ms_ppp$amount[ms_ppp$jobs == 500], na.rm = TRUE))`.
+
+This leads us to investigate the dollars spent to save each job. There are
+some businesses in Mississippi which took hundreds of thousands to save one
+or two jobs and others which took only a couple thousand to save over a hundred
+jobs.
+
+```{r jobs_dollar_add}
+ppp <- mutate(
+  .data = ppp,
+  .after = jobs,
+  dollar_job = amount/jobs
+)
+```
+
+```{r jobs_dollar_minmax, echo=FALSE}
+ppp %>%
+  filter(is_ms) %>% 
+  filter(!is.na(jobs) & jobs > 0) %>% 
+  filter(amount > 10, jobs != 500) %>% 
+  arrange(desc(dollar_job)) %>% 
+  select(all_of(id_vars), dollar_job) %>% 
+  relocate(dollar_job, .after = jobs) %>% 
+  top_bottom(10) %>% 
+  mutate(
+    .keep = "unused",
+    address = paste(
+      address, 
+      paste(city, state, zip), 
+      sep = ", "
+    )
+  ) %>% 
+  mutate(across(amount, dollar, 1)) %>% 
+  mutate(across(dollar_job, dollar, 1)) %>% 
+  mutate(across(business, str_trunc, 35)) %>% 
+  select(-date, -sort) %>% 
+  kable(
+    col.names = c(
+      # "Date",
+      "Lending Bank",
+      "Amount",
+      "Jobs",
+      "Cost",
+      "Business Name",
+      "Business Address"
+    )
+  )
+```
+
+Some of these businesses with small loans and high jobs are sole proprietorship
+or self employed, which questions whether the job numbers are accurate.
+
+```{r jobs_dollar_types, echo=FALSE}
+ppp %>%
+  filter(is_ms) %>% 
+  filter(!is.na(jobs) & jobs > 0) %>% 
+  filter(amount > 10, jobs != 500) %>% 
+  arrange(desc(dollar_job)) %>% 
+  select(all_of(id_vars), dollar_job, type) %>% 
+  relocate(dollar_job, .after = jobs) %>% 
+  filter(dollar_job < 100) %>% 
+  select(-address, -city, -state, -zip, -date) %>% 
+  mutate(across(amount, dollar, 1)) %>% 
+  mutate(across(dollar_job, dollar, 1)) %>% 
+  mutate(across(business, str_trunc, 35)) %>% 
+  kable(
+    col.names = c(
+      # "Date",
+      "Lending Bank",
+      "Amount",
+      "Jobs",
+      "Cost",
+      "Business Name",
+      "Business Type"
+    )
+  )
+```
+
+There are "Self-Employed Individual" businesses which took thousands of dollars
+to retain dozens of jobs.
+
+```{r jobs_dollar_self, echo=FALSE}
+ppp %>%
+  filter(is_ms) %>% 
+  filter(type == "Self-Employed Individuals") %>% 
+  arrange(desc(jobs)) %>% 
+  select(type, all_of(id_vars), dollar_job) %>% 
+  relocate(dollar_job, .after = jobs) %>% 
+  select(-address, -city, -state, -zip, -date) %>% 
+  mutate(across(amount, dollar, 1)) %>% 
+  mutate(across(dollar_job, dollar, 1)) %>% 
+  mutate(across(business, str_trunc, 35)) %>% 
+  head(10) %>% 
+  kable(
+    col.names = c(
+      # "Date",
+      "Lending Bank",
+      "Amount",
+      "Jobs",
+      "Cost",
+      "Business Name",
+      "Business Type"
+    )
+  )
+```
+
+The distribution of loan amount per job retained is similar for both Mississippi
+and the United States, both with a spike of loans at $21,000 per job.
+
+```{r jobs_dollar_hist, echo=FALSE}
+ppp %>% 
+  filter(dollar_job < 25000, dollar_job > 0) %>% 
+  ggplot(aes(dollar_job)) +
+  geom_histogram(aes(fill = ms_lab), bins = 50) +
+  scale_fill_brewer(palette = "Dark2") +
+  scale_x_continuous(labels = dollar, n.breaks = 10) +
+  scale_y_continuous(labels = comma) +
+  labs(
+    title = "Dollars Loaned per Job Reportedly Retained",
+    x = "Dollars/Job",
+    y = "Loan Count"
+  ) +
+  facet_wrap(
+    facets = ~ms_lab,
+    ncol = 1,
+    scales = "free_y"
+  )
+```
+
+The maximum amount forgivable by single people is $20,833:
+
+> In addition to the specific caps described below, the amount of loan
+forgiveness requested for owner-employees and self-employedindividuals’ payroll
+compensation is capped at $20,833 per individual in total across allbusinesses
+in which he or she has an ownership stake.
+
+## Amounts
+
+```{r amount_summary}
+summary(ms_ppp$amount)
+```
+
+These are the records with the minimum and maximum amounts.
+
+```{r amount_minmax}
+ms_ppp %>% 
+  filter(
+    amount == min(amount) | amount == max(amount)
+  ) %>% 
+  select(all_of(id_vars))
+```
+
+Overall, Mississippi has a similar loan amount distribution to the United States
+at large.
+
+```{r hist_amount, echo=FALSE, fig.height=10}
+ppp %>%
+  filter(amount >= 100, amount <= 100000) %>% 
+  ggplot(aes(amount)) +
+  geom_histogram(aes(fill = ms_lab), bins = 50) +
+  scale_fill_brewer(palette = "Dark2", guide = FALSE) +
+  scale_y_continuous(labels = comma) +
+  scale_x_continuous(labels = dollar) +
+  labs(
+    title = "Mississippi PPP Loan Amounts",
+    caption = "Source: SBA",
+    x = "Amount",
+    y = "Count"
+  ) +
+  facet_wrap(~ms_lab, scales = "free_y", ncol = 1)
+```
+
+These are the 20 largest loans in the state:
+
+```{r amount_most, echo=FALSE}
+ms_ppp %>% 
+  arrange(desc(amount)) %>% 
+  select(all_of(id_vars)) %>% 
+  head(20) %>% 
+  mutate(
+    .keep = "unused",
+    address = paste(
+      address, 
+      paste(city, state, zip), 
+      sep = ", "
+    )
+  ) %>% 
+  mutate(across(amount, ~dollar(./1e6))) %>% 
+  select(-date) %>% 
+  kable(
+    col.names = c(
+      # "Date",
+      "Lending Bank",
+      "$ Mil.",
+      "Jobs",
+      "Business Name",
+      "Business Type"
+    )
+  )
+```
+
+## Businesses
+
+There are a number of businesses which apparently relieved multiple loans. 
+
+```{r biz_multi, echo=FALSE}
+multi_biz <- ms_ppp %>% 
+  group_by(business, address, city, state, zip) %>% 
+  mutate(n = n(), group = cur_group_id()) %>% 
+  filter(n > 1) %>% 
+  arrange(desc(n), business) %>% 
+  select(all_of(id_vars), type, n, group) %>% 
+  relocate(type, .after = business)
+```
+
+```{r biz_multi_write, echo=FALSE}
+write_csv(
+  x = multi_biz,
+  file = path(data_dir, "ms_ppp_multi_biz.csv")
+)
+```
+
+```{r biz_multi_view, echo=FALSE}
+multi_biz %>% 
+  mutate(
+    .keep = "unused",
+    address = paste(
+      address, 
+      paste(city, state, zip), 
+      sep = ", "
+    )
+  ) %>% 
+  mutate(across(amount, dollar)) %>% 
+  select(-date, -n, -group) %>% 
+  head(21) %>% 
+  kable(
+    col.names = c(
+      # "Date",
+      "Lending Bank",
+      "$ Mil.",
+      "Jobs",
+      "Business Name",
+      "Business Type",
+      "Business Address"
+    )
+  )
+```
+
+### Duplicate Addresses
+
+There are thousands of loans issued to duplicate addresses. This isn't unusual
+in and of itself but we can explore them nonetheless.
+
+```{r geo_count}
+ms_geo <- ms_ppp %>% 
+  select(all_of(id_vars), type) %>% 
+  group_by(address, city, state, zip) %>% 
+  mutate(num_loans = n(), group = cur_group_id(), .before = 1) %>% 
+  arrange(desc(num_loans)) %>% 
+  filter(num_loans > 1)
+```
+
+Loans under the Paycheck Protection Program had a maximum value of $10 million,
+but we can see that some of business at some of these addresses received more
+than that.
+
+```{r geo_max_10, echo=FALSE}
+ms_geo %>% 
+  group_by(group, num_loans) %>% 
+  summarise(mil_loan = sum(amount)/1e6) %>% 
+  arrange(desc(mil_loan))
+```
+
+This address appears to be home to multiple staffing businesses, which received
+a combined $17.6 million.
+
+```{r geo_multi_staff, echo=FALSE}
+ms_geo %>% 
+  filter(group == 29323) %>% 
+  mutate(
+    .keep = "unused",
+    address = paste(
+      address, 
+      paste(city, state, zip), 
+      sep = ", "
+    )
+  ) %>% 
+  mutate(across(amount, dollar)) %>% 
+  select(-num_loans, -group, -type) %>% 
+  kable(
+    col.names = c(
+      "Date",
+      "Lending Bank",
+      "Amount",
+      "Jobs",
+      "Business Name",
+      "Business Address"
+    )
+  )
+```
+
+It seems common in the data for separate franchises or subsidiaries to receive
+their own loans. Dozens of BUMPER'S DRIVE-IN restaurants all incorporated at the
+same address but operating in different locations received their own loans.
+
+```{r geo_multi_dbi, echo=FALSE}
+ms_geo %>% 
+    filter(group == 11711) %>% 
+    mutate(
+        .keep = "unused",
+        address = paste(
+            address, 
+            paste(city, state, zip), 
+            sep = ", "
+        )
+    ) %>% 
+    mutate(across(amount, dollar)) %>% 
+    select(-num_loans, -group, -type) %>% 
+    kable(
+        col.names = c(
+            "Date",
+            "Lending Bank",
+            "Amount",
+            "Jobs",
+            "Business Name",
+            "Business Address"
+        )
+    )
+```
+
+## Business Type
+
+There are `r n_distinct(ppp$type)` different kinds of business types.
+
+The PPP was ostensibly designed to help small businesses, but we can see that
+most loans nationwide were given to Corporations. In Mississippi, a greater
+percentage of loans were given to LLC's and sole proprietorship.
+
+```{r biz_type, echo=FALSE}
+ppp %>% 
+  filter(!is.na(type)) %>% 
+  count(ms_lab, type) %>% 
+  ggplot(aes(x = reorder(type, n), y = n)) +
+  geom_col(aes(fill = type)) +
+  scale_x_discrete(labels = function(x) str_wrap(x, width = 0)) +
+  scale_y_continuous(labels = comma) +
+  scale_fill_discrete(guide = FALSE) +
+  labs(
+    title = "PPP Loans Issued by Business Type",
+    caption = "Source: SBA",
+    x = "Business Type",
+    y = "Loan Count"
+  ) +
+  facet_wrap(
+    facets = ~ms_lab,
+    ncol = 1,
+    scales = "free_y"
+  )
+```
+
+The distribution of loan amounts by business type is roughly similar between
+loans to businesses in Mississippi and the country at large. The only major 
+discrepancies come from the business types with very few loans in the state.
+
+```{r biz_amount_violin, echo=FALSE}
+ppp %>% 
+  filter(
+    !is.na(type), 
+    amount > 100,
+    type %in% most_common(type, 8)
+  ) %>% 
+  ggplot(aes(x = reorder(type, amount), y = amount)) +
+  geom_violin(
+    mapping = aes(fill = ms_lab, alpha = ms_lab),
+    draw_quantiles = c(0.50),
+    scale = "width",
+    trim = TRUE,
+    na.rm = TRUE,
+    position = "identity"
+  ) +
+  scale_alpha_manual(values = c(1, 0.5), guide = FALSE) +
+  scale_fill_brewer(palette = "Dark2") +
+  scale_y_continuous(
+    breaks = c(1 %o% 10^(2:7)),
+    labels = dollar,
+    trans = "log10"
+  ) +
+  scale_x_discrete(
+    labels = function(x) {
+      stringr::str_wrap(x, width = 10)
+    }
+  ) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "Mississippi PPP: Loan Distribution by Business Type",
+    caption = "Source: SBA",
+    fill = "State",
+    x = "Amount",
+    y = "Count"
+  )
+```
+
+```{r biz_jobs_count, echo=FALSE}
+ppp %>% 
+  filter(!is.na(type), 
+         type %in% most_common(type, 8)) %>% 
+  group_by(type, ms_lab) %>% 
+  summarise(jobs = sum(jobs, na.rm = TRUE)) %>% 
+  ggplot(aes(x = reorder(type, jobs), y = jobs)) +
+  geom_col(aes(fill = type)) +
+  facet_wrap(~ms_lab, scales = "free_y", ncol = 1) +
+  scale_fill_discrete(guide = FALSE) +
+  scale_y_continuous(labels = comma) +
+  scale_x_discrete(
+    labels = function(x) {
+      stringr::str_wrap(x, width = 10)
+    }
+  ) +
+   labs(
+    title = "Mississippi PPP: Jobs Retained by Business Type",
+    caption = "Source: SBA",
+    x = "Business Type",
+    y = "Total Jobs Reported"
+  )
+```
+
+```{r biz_jobs_dollar, echo=FALSE}
+ppp %>% 
+  filter(!is.na(type), 
+         type %in% most_common(type, 8)) %>% 
+  group_by(type, ms_lab) %>% 
+  summarise(dollar_job = sum(amount, na.rm = TRUE)/sum(jobs, na.rm = TRUE)) %>% 
+  ggplot(aes(x = reorder(type, dollar_job), y = dollar_job)) +
+  geom_col(aes(fill = type)) +
+  facet_wrap(~ms_lab, ncol = 1) +
+  scale_fill_discrete(guide = FALSE) +
+  scale_y_continuous(labels = dollar) +
+  scale_x_discrete(
+    labels = function(x) {
+      stringr::str_wrap(x, width = 10)
+    }
+  ) +
+   labs(
+    title = "Mississippi PPP: Cost of Retaining each Job by Business Type",
+    caption = "Source: SBA",
+    x = "Business Type",
+    y = "Jobs/Dollar"
+  )
+```
+
+## Business Industry
+
+```{r naics_download, echo=FALSE}
+nurl <- "https://www.census.gov/eos/www/naics/2017NAICS/6-digit_2017_Codes.xlsx"
+download.file(nurl, destfile = naics_file <- file_temp(ext = "xlsx"))
+```
+
+```{r naics_read, echo=FALSE}
+naics <- read_excel(
+  path = naics_file,
+  range = "A3:B1059",
+  col_names = c("naics", "industry"),
+  col_types = "text"
+)
+```
+
+```{r naics_join, echo=FALSE}
+ppp <- left_join(ppp, naics)
+ppp <- relocate(ppp, industry, .after = naics)
+```
+
+```{r industry_count_bar, echo=FALSE}
+ppp %>% 
+  filter(industry %in% most_common(industry, 10)) %>% 
+  group_by(ms_lab) %>% 
+  count(industry, sort = TRUE) %>% 
+  mutate(p = n/sum(n)) %>% 
+  ggplot(aes(x = reorder(industry, p), y = p)) +
+  geom_col(aes(fill = ms_lab), position = "dodge") +
+  scale_y_continuous(labels = percent) +
+  scale_x_discrete(labels = function(x) str_wrap(x, 10)) +
+  scale_fill_brewer(palette = "Dark2") +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "PPP Loan Count Proportion by Business Industry and State",
+    caption = "Source: SBA",
+    fill = "State",
+    x = "Amount",
+    y = "Count"
+  )
+```
+
+```{r industry_mean_bar, echo=FALSE}
+ppp %>% 
+  filter(industry %in% most_common(industry, 10)) %>% 
+  group_by(ms_lab, industry) %>% 
+  summarise(sum = mean(amount, na.rm = TRUE)) %>% 
+  ggplot(aes(x = reorder(industry, sum), y = sum)) +
+  geom_col(aes(fill = ms_lab), position = "dodge") +
+  scale_y_continuous(labels = dollar) +
+  scale_x_discrete(labels = function(x) str_wrap(x, 10)) +
+  scale_fill_brewer(palette = "Dark2") +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "PPP Loan Count Proportion by Business Industry and State",
+    caption = "Source: SBA",
+    fill = "State",
+    x = "Amount",
+    y = "Count"
+  )
+```
+
+## Business Ownership
+
+There are four variables in the data describing the ownership of the businesses.
+
+1. The race and ethnicity
+2. Gender
+3. Veteran status
+3. Non-profit status
+
+Most loans did not report this information.
+
+```{r no_owner_info}
+ppp %>% 
+  group_by(is_ms) %>% 
+  summarise(
+    no_race = mean(race == "Unanswered", na.rm = TRUE),
+    no_gender = mean(gender == "Unanswered", na.rm = TRUE),
+    no_vet = mean(veteran == "Unanswered", na.rm = TRUE)
+  )
+```
+
+The degree of missing race data, for example, does not seem correlated with a
+particular type of business.
+
+```{r no_owner_type}
+ms_ppp %>% 
+  group_by(type) %>% 
+  summarise(
+    n = n(),
+    no_race = mean(race == "Unanswered", na.rm = TRUE)
+  ) %>% 
+  arrange(desc(n))
+```
+
+### Race & Ethnicity
+
+```{r race_table, echo=FALSE}
+ppp %>% 
+  group_by(is_ms = state == "MS" & !is.na(state)) %>% 
+  count(race, sort = TRUE) %>% 
+  mutate(
+    p = if_else(race != "Unanswered", n, NA_integer_),
+    p = p/sum(p, na.rm = TRUE)
+  ) %>% 
+  arrange(is_ms) %>% 
+  ungroup() %>% 
+  mutate(across(n, comma, 1)) %>% 
+  mutate(across(p, percent, 0.1)) %>% 
+  pivot_wider(
+    id_cols = 1:2, 
+    names_from = is_ms, 
+    values_from = c(n, p),
+    names_glue = "{is_ms}_{.value}",
+    names_sort = TRUE
+  ) %>% 
+  relocate(FALSE_p, .after = FALSE_n) %>% 
+  mutate(across(3:5, str_empty_na)) %>% 
+  kable(col.names = c("Race", "US Count", "", "MS Count", ""))
+```
+
+### Gender
+
+```{r gender_table, echo=FALSE}
+ppp %>% 
+  group_by(is_ms = state == "MS" & !is.na(state)) %>% 
+  count(gender, sort = TRUE) %>% 
+  mutate(
+    p = if_else(gender != "Unanswered", n, NA_integer_),
+    p = p/sum(p, na.rm = TRUE)
+  ) %>% 
+  arrange(is_ms) %>% 
+  ungroup() %>% 
+  mutate(across(n, comma, 1)) %>% 
+  mutate(across(p, percent, 0.1)) %>% 
+  pivot_wider(
+    id_cols = 1:2, 
+    names_from = is_ms, 
+    values_from = c(n, p),
+    names_glue = "{is_ms}_{.value}",
+    names_sort = TRUE
+  ) %>% 
+  relocate(FALSE_p, .after = FALSE_n) %>% 
+  mutate(across(3:5, str_empty_na)) %>% 
+  kable(col.names = c("Gender", "US Count", "", "MS Count", ""))
+```
+
+### Veteran
+
+```{r vet_table, echo=FALSE}
+ppp %>% 
+  group_by(is_ms = state == "MS" & !is.na(state)) %>% 
+  count(veteran, sort = TRUE) %>% 
+  mutate(
+    p = if_else(veteran != "Unanswered", n, NA_integer_),
+    p = p/sum(p, na.rm = TRUE)
+  ) %>% 
+  arrange(is_ms) %>% 
+  ungroup() %>% 
+  mutate(across(n, comma, 1)) %>% 
+  mutate(across(p, percent, 0.1)) %>% 
+  pivot_wider(
+    id_cols = 1:2, 
+    names_from = is_ms, 
+    values_from = c(n, p),
+    names_glue = "{is_ms}_{.value}",
+    names_sort = TRUE
+  ) %>% 
+  relocate(FALSE_p, .after = FALSE_n) %>% 
+  mutate(across(3:5, str_empty_na)) %>% 
+  kable(col.names = c("Veteran", "US Count", "", "MS Count", ""))
+```
+
+### Non-Profit
+
+```{r nonprofit_table, echo=FALSE}
+ppp %>% 
+  group_by(is_ms = state == "MS" & !is.na(state)) %>% 
+  count(non_profit, sort = TRUE) %>% 
+  mutate(
+    p = if_else(non_profit != "Unanswered", n, NA_integer_),
+    p = p/sum(p, na.rm = TRUE)
+  ) %>% 
+  arrange(is_ms) %>% 
+  ungroup() %>% 
+  mutate(across(n, comma, 1)) %>% 
+  mutate(across(p, percent, 0.1)) %>% 
+  pivot_wider(
+    id_cols = 1:2, 
+    names_from = is_ms, 
+    values_from = c(n, p),
+    names_glue = "{is_ms}_{.value}",
+    names_sort = TRUE
+  ) %>% 
+  relocate(FALSE_p, .after = FALSE_n) %>% 
+  mutate(across(3:5, str_empty_na)) %>% 
+  kable(col.names = c("Non-Profit", "US Count", "", "MS Count", ""))
+```
+
+## Dates
+
+```{r bar_day_n, echo=FALSE}
+ppp %>% 
+  count(ms_lab, date) %>% 
+  ggplot(aes(x = date, y = n)) +
+  geom_col(aes(fill = ms_lab), position = "dodge") + 
+  scale_fill_brewer(palette = "Dark2", guide = FALSE) +
+  scale_y_continuous(labels = comma) +
+  scale_x_continuous(breaks = seq(1, 52, by = 2)) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "PPP Loans Approved by Day of Year",
+    caption = "Source: SBA",
+    x = "Day of year",
+    y = "Count"
+  ) +
+  facet_wrap(~ms_lab, ncol = 1, scales = "free_y")
+```
+
+```{r bar_day_amount, echo=FALSE}
+ppp %>% 
+  group_by(ms_lab, date) %>% 
+  summarise(sum = sum(amount)/1e9) %>% 
+  ggplot(aes(x = date, y = sum)) +
+  geom_col(aes(fill = ms_lab), position = "dodge") + 
+  scale_fill_brewer(palette = "Dark2", guide = FALSE) +
+  scale_y_continuous(labels = function(x) dollar(x, suffix = "B")) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "PPP Amount Approved by Day of Year",
+    caption = "Source: SBA",
+    x = "Day of year",
+    y = "Count"
+  ) +
+  facet_wrap(~ms_lab, ncol = 1, scales = "free_y")
+```
+
+## Lenders
+
+```{r lend_count_bar, echo=FALSE}
+ppp %>% 
+  group_by(ms_lab, lender) %>% 
+  summarise(
+    n = n(),
+    sum = sum(amount),
+    mean = mean(amount)
+  ) %>% 
+  arrange(desc(n), .by_group = TRUE) %>% 
+  slice(1:10) %>% 
+  ggplot(aes(reorder(lender, n), n)) +
+  geom_col() +
+  coord_flip() +
+  facet_wrap(~ms_lab, ncol = 1, scales = "free") +
+  scale_y_continuous(labels = comma) +
+  labs(
+    title = "PPP Loans by Bank",
+    caption = "Source: SBA",
+    x = "Lending Bank",
+    y = "Count"
+  )
+```
+
+```{r lend_amount_bar, echo=FALSE}
+ppp %>% 
+  group_by(ms_lab, lender) %>% 
+  summarise(
+    n = n(),
+    sum = sum(amount),
+    mean = mean(amount)
+  ) %>% 
+  arrange(desc(n), .by_group = TRUE) %>% 
+  slice(1:10) %>% 
+  ggplot(aes(reorder(lender, sum), sum)) +
+  geom_col() +
+  coord_flip() +
+  facet_wrap(~ms_lab, ncol = 1, scales = "free") +
+  scale_y_continuous(labels = dollar) +
+  labs(
+    title = "PPP Loans by Bank",
+    caption = "Source: SBA",
+    x = "Lending Bank",
+    y = "Sum"
+  )
+```
+
