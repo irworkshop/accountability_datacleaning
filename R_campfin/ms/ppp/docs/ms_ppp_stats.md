@@ -27,9 +27,9 @@ Thu Dec 17 10:44:36 2020
 
 This is an analysis of Paycheck Protection Program loans in Mississippi.
 
-On December 1, 2020 the Small Business Administration was ordered by the
+On Dec. 1, 2020 the Small Business Administration was ordered by the
 court to release more detailed data on loans made through the Paycheck
-Protection Program (PPP), a major facet of the 2020 CARES Act to provide
+Protection Program, a major facet of the 2020 CARES Act to provide
 stimulus funding during the ongoing COVID-19 pandemic. This detailed
 release came after the SBA initially refused to publish any database,
 then released only partial data on the largest loan recipients. The full
@@ -41,11 +41,11 @@ amounts.
 > PPP loans are not made by SBA. PPP loans are made by lending
 > institutions and then guaranteed by SBA. Accordingly, borrowers apply
 > to lenders and self-certify that they are eligible for PPP loans. The
-> self- certification includes a good faith certification that the
+> self-certification includes a good faith certification that the
 > borrower has economic need requiring the loan and that the borrower
 > has applied the affiliation rules and is a small business. The lender
 > then reviews the borrower’s application, and if all the paperwork is
-> in order, approves the loan and submits it to SBA…
+> in order, approves the loan and submits it to SBA.
 
 > #### Cancelled Loans Do Not Appear In The PPP Loan Data
 > 
@@ -54,7 +54,7 @@ amounts.
 
 ## Prep
 
-We can read the normalized PPP data from the IRW S3 server.
+We read the normalized PPP data from the IRW S3 server.
 
 ``` r
 ppp_dir <- here("us", "covid", "ppp")
@@ -81,7 +81,7 @@ ppp <- vroom(
 )
 ```
 
-We can add additional variables to identify which records are in
+We added additional variables to identify which records are in
 Mississippi.
 
 ``` r
@@ -92,7 +92,7 @@ ppp <- ppp %>%
   )
 ```
 
-And then create a separate table of Mississippi loans only.
+And then created a separate table of just Mississippi loans.
 
 ``` r
 ms_ppp <- filter(ppp, is_ms)
@@ -100,17 +100,19 @@ ms_ppp <- filter(ppp, is_ms)
 
 ## Explore
 
-There are 48,010 loans with 22 columns.
+Mississippi has 48,010 loans with 22 columns.
 
 Mississippi accounts for 0.9% of the total PPP loans, and 0.6% of the
-total amount disbursed. This is close to the 0.9% of the US population
+total amount disbursed. This is close to the 0.9% of the U.S. population
 that lives in the state.
+
+CAN YOU ADD TOTAL AMOUNT TO ABOVE???
 
 ## Jobs
 
-We can also explore the number of *jobs* reportedly retained. These
-numbers were self reported and a significant amount of applications
-reported zero jobs or omitted a number altogether, although the number
+We examined the number of *jobs* reported as retained. These
+numbers were self reported and a significant number of applications
+reported zero jobs or omitted a number altogether, although the number **NUMBER OF PERCENT?**
 of missing jobs reportedly saved was smaller in Mississippi than the
 country at large.
 
@@ -120,7 +122,7 @@ country at large.
     #> 1 Miss.  0.0239    0.0817
     #> 2 Other  0.0656    0.124
 
-These loans, with missing or invalid jobs reported, does not appear to
+These loans, with missing or invalid jobs reported, do not appear to
 be tied to the time the loan was approved and probably isn’t related to
 confusion.
 
@@ -131,7 +133,7 @@ Mississippi, **100%** of loans from Wells Fargo were missing job
 information while **0%** of those from PriorityOne Bank were.
 
 Here are the top ten banks with the greatest and least proportion of
-their loans missing job information.
+their loans missing job information. **I WOULD SEPARATE HIGHEST AND LEAST - WON'T MAKE SENSE OT SOMEONE WHO DOESN'T KNOW HEAD AND TAIL**
 
 | sort | Lending Bank                           | \# Loans | % w/out Jobs |
 | :--- | :------------------------------------- | :------- | :----------- |
@@ -156,7 +158,7 @@ their loans missing job information.
 | tail | Concordia Bank & Trust Company         | 153      | 0%           |
 | tail | Bank of America, National Association  | 105      | 0%           |
 
-If we ignore this missing data, we can continue to breakdown the
+We ignored missing data to continue to breakdown the
 reported jobs.
 
 Most loans did go to small businesses saving less than **25** jobs. This
@@ -175,7 +177,7 @@ ppp %>%
 
 ![](../plots/ms/hist_jobs-1.png)<!-- -->
 
-33 businesses in Mississippi reportedly retained the max of 500 jobs.
+33 businesses in Mississippi reported that they retained the max of 500 jobs.
 
 | Lending Bank                              | Amount      | Jobs | Business Name                   | Business Address                                 |
 | :---------------------------------------- | :---------- | ---: | :------------------------------ | :----------------------------------------------- |
@@ -213,16 +215,12 @@ ppp %>%
 | PriorityOne Bank                          | $34,395     |  500 | SERVICE-ALL REPAIR SERVICE, LLC | 10 PIEDMONT RD, PETAL MS 39465                   |
 | Celtic Bank Corporation                   | $2,253      |  500 | SHERAH MOSS                     | 415 FILLMORE, CORINTH MS 38834                   |
 
-From this list, we can see an incredible range of loan amounts for the
-same 500 jobs retained, from $2,253 to $10,000,000.
+The loan amounts for companies that retained 500 jobs vary widely from $2,253 to $10,000,000.
 
-This leads us to investigate the dollars spent to save each job. There
-are some businesses in Mississippi which took hundreds of thousands to
-save one or two jobs and others which took only a couple thousand to
-save over a hundred jobs.
+We looked at the amount of money compared to the number of jobs. Some businesses in Mississippi received hundreds of thousands to
+save one or two jobs. Other received a few thousand to save more than 100 jobs.
 
-These are the businesses which received the most and least money per job
-reportedly retained.
+These are the businesses that received the most and least money per job retained:
 
 | Lending Bank                          | Amount     | Jobs | Cost     | Business Name                      | Business Address                        |
 | :------------------------------------ | :--------- | ---: | :------- | :--------------------------------- | :-------------------------------------- |
@@ -247,9 +245,8 @@ reportedly retained.
 | Bank of Winona                        | $2,159     |  164 | $13      | CHRISTOPHER CALDWELL               | 205 S STATE ST, DUCK HILL MS 38925      |
 | Community Bank of Mississippi         | $2,500     |  194 | $13      | SHELBY S DENTON                    | 1490 GOVERNMENT ST, BRANDON MS 39042    |
 
-Some of these businesses with small loans and high jobs are sole
-proprietorship or self employed, which questions whether the job numbers
-are accurate.
+Some of these businesses with small loans and high jobs are sole proprietorship or self employed, which brings into question whether the job numbers
+are accurate.  **ARE THERE OTHER THINGS OTHER THAN JOBS THAT THE MONEY CAN BE USED FOR?????**
 
 | Lending Bank                              | Amount  | Jobs | Cost | Business Name                  | Business Type                  |
 | :---------------------------------------- | :------ | ---: | :--- | :----------------------------- | :----------------------------- |
@@ -279,8 +276,7 @@ are accurate.
 | Bank of Winona                            | $2,159  |  164 | $13  | CHRISTOPHER CALDWELL           | Sole Proprietorship            |
 | Community Bank of Mississippi             | $2,500  |  194 | $13  | SHELBY S DENTON                | Sole Proprietorship            |
 
-There are “Self-Employed Individual” businesses which took thousands of
-dollars to retain dozens of jobs.
+XX businesses classified as “Self-Employed Individual” received took thousands of dollars to retain dozens of jobs. **THE HEADERS BELOW ARE WRONG**
 
 | Lending Bank              | Amount                                    | Jobs    | Cost | Business Name | Business Type          |
 | :------------------------ | :---------------------------------------- | :------ | ---: | :------------ | :--------------------- |
@@ -295,18 +291,17 @@ dollars to retain dozens of jobs.
 | Self-Employed Individuals | The First, A National Banking Association | $8,543  |   16 | $534          | DONA J DECKER          |
 | Self-Employed Individuals | BankPlus                                  | $4,500  |   16 | $281          | DUANE ODOM             |
 
-The distribution of loan amount per job retained is similar for both
-Mississippi and the United States, both with a spike of loans at $21,000
+The distribution of loan amount per job retained is similar for both Mississippi and the United States, both with a spike of loans at $21,000
 per job.
 
 ![](../plots/ms/jobs_dollar_hist-1.png)<!-- -->
 
-The maximum amount forgivable by single people is $20,833:
+The maximum amount forgivable by single **do you mean self-employed??** people is $20,833:
 
 > In addition to the specific caps described below, the amount of loan
 > forgiveness requested for owner-employees and
 > self-employedindividuals’ payroll compensation is capped at $20,833
-> per individual in total across allbusinesses in which he or she has an
+> per individual in total across all **SELF-EMPLOYHED??** businesses in which he or she has an
 > ownership stake.
 
 ## Amounts
@@ -368,8 +363,7 @@ There are 47,749 business names in the 48,010 Mississippi PPP loans.
 
 ### Duplicate Names
 
-There are a number of businesses which apparently relieved multiple
-loans.
+There are a number of businesses that appear to have received multiple loans, which is not allowable. 
 
 | Lending Bank                | $ Mil.    | Jobs | Business Name        | Business Type             | Business Address                    |
 | :-------------------------- | :-------- | ---: | :------------------- | :------------------------ | :---------------------------------- |
@@ -397,13 +391,12 @@ that some small businesses had received multiple PPP loans.
 > financial lifeline amid the economic shutdown.
 
 Some of these duplicate loans appear to be similar in value, but none of
-them are exactly the same and some are in fact from the same bank. A
+them are exactly the same and some are from the same bank. We have provided a
 text file with these repeated businesses has been created.
 
 ### Duplicate Addresses
 
-There are thousands of loans issued to duplicate addresses. This isn’t
-unusual in and of itself but we can explore them nonetheless.
+There are thousands of loans issued to duplicate addresses. In some cases, the addresses may be for the headquarters of an organization. For example, **DIOCESES EXAMPLE HERE** Other cases may be worth digging into.
 
 ``` r
 ms_geo <- ms_ppp %>% 
@@ -415,8 +408,7 @@ ms_geo <- ms_ppp %>%
 ```
 
 Loans under the Paycheck Protection Program had a maximum value of $10
-million, but we can see that some of business at some of these addresses
-received more than that.
+million, but some of business at some of these addresses received more than that.
 
     #> # A tibble: 3,393 x 3
     #>    group num_loans mil_loan
@@ -434,7 +426,7 @@ received more than that.
     #> # … with 3,383 more rows
 
 This address appears to be home to multiple staffing businesses, which
-received a combined $17.6 million.
+received a combined $17.6 million. (https://www.google.com/maps/place/432+Magazine+St,+Tupelo,+MS+38804/@34.2557916,-88.7084322,3a,75y,351.84h,90t/data=!3m7!1e1!3m5!1s-34VdNGML7YwaeDI_csvFg!2e0!6s%2F%2Fgeo2.ggpht.com%2Fcbk%3Fpanoid%3D-34VdNGML7YwaeDI_csvFg%26output%3Dthumbnail%26cb_client%3Dsearch.gws-prod.gps%26thumb%3D2%26w%3D86%26h%3D86%26yaw%3D351.83655%26pitch%3D0%26thumbfov%3D100!7i16384!8i8192!4m5!3m4!1s0x88874ea1b4d3d4db:0xa0868308ce6886f3!8m2!3d34.2560076!4d-88.7084512)
 
 | Date       | Lending Bank      | Amount     | Jobs | Business Name                | Business Address                 |
 | :--------- | :---------------- | :--------- | ---: | :--------------------------- | :------------------------------- |
