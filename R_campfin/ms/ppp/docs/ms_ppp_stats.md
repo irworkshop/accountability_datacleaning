@@ -363,7 +363,7 @@ There are 47,749 business names in the 48,010 Mississippi PPP loans.
 
 ### Duplicate Names
 
-There are a number of businesses that appear to have received multiple loans, which is not allowable. 
+There are a number of businesses that appear to have received multiple loans, which is not allowable.  **CORRECT?**
 
 | Lending Bank                | $ Mil.    | Jobs | Business Name        | Business Type             | Business Address                    |
 | :-------------------------- | :-------- | ---: | :------------------- | :------------------------ | :---------------------------------- |
@@ -509,9 +509,8 @@ regions outside Mississippi.
 
 There are 18 different kinds of business types.
 
-The PPP was ostensibly designed to help small businesses, but we can see
-that most loans nationwide were given to Corporations. In Mississippi, a
-greater percentage of loans were given to LLC’s and sole proprietorship.
+The PPP was ostensibly designed to help small businesses, but most loans nationwide were given to Corporations. In Mississippi, a
+greater percentage of loans were given to LLC’s and sole proprietorships.
 
 ![](../plots/ms/biz_type-1.png)<!-- -->
 
