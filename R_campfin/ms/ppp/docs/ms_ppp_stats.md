@@ -426,7 +426,7 @@ million, but some of business at some of these addresses received more than that
     #> # … with 3,383 more rows
 
 This address appears to be home to multiple staffing businesses, which
-received a combined $17.6 million. (https://www.google.com/maps/place/432+Magazine+St,+Tupelo,+MS+38804/@34.2557916,-88.7084322,3a,75y,351.84h,90t/data=!3m7!1e1!3m5!1s-34VdNGML7YwaeDI_csvFg!2e0!6s%2F%2Fgeo2.ggpht.com%2Fcbk%3Fpanoid%3D-34VdNGML7YwaeDI_csvFg%26output%3Dthumbnail%26cb_client%3Dsearch.gws-prod.gps%26thumb%3D2%26w%3D86%26h%3D86%26yaw%3D351.83655%26pitch%3D0%26thumbfov%3D100!7i16384!8i8192!4m5!3m4!1s0x88874ea1b4d3d4db:0xa0868308ce6886f3!8m2!3d34.2560076!4d-88.7084512)
+received a combined $17.6 million. See on [Google Streetview](https://www.google.com/maps/place/432+Magazine+St,+Tupelo,+MS+38804/@34.2557916,-88.7084322,3a,75y,351.84h,90t/data=!3m7!1e1!3m5!1s-34VdNGML7YwaeDI_csvFg!2e0!6s%2F%2Fgeo2.ggpht.com%2Fcbk%3Fpanoid%3D-34VdNGML7YwaeDI_csvFg%26output%3Dthumbnail%26cb_client%3Dsearch.gws-prod.gps%26thumb%3D2%26w%3D86%26h%3D86%26yaw%3D351.83655%26pitch%3D0%26thumbfov%3D100!7i16384!8i8192!4m5!3m4!1s0x88874ea1b4d3d4db:0xa0868308ce6886f3!8m2!3d34.2560076!4d-88.7084512)
 
 | Date       | Lending Bank      | Amount     | Jobs | Business Name                | Business Address                 |
 | :--------- | :---------------- | :--------- | ---: | :--------------------------- | :------------------------------- |
