@@ -1,7 +1,7 @@
 Mississippi PPP Breakdown
 ================
 Kiernan Nicholls
-Thu Dec 17 15:17:37 2020
+Thu Dec 17 15:22:26 2020
 
   - [Data](#data)
   - [Preparation](#preparation)
@@ -150,8 +150,9 @@ The loans missing job data seem to be tied to the lending bank. In
 Mississippi, **100%** of loans from Wells Fargo were missing job
 information while **0%** of those from PriorityOne Bank were.
 
-The following two tables list the top ten banks with the greatest and least proportion of
-their loans missing job information (sorted by most loans given).
+The following two tables list the top ten banks with the greatest and
+least proportion of their loans missing job information (sorted by most
+loans given).
 
 <table class="kable_wrapper">
 
