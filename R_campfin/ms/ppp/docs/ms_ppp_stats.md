@@ -150,7 +150,7 @@ The loans missing job data seem to be tied to the lending bank. In
 Mississippi, **100%** of loans from Wells Fargo were missing job
 information while **0%** of those from PriorityOne Bank were.
 
-Here are the top ten banks with the greatest and least proportion of
+The following two tables list the top ten banks with the greatest and least proportion of
 their loans missing job information (sorted by most loans given).
 
 <table class="kable_wrapper">
@@ -211,7 +211,7 @@ their loans missing job information (sorted by most loans given).
 
 </table>
 
-We ignored missing data to continue to breakdown the reported jobs.
+We ignored missing data in our breakdown of reported jobs.
 
 Most loans did go to small businesses saving less than **25** jobs. This
 was true in both Mississippi and the rest of the country.
