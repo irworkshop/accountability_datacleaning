@@ -1,7 +1,7 @@
 Paycheck Protection Program Loans
 ================
 Kiernan Nicholls
-2020-12-02 11:09:25
+2020-12-17 11:59:23
 
   - [Project](#project)
   - [Objectives](#objectives)
@@ -15,6 +15,7 @@ Kiernan Nicholls
   - [Export](#export)
   - [Upload](#upload)
   - [Dictionary](#dictionary)
+  - [By State](#by-state)
 
 <!-- Place comments regarding knitting here -->
 
@@ -558,7 +559,7 @@ ppp %>%
 #>    <chr>                    <chr>                   
 #>  1 1312 LOUISVILLE AVE      1312 LOUISVILLE AVE     
 #>  2 2301 FM 2729             2301 FM 2729            
-#>  3 78 5th Ave               78 5 TH AVE             
+#>  3 78 5th Ave               78 5TH AVE              
 #>  4 766 E. CRESCENT PL       766 E CRES PL           
 #>  5 2521 Gilmer St           2521 GILMER ST          
 #>  6 1701 Forest Ridge Drive  1701 FRST RDG DR        
@@ -874,3 +875,27 @@ The following table describes the variables in our final exported file:
 | `address_clean`  | `character` | Normalized recipient address                  |
 | `state_clean`    | `character` | Normalized recipient state                    |
 | `city_clean`     | `character` | Normalized recipient city                     |
+
+## By State
+
+We are also going to create separate files on PPP loans by state.
+
+``` r
+st_dir <- here(dirname(clean_dir), "by_state")
+by_state <- group_split(ppp, state_clean)
+by_state <- map(by_state, arrange, city_clean)
+for (i in by_state) {
+  st <- unique(by_state[[i]]$state_clean)
+  st_path <- path(st_dir, glue("ppp_loans_state_{st}.csv"))
+  st_aws <- path("PPP", basename(st_path))
+  write_csv(by_state[[i]], st_path)
+  put_object(
+    file = st_path,
+    object = st_aws, 
+    bucket = "publicaccountability",
+    acl = "public-read",
+    show_progress = TRUE,
+    multipart = TRUE
+  )
+}
+```

@@ -1,10 +1,10 @@
 Mississippi PPP Breakdown
 ================
 Kiernan Nicholls
-Thu Dec 17 10:44:36 2020
+Thu Dec 17 14:04:38 2020
 
   - [Data](#data)
-  - [Prep](#prep)
+  - [Preparation](#preparation)
   - [Explore](#explore)
   - [Jobs](#jobs)
   - [Amounts](#amounts)
@@ -27,14 +27,29 @@ Thu Dec 17 10:44:36 2020
 
 This is an analysis of Paycheck Protection Program loans in Mississippi.
 
-On Dec. 1, 2020 the Small Business Administration was ordered by the
-court to release more detailed data on loans made through the Paycheck
-Protection Program, a major facet of the 2020 CARES Act to provide
-stimulus funding during the ongoing COVID-19 pandemic. This detailed
-release came after the SBA initially refused to publish any database,
-then released only partial data on the largest loan recipients. The full
-database now contains all recipient names, addresses, and exact loan
-amounts.
+On Dec. 1, 2020 the Small Business Administration was ordered by the
+court to release more detailed data on loans made through the [Paycheck
+Protection
+Program](https://www.sba.gov/funding-programs/loans/coronavirus-relief-options/paycheck-protection-program),
+a major facet of the 2020 CARES Act to provide stimulus funding during
+the ongoing COVID-19 pandemic. This detailed release came after the SBA
+initially refused to publish any database, then released only partial
+data on the largest loan recipients. The full database now contains all
+recipient names, addresses, and exact loan amounts.
+
+[According to the
+SBA](https://home.treasury.gov/system/files/136/PPP%20Borrower%20Information%20Fact%20Sheet.pdf),
+PPP loans are forgiven as long as:
+
+1.  The loan proceeds are used to cover payroll costs, and most mortgage
+    interest, rent, and utility costs over the 8 week period after the
+    loan is made.
+2.  Employee and compensation levels are maintained.
+
+[The SBA clarifies key
+aspects](https://www.sba.gov/sites/default/files/2020-12/PPP%20Loan%20Data%20-%20Key%20Aspects%2012-01-20%20-%20Final.pdf)
+of the PPP, namely how the money is distributed and what information is
+actually contained in the data.
 
 > #### PPP Is A Delegated Loan Making Process
 > 
@@ -45,14 +60,14 @@ amounts.
 > borrower has economic need requiring the loan and that the borrower
 > has applied the affiliation rules and is a small business. The lender
 > then reviews the borrower’s application, and if all the paperwork is
-> in order, approves the loan and submits it to SBA.
+> in order, approves the loan and submits it to SBA…
 
 > #### Cancelled Loans Do Not Appear In The PPP Loan Data
 > 
 > The public PPP data includes only active loans. Loans that were
 > cancelled for any reason are not included in the public data release.
 
-## Prep
+## Preparation
 
 We read the normalized PPP data from the IRW S3 server.
 
@@ -96,34 +111,37 @@ And then created a separate table of just Mississippi loans.
 
 ``` r
 ms_ppp <- filter(ppp, is_ms)
+ms2x <- bind_rows(
+  "United States" = ppp,
+  "Mississippi" = ms_ppp,
+  .id = "ms_lab2"
+)
 ```
 
 ## Explore
 
-Mississippi has 48,010 loans with 22 columns.
+Mississippi has 48,010 loans with 22 columns. In total, $3,193,019,738
+was distributed to Mississippi businesses.
 
 Mississippi accounts for 0.9% of the total PPP loans, and 0.6% of the
 total amount disbursed. This is close to the 0.9% of the U.S. population
 that lives in the state.
 
-**CAN YOU ADD TOTAL AMOUNT TO ABOVE???**
-
 ## Jobs
 
-We examined the number of *jobs* reported as retained. These
-numbers were self reported and a significant number of applications
-reported zero jobs or omitted a number altogether, although the number **NUMBER OF PERCENT?**
-of missing jobs reportedly saved was smaller in Mississippi than the
-country at large.
+We examined the number of *jobs* reportedly retained. These numbers were
+self reported and a significant amount of applications reported zero
+jobs or omitted a number altogether, although the percent of loans
+missing job saved was smaller in Mississippi than the country at large.
 
     #> # A tibble: 2 x 3
-    #>   ms_lab no_job zero_jobs
-    #>   <chr>   <dbl>     <dbl>
-    #> 1 Miss.  0.0239    0.0817
-    #> 2 Other  0.0656    0.124
+    #>   ms_lab2       no_job zero_jobs
+    #>   <chr>          <dbl>     <dbl>
+    #> 1 Mississippi   0.0239    0.0817
+    #> 2 United States 0.0652    0.124
 
-These loans, with missing or invalid jobs reported, do not appear to
-be tied to the time the loan was approved and probably isn’t related to
+These loans, with missing or invalid jobs reported, do not appear to be
+tied to the time the loan was approved and probably isn’t related to
 confusion.
 
 ![](../plots/ms/jobs_missing_time-1.png)<!-- -->
@@ -133,51 +151,86 @@ Mississippi, **100%** of loans from Wells Fargo were missing job
 information while **0%** of those from PriorityOne Bank were.
 
 Here are the top ten banks with the greatest and least proportion of
-their loans missing job information. **I WOULD SEPARATE HIGHEST AND LEAST - WON'T MAKE SENSE OT SOMEONE WHO DOESN'T KNOW HEAD AND TAIL**
+their loans missing job information (sorted by most loans given).
 
-| sort | Lending Bank                           | \# Loans | % w/out Jobs |
-| :--- | :------------------------------------- | :------- | :----------- |
-| head | Magnolia State Bank                    | 280      | 100%         |
-| head | Wells Fargo Bank, National Association | 219      | 100%         |
-| head | Southern Bancorp Bank                  | 270      | 87%          |
-| head | Regions Bank                           | 2,286    | 79%          |
-| head | Celtic Bank Corporation                | 540      | 74%          |
-| head | The Peoples Bank                       | 554      | 63%          |
-| head | Bank of Franklin                       | 155      | 42%          |
-| head | Cross River Bank                       | 573      | 24%          |
-| head | First Security Bank                    | 493      | 23%          |
-| head | Bank of Forest                         | 126      | 17%          |
-| tail | Sycamore Bank                          | 209      | 0%           |
-| tail | First Southern Bank                    | 191      | 0%           |
-| tail | Great Southern Bank                    | 191      | 0%           |
-| tail | Mechanics Bank                         | 191      | 0%           |
-| tail | CB\&S Bank                             | 186      | 0%           |
-| tail | Bank of Kilmichael                     | 173      | 0%           |
-| tail | Members Exchange CU                    | 170      | 0%           |
-| tail | Home Bank, National Association        | 155      | 0%           |
-| tail | Concordia Bank & Trust Company         | 153      | 0%           |
-| tail | Bank of America, National Association  | 105      | 0%           |
+<table class="kable_wrapper">
 
-We ignored missing data to continue to breakdown the
-reported jobs.
+<tbody>
+
+<tr>
+
+<td>
+
+| Lending Bank                           | \# Loans | % w/out Jobs |
+| :------------------------------------- | :------- | :----------- |
+| Magnolia State Bank                    | 280      | 100%         |
+| Wells Fargo Bank, National Association | 219      | 100%         |
+| Southern Bancorp Bank                  | 270      | 87%          |
+| Regions Bank                           | 2,286    | 79%          |
+| Celtic Bank Corporation                | 540      | 74%          |
+| The Peoples Bank                       | 554      | 63%          |
+| Bank of Franklin                       | 155      | 42%          |
+| Cross River Bank                       | 573      | 24%          |
+| First Security Bank                    | 493      | 23%          |
+| Bank of Forest                         | 126      | 17%          |
+
+</td>
+
+</tr>
+
+</tbody>
+
+</table>
+
+<table class="kable_wrapper">
+
+<tbody>
+
+<tr>
+
+<td>
+
+| Lending Bank                          | \# Loans | % w/out Jobs |
+| :------------------------------------ | :------- | :----------- |
+| Sycamore Bank                         | 209      | 0%           |
+| First Southern Bank                   | 191      | 0%           |
+| Great Southern Bank                   | 191      | 0%           |
+| Mechanics Bank                        | 191      | 0%           |
+| CB\&S Bank                            | 186      | 0%           |
+| Bank of Kilmichael                    | 173      | 0%           |
+| Members Exchange CU                   | 170      | 0%           |
+| Home Bank, National Association       | 155      | 0%           |
+| Concordia Bank & Trust Company        | 153      | 0%           |
+| Bank of America, National Association | 105      | 0%           |
+
+</td>
+
+</tr>
+
+</tbody>
+
+</table>
+
+We ignored missing data to continue to breakdown the reported jobs.
 
 Most loans did go to small businesses saving less than **25** jobs. This
 was true in both Mississippi and the rest of the country.
 
 ``` r
-ppp %>% 
-  group_by(is_ms) %>% 
+ms2x %>% 
+  group_by(ms_lab2) %>% 
   summarise(small_jobs = mean(jobs < 25, na.rm = TRUE))
 #> # A tibble: 2 x 2
-#>   is_ms small_jobs
-#>   <lgl>      <dbl>
-#> 1 FALSE      0.911
-#> 2 TRUE       0.930
+#>   ms_lab2       small_jobs
+#>   <chr>              <dbl>
+#> 1 Mississippi        0.930
+#> 2 United States      0.911
 ```
 
 ![](../plots/ms/hist_jobs-1.png)<!-- -->
 
-33 businesses in Mississippi reported that they retained the max of 500 jobs.
+33 businesses in Mississippi reported that they retained the max of 500
+jobs.
 
 | Lending Bank                              | Amount      | Jobs | Business Name                   | Business Address                                 |
 | :---------------------------------------- | :---------- | ---: | :------------------------------ | :----------------------------------------------- |
@@ -192,7 +245,7 @@ ppp %>%
 | BancorpSouth Bank                         | $4,699,302  |  500 | LABOR SOURCE, L.L.C.            | 432 MAGAZINE ST, TUPELO MS 38804                 |
 | Synovus Bank                              | $4,490,722  |  500 | RETZER RESOURCES, INC.          | 1215 MAIN ST, GREENVILLE MS 38701                |
 | Planters Bank & Trust Company             | $4,300,000  |  500 | NORTH SUNFLOWER MEDICAL CENTER  | 840 N OAK AVE, RULEVILLE MS 38771                |
-| First State Bank                          | $3,973,318  |  500 | WEST QUALITY FOOD SERVICE INC   | 220 N 16 TH AVE, LAUREL MS 39440                 |
+| First State Bank                          | $3,973,318  |  500 | WEST QUALITY FOOD SERVICE INC   | 220 N 16TH AVE, LAUREL MS 39440                  |
 | The First, A National Banking Association | $3,899,821  |  500 | ROBERTS COMPANY, INC.           | 1612 ADELINE ST, HATTIESBURG MS 39401            |
 | BancorpSouth Bank                         | $3,356,395  |  500 | VERITAS HEALTHCARE GROUP LLC    | 6858 SWINNEA RD, SOUTHAVEN MS 38671              |
 | Regions Bank                              | $3,002,700  |  500 | EMI STAFFING, INC.              | 142 S MAIN ST, GRENADA MS 38901                  |
@@ -202,25 +255,28 @@ ppp %>%
 | The Citizens Bank of Philadelphia         | $2,473,611  |  500 | TRIPLE V INC.                   | 820 HWY 35, FOREST MS 39074                      |
 | Trustmark National Bank                   | $2,386,360  |  500 | NEWCO DINING LLC                | 2680 CRANE RDG DR, JACKSON MS 39216              |
 | Wallis Bank                               | $2,251,300  |  500 | SWEETWATER FRANCHISE GROUP LLC  | 211 BALL AVE, TYLERTOWN MS 39667                 |
-| First Horizon Bank                        | $2,250,000  |  500 | RPM PIZZA MIDWEST, LLC          | 15384 5 TH ST, GULFPORT MS 39503                 |
+| First Horizon Bank                        | $2,250,000  |  500 | RPM PIZZA MIDWEST, LLC          | 15384 5TH ST, GULFPORT MS 39503                  |
 | United Mississippi Bank                   | $2,186,600  |  500 | RIVER ROAD RESTAURANTS, LLC     | 296 HIGHLAND BLVD PO BOX 18939, NATCHEZ MS 39122 |
 | Home Bank, National Association           | $2,142,200  |  500 | SOUTHERN RIVER RESTAURANTS, LLC | 296 HIGHLAND BLVD, NATCHEZ MS 39122              |
 | Renasant Bank                             | $1,977,300  |  500 | SHIFFLETT ENTERPRISES, INC      | PO BOX 236, OLIVE BRANCH MS 38654                |
 | Bank of Yazoo City                        | $1,754,891  |  500 | FIRST CHOICE HOME CARE, LLC     | 823 CALHOUN AVE, YAZOO CITY MS 39194             |
-| First Horizon Bank                        | $1,300,000  |  500 | RPM PIZZA BATON ROUGE, LLC      | 15384 5 TH ST, GULFPORT MS 39503                 |
+| First Horizon Bank                        | $1,300,000  |  500 | RPM PIZZA BATON ROUGE, LLC      | 15384 5TH ST, GULFPORT MS 39503                  |
 | Synovus Bank                              | $1,279,832  |  500 | RETZER LLC                      | 1215 S MAIN ST, GREENVILLE MS 38701              |
-| First Horizon Bank                        | $1,250,000  |  500 | TTT PIZZA LLC                   | 15384 5 TH ST, GULFPORT MS 39503                 |
-| The Citizens National Bank of Meridian    | $451,305    |  500 | CPI-WS, LLC                     | 112 5 TH ST, COLUMBUS MS 39701                   |
+| First Horizon Bank                        | $1,250,000  |  500 | TTT PIZZA LLC                   | 15384 5TH ST, GULFPORT MS 39503                  |
+| The Citizens National Bank of Meridian    | $451,305    |  500 | CPI-WS, LLC                     | 112 5TH ST, COLUMBUS MS 39701                    |
 | Hope Enterprise Corporation               | $59,037     |  500 | P & E TRUCKING, INC.            | 4651 SUNSET RD, NESBIT MS 38651                  |
 | PriorityOne Bank                          | $34,395     |  500 | SERVICE-ALL REPAIR SERVICE, LLC | 10 PIEDMONT RD, PETAL MS 39465                   |
 | Celtic Bank Corporation                   | $2,253      |  500 | SHERAH MOSS                     | 415 FILLMORE, CORINTH MS 38834                   |
 
-The loan amounts for companies that retained 500 jobs vary widely from $2,253 to $10,000,000.
+The loan amounts for companies that retained 500 jobs vary widely from
+$2,253 to $10,000,000.
 
-We looked at the amount of money compared to the number of jobs. Some businesses in Mississippi received hundreds of thousands to
-save one or two jobs. Other received a few thousand to save more than 100 jobs.
+We looked at the amount of money compared to the number of jobs. Some
+businesses in Mississippi received hundreds of thousands to save one or
+two jobs. Other received a few thousand to save more than 100 jobs.
 
-These are the businesses that received the most and least money per job retained:
+These are the businesses that received the most and least money per job
+retained:
 
 | Lending Bank                          | Amount     | Jobs | Cost     | Business Name                      | Business Address                        |
 | :------------------------------------ | :--------- | ---: | :------- | :--------------------------------- | :-------------------------------------- |
@@ -245,8 +301,9 @@ These are the businesses that received the most and least money per job retained
 | Bank of Winona                        | $2,159     |  164 | $13      | CHRISTOPHER CALDWELL               | 205 S STATE ST, DUCK HILL MS 38925      |
 | Community Bank of Mississippi         | $2,500     |  194 | $13      | SHELBY S DENTON                    | 1490 GOVERNMENT ST, BRANDON MS 39042    |
 
-Some of these businesses with small loans and high jobs are sole proprietorship or self employed, which brings into question whether the job numbers
-are accurate.  **ARE THERE OTHER THINGS OTHER THAN JOBS THAT THE MONEY CAN BE USED FOR?????**
+Some of these businesses with small loans and high jobs are sole
+proprietorship or self employed, which brings into question whether the
+job numbers are accurate.
 
 | Lending Bank                              | Amount  | Jobs | Cost | Business Name                  | Business Type                  |
 | :---------------------------------------- | :------ | ---: | :--- | :----------------------------- | :----------------------------- |
@@ -276,7 +333,9 @@ are accurate.  **ARE THERE OTHER THINGS OTHER THAN JOBS THAT THE MONEY CAN BE US
 | Bank of Winona                            | $2,159  |  164 | $13  | CHRISTOPHER CALDWELL           | Sole Proprietorship            |
 | Community Bank of Mississippi             | $2,500  |  194 | $13  | SHELBY S DENTON                | Sole Proprietorship            |
 
-XX businesses classified as “Self-Employed Individual” received took thousands of dollars to retain dozens of jobs. **THE HEADERS BELOW ARE WRONG**
+There are 26 “Self-Employed Individual” businesses which took more than
+a thousand dollars in PPP money and reported having saved more than 10
+jobs.
 
 | Lending Bank              | Amount                                    | Jobs    | Cost | Business Name | Business Type          |
 | :------------------------ | :---------------------------------------- | :------ | ---: | :------------ | :--------------------- |
@@ -291,18 +350,22 @@ XX businesses classified as “Self-Employed Individual” received took thousan
 | Self-Employed Individuals | The First, A National Banking Association | $8,543  |   16 | $534          | DONA J DECKER          |
 | Self-Employed Individuals | BankPlus                                  | $4,500  |   16 | $281          | DUANE ODOM             |
 
-The distribution of loan amount per job retained is similar for both Mississippi and the United States, both with a spike of loans at $21,000
+The distribution of loan amount per job retained is similar for both
+Mississippi and the United States, both with a spike of loans at $21,000
 per job.
 
 ![](../plots/ms/jobs_dollar_hist-1.png)<!-- -->
 
-The maximum amount forgivable by single **do you mean self-employed??** people is $20,833:
+According to [PPP loan forgiveness
+rules](https://www.sba.gov/sites/default/files/2020-10/PPP%20--%20Loan%20Forgiveness%20FAQs%20%28October%2013%2C%202020%29.pdf),
+the maximum loan amount forgivable for sole proprietors and those
+self-employed is $20,833:
 
 > In addition to the specific caps described below, the amount of loan
-> forgiveness requested for owner-employees and
-> self-employedindividuals’ payroll compensation is capped at $20,833
-> per individual in total across all **SELF-EMPLOYHED??** businesses in which he or she has an
-> ownership stake.
+> forgiveness requested for owner-employees and self-employed
+> individuals’ payroll compensation is capped at $20,833 per individual
+> in total across all businesses in which he or she has an ownership
+> stake.
 
 ## Amounts
 
@@ -363,7 +426,8 @@ There are 47,749 business names in the 48,010 Mississippi PPP loans.
 
 ### Duplicate Names
 
-There are a number of businesses that appear to have received multiple loans, which is not allowable.  **CORRECT?**
+There are a number of businesses which apparently relieved multiple
+loans, which is not allowed under the PPP rules.
 
 | Lending Bank                | $ Mil.    | Jobs | Business Name        | Business Type             | Business Address                    |
 | :-------------------------- | :-------- | ---: | :------------------- | :------------------------ | :---------------------------------- |
@@ -381,7 +445,7 @@ There are a number of businesses that appear to have received multiple loans, wh
 
 This could be in line with [earlier
 reporting](https://www.nbcnews.com/business/business-news/ppp-loan-program-accidentally-paid-some-small-business-owners-twice-n1224061)
-that some small businesses had received multiple PPP loans.
+that some small businesses had received multiple PPP loans:
 
 > The issue stems from the hectic early weeks of the program, when
 > funding ran out quickly and borrowers were not hearing back from their
@@ -391,126 +455,106 @@ that some small businesses had received multiple PPP loans.
 > financial lifeline amid the economic shutdown.
 
 Some of these duplicate loans appear to be similar in value, but none of
-them are exactly the same and some are from the same bank. We have provided a
-text file with these repeated businesses has been created.
+them are exactly the same and some are from the same bank. A separate
+text file with these loans to duplicate businesses has been created.
 
 ### Duplicate Addresses
 
-There are thousands of loans issued to duplicate addresses. In some cases, the addresses may be for the headquarters of an organization. For example, **DIOCESES EXAMPLE HERE** Other cases may be worth digging into.
+There are thousands of loans issued to duplicate addresses. In some
+cases, the addresses may be for the headquarters of an organization. For
+example, the Catholic Diocese of Jackson is headquartered at 237 E Amite
+ST, where **51** other church locations are also incorporated (the 10
+largest of those loans are listed below).
 
-``` r
-ms_geo <- ms_ppp %>% 
-  select(all_of(id_vars), type) %>% 
-  group_by(address, city, state, zip) %>% 
-  mutate(num_loans = n(), group = cur_group_id(), .before = 1) %>% 
-  arrange(desc(num_loans)) %>% 
-  filter(num_loans > 1)
-```
+Other cases may be worth digging into.
+
+| Lending Bank            | Amount   | Jobs | Business Name                             | Business Address                 |
+| :---------------------- | :------- | ---: | :---------------------------------------- | :------------------------------- |
+| Trustmark National Bank | $515,736 |  101 | VICKSBURG CATHOLIC SCHOOLS                | 237 E AMITE ST, JACKSON MS 39201 |
+| Trustmark National Bank | $389,165 |   49 | CATHOLIC DIOCESE OF JACKSON               | 237 E AMITE ST, JACKSON MS 39201 |
+| Trustmark National Bank | $305,550 |   62 | ST JOSEPH CATHOLIC SCHOOL SYSTEM          | 237 E AMITE ST, JACKSON MS 39201 |
+| Trustmark National Bank | $185,700 |   44 | ST RICHARD CATHOLIC CHURCH                | 237 E AMITE ST, JACKSON MS 39201 |
+| Trustmark National Bank | $140,180 |   43 | ST PAUL EARLY LEARNING CENTER             | 237 E AMITE ST, JACKSON MS 39201 |
+| Trustmark National Bank | $124,633 |   32 | ST. PATRICK CATHOLIC SCHOOL               | 237 E AMITE ST, JACKSON MS 39201 |
+| Trustmark National Bank | $82,974  |   16 | ST PAUL CATHOLIC CHURCH-FLOWOOD           | 237 E AMITE ST, JACKSON MS 39201 |
+| Trustmark National Bank | $75,517  |   13 | ST JAMES THE GREATER CATHOLIC CHURCH      | 237 E AMITE ST, JACKSON MS 39201 |
+| Trustmark National Bank | $73,880  |   21 | ST FRANCIS OF ASSISI                      | 237 E AMITE ST, JACKSON MS 39201 |
+| Trustmark National Bank | $51,094  |   10 | HOLY FAMILY NATCHEZ EARLY LEARNING CENTER | 237 E AMITE ST, JACKSON MS 39201 |
 
 Loans under the Paycheck Protection Program had a maximum value of $10
-million, but some of business at some of these addresses received more than that.
+million, but business at some of these addresses received more when
+combined.
 
-    #> # A tibble: 3,393 x 3
+    #> # A tibble: 3,383 x 3
     #>    group num_loans mil_loan
     #>    <int>     <int>    <dbl>
-    #>  1 29323         7    17.6 
-    #>  2 11555        10    10.2 
-    #>  3  6931         4    10.1 
+    #>  1 29332         7    17.6 
+    #>  2 11558        10    10.2 
+    #>  3  6933         4    10.1 
     #>  4  1515         2     8.80
-    #>  5 22496         2     8.57
-    #>  6 34299         3     7.89
-    #>  7 29042        30     5.98
-    #>  8 41871         3     5.60
-    #>  9 31759         2     5.45
-    #> 10 34612         3     5.44
-    #> # … with 3,383 more rows
+    #>  5 22502         2     8.57
+    #>  6 34312         3     7.89
+    #>  7 29050        30     5.98
+    #>  8 41885         3     5.60
+    #>  9 31769         2     5.45
+    #> 10 34625         3     5.44
+    #> # … with 3,373 more rows
 
 This address appears to be home to multiple staffing businesses, which
-received a combined $17.6 million. See on [Google Streetview](https://www.google.com/maps/place/432+Magazine+St,+Tupelo,+MS+38804/@34.2557916,-88.7084322,3a,75y,351.84h,90t/data=!3m7!1e1!3m5!1s-34VdNGML7YwaeDI_csvFg!2e0!6s%2F%2Fgeo2.ggpht.com%2Fcbk%3Fpanoid%3D-34VdNGML7YwaeDI_csvFg%26output%3Dthumbnail%26cb_client%3Dsearch.gws-prod.gps%26thumb%3D2%26w%3D86%26h%3D86%26yaw%3D351.83655%26pitch%3D0%26thumbfov%3D100!7i16384!8i8192!4m5!3m4!1s0x88874ea1b4d3d4db:0xa0868308ce6886f3!8m2!3d34.2560076!4d-88.7084512)
+received a combined $17.6 million ([view on Google
+Streetview](https://goo.gl/maps/CnLrRaejf9UNKEPF9)).
 
-| Date       | Lending Bank      | Amount     | Jobs | Business Name                | Business Address                 |
-| :--------- | :---------------- | :--------- | ---: | :--------------------------- | :------------------------------- |
-| 2020-04-13 | BancorpSouth Bank | $1,644,812 |  351 | ONESOURCE STAFFING, L.L.C.   | 432 MAGAZINE ST, TUPELO MS 38804 |
-| 2020-04-14 | BancorpSouth Bank | $1,838,822 |  273 | DAY-HELP, L.L.C.             | 432 MAGAZINE ST, TUPELO MS 38804 |
-| 2020-04-14 | BancorpSouth Bank | $1,467,400 |  245 | EPSCO, INC.                  | 432 MAGAZINE ST, TUPELO MS 38804 |
-| 2020-04-15 | BancorpSouth Bank | $5,931,285 |  500 | WISE STAFFING SERVICES, INC. | 432 MAGAZINE ST, TUPELO MS 38804 |
-| 2020-04-15 | BancorpSouth Bank | $4,699,302 |  500 | LABOR SOURCE, L.L.C.         | 432 MAGAZINE ST, TUPELO MS 38804 |
-| 2020-04-15 | BancorpSouth Bank | $2,038,312 |  492 | WISE MEDICAL STAFFING, INC.  | 432 MAGAZINE ST, TUPELO MS 38804 |
-| 2020-04-29 | BancorpSouth Bank | $9,545     |    1 | A - SQUARED ENTERPRISES, LLC | 432 MAGAZINE ST, TUPELO MS 38804 |
+| Date | Lending Bank | Amount | Jobs | Business Name | Business Address |
+| :--- | :----------- | :----- | ---: | :------------ | :--------------- |
 
 It seems common in the data for separate franchises or subsidiaries to
 receive their own loans. Dozens of BUMPER’S DRIVE-IN restaurants all
 incorporated at the same address but operating in different locations
 received their own loans.
 
-| Date       | Lending Bank                  | Amount   | Jobs | Business Name                        | Business Address                 |
-| :--------- | :---------------------------- | :------- | ---: | :----------------------------------- | :------------------------------- |
-| 2020-04-13 | BankPlus                      | $142,100 |   49 | LODGING AMERICA AT STARKVILLE        | 1554 W PEACE ST, CANTON MS 39046 |
-| 2020-04-13 | BankPlus                      | $108,400 |   47 | LODGING AMERICA AT GUIN LLC          | 1554 W PEACE ST, CANTON MS 39046 |
-| 2020-04-13 | BankPlus                      | $106,000 |   49 | TRILOGY HOSPITALITY AT COLUMBUS, LLC | 1554 W PEACE ST, CANTON MS 39046 |
-| 2020-04-13 | BankPlus                      | $76,900  |   32 | LODGING AMERICA AT NEW ALBANY, LLC   | 1554 W PEACE ST, CANTON MS 39046 |
-| 2020-04-13 | BankPlus                      | $69,400  |   33 | LODGING AMERICA AT BROOKHAVEN LLC    | 1554 W PEACE ST, CANTON MS 39046 |
-| 2020-04-13 | BankPlus                      | $67,800  |   20 | LODGING AMERICA AT LUCEDALE, LLC     | 1554 W PEACE ST, CANTON MS 39046 |
-| 2020-04-13 | BankPlus                      | $61,100  |   27 | LODGING AMERICA AT WIGGINS, LLC      | 1554 W PEACE ST, CANTON MS 39046 |
-| 2020-04-13 | Community Bank of Mississippi | $48,800  |   20 | BDI BROOKHAVEN LLC                   | 1554 W PEACE ST, CANTON MS 39046 |
-| 2020-04-13 | Community Bank of Mississippi | $42,300  |   17 | BDI PHILADELPHIA                     | 1554 W PEACE ST, CANTON MS 39046 |
-| 2020-04-13 | Community Bank of Mississippi | $31,800  |   15 | BDI CHARLESTON                       | 1554 W PEACE ST, CANTON MS 39046 |
-| 2020-04-13 | Community Bank of Mississippi | $31,300  |   21 | BDI HAZELHURST                       | 1554 W PEACE ST, CANTON MS 39046 |
-| 2020-04-13 | Community Bank of Mississippi | $30,700  |   19 | BDI PHILADELPHIA 2                   | 1554 W PEACE ST, CANTON MS 39046 |
-| 2020-04-13 | Community Bank of Mississippi | $30,000  |    9 | BDI LAUREL                           | 1554 W PEACE ST, CANTON MS 39046 |
-| 2020-04-13 | Community Bank of Mississippi | $28,000  |   11 | BDI MENDENHALL                       | 1554 W PEACE ST, CANTON MS 39046 |
-| 2020-04-13 | Community Bank of Mississippi | $27,900  |   12 | BDI CANTON 1 LLC                     | 1554 W PEACE ST, CANTON MS 39046 |
-| 2020-04-13 | Community Bank of Mississippi | $26,900  |   17 | BDI PRENTISS LLC                     | 1554 W PEACE ST, CANTON MS 39046 |
-| 2020-04-13 | Community Bank of Mississippi | $26,300  |    8 | BDI GLUCKSTADT                       | 1554 W PEACE ST, CANTON MS 39046 |
-| 2020-04-13 | Community Bank of Mississippi | $24,500  |   10 | BDI MADISON COUNTY                   | 1554 W PEACE ST, CANTON MS 39046 |
-| 2020-04-13 | Community Bank of Mississippi | $23,700  |   13 | BDI OF HOLLY BUSH RD                 | 1554 W PEACE ST, CANTON MS 39046 |
-| 2020-04-13 | Community Bank of Mississippi | $23,100  |   17 | BDI LOUISVILLE LLC                   | 1554 W PEACE ST, CANTON MS 39046 |
-| 2020-04-13 | Community Bank of Mississippi | $22,600  |   13 | BDI MARKS                            | 1554 W PEACE ST, CANTON MS 39046 |
-| 2020-04-13 | Community Bank of Mississippi | $22,300  |   11 | BDI PEARSON RD                       | 1554 W PEACE ST, CANTON MS 39046 |
-| 2020-04-14 | Community Bank of Mississippi | $117,700 |   17 | BUMPER’S DRIVE-IN OF AMERICA INC     | 1554 W PEACE ST, CANTON MS 39046 |
-| 2020-04-14 | Community Bank of Mississippi | $66,500  |   26 | BDI ROLLINGFORK                      | 1554 W PEACE ST, CANTON MS 39046 |
-| 2020-04-14 | Community Bank of Mississippi | $43,700  |   13 | FRESH MARKET CAFE                    | 1554 W PEACE ST, CANTON MS 39046 |
-| 2020-04-14 | Community Bank of Mississippi | $40,500  |   29 | BDI QUITMAN                          | 1554 W PEACE ST, CANTON MS 39046 |
-| 2020-04-14 | Community Bank of Mississippi | $30,500  |   15 | BUMPERS DRIVE IN OF BELZONI LLC      | 1554 W PEACE ST, CANTON MS 39046 |
-| 2020-04-14 | Community Bank of Mississippi | $30,100  |   11 | SMITHVILLE BUMPERS DRIVE IN          | 1554 W PEACE ST, CANTON MS 39046 |
-| 2020-04-14 | Community Bank of Mississippi | $27,600  |   13 | BUMPERS DRIVE-IN OF RULEVILLE LLC    | 1554 W PEACE ST, CANTON MS 39046 |
-| 2020-04-14 | Community Bank of Mississippi | $25,300  |   11 | BDI VICKSBURG                        | 1554 W PEACE ST, CANTON MS 39046 |
-| 2020-04-14 | Community Bank of Mississippi | $21,700  |   12 | BDI TERRY ROAD                       | 1554 W PEACE ST, CANTON MS 39046 |
-| 2020-04-14 | Community Bank of Mississippi | $20,800  |    4 | C & C EQUIPMENT                      | 1554 W PEACE ST, CANTON MS 39046 |
-| 2020-04-15 | Community Bank of Mississippi | $41,300  |   19 | YAZOO BUMPERS DRIVE IN               | 1554 W PEACE ST, CANTON MS 39046 |
-| 2020-04-16 | Community Bank of Mississippi | $74,200  |   31 | SIMPLY SOUTHERN AT FLOWOOD LLC       | 1554 W PEACE ST, CANTON MS 39046 |
-| 2020-04-16 | Community Bank of Mississippi | $35,100  |   31 | SIMPLY SOUTHERN AT GRENADA LLC       | 1554 W PEACE ST, CANTON MS 39046 |
-| 2020-04-16 | Community Bank of Mississippi | $31,700  |   16 | MACON BUMPERS LLC                    | 1554 W PEACE ST, CANTON MS 39046 |
-| 2020-04-16 | Community Bank of Mississippi | $28,100  |   16 | BDI FLORA LLC                        | 1554 W PEACE ST, CANTON MS 39046 |
-| 2020-04-16 | Community Bank of Mississippi | $25,600  |   16 | BUMPERS DRIVE IN OF BALDWYN, LLC     | 1554 W PEACE ST, CANTON MS 39046 |
+| Date | Lending Bank | Amount | Jobs | Business Name | Business Address |
+| :--- | :----------- | :----- | ---: | :------------ | :--------------- |
 
 This address in Gulfport is also the location of incorporation for nine
 Domino’s Pizza franchises, *three* of which reportedly retained the
-*maximum* 500 jobs and took a combined $10.2 million in PPP loans, which
+maximum 500 jobs and took a combined $10.2 million in PPP loans, which
 exceeds the maximum loan amount for any single business entity. All of
 these loans were issued by the same bank and all but one were issued on
 the same day. Weirdly enough, most of these businesses seem to cover
 regions outside Mississippi.
 
-| Date       | Lending Bank       | Amount     | Jobs | Business Name                      | Business Address                 |
-| :--------- | :----------------- | :--------- | ---: | :--------------------------------- | :------------------------------- |
-| 2020-04-09 | First Horizon Bank | $2,250,000 |  500 | RPM PIZZA MIDWEST, LLC             | 15384 5 TH ST, GULFPORT MS 39503 |
-| 2020-04-08 | First Horizon Bank | $1,300,000 |  500 | RPM PIZZA BATON ROUGE, LLC         | 15384 5 TH ST, GULFPORT MS 39503 |
-| 2020-04-08 | First Horizon Bank | $1,250,000 |  500 | TTT PIZZA LLC                      | 15384 5 TH ST, GULFPORT MS 39503 |
-| 2020-04-08 | First Horizon Bank | $1,250,000 |  387 | RPM PIZZA-NOLA, LLC                | 15384 5 TH ST, GULFPORT MS 39503 |
-| 2020-04-08 | First Horizon Bank | $1,150,000 |  388 | RPM PIZZA GREATER NEW ORLEANS, LLC | 15384 5 TH ST, GULFPORT MS 39503 |
-| 2020-04-08 | First Horizon Bank | $950,000   |  452 | RPM PIZZA CENTRAL MS, LLC          | 15384 5 TH ST, GULFPORT MS 39503 |
-| 2020-04-08 | First Horizon Bank | $900,000   |  414 | RPM PIZZA ACADIANA, LLC            | 15384 5 TH ST, GULFPORT MS 39503 |
-| 2020-04-08 | First Horizon Bank | $900,000   |  369 | RPM PIZZA NORTHWEST LOUISIANA, LLC | 15384 5 TH ST, GULFPORT MS 39503 |
-| 2020-04-12 | BancorpSouth Bank  | $189,638   |   49 | BIG DADDY PIZZA, LLC               | 15384 5 TH ST, GULFPORT MS 39503 |
-| 2020-04-14 | BancorpSouth Bank  | $67,957    |    5 | HMS BROKERAGE, LLC                 | 15384 5 TH ST, GULFPORT MS 39503 |
+It’s worth noting that businesses with more than 500 employees not
+*necessarily* ineligible for PPP loans, according to [this SBA FAQ
+sheet](https://www.sba.gov/sites/default/files/2020-12/Final%20PPP%20FAQs%20%28December%209%202020%29-508.pdf).
+Businesses only have to attest eligibility.
+
+> **Question:** Are small business concerns (as defined in section 3 of
+> the Small Business Act, 15 U.S.C. 632) required to have 500 or fewer
+> employees to be eligible borrowers in the PPP?
+> 
+> **Answer:** No. Small business concerns can be eligible borrowers even
+> if they have more than 500 employees, as long as they satisfy the
+> existing statutory and regulatory definition of a “small business
+> concern” under section 3 of the Small Business Act, 15 U.S.C. 632. A
+> business can qualify if it meets the SBA employee-based or
+> revenue-based size standard corresponding to its primary industry. Go
+> to \<www.sba.gov/size\> for the industry size standards…
+> 
+> A business that qualifies as a small business concern under section 3
+> of the Small Business Act, 15 U.S.C. 632, may truthfully attest to its
+> eligibility for PPP loans on the Borrower Application Form, unless
+> otherwise ineligible.
+
+| Date | Lending Bank | Amount | Jobs | Business Name | Business Address |
+| :--- | :----------- | :----- | ---: | :------------ | :--------------- |
 
 ## Business Type
 
 There are 18 different kinds of business types.
 
-The PPP was ostensibly designed to help small businesses, but most loans nationwide were given to Corporations. In Mississippi, a
-greater percentage of loans were given to LLC’s and sole proprietorships.
+The PPP was ostensibly designed to help small businesses, but most loans
+nationwide were given to Corporations. In Mississippi, a greater
+percentage of loans were given to LLC’s and sole proprietorships.
 
 ![](../plots/ms/biz_type-1.png)<!-- -->
 
@@ -544,18 +588,18 @@ businesses.
 Most loans did not report this information.
 
 ``` r
-ppp %>% 
-  group_by(is_ms) %>% 
+ms2x %>% 
+  group_by(ms_lab2) %>% 
   summarise(
     no_race = mean(race == "Unanswered", na.rm = TRUE),
     no_gender = mean(gender == "Unanswered", na.rm = TRUE),
     no_vet = mean(veteran == "Unanswered", na.rm = TRUE)
   )
 #> # A tibble: 2 x 4
-#>   is_ms no_race no_gender no_vet
-#>   <lgl>   <dbl>     <dbl>  <dbl>
-#> 1 FALSE   0.897     0.787  0.854
-#> 2 TRUE    0.751     0.658  0.806
+#>   ms_lab2       no_race no_gender no_vet
+#>   <chr>           <dbl>     <dbl>  <dbl>
+#> 1 Mississippi     0.751     0.658  0.806
+#> 2 United States   0.896     0.786  0.854
 ```
 
 The degree of missing race data, for example, does not seem correlated
@@ -592,40 +636,40 @@ ms_ppp %>%
 
 ### Race & Ethnicity
 
-| Race                             | US Count  |       | MS Count |       |
-| :------------------------------- | :-------- | :---- | :------- | :---- |
-| Unanswered                       | 4,584,921 |       | 36,071   |       |
-| White                            | 405,503   | 77.4% | 9,891    | 82.8% |
-| Asian                            | 57,974    | 11.1% | 607      | 5.1%  |
-| Hispanic                         | 41,475    | 7.9%  | 216      | 1.8%  |
-| Black or African American        | 15,966    | 3.0%  | 1,184    | 9.9%  |
-| American Indian or Alaska Native | 2,828     | 0.5%  | 41       | 0.3%  |
-| Puerto Rican                     | 158       | 0.0%  |          |       |
-| Multi Group                      | 10        | 0.0%  |          |       |
-| Eskimo & Aleut                   | 5         | 0.0%  |          |       |
+| Race                             | US Count |           | MS Count |       |
+| :------------------------------- | :------- | :-------- | :------- | :---- |
+| Unanswered                       | 36,071   | 4,620,992 |          |       |
+| White                            | 9,891    | 415,394   | 82.8%    | 77.5% |
+| Black or African American        | 1,184    | 17,150    | 9.9%     | 3.2%  |
+| Asian                            | 607      | 58,581    | 5.1%     | 10.9% |
+| Hispanic                         | 216      | 41,691    | 1.8%     | 7.8%  |
+| American Indian or Alaska Native | 41       | 2,869     | 0.3%     | 0.5%  |
+| Puerto Rican                     | NA       | 158       |          | 0.0%  |
+| Multi Group                      | NA       | 10        |          | 0.0%  |
+| Eskimo & Aleut                   | NA       | 5         |          | 0.0%  |
 
 ### Gender
 
-| Gender       | US Count  |       | MS Count |       |
-| :----------- | :-------- | :---- | :------- | :---- |
-| Unanswered   | 4,021,530 |       | 31,612   |       |
-| Male Owned   | 838,070   | 77.1% | 12,339   | 75.2% |
-| Female Owned | 249,240   | 22.9% | 4,059    | 24.8% |
+| Gender       | US Count |           | MS Count |       |
+| :----------- | :------- | :-------- | :------- | :---- |
+| Unanswered   | 31,612   | 4,053,142 |          |       |
+| Male Owned   | 12,339   | 850,409   | 75.2%    | 77.1% |
+| Female Owned | 4,059    | 253,299   | 24.8%    | 22.9% |
 
 ### Veteran
 
-| Veteran     | US Count  |       | MS Count |       |
-| :---------- | :-------- | :---- | :------- | :---- |
-| Unanswered  | 4,365,201 |       | 38,688   |       |
-| Non-Veteran | 709,757   | 95.4% | 8,977    | 96.3% |
-| Veteran     | 33,882    | 4.6%  | 345      | 3.7%  |
+| Veteran     | US Count |           | MS Count |       |
+| :---------- | :------- | :-------- | :------- | :---- |
+| Unanswered  | 38,688   | 4,403,889 |          |       |
+| Non-Veteran | 8,977    | 718,734   | 96.3%    | 95.5% |
+| Veteran     | 345      | 34,227    | 3.7%     | 4.5%  |
 
 ### Non-Profit
 
-| Non-Profit | US Count  |       | MS Count |       |
-| :--------- | :-------- | :---- | :------- | :---- |
-| FALSE      | 4,929,776 | 96.5% | 45,951   | 95.7% |
-| TRUE       | 179,064   | 3.5%  | 2,059    | 4.3%  |
+| Non-Profit | US Count |           | MS Count |       |
+| :--------- | :------- | :-------- | :------- | :---- |
+| FALSE      | 45,951   | 4,975,727 | 95.7%    | 96.5% |
+| TRUE       | 2,059    | 181,123   | 4.3%     | 3.5%  |
 
 ## Dates
 
@@ -634,6 +678,10 @@ ms_ppp %>%
 ![](../plots/ms/bar_day_amount-1.png)<!-- -->
 
 ## Lenders
+
+Kabbage, Inc., an online automated lending platform, is the only one of
+the top 10 national lending banks to show up in the top 10 banks in
+Mississippi.
 
 ![](../plots/ms/lend_count_bar-1.png)<!-- -->
 

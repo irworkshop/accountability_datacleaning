@@ -810,3 +810,33 @@ dict_raw <- tibble(
   col.names = c("Column", "Type", "Definition")
 ))
 ```
+
+## By State
+
+We are also going to create separate files on PPP loans by state.
+
+```{r state_split, eval=FALSE}
+st_dir <- here(dirname(clean_dir), "by_state")
+by_state <- group_split(ppp, state_clean)
+by_state <- map(by_state, arrange, city_clean)
+for (i in seq_along(by_state)) {
+  st <- unique(by_state[[i]]$state_clean)
+  st_path <- path(st_dir, glue("ppp_loans_state_{st}.csv"))
+  st_aws <- path("PPP", basename(st_path))
+  write_csv(by_state[[i]], st_path)
+  message(st)
+  
+}
+```
+
+```{r}
+put_object(
+    file = st_path,
+    object = st_aws, 
+    bucket = "publicaccountability",
+    acl = "public-read",
+    show_progress = TRUE,
+    multipart = TRUE
+)
+```
+
