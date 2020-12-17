@@ -193,7 +193,7 @@ self reported and a significant amount of applications reported zero jobs or
 omitted a number altogether, although the number of missing jobs reportedly
 saved was smaller in Mississippi than the country at large.
 
-```{r jobs_missing}
+```{r jobs_missing, echo=FALSE}
 ppp %>% 
   group_by(ms_lab) %>% 
   summarise(
@@ -310,7 +310,7 @@ ppp %>%
 `r sum(ms_ppp$jobs == 500, na.rm = TRUE)` businesses in Mississippi
 reportedly retained the max of `r max(ms_ppp$jobs, na.rm = TRUE)` jobs.
 
-```{r jobs_max}
+```{r jobs_max, echo=FALSE}
 ms_ppp %>% 
   filter(jobs == max(jobs, na.rm = TRUE)) %>% 
   select(all_of(id_vars)) %>%
@@ -348,13 +348,16 @@ some businesses in Mississippi which took hundreds of thousands to save one
 or two jobs and others which took only a couple thousand to save over a hundred
 jobs.
 
-```{r jobs_dollar_add}
+```{r jobs_dollar_add, echo=FALSE}
 ppp <- mutate(
   .data = ppp,
   .after = jobs,
   dollar_job = amount/jobs
 )
 ```
+
+These are the businesses which received the most and least money per job 
+reportedly retained.
 
 ```{r jobs_dollar_minmax, echo=FALSE}
 ppp %>%
@@ -544,6 +547,11 @@ ms_ppp %>%
 
 ## Businesses
 
+There are `r comma(n_distinct(ms_ppp$business))` business names in the
+`r comma(nrow(ms_ppp))` Mississippi PPP loans.
+
+### Duplicate Names
+
 There are a number of businesses which apparently relieved multiple loans. 
 
 ```{r biz_multi, echo=FALSE}
@@ -575,7 +583,7 @@ multi_biz %>%
   ) %>% 
   mutate(across(amount, dollar)) %>% 
   select(-date, -n, -group) %>% 
-  head(21) %>% 
+  head(11) %>% 
   kable(
     col.names = c(
       # "Date",
@@ -588,6 +596,21 @@ multi_biz %>%
     )
   )
 ```
+
+This could be in line with [earlier reporting][multi] that some small businesses
+had received multiple PPP loans.
+
+> The issue stems from the hectic early weeks of the program, when funding ran
+out quickly and borrowers were not hearing back from their banks, industry
+sources told NBC News. Although businesses must certify they are only applying
+for one loan, some small-business owners applied at more than one bank to ensure
+they could secure a financial lifeline amid the economic shutdown.
+
+Some of these duplicate loans appear to be similar in value, but none of them
+are exactly the same and some are in fact from the same bank. A text file with
+these repeated businesses has been created.
+
+[multi]: https://www.nbcnews.com/business/business-news/ppp-loan-program-accidentally-paid-some-small-business-owners-twice-n1224061
 
 ### Duplicate Addresses
 
@@ -669,6 +692,39 @@ ms_geo %>%
             "Business Address"
         )
     )
+```
+
+This address in Gulfport is also the location of incorporation for nine Domino's
+Pizza franchises, _three_ of which reportedly retained the _maximum_ 500 jobs
+and took a combined $10.2 million in PPP loans, which exceeds the maximum loan
+amount for any single business entity. All of these loans were issued by the
+same bank and all but one were issued on the same day. Weirdly enough, most of
+these businesses seem to cover regions outside Mississippi.
+
+```{r geo_multi_rpm, echo=FALSE}
+ms_geo %>% 
+  filter(group == 11555) %>% 
+  arrange(desc(amount)) %>% 
+  mutate(
+    .keep = "unused",
+    address = paste(
+      address, 
+      paste(city, state, zip), 
+      sep = ", "
+    )
+  ) %>% 
+  mutate(across(amount, dollar)) %>% 
+  select(-num_loans, -group, -type) %>% 
+  kable(
+    col.names = c(
+      "Date",
+      "Lending Bank",
+      "Amount",
+      "Jobs",
+      "Business Name",
+      "Business Address"
+    )
+  )
 ```
 
 ## Business Type

@@ -1,7 +1,7 @@
 Mississippi PPP Breakdown
 ================
 Kiernan Nicholls
-Wed Dec 16 16:31:50 2020
+Thu Dec 17 10:44:36 2020
 
   - [Data](#data)
   - [Prep](#prep)
@@ -9,6 +9,7 @@ Wed Dec 16 16:31:50 2020
   - [Jobs](#jobs)
   - [Amounts](#amounts)
   - [Businesses](#businesses)
+      - [Duplicate Names](#duplicate-names)
       - [Duplicate Addresses](#duplicate-addresses)
   - [Business Type](#business-type)
   - [Business Industry](#business-industry)
@@ -113,19 +114,11 @@ reported zero jobs or omitted a number altogether, although the number
 of missing jobs reportedly saved was smaller in Mississippi than the
 country at large.
 
-``` r
-ppp %>% 
-  group_by(ms_lab) %>% 
-  summarise(
-    no_job = mean(is.na(jobs)),
-    zero_jobs = mean(jobs == 0, na.rm = TRUE)
-  )
-#> # A tibble: 2 x 3
-#>   ms_lab no_job zero_jobs
-#>   <chr>   <dbl>     <dbl>
-#> 1 Miss.  0.0239    0.0817
-#> 2 Other  0.0656    0.124
-```
+    #> # A tibble: 2 x 3
+    #>   ms_lab no_job zero_jobs
+    #>   <chr>   <dbl>     <dbl>
+    #> 1 Miss.  0.0239    0.0817
+    #> 2 Other  0.0656    0.124
 
 These loans, with missing or invalid jobs reported, does not appear to
 be tied to the time the loan was approved and probably isn’t related to
@@ -184,33 +177,6 @@ ppp %>%
 
 33 businesses in Mississippi reportedly retained the max of 500 jobs.
 
-``` r
-ms_ppp %>% 
-  filter(jobs == max(jobs, na.rm = TRUE)) %>% 
-  select(all_of(id_vars)) %>%
-  arrange(desc(amount)) %>% 
-  mutate(
-    .keep = "unused",
-    address = paste(
-      address, 
-      paste(city, state, zip), 
-      sep = ", "
-    )
-  ) %>% 
-  mutate(across(amount, ~dollar(., 1))) %>% 
-  select(-date) %>% 
-  kable(
-    col.names = c(
-      # "Date",
-      "Lending Bank",
-      "Amount",
-      "Jobs",
-      "Business Name",
-      "Business Address"
-    )
-  )
-```
-
 | Lending Bank                              | Amount      | Jobs | Business Name                   | Business Address                                 |
 | :---------------------------------------- | :---------- | ---: | :------------------------------ | :----------------------------------------------- |
 | Hancock Whitney Bank                      | $10,000,000 |  500 | STAFF PRO LLC                   | 238 COURTHOUSE RD, GULFPORT MS 39507             |
@@ -255,13 +221,8 @@ are some businesses in Mississippi which took hundreds of thousands to
 save one or two jobs and others which took only a couple thousand to
 save over a hundred jobs.
 
-``` r
-ppp <- mutate(
-  .data = ppp,
-  .after = jobs,
-  dollar_job = amount/jobs
-)
-```
+These are the businesses which received the most and least money per job
+reportedly retained.
 
 | Lending Bank                          | Amount     | Jobs | Cost     | Business Name                      | Business Address                        |
 | :------------------------------------ | :--------- | ---: | :------- | :--------------------------------- | :-------------------------------------- |
@@ -403,32 +364,41 @@ These are the 20 largest loans in the state:
 
 ## Businesses
 
+There are 47,749 business names in the 48,010 Mississippi PPP loans.
+
+### Duplicate Names
+
 There are a number of businesses which apparently relieved multiple
 loans.
 
-| Lending Bank                | $ Mil.     | Jobs | Business Name                   | Business Type                  | Business Address                     |
-| :-------------------------- | :--------- | ---: | :------------------------------ | :----------------------------- | :----------------------------------- |
-| Hope Enterprise Corporation | $17,400    |    1 | MICHAEL TRESTER                 | Sole Proprietorship            | 514 S HICKORY ST, ABERDEEN MS 39730  |
-| Hope Enterprise Corporation | $14,300    |    1 | MICHAEL TRESTER                 | Sole Proprietorship            | 514 S HICKORY ST, ABERDEEN MS 39730  |
-| Trustmark National Bank     | $17,485    |    1 | MICHAEL TRESTER                 | Sole Proprietorship            | 514 S HICKORY ST, ABERDEEN MS 39730  |
-| Kabbage, Inc.               | $9,225.00  |   11 | ANGELICA JACKSON                | Self-Employed Individuals      | 136 BRADLEY ST, JACKSON MS 39209     |
-| Fundbox, Inc.               | $3,479.80  |   NA | ANGELICA JACKSON                | Sole Proprietorship            | 136 BRADLEY ST, JACKSON MS 39209     |
-| Bank of Kilmichael          | $6,200     |    5 | BOX LOGGING                     | Partnership                    | 115 WHITES RD, FRENCH CAMP MS 39745  |
-| Regions Bank                | $7,500     |    0 | BOX LOGGING                     | Sole Proprietorship            | 115 WHITES RD, FRENCH CAMP MS 39745  |
-| Regions Bank                | $18,800    |    0 | CAIN APPRAISALS LLC             | Sole Proprietorship            | 2455 SOUTHWOOD RD, JACKSON MS 39211  |
-| Cross River Bank            | $14,854    |    1 | CAIN APPRAISALS LLC             | Self-Employed Individuals      | 2455 SOUTHWOOD RD, JACKSON MS 39211  |
-| Kabbage, Inc.               | $17,981    |    1 | CE CE EVENT PLANNING            | Self-Employed Individuals      | 400 MISSION 66, VICKSBURG MS 39183   |
-| Hope Enterprise Corporation | $16,483    |    1 | CE CE EVENT PLANNING            | Sole Proprietorship            | 400 MISSION 66, VICKSBURG MS 39183   |
-| Trustmark National Bank     | $21,480    |    4 | CHRIST THE KING CATHOLIC CHURCH | Non-Profit Organization        | 237 E AMITE ST, JACKSON MS 39201     |
-| Trustmark National Bank     | $10,976    |    4 | CHRIST THE KING CATHOLIC CHURCH | Non-Profit Organization        | 237 E AMITE ST, JACKSON MS 39201     |
-| Trustmark National Bank     | $518,383   |   89 | CHRIST UNITED METHODIST CHURCH  | Non-Profit Organization        | 6000 OLD CANTON RD, JACKSON MS 39211 |
-| Hancock Whitney Bank        | $4,865     |    1 | CHRIST UNITED METHODIST CHURCH  | Non-Profit Organization        | 6000 OLD CANTON RD, JACKSON MS 39211 |
-| BancorpSouth Bank           | $26,247.50 |    3 | CLIFTON CARTWRIGHT DBA NONE     | Sole Proprietorship            | 517 E CHURCH ST, BOONEVILLE MS 38829 |
-| BancorpSouth Bank           | $14,102.50 |    1 | CLIFTON CARTWRIGHT DBA NONE     | Sole Proprietorship            | 517 E CHURCH ST, BOONEVILLE MS 38829 |
-| The Peoples Bank            | $30,621    |   NA | DAVID A CANONICI STATE FARM     | Sole Proprietorship            | 992 HOWARD AVE, BILOXI MS 39530      |
-| The Peoples Bank            | $20,833    |   NA | DAVID A CANONICI STATE FARM     | Sole Proprietorship            | 992 HOWARD AVE, BILOXI MS 39530      |
-| Cross River Bank            | $187,500   |   29 | EXTRA EXTRA TAX SOLUTIONS LLC   | Limited Liability Company(LLC) | 307 W MAIN ST, SENATOBIA MS 38668    |
-| WebBank                     | $57,900    |   29 | EXTRA EXTRA TAX SOLUTIONS LLC   | Limited Liability Company(LLC) | 307 W MAIN ST, SENATOBIA MS 38668    |
+| Lending Bank                | $ Mil.    | Jobs | Business Name        | Business Type             | Business Address                    |
+| :-------------------------- | :-------- | ---: | :------------------- | :------------------------ | :---------------------------------- |
+| Hope Enterprise Corporation | $17,400   |    1 | MICHAEL TRESTER      | Sole Proprietorship       | 514 S HICKORY ST, ABERDEEN MS 39730 |
+| Hope Enterprise Corporation | $14,300   |    1 | MICHAEL TRESTER      | Sole Proprietorship       | 514 S HICKORY ST, ABERDEEN MS 39730 |
+| Trustmark National Bank     | $17,485   |    1 | MICHAEL TRESTER      | Sole Proprietorship       | 514 S HICKORY ST, ABERDEEN MS 39730 |
+| Kabbage, Inc.               | $9,225.00 |   11 | ANGELICA JACKSON     | Self-Employed Individuals | 136 BRADLEY ST, JACKSON MS 39209    |
+| Fundbox, Inc.               | $3,479.80 |   NA | ANGELICA JACKSON     | Sole Proprietorship       | 136 BRADLEY ST, JACKSON MS 39209    |
+| Bank of Kilmichael          | $6,200    |    5 | BOX LOGGING          | Partnership               | 115 WHITES RD, FRENCH CAMP MS 39745 |
+| Regions Bank                | $7,500    |    0 | BOX LOGGING          | Sole Proprietorship       | 115 WHITES RD, FRENCH CAMP MS 39745 |
+| Regions Bank                | $18,800   |    0 | CAIN APPRAISALS LLC  | Sole Proprietorship       | 2455 SOUTHWOOD RD, JACKSON MS 39211 |
+| Cross River Bank            | $14,854   |    1 | CAIN APPRAISALS LLC  | Self-Employed Individuals | 2455 SOUTHWOOD RD, JACKSON MS 39211 |
+| Kabbage, Inc.               | $17,981   |    1 | CE CE EVENT PLANNING | Self-Employed Individuals | 400 MISSION 66, VICKSBURG MS 39183  |
+| Hope Enterprise Corporation | $16,483   |    1 | CE CE EVENT PLANNING | Sole Proprietorship       | 400 MISSION 66, VICKSBURG MS 39183  |
+
+This could be in line with [earlier
+reporting](https://www.nbcnews.com/business/business-news/ppp-loan-program-accidentally-paid-some-small-business-owners-twice-n1224061)
+that some small businesses had received multiple PPP loans.
+
+> The issue stems from the hectic early weeks of the program, when
+> funding ran out quickly and borrowers were not hearing back from their
+> banks, industry sources told NBC News. Although businesses must
+> certify they are only applying for one loan, some small-business
+> owners applied at more than one bank to ensure they could secure a
+> financial lifeline amid the economic shutdown.
+
+Some of these duplicate loans appear to be similar in value, but none of
+them are exactly the same and some are in fact from the same bank. A
+text file with these repeated businesses has been created.
 
 ### Duplicate Addresses
 
@@ -521,6 +491,27 @@ received their own loans.
 | 2020-04-16 | Community Bank of Mississippi | $31,700  |   16 | MACON BUMPERS LLC                    | 1554 W PEACE ST, CANTON MS 39046 |
 | 2020-04-16 | Community Bank of Mississippi | $28,100  |   16 | BDI FLORA LLC                        | 1554 W PEACE ST, CANTON MS 39046 |
 | 2020-04-16 | Community Bank of Mississippi | $25,600  |   16 | BUMPERS DRIVE IN OF BALDWYN, LLC     | 1554 W PEACE ST, CANTON MS 39046 |
+
+This address in Gulfport is also the location of incorporation for nine
+Domino’s Pizza franchises, *three* of which reportedly retained the
+*maximum* 500 jobs and took a combined $10.2 million in PPP loans, which
+exceeds the maximum loan amount for any single business entity. All of
+these loans were issued by the same bank and all but one were issued on
+the same day. Weirdly enough, most of these businesses seem to cover
+regions outside Mississippi.
+
+| Date       | Lending Bank       | Amount     | Jobs | Business Name                      | Business Address                 |
+| :--------- | :----------------- | :--------- | ---: | :--------------------------------- | :------------------------------- |
+| 2020-04-09 | First Horizon Bank | $2,250,000 |  500 | RPM PIZZA MIDWEST, LLC             | 15384 5 TH ST, GULFPORT MS 39503 |
+| 2020-04-08 | First Horizon Bank | $1,300,000 |  500 | RPM PIZZA BATON ROUGE, LLC         | 15384 5 TH ST, GULFPORT MS 39503 |
+| 2020-04-08 | First Horizon Bank | $1,250,000 |  500 | TTT PIZZA LLC                      | 15384 5 TH ST, GULFPORT MS 39503 |
+| 2020-04-08 | First Horizon Bank | $1,250,000 |  387 | RPM PIZZA-NOLA, LLC                | 15384 5 TH ST, GULFPORT MS 39503 |
+| 2020-04-08 | First Horizon Bank | $1,150,000 |  388 | RPM PIZZA GREATER NEW ORLEANS, LLC | 15384 5 TH ST, GULFPORT MS 39503 |
+| 2020-04-08 | First Horizon Bank | $950,000   |  452 | RPM PIZZA CENTRAL MS, LLC          | 15384 5 TH ST, GULFPORT MS 39503 |
+| 2020-04-08 | First Horizon Bank | $900,000   |  414 | RPM PIZZA ACADIANA, LLC            | 15384 5 TH ST, GULFPORT MS 39503 |
+| 2020-04-08 | First Horizon Bank | $900,000   |  369 | RPM PIZZA NORTHWEST LOUISIANA, LLC | 15384 5 TH ST, GULFPORT MS 39503 |
+| 2020-04-12 | BancorpSouth Bank  | $189,638   |   49 | BIG DADDY PIZZA, LLC               | 15384 5 TH ST, GULFPORT MS 39503 |
+| 2020-04-14 | BancorpSouth Bank  | $67,957    |    5 | HMS BROKERAGE, LLC                 | 15384 5 TH ST, GULFPORT MS 39503 |
 
 ## Business Type
 
