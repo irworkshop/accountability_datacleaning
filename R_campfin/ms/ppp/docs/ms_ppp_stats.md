@@ -106,7 +106,7 @@ Mississippi accounts for 0.9% of the total PPP loans, and 0.6% of the
 total amount disbursed. This is close to the 0.9% of the U.S. population
 that lives in the state.
 
-CAN YOU ADD TOTAL AMOUNT TO ABOVE???
+**CAN YOU ADD TOTAL AMOUNT TO ABOVE???**
 
 ## Jobs
 
