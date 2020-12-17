@@ -387,7 +387,7 @@ These are the businesses that received the most and least money per job
 retained:
 
 ```{r jobs_dollar_minmax, echo=FALSE}
-ppp %>%
+ht_jobs <- ppp %>%
   filter(is_ms) %>% 
   filter(!is.na(jobs) & jobs > 0) %>% 
   filter(amount > 10, jobs != 500) %>% 
@@ -406,8 +406,11 @@ ppp %>%
   mutate(across(amount, dollar, 1)) %>% 
   mutate(across(dollar_job, dollar, 1)) %>% 
   mutate(across(business, str_trunc, 35)) %>% 
-  select(-date, -sort) %>% 
-  kable(
+  group_split(sort) %>% 
+  map(select, -date, -sort)
+
+kable(
+  x = ht_jobs[1],
     col.names = c(
       # "Date",
       "Lending Bank",
@@ -418,6 +421,19 @@ ppp %>%
       "Business Address"
     )
   )
+
+kable(
+  x = ht_jobs[2],
+  col.names = c(
+    # "Date",
+    "Lending Bank",
+    "Amount",
+    "Jobs",
+    "Cost",
+    "Business Name",
+    "Business Address"
+  )
+)
 ```
 
 Some of these businesses with small loans and high jobs are sole proprietorship
@@ -561,13 +577,13 @@ ms_ppp %>%
       sep = ", "
     )
   ) %>% 
-  mutate(across(amount, ~dollar(./1e6))) %>% 
+  mutate(across(amount, dollar, 1)) %>% 
   select(-date) %>% 
   kable(
     col.names = c(
       # "Date",
       "Lending Bank",
-      "$ Mil.",
+      "Amount",
       "Jobs",
       "Business Name",
       "Business Type"
@@ -619,7 +635,7 @@ multi_biz %>%
     col.names = c(
       # "Date",
       "Lending Bank",
-      "$ Mil.",
+      "Amount",
       "Jobs",
       "Business Name",
       "Business Type",
@@ -706,7 +722,7 @@ received a combined $17.6 million ([view on Google Streetview][gsv]).
 
 ```{r geo_multi_staff, echo=FALSE}
 ms_geo %>% 
-  filter(group == 29323) %>% 
+  filter(group == 29332) %>% 
   mutate(
     .keep = "unused",
     address = paste(
@@ -715,6 +731,7 @@ ms_geo %>%
       sep = ", "
     )
   ) %>% 
+  arrange(desc(amount)) %>% 
   mutate(across(amount, dollar)) %>% 
   select(-num_loans, -group, -type) %>% 
   kable(
@@ -735,7 +752,7 @@ same address but operating in different locations received their own loans.
 
 ```{r geo_multi_dbi, echo=FALSE}
 ms_geo %>% 
-    filter(group == 11711) %>% 
+    filter(group == 11714) %>% 
     mutate(
         .keep = "unused",
         address = paste(
@@ -744,18 +761,17 @@ ms_geo %>%
             sep = ", "
         )
     ) %>% 
-    mutate(across(amount, dollar)) %>% 
-    select(-num_loans, -group, -type) %>% 
-    kable(
-        col.names = c(
-            "Date",
-            "Lending Bank",
-            "Amount",
-            "Jobs",
-            "Business Name",
-            "Business Address"
-        )
+  mutate(across(amount, dollar)) %>% 
+  select(-num_loans, -group, -type, -date) %>% 
+  kable(
+    col.names = c(
+      "Lending Bank",
+      "Amount",
+      "Jobs",
+      "Business Name",
+      "Business Address"
     )
+  )
 ```
 
 This address in Gulfport is also the location of incorporation for nine Domino's
@@ -788,7 +804,7 @@ PPP loans on the Borrower Application Form, unless otherwise ineligible.
 
 ```{r geo_multi_rpm, echo=FALSE}
 ms_geo %>% 
-  filter(group == 11555) %>% 
+  filter(group == 11558) %>% 
   arrange(desc(amount)) %>% 
   mutate(
     .keep = "unused",
@@ -799,10 +815,9 @@ ms_geo %>%
     )
   ) %>% 
   mutate(across(amount, dollar)) %>% 
-  select(-num_loans, -group, -type) %>% 
+  select(-num_loans, -group, -type, -date) %>% 
   kable(
     col.names = c(
-      "Date",
       "Lending Bank",
       "Amount",
       "Jobs",
@@ -1051,9 +1066,9 @@ ms2x %>%
     names_glue = "{ms_lab2}_{.value}",
     names_sort = TRUE
   ) %>% 
-  relocate(Mississippi_p, .after = Mississippi_p) %>% 
+  relocate(Mississippi_p, .after = Mississippi_n) %>% 
   mutate(across(3:5, str_empty_na)) %>% 
-  kable(col.names = c("Race", "US Count", "", "MS Count", ""))
+  kable(col.names = c("Race", "MS Count", "", "US Count", ""))
 ```
 
 ### Gender
@@ -1077,9 +1092,9 @@ ms2x %>%
     names_glue = "{ms_lab2}_{.value}",
     names_sort = TRUE
   ) %>% 
-  relocate(Mississippi_p, .after = Mississippi_p) %>% 
+  relocate(Mississippi_p, .after = Mississippi_n) %>% 
   mutate(across(3:5, str_empty_na)) %>% 
-  kable(col.names = c("Gender", "US Count", "", "MS Count", ""))
+  kable(col.names = c("Gender", "MS Count", "", "US Count", ""))
 ```
 
 ### Veteran
@@ -1103,9 +1118,9 @@ ms2x %>%
     names_glue = "{ms_lab2}_{.value}",
     names_sort = TRUE
   ) %>% 
-  relocate(Mississippi_p, .after = Mississippi_p) %>% 
+  relocate(Mississippi_p, .after = Mississippi_n) %>% 
   mutate(across(3:5, str_empty_na)) %>% 
-  kable(col.names = c("Veteran", "US Count", "", "MS Count", ""))
+  kable(col.names = c("Veteran", "MS Count", "", "US Count", ""))
 ```
 
 ### Non-Profit
@@ -1129,9 +1144,9 @@ ms2x %>%
     names_glue = "{ms_lab2}_{.value}",
     names_sort = TRUE
   ) %>% 
-  relocate(Mississippi_p, .after = Mississippi_p) %>% 
+  relocate(Mississippi_p, .after = Mississippi_n) %>% 
   mutate(across(3:5, str_empty_na)) %>% 
-  kable(col.names = c("Non-Profit", "US Count", "", "MS Count", ""))
+  kable(col.names = c("Non-Profit", "MS Count", "", "US Count", ""))
 ```
 
 ## Dates
