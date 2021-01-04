@@ -1,0 +1,700 @@
+---
+title: "New Jersey Voters"
+author: "Kiernan Nicholls"
+date: "`r date()`"
+output:
+  github_document: 
+    df_print: tibble
+    toc: true
+    toc_dept: 3
+editor_options: 
+  chunk_output_type: console
+---
+
+<!-- Place comments regarding knitting here -->
+
+```{r setup, include=FALSE, purl=FALSE}
+library(knitr)
+opts_chunk$set(
+  eval = TRUE,
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  error = FALSE,
+  collapse = TRUE,
+  comment = "#>",
+  fig.path = "../plots/",
+  fig.width = 10,
+  dpi = 300
+)
+if (!interactive()) {
+  options(width = 120)
+  set.seed(5)
+}
+```
+
+```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
+doc_dir <- fs::dir_create(here::here("nj", "voters", "docs"))
+```
+
+## Project
+
+The Accountability Project is an effort to cut across data silos and give
+journalists, policy professionals, activists, and the public at large a simple
+way to search across huge volumes of public data about people and organizations.
+
+Our goal is to standardizing public data on a few key fields by thinking of each
+dataset row as a transaction. For each transaction there should be (at least) 3
+variables:
+
+1. All **parties** to a transaction.
+2. The **date** of the transaction.
+3. The **amount** of money involved.
+
+## Objectives
+
+This document describes the process used to complete the following objectives:
+
+1. How many records are in the database?
+1. Check for entirely duplicated records.
+1. Check ranges of continuous variables.
+1. Is there anything blank or missing?
+1. Check for consistency issues.
+1. Create a five-digit ZIP Code called `zip`.
+1. Create a `year` field from the transaction date.
+1. Make sure there is data on both parties to a transaction.
+
+## Packages
+
+The following packages are needed to collect, manipulate, visualize, analyze,
+and communicate these results. The `pacman` package will facilitate their
+installation and attachment.
+
+```{r load_packages, message=FALSE, warning=FALSE, error=FALSE}
+if (!require("pacman")) {
+  install.packages("pacman")
+}
+pacman::p_load(
+  tidyverse, # data manipulation
+  lubridate, # datetime strings
+  gluedown, # printing markdown
+  janitor, # clean data frames
+  campfin, # custom irw tools
+  aws.s3, # aws cloud storage
+  refinr, # cluster & merge
+  scales, # format strings
+  knitr, # knit documents
+  vroom, # fast reading
+  rvest, # scrape html
+  glue, # code strings
+  here, # project paths
+  httr, # http requests
+  fs # local storage 
+)
+```
+
+This document should be run as part of the `R_campfin` project, which lives as a
+sub-directory of the more general, language-agnostic
+[`irworkshop/accountability_datacleaning`][tap] GitHub repository.
+
+The `R_campfin` project uses the [RStudio projects][rproj] feature and should be
+run as such. The project also uses the dynamic `here::here()` tool for file
+paths relative to _your_ machine.
+
+```{r where_here}
+# where does this document knit?
+here::i_am("nj/voters/docs/nj_voters_diary.Rmd")
+```
+
+[tap]: https://github.com/irworkshop/accountability_datacleaning
+[rproj]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects
+
+## Data
+
+The list of voters in New Jersey is from the Department of State's
+[Division of Elections][doe] on their [Voter Information Portal][vip].
+
+[doe]: https://nj.gov/state/elections/index.shtml
+[vip]: https://nj.gov/state/elections/vote.shtml
+
+This data was requested by the Investigative Reporting Workshop on September 18,
+2020 and uploaded raw format to our AWS server.
+
+```{r raw_dir}
+raw_obj <- "svl-2020-0918-370128.zip"
+raw_aws <- path("csv", "svl-2020-0918-370128.zip")
+raw_dir <- dir_create(here("nj", "voters", "data", "raw"))
+raw_zip <- path(raw_dir, raw_obj)
+```
+
+```{r raw_download}
+if (!file_exists(raw_zip)) {
+  save_object(
+    object = raw_aws,
+    bucket = "publicaccountability",
+    file = raw_zip,
+    show_progress = TRUE,
+    overwrite = FALSE
+  )
+}
+```
+
+### Extract
+
+The single archive file contains separate archives by county, each of those
+containing a single comma-delimited text file. We can extract the text file
+from each of these archives.
+
+```{r raw_content}
+zip_files <- mutate(
+  .data = unzip(raw_zip, list = TRUE),
+  across(Length, as_fs_bytes)
+)
+```
+
+```{r echo=FALSE}
+kable(zip_files)
+```
+
+```{r raw_unzip1}
+raw_paths <- unzip(
+  zipfile = raw_zip,
+  exdir = raw_dir,
+  junkpaths = TRUE,
+  files = str_subset(
+    string = zip_files$Name, 
+    pattern = "^_", 
+    negate = TRUE
+  )
+)
+```
+
+```{r raw_county}
+county_zip <- str_subset(raw_paths, "zip$")
+raw_paths <- character(length(county_zip))
+csv_dir <- dir_create(here("nj", "voters", "data", "csv"))
+```
+
+```{r raw_unzip2}
+for (i in seq_along(county_zip)) {
+  aa <- unzip(county_zip[i], list = TRUE)
+  raw_paths[i] <- unzip(
+    zipfile = county_zip[i],
+    exdir = csv_dir,
+    junkpaths = TRUE,
+    files = str_subset(
+      string = aa$Name, 
+      pattern = "^_", 
+      negate = TRUE
+    )
+  )
+}
+```
+
+```{r echo=FALSE}
+raw_paths <- as_fs_path(raw_paths)
+```
+
+### About
+
+The archive file also contains a PDF file describing the layout of these text
+files and some of the codes used.
+
+##### Voter Status
+
+|code |status                        |
+|:----|:-----------------------------|
+|A    |Active                        |
+|AD   |Active Need ID                |
+|AF   |Active Federal Election Only  |
+|IF   |Inactive Confirmation         |
+|ID   |Inactive Confirmation Need ID |
+|P    |Pending                       |
+|PD   |Pending Need ID               |
+|P7   |Pending-17                    |
+|7D   |Pending-17 Need ID            |
+
+##### Party Code
+
+|code |party                   |
+|:----|:-----------------------|
+|CNV  |Conservative Party      |
+|DEM  |Democratic              |
+|GRE  |Green Party             |
+|LIB  |Libertarian Party       |
+|NAT  |Natural Law Party       |
+|RFP  |Reform Party            |
+|REP  |Republican              |
+|SSP  |Socialist Party         |
+|CON  |U.S. Constitution Party |
+|UNA  |Unaffiliated            |
+
+##### File Layout
+
+|FIELD NAME      |FIELD DATA                   |FIELD TYPE       |
+|:---------------|:----------------------------|:----------------|
+|`displayId`     |Voter ID                     |TEXT             |
+|`leg_id`        |Legacy Voter  ID             |TEXT             |
+|`party`         |Party                        |TEXT             |
+|`status`        |Status                       |TEXT             |
+|`last`          |Last Name                    |TEXT             |
+|`first`         |First Name                   |TEXT             |
+|`middle`        |Middle Name                  |TEXT             |
+|`suffix`        |Suffix                       |TEXT             |
+|`dob`           |Date of Birth                |DATE(MM/DD/YYYY) |
+|`street_num`    |Residence Street Number      |TEXT             |
+|`street_pre`    |Residence Street Prefix      |TEXT             |
+|`street_post`   |Residence Street  Post       |TEXT             |
+|`street_base`   |Residence Base Street  Name  |TEXT             |
+|`street_suff`   |Residence Street Suffix      |TEXT             |
+|`street_name`   |Residence Street  Name       |TEXT             |
+|`apt_unit`      |Residence Apt/Unit           |TEXT             |
+|`city`          |Residence City               |TEXT             |
+|`zip`           |Residence Zip                |TEXT             |
+|`county`        |County                       |TEXT             |
+|`municipality`  |Municipality                 |TEXT             |
+|`ward`          |Ward                         |TEXT             |
+|`district`      |District                     |TEXT             |
+|`congressional` |Congressional District       |TEXT             |
+|`legislative`   |Legislative District         |TEXT             |
+|`freeholder`    |Freeholder District          |TEXT             |
+|`school`        |School District              |TEXT             |
+|`fire`          |Fire District                |TEXT             |
+
+### Read
+
+Using the record layout given in the PDF file, we can read each of the 
+`r length(raw_paths)` text files into a single data frame.
+
+```{r raw_read}
+njv <- map_df(
+  .x = raw_paths,
+  .f = read_delim,
+  .id = "source_file",
+  delim = ",",
+  guess_max = 0,
+  escape_backslash = FALSE,
+  escape_double = FALSE,
+  col_types = cols(
+    .default = col_character(),
+    dob = col_date()
+  )
+)
+```
+
+```{r raw_source}
+njv <- njv %>%
+  relocate(source_file, .after = last_col()) %>% 
+  mutate(source_file = basename(raw_paths)[as.integer(source_file)])
+```
+
+### Old
+
+```{r old_file}
+old_aws <- path("csv", "nj_voters.csv")
+old_csv <- path(dirname(raw_dir), "nj_voters_old.csv")
+```
+
+```{r old_download}
+if (!file_exists(old_csv)) {
+  save_object(
+    object = old_aws,
+    bucket = "publicaccountability",
+    file = old_csv,
+    show_progress = TRUE,
+    overwrite = FALSE
+  )
+}
+```
+
+```{r old_read}
+njo <- read_csv(
+  file = old_csv,
+  col_types = cols(
+    .default = col_character(),
+    DATE_REGISTERED = col_date("%m/%d/%Y"),
+    BIRTH_DATE = col_date("%m/%d/%Y")
+  )
+)
+```
+
+```{r old_dates}
+prop_distinct(njo$VOTER_ID)
+prop_in(njv$leg_id, njo$VOTER_ID)
+old_info <- njo %>% 
+  select(
+    county = county_name,
+    leg_id = VOTER_ID,
+    reg_date = DATE_REGISTERED,
+    sex = SEX
+  )
+```
+
+```{r old_bind}
+rm(njo)
+flush_memory(2)
+```
+
+```{r old_join_date}
+njv <- left_join(
+  x = njv,
+  y = old_info,
+  by = c(
+    "county",
+    "leg_id"
+  )
+)
+```
+
+## Explore
+
+There are `r comma(nrow(njv))` rows of `r ncol(njv)` columns. Each column
+represents a single voter registered in the state of New Jersey.
+
+```{r glimpse}
+glimpse(njv)
+tail(njv)
+```
+
+### Missing
+
+Columns vary in their degree of missing values.
+
+```{r na_count}
+col_stats(njv, count_na)
+```
+
+We can flag any record missing a key variable needed to identify a transaction.
+
+```{r na_flag}
+nm_vars <- c("first", "middle", "last", "suffix")
+njv <- flag_na(njv, c(first, last))
+sum(njv$na_flag)
+```
+
+There are `r sum(njv$na_flag)` records missing either the first or last name.
+It would appear a lot of these voters come from countries with conventions
+for naming different than the typical given name/surname combination.
+
+```{r na_view}
+njv %>% 
+  filter(na_flag) %>% 
+  select(all_of(nm_vars)) %>% 
+  sample_n(20)
+```
+
+### Duplicates
+
+We can also flag any record completely duplicated across every column.
+
+```{r dupe_file}
+dupe_file <- here("nj", "voters", "dupes.tsv.xz")
+```
+
+```{r dupe_write}
+if (!file_exists(dupe_file)) {
+  file_create(dupe_file)
+  njs <- njv %>% 
+    select(-displayId, -leg_id) %>% 
+    group_split(district)
+  split_id <- split(njv$displayId, njv$district)
+  pb <- txtProgressBar(max = length(njs), style = 3)
+  for (i in seq_along(njs)) {
+    d1 <- duplicated(njs[[i]], fromLast = FALSE)
+    if (any(d1)) {
+      d2 <- duplicated(njs[[i]], fromLast = TRUE)
+      dupes <- tibble(displayId = split_id[[i]], dupe_flag = d1 | d2)
+      dupes <- filter(dupes, dupe_flag == TRUE)
+      vroom_write(dupes, xzfile(dupe_file), append = TRUE)
+      rm(d2, dupes)
+    }
+    rm(d1)
+    flush_memory(1)
+    setTxtProgressBar(pb, i)
+  }
+  rm(njs)
+}
+```
+
+```{r dupe_read}
+file_size(dupe_file)
+dupes <- read_tsv(
+  file = xzfile(dupe_file),
+  col_names = c("displayId", "dupe_flag"),
+  col_types = cols(
+    displayId = col_character(),
+    dupe_flag = col_logical()
+  )
+)
+dupes <- distinct(dupes)
+```
+
+```{r dupe_join}
+nrow(njv)
+njv <- left_join(njv, dupes, by = "displayId")
+njv <- mutate(njv, dupe_flag = !is.na(dupe_flag))
+sum(njv$dupe_flag)
+```
+
+We can see that, despite supposedly unique IDs, there are duplicate voters.
+
+```{r dupe_view}
+njv %>% 
+  filter(dupe_flag) %>% 
+  select(displayId, all_of(nm_vars), street_name, city) %>% 
+  arrange(last)
+```
+
+### Categorical
+
+```{r distinct_count}
+col_stats(njv, n_distinct)
+```
+
+```{r distinct_plots, echo=FALSE}
+njv %>% 
+  filter(!is.na(party)) %>% 
+  count(party, sort = TRUE) %>% 
+  filter(
+    party %in% c(
+      "Democratic",
+      "Unaffiliated",
+      "Republican",
+      "Libertarian",
+      "U.S. Constitution Party",
+      "Green Party"
+    )
+  ) %>% 
+  ggplot(aes(reorder(party, -n), n)) +
+    geom_col(aes(fill = party)) +
+    scale_y_continuous(labels = comma) +
+    scale_fill_manual(
+      guide = FALSE,
+      values = c(
+        "Democratic" = "#3333FF",
+        "Unaffiliated" = "#666666",
+        "Republican" = "#E81B23",
+        "Libertarian" = "#FED105",
+        "U.S. Constitution Party" = "#A356DE",
+        "Green Party" = "#17aa5c"
+      )
+    ) +
+    labs(y = "count", x = "party")
+explore_plot(njv, status)
+explore_plot(njv, county)
+```
+
+### Dates
+
+```{r date_bad}
+sum(njv$reg_date == "1901-01-01", na.rm = TRUE)
+njv$reg_date[which(njv$reg_date == "1901-01-01")] <- NA
+```
+
+```{r year_birth}
+njv <- mutate(
+  .data = njv, 
+  birth_year = year(dob),
+  reg_year = year(reg_date)
+)
+```
+
+```{r year_reg_bar, echo=FALSE}
+njv %>% 
+  count(reg_year) %>% 
+  filter(reg_year > 1940, reg_year < 2021) %>% 
+  mutate(
+    type = case_when(
+      reg_year %% 4 == 0 ~ "pres.",
+      reg_year %% 2 == 0 ~ "mid.",
+      TRUE ~ "none"
+    )
+  ) %>% 
+  ggplot(aes(reg_year, n)) +
+  geom_col(aes(fill = type)) +
+  scale_fill_manual(values = c("#1B9E77", "#666666", "#D95F02")) +
+  scale_y_continuous(labels = comma) +
+  scale_x_continuous(breaks = seq(1940, 2020, by = 4)) +
+  labs(
+    title = "New Jersey Voters by Date of Registration",
+    x = "Registration Year",
+    y = "Count"
+  )
+```
+
+```{r year_birth_bar, echo=FALSE}
+njv %>%
+  filter(dob > "1900-01-01", dob < today()) %>% 
+  ggplot(aes(dob)) +
+  geom_histogram(bins = 60, fill = dark2["purple"]) +
+  scale_y_continuous(labels = comma) +
+  labs(
+    title = "New Jersey Voters by Date of Birth",
+    x = "Date of Birth",
+    y = "Count"
+  )
+```
+
+## Wrangle
+
+To improve the searchability of the database, we will perform some consistent,
+confident string normalization. For geographic variables like city names and
+ZIP codes, the corresponding `campfin::normal_*()` functions are tailor made to 
+facilitate this process.
+
+The `zip` variable is already as clean as we can expect. 
+
+```{r zip_check}
+prop_in(njv$zip, valid_zip)
+```
+
+We will manually add a variable indicating these voters live in New Jersey.
+
+```{r state_add}
+njv <- mutate(njv, state = "NJ")
+```
+
+### Address
+
+For the street `addresss` variable, the `campfin::normal_address()` function
+will force consistence case, remove punctuation, and abbreviate official 
+USPS suffixes.
+
+```{r address_norm}
+njv <- njv %>% 
+  unite(
+    col = address_norm,
+    street_num, street_pre, street_post, street_name, apt_unit,
+    sep = " ",
+    remove = FALSE,
+    na.rm = TRUE
+  ) %>% 
+  relocate(address_norm, .after = last_col()) %>% 
+  mutate(across(address_norm, normal_address))
+```
+
+### City
+
+Cities are the most difficult geographic variable to normalize, simply due to
+the wide variety of valid cities and formats.
+
+#### Normal
+
+The `campfin::normal_city()` function is a good start, again converting case,
+removing punctuation, but _expanding_ USPS abbreviations. We can also remove
+`invalid_city` values.
+
+```{r city_norm}
+norm_city <- njv %>% 
+  distinct(city, state, zip) %>% 
+  mutate(
+    city_norm = normal_city(
+      city = city, 
+      abbs = usps_city,
+      states = c("NJ", "DC", "NEW JERSEY"),
+      na = invalid_city,
+      na_rep = TRUE
+    )
+  )
+```
+
+#### Swap
+
+We can further improve normalization by comparing our normalized value
+against the _expected_ value for that record's state abbreviation and ZIP code.
+If the normalized value is either an abbreviation for or very similar to the
+expected value, we can confidently swap those two.
+
+```{r city_swap}
+norm_city <- norm_city %>% 
+  rename(city_raw = city) %>% 
+  left_join(
+    y = zipcodes,
+    by = c("state", "zip")
+  ) %>% 
+  rename(city_match = city) %>% 
+  mutate(
+    match_abb = is_abbrev(city_norm, city_match),
+    match_dist = str_dist(city_norm, city_match),
+    city_swap = if_else(
+      condition = !is.na(match_dist) & (match_abb | match_dist == 1),
+      true = city_match,
+      false = city_norm
+    )
+  ) %>% 
+  select(
+    -city_match,
+    -match_dist,
+    -match_abb
+  ) %>% 
+  rename(city = city_raw)
+```
+
+```{r city_rejoin}
+njv <- left_join(
+  x = njv,
+  y = norm_city,
+  by = c("city", "state", "zip")
+)
+```
+
+## Conclude
+
+Before exporting, we can remove the intermediary normalization columns and
+rename all added variables with the `_clean` suffix.
+
+```{r clean_select}
+njv <- njv %>% 
+  select(
+    -city_norm,
+    city_clean  = city_swap
+  ) %>% 
+  rename_all(~str_replace(., "_norm", "_clean")) %>% 
+  rename_all(~str_remove(., "_raw")) %>% 
+  relocate(state, .after = city_clean)
+```
+
+```{r clean_glimpse}
+glimpse(sample_n(njv, 50))
+```
+
+1. There are `r comma(nrow(njv))` records in the database.
+1. There are `r comma(sum(njv$dupe_flag))` duplicate records in the database.
+1. The range and distribution of `amount` and `date` seem reasonable.
+1. There are `r comma(sum(njv$na_flag))` records missing key variables.
+1. Consistency in geographic data has been improved with `campfin::normal_*()`.
+1. The 4-digit `year` variable has been created with `lubridate::year()`.
+
+## Export
+
+Now the file can be saved on disk for upload to the Accountability server.
+
+```{r clean_dir}
+clean_dir <- dir_create(here("nj", "voters", "data", "clean"))
+clean_path <- path(clean_dir, "nj_voters_clean.csv")
+write_csv(njv, clean_path, na = "")
+(clean_size <- file_size(clean_path))
+file_encoding(clean_path) %>% 
+  mutate(across(path, path.abbrev))
+```
+
+## Upload
+
+We can use the `aws.s3::put_object()` to upload the text file to the IRW server.
+
+```{r aws_upload, eval=FALSE}
+aws_path <- path("csv", basename(clean_path))
+if (!object_exists(aws_path, "publicaccountability")) {
+  put_object(
+    file = clean_path,
+    object = aws_path, 
+    bucket = "publicaccountability",
+    acl = "public-read",
+    show_progress = TRUE,
+    multipart = TRUE
+  )
+}
+aws_head <- head_object(aws_path, "publicaccountability")
+(aws_size <- as_fs_bytes(attr(aws_head, "content-length")))
+unname(aws_size == clean_size)
+```
