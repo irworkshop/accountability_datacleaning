@@ -290,6 +290,13 @@ njv <- njv %>%
 
 ### Old
 
+The Investigative Reporting Workshop previously requested this data in November
+of 2019. The data received had a slightly different structure from the data from
+2020. This includes the lack of a statewide voter ID and the presence of the
+voter registration date. The 2020 data contained the same legacy county ID used
+in 2019, meaning we can use this ID to identify the registration date for any
+voter found in the 2019 database.
+
 ```{r old_file}
 old_aws <- path("csv", "nj_voters.csv")
 old_csv <- path(dirname(raw_dir), "nj_voters_old.csv")
@@ -486,10 +493,16 @@ explore_plot(njv, county)
 
 ### Dates
 
+A significant amount of voters have a registration date of January 1, 1901. This
+seems to be the default date for any voter missing a real date. This is common
+practice in voter data. We can remove these dates.
+
 ```{r date_bad}
 sum(njv$reg_date == "1901-01-01", na.rm = TRUE)
 njv$reg_date[which(njv$reg_date == "1901-01-01")] <- NA
 ```
+
+We can then create variables identifying the year of birth and registration.
 
 ```{r year_birth}
 njv <- mutate(

@@ -1,7 +1,7 @@
 New Jersey Voters
 ================
 Kiernan Nicholls
-Mon Jan 4 15:17:34 2021
+Tue Jan 5 11:18:26 2021
 
   - [Project](#project)
   - [Objectives](#objectives)
@@ -296,6 +296,13 @@ njv <- njv %>%
 
 ### Old
 
+The Investigative Reporting Workshop previously requested this data in
+November of 2019. The data received had a slightly different structure
+from the data from 2020. This includes the lack of a statewide voter ID
+and the presence of the voter registration date. The 2020 data contained
+the same legacy county ID used in 2019, meaning we can use this ID to
+identify the registration date for any voter found in the 2019 database.
+
 ``` r
 old_aws <- path("csv", "nj_voters.csv")
 old_csv <- path(dirname(raw_dir), "nj_voters_old.csv")
@@ -328,7 +335,7 @@ njo <- read_csv(
 prop_distinct(njo$VOTER_ID)
 #> [1] 0.9999967
 prop_in(njv$leg_id, njo$VOTER_ID)
-#> [1] 0.9095979
+#> [1] 0.9095981
 old_info <- njo %>% 
   select(
     county = county_name,
@@ -445,8 +452,8 @@ col_stats(njv, count_na)
 #> 26 school        <chr>      165 0.0000262  
 #> 27 fire          <chr>       38 0.00000604 
 #> 28 source_file   <chr>        0 0          
-#> 29 reg_date      <date> 1022079 0.162      
-#> 30 sex           <chr>  1022078 0.162
+#> 29 reg_date      <date> 1022078 0.162      
+#> 30 sex           <chr>  1022077 0.162
 ```
 
 We can flag any record missing a key variable needed to identify a
@@ -618,11 +625,18 @@ col_stats(njv, n_distinct)
 
 ### Dates
 
+A significant amount of voters have a registration date of January 1,
+1901. This seems to be the default date for any voter missing a real
+date. This is common practice in voter data. We can remove these dates.
+
 ``` r
 sum(njv$reg_date == "1901-01-01", na.rm = TRUE)
 #> [1] 7950
 njv$reg_date[which(njv$reg_date == "1901-01-01")] <- NA
 ```
+
+We can then create variables identifying the year of birth and
+registration.
 
 ``` r
 njv <- mutate(
