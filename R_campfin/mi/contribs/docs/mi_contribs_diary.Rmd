@@ -1,12 +1,12 @@
 ---
 title: "Michigan Contributions"
 author: "Kiernan Nicholls"
-date: "`r Sys.time()`"
+date: "`r date()`"
 output:
   github_document: 
     df_print: tibble
     toc: true
-    toc_dept: 2
+    toc_dept: 3
 editor_options: 
   chunk_output_type: console
 ---
@@ -27,12 +27,14 @@ opts_chunk$set(
   fig.width = 10,
   dpi = 300
 )
-options(width = 99)
-set.seed(5)
+if (!interactive()) {
+  options(width = 120)
+  set.seed(5)
+}
 ```
 
 ```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
-fs::dir_create(here::here("mi", "contribs", "docs"))
+doc_dir <- fs::dir_create(here::here("mi", "contribs", "docs"))
 ```
 
 ## Project
@@ -45,22 +47,22 @@ Our goal is to standardizing public data on a few key fields by thinking of each
 dataset row as a transaction. For each transaction there should be (at least) 3
 variables:
 
-1. All **parties** to a transaction
-2. The **date** of the transaction
-3. The **amount** of money involved
+1. All **parties** to a transaction.
+2. The **date** of the transaction.
+3. The **amount** of money involved.
 
 ## Objectives
 
 This document describes the process used to complete the following objectives:
 
 1. How many records are in the database?
-1. Check for duplicates
-1. Check ranges
+1. Check for entirely duplicated records.
+1. Check ranges of continuous variables.
 1. Is there anything blank or missing?
-1. Check for consistency issues
-1. Create a five-digit ZIP Code called `zip`
-1. Create a `year` field from the transaction date
-1. Make sure there is data on both parties to a transaction
+1. Check for consistency issues.
+1. Create a five-digit ZIP Code called `zip`.
+1. Create a `year` field from the transaction date.
+1. Make sure there is data on both parties to a transaction.
 
 ## Packages
 
@@ -68,33 +70,32 @@ The following packages are needed to collect, manipulate, visualize, analyze,
 and communicate these results. The `pacman` package will facilitate their
 installation and attachment.
 
-The IRW's `campfin` package will also have to be installed from GitHub. This
-package contains functions custom made to help facilitate the processing of
-campaign finance data.
-
 ```{r load_packages, message=FALSE, warning=FALSE, error=FALSE}
-if (!require("pacman")) install.packages("pacman")
-pacman::p_load_gh("irworkshop/campfin")
+if (!require("pacman")) {
+  install.packages("pacman")
+}
 pacman::p_load(
   tidyverse, # data manipulation
   lubridate, # datetime strings
-  magrittr, # pipe opperators
   gluedown, # printing markdown
-  janitor, # dataframe clean
-  refinr, # cluster and merge
+  janitor, # clean data frames
+  campfin, # custom irw tools
+  aws.s3, # aws cloud storage
+  refinr, # cluster & merge
   scales, # format strings
   knitr, # knit documents
-  rvest, # read html pages
-  vroom, # read files fast
-  glue, # combine strings
-  here, # relative storage
-  fs # search storage 
+  vroom, # fast reading
+  rvest, # scrape html
+  glue, # code strings
+  here, # project paths
+  httr, # http requests
+  fs # local storage 
 )
 ```
 
 This document should be run as part of the `R_campfin` project, which lives as a
 sub-directory of the more general, language-agnostic
-[`irworkshop/accountability_datacleaning`][repo] GitHub repository.
+[`irworkshop/accountability_datacleaning`][tap] GitHub repository.
 
 The `R_campfin` project uses the [RStudio projects][rproj] feature and should be
 run as such. The project also uses the dynamic `here::here()` tool for file
@@ -102,10 +103,10 @@ paths relative to _your_ machine.
 
 ```{r where_here}
 # where does this document knit?
-here::here()
+here::i_am("mi/contribs/docs/mi_contribs_diary.Rmd")
 ```
 
-[repo]: https://github.com/irworkshop/accountability_datacleaning
+[tap]: https://github.com/irworkshop/accountability_datacleaning
 [rproj]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects
 
 ## Data
@@ -122,7 +123,8 @@ are updated nightly.
 The CFR also provides a README file with a record layout.
 
 ```{r key_page, echo=FALSE}
-key_url <- "https://miboecfr.nictusa.com/cfr/dumpall/cfrdetail/ReadMe_CONTRIBUTIONS.html"
+raw_base <- "https://miboecfr.nictusa.com/cfr/dumpall/cfrdetail"
+key_url <- str_c(raw_base, "ReadMe_CONTRIBUTIONS.html", sep = "/")
 key_page <- read_html(key_url)
 ```
 
@@ -134,58 +136,62 @@ key_page %>%
 ```
 
 ```{r key_vars, results='asis', echo=FALSE}
-key_page %>% 
+key_dict <- key_page %>% 
   html_node("table") %>% 
   html_table() %>% 
-  as_tibble() %>% 
+  as_tibble() 
+old_vars <- key_dict$X1
+key_dict %>% 
   mutate(
     X1 = md_code(X1),
-    X2 = str_trim(str_squish(str_trunc(X2, 90)))
+    X2 = str_trunc(
+      string = str_squish(X2),
+      width = 100
+      # width = 120 - (5 + max(nchar(X1))
+    )
   ) %>% 
-  md_table(col.names = c("Variable", "Description"))
+  kable(col.names = c("Variable", "Description")) %>%
+  md_quote()
 ```
 
-## Import
+## Download
 
 To import the data for processing, we will have to download each archive file
 and read them together into a single data frame object.
 
-### Download
-
 We will scrape the download page for every archive link, then downloading each
 to a local directory.
 
-```{r download_raw}
+```{r raw_dir}
 raw_dir <- dir_create(here("mi", "contribs", "data", "raw"))
-raw_base <- "https://miboecfr.nictusa.com/cfr/dumpall/cfrdetail"
 raw_page <- read_html(raw_base)
+```
+
+```{r raw_urls}
 raw_urls <- raw_page %>% 
   html_node("table") %>% 
   html_nodes("a") %>% 
   html_attr("href") %>% 
   str_subset("contributions") %>% 
   str_c(raw_base, ., sep = "/")
+```
+
+```{r raw_paths}
 raw_paths <- path(raw_dir, basename(raw_urls))
-if (!all(this_file_new(raw_paths))) {
-  for (i in seq_along(raw_paths)) {
-    if (file_exists(raw_paths[i])) {
-      skip(); message("file exists")
-    } else {
-      download.file(raw_urls[i], raw_paths[i])
-    }
+```
+
+```{r raw_download}
+for (i in seq_along(raw_paths)) {
+  if (!file_exists(raw_paths[i])) {
+    download.file(
+      url = raw_urls[i], 
+      destfile = raw_paths[i]
+    )
   }
 }
 ```
 
-```{r download_raw2, include=FALSE, eval=FALSE}
-write_zip <- function(url, dir) {
-  path <- fs::path(dir, basename(url))
-  r <- httr::GET(url, httr::write_disk(path, overwrite = TRUE))
-}
-map(raw_urls, write_zip, raw_dir)
-```
-
-### Read
+## Read
 
 Since the larger files are split with the column header only in the first, we
 will have to read these headers separately. The last column only records the
@@ -194,7 +200,6 @@ time the files are downloaded.
 ```{r mic_names}
 mic_names <- str_split(read_lines(raw_paths[1])[1], "\t")[[1]]
 mic_names <- mic_names[-length(mic_names)]
-mic_names[1:3] <- c("doc_id", "page_no", "cont_id")
 mic_names[length(mic_names)] <- "runtime"
 ```
 
@@ -205,28 +210,7 @@ files at once.
 mic <- vroom(
   file = raw_paths,
   delim = "\t",
-  skip = 1,
-  col_names = mic_names,
-  col_types = cols(
-    .default = col_character(),
-    page_no = col_integer(),
-    doc_stmnt_year = col_integer(),
-    received_date = col_date_usa(),
-    amount = col_double(),
-    aggregate = col_double(),
-    runtime = col_skip()
-  )
-)
-```
-
-```{r read_map, echo=FALSE, eval=FALSE}
-mic <- map_dfr(
-  .x = raw_paths,
-  .f = read_delim,
-  delim = "\t",
-  skip = 1,
-  escape_backslash = FALSE, 
-  escape_double = FALSE,
+  skip = 1, # header
   col_names = mic_names,
   col_types = cols(
     .default = col_character(),
@@ -243,25 +227,181 @@ mic <- map_dfr(
 Some of the columns have an inconsistent number of spacing, which we can trim.
 
 ```{r str_trim, eval=FALSE}
-mic <- mutate_if(mic, is_character, str_trim)
+mic <- mutate(mic, across(where(is_character), str_trim))
+```
+
+```{r raw_rename}
+mic <- rename(
+  .data = mic,
+  doc_id = doc_seq_no,
+  cont_id = contribution_id,
+  cont_detail = cont_detail_id,
+  doc_year = doc_stmnt_year,
+  doc_type = doc_type_desc,
+  com_name = com_legal_name,
+  com_aka = common_name,
+  com_id = cfr_com_id,
+  com_type = com_type,
+  can_f_name = can_first_name,
+  can_l_name = can_last_name,
+  cont_type = contribtype,
+  l_name = l_name_or_org,
+  date = received_date
+)
 ```
 
 ## Explore
 
+There are `r comma(nrow(mic))` rows of `r ncol(mic)` columns. Each record
+represents a single monetary or in-kind contribution made to a committee or
+candidate by an individual or some other business entity.
+
 ```{r glimpse}
-head(mic)
-tail(mic)
 glimpse(mic)
+tail(mic)
 ```
 
-```{r summary_amount}
+### Missing
+
+Columns vary in their degree of missing values.
+
+```{r na_count}
+col_stats(mic, count_na)
+```
+
+We can flag any record missing a key variable needed to identify a transaction.
+
+```{r na_flag}
+key_vars <- c("date", "l_name", "amount", "com_name")
+mic <- flag_na(mic, all_of(key_vars))
+mean(mic$na_flag)
+```
+
+`r comma(sum(mic$na_flag))` records are missing some key variable.
+
+```{r na_view}
+mic %>% 
+  filter(na_flag) %>% 
+  select(all_of(key_vars)) %>% 
+  sample_frac()
+```
+
+Of those records, no single key variable is overwhelmingly missing.
+
+```{r na_recount}
+mic %>% 
+  filter(na_flag) %>% 
+  select(all_of(key_vars)) %>% 
+  col_stats(count_na)
+```
+
+### Duplicates
+
+We can also flag any record completely duplicated across every column.
+
+First, we need to create a unique ID for each contribution by combining the
+document, page, and line numbers.
+
+```{r tx_add}
+id_vars <- c("doc_id", "page_no", "cont_id", "cont_detail")
+mic <- mutate(mic, tx = paste(doc_id, page_no, cont_id, cont_detail, sep = "-"))
+prop_distinct(mic$tx)
+```
+
+```{r dupe_file}
+dupe_file <- here("mi", "contribs", "dupes.tsv.xz")
+```
+
+```{r dupe_write}
+if (!file_exists(dupe_file)) {
+  file_create(dupe_file)
+  mis <- mic %>% 
+    # remove identifying variables
+    select(-doc_id, -page_no, -cont_id, -cont_detail, -tx) %>% 
+    # split by document year
+    group_split(doc_year)
+  split_id <- split(mic$tx, mic$doc_year)
+  pb <- txtProgressBar(max = length(mis), style = 3)
+  # check each year contribs for duplicates
+  for (i in seq_along(mis)) {
+    d1 <- duplicated(mis[[i]], fromLast = FALSE)
+    if (any(d1)) {
+      # append dupes by tx id to file
+      d2 <- duplicated(mis[[i]], fromLast = TRUE)
+      dupes <- tibble(tx = split_id[[i]], dupe_flag = d1 | d2)
+      dupes <- filter(dupes, dupe_flag == TRUE)
+      vroom_write(dupes, xzfile(dupe_file), append = TRUE)
+      rm(d2, dupes)
+    }
+    rm(d1)
+    mis[i] <- NA
+    flush_memory(1)
+    setTxtProgressBar(pb, i)
+  }
+  rm(mis)
+}
+```
+
+```{r dupe_read}
+file_size(dupe_file)
+dupes <- read_tsv(
+  file = xzfile(dupe_file),
+  col_names = c("tx", "dupe_flag"),
+  col_types = cols(
+    tx = col_character(),
+    dupe_flag = col_logical()
+  )
+)
+dupes <- distinct(dupes)
+```
+
+```{r dupe_join}
+nrow_pre <- nrow(mic)
+mic <- left_join(mic, dupes, by = "tx")
+mic <- mutate(mic, dupe_flag = !is.na(dupe_flag))
+sum(mic$dupe_flag)
+nrow(mic) == nrow_pre
+```
+
+We can see that, despite supposedly unique IDs, there are duplicate voters.
+
+```{r dupe_view}
+mic %>% 
+  filter(dupe_flag) %>% 
+  select(all_of(id_vars), all_of(key_vars)) %>% 
+  arrange(l_name)
+```
+
+### Categorical
+
+```{r distinct_count}
+col_stats(mic, n_distinct)
+```
+
+```{r distinct_plots, echo=FALSE, fig.height=3}
+explore_plot(mic, doc_type)
+explore_plot(mic, com_type)
+explore_plot(mic, cont_type)
+```
+
+### Amounts
+
+```{r amount_summary}
 summary(mic$amount)
+mean(mic$amount <= 0, na.rm = TRUE)
 ```
 
-```{r amount_histogram, echo=FALSE}
+These are the records with the minimum and maximum amounts.
+
+```{r amount_minmax}
+glimpse(mic[c(which.max(mic$amount), which.min(mic$amount)), ])
+```
+
+```{r hist_amount, echo=FALSE}
 mic %>%
+  filter(!is.na(amount), amount >= 1) %>% 
   ggplot(aes(amount)) +
-  geom_histogram(fill = dark2["purple"]) +
+  geom_histogram(fill = dark2["purple"], bins = 30) +
   scale_y_continuous(labels = comma) +
   scale_x_continuous(
     breaks = c(1 %o% 10^(0:6)),
@@ -269,130 +409,130 @@ mic %>%
     trans = "log10"
   ) +
   labs(
-    title = "Michigan Contribution Amount Distribution",
-    subtitle = "from 1998 to 2020",
-    caption = "Source: Michigan Board of Elections",
+    title = "Michigan Contributions Amount Distribution",
+    caption = "Source: BOE CFR",
     x = "Amount",
     y = "Count"
   )
 ```
 
-```{r amount_violin}
-mic %>% 
-  filter(amount > 1, amount < 1000000) %>% 
-  ggplot(aes(x = com_type, y = amount, fill = com_type)) +
-  geom_violin(draw_quantiles = TRUE, scale = "width", ) +
-  scale_y_continuous(labels = dollar, trans = "log10") +
-  scale_fill_brewer(palette = "Dark2", guide = FALSE) +
-  labs(
-    title = "Michigan Contribution Amount Distribution by Committee Type",
-    subtitle = "from 1998 to 2020",
-    caption = "Source: Michigan Board of Elections",
-    x = "Committee Type",
-    y = "Amount"
-  )
-```
+### Dates
 
-We can add a new `received_year` variable using `lubridate::year()`.
+We can add a new `year` variable using `lubridate::year(date)`.
 
 ```{r year_add}
-mic <- mutate(mic, received_year = year(received_date))
+mic <- mutate(mic, year = year(date))
 ```
 
-Since we know the records cover the years 1998 through 2020, we will have to do
-some fixing to dates from the distant past or future.
-
-```{r date_range}
+```{r year_fix}
 # view file name dates
 unique(str_extract(dir_ls(raw_dir), "\\d{4}"))
 # count and fix old dates
-min(mic$received_date, na.rm = TRUE)
-sum(mic$received_year < 1998, na.rm = TRUE)
-which_old <- which(mic$received_year < 1990)
-fix_old <- mic$received_year[which_old] %>% 
-  str_replace("\\d(?=\\d{1}$)", "9") %>% 
-  str_pad(width = 4, side = "left", pad = "1") %>% 
-  as.numeric()
-mic$received_year[which_old] <- fix_old
+min(mic$date, na.rm = TRUE)
+sum(mic$year < 1998, na.rm = TRUE)
+which_old <- which(mic$year < 1990)
+fix_old <- mic$year[which_old] %>% 
+    str_replace("\\d(?=\\d{1}$)", "9") %>% 
+    str_pad(width = 4, side = "left", pad = "1") %>% 
+    as.numeric()
+mic$year[which_old] <- fix_old
 
 # count and fix future dates
-max(mic$received_date, na.rm = TRUE)
-sum(mic$received_date > today(), na.rm = TRUE)
-mic$received_year[which(mic$received_year > 2020)] <- c(2011, 2006)
+max(mic$date, na.rm = TRUE)
+sum(mic$date > today(), na.rm = TRUE)
+mic$doc_year[which(mic$year > 2020)]
+mic$year[which(mic$year > 2020)] <- c(2002, 2006)
 ```
 
-```{r year_bar, echo=FALSE}
+```{r date_range}
+min(mic$date, na.rm = TRUE)
+sum(mic$year < min(mic$doc_year) - 1, na.rm = TRUE)
+max(mic$date, na.rm = TRUE)
+sum(mic$date > today(), na.rm = TRUE)
+```
+
+```{r bar_year, echo=FALSE}
 mic %>% 
-  count(received_year) %>% 
-  ggplot(aes(received_year, n)) +
-  geom_col(fill = dark2["purple"]) +
-  coord_cartesian(xlim = c(1998, 2020)) +
+  count(year) %>% 
+  mutate(even = is_even(year)) %>% 
+  ggplot(aes(x = year, y = n)) +
+  geom_col(aes(fill = even)) + 
+  scale_fill_brewer(palette = "Dark2") +
   scale_y_continuous(labels = comma) +
+  scale_x_continuous(breaks = seq(1998, 2021, by = 2)) +
+  coord_cartesian(xlim = c(1996, 2021)) +
+  theme(legend.position = "bottom") +
   labs(
-    title = "Michigan Contributions Received by Year",
-    subtitle = "from 1998 to 2020",
-    caption = "Source: Michigan Board of Elections",
-    x = "Year Received",
+    title = "Michigan Contributions by Year",
+    caption = "Source: BOE CFR",
+    fill = "Election Year",
+    x = "Year Made",
     y = "Count"
   )
 ```
 
 ## Wrangle
 
-To improve the consistency and searchability of the database, we will have to
-do some text normalization. The `campfin::normal_*()` functions help us make
-consistent strings.
+To improve the searchability of the database, we will perform some consistent,
+confident string normalization. For geographic variables like city names and
+ZIP codes, the corresponding `campfin::normal_*()` functions are tailor made to 
+facilitate this process.
 
 ### Address
 
-The `address` variable can be cleaned with `campfin::normal_address()`, which
-will force consistent case, remove punctuation, and replace street suffix 
-variations with the official USPS abbreviation.
+For the street `addresss` variable, the `campfin::normal_address()` function
+will force consistence case, remove punctuation, and abbreviate official 
+USPS suffixes.
 
 ```{r address_norm}
-mic <- mutate(
-  .data = mic,
-  address_norm = normal_address(
-    address = address,
-    abbs = usps_street,
-    na = invalid_city,
-    na_rep = TRUE
+addr_norm <- mic %>% 
+  distinct(address) %>% 
+  mutate(
+    address_norm = normal_address(
+      address = address,
+      abbs = usps_street,
+      na_rep = TRUE
+    )
   )
-)
 ```
 
-```{r address_view, echo=FALSE}
-mic %>% 
-  select(contains("address")) %>% 
-  distinct() %>% 
-  sample_n(10)
+```{r address_view}
+addr_norm
 ```
 
-This process also automatically removed a number of invalid values.
+```{r address_join}
+mic <- left_join(mic, addr_norm)
+```
 
-```{r address_removed}
-prop_na(mic$address)
-prop_na(mic$address_norm)
-mic %>% 
-  select(contains("address")) %>% 
-  filter(!is.na(address), is.na(address_norm)) %>% 
-  count(address, sort = TRUE)
+```{r echo=FALSE}
+rm(addr_norm)
+flush_memory(1)
 ```
 
 ### ZIP
 
-Similarly, we can use the `campfin::normal_zip()` function to try and repair
-some common problems with ZIP codes, primarily removing any ZIP+4 suffixes.
+For ZIP codes, the `campfin::normal_zip()` function will attempt to create
+valid _five_ digit codes by removing the ZIP+4 suffix and returning leading
+zeroes dropped by other programs like Microsoft Excel.
 
 ```{r zip_norm}
-sample(mic$zip, 5)
-mic <- mutate(
-  .data = mic,
-  zip_norm = normal_zip(
-    zip = zip,
-    na_rep = TRUE
+zip_norm <- mic %>% 
+  distinct(zip) %>% 
+  mutate(
+    zip_norm = normal_zip(
+      zip = zip,
+      na_rep = TRUE
+    )
   )
-)
+```
+
+```{r zip_join}
+mic <- left_join(mic, zip_norm, by = "zip")
+```
+
+```{r echo=FALSE}
+rm(zip_norm)
+flush_memory(1)
 ```
 
 ```{r zip_progress}
@@ -405,31 +545,36 @@ progress_table(
 
 ### State
 
-The `campfin::normal_state()` function will make valid 2-digit USPS state
-abbreviations.
-
-```{r state_fix}
-mic <- mutate(mic, state_norm = state)
-# state is first 2 of zip from MI
-state_zip <- mic$state_norm == str_sub(mic$zip_norm, end = 2)
-mi_zip <- mic$zip_norm %in% zipcodes$zip[zipcodes$state == "MI"]
-mic$state_norm[which(state_zip & mi_zip)] <- "MI"
-# state is invalid but close to MI
-ends_mi <- str_detect(mic$state_norm, "(^M|I$)")
-out_state <- mic$state_norm %out% c(valid_state, "MX", "MB")
-mic$state_norm[which(out_state & ends_mi)] <- "MI"
-```
+Valid two digit state abbreviations can be made using the 
+`campfin::normal_state()` function.
 
 ```{r state_norm}
-mic <- mutate(
-  .data = mic,
-  state_norm = normal_state(
-    state = state_norm,
-    abbreviate = TRUE,
-    na_rep = TRUE,
-    valid = valid_state
+can_prov <- c("ON", "QC", "NS", "NB", "MB", "BC", "PE", "SK", "AB", "NL")
+state_norm <- mic %>% 
+  distinct(state) %>% 
+  mutate(
+    state_norm = normal_state(
+      state = state,
+      abbreviate = TRUE,
+      na_rep = TRUE,
+      valid = c(valid_state, can_prov)
+    )
   )
-)
+```
+
+```{r state_join}
+mic <- left_join(mic, state_norm, by = "state")
+```
+
+```{r echo=FALSE}
+rm(state_norm)
+flush_memory(1)
+```
+
+```{r state_view}
+mic %>% 
+  filter(state != state_norm) %>% 
+  count(state, state_norm, sort = TRUE)
 ```
 
 ```{r state_progress}
@@ -442,45 +587,38 @@ progress_table(
 
 ### City
 
-Cities are the most difficult variable to normalize due to the number and
-variety of valid values. 
+Cities are the most difficult geographic variable to normalize, simply due to
+the wide variety of valid cities and formats.
 
-#### Normalize
+#### Normal
 
-The `campfin::normal_city()` function first forces consistent capitalization,
-removes punctuation, and expands common abbreviations.
+The `campfin::normal_city()` function is a good start, again converting case,
+removing punctuation, but _expanding_ USPS abbreviations. We can also remove
+`invalid_city` values.
 
 ```{r city_norm}
-mic <- mutate(
-  .data = mic,
-  city_norm = normal_city(
-    city = city, 
-    abbs = usps_city,
-    states = c("MI", "DC", "MICHIGAN"),
-    na = invalid_city,
-    na_rep = TRUE
+norm_city <- mic %>% 
+  distinct(city, state_norm, zip_norm) %>% 
+  mutate(
+    city_norm = normal_city(
+      city = city, 
+      abbs = usps_city,
+      states = c("MI", "DC", "MICHIGAN"),
+      na = invalid_city,
+      na_rep = TRUE
+    )
   )
-)
-```
-
-```{r city_view, echo=FALSE}
-mic %>% 
-  select(contains("city")) %>% 
-  filter(city != city_norm) %>% 
-  distinct() %>% 
-  sample_n(10)
 ```
 
 #### Swap
 
-We can further reduce these inconsistencies by comparing our normalized value
-to the _expected_ value for that record's (normalized) state and ZIP code. Using
-`campfin::is_abbrev()` and `campfin::str_dist()`, we can test whether the
-expected value is either an abbreviation for or within one character of our
-normalized value.
+We can further improve normalization by comparing our normalized value
+against the _expected_ value for that record's state abbreviation and ZIP code.
+If the normalized value is either an abbreviation for or very similar to the
+expected value, we can confidently swap those two.
 
 ```{r city_swap}
-mic <- mic %>% 
+norm_city <- norm_city %>% 
   rename(city_raw = city) %>% 
   left_join(
     y = zipcodes,
@@ -494,27 +632,45 @@ mic <- mic %>%
     match_abb = is_abbrev(city_norm, city_match),
     match_dist = str_dist(city_norm, city_match),
     city_swap = if_else(
-      condition = !is.na(city_match) & (match_abb | match_dist == 1),
+      condition = !is.na(match_dist) & (match_abb | match_dist == 1),
       true = city_match,
       false = city_norm
     )
   ) %>% 
   select(
-    -match_abb,
+    -city_match,
     -match_dist,
-    -city_match
+    -match_abb
   )
+```
+
+```{r city_rejoin}
+mic <- left_join(
+  x = mic,
+  y = norm_city,
+  by = c(
+    "city" = "city_raw", 
+    "state_norm", 
+    "zip_norm"
+  )
+)
+```
+
+```{r echo=FALSE}
+rm(norm_city)
+flush_memory(1)
 ```
 
 #### Refine
 
-Additionally, we can pass these swapped `city_swap` values to the OpenRefine
-cluster and merge algorithms. These two algorithms cluster similar values and
-replace infrequent values with their more common counterparts. This process can
-be harmful by making _incorrect_ changes. We will only keep changes where the
-state, ZIP code, _and_ new city value all match a valid combination.
+The [OpenRefine][or] algorithms can be used to group similar strings and replace
+the less common versions with their most common counterpart. This can greatly
+reduce inconsistency, but with low confidence; we will only keep any refined
+strings that have a valid city/state/zip combination.
 
-```{r refine_city}
+[or]: https://openrefine.org/
+
+```{r city_refine}
 good_refine <- mic %>% 
   mutate(
     city_refine = city_swap %>% 
@@ -532,7 +688,7 @@ good_refine <- mic %>%
   )
 ```
 
-```{r view_city_refines, echo=FALSE}
+```{r city_count, echo=FALSE}
 good_refine %>%
   count(
     state_norm, 
@@ -543,131 +699,62 @@ good_refine %>%
   )
 ```
 
-We can join these good refined values back to the original data and use them
-over their incorrect `city_swap` counterparts in a new `city_refine` variable.
+Then we can join the refined values back to the database.
 
-```{r join_refine}
+```{r city_join}
 mic <- mic %>% 
   left_join(good_refine) %>% 
   mutate(city_refine = coalesce(city_refine, city_swap))
 ```
 
-#### Check
-
-We can use the `campfin::check_city()` function to pass the remaining unknown
-`city_refine` values (and their `state_norm`) to the Google Geocode API. The
-function returns the name of the city or locality which most associated with
-those values.
-
-This is an easy way to both check for typos and check whether an unknown
-`city_refine` value is actually a completely acceptable neighborhood, census
-designated place, or some other locality not found in our `valid_city` vector
-from our `zipcodes` database.
-
-First, we'll filter out any known valid city and aggregate the remaining records
-by their city and state. Then, we will only query those unknown cities which
-appear at least ten times.
-
-```{r check_filter}
-mic_out <- mic %>% 
-  filter(city_refine %out% c(valid_city, extra_city)) %>% 
-  count(city_refine, state_norm, sort = TRUE) %>% 
-  drop_na() %>% 
-  filter(n > 1)
-```
-
-Passing these values to `campfin::check_city()` with `purrr::pmap_dfr()` will
-return a single tibble of the rows returned by each city/state combination.
-
-First, we'll check to see if the API query has already been done and a file
-exist on disk. If such a file exists, we can read it using `readr::read_csv()`.
-If not, the query will be sent and the file will be written using
-`readr::write_csv()`.
-
-```{r check_send}
-check_file <- here("mi", "contribs", "data", "api_check.csv")
-if (file_exists(check_file)) {
-  check <- read_csv(
-    file = check_file
-  )
-} else {
-  check <- pmap_dfr(
-    .l = list(
-      mic_out$city_refine, 
-      mic_out$state_norm
-    ), 
-    .f = check_city, 
-    key = Sys.getenv("GEOCODE_KEY"), 
-    guess = TRUE
-  ) %>% 
-    mutate(guess = coalesce(guess_city, guess_place)) %>% 
-    select(-guess_city, -guess_place)
-  write_csv(
-    x = check,
-    path = check_file
-  )
-}
-```
-
-Any city/state combination with a `check_city_flag` equal to `TRUE` returned a
-matching city string from the API, indicating this combination is valid enough
-to be ignored.
-
-```{r check_accept}
-valid_locality <- check$guess[check$check_city_flag]
-```
-
-Then we can perform some simple comparisons between the queried city and the
-returned city. If they are extremely similar, we can accept those returned
-locality strings and add them to our list of accepted additional localities.
-
-```{r check_compare}
-valid_locality <- check %>% 
-  filter(!check_city_flag) %>% 
-  mutate(
-    abb = is_abbrev(original_city, guess),
-    dist = str_dist(original_city, guess)
-  ) %>%
-  filter(abb | dist <= 3) %>% 
-  pull(guess) %>% 
-  c(valid_locality)
-```
-
 #### Progress
 
-```{r city_other}
-many_city <- c(valid_city, extra_city, valid_locality)
-mic$city_refine <- str_remove(mic$city_refine, "\\sTOWNSHIP$")
+Our goal for normalization was to increase the proportion of city values known
+to be valid and reduce the total distinct values by correcting misspellings.
+
+```{r city_recount}
+many_city <- c(valid_city, extra_city)
 mic %>% 
   filter(city_refine %out% many_city) %>% 
   count(city_refine, sort = TRUE)
 ```
 
+```{r city_add}
+many_city <- c(
+  many_city,
+  "FARMINGTON HILLS",
+  "SHELBY TOWNSHIP",
+  "MACOMB TOWNSHIP",
+  "GROSSE POINTE WOODS",
+  "GROSSE POINTE FARMS",
+  "GROSSE POINTE PARK"
+)
+```
+
 ```{r city_progress, echo=FALSE}
 progress <- progress_table(
-  mic$city_raw,
+  str_to_upper(mic$city),
   mic$city_norm,
   mic$city_swap,
   mic$city_refine,
   compare = many_city
 ) %>% mutate(stage = as_factor(stage))
-```
-
-```{r progress_print, echo=FALSE}
 kable(progress, digits = 3)
 ```
 
 You can see how the percentage of valid values increased with each stage.
 
-```{r progress_bar, echo=FALSE}
+```{r bar_progress, echo=FALSE}
+raw_in <- percent(prop_in(mic$city, valid_city))
 progress %>% 
   ggplot(aes(x = stage, y = prop_in)) +
   geom_hline(yintercept = 0.99) +
-  geom_col(fill = RColorBrewer::brewer.pal(3, "Dark2")[3]) +
+  geom_col(fill = dark2["purple"]) +
   coord_cartesian(ylim = c(0.75, 1)) +
   scale_y_continuous(labels = percent) +
   labs(
     title = "Michigan City Normalization Progress",
+    subtitle = glue("Raw at {raw_in} before conversion to uppercase"),
     x = "Stage",
     y = "Percent Valid"
   )
@@ -677,7 +764,7 @@ More importantly, the number of distinct values decreased each stage. We were
 able to confidently change many distinct invalid values to their valid
 equivalent.
 
-```{r distinct_bar}
+```{r bar_distinct, echo=FALSE}
 progress %>% 
   select(
     stage, 
@@ -689,35 +776,76 @@ progress %>%
   mutate(name = name == "good") %>% 
   ggplot(aes(x = stage, y = value)) +
   geom_col(aes(fill = name)) +
-  scale_fill_brewer(palette = "Dark2") +
+  scale_fill_brewer(palette = "Dark2", direction = -1) +
   scale_y_continuous(labels = comma) +
   theme(legend.position = "bottom") +
   labs(
     title = "Michigan City Normalization Progress",
     subtitle = "Distinct values, valid and invalid",
     x = "Stage",
-    y = "Percent Valid",
+    y = "Distinct Values",
     fill = "Valid"
   )
-  
 ```
 
 ## Conclude
 
-1. There are `comma(nrow(mic))` records in the database.
-1. There are `comma(sum(mic$dupe_flag))` duplicate records in the database.
+Before exporting, we can remove the intermediary normalization columns and
+rename all added variables with the `_clean` suffix.
+
+```{r clean_select}
+mic <- mic %>% 
+  select(
+    -city_norm,
+    -city_swap,
+    city_clean = city_refine
+  ) %>% 
+  rename_all(~str_replace(., "_norm", "_clean")) %>% 
+  rename_all(~str_remove(., "_raw")) %>% 
+  relocate(state_clean, zip_clean, .after = city_clean)
+```
+
+```{r clean_glimpse}
+glimpse(sample_n(mic, 50))
+```
+
+1. There are `r comma(nrow(mic))` records in the database.
+1. There are `r comma(sum(mic$dupe_flag))` duplicate records in the database.
 1. The range and distribution of `amount` and `date` seem reasonable.
-1. There are `comma(sum(mic$na_flag))` records missing a key variable.
-1. Consistency in geographic data was improved with `campfin::normal_*()`.
-1. The 5-digit `zip_norm` variable was created with `campfin::normal_zip()`.
-1. The 4-digit `year` variable was created with `lubridate::year()`.
+1. There are `r comma(sum(mic$na_flag))` records missing key variables.
+1. Consistency in geographic data has been improved with `campfin::normal_*()`.
+1. The 4-digit `year` variable has been created with `lubridate::year()`.
 
 ## Export
 
-```{r clean_write}
+Now the file can be saved on disk for upload to the Accountability server.
+
+```{r clean_dir}
 clean_dir <- dir_create(here("mi", "contribs", "data", "clean"))
 clean_path <- path(clean_dir, "mi_contribs_clean.csv")
 write_csv(mic, clean_path, na = "")
-file_size(clean_path)
-guess_encoding(clean_path)
+(clean_size <- file_size(clean_path))
+file_encoding(clean_path) %>% 
+  mutate(across(path, path.abbrev))
+```
+
+## Upload
+
+We can use the `aws.s3::put_object()` to upload the text file to the IRW server.
+
+```{r aws_upload, eval=FALSE}
+aws_path <- path("csv", basename(clean_path))
+if (!object_exists(aws_path, "publicaccountability")) {
+  put_object(
+    file = clean_path,
+    object = aws_path, 
+    bucket = "publicaccountability",
+    acl = "public-read",
+    show_progress = TRUE,
+    multipart = TRUE
+  )
+}
+aws_head <- head_object(aws_path, "publicaccountability")
+(aws_size <- as_fs_bytes(attr(aws_head, "content-length")))
+unname(aws_size == clean_size)
 ```
