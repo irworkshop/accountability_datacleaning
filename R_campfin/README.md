@@ -1,5 +1,4 @@
-
-# `R_campfin`
+# R and TAP
 
 This folder contains the [R project][rproj] for collecting and cleaning
 state-level public accountability data like voter registration and campaign
@@ -14,7 +13,7 @@ git clone git@github.com:irworkshop/accountability_datacleaning.git
 ```
 
 Then open the `R_campfin.Rproj` file in [RStudio][rstudio], this will let you
-create and edit data documentation.
+create and edit data documentation using the proper file hierarchy.
 
 Data is organized by state at the top level of the R project, with files
 organized by data type subdirectories (e.g., contributions, expenditures,
@@ -32,6 +31,7 @@ md/contribs/
 ├── data
 │   ├── clean
 │   │   └── md_contribs_clean.csv
+│   ├── dupes.csv.xz
 │   ├── fix_file.txt
 │   └── raw
 │       ├── ContributionsList-2018.csv
@@ -41,7 +41,6 @@ md/contribs/
 ├── docs
 │   ├── md_contribs_diary.Rmd
 │   └── md_contribs_diary.md
-├── dupes.csv.xz
 └── plots
     ├── hist_amount-1.png
     ├── method_bar-1.png
@@ -80,13 +79,47 @@ following objectives:
 
 The documents in each state’s `docs/` folder record the entire process to
 promote for reproducibility and transparency. From our campfin package, call
-the `use_diary()` function to create a new template diary for exploration:
+the `use_diary()` function to create a new template diary for exploration, with
+all the necessary steps laid out:
 
 1. Describe
 2. Import
 3. Explore
 4. Wrangle
 5. Export
+
+``` r
+campfin::use_diary(
+  st = "DC", 
+  type = "voters", 
+  author = "Kiernan Nicholls", 
+  auto = TRUE
+)
+# ✓ ~/R_campfin/dc/voters/docs/dc_voters_diary.Rmd was created
+```
+
+This template should approximate the workflow but tweak each section according
+to your data source and structure (e.g., template column names are replaced with
+the actual names).
+
+The R markdown diary should run/knit from start to finish without errors,
+ending with a saved comma-delimited file from `readr::write_csv()`. 
+
+The processed CSV file is then uploaded to the Workshop's AWS server where it
+can be searched from the Accountability Project website.
+
+``` r
+put_object(
+  file = "dc/voters/data/clean/dc_voters_clean.csv",
+  object = "csv/dc_voters_clean.csv", 
+  bucket = "publicaccountability",
+  acl = "public-read"
+)
+```
+
+Knitting the diary should produce a `.md` markdown file _alongside_ your `.Rmd`
+diary. This markdown file is rendered on GitHub as an HTML page for others to
+view your work.
 
 ## Software
 
@@ -97,16 +130,12 @@ wrangling of campaign finance data. The stable version is on CRAN but the
 latest version lives on GitHub.
 
 ``` r
-install.packages("remotes")
-```
-
-``` r
 # install.packages("remotes")
 remotes::install_github("irworkshp/campfin")
 ```
 
 Most cleaning is done using the [tidyverse][tverse], an opinionated collection
-of R packages which can be easily downloaded with:
+of R packages for data manipulation.
 
 ``` r
 install.packages("tidyverse")
@@ -127,3 +156,4 @@ importantly, other people may benefit from your hard work.
 [campfin]: https://github.com/irworkshop/campfin
 [tverse]: https://github.com/tidyverse
 [guide]: https://github.com/irworkshop/accountability_datacleaning/blob/campfin/IRW_guides/data_check_guide.md
+
