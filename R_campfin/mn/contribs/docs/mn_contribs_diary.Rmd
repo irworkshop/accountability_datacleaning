@@ -1,12 +1,12 @@
 ---
 title: "Minnesota Contributions"
 author: "Kiernan Nicholls"
-date: "`r Sys.time()`"
+date: "`r date()`"
 output:
   github_document: 
     df_print: tibble
     toc: true
-    toc_dept: 2
+    toc_dept: 3
 editor_options: 
   chunk_output_type: console
 ---
@@ -27,12 +27,14 @@ opts_chunk$set(
   fig.width = 10,
   dpi = 300
 )
-options(width = 99)
-set.seed(5)
+if (!interactive()) {
+  options(width = 120)
+  set.seed(5)
+}
 ```
 
 ```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
-fs::dir_create(here::here("mn", "contribs", "docs"))
+doc_dir <- fs::dir_create(here::here("mn", "contribs", "docs"))
 ```
 
 ## Project
@@ -68,26 +70,26 @@ The following packages are needed to collect, manipulate, visualize, analyze,
 and communicate these results. The `pacman` package will facilitate their
 installation and attachment.
 
-The IRW's `campfin` package will also have to be installed from GitHub. This
-package contains functions custom made to help facilitate the processing of
-campaign finance data.
-
 ```{r load_packages, message=FALSE, warning=FALSE, error=FALSE}
-if (!require("pacman")) install.packages("pacman")
-pacman::p_load_gh("irworkshop/campfin")
+if (!require("pacman")) {
+  install.packages("pacman")
+}
 pacman::p_load(
   tidyverse, # data manipulation
   lubridate, # datetime strings
-  magrittr, # pipe operators
-  janitor, # dataframe clean
-  refinr, # cluster and merge
+  gluedown, # printing markdown
+  janitor, # clean data frames
+  campfin, # custom irw tools
+  aws.s3, # aws cloud storage
+  refinr, # cluster & merge
   scales, # format strings
   knitr, # knit documents
-  vroom, # read files fast
+  vroom, # fast reading
+  rvest, # scrape html
+  glue, # code strings
+  here, # project paths
   httr, # http requests
-  glue, # combine strings
-  here, # relative storage
-  fs # search storage 
+  fs # local storage 
 )
 ```
 
@@ -101,7 +103,7 @@ paths relative to _your_ machine.
 
 ```{r where_here}
 # where does this document knit?
-here::here()
+here::i_am("mn/contribs/docs/mn_contribs_diary.Rmd")
 ```
 
 [tap]: https://github.com/irworkshop/accountability_datacleaning
@@ -243,7 +245,8 @@ sum(mnc$dupe_flag)
 ```{r dupe_view}
 mnc %>% 
   filter(dupe_flag) %>% 
-  select(rec_name, con_name, date, amount)
+  select(rec_name, con_name, date, amount) %>% 
+  arrange(rec_name)
 ```
 
 ### Categorical
@@ -257,24 +260,21 @@ col_stats(mnc, n_distinct)
 ```{r bar_rec_type, echo=FALSE}
 explore_plot(
   data = filter(mnc, !is.na(rec_type)),
-  var = rec_type,
-  title = "Minnesota Contributions by Recipient Type"
+  var = rec_type
 )
 ```
 
 ```{r bar_rec_sub, echo=FALSE}
 explore_plot(
   data = filter(mnc, !is.na(rec_sub)),
-  var = rec_sub,
-  title = "Minnesota Contributions by Recipient Sub-Type"
+  var = rec_sub
 )
 ```
 
 ```{r bar_con_type, echo=FALSE}
 explore_plot(
   data = filter(mnc, !is.na(con_type)),
-  var = con_type,
-  title = "Minnesota Contributions by Contributor Type"
+  var = con_type
 )
 ```
 
@@ -322,7 +322,7 @@ mnc %>%
 #### Dates
 
 Since the `year` variable already exists, there is no need to create one. Any of
-these which do not match seems to fall near begining of the year.
+these which do not match seems to fall near beginning of the year.
 
 ```{r date_year}
 mean(mnc$year == year(mnc$date))
@@ -375,7 +375,7 @@ mnc <- mnc %>%
 ## Conclude
 
 ```{r clean_glimpse}
-glimpse(sample_n(mnc, 20))
+glimpse(sample_n(mnc, 100))
 ```
 
 1. There are `r comma(nrow(mnc))` records in the database.
@@ -387,15 +387,72 @@ glimpse(sample_n(mnc, 20))
 
 ## Export
 
+Now the file can be saved on disk for upload to the Accountability server.
+
 ```{r clean_dir}
 clean_dir <- dir_create(here("mn", "contribs", "data", "clean"))
+clean_path <- path(clean_dir, "mn_contribs_clean.csv")
+write_csv(mnc, clean_path, na = "")
+(clean_size <- file_size(clean_path))
 ```
 
-```{r clean_write}
-write_csv(
-  x = mnc,
-  path = path(clean_dir, "mn_contribs_clean.csv"),
-  na = ""
+## Upload
+
+We can use the `aws.s3::put_object()` to upload the text file to the IRW server.
+
+```{r aws_upload, eval=FALSE}
+aws_path <- path("csv", basename(clean_path))
+if (!object_exists(aws_path, "publicaccountability")) {
+  put_object(
+    file = clean_path,
+    object = aws_path, 
+    bucket = "publicaccountability",
+    acl = "public-read",
+    show_progress = TRUE,
+    multipart = TRUE
+  )
+}
+aws_head <- head_object(aws_path, "publicaccountability")
+(aws_size <- as_fs_bytes(attr(aws_head, "content-length")))
+unname(aws_size == clean_size)
+```
+
+## Dictionary
+
+The following table describes the variables in our final exported file:
+
+```{r dict_make, echo=FALSE}
+dict_raw <- tibble(
+  var = md_code(names(mnc)),
+  type = md_code(map_chr(mnc, typeof)),
+  def = c(
+    "Recipient ID",
+    "**Recipient name**",
+    "Recipeint type",
+    "Recipient sub-type",
+    "**Amount** of contribution",
+    "**Date** contribution made",
+    "**Year** contribution made",
+    "**Contributor name**",
+    "Contributor ID",
+    "Contributor registration",
+    "Contributor type",
+    "Receipt type",
+    "Flag indicating in-kind contribution",
+    "Description of in-kind contribution",
+    "Contributor ZIP code",
+    "Contributor employer name",
+    "Flag indicating missing value",
+    "Flag indicating duplicate record",
+    "City name from _matched_ ZIP code",
+    "State abbreviation from _matched_ ZIP code"
+  )
 )
 ```
 
+```{r dict_md, echo=FALSE}
+(dict_md <- kable(
+  x = dict_raw,
+  format = "markdown",
+  col.names = c("Column", "Type", "Definition")
+))
