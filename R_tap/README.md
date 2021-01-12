@@ -12,7 +12,7 @@ To begin working on the project, clone the master branch of this repository.
 git clone git@github.com:irworkshop/accountability_datacleaning.git
 ```
 
-Then open the `R_campfin.Rproj` file in [RStudio][rstudio], this will let you
+Then open the `R_tap.Rproj` file in [RStudio][rstudio], this will let you
 create and edit data documentation using the proper file hierarchy.
 
 Data is organized by state at the top level of the R project, with files
@@ -95,7 +95,7 @@ campfin::use_diary(
   author = "Kiernan Nicholls", 
   auto = TRUE
 )
-# ✓ ~/R_campfin/dc/voters/docs/dc_voters_diary.Rmd was created
+# ✓ ~/R_tap/dc/voters/docs/dc_voters_diary.Rmd was created
 ```
 
 This template should approximate the workflow but tweak each section according
