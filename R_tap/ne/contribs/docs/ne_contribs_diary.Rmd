@@ -1,12 +1,12 @@
 ---
 title: "Nebraska Contributions"
 author: "Kiernan Nicholls"
-date: "`r Sys.time()`"
+date: "`r date()`"
 output:
   github_document: 
     df_print: tibble
     toc: true
-    toc_dept: 2
+    toc_dept: 3
 editor_options: 
   chunk_output_type: console
 ---
@@ -27,12 +27,14 @@ opts_chunk$set(
   fig.width = 10,
   dpi = 300
 )
-options(width = 99)
-set.seed(5)
+if (!interactive()) {
+  options(width = 120)
+  set.seed(5)
+}
 ```
 
 ```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
-fs::dir_create(here::here("ne", "contribs", "docs"))
+doc_dir <- fs::dir_create(here::here("ne", "contribs", "docs"))
 ```
 
 ## Project
@@ -68,26 +70,27 @@ The following packages are needed to collect, manipulate, visualize, analyze,
 and communicate these results. The `pacman` package will facilitate their
 installation and attachment.
 
-The IRW's `campfin` package will also have to be installed from GitHub. This
-package contains functions custom made to help facilitate the processing of
-campaign finance data.
-
 ```{r load_packages, message=FALSE, warning=FALSE, error=FALSE}
-if (!require("pacman")) install.packages("pacman")
-pacman::p_load_gh("irworkshop/campfin")
+if (!require("pacman")) {
+  install.packages("pacman")
+}
 pacman::p_load(
   tidyverse, # data manipulation
   lubridate, # datetime strings
-  gluedown, # print markdown
-  magrittr, # pipe operators
-  janitor, # dataframe clean
-  refinr, # cluster and merge
+  textreadr, # read rtf files
+  gluedown, # printing markdown
+  janitor, # clean data frames
+  campfin, # custom irw tools
+  aws.s3, # aws cloud storage
+  refinr, # cluster & merge
   scales, # format strings
   knitr, # knit documents
-  vroom, # read files fast
-  glue, # combine strings
-  here, # relative storage
-  fs # search storage 
+  vroom, # fast reading
+  rvest, # scrape html
+  glue, # code strings
+  here, # project paths
+  httr, # http requests
+  fs # local storage 
 )
 ```
 
@@ -101,7 +104,7 @@ paths relative to _your_ machine.
 
 ```{r where_here}
 # where does this document knit?
-here::here()
+here::i_am("ne/contribs/docs/ne_contribs_diary.Rmd")
 ```
 
 [tap]: https://github.com/irworkshop/accountability_datacleaning
@@ -109,105 +112,835 @@ here::here()
 
 ## Data
 
-Data is obtained from the [Nebraska Accountability and Disclosure Commission (NADC)][nadc].
+Data is obtained by from the Nebraska Accountability and Disclosure Commission's
+(NADC) [Open Data portal][03]. From this portal, we will download the 
+[Campaign Statements Data][04].
+
+> A weekly export of the campaign filings based upon the paper records filed
+with the Nebraska Accountability and Disclosure Commission.
+
+The [NADC home][04] page explains the role and resources provided by the 
+Commission.
 
 > This site includes the campaign statements filed with the Commission by
 candidates for state and local offices, political action committees or PACs,
 political parties, and ballot question committees. Campaign statements disclose
 the amount and sources of contributions to the committee and the amount purposes
-of expenditures by the committee.
+of expenditures by the committee. The site also includes Reports of
+Contributions filed with the Commission by corporations, unions, limited
+liability companies, limited partnerships, and by industry, trade or
+professional associations. Reports of Contributions disclose contributions and
+expenditures made to support or oppose candidates or ballot questions. Forms,
+instructional materials and a list of committees may be accessed through this
+site. To access the information described in this paragraph, click on the tab
+above marked CAMPAIGN FINANCE.
 
-[nadc]: http://www.nadc.nebraska.gov/
+Navigating to the [campaign finance section of the website][05], the exact
+filing requirements are laid out.
 
-The data itself can be downloaded from the [Campaign Statements Search][search]
-page, where there is a [direct download link][dl].
+> Candidates for state and local office are subject to the campaign finance
+provisions of the Nebraska Political Accountability and Disclosure Act (NPADA).
+Those seeking election to federal office are not subject to the NPADA. Once a
+candidate raises, receives or expends $5,000 or more in a calendar year, he or
+she is required to register the committee with the Commission by filing a
+Statement of Organization and paying a filing fee of $100. Once the candidate
+committee is formed, the committee must file periodic campaign statements.
 
-[search]: http://www.nadc.nebraska.gov/ccdb/search.cgi
-[dl]: http://www.nebraska.gov/nadc_data/nadc_data.zip
+specifically, there are **three** kinds of filings that must be made by general
+candidates:
 
-## Import
+1. > Statement of Organization - This document registers the Committee with the
+Commission. It discloses the name of the committee, the name of the candidate,
+the office sought and the name of the treasurer.
 
-To import the file for processing, we will simply download the ZIP archive,
-extract the appropriate files, and read them into R.
+2. > Campaign Statement - this document provides a summary of the financial
+activity of the committee. It discloses the name of contributors of more than
+\$250 and the amounts of the contributions. It discloses expenditures of more
+than \$250.
 
-### Download
+3. > Report of Late Contributions - this document discloses contributions of
+$1,000 or more received by the committee during 14 days immediately preceding
+the election. Information reported as late contributions are also reported on
+subsequent campaign statements.
+
+Aside from general candidates, the NADC also explains that political committees
+must also file.
+
+> There are **two** types of committees that are commonly referred to as
+political action committees or PACs. One type of PAC is a political committee
+sponsored by a corporation, union or other type of organization. Another type of
+PAC is a political committee which is not sponsored by another group. PACs are
+required to register with the Commission and file periodic campaign statements
+disclosing receipts and expenditures.
+
+1. > State and county political party committees with certain levels of
+financial activity, register with the Commission and file periodic campaign
+statements.
+
+2. > A ballot question committee is a political committee formed for the purpose
+of supporting or opposing the qualification, passage or defeat of a ballot
+question. The committee must register with the Commission within 10 days after
+raising, receiving or expending $5,000 or more in a calendar year. Once
+registered, ballot questions committees file periodic campaign statements
+disclosing receipts and expenditures.
+
+Finally, the NADC identifies the source of the data:
+
+> The campaign filings displayed on this website are based upon the paper
+records filed with the Nebraska Accountability and Disclosure Commission. While
+every effort has been made to ensure accurate data input, errors may occur.
+Anyone noting an error is encouraged to contact this office.
+
+In any discrepancy between the information displayed on this website and the
+official records on file with the Commission, the official records of the
+Commission take precedence.
+
+[01]: https://github.com/irworkshop/accountability_datacleaning
+[03]: http://www.nebraska.gov/government/open-data/
+[04]: http://www.nadc.nebraska.gov/index.html
+[05]: http://www.nadc.nebraska.gov/cf/index.html
+[06]: http://www.nadc.nebraska.gov/docs/B-1-2018.doc
+[07]: http://www.nadc.nebraska.gov/docs/B-2-2018.doc
+[08]: http://www.nadc.nebraska.gov/docs/B-4-2018.doc
+
+## Download
+
+
+The NADC provides a bulk download of records on their [search page][search].
+
+> The campaign filings displayed on this website are based upon the paper
+records filed with the Nebraska Accountability and Disclosure Commission. While
+every effort has been made to ensure accurate data input, errors may occur.
+Anyone noting an error is encouraged to contact this office.
+>
+> In any discrepancy between information displayed on this website and the
+official records on file with the Commission, the official records of the
+Commission take precedence.
+
+> Download the entire dataset of campaign filings based upon the paper records
+filed with the Nebraska Accountability and Disclosure Commission. Dataset is
+updated weekly. [**Download**](https://www.nebraska.gov/nadc_data/nadc_data.zip)
+
+[search]: https://nadc.nebraska.gov/ccdb/search.cgi
+
+The bulk data is provided as a single ZIP archive we can download.
+
+```{r raw_dir}
+raw_url <- "https://www.nebraska.gov/nadc_data/nadc_data.zip"
+raw_dir <- dir_create(here("ne", "contribs", "data", "raw"))
+raw_zip <- path(raw_dir, basename(raw_url))
+```
 
 ```{r raw_download}
-raw_dir <- dir_create(here("ne", "contribs", "data", "raw"))
-raw_url <- "http://www.nebraska.gov/nadc_data/nadc_data.zip"
-raw_zip <- path(raw_dir, basename(raw_url))
-download.file(raw_url, raw_zip)
-as_tibble(unzip(raw_zip, list = TRUE))
-```
-
-```{r raw_unzip}
-raw_files <- unzip(raw_zip, exdir = raw_dir)
-zip_dir <- path(raw_dir, "nadc_data")
-dir_ls(zip_dir) %>% file_move(raw_dir)
-raw_all <- dir_ls(raw_dir, regexp = "txt$")
-dir_delete(zip_dir)
-file_delete(raw_zip)
-```
-
-### Read
-
-The records of interest are spread across a number of seperate files, the 
-descriptions of which are contained in the `nadc_tables.rtf` file. Furthermore,
-the variables describing filing committees are contained in additional files.
-We find read all these files and use a combination of `dplyr::left_join()` and
-`dplyr::bind_rows()` to create a single table with all the data we want.
-
-From reading the tables document, it seems like these files would contain the
-relevant data:
-
-* `FORMA1` – Statement of Organization of a Political Committee:
-* `FORMB1` – Campaign Statement for Candidate and Ballot Question Committee:
-* `FORMB1AB` – All Data from form B-1 schedule A and B, Contributions:
-    * `Committee ID` – Use to link with `FORMb1`, along with Date Received
-* `FORMB2` – From B-2 Campaign Statement Political Party Committees:
-* `FORMB2A` – Form B-2 Contributions:
-* `FORMB4` – Campaign Statement for Independent Committees:
-* `FORMB4A` – Form B-4 Schedule A:
-    * `Committee ID`  - Use to link with `FORMB4`, along with Date Received
-* `FORMB5` – Report of Late contributions:
-* `FORMB7` – Report of Political Contributions of Corporation, Union or Other:
-* `FORMB72` – Form B-7 Direct contributions:
-* `FORMB73` – Form B-7 Indirect contributions:
-* `FORMB9` – Out of State Contribution Report:
-* `FORMB9A` – Form B-9 Schedule A, contributions:
-    * `Form B9 ID` – Use to link with `FORMB9`
-
-First we will read _every_ file into a list of data frames with `purrr::mpa()`
-and `vroom::vroom()`.
-
-```{r all_read}
-nadc <- map(
-  .x = raw_all,
-  .f = vroom,
-  .name_repair = make_clean_names,
-  delim = "|",
-  escape_double = FALSE,
-  escape_backslash = FALSE,
-  col_types = cols(.default = "c")
-)
-```
-
-```{r all_spec_rm, echo=FALSE}
-for (i in seq_along(nadc)) {
-  attr(nadc[[i]], "spec") <- NULL
+if (!file_exists(raw_zip)) {
+  download.file(
+    url = raw_url, 
+    destfile = raw_zip, 
+    method = "curl", 
+    extra = "--cipher 'DEFAULT:!DH'"
+  )
 }
 ```
 
-Then we can go about renaming, binding, and joining these various data frames.
+### Extract
 
-```{r all_rename}
-names(nadc) <- 
-  names(nadc) %>% 
-  basename() %>% 
-  path_ext_remove() %>% 
-  str_remove("form")
+This ZIP file contains 63 text files for each of the various forms submitted.
+We can extract each of these text files into our data directory.
+
+```{r raw_extract}
+raw_all <- unzip(
+  zipfile = raw_zip,
+  junkpaths = TRUE,
+  exdir = raw_dir
+)
 ```
 
-```{r all_glimpse}
-glimpse(nadc)
+```{r raw_info}
+file_info(raw_all) %>% 
+  select(path, size, modification_time) %>% 
+  mutate(across(path, path.abbrev))
+```
+
+### About
+
+One file contains the date the database was last updated.
+
+```{r about_date}
+date_updated <- read_file(file = path(raw_dir, "DATE_UPDATED.TXT"))
+print(date_updated)
+ymd_hms(str_remove_all(date_updated, "\\D")) - now()
+```
+
+Before we can prepare the file for indexing, we need to locate the exact data
+we're interested in. The content, structure, and relationship of each file is
+described in the `nadc_tables.rtf` rich text file. The files correspond to the
+_forms_ through which candidates and committees report their contributions,
+expenditures, etc. Each type of filter uses a different form, so all
+expenditures are split among a few files (corresponding to a few forms). Each
+form typically also has a section (schedule) where _expenditures_ are reported.
+
+Using this file, we can grasp what information is contained on what forms and
+which tables we will need to combine to identify the parties, date, and amount
+of every campaign expenditure.
+
+Form A1 contains all of the names and addresses of political, candidate, and
+ballot question committees. This form has no transactions.
+
+* Date Received
+* Committee ID Number
+* Committee Name
+* Committee Address
+* Committee City
+* Committee State
+* Committee Zip
+* Committee Type
+    * C = Candidate Committee
+    * B = Ballot Question
+    * P = Political Action Committee
+    * T = Political Party Committee
+    * I or R = Independent Reporting Committee
+    * S = Separate Segregated Political Fund Committee
+
+Then the various types of transactions for those committee types are reported
+on subsequent forms. The files of interested were confirmed by the NADC to the
+Investigative Reporting Workshop in June of 2018.
+
+* FORM**B1AB** – All Data from form B-1 schedule A and B, Contributions
+* FORM**B2A** – Form B-2 Contributions
+* FORM**B3** – Report of Earmarked Contribution
+* FORM**B4A** – Form B-4 Schedule A:
+    * Committee ID  - Use to link with FORMB4, along with Date Received
+* FORM**B4B1** – Form B-4 Schedule B Section 1
+* FORM**B5** – Report of Late contributions
+* FORM**B7** – Report of Political Contributions of Corporation, Union, etc.
+* FORM**B72** – Form B-7 Direct contributions
+* FORM**B73** – Form B-7 Indirect contributions
+
+When we read all these sub-forms together and join them against the committee
+statements then we can identify all transactions.
+
+## Read
+
+```{r raw_read}
+nec <- map(
+  .x = raw_all,
+  .f = read_delim,
+  delim = "|",
+  escape_backslash = FALSE,
+  escape_double = FALSE,
+  col_types = cols(
+    .default = col_character()
+  )
+)
+```
+
+```{r echo=FALSE}
+nec <- map(nec, clean_names)
+names(nec) <- path_ext_remove(basename(raw_all))
+```
+
+### Format
+
+Now that each of the files is read as an element of a list, we can format them
+for combination and matching against the tables containing full information on
+the filing committees.
+
+#### Form A-1
+
+```{r form_a1}
+a1 <- nec$forma1 %>% 
+  mutate(across(where(is.character), str_squish)) %>% 
+  select(starts_with("committee")) %>% 
+  rename_with(~str_replace(., "^committee_", "comm_")) %>% 
+  rename(comm_id = comm_id_number) %>% 
+  remove_empty("cols") %>% 
+  remove_constant() %>% 
+  distinct()
+```
+
+#### Form B1-AB
+
+```{r form_b1ab}
+b1ab <- nec$formb1ab %>% 
+  mutate(across(where(is.character), str_squish)) %>% 
+  rename_with(~str_replace(., "^committee_", "comm_")) %>% 
+  rename_with(~str_remove(., "^contributor_")) %>% 
+  select(-comm_name) %>% 
+  rename(
+    received = date_received,
+    cont_id = id,
+    type = type_of_contributor,
+    date = contribution_date,
+    amount = cash_contribution,
+    in_kind = in_kind_contribution,
+    unpaid = unpaid_pledges,
+    mi = middle_initial,
+    org_name = organization_name,
+    zip = zipcode
+  ) %>% 
+  remove_empty("cols") %>% 
+  remove_constant()
+```
+
+#### Form B2-A
+
+```{r form_b2a}
+b2a <- nec$formb2a %>% 
+  mutate(across(where(is.character), str_squish)) %>% 
+  rename_with(~str_replace(., "^committee_", "comm_")) %>% 
+  rename_with(~str_remove(., "^contributor_")) %>% 
+  rename(
+    received = date_received,
+    cont_id = id,
+    date = contribution_date,
+    amount = cash_contribution,
+    in_kind = in_kind_contribution,
+    unpaid = unpaid_pledges
+  ) %>% 
+  remove_empty("cols") %>% 
+  remove_constant()
+```
+
+#### Form B4-A
+
+```{r form_b4a}
+b4a <- nec$formb4a %>% 
+  mutate(across(where(is.character), str_squish)) %>% 
+  rename_with(~str_replace(., "^committee_", "comm_")) %>% 
+  rename(
+    received = date_received,
+    cont_id = contributor_id,
+    date = contribution_date,
+    amount = cash_contribution,
+    unpaid = unpaid_pledges,
+    in_kind = in_kind_contribution
+  ) %>% 
+  remove_empty("cols") %>% 
+  remove_constant()
+```
+
+### Join
+
+```{r join_names}
+names(b4a) %in% names(b1ab)
+names(b2a) %in% names(b1ab)
+names(b2a) %in% names(b4a)
+```
+
+```{r join_bind}
+bx <- bind_rows(b1ab, b4a, b2a)
+nrow(bx)
+```
+
+```{r join_comms}
+nec <- right_join(a1, bx)
+```
+
+```{r join_parse}
+nec <- nec %>% 
+  # parse column types
+  type_convert(
+    col_types = cols(
+      received = col_date_usa(),
+      date = col_date_usa(),
+      amount = col_double(),
+      in_kind = col_double(),
+      unpaid = col_double()
+    )
+  ) %>% 
+  mutate(
+    # remove zero amount values for combination
+    amount = ifelse(amount == 0, NA, amount),
+    in_kind = ifelse(in_kind == 0, NA, in_kind),
+    unpaid = ifelse(unpaid == 0, NA, unpaid),
+    # create a single amount column
+    amount = coalesce(amount, in_kind, unpaid),
+    # new column indicates amount type
+    amount_type = case_when(
+      !is.na(amount) ~ "cash_contrib",
+      !is.na(in_kind) ~ "in_kind",
+      !is.na(unpaid) ~ "unpaid_pledge"
+    )
+  ) %>% 
+  # remove other amounts
+  select(-in_kind, -unpaid)
+```
+
+## Explore
+
+There are `r comma(nrow(nec))` rows of `r ncol(nec)` columns. Each record
+represents a single Contributions...
+
+```{r glimpse}
+glimpse(nec)
+tail(nec)
+```
+
+### Missing
+
+Columns vary in their degree of missing values.
+
+```{r na_count}
+col_stats(nec, count_na)
+```
+
+We can flag any record missing a key variable needed to identify a transaction.
+
+```{r na_flag}
+key_vars <- c("date", "last", "amount", "committee")
+nec <- flag_na(nec, all_of(key_vars))
+sum(nec$na_flag)
+```
+
+```{r na_view}
+nec %>% 
+  filter(na_flag) %>% 
+  select(all_of(key_vars))
+```
+
+### Duplicates
+
+We can also flag any record completely duplicated across every column.
+
+```{r dupe_flag}
+nec <- flag_dupes(nec, -id)
+sum(nec$dupe_flag)
+```
+
+```{r dupe_view}
+nec %>% 
+  filter(dupe_flag) %>% 
+  select(all_of(key_vars))
+```
+
+### Categorical
+
+```{r distinct_count}
+col_stats(nec, n_distinct)
+```
+
+```{r distinct_plots, echo=FALSE}
+explore_plot(nec, type)
+```
+
+### Amounts
+
+```{r amount_summary}
+summary(nec$amount)
+mean(nec$amount <= 0)
+```
+
+These are the records with the minimum and maximum amounts.
+
+```{r amount_minmax}
+glimpse(nec[c(which.max(nec$amount), which.min(nec$amount)), ])
+```
+
+```{r hist_amount, echo=FALSE}
+nec %>%
+  ggplot(aes(amount)) +
+  geom_histogram(fill = dark2["purple"]) +
+  scale_y_continuous(labels = comma) +
+  scale_x_continuous(
+    breaks = c(1 %o% 10^(0:6)),
+    labels = dollar,
+    trans = "log10"
+  ) +
+  labs(
+    title = "Nebraska Contributions Amount Distribution",
+    caption = "Source: {source}",
+    x = "Amount",
+    y = "Count"
+  )
+```
+
+### Dates
+
+We can add the calendar year from `date` with `lubridate::year()`
+
+```{r date_year}
+nec <- mutate(nec, year = year(date))
+```
+
+```{r date_range}
+min(nec$date)
+sum(nec$year < 2000)
+max(nec$date)
+sum(nec$date > today())
+```
+
+```{r bar_year, echo=FALSE}
+nec %>% 
+  count(year) %>% 
+  mutate(even = is_even(year)) %>% 
+  ggplot(aes(x = year, y = n)) +
+  geom_col(aes(fill = even)) + 
+  scale_fill_brewer(palette = "Dark2") +
+  scale_y_continuous(labels = comma) +
+  scale_x_continuous(breaks = seq(2000, 2020, by = 2)) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "Nebraska Contributions by Year",
+    caption = "Source: {source}",
+    fill = "Election Year",
+    x = "Year Made",
+    y = "Count"
+  )
+```
+
+## Wrangle
+
+To improve the searchability of the database, we will perform some consistent,
+confident string normalization. For geographic variables like city names and
+ZIP codes, the corresponding `campfin::normal_*()` functions are tailor made to 
+facilitate this process.
+
+### Address
+
+For the street `addresss` variable, the `campfin::normal_address()` function
+will force consistence case, remove punctuation, and abbreviate official 
+USPS suffixes.
+
+```{r address_norm}
+nec <- nec %>% 
+  unite(
+    col = address_full,
+    starts_with("address"),
+    sep = " ",
+    remove = FALSE,
+    na.rm = TRUE
+  ) %>% 
+  mutate(
+    address_norm = normal_address(
+      address = address_full,
+      abbs = usps_street,
+      na_rep = TRUE
+    )
+  ) %>% 
+  select(-address_full)
+```
+
+```{r address_view}
+nec %>% 
+  select(contains("address")) %>% 
+  distinct() %>% 
+  sample_n(10)
+```
+
+### ZIP
+
+For ZIP codes, the `campfin::normal_zip()` function will attempt to create
+valid _five_ digit codes by removing the ZIP+4 suffix and returning leading
+zeroes dropped by other programs like Microsoft Excel.
+
+```{r zip_norm}
+nec <- nec %>% 
+  mutate(
+    zip_norm = normal_zip(
+      zip = zip,
+      na_rep = TRUE
+    )
+  )
+```
+
+```{r zip_progress}
+progress_table(
+  nec$zip,
+  nec$zip_norm,
+  compare = valid_zip
+)
+```
+
+### State
+
+Valid two digit state abbreviations can be made using the 
+`campfin::normal_state()` function.
+
+```{r state_norm}
+nec <- nec %>% 
+  mutate(
+    state_norm = normal_state(
+      state = state,
+      abbreviate = TRUE,
+      na_rep = TRUE,
+      valid = valid_state
+    )
+  )
+```
+
+```{r state_view}
+nec %>% 
+  filter(state != state_norm) %>% 
+  count(state, state_norm, sort = TRUE)
+```
+
+```{r state_progress}
+progress_table(
+  nec$state,
+  nec$state_norm,
+  compare = valid_state
+)
+```
+
+### City
+
+Cities are the most difficult geographic variable to normalize, simply due to
+the wide variety of valid cities and formats.
+
+#### Normal
+
+The `campfin::normal_city()` function is a good start, again converting case,
+removing punctuation, but _expanding_ USPS abbreviations. We can also remove
+`invalid_city` values.
+
+```{r city_norm}
+norm_city <- nec %>% 
+  distinct(city, state_norm, zip_norm) %>% 
+  mutate(
+    city_norm = normal_city(
+      city = city, 
+      abbs = usps_city,
+      states = c("NE", "DC", "NEBRASKA"),
+      na = invalid_city,
+      na_rep = TRUE
+    )
+  )
+```
+
+#### Swap
+
+We can further improve normalization by comparing our normalized value
+against the _expected_ value for that record's state abbreviation and ZIP code.
+If the normalized value is either an abbreviation for or very similar to the
+expected value, we can confidently swap those two.
+
+```{r city_swap}
+norm_city <- norm_city %>% 
+  rename(city_raw = city) %>% 
+  left_join(
+    y = zipcodes,
+    by = c(
+      "state_norm" = "state",
+      "zip_norm" = "zip"
+    )
+  ) %>% 
+  rename(city_match = city) %>% 
+  mutate(
+    match_abb = is_abbrev(city_norm, city_match),
+    match_dist = str_dist(city_norm, city_match),
+    city_swap = if_else(
+      condition = !is.na(match_dist) & (match_abb | match_dist == 1),
+      true = city_match,
+      false = city_norm
+    )
+  ) %>% 
+  select(
+    -city_match,
+    -match_dist,
+    -match_abb
+  )
+```
+
+```{r city_rejoin}
+nec <- left_join(
+  x = nec,
+  y = norm_city,
+  by = c(
+    "city_raw", 
+    "state_norm", 
+    "zip_norm"
+  )
+)
+```
+
+#### Refine
+
+The [OpenRefine][or] algorithms can be used to group similar strings and replace
+the less common versions with their most common counterpart. This can greatly
+reduce inconsistency, but with low confidence; we will only keep any refined
+strings that have a valid city/state/zip combination.
+
+[or]: https://openrefine.org/
+
+```{r city_refine}
+good_refine <- nec %>% 
+  mutate(
+    city_refine = city_swap %>% 
+      key_collision_merge() %>% 
+      n_gram_merge(numgram = 1)
+  ) %>% 
+  filter(city_refine != city_swap) %>% 
+  inner_join(
+    y = zipcodes,
+    by = c(
+      "city_refine" = "city",
+      "state_norm" = "state",
+      "zip_norm" = "zip"
+    )
+  )
+```
+
+```{r city_count, echo=FALSE}
+good_refine %>%
+  count(
+    state_norm, 
+    zip_norm, 
+    city_swap, 
+    city_refine,
+    sort = TRUE
+  )
+```
+
+Then we can join the refined values back to the database.
+
+```{r city_join}
+nec <- nec %>% 
+  left_join(good_refine) %>% 
+  mutate(city_refine = coalesce(city_refine, city_swap))
+```
+
+#### Progress
+
+Our goal for normalization was to increase the proportion of city values known
+to be valid and reduce the total distinct values by correcting misspellings.
+
+```{r city_progress, echo=FALSE}
+many_city <- c(valid_city, extra_city)
+progress <- progress_table(
+  str_to_upper(nec$city_raw),
+  nec$city_norm,
+  nec$city_swap,
+  nec$city_refine,
+  compare = many_city
+) %>% mutate(stage = as_factor(stage))
+kable(progress, digits = 3)
+```
+
+You can see how the percentage of valid values increased with each stage.
+
+```{r bar_progress, echo=FALSE}
+raw_in <- percent(prop_in(nec$city_raw, valid_city))
+progress %>% 
+  ggplot(aes(x = stage, y = prop_in)) +
+  geom_hline(yintercept = 0.99) +
+  geom_col(fill = dark2["purple"]) +
+  coord_cartesian(ylim = c(0.75, 1)) +
+  scale_y_continuous(labels = percent) +
+  labs(
+    title = "Nebraska City Normalization Progress",
+    subtitle = glue("Raw at {raw_in} before conversion to uppercase"),
+    x = "Stage",
+    y = "Percent Valid"
+  )
+```
+
+More importantly, the number of distinct values decreased each stage. We were
+able to confidently change many distinct invalid values to their valid
+equivalent.
+
+```{r bar_distinct, echo=FALSE}
+progress %>% 
+  select(
+    stage, 
+    all = n_distinct,
+    bad = n_diff
+  ) %>% 
+  mutate(good = all - bad) %>% 
+  pivot_longer(c("good", "bad")) %>% 
+  mutate(name = name == "good") %>% 
+  ggplot(aes(x = stage, y = value)) +
+  geom_col(aes(fill = name)) +
+  scale_fill_brewer(palette = "Dark2", direction = -1) +
+  scale_y_continuous(labels = comma) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "Nebraska City Normalization Progress",
+    subtitle = "Distinct values, valid and invalid",
+    x = "Stage",
+    y = "Distinct Values",
+    fill = "Valid"
+  )
+```
+
+## Conclude
+
+Before exporting, we can remove the intermediary normalization columns and
+rename all added variables with the `_clean` suffix.
+
+```{r clean_select}
+nec <- nec %>% 
+  select(
+    -city_norm,
+    -city_swap,
+    city_clean = city_refine
+  ) %>% 
+  rename_all(~str_replace(., "_norm", "_clean")) %>% 
+  rename_all(~str_remove(., "_raw"))
+```
+
+```{r clean_glimpse}
+glimpse(sample_n(nec, 50))
+```
+
+1. There are `r comma(nrow(nec))` records in the database.
+1. There are `r comma(sum(nec$dupe_flag))` duplicate records in the database.
+1. The range and distribution of `amount` and `date` seem reasonable.
+1. There are `r comma(sum(nec$na_flag))` records missing key variables.
+1. Consistency in geographic data has been improved with `campfin::normal_*()`.
+1. The 4-digit `year` variable has been created with `lubridate::year()`.
+
+## Export
+
+Now the file can be saved on disk for upload to the Accountability server.
+
+```{r clean_dir}
+clean_dir <- dir_create(here("ne", "contribs", "data", "clean"))
+clean_path <- path(clean_dir, "ne_contribs_clean.csv")
+write_csv(nec, clean_path, na = "")
+(clean_size <- file_size(clean_path))
+file_encoding(clean_path) %>% 
+  mutate(across(path, path.abbrev))
+```
+
+## Upload
+
+We can use the `aws.s3::put_object()` to upload the text file to the IRW server.
+
+```{r aws_upload, eval=FALSE}
+aws_path <- path("csv", basename(clean_path))
+if (!object_exists(aws_path, "publicaccountability")) {
+  put_object(
+    file = clean_path,
+    object = aws_path, 
+    bucket = "publicaccountability",
+    acl = "public-read",
+    show_progress = TRUE,
+    multipart = TRUE
+  )
+}
+aws_head <- head_object(aws_path, "publicaccountability")
+(aws_size <- as_fs_bytes(attr(aws_head, "content-length")))
+unname(aws_size == clean_size)
+```
+
+## Dictionary
+
+The following table describes the variables in our final exported file:
+
+```{r dict_make, echo=FALSE}
+dict_raw <- tibble(
+  var = md_code(names(nec)),
+  type = md_code(map_chr(nec, typeof)),
+  def = c(
+    ""
+  )
+)
+```
+
+```{r dict_md, echo=FALSE}
+(dict_md <- kable(
+  x = dict_raw,
+  format = "markdown",
+  col.names = c("Column", "Type", "Definition")
+))
 ```
