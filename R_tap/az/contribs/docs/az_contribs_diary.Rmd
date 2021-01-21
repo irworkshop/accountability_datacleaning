@@ -170,7 +170,8 @@ az <- map(
   .x = az_tables, 
   .f = read_mdb, 
   file = raw_mdb, 
-  na = c("N/A", "", "NA")
+  col_types = TRUE,
+  na = c("", "NA", "N/A", "<missing value>")
 )
 ```
 
@@ -179,7 +180,7 @@ az <- map(az, clean_names, "snake")
 names(az) <- make_clean_names(az_tables)
 ```
 
-## Join
+## Prepare
 
 ```{r fn_no_time, echo=FALSE}
 no_time <- function(x) {
@@ -205,73 +206,573 @@ fix_cols <- function(.data) {
     rename_with(~str_replace(., "category", "cat")) %>% 
     rename_with(~str_replace(., "report", "rpt")) %>% 
     rename_with(~str_replace(., "name", "nm")) %>% 
-    mutate(across(where(no_time), as_date)) %>% 
-    mutate(across(where(is_character), na_if, "N/A"))
+    mutate(across(where(no_time), as_date))
 }
 ```
+
+First we will simplify each data frame by removing empty and constant columns
+and abbreviating column names for ease of use.
 
 ```{r fix_map}
 az <- map(az, fix_cols)
 ```
 
-```{r join_cmte_nms}
-cmte_nms <- az$names %>% 
-  select(nm_id, cmte_nm = last_nm)
+Now that each data frame is read and cleaned, we can prepare them for a join.
+
+### Transactions
+
+The most important table is `Transactions`. This table only identifies the
+reporting committee and transaction partner using their unique ID number. This
+table includes not just contribution _to_ a committee but also the expenses 
+_from_ that committee, etc. Each transaction has it's own unique ID.
+
+```{r echo=FALSE}
+az$transactions <- select(az$transactions, c(1, 3:7))
+az$transactions <- mutate(az$transactions, across(txn_date, as_date))
 ```
 
-```{r join_cmtes}
-az_cmte <- az$committees %>% 
+```{r txn_look}
+az$transactions
+```
+
+Contributions from individuals are the most common transaction type, but there
+are other types that are different kinds of income.
+
+```{r txn_types}
+az$transactions %>% 
+  count(txn_type_id, sort = TRUE) %>% 
+  left_join(az$transaction_types, by = "txn_type_id") %>% 
+  add_prop(sum = FALSE)
+```
+
+Here, we are interested in _all_ income types, so we will use the 
+`income_expense_neutral_id` variable associated with each `txn_type_*` to keep
+only "Income" transactions.
+
+```{r txn_ien}
+az$income_expense_neutral
+```
+
+```{r txn_txn_filter}
+az$transactions <- az$transactions %>% 
+  # identify transaction type
+  left_join(az$transaction_types, by = "txn_type_id") %>% 
+  # identify if type is income
+  left_join(az$income_expense_neutral, by = "income_expense_neutral_id") %>% 
+  # keep only income types
+  filter(income_expense_neutral == "Income") %>% 
+  # remove ids and move cols
+  select(-txn_type_id, -income_expense_neutral_id, -income_expense_neutral) %>% 
+  relocate(txn_type_nm = txn_type_nm, .before = cmte_id)
+```
+
+```{r echo=FALSE}
+az$transactions
+```
+
+Now we will have to use the `Names` and `Committees` tables to identify the
+entities making the contributions and the committees receiving them.
+
+### Committees
+
+The `Committees` table contains all the information on political committees,
+including their financial institutions, chairpersons, etc. We are only
+interested in adding names and addresses to the transaction data so it can be
+searched.
+
+```{r cmte_view_pre}
+az$committees
+```
+
+```{r cmte_addr_keep}
+az$committees <- az$committees %>% 
   # keep address and candidate info
   rename_with(~str_replace(., "physical", "cmte")) %>% 
   select(
     cmte_id, nm_id, starts_with("cmte"), 
     cand_party_id, cand_office_id,
-    cand_is_incumbent, cand_cycle_id
+    cand_is_incumbent, cand_cycle_id,
+    cand_other_party_nm
   ) %>% 
-  rename(cmte_zip = cmte_zip_code) %>% 
+  rename(cmte_zip = cmte_zip_code)
+```
+
+We can then use the `Offices`, `Parties`, and `Cycles` tables to identify
+candidate information by code. We will keep the names and remove the codes.
+
+```{r cmte_code_join}
+az$committees <- az$committees %>% 
   # add office name from id
   left_join(az$offices, by = c("cand_office_id" = "office_id")) %>% 
-  select(-cand_office_id, cand_office = office_nm) %>% 
   # add party name from id
   left_join(az$parties, by = c("cand_party_id" = "party_id")) %>% 
-  select(-cand_party_id, cand_party = party_nm) %>% 
   # add cycle year from id
   left_join(az$cycles[, 1:2], by = c("cand_cycle_id" = "cycle_id")) %>% 
-  select(-cand_cycle_id, cand_cycle = cycle_nm) %>% 
+  # remove codes
+  select(
+    -cand_office_id, cand_office = office_nm,
+    -cand_party_id, cand_party = party_nm,
+    -cand_cycle_id, cand_cycle = cycle_nm
+  ) %>% 
+  # combine "other" party and other col
+  mutate(
+    cand_party = cand_party %>% 
+      na_if("Other") %>% 
+      coalesce(cand_other_party_nm)
+  ) %>% 
+  select(-cand_other_party_nm)
+```
+
+This data still only identifies the committees by their unique `cmte_id`. We 
+can use the `nm_id` variable to add the names for those committees.
+
+```{r cmte_nm_select}
+cmte_nms <- select(az$names, nm_id, cmte_nm = last_nm)
+cmte_nms
+```
+
+```{r cmte_nm_join}
+az$committees <- az$committees %>% 
   # add the committee name
-  left_join(cmte_nms, by = "nm_id") %>% 
+  inner_join(cmte_nms, by = "nm_id") %>% 
   relocate(cmte_nm, .after = cmte_id) %>% 
   select(-nm_id)
 ```
 
-```{r txn_income_type}
-income_txn_type_id <- az$transaction_types %>% 
-  left_join(az$income_expense_neutral) %>% 
-  filter(income_expense_neutral == "Income") %>% 
-  pull(txn_type_id)
+```{r echo=FALSE}
+az$committees
 ```
 
-```{r join_names}
+### Contributors
+
+We can now identify the contributors by their name and address. Again, we will
+join together other tables which identify the _type_ of contributor and the
+county name if they're from Arizona.
+
+```{r ctbr_select}
 az$names <- az$names %>% 
   rename(zip = zip_code) %>% 
+  # add entity type and county name
   left_join(az$entity_types, by = "entity_type_id") %>% 
-  select(-nm_group_id, -entity_type_id) %>% 
-  rename(entity_type = entity_type_nm)
+  left_join(az$counties, by = "county_id") %>% 
+  select(-nm_group_id, -entity_type_id, -county_id) %>% 
+  rename(entity_type = entity_type_nm, county = county_nm) %>% 
+  # keep names of contributors only
+  filter(nm_id %in% az$transactions$nm_id)
 ```
 
-```{r join_all}
-azc <- az$transactions %>% 
-  filter(txn_type_id %in% income_txn_type_id) %>% 
-  select(1, 4:7) %>% 
-  left_join(az_cmte, by = "cmte_id") %>% 
-  inner_join(az$names, by = "nm_id") %>% 
-  relocate(nm_id, .before = last_nm) %>% 
+```{r echo=FALSE}
+az$names %>% 
+  slice(1:10) %>% 
+  remove_empty("cols")
+```
+
+## Wrangle
+
+Before identifying the parties to each transaction, we can use their individual
+tables to normalize the geographic variables search on the Accountability site.
+
+To improve the searchability of the database, we will perform some consistent,
+confident string normalization. For geographic variables like city names and
+ZIP codes, the corresponding `campfin::normal_*()` functions are tailor made to 
+facilitate this process.
+
+### Fix
+
+There are `r comma(sum(str_detect(az$names$zip, "\\$"), na.rm = TRUE))` records
+with some kind of problem shifting the geographic variables out of place. For
+these records, the `city` is in thr `address1` variable, the `state` is in the
+`city` variable, and it appears as though the `zip` variable has been split in
+half with the first two digits (85 is a comma Arizona ZIP code prefix) in the
+`state` column and the last three converted somehow to a dollar value?
+
+This problem has been confirmed to exist in the raw Microsoft Access database
+and not be an error stemming from our conversion to a flat text file.
+
+```{r bad_zip_dollar}
+az$names %>% 
+  filter(str_detect(zip, "\\$")) %>% 
+  select(6:10)
+```
+
+We can attempt to fix these values to the best of our ability.
+
+First, we will find the index of any record with a `zip` value containing a
+dollar sight at the start.
+
+```{r bad_dollar_find}
+dollar_zip <- str_which(az$names$zip, "^\\$")
+length(dollar_zip)
+```
+
+We can then create vectors of the city names and state abbreviations from the
+wrong column.
+
+```{r bad_city_state}
+bad_city <- az$names$address1[dollar_zip]
+bad_state <- az$names$city[dollar_zip]
+```
+
+Then, we will combine the two numbers from the `state` column of these bad
+records the dollar value, after converting those dollar values to three digit
+numbers.
+
+```{r bad_zip_merge}
+bad_zip <- str_c(
+  az$names$state[dollar_zip],
+  str_sub(
+    string = str_pad(
+      string = parse_number(x = az$names$zip[dollar_zip]) * 100, 
+      width = 3, 
+      pad = "0"
+    ), 
+    end = 3
+  )
+)
+```
+
+Only `r percent(prop_in(bad_zip, valid_zip), 0.1)` of these combined ZIP code
+values are actually valid, but that is an improvement over the bad data. It
+seems as though some accuracy was lost whenever these ZIP codes were 
+accidentally converted to dollar values.
+
+```{r bad_zip_check}
+prop_in(az$names$zip[dollar_zip], valid_zip)
+prop_in(bad_zip, valid_zip)
+```
+
+```{r bad_zip_fix_view}
+mutate(count_vec(bad_zip), valid = value %in% valid_zip)
+```
+
+We can now take these three vectors and place them back into the proper columns.
+
+```{r bad_cols_fix}
+az$names$city[dollar_zip] <- bad_city
+az$names$state[dollar_zip] <- bad_state
+az$names$zip[dollar_zip] <- bad_zip
+```
+
+For these bad records, there is no street address value. The city values were
+placed there instead and the addresses were not misplaced (as was the case with
+the state and ZIP code values).
+
+```{r bad_addr_remove}
+az$names$address1[dollar_zip] <- NA
+```
+
+### Address
+
+For the street `addresss*` variables, the `campfin::normal_address()` function
+will force consistence case, remove punctuation, and abbreviate official 
+USPS suffixes.
+
+We will repeat the process once for committee addresses then for contributors.
+
+```{r cmte_address_norm}
+az$committees <- az$committees %>% 
+  unite(
+    col = cmte_address_full,
+    matches("address\\d$"),
+    sep = " ",
+    remove = FALSE,
+    na.rm = TRUE
+  ) %>% 
+  mutate(
+    cmte_address_norm = normal_address(
+      address = cmte_address_full,
+      abbs = usps_street,
+      na_rep = TRUE
+    )
+  ) %>% 
+  select(-cmte_address_full)
+```
+
+```{r nm_address_norm}
+nm_norm_addr <- az$names %>% 
+  distinct(address1, address2) %>% 
+  unite(
+    col = address_full,
+    starts_with("address"),
+    sep = " ",
+    remove = FALSE,
+    na.rm = TRUE
+  ) %>% 
+  mutate(
+    address_norm = normal_address(
+      address = address_full,
+      abbs = usps_street,
+      na_rep = TRUE
+    )
+  ) %>% 
+  select(-address_full)
+```
+
+```{r nm_address_view}
+nm_norm_addr
+```
+
+```{r nm_address_join}
+az$names <- left_join(az$names, nm_norm_addr)
+```
+
+### ZIP
+
+For ZIP codes, the `campfin::normal_zip()` function will attempt to create
+valid _five_ digit codes by removing the ZIP+4 suffix and returning leading
+zeroes dropped by other programs like Microsoft Excel.
+
+```{r cmte_zip_good}
+prop_in(az$committees$cmte_zip, valid_zip)
+```
+
+```{r zip_norm}
+az$names <- az$names %>% 
+  mutate(
+    zip_norm = normal_zip(
+      zip = zip,
+      na_rep = TRUE
+    )
+  )
+```
+
+```{r zip_progress}
+progress_table(
+  az$names$zip,
+  az$names$zip_norm,
+  compare = valid_zip
+)
+```
+
+### State
+
+Valid two digit state abbreviations can be made using the 
+`campfin::normal_state()` function.
+
+```{r cmte_state_norm}
+az$committees <- az$committees %>% 
+  mutate(
+    cmte_state_norm = normal_state(
+      state = cmte_state,
+      abbreviate = TRUE,
+      na_rep = TRUE,
+      valid = valid_state
+    )
+  )
+```
+
+```{r nm_state_norm}
+az$names <- az$names %>% 
+  mutate(
+    state_norm = normal_state(
+      state = state,
+      abbreviate = TRUE,
+      na_rep = TRUE,
+      valid = valid_state
+    )
+  )
+```
+
+```{r nm_state_view}
+az$names %>% 
+  filter(state != state_norm) %>% 
+  count(state, state_norm, sort = TRUE)
+```
+
+```{r nm_state_progress}
+progress_table(
+  az$names$state,
+  az$names$state_norm,
+  compare = valid_state
+)
+```
+
+### City
+
+Cities are the most difficult geographic variable to normalize, simply due to
+the wide variety of valid cities and formats.
+
+#### Normal
+
+The `campfin::normal_city()` function is a good start, again converting case,
+removing punctuation, but _expanding_ USPS abbreviations. We can also remove
+`invalid_city` values.
+
+```{r nm_city_norm}
+nm_norm_city <- az$names %>% 
+  distinct(city, state_norm, zip_norm) %>% 
+  mutate(
+    city_norm = normal_city(
+      city = city, 
+      abbs = usps_city,
+      states = c("AZ", "DC", "ARIZONA"),
+      na = invalid_city,
+      na_rep = TRUE
+    )
+  )
+```
+
+```{r cmte_city_norm}
+cmte_norm_city <- az$committees %>% 
+  distinct(cmte_city, cmte_state_norm, cmte_zip) %>% 
+  mutate(
+    cmte_city_norm = normal_city(
+      city = cmte_city, 
+      abbs = usps_city,
+      states = c("AZ", "DC", "ARIZONA"),
+      na = invalid_city,
+      na_rep = TRUE
+    )
+  )
+```
+
+#### Swap
+
+We can further improve normalization by comparing our normalized value
+against the _expected_ value for that record's state abbreviation and ZIP code.
+If the normalized value is either an abbreviation for or very similar to the
+expected value, we can confidently swap those two.
+
+```{r nm_city_swap}
+nm_norm_city <- nm_norm_city %>% 
+  rename(city_raw = city) %>% 
+  left_join(
+    y = zipcodes,
+    by = c(
+      "state_norm" = "state",
+      "zip_norm" = "zip"
+    )
+  ) %>% 
+  rename(city_match = city) %>% 
+  mutate(
+    match_abb = is_abbrev(city_norm, city_match),
+    match_dist = str_dist(city_norm, city_match),
+    city_swap = if_else(
+      condition = !is.na(match_dist) & (match_abb | match_dist == 1),
+      true = city_match,
+      false = city_norm
+    )
+  ) %>% 
+  select(
+    -city_match,
+    -match_dist,
+    -match_abb
+  )
+```
+
+```{r nm_city_rejoin}
+az$names <- left_join(
+  x = az$names,
+  y = nm_norm_city,
+  by = c(
+    "city" = "city_raw", 
+    "state_norm", 
+    "zip_norm"
+  )
+)
+```
+
+```{r cmte_city_swap}
+cmte_norm_city <- cmte_norm_city %>% 
+  left_join(
+    y = zipcodes,
+    by = c(
+      "cmte_state_norm" = "state",
+      "cmte_zip" = "zip"
+    )
+  ) %>% 
+  rename(city_match = city) %>% 
+  mutate(
+    match_abb = is_abbrev(cmte_city_norm, city_match),
+    match_dist = str_dist(cmte_city_norm, city_match),
+    cmte_city_swap = if_else(
+      condition = !is.na(match_dist) & (match_abb | match_dist == 1),
+      true = city_match,
+      false = cmte_city_norm
+    )
+  ) %>% 
+  select(
+    -city_match,
+    -match_dist,
+    -match_abb
+  )
+```
+
+```{r cmte_city_rejoin}
+az$committees <- left_join(
+  x = az$committees,
+  y = cmte_norm_city,
+  by = c(
+    "cmte_city", 
+    "cmte_state_norm", 
+    "cmte_zip"
+  )
+)
+```
+
+#### Progress
+
+Our goal for normalization was to increase the proportion of city values known
+to be valid and reduce the total distinct values by correcting misspellings.
+
+```{r nm_city_progress, echo=FALSE}
+many_city <- c(valid_city, extra_city)
+progress <- progress_table(
+  str_to_upper(az$names$city),
+  az$names$city_norm,
+  az$names$city_swap,
+  compare = many_city
+) %>% mutate(stage = as_factor(stage))
+kable(progress, digits = 3)
+```
+
+```{r cmte_city_progress, echo=FALSE}
+cmte_progress <- progress_table(
+  str_to_upper(az$committees$cmte_city),
+  az$committees$cmte_city_norm,
+  az$committees$cmte_city_swap,
+  compare = many_city
+) %>% mutate(stage = as_factor(stage))
+kable(cmte_progress, digits = 3)
+```
+
+These intermediary columns can then be removed.
+
+```{r nm_geo_clean}
+az$names <- select(az$names, -city_norm, city_norm = city_swap)
+```
+
+```{r cmte_geo_clean}
+az$committees <- select(
+  .data = az$committees, 
+  -cmte_city_norm, cmte_city_norm = cmte_city_swap
+)
+```
+
+```{r echo=FALSE}
+rm(nm_norm_city, cmte_norm_city)
+flush_memory()
+```
+
+## Join
+
+These tables, with their normalized geographic variables, can now be joined.
+
+```{r comm_join}
+az$transactions <- az$transactions %>% 
+  left_join(az$committees, by = "cmte_id") %>% 
   relocate(cmte_id, .before = cmte_nm)
 ```
 
-```{r join_rm_gc}
-rm(az, az_cmte, income_txn_type_id, cmte_nms)
-flush_memory(1)
+```{r ctbr_join}
+az$transactions <- az$transactions %>% 
+  left_join(az$names, by = "nm_id") %>% 
+  relocate(nm_id, .before = last_nm)
+```
+
+```{r az_rename}
+azc <- az$transactions
+rm(az); flush_memory()
 ```
 
 ## Explore
@@ -295,7 +796,7 @@ col_stats(azc, count_na)
 We can flag any record missing a key variable needed to identify a transaction.
 
 ```{r na_flag}
-key_vars <- c("date", "last", "amount", "committee")
+key_vars <- c("txn_id", "txn_date", "last_nm", "amount", "cmte_nm")
 azc <- flag_na(azc, all_of(key_vars))
 sum(azc$na_flag)
 ```
@@ -303,22 +804,70 @@ sum(azc$na_flag)
 ```{r na_view}
 azc %>% 
   filter(na_flag) %>% 
-  select(all_of(key_vars))
+  select(all_of(key_vars)) %>% 
+  sample_frac()
 ```
 
 ### Duplicates
 
 We can also flag any record completely duplicated across every column.
 
-```{r dupe_flag}
-azc <- flag_dupes(azc, -id)
-sum(azc$dupe_flag)
+```{r dupe_file}
+dupe_file <- here("az", "contribs", "dupes.tsv.xz")
 ```
+
+```{r dupe_write}
+if (!file_exists(dupe_file)) {
+  file_create(dupe_file)
+  azs <- azc %>% 
+    select(-txn_id) %>% 
+    group_split(cmte_zip)
+  split_id <- split(azc$txn_id, azc$cmte_zip)
+  pb <- txtProgressBar(max = length(azs), style = 3)
+  for (i in seq_along(azs)) {
+    d1 <- duplicated(azs[[i]], fromLast = FALSE)
+    if (any(d1)) {
+      d2 <- duplicated(azs[[i]], fromLast = TRUE)
+      dupes <- tibble(txn_id = split_id[[i]], dupe_flag = d1 | d2)
+      dupes <- filter(dupes, dupe_flag == TRUE)
+      vroom_write(dupes, xzfile(dupe_file), append = TRUE)
+      rm(d2, dupes)
+    }
+    rm(d1)
+    flush_memory(1)
+    setTxtProgressBar(pb, i)
+  }
+  rm(azs)
+}
+```
+
+```{r dupe_read}
+file_size(dupe_file)
+dupes <- read_tsv(
+  file = xzfile(dupe_file),
+  col_names = c("txn_id", "dupe_flag"),
+  col_types = cols(
+    txn_id = col_integer(),
+    dupe_flag = col_logical()
+  )
+)
+dupes <- distinct(dupes)
+```
+
+```{r dupe_join}
+nrow(azc)
+azc <- left_join(azc, dupes, by = "txn_id")
+azc <- mutate(azc, dupe_flag = !is.na(dupe_flag))
+mean(azc$dupe_flag)
+```
+
+We can see that, despite unique `txn_id` values, there are duplicate records.
 
 ```{r dupe_view}
 azc %>% 
   filter(dupe_flag) %>% 
-  select(all_of(key_vars))
+  select(txn_id, all_of(key_vars)) %>% 
+  arrange(last_nm)
 ```
 
 ### Categorical
@@ -327,8 +876,19 @@ azc %>%
 col_stats(azc, n_distinct)
 ```
 
-```{r distinct_plots, echo=FALSE}
-explore_plot(azc, type)
+```{r distinct_plots, echo=FALSE, fig.height=3}
+explore_plot(azc, txn_type_nm) + scale_x_wrap()
+explore_plot(azc, cand_office) + scale_x_wrap()
+explore_plot(azc, cand_party) + scale_x_wrap()
+explore_plot(azc, entity_type) + scale_x_wrap(15)
+azc %>% 
+  count(cand_cycle) %>% 
+  ggplot(aes(cand_cycle, n)) +
+  geom_col(aes(fill = n)) +
+  scale_fill_viridis_c(option = "B", end = 0.75, guide = FALSE) +
+  scale_x_continuous(breaks = 1994:2022) +
+  scale_y_continuous(labels = comma) +
+  labs(y = "Count")
 ```
 
 ### Amounts
@@ -356,7 +916,7 @@ azc %>%
   ) +
   labs(
     title = "Arizona Contributions Amount Distribution",
-    caption = "Source: {source}",
+    caption = "Source: AZ SOS",
     x = "Amount",
     y = "Count"
   )
@@ -364,309 +924,36 @@ azc %>%
 
 ### Dates
 
-We can add the calendar year from `date` with `lubridate::year()`
+We can add the calendar year from `txn_date` with `lubridate::year()`
 
 ```{r date_year}
-azc <- mutate(azc, year = year(date))
+azc <- mutate(azc, txn_year = year(txn_date))
 ```
 
 ```{r date_range}
-min(azc$date)
-sum(azc$year < 2000)
-max(azc$date)
-sum(azc$date > today())
+min(azc$txn_date)
+mean(azc$txn_year < 2000)
+max(azc$txn_date)
+sum(azc$txn_date > today())
 ```
 
 ```{r bar_year, echo=FALSE}
 azc %>% 
-  count(year) %>% 
-  mutate(even = is_even(year)) %>% 
-  ggplot(aes(x = year, y = n)) +
+  count(txn_year) %>% 
+  mutate(even = is_even(txn_year)) %>% 
+  ggplot(aes(x = txn_year, y = n)) +
   geom_col(aes(fill = even)) + 
   scale_fill_brewer(palette = "Dark2") +
   scale_y_continuous(labels = comma) +
-  scale_x_continuous(breaks = seq(2000, 2020, by = 2)) +
+  scale_x_continuous(breaks = seq(1994, 2020, by = 2)) +
+  coord_cartesian(xlim = c(1996, 2020)) +
   theme(legend.position = "bottom") +
   labs(
     title = "Arizona Contributions by Year",
-    caption = "Source: {source}",
+    caption = "Source: AZ SOS",
     fill = "Election Year",
     x = "Year Made",
     y = "Count"
-  )
-```
-
-## Wrangle
-
-To improve the searchability of the database, we will perform some consistent,
-confident string normalization. For geographic variables like city names and
-ZIP codes, the corresponding `campfin::normal_*()` functions are tailor made to 
-facilitate this process.
-
-### Address
-
-For the street `addresss` variable, the `campfin::normal_address()` function
-will force consistence case, remove punctuation, and abbreviate official 
-USPS suffixes.
-
-```{r address_norm}
-azc <- azc %>% 
-  unite(
-    col = address_full,
-    starts_with("address"),
-    sep = " ",
-    remove = FALSE,
-    na.rm = TRUE
-  ) %>% 
-  mutate(
-    address_norm = normal_address(
-      address = address_full,
-      abbs = usps_street,
-      na_rep = TRUE
-    )
-  ) %>% 
-  select(-address_full)
-```
-
-```{r address_view}
-azc %>% 
-  select(contains("address")) %>% 
-  distinct() %>% 
-  sample_n(10)
-```
-
-### ZIP
-
-For ZIP codes, the `campfin::normal_zip()` function will attempt to create
-valid _five_ digit codes by removing the ZIP+4 suffix and returning leading
-zeroes dropped by other programs like Microsoft Excel.
-
-```{r zip_norm}
-azc <- azc %>% 
-  mutate(
-    zip_norm = normal_zip(
-      zip = zip,
-      na_rep = TRUE
-    )
-  )
-```
-
-```{r zip_progress}
-progress_table(
-  azc$zip,
-  azc$zip_norm,
-  compare = valid_zip
-)
-```
-
-### State
-
-Valid two digit state abbreviations can be made using the 
-`campfin::normal_state()` function.
-
-```{r state_norm}
-azc <- azc %>% 
-  mutate(
-    state_norm = normal_state(
-      state = state,
-      abbreviate = TRUE,
-      na_rep = TRUE,
-      valid = valid_state
-    )
-  )
-```
-
-```{r state_view}
-azc %>% 
-  filter(state != state_norm) %>% 
-  count(state, state_norm, sort = TRUE)
-```
-
-```{r state_progress}
-progress_table(
-  azc$state,
-  azc$state_norm,
-  compare = valid_state
-)
-```
-
-### City
-
-Cities are the most difficult geographic variable to normalize, simply due to
-the wide variety of valid cities and formats.
-
-#### Normal
-
-The `campfin::normal_city()` function is a good start, again converting case,
-removing punctuation, but _expanding_ USPS abbreviations. We can also remove
-`invalid_city` values.
-
-```{r city_norm}
-norm_city <- azc %>% 
-  distinct(city, state_norm, zip_norm) %>% 
-  mutate(
-    city_norm = normal_city(
-      city = city, 
-      abbs = usps_city,
-      states = c("AZ", "DC", "ARIZONA"),
-      na = invalid_city,
-      na_rep = TRUE
-    )
-  )
-```
-
-#### Swap
-
-We can further improve normalization by comparing our normalized value
-against the _expected_ value for that record's state abbreviation and ZIP code.
-If the normalized value is either an abbreviation for or very similar to the
-expected value, we can confidently swap those two.
-
-```{r city_swap}
-norm_city <- norm_city %>% 
-  rename(city_raw = city) %>% 
-  left_join(
-    y = zipcodes,
-    by = c(
-      "state_norm" = "state",
-      "zip_norm" = "zip"
-    )
-  ) %>% 
-  rename(city_match = city) %>% 
-  mutate(
-    match_abb = is_abbrev(city_norm, city_match),
-    match_dist = str_dist(city_norm, city_match),
-    city_swap = if_else(
-      condition = !is.na(match_dist) & (match_abb | match_dist == 1),
-      true = city_match,
-      false = city_norm
-    )
-  ) %>% 
-  select(
-    -city_match,
-    -match_dist,
-    -match_abb
-  )
-```
-
-```{r city_rejoin}
-azc <- left_join(
-  x = azc,
-  y = norm_city,
-  by = c(
-    "city_raw", 
-    "state_norm", 
-    "zip_norm"
-  )
-)
-```
-
-#### Refine
-
-The [OpenRefine][or] algorithms can be used to group similar strings and replace
-the less common versions with their most common counterpart. This can greatly
-reduce inconsistency, but with low confidence; we will only keep any refined
-strings that have a valid city/state/zip combination.
-
-[or]: https://openrefine.org/
-
-```{r city_refine}
-good_refine <- azc %>% 
-  mutate(
-    city_refine = city_swap %>% 
-      key_collision_merge() %>% 
-      n_gram_merge(numgram = 1)
-  ) %>% 
-  filter(city_refine != city_swap) %>% 
-  inner_join(
-    y = zipcodes,
-    by = c(
-      "city_refine" = "city",
-      "state_norm" = "state",
-      "zip_norm" = "zip"
-    )
-  )
-```
-
-```{r city_count, echo=FALSE}
-good_refine %>%
-  count(
-    state_norm, 
-    zip_norm, 
-    city_swap, 
-    city_refine,
-    sort = TRUE
-  )
-```
-
-Then we can join the refined values back to the database.
-
-```{r city_join}
-azc <- azc %>% 
-  left_join(good_refine) %>% 
-  mutate(city_refine = coalesce(city_refine, city_swap))
-```
-
-#### Progress
-
-Our goal for normalization was to increase the proportion of city values known
-to be valid and reduce the total distinct values by correcting misspellings.
-
-```{r city_progress, echo=FALSE}
-many_city <- c(valid_city, extra_city)
-progress <- progress_table(
-  str_to_upper(azc$city_raw),
-  azc$city_norm,
-  azc$city_swap,
-  azc$city_refine,
-  compare = many_city
-) %>% mutate(stage = as_factor(stage))
-kable(progress, digits = 3)
-```
-
-You can see how the percentage of valid values increased with each stage.
-
-```{r bar_progress, echo=FALSE}
-raw_in <- percent(prop_in(azc$city_raw, valid_city))
-progress %>% 
-  ggplot(aes(x = stage, y = prop_in)) +
-  geom_hline(yintercept = 0.99) +
-  geom_col(fill = dark2["purple"]) +
-  coord_cartesian(ylim = c(0.75, 1)) +
-  scale_y_continuous(labels = percent) +
-  labs(
-    title = "Arizona City Normalization Progress",
-    subtitle = glue("Raw at {raw_in} before conversion to uppercase"),
-    x = "Stage",
-    y = "Percent Valid"
-  )
-```
-
-More importantly, the number of distinct values decreased each stage. We were
-able to confidently change many distinct invalid values to their valid
-equivalent.
-
-```{r bar_distinct, echo=FALSE}
-progress %>% 
-  select(
-    stage, 
-    all = n_distinct,
-    bad = n_diff
-  ) %>% 
-  mutate(good = all - bad) %>% 
-  pivot_longer(c("good", "bad")) %>% 
-  mutate(name = name == "good") %>% 
-  ggplot(aes(x = stage, y = value)) +
-  geom_col(aes(fill = name)) +
-  scale_fill_brewer(palette = "Dark2", direction = -1) +
-  scale_y_continuous(labels = comma) +
-  theme(legend.position = "bottom") +
-  labs(
-    title = "Arizona City Normalization Progress",
-    subtitle = "Distinct values, valid and invalid",
-    x = "Stage",
-    y = "Distinct Values",
-    fill = "Valid"
   )
 ```
 
@@ -676,14 +963,7 @@ Before exporting, we can remove the intermediary normalization columns and
 rename all added variables with the `_clean` suffix.
 
 ```{r clean_select}
-azc <- azc %>% 
-  select(
-    -city_norm,
-    -city_swap,
-    city_clean = city_refine
-  ) %>% 
-  rename_all(~str_replace(., "_norm", "_clean")) %>% 
-  rename_all(~str_remove(., "_raw"))
+azc <- rename_all(azc, ~str_replace(., "_norm", "_clean"))
 ```
 
 ```{r clean_glimpse}
@@ -706,8 +986,6 @@ clean_dir <- dir_create(here("az", "contribs", "data", "clean"))
 clean_path <- path(clean_dir, "az_contribs_clean.csv")
 write_csv(azc, clean_path, na = "")
 (clean_size <- file_size(clean_path))
-file_encoding(clean_path) %>% 
-  mutate(across(path, path.abbrev))
 ```
 
 ## Upload
@@ -729,26 +1007,4 @@ if (!object_exists(aws_path, "publicaccountability")) {
 aws_head <- head_object(aws_path, "publicaccountability")
 (aws_size <- as_fs_bytes(attr(aws_head, "content-length")))
 unname(aws_size == clean_size)
-```
-
-## Dictionary
-
-The following table describes the variables in our final exported file:
-
-```{r dict_make, echo=FALSE}
-dict_raw <- tibble(
-  var = md_code(names(azc)),
-  type = md_code(map_chr(azc, typeof)),
-  def = c(
-    ""
-  )
-)
-```
-
-```{r dict_md, echo=FALSE}
-(dict_md <- kable(
-  x = dict_raw,
-  format = "markdown",
-  col.names = c("Column", "Type", "Definition")
-))
 ```
