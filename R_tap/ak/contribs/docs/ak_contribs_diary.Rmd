@@ -126,11 +126,18 @@ by report year. As of now, this needs to be done by hand.
 
 [search]: https://aws.state.ak.us/ApocReports/CampaignDisclosure/CDIncome.aspx
 
-```{r line_count}
-line_count <- function(path) {
-  as.numeric(str_extract(system(paste("wc -l", path), intern = TRUE), "^\\d+"))
-}
-```
+* 2011: 785
+* 2012: 173,143
+* 2013: 103,121
+* 2014: 206,605
+* 2015: 180,295
+* 2016: 194,377
+* 2017: 144,398
+* 2018: 198,013
+* 2019: 126,881
+* 2020: 137,488
+* 2021: 337
+* **Total**: 1,465,443
 
 ```{r raw_dir}
 raw_dir <- dir_create(here("ak", "contribs", "data", "raw"))
@@ -138,22 +145,7 @@ raw_info <- dir_info(raw_dir)
 sum(raw_info$size)
 raw_info %>% 
   select(path, size, modification_time) %>% 
-  rowwise() %>% 
-  mutate(lines = line_count(path)) %>% 
   mutate(across(path, basename))
-```
-
-```{r raw_get, eval=FALSE}
-httr::GET(
-  # does not work
-  url = "https://aws.state.ak.us/ApocReports/CampaignDisclosure/CDIncome.aspx",
-  write_disk(raw_path)
-  query = list(
-    exportAll = "True",
-    exportFormat = "CSV",
-    isExport = "True"
-  ),
-)
 ```
 
 ## Read
@@ -164,61 +156,85 @@ is an extra comma at the end of each line. We can read this extra column at the
 end as a new `null` column.
 
 ```{r raw_names}
-ak_names <- make_clean_names(read_names(raw_info$path[1]))
+akc_names <- raw_info$path[1] %>% 
+  read_names(delim = ",") %>% 
+  str_replace("--------", "null1") %>% 
+  make_clean_names(case = "snake")
 ```
 
 All the files can be read into a single data frame using `vroom::vroom()`.
 
 ```{r raw_read}
-# 1,411,206 items
+# should be 1,465,443 items
 akc <- vroom(
   file = raw_info$path,
   skip = 1,
   delim = ",",
-  id = "file",
   num_threads = 1,
-  na = c("", "NA", "N/A"),
-  escape_double = FALSE,
-  escape_backslash = FALSE,
-  col_names = c(ak_names, "null"),
+  escape_double = TRUE,
+  na = c("", "NA", "N/A", "n/a"),
+  # add column name to end
+  col_names = c(akc_names, "null2"),
   col_types = cols(
     .default = col_character(),
-    date = col_date_usa(),
+    date = col_date_mdy(),
     amount = col_number(),
     report_year = col_integer(),
-    submitted = col_date_usa(),
-    null = col_logical()
+    submitted = col_date_mdy(),
+    # ignore bad cols
+    null1 = col_skip(),
+    null2 = col_skip()
   )
 )
 ```
 
 ```{r echo=FALSE}
 akc <- akc %>% 
-  select(-x, -null) %>% 
-  relocate(file, .after = last_col()) %>% 
-  mutate(across(file, basename)) %>% 
+  select(-transaction_type) %>% 
   rename(
-    id = result,
-    tran_type = transaction_type,
+    txn = result,
     pay_type = payment_type,
-    pay_detail = payment_detail,
+    pay_info = payment_detail,
     last = last_business_name,
     first = first_name,
     purpose = purpose_of_expenditure,
-    filer = name
+    rpt_type = report_type,
+    elect_name = election_name,
+    elect_type = election_type,
+    committee = name,
+    rpt_year = report_year
   )
 ```
 
 We successfully read the same number of rows as search results.
 
 ```{r raw_rows}
-nrow(akc) == 1411206
+nrow(akc) == 1465443
 ```
 
-`r percent(mean(akc$tran_type == "Income"))` of rows have an "Income" type.
+For exploration, we can split the election name column into its parts.
 
-```{r raw_check}
-count(akc, tran_type)
+```{r raw_split}
+elect_names <- akc %>%
+  distinct(elect_name) %>% 
+  mutate(across(elect_name, na_if, "-")) %>% 
+  separate(
+    col = elect_name,
+    into = c("elect_year", "elect_where"),
+    remove = FALSE,
+    sep = "\\s-\\s",
+    convert = TRUE,
+    extra = "merge"
+  ) %>% 
+  mutate(across(elect_where, str_squish))
+```
+
+```{r raw_names_join}
+akc <- akc %>% 
+  left_join(elect_names, by = "elect_name") %>% 
+  select(-elect_name) %>% 
+  rename(elect_name = elect_where) %>% 
+  relocate(elect_year, elect_name, .before = elect_type)
 ```
 
 ## Explore
@@ -227,7 +243,7 @@ There are `r comma(nrow(akc))` rows of `r ncol(akc)` columns.
 
 ```{r glimpse}
 glimpse(akc)
-head(akc)
+tail(akc)
 ```
 
 ### Missing
@@ -242,7 +258,7 @@ We can flag any rows that are missing a name, date, or amount needed to identify
 a transaction.
 
 ```{r na_flag}
-key_vars <- c("date", "last", "amount", "filer")
+key_vars <- c("date", "last", "amount", "committee")
 akc <- flag_na(akc, all_of(key_vars))
 sum(akc$na_flag)
 ```
@@ -280,7 +296,7 @@ rm(d1, d2); flush_memory()
 ```{r dupe_view}
 akc %>% 
   filter(dupe_flag) %>% 
-  select(id, all_of(key_vars))
+  select(txn, all_of(key_vars))
 ```
 
 ### Categorical
@@ -295,8 +311,8 @@ col_stats(akc, n_distinct)
 
 ```{r bar_categorical, echo=FALSE}
 explore_plot(akc, pay_type)
-explore_plot(akc, report_type)
-explore_plot(akc, election_type)
+explore_plot(akc, rpt_type)
+explore_plot(akc, elect_type)
 explore_plot(akc, office)
 explore_plot(akc, filer_type)
 ```
@@ -398,7 +414,8 @@ will force consistence case, remove punctuation, and abbreviate official
 USPS suffixes.
 
 ```{r address_norm}
-akc <- akc %>% 
+addr_norm <- akc %>% 
+  distinct(address) %>% 
   mutate(
     address_norm = normal_address(
       address = address,
@@ -409,10 +426,12 @@ akc <- akc %>%
 ```
 
 ```{r address_view}
-akc %>% 
-  select(contains("address")) %>% 
-  distinct() %>% 
-  sample_n(10)
+addr_norm
+```
+
+```{r address_join}
+akc <- left_join(akc, addr_norm, by = "address")
+rm(addr_norm); flush_memory()
 ```
 
 ### ZIP
@@ -508,7 +527,8 @@ removing punctuation, but _expanding_ USPS abbreviations. We can also remove
 `invalid_city` values.
 
 ```{r city_norm}
-akc <- akc %>% 
+city_norm <- akc %>% 
+  distinct(city, state_norm, zip_norm) %>% 
   mutate(
     city_norm = normal_city(
       city = city, 
@@ -528,7 +548,7 @@ If the normalized value is either an abbreviation for or very similar to the
 expected value, we can confidently swap those two.
 
 ```{r city_swap}
-akc <- akc %>% 
+city_norm <- city_norm %>% 
   rename(city_raw = city) %>% 
   left_join(
     y = zipcodes,
@@ -554,10 +574,22 @@ akc <- akc %>%
   )
 ```
 
+```{r city_rejoin}
+akc <- left_join(
+  x = akc,
+  y = city_norm,
+  by = c(
+    "city" = "city_raw",
+    "state_norm",
+    "zip_norm"
+  )
+)
+```
+
 #### Refine
 
-The [OpenRefine] algorithms can be used to group similar strings and replace the
-less common versions with their most common counterpart. This can greatly 
+The [OpenRefine][or] algorithms can be used to group similar strings and replace
+the less common versions with their most common counterpart. This can greatly
 reduce inconsistency, but with low confidence; we will only keep any refined
 strings that have a valid city/state/zip combination.
 
@@ -690,30 +722,25 @@ clean_dir <- dir_create(here("ak", "contribs", "data", "clean"))
 clean_path <- path(clean_dir, "ak_contribs_clean.csv")
 write_csv(akc, clean_path, na = "")
 (clean_size <- file_size(clean_path))
-file_encoding(clean_path) %>% 
-  mutate(across(path, path.abbrev))
 ```
 
 ## Upload
 
 We can use the `aws.s3::put_object()` to upload the text file to the IRW server.
 
-```{r s3_upload, eval=TRUE}
-s3_path <- path("csv", basename(clean_path))
-if (!object_exists(s3_path, "publicaccountability")) {
+```{r aws_upload, eval=FALSE}
+aws_path <- path("csv", basename(clean_path))
+if (!object_exists(aws_path, "publicaccountability")) {
   put_object(
     file = clean_path,
-    object = s3_path, 
+    object = aws_path, 
     bucket = "publicaccountability",
     acl = "public-read",
-    multipart = TRUE,
-    show_progress = TRUE
+    show_progress = TRUE,
+    multipart = TRUE
   )
 }
-```
-
-```{r s3_size}
-r <- head_object(s3_path, "publicaccountability")
-(s3_size <- as_fs_bytes(attr(r, "content-length")))
-unname(s3_size == clean_size)
+aws_head <- head_object(aws_path, "publicaccountability")
+(aws_size <- as_fs_bytes(attr(aws_head, "content-length")))
+unname(aws_size == clean_size)
 ```
