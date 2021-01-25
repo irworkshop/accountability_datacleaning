@@ -119,41 +119,15 @@ Data is obtained from the [Alaska Public Offices Commission (APOC)][apoc].
 ## Download
 
 Using the [APOC income search][search], we need to search for "All Completed
-Forms", "Any Names", and "Any" type. Exporting "Any" report year only returns
-roughly 400,000 results despite 1,411,206 results being listed in the search.
-We can export all of the results if we instead search and export individually
-by report year. As of now, this needs to be done by hand.
+Forms", "Any Names", and "Any" type, "Filed _After_" the last update of this
+data. In this case, that is September 30, 2020.
 
 [search]: https://aws.state.ak.us/ApocReports/CampaignDisclosure/CDIncome.aspx
 
-```{r line_count}
-line_count <- function(path) {
-  as.numeric(str_extract(system(paste("wc -l", path), intern = TRUE), "^\\d+"))
-}
-```
-
 ```{r raw_dir}
 raw_dir <- dir_create(here("ak", "contribs", "data", "raw"))
-raw_info <- dir_info(raw_dir)
-sum(raw_info$size)
-raw_info %>% 
-  select(path, size, modification_time) %>% 
-  rowwise() %>% 
-  mutate(lines = line_count(path)) %>% 
-  mutate(across(path, basename))
-```
-
-```{r raw_get, eval=FALSE}
-httr::GET(
-  # does not work
-  url = "https://aws.state.ak.us/ApocReports/CampaignDisclosure/CDIncome.aspx",
-  write_disk(raw_path)
-  query = list(
-    exportAll = "True",
-    exportFormat = "CSV",
-    isExport = "True"
-  ),
-)
+raw_new <- path(raw_dir, "CD_Transactions_Recent.CSV")
+file_size(raw_new)
 ```
 
 ## Read
@@ -164,15 +138,14 @@ is an extra comma at the end of each line. We can read this extra column at the
 end as a new `null` column.
 
 ```{r raw_names}
-ak_names <- make_clean_names(read_names(raw_info$path[1]))
+ak_names <- make_clean_names(read_names(raw_new))
 ```
 
 All the files can be read into a single data frame using `vroom::vroom()`.
 
 ```{r raw_read}
-# 1,411,206 items
 akc <- vroom(
-  file = raw_info$path,
+  file = raw_new,
   skip = 1,
   delim = ",",
   id = "file",
@@ -687,7 +660,7 @@ glimpse(sample_n(akc, 20))
 
 ```{r clean_dir}
 clean_dir <- dir_create(here("ak", "contribs", "data", "clean"))
-clean_path <- path(clean_dir, "ak_contribs_clean.csv")
+clean_path <- path(clean_dir, "ak_contribs_20210125.csv")
 write_csv(akc, clean_path, na = "")
 (clean_size <- file_size(clean_path))
 file_encoding(clean_path) %>% 
