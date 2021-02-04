@@ -131,53 +131,44 @@ The CFB provides [direct data download][data] for all campaign finance data.
 
 [data]: https://cfb.mn.gov/reports-and-data/self-help/data-downloads/campaign-finance/
 
-## Download
+## Import
 
-```{r raw_url}
-cfb_url <- str_c(
-  "https://cfb.mn.gov/",
-  "reports-and-data/self-help/data-downloads/campaign-finance"
-)
-```
+To import the file for processing, we will first have save the file locally
+and then read the flat file.
 
-```{r raw_head}
-mn_head <- HEAD(cfb_url, query = list(download = -2113865252))
-mn_file <- str_extract(
-  string = headers(mn_head)[["content-disposition"]], 
-  pattern = "(?<=\\=\")(.*)(?=\")"
-)
-```
+### Download
 
-```{r raw_dir}
-raw_dir <- dir_create(here("mn", "contribs", "data", "raw"))
-raw_csv <- path(raw_dir, mn_file)
-```
+We can download the file to disk with the `httr::GET()` and `httr::write_disk()`
+functions. These functions make the HTTP requests one would make when clicking
+on the download link on the CFB page. 
 
 ```{r raw_download}
-if (!file_exists(raw_csv)) {
+raw_dir <- dir_create(here("mn", "contribs", "data", "raw"))
+raw_file <- path(raw_dir, "all_contribs.csv")
+if (!file_exists(raw_file)) {
   GET(
-    "https://cfb.mn.gov/reports-and-data/self-help/data-downloads/campaign-finance/",
+    url = "https://cfb.mn.gov/",
+    path = c("reports-and-data", "self-help", "data-downloads", "campaign-finance"),
     query = list(download = -2113865252),
-    write_disk(raw_csv, overwrite = FALSE),
-    progress(type = "down")
+    write_disk(raw_file, overwrite = TRUE),
   )
 }
 ```
 
-## Read
+### Read
+
+We can read this flat file with the `vroom::vroom()` function.
 
 ```{r raw_read}
-mnc <- read_delim(
-  file = raw_csv,
-  delim = ",",
-  escape_backslash = FALSE,
-  escape_double = TRUE,
+mnc <- vroom(
+  file = raw_file,
+  .name_repair = make_clean_names,
   col_types = cols(
     .default = col_character(),
     `Recipient reg num` = col_integer(),
-    `Amount` = col_double(),
-    `Receipt date` = col_date_mdy(),
-    `Year` = col_integer(),
+    Amount = col_double(),
+    `Receipt date` = col_date_usa(),
+    Year = col_integer(),
     `Contributor ID` = col_integer(),
     `Contrib Reg Num` = col_integer(),
     `Contrib employer ID` = col_integer()
@@ -185,94 +176,135 @@ mnc <- read_delim(
 )
 ```
 
-```{r clean_names}
+```{r raw_rename, echo=FALSE}
 mnc <- mnc %>% 
-  clean_names(case = "snake") %>% 
-  rename(date = receipt_date) %>% 
-  mutate(in_kind = (in_kind == "Yes")) %>% 
+  rename(
+    rec_num = recipient_reg_num,
+    rec_name = recipient,
+    rec_type = recipient_type,
+    rec_sub = recipient_subtype,
+    date = receipt_date,
+    year = year,
+    con_name = contributor,
+    con_id = contributor_id,
+    con_reg = contrib_reg_num,
+    con_type = contrib_type,
+    receipt = receipt_type,
+    in_kind = in_kind,
+    in_kind_desc = in_kind_descr,
+    con_zip = contrib_zip,
+    con_emp_id = contrib_employer_id,
+    con_emp_name = contrib_employer_name
+  )%>% 
+  mutate(
+    in_kind = "Yes" == in_kind
+  ) %>% 
   remove_empty("cols")
 ```
 
 ## Explore
 
-There are `r comma(nrow(mnc))` rows of `r ncol(mnc)` columns. Each record
-represents a single contribution made to a political committee.
+The file has `r comma(nrow(mnc))` records of `r ncol(mnc)` variables.
 
 ```{r glimpse}
-glimpse(mnc)
+head(mnc)
 tail(mnc)
+glimpse(sample_n(mnc, 20))
 ```
 
 ### Missing
 
-Columns vary in their degree of missing values.
+We should flag any variable missing the key variables needed to identify a 
+unique contribution.
 
 ```{r na_count}
 col_stats(mnc, count_na)
 ```
 
-We can flag any record missing a key variable needed to identify a transaction.
-
 ```{r na_flag}
-key_vars <- c("date", "contributor", "amount", "recipient")
-mnc <- flag_na(mnc, all_of(key_vars))
+mnc <- mnc %>% flag_na(rec_name, con_name, date, amount)
 sum(mnc$na_flag)
 ```
 
 ```{r na_view}
 mnc %>% 
   filter(na_flag) %>% 
-  select(all_of(key_vars))
+  select(rec_name, con_name, date, amount) %>% 
+  sample_frac()
 ```
 
 ### Duplicates
 
-We can also flag any record completely duplicated across every column.
+Similarly, we can flag all records that are duplicated at least one other time.
 
 ```{r dupe_flag}
 mnc <- flag_dupes(mnc, everything())
-percent(mean(mnc$dupe_flag), 0.1)
+sum(mnc$dupe_flag)
 ```
 
 ```{r dupe_view}
 mnc %>% 
   filter(dupe_flag) %>% 
-  select(all_of(key_vars)) %>% 
-  arrange(date)
+  select(rec_name, con_name, date, amount) %>% 
+  arrange(rec_name)
 ```
 
 ### Categorical
+
+We can explore the distribution of categorical variables.
 
 ```{r distinct_count}
 col_stats(mnc, n_distinct)
 ```
 
-```{r distinct_plots, echo=FALSE}
-explore_plot(mnc, recipient_type)
-explore_plot(mnc, recipient_subtype)
-explore_plot(mnc, contrib_type) + scale_x_wrap(10)
-explore_plot(mnc, receipt_type) + scale_x_wrap(10)
-explore_plot(mnc, in_kind)
+```{r bar_rec_type, echo=FALSE}
+explore_plot(
+  data = filter(mnc, !is.na(rec_type)),
+  var = rec_type
+)
 ```
 
-### Amounts
+```{r bar_rec_sub, echo=FALSE}
+explore_plot(
+  data = filter(mnc, !is.na(rec_sub)),
+  var = rec_sub
+)
+```
 
-```{r amount_summary}
+```{r bar_con_type, echo=FALSE}
+explore_plot(
+  data = filter(mnc, !is.na(con_type)),
+  var = con_type
+)
+```
+
+```{r cat_count, echo=FALSE}
+count(mnc, receipt)
+count(mnc, in_kind)
+```
+
+### Continuous
+
+The range of continuous variables should be checked to identify any egregious
+outliers or strange distributions.
+
+#### Amounts
+
+The range of the `amount` variable is reasonable, with very few contributions
+at or less than zero dollars.
+
+```{r ammount_summary}
 summary(mnc$amount)
-mean(mnc$amount <= 0)
+sum(mnc$amount <= 0)
 ```
 
-These are the records with the minimum and maximum amounts.
-
-```{r amount_minmax}
-glimpse(mnc[c(which.max(mnc$amount), which.min(mnc$amount)), ])
-```
+As we'd expect, the contribution `amount` are log-normally distributed around 
+the median value of `r dollar(median(mnc$amount))`.
 
 ```{r hist_amount, echo=FALSE}
 mnc %>%
-  filter(amount >= 1, !is.na(amount)) %>% 
   ggplot(aes(amount)) +
-  geom_histogram(fill = dark2["purple"], bins = 20) +
+  geom_histogram(fill = dark2["purple"]) +
   scale_y_continuous(labels = comma) +
   scale_x_continuous(
     breaks = c(1 %o% 10^(0:6)),
@@ -281,13 +313,13 @@ mnc %>%
   ) +
   labs(
     title = "Minnesota Contributions Amount Distribution",
-    caption = "Source: MN CFB",
+    caption = "Source: MC CFB",
     x = "Amount",
     y = "Count"
   )
 ```
 
-### Dates
+#### Dates
 
 Since the `year` variable already exists, there is no need to create one. Any of
 these which do not match seems to fall near beginning of the year.
@@ -320,7 +352,7 @@ mnc %>%
   theme(legend.position = "bottom") +
   labs(
     title = "Minnesota Contributions by Year",
-    caption = "Source: MN CFB",
+    caption = "Source: {source}",
     fill = "Election Year",
     x = "Year Made",
     y = "Count"
@@ -334,30 +366,22 @@ expect. There is only a ZIP code. We can use this `zip` variable to add the
 `city` and `state` variables, but not an `address`. These variables will _not_
 be accurate to the data provided by the state.
 
-```{r zip_check}
-prop_in(mnc$contrib_zip, valid_zip)
-```
-
 ```{r zip_join}
-pre_names <- names(mnc)
 mnc <- mnc %>% 
-  left_join(zipcodes, by = c("contrib_zip" = "zip")) %>% 
-  rename_with(
-    .fn = ~glue("contrib_{.}_match"),
-    .cols = setdiff(names(.), pre_names)
-  )
+  left_join(zipcodes, by = c("con_zip" = "zip")) %>% 
+  rename_at(vars(19:20), ~str_replace(., "(.*)$", "cont_\\1_match"))
 ```
 
 ## Conclude
 
 ```{r clean_glimpse}
-glimpse(sample_n(mnc, 50))
+glimpse(sample_n(mnc, 100))
 ```
 
 1. There are `r comma(nrow(mnc))` records in the database.
 1. There are `r comma(sum(mnc$dupe_flag))` duplicate records in the database.
 1. The range and distribution of `amount` and `date` seem reasonable.
-1. There are `r comma(sum(mnc$na_flag))` records missing key variables.
+1. There are `r comma(sum(mnc$na_flag))` records missing ....
 1. Consistency in geographic data has been improved with `campfin::normal_*()`.
 1. The 4-digit `year` variable has been created with `lubridate::year()`.
 
@@ -370,7 +394,6 @@ clean_dir <- dir_create(here("mn", "contribs", "data", "clean"))
 clean_path <- path(clean_dir, "mn_contribs_clean.csv")
 write_csv(mnc, clean_path, na = "")
 (clean_size <- file_size(clean_path))
-non_ascii(clean_path)
 ```
 
 ## Upload
@@ -433,4 +456,3 @@ dict_raw <- tibble(
   format = "markdown",
   col.names = c("Column", "Type", "Definition")
 ))
-```
