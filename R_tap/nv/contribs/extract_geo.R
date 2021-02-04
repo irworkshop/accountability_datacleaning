@@ -4,35 +4,35 @@ extract_geo <- function(html) {
   nv <- xml2::read_html(html)
 
   table_col_one <- nv %>%
-    rvest::html_node("#ctl04_mobjContributions_dgContributions") %>%
-    rvest::html_nodes(".CUserData") %>%
-    rvest::html_nodes("td:nth-child(1)") %>%
-    base::as.character()
+    html_node("#ctl04_mobjContributions_dgContributions") %>%
+    html_nodes(".CUserData") %>%
+    html_nodes("td:nth-child(1)")
 
-  names <- table_col_one %>%
-    str_extract(">(.*?)</a>") %>%
-    str_remove(">") %>%
-    str_remove("</a>") %>%
-    str_replace("&amp;", "&")
+  name <- html_text(html_nodes(table_col_one, "a"))
+  geo <- nv %>%
+    html_node("#ctl04_mobjContributions_dgContributions") %>%
+    html_nodes(".CUserData") %>%
+    as.character() %>%
+    str_extract_all("(?<=<br>).*(?=<)", simplify = TRUE) %>%
+    str_subset(".") %>%
+    str_replace_all("<br>", "~") %>%
+    str_replace_all("~(?=.*~)", " ")
 
-  geo <- table_col_one %>%
-    stringr::str_extract("<br>(.*?)</td>") %>%
-    stringr::str_remove("<br>") %>%
-    stringr::str_remove("</td>") %>%
-    stringr::str_replace("<br>(.*?)<br>", "<br>") %>%
-    tibble::enframe(NULL) %>%
-    tidyr::separate(value, c("address", "city_state_zip"), "<br>") %>%
-    tidyr::separate(city_state_zip, c("city", "state_zip"), ",\\s") %>%
-    tidyr::separate(state_zip, c("state", "zip"), "\\s")
+  name_geo <- extract(
+    data = tibble(name, geo),
+    col = geo,
+    into = c("addr", "city", "state", "zip"),
+    regex = "(.*)~(.*), (\\w{2}) (\\d+)"
+  )
 
-  date_amount <- nv %>%
-    rvest::html_node("#ctl04_mobjContributions_dgContributions") %>%
-    rvest::html_table(fill = TRUE, header = TRUE) %>%
-    tibble::as_tibble(.name_repair = "unique") %>%
-    magrittr::set_names(letters[1:(length(.))]) %>%
-    dplyr::filter(!stringr::str_detect(a, "../../....$")) %>%
-    dplyr::filter(!stringr::str_detect(a, "\\$")) %>%
-    dplyr::mutate(
+  nv %>%
+    html_node("#ctl04_mobjContributions_dgContributions") %>%
+    html_table(fill = TRUE, header = TRUE) %>%
+    set_names(nm = letters[1:12]) %>%
+    as_tibble() %>%
+    filter(!stringr::str_detect(a, "\\d{2}/\\d{2}/\\d{4}$")) %>%
+    filter(!stringr::str_detect(a, "\\$")) %>%
+    mutate(
       b = base::ifelse(
         test = stringr::str_length(b) > 10,
         yes = c,
@@ -44,8 +44,8 @@ extract_geo <- function(html) {
         no = c
       ) %>% readr::parse_number()
     ) %>%
-    dplyr::select(b, c) %>%
-    magrittr::set_names(c("date", "amount"))
+    select(b, c) %>%
+    set_names(c("date", "amount"))
 
   df <- geo %>%
     dplyr::mutate(name = names) %>%

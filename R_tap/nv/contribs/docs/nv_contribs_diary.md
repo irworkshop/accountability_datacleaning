@@ -1,1289 +1,896 @@
----
-title: "Data Diary"
-subtitle: "Nevada Contributions"
-author: "Kiernan Nicholls"
-date: "2019-06-25 11:57:15"
-output:
-  html_document: 
-    df_print: tibble
-    fig_caption: yes
-    highlight: tango
-    keep_md: yes
-    max.print: 32
-    toc: yes
-    toc_float: no
-editor_options: 
-  chunk_output_type: console
----
+Nevada Contributions
+================
+Kiernan Nicholls
+Thu Feb 4 11:00:29 2021
 
+-   [Project](#project)
+-   [Objectives](#objectives)
+-   [Packages](#packages)
+-   [Data](#data)
+    -   [Report](#report)
+    -   [Age](#age)
+    -   [Format](#format)
+    -   [Variables](#variables)
+    -   [Records](#records)
+-   [Download](#download)
+-   [Unzip](#unzip)
+-   [Columns](#columns)
+-   [Read](#read)
+-   [Join](#join)
+    -   [Recipient](#recipient)
+    -   [Contributors](#contributors)
+    -   [Finish](#finish)
+-   [Explore](#explore)
+    -   [Missing](#missing)
+    -   [Duplicates](#duplicates)
+    -   [Categorical](#categorical)
+    -   [Amounts](#amounts)
+    -   [Dates](#dates)
+-   [Wrangle](#wrangle)
+-   [Conclude](#conclude)
+-   [Export](#export)
+-   [Upload](#upload)
 
+<!-- Place comments regarding knitting here -->
+
+## Project
+
+The Accountability Project is an effort to cut across data silos and
+give journalists, policy professionals, activists, and the public at
+large a simple way to search across huge volumes of public data about
+people and organizations.
+
+Our goal is to standardizing public data on a few key fields by thinking
+of each dataset row as a transaction. For each transaction there should
+be (at least) 3 variables:
+
+1.  All **parties** to a transaction.
+2.  The **date** of the transaction.
+3.  The **amount** of money involved.
 
 ## Objectives
 
-1. How many records are in the database?
-1. Check for duplicates
-1. Check ranges
-1. Is there anything blank or missing?
-1. Check for consistency issues
-1. Create a five-digit ZIP Code called ZIP5
-1. Create a YEAR field from the transaction date
-1. For campaign donation data, make sure there is both a donor AND recipient
+This document describes the process used to complete the following
+objectives:
+
+1.  How many records are in the database?
+2.  Check for entirely duplicated records.
+3.  Check ranges of continuous variables.
+4.  Is there anything blank or missing?
+5.  Check for consistency issues.
+6.  Create a five-digit ZIP Code called `zip`.
+7.  Create a `year` field from the transaction date.
+8.  Make sure there is data on both parties to a transaction.
 
 ## Packages
 
-The following packages are needed to collect, manipulate, visualize, analyze, and communicate
-these results. The `pacman` package will facilitate their installation and attachment.
+The following packages are needed to collect, manipulate, visualize,
+analyze, and communicate these results. The `pacman` package will
+facilitate their installation and attachment.
 
-
-```r
-# install.packages("pacman")
+``` r
+if (!require("pacman")) {
+  install.packages("pacman")
+}
 pacman::p_load(
   tidyverse, # data manipulation
-  magrittr, # pipe opperators
-  janitor, # data cleaning
-  refinr, # cluster and merge
-  vroom, # read files fast
-  rvest, # scrape web pages
+  lubridate, # datetime strings
+  gluedown, # printing markdown
+  janitor, # clean data frames
+  campfin, # custom irw tools
+  aws.s3, # aws cloud storage
+  refinr, # cluster & merge
+  scales, # format strings
   knitr, # knit documents
-  here, # navigate local storage
-  fs # search local storage 
+  vroom, # fast reading
+  rvest, # scrape html
+  glue, # code strings
+  here, # project paths
+  httr, # http requests
+  fs # local storage 
 )
+```
+
+This document should be run as part of the `R_campfin` project, which
+lives as a sub-directory of the more general, language-agnostic
+[`irworkshop/accountability_datacleaning`](https://github.com/irworkshop/accountability_datacleaning)
+GitHub repository.
+
+The `R_campfin` project uses the [RStudio
+projects](https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects)
+feature and should be run as such. The project also uses the dynamic
+`here::here()` tool for file paths relative to *your* machine.
+
+``` r
+# where does this document knit?
+here::i_am("nv/contribs/docs/nv_contribs_diary.Rmd")
 ```
 
 ## Data
 
-The Nevada Secretary of State (NVSOS) office requires that one register for an account to access 
-"[bulk data download](https://www.nvsos.gov/sos/online-services/data-download)" service page.
+The Nevada Secretary of State (NVSOS) office requires that one register
+for an account to access “[bulk data
+download](https://www.nvsos.gov/sos/online-services/data-download)”
+service page.
 
-The process for downloaded a report is [outlined here](https://www.nvsos.gov/SoSServices/AnonymousAccess/HelpGuides/DataDownloadUserGuide.aspx):
+> Welcome to the Nevada Secretary of State online unified login system.
+> Here you may access the following systems all with one login account:
+> \* Bulk Data Download \* …
 
-In brief, we will be downloading a "Full Unabridged Database Dump" of "Campaign Finance" data.
+The process for downloaded a report is [outlined
+here](https://www.nvsos.gov/SoSServices/AnonymousAccess/HelpGuides/DataDownloadUserGuide.aspx):
 
-> This report will expose Contributions and Expenses report data filed within our “Aurora” Campaign
-Financial Disclosure system. This would not include data filed in a Financial Disclosure report.
-This bulk data report tool here should be used to pull the entire database or slightly smaller
-subsets of data such as all contributions filed after 1/1/2016 by groups of type “PAC”...
+Create a report for “Full Unabridged Database Dump” of “Campaign
+Finance” data.
 
-The site allows users to define the format for their data download. The site generated the
-following summary of our data format:
+> This report will expose Contributions and Expenses report data filed
+> within our “Aurora” Campaign Financial Disclosure system. This would
+> not include data filed in a Financial Disclosure report. This bulk
+> data report tool here should be used to pull the entire database or
+> slightly smaller subsets of data such as all contributions filed after
+> 1/1/2016 by groups of type “PAC”…
 
-> Your report will generate 6 "," delimited ASCII text file(s) compressed into one Zip file named
-in the format "CampaignFinance.43993.<Today's Date>.zip"*. The first row in each file will contain
-the column names, not actual data. Any field capable of containing a non-numeric character (data
-types char, varchar, or datetime), will be enclosed in double quotes (") so that if the field
-contains your delimiter you may identify it as being contained within the field and not an actual
-delimiter. Any double quotes contained within these fields will be replaced by 2 consecutive double
-quotes ("") so that the end of the field's data is not erroneously identified...
+### Report
 
-The above information provides the information needed to correctly parse each file using
-`vroom::vroom()`.
+The site allows users to define the format for their data download. The
+site generated the following summary of our specified data format:
 
-The report data is partitioned into multiple files, as explained on the 
-[NVSOS FAQ page](https://www.nvsos.gov/SOSServices/AnonymousAccess/HelpGuides/FAQ.aspx#5):
+> If “Text File - Fixed Width” is selected your report results will be
+> inserted into a standard ASCII text file where each field starts at a
+> specific “fixed” position for each line. For more specific information
+> about the report format for custom built reports, including the
+> position and data type of each field, click the “View Selected File
+> Structure” button on the General tab when you viewyour report.
 
-> This is what is referred to as a normalized relational structure in the database world.  Data
-items such as business entities and officers have a direct relation to one another.  There can be
-any number of officers to one business entity.  Because of this many to one relationship, the
-officers data is stored in a different data table (or file) than the business entities.  Then we
-relate officer records to a business entity record by a common key data column, in this case the
-CorporationID... By separating officers and entities into separate records we can eliminate the
-redundancy and added size associated with putting the business entity data on each officer record
-or eliminate the complexity of allocating an undeterminable amount of officers on the one business
-entity record.  This same many-to-one relationship is true of voter history records to voter
-records, UCC actions to UCC liens or Corporation Stocks to Corporations, to name a few.
+This file structure report is an HTML page with a description and six
+tables.
 
-The summary continues to provide individual structure summaries on each of the six files included
-in the report along with an key to the file name:
+> Your report will generate 6 fixed width ASCII text file(s) compressed
+> into one Zip file named in the format
+> “CampaignFinance.43993.&lt;Today’s Date&gt;.zip”\*. Below you will
+> find the format of each file:
 
+### Age
 
-```
-#> $candidates
-#> # A tibble: 6 x 3
-#>   col          key         col_type   
-#>   <chr>        <chr>       <chr>      
-#> 1 CandidateID  Primary Key int        
-#> 2 First Name   <NA>        varchar(25)
-#> 3 Last Name    <NA>        varchar(25)
-#> 4 Party        <NA>        varchar(60)
-#> 5 Office       <NA>        varchar(60)
-#> 6 Jurisdiction <NA>        varchar(50)
-#> 
-#> $groups
-#> # A tibble: 6 x 3
-#>   col          key         col_type    
-#>   <chr>        <chr>       <chr>       
-#> 1 GroupID      Primary Key int         
-#> 2 Group Name   <NA>        varchar(120)
-#> 3 Group Type   <NA>        varchar(100)
-#> 4 Contact Name <NA>        varchar(35) 
-#> 5 Active       <NA>        bit         
-#> 6 City         <NA>        varchar(30) 
-#> 
-#> $reports
-#> # A tibble: 9 x 3
-#>   col             key                                    col_type    
-#>   <chr>           <chr>                                  <chr>       
-#> 1 ReportID        Primary Key                            int         
-#> 2 CandidateID     Foreign Key Ref Candidates.CandidateID int         
-#> 3 GroupID         Foreign Key Ref Groups.GroupID         int         
-#> 4 Report Name     <NA>                                   varchar(120)
-#> 5 Election Cycle  <NA>                                   varchar(4)  
-#> 6 Filing Due Date <NA>                                   datetime    
-#> 7 Filed Date      <NA>                                   datetime    
-#> 8 Amended         <NA>                                   bit         
-#> 9 Superseded      <NA>                                   bit         
-#> 
-#> $payees
-#> # A tibble: 4 x 3
-#>   col         key         col_type    
-#>   <chr>       <chr>       <chr>       
-#> 1 ContactID   Primary Key int         
-#> 2 First Name  <NA>        varchar(30) 
-#> 3 Middle Name <NA>        varchar(30) 
-#> 4 Last Name   <NA>        varchar(100)
-#> 
-#> $contributions
-#> # A tibble: 8 x 3
-#>   col                 key                                           col_type   
-#>   <chr>               <chr>                                         <chr>      
-#> 1 ContributionID      Primary Key                                   int        
-#> 2 ReportID            Foreign Key Ref Reports.ReportID              int        
-#> 3 CandidateID         Foreign Key Ref Candidates.CandidateID        int        
-#> 4 GroupID             Foreign Key Ref Groups.GroupID                int        
-#> 5 Contribution Date   <NA>                                          datetime   
-#> 6 Contribution Amount <NA>                                          money      
-#> 7 Contribution Type   <NA>                                          varchar(30)
-#> 8 ContributorID       Foreign Key Ref Contributors-Payees.ContactID int        
-#> 
-#> $expenses
-#> # A tibble: 8 x 3
-#>   col            key                                           col_type   
-#>   <chr>          <chr>                                         <chr>      
-#> 1 ExpenseID      Primary Key                                   int        
-#> 2 ReportID       Foreign Key Ref Reports.ReportID              int        
-#> 3 CandidateID    Foreign Key Ref Candidates.CandidateID        int        
-#> 4 GroupID        Foreign Key Ref Groups.GroupID                int        
-#> 5 Expense Date   <NA>                                          datetime   
-#> 6 Expense Amount <NA>                                          money      
-#> 7 Expense Type   <NA>                                          varchar(30)
-#> 8 Payee ID       Foreign Key Ref Contributors-Payees.ContactID int
+> The data being reported off of is no more than 24 hours old. This data
+> is copied very late each night from live data to minimize the large
+> burden of bulk reporting on the production system.
+
+### Format
+
+The report data is split into multiple files, per the [NVSOS FAQ
+page](https://www.nvsos.gov/SOSServices/AnonymousAccess/HelpGuides/FAQ.aspx#5):
+
+> This is what is referred to as a normalized relational structure in
+> the database world. Data items such as business entities and officers
+> have a direct relation to one another. There can be any number of
+> officers to one business entity. Because of this many to one
+> relationship, the officers data is stored in a different data table
+> (or file) than the business entities. Then we relate officer records
+> to a business entity record by a common key data column, in this case
+> the CorporationID… By separating officers and entities into separate
+> records we can eliminate the redundancy and added size associated with
+> putting the business entity data on each officer record or eliminate
+> the complexity of allocating an undeterminable amount of officers on
+> the one business entity record. This same many-to-one relationship is
+> true of voter history records to voter records, UCC actions to UCC
+> liens or Corporation Stocks to Corporations, to name a few.
+
+#### Tables
+
+The summary continues to provide individual structure summaries on each
+of the six files included in the report along with an key to the file
+name. These six tables contain columns describing both the data type and
+the width of each column. This information is needed to properly read
+the flat text files.
+
+``` r
+st_dir <- here("nv", "contribs")
+about_path <- path(st_dir, "File Format - Secretary of State, Nevada.html")
+about <- read_html(x = about_path)
 ```
 
-NVSOS provides some further information on a few variables in the "Result Field" tab of the report
-generator:
+``` r
+about_tables <- about %>% 
+  html_nodes(".entryform") %>% 
+  html_table(fill = TRUE) %>% 
+  map(as_tibble)
+```
 
-* `Jurisdiction` = 
+``` r
+about_tables <- about_tables[map_lgl(about_tables, ~ncol(.) == 4)]
+about_tables <- map(about_tables, row_to_names, row_number = 1)
+about_names <- str_subset(html_text(html_nodes(about, "b")), "\\d")
+```
 
-> This will be name of the city or county for city/county offices currently held by the candidate
-(e.g. “CITY OF YERINGTON”, “DOUGLAS COUNTY”).  This will be set to “NV SOS” for statewide offices
-such as Governor, State Controller or State assemblymen.  An office assigned to a candidate could
-be updated by the NV SOS Elections staff as necessary when that candidate files for a new office.
+<table class="kable_wrapper">
+<tbody>
+<tr>
+<td>
 
-* `Contribution Type` = 
+| Field Name                | Data Type   | Start Position | Length |
+|:--------------------------|:------------|---------------:|-------:|
+| CandidateID (Primary Key) | int         |              1 |     10 |
+| First Name                | varchar(25) |             11 |     25 |
+| Last Name                 | varchar(25) |             36 |     25 |
+| Party                     | varchar(60) |             61 |     60 |
+| Office                    | varchar(60) |            121 |     60 |
+| Jurisdiction              | varchar(50) |            181 |     50 |
 
-> Use this column to differentiate which one of four contribution types this contribution record
-is: Monetary Contribution, In Kind Contribution, In Kind Written Commitment, or Written Commitment.
+</td>
+<td>
 
-* `Last Name` = 
+| Field Name            | Data Type    | Start Position | Length |
+|:----------------------|:-------------|---------------:|-------:|
+| GroupID (Primary Key) | int          |              1 |     10 |
+| Group Name            | varchar(120) |             11 |    120 |
+| Group Type            | varchar(100) |            131 |    100 |
+| Contact Name          | varchar(35)  |            231 |     35 |
+| Active                | bit          |            266 |      1 |
+| City                  | varchar(30)  |            267 |     30 |
 
-> When the contributor or payee is an organization as opposed to an individual, the entire
-organization name will be in the Last Name field only.
+</td>
+<td>
 
-* `Expense Type` = 
+| Field Name                                           | Data Type    | Start Position | Length |
+|:-----------------------------------------------------|:-------------|---------------:|-------:|
+| ReportID (Primary Key)                               | int          |              1 |     10 |
+| CandidateID (Foreign Key Ref Candidates.CandidateID) | int          |             11 |     10 |
+| GroupID (Foreign Key Ref Groups.GroupID)             | int          |             21 |     10 |
+| Report Name                                          | varchar(120) |             31 |    120 |
+| Election Cycle                                       | varchar(4)   |            151 |      4 |
+| Filing Due Date                                      | datetime     |            155 |     10 |
+| Filed Date                                           | datetime     |            165 |     10 |
+| Amended                                              | bit          |            175 |      1 |
+| Superseded                                           | bit          |            176 |      1 |
 
-> Use this column to differentiate which type of expense record this is: Monetary Expense or In
-Kind Expense.
+</td>
+<td>
 
-* `Active`
+| Field Name              | Data Type    | Start Position | Length |
+|:------------------------|:-------------|---------------:|-------:|
+| ContactID (Primary Key) | int          |              1 |     10 |
+| First Name              | varchar(30)  |             11 |     30 |
+| Middle Name             | varchar(30)  |             41 |     30 |
+| Last Name               | varchar(100) |             71 |    100 |
 
-> A value of F (False) indicates the group has been marked as inactive by the NV Secretary of
-State's office Elections division due to submission of a "notice of inactivity" or for failure to
-renew annual registration.
+</td>
+<td>
 
-* `Amended` = 
+| Field Name                                                    | Data Type   | Start Position | Length |
+|:--------------------------------------------------------------|:------------|---------------:|-------:|
+| ContributionID (Primary Key)                                  | int         |              1 |     10 |
+| ReportID (Foreign Key Ref Reports.ReportID)                   | int         |             11 |     10 |
+| CandidateID (Foreign Key Ref Candidates.CandidateID)          | int         |             21 |     10 |
+| GroupID (Foreign Key Ref Groups.GroupID)                      | int         |             31 |     10 |
+| Contribution Date                                             | datetime    |             41 |     10 |
+| Contribution Amount                                           | money       |             51 |     21 |
+| Contribution Type                                             | varchar(30) |             72 |     30 |
+| ContributorID (Foreign Key Ref Contributors-Payees.ContactID) | int         |            102 |     10 |
 
-> A value of T (True) indicates this contributions and expense report has been marked as an amended
-report by the original filer implying this report supersedes a report for this same period, filed
-earlier.   An amended report is to be full comprehensive for that report period and in essence
-replaces all contributions and expenses filed in the earlier report.
+</td>
+<td>
 
-* `Election Cycle` = 
+| Field Name                                               | Data Type   | Start Position | Length |
+|:---------------------------------------------------------|:------------|---------------:|-------:|
+| ExpenseID (Primary Key)                                  | int         |              1 |     10 |
+| ReportID (Foreign Key Ref Reports.ReportID)              | int         |             11 |     10 |
+| CandidateID (Foreign Key Ref Candidates.CandidateID)     | int         |             21 |     10 |
+| GroupID (Foreign Key Ref Groups.GroupID)                 | int         |             31 |     10 |
+| Expense Date                                             | datetime    |             41 |     10 |
+| Expense Amount                                           | money       |             51 |     21 |
+| Expense Type                                             | varchar(30) |             72 |     30 |
+| Payee ID (Foreign Key Ref Contributors-Payees.ContactID) | int         |            102 |     10 |
 
-> The Election Cycle is the 4 digit filing or reporting year defining a filing period grouping
-together a collection of contribution and expenses reports...
+</td>
+</tr>
+</tbody>
+</table>
 
-* `Superseded` = 
+#### Data Types
 
-> A report is Superseded when an amended report was filed later by the same filer for the same
-reporting period.  In this case the Superseded field for the older report record will be set to T
-(True)...
+> The Data Types within this column correspond to the SQL Server 2012
+> data types in which the source data is stored. The purpose of exposing
+> these data types is simply to provide a suggested guideline for any
+> software programmers writing an interface to process these report
+> files. Below is a partial list of SQL Server data types:
+
+> -   `bigint` - Numeric, 8 bytes
+> -   `int` - Numeric, 4 bytes
+> -   `smallint` - Numeric, 2 bytes
+> -   `tinyint` - Numeric, 1 byte
+> -   `bit` - Results are Truewhich will be represented as “T”"F"
+> -   `money` - Monetary data, 8 bytes, accuracy to a ten-thousandth of
+>     a unit
+> -   `float` - Floating precision number from -1.79E + 308 through
+>     1.79E + 308.
+> -   `real` - Floating precision number from -3.40E + 38 through
+>     3.40E + 38.
+> -   `datetime` - Date
+> -   `char` - Fixed-length character data
+> -   `varchar` - Variable-length data with a maximum of 8,000
+>     characters
+
+### Variables
+
+Definitions for few variables can be found in the “Result Field” tab:
+
+1.  `Jurisdiction`: &gt; This will be name of the city or county for
+    city/county offices currently held by the candidate (e.g. “CITY OF
+    YERINGTON”, “DOUGLAS COUNTY”). This will be set to “NV SOS” for
+    statewide offices such as Governor, State Controller or State
+    assemblymen. An office assigned to a candidate could be updated by
+    the NV SOS Elections staff as necessary when that candidate files
+    for a new office.
+
+2.  `Contribution Type`: &gt; Use this column to differentiate which one
+    of four contribution types this contribution record is: Monetary
+    Contribution, In Kind Contribution, In Kind Written Commitment, or
+    Written Commitment.
+
+3.  `Last Name`: &gt; When the contributor or payee is an organization
+    as opposed to an individual, the entire organization name will be in
+    the Last Name field only.
+
+4.  `Expense Type`: &gt; Use this column to differentiate which type of
+    expense record this is: Monetary Expense or In Kind Expense.
+
+5.  `Active`: &gt; A value of F (False) indicates the group has been
+    marked as inactive by the NV Secretary of State’s office Elections
+    division due to submission of a “notice of inactivity” or for
+    failure to renew annual registration.
+
+6.  `Amended`: &gt; A value of T (True) indicates this contributions and
+    expense report has been marked as an amended report by the original
+    filer implying this report supersedes a report for this same period,
+    filed earlier. An amended report is to be full comprehensive for
+    that report period and in essence replaces all contributions and
+    expenses filed in the earlier report.
+
+7.  `Election Cycle`: &gt; The Election Cycle is the 4 digit filing or
+    reporting year defining a filing period grouping together a
+    collection of contribution and expenses reports…
+
+8.  `Superseded`: &gt; A report is Superseded when an amended report was
+    filed later by the same filer for the same reporting period. In this
+    case the Superseded field for the older report record will be set to
+    T (True)…
+
+### Records
+
+> Total number of records returned: 1,104,096
+
+``` r
+total_rows <- 1104096
+```
+
+> A record is one single entity or row from a database table. The “Total
+> number of records returned” displayed on the report preview page will
+> be a summation of all rows returned from each table you are reporting
+> from. For example, if your report queries for both Resident Agent and
+> Corporation data from the Corporations database, the number of records
+> returned might be 1000, 700 of which might be Corporation records and
+> 300 being Resident Agent records.
+
+## Download
+
+Within seven days of running the report, the data can be downloaded from
+the link provided to the account email address. The link will not work
+for anybody not logged into that NVSOS account.
+
+``` r
+raw_url <- "https://www.nvsos.gov/yourreports/CampaignFinance.43993.012621101815.zip"
+raw_dir <- dir_create(here("nv", "contribs", "data", "raw"))
+raw_zip <- path(raw_dir, basename(raw_url))
+file_size(raw_zip)
+#> 12.6M
+```
+
+This URL contains the date the report was generated.
+
+``` r
+report_time <- mdy_hms(str_extract(raw_url, "\\d+(?=\\.zip$)"))
+with_tz(report_time, tzone = "PST")
+#> [1] "2021-01-26 10:18:15 PST"
+```
+
+``` r
+if (!file_exists(raw_zip)) {
+  download.file(raw_url, raw_zip)
+}
+```
+
+This raw ZIP archive has been backed up to the IRW server.
+
+``` r
+as_fs_bytes(object_size(
+  object = path("IRW/raw_backup/nv", basename(raw_zip)), 
+  bucket = "publicaccountability"
+))
+#> 12.6M
+```
+
+## Unzip
+
+The provided ZIP archive contains all six tables as fixed width text
+files.
+
+``` r
+raw_txt <- unzip(raw_zip, exdir = raw_dir)
+```
+
+| Name                                               |  Length | Date                |
+|:---------------------------------------------------|--------:|:--------------------|
+| `CampaignFinance.Cnddt.43993.012621101815.txt`     |   1.59M | 2021-01-26 10:18:00 |
+| `CampaignFinance.Cntrbt.43993.012621101815.txt`    |  56.58M | 2021-01-26 10:18:00 |
+| `CampaignFinance.Cntrbtrs-.43993.012621101815.txt` |  36.46M | 2021-01-26 10:18:00 |
+| `CampaignFinance.Expn.43993.012621101815.txt`      |  32.72M | 2021-01-26 10:18:00 |
+| `CampaignFinance.Grp.43993.012621101815.txt`       | 373.38K | 2021-01-26 10:18:00 |
+| `CampaignFinance.Rpr.43993.012621101815.txt`       |   7.58M | 2021-01-26 10:18:00 |
+
+We need to match the order of this vector to the order of the tables.
+
+``` r
+names(raw_txt) <- c(
+  "Candidates",
+  "Contributions",
+  "Contributors",
+  "Expenses",
+  "Groups",
+  "Reports"
+)
+```
+
+``` r
+raw_txt <- raw_txt[match(names(about_tables), names(raw_txt))]
+names(raw_txt) == names(about_tables)
+#> [1] TRUE TRUE TRUE TRUE TRUE TRUE
+```
+
+## Columns
+
+We can use the tables read from the HTML file, and described in the
+**About** section above, to create (1) the column width tables expected
+by `read_fwf()`, and (2) the readr column type specification objects.
+Two functions will take the `Field Name`, `Data Type` and `Length`
+
+``` r
+as_fwf_width <- function(.data) {
+  fwf_widths(
+    widths = as.integer(x = .data[[4]]),
+    col_names = str_remove(
+      string = .data[[1]], 
+      pattern = "\\s\\(.*\\)"
+    )
+  )
+}
+```
+
+``` r
+as_col_spec <- function(.data) {
+  x <- .data[["Data Type"]]
+  x <- case_when(
+    str_detect(x, "varchar")  ~ "c",
+    str_detect(x, "datetime") ~ "D",
+    str_detect(x, "money")    ~ "d",
+    str_detect(x, "bit")      ~ "l",
+    str_detect(x, "int")      ~ "i",
+    TRUE ~ "c"
+  )
+  as.col_spec(
+    x = setNames(
+      object = x,
+      nm = str_remove(
+        string = .data[["Field Name"]], 
+        pattern = "\\s\\(.*\\)"
+      )
+    )
+  )
+}
+```
+
+``` r
+about_tables$Groups
+#> # A tibble: 6 x 4
+#>   `Field Name`          `Data Type`  `Start Position` Length
+#>   <chr>                 <chr>        <chr>            <chr> 
+#> 1 GroupID (Primary Key) int          1                10    
+#> 2 Group Name            varchar(120) 11               120   
+#> 3 Group Type            varchar(100) 131              100   
+#> 4 Contact Name          varchar(35)  231              35    
+#> 5 Active                bit          266              1     
+#> 6 City                  varchar(30)  267              30
+as_fwf_width(about_tables$Groups)
+#> # A tibble: 6 x 3
+#>   begin   end col_names   
+#>   <int> <int> <chr>       
+#> 1     0    10 GroupID     
+#> 2    10   130 Group Name  
+#> 3   130   230 Group Type  
+#> 4   230   265 Contact Name
+#> 5   265   266 Active      
+#> 6   266   296 City
+as_col_spec(about_tables$Groups)
+#> cols(
+#>   GroupID = col_integer(),
+#>   `Group Name` = col_character(),
+#>   `Group Type` = col_character(),
+#>   `Contact Name` = col_character(),
+#>   Active = col_logical(),
+#>   City = col_character()
+#> )
+```
+
+``` r
+raw_widths <- map(about_tables, as_fwf_width)
+raw_types  <- map(about_tables, as_col_spec)
+```
 
 ## Read
 
-The following link was sent via email and downloaded to the `data/` directory:
+One file seems to have been exported with some empty rows and other rows
+without sufficient padding. This can be fixed with string manipulation.
 
-```
-https://www.nvsos.gov/yourreports/CampaignFinance.43993.060419121813.zip
-```
-
-The ZIP file contains the six individual files, as expected.
-
-
-```
-#> # A tibble: 6 x 3
-#>   name                                               length date               
-#>   <chr>                                               <dbl> <dttm>             
-#> 1 CampaignFinance.Cnddt.43993.062519084828.csv       599467 2019-06-25 08:48:00
-#> 2 CampaignFinance.Cntrbt.43993.062519084828.csv    32807839 2019-06-25 08:48:00
-#> 3 CampaignFinance.Cntrbtrs-.43993.062519084828.csv  6375595 2019-06-25 08:48:00
-#> 4 CampaignFinance.Expn.43993.062519084828.csv      16976680 2019-06-25 08:48:00
-#> 5 CampaignFinance.Grp.43993.062519084828.csv         118072 2019-06-25 08:48:00
-#> 6 CampaignFinance.Rpr.43993.062519084828.csv        2419063 2019-06-25 08:48:00
+``` r
+tmp <- file_temp(ext = "txt")
+raw_txt[["Contributors"]] %>% 
+  read_lines(skip_empty_rows = TRUE) %>% 
+  str_subset(pattern = "^\\d") %>% 
+  str_pad(width = 170, side = "right", pad = " ") %>% 
+  write_lines(file = tmp)
+raw_txt[["Contributors"]] <- tmp
 ```
 
-The files will be unzipped into the `data/` directory.
+All six tables can then be read into a list using `readr::read_fwf()`
+and the (1) width tables and (2) column type specifications.
 
-
-```r
-dir_create(here("nv_contribs", "data", "raw"))
-here("nv_contribs", "data", "raw") %>% 
-  dir_ls(glob = "*.zip") %>% 
-  unzip(exdir = here("nv_contribs", "data", "raw"))
-```
-
-Each file can be read using the `vroom::vroom()` function and the parameters explained by NVSOS.
-Variable names will be make "clean" (lowercase snake) using the `janitor::make_clean_names()` 
-function.
-
-
-```r
-nv_candidates <- vroom(
-  file = here("nv_contribs", "data", "raw","CampaignFinance.Cnddt.43993.062519084828.csv"),
-  delim = ",",
-  col_names = TRUE,
-  na = "",
-  quote = "\"",
-  escape_double = TRUE,
-  .name_repair = make_clean_names,
-  col_types = cols(
-    `CandidateID` = col_character(),
-    `First Name` = col_character(),
-    `Last Name` = col_character(),
-    `Party` = col_character(),
-    `Office` = col_character(),            
-    `Jurisdiction` = col_character()
+``` r
+nv <- pmap(
+  .f = read_fwf,
+  locale = locale(
+    date_format = "%m/%d/%Y",
+    tz = "US/Pacific"
+  ),
+  .l = list(
+    file = raw_txt,
+    col_positions = raw_widths,
+    col_types = raw_types
   )
 )
-
-print(nv_candidates)
 ```
 
-```
-#> # A tibble: 6,665 x 6
-#>    candidate_id first_name last_name  party         office                          jurisdiction   
-#>    <chr>        <chr>      <chr>      <chr>         <chr>                           <chr>          
-#>  1 28           Michael    Douglas    Nonpartisan   Supreme Court Justice, Seat F   NV SOS         
-#>  2 30           Richard    Ziser      Republican P… U.S. Senate                     NV SOS         
-#>  3 31           Carlo      Poliak     Unspecified   City Council, Las Vegas         CITY OF LAS VE…
-#>  4 32           Lynn       Hettrick   Republican P… State Assembly, District 39     NV SOS         
-#>  5 33           James      Gibbons    Republican P… Governor                        NV SOS         
-#>  6 34           Bonnie     Parnell    Democratic P… State Assembly, District 40     NV SOS         
-#>  7 35           Marcia     Washington Nonpartisan   State Senate, District 4        CLARK COUNTY   
-#>  8 36           Harry      Reid       Democratic P… U.S. Senate                     NV SOS         
-#>  9 37           Kenneth    Wegner     Republican P… U.S. Senate                     NV SOS         
-#> 10 38           Cynthia    Steel      Nonpartisan   District Court Judge, District… CLARK COUNTY   
-#> # … with 6,655 more rows
-```
+The total number of rows read matches what we were told when exporting.
 
-
-```r
-nv_groups <- vroom(
-  file = here("nv_contribs", "data", "raw","CampaignFinance.Grp.43993.062519084828.csv"),
-  delim = ",",
-  col_names = TRUE,
-  na = "",
-  quote = "\"",
-  escape_double = TRUE,
-  .name_repair = make_clean_names,
-  col_types = cols(
-    `GroupID` = col_character(),
-    `Group Name` = col_character(),
-    `Group Type` = col_character(),
-    `Contact Name` = col_character(),            
-    `Active` = col_logical(),
-    `City` = col_character()
-  )
-)
-
-print(nv_groups)
-```
-
-```
-#> # A tibble: 1,196 x 6
-#>    group_id group_name                               group_type       contact_name  active city    
-#>    <chr>    <chr>                                    <chr>            <chr>         <lgl>  <chr>   
-#>  1 598      Allstate Insurance Company Political Ac… Political Actio… Shirlanda Wa… TRUE   Northbr…
-#>  2 600      American Insurance Association PAC - Ne… Political Actio… James L. Wad… FALSE  Sacrame…
-#>  3 601      Board of Realtors Political Action Comm… Political Actio… Wendy DiVecc… TRUE   Las Veg…
-#>  4 603      Churchill County Education Association   Political Actio… Sue S Matuska TRUE   Fallon  
-#>  5 607      Carriers Allied for Responsible Governm… Political Actio… Daryl E. Cap… FALSE  SPARKS  
-#>  6 610      P.A.C. 357   (fka IBEW LOCAL 357 PAC)    Political Actio… James Halsey  TRUE   Las Veg…
-#>  7 615      Southwest Regional Council of Carpenter… Political Actio… Frank Hawk    TRUE   Sacrame…
-#>  8 616      Construction Industry Committee          Political Actio… Craig Madole  TRUE   Reno    
-#>  9 617      Douglas County Professional Education A… Political Actio… Sue S Matuska TRUE   South L…
-#> 10 621      International Union of Painters and All… Political Actio… Jason Lamber… TRUE   Hanover 
-#> # … with 1,186 more rows
-```
-
-
-```r
-nv_reports <- vroom(
-  file = here("nv_contribs", "data", "raw","CampaignFinance.Rpr.43993.062519084828.csv"),
-  delim = ",",
-  col_names = TRUE,
-  na = "",
-  quote = "\"",
-  escape_double = TRUE,
-  .name_repair = make_clean_names,
-  col_types = cols(
-    `ReportID` = col_character(),
-    `CandidateID` = col_character(),
-    `GroupID` = col_character(),
-    `Report Name` = col_character(),
-    `Election Cycle` = col_number(),
-    `Filing Due Date` = col_date("%m/%d/%Y"),
-    `Filed Date` = col_date("%m/%d/%Y"),
-    `Amended` = col_logical(),
-    `Superseded` = col_logical()
-  )
-)
-
-print(nv_reports)
-```
-
-```
-#> # A tibble: 37,625 x 9
-#>    report_id candidate_id group_id report_name election_cycle filing_due_date filed_date amended
-#>    <chr>     <chr>        <chr>    <chr>                <dbl> <date>          <date>     <lgl>  
-#>  1 6980      <NA>         1220     CE Report 1           2006 NA              2006-08-08 FALSE  
-#>  2 6981      1988         <NA>     CE Report 1           2006 NA              2006-10-30 FALSE  
-#>  3 6982      1988         <NA>     CE Report 1           2006 NA              2006-08-07 FALSE  
-#>  4 6983      <NA>         1332     CE Report 1           2006 NA              2006-08-07 FALSE  
-#>  5 6984      1992         <NA>     CE Report 1           2006 NA              2006-08-07 FALSE  
-#>  6 6985      1165         <NA>     CE Report 1           2006 NA              2006-08-07 FALSE  
-#>  7 6986      155          <NA>     CE Report 1           2006 NA              2006-08-07 FALSE  
-#>  8 6987      <NA>         1364     CE Report 1           2006 NA              2006-08-08 FALSE  
-#>  9 6990      2368         <NA>     CE Report 1           2006 NA              2006-08-08 FALSE  
-#> 10 6991      2360         <NA>     CE Report 1           2006 NA              2006-08-08 FALSE  
-#> # … with 37,615 more rows, and 1 more variable: superseded <lgl>
-```
-
-
-```r
-nv_payees <- vroom(
-  file = here("nv_contribs", "data", "raw","CampaignFinance.Cntrbtrs-.43993.062519084828.csv"),
-  delim = ",",
-  col_names = TRUE,
-  na = "",
-  quote = "\"",
-  escape_double = TRUE,
-  .name_repair = make_clean_names,
-  col_types = cols(
-    `ContactID` = col_character(),
-    `First Name` = col_character(),
-    `Middle Name` = col_character(),
-    `Last Name` = col_character()
-  )
-)
-
-print(nv_payees)
-```
-
-```
-#> # A tibble: 189,055 x 4
-#>    contact_id first_name middle_name last_name               
-#>    <chr>      <chr>      <chr>       <chr>                   
-#>  1 3          <NA>       <NA>        UNITE HERE TIP          
-#>  2 4          <NA>       <NA>        The Calvert Company     
-#>  3 5          <NA>       <NA>        Paid Staff              
-#>  4 6          <NA>       <NA>        Passkey Systems         
-#>  5 7          <NA>       <NA>        Time Printing           
-#>  6 8          Bonnie     B           Jacobs                  
-#>  7 9          <NA>       <NA>        NONE                    
-#>  8 10         <NA>       <NA>        Oriental Trading        
-#>  9 11         <NA>       <NA>        V&S variety & True Value
-#> 10 12         <NA>       <NA>        BuildASign.com          
-#> # … with 189,045 more rows
-```
-
-
-```r
-nv_contributions <- vroom(
-  file = here("nv_contribs", "data", "raw","CampaignFinance.Cntrbt.43993.062519084828.csv"),
-  delim = ",",
-  col_names = TRUE,
-  na = "",
-  quote = "\"",
-  escape_double = TRUE,
-  .name_repair = make_clean_names,
-  col_types = cols(
-    `ContributionID` = col_character(),
-    `ReportID` = col_character(),
-    `CandidateID` = col_character(),
-    `GroupID` = col_character(),
-    `Contribution Date` = col_date("%m/%d/%Y"),
-    `Contribution Amount`	= col_number(),
-    `Contribution Type` = col_character(),
-    `ContributorID` = col_character()
-  )
-)
-
-print(nv_contributions)
-```
-
-```
-#> # A tibble: 457,012 x 8
-#>    contribution_id report_id candidate_id group_id contribution_da… contribution_am…
-#>    <chr>           <chr>     <chr>        <chr>    <date>                      <dbl>
-#>  1 2               6980      <NA>         1220     2006-06-28                  35000
-#>  2 3               6983      <NA>         1332     2006-03-29                      2
-#>  3 4               6983      <NA>         1332     2006-03-31                      1
-#>  4 5               6983      <NA>         1332     2006-04-10                    200
-#>  5 6               6983      <NA>         1332     2006-01-01                      0
-#>  6 7               6983      <NA>         1332     2006-01-01                      0
-#>  7 8               6983      <NA>         1332     2006-01-01                      0
-#>  8 9               6987      <NA>         1364     2006-01-13                   1000
-#>  9 10              6991      2360         <NA>     2006-02-07                    100
-#> 10 11              6991      2360         <NA>     2006-02-08                    500
-#> # … with 457,002 more rows, and 2 more variables: contribution_type <chr>, contributor_id <chr>
-```
-
-
-```r
-nv_expenses <- vroom(
-  file = here("nv_contribs", "data", "raw","CampaignFinance.Cntrbt.43993.062519084828.csv"),
-  delim = ",",
-  col_names = TRUE,
-  na = "",
-  quote = "\"",
-  escape_double = TRUE,
-  .name_repair = make_clean_names,
-  col_types = cols(
-    `ExpenseID` = col_character(),
-    `ReportID` = col_character(),
-    `CandidateID` = col_character(),
-    `GroupID` = col_character(),
-    `Expense Date` = col_date("%m/%d/%Y"),
-    `Expense Amount`	= col_number(),
-    `Expense Type` = col_character(),
-    `Payee ID` = col_character()
-  )
-)
+``` r
+sum(map_dbl(nv, nrow)) == total_rows
+#> [1] TRUE
 ```
 
 ## Join
 
-We are primarily interested in the file containing data on contributions. To make the data base
-more searchable on the Accountability Project database, we will be joining together the various
-normalized relational tables using their respective `*_id` variables. The expenses table will not
-be added.
+The primary table of interest here is `Contributions`, which lists the
+525,038 contributions made to committees and reported to the state. This
+table does not identify the receiving committee or contributing entity.
+This information is found in the `Groups` and `Contributors` tables,
+respectively. We need to add variables identifying all parties to each
+contribution.
 
-
-```r
-nv <- nv_contributions %>%
-  # join with relational tables
-  left_join(nv_reports, by = c("report_id", "candidate_id", "group_id")) %>%
-  left_join(nv_candidates, by = "candidate_id") %>% 
-  left_join(nv_groups, by = "group_id") %>%
-  left_join(nv_payees, by = c("contributor_id" = "contact_id")) %>% 
-  # add origin table info to ambiguous variables
-  rename(
-    candidate_first = first_name.x,
-    candidate_last = last_name.x,
-    candidate_party = party,
-    seeking_office = office,
-    report_amended = amended, 
-    report_superseded = superseded,
-    group_contact = contact_name,
-    group_active = active,
-    group_city = city,
-    payee_first = first_name.y,
-    payee_middle = middle_name,
-    payee_last = last_name.y
-  )
-
-# all rows preserved
-nrow(nv) == nrow(nv_contributions)
-#> [1] TRUE
-
-# all cols includes
-length(nv_contributions) %>% 
-  add(length(nv_reports)) %>% 
-  add(length(nv_candidates)) %>% 
-  add(length(nv_groups)) %>% 
-  add(length(nv_payees)) %>% 
-  subtract(6) %>% # shared key cols
-  equals(length(nv))
-#> [1] TRUE
+``` r
+nv$Contributions
+#> # A tibble: 525,038 x 8
+#>    con_id rpt_id cand_id grp_id con_dt     con_amt con_type                   ctbr_id
+#>     <int>  <int>   <int>  <int> <date>       <dbl> <chr>                        <int>
+#>  1      2   6980      NA   1220 2006-06-28   35000 Monetary Contribution            3
+#>  2      3   6983      NA   1332 2006-03-29       2 Monetary Contribution            8
+#>  3      4   6983      NA   1332 2006-03-31       1 Monetary Contribution            8
+#>  4      5   6983      NA   1332 2006-04-10     200 Monetary Contribution            8
+#>  5      6   6983      NA   1332 2006-01-01       0 Written Commitment               9
+#>  6      7   6983      NA   1332 2006-01-01       0 In Kind Contribution             9
+#>  7      8   6983      NA   1332 2006-01-01       0 In Kind Written Commitment       9
+#>  8      9   6987      NA   1364 2006-01-13    1000 Monetary Contribution           15
+#>  9     10   6991    2360     NA 2006-02-07     100 Monetary Contribution           17
+#> 10     11   6991    2360     NA 2006-02-08     500 Monetary Contribution           18
+#> # … with 525,028 more rows
 ```
 
-This expands our primary table from 8 variables to 27
-without changing the number or records included.
+### Recipient
+
+We will first join the committees. Contributions can be made to either a
+candidate or committee, each listed in their own table with their own
+key column in Contributions. We can combine these keys and tables.
+
+``` r
+rec_cands <- nv$Candidates %>% 
+  select(cand_id, first_nm, last_nm) %>% 
+  filter(cand_id %in% nv$Contributions$cand_id) %>% 
+  mutate(rec_type = "Candidate", .after = last_nm) %>% 
+  unite(
+    col = rec_nm,
+    first_nm, last_nm,,
+    sep = " ",
+    remove = TRUE,
+    na.rm = TRUE
+  )
+```
+
+``` r
+rec_comms <- nv$Groups %>% 
+  filter(grp_id %in% nv$Contributions$grp_id) %>% 
+  select(grp_id, rec_nm = grp_nm, rec_type = grp_type)
+```
+
+``` r
+nv$Contributions <- left_join(
+  x = nv$Contributions,
+  y = bind_rows(rec_cands, rec_comms),
+  by = c("cand_id", "grp_id")
+)
+```
+
+### Contributors
+
+``` r
+ctbr_nms <- nv$Contributors %>% 
+  filter(contact_id %in% nv$Contributions$ctbr_id) %>% 
+  unite(
+    col = ctbr_nm,
+    first_nm, middle_nm, last_nm,
+    sep = " ",
+    remove = TRUE,
+    na.rm = TRUE
+  )
+```
+
+``` r
+nv$Contributions <- left_join(
+  x = nv$Contributions,
+  y = ctbr_nms,
+  by = c("ctbr_id" = "contact_id")
+)
+```
+
+### Finish
+
+``` r
+nvc <- nv$Contributions %>% 
+  relocate(ctbr_id, .before = ctbr_nm) %>% 
+  mutate(
+    cand_id = str_c("C", cand_id),
+    grp_id = str_c("G", grp_id),
+    rec_id = coalesce(cand_id, grp_id),
+    .before = rec_nm
+  ) %>% 
+  select(-cand_id, -grp_id)
+```
 
 ## Explore
 
-Variables containing information on the contributor themselves seem to be missing. While the
-`contributor_id` variable from the "Contributions" database is used to identify each contributor
-in the "Contributors-Payees" using the `contact_id` variable, the later table contains only names.
+There are 525,038 rows of 10 columns. Each record represents a single
+contribution to a political committee or candidate.
 
-This information is submitted by the filer of the report and can be found using the 
-[NVSOS AURORA search portal](https://www.nvsos.gov/SoSCandidateServices/AnonymousAccess/CEFDSearchUU/Search.aspx), 
-so we know the data exists.
-
-For example, in report #6991, contributor #17 (John Mueller) gave money to candidate #2360 (E
-Tiras). Searching for Mr. Tiras' report from 2006-08-08 on the AURORA portal, we can see that Mr.
-Mueller lives at 308 Laura Court, Incline Village, NV 89451 (see
-`nv_contribs/docs/nv_example_report`).
-
-
-```r
-nv %>% 
-  filter(report_id == "6991") %>% 
-  select(
-    report_id, 
-    filed_date, 
-    payee_last, 
-    candidate_last
-  )
+``` r
+glimpse(nvc)
+#> Rows: 525,038
+#> Columns: 10
+#> $ con_id   <int> 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, …
+#> $ rpt_id   <int> 6980, 6983, 6983, 6983, 6983, 6983, 6983, 6987, 6991, 6991, 6991, 6990, 6991, 6991, 6991, 6990, 6991…
+#> $ con_dt   <date> 2006-06-28, 2006-03-29, 2006-03-31, 2006-04-10, 2006-01-01, 2006-01-01, 2006-01-01, 2006-01-13, 200…
+#> $ con_amt  <dbl> 35000, 2, 1, 200, 0, 0, 0, 1000, 100, 500, 1000, 0, 500, 5000, 200, 0, 200, 200, 300, 0, 0, 100, 500…
+#> $ con_type <chr> "Monetary Contribution", "Monetary Contribution", "Monetary Contribution", "Monetary Contribution", …
+#> $ rec_id   <chr> "G1220", "G1332", "G1332", "G1332", "G1332", "G1332", "G1332", "G1364", "C2360", "C2360", "C2360", "…
+#> $ rec_nm   <chr> "Culinary Workers Union Local 226", "Nevada Next PAC", "Nevada Next PAC", "Nevada Next PAC", "Nevada…
+#> $ rec_type <chr> "Independent Expenditure", "Political Action Committee", "Political Action Committee", "Political Ac…
+#> $ ctbr_id  <int> 3, 8, 8, 8, 9, 9, 9, 15, 17, 18, 19, 20, 21, 22, 23, 24, 25, 25, 26, 27, 24, 28, 29, 30, 31, 32, 33,…
+#> $ ctbr_nm  <chr> "UNITE HERE TIP", "Bonnie B Jacobs", "Bonnie B Jacobs", "Bonnie B Jacobs", "NONE", "NONE", "NONE", "…
+tail(nvc)
+#> # A tibble: 6 x 10
+#>   con_id rpt_id con_dt     con_amt con_type         rec_id rec_nm              rec_type            ctbr_id ctbr_nm      
+#>    <int>  <int> <date>       <dbl> <chr>            <chr>  <chr>               <chr>                 <int> <chr>        
+#> 1 736787 111458 2020-12-17    1500 Monetary Contri… G756   Nevada Beer Wholes… Political Action C…  179407 Jason Friers…
+#> 2 736788 111458 2020-12-17     500 Monetary Contri… G756   Nevada Beer Wholes… Political Action C…  393515 Venicia Cons…
+#> 3 736789 111458 2020-12-17     500 Monetary Contri… G756   Nevada Beer Wholes… Political Action C…  329640 Beatrice Dur…
+#> 4 736790 111458 2020-12-17     500 Monetary Contri… G756   Nevada Beer Wholes… Political Action C…  201562 Jill Tolles  
+#> 5 736791 111458 2020-12-17     500 Monetary Contri… G756   Nevada Beer Wholes… Political Action C…  284168 Elaine Marzo…
+#> 6 736838 111479 2020-10-16    1000 Monetary Contri… C13605 Deborah Chang       Candidate             43600 AFSCME
 ```
-
-```
-#> # A tibble: 47 x 4
-#>    report_id filed_date payee_last candidate_last
-#>    <chr>     <date>     <chr>      <chr>         
-#>  1 6991      2006-08-08 Mueller    Tiras         
-#>  2 6991      2006-08-08 Paganelli  Tiras         
-#>  3 6991      2006-08-08 Tiras      Tiras         
-#>  4 6991      2006-08-08 Clark      Tiras         
-#>  5 6991      2006-08-08 Elias      Tiras         
-#>  6 6991      2006-08-08 Offerdahl  Tiras         
-#>  7 6991      2006-08-08 Hengst     Tiras         
-#>  8 6991      2006-08-08 Hengst     Tiras         
-#>  9 6991      2006-08-08 Hengst     Tiras         
-#> 10 6991      2006-08-08 Hubbard    Tiras         
-#> # … with 37 more rows
-```
-
-Below is the structure of the data arranged randomly by row. There are 457012 rows of 
-27 variables.
-
-
-```r
-glimpse(sample_frac(nv))
-```
-
-```
-#> Observations: 457,012
-#> Variables: 27
-#> $ contribution_id     <chr> "7105", "205929", "245514", "228403", "507887", "175682", "351933", …
-#> $ report_id           <chr> "19312", "42399", "45619", "43352", "76529", "41571", "56680", "4010…
-#> $ candidate_id        <chr> "2588", NA, NA, NA, "419", NA, NA, NA, "5894", "419", NA, NA, NA, "3…
-#> $ group_id            <chr> NA, "1616", "700", "1444", NA, "1177", "700", "987", NA, NA, "1975",…
-#> $ contribution_date   <date> 2008-06-26, 2013-05-03, 2014-03-19, 2013-09-12, 2018-02-16, 2013-07…
-#> $ contribution_amount <dbl> 100.00, 12.69, 1250.00, 85.00, 100.00, 100.00, 500.00, 16.00, 2500.0…
-#> $ contribution_type   <chr> "Monetary Contribution", "Monetary Contribution", "Monetary Contribu…
-#> $ contributor_id      <chr> "6718", "121055", "35160", "136942", "279485", "90230", "53074", "58…
-#> $ report_name         <chr> "CE Report 1 (Amended)", "2014 Annual CE Filing", "CE Report 1", "20…
-#> $ election_cycle      <dbl> 2008, 2013, 2014, 2013, 2018, 2013, 2015, 2013, 2014, 2018, 2016, 20…
-#> $ filing_due_date     <date> NA, NA, NA, NA, NA, NA, NA, NA, 2014-10-14, NA, 2016-10-18, 2012-10…
-#> $ filed_date          <date> 2008-10-28, 2014-01-15, 2014-05-20, 2014-02-14, 2018-05-22, 2014-01…
-#> $ report_amended      <lgl> TRUE, FALSE, FALSE, TRUE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, …
-#> $ report_superseded   <lgl> FALSE, FALSE, FALSE, FALSE, TRUE, FALSE, FALSE, FALSE, FALSE, TRUE, …
-#> $ candidate_first     <chr> "Edward", NA, NA, NA, "Chris", NA, NA, NA, "Bob", "Chris", NA, NA, N…
-#> $ candidate_last      <chr> "Goldman", NA, NA, NA, "Giunchigliani", NA, NA, NA, "Lucey", "Giunch…
-#> $ candidate_party     <chr> "Unspecified", NA, NA, NA, "Democratic Party", NA, NA, NA, "Republic…
-#> $ seeking_office      <chr> "Clark County School Trustee, District A", NA, NA, NA, "Governor", N…
-#> $ jurisdiction        <chr> "CLARK COUNTY", NA, NA, NA, "NV SOS", NA, NA, NA, "WASHOE COUNTY", "…
-#> $ group_name          <chr> NA, "The Travelers Companies, Inc. PAC (TPAC)", "Citizens for Justic…
-#> $ group_type          <chr> NA, "Political Action Committee", "Political Action Committee", "Pol…
-#> $ group_contact       <chr> NA, "Michele Balady", "Graham Galloway", "Nancy Jean King", NA, "Sue…
-#> $ group_active        <lgl> NA, TRUE, TRUE, TRUE, NA, TRUE, TRUE, TRUE, NA, NA, TRUE, FALSE, TRU…
-#> $ group_city          <chr> NA, "Hartford", "Carson City", "Reno", NA, "Washington", "Carson Cit…
-#> $ payee_first         <chr> "Ron", "Lee", NA, "Kirstine", "Deborah", "ERIC", NA, "Merritt", "Her…
-#> $ payee_middle        <chr> NA, "R", NA, NA, NA, "A", NA, "A", NA, NA, NA, NA, "J", NA, NA, NA, …
-#> $ payee_last          <chr> "Schroder", "MacDonald", "Fenton Grant Mayfield Kaneda & Litt", "Sor…
-```
-
-### Distinct
-
-The variables vary in their degree of distinctiveness.
-
-The `contribution_id` is 100% 
-distinct and can be used to identify a unique contribution.
-
-
-```r
-nv %>% 
-  map(n_distinct) %>% 
-  unlist() %>% 
-  enframe(name = "variable", value = "n_distinct") %>% 
-  mutate(prop_distinct = round(n_distinct / nrow(nv), 4)) %>%
-  print(n = length(nv))
-```
-
-```
-#> # A tibble: 27 x 3
-#>    variable            n_distinct prop_distinct
-#>    <chr>                    <int>         <dbl>
-#>  1 contribution_id         457012       1      
-#>  2 report_id                13047       0.0285 
-#>  3 candidate_id              1795       0.0039 
-#>  4 group_id                   640       0.0014 
-#>  5 contribution_date         4444       0.0097 
-#>  6 contribution_amount      13284       0.0291 
-#>  7 contribution_type            4       0      
-#>  8 contributor_id          145132       0.318  
-#>  9 report_name                 80       0.0002 
-#> 10 election_cycle              14       0      
-#> 11 filing_due_date             10       0      
-#> 12 filed_date                1181       0.0026 
-#> 13 report_amended               2       0      
-#> 14 report_superseded            2       0      
-#> 15 candidate_first            762       0.0017 
-#> 16 candidate_last            1476       0.0032 
-#> 17 candidate_party              9       0      
-#> 18 seeking_office             537       0.00120
-#> 19 jurisdiction                36       0.0001 
-#> 20 group_name                 639       0.0014 
-#> 21 group_type                   7       0      
-#> 22 group_contact              473       0.001  
-#> 23 group_active                 3       0      
-#> 24 group_city                  89       0.0002 
-#> 25 payee_first              16750       0.0367 
-#> 26 payee_middle              1094       0.00240
-#> 27 payee_last               65375       0.143
-```
-
-The `*_id` variables have as many distinct values as the length of their respective tables.
-
-
-```r
-n_distinct(nv_payees$contact_id)/nrow(nv_payees)
-#> [1] 1
-n_distinct(nv_groups$group_id)/nrow(nv_groups)
-#> [1] 1
-```
-
-For the least distinct variables, we can explore the most common values.
-
-
-
-
-```r
-print_tabyl(nv, contribution_type)
-```
-
-```
-#> # A tibble: 4 x 3
-#>   contribution_type               n  percent
-#>   <chr>                       <dbl>    <dbl>
-#> 1 Monetary Contribution      443119 0.970   
-#> 2 In Kind Contribution        13644 0.0299  
-#> 3 In Kind Written Commitment    128 0.000280
-#> 4 Written Commitment            121 0.000265
-```
-
-```r
-print_tabyl(nv, candidate_party)
-```
-
-```
-#> # A tibble: 9 x 4
-#>   candidate_party                  n   percent valid_percent
-#>   <chr>                        <dbl>     <dbl>         <dbl>
-#> 1 <NA>                        197476 0.432        NA        
-#> 2 Democratic Party            119091 0.261         0.459    
-#> 3 Republican Party             69288 0.152         0.267    
-#> 4 Nonpartisan                  36210 0.0792        0.140    
-#> 5 Unspecified                  33572 0.0735        0.129    
-#> 6 Independent                    814 0.00178       0.00314  
-#> 7 Independent American Party     409 0.000895      0.00158  
-#> 8 Libertarian Party of Nevada    127 0.000278      0.000489 
-#> 9 Nevada Green Party              25 0.0000547     0.0000963
-```
-
-```r
-print_tabyl(nv, seeking_office)
-```
-
-```
-#> # A tibble: 537 x 4
-#>    seeking_office                       n percent valid_percent
-#>    <chr>                            <dbl>   <dbl>         <dbl>
-#>  1 <NA>                            197476 0.432         NA     
-#>  2 Governor                         41600 0.0910         0.160 
-#>  3 Lieutenant Governor              18143 0.0397         0.0699
-#>  4 Attorney General                  8523 0.0186         0.0328
-#>  5 City Council, Las Vegas           6897 0.0151         0.0266
-#>  6 Secretary Of State                4416 0.00966        0.0170
-#>  7 Sheriff, Clark County             4082 0.00893        0.0157
-#>  8 County Commissioner, District F   3888 0.00851        0.0150
-#>  9 State Assembly, District 21       3239 0.00709        0.0125
-#> 10 State Assembly, District 8        3072 0.00672        0.0118
-#> # … with 527 more rows
-```
-
-```r
-print_tabyl(nv, jurisdiction)
-```
-
-```
-#> # A tibble: 36 x 4
-#>    jurisdiction                 n percent valid_percent
-#>    <chr>                    <dbl>   <dbl>         <dbl>
-#>  1 <NA>                    197476 0.432        NA      
-#>  2 NV SOS                   96253 0.211         0.371  
-#>  3 CLARK COUNTY             94893 0.208         0.366  
-#>  4 WASHOE COUNTY            26706 0.0584        0.103  
-#>  5 CITY OF LAS VEGAS        11971 0.0262        0.0461 
-#>  6 CITY OF RENO              7589 0.0166        0.0292 
-#>  7 CITY OF HENDERSON         3255 0.00712       0.0125 
-#>  8 CARSON CITY               3188 0.00698       0.0123 
-#>  9 CITY OF NORTH LAS VEGAS   3180 0.00696       0.0123 
-#> 10 UNKNOWN                   2489 0.00545       0.00959
-#> # … with 26 more rows
-```
-
-```r
-print_tabyl(nv, election_cycle)
-```
-
-```
-#> # A tibble: 14 x 3
-#>    election_cycle     n percent
-#>             <dbl> <dbl>   <dbl>
-#>  1           2013 90111 0.197  
-#>  2           2018 88995 0.195  
-#>  3           2014 77793 0.170  
-#>  4           2012 55131 0.121  
-#>  5           2016 50722 0.111  
-#>  6           2017 27855 0.0610 
-#>  7           2015 21103 0.0462 
-#>  8           2011 20006 0.0438 
-#>  9           2010 11796 0.0258 
-#> 10           2008  6113 0.0134 
-#> 11           2019  2879 0.00630
-#> 12           2009  2045 0.00447
-#> 13           2006  1546 0.00338
-#> 14           2007   917 0.00201
-```
-
-```r
-print_tabyl(nv, report_amended)
-```
-
-```
-#> # A tibble: 2 x 3
-#>   report_amended      n percent
-#>   <lgl>           <dbl>   <dbl>
-#> 1 FALSE          372490   0.815
-#> 2 TRUE            84522   0.185
-```
-
-```r
-print_tabyl(nv, report_superseded)
-```
-
-```
-#> # A tibble: 2 x 3
-#>   report_superseded      n percent
-#>   <lgl>              <dbl>   <dbl>
-#> 1 FALSE             380714   0.833
-#> 2 TRUE               76298   0.167
-```
-
-```r
-print_tabyl(nv, group_type)
-```
-
-```
-#> # A tibble: 7 x 4
-#>   group_type                      n   percent valid_percent
-#>   <chr>                       <dbl>     <dbl>         <dbl>
-#> 1 <NA>                       259536 0.568         NA       
-#> 2 Political Action Committee 152210 0.333          0.771   
-#> 3 Political Party Committee   41845 0.0916         0.212   
-#> 4 PAC Ballot Advocacy Group    2988 0.00654        0.0151  
-#> 5 Recall Committee              270 0.000591       0.00137 
-#> 6 Non-Profit Corporation        135 0.000295       0.000684
-#> 7 Independent Expenditure        28 0.0000613      0.000142
-```
-
-```r
-print_tabyl(nv, group_active)
-```
-
-```
-#> # A tibble: 3 x 4
-#>   group_active      n percent valid_percent
-#>   <lgl>         <dbl>   <dbl>         <dbl>
-#> 1 NA           259536  0.568         NA    
-#> 2 TRUE         168372  0.368          0.853
-#> 3 FALSE         29104  0.0637         0.147
-```
-
-```r
-print_tabyl(nv, group_city)
-```
-
-```
-#> # A tibble: 89 x 4
-#>    group_city       n percent valid_percent
-#>    <chr>        <dbl>   <dbl>         <dbl>
-#>  1 <NA>        259536 0.568         NA     
-#>  2 Washington   57513 0.126          0.291 
-#>  3 Las Vegas    46687 0.102          0.236 
-#>  4 Reno         43778 0.0958         0.222 
-#>  5 Wilmington   12815 0.0280         0.0649
-#>  6 Hartford     11433 0.0250         0.0579
-#>  7 Northbrook    8521 0.0186         0.0431
-#>  8 Carson City   5381 0.0118         0.0272
-#>  9 Henderson     3018 0.00660        0.0153
-#> 10 New York      2019 0.00442        0.0102
-#> # … with 79 more rows
-```
-
-### Ranges
-
-For continuous variables, the ranges should be checked.
-
-
-```r
-summary(nv$contribution_date)
-```
-
-```
-#>         Min.      1st Qu.       Median         Mean      3rd Qu.         Max. 
-#> "2006-01-01" "2013-03-28" "2014-08-14" "2014-12-13" "2017-03-17" "2019-05-01"
-```
-
-```r
-summary(nv$contribution_amount)
-```
-
-```
-#>     Min.  1st Qu.   Median     Mean  3rd Qu.     Max. 
-#>   -25000       25      200     1883     1000 20700000
-```
-
-```r
-summary(nv$filing_due_date)
-```
-
-```
-#>         Min.      1st Qu.       Median         Mean      3rd Qu.         Max.         NA's 
-#> "2006-10-31" "2012-10-16" "2014-10-31" "2015-06-02" "2018-10-16" "2018-10-16"     "343386"
-```
-
-```r
-summary(nv$filed_date)
-```
-
-```
-#>         Min.      1st Qu.       Median         Mean      3rd Qu.         Max. 
-#> "2006-08-07" "2014-01-06" "2014-10-14" "2015-03-27" "2017-12-20" "2019-06-21"
-```
-
-The date variables all seem to make sense. There are no dates before 
-2006-01-01 and none from the future (aside from the upcoming filing dates). 
-
-The maximum contribution is for $20,700,000.
-
-
-```r
-nv %>% 
-  filter(contribution_amount == max(contribution_amount)) %>% 
-  glimpse()
-```
-
-```
-#> Observations: 1
-#> Variables: 27
-#> $ contribution_id     <chr> "544130"
-#> $ report_id           <chr> "80598"
-#> $ candidate_id        <chr> NA
-#> $ group_id            <chr> "3708"
-#> $ contribution_date   <date> 2018-09-21
-#> $ contribution_amount <dbl> 20700000
-#> $ contribution_type   <chr> "Monetary Contribution"
-#> $ contributor_id      <chr> "268234"
-#> $ report_name         <chr> "CE Report 3"
-#> $ election_cycle      <dbl> 2018
-#> $ filing_due_date     <date> 2018-10-16
-#> $ filed_date          <date> 2018-10-16
-#> $ report_amended      <lgl> FALSE
-#> $ report_superseded   <lgl> FALSE
-#> $ candidate_first     <chr> NA
-#> $ candidate_last      <chr> NA
-#> $ candidate_party     <chr> NA
-#> $ seeking_office      <chr> NA
-#> $ jurisdiction        <chr> NA
-#> $ group_name          <chr> "Coalition to Defeat Question 3"
-#> $ group_type          <chr> "Political Action Committee"
-#> $ group_contact       <chr> "Daniel Bravo"
-#> $ group_active        <lgl> TRUE
-#> $ group_city          <chr> "Las Vegas"
-#> $ payee_first         <chr> NA
-#> $ payee_middle        <chr> NA
-#> $ payee_last          <chr> "NV Energy"
-```
-
-### Plot
-
-Visualizations can be made to better understand the distributions of continuous and distinct
-variables.
-
-![](../plots/plot_amt_type-1.png)<!-- -->
-
-![](../plots/plot_amt_party-1.png)<!-- -->
-
-![](../plots/plot_amt_group-1.png)<!-- -->
 
 ### Missing
 
-The variables also vary in their degree of values that are `NA` (empty). 
+There are no columns missing values.
 
-Some variables are mutually exclusive. There cannot be, for example, both `candidate_id` and
-`group_id` value for the same record, as these two variables identify different kinds of
-contributions. These mutually exclusive variables cover 100% of records.
-
-In each of their respective original tables, there are no `NA` values. When you join them together,
-any contribution to a candidate will have `NA` in all variables from the "Groups" table and visa
-versa.
-
-
-```r
-# prop NA each sum to 1
-mean(is.na(nv$candidate_id)) + mean(is.na(nv$group_id))
-#> [1] 1
-mean(is.na(nv$candidate_last)) + mean(is.na(nv$group_name))
-#> [1] 1
-```
-
-It's notable that the important variables (e.g., `*_id`, `payee_last`, `contribution_*`) contain 
-zero missing values.
-
-The full count of `NA` for each variable in the data frame can be found below:
-
-
-```r
-nv %>% 
-  map(function(var) sum(is.na(var))) %>% 
-  unlist() %>% 
-  enframe(name = "variable", value = "n_na") %>% 
-  mutate(prop_na = n_na / nrow(nv)) %>% 
-  print(n = length(nv))
-```
-
-```
-#> # A tibble: 27 x 3
-#>    variable              n_na prop_na
-#>    <chr>                <int>   <dbl>
-#>  1 contribution_id          0   0    
-#>  2 report_id                0   0    
-#>  3 candidate_id        197476   0.432
-#>  4 group_id            259536   0.568
-#>  5 contribution_date        0   0    
-#>  6 contribution_amount      0   0    
-#>  7 contribution_type        0   0    
-#>  8 contributor_id           0   0    
-#>  9 report_name              0   0    
-#> 10 election_cycle           0   0    
-#> 11 filing_due_date     343386   0.751
-#> 12 filed_date               0   0    
-#> 13 report_amended           0   0    
-#> 14 report_superseded        0   0    
-#> 15 candidate_first     197476   0.432
-#> 16 candidate_last      197476   0.432
-#> 17 candidate_party     197476   0.432
-#> 18 seeking_office      197476   0.432
-#> 19 jurisdiction        197476   0.432
-#> 20 group_name          259536   0.568
-#> 21 group_type          259536   0.568
-#> 22 group_contact       264344   0.578
-#> 23 group_active        259536   0.568
-#> 24 group_city          259536   0.568
-#> 25 payee_first         156009   0.341
-#> 26 payee_middle        371887   0.814
-#> 27 payee_last               0   0
+``` r
+col_stats(nvc, count_na)
+#> # A tibble: 10 x 4
+#>    col      class      n     p
+#>    <chr>    <chr>  <int> <dbl>
+#>  1 con_id   <int>      0     0
+#>  2 rpt_id   <int>      0     0
+#>  3 con_dt   <date>     0     0
+#>  4 con_amt  <dbl>      0     0
+#>  5 con_type <chr>      0     0
+#>  6 rec_id   <chr>      0     0
+#>  7 rec_nm   <chr>      0     0
+#>  8 rec_type <chr>      0     0
+#>  9 ctbr_id  <int>      0     0
+#> 10 ctbr_nm  <chr>      0     0
 ```
 
 ### Duplicates
 
-There are no duplicate contributions in the database.
+We can also flag any record completely duplicated across every column.
 
+``` r
+nvc <- flag_dupes(nvc, -con_id)
+sum(nvc$dupe_flag)
+#> [1] 14173
+```
 
-```r
-nrow(get_dupes(nv_contributions))
+``` r
+key_vars <- c("ctbr_nm", "con_dt", "con_amt", "rec_nm")
+```
+
+``` r
+nvc %>% 
+  filter(dupe_flag) %>% 
+  select(con_id, rpt_id, all_of(key_vars))
+#> # A tibble: 14,173 x 6
+#>    con_id rpt_id ctbr_nm                   con_dt     con_amt rec_nm                                                    
+#>     <int>  <int> <chr>                     <date>       <dbl> <chr>                                                     
+#>  1     18   6991 Howard H & Phyllis S Hen… 2006-02-15     200 E Tiras                                                   
+#>  2     19   6991 Howard H & Phyllis S Hen… 2006-02-15     200 E Tiras                                                   
+#>  3    103   7034 member dues               2006-07-15      11 Mineral County Classroom Teachers Association - Together …
+#>  4    105   7034 member dues               2006-07-15      11 Mineral County Classroom Teachers Association - Together …
+#>  5    106   7062 NONE                      2006-01-01       0 Patricia Herzog                                           
+#>  6    107   7062 NONE                      2006-01-01       0 Patricia Herzog                                           
+#>  7    504  13743 Harrah's Operating Compa… 2006-10-05    5000 Susan Brager                                              
+#>  8    505  13743 Harrah's Operating Compa… 2006-10-05    5000 Susan Brager                                              
+#>  9    536  13756 NONE                      2006-10-26       0 Patricia Herzog                                           
+#> 10    537  13756 NONE                      2006-10-26       0 Patricia Herzog                                           
+#> # … with 14,163 more rows
+```
+
+### Categorical
+
+``` r
+col_stats(nvc, n_distinct)
+#> # A tibble: 11 x 4
+#>    col       class       n          p
+#>    <chr>     <chr>   <int>      <dbl>
+#>  1 con_id    <int>  525038 1         
+#>  2 rpt_id    <int>   15636 0.0298    
+#>  3 con_dt    <date>   5077 0.00967   
+#>  4 con_amt   <dbl>   15169 0.0289    
+#>  5 con_type  <chr>       4 0.00000762
+#>  6 rec_id    <chr>    2773 0.00528   
+#>  7 rec_nm    <chr>    2770 0.00528   
+#>  8 rec_type  <chr>       7 0.0000133 
+#>  9 ctbr_id   <int>  170881 0.325     
+#> 10 ctbr_nm   <chr>  128028 0.244     
+#> 11 dupe_flag <lgl>       2 0.00000381
+```
+
+![](../plots/distinct_plots-1.png)<!-- -->![](../plots/distinct_plots-2.png)<!-- -->
+
+### Amounts
+
+``` r
+summary(nvc$con_amt)
+#>     Min.  1st Qu.   Median     Mean  3rd Qu.     Max. 
+#>   -25000       25      200     1876     1000 20700000
+mean(nvc$con_amt <= 0)
+#> [1] 0.0007618496
+```
+
+These are the records with the minimum and maximum amounts.
+
+``` r
+glimpse(nvc[c(which.max(nvc$con_amt), which.min(nvc$con_amt)), ])
+#> Rows: 2
+#> Columns: 11
+#> $ con_id    <int> 544130, 154183
+#> $ rpt_id    <int> 80598, 40633
+#> $ con_dt    <date> 2018-09-21, 2013-01-23
+#> $ con_amt   <dbl> 20700000, -25000
+#> $ con_type  <chr> "Monetary Contribution", "Monetary Contribution"
+#> $ rec_id    <chr> "G3708", "C4995"
+#> $ rec_nm    <chr> "Coalition to Defeat Question 3", "Paul Anderson"
+#> $ rec_type  <chr> "Political Action Committee", "Candidate"
+#> $ ctbr_id   <int> 268234, 72128
+#> $ ctbr_nm   <chr> "NV Energy", "Paul Anderson (Loan Reimb - orig loan was in  2011)"
+#> $ dupe_flag <lgl> FALSE, FALSE
+```
+
+![](../plots/hist_amount-1.png)<!-- -->
+
+### Dates
+
+We can add the calendar year from `con_dt` with `lubridate::year()`
+
+``` r
+nvc <- mutate(nvc, con_yr = year(con_dt))
+```
+
+``` r
+min(nvc$con_dt)
+#> [1] "2006-01-01"
+max(nvc$con_dt)
+#> [1] "2020-12-31"
+sum(nvc$con_dt > today())
 #> [1] 0
 ```
 
-## Clean
+![](../plots/bar_year-1.png)<!-- -->
 
-For consistency sake, we can make all character columns uppercase.
+## Wrangle
 
+There are no geographic variables in the database.
 
-```r
-nv <- nv %>% 
-  mutate_if("is.character", "str_to_upper")
+## Conclude
+
+``` r
+glimpse(sample_n(nvc, 50))
+#> Rows: 50
+#> Columns: 12
+#> $ con_id    <int> 142885, 574758, 208165, 421189, 401072, 483697, 430123, 2595, 484227, 300381, 733549, 645238, 42149…
+#> $ rpt_id    <int> 40106, 82950, 42399, 64317, 62696, 73510, 65108, 17506, 73702, 49425, 111260, 96247, 64335, 41571, …
+#> $ con_dt    <date> 2013-03-29, 2018-03-09, 2013-07-26, 2016-09-16, 2016-08-10, 2017-11-02, 2016-09-13, 2007-01-01, 20…
+#> $ con_amt   <dbl> 36.00, 200.00, 10.00, 1000.00, 250.00, 1000.00, 1500.00, 107.00, 5000.00, 6.00, 150.00, 1000.00, 25…
+#> $ con_type  <chr> "Monetary Contribution", "Monetary Contribution", "Monetary Contribution", "Monetary Contribution",…
+#> $ rec_id    <chr> "G987", "C6876", "G1616", "C6887", "C6526", "C1265", "C8009", "G799", "C8394", "C1643", "C13451", "…
+#> $ rec_nm    <chr> "Bank of America Corporation State and Federal Political Action Committee", "Ozzie Fumo", "The Trav…
+#> $ rec_type  <chr> "Political Action Committee", "Candidate", "Political Action Committee", "Candidate", "Candidate", …
+#> $ ctbr_id   <int> 58067, 273104, 118971, 236327, 148834, 235509, 236837, 2597, 262607, 175909, 357615, 143207, 236543…
+#> $ ctbr_nm   <chr> "Rim O Williams", "Wayne & Nancy Hardy", "Steven K Raymond", "Nicolas Spirtos", "Weil & Drage", "Le…
+#> $ dupe_flag <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, TRUE, FALSE, FALSE, FA…
+#> $ con_yr    <dbl> 2013, 2018, 2013, 2016, 2016, 2017, 2016, 2007, 2017, 2014, 2020, 2019, 2016, 2013, 2013, 2020, 201…
 ```
 
-### Year
+1.  There are 525,038 records in the database.
+2.  There are 14,173 duplicate records in the database.
+3.  The range and distribution of `amount` and `date` seem reasonable.
+4.  There are 0 records missing key variables.
+5.  Consistency in geographic data has been improved with
+    `campfin::normal_*()`.
+6.  The 4-digit `year` variable has been created with
+    `lubridate::year()`.
 
-Since the `contribution_date` variable was parsed as an R date object through `vroom::col_date()`,
-the `lubridate::year()` function makes it easy to extract the contribution year from the
-contribution date.
+## Export
 
+Now the file can be saved on disk for upload to the Accountability
+server.
 
-```r
-nv <- nv %>% 
-  mutate(year_clean = lubridate::year(contribution_date))
+``` r
+clean_dir <- dir_create(here("nv", "contribs", "data", "clean"))
+clean_path <- path(clean_dir, "nv_contribs_clean.csv")
+write_csv(nvc, clean_path, na = "")
+(clean_size <- file_size(clean_path))
+#> 68.2M
+file_encoding(clean_path) %>% 
+  mutate(across(path, path.abbrev))
+#> # A tibble: 1 x 3
+#>   path                                           mime            charset 
+#>   <fs::path>                                     <chr>           <chr>   
+#> 1 ~/nv/contribs/data/clean/nv_contribs_clean.csv application/csv us-ascii
 ```
 
-### Group City
+## Upload
 
-There are 87 `group_city` values.  Only one appears to be invalid.
+We can use the `aws.s3::put_object()` to upload the text file to the IRW
+server.
 
-
-```r
-nv$group_city_clean <- nv$group_city %>% 
-  str_remove("[:punct:]") %>% 
-  na_if("ALKDJF")
-```
-
-### Jurisdiction
-
-There are 36 `jurisdiction` values.  Only one appears to be invalid.
-
-
-```r
-nv$jurisdiction_clean <- na_if(nv$jurisdiction, "UNKNOWN")
-```
-
-### Party
-
-[Tom Roberts](https://www.leg.state.nv.us/App/Legislator/A/Assembly/Current/13) is a member of the
-Republican Party.
-
-
-```r
-nv_candidates %>% 
-  filter(party == "Test Party Name 5")
-```
-
-```
-#> # A tibble: 0 x 6
-#> # … with 6 variables: candidate_id <chr>, first_name <chr>, last_name <chr>, party <chr>,
-#> #   office <chr>, jurisdiction <chr>
-```
-
-```r
-nv$party_clean <- nv$candidate_party %>% 
-  str_replace_all("TEST PARTY NAME 5", "REPUBLICAN PARTY")
-```
-
-### Payee
-
-Because contributions are reported by the recipient, there are inconsistencies in the spelling
-of the contributor's name. While we can't fix potential misspelling of individual names, there are
-ways to reduce the number of variants of non-individual contributor names.
-
-Among records with _only_ a `payee_last` value (non-individuals), there are
-52844 distinct values.
-
-By using the OpenRefine merging algorithms, we can reduce the number of distinct `payee_last`
-values. The approach takes uncommon values and changes them to a more common very similar value.
-
-
-```r
-n_distinct(nv_payees$last_name[is.na(nv_payees$first_name)])
-#> [1] 52844
-
-payee_fix <- nv %>%
-  filter(is.na(payee_first)) %>%
-  mutate(payee_prep = payee_last %>% 
-           str_remove_all(fixed("\""))) %>% 
-  select(contribution_id, payee_last, payee_prep) %>% 
-  mutate(payee_fix = payee_prep %>%
-           key_collision_merge() %>%
-           n_gram_merge()) %>% 
-  mutate(fixed = payee_last != payee_fix) %>% 
-  select(-payee_prep)
-
-# total changed records
-sum(payee_fix$fixed, na.rm = TRUE)
-#> [1] 27330
-
-# distinct changes made
-payee_fix %>% 
-  filter(fixed) %>% 
-  select(-contribution_id) %>% 
-  distinct() %>%
-  nrow()
-#> [1] 5294
-
-# reduced distinct names
-n_distinct(payee_fix$payee_last)
-#> [1] 28609
-n_distinct(payee_fix$payee_fix)
-#> [1] 23323
-
-# percent change
-n_distinct(payee_fix$payee_last) %>% 
-  subtract(n_distinct(payee_fix$payee_fix)) %>% 
-  divide_by(n_distinct(payee_fix$payee_last))
-#> [1] 0.184767
-```
-
-
-```r
-# number of each fix
-payee_fix %>% 
-  filter(fixed) %>% 
-  count(payee_last, payee_fix) %>% 
-  arrange(desc(n))
-```
-
-```
-#> # A tibble: 5,294 x 3
-#>    payee_last                         payee_fix                          n
-#>    <chr>                              <chr>                          <int>
-#>  1 BOYD GAMING CORPORATION            BOYD GAMING                      348
-#>  2 SOUTHWEST GAS                      SOUTHWEST GAS CORPORATION        213
-#>  3 CITIZENS FOR JUSTICE TRUST         CITIZENS FOR JUSTICE, TRUST      176
-#>  4 NEVADA HEALTHPAC                   NEVADA HEALTH PAC                175
-#>  5 NEVADA POWER                       NEVADA POWER COMPANY             167
-#>  6 SOUTH POINT HOTEL AND CASINO       SOUTH POINT HOTEL & CASINO       156
-#>  7 LAS VEGAS CHAMBER OF COMERCE       LAS VEGAS CHAMBER OF COMMERCE    154
-#>  8 CENTURYLINK                        CENTURY LINK                     122
-#>  9 LEWIS AND ROCA                     LEWIS & ROCA                     117
-#> 10 REPUBLIC SILVER STATE DISPOSAL INC REPUBLIC SILVER STATE DISPOSAL   113
-#> # … with 5,284 more rows
-```
-
-Use the table of fixed payee last names to correct the original values.
-
-
-```r
-nv <- nv %>% 
-  left_join(payee_fix, by = c("contribution_id", "payee_last")) %>%
-  mutate(fixed = !is.na(fixed)) %>% 
-  mutate(payee_clean = ifelse(fixed, payee_fix, payee_last)) %>% 
-  mutate(payee_clean = na_if(payee_clean, "NONE"))
-```
-
-## Check
-
-There are 127 records with `NA` values in the new `payee_clean`.
-127 of those values were previously "NONE" in the
-original `payee_last` variable.
-
-To check for records without _any_ kind of identifying information on either side of the 
-transaction, we can coalesce the various variables into one.
-
-
-```
-#> # A tibble: 4 x 2
-#>   variable             n_na
-#>   <chr>               <int>
-#> 1 contribution_id         0
-#> 2 contribution_amount     0
-#> 3 recipient               0
-#> 4 contributor            76
-```
-
-There are 16 unique recipient/contributor combinations missing either value.
-
-
-```r
-nv %>%
-  # select key cols
-  select(
-    candidate_last,
-    group_name,
-    payee_first,
-    payee_clean
-  ) %>% 
-  # coalesce recipient types into one col
-  mutate(recipient = coalesce(candidate_last, group_name)) %>% 
-  select(-candidate_last, -group_name) %>%
-  # repeat for contributors
-  mutate(contributor = coalesce(payee_first, payee_clean)) %>%
-  select(-payee_first, -payee_clean) %>% 
-  # filter for NA
-  filter(is.na(contributor) | is.na(recipient)) %>% 
-  distinct()
-```
-
-```
-#> # A tibble: 16 x 2
-#>    recipient                                                              contributor
-#>    <chr>                                                                  <chr>      
-#>  1 NEVADA NEXT PAC                                                        <NA>       
-#>  2 MILLER                                                                 <NA>       
-#>  3 HERZOG                                                                 <NA>       
-#>  4 DOUGLAS COUNTY PROFESSIONAL EDUCATION ASSOCIATION TOGETHER IN POLITICS <NA>       
-#>  5 LEAVITT                                                                <NA>       
-#>  6 MURDOCH                                                                <NA>       
-#>  7 LANCASTER                                                              <NA>       
-#>  8 POLLOCK                                                                <NA>       
-#>  9 GLASSON                                                                <NA>       
-#> 10 BUNDY                                                                  <NA>       
-#> 11 BALLOT INITIATIVE STRATEGY CENTER                                      <NA>       
-#> 12 SANTUCCI                                                               <NA>       
-#> 13 O'BRIEN                                                                <NA>       
-#> 14 BURTON                                                                 <NA>       
-#> 15 RIVERO                                                                 <NA>       
-#> 16 COCHRAN                                                                <NA>
-```
-
-If both the `payee_first` and `payee_last` variables are `NA`, flag the record with a new `na_flag`
-variable.
-
-
-```r
-nv <- nv %>% 
-  mutate(na_flag = is.na(payee_first) & is.na(payee_clean))
-```
-
-## Conclusion
-
-1. There are 457012 records in the database
-1. There are no duplicate records
-1. All continous ranges make sense
-1. There are very few missing values where there shouldn't be 
-1. consistency issues among non-individual contributor names has been fixed
-1. There is no ZIP code variable
-1. The `contribution_year` variable has been created from the `contribution_date` variable
-1. Records missing any key information are flagged with the `na_flag` variable
-
-## Write
-
-We will write the final data set to disk to be uploaded to the Accountability Project database.
-To save space, unclean columns will be removed and `NA` values will be written as empty strings.
-
-
-```r
-dir_create(here("nv_contribs", "data", "processed"))
-nv %>% 
-  select(
-    -jurisdiction,
-    -candidate_party,
-    -payee_last
-  ) %>% 
-  mutate_if(is.character, str_replace_all, "\"", "\'") %>% 
-  write_csv(
-    path = here("nv_contribs", "data",  "processed", "nv_contribs_clean.csv"),
-    na = ""
+``` r
+aws_path <- path("csv", basename(clean_path))
+if (!object_exists(aws_path, "publicaccountability")) {
+  put_object(
+    file = clean_path,
+    object = aws_path, 
+    bucket = "publicaccountability",
+    acl = "public-read",
+    show_progress = TRUE,
+    multipart = TRUE
   )
+}
+aws_head <- head_object(aws_path, "publicaccountability")
+(aws_size <- as_fs_bytes(attr(aws_head, "content-length")))
+unname(aws_size == clean_size)
 ```
