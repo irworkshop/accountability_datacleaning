@@ -1,7 +1,7 @@
 United States Plum Book
 ================
 Kiernan Nicholls
-Fri Feb 5 12:42:50 2021
+Fri Feb 5 12:44:58 2021
 
 -   [Project](#project)
 -   [Objectives](#objectives)
@@ -471,7 +471,7 @@ published.
 ``` r
 pb <- pb %>% 
   mutate(
-    date = mdy("Dec 1, 2021"),
+    date = mdy("Dec 1, 2020"),
     year = year(date)
   )
 ```
