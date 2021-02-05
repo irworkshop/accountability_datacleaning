@@ -382,6 +382,37 @@ explore_plot(pb, level_grade_or_pay) + scale_x_wrap(10)
 explore_plot(pb, tenure) + scale_x_wrap(10)
 ```
 
+## Wrangle
+
+We will manually add the date this edition of the _Plum Book_ was published.
+
+```{r date_add}
+pb <- pb %>% 
+  mutate(
+    date = mdy("Dec 1, 2021"),
+    year = year(date)
+  )
+```
+
+We can also separate the `location` column into the city and state.
+
+```{r location_split}
+pb <- pb %>% 
+  separate(
+    col = location,
+    into = c("city", "state"),
+    sep = ",\\s",
+    extra = "merge",
+    remove = FALSE
+  ) %>% 
+  relocate(city, state, .after = last_col()) %>% 
+  mutate(
+    country = na_if(str_remove(state, "^[:upper:]{2}$"), ""),
+    country = if_else(is.na(country) & !is.na(state), "United States", country),
+    state = na_if(str_extract(state, "^[:upper:]{2}$"), "")
+  )
+```
+
 ## Conclude
 
 1. There are `r comma(nrow(pb))` records in the database.

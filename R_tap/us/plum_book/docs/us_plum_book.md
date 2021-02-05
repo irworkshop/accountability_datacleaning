@@ -1,7 +1,7 @@
 United States Plum Book
 ================
 Kiernan Nicholls
-Wed Feb 3 15:00:42 2021
+Fri Feb 5 12:42:50 2021
 
 -   [Project](#project)
 -   [Objectives](#objectives)
@@ -15,6 +15,7 @@ Wed Feb 3 15:00:42 2021
     -   [Missing](#missing)
     -   [Duplicates](#duplicates)
     -   [Categorical](#categorical)
+-   [Wrangle](#wrangle)
 -   [Conclude](#conclude)
 -   [Export](#export)
 -   [Upload](#upload)
@@ -462,6 +463,38 @@ col_stats(pb, n_distinct)
 
 ![](../plots/distinct_plots-1.png)<!-- -->![](../plots/distinct_plots-2.png)<!-- -->![](../plots/distinct_plots-3.png)<!-- -->![](../plots/distinct_plots-4.png)<!-- -->![](../plots/distinct_plots-5.png)<!-- -->![](../plots/distinct_plots-6.png)<!-- -->
 
+## Wrangle
+
+We will manually add the date this edition of the *Plum Book* was
+published.
+
+``` r
+pb <- pb %>% 
+  mutate(
+    date = mdy("Dec 1, 2021"),
+    year = year(date)
+  )
+```
+
+We can also separate the `location` column into the city and state.
+
+``` r
+pb <- pb %>% 
+  separate(
+    col = location,
+    into = c("city", "state"),
+    sep = ",\\s",
+    extra = "merge",
+    remove = FALSE
+  ) %>% 
+  relocate(city, state, .after = last_col()) %>% 
+  mutate(
+    country = na_if(str_remove(state, "^[:upper:]{2}$"), ""),
+    country = if_else(is.na(country) & !is.na(state), "United States", country),
+    state = na_if(str_extract(state, "^[:upper:]{2}$"), "")
+  )
+```
+
 ## Conclude
 
 1.  There are 8,204 records in the database.
@@ -483,7 +516,7 @@ clean_dir <- dir_create(here("us", "plum_book", "data", "clean"))
 clean_path <- path(clean_dir, "us_plum_book.csv")
 write_csv(pb, clean_path, na = "")
 (clean_size <- file_size(clean_path))
-#> 1.28M
+#> 1.62M
 non_ascii(clean_path)
 #> # A tibble: 2 x 2
 #>     row line                                                                                                            
