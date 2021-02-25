@@ -1,0 +1,24 @@
+FIELD_NAME          A  B  C  D  E  F  G  H  I  J  K  L  M  N  O  P Q
+DATE1               X  X  X  X  X  X  X  X  X  X  X  X  X  X     X X
+DATE2                                             X  X  X
+CONTRIB_CODE        X        X                                X  X
+CONTRIB_TYPE_CORP            X
+CORP                X  X  X  X  X  X  X  X  X  X  X  X  X  X  X  X X
+FIRST_NAME          X        X                                   X
+MID_INIT            X        X                                   X
+LAST_NAME           X        X                                   X
+ADDR_1              X  X  X  X  X  X  X  X  X  X  X  X  X  X     X X
+CITY                X  X  X  X  X  X  X  X  X  X  X  X  X  X     X X
+STATE               X  X  X  X  X  X  X  X  X  X  X  X  X  X     X X
+ZIP                 X  X  X  X  X  X  X  X  X  X  X  X  X  X     X X
+CHECK_NO            X  X  X        X  X  X     X        X        X X
+CHECK_DATE                                     X
+AMOUNT              X  X  X  X  X  X  X  X  X  X  X  X  X  X     X X
+AMOUNT2                                           X        X  X
+DESCRIPTION                  X
+OTHER_RECPT_CODE                X
+PURPOSE_CODE1                      X                       X  X
+PURPOSE_CODE2                                                      X
+EXPLANATION                        X                       X  X    X
+XFER_TYPE                            X  X
+CHKBOX                                     X

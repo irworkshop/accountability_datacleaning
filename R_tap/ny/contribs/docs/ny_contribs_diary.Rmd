@@ -1,12 +1,12 @@
 ---
 title: "New York Contributions"
 author: "Kiernan Nicholls"
-date: "`r Sys.time()`"
+date: "`r date()`"
 output:
   github_document: 
     df_print: tibble
     toc: true
-    toc_dept: 2
+    toc_dept: 3
 editor_options: 
   chunk_output_type: console
 ---
@@ -28,13 +28,13 @@ opts_chunk$set(
   dpi = 300
 )
 if (!interactive()) {
-  options(width = 99)
+  options(width = 120)
   set.seed(5)
 }
 ```
 
 ```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
-fs::dir_create(here::here("ny", "contribs", "docs"))
+doc_dir <- fs::dir_create(here::here("ny", "contribs", "docs"))
 ```
 
 ## Project
@@ -70,25 +70,25 @@ The following packages are needed to collect, manipulate, visualize, analyze,
 and communicate these results. The `pacman` package will facilitate their
 installation and attachment.
 
-The IRW's `campfin` package will also have to be installed from GitHub. This
-package contains functions custom made to help facilitate the processing of
-campaign finance data.
-
 ```{r load_packages, message=FALSE, warning=FALSE, error=FALSE}
-if (!require("pacman")) install.packages("pacman")
-pacman::p_load_current_gh("irworkshop/campfin")
+if (!require("pacman")) {
+  install.packages("pacman")
+}
 pacman::p_load(
   tidyverse, # data manipulation
   lubridate, # datetime strings
-  magrittr, # pipe operators
-  janitor, # dataframe clean
-  refinr, # cluster and merge
+  gluedown, # printing markdown
+  janitor, # clean data frames
+  campfin, # custom irw tools
+  aws.s3, # aws cloud storage
+  refinr, # cluster & merge
   scales, # format strings
   knitr, # knit documents
-  vroom, # read files fast
-  glue, # combine strings
-  here, # relative storage
-  fs # search storage 
+  rvest, # scrape html
+  glue, # code strings
+  here, # project paths
+  httr, # http requests
+  fs # local storage 
 )
 ```
 
@@ -102,7 +102,7 @@ paths relative to _your_ machine.
 
 ```{r where_here}
 # where does this document knit?
-here::here()
+here::i_am("ny/contribs/docs/ny_contribs_diary.Rmd")
 ```
 
 [tap]: https://github.com/irworkshop/accountability_datacleaning
@@ -156,21 +156,21 @@ To import the contributions data into R, we first have to download two files:
 identify all parties to contributions.
  
 > ##### Database Files in ASCII Delimited Format
-> Updated data files are uploaded during active filing periods after 4:00 P.M.
-daily until the filing is complete.
+> **Updated data files are uploaded during active filing periods after 4:00 P.M.
+daily until the filing is complete.**
 > 
-> Note: To match the filing data files to Filer Names by filer ID you will need
-to [Download the Filer data file][f]. Commcand.zip is a zipped file containing
-the data file (commcand.asc) in ASCII delimited and two text files. (filerec.txt
-contains the data file layout - codes.txt explains the codes used in the data
-file).
+> **Note:** To match the filing data files to Filer Names by filer ID you will
+need to [Download the Filer data file][f]. Commcand.zip is a zipped file
+containing the data file (commcand.asc) in ASCII delimited and two text files.
+(filerec.txt contains the data file layout - codes.txt explains the codes used
+in the data file).
 >
-> All downloadable files are zipped files containing a data file in ASCII
+> **All downloadable files are zipped files containing a data file in ASCII
 delimited format and two text files. (`efsrecb.txt` contains the data file
 layout - `efssched.txt` explains the different schedules as they apply to the
-database).
+database).**
 >
-> [Download Data file containing ALL filings][a]. Note: This file is a large
+> [Download Data file containing ALL filings][a]. **Note:** This file is a large
 file (238, 994 KB) that contains over 6 million records. Do not attempt to
 download this file unless you have a database to download the file to.
 
@@ -179,65 +179,122 @@ download this file unless you have a database to download the file to.
 
 ### Download
 
+We can download the ZIP archives and extract their contents.
+
 ```{r raw_size}
 sboe <- "https://cfapp.elections.ny.gov/NYSBOE/download/ZipDataFiles/"
 con_url <- str_c(sboe, "ALL_REPORTS.zip")
-url_file_size(con_url)
 fil_url <- str_c(sboe, "commcand.zip")
-url_file_size(fil_url)
 ```
 
 ```{r raw_download}
 raw_dir <- dir_create(here("ny", "contribs", "data", "raw"))
 con_zip <- path(raw_dir, basename(con_url))
 fil_zip <- path(raw_dir, basename(fil_url))
-if (!this_file_new(con_zip)) {
+if (!file_exists(con_zip)) {
   download.file(fil_url, fil_zip)
   download.file(con_url, con_zip)
 }
 ```
 
+### Extract
+
+There are three files in each of the two ZIP archives.
+
+```{r zip_view}
+zip_ls <- list(
+  "ALL_REPORTS.zip" = unzip(con_zip, list = TRUE),
+  "commcand.zip"    = unzip(fil_zip, list = TRUE)
+)
+```
+
+```{r zip_view2, echo=FALSE}
+zip_ls <- zip_ls %>% 
+  bind_rows(.id = "source_zip") %>% 
+  as_tibble() %>% 
+  transmute(
+    source_zip = fs_path(source_zip),
+    file_name = fs_path(Name),
+    size = fs_bytes(Length),
+    date = Date
+  )
+zip_ls
+```
+
+If these files don't exist in our raw data directory, they can be extracted.
+
+```{r zip_txt}
+raw_txt <- path(raw_dir, zip_ls$file_name)
+raw_txt <- setNames(raw_txt, basename(raw_txt))
+```
+
 ```{r unzip_path}
-if (length(dir_ls(raw_dir)) != 9) {
-  unzip(con_zip, exdir = raw_dir)
-  unzip(con_zip, exdir = raw_dir)
+if (!all(file_exists(raw_txt))) {
+  con_txt <- unzip(con_zip, exdir = raw_dir)
+  fil_txt <- unzip(fil_zip, exdir = raw_dir)
 }
 ```
 
-### Read
+### About
 
 We will have to read the `EFSRECB.TXT` file to determine the column names and
 formats for the `ALL_REPORTS.out` file, which has no header. The file also
 describes the specifications needed to parse the file, which can be passed as
-arguments to the `vroom::vroom()`.
+arguments to `readr::read_delim()`.
 
 ```{r efsrecb, echo=FALSE}
-efsrecb <- read_lines(path(raw_dir, "EFSRECB.TXT"))
-cat(efsrecb[44:50], sep = "\n")
-efsrecb <- efsrecb[10:42] %>% 
+efsrecb <- read_lines(raw_txt["EFSRECB.TXT"])
+```
+
+```{r efsrecb_spec, echo=FALSE}
+out_args <- str_split(efsrecb[44:50], ":\\s", simplify = TRUE)
+out_args[, 1] <- str_remove_all(out_args[, 1], "\\W")
+out_args[, 2] <- str_to_upper(out_args[, 2])
+colnames(out_args) <- c("", "Value")
+kable(out_args)
+```
+
+```{r efsrecb_cols, echo=FALSE}
+out_cols <- efsrecb[10:42] %>% 
   read_table(na = "") %>% 
   clean_names("snake") %>% 
   mutate(
-    field = field %>% 
-      str_to_lower() %>% 
-      str_remove("_\\d+$")
+    location = parse_integer(location),
+    type = case_when(
+      type == "CHAR" ~ "`<chr>`",
+      type == "DATE" ~ "`<date>`",
+      type == "FLOAT" ~ "`<dbl>`",
+      type == "INTEGER" ~ "`<int>`",
+    ),
+    format = str_remove_all(format, "'"),
+    field = make_clean_names(str_remove(field, "_\\d+$")),
+    efs_import = (efs_import == "REQUIRED")
   )
 
-print(efsrecb, n = Inf)
+out_cols %>% 
+  mutate(
+    across(1, md_code),
+    across(5, as.character),
+    across(4:5, ~str_replace_na(., "")),
+  ) %>% 
+  kable()
 ```
 
+### Fix
+
 ```{r raw_fix}
-con_file <- path(raw_dir, "ALL_REPORTS.out")
-fix_file <- path(raw_dir, "FIX_REPORTS.out")
+fix_file <- path(raw_dir, "FIX_REPORTS.csv")
 if (!file_exists(fix_file)) {
-  read_lines(raw_file) %>% 
-  str_conv(encoding = "ASCII") %>% 
-  str_replace_all("(?<!\r)\n", " ") %>%
-  str_remove_all(",(?!\")") %>% 
-  str_replace_all("(?<!^|,|\r\n)\"(?!,|\r\n|$)", "\'") %>% 
-  write_lines(fix_file)
+  read_lines(raw_txt["ALL_REPORTS.out"]) %>% 
+    iconv(to = "UTF-8", sub = "byte") %>% 
+    str_replace_all("(?<!\r)\n", " ") %>%
+    str_remove_all(",(?!\")") %>% 
+    str_replace_all("(?<!^|,|\r\n)\"(?!,|\r\n|$)", "\'") %>% 
+    write_lines(fix_file)
 }
 ```
+
+### Read
 
 ```{r raw_read}
 nyc <- read_delim(
@@ -245,12 +302,13 @@ nyc <- read_delim(
   delim = ",",
   escape_double = FALSE,
   escape_backslash = FALSE,
-  col_names = efsrecb$field,
+  col_names = out_cols$field,
+  na = c("", "NA", "N/A"),
   col_types = cols(
     .default = col_character(),
-    date1 = col_date_usa(),
-    date2 = col_date_usa(),
-    check_date = col_date_usa(),
+    date1 = col_date("%m/%d/%Y"),
+    date2 = col_date("%m/%d/%Y"),
+    check_date = col_date("%m/%d/%Y"),
     amount = col_double(),
     amount2 = col_double(),
     crerec_date = col_datetime("%m/%d/%Y %H:%M:%S")
@@ -263,26 +321,30 @@ discrete variable like `contrib_type_code`.
 
 ```{r raw_check}
 comma(nrow(nyc))
+all(unique(nyc$freport_id) %in% LETTERS[1:12])
 count(nyc, freport_id)
 ```
+
+### Filter
 
 This file contains _all_ campaign finance transactions. If we consult
 `EFSSHCED.TXT`, we determine which record types correspond to contributions.
 
-```{r efssched, echo=FALSE}
-efssched <- read_lines(path(raw_dir, "EFSSCHED.TXT"))
-efssched <- efssched %>% 
-  extract(60:78) %>% 
-  str_trim() %>% 
+```{r read_sched}
+efssched <- read_lines(raw_txt["EFSSCHED.TXT"])
+```
+
+```{r type_code, echo=FALSE}
+type_codes <- str_trim(efssched[60:78]) %>% 
   enframe(name = NULL) %>% 
   separate(
     col = value,
-    into = c("chkbox", "report_type"),
+    into = c("type_code", "report_type"),
     sep = "\\s-\\s{2}",
     extra = "merge"
   ) %>% 
-  mutate(contrib = str_detect(report_type, "Contrib"))
-print(efssched, n = Inf)
+  mutate(contrib = str_detect(report_type, "Contrib|Receipt"))
+print(type_codes, n = Inf)
 ```
 
 Then we can filter our data frame to include only those records using the 
@@ -290,76 +352,106 @@ Then we can filter our data frame to include only those records using the
 
 ```{r raw_filter}
 nyc <- nyc %>% 
-  filter(transaction_code %in% efssched$chkbox[efssched$contrib]) %>% 
+  filter(transaction_code %in% type_codes$type_code[type_codes$contrib]) %>% 
   remove_empty("cols")
 ```
 
-### Join
+We can consult the `EFSSCHED.txt` to see what columns apply to contribution
+type records, removing any which shouldn't belong.
+
+```{r raw_select, echo=FALSE}
+nyc <- nyc %>% 
+  # see EFSSCHED.txt
+  select(
+    -date2,
+    -contrib_type_code,
+    -check_date,
+    -amount2,
+    -description,
+    -other_recpt_code,
+    -purpose_code1,
+    -purpose_code2,
+    -explanation,
+    -xfer_type,
+    -chkbox
+  )
+```
+
+```{r rows check}
+# ensure proper rows kept
+rows_post <- nrow(nyc)
+comma(rows_post)
+```
+
+### Filers
 
 We will use the files in `commcand.zip` to build a useful data frame of filer
 information, which can then be joined to our contributions.
 
 ```{r filerec, echo=FALSE}
-filerec <- read_table(read_lines(path(raw_dir, "FILEREC.TXT"))[8:22])
-print(filerec)
+filerec <- read_table(read_lines(raw_txt["FILEREC.TXT"])[8:22])
+filerec <- clean_names(filerec, case = "snake")
+filerec <- mutate(filerec, across(1, make_clean_names))
+filerec %>% 
+  mutate(across(1, md_code)) %>% 
+  mutate(
+    type = case_when(
+      type == "CHAR" ~ "`<chr>`",
+      type == "DATE" ~ "`<date>`",
+      type == "FLOAT" ~ "`<dbl>`",
+      type == "INTEGER" ~ "`<int>`",
+    )
+  ) %>% 
+  kable()
+```
+
+We will also read codes from the `CODES.TXT` file and join them to the data.
+
+```{r codes_read}
+codes_all <- str_trim(read_lines(file = raw_txt["CODES.TXT"]))
 ```
 
 ```{r codes_parse, echo=FALSE}
-codes_all <- str_trim(read_lines(file = path(raw_dir, "CODES.TXT")))
 codes_all <- na.omit(na_if(codes_all, ""))
-codes_office <- codes_all %>% 
-  extract(5:79) %>% 
-  enframe(name = NULL) %>% 
-  separate(
-    col = value,
-    into = c("office", "office_name"),
-    sep = "\\s",
-    extra = "merge"
-  ) %>% 
-  mutate(office = as.integer(office))
-
-codes_district <- codes_all %>% 
-  extract(81:83) %>% 
-  enframe(name = NULL) %>% 
-  separate(
-    col = value,
-    into = c("district", "district_name"),
-    sep = "\\s{2,}",
-    extra = "merge",
-    convert = TRUE
+codes_office <- read_table(
+  file = codes_all[5:79], 
+  col_names = c("office", "office_name"),
+  col_types = cols(
+    office = col_integer(),
+    office_name = col_character()
   )
+)
 
-codes_comm <- codes_all %>% 
-  extract(85:105) %>% 
-  enframe(name = NULL) %>% 
-  separate(
-    col = value,
-    into = c("committee_type", "committee_name"),
-    sep = "\\s{2,}",
-    extra = "merge",
-    convert = TRUE
-  )
+codes_district <- read_table(
+  file = codes_all[81:83], 
+  col_names = c("district", "district_name")
+)
 
-codes_report <- codes_all %>% 
-  extract(107:118) %>% 
-  enframe(name = NULL) %>% 
-  separate(
-    col = value,
-    into = c("report", "report_name"),
-    sep = "\\s{2,}",
-    extra = "merge",
-    convert = TRUE
-  )
+codes_comm <- read_table(
+  file = codes_all[85:105], 
+  col_names = c("committee_type", "committee_name")
+)
+
+codes_report <- read_table(
+  file = codes_all[107:118], 
+  col_names = c("report", "report_name")
+)
+```
+
+```{r codes_print, echo=FALSE}
+kable(codes_office)
+kable(codes_district)
+kable(codes_comm)
+kable(codes_report)
 ```
 
 ```{r zip_path}
-fil_path <- path(raw_dir, "COMMCAND.txt")
 commcand <- read_delim(
-  file = fil_path,
+  file = raw_txt["COMMCAND.txt"],
   delim = ",",
   escape_backslash = FALSE,
   escape_double = FALSE,
-  col_names = str_to_lower(filerec$FIELD),
+  col_names = filerec$field,
   col_types = cols(
     .default = col_character(),
     office = col_integer(),
@@ -371,140 +463,212 @@ commcand <- read_delim(
 ```{r join_codes, echo=FALSE}
 commcand <- commcand %>%
   # join codes
-  left_join(codes_office) %>% 
-  # replace codes
-  mutate(office = office_name) %>% 
-  # remove joined names
-  select(-office_name) %>% 
-  # repeat for committee codesd
-  left_join(codes_comm) %>% 
-  mutate(committee_type = committee_name) %>% 
-  select(-committee_name)
+  left_join(codes_office, by = "office") %>% 
+  left_join(codes_comm, by = "committee_type") %>% 
+  # rename columns
+  mutate(committee_type = committee_name, office = office_name) %>% 
+  # remove codes
+  select(-committee_name, -office_name)
+```
+
+#### Wrangle
+
+Before joining the filer data to the contributions, we can clean up the
+address data of each filer. See the section on wrangling before for a more
+detailed explanation of wrangling steps made on contributor data.
+
+```{r fil_addr}
+fil_addr <- commcand %>% 
+  select(fil_id = filer_id, addr = address, city, state, zip)
+```
+
+```{r fil_addr_addr}
+fil_addr <- fil_addr %>% 
+  mutate(
+    addr_norm = normal_address(
+      address = addr,
+      abbs = usps_street,
+      na = invalid_city
+    )
+  )
+```
+
+```{r fil_addr_zip}
+fil_addr <- fil_addr %>% 
+  mutate(
+    zip_norm = normal_zip(
+      zip = zip,
+      na_rep = TRUE
+    )
+  )
+```
+
+```{r fil_addr_st}
+fil_addr <- fil_addr %>% 
+  mutate(
+    state_norm = normal_state(
+      state = state,
+      abbreviate = TRUE,
+      na_rep = TRUE,
+      valid = valid_state
+    )
+  )
+```
+
+```{r fil_addr_city}
+fil_addr <- fil_addr %>% 
+  mutate(
+    city_norm = normal_city(
+      city = city %>% 
+        str_replace("STA$", "STATION") %>% 
+        str_replace("STATI$", "STATION"), 
+      abbs = usps_city,
+      states = c("NY", "DC", "NEW YORK"),
+      na = invalid_city,
+      na_rep = TRUE
+    )
+  )
+```
+
+```{r fil_addr_check}
+prop_in(fil_addr$zip_norm, valid_zip)
+prop_in(fil_addr$state_norm, valid_state)
+prop_in(fil_addr$city, valid_city)
+```
+
+```{r fil_addr_clean}
+fil_addr <- fil_addr %>% 
+  select(fil_id, ends_with("norm")) %>% 
+  rename_with(~str_c("fil", ., sep = "_"), .cols = -1)
+```
+
+#### Join
+
+We can now add the filer data to our contribution data.
+
+```{r join_check_id}
+# all filers in data
+prop_in(nyc$filer_id, commcand$filer_id)
 ```
 
 ```{r join_contribs}
-prop_in(nyc$filer_id, commcand$filer_id)
 nyc <- left_join(
   x = nyc,
   y = commcand,
   by = "filer_id",
-  suffix = c("_con", "_rec")
+  suffix = c("_con", "_fil")
 )
 
 nyc <- rename_prefix(
   df = nyc,
-  suffix = c("_con", "_rec"),
+  suffix = c("_con", "_fil"),
   punct = TRUE
 )
+```
+
+```{r echo=FALSE}
+nyc <- mutate(nyc, across(where(is.character), str_squish))
 ```
 
 ```{r raw_rename, echo=FALSE}
 # rename for clarify and brevity
 nyc <- nyc %>% 
+  rename_with(~str_replace(., "filer_", "fil_")) %>% 
   rename(
-    rec_id = filer_id,
-    tran_code = transaction_code,
+    txn_code = transaction_code,
     date = date1,
-    contrib_type = contrib_type_code,
-    con_corp = corp,
-    con_first = first_name,
-    con_mid = mid_init,
-    con_last = last_name,
     con_addr = addr_1,
-    descr = description,
-    recpt_code = other_recpt_code,
-    purpose1 = purpose_code1,
-    purpose2 = purpose_code2,
-    explan = explanation,
-    xfer = xfer_type,
-    rec_name = filer_name,
-    rec_type = filer_type,
     comm_type = committee_type,
-    district = district,
     treas_first = treas_first_name,
     treas_last = treas_last_name,
-    rec_addr = address
-  )
-```
-
-```{r raw_select, echo=FALSE}
-nyc <- nyc %>% 
-  # see EFSSCHED.txt
-  # remove non contrib cols
-  select(
-    -date2,
-    -contrib_type,
-    -check_date,
-    -amount2,
-    -descr,
-    -recpt_code,
-    -purpose1,
-    -purpose2,
-    -explan,
-    -xfer,
-    -chkbox
+    fil_addr = address,
+    fil_status = status
   )
 ```
 
 ## Explore
 
+There are `r comma(nrow(nyc))` rows of `r ncol(nyc)` columns. Each record
+represents a single contribution made from an individual or entity to a 
+political committee or candidate.
+
 ```{r glimpse}
-head(nyc)
+glimpse(nyc)
 tail(nyc)
-glimpse(sample_n(nyc, 20))
 ```
 
 ### Missing
+
+Columns vary in their degree of missing values.
 
 ```{r na_count}
 col_stats(nyc, count_na)
 ```
 
-_Very_ few records are missing the date, amount, or the name of the contributor
-or recipient. We can flag the few that are with `campfin::flag_na()`.
+We can flag any record missing a key variable needed to identify a transaction.
 
-```{r na_flag}
+We must first create a single variable with the combined contributor names.
+
+```{r con_name_unite}
 nyc <- nyc %>% 
   unite(
-    con_first, con_mid, con_last, con_corp,
     col = con_name,
+    first_name, mid_init, last_name, corp,
     sep = " ",
     remove = FALSE,
     na.rm = TRUE
   ) %>% 
-  flag_na(
-    date, con_name, amount, rec_name
-  )
+  relocate(con_name, .after = last_col()) %>% 
+  mutate(across(con_name, na_if, ""))
+```
 
-percent(mean(nyc$na_flag), 0.01)
+```{r na_flag}
+key_vars <- c("date", "con_name", "amount", "fil_name")
+nyc <- flag_na(nyc, all_of(key_vars))
+mean(nyc$na_flag)
+```
+
+A little over `r percent(mean(nyc$na_flag))` of records are missing a key
+variable, mostly a name identifying the contributor.
+
+```{r na_view}
+nyc %>% 
+  filter(na_flag) %>% 
+  select(all_of(key_vars))
 ```
 
 ### Categorical
 
-```{r n_distinct}
+```{r distinct_count}
 col_stats(nyc, n_distinct)
 ```
 
-```{r explore_plot, echo=FALSE, fig.keep=FALSE}
+```{r distinct_plots, echo=FALSE, fig.height=3}
 explore_plot(nyc, freport_id)
-explore_plot(nyc, tran_code)
-explore_plot(nyc, rec_type)
-explore_plot(nyc, status)
-explore_plot(nyc, comm_type, nbar = 4)
+explore_plot(nyc, txn_code)
+explore_plot(nyc, contrib_code)
+explore_plot(nyc, fil_type)
+explore_plot(nyc, fil_status)
+explore_plot(nyc, comm_type)
+explore_plot(nyc, office)
 ```
 
-### Continuous
+### Amounts
 
-#### Amounts
-
-```{r ammount_summary}
+```{r amount_summary}
 summary(nyc$amount)
 mean(nyc$amount <= 0, na.rm = TRUE)
 ```
 
+These are the records with the minimum and maximum amounts.
+
+```{r amount_minmax}
+glimpse(nyc[c(which.max(nyc$amount), which.min(nyc$amount)), ])
+```
+
 ```{r hist_amount, echo=FALSE}
 nyc %>%
-  filter(amount > 1) %>% 
+  filter(!is.na(amount), amount >= 1) %>% 
   ggplot(aes(amount)) +
   geom_histogram(fill = dark2["purple"]) +
   scale_y_continuous(labels = comma) +
@@ -515,14 +679,15 @@ nyc %>%
   ) +
   labs(
     title = "New York Contributions Amount Distribution",
-    subtitle = "from 2000 to 2019",
     caption = "Source: NYSBOE",
     x = "Amount",
     y = "Count"
   )
 ```
 
-#### Dates
+### Dates
+
+We can add the calendar year from `date` with `lubridate::year()`
 
 ```{r date_year}
 nyc <- mutate(nyc, year = year(date))
@@ -542,19 +707,28 @@ nyc$year %>%
 ```
 
 ```{r date_invalid}
+count_na(nyc$date)
 nyc$year[!between(nyc$year, 1990, 2020)] <- NA
+```
+
+```{r date_range}
+count_na(nyc$date)
+min(nyc$date, na.rm = TRUE)
+sum(nyc$year < 1999, na.rm = TRUE)
+max(nyc$date, na.rm = TRUE)
+sum(nyc$date > today(), na.rm = TRUE)
 ```
 
 ```{r bar_year, echo=FALSE}
 nyc %>% 
   count(year) %>% 
+  filter(year >= 1999) %>% 
   mutate(even = is_even(year)) %>% 
   ggplot(aes(x = year, y = n)) +
   geom_col(aes(fill = even)) + 
   scale_fill_brewer(palette = "Dark2") +
   scale_y_continuous(labels = comma) +
-  scale_x_continuous(breaks = seq(1999, 2020, by = 2)) +
-  coord_cartesian(xlim = c(1999, 2020)) +
+  scale_x_continuous(breaks = seq(1999, 2021, by = 2)) +
   theme(legend.position = "bottom") +
   labs(
     title = "New York Contributions by Year",
@@ -572,27 +746,37 @@ confident string normalization. For geographic variables like city names and
 ZIP codes, the corresponding `campfin::normal_*()` functions are tailor made to 
 facilitate this process.
 
+### Filers
+
+We can now re-join the normalized address variables for filers.
+
+```{r fil_addr_rejoin}
+nyc <- left_join(nyc, fil_addr, by = "fil_id")
+nrow(nyc) == rows_post
+```
+
 ### Address
 
 For the street `addresss` variable, the `campfin::normal_address()` function
 will force consistence case, remove punctuation, and abbreviate official 
 USPS suffixes.
 
-```{r address_norm}
-nyc <- mutate_at(
-  .tbl = nyc,
-  .vars = vars(ends_with("addr")),
-  .funs = list(norm = normal_address),
-  abbs = usps_street,
-  na_rep = TRUE
-)
+```{r con_addr_norm}
+con_addr_norm <- nyc %>% 
+  distinct(con_addr) %>% 
+  mutate(
+    con_addr_norm = normal_address(
+      address = con_addr,
+      abbs = usps_street,
+      na_rep = TRUE
+    )
+  )
 ```
 
-```{r address_view}
-nyc %>% 
-  select(contains("addr")) %>% 
-  distinct() %>% 
-  sample_n(10)
+```{r addr_rejoin}
+nyc <- left_join(nyc, con_addr_norm, by = "con_addr")
+nrow(nyc) == rows_post
+rm(con_addr_norm); flush_memory()
 ```
 
 ### ZIP
@@ -602,18 +786,17 @@ valid _five_ digit codes by removing the ZIP+4 suffix and returning leading
 zeroes dropped by other programs like Microsoft Excel.
 
 ```{r zip_norm}
-nyc <- mutate_at(
-  .tbl = nyc,
-  .vars = vars(ends_with("zip")),
-  .funs = list(norm = normal_zip),
-  na_rep = TRUE
-)
+nyc <- nyc %>% 
+  mutate(
+    con_zip_norm = normal_zip(
+      zip = con_zip,
+      na_rep = TRUE
+    )
+  )
 ```
 
 ```{r zip_progress}
 progress_table(
-  nyc$rec_zip,
-  nyc$rec_zip_norm,  
   nyc$con_zip,
   nyc$con_zip_norm,
   compare = valid_zip
@@ -626,28 +809,35 @@ Valid two digit state abbreviations can be made using the
 `campfin::normal_state()` function.
 
 ```{r state_norm}
-nyc <- mutate_at(
-  .tbl = nyc,
-  .vars = vars(ends_with("state")),
-  .funs = list(norm = normal_state),
-  na_rep = TRUE,
-  valid = NULL
-)
+st_norm <- nyc %>% 
+  distinct(con_state, con_zip_norm) %>% 
+  mutate(
+    con_state_norm = normal_state(
+      # should be "N/A" like with city, etc
+      state = na_if(con_state, "N/"),
+      abbreviate = TRUE,
+      na_rep = TRUE
+    )
+  )
+```
+
+```{r state_bad}
+bad_state <- st_norm$con_state_norm %out% valid_state
+ny_zip <- st_norm$con_zip_norm %in% zipcodes$zip[zipcodes$state == "NY"]
+ny_rx <- str_detect(st_norm$con_state_norm, "^N|Y$")
+sort(table(st_norm$con_state_norm[bad_state & ny_zip & ny_rx]))
+# replace if bad, ny zip, starts with N or ends Y
+st_norm$con_state_norm[bad_state & ny_zip & ny_rx] <- "NY"
+```
+
+```{r state_join}
+nyc <- left_join(nyc, st_norm, by = c("con_state", "con_zip_norm"))
 ```
 
 ```{r state_view}
 nyc %>% 
   filter(con_state != con_state_norm) %>% 
   count(con_state, con_state_norm, sort = TRUE)
-```
-
-```{r state_fix}
-one_let <- str_detect(nyc$con_state_norm, "^(N|Y)$")
-zip_in <- nyc$con_zip_norm %in% zipcodes$zip[zipcodes$state == "NY"]
-nyc$con_state_norm[which(one_let & zip_in)] <- "NY"
-one_let <- str_detect(nyc$rec_state_norm, "^(N|Y)$")
-zip_in <- nyc$rec_zip_norm %in% zipcodes$zip[zipcodes$state == "NY"]
-nyc$rec_state_norm[which(one_let & zip_in)] <- "NY"
 ```
 
 ```{r state_progress}
@@ -670,15 +860,18 @@ removing punctuation, but _expanding_ USPS abbreviations. We can also remove
 `invalid_city` values.
 
 ```{r city_norm}
-nyc <- mutate_at(
-  .tbl = nyc,
-  .vars = vars(ends_with("city")),
-  .funs = list(norm = normal_city),
-  abbs = usps_city,
-  states = c("NY", "DC", "NEW YORK"),
-  na = invalid_city,
-  na_rep = TRUE
-)
+norm_city <- nyc %>% 
+  distinct(con_city, con_state_norm, con_zip_norm) %>% 
+  mutate(
+    con_city_norm = normal_city(
+      city = con_city %>% 
+        str_replace("^S\\.I\\.$", "STATEN ISLAND"), 
+      abbs = usps_city,
+      states = c("NY", "DC", "NEW YORK"),
+      na = invalid_city,
+      na_rep = TRUE
+    )
+  )
 ```
 
 #### Swap
@@ -688,8 +881,8 @@ against the _expected_ value for that record's state abbreviation and ZIP code.
 If the normalized value is either an abbreviation for or very similar to the
 expected value, we can confidently swap those two.
 
-```{r con_city_swap}
-nyc <- nyc %>% 
+```{r city_swap}
+norm_city <- norm_city %>% 
   left_join(
     y = zipcodes,
     by = c(
@@ -714,30 +907,17 @@ nyc <- nyc %>%
   )
 ```
 
-```{r rec_city_swap}
-nyc <- nyc %>% 
-  left_join(
-    y = zipcodes,
-    by = c(
-      "rec_state_norm" = "state",
-      "rec_zip_norm" = "zip"
-    )
-  ) %>% 
-  rename(city_match = city) %>% 
-  mutate(
-    match_abb = is_abbrev(rec_city_norm, city_match),
-    match_dist = str_dist(rec_city_norm, city_match),
-    rec_city_swap = if_else(
-      condition = !is.na(match_dist) & (match_abb | match_dist == 1),
-      true = city_match,
-      false = rec_city_norm
-    )
-  ) %>% 
-  select(
-    -city_match,
-    -match_dist,
-    -match_abb
+```{r city_rejoin}
+nyc <- left_join(
+  x = nyc,
+  y = norm_city,
+  by = c(
+    "con_city", 
+    "con_state_norm", 
+    "con_zip_norm"
   )
+)
+nrow(nyc) == rows_post
 ```
 
 #### Refine
@@ -749,8 +929,8 @@ strings that have a valid city/state/zip combination.
 
 [or]: https://openrefine.org/
 
-```{r con_city_refine}
-con_good_refine <- nyc %>% 
+```{r city_refine}
+good_refine <- nyc %>% 
   mutate(
     con_city_refine = con_city_swap %>% 
       key_collision_merge() %>% 
@@ -767,8 +947,8 @@ con_good_refine <- nyc %>%
   )
 ```
 
-```{r con_city_count, echo=FALSE}
-con_good_refine %>%
+```{r city_count, echo=FALSE}
+good_refine %>%
   count(
     con_state_norm, 
     con_zip_norm, 
@@ -780,135 +960,19 @@ con_good_refine %>%
 
 Then we can join the refined values back to the database.
 
-```{r con_city_join}
+```{r city_join}
 nyc <- nyc %>% 
-  left_join(con_good_refine) %>% 
+  left_join(good_refine, by = names(.)) %>% 
   mutate(con_city_refine = coalesce(con_city_refine, con_city_swap))
-```
-
-Then repeat the process for recipient cities.
-
-```{r rec_city_refine}
-rec_good_refine <- nyc %>% 
-  mutate(
-    rec_city_refine = rec_city_swap %>% 
-      key_collision_merge() %>% 
-      n_gram_merge(numgram = 1)
-  ) %>% 
-  filter(rec_city_refine != rec_city_swap) %>% 
-  inner_join(
-    y = zipcodes,
-    by = c(
-      "rec_city_refine" = "city",
-      "rec_state_norm" = "state",
-      "rec_zip_norm" = "zip"
-    )
-  )
-nyc <- nyc %>% 
-  left_join(rec_good_refine) %>% 
-  mutate(rec_city_refine = coalesce(rec_city_refine, rec_city_swap))
-```
-
-#### Check
-
-We can use the `campfin::check_city()` function to pass the remaining unknown
-`city_refine` values (and their `state_norm`) to the Google Geocode API. The
-function returns the name of the city or locality which most associated with
-those values.
-
-This is an easy way to both check for typos and check whether an unknown
-`city_refine` value is actually a completely acceptable neighborhood, census
-designated place, or some other locality not found in our `valid_city` vector
-from our `zipcodes` database.
-
-First, we'll filter out any known valid city and aggregate the remaining records
-by their city and state. Then, we will only query those unknown cities which
-appear at least ten times.
-
-```{r check_filter}
-nyc_out <- nyc %>% 
-  filter(con_city_refine %out% c(valid_city, extra_city)) %>% 
-  count(con_city_refine, con_state_norm, sort = TRUE) %>% 
-  drop_na() %>% 
-  head(1000)
-```
-
-Passing these values to `campfin::check_city()` with `purrr::pmap_dfr()` will
-return a single tibble of the rows returned by each city/state combination.
-
-First, we'll check to see if the API query has already been done and a file
-exist on disk. If such a file exists, we can read it using `readr::read_csv()`.
-If not, the query will be sent and the file will be written using
-`readr::write_csv()`.
-
-```{r check_send}
-check_file <- here("ny", "contribs", "data", "api_check.csv")
-if (file_exists(check_file)) {
-  check <- read_csv(
-    file = check_file
-  )
-} else {
-  check <- pmap_dfr(
-    .l = list(
-      nyc_out$con_city_refine, 
-      nyc_out$con_state_norm
-    ), 
-    .f = check_city, 
-    key = Sys.getenv("GEOCODE_KEY"), 
-    guess = TRUE
-  ) %>% 
-    mutate(guess = coalesce(guess_city, guess_place)) %>% 
-    select(-guess_city, -guess_place)
-  write_csv(
-    x = check,
-    path = check_file
-  )
-}
-```
-
-Any city/state combination with a `check_city_flag` equal to `TRUE` returned a
-matching city string from the API, indicating this combination is valid enough
-to be ignored.
-
-```{r check_accept}
-valid_locality <- check$guess[check$check_city_flag]
-```
-
-Then we can perform some simple comparisons between the queried city and the
-returned city. If they are extremely similar, we can accept those returned
-locality strings and add them to our list of accepted additional localities.
-
-```{r check_compare}
-valid_locality <- check %>% 
-  filter(!check_city_flag) %>% 
-  mutate(
-    abb = is_abbrev(original_city, guess),
-    dist = str_dist(original_city, guess)
-  ) %>%
-  filter(abb | dist <= 3) %>% 
-  pull(guess) %>% 
-  c(valid_locality)
 ```
 
 #### Progress
 
-```{r con_city_remain}
-many_city <- c(valid_city, extra_city, valid_locality)
-nyc %>% 
-  filter(con_city_refine %out% many_city) %>% 
-  count(con_city_refine, sort = TRUE)
-```
-
-```{r con_city_replace}
-nyc <- nyc %>% 
-  mutate(
-    con_city_refine = con_city_refine %>% 
-      str_replace("^NY$", "NEW YORK") %>% 
-      str_replace("^NYC$", "New York")
-  )
-```
+Our goal for normalization was to increase the proportion of city values known
+to be valid and reduce the total distinct values by correcting misspellings.
 
 ```{r city_progress, echo=FALSE}
+many_city <- c(valid_city, extra_city)
 progress <- progress_table(
   str_to_upper(nyc$con_city),
   nyc$con_city_norm,
@@ -922,7 +986,7 @@ kable(progress, digits = 3)
 You can see how the percentage of valid values increased with each stage.
 
 ```{r bar_progress, echo=FALSE}
-raw_in <- percent(prop_in(nyc$city_raw, valid_city))
+raw_in <- percent(prop_in(nyc$con_city, valid_city))
 progress %>% 
   ggplot(aes(x = stage, y = prop_in)) +
   geom_hline(yintercept = 0.99) +
@@ -965,45 +1029,62 @@ progress %>%
   )
 ```
 
-```{r rec_city_progress}
-progress_table(
-  str_to_upper(nyc$rec_city),
-  nyc$rec_city_norm,
-  nyc$rec_city_swap,
-  nyc$rec_city_refine,
-  compare = many_city
-)
-```
-
 ## Conclude
+
+Before exporting, we can remove the intermediary normalization columns and
+rename all added variables with the `_clean` suffix.
 
 ```{r clean_select}
 nyc <- nyc %>% 
   select(
-    -ends_with("_city_norm"),
-    -ends_with("_city_swap")
+    -con_city_norm,
+    -con_city_swap,
+    con_city_clean = con_city_refine
   ) %>% 
-  rename_all(str_replace, "_refine", "_clean") %>% 
-  rename_all(str_replace, "_norm", "_clean")
+  rename_all(~str_replace(., "_norm", "_clean")) %>% 
+  rename_all(~str_remove(., "_raw"))
 ```
 
 ```{r clean_glimpse}
-glimpse(sample_n(nyc, 20))
+glimpse(sample_n(nyc, 50))
 ```
 
 1. There are `r comma(nrow(nyc))` records in the database.
 1. There are `r comma(sum(nyc$dupe_flag))` duplicate records in the database.
 1. The range and distribution of `amount` and `date` seem reasonable.
-1. There are `r comma(sum(nyc$na_flag))` records missing ....
+1. There are `r comma(sum(nyc$na_flag))` records missing key variables.
 1. Consistency in geographic data has been improved with `campfin::normal_*()`.
 1. The 4-digit `year` variable has been created with `lubridate::year()`.
 
 ## Export
 
+Now the file can be saved on disk for upload to the Accountability server.
+
 ```{r clean_dir}
 clean_dir <- dir_create(here("ny", "contribs", "data", "clean"))
 clean_path <- path(clean_dir, "ny_contribs_clean.csv")
 write_csv(nyc, clean_path, na = "")
-file_size(clean_path)
-guess_encoding(clean_path)
+(clean_size <- file_size(clean_path))
+non_ascii(clean_path)
+```
+
+## Upload
+
+We can use the `aws.s3::put_object()` to upload the text file to the IRW server.
+
+```{r aws_upload, eval=FALSE}
+aws_path <- path("csv", basename(clean_path))
+if (!object_exists(aws_path, "publicaccountability")) {
+  put_object(
+    file = clean_path,
+    object = aws_path, 
+    bucket = "publicaccountability",
+    acl = "public-read",
+    show_progress = TRUE,
+    multipart = TRUE
+  )
+}
+aws_head <- head_object(aws_path, "publicaccountability")
+(aws_size <- as_fs_bytes(attr(aws_head, "content-length")))
+unname(aws_size == clean_size)
 ```
