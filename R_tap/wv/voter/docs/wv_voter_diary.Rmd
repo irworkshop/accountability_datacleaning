@@ -190,11 +190,11 @@ wv <- read_delim(
 
 
 ```{r}
-wv <- wv %>%
-  mutate(
-  across(`REGISTRATION DATE`,
-         mdy)
-)
+#wv <- wv %>%
+  #mutate(
+  #across(`REGISTRATION DATE`,
+         #mdy)
+#)
 
 ```
 
@@ -282,16 +282,14 @@ max(wv$date_of_birth, na.rm = TRUE)
 ```{r bar_year, echo=FALSE}
 wv %>% 
   count(birth_year) %>% 
-  mutate(even = is_even(birth_year)) %>% 
   ggplot(aes(x = birth_year, y = n)) +
-  geom_col(aes(fill = even)) + 
-  scale_fill_brewer(palette = "Dark2") +
+  geom_col() + 
   scale_y_continuous(labels = comma) +
-  scale_x_continuous(breaks = seq(2000, 2020, by = 2)) +
+  scale_x_continuous(breaks = seq(1900, 2020, by = 10)) +
+  coord_cartesian(xlim = c(1900, 2020)) +
   theme(legend.position = "bottom") +
   labs(
     title = "West Virginia Voter by Birth Year",
-    caption = "Source: {source}",
     fill = "Election Year",
     x = "Year Made",
     y = "Count"
@@ -314,25 +312,25 @@ USPS suffixes.
 ```{r address_norm}
 wv <- wv %>% 
   unite(
-    col = street,
-    starts_with("street"),
+    col = address_full,
+    house_no, street, street2, unit, 
     sep = " ",
     remove = FALSE,
     na.rm = TRUE
   ) %>% 
   mutate(
     address_norm = normal_address(
-      address = street,
+      address = address_full,
       abbs = usps_street,
       na_rep = TRUE
     )
-  ) %>% 
-  select(-street)
+  ) %>% select(-address_full)
+  
 ```
 
 ```{r address_view}
 wv %>% 
-  select(contains("address")) %>% 
+  select(house_no, street, street2, unit, address_norm) %>% 
   distinct() %>% 
   sample_n(10)
 ```
@@ -620,3 +618,55 @@ if (!object_exists(s3_path, "publicaccountability")) {
 
 The following table describes the variables in our final exported file:
 
+```{r dict_make, echo=FALSE}
+dict_raw <- tibble(
+  var = md_code(names(wv)),
+  type = md_code(map_chr(wv, typeof)),
+  def = c(
+    "County that the vote was registered in", 
+    "Unique voter ID used to identify a voter",
+    "The voters full name last name",
+    "The voters full name first name",
+    "The voters full name middle name",
+    "The voters full name suffix",
+    "The voters DOB",
+    "The sex of the voter",
+    "The house number of the voters mailing address",
+    "The Street Address of the voters mailing address",
+    "The 2nd part of an adress (if there is a PO box or apt number) of the voters mailing address",
+    "The unit number (if living in an apartment) of the voters mailing address",
+    "Normalized city name",
+    "Normalized 2-digit state abbreviation",
+    "5-digit ZIP code",
+    "(Mail delivered to somewhere else they don't live at)The Street Address of the voters mailing address",
+    "(Mail delivered to somewhere else they don't live at)The 2nd part of an adress (if there is a PO box or apt number) of the voters mailing address",
+    "(Mail delivered to somewhere else they don't live at)The unit number (if living in an apartment) of the voters mailing address",
+    "(Mail delivered to somewhere else they don't live at) Normalized city name",
+    "(Mail delivered to somewhere else they don't live at) Normalized 2-digit state abbreviation",
+    "(Mail delivered to somewhere else they don't live at) 5-digit ZIP code",
+    "The date that the voter registered to vote",
+    "The voter status when voting",
+    "The congressional district of this voter",
+    "The senatorial district of this voter",
+    "The delegate district of this voter",
+    "Legal district of magistrate court",
+    "Voting precinct number",
+    "Polling place within voting precinct ",
+    "Flag for missing date, amount, or name",
+    "Flag for completely duplicated record",
+    "Normalized year",
+    "Normalized birth year",
+    "Normalized combined street address",
+    "The cleaned normalized zip file from the original data",
+    "normalized clean 2 letter state variable",
+    "normalized clean city variable"
+))
+```
+
+```{r dict_md, echo=FALSE}
+(dict_md <- kable(
+  x = dict_raw,
+  format = "markdown",
+  col.names = c("Column", "Type", "Definition")
+))
+```

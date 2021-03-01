@@ -1,7 +1,7 @@
 West Virginia Voter
 ================
 Victor
-2021-02-11 20:30:07
+2021-03-01 11:26:19
 
   - [Project](#project)
   - [Objectives](#objectives)
@@ -147,7 +147,7 @@ file_info(raw_path) %>%
 #> # A tibble: 1 x 18
 #>   path       type   size permissions modification_time   user  group device_id hard_links
 #>   <fs::path> <fct> <fs:> <fs::perms> <dttm>              <chr> <chr>     <dbl>      <dbl>
-#> 1 /Users/vb… file   242M rw-rw-rw-   2021-02-11 20:30:10 vbre… staff  16777220          1
+#> 1 /Users/vb… file   242M rw-rw-rw-   2021-03-01 11:26:22 vbre… staff  16777220          1
 #> # … with 9 more variables: special_device_id <dbl>, inode <dbl>, block_size <dbl>, blocks <dbl>,
 #> #   flags <int>, generation <dbl>, access_time <dttm>, change_time <dttm>, birth_time <dttm>
 ```
@@ -188,11 +188,11 @@ wv <- read_delim(
 ```
 
 ``` r
-wv <- wv %>%
-  mutate(
-  across(`REGISTRATION DATE`,
-         mdy)
-)
+#wv <- wv %>%
+  #mutate(
+  #across(`REGISTRATION DATE`,
+         #mdy)
+#)
 ```
 
 SnakeCase: Cleaning column names
@@ -229,7 +229,7 @@ glimpse(wv)
 #> $ mail_city              <chr> "MOATSVILLE", "PHILIPPI", "PHILIPPI", "PHILIPPI", "PHILIPPI", "PH…
 #> $ mail_state             <chr> "WV", "WV", "WV", "WV", "WV", "WV", "WV", "WV", "WV", "WV", "WV",…
 #> $ mail_zip               <chr> "26405", "26416", "26416", "26416", "26416", "26416", "26416", "2…
-#> $ registration_date      <date> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
+#> $ registration_date      <date> 1988-04-11, 1990-06-28, 2001-05-08, 1975-11-18, 1956-10-06, 1975…
 #> $ status                 <chr> "Active", "Active", "Active", "Active", "Active", "Active", "Acti…
 #> $ congressional_district <chr> "0001", "0001", "0001", "0001", "0001", "0001", "0001", "0001", "…
 #> $ senatorial_district    <chr> "0014", "0014", "0014", "0014", "0014", "0014", "0014", "0014", "…
@@ -286,7 +286,7 @@ col_stats(wv, count_na)
 #> 19 mail_city              <chr>   253054 0.199    
 #> 20 mail_state             <chr>   253650 0.200    
 #> 21 mail_zip               <chr>   261780 0.206    
-#> 22 registration_date      <date> 1271240 1        
+#> 22 registration_date      <date>       0 0        
 #> 23 status                 <chr>        0 0        
 #> 24 congressional_district <chr>      186 0.000146 
 #> 25 senatorial_district    <chr>      186 0.000146 
@@ -300,7 +300,7 @@ col_stats(wv, count_na)
 wv <- wv %>% flag_na(county_name, id_voter, last_name, first_name, date_of_birth, registration_date) #Creates a new column with trues and falses and puts a true on any row that's missing a variable ex. .5% of rows is missing one of those values. .5 is normal though - we only check for columns that are relevant to figuring out the information we need. 
 mean(wv$na_flag) %>% #change this to sum to count the rows vs find %
   percent(0.01)
-#> [1] "100.00%"
+#> [1] "0.00%"
 ```
 
 ### Duplicates
@@ -310,7 +310,7 @@ There are only a handful of entirely duplicated records.
 ``` r
 wv <- flag_dupes(wv, -id_voter, .check = F) #create another logical column that puts true's next to each row with duplicates 
 sum(wv$dupe_flag)
-#> [1] 98
+#> [1] 46
 ```
 
 ``` r
@@ -348,7 +348,7 @@ col_stats(wv, n_distinct)
 #> 19 mail_city              <chr>     3417 0.00269    
 #> 20 mail_state             <chr>       61 0.0000480  
 #> 21 mail_zip               <chr>     3540 0.00278    
-#> 22 registration_date      <date>       1 0.000000787
+#> 22 registration_date      <date>   20671 0.0163     
 #> 23 status                 <chr>        2 0.00000157 
 #> 24 congressional_district <chr>        4 0.00000315 
 #> 25 senatorial_district    <chr>       18 0.0000142  
@@ -376,11 +376,11 @@ same as the number of rows. Maybe remove that column?
 
 ``` r
 count_na(wv$registration_date)
-#> [1] 1271240
+#> [1] 0
 min(wv$registration_date)
-#> [1] NA
+#> [1] "1800-01-01"
 mean(wv$registration_date == "1900-01-01")
-#> [1] NA
+#> [1] 4.090494e-05
 wv$registration_date[wv$registration_date == "1900-01-01"] <- NA
 max(wv$registration_date)
 #> [1] NA
@@ -415,40 +415,40 @@ official USPS suffixes.
 ``` r
 wv <- wv %>% 
   unite(
-    col = street,
-    starts_with("street"),
+    col = address_full,
+    house_no, street, street2, unit, 
     sep = " ",
     remove = FALSE,
     na.rm = TRUE
   ) %>% 
   mutate(
     address_norm = normal_address(
-      address = street,
+      address = address_full,
       abbs = usps_street,
       na_rep = TRUE
     )
-  ) %>% 
-  select(-street)
+  ) %>% select(-address_full)
+  
 ```
 
 ``` r
 wv %>% 
-  select(contains("address")) %>% 
+  select(house_no, street, street2, unit, address_norm) %>% 
   distinct() %>% 
   sample_n(10)
-#> # A tibble: 10 x 1
-#>    address_norm                
-#>    <chr>                       
-#>  1 COFER ST                    
-#>  2 CHESTNUT ST PO BOX 886      
-#>  3 SMITH ST LOFT 402           
-#>  4 BERRYDALE DR                
-#>  5 CSX LN                      
-#>  6 BURWELL HEIGHTS RD PO BOX 32
-#>  7 FARLEY RUN RD               
-#>  8 DELBARTON CONNEY HOLW       
-#>  9 RT 8 BOX 241 EA             
-#> 10 HC 65 BOX 387
+#> # A tibble: 10 x 5
+#>    house_no street                   street2 unit    address_norm            
+#>    <chr>    <chr>                    <chr>   <chr>   <chr>                   
+#>  1 1578     STINSON RD               <NA>    <NA>    1578 STINSON RD         
+#>  2 2546     NATIONAL RD              <NA>    APT 102 2546 NATIONAL RD APT 102
+#>  3 158      DELTA PLACE              <NA>    <NA>    158 DELTA PLACE         
+#>  4 37       CAMBRIDGE DR             <NA>    <NA>    37 CAMBRIDGE DR         
+#>  5 381      FAIRWAY DR               <NA>    <NA>    381 FAIRWAY DR          
+#>  6 119      EDITH LN                 <NA>    <NA>    119 EDITH LN            
+#>  7 186      ELM STREET               <NA>    <NA>    186 ELM ST              
+#>  8 210      HAMPSHIRE DR             <NA>    <NA>    210 HAMPSHIRE DR        
+#>  9 1524     LEE ST E                 APT D   <NA>    1524 LEE ST E APT D     
+#> 10 24       CHANKEY PEN BRANCH DRIVE <NA>    <NA>    24 CHANKEY PEN BR DR
 ```
 
 ### ZIP
@@ -661,7 +661,7 @@ wv <- wv %>%
 ``` r
 glimpse(sample_n(wv, 50))
 #> Rows: 50
-#> Columns: 36
+#> Columns: 37
 #> $ county_name            <chr> "RALEIGH", "PLEASANTS", "MARSHALL", "MORGAN", "RALEIGH", "MARION"…
 #> $ id_voter               <chr> "100465588", "100397835", "100695730", "100737756", "002545065", …
 #> $ last_name              <chr> "BLAKE", "BUNNER", "GUMP", "GATES", "SARVER", "MALONEY", "HERNDON…
@@ -671,6 +671,7 @@ glimpse(sample_n(wv, 50))
 #> $ date_of_birth          <date> 1955-02-02, 1980-12-14, 1994-09-28, 1955-01-01, 1944-10-19, 1952…
 #> $ sex                    <chr> "M", "F", NA, "F", "M", "M", "F", "F", "F", "M", "M", "M", "M", "…
 #> $ house_no               <chr> "184", "80", "6474", "141", "113", "239", "502", "213-D", "5112",…
+#> $ street                 <chr> "HUNTER RIDGE ROAD", "SPRUCE RUN ROAD", "FAIRMONT PIKE ROAD", "GO…
 #> $ street2                <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
 #> $ unit                   <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
 #> $ city                   <chr> "MT HOPE", "FRIENDLY", "MOUNDSVILLE", "BERKELEY SPRINGS", "CRAB O…
@@ -682,7 +683,7 @@ glimpse(sample_n(wv, 50))
 #> $ mail_city              <chr> NA, "FRIENDLY", "MOUNDSVILLE", "BERKELEY SPRINGS", NA, "FARMINGTO…
 #> $ mail_state             <chr> NA, "WV", "WV", "WV", NA, "WV", "WV", "WV", NA, "WV", "WV", "WV",…
 #> $ mail_zip               <chr> NA, "26146", "26041", "25411", NA, "26571", "25313", "26505", NA,…
-#> $ registration_date      <date> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
+#> $ registration_date      <date> 2012-09-24, 2011-03-08, 2017-07-26, 2018-08-16, 1981-11-12, 2004…
 #> $ status                 <chr> "Active", "Active", "Active", "Active", "Active", "Active", "Acti…
 #> $ congressional_district <chr> "0003", "0001", "0001", "0002", "0003", "0001", "0002", "0001", "…
 #> $ senatorial_district    <chr> "0009", "0003", "0002", "0015", "0009", "0002", "0008", "0013", "…
@@ -690,20 +691,20 @@ glimpse(sample_n(wv, 50))
 #> $ magisterial_district   <chr> "02", "D", NA, "WEST MAG. DIST. 1", NA, NA, NA, "CENTRAL", "3", "…
 #> $ precinct_number        <chr> "54", "07", "29", "06", "26", "053", "370", "36", "364", "09", "6…
 #> $ poll_name              <chr> "BRADLEY ELEMENTARY SCHOOL", "ARVILLA", "SHERRARD MIDDLE SCHOOL",…
-#> $ na_flag                <lgl> TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE,…
+#> $ na_flag                <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FA…
 #> $ dupe_flag              <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FA…
-#> $ year                   <dbl> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
+#> $ year                   <dbl> 2012, 2011, 2017, 2018, 1981, 2004, 2020, 1992, 1992, 2002, 1983,…
 #> $ birth_year             <dbl> 1955, 1980, 1994, 1955, 1944, 1952, 1993, 1962, 1947, 1984, 1934,…
-#> $ address_clean          <chr> "HUNTER RDG RD", "SPRUCE RUN RD", "FAIRMONT PIKE RD", "GO AWAY LN…
+#> $ address_clean          <chr> "184 HUNTER RDG RD", "80 SPRUCE RUN RD", "6474 FAIRMONT PIKE RD",…
 #> $ zip_clean              <chr> "25880", "26146", "26041", "25411", "25827", "26571", "25313", "2…
 #> $ state_clean            <chr> "WV", "WV", "WV", "WV", "WV", "WV", "WV", "WV", "WV", "WV", "WV",…
 #> $ city_clean             <chr> "MOUNT HOPE", "FRIENDLY", "MOUNDSVILLE", "BERKELEY SPRINGS", "CRA…
 ```
 
 1.  There are 1,271,240 records in the database.
-2.  There are 98 duplicate records in the database.
+2.  There are 46 duplicate records in the database.
 3.  The range and distribution of `amount` and `date` seem reasonable.
-4.  There are 1,271,240 records missing key variables.
+4.  There are 0 records missing key variables.
 5.  Consistency in geographic data has been improved with
     `campfin::normal_*()`.
 6.  The 4-digit `year` variable has been created with
@@ -719,12 +720,12 @@ clean_dir <- dir_create(here("wv", "voter", "data", "clean"))
 clean_path <- path(clean_dir, "wv_voter_clean.csv")
 write_csv(wv, clean_path, na = "")
 file_size(clean_path)
-#> 255M
+#> 294M
 non_ascii(clean_path)
 #> # A tibble: 1 x 2
 #>      row line                                                                                      
 #>    <int> <chr>                                                                                     
-#> 1 695202 MCDOWELL,000508337,JOHNS,FLORA,C,,1921-11-05,F,220<bd>,,,WELCH,WV,24801,SUMMERS STREET,,,…
+#> 1 695202 MCDOWELL,000508337,JOHNS,FLORA,C,,1921-11-05,F,220<bd>,SUMMERS STREET,,,WELCH,WV,24801,SU…
 ```
 
 ## Upload
@@ -752,3 +753,43 @@ if (!object_exists(s3_path, "publicaccountability")) {
 ## Dictionary
 
 The following table describes the variables in our final exported file:
+
+| Column                   | Type        | Definition                                                                                                                                        |
+| :----------------------- | :---------- | :------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `county_name`            | `character` | County that the vote was registered in                                                                                                            |
+| `id_voter`               | `character` | Unique voter ID used to identify a voter                                                                                                          |
+| `last_name`              | `character` | The voters full name last name                                                                                                                    |
+| `first_name`             | `character` | The voters full name first name                                                                                                                   |
+| `mid`                    | `character` | The voters full name middle name                                                                                                                  |
+| `suffix`                 | `character` | The voters full name suffix                                                                                                                       |
+| `date_of_birth`          | `double`    | The voters DOB                                                                                                                                    |
+| `sex`                    | `character` | The sex of the voter                                                                                                                              |
+| `house_no`               | `character` | The house number of the voters mailing address                                                                                                    |
+| `street`                 | `character` | The Street Address of the voters mailing address                                                                                                  |
+| `street2`                | `character` | The 2nd part of an adress (if there is a PO box or apt number) of the voters mailing address                                                      |
+| `unit`                   | `character` | The unit number (if living in an apartment) of the voters mailing address                                                                         |
+| `city`                   | `character` | Normalized city name                                                                                                                              |
+| `state`                  | `character` | Normalized 2-digit state abbreviation                                                                                                             |
+| `zip`                    | `character` | 5-digit ZIP code                                                                                                                                  |
+| `mail_street`            | `character` | (Mail delivered to somewhere else they don’t live at)The Street Address of the voters mailing address                                             |
+| `mail_street2`           | `character` | (Mail delivered to somewhere else they don’t live at)The 2nd part of an adress (if there is a PO box or apt number) of the voters mailing address |
+| `mail_unit`              | `character` | (Mail delivered to somewhere else they don’t live at)The unit number (if living in an apartment) of the voters mailing address                    |
+| `mail_city`              | `character` | (Mail delivered to somewhere else they don’t live at) Normalized city name                                                                        |
+| `mail_state`             | `character` | (Mail delivered to somewhere else they don’t live at) Normalized 2-digit state abbreviation                                                       |
+| `mail_zip`               | `character` | (Mail delivered to somewhere else they don’t live at) 5-digit ZIP code                                                                            |
+| `registration_date`      | `double`    | The date that the voter registered to vote                                                                                                        |
+| `status`                 | `character` | The voter status when voting                                                                                                                      |
+| `congressional_district` | `character` | The congressional district of this voter                                                                                                          |
+| `senatorial_district`    | `character` | The senatorial district of this voter                                                                                                             |
+| `delegate_district`      | `character` | The delegate district of this voter                                                                                                               |
+| `magisterial_district`   | `character` | Legal district of magistrate court                                                                                                                |
+| `precinct_number`        | `character` | Voting precinct number                                                                                                                            |
+| `poll_name`              | `character` | Polling place within voting precinct                                                                                                              |
+| `na_flag`                | `logical`   | Flag for missing date, amount, or name                                                                                                            |
+| `dupe_flag`              | `logical`   | Flag for completely duplicated record                                                                                                             |
+| `year`                   | `double`    | Normalized year                                                                                                                                   |
+| `birth_year`             | `double`    | Normalized birth year                                                                                                                             |
+| `address_clean`          | `character` | Normalized combined street address                                                                                                                |
+| `zip_clean`              | `character` | The cleaned normalized zip file from the original data                                                                                            |
+| `state_clean`            | `character` | normalized clean 2 letter state variable                                                                                                          |
+| `city_clean`             | `character` | normalized clean city variable                                                                                                                    |
