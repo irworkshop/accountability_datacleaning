@@ -14,9 +14,9 @@ base_and_exercised_options_value,d
 current_total_value_of_award,d
 base_and_all_options_value,d
 potential_total_value_of_award,d
-disaster_emergency_fund_codes_for_overall_award,l
-`outlayed_amount_funded_by_COVID-19_supplementals_for_overall_aw`,l
-`obligated_amount_funded_by_COVID-19_supplementals_for_overall_a`,l
+disaster_emergency_fund_codes_for_overall_award,c
+outlayed_amount_funded_by_COVID-19_supplementals_for_overall_aw,c
+obligated_amount_funded_by_COVID-19_supplementals_for_overall_a,c
 action_date,D
 action_date_fiscal_year,d
 period_of_performance_start_date,T
@@ -61,7 +61,7 @@ recipient_state_name,c
 recipient_zip_4_code,c
 recipient_congressional_district,c
 recipient_phone_number,c
-recipient_fax_number,d
+recipient_fax_number,c
 primary_place_of_performance_country_code,c
 primary_place_of_performance_country_name,c
 primary_place_of_performance_city_name,c
@@ -253,9 +253,9 @@ other_not_for_profit_organization,l
 the_ability_one_program,l
 private_university_or_college,l
 state_controlled_institution_of_higher_learning,l
-`1862_land_grant_college`,l
-`1890_land_grant_college`,l
-`1994_land_grant_college`,l
+1862_land_grant_college,l
+1890_land_grant_college,l
+1994_land_grant_college,l
 minority_institution,l
 historically_black_college,l
 tribal_college,l
