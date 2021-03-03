@@ -1,4 +1,4 @@
-# Tue Mar  2 14:49:34 2021 ------------------------------
+# Wed Mar  3 17:45:59 2021 ------------------------------
 # Request US spending between two dates
 # Investigative Reporting Workshop
 # Public Accountability Project
@@ -10,17 +10,27 @@
 args <- commandArgs(trailingOnly = TRUE)
 here::i_am("us/spending/us_spend_update.R")
 
+cli::cli_h1("update federal spending")
+cli::cli_h2("preparing request")
+
 # load packages -----------------------------------------------------------
 
-library(tidyverse)
-library(lubridate)
-library(janitor)
-library(campfin)
-library(aws.s3)
-library(glue)
-library(here)
-library(httr)
-library(fs)
+if (!require("pacman")) {
+  install.packages("pacman")
+}
+pacman::p_load(
+  tidyverse, # data manipulation
+  lubridate, # datetime strings
+  aws.s3, # aws cloud storage
+  glue, # code strings
+  here, # project paths
+  httr, # http requests
+  here, # local paths
+  cli, # command line
+  fs # local storage
+)
+
+cli_alert_success("attached 10 additional packages")
 
 # notes -------------------------------------------------------------------
 
@@ -45,17 +55,15 @@ spend_api <- function(endpoint, ...) {
 # call script from command line with (1) start and (2) end dates
 # Rscript --vanilla us_spend_update.R --args 2020-01-01 2020-12-31
 
-if (length(args) == 0) {
-  ### !!!!!!!!!!!!!!!!!!
-  # define dates here w/out args
-  # end_date <- "2020-10-01"
-  # start_date <- "2021-09-30"
-  end_date <- Sys.Date()
-  start_date <- end_date - 7
-  ### !!!!!!!!!!!!!!!!!!
-} else if (length(args) == 2){
+if (length(args) == 2) {
+  cli_alert_info("using date arguments from command line")
   end_date <- as.Date(args[2], tryFormats = c("%Y-%m-%d", "%m/%d/%Y"))
   start_date <- as.Date(args[1], tryFormats = c("%Y-%m-%d", "%m/%d/%Y"))
+} else if (length(args) == 0){
+  cli_alert_info("using supplied date variables")
+  # define dates here w/out args
+  end_date <- Sys.Date()
+  start_date <- end_date - 7
 } else {
   stop("when using args, use both start date then end date", call. = FALSE)
 }
@@ -71,9 +79,20 @@ award_types <-
   unnest(cols = award_type) %>%
   mutate(across(award_type, str_to_upper))
 
-# make request ============================================================
+cli_alert_success(paste(
+  "obtained {style_bold(nrow(award_types))} award codes",
+  "{col_silver(Sys.time())}"
+))
 
-message(sprintf("requesting spending between %s and %s", start_date, end_date))
+# make request ============================================================
+cli_h2("request bulk zip")
+
+cli_alert(paste(
+  "making request from",
+  "{col_blue('https://api.usaspending.gov/')}",
+  "{col_silver(Sys.time())}"
+))
+cli_alert_info("data between {start_date} and {end_date}")
 
 award_post <- POST(
   url = spend_api("bulk_download/awards/"),
@@ -100,68 +119,85 @@ award_post <- POST(
   )
 )
 
-stop_for_status(award_post)
-post_date <- award_post$date
-award_post <- content(award_post)
-raw_file <- award_post$file_name
+if (http_error(award_post)) {
+  cli_alert_danger(http_status(award_post)$message)
+  stop_for_status(award_post)
+}
 
-message(sprintf("status: requested (%s)", post_date))
+post_date <- award_post$date
+post_info <- content(award_post)
+
+cli_alert_success("status: {col_green('requested')} {col_silver(post_date)}")
 
 # check status ------------------------------------------------------------
+# cli_h3("check file status")
 
-# All_PrimeTransactionsAndSubawards_2021-03-01_H21M36S10731192.zip
+# All_PrimeTransactions_2021-03-02_H16M49S35586986.zip
 
+cli_alert("wait for file to be ready for download")
 while (!exists("post_status") || post_status == "running") {
   # request status
-  status_get <-GET(
+  status_get <- content(GET(
     url = spend_api("bulk_download/status/"),
-    query = list(
-      file_name = award_post$file_name
-    )
-  )
-  status_get <- content(status_get)
+    query = list(file_name = post_info$file_name)
+  ))
   post_status <- status_get$status
   if (post_status == "running") {
-    message(glue("status: {post_status} ({Sys.time()}), waiting 5 min"))
+    cli_alert_info(paste(
+      "status: {col_cyan(post_status)}, waiting 5 min",
+      "{col_silver(Sys.time())}"
+    ))
     # wait 5 minutes and check again
-    Sys.sleep(time = 5 * 60)
+    Sys.sleep(time = 300)
   } else {
-    message(sprintf("status: {post_status} ({Sys.time()})"))
+    cli_alert_success(paste(
+      "status: {col_green(post_status)}",
+      "{col_silver(Sys.time())}"
+    ))
   }
 }
 
 # download bulk zip when ready --------------------------------------------
+# cli_h3("download bulk zip")
 
 # check size before download
 # kilobytes to total bytes
 bulk_length <- status_get$total_size * 1000
 
-# calculate download time
-if (isTRUE(requireNamespace("speedtest", quietly = TRUE))) {
-  speed <- speedtest::speedtest_cli(progress = FALSE)
-  dl <- speed$result[[7]]$download$bytes
-  dseconds(round(bulk_length / dl, 3))
-}
+raw_zip <- here("us", "spending", post_info$file_name)
 
-raw_dir <- dir_create(here("us", "spending", "update", "data"))
-raw_zip <- path(raw_dir, raw_file)
-message(glue("downloading bulk file: {raw_file} ({fs_bytes(bulk_length)})"))
+cli_alert(paste(
+  "starting downloading:",
+  "{col_blue(str_trunc(post_info$file_url, 50, 'center'))}",
+  "{col_silver(Sys.time())}"
+))
+
+cli_alert_info("file size: {col_silver(fs_bytes(bulk_length))}")
 
 # download locally
-if (!file_exists(raw_zip)) {
+if (file_exists(raw_zip)) {
+  cli_alert_warning("file already exists on disk")
+} else {
   bulk_save <- GET(
-    url = award_post$file_url,
+    url = post_info$file_url,
     write_disk(path = raw_zip),
     progress(type = "down")
   )
 }
 
-# extract files -----------------------------------------------------------
+cli_alert_success(paste(
+  "download complete:",
+  "{col_blue(str_trunc(raw_zip, 50, 'center'))}",
+  "{col_silver(Sys.time())}"
+))
 
-message(glue("extracting zip archive to: {raw_dir}"))
+
+# extract files -----------------------------------------------------------
+# cli_h3("extract bulk zip")
 
 # list the zip contents
-unzip(raw_zip, list = TRUE) %>%
+zip_list <-
+  unzip(raw_zip, list = TRUE) %>%
   as_tibble() %>%
   transmute(
     path = fs_path(Name),
@@ -169,8 +205,24 @@ unzip(raw_zip, list = TRUE) %>%
     date = Date
   )
 
-# extract files
-all_tsv <- unzip(raw_zip, exdir = raw_dir)
+cli_alert(paste(
+  "extracting files to",
+  "{col_blue(usa_dir)}",
+  "{col_silver(Sys.time())}"
+))
+
+# extract all files
+all_tsv <- unzip(
+  zipfile = raw_zip,
+  exdir = usa_dir
+)
+
+cli_alert_success(paste(
+  "extracted {col_green(nrow(zip_list))} files",
+  "{col_silver(Sys.time())}"
+))
+
+quit()
 
 # contracts ===============================================================
 
@@ -178,7 +230,7 @@ all_tsv <- unzip(raw_zip, exdir = raw_dir)
 con_tsv <- str_subset(all_tsv, "All_Contracts")
 con_n <- length(con_tsv)
 
-col_file <- here("us", "spending", "update", "con_cols.csv")
+col_file <- here("us", "spending", "con_cols.csv")
 if (file_exists(col_file)) {
   # read col types
   con_cols <- read_csv(col_file, col_types = cols())
@@ -256,3 +308,15 @@ for (i in seq_along(con_tsv)) {
 # assistance ==============================================================
 
 # upload ==================================================================
+
+if (FALSE) {
+  for (file_name in done_files) {
+    put_object(
+      file = file_name,
+      object = path("csv", file_name),
+      bucket = "publicaccountability",
+      acl = "public-read",
+      multipart = TRUE
+    )
+  }
+}
