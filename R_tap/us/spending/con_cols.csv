@@ -18,7 +18,7 @@ disaster_emergency_fund_codes_for_overall_award,c
 outlayed_amount_funded_by_COVID-19_supplementals_for_overall_aw,c
 obligated_amount_funded_by_COVID-19_supplementals_for_overall_a,c
 action_date,D
-action_date_fiscal_year,d
+action_date_fiscal_year,i
 period_of_performance_start_date,T
 period_of_performance_current_end_date,T
 period_of_performance_potential_end_date,T
