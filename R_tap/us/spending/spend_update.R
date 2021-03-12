@@ -17,6 +17,7 @@ if (length(pkg) > 0) {
     sprintf("Please install %s additional packages:\n", length(pkg)),
     paste("-", pkg, collapse = "\n")
   )
+  quit(save = "no", status = 1)
 }
 
 suppressPackageStartupMessages(library(aws.s3))
@@ -29,12 +30,22 @@ suppressPackageStartupMessages(library(fs))
 cli_h1("Update Federal Spending")
 
 cmd_args <- commandArgs(trailingOnly = TRUE)
-suppressMessages(here::i_am("us/spending/us_spend_update.R"))
+suppressMessages(here::i_am("us/spending/spend_update.R"))
 
 if (!grepl("R_tap", getwd())) {
   cli_alert_danger("Please set working directory to {.path /R_tap}")
   quit(save = "no")
 }
+
+t <- builtin_theme()
+t$span.code <- list(
+  "background-color" = "black",
+  "color" = "white",
+  "before" = "`",
+  "after" = "`"
+)
+
+options(cli.user_theme = t)
 
 cli_h2("Preparing request")
 
@@ -168,7 +179,7 @@ raw_zip <- path(data_dir, post_data$file_name)
 
 bulk_size <- fs_bytes(status_get$total_size * 1000)
 cli_alert(wt("Starting download {.emph ({bulk_size})}"))
-cli_text("{.url {ansi_strtrim(post_data$file_url)}}")
+cli_text("{.url {ansi_strtrim(post_data$file_url, console_width() - 3)}}")
 
 # download locally
 if (file_exists(raw_zip)) {
@@ -182,7 +193,7 @@ if (file_exists(raw_zip)) {
   cli_alert_success(wt("Download complete {.emph ({file_size(raw_zip)})}"))
 }
 
-cli_text("{.file {ansi_strtrim(raw_zip)}}")
+cli_text("{.file {ansi_strtrim(raw_zip, console_width() - 3)}}")
 
 # extract files -----------------------------------------------------------
 cli_h2("Extract text files")
@@ -192,9 +203,7 @@ zip_list <- unzip(raw_zip, list = TRUE)
 zip_list$Length <- fs_bytes(zip_list$Length)
 
 cli_alert_info("Bulk zip contains {nrow(zip_list)} text files:")
-cli_ol()
-cli_li(paste(col_blue(zip_list$Name), col_grey(zip_list$Length)))
-cli_end()
+cli_ol(paste(col_blue(zip_list$Name), col_grey(zip_list$Length)))
 
 cli_process_start("Extracting all files")
 all_csv <- unzip(raw_zip, exdir = data_dir)
@@ -251,10 +260,10 @@ for (i in seq_along(all_csv)) {
 
   # change column names based on file type
   dt_col  <- ifelse(is_sub, "subaward_action_date", "action_date")
-  zip_col <- ifelse(is_sub, "subawardee_zip_code",  "recipient_zip_4_code")
-  amt_col <- ifelse(is_sub, "subaward_amount",      "federal_action_obligation")
-  giv_col <- ifelse(is_sub, "prime_awardee_name",   "awarding_sub_agency_name")
-  rec_col <- ifelse(is_sub, "subawardee_name",      "recipient_name")
+  zip_col <- ifelse(is_sub, "subawardee_zip_code", "recipient_zip_4_code")
+  amt_col <- ifelse(is_sub, "subaward_amount", "federal_action_obligation")
+  giv_col <- ifelse(is_sub, "prime_awardee_name", "awarding_sub_agency_name")
+  rec_col <- ifelse(is_sub, "subawardee_name", "recipient_name")
 
   n_prob <- nrow(problems(us))
   if (n_prob > 0) {
@@ -289,12 +298,13 @@ for (i in seq_along(all_csv)) {
   # cli_h3("Checking data frame structure")
 
   check <- data.frame(
-    file = basename(all_csv[i]),
-    type = file_type,
+    file_nm = basename(all_csv[i]),
+    file_type = file_type,
+    check_dt = Sys.time(),
     start_dt = start_dt,
     end_dt = end_dt,
-    min_date = min(us[[dt_col]], na.rm = TRUE),
-    max_date = max(us[[dt_col]], na.rm = TRUE),
+    min_dt = min(us[[dt_col]], na.rm = TRUE),
+    max_dt = max(us[[dt_col]], na.rm = TRUE),
     n_row = nrow(us),
     n_col = ncol(us),
     sum_amt = sum(us[[amt_col]], na.rm = TRUE),
@@ -302,7 +312,7 @@ for (i in seq_along(all_csv)) {
     zero_amt = sum(us[[amt_col]] <= 0, na.rm = TRUE)
   )
 
-  all_checks <- bind_rows(all_checks, check)
+  all_checks <- do.call("rbind", list(all_checks, check))
 
   write_csv(check, check_file, append = file_exists(check_file))
   cli_alert_success("Checks saved as row in {.path update_check.csv}")
@@ -324,7 +334,7 @@ quit()
 
 # upload ==================================================================
 
-# aws key: state_file-type_date-range.csv
+# aws key: st_file-type_date-range.csv
 # us_contracts-sub_20210101-20210131.csv
 
 # append dates to file names
@@ -332,7 +342,7 @@ file_dates <- paste(gsub("-", "", c(start_dt, end_dt)), collapse = "-")
 # only try upload if have aws key
 if (FALSE && nzchar(Sys.getenv("AWS_SECRET_ACCESS_KEY"))) {
   for (i in seq_along(all_csv)) {
-    file_type <- ifelse(grepl("Contracts", all_csv[i]), "contracts", "assist")
+    file_type <- all_checks$file_type[i]
     cli_process_start("Uploading {i}/{n_csv}")
     put_object(
       file = all_csv[i],
