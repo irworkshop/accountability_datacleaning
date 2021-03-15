@@ -1,6 +1,6 @@
 ---
-title: "West Virginia Contracts"
-author: "Kiernan Nicholls"
+title: "West Virginia Voter"
+author: "Victor"
 date: "`r Sys.time()`"
 output:
   github_document: 
@@ -34,7 +34,7 @@ if (!interactive()) {
 ```
 
 ```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
-doc_dir <- fs::dir_create(here::here("wv", "contribs", "docs"))
+doc_dir <- fs::dir_create(here::here("wv", "voter", "docs"))
 ```
 
 ## Project
@@ -43,7 +43,7 @@ The Accountability Project is an effort to cut across data silos and give
 journalists, policy professionals, activists, and the public at large a simple
 way to search across huge volumes of public data about people and organizations.
 
-Our goal is to standardize public data on a few key fields by thinking of each
+Our goal is to standardizing public data on a few key fields by thinking of each
 dataset row as a transaction. For each transaction there should be (at least) 3
 variables:
 
@@ -83,7 +83,7 @@ pacman::p_load(
   gluedown, # printing markdown
   magrittr, # pipe operators
   janitor, # clean data frames
-  batman, # parse logicals
+  aws.s3, # upload to aws s3
   refinr, # cluster and merge
   scales, # format strings
   knitr, # knit documents
@@ -113,255 +113,183 @@ here::here()
 [rproj]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects
 
 ## Data
+Voter data for the state of West Virginia was obtained via a zip file download from the state's data portal
+from the [Secretary of State] but then extracted and made availableon our IRW database  (https://publicaccountability.s3.amazonaws.com/public/PPP/InvestigatingReporting121620_wvvoters.zip). 
+## Extract
 
-Contributions data can be obtained in bulk from the West Virginia Secretary of
-State [Campaign Finance Reporting System (CFRS)][cfrs]. Each record contains
-information on a contribution made to a candidate or committee. The CFRS also
-provides a [record layout PDF][layout], which we have converted to a text file.
-
-[cfrs]: https://cfrs.wvsos.gov/index.html#/index
-[layout]: https://cfrs.wvsos.gov/CFIS_APIService/Template/KeyDownloads/Contributions%20and%20Loans%20File%20Layout%20Key.pdf
-
-## Dictionary
-
-```{r raw_layout, results='asis'}
-key_path <- here("wv", "contribs", "record_layout.csv")
-(dict_md <- kable(read_csv(key_path)))
+```{r raw_dir}
+raw_dir <- dir_create(here("wv", "voter", "data", "raw"))
+raw_zip <- path(raw_dir,"InvestigatingReporting121620_wvvoters.zip")
 ```
 
-```{r dict_write}
-write_lines(
-  x = c("# West Virginia Contracts Data Dictionary\n", dict_md),
-  path = here("wv", "contribs", "wv_contribs_dict.md"),
+The ZIP archive itself contains a number of subsequent ZIP archives.
+
+```{r zip_list}
+(zip_files <- raw_zip %>% 
+  unzip(list = TRUE) %>% 
+  as_tibble(.name_repair = tolower) %>% 
+  mutate(across(length, as_fs_bytes)) %>% 
+  mutate(across(name, as_fs_path)))
+```
+
+We can extract only the file containing the latest voter data. #There might not be a flag in here for overwrite 
+
+```{r zip_extract}
+raw_path <- unzip(
+  zipfile = raw_zip, 
+  files = str_subset(zip_files$name,"^State"), 
+  exdir = raw_dir,
+  junkpaths = TRUE,
+  overwrite = TRUE
 )
 ```
 
-## Download
-
-The files can be downloaded with an `httr::GET()` request to the CFRS server.
-
-```{r raw_get}
-raw_dir <- dir_create(here("wv", "contribs", "data", "raw"))
-wv_api <- "https://cfrs.wvsos.gov/CFIS_APIService/api"
-for (year in 2018:2020) {
-  wv_get <- GET(
-    url = str_c(wv_api, "DataDownload", "GetCSVDownloadReport", sep = "/"),
-    write_disk(path(raw_dir, glue("CON_{year}.csv")), overwrite = TRUE),
-    query = list(
-      year = "2018",
-      transactionType = "CON",
-      reportFormat = "csv",
-      fileName = glue("CON_{year}.csv")
-    )
-  )
-}
+```{r}
+length(raw_path) #Run this before code to see length before changes 
 ```
 
-```{r raw_info}
-raw_info <- as_tibble(dir_info(raw_dir))
-raw_paths <- raw_info$path
-raw_info %>% 
-  select(path, size, modification_time) %>% 
-  mutate(across(path, ~as_fs_path(basename(.))))
+```{r}
+#
+file_info(raw_path) %>% 
+  group_by(size) %>% 
+  slice(1)
+```
+
+```{r}
+file_info(raw_path) %>% # make table of file into
+  group_by(size) %>% # group them by file size
+  slice(1) %>% # keep only ONE of the same size
+  pull(path) -> raw_path # pull the path column as vector
+```
+
+```{r}
+length(raw_path) #Run this after code to see if changes worked. 
 ```
 
 ## Read
+The .txt file containing Voter data is not a fixed-width file (FWF) with each column
+found at unique line position. 
 
-While character columns are wrapped in double-quotes (`"`), any double-quotes
-_within_ those columns are not escaped in any way. We will have to use regular
-expressions to replace them with single-quotes (`'`).
-
-```{r raw_fix}
-fix_paths <- path_temp(basename(raw_paths))
-for (i in seq_along(raw_paths)) {
-  read_file(raw_paths[i]) %>% 
-    str_replace_all("(?<!,|^)\"(?!,|$)", "\'") %>% 
-    str_replace_all("\"(?=Icing)", "\'") %>% 
-    write_file(fix_paths[i])
-}
-```
-
-The fixed text files can be read into a single data frame.
+We can use this information in `readr::read_fwf()` to parse the text file as a 
+data frame for exploration.
 
 ```{r raw_read}
-wvc <- map_df(
-  .x = fix_paths,
-  .f = read_delim,
-  delim = ",",
-  escape_backslash = FALSE, 
+wv <- read_delim(
+  file = raw_path,
+  delim = "|",
+  escape_backslash = FALSE,
   escape_double = FALSE,
+  quote = "",
   col_types = cols(
     .default = col_character(),
-    `Receipt Amount` = col_double(),
-    `Receipt Date` = col_date("%m/%d/%Y %H:%M:%S %p"),
-    `Filed Date` = col_datetime("%m/%d/%Y %H:%M:%S %p"),
-    `Fundraiser Event Date` = col_datetime("%m/%d/%Y %H:%M:%S %p")
+    `DATE OF BIRTH` = col_date("%m/%d/%Y %H:%M:%S"),
+    `REGISTRATION DATE` = col_date("%m/%d/%Y %H:%M:%S")
   )
 )
 ```
 
-Column names can be converted to snake case and simplified.
 
-```{r raw_rename}
-wvc <- wvc %>% 
-  clean_names("snake") %>% 
-  rename_all(str_remove, "receipt_") %>% 
-  rename_all(str_remove, "fundraiser_") %>% 
-  rename_all(str_remove, "_name") %>% 
-  mutate(across(c(amended, occupation_comment), to_logical))
+```{r}
+#wv <- wv %>%
+  #mutate(
+  #across(`REGISTRATION DATE`,
+         #mdy)
+#)
+
 ```
 
-We can check whether the files were properly read by counting the number of
-distinct values in a discrete variable like the `contribution_type`.
-
-```{r raw_check}
-count(wvc, contribution_type)
+SnakeCase: Cleaning column names 
+```{r}
+#Making column names consistent
+wv <- janitor::clean_names(wv)
 ```
 
 ## Explore
 
 ```{r glimpse}
-glimpse(wvc)
-tail(wvc)
+glimpse(wv)
+tail(wv)
 ```
 
 ### Missing
 
-Columns range in their degree of missing values.
+Most columns are missing some amount of values; we can flag any records missing
+one of the key variables needed to identify a transaction.
 
 ```{r na_count}
-col_stats(wvc, count_na)
+#Go across every column, count the number of NA rows per column and then calculate the % of NA 
+col_stats(wv, count_na)
 ```
-
-We should flag any record missing a key variable, those needed to identify a transaction and all parties, with `campfin::flag_na()`.
-
-First, we will create a single column combining all the contributor and
-recipient names. This way we can avoid columns of one type or the other.
-
-```{r unite_names}
-wvc <- wvc %>% 
-  unite(
-    first, middle, last, suffix,
-    col = "contributor",
-    sep = " ",
-    na.rm = TRUE,
-    remove = FALSE
-  ) %>% 
-  unite(
-    committee, candidate,
-    col = "recipient",
-    sep = " ",
-    na.rm = TRUE,
-    remove = FALSE
-  )
-```
-
-After combining these rows, we have no records missing key variables.
 
 ```{r na_flag}
-wvc <- wvc %>% flag_na(date, contributor, amount, recipient)
-mean(wvc$na_flag)
+wv <- wv %>% flag_na(county_name, id_voter, last_name, first_name, date_of_birth, registration_date) #Creates a new column with trues and falses and puts a true on any row that's missing a variable ex. .5% of rows is missing one of those values. .5 is normal though - we only check for columns that are relevant to figuring out the information we need. 
+mean(wv$na_flag) %>% #change this to sum to count the rows vs find %
+  percent(0.01)
 ```
+
 
 ### Duplicates
 
-We can also flag records that are entirely duplicated across every row, save for
-the supposedly unique `id`.
+There are only a handful of entirely duplicated records.
 
 ```{r dupe_flag}
-wvc <- flag_dupes(wvc, -id)
-percent(mean(wvc$dupe_flag), 0.01)
+wv <- flag_dupes(wv, -id_voter, .check = F) #create another logical column that puts true's next to each row with duplicates 
+sum(wv$dupe_flag)
 ```
 
 ```{r dupe_view}
-wvc %>% 
+dups <- wv %>% 
   filter(dupe_flag) %>% 
-  select(date, contributor, amount, recipient)
+  select(county_name, id_voter, last_name, first_name, date_of_birth, registration_date) %>% 
+  arrange(county_name, last_name, registration_date) 
 ```
-
-Now we can remove the combined name columns.
-
-```{r unite_remove} 
-wvc <- select(wvc, -contributor, -recipient)
-```
-
 ### Categorical
 
-```{r distinct_cound}
-col_stats(wvc, n_distinct)
+```{r distinct_count}
+col_stats(wv, n_distinct)
 ```
 
-```{r distinct_plot, echo=FALSE}
-explore_plot(wvc, source_type)
-explore_plot(wvc, committee_type)
-explore_plot(wvc, committee_type) + scale_x_truncate(50)
-explore_plot(wvc, occupation)
-```
-
-### Amounts
-
-The range of contribution amounts seems reasonable.
-
-```{r amount_summary}
-noquote(map_chr(summary(wvc$amount), dollar))
-sum(wvc$amount <= 0.01)
-```
-
-Here is the largest contribution of `r dollar(max(wvc$amount))`:
-
-```{r amount_max}
-glimpse(wvc[which.max(wvc$amount), ])
-```
-
-```{r hist_amount, echo=FALSE}
-wvc %>%
-  ggplot(aes(amount)) +
-  geom_histogram(fill = dark2["purple"]) +
-  scale_y_continuous(labels = comma) +
-  scale_x_continuous(
-    breaks = c(1 %o% 10^(0:6)),
-    labels = dollar,
-    trans = "log10"
-  ) +
-  labs(
-    title = "West Virginia Contracts Amount Distribution",
-    subtitle = "from 2000 to 2019",
-    caption = "Source: WV CFRS",
-    x = "Amount",
-    y = "Count"
-  )
+```{r distinct_plots, echo=FALSE}
+explore_plot(wv, county_name) + scale_x_truncate()
+explore_plot(wv, poll_name) + scale_x_truncate()
 ```
 
 ### Dates
 
-We can add the calendar year from `date` with `lubridate::year()`
+We can add the calendar year from `registration_date` with `lubridate::year()`
 
 ```{r date_year}
-wvc <- mutate(wvc, year = year(date))
+wv <- mutate(wv, year = year(registration_date), birth_year = year(date_of_birth))
 ```
 
-The range of dates is completely normal.
+There are 0 entries in Registration dates since the count was the exact same as the number of rows. Maybe remove that column?
+```{r date_range_registration}
+count_na(wv$registration_date)
+min(wv$registration_date)
+mean(wv$registration_date == "1900-01-01")
+wv$registration_date[wv$registration_date == "1900-01-01"] <- NA
+max(wv$registration_date)
+```
 
-```{r date_range}
-min(wvc$date)
-sum(wvc$year < 2016)
-max(wvc$date)
-sum(wvc$date > today())
+```{r date_range_birth}
+min(wv$date_of_birth)
+sum(wv$date_of_birth == "1900-01-01")
+wv$date_of_birth[wv$date_of_birth == "1900-01-01"] <- NA
+wv$date_of_birth[wv$date_of_birth == "1900-01-01"] <- NA
+max(wv$date_of_birth, na.rm = TRUE)
 ```
 
 ```{r bar_year, echo=FALSE}
-wvc %>% 
-  count(year) %>% 
-  mutate(even = is_even(year)) %>% 
-  ggplot(aes(x = year, y = n)) +
-  geom_col(aes(fill = even)) + 
-  scale_fill_brewer(palette = "Dark2") +
+wv %>% 
+  count(birth_year) %>% 
+  ggplot(aes(x = birth_year, y = n)) +
+  geom_col() + 
   scale_y_continuous(labels = comma) +
-  scale_x_continuous(breaks = seq(2000, 2020, by = 2)) +
+  scale_x_continuous(breaks = seq(1900, 2020, by = 10)) +
+  coord_cartesian(xlim = c(1900, 2020)) +
   theme(legend.position = "bottom") +
   labs(
-    title = "West Virginia Contracts by Year",
-    caption = "Source: WV CFRS",
+    title = "West Virginia Voter by Birth Year",
     fill = "Election Year",
     x = "Year Made",
     y = "Count"
@@ -382,10 +310,10 @@ will force consistence case, remove punctuation, and abbreviate official
 USPS suffixes.
 
 ```{r address_norm}
-wvc <- wvc %>% 
+wv <- wv %>% 
   unite(
     col = address_full,
-    starts_with("address"),
+    house_no, street, street2, unit, 
     sep = " ",
     remove = FALSE,
     na.rm = TRUE
@@ -396,13 +324,13 @@ wvc <- wvc %>%
       abbs = usps_street,
       na_rep = TRUE
     )
-  ) %>% 
-  select(-address_full)
+  ) %>% select(-address_full)
+  
 ```
 
 ```{r address_view}
-wvc %>% 
-  select(contains("address")) %>% 
+wv %>% 
+  select(house_no, street, street2, unit, address_norm) %>% 
   distinct() %>% 
   sample_n(10)
 ```
@@ -414,7 +342,7 @@ valid _five_ digit codes by removing the ZIP+4 suffix and returning leading
 zeroes dropped by other programs like Microsoft Excel.
 
 ```{r zip_norm}
-wvc <- wvc %>% 
+wv <- wv %>% 
   mutate(
     zip_norm = normal_zip(
       zip = zip,
@@ -425,8 +353,8 @@ wvc <- wvc %>%
 
 ```{r zip_progress}
 progress_table(
-  wvc$zip,
-  wvc$zip_norm,
+  wv$zip,
+  wv$zip_norm,
   compare = valid_zip
 )
 ```
@@ -437,7 +365,7 @@ Valid two digit state abbreviations can be made using the
 `campfin::normal_state()` function.
 
 ```{r state_norm}
-wvc <- wvc %>% 
+wv <- wv %>% 
   mutate(
     state_norm = normal_state(
       state = state,
@@ -449,15 +377,15 @@ wvc <- wvc %>%
 ```
 
 ```{r state_view}
-wvc %>% 
+wv %>% 
   filter(state != state_norm) %>% 
   count(state, state_norm, sort = TRUE)
 ```
 
 ```{r state_progress}
 progress_table(
-  wvc$state,
-  wvc$state_norm,
+  wv$state,
+  wv$state_norm,
   compare = valid_state
 )
 ```
@@ -474,7 +402,7 @@ removing punctuation, but _expanding_ USPS abbreviations. We can also remove
 `invalid_city` values.
 
 ```{r city_norm}
-wvc <- wvc %>% 
+wv <- wv %>% 
   mutate(
     city_norm = normal_city(
       city = city, 
@@ -494,7 +422,7 @@ If the normalized value is either an abbreviation for or very similar to the
 expected value, we can confidently swap those two.
 
 ```{r city_swap}
-wvc <- wvc %>% 
+wv <- wv %>% 
   rename(city_raw = city) %>% 
   left_join(
     y = zipcodes,
@@ -530,7 +458,7 @@ strings that have a valid city/state/zip combination.
 [or]: https://openrefine.org/
 
 ```{r city_refine}
-good_refine <- wvc %>% 
+good_refine <- wv %>% 
   mutate(
     city_refine = city_swap %>% 
       key_collision_merge() %>% 
@@ -561,7 +489,7 @@ good_refine %>%
 Then we can join the refined values back to the database.
 
 ```{r city_join}
-wvc <- wvc %>% 
+wv <- wv %>% 
   left_join(good_refine) %>% 
   mutate(city_refine = coalesce(city_refine, city_swap))
 ```
@@ -571,10 +499,10 @@ wvc <- wvc %>%
 ```{r city_progress, echo=FALSE}
 many_city <- c(valid_city, extra_city)
 progress <- progress_table(
-  str_to_upper(wvc$city_raw),
-  wvc$city_norm,
-  wvc$city_swap,
-  wvc$city_refine,
+  str_to_upper(wv$city_raw),
+  wv$city_norm,
+  wv$city_swap,
+  wv$city_refine,
   compare = many_city
 ) %>% mutate(stage = as_factor(stage))
 kable(progress, digits = 3)
@@ -583,7 +511,7 @@ kable(progress, digits = 3)
 You can see how the percentage of valid values increased with each stage.
 
 ```{r bar_progress, echo=FALSE}
-raw_in <- percent(prop_in(wvc$city_raw, valid_city))
+raw_in <- percent(prop_in(wv$city_raw, valid_city))
 progress %>% 
   ggplot(aes(x = stage, y = prop_in)) +
   geom_hline(yintercept = 0.99) +
@@ -632,7 +560,7 @@ Before exporting, we can remove the intermediary normalization columns and
 rename all added variables with the `_clean` suffix.
 
 ```{r clean_select}
-wvc <- wvc %>% 
+wv <- wv %>% 
   select(
     -city_norm,
     -city_swap,
@@ -643,13 +571,13 @@ wvc <- wvc %>%
 ```
 
 ```{r clean_glimpse}
-glimpse(sample_n(wvc, 20))
+glimpse(sample_n(wv, 50))
 ```
 
-1. There are `r comma(nrow(wvc))` records in the database.
-1. There are `r comma(sum(wvc$dupe_flag))` duplicate records in the database.
+1. There are `r comma(nrow(wv))` records in the database.
+1. There are `r comma(sum(wv$dupe_flag))` duplicate records in the database.
 1. The range and distribution of `amount` and `date` seem reasonable.
-1. There are `r comma(sum(wvc$na_flag))` records missing key variables.
+1. There are `r comma(sum(wv$na_flag))` records missing key variables.
 1. Consistency in geographic data has been improved with `campfin::normal_*()`.
 1. The 4-digit `year` variable has been created with `lubridate::year()`.
 
@@ -658,10 +586,87 @@ glimpse(sample_n(wvc, 20))
 Now the file can be saved on disk for upload to the Accountability server.
 
 ```{r clean_dir}
-clean_dir <- dir_create(here("wv", "contribs", "data", "clean"))
-clean_path <- path(clean_dir, "wv_contribs_clean.csv")
-write_csv(wvc, clean_path, na = "")
+clean_dir <- dir_create(here("wv", "voter", "data", "clean"))
+clean_path <- path(clean_dir, "wv_voter_clean.csv")
+write_csv(wv, clean_path, na = "")
 file_size(clean_path)
-mutate(file_encoding(clean_path), across(path, basename))
+non_ascii(clean_path)
 ```
 
+## Upload
+
+We can use the `aws.s3::put_object()` to upload the text file to the IRW server.
+
+```{r s3_upload, eval=FALSE}
+s3_path <- path("csv", basename(clean_path))
+if (!object_exists(s3_path, "publicaccountability")) {
+  put_object(
+    file = clean_path,
+    object = s3_path, 
+    bucket = "publicaccountability",
+    acl = "public-read",
+    show_progress = TRUE
+  )
+}
+```
+
+```{r s3_size}
+#as_fs_bytes(object_size(s3_path, "publicaccountability"))
+```
+
+## Dictionary
+
+The following table describes the variables in our final exported file:
+
+```{r dict_make, echo=FALSE}
+dict_raw <- tibble(
+  var = md_code(names(wv)),
+  type = md_code(map_chr(wv, typeof)),
+  def = c(
+    "County that the vote was registered in", 
+    "Unique voter ID used to identify a voter",
+    "The voters full name last name",
+    "The voters full name first name",
+    "The voters full name middle name",
+    "The voters full name suffix",
+    "The voters DOB",
+    "The sex of the voter",
+    "The house number of the voters mailing address",
+    "The Street Address of the voters mailing address",
+    "The 2nd part of an adress (if there is a PO box or apt number) of the voters mailing address",
+    "The unit number (if living in an apartment) of the voters mailing address",
+    "Normalized city name",
+    "Normalized 2-digit state abbreviation",
+    "5-digit ZIP code",
+    "(Mail delivered to somewhere else they don't live at)The Street Address of the voters mailing address",
+    "(Mail delivered to somewhere else they don't live at)The 2nd part of an adress (if there is a PO box or apt number) of the voters mailing address",
+    "(Mail delivered to somewhere else they don't live at)The unit number (if living in an apartment) of the voters mailing address",
+    "(Mail delivered to somewhere else they don't live at) Normalized city name",
+    "(Mail delivered to somewhere else they don't live at) Normalized 2-digit state abbreviation",
+    "(Mail delivered to somewhere else they don't live at) 5-digit ZIP code",
+    "The date that the voter registered to vote",
+    "The voter status when voting",
+    "The congressional district of this voter",
+    "The senatorial district of this voter",
+    "The delegate district of this voter",
+    "Legal district of magistrate court",
+    "Voting precinct number",
+    "Polling place within voting precinct ",
+    "Flag for missing date, amount, or name",
+    "Flag for completely duplicated record",
+    "Normalized year",
+    "Normalized birth year",
+    "Normalized combined street address",
+    "The cleaned normalized zip file from the original data",
+    "normalized clean 2 letter state variable",
+    "normalized clean city variable"
+))
+```
+
+```{r dict_md, echo=FALSE}
+(dict_md <- kable(
+  x = dict_raw,
+  format = "markdown",
+  col.names = c("Column", "Type", "Definition")
+))
+```
