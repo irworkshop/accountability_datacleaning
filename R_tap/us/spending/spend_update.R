@@ -1,6 +1,6 @@
 #!/usr/bin/env Rscript
 
-# Tue Mar  9 13:22:23 2021 ------------------------------------------------
+# Tue Mar 9 13:22:23 2021 -------------------------------------------------
 # Request US spending between two dates
 # Investigative Reporting Workshop
 # The Accountability Project
@@ -14,8 +14,8 @@ pkg <- c("aws.s3", "readr", "httr", "here", "cli", "fs")
 pkg <- pkg[!(pkg %in% rownames(installed.packages()))]
 if (length(pkg) > 0) {
   message(
-    sprintf("Please install %s additional packages:\n", length(pkg)),
-    paste("-", pkg, collapse = "\n")
+    sprintf("Please install %s additional package(s):\n", length(pkg)),
+    paste("  -", pkg, collapse = "\n")
   )
   quit(save = "no", status = 1)
 }
@@ -27,27 +27,21 @@ suppressPackageStartupMessages(library(here))
 suppressPackageStartupMessages(library(cli))
 suppressPackageStartupMessages(library(fs))
 
+# misc --------------------------------------------------------------------
+
 cli_h1("Update Federal Spending")
 
-cmd_args <- commandArgs(trailingOnly = TRUE)
+# check working directory for here::here()
 suppressMessages(here::i_am("us/spending/spend_update.R"))
-
 if (!grepl("R_tap", getwd())) {
-  cli_alert_danger("Please set working directory to {.path /R_tap}")
-  quit(save = "no")
+  cli_alert_danger("Please set working directory to {.path R_tap/}")
+  quit(save = "no", status = 0)
 }
 
+# change cli theme
 t <- builtin_theme()
-t$span.code <- list(
-  "background-color" = "black",
-  "color" = "white",
-  "before" = "`",
-  "after" = "`"
-)
-
+t$span.code[1:2] <- list(`background-color` = "#232323", color = "#ffffff")
 options(cli.user_theme = t)
-
-cli_h2("Preparing request")
 
 # notes -------------------------------------------------------------------
 
@@ -63,6 +57,18 @@ cli_h2("Preparing request")
 #   3. Sub-Contracts
 #   3. Sub-Assistance
 
+# run for many fiscal years:
+## for (fy in 2001:2020) {
+##   start_dt <- sprintf("%i-10-01", fy - 1)
+##   end_dt <- sprintf("%i-09-30", fy)
+##   source(
+##     file = "us/spending/spend_update.R",
+##     local = FALSE,
+##     echo = FALSE,
+##     verbose = FALSE
+##   )
+## }
+
 # functions ---------------------------------------------------------------
 
 # add time to message
@@ -75,62 +81,72 @@ wt <- function(...) {
 # call script from command line with (1) start and (2) end dates
 # Rscript --vanilla us_spend_update.R --args 2020-01-01 2020-12-31
 
+# capture command line arguments
+cmd_args <- commandArgs(trailingOnly = TRUE)
+
 if (length(cmd_args) == 2) {
-  cli_alert_info("Using date arguments from arguments")
+  cli_alert_info("Using date range from arguments")
   # capture cmd line args as dates
   end_dt   <- as.Date(cmd_args[2], tryFormats = c("%Y-%m-%d", "%m/%d/%Y"))
   start_dt <- as.Date(cmd_args[1], tryFormats = c("%Y-%m-%d", "%m/%d/%Y"))
   if (end_dt < start_dt) {
-    cli_alert_danger("End date is before start date")
+    cli_alert_danger("End date must come after start date")
     quit(save = "no", status = 1)
   }
 } else if (length(cmd_args) == 0){
   ### !!! define dates here
-  end_dt <- Sys.Date() - 1
-  start_dt <- end_dt - 7
+  # end_dt <- Sys.Date() - 1
+  # start_dt <- end_dt - 7
   ### !!!!!!!!!!!!!!!!!!!!!
+  cli_alert_info("Using date range from user")
 } else {
-  cli_alert_danger("When using args, supply (1) start date and (2) end date")
+  cli_alert_danger("When using args, supply (1) start date & (2) end date")
   quit(save = "no", status = 1)
 }
 
+start_dt_mdy <- format(start_dt, "%b %d")
+end_dt_mdy <- format(end_dt, "%b %d, %Y")
+cli_alert("Updating spending from {start_dt_mdy} to {end_dt_mdy}")
+
 # prep data ---------------------------------------------------------------
+cli_h2("Prepare request")
 
 # request all award types
 award_types <- GET("https://api.usaspending.gov/api/v2/references/award_types")
 # convert to data vector of abbreviations
 award_types <- unlist(lapply(content(award_types), names))
-
-cli_alert_success(wt("Found {.strong {length(award_types)}} award types"))
+cli_alert_success(wt("Found {length(award_types)} award types"))
 
 # make request ============================================================
-cli_h2("Request bulk zip")
+cli_h2("Request bulk download")
 
 cli_alert("Making request from {.url https://api.usaspending.gov/}")
-
 award_post <- POST(
+  user_agent("https://publicaccountability.org/"), # identify to server
   url = "https://api.usaspending.gov/api/v2/bulk_download/awards/",
-  # send post body as json
-  encode = "json",
+  encode = "json", # send post body as json
   body = list(
-    columns = list(),
-    file_format = "csv",
     filters = list(
-      prime_award_types = award_types,
-      sub_award_types = c("procurement", "grant"),
+      prime_award_types = award_types, # all award types from above
+      sub_award_types = c("procurement", "grant"), # all sub-awards
       date_type = "action_date",
-      date_range = list(
+      date_range = list( # dates from cmd or user
         start_date = start_dt,
-        end_dt = end_dt
+        end_date = end_dt
       ),
+      def_codes = list(),
       agencies = list(
-        list(
-          type = "awarding",
+        list( # all agencies
+          name = "All",
           tier = "toptier",
-          name = "All"
+          type = "awarding"
         )
       )
-    )
+    ),
+    columns = list(),
+    # CSV with double escape
+    # can also be TSV or PIPE
+    file_format = "csv"
   )
 )
 
@@ -138,7 +154,7 @@ award_post <- POST(
 post_check <- http_status(award_post)
 if (http_error(award_post)) {
   cli_alert_danger(wt(post_check$message))
-  stop_for_status(award_post)
+  quit(save = "no", status = 1)
 } else {
   cli_alert_success(wt(post_check$message))
 }
@@ -150,7 +166,7 @@ cli_h2("Check file status")
 
 cli_alert("Wait for file to be ready for download")
 while (!exists("post_status") || post_status == "running") {
-  # request status
+  # check request download status
   status_get <- content(GET(
     url = "https://api.usaspending.gov/api/v2/bulk_download/status/",
     query = list(file_name = post_data$file_name)
@@ -206,9 +222,14 @@ cli_alert_info("Bulk zip contains {nrow(zip_list)} text files:")
 cli_ol(paste(col_blue(zip_list$Name), col_grey(zip_list$Length)))
 
 cli_process_start("Extracting all files")
-all_csv <- unzip(raw_zip, exdir = data_dir)
+all_csv <- unzip(raw_zip, exdir = dirname(raw_zip))
 cli_process_done(msg_done = wt("Extracting all files... done"))
 n_csv <- length(all_csv)
+
+if (n_csv < 4) {
+  cli_alert_danger("Bulk file should contain at least 4 text files")
+  quit(save = "no", status = 1)
+}
 
 check_file <- here("us", "spending", "spend_check.csv")
 all_checks <- data.frame()
@@ -269,30 +290,60 @@ for (i in seq_along(all_csv)) {
   if (n_prob > 0) {
     cli_alert_warning("Found {n_prob} problem{?s} when reading")
   } else {
-    cli_alert_success("File read without problems")
+    cli_alert_success("File read without any problems")
   }
 
   # tweak cols ------------------------------------------------------------
   # cli_h3("Manipulating new columns")
 
+  # check amount col
+  if (is_sub) {
+    cli_alert_info("Using the {.code subaward_amount} column")
+  } else if (!is_con) {
+    # find rows w/out fed obligation
+    no_fed_amt <- is.na(us[[amt_col]])
+    if (mean(no_fed_amt) > 0.1) {
+      amt_check <- sprintf("%0.1f%%", mean(no_fed_amt) * 100)
+      cli_alert_warning(paste(
+        "Many rows missing {.code federal_action_obligation} value",
+        "({col_yellow(amt_check)})"
+      ))
+    }
+    # create new copy col of amt
+    amt_col <- "assist_amount"
+    us[[amt_col]] <- us$federal_action_obligation
+    # replace missing with row loan value
+    us[[amt_col]][no_fed_amt] <- us$face_value_of_loan[no_fed_amt]
+    cli_alert_success("Loan amounts added in new {.code assist_amount} column")
+  }
+
   # flag missing values
   us$na_flag <- !complete.cases(us[, c(dt_col, amt_col, giv_col, rec_col)])
   invisible(gc(reset = TRUE, full = TRUE))
-  cli_alert_success("Missing values flagged in {.code na_flag} column")
   na_check <- sprintf("%0.1f%%", mean(us$na_flag) * 100)
-  cli_alert_info("{na_check} of rows have missing value")
+  if (mean(us$na_flag) > 0.01) {
+    cli_alert_warning(paste(
+      "Some rows missing values flagged in new {.code na_flag} column",
+      "({col_yellow(na_check)})"
+    ))
+  } else {
+    cli_alert_success(paste(
+      "Few rows missing values flagged in new {.code na_flag} column",
+      "({col_green(na_check)})"
+    ))
+  }
 
   # trim zip codes to 5 digits
   if (is_con) {
-    us$zip_clean <- substr(us[[zip_col]], 1, 5)
-    cli_alert_success("Trimmed ZIP codes added in {.code zip_clean} column")
+    us$zip_clean <- substr(us[[zip_col]], start = 1, stop = 5)
+    cli_alert_success("Trimmed ZIP codes added in new {.code zip_clean} column")
   } else {
     cli_alert_info("Assist files have clean {.code recipient_zip_code} column")
   }
 
   # add calendar year from action date
   us$action_year <- as.integer(format(us[[dt_col]], "%Y"))
-  cli_alert_success("Calendar year added in {.code action_year} column")
+  cli_alert_success("Calendar year added in new {.code action_year} column")
 
   # save checks -----------------------------------------------------------
   # cli_h3("Checking data frame structure")
@@ -330,11 +381,12 @@ for (i in seq_along(all_csv)) {
   cli_process_done(msg_done = wt("Overwriting file {i}/{n_csv}"))
 }
 
-quit()
+# stop before upload
+quit(save = "no", status = 0)
 
 # upload ==================================================================
 
-# aws key: st_file-type_date-range.csv
+# aws object: st_file-type_date-range.csv
 # us_contracts-sub_20210101-20210131.csv
 
 # append dates to file names
@@ -343,15 +395,17 @@ file_dates <- paste(gsub("-", "", c(start_dt, end_dt)), collapse = "-")
 if (FALSE && nzchar(Sys.getenv("AWS_SECRET_ACCESS_KEY"))) {
   for (i in seq_along(all_csv)) {
     file_type <- all_checks$file_type[i]
-    cli_process_start("Uploading {i}/{n_csv}")
-    put_object(
-      file = all_csv[i],
-      object = sprintf("csv/us_%s_%s_%i.csv", file_type, file_dates, i),
-      bucket = "publicaccountability",
-      acl = "public-read",
-      multipart = TRUE,
-      verbose = FALSE,
-      show_progress = FALSE
+    cli_process_start("Uploading file {i}/{n_csv}")
+    suppressMessages(
+      expr = put_object(
+        file = all_csv[i],
+        object = sprintf("csv/us_%s_%s_%i.csv", file_type, file_dates, i),
+        bucket = "publicaccountability",
+        acl = "public-read",
+        multipart = TRUE,
+        verbose = FALSE,
+        show_progress = FALSE
+      )
     )
     cli_process_done()
   }
