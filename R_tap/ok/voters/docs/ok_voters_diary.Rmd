@@ -1,0 +1,618 @@
+---
+title: "Oklahoma Voters"
+author: "Kiernan Nicholls"
+date: "`r date()`"
+output:
+  github_document: 
+    df_print: tibble
+    toc: true
+    toc_dept: 3
+editor_options: 
+  chunk_output_type: console
+---
+
+<!-- Place comments regarding knitting here -->
+
+```{r setup, include=FALSE, purl=FALSE}
+library(knitr)
+opts_chunk$set(
+  eval = TRUE,
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  error = FALSE,
+  collapse = TRUE,
+  comment = "#>",
+  fig.path = "../plots/",
+  fig.width = 10,
+  dpi = 300
+)
+if (!interactive()) {
+  options(width = 120)
+  set.seed(5)
+}
+```
+
+```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
+doc_dir <- fs::dir_create(here::here("ok", "voters", "docs"))
+```
+
+## Project
+
+The Accountability Project is an effort to cut across data silos and give
+journalists, policy professionals, activists, and the public at large a simple
+way to search across huge volumes of public data about people and organizations.
+
+Our goal is to standardizing public data on a few key fields by thinking of each
+dataset row as a transaction. For each transaction there should be (at least) 3
+variables:
+
+1. All **parties** to a transaction.
+2. The **date** of the transaction.
+3. The **amount** of money involved.
+
+## Objectives
+
+This document describes the process used to complete the following objectives:
+
+1. How many records are in the database?
+1. Check for entirely duplicated records.
+1. Check ranges of continuous variables.
+1. Is there anything blank or missing?
+1. Check for consistency issues.
+1. Create a five-digit ZIP Code called `zip`.
+1. Create a `year` field from the transaction date.
+1. Make sure there is data on both parties to a transaction.
+
+## Packages
+
+The following packages are needed to collect, manipulate, visualize, analyze,
+and communicate these results. The `pacman` package will facilitate their
+installation and attachment.
+
+```{r load_packages, message=FALSE, warning=FALSE, error=FALSE}
+if (!require("pacman")) {
+  install.packages("pacman")
+}
+pacman::p_load(
+  tidyverse, # data manipulation
+  lubridate, # datetime strings
+  gluedown, # printing markdown
+  janitor, # clean data frames
+  campfin, # custom irw tools
+  aws.s3, # aws cloud storage
+  refinr, # cluster & merge
+  scales, # format strings
+  knitr, # knit documents
+  vroom, # fast reading
+  rvest, # scrape html
+  glue, # code strings
+  here, # project paths
+  httr, # http requests,
+  zip, # file compress
+  fs # local storage 
+)
+```
+
+This document should be run as part of the `R_campfin` project, which lives as a
+sub-directory of the more general, language-agnostic
+[`irworkshop/accountability_datacleaning`][tap] GitHub repository.
+
+The `R_campfin` project uses the [RStudio projects][rproj] feature and should be
+run as such. The project also uses the dynamic `here::here()` tool for file
+paths relative to _your_ machine.
+
+```{r where_here}
+# where does this document knit?
+here::i_am("ok/voters/docs/ok_voters_diary.Rmd")
+```
+
+[tap]: https://github.com/irworkshop/accountability_datacleaning
+[rproj]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects
+
+## Data
+
+Voter data for Oklahoma can be obtained from the [State Election Board][seb],
+which provides [a website][virs] where one can download data after requesting 
+access. Users must first register with the state by submitting a form with a
+name, organization, and phone number. Kiernan Nicholls has registered on behalf
+of the Investigative Reporting Workshop. Once registered, users are provided a
+password to access and download the data from the Voter Information Requests
+(VIRS) website.
+
+> #### **Home Page**. Access and Manage Voter Information Requests
+> Voter registration information available in download files from the State
+> Election Board must be imported into user software to sort the information by
+> ZIP Code, name, household or other ways as desired. Lists or labels cannot be
+> produced directly from these files.  
+> 
+> Data is written in CSV format and is refreshed on weekends. A download of the
+> data could take anywhere from several seconds up to 10 minutes (or longer),
+> depending on the size of the file and the download speed of the user’s ISP.  
+> 
+> There are no associated fees, but all users must apply to the State Election
+> Board for a user account.  
+> 
+> For more information including file content layouts, please refer to the
+[readme PDF][readme].  
+
+
+> ##### We suggest the following:
+> 1. **Getting Started**: Register - To access this application, you must first
+  register with the Oklahoma State Election Board. Complete and return the final
+  page of this readme to gain access. Credentials will be emailed to you once 
+  the request is approved.  
+> 2. **Voter Information Requests**: Download - Log in to access and download 
+  the voter information files. All files are zipped for faster processing. 
+  However, due to the potentially large file sizes, downloads may take several 
+  minutes.  
+  
+[seb]: https://oklahoma.gov/elections.html
+[virs]: https://services.okelections.us/virs/
+[readme]: https://services.okelections.us/virs/Documents/readme.pdf
+
+### About
+
+We learn a little about the data from the VIRS [`readme.pdf`][readme] file.
+
+> Voter registration information includes:
+> * Voter's precinct number
+> * Registration address
+> * Voter's name
+> * Date of birth
+> * Voter's ID number
+> * Date of registration
+> * Political affiliation
+> * Mailing address (if different from registration address)
+> * Status
+> * Election dates and method of voting
+> * School District
+> * Municipality
+> * Technology Center District
+
+> Information on each voter may include a registration address and/or a mailing
+address or even no address. Some addresses may not be satisfactory for mailing
+purposes; some information may be incomplete or missing.
+
+> Voters having a rural or physical location address will have this information
+split among the street number, street name, etc., fields. This information will
+need to be concatenated to be meaningful. Mailing address fields are blank
+unless the mailing address is different from the registration address.
+
+> Telephone numbers and Email addresses are NOT included.
+
+> Statewide orders consist of separate files by county or district. Caution!
+Large statewide, county or Congressional District files may be larger than 100MB
+each and require several minutes to download.
+
+### Columns
+
+The [`readme.pdf`][readme] file also provides a table of file columns.
+
+|ELEMENT NAME                    |NOTES                                        |
+|:-------------------------------|:--------------------------------------------|
+|`Precinct number`               |First two characters denote county number    |
+|`Last name`                     |                                             |
+|`First name`                    |                                             |
+|`Middle name`                   |                                             |
+|`Suffix`                        |Jr, Sr, II, etc.                             |
+|`Voter identification number`   |Unique identifier of each voter registration |
+|`Political affiliation`         |DEM, REP, LIB, IND                           |
+|`Status`                        |(A) active, (I) inactive                     |
+|`Street/house number`           |                                             |
+|`Street Direction`              |E, SW, NE, etc.                              |
+|`Street Name`                   |                                             |
+|`Street Type`                   |Ave, Blvd, St, etc.                          |
+|`Street Post Direction`         |                                             |
+|`Building Number`               |Apartment or suite number, etc.              |
+|`City/municipality`             |                                             |
+|`ZIP Code`                      |In ##### or #####-#### format                |
+|`Birth Date`                    |CCYYMMDD                                     |
+|`Date of Registration`          |CCYYMMDD                                     |
+|`Mailing street address1`       |Free form 30-character address line          |
+|`Mailing street address 2`      |Free form 30-character address line          |
+|`Mailing address city`          |                                             |
+|`Mailing address state`         |                                             |
+|`Mailing address ZIP Code`      |In ##### or #####-#### format                |
+|`Municipality`                  |                                             |
+|`Municipal Ward`                |                                             |
+|`School District`               |                                             |
+|`School Board District`         |                                             |
+|`Technical Center District`     |                                             |
+|`Tech. Center Board District`   |                                             |
+|`Election date` (repeats 10)    |CCYYMMDD                                     |
+|`Method of voting` (repeats 10) |(See below)                                  |
+
+`Method of voting`: 
+* IP = Voted in person at polling place
+* AI = Voted absentee in person
+* AB = Absentee
+* PI = Physically Incapacitated
+* CI = Absentee - Care of Physically Incapacitated
+* EI = Absentee - Emergency Incapacitated
+* MI = Absentee - Military
+* OV = Absentee - Overseas
+
+A table is provided for the columns in the `precincts.csv` file included with
+each voter information download.
+
+|ELEMENT NAME                   |NOTES                                     |
+|:------------------------------|:-----------------------------------------|
+|`Precinct number`              |First two characters denote county number |
+|`Congressional district`       |                                          |
+|`State Senate district`        |                                          |
+|`State House district`         |                                          |
+|`County Commissioner district` |                                          |
+|`Polling place`                |                                          |
+
+## Obtain
+
+On the download page, users can chose statewide files voter registration and
+history files sorted by congressional district, county, or state house/senate
+district. We will download the statewide voter registration by county.
+
+|DESCRIPTION            |TYPE               |DATE       |  BYTES|  RECORDS|
+|:----------------------|:------------------|:----------|------:|--------:|
+|Congressional District |Voter History      |2021-03-27 |  97.6M| 24319097|
+|Congressional District |Voter Registration |2021-03-27 | 112.6M|  2274902|
+|County                 |Voter History      |2021-03-27 |  92.6M| 24319097|
+|County                 |Voter Registration |2021-03-27 | 105.4M|  2274902|
+|State House District   |Voter History      |2021-03-27 |  95.8M| 24319097|
+|State House District   |Voter Registration |2021-03-27 | 101.1M|  2274902|
+|State Senate District  |Voter History      |2021-03-27 |  95.5M| 24319097|
+|State Senate District  |Voter Registration |2021-03-27 | 103.8M|  2274902|
+
+```{r raw_dir}
+raw_dir <- dir_create(here("ok", "voters", "data", "raw"))
+raw_zip <- path(raw_dir, "CTYSW_VR_20210330111644.zip")
+```
+
+This file was last updated on March 27 and downloaded on March 30.
+
+```{r raw_size}
+file_size(raw_zip)
+```
+
+```{r raw_time}
+raw_zip %>% 
+  str_remove_all("\\D") %>% 
+  ymd_hms(tz = Sys.timezone())
+```
+
+```{r zip_list, echo=FALSE}
+zip_list <- function(zipfile) {
+  out <- zip::zip_list(zipfile = zipfile)
+  out$compressed_size <- fs::fs_bytes(out$compressed_size)
+  out$uncompressed_size <- fs::fs_bytes(out$uncompressed_size)
+  out$permissions <- fs::fs_perms(out$permissions)
+  tibble::as_tibble(out)
+}
+```
+
+```{r raw_list}
+csv_list <- zip_list(raw_zip)
+nrow(csv_list)
+sum(csv_list$uncompressed_size)
+max(csv_list$timestamp)
+```
+
+```{r raw_unzip}
+unzip(raw_zip, exdir = raw_dir)
+raw_csv <- path(raw_dir, str_subset(csv_list$filename, "CTY\\d{2}_vr.csv"))
+all(file_exists(raw_csv))
+```
+
+## Read
+
+There are `r length(raw_csv)` CSV text files (one for each county) with voter
+registration data. We can read the rows from each file into a single data frame.
+
+```{r read_reg}
+okv <- map_df(
+  .x = raw_csv,
+  .f = read_delim,
+  .id = "source_file", 
+  delim = ",",
+  escape_backslash = FALSE,
+  escape_double = FALSE,
+  col_types = cols(
+    .default = col_character(),
+    DateOfBirth = col_date("%m/%d/%Y"),
+    OriginalRegistration  = col_date("%m/%d/%Y")
+  )
+)
+```
+
+We can ensure all the records have been read by comparing our count of rows
+against the number given in the download table.
+
+```{r read_check}
+nrow(okv) == 2274902
+```
+
+We can also read the table of precinct polling places.
+
+```{r read_precincts}
+precincts <- read_csv(
+  file = path(raw_dir, "precincts.csv"),
+  col_types = cols(
+    .default = col_character()
+  )
+)
+precincts <- clean_names(precincts)
+```
+
+We will remove the voter history columns from this file.
+
+```{r vote_hist}
+okv <- okv %>% 
+  clean_names(case = "snake") %>% 
+  select(
+    -starts_with("voter_hist"),
+    -starts_with("hist_method")
+  ) %>% 
+  relocate(source_file, .after = last_col()) %>% 
+  mutate(source_file = basename(raw_csv)[as.integer(source_file)]) %>% 
+  rename(
+    birth_date = date_of_birth,
+    reg_date = original_registration
+  )
+```
+
+## Explore
+
+There are `r comma(nrow(okv))` rows of `r ncol(okv)` columns. Each record
+represents a single registered voter in the state of Oklahoma.
+
+```{r glimpse}
+glimpse(okv)
+tail(okv)
+```
+
+### Missing
+
+Columns vary in their degree of missing values.
+
+```{r na_count}
+col_stats(okv, count_na)
+```
+
+We can flag any record missing a key variable needed to identify a transaction.
+
+```{r na_flag}
+key_vars <- c("first_name", "last_name", "birth_date")
+okv <- flag_na(okv, all_of(key_vars))
+sum(okv$na_flag)
+```
+
+```{r na_view}
+okv %>% 
+  filter(na_flag) %>% 
+  select(all_of(key_vars))
+```
+
+### Duplicates
+
+We can also flag any record completely duplicated across every column.
+
+```{r dupe_file}
+dupe_file <- here("ok", "voters", "dupes.csv")
+```
+
+```{r dupe_write}
+if (!file_exists(dupe_file)) {
+  file_create(dupe_file)
+  oks <- okv %>% 
+    select(-voter_id) %>% 
+    group_split(school)
+  split_id <- split(okv$voter_id, okv$school)
+  pb <- txtProgressBar(max = length(oks), style = 3)
+  for (i in seq_along(oks)) {
+    d1 <- duplicated(oks[[i]], fromLast = FALSE)
+    if (any(d1)) {
+      d2 <- duplicated(oks[[i]], fromLast = TRUE)
+      dupes <- tibble(ncid = split_id[[i]], dupe_flag = d1 | d2)
+      dupes <- filter(dupes, dupe_flag == TRUE)
+      write_csv(dupes, xzfile(dupe_file), append = TRUE)
+      rm(d2, dupes)
+    }
+    rm(d1)
+    flush_memory(1)
+    setTxtProgressBar(pb, i)
+  }
+  rm(oks)
+}
+```
+
+```{r dupe_read}
+file_size(dupe_file)
+dupes <- read_csv(
+  file = dupe_file,
+  col_names = c("voter_id", "dupe_flag"),
+  col_types = cols(
+    voter_id = col_character(),
+    dupe_flag = col_logical()
+  )
+)
+dupes <- distinct(dupes)
+```
+
+```{r dupe_join}
+nrow(okv)
+okv <- left_join(okv, dupes, by = "voter_id")
+okv <- mutate(okv, dupe_flag = !is.na(dupe_flag))
+sum(okv$dupe_flag)
+```
+
+We can see that, despite unique IDs, there are some duplicate voters. The IDs
+for these duplicates are sequential.
+
+```{r dupe_view}
+okv %>% 
+  filter(dupe_flag) %>% 
+  select(voter_id, all_of(key_vars), zip) %>% 
+  arrange(last_name)
+```
+
+### Categorical
+
+```{r distinct_count}
+col_stats(okv, n_distinct)
+```
+
+```{r distinct_plots, echo=FALSE}
+okv %>% 
+  count(polital_aff) %>% 
+  add_prop() %>% 
+  ggplot(aes(x = reorder(polital_aff, -n), y = p)) +
+  geom_col(aes(fill = polital_aff)) +
+  scale_y_continuous(labels = percent) +
+  scale_fill_manual(
+    guide = FALSE,
+    values = c(
+      DEM = "#2171b5",
+      IND = "#525252",
+      REP = "#cb181d",
+      IND = "#238b45"
+    )
+  ) +
+  labs(
+    title = "Oklahoma Voters by Political Affiliation",
+    x = "Political Affiliation",
+    y = "Percent"
+  )
+explore_plot(okv, status)
+explore_plot(okv, muni) + scale_x_wrap()
+```
+
+### Dates
+
+We can add the calendar year from `reg_date` with `lubridate::year()`.
+
+```{r date_year}
+okv <- okv %>% 
+  mutate(
+    birth_year = year(birth_date), 
+    reg_year = year(reg_date)
+  )
+```
+
+```{r bar_reg_year, echo=FALSE}
+okv %>% 
+  count(reg_year) %>% 
+  filter(!is.na(reg_year)) %>% 
+  mutate(
+    type = if_else(
+      condition = reg_year %% 4 == 0,
+      true = "pres.",
+      false = if_else(
+        condition = reg_year %% 2 == 0,
+        true = "mid.",
+        false = "none"
+      )
+    )
+  ) %>% 
+  ggplot(aes(x = reg_year, y = n)) +
+  geom_col(aes(fill = type)) + 
+  scale_fill_manual(values = c("#1B9E77", "#666666", "#D95F02")) +
+  scale_y_continuous(labels = comma, n.breaks = 6) +
+  scale_x_continuous(breaks = seq(1956, 2020, by = 4)) +
+  coord_cartesian(xlim = c(1956, 2020)) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "Oklahoma Voters Registered by Year",
+    caption = "Source: OH VIRS",
+    fill = "Cycle Registered",
+    x = "Year Registered",
+    y = "Count"
+  )
+```
+
+```{r bar_birth_year, echo=FALSE}
+okv %>% 
+  filter(!is.na(birth_year)) %>% 
+  ggplot(aes(x = birth_year)) +
+  geom_histogram(fill = dark2["purple"], binwidth = 1) + 
+  scale_y_continuous(labels = comma) +
+  scale_x_continuous(breaks = seq(1900, 2004, by = 4)) +
+  coord_cartesian(xlim = c(1900, 2004)) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "Oklahoma Voters by Birth Year",
+    caption = "Source: OK VIRS",
+    x = "Year Born",
+    y = "Count"
+  )
+```
+
+## Wrangle
+
+Almost all city names and ZIP codes are known to be valid.
+
+```{r geo_check}
+prop_in(okv$city, c(valid_city, extra_city))
+prop_in(okv$zip, valid_zip)
+```
+
+We can add the state abbreviation manually.
+
+```{r state_add}
+okv <- mutate(okv, state = "OK", .after = city)
+```
+
+## Conclude
+
+```{r clean_glimpse}
+glimpse(sample_n(okv, 50))
+```
+
+1. There are `r comma(nrow(okv))` records in the database.
+1. There are `r comma(sum(okv$dupe_flag))` duplicate records in the database.
+1. The range and distribution of `amount` and `date` seem reasonable.
+1. There are `r comma(sum(okv$na_flag))` records missing key variables.
+1. Consistency in geographic data has been improved with `campfin::normal_*()`.
+1. The 4-digit `year` variable has been created with `lubridate::year()`.
+
+## Export
+
+Now the file can be saved on disk for upload to the Accountability server.
+
+```{r clean_dir}
+clean_dir <- dir_create(here("ok", "voters", "data", "clean"))
+clean_path <- path(clean_dir, "ok_voters_clean.csv")
+write_csv(okv, clean_path, na = "")
+(clean_size <- file_size(clean_path))
+```
+
+```{r echo=FALSE}
+rm(okv)
+Sys.sleep(5)
+flush_memory()
+```
+
+```{r}
+okl <- read_lines(clean_path)
+na <- non_ascii(clean_path, highlight = cli::bg_yellow)
+okl[na$row]
+```
+
+## Upload
+
+We can use the `aws.s3::put_object()` to upload the text file to the IRW server.
+
+```{r aws_upload, eval=FALSE}
+aws_path <- path("csv", basename(clean_path))
+if (!object_exists(aws_path, "publicaccountability")) {
+  put_object(
+    file = clean_path,
+    object = aws_path, 
+    bucket = "publicaccountability",
+    acl = "public-read",
+    show_progress = TRUE,
+    multipart = TRUE
+  )
+}
+aws_head <- head_object(aws_path, "publicaccountability")
+(aws_size <- as_fs_bytes(attr(aws_head, "content-length")))
+unname(aws_size == clean_size)
+```
