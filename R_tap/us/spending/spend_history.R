@@ -1,7 +1,7 @@
 #!/usr/bin/env Rscript
 
-# Tue Mar 9 13:22:23 2021 -------------------------------------------------
-# Request US spending between two dates
+# Mon Mar 22 10:12:51 2021 ------------------------------------------------
+# Request US spending between fiscal years
 # Investigative Reporting Workshop
 # The Accountability Project
 # Author: Kiernan Nicholls
@@ -29,10 +29,10 @@ suppressPackageStartupMessages(library(fs))
 
 # misc --------------------------------------------------------------------
 
-cli_h1("Update Federal Spending")
+cli_h1("Obtain Federal Spending")
 
 # check working directory for here::here()
-suppressMessages(here::i_am("us/spending/spend_update.R"))
+suppressMessages(here::i_am("us/spending/spend_history.R"))
 if (!grepl("R_tap", getwd())) {
   cli_alert_danger("Please set working directory to {.path R_tap/}")
   quit(save = "no", status = 0)
@@ -44,8 +44,6 @@ t$span.code[1:2] <- list(`background-color` = "#232323", color = "#ffffff")
 options(cli.user_theme = t)
 
 # notes -------------------------------------------------------------------
-
-# for multiple fiscal years, use `spend_history.R`
 
 # Award Types: All
 # Agency: Awarding Agency, All
@@ -68,33 +66,36 @@ wt <- function(...) {
 
 # script args -------------------------------------------------------------
 
-# call script from command line with (1) start and (2) end dates
-# Rscript --vanilla us_spend_update.R --args 2020-01-01 2020-12-31
+# call script from command line with (1) first year (2) second year
+# Rscript --vanilla us_spend_update.R --args 2001 2021
 
 # capture command line arguments
 cmd_args <- commandArgs(trailingOnly = TRUE)
 
 if (length(cmd_args) == 2) {
-  cli_alert_info("Using date range from arguments")
+  cli_alert_info("Using fiscal years from from arguments")
   # capture cmd line args as dates
-  end_dt <- as.Date(cmd_args[2], tryFormats = c("%Y-%m-%d", "%m/%d/%Y"))
-  start_dt <- as.Date(cmd_args[1], tryFormats = c("%Y-%m-%d", "%m/%d/%Y"))
-  if (end_dt < start_dt) {
-    cli_alert_danger("End date must come after start date")
+  start_yr <- as.integer(cmd_args[1])
+  end_yr <- as.integer(cmd_args[2])
+  if (end_yr < start_yr) {
+    cli_alert_danger("First year must come before second year")
     quit(save = "no", status = 1)
   }
 } else if (length(cmd_args) == 0){
   ### !!! define dates here
-  # end_dt <- Sys.Date() - 1
-  # start_dt <- end_dt - 7
+  # end_yr <- as.integer(format(Sys.Date(), "%Y"))
+  # start_yr <- 2001
   ### !!!!!!!!!!!!!!!!!!!!!
-  cli_alert_info("Using date range from user")
+  cli_alert_info("Using fiscal years from user")
 } else {
-  cli_alert_danger("When using args, supply (1) start date & (2) end date")
+  cli_alert_danger("When using args, supply (1) start year & (2) end year")
   quit(save = "no", status = 1)
 }
 
-cli_alert("{format(start_dt, '%b %d, %Y')} to {format(end_dt, '%b %d, %Y')}")
+seq_yr <- seq(start_yr, end_yr)
+n_yr <- length(seq_yr)
+
+cli_alert("FY{start_yr} to FY{end_yr} ({n_yr} year{?s})")
 
 # prep data ---------------------------------------------------------------
 cli_h2("Prepare request")
@@ -108,116 +109,202 @@ cli_alert_success(wt("Found {length(award_types)} award types"))
 # make request ============================================================
 cli_h2("Request bulk download")
 
-cli_alert("Making request from {.url https://api.usaspending.gov/}")
-award_post <- POST(
-  user_agent("https://publicaccountability.org/"), # identify to server
-  url = "https://api.usaspending.gov/api/v2/bulk_download/awards/",
-  encode = "json", # send post body as json
-  body = list(
-    filters = list(
-      prime_award_types = award_types, # all award types from above
-      sub_award_types = c("procurement", "grant"), # all sub-awards
-      date_type = "action_date",
-      date_range = list( # dates from cmd or user
-        start_date = start_dt,
-        end_date = end_dt
-      ),
-      def_codes = list(),
-      agencies = list(
-        list( # all agencies
-          name = "All",
-          tier = "toptier",
-          type = "awarding"
-        )
-      )
-    ),
-    columns = list(),
-    # CSV with double escape
-    # can also be TSV or PIPE
-    file_format = "csv"
+name_file <- here("us", "spending", "bulk_names.csv")
+if (file_exists(name_file)) {
+  bulk_names <- read_csv(
+    file = name_file,
+    col_types = cols(
+      year = col_double(),
+      name = col_character()
+    )
   )
-)
-
-# stop if the POST failed
-post_check <- http_status(award_post)
-if (http_error(award_post)) {
-  cli_alert_danger(wt(post_check$message))
-  quit(save = "no", status = 1)
 } else {
-  cli_alert_success(wt(post_check$message))
+  bulk_names <- data.frame(
+    year = double(),
+    name = character()
+  )
 }
 
-post_data <- content(award_post)
+cli_alert("Making {n_yr} request{?s} from {.url https://api.usaspending.gov/}")
+for (fy in seq_yr) {
+  if (fy %in% bulk_names$year) {
+    fy_file <- bulk_names$name[bulk_names$year == fy]
+    cli_alert_success("FY{fy} already downloaded: {.path {fy_file}}")
+  }
+  start_dt <- sprintf("%i-10-01", fy - 1)
+  end_dt <- sprintf("%i-09-30", fy)
+  award_post <- POST(
+    user_agent("https://publicaccountability.org/"), # identify to server
+    url = "https://api.usaspending.gov/api/v2/bulk_download/awards/",
+    encode = "json", # send post body as json
+    body = list(
+      filters = list(
+        prime_award_types = award_types, # all award types from above
+        sub_award_types = c("procurement", "grant"), # all sub-awards
+        date_type = "action_date",
+        date_range = list( # dates from cmd or user
+          start_date = start_dt,
+          end_date = end_dt
+        ),
+        def_codes = list(),
+        agencies = list(
+          list( # all agencies
+            name = "All",
+            tier = "toptier",
+            type = "awarding"
+          )
+        )
+      ),
+      columns = list(),
+      # CSV with double escape
+      # can also be TSV or PIPE
+      file_format = "csv"
+    )
+  )
 
-# check status ------------------------------------------------------------
-cli_h2("Check file status")
-
-cli_alert("Wait for file to be ready for download")
-while (!exists("post_status") || post_status == "running") {
-  # check request download status
-  status_get <- content(GET(
-    url = "https://api.usaspending.gov/api/v2/bulk_download/status/",
-    query = list(file_name = post_data$file_name)
-  ))
-  post_status <- status_get$status
-  ## TODO: Add spinner for waiting
-  ## TODO: Change wait time by file size
-  if (post_status == "running") {
-    n <- 300 # adjust wait in seconds
-    m <- round(n/60, digits = 1)
-    cli_alert_info(wt("Status: {col_cyan(post_status)}, waiting {m} min"))
-    Sys.sleep(time = n)
-  } else if (post_status == "failed") {
-    cli_alert_danger(wt("Status: {col_red(post_status)}"))
+  # stop if the POST failed
+  post_check <- http_status(award_post)
+  if (http_error(award_post)) {
+    cli_alert_danger(wt(paste0("FY", fy), post_check$message))
     quit(save = "no", status = 1)
   } else {
-    cli_alert_success(wt("Status: {col_green(post_status)}"))
+    cli_alert_success(wt(paste0("FY", fy), post_check$message))
+  }
+
+  post_data <- content(award_post)
+  post_name <- data.frame(
+    year = fy,
+    name = post_data$file_name
+  )
+  # add to the list of requested file
+  bulk_names <- rbind(bulk_names, post_name)
+
+  # save bulk file names by year
+  if (!file_exists(bulk_file)) {
+    write_csv(
+      x = bulk_names,
+      file = name_file
+    )
+  }
+}
+
+# check status ------------------------------------------------------------
+cli_h2("Check each file status")
+
+cli_alert("Wait for {n_yr} file{?s} to be ready for download")
+
+# init empty cols
+bulk_names <- data.frame(
+  bulk_names,
+  status = NA_character_,
+  size = NA_real_,
+  ncol = NA_integer_,
+  nrow = NA_integer_,
+  time = NA_real_
+)
+
+all_fin <- FALSE
+while (!all_fin) {
+  for (i in seq_along(bulk_names$name)) {
+    if (isTRUE(bulk_names$status[i] == "finished")) {
+      next
+    }
+    status_get <- GET(
+      url = "https://api.usaspending.gov/api/v2/bulk_download/status/",
+      query = list(
+        file_name = bulk_names$name[i]
+      )
+    )
+    status_data <- content(status_get)
+    bulk_names$status[i] <- status_data$status
+    bulk_names$size[i] <- fs_bytes(status_data$total_size * 1000)
+    bulk_names$ncol[i] <- status_data$total_columns
+    bulk_names$nrow[i] <- status_data$total_rows
+    bulk_names$time[i] <- dseconds(status_data$seconds_elapsed)
+  }
+  n_fin <- sum(bulk_names$status == "finished")
+  all_fin <- all(bulk_names$status == "finished")
+  if (!all_fin) {
+    n <- 600 # adjust wait in seconds
+    m <- round(n/60, digits = 1)
+    cli_alert_info(wt("Status: {col_cyan(n_fin)}/{n_yr} done, waiting {m} min"))
+    Sys.sleep(time = n)
+  } else if (any(bulk_names$status == "failed")) {
+    cli_alert_danger(wt("Status: {col_red('failed')}"))
+    quit(save = "no", status = 1)
+  } else {
+    cli_alert_success(wt("Status {col_green(n_fin)}/{n_yr} finished"))
   }
 }
 
 # download bulk zip when ready --------------------------------------------
 cli_h2("Download bulk file")
 
+bulk_names$size <- fs_bytes(bulk_names$size)
+bulk_names$time <- as.double(bulk_names$time)
 data_dir <- dir_create(here("us", "spending", "data"))
-raw_zip <- path(data_dir, post_data$file_name)
+raw_zip <- path(data_dir, bulk_names$name)
 
-bulk_size <- fs_bytes(status_get$total_size * 1000)
-cli_alert(wt("Starting download {.emph ({bulk_size})}"))
-cli_text("{.url {ansi_strtrim(post_data$file_url, console_width() - 3)}}")
-
-# download locally
-if (file_exists(raw_zip)) {
-  cli_alert_warning("File already exists on disk")
-} else {
-  bulk_save <- GET(
-    url = post_data$file_url,
-    write_disk(path = raw_zip),
-    progress(type = "down")
+for (i in seq_along(raw_zip)) {
+  cli_h3(wt(
+    "Downloadig FY{bulk_names$year[i]}",
+    "({bulk_names$size[i]})"
+  ))
+  fy_url <- paste0(
+    "https://files.usaspending.gov/generated_downloads/",
+    bulk_names$name[i]
   )
-  cli_alert_success(wt("Download complete {.emph ({file_size(raw_zip)})}"))
+  cli_text("{.url {ansi_strtrim(fy_url, console_width() - 3)}}")
+
+  # download locally
+  if (file_exists(raw_zip[i])) {
+    cli_alert_warning("File already exists on disk")
+  } else {
+    bulk_save <- GET(
+      url = fy_url,
+      write_disk(path = raw_zip[i]),
+      progress(type = "down")
+    )
+    cli_alert_success(wt("Download complete {.emph ({file_size(raw_zip[i])})}"))
+  }
+
+  cli_text("{.file {ansi_strtrim(raw_zip[i], console_width() - 3)}}")
 }
 
-cli_text("{.file {ansi_strtrim(raw_zip, console_width() - 3)}}")
+
 
 # extract files -----------------------------------------------------------
 cli_h2("Extract text files")
+cli_alert_warning("Extraction can fail on large files")
+
+csv_dir <- here("us", "spending", "data", "csv")
 
 # list the zip contents
-zip_list <- unzip(raw_zip, list = TRUE)
-zip_list$Length <- fs_bytes(zip_list$Length)
+zip_list <- lapply(raw_zip, unzip, list = TRUE)
+for (i in seq_along(raw_zip)) {
+  z <- zip_list[[i]]
+  z$Length <- fs_bytes(z$Length)
 
-cli_alert_info("Bulk zip contains {nrow(zip_list)} text files:")
-cli_ol(paste(col_blue(zip_list$Name), col_grey(zip_list$Length)))
+  cli_alert_info("Bulk zip contains {nrow(z)} text files:")
+  cli_ol(paste(col_blue(z$Name), col_grey(z$Length)))
 
-cli_process_start("Extracting all files")
-all_csv <- unzip(raw_zip, exdir = dirname(raw_zip))
-cli_process_done(msg_done = wt("Extracting all files... done"))
-n_csv <- length(all_csv)
+  raw_csv <- path(csv_dir, z$Name)
+  file_exists(raw_csv)
 
-if (n_csv < 4) {
-  cli_alert_danger("Bulk file should contain at least 4 text files")
-  quit(save = "no", status = 1)
+  cli_process_start("Extracting all files")
+  all_csv <- unzip(raw_zip, exdir = dirname(raw_zip))
+  cli_process_done(msg_done = wt("Extracting all files... done"))
+  n_csv <- length(all_csv)
+
+  if (n_csv < 4) {
+    cli_alert_danger("Bulk file should contain at least 4 text files")
+    quit(save = "no", status = 1)
+  }
 }
+
+
+
+
 
 check_file <- here("us", "spending", "spend_check.csv")
 all_checks <- data.frame()

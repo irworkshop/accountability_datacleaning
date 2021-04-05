@@ -288,7 +288,7 @@ TRUE,FALSE,contract_bundling_code,c
 TRUE,FALSE,contract_bundling,c
 TRUE,FALSE,dod_claimant_program_code,c
 TRUE,FALSE,dod_claimant_program_description,c
-TRUE,FALSE,naics_code,d
+TRUE,FALSE,naics_code,i
 TRUE,FALSE,naics_description,c
 TRUE,FALSE,recovered_materials_sustainability_code,c
 TRUE,FALSE,recovered_materials_sustainability,c
@@ -530,7 +530,7 @@ TRUE,TRUE,prime_award_primary_place_of_performance_country_code,c
 TRUE,TRUE,prime_award_primary_place_of_performance_country_name,c
 TRUE,TRUE,prime_award_description,c
 TRUE,TRUE,prime_award_project_title,c
-TRUE,TRUE,prime_award_naics_code,d
+TRUE,TRUE,prime_award_naics_code,i
 TRUE,TRUE,prime_award_naics_description,c
 TRUE,TRUE,prime_award_national_interest_action_code,c
 TRUE,TRUE,prime_award_national_interest_action,c
