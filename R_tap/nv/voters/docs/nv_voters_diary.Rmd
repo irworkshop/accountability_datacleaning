@@ -1,0 +1,587 @@
+---
+title: "Nevada Voters"
+author: "Kiernan Nicholls"
+date: "`r date()`"
+output:
+  github_document: 
+    df_print: tibble
+    toc: true
+    toc_dept: 3
+editor_options: 
+  chunk_output_type: console
+---
+
+<!-- Place comments regarding knitting here -->
+
+```{r setup, include=FALSE, purl=FALSE}
+library(knitr)
+opts_chunk$set(
+  eval = TRUE,
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  error = FALSE,
+  collapse = TRUE,
+  comment = "#>",
+  fig.path = "../plots/",
+  fig.width = 10,
+  dpi = 300
+)
+if (!interactive()) {
+  options(width = 120)
+  set.seed(5)
+}
+```
+
+```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
+doc_dir <- fs::dir_create(here::here("nv", "voters", "docs"))
+```
+
+## Project
+
+The Accountability Project is an effort to cut across data silos and give
+journalists, policy professionals, activists, and the public at large a simple
+way to search across huge volumes of public data about people and organizations.
+
+Our goal is to standardizing public data on a few key fields by thinking of each
+dataset row as a transaction. For each transaction there should be (at least) 3
+variables:
+
+1. All **parties** to a transaction.
+2. The **date** of the transaction.
+3. The **amount** of money involved.
+
+## Objectives
+
+This document describes the process used to complete the following objectives:
+
+1. How many records are in the database?
+1. Check for entirely duplicated records.
+1. Check ranges of continuous variables.
+1. Is there anything blank or missing?
+1. Check for consistency issues.
+1. Create a five-digit ZIP Code called `zip`.
+1. Create a `year` field from the transaction date.
+1. Make sure there is data on both parties to a transaction.
+
+## Packages
+
+The following packages are needed to collect, manipulate, visualize, analyze,
+and communicate these results. The `pacman` package will facilitate their
+installation and attachment.
+
+```{r load_packages, message=FALSE, warning=FALSE, error=FALSE}
+if (!require("pacman")) {
+  install.packages("pacman")
+}
+pacman::p_load(
+  tidyverse, # data manipulation
+  lubridate, # datetime strings
+  gluedown, # printing markdown
+  janitor, # clean data frames
+  campfin, # custom irw tools
+  aws.s3, # aws cloud storage
+  refinr, # cluster & merge
+  scales, # format strings
+  knitr, # knit documents
+  vroom, # fast reading
+  rvest, # scrape html
+  glue, # code strings
+  here, # project paths
+  httr, # http requests
+  fs # local storage 
+)
+```
+
+This document should be run as part of the `R_campfin` project, which lives as a
+sub-directory of the more general, language-agnostic
+[`irworkshop/accountability_datacleaning`][tap] GitHub repository.
+
+The `R_campfin` project uses the [RStudio projects][rproj] feature and should be
+run as such. The project also uses the dynamic `here::here()` tool for file
+paths relative to _your_ machine.
+
+```{r where_here}
+# where does this document knit?
+here::i_am("nv/voters/docs/nv_voters_diary.Rmd")
+```
+
+[tap]: https://github.com/irworkshop/accountability_datacleaning
+[rproj]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects
+
+## Data
+
+The Nevada Secretary of State (NVSOS) office requires that one register for an
+account to access "[bulk data download][bulk]" service page.
+
+The process for downloaded a report is [outlined here][guide].
+
+Create a report for "Full Unabridged Database Dump" of "Eligible Voter List" 
+data.
+
+> ### [Eligible Voter List][evl]
+> 
+> The Help America Vote Act of 2002 (42U.S.C. § 15301 et. Seq.) and NRS 293.675
+require the Secretary of State (SoS) to establish and maintain an official
+statewide voter registration list.
+> 
+> The statewide voter registration list is maintained in a single, uniform,
+centralized and interactive computerized database administered and maintained by
+the SoS.
+> 
+> Registration information held solely in a county or local database is not
+considered part of the statewide voter registration list until it is uploaded to
+the SoS statewide voter registration database. This upload and download of
+registration information between the counties and the SoS does not take place in
+real time. All uploaded voter registration information is made available within
+24 hours of receipt. Registration information reflected in the statewide voter
+registration list may not duplicate the registration information reflected in
+the county voter registration records.
+> 
+> "Active registration" status means a current registration of a voter in the
+official register, entitling such voter to voter in the manner provided pursuant
+to NRS 293.017.
+> 
+> "Inactive voter" means a voter designated as inactive pursuant to NRS 293.530
+whose registration has not been cancelled.
+> 
+> An "eligible voter" is a registered voter that is legally entitled to vote.
+The statewide eligible voter list contains both active and inactive voters.
+> 
+> Voters with a Pend, Cancelled, P-17 or Void status will not be reflected in
+the statewide eligible voter list.
+
+### Report
+
+The site allows users to define the format for their data download. The site
+generated the following summary of our specified data format:
+
+> If "Text File - Fixed Width" is selected your report results will be inserted
+into a standard ASCII text file where each field starts at a specific "fixed"
+position for each line. For more specific information about the report format
+for custom built reports, including the position and data type of each field,
+click the "View Selected File Structure" button on the General tab when you
+view\edit your report.
+
+This file structure report is an HTML page with a description and six tables.
+
+>  Your report will generate 2 fixed width ASCII text file(s) compressed into
+one Zip file named in the format `VoterList.43993.<Today's Date>.zip`*. Below
+you will find the format of each file: ...
+
+```{r about_file, echo=FALSE}
+st_dir <- here("nv", "voters")
+about_path <- path(st_dir, "File Format - Secretary of State, Nevada.html")
+about <- read_html(x = about_path)
+```
+
+```{r about_tables, echo=FALSE}
+about_tables <- about %>% 
+  html_nodes(".entryform") %>% 
+  html_table(fill = TRUE) %>% 
+  map(as_tibble)
+about_tables <- about_tables[[2]]
+```
+
+```{r about_tables_fix, echo=FALSE}
+about_tables <- row_to_names(about_tables, row_number = 1)
+about_names <- str_subset(html_text(html_nodes(about, "b")), "\\d")
+```
+
+```{r about_tables_print, echo=FALSE, results='asis'}
+about_md <- str_split(kable(about_tables, align = "llrr"), "\n")
+md_quote(about_md)
+```
+
+>  \*`<Today's Date>` will be the only variable in the file name that will change
+and ensure your file names will be unique each time the report is ran. This date
+will be the date the report is ran and will be in the format "MMddyyHHmmss".
+
+### Age
+
+> The data being reported off of is no more than 24 hours old. This data is
+copied very late each night from live data to minimize the large burden of bulk
+reporting on the production system.
+
+### Variables
+
+Definitions for few variables can be found in the "Result Field" tab:
+
+1. County Status:
+    > This is the status of the voter as determined by the respective county
+    clerk/registrar. This status can be one of the following:
+    > * Active – An eligible voter whose residence address is current.
+    > * Inactive – A voter whose mail is returned from the address at which he
+    > registered to vote and has not provided a County Elections Official 
+    > with a new residence address. Inactive voters retain the legal right 
+    > to vote, but need not be mailed election material.
+    > * P-17 – A voter who was 17 years of age at the time their voter
+    > registration was submitted, but who will be age 18 by election day and
+    > who has met all other legal requirements to vote.
+    
+2. County Voter ID:
+    > This is the unique identifier used by the county that this voter is
+    registered with. This number is only unique for that county and not
+    necessarily unique across the entire state-wide list. The numeric VoterID
+    column that is included in each voter record in this data download will be
+    unique across all voters for the entire state.
+
+3. ID Required: 
+    > A `Y` in this column indicates that the registered voter may vote at a 
+    polling place only if the person presents to the election board officer at 
+    the polling place official identification to establish identity as defined 
+    in NAC 293.395. An `N` in this column indicates that the registered voter 
+    does not need to provide identification.
+
+4. Phone:
+    > The phone number of the registered voter. If the voter has enrolled in the
+    Please Don't Call list, the text "-PDC" will be appended to the end of the 
+    phone number.
+
+5. Registration Date:
+    > It is possible that the registration date shown may not reflect the
+    individual’s original registration date in Nevada due to movement between
+    counties and other periodic updates to the particular voter registration 
+    record.
+    > 
+    > If any questions arise regarding particular registration dates in regards 
+    to specific individuals, please contact the respective county 
+    clerk/registrar for clarification.
+
+### Records
+
+> Total number of records returned: 10,329,395
+
+```{r rows_total}
+total_rows <- 10329395 
+```
+
+> A record is one single entity or row from a database table. The "Total number
+of records returned" displayed on the report preview page will be a summation of
+all rows returned from each table you are reporting from. For example, if your
+report queries for both Resident Agent and Corporation data from the
+Corporations database, the number of records returned might be 1000, 700 of
+which might be Corporation records and 300 being Resident Agent records.
+
+## Download
+
+Within seven days of running the report, the data can be downloaded from the
+link provided to the account email address. The link will not work for anybody
+not logged into that NVSOS account.
+
+```{r raw_dir}
+raw_url <- "https://www.nvsos.gov/yourreports/VoterList.43993.040921100238.zip"
+raw_dir <- dir_create(here("nv", "voters", "data", "raw"))
+raw_zip <- path(raw_dir, basename(raw_url))
+file_size(raw_zip)
+```
+
+This URL contains the date the report was generated.
+
+```{r raw_time}
+report_time <- mdy_hms(str_extract(raw_url, "\\d+(?=\\.zip$)"))
+with_tz(report_time, tzone = "PST")
+```
+
+This raw ZIP archive has been backed up to the IRW server.
+
+```{r}
+as_fs_bytes(object_size(
+  object = path("IRW/raw_backup/nv", basename(raw_zip)), 
+  bucket = "publicaccountability"
+))
+```
+
+## Unzip
+
+The provided ZIP archive contains two tables as fixed width text files. We are
+only interested in the list of eligible voters.
+
+```{r zip_list}
+zip_txt <- as_tibble(unzip(raw_zip, list = TRUE))
+raw_txt <- path(raw_dir, zip_txt$Name[1])
+```
+
+```{r echo=FALSE, echo=FALSE}
+zip_txt %>% 
+  mutate(
+    across(Length, as_fs_bytes),
+    across(Name, md_code)
+  ) %>% 
+  kable()
+```
+
+```{r zip_unzip}
+if (!file_exists(raw_txt)) {
+  raw_txt <- unzip(
+    zipfile = raw_zip, 
+    exdir = raw_dir,
+    files = basename(raw_zip)
+  )
+}
+```
+
+## Columns
+
+We can use the tables read from the HTML file, and described in the **About**
+section above, to create (1) the column width table expected by `read_fwf()`,
+and (2) the readr column type specification object. Two functions will
+take the `Field Name`, `Data Type` and `Length`.
+
+```{r as_fwf_width, echo=FALSE}
+as_fwf_width <- function(.data) {
+  fwf_widths(
+    widths = as.integer(x = .data[[4]]),
+    col_names = str_remove(
+      string = .data[[1]], 
+      pattern = "\\s\\(.*\\)"
+    )
+  )
+}
+```
+
+```{r as_col_spec, echo=FALSE}
+as_col_spec <- function(.data) {
+  x <- .data[["Data Type"]]
+  x <- case_when(
+    str_detect(x, "varchar")  ~ "c",
+    str_detect(x, "datetime") ~ "D",
+    str_detect(x, "money")    ~ "d",
+    str_detect(x, "bit")      ~ "l",
+    str_detect(x, "int")      ~ "i",
+    TRUE ~ "c"
+  )
+  as.col_spec(
+    x = setNames(
+      object = x,
+      nm = str_remove(
+        string = .data[["Field Name"]], 
+        pattern = "\\s\\(.*\\)"
+      )
+    )
+  )
+}
+```
+
+```{r about_format}
+raw_widths <- as_fwf_width(about_tables)
+raw_types  <- as_col_spec(about_tables)
+```
+
+## Read
+
+The eligible voters list can then be read into a list using `readr::read_fwf()` 
+and the (1) width tables and (2) column type specifications.
+
+```{r read_raw}
+nvv <- read_fwf(
+  file = raw_txt,
+  col_positions = raw_widths,
+  col_types = raw_types,
+  locale = locale(
+    date_format = "%m/%d/%Y",
+    tz = "US/Pacific"
+  )
+)
+```
+
+The total number of rows read matches what we were told when exporting.
+
+```{r rows_read_hist}
+hist_wc <- system2(
+  command = "wc", 
+  args = c(path(raw_dir, zip_txt$Name[2]), "-l"), 
+  stdout = TRUE
+)
+```
+
+```{r rows_check}
+nrow(nvv) + as.integer(str_extract(hist_wc, "\\d+")) == total_rows
+```
+
+```{r clean_names}
+nvv <- nvv %>% 
+  clean_names("snake") %>% 
+  rename_with(~str_remove(., "residential_")) %>% 
+  rename(reg_date = registration_date) %>% 
+  mutate(across(id_required, `==`, "Y"))
+```
+
+## Explore
+
+There are `r comma(nrow(nvv))` rows of `r ncol(nvv)` columns. Each record
+represents a single voter registered in the state of Nevada.
+
+```{r glimpse}
+glimpse(nvv)
+tail(nvv)
+```
+
+### Missing
+
+Columns vary in their degree of missing values.
+
+```{r na_count}
+col_stats(nvv, count_na)
+```
+
+We can flag any record missing a key variable needed to identify a transaction.
+
+```{r na_flag}
+key_vars <- c("first_name", "last_name", "birth_date", "reg_date")
+nvv <- flag_na(nvv, all_of(key_vars))
+sum(nvv$na_flag)
+```
+
+```{r na_view}
+nvv %>% 
+  filter(na_flag) %>% 
+  select(all_of(key_vars), middle_name)
+```
+
+### Categorical
+
+```{r distinct_count}
+col_stats(nvv, n_distinct)
+```
+
+```{r distinct_plots, echo=FALSE}
+explore_plot(nvv, county)
+explore_plot(nvv, party)
+explore_plot(nvv, congressional_district)
+explore_plot(nvv, county)
+```
+
+### Dates
+
+There are thousands of voters with a registration date of January 1, 1900. These
+should be `NA` values, not real dates.
+
+```{r date_min}
+count_na(nvv$reg_date)
+min(nvv$reg_date, na.rm = TRUE)
+sum(nvv$reg_date == "1900-01-01", na.rm = TRUE)
+nvv$reg_date[which(nvv$reg_date == "1900-01-01")] <- NA
+```
+
+```{r date_max}
+max(nvv$reg_date, na.rm = TRUE)
+sum(nvv$reg_date > today(), na.rm = TRUE)
+```
+
+We can add the calendar year from `date` with `lubridate::year()`
+
+```{r date_year}
+nvv <- nvv %>% 
+  mutate(
+    reg_year = year(reg_date),
+    birth_year = year(birth_date)
+  )
+```
+
+```{r bar_reg_year, echo=FALSE}
+nvv %>% 
+  filter(!is.na(reg_year)) %>% 
+  count(reg_year) %>% 
+  mutate(
+    elect_type = case_when(
+      reg_year %% 4 == 0 ~ "Pres.",
+      reg_year %% 2 == 0 ~ "Mid.",
+      TRUE ~ NA_character_
+    )
+  ) %>% 
+  ggplot(aes(x = reg_year, y = n)) +
+  geom_col(aes(fill = elect_type)) + 
+  scale_fill_manual(
+    values = c("#1B9E77", "#D95F02"),
+    na.value = "#666666"
+  ) +
+  scale_y_continuous(labels = comma) +
+  scale_x_continuous(breaks = seq(1950, 2020, by = 4)) +
+  coord_cartesian(xlim = c(1950, 2020)) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "Nevada Voters Registered by Year",
+    caption = "Source: NV SOS",
+    fill = "Election Year",
+    x = "Year Registered",
+    y = "Count"
+  )
+```
+
+```{r hist_birth_year, echo=FALSE}
+nvv %>% 
+  filter(!is.na(birth_year)) %>% 
+  ggplot(aes(x = birth_year)) +
+  geom_histogram(
+    fill = dark2["purple"],
+    binwidth = 3
+  ) +
+  scale_y_continuous(labels = comma) +
+  scale_x_continuous(breaks = seq(1900, 2005, by = 5)) +
+  coord_cartesian(xlim = c(1900, 2005)) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "Nevada Voters by Birth Year",
+    caption = "Source: NV SOS",
+    x = "Birth Year",
+    y = "Count"
+  )
+```
+
+## Wrangle
+
+```{r geo_check}
+prop_in(nvv$zip, valid_zip)
+prop_in(nvv$state, valid_state)
+nvv$city <- str_to_upper(nvv$city)
+prop_in(nvv$city, c(valid_city, extra_city))
+sample(nvv$address_2, 10)
+```
+
+## Conclude
+
+```{r clean_glimpse}
+glimpse(sample_n(nvv, 50))
+```
+
+1. There are `r comma(nrow(nvv))` records in the database.
+1. There are `r comma(sum(nvv$dupe_flag))` duplicate records in the database.
+1. The range and of birth and registration dates seem reasonable.
+1. There are `r comma(sum(nvv$na_flag))` records missing key variables.
+1. Geographic variables are formatted in the way we would expect.
+1. The 4-digit year variables have been created with `lubridate::year()`.
+
+## Export
+
+Now the file can be saved on disk for upload to the Accountability server.
+
+```{r clean_dir}
+clean_dir <- dir_create(here("nv", "voters", "data", "clean"))
+clean_path <- path(clean_dir, "nv_voters_clean.csv")
+write_csv(nvv, clean_path, na = "")
+(clean_size <- file_size(clean_path))
+file_encoding(clean_path) %>% 
+  mutate(across(path, path.abbrev))
+```
+
+## Upload
+
+We can use the `aws.s3::put_object()` to upload the text file to the IRW server.
+
+```{r aws_upload, eval=FALSE}
+aws_path <- path("csv", basename(clean_path))
+if (!object_exists(aws_path, "publicaccountability")) {
+  put_object(
+    file = clean_path,
+    object = aws_path, 
+    bucket = "publicaccountability",
+    acl = "public-read",
+    show_progress = TRUE,
+    multipart = TRUE
+  )
+}
+aws_head <- head_object(aws_path, "publicaccountability")
+(aws_size <- as_fs_bytes(attr(aws_head, "content-length")))
+unname(aws_size == clean_size)
+```

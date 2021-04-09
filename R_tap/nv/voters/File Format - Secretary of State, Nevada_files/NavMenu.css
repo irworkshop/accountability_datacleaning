@@ -1,0 +1,54 @@
+/* Navigation SubMenu for each section under header, to be shared with any application implementing a nav menu without Telerik */
+#mainNavSubMenu {background-color:#afa6a4; color:white;font-family:Verdana, sans-serif;font-size:10px;font-weight:bold;padding-top:3px;padding-bottom:3px;}
+#mainNavSubMenu a {color:white;text-decoration:none;padding-right:3px;}
+#mainNavSubMenu a:hover {text-decoration:underline;}
+
+#mainNavSubMenuEC {background-color:#82a9ab; color:white;font-family:Verdana, sans-serif;font-size:10px;font-weight:bold;padding-top:3px;padding-bottom:3px; text-align:left;text-indent:30px;}
+#mainNavSubMenuEC a {color:white;text-decoration:none;padding-right:3px;}
+#mainNavSubMenuEC a:hover {text-decoration:underline;}
+
+#mainNavSubMenuIC {background-color:#a4b6a2; color:white;font-family:Verdana, sans-serif;font-size:10px;font-weight:bold;padding-top:3px;padding-bottom:3px; text-align:left;text-indent:30px;}
+#mainNavSubMenuIC a {color:white;text-decoration:none;padding-right:3px;}
+#mainNavSubMenuIC a:hover {text-decoration:underline;}
+
+#mainNavSubMenuLC {background-color:#709fcc; color:white;font-family:Verdana, sans-serif;font-size:10px;font-weight:bold;padding-top:3px;padding-bottom:3px; text-align:left;text-indent:30px;}
+#mainNavSubMenuLC a {color:white;text-decoration:none;padding-right:3px;}
+#mainNavSubMenuLC a:hover {text-decoration:underline;}
+
+/* For the skmMenu */
+.mainNavSubMenuSelected {text-decoration:underline;}
+
+.mainNavSubMenuPopUp
+{
+	BORDER-LEFT: #c7c2c2 1px solid;
+	BORDER-RIGHT: #847778 1px solid;
+	background-color: #afa6a4;
+	height: 20px;
+}
+
+.mainNavSubMenuPopUpFirst
+{
+	BORDER-TOP: #c7c2c2 1px solid;
+	BORDER-LEFT: #c7c2c2 1px solid;
+	BORDER-RIGHT: #847778 1px solid;
+	background-color: #afa6a4;
+	height: 20px;
+}
+
+.mainNavSubMenuPopUpLast
+{
+	BORDER-LEFT: #c7c2c2 1px solid;
+	BORDER-BOTTOM: #847778 1px solid;
+	BORDER-RIGHT: #847778 1px solid;
+	background-color: #afa6a4;
+	height: 20px;
+}
+
+.mainNavSubMenuPopUpSelected
+{
+		BORDER-LEFT: #c7c2c2 1px solid;
+	BORDER-RIGHT: #847778 1px solid;
+background: #847778;
+text-decoration:underline;
+height: 20px;
+}

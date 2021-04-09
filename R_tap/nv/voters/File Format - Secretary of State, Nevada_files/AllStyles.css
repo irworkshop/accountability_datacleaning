@@ -1,0 +1,814 @@
+BODY
+{
+
+	font-family:Arial !important;
+	/*font-family:verdana,arial,sans-serif;*/
+	color:#003366;
+	margin: 0px;
+	padding-top:0px;
+	margin-top:0px;
+}
+
+.SOSFontDefault
+{
+LETTER-SPACING: -1px;
+font-weight:bold;
+font-size:16px;
+}
+
+.buttonLinkA
+{
+	color: #003366; 
+	font: 13px arial; 
+	line-height: 1.0;
+	background-color:#d3d3d3;
+	font-weight:bold;
+}
+
+.buttonLinkB
+{
+	color: #003366; 
+	font: 13px arial; 
+	line-height: 1.0;
+	background-color:#eeeeff;
+	font-weight:bold;
+}
+
+.buttonLinkC
+{
+	color: #003366; 
+	font: 11px arial; 
+	line-height: 1.0;
+	background-color:#d3d3d3;
+	font-weight:bold;
+	BORDER-RIGHT: #d3d3d3 1px solid;
+	BORDER-TOP: #d3d3d3 1px solid;
+	BORDER-LEFT: #d3d3d3 1px solid;
+	BORDER-BOTTOM: #d3d3d3 1px solid;
+	border-style:outset;
+}
+
+.buttonLinkD
+{
+	color: #FF0000; 
+	font: 10px arial; 
+	line-height: 1.0;
+	background-color:#d3d3d3;
+	font-weight:bold;
+	text-align:right;
+}
+
+.SOSmenubar
+{
+	color: #FFFFFF; 
+	font: 11px arial; 
+	line-height: 1.0;
+	background-color:#d3d3d3;
+	font-weight:bold;
+	BORDER-RIGHT: #d3d3d3 1px solid;
+	BORDER-TOP: #d3d3d3 1px solid;
+	BORDER-LEFT: #d3d3d3 1px solid;
+	BORDER-BOTTOM: #d3d3d3 1px solid;
+	border-style:outset;
+}
+
+
+
+.MenuSpacer
+{
+	background-color:#a3a3a3;	
+	width:95%;
+}
+
+.InputTypeA
+{
+
+    font-weight: normal;
+    font-size: small;
+    color: black;
+    BACKGROUND-COLOR: #ffffff;
+}
+
+.TextBoxLabel
+{
+	border:0px;
+	background:none;
+	width:70px;
+	font-family:Arial;
+	font-weight:bold;
+	color:#003366;
+	visibility:visible;
+}
+
+.TextBoxHidden
+{
+	width:0px;
+	visibility:hidden;
+}
+
+.DynamicTextBox
+{
+	BORDER-RIGHT: #999999 1px solid;
+    BORDER-TOP: #999999 1px solid;
+    FONT-SIZE: 12px;
+    BORDER-LEFT: #999999 1px solid;
+    BORDER-BOTTOM: #999999 1px solid;
+    BACKGROUND-COLOR: #ffffff;
+	visibility:visible;
+	width:120px;
+}
+
+
+.TitleTable
+{
+background-color: #003366;
+font-weight:bold;
+font-size:16px;
+}
+.TDTitleColor
+{
+	color:#FFFFFF;
+	letter-spacing:normal;
+}
+
+.TDColorA 
+{
+	text-align:right;
+	background-color:#d3d3d3;
+	color:#7b7b7b;
+	height:27px;
+}
+
+.TDColorAPrint
+{
+	text-align:right;
+	background-color: #d3d3d3;
+	color:#7b7b7b;
+	height:15px;
+	font-size:12px;
+	LETTER-SPACING: 0px;
+}
+
+.TDColorACenter
+{
+	text-align:center;
+	background-color: #d3d3d3;
+	color:#7b7b7b;
+	width:35px;
+}
+.TDColorALeft
+{
+	text-align:left;
+	background-color: #d3d3d3;
+	color:#7b7b7b;
+	height:27px;
+    padding-right: 2px !important;
+}
+
+TD.TDColorB 
+{
+	background-color: #eeeeff;
+	color:#00a3ff;
+}
+.TDColorC
+{
+	height:25px;
+	color:#7b7b7b;
+}
+.TDTypeD
+{
+	background-color:#eeeeff;
+	height:25px;
+	color:#7b7b7b;
+	width:300px;
+}
+.TDTypeE
+{
+	background-color:#eeeeff;
+	height:25px;
+	color:#7b7b7b;
+}
+.TDTypeEa
+{
+	background-color:#eeeeff;
+	color:#7b7b7b;
+	LETTER-SPACING: -1px;
+	font-weight:bold;
+	font-size:16px;
+	height:50px;
+}
+.TDTypeF
+{
+	background-color:#eeeeff;
+	height:25px;
+	color:#003366;
+	
+}
+.TDTypeFPrint
+{
+	background-color:#eeeeff;
+	height:15px;
+	color:#003366;
+	font-size:12px;
+	LETTER-SPACING: 0px;
+}
+TD.TDDarkColor {background-color: #003366}
+.DataGridHeader
+{
+	 background-color:#003366;
+	 color:#FFFFFF;
+	 letter-spacing:normal;
+}
+
+
+.DarkFont  {color:#000000;}
+.SmallDark {color:#000000; 
+	FONT-SIZE:16px;
+	LETTER-SPACING: -1px;}
+.TinyDark {color:#000000; font-size:12px;}
+.DownloaderForm {font-size: 14px; color: #FFFFFF; font-family: "Arial"; font-weight:bold;}
+.SubFont {font-size: 12px; color: #003366; font-family: "Arial"; font-weight:bold;}
+.SummaryFont {font-size: 14px; color: #003366; font-family: "Arial"; font-weight:bold;}
+
+.cleartable
+{
+	FONT-SIZE:16px;
+	FONT-FAMILY: Century Gothic;
+}
+
+.entrybox
+{
+BORDER-RIGHT: black 1px solid;
+BORDER-TOP: black 1px solid;
+BORDER-LEFT: black 1px solid;
+BORDER-BOTTOM: black 1px solid;
+BACKGROUND-COLOR: #d3d3d3;
+LETTER-SPACING: -1px;
+
+}
+
+.entryboxClear
+{
+BORDER-RIGHT: black 1px solid;
+BORDER-TOP: black 1px solid;
+BORDER-LEFT: black 1px solid;
+BORDER-BOTTOM: black 1px solid;
+LETTER-SPACING: -1px;
+text-align:left;
+         
+}
+
+.entryform
+{
+LETTER-SPACING: -1px;
+BACKGROUND-COLOR: #d3d3d3;
+font-weight:bold;
+font-size:16px;
+border-color:#7B7B7B;
+border-width:1px;
+border-collapse:collapse;
+border-style:solid;
+text-align:left;
+}
+
+.SOSSelectionGrid
+{
+width:100%;
+LETTER-SPACING: -1px;
+BACKGROUND-COLOR: #d3d3d3;
+font-weight:bold;
+font-size:16px;
+border-color:#7B7B7B;
+border-width:1px;
+border-collapse:collapse;
+border-style:solid;
+
+}
+
+.SOSSelectionSubGrid
+{
+LETTER-SPACING: -1px;
+BACKGROUND-COLOR: #d3d3d3;
+color:#7b7b7b;
+font-weight:bold;
+font-size:16px;
+
+BORDER-BOTTOM: #FFFFFF 1px solid;
+BORDER-RIGHT: #FFFFFF 1px solid; 
+BORDER-TOP: #FFFFFF 1px solid; 
+BORDER-LEFT: #FFFFFF 1px solid; 
+border-collapse:collapse;
+}
+
+
+.printableform
+{
+LETTER-SPACING: -1px;
+BACKGROUND-COLOR: #d3d3d3;
+font-weight:bold;
+border-color:#7B7B7B;
+border-width:1px;
+border-collapse:collapse;
+}
+
+A.headerlink:link { color:#ffffff}       /* unvisited link */
+A.headerlink:visited { color: #ffffff}   /* visited links */
+A.headerlink:active { color: #ffffff}/* active links */
+
+A.DefLink:link { color:#0000ff}       /* unvisited link */
+A.DefLink:visited { color: #0000ff}   /* visited links */
+A.DefLink:active { color: #0000ff}/* active links */
+
+A.DefLinkSmall:link  
+{
+	color:#0000ff; font-size:xx-small; font-weight:bold;
+}
+A.DefLinkSmall:visited  
+{
+	color: #0000ff; font-size:xx-small; font-weight:bold;
+}
+A.DefLinkSmall:active  
+{
+	color: #0000ff; font-size:xx-small; font-weight:bold; 
+}
+
+A.headerlinkSmall:link  
+{
+	color:#ffffff; font-size:xx-small; font-weight:bold;
+}
+A.headerlinkSmall:visited  
+{
+	color: #ffffff; font-size:xx-small; font-weight:bold;
+}
+A.headerlinkSmall:active  
+{
+	color: #ffffff; font-size:xx-small; font-weight:bold; 
+}
+
+.MainSubMenu
+{
+	color: white; 
+	font-family:Verdana, sans-serif;
+	font-size:10px;
+	font-weight:bold;
+	BORDER-RIGHT: 0px solid;
+	BORDER-TOP: 0px solid;
+	BORDER-LEFT: 0px solid;
+	BORDER-BOTTOM: 0px solid;
+	border-style:outset;
+}
+
+.MainSubMenuSelected {text-decoration:underline;background-color:#E29C0B;}
+
+/*
+.PopUpMenuA 
+{
+	background-color:#E29C0B;
+	BORDER-RIGHT: #A44D18 1px solid;
+	BORDER-TOP: #A44D18 1px solid;
+	BORDER-LEFT: #A44D18 1px solid;
+	BORDER-BOTTOM: #A44D18 1px solid;
+	border-style:outset;
+}
+
+.PopUpMenuB 
+{
+	background-color:#F2BA2F;
+	BORDER-RIGHT: #A44D18 1px solid;
+	BORDER-TOP: #A44D18 1px solid;
+	BORDER-LEFT: #A44D18 1px solid;
+	BORDER-BOTTOM: #A44D18 1px solid;
+	border-style:outset;
+}
+
+.PopUpMenuSelected
+{
+	background-color:#85868B;
+	BORDER-RIGHT: #A44D18 1px solid;
+	BORDER-TOP: #A44D18 1px solid;
+	BORDER-LEFT: #A44D18 1px solid;
+	BORDER-BOTTOM: #A44D18 1px solid;
+	border-style:outset;
+	text-decoration:underline;
+}
+*/
+.SOSGridPager
+{
+	 text-align:left;
+	 font-size:16px;
+}
+
+
+
+.SOSContent
+{
+text-align:left;
+width:100%;
+}
+
+
+
+.HomeBox
+{
+BORDER-RIGHT: #7b7b7b 1px solid;
+BORDER-LEFT: #7b7b7b 1px solid;
+BORDER-BOTTOM: #7b7b7b 1px solid;
+BORDER-TOP: #7b7b7b 1px solid;
+BACKGROUND-COLOR:#d3d3d3;
+
+}
+
+.HomeInnerBox
+{
+BORDER-BOTTOM: #E29C0B 2px solid;
+BORDER-TOP: #E29C0B 2px solid;
+BACKGROUND-COLOR:#EEEEEE;
+
+}
+
+TABLE.SSOLandingMenu
+{
+    FONT-WEIGHT: normal;
+    FONT-SIZE: 12px;
+    COLOR: #333333;
+    FONT-FAMILY: arial
+}
+TABLE.SSOLandingMenu TD
+{
+    VERTICAL-ALIGN: middle;
+    height:23px;
+}
+TABLE.SSOLandingMenu A:link
+{
+    FONT-WEIGHT: normal;
+    FONT-SIZE: 12px;
+    COLOR: #333333;
+    FONT-FAMILY: arial;
+    TEXT-DECORATION: none
+}
+TABLE.SSOLandingMenu A:active
+{
+    FONT-WEIGHT: normal;
+    FONT-SIZE: 12px;
+    COLOR: #333333;
+    FONT-FAMILY: arial;
+    TEXT-DECORATION: none
+}
+TABLE.SSOLandingMenu A:visited
+{
+    FONT-WEIGHT: normal;
+    FONT-SIZE: 12px;
+    COLOR: #333333;
+    FONT-FAMILY: arial;
+    TEXT-DECORATION: none
+}
+TABLE.SSOLandingMenu A:hover
+{
+    TEXT-DECORATION: underline
+}
+
+H3.SSOLandingMenu
+{
+    MARGIN-TOP: 8px;
+    FONT-SIZE: 17px;
+    MARGIN-BOTTOM: 6px;
+    PADDING-BOTTOM: 0px;
+    BORDER-BOTTOM: 1px solid;
+    FONT-FAMILY: Verdana, sans-serif;
+    color:#E29C0B;
+}
+
+.HeaderBar
+{
+	 background:url(/SOSServices/images/sortbar.PNG) repeat-x top ;
+	 color:#FFFFFF;
+	 letter-spacing:normal;
+	 height:27px;
+	 text-decoration: none;
+}
+
+.HeaderBarSmallFont
+{
+	 background:url(/SOSServices/images/sortbar.PNG) repeat-x top ;
+	 color:#FFFFFF;
+	 letter-spacing:normal;
+	 height:27px;
+	 text-decoration: none;
+	 font-size:small;
+}
+
+.searchcontrol
+{
+    height: 22px !important;
+    display:inline;
+    padding: 0px 3px !important;
+    font-size: 14px !important;
+    font-weight: normal;
+    line-height: 1.42857143;
+    color: #000;
+    background-color: #fff;
+    background-image: none;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    -webkit-box-shadow: inset 0 1px 1px rgba(0,0,0,.075);
+    box-shadow: inset 0 1px 1px rgba(0,0,0,.075);
+    -webkit-transition: border-color ease-in-out .15s,-webkit-box-shadow ease-in-out .15s;
+    -o-transition: border-color ease-in-out .15s,box-shadow ease-in-out .15s;
+    transition: border-color ease-in-out .15s,box-shadow ease-in-out .15s;
+}
+
+.TDColorB1
+{
+	background-color: #AAAAAA;
+	color:#FF0000;
+	font-size:medium;
+}
+
+.WarningFont
+{
+	font-size:small;
+	font-weight:bold;
+	color: #FF0000;
+	font-style:italic;
+}
+
+.AlertFont
+{
+	font-size:small;
+	font-weight:bold;
+	color: #FF0000;
+}
+
+
+.TDTypeEDISABLED
+{
+	background-color:#eeeeff;
+	height:27px;
+	color:#aaaaaa;
+}
+
+.TDColorALeftDISABLED
+{
+	background-color: #d3d3d3;
+	color:#aaaaaa;
+	height:27px;
+}
+
+.RedLink { color:#FF0000; font-size:10px; letter-spacing:normal;}
+
+.YellowLink { color:#0000FF; font-size:10px; letter-spacing:normal;}
+
+
+.DefImage 
+{
+	border:0px; vertical-align:middle;
+}
+
+.CartSubItem
+{
+	width:25px;
+	BACKGROUND: url(/SOSServices/images/subitem.gif);
+	background-color: #EEEEEE;
+	background-repeat:no-repeat;  
+	background-position:center;
+}
+
+.CartMenuRoot
+{
+	padding-top: 3px;
+	font-size:small;
+    
+}
+
+
+
+.CartMenuRoot .rmLink 
+{
+	TEXT-DECORATION: none !important;
+	color:#FFFFFF;
+	text-align:right;
+	font-size:14px;
+	letter-spacing:normal;
+	width:17px;
+    font-weight: bold !important;
+    border: 0px !important;
+}
+
+.CartMenuRoot .rmLeftImage
+{
+
+}
+
+.CartMenuRoot .TATopItem 
+{
+	TEXT-DECORATION: underline !important;
+	color:#0000FF !important;
+	font-size:14px !important;
+	LETTER-SPACING: -1px;
+    border: 0px !important;
+}
+
+.CartMenuRoot  .rmRootGroup  
+{
+    border: 0px !important;
+
+}
+
+.CartMenuRoot  .rmGroup  
+{
+	BORDER-BOTTOM: #222222 1px solid;
+	BORDER-RIGHT: #222222 1px solid; 
+	BORDER-TOP: #e1e1e1 1px solid; 
+	BORDER-LEFT: #e1e1e1 1px solid;
+	border-collapse:collapse;
+    padding: 0 0 0 0 !important;
+
+}
+
+.CartMenuRoot .rmLink:hover
+{
+	background-color:#003366;
+	color:#FFFFFF;
+	text-decoration:underline !important;
+	cursor: pointer;
+}
+
+.CartMenuRoot .TATopItem:hover
+{
+	background-color:#eeeeee;
+	color:#003366;
+	cursor: default;
+}
+
+
+.RemoveCartItem
+{
+	font-size:medium;
+	background-color:#7b7b7b;
+	padding-top: 3px;
+	TEXT-DECORATION: none !important;
+	color:#FFFFFF;
+	text-align:right;
+	font-size:11px;
+	letter-spacing:normal;
+	BACKGROUND: url(/SOSServices/images/remove.png);
+	background-repeat:no-repeat;  
+	background-position: 5px 3px; 
+}
+
+.RemoveCartItem:hover
+{
+	background-color:#003366;
+	color:#FFFFFF;
+	text-decoration:underline !important;
+}
+
+.HoldCartItem
+{
+	font-size:medium;
+	background-color:#7b7b7b;
+	padding-top: 3px;
+	TEXT-DECORATION: none !important;
+	color:#FFFFFF;
+	text-align:right;
+	font-size:11px;
+	letter-spacing:normal;
+	BACKGROUND: url(/SOSServices/images/pushpinY.gif);
+	background-repeat:no-repeat;  
+	background-position: 7px 1px; 
+}
+
+.HoldCartItem:hover
+{
+	background-color:#003366;
+	color:#FFFFFF;
+	text-decoration:underline !important;
+}
+
+.ReleaseCartItem
+{
+	font-size:medium;
+	background-color:#7b7b7b;
+	padding-top: 3px !important;
+	TEXT-DECORATION: none !important;
+	color:#FFFFFF;
+	text-align:right;
+	font-size:11px;
+	letter-spacing:normal;
+	BACKGROUND: url(/SharedVision/cart2.png);
+	background-repeat:no-repeat;  
+	background-position: 5px 0px; 
+}
+
+.ReleaseCartItem:hover
+{
+	background-color:#003366;
+	color:#FFFFFF;
+	text-decoration:underline !important;
+}
+
+.CartMenu  
+{
+	font-size:medium;
+	background-color:#7b7b7b;
+	padding-top: 3px;
+}
+
+.CartMenu .rmLink 
+{
+	TEXT-DECORATION: none !important;
+	color:#FFFFFF;
+	background-color:#7b7b7b;
+	text-align:right;
+	font-size:11px;
+	height: 22px;
+	letter-spacing:normal;
+	width:400px;
+}
+
+.CartMenu .rmLeftImage
+{
+
+}
+
+.CartMenu .TATopItem 
+{
+	TEXT-DECORATION: underline !important;
+	color:#0000FF;
+	font-size:medium;
+	background-color:#d3d3d3;
+	LETTER-SPACING: -1px;
+
+}
+
+.CartMenu  .rmGroup  
+{
+	BORDER-BOTTOM: #222222 1px solid;
+	BORDER-RIGHT: #222222 1px solid; 
+	BORDER-TOP: #e1e1e1 1px solid; 
+	BORDER-LEFT: #e1e1e1 1px solid;
+	border-collapse:collapse;
+}
+
+.CartMenu .rmLink:hover
+{
+	background-color:#003366;
+	color:#FFFFFF;
+	text-decoration:underline !important;
+}
+
+.CartMenu .TATopItem:hover
+{
+	background-color:#FFFFFF;
+	color:#003366;
+}
+
+.PriceCell
+{
+  padding-right: 2px;
+  text-align: right;
+}
+
+.PriceChangeCell
+{
+	color: #FF8040;
+	font-weight:bold;
+    padding-right: 2px;
+    text-align: right;
+}
+
+.help
+{
+    font-size: small;
+}
+
+.payicon
+{
+    margin:4px;
+}
+
+.bigRed
+{
+    color: red;
+    font-size: large;
+}
+
+.boldBlue
+{
+    color: blue;
+    font-weight: bold;
+}
+
+.h1, .h2, .h3, .h4, .h5, .h6, h1, h2, h3, h4, h5, h6 {
+    font-family: inherit;
+    font-weight: bold !important;
+}
+
+select, textarea {
+    margin: 0;
+    font: initial !important;
+    font-family: Arial !important;
+    color: initial !important;
+    /* font: inherit; */
+    /* color: inherit; */
+}
