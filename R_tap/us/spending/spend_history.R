@@ -83,8 +83,8 @@ if (length(cmd_args) == 2) {
   }
 } else if (length(cmd_args) == 0){
   ### !!! define dates here
-  # end_yr <- as.integer(format(Sys.Date(), "%Y"))
-  # start_yr <- 2001
+  end_yr <- as.integer(format(Sys.Date(), "%Y"))
+  start_yr <- 2001
   ### !!!!!!!!!!!!!!!!!!!!!
   cli_alert_info("Using fiscal years from user")
 } else {
@@ -96,6 +96,9 @@ seq_yr <- seq(start_yr, end_yr)
 n_yr <- length(seq_yr)
 
 cli_alert("FY{start_yr} to FY{end_yr} ({n_yr} year{?s})")
+if (n_yr > 4) {
+  cli_alert_warning("Requesting many years takes time!")
+}
 
 # prep data ---------------------------------------------------------------
 cli_h2("Prepare request")
@@ -130,6 +133,7 @@ for (fy in seq_yr) {
   if (fy %in% bulk_names$year) {
     fy_file <- bulk_names$name[bulk_names$year == fy]
     cli_alert_success("FY{fy} already downloaded: {.path {fy_file}}")
+    next
   }
   start_dt <- sprintf("%i-10-01", fy - 1)
   end_dt <- sprintf("%i-09-30", fy)
@@ -193,18 +197,22 @@ cli_h2("Check each file status")
 
 cli_alert("Wait for {n_yr} file{?s} to be ready for download")
 
-# init empty cols
-bulk_names <- data.frame(
-  bulk_names,
-  status = NA_character_,
-  size = NA_real_,
-  ncol = NA_integer_,
-  nrow = NA_integer_,
-  time = NA_real_
-)
+if (ncol(bulk_names) <= 2) {
+  # init empty cols
+  bulk_names <- data.frame(
+    bulk_names,
+    status = NA_character_,
+    size = NA_real_,
+    ncol = NA_integer_,
+    nrow = NA_integer_,
+    time = NA_real_
+  )
+  all_fin <- FALSE
+} else if (all(bulk_names$status == "finished")) {
+  all_fin <- TRUE
+}
 
-all_fin <- FALSE
-while (!all_fin) {
+while (isFALSE(all_fin)) {
   for (i in seq_along(bulk_names$name)) {
     if (isTRUE(bulk_names$status[i] == "finished")) {
       next
@@ -271,17 +279,17 @@ for (i in seq_along(raw_zip)) {
   cli_text("{.file {ansi_strtrim(raw_zip[i], console_width() - 3)}}")
 }
 
-
-
 # extract files -----------------------------------------------------------
 cli_h2("Extract text files")
 cli_alert_warning("Extraction can fail on large files")
 
 csv_dir <- here("us", "spending", "data", "csv")
+all_csv <- dir_ls(csv_dir, glob = "*.csv")
 
 # list the zip contents
 zip_list <- lapply(raw_zip, unzip, list = TRUE)
 for (i in seq_along(raw_zip)) {
+  cli_h2("Extracting FY{bulk_names$year[i]} files")
   z <- zip_list[[i]]
   z$Length <- fs_bytes(z$Length)
 
@@ -289,22 +297,15 @@ for (i in seq_along(raw_zip)) {
   cli_ol(paste(col_blue(z$Name), col_grey(z$Length)))
 
   raw_csv <- path(csv_dir, z$Name)
-  file_exists(raw_csv)
-
-  cli_process_start("Extracting all files")
-  all_csv <- unzip(raw_zip, exdir = dirname(raw_zip))
-  cli_process_done(msg_done = wt("Extracting all files... done"))
-  n_csv <- length(all_csv)
-
-  if (n_csv < 4) {
-    cli_alert_danger("Bulk file should contain at least 4 text files")
-    quit(save = "no", status = 1)
+  n_csv <- length(raw_csv)
+  if (all(file_exists(raw_csv))) {
+    cli_alert_success("All {n_csv} CSV file{?s} already extracted")
+  } else {
+    cli_process_start("Extracting all files")
+    unzip(raw_zip, exdir = dirname(raw_zip))
+    cli_process_done(msg_done = wt("Extracting all files... done"))
   }
 }
-
-
-
-
 
 check_file <- here("us", "spending", "spend_check.csv")
 all_checks <- data.frame()
