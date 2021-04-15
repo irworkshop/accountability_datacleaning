@@ -141,5 +141,8 @@ vignettes/*.pdf
 # Shiny token, see https://shiny.rstudio.com/articles/shinyapps.html
 rsconnect/
 
+# LibreOffice lock files
+*.~lock*
+
 # macOS folder attrs file
 .DS_Store
