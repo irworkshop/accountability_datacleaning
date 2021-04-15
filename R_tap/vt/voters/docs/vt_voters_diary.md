@@ -1,7 +1,7 @@
 Vermont Voters
 ================
 Kiernan Nicholls
-Tue Apr 13 15:48:42 2021
+Thu Apr 15 11:57:24 2021
 
 -   [Project](#project)
 -   [Objectives](#objectives)
@@ -20,6 +20,7 @@ Tue Apr 13 15:48:42 2021
 -   [Conclude](#conclude)
 -   [Export](#export)
 -   [Upload](#upload)
+-   [Old](#old)
 
 <!-- Place comments regarding knitting here -->
 
@@ -603,16 +604,25 @@ server.
 
 ``` r
 clean_dir <- dir_create(here("vt", "voters", "data", "clean"))
-clean_path <- path(clean_dir, "vt_voters_clean.csv")
+clean_path <- path(clean_dir, "vt_voters_2021-04-09.csv")
 write_csv(vtv, clean_path, na = "")
 (clean_size <- file_size(clean_path))
 #> 104M
-file_encoding(clean_path) %>% 
-  mutate(across(path, path.abbrev))
-#> # A tibble: 1 x 3
-#>   path                                       mime                     charset
-#>   <fs::path>                                 <chr>                    <chr>  
-#> 1 ~/vt/voters/data/clean/vt_voters_clean.csv application/octet-stream binary
+non_ascii(clean_path)
+#> # A tibble: 68 x 2
+#>       row line                                                                                                          
+#>     <int> <chr>                                                                                                         
+#>  1   4375 "000987940,ALDRICH,NOAH,JOS<c3><89>,,50 HUNTINGTON ST,,SAINT ALBANS CITY,VT,05478,50 HUNTINGTON ST,,SAINT ALB…
+#>  2   8147 "000877372,ANDERSEN,MAXWELL,THOMAS,,1 UNIDENTIFIED ST,,MIDDLEBURY,VT,05753,385 CHAUSS<c3><89>E DE WATERLOO,IX…
+#>  3  20093 "000950990,BARBOSA,JORGE,R,,60 MURRAY HILL RD,,MANCHESTER,VT,05255,227 OESTE DE LA CANDELARIA,MAYAG<c3><9c>EZ…
+#>  4  37250 "000806598,BIRG<c3><89>,SARAH,H.,,11 FERAL MOUNTAIN RD,,MIDDLESEX,VT,05602,11 FERAL MOUNTAIN RD,,MIDDLESEX,VT…
+#>  5  57728 "000989066,BROWN,MIYEL,NAJ<c3><89>,,38 MONROE ST,,BURLINGTON,VT,05401,38 MONROE ST,,BURLINGTON,VT,05401,1996,…
+#>  6  80560 "000851588,CHAVES,JARED,SCOTT,,172 HEATH RD,,HYDE PARK,VT,05655,KL<c3><96>NNESTR. 53,,,,,1988,2016-02-01,,ACT…
+#>  7  81152 "000924025,CHESNEY,T<c3><89>O,,,613 HIDDEN VALLEY RD,,POWNAL,VT,05261,613 HIDDEN VALLEY RD,,POWNAL,VT,05261,1…
+#>  8  87077 "000006793,CLOUGH,GRETA,,,302 OLD GUILFORD RD,,BRATTLEBORO,VT,05301,H<c3><96>F<c3><90>ABRAUT 21,,,,,1982,2000…
+#>  9  98030 "000689432,COT<c3><89>,JESSICA,M.,,18 MANNING RD,,HYDE PARK,VT,05655,18 MANNING RD,,HYDE PARK,VT,05655,1970,2…
+#> 10 116488 "000879437,DENEEN,MATHIEU,,,115 HILLINGER LN,,SHARON,VT,05065,M<c3><96>JAV<c3><84>GEN 40,,,,,1980,2016-10-13,…
+#> # … with 58 more rows
 ```
 
 ## Upload
@@ -635,4 +645,90 @@ if (!object_exists(aws_path, "publicaccountability")) {
 aws_head <- head_object(aws_path, "publicaccountability")
 (aws_size <- as_fs_bytes(attr(aws_head, "content-length")))
 unname(aws_size == clean_size)
+```
+
+## Old
+
+Download 2018 data from IRW server.
+
+``` r
+old_csv <- path(raw_dir, "vt_voters_2018.csv")
+if (!file_exists(old_csv)) {
+  save_object(
+    object = "csv/vt_voters.csv",
+    bucket = "publicaccountability",
+    file = old_csv
+  )
+}
+```
+
+Read 2018 data.
+
+``` r
+vto <- read_csv(
+  file = old_csv,
+  col_types = cols(
+    .default = col_character(),
+    REG_DATE = col_date_mdy(),
+    YEAR = col_integer(),
+    YearofBirth = col_integer(),
+    LASTVOTEDATE = col_date_mdy()
+  )
+)
+```
+
+Match old column names to new data.
+
+``` r
+vto <- vto %>% 
+  rename(
+    voter_id = VoterID,
+    last_name = LASTNAME,
+    first_name = FIRSTNAME,
+    middle_name = MIDDLENAME,
+    suffix = SUFFIX,
+    address_1 = ADDRESS1,
+    address_2 = ADDRESS2,
+    city = CITY,
+    state = STATE,
+    zip = ZIP5,
+    birth_year = YearofBirth,
+    reg_date = REG_DATE,
+    reg_year = YEAR,
+    date_last_voted = LASTVOTEDATE,
+    county = County,
+    status = Status,
+    town_of_registration = TownofRegistration
+  )
+```
+
+Bind new structure on old data to fill columns.
+
+``` r
+vto <- bind_rows(vtv[0, ], vto)
+```
+
+Keep only voters not in 2021 data.
+
+``` r
+vto <- filter(vto, voter_id %out% vtv$voter_id)
+```
+
+``` r
+old_path <- path(clean_dir, "vt_voters_2018-12-01.csv")
+write_csv(vto, old_path, na = "")
+```
+
+``` r
+aws_old <- path("csv", basename(old_path))
+if (!object_exists(aws_path, "publicaccountability")) {
+  put_object(
+    file = old_path,
+    object = aws_old, 
+    bucket = "publicaccountability",
+    acl = "public-read",
+    show_progress = TRUE,
+    multipart = TRUE
+  )
+}
 ```
