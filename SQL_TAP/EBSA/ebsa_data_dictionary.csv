@@ -1,0 +1,13 @@
+table_name,column_name,attribute_name,definition,column_datatype,display_name
+"ebsa_ocats","ein","Employer Identification Number","A unique number assigned to a company that provides employment opportunities. This number is assigned by the IRS.","varchar","Plan EIN"
+"ebsa_ocats","load_dt","Load Date","The date the load was completed.","date","No Label"
+"ebsa_ocats","final_close_date","Final Clode Date","Date of Final Closing.","date","Closing Date"
+"ebsa_ocats","penalty_amount","Penalty Amount","The dollar amount that was assessed as a penalty. The available dollar ranges are: $0-$10.000. $10.001 - $50.000.","varchar","Penalty Amount"
+"ebsa_ocats","plan_admin","Plan Administrator","The name of the company that administers the plan.","varchar","Plan Administrator"
+"ebsa_ocats","final_close_reason","Final Close Reason","Final Closing Reason for this Case.","varchar","Closing Reason"
+"ebsa_ocats","plan_name","Plan Name","The specific name of the plan.","varchar","Plan Name"
+"ebsa_ocats","plan_admin_state","Plan Administrator State","The State where the Plan Administrator's office is located.","varchar","Admin State"
+"ebsa_ocats","case_type","Case Type","The type of case. Available selections are: Deficient Filer. Non Filer. Late Filer.","varchar","Case Type"
+"ebsa_ocats","plan_year","Plan Year","The year the Plan went into effect.","varchar","Plan Year"
+"ebsa_ocats","plan_admin_zip_code","Plan Administrator Zip Code","The Zip Code where the Plan Administrator's office is located.","varchar","Admin Zip Code"
+"ebsa_ocats","pn","Plan No","The plan number.","varchar","Plan No"
