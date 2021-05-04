@@ -19,7 +19,7 @@ library(stringr)
 ```
 
 
-#Read file, clean up field names and explore
+## Read file, clean up field names and explore
 
 ```
 wy <- read_csv('wy_salaries.csv', col_names = TRUE)
@@ -33,11 +33,13 @@ arrange(desc(n))
 
 wy_depts<-wy %>% count(HOME_DEPT_CODE,HOME_DEPARTMENT_NAME) %>% 
 arrange(desc(n))
+```
 
-  ```{r pay}
+## Plot pay
+```{r pay}
 hist(wy$BASE_PAY_PARAMETER_AMOUNT)
 ```
-#Export to csv
+## Export to csv
 ```
 write_csv(wy, "wy_salaries_clean.csv", col_names=TRUE)
 ```
