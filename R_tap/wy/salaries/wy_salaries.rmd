@@ -1,0 +1,43 @@
+title: "TAP Wyoming Salaries"
+author: "Jennifer LaFleur"
+date: "May 4, 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```
+library(tidyverse) 
+library(dplyr) 
+library(ggplot2) 
+library(knitr) 
+library(psych) 
+library(stringr)
+```
+
+
+#Read file, clean up field names and explore
+
+```
+wy <- read_csv('wy_salaries.csv', col_names = TRUE)
+
+names(wy)<-str_replace_all(str_to_upper(names(wy)), c(" " = "_"))
+
+describe(wy)
+
+wy_titles<-wy %>% count(ASSIGN_TITLE_CODE, ASSIGN_SUB_TITLE_DESC) %>% 
+arrange(desc(n))
+
+wy_depts<-wy %>% count(HOME_DEPT_CODE,HOME_DEPARTMENT_NAME) %>% 
+arrange(desc(n))
+
+  ```{r pay}
+hist(wy$BASE_PAY_PARAMETER_AMOUNT)
+```
+#Export to csv
+```
+write_csv(wy, "wy_salaries_clean.csv", col_names=TRUE)
+```
