@@ -131,7 +131,6 @@ raw_dir <- dir_create(here("ky", "contribs", "data", "raw"))
 for (yr in 2011:2021) {
   cli_h2("Starting year: {yr}")
   for (mn in 1:12) {
-    cli_h3("Requesting month: {month.abb[mn]}")
     start_dt <- as.Date(paste(yr, mn, 1, sep = "-"))
     end_dt <- start_dt %m+% months(1) - days(1)
     if (start_dt > today()) {
@@ -150,10 +149,10 @@ for (yr in 2011:2021) {
           ContributionSearchType = "All"
         )
       )
-      cli_alert_success("File downloaded: {as.character(file_size(dt_path))}")
+      cli_alert_success("{month.abb[mn]}: {as.character(file_size(dt_path))}")
       Sys.sleep(10)
     } else {
-      cli_alert_success("File already exists")
+      cli_alert_success("{month.abb[mn]} done!")
     }
   }
 }
@@ -277,8 +276,12 @@ kyc %>%
     contributor_last_name, recipient_last_name, 
     amount, election_date, address1
   ) %>% 
-  arrange(contributor_last_name)
+  arrange(recipient_last_name, election_date, amount)
 ```
+
+Without a contribution date, it's difficult to identify these duplicates as
+stemming from a flaw in the data (rather than "true" duplicate repeat payments).
+We will flag them but not remove any.
 
 ### Categorical
 
