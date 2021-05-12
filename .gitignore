@@ -138,6 +138,9 @@ vignettes/*.pdf
 *.utf8.md
 *.knit.md
 
+# Here location file
+.here
+
 # Shiny token, see https://shiny.rstudio.com/articles/shinyapps.html
 rsconnect/
 
@@ -146,3 +149,6 @@ rsconnect/
 
 # macOS folder attrs file
 .DS_Store
+
+# Data directories
+data/
