@@ -90,7 +90,7 @@ RMarkdown diary in the appropriate state directory.
 
 [tap]: https://publicaccountability.org/
 [githow]: https://guides.github.com/introduction/git-handbook/
-[guide]: misc/data_check_guide.md
+[guide]: GUIDE.md
 [rsvs]: https://support.rstudio.com/hc/en-us/articles/200532077-Version-Control-with-Git-and-SVN
 [ghdesk]: https://desktop.github.com/
 [rmd]: https://rmarkdown.rstudio.com/
