@@ -1,0 +1,404 @@
+---
+title: "FAA Pilot Registration"
+author:
+  - "Victor Brew"
+  - "Kiernan Nicholls"
+date: "`r date()`"
+output:
+  github_document: 
+    df_print: tibble
+    toc: true
+    toc_dept: 3
+editor_options: 
+  chunk_output_type: console
+---
+
+<!-- Place comments regarding knitting here -->
+
+```{r setup, include=FALSE, purl=FALSE}
+library(knitr)
+opts_chunk$set(
+  eval = TRUE,
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  error = FALSE,
+  collapse = TRUE,
+  comment = "#>",
+  fig.path = "../plots/",
+  fig.width = 10,
+  dpi = 300
+)
+if (!interactive()) {
+  options(width = 120, knitr.kable.NA = "")
+  set.seed(5)
+}
+```
+
+## Project
+
+The Accountability Project is an effort to cut across data silos and give
+journalists, policy professionals, activists, and the public at large a simple
+way to search across huge volumes of public data about people and organizations.
+
+Our goal is to standardize public data on a few key fields by thinking of each
+dataset row as a transaction. For each transaction there should be (at least) 3
+variables:
+
+1. All **parties** to a transaction.
+2. The **date** of the transaction.
+3. The **amount** of money involved.
+
+## Objectives
+
+This document describes the process used to complete the following objectives:
+
+1. How many records are in the database?
+1. Check for entirely duplicated records.
+1. Check ranges of continuous variables.
+1. Is there anything blank or missing?
+1. Check for consistency issues.
+1. Create a five-digit ZIP Code called `zip`.
+1. Create a `year` field from the transaction date.
+1. Make sure there is data on both parties to a transaction.
+
+## Packages
+
+The following packages are needed to collect, manipulate, visualize, analyze,
+and communicate these results. The `pacman` package will facilitate their
+installation and attachment.
+
+```{r load_packages, message=FALSE, warning=FALSE, error=FALSE}
+if (!require("pacman")) {
+  install.packages("pacman")
+}
+pacman::p_load(
+  tidyverse, # data manipulation
+  lubridate, # datetime strings
+  gluedown, # printing markdown
+  pdftools, # read documentation
+  janitor, # clean data frames
+  campfin, # custom irw tools
+  aws.s3, # aws cloud storage
+  refinr, # cluster & merge
+  scales, # format strings
+  knitr, # knit documents
+  vroom, # fast reading
+  rvest, # scrape html
+  glue, # code strings
+  here, # project paths
+  httr, # http requests
+  fs # local storage 
+)
+```
+
+```{r where_here}
+# where does this document knit?
+here::i_am("national/faa_pilots/docs/faa_pilots_basic.Rmd")
+```
+
+[tap]: https://github.com/irworkshop/accountability_datacleaning
+[rproj]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects
+
+## Data
+
+The database of Federal Aviation Administration (FAA) pilot registrations can
+be obtained from [the FAA website][faa].
+
+[faa]: https://www.faa.gov/licenses_certificates/airmen_certification/releasable_airmen_download/
+
+> ### Airmen Certification Database
+> * Airmen Certification Branch is not the authoritative source for medical
+data.
+> * The expiration date provided in the downloadable file is for informational
+purposes only.
+> * Any questions regarding medical information should be directed to Aerospace
+Medical Certification Division.
+> 
+> We update these files monthly. The records in each database file are stored in
+either fixed length ASCII text format (TXT) or comma-delimited text format (CSV)
+which is already separated into airmen basic records and certificate records.
+Both formats can be manipulated by common database applications such as MS
+Access.
+> 
+> This information does not include airmen certificate number data, nor does it
+include the records of those airmen who do not want their addresses released.
+You can also elect to Change the Releasability Status of your Address if you do
+not want it listed in the database.
+
+We will be downloading the data in fixed length ASCII text format and can use 
+the [provided documentation][doc] to learn more about the data and how to read
+it.
+
+[doc]: https://www.faa.gov/licenses_certificates/airmen_certification/media/Help.pdf
+
+```{r download_docs}
+pdf_tmp <- file_temp(ext = "pdf")
+download.file(
+  "https://www.faa.gov/licenses_certificates/airmen_certification/media/HelpComm.pdf",
+  destfile = pdf_tmp
+)
+```
+
+### Overview
+
+> On April 5, 2000, the Wendell H. Ford Aviation Investment and Reform Act for
+the 21st Century became Public Law 106-181. Section 715 of that law requires the
+Federal Aviation Administration to release names, addresses, and ratings
+information for all airmen after the 120th day following the date of enactment.
+> 
+> The law also requires that the airmen be given an opportunity to elect that
+their address information be withheld from release under this law. Accordingly,
+the FAA sent letters to all active airmen informing them of the provisions of
+the law, and giving them the option to withhold their address information. The
+FAA will be continuing this procedure for airmen who become active. Responses
+from the letters have been processed
+> 
+> This file contains the names, addresses, and certificate information of those
+airmen who did not respond to indicate that they wished to withhold their
+address information. It is the intent of the Airmen Certification Branch to
+produce this file, in its entirety, on a monthly basis. The file may be
+downloaded from the Civil Aviation Registry web site at
+<http://registry.faa.gov>.
+
+### Format
+
+> #### PILOT INFORMATION FILES LAYOUT – COMMA DELIMITED FORMAT
+> Files: `PILOT_BASIC.csv` and `PILOT_CERT.csv`
+> 
+> These files contain Basic and Certificate data for Pilot related Certificate
+Types. They have all fields separated by commas for ACCESS databases. Each file
+has a heading record containing the data field literals. The Unique ID is the
+key to each record and is the link between the 2 files. Each Basic file record
+has 1 or more active Certificate file records. Certificate Types in this file
+include: P, F, A, U, E, H, and X. The non-Pilot files may contain additional
+certificate records for the Airman.
+
+> **Notes:** 
+> * File is in Unique ID order.  
+> * Only active Certificates are processed; At least 1 Certificate must be
+active for Airman to be in file.
+
+##### Pilot Basic record (Record Type `00`)
+
+A table of column formats can be read from the PDF.
+
+```{r read_docs}
+# read table and split by newline
+pdf_txt <- str_split(pdf_text(pdf_tmp), pattern = "\n")
+# read text tables as data frame
+basic_cols <- read_table(
+  file = pdf_txt[[3]][16:30],
+  col_names = str_trim(str_split(pdf_txt[[3]][12], "\\s{2,}")[[1]])
+)
+```
+
+```{r echo=FALSE}
+kable(basic_cols)
+```
+
+## Download
+
+```{r raw_dir}
+raw_url <- "https://registry.faa.gov/database/CS052021.zip"
+raw_dir <- dir_create(here("national", "faa_pilots", "data", "raw"))
+raw_zip <- path(raw_dir, basename(raw_url))
+```
+
+```{r raw_download}
+if (!file_exists(raw_zip)) {
+  download.file(raw_url, raw_zip)
+}
+```
+
+```{r zip_content, echo=FALSE}
+zip_list <- 
+  unzip(raw_zip, list = TRUE) %>% 
+  as_tibble() %>% 
+  mutate(across(Length, fs_bytes))
+kable(zip_list)
+```
+
+```{r zip_unzip}
+raw_csv <- path(raw_dir, zip_list$Name)
+if (!all(file_exists(raw_csv))) {
+  raw_csv <- unzip(raw_zip, exdir = raw_dir)
+}
+```
+
+## Read
+
+```{r raw_read}
+faa <- map_df(
+  .x = str_subset(raw_csv, "_BASIC.csv"),
+  .f = read_delim,
+  delim = ",",
+  trim_ws = TRUE,
+  escape_double = FALSE,
+  col_types = cols(
+    .default = col_character(),
+    `MED CLASS` = col_integer(),
+    `MED DATE` = col_date("%m%Y"),
+    `MED EXP DATE` = col_date("%m%Y"),
+    `BASIC MED COURSE DATE` = col_date("%Y%m%d"),
+    `BASIC MED CMEC DATE` = col_date("%Y%m%d"),
+    `X16` = col_skip() # empty trailing comma
+  )
+)
+```
+
+## Match
+
+We will be adding the 2021 FAA registration data to an existing database. To do
+so, we will have to match our column names and position to that data.
+
+```{r old_match}
+faa <- faa %>% 
+  select(-`BASIC MED COURSE DATE`, -`BASIC MED CMEC DATE`) %>% 
+  rename_with(~str_remove_all(., "\\s"))
+```
+
+## Explore
+
+There are `r comma(nrow(faa))` rows of `r ncol(faa)` columns. Each record
+represents a single pilot registered with the FAA.
+
+```{r glimpse}
+glimpse(faa)
+tail(faa)
+```
+
+### Missing
+
+Columns vary in their degree of missing values.
+
+```{r na_count}
+col_stats(faa, count_na)
+```
+
+Of those pilots missing a first or last name, most appear to be from cultures
+where not everybody has a name that matches the Western surname tradition.
+
+```{r na_flag}
+faa %>% 
+  filter(is.na(FIRSTNAME) | is.na(LASTNAME))
+```
+
+### Duplicates
+
+We can also flag any record completely duplicated across every column.
+
+```{r dupe_flag}
+faa <- flag_dupes(faa, -UNIQUEID)
+sum(faa$dupe_flag)
+```
+
+The few existing duplicates do have their own `UNIQUEID` but duplicate
+everything else, including the address and medical evaluation dates.
+
+```{r dupe_view}
+faa %>% 
+  filter(dupe_flag) %>% 
+  arrange(FIRSTNAME, LASTNAME)
+```
+
+The existing data does not have a variable indication duplicates, so we will
+have to remove this new flag.
+
+```{r dupe_unflag}
+faa <- select(faa, -dupe_flag)
+```
+
+### Categorical
+
+```{r distinct_count}
+col_stats(faa, n_distinct)
+```
+
+```{r distinct_plots, echo=FALSE}
+explore_plot(faa, REGION)
+explore_plot(faa, STATE)
+```
+
+### Dates
+
+```{r date_range}
+min(faa$MEDDATE)
+max(faa$MEDDATE)
+sum(faa$MEDDATE > today())
+```
+
+```{r bar_year, echo=FALSE}
+faa %>% 
+  count(year = year(MEDDATE)) %>% 
+  ggplot(aes(x = year, y = n)) +
+  geom_col() + 
+  scale_y_continuous(labels = comma) +
+  coord_cartesian(xlim = c(2000, 2021)) +
+  scale_x_continuous(breaks = seq(2000, 2020, by = 2)) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "FAA Pilots by Medical Evaluation Date",
+    x = "Year Evaluated",
+    y = "Count"
+  )
+```
+
+## Wrangle
+
+We can add the 5-digit ZIP code in the proper place to match existing format.
+
+```{r zip_add}
+faa <- mutate(faa, ZIP5 = str_sub(ZIPCODE, end = 5), .after = ZIPCODE)
+```
+
+## Conclude
+
+Any missing checks were avoided due to the existing data format.
+
+1. There are `r comma(nrow(faa))` records in the database.
+1. There a handful of un-flagged duplicate records.
+1. Date range is mostly reasonable, but will be formatted as `mm/dd/yyyy`.
+1. There are `r comma(sum(faa$na_flag))` records missing key variables.
+1. Consistency in geographic data has not been improved.
+1. The 4-digit `year` has not been created.
+
+We must also format our date columns as character strings in mm/dd/yyyy format.
+
+```{r date_mdy}
+faa <- faa %>% 
+  mutate(across(where(is.Date), format, "%m/%d/%Y"))
+```
+
+## Export
+
+Now the file can be saved on disk for upload to the Accountability server.
+
+```{r clean_dir}
+clean_dir <- dir_create(path(dirname(raw_dir), "clean"))
+clean_path <- path(clean_dir, glue("airmen_{year(today())}.csv"))
+write_csv(faa, clean_path, na = "")
+(clean_size <- file_size(clean_path))
+non_ascii(clean_path)
+```
+
+## Upload
+
+We can use the `aws.s3::put_object()` to upload the text file to the IRW server.
+
+```{r aws_upload, eval=FALSE}
+aws_path <- path("csv", basename(clean_path))
+if (!object_exists(aws_path, "publicaccountability")) {
+  put_object(
+    file = clean_path,
+    object = aws_path, 
+    bucket = "publicaccountability",
+    acl = "public-read",
+    show_progress = TRUE,
+    multipart = TRUE
+  )
+}
+aws_head <- head_object(aws_path, "publicaccountability")
+(aws_size <- as_fs_bytes(attr(aws_head, "content-length")))
+unname(aws_size == clean_size)
+```
