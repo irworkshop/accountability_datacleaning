@@ -66,6 +66,13 @@ wt <- function(...) {
   paste(..., cli::col_silver(Sys.time()))
 }
 
+cli_bytes <- function(x) {
+  if (is.character(x) && file.exists(x)) {
+    x <- file_size(x)
+  }
+  style_italic(as.character(as_fs_bytes(x)))
+}
+
 # script args -------------------------------------------------------------
 
 # call script from command line with (1) start and (2) end dates
@@ -85,10 +92,10 @@ if (length(cmd_args) == 2) {
   }
 } else if (length(cmd_args) == 0){
   ### !!! define dates here
-  # end_dt <- Sys.Date() - 1
-  # start_dt <- end_dt - 7
+  end_dt <- Sys.Date() - 1
+  start_dt <- end_dt - 7
   ### !!!!!!!!!!!!!!!!!!!!!
-  cli_alert_info("Using date range from user")
+  cli_alert_info("Using default or user supplied dates")
 } else {
   cli_alert_danger("When using args, supply (1) start date & (2) end date")
   quit(save = "no", status = 1)
@@ -152,6 +159,8 @@ post_data <- content(award_post)
 # check status ------------------------------------------------------------
 cli_h2("Check file status")
 
+cli_alert("File name: {.path {post_data$file_name}}")
+
 cli_alert("Wait for file to be ready for download")
 while (!exists("post_status") || post_status == "running") {
   # check request download status
@@ -182,7 +191,7 @@ data_dir <- dir_create(here("us", "spending", "data"))
 raw_zip <- path(data_dir, post_data$file_name)
 
 bulk_size <- fs_bytes(status_get$total_size * 1000)
-cli_alert(wt("Starting download {.emph ({bulk_size})}"))
+cli_alert(wt("Starting download ({cli_bytes(bulk_size)})"))
 cli_text("{.url {ansi_strtrim(post_data$file_url, console_width() - 3)}}")
 
 # download locally
@@ -194,7 +203,7 @@ if (file_exists(raw_zip)) {
     write_disk(path = raw_zip),
     progress(type = "down")
   )
-  cli_alert_success(wt("Download complete {.emph ({file_size(raw_zip)})}"))
+  cli_alert_success(wt("Download complete ({cli_bytes(raw_zip)})"))
 }
 
 cli_text("{.file {ansi_strtrim(raw_zip, console_width() - 3)}}")
@@ -236,7 +245,14 @@ us_cols <- read_csv(
   )
 )
 
-for (i in seq_along(all_csv)) {
+# the files are hosted on the site as downloaded
+# no files need to be read or columns added
+# there are date and year columns
+# addresses are very clear
+# rows are rarely missing values
+# only issue is the ZIP+4 in contracts
+if (FALSE) { # swap with for loop to read and check
+# for (i in seq_along(all_csv)) {
   # read file -------------------------------------------------------------
   cli_h3("Spending file {i}/{n_csv}")
   cli_alert("{.file {basename(all_csv[i])}}")
