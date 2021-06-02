@@ -1,7 +1,7 @@
 Mississippi Voters
 ================
 Kiernan Nicholls
-Wed Jun 2 10:34:47 2021
+Wed Jun 2 11:44:37 2021
 
 -   [Project](#project)
 -   [Objectives](#objectives)
@@ -134,7 +134,7 @@ msv <- read_delim(
   escape_double = FALSE,
   col_types = cols(
     .default = col_character(),
-    regn_date = col_date_mdy(),
+    EFFECTIVE_REGN_DATE = col_date_mdy(),
     DATE_VOTED = col_date_mdy()
   )
 )
@@ -198,7 +198,7 @@ glimpse(msv)
 #> $ mail_city       <chr> "COLDWATER", "COLUMBUS", "CLEVELAND", NA, "COLUMBIA", "WATER VALLEY", "RIDGELAND", "JACKSON", …
 #> $ mail_state      <chr> "MS", "MS", "MS", NA, "MS", "MS", "MS", "MS", "MS", NA, "MS", "MS", NA, NA, "MS", NA, NA, NA, …
 #> $ mail_zip_code   <chr> "38618", "39701", "38732", NA, "39429", "38965", "39157", "39213", "39056-3949", NA, "39648-55…
-#> $ regn_date       <chr> "09/16/2013", "03/07/2007", "11/03/1999", "08/20/2002", "08/28/2002", "08/17/1991", "09/24/201…
+#> $ regn_date       <date> 2013-09-16, 2007-03-07, 1999-11-03, 2002-08-20, 2002-08-28, 1991-08-17, 2013-09-24, 2008-08-0…
 #> $ status          <chr> "Purged", "Purged", "Purged", "Purged", "Purged", "Purged", "Active", "Active", "Purged", "Act…
 #> $ date_voted      <date> NA, 2016-03-01, NA, NA, NA, NA, NA, 2016-11-08, 1801-01-01, NA, 2018-11-06, 2016-11-08, 2019-…
 #> $ us              <chr> "US", "US", "US", "US", "US", "US", "US", "US", "US", "US", "US", "US", "US", "US", "US", "US"…
@@ -247,7 +247,7 @@ tail(msv)
 #> 6 1349772       MARGARET   A           "`"       <NA>   196              <NA>      <NA>        <NA>        <NA>         
 #> # … with 48 more variables: post_direction <chr>, res_city <chr>, res_state <chr>, res_zip_code <chr>,
 #> #   res_county <chr>, precinct_code <chr>, precinct_name <chr>, mailing_address <chr>, mail_city <chr>,
-#> #   mail_state <chr>, mail_zip_code <chr>, regn_date <chr>, status <chr>, date_voted <date>, us <chr>, ms <chr>,
+#> #   mail_state <chr>, mail_zip_code <chr>, regn_date <date>, status <chr>, date_voted <date>, us <chr>, ms <chr>,
 #> #   cong <chr>, sc <chr>, psc <chr>, tc <chr>, da <chr>, sen <chr>, rep <chr>, ca <chr>, chc <chr>, cir <chr>,
 #> #   cnt <chr>, lev <chr>, coct <chr>, jud <chr>, schc <chr>, scir <chr>, sup <chr>, supr <chr>, ec <chr>, jc <chr>,
 #> #   jcj <chr>, con <chr>, mun <chr>, ward <chr>, wardp <chr>, mp <chr>, schd <chr>, schb <chr>, sbal <chr>, fire <chr>,
@@ -284,7 +284,7 @@ col_stats(msv, count_na)
 #> 19 mail_city       <chr>  1264980 0.369      
 #> 20 mail_state      <chr>  1264997 0.369      
 #> 21 mail_zip_code   <chr>  1268558 0.371      
-#> 22 regn_date       <chr>        0 0          
+#> 22 regn_date       <date>       0 0          
 #> 23 status          <chr>        0 0          
 #> 24 date_voted      <date>  850997 0.249      
 #> 25 us              <chr>        0 0          
@@ -341,17 +341,17 @@ msv %>%
   select(all_of(key_vars))
 #> # A tibble: 386 x 4
 #>    first_name last_name regn_date  status
-#>    <chr>      <chr>     <chr>      <chr> 
-#>  1 <NA>       ADAMS     08/18/1972 Purged
-#>  2 <NA>       AIKEN     05/31/1993 Purged
-#>  3 <NA>       ALEXANDER 06/10/1983 Purged
-#>  4 <NA>       ALGEE     06/28/1988 Purged
-#>  5 <NA>       AMBROSE   10/23/1908 Purged
-#>  6 <NA>       ANDERSON  10/02/1985 Purged
-#>  7 <NA>       ANDERTON  06/23/1975 Purged
-#>  8 <NA>       ANGLIN    06/09/1975 Purged
-#>  9 <NA>       ASHFORD   10/06/1993 Purged
-#> 10 <NA>       AVANT     06/04/1970 Purged
+#>    <chr>      <chr>     <date>     <chr> 
+#>  1 <NA>       ADAMS     1972-08-18 Purged
+#>  2 <NA>       AIKEN     1993-05-31 Purged
+#>  3 <NA>       ALEXANDER 1983-06-10 Purged
+#>  4 <NA>       ALGEE     1988-06-28 Purged
+#>  5 <NA>       AMBROSE   1908-10-23 Purged
+#>  6 <NA>       ANDERSON  1985-10-02 Purged
+#>  7 <NA>       ANDERTON  1975-06-23 Purged
+#>  8 <NA>       ANGLIN    1975-06-09 Purged
+#>  9 <NA>       ASHFORD   1993-10-06 Purged
+#> 10 <NA>       AVANT     1970-06-04 Purged
 #> # … with 376 more rows
 ```
 
@@ -375,11 +375,11 @@ msv %>%
   select(all_of(key_vars))
 #> # A tibble: 4 x 4
 #>   first_name last_name regn_date  status
-#>   <chr>      <chr>     <chr>      <chr> 
-#> 1 <NA>       BECK      09/16/2003 Active
-#> 2 <NA>       KENNEDY   08/30/2004 Active
-#> 3 <NA>       TRUONG    09/11/2019 Active
-#> 4 <NA>       WESLEY    02/04/2013 Active
+#>   <chr>      <chr>     <date>     <chr> 
+#> 1 <NA>       BECK      2003-09-16 Active
+#> 2 <NA>       KENNEDY   2004-08-30 Active
+#> 3 <NA>       TRUONG    2019-09-11 Active
+#> 4 <NA>       WESLEY    2013-02-04 Active
 ```
 
 ### Duplicates
@@ -447,17 +447,17 @@ msv %>%
   arrange(last_name)
 #> # A tibble: 424 x 6
 #>    mapping_value first_name last_name regn_date  status res_zip_code
-#>    <chr>         <chr>      <chr>     <chr>      <chr>  <chr>       
-#>  1 1567431       EDDIE      ALEXANDER 06/30/1998 Purged 39301-2203  
-#>  2 1567488       EDDIE      ALEXANDER 06/30/1998 Purged 39301-2203  
-#>  3 1726670553    MICHELLE   ANDERSON  08/23/2019 Active 39204       
-#>  4 1726670547    MICHELLE   ANDERSON  08/23/2019 Active 39204       
-#>  5 16380687      NANCY      ASHMORE   09/29/1995 Purged 39740       
-#>  6 16380684      NANCY      ASHMORE   09/29/1995 Purged 39740       
-#>  7 1725536946    LINDA      BARNES    08/09/2010 Active 39530       
-#>  8 1725536952    LINDA      BARNES    08/09/2010 Active 39530       
-#>  9 1042968       CARYL      BEATY     02/14/2000 Active 38661-9558  
-#> 10 1042971       CARYL      BEATY     02/14/2000 Active 38661-9558  
+#>    <chr>         <chr>      <chr>     <date>     <chr>  <chr>       
+#>  1 1567431       EDDIE      ALEXANDER 1998-06-30 Purged 39301-2203  
+#>  2 1567488       EDDIE      ALEXANDER 1998-06-30 Purged 39301-2203  
+#>  3 1726670553    MICHELLE   ANDERSON  2019-08-23 Active 39204       
+#>  4 1726670547    MICHELLE   ANDERSON  2019-08-23 Active 39204       
+#>  5 16380687      NANCY      ASHMORE   1995-09-29 Purged 39740       
+#>  6 16380684      NANCY      ASHMORE   1995-09-29 Purged 39740       
+#>  7 1725536946    LINDA      BARNES    2010-08-09 Active 39530       
+#>  8 1725536952    LINDA      BARNES    2010-08-09 Active 39530       
+#>  9 1042968       CARYL      BEATY     2000-02-14 Active 38661-9558  
+#> 10 1042971       CARYL      BEATY     2000-02-14 Active 38661-9558  
 #> # … with 414 more rows
 ```
 
@@ -489,7 +489,7 @@ col_stats(msv, n_distinct)
 #> 19 mail_city       <chr>     6421 0.00188    
 #> 20 mail_state      <chr>      109 0.0000318  
 #> 21 mail_zip_code   <chr>   101747 0.0297     
-#> 22 regn_date       <chr>    27692 0.00809    
+#> 22 regn_date       <date>   27692 0.00809    
 #> 23 status          <chr>        5 0.00000146 
 #> 24 date_voted      <date>    1348 0.000394   
 #> 25 us              <chr>        1 0.000000292
@@ -541,19 +541,19 @@ There are thousands of voters with a registration date before January 1,
 count_na(msv$regn_date)
 #> [1] 0
 min(msv$regn_date, na.rm = TRUE)
-#> [1] "01/01/0001"
+#> [1] "1-01-01"
 sum(msv$regn_date == "1801-01-01", na.rm = TRUE)
-#> [1] 0
+#> [1] 16510
 sum(msv$regn_date < "1801-01-01", na.rm = TRUE)
-#> [1] 3423601
+#> [1] 890
 msv$regn_date[which(msv$regn_date <= "1801-01-01")] <- NA
 ```
 
 ``` r
 max(msv$regn_date, na.rm = TRUE)
-#> [1] NA
+#> [1] "2200-12-13"
 sum(msv$regn_date > today(), na.rm = TRUE)
-#> [1] 0
+#> [1] 2
 ```
 
 We can add the calendar year from `date` with `lubridate::year()`
@@ -615,7 +615,7 @@ glimpse(sample_n(msv, 50))
 #> $ mail_city       <chr> "LONG BEACH", "LEXINGTON", "LONG BEACH", "STARKVILLE", NA, "MAGEE", "TUPELO", "SALTILLO", "GUL…
 #> $ mail_state      <chr> "MS", "MS", "MS", "MS", NA, "MS", "MS", "MS", "MS", NA, NA, "MS", "MS", NA, "MS", NA, "MS", NA…
 #> $ mail_zip_code   <chr> "39560", "39095", "39560-6330", "39759", NA, "39111", "38803", "38866", "39501", NA, NA, "3930…
-#> $ regn_date       <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
+#> $ regn_date       <date> 1987-07-03, 1990-07-16, 1971-06-30, 1985-09-10, 2001-02-26, 1995-09-20, 1992-03-19, 1998-05-2…
 #> $ status          <chr> "Purged", "Active", "Active", "Active", "Active", "Active", "Purged", "Active", "Purged", "Act…
 #> $ date_voted      <date> 1999-11-02, 2019-11-05, 2002-11-19, 2017-11-07, 2019-08-27, 2019-11-05, 2014-11-04, 2019-11-0…
 #> $ us              <chr> "US", "US", "US", "US", "US", "US", "US", "US", "US", "US", "US", "US", "US", "US", "US", "US"…
@@ -654,7 +654,7 @@ glimpse(sample_n(msv, 50))
 #> $ wsd             <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
 #> $ na_flag         <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FAL…
 #> $ dupe_flag       <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FAL…
-#> $ regn_year       <dbl> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
+#> $ regn_year       <dbl> 1987, 1990, 1971, 1985, 2001, 1995, 1992, 1998, 1975, 2013, 1991, 1994, 1978, 2018, 1971, 1999…
 #> $ zip_clean       <chr> "39560", "39095", "39560", "39759", "39213", "39111", "38801", "38866", "39507", "39211", "390…
 ```
 
@@ -677,7 +677,7 @@ clean_dir <- dir_create(here("ms", "voters", "data", "clean"))
 clean_path <- path(clean_dir, "ms_voters_2020.csv")
 write_csv(msv, clean_path, na = "")
 (clean_size <- file_size(clean_path))
-#> 875M
+#> 921M
 ```
 
 ``` r

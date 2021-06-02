@@ -148,7 +148,7 @@ msv <- read_delim(
   escape_double = FALSE,
   col_types = cols(
     .default = col_character(),
-    regn_date = col_date_mdy(),
+    EFFECTIVE_REGN_DATE = col_date_mdy(),
     DATE_VOTED = col_date_mdy()
   )
 )
