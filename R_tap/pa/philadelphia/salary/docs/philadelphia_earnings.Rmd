@@ -1,0 +1,437 @@
+---
+title: "Philadelphia City Employee Earnings "
+author: "Kiernan Nicholls"
+date: "`r date()`"
+output:
+  github_document: 
+    df_print: tibble
+    toc: true
+    toc_dept: 3
+editor_options: 
+  chunk_output_type: console
+---
+
+<!-- Place comments regarding knitting here -->
+
+```{r setup, include=FALSE, purl=FALSE}
+library(knitr)
+opts_chunk$set(
+  eval = TRUE,
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  error = FALSE,
+  collapse = TRUE,
+  comment = "#>",
+  fig.path = "../plots/",
+  fig.width = 10,
+  dpi = 300
+)
+if (!interactive()) {
+  options(width = 120)
+  set.seed(5)
+}
+```
+
+```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
+doc_dir <- fs::dir_create(here::here("pa", "philadelphia", "salary", "docs"))
+```
+
+## Project
+
+The Accountability Project is an effort to cut across data silos and give
+journalists, policy professionals, activists, and the public at large a simple
+way to search across huge volumes of public data about people and organizations.
+
+Our goal is to standardize public data on a few key fields by thinking of each
+dataset row as a transaction. For each transaction there should be (at least) 3
+variables:
+
+1. All **parties** to a transaction.
+2. The **date** of the transaction.
+3. The **amount** of money involved.
+
+## Objectives
+
+This document describes the process used to complete the following objectives:
+
+1. How many records are in the database?
+1. Check for entirely duplicated records.
+1. Check ranges of continuous variables.
+1. Is there anything blank or missing?
+1. Check for consistency issues.
+1. Create a five-digit ZIP Code called `zip`.
+1. Create a `year` field from the transaction date.
+1. Make sure there is data on both parties to a transaction.
+
+## Packages
+
+The following packages are needed to collect, manipulate, visualize, analyze,
+and communicate these results. The `pacman` package will facilitate their
+installation and attachment.
+
+```{r load_packages, message=FALSE, warning=FALSE, error=FALSE}
+if (!require("pacman")) {
+  install.packages("pacman")
+}
+pacman::p_load(
+  tidyverse, # data manipulation
+  lubridate, # datetime strings
+  gluedown, # printing markdown
+  janitor, # clean data frames
+  campfin, # custom irw tools
+  aws.s3, # aws cloud storage
+  refinr, # cluster & merge
+  scales, # format strings
+  knitr, # knit documents
+  vroom, # fast reading
+  rvest, # scrape html
+  glue, # code strings
+  here, # project paths
+  httr, # http requests
+  fs # local storage 
+)
+```
+
+This document should be run as part of the `R_campfin` project, which lives as a
+sub-directory of the more general, language-agnostic
+[`irworkshop/accountability_datacleaning`][tap] GitHub repository.
+
+The `R_campfin` project uses the [RStudio projects][rproj] feature and should be
+run as such. The project also uses the dynamic `here::here()` tool for file
+paths relative to _your_ machine.
+
+```{r where_here}
+# where does this document knit?
+here::i_am("pa/philadelphia/salary/docs/philadelphia_earnings.Rmd")
+```
+
+[tap]: https://github.com/irworkshop/accountability_datacleaning
+[rproj]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects
+
+## Data
+
+[Employee earnings][ee] for the city of Philadelphia, PA are found on the city's 
+[open data portal][odp]. The data comes from the Office of Human Resources and 
+Office of the Director of Finance. Data is pushed from the OnePhilly payroll
+system to a SQL database, extracted via a python script and loaded to
+DataBridge. The data starts Q2 of 2019 through the most recent fiscal quarter.
+
+### Notes
+
+> Data from Calendar Year (CY) 2019 Q2 onwards is extracted from the newer
+OnePhilly payroll system and has a different data schema than the legacy payroll
+system. Therefore, one cannot and should not compare the previous earnings data
+(from 2016 to 2019 Q1) with the new data.
+
+> Major changes in the data from 2019 Q2 onwards include various new
+earnings-related fields, a more detailed look at gross pay, and quarter-to-date
+gross pay totals instead of year-to-date totals. In the old earnings data (i.e.
+prior to CY 2019 Q2), some of the gross pay fields were lumped into the
+`ANNUAL_SALARY` field, without the ability to separate them out. With the new
+OnePhilly system, we are now able to show these as their own fields. For this
+reason, it may look like people make less than they used to but that’s not the
+case - it’s just that we’ve separated out the fields for greater clarity and
+transparency. Now, under the `BASE_SALARY` field, you can see someone’s salary
+(if salaried) separate from any other additional compensation they might
+receive. Given the increased scope of this data afforded through the new
+compensation fields, we have also renamed the dataset from 'Employee Salaries'
+to 'Employee Earnings.'
+
+> Gross pay fields: Added all together, the following 5 fields equal an
+employee’s gross pay. Please note these are quarter-to-date totals. To get
+yearly amounts, add up the amounts from each quarter.
+>
+> 1. `base_gross_pay_QTD`
+> 2. `overtime_gross_pay_QTD`
+> 3. `longevity_gross_pay_QTD`
+> 4. `post_separation_payments_QTD`
+> 5. `miscellaneous_gross_pay_QTD`
+
+> With the exception of the `BASE_GROSS_PAY_QTD` field, the remaining four
+fields above are earnings in addition to an employee’s `BASE_SALARY.`
+> 
+> A small number of records related to individuals under the age of 18 were
+removed from this dataset to ensure privacy.
+
+[ee]: https://www.opendataphilly.org/showcase/city-employee-earnings
+[odp]: https://www.opendataphilly.org/showcase/city-employee-earnings
+
+### Fields
+
+```{r echo=FALSE}
+f <- GET(
+  url = "https://us-api.knack.com/v1/scenes/scene_142/views/view_287/records/export/applications/550c60d00711ffe12e9efc64",
+  query = list(
+    type = "csv",
+    format = "both",
+    page = 1,
+    rows_per_page = 10,
+    representationdetails_id = "604284dc49a209001d746460",
+    sort_field = "field_17",
+    sort_order = "asc"
+  )
+)
+```
+
+```{r echo=FALSE}
+f <- read_csv(
+  file = content(f, as = "text", encoding = "UTF-8"),
+  col_types = cols(
+    .default = col_character()
+  )
+)
+```
+
+```{r echo=FALSE}
+f %>% 
+  relocate(Type, .before = Description) %>% 
+  mutate(
+    across(`Field Name`, md_code)
+  ) %>% 
+  kable()
+```
+
+## Download
+
+We can make a `GET` request to query the SQL database and return a CSV file that
+can be read into R and uploaded to TAP.
+
+Making note of the changes described in Q2 and 2019, we can also get the
+_archived_ salary data. The data scheme will differ slightly, so these two
+files will have to be read separately and somehow combined.
+
+```{r raw_dir}
+raw_dir <- dir_create(here("pa", "philadelphia", "salary", "data", "raw"))
+raw_csv <- path(raw_dir, "employee_earnings.csv")
+```
+
+```{r get_2019}
+if (!file_exists(raw_csv)) {
+  get_2019 <- GET(
+    url = "https://phl.carto.com/api/v2/sql",
+    write_disk(raw_csv),
+    progress("down"),
+    query = list(
+      filename = "employee_earnings",
+      format = "csv",
+      q = "SELECT * FROM employee_earnings",
+      skipfields = "cartodb_id,the_geom,the_geom_webmercator"
+    )
+  )
+}
+```
+
+## Read
+
+The CSV files can be read as a data frames and combined together. There are
+fewer columns in the older data, so any record from that source will be missing
+data for the newer columns.
+
+```{r raw_read}
+phl <- read_delim(
+  file = raw_csv,
+  delim = ",",
+  escape_backslash = FALSE,
+  escape_double = FALSE,
+  col_types = cols(
+    .default = col_character(),
+    calendar_year = col_integer(),
+    quarter = col_integer(),
+    base_salary = col_double(),
+    overtime_gross_pay_qtd = col_double(),
+    base_gross_pay_qtd = col_double(),
+    longevity_gross_pay_qtd = col_double(),
+    post_separation_gross_pay_qtd = col_double(),
+    miscellaneous_gross_pay_qtd = col_double(),
+    termination_year = col_integer()
+  )
+)
+```
+
+## Explore
+
+There are `r comma(nrow(phl))` rows of `r ncol(phl)` columns. Each record
+represents a single employee earning in the city of Philadelphia.
+
+```{r glimpse}
+glimpse(phl)
+tail(phl)
+```
+
+### Amounts
+
+We can create a new column containing the total pay received across the five
+earning categories described in the notes above.
+
+```{r}
+phl <- phl %>% 
+  mutate(
+    total_gross_pay = sum(
+      base_salary,
+      overtime_gross_pay_qtd,
+      longevity_gross_pay_qtd,
+      post_separation_gross_pay_qtd,
+      miscellaneous_gross_pay_qtd,
+      na.rm = TRUE
+    )
+  )
+```
+
+```{r}
+phl$total_gross_pay[phl$base_salary != 0 & phl$total_gross_pay == 0] <- NA
+```
+
+```{r amount_summary}
+summary(phl$total_gross_pay)
+mean(phl$total_gross_pay <= 0)
+```
+
+These are the records with the minimum and maximum amounts.
+
+```{r amount_minmax}
+glimpse(phl[c(which.max(phl$base_salary), which.min(phl$base_salary)), ])
+```
+
+```{r hist_amount, echo=FALSE}
+phl %>%
+  filter(base_salary > 120) %>% 
+  ggplot(aes(base_salary)) +
+  geom_histogram(fill = dark2["purple"]) +
+  scale_y_continuous(labels = comma) +
+  scale_x_continuous(
+    breaks = c(1 %o% 10^(0:6)),
+    labels = dollar,
+    trans = "log10"
+  ) +
+  labs(
+    title = "Philadelphia Salary Amount Distribution",
+    subtitle = "Excluding yearly salaries below $150",
+    caption = "Source: OnePhilly",
+    x = "Amount",
+    y = "Count"
+  )
+```
+
+### Missing
+
+Columns vary in their degree of missing values.
+
+```{r na_count}
+col_stats(phl, count_na)
+```
+
+We can flag any record missing a key variable needed to identify a transaction.
+
+```{r na_flag}
+key_vars <- c("last_name", "title", "total_gross_pay")
+phl <- flag_na(phl, all_of(key_vars))
+sum(phl$na_flag)
+```
+
+```{r na_view}
+phl %>% 
+  filter(na_flag) %>% 
+  select(all_of(key_vars), salary_type)
+```
+
+### Duplicates
+
+We can also flag any record completely duplicated across every column.
+
+```{r dupe_flag}
+phl <- flag_dupes(phl, everything())
+sum(phl$dupe_flag)
+```
+
+There are no duplicates in the newer version of the data.
+
+### Categorical
+
+```{r distinct_count}
+col_stats(phl, n_distinct)
+```
+
+```{r distinct_plots, echo=FALSE, fig.height=3}
+explore_plot(phl, department_name)
+explore_plot(phl, salary_type)
+explore_plot(phl, employee_category)
+explore_plot(phl, compulsory_union_code)
+```
+
+### Dates
+
+```{r date_range}
+min(phl$calendar_year)
+max(phl$calendar_year)
+```
+
+```{r bar_year, echo=FALSE}
+phl %>% 
+  count(calendar_year, quarter) %>% 
+  ggplot(aes(x = quarter, y = n)) +
+  geom_col(aes(fill = quarter)) + 
+  scale_fill_distiller(palette = "Dark2", guide = FALSE) +
+  scale_y_continuous(labels = comma) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "Philadelphia Employees by Year and Quarter",
+    caption = "Source: OnePhilly",
+    x = "Quarter",
+    y = "Count"
+  ) + 
+  facet_wrap(~calendar_year, nrow = 1)
+```
+
+## Conclude
+
+```{r clean_glimpse}
+glimpse(sample_n(phl, 50))
+```
+
+1. There are `r comma(nrow(phl))` records in the database.
+1. There are `r comma(sum(phl$dupe_flag))` duplicate records in the database.
+1. The range and distribution of `amount` and `date` seem reasonable.
+1. There are `r comma(sum(phl$na_flag))` records missing key variables.
+1. Consistency in geographic data has been improved with `campfin::normal_*()`.
+1. The 4-digit `year` variable has been created with `lubridate::year()`.
+
+## Export
+
+Now the file can be saved on disk for upload to the Accountability server.
+
+```{r clean_dir}
+clean_dir <- dir_create(here("pa", "philadelphia", "salary", "data", "clean"))
+clean_path <- path(clean_dir, "philadelphia_salary_2019-2021.csv")
+write_csv(phl, clean_path, na = "")
+(clean_size <- file_size(clean_path))
+```
+
+```{r echo=FALSE}
+rm(phl)
+```
+
+```{r}
+non_ascii(clean_path)
+```
+
+## Upload
+
+We can use the `aws.s3::put_object()` to upload the text file to the IRW server.
+
+```{r aws_upload, eval=FALSE}
+aws_path <- path("csv", basename(clean_path))
+if (!object_exists(aws_path, "publicaccountability")) {
+  put_object(
+    file = clean_path,
+    object = aws_path, 
+    bucket = "publicaccountability",
+    acl = "public-read",
+    show_progress = TRUE,
+    multipart = TRUE
+  )
+}
+aws_head <- head_object(aws_path, "publicaccountability")
+(aws_size <- as_fs_bytes(attr(aws_head, "content-length")))
+unname(aws_size == clean_size)
+```
