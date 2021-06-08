@@ -1,0 +1,324 @@
+---
+title: "Baltimore Employee Earnings"
+author: "Kiernan Nicholls"
+date: "`r date()`"
+output:
+  github_document: 
+    df_print: tibble
+    toc: true
+    toc_dept: 3
+editor_options: 
+  chunk_output_type: console
+---
+
+<!-- Place comments regarding knitting here -->
+
+```{r setup, include=FALSE, purl=FALSE}
+library(knitr)
+opts_chunk$set(
+  eval = TRUE,
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  error = FALSE,
+  collapse = TRUE,
+  comment = "#>",
+  fig.path = "../plots/",
+  fig.width = 10,
+  dpi = 300
+)
+if (!interactive()) {
+  options(width = 120)
+  set.seed(5)
+}
+```
+
+```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
+doc_dir <- fs::dir_create(here::here("md", "baltimore", "salary", "docs"))
+```
+
+## Project
+
+The Accountability Project is an effort to cut across data silos and give
+journalists, policy professionals, activists, and the public at large a simple
+way to search across huge volumes of public data about people and organizations.
+
+Our goal is to standardize public data on a few key fields by thinking of each
+dataset row as a transaction. For each transaction there should be (at least) 3
+variables:
+
+1. All **parties** to a transaction.
+2. The **date** of the transaction.
+3. The **amount** of money involved.
+
+## Objectives
+
+This document describes the process used to complete the following objectives:
+
+1. How many records are in the database?
+1. Check for entirely duplicated records.
+1. Check ranges of continuous variables.
+1. Is there anything blank or missing?
+1. Check for consistency issues.
+1. Create a five-digit ZIP Code called `zip`.
+1. Create a `year` field from the transaction date.
+1. Make sure there is data on both parties to a transaction.
+
+## Packages
+
+The following packages are needed to collect, manipulate, visualize, analyze,
+and communicate these results. The `pacman` package will facilitate their
+installation and attachment.
+
+```{r load_packages, message=FALSE, warning=FALSE, error=FALSE}
+if (!require("pacman")) {
+  install.packages("pacman")
+}
+pacman::p_load(
+  tidyverse, # data manipulation
+  lubridate, # datetime strings
+  gluedown, # printing markdown
+  janitor, # clean data frames
+  campfin, # custom irw tools
+  aws.s3, # aws cloud storage
+  refinr, # cluster & merge
+  scales, # format strings
+  knitr, # knit documents
+  vroom, # fast reading
+  rvest, # scrape html
+  glue, # code strings
+  here, # project paths
+  httr, # http requests
+  fs # local storage 
+)
+```
+
+This document should be run as part of the `R_campfin` project, which lives as a
+sub-directory of the more general, language-agnostic
+[`irworkshop/accountability_datacleaning`][tap] GitHub repository.
+
+The `R_campfin` project uses the [RStudio projects][rproj] feature and should be
+run as such. The project also uses the dynamic `here::here()` tool for file
+paths relative to _your_ machine.
+
+```{r where_here}
+# where does this document knit?
+here::i_am("md/baltimore/docs/md_baltimore_diary.Rmd")
+```
+
+[tap]: https://github.com/irworkshop/accountability_datacleaning
+[rproj]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects
+
+## Data
+
+> This dataset represents gross salary of Baltimore City employees from fiscal
+year 2011 through last fiscal year and includes employees who were employed on
+June 30 of last fiscal year
+
+## Download
+
+```{r raw_dir}
+raw_dir <- dir_create(here("md", "baltimore", "salary", "data", "raw"))
+raw_csv <- path(raw_dir, "Baltimore_Employee_Salaries.csv")
+```
+
+```{r raw_download}
+if (!file_exists(raw_csv)) {
+  GET(
+    write_disk(raw_csv),
+    progress("down"),
+    url = "https://opendata.arcgis.com/api/v3/datasets/afdaf8cca48a4bcea9282a781e9190a6_0/downloads/data",
+    query = list(
+      format = "csv",
+      spatialRefId = "4326"
+    )
+  )
+}
+```
+
+## Read
+
+```{r raw_read}
+bal <- read_delim(
+  file = raw_csv,
+  delim = ",",
+  escape_backslash = FALSE,
+  escape_double = FALSE,
+  trim_ws = TRUE,
+  col_types = cols(
+    .default = col_character(),
+    ID = col_integer(),
+    HireDate = col_date("%Y/%m/%d %H:%M:%S+%z"),
+    AnnualSalary = col_double(),
+    FiscalYear = col_number(),
+    ObjectId = col_integer()
+  )
+)
+```
+
+```{r}
+bal <- clean_names(bal, case = "snake")
+```
+
+```{r}
+prop_distinct(bal$id)
+unique(bal$fiscal_year)
+```
+
+## Explore
+
+There are `r comma(nrow(bal))` rows of `r ncol(bal)` columns. Each record
+represents a single employee of Baltimore earning a salary.
+
+```{r glimpse}
+glimpse(bal)
+tail(bal)
+```
+
+### Missing
+
+Columns vary in their degree of missing values.
+
+```{r na_count}
+col_stats(bal, count_na)
+```
+
+We can flag any record missing a key variable needed to identify a transaction.
+
+```{r na_flag}
+key_vars <- c("first_name", "last_name", "annual_salary", "hire_date")
+bal <- flag_na(bal, all_of(key_vars))
+sum(bal$na_flag)
+```
+
+Every record missing a value has the first name of "BPD" and is missing a
+`last_name` value.
+
+```{r na_view}
+bal %>% 
+  filter(na_flag) %>% 
+  count(first_name, agency_name, sort = TRUE)
+```
+
+### Duplicates
+
+We can also flag any record completely duplicated across every column.
+
+```{r dupe_flag}
+bal <- flag_dupes(bal, -id, -object_id)
+sum(bal$dupe_flag)
+```
+
+There are no duplicate records, even ignore the unique `id` variables.
+
+### Categorical
+
+```{r distinct_count}
+col_stats(bal, n_distinct)
+```
+
+```{r distinct_plots, echo=FALSE}
+explore_plot(bal, job_title)
+explore_plot(bal, agency_name)
+```
+
+### Amounts
+
+```{r amount_summary}
+summary(bal$annual_salary)
+sum(bal$annual_salary <= 0)
+```
+
+These are the records with the minimum and maximum amounts.
+
+```{r amount_minmax}
+glimpse(bal[c(which.max(bal$annual_salary), which.min(bal$annual_salary)), ])
+```
+
+```{r hist_amount, echo=FALSE}
+bal %>%
+  ggplot(aes(annual_salary)) +
+  geom_histogram(fill = dark2["purple"]) +
+  scale_y_continuous(labels = comma) +
+  scale_x_continuous(
+    breaks = c(1 %o% 10^(0:6)),
+    labels = dollar,
+    trans = "log10"
+  ) +
+  labs(
+    title = "Baltimore Salary Distribution",
+    caption = "Source: Baltimore Open Data",
+    x = "Amount",
+    y = "Count"
+  )
+```
+
+### Dates
+
+```{r date_range}
+min(bal$hire_date)
+sum(bal$hire_date == min(bal$hire_date))
+sum(bal$fiscal_year < 2000)
+max(bal$hire_date)
+sum(bal$hire_date > today())
+```
+
+```{r bar_year, echo=FALSE}
+bal %>% 
+  filter(hire_date > "1950-01-01") %>% 
+  ggplot(aes(x = hire_date)) + 
+  geom_histogram(bins = 50) +
+  scale_x_date(date_breaks = "5 year", date_labels = "%Y") +
+  labs(
+    title = "Baltimore Employees by Year Hired",
+    caption = "Source: Baltimore Open Data",
+    x = "Year Hired",
+    y = "Count"
+  )
+```
+
+## Conclude
+
+```{r clean_glimpse}
+glimpse(sample_n(bal, 50))
+```
+
+1. There are `r comma(nrow(bal))` records in the database.
+1. There are `r comma(sum(bal$dupe_flag))` duplicate records in the database.
+1. The range and distribution of `annual_salary` and `hire_date` are mostly
+reasonable aside from a couple of outliers.
+1. There are `r comma(sum(bal$na_flag))` records missing key variables.
+1. No geographic variables are in the data.
+1. The fiscal year variable can be used for the year.
+
+## Export
+
+Now the file can be saved on disk for upload to the Accountability server.
+
+```{r clean_dir}
+clean_dir <- dir_create(here("md", "baltimore", "salary", "data", "clean"))
+clean_path <- path(clean_dir, "baltimore_salary_2011-2021.csv")
+write_csv(bal, clean_path, na = "")
+(clean_size <- file_size(clean_path))
+```
+
+## Upload
+
+We can use the `aws.s3::put_object()` to upload the text file to the IRW server.
+
+```{r aws_upload, eval=FALSE}
+aws_path <- path("csv", basename(clean_path))
+if (!object_exists(aws_path, "publicaccountability")) {
+  put_object(
+    file = clean_path,
+    object = aws_path, 
+    bucket = "publicaccountability",
+    acl = "public-read",
+    show_progress = TRUE,
+    multipart = TRUE
+  )
+}
+aws_head <- head_object(aws_path, "publicaccountability")
+(aws_size <- as_fs_bytes(attr(aws_head, "content-length")))
+unname(aws_size == clean_size)
+```
