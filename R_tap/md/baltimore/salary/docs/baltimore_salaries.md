@@ -1,7 +1,7 @@
-Baltimore Employee Earnings
+Baltimore Salaries
 ================
 Kiernan Nicholls
-Tue Jun 8 16:02:40 2021
+Tue Jun 8 16:05:45 2021
 
 -   [Project](#project)
 -   [Objectives](#objectives)
@@ -91,7 +91,7 @@ feature and should be run as such. The project also uses the dynamic
 
 ``` r
 # where does this document knit?
-here::i_am("md/baltimore/docs/md_baltimore_diary.Rmd")
+here::i_am("md/baltimore/salary/docs/baltimore_salaries.Rmd")
 ```
 
 ## Data

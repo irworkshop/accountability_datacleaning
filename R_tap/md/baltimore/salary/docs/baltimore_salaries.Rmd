@@ -1,5 +1,5 @@
 ---
-title: "Baltimore Employee Earnings"
+title: "Baltimore Salaries"
 author: "Kiernan Nicholls"
 date: "`r date()`"
 output:
@@ -103,7 +103,7 @@ paths relative to _your_ machine.
 
 ```{r where_here}
 # where does this document knit?
-here::i_am("md/baltimore/docs/md_baltimore_diary.Rmd")
+here::i_am("md/baltimore/salary/docs/baltimore_salaries.Rmd")
 ```
 
 [tap]: https://github.com/irworkshop/accountability_datacleaning
