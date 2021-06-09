@@ -282,7 +282,7 @@ bal %>%
 We will manually add some geographic variables needed to filter records.
 
 ```{r state_add}
-phl <- mutate(phl, state = "MD", city = "Baltimore")
+bal <- mutate(bal, state = "MD", city = "Baltimore")
 ```
 
 ## Conclude

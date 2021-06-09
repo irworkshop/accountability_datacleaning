@@ -1,7 +1,7 @@
 Baltimore Salaries
 ================
 Kiernan Nicholls
-Tue Jun 8 16:05:45 2021
+Wed Jun 9 12:15:18 2021
 
 -   [Project](#project)
 -   [Objectives](#objectives)
@@ -15,6 +15,7 @@ Tue Jun 8 16:05:45 2021
     -   [Categorical](#categorical)
     -   [Amounts](#amounts)
     -   [Dates](#dates)
+-   [State](#state)
 -   [Conclude](#conclude)
 -   [Export](#export)
 -   [Upload](#upload)
@@ -328,12 +329,20 @@ sum(bal$hire_date > today())
 
 ![](../plots/bar_year-1.png)<!-- -->
 
+## State
+
+We will manually add some geographic variables needed to filter records.
+
+``` r
+bal <- mutate(bal, state = "MD", city = "Baltimore")
+```
+
 ## Conclude
 
 ``` r
 glimpse(sample_n(bal, 50))
 #> Rows: 50
-#> Columns: 13
+#> Columns: 15
 #> $ id            <int> 110593, 18730, 52843, 72625, 78767, 58291, 47582, 145813, 97105, 62530, 69329, 2290, 97224, 1464…
 #> $ first_name    <chr> "Emmanuel", "Walter", "Darius", "Susannah", "Audrey", "Hawa", "Louis", "Anthony", "Lenora", "Mat…
 #> $ mi            <chr> "K", NA, "L", NA, "M", "E", "A", "L", "M", "L", "J", "V", "K", "G", "J", "C", "L", "E", "M", "O"…
@@ -347,6 +356,8 @@ glimpse(sample_n(bal, 50))
 #> $ fiscal_year   <dbl> 2018, 2012, 2014, 2015, 2015, 2014, 2013, 2020, 2017, 2014, 2015, 2011, 2017, 2020, 2017, 2011, …
 #> $ object_id     <int> 110443, 18639, 52949, 72775, 78767, 58188, 47232, 145865, 96988, 62586, 69427, 2042, 97464, 1464…
 #> $ na_flag       <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE…
+#> $ state         <chr> "MD", "MD", "MD", "MD", "MD", "MD", "MD", "MD", "MD", "MD", "MD", "MD", "MD", "MD", "MD", "MD", …
+#> $ city          <chr> "Baltimore", "Baltimore", "Baltimore", "Baltimore", "Baltimore", "Baltimore", "Baltimore", "Balt…
 ```
 
 1.  There are 154,648 records in the database.
@@ -367,7 +378,7 @@ clean_dir <- dir_create(here("md", "baltimore", "salary", "data", "clean"))
 clean_path <- path(clean_dir, "baltimore_salary_2011-2021.csv")
 write_csv(bal, clean_path, na = "")
 (clean_size <- file_size(clean_path))
-#> 17.1M
+#> 19M
 ```
 
 ## Upload
