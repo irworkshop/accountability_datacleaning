@@ -1,15 +1,17 @@
 ---
 title: "Florida Expenditures"
-author: "Kienan Nicholls"
-date: "`r Sys.time()`"
+author: "Kiernan Nicholls"
+date: "`r date()`"
 output:
   github_document: 
     df_print: tibble
     toc: true
-    toc_dept: 2
+    toc_dept: 3
 editor_options: 
   chunk_output_type: console
 ---
+
+<!-- Place comments regarding knitting here -->
 
 ```{r setup, include=FALSE, purl=FALSE}
 library(knitr)
@@ -19,155 +21,167 @@ opts_chunk$set(
   warning = FALSE,
   message = FALSE,
   error = FALSE,
+  collapse = TRUE,
   comment = "#>",
   fig.path = "../plots/",
   fig.width = 10,
   dpi = 300
 )
-options(width = 99)
+if (!interactive()) {
+  options(width = 120)
+  set.seed(5)
+}
+```
+
+```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
+doc_dir <- fs::dir_create(here::here("fl", "expends", "docs"))
 ```
 
 ## Project
 
-The Accountability Project is an effort to cut across data silos and give journalists, policy
-professionals, activists, and the public at large a simple way to search across huge volumes of
-public data about people and organizations.
+The Accountability Project is an effort to cut across data silos and give
+journalists, policy professionals, activists, and the public at large a simple
+way to search across huge volumes of public data about people and organizations.
 
-Our goal is to standardizing public data on a few key fields by thinking of each dataset row as a
-transaction. For each transaction there should be (at least) 3 variables:
+Our goal is to standardize public data on a few key fields by thinking of each
+dataset row as a transaction. For each transaction there should be (at least) 3
+variables:
 
-1. All **parties** to a transaction
-2. The **date** of the transaction
-3. The **amount** of money involved
+1. All **parties** to a transaction.
+2. The **date** of the transaction.
+3. The **amount** of money involved.
 
 ## Objectives
 
 This document describes the process used to complete the following objectives:
 
 1. How many records are in the database?
-1. Check for duplicates
-1. Check ranges
+1. Check for entirely duplicated records.
+1. Check ranges of continuous variables.
 1. Is there anything blank or missing?
-1. Check for consistency issues
-1. Create a five-digit ZIP Code called `ZIP5`
-1. Create a `YEAR` field from the transaction date
-1. Make sure there is data on both parties to a transaction
+1. Check for consistency issues.
+1. Create a five-digit ZIP Code called `zip`.
+1. Create a `year` field from the transaction date.
+1. Make sure there is data on both parties to a transaction.
 
 ## Packages
 
-The following packages are needed to collect, manipulate, visualize, analyze, and communicate
-these results. The `pacman` package will facilitate their installation and attachment.
+The following packages are needed to collect, manipulate, visualize, analyze,
+and communicate these results. The `pacman` package will facilitate their
+installation and attachment.
 
-The IRW's `campfin` package will also have to be installed from GitHub. This package contains
-functions custom made to help facilitate the processing of campaign finance data.
-
-```{r load_packages, message=FALSE, dfrning=FALSE, error=FALSE}
-if (!require("pacman")) install.packages("pacman")
-pacman::p_load_current_gh("irworkshop/campfin")
+```{r load_packages, message=FALSE, warning=FALSE, error=FALSE}
+if (!require("pacman")) {
+  install.packages("pacman")
+}
 pacman::p_load(
-  stringdist, # levenshtein value
-  RSelenium, # remote browser
   tidyverse, # data manipulation
   lubridate, # datetime strings
-  tidytext, # string analysis
-  magrittr, # pipe opperators
-  janitor, # dataframe clean
-  refinr, # cluster and merge
+  gluedown, # printing markdown
+  janitor, # clean data frames
+  campfin, # custom irw tools
+  aws.s3, # aws cloud storage
+  refinr, # cluster & merge
   scales, # format strings
   knitr, # knit documents
-  vroom, # read files fast
-  glue, # combine strings
-  here, # relative storage
-  fs # search storage 
+  vroom, # fast reading
+  rvest, # scrape html
+  glue, # code strings
+  here, # project paths
+  httr, # http requests
+  fs # local storage 
 )
 ```
 
-This document should be run as part of the `R_campfin` project, which lives as a sub-directory of
-the more general, language-agnostic [`irworkshop/accountability_datacleaning`][01] GitHub
-repository.
+This document should be run as part of the `R_campfin` project, which lives as a
+sub-directory of the more general, language-agnostic
+[`irworkshop/accountability_datacleaning`][tap] GitHub repository.
 
-The `R_campfin` project uses the [RStudio projects][02] feature and should be run as such. The
-project also uses the dynamic `here::here()` tool for file paths relative to _your_ machine.
+The `R_campfin` project uses the [RStudio projects][rproj] feature and should be
+run as such. The project also uses the dynamic `here::here()` tool for file
+paths relative to _your_ machine.
 
-```{r where_here, collapse=TRUE}
-# where dfs this document knit?
-here::here()
+```{r where_here}
+# where does this document knit?
+here::i_am("fl/expends/docs/fl_expends_diary.Rmd")
 ```
 
-[01]: https://github.com/irworkshop/accountability_datacleaning "TAP repo"
-[02]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects "Rproj"
+[tap]: https://github.com/irworkshop/accountability_datacleaning
+[rproj]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects
 
 ## Data
 
 Data is obtained from the Florida Division of Elections.
 
-As the [agency home page][03] explains:
+As the [agency home page][fdoe] explains:
 
-> By Florida law, campaigns, committees, and electioneering communications organizations are
-required to disclose detailed financial records of campaign contributions and expenditures. Chapter
-106, Florida Statutes, regulates campaign financing for all candidates, including judicial
-candidates, political committees, electioneering communication organizations, affiliated party
-committees, and political parties. It does not regulate campaign financing for candidates for
-federal office.
+> By Florida law, campaigns, committees, and electioneering communications
+organizations are required to disclose detailed financial records of campaign
+contributions and expenditures. Chapter 106, Florida Statutes, regulates
+campaign financing for all candidates, including judicial candidates, political
+committees, electioneering communication organizations, affiliated party
+committees, and political parties. It does not regulate campaign financing for
+candidates for federal office.
 
-[03]: https://dos.myflorida.com/elections/candidates-committees/campaign-finance/ "source"
+[fdoe]: https://dos.myflorida.com/elections/candidates-committees/campaign-finance/
 
 ### About
 
-A more detailed description of available data can be found on the [Campaign Finance page][04]:
+A more detailed description of available data can be found on the 
+[Campaign Finance page][cf]:
 
-[04]: https://dos.myflorida.com/elections/candidates-committees/campaign-finance/campaign-finance-database/
+[cf]: https://dos.myflorida.com/elections/candidates-committees/campaign-finance/campaign-finance-database/
 
 > #### Quality of Data
-> 
-> The information presented in the campaign finance database is an accurate representation of the reports filed with the Florida Division of Elections.
-> 
-> Some of the information in the campaign finance database was submitted in electronic form, and
-some of the information was key-entered from paper reports. Sometimes items which are not
-consistent with filing requirements, such as incorrect codes or incorrectly formatted or blank
-items, are present in the results of a query. They are incorrect in the database because they were
+> The information presented in the campaign finance database is an accurate
+representation of the reports filed with the Florida Division of Elections. > >
+Some of the information in the campaign finance database was submitted in
+electronic form, and some of the information was key-entered from paper reports.
+Sometimes items which are not consistent with filing requirements, such as
+incorrect codes or incorrectly formatted or blank items, are present in the
+results of a query. They are incorrect in the database because they were
 incorrect on reports submitted to the division.
 
 > #### What does the Database Contain?
-> 
-> By law candidates and committees are required to disclose detailed financial records of
-contributions received and expenditures made. For committees, the campaign finance database
-contains all contributions and expenditures reported to the Florida Division of Elections since
-January 1, 1996. For candidates, the campaign finance database contains all contributions and
-expenditures reported to the Division since the candidacy was announced, beginning with the 1996
+> By law candidates and committees are required to disclose detailed financial
+records of contributions received and expenditures made. For committees, the
+campaign finance database contains all contributions and expenditures reported
+to the Florida Division of Elections since January 1, 1996. For candidates, the
+campaign finance database contains all contributions and expenditures reported
+to the Division since the candidacy was announced, beginning with the 1996
 election.
 
 > #### Whose Records are Included?
-> 
-> Included are campaign finance reports which have been filed by candidates for any multi-county
-office, with the exception of U.S. Senator and U.S. Representative, and by organizations that
-receive contributions or make expenditures of more than $500 in a calendar year to support or
-oppose any multi-county candidate, issue, or party. To obtain reports from local county or
+> Included are campaign finance reports which have been filed by candidates for
+any multi-county office, with the exception of U.S. Senator and U.S.
+Representative, and by organizations that receive contributions or make
+expenditures of more than $500 in a calendar year to support or oppose any
+multi-county candidate, issue, or party. To obtain reports from local county or
 municipal candidates and committees, contact county or city filing offices.
 
 > #### When are the Records Available?
-> 
-> Campaign finance reports are posted to the database as they are received from the candidates and
-committees. Our data is as current as possible, consistent with the reporting requirements of
-Florida law.
+> Campaign finance reports are posted to the database as they are received from
+the candidates and committees. Our data is as current as possible, consistent
+with the reporting requirements of Florida law.
 
-## Import
+## Download
 
-### Download
-
-We will use the [Expenditure Records][05] querey form to download three separate files covering all
-campaign expenditures. [The previous page][04] lists instructions on how to download the desired
-files:
+We will use the [Expenditure Records][exp] query form to download three separate
+files covering all campaign expenditures. [The home page][cf] lists
+instructions on how to download the desired files:
 
 > #### How to Use the Campaign Finance Database
-> 
 > 1. Specify a subset of the [Expenditure]...
-> 2. Select an election year entry from the list box
-> 3. Select a candidate/committee option: 
-> 4. Select contribution criteria (for Detail report only): 
+> 2. Select an election year entry from the list box.
+> 3. Select a candidate/committee option...
+> 4. Select contribution criteria (for Detail report only)...
 > 5. Select how you would like the records sorted. 
 > 6. Select the format in which you would like the data returned. 
-> 7. Limit the number of records to return. 
+> 7. Limit the number of records to return....
+>     * Choosing "Return Query Results in a Tab Delimited Text File" will return
+        the data in a file of tab-separated columns suitable for importing into 
+        almost any spreadsheet or database. This option allows you to download 
+        the data for further analysis offline.
 > 8. Click on the Submit Query button.
 
 To get all files covering all expenditures:
@@ -175,426 +189,560 @@ To get all files covering all expenditures:
 1. Select "All" from the **Election Year** drop down menu
 1. In the **From Date Range** text box, enter "01/01/2008"
 1. Delete "500" from the **Limit Records** text box
-1. Select "Return Results in a Tab Delimited Text File" **Retrieval Format** option
+1. Select the "Return Results in a Tab Delimited Text File" **Retrieval Format**
 1. Save to the `/fl/expends/data/raw` directory
 
-We can automate this process using the `RSelenium` package:
+[exp]: https://dos.elections.myflorida.com/campaign-finance/expenditures/
 
-```{r raw_dir}
-# create a directory for the raw data
-raw_dir <- here("fl", "expends", "data", "raw")
-dir_create(raw_dir)
-```
+```{r raw_tsv}
+raw_dir <- dir_create(here("fl", "expends", "data", "raw"))
+raw_tsv <- path(raw_dir, "Expend.txt")
+```   
 
-```{r download_raw, warning=FALSE, error=FALSE, message=FALSE, collapse=TRUE, eval=FALSE}
-# open the driver with auto download options
-remote_driver <- rsDriver(
-  port = 4444L,
-  browser = "firefox",
-  extraCapabilities = makeFirefoxProfile(
-    list(
-      browser.download.dir = raw_dir,
-      browser.download.folderList = 2L,
-      browser.helperApps.neverAsk.saveToDisk = "text/txt"
+```{r raw_post}
+if (!file_exists(raw_tsv) && FALSE) {
+  POST(
+    write_disk(raw_tsv),
+    user_agent("https://publicaccountability.org/"),
+    url = "https://dos.elections.myflorida.com/cgi-bin/expend.exe",
+    # must get cookies from browser :(
+    set_cookies(),
+    encode = "form",
+    body = list(
+      election = "All",
+      search_on = "1",
+      CanFName = "",
+      CanLName = "",
+      CanNameSrch = "2",
+      office = "All",
+      cdistrict = "",
+      cgroup = "",
+      party = "All",
+      ComName = "",
+      ComNameSrch = "2",
+      committee = "All",
+      cfname = "",
+      clname = "",
+      namesearch = "2",
+      ccity = "",
+      cstate = "",
+      czipcode = "",
+      cpurpose = "",
+      cdollar_minimum = "",
+      cdollar_maximum = "",
+      rowlimit = "",
+      csort1 = "DAT",
+      csort2 = "CAN",
+      cdatefrom = "01/01/1900",
+      cdateto = "",
+      queryformat = "2",
+      Submit = "Submit"
     )
   )
-)
-
-# navigate to the FL DOE download site
-remote_browser <- remote_driver$client
-expends_url <- "https://dos.elections.myflorida.com/campaign-finance/expenditures/"
-remote_browser$navigate(expends_url)
-
-# chose "All" from elections list
-year_menu <- "/html/body/div/div[1]/div/div/div/div/div/div/div/div/form/select[1]/option[@value = 'All']"
-remote_browser$findElement("xpath", year_menu)$clickElement()
-
-# remove the records limit text of 500
-limit_box <- "div.marginBot:nth-child(64) > input:nth-child(1)"
-remote_browser$findElement("css", limit_box)$clearElement()
-
-# enter Jan 1 2008 as start date
-date_box <- "div.indent:nth-child(2) > input:nth-child(1)"
-remote_browser$findElement("css", date_box)$sendKeysToElement(list("01/01/2008"))
-
-# chose "txt" as export option
-txt_button <- "ul.noBullet:nth-child(70) > li:nth-child(2) > input:nth-child(1)"
-remote_browser$findElement("css", txt_button)$clickElement()
-
-# click the submit button
-submit_button <- "#rightContent > form:nth-child(6) > div:nth-child(71) > input:nth-child(2)"
-remote_browser$findElement("css", submit_button)$clickElement()
-
-# close the browser and driver
-remote_browser$close()
-remote_driver$server$stop()
+}
 ```
 
-[05]: https://dos.elections.myflorida.com/campaign-finance/expenditures/
+## Fix
 
-### Read
+The tab-separated file has no quotes surrounding problematic fields. That
+results in a handful with new-line character breaks (e.g., typed in an 
+address). To fix this problem, we have to read each line separately and then
+manually combine any of those split lines.
 
-```{r read_raw}
-fl <- 
-  read_delim(
-    file = dir_ls(path = raw_dir),
-    delim = "\t",
-    escape_double = FALSE,
-    escape_backslash = FALSE,
-    trim_ws = TRUE,
-    col_types = cols(
-      .default = col_character(),
-      Date = col_date("%m/%d/%Y"),
-      Amount = col_double()
-    )
-  ) %>% 
-  select(-starts_with("X")) %>% 
-  clean_names() %>% 
-  mutate_if(is_character, str_to_upper)
+```{r fix_read}
+fll <- read_lines(raw_tsv)
+length(fll)
+fl_head <- fll[1] # save header
+fll <- fll[-1] # remove header
+```
+
+We can identify the problematic lines by looking for any line without a `Date`
+character pattern following the first tab-delimiter.
+
+```{r fix_which}
+bad_nl <- str_which(
+  string = fll,
+  # find rows without date in 2nd col
+  pattern = "^(.*)\t(\\d{2}/\\d{2}/\\d{4})",
+  negate = TRUE
+)
+```
+
+```{r fix_show}
+length(bad_nl)
+fll[bad_nl]
+```
+
+We can then combine these identified lines with the previous, making a new valid
+line. When the broken line is removed, the file can be read.
+
+```{r fix_merge}
+fl_combine <- paste0(fll[bad_nl - 1], fll[bad_nl])
+read_tsv(file = c(fl_head, fl_combine)) # test lines
+fll[bad_nl - 1] <- fl_combine # replace broken lines
+fll <- fll[-bad_nl] # remove extra already merged
+```
+
+```{r}
+fll <- iconv(fll, to = "UTF-8", sub = "")
+```
+
+```{r fix_write}
+tmp_tsv <- file_temp(ext = "tsv")
+write_lines(x = c(fl_head, fll), file = tmp_tsv)
+```
+
+```{r fix_rm, echo=FALSE}
+rm(fll, fl_head, fl_combine, bad_nl)
+gc(reset = TRUE, full = TRUE)
+```
+
+## Read
+
+```{r raw_read}
+fle <- read_delim(
+  file = tmp_tsv,
+  delim = "\t",
+  quote = "",
+  escape_backslash = FALSE,
+  escape_double = FALSE,
+  col_types = cols(
+    .default = col_character(),
+    Date = col_date_mdy(),
+    Amount = col_double()
+  )
+)
+```
+
+```{r raw_names}
+fle <- fle %>% 
+  rename(`Comm Name` = `Candidate/Committee`) %>% 
+  clean_names(case = "snake")
 ```
 
 ## Explore
 
+There are `r comma(nrow(fle))` rows of `r ncol(fle)` columns. Each record
+represents a single expenditure made by a political campaign to an outside
+vendor for goods or services.
+
 ```{r glimpse}
-head(fl)
-tail(fl)
-glimpse(fl)
-```
-
-### Categorical
-
-We can explore the least distinct variables with `ggplot::geom_bar()` or perform tidytext analysis
-on complex character strings.
-
-```{r n_distinct}
-glimpse_fun(fl, n_distinct)
-```
-
-```{r type_bar, echo=FALSE}
-fl %>% 
-  count(type, sort = TRUE) %>% 
-  ggplot(aes(reorder(type, n), n)) +
-  geom_col(fill = rep(RColorBrewer::brewer.pal(8, "Dark2"), length.out = 19)) +
-  scale_y_log10() +
-  coord_flip() +
-  labs(
-    title = "Florida Expenditures by Type",
-    x = "Type",
-    y = "Count",
-    caption = "Source: Florida Dept. of State"
-  )
-```
-
-```{r purpose_bar, echo=FALSE}
-fl %>% 
-  unnest_tokens(word, purpose) %>% 
-  anti_join(stop_words) %>% 
-  count(word, sort = TRUE) %>% 
-  head(20) %>% 
-  ggplot(aes(reorder(word, n), n)) +
-  geom_col() +
-  coord_flip() +
-  labs(
-    title = "Florida Expenditure Purpose by Word Count",
-    x = "Word",
-    y = "Count",
-    caption = "Source: Florida Dept. of State"
-  )
-```
-
-### Continuous
-
-```{r}
-fl <- mutate(fl, year = year(date))
-```
-
-```{r amount_hist, echo=FALSE}
-fl %>% 
-  ggplot(aes(amount)) +
-  geom_histogram(fill = RColorBrewer::brewer.pal(3, "Dark2")[1]) +
-  scale_x_continuous(labels = scales::dollar, trans = "log10") +
-  labs(
-    title = "Florida Expenditures by Amount",
-    x = "Amount",
-    y = "Count",
-    caption = "Source: Florida Dept. of State"
-  )
-```
-
-```{r year_bar, echo=FALSE}
-fl %>% 
-  filter(year > 2008, date < today()) %>% 
-  count(year) %>% 
-  mutate(even = is_even(year)) %>% 
-  ggplot(aes(year, n)) +
-  geom_col(aes(fill = even)) +
-  scale_fill_brewer(palette = "Dark2") +
-  scale_x_continuous(breaks = 2008:2019) +
-  theme(legend.position = "bottom") +
-  labs(
-    title = "Florida Expenditures by Year",
-    x = "Year",
-    y = "Count",
-    caption = "Source: Florida Dept. of State",
-    fill = "Election Year"
-  )
-```
-
-```{r month_line, echo=FALSE}
-fl %>% 
-  mutate(even = is_even(year)) %>% 
-  group_by(even, month = month(date)) %>% 
-  filter(year > 2008, year < 2019) %>% 
-  summarise(mean = mean(amount)) %>% 
-  ggplot(mapping = aes(x = month, y = mean)) +
-  geom_line(aes(color = even), size = 2) +
-  scale_x_continuous(breaks = 1:12, labels = month.abb) +
-  scale_color_brewer(palette = "Dark2") +
-  theme(legend.position = "bottom") +
-  labs(
-    title = "Florida Expenditures by Month",
-    x = "Month",
-    y = "Count",
-    caption = "Source: Florida Dept. of State",
-    color = "Election Year"
-  )
-```
-
-### Duplicates
-
-The `flag_dupes()` function can flag records with duplicate values across every variable.
-
-```{r get_dupes, collapse=TRUE}
-fl <- flag_dupes(fl, everything())
-sum(fl$dupe_flag)
-mean(fl$dupe_flag)
+glimpse(fle)
+tail(fle)
 ```
 
 ### Missing
 
-There are a number of rows missing key information.
+Columns vary in their degree of missing values.
 
-```{r count_na}
-glimpse_fun(fl, count_na)
+```{r na_count}
+col_stats(fle, count_na)
 ```
 
-The `flag_na()` function can flag records missing values key values in any key variable.
+We can flag any record missing a key variable needed to identify a transaction.
 
-```{r flag_na}
-fl <- flag_na(fl, payee_name, candidate_committee, date, amount)
-sum(fl$na_flag)
+```{r na_flag}
+key_vars <- c("date", "payee_name", "amount", "comm_name")
+fle <- flag_na(fle, all_of(key_vars))
+sum(fle$na_flag)
 ```
 
-## Clean
+```{r na_view}
+fle %>% 
+  filter(na_flag) %>% 
+  select(all_of(key_vars))
+```
 
-We need to separate the `city_state_zip` variable into their respective variables. Then we can
-clean each part.
+### Duplicates
 
-```{r separate_geo}
-fl <- fl %>% 
-  separate(
-    col = city_state_zip,
-    into = c("city_sep", "state_zip"),
-    sep = ",\\s",
-    remove = FALSE
-  ) %>% 
-  separate(
-    col = state_zip,
-    into = c("state_sep", "zip_sep"),
-    sep = "\\s",
-    remove = TRUE
+We can also flag any record completely duplicated across every column.
+
+```{r dupe_flag}
+fle <- flag_dupes(fle, everything())
+mean(fle$dupe_flag)
+sum(fle$dupe_flag)
+```
+
+```{r dupe_view}
+fle %>% 
+  filter(dupe_flag) %>% 
+  select(all_of(key_vars)) %>% 
+  arrange(payee_name, amount)
+```
+
+### Categorical
+
+```{r distinct_count}
+col_stats(fle, n_distinct)
+```
+
+```{r type_upper}
+fle <- mutate(fle, across(type, str_to_upper))
+```
+
+```{r distinct_plots, echo=FALSE}
+explore_plot(fle, type)
+```
+
+### Amounts
+
+```{r amount_summary}
+summary(fle$amount)
+mean(fle$amount <= 0)
+```
+
+These are the records with the minimum and maximum amounts.
+
+```{r amount_minmax}
+glimpse(fle[c(which.max(fle$amount), which.min(fle$amount)), ])
+```
+
+```{r hist_amount, echo=FALSE}
+fle %>%
+  ggplot(aes(amount)) +
+  geom_histogram(fill = dark2["purple"]) +
+  scale_y_continuous(labels = comma) +
+  scale_x_continuous(
+    breaks = c(1 %o% 10^(0:6)),
+    labels = dollar,
+    trans = "log10"
+  ) +
+  labs(
+    title = "Florida Expenditures Amount Distribution",
+    caption = "Source: FL DOE",
+    x = "Amount",
+    y = "Count"
   )
+```
+
+### Dates
+
+We can add the calendar year from `date` with `lubridate::year()`
+
+```{r date_year}
+fle <- mutate(fle, year = year(date))
+```
+
+```{r date_range}
+min(fle$date)
+sum(fle$year < 2000)
+max(fle$date)
+sum(fle$date > today())
+```
+
+```{r bar_year, echo=FALSE}
+fle %>% 
+  count(year) %>% 
+  mutate(even = is_even(year)) %>% 
+  ggplot(aes(x = year, y = n)) +
+  geom_col(aes(fill = even)) + 
+  scale_fill_brewer(palette = "Dark2") +
+  scale_y_continuous(labels = comma) +
+  scale_x_continuous(breaks = seq(1995, 2021, by = 2)) +
+  coord_cartesian(xlim = c(1995, 2021)) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "Florida Expenditures by Year",
+    caption = "Source: FL DOE",
+    fill = "Election Year",
+    x = "Year Made",
+    y = "Count"
+  )
+```
+
+## Wrangle
+
+To improve the searchability of the database, we will perform some consistent,
+confident string normalization. For geographic variables like city names and
+ZIP codes, the corresponding `campfin::normal_*()` functions are tailor made to 
+facilitate this process.
+
+### Separate
+
+```{r}
+fle <- extract(
+  data = fle,
+  col = city_state_zip,
+  into = c("city", "state", "zip"),
+  regex = "^(.*),\\s+(.*)\\s+(.*)$",
+  remove = FALSE
+)
 ```
 
 ### Address
 
-The database seems to use repeating astricks characters as `NA` values. We can remove any value
-with a single repeating character.
+For the street `addresss` variable, the `campfin::normal_address()` function
+will force consistence case, remove punctuation, and abbreviate official 
+USPS suffixes.
 
-```{r norm_address}
-fl <- fl %>% 
+The `address` also seems to be separated by white space not tab-characters. We
+can create a new variable with the secondary address.
+
+```{r}
+fle %>% 
+  select(address) %>% 
+  head(10)
+```
+
+```{r address_split}
+fl_addr <- fle %>% 
+  distinct(address) %>% 
+  separate(
+    col = address,
+    into = c("address1", "address2"),
+    sep = "\\s{3,}",
+    remove = FALSE,
+    extra = "merge",
+    fill = "right"
+  )
+```
+
+```{r address_norm}
+fl_addr <- mutate(
+  fl_addr,
+  across(
+    .cols = c(address1, address2),
+    .fns = ~normal_address(
+      address = .,
+      abbs = usps_street,
+      na_rep = TRUE,
+      na = invalid_city
+    )
+  )
+)
+```
+
+```{r address_join}
+fle <- left_join(fle, fl_addr, by = "address")
+fle <- fle %>% 
+  relocate(address1, address2, .after = address) %>% 
+  select(-address)
+```
+
+```{r address_view}
+fle %>% 
+  select(contains("address")) %>% 
+  distinct() %>% 
+  sample_n(10)
+```
+
+```{r echo=FALSE}
+rm(fl_addr)
+flush_memory()
+```
+
+### ZIP
+
+For ZIP codes, the `campfin::normal_zip()` function will attempt to create
+valid _five_ digit codes by removing the ZIP+4 suffix and returning leading
+zeroes dropped by other programs like Microsoft Excel.
+
+```{r zip_norm}
+fle <- fle %>% 
   mutate(
-    address_clean = normal_address(
-      address = address,
-      add_abbs = usps_street,
+    zip_norm = normal_zip(
+      zip = zip,
       na_rep = TRUE
     )
   )
 ```
 
-### Zip
-
-```{r bad_zip, collapse=TRUE}
-sample(fl$zip_sep[which(nchar(fl$zip_sep) != 5)], 10)
-```
-
-```{r norm_zip}
-fl <- fl %>% mutate(zip_clean = normal_zip(zip_sep, na_rep = TRUE))
-```
-
 ```{r zip_progress}
 progress_table(
-  fl$zip_sep,
-  fl$zip_clean,
+  fle$zip,
+  fle$zip_norm,
   compare = valid_zip
 )
 ```
 
 ### State
 
-```{r norm_state}
-fl <- fl %>% mutate(
-  state_clean = normal_state(
-    state = state_sep,
-    abbreviate = TRUE,
-    valid = NULL
+Valid two digit state abbreviations can be made using the 
+`campfin::normal_state()` function.
+
+```{r state_norm}
+fle <- fle %>% 
+  mutate(
+    state_norm = normal_state(
+      state = state,
+      abbreviate = TRUE,
+      na_rep = TRUE,
+      valid = valid_state
+    )
   )
-)
+```
+
+```{r state_view}
+fle %>% 
+  filter(state != state_norm) %>% 
+  count(state, state_norm, sort = TRUE)
 ```
 
 ```{r state_progress}
 progress_table(
-  fl$state_sep,
-  fl$state_clean,
+  fle$state,
+  fle$state_norm,
   compare = valid_state
 )
 ```
 
-```{r view_state}
-fl %>% 
-  filter(state_clean %out% valid_state) %>% 
-  count(state_clean, sort = TRUE)
-```
-
-```{r manual_state}
-fl$state_clean <- str_replace(fl$state_clean, "^F$", "FL")
-fl$state_clean <- na_out(fl$state_clean, valid_state)
-```
-
 ### City
 
-```{r city_normal}
-fl <- fl %>% 
+Cities are the most difficult geographic variable to normalize, simply due to
+the wide variety of valid cities and formats.
+
+#### Normal
+
+The `campfin::normal_city()` function is a good start, again converting case,
+removing punctuation, but _expanding_ USPS abbreviations. We can also remove
+`invalid_city` values.
+
+```{r city_norm}
+norm_city <- fle %>% 
+  distinct(city, state_norm, zip_norm) %>% 
   mutate(
     city_norm = normal_city(
-      city = city_sep,
+      city = city, 
+      abbs = usps_city,
+      states = c("FL", "DC", "FLORIDA"),
       na = invalid_city,
-      st_abbs = c("FL", "DC"),
-      geo_abbs = usps_city,
       na_rep = TRUE
     )
   )
-
-n_distinct(fl$city_norm)
 ```
 
-```{r city_match}
-fl <- fl %>% 
-  left_join(
-    y = zipcodes, 
-    by = c(
-      "zip_clean" = "zip", 
-      "state_clean" = "state"
-    )
-  ) %>% 
-  rename(city_match = city)
-```
+#### Swap
+
+We can further improve normalization by comparing our normalized value
+against the _expected_ value for that record's state abbreviation and ZIP code.
+If the normalized value is either an abbreviation for or very similar to the
+expected value, we can confidently swap those two.
 
 ```{r city_swap}
-fl <- fl %>% 
+norm_city <- norm_city %>% 
+  rename(city_raw = city) %>% 
+  left_join(
+    y = zipcodes,
+    by = c(
+      "state_norm" = "state",
+      "zip_norm" = "zip"
+    )
+  ) %>% 
+  rename(city_match = city) %>% 
   mutate(
     match_abb = is_abbrev(city_norm, city_match),
     match_dist = str_dist(city_norm, city_match),
     city_swap = if_else(
-      condition = match_abb | match_dist <= 2,
+      condition = !is.na(match_dist) & (match_abb | match_dist == 1),
       true = city_match,
       false = city_norm
     )
+  ) %>% 
+  select(
+    -city_match,
+    -match_dist,
+    -match_abb
   )
-
-summary(fl$match_dist)
-sum(fl$match_dist == 1, na.rm = TRUE)
 ```
 
+```{r city_rejoin}
+fle <- left_join(
+  x = fle,
+  y = norm_city,
+  by = c(
+    "city_raw", 
+    "state_norm", 
+    "zip_norm"
+  )
+)
+```
+
+#### Refine
+
+The [OpenRefine][or] algorithms can be used to group similar strings and replace
+the less common versions with their most common counterpart. This can greatly
+reduce inconsistency, but with low confidence; we will only keep any refined
+strings that have a valid city/state/zip combination.
+
+[or]: https://openrefine.org/
+
 ```{r city_refine}
-fl_refine <- fl %>% 
-  filter(state_clean == "FL") %>% 
+good_refine <- fle %>% 
   mutate(
     city_refine = city_swap %>% 
       key_collision_merge() %>% 
-      n_gram_merge()
+      n_gram_merge(numgram = 1)
   ) %>% 
   filter(city_refine != city_swap) %>% 
   inner_join(
-    y = zipcodes, 
+    y = zipcodes,
     by = c(
-      "city_swap" = "city",
-      "zip_clean" = "zip", 
-      "state_clean" = "state"
+      "city_refine" = "city",
+      "state_norm" = "state",
+      "zip_norm" = "zip"
     )
   )
+```
 
-fl_refine %>% 
+```{r city_count, echo=FALSE}
+good_refine %>%
   count(
+    state_norm, 
+    zip_norm, 
     city_swap, 
     city_refine,
     sort = TRUE
   )
 ```
 
+Then we can join the refined values back to the database.
+
 ```{r city_join}
-fl <- fl %>% 
-  left_join(fl_refine) %>% 
-  mutate(city_clean = coalesce(city_refine, city_swap))
+fle <- fle %>% 
+  left_join(good_refine) %>% 
+  mutate(city_refine = coalesce(city_refine, city_swap))
 ```
 
-We will check a few remaining cities by hand. The 20 most common cities not in
-`valid_city` are actually valid cities.
+#### Progress
 
-```{r city_bad}
-bad_city <- fl$city_clean[which(fl$city_clean %out% valid_city)]
-more_city <- most_common(bad_city, n = 20)
-print(more_city)
-```
+Our goal for normalization was to increase the proportion of city values known
+to be valid and reduce the total distinct values by correcting misspellings.
 
-```{r city_progress}
-progress <-
-  progress_table(
-    fl$city_sep,
-    fl$city_norm,
-    fl$city_swap,
-    fl$city_clean,
-    compare = c(valid_city, more_city)
-  ) %>% 
-  mutate(stage = as_factor(stage))
-```
-
-```{r progress_print, echo=FALSE}
-print(progress)
+```{r city_progress, echo=FALSE}
+many_city <- c(valid_city, extra_city)
+progress <- progress_table(
+  str_to_upper(fle$city_raw),
+  fle$city_norm,
+  fle$city_swap,
+  fle$city_refine,
+  compare = many_city
+) %>% mutate(stage = as_factor(stage))
+kable(progress, digits = 3)
 ```
 
 You can see how the percentage of valid values increased with each stage.
 
-```{r progress_bar, echo=FALSE}
+```{r bar_progress, echo=FALSE}
+raw_in <- percent(prop_in(fle$city_raw, valid_city))
 progress %>% 
   ggplot(aes(x = stage, y = prop_in)) +
   geom_hline(yintercept = 0.99) +
-  geom_col(fill = RColorBrewer::brewer.pal(3, "Dark2")[3]) +
+  geom_col(fill = dark2["purple"]) +
   coord_cartesian(ylim = c(0.75, 1)) +
   scale_y_continuous(labels = percent) +
   labs(
     title = "Florida City Normalization Progress",
+    subtitle = glue("Raw at {raw_in} before conversion to uppercase"),
     x = "Stage",
-    y = "Percent Valid",
-    caption = "Source: Florida Dept. of State"
+    y = "Percent Valid"
   )
 ```
 
 More importantly, the number of distinct values decreased each stage. We were
 able to confidently change many distinct invalid values to their valid
-equivilent.
+equivalent.
 
-```{r distinct_bar}
+```{r bar_distinct, echo=FALSE}
 progress %>% 
   select(
     stage, 
@@ -606,63 +754,97 @@ progress %>%
   mutate(name = name == "good") %>% 
   ggplot(aes(x = stage, y = value)) +
   geom_col(aes(fill = name)) +
-  scale_fill_brewer(palette = "Dark2") +
+  scale_fill_brewer(palette = "Dark2", direction = -1) +
   scale_y_continuous(labels = comma) +
   theme(legend.position = "bottom") +
   labs(
     title = "Florida City Normalization Progress",
     subtitle = "Distinct values, valid and invalid",
     x = "Stage",
-    y = "Percent Valid",
-    caption = "Source: Florida Dept. of State",
+    y = "Distinct Values",
     fill = "Valid"
   )
-  
 ```
 
-## Lookup
+## Conclude
 
-If there is a lookup file, we can add that stage too.
+Before exporting, we can remove the intermediary normalization columns and
+rename all added variables with the `_clean` suffix.
 
-```{r lookup, eval=TRUE}
-lookup_file <- here("fl", "expends", "data", "fl_expends_city_lookup.csv")
-if (file.exists(lookup_file)) {
-  lookup <- read_csv(lookup_file) %>% clean_names()
-  fl <- left_join(fl, select(lookup, 1, 2))
-  progress_table(
-    fl$city_sep,
-    fl$city_norm,
-    fl$city_swap,
-    fl$city_clean,
-    fl$city_clean2,
-    compare = c(valid_city, more_city)
-  ) 
-}
+```{r clean_select}
+fle <- fle %>% 
+  select(
+    -city_norm,
+    -city_swap,
+    city_clean = city_refine
+  ) %>% 
+  rename_all(~str_replace(., "_norm", "_clean")) %>% 
+  rename_all(~str_remove(., "_raw"))
 ```
+
+```{r clean_glimpse}
+glimpse(sample_n(fle, 50))
+```
+
+1. There are `r comma(nrow(fle))` records in the database.
+1. There are `r comma(sum(fle$dupe_flag))` duplicate records in the database.
+1. The range and distribution of `amount` and `date` seem reasonable.
+1. There are `r comma(sum(fle$na_flag))` records missing key variables.
+1. Consistency in geographic data has been improved with `campfin::normal_*()`.
+1. The 4-digit `year` variable has been created with `lubridate::year()`.
 
 ## Export
 
-```{r write_clean}
-clean_dir <- here("fl", "expends", "data", "processed")
-dir_create(clean_dir)
-fl %>% 
-  select(
-    -city_state_zip,
-    -city_sep,
-    -state_sep,
-    -zip_sep,
-    -city_norm,
-    -city_match,
-    -match_dist,
-    -match_abb,
-    -city_swap,
-    -city_refine
-  ) %>% 
-  write_csv(
-    path = glue("{clean_dir}/fl_expends_clean.csv"),
-    na = ""
-  )
+Now the file can be saved on disk for upload to the Accountability server.
+
+```{r clean_dir}
+clean_dir <- dir_create(here("fl", "expends", "data", "clean"))
+clean_path <- path(clean_dir, "fl_expends_clean.csv")
+write_csv(fle, clean_path, na = "")
+(clean_size <- file_size(clean_path))
+file_encoding(clean_path) %>% 
+  mutate(across(path, path.abbrev))
 ```
 
+## Upload
 
+We can use the `aws.s3::put_object()` to upload the text file to the IRW server.
 
+```{r aws_upload, eval=FALSE}
+aws_path <- path("csv", basename(clean_path))
+if (!object_exists(aws_path, "publicaccountability")) {
+  put_object(
+    file = clean_path,
+    object = aws_path, 
+    bucket = "publicaccountability",
+    acl = "public-read",
+    show_progress = TRUE,
+    multipart = TRUE
+  )
+}
+aws_head <- head_object(aws_path, "publicaccountability")
+(aws_size <- as_fs_bytes(attr(aws_head, "content-length")))
+unname(aws_size == clean_size)
+```
+
+## Dictionary
+
+The following table describes the variables in our final exported file:
+
+```{r dict_make, echo=FALSE}
+dict_raw <- tibble(
+  var = md_code(names(fle)),
+  type = md_code(map_chr(fle, typeof)),
+  def = c(
+    ""
+  )
+)
+```
+
+```{r dict_md, echo=FALSE}
+(dict_md <- kable(
+  x = dict_raw,
+  format = "markdown",
+  col.names = c("Column", "Type", "Definition")
+))
+```

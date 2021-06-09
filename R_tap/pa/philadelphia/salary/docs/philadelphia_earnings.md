@@ -1,7 +1,7 @@
 Philadelphia City Employee Earnings
 ================
 Kiernan Nicholls
-Tue Jun 8 15:31:38 2021
+Wed Jun 9 11:46:39 2021
 
 -   [Project](#project)
 -   [Objectives](#objectives)
@@ -17,6 +17,7 @@ Tue Jun 8 15:31:38 2021
     -   [Duplicates](#duplicates)
     -   [Categorical](#categorical)
     -   [Dates](#dates)
+-   [State](#state)
 -   [Conclude](#conclude)
 -   [Export](#export)
 -   [Upload](#upload)
@@ -277,8 +278,13 @@ tail(phl)
 We can create a new column containing the total pay received across the
 five earning categories described in the notes above.
 
+> With the exception of the `BASE_GROSS_PAY_QTD` field, the remaining
+> four fields above are earnings in addition to an employee’s
+> `BASE_SALARY.`
+
 ``` r
 phl <- phl %>% 
+  rowwise() %>% 
   mutate(
     total_gross_pay = sum(
       base_salary,
@@ -288,7 +294,8 @@ phl <- phl %>%
       miscellaneous_gross_pay_qtd,
       na.rm = TRUE
     )
-  )
+  ) %>% 
+  ungroup()
 ```
 
 ``` r
@@ -298,9 +305,9 @@ phl$total_gross_pay[phl$base_salary != 0 & phl$total_gross_pay == 0] <- NA
 ``` r
 summary(phl$total_gross_pay)
 #>    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
-#> 1.6e+10 1.6e+10 1.6e+10 1.6e+10 1.6e+10 1.6e+10
+#>   -4299   44097   60990   62671   82513  551534
 mean(phl$total_gross_pay <= 0)
-#> [1] 0
+#> [1] 0.04161151
 ```
 
 These are the records with the minimum and maximum amounts.
@@ -329,7 +336,7 @@ glimpse(phl[c(which.max(phl$base_salary), which.min(phl$base_salary)), ])
 #> $ termination_month             <chr> NA, "1"
 #> $ termination_year              <int> NA, 2020
 #> $ public_id                     <chr> "3027", "25791"
-#> $ total_gross_pay               <dbl> 16002297353, 16002297353
+#> $ total_gross_pay               <dbl> 297377.69, 10013.42
 ```
 
 ![](../plots/hist_amount-1.png)<!-- -->
@@ -423,7 +430,7 @@ col_stats(phl, n_distinct)
 #> 18 termination_month             <chr>     13 0.0000509 
 #> 19 termination_year              <int>      8 0.0000313 
 #> 20 public_id                     <chr>  37060 0.145     
-#> 21 total_gross_pay               <dbl>      1 0.00000392
+#> 21 total_gross_pay               <dbl> 173614 0.680     
 #> 22 na_flag                       <lgl>      1 0.00000392
 ```
 
@@ -440,12 +447,20 @@ max(phl$calendar_year)
 
 ![](../plots/bar_year-1.png)<!-- -->
 
+## State
+
+We will manually add some geographic variables needed to filter records.
+
+``` r
+phl <- mutate(phl, state = "PA", city = "Philadelphia")
+```
+
 ## Conclude
 
 ``` r
 glimpse(sample_n(phl, 50))
 #> Rows: 50
-#> Columns: 22
+#> Columns: 24
 #> $ calendar_year                 <int> 2019, 2019, 2020, 2019, 2019, 2020, 2020, 2019, 2020, 2019, 2020, 2021, 2020, 20…
 #> $ quarter                       <int> 4, 4, 4, 2, 4, 1, 1, 3, 3, 3, 2, 1, 2, 1, 2, 2, 3, 2, 2, 2, 1, 3, 4, 2, 2, 1, 1,…
 #> $ last_name                     <chr> "Bennett", "Hess", "Walsh", "Blakey", "Ramos", "Ditro", "Thomas", "Bunch", "Bahl…
@@ -466,8 +481,10 @@ glimpse(sample_n(phl, 50))
 #> $ termination_month             <chr> NA, NA, NA, NA, NA, NA, "2", NA, NA, NA, NA, NA, NA, NA, NA, NA, "3", NA, "3", N…
 #> $ termination_year              <int> NA, NA, NA, NA, NA, NA, 2020, NA, NA, NA, NA, NA, NA, NA, NA, NA, 2020, NA, 2020…
 #> $ public_id                     <chr> "25241", "503", "27011", "13582", "32056", "14551", "13357", "3754", "24576", "2…
-#> $ total_gross_pay               <dbl> 16002297353, 16002297353, 16002297353, 16002297353, 16002297353, 16002297353, 16…
+#> $ total_gross_pay               <dbl> 78116.72, 76740.08, 47310.75, 39369.66, 54715.66, 77830.10, 43260.00, 47611.03, …
 #> $ na_flag                       <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FAL…
+#> $ state                         <chr> "PA", "PA", "PA", "PA", "PA", "PA", "PA", "PA", "PA", "PA", "PA", "PA", "PA", "P…
+#> $ city                          <chr> "Philadelphia", "Philadelphia", "Philadelphia", "Philadelphia", "Philadelphia", …
 ```
 
 1.  There are 255,338 records in the database.
@@ -489,7 +506,7 @@ clean_dir <- dir_create(here("pa", "philadelphia", "salary", "data", "clean"))
 clean_path <- path(clean_dir, "philadelphia_salary_2019-2021.csv")
 write_csv(phl, clean_path, na = "")
 (clean_size <- file_size(clean_path))
-#> 37.8M
+#> 39.5M
 ```
 
 ``` r

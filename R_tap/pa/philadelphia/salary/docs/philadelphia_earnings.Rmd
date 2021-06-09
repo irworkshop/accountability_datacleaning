@@ -264,8 +264,12 @@ tail(phl)
 We can create a new column containing the total pay received across the five
 earning categories described in the notes above.
 
+> With the exception of the `BASE_GROSS_PAY_QTD` field, the remaining four
+fields above are earnings in addition to an employee’s `BASE_SALARY.`
+
 ```{r}
 phl <- phl %>% 
+  rowwise() %>% 
   mutate(
     total_gross_pay = sum(
       base_salary,
@@ -275,7 +279,8 @@ phl <- phl %>%
       miscellaneous_gross_pay_qtd,
       na.rm = TRUE
     )
-  )
+  ) %>% 
+  ungroup()
 ```
 
 ```{r}
@@ -381,6 +386,14 @@ phl %>%
     y = "Count"
   ) + 
   facet_wrap(~calendar_year, nrow = 1)
+```
+
+## State
+
+We will manually add some geographic variables needed to filter records.
+
+```{r state_add}
+phl <- mutate(phl, state = "PA", city = "Philadelphia")
 ```
 
 ## Conclude
