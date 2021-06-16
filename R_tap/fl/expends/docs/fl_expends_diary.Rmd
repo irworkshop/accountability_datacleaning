@@ -93,6 +93,10 @@ pacman::p_load(
 )
 ```
 
+```{r}
+packageVersion("campfin")
+```
+
 This document should be run as part of the `R_campfin` project, which lives as a
 sub-directory of the more general, language-agnostic
 [`irworkshop/accountability_datacleaning`][tap] GitHub repository.
@@ -347,10 +351,19 @@ fle <- flag_na(fle, all_of(key_vars))
 sum(fle$na_flag)
 ```
 
+A few hundred records are missing a `payee_name`.
+
 ```{r na_view}
 fle %>% 
   filter(na_flag) %>% 
-  select(all_of(key_vars))
+  select(all_of(key_vars), city_state_zip) %>% 
+  relocate(city_state_zip, .after = payee_name)
+```
+
+```{r na_recount}
+fle %>% 
+  select(all_of(key_vars)) %>% 
+  col_stats(count_na)
 ```
 
 ### Duplicates
@@ -363,11 +376,20 @@ mean(fle$dupe_flag)
 sum(fle$dupe_flag)
 ```
 
+`r percent(mean(fle$dupe_flag), 0.01)` of records are duplicated at least once.
+
 ```{r dupe_view}
 fle %>% 
   filter(dupe_flag) %>% 
   select(all_of(key_vars)) %>% 
   arrange(payee_name, amount)
+```
+
+```{r}
+fle %>% 
+  filter(dupe_flag) %>% 
+  select(all_of(key_vars)) %>% 
+  count(payee_name, amount, comm_name, sort = TRUE)
 ```
 
 ### Categorical
@@ -425,7 +447,7 @@ fle <- mutate(fle, year = year(date))
 
 ```{r date_range}
 min(fle$date)
-sum(fle$year < 2000)
+sum(fle$year < 1995)
 max(fle$date)
 sum(fle$date > today())
 ```
@@ -459,17 +481,51 @@ facilitate this process.
 
 ### Separate
 
-```{r}
+The `city_state_zip` column contains all three geographic variables in a single
+string. We need to separate out the data so they can be properly searched on the
+site. The string normally takes the format of `Miami, FL 33101`, with the city
+name first before a common, followed by the two-letter state abbreviation and
+5-digit ZIP code. Quite a number of these values break this expected format,
+upwards of 5% of values. We can use regular expressions to manipulate broken
+strings and then extract the geographic variables from their expected locations.
+
+```{r eval=FALSE}
 fle <- extract(
   data = fle,
   col = city_state_zip,
-  into = c("city", "state", "zip"),
-  regex = "^(.*),\\s+(.*)\\s+(.*)$",
+  into = c("city_sep", "state_sep", "zip_sep"),
+  regex = "^(.*),\\s+(.*),?\\s+(.*)$",
   remove = FALSE
 )
 ```
 
-### Address
+```{r geo_sep}
+csz <- fle %>%
+  distinct(city_state_zip) %>% 
+  mutate(
+    # fix the city_state_zip values
+    x = city_state_zip %>% 
+      str_squish() %>% 
+      str_replace("(?<=\\s)F, L", ", FL") %>% 
+      str_replace("(?<=\\s)F, L,", ", FL") %>% 
+      str_replace("(?<=\\s)F, L.", ", FL") %>% 
+      str_remove("(?<=FL),") %>% 
+      str_replace("([A-Z]{2})(\\d+)", "\\1 \\2") %>% 
+      str_replace("\\sDC,", ", DC"),
+    # extract the geo from each spot
+    city_sep = str_extract(x, "(.*)(?=,(\\s|$))"),
+    state_sep = str_extract(x, "[A-Z\\*\\.]{1,}(?=\\s\\d|$)"),
+    zip_sep = str_extract(x, "\\d{2,5}(?:-\\d{4})?$"),
+    across(where(is.character), na_if, "")
+  ) %>% 
+  select(-x)
+```
+
+```{r}
+fle <- left_join(fle, csz, by = "city_state_zip")
+```
+
+### Address           
 
 For the street `addresss` variable, the `campfin::normal_address()` function
 will force consistence case, remove punctuation, and abbreviate official 
@@ -498,25 +554,33 @@ fl_addr <- fle %>%
 ```
 
 ```{r address_norm}
-fl_addr <- mutate(
-  fl_addr,
-  across(
-    .cols = c(address1, address2),
-    .fns = ~normal_address(
-      address = .,
-      abbs = usps_street,
-      na_rep = TRUE,
-      na = invalid_city
+fl_addr <- fl_addr %>% 
+  mutate(
+    across(
+      .cols = c(address1, address2),
+      .fns = ~normal_address(
+        address = .,
+        abbs = usps_street,
+        na_rep = TRUE,
+        na = invalid_city
+      )
     )
   )
+```
+
+```{r}
+fl_addr <- unite(
+  data = fl_addr,
+  col = address_clean,
+  address1, address2,
+  sep = " ",
+  remove = TRUE,
+  na.rm = TRUE
 )
 ```
 
 ```{r address_join}
 fle <- left_join(fle, fl_addr, by = "address")
-fle <- fle %>% 
-  relocate(address1, address2, .after = address) %>% 
-  select(-address)
 ```
 
 ```{r address_view}
@@ -541,7 +605,7 @@ zeroes dropped by other programs like Microsoft Excel.
 fle <- fle %>% 
   mutate(
     zip_norm = normal_zip(
-      zip = zip,
+      zip = zip_sep,
       na_rep = TRUE
     )
   )
@@ -549,7 +613,7 @@ fle <- fle %>%
 
 ```{r zip_progress}
 progress_table(
-  fle$zip,
+  fle$zip_sep,
   fle$zip_norm,
   compare = valid_zip
 )
@@ -564,7 +628,7 @@ Valid two digit state abbreviations can be made using the
 fle <- fle %>% 
   mutate(
     state_norm = normal_state(
-      state = state,
+      state = state_sep,
       abbreviate = TRUE,
       na_rep = TRUE,
       valid = valid_state
@@ -574,13 +638,13 @@ fle <- fle %>%
 
 ```{r state_view}
 fle %>% 
-  filter(state != state_norm) %>% 
-  count(state, state_norm, sort = TRUE)
+  filter(state_sep != state_norm) %>% 
+  count(state_sep, state_norm, sort = TRUE)
 ```
 
 ```{r state_progress}
 progress_table(
-  fle$state,
+  fle$state_sep,
   fle$state_norm,
   compare = valid_state
 )
@@ -599,10 +663,10 @@ removing punctuation, but _expanding_ USPS abbreviations. We can also remove
 
 ```{r city_norm}
 norm_city <- fle %>% 
-  distinct(city, state_norm, zip_norm) %>% 
+  distinct(city_sep, state_norm, zip_norm) %>% 
   mutate(
     city_norm = normal_city(
-      city = city, 
+      city = city_sep, 
       abbs = usps_city,
       states = c("FL", "DC", "FLORIDA"),
       na = invalid_city,
@@ -620,7 +684,6 @@ expected value, we can confidently swap those two.
 
 ```{r city_swap}
 norm_city <- norm_city %>% 
-  rename(city_raw = city) %>% 
   left_join(
     y = zipcodes,
     by = c(
@@ -650,7 +713,7 @@ fle <- left_join(
   x = fle,
   y = norm_city,
   by = c(
-    "city_raw", 
+    "city_sep", 
     "state_norm", 
     "zip_norm"
   )
@@ -699,7 +762,7 @@ Then we can join the refined values back to the database.
 
 ```{r city_join}
 fle <- fle %>% 
-  left_join(good_refine) %>% 
+  left_join(good_refine, by = names(.)) %>% 
   mutate(city_refine = coalesce(city_refine, city_swap))
 ```
 
@@ -711,7 +774,7 @@ to be valid and reduce the total distinct values by correcting misspellings.
 ```{r city_progress, echo=FALSE}
 many_city <- c(valid_city, extra_city)
 progress <- progress_table(
-  str_to_upper(fle$city_raw),
+  str_to_upper(fle$city_sep),
   fle$city_norm,
   fle$city_swap,
   fle$city_refine,
