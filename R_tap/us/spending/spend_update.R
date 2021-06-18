@@ -400,10 +400,11 @@ if (FALSE && nzchar(Sys.getenv("AWS_SECRET_ACCESS_KEY"))) {
   for (i in seq_along(all_csv)) {
     file_type <- all_checks$file_type[i]
     cli_process_start("Uploading file {i}/{n_csv}")
+    n <- regmatches(x[i], m = regexpr(pattern = "\\d+\\.csv", text = x[i]))
     suppressMessages(
       expr = put_object(
         file = all_csv[i],
-        object = sprintf("csv/us_%s_%s_%i.csv", file_type, file_dates, i),
+        object = sprintf("csv/us_%s_%s_%s", file_type, file_dates, n),
         bucket = "publicaccountability",
         acl = "public-read",
         multipart = TRUE,
