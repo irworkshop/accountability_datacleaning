@@ -111,90 +111,130 @@ here::i_am("ny/contribs/docs/ny_contribs_diary.Rmd")
 ## Data
 
 The New York state campaign finance contributions data can be obtained from the
-[New York State Board of Elections (NYSBOE)][boe].
+[New York State Board of Elections (NYSBOE)][boe]. From the BOE's 
+[Campaign Finance page][cf] we can navigate to the [bulk data][bulk] download
+page (from the Campaign Disclosure drop-down menu).
 
-[boe]: https://www.elections.ny.gov/INDEX.html
-
-From the NYSBOE's [view reports page][vr] we can obtain the raw database in ASCII
-files. The NYSBOE also provides disclaimers on the data availability and accuracy.
-
-[vr]: https://www.elections.ny.gov/CFViewReports.html
+> The New York State Board of Elections (NYSBOE) makes this reporting system
+available as an UNOFFICIAL resource for information related to candidates and
+their respective ballot access and campaign disclosure filings.
+> 
+> The NYSBOE Public Reporting system logs and tracks the disclosure reports of
+candidate, ballot access documents including petitions, certificates of
+nomination, related documents, and their status...
+> 
+> ##### Bulk Download
+> Disclosure Reports filed with the New York State Board Of Elections in csv
+format. Option to download All or specified Filing Year and Disclosure Period.
 
 > ##### Data Availability
 > This database contains all financial disclosure reports filed with NYSBOE from
 July of 1999 to the present. Financial disclosure reports filed prior to the
 1999 July Periodic report are either on file with the New York State Archives or
 in storage with the New York State Board of Elections. For further information
-or to obtain copies of these archived or stored filings, please call
-1-800-458-3453. Each page costs 25¢ plus postage and copy orders must be
-prepaid.
->
+or to obtain copies of these archived or stored disclosure reports, please call
+1-800-458-3453.
+> 
 > Electronically filed disclosure reports are generally available in the
-database on the day they are received. A small number of candidates and
-committees are either statutorily exempt or have applied for and obtained
-exemptions from electronic filing. These filers will continue filing on paper
-and their disclosure reports will become available as they are manually entered
-into the database by NYSBOE staff.
+database on the day they are received.
 
 > ##### Data Accuracy
-> The majority of financial disclosure reports filed at NYSBOE are entered into
-the database directly from e-mail, diskette, CD or DVD filings submitted by
-committee treasurers or candidates. The information contained in paper filings
-will be entered into the database exactly as it appears on the forms. Because
-database searches retrieve information exactly the way it is reported and then
-entered into the database, search results may be inaccurate and/or incomplete.
-This will occur, for example, if filers do not adhere to the required format, do
-not use the proper codes, misspell words or leave items blank. Although NYSBOE
-carefully reviews disclosure reports and requires treasurers to submit amended
-reports as needed, there will necessarily be delays before the review process is
-completed and the information in the database is corrected.
+> Financial disclosure reports filed at NYSBOE are added to the database
+directly by submitting from the Electronic Filing Application. Because database
+searched retrieve information exactly the way it is reported, search results may
+be inaccurate and/or incomplete. This will occur, for example, if filers do not
+adhere to the required format, do not use the proper codes, misspell words or
+leave items blank. Although NYSBOE carefully reviews disclosure reports and
+requires treasurers to submit amended reports as needed, there will necessarily
+be delays before the review process is completed and the information in the
+database is corrected.
 
-## Import
+> #### Database Files in Comma Seprated Value (CSV) Format
+> To match the disclosure report data files to Filer Names by filer ID you will
+need to Download the Filer data file (Commcand.zip) is a zipped file containing
+the data file (commcand.csv) in CSV and a PDF file
+(FileFormatReferenceFiler.pdf) contains the data file layout.
 
-To import the contributions data into R, we first have to download two files:
-(1) the filer data and (2) the filings data. Together, these two files can
-identify all parties to contributions.
- 
-> ##### Database Files in ASCII Delimited Format
-> **Updated data files are uploaded during active filing periods after 4:00 P.M.
-daily until the filing is complete.**
-> 
-> **Note:** To match the filing data files to Filer Names by filer ID you will
-need to [Download the Filer data file][f]. Commcand.zip is a zipped file
-containing the data file (commcand.asc) in ASCII delimited and two text files.
-(filerec.txt contains the data file layout - codes.txt explains the codes used
-in the data file).
->
-> **All downloadable files are zipped files containing a data file in ASCII
-delimited format and two text files. (`efsrecb.txt` contains the data file
-layout - `efssched.txt` explains the different schedules as they apply to the
-database).**
->
-> [Download Data file containing ALL filings][a]. **Note:** This file is a large
-file (238, 994 KB) that contains over 6 million records. Do not attempt to
-download this file unless you have a database to download the file to.
+> All downloadable files are zipped files containing eight data files in CSV
+format (`STATE_CANDIDATE_ACTIVE.csv`, `STATE_CANDIDATE_INACTIVE.csv`,
+`COUNTY_CANDIDATE_ACTIVE.csv`, `COUNTY_CANDIDATE_INACTIVE.csv`,
+`STATE_COMMITTEE_ACTIVE.csv`, `STATE_COMMITTEE_INACTIVE.csv`,
+`COUNTY_COMMITTEE_ACTIVE.csv`, `COUNTY_COMMITTEE_INACTIVE.csv`) and a PDF file
+(`FileFormatReference.pdf`) contains the datafile layout.
 
-[f]: https://cfapp.elections.ny.gov/NYSBOE/download/ZipDataFiles/commcand.zip
-[a]: https://cfapp.elections.ny.gov/NYSBOE/download/ZipDataFiles/ALL_REPORTS.zip
+> **Note:**
+> Selected Report Year "All" and Report Type "All" contains large files. Do not
+attempt to download these files unless you have a database to download the files
+to.
+
+[boe]: https://www.elections.ny.gov/
+[cf]: https://www.elections.ny.gov/CampaignFinance.html
+[bulk]: https://publicreporting.elections.ny.gov/DownloadCampaignFinanceData/DownloadCampaignFinanceData
 
 ### Download
 
-We can download the ZIP archives and extract their contents.
+The BOE website has instructions on how to use the website to select what files
+are to be downloaded. We can use these instructions to try and replicate the
+form process with `GET()` and `POST()` request from the httr package.
 
-```{r raw_size}
-sboe <- "https://cfapp.elections.ny.gov/NYSBOE/download/ZipDataFiles/"
-con_url <- str_c(sboe, "ALL_REPORTS.zip")
-fil_url <- str_c(sboe, "commcand.zip")
+> #### Bulk Download
+> Search produces all financial disclosure reports filed with the New York State
+Board of Elections (NYSBOE) from July of 1999 to present in csv format.
+Financial disclosure reports filed prior to the 1999 July Periodic report are
+either on file with the New York State Archives or in storage with the New York
+State Board of Elections. Electronically filed disclosure reports are generally
+available in the database on the day they are received.
+
+> ##### Data Type
+> Click on the Data Type drop-down list and select either **Filer Data** to
+download the data of Filers registered with State Offices or select **Disclosure
+Report** to download All or specified Filing Year and Disclosure Period. If
+**Disclosure Report** is selected then system displays **Report Year** and
+**Report Type** dropdown fields.
+
+> ##### Report Year
+> Dropdown is visible only on selecting **Disclosure Report** in the **Data
+Type** dropdown. Click on the **Report Year** drop-down list and select a year
+to download disclosure report for the selected year.
+
+> ##### Report Type
+> Dropdown is visible only on selecting **Disclosure Report** in the **Data
+Type** dropdown. Click on the **Report Type** drop-down list and select an
+report type to download disclosure report for the selected year and for the
+selected type.
+
+> ##### Download
+> Click on the **Download** button to download the Filer Data or Disclosure
+report based on values selected in the Filter fields. System will download the
+Zip file with filer data or Disclosure Reports
+### Download
+
+```{r raw_dir}
+raw_dir <- dir_create(here("ny", "contribs", "data", "raw"))
+fil_zip <- file_temp(ext = "zip")
 ```
 
-```{r raw_download}
-raw_dir <- dir_create(here("ny", "contribs", "data", "raw"))
-con_zip <- path(raw_dir, basename(con_url))
-fil_zip <- path(raw_dir, basename(fil_url))
-if (!file_exists(con_zip)) {
-  download.file(fil_url, fil_zip)
-  download.file(con_url, con_zip)
-}
+```{r}
+dcf <- "https://publicreporting.elections.ny.gov/DownloadCampaignFinanceData/"
+dcf_get <- GET(url = str_c(dcf, "DownloadCampaignFinanceData"))
+dcf_cookie <- cookies(dcf_get)
+dcf_asp <- dcf_cookie$value
+names(dcf_asp) <- dcf_cookie$name
+```
+
+```{r fil_get}
+fil_get <- GET(
+  url = str_c(dcf, "DownloadZipFile"),
+  user_agent("https://publicaccountability.org/"),
+  write_disk(fil_zip, overwrite = TRUE),
+  set_cookies(dcf_asp),
+  progress("down"),
+  query = list(
+    lstDateType = "--lstDateType",
+    lstUCYearDCF = "--lstUCYearDCF",
+    lstFilingDesc = "--lstFilingDesc"
+  )
+)
 ```
 
 ### Extract
