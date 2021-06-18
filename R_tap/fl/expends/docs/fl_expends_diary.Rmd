@@ -836,13 +836,12 @@ rename all added variables with the `_clean` suffix.
 
 ```{r clean_select}
 fle <- fle %>% 
-  select(
-    -city_norm,
-    -city_swap,
-    city_clean = city_refine
-  ) %>% 
+  select(-ends_with("_sep")) %>% 
+  select(-city_norm, -city_swap) %>% 
+  rename(city_clean = city_refine) %>% 
   rename_all(~str_replace(., "_norm", "_clean")) %>% 
-  rename_all(~str_remove(., "_raw"))
+  relocate(city_clean, .after = address_clean) %>% 
+  relocate(zip_clean, .after = state_clean)
 ```
 
 ```{r clean_glimpse}
@@ -862,11 +861,9 @@ Now the file can be saved on disk for upload to the Accountability server.
 
 ```{r clean_dir}
 clean_dir <- dir_create(here("fl", "expends", "data", "clean"))
-clean_path <- path(clean_dir, "fl_expends_clean.csv")
+clean_path <- path(clean_dir, "fl_expends_1995-2020.csv")
 write_csv(fle, clean_path, na = "")
 (clean_size <- file_size(clean_path))
-file_encoding(clean_path) %>% 
-  mutate(across(path, path.abbrev))
 ```
 
 ## Upload
@@ -888,26 +885,4 @@ if (!object_exists(aws_path, "publicaccountability")) {
 aws_head <- head_object(aws_path, "publicaccountability")
 (aws_size <- as_fs_bytes(attr(aws_head, "content-length")))
 unname(aws_size == clean_size)
-```
-
-## Dictionary
-
-The following table describes the variables in our final exported file:
-
-```{r dict_make, echo=FALSE}
-dict_raw <- tibble(
-  var = md_code(names(fle)),
-  type = md_code(map_chr(fle, typeof)),
-  def = c(
-    ""
-  )
-)
-```
-
-```{r dict_md, echo=FALSE}
-(dict_md <- kable(
-  x = dict_raw,
-  format = "markdown",
-  col.names = c("Column", "Type", "Definition")
-))
 ```

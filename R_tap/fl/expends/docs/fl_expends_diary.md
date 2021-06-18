@@ -1,7 +1,7 @@
 Florida Expenditures
 ================
 Kiernan Nicholls
-Wed Jun 16 15:47:11 2021
+Fri Jun 18 13:56:25 2021
 
 -   [Project](#project)
 -   [Objectives](#objectives)
@@ -26,7 +26,6 @@ Wed Jun 16 15:47:11 2021
 -   [Conclude](#conclude)
 -   [Export](#export)
 -   [Upload](#upload)
--   [Dictionary](#dictionary)
 
 <!-- Place comments regarding knitting here -->
 
@@ -321,8 +320,8 @@ write_lines(x = c(fl_head, fll), file = tmp_tsv)
 ```
 
     #>           used (Mb) gc trigger  (Mb) max used (Mb)
-    #> Ncells 1128021 60.3    4221014 225.5  1128021 60.3
-    #> Vcells 2965006 22.7   44521944 339.7  2965006 22.7
+    #> Ncells 1127952 60.3    4220945 225.5  1127952 60.3
+    #> Vcells 2964783 22.7   44521744 339.7  2964783 22.7
 
 ## Read
 
@@ -941,19 +940,18 @@ and rename all added variables with the `_clean` suffix.
 
 ``` r
 fle <- fle %>% 
-  select(
-    -city_norm,
-    -city_swap,
-    city_clean = city_refine
-  ) %>% 
+  select(-ends_with("_sep")) %>% 
+  select(-city_norm, -city_swap) %>% 
+  rename(city_clean = city_refine) %>% 
   rename_all(~str_replace(., "_norm", "_clean")) %>% 
-  rename_all(~str_remove(., "_raw"))
+  relocate(city_clean, .after = address_clean) %>% 
+  relocate(zip_clean, .after = state_clean)
 ```
 
 ``` r
 glimpse(sample_n(fle, 50))
 #> Rows: 50
-#> Columns: 18
+#> Columns: 15
 #> $ comm_name      <chr> "Perry, Belvin  (NOP)(CTJ)", "Henry, Patrick  (DEM)(STR)", "Florida Democratic Party (PTY)", "T…
 #> $ date           <date> 2000-08-29, 2018-11-07, 2015-04-29, 2019-10-30, 2014-10-06, 2018-06-24, 2010-09-08, 2015-05-04…
 #> $ amount         <dbl> 396.00, 330.00, 1500.00, 5.00, -500.00, 3.20, 300.00, 4000.00, 286.95, 500.00, 168.44, 60.07, 2…
@@ -965,13 +963,10 @@ glimpse(sample_n(fle, 50))
 #> $ na_flag        <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALS…
 #> $ dupe_flag      <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALS…
 #> $ year           <dbl> 2000, 2018, 2015, 2019, 2014, 2018, 2010, 2015, 2020, 2009, 2005, 2008, 2010, 2017, 2004, 2013,…
-#> $ city_sep       <chr> "APOPKA", "DAYTONA BEACH", "JACKSONVILLE", "BATON ROUGE", "PLANT CITY", "SAN JOSE", "ST PETERSB…
-#> $ state_sep      <chr> "FL", "FL", "FL", "LA", "FL", "CA", "FL", "FL", "FL", "FL", "TX", "FL", "FL", "FL", "FL", "FL",…
-#> $ zip_sep        <chr> "32712", "32114", "32206", "70808", "33563", "95131", "33703", "32082", "33133", "33408", "7526…
 #> $ address_clean  <chr> "439 W ORANGE BLOSSOM TR", "PO BOX 10128", "1414 SILVER ST", "5555 HILTON AVE STE 106", "600 W …
-#> $ zip_clean      <chr> "32712", "32114", "32206", "70808", "33563", "95131", "33703", "32082", "33133", "33408", "7526…
-#> $ state_clean    <chr> "FL", "FL", "FL", "LA", "FL", "CA", "FL", "FL", "FL", "FL", "TX", "FL", "FL", "FL", "FL", "FL",…
 #> $ city_clean     <chr> "APOPKA", "DAYTONA BEACH", "JACKSONVILLE", "BATON ROUGE", "PLANT CITY", "SAN JOSE", "SAINT PETE…
+#> $ state_clean    <chr> "FL", "FL", "FL", "LA", "FL", "CA", "FL", "FL", "FL", "FL", "TX", "FL", "FL", "FL", "FL", "FL",…
+#> $ zip_clean      <chr> "32712", "32114", "32206", "70808", "33563", "95131", "33703", "32082", "33133", "33408", "7526…
 ```
 
 1.  There are 1,901,043 records in the database.
@@ -990,16 +985,10 @@ server.
 
 ``` r
 clean_dir <- dir_create(here("fl", "expends", "data", "clean"))
-clean_path <- path(clean_dir, "fl_expends_clean.csv")
+clean_path <- path(clean_dir, "fl_expends_1995-2020.csv")
 write_csv(fle, clean_path, na = "")
 (clean_size <- file_size(clean_path))
-#> 377M
-file_encoding(clean_path) %>% 
-  mutate(across(path, path.abbrev))
-#> # A tibble: 1 x 3
-#>   path                                         mime            charset 
-#>   <fs::path>                                   <chr>           <chr>   
-#> 1 ~/fl/expends/data/clean/fl_expends_clean.csv application/csv us-ascii
+#> 343M
 ```
 
 ## Upload
@@ -1023,28 +1012,3 @@ aws_head <- head_object(aws_path, "publicaccountability")
 (aws_size <- as_fs_bytes(attr(aws_head, "content-length")))
 unname(aws_size == clean_size)
 ```
-
-## Dictionary
-
-The following table describes the variables in our final exported file:
-
-| Column           | Type        | Definition |
-|:-----------------|:------------|:-----------|
-| `comm_name`      | `character` |            |
-| `date`           | `double`    |            |
-| `amount`         | `double`    |            |
-| `payee_name`     | `character` |            |
-| `address`        | `character` |            |
-| `city_state_zip` | `character` |            |
-| `purpose`        | `character` |            |
-| `type`           | `character` |            |
-| `na_flag`        | `logical`   |            |
-| `dupe_flag`      | `logical`   |            |
-| `year`           | `double`    |            |
-| `city_sep`       | `character` |            |
-| `state_sep`      | `character` |            |
-| `zip_sep`        | `character` |            |
-| `address_clean`  | `character` |            |
-| `zip_clean`      | `character` |            |
-| `state_clean`    | `character` |            |
-| `city_clean`     | `character` |            |
