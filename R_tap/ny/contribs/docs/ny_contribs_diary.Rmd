@@ -77,6 +77,7 @@ if (!require("pacman")) {
 pacman::p_load(
   tidyverse, # data manipulation
   lubridate, # datetime strings
+  tabulizer, # read pdf tables
   gluedown, # printing markdown
   janitor, # clean data frames
   campfin, # custom irw tools
@@ -88,6 +89,7 @@ pacman::p_load(
   glue, # code strings
   here, # project paths
   httr, # http requests
+  cli, # command line
   fs # local storage 
 )
 ```
@@ -108,7 +110,7 @@ here::i_am("ny/contribs/docs/ny_contribs_diary.Rmd")
 [tap]: https://github.com/irworkshop/accountability_datacleaning
 [rproj]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects
 
-## Data
+## About
 
 The New York state campaign finance contributions data can be obtained from the
 [New York State Board of Elections (NYSBOE)][boe]. From the BOE's 
@@ -152,8 +154,8 @@ database is corrected.
 > #### Database Files in Comma Seprated Value (CSV) Format
 > To match the disclosure report data files to Filer Names by filer ID you will
 need to Download the Filer data file (Commcand.zip) is a zipped file containing
-the data file (commcand.csv) in CSV and a PDF file
-(FileFormatReferenceFiler.pdf) contains the data file layout.
+the data file (`commcand.csv`) in CSV and a PDF file
+(`FileFormatReferenceFiler.pdf`) contains the data file layout.
 
 > All downloadable files are zipped files containing eight data files in CSV
 format (`STATE_CANDIDATE_ACTIVE.csv`, `STATE_CANDIDATE_INACTIVE.csv`,
@@ -171,7 +173,11 @@ to.
 [cf]: https://www.elections.ny.gov/CampaignFinance.html
 [bulk]: https://publicreporting.elections.ny.gov/DownloadCampaignFinanceData/DownloadCampaignFinanceData
 
-### Download
+## Download
+
+```{r raw_dir}
+raw_dir <- dir_create(here("ny", "contribs", "data", "raw"))
+```
 
 The BOE website has instructions on how to use the website to select what files
 are to be downloaded. We can use these instructions to try and replicate the
@@ -207,153 +213,264 @@ selected type.
 > Click on the **Download** button to download the Filer Data or Disclosure
 report based on values selected in the Filter fields. System will download the
 Zip file with filer data or Disclosure Reports
-### Download
 
-```{r raw_dir}
-raw_dir <- dir_create(here("ny", "contribs", "data", "raw"))
-fil_zip <- file_temp(ext = "zip")
-```
+We will first obtain the "Filer Data" data type. We need to replicate the steps
+one takes when visiting the site:
 
-```{r}
+1. Visit the home page and obtain an "ASP.NET" session ID cookie.
+2. Set the session requesting filer data.
+3. Download the filer data ZIP archive.
+
+```{r asp_cookie}
 dcf <- "https://publicreporting.elections.ny.gov/DownloadCampaignFinanceData/"
 dcf_get <- GET(url = str_c(dcf, "DownloadCampaignFinanceData"))
 dcf_cookie <- cookies(dcf_get)
-dcf_asp <- dcf_cookie$value
-names(dcf_asp) <- dcf_cookie$name
+asp_cookie <- c(ASP.NET_SessionId = dcf_cookie$value)
 ```
 
-```{r fil_get}
-fil_get <- GET(
-  url = str_c(dcf, "DownloadZipFile"),
-  user_agent("https://publicaccountability.org/"),
-  write_disk(fil_zip, overwrite = TRUE),
-  set_cookies(dcf_asp),
-  progress("down"),
-  query = list(
-    lstDateType = "--lstDateType",
-    lstUCYearDCF = "--lstUCYearDCF",
-    lstFilingDesc = "--lstFilingDesc"
+### Filers
+
+```{r raw_dir}
+fil_zip <- path(raw_dir, "commcand.zip")
+if (!file_exists(fil_zip)) {
+  message("Filer Data")
+  
+  # set session to retrieve data
+  fil_post <- POST(
+    url = str_c(dcf, "SetSessions"),
+    set_cookies(asp_cookie),
+    encode = "json",
+    body = list(
+      lstDateType = "Filer Data",
+      lstFilingDesc = "- Select -",
+      lstUCYearDCF = "- Select -"
+    )
   )
-)
-```
-
-### Extract
-
-There are three files in each of the two ZIP archives.
-
-```{r zip_view}
-zip_ls <- list(
-  "ALL_REPORTS.zip" = unzip(con_zip, list = TRUE),
-  "commcand.zip"    = unzip(fil_zip, list = TRUE)
-)
-```
-
-```{r zip_view2, echo=FALSE}
-zip_ls <- zip_ls %>% 
-  bind_rows(.id = "source_zip") %>% 
-  as_tibble() %>% 
-  transmute(
-    source_zip = fs_path(source_zip),
-    file_name = fs_path(Name),
-    size = fs_bytes(Length),
-    date = Date
+  
+  # download requested data
+  fil_get <- GET(
+    url = str_c(dcf, "DownloadZipFile"),
+    write_disk(fil_zip, overwrite = TRUE),
+    set_cookies(asp_cookie),
+    progress("down"),
+    query = list(
+      lstDateType = "--lstDateType",
+      lstUCYearDCF = "--lstUCYearDCF",
+      lstFilingDesc = "--lstFilingDesc"
+    )
   )
-zip_ls
-```
-
-If these files don't exist in our raw data directory, they can be extracted.
-
-```{r zip_txt}
-raw_txt <- path(raw_dir, zip_ls$file_name)
-raw_txt <- setNames(raw_txt, basename(raw_txt))
-```
-
-```{r unzip_path}
-if (!all(file_exists(raw_txt))) {
-  con_txt <- unzip(con_zip, exdir = raw_dir)
-  fil_txt <- unzip(fil_zip, exdir = raw_dir)
 }
 ```
 
-### About
+### Disclosures
 
-We will have to read the `EFSRECB.TXT` file to determine the column names and
-formats for the `ALL_REPORTS.out` file, which has no header. The file also
-describes the specifications needed to parse the file, which can be passed as
-arguments to `readr::read_delim()`.
+We need to first define the file names for each of the report types.
 
-```{r efsrecb, echo=FALSE}
-efsrecb <- read_lines(raw_txt["EFSRECB.TXT"])
+```{r rpt_type}
+rpt_type <- tribble(
+  ~report_type,       ~file_name,
+  "State Candidate",  "ALL_REPORTS_CountyCandidate.zip", 
+  "State Committee",  "ALL_REPORTS_CountyCommittee.zip", 
+  "County Candidate", "ALL_REPORTS_StateCandidate.zip", 
+  "County Committee", "ALL_REPORTS_StateCommittee.zip"
+)
 ```
 
-```{r efsrecb_spec, echo=FALSE}
-out_args <- str_split(efsrecb[44:50], ":\\s", simplify = TRUE)
-out_args[, 1] <- str_remove_all(out_args[, 1], "\\W")
-out_args[, 2] <- str_to_upper(out_args[, 2])
-colnames(out_args) <- c("", "Value")
-kable(out_args)
+```{r con_zip}
+con_zip <- rpt_type$file_name <- path(raw_dir, rpt_type$file_name)
 ```
 
-```{r efsrecb_cols, echo=FALSE}
-out_cols <- efsrecb[10:42] %>% 
-  read_table(na = "") %>% 
-  clean_names("snake") %>% 
-  mutate(
-    location = parse_integer(location),
-    type = case_when(
-      type == "CHAR" ~ "`<chr>`",
-      type == "DATE" ~ "`<date>`",
-      type == "FLOAT" ~ "`<dbl>`",
-      type == "INTEGER" ~ "`<int>`",
-    ),
-    format = str_remove_all(format, "'"),
-    field = make_clean_names(str_remove(field, "_\\d+$")),
-    efs_import = (efs_import == "REQUIRED")
-  )
+Then each of these four file types can be requested and saved.
 
-out_cols %>% 
+```{r con_get}
+for (i in seq_along(rpt_type$report_type)) {
+  cli_process_start(rpt_type$report_type[i])
+  if (!file_exists(con_zip[i])) {
+    
+    # request each report type for every year
+    con_post <- POST(
+      url = str_c(dcf, "SetSessions"),
+      set_cookies(asp_cookie),
+      encode = "json",
+      body = list(
+        lstDateType = "Disclosure Report",
+        lstFilingDesc = rpt_type$report_type[i],
+        lstUCYearDCF = "All"
+      )
+    )
+    
+    # save the zip archive for that type
+    con_get <- GET(
+      url = str_c(dcf, "DownloadZipFile"),
+      write_disk(con_zip[i], overwrite = TRUE),
+      set_cookies(asp_cookie),
+      progress("down"),
+      query = list(
+        lstDateType = "--lstDateType",
+        lstUCYearDCF = "--lstUCYearDCF",
+        lstFilingDesc = "--lstFilingDesc"
+      )
+    )
+  }
+  cli_process_done()
+}
+```
+
+```{r echo=FALSE}
+rpt_type %>%
+  mutate(length = file_size(file_name), across(file_name, basename)) %>% 
+  kable(col.names = make_clean_names(names(.), "title"))
+```
+
+## Extract
+
+We can now extract the CSV and PDF files from each of the five ZIP archives. We
+will first extract the filer data from `commcand.zip` and use the accompanying
+PDF to create a table of column names and types.
+
+```{r echo=FALSE}
+unzip(fil_zip, list = TRUE) %>% 
+  mutate(across(Length, fs_bytes)) %>% 
+  kable()
+```
+
+```{r fil_unzip}
+fil_ls <- path(raw_dir, unzip(fil_zip, list = TRUE)[[1]])
+unzip(fil_zip, exdir = raw_dir, overwrite = FALSE)
+fil_csv <- str_subset(fil_ls, "CSV$")
+file_exists(fil_csv)
+```
+
+We can get a table of column layouts from the PDF in the ZIP archive.
+
+```{r fil_pdf}
+fil_col <- extract_tables(
+  file = fil_ls[2],
+  pages = 1, 
+  method = "lattice", 
+  output = "data.frame"
+)
+```
+
+```{r echo=FALSE}
+fil_col <- as_tibble(fil_col[[1]])
+fil_col$Description[1] <- paste(fil_col$Description[1], fil_col$CSV.Position[2])
+fil_col <- fil_col[-2, ]
+fil_col %>% 
+  mutate(across(Fields, md_code)) %>% 
+  kable()
+```
+
+```{r}
+fil_names <- fil_col$Fields
+```
+
+We can similarly extract the CSV files from each of the four disclosure ZIP 
+files and get a table of column names and types from the PDF found in each.
+
+```{r}
+# go into each nested ZIP and extract CSV
+for (i in seq_along(con_zip)) {
+  a <- unzip(con_zip[i], exdir = raw_dir, overwrite = FALSE)
+  unzip(grep("zip", a, value = TRUE), overwrite = FALSE, exdir = raw_dir)
+}
+```
+
+```{r}
+# find all extracted CSV files
+con_csv <- dir_ls(raw_dir, glob = "*.csv")
+```
+
+```{r echo=FALSE}
+file_info(con_csv) %>% 
+  select(1:5) %>% 
+  mutate(across(path, basename)) %>% 
+  kable()
+```
+
+```{r fil_pdf, echo=FALSE}
+con_pdf <- extract_tables(
+  file = unzip(
+    zipfile = con_zip[1], 
+    files = "FileFormatReference.pdf", 
+    exdir = tempdir()
+  ),
+  area = list(
+    c(top = 62, left = 32, bottom = 570, right = 766),
+    c(top = 45, left = 33, bottom = 550, right = 766),
+    c(top = 45, left = 32, bottom = 560, right = 766), 
+    c(top = 40, left = 33, bottom = 550, right = 766), 
+    c(top = 50, left = 32, bottom = 560, right = 766), 
+    c(top = 40, left = 32, bottom = 550, right = 766)
+  ),
+  method = "lattice", 
+  output = "csv",
+  outdir = dir_create(path(raw_dir, "pdf"))
+)
+```
+
+```{r echo=FALSE}
+con_col <- map(dir_ls(con_pdf), read_csv, col_types = cols())
+names(con_col) <- c("AC", "DF", "GI", "JL", "MO", "PR")
+con_col[[1]] %>% 
+  select(-starts_with("Schedule")) %>% 
+  rename_with(~str_replace(., "\r", " ")) %>% 
   mutate(
-    across(1, md_code),
-    across(5, as.character),
-    across(4:5, ~str_replace_na(., "")),
+    across(2, md_code),
+    across(where(is.character), str_replace, "\r", " ")
   ) %>% 
   kable()
 ```
 
-### Fix
-
-```{r raw_fix}
-fix_file <- path(raw_dir, "FIX_REPORTS.csv")
-if (!file_exists(fix_file)) {
-  read_lines(raw_txt["ALL_REPORTS.out"]) %>% 
-    iconv(to = "UTF-8", sub = "byte") %>% 
-    str_replace_all("(?<!\r)\n", " ") %>%
-    str_remove_all(",(?!\")") %>% 
-    str_replace_all("(?<!^|,|\r\n)\"(?!,|\r\n|$)", "\'") %>% 
-    write_lines(fix_file)
-}
+```{r con_names}
+con_names <- con_col[[1]][[2]]
 ```
 
-### Read
+## Read
+
+The data is split across five files of two types. First, there are four files
+with contributions for state candidates and committees and county candidates
+and committees. The fifth file is the one containing information on the filing
+committees themselves.
+
+We can combine all four contribution files and then use the filer information
+to identify the recipient party to each transaction.
+
+### Contributions
+
+We can read each of the four CSV files into a single list. Each file can be read
+using the column names and schema from the PDF layout file.
 
 ```{r raw_read}
-nyc <- read_delim(
-  file = fix_file,
+nyc <- map(
+  .x = con_csv,
+  .f = read_delim,
   delim = ",",
   escape_double = FALSE,
   escape_backslash = FALSE,
-  col_names = out_cols$field,
+  col_names = con_names,
   na = c("", "NA", "N/A"),
   col_types = cols(
     .default = col_character(),
-    date1 = col_date("%m/%d/%Y"),
-    date2 = col_date("%m/%d/%Y"),
-    check_date = col_date("%m/%d/%Y"),
-    amount = col_double(),
-    amount2 = col_double(),
-    crerec_date = col_datetime("%m/%d/%Y %H:%M:%S")
+    FILER_ID = col_integer(),
+    ELECTION_YEAR = col_integer(),
+    SCHED_DATE = col_datetime(),
+    ORG_DATE = col_datetime(),
+    OWED_AMT = col_double(),
+    ORG_AMT = col_double()
   )
 )
+```
+
+Each of the elements of this list can then be combined with a new column
+indications from which file they originated.
+
+```{r raw_bind}
+nyc <- nyc %>% 
+  bind_rows(.id = "source_file") %>% 
+  clean_names(case = "snake") %>% 
+  mutate(across(source_file, basename)) %>% 
+  relocate(source_file, .after = last_col())
 ```
 
 To ensure the file was properly read, we can count the distinct values of a
@@ -361,66 +478,8 @@ discrete variable like `contrib_type_code`.
 
 ```{r raw_check}
 comma(nrow(nyc))
-all(unique(nyc$freport_id) %in% LETTERS[1:12])
-count(nyc, freport_id)
-```
-
-### Filter
-
-This file contains _all_ campaign finance transactions. If we consult
-`EFSSHCED.TXT`, we determine which record types correspond to contributions.
-
-```{r read_sched}
-efssched <- read_lines(raw_txt["EFSSCHED.TXT"])
-```
-
-```{r type_code, echo=FALSE}
-type_codes <- str_trim(efssched[60:78]) %>% 
-  enframe(name = NULL) %>% 
-  separate(
-    col = value,
-    into = c("type_code", "report_type"),
-    sep = "\\s-\\s{2}",
-    extra = "merge"
-  ) %>% 
-  mutate(contrib = str_detect(report_type, "Contrib|Receipt"))
-print(type_codes, n = Inf)
-```
-
-Then we can filter our data frame to include only those records using the 
-`transaction_code` variable.
-
-```{r raw_filter}
-nyc <- nyc %>% 
-  filter(transaction_code %in% type_codes$type_code[type_codes$contrib]) %>% 
-  remove_empty("cols")
-```
-
-We can consult the `EFSSCHED.txt` to see what columns apply to contribution
-type records, removing any which shouldn't belong.
-
-```{r raw_select, echo=FALSE}
-nyc <- nyc %>% 
-  # see EFSSCHED.txt
-  select(
-    -date2,
-    -contrib_type_code,
-    -check_date,
-    -amount2,
-    -description,
-    -other_recpt_code,
-    -purpose_code1,
-    -purpose_code2,
-    -explanation,
-    -xfer_type,
-    -chkbox
-  )
-```
-
-```{r rows check}
-# ensure proper rows kept
-rows_post <- nrow(nyc)
-comma(rows_post)
+all(unique(nyc$filing_abbrev) %in% LETTERS[1:12])
+count(nyc, filing_abbrev)
 ```
 
 ### Filers
@@ -428,87 +487,22 @@ comma(rows_post)
 We will use the files in `commcand.zip` to build a useful data frame of filer
 information, which can then be joined to our contributions.
 
-```{r filerec, echo=FALSE}
-filerec <- read_table(read_lines(raw_txt["FILEREC.TXT"])[8:22])
-filerec <- clean_names(filerec, case = "snake")
-filerec <- mutate(filerec, across(1, make_clean_names))
-filerec %>% 
-  mutate(across(1, md_code)) %>% 
-  mutate(
-    type = case_when(
-      type == "CHAR" ~ "`<chr>`",
-      type == "DATE" ~ "`<date>`",
-      type == "FLOAT" ~ "`<dbl>`",
-      type == "INTEGER" ~ "`<int>`",
-    )
-  ) %>% 
-  kable()
-```
-
-We will also read codes from the `CODES.TXT` file and join them to the data.
-
-```{r codes_read}
-codes_all <- str_trim(read_lines(file = raw_txt["CODES.TXT"]))
-```
-
-```{r codes_parse, echo=FALSE}
-codes_all <- na.omit(na_if(codes_all, ""))
-codes_office <- read_table(
-  file = codes_all[5:79], 
-  col_names = c("office", "office_name"),
-  col_types = cols(
-    office = col_integer(),
-    office_name = col_character()
-  )
-)
-
-codes_district <- read_table(
-  file = codes_all[81:83], 
-  col_names = c("district", "district_name")
-)
-
-codes_comm <- read_table(
-  file = codes_all[85:105], 
-  col_names = c("committee_type", "committee_name")
-)
-
-codes_report <- read_table(
-  file = codes_all[107:118], 
-  col_names = c("report", "report_name")
-)
-```
-
-```{r codes_print, echo=FALSE}
-kable(codes_office)
-kable(codes_district)
-kable(codes_comm)
-kable(codes_report)
-```
-
 ```{r zip_path}
 commcand <- read_delim(
-  file = raw_txt["COMMCAND.txt"],
+  file = fil_csv,
   delim = ",",
   escape_backslash = FALSE,
   escape_double = FALSE,
-  col_names = filerec$field,
+  col_names = fil_names,
   col_types = cols(
     .default = col_character(),
-    office = col_integer(),
-    district = col_integer()
+    FILER_ID = col_integer()
   )
 )
 ```
 
 ```{r join_codes, echo=FALSE}
-commcand <- commcand %>%
-  # join codes
-  left_join(codes_office, by = "office") %>% 
-  left_join(codes_comm, by = "committee_type") %>% 
-  # rename columns
-  mutate(committee_type = committee_name, office = office_name) %>% 
-  # remove codes
-  select(-committee_name, -office_name)
+commcand <- clean_names(commcand, "snake")
 ```
 
 #### Wrangle
@@ -519,7 +513,7 @@ detailed explanation of wrangling steps made on contributor data.
 
 ```{r fil_addr}
 fil_addr <- commcand %>% 
-  select(fil_id = filer_id, addr = address, city, state, zip)
+  select(filer_id, addr = address, city, state, zip = zipcode)
 ```
 
 ```{r fil_addr_addr}
@@ -560,8 +554,8 @@ fil_addr <- fil_addr %>%
   mutate(
     city_norm = normal_city(
       city = city %>% 
-        str_replace("STA$", "STATION") %>% 
-        str_replace("STATI$", "STATION"), 
+        str_replace("\\sSTA$", " STATION") %>% 
+        str_replace("\\sSTATI$", " STATION"), 
       abbs = usps_city,
       states = c("NY", "DC", "NEW YORK"),
       na = invalid_city,
@@ -573,13 +567,41 @@ fil_addr <- fil_addr %>%
 ```{r fil_addr_check}
 prop_in(fil_addr$zip_norm, valid_zip)
 prop_in(fil_addr$state_norm, valid_state)
-prop_in(fil_addr$city, valid_city)
+prop_in(fil_addr$city_norm, valid_city)
 ```
 
 ```{r fil_addr_clean}
 fil_addr <- fil_addr %>% 
-  select(fil_id, ends_with("norm")) %>% 
+  select(filer_id, ends_with("norm")) %>% 
   rename_with(~str_c("fil", ., sep = "_"), .cols = -1)
+```
+
+This leaves us with clean table of normalized geographic variables by `filer_id`
+which can then be added to a table of filer names. That table of filer
+information can then be joined against each contribution to identify all parties
+for each transaction.
+
+```{r echo=FALSE}
+fil_addr
+```
+
+```{r}
+commcand <- commcand %>% 
+  select(
+    filer_id,
+    filer_type = compliance_type_desc,
+    filer_level = filer_type_desc,
+    filer_status
+  ) %>% 
+  rename_with(~str_replace(., "filer_", "fil_"), -filer_id)
+```
+
+```{r fil_addr_rejoin}
+commcand <- left_join(
+  x = commcand,
+  y = fil_addr,
+  by = "filer_id"
+)
 ```
 
 #### Join
@@ -595,35 +617,8 @@ prop_in(nyc$filer_id, commcand$filer_id)
 nyc <- left_join(
   x = nyc,
   y = commcand,
-  by = "filer_id",
-  suffix = c("_con", "_fil")
+  by = "filer_id"
 )
-
-nyc <- rename_prefix(
-  df = nyc,
-  suffix = c("_con", "_fil"),
-  punct = TRUE
-)
-```
-
-```{r echo=FALSE}
-nyc <- mutate(nyc, across(where(is.character), str_squish))
-```
-
-```{r raw_rename, echo=FALSE}
-# rename for clarify and brevity
-nyc <- nyc %>% 
-  rename_with(~str_replace(., "filer_", "fil_")) %>% 
-  rename(
-    txn_code = transaction_code,
-    date = date1,
-    con_addr = addr_1,
-    comm_type = committee_type,
-    treas_first = treas_first_name,
-    treas_last = treas_last_name,
-    fil_addr = address,
-    fil_status = status
-  )
 ```
 
 ## Explore
