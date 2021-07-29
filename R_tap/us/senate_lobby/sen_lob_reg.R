@@ -3,7 +3,6 @@
 # find all senate lobbyists
 # https://lda.senate.gov/api/
 
-library(rvest)
 library(readr)
 library(httr)
 library(cli)
@@ -60,52 +59,45 @@ auth_lda <- function() {
   httr::add_headers(Authorization = paste("Token", Sys.getenv("LDA_API_KEY")))
 }
 
-null2na <- function(x) {
-  x[length(x) == 0] <- NA
-  return(x)
-}
-
-# registrants -------------------------------------------------------------
-#> Returns all registrants matching the provided filters.
+# get filings -------------------------------------------------------------
+# filing contains data on registrant and client
 
 pg_num <- 1
 n_row <- 0
+
 # request first page
-reg_get <- GET("https://lda.senate.gov/api/v1/registrants/", auth_lda())
-reg_dat <- content(reg_get)
-n_all <- reg_dat$count
-cli_alert_info("Total record count: {n_all} ({n_all/25} pages)")
 cli_h3("Page number: {pg_num}")
+fil_get <- GET("https://lda.senate.gov/api/v1/filings/", auth_lda())
 
-res <- reg_dat$results
+# convert request to dataframe
+fil_dat <- content(fil_get, "parsed", simplifyDataFrame = TRUE, flatten = TRUE)
+n_all <- fil_dat$count
+res <- fil_dat$results
 
-# replace NULL elements with NA for column stack
-res <- lapply(res, FUN = function(l) lapply(l, null2na))
+cli_alert_info("Total record count: {n_all} ({n_all/25} pages)")
 
-# convert list to 1 row and stack together
-res <- do.call("rbind", lapply(res, as.data.frame))
+# update progress check
 n_row <- n_row + nrow(res)
 prop_row <- paste0(round(100 * (n_row/n_all), 2), "%")
 
-# write page to file
+# write results to file
 write_csv(res, file = lob_csv)
 cli_alert_success("Total results written: {n_row} ({prop_row})")
 
-# check for next page and save
-has_next <- is.character(reg_dat[["next"]])
+# check for next page and repeat
+has_next <- is.character(fil_dat[["next"]])
 while (has_next) {
   pg_num <- pg_num + 1
   cli_h3("Page number: {pg_num}")
   # request next page if exists
-  reg_get <- GET(reg_dat[["next"]], auth_lda())
+  nx_get <- GET(fil_dat[["next"]], auth_lda())
   # repeat binding
-  reg_dat <- content(reg_get)
-  has_next <- is.character(reg_dat[["next"]])
-  res <- reg_dat$results
-  res <- lapply(res, FUN = function(l) lapply(l, null2na))
-  res <- do.call("rbind", lapply(res, as.data.frame))
-  write_csv(res, file = lob_csv, append = TRUE)
-  n_row <- n_row + nrow(res)
+  nx_dat <- content(nx_get, "parsed", simplifyDataFrame = TRUE, flatten = TRUE)
+  has_next <- is.character(nx_dat[["next"]])
+  nx <- nx_dat$results
+  # append to previous page results
+  write_csv(nx, file = lob_csv, append = TRUE)
+  n_row <- n_row + nrow(nx)
   prop_row <- paste0(round(100 * (n_row/n_all), 2), "%")
   cli_alert_success("Total results written: {n_row} ({prop_row})")
 }
