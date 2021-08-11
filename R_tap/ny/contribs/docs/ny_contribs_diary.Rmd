@@ -230,13 +230,11 @@ asp_cookie <- c(ASP.NET_SessionId = dcf_cookie$value)
 
 ### Filers
 
-```{r raw_dir}
+```{r fil_get}
 fil_zip <- path(raw_dir, "commcand.zip")
 if (!file_exists(fil_zip)) {
   message("Filer Data")
-  
-  # set session to retrieve data
-  fil_post <- POST(
+  fil_post <- POST( # set session to retrieve data
     url = str_c(dcf, "SetSessions"),
     set_cookies(asp_cookie),
     encode = "json",
@@ -246,9 +244,7 @@ if (!file_exists(fil_zip)) {
       lstUCYearDCF = "- Select -"
     )
   )
-  
-  # download requested data
-  fil_get <- GET(
+  fil_get <- GET( # download requested data
     url = str_c(dcf, "DownloadZipFile"),
     write_disk(fil_zip, overwrite = TRUE),
     set_cookies(asp_cookie),
@@ -266,17 +262,14 @@ if (!file_exists(fil_zip)) {
 
 We need to first define the file names for each of the report types.
 
-```{r rpt_type}
+```{r rpt_type, echo=FALSE}
 rpt_type <- tribble(
   ~report_type,       ~file_name,
-  "State Candidate",  "ALL_REPORTS_CountyCandidate.zip", 
-  "State Committee",  "ALL_REPORTS_CountyCommittee.zip", 
-  "County Candidate", "ALL_REPORTS_StateCandidate.zip", 
-  "County Committee", "ALL_REPORTS_StateCommittee.zip"
+  "County Candidate", "ALL_REPORTS_CountyCandidate.zip", 
+  "County Committee", "ALL_REPORTS_CountyCommittee.zip", 
+  "State Candidate",  "ALL_REPORTS_StateCandidate.zip", 
+  "State Committee",  "ALL_REPORTS_StateCommittee.zip"
 )
-```
-
-```{r con_zip}
 con_zip <- rpt_type$file_name <- path(raw_dir, rpt_type$file_name)
 ```
 
@@ -286,9 +279,7 @@ Then each of these four file types can be requested and saved.
 for (i in seq_along(rpt_type$report_type)) {
   cli_process_start(rpt_type$report_type[i])
   if (!file_exists(con_zip[i])) {
-    
-    # request each report type for every year
-    con_post <- POST(
+    con_post <- POST( # request each report type for every year
       url = str_c(dcf, "SetSessions"),
       set_cookies(asp_cookie),
       encode = "json",
@@ -298,9 +289,7 @@ for (i in seq_along(rpt_type$report_type)) {
         lstUCYearDCF = "All"
       )
     )
-    
-    # save the zip archive for that type
-    con_get <- GET(
+    con_get <- GET( # save the zip archive for that type
       url = str_c(dcf, "DownloadZipFile"),
       write_disk(con_zip[i], overwrite = TRUE),
       set_cookies(asp_cookie),
@@ -328,6 +317,8 @@ We can now extract the CSV and PDF files from each of the five ZIP archives. We
 will first extract the filer data from `commcand.zip` and use the accompanying
 PDF to create a table of column names and types.
 
+### Filers
+
 ```{r echo=FALSE}
 unzip(fil_zip, list = TRUE) %>% 
   mutate(across(Length, fs_bytes)) %>% 
@@ -338,7 +329,7 @@ unzip(fil_zip, list = TRUE) %>%
 fil_ls <- path(raw_dir, unzip(fil_zip, list = TRUE)[[1]])
 unzip(fil_zip, exdir = raw_dir, overwrite = FALSE)
 fil_csv <- str_subset(fil_ls, "CSV$")
-file_exists(fil_csv)
+file.exists(fil_csv)
 ```
 
 We can get a table of column layouts from the PDF in the ZIP archive.
@@ -361,24 +352,27 @@ fil_col %>%
   kable()
 ```
 
-```{r}
+```{r fil_names}
 fil_names <- fil_col$Fields
 ```
+
+### Disclosures
 
 We can similarly extract the CSV files from each of the four disclosure ZIP 
 files and get a table of column names and types from the PDF found in each.
 
 ```{r}
-# go into each nested ZIP and extract CSV
-for (i in seq_along(con_zip)) {
+for (i in seq_along(con_zip)) { # go into each nested ZIP and extract CSV
   a <- unzip(con_zip[i], exdir = raw_dir, overwrite = FALSE)
+  if (length(a) == 0) {
+    a <- path(raw_dir, unzip(con_zip[i], list = TRUE)[[1]])
+  }
   unzip(grep("zip", a, value = TRUE), overwrite = FALSE, exdir = raw_dir)
 }
 ```
 
 ```{r}
-# find all extracted CSV files
-con_csv <- dir_ls(raw_dir, glob = "*.csv")
+con_csv <- dir_ls(raw_dir, glob = "*.csv") # find all extracted CSV files
 ```
 
 ```{r echo=FALSE}
@@ -388,7 +382,7 @@ file_info(con_csv) %>%
   kable()
 ```
 
-```{r fil_pdf, echo=FALSE}
+```{r con_pdf, echo=FALSE}
 con_pdf <- extract_tables(
   file = unzip(
     zipfile = con_zip[1], 
@@ -411,7 +405,6 @@ con_pdf <- extract_tables(
 
 ```{r echo=FALSE}
 con_col <- map(dir_ls(con_pdf), read_csv, col_types = cols())
-names(con_col) <- c("AC", "DF", "GI", "JL", "MO", "PR")
 con_col[[1]] %>% 
   select(-starts_with("Schedule")) %>% 
   rename_with(~str_replace(., "\r", " ")) %>% 
@@ -426,23 +419,23 @@ con_col[[1]] %>%
 con_names <- con_col[[1]][[2]]
 ```
 
-## Read
+## Import
 
 The data is split across five files of two types. First, there are four files
-with contributions for state candidates and committees and county candidates
-and committees. The fifth file is the one containing information on the filing
+with receipt disclosures for both candidates and committees at both the state
+and county level. The fifth file is the one containing information on the filing
 committees themselves.
 
 We can combine all four contribution files and then use the filer information
 to identify the recipient party to each transaction.
 
-### Contributions
+### Disclosures
 
-We can read each of the four CSV files into a single list. Each file can be read
-using the column names and schema from the PDF layout file.
+We can read each of the four CSV files into a list. Each file can be read using
+the column names and schema from the PDF layout file.
 
 ```{r raw_read}
-nyc <- map(
+nyc <- map_df(
   .x = con_csv,
   .f = read_delim,
   delim = ",",
@@ -463,23 +456,143 @@ nyc <- map(
 ```
 
 Each of the elements of this list can then be combined with a new column
-indications from which file they originated.
+indicating the file from which they originated. Almost all records are from
+either state or county committees.
 
 ```{r raw_bind}
-nyc <- nyc %>% 
-  bind_rows(.id = "source_file") %>% 
-  clean_names(case = "snake") %>% 
-  mutate(across(source_file, basename)) %>% 
-  relocate(source_file, .after = last_col())
+nyc <- clean_names(nyc, case = "snake")
 ```
 
 To ensure the file was properly read, we can count the distinct values of a
 discrete variable like `contrib_type_code`.
 
 ```{r raw_check}
-comma(nrow(nyc))
+comma(nrow(nyc)) # 14,027,772
 all(unique(nyc$filing_abbrev) %in% LETTERS[1:12])
 count(nyc, filing_abbrev)
+```
+
+### Filter
+
+These four files contain campaign finance reports for every schedule. 
+[Per the SBOE][sched_pdf], contributions and receipts are reported in schedules
+A through E, with expenditures classified as schedule F, and all other types of
+campaign finance as schedules G through R.
+
+> #### CONTRIBUTIONS / RECEIPTS 
+> Contributions and receipts are reported on the following schedules:  
+
+> #### Schedule A 
+> Monetary contributions received from:
+> * Individuals 
+> * Candidate/candidate’s spouse 
+> * Family members of candidate 
+> * Partnerships    
+
+> #### Schedule B 
+> Monetary contributions received from corporations. These are subject to an
+aggregate calendar year giving limit of $5,000, as well as the
+candidate/committee receipt limit.
+
+> #### Schedule C 
+> Monetary contributions received from all other contributors: 
+> * Political committees 
+> * PACs 
+> * LLCs/PLLCs  
+>     - effective January 31, 2019, these are subject to an aggregate calendar
+year giving limit of $5,000, as well as the candidate/committee receipt limit
+> * Unions, foundations, etc.   
+
+> #### Schedule D 
+> In-kind contributions (non-monetary contributions; must provide description): 
+> * Services/facilities provided 
+> * Property given   
+> * Expenses paid by someone else   
+
+> #### Schedule E Other receipts: 
+> * Interest/dividends 
+> * Proceeds of a sale/lease  
+> * Other (must provide description) 
+
+```{r echo=FALSE}
+nyc %>%
+  count(filing_sched_abbrev, filing_sched_desc) %>% 
+  mutate(across(n, comma)) %>% 
+  kable(
+    col.names = c("Filing Sched.", "Description", "Count")
+  )
+```
+
+For this dataset, we are only interested in contribution transactions, so we can
+filter to keep only those schedules.
+
+```{r sched_filter}
+nyc <- filter(nyc, filing_sched_abbrev %in% c("A", "B", "C", "D", "E"))
+```
+
+```{r echo=FALSE}
+flush_memory()
+```
+
+Since all schedules were combined into the same file structure, there are some
+columns for which there is only data for rows of particular schedules. We can
+remove any columns that should not contain any data regarding contributions.
+
+The schedules relevant to each column are also reported in the PDF layout file.
+
+```{r echo=FALSE}
+all_col <- bind_cols(
+  con_col[[1]][, 1:5],
+  con_col[[1]][, 6:8],
+  con_col[[2]][, 6:8],
+  con_col[[3]][, 6:8],
+  con_col[[4]][, 6:8],
+  con_col[[5]][, 6:8],
+  con_col[[6]][, 6:8],
+)
+```
+
+```{r echo=FALSE}
+all_col %>% 
+  select(Column = 2, starts_with("Schedule")) %>% 
+  na_if("NULL") %>% 
+  mutate(across(
+    .cols = starts_with("Schedule"),
+    .fns = function(x) {
+      ifelse(is.na(x), "", "X")
+    }
+  )) %>% 
+  rename_with(
+    .fn = ~str_remove(str_remove(., "Schedule "), ":"),
+    .cols = starts_with("Schedule")
+  ) %>% 
+  kable()
+```
+
+[sched_pdf]: https://www.elections.ny.gov/NYSBOE/download/finance/ScheduleBrochure.pdf
+
+We can use this table to find a list of column names that should be present for
+at least one of the contribution schedule types (A through E).
+
+```{r abcde_cols}
+abcde_cols <- all_col %>% 
+  select(col = 2, starts_with("Schedule")) %>% 
+  na_if("NULL") %>% 
+  mutate(across(-1, ~!is.na(.))) %>% 
+  rename_with(~str_remove(str_remove(., "Schedule "), ":")) %>% 
+  pivot_longer(cols = -1, names_to = "sched", values_to = "has_col") %>% 
+  filter(sched %in% LETTERS[1:5], has_col == TRUE) %>% 
+  pull(col) %>% 
+  unique() %>% 
+  make_clean_names()
+```
+
+```{r}
+nyc <- select(nyc, all_of(abcde_cols))
+```
+
+```{r echo=FALSE}
+flush_memory(2)
 ```
 
 ### Filers
@@ -577,9 +690,9 @@ fil_addr <- fil_addr %>%
 ```
 
 This leaves us with clean table of normalized geographic variables by `filer_id`
-which can then be added to a table of filer names. That table of filer
-information can then be joined against each contribution to identify all parties
-for each transaction.
+which can then be added to a table of filer names. That table of filer info can
+then be joined against each contribution to identify all parties for each
+transaction.
 
 ```{r echo=FALSE}
 fil_addr
@@ -604,21 +717,16 @@ commcand <- left_join(
 )
 ```
 
-#### Join
+### Join
 
 We can now add the filer data to our contribution data.
 
 ```{r join_check_id}
-# all filers in data
-prop_in(nyc$filer_id, commcand$filer_id)
+prop_in(nyc$filer_id, commcand$filer_id) # all filers in data?
 ```
 
 ```{r join_contribs}
-nyc <- left_join(
-  x = nyc,
-  y = commcand,
-  by = "filer_id"
-)
+nyc <- left_join(nyc, commcand, by = "filer_id")
 ```
 
 ## Explore
@@ -632,6 +740,10 @@ glimpse(nyc)
 tail(nyc)
 ```
 
+```{r row_count}
+rows_post <- nrow(nyc)
+```
+
 ### Missing
 
 Columns vary in their degree of missing values.
@@ -642,34 +754,138 @@ col_stats(nyc, count_na)
 
 We can flag any record missing a key variable needed to identify a transaction.
 
-We must first create a single variable with the combined contributor names.
-
 ```{r con_name_unite}
-nyc <- nyc %>% 
-  unite(
-    col = con_name,
-    first_name, mid_init, last_name, corp,
-    sep = " ",
-    remove = FALSE,
-    na.rm = TRUE
-  ) %>% 
-  relocate(con_name, .after = last_col()) %>% 
-  mutate(across(con_name, na_if, ""))
+mean(is.na(nyc$flng_ent_last_name) & is.na(nyc$flng_ent_name))
+mean(is.na(nyc$cand_comm_name))
+mean(is.na(nyc$sched_date))
+mean(is.na(nyc$org_amt))
+```
+
+```{r}
+key_vars <- c("sched_date", "cand_comm_name", "org_amt", 
+              "flng_ent_name", "flng_ent_last_name")
 ```
 
 ```{r na_flag}
-key_vars <- c("date", "con_name", "amount", "fil_name")
-nyc <- flag_na(nyc, all_of(key_vars))
+nyc <- nyc %>% 
+  mutate(
+    na_flag = is.na(sched_date) | 
+                is.na(org_amt) | 
+                  (is.na(flng_ent_last_name) & is.na(flng_ent_name))
+  )
 mean(nyc$na_flag)
 ```
 
-A little over `r percent(mean(nyc$na_flag))` of records are missing a key
-variable, mostly a name identifying the contributor.
+A little over `r percent(mean(nyc$na_flag), 0.01)` of records are missing either
+the transaction `sched_date`, `org_amt` or a `flng_ent_*name`.
 
 ```{r na_view}
 nyc %>% 
   filter(na_flag) %>% 
   select(all_of(key_vars))
+```
+
+```{r na_recount}
+nyc %>%
+  select(all_of(key_vars)) %>% 
+  mutate(flng_ent_name = coalesce(flng_ent_name, flng_ent_last_name)) %>% 
+  select(-flng_ent_last_name) %>% 
+  col_stats(count_na)
+```
+
+```{r na_cand_count}
+nyc %>% 
+  filter(is.na(flng_ent_last_name) & is.na(flng_ent_name)) %>% 
+  count(cntrbn_type_desc, sort = TRUE) %>% 
+  add_prop(sum = TRUE)
+```
+
+### Duplicates
+
+We can also flag any entirely duplicate rows. To keep memory usage low with such
+a large data frame, we will split our data into a list and check each element of
+the list. For each chunk, we will write the duplicate row positions to a local
+file.
+
+```{r dupe_write}
+dupe_file <- here("ny", "contribs", "dupes.txt")
+if (!file_exists(dupe_file)) {
+  # save copy to disc
+  tmp <- file_temp(ext = "rds")
+  write_rds(nyc, file = tmp)
+  file_size(tmp)
+  # split file into chunks
+  tx_id <- split(nyc$trans_number, nyc$sched_date)
+  nys <- nyc %>%
+    select(-trans_number) %>% 
+    group_split(sched_date)
+  # remove from memoery
+  if (file_exists(tmp)) {
+    rm(nyc)
+    Sys.sleep(5)
+    flush_memory(2)
+  }
+  pb <- txtProgressBar(max = length(nys), style = 3)
+  for (i in seq_along(nys)) {
+    # check dupes from both ends
+    d1 <- duplicated(nys[[i]], fromLast = FALSE)
+    d2 <- duplicated(nys[[i]], fromLast = TRUE)
+    dupe_vec <- d1 | d2
+    rm(d1, d2)
+    # append dupe id to file
+    if (any(dupe_vec)) {
+      write_lines(
+        x = tx_id[[i]][dupe_vec], 
+        file = dupe_file, 
+        append = file_exists(dupe_file)
+      )
+    }
+    rm(dupe_vec)
+    nys[[i]] <- NA
+    tx_id[[i]] <- NA
+    if (i %% 100 == 0) {
+      Sys.sleep(2)
+      flush_memory()
+    }
+    setTxtProgressBar(pb, i)
+  }
+  rm(nys, tx_id)
+  Sys.sleep(5)
+  flush_memory()
+  nyc <- read_rds(tmp)
+}
+```
+
+```{r dupe_add}
+dupe_id <- tibble(
+  trans_number = read_lines(dupe_file),
+  dupe_flag = TRUE
+)
+nyc <- left_join(nyc, dupe_id, by = "trans_number")
+nyc <- mutate(nyc, across(dupe_flag, Negate(is.na)))
+```
+
+```{r dupe_view}
+percent(mean(nyc$dupe_flag), 0.1)
+nyc %>% 
+  filter(dupe_flag) %>% 
+  count(sched_date, cand_comm_name, org_amt, flng_ent_name, flng_ent_last_name,
+        sort = TRUE)
+```
+
+There is significant overlap between those rows missing values and those rows
+that are duplicates.
+
+```{r}
+mean(nyc$dupe_flag[nyc$na_flag]) # missing values dupes
+mean(nyc$na_flag[nyc$dupe_flag]) # dupes missing values
+```
+
+```{r}
+nyc %>% 
+  filter(dupe_flag) %>%
+  select(all_of(key_vars)) %>% 
+  col_stats(count_na)
 ```
 
 ### Categorical
@@ -679,32 +895,34 @@ col_stats(nyc, n_distinct)
 ```
 
 ```{r distinct_plots, echo=FALSE, fig.height=3}
-explore_plot(nyc, freport_id)
-explore_plot(nyc, txn_code)
-explore_plot(nyc, contrib_code)
+explore_plot(nyc, election_type)
+explore_plot(nyc, filing_abbrev)
+explore_plot(nyc, filing_sched_abbrev)
+explore_plot(nyc, cntrbr_type_desc) + scale_x_wrap()
+explore_plot(nyc, cntrbn_type_desc) + scale_x_wrap()
+explore_plot(nyc, receipt_type_desc) + scale_x_wrap()
 explore_plot(nyc, fil_type)
+explore_plot(nyc, fil_level)
 explore_plot(nyc, fil_status)
-explore_plot(nyc, comm_type)
-explore_plot(nyc, office)
 ```
 
 ### Amounts
 
 ```{r amount_summary}
-summary(nyc$amount)
-mean(nyc$amount <= 0, na.rm = TRUE)
+summary(nyc$org_amt)
+mean(nyc$org_amt <= 0, na.rm = TRUE)
 ```
 
 These are the records with the minimum and maximum amounts.
 
 ```{r amount_minmax}
-glimpse(nyc[c(which.max(nyc$amount), which.min(nyc$amount)), ])
+glimpse(nyc[c(which.max(nyc$org_amt), which.min(nyc$org_amt)), ])
 ```
 
 ```{r hist_amount, echo=FALSE}
 nyc %>%
-  filter(!is.na(amount), amount >= 1) %>% 
-  ggplot(aes(amount)) +
+  filter(!is.na(org_amt), org_amt >= 1) %>% 
+  ggplot(aes(org_amt)) +
   geom_histogram(fill = dark2["purple"]) +
   scale_y_continuous(labels = comma) +
   scale_x_continuous(
@@ -722,44 +940,26 @@ nyc %>%
 
 ### Dates
 
-We can add the calendar year from `date` with `lubridate::year()`
+We can add the calendar year from `sched_date` with `lubridate::year()`
 
 ```{r date_year}
-nyc <- mutate(nyc, year = year(date))
+nyc <- mutate(nyc, sched_year = year(sched_date))
 ```
+
+There are a few hundred records with a `sched_date` beyond 2021 or before 1999.
+We will leave these as-is.
 
 ```{r date_fix}
-nyc$year %>% 
-  str_replace_all("^([0-9])$", "200\\1") %>% 
-  str_replace_all("^(1[0-9])$", "20\\1") %>% 
-  str_replace_all("^99$", "1999") %>% 
-  str_replace_all("^999$", "1999") %>% 
-  str_replace("^2(\\d{2})$", "20\\1") %>% 
-  str_replace("^10(\\d{2})$", "20\\1") %>%
-  str_replace("^190(\\d{1})$", "200\\1") %>%
-  str_replace("^1899$", "1999") %>% 
-  as.integer() -> nyc$year
-```
-
-```{r date_invalid}
-count_na(nyc$date)
-nyc$year[!between(nyc$year, 1990, 2020)] <- NA
-```
-
-```{r date_range}
-count_na(nyc$date)
-min(nyc$date, na.rm = TRUE)
-sum(nyc$year < 1999, na.rm = TRUE)
-max(nyc$date, na.rm = TRUE)
-sum(nyc$date > today(), na.rm = TRUE)
+sum(is.na(nyc$sched_date))
+sum(nyc$sched_year < 1999 | nyc$sched_year > 2021, na.rm = TRUE)
 ```
 
 ```{r bar_year, echo=FALSE}
 nyc %>% 
-  count(year) %>% 
-  filter(year >= 1999) %>% 
-  mutate(even = is_even(year)) %>% 
-  ggplot(aes(x = year, y = n)) +
+  count(sched_year) %>% 
+  filter(sched_year >= 1999, sched_year <= 2021) %>% 
+  mutate(even = is_even(sched_year)) %>% 
+  ggplot(aes(x = sched_year, y = n)) +
   geom_col(aes(fill = even)) + 
   scale_fill_brewer(palette = "Dark2") +
   scale_y_continuous(labels = comma) +
@@ -768,7 +968,7 @@ nyc %>%
   labs(
     title = "New York Contributions by Year",
     caption = "Source: NYSBOE",
-    fill = "Election Year",
+    fill = "Even Year",
     x = "Year Made",
     y = "Count"
   )
@@ -781,15 +981,6 @@ confident string normalization. For geographic variables like city names and
 ZIP codes, the corresponding `campfin::normal_*()` functions are tailor made to 
 facilitate this process.
 
-### Filers
-
-We can now re-join the normalized address variables for filers.
-
-```{r fil_addr_rejoin}
-nyc <- left_join(nyc, fil_addr, by = "fil_id")
-nrow(nyc) == rows_post
-```
-
 ### Address
 
 For the street `addresss` variable, the `campfin::normal_address()` function
@@ -798,10 +989,10 @@ USPS suffixes.
 
 ```{r con_addr_norm}
 con_addr_norm <- nyc %>% 
-  distinct(con_addr) %>% 
+  distinct(flng_ent_add1) %>% 
   mutate(
-    con_addr_norm = normal_address(
-      address = con_addr,
+    addr_norm = normal_address(
+      address = flng_ent_add1,
       abbs = usps_street,
       na_rep = TRUE
     )
@@ -809,8 +1000,7 @@ con_addr_norm <- nyc %>%
 ```
 
 ```{r addr_rejoin}
-nyc <- left_join(nyc, con_addr_norm, by = "con_addr")
-nrow(nyc) == rows_post
+nyc <- left_join(nyc, con_addr_norm, by = "flng_ent_add1")
 rm(con_addr_norm); flush_memory()
 ```
 
@@ -823,8 +1013,8 @@ zeroes dropped by other programs like Microsoft Excel.
 ```{r zip_norm}
 nyc <- nyc %>% 
   mutate(
-    con_zip_norm = normal_zip(
-      zip = con_zip,
+    zip_norm = normal_zip(
+      zip = flng_ent_zip,
       na_rep = TRUE
     )
   )
@@ -832,8 +1022,8 @@ nyc <- nyc %>%
 
 ```{r zip_progress}
 progress_table(
-  nyc$con_zip,
-  nyc$con_zip_norm,
+  nyc$flng_ent_zip,
+  nyc$zip_norm,
   compare = valid_zip
 )
 ```
@@ -845,40 +1035,39 @@ Valid two digit state abbreviations can be made using the
 
 ```{r state_norm}
 st_norm <- nyc %>% 
-  distinct(con_state, con_zip_norm) %>% 
+  distinct(flng_ent_state, zip_norm) %>% 
   mutate(
-    con_state_norm = normal_state(
-      # should be "N/A" like with city, etc
-      state = na_if(con_state, "N/"),
+    state_norm = normal_state(
+      state = flng_ent_state,
       abbreviate = TRUE,
       na_rep = TRUE
     )
   )
 ```
 
-```{r state_bad}
-bad_state <- st_norm$con_state_norm %out% valid_state
-ny_zip <- st_norm$con_zip_norm %in% zipcodes$zip[zipcodes$state == "NY"]
-ny_rx <- str_detect(st_norm$con_state_norm, "^N|Y$")
-sort(table(st_norm$con_state_norm[bad_state & ny_zip & ny_rx]))
+```{r state_bad, eval=FALSE, echo=FALSE}
+bad_state <- st_norm$state_norm %out% valid_state
+ny_zip <- st_norm$zip_norm %in% zipcodes$zip[zipcodes$state == "NY"]
+ny_rx <- str_detect(st_norm$state_norm, "^N|Y$")
+sort(table(st_norm$state_norm[bad_state & ny_zip & ny_rx]))
 # replace if bad, ny zip, starts with N or ends Y
-st_norm$con_state_norm[bad_state & ny_zip & ny_rx] <- "NY"
+st_norm$state_norm[bad_state & ny_zip & ny_rx] <- "NY"
 ```
 
 ```{r state_join}
-nyc <- left_join(nyc, st_norm, by = c("con_state", "con_zip_norm"))
+nyc <- left_join(nyc, st_norm, by = c("flng_ent_state", "zip_norm"))
 ```
 
 ```{r state_view}
 nyc %>% 
-  filter(con_state != con_state_norm) %>% 
-  count(con_state, con_state_norm, sort = TRUE)
+  filter(flng_ent_state != state_norm) %>% 
+  count(flng_ent_state, state_norm, sort = TRUE)
 ```
 
 ```{r state_progress}
 progress_table(
-  nyc$con_state,
-  nyc$con_state_norm,
+  nyc$flng_ent_state,
+  nyc$state_norm,
   compare = valid_state
 )
 ```
@@ -896,10 +1085,10 @@ removing punctuation, but _expanding_ USPS abbreviations. We can also remove
 
 ```{r city_norm}
 norm_city <- nyc %>% 
-  distinct(con_city, con_state_norm, con_zip_norm) %>% 
+  distinct(flng_ent_city, state_norm, zip_norm) %>% 
   mutate(
-    con_city_norm = normal_city(
-      city = con_city %>% 
+    city_norm = normal_city(
+      city = flng_ent_city %>% 
         str_replace("^S\\.I\\.$", "STATEN ISLAND"), 
       abbs = usps_city,
       states = c("NY", "DC", "NEW YORK"),
@@ -921,18 +1110,18 @@ norm_city <- norm_city %>%
   left_join(
     y = zipcodes,
     by = c(
-      "con_state_norm" = "state",
-      "con_zip_norm" = "zip"
+      "state_norm" = "state",
+      "zip_norm" = "zip"
     )
   ) %>% 
   rename(city_match = city) %>% 
   mutate(
-    match_abb = is_abbrev(con_city_norm, city_match),
-    match_dist = str_dist(con_city_norm, city_match),
-    con_city_swap = if_else(
+    match_abb = is_abbrev(city_norm, city_match),
+    match_dist = str_dist(city_norm, city_match),
+    city_swap = if_else(
       condition = !is.na(match_dist) & (match_abb | match_dist == 1),
       true = city_match,
-      false = con_city_norm
+      false = city_norm
     )
   ) %>% 
   select(
@@ -947,9 +1136,9 @@ nyc <- left_join(
   x = nyc,
   y = norm_city,
   by = c(
-    "con_city", 
-    "con_state_norm", 
-    "con_zip_norm"
+    "flng_ent_city", 
+    "state_norm", 
+    "zip_norm"
   )
 )
 nrow(nyc) == rows_post
@@ -967,17 +1156,17 @@ strings that have a valid city/state/zip combination.
 ```{r city_refine}
 good_refine <- nyc %>% 
   mutate(
-    con_city_refine = con_city_swap %>% 
+    city_refine = city_swap %>% 
       key_collision_merge() %>% 
       n_gram_merge(numgram = 1)
   ) %>% 
-  filter(con_city_refine != con_city_swap) %>% 
+  filter(city_refine != city_swap) %>% 
   inner_join(
     y = zipcodes,
     by = c(
-      "con_city_refine" = "city",
-      "con_state_norm" = "state",
-      "con_zip_norm" = "zip"
+      "city_refine" = "city",
+      "state_norm" = "state",
+      "zip_norm" = "zip"
     )
   )
 ```
@@ -985,10 +1174,10 @@ good_refine <- nyc %>%
 ```{r city_count, echo=FALSE}
 good_refine %>%
   count(
-    con_state_norm, 
-    con_zip_norm, 
-    con_city_swap, 
-    con_city_refine,
+    state_norm, 
+    zip_norm, 
+    city_swap, 
+    city_refine,
     sort = TRUE
   )
 ```
@@ -998,7 +1187,7 @@ Then we can join the refined values back to the database.
 ```{r city_join}
 nyc <- nyc %>% 
   left_join(good_refine, by = names(.)) %>% 
-  mutate(con_city_refine = coalesce(con_city_refine, con_city_swap))
+  mutate(city_refine = coalesce(city_refine, city_swap))
 ```
 
 #### Progress
@@ -1009,10 +1198,10 @@ to be valid and reduce the total distinct values by correcting misspellings.
 ```{r city_progress, echo=FALSE}
 many_city <- c(valid_city, extra_city)
 progress <- progress_table(
-  str_to_upper(nyc$con_city),
-  nyc$con_city_norm,
-  nyc$con_city_swap,
-  nyc$con_city_refine,
+  str_to_upper(nyc$flng_ent_city),
+  nyc$city_norm,
+  nyc$city_swap,
+  nyc$city_refine,
   compare = many_city
 ) %>% mutate(stage = as_factor(stage))
 kable(progress, digits = 3)
@@ -1021,7 +1210,7 @@ kable(progress, digits = 3)
 You can see how the percentage of valid values increased with each stage.
 
 ```{r bar_progress, echo=FALSE}
-raw_in <- percent(prop_in(nyc$con_city, valid_city))
+raw_in <- percent(prop_in(nyc$flng_ent_city, valid_city))
 progress %>% 
   ggplot(aes(x = stage, y = prop_in)) +
   geom_hline(yintercept = 0.99) +
@@ -1072,9 +1261,9 @@ rename all added variables with the `_clean` suffix.
 ```{r clean_select}
 nyc <- nyc %>% 
   select(
-    -con_city_norm,
-    -con_city_swap,
-    con_city_clean = con_city_refine
+    -city_norm,
+    -city_swap,
+    city_clean = city_refine
   ) %>% 
   rename_all(~str_replace(., "_norm", "_clean")) %>% 
   rename_all(~str_remove(., "_raw"))
@@ -1086,10 +1275,10 @@ glimpse(sample_n(nyc, 50))
 
 1. There are `r comma(nrow(nyc))` records in the database.
 1. There are `r comma(sum(nyc$dupe_flag))` duplicate records in the database.
-1. The range and distribution of `amount` and `date` seem reasonable.
+1. The range and distribution of `org_amt` and `sched_date` seem reasonable.
 1. There are `r comma(sum(nyc$na_flag))` records missing key variables.
 1. Consistency in geographic data has been improved with `campfin::normal_*()`.
-1. The 4-digit `year` variable has been created with `lubridate::year()`.
+1. The 4-digit `sched_year` variable has been created with `lubridate::year()`.
 
 ## Export
 
@@ -1097,10 +1286,9 @@ Now the file can be saved on disk for upload to the Accountability server.
 
 ```{r clean_dir}
 clean_dir <- dir_create(here("ny", "contribs", "data", "clean"))
-clean_path <- path(clean_dir, "ny_contribs_clean.csv")
+clean_path <- path(clean_dir, "ny_contribs_1999-20210811.csv")
 write_csv(nyc, clean_path, na = "")
 (clean_size <- file_size(clean_path))
-non_ascii(clean_path)
 ```
 
 ## Upload
