@@ -111,6 +111,54 @@ here::i_am("nm/contribs/docs/nm_contribs_diary.Rmd")
 
 ## Data
 
+The data available at [the old CFIS website][old_cris] is decommissioned and no
+longer updated. The most recent contributions in the data were made in October
+of 2020.
+
+> #### !!Attention Candidates, Political Committees and Lobbyists!!
+>
+> This system has been decommissioned and is no longer available for use by
+candidates and political committees. To file a disclosure report or to register
+a new political committee, please use the new CFIS at
+https://login.cfis.sos.state.nm.us
+>
+> Lobbyists, please continue to use this system through calendar year 2020. You will use the new CFIS for 2021. More information will follow. If you have any support questions, please contact sos.elections@state.nm.us.
+
+Data from 2020 onward can be found from the New Mexico Secretary of state at a
+[new CRIS portal][new_cris].
+
+> This page provides comma separated value (CSV) downloads of contribution,
+expenditure, and loan data for each reporting year in a zipped file format.
+These files can be downloaded and imported into other applications (Microsoft
+Excel, Microsoft Access, etc.)
+> 
+> This data is extracted as it existed as of 08/17/2021 12:09 PM. 
+
+The new CRIS page also provides a [record layout][layout] for contributions.
+From this layout, we know the new data has a different structure than the old
+data. We will first download the old data and format it to take an overlapping
+structure to the newer data.
+
+[old_cris]: https://www.cfis.state.nm.us/media/CFIS_Data_Download.aspx
+[new_cris]: https://login.cfis.sos.state.nm.us/
+[layout]: https://login.cfis.sos.state.nm.us/Template/Contributions%20and%20Loans%20File%20Layout%20Key.pdf
+
+## Download
+
+We can download data from both CRIS websites using a combination of GET and POST
+requests made to the server. These requests define what data we are interested
+in and save the file locally.
+
+```{r raw_dir}
+raw_dir <- dir_create(here("nm", "contribs", "data", "raw"))
+```
+
+### Old
+
+The old CRIS website uses an ASP.NET server. We can visit the home page and then
+use the cookies from that visit to make two subsequent requests for campaign
+finance transactions made by (1) Candidates and (2) PACs.
+
 > #### CFIS Data Download
 > The files available will be downloaded in a CSV file format. To download a
 file, select the type of CFIS data and corresponding filters and click Download
@@ -124,12 +172,6 @@ periods for candidates, PACs, and Lobbyists.
 >
 > The CFIS data available for download is updated daily at 12:00AM and 12:00PM
 MST.
-
-## Download
-
-```{r raw_dir}
-raw_dir <- dir_create(here("nm", "contribs", "data", "raw"))
-```
 
 ```{r nm_home}
 nm_url <- "https://www.cfis.state.nm.us/media/CFIS_Data_Download.aspx"
@@ -155,24 +197,40 @@ view_state <- list(
 ```
 
 ```{r}
-for (look_for in c("Candidates", "PACs", "Lobbyist")) {
+nm_types <- tribble(
+  ~look_for,    ~file_name,
+  "Candidates", "CandidateTransactions.csv", 
+# "Lobbyist",   "LobbyistTransactions.csv", 
+  "PACs",       "PACTransactions.csv",
+)
+```
+
+```{r echo=FALSE}
+nm_types <- mutate(nm_types, file_name = path(raw_dir, file_name))
+nm_types %>% 
+  mutate(across(file_name, path.abbrev)) %>% 
+  kable(col.names = c("\"Look For\"", "File Path"))
+```
+
+```{r}
+for (look_for in nm_types$look_for) {
   message(look_for)
-  csv_path <- path(raw_dir, look_for, ext = "csv")
+  csv_path <- nm_types$file_name[match(look_for, nm_types$look_for)]
   if (!file_exists(csv_path)) {
-    Sys.sleep(3)
+    Sys.sleep(runif(1, 1, 3))
     POST(
       url = "https://www.cfis.state.nm.us/media/CFIS_Data_Download.aspx",
       write_disk(path = csv_path, overwrite = TRUE),
       set_cookies(nm_cookie),
       progress("down"),
-      body = c(
+      body = c( # combine extracted VIEWSTATE with form options 
         view_state, # __VIEWSTATE, __VIEWSTATEGENERATOR, __EVENTVALIDATION
         list( # dropdown body arguments: ALL rows for each file type
           `ctl00$ContentPlaceHolder1$header1$ddlCSVSelect` = "Transactions",
           `ctl00$ContentPlaceHolder1$header1$ddlRegisrationYear` = "0",
-          `ctl00$ContentPlaceHolder1$header1$ddlViewBy` = "Lobbyist",
+          `ctl00$ContentPlaceHolder1$header1$ddlViewBy` = "Lobbyist", # keep
           `ctl00$ContentPlaceHolder1$header1$hfFilePeriodFilter` = "ALL",
-          `ctl00$ContentPlaceHolder1$header1$ddlLookFor` = look_for,
+          `ctl00$ContentPlaceHolder1$header1$ddlLookFor` = look_for, # change
           `ctl00$ContentPlaceHolder1$header1$ddlFilePeriodYear` = "0",
           `ctl00$ContentPlaceHolder1$header1$ddlFPCan` = "ALL",
           `ctl00$ContentPlaceHolder1$header1$Button1` = "Download+Data",
@@ -186,38 +244,86 @@ for (look_for in c("Candidates", "PACs", "Lobbyist")) {
 }
 ```
 
-```{r raw_download}
-for (type in c("Candidates", "PACs", "Lobbyists")) {
-  message(type)
-  type_csv <- path(raw_dir, paste0(type, ".csv"))
-  POST(
-    url = "https://www.cfis.state.nm.us/media/CFIS_Data_Download.aspx",
-    write_disk(path = type_csv, overwrite = TRUE),
-    set_cookies(nm_cookie),
-    progress("down"),
-    body = list(
-      ddlCSVSelect = "Transactions",
-      ddlRegisrationYear = "0",
-      ddlViewBy = type,
-      hfFilePeriodFilter = "ALL",
-      ddlLookFor = type,
-      ddlFilePeriodYear = "0",
-      ddlFPCan = "ALL",
-      hfLobbyistFilingPeriod = "ALL",
-      ddlTransRegYear = "0",
-      ddlFPLob = "ALL",
-      Button3 = "Download+Data"
-    )
+### New
+
+The new CRIS website hosts separate annual files for political contributions
+and expenditures. These files can be checked with a request to the page.
+
+```{r nm_check_get}
+nm_check <- GET(
+  "https://login.cfis.sos.state.nm.us/api///DataDownload/GetCheckDatadownload",
+  query = list(
+    pageNumber = 1,
+    pageSize = 10,
+    sortDir = "Desc",
+    sortedBy = "ElectionYear"
   )
-  Sys.sleep(5)
+)
+```
+
+```{r nm_check_json}
+nm_check <- content(
+  x = nm_check, 
+  as = "parsed", 
+  type = "application/json"
+)
+```
+
+The data on this page reports last being updates at 
+`format(as_datetime(nm_check[[length(nm_check)]]$PSTTime), "%H:%M %b %d, %Y")`.
+There are `length(nm_check) - 1` files currently hosted on the new CRIS download
+page. We will download the files with `TransactionType` of `CON`, indicating
+they contain contributions.
+
+```{r echo=FALSE}
+post_time <- as_datetime(nm_check[[length(nm_check)]]$PSTTime)
+if (is.null(nm_check[[length(nm_check)]][[1]])) {
+  nm_check <- nm_check[-length(nm_check)]
+}
+for (i in seq_along(nm_check)) {
+  nm_check[[i]][map_lgl(nm_check[[i]], is.null)] <- NA
+}
+nm_check <- map_df(nm_check, as_tibble)
+nm_check$PSTTime <- post_time
+kable(nm_check)
+nm_check <- filter(nm_check, TransactionType == "CON")
+```
+
+```{r}
+for (i in seq(nrow(nm_check))) {
+  message(nm_check$NameOfFile[i])
+  con_path <- path(raw_dir, nm_check$NameOfFile[i])
+  if (!file_exists(con_path)) {
+    GET(
+     "https://login.cfis.sos.state.nm.us/api/DataDownload/GetCSVDownloadReport",
+      query = list(
+        year = nm_check$ElectionYear[i],
+        transactionType = nm_check$TransactionType[i],
+        reportFormat = "csv",
+        fileName = nm_check$NameOfFile[i],
+      )
+    )
+  }
 }
 ```
 
 ## Read
 
-```{r raw_read}
-nmc <- map(
-  .x = dir_ls(raw_dir),
+We will read the old and new file formats separately. The search format of the
+Accountability Project database requires that files in the same dataset have the
+same structure. The older files have fewer columns containing less overall data.
+We can rename the shared columns to match and remove any columns in the older
+format containing data not found in the newer format.
+
+For example, if the older data contained columns [a, b, c, d] and the newer
+format contained columns [A, B, C, E, F] then the older columns would be
+renamed and removed to contain only [A, B, C] to overlap with the newer data.
+
+### Old
+
+```{r old_read}
+nm_old <- map(
+  .x = nm_types$file_name,
   .f = read_delim,
   delim = ",",
   na = c("", "NA", "NULL", "N/A"),
@@ -232,6 +338,65 @@ nmc <- map(
     `Date Added` = col_datetime()
   )
 )
+```
+
+The older data has two very similar formats for Candidate and PAC contributions.
+Once the `PAC Name` column is renamed to `Last Name`, then the two can be bound
+into a single table.
+
+```{r old_filter}
+names(nm_old) <- nm_types$look_for
+nm_old$PACs <- rename(nm_old$PACs, `Last Name` = `PAC Name`)
+nm_old <- bind_rows(nm_old)
+```
+
+Here is a random row from the old format.
+
+```{r echo=FALSE}
+glimpse(sample_n(nm_old, 1))
+```
+
+### New
+
+```{r}
+new_csv <- path(raw_dir, nm_check$NameOfFile)
+```
+
+```{r new_read}
+nm_new <- read_delim(
+  file = new_csv,
+  escape_backslash = FALSE,
+  escape_double = TRUE,
+  locale = locale(tz = "MST"),
+  col_types = cols(
+    .default = col_character(),
+    # `Transaction Date` = col_datetime("%m/%d/%Y %H:%M:%S %p"),
+    # `Filed Date` = col_datetime("%m/%d/%Y %H:%M:%S %p"),
+    # `Start of Period` = col_datetime("%b  %d %Y %H:%M%p"),
+    # `End of Period` = col_datetime("%b  %d %Y %H:%M%p")
+  )
+)
+```
+
+```{r new_parse, echo=FALSE}
+# https://github.com/tidyverse/readr/issues/1276
+nm_new <- nm_new %>% 
+  type_convert(
+    locale = locale(tz = "MST"),
+    col_types = cols(
+      .default = col_character(),
+      `Transaction Date` = col_datetime("%m/%d/%Y %H:%M:%S %p"),
+      `Filed Date` = col_datetime("%m/%d/%Y %H:%M:%S %p"),
+      `Start of Period` = col_datetime("%b  %d %Y %H:%M%p"),
+      `End of Period` = col_datetime("%b  %d %Y %H:%M%p")
+    )
+  )
+```
+
+### Combine
+
+```{r}
+
 ```
 
 ## Explore
