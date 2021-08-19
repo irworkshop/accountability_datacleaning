@@ -329,6 +329,7 @@ nm_old <- map(
   na = c("", "NA", "NULL", "N/A"),
   escape_backslash = FALSE, 
   escape_double = FALSE,
+  locale = locale(tz = "MST"),
   col_types = cols(
     .default = col_character(),
     `IsContribution` = col_logical(),
@@ -356,7 +357,24 @@ Here is a random row from the old format.
 glimpse(sample_n(nm_old, 1))
 ```
 
+In the old data, the `Last Name` column contains the _recipient_ while the
+`ContribExpenditure Last Name` or `Company Name` contains the name of the
+party making the contribution.
+
+```{r echo=FALSE}
+nm_old %>% 
+  filter(IsContribution) %>% 
+  select(
+    `Last Name`,
+    `ContribExpenditure Last Name`,
+    `Company Name`
+  ) %>% 
+  sample_n(10)
+```
+
 ### New
+
+We can similarly read the files from the new CRIS website.
 
 ```{r}
 new_csv <- path(raw_dir, nm_check$NameOfFile)
@@ -370,16 +388,18 @@ nm_new <- read_delim(
   locale = locale(tz = "MST"),
   col_types = cols(
     .default = col_character(),
+    `Transaction Amount` = col_double(),
+    `Transaction ID` = col_integer()
+    # BUG: https://github.com/tidyverse/readr/issues/1276
     # `Transaction Date` = col_datetime("%m/%d/%Y %H:%M:%S %p"),
     # `Filed Date` = col_datetime("%m/%d/%Y %H:%M:%S %p"),
     # `Start of Period` = col_datetime("%b  %d %Y %H:%M%p"),
-    # `End of Period` = col_datetime("%b  %d %Y %H:%M%p")
+    # `End of Period` = col_datetime("%b  %d %Y %H:%M%p"),
   )
 )
 ```
 
 ```{r new_parse, echo=FALSE}
-# https://github.com/tidyverse/readr/issues/1276
 nm_new <- nm_new %>% 
   type_convert(
     locale = locale(tz = "MST"),
@@ -391,18 +411,176 @@ nm_new <- nm_new %>%
       `End of Period` = col_datetime("%b  %d %Y %H:%M%p")
     )
   )
+
+nm_new <- nm_new %>% 
+  mutate(across(
+    .cols = c(Amended, `Employment Information Requested`),
+    .fns = function(x) x == "Y"
+  ))
+```
+
+```{r echo=FALSE}
+glimpse(sample_n(nm_new, 1))
+```
+
+In the new data, every row has a `Committee Name` that received and reported
+the contribution. The contributions made to a _candidate_ campaign committee
+have both the `Committee Name` and the `Candidate * Name`. For contributions
+made by an individual there is a first and last name, while those made by
+companies entirely in the `Last Name` column.
+
+```{r}
+nm_new %>% 
+  select(
+    `Contributor Code`,
+    `First Name`,
+    `Last Name`,
+    `Committee Name`,
+    `Report Entity Type`,
+    `Candidate Last Name`,
+  ) %>% 
+  sample_n(10) %>% 
+  arrange(
+    `Contributor Code`,
+    `Report Entity Type`
+  )
+```
+
+```{r echo=FALSE}
+nm_new %>% 
+  select(`Contributor Code`, `First Name`) %>% 
+  group_by(`Contributor Code`) %>% 
+  summarise(no_first_name = mean(is.na(`First Name`))) %>% 
+  arrange(-no_first_name)
+
+nm_new %>% 
+    select(`Report Entity Type`, `Candidate First Name`) %>% 
+    group_by(`Report Entity Type`) %>% 
+    summarise(no_first_name = mean(is.na(`Candidate First Name`))) %>% 
+    arrange(-no_first_name)
 ```
 
 ### Combine
 
-```{r}
+while the two files have different column names, they overlap significantly in
+the actual data contained in those columns. We can rename the _older_ columns
+to match their newer counterparts and then combine the two files.
 
+```{r}
+nm_old_nm <- names(nm_old)
+```
+
+```{r}
+nm_old <- nm_old %>% 
+  rename(
+    `Candidate First Name` = `First Name`,
+    `Candidate Last Name` = `Last Name`,
+    `Contribution Type` = `Description`,
+    `Transaction Amount` = `Amount`,
+    `Transaction Date` = `Date Contribution`,
+    `Description` = `ContribExpenditure Description`,
+    `First Name` = `ContribExpenditure First Name`,
+    `Middle Name` = `ContribExpenditure Middle Name`,
+    `Last Name` = `ContribExpenditure Last Name`,
+    `Contributor Address Line 1` = `Address`,
+    `Contributor City` = `City`,
+    `Contributor State` = `State`,
+    `Contributor Zip Code` = `Zip`,
+    `Contributor Occupation` = `Occupation`,
+    `Report Name` = `Filing Period`,
+    `Filed Date` = `Date Added`
+  )
+
+```
+
+```{r}
+mean(is.na(nm_old$`Last Name`)[!is.na(nm_old$`Company Name`)])
+mean(!is.na(nm_old$`Last Name`)[is.na(nm_old$`Company Name`)])
+nm_old <- mutate(nm_old, `Last Name` = coalesce(`Last Name`, `Company Name`))
+```
+
+```{r}
+old_new_overlap <- intersect(x = names(nm_new), y = names(nm_old))
+length(old_new_overlap)
+setdiff(names(nm_new), names(nm_old)) # in new, not old
+nm_old <- select(nm_old, all_of(old_new_overlap))
+```
+
+Both files contain records from the year 2020, although we can plot the total
+contributions made in each month to see that the shift to the new CRIS website
+occurred in June and there doesn't seem to be a gap in the time covered or
+significant overlap in data.
+
+```{r bar_overlap, echo=FALSE}
+old_my <- nm_old %>% 
+  count(
+    y = year(`Transaction Date`),
+    m = month(`Transaction Date`),
+    name = "old"
+  )
+
+new_my <- nm_new %>% 
+  count(
+    y = year(`Transaction Date`),
+    m = month(`Transaction Date`),
+    name = "new"
+  )
+
+overlap_my <- full_join(
+  x = old_my,
+  y = new_my,
+  by = c("y", "m")
+)
+
+overlap_my %>% 
+  filter(y >= 2018, y <= 2021) %>% 
+  pivot_longer(
+    cols = c(old, new),
+    names_to = "age",
+    values_to = "n"
+  ) %>% 
+  ggplot(aes(x = m, y = n)) +
+  geom_col(aes(fill = age)) +
+  facet_wrap(~y, nrow = 1) +
+  scale_x_continuous(breaks = seq(1, 12)) +
+  scale_y_continuous(labels = comma) +
+  scale_fill_discrete(guide = "none") +
+  labs(
+    title = "Overlap in new and old CRIS Contribution Records",
+    x = "Month",
+    y = "Count"
+  )
+```
+
+```{r}
+# sort and fill with empty rows
+# bind_rows(nm_new[0, ], nm_old)
+```
+
+We have removed any columns in the _old_ data that did not have analogues in the
+_new_ data. When the two tables are essentially stacked together, empty rows
+will be created for any column not found in the new data.
+
+```{r bind_age}
+nmc <- bind_rows(new = nm_new, old = nm_old, .id = "age")
+```
+
+```{r rm_age, echo=FALSE}
+# nm_new <- sample_n(nm_new, 100)
+# nm_old <- sample_n(nm_old, 100)
+Sys.sleep(3)
+flush_memory(2)
+```
+
+```{r clean_names}
+nmc <- clean_names(nmc, case = "snake")
 ```
 
 ## Explore
 
 There are `r comma(nrow(nmc))` rows of `r ncol(nmc)` columns. Each record
-represents a single Contributions...
+represents a single contribution made from an individual or corporation to a
+political candidate campaign or committee.
 
 ```{r glimpse}
 glimpse(nmc)
@@ -411,7 +589,8 @@ tail(nmc)
 
 ### Missing
 
-Columns vary in their degree of missing values.
+Columns vary in their degree of missing values. Of course, rows not found in the
+_older_ data will be 100% in this combined table.
 
 ```{r na_count}
 col_stats(nmc, count_na)
@@ -419,16 +598,22 @@ col_stats(nmc, count_na)
 
 We can flag any record missing a key variable needed to identify a transaction.
 
+```{r}
+nmc <- nmc %>% 
+  mutate(committee_name = coalesce(committee_name, candidate_last_name))
+```
+
 ```{r na_flag}
-key_vars <- c("date", "last", "amount", "committee")
+key_vars <- c("transaction_date", "last_name", 
+              "transaction_amount", "committee_name")
 nmc <- flag_na(nmc, all_of(key_vars))
-sum(nmc$na_flag)
+percent(mean(nmc$na_flag), 0.01)
 ```
 
 ```{r na_view}
 nmc %>% 
   filter(na_flag) %>% 
-  select(all_of(key_vars))
+  select(age, all_of(key_vars))
 ```
 
 ### Duplicates
@@ -436,14 +621,19 @@ nmc %>%
 We can also flag any record completely duplicated across every column.
 
 ```{r dupe_flag}
-nmc <- flag_dupes(nmc, -id)
-sum(nmc$dupe_flag)
+nmc <- flag_dupes(nmc, -transaction_id)
+percent(mean(nmc$dupe_flag), 0.01)
+```
+
+```{r}
+percent(mean(nmc$dupe_flag[nmc$na_flag]))
 ```
 
 ```{r dupe_view}
 nmc %>% 
   filter(dupe_flag) %>% 
-  select(all_of(key_vars))
+  select(age, all_of(key_vars)) %>% 
+  arrange(committee_name)
 ```
 
 ### Categorical
