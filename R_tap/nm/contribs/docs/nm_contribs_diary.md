@@ -1,7 +1,7 @@
 New Mexico Contributions
 ================
 Kiernan Nicholls
-Fri Aug 20 12:54:06 2021
+Fri Aug 20 15:18:22 2021
 
 -   [Project](#project)
 -   [Objectives](#objectives)
@@ -275,10 +275,10 @@ download page. We will download the files with `TransactionType` of
 
 | TransactionKey          | ElectionYear | NameOfFile    | TransactionType | PSTTime             |
 |:------------------------|-------------:|:--------------|:----------------|:--------------------|
-| Contributions and Loans |         2021 | CON\_2021.csv | CON             | 2021-08-20 09:53:42 |
-| Expenditures            |         2021 | EXP\_2021.csv | EXP             | 2021-08-20 09:53:42 |
-| Contributions and Loans |         2020 | CON\_2020.csv | CON             | 2021-08-20 09:53:42 |
-| Expenditures            |         2020 | EXP\_2020.csv | EXP             | 2021-08-20 09:53:42 |
+| Contributions and Loans |         2021 | CON\_2021.csv | CON             | 2021-08-20 12:17:57 |
+| Expenditures            |         2021 | EXP\_2021.csv | EXP             | 2021-08-20 12:17:57 |
+| Contributions and Loans |         2020 | CON\_2020.csv | CON             | 2021-08-20 12:17:57 |
+| Expenditures            |         2020 | EXP\_2020.csv | EXP             | 2021-08-20 12:17:57 |
 
 ``` r
 for (i in seq(nrow(nm_check))) {
@@ -387,6 +387,13 @@ of the party making the contribution.
     #>  8 Lopez                                                    Tristani                       <NA>          
     #>  9 Mcmillan                                                 <NA>                           NM Dental PAC 
     #> 10 ActBlue New Mexico                                       THIESSEN                       <NA>
+
+We are only interested in the records with an `IsContribution` value of
+`TRUE`.
+
+``` r
+nm_old <- filter(nm_old, IsContribution)
+```
 
 ### New
 
@@ -544,9 +551,9 @@ nm_old <- nm_old %>%
 
 ``` r
 mean(is.na(nm_old$`Last Name`)[!is.na(nm_old$`Company Name`)])
-#> [1] 0.9067446
+#> [1] 0.7578137
 mean(!is.na(nm_old$`Last Name`)[is.na(nm_old$`Company Name`)])
-#> [1] 0.9850568
+#> [1] 0.984004
 nm_old <- mutate(nm_old, `Last Name` = coalesce(`Last Name`, `Company Name`))
 ```
 
@@ -591,13 +598,13 @@ nmc <- clean_names(nmc, case = "snake")
 
 ## Explore
 
-There are 1,530,519 rows of 36 columns. Each record represents a single
+There are 1,118,842 rows of 36 columns. Each record represents a single
 contribution made from an individual or corporation to a political
 candidate campaign or committee.
 
 ``` r
 glimpse(nmc)
-#> Rows: 1,530,519
+#> Rows: 1,118,842
 #> Columns: 36
 #> $ age                              <chr> "new", "new", "new", "new", "new", "new", "new", "new", "new", "new", "new", …
 #> $ org_id                           <chr> "1416", "1416", "1442", "1442", "1453", "1453", "1453", "1453", "1453", "1453…
@@ -639,12 +646,12 @@ tail(nmc)
 #> # A tibble: 6 × 36
 #>   age   org_id transaction_amou… transaction_date    last_name    first_name middle_name prefix suffix contributor_addr…
 #>   <chr> <chr>              <dbl> <dttm>              <chr>        <chr>      <chr>       <chr>  <chr>  <chr>            
-#> 1 old   <NA>               2743  2009-06-08 00:00:00 Crook        Keigm      <NA>        <NA>   <NA>   6800 Montgomery,…
-#> 2 old   <NA>                702. 2009-06-15 00:00:00 Los Pinos F… <NA>       <NA>        <NA>   <NA>   2820 Richmond Dr.
-#> 3 old   <NA>                200  2009-06-24 00:00:00 Denish       Diane      <NA>        <NA>   <NA>   2604 Morrow, NE  
-#> 4 old   <NA>                267. 2009-08-01 00:00:00 Madrid Busi… <NA>       <NA>        <NA>   <NA>   P.O. Box 92406   
-#> 5 old   <NA>               2000  2009-08-17 00:00:00 Cravens      Kent       <NA>        <NA>   <NA>   4500 Osuna, NE   
-#> 6 old   <NA>               2000  2009-09-23 00:00:00 Crook        Keigm      <NA>        <NA>   <NA>   6800 Montgomery,…
+#> 1 old   <NA>                44.9 2009-08-19 00:00:00 Pack         Ed         <NA>        <NA>   <NA>   2007 Bolulph Rd  
+#> 2 old   <NA>              3000   2009-07-01 00:00:00 Democratic … <NA>       <NA>        <NA>   <NA>   1401 K Street, N…
+#> 3 old   <NA>             10000   2009-08-27 00:00:00 Democratic … <NA>       <NA>        <NA>   <NA>   1401 K Street, N…
+#> 4 old   <NA>               300   2009-05-30 00:00:00 Gwen L Alst… <NA>       <NA>        <NA>   <NA>   3300 N Butler    
+#> 5 old   <NA>               300   2009-06-30 00:00:00 Gwen L Alst… <NA>       <NA>        <NA>   <NA>   3300 N Butler    
+#> 6 old   <NA>               300   2009-07-31 00:00:00 Gwen L Alst… <NA>       <NA>        <NA>   <NA>   3300 N Butler    
 #> # … with 26 more variables: contributor_address_line_2 <chr>, contributor_city <chr>, contributor_state <chr>,
 #> #   contributor_zip_code <chr>, description <chr>, check_number <chr>, transaction_id <int>, filed_date <dttm>,
 #> #   election <chr>, report_name <chr>, start_of_period <dttm>, end_of_period <dttm>, contributor_code <chr>,
@@ -665,41 +672,41 @@ col_stats(nmc, count_na)
 #>    col                              class        n        p
 #>    <chr>                            <chr>    <int>    <dbl>
 #>  1 age                              <chr>        0 0       
-#>  2 org_id                           <chr>  1420461 0.928   
+#>  2 org_id                           <chr>  1008784 0.902   
 #>  3 transaction_amount               <dbl>        0 0       
-#>  4 transaction_date                 <dttm>     726 0.000474
-#>  5 last_name                        <chr>    14266 0.00932 
-#>  6 first_name                       <chr>   531124 0.347   
-#>  7 middle_name                      <chr>  1354054 0.885   
-#>  8 prefix                           <chr>  1530504 1.00    
-#>  9 suffix                           <chr>  1519870 0.993   
-#> 10 contributor_address_line_1       <chr>    20017 0.0131  
-#> 11 contributor_address_line_2       <chr>  1528337 0.999   
-#> 12 contributor_city                 <chr>    19115 0.0125  
-#> 13 contributor_state                <chr>    18601 0.0122  
-#> 14 contributor_zip_code             <chr>    18604 0.0122  
-#> 15 description                      <chr>  1066864 0.697   
-#> 16 check_number                     <chr>  1509439 0.986   
-#> 17 transaction_id                   <int>  1420461 0.928   
+#>  4 transaction_date                 <dttm>     726 0.000649
+#>  5 last_name                        <chr>    14264 0.0127  
+#>  6 first_name                       <chr>   179445 0.160   
+#>  7 middle_name                      <chr>   950740 0.850   
+#>  8 prefix                           <chr>  1118827 1.00    
+#>  9 suffix                           <chr>  1108507 0.991   
+#> 10 contributor_address_line_1       <chr>    19768 0.0177  
+#> 11 contributor_address_line_2       <chr>  1116660 0.998   
+#> 12 contributor_city                 <chr>    18910 0.0169  
+#> 13 contributor_state                <chr>    18431 0.0165  
+#> 14 contributor_zip_code             <chr>    18466 0.0165  
+#> 15 description                      <chr>   994331 0.889   
+#> 16 check_number                     <chr>  1097762 0.981   
+#> 17 transaction_id                   <int>  1008784 0.902   
 #> 18 filed_date                       <dttm>       0 0       
-#> 19 election                         <chr>  1420461 0.928   
-#> 20 report_name                      <chr>    12850 0.00840 
-#> 21 start_of_period                  <dttm> 1420461 0.928   
-#> 22 end_of_period                    <dttm> 1420461 0.928   
-#> 23 contributor_code                 <chr>  1421800 0.929   
-#> 24 contribution_type                <chr>      278 0.000182
-#> 25 report_entity_type               <chr>  1420461 0.928   
-#> 26 committee_name                   <chr>  1420461 0.928   
-#> 27 candidate_last_name              <chr>    64520 0.0422  
-#> 28 candidate_first_name             <chr>   768865 0.502   
-#> 29 candidate_middle_name            <chr>  1500385 0.980   
-#> 30 candidate_prefix                 <chr>  1530516 1.00    
-#> 31 candidate_suffix                 <chr>  1528688 0.999   
-#> 32 amended                          <lgl>  1420461 0.928   
-#> 33 contributor_employer             <chr>  1488913 0.973   
-#> 34 contributor_occupation           <chr>   761067 0.497   
-#> 35 occupation_comment               <chr>  1530519 1       
-#> 36 employment_information_requested <lgl>  1420461 0.928
+#> 19 election                         <chr>  1008784 0.902   
+#> 20 report_name                      <chr>     9001 0.00804 
+#> 21 start_of_period                  <dttm> 1008784 0.902   
+#> 22 end_of_period                    <dttm> 1008784 0.902   
+#> 23 contributor_code                 <chr>  1010123 0.903   
+#> 24 contribution_type                <chr>      278 0.000248
+#> 25 report_entity_type               <chr>  1008784 0.902   
+#> 26 committee_name                   <chr>  1008784 0.902   
+#> 27 candidate_last_name              <chr>    64502 0.0577  
+#> 28 candidate_first_name             <chr>   583681 0.522   
+#> 29 candidate_middle_name            <chr>  1088708 0.973   
+#> 30 candidate_prefix                 <chr>  1118839 1.00    
+#> 31 candidate_suffix                 <chr>  1117011 0.998   
+#> 32 amended                          <lgl>  1008784 0.902   
+#> 33 contributor_employer             <chr>  1077236 0.963   
+#> 34 contributor_occupation           <chr>   508500 0.454   
+#> 35 occupation_comment               <chr>  1118842 1       
+#> 36 employment_information_requested <lgl>  1008784 0.902
 ```
 
 We can flag any record missing a key variable needed to identify a
@@ -715,14 +722,14 @@ key_vars <- c("transaction_date", "last_name",
               "transaction_amount", "committee_name")
 nmc <- flag_na(nmc, all_of(key_vars))
 percent(mean(nmc$na_flag), 0.01)
-#> [1] "0.98%"
+#> [1] "1.34%"
 ```
 
 ``` r
 nmc %>% 
   filter(na_flag) %>% 
   select(age, all_of(key_vars))
-#> # A tibble: 15,048 × 5
+#> # A tibble: 15,028 × 5
 #>    age   transaction_date    last_name transaction_amount committee_name                       
 #>    <chr> <dttm>              <chr>                  <dbl> <chr>                                
 #>  1 new   2020-11-01 00:00:00 <NA>                      20 Republican Party of Bernalillo County
@@ -735,7 +742,7 @@ nmc %>%
 #>  8 new   2020-10-28 00:00:00 <NA>                      60 Democratic Party of Socorro County   
 #>  9 new   2020-12-03 00:00:00 <NA>                      87 Democratic Party of Sandoval County  
 #> 10 new   2021-02-12 00:00:00 <NA>                      15 Luna County Democratic Party         
-#> # … with 15,038 more rows
+#> # … with 15,018 more rows
 ```
 
 ### Duplicates
@@ -745,7 +752,7 @@ We can also flag any record completely duplicated across every column.
 ``` r
 nmc <- flag_dupes(nmc, -transaction_id)
 percent(mean(nmc$dupe_flag), 0.01)
-#> [1] "3.91%"
+#> [1] "3.87%"
 ```
 
 ``` r
@@ -758,7 +765,7 @@ nmc %>%
   filter(dupe_flag) %>% 
   select(age, all_of(key_vars)) %>% 
   arrange(committee_name)
-#> # A tibble: 59,863 × 5
+#> # A tibble: 43,331 × 5
 #>    age   transaction_date    last_name                             transaction_amount committee_name     
 #>    <chr> <dttm>              <chr>                                              <dbl> <chr>              
 #>  1 old   2017-10-27 00:00:00 Bargas                                           5500    579 PAC            
@@ -771,7 +778,7 @@ nmc %>%
 #>  8 new   2020-12-31 00:00:00 US Eagle Federal Credit Union                       3.33 A New Day For NM   
 #>  9 new   2020-10-31 00:00:00 US Eagle Federal Credit Union                       3.82 A New Day For NM   
 #> 10 new   2020-10-29 00:00:00 Rio Grande Chapter of Sierra Club PAC               8.03 A New Day For NM   
-#> # … with 59,853 more rows
+#> # … with 43,321 more rows
 ```
 
 ### Categorical
@@ -781,44 +788,44 @@ col_stats(nmc, n_distinct)
 #> # A tibble: 38 × 4
 #>    col                              class       n           p
 #>    <chr>                            <chr>   <int>       <dbl>
-#>  1 age                              <chr>       2 0.00000131 
-#>  2 org_id                           <chr>     620 0.000405   
-#>  3 transaction_amount               <dbl>   68514 0.0448     
-#>  4 transaction_date                 <dttm>   6536 0.00427    
-#>  5 last_name                        <chr>  184478 0.121      
-#>  6 first_name                       <chr>   50264 0.0328     
-#>  7 middle_name                      <chr>    3686 0.00241    
-#>  8 prefix                           <chr>       4 0.00000261 
-#>  9 suffix                           <chr>     205 0.000134   
-#> 10 contributor_address_line_1       <chr>  409952 0.268      
-#> 11 contributor_address_line_2       <chr>     804 0.000525   
-#> 12 contributor_city                 <chr>   19103 0.0125     
-#> 13 contributor_state                <chr>     477 0.000312   
-#> 14 contributor_zip_code             <chr>   58756 0.0384     
-#> 15 description                      <chr>  100726 0.0658     
-#> 16 check_number                     <chr>    8024 0.00524    
-#> 17 transaction_id                   <int>   93215 0.0609     
-#> 18 filed_date                       <dttm> 504359 0.330      
-#> 19 election                         <chr>      10 0.00000653 
-#> 20 report_name                      <chr>     118 0.0000771  
-#> 21 start_of_period                  <dttm>     26 0.0000170  
-#> 22 end_of_period                    <dttm>     11 0.00000719 
-#> 23 contributor_code                 <chr>       6 0.00000392 
-#> 24 contribution_type                <chr>      10 0.00000653 
-#> 25 report_entity_type               <chr>       7 0.00000457 
-#> 26 committee_name                   <chr>    2852 0.00186    
-#> 27 candidate_last_name              <chr>    2729 0.00178    
-#> 28 candidate_first_name             <chr>    1618 0.00106    
-#> 29 candidate_middle_name            <chr>     118 0.0000771  
-#> 30 candidate_prefix                 <chr>       4 0.00000261 
-#> 31 candidate_suffix                 <chr>       4 0.00000261 
-#> 32 amended                          <lgl>       3 0.00000196 
-#> 33 contributor_employer             <chr>    7807 0.00510    
-#> 34 contributor_occupation           <chr>   43594 0.0285     
-#> 35 occupation_comment               <chr>       1 0.000000653
-#> 36 employment_information_requested <lgl>       3 0.00000196 
-#> 37 na_flag                          <lgl>       2 0.00000131 
-#> 38 dupe_flag                        <lgl>       2 0.00000131
+#>  1 age                              <chr>       2 0.00000179 
+#>  2 org_id                           <chr>     620 0.000554   
+#>  3 transaction_amount               <dbl>   18585 0.0166     
+#>  4 transaction_date                 <dttm>   6388 0.00571    
+#>  5 last_name                        <chr>  133493 0.119      
+#>  6 first_name                       <chr>   48494 0.0433     
+#>  7 middle_name                      <chr>    3567 0.00319    
+#>  8 prefix                           <chr>       4 0.00000358 
+#>  9 suffix                           <chr>     193 0.000172   
+#> 10 contributor_address_line_1       <chr>  343876 0.307      
+#> 11 contributor_address_line_2       <chr>     804 0.000719   
+#> 12 contributor_city                 <chr>   17059 0.0152     
+#> 13 contributor_state                <chr>     367 0.000328   
+#> 14 contributor_zip_code             <chr>   55774 0.0498     
+#> 15 description                      <chr>   11412 0.0102     
+#> 16 check_number                     <chr>    8024 0.00717    
+#> 17 transaction_id                   <int>   93215 0.0833     
+#> 18 filed_date                       <dttm> 324399 0.290      
+#> 19 election                         <chr>      10 0.00000894 
+#> 20 report_name                      <chr>     117 0.000105   
+#> 21 start_of_period                  <dttm>     26 0.0000232  
+#> 22 end_of_period                    <dttm>     11 0.00000983 
+#> 23 contributor_code                 <chr>       6 0.00000536 
+#> 24 contribution_type                <chr>       9 0.00000804 
+#> 25 report_entity_type               <chr>       7 0.00000626 
+#> 26 committee_name                   <chr>    2783 0.00249    
+#> 27 candidate_last_name              <chr>    2660 0.00238    
+#> 28 candidate_first_name             <chr>    1585 0.00142    
+#> 29 candidate_middle_name            <chr>     118 0.000105   
+#> 30 candidate_prefix                 <chr>       4 0.00000358 
+#> 31 candidate_suffix                 <chr>       4 0.00000358 
+#> 32 amended                          <lgl>       3 0.00000268 
+#> 33 contributor_employer             <chr>    7807 0.00698    
+#> 34 contributor_occupation           <chr>   38016 0.0340     
+#> 35 occupation_comment               <chr>       1 0.000000894
+#> 36 employment_information_requested <lgl>       3 0.00000268 
+#> 37 na_flag                          <lgl>       2 0.00000179 
+#> 38 dupe_flag                        <lgl>       2 0.00000179
 ```
 
 ![](../plots/distinct_plots-1.png)<!-- -->![](../plots/distinct_plots-2.png)<!-- -->![](../plots/distinct_plots-3.png)<!-- -->
@@ -827,10 +834,10 @@ col_stats(nmc, n_distinct)
 
 ``` r
 summary(nmc$transaction_amount)
-#>    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
-#>   -1166      19      50     399     200 3269132
+#>      Min.   1st Qu.    Median      Mean   3rd Qu.      Max. 
+#>       0.0      12.0      50.0     285.2     125.0 2000000.0
 percent(mean(nmc$transaction_amount <= 0), 0.001)
-#> [1] "0.001%"
+#> [1] "0.000%"
 ```
 
 These are the records with the minimum and maximum amounts.
@@ -844,38 +851,38 @@ glimpse(nmc[c(
 #> Columns: 38
 #> $ age                              <chr> "old", "old"
 #> $ org_id                           <chr> NA, NA
-#> $ transaction_amount               <dbl> 3269132, -1166
-#> $ transaction_date                 <dttm> 2014-02-20, 2004-06-30
-#> $ last_name                        <chr> "Martinez", "Laughing Lamb Design"
-#> $ first_name                       <chr> "Susana", NA
+#> $ transaction_amount               <dbl> 2e+06, 0e+00
+#> $ transaction_date                 <dttm> 2018-09-05, 2006-08-04
+#> $ last_name                        <chr> "Chevron Corporation", "Mayfield"
+#> $ first_name                       <chr> NA, "Betty"
 #> $ middle_name                      <chr> NA, NA
 #> $ prefix                           <chr> NA, NA
 #> $ suffix                           <chr> NA, NA
-#> $ contributor_address_line_1       <chr> "P.O. Box 15117", "P.O. Box 12045"
+#> $ contributor_address_line_1       <chr> "PO Box 6042", "1504 W. Thomas"
 #> $ contributor_address_line_2       <chr> NA, NA
-#> $ contributor_city                 <chr> "Las Cruces", "Jackson"
-#> $ contributor_state                <chr> "NM", "WY"
-#> $ contributor_zip_code             <chr> "88004-5117", "83002"
-#> $ description                      <chr> "Transfer of funds to 2014 campaign", NA
+#> $ contributor_city                 <chr> "San Ramon", "Carlsbad"
+#> $ contributor_state                <chr> "CA", "NM"
+#> $ contributor_zip_code             <chr> "94583", "88220"
+#> $ description                      <chr> NA, NA
 #> $ check_number                     <chr> NA, NA
 #> $ transaction_id                   <int> NA, NA
-#> $ filed_date                       <dttm> 2014-04-04 10:53:21, 2010-01-01 00:00:00
+#> $ filed_date                       <dttm> 2018-10-07 14:00:27, 2010-01-01 00:00:00
 #> $ election                         <chr> NA, NA
-#> $ report_name                      <chr> "2014 First Biannual ", "Third Primary Report"
+#> $ report_name                      <chr> "2018 Second General", "First General"
 #> $ start_of_period                  <dttm> NA, NA
 #> $ end_of_period                    <dttm> NA, NA
 #> $ contributor_code                 <chr> NA, NA
-#> $ contribution_type                <chr> "Monetary Expenditure", "Monetary Expenditure"
+#> $ contribution_type                <chr> "Monetary contribution", "Monetary contribution"
 #> $ report_entity_type               <chr> NA, NA
-#> $ committee_name                   <chr> "Martinez", "Wirth"
-#> $ candidate_last_name              <chr> "Martinez", "Wirth"
-#> $ candidate_first_name             <chr> "Susana", "Peter"
+#> $ committee_name                   <chr> "NEW MEXICO STRONG", "Read"
+#> $ candidate_last_name              <chr> "NEW MEXICO STRONG", "Read"
+#> $ candidate_first_name             <chr> NA, "D'Ann"
 #> $ candidate_middle_name            <chr> NA, NA
 #> $ candidate_prefix                 <chr> NA, NA
 #> $ candidate_suffix                 <chr> NA, NA
 #> $ amended                          <lgl> NA, NA
 #> $ contributor_employer             <chr> NA, NA
-#> $ contributor_occupation           <chr> NA, NA
+#> $ contributor_occupation           <chr> "Energy", NA
 #> $ occupation_comment               <chr> NA, NA
 #> $ employment_information_requested <lgl> NA, NA
 #> $ na_flag                          <lgl> FALSE, FALSE
@@ -897,11 +904,11 @@ nmc <- mutate(nmc, transaction_year = year(transaction_date))
 min(nmc$transaction_date, na.rm = TRUE)
 #> [1] "1900-04-09 MST"
 sum(nmc$transaction_year < 2000, na.rm = TRUE)
-#> [1] 14
+#> [1] 5
 max(nmc$transaction_date, na.rm = TRUE)
 #> [1] "3004-03-30 MST"
 sum(nmc$transaction_date > today(), na.rm = TRUE)
-#> [1] 2
+#> [1] 1
 ```
 
 ![](../plots/bar_year-1.png)<!-- -->
@@ -941,7 +948,7 @@ nm_addr <- nmc %>%
 
 ``` r
 nm_addr
-#> # A tibble: 410,472 × 3
+#> # A tibble: 344,373 × 3
 #>    contributor_address_line_1 contributor_address_line_2 address_norm         
 #>    <chr>                      <chr>                      <chr>                
 #>  1 <NA>                       <NA>                       <NA>                 
@@ -954,7 +961,7 @@ nm_addr
 #>  8 3077 Evelyn St             <NA>                       3077 EVELYN ST       
 #>  9 1251 Turk St               Apt 1118                   1251 TURK ST APT 1118
 #> 10 7809 SHERWOOD DR NW        <NA>                       7809 SHERWOOD DR NW  
-#> # … with 410,462 more rows
+#> # … with 344,363 more rows
 ```
 
 ``` r
@@ -986,8 +993,8 @@ progress_table(
 #> # A tibble: 2 × 6
 #>   stage                    prop_in n_distinct prop_na  n_out n_diff
 #>   <chr>                      <dbl>      <dbl>   <dbl>  <dbl>  <dbl>
-#> 1 nmc$contributor_zip_code   0.883      58756  0.0122 177367  45498
-#> 2 nmc$zip_norm               0.989      17214  0.0143  16268   2684
+#> 1 nmc$contributor_zip_code   0.861      55774  0.0165 153046  43231
+#> 2 nmc$zip_norm               0.990      16160  0.0180  11471   2305
 ```
 
 ### State
@@ -1011,20 +1018,20 @@ nmc <- nmc %>%
 nmc %>% 
   filter(contributor_state != state_norm) %>% 
   count(contributor_state, state_norm, sort = TRUE)
-#> # A tibble: 213 × 3
-#>    contributor_state    state_norm     n
-#>    <chr>                <chr>      <int>
-#>  1 New Mexico           NM         14162
-#>  2 California           CA          1787
-#>  3 Texas                TX           991
-#>  4 New York             NY           737
-#>  5 nm                   NM           648
-#>  6 Florida              FL           528
-#>  7 Colorado             CO           477
-#>  8 Arizona              AZ           374
-#>  9 Illinois             IL           322
-#> 10 District of Columbia DC           321
-#> # … with 203 more rows
+#> # A tibble: 178 × 3
+#>    contributor_state state_norm     n
+#>    <chr>             <chr>      <int>
+#>  1 New Mexico        NM         10420
+#>  2 California        CA          1695
+#>  3 Texas             TX           940
+#>  4 New York          NY           687
+#>  5 nm                NM           546
+#>  6 Florida           FL           491
+#>  7 Colorado          CO           450
+#>  8 Massachusetts     MA           290
+#>  9 Arizona           AZ           274
+#> 10 Illinois          IL           271
+#> # … with 168 more rows
 ```
 
 ``` r
@@ -1036,8 +1043,8 @@ progress_table(
 #> # A tibble: 2 × 6
 #>   stage                 prop_in n_distinct prop_na n_out n_diff
 #>   <chr>                   <dbl>      <dbl>   <dbl> <dbl>  <dbl>
-#> 1 nmc$contributor_state   0.982        477  0.0122 27002    418
-#> 2 nmc$state_norm          1             59  0.0135     0      1
+#> 1 nmc$contributor_state   0.981        367  0.0165 20730    308
+#> 2 nmc$state_norm          1             59  0.0176     0      1
 ```
 
 ### City
@@ -1136,20 +1143,20 @@ good_refine <- nmc %>%
   )
 ```
 
-    #> # A tibble: 271 × 5
-    #>    state_norm zip_norm city_swap      city_refine       n
-    #>    <chr>      <chr>    <chr>          <chr>         <int>
-    #>  1 NC         28270    CHAROLETTE     CHARLOTTE       115
-    #>  2 NM         87801    SOCCORO        SOCORRO          48
-    #>  3 NM         87010    LOS CERRILLOS  CERRILLOS        46
-    #>  4 CA         94105    SAN FRANSICO   SAN FRANCISCO    34
-    #>  5 NM         88310    ALMGORODO      ALAMOGORDO       27
-    #>  6 NM         88081    CHAPPARAL      CHAPARRAL        24
-    #>  7 IL         60094    PALLANTINE     PALATINE         21
-    #>  8 NM         87375    YAH TA HEY     YATAHEY          20
-    #>  9 NM         87375    YA TA HEY      YATAHEY          19
-    #> 10 NM         87106    ALBUQUERQERQUE ALBUQUERQUE      15
-    #> # … with 261 more rows
+    #> # A tibble: 198 × 5
+    #>    state_norm zip_norm city_swap     city_refine      n
+    #>    <chr>      <chr>    <chr>         <chr>        <int>
+    #>  1 NM         87010    LOS CERRILLOS CERRILLOS       46
+    #>  2 NM         87801    SOCCORO       SOCORRO         45
+    #>  3 NM         88310    ALMGORODO     ALAMOGORDO      11
+    #>  4 CA         94583    SAN ROMAN     SAN RAMON       10
+    #>  5 NM         87059    TIREJAS       TIJERAS         10
+    #>  6 PA         19103    PHILLADEPHIA  PHILADELPHIA     8
+    #>  7 NM         87004    BERNALLIO     BERNALILLO       7
+    #>  8 NM         87048    CORALLES      CORRALES         6
+    #>  9 NM         87375    YAH TA HEY    YATAHEY          6
+    #> 10 OH         45236    CINCINATTI    CINCINNATI       5
+    #> # … with 188 more rows
 
 Then we can join the refined values back to the database.
 
@@ -1167,10 +1174,10 @@ misspellings.
 
 | stage                                | prop\_in | n\_distinct | prop\_na | n\_out | n\_diff |
 |:-------------------------------------|---------:|------------:|---------:|-------:|--------:|
-| `str_to_upper(nmc$contributor_city)` |    0.955 |       13728 |    0.012 |  67326 |    6731 |
-| `nmc$city_norm`                      |    0.973 |       11526 |    0.014 |  40888 |    4481 |
-| `nmc$city_swap`                      |    0.991 |        9167 |    0.014 |  13874 |    2113 |
-| `nmc$city_refine`                    |    0.991 |        8988 |    0.014 |  13012 |    1934 |
+| `str_to_upper(nmc$contributor_city)` |    0.961 |       12074 |    0.017 |  43109 |    5202 |
+| `nmc$city_norm`                      |    0.975 |       10412 |    0.018 |  27913 |    3500 |
+| `nmc$city_swap`                      |    0.991 |        8487 |    0.018 |  10369 |    1562 |
+| `nmc$city_refine`                    |    0.991 |        8346 |    0.018 |   9948 |    1421 |
 
 You can see how the percentage of valid values increased with each
 stage.
@@ -1207,53 +1214,53 @@ glimpse(sample_n(nmc, 50))
 #> Columns: 43
 #> $ age                              <chr> "old", "old", "old", "old", "old", "old", "old", "old", "old", "old", "old", …
 #> $ org_id                           <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
-#> $ transaction_amount               <dbl> 150.00, 33.75, 25.00, 250.00, 500.00, 11.88, 0.05, 600.44, 10.00, 15.00, 50.0…
-#> $ transaction_date                 <dttm> 2010-06-02, 2013-10-07, 2012-09-13, 2007-09-18, 2014-03-03, 2018-08-10, 2011…
-#> $ last_name                        <chr> "Pacheco", "Gonzalez", "Allison", "NARAL New Mexico", "Lundstrom", "Buchanan"…
-#> $ first_name                       <chr> "Sharon", "Leo", "Linda", NA, "Patricia", "Erik", "Jeffrey", NA, NA, "Robert"…
-#> $ middle_name                      <chr> "S.", NA, NA, NA, "A", NA, NA, NA, NA, "E", NA, "O", NA, NA, "Z.", NA, NA, NA…
+#> $ transaction_amount               <dbl> 250.00, 13.12, 0.81, 50.00, 0.18, 25.00, 25.00, 100.00, 1.00, 30.00, 1500.00,…
+#> $ transaction_date                 <dttm> 2020-04-05, 2006-03-15, 2017-03-03, 2010-06-03, 2011-10-28, 2019-05-21, 2011…
+#> $ last_name                        <chr> "DAVIS", "Pioneer Bank", "SILVA", "Van Soelen", "Dulaney", "Branch", "Collins…
+#> $ first_name                       <chr> "GEORGE", NA, "JESUS", "Fred", "Todd", "Michael", "James", "J", "James", "Pau…
+#> $ middle_name                      <chr> NA, NA, "R", NA, "R", "Paul", "T,", "Harrison", NA, NA, NA, NA, NA, NA, NA, N…
 #> $ prefix                           <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
-#> $ suffix                           <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, "Jr.", NA, NA, NA, NA, NA, NA, NA, NA, NA…
-#> $ contributor_address_line_1       <chr> "1105 Carmel Road", "Alvarado Square", "2300 Wrangler Ct", "P.O. Box 97", "34…
+#> $ suffix                           <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
+#> $ contributor_address_line_1       <chr> "1605 MORNINGSIDE DR NE", "PO Box 130", "3900 Pan American Fwy NE", "1424 Gid…
 #> $ contributor_address_line_2       <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
-#> $ contributor_city                 <chr> "Belen", "Albuquerque", "Rio Rancho", "Albuquerque", "Gallup", "Albuquerque",…
-#> $ contributor_state                <chr> "NM", "NM", "NM", "NM", "NM", "NM", "KY", "NM", "NM", "NM", "NM", "NM", "NM",…
-#> $ contributor_zip_code             <chr> "87002", "87158", "87124", "87103", "87301", "87102", "42503-4131", "88046", …
-#> $ description                      <chr> NA, NA, "Campaign contribution", NA, "campaign contribution", NA, NA, "Commun…
+#> $ contributor_city                 <chr> "ALBUQUERQUE", "Roswell", "Albuquerque", "Clovis", "Great Falls", "Santa Fe",…
+#> $ contributor_state                <chr> "NM", "NM", "NM", "NM", "MT", "NM", "NM", "NM", "NM", "NM", "District of Colu…
+#> $ contributor_zip_code             <chr> "87110", "88202", "87107", "88101", "59405", "87501", "87901-2200", "87594", …
+#> $ description                      <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
 #> $ check_number                     <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
 #> $ transaction_id                   <int> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
-#> $ filed_date                       <dttm> 2010-06-28 16:41:43, 2013-10-08 10:57:27, 2012-10-08 15:18:51, 2010-01-01 00…
+#> $ filed_date                       <dttm> 2020-04-07 10:16:25, 2010-01-01 00:00:00, 2017-04-04 10:42:03, 2010-07-01 14…
 #> $ election                         <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
-#> $ report_name                      <chr> "Fourth Primary Report 2010", "2013 Second Biannual", "2012 Second Biannual",…
+#> $ report_name                      <chr> "2020 First Primary Report", "First Primary", "2017 First Biannual", "Fourth …
 #> $ start_of_period                  <dttm> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
 #> $ end_of_period                    <dttm> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
 #> $ contributor_code                 <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
-#> $ contribution_type                <chr> "Monetary contribution", "Monetary contribution", "Monetary Expenditure", "Mo…
+#> $ contribution_type                <chr> "Monetary contribution", "Monetary contribution", "Monetary contribution", "M…
 #> $ report_entity_type               <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
-#> $ committee_name                   <chr> "Barela", "PNM Responsible Citizens Group", "Saxton", "Park", "Gonzales", "PN…
-#> $ candidate_last_name              <chr> "Barela", "PNM Responsible Citizens Group", "Saxton", "Park", "Gonzales", "PN…
-#> $ candidate_first_name             <chr> "Elias", NA, "Janice", "Al", "Roberto 'bobby'", NA, NA, "Carrie", NA, NA, "Em…
+#> $ committee_name                   <chr> "ActBlue New Mexico", "Jennings", "Southwest Regional Council of Carpenters N…
+#> $ candidate_last_name              <chr> "ActBlue New Mexico", "Jennings", "Southwest Regional Council of Carpenters N…
+#> $ candidate_first_name             <chr> NA, "Timothy", NA, "Susana", NA, "Michelle", NA, "Domingo", NA, "Natalie", "D…
 #> $ candidate_middle_name            <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
 #> $ candidate_prefix                 <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
 #> $ candidate_suffix                 <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
 #> $ amended                          <lgl> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
 #> $ contributor_employer             <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
-#> $ contributor_occupation           <chr> NA, NA, "Candidate for Senate District 40", NA, NA, "CONTROLLER ASST, SHARED …
+#> $ contributor_occupation           <chr> "ATTORNEY", NA, NA, "Attorney", "Manager Area Sales", NA, NA, NA, NA, "Not em…
 #> $ occupation_comment               <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
 #> $ employment_information_requested <lgl> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
 #> $ na_flag                          <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, …
-#> $ dupe_flag                        <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, TRUE, FALSE, FALSE, F…
-#> $ transaction_year                 <dbl> 2010, 2013, 2012, 2007, 2014, 2018, 2011, 2019, 2014, 2017, 2012, 2016, 2019,…
-#> $ address_clean                    <chr> "1105 CARMEL RD", "ALVARADO SQ", "2300 WRANGLER CT", "PO BOX 97", "3406 BLUEH…
-#> $ city_clean                       <chr> "BELEN", "ALBUQUERQUE", "RIO RANCHO", "ALBUQUERQUE", "GALLUP", "ALBUQUERQUE",…
-#> $ state_clean                      <chr> "NM", "NM", "NM", "NM", "NM", "NM", "KY", "NM", "NM", "NM", "NM", "NM", "NM",…
-#> $ zip_clean                        <chr> "87002", "87158", "87124", "87103", "87301", "87102", "42503", "88046", "8719…
+#> $ dupe_flag                        <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, …
+#> $ transaction_year                 <dbl> 2020, 2006, 2017, 2010, 2011, 2019, 2011, 2005, 2013, 2018, 2006, 2018, 2018,…
+#> $ address_clean                    <chr> "1605 MORNINGSIDE DR NE", "PO BOX 130", "3900 PAN AMERICAN FWY NE", "1424 GID…
+#> $ city_clean                       <chr> "ALBUQUERQUE", "ROSWELL", "ALBUQUERQUE", "CLOVIS", "GREAT FALLS", "SANTA FE",…
+#> $ state_clean                      <chr> "NM", "NM", "NM", "NM", "MT", "NM", "NM", "NM", "NM", "NM", "DC", "NM", "NM",…
+#> $ zip_clean                        <chr> "87110", "88202", "87107", "88101", "59405", "87501", "87901", "87594", "8710…
 ```
 
-1.  There are 1,530,533 records in the database.
-2.  There are 59,877 duplicate records in the database.
+1.  There are 1,118,856 records in the database.
+2.  There are 43,345 duplicate records in the database.
 3.  The range and distribution of `amount` and `date` seem reasonable.
-4.  There are 15,048 records missing key variables.
+4.  There are 15,028 records missing key variables.
 5.  Consistency in geographic data has been improved with
     `campfin::normal_*()`.
 6.  The 4-digit `year` variable has been created with
@@ -1269,7 +1276,7 @@ clean_dir <- dir_create(here("nm", "contribs", "data", "clean"))
 clean_path <- path(clean_dir, "nm_contribs_2000-20210817.csv")
 write_csv(nmc, clean_path, na = "")
 (clean_size <- file_size(clean_path))
-#> 424M
+#> 312M
 file_encoding(clean_path) %>% 
   mutate(across(path, path.abbrev))
 #> # A tibble: 1 × 3
