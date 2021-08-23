@@ -386,6 +386,10 @@ We can similarly read the files from the new CRIS website.
 new_csv <- path(raw_dir, nm_check$NameOfFile)
 ```
 
+```{r echo=FALSE}
+new_csv <- dir_ls(raw_dir, regex = "\\d.csv$")
+```
+
 ```{r new_read}
 nm_new <- read_delim(
   file = new_csv,
@@ -569,6 +573,7 @@ will be created for any column not found in the new data.
 
 ```{r bind_age}
 nmc <- bind_rows(new = nm_new, old = nm_old, .id = "age")
+nmc <- relocate(nmc, age, .after = last_col())
 ```
 
 ```{r rm_age, echo=FALSE}
@@ -1008,6 +1013,7 @@ rename all added variables with the `_clean` suffix.
 ```{r clean_select}
 nmc <- nmc %>% 
   select(
+    -age,
     -city_norm,
     -city_swap,
     city_clean = city_refine
@@ -1042,7 +1048,7 @@ file_encoding(clean_path) %>%
   mutate(across(path, path.abbrev))
 ```
 
-```{r echo=FALSE}
+```{r echo=FALSE, eval=FALSE}
 rm(nmc)
 flush_memory()
 na <- non_ascii(clean_path)
