@@ -352,7 +352,7 @@ The older data has two very similar formats for Candidate and PAC expenditures.
 Once the `PAC Name` column is renamed to `Last Name`, then the two can be bound
 into a single table.
 
-```{r old_filter}
+```{r old_bind}
 names(nm_old) <- nm_types$look_for
 nm_old$PACs <- rename(nm_old$PACs, `Last Name` = `PAC Name`)
 nm_old <- bind_rows(nm_old)
