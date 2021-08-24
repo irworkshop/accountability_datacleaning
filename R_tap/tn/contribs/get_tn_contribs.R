@@ -1,14 +1,34 @@
-library(tidyverse)
-library(janitor)
-library(campfin)
-library(rvest)
-library(httr)
-library(cli)
-library(fs)
+# TN Contributions
+# Kiernan Nicholls, Julia Ingram
+# Investigative Reporting Workshop
+# Tue Aug 24 14:10:10 2021
 
-tn_dir <- "~/Desktop/tn_contribs/"
+if (!require("pacman")) {
+  install.packages("pacman")
+}
+
+pacman::p_load(
+  tidyverse,
+  lubridate,
+  janitor,
+  campfin,
+  aws.s3,
+  refinr,
+  scales,
+  here,
+  httr,
+  fs
+)
+
+tn_dir <- dir_create(here("tn", "contribs", "data", "raw"))
+tn_csv <- dir_ls(tn_dir, glob = "*.csv")
+tn_yrs <- as.numeric(unique(str_extract(tn_csv, "\\d{4}")))
 
 for (y in 2000:2021) {
+  if (y %in% tn_yrs) {
+    message("Files for year already saved")
+    next
+  }
   cli_h2("Year: {y}")
   # request data ------------------------------------------------------------
 
@@ -135,12 +155,13 @@ tnc <- map_df(
       code = read_delim(
         file = x,
         delim = ",",
-        escape_backslash = TRUE,
+        escape_backslash = FALSE,
         escape_double = FALSE,
         col_types = cols(
           .default = col_character(),
           `Amount` = col_number(),
-          `Date` = col_date("%m/%d/%Y"),
+          # 09/32/2020, 07/24/15, 5/6/14
+          # `Date` = col_date("%m/%d/%Y"),
           `Election Year` = col_integer()
         )
       )
@@ -150,6 +171,10 @@ tnc <- map_df(
 
 tnc <- clean_names(tnc, case = "snake")
 n_distinct(tnc$type) == 2
+
+# fix dates with lubridate
+# invalid dates with be removed
+tnc <- mutate(tnc, across(date, mdy))
 
 # split address -----------------------------------------------------------
 
@@ -175,7 +200,6 @@ good_split <- filter(x3, state %in% valid_abb)
 bad_split <- filter(x3, state %out% valid_abb)
 
 # fix split ---------------------------------------------------------------
-
 
 # mising something in the middle, move and re-split
 no_zip <- bad_split %>%
@@ -249,5 +273,240 @@ sample_n(bad_fix, 20)
 
 # recombine with good splits
 tn_addr <- bind_rows(good_split, bad_fix)
+tn_addr <- mutate(tn_addr, across(everything(), str_squish))
 
-write_tsv(tn_addr, file = "~/Desktop/tn_addr.tsv")
+# wrangle address ---------------------------------------------------------
+
+# trim zip codes
+tn_addr <- tn_addr %>%
+  mutate(across(zip, normal_zip)) %>%
+  rename(zip_norm = zip)
+
+# state already very good
+prop_in(tn_addr$state, valid_state)
+tn_addr <- rename(tn_addr, state_norm = state)
+
+# split address on last comma
+tn_addr <- separate(
+  data = tn_addr,
+  col = addr_city,
+  into = c("addr_sep", "city_sep"),
+  sep = ",\\s?(?=[^,]*$)",
+  remove = TRUE,
+  extra = "merge",
+  fill = "left"
+)
+
+# normalize city
+tn_city <- tn_addr %>%
+  distinct(city_sep, state_norm, zip_norm) %>%
+  mutate(
+    city_norm = normal_city(
+      city = city_sep,
+      abbs = usps_city,
+      states = c("TN", "DC"),
+      na = invalid_city,
+      na_rep = TRUE
+    )
+  )
+
+tn_city <- tn_city %>%
+  # match city against zip expect
+  left_join(
+    y = zipcodes,
+    by = c(
+      "state_norm" = "state",
+      "zip_norm" = "zip"
+    )
+  ) %>%
+  rename(city_match = city) %>%
+  # swap with expect if similar
+  mutate(
+    match_abb = is_abbrev(city_norm, city_match),
+    match_dist = str_dist(city_norm, city_match),
+    city_swap = if_else(
+      condition = !is.na(match_dist) & (match_abb | match_dist == 1),
+      true = city_match,
+      false = city_norm
+    )
+  ) %>%
+  select(
+    -city_match,
+    -match_dist,
+    -match_abb
+  )
+
+# rejoin to address
+tn_addr <- left_join(tn_addr, tn_city)
+
+good_refine <- tn_addr %>%
+  mutate(
+    city_refine = city_swap %>%
+      key_collision_merge() %>%
+      n_gram_merge(numgram = 1)
+  ) %>%
+  filter(city_refine != city_swap) %>%
+  inner_join(
+    y = zipcodes,
+    by = c(
+      "city_refine" = "city",
+      "state_norm" = "state",
+      "zip_norm" = "zip"
+    )
+  )
+
+# add refined cities back
+tn_addr <- tn_addr %>%
+  left_join(good_refine, by = names(.)) %>%
+  mutate(city_refine = coalesce(city_refine, city_swap))
+
+# normalize address with usps standard
+tn_addr <- tn_addr %>%
+  mutate(
+    .keep = "unused",
+    .before = city_sep,
+    addr_norm = normal_address(
+      address = addr_sep,
+      abbs = usps_street,
+      na = invalid_city,
+      na_rep = TRUE
+    )
+  )
+
+tn_addr <- distinct(tn_addr)
+
+# add back all split and cleaned addresses
+tnc <- left_join(
+  x = tnc,
+  y = tn_addr,
+  by = "contributor_address"
+)
+
+many_city <- c(valid_city, extra_city)
+many_city <- c(many_city, "RESEARCH TRIANGLE PARK", "FARMINGTON HILLS")
+
+progress_table(
+  tnc$city_sep,
+  tnc$city_norm,
+  tnc$city_swap,
+  tnc$city_refine,
+  compare = many_city
+)
+
+# remove intermediary columns
+tnc <- tnc %>%
+  select(
+    -city_sep,
+    -city_norm,
+    -city_swap
+  ) %>%
+  # consistent rename and reorder
+  rename(city_norm = city_refine) %>%
+  relocate(city_norm, .after = addr_norm) %>%
+  rename_with(~str_replace(., "_norm", "_clean"))
+
+# explore -----------------------------------------------------------------
+
+glimpse(tnc)
+
+# flag NA values
+col_stats(tnc, count_na)
+key_vars <- c("date", "contributor_name", "amount", "recipient_name")
+tnc <- flag_na(tnc, all_of(key_vars))
+sum(tnc$na_flag)
+tnc %>%
+  filter(na_flag) %>%
+  select(all_of(key_vars)) %>%
+  sample_n(10)
+
+# count distinct values
+col_stats(tnc, n_distinct)
+
+# count/plot discrete
+count(tnc, type)
+count(tnc, adj)
+explore_plot(tnc, report_name) + scale_x_wrap()
+
+# flag duplicate values
+tnc <- flag_dupes(tnc, everything())
+mean(tnc$dupe_flag)
+tnc %>%
+  filter(dupe_flag) %>%
+  select(all_of(key_vars)) %>%
+  arrange(recipient_name)
+
+# amounts -----------------------------------------------------------------
+
+summary(tnc$amount)
+sum(tnc$amount <= 0)
+
+# min and max to and from same people?
+glimpse(tnc[c(which.max(tnc$amount), which.min(tnc$amount)), ])
+
+tnc %>%
+  filter(amount >= 1) %>%
+  ggplot(aes(amount)) +
+  geom_histogram(fill = dark2["purple"], bins = 30) +
+  scale_y_continuous(labels = scales::comma) +
+  scale_x_continuous(
+    breaks = c(1 %o% 10^(0:6)),
+    labels = scales::dollar,
+    trans = "log10"
+  ) +
+  labs(
+    title = "New Mexico Contributions Amount Distribution",
+    caption = "Source: TN Online Campaign Finance",
+    x = "Amount",
+    y = "Count"
+  )
+
+# dates -------------------------------------------------------------------
+
+tnc <- mutate(tnc, year = year(date))
+
+min(tnc$date, na.rm = TRUE)
+sum(tnc$year < 2000, na.rm = TRUE)
+max(tnc$date, na.rm = TRUE)
+sum(tnc$date > today(), na.rm = TRUE)
+
+tnc %>%
+  filter(between(year, 2002, 2021)) %>%
+  count(year) %>%
+  mutate(even = is_even(year)) %>%
+  ggplot(aes(x = year, y = n)) +
+  geom_col(aes(fill = even)) +
+  scale_fill_brewer(palette = "Dark2") +
+  scale_y_continuous(labels = scales::comma) +
+  scale_x_continuous(breaks = seq(2000, 2020, by = 2)) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "Tennessee Contributions by Year",
+    caption = "Source: TN Online Campaign Finance",
+    fill = "Election Year",
+    x = "Year Made",
+    y = "Count"
+  )
+
+# export ------------------------------------------------------------------
+
+clean_dir <- dir_create(here("tn", "contribs", "data", "clean"))
+clean_path <- path(clean_dir, "tn_contribs_2002-20210824.csv")
+write_csv(tnc, clean_path, na = "")
+(clean_size <- file_size(clean_path))
+
+# upload ------------------------------------------------------------------
+
+aws_path <- path("csv", basename(clean_path))
+if (!object_exists(aws_path, "publicaccountability")) {
+  put_object(
+    file = clean_path,
+    object = aws_path,
+    bucket = "publicaccountability",
+    acl = "public-read",
+    show_progress = TRUE,
+    multipart = TRUE
+  )
+}
+aws_head <- head_object(aws_path, "publicaccountability")
+(aws_size <- as_fs_bytes(attr(aws_head, "content-length")))
+unname(aws_size == clean_size)
