@@ -89,6 +89,7 @@ pacman::p_load(
   glue, # code strings
   here, # project paths
   httr, # http requests
+  cli, # command line
   fs # local storage 
 )
 ```
@@ -171,8 +172,8 @@ rpt_years <- ut_search %>%
 ```
 
 ```{r year_minmax}
-min(report_years)
-max(report_years)
+min(rpt_years)
+max(rpt_years)
 ```
 
 ```{r search_types}
@@ -182,11 +183,11 @@ entity_types <- ut_search %>%
   str_subset("\\w")
 ```
 
-There are `r length(entity_types) * length(report_years)` combinations of these
+There are `r length(entity_types) * length(rpt_years)` combinations of these
 types and years, however many of these combinations have no search results.
 
 ```{r search_combn}
-length(entity_types) * length(report_years)
+length(entity_types) * length(rpt_years)
 ```
 
 We can make a `for` loop to run through each combination and request data from
@@ -236,6 +237,12 @@ raw_csv <- raw_info$path
 
 ## Fix
 
+Most columns in the comma-separated file are enclosed in double-quotation marks
+(`"`) to escape any commas _within_ the columns. However, double-quotes within
+strings are not escaped with doubling or a backslash. We can use regular
+expressions to find quotes not being used to enclose a column and replace them
+with a single-quote mark.
+
 ```{r}
 tmp_dir <- dir_create(path(dirname(raw_dir), "tmp"))
 tmp_csv <- path(tmp_dir, basename(raw_csv))
@@ -252,6 +259,8 @@ for (i in seq_along(raw_csv)) {
 ```
 
 ## Read
+
+The fixed files can be read together into a list of tables.
 
 ```{r raw_read}
 utc <- map(
@@ -270,6 +279,25 @@ utc <- map(
 )
 ```
 
+The second column in each file contains the name of the entity filing the report
+on which the contribution was reported. The name of that second column is thus
+different depending on the entity type of that particular file. We can rename
+the second column in every file to `ENTITY_NAME`.
+
+```{r}
+utc <- map(utc, rename, ENTITY_NAME = 2)
+```
+
+Now every table has the same names and can be combined into a single table.
+
+```{r}
+names(utc) <- basename(tmp_csv)
+utc <- bind_rows(utc, .id = "FILE_NAME")
+```
+
+We will identify the source of each row by the entity type and report year from
+the file name.
+
 ```{r entity_join}
 file_entity <- extract(
   data = tibble(FILE_NAME = basename(tmp_csv)),
@@ -282,13 +310,13 @@ file_entity <- extract(
 ```
 
 ```{r raw_bind}
-names(utc) <- basename(tmp_csv)
-utc <- map(utc, rename, ENTITY_NAME = 2)
-utc <- bind_rows(utc, .id = "FILE_NAME")
 utc <- utc %>% 
   left_join(file_entity, by = "FILE_NAME") %>% 
   select(-FILE_NAME)
 ```
+
+This data includes both `Contribution` and `Expenditure` transaction types. We
+can filter the data to only include the former.
 
 ```{r raw_filter}
 utc <- filter(utc, TRAN_TYPE == "Contribution")
@@ -296,6 +324,23 @@ utc <- filter(utc, TRAN_TYPE == "Contribution")
 
 ```{r raw_rename}
 utc <- clean_names(utc, case = "snake")
+```
+
+Finally, three columns use an `X` to indicate a `TRUE` value and blank `NA` to
+indicate false.
+
+```{r binary_view}
+utc %>% 
+  select(filed, inkind, loan) %>% 
+  distinct()
+```
+
+We can convert these quasi-logical columns to their proper data type for 
+mathematical analysis.
+
+```{r binary_convert}
+utc <- utc %>% 
+  mutate(across(c(filed, inkind, loan), ~!is.na(.)))
 ```
 
 ## Explore
@@ -309,6 +354,39 @@ glimpse(utc)
 tail(utc)
 ```
 
+We can see that despite data existing since 1998, contributions aren't really
+reported in bulk until 2008.
+
+```{r echo=FALSE}
+row_count <- utc %>% 
+  count(entity_type, report_year, sort = TRUE)
+
+et_levels <- row_count %>% 
+  group_by(entity_type) %>% 
+  summarise(n = sum(n)) %>% 
+  arrange(desc(n)) %>% 
+  pull(entity_type)
+
+row_count$entity_type <- factor(
+  x = row_count$entity_type,
+  levels = et_levels
+)
+
+row_count %>% 
+  ggplot(aes(x = report_year, y = n)) +
+  geom_col(aes(fill = entity_type), position = position_stack(reverse = TRUE)) +
+  scale_fill_brewer(palette = "Dark2") +
+  scale_y_continuous(labels = comma) +
+  theme(legend.position = "bottom") +
+  guides(fill = guide_legend(nrow = 1, byrow = TRUE))+
+  labs(
+    title = "Utah Contributions by Entity Type and Report Year",
+    subtitle = "Combonation determines in which file contribution obtained",
+    x = "Report Year",
+    y = "Count"
+  )
+```
+
 ### Missing
 
 Columns vary in their degree of missing values.
@@ -320,10 +398,13 @@ col_stats(utc, count_na)
 We can flag any record missing a key variable needed to identify a transaction.
 
 ```{r na_flag}
-key_vars <- c("date", "last", "amount", "committee")
+key_vars <- c("tran_date", "name", "tran_amt", "entity_name")
 utc <- flag_na(utc, all_of(key_vars))
 sum(utc$na_flag)
 ```
+
+Of the four key variables, only a few are missing the `name` of the individual
+making the contribution.
 
 ```{r na_view}
 utc %>% 
@@ -336,14 +417,18 @@ utc %>%
 We can also flag any record completely duplicated across every column.
 
 ```{r dupe_flag}
-utc <- flag_dupes(utc, -id)
+utc <- flag_dupes(utc, -tran_id)
 sum(utc$dupe_flag)
 ```
+
+Despite unique `tran_id` values, there are `r comma(sum(utc$dupe_flag))` fully
+duplicated values (same date, amount, names, etc.).
 
 ```{r dupe_view}
 utc %>% 
   filter(dupe_flag) %>% 
-  select(all_of(key_vars))
+  select(tran_id, all_of(key_vars)) %>% 
+  arrange(tran_date)
 ```
 
 ### Categorical
@@ -353,25 +438,26 @@ col_stats(utc, n_distinct)
 ```
 
 ```{r distinct_plots, echo=FALSE}
-explore_plot(utc, type)
+explore_plot(utc, report) + scale_x_wrap()
+explore_plot(utc, entity_type)
 ```
 
 ### Amounts
 
 ```{r amount_summary}
-summary(utc$amount)
-mean(utc$amount <= 0)
+summary(utc$tran_amt)
+mean(utc$tran_amt <= 0)
 ```
 
 These are the records with the minimum and maximum amounts.
 
 ```{r amount_minmax}
-glimpse(utc[c(which.max(utc$amount), which.min(utc$amount)), ])
+glimpse(utc[c(which.max(utc$tran_amt), which.min(utc$tran_amt)), ])
 ```
 
 ```{r hist_amount, echo=FALSE}
 utc %>%
-  ggplot(aes(amount)) +
+  ggplot(aes(tran_amt)) +
   geom_histogram(fill = dark2["purple"]) +
   scale_y_continuous(labels = comma) +
   scale_x_continuous(
@@ -381,7 +467,7 @@ utc %>%
   ) +
   labs(
     title = "Utah Contributions Amount Distribution",
-    caption = "Source: {source}",
+    caption = "Source: UT SOS",
     x = "Amount",
     y = "Count"
   )
@@ -389,24 +475,24 @@ utc %>%
 
 ### Dates
 
-We can add the calendar year from `date` with `lubridate::year()`
+We can add the calendar year from `tran_date` with `lubridate::year()`
 
 ```{r date_year}
-utc <- mutate(utc, year = year(date))
+utc <- mutate(utc, tran_year = year(tran_date))
 ```
 
 ```{r date_range}
-min(utc$date)
-sum(utc$year < 2000)
-max(utc$date)
-sum(utc$date > today())
+min(utc$tran_date)
+sum(utc$tran_year < 2000)
+max(utc$tran_date)
+sum(utc$tran_date > today())
 ```
 
 ```{r bar_year, echo=FALSE}
 utc %>% 
-  count(year) %>% 
-  mutate(even = is_even(year)) %>% 
-  ggplot(aes(x = year, y = n)) +
+  count(tran_year) %>% 
+  mutate(even = is_even(tran_year)) %>% 
+  ggplot(aes(x = tran_year, y = n)) +
   geom_col(aes(fill = even)) + 
   scale_fill_brewer(palette = "Dark2") +
   scale_y_continuous(labels = comma) +
@@ -414,7 +500,7 @@ utc %>%
   theme(legend.position = "bottom") +
   labs(
     title = "Utah Contributions by Year",
-    caption = "Source: {source}",
+    caption = "Source: UT SOS",
     fill = "Election Year",
     x = "Year Made",
     y = "Count"
@@ -435,7 +521,8 @@ will force consistence case, remove punctuation, and abbreviate official
 USPS suffixes.
 
 ```{r address_norm}
-utc <- utc %>% 
+norm_addr <- utc %>% 
+  distinct(address1, address2) %>% 
   unite(
     col = address_full,
     starts_with("address"),
@@ -453,11 +540,12 @@ utc <- utc %>%
   select(-address_full)
 ```
 
-```{r address_view}
-utc %>% 
-  select(contains("address")) %>% 
-  distinct() %>% 
-  sample_n(10)
+```{r address_view, echo=FALSE}
+norm_addr
+```
+
+```{r address_rejoin}
+utc <- left_join(utc, norm_addr, by = c("address1", "address2"))
 ```
 
 ### ZIP
@@ -579,7 +667,7 @@ utc <- left_join(
   x = utc,
   y = norm_city,
   by = c(
-    "city_raw", 
+    "city" = "city_raw", 
     "state_norm", 
     "zip_norm"
   )
@@ -628,7 +716,7 @@ Then we can join the refined values back to the database.
 
 ```{r city_join}
 utc <- utc %>% 
-  left_join(good_refine) %>% 
+  left_join(good_refine, by = names(.)) %>% 
   mutate(city_refine = coalesce(city_refine, city_swap))
 ```
 
@@ -637,22 +725,51 @@ utc <- utc %>%
 Our goal for normalization was to increase the proportion of city values known
 to be valid and reduce the total distinct values by correcting misspellings.
 
-```{r city_progress, echo=FALSE}
+Some misspellings and abbreviations remain than can be manually fixed.
+
+```{r many_city}
 many_city <- c(valid_city, extra_city)
+utc %>% 
+  count(city_refine, sort = TRUE) %>% 
+  filter(city_refine %out% many_city)
+```
+
+```{r city_manual}
+utc <- utc %>% 
+  mutate(
+    city_refine = city_refine %>% 
+      str_replace("^SALT LAKE CIT$", "SALT LAKE CITY") %>% 
+      str_replace("^SALT LAKE CTY$", "SALT LAKE CITY") %>% 
+      str_replace("^SLC$", "SALT LAKE CITY") %>% 
+      str_replace("^WEST VALLEY C$", "WEST VALLEY CITY") %>% 
+      str_replace("^WVC$", "WEST VALLEY CITY")
+  )
+```
+
+Some other common _valid_ city names need to be recognized before we check our
+progress.
+
+```{r}
+many_city <- c(many_city, "NIBLEY", "ST GEORGE")
+```
+
+```{r city_progress, echo=FALSE}
 progress <- progress_table(
-  str_to_upper(utc$city_raw),
+  str_to_upper(utc$city),
   utc$city_norm,
   utc$city_swap,
   utc$city_refine,
   compare = many_city
 ) %>% mutate(stage = as_factor(stage))
-kable(progress, digits = 3)
+progress %>%
+  mutate(across(1, md_code)) %>% 
+  kable(digits = 3)
 ```
 
 You can see how the percentage of valid values increased with each stage.
 
 ```{r bar_progress, echo=FALSE}
-raw_in <- percent(prop_in(utc$city_raw, valid_city))
+raw_in <- percent(prop_in(utc$city, valid_city))
 progress %>% 
   ggplot(aes(x = stage, y = prop_in)) +
   geom_hline(yintercept = 0.99) +
@@ -695,8 +812,6 @@ progress %>%
   )
 ```
 
-## Conclude
-
 Before exporting, we can remove the intermediary normalization columns and
 rename all added variables with the `_clean` suffix.
 
@@ -708,8 +823,11 @@ utc <- utc %>%
     city_clean = city_refine
   ) %>% 
   rename_all(~str_replace(., "_norm", "_clean")) %>% 
-  rename_all(~str_remove(., "_raw"))
+  rename_all(~str_remove(., "_raw")) %>% 
+  relocate(address_clean, city_clean, state_clean, .before = zip_clean)
 ```
+
+## Conclude
 
 ```{r clean_glimpse}
 glimpse(sample_n(utc, 50))
@@ -717,10 +835,10 @@ glimpse(sample_n(utc, 50))
 
 1. There are `r comma(nrow(utc))` records in the database.
 1. There are `r comma(sum(utc$dupe_flag))` duplicate records in the database.
-1. The range and distribution of `amount` and `date` seem reasonable.
+1. The range and distribution of `tran_amt` and `tran_date` seem reasonable.
 1. There are `r comma(sum(utc$na_flag))` records missing key variables.
 1. Consistency in geographic data has been improved with `campfin::normal_*()`.
-1. The 4-digit `year` variable has been created with `lubridate::year()`.
+1. The 4-digit `tran_year` variable has been created with `lubridate::year()`.
 
 ## Export
 
@@ -728,11 +846,9 @@ Now the file can be saved on disk for upload to the Accountability server.
 
 ```{r clean_dir}
 clean_dir <- dir_create(here("ut", "contribs", "data", "clean"))
-clean_path <- path(clean_dir, "ut_contribs_clean.csv")
+clean_path <- path(clean_dir, "ut_contribs_2000-20210827.csv")
 write_csv(utc, clean_path, na = "")
 (clean_size <- file_size(clean_path))
-file_encoding(clean_path) %>% 
-  mutate(across(path, path.abbrev))
 ```
 
 ## Upload
@@ -754,26 +870,4 @@ if (!object_exists(aws_path, "publicaccountability")) {
 aws_head <- head_object(aws_path, "publicaccountability")
 (aws_size <- as_fs_bytes(attr(aws_head, "content-length")))
 unname(aws_size == clean_size)
-```
-
-## Dictionary
-
-The following table describes the variables in our final exported file:
-
-```{r dict_make, echo=FALSE}
-dict_raw <- tibble(
-  var = md_code(names(utc)),
-  type = md_code(map_chr(utc, typeof)),
-  def = c(
-    ""
-  )
-)
-```
-
-```{r dict_md, echo=FALSE}
-(dict_md <- kable(
-  x = dict_raw,
-  format = "markdown",
-  col.names = c("Column", "Type", "Definition")
-))
 ```
