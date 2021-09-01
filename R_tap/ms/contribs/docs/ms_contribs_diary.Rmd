@@ -164,7 +164,7 @@ mail, email or fax prior to the applicable reporting deadline.
 ## Download
 
 ```{r raw_dir}
-raw_dir <- dir_create(here("ms", "contrib", "data", "raw"))
+raw_dir <- dir_create(here("ms", "contribs", "data", "raw"))
 raw_json <- path(raw_dir, "ms_contribs.json")
 ```
 
