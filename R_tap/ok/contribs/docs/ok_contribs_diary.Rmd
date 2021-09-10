@@ -77,15 +77,14 @@ if (!require("pacman")) {
 pacman::p_load(
   tidyverse, # data manipulation
   lubridate, # datetime strings
-  textreadr, # read doc files
   gluedown, # printing markdown
   janitor, # clean data frames
   campfin, # custom irw tools
   aws.s3, # aws cloud storage
   refinr, # cluster & merge
-  readxl, # read excel files
   scales, # format strings
   knitr, # knit documents
+  vroom, # fast reading
   rvest, # scrape html
   glue, # code strings
   here, # project paths
@@ -112,650 +111,130 @@ here::i_am("ok/contribs/docs/ok_contribs_diary.Rmd")
 
 ## Data
 
-Oklahoma contributions can be downloaded as a ZIP archive from the
-[Oklahoma Ethics Commission's Campaign Reporting System][oec]. This website
-providers uses with the ability to get all campaign finance data.
+The [Oklahoma Ethics Commission][oec] provides a [data download page][ddp] where
+users can download campaign finance records by year.
 
-> #### Welcome to the Oklahoma Ethics Commission's Public Disclosure System. 
->
-> In accordance to the Open Records Act, Section 24A.1 et seq. of Title 51 of
-the Oklahoma Statutes you will be able to search and retrieve reports and data
-filed by registered candidate and non-candidate committees in the state of
-Oklahoma.
+> ### Data Download
 > 
-> This system is designed to provide accurate and timely information to the
-public.
+> This page provides comma separated value (CSV) downloads of contribution,
+loan, and expenditure data for each reporting year in a zipped file format.
+These files can be downloaded and imported into other applications (Microsoft
+Excel, Microsoft Access, etc.)
 >
-> You can search for data by the following means:
->
-> * Statistical Information
-> * Advanced Contributor Searches
-> * Advanced Expenditure Search
-> * Search Paper Reports (all or specific)
-> * Download Raw Data (available after secure login)
-> * Candidate Information
-> * Non-Candidate Committee Information
-> * Position, District, Office Number
-> * Campaign Fund Balances
+> This data is extracted from the state of Oklahoma database as it existed as of
+9/9/2021  12:08 AM
 
-The [Helpful Hints][hh] page provides information on the type of data available
-for bulk download.
+> ### Downloading Contribution and Expenditure Data
+> 
+> You can access the Campaign Finance Data Download page to download
+contribution and expenditure data for import into other applications such as
+Microsoft Excel or Access. A weekly batch process is run that captures the
+year-to-date information for the current year. The data is available for each
+calendar year. The file is downloaded in CSV format.
 
-> #### Who can use the public disclosure system?
-> Everyone has access to the public disclosure system, the only secured access
-point is the downloadable raw data option. This option provides an entire
-database dump in comma separated value (`.csv`) or tab delimited (`.txt`)
-formats. This secure area is intended for use by the media and import into an
-existing database.
+The OEC also provides a [PDF file layout key][flk].
 
-> #### How quickly are filed reports available online?
-> As soon as a report is submitted online by a committee it is available online
-through the public disclosure.
+|   |Field Name     |Description                                            |
+|:--|:--------------|:------------------------------------------------------|
+|A  |RECEIPT ID     |This is the Receipt internal ID. This ID is unique.    |
+|B  |ORG ID         |Unique ID of the receiving candidate or committee.     |
+|C  |RECEIPT TYPE   |This is the Receipt Type.                              |
+|D  |RECEIPT DATE   |Receipt Date                                           |
+|E  |RECEIPT AMOUNT |Receipt Amount                                         |
+|F  |DESCRIPTION    |This is the description provided for the receipt.      |
+|G  |SOURCE TYPE    |Type of entity that is the source of the Receipt.      |
+|H  |FIRST NAME     |Source First Name                                      |
+|I  |MIDDLE NAME    |Source Middle Initial or Name if provided.             |
+|J  |LAST NAME      |Source Last Name                                       |
+|K  |SUFFIX         |Source Name Suffix                                     |
+|L  |SPOUSE NAME    |Source Spouse Name                                     |
+|M  |ADDRESS 1      |Source , PO Box, or other directional information      |
+|N  |ADDRESS 2      |Source Suite/Apartment number                          |
+|O  |CITY           |Source City                                            |
+|P  |STATE          |Source State                                           |
+|Q  |ZIP            |Source  Zip Code                                       |
+|R  |FILED DATE     |Receipt Filed Date                                     |
+|S  |COMMITTEE TYPE |Indicates Type of receiving committee                  |
+|T  |COMMITTEE NAME |This is the name of the receiving committee.           |
+|U  |CANDIDATE NAME |This is the name of the receiving candidate            |
+|V  |AMENDED        |Y/N indicator to show if an amendment was filed...     |
+|W  |EMPLOYER       |Source's employer...                                   |
+|X  |OCCUPATION     |The Source's occupation... used for Individual donors. |
 
-The OEC also provides two files providing table descriptions and relationships
-between the available tables.
-
-```{r about_relate}
-relate_xls <- here("ok", "contribs", "data", "relations_db.xls")
-if (!file_exists(relate_xls)) {
-  relate_get <- GET(
-    url = "https://www.ok.gov/ethics/public/dfile.php",
-    query = list(action = "relation"),
-    write_disk(relate_xls),
-    progress("down")
-  )
-}
-relate <- read_excel(relate_xls)
-```
-
-```{r about_desc}
-desc_doc <- here("ok", "contribs", "data", "descriptions.doc")
-if (!file_exists(desc_doc)) {
-  desc_get <- GET(
-    url = "https://www.ok.gov/ethics/public/dfile.php",
-    query = list(action = "relation"),
-    write_disk(desc_doc),
-    progress("down")
-  )
-}
-desc <- read_doc(desc_doc)
-```
-
-[oec]: https://pay.apps.ok.gov/ethics/crs/index.php
-[hh]: https://apps.ok.gov/ethics/public/helpful_hints.php
+[oec]: https://guardian.ok.gov/PublicSite/Homepage.aspx#
+[ddp]: https://guardian.ok.gov/PublicSite/DataDownload.aspx
+[flk]: https://guardian.ok.gov/PublicSite/Resources/PublicDocuments/OKReceiptsAndTransfersInFileLayout.pdf
 
 ## Download
 
-The [Raw Data Download][rdd] page provides links to download the bulk data as a
-single archive containing comma-separated text files. This `ethicscsvfile.zip`
-archive file can be downloaded locally if it does not exist or is more than a
-day old.
+The annual ZIP archives provided by OEC have unique URLs and can be downloaded.
 
 ```{r raw_dir}
-raw_head <- HEAD(
-  url = "https://www.ok.gov/ethics/public/dfile.php",
-  query = list(action = "csv"),
-)
-raw_disp <- headers(raw_head)[["content-disposition"]]
+ok_url <- "https://guardian.ok.gov/PublicSite/Docs/BulkDataDownloads/"
+ok_name <- glue("{2014:2021}_ContributionLoanExtract.csv.zip")
+raw_url <- str_c(ok_url, ok_name)
 raw_dir <- dir_create(here("ok", "contribs", "data", "raw"))
-raw_zip <- path(raw_dir, str_extract(raw_disp, "(?<=\\=)(.*)$"))
+raw_zip <- path(raw_dir, basename(raw_url))
 ```
 
-```{r file_age}
-file_age <- function(...) {
-  finfo <- file.info(...)
-  lubridate::as.period(Sys.time() - finfo$mtime)
-}
+```{r echo=FALSE}
+md_order(md_code(raw_url))
 ```
 
 ```{r raw_download}
-if (!file_exists(raw_zip) || hour(file_age(raw_zip)) > 24) {
-  raw_get <- GET(
-    url = "https://www.ok.gov/ethics/public/dfile.php",
-    query = list(action = "csv"),
-    write_disk(raw_zip, overwrite = TRUE),
-    progress("down")
-  )
+if (!all(file_exists(raw_zip))) {
+  download.file(raw_url, raw_zip)
 }
 ```
 
-[rdd]: https://apps.ok.gov/ethics/public/login.php
-
-### Unzip
-
-The `ethicstabfile.zip` file is an archive containing 48 text files.
-
-```{r zip_list, echo=FALSE}
-as_tibble(unzip(raw_zip, list = TRUE))
+```{r echo=FALSE}
+file_info(raw_zip) %>% 
+  select(path, size, modification_time) %>% 
+  mutate(across(1, basename))
 ```
 
-```{r zip_unzip}
-raw_csv <- unzip(raw_zip, exdir = raw_dir)
+```{r raw_unzip, eval=FALSE}
+raw_csv <- map_chr(raw_zip, unzip, exdir = raw_dir)
+```
+
+```{r echo=FALSE}
+raw_csv <- path_ext_remove(raw_zip)
 ```
 
 ## Read
 
-The data of interest is spread across a number of different files than can be
-joined along their respective `*_id` variables. The `transaction.csv` contains
-the list of contributions and expenses, and data on those transactions is spread
-across other tables.
-
-The relationship between these files is described in the `relations_db.xls`
-Excel file. Descriptions for each of these files is provided int the
-`descriptions.doc` Word file.
-
-In general, there are three _types_ of files that need to be read and joined together
-
-1. All transactions
-    * `transaction.csv`
-1. Contributor information
-    * `contributor.csv`
-    * `cont_type.csv`
-    * `individual_cont.csv`
-    * `business_cont.csv`
-    * `committee_cont.csv`
-    * `vendor_cont.csv`
-1. Recipient information
-    * `so1.csv`
-    * `so2.csv`
-    * `party.csv`
-    * `district.csv`
-    * `office.csv`
-    * `affiliation.csv`
-    * `report.csv`
-    * `lump_fund.csv`
-    * `surplus.csv`
-    * `refund.csv`
-
-They will each be read as data frames using `read_csv()`. All files contain an
-erroneous trailing column in the header resulting in an empty column that will
-be removed. All variable names will be made "clean" (lowercase and snake_case)
-using `make_clean_names()`. We can create a function that will let us easily
-apply these steps to each file.
-
-```{r read_ok}
-read_okc <- function(name, dir = here("ok", "contribs", "data", "raw"), ...) {
-  # find path to file name
-  ok_path <- file.path(dir, name)
-  # readr first line of file
-  ok_head <- readLines(ok_path, n = 1)
-  # split into vector of col names
-  ok_names <- strsplit(ok_head, split = ",")[[1]]
-  # make non-empty values lowercase
-  ok_names <- tolower(ok_names[nzchar(ok_names)])
-  # read file with new col names
-  readr::read_csv(ok_path, skip = 1, col_names = ok_names, ...)
-}
-```
-
-### Transactions
-
-> Holds all the contribution and expenditure transactions. Has the transaction
-date, amount, the contributor id and report number (report_num) that it ties
-back to in the report table.
-
-```{r read_transaction}
-transaction <- read_okc(
-  name = "transaction.csv",
-  col_types = cols(
-    trans_index = col_integer(),
-    transaction_date = col_date("%d-%b-%y"),
-    contributor_id = col_integer(),
-    trans_amount = col_double(),
-    rep_num = col_integer()
-  )
-)
-```
-
-### Contributors
-
-> Holds address, phone and type of any contributor using [`contributor_id`] as
-its identifier in other tables.
-
-```{r read_contributor}
-contributor <- read_okc(
-  name = "contributor.csv",
+```{r raw_read}
+okc <- read_delim(
+  file = raw_csv,
+  delim = ",",
+  escape_backslash = FALSE,
+  escape_double = TRUE,
   col_types = cols(
     .default = col_character(),
-    contributor_id = col_integer(),
-    type = col_integer()
+    `Receipt ID` = col_integer(),
+    `Org ID` = col_integer(),
+    `Receipt Amount` = col_double(),
+    `Receipt Date` = col_date_mdy(),
+    `Filed Date` = col_date_mdy()
   )
 )
 ```
 
-> Holds the different contributor types available (Individual, Business, Committee, Vendor)
-
-```{r read_cont_type}
-cont_type <- read_okc(
-  name = "cont_type.csv",
-  col_types = cols(
-    cont_type = col_integer(),
-    cont_desc = col_character()
-  )
-)
+```{r raw_clean}
+okc <- okc %>% 
+  clean_names(case = "snake") %>% 
+  mutate(across(amended, function(x) x == "Y"))
 ```
 
-#### Individual Contributors
-
-> Holds information relating to any individual contributor. Name, employer and occupation. Contributor id is the key that goes back to the contributor table and into either the transaction table for a transaction list or contributor aggregate table for tie ins to the `ethics_num` (committee) with aggregate totals.
-
-```{r read_individual_cont}
-individual_cont <- read_okc(
-  name = "individual_cont.csv",
-  col_types = cols(
-    contributor_id = col_integer(),
-    cont_fname = col_character(),
-    cont_mname = col_character(),
-    cont_lname = col_character(),
-    employer = col_character(),
-    occupation = col_character()
-  )
-)
-```
-
-#### Business Contributors
-
-> Holds the business name (`cont_name`) and business activity of a business
-contributor. Contributor id is the key that goes back to the contributor table
-and into either the transaction table for a transaction list or contributor
-aggregate table for tie ins to the `ethics_num` (committee) with aggregate
-totals.
-
-```{r read_business_cont}
-business_cont <- read_okc(
-  name = "business_cont.csv",
-  col_types = cols(
-    cont_id = col_double(),
-    cont_name = col_character(),
-    business_activity = col_character()
-  )
-)
-```
-
-#### Committee Contributors
-
-> Holds the principal interest, contributor committee name and contributor FEC
-number and committees ethics number for any committee contributors
-(`contributor_id`). Contributor id is the key that goes back to the contributor
-table and into either the transaction table for a transaction list or
-contributor aggregate table for tie ins to the ethics_num (committee) with
-aggregate totals.
-
-```{r read_committee_cont}
-committee_cont <- read_okc(
-  name = "committee_cont.csv",
-  col_types = cols(
-    principal_interest = col_character(),
-    id = col_integer(),
-    ethics_num = col_integer(),
-    committee_name = col_character(),
-    cont_fec = col_character()
-  )
-)
-```
-
-#### Vendor Contributors
-
-> Holds the Vendor Contributor name for any expenditure transaction
-
-```{r read_vendor_cont}
-vendor_cont <- read_okc(
-  name = "vendor_cont.csv",
-  col_types = cols(
-    cont_id = col_integer(),
-    cont_name = col_character()
-  )
-)
-```
-
-### Recipients
-
-The information on the recipients of each transaction are held in other
-databases.
-
-#### Statement of Organization
-
-The "SO-1" form applies to committees formed to support a political candidate.
-
-```{r read_so1}
-so1 <- read_okc(
-  name = "so1.csv",
-  col_types = cols(
-    stricken_withdrawn = col_logical(),
-    organization_date = col_date("%m/%d/%Y"),
-    stmt_of_intent = col_date("%m/%d/%Y"),
-    stricken_withdrawn_2 = col_date("%m/%d/%Y")
-  )
-)
-```
-
-The "SO-2" form applies to committees formed to support non-candidate issues.
-
-```{r read_so2}
-so2 <- read_okc(
-  name = "so2.csv",
-  col_types = cols(
-    .default = col_character(),
-    ethics_num = col_integer(),
-    rep_num = col_integer(),
-    affiliation_id = col_integer(),
-    organization_date = col_date("%m/%d/%Y")
-  )
-)
-```
-
-#### Parties
-
-> Has the different party affiliation types
-
-```{r read_party}
-party <- read_okc(
-  name = "party.csv",
-  col_types = cols(
-    viewable = col_logical(),
-    party_id = col_integer(),
-    party_desc = col_character()
-  )
-)
-```
-
-#### Offices
-
-> Description of office types (mainly for elections)
-
-```{r read_office}
-office <- read_okc(
-  name = "office.csv",
-  col_types = cols(
-    id = col_integer(),
-    office_desc = col_character()
-  )
-)
-```
-
-#### Districts
-
-> List of the districts for elections
-
-```{r read_district}
-district <- read_okc(
-  name = "district.csv",
-  col_types = cols(
-    district_id = col_integer(),
-    district_desc = col_character()
-  )
-)
-```
-
-#### Candidates
-
-> Holds the candidate name and birthdate tied to the specific ethics_num
-(committee)
-
-```{r read_candidate}
-candidate <- read_okc(
-  name = "candidate.csv",
-  col_types = cols(
-    .default = col_character(),
-    ethics_num = col_integer(),
-    birthdate = col_date("%Y%m%d")
-  )
-)
-```
-
-#### Lump Funds
-
-> Holds lump fund information for the respective report_num
-
-```{r read_lump_fund}
-lump_fund <- read_okc(
-  name = "lump_fund.csv",
-  col_types = cols(
-    rep_num = col_integer(),
-    lump_amount = col_double(),
-    lump_desc = col_character(),
-    lump_code = col_integer(),
-    lump_persons = col_integer(),
-    lump_id = col_integer(),
-    lump_date = col_date("%d-%b-%y"),
-  )
-)
-```
-
-### Report
-
-> Holds all the `report_num` for all filed reports in the system from the SO1,
-SO2s to all the C1R, C3R, C4R, and C5R reports. C6R reports are stored in the
-c6r_report table. Contains the date the report was submitted, the `ethics_num`
-(committee) that it ties to, period id, the report type, signature field, admin
-entered (means the report was filed by administrator), the amended reference (if
-null, is the latest report, if not then that report was amended to the
-`report_num` that is displayed in that field.), the final flag determines if
-that was the final report they will be filing and `supp_year` is just a field on
-the form to show the year.
-
-```{r read_report}
-report <- read_okc(
-  name = "report.csv",
-  col_types = cols(
-    ethics_num = col_integer(),
-    rep_num = col_integer(),
-    period_id = col_integer(),
-    report_type = col_integer(),
-    signature = col_character(),
-    submitted_date = col_character(),
-    admin_entered = col_integer(),
-    amended_reference = col_integer(),
-    final = col_logical(),
-    supp_year = col_integer()
-  )
-)
-```
-
-> Description of each type of report available (SO1, SO2, C1R, C3R, C4R, C5R,
-C6R)
-
-```{r read_rep_type}
-report_type <- read_okc(
-  name = "report_type.csv",
-  col_types = cols(
-    report_type = col_integer(),
-    report_description = col_character()
-  )
-)
-```
-
-## Join
-
-Our primary interest is when a transaction was made, for how much, from whom,
-and to whom. The transaction database contains the when and how much, but uses
-keys to identify the who.
-
-The contributor of a transaction (giving money) is identified by the `cont_id`
-variable.
-
-The recipient of a transaction (getting money) are the ones filing the report on
-which each transaction appears, identifying by the `rep_num` variable. In the
-database of reports, the filer of each report is identified with their
-`ethics_id`.
-
-By joining each transaction with the filer of the respective report, we can
-identify the filer.
-
-```{r join_recs}
-okc <- left_join(
-  x = transaction,
-  y = report %>% select(rep_num, ethics_num), 
-  by = "rep_num"
-)
-```
-
-To improve the searchability of this database of transactions, we will add the
-name and location of each contributor and recipient.
-
-### Contributors
-
-First, we will join the `contributor` table, which contains geographic data on
-each contributor (city, state, zip), which the full tables of each contributor
-type.
-
-There are four types of contributors, each identified with different
-`cont_*name` variables:
-
-1. Individuals with `cont_fname`, `cont_mname`, and `cont_lname`.
-    * With `cont_employer` and `cont_occupation`.
-2. Businesses with a `cont_name`.
-    * With `business_activity` describing the business type.
-3. Committees with a `cont_name`.
-    * with `cont_interest` and `ethics_num`.
-4. Vendors with a `committee_name`.
-    * with an OEC `ethics_num` ID.
-
-It's important to note that the transactions database contains both
-contributions _and_ expenditures reported by the filer. For expenditures, the
-"contributor" is actually the vendor recipient of the money. These vendor
-transactions will be filtered out.
-
-```{r echo=FALSE}
-cont_type %>% 
-  mutate(
-    table_name = paste0(tolower(cont_desc), "_cont"),
-    file_name = md_code(paste0(table_name, ".csv")),
-    nrow = comma(map_dbl(table_name, ~nrow(get(.))))
-  ) %>% 
-  select(-table_name) %>% 
-  kable()
-```
-
-```{r join_conts, collapse=TRUE}
-all_cont <- contributor %>%
-  select(-phone, -ext) %>%  # 99% missing
-  # add the type of contribution identifying the right table
-  left_join(cont_type, by = c("type" = "cont_type")) %>% 
-  # ignore vendor names from "any expenditure transaction"
-  filter(contributor_id %out% vendor_cont$cont_id)  %>% 
-  # add the names and details from each of the 3 types
-  left_join(individual_cont, by = "contributor_id") %>% 
-  left_join(business_cont, by = c("contributor_id" = "cont_id")) %>% 
-  left_join(committee_cont, by = c("contributor_id" = "id")) %>% 
-  select(-ethics_num, -cont_fec)
-```
-
-```{r}
-comma(nrow(all_cont))
-```
-
-There appears to be more total contributors than listed in the `contributor`
-database. There are `r nrow(individual_cont) - nrow(contributor)` more
-_individual_ contributors alone than there are total rows in the `contributor`
-database.
-
-```{r cont_miss, collapse=TRUE}
-nrow(individual_cont) - nrow(contributor)
-mean(individual_cont$contributor_id %in% contributor$contributor_id)
-```
-
-### Recipients
-
-When a committee is formed to receive contributions, the file a "Statement of
-Organization" report. Committees formed to receive funds on behalf of a
-candidate file an "SO-1" form, and non-candidate organizations file an "SO-2"
-form.
-
-These forms contain a lot of information, but we will extract only the
-geographic information of each, so that we can better search the contributions
-and expenditures in the transactions database.
-
-First, we will create a new table of candidate committee information from the
-SO-1 database.
-
-```{r can_recs}
-cand_recs <- so1 %>%
-  left_join(candidate, by = "ethics_num") %>% 
-  left_join(party, by = c("party_num" = "party_id")) %>% 
-  left_join(office, by = c("office_num" = "id")) %>% 
-  rename_with(
-    ~paste("com", ., sep = "_"),
-    c(street, city, state, zip)
-  ) %>% 
-  rename(com_name = comname) %>% 
-  # multiple entries per ethics id, take only the first
-  distinct() %>% 
-  group_by(ethics_num) %>% 
-  slice(1) %>% 
-  ungroup() %>% 
-  select(ethics_num, com_name, starts_with("com_"), office_desc, party_desc)
-```
-
-The same can be done with non-candidate committee recipients from SO-2 filings.
-
-```{r com_recs}
-comm_recs <- so2 %>% 
-  rename(com_name = comname) %>% 
-  rename_with(
-    ~paste("com", ., sep = "_"),
-    c(street, city, state, zip)
-  ) %>%
-  select(ethics_num, starts_with("com_")) %>%
-  distinct() %>% 
-  group_by(ethics_num) %>% 
-  slice(1) %>% 
-  ungroup()
-```
-
-Combine the two types of recipients into a single table that can be joined to
-the transactions database along the `ethics_id` of each transaction's report
-filer.
-
-```{r bind_recs, collapse=TRUE}
-all_rec <- bind_rows(cand_recs, comm_recs)
-dim(all_rec)
-n_distinct(all_rec$ethics_num) == nrow(all_rec)
-```
-
-There are `r nrow(all_rec)` unique committees that have filed SO-1 or
-S0-2 reports, each identified by their unique `ethics_id` variable.
-
-### Total Join
-
-With our new tables of unique contributors and unique recipients, we can better
-identify the parties to each transaction. We will join all three tables by their
-respective `*_id` variables.
-
-```{r}
-okc <- transaction %>% 
-  inner_join(report %>% select(rep_num, ethics_num), by = "rep_num") %>% 
-  inner_join(all_cont, by = "contributor_id") %>% 
-  inner_join(all_rec, by = "ethics_num")
-```
-
-```{r include=FALSE}
-rm(
-  all_contributors,
-  all_recipients,
-  candidates,
-  parties,
-  offices,
-  contributors,
-  individual_conts,
-  business_conts,
-  vendor_conts,
-  committee_conts,
-  committee_recs,
-  transactions,
-  so1, 
-  so2,
-  lump_funds,
-  reports,
-  cont_types,
-  districts
-)
+```{r raw_check}
+count(okc, amended)
+prop_distinct(na.omit(okc$receipt_id))
 ```
 
 ## Explore
 
 There are `r comma(nrow(okc))` rows of `r ncol(okc)` columns. Each record
-represents a single Contributions...
+represents a single contribution made from an individual to a committee.
 
 ```{r glimpse}
 glimpse(okc)
@@ -770,18 +249,41 @@ Columns vary in their degree of missing values.
 col_stats(okc, count_na)
 ```
 
-We can flag any record missing a key variable needed to identify a transaction.
+There are two columns for the recipient name; one for candidates and one for
+committees. Neither column is missing any values without a corresponding value
+in other column.
 
-```{r na_flag}
-key_vars <- c("date", "last", "amount", "committee")
-okc <- flag_na(okc, all_of(key_vars))
-sum(okc$na_flag)
+```{r}
+okc %>% 
+  group_by(committee_type) %>% 
+  summarise(
+    no_cand_name = prop_na(candidate_name),
+    no_comm_name = prop_na(committee_name)
+  )
 ```
 
-```{r na_view}
-okc %>% 
-  filter(na_flag) %>% 
-  select(all_of(key_vars))
+Of the other key variables, only a few hundred `last_name` values are missing.
+
+```{r key_vars}
+key_vars <- c(
+  "receipt_date", "last_name", "receipt_amount", 
+  "candidate_name", "committee_name"
+)
+```
+
+```{r cand_comm_name}
+prop_na(okc$candidate_name[!is.na(okc$committee_name)])
+prop_na(okc$committee_name[!is.na(okc$candidate_name)])
+```
+
+We can flag any record missing a key variable needed to identify a transaction.
+
+```{r flag_na}
+count_na(okc$receipt_date)
+count_na(okc$receipt_amount)
+count_na(okc$last_name)
+okc <- mutate(okc, na_flag = is.na(last_name))
+sum(okc$na_flag)
 ```
 
 ### Duplicates
@@ -789,14 +291,41 @@ okc %>%
 We can also flag any record completely duplicated across every column.
 
 ```{r dupe_flag}
-okc <- flag_dupes(okc, -id)
-sum(okc$dupe_flag)
+okc <- flag_dupes(okc, -receipt_id)
+mean(okc$dupe_flag)
 ```
 
 ```{r dupe_view}
 okc %>% 
   filter(dupe_flag) %>% 
-  select(all_of(key_vars))
+  select(receipt_id, all_of(key_vars))
+```
+
+A huge proportion of contributions are duplicates because more than half of all
+contributions have the `last_name` value of "NON-ITEMIZED CONTRIBUTOR".
+
+```{r lname_count}
+count(okc, last_name, sort = TRUE)
+```
+
+These non-itemized contributions are missing a `receipt_source_type` value.
+
+```{r no_source_type}
+unique(okc$last_name[is.na(okc$receipt_source_type)])
+```
+
+For the sake of flagging duplicates, we will ignore these values.
+
+```{r dupe_remove}
+okc$dupe_flag[is.na(okc$receipt_source_type)] <- FALSE
+```
+
+```{r dupe_review}
+mean(okc$dupe_flag)
+okc %>% 
+  filter(dupe_flag) %>% 
+  select(receipt_id, all_of(key_vars)) %>% 
+  arrange(receipt_date, last_name)
 ```
 
 ### Categorical
@@ -805,27 +334,24 @@ okc %>%
 col_stats(okc, n_distinct)
 ```
 
-```{r distinct_plots, echo=FALSE}
-explore_plot(okc, type)
-```
-
 ### Amounts
 
 ```{r amount_summary}
-summary(okc$amount)
-mean(okc$amount <= 0)
+summary(okc$receipt_amount)
+mean(okc$receipt_amount <= 0)
 ```
 
 These are the records with the minimum and maximum amounts.
 
 ```{r amount_minmax}
-glimpse(okc[c(which.max(okc$amount), which.min(okc$amount)), ])
+glimpse(okc[c(which.max(okc$receipt_amount), which.min(okc$receipt_amount)), ])
 ```
 
 ```{r hist_amount, echo=FALSE}
 okc %>%
-  ggplot(aes(amount)) +
-  geom_histogram(fill = dark2["purple"]) +
+  filter(receipt_amount >= 1) %>% 
+  ggplot(aes(receipt_amount)) +
+  geom_histogram(fill = dark2["purple"], bins = 20) +
   scale_y_continuous(labels = comma) +
   scale_x_continuous(
     breaks = c(1 %o% 10^(0:6)),
@@ -840,26 +366,34 @@ okc %>%
   )
 ```
 
+Negative `receipt_amount` values are for refunds and offsets.
+
+```{r negative_amount}
+okc %>% 
+  filter(receipt_amount < 0) %>% 
+  count(description, sort = TRUE)
+```
+
 ### Dates
 
-We can add the calendar year from `date` with `lubridate::year()`
+We can add the calendar year from `receipt_date` with `lubridate::year()`
 
 ```{r date_year}
-okc <- mutate(okc, year = year(date))
+okc <- mutate(okc, receipt_year = year(receipt_date))
 ```
 
 ```{r date_range}
-min(okc$date)
-sum(okc$year < 2000)
-max(okc$date)
-sum(okc$date > today())
+min(okc$receipt_date)
+sum(okc$receipt_year < 2000)
+max(okc$receipt_date)
+sum(okc$receipt_date > today())
 ```
 
 ```{r bar_year, echo=FALSE}
 okc %>% 
-  count(year) %>% 
-  mutate(even = is_even(year)) %>% 
-  ggplot(aes(x = year, y = n)) +
+  count(receipt_year) %>% 
+  mutate(even = is_even(receipt_year)) %>% 
+  ggplot(aes(x = receipt_year, y = n)) +
   geom_col(aes(fill = even)) + 
   scale_fill_brewer(palette = "Dark2") +
   scale_y_continuous(labels = comma) +
@@ -888,7 +422,8 @@ will force consistence case, remove punctuation, and abbreviate official
 USPS suffixes.
 
 ```{r address_norm}
-okc <- okc %>% 
+addr_norm <- okc %>%
+  distinct(address_1, address_2) %>% 
   unite(
     col = address_full,
     starts_with("address"),
@@ -907,10 +442,11 @@ okc <- okc %>%
 ```
 
 ```{r address_view}
-okc %>% 
-  select(contains("address")) %>% 
-  distinct() %>% 
-  sample_n(10)
+sample_n(addr_norm, 10)
+```
+
+```{r address_join}
+okc <- left_join(okc, addr_norm, by = c("address_1", "address_2"))
 ```
 
 ### ZIP
@@ -939,33 +475,12 @@ progress_table(
 
 ### State
 
-Valid two digit state abbreviations can be made using the 
-`campfin::normal_state()` function.
+The only invalid `state` values are either missing or Canadian provinces.
 
-```{r state_norm}
-okc <- okc %>% 
-  mutate(
-    state_norm = normal_state(
-      state = state,
-      abbreviate = TRUE,
-      na_rep = TRUE,
-      valid = valid_state
-    )
-  )
-```
-
-```{r state_view}
+```{r state_count}
 okc %>% 
-  filter(state != state_norm) %>% 
-  count(state, state_norm, sort = TRUE)
-```
-
-```{r state_progress}
-progress_table(
-  okc$state,
-  okc$state_norm,
-  compare = valid_state
-)
+  count(state, sort = TRUE) %>% 
+  filter(state %out% valid_state)
 ```
 
 ### City
@@ -981,7 +496,7 @@ removing punctuation, but _expanding_ USPS abbreviations. We can also remove
 
 ```{r city_norm}
 norm_city <- okc %>% 
-  distinct(city, state_norm, zip_norm) %>% 
+  distinct(city, state, zip_norm) %>% 
   mutate(
     city_norm = normal_city(
       city = city, 
@@ -1006,7 +521,7 @@ norm_city <- norm_city %>%
   left_join(
     y = zipcodes,
     by = c(
-      "state_norm" = "state",
+      "state",
       "zip_norm" = "zip"
     )
   ) %>% 
@@ -1032,8 +547,8 @@ okc <- left_join(
   x = okc,
   y = norm_city,
   by = c(
-    "city_raw", 
-    "state_norm", 
+    "city" = "city_raw", 
+    "state", 
     "zip_norm"
   )
 )
@@ -1060,7 +575,7 @@ good_refine <- okc %>%
     y = zipcodes,
     by = c(
       "city_refine" = "city",
-      "state_norm" = "state",
+      "state",
       "zip_norm" = "zip"
     )
   )
@@ -1069,7 +584,7 @@ good_refine <- okc %>%
 ```{r city_count, echo=FALSE}
 good_refine %>%
   count(
-    state_norm, 
+    state, 
     zip_norm, 
     city_swap, 
     city_refine,
@@ -1081,7 +596,7 @@ Then we can join the refined values back to the database.
 
 ```{r city_join}
 okc <- okc %>% 
-  left_join(good_refine) %>% 
+  left_join(good_refine, by = names(.)) %>% 
   mutate(city_refine = coalesce(city_refine, city_swap))
 ```
 
@@ -1093,19 +608,21 @@ to be valid and reduce the total distinct values by correcting misspellings.
 ```{r city_progress, echo=FALSE}
 many_city <- c(valid_city, extra_city)
 progress <- progress_table(
-  str_to_upper(okc$city_raw),
+  str_to_upper(okc$city),
   okc$city_norm,
   okc$city_swap,
   okc$city_refine,
   compare = many_city
 ) %>% mutate(stage = as_factor(stage))
-kable(progress, digits = 3)
+progress %>%
+  mutate(across(1, md_code)) %>% 
+  kable(digits = 3)
 ```
 
 You can see how the percentage of valid values increased with each stage.
 
 ```{r bar_progress, echo=FALSE}
-raw_in <- percent(prop_in(okc$city_raw, valid_city))
+raw_in <- percent(prop_in(okc$city, valid_city))
 progress %>% 
   ggplot(aes(x = stage, y = prop_in)) +
   geom_hline(yintercept = 0.99) +
@@ -1148,7 +665,7 @@ progress %>%
   )
 ```
 
-## Conclude
+### Reorganize
 
 Before exporting, we can remove the intermediary normalization columns and
 rename all added variables with the `_clean` suffix.
@@ -1161,19 +678,22 @@ okc <- okc %>%
     city_clean = city_refine
   ) %>% 
   rename_all(~str_replace(., "_norm", "_clean")) %>% 
-  rename_all(~str_remove(., "_raw"))
+  rename_all(~str_remove(., "_raw")) %>% 
+  relocate(address_clean, city_clean, zip_clean, .after = last_col())
 ```
 
 ```{r clean_glimpse}
 glimpse(sample_n(okc, 50))
 ```
 
+## Conclude
+
 1. There are `r comma(nrow(okc))` records in the database.
 1. There are `r comma(sum(okc$dupe_flag))` duplicate records in the database.
-1. The range and distribution of `amount` and `date` seem reasonable.
+1. Checked the range and distribution of `receipt_amount` and `receipt_date`.
 1. There are `r comma(sum(okc$na_flag))` records missing key variables.
 1. Consistency in geographic data has been improved with `campfin::normal_*()`.
-1. The 4-digit `year` variable has been created with `lubridate::year()`.
+1. The 4-digit `receipt_year` variable has been created.
 
 ## Export
 
@@ -1181,11 +701,9 @@ Now the file can be saved on disk for upload to the Accountability server.
 
 ```{r clean_dir}
 clean_dir <- dir_create(here("ok", "contribs", "data", "clean"))
-clean_path <- path(clean_dir, "ok_contribs_clean.csv")
+clean_path <- path(clean_dir, "ok_contribs_2015-20210910.csv")
 write_csv(okc, clean_path, na = "")
 (clean_size <- file_size(clean_path))
-file_encoding(clean_path) %>% 
-  mutate(across(path, path.abbrev))
 ```
 
 ## Upload
@@ -1207,26 +725,4 @@ if (!object_exists(aws_path, "publicaccountability")) {
 aws_head <- head_object(aws_path, "publicaccountability")
 (aws_size <- as_fs_bytes(attr(aws_head, "content-length")))
 unname(aws_size == clean_size)
-```
-
-## Dictionary
-
-The following table describes the variables in our final exported file:
-
-```{r dict_make, echo=FALSE}
-dict_raw <- tibble(
-  var = md_code(names(okc)),
-  type = md_code(map_chr(okc, typeof)),
-  def = c(
-    ""
-  )
-)
-```
-
-```{r dict_md, echo=FALSE}
-(dict_md <- kable(
-  x = dict_raw,
-  format = "markdown",
-  col.names = c("Column", "Type", "Definition")
-))
 ```
