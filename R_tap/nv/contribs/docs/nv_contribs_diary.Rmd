@@ -321,6 +321,13 @@ with_tz(report_time, tzone = "PST")
 ```{r raw_download}
 if (!file_exists(raw_zip)) {
   download.file(raw_url, raw_zip)
+} else {
+  aws_backup <- path("IRW/raw_backup/nv", basename(raw_zip))
+  save_object(
+    object = aws_backup,
+    bucket = "publicaccountability",
+    file = raw_zip
+  )
 }
 ```
 
@@ -328,7 +335,7 @@ This raw ZIP archive has been backed up to the IRW server.
 
 ```{r}
 as_fs_bytes(object_size(
-  object = path("IRW/raw_backup/nv", basename(raw_zip)), 
+  object = aws_backup, 
   bucket = "publicaccountability"
 ))
 ```
@@ -463,24 +470,7 @@ sum(map_dbl(nv, nrow)) == total_rows
 ```
 
 ```{r raw_rename, echo=FALSE}
-nv <- map(
-  .x = nv,
-  .f = function(.data) {
-    .data %>% 
-      clean_names(case = "snake") %>% 
-      rename_with(~str_replace(., "election",     "elect")) %>% 
-      rename_with(~str_replace(., "contributor",  "ctbr")) %>% 
-      rename_with(~str_replace(., "candidate",    "cand")) %>% 
-      rename_with(~str_replace(., "contribution", "con")) %>% 
-      rename_with(~str_replace(., "jurisdiction", "jdx")) %>% 
-      rename_with(~str_replace(., "expense",      "exp")) %>% 
-      rename_with(~str_replace(., "report",       "rpt")) %>% 
-      rename_with(~str_replace(., "amount",       "amt")) %>% 
-      rename_with(~str_replace(., "group",        "grp")) %>% 
-      rename_with(~str_replace(., "name",         "nm")) %>% 
-      rename_with(~str_replace(., "date",         "dt")) 
-  } 
-)
+nv <- map(nv, clean_names)
 ```
 
 ## Join
@@ -504,12 +494,12 @@ key column in Contributions. We can combine these keys and tables.
 
 ```{r rec_cand_fix}
 rec_cands <- nv$Candidates %>% 
-  select(cand_id, first_nm, last_nm) %>% 
-  filter(cand_id %in% nv$Contributions$cand_id) %>% 
-  mutate(rec_type = "Candidate", .after = last_nm) %>% 
+  select(candidate_id, first_name, last_name) %>% 
+  filter(candidate_id %in% nv$Contributions$candidate_id) %>% 
+  mutate(rec_type = "Candidate", .after = last_name) %>% 
   unite(
-    col = rec_nm,
-    first_nm, last_nm,,
+    col = recipient_name,
+    first_name, last_name,
     sep = " ",
     remove = TRUE,
     na.rm = TRUE
@@ -518,16 +508,16 @@ rec_cands <- nv$Candidates %>%
 
 ```{r rec_groups_fix}
 rec_comms <- nv$Groups %>% 
-  filter(grp_id %in% nv$Contributions$grp_id) %>% 
-  select(grp_id, rec_nm = grp_nm, rec_type = grp_type)
+  filter(group_id %in% nv$Contributions$group_id) %>% 
+  select(group_id, recipient_name = group_name, recipient_type = group_type)
 ```
 
 ```{r con_coalesce, eval=FALSE, echo=FALSE}
 nv$Contributions <- mutate(
   .data = nv$Contributions,
-  .after = con_id,
+  .after = contribution_id,
   .keep = "unused",
-  rec_id = coalesce(cand_id, grp_id)
+  rec_id = coalesce(candidate_id, group_id)
 )
 ```
 
@@ -535,7 +525,7 @@ nv$Contributions <- mutate(
 nv$Contributions <- left_join(
   x = nv$Contributions,
   y = bind_rows(rec_cands, rec_comms),
-  by = c("cand_id", "grp_id")
+  by = c("candidate_id", "group_id")
 )
 ```
 
@@ -568,11 +558,11 @@ nvc <- nv$Contributions %>%
   relocate(ctbr_id, .before = ctbr_nm) %>% 
   mutate(
     cand_id = str_c("C", cand_id),
-    grp_id = str_c("G", grp_id),
-    rec_id = coalesce(cand_id, grp_id),
+    group_id = str_c("G", group_id),
+    rec_id = coalesce(cand_id, group_id),
     .before = rec_nm
   ) %>% 
-  select(-cand_id, -grp_id)
+  select(-cand_id, -group_id)
 ```
 
 ## Explore
