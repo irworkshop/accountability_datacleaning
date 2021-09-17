@@ -1,17 +1,27 @@
 Puerto Rico Contributions
 ================
 Kiernan Nicholls
-2020-04-14 15:02:21
+Fri Sep 17 15:54:17 2021
 
-  - [Project](#project)
-  - [Objectives](#objectives)
-  - [Packages](#packages)
-  - [Data](#data)
-  - [Import](#import)
-  - [Explore](#explore)
-  - [Wrangle](#wrangle)
-  - [Conclude](#conclude)
-  - [Export](#export)
+-   [Project](#project)
+-   [Objectives](#objectives)
+-   [Packages](#packages)
+-   [Data](#data)
+-   [Download](#download)
+-   [Read](#read)
+-   [Explore](#explore)
+    -   [Missing](#missing)
+    -   [Duplicates](#duplicates)
+    -   [Categorical](#categorical)
+    -   [Amounts](#amounts)
+    -   [Dates](#dates)
+-   [Wrangle](#wrangle)
+    -   [ZIP](#zip)
+    -   [State](#state)
+    -   [City](#city)
+-   [Conclude](#conclude)
+-   [Export](#export)
+-   [Upload](#upload)
 
 <!-- Place comments regarding knitting here -->
 
@@ -22,7 +32,7 @@ give journalists, policy professionals, activists, and the public at
 large a simple way to search across huge volumes of public data about
 people and organizations.
 
-Our goal is to standardizing public data on a few key fields by thinking
+Our goal is to standardize public data on a few key fields by thinking
 of each dataset row as a transaction. For each transaction there should
 be (at least) 3 variables:
 
@@ -50,24 +60,26 @@ The following packages are needed to collect, manipulate, visualize,
 analyze, and communicate these results. The `pacman` package will
 facilitate their installation and attachment.
 
-The IRW’s `campfin` package will also have to be installed from GitHub.
-This package contains functions custom made to help facilitate the
-processing of campaign finance data.
-
 ``` r
-if (!require("pacman")) install.packages("pacman")
-pacman::p_load_gh("irworkshop/campfin")
+if (!require("pacman")) {
+  install.packages("pacman")
+}
 pacman::p_load(
   tidyverse, # data manipulation
   lubridate, # datetime strings
-  janitor, # dataframe clean
-  refinr, # cluster and merge
+  gluedown, # printing markdown
+  janitor, # clean data frames
+  campfin, # custom irw tools
+  aws.s3, # aws cloud storage
+  refinr, # cluster & merge
   scales, # format strings
   knitr, # knit documents
-  vroom, # read files fast
-  glue, # combine strings
-  here, # relative storage
-  fs # search storage 
+  vroom, # fast reading
+  rvest, # scrape html
+  glue, # code strings
+  here, # project paths
+  httr, # http requests
+  fs # local storage 
 )
 ```
 
@@ -83,8 +95,7 @@ feature and should be run as such. The project also uses the dynamic
 
 ``` r
 # where does this document knit?
-here::here()
-#> [1] "/home/kiernan/Code/accountability_datacleaning/R_campfin"
+here::i_am("pr/contribs/docs/pr_contribs_diary.Rmd")
 ```
 
 ## Data
@@ -114,120 +125,136 @@ September 28, 2016 and last updated February 14, 2019.
 
 There are 166,000 rows and 11 columns (translated):
 
-  - `Candidate`: Name of the candidate, party or campaign committee.
-  - `Candidature`: Description of the candidate, party or campaign
+-   `Candidate`: Name of the candidate, party or campaign committee.
+-   `Candidature`: Description of the candidate, party or campaign
     committee.
-  - `Acronym`: Acronym of the political party or type of committee:
-      - “CI” = Independent Candidate
-      - “CGI” = Independent Expenditure Committee
-  - `Amount`: Amount of money contributed.
-  - `Method`: Donation form.
-  - `Donor`: Full name of the donor.
-  - `City`: City where the donor resides.
-  - `Date`: Date the donation was generated (day / month / year).
-  - `Event`: Description of the election year or event.
-  - `Zip Code`: Donor zip code.
-  - `Location 1`: Donation coordinates based on the donor’s zip code.
+-   `Acronym`: Acronym of the political party or type of committee:
+    -   “CI” = Independent Candidate
+    -   “CGI” = Independent Expenditure Committee
+-   `Amount`: Amount of money contributed.
+-   `Method`: Donation form.
+-   `Donor`: Full name of the donor.
+-   `City`: City where the donor resides.
+-   `Date`: Date the donation was generated (day / month / year).
+-   `Event`: Description of the election year or event.
+-   `Zip Code`: Donor zip code.
+-   `Location 1`: Donation coordinates based on the donor’s zip code.
 
-## Import
-
-The data can be imported from the OpenData portal as a flat text file or
-via the SODA API.
-
-### Read
+## Download
 
 ``` r
 raw_dir <- dir_create(here("pr", "contribs", "data", "raw"))
+raw_csv <- path(raw_dir, "Donaciones.csv")
 ```
 
 ``` r
-prc <- read_csv(
-  file = "https://data.oce.pr.gov/api/views/kdwd-nb6g/rows.csv",
-  skip = 1,
-  col_names = c("cand", "type", "code", "amount", "method", "donor", 
-                "city", "date", "event", "zip", "coord"),
+if (!file_exists(raw_csv)) {
+  GET(
+    url = "https://data.oce.pr.gov/api/views/kdwd-nb6g/rows.csv",
+    query = list(accessType = "DOWNLOAD"),
+    write_disk(path = tmp <- file_temp(ext = "csv")),
+    progress(type = "down")
+  )
+}
+```
+
+## Read
+
+``` r
+prc <- read_delim(
+  file = raw_csv,
+  delim = ",",
+  escape_backslash = FALSE,
+  escape_double = FALSE,
   col_types = cols(
     .default = col_character(),
-    amount = col_double(),
-    date = col_date("%d/%m/%Y")
+    Cantidad = col_double(),
+    Fecha = col_date("%d/%m/%Y")
   )
 )
 ```
 
 ``` r
-prc <- prc %>% 
-  extract(
-    col = coord,
-    into = c("lat", "long"),
-    regex = "(\\d*\\.\\d*), (-\\d*\\.\\d*)",
-    remove = TRUE,
-    convert = TRUE
-  )
+prc <- clean_names(prc, case = "snake")
+```
+
+We can also rename the columns to their English translation.
+
+``` r
+# per Google Translate
+names(prc)[1:9] <- c(
+  "candidate", # candidato
+  "candidacy", # candidatura
+  "acronym",   # siglas
+  "amount",    # cantidad
+  "method",    # metodo
+  "donor",     # donante
+  "city",      # ciudad
+  "date",      # fecha
+  "event"      # evento
+)
 ```
 
 ## Explore
 
+There are 165,617 rows of 11 columns. Each record represents a single
+contribution from an individual to a political candidate.
+
 ``` r
-head(prc)
-#> # A tibble: 6 x 12
-#>   cand         type   code  amount method    donor    city   date       event     zip     lat  long
-#>   <chr>        <chr>  <chr>  <dbl> <chr>     <chr>    <chr>  <date>     <chr>     <chr> <dbl> <dbl>
-#> 1 PARTIDO IND… Parti… PIP      200 Cheque    DAMARIS… ARECI… 2018-03-31 2018 - A… 00612  18.4 -66.7
-#> 2 PARTIDO IND… Parti… PIP      200 Transfer… ADRIAN … CAGUAS 2018-03-31 2018 - A… 00726  18.2 -66.1
-#> 3 PARTIDO IND… Parti… PIP      200 Transfer… CARLOS … SAN J… 2018-03-31 2018 - A… 00919  18.4 -66.1
-#> 4 PARTIDO IND… Parti… PIP      200 Transfer… CARLOS … SAN J… 2018-03-31 2018 - A… 00907  18.5 -66.1
-#> 5 PARTIDO IND… Parti… PIP      400 Transfer… GILBERT… SAN J… 2018-03-31 2018 - A… 00975  18.4 -66.1
-#> 6 PARTIDO IND… Parti… PIP      200 Transfer… JOSE CR… SAN S… 2018-03-31 2018 - A… 00685  18.3 -67.0
+glimpse(prc)
+#> Rows: 165,617
+#> Columns: 11
+#> $ candidate  <chr> "PARTIDO INDEPENDENTISTA PUERTORRIQUEÑO", "PARTIDO INDEPENDENTISTA PUERTORRIQUEÑO", "PARTIDO INDEPE…
+#> $ candidacy  <chr> "Partido", "Partido", "Partido", "Partido", "Partido", "Partido", "Partido", "Partido", "Partido", …
+#> $ acronym    <chr> "PIP", "PIP", "PIP", "PIP", "PIP", "PIP", "PIP", "PIP", "PIP", "PIP", "PIP", "PIP", "PPD", "PPD", "…
+#> $ amount     <dbl> 200.00, 200.00, 200.00, 200.00, 400.00, 200.00, 200.00, 200.00, 200.00, 200.00, 200.00, 200.00, 20.…
+#> $ method     <chr> "Cheque", "Transferencia Electrónica", "Transferencia Electrónica", "Transferencia Electrónica", "T…
+#> $ donor      <chr> "DAMARIS MANGUAL VELEZ", "ADRIAN GONZALEZ COSTA", "CARLOS AVILES VAZQUEZ", "CARLOS GORRIN PERALTA",…
+#> $ city       <chr> "ARECIBO", "CAGUAS", "SAN JUAN", "SAN JUAN", "SAN JUAN", "SAN SEBASTIAN", "SAN JUAN", "TRUJILLO ALT…
+#> $ date       <date> 2018-03-31, 2018-03-31, 2018-03-31, 2018-03-31, 2018-03-31, 2018-03-31, 2018-03-31, 2018-03-31, 20…
+#> $ event      <chr> "2018 - Año no eleccionario", "2018 - Año no eleccionario", "2018 - Año no eleccionario", "2018 - A…
+#> $ zip_code   <chr> "00612", "00726", "00919", "00907", "00975", "00685", "00926", "00976", "00907", "00783", "00725", …
+#> $ location_1 <chr> "(18.449732, -66.69879)", "(18.212965, -66.058033)", "(18.410462, -66.060533)", "(18.451131, -66.07…
 tail(prc)
-#> # A tibble: 6 x 12
-#>   cand       type      code  amount method  donor    city   date       event      zip     lat  long
-#>   <chr>      <chr>     <chr>  <dbl> <chr>   <chr>    <chr>  <date>     <chr>      <chr> <dbl> <dbl>
-#> 1 CARLOS LO… Alcalde … PPD     -500 Ajustes CESAR M… CAGUAS 2013-09-20 2013 - Añ… 00725  18.2 -66.0
-#> 2 RAMON LUI… Senador … PPD     1000 Cheque  PRAXAIR… Otra … 2016-02-29 2016 - Añ… 06813  NA    NA  
-#> 3 RAMON LUI… Senador … PPD     1000 Cheque  PRAXAIR… Otra … 2016-02-29 2016 - Añ… 06813  NA    NA  
-#> 4 RAMON LUI… Senador … PPD     1000 Cheque  PRAXAIR… Otra … 2016-02-29 2016 - Añ… 06813  NA    NA  
-#> 5 RAMON LUI… Senador … PPD     1000 Cheque  PRAXAIR… Otra … 2016-02-29 2016 - Añ… 06813  NA    NA  
-#> 6 RAMON LUI… Senador … PPD     1000 Cheque  PRAXAIR… Otra … 2016-02-29 2016 - Añ… 06813  NA    NA
-glimpse(sample_n(prc, 20))
-#> Rows: 20
-#> Columns: 12
-#> $ cand   <chr> "LUIS FORTUÑO BURSET", "THOMAS RIVERA SCHATZ", "RICARDO ROSSELLO NEVARES", "ALEJA…
-#> $ type   <chr> "Gobernador", "Senador por Acumulación", "Gobernador", "Gobernador", "Senador por…
-#> $ code   <chr> "PNP", "PNP", "PNP", "PPD", "PPD", "PIP", "PIP", "PNP", "PNP", "PPD", "PPD", "PIP…
-#> $ amount <dbl> 1000, 500, 125, 1000, 75, 600, 20, 1000, 500, 250, 1000, 30, 200, -500, 125, 25, …
-#> $ method <chr> "No Disponible", "Cheque", "Cheque", "Cheque", "No Disponible", "Transferencia El…
-#> $ donor  <chr> "AGENOL GONZALEZ CUBERO", "LUIS RIVERA MARIN", "LUINEL TORRES ACOSTA", "IRVING FA…
-#> $ city   <chr> "ISABELA", "SAN JUAN", "GUAYANILLA", "GUAYNABO", "TOA BAJA", "CAGUAS", "BAYAMON",…
-#> $ date   <date> 2012-09-24, 2016-10-14, 2016-03-15, 2015-08-08, 2011-08-31, 2015-03-30, 2016-01-…
-#> $ event  <chr> "2012 Elecciones Generales 1 julio - 31 diciembre", "2016 - Año Electoral", "2016…
-#> $ zip    <chr> "00662", "00926", "00656", "00966", "00951", "00726", "00959", "00983", "00727", …
-#> $ lat    <dbl> 18.47885, 18.36136, 18.03887, 18.39851, 18.45776, 18.21297, 18.38706, 18.41441, N…
-#> $ long   <dbl> -67.01973, -66.05620, -66.79168, -66.11522, -66.19650, -66.05803, -66.15943, -65.…
+#> # A tibble: 6 × 11
+#>   candidate                              candidacy acronym amount method donor city  date       event zip_code location_1
+#>   <chr>                                  <chr>     <chr>    <dbl> <chr>  <chr> <chr> <date>     <chr> <chr>    <chr>     
+#> 1 JOSE APONTE DALMAU                     Alcalde … PPD        200 Cheque BARU… CARO… 2018-12-20 2018… 00958    (18.34487…
+#> 2 RICARDO ROSSELLO NEVARES               Gobernad… PNP       2700 Efect… EFRA… YABU… 2018-09-18 2018… 00767    (18.07275…
+#> 3 VICTOR EMERIC CATARINEAU               Alcalde … PPD         20 Efect… HECT… VIEQ… 2018-11-30 2018… 00765    (18.12566…
+#> 4 PARTIDO INDEPENDENTISTA PUERTORRIQUEÑO Partido   PIP        100 Trans… EDWI… MAYA… 2018-11-30 2018… 00680    (18.20523…
+#> 5 RICARDO ROSSELLO NEVARES               Gobernad… PNP       1100 Cheque PEDR… TOA … 2018-09-10 2018… 00952    (18.42921…
+#> 6 YASHIRA LEBRON RODRIGUEZ               Represen… PNP        300 Cheque ANGE… BAYA… 2018-12-11 2018… 00959    (18.38706…
 ```
 
 ### Missing
 
-``` r
-col_stats(prc, count_na)
-#> # A tibble: 12 x 4
-#>    col    class      n       p
-#>    <chr>  <chr>  <int>   <dbl>
-#>  1 cand   <chr>      0 0      
-#>  2 type   <chr>      0 0      
-#>  3 code   <chr>      0 0      
-#>  4 amount <dbl>      0 0      
-#>  5 method <chr>      0 0      
-#>  6 donor  <chr>   1244 0.00751
-#>  7 city   <chr>   1606 0.00970
-#>  8 date   <date>     0 0      
-#>  9 event  <chr>      0 0      
-#> 10 zip    <chr>   2094 0.0126 
-#> 11 lat    <dbl>   9047 0.0546 
-#> 12 long   <dbl>   9047 0.0546
-```
+Columns vary in their degree of missing values.
 
 ``` r
-prc <- prc %>% flag_na(date, donor, amount, cand)
+col_stats(prc, count_na)
+#> # A tibble: 11 × 4
+#>    col        class      n       p
+#>    <chr>      <chr>  <int>   <dbl>
+#>  1 candidate  <chr>      0 0      
+#>  2 candidacy  <chr>      0 0      
+#>  3 acronym    <chr>      0 0      
+#>  4 amount     <dbl>      0 0      
+#>  5 method     <chr>      0 0      
+#>  6 donor      <chr>   1244 0.00751
+#>  7 city       <chr>   1606 0.00970
+#>  8 date       <date>     0 0      
+#>  9 event      <chr>      0 0      
+#> 10 zip_code   <chr>   2094 0.0126 
+#> 11 location_1 <chr>   9047 0.0546
+```
+
+We can flag any record missing a key variable needed to identify a
+transaction.
+
+``` r
+key_vars <- c("date", "donor", "amount", "candidate")
+prc <- flag_na(prc, all_of(key_vars))
 mean(prc$na_flag)
 #> [1] 0.007511306
 ```
@@ -235,25 +262,26 @@ mean(prc$na_flag)
 ``` r
 prc %>% 
   filter(na_flag) %>% 
-  select(date, donor, amount, cand) %>% 
-  sample_frac()
-#> # A tibble: 1,244 x 4
-#>    date       donor amount cand                                
-#>    <date>     <chr>  <dbl> <chr>                               
-#>  1 2015-02-13 <NA>    160  "JONATHAN TOSSAS ORTIZ"             
-#>  2 2015-05-09 <NA>    960  "ROLANDO CRESPO ARROYO"             
-#>  3 2015-02-28 <NA>    219  "COMITE MUNICIPAL MAYAGUEZ PNP"     
-#>  4 2015-03-22 <NA>    967. "LUIS \"ROLAN\" MALDONADO RODRIGUEZ"
-#>  5 2015-03-01 <NA>   2914  "MARTIN VARGAS MORALES"             
-#>  6 2015-05-01 <NA>    345  "ISANDER LOIZ DE LEON"              
-#>  7 2015-04-06 <NA>    725  "PEDRO TORRES RIVERA"               
-#>  8 2014-10-04 <NA>   3000  "RAMON CRUZ BURGOS"                 
-#>  9 2015-03-22 <NA>      5  "COMITE MUNICIPAL JUNCOS PNP"       
-#> 10 2014-11-13 <NA>    300  "REINALDO VARGAS RODRIGUEZ"         
+  select(all_of(key_vars))
+#> # A tibble: 1,244 × 4
+#>    date       donor amount candidate                    
+#>    <date>     <chr>  <dbl> <chr>                        
+#>  1 2014-03-29 <NA>  1540   ALEJANDRO GARCIA PADILLA     
+#>  2 2015-03-15 <NA>    40   JAIME IRIZARRY DELGADO       
+#>  3 2015-03-15 <NA>    40   JAIME IRIZARRY DELGADO       
+#>  4 2014-11-28 <NA>  4200   CARLOS RODRIGUEZ RIVERA      
+#>  5 2015-04-11 <NA>    30.2 MARTIN VARGAS MORALES        
+#>  6 2015-03-01 <NA>   301.  ROLANDO CRESPO ARROYO        
+#>  7 2015-05-02 <NA>    17   COMITE MUNICIPAL VILLALBA PNP
+#>  8 2014-03-29 <NA>  4020   NORMAN RAMIREZ RIVERA        
+#>  9 2015-03-14 <NA>   170   ROBERTO FELICIANO ROSADO     
+#> 10 2015-04-14 <NA>    30   LUIS SOTO MORALES            
 #> # … with 1,234 more rows
 ```
 
 ### Duplicates
+
+We can also flag any record completely duplicated across every column.
 
 ``` r
 prc <- flag_dupes(prc, everything())
@@ -264,20 +292,21 @@ mean(prc$dupe_flag)
 ``` r
 prc %>% 
   filter(dupe_flag) %>% 
-  select(date, donor, amount, cand)
-#> # A tibble: 14,552 x 4
-#>    date       donor                   amount cand                       
-#>    <date>     <chr>                    <dbl> <chr>                      
-#>  1 2016-04-02 WILLIAM MORALES PENA       100 YARAMARY TORRES REYES      
-#>  2 2016-08-30 RICARDO SOLA RODRIGUEZ     500 PARTIDO POPULAR DEMOCRATICO
-#>  3 2015-09-24 RAFAEL DUENO PALMER       1000 ALEJANDRO GARCIA PADILLA   
-#>  4 2016-11-01 CELESTE BENITEZ RIVERA     200 PARTIDO POPULAR DEMOCRATICO
-#>  5 2016-08-05 SANDRA TORRES MARRERO     2500 PARTIDO POPULAR DEMOCRATICO
-#>  6 2017-03-06 CESAR VARGAS VELAZQUEZ     500 THOMAS RIVERA SCHATZ       
-#>  7 2016-07-02 JOSE MEDINA TOLLINCHE     1000 MARIA CHARBONIER LAUREANO  
-#>  8 2018-03-18 JUDITH HERNANDEZ ARROYO     10 VICTOR PARES OTERO         
-#>  9 2018-03-18 JUDITH HERNANDEZ ARROYO     10 VICTOR PARES OTERO         
-#> 10 2018-03-18 MILAGROS LUGO NAZARIO       10 VICTOR PARES OTERO         
+  select(all_of(key_vars)) %>% 
+  arrange(date)
+#> # A tibble: 14,552 × 4
+#>    date       donor                     amount candidate           
+#>    <date>     <chr>                      <dbl> <chr>               
+#>  1 2011-01-01 MARIO CORSINO CRUZ        1000   THOMAS RIVERA SCHATZ
+#>  2 2011-01-01 MARIO CORSINO CRUZ        1000   THOMAS RIVERA SCHATZ
+#>  3 2011-01-05 MAX PEREZ PRESTON          200   JORGE NAVARRO SUAREZ
+#>  4 2011-01-05 MAX PEREZ PRESTON          200   JORGE NAVARRO SUAREZ
+#>  5 2011-01-06 JORGE SUAREZ PEREZ-GUERRA   83.3 RAMON TORRES MORALES
+#>  6 2011-01-06 JORGE SUAREZ PEREZ-GUERRA   83.3 RAMON TORRES MORALES
+#>  7 2011-01-06 WALDEMAR VELEZ SILVAGNOLI   80   RAMON TORRES MORALES
+#>  8 2011-01-06 WALDEMAR VELEZ SILVAGNOLI   80   RAMON TORRES MORALES
+#>  9 2011-01-13 JULIO BRAVO SOLER         1000   JOSE CHICO VEGA     
+#> 10 2011-01-13 JULIO BRAVO SOLER         1000   JOSE CHICO VEGA     
 #> # … with 14,542 more rows
 ```
 
@@ -285,34 +314,27 @@ prc %>%
 
 ``` r
 col_stats(prc, n_distinct)
-#> # A tibble: 14 x 4
-#>    col       class      n         p
-#>    <chr>     <chr>  <int>     <dbl>
-#>  1 cand      <chr>    869 0.00525  
-#>  2 type      <chr>    138 0.000833 
-#>  3 code      <chr>     11 0.0000664
-#>  4 amount    <dbl>   3843 0.0232   
-#>  5 method    <chr>     11 0.0000664
-#>  6 donor     <chr>  49858 0.301    
-#>  7 city      <chr>    988 0.00597  
-#>  8 date      <date>  2757 0.0166   
-#>  9 event     <chr>     19 0.000115 
-#> 10 zip       <chr>   1616 0.00976  
-#> 11 lat       <dbl>    151 0.000912 
-#> 12 long      <dbl>    151 0.000912 
-#> 13 na_flag   <lgl>      2 0.0000121
-#> 14 dupe_flag <lgl>      2 0.0000121
+#> # A tibble: 13 × 4
+#>    col        class      n         p
+#>    <chr>      <chr>  <int>     <dbl>
+#>  1 candidate  <chr>    869 0.00525  
+#>  2 candidacy  <chr>    138 0.000833 
+#>  3 acronym    <chr>     11 0.0000664
+#>  4 amount     <dbl>   3843 0.0232   
+#>  5 method     <chr>     11 0.0000664
+#>  6 donor      <chr>  49858 0.301    
+#>  7 city       <chr>    988 0.00597  
+#>  8 date       <date>  2757 0.0166   
+#>  9 event      <chr>     19 0.000115 
+#> 10 zip_code   <chr>   1616 0.00976  
+#> 11 location_1 <chr>    151 0.000912 
+#> 12 na_flag    <lgl>      2 0.0000121
+#> 13 dupe_flag  <lgl>      2 0.0000121
 ```
 
-![](../plots/bar_code-1.png)<!-- -->
+![](../plots/distinct_plots-1.png)<!-- -->![](../plots/distinct_plots-2.png)<!-- -->![](../plots/distinct_plots-3.png)<!-- -->
 
-![](../plots/bar_method-1.png)<!-- -->
-
-![](../plots/bar_event-1.png)<!-- -->
-
-### Continuous
-
-#### Amounts
+### Amounts
 
 ``` r
 summary(prc$amount)
@@ -322,9 +344,32 @@ mean(prc$amount <= 0)
 #> [1] 0.02772058
 ```
 
-![](../plots/amount_histogram-1.png)<!-- -->
+These are the records with the minimum and maximum amounts.
 
-#### Dates
+``` r
+glimpse(prc[c(which.max(prc$amount), which.min(prc$amount)), ])
+#> Rows: 2
+#> Columns: 13
+#> $ candidate  <chr> "DEMOCRATAS APOYANDO A ALEJANDRO Y OBAMA", "COMITE MUNICIPAL GUANICA PIP"
+#> $ candidacy  <chr> "Comité de Gastos Independientes", "Comité Municipal"
+#> $ acronym    <chr> "PPD", "PIP"
+#> $ amount     <dbl> 250000, -35300
+#> $ method     <chr> "No Disponible", "Especie"
+#> $ donor      <chr> ". DEMOCRATIC GOVERNORS ASSOCIATION", "ENI LOPEZ BARRIOS"
+#> $ city       <chr> "WASHINGTON", "GUANICA"
+#> $ date       <date> 2012-10-05, 2016-02-02
+#> $ event      <chr> "2012 Elecciones Generales 1 julio - 31 diciembre", "2016 - Año Electoral"
+#> $ zip_code   <chr> "20005", "00653"
+#> $ location_1 <chr> NA, "(17.992112, -66.90097)"
+#> $ na_flag    <lgl> FALSE, FALSE
+#> $ dupe_flag  <lgl> FALSE, FALSE
+```
+
+![](../plots/hist_amount-1.png)<!-- -->
+
+### Dates
+
+We can add the calendar year from `date` with `lubridate::year()`
 
 ``` r
 prc <- mutate(prc, year = year(date))
@@ -341,7 +386,7 @@ sum(prc$date > today())
 #> [1] 0
 ```
 
-![](../plots/year_bar-1.png)<!-- -->
+![](../plots/bar_year-1.png)<!-- -->
 
 ## Wrangle
 
@@ -349,9 +394,6 @@ To improve the searchability of the database, we will perform some
 consistent, confident string normalization. For geographic variables
 like city names and ZIP codes, the corresponding `campfin::normal_*()`
 functions are tailor made to facilitate this process.
-
-The database does not contain addresses or states. We can add the later
-using the `zip` variable, once it is cleaned.
 
 ### ZIP
 
@@ -363,7 +405,7 @@ returning leading zeroes dropped by other programs like Microsoft Excel.
 prc <- prc %>% 
   mutate(
     zip_norm = normal_zip(
-      zip = zip,
+      zip = zip_code,
       na_rep = TRUE
     )
   )
@@ -371,33 +413,47 @@ prc <- prc %>%
 
 ``` r
 progress_table(
-  prc$zip,
+  prc$zip_code,
   prc$zip_norm,
   compare = valid_zip
 )
-#> # A tibble: 2 x 6
-#>   stage    prop_in n_distinct prop_na n_out n_diff
-#>   <chr>      <dbl>      <dbl>   <dbl> <dbl>  <dbl>
-#> 1 zip        0.991       1616  0.0126  1450    249
-#> 2 zip_norm   0.994       1532  0.0138   945    149
+#> # A tibble: 2 × 6
+#>   stage        prop_in n_distinct prop_na n_out n_diff
+#>   <chr>          <dbl>      <dbl>   <dbl> <dbl>  <dbl>
+#> 1 prc$zip_code   0.991       1616  0.0126  1450    249
+#> 2 prc$zip_norm   0.993       1563  0.0139  1123    184
 ```
 
-Now we can add the state for each ZIP code.
+### State
+
+There is no state information but we can add the state associated with
+each normalized `zip_code` value.
 
 ``` r
 prc <- left_join(
   x = prc,
-  y = select(zipcodes, -city), 
+  y = zipcodes[, 2:3],
   by = c("zip_norm" = "zip")
 )
-prc %>% 
-  select(zip, state) %>% 
-  col_stats(count_na)
-#> # A tibble: 2 x 4
-#>   col   class     n      p
-#>   <chr> <chr> <int>  <dbl>
-#> 1 zip   <chr>  2094 0.0126
-#> 2 state <chr>  3226 0.0195
+```
+
+``` r
+prc <- rename(prc, state_match = state)
+count(prc, state_match, sort = TRUE)
+#> # A tibble: 53 × 2
+#>    state_match      n
+#>    <chr>        <int>
+#>  1 PR          159302
+#>  2 <NA>          3421
+#>  3 FL             700
+#>  4 NY             463
+#>  5 TX             193
+#>  6 DC             178
+#>  7 NJ             166
+#>  8 VA             157
+#>  9 MD             117
+#> 10 PA              95
+#> # … with 43 more rows
 ```
 
 ### City
@@ -412,7 +468,8 @@ case, removing punctuation, but *expanding* USPS abbreviations. We can
 also remove `invalid_city` values.
 
 ``` r
-prc <- prc %>% 
+norm_city <- prc %>% 
+  distinct(city, state_match, zip_norm) %>% 
   mutate(
     city_norm = normal_city(
       city = city, 
@@ -432,11 +489,14 @@ ZIP code. If the normalized value is either an abbreviation for or very
 similar to the expected value, we can confidently swap those two.
 
 ``` r
-prc <- prc %>% 
+norm_city <- norm_city %>% 
   rename(city_raw = city) %>% 
   left_join(
     y = zipcodes,
-    by = c("state", "zip_norm" = "zip")
+    by = c(
+      "state_match" = "state",
+      "zip_norm" = "zip"
+    )
   ) %>% 
   rename(city_match = city) %>% 
   mutate(
@@ -455,90 +515,127 @@ prc <- prc %>%
   )
 ```
 
+``` r
+prc <- left_join(
+  x = prc,
+  y = norm_city,
+  by = c(
+    "city" = "city_raw", 
+    "state_match", 
+    "zip_norm"
+  )
+)
+```
+
+#### Refine
+
+The [OpenRefine](https://openrefine.org/) algorithms can be used to
+group similar strings and replace the less common versions with their
+most common counterpart. This can greatly reduce inconsistency, but with
+low confidence; we will only keep any refined strings that have a valid
+city/state/zip combination.
+
+``` r
+good_refine <- prc %>% 
+  mutate(
+    city_refine = city_swap %>% 
+      key_collision_merge() %>% 
+      n_gram_merge(numgram = 1)
+  ) %>% 
+  filter(city_refine != city_swap) %>% 
+  inner_join(
+    y = zipcodes,
+    by = c(
+      "city_refine" = "city",
+      "state_match" = "state",
+      "zip_norm" = "zip"
+    )
+  )
+```
+
+    #> # A tibble: 3 × 5
+    #>   state_match zip_norm city_swap     city_refine     n
+    #>   <chr>       <chr>    <chr>         <chr>       <int>
+    #> 1 NC          27522    CREEDMORE     CREEDMOOR       1
+    #> 2 OH          45245    CINCINATTI    CINCINNATI      1
+    #> 3 TN          38281    UNION CITY TN UNION CITY      1
+
+Then we can join the refined values back to the database.
+
+``` r
+prc <- prc %>% 
+  left_join(good_refine, by = names(.)) %>% 
+  mutate(city_refine = coalesce(city_refine, city_swap))
+```
+
 #### Progress
 
-| stage      | prop\_in | n\_distinct | prop\_na | n\_out | n\_diff |
-| :--------- | -------: | ----------: | -------: | -----: | ------: |
-| city\_raw) |    0.975 |         826 |     0.01 |   4021 |     179 |
-| city\_norm |    0.976 |         820 |     0.01 |   3973 |     165 |
-| city\_swap |    0.991 |         786 |     0.01 |   1522 |     106 |
+Our goal for normalization was to increase the proportion of city values
+known to be valid and reduce the total distinct values by correcting
+misspellings.
+
+| stage                    | prop\_in | n\_distinct | prop\_na | n\_out | n\_diff |
+|:-------------------------|---------:|------------:|---------:|-------:|--------:|
+| `str_to_upper(prc$city)` |    0.975 |         826 |     0.01 |   4021 |     179 |
+| `prc$city_norm`          |    0.976 |         819 |     0.01 |   3978 |     169 |
+| `prc$city_swap`          |    0.991 |         785 |     0.01 |   1522 |     107 |
+| `prc$city_refine`        |    0.991 |         782 |     0.01 |   1519 |     104 |
 
 You can see how the percentage of valid values increased with each
 stage.
 
-![](../plots/progress_bar-1.png)<!-- -->
+![](../plots/bar_progress-1.png)<!-- -->
 
 More importantly, the number of distinct values decreased each stage. We
 were able to confidently change many distinct invalid values to their
 valid equivalent.
 
-``` r
-progress %>% 
-  select(
-    stage, 
-    all = n_distinct,
-    bad = n_diff
-  ) %>% 
-  mutate(good = all - bad) %>% 
-  pivot_longer(c("good", "bad")) %>% 
-  mutate(name = name == "good") %>% 
-  ggplot(aes(x = stage, y = value)) +
-  geom_col(aes(fill = name)) +
-  scale_fill_brewer(palette = "Dark2", direction = -1) +
-  scale_y_continuous(labels = comma) +
-  theme(legend.position = "bottom") +
-  labs(
-    title = "Puerto Rico City Normalization Progress",
-    subtitle = "Distinct values, valid and invalid",
-    x = "Stage",
-    y = "Percent Valid",
-    fill = "Valid"
-  )
-```
-
-![](../plots/distinct_bar-1.png)<!-- -->
+![](../plots/bar_distinct-1.png)<!-- -->
 
 ## Conclude
+
+Before exporting, we can remove the intermediary normalization columns
+and rename all added variables with the `_clean` suffix.
 
 ``` r
 prc <- prc %>% 
   select(
     -city_norm,
-    city = city_raw,
-    city_clean = city_swap,
-    state_match = state,
-    zip_clean = zip_norm,
-  )
+    -city_swap,
+    city_clean = city_refine
+  ) %>% 
+  rename_all(~str_replace(., "_norm", "_clean")) %>% 
+  rename_all(~str_remove(., "_raw")) %>% 
+  relocate(city_clean, state_match, zip_clean, .before = last_col())
 ```
 
 ``` r
-glimpse(sample_n(prc, 20))
-#> Rows: 20
-#> Columns: 18
-#> $ cand        <chr> "JOSE \"JOSIAN\" SANTIAGO RIVERA", "HECTOR O'NEILL GARCIA", "PARTIDO NUEVO P…
-#> $ type        <chr> "Alcalde de Comerío", "Alcalde de Guaynabo", "Partido", "Alcalde de Carolina…
-#> $ code        <chr> "PPD", "PNP", "PNP", "PPD", "PNP", "PNP", "PIP", "PIP", "PPD", "PPD", "PNP",…
-#> $ amount      <dbl> 10.0, 20.0, 400.0, 200.0, 150.0, 112.5, 10.0, 75.0, 20.0, 200.0, 500.0, 250.…
-#> $ method      <chr> "Transferencia Electrónica", "Efectivo", "No Disponible", "Efectivo", "No Di…
-#> $ donor       <chr> "CARLOS CARRASQUILLO LOPEZ", "JUAN FUENTES CUBERO", "MELVIN DIAZ DIAZ", "RAM…
-#> $ city        <chr> "COMERIO", "GUAYNABO", "SAN JUAN", "CAGUAS", "SAN SEBASTIAN", "COAMO", "CIAL…
-#> $ date        <date> 2016-02-12, 2013-11-22, 2012-10-25, 2015-03-09, 2011-08-26, 2017-12-01, 201…
-#> $ event       <chr> "2016 - Año Electoral", "2013 - Año no eleccionario", "2012 Elecciones Gener…
-#> $ zip         <chr> "00782", "00971", "00926", "00725", "00685", "00769", "00638", "00795", "007…
-#> $ lat         <dbl> 18.22335, 18.32969, 18.36136, 18.23393, 18.33260, 18.09281, 18.30814, 18.036…
-#> $ long        <dbl> -66.22670, -66.11876, -66.05620, -66.04502, -66.98104, -66.36110, -66.49835,…
-#> $ na_flag     <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE,…
-#> $ dupe_flag   <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE,…
-#> $ year        <dbl> 2016, 2013, 2012, 2015, 2011, 2017, 2016, 2014, 2014, 2018, 2012, 2015, 2015…
-#> $ zip_clean   <chr> "00782", "00971", "00926", "00725", "00685", "00769", "00638", "00795", "007…
-#> $ state_match <chr> "PR", "PR", "PR", "PR", "PR", "PR", "PR", "PR", "PR", "PR", "PR", "PR", "PR"…
-#> $ city_clean  <chr> "COMERIO", "GUAYNABO", "SAN JUAN", "CAGUAS", "SAN SEBASTIAN", "COAMO", "CIAL…
+glimpse(sample_n(prc, 50))
+#> Rows: 50
+#> Columns: 17
+#> $ candidate   <chr> "WILLIAM MIRANDA TORRES", "PARTIDO POPULAR DEMOCRATICO", "PARTIDO INDEPENDENTISTA PUERTORRIQUEÑO",…
+#> $ candidacy   <chr> "Alcalde", "Partido", "Partido", "Representante Distrito 40", "Representante Distrito 04", "Comité…
+#> $ acronym     <chr> "PPD", "PPD", "PIP", "PNP", "PNP", "CAP", "PNP", "PNP", "CI", "PNP", "PNP", "PIP", "PNP", "PPD", "…
+#> $ amount      <dbl> 500, 2000, 5, -10, 20, 100, 50, 125, 5, 1000, 10, -100, 500, 2500, 500, 100, 500, 100, 500, 500, 1…
+#> $ method      <chr> "No Disponible", "Cheque", "Transferencia Electrónica", "Ajustes", "Efectivo", "Cheque", "Transfer…
+#> $ donor       <chr> "JORGE SANCHEZ SANTIAGO", "PEDRO ORTIZ ALVAREZ", "GILBERTO TORRUELLAS IGLESIAS", "LUIS DELGADO DEL…
+#> $ city        <chr> "CAGUAS", "PONCE", "SAN LORENZO", "CAROLINA", "HUMACAO", "SAN JUAN", "TRUJILLO ALTO", "BAYAMON", "…
+#> $ date        <date> 2012-06-03, 2016-10-04, 2015-12-31, 2015-01-13, 2018-11-11, 2014-08-15, 2015-11-03, 2016-03-09, 2…
+#> $ event       <chr> "2012 Elecciones Generales 1 enero - 30 junio", "2016 - Año Electoral", "2015 - Año no eleccionari…
+#> $ zip_code    <chr> "00726", "00732", "00754", "00987", "00791", "00901", "00976", "00956", "00719", "00917", "00983",…
+#> $ location_1  <chr> "(18.212965, -66.058033)", "(18.021781, -66.613742)", "(18.15633, -65.96831)", "(18.372228, -65.96…
+#> $ na_flag     <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, …
+#> $ dupe_flag   <lgl> FALSE, FALSE, TRUE, FALSE, FALSE, TRUE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, TRUE, FALSE, TRU…
+#> $ year        <dbl> 2012, 2016, 2015, 2015, 2018, 2014, 2015, 2016, 2016, 2012, 2015, 2015, 2017, 2012, 2016, 2011, 20…
+#> $ city_clean  <chr> "CAGUAS", "PONCE", "SAN LORENZO", "CAROLINA", "HUMACAO", "SAN JUAN", "TRUJILLO ALTO", "BAYAMON", "…
+#> $ state_match <chr> "PR", "PR", "PR", "PR", "PR", "PR", "PR", "PR", "PR", "PR", "PR", "PR", "PR", "PR", "PR", "PR", "P…
+#> $ zip_clean   <chr> "00726", "00732", "00754", "00987", "00791", "00901", "00976", "00956", "00719", "00917", "00983",…
 ```
 
-1.  There are 165617 records in the database.
-2.  There are 14552 duplicate records in the database.
+1.  There are 165,617 records in the database.
+2.  There are 14,552 duplicate records in the database.
 3.  The range and distribution of `amount` and `date` seem reasonable.
-4.  There are 1244 records missing either recipient or date.
+4.  There are 1,244 records missing key variables.
 5.  Consistency in geographic data has been improved with
     `campfin::normal_*()`.
 6.  The 4-digit `year` variable has been created with
@@ -546,8 +643,35 @@ glimpse(sample_n(prc, 20))
 
 ## Export
 
+Now the file can be saved on disk for upload to the Accountability
+server.
+
 ``` r
 clean_dir <- dir_create(here("pr", "contribs", "data", "clean"))
-clean_path <- path(clean_dir, "pr_contribs_clean.csv")
-write_csv(prc, path = clean_path, na = "")
+clean_path <- path(clean_dir, "pr_contribs_20110101-20181231.csv")
+write_csv(prc, clean_path, na = "")
+(clean_size <- file_size(clean_path))
+#> 31.2M
+```
+
+## Upload
+
+We can use the `aws.s3::put_object()` to upload the text file to the IRW
+server.
+
+``` r
+aws_path <- path("csv", basename(clean_path))
+if (!object_exists(aws_path, "publicaccountability")) {
+  put_object(
+    file = clean_path,
+    object = aws_path, 
+    bucket = "publicaccountability",
+    acl = "public-read",
+    show_progress = TRUE,
+    multipart = TRUE
+  )
+}
+aws_head <- head_object(aws_path, "publicaccountability")
+(aws_size <- as_fs_bytes(attr(aws_head, "content-length")))
+unname(aws_size == clean_size)
 ```
