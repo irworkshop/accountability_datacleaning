@@ -261,10 +261,10 @@ order) as the one downloaded today (September 16, 2021), then we can fix these
 issues manually, removing the bad lines, and saving the fixed lines to a new
 text file.
 
-```{r raw_fix}
-raw_fix <- here("il", "contribs", "data", "Receipts-fix.txt")
+```{r fix_txt}
+fix_txt <- here("il", "contribs", "data", "Receipts-fix.txt")
 fixes <- rep(FALSE, 4)
-if (!file_exists(raw_fix)) {
+if (!file_exists(fix_txt)) {
   x <- read_lines(raw_txt)
   Sys.sleep(5)
   
@@ -307,7 +307,7 @@ if (!file_exists(raw_fix)) {
     )
     x <- x[-bad_rows]
   }
-  write_lines(x, raw_fix)
+  write_lines(x, fix_txt)
 }
 ```
 
@@ -323,7 +323,7 @@ We can read the manually fixed tab-delimited file.
 
 ```{r raw_read}
 ilc <- read_delim(
-  file = raw_fix,
+  file = fix_txt,
   delim = "\t",
   quote = "",
   escape_backslash = FALSE,
@@ -332,6 +332,7 @@ ilc <- read_delim(
   col_types = cols(
     .default = col_character(),
     ID = col_integer(),
+    CommitteeID = col_integer(),
     FiledDocID = col_integer(),
     RcvDate = col_datetime(),
     Amount = col_double(),
@@ -359,6 +360,158 @@ count(ilc, RedactionRequested)
 ilc <- clean_names(ilc, case = "snake")
 ```
 
+## Committees
+
+The contribution records contain the name and address of the contributor but
+only identify the receiving committee with an `committee_id` variable. We can
+use that `committee_id` to join against the `Committees.txt` database.
+
+```{r cmt_download}
+cmt_txt <- path(raw_dir, str_subset(il_ls$name, "Committees"))
+if (!file_exists(cmt_txt)) {
+  download.file(
+    url = str_subset(raw_url, "Committees"),
+    destfile = cmt_txt
+  )
+}
+```
+
+```{r cmt_read}
+committees <- read_delim(
+  file = cmt_txt,
+  delim = "\t",
+  quote = "",
+  escape_backslash = FALSE,
+  escape_double = FALSE,
+  trim_ws = TRUE,
+  col_types = cols(
+    .default = col_character(),
+    ID = col_integer(),
+    StateCommittee = col_logical(),
+    StateID = col_integer(),
+    LocalCommittee = col_logical(),
+    LocalID = col_integer(),
+    StatusDate = col_datetime(),
+    CreationDate = col_datetime(),
+    CreationAmount = col_double(),
+    DispFundsReturn = col_logical(),
+    DispFundsPolComm = col_logical(),
+    DispFundsCharity = col_logical(),
+    DispFunds95 = col_logical()
+  )
+)
+```
+
+```{r cmt_snake}
+committees <- clean_names(committees, case = "snake")
+```
+
+We are only interested in the columns which identify the receiving committee by
+name and address so they can be easily searched.
+
+```{r cmt_select}
+committees <- committees %>% 
+  select(id, name, starts_with("address"), city, state, zip)
+```
+
+#### Wrangle
+
+Before we join the tables, we are going to normalize the geographic variables of
+the address. The explanation for this process is detailed in the `Wrangle`
+section below.
+
+```{r cmte_addr_norm}
+committees <- committees %>% 
+  unite(
+    col = address,
+    starts_with("address"),
+    sep = " ",
+    remove = TRUE,
+    na.rm = TRUE
+  ) %>% 
+  mutate(
+    address = normal_address(
+      address = address,
+      abbs = usps_street,
+      na_rep = TRUE
+    )
+  )
+```
+
+```{r cmte_zip_norm}
+committees$zip <- normal_zip(
+  zip = committees$zip,
+  na_rep = TRUE,
+  na = ""
+)
+```
+
+```{r cmte_st_norm}
+il_zip <- zipcodes$zip[zipcodes$state == "IL"]
+committees$state[committees$state == "L" & committees$zip %in% il_zip] <- "IL"
+committees$state[committees$state == "O:" & committees$zip %in% il_zip] <- "IL"
+committees$state <- normal_state(
+  state = committees$state,
+  valid = valid_state
+)
+```
+
+```{r cmte_city_swap}
+committees <- committees %>% 
+  mutate(
+    city = normal_city(
+      city = city, 
+      abbs = usps_city,
+      states = c("IL", "DC", "ILLINOIS"),
+      na = invalid_city,
+      na_rep = TRUE
+    )
+  ) %>% 
+  left_join(
+    y = zipcodes,
+    by = c("state", "zip"),
+    suffix = c("_norm", "_match")
+  ) %>% 
+  mutate(
+    match_abb = is_abbrev(city_norm, city_match),
+    match_dist = str_dist(city_norm, city_match),
+    city_swap = if_else(
+      condition = !is.na(match_dist) & (match_abb | match_dist == 1),
+      true = city_match,
+      false = city_norm
+    ),
+    .after = city_norm
+  ) %>% 
+  select(
+    -match_abb,
+    -match_dist,
+    -city_norm,
+    -city_match
+  ) %>% 
+  rename(city = city_swap)
+```
+
+#### Join
+
+These columns can be joined with every contribution. We will identify columns
+from the `Committees.txt` column with the `cmte_` prefix.
+
+```{r cmte_rename}
+committees <- rename_with(
+  .data = committees,
+  .fn = ~paste0("cmte_", .),
+  .cols = -id
+)
+```
+
+```{r cmte_join}
+ilc <- left_join(
+  x = ilc,
+  y = committees,
+  by = c("committee_id" = "id")
+)
+```
+
 ## Explore
 
 There are `r comma(nrow(ilc))` rows of `r ncol(ilc)` columns. Each record
@@ -381,30 +534,90 @@ col_stats(ilc, count_na)
 We can flag any record missing a key variable needed to identify a transaction.
 
 ```{r na_flag}
-key_vars <- c("date", "last", "amount", "committee")
+key_vars <- c("rcv_date", "last_only_name", "amount", "cmte_name")
 ilc <- flag_na(ilc, all_of(key_vars))
 sum(ilc$na_flag)
 ```
 
-```{r na_view}
-ilc %>% 
-  filter(na_flag) %>% 
-  select(all_of(key_vars))
+`r percent(mean(ilc$na_flag), 0.1)` rows are missing a key variable.
+
+```{r}
+if (sum(ilc$na_flag) == 0) {
+  ilc <- select(ilc, -na_flag)
+}
 ```
 
 ### Duplicates
 
-We can also flag any record completely duplicated across every column.
+We can also flag any entirely duplicate rows. To keep memory usage low with such
+a large data frame, we will split our data into a list and check each element of
+the list. For each chunk, we will write the duplicate `id` to a text file.
 
-```{r dupe_flag}
-ilc <- flag_dupes(ilc, -id)
-sum(ilc$dupe_flag)
+```{r}
+prop_distinct(ilc$id)
 ```
+
+```{r dupe_write}
+dupe_file <- here("ny", "contribs", "data", "dupe_ids.txt")
+if (!file_exists(dupe_file)) {
+  tmp <- file_temp(ext = "rds")
+  write_rds(ilc, file = tmp)
+  file_size(tmp)
+  il_id <- split(ilc$id, ilc$rcv_date)
+  ils <- ilc %>%
+    select(-id) %>% 
+    group_split(rcv_date)
+  if (file_exists(tmp)) {
+    rm(ilc)
+    Sys.sleep(5)
+    flush_memory(2)
+  }
+  ils <- ils[map_lgl(ils, function(x) nrow(x) > 1)]
+  pb <- txtProgressBar(max = length(ils), style = 3)
+  for (i in seq_along(ils)) {
+    d1 <- duplicated(ils[[i]], fromLast = FALSE)
+    d2 <- duplicated(ils[[i]], fromLast = TRUE)
+    dupe_vec <- d1 | d2
+    rm(d1, d2)
+    if (any(dupe_vec)) {
+      write_lines(
+        x = il_id[[i]][dupe_vec], 
+        file = dupe_file, 
+        append = file_exists(dupe_file),
+        na = ""
+      )
+    }
+    rm(dupe_vec)
+    ils[[i]] <- NA
+    il_id[[i]] <- NA
+    if (i %% 100 == 0) {
+      Sys.sleep(2)
+      flush_memory()
+    }
+    setTxtProgressBar(pb, i)
+  }
+  rm(ils, il_id)
+  Sys.sleep(5)
+  flush_memory()
+  ilc <- read_rds(tmp)
+}
+```
+
+```{r dupe_add}
+dupe_id <- tibble(
+  id = as.integer(read_lines(dupe_file, skip_empty_rows = TRUE)),
+  dupe_flag = TRUE
+)
+ilc <- left_join(ilc, dupe_id, by = "id")
+ilc <- mutate(ilc, across(dupe_flag, Negate(is.na)))
+```
+
+`r percent(mean(ilc$dupe_flag), 0.1)` of rows are duplicates.
 
 ```{r dupe_view}
 ilc %>% 
   filter(dupe_flag) %>% 
-  select(all_of(key_vars))
+  count(rcv_date, last_only_name, amount, cmte_name, sort = TRUE)
 ```
 
 ### Categorical
@@ -414,7 +627,8 @@ col_stats(ilc, n_distinct)
 ```
 
 ```{r distinct_plots, echo=FALSE}
-explore_plot(ilc, type)
+explore_plot(ilc, d2part)
+explore_plot(ilc, archived)
 ```
 
 ### Amounts
@@ -432,6 +646,7 @@ glimpse(ilc[c(which.max(ilc$amount), which.min(ilc$amount)), ])
 
 ```{r hist_amount, echo=FALSE}
 ilc %>%
+  filter(amount >= 1, amount <= 1e6) %>% 
   ggplot(aes(amount)) +
   geom_histogram(fill = dark2["purple"]) +
   scale_y_continuous(labels = comma) +
@@ -442,7 +657,7 @@ ilc %>%
   ) +
   labs(
     title = "Illinois Contributions Amount Distribution",
-    caption = "Source: {source}",
+    caption = "Source: Illinois State Board of Elections ",
     x = "Amount",
     y = "Count"
   )
@@ -453,29 +668,30 @@ ilc %>%
 We can add the calendar year from `date` with `lubridate::year()`
 
 ```{r date_year}
-ilc <- mutate(ilc, year = year(date))
+ilc <- mutate(ilc, rcv_year = year(rcv_date))
 ```
 
 ```{r date_range}
-min(ilc$date)
-sum(ilc$year < 2000)
-max(ilc$date)
-sum(ilc$date > today())
+min(ilc$rcv_date)
+sum(ilc$rcv_year < 1994)
+max(ilc$rcv_date)
+sum(ilc$rcv_date > today())
 ```
 
 ```{r bar_year, echo=FALSE}
 ilc %>% 
-  count(year) %>% 
-  mutate(even = is_even(year)) %>% 
-  ggplot(aes(x = year, y = n)) +
+  count(rcv_year) %>% 
+  filter(rcv_year >= 1994) %>% 
+  mutate(even = is_even(rcv_year)) %>% 
+  ggplot(aes(x = rcv_year, y = n)) +
   geom_col(aes(fill = even)) + 
   scale_fill_brewer(palette = "Dark2") +
   scale_y_continuous(labels = comma) +
-  scale_x_continuous(breaks = seq(2000, 2020, by = 2)) +
+  scale_x_continuous(breaks = seq(1994, 2020, by = 2)) +
   theme(legend.position = "bottom") +
   labs(
     title = "Illinois Contributions by Year",
-    caption = "Source: {source}",
+    caption = "Source: Illinois State Board of Elections ",
     fill = "Election Year",
     x = "Year Made",
     y = "Count"
@@ -496,7 +712,8 @@ will force consistence case, remove punctuation, and abbreviate official
 USPS suffixes.
 
 ```{r address_norm}
-ilc <- ilc %>% 
+norm_addr <- ilc %>% 
+  distinct(address1, address2) %>% 
   unite(
     col = address_full,
     starts_with("address"),
@@ -515,10 +732,16 @@ ilc <- ilc %>%
 ```
 
 ```{r address_view}
-ilc %>% 
-  select(contains("address")) %>% 
-  distinct() %>% 
-  sample_n(10)
+sample_n(norm_addr, 10)
+```
+
+```{r address_join}
+ilc <- left_join(ilc, norm_addr, by = c("address1", "address2"))
+```
+
+```{r include=FALSE}
+rm(norm_addr)
+flush_memory()
 ```
 
 ### ZIP
@@ -551,7 +774,8 @@ Valid two digit state abbreviations can be made using the
 `campfin::normal_state()` function.
 
 ```{r state_norm}
-ilc <- ilc %>% 
+st_norm <- ilc %>% 
+  distinct(state) %>% 
   mutate(
     state_norm = normal_state(
       state = state,
@@ -562,10 +786,13 @@ ilc <- ilc %>%
   )
 ```
 
-```{r state_view}
-ilc %>% 
-  filter(state != state_norm) %>% 
-  count(state, state_norm, sort = TRUE)
+```{r state_count}
+st_norm %>% 
+  filter(state != state_norm)
+```
+
+```{r state_join}
+ilc <- left_join(ilc, st_norm, by = "state")
 ```
 
 ```{r state_progress}
@@ -640,7 +867,7 @@ ilc <- left_join(
   x = ilc,
   y = norm_city,
   by = c(
-    "city_raw", 
+    "city" = "city_raw", 
     "state_norm", 
     "zip_norm"
   )
@@ -689,7 +916,7 @@ Then we can join the refined values back to the database.
 
 ```{r city_join}
 ilc <- ilc %>% 
-  left_join(good_refine) %>% 
+  left_join(good_refine, by = names(.)) %>% 
   mutate(city_refine = coalesce(city_refine, city_swap))
 ```
 
@@ -701,7 +928,7 @@ to be valid and reduce the total distinct values by correcting misspellings.
 ```{r city_progress, echo=FALSE}
 many_city <- c(valid_city, extra_city)
 progress <- progress_table(
-  str_to_upper(ilc$city_raw),
+  str_to_upper(ilc$city),
   ilc$city_norm,
   ilc$city_swap,
   ilc$city_refine,
@@ -713,7 +940,7 @@ kable(progress, digits = 3)
 You can see how the percentage of valid values increased with each stage.
 
 ```{r bar_progress, echo=FALSE}
-raw_in <- percent(prop_in(ilc$city_raw, valid_city))
+raw_in <- percent(prop_in(ilc$city, valid_city))
 progress %>% 
   ggplot(aes(x = stage, y = prop_in)) +
   geom_hline(yintercept = 0.99) +
@@ -756,8 +983,6 @@ progress %>%
   )
 ```
 
-## Conclude
-
 Before exporting, we can remove the intermediary normalization columns and
 rename all added variables with the `_clean` suffix.
 
@@ -769,12 +994,15 @@ ilc <- ilc %>%
     city_clean = city_refine
   ) %>% 
   rename_all(~str_replace(., "_norm", "_clean")) %>% 
-  rename_all(~str_remove(., "_raw"))
+  rename_all(~str_remove(., "_raw")) %>% 
+  relocate(city_clean, state_clean, zip_clean, .after = address_clean)
 ```
 
 ```{r clean_glimpse}
 glimpse(sample_n(ilc, 50))
 ```
+
+## Conclude
 
 1. There are `r comma(nrow(ilc))` records in the database.
 1. There are `r comma(sum(ilc$dupe_flag))` duplicate records in the database.
@@ -789,11 +1017,9 @@ Now the file can be saved on disk for upload to the Accountability server.
 
 ```{r clean_dir}
 clean_dir <- dir_create(here("il", "contribs", "data", "clean"))
-clean_path <- path(clean_dir, "il_contribs_clean.csv")
+clean_path <- path(clean_dir, "il_contribs_19940701-20210915.csv")
 write_csv(ilc, clean_path, na = "")
 (clean_size <- file_size(clean_path))
-file_encoding(clean_path) %>% 
-  mutate(across(path, path.abbrev))
 ```
 
 ## Upload
@@ -815,26 +1041,4 @@ if (!object_exists(aws_path, "publicaccountability")) {
 aws_head <- head_object(aws_path, "publicaccountability")
 (aws_size <- as_fs_bytes(attr(aws_head, "content-length")))
 unname(aws_size == clean_size)
-```
-
-## Dictionary
-
-The following table describes the variables in our final exported file:
-
-```{r dict_make, echo=FALSE}
-dict_raw <- tibble(
-  var = md_code(names(ilc)),
-  type = md_code(map_chr(ilc, typeof)),
-  def = c(
-    ""
-  )
-)
-```
-
-```{r dict_md, echo=FALSE}
-(dict_md <- kable(
-  x = dict_raw,
-  format = "markdown",
-  col.names = c("Column", "Type", "Definition")
-))
 ```
