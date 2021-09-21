@@ -1,20 +1,31 @@
-Florida Campaign Contributions Diary
+Florida Contributions
 ================
-Yanqi Xu
-2020-09-08 12:27:50
+Kiernan Nicholls
+Tue Sep 21 16:01:34 2021
 
-  - [Project](#project)
-  - [Objectives](#objectives)
-  - [Packages](#packages)
-  - [Data](#data)
-  - [Download](#download)
-  - [Read](#read)
-  - [Explore](#explore)
-  - [Wrangle](#wrangle)
-  - [Conclude](#conclude)
-  - [Export](#export)
-  - [Upload](#upload)
-  - [Dictionary](#dictionary)
+-   [Project](#project)
+-   [Objectives](#objectives)
+-   [Packages](#packages)
+-   [Data](#data)
+    -   [About](#about)
+-   [Download](#download)
+-   [Fix](#fix)
+-   [Read](#read)
+-   [Explore](#explore)
+    -   [Missing](#missing)
+    -   [Duplicates](#duplicates)
+    -   [Categorical](#categorical)
+    -   [Amounts](#amounts)
+    -   [Dates](#dates)
+-   [Wrangle](#wrangle)
+    -   [Separate](#separate)
+    -   [Address](#address)
+    -   [ZIP](#zip)
+    -   [State](#state)
+    -   [City](#city)
+-   [Conclude](#conclude)
+-   [Export](#export)
+-   [Upload](#upload)
 
 <!-- Place comments regarding knitting here -->
 
@@ -25,7 +36,7 @@ give journalists, policy professionals, activists, and the public at
 large a simple way to search across huge volumes of public data about
 people and organizations.
 
-Our goal is to standardizing public data on a few key fields by thinking
+Our goal is to standardize public data on a few key fields by thinking
 of each dataset row as a transaction. For each transaction there should
 be (at least) 3 variables:
 
@@ -53,29 +64,33 @@ The following packages are needed to collect, manipulate, visualize,
 analyze, and communicate these results. The `pacman` package will
 facilitate their installation and attachment.
 
-The IRW’s `campfin` package will also have to be installed from GitHub.
-This package contains functions custom made to help facilitate the
-processing of campaign finance data.
-
 ``` r
-if (!require("pacman")) install.packages("pacman")
-pacman::p_load_gh("irworkshop/campfin")
+if (!require("pacman")) {
+  install.packages("pacman")
+}
 pacman::p_load(
   tidyverse, # data manipulation
   lubridate, # datetime strings
   gluedown, # printing markdown
-  magrittr, # pipe operators
   janitor, # clean data frames
-  refinr, # cluster and merge
+  campfin, # custom irw tools
+  aws.s3, # aws cloud storage
+  refinr, # cluster & merge
   scales, # format strings
   knitr, # knit documents
-  vroom, # read files fast
-  rvest, # html scraping
-  glue, # combine strings
-  here, # relative paths
+  vroom, # fast reading
+  rvest, # scrape html
+  glue, # code strings
+  here, # project paths
   httr, # http requests
+  cli, # command line
   fs # local storage 
 )
+```
+
+``` r
+packageVersion("campfin")
+#> [1] '1.0.8.9000'
 ```
 
 This document should be run as part of the `R_campfin` project, which
@@ -90,170 +105,436 @@ feature and should be run as such. The project also uses the dynamic
 
 ``` r
 # where does this document knit?
-here::here()
-#> [1] "/Users/yanqixu/code/accountability_datacleaning/R_campfin"
+here::i_am("fl/contribs/docs/fl_contribs_diary.Rmd")
 ```
 
 ## Data
 
+Data is obtained from the Florida Division of Elections.
+
+As the [agency home
+page](https://dos.myflorida.com/elections/candidates-committees/campaign-finance/)
+explains:
+
+> By Florida law, campaigns, committees, and electioneering
+> communications organizations are required to disclose detailed
+> financial records of campaign contributions and Contributions. Chapter
+> 106, Florida Statutes, regulates campaign financing for all
+> candidates, including judicial candidates, political committees,
+> electioneering communication organizations, affiliated party
+> committees, and political parties. It does not regulate campaign
+> financing for candidates for federal office.
+
+### About
+
+A more detailed description of available data can be found on the
+[Campaign Finance
+page](https://dos.myflorida.com/elections/candidates-committees/campaign-finance/campaign-finance-database/):
+
+> #### Quality of Data
+>
+> The information presented in the campaign finance database is an
+> accurate representation of the reports filed with the Florida Division
+> of Elections. &gt; &gt; Some of the information in the campaign
+> finance database was submitted in electronic form, and some of the
+> information was key-entered from paper reports. Sometimes items which
+> are not consistent with filing requirements, such as incorrect codes
+> or incorrectly formatted or blank items, are present in the results of
+> a query. They are incorrect in the database because they were
+> incorrect on reports submitted to the division.
+
+> #### What does the Database Contain?
+>
+> By law candidates and committees are required to disclose detailed
+> financial records of contributions received and Contributions made.
+> For committees, the campaign finance database contains all
+> contributions and Contributions reported to the Florida Division of
+> Elections since January 1, 1996. For candidates, the campaign finance
+> database contains all contributions and Contributions reported to the
+> Division since the candidacy was announced, beginning with the 1996
+> election.
+
+> #### Whose Records are Included?
+>
+> Included are campaign finance reports which have been filed by
+> candidates for any multi-county office, with the exception of U.S.
+> Senator and U.S. Representative, and by organizations that receive
+> contributions or make Contributions of more than $500 in a calendar
+> year to support or oppose any multi-county candidate, issue, or party.
+> To obtain reports from local county or municipal candidates and
+> committees, contact county or city filing offices.
+
+> #### When are the Records Available?
+>
+> Campaign finance reports are posted to the database as they are
+> received from the candidates and committees. Our data is as current as
+> possible, consistent with the reporting requirements of Florida law.
+
 ## Download
 
-Files (in Tab-delimited .txt) were downloaded from [Florida Department
-of State’s Campaign Finance
-Database](https://dos.elections.myflorida.com/campaign-finance/contributions/#both):
-The Accountability Project already hosts data from 01/01/2008 to
-08/01/2020. We’ll set the date range to
+We will use the [Contributions
+Records](https://dos.elections.myflorida.com/campaign-finance/Contributions/)
+query form to download three separate files covering all campaign
+Contributions. [The home
+page](https://dos.myflorida.com/elections/candidates-committees/campaign-finance/campaign-finance-database/)
+lists instructions on how to download the desired files:
+
+> #### How to Use the Campaign Finance Database
+>
+> 1.  Specify a subset of the \[Contributions\]…
+> 2.  Select an election year entry from the list box.
+> 3.  Select a candidate/committee option…
+> 4.  Select contribution criteria (for Detail report only)…
+> 5.  Select how you would like the records sorted.
+> 6.  Select the format in which you would like the data returned.
+> 7.  Limit the number of records to return….
+>     -   Choosing “Return Query Results in a Tab Delimited Text File”
+>         will return the data in a file of tab-separated columns
+>         suitable for importing into almost any spreadsheet or
+>         database. This option allows you to download the data for
+>         further analysis offline.
+> 8.  Click on the Submit Query button.
+
+To get all files covering all contributions:
+
+1.  Select “All” from the **Election Year** drop down menu
+2.  In the **From Date Range** text box, enter “01/01/2008”
+3.  Delete “500” from the **Limit Records** text box
+4.  Select the “Return Results in a Tab Delimited Text File” **Retrieval
+    Format**
+5.  Save to the `/fl/contribs/data/raw` directory
 
 ``` r
 raw_dir <- dir_create(here("fl", "contribs", "data", "raw"))
+raw_tsv <- path(raw_dir, "Contrib.txt")
+```
+
+``` r
+fl_get <- GET(
+  url = "https://dos.elections.myflorida.com/campaign-finance/contributions/"
+)
+```
+
+``` r
+fl_cookie <- cookies(fl_get)
+fl_cookie <- setNames(fl_cookie$value, fl_cookie$name)
+```
+
+``` r
+post_dt <- tibble(
+  from_dt = seq(
+    from = as.Date("1995-01-01"), 
+    to = Sys.Date(), 
+    by = "1 month"
+  ),
+  thru_dt = rollforward(from_dt)
+)
+```
+
+``` r
+for (i in seq(nrow(post_dt))) {
+  from_ymd <- format(post_dt$from_dt[i], "%Y%m%d")
+  from_mdy <- format(post_dt$from_dt[i], "%m/%d/%Y")
+  thru_ymd <- format(post_dt$from_dt[i], "%Y%m%d")
+  thru_mdy <- format(post_dt$from_dt[i], "%m/%d/%Y")
+  dt_tsv <- path(raw_dir, glue("flc_{from_ymd}-{thru_ymd}.tsv"))
+  if (!file_exists(dt_tsv)) {
+    POST(
+      url = "https://dos.elections.myflorida.com/cgi-bin/contrib.exe",
+      user_agent("https://publicaccountability.org/"),
+      write_disk(path = dt_tsv, overwrite = TRUE),
+      set_cookies(fl_cookie),
+      encode = "form",
+      body = list(
+        election = "All",
+        search_on = "1",
+        CanFName = "",
+        CanLName = "",
+        CanNameSrch = "2",
+        office = "All",
+        cdistrict = "",
+        cgroup = "",
+        party = "All",
+        ComName = "",
+        ComNameSrch = "2",
+        committee = "All",
+        cfname = "",
+        clname = "",
+        namesearch = "2",
+        ccity = "",
+        cstate = "",
+        czipcode = "",
+        cpurpose = "",
+        cdollar_minimum = "",
+        cdollar_maximum = "",
+        rowlimit = "",
+        csort1 = "DAT",
+        csort2 = "CAN",
+        cdatefrom = from_mdy,
+        cdateto = thru_mdy,
+        queryformat = "2",
+        Submit = "Submit"
+      )
+    )
+    cli_alert_success("{from_mdy} - {thru_mdy}")
+  }
+}
+```
+
+## Fix
+
+``` r
+raw_tsv <- dir_ls(raw_dir, glob = "*.tsv")
+```
+
+``` r
+fix_dir <- dir_create(path(dirname(raw_dir), "fix"))
+fix_tsv <- path(fix_dir, basename(raw_tsv))
+for (i in seq_along(raw_tsv)) {
+  message(i)
+  if (!file_exists(fix_tsv[i])) {
+    x <- read_lines(raw_tsv[i])
+    x_top <- x[1]
+    x <- x[-1]
+    # find rows without date in 2nd col
+    bad_nl <- str_which(x, "^(.*)\t(\\d{2}/\\d{2}/\\d{4})", negate = TRUE)
+    if (length(bad_nl) > 1) {
+      x[bad_nl - 1] <- paste0(x[bad_nl - 1], x[bad_nl])
+      x <- x[-bad_nl]
+      x <- iconv(x, to = "ASCII//TRANSLIT", sub = "")
+    }
+    write_lines(x = c(x_top, x), file = fix_tsv[i])
+    rm(x, x_top)
+  }
+}
 ```
 
 ## Read
 
-We can see that sometimes quotes are not closed and thus cause confusion
-for R to parse. After examining the use of quotes, we can see that they
-don’t really Therefore, we can safely remove the quote
-
 ``` r
-flc <- read_lines(file = dir_ls(raw_dir))
-flc <- flc %>% str_remove_all('"') %>% read_delim(delim = "\t",
-                                                  col_types = cols(.default = col_character(),
-                                                                    Amount = col_double()))
+fle <- read_delim(
+  file = raw_tsv,
+  delim = "\t",
+  quote = "",
+  escape_backslash = FALSE,
+  escape_double = FALSE,
+  col_types = cols(
+    .default = col_character(),
+    Date = col_date_mdy(),
+    Amount = col_double()
+  )
+)
 ```
 
-To keep consistency with TAP’s previous data structure, we will rename
-some columns.
+``` r
+problems(fle)
+#> # A tibble: 0 × 5
+#> # … with 5 variables: row <int>, col <int>, expected <chr>, actual <chr>, file <chr>
+```
 
 ``` r
-flc <- flc %>% 
-  rename(Candidate_Committee = `Candidate/Committee`,
-         ContribName=`Contributor Name`,
-         City_State_Zip=`City State Zip`,
-         InkindDesc = `Inkind Desc`,
-         Type = Typ)
+fle <- fle %>% 
+  rename(`Comm Name` = `Candidate/Committee`) %>% 
+  clean_names(case = "snake")
+```
+
+To confirm our file was read correctly, we can count the distinct values
+of a variable known to be discrete (like `typ`). If we find no erroneous
+values, we know this column has been properly read across every line.
+
+``` r
+count(fle, typ)
+#> # A tibble: 12 × 2
+#>    typ        n
+#>    <chr>  <int>
+#>  1 CAS    78997
+#>  2 CHE   594541
+#>  3 COF       20
+#>  4 DUE   101153
+#>  5 INK     5858
+#>  6 INT     1938
+#>  7 LOA      679
+#>  8 MO        64
+#>  9 MUC     1066
+#> 10 RCT        5
+#> 11 REF     1010
+#> 12 X       1110
 ```
 
 ## Explore
 
+There are 786,441 rows of 9 columns. Each record represents a single
+contribution made from an individual to a committee.
+
 ``` r
-glimpse(flc)
-#> Rows: 646,712
+glimpse(fle)
+#> Rows: 786,441
 #> Columns: 9
-#> $ Candidate_Committee <chr> "Floridians for Honest Government (PAC)", "Gulf Coast Citizen's Alli…
-#> $ Date                <chr> "08/10/2020", "07/28/2020", "08/13/2020", "06/02/2020", "06/02/2020"…
-#> $ Amount              <dbl> 0, 1000, 50000, 3, 3, 3, 3, 3, 5, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3…
-#> $ Type                <chr> "X", "CHE", "CHE", "CHE", "CHE", "CHE", "CHE", "CHE", "CHE", "CHE", …
-#> $ ContribName         <chr> NA, NA, NA, "AILING, JR KENNETH", "ANDREWS, JR REFUSE", "BAKER, JR J…
-#> $ Address             <chr> NA, "1808 JAMES REDMAN PARKWAY 178", "3701 NEWTON STREET", "4111 WOO…
-#> $ City_State_Zip      <chr> ",  ", "PLANT CITY, FL 33563", "DENVER, CO 80211", "MINERVA, OH 4465…
-#> $ Occupation          <chr> NA, "COMMERCIAL PLAYGROUNDS", "POLITICAL ORGANIZATION", "NELSON TREE…
-#> $ InkindDesc          <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
-tail(flc)
-#> # A tibble: 6 x 9
-#>   Candidate_Committee Date   Amount Type  ContribName Address  City_State_Zip Occupation InkindDesc
-#>   <chr>               <chr>   <dbl> <chr> <chr>       <chr>    <chr>          <chr>      <chr>     
-#> 1 Local Union 915 IB… 02/26…   5.9  CHE   ZYTCZAK JA… 22711 G… LUTZ, FL 33549 ELECTRICI… <NA>      
-#> 2 Local Union 915 IB… 03/11…   7.55 CHE   ZYTCZAK JA… 22711 G… LUTZ, FL 33549 ELECTRICI… <NA>      
-#> 3 Local Union 915 IB… 05/14…   9.65 CHE   ZYTCZAK JA… 22711 G… LUTZ, FL 33549 ELECTRICI… <NA>      
-#> 4 Local Union 915 IB… 06/16…   7.15 CHE   ZYTCZAK JA… 22711 G… LUTZ, FL 33549 ELECTRICI… <NA>      
-#> 5 FAIAPAC (PAC)       08/01…  75    CHE   ZYWAVE      10100 W… MILWAUKEE, WI… INSURANCE  <NA>      
-#> 6 FAIAPAC (PAC)       07/15…  75    CHE   ZYWAVE      10100 W… MILWAUKEE, WI… INSURANCE  <NA>
+#> $ comm_name        <chr> "Jennings, Toni  (REP)(STS)", "Kelly, Everett  (DEM)(STR)", "Kelly, Everett  (DEM)(STR)", "St…
+#> $ date             <date> 1995-01-01, 1995-02-01, 1995-02-01, 1995-02-01, 1995-03-01, 1995-03-01, 1995-03-01, 1995-03-…
+#> $ amount           <dbl> 3397.15, 500.00, 500.00, 500.00, 300.00, 200.00, 100.00, 100.00, 100.00, 100.00, 100.00, 50.0…
+#> $ typ              <chr> "CHE", "CHE", "CHE", "CHE", "CHE", "CHE", "CHE", "CHE", "CHE", "CHE", "CHE", "CHE", "CHE", "C…
+#> $ contributor_name <chr> "BARNETT BANK OF CENTRAL FL.", "FLORIDA PHARMACY PAC", "PANZER, MAURER, MAYNARD PA", "MANUFAC…
+#> $ address          <chr> "PO BOX 1000", "P.O. BOX 1575", "3081 E COMMERCIAL BLVD.", "TWO N. RIVERSIDE PZ", "217 N KIRK…
+#> $ city_state_zip   <chr> "WINTER PARK, FL 32790", "TALLAHASSEE, FL 32302", "FT. LAUDERDALE, FL 33308", "CHICAGO, IL 60…
+#> $ occupation       <chr> "INTEREST", "PAC", "ATTORNEYS", "MOBILE HOMES", "PAC", "REGIONAL MANAGER", NA, "POLITICAL ACT…
+#> $ inkind_desc      <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
+tail(fle)
+#> # A tibble: 6 × 9
+#>   comm_name                     date        amount typ   contributor_name  address city_state_zip occupation inkind_desc
+#>   <chr>                         <date>       <dbl> <chr> <chr>             <chr>   <chr>          <chr>      <chr>      
+#> 1 Friends of Ron DeSantis (PAC) 2021-08-01   250   CHE   TATO JOHN         293 FL… SANTA ROSA BE… RETIRED    <NA>       
+#> 2 Friends of Ron DeSantis (PAC) 2021-08-01   500   CHE   BARNETT SCOTT     4602 C… BUSHNELL, FL … RETIRED    <NA>       
+#> 3 Friends of Ron DeSantis (PAC) 2021-08-01  5000   CHE   BIEKER MICHAEL    354 1S… NAPLES, FL 34… LED LIGHT… <NA>       
+#> 4 Friends of Ron DeSantis (PAC) 2021-08-01 10000   CHE   METABUILT LLC     550 AR… BIRMINGHAM, M… MANUFACTU… <NA>       
+#> 5 FAIAPAC (PAC)                 2021-08-01    62.5 CHE   ASHWORTH & SACHS… 999 VA… NAPLES, FL 34… INSURANCE  <NA>       
+#> 6 Florida Cow PAC (PAC)         2021-08-01    50   CHE   JOHNSON ANDREA    3049 C… GREEN, FL 341… RANCHER    <NA>
 ```
 
 ### Missing
 
-``` r
-col_stats(flc, count_na)
-#> # A tibble: 9 x 4
-#>   col                 class      n          p
-#>   <chr>               <chr>  <int>      <dbl>
-#> 1 Candidate_Committee <chr>      0 0         
-#> 2 Date                <chr>      0 0         
-#> 3 Amount              <dbl>      0 0         
-#> 4 Type                <chr>      0 0         
-#> 5 ContribName         <chr>      3 0.00000464
-#> 6 Address             <chr>    376 0.000581  
-#> 7 City_State_Zip      <chr>      0 0         
-#> 8 Occupation          <chr> 259480 0.401     
-#> 9 InkindDesc          <chr> 640211 0.990
-```
+Columns vary in their degree of missing values.
 
 ``` r
-flc <- flc %>% flag_na(Address, ContribName)
-sum(flc$na_flag)
-#> [1] 378
+col_stats(fle, count_na)
+#> # A tibble: 9 × 4
+#>   col              class       n        p
+#>   <chr>            <chr>   <int>    <dbl>
+#> 1 comm_name        <chr>       0 0       
+#> 2 date             <date>      0 0       
+#> 3 amount           <dbl>       0 0       
+#> 4 typ              <chr>       0 0       
+#> 5 contributor_name <chr>     157 0.000200
+#> 6 address          <chr>    7934 0.0101  
+#> 7 city_state_zip   <chr>       0 0       
+#> 8 occupation       <chr>  394321 0.501   
+#> 9 inkind_desc      <chr>  779222 0.991
 ```
 
+We can flag any record missing a key variable needed to identify a
+transaction.
+
 ``` r
-flc %>% 
+key_vars <- c("date", "contributor_name", "amount", "comm_name")
+fle <- flag_na(fle, all_of(key_vars))
+sum(fle$na_flag)
+#> [1] 157
+```
+
+A few hundred records are missing a `contributor_name`.
+
+``` r
+fle %>% 
   filter(na_flag) %>% 
-  select(Candidate_Committee,Date, Amount, Type, InkindDesc)
-#> # A tibble: 378 x 5
-#>    Candidate_Committee                    Date       Amount Type  InkindDesc
-#>    <chr>                                  <chr>       <dbl> <chr> <chr>     
-#>  1 Floridians for Honest Government (PAC) 08/10/2020      0 X     <NA>      
-#>  2 Gulf Coast Citizen's Alliance (PAC)    07/28/2020   1000 CHE   <NA>      
-#>  3 Parents for Great Schools (ECO)        08/13/2020  50000 CHE   <NA>      
-#>  4 Florida ACRE (PAC)                     03/10/2020    100 MUC   <NA>      
-#>  5 Florida ACRE (PAC)                     06/01/2020    104 MUC   <NA>      
-#>  6 Florida ACRE (PAC)                     06/01/2020    530 MUC   <NA>      
-#>  7 Florida ACRE (PAC)                     08/25/2020     11 MUC   <NA>      
-#>  8 Florida ACRE (PAC)                     05/06/2020     11 MUC   <NA>      
-#>  9 Florida ACRE (PAC)                     04/22/2020     44 MUC   <NA>      
-#> 10 Florida ACRE (PAC)                     04/09/2019   2825 MUC   <NA>      
-#> # … with 368 more rows
+  select(all_of(key_vars), city_state_zip) %>% 
+  relocate(city_state_zip, .after = contributor_name)
+#> # A tibble: 157 × 5
+#>    date       contributor_name city_state_zip           amount comm_name                                     
+#>    <date>     <chr>            <chr>                     <dbl> <chr>                                         
+#>  1 1996-03-01 <NA>             "WINTER HAVEN, FL 33882"  200   Brennan, Mary  (DEM)(STR)                     
+#>  2 1996-03-01 <NA>             ",       "                 30   NRA Political Victory Fund (PAC)              
+#>  3 1996-03-01 <NA>             ",       "                 56.3 NRA Political Victory Fund (PAC)              
+#>  4 1996-03-01 <NA>             ",       "                 28.1 NRA Political Victory Fund (PAC)              
+#>  5 1996-03-01 <NA>             ",       "                 28.1 NRA Political Victory Fund (PAC)              
+#>  6 1996-03-01 <NA>             ",       "                 28.1 NRA Political Victory Fund (PAC)              
+#>  7 1996-04-01 <NA>             ",  00000"                  0   The Parole Elimination Network Group (PAC)    
+#>  8 1996-06-01 <NA>             "HOLLYWOOD, FL 23020"     175   Baum, Maurice  (REP)(STR)                     
+#>  9 1996-06-01 <NA>             "HOLLYWOOD, FL 23020"      69   Baum, Maurice  (REP)(STR)                     
+#> 10 1996-06-01 <NA>             ", FL 00000"                0   Palm Beach County PBA Association Campai (CCE)
+#> # … with 147 more rows
+```
+
+``` r
+fle %>% 
+  select(all_of(key_vars)) %>% 
+  col_stats(count_na)
+#> # A tibble: 4 × 4
+#>   col              class      n        p
+#>   <chr>            <chr>  <int>    <dbl>
+#> 1 date             <date>     0 0       
+#> 2 contributor_name <chr>    157 0.000200
+#> 3 amount           <dbl>      0 0       
+#> 4 comm_name        <chr>      0 0
 ```
 
 ### Duplicates
 
+We can also flag any record completely duplicated across every column.
+
 ``` r
-flc <- flag_dupes(flc, everything())
-sum(flc$dupe_flag)
-#> [1] 9488
+fle <- flag_dupes(fle, everything())
+mean(fle$dupe_flag)
+#> [1] 0.04872457
+sum(fle$dupe_flag)
+#> [1] 38319
+```
+
+4.87% of records are duplicated at least once.
+
+``` r
+fle %>% 
+  filter(dupe_flag) %>% 
+  select(all_of(key_vars)) %>% 
+  arrange(contributor_name, amount)
+#> # A tibble: 38,319 × 4
+#>    date       contributor_name amount comm_name                 
+#>    <date>     <chr>             <dbl> <chr>                     
+#>  1 2011-06-01 1 @ $100          100   Ruth's List  Florida (CCE)
+#>  2 2011-06-01 1 @ $100          100   Ruth's List  Florida (CCE)
+#>  3 2009-07-01 1 @ $7              7   TREE PAC, Inc. (CCE)      
+#>  4 2009-07-01 1 @ $7              7   TREE PAC, Inc. (CCE)      
+#>  5 2001-10-01 1 @ 100.00        100   TREE PAC, Inc. (CCE)      
+#>  6 2001-10-01 1 @ 100.00        100   TREE PAC, Inc. (CCE)      
+#>  7 2001-10-01 1 @ 11.31          11.3 TREE PAC, Inc. (CCE)      
+#>  8 2001-10-01 1 @ 11.31          11.3 TREE PAC, Inc. (CCE)      
+#>  9 2001-10-01 1 @ 13.10          13.1 TREE PAC, Inc. (CCE)      
+#> 10 2001-10-01 1 @ 13.10          13.1 TREE PAC, Inc. (CCE)      
+#> # … with 38,309 more rows
 ```
 
 ``` r
-flc %>% 
+fle %>% 
   filter(dupe_flag) %>% 
-  select(Candidate_Committee,Date, Amount, Type, InkindDesc)
-#> # A tibble: 9,488 x 5
-#>    Candidate_Committee                            Date       Amount Type  InkindDesc
-#>    <chr>                                          <chr>       <dbl> <chr> <chr>     
-#>  1 Duval Teachers United Tiger Cope (PAC)         04/23/2020    4.2 MUC   <NA>      
-#>  2 Duval Teachers United Tiger Cope (PAC)         04/23/2020    4.2 MUC   <NA>      
-#>  3 Alachua - Totally Involved in Government (PAC) 09/30/2019   25   MUC   <NA>      
-#>  4 Alachua - Totally Involved in Government (PAC) 09/30/2019   25   MUC   <NA>      
-#>  5 Duval Teachers United Tiger Cope (PAC)         04/23/2020   43.2 MUC   <NA>      
-#>  6 Duval Teachers United Tiger Cope (PAC)         04/23/2020   43.2 MUC   <NA>      
-#>  7 United TIGER/COPE South (PAC)                  07/16/2019  166.  MUC   <NA>      
-#>  8 United TIGER/COPE South (PAC)                  07/16/2019  166.  MUC   <NA>      
-#>  9 United TIGER/COPE North (PAC)                  03/01/2019  172.  MUC   <NA>      
-#> 10 United TIGER/COPE North (PAC)                  03/01/2019  172.  MUC   <NA>      
-#> # … with 9,478 more rows
+  select(all_of(key_vars)) %>% 
+  count(contributor_name, amount, comm_name, sort = TRUE)
+#> # A tibble: 13,867 × 4
+#>    contributor_name              amount comm_name                                          n
+#>    <chr>                          <dbl> <chr>                                          <int>
+#>  1 CARDWELL GRACIE                 5    AT&T Florida Political Action Committee  (CCE)    86
+#>  2 SIRIANNI MARYROSE               5    AT&T Florida Political Action Committee  (CCE)    86
+#>  3 <NA>                            0    Streitfeld, Jeffrey E. (NOP)(CTJ)                 53
+#>  4 LASTNAME FIRSTNAME MIDDLENAME   0    DRIVE-Democrat, Republican, Independent  (PAC)    41
+#>  5 MEMBERSHIP DUES                 6    Florida Action Committee for Rural Elect (CCE)    39
+#>  6 FERNANDEZ DANIEL                5    Hialeah Fire PAC (PAC)                            38
+#>  7 SMITH JAMES                     0.25 Florida Police Benevolent Association In (PAC)    17
+#>  8 SMITH JAMES                     0.5  Florida Police Benevolent Association In (PAC)    15
+#>  9 HOLMES WILLIAM                  1    Sun Coast Police Benevolent Association  (PAC)    14
+#> 10 JOHNSON WILLIAM                 0.25 Florida Police Benevolent Association In (PAC)    14
+#> # … with 13,857 more rows
 ```
 
 ### Categorical
 
 ``` r
-col_stats(flc, n_distinct)
-#> # A tibble: 11 x 4
-#>    col                 class      n          p
-#>    <chr>               <chr>  <int>      <dbl>
-#>  1 Candidate_Committee <chr>   1298 0.00201   
-#>  2 Date                <chr>    607 0.000939  
-#>  3 Amount              <dbl>   7616 0.0118    
-#>  4 Type                <chr>      9 0.0000139 
-#>  5 ContribName         <chr> 230634 0.357     
-#>  6 Address             <chr> 227277 0.351     
-#>  7 City_State_Zip      <chr>  20287 0.0314    
-#>  8 Occupation          <chr>  12482 0.0193    
-#>  9 InkindDesc          <chr>    862 0.00133   
-#> 10 na_flag             <lgl>      2 0.00000309
-#> 11 dupe_flag           <lgl>      2 0.00000309
+col_stats(fle, n_distinct)
+#> # A tibble: 11 × 4
+#>    col              class       n          p
+#>    <chr>            <chr>   <int>      <dbl>
+#>  1 comm_name        <chr>    6827 0.00868   
+#>  2 date             <date>    320 0.000407  
+#>  3 amount           <dbl>   11577 0.0147    
+#>  4 typ              <chr>      12 0.0000153 
+#>  5 contributor_name <chr>  394224 0.501     
+#>  6 address          <chr>  328970 0.418     
+#>  7 city_state_zip   <chr>   37967 0.0483    
+#>  8 occupation       <chr>   29146 0.0371    
+#>  9 inkind_desc      <chr>    2631 0.00335   
+#> 10 na_flag          <lgl>       2 0.00000254
+#> 11 dupe_flag        <lgl>       2 0.00000254
 ```
 
 ``` r
-explore_plot(flc, Type)
+fle <- mutate(fle, across(typ, str_to_upper))
 ```
 
 ![](../plots/distinct_plots-1.png)<!-- -->
@@ -261,11 +542,30 @@ explore_plot(flc, Type)
 ### Amounts
 
 ``` r
-summary(flc$amount)
-#> Length  Class   Mode 
-#>      0   NULL   NULL
-mean(flc$amount <= 0)
-#> [1] NaN
+summary(fle$amount)
+#>    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+#> -400000       1       5     231      20 3400000
+mean(fle$amount <= 0)
+#> [1] 0.009925729
+```
+
+These are the records with the minimum and maximum amounts.
+
+``` r
+glimpse(fle[c(which.max(fle$amount), which.min(fle$amount)), ])
+#> Rows: 2
+#> Columns: 11
+#> $ comm_name        <chr> "Floridians for a Fair Democracy,  Inc. (PAC)", "Hinkle, Jeff  (REP)(STR)"
+#> $ date             <date> 2018-08-01, 2020-05-01
+#> $ amount           <dbl> 3400000, -400000
+#> $ typ              <chr> "CHE", "LOA"
+#> $ contributor_name <chr> "AMERICAN CIVIL LIBERTIES UNION, INC.", "HINKLE JEFF"
+#> $ address          <chr> "125 BROAD ST", "4482 STONEBRIDGE RD"
+#> $ city_state_zip   <chr> "NEW YORK, NY 10004", "DESTIN, FL 32541"
+#> $ occupation       <chr> "SOCIAL WELFARE ORGANIZATION", "CEO AVIATION"
+#> $ inkind_desc      <chr> NA, NA
+#> $ na_flag          <lgl> FALSE, FALSE
+#> $ dupe_flag        <lgl> FALSE, FALSE
 ```
 
 ![](../plots/hist_amount-1.png)<!-- -->
@@ -275,18 +575,17 @@ mean(flc$amount <= 0)
 We can add the calendar year from `date` with `lubridate::year()`
 
 ``` r
-flc$Date <- as.Date(flc$Date,format = "%m/%d/%Y")
-flc <- mutate(flc, YEAR = year(Date))
+fle <- mutate(fle, year = year(date))
 ```
 
 ``` r
-min(flc$date)
-#> [1] Inf
-sum(flc$year < 2000)
+min(fle$date)
+#> [1] "1995-01-01"
+sum(fle$year < 1995)
 #> [1] 0
-max(flc$date)
-#> [1] -Inf
-sum(flc$date > today())
+max(fle$date)
+#> [1] "2021-08-01"
+sum(fle$date > today())
 #> [1] 0
 ```
 
@@ -299,97 +598,192 @@ consistent, confident string normalization. For geographic variables
 like city names and ZIP codes, the corresponding `campfin::normal_*()`
 functions are tailor made to facilitate this process.
 
+### Separate
+
+The `city_state_zip` column contains all three geographic variables in a
+single string. We need to separate out the data so they can be properly
+searched on the site. The string normally takes the format of
+`Miami, FL 33101`, with the city name first before a common, followed by
+the two-letter state abbreviation and 5-digit ZIP code. Quite a number
+of these values break this expected format, upwards of 5% of values. We
+can use regular expressions to manipulate broken strings and then
+extract the geographic variables from their expected locations.
+
+``` r
+fle$city_state_zip <- str_conv(fle$city_state_zip, "UTF-8")
+```
+
+``` r
+fle <- extract(
+  data = fle,
+  col = city_state_zip,
+  into = c("city_sep", "state_sep", "zip_sep"),
+  regex = "^(.*),\\s+(.*),?\\s+(.*)$",
+  remove = FALSE
+)
+```
+
+``` r
+csz <- fle %>%
+  distinct(city_state_zip) %>% 
+  mutate(
+    # fix the city_state_zip values
+    x = city_state_zip %>% 
+      na_rep() %>% 
+      str_squish() %>% 
+      str_replace("(?<=\\s)F, L", ", FL") %>% 
+      str_replace("(?<=\\s)F, L,", ", FL") %>% 
+      str_replace("(?<=\\s)F, L.", ", FL") %>% 
+      str_remove("(?<=FL),") %>% 
+      str_replace("([A-Z]{2})(\\d+)", "\\1 \\2") %>% 
+      str_replace("\\sDC,", ", DC"),
+    # extract the geo from each spot
+    city_sep = str_extract(x, "(.*)(?=,(\\s|$))"),
+    state_sep = str_extract(x, "[A-Z\\*\\.]{1,}(?=\\s\\d|$)"),
+    zip_sep = str_extract(x, "\\d{2,5}(?:-\\d{4})?$"),
+    across(where(is.character), na_if, "")
+  ) %>% 
+  select(-x)
+```
+
+``` r
+fle <- left_join(fle, csz, by = "city_state_zip")
+```
+
 ### Address
 
 For the street `addresss` variable, the `campfin::normal_address()`
 function will force consistence case, remove punctuation, and abbreviate
 official USPS suffixes.
 
+The `address` also seems to be separated by white space not
+tab-characters. We can create a new variable with the secondary address.
+
 ``` r
-flc <- flc %>% 
+fle %>% 
+  select(address) %>% 
+  head(10)
+#> # A tibble: 10 × 1
+#>    address                
+#>    <chr>                  
+#>  1 PO BOX 1000            
+#>  2 P.O. BOX 1575          
+#>  3 3081 E COMMERCIAL BLVD.
+#>  4 TWO N. RIVERSIDE PZ    
+#>  5 217 N KIRKMAN RD #1    
+#>  6 12203 SW 107TH COURT   
+#>  7 P.O. BOX 3106          
+#>  8 335 BEARD STREET       
+#>  9 2092 CYNTHIA DR        
+#> 10 P.O. BOX 10615
+```
+
+``` r
+fle$address <- str_conv(fle$address, encoding = "UTF-8")
+```
+
+``` r
+fl_addr <- fle %>% 
+  distinct(address) %>% 
+  separate(
+    col = address,
+    into = c("address1", "address2"),
+    sep = "\\s{3,}",
+    remove = FALSE,
+    extra = "merge",
+    fill = "right"
+  )
+```
+
+``` r
+fl_addr <- fl_addr %>% 
   mutate(
-    Address_norm = normal_address(
-      address = Address,
-      abbs = usps_street,
-      na_rep = TRUE
+    across(
+      .cols = c(address1, address2),
+      .fns = ~normal_address(
+        address = .,
+        abbs = usps_street,
+        na_rep = TRUE,
+        na = invalid_city
+      )
     )
   )
 ```
 
 ``` r
-flc %>% 
-  select(contains("Address")) %>% 
+fl_addr <- unite(
+  data = fl_addr,
+  col = address_clean,
+  address1, address2,
+  sep = " ",
+  remove = TRUE,
+  na.rm = TRUE
+)
+```
+
+``` r
+fle <- left_join(fle, fl_addr, by = "address")
+```
+
+``` r
+fle %>% 
+  select(contains("address")) %>% 
   distinct() %>% 
   sample_n(10)
-#> # A tibble: 10 x 2
-#>    Address                      Address_norm           
-#>    <chr>                        <chr>                  
-#>  1 950 SPOONBILL CT             950 SPOONBILL CT       
-#>  2 260 BERGEN ST. #4F           260 BERGEN ST 4 F      
-#>  3 1416 HAMPSTEAD AVE.          1416 HAMPSTEAD AVE     
-#>  4 96271 PALM BLUFF DRIVE       96271 PALM BLF DR      
-#>  5 1687 PASSION VINE CR         1687 PASSION VINE CR   
-#>  6 679 S. REED CT.  APT. #3-201 679 S REED CT APT 3201 
-#>  7 13354 SW 58TH AVENUE         13354 SW 58 TH AVE     
-#>  8 101 N 12TH ST UNIT 401       101 N 12 TH ST UNIT 401
-#>  9 4801 NAHANE WAY              4801 NAHANE WAY        
-#> 10 1210 SE MCFARLANE AVE        1210 SE MCFARLANE AVE
+#> # A tibble: 10 × 2
+#>    address                               address_clean          
+#>    <chr>                                 <chr>                  
+#>  1 216 SARATOGA BLVD. E.                 216 SARATOGA BLVD E    
+#>  2 7019 MCBRIDE POINTE                   7019 MCBRIDE POINTE    
+#>  3 1010 GARDEN PLAZA             SUITE A 1010 GARDEN PLZ SUITE A
+#>  4 207 PARK STREET                       207 PARK ST            
+#>  5 40 WISCONSIN ST APT 40                40 WISCONSIN ST APT 40 
+#>  6 10097 NORTHWEST 16TH STREET           10097 NORTHWEST 16TH ST
+#>  7 6110NW 1ST STREET                     6110 NW 1ST ST         
+#>  8 727 ASHERY DR.                        727 ASHERY DR          
+#>  9 8482 CARTER ST.                       8482 CARTER ST         
+#> 10 5033 GALBRAITH                        5033 GALBRAITH
 ```
 
 ### ZIP
-
-To normalize the City, State and ZIP fields, we will need to separate
-them first.
-
-``` r
-flc <- flc %>% 
-  mutate(Zip= str_extract(City_State_Zip, "\\d{2,}"))
-```
 
 For ZIP codes, the `campfin::normal_zip()` function will attempt to
 create valid *five* digit codes by removing the ZIP+4 suffix and
 returning leading zeroes dropped by other programs like Microsoft Excel.
 
 ``` r
-flc <- flc %>% 
+fle <- fle %>% 
   mutate(
-    ZIP5 = normal_zip(
-      zip = Zip,
+    zip_norm = normal_zip(
+      zip = zip_sep,
       na_rep = TRUE
     )
-  ) 
+  )
 ```
 
 ``` r
 progress_table(
-  flc$Zip,
-  flc$ZIP5,
+  fle$zip_sep,
+  fle$zip_norm,
   compare = valid_zip
 )
-#> # A tibble: 2 x 6
-#>   stage prop_in n_distinct prop_na n_out n_diff
-#>   <chr>   <dbl>      <dbl>   <dbl> <dbl>  <dbl>
-#> 1 Zip     0.997      13446 0.00786  1765    696
-#> 2 ZIP5    0.998      13362 0.00790  1549    581
+#> # A tibble: 2 × 6
+#>   stage        prop_in n_distinct prop_na n_out n_diff
+#>   <chr>          <dbl>      <dbl>   <dbl> <dbl>  <dbl>
+#> 1 fle$zip_sep    0.981      21100  0.0224 14498   1362
+#> 2 fle$zip_norm   0.993      21091  0.0338  5512   1353
 ```
 
 ### State
-
-``` r
-flc <- flc %>% 
-  mutate(State = str_extract(City_State_Zip, "(?<=,\\s)[A-Z]{2}(?=\\s)"))
-
-flc$State[str_detect(flc$City_State_Zip,"F 3\\d*")] <- "FL"
-```
 
 Valid two digit state abbreviations can be made using the
 `campfin::normal_state()` function.
 
 ``` r
-flc <- flc %>% 
+fle <- fle %>% 
   mutate(
-    State_norm = normal_state(
-      state = State,
+    state_norm = normal_state(
+      state = state_sep,
       abbreviate = TRUE,
       na_rep = TRUE,
       valid = valid_state
@@ -398,35 +792,32 @@ flc <- flc %>%
 ```
 
 ``` r
-flc %>% 
-  filter(State != State_norm) %>% 
-  count(State, sort = TRUE)
-#> # A tibble: 0 x 2
-#> # … with 2 variables: State <chr>, n <int>
+fle %>% 
+  filter(state_sep != state_norm) %>% 
+  count(state_sep, state_norm, sort = TRUE)
+#> # A tibble: 1 × 3
+#>   state_sep state_norm     n
+#>   <chr>     <chr>      <int>
+#> 1 FL.       FL             6
 ```
 
 ``` r
 progress_table(
-  flc$State,
-  flc$State_norm,
+  fle$state_sep,
+  fle$state_norm,
   compare = valid_state
 )
-#> # A tibble: 2 x 6
-#>   stage      prop_in n_distinct prop_na n_out n_diff
-#>   <chr>        <dbl>      <dbl>   <dbl> <dbl>  <dbl>
-#> 1 State         1.00         77 0.00258    83     19
-#> 2 State_norm    1            59 0.00271     0      1
+#> # A tibble: 2 × 6
+#>   stage          prop_in n_distinct prop_na n_out n_diff
+#>   <chr>            <dbl>      <dbl>   <dbl> <dbl>  <dbl>
+#> 1 fle$state_sep    0.999        144  0.0185   410     86
+#> 2 fle$state_norm   1             58  0.0190     0      1
 ```
 
 ### City
 
 Cities are the most difficult geographic variable to normalize, simply
 due to the wide variety of valid cities and formats.
-
-``` r
-flc <- flc %>% 
-  mutate(City = str_extract(City_State_Zip,".+(?=,\\s)"))
-```
 
 #### Normal
 
@@ -435,10 +826,11 @@ case, removing punctuation, but *expanding* USPS abbreviations. We can
 also remove `invalid_city` values.
 
 ``` r
-flc <- flc %>% 
+norm_city <- fle %>% 
+  distinct(city_sep, state_norm, zip_norm) %>% 
   mutate(
-    City_norm = normal_city(
-      city = City, 
+    city_norm = normal_city(
+      city = city_sep, 
       abbs = usps_city,
       states = c("FL", "DC", "FLORIDA"),
       na = invalid_city,
@@ -455,30 +847,41 @@ ZIP code. If the normalized value is either an abbreviation for or very
 similar to the expected value, we can confidently swap those two.
 
 ``` r
-flc <- flc %>% 
-  rename(City_raw = City) %>% 
+norm_city <- norm_city %>% 
   left_join(
     y = zipcodes,
     by = c(
-      "State_norm" = "state",
-      "ZIP5" = "zip"
+      "state_norm" = "state",
+      "zip_norm" = "zip"
     )
   ) %>% 
-  rename(City_match = city) %>% 
+  rename(city_match = city) %>% 
   mutate(
-    match_abb = is_abbrev(City_norm, City_match),
-    match_dist = str_dist(City_norm, City_match),
-    City_swap = if_else(
+    match_abb = is_abbrev(city_norm, city_match),
+    match_dist = str_dist(city_norm, city_match),
+    city_swap = if_else(
       condition = !is.na(match_dist) & (match_abb | match_dist == 1),
-      true = City_match,
-      false = City_norm
+      true = city_match,
+      false = city_norm
     )
   ) %>% 
   select(
-    -City_match,
+    -city_match,
     -match_dist,
     -match_abb
   )
+```
+
+``` r
+fle <- left_join(
+  x = fle,
+  y = norm_city,
+  by = c(
+    "city_sep", 
+    "state_norm", 
+    "zip_norm"
+  )
+)
 ```
 
 #### Refine
@@ -490,137 +893,96 @@ low confidence; we will only keep any refined strings that have a valid
 city/state/zip combination.
 
 ``` r
-good_refine <- flc %>% 
+good_refine <- fle %>% 
   mutate(
-    City_refine = City_swap %>% 
+    city_refine = city_swap %>% 
       key_collision_merge() %>% 
       n_gram_merge(numgram = 1)
   ) %>% 
-  filter(City_refine != City_swap) %>% 
+  filter(city_refine != city_swap) %>% 
   inner_join(
     y = zipcodes,
     by = c(
-      "City_refine" = "city",
-      "State_norm" = "state",
-      "ZIP5" = "zip"
+      "city_refine" = "city",
+      "state_norm" = "state",
+      "zip_norm" = "zip"
     )
   )
 ```
 
-    #> # A tibble: 59 x 5
-    #>    State_norm ZIP5  City_swap        City_refine         n
-    #>    <chr>      <chr> <chr>            <chr>           <int>
-    #>  1 FL         34653 NEW POINT RICHEY NEW PORT RICHEY    72
-    #>  2 FL         34655 NEW POINT RICHEY NEW PORT RICHEY    56
-    #>  3 FL         34654 NEW POINT RICHEY NEW PORT RICHEY    50
-    #>  4 CA         94127 SAN FRANCISCO CA SAN FRANCISCO      12
-    #>  5 FL         33433 BACO RATON       BOCA RATON         12
-    #>  6 FL         33948 PORT CHAROLETTE  PORT CHARLOTTE     10
-    #>  7 FL         32801 ORLANDONDO       ORLANDO             8
-    #>  8 FL         33647 TAMPAPA          TAMPA               6
-    #>  9 FL         32132 EDAGWATER        EDGEWATER           3
-    #> 10 CA         94104 SAN FRANSICO     SAN FRANCISCO       2
-    #> # … with 49 more rows
+    #> # A tibble: 97 × 5
+    #>    state_norm zip_norm city_swap         city_refine           n
+    #>    <chr>      <chr>    <chr>             <chr>             <int>
+    #>  1 FL         34653    NEW POINT RICHEY  NEW PORT RICHEY      30
+    #>  2 FL         34655    NEW POINT RICHEY  NEW PORT RICHEY      21
+    #>  3 FL         34654    NEW POINT RICHEY  NEW PORT RICHEY      19
+    #>  4 FL         32082    PONTEVERDE BEACH  PONTE VEDRA BEACH     9
+    #>  5 FL         32082    PONTE VERDE BEACH PONTE VEDRA BEACH     5
+    #>  6 SC         29406    NORTH CHARLESTON  CHARLESTON            5
+    #>  7 NY         11733    SETAUKET          EAST SETAUKET         4
+    #>  8 WV         25309    SO CHARLESTON     CHARLESTON            4
+    #>  9 FL         34652    NEW POINT RICHEY  NEW PORT RICHEY       3
+    #> 10 OH         45244    CINCINATTI        CINCINNATI            3
+    #> # … with 87 more rows
 
 Then we can join the refined values back to the database.
 
 ``` r
-flc <- flc %>% 
-  left_join(good_refine) %>% 
-  mutate(City_refine = coalesce(City_refine, City_swap))
+fle <- fle %>% 
+  left_join(good_refine, by = names(.)) %>% 
+  mutate(city_refine = coalesce(city_refine, city_swap))
 ```
 
-#### Check
-
-We can use the `campfin::check_city()` function to pass the remaining
-unknown `city_refine` values (and their `state_norm`) to the Google
-Geocode API. The function returns the name of the city or locality which
-most associated with those values.
-
-This is an easy way to both check for typos and check whether an unknown
-`city_refine` value is actually a completely acceptable neighborhood,
-census designated place, or some other locality not found in our
-`valid_city` vector from our `zipcodes` database.
-
-First, we’ll filter out any known valid city and aggregate the remaining
-records by their city and state. Then, we will only query those unknown
-cities which appear at least ten times.
+#### Manual
 
 ``` r
-flc_out <- flc %>% 
-  filter(City_refine %out% c(valid_city, extra_city)) %>% 
-  count(City_refine, State_norm, sort = TRUE) %>% 
-  drop_na() %>% 
-  filter(n > 1)
+many_city <- c(valid_city, extra_city)
+fle %>% 
+  count(city_sep, city_refine, state_norm, sort = TRUE) %>% 
+  filter(city_refine %out% many_city)
+#> # A tibble: 2,253 × 4
+#>    city_sep          city_refine       state_norm     n
+#>    <chr>             <chr>             <chr>      <int>
+#>  1 <NA>              <NA>              <NA>       14288
+#>  2 PMBK PINES        PMBK PINES        FL          1406
+#>  3 RYL PALM BEACH    RYL PALM BEACH    FL           469
+#>  4 HALLANDALE BEACH  HALLANDALE BEACH  FL           423
+#>  5 <NA>              <NA>              FL           302
+#>  6 MIAMI SHORES      MIAMI SHORES      FL           285
+#>  7 FARMINGTON HL     FARMINGTON HILL   MI           243
+#>  8 SUNNY ISLES BEACH SUNNY ISLES BEACH FL           242
+#>  9 FARMINGTON HILLS  FARMINGTON HILLS  MI           235
+#> 10 PT. CHARLOTTE     POINT CHARLOTTE   FL           184
+#> # … with 2,243 more rows
 ```
 
-Passing these values to `campfin::check_city()` with `purrr::pmap_dfr()`
-will return a single tibble of the rows returned by each city/state
-combination.
-
-First, we’ll check to see if the API query has already been done and a
-file exist on disk. If such a file exists, we can read it using
-`readr::read_csv()`. If not, the query will be sent and the file will be
-written using `readr::write_csv()`.
-
 ``` r
-check_file <- here("fl", "contribs", "data", "api_check.csv")
-if (file_exists(check_file)) {
-  check <- read_csv(
-    file = check_file
-  )
-} else {
-  check <- pmap_dfr(
-    .l = list(
-      flc_out$City_refine, 
-      flc_out$State_norm
-    ), 
-    .f = check_city, 
-    key = Sys.getenv("GEOCODE_KEY"), 
-    guess = TRUE
-  ) %>% 
-    mutate(guess = coalesce(guess_city, guess_place)) %>% 
-    select(-guess_city, -guess_place)
-  write_csv(
-    x = check,
-    path = check_file
-  )
-}
-```
-
-Any city/state combination with a `check_city_flag` equal to `TRUE`
-returned a matching city string from the API, indicating this
-combination is valid enough to be ignored.
-
-``` r
-valid_locality <- check$guess[check$check_city_flag]
-```
-
-Then we can perform some simple comparisons between the queried city and
-the returned city. If they are extremely similar, we can accept those
-returned locality strings and add them to our list of accepted
-additional localities.
-
-``` r
-valid_locality <- check %>% 
-  filter(!check_city_flag) %>% 
+fle <- fle %>% 
   mutate(
-    abb = is_abbrev(original_city, guess),
-    dist = str_dist(original_city, guess)
-  ) %>%
-  filter(abb | dist <= 3) %>% 
-  pull(guess) %>% 
-  c(valid_locality)
+    city_refine = city_refine %>% 
+      str_replace("^RYL(?=\\s)", "ROYAL") %>% 
+      str_replace("^PMBK(?=\\s)", "PEMBROKE") %>% 
+      str_replace("^LGHTHSE(?=\\s)", "LIGHTHOUSE") %>% 
+      str_replace("^FARMINGTON HILL$", "FARMINGTON HILLS")
+  )
+```
+
+``` r
+many_city <- c(many_city, "HALLANDALE BEACH", "FARMINGTON HILLS")
 ```
 
 #### Progress
 
-| stage        | prop\_in | n\_distinct | prop\_na | n\_out | n\_diff |
-| :----------- | -------: | ----------: | -------: | -----: | ------: |
-| City\_raw)   |    0.930 |        8836 |    0.003 |  45168 |    2485 |
-| City\_norm   |    0.977 |        8391 |    0.003 |  14955 |    1999 |
-| City\_swap   |    0.985 |        7317 |    0.003 |   9418 |     911 |
-| City\_refine |    0.986 |        7264 |    0.003 |   9132 |     858 |
+Our goal for normalization was to increase the proportion of city values
+known to be valid and reduce the total distinct values by correcting
+misspellings.
+
+| stage                        | prop\_in | n\_distinct | prop\_na | n\_out | n\_diff |
+|:-----------------------------|---------:|------------:|---------:|-------:|--------:|
+| `str_to_upper(fle$city_sep)` |    0.940 |       15933 |    0.019 |  46482 |    6190 |
+| `fle$city_norm`              |    0.963 |       14135 |    0.020 |  28270 |    4315 |
+| `fle$city_swap`              |    0.986 |       11892 |    0.020 |  11110 |    2033 |
+| `fle$city_refine`            |    0.989 |       11807 |    0.020 |   8543 |    1948 |
 
 You can see how the percentage of valid values increased with each
 stage.
@@ -633,51 +995,46 @@ valid equivalent.
 
 ![](../plots/bar_distinct-1.png)<!-- -->
 
-## Conclude
-
 Before exporting, we can remove the intermediary normalization columns
 and rename all added variables with the `_clean` suffix.
 
 ``` r
-flc <- flc %>% 
-  select(
-    -City_norm,
-    -City_swap,
-    -City_raw,
-    -State,
-    -Zip,
-    City_clean = City_refine
-  ) %>% 
+fle <- fle %>% 
+  select(-ends_with("_sep")) %>% 
+  select(-city_norm, -city_swap) %>% 
+  rename(city_clean = city_refine) %>% 
   rename_all(~str_replace(., "_norm", "_clean")) %>% 
-  rename_all(~str_remove(., "_raw"))
+  relocate(city_clean, state_clean, zip_clean, .after = address_clean)
 ```
 
 ``` r
-glimpse(sample_n(flc, 20))
-#> Rows: 20
+glimpse(sample_n(fle, 50))
+#> Rows: 50
 #> Columns: 16
-#> $ Candidate_Committee <chr> "Realtors Political Advocacy Committee (PAC)", "Realtors Political A…
-#> $ Date                <date> 2020-01-27, 2020-07-06, 2019-02-14, 2019-05-21, 2019-04-30, 2020-05…
-#> $ Amount              <dbl> 99.00, 20.00, 8.10, 15.00, 0.42, 2.00, 3.00, 30.00, 30.00, 59.00, 20…
-#> $ Type                <chr> "CHE", "CHE", "CHE", "MUC", "CHE", "CHE", "CHE", "CHE", "CHE", "CHE"…
-#> $ ContribName         <chr> "LYNCH AMBER", "KOTASKA THERESA ANN", "TROUTMAN GEORGE L", "2 DONORS…
-#> $ Address             <chr> "5254 WINDING WAY", "7107 WESTHILL CT", "12501 NW 17TH PL", "150 SOU…
-#> $ City_State_Zip      <chr> "SARASOTA, FL 34242", "LAKEWOOD RANCH, FL 34202", "MIAMI, FL 33167",…
-#> $ Occupation          <chr> NA, NA, NA, NA, NA, "FIRE FIGHTER", "BROWARD SHERIFF'S OFFICE", "REA…
-#> $ InkindDesc          <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
-#> $ na_flag             <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE…
-#> $ dupe_flag           <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE…
-#> $ YEAR                <dbl> 2020, 2020, 2019, 2019, 2019, 2020, 2019, 2020, 2020, 2020, 2020, 20…
-#> $ Address_clean       <chr> "5254 WINDING WAY", "7107 WESTHILL CT", "12501 NW 17 TH PL", "150 S …
-#> $ ZIP5                <chr> "34242", "34202", "33167", "32301", "32780", "33312", "33407", "4850…
-#> $ State_clean         <chr> "FL", "FL", "FL", "FL", "FL", "FL", "FL", "MI", "FL", "FL", "FL", "I…
-#> $ City_clean          <chr> "SARASOTA", "LAKEWOOD RANCH", "MIAMI", "TALLAHASSEE", "TITUSVILLE", …
+#> $ comm_name        <chr> "DRIVE-Democrat, Republican, Independent  (PAC)", "Bogdanoff, Ellyn  (REP)(STS)", "Diaz de la…
+#> $ date             <date> 2005-06-01, 2011-03-01, 1996-03-01, 2005-08-01, 2020-08-01, 2016-04-01, 2007-09-01, 2013-03-…
+#> $ amount           <dbl> 1.00, 500.00, 500.00, 1.00, 1.02, 20.00, 5.00, 4.62, 10.00, 15.00, 0.42, 10.00, 2.00, 2.00, 1…
+#> $ typ              <chr> "CHE", "CHE", "CHE", "CHE", "CHE", "CHE", "DUE", "CHE", "CHE", "CHE", "CHE", "DUE", "CHE", "C…
+#> $ contributor_name <chr> "SMITH MICHAEL B", "AT&T FLORIDA PAC", "MORRISON-KNUDSSEN CORPORATION", "RUSSELL HAROLD", "GA…
+#> $ address          <chr> "115 SPICER CT", "150 SOUTH MONROE STREET       SUITE 400", "PO BOX 73", "235 FAIRFIELD DR.",…
+#> $ city_state_zip   <chr> "WHITEHOUSE, TN 37188", "TALLAHASSEE, FL 32301", "BOISE, ID 83729", "JACKSON, MS 39206", "NAP…
+#> $ occupation       <chr> "DRIVER", "PAC", "CONSTRUCTION COMPA", "DRIVER", "ADMIN, CYPRESS CONTRACTING", "REAL ESTATE B…
+#> $ inkind_desc      <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
+#> $ na_flag          <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FA…
+#> $ dupe_flag        <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FA…
+#> $ year             <dbl> 2005, 2011, 1996, 2005, 2020, 2016, 2007, 2013, 2004, 2007, 2019, 2006, 2005, 2000, 2003, 200…
+#> $ address_clean    <chr> "115 SPICER CT", "150 SOUTH MONROE ST SUITE 400", "PO BOX 73", "235 FAIRFIELD DR", "7060 VENI…
+#> $ city_clean       <chr> "WHITE HOUSE", "TALLAHASSEE", "BOISE", "JACKSON", "NAPLES", "MILTON", "MIAMI", "GRAND BLANC",…
+#> $ state_clean      <chr> "TN", "FL", "ID", "MS", "FL", "FL", "FL", "MI", "AZ", "CT", "FL", "FL", "OH", "FL", "NY", "FL…
+#> $ zip_clean        <chr> "37188", "32301", "83729", "39206", "34119", "32570", "00003", "48439", "85020", "06810", "33…
 ```
 
-1.  There are 646,712 records in the database.
-2.  There are 9,488 duplicate records in the database.
+## Conclude
+
+1.  There are 786,443 records in the database.
+2.  There are 38,321 duplicate records in the database.
 3.  The range and distribution of `amount` and `date` seem reasonable.
-4.  There are 378 records missing key variables.
+4.  There are 157 records missing key variables.
 5.  Consistency in geographic data has been improved with
     `campfin::normal_*()`.
 6.  The 4-digit `year` variable has been created with
@@ -690,55 +1047,30 @@ server.
 
 ``` r
 clean_dir <- dir_create(here("fl", "contribs", "data", "clean"))
-clean_path <- path(clean_dir, "fl_contribs_clean.csv")
-write_csv(flc, clean_path, na = "")
-file_size(clean_path)
-#> 111M
-file_encoding(clean_path)
-#> # A tibble: 1 x 3
-#>   path                                                                                mime  charset
-#>   <fs::path>                                                                          <chr> <chr>  
-#> 1 /Users/yanqixu/code/accountability_datacleaning/R_campfin/fl/contribs/data/clean/f… <NA>  <NA>
+clean_path <- path(clean_dir, "fl_contribs_19950101-20210921.csv")
+write_csv(fle, clean_path, na = "")
+(clean_size <- file_size(clean_path))
+#> 137M
 ```
 
 ## Upload
 
-``` r
-s3write_using(
-  x = sdc,
-  FUN = write_csv,
-  object = "csv/sd_contracts.csv",
-  bucket = "publicaccountability",
-  na = ""
-)
-```
-
-## Dictionary
-
-The following table describes the variables in our final exported file:
-
-| Column                | Type        | Definition                             |
-| :-------------------- | :---------- | :------------------------------------- |
-| `Candidate_Committee` | `character` | Recipient candidate or committee       |
-| `Date`                | `double`    | Date of contribution made              |
-| `Amount`              | `double`    | Contribution amount                    |
-| `Type`                | `character` | Contributor type                       |
-| `ContribName`         | `character` | Contributor name                       |
-| `Address`             | `character` | Contributor street address             |
-| `City_State_Zip`      | `character` | Contributor City, State and ZIP code   |
-| `Occupation`          | `character` | Contributor occupation                 |
-| `InkindDesc`          | `character` | Description of Inkind Contributions    |
-| `na_flag`             | `logical`   | Flag for missing date, amount, or name |
-| `dupe_flag`           | `logical`   | Flag for completely duplicated record  |
-| `YEAR`                | `double`    | Calendar year of contribution date     |
-| `Address_clean`       | `character` | Normalized combined street address     |
-| `ZIP5`                | `character` | Normalized 5-digit ZIP code            |
-| `State_clean`         | `character` | Normalized 2-digit state abbreviation  |
-| `City_clean`          | `character` | Normalized city name                   |
+We can use the `aws.s3::put_object()` to upload the text file to the IRW
+server.
 
 ``` r
-write_lines(
-  x = c("# Florida Contribution Data Dictionary\n", dict_md),
-  path = here("fl", "contribs", "fl_contribs_dict.md"),
-)
+aws_path <- path("csv", basename(clean_path))
+if (!object_exists(aws_path, "publicaccountability")) {
+  put_object(
+    file = clean_path,
+    object = aws_path, 
+    bucket = "publicaccountability",
+    acl = "public-read",
+    show_progress = TRUE,
+    multipart = TRUE
+  )
+}
+aws_head <- head_object(aws_path, "publicaccountability")
+(aws_size <- as_fs_bytes(attr(aws_head, "content-length")))
+unname(aws_size == clean_size)
 ```
