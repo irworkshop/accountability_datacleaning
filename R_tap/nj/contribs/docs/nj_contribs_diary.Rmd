@@ -310,20 +310,25 @@ njc <- njc %>%
   unite(
     col = cont_xname,
     cont_fname, cont_mname, cont_lname, cont_suffix,
-    cont_non_ind_name, cont_non_ind_name2,
     sep = " ",
     remove = FALSE,
     na.rm = TRUE
   ) %>% 
-  mutate(across(cont_xname, na_if, "")) %>% 
+  mutate(
+    cont_xname = coalesce(cont_xname, cont_non_ind_name),
+    across(cont_xname, na_if, "")
+  ) %>% 
   # repeat for recipients
   unite(
     col = rec_xname,
     rec_fname, rec_mname, rec_lname, rec_suffix, 
-    rec_non_ind_name, rec_non_ind_name2,
     sep = " ",
     remove = FALSE,
     na.rm = TRUE
+  ) %>% 
+    mutate(
+    rec_xname = coalesce(rec_xname, rec_non_ind_name),
+    across(rec_xname, na_if, "")
   ) %>% 
   mutate(across(rec_xname, na_if, "")) %>% 
   relocate(ends_with("xname"), .after = last_col())
@@ -654,7 +659,9 @@ progress <- progress_table(
   njc$cont_city_refine,
   compare = many_city
 ) %>% mutate(stage = as_factor(stage))
-kable(progress, digits = 3)
+progress %>% 
+  mutate(across(1, md_code)) %>% 
+  kable(digits = 3)
 ```
 
 You can see how the percentage of valid values increased with each stage.
@@ -703,14 +710,13 @@ progress %>%
   )
 ```
 
-## Conclude
-
 Before exporting, we can remove the intermediary normalization columns and
 rename all added variables with the `_clean` suffix.
 
 ```{r clean_select}
 njc <- njc %>% 
   select(
+    -ends_with("_xname"),
     -cont_city_norm,
     -cont_city_swap,
     cont_city_clean = cont_city_refine
@@ -720,16 +726,18 @@ njc <- njc %>%
   relocate(cont_zip_clean, .after = cont_city_clean)
 ```
 
-```{r clean_glimpse}
-glimpse(sample_n(njc, 50))
-```
+## Conclude
 
 1. There are `r comma(nrow(njc))` records in the database.
 1. There are `r comma(sum(njc$dupe_flag))` duplicate records in the database.
 1. The range and distribution of `amount` and `date` seem reasonable.
 1. There are `r comma(sum(njc$na_flag))` records missing key variables.
 1. Consistency in geographic data has been improved with `campfin::normal_*()`.
-1. The 4-digit `year` variable has been created with `lubridate::year()`.
+1. The 4-digit `cont_year` variable has been created with `lubridate::year()`.
+
+```{r clean_glimpse}
+glimpse(sample_n(njc, 50))
+```
 
 ## Export
 
@@ -737,7 +745,7 @@ Now the file can be saved on disk for upload to the Accountability server.
 
 ```{r clean_dir}
 clean_dir <- dir_create(here("nj", "contribs", "data", "clean"))
-clean_path <- path(clean_dir, "nj_contribs_clean.csv")
+clean_path <- path(clean_dir, "nj_contribs_1978-20151231.csv")
 write_csv(njc, clean_path, na = "")
 (clean_size <- file_size(clean_path))
 file_encoding(clean_path) %>% 

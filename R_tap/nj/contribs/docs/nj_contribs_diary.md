@@ -1,7 +1,7 @@
 New Jersey Contributions
 ================
 Kiernan Nicholls
-Thu Feb 4 14:45:37 2021
+Thu Sep 23 15:35:48 2021
 
 -   [Project](#project)
 -   [Objectives](#objectives)
@@ -197,18 +197,18 @@ md_bullet(raw_head[["last-modified"]])
 raw_date <- as_date(dmy_hms(raw_head[["last-modified"]]))
 today() - raw_date
 #> Time differences in days
-#> [1] 1407 1619 1409 1409
+#> [1] 1638 1850 1640 1640
 ```
 
 ``` r
 file_info_short(raw_zip)
-#> # A tibble: 4 x 3
+#> # A tibble: 4 × 3
 #>   path                    size modification_time  
 #>   <chr>            <fs::bytes> <dttm>             
-#> 1 All_GUB_Text.zip       5.67M 2021-02-01 12:22:46
-#> 2 All_LEG_Text.zip       9.72M 2021-02-01 12:22:49
-#> 3 All_CW_Text.zip        3.47M 2021-02-01 12:22:51
-#> 4 All_PAC_Text.zip       6.17M 2021-02-01 12:22:57
+#> 1 All_GUB_Text.zip       5.67M 2021-09-23 14:54:43
+#> 2 All_LEG_Text.zip       9.72M 2021-09-23 14:54:44
+#> 3 All_CW_Text.zip        3.47M 2021-09-23 14:54:44
+#> 4 All_PAC_Text.zip       6.17M 2021-09-23 14:54:45
 ```
 
 ### Extract
@@ -218,19 +218,19 @@ raw_txt <- unlist(map(raw_zip, unzip, exdir = raw_dir))
 length(raw_txt)
 #> [1] 97
 file_info_short(raw_txt)
-#> # A tibble: 97 x 3
+#> # A tibble: 97 × 3
 #>    path                 size modification_time  
 #>    <chr>         <fs::bytes> <dttm>             
-#>  1 Gub_P2005.txt       3.41M 2021-02-04 14:45:40
-#>  2 Gub_G1981.txt       1.82M 2021-02-04 14:45:40
-#>  3 Gub_G1985.txt     980.67K 2021-02-04 14:45:40
-#>  4 Gub_G1989.txt       1.04M 2021-02-04 14:45:40
-#>  5 Gub_G1993.txt       2.46M 2021-02-04 14:45:40
-#>  6 Gub_G1997.txt       2.37M 2021-02-04 14:45:40
-#>  7 Gub_G2001.txt       2.52M 2021-02-04 14:45:40
-#>  8 Gub_G2005.txt     394.82K 2021-02-04 14:45:40
-#>  9 Gub_I1982.txt     211.88K 2021-02-04 14:45:40
-#> 10 Gub_I1986.txt     337.67K 2021-02-04 14:45:40
+#>  1 Gub_P2005.txt       3.41M 2021-09-23 15:35:51
+#>  2 Gub_G1981.txt       1.82M 2021-09-23 15:35:51
+#>  3 Gub_G1985.txt     980.67K 2021-09-23 15:35:51
+#>  4 Gub_G1989.txt       1.04M 2021-09-23 15:35:51
+#>  5 Gub_G1993.txt       2.46M 2021-09-23 15:35:51
+#>  6 Gub_G1997.txt       2.37M 2021-09-23 15:35:51
+#>  7 Gub_G2001.txt       2.52M 2021-09-23 15:35:51
+#>  8 Gub_G2005.txt     394.82K 2021-09-23 15:35:51
+#>  9 Gub_I1982.txt     211.88K 2021-09-23 15:35:51
+#> 10 Gub_I1986.txt     337.67K 2021-09-23 15:35:51
 #> # … with 87 more rows
 sum(file_size(raw_txt))
 #> 179M
@@ -260,7 +260,7 @@ length(raw_cols)
 ``` r
 raw_delims <- map_chr(raw_txt, guess_delim)
 fct_count(raw_delims, prop = TRUE)
-#> # A tibble: 2 x 3
+#> # A tibble: 2 × 3
 #>   f         n     p
 #>   <fct> <int> <dbl>
 #> 1 "\t"     75 0.773
@@ -307,50 +307,50 @@ contribution made to a political campaign or committee.
 glimpse(njc)
 #> Rows: 879,485
 #> Columns: 34
-#> $ cont_lname         <chr> "MACKENZIE", "REEHILL", "TOMANELLI", "TOMANELLI", "TOMANELLI", "TOMANELLI", "TOMANELLI", "…
-#> $ cont_fname         <chr> "SCOTT", "WILLIAM", "JOSEPH", "JOSEPH", "JOSEPH", "JOSEPH", "JOSEPH", "JOSEPH", "PATRICIA"…
-#> $ cont_mname         <chr> "B", "F", NA, NA, NA, NA, NA, NA, "J", "J", NA, NA, NA, NA, NA, "J", "J", "J", "J", "J", N…
-#> $ cont_suffix        <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
-#> $ cont_non_ind_name  <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
-#> $ cont_non_ind_name2 <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
-#> $ cont_street1       <chr> "830 ELDEN ST", "1206 KING GEORGE LANE", "614 BLUE RIDGE LN", "614 BLUE RIDGE LN", "614 BL…
-#> $ cont_street2       <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
-#> $ cont_city          <chr> "HERNDON", "TOMS RIVER", "MAHWAH", "MAHWAH", "MAHWAH", "MAHWAH", "MAHWAH", "MAHWAH", "TOMS…
-#> $ cont_state         <chr> "VA", "NJ", "NJ", "NJ", "NJ", "NJ", "NJ", "NJ", "NJ", "NJ", "NJ", "NJ", "NJ", "NJ", "NJ", …
-#> $ cont_zip           <chr> "20170", "08753", "07430", "07430", "07430", "07430", "07430", "07430", "08753", "08753", …
-#> $ cont_type          <chr> "INDIVIDUAL", "INDIVIDUAL", "INDIVIDUAL", "INDIVIDUAL", "INDIVIDUAL", "INDIVIDUAL", "INDIV…
-#> $ cont_amt           <dbl> 2350, 3000, 1500, 1000, 500, 65, 50, -115, 1500, 1500, 300, 25, 20, 10, 10, 3000, 3000, 26…
-#> $ receipt_type       <chr> "MONETARY", "MONETARY", "MONETARY", "MONETARY", "MONETARY", "MONETARY", "MONETARY", "REFUN…
-#> $ cont_date          <date> 2005-10-14, 2005-10-31, 2004-09-20, 2005-01-15, 2005-09-18, 2005-04-14, 2005-04-11, 2005-…
-#> $ occupation         <chr> "ACCOUNTANTS/AUDITORS", "ACCOUNTANTS/AUDITORS", "ACCOUNTANTS/AUDITORS", "ACCOUNTANTS/AUDIT…
-#> $ emp_name           <chr> "MACKENZIE & COMPANY", "GILMORE & MONAHAN PA", "JOSEPH TOMANELLI CPA", "JOSEPH TOMANELLI C…
-#> $ emp_street1        <chr> "830 ELDEN ST", "10 ALLEN STREET", "614 BLUE RIBBON LN", "614 BLUE RIBBON LN", "614 BLUE R…
-#> $ emp_street2        <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
-#> $ emp_city           <chr> "HERNDON", "TOMS RIVER", "MAHWAH", "MAHWAH", "MAHWAH", "MAHWAH", "MAHWAH", "MAHWAH", "TOMS…
-#> $ emp_state          <chr> "VA", "NJ", "NJ", "NJ", "NJ", "NJ", "NJ", "NJ", "NJ", "NJ", "NY", "NJ", "NJ", "NJ", "NJ", …
-#> $ emp_zip            <chr> "20170", "08753", "07430", "07430", "07430", "07430", "07430", "07430", "08753", "08753", …
-#> $ rec_lname          <chr> "LONEGAN", "SCHROEDER", "LONEGAN", "LONEGAN", "LONEGAN", "LONEGAN", "LONEGAN", "LONEGAN", …
-#> $ rec_fname          <chr> "STEVEN", "ROBERT", "STEVEN", "STEVEN", "STEVEN", "STEVEN", "STEVEN", "STEVEN", "BRET", "B…
-#> $ rec_mname          <chr> "M", NA, "M", "M", "M", "M", "M", "M", "D", "D", "D", "M", "M", "M", "M", "D", "D", "D", "…
-#> $ rec_suffix         <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
-#> $ rec_non_ind_name   <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
-#> $ rec_non_ind_name2  <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
-#> $ office             <chr> "GOVERNOR", "GOVERNOR", "GOVERNOR", "GOVERNOR", "GOVERNOR", "GOVERNOR", "GOVERNOR", "GOVER…
-#> $ party              <chr> "REPUBLICAN", "REPUBLICAN", "REPUBLICAN", "REPUBLICAN", "REPUBLICAN", "REPUBLICAN", "REPUB…
-#> $ location           <chr> "STATEWIDE", "STATEWIDE", "STATEWIDE", "STATEWIDE", "STATEWIDE", "STATEWIDE", "STATEWIDE",…
-#> $ election_year      <int> 2005, 2005, 2005, 2005, 2005, 2005, 2005, 2005, 2005, 2005, 2005, 2005, 2005, 2005, 2005, …
-#> $ election_type      <chr> "PRIMARY", "PRIMARY", "PRIMARY", "PRIMARY", "PRIMARY", "PRIMARY", "PRIMARY", "PRIMARY", "P…
-#> $ src_file           <chr> "Gub_P2005.txt", "Gub_P2005.txt", "Gub_P2005.txt", "Gub_P2005.txt", "Gub_P2005.txt", "Gub_…
+#> $ cont_lname         <chr> "MACKENZIE", "REEHILL", "TOMANELLI", "TOMANELLI", "TOMANELLI", "TOMANELLI", "TOMANELLI", "T…
+#> $ cont_fname         <chr> "SCOTT", "WILLIAM", "JOSEPH", "JOSEPH", "JOSEPH", "JOSEPH", "JOSEPH", "JOSEPH", "PATRICIA",…
+#> $ cont_mname         <chr> "B", "F", NA, NA, NA, NA, NA, NA, "J", "J", NA, NA, NA, NA, NA, "J", "J", "J", "J", "J", NA…
+#> $ cont_suffix        <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
+#> $ cont_non_ind_name  <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
+#> $ cont_non_ind_name2 <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
+#> $ cont_street1       <chr> "830 ELDEN ST", "1206 KING GEORGE LANE", "614 BLUE RIDGE LN", "614 BLUE RIDGE LN", "614 BLU…
+#> $ cont_street2       <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
+#> $ cont_city          <chr> "HERNDON", "TOMS RIVER", "MAHWAH", "MAHWAH", "MAHWAH", "MAHWAH", "MAHWAH", "MAHWAH", "TOMS …
+#> $ cont_state         <chr> "VA", "NJ", "NJ", "NJ", "NJ", "NJ", "NJ", "NJ", "NJ", "NJ", "NJ", "NJ", "NJ", "NJ", "NJ", "…
+#> $ cont_zip           <chr> "20170", "08753", "07430", "07430", "07430", "07430", "07430", "07430", "08753", "08753", "…
+#> $ cont_type          <chr> "INDIVIDUAL", "INDIVIDUAL", "INDIVIDUAL", "INDIVIDUAL", "INDIVIDUAL", "INDIVIDUAL", "INDIVI…
+#> $ cont_amt           <dbl> 2350, 3000, 1500, 1000, 500, 65, 50, -115, 1500, 1500, 300, 25, 20, 10, 10, 3000, 3000, 260…
+#> $ receipt_type       <chr> "MONETARY", "MONETARY", "MONETARY", "MONETARY", "MONETARY", "MONETARY", "MONETARY", "REFUND…
+#> $ cont_date          <date> 2005-10-14, 2005-10-31, 2004-09-20, 2005-01-15, 2005-09-18, 2005-04-14, 2005-04-11, 2005-1…
+#> $ occupation         <chr> "ACCOUNTANTS/AUDITORS", "ACCOUNTANTS/AUDITORS", "ACCOUNTANTS/AUDITORS", "ACCOUNTANTS/AUDITO…
+#> $ emp_name           <chr> "MACKENZIE & COMPANY", "GILMORE & MONAHAN PA", "JOSEPH TOMANELLI CPA", "JOSEPH TOMANELLI CP…
+#> $ emp_street1        <chr> "830 ELDEN ST", "10 ALLEN STREET", "614 BLUE RIBBON LN", "614 BLUE RIBBON LN", "614 BLUE RI…
+#> $ emp_street2        <chr> NA, NA, NA, NA, NA, NA, NA, NA, " ", " ", " ", NA, NA, NA, NA, " ", " ", " ", " ", " ", " "…
+#> $ emp_city           <chr> "HERNDON", "TOMS RIVER", "MAHWAH", "MAHWAH", "MAHWAH", "MAHWAH", "MAHWAH", "MAHWAH", "TOMS …
+#> $ emp_state          <chr> "VA", "NJ", "NJ", "NJ", "NJ", "NJ", "NJ", "NJ", "NJ", "NJ", "NY", "NJ", "NJ", "NJ", "NJ", N…
+#> $ emp_zip            <chr> "20170", "08753", "07430", "07430", "07430", "07430", "07430", "07430", "08753", "08753", "…
+#> $ rec_lname          <chr> "LONEGAN", "SCHROEDER", "LONEGAN", "LONEGAN", "LONEGAN", "LONEGAN", "LONEGAN", "LONEGAN", "…
+#> $ rec_fname          <chr> "STEVEN", "ROBERT", "STEVEN", "STEVEN", "STEVEN", "STEVEN", "STEVEN", "STEVEN", "BRET", "BR…
+#> $ rec_mname          <chr> "M", NA, "M", "M", "M", "M", "M", "M", "D", "D", "D", "M", "M", "M", "M", "D", "D", "D", "D…
+#> $ rec_suffix         <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
+#> $ rec_non_ind_name   <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
+#> $ rec_non_ind_name2  <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
+#> $ office             <chr> "GOVERNOR", "GOVERNOR", "GOVERNOR", "GOVERNOR", "GOVERNOR", "GOVERNOR", "GOVERNOR", "GOVERN…
+#> $ party              <chr> "REPUBLICAN", "REPUBLICAN", "REPUBLICAN", "REPUBLICAN", "REPUBLICAN", "REPUBLICAN", "REPUBL…
+#> $ location           <chr> "STATEWIDE", "STATEWIDE", "STATEWIDE", "STATEWIDE", "STATEWIDE", "STATEWIDE", "STATEWIDE", …
+#> $ election_year      <int> 2005, 2005, 2005, 2005, 2005, 2005, 2005, 2005, 2005, 2005, 2005, 2005, 2005, 2005, 2005, 2…
+#> $ election_type      <chr> "PRIMARY", "PRIMARY", "PRIMARY", "PRIMARY", "PRIMARY", "PRIMARY", "PRIMARY", "PRIMARY", "PR…
+#> $ src_file           <chr> "Gub_P2005.txt", "Gub_P2005.txt", "Gub_P2005.txt", "Gub_P2005.txt", "Gub_P2005.txt", "Gub_P…
 tail(njc)
-#> # A tibble: 6 x 34
-#>   cont_lname cont_fname cont_mname cont_suffix cont_non_ind_na… cont_non_ind_na… cont_street1 cont_street2 cont_city
-#>   <chr>      <chr>      <chr>      <chr>       <chr>            <chr>            <chr>        <chr>        <chr>    
-#> 1 ZULUETA    SHEILA PAZ <NA>       <NA>        <NA>             <NA>             223 79TH ST  <NA>         NORTH BE…
-#> 2 ZUMPINO    MICHAEL    L          <NA>        <NA>             <NA>             834 PATTERS… <NA>         LANSDALE 
-#> 3 <NA>       <NA>       <NA>       <NA>        ZWICKER VELLA F… <NA>             P O BOX 191  <NA>         KINGSTON 
-#> 4 <NA>       <NA>       <NA>       <NA>        ZWICKER VELLA F… <NA>             P O BOX 191  <NA>         KINGSTON 
-#> 5 <NA>       <NA>       <NA>       <NA>        ZWICKER VELLA F… <NA>             P O BOX 191  <NA>         KINGSTON 
-#> 6 <NA>       <NA>       <NA>       <NA>        ZWICKER VELLA F… <NA>             P O BOX 191  <NA>         KINGSTON 
+#> # A tibble: 6 × 34
+#>   cont_lname cont_fname cont_mname cont_suffix cont_non_ind_name   cont_non_ind_nam… cont_street1 cont_street2 cont_city
+#>   <chr>      <chr>      <chr>      <chr>       <chr>               <chr>             <chr>        <chr>        <chr>    
+#> 1 ZULUETA    SHEILA PAZ <NA>       <NA>        <NA>                <NA>              223 79TH ST  <NA>         NORTH BE…
+#> 2 ZUMPINO    MICHAEL    L          <NA>        <NA>                <NA>              834 PATTERS… <NA>         LANSDALE 
+#> 3 <NA>       <NA>       <NA>       <NA>        ZWICKER VELLA FOR … <NA>              P O BOX 191  <NA>         KINGSTON 
+#> 4 <NA>       <NA>       <NA>       <NA>        ZWICKER VELLA FOR … <NA>              P O BOX 191  <NA>         KINGSTON 
+#> 5 <NA>       <NA>       <NA>       <NA>        ZWICKER VELLA FOR … <NA>              P O BOX 191  <NA>         KINGSTON 
+#> 6 <NA>       <NA>       <NA>       <NA>        ZWICKER VELLA FOR … <NA>              P O BOX 191  <NA>         KINGSTON 
 #> # … with 25 more variables: cont_state <chr>, cont_zip <chr>, cont_type <chr>, cont_amt <dbl>, receipt_type <chr>,
 #> #   cont_date <date>, occupation <chr>, emp_name <chr>, emp_street1 <chr>, emp_street2 <chr>, emp_city <chr>,
 #> #   emp_state <chr>, emp_zip <chr>, rec_lname <chr>, rec_fname <chr>, rec_mname <chr>, rec_suffix <chr>,
@@ -364,35 +364,35 @@ Columns vary in their degree of missing values.
 
 ``` r
 col_stats(njc, count_na)
-#> # A tibble: 34 x 4
+#> # A tibble: 34 × 4
 #>    col                class       n          p
 #>    <chr>              <chr>   <int>      <dbl>
 #>  1 cont_lname         <chr>  417307 0.474     
 #>  2 cont_fname         <chr>  417414 0.475     
-#>  3 cont_mname         <chr>  690930 0.786     
-#>  4 cont_suffix        <chr>  855498 0.973     
+#>  3 cont_mname         <chr>  690920 0.786     
+#>  4 cont_suffix        <chr>  855451 0.973     
 #>  5 cont_non_ind_name  <chr>  462433 0.526     
-#>  6 cont_non_ind_name2 <chr>  859252 0.977     
+#>  6 cont_non_ind_name2 <chr>  859246 0.977     
 #>  7 cont_street1       <chr>   22271 0.0253    
-#>  8 cont_street2       <chr>  866707 0.985     
+#>  8 cont_street2       <chr>  861915 0.980     
 #>  9 cont_city          <chr>   17114 0.0195    
 #> 10 cont_state         <chr>   17063 0.0194    
-#> 11 cont_zip           <chr>   40051 0.0455    
+#> 11 cont_zip           <chr>   40050 0.0455    
 #> 12 cont_type          <chr>       0 0         
 #> 13 cont_amt           <dbl>       1 0.00000114
 #> 14 receipt_type       <chr>       0 0         
 #> 15 cont_date          <date>   4485 0.00510   
 #> 16 occupation         <chr>  627771 0.714     
-#> 17 emp_name           <chr>  674398 0.767     
+#> 17 emp_name           <chr>  674393 0.767     
 #> 18 emp_street1        <chr>  694543 0.790     
-#> 19 emp_street2        <chr>  874748 0.995     
+#> 19 emp_street2        <chr>  867948 0.987     
 #> 20 emp_city           <chr>  688563 0.783     
 #> 21 emp_state          <chr>  688184 0.782     
 #> 22 emp_zip            <chr>  691260 0.786     
 #> 23 rec_lname          <chr>  310023 0.353     
 #> 24 rec_fname          <chr>  310023 0.353     
 #> 25 rec_mname          <chr>  546682 0.622     
-#> 26 rec_suffix         <chr>  850742 0.967     
+#> 26 rec_suffix         <chr>  850720 0.967     
 #> 27 rec_non_ind_name   <chr>  569462 0.647     
 #> 28 rec_non_ind_name2  <chr>  834329 0.949     
 #> 29 office             <chr>       0 0         
@@ -415,20 +415,25 @@ njc <- njc %>%
   unite(
     col = cont_xname,
     cont_fname, cont_mname, cont_lname, cont_suffix,
-    cont_non_ind_name, cont_non_ind_name2,
     sep = " ",
     remove = FALSE,
     na.rm = TRUE
   ) %>% 
-  mutate(across(cont_xname, na_if, "")) %>% 
+  mutate(
+    cont_xname = coalesce(cont_xname, cont_non_ind_name),
+    across(cont_xname, na_if, "")
+  ) %>% 
   # repeat for recipients
   unite(
     col = rec_xname,
     rec_fname, rec_mname, rec_lname, rec_suffix, 
-    rec_non_ind_name, rec_non_ind_name2,
     sep = " ",
     remove = FALSE,
     na.rm = TRUE
+  ) %>% 
+    mutate(
+    rec_xname = coalesce(rec_xname, rec_non_ind_name),
+    across(rec_xname, na_if, "")
   ) %>% 
   mutate(across(rec_xname, na_if, "")) %>% 
   relocate(ends_with("xname"), .after = last_col())
@@ -438,29 +443,29 @@ njc <- njc %>%
 key_vars <- c("cont_date", "cont_xname", "cont_amt", "rec_xname")
 njc <- flag_na(njc, all_of(key_vars))
 mean(njc$na_flag)
-#> [1] 0.005261033
+#> [1] 0.6407659
 ```
 
-0.5% of records are missing a key variable.
+64.1% of records are missing a key variable.
 
 ``` r
 njc %>% 
   filter(na_flag) %>% 
   select(all_of(key_vars))
-#> # A tibble: 4,627 x 4
-#>    cont_date  cont_xname        cont_amt rec_xname       
-#>    <date>     <chr>                <dbl> <chr>           
-#>  1 NA         FRANCIS J WALSH      -2600 BRET D SCHUNDLER
-#>  2 NA         FRANCIS J WALSH      -3000 BRET D SCHUNDLER
-#>  3 NA         PIERRE YANNEY        -1000 BRET D SCHUNDLER
-#>  4 NA         EDWARD BREEN         -1000 BRET D SCHUNDLER
-#>  5 NA         DAVID C KLIPSTEIN    -1000 BRET D SCHUNDLER
-#>  6 NA         LEWIS ARNO           -2600 BRET D SCHUNDLER
-#>  7 NA         BONNIE ARNO          -2600 BRET D SCHUNDLER
-#>  8 NA         BONNIE ARNO          -2600 BRET D SCHUNDLER
-#>  9 NA         JOHN T SULLIVAN       -100 BRET D SCHUNDLER
-#> 10 NA         RONALD CAMI          -2000 BRET D SCHUNDLER
-#> # … with 4,617 more rows
+#> # A tibble: 563,544 × 4
+#>    cont_date cont_xname        cont_amt rec_xname       
+#>    <date>    <chr>                <dbl> <chr>           
+#>  1 NA        FRANCIS J WALSH      -2600 BRET D SCHUNDLER
+#>  2 NA        FRANCIS J WALSH      -3000 BRET D SCHUNDLER
+#>  3 NA        PIERRE YANNEY        -1000 BRET D SCHUNDLER
+#>  4 NA        EDWARD BREEN         -1000 BRET D SCHUNDLER
+#>  5 NA        DAVID C KLIPSTEIN    -1000 BRET D SCHUNDLER
+#>  6 NA        LEWIS ARNO           -2600 BRET D SCHUNDLER
+#>  7 NA        BONNIE ARNO          -2600 BRET D SCHUNDLER
+#>  8 NA        BONNIE ARNO          -2600 BRET D SCHUNDLER
+#>  9 NA        JOHN T SULLIVAN       -100 BRET D SCHUNDLER
+#> 10 NA        RONALD CAMI          -2000 BRET D SCHUNDLER
+#> # … with 563,534 more rows
 ```
 
 Most of these records are missing the `cont_date` value.
@@ -470,13 +475,13 @@ njc %>%
   filter(na_flag) %>% 
   select(all_of(key_vars)) %>% 
   col_stats(count_na)
-#> # A tibble: 4 x 4
-#>   col        class      n        p
-#>   <chr>      <chr>  <int>    <dbl>
-#> 1 cont_date  <date>  4485 0.969   
-#> 2 cont_xname <chr>    145 0.0313  
-#> 3 cont_amt   <dbl>      1 0.000216
-#> 4 rec_xname  <chr>      0 0
+#> # A tibble: 4 × 4
+#>   col        class       n          p
+#>   <chr>      <chr>   <int>      <dbl>
+#> 1 cont_date  <date>   4485 0.00796   
+#> 2 cont_xname <chr>  417193 0.740     
+#> 3 cont_amt   <dbl>       1 0.00000177
+#> 4 rec_xname  <chr>  310023 0.550
 ```
 
 ### Duplicates
@@ -486,7 +491,7 @@ We can also flag any record completely duplicated across every column.
 ``` r
 njc <- flag_dupes(njc, everything())
 sum(njc$dupe_flag)
-#> [1] 10674
+#> [1] 10631
 ```
 
 ``` r
@@ -494,48 +499,48 @@ njc %>%
   filter(dupe_flag) %>% 
   select(all_of(key_vars)) %>% 
   arrange(cont_date)
-#> # A tibble: 10,674 x 4
-#>    cont_date  cont_xname                  cont_amt rec_xname     
-#>    <date>     <chr>                          <dbl> <chr>         
-#>  1 1978-09-15 GENERAL FOAM INSULATION INC      100 THOMAS F SMITH
-#>  2 1978-09-15 GENERAL FOAM INSULATION INC      100 THOMAS F SMITH
-#>  3 1978-09-18 ARROW SUPPLY CO INC              100 THOMAS F SMITH
-#>  4 1978-09-18 ARROW SUPPLY CO INC              100 THOMAS F SMITH
-#>  5 1978-09-18 DUNCAN HARDWARE INC              100 THOMAS F SMITH
-#>  6 1978-09-18 DUNCAN HARDWARE INC              100 THOMAS F SMITH
-#>  7 1978-09-18 VICTOR SMARRO                    100 THOMAS F SMITH
-#>  8 1978-09-18 VICTOR SMARRO                    100 THOMAS F SMITH
-#>  9 1978-09-18 LOUIS PUZIO                      100 THOMAS F SMITH
-#> 10 1978-09-18 LOUIS PUZIO                      100 THOMAS F SMITH
-#> # … with 10,664 more rows
+#> # A tibble: 10,631 × 4
+#>    cont_date  cont_xname    cont_amt rec_xname     
+#>    <date>     <chr>            <dbl> <chr>         
+#>  1 1978-09-15 <NA>               100 THOMAS F SMITH
+#>  2 1978-09-15 <NA>               100 THOMAS F SMITH
+#>  3 1978-09-18 <NA>               100 THOMAS F SMITH
+#>  4 1978-09-18 <NA>               100 THOMAS F SMITH
+#>  5 1978-09-18 <NA>               100 THOMAS F SMITH
+#>  6 1978-09-18 <NA>               100 THOMAS F SMITH
+#>  7 1978-09-18 VICTOR SMARRO      100 THOMAS F SMITH
+#>  8 1978-09-18 VICTOR SMARRO      100 THOMAS F SMITH
+#>  9 1978-09-18 LOUIS PUZIO        100 THOMAS F SMITH
+#> 10 1978-09-18 LOUIS PUZIO        100 THOMAS F SMITH
+#> # … with 10,621 more rows
 ```
 
 ### Categorical
 
 ``` r
 col_stats(njc, n_distinct)
-#> # A tibble: 38 x 4
+#> # A tibble: 38 × 4
 #>    col                class       n          p
 #>    <chr>              <chr>   <int>      <dbl>
 #>  1 cont_lname         <chr>   67292 0.0765    
 #>  2 cont_fname         <chr>   25291 0.0288    
-#>  3 cont_mname         <chr>     135 0.000153  
-#>  4 cont_suffix        <chr>     168 0.000191  
+#>  3 cont_mname         <chr>     136 0.000155  
+#>  4 cont_suffix        <chr>     170 0.000193  
 #>  5 cont_non_ind_name  <chr>  105714 0.120     
-#>  6 cont_non_ind_name2 <chr>    8298 0.00944   
+#>  6 cont_non_ind_name2 <chr>    8299 0.00944   
 #>  7 cont_street1       <chr>  237297 0.270     
-#>  8 cont_street2       <chr>    3838 0.00436   
+#>  8 cont_street2       <chr>    3840 0.00437   
 #>  9 cont_city          <chr>    7753 0.00882   
 #> 10 cont_state         <chr>      74 0.0000841 
-#> 11 cont_zip           <chr>    9814 0.0112    
+#> 11 cont_zip           <chr>    9815 0.0112    
 #> 12 cont_type          <chr>      19 0.0000216 
 #> 13 cont_amt           <dbl>   24205 0.0275    
 #> 14 receipt_type       <chr>      36 0.0000409 
 #> 15 cont_date          <date>  11413 0.0130    
 #> 16 occupation         <chr>      89 0.000101  
-#> 17 emp_name           <chr>   68385 0.0778    
+#> 17 emp_name           <chr>   68387 0.0778    
 #> 18 emp_street1        <chr>   53530 0.0609    
-#> 19 emp_street2        <chr>    1991 0.00226   
+#> 19 emp_street2        <chr>    1993 0.00227   
 #> 20 emp_city           <chr>    2936 0.00334   
 #> 21 emp_state          <chr>      65 0.0000739 
 #> 22 emp_zip            <chr>    4260 0.00484   
@@ -551,8 +556,8 @@ col_stats(njc, n_distinct)
 #> 32 election_year      <int>      31 0.0000352 
 #> 33 election_type      <chr>       4 0.00000455
 #> 34 src_file           <chr>      97 0.000110  
-#> 35 cont_xname         <chr>  322422 0.367     
-#> 36 rec_xname          <chr>    7020 0.00798   
+#> 35 cont_xname         <chr>  213972 0.243     
+#> 36 rec_xname          <chr>    3766 0.00428   
 #> 37 na_flag            <lgl>       2 0.00000227
 #> 38 dupe_flag          <lgl>       2 0.00000227
 ```
@@ -611,9 +616,9 @@ glimpse(njc[c(which.max(njc$cont_amt), which.min(njc$cont_amt)), ])
 #> $ election_year      <int> 2005, 2001
 #> $ election_type      <chr> "GENERAL", "POLITICAL ACTION COMMITTEE"
 #> $ src_file           <chr> "Gub_G2005.txt", "PAC2001.txt"
-#> $ cont_xname         <chr> "JON S CORZINE", "STERLING BANK"
-#> $ rec_xname          <chr> "JON S CORZINE", "BURLINGTON COUNTY REPUBLICAN CMTE"
-#> $ na_flag            <lgl> FALSE, FALSE
+#> $ cont_xname         <chr> "JON S CORZINE", NA
+#> $ rec_xname          <chr> "JON S CORZINE", NA
+#> $ na_flag            <lgl> FALSE, TRUE
 #> $ dupe_flag          <lgl> FALSE, FALSE
 ```
 
@@ -679,11 +684,11 @@ progress_table(
   njc$cont_zip_norm,
   compare = valid_zip
 )
-#> # A tibble: 2 x 6
-#>   stage         prop_in n_distinct prop_na n_out n_diff
-#>   <chr>           <dbl>      <dbl>   <dbl> <dbl>  <dbl>
-#> 1 cont_zip        0.970       9814  0.0455 24891   2550
-#> 2 cont_zip_norm   0.995       8273  0.0503  4086    980
+#> # A tibble: 2 × 6
+#>   stage             prop_in n_distinct prop_na n_out n_diff
+#>   <chr>               <dbl>      <dbl>   <dbl> <dbl>  <dbl>
+#> 1 njc$cont_zip        0.970       9815  0.0455 24892   2551
+#> 2 njc$cont_zip_norm   0.977       8952  0.0503 18837   1678
 ```
 
 ### State
@@ -791,7 +796,7 @@ good_refine <- njc %>%
   )
 ```
 
-    #> # A tibble: 68 x 5
+    #> # A tibble: 67 × 5
     #>    cont_state cont_zip_norm cont_city_swap    cont_city_refine     n
     #>    <chr>      <chr>         <chr>             <chr>            <int>
     #>  1 NJ         07203         ROSSELL           ROSELLE              4
@@ -804,7 +809,7 @@ good_refine <- njc %>%
     #>  8 NJ         08008         HAVEN BEACH       BEACH HAVEN          2
     #>  9 NJ         08542         PRICENTON         PRINCETON            2
     #> 10 NJ         08826         GLEN GARDEN       GLEN GARDNER         2
-    #> # … with 58 more rows
+    #> # … with 57 more rows
 
 Then we can join the refined values back to the database.
 
@@ -821,7 +826,7 @@ many_city <- c(valid_city, extra_city)
 njc %>% 
   filter(cont_city_refine %out% many_city) %>% 
   count(cont_state, cont_city_refine, sort = TRUE)
-#> # A tibble: 2,278 x 3
+#> # A tibble: 2,301 × 3
 #>    cont_state cont_city_refine     n
 #>    <chr>      <chr>            <int>
 #>  1 <NA>       <NA>             16579
@@ -834,7 +839,7 @@ njc %>%
 #>  8 NN         NO NAME            353
 #>  9 NJ         PITTSGROVE         269
 #> 10 NJ         BRICK TOWN         234
-#> # … with 2,268 more rows
+#> # … with 2,291 more rows
 ```
 
 ``` r
@@ -845,12 +850,12 @@ Our goal for normalization was to increase the proportion of city values
 known to be valid and reduce the total distinct values by correcting
 misspellings.
 
-| stage              | prop\_in | n\_distinct | prop\_na | n\_out | n\_diff |
-|:-------------------|---------:|------------:|---------:|-------:|--------:|
-| cont\_city)        |    0.981 |        7723 |    0.019 |  16123 |    3871 |
-| cont\_city\_norm   |    0.985 |        7427 |    0.019 |  13211 |    3558 |
-| cont\_city\_swap   |    0.990 |        6154 |    0.019 |   8854 |    2258 |
-| cont\_city\_refine |    0.990 |        6101 |    0.019 |   8773 |    2205 |
+| stage                         | prop\_in | n\_distinct | prop\_na | n\_out | n\_diff |
+|:------------------------------|---------:|------------:|---------:|-------:|--------:|
+| `str_to_upper(njc$cont_city)` |    0.981 |        7723 |    0.019 |  16123 |    3871 |
+| `njc$cont_city_norm`          |    0.984 |        7440 |    0.019 |  13484 |    3579 |
+| `njc$cont_city_swap`          |    0.990 |        6174 |    0.019 |   8947 |    2278 |
+| `njc$cont_city_refine`        |    0.990 |        6122 |    0.019 |   8867 |    2226 |
 
 You can see how the percentage of valid values increased with each
 stage.
@@ -863,14 +868,13 @@ valid equivalent.
 
 ![](../plots/bar_distinct-1.png)<!-- -->
 
-## Conclude
-
 Before exporting, we can remove the intermediary normalization columns
 and rename all added variables with the `_clean` suffix.
 
 ``` r
 njc <- njc %>% 
   select(
+    -ends_with("_xname"),
     -cont_city_norm,
     -cont_city_swap,
     cont_city_clean = cont_city_refine
@@ -880,61 +884,61 @@ njc <- njc %>%
   relocate(cont_zip_clean, .after = cont_city_clean)
 ```
 
+## Conclude
+
+1.  There are 879,485 records in the database.
+2.  There are 10,631 duplicate records in the database.
+3.  The range and distribution of `amount` and `date` seem reasonable.
+4.  There are 563,544 records missing key variables.
+5.  Consistency in geographic data has been improved with
+    `campfin::normal_*()`.
+6.  The 4-digit `cont_year` variable has been created with
+    `lubridate::year()`.
+
 ``` r
 glimpse(sample_n(njc, 50))
 #> Rows: 50
-#> Columns: 41
-#> $ cont_lname         <chr> NA, "FELDMAN", NA, NA, NA, "RYAN", NA, NA, NA, NA, "CHEATLE", NA, NA, NA, "COLON", NA, NA,…
-#> $ cont_fname         <chr> NA, "WARREN", NA, NA, NA, "MARYANN", NA, NA, NA, NA, "DONALD", NA, NA, NA, "WILLIAM DOUGLA…
-#> $ cont_mname         <chr> NA, NA, NA, NA, NA, "T", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "A", "K", NA, NA,…
-#> $ cont_suffix        <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
-#> $ cont_non_ind_name  <chr> "JOHN L KRAFT ESQ LLC", NA, "BAC ADMINISTRATIVE DISTRICT COUNCIL OF NJ PAC", "BERKELEY COL…
-#> $ cont_non_ind_name2 <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
-#> $ cont_street1       <chr> "325 COLUMBIA TPKE", "102 W HILL RD", "3281 RT 206 STE 3", "64 E MIDLAND AVE", "66 E MAIN …
-#> $ cont_street2       <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
-#> $ cont_city          <chr> "FLORHAM PARK", "WOODCLIFF LAKE", "BORDENTOWN", "PARAMUS", "SOMERVILLE", "HARRINGTON PARK"…
-#> $ cont_state         <chr> "NJ", "NJ", "NJ", "NJ", "NJ", "NJ", "CA", "NJ", "NJ", "NJ", "NJ", "NJ", "NJ", "NJ", "NJ", …
-#> $ cont_zip           <chr> "07932", "07677", "08505", "07652", "08876", "07640", "94080", "08832", "08608", "08817", …
-#> $ cont_type          <chr> "BUSINESS/CORP", "INDIVIDUAL", "UNION PAC", "BUSINESS/CORP", "POLITICAL PARTY CMTE", "INDI…
-#> $ cont_amt           <dbl> 2000.00, 2000.00, 1000.00, 500.00, 3000.00, 150.00, 900.00, 2000.00, 500.00, 2600.00, 600.…
-#> $ receipt_type       <chr> "MONETARY", "MONETARY", "MONETARY", "MONETARY", "MONETARY", "MONETARY", "MONETARY", "MONET…
-#> $ cont_date          <date> 2004-09-28, 2015-03-27, 2010-11-08, 2010-03-30, 2010-10-29, 2005-09-28, 2015-02-24, 2013-…
-#> $ occupation         <chr> NA, "MGMT/EXECUTIVES", NA, NA, NA, "HOMEMAKERS", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
-#> $ emp_name           <chr> NA, "WARREN FELDMAN ENTRAINMENT", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
-#> $ emp_street1        <chr> NA, "140 LITTLE ST", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "…
-#> $ emp_street2        <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
-#> $ emp_city           <chr> NA, "BELLEVILLE", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "CAR…
-#> $ emp_state          <chr> NA, "NJ", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "NJ", NA, NA…
-#> $ emp_zip            <chr> NA, "07109", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "07008", …
-#> $ rec_lname          <chr> NA, NA, NA, "RUMANA", NA, "LONEGAN", "LAMPITT", NA, NA, "BROWN", NA, "DECROCE", "BUCCO", N…
-#> $ rec_fname          <chr> NA, NA, NA, "SCOTT", NA, "STEVEN", "PAMELA", NA, NA, "CHRISTOPHER", NA, "ALEX", "ANTHONY",…
-#> $ rec_mname          <chr> NA, NA, NA, "T", NA, "M", "R", NA, NA, "A", NA, NA, NA, NA, NA, "R", NA, NA, "J", "E", "S"…
-#> $ rec_suffix         <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "JR", NA, NA, NA, NA, …
-#> $ rec_non_ind_name   <chr> "PASSAIC COUNTY DEMOCRATIC CMTE", "GOLDSMITH & DERIENZO", "NJ DEMOCRATIC STATE COMMITTEE",…
-#> $ rec_non_ind_name2  <chr> NA, "FO", NA, NA, "CTE", NA, NA, NA, NA, NA, "FOR FREEHOLDER", NA, NA, NA, NA, NA, NA, NA,…
-#> $ office             <chr> "COUNTY DEM PARTY", "JOINT CANDIDATES CMTE", "STATE POLITICAL PARTY CMTE", "STATE ASSEMBLY…
-#> $ party              <chr> "DEMOCRAT", "DEMOCRAT", "DEMOCRAT", "REPUBLICAN", "REPUBLICAN", "REPUBLICAN", "DEMOCRAT", …
-#> $ location           <chr> "PASSAIC COUNTY", "39TH LEGISLATIVE DISTRICT", "STATEWIDE", "40TH LEGISLATIVE DISTRICT", "…
-#> $ election_year      <int> 2004, 2015, 2010, 2011, 2010, 2005, 2015, 2013, 2004, 2011, 2011, 2001, 2009, 2012, 2000, …
-#> $ election_type      <chr> "POLITICAL ACTION COMMITTEE", "PRIMARY", "POLITICAL ACTION COMMITTEE", "PRIMARY", "GENERAL…
-#> $ src_file           <chr> "PAC2004.txt", "LEG_P2015.txt", "PAC2010.txt", "Leg_P2011.txt", "CWG2010.txt", "Gub_P2005.…
-#> $ cont_xname         <chr> "JOHN L KRAFT ESQ LLC", "WARREN FELDMAN", "BAC ADMINISTRATIVE DISTRICT COUNCIL OF NJ PAC",…
-#> $ rec_xname          <chr> "PASSAIC COUNTY DEMOCRATIC CMTE", "GOLDSMITH & DERIENZO FO", "NJ DEMOCRATIC STATE COMMITTE…
-#> $ na_flag            <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE,…
-#> $ dupe_flag          <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE,…
-#> $ cont_year          <dbl> 2004, 2015, 2010, 2010, 2010, 2005, 2015, 2013, 2004, 2011, 2011, 2000, 2009, 2012, 2000, …
-#> $ cont_city_clean    <chr> "FLORHAM PARK", "WOODCLIFF LAKE", "BORDENTOWN", "PARAMUS", "SOMERVILLE", "HARRINGTON PARK"…
-#> $ cont_zip_clean     <chr> "07932", "07677", "08505", "07652", "08876", "07640", "94080", "08832", "08608", "08817", …
+#> Columns: 39
+#> $ cont_lname         <chr> NA, "FELDMAN", NA, NA, NA, "RYAN", NA, NA, NA, NA, "CHEATLE", NA, NA, NA, "COLON", NA, NA, …
+#> $ cont_fname         <chr> NA, "WARREN", NA, NA, NA, "MARYANN", NA, NA, NA, NA, "DONALD", NA, NA, NA, "WILLIAM DOUGLAS…
+#> $ cont_mname         <chr> NA, NA, NA, NA, NA, "T", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "A", "K", NA, NA, …
+#> $ cont_suffix        <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
+#> $ cont_non_ind_name  <chr> "JOHN L KRAFT ESQ LLC", NA, "BAC ADMINISTRATIVE DISTRICT COUNCIL OF NJ PAC", "BERKELEY COLL…
+#> $ cont_non_ind_name2 <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
+#> $ cont_street1       <chr> "325 COLUMBIA TPKE", "102 W HILL RD", "3281 RT 206 STE 3", "64 E MIDLAND AVE", "66 E MAIN S…
+#> $ cont_street2       <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
+#> $ cont_city          <chr> "FLORHAM PARK", "WOODCLIFF LAKE", "BORDENTOWN", "PARAMUS", "SOMERVILLE", "HARRINGTON PARK",…
+#> $ cont_state         <chr> "NJ", "NJ", "NJ", "NJ", "NJ", "NJ", "CA", "NJ", "NJ", "NJ", "NJ", "NJ", "NJ", "NJ", "NJ", "…
+#> $ cont_zip           <chr> "07932", "07677", "08505", "07652", "08876", "07640", "94080", "08832", "08608", "08817", "…
+#> $ cont_type          <chr> "BUSINESS/CORP", "INDIVIDUAL", "UNION PAC", "BUSINESS/CORP", "POLITICAL PARTY CMTE", "INDIV…
+#> $ cont_amt           <dbl> 2000.00, 2000.00, 1000.00, 500.00, 3000.00, 150.00, 900.00, 2000.00, 500.00, 2600.00, 600.0…
+#> $ receipt_type       <chr> "MONETARY", "MONETARY", "MONETARY", "MONETARY", "MONETARY", "MONETARY", "MONETARY", "MONETA…
+#> $ cont_date          <date> 2004-09-28, 2015-03-27, 2010-11-08, 2010-03-30, 2010-10-29, 2005-09-28, 2015-02-24, 2013-1…
+#> $ occupation         <chr> NA, "MGMT/EXECUTIVES", NA, NA, NA, "HOMEMAKERS", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
+#> $ emp_name           <chr> NA, "WARREN FELDMAN ENTRAINMENT", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
+#> $ emp_street1        <chr> NA, "140 LITTLE ST", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "1…
+#> $ emp_street2        <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
+#> $ emp_city           <chr> NA, "BELLEVILLE", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "CART…
+#> $ emp_state          <chr> NA, "NJ", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "NJ", NA, NA,…
+#> $ emp_zip            <chr> NA, "07109", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "07008", N…
+#> $ rec_lname          <chr> NA, NA, NA, "RUMANA", NA, "LONEGAN", "LAMPITT", NA, NA, "BROWN", NA, "DECROCE", "BUCCO", NA…
+#> $ rec_fname          <chr> NA, NA, NA, "SCOTT", NA, "STEVEN", "PAMELA", NA, NA, "CHRISTOPHER", NA, "ALEX", "ANTHONY", …
+#> $ rec_mname          <chr> NA, NA, NA, "T", NA, "M", "R", NA, NA, "A", NA, NA, NA, NA, NA, "R", NA, NA, "J", "E", "S",…
+#> $ rec_suffix         <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "JR", NA, NA, NA, NA, N…
+#> $ rec_non_ind_name   <chr> "PASSAIC COUNTY DEMOCRATIC CMTE", "GOLDSMITH & DERIENZO", "NJ DEMOCRATIC STATE COMMITTEE", …
+#> $ rec_non_ind_name2  <chr> NA, "FO", NA, NA, "CTE", NA, NA, NA, NA, NA, "FOR FREEHOLDER", NA, NA, NA, NA, NA, NA, NA, …
+#> $ office             <chr> "COUNTY DEM PARTY", "JOINT CANDIDATES CMTE", "STATE POLITICAL PARTY CMTE", "STATE ASSEMBLY"…
+#> $ party              <chr> "DEMOCRAT", "DEMOCRAT", "DEMOCRAT", "REPUBLICAN", "REPUBLICAN", "REPUBLICAN", "DEMOCRAT", "…
+#> $ location           <chr> "PASSAIC COUNTY", "39TH LEGISLATIVE DISTRICT", "STATEWIDE", "40TH LEGISLATIVE DISTRICT", "S…
+#> $ election_year      <int> 2004, 2015, 2010, 2011, 2010, 2005, 2015, 2013, 2004, 2011, 2011, 2001, 2009, 2012, 2000, 2…
+#> $ election_type      <chr> "POLITICAL ACTION COMMITTEE", "PRIMARY", "POLITICAL ACTION COMMITTEE", "PRIMARY", "GENERAL"…
+#> $ src_file           <chr> "PAC2004.txt", "LEG_P2015.txt", "PAC2010.txt", "Leg_P2011.txt", "CWG2010.txt", "Gub_P2005.t…
+#> $ na_flag            <lgl> TRUE, TRUE, TRUE, TRUE, TRUE, FALSE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, …
+#> $ dupe_flag          <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, …
+#> $ cont_year          <dbl> 2004, 2015, 2010, 2010, 2010, 2005, 2015, 2013, 2004, 2011, 2011, 2000, 2009, 2012, 2000, 2…
+#> $ cont_city_clean    <chr> "FLORHAM PARK", "WOODCLIFF LAKE", "BORDENTOWN", "PARAMUS", "SOMERVILLE", "HARRINGTON PARK",…
+#> $ cont_zip_clean     <chr> "07932", "07677", "08505", "07652", "08876", "07640", "94080", "08832", "08608", "08817", "…
 ```
-
-1.  There are 879,485 records in the database.
-2.  There are 10,674 duplicate records in the database.
-3.  The range and distribution of `amount` and `date` seem reasonable.
-4.  There are 4,627 records missing key variables.
-5.  Consistency in geographic data has been improved with
-    `campfin::normal_*()`.
-6.  The 4-digit `year` variable has been created with
-    `lubridate::year()`.
 
 ## Export
 
@@ -943,16 +947,16 @@ server.
 
 ``` r
 clean_dir <- dir_create(here("nj", "contribs", "data", "clean"))
-clean_path <- path(clean_dir, "nj_contribs_clean.csv")
+clean_path <- path(clean_dir, "nj_contribs_1978-20151231.csv")
 write_csv(njc, clean_path, na = "")
 (clean_size <- file_size(clean_path))
-#> 248M
+#> 212M
 file_encoding(clean_path) %>% 
   mutate(across(path, path.abbrev))
-#> # A tibble: 1 x 3
-#>   path                                           mime            charset 
-#>   <fs::path>                                     <chr>           <chr>   
-#> 1 ~/nj/contribs/data/clean/nj_contribs_clean.csv application/csv us-ascii
+#> # A tibble: 1 × 3
+#>   path                                                   mime            charset 
+#>   <fs::path>                                             <chr>           <chr>   
+#> 1 ~/nj/contribs/data/clean/nj_contribs_1978-20151231.csv application/csv us-ascii
 ```
 
 ## Upload
