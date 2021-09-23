@@ -1,1451 +1,949 @@
----
-title: "Data Diary"
-subtitle: "Washington Contributions"
-author: "Kiernan Nicholls"
-date: "2019-05-23 17:47:18"
-output:
-  html_document: 
-    df_print: tibble
-    fig_caption: yes
-    highlight: tango
-    keep_md: yes
-    max.print: 32
-    toc: yes
-    toc_float: no
-editor_options: 
-  chunk_output_type: console
----
+Washington Contributions
+================
+Kiernan Nicholls
+Thu Sep 23 14:37:40 2021
 
+-   [Project](#project)
+-   [Objectives](#objectives)
+-   [Packages](#packages)
+-   [Data](#data)
+-   [Download](#download)
+-   [Read](#read)
+-   [Explore](#explore)
+    -   [Missing](#missing)
+    -   [Duplicates](#duplicates)
+    -   [Categorical](#categorical)
+    -   [Amounts](#amounts)
+    -   [Dates](#dates)
+-   [Wrangle](#wrangle)
+    -   [Address](#address)
+    -   [ZIP](#zip)
+    -   [State](#state)
+    -   [City](#city)
+-   [Conclude](#conclude)
+-   [Export](#export)
+-   [Upload](#upload)
 
+<!-- Place comments regarding knitting here -->
+
+## Project
+
+The Accountability Project is an effort to cut across data silos and
+give journalists, policy professionals, activists, and the public at
+large a simple way to search across huge volumes of public data about
+people and organizations.
+
+Our goal is to standardize public data on a few key fields by thinking
+of each dataset row as a transaction. For each transaction there should
+be (at least) 3 variables:
+
+1.  All **parties** to a transaction.
+2.  The **date** of the transaction.
+3.  The **amount** of money involved.
 
 ## Objectives
 
-1. How many records are in the database?
-1. Check for duplicates
-1. Check ranges
-1. Is there anything blank or missing?
-1. Check for consistency issues
-1. Create a five-digit ZIP Code called ZIP5
-1. Create a YEAR field from the transaction date
-1. For campaign donation data, make sure there is both a donor AND recipient
+This document describes the process used to complete the following
+objectives:
 
-## Data
-
-Retrieved from [data.wa.gov][01], uploaded by the 
-[Public Disclosure Commission][02]. Created December 16, 2016. Updated on 
-May 23, 2019.
-
-[01]: https://data.wa.gov/Politics/Contributions-to-Candidates-and-Political-Committe/kv7h-kjye/data
-[02]: https://www.pdc.wa.gov/
-
-### About
-
-> This dataset contains cash and in-kind contributions, (including unpaid loans) made to Washington
-State Candidates and Political Committees for the last 10 years as reported to the PDC on forms C3,
-C4, Schedule C and their electronic filing equivalents. It does not include loans which have been
-paid or forgiven, pledges or any expenditures.
-> 
-> For candidates, the number of years is determined by the year of the election, not necessarily
-the year the contribution was reported. For political committees, the number of years is determined
-by the calendar year of the reporting period.
->
-> Candidates and political committees choosing to file under "mini reporting" are not included in
-this dataset. See WAC 390-16-105 for information regarding eligibility.
->
-> This dataset is a best-effort by the PDC to provide a complete set of records as described
-herewith and may contain incomplete or incorrect information. The PDC provides access to the
-original reports for the purpose of record verification.
->
-> Descriptions attached to this dataset do not constitute legal definitions; please consult RCW
-42.17A and WAC Title 390 for legal definitions and additional information political finance
-disclosure requirements.
->
-> CONDITION OF RELEASE: This publication constitutes a list of individuals prepared by the
-Washington State Public Disclosure Commission and may not be used for commercial purposes. This
-list is provided on the condition and with the understanding that the persons receiving it agree to
-this statutorily imposed limitation on its use. See RCW 42.56.070(9) and AGO 1975 No. 15.
-
-### Variables
-
-The Public Disclosure Commission [provides definitions][03] for each of the variables in the data
-set:
-
-* `id`: Corresponds to a single record. Uniquely identifies a single row When combined with the
-origin value.
-* `report_number`: Used for tracking the individual form. Unique to the report it represents.
-* `origin`: The form, schedule or section where the record was reported.
-* `filier_id`: The unique id assigned to a candidate or political committee. Consistent across
-election years.
-* `type`: Indicates if this record is for a candidate or a political committee
-* `first_name`: First name, as reported by the filer. Potentially inconsistent.
-* `last_name`: Last name or full name of a filing entity that is registered under one name.
-* `office`: The office sought by the candidate
-* `legislative_district`: The Washington State legislative district
-* `position`: The position associated with an office with multiple seats.
-* `party`: "Major party" declaration
-* `ballot_number`: Initiative ballot number is assigned by the Secretary of State
-* `for_or_against`: Ballot initiative committees either supports or opposes
-* `jurisdiction`: The political jurisdiction associated with the office of a candidate
-* `election_year`: Election year for candidates and single election committees. Reporting year for
-continuing committees.
-* `amount`: The amount of the cash or in-kind contribution (or adjustment).
-* `cash_or_in_kind`: What kind of contribution, if known.
-* `receipt_date`: The date that the contribution was received.
-* `description`: The reported description of the transaction. This field does not apply to cash
-contributions
-* `primary_general`: Candidates must specify whether a contribution is designated for the primary
-or the general election.
-* `code`: Type of entity that made the contribution.
-* `contributor_name`:	The name of the individual _or_ organization making the contribution as
-reported (where total >$25).
-* `contributor_address`: The street address of the individual or organization making the
-contribution.
-* `contributor_city`: The city of the individual or organization making the contribution.
-* `contributor_state`: The state of the individual or organization making the contribution.
-* `contributor_zip`: The US zip code of the individual or organization making the contribution.
-* `contributor_occupation`: The occupation of the (individual) contributor (where total >$100).
-* `contributor_employer_name`: The name of the contributor's employer.
-* `contributor_employer_city`: City of the contributor's employer.
-* `contributor_employer_state`: State of the contributor's employer.
-* `url`: A link to a PDF version of the original report as it was filed to the PDC.
-* `contributor_location`: The geocoded location of the contributor as reported. Quality dependent
-on how many of the address fields are available and is calculated using a third-party service.
-
-[03]: https://data.wa.gov/Politics/Contributions-to-Candidates-and-Political-Committe/kv7h-kjye
+1.  How many records are in the database?
+2.  Check for entirely duplicated records.
+3.  Check ranges of continuous variables.
+4.  Is there anything blank or missing?
+5.  Check for consistency issues.
+6.  Create a five-digit ZIP Code called `zip`.
+7.  Create a `year` field from the transaction date.
+8.  Make sure there is data on both parties to a transaction.
 
 ## Packages
 
-This data set will be collected, explored, and saved using the free and open R packages below.
+The following packages are needed to collect, manipulate, visualize,
+analyze, and communicate these results. The `pacman` package will
+facilitate their installation and attachment.
 
-
-```r
-# install.packages("pacman")
+``` r
+if (!require("pacman")) {
+  install.packages("pacman")
+}
 pacman::p_load(
-  tidyverse, 
-  lubridate, 
-  magrittr, 
-  janitor, 
-  zipcode, 
-  here
+  tidyverse, # data manipulation
+  lubridate, # datetime strings
+  jsonlite, # parse json data
+  gluedown, # printing markdown
+  janitor, # clean data frames
+  campfin, # custom irw tools
+  aws.s3, # aws cloud storage
+  refinr, # cluster & merge
+  scales, # format strings
+  knitr, # knit documents
+  vroom, # fast reading
+  rvest, # scrape html
+  glue, # code strings
+  here, # project paths
+  httr, # http requests
+  fs # local storage 
 )
+```
+
+This document should be run as part of the `R_campfin` project, which
+lives as a sub-directory of the more general, language-agnostic
+[`irworkshop/accountability_datacleaning`](https://github.com/irworkshop/accountability_datacleaning)
+GitHub repository.
+
+The `R_campfin` project uses the [RStudio
+projects](https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects)
+feature and should be run as such. The project also uses the dynamic
+`here::here()` tool for file paths relative to *your* machine.
+
+``` r
+# where does this document knit?
+here::i_am("wa/contribs/docs/wa_contribs_diary.Rmd")
+```
+
+## Data
+
+``` r
+wa_meta <- fromJSON("https://data.wa.gov/api/views/kv7h-kjye")
+```
+
+[Contributions](https://data.wa.gov/d/kv7h-kjye) for the state of
+Washington can be obtained from the state’s [Public Disclosure
+Commission](http://pdc.wa.gov/) on their [Open Data
+portal](https://data.wa.gov/). The data is titled “Contributions to
+Candidates and Political Committees” and was created on December 16,
+2016 and was last updated at September 23, 2021.
+
+#### Description
+
+> This dataset contains cash and in-kind contributions, (including
+> unpaid loans) made to Washington State Candidates and Political
+> Committees for the last 10 years as reported to the PDC on forms C3,
+> C4, Schedule C and their electronic filing equivalents. It does not
+> include loans which have been paid or forgiven, pledges or any
+> expenditures.
+>
+> For candidates, the number of years is determined by the year of the
+> election, not necessarily the year the contribution was reported. For
+> political committees, the number of years is determined by the
+> calendar year of the reporting period.
+>
+> Candidates and political committees choosing to file under “mini
+> reporting” are not included in this dataset. See WAC 390-16-105 for
+> information regarding eligibility.
+>
+> This dataset is a best-effort by the PDC to provide a complete set of
+> records as described herewith and may contain incomplete or incorrect
+> information. The PDC provides access to the original reports for the
+> purpose of record verification.
+>
+> Descriptions attached to this dataset do not constitute legal
+> definitions; please consult RCW 42.17A and WAC Title 390 for legal
+> definitions and additional information political finance disclosure
+> requirements.
+>
+> CONDITION OF RELEASE: This publication constitutes a list of
+> individuals prepared by the Washington State Public Disclosure
+> Commission and may not be used for commercial purposes. This list is
+> provided on the condition and with the understanding that the persons
+> receiving it agree to this statutorily imposed limitation on its use.
+> See RCW 42.56.070(9) and AGO 1975 No. 15.
+
+#### Dictionary
+
+| fieldName                    | dataTypeName   | description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+|:-----------------------------|:---------------|:-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `id`                         | text           | PDC internal identifier that corresponds to a single contribution or correction record. When combined with the origin value, this number uniquely identifies a single row.                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `report_number`              | text           | PDC identifier used for tracking the individual form C3, C4 or C4 schedule C. Multiple contributions or corrections will correspond to the same report number when they were reported to the PDC at the same time. The report number is unique to the report it represents. When a report is amended, a new report number is assigned that supersedes the original version of the amended report and the original report records are not included in this dataset.                                                                                                                                         |
+| `origin`                     | text           | The form, schedule or section where the record was reported. Please see <https://www.pdc.wa.gov/learn/forms> for a list of forms and instructions.<br/><br/>AUB (Form C3, schedule AU, auction buyer);<br/>AUD (Form C3, schedule AU, auction donor);<br/>C.1 (Form C4, schedule C1 correction);<br/>C3 (Form C3 cash contribution);<br/>C3.1A (Form C3, anonymous contributions);<br/>C3.1B (Form C3, candidate personal funds);<br/>C3.1D (Form C3, miscellaneous receipts)<br/>C3.1E (Form C3, small contributions);<br/>C4 (Form C4, in-kind contribution);<br/><br/>                                  |
+| `committee_id`               | text           | The unique identifier of a committee. For a continuing committee, this id will be the same for all the years that the committee is registered. Single year committees and candidate committees will have a unique id for each year even though the candidate or committee organization might be the same across years. Surplus accounts will have a single committee id across all years.                                                                                                                                                                                                                  |
+| `filer_id`                   | text           | The unique id assigned to a candidate or political committee. The filer id is consistent across election years with the exception that an individual running for a second office in the same election year will receive a second filer id. There is no correlation between the two filer ids. For a candidate and single-election-year committee such as a ballot committee, the combination of filer\_id and election\_year uniquely identifies a campaign.                                                                                                                                               |
+| `type`                       | text           | Indicates if this record is for a candidate or a political committee. In the case of a political committee, it may be either a continuing political committee, party committee or single election year committee.                                                                                                                                                                                                                                                                                                                                                                                          |
+| `filer_name`                 | text           | The candidate or committee name as reported on the form C1 candidate or committee registration form. The name will be consistent across all records for the same filer id and election year but may differ across years due to candidates or committees changing their name.                                                                                                                                                                                                                                                                                                                               |
+| `office`                     | text           | The office sought by the candidate. Does not apply to political committees.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `legislative_district`       | text           | The Washington State legislative district. This field only applies to candidates where the office is “state senator” or “state representative.”                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `position`                   | text           | The position associated with an office. This field typically applies to judicial and local office that have multiple positions or seats. This field does not apply to political committees.                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `party`                      | text           | The political party as declared by the candidate or committee on their form C1 registration. Contains only “Major parties” as recognized by Washington State law.                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `ballot_number`              | text           | If the committee is a Statewide Ballot Initiative Committee a ballot number will appear once a ballot number is assigned by the Secretary of State. Local Ballot Initiatives will not have a ballot number. This field will contain a number only if the Secretary of State issues a number.                                                                                                                                                                                                                                                                                                               |
+| `for_or_against`             | text           | Ballot initiative committees are formed to either support or oppose an initiative. This field represents whether a committee “supports” (for) or “opposes” (against) a ballot initiative.                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `jurisdiction`               | text           | <br/>The political jurisdiction associated with the office of a candidate.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `jurisdiction_county`        | text           | The county associated with the jurisdiction of a candidate. Multi-county jurisdictions as reported as the primary county. This field will be empty for political committees and when a candidate jurisdiction is statewide.                                                                                                                                                                                                                                                                                                                                                                                |
+| `jurisdiction_type`          | text           | The type of jurisdiction this office is: Statewide, Local, etc.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `election_year`              | number         | The election year in the case of candidates and single election committees. The reporting year in the case of continuing political committees.                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `amount`                     | number         | The amount of the cash or in-kind contribution. On corrections records, this field is the amount of the adjustment.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `cash_or_in_kind`            | text           | What kind of contribution this is, if known.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| `receipt_date`               | calendar\_date | <br/>The date that the contribution was received.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `description`                | text           | <br/>The reported description of the transaction. This field does not apply to cash contributions. Not all in-kind contributions and corrections will contain a description. In the case of corrections, the PDC has added a notation regarding the amounts reported on the form Schedule C. A C3 contains not only detailed contributions it also contains none detailed cash - this column will contain the descriptions: ‘Anonymous - Cash’; ‘Candidates Personal Funds - Does not include candidate loans’; ‘Miscellaneous Receipts’, ‘Contributions of $25 or less contributed by: \_\_\_\_ persons’. |
+| `memo`                       | text           | The optional memo field associated with the transaction. In most cases this field will be blank.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `primary_general`            | text           | <br/>Candidates subject to contribution limits must specify whether a contribution is designated for the primary or the general election. Contributions to candidates not subject to limits, political committees and continuing political committees apply to the full election cycle.                                                                                                                                                                                                                                                                                                                    |
+| `code`                       | text           | When a contribution is received, the code field denotes the type of entity that made the contribution. These types are determined by the filer. The field values correspond to the selected code: A: Anonymous; B: Business; C: PAC; I: Individual; L: Caucus; O: Other; P: Bona Fide Party; S: Self Pers. Fund; T: Minor Party; U: Union.                                                                                                                                                                                                                                                                 |
+| `contributor_category`       | text           | Indicates if the contributor is an “Individual” or “Organization”. When a contribution is received, the code field denotes the type of entity that made the contribution. These types are determined by the filer. The field values correspond to the selected code: A: Anonymous; B: Business; C: PAC; I: Individual; L: Caucus; O: Other; P: Bona Fide Party; S: Self Pers. Fund; T: Minor Party; U: Union. Codes B, C, F, L, O, P, M and U are assigned the category “Organization” and all others are assigned the category “Individual”.                                                              |
+| `contributor_name`           | text           | <br/>The name of the individual or organization making the contribution as reported. The names appearing here have not been normalized and the same entity may be represented by different names in the dataset. This field only applies to contributions where the aggregate total of all contributions from this contributor to this candidate or committee exceeds $25 for the election cycle (calendar year for continuing committees).                                                                                                                                                                |
+| `contributor_address`        | text           | The street address of the individual or organization making the contribution. Refer to the contributor name field for more information on when this information is required.                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| `contributor_city`           | text           | The city of the individual or organization making the contribution. Refer to the contributor name field for more information on when this information is required.                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `contributor_state`          | text           | The state of the individual or organization making the contribution. Contributions from outside the United States may contain foreign postal region codes in this field. Refer to the contributor name field for more information on when this information is required.                                                                                                                                                                                                                                                                                                                                    |
+| `contributor_zip`            | text           | The US zip code of the individual or organization making the contribution. Contributions from outside the United States may contain foreign postal codes in this field. Refer to the contributor name field for more information on when this information is required.                                                                                                                                                                                                                                                                                                                                     |
+| `contributor_occupation`     | text           | The occupation of the contributor. This field only applies to contributions by individuals and only when an individual gives a campaign or committee more than $100 in the aggregate for the election cycle (calendar year for continuing political committees).                                                                                                                                                                                                                                                                                                                                           |
+| `contributor_employer_name`  | text           | The name of the contributor’s employer. The names appearing here have not been normalized and the same entity may be represented by different names in the dataset. Refer to the contributor occupation field to see when this field applies.                                                                                                                                                                                                                                                                                                                                                              |
+| `contributor_employer_city`  | text           | City of the contributor’s employer. Refer to the contributor occupation field to see when this field applies.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `contributor_employer_state` | text           | State of the contributor’s employer. Refer to the contributor occupation field to see when this field applies.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `url`                        | url            | A link to a PDF version of the original report as it was filed to the PDC.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `contributor_location`       | point          | The geocoded location of the contributor as reported. The quality of the geocoded location is dependent on how many of the address fields are available and is calculated using a third-party service. The PDC has not verified the results of the geocoding. Please refer to the recipient\_name field for more information regarding address fields.                                                                                                                                                                                                                                                     |
+
+## Download
+
+``` r
+raw_dir <- dir_create(here("wa", "contribs", "data", "raw"))
+raw_tsv <- path(raw_dir, path_ext_set(wa_meta$resourceName, "tsv"))
+```
+
+``` r
+if (!file_exists(raw_tsv)) {
+  wa_head <- GET(
+    url = "https://data.wa.gov/api/views/kv7h-kjye/rows.tsv",
+    query = list(accessType = "DOWNLOAD"),
+    write_disk(path = raw_tsv),
+    progress("down")
+  )
+}
 ```
 
 ## Read
 
-The source file is updated, daily so reproducing findings precisely is unlikely. Code here has been
-generalized as much as possible. The data in this document was retrieved the day it was created
-(see above).
-
-If _today's_ file exists in the project directory, read it into R; otherwise, retrieve the file
-directly from the Washington State website. This is done using `readr::read_csv()`
-
-The `receipt_date` strings are converted from their original format (MM/DD/YYYY) to ISO-8601 format
-(YYYY-MM-DD) as to be handled as date objects in R. The contribution `amount` values are read as
-doubles. All other variables are handled as character strings.
-
-
-```r
-# create path to file
-wa_file <- here("wa_contribs", "data", "Contributions_to_Candidates_and_Political_Committees.csv")
-# if a recent version exists where it should, read it
-if (file.exists(wa_file) & as_date(file.mtime(wa_file)) == today()) {
-  wa <- read_csv(
-    file = wa_file,
-    na = c("", "NA", "N/A"),
-    col_types = cols(
-      .default = col_character(),
-      amount = col_double(),
-      receipt_date = col_date(format = "%m/%d/%Y")
-    )
+``` r
+wac <- read_delim(
+  file = raw_tsv,
+  delim = "\t",
+  escape_backslash = FALSE,
+  escape_double = FALSE,
+  col_types = cols(
+    .default = col_character(),
+    id = col_integer(),
+    election_year = col_integer(),
+    amount = col_double(),
+    receipt_date = col_date("%m/%d/%Y")
   )
-} else { # otherwise read it from the internet
-  wa <- read_csv(
-    file = "https://data.wa.gov/api/views/kv7h-kjye/rows.csv?accessType=DOWNLOAD",
-    na = c("", "NA", "N/A"),
-    col_types = cols(
-      .default = col_character(),
-      amount = col_double(),
-      receipt_date = col_date(format = "%m/%d/%Y")
-    )
-  )
-}
+)
 ```
 
 ## Explore
 
-There are 4224421 records of 37 variables. There are no duplicate rows.
-However, without the unique `id` variable, there are `nrow(wa) - nrow(distinct(select(wa, -id)))` 
-rows with repeated information.
-
-
-```r
-glimpse(wa)
-```
-
-```
-## Observations: 4,224,421
-## Variables: 37
-## $ id                         <chr> "1807811.rcpt", "1807812.rcpt", "1807813.rcpt", "1807814.rcpt…
-## $ report_number              <chr> "100218448", "100218449", "100218449", "100218449", "10021844…
-## $ origin                     <chr> "C3", "C3", "C3", "C3", "C3", "C3", "C3", "C3", "C3", "C3", "…
-## $ filer_id                   <chr> "WASHMH 006", "NOBLP  005", "NOBLP  005", "NOBLP  005", "NOBL…
-## $ type                       <chr> "Political Committee", "Candidate", "Candidate", "Candidate",…
-## $ filer_name                 <chr> "NW HOUSING ASSN PAC", "NOBLE PHILLIP D", "NOBLE PHILLIP D", …
-## $ first_name                 <chr> NA, "PHILLIP", "PHILLIP", "PHILLIP", "PHILLIP", "PHILLIP", "P…
-## $ middle_initial             <chr> NA, "D", "D", "D", "D", "D", "D", "D", NA, NA, NA, NA, "C", "…
-## $ last_name                  <chr> "NORTHWEST HOUSING ASSN PAC", "NOBLE", "NOBLE", "NOBLE", "NOB…
-## $ office                     <chr> NA, "CITY COUNCIL MEMBER", "CITY COUNCIL MEMBER", "CITY COUNC…
-## $ legislative_district       <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
-## $ position                   <chr> NA, "07", "07", "07", "07", "07", "07", "07", NA, NA, NA, NA,…
-## $ party                      <chr> NA, "NON PARTISAN", "NON PARTISAN", "NON PARTISAN", "NON PART…
-## $ ballot_number              <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
-## $ for_or_against             <chr> NA, NA, NA, NA, NA, NA, NA, NA, "For", "For", "For", "For", N…
-## $ jurisdiction               <chr> NA, "CITY OF BELLEVUE", "CITY OF BELLEVUE", "CITY OF BELLEVUE…
-## $ jurisdiction_county        <chr> NA, "KING", "KING", "KING", "KING", "KING", "KING", "KING", N…
-## $ jurisdiction_type          <chr> NA, "Local", "Local", "Local", "Local", "Local", "Local", "Lo…
-## $ election_year              <chr> "2007", "2007", "2007", "2007", "2007", "2007", "2007", "2007…
-## $ amount                     <dbl> 21.00, 700.00, 5000.00, 250.00, 50.00, 100.00, 50.00, 50.00, …
-## $ cash_or_in_kind            <chr> "Cash", "Cash", "Cash", "Cash", "Cash", "Cash", "Cash", "Cash…
-## $ receipt_date               <date> 2007-07-11, 2007-07-17, 2007-07-17, 2007-07-17, 2007-07-17, …
-## $ description                <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
-## $ memo                       <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
-## $ primary_general            <chr> "Full election cycle", "Full election cycle", "Full election …
-## $ code                       <chr> "Other", "Other", "Other", "Individual", "Individual", "Indiv…
-## $ contributor_name           <chr> "PALM HARBOR HOMES", "RHA PAC", "HELSELL FETTERMAN LLP", "KIN…
-## $ contributor_address        <chr> "3737 PALM HARBOR DRIVE", "PO BOX 99447", "1001 FOURTH AVENUE…
-## $ contributor_city           <chr> "MILLERSBURG", "SEATTLE", "SEATTLE", "REDMOND", "BELLEVUE", "…
-## $ contributor_state          <chr> "OR", "WA", "WA", "WA", "WA", "WA", "WA", "WA", "WA", "WA", "…
-## $ contributor_zip            <chr> "97321", "98199", "98111", "98052", "98004", "98004", "98005"…
-## $ contributor_occupation     <chr> NA, NA, NA, "PRINICPAL", NA, NA, NA, NA, NA, NA, "FIREFIGHTER…
-## $ contributor_employer_name  <chr> NA, NA, NA, "GLY CONSTRUCTION, INC.", NA, NA, NA, NA, NA, NA,…
-## $ contributor_employer_city  <chr> NA, NA, NA, "BELLEVUE", NA, NA, NA, NA, NA, NA, "ELLENSBURG",…
-## $ contributor_employer_state <chr> NA, NA, NA, "WA", NA, NA, NA, NA, NA, NA, "WA", "WA", NA, NA,…
-## $ url                        <chr> "View report (https://web.pdc.wa.gov/rptimg/default.aspx?batc…
-## $ contributor_location       <chr> "(44.68601, -123.05647)", "(47.64955, -122.39489)", "(47.6062…
-```
-
-```r
-nrow(distinct(wa)) == nrow(wa)
-```
-
-```
-## [1] TRUE
-```
-
-```r
-wa %>% 
-  select(-id) %>% 
-  distinct() %>% 
-  nrow() %>% 
-  subtract(nrow(wa))
-```
-
-```
-## [1] -43967
-```
-
-Variables range in their degree of distinctness. For example, There are only 10 distinct value of
-`origin` and 97 for `ballot_number`; however, there are understandably nearly half a million
-distinct values for `contributor_location` and even more for `contributor_name`.
-
-
-```r
-wa %>% 
-  map(n_distinct) %>% 
-  unlist() %>% 
-  enframe(name = "variable", value = "n_distinct") %>% 
-  mutate(prop_distinct = round(n_distinct / nrow(wa), 4)) %>% 
-  print(n = length(wa))
-```
-
-```
-## # A tibble: 37 x 3
-##    variable                   n_distinct prop_distinct
-##    <chr>                           <int>         <dbl>
-##  1 id                            4224421      1       
-##  2 report_number                  385838      0.0913  
-##  3 origin                             10      0       
-##  4 filer_id                         5906      0.0014  
-##  5 type                                2      0       
-##  6 filer_name                       6107      0.0014  
-##  7 first_name                       1189      0.000300
-##  8 middle_initial                     27      0       
-##  9 last_name                        4711      0.0011  
-## 10 office                             44      0       
-## 11 legislative_district               52      0       
-## 12 position                           65      0       
-## 13 party                               9      0       
-## 14 ballot_number                      97      0       
-## 15 for_or_against                      3      0       
-## 16 jurisdiction                      526      0.0001  
-## 17 jurisdiction_county                38      0       
-## 18 jurisdiction_type                   5      0       
-## 19 election_year                      17      0       
-## 20 amount                          44757      0.0106  
-## 21 cash_or_in_kind                     2      0       
-## 22 receipt_date                     5288      0.0013  
-## 23 description                     78117      0.0185  
-## 24 memo                              283      0.0001  
-## 25 primary_general                     3      0       
-## 26 code                                8      0       
-## 27 contributor_name               836108      0.198   
-## 28 contributor_address            796656      0.189   
-## 29 contributor_city                13171      0.0031  
-## 30 contributor_state                 127      0       
-## 31 contributor_zip                 16280      0.0039  
-## 32 contributor_occupation          35935      0.0085  
-## 33 contributor_employer_name      113423      0.0268  
-## 34 contributor_employer_city        7024      0.0017  
-## 35 contributor_employer_state        137      0       
-## 36 url                            385838      0.0913  
-## 37 contributor_location           468489      0.111
-```
-
-Variables also range in their degree of missing values. Key variables like `report_number` or
-`code` have 0 missing values, while others like `first_name` or `office` are missing over half
-(likely PAC/Corp. contributions and issue contributions respectively).
-
-
-```r
-count_na <- function(v) sum(is.na(v))
-wa %>% map(count_na) %>% 
-  unlist() %>% 
-  enframe(name = "variable", value = "n_na") %>% 
-  mutate(prop_na = n_na / nrow(wa)) %>% 
-  print(n = length(wa))
-```
-
-```
-## # A tibble: 37 x 3
-##    variable                      n_na    prop_na
-##    <chr>                        <int>      <dbl>
-##  1 id                               0 0         
-##  2 report_number                    0 0         
-##  3 origin                           0 0         
-##  4 filer_id                         0 0         
-##  5 type                             0 0         
-##  6 filer_name                       0 0         
-##  7 first_name                 2623057 0.621     
-##  8 middle_initial             2791706 0.661     
-##  9 last_name                        0 0         
-## 10 office                     2623053 0.621     
-## 11 legislative_district       3711578 0.879     
-## 12 position                   3440229 0.814     
-## 13 party                      2622213 0.621     
-## 14 ballot_number              4023789 0.953     
-## 15 for_or_against             3770023 0.892     
-## 16 jurisdiction               2493740 0.590     
-## 17 jurisdiction_county        3008678 0.712     
-## 18 jurisdiction_type          2623053 0.621     
-## 19 election_year                    0 0         
-## 20 amount                           0 0         
-## 21 cash_or_in_kind                  0 0         
-## 22 receipt_date                 12591 0.00298   
-## 23 description                3917046 0.927     
-## 24 memo                       4133447 0.978     
-## 25 primary_general                  0 0         
-## 26 code                             0 0         
-## 27 contributor_name                27 0.00000639
-## 28 contributor_address         180101 0.0426    
-## 29 contributor_city            177253 0.0420    
-## 30 contributor_state           170263 0.0403    
-## 31 contributor_zip             181370 0.0429    
-## 32 contributor_occupation     2801286 0.663     
-## 33 contributor_employer_name  2972083 0.704     
-## 34 contributor_employer_city  3041105 0.720     
-## 35 contributor_employer_state 3039095 0.719     
-## 36 url                              0 0         
-## 37 contributor_location        208755 0.0494
-```
-
-We can use `janitor::tablyl()` and `base::summary()` to explore the least distinct and continuous
-variables.
-
-
-```r
-wa %>% tabyl(origin) %>% arrange(desc(n))
-```
-
-```
-## # A tibble: 10 x 3
-##    origin       n  percent
-##    <chr>    <dbl>    <dbl>
-##  1 C3     3916971 0.927   
-##  2 C3.1E    92868 0.0220  
-##  3 C4       75429 0.0179  
-##  4 AUB      40512 0.00959 
-##  5 AUD      40512 0.00959 
-##  6 C3.1D    29082 0.00688 
-##  7 C.1      11037 0.00261 
-##  8 C3.1A     9043 0.00214 
-##  9 C3.1B     5671 0.00134 
-## 10 C.3       3296 0.000780
-```
-
-```r
-wa %>% tabyl(type) %>% arrange(desc(n))
-```
-
-```
-## # A tibble: 2 x 3
-##   type                      n percent
-##   <chr>                 <dbl>   <dbl>
-## 1 Political Committee 2623053   0.621
-## 2 Candidate           1601368   0.379
-```
-
-```r
-wa %>% tabyl(party) %>% arrange(desc(n))
-```
-
-```
-## # A tibble: 9 x 4
-##   party                    n    percent valid_percent
-##   <chr>                <dbl>      <dbl>         <dbl>
-## 1 <NA>               2622213 0.621         NA        
-## 2 DEMOCRAT            596549 0.141          0.372    
-## 3 NON PARTISAN        511851 0.121          0.319    
-## 4 REPUBLICAN          473548 0.112          0.296    
-## 5 OTHER                10797 0.00256        0.00674  
-## 6 NONE                  4240 0.00100        0.00265  
-## 7 INDEPENDENT           3940 0.000933       0.00246  
-## 8 LIBERTARIAN           1260 0.000298       0.000786 
-## 9 CONSTITUTION PARTY      23 0.00000544     0.0000144
-```
-
-```r
-wa %>% tabyl(for_or_against) %>% arrange(desc(n))
-```
-
-```
-## # A tibble: 3 x 4
-##   for_or_against       n percent valid_percent
-##   <chr>            <dbl>   <dbl>         <dbl>
-## 1 <NA>           3770023 0.892         NA     
-## 2 For             423537 0.100          0.932 
-## 3 Against          30861 0.00731        0.0679
-```
-
-```r
-wa %>% tabyl(election_year)
-```
-
-```
-## # A tibble: 17 x 3
-##    election_year      n   percent
-##    <chr>          <dbl>     <dbl>
-##  1 2007          197987 0.0469   
-##  2 2008          490708 0.116    
-##  3 2009          276754 0.0655   
-##  4 2010          298597 0.0707   
-##  5 2011          209605 0.0496   
-##  6 2012          561683 0.133    
-##  7 2013          284077 0.0672   
-##  8 2014          337639 0.0799   
-##  9 2015          276217 0.0654   
-## 10 2016          442068 0.105    
-## 11 2017          303533 0.0719   
-## 12 2018          411948 0.0975   
-## 13 2019          107965 0.0256   
-## 14 2020           23361 0.00553  
-## 15 2021            1781 0.000422 
-## 16 2022             403 0.0000954
-## 17 2023              95 0.0000225
-```
-
-```r
-wa %>% tabyl(cash_or_in_kind) %>% arrange(desc(n))
-```
-
-```
-## # A tibble: 2 x 3
-##   cash_or_in_kind       n percent
-##   <chr>             <dbl>   <dbl>
-## 1 Cash            4148992  0.982 
-## 2 In kind           75429  0.0179
-```
-
-```r
-wa %>% tabyl(cash_or_in_kind) %>% arrange(desc(n))
-```
-
-```
-## # A tibble: 2 x 3
-##   cash_or_in_kind       n percent
-##   <chr>             <dbl>   <dbl>
-## 1 Cash            4148992  0.982 
-## 2 In kind           75429  0.0179
-```
-
-```r
-wa %>% tabyl(primary_general) %>% arrange(desc(n))
-```
-
-```
-## # A tibble: 3 x 3
-##   primary_general           n percent
-##   <chr>                 <dbl>   <dbl>
-## 1 Full election cycle 2890255   0.684
-## 2 Primary              812108   0.192
-## 3 General              522058   0.124
-```
-
-```r
-wa %>%  tabyl(code) %>% arrange(desc(n))
-```
-
-```
-## # A tibble: 8 x 3
-##   code                             n  percent
-##   <chr>                        <dbl>    <dbl>
-## 1 Individual                 3401494 0.805   
-## 2 Other                       436363 0.103   
-## 3 Business                    259902 0.0615  
-## 4 Political Action Committee   92059 0.0218  
-## 5 Union                        21449 0.00508 
-## 6 Party                         9286 0.00220 
-## 7 Self                          1970 0.000466
-## 8 Caucus                        1898 0.000449
-```
-
-```r
-wa %>% tabyl(contributor_state) %>% arrange(desc(n))
-```
-
-```
-## # A tibble: 127 x 4
-##    contributor_state       n percent valid_percent
-##    <chr>               <dbl>   <dbl>         <dbl>
-##  1 WA                3824238 0.905         0.943  
-##  2 <NA>               170263 0.0403       NA      
-##  3 CA                  39634 0.00938       0.00978
-##  4 OR                  32139 0.00761       0.00793
-##  5 ID                  14399 0.00341       0.00355
-##  6 NY                  12186 0.00288       0.00301
-##  7 TX                  11794 0.00279       0.00291
-##  8 DC                   8595 0.00203       0.00212
-##  9 FL                   7859 0.00186       0.00194
-## 10 VA                   7405 0.00175       0.00183
-## # … with 117 more rows
-```
-
-
-```r
-wa %>% 
-  ggplot(mapping = aes(x = amount)) +
-  geom_histogram(bins = 30) +
-  scale_y_log10() +
-  scale_x_log10(labels = scales::dollar, 
-                breaks = c(1, 10, 100, 1000, 100000, 1000000)) +
-  facet_wrap(~cash_or_in_kind, ncol = 1) +
-  labs(title = "Logarithmic Histogram of Contribution Amounts",
-       x = "Dollars Contributed",
-       y = "Number of Contributions")
-```
-
-There are 13916 records with `amount` values less than zero, which seem to
-indicate corrections or refunds.
-
-The median negative amount is only \$100, but 86 are less than $10,000 and
-one is a correction of \$2.5 million. That report can be found at the URL below.
-
-
-```r
-summary(wa$amount)
-```
-
-```
-##     Min.  1st Qu.   Median     Mean  3rd Qu.     Max. 
-## -2500000       10       35      308      100  8929810
-```
-
-```r
-summary(wa$amount[wa$amount < 0])
-```
-
-```
-##       Min.    1st Qu.     Median       Mean    3rd Qu.       Max. 
-## -2500000.0     -300.0     -100.0     -862.2      -30.0        0.0
-```
-
-```r
-wa$url[wa$amount == min(wa$amount)]
-```
-
-```
-## [1] "View report (https://web.pdc.wa.gov/rptimg/default.aspx?batchnumber=100441590)"
-```
-
-There seems to be a number of broken date strings in the `receipt_date` variable. The earliest and
-latest dates do not make sense. The earliest date was listed on a form from 2007, but records the
-receiving date as 1900.
-
-
-```r
-min(wa$receipt_date, na.rm = TRUE)
-```
-
-```
-## [1] "1900-01-01"
-```
-
-```r
-max(wa$receipt_date, na.rm = TRUE)
-```
-
-```
-## [1] "2041-06-06"
-```
-
-```r
-sum(is.na(wa$receipt_date))
-```
-
-```
-## [1] 12591
-```
-
-There should only be reports for the last 10 years, but over 100,000 are more than 12 years old.
-There are 15 records with dates from before the year 2000. There are also 34 record with receipt
-dates more than a year from today.
-
-
-```r
-wa %>% 
-  filter(receipt_date < "2000-01-01") %>%
-  arrange(receipt_date) %>% 
-  select(
-    id, 
-    receipt_date, 
-    election_year, 
-    contributor_name, 
-    amount, filer_name
-  )
-```
-
-```
-## # A tibble: 15 x 6
-##    id         receipt_date election_year contributor_name         amount filer_name                
-##    <chr>      <date>       <chr>         <chr>                     <dbl> <chr>                     
-##  1 1712756.r… 1900-01-01   2007          BOOKKEEPING            23862.   THE LEADERSHIP COUNCIL    
-##  2 5133549.r… 1916-06-08   2016          STEPHENS LARRY           100    YAKIMA CO DEMO CENT COMM …
-##  3 2895778.r… 1964-06-11   2010          MURPHY MARY              500    MURPHY EDMUND M           
-##  4 20638.corr 1964-06-11   2010          CORRECTION TO CONTRIB…  -500    MURPHY EDMUND M           
-##  5 5985281.r… 1968-07-31   2018          BARTZ PATRICIA            50    WHATCOM CO DEMO CENT COMM…
-##  6 7574185.s… 1968-07-31   2018          SMALL CONTRIBUTIONS       50    WHATCOM CO DEMO CENT COMM…
-##  7 7574215.s… 1968-07-31   2018          SMALL CONTRIBUTIONS       45    WHATCOM CO DEMO CENT COMM…
-##  8 5985290.r… 1968-08-01   2018          SCHWARTZ COLLEEN         100    WHATCOM CO DEMO CENT COMM…
-##  9 7574221.s… 1968-08-01   2018          SMALL CONTRIBUTIONS       20    WHATCOM CO DEMO CENT COMM…
-## 10 5937348.r… 1970-06-28   2018          STOKES LARRY             100    WALLIS JEFFREY J          
-## 11 6597810.s… 1975-11-18   2016          MISCELLANEOUS RECEIPTS     0.53 SNOHOMISH CO DEMO CENT CO…
-## 12 4479226.r… 1994-08-06   2016          THORN TERRY              150    BENTON DONALD M           
-## 13 4479227.r… 1994-08-06   2016          CHAPMAN ROBERT           200    BENTON DONALD M           
-## 14 4479228.r… 1994-08-07   2016          RASMUSSEN JOAN           100    BENTON DONALD M           
-## 15 4479229.r… 1994-08-07   2016          PEMCO                    500    BENTON DONALD M
-```
-
-```r
-wa %>% 
-  filter(receipt_date > today() + years(1)) %>%
-  arrange(desc(receipt_date)) %>% 
-  select(
-    id, 
-    receipt_date, 
-    election_year, 
-    contributor_name, 
-    amount, filer_name
-  )
-```
-
-```
-## # A tibble: 34 x 6
-##    id        receipt_date election_year contributor_name       amount filer_name                   
-##    <chr>     <date>       <chr>         <chr>                   <dbl> <chr>                        
-##  1 4409700.… 2041-06-06   2014          MUNRO RALPH D              50 BURRAGE JEANETTE R           
-##  2 4409701.… 2041-06-06   2014          KLEINER WALTER H          100 BURRAGE JEANETTE R           
-##  3 4409702.… 2041-06-06   2014          HUGHES LARRY R            100 BURRAGE JEANETTE R           
-##  4 3685495.… 2031-07-29   2012          KENNICOTT ELAINE E        100 WONG YOSHIE                  
-##  5 5180900.… 2031-07-22   2016          SEIU HEALTHCARE            50 HANSEN DREW D                
-##  6 5180901.… 2031-07-22   2016          MUCLESHOOT INDIAN TRI…    250 HANSEN DREW D                
-##  7 5901063.… 2031-05-27   2018          TURNER BRUCE              500 FELICI RICKY (RICK) J        
-##  8 3662698.… 2030-07-29   2012          ROBBINS BONNIE            250 WONG YOSHIE                  
-##  9 39015.co… 2029-12-28   2016          CORRECTION TO CONTRIB…      0 AMERICAN INSTITUTE OF ARCHIT…
-## 10 6241247.… 2029-02-23   2019          CAIRNS JOANNA              50 DAVIS KHALIA                 
-## # … with 24 more rows
-```
-
-Looking at the original report source for a few of them (found through the `url` value), we can see
-normal looking contribution dates alongside the weird ones. Writing "06/06/14" as "06/06/41" is an
-example of a likely error.
-
-There are nearly 200 records with egregious dates older than 1990 or from the future. I will flag
-these dates with a new `date_flag` logical variable.
-
-
-```r
-wa <- wa %>% mutate(date_flag = receipt_date < "1990-01-01" | receipt_date > today())
-```
-
-## Clean
-
-We can now clean the data to reach our objectives. All original columns and rows are preserved. New
-cleaned columns are suffixed with `*_clean`.
-
-### Mutate
-
-Add new variables using `dplyr::mutate()` and string functions from: `zipcode`, `lubridate`, and
-`stringr`.
-
-
-```r
-wa <- wa %>% 
-  # create needed cols
-  mutate(zip5_clean = clean.zipcodes(contributor_zip)) %>% 
-  mutate(year_clean = year(receipt_date)) %>%
-  # initialize other cols
-  mutate(
-    address_clean = str_remove(contributor_address, "[:punct:]"),
-    city_clean    = contributor_city,
-    state_clean   = contributor_state
-  )
-```
-
-### ZIP Codes
-
-After `zipcode::clean.zipcodes()` runs, there are still,
-108 ZIP codes less than 5 characters. We can make these
-`NA` rather than try to figure them out. We can also make some common erroneous ZIPs `NA`.
-
-
-```r
-n_distinct(wa$contributor_zip)
-```
-
-```
-## [1] 16280
-```
-
-```r
-n_distinct(wa$zip5_clean)
-```
-
-```
-## [1] 15377
-```
-
-```r
-sum(nchar(wa$zip5_clean) < 5, na.rm = T)
-```
-
-```
-## [1] 108
-```
-
-```r
-unique(wa$zip5_clean[nchar(wa$zip5_clean) < 5 & !is.na(wa$zip5_clean)])
-```
-
-```
-##  [1] "98" "26" "75" "35" "25" "3"  "10" "50" "86" "60" "15" "99" "7"  "09" "03" "9"  "00" "4"  "67"
-## [20] "32" "90" "13" "92" "30" "6"  "0"  "04"
-```
-
-```r
-wa$zip5_clean[nchar(wa$zip5_clean) < 5 & !is.na(wa$zip5_clean)] <- NA
-wa$zip5_clean <- wa$zip5_clean %>% na_if("00000|11111|99999")
-```
-
-### Sate Abbreviations
-
-There are 127 distinct state abbreviations in the
-`contributor_state` variable.
-
-
-```r
-n_distinct(wa$contributor_state)
-```
-
-```
-## [1] 127
-```
-
-The `zipcode` package contains a useful list of zip codes and their accompanying states and cities.
-This package has a list of state abbreviations that includes armed forces postal addresses and
-American territories. We can add Canadian provinces to make it even more useful (compared to
-`base::state.abb`).
-
-
-```r
-data("zipcode")
-zipcode <- 
-  tribble(
-    ~city,           ~state,
-    "Toronto",       "ON",
-    "Quebec City",   "QC",
-    "Montreal",      "QC",
-    "Halifax",       "NS",
-    "Fredericton",   "NB",
-    "Moncton",       "NB",
-    "Winnipeg",      "MB",
-    "Victoria",      "BC",
-    "Vancouver",     "BC",
-    "Surrey",        "BC",
-    "Richmond",      "BC",
-    "Charlottetown", "PE",
-    "Regina",        "SK",
-    "Saskatoon",     "SK",
-    "Edmonton",      "AB",
-    "Calgary",       "AB",
-    "St. John's",    "NL") %>% 
-  bind_rows(zipcode) %>%
-  mutate(city = str_to_upper(city) %>% str_remove_all("[:punct:]")) %>% 
-  arrange(zip)
-
-valid_abbs   <- sort(unique(zipcode$state))
-invalid_abbs <- setdiff(wa$contributor_state, valid_abbs)
-```
-
-From this list, we know there are 72 valid abbreviations across the 50 states,
-DC, territories, military bases, and Canadian provinces.
-
-There are 325 records with 
-58 invalid abbreviations.
-
-
-```r
-wa %>% 
-  filter(!(contributor_state %in% valid_abbs)) %>% 
-  group_by(contributor_state) %>% 
-  count() %>%
-  arrange(desc(n))
-```
-
-```
-## # A tibble: 58 x 2
-##    contributor_state      n
-##    <chr>              <int>
-##  1 <NA>              170263
-##  2 ZZ                    55
-##  3 RE                    41
-##  4 ,                     35
-##  5 OT                    32
-##  6 OL                    30
-##  7 98                    19
-##  8 UK                    11
-##  9 TE                     8
-## 10 SE                     6
-## # … with 48 more rows
-```
-
-"ZZ" is used to represent contributions from foreign countries. Some Canadian contributions have
-valid `contributor_state` values (e.g., "BC", "ON"). There are 55 "ZZ" records with 14
-distinct `contributor_city` values.
-
-
-```r
-wa %>%
-  filter(contributor_state == "ZZ") %>% 
-  pull(contributor_city) %>% 
-  unique()
-```
-
-```
-##  [1] "TOKYO"             "JAPAN"             "KAMAKURA 248-0016" "SURREY BC"        
-##  [5] "VANCOUVER BC"      "SHIBUYA-KU  TOKYO" "RICHMOND, BC"      "SAI WAN HO"       
-##  [9] "OSAKA"             "OHTSU SHIGA"       "KOWLOON"           "TSING YI"         
-## [13] "IBARAKI"
-```
-
-
-```r
-wa$state_clean[wa$contributor_state == "ZZ" & 
-                 wa$contributor_city == "VANCOUVER BC" & 
-                   !is.na(wa$contributor_state)] <- "BC"
-
-wa$state_clean[wa$contributor_state == "ZZ" & 
-                 wa$contributor_city == "RICHMOND, BC" & 
-                   !is.na(wa$contributor_state)] <- "BC"
-
-wa$state_clean[wa$contributor_state == "ZZ" & 
-                 wa$contributor_city == "SURREY BC" & 
-                   !is.na(wa$contributor_state)] <- "BC"
-```
-
-Once those "ZZ" values are made into Canadian abbreviations, we can make the rest of the "ZZ"
-values `NA`.
-
-
-```r
-wa$state_clean <- wa$state_clean %>% na_if("ZZ")
-wa$state_clean <- wa$state_clean %>% na_if("XX") # also foreign
-```
-
-All the records with a `state_clean` value of `,` have a `contributor_city` value of "SEATTLE",
-so we can make them all "WA".
-
-
-```r
-if (
-  wa %>% 
-  filter(state_clean == ",") %>% 
-  pull(contributor_city) %>% 
-  unique() %>% 
-  equals("SEATTLE")
-) {
-  wa$state_clean[wa$state_clean == "," & !is.na(wa$state_clean)] <- "WA"
+There are 5,310,134 rows of 36 columns. Each record represents a single
+cash or in-kind contribution or correction.
+
+``` r
+glimpse(wac)
+#> Rows: 5,310,134
+#> Columns: 36
+#> $ id                         <int> 13342841, 13343735, 11644965, 11872032, 11155319, 12481055, 11363379, 11363302, 113…
+#> $ report_number              <chr> "100266813", "100277081", "100326656", "100329684", "100364667", "100259876", "1003…
+#> $ origin                     <chr> "C3", "C3", "C3", "C3", "C3", "C3", "C3", "C3", "C3", "C3", "C3", "C3", "C3", "C3",…
+#> $ committee_id               <chr> "17557", "17557", "36", "7210", "12226", "2198", "17557", "17557", "17557", "17557"…
+#> $ filer_id                   <chr> "SEATPO 134", "SEATPO 134", "39THLD 290", "GOERK  272", "MARRC  203", "BUILIG 661",…
+#> $ type                       <chr> "Political Committee", "Political Committee", "Political Committee", "Candidate", "…
+#> $ filer_name                 <chr> "SEATTLE POLICE OFFICERS GUILD POLITICAL ACTION COMMITTEE", "SEATTLE POLICE OFFICER…
+#> $ office                     <chr> NA, NA, NA, "CITY COUNCIL MEMBER", "STATE SENATOR", NA, NA, NA, NA, NA, NA, NA, NA,…
+#> $ legislative_district       <chr> NA, NA, NA, NA, "06", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "24", "15", NA, NA, N…
+#> $ position                   <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
+#> $ party                      <chr> NA, NA, "DEMOCRATIC", "NON PARTISAN", "DEMOCRATIC", NA, NA, NA, NA, NA, NA, NA, NA,…
+#> $ ballot_number              <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
+#> $ for_or_against             <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
+#> $ jurisdiction               <chr> NA, NA, NA, "CITY OF MONROE", "LEG DISTRICT 06 - SENATE", NA, NA, NA, NA, NA, NA, N…
+#> $ jurisdiction_county        <chr> NA, NA, NA, "SNOHOMISH", "SPOKANE", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "CLALLA…
+#> $ jurisdiction_type          <chr> NA, NA, NA, "Local", "Legislative", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "Legisl…
+#> $ election_year              <int> 2008, 2008, 2009, 2009, 2010, 2008, 2010, 2010, 2010, 2010, 2010, 2010, 2010, 2010,…
+#> $ amount                     <dbl> 4.00, 4.00, 0.42, 250.00, 25.00, 1025.00, 10.00, 10.00, 6.00, 10.00, 6.00, 4.00, 10…
+#> $ cash_or_in_kind            <chr> "Cash", "Cash", "Cash", "Cash", "Cash", "Cash", "Cash", "Cash", "Cash", "Cash", "Ca…
+#> $ receipt_date               <date> 2008-07-18, 2008-09-29, 2009-09-30, 2009-10-14, 2010-06-15, 2008-06-30, 2010-05-21…
+#> $ description                <chr> NA, NA, "Miscellaneous Receipts", NA, "Contributions of $25 or less contributed by:…
+#> $ memo                       <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
+#> $ primary_general            <chr> "Full Election", "Full Election", NA, "Full Election", NA, NA, "Full Election", "Fu…
+#> $ code                       <chr> "Individual", "Individual", "Other", "Individual", "Other", "Other", "Individual", …
+#> $ contributor_category       <chr> "Individual", "Individual", "Individual", "Individual", "Individual", "Individual",…
+#> $ contributor_name           <chr> "CARR ALAN", "BRANHAM AMY", "MISCELLANEOUS RECEIPTS", "OLSHEFSKY LISETTE", "SMALL C…
+#> $ contributor_address        <chr> "2949 4TH AVENUE, S.", "2949 4TH AVENUE, S.", NA, "17837 N 46TH DR", NA, NA, "2949 …
+#> $ contributor_city           <chr> "SEATTLE", "SEATTLE", NA, "GLENDALE", NA, NA, "SEATTLE", "SEATTLE", "SEATTLE", "SEA…
+#> $ contributor_state          <chr> "WA", "WA", NA, "AZ", NA, NA, "WA", "WA", "WA", "WA", "WA", "WA", "WA", "WA", NA, N…
+#> $ contributor_zip            <chr> "98134", "98134", NA, "85308", NA, NA, "98134", "98134", "98134", "98134", "98134",…
+#> $ contributor_occupation     <chr> NA, NA, NA, "RETIRED", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
+#> $ contributor_employer_name  <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
+#> $ contributor_employer_city  <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
+#> $ contributor_employer_state <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
+#> $ url                        <chr> "https://web.pdc.wa.gov/rptimg/default.aspx?batchnumber=100266813", "https://web.pd…
+#> $ contributor_location       <chr> NA, NA, NA, NA, NA, NA, "POINT (-122.32954 47.57618)", "POINT (-122.32954 47.57618)…
+tail(wac)
+#> # A tibble: 6 × 36
+#>         id report_number origin committee_id filer_id   type    filer_name    office   legislative_dis… position   party
+#>      <int> <chr>         <chr>  <chr>        <chr>      <chr>   <chr>         <chr>    <chr>            <chr>      <chr>
+#> 1 15255294 110049174     C3     27866        SCHMJ  584 Candid… Joseph R Sch… CITY CO… <NA>             City Coun… <NA> 
+#> 2 15255293 110049174     C3     27866        SCHMJ  584 Candid… Joseph R Sch… CITY CO… <NA>             City Coun… <NA> 
+#> 3 15255297 110049174     C3     27866        SCHMJ  584 Candid… Joseph R Sch… CITY CO… <NA>             City Coun… <NA> 
+#> 4 15255295 110049174     C3     27866        SCHMJ  584 Candid… Joseph R Sch… CITY CO… <NA>             City Coun… <NA> 
+#> 5 15255304 110049175     C3     29612        LFP-N--963 Politi… Neighbors Fo… <NA>     <NA>             <NA>       <NA> 
+#> 6 15255311 110049176     C3     26591        MUTCJ  248 Candid… MUTCHLER JON… CITY CO… <NA>             City Coun… <NA> 
+#> # … with 25 more variables: ballot_number <chr>, for_or_against <chr>, jurisdiction <chr>, jurisdiction_county <chr>,
+#> #   jurisdiction_type <chr>, election_year <int>, amount <dbl>, cash_or_in_kind <chr>, receipt_date <date>,
+#> #   description <chr>, memo <chr>, primary_general <chr>, code <chr>, contributor_category <chr>,
+#> #   contributor_name <chr>, contributor_address <chr>, contributor_city <chr>, contributor_state <chr>,
+#> #   contributor_zip <chr>, contributor_occupation <chr>, contributor_employer_name <chr>,
+#> #   contributor_employer_city <chr>, contributor_employer_state <chr>, url <chr>, contributor_location <chr>
+```
+
+### Missing
+
+Columns vary in their degree of missing values.
+
+``` r
+col_stats(wac, count_na)
+#> # A tibble: 36 × 4
+#>    col                        class        n         p
+#>    <chr>                      <chr>    <int>     <dbl>
+#>  1 id                         <int>        0 0        
+#>  2 report_number              <chr>        0 0        
+#>  3 origin                     <chr>        0 0        
+#>  4 committee_id               <chr>        0 0        
+#>  5 filer_id                   <chr>        0 0        
+#>  6 type                       <chr>        0 0        
+#>  7 filer_name                 <chr>        0 0        
+#>  8 office                     <chr>  3210879 0.605    
+#>  9 legislative_district       <chr>  4693165 0.884    
+#> 10 position                   <chr>  5043688 0.950    
+#> 11 party                      <chr>  2946040 0.555    
+#> 12 ballot_number              <chr>  5189839 0.977    
+#> 13 for_or_against             <chr>  5003349 0.942    
+#> 14 jurisdiction               <chr>  3047133 0.574    
+#> 15 jurisdiction_county        <chr>  3770502 0.710    
+#> 16 jurisdiction_type          <chr>  3137418 0.591    
+#> 17 election_year              <int>        0 0        
+#> 18 amount                     <dbl>        0 0        
+#> 19 cash_or_in_kind            <chr>        0 0        
+#> 20 receipt_date               <date>     472 0.0000889
+#> 21 description                <chr>  5014333 0.944    
+#> 22 memo                       <chr>  5249993 0.989    
+#> 23 primary_general            <chr>   257795 0.0485   
+#> 24 code                       <chr>        0 0        
+#> 25 contributor_category       <chr>        0 0        
+#> 26 contributor_name           <chr>        0 0        
+#> 27 contributor_address        <chr>   211604 0.0398   
+#> 28 contributor_city           <chr>   209241 0.0394   
+#> 29 contributor_state          <chr>   205627 0.0387   
+#> 30 contributor_zip            <chr>   214722 0.0404   
+#> 31 contributor_occupation     <chr>  3587854 0.676    
+#> 32 contributor_employer_name  <chr>  3794292 0.715    
+#> 33 contributor_employer_city  <chr>  3888013 0.732    
+#> 34 contributor_employer_state <chr>  3888391 0.732    
+#> 35 url                        <chr>        0 0        
+#> 36 contributor_location       <chr>  4246877 0.800
+```
+
+We can flag any record missing a key variable needed to identify a
+transaction.
+
+``` r
+key_vars <- c("receipt_date", "contributor_name", "amount", "filer_name")
+wac <- flag_na(wac, all_of(key_vars))
+sum(wac$na_flag)
+#> [1] 472
+```
+
+``` r
+wac %>% 
+  filter(na_flag) %>% 
+  select(all_of(key_vars))
+#> # A tibble: 472 × 4
+#>    receipt_date contributor_name        amount filer_name                                                 
+#>    <date>       <chr>                    <dbl> <chr>                                                      
+#>  1 NA           SMALL CONTRIBUTIONS      353.  WASHINGTON EDUCATION ASSOCIATION POLITICAL ACTION COMMITTEE
+#>  2 NA           SMALL CONTRIBUTIONS     4608   WASHINGTON EDUCATION ASSOCIATION POLITICAL ACTION COMMITTEE
+#>  3 NA           ANONYMOUS CONTRIBUTIONS   20   WASHINGTON EDUCATION ASSOCIATION POLITICAL ACTION COMMITTEE
+#>  4 NA           SMALL CONTRIBUTIONS       51.5 NUCOR PAC OF WA                                            
+#>  5 NA           SMALL CONTRIBUTIONS        0.5 NUCOR PAC OF WA                                            
+#>  6 NA           SMALL CONTRIBUTIONS       34.5 NUCOR PAC OF WA                                            
+#>  7 NA           MISCELLANEOUS RECEIPTS   450   WASHINGTON EDUCATION ASSOCIATION POLITICAL ACTION COMMITTEE
+#>  8 NA           SMALL CONTRIBUTIONS      635   WASHINGTON EDUCATION ASSOCIATION POLITICAL ACTION COMMITTEE
+#>  9 NA           SMALL CONTRIBUTIONS      140   WASHINGTON EDUCATION ASSOCIATION POLITICAL ACTION COMMITTEE
+#> 10 NA           SMALL CONTRIBUTIONS     1330   WASHINGTON EDUCATION ASSOCIATION POLITICAL ACTION COMMITTEE
+#> # … with 462 more rows
+```
+
+### Duplicates
+
+We can also flag any entirely duplicate rows. To keep memory usage low
+with such a large data frame, we will split our data into a list and
+check each element of the list. For each chunk, we will write the
+duplicate `id` to a text file.
+
+``` r
+prop_distinct(wac$id)
+#> [1] 1
+```
+
+``` r
+dupe_file <- here("il", "contribs", "data", "dupe_ids.txt")
+if (!file_exists(dupe_file)) {
+  tmp <- file_temp(ext = "rds")
+  write_rds(wac, file = tmp)
+  file_size(tmp)
+  wa_id <- split(wac$id, wac$receipt_date)
+  was <- wac %>%
+    select(-id) %>% 
+    group_split(receipt_date)
+  if (file_exists(tmp)) {
+    rm(wac)
+    Sys.sleep(5)
+    flush_memory(2)
+  }
+  pb <- txtProgressBar(max = length(was), style = 3)
+  for (i in seq_along(was)) {
+    if (nrow(was[[i]]) < 2) {
+      next
+    }
+    d1 <- duplicated(was[[i]], fromLast = FALSE)
+    d2 <- duplicated(was[[i]], fromLast = TRUE)
+    dupe_vec <- d1 | d2
+    rm(d1, d2)
+    if (any(dupe_vec)) {
+      write_lines(
+        x = wa_id[[i]][dupe_vec], 
+        file = dupe_file, 
+        append = file_exists(dupe_file),
+        na = ""
+      )
+    }
+    rm(dupe_vec)
+    was[[i]] <- NA
+    wa_id[[i]] <- NA
+    if (i %% 100 == 0) {
+      Sys.sleep(2)
+      flush_memory()
+    }
+    setTxtProgressBar(pb, i)
+  }
+  rm(was, wa_id)
+  Sys.sleep(5)
+  flush_memory()
+  wac <- read_rds(tmp)
 }
 ```
 
-Most of the records with a `contributor_state` value of "RE" have "REQUESTED" in the fields as a
-placeholder. We will have to make them `NA`. Two records can be fixed manually based on their
-`contributor_city` value.
-
-
-```r
-wa %>% 
-  filter(address_clean == "REQUESTED") %>%
-  filter(state_clean == "RE") %>% 
-  select(
-    id,
-    contributor_name,
-    contributor_address,
-    contributor_state,
-    contributor_zip,
-    amount,
-    filer_name
-  )
-```
-
-```
-## # A tibble: 13 x 7
-##    id       contributor_name contributor_addre… contributor_sta… contributor_zip amount filer_name 
-##    <chr>    <chr>            <chr>              <chr>            <chr>            <dbl> <chr>      
-##  1 4742264… REISBERG LEAH    REQUESTED          RE               REQUE               20 BRADY WHIT…
-##  2 4742265… NADASKY JULIE    REQUESTED          RE               REQUE              150 BRADY WHIT…
-##  3 4742266… JOHNSON RON      REQUESTED          RE               REQUE               60 BRADY WHIT…
-##  4 4742268… ROSS KELLIE      REQUESTED          RE               REQUE              100 BRADY WHIT…
-##  5 4742269… WILLIAMS KERRY   REQUESTED          RE               REQUE               80 BRADY WHIT…
-##  6 4742270… GREEN JONELL     REQUESTED          RE               REQUE               40 BRADY WHIT…
-##  7 4742271… THOMAS DION      REQUESTED          RE               REQUE               40 BRADY WHIT…
-##  8 4742272… REQUESTED ILLIZM REQUESTED          RE               REQUE               40 BRADY WHIT…
-##  9 4742273… REQUESTED NATHAN REQUESTED          RE               REQUE               40 BRADY WHIT…
-## 10 4742274… REISBERG LEAH    REQUESTED          RE               REQUE              120 BRADY WHIT…
-## 11 4742278… ROBERTS MICHAEL  REQUESTED          RE               REQUE               40 BRADY WHIT…
-## 12 4742252… TREVIGNE ERICH   REQUESTED          RE               REQUE               30 BRADY WHIT…
-## 13 4742254… REISBERG LEAH    REQUESTED          RE               REQUE               40 BRADY WHIT…
-```
-
-```r
-wa$state_clean[wa$address_clean == "REQUESTED" & wa$state_clean == "RE"] <- NA
-
-wa %>% 
-  filter(state_clean == "RE") %>% 
-  pull(contributor_city) %>% 
-  unique()
-```
-
-```
-## [1] "LAKE FOREST PARK" "REDMOND"          "REQUESTED"
-```
-
-```r
-# if the city is REDMOND and state RE, make WA
-wa$state_clean[wa$state_clean == "RE" & 
-                 wa$city_clean == "REDMOND" & 
-                  !is.na(wa$state_clean)] <- "WA"
-
-# if the city is LAKE FOREST PARK and state RE, make WA
-wa$state_clean[wa$state_clean == "RE" & 
-                 wa$city_clean == "LAKE FOREST PARK" & 
-                  !is.na(wa$state_clean)] <- "WA"
-```
-
-Many of the records with a `contributor_state` value of "OT" seem to be located in Australia, and
-all of them appear to be from foreign countries. Perhaps "OT" is an abbreviation for "Overseas
-Territory"? We can make these values `NA`.
-
-
-```r
-wa %>% 
-  filter(state_clean == "OT") %>% 
-  select(
-    contributor_name,
-    contributor_address,
-    contributor_city,
-    contributor_state,
-    contributor_zip,
-    filer_name
-  )
-```
-
-```
-## # A tibble: 32 x 6
-##    contributor_name  contributor_add… contributor_city contributor_sta… contributor_zip filer_name 
-##    <chr>             <chr>            <chr>            <chr>            <chr>           <chr>      
-##  1 HOLLING ANDREAS   MAXIMILIANSTR 1… MNNSTER          OT               48147           ORGANIC CO…
-##  2 NAISMITH AUDREY   5 COOLAROO PLACE CHURCHILL        OT               3842            ORGANIC CO…
-##  3 NEAL JODIE        2260 KALANG RD   BELLINGEN NSW    OT               2454            ORGANIC CO…
-##  4 SWIFT MARILYN     PO BOX 7592      SAIPAN           OT               96950           ORGANIC CO…
-##  5 BUYS KAREN        351 KEES RD      YARRAM           OT               03971           ORGANIC CO…
-##  6 PIGGOTT ROGER     26 ROACH RD      BADDAGINNIE      OT               03670           ORGANIC CO…
-##  7 SUTHERLAND DIANE  44 RUE E VAN DR… BRUSSELS         OT               01050           ORGANIC CO…
-##  8 MARIT-WILLMANN A… REITA            MEISINGSET       OT               06628           ORGANIC CO…
-##  9 ZUCCHI KARL       MIDDENKAMP 45    OSNABRUECK       OT               49082           ORGANIC CO…
-## 10 BOYDELL RUTH      132 MARSHALL ST  AUSTRALIA        OT               02289           ORGANIC CO…
-## # … with 22 more rows
-```
-
-```r
-wa$state_clean %<>% na_if("OT")
-```
-
-There are 26 records with numeric state abbreviations. Using the `contributor_city` and
-`contributor_zip` variables and comparing those in our `zipcode` table, we can see these should all
-have state abbreviations of "WA."
-
-
-```r
-if (
-  wa %>% 
-  filter(state_clean %>% str_detect("[\\d+]")) %>% 
-  left_join(
-    y = (zipcode %>% 
-      select(city, zip, state) %>% 
-      drop_na()), 
-    by = c("zip5_clean" = "zip")) %>%
-  pull(state) %>%
-  na.omit() %>% 
-  unique() %>% 
-  equals("WA")
-) {
-  wa$state_clean[str_detect(wa$state_clean, "[\\d+]") & !is.na(wa$state_clean)] <- "WA"
-}
-```
-
-There are 30 records with a `contributor_state` value of
-"OL." Each of these records has a `contributor_state` value of "OLYMPIA" and a `contributor_zip`
-value in Washington. We can give all these records a `state_clean` value of "WA."
-
-One is from Selfoss, a city in Iceland. The `contributor_name` value for that record has many
-missing characters, as one from Iceland would. We will make that state record `NA`.
-
-
-```r
-wa %>% 
-  filter(state_clean == "OL") %>% 
-  pull(city_clean) %>% 
-  unique()
-```
-
-```
-## [1] "OLYMPIA" "SELFOSS"
-```
-
-```r
-wa$state_clean[wa$state_clean == "OL"] <- "WA"
-wa$state_clean[wa$city_clean == "SELFOSS"] <- NA
-```
-
-After fixing these most common `contributor_state` errors, there are a little over 100 records
-still with invalid state abbreviations. Looking at the city names, most of these abbreviations
-stand for other countries and can be made `NA`. We can fix records with `contributor_city` values
-that look American.
-
-
-```r
-sum(na.omit(wa$state_clean) %in% invalid_abbs)
-```
-
-```
-## [1] 105
-```
-
-```r
-wa %>% 
-  filter(state_clean %in% invalid_abbs) %>% 
-  filter(!is.na(state_clean)) %>% 
-  pull(city_clean) %>% 
-  unique()
-```
-
-```
-##  [1] "KATY"                 "SPRING"               "LONDON"               "SAITAMA"             
-##  [5] "WALLINGTON"           "PADBURY"              "AMSTERDAM, HOLLAND"   "DURHAM"              
-##  [9] "OSMO"                 "MANILA"               "VERDUN"               "COMOX"               
-## [13] "SINGAPORE"            "COURTENAY"            "BERGEN"               "VOULA"               
-## [17] "HURST GREEN"          "MORTSEL"              "RIBEIRO PRETO"        "TAURANGA"            
-## [21] "ROSNY SOUS BOIS"      "WHITEHORSE"           "MURI"                 "MILAN"               
-## [25] "TANUNDA AUSTRALIA"    "PEARLAND"             "AUSTIN"               "TUMWATER"            
-## [29] "4600 36TH AVE SW"     "SEATTLE"              "ELLENSBURG"           "RAINIER"             
-## [33] "TACOMA"               "REQUESTED"            "TOKOROZAWA CITY, SAI" "D.N. GALILHATACHTONE"
-## [37] "CAMBRIDGE"            "INDIANOLA"            "MARYVILLE"            "BERLIN"              
-## [41] "COPENHAGEN"           "ORGIVA"               "SOLIHULL"             "AUCKLAND"            
-## [45] "YELLOWKNIFE"          "KOLBOTN"              "LIMOGES"              "AALBORG"             
-## [49] "MILL BAY"             "EINDHOVEN"            "GWERN-Y-BRENIN"       "WASHINGTON"          
-## [53] "HILLSBORO"            "ATLANTA"              "HENLEY-ON-THAMES"     "1410-WATERLOO"       
-## [57] "BERN -3018"           "VILNIUS 08220"        "\"GLENBANE,"          "\"BAINBRIDGE"        
-## [61] "\"LONG"               "15/2003"              "SAN DIEGO"            "FEDERAL WAY"         
-## [65] "CHINA"                "SOUTH KOREA"          "AUSTRALIA"            "ICELAND"             
-## [69] "HONG KONG"            "PARIS"                "PRALON"               "KAMAGAWA-SHI"
-```
-
-There are over 50 records with a `contributor_city` value of "SEATTLE" and Washington state ZIP
-codes with invalid `contributor_state` values. We can make these "WA".
-
-
-```r
-seattle_ids <- wa %>%
-  filter(city_clean == "SEATTLE") %>% 
-  filter(state_clean %in% invalid_abbs) %>% 
-  select(
-    id, 
-    contributor_name,
-    address_clean,
-    city_clean,
-    state_clean,
-    zip5_clean,
-    filer_name) %>% 
-  left_join(
-    (zipcode %>% select(city, zip, state) %>% drop_na()), 
-    by = c("zip5_clean" = "zip", "city_clean" = "city")) %>% 
-  pull(id)
-
-wa$state_clean[wa$id %in% seattle_ids] <- "WA"
-rm(seattle_ids)
-```
-
-This record should be placed in Washington, D.C.
-
-
-```r
-wa$state_clean[wa$state_clean == "DI" & 
-                 wa$city_clean == "WASHINGTON" & 
-                   wa$zip5_clean == "20016" & 
-                     !is.na(wa$state_clean)] <- "DC"
-```
-
-Finally, we can make all remaining invalid abbreviations `NA`.
-
-
-```r
-n_distinct(wa$state_clean)
-## [1] 116
-length(valid_abbs)
-## [1] 72
-sum(na.omit(wa$state_clean) %in% invalid_abbs)
-## [1] 95
-wa$state_clean[wa$state_clean %in% invalid_abbs] <- NA
-```
-
-This brings our total distinct abbreviations to 70. There are records
-from every state except for American Samoa, the Marshall Islands, and Palau.
-
-
-```r
-n_distinct(wa$state_clean)
-## [1] 70
-setdiff(valid_abbs, sort(unique(wa$state_clean)))
-## [1] "AS" "MH" "PW"
-```
-
-### Clean City
-
-Cities are the most challenging. There are 13171 distinct values of
-`contributor_city`. There are 756 Washington state
-cities in the fairly comprehensive `zipcode` list. Since only 5% of records are from outside the
-state, there are clearly many misspelled `contributor_city` values.
-
-
-```r
-n_distinct(wa$contributor_city)
-```
-
-```
-## [1] 13171
-```
-
-```r
-wa %>% tabyl(state_clean) %>% arrange(desc(n))
-```
-
-```
-## # A tibble: 70 x 4
-##    state_clean       n percent valid_percent
-##    <chr>         <dbl>   <dbl>         <dbl>
-##  1 WA          3824411 0.905         0.943  
-##  2 <NA>         170404 0.0403       NA      
-##  3 CA            39634 0.00938       0.00978
-##  4 OR            32139 0.00761       0.00793
-##  5 ID            14399 0.00341       0.00355
-##  6 NY            12186 0.00288       0.00301
-##  7 TX            11794 0.00279       0.00291
-##  8 DC             8596 0.00203       0.00212
-##  9 FL             7859 0.00186       0.00194
-## 10 VA             7405 0.00175       0.00183
-## # … with 60 more rows
-```
-
-Looking at just values starting with "SEAT", we can see how many different ways people can misspell
-their city.
-
-
-```r
-unique(wa$city_clean[str_detect(wa$city_clean, "SEAT")])
-```
-
-```
-##  [1] "SEATTLE"              NA                     "SEATAC"               "SEATTEL"             
-##  [5] "SEATRLE"              "SEATTTLE"             "SEATTLE, WA"          "SEATTL"              
-##  [9] "SEATTLEW="            "SEATTLE W"            "SEATTLE,"             "SEATATLE"            
-## [13] "SEATT;LE"             "SEATTE"               "SEATLE"               "SEATTLTE"            
-## [17] "SEATTLER"             "SEATT;E"              "SEATTKE"              "WEST SEATTLE"        
-## [21] "SEATTLE, WA 98104"    "SEATTLE WA"           "SEATTLEL"             "SEATLLE"             
-## [25] "SEATTLE."             "SEATTLEQ"             "SEATTAC"              "SEATTYLE"            
-## [29] "SEATGTLE"             "SEATTLLE"             "W-SEATTLE"            "SEATTLW"             
-## [33] "SEATTLED"             "SEATTLE, WA  98103"   "SEATTLE`"             "SEATTLR"             
-## [37] "SEATTLOE"             "SEATTLEW"             "SEATTALE"             "SEATTLEE"            
-## [41] "SEATTPE"              "`SEATTLE"             "SEATTLE P"            "SEAT TLE"            
-## [45] "WSEATTLE"             "SEATYTLE"             "SEATTLKE"             "SEATTLE, WA  98168"  
-## [49] "SEATT"                "SEATTLE4"             "SEATTTE"              "SEATAC,"             
-## [53] "SEATTLEC"             "SOUTH SEATTLE"        "SEATTLESEATTLE"       "SEATTLE WA 98118"    
-## [57] "SEATTLE, WA  98115"   "SEATTLE WA 98102"     "SEATTLE, WA 98112"    "SEATTLE, WA 98102"   
-## [61] "SEATTLE E"            "SEATTLE WA 98104"     "SEATTILE"             "SILVER SEATTLE"      
-## [65] "SEATTLE 98116-2201"   "SEATBACK"             "EDMONDSSEATTLE"       "SEATTELE"            
-## [69] "SEATTRLE"             "SEATLTE"              "SEATTLE WA 98105"     "SEATTLWASHINGTON"    
-## [73] "SSEATTLE"             "SEATTLELE"            "SEATTLE, WA 98119-17" "\"SEATTLE,"          
-## [77] "SEATTLETTLE"          "SEATTLET"             "SEATTLEA"             "SEAT"                
-## [81] "SEATAK"               "SEATTTL"              "SEATCA"               "SEATTLE TACOMA, WASH"
-## [85] "SEATAX"
-```
-
-There are 6769 of 
-`contributor_city` values not contained in the `zipcodes` data base; not all are misspellings, but
-there are still too many to correct by hand.
-
-
-```r
-length(setdiff(wa$city_clean, zipcode$city))
-```
-
-```
-## [1] 6769
-```
-
-I am going to create a separate table of spelling corrections. We can then join this table onto
-the original data to create a new column of correct city names. The bulk of the work will be done
-using key collision and ngram fingerprint algorithms from the open source tool Open Refine. These
-algorithms are ported to R in the package `refinr`. These tools are able to correct most of the 
-common errors, but I will be double checking the table and making changes in R.
-
-There is a separate file in `wa_contribs/code/` which creates the lookup table needed to correct
-spelling. That file has more detailed comments on the process. Below you can see some of the
-changes made.
-
-
-```r
-source(here("wa_contribs", "code", "fix_wa_city.R"))
-sample_n(city_fix_table, 10)
-```
-
-```
-## # A tibble: 10 x 4
-##    state_clean zip5_clean city_clean        city_fix        
-##    <chr>       <chr>      <chr>             <chr>           
-##  1 WA          99115      COULE CITY        COULEE CITY     
-##  2 KS          67401      SALINA            SALINAS         
-##  3 WA          98328      EATONVILL         EATONVILLE      
-##  4 WA          98155      LAKE FORREST PARK LAKE FOREST PARK
-##  5 WA          99344      OTHELLE           OTHELLO         
-##  6 NE          68317      BENNET            BENNET          
-##  7 OR          97753      POWELL-BUTTE      POWELL BUTTE    
-##  8 WA          98827      LOMIS             LOOMIS          
-##  9 WA          98022      ENUMCCLAW         ENUMCLAW        
-## 10 ID          83814      COEUR D ALENE     COEUR DALENE
-```
-
-Join the original data set with the table of corrected city spellings. For every record, 
-make `city_clean` either the original spelling or the corrected spelling.
-
-
-```r
-wa <- wa %>% 
-  left_join(city_fix_table, by = c("zip5_clean", "city_clean", "state_clean")) %>% 
-  mutate(city_clean = ifelse(is.na(city_fix), city_clean, city_fix)) %>% 
-  select(-city_fix)
-```
-
-## Confirm
-
-The key variables for this project are:
-
-* `id` and `record_number` to identify the form
-* `contributor_name` for who is giving money
-* `amount` for how much was given
-* `filer_name` for who it was given to
-
-We need to ensure every row in the cleaned table contains that information.
-
-
-```r
-wa %>% 
-  # select for the important vars
-  select(
-    id, 
-    report_number, 
-    contributor_name, 
-    amount, 
-    filer_name) %>% 
-  # drop any row with missing data
-  drop_na() %>% 
-  # count the rows
-  nrow() %>% 
-  # check if equal to total total
-  subtract(nrow(wa))
-```
-
-```
-## [1] -27
-```
-
-The cleaned data set has 27 rows missing key information. Many of them are from a single auction,
-held on April 29, 2008. Looking at the report for that auction, these auction rows were items
-donated _by_ the Washington State Republican part that did not sell (hence the \$0 `amount`
-values). Since there was no buyer, there is no `contributor_name` value.
-
-I will flag these reports with a new `missing_flag` logical variable.
-
-
-```r
-wa %>% 
-  select(
-    id, 
-    report_number,
-    contributor_name, 
-    amount, 
-    filer_name) %>% 
-  map(count_na) %>% 
-  unlist() %>% 
-  enframe(name = "variable", value = "n_na") %>% 
-  mutate(prop_na = n_na / nrow(wa)) %>% 
-  print(n = length(wa))
-```
-
-```
-## # A tibble: 5 x 3
-##   variable          n_na    prop_na
-##   <chr>            <int>      <dbl>
-## 1 id                   0 0         
-## 2 report_number        0 0         
-## 3 contributor_name    27 0.00000639
-## 4 amount               0 0         
-## 5 filer_name           0 0
-```
-
-```r
-wa %>% 
-  # select for the important vars
-  select(
-    id, 
-    report_number,
-    contributor_name, 
-    amount, 
-    filer_name,
-    receipt_date) %>% 
-  filter(is.na(contributor_name)) %>% 
-  print(n = 27)
-```
-
-```
-## # A tibble: 27 x 6
-##    id          report_number contributor_name amount filer_name                        receipt_date
-##    <chr>       <chr>         <chr>             <dbl> <chr>                             <date>      
-##  1 1743538.rc… 100207821     <NA>                36  SNOHOMISH CO DEMO CENT COMM NON … 2007-03-31  
-##  2 2147780.rc… 100259580     <NA>              4732. WA AFFORDABLE HOUSING COUNCIL     2008-06-19  
-##  3 2321311.rc… 100274694     <NA>                20  COALITION AGAINST ASSISTED SUICI… 2008-09-15  
-##  4 2346433.rc… 100276695     <NA>                10  COALITION AGAINST ASSISTED SUICI… 2008-10-03  
-##  5 2387991.rc… 100280141     <NA>                 5  COALITION AGAINST ASSISTED SUICI… 2008-10-17  
-##  6 2388003.rc… 100280141     <NA>               250  COALITION AGAINST ASSISTED SUICI… 2008-10-17  
-##  7 3032586.rc… 100385917     <NA>                35  KILMER DEREK C                    2010-10-15  
-##  8 30583.auctd 1001267717    <NA>                 0  REEVES AUBREY C JR                NA          
-##  9 29356.auctb 100252646     <NA>                 0  WA ST REPUB PARTY EXEMPT          2008-04-29  
-## 10 29357.auctb 100252646     <NA>                 0  WA ST REPUB PARTY EXEMPT          2008-04-29  
-## 11 29359.auctb 100252646     <NA>                 0  WA ST REPUB PARTY EXEMPT          2008-04-29  
-## 12 29365.auctb 100252646     <NA>                 0  WA ST REPUB PARTY EXEMPT          2008-04-29  
-## 13 29293.auctb 100252646     <NA>                 0  WA ST REPUB PARTY EXEMPT          2008-04-29  
-## 14 29295.auctb 100252646     <NA>                 0  WA ST REPUB PARTY EXEMPT          2008-04-29  
-## 15 29317.auctb 100252646     <NA>                 0  WA ST REPUB PARTY EXEMPT          2008-04-29  
-## 16 29290.auctb 100252646     <NA>                 0  WA ST REPUB PARTY EXEMPT          2008-04-29  
-## 17 29330.auctb 100252646     <NA>                 0  WA ST REPUB PARTY EXEMPT          2008-04-29  
-## 18 29328.auctb 100252646     <NA>                 0  WA ST REPUB PARTY EXEMPT          2008-04-29  
-## 19 29322.auctb 100252646     <NA>                 0  WA ST REPUB PARTY EXEMPT          2008-04-29  
-## 20 29326.auctb 100252646     <NA>                 0  WA ST REPUB PARTY EXEMPT          2008-04-29  
-## 21 29258.auctb 100252646     <NA>                 0  WA ST REPUB PARTY EXEMPT          2008-04-29  
-## 22 29224.auctb 100252646     <NA>                 0  WA ST REPUB PARTY EXEMPT          2008-04-29  
-## 23 29333.auctb 100252646     <NA>                 0  WA ST REPUB PARTY EXEMPT          2008-04-29  
-## 24 29303.auctb 100252646     <NA>                 0  WA ST REPUB PARTY EXEMPT          2008-04-29  
-## 25 29345.auctb 100252646     <NA>                 0  WA ST REPUB PARTY EXEMPT          2008-04-29  
-## 26 29368.auctb 100252646     <NA>                 0  WA ST REPUB PARTY EXEMPT          2008-04-29  
-## 27 30583.auctb 1001267717    <NA>                 0  REEVES AUBREY C JR                NA
-```
-
-```r
-wa <- wa %>% mutate(missing_flag = is.na(contributor_name))
-```
-
-## Conclusion
-
-The final data set now meets all our objectives:
-
-1. There are 4224421 records.
-1. There are no duplicated records.
-1. `amount` has a large range due to corrections, while `receipt_date` has a few
-erroneous values do to entry errors (flagged with `date_flag`).
-1. Missing data varies by nature of variable.
-1. The `state_clean`, `city_clean`, and `address_clean` are all consistently uppercase without punctuation. Many spelling errors have been corrected in the first two.
-1. The `zip5_clean` variable contains clean ZIP codes.
-1. the `year_clean` variable contains clean receipt year values.
-1. The 27 records missing contributor names have been flagged with the
-`missing_flag` variable.
-
-The overall number of distinct values has been reduced, allowing for better searching.
-
-
-```r
-n_distinct(wa$address_clean) - n_distinct(wa$contributor_address)
-## [1] -43500
-n_distinct(wa$city_clean)    - n_distinct(wa$contributor_city)  
-## [1] -1251
-n_distinct(wa$state_clean)   - n_distinct(wa$contributor_state) 
-## [1] -57
-n_distinct(wa$zip5_clean)    - n_distinct(wa$contributor_zip)   
-## [1] -930
-```
-
-We can write two versions of the document. The first has all original columns along with cleaned
-data in the `*_clean` columns. The second remove the original columns for file size reasons.
-
-
-```r
-# all data, original and cleaned
-wa %>% write_csv(
-  path = here("wa_contribs", "data", "wa_contribs_all.csv"),
-  na = "",
-  col_names = TRUE,
-  quote_escape = "backslash"
+``` r
+dupe_id <- tibble(
+  id = as.integer(read_lines(dupe_file, skip_empty_rows = TRUE)),
+  dupe_flag = TRUE
 )
+wac <- left_join(wac, dupe_id, by = "id")
+wac <- mutate(wac, across(dupe_flag, Negate(is.na)))
+```
 
-wa %>%
-  # remove the original contributor_* columns for space
-  select(
-    -contributor_address,
-    -contributor_city,
-    -contributor_state,
-    -contributor_zip
-  ) %>% 
-  write_csv(
-    path = here("wa_contribs", "data", "wa_contribs_clean.csv"),
-    na = "",
-    col_names = TRUE,
-    quote_escape = "backslash"
+1.9% of rows are duplicates.
+
+``` r
+wac %>% 
+  filter(dupe_flag) %>% 
+  count(receipt_date, contributor_name, amount, filer_name, sort = TRUE)
+#> # A tibble: 44,023 × 5
+#>    receipt_date contributor_name                   amount filer_name                                                   n
+#>    <date>       <chr>                               <dbl> <chr>                                                    <int>
+#>  1 2019-08-29   CORRECTION TO CONTRIBUTIONS         -2.25 WASHINGTON EDUCATION ASSOCIATION POLITICAL ACTION COMMI…  1046
+#>  2 2008-06-17   CORRECTION TO CONTRIBUTIONS        -75    RONALD C SIMS                                              179
+#>  3 2008-06-17   CORRECTION TO CONTRIBUTIONS       -100    RONALD C SIMS                                               98
+#>  4 2015-04-25   KITSAP CO DEMOCRATIC CNTRL COMM     60    Kitsap County Democratic Central Committee                  86
+#>  5 2006-10-13   PROCEEDS FROM LOW COST FUNDRAISER   50    AUBURN CIT FOR SCHOOLS                                      78
+#>  6 2014-09-12   PROCEEDS FROM LOW COST FUNDRAISER   20    PIKE LIZ S (LIZ PIKE)                                       73
+#>  7 2007-10-20   CORRECTION TO CONTRIBUTIONS         -2.25 WASHINGTON EDUCATION ASSOCIATION POLITICAL ACTION COMMI…    62
+#>  8 2017-02-18   PROCEEDS FROM LOW COST FUNDRAISER   50    Grant County Republican Party Central Committee             57
+#>  9 2015-03-25   CORRECTION TO CONTRIBUTIONS        -82.0  Mary Sue Wilson                                             50
+#> 10 2015-03-25   CORRECTION TO CONTRIBUTIONS        -41.0  Mary Sue Wilson                                             45
+#> # … with 44,013 more rows
+```
+
+### Categorical
+
+``` r
+col_stats(wac, n_distinct)
+#> # A tibble: 38 × 4
+#>    col                        class        n           p
+#>    <chr>                      <chr>    <int>       <dbl>
+#>  1 id                         <int>  5310134 1          
+#>  2 report_number              <chr>   493404 0.0929     
+#>  3 origin                     <chr>        5 0.000000942
+#>  4 committee_id               <chr>    10350 0.00195    
+#>  5 filer_id                   <chr>     7150 0.00135    
+#>  6 type                       <chr>        2 0.000000377
+#>  7 filer_name                 <chr>     8491 0.00160    
+#>  8 office                     <chr>       44 0.00000829 
+#>  9 legislative_district       <chr>       50 0.00000942 
+#> 10 position                   <chr>      189 0.0000356  
+#> 11 party                      <chr>       12 0.00000226 
+#> 12 ballot_number              <chr>      108 0.0000203  
+#> 13 for_or_against             <chr>        3 0.000000565
+#> 14 jurisdiction               <chr>      573 0.000108   
+#> 15 jurisdiction_county        <chr>       39 0.00000734 
+#> 16 jurisdiction_type          <chr>        5 0.000000942
+#> 17 election_year              <int>       19 0.00000358 
+#> 18 amount                     <dbl>    50811 0.00957    
+#> 19 cash_or_in_kind            <chr>        2 0.000000377
+#> 20 receipt_date               <date>    6168 0.00116    
+#> 21 description                <chr>    64571 0.0122     
+#> 22 memo                       <chr>        3 0.000000565
+#> 23 primary_general            <chr>        4 0.000000753
+#> 24 code                       <chr>        8 0.00000151 
+#> 25 contributor_category       <chr>        2 0.000000377
+#> 26 contributor_name           <chr>  1042321 0.196      
+#> 27 contributor_address        <chr>  1032673 0.194      
+#> 28 contributor_city           <chr>    18132 0.00341    
+#> 29 contributor_state          <chr>      161 0.0000303  
+#> 30 contributor_zip            <chr>    18399 0.00346    
+#> 31 contributor_occupation     <chr>    44471 0.00837    
+#> 32 contributor_employer_name  <chr>   140063 0.0264     
+#> 33 contributor_employer_city  <chr>     9261 0.00174    
+#> 34 contributor_employer_state <chr>      145 0.0000273  
+#> 35 url                        <chr>   522241 0.0983     
+#> 36 contributor_location       <chr>   139809 0.0263     
+#> 37 na_flag                    <lgl>        2 0.000000377
+#> 38 dupe_flag                  <lgl>        2 0.000000377
+```
+
+![](../plots/distinct_plots-1.png)<!-- -->
+
+### Amounts
+
+``` r
+summary(wac$amount)
+#>     Min.  1st Qu.   Median     Mean  3rd Qu.     Max. 
+#> -2500000       10       35      290      100  8929810
+mean(wac$amount <= 0)
+#> [1] 0.003497275
+```
+
+These are the records with the minimum and maximum amounts.
+
+``` r
+glimpse(wac[c(which.max(wac$amount), which.min(wac$amount)), ])
+#> Rows: 2
+#> Columns: 38
+#> $ id                         <int> 10644750, 10645096
+#> $ report_number              <chr> "100433945", "100441590"
+#> $ origin                     <chr> "C3", "C.1"
+#> $ committee_id               <chr> "22059", "22059"
+#> $ filer_id                   <chr> "YES1183109", "YES1183109"
+#> $ type                       <chr> "Political Committee", "Political Committee"
+#> $ filer_name                 <chr> "YES ON 1183 COALITION", "YES ON 1183 COALITION"
+#> $ office                     <chr> NA, NA
+#> $ legislative_district       <chr> NA, NA
+#> $ position                   <chr> NA, NA
+#> $ party                      <chr> NA, NA
+#> $ ballot_number              <chr> NA, NA
+#> $ for_or_against             <chr> NA, NA
+#> $ jurisdiction               <chr> NA, NA
+#> $ jurisdiction_county        <chr> NA, NA
+#> $ jurisdiction_type          <chr> NA, NA
+#> $ election_year              <int> 2011, 2011
+#> $ amount                     <dbl> 8929810, -2500000
+#> $ cash_or_in_kind            <chr> "Cash", "Cash"
+#> $ receipt_date               <date> 2011-10-17, 2011-10-17
+#> $ description                <chr> NA, "(Reported amount: 8929810.00; Corrected amount: 6429810.00) Description: REFUN…
+#> $ memo                       <chr> NA, NA
+#> $ primary_general            <chr> "Full Election", NA
+#> $ code                       <chr> "Business", "Other"
+#> $ contributor_category       <chr> "Organization", "Individual"
+#> $ contributor_name           <chr> "COSTCO", "CORRECTION TO CONTRIBUTIONS"
+#> $ contributor_address        <chr> "999 LAKE DR", NA
+#> $ contributor_city           <chr> "ISSAQUAH", NA
+#> $ contributor_state          <chr> "WA", NA
+#> $ contributor_zip            <chr> "98027", NA
+#> $ contributor_occupation     <chr> NA, NA
+#> $ contributor_employer_name  <chr> NA, NA
+#> $ contributor_employer_city  <chr> NA, NA
+#> $ contributor_employer_state <chr> NA, NA
+#> $ url                        <chr> "https://web.pdc.wa.gov/rptimg/default.aspx?batchnumber=100433945", "https://web.pd…
+#> $ contributor_location       <chr> NA, NA
+#> $ na_flag                    <lgl> FALSE, FALSE
+#> $ dupe_flag                  <lgl> FALSE, FALSE
+```
+
+![](../plots/hist_amount-1.png)<!-- -->
+
+### Dates
+
+We can add the calendar year from `receipt_date` with
+`lubridate::year()`
+
+``` r
+wac <- mutate(wac, receipt_year = year(receipt_date))
+```
+
+``` r
+min(wac$receipt_date)
+#> [1] NA
+sum(wac$receipt_year < 2000)
+#> [1] NA
+max(wac$receipt_date)
+#> [1] NA
+sum(wac$receipt_date > today())
+#> [1] NA
+```
+
+![](../plots/bar_year-1.png)<!-- -->
+
+## Wrangle
+
+To improve the searchability of the database, we will perform some
+consistent, confident string normalization. For geographic variables
+like city names and ZIP codes, the corresponding `campfin::normal_*()`
+functions are tailor made to facilitate this process.
+
+### Address
+
+The `contributor_address` variable is already sufficiently normalized.
+
+``` r
+sample(wac$contributor_address, 5)
+#> [1] "12116 E PORTLAND"                   "2730 OCCIDENTAL AVE S"              "1308 ALEXANDER AVE E"              
+#> [4] NA                                   "16125 JUANITA WOODINVILLE WAY #702"
+```
+
+### ZIP
+
+For ZIP codes, the `campfin::normal_zip()` function will attempt to
+create valid *five* digit codes by removing the ZIP+4 suffix and
+returning leading zeroes dropped by other programs like Microsoft Excel.
+
+``` r
+wac <- wac %>% 
+  mutate(
+    zip_norm = normal_zip(
+      zip = contributor_zip %>% 
+        str_remove_all("-\\d{4}$"),
+      na_rep = TRUE
+    )
   )
+```
+
+``` r
+wac %>% 
+  count(contributor_zip, zip_norm, sort = TRUE) %>% 
+  filter(contributor_zip != zip_norm)
+#> # A tibble: 385 × 3
+#>    contributor_zip zip_norm     n
+#>    <chr>           <chr>    <int>
+#>  1 V6J 1           61          83
+#>  2 V6Z 2           62          19
+#>  3 100.0           1000        16
+#>  4 98---           98          11
+#>  5 +9116           9116        10
+#>  6 WA989           989          9
+#>  7 `9810           9810         7
+#>  8 250.0           2500         7
+#>  9 500.0           5000         7
+#> 10 98,16           9816         7
+#> # … with 375 more rows
+```
+
+``` r
+progress_table(
+  wac$contributor_zip,
+  wac$zip_norm,
+  compare = valid_zip
+)
+#> # A tibble: 2 × 6
+#>   stage               prop_in n_distinct prop_na n_out n_diff
+#>   <chr>                 <dbl>      <dbl>   <dbl> <dbl>  <dbl>
+#> 1 wac$contributor_zip   0.994      18399  0.0404 28991   2920
+#> 2 wac$zip_norm          0.998      18025  0.0436 12235   2546
+```
+
+### State
+
+Valid two digit state abbreviations can be made using the
+`campfin::normal_state()` function.
+
+``` r
+wac <- wac %>% 
+  mutate(
+    state_norm = normal_state(
+      state = contributor_state,
+      abbreviate = TRUE,
+      na_rep = TRUE,
+      valid = valid_state
+    )
+  )
+```
+
+``` r
+wac %>% 
+  count(contributor_state, state_norm, sort = TRUE) %>% 
+  filter(contributor_state != state_norm)
+#> # A tibble: 5 × 3
+#>   contributor_state state_norm     n
+#>   <chr>             <chr>      <int>
+#> 1 Washington        WA           151
+#> 2 Wa                WA            28
+#> 3 WASHINGTON        WA            17
+#> 4 wa                WA            13
+#> 5 Wa.               WA             3
+```
+
+``` r
+progress_table(
+  wac$contributor_state,
+  wac$state_norm,
+  compare = valid_state
+)
+#> # A tibble: 2 × 6
+#>   stage                 prop_in n_distinct prop_na n_out n_diff
+#>   <chr>                   <dbl>      <dbl>   <dbl> <dbl>  <dbl>
+#> 1 wac$contributor_state    1.00        161  0.0387  1103    102
+#> 2 wac$state_norm           1            59  0.0389     0      1
+```
+
+### City
+
+Cities are the most difficult geographic variable to normalize, simply
+due to the wide variety of valid cities and formats.
+
+#### Normal
+
+The `campfin::normal_city()` function is a good start, again converting
+case, removing punctuation, but *expanding* USPS abbreviations. We can
+also remove `invalid_city` values.
+
+``` r
+norm_city <- wac %>% 
+  distinct(contributor_city, state_norm, zip_norm) %>% 
+  mutate(
+    city_norm = normal_city(
+      city = contributor_city, 
+      abbs = usps_city,
+      states = c("WA", "DC", "WASHINGTON"),
+      na = invalid_city,
+      na_rep = TRUE
+    )
+  )
+```
+
+#### Swap
+
+We can further improve normalization by comparing our normalized value
+against the *expected* value for that record’s state abbreviation and
+ZIP code. If the normalized value is either an abbreviation for or very
+similar to the expected value, we can confidently swap those two.
+
+``` r
+norm_city <- norm_city %>% 
+  left_join(
+    y = zipcodes,
+    by = c(
+      "state_norm" = "state",
+      "zip_norm" = "zip"
+    )
+  ) %>% 
+  rename(city_match = city) %>% 
+  mutate(
+    match_abb = is_abbrev(city_norm, city_match),
+    match_dist = str_dist(city_norm, city_match),
+    city_swap = if_else(
+      condition = !is.na(match_dist) & (match_abb | match_dist == 1),
+      true = city_match,
+      false = city_norm
+    )
+  ) %>% 
+  select(
+    -city_match,
+    -match_dist,
+    -match_abb
+  )
+```
+
+``` r
+wac <- left_join(
+  x = wac,
+  y = norm_city,
+  by = c(
+    "contributor_city",
+    "state_norm", 
+    "zip_norm"
+  )
+)
+```
+
+#### Refine
+
+The [OpenRefine](https://openrefine.org/) algorithms can be used to
+group similar strings and replace the less common versions with their
+most common counterpart. This can greatly reduce inconsistency, but with
+low confidence; we will only keep any refined strings that have a valid
+city/state/zip combination.
+
+``` r
+good_refine <- wac %>% 
+  mutate(
+    city_refine = city_swap %>% 
+      key_collision_merge() %>% 
+      n_gram_merge(numgram = 1)
+  ) %>% 
+  filter(city_refine != city_swap) %>% 
+  inner_join(
+    y = zipcodes,
+    by = c(
+      "city_refine" = "city",
+      "state_norm" = "state",
+      "zip_norm" = "zip"
+    )
+  )
+```
+
+    #> # A tibble: 258 × 5
+    #>    state_norm zip_norm city_swap       city_refine           n
+    #>    <chr>      <chr>    <chr>           <chr>             <int>
+    #>  1 WA         98374    PUAYLLP         PUYALLUP             74
+    #>  2 WA         98638    NASSEL          NASELLE              22
+    #>  3 ID         83815    COUER DALENE    COEUR D ALENE        21
+    #>  4 WA         98537    COSMPOLOLIS     COSMOPOLIS           20
+    #>  5 WA         98275    MULKITEO        MUKILTEO             18
+    #>  6 NY         11733    SETAUKET        EAST SETAUKET        15
+    #>  7 WA         98110    BAINBRIDGE ISLE BAINBRIDGE ISLAND    12
+    #>  8 OH         45202    CINCINATTI      CINCINNATI           11
+    #>  9 OR         97850    LEGRANDE        LA GRANDE            10
+    #> 10 WA         98359    OLAOOA          OLALLA               10
+    #> # … with 248 more rows
+
+Then we can join the refined values back to the database.
+
+``` r
+wac <- wac %>% 
+  left_join(good_refine, by = names(.)) %>% 
+  mutate(city_refine = coalesce(city_refine, city_swap))
+```
+
+#### Progress
+
+Our goal for normalization was to increase the proportion of city values
+known to be valid and reduce the total distinct values by correcting
+misspellings.
+
+| stage                                | prop\_in | n\_distinct | prop\_na | n\_out | n\_diff |
+|:-------------------------------------|---------:|------------:|---------:|-------:|--------:|
+| `str_to_upper(wac$contributor_city)` |    0.984 |       15011 |    0.039 |  82502 |    7381 |
+| `wac$city_norm`                      |    0.987 |       13946 |    0.040 |  67506 |    6294 |
+| `wac$city_swap`                      |    0.993 |       10319 |    0.040 |  37381 |    2663 |
+| `wac$city_refine`                    |    0.993 |       10101 |    0.040 |  36783 |    2446 |
+
+You can see how the percentage of valid values increased with each
+stage.
+
+![](../plots/bar_progress-1.png)<!-- -->
+
+More importantly, the number of distinct values decreased each stage. We
+were able to confidently change many distinct invalid values to their
+valid equivalent.
+
+![](../plots/bar_distinct-1.png)<!-- -->
+
+Before exporting, we can remove the intermediary normalization columns
+and rename all added variables with the `_clean` suffix.
+
+``` r
+wac <- wac %>% 
+  select(
+    -city_norm,
+    -city_swap,
+    city_clean = city_refine
+  ) %>% 
+  rename_all(~str_replace(., "_norm", "_clean")) %>% 
+  rename_all(~str_remove(., "_raw")) %>% 
+  relocate(city_clean, state_clean, .before = zip_clean)
+```
+
+``` r
+glimpse(sample_n(wac, 50))
+#> Rows: 50
+#> Columns: 42
+#> $ id                         <int> 6735455, 4063058, 12384344, 7722445, 5131410, 14863592, 2206257, 13919891, 9707781,…
+#> $ report_number              <chr> "100668298", "100782259", "100272778", "100609519", "100738673", "110027949", "1009…
+#> $ origin                     <chr> "C3", "C3", "C3", "C3", "C3", "C3", "C3", "C3", "AU", "C3", "C3", "C3", "C3", "C3",…
+#> $ committee_id               <chr> "20794", "5339", "109", "20728", "6371", "26576", "17153", "12790", "17937", "9495"…
+#> $ filer_id                   <chr> "WASHSP 507", "DURKJ  144", "21STLDV036", "WASHHP 119", "FIREAS 501", "GONZM  102",…
+#> $ type                       <chr> "Political Committee", "Candidate", "Political Committee", "Political Committee", "…
+#> $ filer_name                 <chr> "AWSP-WASHINGTON SCHOOL PRINCIPALS LEGISLATIVE EFFECTIVENESS ASSOCIATION", "Jenny A…
+#> $ office                     <chr> NA, "MAYOR", NA, NA, NA, "MAYOR", "CITY COUNCIL MEMBER", "MAYOR", NA, "STATE REPRES…
+#> $ legislative_district       <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, "31", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
+#> $ position                   <chr> NA, NA, NA, NA, NA, NA, "CITY COUNCIL MEMBER, POSITION 3", NA, NA, NA, NA, NA, NA, …
+#> $ party                      <chr> NA, "NONE", "DEMOCRATIC", NA, NA, NA, "OTHER", "NON PARTISAN", "DEMOCRATIC", "REPUB…
+#> $ ballot_number              <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
+#> $ for_or_against             <chr> NA, NA, "For", NA, NA, NA, NA, NA, NA, NA, NA, "For", NA, NA, NA, NA, NA, NA, "For"…
+#> $ jurisdiction               <chr> NA, "CITY OF SEATTLE", "SNOHOMISH CO", NA, NA, "CITY OF SEATTLE", "CITY OF SEATTLE"…
+#> $ jurisdiction_county        <chr> NA, "KING", "SNOHOMISH", NA, NA, "KING", "KING", "WHATCOM", NA, "KING", "SPOKANE", …
+#> $ jurisdiction_type          <chr> NA, "Local", "Local", NA, NA, "Local", "Local", "Local", NA, "Legislative", "Local"…
+#> $ election_year              <int> 2015, 2017, 2008, 2014, 2016, 2021, 2019, 2007, 2012, 2017, 2007, 2016, 2021, 2013,…
+#> $ amount                     <dbl> 15.00, 500.00, 25.00, 100.00, 10.00, 100.00, 10.00, 100.00, 20.00, 1000.00, 99.99, …
+#> $ cash_or_in_kind            <chr> "Cash", "Cash", "Cash", "Cash", "Cash", "Cash", "Cash", "Cash", "Cash", "Cash", "Ca…
+#> $ receipt_date               <date> 2015-11-12, 2017-08-04, 2008-08-18, 2014-10-14, 2016-12-16, 2021-03-19, 2019-06-29…
+#> $ description                <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "EVENT …
+#> $ memo                       <chr> NA, NA, NA, NA, NA, NA, NA, NA, "Item Donor", NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
+#> $ primary_general            <chr> "Full Election", "Full Election", "Full Election", "Full Election", "Full Election"…
+#> $ code                       <chr> "Individual", "Individual", "Individual", "Individual", "Individual", "Individual",…
+#> $ contributor_category       <chr> "Individual", "Individual", "Individual", "Individual", "Individual", "Individual",…
+#> $ contributor_name           <chr> "FOSTER RYAN B", "JASSNY LAUREN", "COOPER CHRYSTAL", "LACY TYSON", "THIERFELDER MAT…
+#> $ contributor_address        <chr> "1020 EVERGREEN WAY SE", "317 W HIGHLAND DR", "820 MAPLE ST", "PO BOX 669", "2911 E…
+#> $ contributor_city           <chr> "AUBURN", "SEATTLE", "EDMONDS", "DAVENPORT", "VANCOUVER", "Seattle", "LINTON", "BEL…
+#> $ contributor_state          <chr> "WA", "WA", "WA", "WA", "WA", "WA", "IN", "WA", "WA", "WA", "WA", "WA", "ID", "WA",…
+#> $ contributor_zip            <chr> "98092", "98119", "98020", "99122", "98661", "98199", "47441", "98225", "98274", "9…
+#> $ contributor_occupation     <chr> "PRINCIPAL", "BANKER", NA, NA, "FIRE FIGHTER", NA, NA, "RECYCLING MANAGER", NA, NA,…
+#> $ contributor_employer_name  <chr> "AUBURN SD", "COMMERCE BANK", NA, NA, "CITY OF VANCOUVER", NA, NA, "SANITARY SERVIC…
+#> $ contributor_employer_city  <chr> "AUBURN", "SEATTLE", NA, NA, "VANCOUVER", NA, NA, "BELLINGHAM", NA, NA, NA, NA, NA,…
+#> $ contributor_employer_state <chr> "WA", "WA", NA, NA, "WA", NA, NA, "WA", NA, NA, NA, NA, NA, NA, "NC", NA, NA, NA, "…
+#> $ url                        <chr> "https://web.pdc.wa.gov/rptimg/default.aspx?batchnumber=100668298", "https://web.pd…
+#> $ contributor_location       <chr> NA, NA, NA, NA, "POINT (-122.63977 45.63165)", "POINT (-122.40569 47.6434)", NA, "P…
+#> $ na_flag                    <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE,…
+#> $ dupe_flag                  <lgl> FALSE, FALSE, FALSE, FALSE, TRUE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, …
+#> $ receipt_year               <dbl> 2015, 2017, 2008, 2014, 2016, 2021, 2019, 2007, 2012, 2017, 2007, 2016, 2021, 2013,…
+#> $ city_clean                 <chr> "AUBURN", "SEATTLE", "EDMONDS", "DAVENPORT", "VANCOUVER", "SEATTLE", "LINTON", "BEL…
+#> $ state_clean                <chr> "WA", "WA", "WA", "WA", "WA", "WA", "IN", "WA", "WA", "WA", "WA", "WA", "ID", "WA",…
+#> $ zip_clean                  <chr> "98092", "98119", "98020", "99122", "98661", "98199", "47441", "98225", "98274", "9…
+```
+
+## Conclude
+
+1.  There are 5,310,134 records in the database.
+2.  There are 103,026 duplicate records in the database.
+3.  The range and distribution of `amount` and `date` seem reasonable.
+4.  There are 472 records missing key variables.
+5.  Consistency in geographic data has been improved with
+    `campfin::normal_*()`.
+6.  The 4-digit `year` variable has been created with
+    `lubridate::year()`.
+
+## Export
+
+Now the file can be saved on disk for upload to the Accountability
+server.
+
+``` r
+clean_dir <- dir_create(here("wa", "contribs", "data", "clean"))
+clean_path <- path(clean_dir, "wa_contribs_20040101-20210922.csv")
+write_csv(wac, clean_path, na = "")
+(clean_size <- file_size(clean_path))
+#> 1.78G
+```
+
+## Upload
+
+We can use the `aws.s3::put_object()` to upload the text file to the IRW
+server.
+
+``` r
+aws_path <- path("csv", basename(clean_path))
+if (!object_exists(aws_path, "publicaccountability")) {
+  put_object(
+    file = clean_path,
+    object = aws_path, 
+    bucket = "publicaccountability",
+    acl = "public-read",
+    show_progress = TRUE,
+    multipart = TRUE
+  )
+}
+aws_head <- head_object(aws_path, "publicaccountability")
+(aws_size <- as_fs_bytes(attr(aws_head, "content-length")))
+unname(aws_size == clean_size)
 ```
