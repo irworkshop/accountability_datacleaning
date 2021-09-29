@@ -91,6 +91,7 @@ pacman::p_load(
   rvest, # html scraping
   glue, # combine strings
   here, # relative paths
+  httr2, # http requests
   httr, # http requests
   fs # local storage 
 )
@@ -132,7 +133,7 @@ key_path <- here("wv", "contribs", "record_layout.csv")
 ```{r dict_write}
 write_lines(
   x = c("# West Virginia Contracts Data Dictionary\n", dict_md),
-  path = here("wv", "contribs", "wv_contribs_dict.md"),
+  file = here("wv", "contribs", "wv_contribs_dict.md"),
 )
 ```
 
@@ -143,26 +144,56 @@ The files can be downloaded with an `httr::GET()` request to the CFRS server.
 ```{r raw_get}
 raw_dir <- dir_create(here("wv", "contribs", "data", "raw"))
 wv_api <- "https://cfrs.wvsos.gov/CFIS_APIService/api"
-for (year in 2018:2020) {
-  wv_get <- GET(
-    url = str_c(wv_api, "DataDownload", "GetCSVDownloadReport", sep = "/"),
-    write_disk(path(raw_dir, glue("CON_{year}.csv")), overwrite = TRUE),
-    query = list(
-      year = "2018",
-      transactionType = "CON",
-      reportFormat = "csv",
-      fileName = glue("CON_{year}.csv")
-    )
+```
+
+```{r raw_list}
+wv_ls <- request("https://cfrs.wvsos.gov/CFIS_APIService/api/") %>% 
+  req_url_path_append("DataDownload", "GetCheckDatadownload") %>% 
+  req_url_query(pageNumber = 1, pageSize = 50) %>% 
+  req_perform() %>% 
+  resp_body_json(
+    check_type = FALSE,
+    simplifyDataFrame = TRUE
   )
+```
+
+```{r echo=FALSE}
+wv_ls %>% 
+  mutate(across(NameOfFile, md_code)) %>% 
+  kable()
+```
+
+```{r}
+wv_ls <- wv_ls %>% 
+  filter(TransactionType == "CON") %>% 
+  mutate(FilePath = path(raw_dir, NameOfFile))
+```
+
+```{r}
+for (i in seq(nrow(wv_ls))) {
+  message(wv_ls$NameOfFile[i])
+  if (!file_exists(wv_ls$FilePath[i])) {
+    request("https://cfrs.wvsos.gov/CFIS_APIService/api/") %>% 
+      req_url_path_append("DataDownload", "GetCSVDownloadReport") %>% 
+      req_url_query(
+        year = wv_ls$ElectionYear[i],
+        transactionType = wv_ls$TransactionType[i],
+        reportFormat = "csv",
+        fileName = wv_ls$NameOfFile[i]
+      ) %>% 
+      req_perform(path = wv_ls$FilePath[i])
+  }
 }
 ```
 
-```{r raw_info}
-raw_info <- as_tibble(dir_info(raw_dir))
-raw_paths <- raw_info$path
-raw_info %>% 
+```{r echo=FALSE}
+raw_csv <- wv_ls$FilePath
+```
+
+```{r echo=FALSE}
+file_info(raw_csv) %>% 
   select(path, size, modification_time) %>% 
-  mutate(across(path, ~as_fs_path(basename(.))))
+  mutate(across(path, basename))
 ```
 
 ## Read
@@ -172,24 +203,26 @@ _within_ those columns are not escaped in any way. We will have to use regular
 expressions to replace them with single-quotes (`'`).
 
 ```{r raw_fix}
-fix_paths <- path_temp(basename(raw_paths))
-for (i in seq_along(raw_paths)) {
-  read_file(raw_paths[i]) %>% 
-    str_replace_all("(?<!,|^)\"(?!,|$)", "\'") %>% 
-    str_replace_all("\"(?=Icing)", "\'") %>% 
-    write_file(fix_paths[i])
+fix_csv <- path_temp(basename(raw_csv))
+for (i in seq_along(raw_csv)) {
+  read_lines(raw_csv[i]) %>% 
+    str_replace("Report$", "Report,") %>% 
+    str_replace_all(",\"([A-z\\. ]+)\"[^,|\"]*", ",'\\1'") %>% 
+    str_replace_all("\\s\"([A-z\\. ]+)\"[^,|\"]*", " '\\1'") %>% 
+    str_replace_all("(?<!^|,)\"(?!,|$)", r"("""")") %>% 
+    write_lines(fix_csv[i])
 }
 ```
 
 The fixed text files can be read into a single data frame.
 
 ```{r raw_read}
-wvc <- map_df(
-  .x = fix_paths,
-  .f = read_delim,
+wvc <- read_delim(
+  file = fix_csv,
   delim = ",",
   escape_backslash = FALSE, 
-  escape_double = FALSE,
+  escape_double = TRUE,
+  na = c("", " "),
   col_types = cols(
     .default = col_character(),
     `Receipt Amount` = col_double(),
@@ -200,14 +233,15 @@ wvc <- map_df(
 )
 ```
 
+```{r}
+problems(wvc)
+```
+
 Column names can be converted to snake case and simplified.
 
 ```{r raw_rename}
 wvc <- wvc %>% 
   clean_names("snake") %>% 
-  rename_all(str_remove, "receipt_") %>% 
-  rename_all(str_remove, "fundraiser_") %>% 
-  rename_all(str_remove, "_name") %>% 
   mutate(across(c(amended, occupation_comment), to_logical))
 ```
 
@@ -235,31 +269,14 @@ col_stats(wvc, count_na)
 
 We should flag any record missing a key variable, those needed to identify a transaction and all parties, with `campfin::flag_na()`.
 
-First, we will create a single column combining all the contributor and
-recipient names. This way we can avoid columns of one type or the other.
-
-```{r unite_names}
-wvc <- wvc %>% 
-  unite(
-    first, middle, last, suffix,
-    col = "contributor",
-    sep = " ",
-    na.rm = TRUE,
-    remove = FALSE
-  ) %>% 
-  unite(
-    committee, candidate,
-    col = "recipient",
-    sep = " ",
-    na.rm = TRUE,
-    remove = FALSE
-  )
-```
-
 After combining these rows, we have no records missing key variables.
 
+```{r key_vars}
+key_vars <- c("receipt_date", "last_name", "receipt_amount", "candidate_name")
+```
+
 ```{r na_flag}
-wvc <- wvc %>% flag_na(date, contributor, amount, recipient)
+wvc <- flag_na(wvc, all_of(key_vars))
 mean(wvc$na_flag)
 ```
 
@@ -269,20 +286,15 @@ We can also flag records that are entirely duplicated across every row, save for
 the supposedly unique `id`.
 
 ```{r dupe_flag}
-wvc <- flag_dupes(wvc, -id)
+wvc <- flag_dupes(wvc, -receipt_id)
 percent(mean(wvc$dupe_flag), 0.01)
 ```
 
 ```{r dupe_view}
 wvc %>% 
   filter(dupe_flag) %>% 
-  select(date, contributor, amount, recipient)
-```
-
-Now we can remove the combined name columns.
-
-```{r unite_remove} 
-wvc <- select(wvc, -contributor, -recipient)
+  select(all_of(key_vars)) %>% 
+  arrange(receipt_date)
 ```
 
 ### Categorical
@@ -292,30 +304,35 @@ col_stats(wvc, n_distinct)
 ```
 
 ```{r distinct_plot, echo=FALSE}
-explore_plot(wvc, source_type)
-explore_plot(wvc, committee_type)
-explore_plot(wvc, committee_type) + scale_x_truncate(50)
-explore_plot(wvc, occupation)
+explore_plot(wvc, receipt_source_type) + scale_x_wrap()
+explore_plot(wvc, receipt_type) + scale_x_wrap()
+explore_plot(wvc, committee_type) + scale_x_wrap()
+explore_plot(wvc, occupation) + scale_x_wrap()
+explore_plot(wvc, report_name) + scale_x_wrap()
 ```
 
 ### Amounts
 
+```{r}
+wvc$receipt_amount <- round(wvc$receipt_amount, digits = 2)
+```
+
 The range of contribution amounts seems reasonable.
 
 ```{r amount_summary}
-noquote(map_chr(summary(wvc$amount), dollar))
-sum(wvc$amount <= 0.01)
+noquote(map_chr(summary(wvc$receipt_amount), dollar))
+sum(wvc$receipt_amount <= 0.01)
 ```
 
-Here is the largest contribution of `r dollar(max(wvc$amount))`:
+Here is the largest contribution of `r dollar(max(wvc$receipt_amount))`:
 
 ```{r amount_max}
-glimpse(wvc[which.max(wvc$amount), ])
+glimpse(wvc[which.max(wvc$receipt_amount), ])
 ```
 
 ```{r hist_amount, echo=FALSE}
 wvc %>%
-  ggplot(aes(amount)) +
+  ggplot(aes(receipt_amount)) +
   geom_histogram(fill = dark2["purple"]) +
   scale_y_continuous(labels = comma) +
   scale_x_continuous(
@@ -334,30 +351,30 @@ wvc %>%
 
 ### Dates
 
-We can add the calendar year from `date` with `lubridate::year()`
+We can add the calendar year from `receipt_date` with `lubridate::year()`
 
 ```{r date_year}
-wvc <- mutate(wvc, year = year(date))
+wvc <- mutate(wvc, receipt_year = year(receipt_date))
 ```
 
 The range of dates is completely normal.
 
 ```{r date_range}
-min(wvc$date)
-sum(wvc$year < 2016)
-max(wvc$date)
-sum(wvc$date > today())
+min(wvc$receipt_date)
+sum(wvc$receipt_year < 2016)
+max(wvc$receipt_date)
+sum(wvc$receipt_date > today())
 ```
 
 ```{r bar_year, echo=FALSE}
 wvc %>% 
-  count(year) %>% 
-  mutate(even = is_even(year)) %>% 
-  ggplot(aes(x = year, y = n)) +
+  count(receipt_year) %>% 
+  mutate(even = is_even(receipt_year)) %>% 
+  ggplot(aes(x = receipt_year, y = n)) +
   geom_col(aes(fill = even)) + 
   scale_fill_brewer(palette = "Dark2") +
   scale_y_continuous(labels = comma) +
-  scale_x_continuous(breaks = seq(2000, 2020, by = 2)) +
+  scale_x_continuous(breaks = seq(2016, 2020, by = 1)) +
   theme(legend.position = "bottom") +
   labs(
     title = "West Virginia Contracts by Year",
@@ -382,29 +399,37 @@ will force consistence case, remove punctuation, and abbreviate official
 USPS suffixes.
 
 ```{r address_norm}
-wvc <- wvc %>% 
-  unite(
-    col = address_full,
-    starts_with("address"),
-    sep = " ",
-    remove = FALSE,
-    na.rm = TRUE
-  ) %>% 
+addr_norm <- wvc %>%
+  distinct(address1, address2) %>% 
   mutate(
-    address_norm = normal_address(
-      address = address_full,
+    norm_address1 = normal_address(
+      address = address1,
       abbs = usps_street,
       na_rep = TRUE
+    ),
+    norm_address2 = normal_address(
+      address = address2,
+      abbs = usps_street,
+      na_rep = TRUE,
+      abb_end = FALSE
     )
   ) %>% 
-  select(-address_full)
+  unite(
+    col = address_norm,
+    starts_with("norm_address"),
+    sep = " ",
+    remove = TRUE,
+    na.rm = TRUE
+  ) %>% 
+  mutate(across(address_norm, na_if, ""))
 ```
 
 ```{r address_view}
-wvc %>% 
-  select(contains("address")) %>% 
-  distinct() %>% 
-  sample_n(10)
+sample_n(addr_norm, 10)
+```
+
+```{r address_rejoin}
+wvc <- left_join(wvc, addr_norm)
 ```
 
 ### ZIP
@@ -413,7 +438,7 @@ For ZIP codes, the `campfin::normal_zip()` function will attempt to create
 valid _five_ digit codes by removing the ZIP+4 suffix and returning leading
 zeroes dropped by other programs like Microsoft Excel.
 
-```{r zip_norm}
+```{r zip-norm}
 wvc <- wvc %>% 
   mutate(
     zip_norm = normal_zip(
@@ -423,7 +448,7 @@ wvc <- wvc %>%
   )
 ```
 
-```{r zip_progress}
+```{r zip-progress}
 progress_table(
   wvc$zip,
   wvc$zip_norm,
@@ -436,7 +461,7 @@ progress_table(
 Valid two digit state abbreviations can be made using the 
 `campfin::normal_state()` function.
 
-```{r state_norm}
+```{r state-norm}
 wvc <- wvc %>% 
   mutate(
     state_norm = normal_state(
@@ -448,13 +473,13 @@ wvc <- wvc %>%
   )
 ```
 
-```{r state_view}
+```{r state-view}
 wvc %>% 
   filter(state != state_norm) %>% 
   count(state, state_norm, sort = TRUE)
 ```
 
-```{r state_progress}
+```{r state-progress}
 progress_table(
   wvc$state,
   wvc$state_norm,
@@ -473,8 +498,9 @@ The `campfin::normal_city()` function is a good start, again converting case,
 removing punctuation, but _expanding_ USPS abbreviations. We can also remove
 `invalid_city` values.
 
-```{r city_norm}
-wvc <- wvc %>% 
+```{r city-norm}
+norm_city <- wvc %>% 
+  distinct(city, state_norm, zip_norm) %>% 
   mutate(
     city_norm = normal_city(
       city = city, 
@@ -493,8 +519,8 @@ against the _expected_ value for that record's state abbreviation and ZIP code.
 If the normalized value is either an abbreviation for or very similar to the
 expected value, we can confidently swap those two.
 
-```{r city_swap}
-wvc <- wvc %>% 
+```{r city-swap}
+norm_city <- norm_city %>% 
   rename(city_raw = city) %>% 
   left_join(
     y = zipcodes,
@@ -520,6 +546,18 @@ wvc <- wvc %>%
   )
 ```
 
+```{r city-rejoin}
+wvc <- left_join(
+  x = wvc,
+  y = norm_city,
+  by = c(
+    "city" = "city_raw", 
+    "state_norm", 
+    "zip_norm"
+  )
+)
+```
+
 #### Refine
 
 The [OpenRefine][or] algorithms can be used to group similar strings and replace
@@ -529,7 +567,7 @@ strings that have a valid city/state/zip combination.
 
 [or]: https://openrefine.org/
 
-```{r city_refine}
+```{r city-refine}
 good_refine <- wvc %>% 
   mutate(
     city_refine = city_swap %>% 
@@ -547,7 +585,7 @@ good_refine <- wvc %>%
   )
 ```
 
-```{r city_count, echo=FALSE}
+```{r city-count, echo=FALSE}
 good_refine %>%
   count(
     state_norm, 
@@ -560,7 +598,7 @@ good_refine %>%
 
 Then we can join the refined values back to the database.
 
-```{r city_join}
+```{r city-join}
 wvc <- wvc %>% 
   left_join(good_refine) %>% 
   mutate(city_refine = coalesce(city_refine, city_swap))
@@ -568,22 +606,27 @@ wvc <- wvc %>%
 
 #### Progress
 
-```{r city_progress, echo=FALSE}
+Our goal for normalization was to increase the proportion of city values known
+to be valid and reduce the total distinct values by correcting misspellings.
+
+```{r city-progress, echo=FALSE}
 many_city <- c(valid_city, extra_city)
 progress <- progress_table(
-  str_to_upper(wvc$city_raw),
+  str_to_upper(wvc$city),
   wvc$city_norm,
   wvc$city_swap,
   wvc$city_refine,
   compare = many_city
 ) %>% mutate(stage = as_factor(stage))
-kable(progress, digits = 3)
+progress %>% 
+    mutate(across(stage, md_code)) %>% 
+    kable(digits = 3)
 ```
 
 You can see how the percentage of valid values increased with each stage.
 
-```{r bar_progress, echo=FALSE}
-raw_in <- percent(prop_in(wvc$city_raw, valid_city))
+```{r bar-progress, echo=FALSE}
+raw_in <- percent(prop_in(wvc$city, valid_city))
 progress %>% 
   ggplot(aes(x = stage, y = prop_in)) +
   geom_hline(yintercept = 0.99) +
@@ -602,7 +645,7 @@ More importantly, the number of distinct values decreased each stage. We were
 able to confidently change many distinct invalid values to their valid
 equivalent.
 
-```{r bar_distinct, echo=FALSE}
+```{r bar-distinct, echo=FALSE}
 progress %>% 
   select(
     stage, 
@@ -626,12 +669,10 @@ progress %>%
   )
 ```
 
-## Conclude
-
 Before exporting, we can remove the intermediary normalization columns and
 rename all added variables with the `_clean` suffix.
 
-```{r clean_select}
+```{r clean-select}
 wvc <- wvc %>% 
   select(
     -city_norm,
@@ -639,11 +680,14 @@ wvc <- wvc %>%
     city_clean = city_refine
   ) %>% 
   rename_all(~str_replace(., "_norm", "_clean")) %>% 
-  rename_all(~str_remove(., "_raw"))
+  rename_all(~str_remove(., "_raw")) %>% 
+  relocate(address_clean, city_clean, state_clean, .before = zip_clean)
 ```
 
-```{r clean_glimpse}
-glimpse(sample_n(wvc, 20))
+## Conclude
+
+```{r clean-glimpse}
+glimpse(sample_n(wvc, 50))
 ```
 
 1. There are `r comma(nrow(wvc))` records in the database.
@@ -657,11 +701,52 @@ glimpse(sample_n(wvc, 20))
 
 Now the file can be saved on disk for upload to the Accountability server.
 
-```{r clean_dir}
+```{r clean-dir}
 clean_dir <- dir_create(here("wv", "contribs", "data", "clean"))
-clean_path <- path(clean_dir, "wv_contribs_clean.csv")
+clean_path <- path(clean_dir, "wv_contribs_20160301-20210630.csv")
 write_csv(wvc, clean_path, na = "")
-file_size(clean_path)
-mutate(file_encoding(clean_path), across(path, basename))
+(clean_size <- file_size(clean_path))
 ```
 
+## Upload
+
+We can use the `aws.s3::put_object()` to upload the text file to the IRW server.
+
+```{r aws-upload, eval=FALSE}
+aws_path <- path("csv", basename(clean_path))
+if (!object_exists(aws_path, "publicaccountability")) {
+  put_object(
+    file = clean_path,
+    object = aws_path, 
+    bucket = "publicaccountability",
+    acl = "public-read",
+    show_progress = TRUE,
+    multipart = TRUE
+  )
+}
+aws_head <- head_object(aws_path, "publicaccountability")
+(aws_size <- as_fs_bytes(attr(aws_head, "content-length")))
+unname(aws_size == clean_size)
+```
+
+## Dictionary
+
+The following table describes the variables in our final exported file:
+
+```{r dict-make, echo=FALSE}
+dict_raw <- tibble(
+  var = md_code(names(wvc)),
+  type = md_code(map_chr(wvc, typeof)),
+  def = c(
+    ""
+  )
+)
+```
+
+```{r dict-md, echo=FALSE}
+(dict_md <- kable(
+  x = dict_raw,
+  format = "markdown",
+  col.names = c("Column", "Type", "Definition")
+))
+```
