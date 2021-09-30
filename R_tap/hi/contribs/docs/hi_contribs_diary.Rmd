@@ -1,12 +1,12 @@
 ---
 title: "Hawaii Contributions"
 author: "Kiernan Nicholls"
-date: "`r Sys.time()`"
+date: "`r date()`"
 output:
   github_document: 
     df_print: tibble
     toc: true
-    toc_dept: 2
+    toc_dept: 3
 editor_options: 
   chunk_output_type: console
 ---
@@ -27,12 +27,14 @@ opts_chunk$set(
   fig.width = 10,
   dpi = 300
 )
-options(width = 99)
-set.seed(5)
+if (!interactive()) {
+  options(width = 120)
+  set.seed(5)
+}
 ```
 
-```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
-fs::dir_create(here::here("hi", "contribs", "docs"))
+```{r create-docs-dir, eval=FALSE, echo=FALSE, include=FALSE}
+doc_dir <- fs::dir_create(here::here("hi", "contribs", "docs"))
 ```
 
 ## Project
@@ -41,26 +43,26 @@ The Accountability Project is an effort to cut across data silos and give
 journalists, policy professionals, activists, and the public at large a simple
 way to search across huge volumes of public data about people and organizations.
 
-Our goal is to standardizing public data on a few key fields by thinking of each
+Our goal is to standardize public data on a few key fields by thinking of each
 dataset row as a transaction. For each transaction there should be (at least) 3
 variables:
 
-1. All **parties** to a transaction
-2. The **date** of the transaction
-3. The **amount** of money involved
+1. All **parties** to a transaction.
+2. The **date** of the transaction.
+3. The **amount** of money involved.
 
 ## Objectives
 
 This document describes the process used to complete the following objectives:
 
 1. How many records are in the database?
-1. Check for duplicates
-1. Check ranges
+1. Check for entirely duplicated records.
+1. Check ranges of continuous variables.
 1. Is there anything blank or missing?
-1. Check for consistency issues
-1. Create a five-digit ZIP Code called `ZIP5`
-1. Create a `YEAR` field from the transaction date
-1. Make sure there is data on both parties to a transaction
+1. Check for consistency issues.
+1. Create a five-digit ZIP Code called `zip`.
+1. Create a `year` field from the transaction date.
+1. Make sure there is data on both parties to a transaction.
 
 ## Packages
 
@@ -68,233 +70,286 @@ The following packages are needed to collect, manipulate, visualize, analyze,
 and communicate these results. The `pacman` package will facilitate their
 installation and attachment.
 
-The IRW's `campfin` package will also have to be installed from GitHub. This
-package contains functions custom made to help facilitate the processing of
-campaign finance data.
-
-```{r load_packages, message=FALSE, dfrning=FALSE, error=FALSE}
-if (!require("pacman")) install.packages("pacman")
-pacman::p_load_gh("irworkshop/campfin")
+```{r load-packages, message=FALSE, warning=FALSE, error=FALSE}
+if (!require("pacman")) {
+  install.packages("pacman")
+}
 pacman::p_load(
   tidyverse, # data manipulation
   lubridate, # datetime strings
-  magrittr, # pipe operators
-  janitor, # data frame clean
-  refinr, # cluster and merge
+  gluedown, # printing markdown
+  jsonlite, # parse json data
+  janitor, # clean data frames
+  campfin, # custom irw tools
+  aws.s3, # aws cloud storage
+  refinr, # cluster & merge
   scales, # format strings
   knitr, # knit documents
-  vroom, # read files fast
-  glue, # combine strings
-  here, # relative storage
-  fs # search storage 
+  vroom, # fast reading
+  rvest, # scrape html
+  glue, # code strings
+  here, # project paths
+  httr, # http requests
+  fs # local storage 
 )
 ```
 
 This document should be run as part of the `R_campfin` project, which lives as a
 sub-directory of the more general, language-agnostic
-[`irworkshop/accountability_datacleaning`][01] GitHub repository.
+[`irworkshop/accountability_datacleaning`][tap] GitHub repository.
 
-The `R_campfin` project uses the [RStudio projects][02] feature and should be
+The `R_campfin` project uses the [RStudio projects][rproj] feature and should be
 run as such. The project also uses the dynamic `here::here()` tool for file
 paths relative to _your_ machine.
 
-```{r where_here}
+```{r where-here}
 # where does this document knit?
-here::here()
+here::i_am("hi/contribs/docs/hi_contribs_diary.Rmd")
 ```
 
-[01]: https://github.com/irworkshop/accountability_datacleaning
-[02]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects
+[tap]: https://github.com/irworkshop/accountability_datacleaning
+[rproj]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects
 
 ## Data
 
 Data is obtained from the [Hawaii Campaign Spending Commission][csc] (CSC). The
 file can be found on the [Hawaii Open Data portal][odp]. There are two files,
-one contributions received by Candidate committees and one for Noncandidate
+one contributions received by Candidate committees and one for Non-candidate
 committees. In both files, each record represents a campaign contribution made
 from an individual, political party, or some other entity.
 
 [csc]: https://ags.hawaii.gov/campaign/
 [dop]: https://data.hawaii.gov/about
 
-## Import
+```{r about_meta}
+cand_about <- fromJSON("https://hicscdata.hawaii.gov/api/views/jexd-xbcg")
+comm_about <- fromJSON("https://hicscdata.hawaii.gov/api/views/rajm-32md")
+```
 
-We can read both files into a single data frame with `purrr::map_df()` and 
-`readr::read_csv()`.
+```{r about_date}
+as_datetime(cand_about$createdAt)
+as_datetime(cand_about$publicationDate)
+as_datetime(cand_about$rowsUpdatedAt)
+```
 
-```{r read_raw}
-hic <- map_df(
-  .x = c(
-    "https://data.hawaii.gov/api/views/jexd-xbcg/rows.csv", # Candidates
-    "https://data.hawaii.gov/api/views/rajm-32md/rows.csv" # Committees
-  ),
-  .f = read_csv,
-  .id = "reg_type",
-  col_types = cols(
-    .default = col_character(),
-    Date = col_date_usa(),
-    Amount = col_double(),
-    Aggregate = col_double()
+```{r echo=FALSE}
+cand_about$columns %>% 
+  select(fieldName, name, dataTypeName) %>% 
+  mutate(across(fieldName, md_code)) %>% 
+  kable()
+```
+
+```{r echo=FALSE}
+comm_about$columns %>% 
+  select(fieldName, name, dataTypeName) %>% 
+  mutate(across(fieldName, md_code)) %>% 
+  kable()
+```
+
+## Download
+
+```{r raw-dir}
+raw_dir <- dir_create(here("hi", "contribs", "data", "raw"))
+cand_csv <- path(raw_dir, "jexd-xbcg.tsv")
+comm_csv <- path(raw_dir, "rajm-32md.tsv")
+```
+
+```{r raw-download}
+if (!file_exists(cand_csv)) {
+  cand_get <- GET(
+    url = "https://hicscdata.hawaii.gov/api/views/jexd-xbcg/rows.tsv",
+    query = list(accessType = "DOWNLOAD"),
+    write_disk(path = cand_csv),
+    progress(type = "down")
+  )
+}
+```
+
+```{r}
+if (!file_exists(comm_csv)) {
+  comm_get <- GET(
+    url = "https://hicscdata.hawaii.gov/api/views/rajm-32md/rows.tsv",
+    query = list(accessType = "DOWNLOAD"),
+    write_disk(path = comm_csv),
+    progress(type = "down")
+  )
+}
+```
+
+```{r raw-csv}
+raw_tsv <- dir_ls(raw_dir, glob = "*.tsv")
+```
+
+## Read
+
+Each file can be ready using the column names from their metadata files. Both
+files have overlapping columns with some slightly different names. Some work can
+be done to match the names across both files.
+
+```{r}
+cand_names <- cand_about$columns$fieldName
+comm_names <- comm_about$columns$fieldName
+```
+
+```{r}
+cand_names <- cand_names[-length(cand_names)]
+comm_names <- comm_names[-length(comm_names)]
+```
+
+```{r}
+cand_names <- str_remove(cand_names, "^street_(?=address)")
+cand_names[cand_names == "non_resident_yes_or_no_"] <- "non_resident_yes_or_no"
+```
+
+```{r}
+setdiff(comm_names, cand_names)
+setdiff(cand_names, comm_names)
+```
+
+Each file will be read into a list of two data frames.
+
+```{r read-delim}
+hic <- map2(
+  .x = list(cand_csv, comm_csv),
+  .y = list(cand_names, comm_names),
+  .f = ~read_delim(
+    file = .x,
+    delim = "\t",
+    skip = 1,
+    na = c("", " ", "-"),
+    escape_backslash = FALSE,
+    escape_double = FALSE,
+    col_names = .y,
+    col_types = cols(
+      .default = col_character(),
+      date = col_date_mdy(),
+      amount = col_double(),
+      aggregate = col_double()
+    )
   )
 )
 ```
 
-Then we will do some slight wrangling to the column names, types, and positions
-for clarity.
+Then those two data frames can be combined with overlapping columns
+aligned and the unique ones moved into the appropriate position or removed.
 
-```{r shape_raw}
-hic <- hic %>%
-  clean_names(case = "snake") %>%
-  rename(
-    cand_name = candidate_name,
-    comm_name = noncandidate_committee_name,
-    cont_type = contributor_type,
-    cont_name = contributor_name,
-    monetary = non_monetary_yes_or_no,
-    category = non_monetary_category,
-    description = non_monetary_description,
-    in_state = in_out_state,
-    zip = zip_code,
-    reg_id = reg_no,
-  ) %>% 
-  mutate(
-    reg_type = recode(reg_type, "1" = "Candidate", "2" = "Noncandidate"),
-    reg_name = coalesce(cand_name, comm_name),
-    monetary = equals(monetary, "N"),
-    in_state = equals(in_state, "HI")
-  ) %>% 
-  select(
-    date,
-    reg_id,
-    reg_type,
-    reg_name,
-    everything(),
-    -comm_name,
-    -cand_name
-  )
+```{r bind-raw}
+hic <- bind_rows(hic) %>% 
+  mutate(across(ends_with("yes_or_no"), `==`, "Y")) %>% 
+  relocate(noncandidate_committee_name, .after = candidate_name) %>% 
+  rename(committee_name = noncandidate_committee_name) %>% 
+  select(-location_1)
 ```
 
 ## Explore
 
-The data base has `r comma(nrow(hic))` rows of `r ncol(hic)` variables.
+There are `r comma(nrow(hic))` rows of `r ncol(hic)` columns. Each record
+represents a single campaign contribution received by Hawaii state and county
+candidates from November 8, 2006 through June 30, 2021.
 
 ```{r glimpse}
-head(hic)
+glimpse(hic)
 tail(hic)
-glimpse(sample_frac(hic))
 ```
 
 ### Missing
 
-```{r glimpse_na}
+Columns vary in their degree of missing values.
+
+```{r na-count}
 col_stats(hic, count_na)
 ```
 
-There are no columns missing the name, date, or amount used to identify a unique contribution.
+We can flag any record missing a key variable needed to identify a transaction.
+
+```{r}
+key_vars <- c("date", "contributor_name", "amount", 
+              "committee_name","candidate_name")
+```
+
+```{r na-name}
+mean(is.na(hic$candidate_name) & is.na(hic$candidate_name))
+```
+
+```{r}
+hic <- hic %>% 
+  mutate(any_recip = coalesce(candidate_name, committee_name)) %>% 
+  flag_na(date, amount, contributor_name, any_recip) %>% 
+  select(-any_recip)
+```
+
+```{r na-flag}
+sum(hic$na_flag)
+```
+
+```{r na-unflag}
+if (sum(hic$na_flag) == 0) {
+  hic <- select(hic, -na_flag)
+}
+```
 
 ### Duplicates
 
-```{r dupe_flag}
+We can also flag any record completely duplicated across every column.
+
+```{r dupe-flag}
 hic <- flag_dupes(hic, everything())
+sum(hic$dupe_flag)
 ```
 
-There are `r sum(hic$dupe_flag)` rows that are complete duplicated of another.
-They are flagged.
-
-```{r dupe_view}
+```{r dupe-view}
 hic %>% 
   filter(dupe_flag) %>% 
-  select(date, reg_name, cont_name, amount) %>% 
-  arrange(date)
+  select(all_of(key_vars)) %>% 
+  arrange(date, contributor_name)
 ```
 
 ### Categorical
 
-```{r glimpse_distinct}
+```{r distinct-count}
 col_stats(hic, n_distinct)
 ```
 
-```{r plot_reg_type}
-explore_plot(
-  data = filter(hic, !is.na(reg_type)),
-  var = reg_type,
-  title = "Hawaii Recipient Types"
-)
+```{r distinct-plots, echo=FALSE, fig.height=3}
+explore_plot(hic, contributor_type) + scale_x_wrap()
+explore_plot(hic, office) + scale_x_wrap()
+explore_plot(hic, county) + scale_x_wrap()
+explore_plot(hic, party, nbar = 3) + 
+  scale_x_wrap() + 
+  scale_fill_manual(
+    guide = "none",
+    values = c(
+      "Democrat" = "blue", 
+      "Republican" = "Red"
+    )
+  )
+explore_plot(hic, election_period) + scale_x_wrap()
+explore_plot(hic, inoutstate) + scale_x_wrap()
+explore_plot(hic, range) + scale_x_wrap()
 ```
 
-```{r plot_cont_type}
-explore_plot(
-  data = hic,
-  var = cont_type,
-  title = "Hawaii Contributor Types"
-)
+### Amounts
+
+```{r amount-round}
+hic$amount <- round(hic$amount, digits = 2)
 ```
 
-```{r plot_cont_monetary}
-explore_plot(
-  data = hic,
-  var = monetary,
-  title = "Hawaii Monetary Contributions"
-)
-```
-
-```{r plot_cont_category}
-explore_plot(
-  data = filter(hic, !is.na(category)),
-  var = category,
-  title = "Hawaii Non-Monetary Categories"
-)
-```
-
-```{r plot_office}
-explore_plot(
-  data = filter(hic, !is.na(office)),
-  var = office,
-  title = "Hawaii Recipeient Candidate for Office"
-)
-```
-
-```{r plot_party}
-explore_plot(
-  data = filter(hic, !is.na(party)),
-  var = party,
-  title = "Hawaii Recipeient Candidate Party"
-)
-```
-
-```{r plot_instate}
-explore_plot(
-  data = filter(hic, !is.na(in_state)),
-  var = in_state,
-  title = "Hawaii Contributor In-State"
-)
-```
-
-```{r fix_range}
-hic <- mutate(hic, range = str_remove_all(range, "\\s"))
-```
-
-```{r plot_range}
-explore_plot(
-  data = filter(hic, !is.na(range)),
-  var = range,
-  title = "Hawaii Contributor In-State"
-)
-```
-
-### Continuous
-
-#### Amounts
-
-```{r summary_amount}
+```{r amount-summary}
 summary(hic$amount)
+mean(hic$amount <= 0)
 ```
 
-```{r amount_histogram, echo=FALSE}
+These are the records with the minimum and maximum amounts.
+
+```{r amount-minmax}
+glimpse(hic[c(which.max(hic$amount), which.min(hic$amount)), ])
+```
+
+```{r hist-amount, echo=FALSE}
 hic %>%
-  filter(amount > 1) %>% 
+  filter(amount >= 1) %>% 
   ggplot(aes(amount)) +
-  geom_histogram(fill = dark2["purple"], bins = 20) +
+  geom_histogram(fill = dark2["purple"], bins = 30) +
   scale_y_continuous(labels = comma) +
   scale_x_continuous(
     breaks = c(1 %o% 10^(0:6)),
@@ -302,145 +357,114 @@ hic %>%
     trans = "log10"
   ) +
   labs(
-    title = "Hawaii Contribution Amount Distribution",
+    title = "Hawaii Contributions Amount Distribution",
+    caption = "Source: Hawaii Campaign Spending Commission",
     x = "Amount",
     y = "Count"
   )
 ```
 
-```{r amount_violin_reg_type, echo=FALSE}
-hic %>% 
-  filter(amount > 1) %>% 
-  ggplot(
-    mapping = aes(
-      x = reorder(reg_type, X = amount, FUN = median, na.rm = TRUE), 
-      y = amount,
-      fill = reg_type
-    )
-  ) +
-  geom_violin(
-    trim = TRUE,
-    draw_quantiles = c(0.25, 0.5, 0.75),
-    scale = "area",
-    adjust = 2
-  ) +
-  scale_y_continuous(
-    breaks = c(1 %o% 10^(0:6)),
-    trans = "log10",
-    labels = dollar
-  ) +
-  scale_fill_brewer(
-    type = "qual", 
-    palette = "Dark2", 
-    guide = FALSE
-  ) +
-  labs(
-    title = "Hawaii Contribution Amount",
-    subtitle = "by Recipient Type",
-    x = "",
-    y = "Expenditure Amount"
-  ) +
-  theme(panel.grid.major.x = element_blank())
-```
+### Dates
 
-```{r amount_violin_cont_type, echo=FALSE}
-hic %>% 
-  filter(
-    amount > 1,
-    cont_type %in% most_common(cont_type, 4)
-  ) %>% 
-  ggplot(
-    mapping = aes(
-      x = reorder(cont_type, X = amount, FUN = median, na.rm = TRUE), 
-      y = amount,
-      fill = cont_type
-    )
-  ) +
-  geom_violin(
-    trim = TRUE,
-    draw_quantiles = c(0.25, 0.5, 0.75),
-    scale = "area",
-    adjust = 2
-  ) +
-  scale_y_continuous(
-    breaks = c(1 %o% 10^(0:6)),
-    trans = "log10",
-    labels = dollar
-  ) +
-  scale_fill_brewer(
-    type = "qual", 
-    palette = "Dark2", 
-    guide = FALSE
-  ) +
-  labs(
-    title = "Hawaii Contribution Amount",
-    subtitle = "by Contributor Type",
-    x = "",
-    y = "Expenditure Amount"
-  ) +
-  theme(panel.grid.major.x = element_blank())
-```
+We can add the calendar year from `date` with `lubridate::year()`
 
-#### Dates
-
-```{r year_add}
+```{r date-year}
 hic <- mutate(hic, year = year(date))
 ```
 
-```{r date_range}
+```{r date-range}
 min(hic$date)
 sum(hic$year < 2000)
 max(hic$date)
 sum(hic$date > today())
 ```
 
+```{r bar-year, echo=FALSE}
+hic %>% 
+  count(year) %>% 
+  mutate(even = is_even(year)) %>% 
+  ggplot(aes(x = year, y = n)) +
+  geom_col(aes(fill = even)) + 
+  scale_fill_brewer(palette = "Dark2") +
+  scale_y_continuous(labels = comma) +
+  scale_x_continuous(breaks = seq(2006, 2020, by = 1)) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "Hawaii Contributions by Year",
+    caption = "Source: Hawaii Campaign Spending Commission",
+    fill = "Election Year",
+    x = "Year Made",
+    y = "Count"
+  )
+```
+
 ## Wrangle
+
+To improve the searchability of the database, we will perform some consistent,
+confident string normalization. For geographic variables like city names and
+ZIP codes, the corresponding `campfin::normal_*()` functions are tailor made to 
+facilitate this process.
 
 ### Address
 
-```{r address_norm}
-hic <- hic %>% 
-  # combine street addr
-  unite(
-    col = adress_full,
-    starts_with("address"),
-    sep = " ",
-    remove = FALSE,
-    na.rm = TRUE
-  ) %>% 
-  # normalize combined addr
+For the street `addresss` variable, the `campfin::normal_address()` function
+will force consistence case, remove punctuation, and abbreviate official 
+USPS suffixes.
+
+```{r address-norm}
+addr_norm <- hic %>% 
+  distinct(address_1, address_2) %>% 
   mutate(
-    address_norm = normal_address(
-      address = adress_full,
+    xaddress_1 = address_1 %>%
+      na_rep(n = 0) %>% 
+      # keep hyphen in address number?
+      str_replace("(?<=\\d)-(?=\\d)", "XYX") %>% 
+      normal_address(abbs = usps_street) %>% 
+      str_replace("XYX", "-")
+    ,
+    xaddress_2 = normal_address(
+      address = address_2,
       abbs = usps_street,
-      na_rep = TRUE
+      na_rep = TRUE,
+      abb_end = FALSE
     )
   ) %>% 
-  select(-adress_full)
+  unite(
+    col = address_norm,
+    starts_with("xaddress_"),
+    sep = " ",
+    remove = TRUE,
+    na.rm = TRUE
+  )
 ```
 
-```{r address_view}
-hic %>% 
-  select(starts_with("address")) %>% 
-  distinct() %>% 
-  sample_frac()
+```{r address-view, echo=FALSE}
+sample_n(addr_norm, 10)
+```
+
+```{r address-join}
+hic <- left_join(hic, addr_norm, by = c("address_1", "address_2"))
 ```
 
 ### ZIP
 
-```{r zip_norm}
+For ZIP codes, the `campfin::normal_zip()` function will attempt to create
+valid _five_ digit codes by removing the ZIP+4 suffix and returning leading
+zeroes dropped by other programs like Microsoft Excel.
+
+```{r zip-norm}
 hic <- hic %>% 
   mutate(
     zip_norm = normal_zip(
-      zip = zip,
+      zip = zip_code,
       na_rep = TRUE
     )
   )
 ```
 
-```{r zip_progress}
+```{r zip-progress}
 progress_table(
-  hic$zip,
+  hic$zip_code,
   hic$zip_norm,
   compare = valid_zip
 )
@@ -448,15 +472,30 @@ progress_table(
 
 ### State
 
-```{r}
+All the `state` values are known to be valid abbreviations.
+
+```{r state-check}
 prop_in(hic$state, valid_state)
-count_vec(hic$state)
+```
+
+```{r state-count}
+count(hic, state, sort = TRUE)
 ```
 
 ### City
 
-```{r city_norm}
-hic <- hic %>% 
+Cities are the most difficult geographic variable to normalize, simply due to
+the wide variety of valid cities and formats.
+
+#### Normal
+
+The `campfin::normal_city()` function is a good start, again converting case,
+removing punctuation, but _expanding_ USPS abbreviations. We can also remove
+`invalid_city` values.
+
+```{r city-norm}
+norm_city <- hic %>% 
+  distinct(city, state, zip_norm) %>% 
   mutate(
     city_norm = normal_city(
       city = city, 
@@ -468,9 +507,16 @@ hic <- hic %>%
   )
 ```
 
-```{r city_swap}
-hic <- hic %>% 
-  rename(cont_city = city) %>% 
+#### Swap
+
+We can further improve normalization by comparing our normalized value
+against the _expected_ value for that record's state abbreviation and ZIP code.
+If the normalized value is either an abbreviation for or very similar to the
+expected value, we can confidently swap those two.
+
+```{r city-swap}
+norm_city <- norm_city %>% 
+  rename(city_raw = city) %>% 
   left_join(
     y = zipcodes,
     by = c(
@@ -483,56 +529,203 @@ hic <- hic %>%
     match_abb = is_abbrev(city_norm, city_match),
     match_dist = str_dist(city_norm, city_match),
     city_swap = if_else(
-      condition = !is.na(city_match) & (match_abb | match_dist == 1),
+      condition = !is.na(match_dist) & (match_abb | match_dist == 1),
       true = city_match,
       false = city_norm
     )
   ) %>% 
   select(
-    -match_abb,
+    -city_match,
     -match_dist,
-    -city_match
-  ) %>% 
-  rename(city = cont_city)
+    -match_abb
+  )
 ```
 
-```{r city_progress}
-progress_table(
-  hic$city,
+```{r city-rejoin}
+hic <- left_join(
+  x = hic,
+  y = norm_city,
+  by = c(
+    "city" = "city_raw", 
+    "state", 
+    "zip_norm"
+  )
+)
+```
+
+#### Refine
+
+The [OpenRefine][or] algorithms can be used to group similar strings and replace
+the less common versions with their most common counterpart. This can greatly
+reduce inconsistency, but with low confidence; we will only keep any refined
+strings that have a valid city/state/zip combination.
+
+[or]: https://openrefine.org/
+
+```{r city-refine}
+good_refine <- hic %>% 
+  mutate(
+    city_refine = city_swap %>% 
+      key_collision_merge() %>% 
+      n_gram_merge(numgram = 1)
+  ) %>% 
+  filter(city_refine != city_swap) %>% 
+  inner_join(
+    y = zipcodes,
+    by = c(
+      "city_refine" = "city",
+      "state" = "state",
+      "zip_norm" = "zip"
+    )
+  )
+```
+
+```{r city-count, echo=FALSE}
+good_refine %>%
+  count(
+    state, 
+    zip_norm, 
+    city_swap, 
+    city_refine,
+    sort = TRUE
+  )
+```
+
+Then we can join the refined values back to the database.
+
+```{r city-join}
+hic <- hic %>% 
+  left_join(good_refine, by = names(.)) %>% 
+  mutate(city_refine = coalesce(city_refine, city_swap))
+```
+
+#### Progress
+
+Our goal for normalization was to increase the proportion of city values known
+to be valid and reduce the total distinct values by correcting misspellings.
+
+```{r city-progress, echo=FALSE}
+many_city <- c(valid_city, extra_city)
+progress <- progress_table(
+  str_to_upper(hic$city),
   hic$city_norm,
   hic$city_swap,
-  compare = c(valid_city, extra_city)
-)
+  hic$city_refine,
+  compare = many_city
+) %>% mutate(stage = as_factor(stage))
+progress %>% 
+    mutate(across(stage, md_code)) %>% 
+    kable(digits = 3)
+```
+
+You can see how the percentage of valid values increased with each stage.
+
+```{r bar-progress, echo=FALSE}
+raw_in <- percent(prop_in(hic$city, valid_city))
+progress %>% 
+  ggplot(aes(x = stage, y = prop_in)) +
+  geom_hline(yintercept = 0.99) +
+  geom_col(fill = dark2["purple"]) +
+  coord_cartesian(ylim = c(0.75, 1)) +
+  scale_y_continuous(labels = percent) +
+  labs(
+    title = "Hawaii City Normalization Progress",
+    subtitle = glue("Raw at {raw_in} before conversion to uppercase"),
+    x = "Stage",
+    y = "Percent Valid"
+  )
+```
+
+More importantly, the number of distinct values decreased each stage. We were
+able to confidently change many distinct invalid values to their valid
+equivalent.
+
+```{r bar-distinct, echo=FALSE}
+progress %>% 
+  select(
+    stage, 
+    all = n_distinct,
+    bad = n_diff
+  ) %>% 
+  mutate(good = all - bad) %>% 
+  pivot_longer(c("good", "bad")) %>% 
+  mutate(name = name == "good") %>% 
+  ggplot(aes(x = stage, y = value)) +
+  geom_col(aes(fill = name)) +
+  scale_fill_brewer(palette = "Dark2", direction = -1) +
+  scale_y_continuous(labels = comma) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "Hawaii City Normalization Progress",
+    subtitle = "Distinct values, valid and invalid",
+    x = "Stage",
+    y = "Distinct Values",
+    fill = "Valid"
+  )
+```
+
+Before exporting, we can remove the intermediary normalization columns and
+rename all added variables with the `_clean` suffix.
+
+```{r clean-select}
+hic <- hic %>% 
+  select(
+    -city_norm,
+    -city_swap,
+    city_clean = city_refine
+  ) %>% 
+  rename_all(~str_replace(., "_norm", "_clean")) %>% 
+  rename_all(~str_remove(., "_raw")) %>% 
+  relocate(address_clean, city_clean, .before = zip_clean)
 ```
 
 ## Conclude
 
-```{r glimpse_final}
-glimpse(sample_frac(hic))
+```{r clean-glimpse}
+glimpse(sample_n(hic, 50))
 ```
 
-1. There are `r nrow(hic)` records in the database.
-1. There are `r sum(hic$dupe_flag)` duplicate records in the database.
+1. There are `r comma(nrow(hic))` records in the database.
+1. There are `r comma(sum(hic$dupe_flag))` duplicate records in the database.
 1. The range and distribution of `amount` and `date` seem reasonable.
-1. There are `r sum(hic$na_flag)` records missing either recipient or date.
+1. There are `r comma(sum(hic$na_flag))` records missing key variables.
 1. Consistency in geographic data has been improved with `campfin::normal_*()`.
-1. The 5-digit `zip_norm` variable has been created with `campfin::normal_zip(hic$zip)`.
 1. The 4-digit `year` variable has been created with `lubridate::year()`.
 
 ## Export
 
-```{r clean_trim}
-hic <- hic %>% 
-  select(
-    -city_norm,
-    city_norm = city_swap
-  )
+Now the file can be saved on disk for upload to the Accountability server.
+
+```{r path-dates}
+min_yr <- min(hic$year[sum(hic$year == min(hic$year)) > 100])
+min_dt <- str_remove_all(min(hic$date[hic$year == min_yr]), "-")
+max_dt <- str_remove_all(max(hic$date[hic$year == year(today())]), "-")
 ```
 
-```{r clean_write}
-clean_dir <- dir_create(here("hi", "contribs", "data", "processed"))
-clean_path <- path(clean_dir, "hi_cont_clean.csv")
-write_csv(hic, path = clean_path, na = "")
-file_size(clean_path)
-guess_encoding(clean_path)
+```{r clean-dir}
+clean_dir <- dir_create(here("hi", "contribs", "data", "clean"))
+clean_path <- path(clean_dir, glue("hi_contribs_{min_dt}-{max_dt}.csv"))
+write_csv(hic, clean_path, na = "")
+(clean_size <- file_size(clean_path))
+```
+
+## Upload
+
+We can use the `aws.s3::put_object()` to upload the text file to the IRW server.
+
+```{r aws-upload, eval=FALSE}
+aws_path <- path("csv", basename(clean_path))
+if (!object_exists(aws_path, "publicaccountability")) {
+  put_object(
+    file = clean_path,
+    object = aws_path, 
+    bucket = "publicaccountability",
+    acl = "public-read",
+    show_progress = TRUE,
+    multipart = TRUE
+  )
+}
+aws_head <- head_object(aws_path, "publicaccountability")
+(aws_size <- as_fs_bytes(attr(aws_head, "content-length")))
+unname(aws_size == clean_size)
 ```
