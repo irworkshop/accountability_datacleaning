@@ -1,0 +1,778 @@
+---
+title: "Vermont Parcels"
+author: "Kiernan Nicholls"
+date: "`r date()`"
+output:
+  github_document: 
+    df_print: tibble
+    toc: true
+    toc_dept: 3
+editor_options: 
+  chunk_output_type: console
+---
+
+<!-- Place comments regarding knitting here -->
+
+```{r setup, include=FALSE, purl=FALSE}
+library(knitr)
+opts_chunk$set(
+  eval = TRUE,
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  error = FALSE,
+  collapse = TRUE,
+  comment = "#>",
+  fig.path = "../plots/",
+  fig.width = 10,
+  dpi = 300
+)
+if (!interactive()) {
+  options(width = 120)
+  set.seed(5)
+}
+```
+
+```{r create-docs-dir, eval=FALSE, echo=FALSE, include=FALSE}
+doc_dir <- fs::dir_create(here::here("vt", "parcels", "docs"))
+```
+
+## Project
+
+The Accountability Project is an effort to cut across data silos and give
+journalists, policy professionals, activists, and the public at large a simple
+way to search across huge volumes of public data about people and organizations.
+
+Our goal is to standardize public data on a few key fields by thinking of each
+dataset row as a transaction. For each transaction there should be (at least) 3
+variables:
+
+1. All **parties** to a transaction.
+2. The **date** of the transaction.
+3. The **amount** of money involved.
+
+## Objectives
+
+This document describes the process used to complete the following objectives:
+
+1. How many records are in the database?
+1. Check for entirely duplicated records.
+1. Check ranges of continuous variables.
+1. Is there anything blank or missing?
+1. Check for consistency issues.
+1. Create a five-digit ZIP Code called `zip`.
+1. Create a `year` field from the transaction date.
+1. Make sure there is data on both parties to a transaction.
+
+## Packages
+
+The following packages are needed to collect, manipulate, visualize, analyze,
+and communicate these results. The `pacman` package will facilitate their
+installation and attachment.
+
+```{r load-packages, message=FALSE, warning=FALSE, error=FALSE}
+if (!require("pacman")) {
+  install.packages("pacman")
+}
+pacman::p_load(
+  tidyverse, # data manipulation
+  lubridate, # datetime strings
+  jsonlite, # parse JSON data
+  gluedown, # printing markdown
+  janitor, # clean data frames
+  campfin, # custom irw tools
+  aws.s3, # aws cloud storage
+  refinr, # cluster & merge
+  scales, # format strings
+  knitr, # knit documents
+  vroom, # fast reading
+  rvest, # scrape html
+  glue, # code strings
+  here, # project paths
+  httr, # http requests
+  fs # local storage 
+)
+```
+
+```{r echo=FALSE}
+options(knitr.kable.NA = "")
+```
+
+This document should be run as part of the `R_campfin` project, which lives as a
+sub-directory of the more general, language-agnostic
+[`irworkshop/accountability_datacleaning`][tap] GitHub repository.
+
+The `R_campfin` project uses the [RStudio projects][rproj] feature and should be
+run as such. The project also uses the dynamic `here::here()` tool for file
+paths relative to _your_ machine.
+
+```{r where-here}
+# where does this document knit?
+here::i_am("vt/parcels/docs/vt_parcels_diary.Rmd")
+```
+
+[tap]: https://github.com/irworkshop/accountability_datacleaning
+[rproj]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects
+
+## Data
+
+Data is from the [Vermont Parcel Program][vpp] run by the 
+[Vermont Center for Geographic Information][vcgi].
+
+> Parcel mapping in Vermont is undertaken and overseen by each municipality, who
+may perform annual map updates on their own or hire vendors to maintain. As part
+of the Parcel Program, VCGI coordinates the collection of the best available
+digital parcel data from municipalities and publishes them in a uniform GIS
+format joined with the Tax Department’s [annual grand list][agl]. VCGI also
+develops the [data standards][ds], [templates][tem], [digital parcel mapping
+guidelines][pmg], and guidance resources by which Vermont digital GIS parcel
+data are organized and made publicly available.
+> 
+> The Parcel Program is an outgrowth of the [Statewide Property Mapping
+Project][spmp] which included a three-year (2017-2019) funded effort to create
+or update digital GIS parcel data for all of Vermont’s municipalities. The
+Project successfully completed that work in December 2019, resulting in a freely
+available GIS layer for all Vermont municipalities joined with their [annual
+grand list][agl] via a parcel’s unique [School Property Account Number
+(SPAN)][span]. The parcel Program now supports the ongoing collection and
+publishing of municipal parcel data in GIS format statewide, continuing to use
+the SPAN number as a unique parcel identifier.
+
+[vpp]: https://vcgi.vermont.gov/data-and-programs/parcel-program
+[vcgi]: https://vcgi.vermont.gov/
+[agl]: https://tax.vermont.gov/municipal-officials/data-request
+[ds]: https://vcgi.vermont.gov/document/vt-gis-parcel-data-standard
+[tem]: https://vcgi.vermont.gov/document/geodatabase-template-parcel-data-standard
+[pmg]: https://vcgi.vermont.gov/document/vermont-gis-parcel-mapping-guideline
+[spmp]: https://legislature.vermont.gov/statutes/section/19/001/00044
+[span]: https://tax.vermont.gov/home/tax-learning-center/glossary#s
+
+### Dictionary
+
+```{r echo=FALSE}
+vt_meta <- fromJSON("https://opendata.arcgis.com/api/v3/datasets/09cf47e1cf82465e99164762a04f3ce6_0")
+vt_dict <- as_tibble(vt_meta$data$attributes$fields)
+vt_dict %>% 
+  select(name, alias, type, length) %>% 
+  mutate(
+    across(name, md_code),
+    across(type, str_remove, "^esriFieldType")
+  ) %>% 
+  kable()
+```
+
+## Download
+
+The parcel list can be downloaded directly from the Vermont Open Geodata Portal.
+
+```{r raw-head}
+id <- "09cf47e1cf82465e99164762a04f3ce6_0"
+vt_head <- HEAD(
+  url = glue("https://opendata.arcgis.com/api/v3/datasets/{id}/downloads/data"),
+  query = list(
+    format = "csv",
+    spatialRefId = 32145
+  )
+)
+```
+
+```{r raw-name}
+vt_info <- headers(vt_head)
+vt_name <- str_extract(vt_info[["content-disposition"]], '(?<=").*?(?=")')
+```
+
+```{r raw-dir}
+raw_dir <- dir_create(here("vt", "parcels", "data", "raw"))
+raw_csv <- path(raw_dir, vt_name)
+```
+
+```{r raw-download}
+if (!file_exists(raw_csv)) {
+  GET(
+    url = vt_head$url,
+    write_disk(raw_csv), 
+    progress("down")
+  )
+}
+```
+
+## Read
+
+The tabular parcel list can be read as a data frame from the CSV file.
+
+```{r raw-read}
+vtp <- read_delim(
+  file = raw_csv,
+  delim = ",",
+  guess_max = 1e6,
+  escape_backslash = FALSE,
+  escape_double = FALSE
+)
+```
+
+```{r clean-names}
+vtp <- clean_names(vtp, case = "snake")
+```
+
+## Explore
+
+There are `r comma(nrow(vtp))` rows of `r ncol(vtp)` columns. Each record
+represents a single property parcel in the state of Vermont.
+
+```{r glimpse}
+glimpse(vtp)
+tail(vtp)
+```
+
+### Missing
+
+Columns vary in their degree of missing values.
+
+```{r na-count}
+col_stats(vtp, count_na)
+```
+
+We can flag any record missing a key variable needed to identify a transaction.
+
+```{r na-flag}
+key_vars <- c("real_flv", "year", "addrgl1", "owner1")
+vtp <- flag_na(vtp, all_of(key_vars))
+mean(vtp$na_flag)
+```
+
+```{r na-view}
+vtp %>% 
+  filter(na_flag) %>% 
+  select(all_of(key_vars))
+```
+
+### Duplicates
+
+We can also flag any record completely duplicated across every column.
+
+```{r dupe-flag}
+vtp <- flag_dupes(vtp, -objectid)
+sum(vtp$dupe_flag)
+```
+
+```{r dupe-view}
+vtp %>% 
+  filter(dupe_flag) %>% 
+  select(objectid, all_of(key_vars))
+```
+
+### Categorical
+
+```{r distinct-count}
+col_stats(vtp, n_distinct)
+```
+
+```{r distinct-plots, echo=FALSE, fig.height=3}
+explore_plot(vtp, proptype)
+explore_plot(vtp, town)
+explore_plot(vtp, sourcetype)
+explore_plot(vtp, editmethod)
+explore_plot(vtp, matchstat)
+explore_plot(vtp, cat)
+explore_plot(vtp, rescode)
+explore_plot(vtp, equipcode)
+explore_plot(vtp, hsdecl)
+explore_plot(vtp, expdesc)
+explore_plot(vtp, statute)
+```
+
+### Amounts
+
+```{r amount-round}
+vtp$real_flv <- round(vtp$real_flv, digits = 2)
+```
+
+```{r amount-summary}
+summary(vtp$real_flv)
+mean(vtp$real_flv <= 0, na.rm = TRUE)
+```
+
+These are the records with the minimum and maximum amounts.
+
+```{r amount-minmax}
+glimpse(vtp[c(which.max(vtp$real_flv), which.min(vtp$real_flv)), ])
+```
+
+```{r hist-amount, echo=FALSE}
+vtp %>%
+  filter(real_flv >= 100, real_flv <= 1e7) %>% 
+  ggplot(aes(real_flv)) +
+  geom_histogram(fill = dark2["purple"]) +
+  scale_y_continuous(labels = comma) +
+  scale_x_continuous(
+    breaks = c(1 %o% 10^(0:8)),
+    labels = dollar,
+    trans = "log10"
+  ) +
+  labs(
+    title = "Vermont Parcels Amount Distribution",
+    caption = "Source: VCGI",
+    x = "Amount",
+    y = "Count"
+  )
+```
+
+### Dates
+
+There is an existing `year` variable.
+
+```{r date-range}
+min(vtp$year)
+sum(vtp$year < 2000)
+max(vtp$year)
+sum(vtp$year > year(today()))
+```
+
+```{r bar-year, echo=FALSE}
+vtp %>% 
+  count(year) %>% 
+  filter(year > 2009) %>% 
+  ggplot(aes(x = year, y = n)) +
+  geom_col() + 
+  scale_fill_brewer(palette = "Dark2") +
+  scale_y_continuous(labels = comma) +
+  scale_x_continuous(breaks = 2017:2021) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "Vermont Parcels by Year",
+    caption = "Source: VCGI",
+    x = "GIS Year",
+    y = "Count"
+  )
+```
+
+## Wrangle
+
+To improve the searchability of the database, we will perform some consistent,
+confident string normalization. For geographic variables like city names and
+ZIP codes, the corresponding `campfin::normal_*()` functions are tailor made to 
+facilitate this process.
+
+The variables being cleaned in this data refer mostly to the mailing address of
+the property owner. The address of the parcel itself is only found in the
+`e911addr` variable. The `town` variable similarly refers to the legal town
+locality of the property, with the `citygl` variable referring to the city of
+the owner's mailing address, etc.
+
+### Address
+
+The address variables are already sufficiently normalized.
+
+```{r echo=FALSE}
+vtp %>% 
+  sample_n(10) %>% 
+  distinct(addrgl1, addrgl2)
+```
+
+### ZIP
+
+For ZIP codes, the `campfin::normal_zip()` function will attempt to create
+valid _five_ digit codes by removing the ZIP+4 suffix and returning leading
+zeroes dropped by other programs like Microsoft Excel.
+
+```{r zip-norm}
+vtp <- vtp %>% 
+  mutate(
+    zip_norm = normal_zip(
+      zip = zipgl,
+      na_rep = TRUE
+    )
+  )
+```
+
+```{r zip-progress, echo=FALSE}
+progress_table(
+  vtp$zipgl,
+  vtp$zip_norm,
+  compare = valid_zip
+)
+```
+
+### State
+
+Valid two digit state abbreviations can be made using the 
+`campfin::normal_state()` function.
+
+```{r state-norm}
+vtp <- vtp %>% 
+  mutate(
+    state_norm = stgl %>%
+      str_remove_all("\\.") %>% 
+      str_replace("^CANADA$", "CN") %>% 
+      str_replace("^QUEBEC$", "QC") %>% 
+      str_replace("^QUE?(\\s+)?CANADA$", "QC") %>% 
+      str_replace("^N Y$", "NY") %>% 
+      str_remove("\\s+CANADA$") %>% 
+      normal_state(abbreviate = TRUE, na_rep = TRUE) %>% 
+      str_replace("^(\\w)\\s(\\w)", "\\1\\2")
+  )
+```
+
+```{r state-view}
+vtp %>% 
+  filter(stgl != state_norm) %>% 
+  count(stgl, state_norm, sort = TRUE)
+```
+
+```{r state-progress, echo=FALSE}
+progress_table(
+  vtp$stgl,
+  vtp$state_norm,
+  compare = valid_state
+)
+```
+
+We are also going to manually add the state of each property address, which
+should be Vermont in all cases.
+
+```{r state-add}
+vtp <- mutate(vtp, state_prop = "VT")
+```
+
+### City
+
+Cities are the most difficult geographic variable to normalize, simply due to
+the wide variety of valid cities and formats.
+
+#### Normal
+
+The `campfin::normal_city()` function is a good start, again converting case,
+removing punctuation, but _expanding_ USPS abbreviations. We can also remove
+`invalid_city` values.
+
+```{r city-norm}
+norm_city <- vtp %>% 
+  distinct(citygl, state_norm, zip_norm) %>% 
+  mutate(
+    city_norm = normal_city(
+      city = citygl, 
+      abbs = usps_city,
+      states = c("VT", "DC", "VERMONT"),
+      na = invalid_city,
+      na_rep = TRUE
+    )
+  )
+```
+
+#### Swap
+
+We can further improve normalization by comparing our normalized value
+against the _expected_ value for that record's state abbreviation and ZIP code.
+If the normalized value is either an abbreviation for or very similar to the
+expected value, we can confidently swap those two.
+
+```{r city-swap}
+norm_city <- norm_city %>% 
+  left_join(
+    y = zipcodes,
+    by = c(
+      "state_norm" = "state",
+      "zip_norm" = "zip"
+    )
+  ) %>% 
+  rename(city_match = city) %>% 
+  mutate(
+    match_abb = is_abbrev(city_norm, city_match),
+    match_dist = str_dist(city_norm, city_match),
+    city_swap = if_else(
+      condition = !is.na(match_dist) & (match_abb | match_dist == 1),
+      true = city_match,
+      false = city_norm
+    )
+  ) %>% 
+  select(
+    -city_match,
+    -match_dist,
+    -match_abb
+  )
+```
+
+```{r city-rejoin}
+vtp <- left_join(
+  x = vtp,
+  y = norm_city,
+  by = c(
+    "citygl", 
+    "state_norm", 
+    "zip_norm"
+  )
+)
+```
+
+#### Refine
+
+The [OpenRefine][or] algorithms can be used to group similar strings and replace
+the less common versions with their most common counterpart. This can greatly
+reduce inconsistency, but with low confidence; we will only keep any refined
+strings that have a valid city/state/zip combination.
+
+[or]: https://openrefine.org/
+
+```{r city-refine}
+good_refine <- vtp %>% 
+  mutate(
+    city_refine = city_swap %>% 
+      key_collision_merge() %>% 
+      n_gram_merge(numgram = 1)
+  ) %>% 
+  filter(city_refine != city_swap) %>% 
+  inner_join(
+    y = zipcodes,
+    by = c(
+      "city_refine" = "city",
+      "state_norm" = "state",
+      "zip_norm" = "zip"
+    )
+  )
+```
+
+```{r city-count, echo=FALSE}
+good_refine %>%
+  count(
+    state_norm, 
+    zip_norm, 
+    city_swap, 
+    city_refine,
+    sort = TRUE
+  )
+```
+
+Then we can join the refined values back to the database.
+
+```{r city-join}
+vtp <- vtp %>% 
+  left_join(good_refine, by = names(.)) %>% 
+  mutate(city_refine = coalesce(city_refine, city_swap))
+```
+
+#### Check
+
+We can use the `campfin::check_city()` function to pass the remaining unknown
+`city_refine` values (and their `state_norm`) to the Google Geocode API. The
+function returns the name of the city or locality which most associated with
+those values.
+
+This is an easy way to both check for typos and check whether an unknown
+`city_refine` value is actually a completely acceptable neighborhood, census
+designated place, or some other locality not found in our `valid_city` vector
+from our `zipcodes` database.
+
+First, we'll filter out any known valid city and aggregate the remaining records
+by their city and state. Then, we will only query those unknown cities which
+appear at least ten times.
+
+```{r}
+many_city <- c(valid_city, extra_city)
+```
+
+```{r check_filter}
+vtp_out <- vtp %>% 
+  filter(city_refine %out% many_city) %>% 
+  count(city_refine, state_norm, sort = TRUE) %>% 
+  drop_na() %>% 
+  head(100)
+```
+
+Passing these values to `campfin::check_city()` with `purrr::pmap_dfr()` will
+return a single tibble of the rows returned by each city/state combination.
+
+First, we'll check to see if the API query has already been done and a file
+exist on disk. If such a file exists, we can read it using `readr::read_csv()`.
+If not, the query will be sent and the file will be written using
+`readr::write_csv()`.
+
+```{r check_send}
+check_file <- here("vt", "parcels", "data", "city_check.csv")
+if (file_exists(check_file)) {
+  check <- read_csv(
+    file = check_file,
+    col_types = cols(
+      .default = col_character(),
+      check_city_flag = col_logical()
+    )
+  )
+} else {
+  check <- pmap_dfr(
+    .l = list(
+      vtp_out$city_refine, 
+      vtp_out$state_norm
+    ), 
+    .f = check_city, 
+    key = Sys.getenv("GEOCODE_KEY"), 
+    guess = TRUE
+  ) %>% 
+    mutate(guess = coalesce(guess_city, guess_place)) %>% 
+    select(-guess_city, -guess_place)
+  write_csv(
+    x = check,
+    file = check_file
+  )
+}
+```
+
+Any city/state combination with a `check_city_flag` equal to `TRUE` returned a
+matching city string from the API, indicating this combination is valid enough
+to be ignored.
+
+```{r check_accept}
+valid_locality <- check$guess[check$check_city_flag]
+length(valid_locality)
+```
+
+Then we can perform some simple comparisons between the queried city and the
+returned city. If they are extremely similar, we can accept those returned
+locality strings and add them to our list of accepted additional localities.
+
+```{r check_compare}
+valid_locality <- check %>% 
+  filter(!check_city_flag) %>% 
+  mutate(
+    abb = is_abbrev(original_city, guess),
+    dist = str_dist(original_city, guess)
+  ) %>%
+  filter(abb | dist <= 3) %>% 
+  pull(guess) %>% 
+  c(valid_locality)
+
+length(valid_locality)
+```
+
+```{r}
+many_city <- c(many_city, valid_locality)
+```
+
+```{r}
+many_city <- c(
+  many_city, "BROWNINGTON", "WEYBRIDGE", "ST GEORGE", "GEORGIA", "PANTON"
+)
+```
+
+#### Progress
+
+Our goal for normalization was to increase the proportion of city values known
+to be valid and reduce the total distinct values by correcting misspellings.
+
+```{r city-progress, echo=FALSE}
+progress <- progress_table(
+  str_to_upper(vtp$citygl),
+  vtp$city_norm,
+  vtp$city_swap,
+  vtp$city_refine,
+  compare = many_city
+) %>% mutate(stage = as_factor(stage))
+progress %>% 
+    mutate(across(stage, md_code)) %>% 
+    kable(digits = 3)
+```
+
+You can see how the percentage of valid values increased with each stage.
+
+```{r bar-progress, echo=FALSE}
+raw_in <- percent(prop_in(vtp$citygl, valid_city))
+progress %>% 
+  ggplot(aes(x = stage, y = prop_in)) +
+  geom_hline(yintercept = 0.99) +
+  geom_col(fill = dark2["purple"]) +
+  coord_cartesian(ylim = c(0.75, 1)) +
+  scale_y_continuous(labels = percent) +
+  labs(
+    title = "Vermont City Normalization Progress",
+    subtitle = glue("Raw at {raw_in} before conversion to uppercase"),
+    x = "Stage",
+    y = "Percent Valid"
+  )
+```
+
+More importantly, the number of distinct values decreased each stage. We were
+able to confidently change many distinct invalid values to their valid
+equivalent.
+
+```{r bar-distinct, echo=FALSE}
+progress %>% 
+  select(
+    stage, 
+    all = n_distinct,
+    bad = n_diff
+  ) %>% 
+  mutate(good = all - bad) %>% 
+  pivot_longer(c("good", "bad")) %>% 
+  mutate(name = name == "good") %>% 
+  ggplot(aes(x = stage, y = value)) +
+  geom_col(aes(fill = name)) +
+  scale_fill_brewer(palette = "Dark2", direction = -1) +
+  scale_y_continuous(labels = comma) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "Vermont City Normalization Progress",
+    subtitle = "Distinct values, valid and invalid",
+    x = "Stage",
+    y = "Distinct Values",
+    fill = "Valid"
+  )
+```
+
+Before exporting, we can remove the intermediary normalization columns and
+rename all added variables with the `_clean` suffix.
+
+```{r clean-select}
+vtp <- vtp %>% 
+  select(
+    -city_norm,
+    -city_swap,
+    city_clean = city_refine
+  ) %>% 
+  rename_all(~str_replace(., "_norm", "_clean")) %>% 
+  rename_all(~str_remove(., "_raw")) %>% 
+  relocate(city_clean, state_clean, .before = zip_clean) %>% 
+  relocate(state_prop, .before = city_clean)
+```
+
+## Conclude
+
+```{r clean-glimpse}
+glimpse(sample_n(vtp, 50))
+```
+
+1. There are `r comma(nrow(vtp))` records in the database.
+1. There are `r comma(sum(vtp$dupe_flag))` duplicate records in the database.
+1. The range and distribution of `amount` and `date` seem reasonable.
+1. There are `r comma(sum(vtp$na_flag))` records missing key variables.
+1. Consistency in geographic data has been improved with `campfin::normal_*()`.
+1. The 4-digit `year` variable has been created with `lubridate::year()`.
+
+## Export
+
+Now the file can be saved on disk for upload to the Accountability server.
+
+```{r clean-dir}
+clean_dir <- dir_create(here("vt", "parcels", "data", "clean"))
+clean_path <- path(clean_dir, "vt_parcels_2017-20211011.csv")
+write_csv(vtp, clean_path, na = "")
+(clean_size <- file_size(clean_path))
+```
+
+## Upload
+
+We can use the `aws.s3::put_object()` to upload the text file to the IRW server.
+
+```{r aws-upload, eval=FALSE}
+aws_path <- path("csv", basename(clean_path))
+if (!object_exists(aws_path, "publicaccountability")) {
+  put_object(
+    file = clean_path,
+    object = aws_path, 
+    bucket = "publicaccountability",
+    acl = "public-read",
+    show_progress = TRUE,
+    multipart = TRUE
+  )
+}
+aws_head <- head_object(aws_path, "publicaccountability")
+(aws_size <- as_fs_bytes(attr(aws_head, "content-length")))
+unname(aws_size == clean_size)
+```
