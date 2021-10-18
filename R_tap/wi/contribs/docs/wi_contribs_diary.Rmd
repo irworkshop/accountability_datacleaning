@@ -119,7 +119,7 @@ disclosure to the public. This website contains detailed financial records and
 related information that candidates, committees, organizations and parties are
 required by law to disclose.
 
-## Import
+## Download
 
 Using the CIFS [contribution search portal][search], we can run a search for all
 contributions from "All Filing Periods" from the dates 2000-01-01 to 
@@ -141,27 +141,62 @@ the bottom and on the right hand side, click the XLS icon.
 
 [search]: https://cfis.wi.gov/Public/Registration.aspx?page=ReceiptList#
 
-Infuriatingly, the site only lets users export 65,000 records at a time. We
-have manually exported 91 files.
+Infuriatingly, the site only lets users export 65,000 records at a time. I have
+written a scrip that will use Selenium to open a remote browser, submit a search
+for all contributions and download the row-limited files one by one.
 
-```{r raw_dir}
-raw_dir <- dir_create(here("wi", "contribs", "data", "raw"))
-raw_files <- as_tibble(dir_info(raw_dir))
-sum(raw_files$size)
-raw_files %>% 
-  select(path, size, modification_time) %>% 
-  mutate(across(path, basename))
+```{r eval=FALSE}
+source(
+  file = here("wi", "contribs", "docs", "scrape_wi_contribs.R")
+)
 ```
 
-The files can be read into a single data frame with `vroom::vroom()`.
+The files are downloaded to the `scrape/` directory.
+
+```{r raw_dir}
+raw_dir <- dir_create(here("wi", "contribs", "data", "scrape"))
+raw_info <- as_tibble(dir_info(raw_dir))
+sum(raw_info$size)
+raw_info %>% 
+  select(path, size, modification_time) %>% 
+  mutate(across(path, basename))
+raw_csv <- raw_info$path
+```
+
+We should check the file names to ensure we were able to download every batch
+of 65,000. If we count the distance between each of the sorted numbers in the
+row ranges we should be left with only 1, 64999, and however many are in the 
+last range (the only one below 65,000).
+
+```{r}
+row_range <- raw_csv %>% 
+  str_extract(pattern = "(\\d+)-(\\d+)") %>% 
+  str_split(pattern = "-") %>% 
+  map(as.numeric) %>% 
+  unlist() %>% 
+  sort() 
+
+sort(table(diff(row_range)))
+```
+
+## Read
+
+The files can be read into a single data frame with `read_delim()`.
 
 ```{r raw_read}
-wic <- vroom(
-  file = raw_files$path,
+wic <- read_delim( # 6,936,189
+  file = raw_csv,
   delim = ",",
   escape_double = FALSE,
   escape_backslash = FALSE,
-  col_types = cols(.default = "c")
+  col_types = cols(
+    .default = col_character(),
+    TransactionDate = col_date_mdy(),
+    ContributionAmount = col_double(),
+    ETHCFID = col_integer(),
+    `72 Hr. Reports` = col_date_mdy(),
+    SegregatedFundFlag = col_logical()
+  )
 )
 ```
 
@@ -169,43 +204,60 @@ We can check the number of rows against the total reported by our empty search.
 We can also count the number of distinct values from a discrete column.
 
 ```{r raw_check}
-nrow(wic) == 5866891 # check col count
+nrow(wic) == 6936189 # check col count
 count(wic, ContributorType) # check distinct col
-prop_na(wic$`72 Hr. Reports`) # empty column
+prop_na(wic[[length(wic)]]) # empty column
 ```
 
 The file appears to have been read correctly. We just need to parse, rename, and
 remove some of the columns.
 
 ```{r raw_names}
-raw_names <- names(wic)[c(-19, -21)]
+raw_names <- names(wic)[-length(wic)]
 ```
 
-```{r raw_parse}
+```{r name_clean}
 wic <- wic %>% 
   clean_names("snake") %>% 
-  remove_empty("cols") %>% 
-  select(-x72_hr_reports) %>% 
-  mutate(across(transaction_date, mdy)) %>% 
-  mutate(across(contribution_amount, parse_double)) %>% 
-  mutate(across(segregated_fund_flag, parse_logical)) %>% 
-  rename(
-    date = transaction_date,
-    period = filing_period_name,
-    con_name = contributor_name,
-    amount = contribution_amount,
-    addr1 = address_line1,
-    addr2 = address_line2,
-    state = state_code,
-    emp_name = employer_name,
-    emp_addr = employer_address,
-    con_type = contributor_type,
-    rec_name = receiving_committee_name,
-    seg_fund = segregated_fund_flag
+  select(-last_col()) # empty
+```
+
+The `contributor_name` columns is in a "LAST FIRST" format, which might
+complicate searches on the TAP database. Each name is separated with two spaces,
+so we can separate each name into its own column so they can be properly
+ordered when mapped in the database.
+
+```{r raw_parse}
+name_split <- wic %>% 
+  distinct(contributor_name) %>% 
+  separate(
+    col = contributor_name,
+    into = c(
+      "contributor_last", 
+      "contributor_first"
+    ),
+    sep = "\\s{2}",
+    remove = FALSE,
+    extra = "merge",
+    fill = "right"
   )
 ```
 
+```{r name_rejoin}
+wic <- wic %>% 
+  left_join(name_split, by = "contributor_name") %>% 
+  relocate(contributor_first, contributor_last, .after = contributor_name) %>%  
+  select(-contributor_name)
+```
+
+```{r squish}
+wic <- mutate(wic, across(where(is.character), str_squish))
+```
+
 ## Explore
+
+There are `r comma(nrow(wic))` rows of `r ncol(wic)` columns. Each record
+represents a single contribution from an individual to a political committee.
 
 ```{r glimpse}
 glimpse(wic)
@@ -214,65 +266,108 @@ tail(wic)
 
 ### Missing
 
-Very few important records are missing a value.
+Columns vary in their degree of missing values.
 
-```{r na_count}
+```{r na-count}
 col_stats(wic, count_na)
 ```
 
-We can flag these few records with `campfin::flag_na()`.
+We can flag any record missing a key variable needed to identify a transaction.
 
-```{r na_flag}
-wic <- wic %>% flag_na(date, con_name, amount, rec_name)
-percent(mean(wic$na_flag), 0.0001)
+```{r na-flag}
+key_vars <- c("transaction_date", "contributor_last", 
+              "contribution_amount", "receiving_committee_name")
+wic <- flag_na(wic, all_of(key_vars))
+sum(wic$na_flag)
 ```
 
-```{r na_view}
+Very, very few records are missing the contributor name.
+
+```{r na-view}
 wic %>% 
   filter(na_flag) %>% 
-  select(date, con_name, amount, rec_name)
+  select(all_of(key_vars))
 ```
 
 ### Duplicates
 
-Quite a few more records are duplicated. While it's possible for the same person
-to make a contribution of the same amount on the same day, we will still flag
-these records with `campfin::flag_dupes()`.
+We can also flag any entirely duplicate rows. To keep memory usage low with such
+a large data frame, we will split our data into a list and check each element of
+the list. For each chunk, we will write the duplicate `id` to a text file.
 
-```{r dupe_flag}
-wic <- flag_dupes(wic, everything())
-percent(mean(wic$dupe_flag), 0.01)
+```{r dupe_write}
+wic <- wic %>% 
+  group_split(
+    q = quarter(transaction_date),
+    y = year(transaction_date),
+    .keep = FALSE
+  ) %>% 
+  map_dfr(
+    .f = function(x) {
+      message(x$transaction_date[1])
+      if (nrow(x) > 1) {
+        x <- flag_dupes(x, everything(), .check = FALSE)
+        if (runif(1) > 0.75) {
+          flush_memory(1)
+        }
+      } else {
+        x$dupe_flag <- FALSE
+      }
+      return(x)
+    }
+  )
 ```
+
+`r percent(mean(wic$dupe_flag, na.rm = TRUE), 0.1)` of rows are duplicates.
 
 ```{r dupe_view}
 wic %>% 
   filter(dupe_flag) %>% 
-  select(date, con_name, amount, rec_name)
+  select(key_vars) %>% 
+  arrange(transaction_date)
+```
+
+```{r dupe_count}
+wic %>% 
+  filter(dupe_flag) %>% 
+  count(transaction_date, contributor_last, 
+        contribution_amount, receiving_committee_name, 
+        sort = TRUE)
 ```
 
 ### Categorical
 
-```{r n_distinct}
+```{r distinct-count}
 col_stats(wic, n_distinct)
 ```
 
-```{r n_count}
-count(wic, seg_fund, sort = TRUE)
-count(wic, con_type, sort = TRUE)
+```{r distinct-plots, echo=FALSE}
+explore_plot(wic, contributor_type)
 ```
 
-### Continuous
+### Amounts
 
-#### Amounts
-
-```{r ammount_summary}
-summary(wic$amount)
-mean(wic$amount <= 0)
+```{r amount-round}
+wic$contribution_amount <- round(wic$contribution_amount, digits = 2)
 ```
 
-```{r hist_amount, echo=FALSE}
+```{r amount-summary}
+summary(wic$contribution_amount)
+mean(wic$contribution_amount <= 0)
+```
+
+These are the records with the minimum and maximum amounts.
+
+```{r amount-minmax}
+glimpse(wic[c(
+  which.max(wic$contribution_amount), 
+  which.min(wic$contribution_amount)
+), ])
+```
+
+```{r hist-amount, echo=FALSE}
 wic %>%
-  ggplot(aes(amount)) +
+  ggplot(aes(contribution_amount)) +
   geom_histogram(fill = dark2["purple"]) +
   scale_y_continuous(labels = comma) +
   scale_x_continuous(
@@ -282,44 +377,41 @@ wic %>%
   ) +
   labs(
     title = "Wisconsin Contributions Amount Distribution",
-    subtitle = "from 2000 to 2019",
-    caption = "Source: {source}",
+    caption = "Source: WI CIFS",
     x = "Amount",
     y = "Count"
   )
 ```
 
-#### Dates
+### Dates
 
-We can use `lubridate::year()` to add a calendar year from the date.
+We can add the calendar year from `date` with `lubridate::year()`
 
-```{r date_year}
-wic <- mutate(wic, year = year(date))
+```{r date-year}
+wic <- mutate(wic, transaction_year = year(transaction_date))
 ```
 
-The `date` and new `year` columns are very clean.
-
-```{r date_range}
-min(wic$date)
-sum(wic$year < 2000)
-max(wic$date)
-sum(wic$date > today())
+```{r date-range}
+min(wic$transaction_date)
+sum(wic$transaction_year < 2008)
+max(wic$transaction_date)
+sum(wic$transaction_date > today())
 ```
 
-```{r bar_year, echo=FALSE}
-wic %>%
-  count(year) %>% 
-  filter(year >= 2008) %>% 
-  mutate(even = is_even(year)) %>% 
-  ggplot(aes(x = year, y = n)) +
+```{r bar-year, echo=FALSE}
+wic %>% 
+  count(transaction_year) %>% 
+  mutate(even = is_even(transaction_year)) %>% 
+  ggplot(aes(x = transaction_year, y = n)) +
   geom_col(aes(fill = even)) + 
   scale_fill_brewer(palette = "Dark2") +
   scale_y_continuous(labels = comma) +
-  scale_x_continuous(breaks = seq(2008, 2020, by = 2)) +
+  scale_x_continuous(breaks = seq(2000, 2020, by = 2)) +
   theme(legend.position = "bottom") +
+  coord_cartesian(xlim = c(2008, 2021)) +
   labs(
     title = "Wisconsin Contributions by Year",
-    caption = "Source: {source}",
+    caption = "Source: WI CIFS",
     fill = "Election Year",
     x = "Year Made",
     y = "Count"
@@ -339,30 +431,32 @@ For the street `addresss` variable, the `campfin::normal_address()` function
 will force consistence case, remove punctuation, and abbreviate official 
 USPS suffixes.
 
-```{r address_norm}
-wic <- wic %>% 
-  unite(
-    starts_with("addr"),
-    col = addr_full,
-    sep = " ",
-    remove = FALSE,
-    na.rm = TRUE
-  ) %>% 
+```{r address-norm}
+addr_norm <- wic %>% 
+  distinct(address_line1, address_line2) %>% 
   mutate(
-    addr_norm = normal_address(
-      address = addr_full,
+    across(
+      starts_with("address_"),
+      list(anorm = normal_address),
       abbs = usps_street,
       na_rep = TRUE
     )
   ) %>% 
-  select(-addr_full)
+  unite(
+    col = address_norm,
+    ends_with("_anorm"),
+    sep = " ",
+    remove = TRUE,
+    na.rm = TRUE
+  )
 ```
 
-```{r address_view}
-wic %>% 
-  select(starts_with("addr")) %>% 
-  distinct() %>% 
-  sample_n(10)
+```{r address-view}
+addr_norm
+```
+
+```{r address-join}
+wic <- left_join(wic, addr_norm, by = c("address_line1", "address_line2"))
 ```
 
 ### ZIP
@@ -371,7 +465,7 @@ For ZIP codes, the `campfin::normal_zip()` function will attempt to create
 valid _five_ digit codes by removing the ZIP+4 suffix and returning leading
 zeroes dropped by other programs like Microsoft Excel.
 
-```{r zip_norm}
+```{r zip-norm}
 wic <- wic %>% 
   mutate(
     zip_norm = normal_zip(
@@ -381,7 +475,7 @@ wic <- wic %>%
   )
 ```
 
-```{r zip_progress}
+```{r zip-progress}
 progress_table(
   wic$zip,
   wic$zip_norm,
@@ -391,33 +485,9 @@ progress_table(
 
 ### State
 
-Valid two digit state abbreviations can be made using the 
-`campfin::normal_state()` function.
-
-```{r state_norm}
-wic <- wic %>% 
-  mutate(
-    state_norm = normal_state(
-      state = state,
-      abbreviate = TRUE,
-      na_rep = TRUE,
-      valid = valid_state
-    )
-  )
-```
-
-```{r state_view}
-wic %>% 
-  filter(state != state_norm) %>% 
-  count(state, state_norm, sort = TRUE)
-```
-
-```{r state_progress}
-progress_table(
-  wic$state,
-  wic$state_norm,
-  compare = valid_state
-)
+```{r state-upper}
+wic$state_code <- str_to_upper(wic$state_code)
+prop_in(wic$state_code, valid_state)
 ```
 
 ### City
@@ -431,17 +501,18 @@ The `campfin::normal_city()` function is a good start, again converting case,
 removing punctuation, but _expanding_ USPS abbreviations. We can also remove
 `invalid_city` values.
 
-```{r city_norm}
-wic <- mutate(
-  .data = wic,
-  city_norm = normal_city(
-    city = city, 
-    abbs = usps_city,
-    states = c("WI", "DC", "WISCONSIN"),
-    na = invalid_city,
-    na_rep = TRUE
+```{r city-norm}
+norm_city <- wic %>% 
+  distinct(city, state_code, zip_norm) %>% 
+  mutate(
+    city_norm = normal_city(
+      city = city, 
+      abbs = usps_city,
+      states = c("WI", "DC", "WISCONSIN"),
+      na = invalid_city,
+      na_rep = TRUE
+    )
   )
-)
 ```
 
 #### Swap
@@ -451,23 +522,21 @@ against the _expected_ value for that record's state abbreviation and ZIP code.
 If the normalized value is either an abbreviation for or very similar to the
 expected value, we can confidently swap those two.
 
-```{r city_swap}
-wic <- wic %>% 
+```{r city-swap}
+norm_city <- norm_city %>% 
   rename(city_raw = city) %>% 
   left_join(
     y = zipcodes,
     by = c(
-      "state_norm" = "state",
+      "state_code" = "state",
       "zip_norm" = "zip"
     )
   ) %>% 
   rename(city_match = city) %>% 
   mutate(
-    # check for abb or small diff
     match_abb = is_abbrev(city_norm, city_match),
     match_dist = str_dist(city_norm, city_match),
     city_swap = if_else(
-      # if nan and either condition
       condition = !is.na(match_dist) & (match_abb | match_dist == 1),
       true = city_match,
       false = city_norm
@@ -480,6 +549,18 @@ wic <- wic %>%
   )
 ```
 
+```{r city-rejoin}
+wic <- left_join(
+  x = wic,
+  y = norm_city,
+  by = c(
+    "city" = "city_raw", 
+    "state_code", 
+    "zip_norm"
+  )
+)
+```
+
 #### Refine
 
 The [OpenRefine][or] algorithms can be used to group similar strings and replace
@@ -489,7 +570,7 @@ strings that have a valid city/state/zip combination.
 
 [or]: https://openrefine.org/
 
-```{r city_refine}
+```{r city-refine}
 good_refine <- wic %>% 
   mutate(
     city_refine = city_swap %>% 
@@ -501,17 +582,16 @@ good_refine <- wic %>%
     y = zipcodes,
     by = c(
       "city_refine" = "city",
-      "state_norm" = "state",
+      "state_code" = "state",
       "zip_norm" = "zip"
     )
   )
 ```
 
-```{r city_count, echo=FALSE}
-nrow(good_refine)
+```{r city-count, echo=FALSE}
 good_refine %>%
   count(
-    state_norm, 
+    state_code, 
     zip_norm, 
     city_swap, 
     city_refine,
@@ -521,43 +601,35 @@ good_refine %>%
 
 Then we can join the refined values back to the database.
 
-```{r city_join}
+```{r city-join}
 wic <- wic %>% 
-  left_join(good_refine) %>% 
+  left_join(good_refine, by = names(.)) %>% 
   mutate(city_refine = coalesce(city_refine, city_swap))
-```
-
-There are one or two more very common values we can adjust by hand.
-
-```{r city_fix}
-wic <- wic %>% 
-  mutate(
-    city_refine = city_refine %>% 
-      na_if("WORK AT HOME") %>% 
-      na_if("WI") %>% 
-      str_replace("^NYC$", "NEW YORK") %>% 
-      str_replace("TRIANGLE PA$", "TRIANGLE PARK")
-  )
 ```
 
 #### Progress
 
-```{r city_progress, echo=FALSE}
-many_city <- c(valid_city, extra_city, "RESEARCH TRIANGLE PARK")
+Our goal for normalization was to increase the proportion of city values known
+to be valid and reduce the total distinct values by correcting misspellings.
+
+```{r city-progress, echo=FALSE}
+many_city <- c(valid_city, extra_city)
 progress <- progress_table(
-  str_to_upper(wic$city_raw),
+  str_to_upper(wic$city),
   wic$city_norm,
   wic$city_swap,
   wic$city_refine,
   compare = many_city
 ) %>% mutate(stage = as_factor(stage))
-kable(progress, digits = 3)
+progress %>% 
+    mutate(across(stage, md_code)) %>% 
+    kable(digits = 3)
 ```
 
 You can see how the percentage of valid values increased with each stage.
 
-```{r bar_progress, echo=FALSE}
-raw_in <- percent(prop_in(wic$city_raw, valid_city))
+```{r bar-progress, echo=FALSE}
+raw_in <- percent(prop_in(wic$city, valid_city))
 progress %>% 
   ggplot(aes(x = stage, y = prop_in)) +
   geom_hline(yintercept = 0.99) +
@@ -576,7 +648,7 @@ More importantly, the number of distinct values decreased each stage. We were
 able to confidently change many distinct invalid values to their valid
 equivalent.
 
-```{r bar_distinct, echo=FALSE}
+```{r bar-distinct, echo=FALSE}
 progress %>% 
   select(
     stage, 
@@ -600,9 +672,10 @@ progress %>%
   )
 ```
 
-## Export
+Before exporting, we can remove the intermediary normalization columns and
+rename all added variables with the `_clean` suffix.
 
-```{r clean_select}
+```{r clean-select}
 wic <- wic %>% 
   select(
     -city_norm,
@@ -610,78 +683,51 @@ wic <- wic %>%
     city_clean = city_refine
   ) %>% 
   rename_all(~str_replace(., "_norm", "_clean")) %>% 
-  rename(city = city_raw)
+  rename_all(~str_remove(., "_raw")) %>% 
+  relocate(address_clean, city_clean, .before = zip_clean)
 ```
 
-```{r clean_glimpse}
-glimpse(sample_n(wic, 20))
+## Conclude
+
+```{r clean-glimpse}
+glimpse(sample_n(wic, 50))
 ```
 
 1. There are `r comma(nrow(wic))` records in the database.
 1. There are `r comma(sum(wic$dupe_flag))` duplicate records in the database.
 1. The range and distribution of `amount` and `date` seem reasonable.
-1. There are `r comma(sum(wic$na_flag))` records missing a key variable.
+1. There are `r comma(sum(wic$na_flag))` records missing key variables.
 1. Consistency in geographic data has been improved with `campfin::normal_*()`.
 1. The 4-digit `year` variable has been created with `lubridate::year()`.
 
-```{r clean_dir}
+## Export
+
+Now the file can be saved on disk for upload to the Accountability server.
+
+```{r clean-dir}
 clean_dir <- dir_create(here("wi", "contribs", "data", "clean"))
-clean_path <- path(clean_dir, "wi_contribs_clean.csv")
+clean_path <- path(clean_dir, "wi_contribs_2008-20211018.csv")
 write_csv(wic, clean_path, na = "")
-file_size(clean_path)
-guess_encoding(clean_path)
+(clean_size <- file_size(clean_path))
 ```
 
-## Dictionary
+## Upload
 
-```{r dict_make, echo=FALSE}
-dict_raw <- tibble(
-  var = md_code(names(wic)),
-  # raw = c(md_code(raw_names), rep("", 7)),
-  type = md_code(map_chr(wic, rlang::as_label)),
-  def = c(
-    "Date contribution was made",
-    "Election during which contribution was made",
-    "Contributor full name",
-    "Contribution amount or correction",
-    "Contributor street address",
-    "Contributor secondary address",
-    "Contributor city name",
-    "Contributor 2-digit state abbreviation",
-    "Contributor ZIP+4 code",
-    "Contributor occupation",
-    "Contributor employer name",
-    "Contributor employer address",
-    "Contributor type",
-    "Recipient committee name",
-    "Recipient ethics & campaign finance ID",
-    "Contribution condiut (method)",
-    "Recipient election office sought",
-    "Comment (typically check date)",
-    "PAC segregated fund sourced",
-    "Flag for missing date, amount, or name",
-    "Flag for completely duplicated record",
-    "Calendar year of contribution date",
-    "Normalized combined street address",
-    "Normalized 5-digit ZIP code",
-    "Normalized 2-digit state abbreviation",
-    "Normalized city name"
+We can use the `aws.s3::put_object()` to upload the text file to the IRW server.
+
+```{r aws-upload, eval=FALSE}
+aws_path <- path("csv", basename(clean_path))
+if (!object_exists(aws_path, "publicaccountability")) {
+  put_object(
+    file = clean_path,
+    object = aws_path, 
+    bucket = "publicaccountability",
+    acl = "public-read",
+    show_progress = TRUE,
+    multipart = TRUE
   )
-)
+}
+aws_head <- head_object(aws_path, "publicaccountability")
+(aws_size <- as_fs_bytes(attr(aws_head, "content-length")))
+unname(aws_size == clean_size)
 ```
-
-```{r dict_md, echo=FALSE}
-(dict_md <- kable(
-  x = dict_raw,
-  format = "markdown",
-  col.names = c("Column", "Type", "Definition")
-))
-```
-
-```{r dict_write}
-write_lines(
-  x = c("# Wisconsin Contributions Data Dictionary\n", dict_md),
-  path = here("wi", "contribs", "wi_contribs_dict.md"),
-)
-```
-

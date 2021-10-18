@@ -1,17 +1,19 @@
 Wisconsin Contributions
 ================
 Kiernan Nicholls
-2020-04-23 12:00:39
+2021-10-18 16:18:08
 
-  - [Project](#project)
-  - [Objectives](#objectives)
-  - [Packages](#packages)
-  - [Data](#data)
-  - [Import](#import)
-  - [Explore](#explore)
-  - [Wrangle](#wrangle)
-  - [Export](#export)
-  - [Dictionary](#dictionary)
+-   [Project](#project)
+-   [Objectives](#objectives)
+-   [Packages](#packages)
+-   [Data](#data)
+-   [Download](#download)
+-   [Read](#read)
+-   [Explore](#explore)
+-   [Wrangle](#wrangle)
+-   [Conclude](#conclude)
+-   [Export](#export)
+-   [Upload](#upload)
 
 <!-- Place comments regarding knitting here -->
 
@@ -86,7 +88,7 @@ feature and should be run as such. The project also uses the dynamic
 ``` r
 # where does this document knit?
 here::here()
-#> [1] "/home/kiernan/Code/accountability_datacleaning/R_campfin"
+#> [1] "/home/kiernan/Documents/tap/R_tap"
 ```
 
 ## Data
@@ -100,12 +102,12 @@ Data is from the Wisconsin Secretary of State’s Campaign Finance System
 > detailed financial records and related information that candidates,
 > committees, organizations and parties are required by law to disclose.
 
-## Import
+## Download
 
 Using the CIFS [contribution search
 portal](https://cfis.wi.gov/Public/Registration.aspx?page=ReceiptList#),
 we can run a search for all contributions from “All Filing Periods” from
-the dates 2000-01-01 to 2020-04-23. Those search results need to be
+the dates 2000-01-01 to 2021-10-18. Those search results need to be
 manually exported as the `ReceiptsList.csv` file.
 
 > To view contributions to a committee, go to the CFIS Home Page, on the
@@ -124,41 +126,80 @@ manually exported as the `ReceiptsList.csv` file.
 > click the XLS icon.
 
 Infuriatingly, the site only lets users export 65,000 records at a time.
-We have manually exported 91 files.
+I have written a scrip that will use Selenium to open a remote browser,
+submit a search for all contributions and download the row-limited files
+one by one.
 
 ``` r
-raw_dir <- dir_create(here("wi", "contribs", "data", "raw"))
-raw_files <- as_tibble(dir_info(raw_dir))
-sum(raw_files$size)
-#> 1.06G
-raw_files %>% 
-  select(path, size, modification_time) %>% 
-  mutate(across(path, basename))
-#> # A tibble: 91 x 3
-#>    path                                    size modification_time  
-#>    <chr>                            <fs::bytes> <dttm>             
-#>  1 ReceiptsList_1-65000.csv               12.7M 2020-04-21 12:45:29
-#>  2 ReceiptsList_1040001-1105000.csv       10.8M 2020-04-21 16:37:16
-#>  3 ReceiptsList_1105001-1170000.csv       11.9M 2020-04-21 16:42:53
-#>  4 ReceiptsList_1170001-1235000.csv         11M 2020-04-21 16:49:02
-#>  5 ReceiptsList_1235001-1300000.csv       10.8M 2020-04-21 17:13:05
-#>  6 ReceiptsList_1300001-1365000.csv       10.9M 2020-04-21 17:38:50
-#>  7 ReceiptsList_130001-195000.csv         11.2M 2020-04-21 13:05:47
-#>  8 ReceiptsList_1365001-1430000.csv       12.2M 2020-04-21 17:50:38
-#>  9 ReceiptsList_1430001-1495000.csv       10.9M 2020-04-21 17:59:44
-#> 10 ReceiptsList_1495001-1560000.csv       10.5M 2020-04-21 18:07:38
-#> # … with 81 more rows
+source(
+  file = here("wi", "contribs", "docs", "scrape_wi_contribs.R")
+)
 ```
 
-The files can be read into a single data frame with `vroom::vroom()`.
+The files are downloaded to the `scrape/` directory.
 
 ``` r
-wic <- vroom(
-  file = raw_files$path,
+raw_dir <- dir_create(here("wi", "contribs", "data", "scrape"))
+raw_info <- as_tibble(dir_info(raw_dir))
+sum(raw_info$size)
+#> 1.24G
+raw_info %>% 
+  select(path, size, modification_time) %>% 
+  mutate(across(path, basename))
+#> # A tibble: 107 × 3
+#>    path                                   size modification_time  
+#>    <chr>                           <fs::bytes> <dttm>             
+#>  1 wi_contribs_1-65000.csv               12.3M 2021-10-18 11:40:05
+#>  2 wi_contribs_1040001-1105000.csv       11.6M 2021-10-18 11:40:11
+#>  3 wi_contribs_1105001-1170000.csv       11.5M 2021-10-18 11:40:11
+#>  4 wi_contribs_1170001-1235000.csv       10.3M 2021-10-18 11:40:11
+#>  5 wi_contribs_1235001-1300000.csv       12.8M 2021-10-18 11:40:11
+#>  6 wi_contribs_1300001-1365000.csv       11.9M 2021-10-18 11:40:11
+#>  7 wi_contribs_130001-195000.csv         10.4M 2021-10-18 11:40:10
+#>  8 wi_contribs_1365001-1430000.csv       10.4M 2021-10-18 11:40:11
+#>  9 wi_contribs_1430001-1495000.csv       11.1M 2021-10-18 11:40:12
+#> 10 wi_contribs_1495001-1560000.csv       10.7M 2021-10-18 11:40:12
+#> # … with 97 more rows
+raw_csv <- raw_info$path
+```
+
+We should check the file names to ensure we were able to download every
+batch of 65,000. If we count the distance between each of the sorted
+numbers in the row ranges we should be left with only 1, 64999, and
+however many are in the last range (the only one below 65,000).
+
+``` r
+row_range <- raw_csv %>% 
+  str_extract(pattern = "(\\d+)-(\\d+)") %>% 
+  str_split(pattern = "-") %>% 
+  map(as.numeric) %>% 
+  unlist() %>% 
+  sort() 
+
+sort(table(diff(row_range)))
+#> 
+#> 46188     1 64999 
+#>     1   106   106
+```
+
+## Read
+
+The files can be read into a single data frame with `read_delim()`.
+
+``` r
+wic <- read_delim( # 6,936,189
+  file = raw_csv,
   delim = ",",
   escape_double = FALSE,
   escape_backslash = FALSE,
-  col_types = cols(.default = "c")
+  col_types = cols(
+    .default = col_character(),
+    TransactionDate = col_date_mdy(),
+    ContributionAmount = col_double(),
+    ETHCFID = col_integer(),
+    `72 Hr. Reports` = col_date_mdy(),
+    SegregatedFundFlag = col_logical()
+  )
 )
 ```
 
@@ -167,270 +208,333 @@ search. We can also count the number of distinct values from a discrete
 column.
 
 ``` r
-nrow(wic) == 5866891 # check col count
+nrow(wic) == 6936189 # check col count
 #> [1] TRUE
 count(wic, ContributorType) # check distinct col
-#> # A tibble: 9 x 2
+#> # A tibble: 9 × 2
 #>   ContributorType         n
 #>   <chr>               <int>
-#> 1 Anonymous           13967
-#> 2 Business            15501
-#> 3 Ethics Commission     134
-#> 4 Individual        5739136
-#> 5 Local Candidate      2395
-#> 6 Registrant          62483
-#> 7 Self                10703
-#> 8 Unitemized          18147
-#> 9 Unregistered         4425
-prop_na(wic$`72 Hr. Reports`) # empty column
-#> [1] 0.9978445
+#> 1 Anonymous           17074
+#> 2 Business            18444
+#> 3 Ethics Commission     143
+#> 4 Individual        6786497
+#> 5 Local Candidate      2812
+#> 6 Registrant          74804
+#> 7 Self                12065
+#> 8 Unitemized          18169
+#> 9 Unregistered         6181
+prop_na(wic[[length(wic)]]) # empty column
+#> [1] 1
 ```
 
 The file appears to have been read correctly. We just need to parse,
 rename, and remove some of the columns.
 
 ``` r
-raw_names <- names(wic)[c(-19, -21)]
+raw_names <- names(wic)[-length(wic)]
 ```
 
 ``` r
 wic <- wic %>% 
   clean_names("snake") %>% 
-  remove_empty("cols") %>% 
-  select(-x72_hr_reports) %>% 
-  mutate(across(transaction_date, mdy)) %>% 
-  mutate(across(contribution_amount, parse_double)) %>% 
-  mutate(across(segregated_fund_flag, parse_logical)) %>% 
-  rename(
-    date = transaction_date,
-    period = filing_period_name,
-    con_name = contributor_name,
-    amount = contribution_amount,
-    addr1 = address_line1,
-    addr2 = address_line2,
-    state = state_code,
-    emp_name = employer_name,
-    emp_addr = employer_address,
-    con_type = contributor_type,
-    rec_name = receiving_committee_name,
-    seg_fund = segregated_fund_flag
+  select(-last_col()) # empty
+```
+
+The `contributor_name` columns is in a “LAST FIRST” format, which might
+complicate searches on the TAP database. Each name is separated with two
+spaces, so we can separate each name into its own column so they can be
+properly ordered when mapped in the database.
+
+``` r
+name_split <- wic %>% 
+  distinct(contributor_name) %>% 
+  separate(
+    col = contributor_name,
+    into = c(
+      "contributor_last", 
+      "contributor_first"
+    ),
+    sep = "\\s{2}",
+    remove = FALSE,
+    extra = "merge",
+    fill = "right"
   )
+```
+
+``` r
+wic <- wic %>% 
+  left_join(name_split, by = "contributor_name") %>% 
+  relocate(contributor_first, contributor_last, .after = contributor_name) %>%  
+  select(-contributor_name)
+```
+
+``` r
+wic <- mutate(wic, across(where(is.character), str_squish))
 ```
 
 ## Explore
 
+There are 6,936,189 rows of 21 columns. Each record represents a single
+contribution from an individual to a political committee.
+
 ``` r
 glimpse(wic)
-#> Rows: 5,866,891
-#> Columns: 19
-#> $ date       <date> 2018-10-05, 2020-03-01, 2020-02-10, 2018-10-05, 2018-10-16, 2018-09-12, 2018…
-#> $ period     <chr> "Fall Pre-Election 2018", "Spring Pre-Election 2020", "Spring Pre-Election 20…
-#> $ con_name   <chr> "Clark Co Democratic Party", "Kachel  Mike", "Conroy  Laura", "Zich  Joni", "…
-#> $ amount     <dbl> 500.00, 300.00, 40.00, 150.00, 100.00, 100.00, 68.00, 20000.00, 10583.64, 700…
-#> $ addr1      <chr> "W6329 Timberlane Road", "PO Box 239", "N7681 E. Lakeshore Dr", "3101 36th Av…
-#> $ addr2      <chr> NA, NA, NA, NA, NA, NA, NA, NA, "Suite 200", NA, NA, NA, NA, NA, NA, NA, NA, …
-#> $ city       <chr> "Neillsville", "Whitewater", "Whitewater", "St. Anthony", NA, "Madison", "Eau…
-#> $ state      <chr> "WI", "WI", "WI", "MN", "WI", "WI", "WI", "WI", "WI", "WI", "WI", "WI", "WI",…
-#> $ zip        <chr> "54456", "53190", "53190", "55418", NA, "53704", "54701", "54401", "53703", N…
-#> $ occupation <chr> NA, "Real Estate", NA, NA, NA, "RETIRED", "RETIRED", NA, NA, NA, NA, NA, NA, …
-#> $ emp_name   <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
-#> $ emp_addr   <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
-#> $ con_type   <chr> "Registrant", "Individual", "Individual", "Individual", "Anonymous", "Individ…
-#> $ rec_name   <chr> "Wendy Sue for Wisconsin", "Republican Party of Walworth County", "Republican…
-#> $ ethcfid    <chr> "0105996", "0300171", "0300171", "0105996", "0105996", "0105996", "0105996", …
-#> $ conduit    <chr> NA, NA, NA, "Xcel Energy Conduit Fund", NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
-#> $ branch     <chr> "State Assembly  District No. 68", NA, NA, "State Assembly  District No. 68",…
-#> $ comment    <chr> NA, "Whitewater HQ Rent", "MAGA Wear", NA, "donation to charity $90 April 10 …
-#> $ seg_fund   <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, …
+#> Rows: 6,936,189
+#> Columns: 21
+#> $ transaction_date         <date> 2020-10-20, 2020-10-20, 2020-10-20, 2020-11-05, 2020-10-13, 202…
+#> $ filing_period_name       <chr> "January Continuing 2021", "January Continuing 2021", "January C…
+#> $ contributor_first        <chr> NA, "Bruce", "James", "John Conrad", "Smith", "Hilficker", "Osow…
+#> $ contributor_last         <chr> "Republican Party of Milwaukee County", "Boll", "Meyers", "Ellen…
+#> $ contribution_amount      <dbl> 100.00, 100.00, 65.00, 1074.44, 25.00, 500.00, 100.00, 99.00, 15…
+#> $ address_line1            <chr> "801 S 108th St", "732 S 103rd St", "3232 N Norwood Pl", "1343 S…
+#> $ address_line2            <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
+#> $ city                     <chr> "West Allis", "Milwaukee", "Milwaukee", "Shell Lake", "Eau Clair…
+#> $ state_code               <chr> "WI", "WI", "WI", "WI", "WI", "MN", "WI", "WI", "WI", "MA", "WI"…
+#> $ zip                      <chr> "53214", "53214", "53216", "54871", "54701", "55101", "53219", "…
+#> $ occupation               <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "Retired", "Reti…
+#> $ employer_name            <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
+#> $ employer_address         <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
+#> $ contributor_type         <chr> "Business", "Individual", "Individual", "Self", "Individual", "I…
+#> $ receiving_committee_name <chr> "Abie for Assembly", "Abie for Assembly", "Abie for Assembly", "…
+#> $ ethcfid                  <int> 106253, 106253, 106253, 106325, 106325, 106325, 106325, 106325, …
+#> $ conduit                  <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
+#> $ branch                   <chr> "State Assembly District No. 17", "State Assembly District No. 1…
+#> $ comment                  <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
+#> $ x72_hr_reports           <date> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
+#> $ segregated_fund_flag     <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, F…
 tail(wic)
-#> # A tibble: 6 x 19
-#>   date       period con_name amount addr1 addr2 city  state zip   occupation emp_name emp_addr
-#>   <date>     <chr>  <chr>     <dbl> <chr> <chr> <chr> <chr> <chr> <chr>      <chr>    <chr>   
-#> 1 2018-10-15 Fall … Huck  J…   20   W611… <NA>  Burn… WI    53922 <NA>       <NA>     <NA>    
-#> 2 2018-10-15 Fall … Rohloff…   20   1379… <NA>  Moun… WI    54149 <NA>       <NA>     <NA>    
-#> 3 2018-10-15 Fall … Neumann…   20   3535… <NA>  Dodg… WI    53533 <NA>       <NA>     <NA>    
-#> 4 2018-10-15 Fall … Pomeran…    2.5 740 … Apt … New … NY    10025 <NA>       <NA>     <NA>    
-#> 5 2018-10-15 Fall … Hunting…   25   1100… <NA>  Appl… WI    54914 <NA>       <NA>     <NA>    
-#> 6 2018-10-15 Fall … Navis  …   50   1048… <NA>  Sheb… WI    53081 RETIRED    <NA>     <NA>    
-#> # … with 7 more variables: con_type <chr>, rec_name <chr>, ethcfid <chr>, conduit <chr>,
-#> #   branch <chr>, comment <chr>, seg_fund <lgl>
+#> # A tibble: 6 × 21
+#>   transaction_date filing_period_name   contributor_first contributor_last contribution_amount
+#>   <date>           <chr>                <chr>             <chr>                          <dbl>
+#> 1 2020-06-24       July Continuing 2020 JACOB             DZIEKAN                         0.59
+#> 2 2020-06-24       July Continuing 2020 CHAD              MARTINEZ                        0.53
+#> 3 2020-06-24       July Continuing 2020 KYLE              DOWE                            0.78
+#> 4 2020-06-24       July Continuing 2020 SHAUN             SCHOWALTER                      0.56
+#> 5 2020-06-24       July Continuing 2020 MASON             KILEN                           0.68
+#> 6 2020-06-24       July Continuing 2020 STEVEN            MUELLER                         0.47
+#> # … with 16 more variables: address_line1 <chr>, address_line2 <chr>, city <chr>,
+#> #   state_code <chr>, zip <chr>, occupation <chr>, employer_name <chr>, employer_address <chr>,
+#> #   contributor_type <chr>, receiving_committee_name <chr>, ethcfid <int>, conduit <chr>,
+#> #   branch <chr>, comment <chr>, x72_hr_reports <date>, segregated_fund_flag <lgl>
 ```
 
 ### Missing
 
-Very few important records are missing a value.
+Columns vary in their degree of missing values.
 
 ``` r
 col_stats(wic, count_na)
-#> # A tibble: 19 x 4
-#>    col        class        n          p
-#>    <chr>      <chr>    <int>      <dbl>
-#>  1 date       <date>       0 0         
-#>  2 period     <chr>        0 0         
-#>  3 con_name   <chr>        8 0.00000136
-#>  4 amount     <dbl>        0 0         
-#>  5 addr1      <chr>    78412 0.0134    
-#>  6 addr2      <chr>  5609875 0.956     
-#>  7 city       <chr>    65347 0.0111    
-#>  8 state      <chr>    38252 0.00652   
-#>  9 zip        <chr>    84754 0.0144    
-#> 10 occupation <chr>  4248219 0.724     
-#> 11 emp_name   <chr>  4887226 0.833     
-#> 12 emp_addr   <chr>  5045662 0.860     
-#> 13 con_type   <chr>        0 0         
-#> 14 rec_name   <chr>        0 0         
-#> 15 ethcfid    <chr>        0 0         
-#> 16 conduit    <chr>  5364280 0.914     
-#> 17 branch     <chr>  3489357 0.595     
-#> 18 comment    <chr>  4641101 0.791     
-#> 19 seg_fund   <lgl>        0 0
+#> # A tibble: 21 × 4
+#>    col                      class        n          p
+#>    <chr>                    <chr>    <int>      <dbl>
+#>  1 transaction_date         <date>       0 0         
+#>  2 filing_period_name       <chr>        0 0         
+#>  3 contributor_first        <chr>   134727 0.0194    
+#>  4 contributor_last         <chr>        7 0.00000101
+#>  5 contribution_amount      <dbl>        0 0         
+#>  6 address_line1            <chr>   110636 0.0160    
+#>  7 address_line2            <chr>  6604325 0.952     
+#>  8 city                     <chr>    72571 0.0105    
+#>  9 state_code               <chr>    43299 0.00624   
+#> 10 zip                      <chr>    95350 0.0137    
+#> 11 occupation               <chr>  5124426 0.739     
+#> 12 employer_name            <chr>  5956515 0.859     
+#> 13 employer_address         <chr>  6114813 0.882     
+#> 14 contributor_type         <chr>        0 0         
+#> 15 receiving_committee_name <chr>        0 0         
+#> 16 ethcfid                  <int>        0 0         
+#> 17 conduit                  <chr>  6420693 0.926     
+#> 18 branch                   <chr>  4320103 0.623     
+#> 19 comment                  <chr>  5332800 0.769     
+#> 20 x72_hr_reports           <date> 6921889 0.998     
+#> 21 segregated_fund_flag     <lgl>        0 0
 ```
 
-We can flag these few records with `campfin::flag_na()`.
+We can flag any record missing a key variable needed to identify a
+transaction.
 
 ``` r
-wic <- wic %>% flag_na(date, con_name, amount, rec_name)
-percent(mean(wic$na_flag), 0.0001)
-#> [1] "0.0001%"
+key_vars <- c("transaction_date", "contributor_last", 
+              "contribution_amount", "receiving_committee_name")
+wic <- flag_na(wic, all_of(key_vars))
+sum(wic$na_flag)
+#> [1] 7
 ```
+
+Very, very few records are missing the contributor name.
 
 ``` r
 wic %>% 
   filter(na_flag) %>% 
-  select(date, con_name, amount, rec_name)
-#> # A tibble: 8 x 4
-#>   date       con_name amount rec_name                     
-#>   <date>     <chr>     <dbl> <chr>                        
-#> 1 2008-12-31 <NA>       84.6 Friends of Shirley Krug      
-#> 2 2008-11-30 <NA>       81.7 Friends of Shirley Krug      
-#> 3 2008-10-31 <NA>       84.3 Friends of Shirley Krug      
-#> 4 2008-09-30 <NA>       77.8 Friends of Shirley Krug      
-#> 5 2008-08-31 <NA>       80.2 Friends of Shirley Krug      
-#> 6 2008-07-31 <NA>       78.2 Friends of Shirley Krug      
-#> 7 2008-10-08 <NA>     2500   WI Teamsters Joint Council 39
-#> 8 2008-09-10 <NA>     2500   WI Teamsters Joint Council 39
+  select(all_of(key_vars))
+#> # A tibble: 7 × 4
+#>   transaction_date contributor_last contribution_amount receiving_committee_name             
+#>   <date>           <chr>                          <dbl> <chr>                                
+#> 1 2020-12-31       <NA>                          2430.  Wisconsin Federation for Children PAC
+#> 2 2008-12-31       <NA>                            84.6 Friends of Shirley Krug              
+#> 3 2008-11-30       <NA>                            81.7 Friends of Shirley Krug              
+#> 4 2008-10-31       <NA>                            84.3 Friends of Shirley Krug              
+#> 5 2008-09-30       <NA>                            77.8 Friends of Shirley Krug              
+#> 6 2008-08-31       <NA>                            80.2 Friends of Shirley Krug              
+#> 7 2008-07-31       <NA>                            78.2 Friends of Shirley Krug
 ```
 
 ### Duplicates
 
-Quite a few more records are duplicated. While it’s possible for the
-same person to make a contribution of the same amount on the same day,
-we will still flag these records with `campfin::flag_dupes()`.
+We can also flag any entirely duplicate rows. To keep memory usage low
+with such a large data frame, we will split our data into a list and
+check each element of the list. For each chunk, we will write the
+duplicate `id` to a text file.
 
 ``` r
-wic <- flag_dupes(wic, everything())
-percent(mean(wic$dupe_flag), 0.01)
-#> [1] "1.63%"
+wic <- wic %>% 
+  group_split(
+    q = quarter(transaction_date),
+    y = year(transaction_date),
+    .keep = FALSE
+  ) %>% 
+  map_dfr(
+    .f = function(x) {
+      message(x$transaction_date[1])
+      if (nrow(x) > 1) {
+        x <- flag_dupes(x, everything(), .check = FALSE)
+        if (runif(1) > 0.75) {
+          flush_memory(1)
+        }
+      }
+      return(x)
+    }
+  )
 ```
+
+NA of rows are duplicates.
 
 ``` r
 wic %>% 
   filter(dupe_flag) %>% 
-  select(date, con_name, amount, rec_name)
-#> # A tibble: 95,742 x 4
-#>    date       con_name            amount rec_name
-#>    <date>     <chr>                <dbl> <chr>   
-#>  1 2020-03-23 MICHAUD  PETER J      6    WEAC PAC
-#>  2 2020-03-23 MICHAUD  PETER J      6    WEAC PAC
-#>  3 2020-03-23 LESSOR  LOUIS W       5.01 WEAC PAC
-#>  4 2020-03-23 LESSOR  LOUIS W       5.01 WEAC PAC
-#>  5 2020-03-23 GEORGESON  PAMELA L   5.01 WEAC PAC
-#>  6 2020-03-23 GEORGESON  PAMELA L   5.01 WEAC PAC
-#>  7 2020-03-23 BEHNKE  MICHELLE C    5.01 WEAC PAC
-#>  8 2020-03-23 BEHNKE  MICHELLE C    5.01 WEAC PAC
-#>  9 2020-03-23 DRESANG  GINA M       5.01 WEAC PAC
-#> 10 2020-03-23 DRESANG  GINA M       5.01 WEAC PAC
-#> # … with 95,732 more rows
+  count(transaction_date, contributor_last, 
+        contribution_amount, receiving_committee_name, 
+        sort = TRUE)
+#> # A tibble: 46,639 × 5
+#>    transaction_date contributor_last contribution_amount receiving_committee_name                 n
+#>    <date>           <chr>                          <dbl> <chr>                                <int>
+#>  1 2008-10-30       Unitemized                        20 Assembly Democratic Camp Comm          120
+#>  2 2011-06-10       Anonymous                         10 Shilling for Senate                     75
+#>  3 2018-02-08       Anonymous                          2 Local 420 PAC                           69
+#>  4 2017-12-28       Anonymous                          2 Local 420 PAC                           62
+#>  5 2010-07-15       Anonymous                         10 Matt Bitz for Assembly                  60
+#>  6 2013-08-07       Anonymous                         10 Marathon Co Democratic Party            54
+#>  7 2010-09-07       Anonymous                          5 Republican Party of Jackson County …    52
+#>  8 2018-06-15       Anonymous                          5 Waukesha County Democratic Party        49
+#>  9 2017-08-22       Anonymous                          2 Local 420 PAC                           48
+#> 10 2013-08-25       Anonymous                         10 Marathon Co Democratic Party            41
+#> # … with 46,629 more rows
 ```
 
 ### Categorical
 
 ``` r
 col_stats(wic, n_distinct)
-#> # A tibble: 21 x 4
-#>    col        class        n           p
-#>    <chr>      <chr>    <int>       <dbl>
-#>  1 date       <date>    4683 0.000798   
-#>  2 period     <chr>      137 0.0000234  
-#>  3 con_name   <chr>  1115590 0.190      
-#>  4 amount     <dbl>    27192 0.00463    
-#>  5 addr1      <chr>  1283597 0.219      
-#>  6 addr2      <chr>    26917 0.00459    
-#>  7 city       <chr>    36009 0.00614    
-#>  8 state      <chr>       58 0.00000989 
-#>  9 zip        <chr>   337132 0.0575     
-#> 10 occupation <chr>    75754 0.0129     
-#> 11 emp_name   <chr>   128858 0.0220     
-#> 12 emp_addr   <chr>   225559 0.0384     
-#> 13 con_type   <chr>        9 0.00000153 
-#> 14 rec_name   <chr>     2564 0.000437   
-#> 15 ethcfid    <chr>     2569 0.000438   
-#> 16 conduit    <chr>      232 0.0000395  
-#> 17 branch     <chr>      380 0.0000648  
-#> 18 comment    <chr>    72989 0.0124     
-#> 19 seg_fund   <lgl>        2 0.000000341
-#> 20 na_flag    <lgl>        2 0.000000341
-#> 21 dupe_flag  <lgl>        2 0.000000341
+#> # A tibble: 23 × 4
+#>    col                      class        n           p
+#>    <chr>                    <chr>    <int>       <dbl>
+#>  1 transaction_date         <date>    5188 0.000748   
+#>  2 filing_period_name       <chr>      162 0.0000234  
+#>  3 contributor_first        <chr>   149599 0.0216     
+#>  4 contributor_last         <chr>   266665 0.0384     
+#>  5 contribution_amount      <dbl>    29485 0.00425    
+#>  6 address_line1            <chr>  1373593 0.198      
+#>  7 address_line2            <chr>    30853 0.00445    
+#>  8 city                     <chr>    37442 0.00540    
+#>  9 state_code               <chr>       58 0.00000836 
+#> 10 zip                      <chr>   343284 0.0495     
+#> 11 occupation               <chr>    82534 0.0119     
+#> 12 employer_name            <chr>   126085 0.0182     
+#> 13 employer_address         <chr>   222757 0.0321     
+#> 14 contributor_type         <chr>        9 0.00000130 
+#> 15 receiving_committee_name <chr>     2788 0.000402   
+#> 16 ethcfid                  <int>     2794 0.000403   
+#> 17 conduit                  <chr>      235 0.0000339  
+#> 18 branch                   <chr>      399 0.0000575  
+#> 19 comment                  <chr>    80991 0.0117     
+#> 20 x72_hr_reports           <date>     812 0.000117   
+#> 21 segregated_fund_flag     <lgl>        2 0.000000288
+#> 22 na_flag                  <lgl>        2 0.000000288
+#> 23 dupe_flag                <lgl>        3 0.000000433
+```
+
+![](../plots/distinct-plots-1.png)<!-- -->
+
+### Amounts
+
+``` r
+wic$contribution_amount <- round(wic$contribution_amount, digits = 2)
 ```
 
 ``` r
-count(wic, seg_fund, sort = TRUE)
-#> # A tibble: 2 x 2
-#>   seg_fund       n
-#>   <lgl>      <int>
-#> 1 FALSE    5863178
-#> 2 TRUE        3713
-count(wic, con_type, sort = TRUE)
-#> # A tibble: 9 x 2
-#>   con_type                n
-#>   <chr>               <int>
-#> 1 Individual        5739136
-#> 2 Registrant          62483
-#> 3 Unitemized          18147
-#> 4 Business            15501
-#> 5 Anonymous           13967
-#> 6 Self                10703
-#> 7 Unregistered         4425
-#> 8 Local Candidate      2395
-#> 9 Ethics Commission     134
-```
-
-### Continuous
-
-#### Amounts
-
-``` r
-summary(wic$amount)
+summary(wic$contribution_amount)
 #>    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
-#>       0       3      10     116      47 3250000
-mean(wic$amount <= 0)
-#> [1] 0.001980606
+#>       0       2      10     115      35 3250000
+mean(wic$contribution_amount <= 0)
+#> [1] 0.002056172
 ```
 
-![](../plots/hist_amount-1.png)<!-- -->
-
-#### Dates
-
-We can use `lubridate::year()` to add a calendar year from the date.
+These are the records with the minimum and maximum amounts.
 
 ``` r
-wic <- mutate(wic, year = year(date))
+glimpse(wic[c(
+  which.max(wic$contribution_amount), 
+  which.min(wic$contribution_amount)
+), ])
+#> Rows: 2
+#> Columns: 23
+#> $ transaction_date         <date> 2020-02-28, 2007-03-26
+#> $ filing_period_name       <chr> "Spring Pre-Election 2020", "July Continuing 2007"
+#> $ contributor_first        <chr> NA, "Annette K."
+#> $ contributor_last         <chr> "Marsy's Law for All Foundation", "Ziegler"
+#> $ contribution_amount      <dbl> 3250000, 0
+#> $ address_line1            <chr> "15 Enterprise Suite 550", "PO Box 620066"
+#> $ address_line2            <chr> NA, NA
+#> $ city                     <chr> "Aliso Viejo", "Middleton"
+#> $ state_code               <chr> "CA", "WI"
+#> $ zip                      <chr> "92656", "53562"
+#> $ occupation               <chr> NA, NA
+#> $ employer_name            <chr> NA, NA
+#> $ employer_address         <chr> NA, NA
+#> $ contributor_type         <chr> "Business", "Self"
+#> $ receiving_committee_name <chr> "Marsy's Law for Wisconsin LLC", "Justice Ziegler For Supreme C…
+#> $ ethcfid                  <int> 700120, 103567
+#> $ conduit                  <chr> NA, NA
+#> $ branch                   <chr> NA, "Supreme Court"
+#> $ comment                  <chr> NA, "All personal loans were forgiven 10/27/2007 when the commit…
+#> $ x72_hr_reports           <date> NA, NA
+#> $ segregated_fund_flag     <lgl> FALSE, FALSE
+#> $ na_flag                  <lgl> FALSE, FALSE
+#> $ dupe_flag                <lgl> FALSE, FALSE
 ```
 
-The `date` and new `year` columns are very clean.
+![](../plots/hist-amount-1.png)<!-- -->
+
+### Dates
+
+We can add the calendar year from `date` with `lubridate::year()`
 
 ``` r
-min(wic$date)
-#> [1] "2000-03-31"
-sum(wic$year < 2000)
-#> [1] 0
-max(wic$date)
-#> [1] "2020-04-07"
-sum(wic$date > today())
+wic <- mutate(wic, transaction_year = year(transaction_date))
+```
+
+``` r
+min(wic$transaction_date)
+#> [1] "1995-12-31"
+sum(wic$transaction_year < 2008)
+#> [1] 473
+max(wic$transaction_date)
+#> [1] "2021-08-04"
+sum(wic$transaction_date > today())
 #> [1] 0
 ```
 
-![](../plots/bar_year-1.png)<!-- -->
+![](../plots/bar-year-1.png)<!-- -->
 
 ## Wrangle
 
@@ -446,42 +550,45 @@ function will force consistence case, remove punctuation, and abbreviate
 official USPS suffixes.
 
 ``` r
-wic <- wic %>% 
-  unite(
-    starts_with("addr"),
-    col = addr_full,
-    sep = " ",
-    remove = FALSE,
-    na.rm = TRUE
-  ) %>% 
+addr_norm <- wic %>% 
+  distinct(address_line1, address_line2) %>% 
   mutate(
-    addr_norm = normal_address(
-      address = addr_full,
+    across(
+      starts_with("address_"),
+      list(anorm = normal_address),
       abbs = usps_street,
       na_rep = TRUE
     )
   ) %>% 
-  select(-addr_full)
+  unite(
+    col = address_norm,
+    ends_with("_anorm"),
+    sep = " ",
+    remove = TRUE,
+    na.rm = TRUE
+  )
 ```
 
 ``` r
-wic %>% 
-  select(starts_with("addr")) %>% 
-  distinct() %>% 
-  sample_n(10)
-#> # A tibble: 10 x 3
-#>    addr1                        addr2    addr_norm                      
-#>    <chr>                        <chr>    <chr>                          
-#>  1 3702 E Martin Avenue         <NA>     3702 E MARTIN AVE              
-#>  2 S5075 Lover's Ln             <NA>     S 5075 LOVERS LN               
-#>  3 N5354 Saint Helena Road      <NA>     N 5354 SAINT HELENA RD         
-#>  4 615 W Main St                Apt 108  615 W MAIN ST APT 108          
-#>  5 4415 S 5th Street            <NA>     4415 S 5 TH ST                 
-#>  6 2121 N Gooder St             <NA>     2121 N GOODER ST               
-#>  7 3005 Haxton Way              <NA>     3005 HAXTON WAY                
-#>  8 6  Brightwaters Circle NE    <NA>     6 BRIGHTWATERS CIR NE          
-#>  9 N9081 River Rd               <NA>     N 9081 RIV RD                  
-#> 10 25161 Sandpiper Greens Court Apt. 304 25161 SANDPIPER GRNS CT APT 304
+addr_norm
+#> # A tibble: 1,416,282 × 3
+#>    address_line1                 address_line2 address_norm               
+#>    <chr>                         <chr>         <chr>                      
+#>  1 W269 S3244 Merrill Hills Road <NA>          W269 S3244 MERRILL HILLS RD
+#>  2 7633 Geralayne Circle         <NA>          7633 GERALAYNE CIR         
+#>  3 8819 Whispering Oaks Court    <NA>          8819 WHISPERING OAKS CT    
+#>  4 N26779 County Road T          <NA>          N26779 COUNTY ROAD T       
+#>  5 3032 Walden Circle            <NA>          3032 WALDEN CIR            
+#>  6 2845 North 68th Street        <NA>          2845 NORTH 68TH ST         
+#>  7 3033 W. Spencer St.           <NA>          3033 W SPENCER ST          
+#>  8 823 East Sunset Avenue        <NA>          823 EAST SUNSET AVE        
+#>  9 2520 Settlement Road          <NA>          2520 SETTLEMENT RD         
+#> 10 8348 South 68th Street        <NA>          8348 SOUTH 68TH ST         
+#> # … with 1,416,272 more rows
+```
+
+``` r
+wic <- left_join(wic, addr_norm, by = c("address_line1", "address_line2"))
 ```
 
 ### ZIP
@@ -506,54 +613,19 @@ progress_table(
   wic$zip_norm,
   compare = valid_zip
 )
-#> # A tibble: 2 x 6
-#>   stage    prop_in n_distinct prop_na   n_out n_diff
-#>   <chr>      <dbl>      <dbl>   <dbl>   <dbl>  <dbl>
-#> 1 zip        0.708     337132  0.0144 1687471 310954
-#> 2 zip_norm   0.997      32680  0.0146   17674   4143
+#> # A tibble: 2 × 6
+#>   stage        prop_in n_distinct prop_na   n_out n_diff
+#>   <chr>          <dbl>      <dbl>   <dbl>   <dbl>  <dbl>
+#> 1 wic$zip        0.698     343284  0.0137 2065639 316832
+#> 2 wic$zip_norm   0.997      33091  0.0139   18633   4341
 ```
 
 ### State
 
-Valid two digit state abbreviations can be made using the
-`campfin::normal_state()` function.
-
 ``` r
-wic <- wic %>% 
-  mutate(
-    state_norm = normal_state(
-      state = state,
-      abbreviate = TRUE,
-      na_rep = TRUE,
-      valid = valid_state
-    )
-  )
-```
-
-``` r
-wic %>% 
-  filter(state != state_norm) %>% 
-  count(state, state_norm, sort = TRUE)
-#> # A tibble: 4 x 3
-#>   state state_norm     n
-#>   <chr> <chr>      <int>
-#> 1 Wi    WI            63
-#> 2 Mn    MN             6
-#> 3 Il    IL             3
-#> 4 wi    WI             1
-```
-
-``` r
-progress_table(
-  wic$state,
-  wic$state_norm,
-  compare = valid_state
-)
-#> # A tibble: 2 x 6
-#>   stage      prop_in n_distinct prop_na n_out n_diff
-#>   <chr>        <dbl>      <dbl>   <dbl> <dbl>  <dbl>
-#> 1 state         1.00         58 0.00652    73      5
-#> 2 state_norm    1            54 0.00652     0      1
+wic$state_code <- str_to_upper(wic$state_code)
+prop_in(wic$state_code, valid_state)
+#> [1] 1
 ```
 
 ### City
@@ -568,16 +640,17 @@ case, removing punctuation, but *expanding* USPS abbreviations. We can
 also remove `invalid_city` values.
 
 ``` r
-wic <- mutate(
-  .data = wic,
-  city_norm = normal_city(
-    city = city, 
-    abbs = usps_city,
-    states = c("WI", "DC", "WISCONSIN"),
-    na = invalid_city,
-    na_rep = TRUE
+norm_city <- wic %>% 
+  distinct(city, state_code, zip_norm) %>% 
+  mutate(
+    city_norm = normal_city(
+      city = city, 
+      abbs = usps_city,
+      states = c("WI", "DC", "WISCONSIN"),
+      na = invalid_city,
+      na_rep = TRUE
+    )
   )
-)
 ```
 
 #### Swap
@@ -588,22 +661,20 @@ ZIP code. If the normalized value is either an abbreviation for or very
 similar to the expected value, we can confidently swap those two.
 
 ``` r
-wic <- wic %>% 
+norm_city <- norm_city %>% 
   rename(city_raw = city) %>% 
   left_join(
     y = zipcodes,
     by = c(
-      "state_norm" = "state",
+      "state_code" = "state",
       "zip_norm" = "zip"
     )
   ) %>% 
   rename(city_match = city) %>% 
   mutate(
-    # check for abb or small diff
     match_abb = is_abbrev(city_norm, city_match),
     match_dist = str_dist(city_norm, city_match),
     city_swap = if_else(
-      # if nan and either condition
       condition = !is.na(match_dist) & (match_abb | match_dist == 1),
       true = city_match,
       false = city_norm
@@ -614,6 +685,18 @@ wic <- wic %>%
     -match_dist,
     -match_abb
   )
+```
+
+``` r
+wic <- left_join(
+  x = wic,
+  y = norm_city,
+  by = c(
+    "city" = "city_raw", 
+    "state_code", 
+    "zip_norm"
+  )
+)
 ```
 
 #### Refine
@@ -636,70 +719,61 @@ good_refine <- wic %>%
     y = zipcodes,
     by = c(
       "city_refine" = "city",
-      "state_norm" = "state",
+      "state_code" = "state",
       "zip_norm" = "zip"
     )
   )
 ```
 
-    #> [1] 631
-    #> # A tibble: 326 x 5
-    #>    state_norm zip_norm city_swap        city_refine         n
+    #> # A tibble: 378 × 5
+    #>    state_code zip_norm city_swap        city_refine         n
     #>    <chr>      <chr>    <chr>            <chr>           <int>
     #>  1 WI         54873    SOLON SPRINGSSS  SOLON SPRINGS      35
-    #>  2 WI         53051    MENONOMEE FALLS  MENOMONEE FALLS    23
-    #>  3 WI         54751    MENOMINEE        MENOMONIE          22
-    #>  4 CA         92625    CORONA DALE MAR  CORONA DEL MAR     13
-    #>  5 IL         60030    GREYS LAKE       GRAYSLAKE          12
-    #>  6 WI         54751    MENONOMIE        MENOMONIE          12
-    #>  7 CA         90292    MARINA DALE REY  MARINA DEL REY     11
-    #>  8 SC         29406    NORTH CHARLESTON CHARLESTON         10
-    #>  9 WI         54956    NEEHAN           NEENAH             10
-    #> 10 CA         95060    SANATA CRUZ CA   SANTA CRUZ          9
-    #> # … with 316 more rows
+    #>  2 WI         54751    MENOMINEE        MENOMONIE          27
+    #>  3 WI         53051    MENONOMEE FALLS  MENOMONEE FALLS    24
+    #>  4 WI         53566    MNRO MONROE      MONROE             14
+    #>  5 CA         92625    CORONA DALE MAR  CORONA DEL MAR     13
+    #>  6 WI         54751    MENONOMIE        MENOMONIE          13
+    #>  7 CA         90292    MARINA DALE REY  MARINA DEL REY     12
+    #>  8 IL         60030    GREYS LAKE       GRAYSLAKE          12
+    #>  9 SC         29406    NORTH CHARLESTON CHARLESTON         10
+    #> 10 WI         54956    NEEHAN           NEENAH             10
+    #> # … with 368 more rows
 
 Then we can join the refined values back to the database.
 
 ``` r
 wic <- wic %>% 
-  left_join(good_refine) %>% 
+  left_join(good_refine, by = names(.)) %>% 
   mutate(city_refine = coalesce(city_refine, city_swap))
-```
-
-There are one or two more very common values we can adjust by hand.
-
-``` r
-wic <- wic %>% 
-  mutate(
-    city_refine = city_refine %>% 
-      na_if("WORK AT HOME") %>% 
-      na_if("WI") %>% 
-      str_replace("^NYC$", "NEW YORK") %>% 
-      str_replace("TRIANGLE PA$", "TRIANGLE PARK")
-  )
 ```
 
 #### Progress
 
-| stage        | prop\_in | n\_distinct | prop\_na | n\_out | n\_diff |
-| :----------- | -------: | ----------: | -------: | -----: | ------: |
-| city\_raw)   |    0.981 |       25778 |    0.011 | 111750 |   12025 |
-| city\_norm   |    0.988 |       23746 |    0.011 |  70363 |    9951 |
-| city\_swap   |    0.996 |       17940 |    0.011 |  24047 |    4140 |
-| city\_refine |    0.996 |       17664 |    0.011 |  20790 |    3866 |
+Our goal for normalization was to increase the proportion of city values
+known to be valid and reduce the total distinct values by correcting
+misspellings.
+
+| stage                    | prop_in | n_distinct | prop_na |  n_out | n_diff |
+|:-------------------------|--------:|-----------:|--------:|-------:|-------:|
+| `str_to_upper(wic$city)` |   0.980 |      26707 |   0.010 | 134879 |  12872 |
+| `wic$city_norm`          |   0.985 |      24901 |   0.011 | 100788 |  11030 |
+| `wic$city_swap`          |   0.995 |      18581 |   0.011 |  31413 |   4707 |
+| `wic$city_refine`        |   0.996 |      18268 |   0.011 |  30725 |   4397 |
 
 You can see how the percentage of valid values increased with each
 stage.
 
-![](../plots/bar_progress-1.png)<!-- -->
+![](../plots/bar-progress-1.png)<!-- -->
 
 More importantly, the number of distinct values decreased each stage. We
 were able to confidently change many distinct invalid values to their
 valid equivalent.
 
-![](../plots/bar_distinct-1.png)<!-- -->
+![](../plots/bar-distinct-1.png)<!-- -->
 
-## Export
+Before exporting, we can remove the intermediary normalization columns
+and rename all added variables with the `_clean` suffix.
 
 ``` r
 wic <- wic %>% 
@@ -709,99 +783,85 @@ wic <- wic %>%
     city_clean = city_refine
   ) %>% 
   rename_all(~str_replace(., "_norm", "_clean")) %>% 
-  rename(city = city_raw)
+  rename_all(~str_remove(., "_raw")) %>% 
+  relocate(address_clean, city_clean, .before = zip_clean)
 ```
+
+## Conclude
 
 ``` r
-glimpse(sample_n(wic, 20))
-#> Rows: 20
-#> Columns: 26
-#> $ date        <date> 2009-05-21, 2016-12-31, 2014-10-12, 2018-03-31, 2012-04-18, 2009-04-13, 201…
-#> $ period      <chr> "July Continuing 2009", "January Continuing 2017", "Fall Pre-Election 2014",…
-#> $ con_name    <chr> "HORNING  DAVID", "SLOAN  DAVA T", "Partain  Peter", "Hanson  Joshua", "Lond…
-#> $ amount      <dbl> 3.00, 1.50, 250.00, 30.00, 25.00, 25.00, 100.00, 25.00, 20.00, 500.00, 4.00,…
-#> $ addr1       <chr> "W305 N5200 GAIL LN", "9500 N GREEN BAY RD", "15332 Antioch Street Ste 490",…
-#> $ addr2       <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
-#> $ city        <chr> "HARTLAND", "BROWN DEER", "Pacific Palisades", "Beldenville", "Anthem", "Kew…
-#> $ state       <chr> "WI", "WI", "CA", "WI", "AZ", "WI", "WI", "OR", "WI", "WI", "WI", "WI", "WI"…
-#> $ zip         <chr> "53029", "53209-1075", "90272", "54003", "85086-3920", "53040", "54669", "97…
-#> $ occupation  <chr> "Administrative Professional - Telephone", NA, "MANAGER", NA, NA, "Other - R…
-#> $ emp_name    <chr> "AT&T Services  Inc.", NA, "Self", NA, NA, NA, NA, NA, "Mark Mand Excavating…
-#> $ emp_addr    <chr> "722 N BROADWAY  6M119C  MILWAUKEE  WI 53202", NA, "15332 Antioch Street Ste…
-#> $ con_type    <chr> "Individual", "Individual", "Individual", "Individual", "Individual", "Indiv…
-#> $ rec_name    <chr> "AT&T Wisconsin Employee PAC", "WEAC PAC", "Friends of Scott Walker", "Wisco…
-#> $ ethcfid     <chr> "0500366", "0500189", "0102575", "0300245", "0102575", "0102575", "0300096",…
-#> $ conduit     <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
-#> $ branch      <chr> NA, NA, "Governor", NA, "Governor", "Governor", NA, "Governor", NA, NA, NA, …
-#> $ comment     <chr> NA, "eDues including EFT  Credit Card and/or Check from 9/1 to 12/31/2016", …
-#> $ seg_fund    <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE,…
-#> $ na_flag     <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE,…
-#> $ dupe_flag   <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE,…
-#> $ year        <dbl> 2009, 2016, 2014, 2018, 2012, 2009, 2017, 2012, 2009, 2018, 2019, 2017, 2017…
-#> $ addr_clean  <chr> "W 305 N 5200 GAIL LN", "9500 N GRN BAY RD", "15332 ANTIOCH ST STE 490", "N …
-#> $ zip_clean   <chr> "53029", "53209", "90272", "54003", "85086", "53040", "54669", "97035", "530…
-#> $ state_clean <chr> "WI", "WI", "CA", "WI", "AZ", "WI", "WI", "OR", "WI", "WI", "WI", "WI", "WI"…
-#> $ city_clean  <chr> "HARTLAND", "BROWN DEER", "PACIFIC PALISADES", "BELDENVILLE", "ANTHEM", "KEW…
+glimpse(sample_n(wic, 50))
+#> Rows: 50
+#> Columns: 27
+#> $ transaction_date         <date> 2015-02-11, 2011-03-17, 2011-05-15, 2012-02-24, 2015-05-11, 201…
+#> $ filing_period_name       <chr> "July Continuing 2015", "Spring Pre-Election 2011", "July Contin…
+#> $ contributor_first        <chr> "David", "David", "Joan", "Leonard", "John", "JOSLYN E", "Larry"…
+#> $ contributor_last         <chr> "Ferguson", "Feiss", "Honig", "Sobczak", "Maier", "OLSON", "Pres…
+#> $ contribution_amount      <dbl> 25.00, 100.00, 6.25, 5000.00, 50.00, 0.17, 3.00, 4.00, 25.00, 5.…
+#> $ address_line1            <chr> "530 S David Ln", "7915 Mary Ellen Pl", "3300 Darby Rd. #7305", …
+#> $ address_line2            <chr> NA, NA, NA, NA, NA, NA, "WI1-4042", NA, NA, "P.O. Box 2306", NA,…
+#> $ city                     <chr> "Knoxville", "Milwaukee", "Haverford", "Milwaukee", "Roscoe", "A…
+#> $ state_code               <chr> "TN", "WI", "PA", "WI", "IL", "WI", "WI", "WI", "WI", "WI", "WI"…
+#> $ zip                      <chr> "37922", "53213-3470", "19041", "53211-4314", "61073", "54806-22…
+#> $ occupation               <chr> "RETIRED", NA, NA, "REAL ESTATE", "ATTORNEY", NA, NA, NA, "Nurse…
+#> $ employer_name            <chr> NA, NA, NA, "Eastmore Real Estate", NA, NA, NA, NA, NA, "PBC", N…
+#> $ employer_address         <chr> NA, NA, NA, "3287 N Oakland Ave Milwaukee WI 53211", NA, NA, NA,…
+#> $ contributor_type         <chr> "Individual", "Individual", "Individual", "Individual", "Individ…
+#> $ receiving_committee_name <chr> "Friends of Scott Walker", "State Senate Democratic Comm", "Frie…
+#> $ ethcfid                  <int> 102575, 400003, 102813, 300054, 102575, 500132, 500847, 500189, …
+#> $ conduit                  <chr> NA, "ActBlue Wisconsin", "ActBlue Wisconsin", NA, NA, NA, NA, NA…
+#> $ branch                   <chr> "Governor", NA, "State Senate District No. 22", NA, "Governor", …
+#> $ comment                  <chr> NA, NA, NA, "recall", NA, "eDues including EFT Credit Card and/o…
+#> $ x72_hr_reports           <date> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
+#> $ segregated_fund_flag     <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, F…
+#> $ na_flag                  <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, F…
+#> $ dupe_flag                <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, F…
+#> $ transaction_year         <dbl> 2015, 2011, 2011, 2012, 2015, 2018, 2012, 2020, 2019, 2013, 2013…
+#> $ address_clean            <chr> "530 S DAVID LN", "7915 MARY ELLEN PL", "3300 DARBY RD 7305", "2…
+#> $ city_clean               <chr> "KNOXVILLE", "MILWAUKEE", "HAVERFORD", "MILWAUKEE", "ROSCOE", "A…
+#> $ zip_clean                <chr> "37922", "53213", "19041", "53211", "61073", "54806", "53202", "…
 ```
 
-1.  There are 5,866,895 records in the database.
-2.  There are 95,746 duplicate records in the database.
+1.  There are 6,936,193 records in the database.
+2.  There are NA duplicate records in the database.
 3.  The range and distribution of `amount` and `date` seem reasonable.
-4.  There are 8 records missing a key variable.
+4.  There are 7 records missing key variables.
 5.  Consistency in geographic data has been improved with
     `campfin::normal_*()`.
 6.  The 4-digit `year` variable has been created with
     `lubridate::year()`.
 
-<!-- end list -->
+## Export
+
+Now the file can be saved on disk for upload to the Accountability
+server.
 
 ``` r
 clean_dir <- dir_create(here("wi", "contribs", "data", "clean"))
-clean_path <- path(clean_dir, "wi_contribs_clean.csv")
+clean_path <- path(clean_dir, "wi_contribs_2008-20211018.csv")
 write_csv(wic, clean_path, na = "")
-file_size(clean_path)
-#> 1.32G
-guess_encoding(clean_path)
-#> # A tibble: 1 x 2
-#>   encoding confidence
-#>   <chr>         <dbl>
-#> 1 ASCII             1
+(clean_size <- file_size(clean_path))
+#> 1.52G
 ```
 
-## Dictionary
+## Upload
 
-| Column        | Type     | Definition                                  |
-| :------------ | :------- | :------------------------------------------ |
-| `date`        | `<date>` | Date contribution was made                  |
-| `period`      | `<chr>`  | Election during which contribution was made |
-| `con_name`    | `<chr>`  | Contributor full name                       |
-| `amount`      | `<dbl>`  | Contribution amount or correction           |
-| `addr1`       | `<chr>`  | Contributor street address                  |
-| `addr2`       | `<chr>`  | Contributor secondary address               |
-| `city`        | `<chr>`  | Contributor city name                       |
-| `state`       | `<chr>`  | Contributor 2-digit state abbreviation      |
-| `zip`         | `<chr>`  | Contributor ZIP+4 code                      |
-| `occupation`  | `<chr>`  | Contributor occupation                      |
-| `emp_name`    | `<chr>`  | Contributor employer name                   |
-| `emp_addr`    | `<chr>`  | Contributor employer address                |
-| `con_type`    | `<chr>`  | Contributor type                            |
-| `rec_name`    | `<chr>`  | Recipient committee name                    |
-| `ethcfid`     | `<chr>`  | Recipient ethics & campaign finance ID      |
-| `conduit`     | `<chr>`  | Contribution condiut (method)               |
-| `branch`      | `<chr>`  | Recipient election office sought            |
-| `comment`     | `<chr>`  | Comment (typically check date)              |
-| `seg_fund`    | `<lgl>`  | PAC segregated fund sourced                 |
-| `na_flag`     | `<lgl>`  | Flag for missing date, amount, or name      |
-| `dupe_flag`   | `<lgl>`  | Flag for completely duplicated record       |
-| `year`        | `<dbl>`  | Calendar year of contribution date          |
-| `addr_clean`  | `<chr>`  | Normalized combined street address          |
-| `zip_clean`   | `<chr>`  | Normalized 5-digit ZIP code                 |
-| `state_clean` | `<chr>`  | Normalized 2-digit state abbreviation       |
-| `city_clean`  | `<chr>`  | Normalized city name                        |
+We can use the `aws.s3::put_object()` to upload the text file to the IRW
+server.
 
 ``` r
-write_lines(
-  x = c("# Wisconsin Contributions Data Dictionary\n", dict_md),
-  path = here("wi", "contribs", "wi_contribs_dict.md"),
-)
+aws_path <- path("csv", basename(clean_path))
+if (!object_exists(aws_path, "publicaccountability")) {
+  put_object(
+    file = clean_path,
+    object = aws_path, 
+    bucket = "publicaccountability",
+    acl = "public-read",
+    show_progress = TRUE,
+    multipart = TRUE
+  )
+}
+aws_head <- head_object(aws_path, "publicaccountability")
+(aws_size <- as_fs_bytes(attr(aws_head, "content-length")))
+unname(aws_size == clean_size)
 ```
