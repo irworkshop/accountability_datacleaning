@@ -1,12 +1,12 @@
 ---
 title: "Wyoming Contributions"
 author: "Kiernan Nicholls"
-date: "`r Sys.time()`"
+date: "`r date()`"
 output:
   github_document: 
     df_print: tibble
     toc: true
-    toc_dept: 2
+    toc_dept: 3
 editor_options: 
   chunk_output_type: console
 ---
@@ -27,12 +27,14 @@ opts_chunk$set(
   fig.width = 10,
   dpi = 300
 )
-options(width = 99)
-set.seed(5)
+if (!interactive()) {
+  options(width = 120)
+  set.seed(5)
+}
 ```
 
-```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
-fs::dir_create(here::here("wy", "contribs", "docs"))
+```{r create-docs-dir, eval=FALSE, echo=FALSE, include=FALSE}
+doc_dir <- fs::dir_create(here::here("wy", "contribs", "docs"))
 ```
 
 ## Project
@@ -41,7 +43,7 @@ The Accountability Project is an effort to cut across data silos and give
 journalists, policy professionals, activists, and the public at large a simple
 way to search across huge volumes of public data about people and organizations.
 
-Our goal is to standardizing public data on a few key fields by thinking of each
+Our goal is to standardize public data on a few key fields by thinking of each
 dataset row as a transaction. For each transaction there should be (at least) 3
 variables:
 
@@ -68,26 +70,31 @@ The following packages are needed to collect, manipulate, visualize, analyze,
 and communicate these results. The `pacman` package will facilitate their
 installation and attachment.
 
-The IRW's `campfin` package will also have to be installed from GitHub. This
-package contains functions custom made to help facilitate the processing of
-campaign finance data.
-
-```{r load_packages, message=FALSE, warning=FALSE, error=FALSE}
-if (!require("pacman")) install.packages("pacman")
-pacman::p_load_gh("irworkshop/campfin")
+```{r load-packages, message=FALSE, warning=FALSE, error=FALSE}
+if (!require("pacman")) {
+  install.packages("pacman")
+}
 pacman::p_load(
   tidyverse, # data manipulation
   lubridate, # datetime strings
-  magrittr, # pipe operators
-  janitor, # dataframe clean
-  refinr, # cluster and merge
+  gluedown, # printing markdown
+  janitor, # clean data frames
+  campfin, # custom irw tools
+  aws.s3, # aws cloud storage
+  refinr, # cluster & merge
   scales, # format strings
   knitr, # knit documents
-  vroom, # read files fast
-  glue, # combine strings
-  here, # relative storage
-  fs # search storage 
+  vroom, # fast reading
+  rvest, # scrape html
+  glue, # code strings
+  here, # project paths
+  httr, # http requests
+  fs # local storage 
 )
+```
+
+```{r package-options, echo=FALSE}
+options(options(knitr.kable.NA = ""))
 ```
 
 This document should be run as part of the `R_campfin` project, which lives as a
@@ -98,15 +105,15 @@ The `R_campfin` project uses the [RStudio projects][rproj] feature and should be
 run as such. The project also uses the dynamic `here::here()` tool for file
 paths relative to _your_ machine.
 
-```{r where_here}
+```{r where-here}
 # where does this document knit?
-here::here()
+here::i_am("wy/contribs/docs/wy_contribs_diary.Rmd")
 ```
 
 [tap]: https://github.com/irworkshop/accountability_datacleaning
 [rproj]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects
 
-## Data
+## Source
 
 Data is obtained from the Wyoming Secretary of State's Campaign Finance System
 (WYCIFS).
@@ -117,7 +124,7 @@ disclosure to the public. This website contains detailed financial records and
 related information that candidates, committees, organizations and parties are
 required by law to disclose.
 
-## Import
+## Download
 
 Using the WYCIFS [contribution search portal][search], we can run an empty
 search and return all contributions from "All" sources. Those search results
@@ -125,71 +132,133 @@ need to be manually exported as the `ExportContributions` file.
 
 [search]: https://www.wycampaignfinance.gov/WYCFWebApplication/GSF_SystemConfiguration/SearchContributions.aspx
 
-```{r raw_dir}
+```{r raw-info}
 raw_dir <- dir_create(here("wy", "contribs", "data", "raw"))
-raw_file <- path(raw_dir, "ExportContributions")
+raw_txt <- dir_ls(raw_dir, glob = "*.txt")
+file_size(raw_txt)
 ```
 
-```{r raw_download}
-wyc <- vroom(
-  file = raw_file,
-  .name_repair = make_clean_names,
+## Read
+
+```{r raw-read}
+wyc <- read_delim(
+  file = raw_txt,
+  delim = ",",
+  escape_backslash = FALSE,
+  escape_double = FALSE,
   col_types = cols(
     .default = col_character(),
-    Date = col_date_usa(),
-    Amount = col_double(),
+    Date = col_date_mdy(),
+    Amount = col_double()
   )
 )
 ```
 
+```{r clean-names}
+wyc <- clean_names(wyc, case = "snake")
+```
+
 ## Explore
 
+There are `r comma(nrow(wyc))` rows of `r ncol(wyc)` columns. Each record
+represents a single contribution from an individual or business to a political
+committee.
+
 ```{r glimpse}
-head(wyc)
+glimpse(wyc)
 tail(wyc)
-glimpse(sample_n(wyc, 20))
+```
+
+## Separate
+
+```{r raw-split}
+wyc <- wyc %>% 
+  extract(
+    col = contributor_name,
+    into = c("contributor_name", "contributor_city"),
+    regex = "^(.*)\\s\\((.*)\\)$",
+    remove = TRUE
+  ) %>% 
+  extract(
+    col = "city_state_zip",
+    into = c("city_split", "state_split", "zip_split"),
+    regex = "^(.*), (.*) (.*)$",
+    remove = FALSE
+  ) %>% 
+  mutate(across(where(is.character), str_squish)) %>% 
+  mutate(across(where(is.character), na_if, ""))
 ```
 
 ### Missing
 
-```{r na_count}
+Columns vary in their degree of missing values.
+
+```{r na-count}
 col_stats(wyc, count_na)
 ```
 
-```{r na_flag}
-wyc <- wyc %>% flag_na(date, contributor_name, amount, recipient_name)
+We can flag any record missing a key variable needed to identify a transaction.
+
+```{r na-flag}
+key_vars <- c("date", "contributor_name", "amount", "recipient_name")
+wyc <- flag_na(wyc, all_of(key_vars))
 mean(wyc$na_flag)
+sum(wyc$na_flag)
+```
+
+```{r na-view}
+wyc %>% 
+  filter(na_flag) %>% 
+  select(all_of(key_vars))
 ```
 
 ### Duplicates
 
-```{r dupe_flag}
-wyc <- flag_dupes(wyc, everything(), .check = TRUE)
+We can also flag any record completely duplicated across every column.
+
+```{r dupe-flag}
+wyc <- flag_dupes(wyc, everything())
 mean(wyc$dupe_flag)
+sum(wyc$dupe_flag)
 ```
 
-```{r dupe_view}
+```{r dupe-view}
 wyc %>% 
   filter(dupe_flag) %>% 
-  select(date, contributor_name, amount, recipient_name)
+  select(all_of(key_vars)) %>% 
+  arrange(date)
 ```
 
 ### Categorical
 
-```{r n_distinct}
+```{r distinct-count}
 col_stats(wyc, n_distinct)
 ```
 
-### Continuous
+```{r distinct-plots, echo=FALSE}
+explore_plot(wyc, recipient_type)
+explore_plot(wyc, contribution_type)
+explore_plot(wyc, filing_status)
+```
 
-#### Amounts
+### Amounts
 
-```{r ammount_summary}
+```{r amount-round}
+wyc$amount <- round(wyc$amount, digits = 2)
+```
+
+```{r amount-summary}
 summary(wyc$amount)
 mean(wyc$amount <= 0)
 ```
 
-```{r hist_amount, echo=FALSE}
+These are the records with the minimum and maximum amounts.
+
+```{r amount-minmax}
+glimpse(wyc[c(which.max(wyc$amount), which.min(wyc$amount)), ])
+```
+
+```{r hist-amount, echo=FALSE}
 wyc %>%
   ggplot(aes(amount)) +
   geom_histogram(fill = dark2["purple"]) +
@@ -207,20 +276,22 @@ wyc %>%
   )
 ```
 
-#### Dates
+### Dates
 
-```{r date_year}
+We can add the calendar year from `date` with `lubridate::year()`
+
+```{r date-year}
 wyc <- mutate(wyc, year = year(date))
 ```
 
-```{r date_range}
+```{r date-range}
 min(wyc$date)
 sum(wyc$year < 2000)
 max(wyc$date)
 sum(wyc$date > today())
 ```
 
-```{r bar_year, echo=FALSE}
+```{r bar-year, echo=FALSE}
 wyc %>% 
   count(year) %>% 
   mutate(even = is_even(year)) %>% 
@@ -246,64 +317,10 @@ confident string normalization. For geographic variables like city names and
 ZIP codes, the corresponding `campfin::normal_*()` functions are tailor made to 
 facilitate this process.
 
-The `city_state_zip` valriable contains all three geographic variables, aside
-from a street address, which is not present.
-
-We can split these three variables using `tidyr::separate()` and regular
-expressions.
-
-```{r geo_split}
-wyc <- wyc %>% 
-  separate(
-    col = city_state_zip,
-    into = c("city", "state_zip"),
-    sep = ",\\s(?=[:upper:]{2}\\s\\d+)",
-    fill = "right",
-    extra = "merge"
-  ) %>% 
-  separate(
-    col = state_zip,
-    into = c("state", "zip"),
-    sep = "\\s(?=\\d+)",
-    extra = "merge"
-  )
-```
-
 ### ZIP
 
-For ZIP codes, the `campfin::normal_zip()` function will attempt to create
-valid _five_ digit codes by removing the ZIP+4 suffix and returning leading
-zeroes dropped by other programs like Microsoft Excel.
-
-```{r zip_norm}
-wyc <- wyc %>% 
-  mutate(
-    zip_norm = normal_zip(
-      zip = zip,
-      na_rep = TRUE
-    )
-  )
-```
-
-```{r zip_progress}
-progress_table(
-  wyc$zip,
-  wyc$zip_norm,
-  compare = valid_zip
-)
-```
-
-This new variable does not improve anything on the original, so it does not need
-to be created.
-
-```{r zip_remove}
-wyc <- select(wyc, -zip_norm)
-```
-
-### State
-
-```{r state_check}
-prop_in(wyc$state, valid_state)
+```{r zip-na}
+wyc$zip_split <- na_rep(wyc$zip_split)
 ```
 
 ### City
@@ -317,11 +334,12 @@ The `campfin::normal_city()` function is a good start, again converting case,
 removing punctuation, but _expanding_ USPS abbreviations. We can also remove
 `invalid_city` values.
 
-```{r city_norm}
-wyc <- wyc %>% 
+```{r city-norm}
+norm_city <- wyc %>% 
+  distinct(city_split, state_split, zip_split) %>% 
   mutate(
     city_norm = normal_city(
-      city = city, 
+      city = city_split, 
       abbs = usps_city,
       states = c("WY", "DC", "WYOMING"),
       na = invalid_city,
@@ -337,12 +355,14 @@ against the _expected_ value for that record's state abbreviation and ZIP code.
 If the normalized value is either an abbreviation for or very similar to the
 expected value, we can confidently swap those two.
 
-```{r city_swap}
-wyc <- wyc %>% 
-  rename(city_raw = city) %>% 
+```{r city-swap}
+norm_city <- norm_city %>% 
   left_join(
     y = zipcodes,
-    by = c("state", "zip")
+    by = c(
+      "state_split" = "state",
+      "zip_split" = "zip"
+    )
   ) %>% 
   rename(city_match = city) %>% 
   mutate(
@@ -361,16 +381,28 @@ wyc <- wyc %>%
   )
 ```
 
+```{r city-rejoin}
+wyc <- left_join(
+  x = wyc,
+  y = norm_city,
+  by = c(
+    "city_split", 
+    "state_split", 
+    "zip_split"
+  )
+)
+```
+
 #### Refine
 
-The [OpenRefine] algorithms can be used to group similar strings and replace the
-less common versions with their most common counterpart. This can greatly 
+The [OpenRefine][or] algorithms can be used to group similar strings and replace
+the less common versions with their most common counterpart. This can greatly
 reduce inconsistency, but with low confidence; we will only keep any refined
 strings that have a valid city/state/zip combination.
 
 [or]: https://openrefine.org/
 
-```{r city_refine}
+```{r city-refine}
 good_refine <- wyc %>% 
   mutate(
     city_refine = city_swap %>% 
@@ -380,15 +412,19 @@ good_refine <- wyc %>%
   filter(city_refine != city_swap) %>% 
   inner_join(
     y = zipcodes,
-    by = c("city_refine" = "city", "state", "zip")
+    by = c(
+      "city_refine" = "city",
+      "state_split" = "state",
+      "zip_split" = "zip"
+    )
   )
 ```
 
-```{r city_count, echo=FALSE}
+```{r city-count, echo=FALSE}
 good_refine %>%
   count(
-    state, 
-    zip, 
+    state_split, 
+    zip_split, 
     city_swap, 
     city_refine,
     sort = TRUE
@@ -397,29 +433,35 @@ good_refine %>%
 
 Then we can join the refined values back to the database.
 
-```{r city_join}
+```{r city-join}
 wyc <- wyc %>% 
-  left_join(good_refine) %>% 
+  left_join(good_refine, by = names(.)) %>% 
   mutate(city_refine = coalesce(city_refine, city_swap))
 ```
 
 #### Progress
 
-```{r city_progress, echo=FALSE}
+Our goal for normalization was to increase the proportion of city values known
+to be valid and reduce the total distinct values by correcting misspellings.
+
+```{r city-progress, echo=FALSE}
 many_city <- c(valid_city, extra_city)
 progress <- progress_table(
-  str_to_upper(wyc$city_raw),
+  str_to_upper(wyc$city_split),
   wyc$city_norm,
   wyc$city_swap,
+  wyc$city_refine,
   compare = many_city
 ) %>% mutate(stage = as_factor(stage))
-kable(progress, digits = 3)
+progress %>% 
+    mutate(across(stage, md_code)) %>% 
+    kable(digits = 3)
 ```
 
 You can see how the percentage of valid values increased with each stage.
 
-```{r bar_progress, echo=FALSE}
-raw_in <- percent(prop_in(wyc$city_raw, valid_city))
+```{r bar-progress, echo=FALSE}
+raw_in <- percent(prop_in(wyc$city_split, valid_city))
 progress %>% 
   ggplot(aes(x = stage, y = prop_in)) +
   geom_hline(yintercept = 0.99) +
@@ -438,7 +480,7 @@ More importantly, the number of distinct values decreased each stage. We were
 able to confidently change many distinct invalid values to their valid
 equivalent.
 
-```{r bar_distinct, echo=FALSE}
+```{r bar-distinct, echo=FALSE}
 progress %>% 
   select(
     stage, 
@@ -462,35 +504,85 @@ progress %>%
   )
 ```
 
-## Conclude
+Before exporting, we can remove the intermediary normalization columns and
+rename all added variables with the `_clean` suffix.
 
-```{r clean_select}
+```{r clean-select}
 wyc <- wyc %>% 
   select(
+    -city_split,
     -city_norm,
     -city_swap,
     city_clean = city_refine
   ) %>% 
-  rename_all(~str_replace(., "_norm", "_clean"))
+  rename_all(~str_replace(., "_split", "_clean")) %>% 
+  rename_all(~str_remove(., "_raw")) %>% 
+  relocate(city_clean, state_clean, zip_clean, .after = year)
 ```
 
-```{r clean_glimpse}
-glimpse(sample_n(wyc, 20))
+## Conclude
+
+```{r clean-glimpse}
+glimpse(sample_n(wyc, 50))
 ```
 
 1. There are `r comma(nrow(wyc))` records in the database.
 1. There are `r comma(sum(wyc$dupe_flag))` duplicate records in the database.
 1. The range and distribution of `amount` and `date` seem reasonable.
-1. There are `r comma(sum(wyc$na_flag))` records missing ....
+1. There are `r comma(sum(wyc$na_flag))` records missing key variables.
 1. Consistency in geographic data has been improved with `campfin::normal_*()`.
 1. The 4-digit `year` variable has been created with `lubridate::year()`.
 
 ## Export
 
-```{r clean_dir}
+Now the file can be saved on disk for upload to the Accountability server.
+
+```{r clean-dir}
 clean_dir <- dir_create(here("wy", "contribs", "data", "clean"))
-clean_path <- path(clean_dir, "wy_contribs_clean.csv")
-write_csv(wyc, clean_path, na = "")
-file_size(clean_path)
-guess_encoding(clean_path)
+clean_csv <- path(clean_dir, "wy_contribs_20081216-20201231.csv")
+write_csv(wyc, clean_csv, na = "")
+(clean_size <- file_size(clean_csv))
+```
+
+## Upload
+
+We can use the `aws.s3::put_object()` to upload the text file to the IRW server.
+
+```{r aws-upload, eval=FALSE}
+aws_csv <- path("csv", basename(clean_csv))
+if (!object_exists(aws_csv, "publicaccountability")) {
+  put_object(
+    file = clean_csv,
+    object = aws_csv, 
+    bucket = "publicaccountability",
+    acl = "public-read",
+    show_progress = TRUE,
+    multipart = TRUE
+  )
+}
+aws_head <- head_object(aws_csv, "publicaccountability")
+(aws_size <- as_fs_bytes(attr(aws_head, "content-length")))
+unname(aws_size == clean_size)
+```
+
+## Dictionary
+
+The following table describes the variables in our final exported file:
+
+```{r dict-make, echo=FALSE}
+dict_raw <- tibble(
+  var = md_code(names(wyc)),
+  type = md_code(map_chr(wyc, typeof)),
+  def = c(
+    ""
+  )
+)
+```
+
+```{r dict-md, echo=FALSE}
+(dict_md <- kable(
+  x = dict_raw,
+  format = "markdown",
+  col.names = c("Column", "Type", "Definition")
+))
 ```
