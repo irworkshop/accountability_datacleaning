@@ -1,7 +1,7 @@
 Nevada Contributions
 ================
 Kiernan Nicholls
-Thu Feb 4 11:00:29 2021
+Fri Oct 22 13:14:25 2021
 
 -   [Project](#project)
 -   [Objectives](#objectives)
@@ -19,7 +19,6 @@ Thu Feb 4 11:00:29 2021
 -   [Join](#join)
     -   [Recipient](#recipient)
     -   [Contributors](#contributors)
-    -   [Finish](#finish)
 -   [Explore](#explore)
     -   [Missing](#missing)
     -   [Duplicates](#duplicates)
@@ -146,9 +145,8 @@ This file structure report is an HTML page with a description and six
 tables.
 
 > Your report will generate 6 fixed width ASCII text file(s) compressed
-> into one Zip file named in the format
-> “CampaignFinance.43993.&lt;Today’s Date&gt;.zip”\*. Below you will
-> find the format of each file:
+> into one Zip file named in the format “CampaignFinance.43993.\<Today’s
+> Date>.zip”\*. Below you will find the format of each file:
 
 ### Age
 
@@ -203,11 +201,6 @@ about_tables <- map(about_tables, row_to_names, row_number = 1)
 about_names <- str_subset(html_text(html_nodes(about, "b")), "\\d")
 ```
 
-<table class="kable_wrapper">
-<tbody>
-<tr>
-<td>
-
 | Field Name                | Data Type   | Start Position | Length |
 |:--------------------------|:------------|---------------:|-------:|
 | CandidateID (Primary Key) | int         |              1 |     10 |
@@ -217,9 +210,6 @@ about_names <- str_subset(html_text(html_nodes(about, "b")), "\\d")
 | Office                    | varchar(60) |            121 |     60 |
 | Jurisdiction              | varchar(50) |            181 |     50 |
 
-</td>
-<td>
-
 | Field Name            | Data Type    | Start Position | Length |
 |:----------------------|:-------------|---------------:|-------:|
 | GroupID (Primary Key) | int          |              1 |     10 |
@@ -228,9 +218,6 @@ about_names <- str_subset(html_text(html_nodes(about, "b")), "\\d")
 | Contact Name          | varchar(35)  |            231 |     35 |
 | Active                | bit          |            266 |      1 |
 | City                  | varchar(30)  |            267 |     30 |
-
-</td>
-<td>
 
 | Field Name                                           | Data Type    | Start Position | Length |
 |:-----------------------------------------------------|:-------------|---------------:|-------:|
@@ -244,18 +231,12 @@ about_names <- str_subset(html_text(html_nodes(about, "b")), "\\d")
 | Amended                                              | bit          |            175 |      1 |
 | Superseded                                           | bit          |            176 |      1 |
 
-</td>
-<td>
-
 | Field Name              | Data Type    | Start Position | Length |
 |:------------------------|:-------------|---------------:|-------:|
 | ContactID (Primary Key) | int          |              1 |     10 |
 | First Name              | varchar(30)  |             11 |     30 |
 | Middle Name             | varchar(30)  |             41 |     30 |
 | Last Name               | varchar(100) |             71 |    100 |
-
-</td>
-<td>
 
 | Field Name                                                    | Data Type   | Start Position | Length |
 |:--------------------------------------------------------------|:------------|---------------:|-------:|
@@ -268,9 +249,6 @@ about_names <- str_subset(html_text(html_nodes(about, "b")), "\\d")
 | Contribution Type                                             | varchar(30) |             72 |     30 |
 | ContributorID (Foreign Key Ref Contributors-Payees.ContactID) | int         |            102 |     10 |
 
-</td>
-<td>
-
 | Field Name                                               | Data Type   | Start Position | Length |
 |:---------------------------------------------------------|:------------|---------------:|-------:|
 | ExpenseID (Primary Key)                                  | int         |              1 |     10 |
@@ -281,11 +259,6 @@ about_names <- str_subset(html_text(html_nodes(about, "b")), "\\d")
 | Expense Amount                                           | money       |             51 |     21 |
 | Expense Type                                             | varchar(30) |             72 |     30 |
 | Payee ID (Foreign Key Ref Contributors-Payees.ContactID) | int         |            102 |     10 |
-
-</td>
-</tr>
-</tbody>
-</table>
 
 #### Data Types
 
@@ -299,7 +272,7 @@ about_names <- str_subset(html_text(html_nodes(about, "b")), "\\d")
 > -   `int` - Numeric, 4 bytes
 > -   `smallint` - Numeric, 2 bytes
 > -   `tinyint` - Numeric, 1 byte
-> -   `bit` - Results are Truewhich will be represented as “T”"F"
+> -   `bit` - Results are Truewhich will be represented as “T”"F”
 > -   `money` - Monetary data, 8 bytes, accuracy to a ten-thousandth of
 >     a unit
 > -   `float` - Floating precision number from -1.79E + 308 through
@@ -315,7 +288,7 @@ about_names <- str_subset(html_text(html_nodes(about, "b")), "\\d")
 
 Definitions for few variables can be found in the “Result Field” tab:
 
-1.  `Jurisdiction`: &gt; This will be name of the city or county for
+1.  `Jurisdiction`: > This will be name of the city or county for
     city/county offices currently held by the candidate (e.g. “CITY OF
     YERINGTON”, “DOUGLAS COUNTY”). This will be set to “NV SOS” for
     statewide offices such as Governor, State Controller or State
@@ -323,45 +296,45 @@ Definitions for few variables can be found in the “Result Field” tab:
     the NV SOS Elections staff as necessary when that candidate files
     for a new office.
 
-2.  `Contribution Type`: &gt; Use this column to differentiate which one
-    of four contribution types this contribution record is: Monetary
+2.  `Contribution Type`: > Use this column to differentiate which one of
+    four contribution types this contribution record is: Monetary
     Contribution, In Kind Contribution, In Kind Written Commitment, or
     Written Commitment.
 
-3.  `Last Name`: &gt; When the contributor or payee is an organization
-    as opposed to an individual, the entire organization name will be in
+3.  `Last Name`: > When the contributor or payee is an organization as
+    opposed to an individual, the entire organization name will be in
     the Last Name field only.
 
-4.  `Expense Type`: &gt; Use this column to differentiate which type of
+4.  `Expense Type`: > Use this column to differentiate which type of
     expense record this is: Monetary Expense or In Kind Expense.
 
-5.  `Active`: &gt; A value of F (False) indicates the group has been
-    marked as inactive by the NV Secretary of State’s office Elections
-    division due to submission of a “notice of inactivity” or for
-    failure to renew annual registration.
+5.  `Active`: > A value of F (False) indicates the group has been marked
+    as inactive by the NV Secretary of State’s office Elections division
+    due to submission of a “notice of inactivity” or for failure to
+    renew annual registration.
 
-6.  `Amended`: &gt; A value of T (True) indicates this contributions and
+6.  `Amended`: > A value of T (True) indicates this contributions and
     expense report has been marked as an amended report by the original
     filer implying this report supersedes a report for this same period,
     filed earlier. An amended report is to be full comprehensive for
     that report period and in essence replaces all contributions and
     expenses filed in the earlier report.
 
-7.  `Election Cycle`: &gt; The Election Cycle is the 4 digit filing or
+7.  `Election Cycle`: > The Election Cycle is the 4 digit filing or
     reporting year defining a filing period grouping together a
     collection of contribution and expenses reports…
 
-8.  `Superseded`: &gt; A report is Superseded when an amended report was
+8.  `Superseded`: > A report is Superseded when an amended report was
     filed later by the same filer for the same reporting period. In this
     case the Superseded field for the older report record will be set to
     T (True)…
 
 ### Records
 
-> Total number of records returned: 1,104,096
+> Total number of records returned: 1,116,003
 
 ``` r
-total_rows <- 1104096
+total_rows <- 1116003
 ```
 
 > A record is one single entity or row from a database table. The “Total
@@ -379,11 +352,9 @@ the link provided to the account email address. The link will not work
 for anybody not logged into that NVSOS account.
 
 ``` r
-raw_url <- "https://www.nvsos.gov/yourreports/CampaignFinance.43993.012621101815.zip"
+raw_url <- "https://www.nvsos.gov/yourreports/CampaignFinance.43993.102221071331.zip"
 raw_dir <- dir_create(here("nv", "contribs", "data", "raw"))
 raw_zip <- path(raw_dir, basename(raw_url))
-file_size(raw_zip)
-#> 12.6M
 ```
 
 This URL contains the date the report was generated.
@@ -391,23 +362,34 @@ This URL contains the date the report was generated.
 ``` r
 report_time <- mdy_hms(str_extract(raw_url, "\\d+(?=\\.zip$)"))
 with_tz(report_time, tzone = "PST")
-#> [1] "2021-01-26 10:18:15 PST"
+#> [1] "2021-10-22 07:13:31 PST"
 ```
 
 ``` r
+aws_key <- path("IRW/raw_backup/nv", basename(raw_zip))
+aws_bkt <- "publicaccountability"
 if (!file_exists(raw_zip)) {
   download.file(raw_url, raw_zip)
+  put_object(
+    file = raw_zip,
+    object = aws_key,
+    bucket = aws_bkt
+  )
+} else if (object_exists(aws_key, aws_bkt)) {
+  save_object(
+    object = aws_key,
+    bucket = aws_bkt,
+    file = raw_zip
+  )
 }
+#> /home/kiernan/Documents/tap/R_tap/nv/contribs/data/raw/CampaignFinance.43993.102221071331.zip
 ```
 
 This raw ZIP archive has been backed up to the IRW server.
 
 ``` r
-as_fs_bytes(object_size(
-  object = path("IRW/raw_backup/nv", basename(raw_zip)), 
-  bucket = "publicaccountability"
-))
-#> 12.6M
+as_fs_bytes(object_size(object = aws_key, bucket = aws_bkt))
+#> 17.1M
 ```
 
 ## Unzip
@@ -421,12 +403,12 @@ raw_txt <- unzip(raw_zip, exdir = raw_dir)
 
 | Name                                               |  Length | Date                |
 |:---------------------------------------------------|--------:|:--------------------|
-| `CampaignFinance.Cnddt.43993.012621101815.txt`     |   1.59M | 2021-01-26 10:18:00 |
-| `CampaignFinance.Cntrbt.43993.012621101815.txt`    |  56.58M | 2021-01-26 10:18:00 |
-| `CampaignFinance.Cntrbtrs-.43993.012621101815.txt` |  36.46M | 2021-01-26 10:18:00 |
-| `CampaignFinance.Expn.43993.012621101815.txt`      |  32.72M | 2021-01-26 10:18:00 |
-| `CampaignFinance.Grp.43993.012621101815.txt`       | 373.38K | 2021-01-26 10:18:00 |
-| `CampaignFinance.Rpr.43993.012621101815.txt`       |   7.58M | 2021-01-26 10:18:00 |
+| `CampaignFinance.Cnddt.43993.102221071331.txt`     |    2.2M | 2021-10-22 07:13:00 |
+| `CampaignFinance.Cntrbt.43993.102221071331.txt`    |  56.92M | 2021-10-22 07:13:00 |
+| `CampaignFinance.Cntrbtrs-.43993.102221071331.txt` |  67.96M | 2021-10-22 07:13:00 |
+| `CampaignFinance.Expn.43993.102221071331.txt`      |  33.44M | 2021-10-22 07:13:00 |
+| `CampaignFinance.Grp.43993.102221071331.txt`       | 380.07K | 2021-10-22 07:13:00 |
+| `CampaignFinance.Rpr.43993.102221071331.txt`       |   7.73M | 2021-10-22 07:13:00 |
 
 We need to match the order of this vector to the order of the tables.
 
@@ -491,7 +473,7 @@ as_col_spec <- function(.data) {
 
 ``` r
 about_tables$Groups
-#> # A tibble: 6 x 4
+#> # A tibble: 6 × 4
 #>   `Field Name`          `Data Type`  `Start Position` Length
 #>   <chr>                 <chr>        <chr>            <chr> 
 #> 1 GroupID (Primary Key) int          1                10    
@@ -501,7 +483,7 @@ about_tables$Groups
 #> 5 Active                bit          266              1     
 #> 6 City                  varchar(30)  267              30
 as_fwf_width(about_tables$Groups)
-#> # A tibble: 6 x 3
+#> # A tibble: 6 × 3
 #>   begin   end col_names   
 #>   <int> <int> <chr>       
 #> 1     0    10 GroupID     
@@ -562,14 +544,24 @@ nv <- pmap(
 The total number of rows read matches what we were told when exporting.
 
 ``` r
-sum(map_dbl(nv, nrow)) == total_rows
-#> [1] TRUE
+comma(sum(map_dbl(nv, nrow)))
+#> [1] "1,116,033"
+enframe(map_dbl(nv, nrow))
+#> # A tibble: 6 × 2
+#>   name           value
+#>   <chr>          <dbl>
+#> 1 Candidates      7263
+#> 2 Groups          1306
+#> 3 Reports        45557
+#> 4 Contributors  223407
+#> 5 Contributions 528199
+#> 6 Expenses      310301
 ```
 
 ## Join
 
 The primary table of interest here is `Contributions`, which lists the
-525,038 contributions made to committees and reported to the state. This
+528,199 contributions made to committees and reported to the state. This
 table does not identify the receiving committee or contributing entity.
 This information is found in the `Groups` and `Contributors` tables,
 respectively. We need to add variables identifying all parties to each
@@ -577,20 +569,20 @@ contribution.
 
 ``` r
 nv$Contributions
-#> # A tibble: 525,038 x 8
-#>    con_id rpt_id cand_id grp_id con_dt     con_amt con_type                   ctbr_id
-#>     <int>  <int>   <int>  <int> <date>       <dbl> <chr>                        <int>
-#>  1      2   6980      NA   1220 2006-06-28   35000 Monetary Contribution            3
-#>  2      3   6983      NA   1332 2006-03-29       2 Monetary Contribution            8
-#>  3      4   6983      NA   1332 2006-03-31       1 Monetary Contribution            8
-#>  4      5   6983      NA   1332 2006-04-10     200 Monetary Contribution            8
-#>  5      6   6983      NA   1332 2006-01-01       0 Written Commitment               9
-#>  6      7   6983      NA   1332 2006-01-01       0 In Kind Contribution             9
-#>  7      8   6983      NA   1332 2006-01-01       0 In Kind Written Commitment       9
-#>  8      9   6987      NA   1364 2006-01-13    1000 Monetary Contribution           15
-#>  9     10   6991    2360     NA 2006-02-07     100 Monetary Contribution           17
-#> 10     11   6991    2360     NA 2006-02-08     500 Monetary Contribution           18
-#> # … with 525,028 more rows
+#> # A tibble: 528,199 × 8
+#>    contribution_id report_id candidate_id group_id contribution_date contribution_amo… contribution_type  contributor_id
+#>              <int>     <int>        <int>    <int> <date>                        <dbl> <chr>                       <int>
+#>  1               2      6980           NA     1220 2006-06-28                    35000 Monetary Contribu…              3
+#>  2               3      6983           NA     1332 2006-03-29                        2 Monetary Contribu…              8
+#>  3               4      6983           NA     1332 2006-03-31                        1 Monetary Contribu…              8
+#>  4               5      6983           NA     1332 2006-04-10                      200 Monetary Contribu…              8
+#>  5               6      6983           NA     1332 2006-01-01                        0 Written Commitment              9
+#>  6               7      6983           NA     1332 2006-01-01                        0 In Kind Contribut…              9
+#>  7               8      6983           NA     1332 2006-01-01                        0 In Kind Written C…              9
+#>  8               9      6987           NA     1364 2006-01-13                     1000 Monetary Contribu…             15
+#>  9              10      6991         2360       NA 2006-02-07                      100 Monetary Contribu…             17
+#> 10              11      6991         2360       NA 2006-02-08                      500 Monetary Contribu…             18
+#> # … with 528,189 more rows
 ```
 
 ### Recipient
@@ -601,12 +593,12 @@ key column in Contributions. We can combine these keys and tables.
 
 ``` r
 rec_cands <- nv$Candidates %>% 
-  select(cand_id, first_nm, last_nm) %>% 
-  filter(cand_id %in% nv$Contributions$cand_id) %>% 
-  mutate(rec_type = "Candidate", .after = last_nm) %>% 
+  select(candidate_id, first_name, last_name) %>% 
+  filter(candidate_id %in% nv$Contributions$candidate_id) %>% 
+  mutate(recipient_type = "Candidate", .after = last_name) %>% 
   unite(
-    col = rec_nm,
-    first_nm, last_nm,,
+    col = recipient_name,
+    first_name, last_name,
     sep = " ",
     remove = TRUE,
     na.rm = TRUE
@@ -615,26 +607,74 @@ rec_cands <- nv$Candidates %>%
 
 ``` r
 rec_comms <- nv$Groups %>% 
-  filter(grp_id %in% nv$Contributions$grp_id) %>% 
-  select(grp_id, rec_nm = grp_nm, rec_type = grp_type)
+  filter(group_id %in% nv$Contributions$group_id) %>% 
+  select(group_id, recipient_name = group_name, recipient_type = group_type)
 ```
 
 ``` r
-nv$Contributions <- left_join(
-  x = nv$Contributions,
-  y = bind_rows(rec_cands, rec_comms),
-  by = c("cand_id", "grp_id")
+all_recipients <- rec_cands %>% 
+  bind_rows(rec_comms) %>% 
+  relocate(group_id, .after = candidate_id)
+```
+
+    #> # A tibble: 14 × 4
+    #>    candidate_id group_id recipient_name                                                  recipient_type            
+    #>           <int>    <int> <chr>                                                           <chr>                     
+    #>  1         5468       NA Marsha Berkbigler                                               Candidate                 
+    #>  2         5595       NA Mark Newburn                                                    Candidate                 
+    #>  3           NA     6941 Committee to Elect David Bagley                                 Independent Expenditure   
+    #>  4           NA     2293 Working Families for Assembly 13                                Independent Expenditure   
+    #>  5           NA     2420 Everytown for Gun Safety Action Fund, Inc. (Nonprofit)          Non-Profit Corporation    
+    #>  6           NA     4820 PLAN Action Fund                                                Non-Profit Corporation    
+    #>  7           NA     2269 Washoe County Citizens for Change                               PAC Ballot Advocacy Group 
+    #>  8           NA     1626 School, Road and Safety Funding Solutions Ballot Advocacy Group PAC Ballot Advocacy Group 
+    #>  9           NA     4807 DLGA PAC - Nevada                                               Political Action Committee
+    #> 10           NA     1307 Republican State Leadership Committee                           Political Action Committee
+    #> 11           NA     1225 Clark County Republican Party                                   Political Party Committee 
+    #> 12           NA     1373 Pahrump Valley Republican Women                                 Political Party Committee 
+    #> 13           NA     3680 Committee to Recall Senator Nicole Cannizzaro                   Recall Committee          
+    #> 14           NA     5896 Humboldt County 2nd Amendment Grassroots                        Recall Committee
+
+``` r
+all_recipients <- mutate(
+  .data = all_recipients,
+  .before = 1,
+  .keep = "unused",
+  recipient_id = coalesce(
+    candidate_id, 
+    group_id
+  )
 )
+```
+
+``` r
+nvc <- nv$Contributions %>% 
+  mutate(
+    .after = group_id,
+    .keep = "unused",
+    recipient_id = coalesce(
+      candidate_id, 
+      group_id
+    )
+  ) %>% 
+  left_join(
+    y = all_recipients,
+    by = "recipient_id"
+  ) %>% 
+  relocate(
+    .after = recipient_id,
+    recipient_name, recipient_type
+  )
 ```
 
 ### Contributors
 
 ``` r
-ctbr_nms <- nv$Contributors %>% 
-  filter(contact_id %in% nv$Contributions$ctbr_id) %>% 
+contributor_names <- nv$Contributors %>% 
+  filter(contact_id %in% nv$Contributions$contributor_id) %>% 
   unite(
-    col = ctbr_nm,
-    first_nm, middle_nm, last_nm,
+    col = contributor_name,
+    first_name, middle_name, last_name,
     sep = " ",
     remove = TRUE,
     na.rm = TRUE
@@ -642,56 +682,43 @@ ctbr_nms <- nv$Contributors %>%
 ```
 
 ``` r
-nv$Contributions <- left_join(
-  x = nv$Contributions,
-  y = ctbr_nms,
-  by = c("ctbr_id" = "contact_id")
+nvc <- left_join(
+  x = nvc,
+  y = contributor_names,
+  by = c("contributor_id" = "contact_id")
 )
-```
-
-### Finish
-
-``` r
-nvc <- nv$Contributions %>% 
-  relocate(ctbr_id, .before = ctbr_nm) %>% 
-  mutate(
-    cand_id = str_c("C", cand_id),
-    grp_id = str_c("G", grp_id),
-    rec_id = coalesce(cand_id, grp_id),
-    .before = rec_nm
-  ) %>% 
-  select(-cand_id, -grp_id)
 ```
 
 ## Explore
 
-There are 525,038 rows of 10 columns. Each record represents a single
+There are 555,283 rows of 10 columns. Each record represents a single
 contribution to a political committee or candidate.
 
 ``` r
 glimpse(nvc)
-#> Rows: 525,038
+#> Rows: 555,283
 #> Columns: 10
-#> $ con_id   <int> 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, …
-#> $ rpt_id   <int> 6980, 6983, 6983, 6983, 6983, 6983, 6983, 6987, 6991, 6991, 6991, 6990, 6991, 6991, 6991, 6990, 6991…
-#> $ con_dt   <date> 2006-06-28, 2006-03-29, 2006-03-31, 2006-04-10, 2006-01-01, 2006-01-01, 2006-01-01, 2006-01-13, 200…
-#> $ con_amt  <dbl> 35000, 2, 1, 200, 0, 0, 0, 1000, 100, 500, 1000, 0, 500, 5000, 200, 0, 200, 200, 300, 0, 0, 100, 500…
-#> $ con_type <chr> "Monetary Contribution", "Monetary Contribution", "Monetary Contribution", "Monetary Contribution", …
-#> $ rec_id   <chr> "G1220", "G1332", "G1332", "G1332", "G1332", "G1332", "G1332", "G1364", "C2360", "C2360", "C2360", "…
-#> $ rec_nm   <chr> "Culinary Workers Union Local 226", "Nevada Next PAC", "Nevada Next PAC", "Nevada Next PAC", "Nevada…
-#> $ rec_type <chr> "Independent Expenditure", "Political Action Committee", "Political Action Committee", "Political Ac…
-#> $ ctbr_id  <int> 3, 8, 8, 8, 9, 9, 9, 15, 17, 18, 19, 20, 21, 22, 23, 24, 25, 25, 26, 27, 24, 28, 29, 30, 31, 32, 33,…
-#> $ ctbr_nm  <chr> "UNITE HERE TIP", "Bonnie B Jacobs", "Bonnie B Jacobs", "Bonnie B Jacobs", "NONE", "NONE", "NONE", "…
+#> $ contribution_id     <int> 2, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 13, 14, 15, 16, 17, 17, 18, 19, 20, 21, 21, 22,…
+#> $ report_id           <int> 6980, 6980, 6983, 6983, 6983, 6983, 6983, 6983, 6987, 6991, 6991, 6991, 6990, 6990, 6991, …
+#> $ recipient_id        <int> 1220, 1220, 1332, 1332, 1332, 1332, 1332, 1332, 1364, 2360, 2360, 2360, 2368, 2368, 2360, …
+#> $ recipient_name      <chr> "Gary Perea", "Culinary Workers Union Local 226", "Nevada Next PAC", "Nevada Next PAC", "N…
+#> $ recipient_type      <chr> "Candidate", "Independent Expenditure", "Political Action Committee", "Political Action Co…
+#> $ contribution_date   <date> 2006-06-28, 2006-06-28, 2006-03-29, 2006-03-31, 2006-04-10, 2006-01-01, 2006-01-01, 2006-…
+#> $ contribution_amount <dbl> 35000, 35000, 2, 1, 200, 0, 0, 0, 1000, 100, 500, 1000, 0, 0, 500, 5000, 200, 0, 0, 200, 2…
+#> $ contribution_type   <chr> "Monetary Contribution", "Monetary Contribution", "Monetary Contribution", "Monetary Contr…
+#> $ contributor_id      <int> 3, 3, 8, 8, 8, 9, 9, 9, 15, 17, 18, 19, 20, 20, 21, 22, 23, 24, 24, 25, 25, 26, 27, 27, 24…
+#> $ contributor_name    <chr> "UNITE HERE TIP", "UNITE HERE TIP", "Bonnie B Jacobs", "Bonnie B Jacobs", "Bonnie B Jacobs…
 tail(nvc)
-#> # A tibble: 6 x 10
-#>   con_id rpt_id con_dt     con_amt con_type         rec_id rec_nm              rec_type            ctbr_id ctbr_nm      
-#>    <int>  <int> <date>       <dbl> <chr>            <chr>  <chr>               <chr>                 <int> <chr>        
-#> 1 736787 111458 2020-12-17    1500 Monetary Contri… G756   Nevada Beer Wholes… Political Action C…  179407 Jason Friers…
-#> 2 736788 111458 2020-12-17     500 Monetary Contri… G756   Nevada Beer Wholes… Political Action C…  393515 Venicia Cons…
-#> 3 736789 111458 2020-12-17     500 Monetary Contri… G756   Nevada Beer Wholes… Political Action C…  329640 Beatrice Dur…
-#> 4 736790 111458 2020-12-17     500 Monetary Contri… G756   Nevada Beer Wholes… Political Action C…  201562 Jill Tolles  
-#> 5 736791 111458 2020-12-17     500 Monetary Contri… G756   Nevada Beer Wholes… Political Action C…  284168 Elaine Marzo…
-#> 6 736838 111479 2020-10-16    1000 Monetary Contri… C13605 Deborah Chang       Candidate             43600 AFSCME
+#> # A tibble: 6 × 10
+#>   contribution_id report_id recipient_id recipient_name recipient_type             contribution_date contribution_amount
+#>             <int>     <int>        <int> <chr>          <chr>                      <date>                          <dbl>
+#> 1          751402    119820          672 SNR PAC        Political Action Committee 2021-08-04                       1000
+#> 2          751403    119820          672 SNR PAC        Political Action Committee 2021-08-04                       1000
+#> 3          751404    119820          672 SNR PAC        Political Action Committee 2021-08-03                       1000
+#> 4          751405    119820          672 SNR PAC        Political Action Committee 2021-08-16                       1000
+#> 5          751406    119820          672 SNR PAC        Political Action Committee 2021-07-01                       1000
+#> 6          751407    119820          672 SNR PAC        Political Action Committee 2021-09-11                       1000
+#> # … with 3 more variables: contribution_type <chr>, contributor_id <int>, contributor_name <chr>
 ```
 
 ### Missing
@@ -700,19 +727,19 @@ There are no columns missing values.
 
 ``` r
 col_stats(nvc, count_na)
-#> # A tibble: 10 x 4
-#>    col      class      n     p
-#>    <chr>    <chr>  <int> <dbl>
-#>  1 con_id   <int>      0     0
-#>  2 rpt_id   <int>      0     0
-#>  3 con_dt   <date>     0     0
-#>  4 con_amt  <dbl>      0     0
-#>  5 con_type <chr>      0     0
-#>  6 rec_id   <chr>      0     0
-#>  7 rec_nm   <chr>      0     0
-#>  8 rec_type <chr>      0     0
-#>  9 ctbr_id  <int>      0     0
-#> 10 ctbr_nm  <chr>      0     0
+#> # A tibble: 10 × 4
+#>    col                 class      n     p
+#>    <chr>               <chr>  <int> <dbl>
+#>  1 contribution_id     <int>      0     0
+#>  2 report_id           <int>      0     0
+#>  3 recipient_id        <int>      0     0
+#>  4 recipient_name      <chr>      0     0
+#>  5 recipient_type      <chr>      0     0
+#>  6 contribution_date   <date>     0     0
+#>  7 contribution_amount <dbl>      0     0
+#>  8 contribution_type   <chr>      0     0
+#>  9 contributor_id      <int>      0     0
+#> 10 contributor_name    <chr>      0     0
 ```
 
 ### Duplicates
@@ -720,53 +747,54 @@ col_stats(nvc, count_na)
 We can also flag any record completely duplicated across every column.
 
 ``` r
-nvc <- flag_dupes(nvc, -con_id)
+nvc <- flag_dupes(nvc, -contribution_id)
 sum(nvc$dupe_flag)
-#> [1] 14173
+#> [1] 14527
 ```
 
 ``` r
-key_vars <- c("ctbr_nm", "con_dt", "con_amt", "rec_nm")
+key_vars <- c("contributor_name", "contribution_date", 
+              "contribution_amount", "recipient_name")
 ```
 
 ``` r
 nvc %>% 
   filter(dupe_flag) %>% 
-  select(con_id, rpt_id, all_of(key_vars))
-#> # A tibble: 14,173 x 6
-#>    con_id rpt_id ctbr_nm                   con_dt     con_amt rec_nm                                                    
-#>     <int>  <int> <chr>                     <date>       <dbl> <chr>                                                     
-#>  1     18   6991 Howard H & Phyllis S Hen… 2006-02-15     200 E Tiras                                                   
-#>  2     19   6991 Howard H & Phyllis S Hen… 2006-02-15     200 E Tiras                                                   
-#>  3    103   7034 member dues               2006-07-15      11 Mineral County Classroom Teachers Association - Together …
-#>  4    105   7034 member dues               2006-07-15      11 Mineral County Classroom Teachers Association - Together …
-#>  5    106   7062 NONE                      2006-01-01       0 Patricia Herzog                                           
-#>  6    107   7062 NONE                      2006-01-01       0 Patricia Herzog                                           
-#>  7    504  13743 Harrah's Operating Compa… 2006-10-05    5000 Susan Brager                                              
-#>  8    505  13743 Harrah's Operating Compa… 2006-10-05    5000 Susan Brager                                              
-#>  9    536  13756 NONE                      2006-10-26       0 Patricia Herzog                                           
-#> 10    537  13756 NONE                      2006-10-26       0 Patricia Herzog                                           
-#> # … with 14,163 more rows
+  select(contribution_id, report_id, all_of(key_vars))
+#> # A tibble: 14,527 × 6
+#>    contribution_id report_id contributor_name            contribution_date contribution_amount recipient_name           
+#>              <int>     <int> <chr>                       <date>                          <dbl> <chr>                    
+#>  1              18      6991 Howard H & Phyllis S Hengst 2006-02-15                        200 E Tiras                  
+#>  2              19      6991 Howard H & Phyllis S Hengst 2006-02-15                        200 E Tiras                  
+#>  3             103      7034 member dues                 2006-07-15                         11 Mineral County Classroom…
+#>  4             105      7034 member dues                 2006-07-15                         11 Mineral County Classroom…
+#>  5             106      7062 NONE                        2006-01-01                          0 Patricia Herzog          
+#>  6             107      7062 NONE                        2006-01-01                          0 Patricia Herzog          
+#>  7             504     13743 Harrah's Operating Company  2006-10-05                       5000 Susan Brager             
+#>  8             505     13743 Harrah's Operating Company  2006-10-05                       5000 Susan Brager             
+#>  9             536     13756 NONE                        2006-10-26                          0 Patricia Herzog          
+#> 10             537     13756 NONE                        2006-10-26                          0 Patricia Herzog          
+#> # … with 14,517 more rows
 ```
 
 ### Categorical
 
 ``` r
 col_stats(nvc, n_distinct)
-#> # A tibble: 11 x 4
-#>    col       class       n          p
-#>    <chr>     <chr>   <int>      <dbl>
-#>  1 con_id    <int>  525038 1         
-#>  2 rpt_id    <int>   15636 0.0298    
-#>  3 con_dt    <date>   5077 0.00967   
-#>  4 con_amt   <dbl>   15169 0.0289    
-#>  5 con_type  <chr>       4 0.00000762
-#>  6 rec_id    <chr>    2773 0.00528   
-#>  7 rec_nm    <chr>    2770 0.00528   
-#>  8 rec_type  <chr>       7 0.0000133 
-#>  9 ctbr_id   <int>  170881 0.325     
-#> 10 ctbr_nm   <chr>  128028 0.244     
-#> 11 dupe_flag <lgl>       2 0.00000381
+#> # A tibble: 11 × 4
+#>    col                 class       n          p
+#>    <chr>               <chr>   <int>      <dbl>
+#>  1 contribution_id     <int>  528199 0.951     
+#>  2 report_id           <int>   15887 0.0286    
+#>  3 recipient_id        <int>    2716 0.00489   
+#>  4 recipient_name      <chr>    2795 0.00503   
+#>  5 recipient_type      <chr>       7 0.0000126 
+#>  6 contribution_date   <date>   5332 0.00960   
+#>  7 contribution_amount <dbl>   15630 0.0281    
+#>  8 contribution_type   <chr>       4 0.00000720
+#>  9 contributor_id      <int>  171561 0.309     
+#> 10 contributor_name    <chr>  128542 0.231     
+#> 11 dupe_flag           <lgl>       2 0.00000360
 ```
 
 ![](../plots/distinct_plots-1.png)<!-- -->![](../plots/distinct_plots-2.png)<!-- -->
@@ -774,48 +802,51 @@ col_stats(nvc, n_distinct)
 ### Amounts
 
 ``` r
-summary(nvc$con_amt)
+summary(nvc$contribution_amount)
 #>     Min.  1st Qu.   Median     Mean  3rd Qu.     Max. 
-#>   -25000       25      200     1876     1000 20700000
-mean(nvc$con_amt <= 0)
-#> [1] 0.0007618496
+#>   -25000       25      200     2089     1000 20700000
+mean(nvc$contribution_amount <= 0)
+#> [1] 0.0007671764
 ```
 
 These are the records with the minimum and maximum amounts.
 
 ``` r
-glimpse(nvc[c(which.max(nvc$con_amt), which.min(nvc$con_amt)), ])
+glimpse(nvc[c(
+  which.max(nvc$contribution_amount), which.min(nvc$contribution_amount)
+), ])
 #> Rows: 2
 #> Columns: 11
-#> $ con_id    <int> 544130, 154183
-#> $ rpt_id    <int> 80598, 40633
-#> $ con_dt    <date> 2018-09-21, 2013-01-23
-#> $ con_amt   <dbl> 20700000, -25000
-#> $ con_type  <chr> "Monetary Contribution", "Monetary Contribution"
-#> $ rec_id    <chr> "G3708", "C4995"
-#> $ rec_nm    <chr> "Coalition to Defeat Question 3", "Paul Anderson"
-#> $ rec_type  <chr> "Political Action Committee", "Candidate"
-#> $ ctbr_id   <int> 268234, 72128
-#> $ ctbr_nm   <chr> "NV Energy", "Paul Anderson (Loan Reimb - orig loan was in  2011)"
-#> $ dupe_flag <lgl> FALSE, FALSE
+#> $ contribution_id     <int> 544130, 154183
+#> $ report_id           <int> 80598, 40633
+#> $ recipient_id        <int> 3708, 4995
+#> $ recipient_name      <chr> "Jeffrey Bobeck", "Paul Anderson"
+#> $ recipient_type      <chr> "Candidate", "Candidate"
+#> $ contribution_date   <date> 2018-09-21, 2013-01-23
+#> $ contribution_amount <dbl> 20700000, -25000
+#> $ contribution_type   <chr> "Monetary Contribution", "Monetary Contribution"
+#> $ contributor_id      <int> 268234, 72128
+#> $ contributor_name    <chr> "NV Energy", "Paul Anderson (Loan Reimb - orig loan was in  2011)"
+#> $ dupe_flag           <lgl> FALSE, FALSE
 ```
 
 ![](../plots/hist_amount-1.png)<!-- -->
 
 ### Dates
 
-We can add the calendar year from `con_dt` with `lubridate::year()`
+We can add the calendar year from `contribution_date` with
+`lubridate::year()`
 
 ``` r
-nvc <- mutate(nvc, con_yr = year(con_dt))
+nvc <- mutate(nvc, contribution_year = year(contribution_date))
 ```
 
 ``` r
-min(nvc$con_dt)
+min(nvc$contribution_date)
 #> [1] "2006-01-01"
-max(nvc$con_dt)
-#> [1] "2020-12-31"
-sum(nvc$con_dt > today())
+max(nvc$contribution_date)
+#> [1] "2021-09-30"
+sum(nvc$contribution_date > today())
 #> [1] 0
 ```
 
@@ -831,22 +862,22 @@ There are no geographic variables in the database.
 glimpse(sample_n(nvc, 50))
 #> Rows: 50
 #> Columns: 12
-#> $ con_id    <int> 142885, 574758, 208165, 421189, 401072, 483697, 430123, 2595, 484227, 300381, 733549, 645238, 42149…
-#> $ rpt_id    <int> 40106, 82950, 42399, 64317, 62696, 73510, 65108, 17506, 73702, 49425, 111260, 96247, 64335, 41571, …
-#> $ con_dt    <date> 2013-03-29, 2018-03-09, 2013-07-26, 2016-09-16, 2016-08-10, 2017-11-02, 2016-09-13, 2007-01-01, 20…
-#> $ con_amt   <dbl> 36.00, 200.00, 10.00, 1000.00, 250.00, 1000.00, 1500.00, 107.00, 5000.00, 6.00, 150.00, 1000.00, 25…
-#> $ con_type  <chr> "Monetary Contribution", "Monetary Contribution", "Monetary Contribution", "Monetary Contribution",…
-#> $ rec_id    <chr> "G987", "C6876", "G1616", "C6887", "C6526", "C1265", "C8009", "G799", "C8394", "C1643", "C13451", "…
-#> $ rec_nm    <chr> "Bank of America Corporation State and Federal Political Action Committee", "Ozzie Fumo", "The Trav…
-#> $ rec_type  <chr> "Political Action Committee", "Candidate", "Political Action Committee", "Candidate", "Candidate", …
-#> $ ctbr_id   <int> 58067, 273104, 118971, 236327, 148834, 235509, 236837, 2597, 262607, 175909, 357615, 143207, 236543…
-#> $ ctbr_nm   <chr> "Rim O Williams", "Wayne & Nancy Hardy", "Steven K Raymond", "Nicolas Spirtos", "Weil & Drage", "Le…
-#> $ dupe_flag <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, TRUE, FALSE, FALSE, FA…
-#> $ con_yr    <dbl> 2013, 2018, 2013, 2016, 2016, 2017, 2016, 2007, 2017, 2014, 2020, 2019, 2016, 2013, 2013, 2020, 201…
+#> $ contribution_id     <int> 2244, 448754, 699014, 286634, 690067, 602853, 388434, 174273, 221412, 674976, 158639, 2392…
+#> $ report_id           <int> 17104, 68590, 107580, 49175, 107171, 85038, 61771, 41571, 41333, 103703, 41573, 44577, 494…
+#> $ recipient_id        <int> 3306, 5756, 13471, 5767, 13519, 9557, 8106, 1177, 1643, 6526, 1934, 6188, 1643, 987, 13787…
+#> $ recipient_name      <chr> "John Breternitz", "Isaac Barron", "Heidi Kasama", "Lesley Cohen", "Shanon Clowers-Sanborn…
+#> $ recipient_type      <chr> "Candidate", "Candidate", "Candidate", "Candidate", "Candidate", "Candidate", "Candidate",…
+#> $ contribution_date   <date> 2007-10-19, 2017-03-08, 2020-09-16, 2014-07-22, 2020-09-10, 2018-01-20, 2016-03-14, 2013-…
+#> $ contribution_amount <dbl> 465.28, 1000.00, 500.00, 100.00, 350.00, 500.00, 500.00, 30.00, 500.00, 500.00, 76.30, 100…
+#> $ contribution_type   <chr> "In Kind Contribution", "Monetary Contribution", "Monetary Contribution", "Monetary Contri…
+#> $ contributor_id      <int> 2182, 244629, 147386, 167717, 373366, 265634, 10616, 90027, 113183, 179517, 74851, 143466,…
+#> $ contributor_name    <chr> "DRAKE", "Apex Granite Company LLC", "GlaxoSmithKline LLC PAC", "Steven Eisen", "Tanasi La…
+#> $ dupe_flag           <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE,…
+#> $ contribution_year   <dbl> 2007, 2017, 2020, 2014, 2020, 2018, 2016, 2013, 2013, 2020, 2013, 2014, 2014, 2013, 2020, …
 ```
 
-1.  There are 525,038 records in the database.
-2.  There are 14,173 duplicate records in the database.
+1.  There are 555,283 records in the database.
+2.  There are 14,527 duplicate records in the database.
 3.  The range and distribution of `amount` and `date` seem reasonable.
 4.  There are 0 records missing key variables.
 5.  Consistency in geographic data has been improved with
@@ -857,20 +888,26 @@ glimpse(sample_n(nvc, 50))
 ## Export
 
 Now the file can be saved on disk for upload to the Accountability
-server.
+server. We will name the object using a date range of the records
+included.
+
+``` r
+min_dt <- str_remove_all(min(nvc$contribution_date), "-")
+max_dt <- str_remove_all(max(nvc$contribution_date), "-")
+csv_ts <- paste(min_dt, max_dt, sep = "-")
+```
 
 ``` r
 clean_dir <- dir_create(here("nv", "contribs", "data", "clean"))
-clean_path <- path(clean_dir, "nv_contribs_clean.csv")
-write_csv(nvc, clean_path, na = "")
-(clean_size <- file_size(clean_path))
-#> 68.2M
-file_encoding(clean_path) %>% 
-  mutate(across(path, path.abbrev))
-#> # A tibble: 1 x 3
-#>   path                                           mime            charset 
-#>   <fs::path>                                     <chr>           <chr>   
-#> 1 ~/nv/contribs/data/clean/nv_contribs_clean.csv application/csv us-ascii
+clean_csv <- path(clean_dir, glue("nv_contribs_{csv_ts}.csv"))
+clean_rds <- path_ext_set(clean_csv, "rds")
+```
+
+``` r
+write_csv(nvc, clean_csv, na = "")
+write_rds(nvc, clean_rds, compress = "xz")
+(clean_size <- file_size(clean_csv))
+#> 71.6M
 ```
 
 ## Upload
@@ -879,18 +916,18 @@ We can use the `aws.s3::put_object()` to upload the text file to the IRW
 server.
 
 ``` r
-aws_path <- path("csv", basename(clean_path))
-if (!object_exists(aws_path, "publicaccountability")) {
+aws_key <- path("csv", basename(clean_csv))
+if (!object_exists(aws_csv, "publicaccountability")) {
   put_object(
-    file = clean_path,
-    object = aws_path, 
+    file = clean_csv,
+    object = aws_key, 
     bucket = "publicaccountability",
     acl = "public-read",
     show_progress = TRUE,
     multipart = TRUE
   )
 }
-aws_head <- head_object(aws_path, "publicaccountability")
+aws_head <- head_object(aws_csv, "publicaccountability")
 (aws_size <- as_fs_bytes(attr(aws_head, "content-length")))
 unname(aws_size == clean_size)
 ```

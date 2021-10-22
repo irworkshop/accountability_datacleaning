@@ -285,10 +285,10 @@ Definitions for few variables can be found in the "Result Field" tab:
 
 ### Records
 
-> Total number of records returned: 1,104,096
+> Total number of records returned: 1,116,003
 
 ```{r rows_total}
-total_rows <- 1104096
+total_rows <- 1116003
 ```
 
 > A record is one single entity or row from a database table. The "Total number
@@ -305,10 +305,9 @@ link provided to the account email address. The link will not work for anybody
 not logged into that NVSOS account.
 
 ```{r raw_dir}
-raw_url <- "https://www.nvsos.gov/yourreports/CampaignFinance.43993.012621101815.zip"
+raw_url <- "https://www.nvsos.gov/yourreports/CampaignFinance.43993.102221071331.zip"
 raw_dir <- dir_create(here("nv", "contribs", "data", "raw"))
 raw_zip <- path(raw_dir, basename(raw_url))
-file_size(raw_zip)
 ```
 
 This URL contains the date the report was generated.
@@ -319,13 +318,19 @@ with_tz(report_time, tzone = "PST")
 ```
 
 ```{r raw_download}
+aws_key <- path("IRW/raw_backup/nv", basename(raw_zip))
+aws_bkt <- "publicaccountability"
 if (!file_exists(raw_zip)) {
   download.file(raw_url, raw_zip)
-} else {
-  aws_backup <- path("IRW/raw_backup/nv", basename(raw_zip))
+  put_object(
+    file = raw_zip,
+    object = aws_key,
+    bucket = aws_bkt
+  )
+} else if (object_exists(aws_key, aws_bkt)) {
   save_object(
-    object = aws_backup,
-    bucket = "publicaccountability",
+    object = aws_key,
+    bucket = aws_bkt,
     file = raw_zip
   )
 }
@@ -333,11 +338,8 @@ if (!file_exists(raw_zip)) {
 
 This raw ZIP archive has been backed up to the IRW server.
 
-```{r}
-as_fs_bytes(object_size(
-  object = aws_backup, 
-  bucket = "publicaccountability"
-))
+```{r raw_backup_size}
+as_fs_bytes(object_size(object = aws_key, bucket = aws_bkt))
 ```
 
 ## Unzip
@@ -466,7 +468,8 @@ nv <- pmap(
 The total number of rows read matches what we were told when exporting.
 
 ```{r raw_row_check}
-sum(map_dbl(nv, nrow)) == total_rows
+comma(sum(map_dbl(nv, nrow)))
+enframe(map_dbl(nv, nrow))
 ```
 
 ```{r raw_rename, echo=FALSE}
@@ -496,7 +499,7 @@ key column in Contributions. We can combine these keys and tables.
 rec_cands <- nv$Candidates %>% 
   select(candidate_id, first_name, last_name) %>% 
   filter(candidate_id %in% nv$Contributions$candidate_id) %>% 
-  mutate(rec_type = "Candidate", .after = last_name) %>% 
+  mutate(recipient_type = "Candidate", .after = last_name) %>% 
   unite(
     col = recipient_name,
     first_name, last_name,
@@ -512,31 +515,59 @@ rec_comms <- nv$Groups %>%
   select(group_id, recipient_name = group_name, recipient_type = group_type)
 ```
 
-```{r con_coalesce, eval=FALSE, echo=FALSE}
-nv$Contributions <- mutate(
-  .data = nv$Contributions,
-  .after = contribution_id,
+```{r rec_all_binds}
+all_recipients <- rec_cands %>% 
+  bind_rows(rec_comms) %>% 
+  relocate(group_id, .after = candidate_id)
+```
+
+```{r echo=FALSE}
+all_recipients %>% 
+  group_by(recipient_type) %>% 
+  sample_n(2) %>% 
+  ungroup()
+```
+
+```{r recip_join_id}
+all_recipients <- mutate(
+  .data = all_recipients,
+  .before = 1,
   .keep = "unused",
-  rec_id = coalesce(candidate_id, group_id)
+  recipient_id = coalesce(
+    candidate_id, 
+    group_id
+  )
 )
 ```
 
 ```{r rec_join}
-nv$Contributions <- left_join(
-  x = nv$Contributions,
-  y = bind_rows(rec_cands, rec_comms),
-  by = c("candidate_id", "group_id")
-)
+nvc <- nv$Contributions %>% 
+  mutate(
+    .after = group_id,
+    .keep = "unused",
+    recipient_id = coalesce(
+      candidate_id, 
+      group_id
+    )
+  ) %>% 
+  left_join(
+    y = all_recipients,
+    by = "recipient_id"
+  ) %>% 
+  relocate(
+    .after = recipient_id,
+    recipient_name, recipient_type
+  )
 ```
 
 ### Contributors
 
 ```{r ctbr_nms}
-ctbr_nms <- nv$Contributors %>% 
-  filter(contact_id %in% nv$Contributions$ctbr_id) %>% 
+contributor_names <- nv$Contributors %>% 
+  filter(contact_id %in% nv$Contributions$contributor_id) %>% 
   unite(
-    col = ctbr_nm,
-    first_nm, middle_nm, last_nm,
+    col = contributor_name,
+    first_name, middle_name, last_name,
     sep = " ",
     remove = TRUE,
     na.rm = TRUE
@@ -544,25 +575,11 @@ ctbr_nms <- nv$Contributors %>%
 ```
 
 ```{r ctbr_join}
-nv$Contributions <- left_join(
-  x = nv$Contributions,
-  y = ctbr_nms,
-  by = c("ctbr_id" = "contact_id")
+nvc <- left_join(
+  x = nvc,
+  y = contributor_names,
+  by = c("contributor_id" = "contact_id")
 )
-```
-
-### Finish
-
-```{r}
-nvc <- nv$Contributions %>% 
-  relocate(ctbr_id, .before = ctbr_nm) %>% 
-  mutate(
-    cand_id = str_c("C", cand_id),
-    group_id = str_c("G", group_id),
-    rec_id = coalesce(cand_id, group_id),
-    .before = rec_nm
-  ) %>% 
-  select(-cand_id, -group_id)
 ```
 
 ## Explore
@@ -588,18 +605,19 @@ col_stats(nvc, count_na)
 We can also flag any record completely duplicated across every column.
 
 ```{r dupe_flag}
-nvc <- flag_dupes(nvc, -con_id)
+nvc <- flag_dupes(nvc, -contribution_id)
 sum(nvc$dupe_flag)
 ```
 
 ```{r key_vars}
-key_vars <- c("ctbr_nm", "con_dt", "con_amt", "rec_nm")
+key_vars <- c("contributor_name", "contribution_date", 
+              "contribution_amount", "recipient_name")
 ```
 
 ```{r dupe_view}
 nvc %>% 
   filter(dupe_flag) %>% 
-  select(con_id, rpt_id, all_of(key_vars))
+  select(contribution_id, report_id, all_of(key_vars))
 ```
 
 ### Categorical
@@ -609,27 +627,29 @@ col_stats(nvc, n_distinct)
 ```
 
 ```{r distinct_plots, echo=FALSE, fig.height=3}
-explore_plot(nvc, con_type)
-explore_plot(nvc, rec_type) + scale_x_wrap()
+explore_plot(nvc, contribution_type) + scale_x_wrap()
+explore_plot(nvc, recipient_type) + scale_x_wrap()
 ```
 
 ### Amounts
 
 ```{r amount_summary}
-summary(nvc$con_amt)
-mean(nvc$con_amt <= 0)
+summary(nvc$contribution_amount)
+mean(nvc$contribution_amount <= 0)
 ```
 
 These are the records with the minimum and maximum amounts.
 
 ```{r amount_minmax}
-glimpse(nvc[c(which.max(nvc$con_amt), which.min(nvc$con_amt)), ])
+glimpse(nvc[c(
+  which.max(nvc$contribution_amount), which.min(nvc$contribution_amount)
+), ])
 ```
 
 ```{r hist_amount, echo=FALSE}
 nvc %>%
-  ggplot(aes(con_amt)) +
-  geom_histogram(fill = dark2["purple"]) +
+  ggplot(aes(contribution_amount)) +
+  geom_histogram(fill = dark2["purple"], bins = 30) +
   scale_y_continuous(labels = comma) +
   scale_x_continuous(
     breaks = c(1 %o% 10^(0:6)),
@@ -638,7 +658,7 @@ nvc %>%
   ) +
   labs(
     title = "Nevada Contributions Amount Distribution",
-    caption = "Source: {source}",
+    caption = "Source: Nevada Secretary of State",
     x = "Amount",
     y = "Count"
   )
@@ -646,23 +666,23 @@ nvc %>%
 
 ### Dates
 
-We can add the calendar year from `con_dt` with `lubridate::year()`
+We can add the calendar year from `contribution_date` with `lubridate::year()`
 
 ```{r date_year}
-nvc <- mutate(nvc, con_yr = year(con_dt))
+nvc <- mutate(nvc, contribution_year = year(contribution_date))
 ```
 
 ```{r date_range}
-min(nvc$con_dt)
-max(nvc$con_dt)
-sum(nvc$con_dt > today())
+min(nvc$contribution_date)
+max(nvc$contribution_date)
+sum(nvc$contribution_date > today())
 ```
 
 ```{r bar_year, echo=FALSE}
 nvc %>% 
-  count(con_yr) %>% 
-  mutate(even = is_even(con_yr)) %>% 
-  ggplot(aes(x = con_yr, y = n)) +
+  count(contribution_year) %>% 
+  mutate(even = is_even(contribution_year)) %>% 
+  ggplot(aes(x = contribution_year, y = n)) +
   geom_col(aes(fill = even)) + 
   scale_fill_brewer(palette = "Dark2") +
   scale_y_continuous(labels = comma) +
@@ -670,7 +690,7 @@ nvc %>%
   theme(legend.position = "bottom") +
   labs(
     title = "Nevada Contributions by Year",
-    caption = "Source: {source}",
+    caption = "Source: Nevada Secretary of State",
     fill = "Election Year",
     x = "Year Made",
     y = "Count"
@@ -696,34 +716,44 @@ glimpse(sample_n(nvc, 50))
 
 ## Export
 
-Now the file can be saved on disk for upload to the Accountability server.
+Now the file can be saved on disk for upload to the Accountability server. We
+will name the object using a date range of the records included.
 
-```{r clean_dir}
+```{r clean-timestamp}
+min_dt <- str_remove_all(min(nvc$contribution_date), "-")
+max_dt <- str_remove_all(max(nvc$contribution_date), "-")
+csv_ts <- paste(min_dt, max_dt, sep = "-")
+```
+
+```{r clean-dir}
 clean_dir <- dir_create(here("nv", "contribs", "data", "clean"))
-clean_path <- path(clean_dir, "nv_contribs_clean.csv")
-write_csv(nvc, clean_path, na = "")
-(clean_size <- file_size(clean_path))
-file_encoding(clean_path) %>% 
-  mutate(across(path, path.abbrev))
+clean_csv <- path(clean_dir, glue("nv_contribs_{csv_ts}.csv"))
+clean_rds <- path_ext_set(clean_csv, "rds")
+```
+
+```{r clean-write}
+write_csv(nvc, clean_csv, na = "")
+write_rds(nvc, clean_rds, compress = "xz")
+(clean_size <- file_size(clean_csv))
 ```
 
 ## Upload
 
 We can use the `aws.s3::put_object()` to upload the text file to the IRW server.
 
-```{r aws_upload, eval=FALSE}
-aws_path <- path("csv", basename(clean_path))
-if (!object_exists(aws_path, "publicaccountability")) {
+```{r aws-upload, eval=FALSE}
+aws_key <- path("csv", basename(clean_csv))
+if (!object_exists(aws_csv, "publicaccountability")) {
   put_object(
-    file = clean_path,
-    object = aws_path, 
+    file = clean_csv,
+    object = aws_key, 
     bucket = "publicaccountability",
     acl = "public-read",
     show_progress = TRUE,
     multipart = TRUE
   )
 }
-aws_head <- head_object(aws_path, "publicaccountability")
+aws_head <- head_object(aws_csv, "publicaccountability")
 (aws_size <- as_fs_bytes(attr(aws_head, "content-length")))
 unname(aws_size == clean_size)
 ```
