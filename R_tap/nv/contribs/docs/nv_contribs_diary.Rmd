@@ -305,7 +305,7 @@ link provided to the account email address. The link will not work for anybody
 not logged into that NVSOS account.
 
 ```{r raw_dir}
-raw_url <- "https://www.nvsos.gov/yourreports/CampaignFinance.43993.102221071331.zip"
+raw_url <- "https://www.nvsos.gov/yourreports/CampaignFinance.43993.102721094009.zip"
 raw_dir <- dir_create(here("nv", "contribs", "data", "raw"))
 raw_zip <- path(raw_dir, basename(raw_url))
 ```
@@ -325,7 +325,10 @@ if (!file_exists(raw_zip)) {
   put_object(
     file = raw_zip,
     object = aws_key,
-    bucket = aws_bkt
+    bucket = aws_bkt,
+    acl = "public-read",
+    show_progress = TRUE,
+    multipart = TRUE
   )
 } else if (object_exists(aws_key, aws_bkt)) {
   save_object(
@@ -451,7 +454,7 @@ All six tables can then be read into a list using `readr::read_fwf()` and the
 (1) width tables and (2) column type specifications.
 
 ```{r raw_read}
-nv <- pmap(
+nv <- pmap( # 1,116,010
   .f = read_fwf,
   locale = locale(
     date_format = "%m/%d/%Y",
@@ -563,23 +566,314 @@ nvc <- nv$Contributions %>%
 ### Contributors
 
 ```{r ctbr_nms}
-contributor_names <- nv$Contributors %>% 
-  filter(contact_id %in% nv$Contributions$contributor_id) %>% 
+all_contributors <- nv$Contributors %>% 
+  filter(contact_id %in% nv$Contributions$contributor_id)
+```
+
+## Wrangle
+
+To improve the searchability of the database, we will perform some consistent,
+confident string normalization. For geographic variables like city names and
+ZIP codes, the corresponding `campfin::normal_*()` functions are tailor made to 
+facilitate this process.
+
+### Address
+
+For the street `addresss` variable, the `campfin::normal_address()` function
+will force consistence case, remove punctuation, and abbreviate official 
+USPS suffixes.
+
+```{r address-norm}
+addr_norm <- all_contributors %>% 
+  distinct(address_1, address_2) %>% 
+  mutate(
+    across(
+      starts_with("address_"),
+      list(xnorm = normal_address),
+      abbs = usps_street
+    )
+  ) %>% 
   unite(
-    col = contributor_name,
-    first_name, middle_name, last_name,
+    col = address_norm,
+    ends_with("_xnorm"),
     sep = " ",
     remove = TRUE,
     na.rm = TRUE
+  ) %>% 
+  mutate(across(address_norm, na_if, ""))
+```
+
+```{r address-view}
+addr_norm
+```
+
+```{r address-join}
+all_contributors <- left_join(
+  x = all_contributors, 
+  y = addr_norm, 
+  by = c("address_1", "address_2")
+)
+```
+
+### ZIP
+
+For ZIP codes, the `campfin::normal_zip()` function will attempt to create
+valid _five_ digit codes by removing the ZIP+4 suffix and returning leading
+zeroes dropped by other programs like Microsoft Excel.
+
+```{r zip-norm}
+all_contributors <- all_contributors %>% 
+  mutate(
+    zip_norm = normal_zip(
+      zip = zip,
+      na_rep = TRUE
+    )
   )
 ```
+
+```{r zip-progress}
+progress_table(
+  all_contributors$zip,
+  all_contributors$zip_norm,
+  compare = valid_zip
+)
+```
+
+### State
+
+Valid two digit state abbreviations can be made using the 
+`campfin::normal_state()` function.
+
+```{r state-norm}
+all_contributors <- all_contributors %>% 
+  mutate(
+    state_norm = normal_state(
+      state = state,
+      abbreviate = TRUE,
+      na_rep = TRUE
+    )
+  )
+```
+
+```{r state-view}
+all_contributors %>% 
+  filter(state != state_norm) %>% 
+  count(state, state_norm, sort = TRUE)
+```
+
+```{r state-progress}
+progress_table(
+  all_contributors$state,
+  all_contributors$state_norm,
+  compare = valid_state
+)
+```
+
+### City
+
+Cities are the most difficult geographic variable to normalize, simply due to
+the wide variety of valid cities and formats.
+
+#### Normal
+
+The `campfin::normal_city()` function is a good start, again converting case,
+removing punctuation, but _expanding_ USPS abbreviations. We can also remove
+`invalid_city` values.
+
+```{r city-norm}
+norm_city <- all_contributors %>% 
+  distinct(city, state_norm, zip_norm) %>% 
+  mutate(
+    city_norm = normal_city(
+      city = city, 
+      abbs = usps_city,
+      states = c("NV", "DC", "NEVADA"),
+      na = invalid_city,
+      na_rep = TRUE
+    )
+  )
+```
+
+#### Swap
+
+We can further improve normalization by comparing our normalized value
+against the _expected_ value for that record's state abbreviation and ZIP code.
+If the normalized value is either an abbreviation for or very similar to the
+expected value, we can confidently swap those two.
+
+```{r city-swap}
+norm_city <- norm_city %>% 
+  rename(city_raw = city) %>% 
+  left_join(
+    y = zipcodes,
+    by = c(
+      "state_norm" = "state",
+      "zip_norm" = "zip"
+    )
+  ) %>% 
+  rename(city_match = city) %>% 
+  mutate(
+    match_abb = is_abbrev(city_norm, city_match),
+    match_dist = str_dist(city_norm, city_match),
+    city_swap = if_else(
+      condition = !is.na(match_dist) & (match_abb | match_dist == 1),
+      true = city_match,
+      false = city_norm
+    )
+  ) %>% 
+  select(
+    -city_match,
+    -match_dist,
+    -match_abb
+  )
+```
+
+```{r city-rejoin}
+all_contributors <- left_join(
+  x = all_contributors,
+  y = norm_city,
+  by = c(
+    "city" = "city_raw", 
+    "state_norm", 
+    "zip_norm"
+  )
+)
+```
+
+#### Refine
+
+The [OpenRefine][or] algorithms can be used to group similar strings and replace
+the less common versions with their most common counterpart. This can greatly
+reduce inconsistency, but with low confidence; we will only keep any refined
+strings that have a valid city/state/zip combination.
+
+[or]: https://openrefine.org/
+
+```{r city-refine}
+good_refine <- all_contributors %>% 
+  mutate(
+    city_refine = city_swap %>% 
+      key_collision_merge() %>% 
+      n_gram_merge(numgram = 1)
+  ) %>% 
+  filter(city_refine != city_swap) %>% 
+  inner_join(
+    y = zipcodes,
+    by = c(
+      "city_refine" = "city",
+      "state_norm" = "state",
+      "zip_norm" = "zip"
+    )
+  )
+```
+
+```{r city-count, echo=FALSE}
+good_refine %>%
+  count(
+    state_norm, 
+    zip_norm, 
+    city_swap, 
+    city_refine,
+    sort = TRUE
+  )
+```
+
+Then we can join the refined values back to the database.
+
+```{r city-join}
+all_contributors <- all_contributors %>% 
+  left_join(good_refine, by = names(.)) %>% 
+  mutate(city_refine = coalesce(city_refine, city_swap))
+```
+
+## Join
 
 ```{r ctbr_join}
 nvc <- left_join(
   x = nvc,
-  y = contributor_names,
+  y = all_contributors,
   by = c("contributor_id" = "contact_id")
 )
+```
+
+#### City Progress
+
+Our goal for normalization was to increase the proportion of city values known
+to be valid and reduce the total distinct values by correcting misspellings.
+
+```{r city-progress, echo=FALSE}
+many_city <- c(valid_city, extra_city)
+progress <- progress_table(
+  str_to_upper(nvc$city),
+  nvc$city_norm,
+  nvc$city_swap,
+  nvc$city_refine,
+  compare = many_city
+) %>% mutate(stage = as_factor(stage))
+progress %>% 
+    mutate(across(stage, md_code)) %>% 
+    kable(digits = 3)
+```
+
+You can see how the percentage of valid values increased with each stage.
+
+```{r bar-progress, echo=FALSE}
+raw_in <- percent(prop_in(nvc$city, valid_city))
+progress %>% 
+  ggplot(aes(x = stage, y = prop_in)) +
+  geom_hline(yintercept = 0.99) +
+  geom_col(fill = dark2["purple"]) +
+  coord_cartesian(ylim = c(0.75, 1)) +
+  scale_y_continuous(labels = percent) +
+  labs(
+    title = "Nevada City Normalization Progress",
+    subtitle = glue("Raw at {raw_in} before conversion to uppercase"),
+    x = "Stage",
+    y = "Percent Valid"
+  )
+```
+
+More importantly, the number of distinct values decreased each stage. We were
+able to confidently change many distinct invalid values to their valid
+equivalent.
+
+```{r bar-distinct, echo=FALSE}
+progress %>% 
+  select(
+    stage, 
+    all = n_distinct,
+    bad = n_diff
+  ) %>% 
+  mutate(good = all - bad) %>% 
+  pivot_longer(c("good", "bad")) %>% 
+  mutate(name = name == "good") %>% 
+  ggplot(aes(x = stage, y = value)) +
+  geom_col(aes(fill = name)) +
+  scale_fill_brewer(palette = "Dark2", direction = -1) +
+  scale_y_continuous(labels = comma) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "Nevada City Normalization Progress",
+    subtitle = "Distinct values, valid and invalid",
+    x = "Stage",
+    y = "Distinct Values",
+    fill = "Valid"
+  )
+```
+
+Before exporting, we can remove the intermediary normalization columns and
+rename all added variables with the `_clean` suffix.
+
+```{r clean-select}
+nvc <- nvc %>% 
+  select(
+    -city_norm,
+    -city_swap,
+    city_clean = city_refine
+  ) %>% 
+  rename_all(~str_replace(., "_norm", "_clean")) %>% 
+  rename_all(~str_remove(., "_raw")) %>% 
+  relocate(address_clean, city_clean, state_clean, .before = zip_clean)
 ```
 
 ## Explore
@@ -610,7 +904,7 @@ sum(nvc$dupe_flag)
 ```
 
 ```{r key_vars}
-key_vars <- c("contributor_name", "contribution_date", 
+key_vars <- c("last_name", "contribution_date", 
               "contribution_amount", "recipient_name")
 ```
 
@@ -696,10 +990,6 @@ nvc %>%
     y = "Count"
   )
 ```
-
-## Wrangle
-
-There are no geographic variables in the database.
 
 ## Conclude
 

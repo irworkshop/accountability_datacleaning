@@ -1,7 +1,7 @@
 Nevada Contributions
 ================
 Kiernan Nicholls
-Fri Oct 22 13:14:25 2021
+Wed Oct 27 13:53:48 2021
 
 -   [Project](#project)
 -   [Objectives](#objectives)
@@ -19,13 +19,18 @@ Fri Oct 22 13:14:25 2021
 -   [Join](#join)
     -   [Recipient](#recipient)
     -   [Contributors](#contributors)
+-   [Wrangle](#wrangle)
+    -   [Address](#address)
+    -   [ZIP](#zip)
+    -   [State](#state)
+    -   [City](#city)
+-   [Join](#join-1)
 -   [Explore](#explore)
     -   [Missing](#missing)
     -   [Duplicates](#duplicates)
     -   [Categorical](#categorical)
     -   [Amounts](#amounts)
     -   [Dates](#dates)
--   [Wrangle](#wrangle)
 -   [Conclude](#conclude)
 -   [Export](#export)
 -   [Upload](#upload)
@@ -209,6 +214,10 @@ about_names <- str_subset(html_text(html_nodes(about, "b")), "\\d")
 | Party                     | varchar(60) |             61 |     60 |
 | Office                    | varchar(60) |            121 |     60 |
 | Jurisdiction              | varchar(50) |            181 |     50 |
+| Mailing Address           | varchar(50) |            231 |     50 |
+| Mailing City              | varchar(25) |            281 |     25 |
+| Mailing State             | varchar(2)  |            306 |      2 |
+| Mailing Zip               | varchar(9)  |            308 |      9 |
 
 | Field Name            | Data Type    | Start Position | Length |
 |:----------------------|:-------------|---------------:|-------:|
@@ -237,6 +246,11 @@ about_names <- str_subset(html_text(html_nodes(about, "b")), "\\d")
 | First Name              | varchar(30)  |             11 |     30 |
 | Middle Name             | varchar(30)  |             41 |     30 |
 | Last Name               | varchar(100) |             71 |    100 |
+| Address 1               | varchar(60)  |            171 |     60 |
+| Address 2               | varchar(30)  |            231 |     30 |
+| City                    | varchar(45)  |            261 |     45 |
+| State                   | varchar(2)   |            306 |      2 |
+| Zip                     | varchar(10)  |            308 |     10 |
 
 | Field Name                                                    | Data Type   | Start Position | Length |
 |:--------------------------------------------------------------|:------------|---------------:|-------:|
@@ -352,7 +366,7 @@ the link provided to the account email address. The link will not work
 for anybody not logged into that NVSOS account.
 
 ``` r
-raw_url <- "https://www.nvsos.gov/yourreports/CampaignFinance.43993.102221071331.zip"
+raw_url <- "https://www.nvsos.gov/yourreports/CampaignFinance.43993.102721094009.zip"
 raw_dir <- dir_create(here("nv", "contribs", "data", "raw"))
 raw_zip <- path(raw_dir, basename(raw_url))
 ```
@@ -362,7 +376,7 @@ This URL contains the date the report was generated.
 ``` r
 report_time <- mdy_hms(str_extract(raw_url, "\\d+(?=\\.zip$)"))
 with_tz(report_time, tzone = "PST")
-#> [1] "2021-10-22 07:13:31 PST"
+#> [1] "2021-10-27 09:40:09 PST"
 ```
 
 ``` r
@@ -373,7 +387,10 @@ if (!file_exists(raw_zip)) {
   put_object(
     file = raw_zip,
     object = aws_key,
-    bucket = aws_bkt
+    bucket = aws_bkt,
+    acl = "public-read",
+    show_progress = TRUE,
+    multipart = TRUE
   )
 } else if (object_exists(aws_key, aws_bkt)) {
   save_object(
@@ -382,7 +399,7 @@ if (!file_exists(raw_zip)) {
     file = raw_zip
   )
 }
-#> /home/kiernan/Documents/tap/R_tap/nv/contribs/data/raw/CampaignFinance.43993.102221071331.zip
+#> /home/kiernan/Documents/tap/R_tap/nv/contribs/data/raw/CampaignFinance.43993.102721094009.zip
 ```
 
 This raw ZIP archive has been backed up to the IRW server.
@@ -403,12 +420,12 @@ raw_txt <- unzip(raw_zip, exdir = raw_dir)
 
 | Name                                               |  Length | Date                |
 |:---------------------------------------------------|--------:|:--------------------|
-| `CampaignFinance.Cnddt.43993.102221071331.txt`     |    2.2M | 2021-10-22 07:13:00 |
-| `CampaignFinance.Cntrbt.43993.102221071331.txt`    |  56.92M | 2021-10-22 07:13:00 |
-| `CampaignFinance.Cntrbtrs-.43993.102221071331.txt` |  67.96M | 2021-10-22 07:13:00 |
-| `CampaignFinance.Expn.43993.102221071331.txt`      |  33.44M | 2021-10-22 07:13:00 |
-| `CampaignFinance.Grp.43993.102221071331.txt`       | 380.07K | 2021-10-22 07:13:00 |
-| `CampaignFinance.Rpr.43993.102221071331.txt`       |   7.73M | 2021-10-22 07:13:00 |
+| `CampaignFinance.Cnddt.43993.102721094009.txt`     |    2.2M | 2021-10-27 09:40:00 |
+| `CampaignFinance.Cntrbt.43993.102721094009.txt`    |  56.92M | 2021-10-27 09:40:00 |
+| `CampaignFinance.Cntrbtrs-.43993.102721094009.txt` |  67.96M | 2021-10-27 09:40:00 |
+| `CampaignFinance.Expn.43993.102721094009.txt`      |  33.44M | 2021-10-27 09:40:00 |
+| `CampaignFinance.Grp.43993.102721094009.txt`       | 380.07K | 2021-10-27 09:40:00 |
+| `CampaignFinance.Rpr.43993.102721094009.txt`       |   7.73M | 2021-10-27 09:40:00 |
 
 We need to match the order of this vector to the order of the tables.
 
@@ -527,7 +544,7 @@ All six tables can then be read into a list using `readr::read_fwf()`
 and the (1) width tables and (2) column type specifications.
 
 ``` r
-nv <- pmap(
+nv <- pmap( # 1,116,010
   .f = read_fwf,
   locale = locale(
     date_format = "%m/%d/%Y",
@@ -545,23 +562,23 @@ The total number of rows read matches what we were told when exporting.
 
 ``` r
 comma(sum(map_dbl(nv, nrow)))
-#> [1] "1,116,033"
+#> [1] "1,116,040"
 enframe(map_dbl(nv, nrow))
 #> # A tibble: 6 × 2
 #>   name           value
 #>   <chr>          <dbl>
 #> 1 Candidates      7263
 #> 2 Groups          1306
-#> 3 Reports        45557
-#> 4 Contributors  223407
-#> 5 Contributions 528199
-#> 6 Expenses      310301
+#> 3 Reports        45561
+#> 4 Contributors  223408
+#> 5 Contributions 528200
+#> 6 Expenses      310302
 ```
 
 ## Join
 
 The primary table of interest here is `Contributions`, which lists the
-528,199 contributions made to committees and reported to the state. This
+528,200 contributions made to committees and reported to the state. This
 table does not identify the receiving committee or contributing entity.
 This information is found in the `Groups` and `Contributors` tables,
 respectively. We need to add variables identifying all parties to each
@@ -569,7 +586,7 @@ contribution.
 
 ``` r
 nv$Contributions
-#> # A tibble: 528,199 × 8
+#> # A tibble: 528,200 × 8
 #>    contribution_id report_id candidate_id group_id contribution_date contribution_amo… contribution_type  contributor_id
 #>              <int>     <int>        <int>    <int> <date>                        <dbl> <chr>                       <int>
 #>  1               2      6980           NA     1220 2006-06-28                    35000 Monetary Contribu…              3
@@ -582,7 +599,7 @@ nv$Contributions
 #>  8               9      6987           NA     1364 2006-01-13                     1000 Monetary Contribu…             15
 #>  9              10      6991         2360       NA 2006-02-07                      100 Monetary Contribu…             17
 #> 10              11      6991         2360       NA 2006-02-08                      500 Monetary Contribu…             18
-#> # … with 528,189 more rows
+#> # … with 528,190 more rows
 ```
 
 ### Recipient
@@ -670,34 +687,325 @@ nvc <- nv$Contributions %>%
 ### Contributors
 
 ``` r
-contributor_names <- nv$Contributors %>% 
-  filter(contact_id %in% nv$Contributions$contributor_id) %>% 
+all_contributors <- nv$Contributors %>% 
+  filter(contact_id %in% nv$Contributions$contributor_id)
+```
+
+## Wrangle
+
+To improve the searchability of the database, we will perform some
+consistent, confident string normalization. For geographic variables
+like city names and ZIP codes, the corresponding `campfin::normal_*()`
+functions are tailor made to facilitate this process.
+
+### Address
+
+For the street `addresss` variable, the `campfin::normal_address()`
+function will force consistence case, remove punctuation, and abbreviate
+official USPS suffixes.
+
+``` r
+addr_norm <- all_contributors %>% 
+  distinct(address_1, address_2) %>% 
+  mutate(
+    across(
+      starts_with("address_"),
+      list(xnorm = normal_address),
+      abbs = usps_street
+    )
+  ) %>% 
   unite(
-    col = contributor_name,
-    first_name, middle_name, last_name,
+    col = address_norm,
+    ends_with("_xnorm"),
     sep = " ",
     remove = TRUE,
     na.rm = TRUE
+  ) %>% 
+  mutate(across(address_norm, na_if, ""))
+```
+
+``` r
+addr_norm
+#> # A tibble: 131,323 × 3
+#>    address_1            address_2 address_norm     
+#>    <chr>                <chr>     <chr>            
+#>  1 275 7th Ave.         <NA>      275 7TH AVE      
+#>  2 1224 Western Ave     <NA>      1224 WESTERN AVE 
+#>  3 7511 W Diablo Dr     <NA>      7511 W DIABLO DR 
+#>  4 <NA>                 <NA>      <NA>             
+#>  5 3215 Cinder Lane     <NA>      3215 CINDER LN   
+#>  6 308 Laura Court      <NA>      308 LAURA CT     
+#>  7 453 Second Tee Drive <NA>      453 SECOND TEE DR
+#>  8 PO Box 3108          <NA>      PO BOX 3108      
+#>  9 none                 <NA>      NONE             
+#> 10 PO Box 8760          <NA>      PO BOX 8760      
+#> # … with 131,313 more rows
+```
+
+``` r
+all_contributors <- left_join(
+  x = all_contributors, 
+  y = addr_norm, 
+  by = c("address_1", "address_2")
+)
+```
+
+### ZIP
+
+For ZIP codes, the `campfin::normal_zip()` function will attempt to
+create valid *five* digit codes by removing the ZIP+4 suffix and
+returning leading zeroes dropped by other programs like Microsoft Excel.
+
+``` r
+all_contributors <- all_contributors %>% 
+  mutate(
+    zip_norm = normal_zip(
+      zip = zip,
+      na_rep = TRUE
+    )
   )
 ```
 
 ``` r
+progress_table(
+  all_contributors$zip,
+  all_contributors$zip_norm,
+  compare = valid_zip
+)
+#> # A tibble: 2 × 6
+#>   stage                     prop_in n_distinct  prop_na n_out n_diff
+#>   <chr>                       <dbl>      <dbl>    <dbl> <dbl>  <dbl>
+#> 1 all_contributors$zip        0.779      36229 0.000227 37892  27931
+#> 2 all_contributors$zip_norm   0.986      12582 0.00189   2367   1268
+```
+
+### State
+
+Valid two digit state abbreviations can be made using the
+`campfin::normal_state()` function.
+
+``` r
+all_contributors <- all_contributors %>% 
+  mutate(
+    state_norm = normal_state(
+      state = state,
+      abbreviate = TRUE,
+      na_rep = TRUE
+    )
+  )
+```
+
+``` r
+all_contributors %>% 
+  filter(state != state_norm) %>% 
+  count(state, state_norm, sort = TRUE)
+#> # A tibble: 65 × 3
+#>    state state_norm     n
+#>    <chr> <chr>      <int>
+#>  1 Nv    NV          1034
+#>  2 nv    NV          1032
+#>  3 Ca    CA            59
+#>  4 ca    CA            36
+#>  5 Ne    NE            34
+#>  6 Ut    UT            27
+#>  7 Tx    TX            15
+#>  8 Fl    FL            13
+#>  9 nV    NV            12
+#> 10 Co    CO            11
+#> # … with 55 more rows
+```
+
+``` r
+progress_table(
+  all_contributors$state,
+  all_contributors$state_norm,
+  compare = valid_state
+)
+#> # A tibble: 2 × 6
+#>   stage                       prop_in n_distinct  prop_na n_out n_diff
+#>   <chr>                         <dbl>      <dbl>    <dbl> <dbl>  <dbl>
+#> 1 all_contributors$state        0.983        183 0.000880  2866    126
+#> 2 all_contributors$state_norm   0.999         91 0.00299    121     34
+```
+
+### City
+
+Cities are the most difficult geographic variable to normalize, simply
+due to the wide variety of valid cities and formats.
+
+#### Normal
+
+The `campfin::normal_city()` function is a good start, again converting
+case, removing punctuation, but *expanding* USPS abbreviations. We can
+also remove `invalid_city` values.
+
+``` r
+norm_city <- all_contributors %>% 
+  distinct(city, state_norm, zip_norm) %>% 
+  mutate(
+    city_norm = normal_city(
+      city = city, 
+      abbs = usps_city,
+      states = c("NV", "DC", "NEVADA"),
+      na = invalid_city,
+      na_rep = TRUE
+    )
+  )
+```
+
+#### Swap
+
+We can further improve normalization by comparing our normalized value
+against the *expected* value for that record’s state abbreviation and
+ZIP code. If the normalized value is either an abbreviation for or very
+similar to the expected value, we can confidently swap those two.
+
+``` r
+norm_city <- norm_city %>% 
+  rename(city_raw = city) %>% 
+  left_join(
+    y = zipcodes,
+    by = c(
+      "state_norm" = "state",
+      "zip_norm" = "zip"
+    )
+  ) %>% 
+  rename(city_match = city) %>% 
+  mutate(
+    match_abb = is_abbrev(city_norm, city_match),
+    match_dist = str_dist(city_norm, city_match),
+    city_swap = if_else(
+      condition = !is.na(match_dist) & (match_abb | match_dist == 1),
+      true = city_match,
+      false = city_norm
+    )
+  ) %>% 
+  select(
+    -city_match,
+    -match_dist,
+    -match_abb
+  )
+```
+
+``` r
+all_contributors <- left_join(
+  x = all_contributors,
+  y = norm_city,
+  by = c(
+    "city" = "city_raw", 
+    "state_norm", 
+    "zip_norm"
+  )
+)
+```
+
+#### Refine
+
+The [OpenRefine](https://openrefine.org/) algorithms can be used to
+group similar strings and replace the less common versions with their
+most common counterpart. This can greatly reduce inconsistency, but with
+low confidence; we will only keep any refined strings that have a valid
+city/state/zip combination.
+
+``` r
+good_refine <- all_contributors %>% 
+  mutate(
+    city_refine = city_swap %>% 
+      key_collision_merge() %>% 
+      n_gram_merge(numgram = 1)
+  ) %>% 
+  filter(city_refine != city_swap) %>% 
+  inner_join(
+    y = zipcodes,
+    by = c(
+      "city_refine" = "city",
+      "state_norm" = "state",
+      "zip_norm" = "zip"
+    )
+  )
+```
+
+    #> # A tibble: 23 × 5
+    #>    state_norm zip_norm city_swap         city_refine          n
+    #>    <chr>      <chr>    <chr>             <chr>            <int>
+    #>  1 NY         11733    SETAUKET          EAST SETAUKET        4
+    #>  2 DE         19720    NEWCASTEL         NEW CASTLE           2
+    #>  3 SC         29406    NORTH CHARLESTON  CHARLESTON           2
+    #>  4 CA         91730    RANCHO CUCUMANGA  RANCHO CUCAMONGA     1
+    #>  5 CA         92036    JULIANJULIAN      JULIAN               1
+    #>  6 CA         94114    SAN FRANCISON     SAN FRANCISCO        1
+    #>  7 FL         33304    FORT LAUREDALE    FORT LAUDERDALE      1
+    #>  8 IL         60070    PROSPECTOR HIGHTS PROSPECT HEIGHTS     1
+    #>  9 IN         47591    VINCENNES IN      VINCENNES            1
+    #> 10 NV         89020    ARMAGOSA VALLEY   AMARGOSA VALLEY      1
+    #> # … with 13 more rows
+
+Then we can join the refined values back to the database.
+
+``` r
+all_contributors <- all_contributors %>% 
+  left_join(good_refine, by = names(.)) %>% 
+  mutate(city_refine = coalesce(city_refine, city_swap))
+```
+
+## Join
+
+``` r
 nvc <- left_join(
   x = nvc,
-  y = contributor_names,
+  y = all_contributors,
   by = c("contributor_id" = "contact_id")
 )
 ```
 
+#### City Progress
+
+Our goal for normalization was to increase the proportion of city values
+known to be valid and reduce the total distinct values by correcting
+misspellings.
+
+| stage                    | prop_in | n_distinct | prop_na | n_out | n_diff |
+|:-------------------------|--------:|-----------:|--------:|------:|-------:|
+| `str_to_upper(nvc$city)` |   0.984 |       6736 |   0.000 |  9095 |   1076 |
+| `nvc$city_norm`          |   0.989 |       6524 |   0.001 |  6010 |    846 |
+| `nvc$city_swap`          |   0.996 |       6087 |   0.001 |  2289 |    392 |
+| `nvc$city_refine`        |   0.996 |       6064 |   0.001 |  2217 |    372 |
+
+You can see how the percentage of valid values increased with each
+stage.
+
+![](../plots/bar-progress-1.png)<!-- -->
+
+More importantly, the number of distinct values decreased each stage. We
+were able to confidently change many distinct invalid values to their
+valid equivalent.
+
+![](../plots/bar-distinct-1.png)<!-- -->
+
+Before exporting, we can remove the intermediary normalization columns
+and rename all added variables with the `_clean` suffix.
+
+``` r
+nvc <- nvc %>% 
+  select(
+    -city_norm,
+    -city_swap,
+    city_clean = city_refine
+  ) %>% 
+  rename_all(~str_replace(., "_norm", "_clean")) %>% 
+  rename_all(~str_remove(., "_raw")) %>% 
+  relocate(address_clean, city_clean, state_clean, .before = zip_clean)
+```
+
 ## Explore
 
-There are 555,283 rows of 10 columns. Each record represents a single
+There are 555,284 rows of 21 columns. Each record represents a single
 contribution to a political committee or candidate.
 
 ``` r
 glimpse(nvc)
-#> Rows: 555,283
-#> Columns: 10
+#> Rows: 555,284
+#> Columns: 21
 #> $ contribution_id     <int> 2, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 13, 14, 15, 16, 17, 17, 18, 19, 20, 21, 21, 22,…
 #> $ report_id           <int> 6980, 6980, 6983, 6983, 6983, 6983, 6983, 6983, 6987, 6991, 6991, 6991, 6990, 6990, 6991, …
 #> $ recipient_id        <int> 1220, 1220, 1332, 1332, 1332, 1332, 1332, 1332, 1364, 2360, 2360, 2360, 2368, 2368, 2360, …
@@ -707,9 +1015,20 @@ glimpse(nvc)
 #> $ contribution_amount <dbl> 35000, 35000, 2, 1, 200, 0, 0, 0, 1000, 100, 500, 1000, 0, 0, 500, 5000, 200, 0, 0, 200, 2…
 #> $ contribution_type   <chr> "Monetary Contribution", "Monetary Contribution", "Monetary Contribution", "Monetary Contr…
 #> $ contributor_id      <int> 3, 3, 8, 8, 8, 9, 9, 9, 15, 17, 18, 19, 20, 20, 21, 22, 23, 24, 24, 25, 25, 26, 27, 27, 24…
-#> $ contributor_name    <chr> "UNITE HERE TIP", "UNITE HERE TIP", "Bonnie B Jacobs", "Bonnie B Jacobs", "Bonnie B Jacobs…
+#> $ first_name          <chr> NA, NA, "Bonnie", "Bonnie", "Bonnie", NA, NA, NA, "Michelle Langile", "John", "John", "E. …
+#> $ middle_name         <chr> NA, NA, "B", "B", "B", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "E.", NA, NA, NA, NA, N…
+#> $ last_name           <chr> "UNITE HERE TIP", "UNITE HERE TIP", "Jacobs", "Jacobs", "Jacobs", "NONE", "NONE", "NONE", …
+#> $ address_1           <chr> "275 7th Ave.", "275 7th Ave.", "7511 W Diablo Dr", "7511 W Diablo Dr", "7511 W Diablo Dr"…
+#> $ address_2           <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
+#> $ city                <chr> "New York", "New York", "Las Vegas", "Las Vegas", "Las Vegas", NA, NA, NA, "Las Vegas", "I…
+#> $ state               <chr> "NY", "NY", "NV", "NV", "NV", NA, NA, NA, "NV", "NV", "NV", "NV", "nv", "nv", "NV", "NV", …
+#> $ zip                 <chr> "10001", "10001", "89113", "89113", "89113", NA, NA, NA, "89103-3004", "89451", "89451", "…
+#> $ address_clean       <chr> "275 7TH AVE", "275 7TH AVE", "7511 W DIABLO DR", "7511 W DIABLO DR", "7511 W DIABLO DR", …
+#> $ city_clean          <chr> "NEW YORK", "NEW YORK", "LAS VEGAS", "LAS VEGAS", "LAS VEGAS", NA, NA, NA, "LAS VEGAS", "I…
+#> $ state_clean         <chr> "NY", "NY", "NV", "NV", "NV", NA, NA, NA, "NV", "NV", "NV", "NV", "NV", "NV", "NV", "NV", …
+#> $ zip_clean           <chr> "10001", "10001", "89113", "89113", "89113", NA, NA, NA, "89103", "89451", "89451", "89450…
 tail(nvc)
-#> # A tibble: 6 × 10
+#> # A tibble: 6 × 21
 #>   contribution_id report_id recipient_id recipient_name recipient_type             contribution_date contribution_amount
 #>             <int>     <int>        <int> <chr>          <chr>                      <date>                          <dbl>
 #> 1          751402    119820          672 SNR PAC        Political Action Committee 2021-08-04                       1000
@@ -718,7 +1037,9 @@ tail(nvc)
 #> 4          751405    119820          672 SNR PAC        Political Action Committee 2021-08-16                       1000
 #> 5          751406    119820          672 SNR PAC        Political Action Committee 2021-07-01                       1000
 #> 6          751407    119820          672 SNR PAC        Political Action Committee 2021-09-11                       1000
-#> # … with 3 more variables: contribution_type <chr>, contributor_id <int>, contributor_name <chr>
+#> # … with 14 more variables: contribution_type <chr>, contributor_id <int>, first_name <chr>, middle_name <chr>,
+#> #   last_name <chr>, address_1 <chr>, address_2 <chr>, city <chr>, state <chr>, zip <chr>, address_clean <chr>,
+#> #   city_clean <chr>, state_clean <chr>, zip_clean <chr>
 ```
 
 ### Missing
@@ -727,19 +1048,30 @@ There are no columns missing values.
 
 ``` r
 col_stats(nvc, count_na)
-#> # A tibble: 10 × 4
-#>    col                 class      n     p
-#>    <chr>               <chr>  <int> <dbl>
-#>  1 contribution_id     <int>      0     0
-#>  2 report_id           <int>      0     0
-#>  3 recipient_id        <int>      0     0
-#>  4 recipient_name      <chr>      0     0
-#>  5 recipient_type      <chr>      0     0
-#>  6 contribution_date   <date>     0     0
-#>  7 contribution_amount <dbl>      0     0
-#>  8 contribution_type   <chr>      0     0
-#>  9 contributor_id      <int>      0     0
-#> 10 contributor_name    <chr>      0     0
+#> # A tibble: 21 × 4
+#>    col                 class       n         p
+#>    <chr>               <chr>   <int>     <dbl>
+#>  1 contribution_id     <int>       0 0        
+#>  2 report_id           <int>       0 0        
+#>  3 recipient_id        <int>       0 0        
+#>  4 recipient_name      <chr>       0 0        
+#>  5 recipient_type      <chr>       0 0        
+#>  6 contribution_date   <date>      0 0        
+#>  7 contribution_amount <dbl>       0 0        
+#>  8 contribution_type   <chr>       0 0        
+#>  9 contributor_id      <int>       0 0        
+#> 10 first_name          <chr>  189406 0.341    
+#> 11 middle_name         <chr>  464953 0.837    
+#> 12 last_name           <chr>       6 0.0000108
+#> 13 address_1           <chr>     163 0.000294 
+#> 14 address_2           <chr>  465960 0.839    
+#> 15 city                <chr>     134 0.000241 
+#> 16 state               <chr>     321 0.000578 
+#> 17 zip                 <chr>     126 0.000227 
+#> 18 address_clean       <chr>     244 0.000439 
+#> 19 city_clean          <chr>     462 0.000832 
+#> 20 state_clean         <chr>    1138 0.00205  
+#> 21 zip_clean           <chr>     809 0.00146
 ```
 
 ### Duplicates
@@ -753,7 +1085,7 @@ sum(nvc$dupe_flag)
 ```
 
 ``` r
-key_vars <- c("contributor_name", "contribution_date", 
+key_vars <- c("last_name", "contribution_date", 
               "contribution_amount", "recipient_name")
 ```
 
@@ -762,18 +1094,18 @@ nvc %>%
   filter(dupe_flag) %>% 
   select(contribution_id, report_id, all_of(key_vars))
 #> # A tibble: 14,527 × 6
-#>    contribution_id report_id contributor_name            contribution_date contribution_amount recipient_name           
-#>              <int>     <int> <chr>                       <date>                          <dbl> <chr>                    
-#>  1              18      6991 Howard H & Phyllis S Hengst 2006-02-15                        200 E Tiras                  
-#>  2              19      6991 Howard H & Phyllis S Hengst 2006-02-15                        200 E Tiras                  
-#>  3             103      7034 member dues                 2006-07-15                         11 Mineral County Classroom…
-#>  4             105      7034 member dues                 2006-07-15                         11 Mineral County Classroom…
-#>  5             106      7062 NONE                        2006-01-01                          0 Patricia Herzog          
-#>  6             107      7062 NONE                        2006-01-01                          0 Patricia Herzog          
-#>  7             504     13743 Harrah's Operating Company  2006-10-05                       5000 Susan Brager             
-#>  8             505     13743 Harrah's Operating Company  2006-10-05                       5000 Susan Brager             
-#>  9             536     13756 NONE                        2006-10-26                          0 Patricia Herzog          
-#> 10             537     13756 NONE                        2006-10-26                          0 Patricia Herzog          
+#>    contribution_id report_id last_name                  contribution_date contribution_amount recipient_name            
+#>              <int>     <int> <chr>                      <date>                          <dbl> <chr>                     
+#>  1              18      6991 Hengst                     2006-02-15                        200 E Tiras                   
+#>  2              19      6991 Hengst                     2006-02-15                        200 E Tiras                   
+#>  3             103      7034 member dues                2006-07-15                         11 Mineral County Classroom …
+#>  4             105      7034 member dues                2006-07-15                         11 Mineral County Classroom …
+#>  5             106      7062 NONE                       2006-01-01                          0 Patricia Herzog           
+#>  6             107      7062 NONE                       2006-01-01                          0 Patricia Herzog           
+#>  7             504     13743 Harrah's Operating Company 2006-10-05                       5000 Susan Brager              
+#>  8             505     13743 Harrah's Operating Company 2006-10-05                       5000 Susan Brager              
+#>  9             536     13756 NONE                       2006-10-26                          0 Patricia Herzog           
+#> 10             537     13756 NONE                       2006-10-26                          0 Patricia Herzog           
 #> # … with 14,517 more rows
 ```
 
@@ -781,11 +1113,11 @@ nvc %>%
 
 ``` r
 col_stats(nvc, n_distinct)
-#> # A tibble: 11 × 4
+#> # A tibble: 22 × 4
 #>    col                 class       n          p
 #>    <chr>               <chr>   <int>      <dbl>
-#>  1 contribution_id     <int>  528199 0.951     
-#>  2 report_id           <int>   15887 0.0286    
+#>  1 contribution_id     <int>  528200 0.951     
+#>  2 report_id           <int>   15888 0.0286    
 #>  3 recipient_id        <int>    2716 0.00489   
 #>  4 recipient_name      <chr>    2795 0.00503   
 #>  5 recipient_type      <chr>       7 0.0000126 
@@ -793,8 +1125,19 @@ col_stats(nvc, n_distinct)
 #>  7 contribution_amount <dbl>   15630 0.0281    
 #>  8 contribution_type   <chr>       4 0.00000720
 #>  9 contributor_id      <int>  171561 0.309     
-#> 10 contributor_name    <chr>  128542 0.231     
-#> 11 dupe_flag           <lgl>       2 0.00000360
+#> 10 first_name          <chr>   19151 0.0345    
+#> 11 middle_name         <chr>    1191 0.00214   
+#> 12 last_name           <chr>   73860 0.133     
+#> 13 address_1           <chr>  121986 0.220     
+#> 14 address_2           <chr>    8731 0.0157    
+#> 15 city                <chr>    8922 0.0161    
+#> 16 state               <chr>     183 0.000330  
+#> 17 zip                 <chr>   36229 0.0652    
+#> 18 address_clean       <chr>  109556 0.197     
+#> 19 city_clean          <chr>    6064 0.0109    
+#> 20 state_clean         <chr>      91 0.000164  
+#> 21 zip_clean           <chr>   12582 0.0227    
+#> 22 dupe_flag           <lgl>       2 0.00000360
 ```
 
 ![](../plots/distinct_plots-1.png)<!-- -->![](../plots/distinct_plots-2.png)<!-- -->
@@ -806,7 +1149,7 @@ summary(nvc$contribution_amount)
 #>     Min.  1st Qu.   Median     Mean  3rd Qu.     Max. 
 #>   -25000       25      200     2089     1000 20700000
 mean(nvc$contribution_amount <= 0)
-#> [1] 0.0007671764
+#> [1] 0.000767175
 ```
 
 These are the records with the minimum and maximum amounts.
@@ -816,7 +1159,7 @@ glimpse(nvc[c(
   which.max(nvc$contribution_amount), which.min(nvc$contribution_amount)
 ), ])
 #> Rows: 2
-#> Columns: 11
+#> Columns: 22
 #> $ contribution_id     <int> 544130, 154183
 #> $ report_id           <int> 80598, 40633
 #> $ recipient_id        <int> 3708, 4995
@@ -826,7 +1169,18 @@ glimpse(nvc[c(
 #> $ contribution_amount <dbl> 20700000, -25000
 #> $ contribution_type   <chr> "Monetary Contribution", "Monetary Contribution"
 #> $ contributor_id      <int> 268234, 72128
-#> $ contributor_name    <chr> "NV Energy", "Paul Anderson (Loan Reimb - orig loan was in  2011)"
+#> $ first_name          <chr> NA, "Paul"
+#> $ middle_name         <chr> NA, NA
+#> $ last_name           <chr> "NV Energy", "Anderson (Loan Reimb - orig loan was in  2011)"
+#> $ address_1           <chr> "6226 W Sahara Avenue", "6180 Loyal Royal"
+#> $ address_2           <chr> NA, NA
+#> $ city                <chr> "Las Vegas", "Las Vegas"
+#> $ state               <chr> "NV", "NV"
+#> $ zip                 <chr> "89146", "89131"
+#> $ address_clean       <chr> "6226 W SAHARA AVE", "6180 LOYAL ROYAL"
+#> $ city_clean          <chr> "LAS VEGAS", "LAS VEGAS"
+#> $ state_clean         <chr> "NV", "NV"
+#> $ zip_clean           <chr> "89146", "89131"
 #> $ dupe_flag           <lgl> FALSE, FALSE
 ```
 
@@ -852,16 +1206,12 @@ sum(nvc$contribution_date > today())
 
 ![](../plots/bar_year-1.png)<!-- -->
 
-## Wrangle
-
-There are no geographic variables in the database.
-
 ## Conclude
 
 ``` r
 glimpse(sample_n(nvc, 50))
 #> Rows: 50
-#> Columns: 12
+#> Columns: 23
 #> $ contribution_id     <int> 2244, 448754, 699014, 286634, 690067, 602853, 388434, 174273, 221412, 674976, 158639, 2392…
 #> $ report_id           <int> 17104, 68590, 107580, 49175, 107171, 85038, 61771, 41571, 41333, 103703, 41573, 44577, 494…
 #> $ recipient_id        <int> 3306, 5756, 13471, 5767, 13519, 9557, 8106, 1177, 1643, 6526, 1934, 6188, 1643, 987, 13787…
@@ -871,12 +1221,23 @@ glimpse(sample_n(nvc, 50))
 #> $ contribution_amount <dbl> 465.28, 1000.00, 500.00, 100.00, 350.00, 500.00, 500.00, 30.00, 500.00, 500.00, 76.30, 100…
 #> $ contribution_type   <chr> "In Kind Contribution", "Monetary Contribution", "Monetary Contribution", "Monetary Contri…
 #> $ contributor_id      <int> 2182, 244629, 147386, 167717, 373366, 265634, 10616, 90027, 113183, 179517, 74851, 143466,…
-#> $ contributor_name    <chr> "DRAKE", "Apex Granite Company LLC", "GlaxoSmithKline LLC PAC", "Steven Eisen", "Tanasi La…
+#> $ first_name          <chr> NA, NA, NA, "Steven", NA, "Young", NA, "CARI", NA, NA, "MARY", NA, "Blanche R", "Kathy", "…
+#> $ middle_name         <chr> NA, NA, NA, NA, NA, NA, NA, "E", NA, NA, "K", NA, NA, "J", NA, NA, NA, NA, NA, NA, NA, NA,…
+#> $ last_name           <chr> "DRAKE", "Apex Granite Company LLC", "GlaxoSmithKline LLC PAC", "Eisen", "Tanasi Las Offic…
+#> $ address_1           <chr> "1519 FOSTER DR", "9910 W. Cheyenne Ave.", "Five Moore Drive", "1044 Dodger Blue Ave", "87…
+#> $ address_2           <chr> NA, "#110", "P.O. Box 13358", NA, "#105", NA, NA, NA, NA, NA, "APT 3", "Suite 700", NA, NA…
+#> $ city                <chr> "RENO", "Las Vegas", "Res. Triangle Park", "Las Vegas", "Las Vegas", "Las Vegas", "Las Veg…
+#> $ state               <chr> "NV", "NV", "NC", "NV", "NV", "NV", "NV", "OK", "NC", "NV", "CA", "DC", "PA", "WA", "NV", …
+#> $ zip                 <chr> "89509-1211", "89129", "27709", "89123", "89148", "89148", "89103", "730714332", "27605-03…
+#> $ address_clean       <chr> "1519 FOSTER DR", "9910 W CHEYENNE AVE #110", "FIVE MOORE DR PO BOX 13358", "1044 DODGER B…
+#> $ city_clean          <chr> "RENO", "LAS VEGAS", "RES TRIANGLE PARK", "LAS VEGAS", "LAS VEGAS", "LAS VEGAS", "LAS VEGA…
+#> $ state_clean         <chr> "NV", "NV", "NC", "NV", "NV", "NV", "NV", "OK", "NC", "NV", "CA", "DC", "PA", "WA", "NV", …
+#> $ zip_clean           <chr> "89509", "89129", "27709", "89123", "89148", "89148", "89103", "73071", "27605", "89106", …
 #> $ dupe_flag           <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE,…
 #> $ contribution_year   <dbl> 2007, 2017, 2020, 2014, 2020, 2018, 2016, 2013, 2013, 2020, 2013, 2014, 2014, 2013, 2020, …
 ```
 
-1.  There are 555,283 records in the database.
+1.  There are 555,284 records in the database.
 2.  There are 14,527 duplicate records in the database.
 3.  The range and distribution of `amount` and `date` seem reasonable.
 4.  There are 0 records missing key variables.
@@ -907,7 +1268,7 @@ clean_rds <- path_ext_set(clean_csv, "rds")
 write_csv(nvc, clean_csv, na = "")
 write_rds(nvc, clean_rds, compress = "xz")
 (clean_size <- file_size(clean_csv))
-#> 71.6M
+#> 114M
 ```
 
 ## Upload
