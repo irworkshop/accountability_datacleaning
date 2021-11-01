@@ -136,7 +136,8 @@ if (length(exist_json) > 0) {
 
   # request first page
   cli_h3("Page number: {n_pg}")
-  fil_get <- GET(
+  fil_get <- RETRY(
+    verb = "GET",
     url = "https://lda.senate.gov/api/v1/filings/",
     query = list(page_size = pg_size, filing_dt_posted_after = dt_from),
     auth_lda()
@@ -172,7 +173,7 @@ while (has_next) {
   n_pg <- n_pg + 1
   cli_h3("Page number: {n_pg}")
   # request next page if exists
-  fil_get <- GET(fil_dat[["next"]], auth_lda())
+  fil_get <- RETRY("GET", fil_dat[["next"]], auth_lda())
   # repeat binding
   fil_txt <- content(fil_get, "text", encoding = "UTF-8")
   fil_dat <- content(fil_get, "parsed")
