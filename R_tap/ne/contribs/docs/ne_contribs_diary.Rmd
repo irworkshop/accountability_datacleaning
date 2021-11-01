@@ -322,21 +322,20 @@ statements then we can identify all transactions.
 ## Read
 
 ```{r raw_read}
-nec <- map(
+ne_all <- map(
   .x = raw_all,
   .f = read_delim,
   delim = "|",
   escape_backslash = FALSE,
   escape_double = FALSE,
-  col_types = cols(
-    .default = col_character()
-  )
+  col_types = cols(.default = col_character()),
+  trim_ws = TRUE
 )
 ```
 
 ```{r echo=FALSE}
-nec <- map(nec, clean_names)
-names(nec) <- path_ext_remove(basename(raw_all))
+ne_all <- map(ne_all, clean_names)
+names(ne_all) <- path_ext_remove(basename(raw_all))
 ```
 
 ### Format
@@ -345,78 +344,52 @@ Now that each of the files is read as an element of a list, we can format them
 for combination and matching against the tables containing full information on
 the filing committees.
 
-#### Form A-1
+#### A Forms
 
 ```{r form_a1}
-a1 <- nec$forma1 %>% 
-  mutate(across(where(is.character), str_squish)) %>% 
+a1 <- ne_all$forma1 %>% 
   select(starts_with("committee")) %>% 
-  rename_with(~str_replace(., "^committee_", "comm_")) %>% 
-  rename(comm_id = comm_id_number) %>% 
-  remove_empty("cols") %>% 
-  remove_constant() %>% 
+  rename(committee_id = committee_id_number) %>% 
   distinct()
 ```
 
-#### Form B1-AB
+#### B Forms
 
-```{r form_b1ab}
-b1ab <- nec$formb1ab %>% 
-  mutate(across(where(is.character), str_squish)) %>% 
-  rename_with(~str_replace(., "^committee_", "comm_")) %>% 
-  rename_with(~str_remove(., "^contributor_")) %>% 
-  select(-comm_name) %>% 
-  rename(
-    received = date_received,
-    cont_id = id,
-    type = type_of_contributor,
-    date = contribution_date,
-    amount = cash_contribution,
-    in_kind = in_kind_contribution,
-    unpaid = unpaid_pledges,
-    mi = middle_initial,
-    org_name = organization_name,
-    zip = zipcode
-  ) %>% 
-  remove_empty("cols") %>% 
-  remove_constant()
+```{r}
+b1ab <- ne_all$formb1ab %>% 
+  select(
+      committee_id,
+      date_received,
+      contributor_id,
+      contribution_date,
+      cash_contribution,
+      in_kind_contribution,
+      unpaid_pledges
+    )
 ```
 
-#### Form B2-A
-
-```{r form_b2a}
-b2a <- nec$formb2a %>% 
-  mutate(across(where(is.character), str_squish)) %>% 
-  rename_with(~str_replace(., "^committee_", "comm_")) %>% 
-  rename_with(~str_remove(., "^contributor_")) %>% 
-  rename(
-    received = date_received,
-    cont_id = id,
-    date = contribution_date,
-    amount = cash_contribution,
-    in_kind = in_kind_contribution,
-    unpaid = unpaid_pledges
-  ) %>% 
-  remove_empty("cols") %>% 
-  remove_constant()
+```{r}
+b2a <- ne_all$formb2a %>% 
+  select(
+    committee_id,
+    date_received,
+    contributor_id,
+    contribution_date,
+    cash_contribution,
+    in_kind_contribution,
+    unpaid_pledges
+  )
 ```
 
-#### Form B4-A
-
-```{r form_b4a}
-b4a <- nec$formb4a %>% 
-  mutate(across(where(is.character), str_squish)) %>% 
-  rename_with(~str_replace(., "^committee_", "comm_")) %>% 
-  rename(
-    received = date_received,
-    cont_id = contributor_id,
-    date = contribution_date,
-    amount = cash_contribution,
-    unpaid = unpaid_pledges,
-    in_kind = in_kind_contribution
-  ) %>% 
-  remove_empty("cols") %>% 
-  remove_constant()
+```{r}
+ne_all$formb4b1 %>% 
+  select(
+    committee_id,
+    date_received,
+    cash_contribution,
+    in_kind_contribution,
+    unpaid_pledges
+  )
 ```
 
 ### Join
@@ -433,7 +406,13 @@ nrow(bx)
 ```
 
 ```{r join_comms}
-nec <- right_join(a1, bx)
+nec <- right_join(
+  x = a1, 
+  y = bx,
+  by = c(
+    "committee_id_number" = "committee_id"
+  )
+)
 ```
 
 ```{r join_parse}
@@ -441,29 +420,21 @@ nec <- nec %>%
   # parse column types
   type_convert(
     col_types = cols(
-      received = col_date_usa(),
-      date = col_date_usa(),
-      amount = col_double(),
-      in_kind = col_double(),
-      unpaid = col_double()
+      date_received = col_date_mdy(),
+      contribution_date = col_date_mdy(),
+      cash_contribution = col_double(),
+      in_kind_contribution = col_double(),
+      unpaid_pledges = col_double()
     )
   ) %>% 
   mutate(
-    # remove zero amount values for combination
-    amount = ifelse(amount == 0, NA, amount),
-    in_kind = ifelse(in_kind == 0, NA, in_kind),
-    unpaid = ifelse(unpaid == 0, NA, unpaid),
+    across(
+      .cols = c(cash_contribution, in_kind_contribution, unpaid_pledges),
+      .fns = ~if_else(. == 0, NA, .)
+    ),
     # create a single amount column
-    amount = coalesce(amount, in_kind, unpaid),
-    # new column indicates amount type
-    amount_type = case_when(
-      !is.na(amount) ~ "cash_contrib",
-      !is.na(in_kind) ~ "in_kind",
-      !is.na(unpaid) ~ "unpaid_pledge"
-    )
-  ) %>% 
-  # remove other amounts
-  select(-in_kind, -unpaid)
+    contribution_amount = coalesce(amount, in_kind, unpaid),
+  )
 ```
 
 ## Explore
