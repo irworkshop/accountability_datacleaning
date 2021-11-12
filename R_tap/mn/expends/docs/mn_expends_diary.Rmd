@@ -1,15 +1,17 @@
 ---
-title: "State Data"
-author: "First Last"
-date: "`r Sys.time()`"
+title: "Minnesota Expenditures"
+author: "Kiernan Nicholls"
+date: "`r date()`"
 output:
   github_document: 
     df_print: tibble
     toc: true
-    toc_dept: 2
+    toc_dept: 3
 editor_options: 
   chunk_output_type: console
 ---
+
+<!-- Place comments regarding knitting here -->
 
 ```{r setup, include=FALSE, purl=FALSE}
 library(knitr)
@@ -19,706 +21,454 @@ opts_chunk$set(
   warning = FALSE,
   message = FALSE,
   error = FALSE,
+  collapse = TRUE,
   comment = "#>",
   fig.path = "../plots/",
   fig.width = 10,
   dpi = 300
 )
-options(width = 99)
-set.seed(10753)
+if (!interactive()) {
+  options(width = 120)
+  set.seed(5)
+}
+```
+
+```{r create-docs-dir, eval=FALSE, echo=FALSE, include=FALSE}
+doc_dir <- fs::dir_create(here::here("mn", "expends", "docs"))
 ```
 
 ## Project
 
-The Accountability Project is an effort to cut across data silos and give journalists, policy
-professionals, activists, and the public at large a simple way to search across huge volumes of
-public data about people and organizations.
+The Accountability Project is an effort to cut across data silos and give
+journalists, policy professionals, activists, and the public at large a simple
+way to search across huge volumes of public data about people and organizations.
 
-Our goal is to standardizing public data on a few key fields by thinking of each dataset row as a
-transaction. For each transaction there should be (at least) 3 variables:
+Our goal is to standardize public data on a few key fields by thinking of each
+dataset row as a transaction. For each transaction there should be (at least) 3
+variables:
 
-1. All **parties** to a transaction
-2. The **date** of the transaction
-3. The **amount** of money involved
+1. All **parties** to a transaction.
+2. The **date** of the transaction.
+3. The **amount** of money involved.
 
 ## Objectives
 
 This document describes the process used to complete the following objectives:
 
 1. How many records are in the database?
-1. Check for duplicates
-1. Check ranges
+1. Check for entirely duplicated records.
+1. Check ranges of continuous variables.
 1. Is there anything blank or missing?
-1. Check for consistency issues
-1. Create a five-digit ZIP Code called `ZIP5`
-1. Create a `YEAR` field from the transaction date
-1. Make sure there is data on both parties to a transaction
+1. Check for consistency issues.
+1. Create a five-digit ZIP Code called `zip`.
+1. Create a `year` field from the transaction date.
+1. Make sure there is data on both parties to a transaction.
 
 ## Packages
 
-The following packages are needed to collect, manipulate, visualize, analyze, and communicate
-these results. The `pacman` package will facilitate their installation and attachment.
+The following packages are needed to collect, manipulate, visualize, analyze,
+and communicate these results. The `pacman` package will facilitate their
+installation and attachment.
 
-The IRW's `campfin` package will also have to be installed from GitHub. This package contains
-functions custom made to help facilitate the processing of campaign finance data.
-
-```{r load_packages, message=FALSE, dfrning=FALSE, error=FALSE}
-if (!require("pacman")) install.packages("pacman")
-pacman::p_load_gh("irworkshop/campfin")
+```{r load-packages, message=FALSE, warning=FALSE, error=FALSE}
+if (!require("pacman")) {
+  install.packages("pacman")
+}
 pacman::p_load(
   tidyverse, # data manipulation
   lubridate, # datetime strings
-  magrittr, # pipe opperators
-  tidytext, # text analysis
-  janitor, # dataframe clean
-  batman, # parse logical
-  refinr, # cluster and merge
+  gluedown, # printing markdown
+  janitor, # clean data frames
+  campfin, # custom irw tools
+  aws.s3, # aws cloud storage
+  refinr, # cluster & merge
   scales, # format strings
-  rvest, # read html files
   knitr, # knit documents
-  vroom, # read files fast
-  glue, # combine strings
-  here, # relative storage
-  fs # search storage 
+  vroom, # fast reading
+  rvest, # scrape html
+  glue, # code strings
+  here, # project paths
+  httr, # http requests
+  fs # local storage 
 )
 ```
 
-This document should be run as part of the `R_campfin` project, which lives as a sub-directory of
-the more general, language-agnostic [`irworkshop/accountability_datacleaning`][01] GitHub
-repository.
+This diary was run using `campfin` version `r packageVersion("campfin")`.
 
-The `R_campfin` project uses the [RStudio projects][02] feature and should be run as such. The
-project also uses the dynamic `here::here()` tool for file paths relative to _your_ machine.
-
-```{r where_here, collapse=TRUE}
-# where does this document knit?
-here::here()
+```{r campfin-version}
+packageVersion("campfin")
 ```
 
-## Data
+```{r package-options, echo=FALSE}
+options(options(knitr.kable.NA = ""))
+```
+
+This document should be run as part of the `R_tap` project, which lives as a
+sub-directory of the more general, language-agnostic
+[`irworkshop/accountability_datacleaning`][tap] GitHub repository.
+
+The `R_tap` project uses the [RStudio projects][rproj] feature and should be
+run as such. The project also uses the dynamic `here::here()` tool for file
+paths relative to _your_ machine.
+
+```{r where-here}
+# where does this document knit?
+here::i_am("mn/expends/docs/mn_expends_diary.Rmd")
+```
+
+[tap]: https://github.com/irworkshop/accountability_datacleaning
+[rproj]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects
+
+## Source
 
 Data is obtained from the [Minnestoa Campaign Finance Board (CFB)][03].
 
 The [CFB's mission][04] is to regulating [campaign finance][05], among other things.
 
-> The Campaign Finance and Public Disclosure Board was established by the state legislature in 1974
-and is charged with the administration of Minnesota Statutes, Chapter 10A, the Campaign Finance and
-Public Disclosure Act, as well as portions of Chapter 211B, the Fair Campaign Practices act.
+> The Campaign Finance and Public Disclosure Board was established by the state
+legislature in 1974 and is charged with the administration of Minnesota
+Statutes, Chapter 10A, the Campaign Finance and Public Disclosure Act, as well
+as portions of Chapter 211B, the Fair Campaign Practices act.
 
-> The Board's mission is to promote public confidence in state government decision-making through
-development, administration, and enforcement of disclosure and public financing programs which will
-ensure public access to and understanding of information filed with the Board.
+> The Board's mission is to promote public confidence in state government
+decision-making through development, administration, and enforcement of
+disclosure and public financing programs which will ensure public access to and
+understanding of information filed with the Board.
 
-> The Board is responsible for administration of statutes governing the financial operations of
-associations that seek to influence Minnesota state elections. The Board's jurisdiction is
-established by Minnesota Statutes Chapter 10A. The Board does not have jurisdiction over federal
-elections, which are regulated by the Federal Election Commission, nor does the Board have
+> The Board is responsible for administration of statutes governing the
+financial operations of associations that seek to influence Minnesota state
+elections. The Board's jurisdiction is established by Minnesota Statutes Chapter
+10A. The Board does not have jurisdiction over federal elections, which are
+regulated by the Federal Election Commission, nor does the Board have
 jurisdiction over local elections.
 
 We can go to the Minnesota Statutes, Chapter 10A, to see the exact scope of the data collection we
 will be wrangling.
 
-> [Subd. 9. Campaign expenditure][06]. "Campaign expenditure" or "expenditure" means a purchase or
-payment of money or anything of value, or an advance of credit, made or incurred for the purpose of
-influencing the nomination or election of a candidate or for the purpose of promoting or defeating
-a ballot question. An expenditure is considered to be made in the year in which the candidate made
-the purchase of goods or services or incurred an obligation to pay for goods or services. An
-expenditure made for the purpose of defeating a candidate is considered made for the purpose of
-influencing the nomination or election of that candidate or any opponent of that candidate...
+> [Subd. 9. Campaign expenditure][06]. "Campaign expenditure" or "expenditure"
+means a purchase or payment of money or anything of value, or an advance of
+credit, made or incurred for the purpose of influencing the nomination or
+election of a candidate or for the purpose of promoting or defeating a ballot
+question. An expenditure is considered to be made in the year in which the
+candidate made the purchase of goods or services or incurred an obligation to
+pay for goods or services. An expenditure made for the purpose of defeating a
+candidate is considered made for the purpose of influencing the nomination or
+election of that candidate or any opponent of that candidate...
 > "Expenditure" does not include:  
 > (1) noncampaign disbursements as defined in subdivision 26;  
-> (2) services provided without compensation by an individual volunteering personal time on behalf
-of a candidate, ballot question, political committee, political fund, principal campaign committee,
-or party unit;  
-> (3) the publishing or broadcasting of news items or editorial comments by the news media; or  
-> (4) an individual's unreimbursed personal use of an automobile owned by the individual and used
-by the individual while volunteering personal time.
+> (2) services provided without compensation by an individual volunteering
+personal time on behalf
+of a candidate, ballot question, political committee, political fund, principal
+campaign committee, or party unit;
+> (3) the publishing or broadcasting of news items or editorial comments by the
+news media; or
+> (4) an individual's unreimbursed personal use of an automobile owned by the
+individual and used by the individual while volunteering personal time.
 
-On the CFB [Self-Help Data Download page][07], there are three types of files listed:
+[03]: https://cfb.mn.gov/
+[04]: https://cfb.mn.gov/citizen-resources/the-board/more-about-the-board/mission/
+[05]: https://cfb.mn.gov/citizen-resources/board-programs/overview/campaign-finance/
+[06]: https://www.revisor.mn.gov/statutes/cite/10A.01#stat.10A.01.9
+[07]: https://cfb.mn.gov/reports-and-data/self-help/data-downloads/campaign-finance/ 
 
-1. Contributions received
-1. Expenditures and contributions made
-1. Independent expenditures
 
-For each type of file, there is a table listing the 8 types of files that can be downloaded. Here 
-is the table for Expenditures and contributions made:
+## Download
 
-```{r download_table, echo=FALSE, results='asis'}
-base_url <- "https://cfb.mn.gov/reports-and-data/self-help/data-downloads/campaign-finance/"
-page <- read_html(base_url)
-file_table <- page %>% 
-  html_node(".content-main > table:nth-child(4)") %>% 
-  html_table() %>% 
-  as_tibble() %>% 
-  clean_names()
-
-css_selectors <- glue(
-  ".content-main",
-  "table:nth-child(4)",
-  "tbody:nth-child(2)",
-  "tr:nth-child({seq_along(file_table$download_data)})",
-  "td:nth-child(3)",
-  "a:nth-child(1)",
-  .sep = ">"
+```{r raw-head}
+raw_head <- HEAD(
+  "https://cfb.mn.gov/reports-and-data/self-help/data-downloads/campaign-finance/",
+  query = list(download = "-1890073264")
 )
-
-css_attrs <- rep(NA, length(css_selectors))
-for (i in seq_along(css_selectors)) {
-  css_attrs[i] <- page %>% 
-    html_node(css = css_selectors[i]) %>% 
-    html_attr("href")
-}
-
-download_urls <- glue("{base_url}{css_attrs}")
-
-file_table %>% 
-  mutate(download_data = glue("[{download_data}]({download_urls})")) %>% 
-  kable(
-    format = "markdown",
-    col.names = snakecase::to_title_case(names(file_table))
-  )
+raw_name <- headers(raw_head)[["content-disposition"]]
+raw_name <- str_extract(raw_name, "(?<=\")(.*)(?=\")")
 ```
 
-## Import
+```{r raw-dir}
+raw_dir <- dir_create(here("mn", "expends", "data", "raw"))
+raw_csv <- path(raw_dir, raw_name)
+```
 
-We will be processing the "All" file under "Expenditures and contributions made."
 
-### Download
-
-We can download a copy of the file in question to the `/raw` directory.
-
-```{r download_exp}
-raw_dir  <- here("mn", "expends", "data", "raw")
-exp_file <- glue("{raw_dir}/all_expenditures_contributions_made.csv")
-dir_create(raw_dir)
-
-if (!all_files_new(raw_dir)) {
-  download.file(
-    url = download_urls[1],
-    destfile = exp_file
-  )
+```{r raw-download}
+if (!file_exists(raw_csv)) {
+  GET(raw_head$url, write_disk(raw_csv))
 }
 ```
 
-### Read
+## Read
 
-```{r read_exp}
-mn <- 
-  vroom(
-    file = exp_file,
-    .name_repair = make_clean_names,
-    col_types = cols(
-      .default = col_character(),
-      Amount = col_double(),
-      `Unpaid amount` = col_double(),
-      Date = col_date("%m/%d/%Y"),
-      Year = col_integer()
-    )
+```{r raw-read}
+mne <- read_delim(
+  file = raw_csv,
+  delim = ",",
+  escape_backslash = FALSE,
+  escape_double = FALSE,
+  col_types = cols(
+    .default = col_character(),
+    `Amount` = col_double(),
+    `Unpaid amount` = col_double(),
+    `Date` = col_date("%m/%d/%Y"),
+    `Year` = col_integer()
   )
-mn <- mutate(mn, in_kind = to_logical(in_kind))
-mn <- mutate_if(mn, is_character, toupper)
+)
+```
+
+```{r clean-names}
+mne <- clean_names(mne, case = "snake")
 ```
 
 ## Explore
 
-The database has `r nrow(mn)` records of `r ncol(mn)` variables. The file appears to have been
-properly read into R as a data frame.
+There are `r comma(nrow(mne))` rows of `r ncol(mne)` columns. Each record
+represents a single expenditures made by a campaign to a vendor or as a
+contribution to another campaign.
 
 ```{r glimpse}
-head(mn)
-tail(mn)
-glimpse(sample_frac(mn))
+glimpse(mne)
+tail(mne)
 ```
 
 ### Missing
 
-First, we need to ensure that each record contains a value for both parties to the expenditure
-(`committee_name` makes the expenditure to `vendor_name`), as well as a `date` and `amount`.
+Columns vary in their degree of missing values.
 
-```{r glimpse_na}
-glimpse_fun(mn, count_na)
+```{r na-count}
+col_stats(mne, count_na)
 ```
 
-There are `r count_na(mn$vendor_name)` records missing a `vendor_name` value thay will be flagged.
+We can flag any record missing a key variable needed to identify a transaction.
 
-```{r flag_na, collapse=TRUE}
-mn <- mn %>% flag_na(vendor_name, committee_name, date, amount)
-sum(mn$na_flag)
+```{r na-flag}
+key_vars <- c("date", "committee_name", "amount", "vendor_name")
+mne <- flag_na(mne, all_of(key_vars))
+sum(mne$na_flag)
 ```
 
-It's important to note that `r percent(mean(is.na(mn$vendor_city)))` of values are missing a 
-`vendor_state`, `vendor_state`, and `vendor_zip` value. From the bar chart below, we can see that
-`r percent(mean(is.na(mn$vendor_city[mn$type == "CONTRIBUTION"]), na.rm = T))` of expenditures with a `type`
-value of "CONTRIBUTION." are missing the geographic vendor data like `vendor_city`. However, only
-`r percent(mean(mn$type == "CONTRIBUTION"))` of expenditures have `type` "CONTRIBUTION."
-
-```{r na_geo_bar, echo=FALSE}
-mn %>%
-  filter(type %in% c(
-    "CAMPAIGN EXPENDITURE", 
-    "GENERAL EXPENDITURE", 
-    "CONTRIBUTION", 
-    "NON-CAMPAIGN DISBURSEMENT"
-  )) %>% 
-  mutate(geo_na = is.na(vendor_city)) %>% 
-  count(geo_na, type, sort = TRUE) %>% 
-  ggplot(aes(x = type, y = n)) +
-  geom_col(aes(fill = geo_na)) +
-  coord_flip() +
-  scale_fill_manual(values = c("#595959", "red")) +
-  labs(
-    title = "Minnesota Expenditure Entity Types",
-    caption = "Source: MN CFB",
-    x = "Expenditure Type",
-    y = "Count",
-    fill = "Missing Geographic Data"
-  ) +
-  theme(legend.position = "bottom")
+```{r na-view}
+mne %>% 
+  filter(na_flag) %>% 
+  select(all_of(key_vars))
 ```
 
 ### Duplicates
 
-```{r flag_dupes, collapse=TRUE}
-mn <- flag_dupes(mn, everything())
-sum(mn$dupe_flag)
-percent(mean(mn$dupe_flag))
+We can also flag any record completely duplicated across every column.
+
+```{r dupe-flag}
+mne <- flag_dupes(mne, everything())
+sum(mne$dupe_flag)
+```
+
+```{r dupe-view}
+mne %>% 
+  filter(dupe_flag) %>% 
+  select(all_of(key_vars)) %>% 
+  arrange(date, amount, vendor_name)
 ```
 
 ### Categorical
 
-```{r glimpse_distinct}
-glimpse_fun(mn, n_distinct)
+```{r distinct-count}
+col_stats(mne, n_distinct)
 ```
 
-For categorical data, we can explore the distribution of values using `ggplot::geom_col()`.
-
-```{r entity_bar, echo=FALSE}
-explore_plot(
-  data = mn,
-  var = entity_type,
-  palette = "Dark2",
-  title = "Minnesota Expenditure Entity Types",
-  caption = "Source: MN CFB"
-)
+```{r distinct-plots, echo=FALSE, fig.height=3}
+explore_plot(mne, entity_type)
+explore_plot(mne, entity_sub_type)
+explore_plot(mne, type)
+explore_plot(mne, in_kind)
 ```
 
-```{r entity_sub_bar, echo=FALSE}
-explore_plot(
-  data = filter(mn, !is.na(entity_sub_type)),
-  var = entity_sub_type,
-  palette = "Dark2",
-  title = "Minnesota Expenditure Entity Sub-Types",
-  caption = "Source: MN CFB"
-)
+### Amounts
+
+```{r amount-round}
+# fix floating point precision
+mne$amount <- round(mne$amount, digits = 2)
 ```
 
-```{r exp_type_bar, echo=FALSE}
-explore_plot(
-  data = filter(mn, !is.na(type)),
-  var = type,
-  flip = TRUE,
-  palette = "Dark2",
-  title = "Minnesota Expenditure Types",
-  caption = "Source: MN CFB"
-)
+```{r amount-summary}
+summary(mne$amount)
+mean(mne$amount <= 0)
 ```
 
-```{r in_kind_bar, echo=FALSE}
-explore_plot(
-  data = mn,
-  var = in_kind,
-  palette = "Dark2",
-  title = "Minnesota In-Kind Expenditures",
-  caption = "Source: MN CFB"
-)
+These are the records with the minimum and maximum amounts.
+
+```{r amount-minmax}
+glimpse(mne[c(which.max(mne$amount), which.min(mne$amount)), ])
 ```
 
-```{r purpose_bar, echo=FALSE, fig.height=10}
-mn %>% 
-  unnest_tokens(word, purpose) %>% 
-  anti_join(stop_words) %>% 
-  count(word, sort = TRUE) %>% 
-  drop_na() %>% 
-  head(25) %>% 
-  ggplot(aes(reorder(word, n), n)) +
-  geom_col(aes(fill = n)) +
-  coord_flip() +
-  scale_fill_gradient(guide = FALSE) +
-  labs(
-    title = "Minnesota Expenditure Purpose Text",
-    caption = "Source: MN CFB",
-    x = "Word",
-    y = "Frequency"
-  )
-```
+The distribution of amount values are typically log-normal.
 
-```{r ik_desc_bar, echo=FALSE, fig.height=10}
-mn %>% 
-  unnest_tokens(word, in_kind_descr) %>% 
-  anti_join(stop_words) %>% 
-  count(word, sort = TRUE) %>% 
-  drop_na() %>% 
-  head(25) %>% 
-  ggplot(aes(reorder(word, n), n)) +
-  geom_col(aes(fill = n)) +
-  coord_flip() +
-  scale_fill_gradient(guide = FALSE) +
-  labs(
-    title = "Minnesota In-Kind Expenditure Description Text",
-    caption = "Source: MN CFB",
-    x = "Word",
-    y = "Frequency"
-  )
-```
-
-### Continuous
-
-For continuous variables, we should explore the ranges and distribution of values.
-
-#### Amounts
-
-```{r amount_range, collapse=TRUE}
-summary(mn$amount)
-sum(mn$amount <= 0)
-```
-
-```{r amount_hist, echo=FALSE}
-mn %>% 
-  ggplot(mapping = aes(x = amount)) +
-  geom_histogram() +
+```{r hist-amount, echo=FALSE}
+mne %>%
+  ggplot(aes(amount)) +
+  geom_histogram(fill = dark2["purple"]) +
+  scale_y_continuous(labels = comma) +
   scale_x_continuous(
     breaks = c(1 %o% 10^(0:6)),
-    trans = "log10",
-    labels = dollar
+    labels = dollar,
+    trans = "log10"
   ) +
   labs(
-    title = "Minnesota Expenditure Amount Distribution",
+    title = "Minnesota Expenditures Amount Distribution",
     caption = "Source: MN CFB",
     x = "Amount",
     y = "Count"
   )
 ```
 
-```{r amount_box_ik, echo=FALSE}
-mn %>% 
-  ggplot(aes(x = in_kind, y = amount)) +
-  geom_boxplot(
-    varwidth = TRUE,
-    outlier.alpha = 0.01,
-    mapping = aes(fill = in_kind)
-  ) +
-  scale_y_continuous(
-    breaks = c(1 %o% 10^(0:6)),
-    trans = "log10",
-    labels = dollar 
-  ) +
-  scale_fill_brewer(
-    type = "qual",
-    palette = "Dark2",
-    guide = FALSE
-  ) +
-  labs(
-    title = "Minnesota Expenditure Amount Range",
-    subtitle = "for In-Kind and Direct Expenditures",
-    caption = "Source: MN CFB",
-    fill = "In-Kind",
-    x = "In-Kind",
-    y = "Count"
-  ) +
-  theme(panel.grid.major.x = element_blank())
+### Dates
+
+We can add the calendar year from `date` with `lubridate::year()`
+
+```{r date-year}
+mne <- mutate(mne, year = year(date))
 ```
 
-```{r amount_box_sub, echo=FALSE}
-mn %>% 
-  filter(amount > 1) %>% 
-  filter(entity_sub_type %in% most_common(mn$entity_sub_type, 4)) %>% 
-  filter(!is.na(entity_sub_type)) %>% 
-  ggplot(
-    mapping = aes(
-      x = reorder(
-        x = entity_sub_type, 
-        X = amount, 
-        FUN = median, 
-        na.rm = TRUE
-      ), 
-      y = amount)
-  ) +
-  geom_violin(
-    mapping = aes(fill = entity_sub_type)
-  ) +
-  scale_y_continuous(
-    breaks = c(1 %o% 10^(0:6)),
-    trans = "log10",
-    labels = dollar 
-  ) +
-  scale_fill_brewer(
-    type = "qual",
-    palette = "Dark2",
-    guide = FALSE
-  ) +
-  labs(
-    title = "Minnesota Expenditure Amount Range",
-    subtitle = "for Most Common Entity Sub Types",
-    caption = "Source: MN CFB",
-    fill = "In-Kind",
-    x = "Entity Sub Type",
-    y = "Amount"
-  ) +
-  theme(panel.grid.major.x = element_blank())
+```{r date-range}
+min(mne$date)
+sum(mne$year < 2000)
+max(mne$date)
+sum(mne$date > today())
 ```
 
-```{r amount_box_type, echo=FALSE}
-mn %>% 
-  filter(amount > 1) %>% 
-  filter(!is.na(type)) %>% 
-  ggplot(
-    mapping = aes(
-      x = reorder(
-        x = type, 
-        X = amount, 
-        FUN = median, 
-        na.rm = TRUE
-      ), 
-      y = amount)
-  ) +
-  geom_violin(
-    mapping = aes(fill = type)
-  ) +
-  scale_y_continuous(
-    breaks = c(1 %o% 10^(0:6)),
-    trans = "log10",
-    labels = dollar 
-  ) +
-  scale_fill_brewer(
-    type = "qual",
-    palette = "Dark2",
-    guide = FALSE
-  ) +
-  labs(
-    title = "Minnesota Expenditure Amount Range",
-    subtitle = "by Most Common Expenditure Types",
-    caption = "Source: MN CFB",
-    fill = "In-Kind",
-    x = "Entity Sub Type",
-    y = "Amount"
-  ) +
-  theme(panel.grid.major.x = element_blank()) +
-  coord_flip()
-```
+It's common to see an increase in the number of contributins in elections years.
 
-```{r amount_hist_type, echo=FALSE, fig.height=10}
-mn %>% 
-  filter(type %in% most_common(type, 4)) %>% 
-  filter(!is.na(type)) %>% 
-  ggplot(aes(amount)) +
-  geom_histogram(aes(fill = type)) +
-  geom_vline(xintercept = 500) +
+```{r bar-year, echo=FALSE}
+mne %>% 
+  count(year) %>% 
+  mutate(even = is_even(year)) %>% 
+  ggplot(aes(x = year, y = n)) +
+  geom_col(aes(fill = even)) + 
+  scale_fill_brewer(palette = "Dark2") +
   scale_y_continuous(labels = comma) +
-  scale_x_continuous(
-    breaks = c(1 %o% 10^(0:6)),
-    trans = "log10",
-    labels = dollar 
-  ) +
-  scale_fill_brewer(
-    type = "qual",
-    palette = "Dark2",
-    guide = FALSE
-  ) +
+  scale_x_continuous(breaks = seq(2015, 2020)) +
+  theme(legend.position = "bottom") +
   labs(
-    title = "Minnesota Expenditure Amount Distribution",
-    subtitle = "by Most Common Expenditure Types",
-    caption = "Source: MN CFB",
-    fill = "In-Kind",
-    x = "Entity Sub Type",
-    y = "Amount"
-  ) +
-  facet_wrap(~type, ncol = 1)
-```
-
-#### Dates
-
-The range of `date` is very good, there are `r sum(mn$date > today())` dates beyond `today()`.
-
-```{r date_range}
-min(mn$date)
-max(mn$date)
-sum(mn$date > today())
-```
-
-We do not need to create a 4-digit year variable, as one already exists.
-
-```{r year_bar, echo=FALSE}
-mn %>% 
-  count(year, sort = T) %>% 
-  mutate(
-    on = is_even(year),
-    p = n/sum(n)
-  ) %>%
-  ggplot(aes(x = year, y = p)) +
-  geom_col(aes(fill = on)) +
-  scale_y_continuous(labels = percent) +
-  scale_x_continuous(breaks = 2009:2019) +
-  scale_fill_brewer(
-    type = "qual",
-    palette = "Dark2"
-  ) +
-  labs(
-    title = "Minnesota Expenditure Year Count",
+    title = "Minnesota Expenditures by Year",
     caption = "Source: MN CFB",
     fill = "Election Year",
-    x = "Year",
-    y = "Percent"
-  ) +
-  theme(legend.position = "bottom")
-```
-
-```{r month_amount_line, echo=FALSE}
-mn %>%
-  mutate(
-    month = month(date),
-    on = is_even(year),
-  ) %>%
-  group_by(month, on) %>%
-  summarize(mean = mean(amount)) %>% 
-  ggplot(aes(x = month, y = mean)) +
-  geom_line(aes(color = on), size = 2) +
-  scale_y_continuous(labels = dollar) +
-  scale_x_continuous(labels = month.abb, breaks = 1:12) +
-  scale_color_brewer(
-    type = "qual",
-    palette = "Dark2"
-  ) +
-  labs(
-    title = "Minnesota Expenditure Amount by Month",
-    caption = "Source: MN CFB",
-    fill = "Election Year",
-    x = "Month",
-    y = "Mean Amount"
-  ) +
-  theme(legend.position = "bottom")
-```
-
-```{r cycle_amount_line, echo=FALSE}
-mn %>% 
-  select(date, year, amount) %>% 
-  mutate(
-    off = !is_even(year),
-    cycle = as.character(if_else(!off, year, year - 1L)),
-    month = if_else(off, month(date), month(date) + 12)
-  ) %>% 
-  group_by(cycle, off, month) %>% 
-  summarize(mean = mean(amount)) %>% 
-  ggplot(mapping = aes(x = month, y = mean)) +
-  geom_vline(xintercept = 11, color = "grey10") +
-  geom_line(aes(color = cycle), size = 1) +
-  scale_color_brewer(type = "qual", palette = "Dark2") +
-  scale_x_continuous(labels = rep(month.abb, 2)[is_even(1:24)], breaks = seq(1, 24, 2)) +
-  scale_y_continuous(labels = dollar) +
-  labs(
-    title = "Minnesota Expenditure Amount by Month and Election Cycle",
-    caption = "Source: MN CFB",
-    color = "Election Cycle",
-    x = "Month in Cycle",
-    y = "Mean Amount"
+    x = "Year Made",
+    y = "Count"
   )
 ```
 
 ## Wrangle
 
+To improve the searchability of the database, we will perform some consistent,
+confident string normalization. For geographic variables like city names and
+ZIP codes, the corresponding `campfin::normal_*()` functions are tailor made to 
+facilitate this process.
+
 ### Address
 
-To improve searcability of payees, we will unite the `vendor_address_1` and `vendor_address_2`.
-Then we can normalize the combined address with `campfin::normal_address()`.
+For the street `addresss` variable, the `campfin::normal_address()` function
+will force consistence case, remove punctuation, and abbreviate official 
+USPS suffixes.
 
-```{r address_normal}
-mn <- mn %>% 
+```{r address-norm}
+addr_norm <- mne %>% 
+  distinct(vendor_address_1, vendor_address_2) %>% 
+  mutate(
+    across(
+      .cols = c(vendor_address_1, vendor_address_2),
+      .fns = list(xnorm = normal_address),
+      abbs = usps_street,
+      na_rep = TRUE,
+      abb_end = FALSE
+    )
+  ) %>% 
   unite(
-    col = vendor_address_full,
-    starts_with("vendor_address"),
+    col = address_norm,
+    ends_with("_xnorm"),
     sep = " ",
-    remove = FALSE,
+    remove = TRUE,
     na.rm = TRUE
   ) %>% 
+  mutate(across(address_norm, na_if, ""))
+```
+
+```{r address-view}
+addr_norm
+```
+
+```{r address-join}
+mne <- left_join(mne, addr_norm)
+```
+
+### ZIP
+
+For ZIP codes, the `campfin::normal_zip()` function will attempt to create
+valid _five_ digit codes by removing the ZIP+4 suffix and returning leading
+zeroes dropped by other programs like Microsoft Excel.
+
+```{r zip-norm}
+mne <- mne %>% 
   mutate(
-    address_norm = normal_address(
-      address = vendor_address_full,
-      add_abbs = usps_street,
+    zip_norm = normal_zip(
+      zip = vendor_zip,
       na_rep = TRUE
     )
   )
 ```
 
-Here, we see the type of changes that are made.
-
-```{r address_view, echo=FALSE}
-mn %>% 
-  select(
-    vendor_address_1,
-    vendor_address_2,
-    address_norm
-  ) %>% 
-  drop_na() %>% 
-  sample_frac()
-```
-
-### ZIP
-
-We do not need to do much zip to normalize the `vendor_zip`.
-
-```{r zip_norm}
-mn <- mutate(mn, zip_norm = normal_zip(vendor_zip, na_rep = TRUE))
-```
-
-```{r zip_progress}
+```{r zip-progress}
 progress_table(
-  mn$vendor_zip,
-  mn$zip_norm,
+  mne$vendor_zip,
+  mne$zip_norm,
   compare = valid_zip
 )
 ```
 
 ### State
 
-The `vendor_state` value is also very clean.
+Valid two digit state abbreviations can be made using the 
+`campfin::normal_state()` function.
 
-```{r state_normal}
-mn <- mn %>% 
+```{r state-norm}
+mne <- mne %>% 
   mutate(
-    state_norm = vendor_state %>% 
-      str_replace("^M$", "MN") %>% 
-      str_replace("^MM$", "MN") %>% 
-      str_replace("^FO$", "FL") %>% 
-      normal_state() %>% 
-      na_if("GR") %>% 
-      na_if("LW")
+    state_norm = normal_state(
+      state = vendor_state,
+      abbreviate = TRUE,
+      na_rep = TRUE
+    )
   )
 ```
 
-```{r state_progress}
+```{r state-view}
+mne %>% 
+  filter(vendor_state != state_norm) %>% 
+  count(vendor_state, state_norm, sort = TRUE)
+```
+
+```{r state-progress}
 progress_table(
-  mn$vendor_state,
-  mn$state_norm,
-  compare = valid_abb
+  mne$vendor_state,
+  mne$state_norm,
+  compare = valid_state
 )
 ```
 
 ### City
 
-To clean the `vendor_city`, we will use a three step process that makes only simple normalization
-and confident automatic changes.
+Cities are the most difficult geographic variable to normalize, simply due to
+the wide variety of valid cities and formats.
 
-1. Normalize with `campfin::normal_city()` (capitalization, punctuation, abbreviations)
-1. Swap cities with their expected value (for that state and ZIP) if the strings are very similar
+#### Normal
 
-#### Normalize
+The `campfin::normal_city()` function is a good start, again converting case,
+removing punctuation, but _expanding_ USPS abbreviations. We can also remove
+`invalid_city` values.
 
-```{r city_normal}
-mn <- mn %>% 
+```{r city-norm}
+norm_city <- mne %>% 
+  distinct(vendor_city, state_norm, zip_norm) %>% 
   mutate(
     city_norm = normal_city(
       city = vendor_city, 
-      geo_abbs = usps_city,
-      st_abbs = c("MN", "DC", "MINNESOTA"),
+      abbs = usps_city,
+      states = c("MN", "DC", "MINNESOTA"),
       na = invalid_city,
       na_rep = TRUE
     )
@@ -727,8 +477,13 @@ mn <- mn %>%
 
 #### Swap
 
-```{r city_swap}
-mn <- mn %>% 
+We can further improve normalization by comparing our normalized value
+against the _expected_ value for that record's state abbreviation and ZIP code.
+If the normalized value is either an abbreviation for or very similar to the
+expected value, we can confidently swap those two.
+
+```{r city-swap}
+norm_city <- norm_city %>% 
   left_join(
     y = zipcodes,
     by = c(
@@ -741,32 +496,47 @@ mn <- mn %>%
     match_abb = is_abbrev(city_norm, city_match),
     match_dist = str_dist(city_norm, city_match),
     city_swap = if_else(
-      condition = match_dist == 1 | match_abb,
+      condition = !is.na(match_dist) & (match_abb | match_dist == 1),
       true = city_match,
       false = city_norm
     )
+  ) %>% 
+  select(
+    -city_match,
+    -match_dist,
+    -match_abb
   )
 ```
 
-There are still cities which are registered as invalid.
-
-```{r city_bad, echo=FALSE}
-mn %>% 
-  filter(city_swap %out% valid_city) %>% 
-  count(state_norm, vendor_city, city_swap, sort = TRUE)
+```{r city-rejoin}
+mne <- left_join(
+  x = mne,
+  y = norm_city,
+  by = c(
+    "vendor_city", 
+    "state_norm", 
+    "zip_norm"
+  )
+)
 ```
 
 #### Refine
 
-```{r city_refine}
-good_refine <- mn %>% 
-  filter(state_norm == "MN") %>% 
+The [OpenRefine][or] algorithms can be used to group similar strings and replace
+the less common versions with their most common counterpart. This can greatly
+reduce inconsistency, but with low confidence; we will only keep any refined
+strings that have a valid city/state/zip combination.
+
+[or]: https://openrefine.org/
+
+```{r city-refine}
+good_refine <- mne %>% 
   mutate(
     city_refine = city_swap %>% 
       key_collision_merge() %>% 
       n_gram_merge(numgram = 1)
   ) %>% 
-  filter(city_swap != city_refine) %>% 
+  filter(city_refine != city_swap) %>% 
   inner_join(
     y = zipcodes,
     by = c(
@@ -777,140 +547,57 @@ good_refine <- mn %>%
   )
 ```
 
-Obviously, this wasn't worth the effort, but I've already done it.
-
-```{r refine_count, echo=FALSE}
-count(
-  x = good_refine, 
-  state_norm, 
-  city_swap, 
-  city_refine, 
-  sort = TRUE
-)
+```{r city-count, echo=FALSE}
+good_refine %>%
+  count(
+    state_norm, 
+    zip_norm, 
+    city_swap, 
+    city_refine,
+    sort = TRUE
+  )
 ```
 
-Then we can join theses good refines back to the original database and combine them with the
-unchanged `city_swap`.
+Then we can join the refined values back to the database.
 
-```{r refine_join}
-mn <- mn %>% 
-  left_join(good_refine) %>% 
+```{r city-join}
+mne <- mne %>% 
+  left_join(good_refine, by = names(.)) %>% 
   mutate(city_refine = coalesce(city_refine, city_swap))
 ```
 
-## Check
+#### Progress
 
-We can use the `check_city()` function to pass the remaining unknown `city_refine` values (and
-their `state_norm`) to the Google Geocode API. The function returns the name of the city or
-locality which most associated with those values.
+Our goal for normalization was to increase the proportion of city values known
+to be valid and reduce the total distinct values by correcting misspellings.
 
-This is an easy way to both check for typos and check whether an unknown `city_refine` value is
-actually a completely acceptable neighborhood, census designated place, or some other locality not
-found in our `valid_city` vector from our `zipcodes` database.
-
-First, we'll filter out any known valid city and aggregate the remaining records by their city and
-state. Then, we will only query those unknown cities which appear at least ten times.
-
-```{r check_filter}
-mn_out <- mn %>% 
-  filter(city_refine %out% valid_city) %>% 
-  count(city_refine, state_norm, sort = TRUE) %>% 
-  drop_na() %>% 
-  filter(n > 10)
-```
-
-Passing these values to `check_city()` with `purrr::pmap_dfr()` will return a single tibble of the
-rows returned by each city/state combination.
-
-First, we'll check to see if the API query has already been done and a file exist on disk. If such
-a file exists, we can read it using `readr::read_csv()`. If not, the query will be sent and the
-file will be written using `readr::write_csv()`.
-
-```{r check_send}
-check_file <- here("mn", "expends", "data", "api_check.csv")
-if (file_exists(check_file)) {
-  check <- read_csv(
-    file = check_file
-  )
-} else {
-  check <- pmap_dfr(
-    .l = list(
-      mn_out$city_refine, 
-      mn_out$state_norm
-    ), 
-    .f = check_city, 
-    key = Sys.getenv("GEOCODE_KEY"), 
-    guess = TRUE
-  ) %>% 
-    mutate(guess = coalesce(guess_city, guess_place)) %>% 
-    select(-guess_city, -guess_place)
-  write_csv(
-    x = check,
-    path = check_file
-  )
-}
-```
-
-Any city/state combination with a `check_city_flag` equal to `TRUE` returned a matching city string
-from the API, indicating this combination is valid enough to be ignored.
-
-```{r check_accept}
-valid_locality <- check$guess[check$check_city_flag]
-```
-
-Then we can perform some simple comparisons between the queried city and the returned city. If they
-are extremelly similar, we can accept those returned locality strings and add them to our list of
-accepted additional localities.
-
-```{r check_compare}
-valid_locality <- check %>% 
-  filter(!check_city_flag) %>% 
-  mutate(
-    abb = is_abbrev(original_city, guess),
-    dist = str_dist(original_city, guess)
-  ) %>%
-  filter(abb | dist <= 3) %>% 
-  pull(guess) %>% 
-  c(valid_locality)
-```
-
-This list of acceptable localities can be added with our `valid_city` and `extra_city` vectors
-from the `campfin` package. The cities checked will eventually be added to `extra_city`.
-
-```{r check_combine}
-many_city <- c(valid_city, extra_city, valid_locality)
-```
-
-```{r check_diff}
-percent(prop_in(mn$city_refine, valid_city))
-percent(prop_in(mn$city_refine, many_city))
-```
-
-```{r city_progress, echo=FALSE}
+```{r city-progress, echo=FALSE}
+many_city <- c(valid_city, extra_city)
 progress <- progress_table(
-  mn$vendor_city,
-  mn$city_norm,
-  mn$city_swap,
-  mn$city_refine,
+  str_to_upper(mne$vendor_city),
+  mne$city_norm,
+  mne$city_swap,
+  mne$city_refine,
   compare = many_city
 ) %>% mutate(stage = as_factor(stage))
-```
-
-```{r progress_print, echo=FALSE}
-kable(progress, digits = 3)
+progress %>% 
+    mutate(across(stage, md_code)) %>% 
+    kable(digits = 3)
 ```
 
 You can see how the percentage of valid values increased with each stage.
 
-```{r progress_bar, echo=FALSE}
+```{r bar-progress, echo=FALSE}
+raw_in <- percent(prop_in(mne$vendor_city, valid_city))
 progress %>% 
   ggplot(aes(x = stage, y = prop_in)) +
   geom_hline(yintercept = 0.99) +
-  geom_col(fill = RColorBrewer::brewer.pal(3, "Dark2")[3]) +
+  geom_col(fill = dark2["purple"]) +
   coord_cartesian(ylim = c(0.75, 1)) +
   scale_y_continuous(labels = percent) +
   labs(
-    title = "Massachusetts City Normalization Progress",
+    title = "Minnesota City Normalization Progress",
+    subtitle = glue("Raw at {raw_in} before conversion to uppercase"),
     x = "Stage",
     y = "Percent Valid"
   )
@@ -918,9 +605,9 @@ progress %>%
 
 More importantly, the number of distinct values decreased each stage. We were
 able to confidently change many distinct invalid values to their valid
-equivilent.
+equivalent.
 
-```{r distinct_bar}
+```{r bar-distinct, echo=FALSE}
 progress %>% 
   select(
     stage, 
@@ -932,60 +619,86 @@ progress %>%
   mutate(name = name == "good") %>% 
   ggplot(aes(x = stage, y = value)) +
   geom_col(aes(fill = name)) +
-  scale_fill_brewer(palette = "Dark2") +
+  scale_fill_brewer(palette = "Dark2", direction = -1) +
   scale_y_continuous(labels = comma) +
   theme(legend.position = "bottom") +
   labs(
-    title = "Massachusetts City Normalization Progress",
+    title = "Minnesota City Normalization Progress",
     subtitle = "Distinct values, valid and invalid",
     x = "Stage",
-    y = "Percent Valid",
+    y = "Distinct Values",
     fill = "Valid"
   )
 ```
 
+Before exporting, we can remove the intermediary normalization columns and
+rename all added variables with the `_clean` suffix.
+
+```{r clean-select}
+mne <- mne %>% 
+  select(
+    -city_norm,
+    -city_swap,
+    city_clean = city_refine
+  ) %>% 
+  rename_all(~str_replace(., "_norm", "_clean")) %>% 
+  rename_all(~str_remove(., "_raw")) %>% 
+  relocate(address_clean, city_clean, state_clean, .before = zip_clean)
+```
+
 ## Conclude
 
-1. There are `r nrow(mn)` records in the database.
-1. There are `r sum(mn$dupe_flag)` duplicate records in the database.
+```{r clean-glimpse}
+glimpse(sample_n(mne, 1000))
+```
+
+1. There are `r comma(nrow(mne))` records in the database.
+1. There are `r comma(sum(mne$dupe_flag))` duplicate records in the database.
 1. The range and distribution of `amount` and `date` seem reasonable.
-1. There are `r sum(mn$na_flag)` records missing a `vendor_name` variable.
-1. Consistency in goegraphic data has been improved with `campfin::normal_*()`.
-1. The database already contained a 5-digit `vendor_zip` and 4-digit `year` variable.
+1. There are `r comma(sum(mne$na_flag))` records missing key variables.
+1. Consistency in geographic data has been improved with `campfin::normal_*()`.
+1. The 4-digit `year` variable has been created with `lubridate::year()`.
 
 ## Export
 
-```{r proc_dir}
-proc_dir <- here("mn", "expends", "data", "processed")
-dir_create(proc_dir)
+Now the file can be saved on disk for upload to the Accountability server. We
+will name the object using a date range of the records included.
+
+```{r clean-timestamp}
+min_dt <- str_remove_all(min(mne$date), "-")
+max_dt <- str_remove_all(max(mne$date), "-")
+(csv_ts <- paste(min_dt, max_dt, sep = "-"))
 ```
 
-```{r write_clean, collapse=TRUE}
-mn %>% 
-  select(
-    -city_norm,
-    -city_match,
-    -match_abb,
-    -match_dist,
-    -city_swap
-  ) %>% 
-  rename(
-    address_clean = address_norm,
-    city_clean    = city_refine,
-    state_clean   = state_norm,
-    zip_clean     = zip_norm,
-  ) %>% 
-  write_csv(
-    na = "",
-    path = glue("{proc_dir}/mn_expends_processed.csv")
+```{r clean-dir}
+clean_dir <- dir_create(here("mn", "expends", "data", "clean"))
+clean_csv <- path(clean_dir, glue("mn_expends_{csv_ts}.csv"))
+clean_rds <- path_ext_set(clean_csv, "rds")
+```
+
+```{r clean-write}
+write_csv(mne, clean_csv, na = "")
+write_rds(mne, clean_rds, compress = "xz")
+(clean_size <- file_size(clean_csv))
+```
+
+## Upload
+
+We can use the `aws.s3::put_object()` to upload the text file to the IRW server.
+
+```{r aws-upload, eval=FALSE}
+aws_key <- path("csv", basename(clean_csv))
+if (!object_exists(aws_csv, "publicaccountability")) {
+  put_object(
+    file = clean_csv,
+    object = aws_key, 
+    bucket = "publicaccountability",
+    acl = "public-read",
+    show_progress = TRUE,
+    multipart = TRUE
   )
+}
+aws_head <- head_object(aws_csv, "publicaccountability")
+(aws_size <- as_fs_bytes(attr(aws_head, "content-length")))
+unname(aws_size == clean_size)
 ```
-
-
-[01]: https://github.com/irworkshop/accountability_datacleaning "TAP repo"
-[02]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects "Rproj"
-[03]: https://cfb.mn.gov/ "cfb_home"
-[04]: https://cfb.mn.gov/citizen-resources/the-board/more-about-the-board/mission/ "cfb_mission"
-[05]: https://cfb.mn.gov/citizen-resources/board-programs/overview/campaign-finance/ "cfb_cf"
-[06]: https://www.revisor.mn.gov/statutes/cite/10A.01#stat.10A.01.9 "mn_10a.1.9"
-[07]: https://cfb.mn.gov/reports-and-data/self-help/data-downloads/campaign-finance/ "cf_dl"
