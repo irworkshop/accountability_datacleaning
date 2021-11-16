@@ -138,7 +138,7 @@ award_post <- POST(
         )
       )
     ),
-    columns = list(),
+    # columns = list(),
     # CSV with double escape
     # can also be TSV or PIPE
     file_format = "csv"
@@ -262,9 +262,7 @@ if (FALSE) { # swap with for loop to read and check
   is_con <- grepl("All_Contracts", all_csv[i])
   file_type <- ifelse(is_con, "contract", "assist")
   is_sub <- grepl("Subawards", all_csv[i])
-  if (is_sub) {
-    file_type <- paste(file_type, "sub", sep = "-")
-  }
+  file_type <- paste(file_type, ifelse(is_sub, "sub", "prime"), sep = "-")
 
   us_spec <- paste(
     # col type string based on file type
@@ -278,7 +276,7 @@ if (FALSE) { # swap with for loop to read and check
     delim = ",",
     escape_double = TRUE,
     na = "",
-    col_types = us_spec,
+    # col_types = us_spec,
     guess_max = 0,
     progress = TRUE
   )
@@ -346,7 +344,7 @@ if (FALSE) { # swap with for loop to read and check
   }
 
   # add calendar year from action date
-  us$action_year <- as.integer(format(us[[dt_col]], "%Y"))
+  us$action_year <- as.integer(format(as.Date(us[[dt_col]]), "%Y"))
   cli_alert_success("Calendar year added in new {.code action_year} column")
 
   # save checks -----------------------------------------------------------
@@ -362,9 +360,9 @@ if (FALSE) { # swap with for loop to read and check
     max_dt = max(us[[dt_col]], na.rm = TRUE),
     n_row = nrow(us),
     n_col = ncol(us),
-    sum_amt = sum(us[[amt_col]], na.rm = TRUE),
+    sum_amt = sum(as.numeric(us[[amt_col]]), na.rm = TRUE),
     na_flags = sum(us$na_flag, na.rm = TRUE),
-    zero_amt = sum(us[[amt_col]] <= 0, na.rm = TRUE)
+    zero_amt = sum(as.numeric(us[[amt_col]]) <= 0, na.rm = TRUE)
   )
 
   all_checks <- do.call("rbind", list(all_checks, check))
@@ -400,7 +398,10 @@ if (FALSE && nzchar(Sys.getenv("AWS_SECRET_ACCESS_KEY"))) {
   for (i in seq_along(all_csv)) {
     file_type <- all_checks$file_type[i]
     cli_process_start("Uploading file {i}/{n_csv}")
-    n <- regmatches(x[i], m = regexpr(pattern = "\\d+\\.csv", text = x[i]))
+    n <- regmatches(
+      x = all_csv[i],
+      m = regexpr(pattern = "\\d+\\.csv", text = all_csv[i])
+    )
     suppressMessages(
       expr = put_object(
         file = all_csv[i],
