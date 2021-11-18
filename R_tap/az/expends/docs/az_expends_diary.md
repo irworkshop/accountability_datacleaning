@@ -1,19 +1,28 @@
 Arizona Expenditures
 ================
 Kiernan Nicholls
-2020-08-28 17:59:00
+Thu Nov 18 10:16:02 2021
 
-  - [Project](#project)
-  - [Objectives](#objectives)
-  - [Packages](#packages)
-  - [Data](#data)
-  - [Read](#read)
-  - [Join](#join)
-  - [Explore](#explore)
-  - [Wrangle](#wrangle)
-  - [Conclude](#conclude)
-  - [Export](#export)
-  - [Upload](#upload)
+-   [Project](#project)
+-   [Objectives](#objectives)
+-   [Packages](#packages)
+-   [Source](#source)
+-   [Read](#read)
+-   [Join](#join)
+    -   [Expenses](#expenses)
+    -   [Committee](#committee)
+    -   [Vendor](#vendor)
+    -   [Finalize](#finalize)
+-   [Explore](#explore)
+    -   [Missing](#missing)
+    -   [Duplicates](#duplicates)
+    -   [Categorical](#categorical)
+    -   [Amounts](#amounts)
+    -   [Dates](#dates)
+    -   [Wrangle](#wrangle)
+-   [Conclude](#conclude)
+-   [Export](#export)
+-   [Upload](#upload)
 
 <!-- Place comments regarding knitting here -->
 
@@ -24,7 +33,7 @@ give journalists, policy professionals, activists, and the public at
 large a simple way to search across huge volumes of public data about
 people and organizations.
 
-Our goal is to standardizing public data on a few key fields by thinking
+Our goal is to standardize public data on a few key fields by thinking
 of each dataset row as a transaction. For each transaction there should
 be (at least) 3 variables:
 
@@ -52,49 +61,53 @@ The following packages are needed to collect, manipulate, visualize,
 analyze, and communicate these results. The `pacman` package will
 facilitate their installation and attachment.
 
-The IRW’s `campfin` package will also have to be installed from GitHub.
-This package contains functions custom made to help facilitate the
-processing of campaign finance data.
-
 ``` r
-if (!require("pacman")) install.packages("pacman")
-pacman::p_load_gh("irworkshop/campfin")
-pacman::p_load_gh("kiernann/mdbr")
+if (!require("pacman")) {
+  install.packages("pacman")
+}
 pacman::p_load(
   tidyverse, # data manipulation
   lubridate, # datetime strings
   gluedown, # printing markdown
-  magrittr, # pipe operators
   janitor, # clean data frames
-  refinr, # cluster and merge
+  campfin, # custom irw tools
+  aws.s3, # aws cloud storage
+  refinr, # cluster & merge
   scales, # format strings
   knitr, # knit documents
-  vroom, # read files fast
-  rvest, # html scraping
-  glue, # combine strings
-  here, # relative paths
+  vroom, # fast reading
+  rvest, # scrape html
+  glue, # code strings
+  here, # project paths
   httr, # http requests
+  mdbr, # read mdb files
   fs # local storage 
 )
 ```
 
-This document should be run as part of the `R_campfin` project, which
-lives as a sub-directory of the more general, language-agnostic
+This diary was run using `campfin` version 1.0.8.9201.
+
+``` r
+packageVersion("campfin")
+#> [1] '1.0.8.9201'
+```
+
+This document should be run as part of the `R_tap` project, which lives
+as a sub-directory of the more general, language-agnostic
 [`irworkshop/accountability_datacleaning`](https://github.com/irworkshop/accountability_datacleaning)
 GitHub repository.
 
-The `R_campfin` project uses the [RStudio
+The `R_tap` project uses the [RStudio
 projects](https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects)
 feature and should be run as such. The project also uses the dynamic
 `here::here()` tool for file paths relative to *your* machine.
 
 ``` r
 # where does this document knit?
-here::here()
-#> [1] "/home/kiernan/Code/tap/R_campfin"
+here::i_am("az/expends/docs/az_expends_diary.Rmd")
 ```
 
-## Data
+## Source
 
 Expenditures data for the state of Arizona was retrieved under open
 records law Arizona Rev. Stat. Ann. Secs. 39-121 to 39-122. After a $25
@@ -138,7 +151,7 @@ az_tables <- mdb_tables(mdb_file)
 ```
 
 | Table                  | Description                                      | Rows      |
-| :--------------------- | :----------------------------------------------- | :-------- |
+|:-----------------------|:-------------------------------------------------|:----------|
 | `BallotMeasures`       | Information on ballot measures voted on          | 50        |
 | `Categories`           | Category names with codes                        | 71        |
 | `Counties`             | County names with codes                          | 15        |
@@ -155,543 +168,642 @@ az_tables <- mdb_tables(mdb_file)
 | `Committees`           | Names, IDs, and addresses of filing committees   | 4,556     |
 | `Transactions`         | All expenditures with amounts and dates          | 6,241,937 |
 
-These tables can be read with `read_mdb()`, which uses
-`readr::read_csv()`. We will read every table into a single list of
-multiple data frames.
+These tables in this file can be exported to separate comma-delimited
+text files that can then be read into a single list.
 
 ``` r
-a <- rep(list(NA), length(az_tables))
-names(a) <- make_clean_names(az_tables)
-for (i in seq_along(az_tables)) {
-  a[[i]] <- read_mdb(mdb_file, az_tables[i])
+raw_csv <- path(raw_dir, path_ext_set(make_clean_names(az_tables), "csv"))
+```
+
+``` r
+if (!all(file_exists(raw_csv))) {
+  for (i in seq_along(az_tables)) {
+    message(az_tables[i])
+    export_mdb(
+      file = mdb_file,
+      table = az_tables[i],
+      path = raw_csv[i]
+    )
+  }
 }
 ```
 
-## Join
-
-These many data frames can then be joined together to create a single
-collection of transactions between parties.
+These CSV files can be read using the schema from the Access database.
 
 ``` r
-a$committees <- select(
-  .data = a$committees, CommitteeID, NameID, 
-  starts_with("Candidate"), -CandidateOtherPartyName
+az <- map(
+  .x = seq_along(raw_csv),
+  .f = function(i) {
+    read_csv(
+      file = raw_csv[i],
+      col_types = mdb_schema(
+        file = mdb_file,
+        table = az_tables[i]
+      )
+    )
+  }
 )
 ```
 
 ``` r
-a$names <- select(a$names, -NameGroupID, -CountyID, Zip = ZipCode)
+names(az) <- az_tables
 ```
 
 ``` r
-aze <- a$transactions %>% # 6,241,937
-  # Transaction type, category info -------------------------------------------
-  left_join(a$transaction_types, by = "TransactionTypeID") %>% 
-  select(-TransactionTypeID) %>% 
-  left_join(a$income_expense_neutral, by = "IncomeExpenseNeutralID") %>% 
-  select(-IncomeExpenseNeutralID, TransactionMethod = IncomeExpenseNeutral) %>% 
-  left_join(a$categories, by = "CategoryID") %>% 
-  select(-CategoryID, -SubjectCommitteeID) %>%
-  # Spending COMMITTEE info ---------------------------------------------------
-  rename(PayeeID = NameID) %>% # expenditure recipient
-  relocate(CommitteeID, .after = last_col()) %>% 
-  left_join(a$committees, by = "CommitteeID") %>% 
-  # COMMITTEE party, county, office, cycle ------------------------------------
-  # join by ID, remove ID and rename columns
-  left_join(a$parties, by = c("CandidatePartyID" = "PartyID")) %>% 
-  select(-CandidatePartyID, CandidateParty = PartyName) %>% 
-  left_join(a$offices, by = c("CandidateOfficeID" = "OfficeID")) %>% 
-  select(-CandidateOfficeID, CandidateOffice = OfficeName) %>% 
-  left_join(a$counties, by = c("CandidateCountyID" = "CountyID")) %>% 
-  select(-CandidateCountyID, CandidateCounty = CountyName) %>%
-  left_join(select(a$cycles, 1:2), by = c("CandidateCycleID" = "CycleID")) %>% 
-  select(-CandidateCycleID, CandidateCycle = CycleName) %>%
-  # CANDIDATE name and info ---------------------------------------------------
-  left_join(a$names, by = "NameID") %>% 
-  rename(CandidateID = NameID) %>% 
-  left_join(a$entity_types, by = "EntityTypeID") %>% 
-  select(-EntityTypeID, CandidateType = EntityTypeName) %>% 
-  rename_with(~paste0("Candidate", .), .cols = 21:last_col(1)) %>% 
-  # PAYEE name and info -------------------------------------------------------
-  relocate(PayeeID, .after = last_col()) %>% 
-  left_join(a$names, by = c("PayeeID" = "NameID")) %>% 
-  left_join(a$entity_types, by = "EntityTypeID") %>% 
-  select(-EntityTypeID, PayeeType = EntityTypeName) %>% 
-  rename_with(~paste0("Payee", .), .cols = 33:last_col(1)) %>% 
-  select(-14) %>% 
-  rename_with(.fn = az_rename) %>% 
-  rename(date = tx_date) %>% 
-  mutate(across(ends_with("date"), as_date))
+az$Transactions$TransactionDate <- as_date(az$Transactions$TransactionDate)
+```
+
+## Join
+
+The relational database contains 17 tables. The `Transactions` table
+contains all the campaign finance transactions with details, such as the
+party names or transaction types, only identified with ID variables. We
+need to use the smaller tables to add information about each
+expenditure.
+
+### Expenses
+
+The `Transactions` table contains 159 different types of transactions.
+Each transaction type can be related to income, an expenses, or neutral.
+
+``` r
+expense_types <- left_join(
+  az$TransactionTypes,
+  az$IncomeExpenseNeutral,
+  by = "IncomeExpenseNeutralID"
+)
+```
+
+We can then identify only those transaction types which relate to
+expenses.
+
+``` r
+expense_types <- expense_types %>% 
+  filter(IncomeExpenseNeutral == "Expense") %>% 
+  select(-starts_with("IncomeExpenseNeutral"))
+```
+
+The table of transactions can then be filtered to only those transaction
+types.
+
+``` r
+aze <- az$Transactions %>% 
+  inner_join(expense_types, by = "TransactionTypeID") %>% 
+  relocate(TransactionTypeName, .after = TransactionTypeID) %>% 
+  select(-TransactionTypeID, TransactionType = TransactionTypeName)
+```
+
+### Committee
+
+The spending party to each expenditure transaction is only identified by
+the `CommitteeID`. The committees themselves are identified in the
+separate `Committees` table, which in turn only identifies the
+committees by name using the `NameID` column and `Names` table. We can
+join all these together and select the subset of columns needed to
+identify the parties to the transaction.
+
+``` r
+comm_names <- az$Names %>% 
+  select(NameID, CommitteeName = LastName, EntityTypeID) %>% 
+  left_join(az$EntityTypes, by = "EntityTypeID") %>% 
+  select(-EntityTypeID) %>% 
+  rename(CommitteeType = EntityTypeName)
 ```
 
 ``` r
-rm(a); flush_memory()
+az_comm <- az$Committees %>% 
+  select(1:2, starts_with("Physical")) %>% 
+  rename_with(~str_replace(., "Physical", "Committee")) %>% 
+  left_join(comm_names, by = "NameID") %>% 
+  relocate(CommitteeName, .after = NameID) %>% 
+  select(-NameID)
+```
+
+Before we join the committee names and addresses to the list of
+transactions, we can first normalize the geographic data independently.
+
+``` r
+az_comm <- az_comm %>% 
+  mutate(
+    across(
+      contains("Address"),
+      list(xnorm = normal_address),
+      abbs = usps_street
+    )
+  ) %>% 
+  unite(
+    CommitteeAddressNorm, sep = " ",
+    matches("CommitteeAddress\\d_xnorm")
+  )
+```
+
+``` r
+az_comm <- az_comm %>% 
+  mutate(
+    CommitteeCityNorm = normal_city(
+      city = CommitteeCity,
+      abbs = usps_city,
+      states = c("AZ", "DC"),
+      na = invalid_city,
+      na_rep = TRUE
+    )
+  )
+```
+
+``` r
+az_comm <- az_comm %>% 
+  mutate(
+    CommitteeStateNorm = normal_state(
+      state = CommitteeState,
+      abbreviate = TRUE,
+      na_rep = TRUE,
+      valid = valid_state
+    )
+  )
+```
+
+``` r
+az_comm <- az_comm %>% 
+  mutate(
+    CommitteeZipNorm = normal_zip(
+      zip = CommitteeZipCode,
+      na_rep = TRUE
+    )
+  )
+```
+
+``` r
+prop_in(az_comm$CommitteeCityNorm, valid_city)
+#> [1] 0.9828684
+prop_in(az_comm$CommitteeState, valid_state)
+#> [1] 0.9607112
+prop_in(az_comm$CommitteeZipNorm, valid_zip)
+#> [1] 0.9984626
+```
+
+``` r
+aze <- aze %>% 
+  left_join(az_comm, by = "CommitteeID") %>% 
+  relocate(all_of(names(az_comm)), .after = CommitteeID)
+```
+
+### Vendor
+
+``` r
+az_vend <- az$Names %>% 
+  left_join(az$EntityTypes, by = "EntityTypeID") %>% 
+  select(
+    NameID, LastName, FirstName, MiddleName, Suffix, EntityTypeName,
+    Address1, Address2, City, State, ZipCode
+  ) %>% 
+  rename(VendorType = EntityTypeName)
+```
+
+We will perform the same kind of geographic normalization on our vendor
+data.
+
+``` r
+az_vend <- az_vend %>% 
+  mutate(
+    across(
+      contains("Address"),
+      list(xnorm = normal_address),
+      abbs = usps_street
+    )
+  ) %>% 
+  unite(
+    AddressNorm, sep = " ",
+    matches("^Address\\d_xnorm")
+  )
+```
+
+``` r
+az_vend <- az_vend %>% 
+  mutate(
+    StateNorm = normal_state(
+      state = State,
+      abbreviate = TRUE,
+      na_rep = TRUE,
+      valid = valid_state
+    )
+  )
+```
+
+``` r
+az_vend <- az_vend %>% 
+  mutate(
+    ZipNorm = normal_zip(
+      zip = ZipCode,
+      na_rep = TRUE
+    )
+  )
+```
+
+``` r
+az_city <- az_vend %>% 
+  distinct(City, StateNorm, ZipNorm) %>% 
+  mutate(
+    CityNorm = normal_city(
+      city = City,
+      abbs = usps_city,
+      states = c("AZ", "DC"),
+      na = invalid_city,
+      na_rep = TRUE
+    )
+  )
+```
+
+``` r
+az_city <- az_city %>% 
+  left_join(
+    y = zipcodes,
+    by = c(
+      "StateNorm" = "state",
+      "ZipNorm" = "zip"
+    )
+  ) %>% 
+  rename(CityMatch = city) %>% 
+  mutate(
+    match_abb = is_abbrev(CityNorm, CityMatch),
+    match_dist = str_dist(CityNorm, CityMatch),
+    CitySwap = if_else(
+      condition = !is.na(match_dist) & (match_abb | match_dist == 1),
+      true = CityMatch,
+      false = CityNorm
+    )
+  ) %>% 
+  select(
+    -CityMatch,
+    -match_dist,
+    -match_abb
+  )
+```
+
+``` r
+az_vend <- left_join(az_vend, az_city)
+```
+
+``` r
+prop_in(az_vend$CitySwap, valid_city)
+#> [1] 0.9662739
+prop_in(az_vend$State, valid_state)
+#> [1] 0.9790933
+prop_in(az_vend$ZipNorm, valid_zip)
+#> [1] 0.9817324
+```
+
+``` r
+aze <- aze %>% 
+  left_join(az_vend, by = "NameID") %>% 
+  relocate(all_of(names(az_vend)), .after = Amount) %>% 
+  relocate(ends_with("_norm"), .after = last_col())
+```
+
+### Finalize
+
+``` r
+aze <- aze %>% 
+  left_join(az$Categories, by = "CategoryID") %>% 
+  relocate(CategoryName, .after = CategoryID) %>% 
+  select(-CategoryID, Category = CategoryName)
+```
+
+``` r
+aze <- clean_names(aze, case = "snake")
 ```
 
 ## Explore
 
+There are 571,766 rows of 39 columns. Each record represents a single
+expenditure from a committee to a vendor or another party.
+
 ``` r
 glimpse(aze)
-#> Rows: 6,241,937
-#> Columns: 43
-#> $ tx_id             <int> 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20,…
-#> $ mod_tx_id         <int> 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20,…
-#> $ date              <date> 2003-09-10, 2003-12-09, 2003-10-23, 2003-10-27, 2004-01-10, 2003-01-0…
-#> $ amount            <dbl> 50.0, 100.0, 140.0, 250.0, 280.0, 160.0, 100.0, 100.0, 10.0, 10.0, 10.…
-#> $ is_for_benefit    <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, …
-#> $ memo              <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
-#> $ account_type      <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
-#> $ deleted           <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, …
-#> $ tx_type           <chr> "Contribution from Individuals", "Contribution from Individuals", "Con…
-#> $ tx_method         <chr> "Income", "Income", "Income", "Income", "Income", "Income", "Income", …
-#> $ category          <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
-#> $ com_id            <int> 200492094, 200492094, 200492094, 200492094, 200492094, 200492094, 2004…
-#> $ cand_id           <int> 713544, 713544, 713544, 713544, 713544, 713544, 713544, 713544, 159530…
-#> $ cand_is_incumbent <lgl> TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, FALSE, FALSE, FALSE, F…
-#> $ cand_party        <chr> "Republican", "Republican", "Republican", "Republican", "Republican", …
-#> $ cand_office       <chr> "State Senator - District No. 6", "State Senator - District No. 6", "S…
-#> $ cand_county       <chr> "Maricopa", "Maricopa", "Maricopa", "Maricopa", "Maricopa", "Maricopa"…
-#> $ cand_cycle        <int> 2004, 2004, 2004, 2004, 2004, 2004, 2004, 2004, NA, NA, NA, NA, NA, NA…
-#> $ cand_last         <chr> "VOTE DEAN MARTIN - 2004", "VOTE DEAN MARTIN - 2004", "VOTE DEAN MARTI…
-#> $ cand_first        <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
-#> $ cand_middle       <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
-#> $ cand_suffix       <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
-#> $ cand_addr1        <chr> "23227 N 23rd Pl", "23227 N 23rd Pl", "23227 N 23rd Pl", "23227 N 23rd…
-#> $ cand_addr2        <chr> NA, NA, NA, NA, NA, NA, NA, NA, "Ste 700", "Ste 700", "Ste 700", "Ste …
-#> $ cand_city         <chr> "Phoenix", "Phoenix", "Phoenix", "Phoenix", "Phoenix", "Phoenix", "Pho…
-#> $ cand_state        <chr> "AZ", "AZ", "AZ", "AZ", "AZ", "AZ", "AZ", "AZ", "DC", "DC", "DC", "DC"…
-#> $ cand_zip          <chr> "85024", "85024", "85024", "85024", "85024", "85024", "85024", "85024"…
-#> $ cand_occupation   <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
-#> $ cand_employer     <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
-#> $ cand_type         <chr> "Candidate (not participating in Clean Elections)", "Candidate (not pa…
-#> $ payee_id          <int> 541067, 541142, 541066, 541095, 541218, 541275, 541418, 541408, 307788…
-#> $ payee_last        <chr> "Lopata", "Allen", "Low", "Ricks", "Wilhelm-Garcia", "Barclay", "Shipe…
-#> $ payee_first       <chr> "Jaime", "Richard", "Jamie", "Ron", "Connie", "Steve", "Robert", "Tim"…
-#> $ payee_middle      <chr> NA, NA, NA, NA, NA, NA, NA, NA, "Dieter", "Dieter", "Dieter", "Dieter"…
-#> $ payee_suffix      <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
-#> $ payee_addr1       <chr> "1053 E Sheffield Ave", "1029 E Vista Ave", "5817 E Leith Ln", "6338 A…
-#> $ payee_addr2       <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
-#> $ payee_city        <chr> "Chandler", "Phoenix", "Scottsdale", "Dallas", "Phoenix", "Phoenix", "…
-#> $ payee_state       <chr> "AZ", "AZ", "AZ", "TX", "AZ", "AZ", "AZ", "AZ", "VA", "VA", "VA", "VA"…
-#> $ payee_zip         <chr> "85225", "85020", "85254", "75230", "85013", "85048", "86515", "85259"…
-#> $ payee_occupation  <chr> "Integrated Solutions Manager", "Owner", "Insurance Producer", "VP-Gov…
-#> $ payee_employer    <chr> "SBC DataComm, Inc.", "Allen Tenant Services", "Low & Johnson", "South…
-#> $ payee_type        <chr> "Individual", "Individual", "Individual", "Individual", "Individual", …
+#> Rows: 571,766
+#> Columns: 39
+#> $ transaction_id          <int> 26397, 26439, 29539, 30916, 30918, 31099, 40764, 42329, 42331, 42333, 42334, 42337, 42…
+#> $ modifies_transaction_id <int> 26397, 26439, 29539, 30916, 30918, 31099, 40764, 42329, 42331, 42333, 42334, 42337, 42…
+#> $ transaction_type        <chr> "Refund Contribution Less than $50", "Refund Contribution Less than $50", "Refund Cont…
+#> $ committee_id            <int> 1648, 1102, 1102, 1648, 1648, 1102, 200402517, 1102, 1102, 1102, 1332, 1332, 1036, 106…
+#> $ committee_name          <chr> "REPUBLICAN NATIONAL STATE ELECTIONS COMMITTEE", "HSBC North America Political Action …
+#> $ committee_address1      <chr> "310 FIRST STREET SE", "26525 N. Riverwoods Blvd.", "26525 N. Riverwoods Blvd.", "310 …
+#> $ committee_address2      <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "Suite 1001", "Suite 1001", NA, NA, "1st floor…
+#> $ committee_city          <chr> "WASHINGTON", "Mettawa", "Mettawa", "WASHINGTON", "WASHINGTON", "Mettawa", "PASADENA",…
+#> $ committee_state         <chr> "DC", "IL", "IL", "DC", "DC", "IL", "CA", "IL", "IL", "IL", "DC", "DC", "CO", "AZ", "A…
+#> $ committee_zip_code      <chr> "20003", "60045", "60045", "20003", "20003", "60045", "91124", "60045", "60045", "6004…
+#> $ committee_type          <chr> "Political Organization", "Segregated Fund", "Segregated Fund", "Political Organizatio…
+#> $ committee_address_norm  <chr> "310 FIRST STREET SE NA", "26525 N RIVERWOODS BLVD NA", "26525 N RIVERWOODS BLVD NA", …
+#> $ committee_city_norm     <chr> "WASHINGTON", "METTAWA", "METTAWA", "WASHINGTON", "WASHINGTON", "METTAWA", "PASADENA",…
+#> $ committee_state_norm    <chr> "DC", "IL", "IL", "DC", "DC", "IL", "CA", "IL", "IL", "IL", "DC", "DC", "CO", "AZ", "A…
+#> $ committee_zip_norm      <chr> "20003", "60045", "60045", "20003", "20003", "60045", "91124", "60045", "60045", "6004…
+#> $ transaction_date        <date> 2002-05-28, 2000-05-31, 2000-03-31, 2002-02-01, 2002-02-27, 2000-02-29, 2003-04-01, 1…
+#> $ amount                  <dbl> -4500.00, -7.91, -48.00, -2000.00, -2000.00, -7.91, -55.00, -287025.00, -5000.00, -745…
+#> $ name_id                 <int> -1, -1, 43167, -1, -1, -1, -1, 42353, 42354, 42355, 176061, 42355, 2947, 29698, 58147,…
+#> $ last_name               <chr> "Multiple Contributors", "Multiple Contributors", "Campos", "Multiple Contributors", "…
+#> $ first_name              <chr> NA, NA, "Fidel", NA, NA, NA, NA, NA, NA, NA, NA, NA, "EDWARD C/C", NA, NA, NA, "Sally"…
+#> $ middle_name             <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
+#> $ suffix                  <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
+#> $ vendor_type             <chr> "Individual", "Individual", "Individual", "Individual", "Individual", "Individual", "I…
+#> $ address1                <chr> NA, NA, "200 W Adams St", NA, NA, NA, NA, NA, NA, NA, NA, NA, "14404 W Sky Hawk Dr", "…
+#> $ address2                <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "Ste 2…
+#> $ city                    <chr> NA, NA, "Chicago", NA, NA, NA, NA, NA, NA, NA, NA, NA, "Sun City West", "Phoenix", "Ph…
+#> $ state                   <chr> "AZ", "AZ", "IL", "AZ", "AZ", "AZ", "AZ", "AZ", "AZ", "AZ", "AZ", "AZ", "AZ", "AZ", "A…
+#> $ zip_code                <chr> NA, NA, "60606", NA, NA, NA, NA, "00000", "00000", "00000", "00000", "00000", "85375",…
+#> $ address_norm            <chr> "NA NA", "NA NA", "200 W ADAMS ST NA", "NA NA", "NA NA", "NA NA", "NA NA", "NA NA", "N…
+#> $ state_norm              <chr> "AZ", "AZ", "IL", "AZ", "AZ", "AZ", "AZ", "AZ", "AZ", "AZ", "AZ", "AZ", "AZ", "AZ", "A…
+#> $ zip_norm                <chr> NA, NA, "60606", NA, NA, NA, NA, NA, NA, NA, NA, NA, "85375", "85001", "85011", NA, "8…
+#> $ city_norm               <chr> NA, NA, "CHICAGO", NA, NA, NA, NA, NA, NA, NA, NA, NA, "SUN CITY WEST", "PHOENIX", "PH…
+#> $ city_swap               <chr> NA, NA, "CHICAGO", NA, NA, NA, NA, NA, NA, NA, NA, NA, "SUN CITY WEST", "PHOENIX", "PH…
+#> $ is_for_benefit          <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FA…
+#> $ subject_committee_id    <int> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
+#> $ memo                    <chr> NA, NA, NA, NA, NA, NA, NA, "OTHER DISBURSEMENTS", "TRANSFER TO ANOTHER COMMITTEE", "E…
+#> $ category                <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
+#> $ account_type            <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
+#> $ deleted                 <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FA…
 tail(aze)
-#> # A tibble: 6 x 43
-#>    tx_id mod_tx_id date       amount is_for_benefit memo  account_type deleted tx_type tx_method
-#>    <int>     <int> <date>      <dbl> <lgl>          <chr> <chr>        <lgl>   <chr>   <chr>    
-#> 1 8.55e6   8554698 2020-08-03    50  FALSE          <NA>  <NA>         FALSE   Contri… Income   
-#> 2 8.55e6   8554749 2020-07-14   300  FALSE          <NA>  <NA>         FALSE   Contri… Income   
-#> 3 8.55e6   8554752 2020-07-17  1000  FALSE          <NA>  <NA>         FALSE   Contri… Income   
-#> 4 8.55e6   8554760 2020-07-06  -269. TRUE           <NA>  <NA>         FALSE   Operat… Expense  
-#> 5 8.55e6   8554761 2020-07-15  -252. TRUE           <NA>  <NA>         FALSE   Operat… Expense  
-#> 6 8.55e6   8554774 2020-07-06  -170  TRUE           Refu… <NA>         FALSE   Operat… Expense  
-#> # … with 33 more variables: category <chr>, com_id <int>, cand_id <int>, cand_is_incumbent <lgl>,
-#> #   cand_party <chr>, cand_office <chr>, cand_county <chr>, cand_cycle <int>, cand_last <chr>,
-#> #   cand_first <chr>, cand_middle <chr>, cand_suffix <chr>, cand_addr1 <chr>, cand_addr2 <chr>,
-#> #   cand_city <chr>, cand_state <chr>, cand_zip <chr>, cand_occupation <chr>, cand_employer <chr>,
-#> #   cand_type <chr>, payee_id <int>, payee_last <chr>, payee_first <chr>, payee_middle <chr>,
-#> #   payee_suffix <chr>, payee_addr1 <chr>, payee_addr2 <chr>, payee_city <chr>, payee_state <chr>,
-#> #   payee_zip <chr>, payee_occupation <chr>, payee_employer <chr>, payee_type <chr>
+#> # A tibble: 6 × 39
+#>   transaction_id modifies_transaction_id transaction_type  committee_id committee_name committee_addre… committee_addre…
+#>            <int>                   <int> <chr>                    <int> <chr>          <chr>            <chr>           
+#> 1        8554625                 8554625 Operating Expens…    202000066 Sloan2020      10450 N 74th St  <NA>            
+#> 2        8554639                 8554639 Operating Expens…       100128 Mabelle Gumme… 2851 N Tomahawk… <NA>            
+#> 3        8554681                 8554681 Submit $5 Qualif…    202000066 Sloan2020      10450 N 74th St  <NA>            
+#> 4        8554760                 8554760 Operating Expens…    201800020 Elect Karen F… 5691 Hole-in-On… <NA>            
+#> 5        8554761                 8554761 Operating Expens…    201800020 Elect Karen F… 5691 Hole-in-On… <NA>            
+#> 6        8554774                 8554774 Operating Expens…       100122 Tovar for Ari… 621 N. 5th Ave   <NA>            
+#> # … with 32 more variables: committee_city <chr>, committee_state <chr>, committee_zip_code <chr>,
+#> #   committee_type <chr>, committee_address_norm <chr>, committee_city_norm <chr>, committee_state_norm <chr>,
+#> #   committee_zip_norm <chr>, transaction_date <date>, amount <dbl>, name_id <int>, last_name <chr>, first_name <chr>,
+#> #   middle_name <chr>, suffix <chr>, vendor_type <chr>, address1 <chr>, address2 <chr>, city <chr>, state <chr>,
+#> #   zip_code <chr>, address_norm <chr>, state_norm <chr>, zip_norm <chr>, city_norm <chr>, city_swap <chr>,
+#> #   is_for_benefit <lgl>, subject_committee_id <int>, memo <chr>, category <chr>, account_type <chr>, deleted <lgl>
 ```
 
 ### Missing
 
-``` r
-col_stats(aze, count_na)
-#> # A tibble: 43 x 4
-#>    col               class        n           p
-#>    <chr>             <chr>    <int>       <dbl>
-#>  1 tx_id             <int>        0 0          
-#>  2 mod_tx_id         <int>        0 0          
-#>  3 date              <date>       0 0          
-#>  4 amount            <dbl>        0 0          
-#>  5 is_for_benefit    <lgl>        0 0          
-#>  6 memo              <chr>  4819056 0.772      
-#>  7 account_type      <chr>  6036387 0.967      
-#>  8 deleted           <lgl>        0 0          
-#>  9 tx_type           <chr>        0 0          
-#> 10 tx_method         <chr>        0 0          
-#> 11 category          <chr>  5991152 0.960      
-#> 12 com_id            <int>        0 0          
-#> 13 cand_id           <int>       59 0.00000945 
-#> 14 cand_is_incumbent <lgl>       59 0.00000945 
-#> 15 cand_party        <chr>  5155267 0.826      
-#> 16 cand_office       <chr>  5131892 0.822      
-#> 17 cand_county       <chr>  5183575 0.830      
-#> 18 cand_cycle        <int>  5150176 0.825      
-#> 19 cand_last         <chr>       59 0.00000945 
-#> 20 cand_first        <chr>  6239685 1.00       
-#> 21 cand_middle       <chr>  6235507 0.999      
-#> 22 cand_suffix       <chr>  6241937 1          
-#> 23 cand_addr1        <chr>     3806 0.000610   
-#> 24 cand_addr2        <chr>  4187660 0.671      
-#> 25 cand_city         <chr>     5817 0.000932   
-#> 26 cand_state        <chr>     3883 0.000622   
-#> 27 cand_zip          <chr>     5902 0.000946   
-#> 28 cand_occupation   <chr>  6241937 1          
-#> 29 cand_employer     <chr>  6241937 1          
-#> 30 cand_type         <chr>       59 0.00000945 
-#> 31 payee_id          <int>        0 0          
-#> 32 payee_last        <chr>        2 0.000000320
-#> 33 payee_first       <chr>   959849 0.154      
-#> 34 payee_middle      <chr>  4887905 0.783      
-#> 35 payee_suffix      <chr>  6067431 0.972      
-#> 36 payee_addr1       <chr>   514352 0.0824     
-#> 37 payee_addr2       <chr>  5471033 0.876      
-#> 38 payee_city        <chr>   514397 0.0824     
-#> 39 payee_state       <chr>   231931 0.0372     
-#> 40 payee_zip         <chr>   541049 0.0867     
-#> 41 payee_occupation  <chr>  1375455 0.220      
-#> 42 payee_employer    <chr>  1410761 0.226      
-#> 43 payee_type        <chr>        0 0
-```
+Columns vary in their degree of missing values.
 
 ``` r
-key_vars <- c("date", "payee_last", "amount", "cand_last")
+col_stats(aze, count_na)
+#> # A tibble: 39 × 4
+#>    col                     class       n          p
+#>    <chr>                   <chr>   <int>      <dbl>
+#>  1 transaction_id          <int>       0 0         
+#>  2 modifies_transaction_id <int>       0 0         
+#>  3 transaction_type        <chr>       0 0         
+#>  4 committee_id            <int>       0 0         
+#>  5 committee_name          <chr>      39 0.0000682 
+#>  6 committee_address1      <chr>      39 0.0000682 
+#>  7 committee_address2      <chr>  494834 0.865     
+#>  8 committee_city          <chr>     501 0.000876  
+#>  9 committee_state         <chr>      39 0.0000682 
+#> 10 committee_zip_code      <chr>      39 0.0000682 
+#> 11 committee_type          <chr>      39 0.0000682 
+#> 12 committee_address_norm  <chr>      39 0.0000682 
+#> 13 committee_city_norm     <chr>     501 0.000876  
+#> 14 committee_state_norm    <chr>      42 0.0000735 
+#> 15 committee_zip_norm      <chr>     501 0.000876  
+#> 16 transaction_date        <date>      0 0         
+#> 17 amount                  <dbl>       0 0         
+#> 18 name_id                 <int>       0 0         
+#> 19 last_name               <chr>       2 0.00000350
+#> 20 first_name              <chr>  488854 0.855     
+#> 21 middle_name             <chr>  556469 0.973     
+#> 22 suffix                  <chr>  570431 0.998     
+#> 23 vendor_type             <chr>       0 0         
+#> 24 address1                <chr>   19345 0.0338    
+#> 25 address2                <chr>  470204 0.822     
+#> 26 city                    <chr>   19440 0.0340    
+#> 27 state                   <chr>    3151 0.00551   
+#> 28 zip_code                <chr>   20987 0.0367    
+#> 29 address_norm            <chr>       0 0         
+#> 30 state_norm              <chr>    6413 0.0112    
+#> 31 zip_norm                <chr>   27051 0.0473    
+#> 32 city_norm               <chr>   23783 0.0416    
+#> 33 city_swap               <chr>   23783 0.0416    
+#> 34 is_for_benefit          <lgl>       0 0         
+#> 35 subject_committee_id    <int>  514980 0.901     
+#> 36 memo                    <chr>  217414 0.380     
+#> 37 category                <chr>  320981 0.561     
+#> 38 account_type            <chr>  528402 0.924     
+#> 39 deleted                 <lgl>       0 0
+```
+
+We can flag any record missing a key variable needed to identify a
+transaction.
+
+``` r
+key_vars <- c("transaction_date", "committee_name", "amount", "last_name")
 aze <- flag_na(aze, all_of(key_vars))
 sum(aze$na_flag)
-#> [1] 61
+#> [1] 41
 ```
 
 ``` r
 aze %>% 
   filter(na_flag) %>% 
-  select(all_of(key_vars)) %>% 
-  sample_frac()
-#> # A tibble: 61 x 4
-#>    date       payee_last    amount cand_last        
-#>    <date>     <chr>          <dbl> <chr>            
-#>  1 2014-05-16 Eames          -15   <NA>             
-#>  2 2014-10-16 QuickTrip      -34.4 <NA>             
-#>  3 2014-11-06 COSTCO         -31.9 <NA>             
-#>  4 2014-08-08 Eames         -996.  <NA>             
-#>  5 2014-02-03 <NA>          -135   Elect Steve Smith
-#>  6 2014-10-14 Eames          300   <NA>             
-#>  7 2014-07-09 FRAZEE PAINT  -151.  <NA>             
-#>  8 2014-08-29 Eames           25   <NA>             
-#>  9 2014-05-20 Eames          100   <NA>             
-#> 10 2014-08-11 Karl         -1000   <NA>             
-#> # … with 51 more rows
+  select(all_of(key_vars))
+#> # A tibble: 41 × 4
+#>    transaction_date committee_name    amount last_name
+#>    <date>           <chr>              <dbl> <chr>    
+#>  1 2014-05-16       <NA>                -15  Eames    
+#>  2 2014-05-16       <NA>                -20  Eames    
+#>  3 2014-05-26       <NA>                -25  Eames    
+#>  4 2014-05-20       <NA>               -100  Eames    
+#>  5 2014-05-27       <NA>               -150  Eames    
+#>  6 2014-02-03       Elect Steve Smith  -135  <NA>     
+#>  7 2014-04-14       Elect Steve Smith   -20  <NA>     
+#>  8 2014-08-08       <NA>               -996. Eames    
+#>  9 2014-08-11       <NA>               -177. Eames    
+#> 10 2014-08-11       <NA>              -1000  Karl     
+#> # … with 31 more rows
 ```
 
 ### Duplicates
 
+We can also flag any record completely duplicated across every column.
+
 ``` r
-dupe_file <- here("az", "expends", "dupes.txt")
-if (!file_exists(dupe_file)) {
-  file_create(dupe_file)
-  # split file into monthly chunks
-  azs <- aze %>% 
-    mutate(month = month(date), year = year(date)) %>% 
-    group_split(month, year, .keep = FALSE)
-  pb <- txtProgressBar(max = length(azs), style = 3)
-  for (i in seq_along(azs)) {
-    # check dupes from both ends
-    d1 <- duplicated(azs[[i]], fromLast = FALSE)
-    d2 <- duplicated(azs[[i]], fromLast = TRUE)
-    # append to disk
-    write_lines(d1 | d2, dupe_file, append = TRUE)
-    rm(d1, d2)
-    azs[[i]] <- NA
-    Sys.sleep(1); flush_memory(1)
-    setTxtProgressBar(pb, value = i)
-  }
-  rm(azs)
-}
-#>   |                                                                                                 |                                                                                         |   0%  |                                                                                                 |=                                                                                        |   1%  |                                                                                                 |=                                                                                        |   2%  |                                                                                                 |==                                                                                       |   2%  |                                                                                                 |==                                                                                       |   3%  |                                                                                                 |===                                                                                      |   3%  |                                                                                                 |===                                                                                      |   4%  |                                                                                                 |====                                                                                     |   4%  |                                                                                                 |====                                                                                     |   5%  |                                                                                                 |=====                                                                                    |   5%  |                                                                                                 |=====                                                                                    |   6%  |                                                                                                 |======                                                                                   |   6%  |                                                                                                 |======                                                                                   |   7%  |                                                                                                 |=======                                                                                  |   7%  |                                                                                                 |=======                                                                                  |   8%  |                                                                                                 |========                                                                                 |   9%  |                                                                                                 |=========                                                                                |  10%  |                                                                                                 |==========                                                                               |  11%  |                                                                                                 |==========                                                                               |  12%  |                                                                                                 |===========                                                                              |  12%  |                                                                                                 |===========                                                                              |  13%  |                                                                                                 |============                                                                             |  13%  |                                                                                                 |============                                                                             |  14%  |                                                                                                 |=============                                                                            |  14%  |                                                                                                 |=============                                                                            |  15%  |                                                                                                 |==============                                                                           |  15%  |                                                                                                 |==============                                                                           |  16%  |                                                                                                 |===============                                                                          |  17%  |                                                                                                 |================                                                                         |  17%  |                                                                                                 |================                                                                         |  18%  |                                                                                                 |=================                                                                        |  19%  |                                                                                                 |==================                                                                       |  20%  |                                                                                                 |==================                                                                       |  21%  |                                                                                                 |===================                                                                      |  21%  |                                                                                                 |===================                                                                      |  22%  |                                                                                                 |====================                                                                     |  22%  |                                                                                                 |====================                                                                     |  23%  |                                                                                                 |=====================                                                                    |  23%  |                                                                                                 |=====================                                                                    |  24%  |                                                                                                 |======================                                                                   |  24%  |                                                                                                 |======================                                                                   |  25%  |                                                                                                 |=======================                                                                  |  26%  |                                                                                                 |========================                                                                 |  27%  |                                                                                                 |========================                                                                 |  28%  |                                                                                                 |=========================                                                                |  28%  |                                                                                                 |==========================                                                               |  29%  |                                                                                                 |==========================                                                               |  30%  |                                                                                                 |===========================                                                              |  30%  |                                                                                                 |===========================                                                              |  31%  |                                                                                                 |============================                                                             |  31%  |                                                                                                 |============================                                                             |  32%  |                                                                                                 |=============================                                                            |  32%  |                                                                                                 |=============================                                                            |  33%  |                                                                                                 |==============================                                                           |  33%  |                                                                                                 |==============================                                                           |  34%  |                                                                                                 |===============================                                                          |  34%  |                                                                                                 |===============================                                                          |  35%  |                                                                                                 |================================                                                         |  36%  |                                                                                                 |=================================                                                        |  37%  |                                                                                                 |=================================                                                        |  38%  |                                                                                                 |==================================                                                       |  38%  |                                                                                                 |==================================                                                       |  39%  |                                                                                                 |===================================                                                      |  39%  |                                                                                                 |===================================                                                      |  40%  |                                                                                                 |====================================                                                     |  40%  |                                                                                                 |====================================                                                     |  41%  |                                                                                                 |=====================================                                                    |  41%  |                                                                                                 |=====================================                                                    |  42%  |                                                                                                 |======================================                                                   |  42%  |                                                                                                 |======================================                                                   |  43%  |                                                                                                 |=======================================                                                  |  43%  |                                                                                                 |=======================================                                                  |  44%  |                                                                                                 |========================================                                                 |  45%  |                                                                                                 |=========================================                                                |  46%  |                                                                                                 |=========================================                                                |  47%  |                                                                                                 |==========================================                                               |  47%  |                                                                                                 |==========================================                                               |  48%  |                                                                                                 |===========================================                                              |  48%  |                                                                                                 |===========================================                                              |  49%  |                                                                                                 |============================================                                             |  49%  |                                                                                                 |============================================                                             |  50%  |                                                                                                 |=============================================                                            |  50%  |                                                                                                 |=============================================                                            |  51%  |                                                                                                 |==============================================                                           |  51%  |                                                                                                 |==============================================                                           |  52%  |                                                                                                 |===============================================                                          |  52%  |                                                                                                 |===============================================                                          |  53%  |                                                                                                 |================================================                                         |  53%  |                                                                                                 |================================================                                         |  54%  |                                                                                                 |=================================================                                        |  55%  |                                                                                                 |==================================================                                       |  56%  |                                                                                                 |==================================================                                       |  57%  |                                                                                                 |===================================================                                      |  57%  |                                                                                                 |===================================================                                      |  58%  |                                                                                                 |====================================================                                     |  58%  |                                                                                                 |====================================================                                     |  59%  |                                                                                                 |=====================================================                                    |  59%  |                                                                                                 |=====================================================                                    |  60%  |                                                                                                 |======================================================                                   |  60%  |                                                                                                 |======================================================                                   |  61%  |                                                                                                 |=======================================================                                  |  61%  |                                                                                                 |=======================================================                                  |  62%  |                                                                                                 |========================================================                                 |  62%  |                                                                                                 |========================================================                                 |  63%  |                                                                                                 |=========================================================                                |  64%  |                                                                                                 |==========================================================                               |  65%  |                                                                                                 |==========================================================                               |  66%  |                                                                                                 |===========================================================                              |  66%  |                                                                                                 |===========================================================                              |  67%  |                                                                                                 |============================================================                             |  67%  |                                                                                                 |============================================================                             |  68%  |                                                                                                 |=============================================================                            |  68%  |                                                                                                 |=============================================================                            |  69%  |                                                                                                 |==============================================================                           |  69%  |                                                                                                 |==============================================================                           |  70%  |                                                                                                 |===============================================================                          |  70%  |                                                                                                 |===============================================================                          |  71%  |                                                                                                 |================================================================                         |  72%  |                                                                                                 |=================================================================                        |  72%  |                                                                                                 |=================================================================                        |  73%  |                                                                                                 |==================================================================                       |  74%  |                                                                                                 |===================================================================                      |  75%  |                                                                                                 |===================================================================                      |  76%  |                                                                                                 |====================================================================                     |  76%  |                                                                                                 |====================================================================                     |  77%  |                                                                                                 |=====================================================================                    |  77%  |                                                                                                 |=====================================================================                    |  78%  |                                                                                                 |======================================================================                   |  78%  |                                                                                                 |======================================================================                   |  79%  |                                                                                                 |=======================================================================                  |  79%  |                                                                                                 |=======================================================================                  |  80%  |                                                                                                 |========================================================================                 |  81%  |                                                                                                 |=========================================================================                |  82%  |                                                                                                 |=========================================================================                |  83%  |                                                                                                 |==========================================================================               |  83%  |                                                                                                 |===========================================================================              |  84%  |                                                                                                 |===========================================================================              |  85%  |                                                                                                 |============================================================================             |  85%  |                                                                                                 |============================================================================             |  86%  |                                                                                                 |=============================================================================            |  86%  |                                                                                                 |=============================================================================            |  87%  |                                                                                                 |==============================================================================           |  87%  |                                                                                                 |==============================================================================           |  88%  |                                                                                                 |===============================================================================          |  88%  |                                                                                                 |===============================================================================          |  89%  |                                                                                                 |================================================================================         |  90%  |                                                                                                 |=================================================================================        |  91%  |                                                                                                 |==================================================================================       |  92%  |                                                                                                 |==================================================================================       |  93%  |                                                                                                 |===================================================================================      |  93%  |                                                                                                 |===================================================================================      |  94%  |                                                                                                 |====================================================================================     |  94%  |                                                                                                 |====================================================================================     |  95%  |                                                                                                 |=====================================================================================    |  95%  |                                                                                                 |=====================================================================================    |  96%  |                                                                                                 |======================================================================================   |  96%  |                                                                                                 |======================================================================================   |  97%  |                                                                                                 |=======================================================================================  |  97%  |                                                                                                 |=======================================================================================  |  98%  |                                                                                                 |======================================================================================== |  98%  |                                                                                                 |======================================================================================== |  99%  |                                                                                                 |=========================================================================================| 100%
+aze <- flag_dupes(aze, -transaction_id)
+sum(aze$dupe_flag)
+#> [1] 23
 ```
 
 ``` r
-aze <- mutate(aze, dupe_flag = as.logical(read_lines(dupe_file)))
-if (sum(aze$dupe_flag) == 0) {
-  file_delete(dupe_file)
-  aze <- select(aze, -dupe_flag)
-}
+aze %>% 
+  filter(dupe_flag) %>% 
+  select(all_of(key_vars)) %>% 
+  arrange(transaction_date, committee_name)
+#> # A tibble: 23 × 4
+#>    transaction_date committee_name                                   amount last_name     
+#>    <date>           <chr>                                             <dbl> <chr>         
+#>  1 1999-12-30       COMMITTEE TO ELECT LINDA BINDER DIST 1 REP 2000 -124.   MEAHL         
+#>  2 1999-12-30       COMMITTEE TO ELECT LINDA BINDER DIST 1 REP 2000 -124.   MEAHL         
+#>  3 2000-06-30       CAPALBY 2000                                     -64    FRENCH        
+#>  4 2000-06-30       CAPALBY 2000                                     -64    FRENCH        
+#>  5 2000-08-16       FRIENDS OF RON GAWLITTA                           -0.01 BENNING, JOYCE
+#>  6 2000-08-16       FRIENDS OF RON GAWLITTA                           -0.01 BENNING, JOYCE
+#>  7 2000-08-16       FRIENDS OF RON GAWLITTA                           -0.01 BENNING, JOYCE
+#>  8 2000-08-16       FRIENDS OF RON GAWLITTA                           -0.01 BENNING, JOYCE
+#>  9 2006-05-28       ROBERT D JOHNSON                                 -48    JOHNSON       
+#> 10 2006-05-28       ROBERT D JOHNSON                                 -48    JOHNSON       
+#> # … with 13 more rows
 ```
 
 ### Categorical
 
 ``` r
 col_stats(aze, n_distinct)
-#> # A tibble: 44 x 4
-#>    col               class        n           p
-#>    <chr>             <chr>    <int>       <dbl>
-#>  1 tx_id             <int>  6241937 1          
-#>  2 mod_tx_id         <int>  6179797 0.990      
-#>  3 date              <date>    8946 0.00143    
-#>  4 amount            <dbl>   114705 0.0184     
-#>  5 is_for_benefit    <lgl>        2 0.000000320
-#>  6 memo              <chr>   233121 0.0373     
-#>  7 account_type      <chr>        3 0.000000481
-#>  8 deleted           <lgl>        1 0.000000160
-#>  9 tx_type           <chr>      140 0.0000224  
-#> 10 tx_method         <chr>        3 0.000000481
-#> 11 category          <chr>       64 0.0000103  
-#> 12 com_id            <int>     4402 0.000705   
-#> 13 cand_id           <int>     4402 0.000705   
-#> 14 cand_is_incumbent <lgl>        3 0.000000481
-#> 15 cand_party        <chr>        7 0.00000112 
-#> 16 cand_office       <chr>       70 0.0000112  
-#> 17 cand_county       <chr>       16 0.00000256 
-#> 18 cand_cycle        <int>       16 0.00000256 
-#> 19 cand_last         <chr>     4249 0.000681   
-#> 20 cand_first        <chr>        3 0.000000481
-#> 21 cand_middle       <chr>        3 0.000000481
-#> 22 cand_suffix       <chr>        1 0.000000160
-#> 23 cand_addr1        <chr>     2923 0.000468   
-#> 24 cand_addr2        <chr>      586 0.0000939  
-#> 25 cand_city         <chr>      295 0.0000473  
-#> 26 cand_state        <chr>       41 0.00000657 
-#> 27 cand_zip          <chr>      549 0.0000880  
-#> 28 cand_occupation   <chr>        1 0.000000160
-#> 29 cand_employer     <chr>        1 0.000000160
-#> 30 cand_type         <chr>       27 0.00000433 
-#> 31 payee_id          <int>  1188150 0.190      
-#> 32 payee_last        <chr>   260133 0.0417     
-#> 33 payee_first       <chr>    59805 0.00958    
-#> 34 payee_middle      <chr>     9266 0.00148    
-#> 35 payee_suffix      <chr>      340 0.0000545  
-#> 36 payee_addr1       <chr>   462011 0.0740     
-#> 37 payee_addr2       <chr>    24183 0.00387    
-#> 38 payee_city        <chr>    13767 0.00221    
-#> 39 payee_state       <chr>      444 0.0000711  
-#> 40 payee_zip         <chr>    18033 0.00289    
-#> 41 payee_occupation  <chr>    87290 0.0140     
-#> 42 payee_employer    <chr>   116714 0.0187     
-#> 43 payee_type        <chr>       43 0.00000689 
-#> 44 na_flag           <lgl>        2 0.000000320
+#> # A tibble: 41 × 4
+#>    col                     class       n          p
+#>    <chr>                   <chr>   <int>      <dbl>
+#>  1 transaction_id          <int>  571766 1         
+#>  2 modifies_transaction_id <int>  571166 0.999     
+#>  3 transaction_type        <chr>      69 0.000121  
+#>  4 committee_id            <int>    4365 0.00763   
+#>  5 committee_name          <chr>    4208 0.00736   
+#>  6 committee_address1      <chr>    3722 0.00651   
+#>  7 committee_address2      <chr>     399 0.000698  
+#>  8 committee_city          <chr>     422 0.000738  
+#>  9 committee_state         <chr>      44 0.0000770 
+#> 10 committee_zip_code      <chr>     550 0.000962  
+#> 11 committee_type          <chr>      27 0.0000472 
+#> 12 committee_address_norm  <chr>    3362 0.00588   
+#> 13 committee_city_norm     <chr>     284 0.000497  
+#> 14 committee_state_norm    <chr>      37 0.0000647 
+#> 15 committee_zip_norm      <chr>     549 0.000960  
+#> 16 transaction_date        <date>   8815 0.0154    
+#> 17 amount                  <dbl>   78651 0.138     
+#> 18 name_id                 <int>  140940 0.246     
+#> 19 last_name               <chr>   84031 0.147     
+#> 20 first_name              <chr>    6157 0.0108    
+#> 21 middle_name             <chr>    1369 0.00239   
+#> 22 suffix                  <chr>      62 0.000108  
+#> 23 vendor_type             <chr>      43 0.0000752 
+#> 24 address1                <chr>   68301 0.119     
+#> 25 address2                <chr>    7611 0.0133    
+#> 26 city                    <chr>    4943 0.00865   
+#> 27 state                   <chr>     254 0.000444  
+#> 28 zip_code                <chr>    7983 0.0140    
+#> 29 address_norm            <chr>   71915 0.126     
+#> 30 state_norm              <chr>      56 0.0000979 
+#> 31 zip_norm                <chr>    7969 0.0139    
+#> 32 city_norm               <chr>    3808 0.00666   
+#> 33 city_swap               <chr>    3639 0.00636   
+#> 34 is_for_benefit          <lgl>       2 0.00000350
+#> 35 subject_committee_id    <int>    7123 0.0125    
+#> 36 memo                    <chr>  148296 0.259     
+#> 37 category                <chr>      64 0.000112  
+#> 38 account_type            <chr>       3 0.00000525
+#> 39 deleted                 <lgl>       1 0.00000175
+#> 40 na_flag                 <lgl>       2 0.00000350
+#> 41 dupe_flag               <lgl>       2 0.00000350
 ```
 
-![](../plots/distinct_plots-1.png)<!-- -->![](../plots/distinct_plots-2.png)<!-- -->![](../plots/distinct_plots-3.png)<!-- -->![](../plots/distinct_plots-4.png)<!-- -->![](../plots/distinct_plots-5.png)<!-- -->![](../plots/distinct_plots-6.png)<!-- -->![](../plots/distinct_plots-7.png)<!-- -->![](../plots/distinct_plots-8.png)<!-- -->
+![](../plots/distinct-plots-1.png)<!-- -->![](../plots/distinct-plots-2.png)<!-- -->
 
 ### Amounts
 
 ``` r
-summary(aze$amount)
-#>      Min.   1st Qu.    Median      Mean   3rd Qu.      Max. 
-#> -26878591         2         8         9        25  25653327
-mean(aze$amount <= 0)
-#> [1] 0.09160073
+# fix floating point precision
+aze$amount <- round(aze$amount, digits = 2)
 ```
 
-![](../plots/hist_amount-1.png)<!-- -->
+All expenditures in the transaction table have a negative amounts (to
+distinguish the flow of money from contributions). Since we are only
+dealing with expenditures in this dataset, and we will be clarifying the
+giving and receiving parties differently than contributions, we can
+safely convert these values to positive amounts.
+
+``` r
+aze$amount <- aze$amount * -1
+```
+
+``` r
+summary(aze$amount)
+#>     Min.  1st Qu.   Median     Mean  3rd Qu.     Max. 
+#>        0       28      115     1901      500 26878591
+mean(aze$amount <= 0)
+#> [1] 0
+```
+
+These are the records with the minimum and maximum amounts.
+
+``` r
+glimpse(aze[c(which.max(aze$amount), which.min(aze$amount)), ])
+#> Rows: 2
+#> Columns: 41
+#> $ transaction_id          <int> 990397, 46087
+#> $ modifies_transaction_id <int> 990397, 46087
+#> $ transaction_type        <chr> "Operating Expense - Pay Cash/Check", "Expend Business In-Kind Contribution"
+#> $ committee_id            <int> 1648, 200091613
+#> $ committee_name          <chr> "REPUBLICAN NATIONAL STATE ELECTIONS COMMITTEE", "FRIENDS OF RON GAWLITTA"
+#> $ committee_address1      <chr> "310 FIRST STREET SE", "1309 W. LINGER LANE"
+#> $ committee_address2      <chr> NA, NA
+#> $ committee_city          <chr> "WASHINGTON", "PHOENIX"
+#> $ committee_state         <chr> "DC", "AZ"
+#> $ committee_zip_code      <chr> "20003", "85021"
+#> $ committee_type          <chr> "Political Organization", "Candidate (not participating in Clean Elections)"
+#> $ committee_address_norm  <chr> "310 FIRST STREET SE NA", "1309 W LINGER LN NA"
+#> $ committee_city_norm     <chr> "WASHINGTON", "PHOENIX"
+#> $ committee_state_norm    <chr> "DC", "AZ"
+#> $ committee_zip_norm      <chr> "20003", "85021"
+#> $ transaction_date        <date> 2002-08-21, 2000-05-09
+#> $ amount                  <dbl> 26878590.61, 0.01
+#> $ name_id                 <int> 207516, 353641
+#> $ last_name               <chr> "PREVIOUS DISBURSEMENTS", "JOYCE BENNING"
+#> $ first_name              <chr> NA, NA
+#> $ middle_name             <chr> NA, NA
+#> $ suffix                  <chr> NA, NA
+#> $ vendor_type             <chr> "Business", "Business"
+#> $ address1                <chr> "310 1st St SE", "8847 N 7th Ave"
+#> $ address2                <chr> NA, NA
+#> $ city                    <chr> "Washington", "Phoenix"
+#> $ state                   <chr> "DC", "AZ"
+#> $ zip_code                <chr> "20003", "85021"
+#> $ address_norm            <chr> "310 1ST ST SE NA", "8847 N 7TH AVE NA"
+#> $ state_norm              <chr> "DC", "AZ"
+#> $ zip_norm                <chr> "20003", "85021"
+#> $ city_norm               <chr> "WASHINGTON", "PHOENIX"
+#> $ city_swap               <chr> "WASHINGTON", "PHOENIX"
+#> $ is_for_benefit          <lgl> FALSE, FALSE
+#> $ subject_committee_id    <int> NA, NA
+#> $ memo                    <chr> NA, NA
+#> $ category                <chr> NA, NA
+#> $ account_type            <chr> NA, NA
+#> $ deleted                 <lgl> FALSE, FALSE
+#> $ na_flag                 <lgl> FALSE, FALSE
+#> $ dupe_flag               <lgl> FALSE, FALSE
+```
+
+The distribution of amount values are typically log-normal.
+
+![](../plots/hist-amount-1.png)<!-- -->
 
 ### Dates
 
 We can add the calendar year from `date` with `lubridate::year()`
 
 ``` r
-aze <- mutate(aze, year = year(date))
+aze <- mutate(aze, transaction_year = year(transaction_date))
 ```
 
 ``` r
-min(aze$date)
-#> [1] "1994-11-29"
-sum(aze$year < 2000)
-#> [1] 256038
-max(aze$date)
+min(aze$transaction_date)
+#> [1] "1994-11-30"
+sum(aze$transaction_year < 2000)
+#> [1] 21524
+max(aze$transaction_date)
 #> [1] "2020-08-12"
-sum(aze$date > today())
+sum(aze$transaction_date > today())
 #> [1] 0
 ```
 
-![](../plots/bar_year-1.png)<!-- -->
+It’s common to see an increase in the number of contributins in
+elections years.
 
-## Wrangle
+![](../plots/bar-year-1.png)<!-- -->
 
-To improve the searchability of the database, we will perform some
-consistent, confident string normalization. For geographic variables
-like city names and ZIP codes, the corresponding `campfin::normal_*()`
-functions are tailor made to facilitate this process.
-
-### Address
-
-For the street `addresss` variable, the `campfin::normal_address()`
-function will force consistence case, remove punctuation, and abbreviate
-official USPS suffixes.
-
-``` r
-aze <- aze %>% 
-  unite(
-    col = payee_addr,
-    starts_with("payee_addr"),
-    sep = " ",
-    remove = FALSE,
-    na.rm = TRUE
-  ) %>% 
-  unite(
-    col = cand_addr,
-    starts_with("cand_addr"),
-    sep = " ",
-    remove = FALSE,
-    na.rm = TRUE
-  ) %>% 
-  mutate(across(
-    .cols = ends_with("_addr"),
-    .fns = list(norm = normal_address),
-    abbs = usps_street,
-    na_rep = TRUE
-  )) %>% 
-  select(-ends_with("_addr"))
-```
-
-``` r
-aze %>% 
-  sample_n(10) %>% 
-  select(contains("_addr"))
-#> # A tibble: 10 x 6
-#>    cand_addr1       cand_addr2 payee_addr1       payee_addr2 cand_addr_norm       payee_addr_norm  
-#>    <chr>            <chr>      <chr>             <chr>       <chr>                <chr>            
-#>  1 255 E Osborn Rd  Ste 200    <NA>              <NA>        255 E OSBORN RD STE… <NA>             
-#>  2 4420 E Michelle… <NA>       4420 E Michelle … <NA>        4420 E MICHELLE DR   4420 E MICHELLE …
-#>  3 26525 N Riverwo… <NA>       2147 Zack Ridge … <NA>        26525 N RIVERWOODS … 2147 ZACK RDG DR 
-#>  4 5433 N 106th Ave <NA>       8131 N 12th St    <NA>        5433 N 106 TH AVE    8131 N 12 TH ST  
-#>  5 13312 W Gelding… <NA>       13206 W Shadow H… <NA>        13312 W GELDING DR   13206 W SHADOW H…
-#>  6 1001 Louisiana … Ste N1134s 56 Autumn Cres    <NA>        1001 LOUISIANA ST S… 56 AUTUMN CRES   
-#>  7 2244 W Michigan… <NA>       2942 N 24th St    <NA>        2244 W MICHIGAN AVE  2942 N 24 TH ST  
-#>  8 1001 Louisiana … Ste N1134s 19403 Lockridge … <NA>        1001 LOUISIANA ST S… 19403 LOCKRIDGE …
-#>  9 PO Box 4685      <NA>       7434 E Cholla Ln  <NA>        PO BOX 4685          7434 E CHOLLA LN 
-#> 10 1650 N 36th St   <NA>       1693 E Oakland St <NA>        1650 N 36 TH ST      1693 E OAKLAND ST
-```
-
-### ZIP
-
-For ZIP codes, the `campfin::normal_zip()` function will attempt to
-create valid *five* digit codes by removing the ZIP+4 suffix and
-returning leading zeroes dropped by other programs like Microsoft Excel.
-
-``` r
-aze <- mutate(
-  .data = aze, across(
-    .cols = ends_with("_zip"),
-    .fns = list(norm = normal_zip),
-    na_rep = TRUE
-  )
-)
-```
-
-``` r
-progress_table(
-  aze$payee_zip,
-  aze$payee_zip_norm,
-  compare = valid_zip
-)
-#> # A tibble: 2 x 6
-#>   stage          prop_in n_distinct prop_na n_out n_diff
-#>   <chr>            <dbl>      <dbl>   <dbl> <dbl>  <dbl>
-#> 1 payee_zip        0.993      18033  0.0867 40071    919
-#> 2 payee_zip_norm   0.995      17870  0.0889 26145    747
-```
-
-### State
-
-Valid two digit state abbreviations can be made using the
-`campfin::normal_state()` function.
-
-``` r
-aze <- mutate(
-  .data = aze, across(
-    .cols = ends_with("_state"),
-    .fns = list(norm = normal_state),
-    abbreviate = TRUE,
-    na_rep = TRUE,
-  )
-)
-```
-
-``` r
-aze %>% 
-  filter(payee_state != payee_state_norm) %>% 
-  count(payee_state, payee_state_norm, sort = TRUE)
-#> # A tibble: 237 x 3
-#>    payee_state payee_state_norm     n
-#>    <chr>       <chr>            <int>
-#>  1 "<miss"     MISS             26281
-#>  2 "az"        AZ                4133
-#>  3 "Az"        AZ                3630
-#>  4 "Arizo"     ARIZO              467
-#>  5 "AZ "       AZ                 416
-#>  6 "Reque"     REQUE              204
-#>  7 "Ariz"      ARIZ               184
-#>  8 "Inter"     INTER              132
-#>  9 "Texas"     TX                 131
-#> 10 "Fla"       FLA                127
-#> # … with 227 more rows
-```
-
-``` r
-progress_table(
-  aze$payee_state,
-  aze$payee_state_norm,
-  compare = valid_state
-)
-#> # A tibble: 2 x 6
-#>   stage            prop_in n_distinct prop_na n_out n_diff
-#>   <chr>              <dbl>      <dbl>   <dbl> <dbl>  <dbl>
-#> 1 payee_state        0.991        444  0.0372 56496    385
-#> 2 payee_state_norm   0.995        234  0.0399 29895    176
-```
-
-### City
-
-Cities are the most difficult geographic variable to normalize, simply
-due to the wide variety of valid cities and formats.
-
-#### Normal
-
-The `campfin::normal_city()` function is a good start, again converting
-case, removing punctuation, but *expanding* USPS abbreviations. We can
-also remove `invalid_city` values.
-
-``` r
-aze <- mutate(
-  .data = aze, across(
-    .cols = ends_with("_city"),
-    .fns = list(norm = normal_city),
-    abbs = usps_city,
-      states = c("AZ", "DC", "ARIZONA"),
-      na = invalid_city,
-      na_rep = TRUE
-  )
-)
-```
-
-#### Swap
-
-We can further improve normalization by comparing our normalized value
-against the *expected* value for that record’s state abbreviation and
-ZIP code. If the normalized value is either an abbreviation for or very
-similar to the expected value, we can confidently swap those two.
-
-``` r
-aze <- aze %>% 
-  left_join(
-    y = zipcodes,
-    by = c(
-      "payee_state_norm" = "state",
-      "payee_zip_norm" = "zip"
-    )
-  ) %>% 
-  rename(city_match = city) %>% 
-  mutate(
-    match_abb = is_abbrev(payee_city_norm, city_match),
-    match_dist = str_dist(payee_city_norm, city_match),
-    payee_city_swap = if_else(
-      condition = !is.na(match_dist) & (match_abb | match_dist == 1),
-      true = city_match,
-      false = payee_city_norm
-    )
-  ) %>% 
-  select(
-    -city_match,
-    -match_dist,
-    -match_abb
-  )
-```
-
-#### Refine
+### Wrangle
 
 The [OpenRefine](https://openrefine.org/) algorithms can be used to
 group similar strings and replace the less common versions with their
@@ -702,104 +814,61 @@ city/state/zip combination.
 ``` r
 good_refine <- aze %>% 
   mutate(
-    payee_city_refine = payee_city_swap %>% 
+    city_refine = city_swap %>% 
       key_collision_merge() %>% 
       n_gram_merge(numgram = 1)
   ) %>% 
-  filter(payee_city_refine != payee_city_swap) %>% 
+  filter(city_refine != city_swap) %>% 
   inner_join(
     y = zipcodes,
     by = c(
-      "payee_city_refine" = "city",
-      "payee_state_norm" = "state",
-      "payee_zip_norm" = "zip"
+      "city_refine" = "city",
+      "state_norm" = "state",
+      "zip_norm" = "zip"
     )
   )
 ```
 
-    #> # A tibble: 22 x 5
-    #>    payee_state_norm payee_zip_norm payee_city_swap      payee_city_refine     n
-    #>    <chr>            <chr>          <chr>                <chr>             <int>
-    #>  1 FL               32084          AUGUSTINE            SAINT AUGUSTINE      12
-    #>  2 MS               39530          BIXOLI               BILOXI                6
-    #>  3 AZ               85251          SCOTTSDALESCOTTSDALE SCOTTSDALE            4
-    #>  4 AZ               85616          CHACUCA CITY         HUACHUCA CITY         4
-    #>  5 CT               06033          GLATONSBURY          GLASTONBURY           3
-    #>  6 SC               29406          NORTH CHARLESTON     CHARLESTON            3
-    #>  7 SC               29419          NORTH CHARLESTON     CHARLESTON            3
-    #>  8 OR               97228          PORTLAND OR          PORTLAND              2
-    #>  9 AZ               85015          PPHOENIXHOENIX       PHOENIX               1
-    #> 10 AZ               85119          APACHIE JUNTION      APACHE JUNCTION       1
-    #> # … with 12 more rows
+    #> # A tibble: 5 × 5
+    #>   state_norm zip_norm city_swap        city_refine     n
+    #>   <chr>      <chr>    <chr>            <chr>       <int>
+    #> 1 CT         06033    GLATONSBURY      GLASTONBURY     3
+    #> 2 SC         29419    NORTH CHARLESTON CHARLESTON      3
+    #> 3 AZ         85308    GLENDALE #       GLENDALE        1
+    #> 4 OR         97228    PORTLAND OR      PORTLAND        1
+    #> 5 SC         29406    NORTH CHARLESTON CHARLESTON      1
 
 Then we can join the refined values back to the database.
 
 ``` r
 aze <- aze %>% 
-  left_join(good_refine, by = names(aze)) %>% 
-  mutate(payee_city_refine = coalesce(payee_city_refine, payee_city_swap))
+  left_join(good_refine, by = names(.)) %>% 
+  mutate(city_refine = coalesce(city_refine, city_swap))
 ```
 
 #### Progress
 
-``` r
-many_city <- c(valid_city, extra_city)
-aze %>% 
-  filter(payee_city_refine %out% many_city) %>% 
-  count(payee_city_refine, payee_state_norm, payee_zip_norm, sort = TRUE) %>% 
-  drop_na()
-#> # A tibble: 1,304 x 4
-#>    payee_city_refine payee_state_norm payee_zip_norm     n
-#>    <chr>             <chr>            <chr>          <int>
-#>  1 SHELBY TOWNSHIP   MI               48315           4212
-#>  2 SHELBY TOWNSHIP   MI               48316           4130
-#>  3 FARMINGTON HILLS  MI               48331           4069
-#>  4 FARMINGTON HILLS  MI               48334           1713
-#>  5 FARMINGTON HILLS  MI               48335           1564
-#>  6 SADDLEBROOKE      AZ               85739           1155
-#>  7 FARMINGTON HILLS  MI               48336           1086
-#>  8 WAITING           AZ               85260            820
-#>  9 DESERT HILLS      AZ               85086            751
-#> 10 SHELBY TOWNSHIP   MI               48317            622
-#> # … with 1,294 more rows
-```
+Our goal for normalization was to increase the proportion of city values
+known to be valid and reduce the total distinct values by correcting
+misspellings.
 
-``` r
-aze$payee_city_refine <- na_in(
-  x = aze$payee_city_refine, 
-  y = c("<MISSING VALUE>", "AZ")
-)
-```
-
-``` r
-many_city <- c(
-  many_city,
-  "FARMINGTON HILLS",
-  "SHELBY TOWNSHIP",
-  "SADDLEBROOKE",
-  "DESERT HILLS"
-)
-```
-
-| stage               | prop\_in | n\_distinct | prop\_na | n\_out | n\_diff |
-| :------------------ | -------: | ----------: | -------: | -----: | ------: |
-| payee\_city)        |    0.985 |       10478 |    0.082 |  83955 |    2455 |
-| payee\_city\_norm   |    0.988 |        9766 |    0.084 |  66091 |    1725 |
-| payee\_city\_swap   |    0.990 |        9245 |    0.084 |  57865 |    1197 |
-| payee\_city\_refine |    0.997 |        9228 |    0.091 |  16416 |    1180 |
+| stage                    | prop_in | n_distinct | prop_na | n_out | n_diff |
+|:-------------------------|--------:|-----------:|--------:|------:|-------:|
+| `str_to_upper(aze$city)` |   0.979 |       3964 |   0.034 | 11757 |    750 |
+| `aze$city_norm`          |   0.987 |       3808 |   0.042 |  7122 |    592 |
+| `aze$city_swap`          |   0.990 |       3639 |   0.042 |  5312 |    418 |
+| `aze$city_refine`        |   0.990 |       3635 |   0.042 |  5307 |    415 |
 
 You can see how the percentage of valid values increased with each
 stage.
 
-![](../plots/bar_progress-1.png)<!-- -->
+![](../plots/bar-progress-1.png)<!-- -->
 
 More importantly, the number of distinct values decreased each stage. We
 were able to confidently change many distinct invalid values to their
 valid equivalent.
 
-![](../plots/bar_distinct-1.png)<!-- -->
-
-## Conclude
+![](../plots/bar-distinct-1.png)<!-- -->
 
 Before exporting, we can remove the intermediary normalization columns
 and rename all added variables with the `_clean` suffix.
@@ -807,77 +876,68 @@ and rename all added variables with the `_clean` suffix.
 ``` r
 aze <- aze %>% 
   select(
-    -payee_city_norm,
-    -payee_city_swap,
-    payee_city_clean = payee_city_refine
+    -city_norm,
+    -city_swap,
+    city_clean = city_refine
   ) %>% 
   rename_all(~str_replace(., "_norm", "_clean")) %>% 
-  rename_all(~str_remove(., "_raw"))
+  relocate(ends_with("_clean"), .after = last_col()) %>% 
+  relocate(address_clean, city_clean, state_clean, .before = zip_clean)
 ```
+
+## Conclude
 
 ``` r
-glimpse(sample_n(aze, 50))
-#> Rows: 50
-#> Columns: 53
-#> $ tx_id             <int> 2238306, 5328446, 5648327, 1323149, 3945241, 5770730, 7136476, 1107825…
-#> $ mod_tx_id         <int> 2238306, 5328446, 5648327, 1323149, 3945241, 5770730, 7136476, 1107825…
-#> $ date              <date> 2004-09-16, 2014-07-11, 2014-12-30, 2001-04-13, 2011-07-15, 2014-01-1…
-#> $ amount            <dbl> 5.00, 0.39, 1.25, 15.00, 2.00, 58.40, 1.75, 8.00, 4.62, 5.00, 7.00, 20…
-#> $ is_for_benefit    <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, …
-#> $ memo              <chr> NA, "BIWEEKLY     0.39", NA, NA, "PAYROLL DEDUCTION", NA, NA, NA, NA, …
-#> $ account_type      <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
-#> $ deleted           <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, …
-#> $ tx_type           <chr> "Aggregate Contributions less than $50", "Contribution from Individual…
-#> $ tx_method         <chr> "Income", "Income", "Income", "Income", "Income", "Income", "Income", …
-#> $ category          <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
-#> $ com_id            <int> 1102, 1206, 2083, 200002293, 1016, 1227, 2083, 200202394, 1514, 200693…
-#> $ cand_id           <int> 820669, 1440062, 1604615, 706928, 1529579, 1440068, 1604615, 884996, 1…
-#> $ cand_is_incumbent <lgl> FALSE, FALSE, FALSE, TRUE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, F…
-#> $ cand_party        <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, "Democratic", NA, NA, NA, NA, NA, …
-#> $ cand_office       <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, "State Representative - District 8…
-#> $ cand_county       <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, "Maricopa", NA, NA, NA, NA, NA, NA…
-#> $ cand_cycle        <int> NA, NA, NA, NA, NA, NA, NA, NA, NA, 2006, NA, NA, NA, NA, NA, NA, 2012…
-#> $ cand_last         <chr> "HSBC North America Political Action Committee (H-PAC)", "SALT RIVER V…
-#> $ cand_first        <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
-#> $ cand_middle       <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
-#> $ cand_suffix       <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
-#> $ cand_addr1        <chr> "26525 N Riverwoods Blvd", "CORPORATE TAXES,  ISB336  PO BOX 52025", "…
-#> $ cand_addr2        <chr> NA, NA, NA, "P O BOX 10566", "801 PENNSYLVANIA AVE NW, SUITE 214", NA,…
-#> $ cand_city         <chr> "Mettawa", "PHOENIX", "Phoenix", "BIRMINGHAM", "WASHINGTON", "Phoenix"…
-#> $ cand_state        <chr> "IL", "AZ", "AZ", "AL", "DC", "AZ", "AZ", "MI", "GA", "AZ", "AZ", "AZ"…
-#> $ cand_zip          <chr> "60045", "85207", "85004", "35296", "20004", "85016", "85004", "48275"…
-#> $ cand_occupation   <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
-#> $ cand_employer     <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
-#> $ cand_type         <chr> "Segregated Fund", "Political Action Committee (Mega Standing)", "Poli…
-#> $ payee_id          <int> -1, 838975, 1166139, 303594, 1046967, 1285758, 1497771, 375650, 840751…
-#> $ payee_last        <chr> "Multiple Contributors", "BUONAGURIO", "STRASSBERG", "HARDIN", "DEBENO…
-#> $ payee_first       <chr> NA, "JOHN", "AARON", "ANDREW", "JEFF", "Christo", "FRYS FOOD STORES", …
-#> $ payee_middle      <chr> NA, "E", NA, NA, NA, NA, NA, NA, NA, "C", NA, "A", NA, NA, NA, NA, NA,…
-#> $ payee_suffix      <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, "JR", NA, NA, NA, NA, NA, NA, NA, …
-#> $ payee_addr1       <chr> NA, "12718 W Milton Dr", "9818 N 7th Pl", "4408 SW 105th Dr", "PO Box …
-#> $ payee_addr2       <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "Apt 2073", NA, NA…
-#> $ payee_city        <chr> NA, "Peoria", "Phoenix", "Gainesville", "Phoenix", "Chandler", "AZ", "…
-#> $ payee_state       <chr> "AZ", "AZ", "AZ", "FL", "AZ", "AZ", "85", "VA", "OK", "AZ", "AZ", "AZ"…
-#> $ payee_zip         <chr> NA, "85383", "85020", "32608", "85072", "85248", "$1.75", "22302", "73…
-#> $ payee_occupation  <chr> NA, "MANAGER CLAIMS SERVI", "DELI CLERK", "PRIVATE BANKING EXEC I", "P…
-#> $ payee_employer    <chr> NA, "SRP", "FRYS #612", "COMPASS BANCSHARES, INC.", "APS", "J.B. Hende…
-#> $ payee_type        <chr> "Individual", "Individual", "Individual", "Individual", "Individual", …
-#> $ na_flag           <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, …
-#> $ year              <dbl> 2004, 2014, 2014, 2001, 2011, 2014, 2017, 2002, 2008, 2006, 2018, 2017…
-#> $ cand_addr_clean   <chr> "26525 N RIVERWOODS BLVD", "CORPORATE TAXES ISB 336 PO BOX 52025", "24…
-#> $ payee_addr_clean  <chr> NA, "12718 W MILTON DR", "9818 N 7 TH PL", "4408 SW 105 TH DR", "PO BO…
-#> $ cand_zip_clean    <chr> "60045", "85207", "85004", "35296", "20004", "85016", "85004", "48275"…
-#> $ payee_zip_clean   <chr> NA, "85383", "85020", "32608", "85072", "85248", "00175", "22302", "73…
-#> $ cand_state_clean  <chr> "IL", "AZ", "AZ", "AL", "DC", "AZ", "AZ", "MI", "GA", "AZ", "AZ", "AZ"…
-#> $ payee_state_clean <chr> "AZ", "AZ", "AZ", "FL", "AZ", "AZ", NA, "VA", "OK", "AZ", "AZ", "AZ", …
-#> $ cand_city_clean   <chr> "METTAWA", "PHOENIX", "PHOENIX", "BIRMINGHAM", "WASHINGTON", "PHOENIX"…
-#> $ payee_city_clean  <chr> NA, "PEORIA", "PHOENIX", "GAINESVILLE", "PHOENIX", "CHANDLER", NA, "AL…
+glimpse(sample_n(aze, 1000))
+#> Rows: 1,000
+#> Columns: 41
+#> $ transaction_id          <int> 549892, 8168273, 6805307, 2511159, 4425322, 4355130, 5290813, 4453097, 52118, 5293903,…
+#> $ modifies_transaction_id <int> 549892, 8168273, 6805307, 2511159, 4425322, 4355130, 5290813, 4453097, 52118, 5293903,…
+#> $ transaction_type        <chr> "Operating Expense - Pay Cash/Check", "Operating Expense - Pay Cash/Check", "Operating…
+#> $ committee_id            <int> 200091526, 201600354, 201600122, 1365, 201000113, 201200304, 201200041, 201200217, 911…
+#> $ committee_name          <chr> "HERSCHELLA HORTON FOR AZ CORPORATION COMMISSION", "Mendez for Senate", "Weninger For …
+#> $ committee_address1      <chr> "2486 S. SADDLEBACK AVENUE", "2035 S Elm St", "1360 S. Camellia Ct", "C/O 2058 S Dobso…
+#> $ committee_address2      <chr> NA, "145", NA, NA, NA, NA, NA, NA, NA, "Suite 104", NA, NA, NA, NA, NA, NA, NA, "Ste. …
+#> $ committee_city          <chr> "TUCSON", "Tempe", "Chandler", "Mesa", "Chandler", "Green Valley", "Prescott", "Phoeni…
+#> $ committee_state         <chr> "AZ", "AZ", "AZ", "AZ", "AZ", "AZ", "AZ", "AZ", "AZ", "AZ", "AZ", "AZ", "AZ", "AZ", "A…
+#> $ committee_zip_code      <chr> "85710", "85282", "85286", "85202", "85226", "85614", "86301", "85004", "85714", "8500…
+#> $ committee_type          <chr> "Candidate (not participating in Clean Elections)", "Candidate (participating in Clean…
+#> $ transaction_date        <date> 2000-02-29, 2019-10-25, 2016-09-01, 2007-09-20, 2012-10-16, 2012-08-07, 2014-07-31, 2…
+#> $ amount                  <dbl> 10.00, 400.00, 4.49, 100.00, 3875.00, 37.43, 32.98, 114.77, 46.15, 143.45, 3403.54, 17…
+#> $ name_id                 <int> 332007, 1512015, 1289427, 722764, 1014615, 1119338, 1014549, 723590, 260329, 1186530, …
+#> $ last_name               <chr> "NATIONAL BANK OF ARIZONA", "Radar Strategies", "Starbucks", "DOUG CLARK CAMPAIGN", "K…
+#> $ first_name              <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, "Edward", NA, NA, NA, NA, NA, "JOE", NA, NA, NA, N…
+#> $ middle_name             <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "NIXON", NA, NA, NA, NA, N…
+#> $ suffix                  <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
+#> $ vendor_type             <chr> "Business", "Business", "Business", "Business", "Business", "Business", "Business", "B…
+#> $ address1                <chr> "333 N Wilmot Rd", "124 W McDowell Rd", "4030 W Ray Rd", "2533 W Steinbeck Ct", "5114 …
+#> $ address2                <chr> NA, NA, NA, NA, NA, "Ste 14", NA, NA, NA, NA, "Ste 404", NA, NA, NA, NA, "Ste C", NA, …
+#> $ city                    <chr> "Tucson", "Phoenix", "Chandler", "Phoenix", "Phoenix", "Green Valley", "Internet Websi…
+#> $ state                   <chr> "AZ", "AZ", "AZ", "AZ", "AZ", "AZ", NA, "AZ", "AZ", "AZ", "IL", "AZ", "AZ", "MD", "AZ"…
+#> $ zip_code                <chr> "85711", "85003", "85226", "85086", "85018", "85622", "12345", "85012", "85721", "8500…
+#> $ is_for_benefit          <lgl> FALSE, TRUE, FALSE, FALSE, TRUE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, TRUE…
+#> $ subject_committee_id    <int> NA, 0, NA, NA, 1045587, NA, NA, NA, 0, NA, NA, NA, NA, NA, NA, 226008, NA, NA, NA, NA,…
+#> $ memo                    <chr> "service charge", NA, NA, NA, NA, NA, "FB ad", "Volunteer Refreshments", "Campaign Mom…
+#> $ category                <chr> NA, "Voter list", "Other", NA, "Mailings", "Food/refreshments", "Advertising", "Other"…
+#> $ account_type            <chr> NA, NA, NA, NA, NA, "Primary", "Primary", NA, NA, "Primary", NA, NA, NA, "General", NA…
+#> $ deleted                 <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FA…
+#> $ na_flag                 <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FA…
+#> $ dupe_flag               <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FA…
+#> $ transaction_year        <dbl> 2000, 2019, 2016, 2007, 2012, 2012, 2014, 2012, 1997, 2014, 2019, 2010, 2018, 2018, 20…
+#> $ committee_address_clean <chr> "2486 S SADDLEBACK AVE NA", "2035 S ELM ST 145", "1360 S CAMELLIA CT NA", "C/O 2058 S …
+#> $ committee_city_clean    <chr> "TUCSON", "TEMPE", "CHANDLER", "MESA", "CHANDLER", "GREEN VALLEY", "PRESCOTT", "PHOENI…
+#> $ committee_state_clean   <chr> "AZ", "AZ", "AZ", "AZ", "AZ", "AZ", "AZ", "AZ", "AZ", "AZ", "AZ", "AZ", "AZ", "AZ", "A…
+#> $ committee_zip_clean     <chr> "85710", "85282", "85286", "85202", "85226", "85614", "86301", "85004", "85714", "8500…
+#> $ address_clean           <chr> "333 N WILMOT RD NA", "124 W MCDOWELL RD NA", "4030 W RAY RD NA", "2533 W STEINBECK CT…
+#> $ city_clean              <chr> "TUCSON", "PHOENIX", "CHANDLER", "PHOENIX", "PHOENIX", "GREEN VALLEY", "INTERNET WEBSI…
+#> $ state_clean             <chr> "AZ", "AZ", "AZ", "AZ", "AZ", "AZ", NA, "AZ", "AZ", "AZ", "IL", "AZ", "AZ", "MD", "AZ"…
+#> $ zip_clean               <chr> "85711", "85003", "85226", "85086", "85018", "85622", "12345", "85012", "85721", "8500…
 ```
 
-1.  There are 6,241,937 records in the database.
-2.  There are 0 duplicate records in the database.
+1.  There are 571,766 records in the database.
+2.  There are 23 duplicate records in the database.
 3.  The range and distribution of `amount` and `date` seem reasonable.
-4.  There are 61 records missing key variables.
+4.  There are 41 records missing key variables.
 5.  Consistency in geographic data has been improved with
     `campfin::normal_*()`.
 6.  The 4-digit `year` variable has been created with
@@ -886,33 +946,49 @@ glimpse(sample_n(aze, 50))
 ## Export
 
 Now the file can be saved on disk for upload to the Accountability
-server.
+server. We will name the object using a date range of the records
+included.
+
+``` r
+min_dt <- min(aze$transaction_date[aze$transaction_year >= 1996]) %>% 
+  str_remove_all("-")
+max_dt <- str_remove_all(max(aze$transaction_date), "-")
+csv_ts <- paste(min_dt, max_dt, sep = "-")
+```
 
 ``` r
 clean_dir <- dir_create(here("az", "expends", "data", "clean"))
-clean_path <- path(clean_dir, "az_expends_clean.csv")
-write_csv(aze, clean_path, na = "")
-file_size(clean_path)
-#> 2.5G
-file_encoding(clean_path) %>% 
-  mutate(across(path, path.abbrev))
-#> # A tibble: 1 x 3
-#>   path                                         mime            charset 
-#>   <chr>                                        <chr>           <chr>   
-#> 1 ~/az/expends/data/clean/az_expends_clean.csv application/csv us-ascii
+clean_csv <- path(clean_dir, glue("az_expends_{csv_ts}.csv"))
+clean_rds <- path_ext_set(clean_csv, "rds")
+basename(clean_csv)
+#> [1] "az_expends_19960101-20200812.csv"
+```
+
+``` r
+write_csv(aze, clean_csv, na = "")
+write_rds(aze, clean_rds, compress = "xz")
+(clean_size <- file_size(clean_csv))
+#> 214M
 ```
 
 ## Upload
 
-Using the [duckr](https://github.com/kiernann/duckr) R package, we can
-wrap around the [duck](https://duck.sh/) command line tool to upload the
-file to the IRW server.
+We can use the `aws.s3::put_object()` to upload the text file to the IRW
+server.
 
 ``` r
-# remotes::install_github("kiernann/duckr")
-s3_dir <- "s3:/publicaccountability/csv/"
-s3_path <- path(s3_dir, basename(clean_path))
-if (require(duckr)) {
-  duckr::duck_upload(clean_path, s3_path)
+aws_key <- path("csv", basename(clean_csv))
+if (!object_exists(aws_csv, "publicaccountability")) {
+  put_object(
+    file = clean_csv,
+    object = aws_key, 
+    bucket = "publicaccountability",
+    acl = "public-read",
+    show_progress = TRUE,
+    multipart = TRUE
+  )
 }
+aws_head <- head_object(aws_csv, "publicaccountability")
+(aws_size <- as_fs_bytes(attr(aws_head, "content-length")))
+unname(aws_size == clean_size)
 ```
