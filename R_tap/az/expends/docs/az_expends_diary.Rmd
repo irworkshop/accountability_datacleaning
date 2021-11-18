@@ -786,7 +786,7 @@ We can use the `aws.s3::put_object()` to upload the text file to the IRW server.
 
 ```{r aws-upload, eval=FALSE}
 aws_key <- path("csv", basename(clean_csv))
-if (!object_exists(aws_csv, "publicaccountability")) {
+if (!object_exists(aws_key, "publicaccountability")) {
   put_object(
     file = clean_csv,
     object = aws_key, 
@@ -796,7 +796,7 @@ if (!object_exists(aws_csv, "publicaccountability")) {
     multipart = TRUE
   )
 }
-aws_head <- head_object(aws_csv, "publicaccountability")
+aws_head <- head_object(aws_key, "publicaccountability")
 (aws_size <- as_fs_bytes(attr(aws_head, "content-length")))
 unname(aws_size == clean_size)
 ```
