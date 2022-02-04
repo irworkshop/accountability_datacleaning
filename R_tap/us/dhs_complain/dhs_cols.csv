@@ -1,0 +1,25 @@
+"column","start","end"
+"Row",54,62
+"Number",63,80
+"Master Complaint Number",81,122
+"Investigation Type",123,154
+"Current Activity",155,191
+"Last Activity Date",192,211
+"Closed",212,231
+"Method of Receipt",232,262
+"Source",263,283
+"Date to DHS",284,305
+"Date to CRCL",306,322
+"Summary of Allegation",323,468
+"Component Referenced",469,490
+"Components Involved",491,510
+"Special Process",511,528
+"Special Process Type",529,559
+"Complaint Issue",560,586
+"Issue Basis",587,605
+"Situation",606,626
+"Situation Basis",627,651
+"Incident Location",652,686
+"Incident Date",687,705
+"City",706,722
+"State",723,999
