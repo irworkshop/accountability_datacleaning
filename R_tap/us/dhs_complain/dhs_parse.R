@@ -21,30 +21,42 @@ n_col <- nrow(w)
 
 # Page --------------------------------------------------------------------
 
-# Used for later to match state overflows
+# used for later to match state overflows
 no_space_st <- str_remove_all(state.name, "\\s")
 
+# used to determine if Y coord equals or is close to value
 almost <- function(x, y, d = 2) {
   (x %in% y) | sapply(x, function(z) min(abs(y - z)) < d)
 }
 
+
 all <- rep(list(NA), length(dhs_pdf))
 
+# page by page read columns
 for (n in seq_along(dhs_pdf)) {
   message(n)
   pg <- dhs_pdf[[n]]
+
+  # all the regular text is 3 pixels tall
   pg <- pg[pg$height == 3, ]
 
   if (n == 1) {
+    # trim off the column headers on page 1
     pg <- pg[pg$y >= 73, ]
   }
 
-  # Find all text between width X coordinates and Y row coordinates
-  # Rows are easily delineated by the running integer on leftmost side
+  # find all text between width X coordinates and Y row coordinates
+  # rows are easily delineated by the running integer on leftmost side
   row_y <- pg$y[pg$x >= 54 & pg$x <= 62]
+
+  if (n == 16) {
+    # this page has one redacted row num, use date Y coord
+    row_y <- sort(c(row_y, pg$y[pg$text == "3/9/2021"]))
+  }
 
   out <- tibble(y = row_y)
 
+  # column by column
   for (i in seq(n_col)) {
 
     res <- pg %>%
@@ -52,20 +64,21 @@ for (n in seq_along(dhs_pdf)) {
       filter(x >= w$start[i], x <= w$end[i])
 
     if (i == 12) {
-      # The redacted (b)(6) lines are a few pixels down
+      # the redacted (b)(6) lines are shifted a few pixels down
       # check for any redaction and remap Y coord upwards
-      b6_y <- str_which(res$text, "\\((b|6)\\)")
-      if (b6_y[1] == 1) {
-
-      }
-      y_diff <- any(res$y[b6_y] != res$y[b6_y - 1])
+      res <- res %>%
+        group_by(y) %>%
+        # ignore any line that is ALL redacted
+        filter(!all(str_detect(text, "\\((b|\\d)\\)")))
+      b6_y <- str_which(res$text, "\\((b|\\d)\\)")
+      y_diff <- any(res$y[b6_y] != res$y[ b6_y - 1])
       while (y_diff) {
-        res <- mutate(res, y = ifelse(str_detect(text, "\\("), lag(y), y))
-        y_diff <- any(res$y[b6_y] != res$y[b6_y - 1])
+        res$y <- ifelse(str_detect(res$text, "\\("), lag(res$y), res$y)
+        y_diff <- any(res$y[b6_y] != res$y[ b6_y - 1])
       }
     }
 
-    # Back combine overflow city lines
+    # back combine overflow city lines
     if (i == 23) {
       k <- 1
       while (i < nrow(res)) {
@@ -112,7 +125,13 @@ for (n in seq_along(dhs_pdf)) {
   out <- out %>%
     arrange(y) %>%
     select(-y) %>%
+    # merge overflow ID number
     mutate(across(Number, str_remove, "\\s"))
+  # match and swap separated state names
   out$State <- state.name[match(str_remove_all(out$State, "\\s"), no_space_st)]
   all[[n]] <- out
 }
+
+# combine all the pages and write to file
+all <- bind_rows(all)
+write_csv(all, "us/dhs_complain/all_dhs.csv", na = "")
