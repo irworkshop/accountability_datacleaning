@@ -14,9 +14,6 @@ library(httr)
 library(usa)
 library(fs)
 
-# functions ---------------------------------------------------------------
-
-
 # 2014 non-dod ------------------------------------------------------------
 
 # The data from 1974-2014 is in a fixed width format
@@ -273,24 +270,277 @@ for (i in tran_n) {
 # recombine with new num column
 sct_tran <- bind_rows(out)
 
+sct_tran <- sct_tran %>%
+  rename(
+    date_from = date_trans_in_use_from,
+    date_until = date_trans_in_use_until
+  ) %>%
+  # shift end date to be exclusive w/ no overlap
+  mutate(date_until = date_until - 1)
+
 # agency codes ------------------------------------------------------------
 
+#> AG - Agency with Subelement
 agency_tran <- sct_tran %>%
-  filter(sct_table_id == "AG")
+  filter(sct_table_id == "AG") %>%
+  select(-sct_table_id)
 
-agency_dt <- opm_14 %>%
+# pull distinct code/date combos to match and rejoin later
+# our translations must match 1:1 (972,790)
+agency_dates <- opm_14 %>%
   distinct(agency_subelement, effective_date)
 
-all_agency <- agency_dt %>%
-  left_join(
-    y = agency_tran,
-    by = c("agency_subelement" = "data_code")
-  ) %>%
-  filter(
-    effective_date %within% interval(
-      start = date_trans_in_use_from,
-      end = date_trans_in_use_until
+# start by matching codes with a single translation
+single_tran <- agency_tran %>%
+  group_by(data_code) %>%
+  # find codes with one one translation
+  filter(n_distinct(translation) == 1) %>%
+  # keep only one of repeat translations
+  slice(1) %>%
+  ungroup() %>%
+  # remove unneeded dates
+  select(data_code, translation)
+
+# set aside matching translations
+tran_alpha <- inner_join(
+  x = agency_dates,
+  y = single_tran,
+  by = c("agency_subelement" = "data_code")
+)
+
+# remove matched dates before continue
+multi_tran <- anti_join(
+  x = agency_dates,
+  y = tran_alpha,
+  by = "agency_subelement"
+)
+
+nrow(tran_alpha) + nrow(multi_tran) == 972790
+
+x <- multi_tran %>%
+  rename(date_from = effective_date) %>%
+  mutate(date_until = date_from) %>%
+  group_split(agency_subelement)
+
+length(x)
+
+out <- rep(list(NA), length(x))
+# for each data code...
+for (i in seq_along(x)) {
+  message(i)
+  # find all translations for code
+  code <- unique(x[[i]]$agency_subelement)
+  tran <- agency_tran %>%
+    filter(data_code == str_remove_all(code, "\\*")) %>%
+    select(-data_code, -tran_num) %>%
+    distinct()
+  if (any(table(tran$date_from) > 1) | any(table(tran$date_until) > 1)) {
+    # fix date overlaps
+    tran <- tran %>%
+      group_by(date_from) %>%
+      # keep longest interval if same start date
+      filter(date_until == max(date_until)) %>%
+      ungroup()
+    tran <- tran %>%
+      group_by(date_until) %>%
+      # keep longest interval if same end date
+      filter(date_from == min(date_from)) %>%
+      ungroup()
+  }
+  # join possible tran by date overlap
+  y <- interval_left_join(
+    x = x[[i]],
+    y = tran,
+    by = c("date_from", "date_until")
+  )
+  stopifnot(nrow(y) == nrow(x[[i]]))
+  # isolate code, date, tran
+  out[[i]] <- y %>%
+    select(
+      -ends_with(".y"),
+      -date_until.x,
+      effective_date = date_from.x
     )
-  ) %>%
-  select(1:2, agency_name = translation) %>%
-  distinct()
+}
+
+tran_bravo <- bind_rows(out)
+
+all_tran <- bind_rows(tran_alpha, tran_bravo)
+nrow(all_tran) == nrow(agency_dates)
+
+rm(tran_alpha, tran_bravo, x, out, multi_tran, single_tran, agency_tran)
+
+# repeat for AH codes -----------------------------------------------------
+
+# find missing translations
+noagency_date <- all_tran %>%
+  filter(is.na(translation)) %>%
+  mutate(agency_withoutsub = str_remove_all(agency_subelement, "\\*")) %>%
+  select(-translation)
+
+has_tran <- all_tran %>%
+  filter(!is.na(translation))
+
+#> AH - Agency without Subelement
+noagency_tran <- sct_tran %>%
+  filter(sct_table_id == "AH") %>%
+  select(-sct_table_id)
+
+# start by matching codes with a single translation
+single_tran <- noagency_tran %>%
+  group_by(data_code) %>%
+  # find codes with one one translation
+  filter(n_distinct(translation) == 1) %>%
+  # keep only one of repeat translations
+  slice(1) %>%
+  ungroup() %>%
+  # remove unneeded dates
+  select(data_code, translation)
+
+# set aside matching translations
+tran_charlie <- inner_join(
+  x = noagency_date,
+  y = single_tran,
+  by = c("agency_withoutsub" = "data_code")
+)
+
+# remove matched dates before continue
+multi_tran <- anti_join(
+  x = noagency_date,
+  y = tran_charlie,
+  by = "agency_subelement"
+)
+
+nrow(tran_charlie) + nrow(multi_tran) == 3163
+
+x <- multi_tran %>%
+  rename(date_from = effective_date) %>%
+  mutate(date_until = date_from) %>%
+  group_split(agency_subelement)
+
+length(x)
+
+out <- rep(list(NA), length(x))
+# for each data code...
+for (i in seq_along(x)) {
+  message(i)
+  # find all translations for code
+  code <- unique(x[[i]]$agency_subelement)
+  tran <- agency_tran %>%
+    filter(data_code == str_remove_all(code, "\\*")) %>%
+    select(-data_code, -tran_num) %>%
+    distinct()
+  if (any(table(tran$date_from) > 1) | any(table(tran$date_until) > 1)) {
+    # fix date overlaps
+    tran <- tran %>%
+      group_by(date_from) %>%
+      # keep longest interval if same start date
+      filter(date_until == max(date_until)) %>%
+      ungroup()
+    tran <- tran %>%
+      group_by(date_until) %>%
+      # keep longest interval if same end date
+      filter(date_from == min(date_from)) %>%
+      ungroup()
+  }
+  # join possible tran by date overlap
+  y <- interval_left_join(
+    x = x[[i]],
+    y = tran,
+    by = c("date_from", "date_until")
+  )
+  stopifnot(nrow(y) == nrow(x[[i]]))
+  # isolate code, date, tran
+  out[[i]] <- y %>%
+    select(
+      -ends_with(".y"),
+      -date_until.x,
+      effective_date = date_from.x
+    )
+}
+
+tran_delta <- bind_rows(out)
+
+more_tran <- bind_rows(tran_charlie, tran_delta)
+nrow(more_tran) == nrow(noagency_date)
+
+more_tran <- select(more_tran, -agency_withoutsub)
+
+all_tran <- bind_rows(has_tran, more_tran)
+nrow(all_tran) == nrow(agency_dates)
+
+rm(more_tran, tran_charlie, tran_delta, x, out, multi_tran, single_tran)
+
+# apply recent code to rest -----------------------------------------------
+
+still_no_tran <- all_tran %>%
+  filter(is.na(translation)) %>%
+  mutate(agency_withoutsub = str_remove_all(agency_subelement, "\\*")) %>%
+  select(-translation)
+
+has_tran <- all_tran %>%
+  filter(!is.na(translation))
+
+# use most recent without any date match
+recent_tran <- sct_tran %>%
+  filter(sct_table_id %in% c("AG", "AH")) %>%
+  group_by(data_code) %>%
+  arrange(desc(date_until)) %>%
+  slice(1) %>%
+  ungroup() %>%
+  select(data_code, translation)
+
+last_tran <- left_join(
+  x = still_no_tran,
+  y = recent_tran,
+  by = c("agency_withoutsub" = "data_code")
+)
+
+last_tran <- last_tran %>%
+  select(-agency_withoutsub)
+
+all_tran <- bind_rows(has_tran, last_tran)
+rm(last_tran, recent_tran, still_no_tran, has_tran)
+
+# fix one remaining code with no direct translation
+all_tran$translation[all_tran$agency_subelement == "JL**"] <- "U.S. COURTS"
+
+all_tran <- rename(all_tran, agency_name = translation)
+
+
+# type indicators ---------------------------------------------------------
+
+accend_type <- tibble(
+  type_indicator = c("A", str_subset(opm_readme[463:471], ".")),
+  type_name = c("Accession", str_subset(opm_readme[475:482], "."))
+)
+
+depart_type <- tibble(
+  type_indicator = c("S", str_subset(opm_readme[494:516], ".")),
+  type_name = c("Separation", str_subset(opm_readme[520:535], "."))
+)
+
+type_ind <- bind_rows(accend_type, depart_type)
+type_ind <- mutate(type_ind, across(everything(), str_trim))
+
+# join codes to data ------------------------------------------------------
+
+opm_14 <- left_join(
+  x = opm_14,
+  y = all_duty,
+  by = "duty_station"
+)
+
+opm_14 <- left_join(
+  x = opm_14,
+  y = all_tran,
+  by = c("agency_subelement", "effective_date")
+)
+
+opm_14 <- left_join(
+  x = opm_14,
+  y = type_ind,
+  by = "type_indicator"
+)
+
+# select columns ----------------------------------------------------------
