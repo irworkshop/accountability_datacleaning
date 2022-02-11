@@ -41,6 +41,23 @@ opm_fwf$element[4] <- "type_indicator"
 # list all opm dynamic files
 opm_txt_14 <- dir_ls("us/opm_employ/data/FOIA_2017-04762/data/1973-09-to-2014-06/non-dod/dynamic/")
 
+# order text files by date
+opm_txt_tbl <- tibble(file = basename(opm_txt_14))
+opm_txt_tbl <- opm_txt_tbl %>%
+  extract(
+    col = file,
+    into = c("month", "year"),
+    regex = "^(\\w{3})(\\d{4})\\.",
+    convert = TRUE,
+    remove = FALSE
+  ) %>%
+  mutate(
+    month = factor(month, levels = toupper(month.abb))
+  ) %>%
+  arrange(year, month)
+
+opm_txt_14 <- opm_txt_14[match(opm_txt_tbl$file, basename(opm_txt_14))]
+
 opm_14 <- lapply(
   X = opm_txt_14,
   FUN = function(x) {
@@ -544,3 +561,10 @@ opm_14 <- left_join(
 )
 
 # select columns ----------------------------------------------------------
+
+clean_dir <- dir_create(here("us", "opm_employ", "data", "clean"))
+clean_csv <- path(clean_dir, "opm_dynamic_1973-2017.csv")
+clean_rds <- path_ext_set(clean_csv, "rds")
+
+write_csv(opm_14, clean_csv, na = "")
+write_rds(opm_14, clean_rds, compress = "xz")
