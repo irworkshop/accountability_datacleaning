@@ -14,11 +14,11 @@ library(httr)
 library(usa)
 library(fs)
 
-# 2014 non-dod ------------------------------------------------------------
+# 2014 ====================================================================
 
 # The data from 1974-2014 is in a fixed width format
-# Column names and widths come from the FOIA response
-# Dynamic files list ascensions and separations
+# Column names and widths come from the FOIA response pdf
+# Dynamic files list accessions and separations
 
 opm_readme <- read_lines("us/opm_employ/data/FOIA_2017-04762/docs/2015-02-11-opm-foia-response_djvu.txt")
 
@@ -385,7 +385,7 @@ tran_bravo <- bind_rows(out)
 all_tran <- bind_rows(tran_alpha, tran_bravo)
 nrow(all_tran) == nrow(agency_dates)
 
-rm(tran_alpha, tran_bravo, x, out, multi_tran, single_tran, agency_tran)
+rm(tran_alpha, tran_bravo, x, out, multi_tran, single_tran)
 
 # repeat for AH codes -----------------------------------------------------
 
@@ -562,9 +562,144 @@ opm_14 <- left_join(
 
 # select columns ----------------------------------------------------------
 
-clean_dir <- dir_create(here("us", "opm_employ", "data", "clean"))
-clean_csv <- path(clean_dir, "opm_dynamic_1973-2017.csv")
-clean_rds <- path_ext_set(clean_csv, "rds")
+a <- opm_14
 
-write_csv(opm_14, clean_csv, na = "")
-write_rds(opm_14, clean_rds, compress = "xz")
+# 2016 ====================================================================
+
+# The data from 2014-2016 is in many pipe delim files
+# data column names and translations in separate files
+# some variable have combined codes to separate
+
+# documentation -----------------------------------------------------------
+
+dir_link <- link_create(
+  path = "us/opm_employ/data/FOIA_2017-04762/data/2014-09-to-2016-09/non-dod/",
+  new_path = "data_2016"
+)
+
+opm_cols_16 <- read_excel(
+  path = "data_2016/documentation/Jeremy Singer-Vine Data Record Format.xls",
+  sheet = "Dynamics Format",
+  range = "A5:B24"
+)
+
+opm_cols_16 <- opm_cols_16[[1]] %>%
+  str_remove("\\(.*\\)") %>%
+  str_trim() %>%
+  make_clean_names()
+
+# accessions --------------------------------------------------------------
+
+opm_16_acc <- read_delim(
+  file = dir_ls("data_2016/accessions/"),
+  delim = "|",
+  na = c("############", "."),
+  col_names = opm_cols_16,
+  col_types = cols(
+    .default = col_character(),
+    effective_date = col_date("%Y%m%d"),
+    adjusted_basic_pay = col_number()
+  )
+)
+
+# separations -------------------------------------------------------------
+
+opm_16_sep <- read_delim(
+  file = dir_ls("data_2016/separations/"),
+  delim = "|",
+  na = c("############", "."),
+  col_names = opm_cols_16,
+  col_types = cols(
+    .default = col_character(),
+    effective_date = col_date("%Y%m%d"),
+    adjusted_basic_pay = col_number()
+  )
+)
+
+# combine -----------------------------------------------------------------
+
+opm_16 <- bind_rows(opm_16_acc, opm_16_sep)
+
+# translate ---------------------------------------------------------------
+
+# read the translations for ACC/SEP code
+acc_sep <- read_fwf(
+  file = "data_2016/translations/AccSep Translation.txt",
+  col_positions = fwf_empty(
+    file = "data_2016/translations/AccSep Translation.txt",
+    col_names = c("acc_sep", "acc_sep_name"),
+    skip = 1
+  )
+)
+
+# join to end of table
+opm_16 <- left_join(
+  x = opm_16,
+  y = acc_sep,
+  by = "acc_sep"
+)
+
+opm_16 <- relocate(opm_16, acc_sep_name, .after = acc_sep)
+
+# separate codes from string variables
+opm_16 <- opm_16 %>%
+  separate(
+    col = agency,
+    into = c("agency_cd", "agency"),
+    sep = "-",
+    extra = "merge",
+    fill = "left"
+  ) %>%
+  separate(
+    col = sub_agency,
+    into = c("sub_cd", "sub_agency"),
+    sep = "-",
+    extra = "merge",
+    fill = "left"
+  ) %>%
+  separate(
+    col = occupation,
+    into = c("occupation_cd", "occupation"),
+    sep = "-",
+    extra = "merge",
+    fill = "left"
+  )
+
+# clean -------------------------------------------------------------------
+
+link_delete(dir_link)
+
+b <- opm_16
+
+# 2022 ====================================================================
+
+# Data from 2017-2022 are in pipe delim text files
+# Tables finally contain all names and translations
+
+opm_txt_2022 <- dir_ls("us/opm_employ/data/FOIA_2022-00300/non-dod/dynamics/")
+
+opm_21 <- read_delim(
+  file = opm_txt_2022,
+  delim = "|",
+  col_types = cols(
+    .default = col_character(),
+    EffectiveDate = col_date("%Y%m")
+    # LengthOfService = col_number()
+  )
+)
+
+opm_21 <- clean_names(opm_21, case = "snake")
+
+opm_21$length_of_service <- parse_number(opm_21$length_of_service, na = ".")
+opm_21$length_of_service <- round(opm_21$length_of_service, 2)
+
+opm_21 <- separate(
+  data = opm_21,
+  col = name,
+  into = c("family_name", "given_name"),
+  sep = ",\\s",
+  fill = "right",
+  extra = "merge"
+)
+
+c <- opm_21
