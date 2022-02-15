@@ -9,6 +9,7 @@ library(lubridate)
 library(campfin)
 library(janitor)
 library(readxl)
+library(aws.s3)
 library(rvest)
 library(httr)
 library(usa)
@@ -79,6 +80,16 @@ opm_14 <- lapply(
 names(opm_14) <- basename(names(opm_14))
 opm_14 <- bind_rows(opm_14, .id = "source_file")
 opm_14 <- relocate(opm_14, source_file, .after = last_col())
+
+opm_14$adjusted_basic_pay <- parse_number(
+  x = opm_14$adjusted_basic_pay,
+  na = c("******", "######")
+)
+
+# filter ------------------------------------------------------------------
+
+opm_14 <- opm_14 %>%
+  filter(str_detect(employee_name, "NAME WITHHELD BY", negate = TRUE))
 
 # geographic locator codes ------------------------------------------------
 
@@ -524,7 +535,6 @@ all_tran$translation[all_tran$agency_subelement == "JL**"] <- "U.S. COURTS"
 
 all_tran <- rename(all_tran, agency_name = translation)
 
-
 # type indicators ---------------------------------------------------------
 
 accend_type <- tibble(
@@ -539,6 +549,85 @@ depart_type <- tibble(
 
 type_ind <- bind_rows(accend_type, depart_type)
 type_ind <- mutate(type_ind, across(everything(), str_trim))
+
+# occupation --------------------------------------------------------------
+
+# use the date technique for agency codes
+
+occup_tran <- sct_tran %>%
+  filter(sct_table_id == "XB") %>%
+  select(-sct_table_id) %>%
+  filter(translation != "UNKNOWN")
+
+occup_dates <- opm_14 %>%
+  distinct(occupation, effective_date)
+
+single_tran <- occup_tran %>%
+  group_by(data_code) %>%
+  filter(n_distinct(translation) == 1) %>%
+  slice(1) %>%
+  ungroup() %>%
+  select(data_code, translation)
+
+tran_echo <- inner_join(
+  x = occup_dates,
+  y = single_tran,
+  by = c("occupation" = "data_code")
+)
+
+multi_tran <- anti_join(
+  x = occup_dates,
+  y = tran_echo,
+  by = "occupation"
+)
+
+nrow(tran_echo) + nrow(multi_tran) == nrow(occup_dates)
+
+x <- multi_tran %>%
+  rename(date_from = effective_date) %>%
+  mutate(date_until = date_from) %>%
+  group_split(occupation)
+
+length(x)
+
+out <- rep(list(NA), length(x))
+for (i in seq_along(x)) {
+  message(i)
+  code <- unique(x[[i]]$occupation)
+  tran <- occup_tran %>%
+    filter(data_code == str_remove_all(code, "\\*")) %>%
+    select(-data_code, -tran_num) %>%
+    distinct()
+  if (any(table(tran$date_from) > 1) | any(table(tran$date_until) > 1)) {
+    tran <- tran %>%
+      group_by(date_from) %>%
+      filter(date_until == max(date_until)) %>%
+      ungroup()
+    tran <- tran %>%
+      group_by(date_until) %>%
+      filter(date_from == min(date_from)) %>%
+      ungroup()
+  }
+  y <- interval_left_join(
+    x = x[[i]],
+    y = tran,
+    by = c("date_from", "date_until")
+  )
+  stopifnot(nrow(y) == nrow(x[[i]]))
+  out[[i]] <- y %>%
+    select(
+      -ends_with(".y"),
+      -date_until.x,
+      effective_date = date_from.x
+    )
+}
+
+tran_fox <- bind_rows(out)
+
+all_occup <- bind_rows(tran_echo, tran_fox)
+nrow(all_occup) == nrow(occup_dates)
+
+all_occup <- rename(all_occup, occupation_name = translation)
 
 # join codes to data ------------------------------------------------------
 
@@ -560,9 +649,48 @@ opm_14 <- left_join(
   by = "type_indicator"
 )
 
+opm_14 <- left_join(
+  x = opm_14,
+  y = all_occup,
+  by = c("occupation", "effective_date")
+)
+
+
+# separate ----------------------------------------------------------------
+
+# split given and family names
+a <- opm_14 %>%
+  mutate(
+    employee_name = str_replace(
+      string = employee_name,
+      pattern = "^(\\w+)\\s(\\w{1})\\s(\\w{1})$",
+      replacement = "\\1,\\2 \\3"
+    ),
+    employee_name = str_replace(
+      string = employee_name,
+      pattern = "\\s{3,}",
+      replacement = ","
+    )
+  ) %>%
+  separate(
+    col = employee_name,
+    into = c("family_name", "given_name"),
+    sep = ",\\s?",
+    fill = "right",
+    extra = "merge"
+  ) %>%
+  mutate(
+    given_name = coalesce(
+      given_name,
+      str_extract(family_name, "(?<=\\s)\\w{1}$")
+    ),
+    family_name = family_name %>%
+      str_remove("\\s\\w{1}$")
+  )
+
 # select columns ----------------------------------------------------------
 
-a <- opm_14
+# a <- opm_14
 
 # 2016 ====================================================================
 
@@ -619,6 +747,11 @@ opm_16_sep <- read_delim(
 # combine -----------------------------------------------------------------
 
 opm_16 <- bind_rows(opm_16_acc, opm_16_sep)
+
+# filter ------------------------------------------------------------------
+
+opm_16 <- opm_16 %>%
+  filter(str_detect(family_name, "NAME WITHHELD BY", negate = TRUE))
 
 # translate ---------------------------------------------------------------
 
@@ -690,6 +823,13 @@ opm_21 <- read_delim(
 
 opm_21 <- clean_names(opm_21, case = "snake")
 
+# filter ------------------------------------------------------------------
+
+opm_21 <- opm_21 %>%
+  filter(str_detect(name, "NAME WITHHELD BY", negate = TRUE))
+
+# clean -------------------------------------------------------------------
+
 opm_21$length_of_service <- parse_number(opm_21$length_of_service, na = ".")
 opm_21$length_of_service <- round(opm_21$length_of_service, 2)
 
@@ -702,4 +842,77 @@ opm_21 <- separate(
   extra = "merge"
 )
 
+opm_21$acc_sep <- str_remove(opm_21$acc_sep, "^\\w{2}-")
+
 c <- opm_21
+
+# Merge ===================================================================
+
+stopifnot(nrow(a) + nrow(b) + nrow(c) == 9908281)
+
+a <- a %>%
+  select(
+    given_name,
+    family_name,
+    effective_date,
+    adjusted_basic_pay,
+    occupation = occupation_name,
+    agency = agency_name,
+    acc_sep = type_name,
+    duty_city,
+    duty_state
+  )
+
+b <- b %>%
+  select(
+    given_name,
+    family_name,
+    effective_date,
+    adjusted_basic_pay,
+    occupation,
+    agency,
+    acc_sep = acc_sep_name
+  )
+
+c <- c %>%
+  select(
+    given_name,
+    family_name,
+    effective_date,
+    occupation,
+    agency,
+    sub_agency = agency_subelement,
+    acc_sep
+  )
+
+out <- bind_rows(a, b, c)
+out <- relocate(out, sub_agency, .after = agency)
+out <- relocate(out, acc_sep, .after = last_col())
+
+# Export ==================================================================
+
+clean_dir <- dir_create("us/opm_employ/data/clean/")
+clean_csv <- path(clean_dir, "opm_employees_1982-2020.csv")
+
+write_csv(
+  x = out,
+  file = clean_csv,
+  na = ""
+)
+
+file_size(clean_csv)
+
+aws_key <- path("csv", basename(clean_csv))
+if (!object_exists(aws_key, "publicaccountability")) {
+  put_object(
+    file = clean_csv,
+    object = aws_key,
+    bucket = "publicaccountability",
+    acl = "public-read",
+    show_progress = TRUE,
+    multipart = TRUE
+  )
+}
+
+aws_head <- head_object(aws_key, "publicaccountability")
+as_fs_bytes(attr(aws_head, "content-length"))
