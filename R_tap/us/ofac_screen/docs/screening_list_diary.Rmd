@@ -1,0 +1,396 @@
+---
+title: "Consolidated Screening List"
+author: "Kiernan Nicholls"
+date: "`r date()`"
+output:
+  github_document: 
+    df_print: tibble
+    toc: true
+    toc_dept: 3
+editor_options: 
+  chunk_output_type: console
+---
+
+<!-- Place comments regarding knitting here -->
+
+```{r setup, include=FALSE, purl=FALSE}
+library(knitr)
+opts_chunk$set(
+  eval = TRUE,
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  error = FALSE,
+  collapse = TRUE,
+  comment = "#>",
+  fig.path = "../plots/",
+  fig.width = 10,
+  dpi = 300
+)
+if (!interactive()) {
+  options(width = 120)
+  set.seed(5)
+}
+```
+
+```{r create-docs-dir, eval=FALSE, echo=FALSE, include=FALSE}
+doc_dir <- fs::dir_create(here::here("us", "ofac_screen", "docs"))
+```
+
+## Project
+
+The Accountability Project is an effort to cut across data silos and give
+journalists, policy professionals, activists, and the public at large a simple
+way to search across huge volumes of public data about people and organizations.
+
+Our goal is to standardize public data on a few key fields by thinking of each
+dataset row as a transaction. For each transaction there should be (at least) 3
+variables:
+
+1. All **parties** to a transaction.
+2. The **date** of the transaction.
+3. The **amount** of money involved.
+
+## Objectives
+
+This document describes the process used to complete the following objectives:
+
+1. How many records are in the database?
+1. Check for entirely duplicated records.
+1. Check ranges of continuous variables.
+1. Is there anything blank or missing?
+1. Check for consistency issues.
+1. Create a five-digit ZIP Code called `zip`.
+1. Create a `year` field from the transaction date.
+1. Make sure there is data on both parties to a transaction.
+
+## Packages
+
+The following packages are needed to collect, manipulate, visualize, analyze,
+and communicate these results. The `pacman` package will facilitate their
+installation and attachment.
+
+```{r load-packages, message=FALSE, warning=FALSE, error=FALSE}
+if (!require("pacman")) {
+  install.packages("pacman")
+}
+pacman::p_load(
+  tidyverse, # data manipulation
+  lubridate, # datetime strings
+  tabulizer, # read pdf tables
+  gluedown, # printing markdown
+  janitor, # clean data frames
+  campfin, # custom irw tools
+  aws.s3, # aws cloud storage
+  refinr, # cluster & merge
+  scales, # format strings
+  knitr, # knit documents
+  vroom, # fast reading
+  rvest, # scrape html
+  glue, # code strings
+  here, # project paths
+  httr, # http requests
+  fs # local storage 
+)
+```
+
+This diary was run using `campfin` version `r packageVersion("campfin")`.
+
+```{r campfin-version}
+packageVersion("campfin")
+```
+
+```{r package-options, echo=FALSE}
+options(options(knitr.kable.NA = ""))
+```
+
+This document should be run as part of the `R_tap` project, which lives as a
+sub-directory of the more general, language-agnostic
+[`irworkshop/accountability_datacleaning`][tap] GitHub repository.
+
+The `R_tap` project uses the [RStudio projects][rproj] feature and should be
+run as such. The project also uses the dynamic `here::here()` tool for file
+paths relative to _your_ machine.
+
+```{r where-here}
+# where does this document knit?
+here::i_am("us/ofac_screen/docs/screening_list_diary.Rmd")
+```
+
+[tap]: https://github.com/irworkshop/accountability_datacleaning
+[rproj]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects
+
+## Source
+
+A copy of the Consolidated Screening List (CSL) can be obtained from from the
+[U.S. Treasury website.][csl]
+
+> The Consolidated Screening List (CSL) is a list of parties for which the
+United States Government maintains restrictions on certain exports, reexports,
+or transfers of items. Below, under "Tools" are links to the CSL search engine,
+downloadable CSL files, and the CSL Application Programming Interface (API), all
+consisting of the consolidation of multiple export screening lists of the
+Departments of Commerce, State, and Treasury.
+
+We should note here the considerations listed on the Treasury website:
+
+> ### Key Considerations:
+> * These tools are a consolidation of multiple export screening lists of the
+    Departments of Commerce, State, and the Treasury and may be used as an aid 
+    to industry in conducting electronic screens of potential parties to 
+    regulated transactions.
+> * In the event that a company, entity, or person on the list appears to match
+    a party potentially involved in your export transaction, additional due
+    diligence should be conducted before proceeding.
+> * There may be a strict export prohibition, requirement for seeking a license
+    application, evaluation of the end-use or user to ensure it does not result 
+    in an activity prohibited by any U.S. export regulations, or other 
+    restriction.
+> * Prior to taking further action, to ensure full compliance with all of the
+    terms and conditions of the restrictions placed on the parties on this list, 
+    the user must check the official publication of restricted parties in the 
+    Federal Register. They should also check the official lists of restricted 
+    parties maintained on the websites of the Departments of Commerce, State, 
+    and the Treasury.
+
+[csl]: https://www.trade.gov/consolidated-screening-list
+
+## Download
+
+We can directly download a copy of the list in tab-separated format.
+
+> #### CSL Downloadable Files
+> In the CSL downloadable files, there is a column which is titled "source."
+This column indicates which specific federal agency’s proscribed party screening
+list is the source for each entry on the spreadsheet. Blank data fields in the
+CSL downloadable file are not applicable to the consolidated screening list in
+the "source" column.
+> * Instructions for Downloading the Consolidated Screening List 
+> * CSV Download 
+> * TSV Download (ASCII encoded)   
+> * JSON
+
+From the above instructions file, there is information on the format.
+
+> #### Data Specifications:
+> Each file contains 27 columns – one for each field. The first row consists of
+the field names. Please note that some of the field names [e.g., source,
+entity_number] are longer than the data length of those fields.
+
+> #### Recent Changes to the Files:
+> On July 1, 2015, both the CSV and TSV files have been updated to accommodate
+changes in how the data is organized. Several of the field names have been
+updated and some of the fields contain additional information. For example, the
+City, State/Province, Postal Code, and Country have been combined into one
+addresses field. If an entity has more than one Address, then they are all
+included in the one field separated by semi-colons. This is true for alternate
+names as well. Because multiple addresses and alternate names have been
+combined, there are far fewer rows in the CSV/TSV files than previously.
+
+```{r raw-dir}
+raw_url <- "http://api.trade.gov/static/consolidated_screening_list/consolidated.tsv"
+raw_dir <- dir_create(here("us", "ofac_screen", "data", "raw"))
+raw_tsv <- path(raw_dir, basename(raw_url))
+```
+
+```{r raw-download}
+if (!file_exists(raw_tsv)) {
+  download.file(raw_url, raw_tsv)
+}
+```
+
+## Dictionary
+
+We can get a dictionary of columns from the instructions PDF.
+
+```{r echo=FALSE}
+dict <- file_temp(ext = "pdf")
+download.file("https://legacy.trade.gov/CSL_Download_Instructions.pdf", dict)
+d <- extract_tables(
+  file = dict,
+  pages = 2:3,
+  columns = list(c(121, 247))
+)
+d[[1]] <- d[[1]] %>% 
+  as_tibble() %>% 
+  row_to_names(1) %>% 
+  clean_names() %>% 
+  na_if("") %>% 
+  fill(column, field_name) %>% 
+  group_by(column, field_name) %>% 
+  summarise(description = paste(description, collapse = " "))
+d[[2]] <- setNames(as_tibble(d[[2]]), names(d[[1]]))
+d[[2]]$description <- str_replace_all(d[[2]]$description, "\r", " ")
+d <- bind_rows(d[[1]], d[[2]])
+d %>% 
+  mutate(across(field_name, md_code)) %>% 
+  kable()
+```
+
+## Read
+
+```{r raw-read}
+csl <- read_delim(
+  file = raw_tsv,
+  delim = "\t",
+  escape_backslash = FALSE,
+  escape_double = FALSE,
+  col_types = cols(
+    .default = col_character()
+  )
+)
+```
+
+```{r clean-names}
+csl <- clean_names(csl, case = "snake")
+```
+
+## Explore
+
+There are `r comma(nrow(csl))` rows of `r ncol(csl)` columns. Each record
+represents a single name of a person with whom the U.S. restricts business.
+
+```{r glimpse}
+glimpse(csl)
+tail(csl)
+```
+
+### Missing
+
+Columns vary in their degree of missing values.
+
+```{r na-count}
+col_stats(csl, count_na)
+```
+
+No rows are missing the `name` of the person or vehicle, but since the data is
+so varied there is no consistency in other variables.
+
+### Duplicates
+
+We can also flag any record completely duplicated across every column.
+
+```{r dupe-flag}
+csl <- flag_dupes(csl, -id)
+sum(csl$dupe_flag)
+```
+
+There are no duplicate values in the data.
+
+### Categorical
+
+```{r distinct-count}
+col_stats(csl, n_distinct)
+```
+
+```{r distinct-plots, echo=FALSE, fig.height=3}
+explore_plot(csl, type)
+csl %>% 
+  mutate(source = str_extract(source, "\\((.*)\\)")) %>% 
+  explore_plot(source)
+```
+
+## Pivot
+
+The original format of the CSL lists a single _primary_ name in the `name`
+column and then a list of many _other_ names in the `alt_names` column. For our
+purposes, we are interested in making these alternative names easily searchable.
+When a person is hoping to find results on a given individual, we want to make
+it possible for _any_ of their known names to return information.
+
+We can do this by un-nesting each of the alternate names into their own copy of 
+the original row, with the same additional information.
+
+```{r alt-count}
+sum(str_count(csl$alt_names, ";"), na.rm = TRUE)
+```
+
+```{r alt-unnest}
+csl <- csl %>% 
+  mutate(across(where(is.character), str_squish)) %>% 
+  unite(
+    col = all_names, 
+    name, alt_names,
+    sep = "; ",
+    remove = TRUE,
+    na.rm = TRUE
+  ) %>% 
+  mutate(across(all_names, str_split, ";\\s")) %>% 
+  unnest(
+    cols = all_names,
+    keep_empty = TRUE
+  )
+```
+
+## Conclude
+
+```{r clean-glimpse}
+glimpse(sample_n(csl, 1000))
+```
+
+1. There are `r comma(nrow(csl))` records in the database.
+1. There are `r comma(sum(csl$dupe_flag))` duplicate records in the database.
+1. The range and distribution of `amount` and `date` seem reasonable.
+1. There are `r comma(sum(csl$na_flag))` records missing key variables.
+1. Consistency in geographic data has been improved with `campfin::normal_*()`.
+1. The 4-digit `year` variable has been created with `lubridate::year()`.
+
+## Export
+
+Now the file can be saved on disk for upload to the Accountability server.
+
+```{r clean-dir}
+clean_dir <- dir_create(here("us", "ofac_screen", "data", "clean"))
+clean_csv <- path(clean_dir, glue("ofac_screening_list.csv"))
+clean_rds <- path_ext_set(clean_csv, "rds")
+basename(clean_csv)
+```
+
+```{r clean-write}
+write_csv(csl, clean_csv, na = "")
+write_rds(csl, clean_rds, compress = "xz")
+(clean_size <- file_size(clean_csv))
+```
+
+## Upload
+
+We can use the `aws.s3::put_object()` to upload the text file to the IRW server.
+
+```{r aws-upload, eval=FALSE}
+aws_key <- path("csv", basename(clean_csv))
+if (!object_exists(aws_key, "publicaccountability")) {
+  put_object(
+    file = clean_csv,
+    object = aws_key, 
+    bucket = "publicaccountability",
+    acl = "public-read",
+    show_progress = TRUE,
+    multipart = TRUE
+  )
+}
+aws_head <- head_object(aws_key, "publicaccountability")
+(aws_size <- as_fs_bytes(attr(aws_head, "content-length")))
+unname(aws_size == clean_size)
+```
+
+## Dictionary
+
+The following table describes the variables in our final exported file:
+
+```{r dict-make, echo=FALSE}
+dict_raw <- tibble(
+  var = md_code(names(csl)),
+  type = md_code(map_chr(csl, typeof)),
+  def = c(
+    ""
+  )
+)
+```
+
+```{r dict-md, echo=FALSE}
+(dict_md <- kable(
+  x = dict_raw,
+  format = "markdown",
+  col.names = c("Column", "Type", "Definition")
+))
+```
