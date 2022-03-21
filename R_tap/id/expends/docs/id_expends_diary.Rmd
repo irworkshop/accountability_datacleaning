@@ -1,12 +1,12 @@
 ---
 title: "Idaho Expenditures"
 author: "Kiernan Nicholls"
-date: "`r date()`"
+date: "`r Sys.time()`"
 output:
   github_document: 
     df_print: tibble
     toc: true
-    toc_dept: 3
+    toc_dept: 2
 editor_options: 
   chunk_output_type: console
 ---
@@ -28,13 +28,13 @@ opts_chunk$set(
   dpi = 300
 )
 if (!interactive()) {
-  options(width = 120)
+  options(width = 99)
   set.seed(5)
 }
 ```
 
-```{r create-docs-dir, eval=FALSE, echo=FALSE, include=FALSE}
-doc_dir <- fs::dir_create(here::here("id", "expends", "docs"))
+```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
+fs::dir_create(here::here("id", "expends", "docs"))
 ```
 
 ## Project
@@ -43,26 +43,26 @@ The Accountability Project is an effort to cut across data silos and give
 journalists, policy professionals, activists, and the public at large a simple
 way to search across huge volumes of public data about people and organizations.
 
-Our goal is to standardize public data on a few key fields by thinking of each
+Our goal is to standardizing public data on a few key fields by thinking of each
 dataset row as a transaction. For each transaction there should be (at least) 3
 variables:
 
-1. All **parties** to a transaction.
-2. The **date** of the transaction.
-3. The **amount** of money involved.
+1. All **parties** to a transaction
+2. The **date** of the transaction
+3. The **amount** of money involved
 
 ## Objectives
 
 This document describes the process used to complete the following objectives:
 
 1. How many records are in the database?
-1. Check for entirely duplicated records.
-1. Check ranges of continuous variables.
+1. Check for duplicates
+1. Check ranges
 1. Is there anything blank or missing?
-1. Check for consistency issues.
-1. Create a five-digit ZIP Code called `zip`.
-1. Create a `year` field from the transaction date.
-1. Make sure there is data on both parties to a transaction.
+1. Check for consistency issues
+1. Create a five-digit ZIP Code called `zip`
+1. Create a `year` field from the transaction date
+1. Make sure there is data on both parties to a transaction
 
 ## Packages
 
@@ -70,175 +70,460 @@ The following packages are needed to collect, manipulate, visualize, analyze,
 and communicate these results. The `pacman` package will facilitate their
 installation and attachment.
 
-```{r load-packages, message=FALSE, warning=FALSE, error=FALSE}
-if (!require("pacman")) {
-  install.packages("pacman")
-}
+The IRW's `campfin` package will also have to be installed from GitHub. This
+package contains functions custom made to help facilitate the processing of
+campaign finance data.
+
+```{r load_packages, message=FALSE, warning=FALSE, error=FALSE}
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load_gh("irworkshop/campfin")
 pacman::p_load(
   tidyverse, # data manipulation
+  snakecase, # column naming
   lubridate, # datetime strings
+  jsonlite, # from json data
+  magrittr, # pipe opperators
   gluedown, # printing markdown
-  janitor, # clean data frames
-  campfin, # custom irw tools
-  aws.s3, # aws cloud storage
-  refinr, # cluster & merge
+  janitor, # dataframe clean
+  aws.s3, # upload to aws s3
+  refinr, # cluster and merge
   scales, # format strings
+  readxl, # read excel files
   knitr, # knit documents
-  vroom, # fast reading
-  rvest, # scrape html
-  glue, # code strings
-  here, # project paths
+  rvest, # read html pages
+  vroom, # read files fast
+  glue, # combine strings
   httr, # http requests
-  fs # local storage 
+  here, # relative storage
+  fs # search storage 
 )
 ```
 
-This diary was run using `campfin` version `r packageVersion("campfin")`.
-
-```{r campfin-version}
-packageVersion("campfin")
-```
-
-```{r package-options, echo=FALSE}
-options(options(knitr.kable.NA = ""))
-```
-
-This document should be run as part of the `R_tap` project, which lives as a
+This document should be run as part of the `R_campfin` project, which lives as a
 sub-directory of the more general, language-agnostic
-[`irworkshop/accountability_datacleaning`][tap] GitHub repository.
+[`irworkshop/accountability_datacleaning`][repo] GitHub repository.
 
-The `R_tap` project uses the [RStudio projects][rproj] feature and should be
+The `R_campfin` project uses the [RStudio projects][rproj] feature and should be
 run as such. The project also uses the dynamic `here::here()` tool for file
 paths relative to _your_ machine.
 
-```{r where-here}
+```{r where_here}
 # where does this document knit?
-here::i_am("id/expends/docs/id_expends_diary.Rmd")
+here::here()
 ```
 
-[tap]: https://github.com/irworkshop/accountability_datacleaning
+[repo]: https://github.com/irworkshop/accountability_datacleaning
 [rproj]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects
 
-## Source
+## Data
 
+This data is obtained from the Michigan [Board of Elections (BOE)][boe] 
+[Campaign Finance Reporting (CFR)][cfr] system. The data is provided as 
+[annual ZIP archive files][data] for the years 1998 through 2020. These files
+are updated nightly.
 
+[boe]: https://www.michigan.gov/sos/0,4670,7-127-1633---,00.html
+[cfr]: https://www.michigan.gov/sos/0,4670,7-127-1633_8723---,00.html
+[data]: https://miboecfr.nictusa.com/cfr/dumpall/cfrdetail/
 
-## Download
+## Import
 
-```{r raw-dir}
-raw_url <- "https://example.com/source_file.csv"
+To import the data for processing, we will have to download each archive file
+and read them together into a single data frame object.
+
+### Download
+
+We will scrape the download page for every archive link, then downloading each
+to a local directory.
+
+```{r download_raw}
 raw_dir <- dir_create(here("id", "expends", "data", "raw"))
-raw_csv <- path(raw_dir, basename(raw_url))
-```
-
-```{r raw-download}
-if (!file_exists(raw_csv)) {
-  download.file(raw_url, raw_csv)
+raw_base <- "https://sos.idaho.gov/elect/finance/downloads.html"
+raw_page <- read_html(raw_base)
+raw_urls <- raw_page %>% 
+  html_node("table") %>% 
+  html_nodes("a") %>% 
+  html_attr("href") %>% 
+  str_subset("exp") %>%
+  str_subset("^2") %>% 
+  str_c(dirname(raw_base), ., sep = "/") %>% 
+  rev()
+raw_paths <- path(raw_dir, basename(str_replace(raw_urls, "(?<=\\d)/", "_")))
+if (!all(file_exists(raw_dir))) {
+  download.file(raw_urls, raw_paths)
 }
 ```
 
-## Read
+### Read
 
-```{r raw-read}
-ide <- read_delim(
-  file = raw_csv,
-  delim = ",",
-  escape_backslash = FALSE,
-  escape_double = FALSE,
-  col_types = cols(
-    .default = col_character(),
-    date = col_date_mdy(),
-    amount = col_double()
-  )
+Each file has a different column order and names. We will first use 
+`purrr::map()` to use `readxl::read_excel()` and create a list of data frames.
+
+```{r read_excel}
+ide <- map(
+  .x = raw_paths,
+  .f = read_excel,
+  col_types = "text"
 )
 ```
 
-```{r clean-names}
-ide <- clean_names(ide, case = "snake")
+Since the variety of column names is so great, we will have to chain together
+a number of `stringr::str_replace()` functions to create some consistency.
+
+```{r rename_fun}
+consistent_names <- function(nm) {
+  nm %>% 
+    to_snake_case() %>% 
+    str_replace("recipient_", "recip_") %>% 
+    str_replace("contrib_", "recip_") %>% 
+    str_replace_all("money", "amount") %>% 
+    str_replace("recip_name", "recip_last") %>% 
+    str_replace("^name$", "committee") %>% 
+    str_replace("^first_name$", "cand_first") %>% 
+    str_replace("^last_name$", "cand_last") %>% 
+    str_replace("^middle_name$", "cand_mi") %>% 
+    str_replace("suf$", "suffix") %>% 
+    str_replace("_mid$", "_mi") %>% 
+    str_replace("middle", "mi") %>% 
+    str_replace("cand_party", "party") %>% 
+    # str_replace("_cp$", "_type") %>% 
+    str_remove("_name$") %>% 
+    str_replace("zipcode", "zip") %>% 
+    str_replace("_st$", "_state") %>% 
+    str_replace("mailing", "address") %>% 
+    str_replace("line_1", "address_1") %>% 
+    str_replace("line_2", "address_2") %>% 
+    str_replace("explanation", "description") %>% 
+    str_remove("^recip_") %>% 
+    # str_remove("^contributing_") %>% 
+    str_remove("^exp_") %>% 
+    str_remove("^expen_") %>% 
+    str_remove("^expense_") %>% 
+    str_remove("^expenditure_") %>% 
+    str_replace("^address$", "address_1") %>% 
+    str_replace("^election_type$", "election") %>% 
+    str_replace("_one", "_1") %>% 
+    str_replace("_two", "_2") %>% 
+    str_replace("_three", "_3") %>% 
+    str_replace("^committee_company$", "company") %>% 
+    str_replace("^company_committee$", "company")
+}
+```
+
+```{r rename_all}
+ide <- map(ide, rename_with, consistent_names)
+```
+
+Now that each individual data frame has similar column names, we can use
+`dplyr::bind_rows()` to bind all `r length(ide)` data frames together.
+
+```{r bind_rows}
+names(ide) <- basename(raw_paths)
+ide <- bind_rows(ide, .id = "source_file")
+ide <- relocate(ide, source_file, .after = last_col())
+```
+
+Then, we can use `readr::type_convert()` to parse our character columns.
+
+```{r parse_double}
+ide$amount <- parse_double(ide$amount)
+```
+
+```{r purpose_fix}
+ide <- ide %>% 
+  unite(
+    col = purpose_codes2,
+    matches("purpose_code_\\d$"),
+    sep = "|",
+    remove = TRUE,
+    na.rm = TRUE
+  ) %>% 
+  unite(
+    col = purpose2,
+    matches("purpose_code_\\d_description$"),
+    sep = "|",
+    remove = TRUE,
+    na.rm = TRUE
+  ) %>% 
+  mutate(across(contains("purpose"), na_if, "")) %>% 
+  mutate(
+    purpose_codes = coalesce(purpose_codes, purpose_codes2),
+    purpose_desc = coalesce(purpose, purpose2),
+    .keep = "unused"
+  ) %>% 
+  relocate(purpose_desc, .after = purpose_codes)
+```
+
+We also need to reorder and recode these variables to be consistent across each
+year.
+
+```{r reorder, echo=FALSE}
+ide <- ide %>% 
+  mutate(
+    last = coalesce(last, company)
+  ) %>% 
+  select(
+    committee,
+    cand_first,
+    cand_mi,
+    cand_last,
+    cand_suffix,
+    party,
+    office,
+    district,
+    method = type,
+    amount,
+    date,
+    type = cp,
+    last,
+    first,
+    mi,
+    suffix,
+    address_1,
+    address_2,
+    city,
+    state,
+    zip,
+    country,
+    source_file
+  )
+```
+
+```{r recode}
+ide <- ide %>% 
+  mutate(across(where(is.character), str_to_upper)) %>% 
+  mutate(
+    office = office %>% 
+      str_replace("REPRESENTATIVE", "REP."),
+    cand_suffix = cand_suffix %>% 
+      str_remove_all("[:punct:]"),
+    party = party %>% 
+      str_replace("OTHER", "OTH") %>% 
+      str_replace("REPUBLICAN", "REP") %>% 
+      str_replace("DEMOCRATIC", "DEM") %>% 
+      str_replace("INDEPENDENT", "IND") %>% 
+      str_replace("LIBERTARIAN", "LIB") %>% 
+      str_replace("CONSTITUTION", "CON") %>% 
+      str_replace("NON-PARTISAN", "NON"),
+    method = method %>% 
+      str_replace("^I$", "IN KIND") %>% 
+      str_replace("^R$", "REPAYMENT")
+  )
+```
+
+```{r check}
+count(ide, type)
+```
+
+```{r dates}
+count_na(ide$date) # 452
+slash_dates <- str_which(ide$date, "\\d+/\\d+/\\d{4}")
+ide$date[slash_dates] <- as.character(mdy(ide$date[slash_dates]))
+excel_dates <- str_which(ide$date, "[:punct:]", negate = TRUE)
+ide$date[excel_dates] <- ide$date[excel_dates] %>% 
+  as.numeric() %>% 
+  excel_numeric_to_date() %>% 
+  as.character()
+
+ide$date <- as_date(ide$date)
+count_na(ide$date) # 457
+```
+
+### 2020
+
+The Excel files only cover data up until 2018. For newer data, we need to use
+the new API. We can request all available, 1000 rows at a time.
+
+```{r}
+body <- list(
+  dates = c("2020-01-01T05:00:00.000Z", "2022-03-17T04:00:00.000Z"), 
+  activity_types = list(donate = FALSE, spend = TRUE, file = FALSE), 
+  amounts = c(1, 200000), 
+  campaign_types = list(Candidate = TRUE, PAC = TRUE),
+  ch = "summary", 
+  contest_years = c(2020, 2022), 
+  order = "date desc", 
+  page = 1, 
+  limit = 1000
+)
+```
+
+```{r new_data}
+new_rds <- here("id", "expends", "data", "new_data.rds")
+if (!file_exists(new_rds)) {
+  new <- tibble()
+  more_pg <- TRUE
+  pg <- 1
+  while (more_pg) {
+    message(pg)
+    # fetch data ----
+    body$page <- pg
+    a <- POST(
+      url = "https://sunshine.sos.idaho.gov/api/es/finances/get_activity.json",
+      body = toJSON(body, auto_unbox = TRUE)
+    )
+    b <- content(a, simplifyDataFrame = TRUE)
+    c <- as_tibble(b$output)
+    # check progress ----
+    new <- bind_rows(new, c)
+    more_pg <- (nrow(new)) < b$output_meta$count_total_rows
+    pg <- pg + 1
+  }
+  write_rds(new, new_rds)
+} else {
+  new <- read_rds(new_rds)
+}
+```
+
+We need to select and rename all of the columns that match between our new data
+and the old Excel files.
+
+```{r new_rename}
+new <- new %>% 
+  select(
+    committee = from_display_name,
+    party = from_party_code,
+    office = from_office_name,
+    district = from_district_name,
+    method = spend_type,
+    amount,
+    date,
+    type = from_entity_type,
+    last = to_display_name,
+    address_1 = to_address,
+    city = to_city,
+    state = to_state,
+    zip = to_zip,
+  ) %>% 
+  mutate(
+    across(everything(), ~na_if(str_squish(str_to_upper(.)), "")),
+    across(amount, parse_double),
+    across(date, as_date),
+    source_file = "get_activity.json"
+  )
+```
+
+```{r new_recode}
+new <- new %>% 
+  mutate(
+    party = party %>% 
+      recode(
+        "REPUBLICAN" = "REP",
+        "DEMOCRATIC" = "DEM",
+        "INDEPENDENT" = "IND",
+        "LIBERTARIAN" = "LIB",
+        "CONSTITUTION" = "CON",
+        "UNAFFILIATED" = "NON"
+      )
+  )
+```
+
+```{r new_join}
+setdiff(names(new), names(ide))
+ide <- bind_rows(ide, new)
 ```
 
 ## Explore
 
-There are `r comma(nrow(ide))` rows of `r ncol(ide)` columns. Each record
-represents a single Expenditures...
-
 ```{r glimpse}
 glimpse(ide)
+head(ide)
 tail(ide)
 ```
 
-### Missing
+We should first identify which columns are missing the kinds of key information
+we need to properly identify all parties to a contribution. We can do this
+with `campfin::flag_na()` after creating a new
 
-Columns vary in their degree of missing values.
-
-```{r na-count}
+```{r count_na}
 col_stats(ide, count_na)
 ```
 
-We can flag any record missing a key variable needed to identify a transaction.
+```{r flag_na}
+ide <- ide %>% 
+  # combine cand and comm names in new col
+  mutate(recip = coalesce(cand_last, committee)) %>% 
+  flag_na(last, recip, date, amount)
 
-```{r na-flag}
-key_vars <- c("date", "last_name", "amount", "committee_name")
-ide <- flag_na(ide, all_of(key_vars))
 sum(ide$na_flag)
+mean(ide$na_flag)
 ```
 
-```{r na-view}
-ide %>% 
-  filter(na_flag) %>% 
-  select(all_of(key_vars))
+```{r}
+ide <- select(ide, -recip)
 ```
 
-### Duplicates
+Records that are entirely duplicated at least once across all columns should
+also be identified with `campfin::flag_dupes()`. The first occurrence of the
+record is not flagged, but all subsequent duplicates are. Not all these records
+are true duplicates, since it is technically possible to make the same
+contribution to the same person on the same day for the same amount.
 
-We can also flag any record completely duplicated across every column.
-
-```{r dupe-flag}
-ide <- flag_dupes(ide, -id)
+```{r flag_dupes}
+ide <- flag_dupes(ide, everything(), .check = TRUE)
 sum(ide$dupe_flag)
-```
-
-```{r dupe-view}
+mean(ide$dupe_flag)
 ide %>% 
   filter(dupe_flag) %>% 
-  select(all_of(key_vars)) %>% 
-  arrange(date)
+  count(committee, last, date, amount, sort = TRUE)
 ```
 
 ### Categorical
 
-```{r distinct-count}
+```{r n_distinct}
 col_stats(ide, n_distinct)
 ```
 
-```{r distinct-plots, echo=FALSE, fig.height=3}
-explore_plot(ide, type)
+```{r bar_office, echo=FALSE}
+explore_plot(
+  data = ide,
+  var = office
+) + 
+  theme(axis.text.x = element_text(angle = 10, vjust = 0.7)) +
+  labs(
+    title = "Idaho Expenditures by Office",
+    caption = "Source: Idaho Elections Office"
+  )
+```
+
+```{r bar_party, echo=FALSE}
+explore_plot(
+  data = ide,
+  var = party
+) +
+  labs(
+  title = "Idaho Expenditures by Office",
+  caption = "Source: Idaho Elections Office"
+  )
+```
+
+```{r type_party, echo=FALSE}
+explore_plot(
+  data = filter(ide, !is.na(type)),
+  var = type
+) +
+  labs(
+    title = "Idaho Expenditures by Office",
+    caption = "Source: Idaho Elections Office"
+  )
 ```
 
 ### Amounts
 
-```{r amount-round}
-# fix floating point precision
-ide$amount <- round(ide$amount, digits = 2)
-```
-
-```{r amount-summary}
+```{r amount_summary}
 summary(ide$amount)
-mean(ide$amount <= 0)
+mean(ide$amount <= 0, na.rm = TRUE)
 ```
 
-These are the records with the minimum and maximum amounts.
-
-```{r amount-minmax}
-glimpse(ide[c(which.max(ide$amount), which.min(ide$amount)), ])
+```{r amount_minmax}
+glimpse(ide[c(which.min(ide$amount), which.max(ide$amount)), ])
 ```
 
-The distribution of amount values are typically log-normal.
-
-```{r hist-amount, echo=FALSE}
+```{r amount_histogram, echo=FALSE}
 ide %>%
+  filter(amount > 1) %>% 
   ggplot(aes(amount)) +
-  geom_histogram(fill = dark2["purple"]) +
+  geom_histogram(fill = dark2["purple"], bins = 20) +
   scale_y_continuous(labels = comma) +
   scale_x_continuous(
     breaks = c(1 %o% 10^(0:6)),
@@ -247,7 +532,32 @@ ide %>%
   ) +
   labs(
     title = "Idaho Expenditures Amount Distribution",
-    caption = "Source: {source}",
+    subtitle = "from 2000 to 2019",
+    caption = "Source: Idaho Elections Office",
+    x = "Amount",
+    y = "Count"
+  )
+```
+
+```{r amount_violin, echo=FALSE}
+ide %>%
+  filter(
+    amount > 1,
+    amount < 1e6,
+    party %in% most_common(ide$party, 4)
+  ) %>% 
+  ggplot(aes(x = party, y = amount)) +
+  geom_violin(aes(fill = party), adjust = 2) +
+  scale_fill_brewer(palette = "Dark2", guide = FALSE) +
+  scale_y_continuous(
+    breaks = c(1 %o% 10^(0:6)),
+    labels = dollar,
+    trans = "log10"
+  ) +
+  labs(
+    title = "Idaho Expenditures Amount Distribution",
+    subtitle = "from 2000 to 2019, by Party",
+    caption = "Source: Idaho Elections Office",
     x = "Amount",
     y = "Count"
   )
@@ -255,22 +565,37 @@ ide %>%
 
 ### Dates
 
-We can add the calendar year from `date` with `lubridate::year()`
-
-```{r date-year}
+```{r year_add}
 ide <- mutate(ide, year = year(date))
 ```
 
-```{r date-range}
-min(ide$date)
-sum(ide$year < 2000)
-max(ide$date)
-sum(ide$date > today())
+```{r date_range}
+min(ide$date, na.rm = TRUE)
+max(ide$date, na.rm = TRUE)
+ide <- mutate(ide, date_flag = date > today() | year < 1999 | is.na(date))
+count_na(ide$date) # 457
+sum(ide$date_flag) # 489 = 32
+mean(ide$date_flag)
 ```
 
-It's common to see an increase in the number of contributins in elections years.
+```{r date_replace}
+x <- ide$date[ide$date_flag & !is.na(ide$date)]
+x <- str_replace(x, "^202(?=[^2])", "201")
+x <- str_replace(x, "^19([^9])", "199")
+x <- str_replace(x, "^2([^2])", "20")
+x <- str_replace(x, "2061", "2016")
+x[which(x > today() | year(x) < 1999)] <- NA
+ide$date[ide$date_flag & !is.na(ide$date)] <- as_date(x)
+ide <- mutate(
+  .data = ide,
+  date_flag = date > today() | year < 1999 | is.na(date),
+  year = year(date)
+)
+count_na(ide$date) # 484
+sum(ide$date_flag) # 484
+```
 
-```{r bar-year, echo=FALSE}
+```{r}
 ide %>% 
   count(year) %>% 
   mutate(even = is_even(year)) %>% 
@@ -282,7 +607,7 @@ ide %>%
   theme(legend.position = "bottom") +
   labs(
     title = "Idaho Expenditures by Year",
-    caption = "Source: {source}",
+    caption = "Source: Idaho Elections Office",
     fill = "Election Year",
     x = "Year Made",
     y = "Count"
@@ -304,10 +629,10 @@ USPS suffixes.
 
 ```{r address-norm}
 addr_norm <- ide %>% 
-  distinct(address1, address2) %>% 
+  distinct(address_1, address_2) %>% 
   unite(
     col = address_full,
-    starts_with("address"),
+    starts_with("address_"),
     sep = " ",
     remove = FALSE,
     na.rm = TRUE
@@ -327,7 +652,7 @@ addr_norm
 ```
 
 ```{r address-join}
-ide <- left_join(ide, addr_norm, by = c("address1", "address2"))
+ide <- left_join(ide, addr_norm, by = c("address_1", "address_2"))
 ```
 
 ### ZIP
@@ -601,8 +926,8 @@ Now the file can be saved on disk for upload to the Accountability server. We
 will name the object using a date range of the records included.
 
 ```{r clean-timestamp}
-min_dt <- str_remove_all(min(ide$date), "-")
-max_dt <- str_remove_all(max(ide$date), "-")
+min_dt <- str_remove_all(min(ide$date, na.rm = TRUE), "-")
+max_dt <- str_remove_all(max(ide$date, na.rm = TRUE), "-")
 csv_ts <- paste(min_dt, max_dt, sep = "-")
 ```
 
@@ -638,26 +963,4 @@ if (!object_exists(aws_key, "publicaccountability")) {
 aws_head <- head_object(aws_key, "publicaccountability")
 (aws_size <- as_fs_bytes(attr(aws_head, "content-length")))
 unname(aws_size == clean_size)
-```
-
-## Dictionary
-
-The following table describes the variables in our final exported file:
-
-```{r dict-make, echo=FALSE}
-dict_raw <- tibble(
-  var = md_code(names(ide)),
-  type = md_code(map_chr(ide, typeof)),
-  def = c(
-    ""
-  )
-)
-```
-
-```{r dict-md, echo=FALSE}
-(dict_md <- kable(
-  x = dict_raw,
-  format = "markdown",
-  col.names = c("Column", "Type", "Definition")
-))
 ```
