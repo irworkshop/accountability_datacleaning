@@ -1,12 +1,12 @@
 ---
 title: "Nebraska Expenditures"
 author: "Kiernan Nicholls"
-date: "`r Sys.time()`"
+date: "`r date()`"
 output:
   github_document: 
     df_print: tibble
     toc: true
-    toc_dept: 2
+    toc_dept: 3
 editor_options: 
   chunk_output_type: console
 ---
@@ -28,7 +28,7 @@ opts_chunk$set(
   dpi = 300
 )
 if (!interactive()) {
-  options(width = 99)
+  options(width = 120)
   set.seed(5)
 }
 ```
@@ -70,27 +70,25 @@ The following packages are needed to collect, manipulate, visualize, analyze,
 and communicate these results. The `pacman` package will facilitate their
 installation and attachment.
 
-The IRW's `campfin` package will also have to be installed from GitHub. This
-package contains functions custom made to help facilitate the processing of
-campaign finance data.
-
 ```{r load_packages, message=FALSE, warning=FALSE, error=FALSE}
-if (!require("pacman")) install.packages("pacman")
-pacman::p_load_gh("irworkshop/campfin")
+if (!require("pacman")) {
+  install.packages("pacman")
+}
 pacman::p_load(
   tidyverse, # data manipulation
   lubridate, # datetime strings
-  textreadr, # read text files
+  textreadr, # read rtf files
   gluedown, # printing markdown
-  magrittr, # pipe operators
   janitor, # clean data frames
-  refinr, # cluster and merge
+  campfin, # custom irw tools
+  aws.s3, # aws cloud storage
+  refinr, # cluster & merge
   scales, # format strings
   knitr, # knit documents
-  vroom, # read files fast
-  rvest, # html scraping
-  glue, # combine strings
-  here, # relative paths
+  vroom, # fast reading
+  rvest, # scrape html
+  glue, # code strings
+  here, # project paths
   httr, # http requests
   fs # local storage 
 )
@@ -106,7 +104,7 @@ paths relative to _your_ machine.
 
 ```{r where_here}
 # where does this document knit?
-here::here()
+here::i_am("ne/expends/docs/ne_expends_diary.Rmd")
 ```
 
 [tap]: https://github.com/irworkshop/accountability_datacleaning
@@ -129,9 +127,9 @@ candidates for state and local offices, political action committees or PACs,
 political parties, and ballot question committees. Campaign statements disclose
 the amount and sources of contributions to the committee and the amount purposes
 of expenditures by the committee. The site also includes Reports of
-Contributions filed with the Commission by corporations, unions, limited
+Expenditures filed with the Commission by corporations, unions, limited
 liability companies, limited partnerships, and by industry, trade or
-professional associations. Reports of Contributions disclose contributions and
+professional associations. Reports of Expenditures disclose contributions and
 expenditures made to support or oppose candidates or ballot questions. Forms,
 instructional materials and a list of committees may be accessed through this
 site. To access the information described in this paragraph, click on the tab
@@ -160,7 +158,7 @@ activity of the committee. It discloses the name of contributors of more than
 \$250 and the amounts of the contributions. It discloses expenditures of more
 than \$250.
 
-3. > Report of Late Contributions - this document discloses contributions of
+3. > Report of Late Expenditures - this document discloses contributions of
 $1,000 or more received by the committee during 14 days immediately preceding
 the election. Information reported as late contributions are also reported on
 subsequent campaign statements.
@@ -207,46 +205,79 @@ Commission take precedence.
 
 ## Download
 
-We can download the ZIP archive locally.
 
-```{r raw_download}
-raw_dir <- dir_create(here("ne", "expends", "data", "raw"))
-zip_url <- "http://www.nebraska.gov/nadc_data/nadc_data.zip"
-zip_path <- path(raw_dir, basename(zip_url))
-if (!file_exists(zip_path)) {
-  download.file(zip_url, zip_path)
+The NADC provides a bulk download of records on their [search page][search].
+
+> The campaign filings displayed on this website are based upon the paper
+records filed with the Nebraska Accountability and Disclosure Commission. While
+every effort has been made to ensure accurate data input, errors may occur.
+Anyone noting an error is encouraged to contact this office.
+>
+> In any discrepancy between information displayed on this website and the
+official records on file with the Commission, the official records of the
+Commission take precedence.
+
+> Download the entire dataset of campaign filings based upon the paper records
+filed with the Nebraska Accountability and Disclosure Commission. Dataset is
+updated weekly. [**Download**](https://www.nebraska.gov/nadc_data/nadc_data.zip)
+
+[search]: https://nadc.nebraska.gov/ccdb/search.cgi
+
+The bulk data is provided as a single ZIP archive we can download.
+
+```{r}
+con_dir <- here("ne", "contribs", "data", "raw")
+if (length(dir_ls(con_dir)) > 1) {
+  raw_dir <- con_dir
+} else {
+  raw_dir <- dir_create(here("ne", "expends", "data", "raw"))
 }
 ```
 
-Then we can extract the contents to our `raw/data/` directory.
-
-```{r zip_info}
-file_size(zip_path)
-(zip_content <- zip_path %>% 
-  unzip(list = TRUE) %>% 
-  as_tibble(.name_repair = tolower) %>% 
-  mutate(across(length, as_fs_bytes)) %>% 
-  mutate(across(name, as_fs_path)))
+```{r raw_dir}
+raw_url <- "https://www.nebraska.gov/nadc_data/nadc_data.zip"
+raw_zip <- path(raw_dir, basename(raw_url))
 ```
 
-```{r zip_extract}
-raw_paths <- as_fs_path(unzip(
-  zipfile = zip_path, 
-  exdir = raw_dir,
-  junkpaths = TRUE
-))
+```{r raw_download}
+if (!file_exists(raw_zip)) {
+  download.file(
+    url = raw_url, 
+    destfile = raw_zip, 
+    method = "curl", 
+    extra = "--cipher 'DEFAULT:!DH'"
+  )
+}
 ```
 
-The first file in the folder, `DATE_UPDATED.TXT` contains the time the files were last updated.
+### Extract
 
-```{r zip_date}
+This ZIP file contains 63 text files for each of the various forms submitted.
+We can extract each of these text files into our data directory.
+
+```{r raw_extract}
+raw_all <- unzip(
+  zipfile = raw_zip,
+  junkpaths = TRUE,
+  exdir = raw_dir
+)
+```
+
+```{r raw_info}
+file_info(raw_all) %>% 
+  select(path, size, modification_time) %>% 
+  mutate(across(path, path.abbrev))
+```
+
+### About
+
+One file contains the date the database was last updated.
+
+```{r about_date}
 date_updated <- read_file(file = path(raw_dir, "DATE_UPDATED.TXT"))
 print(date_updated)
-date_updated <- as_datetime(str_extract(date_updated, "(?<=:\\s).*"))
-date_updated - now()
+ymd_hms(str_remove_all(date_updated, "\\D")) - now()
 ```
-
-## Read
 
 Before we can prepare the file for indexing, we need to locate the exact data
 we're interested in. The content, structure, and relationship of each file is
@@ -255,10 +286,6 @@ _forms_ through which candidates and committees report their contributions,
 expenditures, etc. Each type of filter uses a different form, so all
 expenditures are split among a few files (corresponding to a few forms). Each
 form typically also has a section (schedule) where _expenditures_ are reported.
-
-```{r tales_read}
-ne_tables <- read_rtf(path(raw_dir, "nadc_tables.rtf"))
-```
 
 Using this file, we can grasp what information is contained on what forms and
 which tables we will need to combine to identify the parties, date, and amount
@@ -283,350 +310,296 @@ ballot question committees. This form has no transactions.
     * S = Separate Segregated Political Fund Committee
 
 Then the various types of transactions for those committee types are reported
-on subsequent forms:
+on subsequent forms. The files of interested were confirmed by the NADC to the
+Investigative Reporting Workshop in June of 2018.
 
-* Form **B1D** – Form B-1 Schedule D Section 1, Expenditures
-* Form **B2B** – Form B-2 Expenditures:
-* Form **B4B1** – Form B-4 Schedule B Section 1
-* Form **B6EXPEND** – Form B-6 Expenditures:
-* Form **B9B** – Form B-9 Schedule B, expenditure
-* Form **B10EXP** – Form B-10 expenditures
-* Form **B11** – Report of Late Independent Expenditure
+* FORM**B1AB** – All Data from form B-1 schedule A and B, Expenditures
+* FORM**B2A** – Form B-2 Expenditures
+* FORM**B3** – Report of Earmarked Contribution
+* FORM**B4A** – Form B-4 Schedule A:
+    * Committee ID  - Use to link with FORMB4, along with Date Received
+* FORM**B4B1** – Form B-4 Schedule B Section 1
+* FORM**B5** – Report of Late contributions
+* FORM**B7** – Report of Political Expenditures of Corporation, Union, etc.
+* FORM**B72** – Form B-7 Direct contributions
+* FORM**B73** – Form B-7 Indirect contributions
 
 When we read all these sub-forms together and join them against the committee
-statements then we can identify all transactions
+statements then we can identify all transactions.
 
-### Form B
+## Read
 
-```{r read_b1}
-b1 <- read_delim(
-  file = path(raw_dir, "formb1.txt"),
+```{r raw_read}
+ne_all <- map(
+  .x = raw_all,
+  .f = read_delim,
   delim = "|",
   escape_backslash = FALSE,
   escape_double = FALSE,
-  col_types = cols(
-    .default = col_character(),
-    `Date Received` = col_date_usa(),
-    `Expenditure Date` = col_date_usa(),
-    `Amount` = col_double(),
-    `In-Kind` = col_double()
-  )
+  col_types = cols(.default = col_character()),
+  trim_ws = TRUE
 )
 ```
 
-```{r fix_b1d, echo=FALSE}
-b1 <- b1 %>% 
-  clean_names("snake") %>% 
-  mutate(across(where(is.character), str_squish))
+```{r echo=FALSE}
+ne_all <- map(ne_all, clean_names)
+names(ne_all) <- path_ext_remove(basename(raw_all))
 ```
 
-### Form B-1D
+### Format
 
-> List all payees who were paid more than $250 during this reporting period. If
-multiple payments to the same payee totaled more than $250 throughout this
-reporting period, those expenditures must be listed. Reporting period refers to
-your entry on Page 1 under Item 4. Expenditures to the same payee over separate
-reporting periods should not be accumulated.  Expenditures to the same payee
-must be listed under the same name. If the committee reimburses the candidate or
-engages the services of an advertising agency or another agent of the committee
-for expenses they incurred on behalf of the committee, list the payments the
-committee made to the candidate or agent and also list the payments which were
-made by the candidate or agent on behalf of the committee.
+Now that each of the files is read as an element of a list, we can format them
+for combination and matching against the tables containing full information on
+the filing committees.
 
-```{r vars_b1d}
-md_order(ne_tables[141:149])
+#### A Forms
+
+```{r form_a1}
+a1 <- ne_all$forma1 %>% 
+  select(starts_with("committee")) %>% 
+  rename(committee_id = committee_id_number) %>% 
+  distinct()
 ```
 
-```{r read_b1d}
-b1d <- read_delim(
-  file = path(raw_dir, "formb1d.txt"),
-  delim = "|",
-  escape_backslash = FALSE,
-  escape_double = FALSE,
-  col_types = cols(
-    .default = col_character(),
-    `Date Received` = col_date_usa(),
-    `Expenditure Date` = col_date_usa(),
-    `Amount` = col_double(),
-    `In-Kind` = col_double()
-  )
-)
-```
+#### B Forms
 
-```{r fix_b1d, echo=FALSE}
-b1d <- b1d %>% 
-  clean_names("snake") %>% 
-  mutate(across(where(is.character), str_squish)) %>% 
+```{r}
+b1d <- ne_all$formb1d %>% 
   select(
-    comm_id = committee_id,
-    payee_name, payee_address, 
-    date = expenditure_date,
-    amount, in_kind
-  )
-```
-
-```{r amount_b1d}
-b1d <- b1d %>% 
-  # combine and indicate amount
-  mutate(across(5:6, na_if, "0")) %>% 
-  mutate(
-    amount = coalesce(amount, in_kind),
-    in_kind = !is.na(in_kind)
-  )
-```
-
-```{r show_b1d, echo=FALSE}
-print(b1d)
-```
-
-### Form B-2B
-
-[form B-2][07] covers Political Party Committees, where Item 5 of that form asks the party to:
-
-> List expenditures of any amount which were made to or for the benefit of
-candidates or ballot questions. If your committee made multiple contributions in
-support or opposition to the same candidate or ballot question committee, also
-list the total accumulated contributions given for the election. Expenditures
-made in support of more than one candidate or ballot question committee must be
-allocated (E.g. the purchase of a newspaper ad advocating support or opposition
-to more than one candidate or ballot question).
-
-```{r lines_b2b}
-b2b <- read_lines(path(raw_dir, "formb2b.txt"))
-b2b[1] <- str_remove(b2b[1], "Report ID\\|")
-```
-
-```{r read_b2b}
-b2b <- read_delim(
-  file = b2b,
-  delim = "|",
-  escape_backslash = FALSE,
-  escape_double = FALSE,
-  col_types = cols(
-    .default = col_character(),
-    `Date Received` = col_date_usa(),
-    `Support/Oppose` = col_logical(),
-    `Expenditure Date` = col_date_usa(),
-    `Amount` = col_double(),
-    `Line ID` = col_double()
-  )
-)
-```
-
-```{r fix_b1d, echo=FALSE}
-b2b <- b2b %>% 
-  clean_names("snake") %>% 
-  mutate(across(where(is.character), str_squish)) %>% 
-  select(
-    comm_id = committee_id,
-    payee_id = committee_id_expenditure_is_for,
-    date = expenditure_date,
-    amount
-  )
-```
-
-```{r show_b1d, echo=FALSE}
-print(b2b)
-```
-
-### Form B-4B1
-
-[form B-4][08] covers Independent Committees, with Section 1 of Schedule B: 
-
-> Indicate the total amount of expenditures, for or against each Nebraska
-candidate or ballot question (B.Q.) or other allowed committee (including a
-political party), during this reporting period and the total for the calendar
-year to date. An expenditure made in support of more than one candidate or
-ballot question must be apportioned reasonably among the candidates or ballot
-questions supported or opposed. "Expenditure" for the purpose of this schedule
-includes direct and in-kind contributions, loans, independent expenditures, and
-all other disbursements of funds made in support of or in opposition to Nebraska
-state and local candidates and ballot questions.
-
-```{r lines_b2b}
-b4b1 <- read_lines(path(raw_dir, "formb4b1.txt"))
-b4b1[1] <- str_remove(b4b1[1], "Report ID\\|")
-```
-
-```{r read_b2b}
-b4b1 <- read_delim(
-  file = b4b1,
-  delim = "|",
-  escape_backslash = FALSE,
-  escape_double = FALSE,
-  col_types = cols(
-    .default = col_character(),
-    `Date Received` = col_date_usa(),
-    `Support/Oppose` = col_logical(),
-    `Expenditure Date` = col_date_usa(),
-    `Amount` = col_double(),
-    `Expense Category` = col_double()
-  )
-)
-```
-
-```{r fix_b1d, echo=FALSE}
-b4b1 <- b4b1 %>% 
-  clean_names("snake") %>% 
-  mutate(across(where(is.character), str_squish)) %>% 
-  select(
-    comm_id = committee_id,
-    payee_id = committee_expenditure_id,
-    date = expenditure_date,
-    amount
-  )
-```
-
-```{r show_b1d, echo=FALSE}
-print(b4b1)
-```
-
-### Form B-11
-
-> A Report of Late Independent Expenditure is filed on time if it is postmarked
-or personally delivered on or before the due date, or if it is sent by facsimile
-in such time as to cause it to be received by the Commission Office on the date
-on which the report is due.  If this report is sent by facsimile, the sender
-should call the Commission Office immediately thereafter to ensure it was
-received.
-
-```{r read_b11}
-b11 <- read_delim(
-  file = path(raw_dir, "formb11.txt"),
-  delim = "|",
-  escape_backslash = FALSE,
-  escape_double = FALSE,
-  col_types = cols(
-    .default = col_character(),
-    `Postmark Date` = col_date_usa(),
-    `Date Received` = col_date_usa(),
-    `Expenditure Date` = col_date_usa(),
-    `Amount` = col_double(),
-    `Date Last Revised` = col_date_usa()
-  )
-)
-```
-
-```{r fix_b1d, echo=FALSE}
-b11 <- b11 %>% 
-  clean_names("snake") %>% 
-  mutate(across(where(is.character), str_squish)) %>% 
-  select(
-    comm_id = committee_id,
-    starts_with("recipient"),
-    date = expenditure_date,
-    amount
+    everything()
   ) %>% 
-  rename_with(~str_replace(., "recipient", "payee"))
+  mutate(
+    is_in_kind = in_kind != 0,
+    amount = coalesce(
+      na_if(amount, 0),
+      na_if(in_kind, 0)
+    )
+  ) %>% 
+  select(-in_kind)
 ```
 
-```{r show_b1d, echo=FALSE}
-print(b11)
+```{r}
+b2b <- ne_all$formb2b %>% 
+  mutate(is_in_kind = nature_of_expenditure == "K") %>% 
+  select(
+    committee_id,
+    date_received,
+    expenditure_date,
+    amount,
+    payee_id = committee_id_expenditure_is_for,
+    payee_name = report_id,
+    expenditure_purpose = description,
+    is_in_kind
+  )
+```
+
+```{r}
+b4b1 <- ne_all$formb4b1 %>% 
+  mutate(is_in_kind = nature_of_expenditure == "K") %>% 
+  select(
+    committee_id,
+    date_received,
+    expenditure_date,
+    amount,
+    payee_id = committee_expenditure_id,
+    payee_name = report_id,
+    expenditure_purpose = expense_category,
+    is_in_kind
+  )
+```
+
+```{r}
+b6 <- ne_all$formb6 %>% 
+  select(
+    committee_id,
+    date_received,
+    contributor_id,
+    contribution_date = date_of_contribution,
+    cash_contribution = amount,
+    contributor_name
+  )
+```
+
+```{r}
+b6expend <- ne_all$formb6expend %>% 
+  select(
+    committee_name,
+    committee_id,
+    date_received,
+    contributor_id,
+    contribution_date,
+    cash_contribution = amount,
+    contributor_name = report_id
+  )
+```
+
+```{r}
+b9 <- ne_all$formb9 %>% 
+  select(
+    committee_name,
+    committee_id,
+    date_received,
+    contributor_id,
+    contribution_date,
+    cash_contribution = amount,
+    contributor_name = report_id
+  )
 ```
 
 ### Join
 
-```{r read_a1}
-a1 <- read_delim(
-  file = path(raw_dir, "forma1.txt"),
-  delim = "|",
-  escape_backslash = FALSE,
-  escape_double = FALSE,
-  col_types = cols(
-    .default = col_character(),
-    `Date Received` = col_date_usa(),
-    `Postmark Date` = col_date_usa(),
-    `Oppose Ballot Question` = col_logical(),
-    `Date over Theshold` = col_date_usa(),
-    `Date Dissolved` = col_date_usa(),
-    `Date of Next Election` = col_date_usa(),
-    `Won General` = col_logical(),
-    `Won Primary` = col_logical()
-  )
+```{r join_names}
+names(b4a) %in% names(b1ab)
+names(b2a) %in% names(b1ab)
+names(b2a) %in% names(b4a)
+names(b2a) %in% names(b5)
+names(b2a) %in% names(b72)
+names(b2a) %in% names(b73)
+```
+
+```{r join_bind}
+bx <- bind_rows(
+  "Form B1AB" = b1ab, 
+  "Form B4A" = b4a, 
+  "Form B5" = b5, 
+  "Form B72" = b72, 
+  "Form B73" = b73, 
+  .id = "source_form"
 )
 ```
 
-```{r fix_a1, echo=FALSE}
-a1 <- a1 %>% 
-  clean_names("snake") %>% 
-  mutate(across(where(is.character), str_squish)) %>% 
-  select(starts_with("committee")) %>% 
-  rename_with(~str_replace(., "^committee_", "comm_")) %>% 
-  rename(comm_id = comm_id_number)
+```{r join_comms}
+nec <- right_join(a1, bx, by = "committee_id")
+nec <- nec %>% 
+  mutate(
+    committee_name = coalesce(committee_name.x, committee_name.y),
+    .keep = "unused",
+    .after = committee_id
+  )
 ```
 
-```{r print_a1, echo=FALSE}
-```
-
-```{r bind_bx}
-bx <- bind_rows(b1d, b2b, b4b1)
-```
-
-```{r join_ab}
-bx <- left_join(bx, a1, by = "comm_id")
-ax <- rename_with(a1, ~str_replace(., "comm_", "payee_"))
-ax <- select(ax, -payee_type)
-bx <- left_join(bx, ax)
+```{r join_parse}
+nec <- nec %>% 
+  # parse column types
+  type_convert(
+    col_types = cols(
+      date_received = col_date_mdy(),
+      contribution_date = col_date_mdy(),
+      cash_contribution = col_double(),
+      in_kind_contribution = col_double(),
+      unpaid_pledges = col_double()
+    )
+  ) %>% 
+  mutate(
+    across(
+      .cols = c(cash_contribution, in_kind_contribution, unpaid_pledges),
+      .fns = ~na_if(., 0)
+    ),
+    # create a single amount column
+    contribution_amount = coalesce(
+      cash_contribution, 
+      in_kind_contribution, 
+      unpaid_pledges
+    )
+  )
 ```
 
 ## Explore
 
+There are `r comma(nrow(nec))` rows of `r ncol(nec)` columns. Each record
+represents a single contribution from an entity to a committee.
+
 ```{r glimpse}
-glimpse(nee)
-tail(nee)
+glimpse(nec)
+tail(nec)
 ```
 
 ### Missing
 
+Columns vary in their degree of missing values.
+
 ```{r na_count}
-col_stats(nee, count_na)
+col_stats(nec, count_na)
 ```
 
+We can flag any record missing a key variable needed to identify a transaction.
+
 ```{r na_flag}
-nee <- nee %>% flag_na(date, last, amount, committee)
-sum(nee$na_flag)
+key_vars <- c("contribution_date", "contributor_name", 
+              "contribution_amount", "committee_name")
+nec <- flag_na(nec, all_of(key_vars))
+mean(nec$na_flag)
+sum(nec$na_flag)
 ```
 
 ```{r na_view}
-nee %>% 
+nec %>% 
   filter(na_flag) %>% 
-  select(date, last, amount, committee)
+  select(all_of(key_vars), source_form)
+```
+
+```{r}
+nec %>% 
+  group_by(source_form) %>% 
+  summarise(
+    n = n(),
+    no_key_comm = mean(is.na(committee_name)),
+    no_key_name = mean(is.na(contributor_name)),
+    no_key_amt = mean(is.na(contribution_amount))
+  ) %>% 
+  arrange(desc(n))
 ```
 
 ### Duplicates
 
+We can also flag any record completely duplicated across every column.
+
 ```{r dupe_flag}
-nee <- flag_dupes(nee, -id)
-sum(nee$dupe_flag)
+nec <- flag_dupes(nec, everything())
+sum(nec$dupe_flag)
+mean(nec$dupe_flag)
 ```
 
 ```{r dupe_view}
-nee %>% 
+nec %>% 
   filter(dupe_flag) %>% 
-  select(date, last, amount, committee)
+  select(all_of(key_vars)) %>% 
+  arrange(contribution_date)
 ```
 
 ### Categorical
 
 ```{r distinct_count}
-col_stats(nee, n_distinct)
+col_stats(nec, n_distinct)
 ```
 
-```{r distinct_plots}
-explore_plot(nee, type)
+```{r distinct_plots, echo=FALSE}
+explore_plot(nec, committee_type)
+explore_plot(nec, source_form)
 ```
 
 ### Amounts
 
-```{r ammount_summary}
-summary(nee$amount)
-mean(nee$amount <= 0)
+```{r amount_round}
+nec$contribution_amount <- round(nec$contribution_amount, 2)
+```
+
+```{r amount_summary}
+summary(nec$contribution_amount)
+mean(nec$contribution_amount <= 0, na.rm = TRUE)
+```
+
+These are the records with the minimum and maximum amounts.
+
+```{r amount_minmax}
+glimpse(nec[c(which.max(nec$contribution_amount), which.min(nec$contribution_amount)), ])
 ```
 
 ```{r hist_amount, echo=FALSE}
-nee %>%
-  ggplot(aes(amount)) +
-  geom_histogram(fill = dark2["purple"]) +
+nec %>%
+  filter(contribution_amount >= 1) %>% 
+  ggplot(aes(contribution_amount)) +
+  geom_histogram(fill = dark2["purple"], bins = 25) +
   scale_y_continuous(labels = comma) +
   scale_x_continuous(
     breaks = c(1 %o% 10^(0:6)),
@@ -634,8 +607,8 @@ nee %>%
     trans = "log10"
   ) +
   labs(
-    title = "Nebraska Contracts Amount Distribution",
-    caption = "Source: {source}",
+    title = "Nebraska Expenditures Amount Distribution",
+    caption = "Source: NADC",
     x = "Amount",
     y = "Count"
   )
@@ -646,29 +619,30 @@ nee %>%
 We can add the calendar year from `date` with `lubridate::year()`
 
 ```{r date_year}
-nee <- mutate(nee, year = year(date))
+nec <- mutate(nec, contribution_year = year(contribution_date))
 ```
 
 ```{r date_range}
-min(nee$date)
-sum(nee$year < 2000)
-max(nee$date)
-sum(nee$date > today())
+min(nec$contribution_date)
+sum(nec$contribution_year < 1984)
+max(nec$contribution_date)
+sum(nec$contribution_date > today())
 ```
 
 ```{r bar_year, echo=FALSE}
-nee %>% 
-  count(year) %>% 
-  mutate(even = is_even(year)) %>% 
-  ggplot(aes(x = year, y = n)) +
+nec %>% 
+  filter(contribution_year > 1984, contribution_year < 2022) %>% 
+  count(contribution_year) %>% 
+  mutate(even = is_even(contribution_year)) %>% 
+  ggplot(aes(x = contribution_year, y = n)) +
   geom_col(aes(fill = even)) + 
   scale_fill_brewer(palette = "Dark2") +
   scale_y_continuous(labels = comma) +
-  scale_x_continuous(breaks = seq(2000, 2020, by = 2)) +
+  scale_x_continuous(breaks = seq(1984, 2020, by = 4)) +
   theme(legend.position = "bottom") +
   labs(
     title = "Nebraska Expenditures by Year",
-    caption = "Source: {source}",
+    caption = "Source: NADC",
     fill = "Election Year",
     x = "Year Made",
     y = "Count"
@@ -688,30 +662,24 @@ For the street `addresss` variable, the `campfin::normal_address()` function
 will force consistence case, remove punctuation, and abbreviate official 
 USPS suffixes.
 
-```{r address_norm}
-nee <- nee %>% 
-  unite(
-    col = address_full,
-    starts_with("address"),
-    sep = " ",
-    remove = FALSE,
-    na.rm = TRUE
-  ) %>% 
+```{r address-norm}
+addr_norm <- nec %>% 
+  distinct(contributor_address) %>% 
   mutate(
     address_norm = normal_address(
-      address = address_full,
+      address = contributor_address,
       abbs = usps_street,
       na_rep = TRUE
     )
-  ) %>% 
-  select(-address_full)
+  )
 ```
 
-```{r address_view}
-nee %>% 
-  select(contains("address")) %>% 
-  distinct() %>% 
-  sample_n(10)
+```{r address-view}
+sample_n(addr_norm, 10)
+```
+
+```{r address-join}
+nec <- left_join(nec, addr_norm, by = "contributor_address")
 ```
 
 ### ZIP
@@ -720,53 +688,31 @@ For ZIP codes, the `campfin::normal_zip()` function will attempt to create
 valid _five_ digit codes by removing the ZIP+4 suffix and returning leading
 zeroes dropped by other programs like Microsoft Excel.
 
-```{r zip_norm}
-nee <- nee %>% 
+```{r zip-norm}
+nec <- nec %>% 
   mutate(
     zip_norm = normal_zip(
-      zip = zip,
+      zip = contributor_zipcode,
       na_rep = TRUE
     )
   )
 ```
 
-```{r zip_progress}
+```{r zip-progress}
 progress_table(
-  nee$zip,
-  nee$zip_norm,
+  nec$contributor_zipcode,
+  nec$zip_norm,
   compare = valid_zip
 )
 ```
 
 ### State
 
-Valid two digit state abbreviations can be made using the 
-`campfin::normal_state()` function.
+The existing `contributor_state` column needs not be cleaned.
 
-```{r state_norm}
-nee <- nee %>% 
-  mutate(
-    state_norm = normal_state(
-      state = state,
-      abbreviate = TRUE,
-      na_rep = TRUE,
-      valid = valid_state
-    )
-  )
-```
-
-```{r state_view}
-nee %>% 
-  filter(state != state_norm) %>% 
-  count(state, state_norm, sort = TRUE)
-```
-
-```{r state_progress}
-progress_table(
-  nee$state,
-  nee$state_norm,
-  compare = valid_state
-)
+```{r state_check}
+prop_in(nec$contributor_state, valid_state)
+what_out(nec$contributor_state, valid_state)
 ```
 
 ### City
@@ -780,11 +726,12 @@ The `campfin::normal_city()` function is a good start, again converting case,
 removing punctuation, but _expanding_ USPS abbreviations. We can also remove
 `invalid_city` values.
 
-```{r city_norm}
-nee <- nee %>% 
+```{r city-norm}
+norm_city <- nec %>% 
+  distinct(contributor_city, contributor_state, zip_norm) %>% 
   mutate(
     city_norm = normal_city(
-      city = city, 
+      city = contributor_city, 
       abbs = usps_city,
       states = c("NE", "DC", "NEBRASKA"),
       na = invalid_city,
@@ -800,13 +747,13 @@ against the _expected_ value for that record's state abbreviation and ZIP code.
 If the normalized value is either an abbreviation for or very similar to the
 expected value, we can confidently swap those two.
 
-```{r city_swap}
-nee <- nee %>% 
-  rename(city_raw = city) %>% 
+```{r city-swap}
+norm_city <- norm_city %>% 
+  rename(city_raw = contributor_city) %>% 
   left_join(
     y = zipcodes,
     by = c(
-      "state_norm" = "state",
+      "contributor_state" = "state",
       "zip_norm" = "zip"
     )
   ) %>% 
@@ -827,6 +774,18 @@ nee <- nee %>%
   )
 ```
 
+```{r city-rejoin}
+nec <- left_join(
+  x = nec,
+  y = norm_city,
+  by = c(
+    "contributor_city" = "city_raw", 
+    "contributor_state", 
+    "zip_norm"
+  )
+)
+```
+
 #### Refine
 
 The [OpenRefine][or] algorithms can be used to group similar strings and replace
@@ -836,8 +795,8 @@ strings that have a valid city/state/zip combination.
 
 [or]: https://openrefine.org/
 
-```{r city_refine}
-good_refine <- nee %>% 
+```{r city-refine}
+good_refine <- nec %>% 
   mutate(
     city_refine = city_swap %>% 
       key_collision_merge() %>% 
@@ -848,16 +807,16 @@ good_refine <- nee %>%
     y = zipcodes,
     by = c(
       "city_refine" = "city",
-      "state_norm" = "state",
+      "contributor_state" = "state",
       "zip_norm" = "zip"
     )
   )
 ```
 
-```{r city_count, echo=FALSE}
+```{r city-count, echo=FALSE}
 good_refine %>%
   count(
-    state_norm, 
+    contributor_state, 
     zip_norm, 
     city_swap, 
     city_refine,
@@ -867,35 +826,40 @@ good_refine %>%
 
 Then we can join the refined values back to the database.
 
-```{r city_join}
-nee <- nee %>% 
-  left_join(good_refine) %>% 
+```{r city-join}
+nec <- nec %>% 
+  left_join(good_refine, by = names(.)) %>% 
   mutate(city_refine = coalesce(city_refine, city_swap))
 ```
 
 #### Progress
 
-```{r city_progress, echo=FALSE}
+Our goal for normalization was to increase the proportion of city values known
+to be valid and reduce the total distinct values by correcting misspellings.
+
+```{r city-progress, echo=FALSE}
 many_city <- c(valid_city, extra_city)
 progress <- progress_table(
-  str_to_upper(nee$city_raw),
-  nee$city_norm,
-  nee$city_swap,
-  nee$city_refine,
+  nec$contributor_city,
+  nec$city_norm,
+  nec$city_swap,
+  nec$city_refine,
   compare = many_city
 ) %>% mutate(stage = as_factor(stage))
-kable(progress, digits = 3)
+progress %>% 
+    mutate(across(stage, md_code)) %>% 
+    kable(digits = 3)
 ```
 
 You can see how the percentage of valid values increased with each stage.
 
-```{r bar_progress, echo=FALSE}
-raw_in <- percent(prop_in(nee$city_raw, valid_city))
+```{r bar-progress, echo=FALSE}
+raw_in <- percent(prop_in(nec$contributor_city, valid_city))
 progress %>% 
   ggplot(aes(x = stage, y = prop_in)) +
   geom_hline(yintercept = 0.99) +
   geom_col(fill = dark2["purple"]) +
-  coord_cartesian(ylim = c(0.75, 1)) +
+  coord_cartesian(ylim = c(0.95, 1)) +
   scale_y_continuous(labels = percent) +
   labs(
     title = "Nebraska City Normalization Progress",
@@ -909,7 +873,7 @@ More importantly, the number of distinct values decreased each stage. We were
 able to confidently change many distinct invalid values to their valid
 equivalent.
 
-```{r bar_distinct, echo=FALSE}
+```{r bar-distinct, echo=FALSE}
 progress %>% 
   select(
     stage, 
@@ -933,110 +897,69 @@ progress %>%
   )
 ```
 
-## Conclude
-
 Before exporting, we can remove the intermediary normalization columns and
 rename all added variables with the `_clean` suffix.
 
-```{r clean_select}
-nee <- nee %>% 
+```{r clean-select}
+nec <- nec %>% 
   select(
     -city_norm,
     -city_swap,
     city_clean = city_refine
   ) %>% 
   rename_all(~str_replace(., "_norm", "_clean")) %>% 
-  rename_all(~str_remove(., "_raw"))
+  rename_all(~str_remove(., "_raw")) %>% 
+  relocate(address_clean, city_clean, .before = zip_clean)
 ```
 
-```{r clean_glimpse}
-glimpse(sample_n(nee, 50))
+## Conclude
+
+```{r clean-glimpse}
+glimpse(sample_n(nec, 1000))
 ```
 
-1. There are `r comma(nrow(nee))` records in the database.
-1. There are `r comma(sum(nee$dupe_flag))` duplicate records in the database.
+1. There are `r comma(nrow(nec))` records in the database.
+1. There are `r comma(sum(nec$dupe_flag))` duplicate records in the database.
 1. The range and distribution of `amount` and `date` seem reasonable.
-1. There are `r comma(sum(nee$na_flag))` records missing key variables.
+1. There are `r comma(sum(nec$na_flag))` records missing key variables.
 1. Consistency in geographic data has been improved with `campfin::normal_*()`.
 1. The 4-digit `year` variable has been created with `lubridate::year()`.
 
 ## Export
 
-Now the file can be saved on disk for upload to the Accountability server.
+Now the file can be saved on disk for upload to the Accountability server. We
+will name the object using a date range of the records included.
 
-```{r clean_dir}
+```{r clean-dir}
 clean_dir <- dir_create(here("ne", "expends", "data", "clean"))
-clean_path <- path(clean_dir, "ne_expends_clean.csv")
-write_csv(nee, clean_path, na = "")
-file_size(clean_path)
-file_encoding(clean_path) %>% 
-  mutate(across(path, path.abbrev))
+clean_csv <- path(clean_dir, glue("ne_contribs_1984-20220329.csv"))
+clean_rds <- path_ext_set(clean_csv, "rds")
+basename(clean_csv)
+```
+
+```{r clean-write}
+write_csv(nec, clean_csv, na = "")
+write_rds(nec, clean_rds, compress = "xz")
+(clean_size <- file_size(clean_csv))
 ```
 
 ## Upload
 
-Using the [duckr] R package, we can wrap around the [duck] command line tool to
-upload the file to the IRW server.
+We can use the `aws.s3::put_object()` to upload the text file to the IRW server.
 
-[duckr]: https://github.com/kiernann/duckr
-[duck]: https://duck.sh/
-
-```{r clean_upload, eval=FALSE}
-# remotes::install_github("kiernann/duckr")
-s3_dir <- "s3:/publicaccountability/csv/"
-s3_path <- path(s3_dir, basename(clean_path))
-if (require(duckr)) {
-  duckr::duck_upload(clean_path, s3_path)
-}
-```
-
-## Dictionary
-
-The following table describes the variables in our final exported file:
-
-```{r dict_make, echo=FALSE}
-dict_raw <- tibble(
-  var = md_code(names(nee)),
-  type = md_code(map_chr(nee, typeof)),
-  def = c(
-    "Date contribution was made",
-    "Contribution amount or correction",
-    "Contributor name",
-    "Contributor unique ID",
-    "Contributor street address",
-    "Contributor secondary address",
-    "Contributor city name",
-    "Contributor state abbreviation",
-    "Contributor ZIP+4 code",
-    "Contributor occupation",
-    "Contributor employer name",
-    "Contributor type",
-    "Recipient committee name",
-    "Recipient unique ID",
-    "Contribution method",
-    "Recipient election or office sought",
-    "Flag for missing date, amount, or name",
-    "Flag for completely duplicated record",
-    "Calendar year of contribution date",
-    "Normalized combined street address",
-    "Normalized 5-digit ZIP code",
-    "Normalized 2-digit state abbreviation",
-    "Normalized city name"
+```{r aws-upload, eval=FALSE}
+aws_key <- path("csv", basename(clean_csv))
+if (!object_exists(aws_key, "publicaccountability")) {
+  put_object(
+    file = clean_csv,
+    object = aws_key, 
+    bucket = "publicaccountability",
+    acl = "public-read",
+    show_progress = TRUE,
+    multipart = TRUE
   )
-)
-```
-
-```{r dict_md, echo=FALSE}
-(dict_md <- kable(
-  x = dict_raw,
-  format = "markdown",
-  col.names = c("Column", "Type", "Definition")
-))
-```
-
-```{r dict_write}
-write_lines(
-  x = c("# Nebraska Contracts Data Dictionary\n", dict_md),
-  path = here("ne", "expends", "ne_expends_dict.md"),
-)
+}
+aws_head <- head_object(aws_key, "publicaccountability")
+(aws_size <- as_fs_bytes(attr(aws_head, "content-length")))
+unname(aws_size == clean_size)
 ```
