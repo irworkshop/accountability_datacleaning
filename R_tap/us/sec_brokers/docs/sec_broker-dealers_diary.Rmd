@@ -1,0 +1,625 @@
+---
+title: "United States Broker-Dealers"
+author: "Kiernan Nicholls"
+date: "`r date()`"
+output:
+  github_document:
+    df_print: tibble
+    toc: true
+    toc_dept: 3
+editor_options:
+  chunk_output_type: console
+---
+
+<!-- Place comments regarding knitting here -->
+
+```{r setup, include=FALSE, purl=FALSE}
+library(knitr)
+opts_chunk$set(
+  eval = TRUE,
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  error = FALSE,
+  collapse = TRUE,
+  comment = "#>",
+  fig.path = "../plots/",
+  fig.width = 10,
+  dpi = 300
+)
+if (!interactive()) {
+  options(width = 120)
+  set.seed(5)
+}
+```
+
+```{r create-docs-dir, eval=FALSE, echo=FALSE, include=FALSE}
+doc_dir <- fs::dir_create(here::here("us", "sec_brokers", "docs"))
+```
+
+## Project
+
+The Accountability Project is an effort to cut across data silos and give
+journalists, policy professionals, activists, and the public at large a simple
+way to search across huge volumes of public data about people and organizations.
+
+Our goal is to standardize public data on a few key fields by thinking of each
+dataset row as a transaction. For each transaction there should be (at least) 3
+variables:
+
+1. All **parties** to a transaction.
+2. The **date** of the transaction.
+3. The **amount** of money involved.
+
+## Objectives
+
+This document describes the process used to complete the following objectives:
+
+1. How many records are in the database?
+1. Check for entirely duplicated records.
+1. Check ranges of continuous variables.
+1. Is there anything blank or missing?
+1. Check for consistency issues.
+1. Create a five-digit ZIP Code called `zip`.
+1. Create a `year` field from the transaction date.
+1. Make sure there is data on both parties to a transaction.
+
+## Packages
+
+The following packages are needed to collect, manipulate, visualize, analyze,
+and communicate these results. The `pacman` package will facilitate their
+installation and attachment.
+
+```{r load-packages, message=FALSE, warning=FALSE, error=FALSE}
+if (!require("pacman")) {
+  install.packages("pacman")
+}
+pacman::p_load(
+  tidyverse, # data manipulation
+  lubridate, # datetime strings
+  gluedown, # printing markdown
+  janitor, # clean data frames
+  campfin, # custom irw tools
+  aws.s3, # aws cloud storage
+  refinr, # cluster & merge
+  scales, # format strings
+  knitr, # knit documents
+  vroom, # fast reading
+  rvest, # scrape html
+  glue, # code strings
+  here, # project paths
+  httr, # http requests
+  fs # local storage
+)
+```
+
+This diary was run using `campfin` version `r packageVersion("campfin")`.
+
+```{r campfin-version}
+packageVersion("campfin")
+```
+
+```{r package-options, echo=FALSE}
+options(options(knitr.kable.NA = ""))
+```
+
+This document should be run as part of the `R_tap` project, which lives as a
+sub-directory of the more general, language-agnostic
+[`irworkshop/accountability_datacleaning`][tap] GitHub repository.
+
+The `R_tap` project uses the [RStudio projects][rproj] feature and should be
+run as such. The project also uses the dynamic `here::here()` tool for file
+paths relative to _your_ machine.
+
+```{r where-here}
+# where does this document knit?
+here::i_am("us/sec_brokers/sec_broker-dealers_diary.Rmd")
+```
+
+[tap]: https://github.com/irworkshop/accountability_datacleaning
+[rproj]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects
+
+## Source
+
+The Security Exchange Commission (SEC) requires brokers and dealers to register.
+
+> Most "brokers" and "dealers" must register with the SEC and join a
+"self-regulatory organization," or SRO. This section covers the factors that
+determine whether a person is a broker or dealer. It also describes the types of
+brokers and dealers that do not have to register with the SEC. Self-regulatory
+organizations are described in Part III, below.
+
+> ### A. Who is a "Broker"
+> any person engaged in the business of effecting transactions in securities for
+the account of others.
+
+> ### B. Who is a "Dealer"
+> any person engaged in the business of buying and selling securities for his
+own account, through a broker or otherwise.
+
+The SEC then hosts this list online for people to download.
+
+```{r}
+home <- read_html("https://www.sec.gov/help/foiadocsbdfoiahtm.html")
+```
+
+> ### What You Should Know About the Data File
+> This ascii text file contains the Central Index Key (CIK) numbers, company
+names, SEC reporting file numbers, and addresses (business addresses are
+provided when mailing addresses are not available) of active broker-dealers who
+are registered with the SEC.
+> 
+> The information in this file is **raw data** — data that is meant to be used
+as input to another program. The data items are provided as a "tab delimited"
+file. Although the file can be viewed in any program that accepts ASCII text
+(for example, a word processor), the data fields are best viewed when imported
+into a program that accepts delimited data, such as a spreadsheet. The record
+layout and maximum field sizes are shown below for those who want to process the
+data into another form.
+
+```{r}
+raw_cols <- home %>% 
+  html_element("table") %>% 
+  html_table()
+```
+
+```{r echo=FALSE}
+kable(raw_cols)
+raw_cols <- clean_names(raw_cols)
+```
+
+## Download
+
+We are going to download _all_ of the files listed on this home page.
+
+```{r}
+down <- html_elements(home, "table")[[2]]
+```
+
+```{r}
+raw_url <- down %>% 
+  html_elements("a") %>% 
+  html_attr("href") %>% 
+  str_c("https://www.sec.gov", .)
+```
+
+```{r}
+down_tbl <- down %>% 
+  html_table() %>% 
+  mutate(
+    across(everything(), str_remove, "^\\w+:(\\s+)?"),
+    across(Size, as_fs_bytes),
+    url = raw_url
+  )
+```
+
+```{r echo=FALSE}
+down_tbl %>% 
+  mutate(File = glue("[{File}]({url})")) %>% 
+  select(-url) %>% 
+  head() %>% 
+  kable()
+```
+
+```{r raw-dir}
+raw_dir <- dir_create(here("us", "sec_brokers", "data", "raw"))
+raw_tsv <- path(raw_dir, basename(raw_url))
+```
+
+```{r raw-download}
+if (!all(file_exists(raw_tsv))) {
+  for (i in seq_along(raw_url)) {
+    cli::cli_h2(basename(raw_url[i]))
+    RETRY(
+      verb = "GET",
+      url = raw_url[i],
+      pause_base = 2,
+      quiet = FALSE,
+      progress("down"),
+      write_disk(
+        path = raw_tsv[i], 
+        overwrite = TRUE
+      )
+    )
+  }
+}
+```
+
+## Read
+
+Some files vary in their line ending characters. We can quickly remove these.
+
+```{r}
+tmp_tsv <- path_temp(basename(raw_tsv))
+for (i in seq_along(tmp_tsv)) {
+  message(i)
+  read_file(raw_tsv[i]) %>% 
+    str_replace_all("\r\r\n", "\r") %>% 
+    write_file(tmp_tsv[i])
+}
+```
+
+Now each fixed file can be read into a single file.
+
+```{r raw-read}
+sec <- read_delim(
+  file = tmp_tsv,
+  delim = "\t",
+  escape_backslash = FALSE,
+  escape_double = FALSE,
+  col_names = raw_cols$field_name,
+  name_repair = make_clean_names,
+  id = "source_file",
+  na = c(" ", ""),
+  col_types = cols(
+    .default = col_character()
+  )
+)
+```
+
+We will rearrange the columns to add the source file and date from the download
+page table to the end.
+
+```{r clean-names}
+sec <- sec %>% 
+  select(-X9) %>% 
+  mutate(across(source_file, basename)) %>% 
+  relocate(source_file, .after = last_col()) %>% 
+  left_join(
+    down_tbl %>% 
+      mutate(source_file = basename(url)) %>% 
+      select(source_file, source_date = File)
+  )
+```
+
+Many registrants are listed in multiple quarterly files. We are going to keep
+only the most recent registration per entry but also create a new column 
+indicating the _first_ file they appeared in.
+
+```{r date-add}
+sec <- sec %>%
+  group_by(cik_number) %>% 
+  mutate(
+    source_date = parse_date(source_date, "%B %Y"),
+    first_date = min(source_date),
+    last_date = max(source_date),
+  ) %>% 
+  arrange(desc(source_date)) %>% 
+  slice(1) %>% 
+  ungroup() %>% 
+  select(-source_date)
+```
+
+About half the registrants are listed in the most recent file.
+
+```{r most-recent}
+mean(sec$source_date == max(sec$source_date))
+```
+
+## Explore
+
+There are `r comma(nrow(sec))` rows of `r ncol(sec)` columns. Each record
+represents a single broker-dealer registered with the SEC.
+
+```{r glimpse}
+glimpse(sec)
+tail(sec)
+```
+
+### Missing
+
+Columns vary in their degree of missing values. Only the `address2` and
+`state_code` columns are missing data.
+
+```{r na-count}
+col_stats(sec, count_na)
+```
+
+The rows missing `state_code` have a foreign `city` value, which makes sense.
+
+```{r na-state}
+sec %>% 
+  filter(is.na(state_code)) %>% 
+  count(city, sort = TRUE)
+```
+
+### Dates
+
+We can add the calendar year from `date` with `lubridate::year()`
+
+```{r date-year}
+sec <- mutate(sec, last_year = year(last_date))
+```
+
+```{r date-range}
+min(sec$last_date)
+sum(sec$last_year < 2000)
+max(sec$last_date)
+sum(sec$last_date > today())
+```
+
+```{r bar-year, echo=FALSE}
+sec %>%
+  count(last_year) %>%
+  ggplot(aes(x = last_year, y = n)) +
+  geom_col() +
+  scale_fill_brewer(palette = "Dark2") +
+  scale_y_continuous(labels = comma) +
+  scale_x_continuous(breaks = seq(2007, 2022)) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "United States Broker-Dealers by Last Listed Year",
+    caption = "Source: SEC",
+    fill = "Election Year",
+    x = "Year Last Registered",
+    y = "Count"
+  )
+```
+
+## Wrangle
+
+To improve the searchability of the database, we will perform some consistent,
+confident string normalization. For geographic variables like city names and
+ZIP codes, the corresponding `campfin::normal_*()` functions are tailor made to
+facilitate this process.
+
+### Address
+
+For the street `addresss` variable, the `campfin::normal_address()` function
+will force consistence case, remove punctuation, and abbreviate official
+USPS suffixes.
+
+```{r address-norm}
+sec <- sec %>%
+  mutate(
+    address1_norm = normal_address(address1, usps_street),
+    address2_norm = normal_address(address2, usps_street, abb_end = FALSE)
+  ) %>%
+  unite(
+    col = address_norm,
+    matches("^address\\d_norm$"),
+    sep = " ",
+    remove = TRUE,
+    na.rm = TRUE
+  )
+```
+
+### ZIP
+
+For ZIP codes, the `campfin::normal_zip()` function will attempt to create
+valid _five_ digit codes by removing the ZIP+4 suffix and returning leading
+zeroes dropped by other programs like Microsoft Excel.
+
+```{r zip-norm}
+sec <- sec %>%
+  mutate(
+    zip_norm = normal_zip(
+      zip = zip_code,
+      na_rep = TRUE
+    )
+  )
+```
+
+```{r zip-progress}
+progress_table(
+  sec$zip_code,
+  sec$zip_norm,
+  compare = valid_zip
+)
+```
+
+### State
+
+All of the "invalid" `state_code` values are from overseas.
+
+```{r}
+prop_in(sec$state_code, valid_state)
+unique(what_out(sec$state_code, valid_state))
+```
+
+### City
+
+Cities are the most difficult geographic variable to normalize, simply due to
+the wide variety of valid cities and formats.
+
+#### Normal
+
+The `campfin::normal_city()` function is a good start, again converting case,
+removing punctuation, but _expanding_ USPS abbreviations. We can also remove
+`invalid_city` values.
+
+```{r city-norm}
+norm_city <- sec %>%
+  distinct(city, state_code, zip_norm) %>%
+  mutate(
+    city_norm = normal_city(
+      city = city,
+      abbs = usps_city,
+      states = c("US", "DC", "UNITED STATES"),
+      na = invalid_city,
+      na_rep = TRUE
+    )
+  )
+```
+
+#### Swap
+
+We can further improve normalization by comparing our normalized value
+against the _expected_ value for that record's state abbreviation and ZIP code.
+If the normalized value is either an abbreviation for or very similar to the
+expected value, we can confidently swap those two.
+
+```{r city-swap}
+norm_city <- norm_city %>%
+  rename(city_raw = city) %>%
+  left_join(
+    y = zipcodes,
+    by = c(
+      "state_code" = "state",
+      "zip_norm" = "zip"
+    )
+  ) %>%
+  rename(city_match = city) %>%
+  mutate(
+    match_abb = is_abbrev(city_norm, city_match),
+    match_dist = str_dist(city_norm, city_match),
+    city_swap = if_else(
+      condition = !is.na(match_dist) & (match_abb | match_dist == 1),
+      true = city_match,
+      false = city_norm
+    )
+  ) %>%
+  select(
+    -city_match,
+    -match_dist,
+    -match_abb
+  )
+```
+
+```{r city-rejoin}
+sec <- left_join(
+  x = sec,
+  y = norm_city,
+  by = c(
+    "city" = "city_raw",
+    "state_code",
+    "zip_norm"
+  )
+)
+```
+
+#### Progress
+
+Our goal for normalization was to increase the proportion of city values known
+to be valid and reduce the total distinct values by correcting misspellings.
+
+```{r city-progress, echo=FALSE}
+many_city <- c(valid_city, extra_city)
+progress <- progress_table(
+  str_to_upper(sec$city),
+  sec$city_norm,
+  sec$city_swap,
+  compare = many_city
+) %>% mutate(stage = as_factor(stage))
+progress %>%
+    mutate(across(stage, md_code)) %>%
+    kable(digits = 3)
+```
+
+You can see how the percentage of valid values increased with each stage.
+
+```{r bar-progress, echo=FALSE}
+raw_in <- percent(prop_in(sec$city, valid_city))
+progress %>%
+  ggplot(aes(x = stage, y = prop_in)) +
+  geom_hline(yintercept = 0.99) +
+  geom_col(fill = dark2["purple"]) +
+  coord_cartesian(ylim = c(0.75, 1)) +
+  scale_y_continuous(labels = percent) +
+  labs(
+    title = "United States City Normalization Progress",
+    subtitle = glue("Raw at {raw_in} before conversion to uppercase"),
+    x = "Stage",
+    y = "Percent Valid"
+  )
+```
+
+More importantly, the number of distinct values decreased each stage. We were
+able to confidently change many distinct invalid values to their valid
+equivalent.
+
+```{r bar-distinct, echo=FALSE}
+progress %>%
+  select(
+    stage,
+    all = n_distinct,
+    bad = n_diff
+  ) %>%
+  mutate(good = all - bad) %>%
+  pivot_longer(c("good", "bad")) %>%
+  mutate(name = name == "good") %>%
+  ggplot(aes(x = stage, y = value)) +
+  geom_col(aes(fill = name)) +
+  scale_fill_brewer(palette = "Dark2", direction = -1) +
+  scale_y_continuous(labels = comma) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "United States City Normalization Progress",
+    subtitle = "Distinct values, valid and invalid",
+    x = "Stage",
+    y = "Distinct Values",
+    fill = "Valid"
+  )
+```
+
+Before exporting, we can remove the intermediary normalization columns and
+rename all added variables with the `_clean` suffix.
+
+```{r clean-select}
+sec <- sec %>%
+  select(
+    -city_norm,
+    city_clean = city_swap,
+  ) %>%
+  rename_all(~str_replace(., "_norm", "_clean")) %>%
+  rename_all(~str_remove(., "_raw")) %>%
+  relocate(address_clean, city_clean, .before = zip_clean)
+```
+
+## Conclude
+
+```{r clean-glimpse}
+glimpse(sample_n(sec, 1000))
+```
+
+1. There are `r comma(nrow(sec))` records in the database.
+1. There are `r comma(sum(sec$dupe_flag))` duplicate records in the database.
+1. The range and distribution of `amount` and `date` seem reasonable.
+1. There are `r comma(sum(sec$na_flag))` records missing key variables.
+1. Consistency in geographic data has been improved with `campfin::normal_*()`.
+1. The 4-digit `year` variable has been created with `lubridate::year()`.
+
+## Export
+
+Now the file can be saved on disk for upload to the Accountability server. We
+will name the object using a date range of the records included.
+
+```{r clean-timestamp}
+min_dt <- str_remove_all(min(sec$first_date), "-")
+max_dt <- str_remove_all(max(sec$last_date), "-")
+csv_ts <- paste(min_dt, max_dt, sep = "-")
+```
+
+```{r clean-dir}
+clean_dir <- dir_create(here("us", "sec_brokers", "data", "clean"))
+clean_csv <- path(clean_dir, glue("sec_broker-dealers_{csv_ts}.csv"))
+clean_rds <- path_ext_set(clean_csv, "rds")
+basename(clean_csv)
+```
+
+```{r clean-write}
+write_csv(sec, clean_csv, na = "")
+write_rds(sec, clean_rds, compress = "xz")
+(clean_size <- file_size(clean_csv))
+```
+
+## Upload
+
+We can use the `aws.s3::put_object()` to upload the text file to the IRW server.
+
+```{r aws-upload, eval=FALSE}
+aws_key <- path("csv", basename(clean_csv))
+if (!object_exists(aws_key, "publicaccountability")) {
+  put_object(
+    file = clean_csv,
+    object = aws_key,
+    bucket = "publicaccountability",
+    acl = "public-read",
+    show_progress = TRUE,
+    multipart = TRUE
+  )
+}
+aws_head <- head_object(aws_key, "publicaccountability")
+(aws_size <- as_fs_bytes(attr(aws_head, "content-length")))
+unname(aws_size == clean_size)
+```
