@@ -358,14 +358,29 @@ a1 <- ne_all$forma1 %>%
 ```{r}
 b1ab <- ne_all$formb1ab %>% 
   select(
-      committee_id,
-      date_received,
-      contributor_id,
-      contribution_date,
-      cash_contribution,
-      in_kind_contribution,
-      unpaid_pledges
+    committee_id,
+    date_received,
+    contributor_id,
+    contribution_date,
+    cash_contribution,
+    in_kind_contribution,
+    unpaid_pledges,
+    starts_with("contributor_")
+  ) %>% 
+  unite(
+    col = contributor_name,
+    contributor_first_name, contributor_middle_initial, contributor_last_name,
+    sep = " ",
+    na.rm = TRUE,
+    remove = TRUE
+  ) %>% 
+  mutate(
+    contributor_name = coalesce(
+      contributor_organization_name,
+      na_if(contributor_name, "")
     )
+  ) %>% 
+  select(-contributor_organization_name)
 ```
 
 ```{r}
@@ -377,18 +392,60 @@ b2a <- ne_all$formb2a %>%
     contribution_date,
     cash_contribution,
     in_kind_contribution,
-    unpaid_pledges
+    unpaid_pledges,
+    contributor_name = report_id
   )
 ```
 
 ```{r}
-ne_all$formb4b1 %>% 
+b4a <- ne_all$formb4a %>% 
   select(
     committee_id,
     date_received,
+    contributor_id,
+    contribution_date,
     cash_contribution,
     in_kind_contribution,
-    unpaid_pledges
+    unpaid_pledges,
+    contributor_name = report_id
+  )
+```
+
+```{r}
+b5 <- ne_all$formb5 %>% 
+  select(
+    committee_id,
+    date_received,
+    contributor_id,
+    contribution_date = date_of_contribution,
+    cash_contribution = amount,
+    contributor_name
+  )
+```
+
+```{r}
+b72 <- ne_all$formb72 %>% 
+  select(
+    committee_name,
+    committee_id,
+    date_received,
+    contributor_id,
+    contribution_date,
+    cash_contribution = amount,
+    contributor_name = report_id
+  )
+```
+
+```{r}
+b73 <- ne_all$formb73 %>% 
+  select(
+    committee_name,
+    committee_id,
+    date_received,
+    contributor_id,
+    contribution_date,
+    cash_contribution = amount,
+    contributor_name = report_id
   )
 ```
 
@@ -398,21 +455,30 @@ ne_all$formb4b1 %>%
 names(b4a) %in% names(b1ab)
 names(b2a) %in% names(b1ab)
 names(b2a) %in% names(b4a)
+names(b2a) %in% names(b5)
+names(b2a) %in% names(b72)
+names(b2a) %in% names(b73)
 ```
 
 ```{r join_bind}
-bx <- bind_rows(b1ab, b4a, b2a)
-nrow(bx)
+bx <- bind_rows(
+  "Form B1AB" = b1ab, 
+  "Form B4A" = b4a, 
+  "Form B5" = b5, 
+  "Form B72" = b72, 
+  "Form B73" = b73, 
+  .id = "source_form"
+)
 ```
 
 ```{r join_comms}
-nec <- right_join(
-  x = a1, 
-  y = bx,
-  by = c(
-    "committee_id_number" = "committee_id"
+nec <- right_join(a1, bx, by = "committee_id")
+nec <- nec %>% 
+  mutate(
+    committee_name = coalesce(committee_name.x, committee_name.y),
+    .keep = "unused",
+    .after = committee_id
   )
-)
 ```
 
 ```{r join_parse}
@@ -430,17 +496,21 @@ nec <- nec %>%
   mutate(
     across(
       .cols = c(cash_contribution, in_kind_contribution, unpaid_pledges),
-      .fns = ~if_else(. == 0, NA, .)
+      .fns = ~na_if(., 0)
     ),
     # create a single amount column
-    contribution_amount = coalesce(amount, in_kind, unpaid),
+    contribution_amount = coalesce(
+      cash_contribution, 
+      in_kind_contribution, 
+      unpaid_pledges
+    )
   )
 ```
 
 ## Explore
 
 There are `r comma(nrow(nec))` rows of `r ncol(nec)` columns. Each record
-represents a single Contributions...
+represents a single contribution from an entity to a committee.
 
 ```{r glimpse}
 glimpse(nec)
@@ -458,15 +528,29 @@ col_stats(nec, count_na)
 We can flag any record missing a key variable needed to identify a transaction.
 
 ```{r na_flag}
-key_vars <- c("date", "last", "amount", "committee")
+key_vars <- c("contribution_date", "contributor_name", 
+              "contribution_amount", "committee_name")
 nec <- flag_na(nec, all_of(key_vars))
+mean(nec$na_flag)
 sum(nec$na_flag)
 ```
 
 ```{r na_view}
 nec %>% 
   filter(na_flag) %>% 
-  select(all_of(key_vars))
+  select(all_of(key_vars), source_form)
+```
+
+```{r}
+nec %>% 
+  group_by(source_form) %>% 
+  summarise(
+    n = n(),
+    no_key_comm = mean(is.na(committee_name)),
+    no_key_name = mean(is.na(contributor_name)),
+    no_key_amt = mean(is.na(contribution_amount))
+  ) %>% 
+  arrange(desc(n))
 ```
 
 ### Duplicates
@@ -474,14 +558,16 @@ nec %>%
 We can also flag any record completely duplicated across every column.
 
 ```{r dupe_flag}
-nec <- flag_dupes(nec, -id)
+nec <- flag_dupes(nec, everything())
 sum(nec$dupe_flag)
+mean(nec$dupe_flag)
 ```
 
 ```{r dupe_view}
 nec %>% 
   filter(dupe_flag) %>% 
-  select(all_of(key_vars))
+  select(all_of(key_vars)) %>% 
+  arrange(contribution_date)
 ```
 
 ### Categorical
@@ -491,26 +577,32 @@ col_stats(nec, n_distinct)
 ```
 
 ```{r distinct_plots, echo=FALSE}
-explore_plot(nec, type)
+explore_plot(nec, committee_type)
+explore_plot(nec, source_form)
 ```
 
 ### Amounts
 
+```{r amount_round}
+nec$contribution_amount <- round(nec$contribution_amount, 2)
+```
+
 ```{r amount_summary}
-summary(nec$amount)
-mean(nec$amount <= 0)
+summary(nec$contribution_amount)
+mean(nec$contribution_amount <= 0, na.rm = TRUE)
 ```
 
 These are the records with the minimum and maximum amounts.
 
 ```{r amount_minmax}
-glimpse(nec[c(which.max(nec$amount), which.min(nec$amount)), ])
+glimpse(nec[c(which.max(nec$contribution_amount), which.min(nec$contribution_amount)), ])
 ```
 
 ```{r hist_amount, echo=FALSE}
 nec %>%
-  ggplot(aes(amount)) +
-  geom_histogram(fill = dark2["purple"]) +
+  filter(contribution_amount >= 1) %>% 
+  ggplot(aes(contribution_amount)) +
+  geom_histogram(fill = dark2["purple"], bins = 25) +
   scale_y_continuous(labels = comma) +
   scale_x_continuous(
     breaks = c(1 %o% 10^(0:6)),
@@ -519,7 +611,7 @@ nec %>%
   ) +
   labs(
     title = "Nebraska Contributions Amount Distribution",
-    caption = "Source: {source}",
+    caption = "Source: NADC",
     x = "Amount",
     y = "Count"
   )
@@ -530,29 +622,30 @@ nec %>%
 We can add the calendar year from `date` with `lubridate::year()`
 
 ```{r date_year}
-nec <- mutate(nec, year = year(date))
+nec <- mutate(nec, contribution_year = year(contribution_date))
 ```
 
 ```{r date_range}
-min(nec$date)
-sum(nec$year < 2000)
-max(nec$date)
-sum(nec$date > today())
+min(nec$contribution_date)
+sum(nec$contribution_year < 1984)
+max(nec$contribution_date)
+sum(nec$contribution_date > today())
 ```
 
 ```{r bar_year, echo=FALSE}
 nec %>% 
-  count(year) %>% 
-  mutate(even = is_even(year)) %>% 
-  ggplot(aes(x = year, y = n)) +
+  filter(contribution_year > 1984, contribution_year < 2022) %>% 
+  count(contribution_year) %>% 
+  mutate(even = is_even(contribution_year)) %>% 
+  ggplot(aes(x = contribution_year, y = n)) +
   geom_col(aes(fill = even)) + 
   scale_fill_brewer(palette = "Dark2") +
   scale_y_continuous(labels = comma) +
-  scale_x_continuous(breaks = seq(2000, 2020, by = 2)) +
+  scale_x_continuous(breaks = seq(1984, 2020, by = 4)) +
   theme(legend.position = "bottom") +
   labs(
     title = "Nebraska Contributions by Year",
-    caption = "Source: {source}",
+    caption = "Source: NADC",
     fill = "Election Year",
     x = "Year Made",
     y = "Count"
@@ -572,30 +665,24 @@ For the street `addresss` variable, the `campfin::normal_address()` function
 will force consistence case, remove punctuation, and abbreviate official 
 USPS suffixes.
 
-```{r address_norm}
-nec <- nec %>% 
-  unite(
-    col = address_full,
-    starts_with("address"),
-    sep = " ",
-    remove = FALSE,
-    na.rm = TRUE
-  ) %>% 
+```{r address-norm}
+addr_norm <- nec %>% 
+  distinct(contributor_address) %>% 
   mutate(
     address_norm = normal_address(
-      address = address_full,
+      address = contributor_address,
       abbs = usps_street,
       na_rep = TRUE
     )
-  ) %>% 
-  select(-address_full)
+  )
 ```
 
-```{r address_view}
-nec %>% 
-  select(contains("address")) %>% 
-  distinct() %>% 
-  sample_n(10)
+```{r address-view}
+sample_n(addr_norm, 10)
+```
+
+```{r address-join}
+nec <- left_join(nec, addr_norm, by = "contributor_address")
 ```
 
 ### ZIP
@@ -604,19 +691,19 @@ For ZIP codes, the `campfin::normal_zip()` function will attempt to create
 valid _five_ digit codes by removing the ZIP+4 suffix and returning leading
 zeroes dropped by other programs like Microsoft Excel.
 
-```{r zip_norm}
+```{r zip-norm}
 nec <- nec %>% 
   mutate(
     zip_norm = normal_zip(
-      zip = zip,
+      zip = contributor_zipcode,
       na_rep = TRUE
     )
   )
 ```
 
-```{r zip_progress}
+```{r zip-progress}
 progress_table(
-  nec$zip,
+  nec$contributor_zipcode,
   nec$zip_norm,
   compare = valid_zip
 )
@@ -624,33 +711,11 @@ progress_table(
 
 ### State
 
-Valid two digit state abbreviations can be made using the 
-`campfin::normal_state()` function.
+The existing `contributor_state` column needs not be cleaned.
 
-```{r state_norm}
-nec <- nec %>% 
-  mutate(
-    state_norm = normal_state(
-      state = state,
-      abbreviate = TRUE,
-      na_rep = TRUE,
-      valid = valid_state
-    )
-  )
-```
-
-```{r state_view}
-nec %>% 
-  filter(state != state_norm) %>% 
-  count(state, state_norm, sort = TRUE)
-```
-
-```{r state_progress}
-progress_table(
-  nec$state,
-  nec$state_norm,
-  compare = valid_state
-)
+```{r state_check}
+prop_in(nec$contributor_state, valid_state)
+what_out(nec$contributor_state, valid_state)
 ```
 
 ### City
@@ -664,12 +729,12 @@ The `campfin::normal_city()` function is a good start, again converting case,
 removing punctuation, but _expanding_ USPS abbreviations. We can also remove
 `invalid_city` values.
 
-```{r city_norm}
+```{r city-norm}
 norm_city <- nec %>% 
-  distinct(city, state_norm, zip_norm) %>% 
+  distinct(contributor_city, contributor_state, zip_norm) %>% 
   mutate(
     city_norm = normal_city(
-      city = city, 
+      city = contributor_city, 
       abbs = usps_city,
       states = c("NE", "DC", "NEBRASKA"),
       na = invalid_city,
@@ -685,13 +750,13 @@ against the _expected_ value for that record's state abbreviation and ZIP code.
 If the normalized value is either an abbreviation for or very similar to the
 expected value, we can confidently swap those two.
 
-```{r city_swap}
+```{r city-swap}
 norm_city <- norm_city %>% 
-  rename(city_raw = city) %>% 
+  rename(city_raw = contributor_city) %>% 
   left_join(
     y = zipcodes,
     by = c(
-      "state_norm" = "state",
+      "contributor_state" = "state",
       "zip_norm" = "zip"
     )
   ) %>% 
@@ -712,13 +777,13 @@ norm_city <- norm_city %>%
   )
 ```
 
-```{r city_rejoin}
+```{r city-rejoin}
 nec <- left_join(
   x = nec,
   y = norm_city,
   by = c(
-    "city_raw", 
-    "state_norm", 
+    "contributor_city" = "city_raw", 
+    "contributor_state", 
     "zip_norm"
   )
 )
@@ -733,7 +798,7 @@ strings that have a valid city/state/zip combination.
 
 [or]: https://openrefine.org/
 
-```{r city_refine}
+```{r city-refine}
 good_refine <- nec %>% 
   mutate(
     city_refine = city_swap %>% 
@@ -745,16 +810,16 @@ good_refine <- nec %>%
     y = zipcodes,
     by = c(
       "city_refine" = "city",
-      "state_norm" = "state",
+      "contributor_state" = "state",
       "zip_norm" = "zip"
     )
   )
 ```
 
-```{r city_count, echo=FALSE}
+```{r city-count, echo=FALSE}
 good_refine %>%
   count(
-    state_norm, 
+    contributor_state, 
     zip_norm, 
     city_swap, 
     city_refine,
@@ -764,9 +829,9 @@ good_refine %>%
 
 Then we can join the refined values back to the database.
 
-```{r city_join}
+```{r city-join}
 nec <- nec %>% 
-  left_join(good_refine) %>% 
+  left_join(good_refine, by = names(.)) %>% 
   mutate(city_refine = coalesce(city_refine, city_swap))
 ```
 
@@ -775,27 +840,29 @@ nec <- nec %>%
 Our goal for normalization was to increase the proportion of city values known
 to be valid and reduce the total distinct values by correcting misspellings.
 
-```{r city_progress, echo=FALSE}
+```{r city-progress, echo=FALSE}
 many_city <- c(valid_city, extra_city)
 progress <- progress_table(
-  str_to_upper(nec$city_raw),
+  nec$contributor_city,
   nec$city_norm,
   nec$city_swap,
   nec$city_refine,
   compare = many_city
 ) %>% mutate(stage = as_factor(stage))
-kable(progress, digits = 3)
+progress %>% 
+    mutate(across(stage, md_code)) %>% 
+    kable(digits = 3)
 ```
 
 You can see how the percentage of valid values increased with each stage.
 
-```{r bar_progress, echo=FALSE}
-raw_in <- percent(prop_in(nec$city_raw, valid_city))
+```{r bar-progress, echo=FALSE}
+raw_in <- percent(prop_in(nec$contributor_city, valid_city))
 progress %>% 
   ggplot(aes(x = stage, y = prop_in)) +
   geom_hline(yintercept = 0.99) +
   geom_col(fill = dark2["purple"]) +
-  coord_cartesian(ylim = c(0.75, 1)) +
+  coord_cartesian(ylim = c(0.95, 1)) +
   scale_y_continuous(labels = percent) +
   labs(
     title = "Nebraska City Normalization Progress",
@@ -809,7 +876,7 @@ More importantly, the number of distinct values decreased each stage. We were
 able to confidently change many distinct invalid values to their valid
 equivalent.
 
-```{r bar_distinct, echo=FALSE}
+```{r bar-distinct, echo=FALSE}
 progress %>% 
   select(
     stage, 
@@ -833,12 +900,10 @@ progress %>%
   )
 ```
 
-## Conclude
-
 Before exporting, we can remove the intermediary normalization columns and
 rename all added variables with the `_clean` suffix.
 
-```{r clean_select}
+```{r clean-select}
 nec <- nec %>% 
   select(
     -city_norm,
@@ -846,11 +911,14 @@ nec <- nec %>%
     city_clean = city_refine
   ) %>% 
   rename_all(~str_replace(., "_norm", "_clean")) %>% 
-  rename_all(~str_remove(., "_raw"))
+  rename_all(~str_remove(., "_raw")) %>% 
+  relocate(address_clean, city_clean, .before = zip_clean)
 ```
 
-```{r clean_glimpse}
-glimpse(sample_n(nec, 50))
+## Conclude
+
+```{r clean-glimpse}
+glimpse(sample_n(nec, 1000))
 ```
 
 1. There are `r comma(nrow(nec))` records in the database.
@@ -862,56 +930,39 @@ glimpse(sample_n(nec, 50))
 
 ## Export
 
-Now the file can be saved on disk for upload to the Accountability server.
+Now the file can be saved on disk for upload to the Accountability server. We
+will name the object using a date range of the records included.
 
-```{r clean_dir}
+```{r clean-dir}
 clean_dir <- dir_create(here("ne", "contribs", "data", "clean"))
-clean_path <- path(clean_dir, "ne_contribs_clean.csv")
-write_csv(nec, clean_path, na = "")
-(clean_size <- file_size(clean_path))
-file_encoding(clean_path) %>% 
-  mutate(across(path, path.abbrev))
+clean_csv <- path(clean_dir, glue("ne_contribs_1984-20220329.csv"))
+clean_rds <- path_ext_set(clean_csv, "rds")
+basename(clean_csv)
+```
+
+```{r clean-write}
+write_csv(nec, clean_csv, na = "")
+write_rds(nec, clean_rds, compress = "xz")
+(clean_size <- file_size(clean_csv))
 ```
 
 ## Upload
 
 We can use the `aws.s3::put_object()` to upload the text file to the IRW server.
 
-```{r aws_upload, eval=FALSE}
-aws_path <- path("csv", basename(clean_path))
-if (!object_exists(aws_path, "publicaccountability")) {
+```{r aws-upload, eval=FALSE}
+aws_key <- path("csv", basename(clean_csv))
+if (!object_exists(aws_key, "publicaccountability")) {
   put_object(
-    file = clean_path,
-    object = aws_path, 
+    file = clean_csv,
+    object = aws_key, 
     bucket = "publicaccountability",
     acl = "public-read",
     show_progress = TRUE,
     multipart = TRUE
   )
 }
-aws_head <- head_object(aws_path, "publicaccountability")
+aws_head <- head_object(aws_key, "publicaccountability")
 (aws_size <- as_fs_bytes(attr(aws_head, "content-length")))
 unname(aws_size == clean_size)
-```
-
-## Dictionary
-
-The following table describes the variables in our final exported file:
-
-```{r dict_make, echo=FALSE}
-dict_raw <- tibble(
-  var = md_code(names(nec)),
-  type = md_code(map_chr(nec, typeof)),
-  def = c(
-    ""
-  )
-)
-```
-
-```{r dict_md, echo=FALSE}
-(dict_md <- kable(
-  x = dict_raw,
-  format = "markdown",
-  col.names = c("Column", "Type", "Definition")
-))
 ```
