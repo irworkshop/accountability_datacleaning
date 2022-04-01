@@ -1,17 +1,30 @@
 Nebraska Expenditures
 ================
 Kiernan Nicholls
-2019-08-06 11:05:07
+Fri Apr 1 13:37:18 2022
 
-  - [Project](#project)
-  - [Objectives](#objectives)
-  - [Packages](#packages)
-  - [Data](#data)
-  - [Import](#import)
-  - [Explore](#explore)
-  - [Wrangle](#wrangle)
-  - [Conclude](#conclude)
-  - [Export](#export)
+-   [Project](#project)
+-   [Objectives](#objectives)
+-   [Packages](#packages)
+-   [Data](#data)
+-   [Download](#download)
+    -   [Extract](#extract)
+    -   [About](#about)
+-   [Read](#read)
+    -   [Format](#format)
+    -   [Join](#join)
+-   [Explore](#explore)
+    -   [Missing](#missing)
+    -   [Duplicates](#duplicates)
+    -   [Categorical](#categorical)
+    -   [Amounts](#amounts)
+    -   [Dates](#dates)
+    -   [Wrangle](#wrangle)
+-   [Conclude](#conclude)
+-   [Export](#export)
+-   [Upload](#upload)
+
+<!-- Place comments regarding knitting here -->
 
 ## Project
 
@@ -24,9 +37,9 @@ Our goal is to standardizing public data on a few key fields by thinking
 of each dataset row as a transaction. For each transaction there should
 be (at least) 3 variables:
 
-1.  All **parties** to a transaction
-2.  The **date** of the transaction
-3.  The **amount** of money involved
+1.  All **parties** to a transaction.
+2.  The **date** of the transaction.
+3.  The **amount** of money involved.
 
 ## Objectives
 
@@ -34,13 +47,13 @@ This document describes the process used to complete the following
 objectives:
 
 1.  How many records are in the database?
-2.  Check for duplicates
-3.  Check ranges
+2.  Check for entirely duplicated records.
+3.  Check ranges of continuous variables.
 4.  Is there anything blank or missing?
-5.  Check for consistency issues
-6.  Create a five-digit ZIP Code called `ZIP5`
-7.  Create a `YEAR` field from the transaction date
-8.  Make sure there is data on both parties to a transaction
+5.  Check for consistency issues.
+6.  Create a five-digit ZIP Code called `zip`.
+7.  Create a `year` field from the transaction date.
+8.  Make sure there is data on both parties to a transaction.
 
 ## Packages
 
@@ -48,79 +61,76 @@ The following packages are needed to collect, manipulate, visualize,
 analyze, and communicate these results. The `pacman` package will
 facilitate their installation and attachment.
 
-The IRW’s `campfin` package will also have to be installed from GitHub.
-This package contains functions custom made to help facilitate the
-processing of campaign finance data.
-
 ``` r
-if (!require("pacman")) install.packages("pacman")
-pacman::p_load_current_gh("kiernann/campfin")
+if (!require("pacman")) {
+  install.packages("pacman")
+}
 pacman::p_load(
-  stringdist, # levenshtein value
-  RSelenium, # remote browser
   tidyverse, # data manipulation
   lubridate, # datetime strings
-  tidytext, # text analysis
-  tidytext, # text analysis
-  magrittr, # pipe opperators
-  janitor, # dataframe clean
-  refinr, # cluster and merge
+  textreadr, # read rtf files
+  gluedown, # printing markdown
+  janitor, # clean data frames
+  campfin, # custom irw tools
+  aws.s3, # aws cloud storage
+  refinr, # cluster & merge
   scales, # format strings
   knitr, # knit documents
-  vroom, # read files fast
-  glue, # combine strings
-  here, # relative storage
-  fs # search storage 
+  vroom, # fast reading
+  rvest, # scrape html
+  glue, # code strings
+  here, # project paths
+  httr, # http requests
+  fs # local storage 
 )
 ```
 
 This document should be run as part of the `R_campfin` project, which
 lives as a sub-directory of the more general, language-agnostic
-[`irworkshop/accountability_datacleaning`](https://github.com/irworkshop/accountability_datacleaning "tap")
+[`irworkshop/accountability_datacleaning`](https://github.com/irworkshop/accountability_datacleaning)
 GitHub repository.
 
 The `R_campfin` project uses the [RStudio
-projects](https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects "rproj")
+projects](https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects)
 feature and should be run as such. The project also uses the dynamic
 `here::here()` tool for file paths relative to *your* machine.
 
 ``` r
-# where dfs this document knit?
-here::here()
-#> [1] "/home/ubuntu/R/accountability_datacleaning/R_campfin"
+# where does this document knit?
+here::i_am("ne/expends/docs/ne_expends_diary.Rmd")
 ```
 
 ## Data
 
 Data is obtained by from the Nebraska Accountability and Disclosure
 Commission’s (NADC) [Open Data
-portal](http://www.nebraska.gov/government/open-data/ "portal"). From
-this portal, we will download the [Campaign Statements
-Data](http://www.nadc.nebraska.gov/index.html "nadc").
+portal](http://www.nebraska.gov/government/open-data/). From this
+portal, we will download the [Campaign Statements
+Data](http://www.nadc.nebraska.gov/index.html).
 
 > A weekly export of the campaign filings based upon the paper records
 > filed with the Nebraska Accountability and Disclosure Commission.
 
-The [NADC home](http://www.nadc.nebraska.gov/index.html "nadc") page
-explains the role and resources provided by the Commission.
+The [NADC home](http://www.nadc.nebraska.gov/index.html) page explains
+the role and resources provided by the Commission.
 
 > This site includes the campaign statements filed with the Commission
 > by candidates for state and local offices, political action committees
 > or PACs, political parties, and ballot question committees. Campaign
 > statements disclose the amount and sources of contributions to the
 > committee and the amount purposes of expenditures by the committee.
-> The site also includes Reports of Contributions filed with the
+> The site also includes Reports of Expenditures filed with the
 > Commission by corporations, unions, limited liability companies,
 > limited partnerships, and by industry, trade or professional
-> associations. Reports of Contributions disclose contributions and
+> associations. Reports of Expenditures disclose contributions and
 > expenditures made to support or oppose candidates or ballot questions.
 > Forms, instructional materials and a list of committees may be
 > accessed through this site. To access the information described in
 > this paragraph, click on the tab above marked CAMPAIGN FINANCE.
 
 Navigating to the [campaign finance section of the
-website](http://www.nadc.nebraska.gov/cf/index.html "nadc_cf"), the
-exact filing requirements are layed out.
+website](http://www.nadc.nebraska.gov/cf/index.html), the exact filing
+requirements are laid out.
 
 > Candidates for state and local office are subject to the campaign
 > finance provisions of the Nebraska Political Accountability and
@@ -135,21 +145,20 @@ exact filing requirements are layed out.
 specifically, there are **three** kinds of filings that must be made by
 general candidates:
 
-1.  > Statement of Organization - This document registers the Committee
+1.  Statement of Organization - This document registers the Committee
     > with the Commission. It discloses the name of the committee, the
     > name of the candidate, the office sought and the name of the
     > treasurer.
 
-2.  > Campaign Statement - this document provides a summary of the
+2.  Campaign Statement - this document provides a summary of the
     > financial activity of the committee. It discloses the name of
     > contributors of more than $250 and the amounts of the
     > contributions. It discloses expenditures of more than $250.
 
-3.  > Report of Late Contributions - this document discloses
-    > contributions of $1,000 or more received by the committee during
-    > 14 days immediately preceding the election. Information reported
-    > as late contributions are also reported on subsequent campaign
-    > statements.
+3.  Report of Late Expenditures - this document discloses contributions
+    > of $1,000 or more received by the committee during 14 days
+    > immediately preceding the election. Information reported as late
+    > contributions are also reported on subsequent campaign statements.
 
 Aside from general candidates, the NADC also explains that political
 committees must also file.
@@ -162,20 +171,19 @@ committees must also file.
 > Commission and file periodic campaign statements disclosing receipts
 > and expenditures.
 
-1.  > State and county political party committees with certain levels of
+1.  State and county political party committees with certain levels of
     > financial activity, register with the Commission and file periodic
     > campaign statements.
 
-2.  > A ballot question committee is a political committee formed for
-    > the purpose of supporting or opposing the qualification, passage
-    > or defeat of a ballot question. The committee must register with
-    > the Commission within 10 days after raising, receiving or
-    > expending $5,000 or more in a calendar year. Once registered,
-    > ballot questions committees file periodic campaign statements
-    > disclosing receipts and expenditures.
+2.  A ballot question committee is a political committee formed for the
+    > purpose of supporting or opposing the qualification, passage or
+    > defeat of a ballot question. The committee must register with the
+    > Commission within 10 days after raising, receiving or expending
+    > $5,000 or more in a calendar year. Once registered, ballot
+    > questions committees file periodic campaign statements disclosing
+    > receipts and expenditures.
 
-Finally, regarding the specific data in question, the NADC identifies
-the source:
+Finally, the NADC identifies the source of the data:
 
 > The campaign filings displayed on this website are based upon the
 > paper records filed with the Nebraska Accountability and Disclosure
@@ -187,636 +195,541 @@ In any discrepancy between the information displayed on this website and
 the official records on file with the Commission, the official records
 of the Commission take precedence.
 
-## Import
+## Download
 
-The campaign statements data is provided as a series of text files
-organized in a relational database management system (DRMS).
+The NADC provides a bulk download of records on their [search
+page](https://nadc.nebraska.gov/ccdb/search.cgi).
 
-### Download
+> The campaign filings displayed on this website are based upon the
+> paper records filed with the Nebraska Accountability and Disclosure
+> Commission. While every effort has been made to ensure accurate data
+> input, errors may occur. Anyone noting an error is encouraged to
+> contact this office.
+>
+> In any discrepancy between information displayed on this website and
+> the official records on file with the Commission, the official records
+> of the Commission take precedence.
 
-The data is provided as a ZIP file, which can be downloaded locally.
+> Download the entire dataset of campaign filings based upon the paper
+> records filed with the Nebraska Accountability and Disclosure
+> Commission. Dataset is updated weekly.
+> [**Download**](https://www.nebraska.gov/nadc_data/nadc_data.zip)
+
+The bulk data is provided as a single ZIP archive we can download.
 
 ``` r
-raw_dir <- here("ne", "expends", "data", "raw")
-dir_create(raw_dir)
+con_dir <- here("ne", "contribs", "data", "raw")
+if (length(dir_ls(con_dir)) > 1) {
+  raw_dir <- con_dir
+} else {
+  raw_dir <- dir_create(here("ne", "expends", "data", "raw"))
+}
 ```
 
 ``` r
-zip_url <- "http://www.nebraska.gov/nadc_data/nadc_data.zip"
-zip_file <- str_c(raw_dir, basename(zip_url), sep = "/")
-download.file(
-  url = zip_url,
-  destfile = zip_file
-)
+raw_url <- "https://www.nebraska.gov/nadc_data/nadc_data.zip"
+raw_zip <- path(raw_dir, basename(raw_url))
 ```
 
-There are 64 files contained in a single folder (`/nadc_data`) inside
-the ZIP archive.
+``` r
+if (!file_exists(raw_zip)) {
+  download.file(
+    url = raw_url, 
+    destfile = raw_zip, 
+    method = "curl", 
+    extra = "--cipher 'DEFAULT:!DH'"
+  )
+}
+```
 
-  - nadc\_data/
-  - nadc\_data/forma1cand.txt
-  - nadc\_data/nadc\_tables.rtf
-  - nadc\_data/forma1.txt
-  - nadc\_data/formcfla4.txt
-  - nadc\_data/formb73.txt
-  - nadc\_data/formb1c.txt
-  - nadc\_data/formb4a.txt
-  - nadc\_data/loblatefile.txt
-  - nadc\_data/formb7.txt
-  - nadc\_data/formcfla8.txt
-  - nadc\_data/formb4b1.txt
-  - nadc\_data/formb1ab.txt
-  - nadc\_data/formb2b.txt
-  - nadc\_data/formb10exp.txt
-  - nadc\_data/corplatefile.txt
-  - nadc\_data/formb1c2.txt
-  - nadc\_data/commlatefile.txt
-  - nadc\_data/formc1prop.txt
-  - nadc\_data/formb6.txt
-  - nadc\_data/formb4b3.txt
-  - nadc\_data/formb4b2.txt
-  - nadc\_data/formb6cont.txt
-  - nadc\_data/lformcc.txt
-  - nadc\_data/formb2.txt
-  - nadc\_data/formb10.txt
-  - nadc\_data/formb2a.txt
-  - nadc\_data/lforme.txt
-  - nadc\_data/formb1d.txt
-  - nadc\_data/formb11.txt
-  - nadc\_data/formb9b.txt
-  - nadc\_data/formb1.txt
-  - nadc\_data/formcfla8c.txt
-  - nadc\_data/formb9a.txt
-  - nadc\_data/lformf.txt
-  - nadc\_data/formcfla9ex.txt
-  - nadc\_data/formb5.txt
-  - nadc\_data/lforma.txt
-  - nadc\_data/formcfla8a.txt
-  - nadc\_data/formb4.txt
-  - nadc\_data/lformd.txt
-  - nadc\_data/formcfla3.txt
-  - nadc\_data/formcfla2.txt
-  - nadc\_data/formcfla9.txt
-  - nadc\_data/formb1d2.txt
-  - nadc\_data/lformbb.txt
-  - nadc\_data/formcfla5.txt
-  - nadc\_data/formb4c.txt
-  - nadc\_data/lformb.txt
-  - nadc\_data/formb9.txt
-  - nadc\_data/lformc.txt
-  - nadc\_data/formcfla6.txt
-  - nadc\_data/formb6expend.txt
-  - nadc\_data/formc1.txt
-  - nadc\_data/formcfla7.txt
-  - nadc\_data/lformar.txt
-  - nadc\_data/formcfla8b.txt
-  - nadc\_data/formb3.txt
-  - nadc\_data/formcfla1.txt
-  - nadc\_data/forma1misc.txt
-  - nadc\_data/formc1inc.txt
-  - nadc\_data/formb72.txt
-  - nadc\_data/formc2.txt
-  - nadc\_data/DATE\_UPDATED.TXT
+### Extract
 
-We can then unzip the archive to the same `/raw` directory.
+This ZIP file contains 63 text files for each of the various forms
+submitted. We can extract each of these text files into our data
+directory.
 
 ``` r
-unzip(
-  zipfile = zip_file,
+raw_all <- unzip(
+  zipfile = raw_zip,
+  junkpaths = TRUE,
   exdir = raw_dir
 )
 ```
 
-The archive contains a single folder, inside which are the many TXT
-files we need.
-
 ``` r
-nadc_dir <- here("ne", "expends", "data", "raw", "nadc_data")
+file_info(raw_all) %>% 
+  select(path, size, modification_time) %>% 
+  mutate(across(path, path.abbrev))
+#> # A tibble: 63 × 3
+#>    path                                                                          size modification_time  
+#>    <fs::path>                                                             <fs::bytes> <dttm>             
+#>  1 /home/kiernan/Documents/tap/R_tap/ne/contribs/data/raw/forma1cand.txt      176.79K 2022-04-01 13:37:18
+#>  2 /home/kiernan/Documents/tap/R_tap/ne/contribs/data/raw/nadc_tables.rtf     308.23K 2022-04-01 13:37:18
+#>  3 /home/kiernan/Documents/tap/R_tap/ne/contribs/data/raw/forma1.txt          513.79K 2022-04-01 13:37:18
+#>  4 /home/kiernan/Documents/tap/R_tap/ne/contribs/data/raw/formcfla4.txt         18.3K 2022-04-01 13:37:18
+#>  5 /home/kiernan/Documents/tap/R_tap/ne/contribs/data/raw/formb73.txt           1.13M 2022-04-01 13:37:18
+#>  6 /home/kiernan/Documents/tap/R_tap/ne/contribs/data/raw/formb1c.txt         263.48K 2022-04-01 13:37:18
+#>  7 /home/kiernan/Documents/tap/R_tap/ne/contribs/data/raw/formb4a.txt           3.54M 2022-04-01 13:37:18
+#>  8 /home/kiernan/Documents/tap/R_tap/ne/contribs/data/raw/loblatefile.txt     328.73K 2022-04-01 13:37:18
+#>  9 /home/kiernan/Documents/tap/R_tap/ne/contribs/data/raw/formb7.txt             2.8M 2022-04-01 13:37:18
+#> 10 /home/kiernan/Documents/tap/R_tap/ne/contribs/data/raw/formcfla8.txt         3.06K 2022-04-01 13:37:18
+#> # … with 53 more rows
 ```
 
-### Read
+### About
 
-The first file in the folder, `DATE_UPDATED.TXT` contains the time the
-files were last updated.
-
-``` r
-read_lines(file = glue("{nadc_dir}/DATE_UPDATED.TXT")) %>% 
-  str_remove_all("[:alpha:]") %>% 
-  as_datetime() %>% 
-  subtract(now())
-#> Time difference of -1.503543 days
-```
-
-To work with the relational database managment system, we are going to
-read every text file into a single list comprised of separate data
-frames by using `purrr::map()` and `readr::read_delim()`.
+One file contains the date the database was last updated.
 
 ``` r
-ne <- 
-  dir_ls(
-    path = nadc_dir,
-    type = "file",
-    glob = "*.txt$"
-  ) %>% 
-  map(
-    read_delim,
-    delim = "|",
-    escape_double = FALSE,
-    escape_backslash = FALSE,
-    col_types = cols(.default = "c")
-  ) %>% 
-  map(clean_names)
-
-# set names equal to form
-names(ne) <- tools::file_path_sans_ext(basename(names(ne)))
+date_updated <- read_file(file = path(raw_dir, "DATE_UPDATED.TXT"))
+print(date_updated)
+#> [1] "Data last loaded: 2022-03-28 03:00:19"
+ymd_hms(str_remove_all(date_updated, "\\D")) - now()
+#> Time difference of -4.609032 days
 ```
 
 Before we can prepare the file for indexing, we need to locate the exact
 data we’re interested in. The content, structure, and relationship of
-each file is described in the `/nadc_data/nadc_tables.rtf` rich text
-file. The files correspond to the *forms* through which candidates and
-committees report their contributions, expenditures, etc. Each type of
-filter uses a different form, so all expenditures are split among a few
-files (corresponding to a few forms). Each form typically also has a
-section (schedule) where *expenditures* are reported.
+each file is described in the `nadc_tables.rtf` rich text file. The
+files correspond to the *forms* through which candidates and committees
+report their contributions, expenditures, etc. Each type of filter uses
+a different form, so all expenditures are split among a few files
+(corresponding to a few forms). Each form typically also has a section
+(schedule) where *expenditures* are reported.
 
-#### Form B-1
+Using this file, we can grasp what information is contained on what
+forms and which tables we will need to combine to identify the parties,
+date, and amount of every campaign expenditure.
 
-[Form B-1](http://www.nadc.nebraska.gov/docs/B-1-2018.doc "b-1") covers
-Candiate and Ballot Question Committees, where Section 1 of Schedule D
-asks the candidate/committee to:
+Form A1 contains all of the names and addresses of political, candidate,
+and ballot question committees. This form has no transactions.
 
-> List all payees who were paid more than $250 during this reporting
-> period. If multiple payments to the same payee totaled more than $250
-> throughout this reporting period, those expenditures must be listed.
-> Reporting period refers to your entry on Page 1 under Item 4.
-> Expenditures to the same payee over separate reporting periods should
-> not be accumulated. Expenditures to the same payee must be listed
-> under the same name. If the committee reimburses the candidate or
-> engages the services of an advertising agency or another agent of the
-> committee for expenses they incurred on behalf of the committee, list
-> the payments the committee made to the candidate or agent and also
-> list the payments which were made by the candidate or agent on behalf
-> of the committee. (E.g., If the candidate makes payments to a
-> newspaper for advertising and is reimbursed by the committee, report
-> the payments made to the candidate but also list the payments made by
-> the candidate to the newspaper. Include the name of the newspaper, and
-> the date of each of the expenditures by the candidate and list the
-> amount only in the “purpose” box along with the description of the
-> expenditure.)
+-   Date Received
+-   Committee ID Number
+-   Committee Name
+-   Committee Address
+-   Committee City
+-   Committee State
+-   Committee Zip
+-   Committee Type
+    -   C = Candidate Committee
+    -   B = Ballot Question
+    -   P = Political Action Committee
+    -   T = Political Party Committee
+    -   I or R = Independent Reporting Committee
+    -   S = Separate Segregated Political Fund Committee
 
-The form also defines the NADC conception of expenditure:
+Then the various types of transactions for those committee types are
+reported on subsequent forms. The files of interested were confirmed by
+the NADC to the Investigative Reporting Workshop in June of 2018.
 
-> Expenditure: A payment, donation, loan, pledge, or promise of payment
-> of money or anything of ascertainable monetary value for goods,
-> materials, services, or facilities in assistance of, or in opposition
-> to, the nomination or election of a candidate, or the qualification,
-> passage, or defeat of a ballot question. (An offer or tender of an
-> expenditure is not an expenditure if expressly and unconditionally
-> rejected or returned.) Expenditure shall include a contribution or a
-> transfer of anything of ascertainable monetary value for purposes of
-> influencing the nomination or election of any candidate or the
-> qualification, passage or defeat of a ballot question.
+-   FORM**B1AB** – All Data from form B-1 schedule A and B, Expenditures
+-   FORM**B2A** – Form B-2 Expenditures
+-   FORM**B3** – Report of Earmarked Contribution
+-   FORM**B4A** – Form B-4 Schedule A:
+    -   Committee ID - Use to link with FORMB4, along with Date Received
+-   FORM**B4B1** – Form B-4 Schedule B Section 1
+-   FORM**B5** – Report of Late contributions
+-   FORM**B7** – Report of Political Expenditures of Corporation, Union,
+    etc.
+-   FORM**B72** – Form B-7 Direct contributions
+-   FORM**B73** – Form B-7 Indirect contributions
+
+When we read all these sub-forms together and join them against the
+committee statements then we can identify all transactions.
+
+## Read
 
 ``` r
-glimpse(ne$formb1d)
+ne_all <- map(
+  .x = raw_all,
+  .f = read_delim,
+  delim = "|",
+  escape_backslash = FALSE,
+  escape_double = FALSE,
+  col_types = cols(.default = col_character()),
+  trim_ws = TRUE
+)
 ```
 
-    #> Observations: 79,172
-    #> Variables: 9
-    #> $ committee_name      <chr> "NEBRASKANS FOR TERM LIMITS (DISSOLVED)", "NEBRASKANS FOR TERM LIMIT…
-    #> $ committee_id        <chr> "99BQC00006", "99BQC00006", "99BQC00006", "99BQC00006", "99BQC00006"…
-    #> $ date_received       <chr> "06/30/2000", "06/30/2000", "06/30/2000", "06/30/2000", "06/30/2000"…
-    #> $ payee_name          <chr> "SMITH, LES                    ", "SUTTON, CAROLYN               ", …
-    #> $ payee_address       <chr> "RT 1 BOX 266, PALMYRA NE 68418          ", "904 S 153RD ST, OMAHA N…
-    #> $ expenditure_purpose <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "SETTLEM…
-    #> $ expenditure_date    <chr> "06/13/2000", "06/13/2000", "06/13/2000", "06/13/2000", "06/13/2000"…
-    #> $ amount              <chr> "139", "490", "60", "151", "190.5", "13.8", "575", "501", "0", "0", …
-    #> $ in_kind             <chr> "0", "0", "0", "0", "0", "0", "0", "0", "10000", "20000", "12452.86"…
+### Format
 
-#### Form B-2
+Now that each of the files is read as an element of a list, we can
+format them for combination and matching against the tables containing
+full information on the filing committees.
 
-[form B-2](http://www.nadc.nebraska.gov/docs/B-2-2018.doc "b-2") covers
-Political Party Committees, where Item 5 of that form asks the party to:
-
-> List expenditures of any amount which were made to or for the benefit
-> of candidates or ballot questions. If your committee made multiple
-> contributions in support or opposition to the same candidate or ballot
-> question committee, also list the total accumulated contributions
-> given for the election. Expenditures made in support of more than one
-> candidate or ballot question committee must be allocated (E.g. the
-> purchase of a newspaper ad advocating support or opposition to more
-> than one candidate or ballot question).
+#### A Forms
 
 ``` r
-glimpse(ne$formb2b)
+a1 <- ne_all$forma1 %>% 
+  select(starts_with("committee")) %>% 
+  rename(committee_id = committee_id_number) %>% 
+  distinct()
 ```
 
-    #> Observations: 5,479
-    #> Variables: 11
-    #> $ committee_id                      <chr> "99PPC00024", "99PPC00024", "99PPC00024", "99PPC00024"…
-    #> $ date_received                     <chr> "11/23/2000", "11/23/2000", "11/23/2000", "11/23/2000"…
-    #> $ committee_id_expenditure_is_for   <chr> "99CAC00286", "99CAC00255", "99CAC00255", "99CAC00169"…
-    #> $ support_oppose                    <chr> "0", "0", "0", "0", "0", "0", "0", "0", "0", "0", "0",…
-    #> $ nature_of_expenditure             <chr> "I", "K", "I", "I", "I", "I", "I", "K", "I", "I", "K",…
-    #> $ expenditure_date                  <chr> "10/01/2000", "10/20/2000", "10/01/2000", "10/01/2000"…
-    #> $ amount                            <chr> "46.88", "5", "46.88", "46.88", "46.9", "46.88", "46.8…
-    #> $ description                       <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
-    #> $ line_id                           <chr> "014", "022", "026", "016", "006", "027", "017", "025"…
-    #> $ report_id                         <chr> "FRIENDS OF DREW MILLER", "DUDA FOR COUNTY BOARD", "DU…
-    #> $ committee_name_expenditure_is_for <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
-
-#### Form B-4
-
-[form B-4](http://www.nadc.nebraska.gov/docs/B-4-2018.doc "b-4") covers
-Independent Committees, where Section 1 of Schedule B asks the committee
-to:
-
-> Indicate the total amount of expenditures, for or against each
-> Nebraska candidate or ballot question (B.Q.) or other allowed
-> committee (including a political party), during this reporting period
-> and the total for the calendar year to date. An expenditure made in
-> support of more than one candidate or ballot question must be
-> apportioned reasonably among the candidates or ballot questions
-> supported or opposed. “Expenditure” for the purpose of this schedule
-> includes direct and in-kind contributions, loans, independent
-> expenditures, and all other disbursements of funds made in support of
-> or in opposition to Nebraska state and local candidates and ballot
-> questions.
+#### B Forms
 
 ``` r
-glimpse(ne$formb4b1)
-```
-
-    #> Observations: 41,369
-    #> Variables: 11
-    #> $ form_id_number             <chr> "127", "128", "129", "130", "131", "132", "133", "134", "135"…
-    #> $ committee_id               <chr> "99PAC00016", "99PAC00016", "99PAC00016", "99PAC00016", "99PA…
-    #> $ date_received              <chr> "01/24/2000", "01/24/2000", "01/24/2000", "01/24/2000", "01/2…
-    #> $ committee_expenditure_id   <chr> "99CAC00276", "99CAC00284", "99CAC00178", "99CAC00384", "99CA…
-    #> $ support_oppose             <chr> "0", "0", "0", "0", "0", "0", "0", "0", "0", "0", "0", "0", "…
-    #> $ nature_of_expenditure      <chr> "D", "D", "D", "D", "D", "D", "D", "D", "D", "D", "D", "D", "…
-    #> $ expenditure_date           <chr> "11/16/1999", "11/16/1999", "10/20/1999", "10/15/1999", "02/2…
-    #> $ amount                     <chr> "1000", "500", "600", "1000", "100", "500", "100", "200", "50…
-    #> $ expense_category           <chr> "026", "026", "026", "026", "026", "026", "026", "026", "026"…
-    #> $ report_id                  <chr> "KRISTENSEN FOR LEGISLATURE", "MATZKE FOR LEGISLATURE", "PEOP…
-    #> $ expenditure_committee_name <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
-
-#### Bind
-
-We can bind these three data frames together to create a single data
-frame of expenditures by candidates, ballot committees, political
-committees, and party committees. Then we can clean and parse this
-combined data frame.
-
-Before we bind these tables together, we need to rename some variables
-and add additional information from other forms so we can identify the
-parties on both sides of each expenditure.
-
-``` r
-fixed_b1d <- ne$formb1d %>% 
-  # add from b1
-  select(-committee_name) %>% 
-  map_dfr(str_trim)
-```
-
-``` r
-fixed_b2b <- ne$formb2b %>%
-  remove_empty("cols") %>% 
-  rename(
-    committee_payee_id = committee_id_expenditure_is_for,
-    # this file has last cols shifted left
-    committee_payee_name = report_id,
-  ) %>% 
-  left_join(
-    ne$forma1 %>% select(starts_with("committee")), 
-    by = c("committee_payee_id" = "committee_id_number")
-  ) %>% 
-  select(-committee_name)
-```
-
-``` r
-fixed_b4b1 <- ne$formb4b1 %>%
-  remove_empty("cols") %>% 
-  rename(
-    committee_payee_id = committee_expenditure_id,
-    # this file has last cols shifted left
-    committee_payee_name = report_id,
-  ) %>%
-  # add committee geo info
-  left_join(
-    ne$forma1 %>% select(starts_with("committee")), 
-    by = c("committee_payee_id" = "committee_id_number")
-  ) %>% 
+b1d <- ne_all$formb1d %>% 
   select(
-    -committee_name,
-    -form_id_number
+    everything()
+  ) %>% 
+  mutate(
+    is_in_kind = in_kind != 0,
+    amount = coalesce(
+      na_if(amount, 0),
+      na_if(in_kind, 0)
+    )
+  ) %>% 
+  select(-in_kind) %>% 
+  rename(expenditure_amount = amount)
+```
+
+``` r
+b2b <- ne_all$formb2b %>% 
+  mutate(is_in_kind = nature_of_expenditure == "K") %>% 
+  select(
+    committee_id,
+    date_received,
+    expenditure_date,
+    expenditure_amount = amount,
+    payee_id = committee_id_expenditure_is_for,
+    payee_name = report_id,
+    expenditure_purpose = description,
+    is_in_kind
   )
 ```
 
 ``` r
-ne_exp <- 
-  bind_rows(
-    fixed_b1d, 
-    fixed_b2b, 
-    fixed_b4b1
-  ) %>% 
-  na_if("0") %>% 
+b4b1 <- ne_all$formb4b1 %>% 
+  mutate(is_in_kind = nature_of_expenditure == "K") %>% 
+  select(
+    committee_id,
+    date_received,
+    expenditure_date,
+    expenditure_amount = amount,
+    payee_id = committee_expenditure_id,
+    payee_name = report_id,
+    expenditure_purpose = expense_category,
+    is_in_kind
+  )
+```
+
+### Join
+
+``` r
+names(b1d) %in% names(b2b)
+#> [1] FALSE  TRUE  TRUE  TRUE FALSE  TRUE  TRUE  TRUE  TRUE
+names(b1d) %in% names(b4b1)
+#> [1] FALSE  TRUE  TRUE  TRUE FALSE  TRUE  TRUE  TRUE  TRUE
+```
+
+``` r
+bx <- bind_rows(
+  "Form B1D" = b1d, 
+  "Form B2B" = b2b, 
+  "Form B4B1" = b4b1, 
+  .id = "source_form"
+)
+```
+
+``` r
+bex <- bx %>% 
+  relocate(payee_id, .before = payee_name)
+```
+
+``` r
+nee <- right_join(a1, bx, by = "committee_id")
+nee <- nee %>% 
   mutate(
-    date_received = parse_date(date_received, "%m/%d/%Y"),
-    expenditure_date = parse_date(expenditure_date, "%m/%d/%Y"),
-    oppose_clean = parse_logical(support_oppose),
-    amount_clean = parse_number(coalesce(amount, in_kind)),
-    inkind_clean = !is.na(in_kind),
-    payee_name_clean = coalesce(payee_name, committee_payee_name)
+    committee_name = coalesce(committee_name.x, committee_name.y),
+    .keep = "unused",
+    .after = committee_id
+  )
+```
+
+``` r
+nee <- nee %>% 
+  # parse column types
+  type_convert(
+    col_types = cols(
+      date_received = col_date_mdy(),
+      expenditure_date = col_date_mdy(),
+      expenditure_amount = col_double()
+    )
   )
 ```
 
 ## Explore
 
-``` r
-head(ne_exp)
-```
-
-    #> # A tibble: 6 x 24
-    #>   committee_id date_received payee_name payee_address expenditure_pur… expenditure_date amount
-    #>   <chr>        <date>        <chr>      <chr>         <chr>            <date>           <chr> 
-    #> 1 99BQC00006   2000-06-30    SMITH, LES RT 1 BOX 266… <NA>             2000-06-13       139   
-    #> 2 99BQC00006   2000-06-30    SUTTON, C… 904 S 153RD … <NA>             2000-06-13       490   
-    #> 3 99BQC00006   2000-06-30    TERRELL, … 5209 S 8TH P… <NA>             2000-06-13       60    
-    #> 4 99BQC00006   2000-06-30    TIPPERY, … 2000 NORTHRI… <NA>             2000-06-13       151   
-    #> 5 99BQC00006   2000-06-30    VON RIEUT… 4221 MARY CI… <NA>             2000-06-13       190.5 
-    #> 6 99BQC00006   2000-06-30    WILSON, R… 3825 SWIFT #… <NA>             2000-06-13       13.8  
-    #> # … with 17 more variables: in_kind <chr>, committee_payee_id <chr>, support_oppose <chr>,
-    #> #   nature_of_expenditure <chr>, description <chr>, line_id <chr>, committee_payee_name <chr>,
-    #> #   committee_address <chr>, committee_city <chr>, committee_state <chr>, committee_zip <chr>,
-    #> #   committee_type <chr>, expense_category <chr>, oppose_clean <lgl>, amount_clean <dbl>,
-    #> #   inkind_clean <lgl>, payee_name_clean <chr>
+There are 141,082 rows of 16 columns. Each record represents a single
+contribution from an entity to a committee.
 
 ``` r
-tail(ne_exp)
+glimpse(nee)
+#> Rows: 141,082
+#> Columns: 16
+#> $ committee_id        <chr> "08BQC00200", "08BQC00200", "08BQC00200", "08BQC00200", "08BQC00200", "08BQC00200", "08BQC…
+#> $ committee_name      <chr> "25 COUNTIES FOR OUR FUTURE", "25 COUNTIES FOR OUR FUTURE", "25 COUNTIES FOR OUR FUTURE", …
+#> $ committee_address   <chr> "PO BOX 2024; 1413 CRANE AVENUE", "PO BOX 2024; 1413 CRANE AVENUE", "PO BOX 2024; 1413 CRA…
+#> $ committee_city      <chr> "HASTINGS", "HASTINGS", "HASTINGS", "HASTINGS", "HASTINGS", "HASTINGS", "HASTINGS", "HASTI…
+#> $ committee_state     <chr> "NE", "NE", "NE", "NE", "NE", "NE", "NE", "NE", "NE", "NE", "NE", "NE", "NE", "NE", "NE", …
+#> $ committee_zip       <chr> "68902", "68902", "68902", "68902", "68902", "68902", "68902", "68902", "68902", "68902", …
+#> $ committee_type      <chr> "B", "B", "B", "B", "B", "B", "B", "B", "B", "B", "B", "B", "C", "C", "C", "C", "C", "C", …
+#> $ source_form         <chr> "Form B1D", "Form B1D", "Form B1D", "Form B1D", "Form B1D", "Form B1D", "Form B1D", "Form …
+#> $ date_received       <date> 2008-10-07, 2008-10-24, 2008-10-24, 2008-10-24, 2008-10-24, 2008-10-24, 2008-10-24, 2009-…
+#> $ payee_name          <chr> "DAVID & ASSOCIATES", "KLIR RADIO", "KRNY FM RADIO", "KKPR/KLIQ RADIO", "KRGI FM RADIO", "…
+#> $ payee_address       <chr> "PO BOX 130, HASTINGS, NE", "418 25TH ST COLUMBUS, NE 68601", "PO BOX 669 KEARNEY, NE 6884…
+#> $ expenditure_purpose <chr> "MEDIA PRODUCTION, MANAGEMENT, RESEARCH", "RADIO ADVERTISING SPOTS", "RADIO ADVERTISING SP…
+#> $ expenditure_date    <date> 2008-09-12, 2008-10-13, 2008-10-13, 2008-10-13, 2008-10-13, 2008-10-13, 2008-10-13, 2008-…
+#> $ expenditure_amount  <dbl> 16484.43, 4500.75, 3000.50, 2244.85, 3031.95, 3032.80, 4099.98, 520.00, 8765.89, 20000.00,…
+#> $ is_in_kind          <lgl> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, FALSE, NA, NA, NA, NA, NA, NA, NA, NA,…
+#> $ payee_id            <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
+tail(nee)
+#> # A tibble: 6 × 16
+#>   committee_id committee_name   committee_addre… committee_city committee_state committee_zip committee_type source_form
+#>   <chr>        <chr>            <chr>            <chr>          <chr>           <chr>         <chr>          <chr>      
+#> 1 11CAC01578   ANNA WISHART FO… <NA>             <NA>           <NA>            <NA>          <NA>           Form B1D   
+#> 2 11CAC01578   ANNA WISHART FO… <NA>             <NA>           <NA>            <NA>          <NA>           Form B1D   
+#> 3 11CAC01578   ANNA WISHART FO… <NA>             <NA>           <NA>            <NA>          <NA>           Form B1D   
+#> 4 11CAC01578   ANNA WISHART FO… <NA>             <NA>           <NA>            <NA>          <NA>           Form B1D   
+#> 5 11CAC01578   ANNA WISHART FO… <NA>             <NA>           <NA>            <NA>          <NA>           Form B1D   
+#> 6 11CAC01578   ANNA WISHART FO… <NA>             <NA>           <NA>            <NA>          <NA>           Form B1D   
+#> # … with 8 more variables: date_received <date>, payee_name <chr>, payee_address <chr>, expenditure_purpose <chr>,
+#> #   expenditure_date <date>, expenditure_amount <dbl>, is_in_kind <lgl>, payee_id <chr>
 ```
-
-    #> # A tibble: 6 x 24
-    #>   committee_id date_received payee_name payee_address expenditure_pur… expenditure_date amount
-    #>   <chr>        <date>        <chr>      <chr>         <chr>            <date>           <chr> 
-    #> 1 99PAC00069   2019-01-15    <NA>       <NA>          <NA>             2018-12-12       100   
-    #> 2 99PAC00069   2019-01-15    <NA>       <NA>          <NA>             2018-12-17       2500  
-    #> 3 99PAC00069   2019-01-15    <NA>       <NA>          <NA>             2018-11-08       238.63
-    #> 4 99PAC00069   2019-01-15    <NA>       <NA>          <NA>             2018-11-15       296.57
-    #> 5 99PAC00023   2018-04-16    <NA>       <NA>          <NA>             2017-07-17       1200  
-    #> 6 13PAC00171   2017-04-27    <NA>       <NA>          <NA>             2017-03-31       100   
-    #> # … with 17 more variables: in_kind <chr>, committee_payee_id <chr>, support_oppose <chr>,
-    #> #   nature_of_expenditure <chr>, description <chr>, line_id <chr>, committee_payee_name <chr>,
-    #> #   committee_address <chr>, committee_city <chr>, committee_state <chr>, committee_zip <chr>,
-    #> #   committee_type <chr>, expense_category <chr>, oppose_clean <lgl>, amount_clean <dbl>,
-    #> #   inkind_clean <lgl>, payee_name_clean <chr>
-
-``` r
-glimpse(sample_frac(ne_exp))
-```
-
-    #> Observations: 126,030
-    #> Variables: 24
-    #> $ committee_id          <chr> "99PAC00020", "07CAC01052", "15CAC02071", "16CAC02122", "99PAC0009…
-    #> $ date_received         <date> 2014-04-08, 2011-01-31, 2016-02-01, 2017-01-17, 2010-01-12, 2004-…
-    #> $ payee_name            <chr> NA, "GLOOR, MIKE", "ADELLE BURKE", "BICKEL, TAYLOR", NA, NA, "WNAX…
-    #> $ payee_address         <chr> NA, "3115 BRENTWOOD CIRCLE, GRAND ISLAND, NE", NA, "781016 CALIFOR…
-    #> $ expenditure_purpose   <chr> NA, "MILEAGE", "CONSULTING", "CONSULTING", NA, NA, "RADIO AD", NA,…
-    #> $ expenditure_date      <date> 2014-02-04, 2010-12-31, 2015-09-18, 2016-11-16, 2009-11-25, 2004-…
-    #> $ amount                <chr> "100", "1040.55", "600", "1999", "1000", "10000", "506", "500", "5…
-    #> $ in_kind               <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, "34.12", NA, NA, NA, NA, NA, N…
-    #> $ committee_payee_id    <chr> "14CAC01858", NA, NA, NA, "05CAC00757", "99PPC00003", NA, "07CAC01…
-    #> $ support_oppose        <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
-    #> $ nature_of_expenditure <chr> "D", NA, NA, NA, "D", "D", NA, "D", NA, NA, "I", NA, "E", "D", NA,…
-    #> $ description           <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "GOLDENROD PRINTING - MAIL…
-    #> $ line_id               <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
-    #> $ committee_payee_name  <chr> "STINNER FOR LEGISLATURE", NA, NA, NA, "WIGHTMAN FOR LEGISLATURE (…
-    #> $ committee_address     <chr> "1510 BROADWAY", NA, NA, NA, "PO BOX 100", "201 N 8TH ST STE 210",…
-    #> $ committee_city        <chr> "SCOTTSBLUFF", NA, NA, NA, "LEXINGTON", "LINCOLN", NA, "OMAHA", NA…
-    #> $ committee_state       <chr> "NE", NA, NA, NA, "NE", "NE", NA, "NE", NA, NA, "NE", NA, "NE", "N…
-    #> $ committee_zip         <chr> "69361", NA, NA, NA, "68850", "68508", NA, "68112", NA, NA, "68028…
-    #> $ committee_type        <chr> "C", NA, NA, NA, "C", "T", NA, "C", NA, NA, "C", NA, "C", "C", NA,…
-    #> $ expense_category      <chr> "026", NA, NA, NA, "026", "028", NA, "026", NA, NA, NA, NA, "026",…
-    #> $ oppose_clean          <lgl> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
-    #> $ amount_clean          <dbl> 100.00, 1040.55, 600.00, 1999.00, 1000.00, 10000.00, 506.00, 500.0…
-    #> $ inkind_clean          <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, TRU…
-    #> $ payee_name_clean      <chr> "STINNER FOR LEGISLATURE", "GLOOR, MIKE", "ADELLE BURKE", "BICKEL,…
 
 ### Missing
 
+Columns vary in their degree of missing values.
+
 ``` r
-glimpse_fun(ne_exp, count_na)
+col_stats(nee, count_na)
+#> # A tibble: 16 × 4
+#>    col                 class      n         p
+#>    <chr>               <chr>  <int>     <dbl>
+#>  1 committee_id        <chr>      0 0        
+#>  2 committee_name      <chr>      8 0.0000567
+#>  3 committee_address   <chr>     25 0.000177 
+#>  4 committee_city      <chr>    975 0.00691  
+#>  5 committee_state     <chr>    975 0.00691  
+#>  6 committee_zip       <chr>     24 0.000170 
+#>  7 committee_type      <chr>     13 0.0000921
+#>  8 source_form         <chr>      0 0        
+#>  9 date_received       <date>     0 0        
+#> 10 payee_name          <chr>     67 0.000475 
+#> 11 payee_address       <chr>  63994 0.454    
+#> 12 expenditure_purpose <chr>   4922 0.0349   
+#> 13 expenditure_date    <date>     0 0        
+#> 14 expenditure_amount  <dbl>   3640 0.0258   
+#> 15 is_in_kind          <lgl>  45842 0.325    
+#> 16 payee_id            <chr>  89323 0.633
 ```
 
-    #> # A tibble: 24 x 4
-    #>    var                   type       n        p
-    #>    <chr>                 <chr>  <int>    <dbl>
-    #>  1 committee_id          chr        0 0       
-    #>  2 date_received         date       0 0       
-    #>  3 payee_name            chr    46914 0.372   
-    #>  4 payee_address         chr    58807 0.467   
-    #>  5 expenditure_purpose   chr    49685 0.394   
-    #>  6 expenditure_date      date       0 0       
-    #>  7 amount                chr    14050 0.111   
-    #>  8 in_kind               chr   115174 0.914   
-    #>  9 committee_payee_id    chr    79172 0.628   
-    #> 10 support_oppose        chr   124166 0.985   
-    #> 11 nature_of_expenditure chr    79187 0.628   
-    #> 12 description           chr   122366 0.971   
-    #> 13 line_id               chr   125616 0.997   
-    #> 14 committee_payee_name  chr    79173 0.628   
-    #> 15 committee_address     chr    79412 0.630   
-    #> 16 committee_city        chr    79779 0.633   
-    #> 17 committee_state       chr    79779 0.633   
-    #> 18 committee_zip         chr    79200 0.628   
-    #> 19 committee_type        chr    79200 0.628   
-    #> 20 expense_category      chr    84728 0.672   
-    #> 21 oppose_clean          lgl   124166 0.985   
-    #> 22 amount_clean          dbl     3420 0.0271  
-    #> 23 inkind_clean          lgl        0 0       
-    #> 24 payee_name_clean      chr       57 0.000452
-
-Since the combined data frame comes from three different sources, it’s
-difficult to identify what are expected missing values and those that
-should be flagged. `na_flag` will equal `TRUE` when a record has either
-(1) no `amount_clean` (`amount` or `in_kind`) *or* (2) no
-`payee_name_clean` (`payee_name` for individuals or
-`payee_committee_name` for others).
+We can flag any record missing a key variable needed to identify a
+transaction.
 
 ``` r
-sum(is.na(ne_exp$payee_name) & is.na(ne_exp$committee_payee_name))
-#> [1] 57
+key_vars <- c("expenditure_date", "committee_name", 
+              "expenditure_amount", "payee_name")
+nee <- flag_na(nee, all_of(key_vars))
+mean(nee$na_flag)
+#> [1] 0.02621879
+sum(nee$na_flag)
+#> [1] 3699
+```
 
-ne_exp <- ne_exp %>% 
-  mutate(na_flag = is.na(amount_clean) | is.na(payee_name_clean))
+``` r
+nee %>% 
+  filter(na_flag) %>% 
+  select(all_of(key_vars), source_form)
+#> # A tibble: 3,699 × 5
+#>    expenditure_date committee_name                            expenditure_amount payee_name                  source_form
+#>    <date>           <chr>                                                  <dbl> <chr>                       <chr>      
+#>  1 2007-04-12       ABBOTT FOR COUNCIL (DISSOLVED)                          NA   STEAMFITTERS AND PLUMBERS … Form B1D   
+#>  2 2012-10-01       AL DAVIS FOR LEGISLATURE                                25.8 <NA>                        Form B1D   
+#>  3 2017-01-17       AL DAVIS FOR LEGISLATURE                                NA   AL DAVIS                    Form B1D   
+#>  4 2006-05-10       AMY LINDSAY FOR MUD BOARD (DISSOLVED)                   NA   SUAREZ, ALFRED M            Form B1D   
+#>  5 2015-03-25       ANDY STEBBING FOR MAYOR                                 NA   LANCASTER CO TREASURER      Form B1D   
+#>  6 2018-12-31       ANGIE MORONES-HARRIS                                    NA   ANGIE MORONES HARRIS        Form B1D   
+#>  7 2012-04-25       ANN FERLIC ASHFORD FOR REGENT (DISSOLVED)               NA   KFAB,KGOR                   Form B1D   
+#>  8 2012-04-12       ANN FERLIC ASHFORD FOR REGENT (DISSOLVED)               NA   UNIONIST                    Form B1D   
+#>  9 2012-03-31       ANN FERLIC ASHFORD FOR REGENT (DISSOLVED)               NA   UNIONIST                    Form B1D   
+#> 10 2012-04-25       ANN FERLIC ASHFORD FOR REGENT (DISSOLVED)               NA   KSRZ                        Form B1D   
+#> # … with 3,689 more rows
+```
 
-sum(ne_exp$na_flag)
-#> [1] 3465
-percent(mean(ne_exp$na_flag))
-#> [1] "2.75%"
+``` r
+nee %>% 
+  group_by(source_form) %>% 
+  summarise(
+    n = n(),
+    no_key_comm = mean(is.na(committee_name)),
+    no_key_name = mean(is.na(payee_name)),
+    no_key_amt = mean(is.na(expenditure_amount))
+  ) %>% 
+  arrange(desc(n))
+#> # A tibble: 3 × 5
+#>   source_form     n no_key_comm no_key_name no_key_amt
+#>   <chr>       <int>       <dbl>       <dbl>      <dbl>
+#> 1 Form B1D    89323   0.0000896   0.000728    0.0406  
+#> 2 Form B4B1   45722   0           0.0000219   0.000328
+#> 3 Form B2B     6037   0           0.000166    0
 ```
 
 ### Duplicates
 
-We can use `campfin::flag_dupes()` to create a new `dupe_flag` logical
-variable, identifying every duplicate row *after* the initial occurance.
+We can also flag any record completely duplicated across every column.
 
 ``` r
-ne_exp <- flag_dupes(ne_exp)
-sum(ne_exp$dupe_flag)
-#> [1] 648
+nee <- flag_dupes(nee, everything())
+sum(nee$dupe_flag)
+#> [1] 1017
+mean(nee$dupe_flag)
+#> [1] 0.007208574
 ```
 
 ``` r
-filter(ne_exp, dupe_flag)
+nee %>% 
+  filter(dupe_flag) %>% 
+  select(all_of(key_vars)) %>% 
+  arrange(expenditure_date)
+#> # A tibble: 1,017 × 4
+#>    expenditure_date committee_name                      expenditure_amount payee_name                 
+#>    <date>           <chr>                                            <dbl> <chr>                      
+#>  1 1999-01-14       CITIZENS FOR WESELY                               2300 PAT EGAN INSURANCE, INC.   
+#>  2 1999-01-14       CITIZENS FOR WESELY                               2300 PAT EGAN INSURANCE, INC.   
+#>  3 1999-01-14       CITIZENS FOR WESELY                               2300 PAT EGAN INSURANCE, INC.   
+#>  4 1999-01-20       CITIZENS FOR WESELY                               2500 BATT, BOB                  
+#>  5 1999-01-20       CITIZENS FOR WESELY                               2500 BATT, BOB                  
+#>  6 1999-02-15       JOHNSON FOR MAYOR (DISSOLVED)                     1176 STRICTLY BUSINESS MAGAZINE 
+#>  7 1999-02-15       JOHNSON FOR MAYOR (DISSOLVED)                     1176 STRICTLY BUSINESS MAGAZINE 
+#>  8 1999-02-15       JOHNSON FOR MAYOR (DISSOLVED)                     1176 STRICTLY BUSINESS MAGAZINE 
+#>  9 1999-03-04       JON CAMP FOR CITY COUNCIL COMMITTEE                 15 BORCHERT, MARSHALL & JENNIE
+#> 10 1999-03-04       JON CAMP FOR CITY COUNCIL COMMITTEE                 15 BORCHERT, MARSHALL & JENNIE
+#> # … with 1,007 more rows
 ```
-
-    #> # A tibble: 648 x 26
-    #>    committee_id date_received payee_name payee_address expenditure_pur… expenditure_date amount
-    #>    <chr>        <date>        <chr>      <chr>         <chr>            <date>           <chr> 
-    #>  1 99BQC00032   1999-07-01    AMERICANS… 504 E. MADIS… <NA>             1999-06-01       <NA>  
-    #>  2 99BQC00032   1999-07-01    AMERICANS… 504 E. MADIS… <NA>             1999-06-03       <NA>  
-    #>  3 99BQC00032   1999-07-01    AMERICANS… 811 SOUTH 13… <NA>             1999-06-29       <NA>  
-    #>  4 99BQC00032   1999-07-01    COALITION… BOX 587,      <NA>             1999-06-03       <NA>  
-    #>  5 99BQC00032   1999-07-01    COALITION… BOX 587,      <NA>             1999-06-07       <NA>  
-    #>  6 99BQC00032   1999-10-05    AMERICANS… 811 SOUTH 13… <NA>             1999-09-13       <NA>  
-    #>  7 99BQC00038   2000-04-11    BARNHART … 2600 Farnam … <NA>             2000-03-20       <NA>  
-    #>  8 99BQC00038   2000-04-11    BASS & AS… 2027 DODGE S… <NA>             2000-03-01       <NA>  
-    #>  9 99BQC00038   2000-04-11    COX JOHNS… 440 REGENCY … <NA>             2000-03-23       <NA>  
-    #> 10 99BQC00038   2000-04-11    DAYSPRING… 8982 J ST, O… <NA>             2000-03-16       <NA>  
-    #> # … with 638 more rows, and 19 more variables: in_kind <chr>, committee_payee_id <chr>,
-    #> #   support_oppose <chr>, nature_of_expenditure <chr>, description <chr>, line_id <chr>,
-    #> #   committee_payee_name <chr>, committee_address <chr>, committee_city <chr>,
-    #> #   committee_state <chr>, committee_zip <chr>, committee_type <chr>, expense_category <chr>,
-    #> #   oppose_clean <lgl>, amount_clean <dbl>, inkind_clean <lgl>, payee_name_clean <chr>,
-    #> #   na_flag <lgl>, dupe_flag <lgl>
 
 ### Categorical
 
 ``` r
-glimpse_fun(ne_exp, n_distinct)
+col_stats(nee, n_distinct)
+#> # A tibble: 18 × 4
+#>    col                 class      n         p
+#>    <chr>               <chr>  <int>     <dbl>
+#>  1 committee_id        <chr>   1878 0.0133   
+#>  2 committee_name      <chr>   1873 0.0133   
+#>  3 committee_address   <chr>   1742 0.0123   
+#>  4 committee_city      <chr>    192 0.00136  
+#>  5 committee_state     <chr>     12 0.0000851
+#>  6 committee_zip       <chr>    287 0.00203  
+#>  7 committee_type      <chr>      8 0.0000567
+#>  8 source_form         <chr>      3 0.0000213
+#>  9 date_received       <date>  2597 0.0184   
+#> 10 payee_name          <chr>  23476 0.166    
+#> 11 payee_address       <chr>  31373 0.222    
+#> 12 expenditure_purpose <chr>  29808 0.211    
+#> 13 expenditure_date    <date>  8121 0.0576   
+#> 14 expenditure_amount  <dbl>  41774 0.296    
+#> 15 is_in_kind          <lgl>      3 0.0000213
+#> 16 payee_id            <chr>   2108 0.0149   
+#> 17 na_flag             <lgl>      2 0.0000142
+#> 18 dupe_flag           <lgl>      2 0.0000142
 ```
 
-    #> # A tibble: 26 x 4
-    #>    var                   type      n         p
-    #>    <chr>                 <chr> <int>     <dbl>
-    #>  1 committee_id          chr    1713 0.0136   
-    #>  2 date_received         date   2315 0.0184   
-    #>  3 payee_name            chr   19832 0.157    
-    #>  4 payee_address         chr   28462 0.226    
-    #>  5 expenditure_purpose   chr   26593 0.211    
-    #>  6 expenditure_date      date   7330 0.0582   
-    #>  7 amount                chr   35529 0.282    
-    #>  8 in_kind               chr    4616 0.0366   
-    #>  9 committee_payee_id    chr    1933 0.0153   
-    #> 10 support_oppose        chr       2 0.0000159
-    #> 11 nature_of_expenditure chr       8 0.0000635
-    #> 12 description           chr     482 0.00382  
-    #> 13 line_id               chr      33 0.000262 
-    #> 14 committee_payee_name  chr    1928 0.0153   
-    #> 15 committee_address     chr    1248 0.00990  
-    #> 16 committee_city        chr     191 0.00152  
-    #> 17 committee_state       chr       7 0.0000555
-    #> 18 committee_zip         chr     295 0.00234  
-    #> 19 committee_type        chr       8 0.0000635
-    #> 20 expense_category      chr       6 0.0000476
-    #> 21 oppose_clean          lgl       2 0.0000159
-    #> 22 amount_clean          dbl   37971 0.301    
-    #> 23 inkind_clean          lgl       2 0.0000159
-    #> 24 payee_name_clean      chr   21607 0.171    
-    #> 25 na_flag               lgl       2 0.0000159
-    #> 26 dupe_flag             lgl       2 0.0000159
+![](../plots/distinct_plots-1.png)<!-- -->![](../plots/distinct_plots-2.png)<!-- -->![](../plots/distinct_plots-3.png)<!-- -->
 
-![](../plots/words_bar-1.png)<!-- -->
-
-![](../plots/nature_bar-1.png)<!-- -->
-
-### Continuous
-
-#### Amounts
+### Amounts
 
 ``` r
-summary(ne$amount)
-#> Length  Class   Mode 
-#>      0   NULL   NULL
-sum(ne$amount < 0, na.rm = TRUE)
-#> [1] 0
+nee$expenditure_amount <- round(nee$expenditure_amount, 2)
 ```
 
 ``` r
-ne_exp %>% 
-  ggplot(aes(amount_clean)) +
-  geom_histogram() +
-  scale_x_continuous(
-    trans = "log10",
-    labels = dollar
-  ) +
-  labs(
-    title = "Nebraska Expenditure Amount Distribution",
-    x = "Word",
-    y = "Count"
-  )
+summary(nee$expenditure_amount)
+#>    Min. 1st Qu.  Median    Mean 3rd Qu.    Max.    NA's 
+#>  -42328     133     500    1749    1020 2096511    3640
+mean(nee$expenditure_amount <= 0, na.rm = TRUE)
+#> [1] 0.00384162
 ```
 
-![](../plots/unnamed-chunk-1-1.png)<!-- -->
-
-#### Dates
+These are the records with the minimum and maximum amounts.
 
 ``` r
-ne_exp <- mutate(ne_exp, expenditure_year = year(expenditure_date))
+glimpse(nee[c(which.max(nee$expenditure_amount), which.min(nee$expenditure_amount)), ])
+#> Rows: 2
+#> Columns: 18
+#> $ committee_id        <chr> "15BQC00421", "99BQC00090"
+#> $ committee_name      <chr> "KEEP THE MONEY IN NEBRASKA", "KEEP THE MONEY IN NEBRASKA COMM., INC.(DISSOLVED)"
+#> $ committee_address   <chr> "301 S 12TH STREET SUITE 140", "1299 FARNAM ST.  SUITE 1501"
+#> $ committee_city      <chr> "LINCOLN", "OMAHA"
+#> $ committee_state     <chr> "NE", "NE"
+#> $ committee_zip       <chr> "68508", "68102"
+#> $ committee_type      <chr> "B", "B"
+#> $ source_form         <chr> "Form B1D", "Form B1D"
+#> $ date_received       <date> 2020-12-31, 2005-01-12
+#> $ payee_name          <chr> "BLUE EARTH MARKETING", "ROBINSON & MUENSTER"
+#> $ payee_address       <chr> "600 4TH STREET STE 201 SIOUX CITY IA 511", NA
+#> $ expenditure_purpose <chr> "ADVERTISING", "PARTIAL REFUND OF PHONE BANK"
+#> $ expenditure_date    <date> 2020-11-25, 2004-10-27
+#> $ expenditure_amount  <dbl> 2096510.9, -42328.4
+#> $ is_in_kind          <lgl> NA, FALSE
+#> $ payee_id            <chr> NA, NA
+#> $ na_flag             <lgl> FALSE, FALSE
+#> $ dupe_flag           <lgl> FALSE, FALSE
+```
+
+![](../plots/hist_amount-1.png)<!-- -->
+
+### Dates
+
+We can add the calendar year from `date` with `lubridate::year()`
+
+``` r
+nee <- mutate(nee, expenditure_year = year(expenditure_date))
 ```
 
 ``` r
-min(ne_exp$expenditure_date)
+min(nee$expenditure_date)
 #> [1] "15-04-07"
-sum(ne_exp$expenditure_year < 1999)
-#> [1] 352
-max(ne_exp$expenditure_date)
+sum(nee$expenditure_year < 1984)
+#> [1] 23
+max(nee$expenditure_date)
 #> [1] "9915-12-31"
-sum(ne_exp$expenditure_date > today())
-#> [1] 34
+sum(nee$expenditure_date > today())
+#> [1] 22
 ```
 
-``` r
-ne_exp <- ne_exp %>% 
-  mutate(
-    date_flag = or(expenditure_year < 1999, expenditure_year > 2019),
-    date_clean = as_date(ifelse(date_flag, NA, expenditure_date)),
-    year_clean = year(date_clean)
-  )
+![](../plots/bar_year-1.png)<!-- -->
 
-sum(ne_exp$date_flag)
-#> [1] 375
-```
+### Wrangle
 
-## Wrangle
+#### Address
 
-### Address
-
-There is very little consistency in the format of `payee_address`.
+There is very little consistency in the format of payee_address.
 
 ``` r
-# Mon Aug  5 17:19:45 2019 ------------------------------
 sample(
-  x = na.omit(ne_exp$payee_address),
+  x = na.omit(nee$payee_address),
   size = 20
 )
+#>  [1] "PO BOX 337"                               "PO BOX 45913 OMAHA NE 68145"             
+#>  [3] "PO BOX 413 WAYNE NE 68787"                "226 BORDEAUX ST CHADRON NE 69337"        
+#>  [5] "2145 NORTH COTNER BLVD."                  "18331 DUPONT CIRCLE  OMAHA NE 68130"     
+#>  [7] "6720 NW 6TH STREET, LINCOLN, NE  68521"   "4113 S. 84TH ST. OMAHA, NE"              
+#>  [9] "11922 S. 53RD STREET PAPILLION NE 68133"  "8510 KST OMAHA NE 68127"                 
+#> [11] "POB 409101, OGDEN, UT"                    "128 N 13 ST #508 LINCOLN NE 68508"       
+#> [13] "802 SO. 80TH ST.  OMAHA NE 68114"         "2801 CORNHUSKER HIGHWAY LINCOLN NE 68564"
+#> [15] "2630 N 27TH ST LINCOLN, NE 68521"         "700 LINCOLN SQ. 121 S. 13TH ST"          
+#> [17] "1715 W 41ST ST KEARNEY, NE 68845"         "NORFOLK"                                 
+#> [19] "3606 N 156 ST STE 101-308, OMAHA, NE"     "9907 ONTARIO ST, OMAHA, NE"
 ```
 
-    #>  [1] "10031 MAPLE STREET, OMAHA NE 68134"      "1602 STONE ST FALLS CITY, NE 68355"     
-    #>  [3] "1850 M ST., NW  WASHINGTON, DC"          "P.O. BOX 80009 LINCOLN, NE"             
-    #>  [5] "700 R ST., LINCOLN NE 68508"             "LINCOLN NE 68502"                       
-    #>  [7] "514 UNIVERSITY"                          "5865 GRAND PAVILION WAY #302, VA"       
-    #>  [9] "1310 HARVEY STREET OMAHA NE 68102"       "P.O. BOX 8169"                          
-    #> [11] "1480 CO RD J OAKLAND,NE 68045"           "OMNI SHOREHAM HOTEL, WASHINGTON, DC"    
-    #> [13] "9746 CADY AVE, OMAHA, NE"                "1919 S. 40TH, STE 302, Lincoln NE 68506"
-    #> [15] "13467 CHANDLER RD, Omaha NE 68138"       "2907 S 186 PLAZA #702 OMAHA NE 68130"   
-    #> [17] "5200 SW 30 DAVENPORT IA 52802"           "3940 CRNHSKR HWY STE 400 LINCOLN 68504" 
-    #> [19] "5620 V ST., OMAHA, NE"                   "1013 W 75TH ST OMAHA, NE 68114"
+We can use some character patterns to pull out ZIP codes and state
+abbreviations but cities would be too difficult.
 
 ``` r
-ne_exp <- ne_exp %>% 
+nee <- nee %>% 
   mutate(
     zip_clean = payee_address %>% 
       str_extract(rx_zip) %>% 
@@ -825,32 +738,124 @@ ne_exp <- ne_exp %>%
 ```
 
 ``` r
-ne_exp <- ne_exp %>% 
+pull_state <- function(x) {
+  out <- NA_character_
+  found <- FALSE
+  i <- 1
+  while (!found & i < length(state.abb)) {
+    out <- str_extract(x, sprintf("(?<=\\s|,)(%s)(?=\\s|$)", state.abb[i]))
+    found <- !is.na(out)
+    i <- i + 1
+  }
+  return(out)
+}
+```
+
+``` r
+nee <- nee %>% 
   mutate(
-    state_clean = payee_address %>% 
-      str_extract(rx_state) %>%
-      normal_state(
-        abbreviate = TRUE,
-        na = na_city,
-        na_rep = TRUE,
-        valid = geo$state
-      )
+    state_clean = map_chr(payee_address, pull_state)
   )
+```
+
+``` r
+nee %>% 
+  filter(!is.na(payee_address)) %>% 
+  select(payee_address, state_clean) %>% 
+  group_by(state_clean) %>% slice(1)
+#> # A tibble: 50 × 2
+#>    payee_address                            state_clean
+#>    <chr>                                    <chr>      
+#>  1 BENTONVILLE, AK                          AK         
+#>  2 111 INDUSTRIAL PARK RD PRATTVILLE, AL 36 AL         
+#>  3 PO BOX 7836 PINE BLUFF, AR 71611         AR         
+#>  4 4714 E VIRGINIA AVE PHOENIX AZ 85008     AZ         
+#>  5 1020 ENTERPRISE WAY, SUNNYDALE CA        CA         
+#>  6 13085 W.CEDARDR,#313 LAKEWOOD, CO 80203  CO         
+#>  7 9270 PIONEER CT                          CT         
+#>  8 PO BOX 15298, WILMINGTON DE              DE         
+#>  9 2145 SUNNYDALE BLVD CLEATWATER,FL 33765  FL         
+#> 10 PO BOX4002 ACWORTH GA 30101              GA         
+#> # … with 40 more rows
 ```
 
 ## Conclude
 
+``` r
+glimpse(sample_n(nee, 1000))
+#> Rows: 1,000
+#> Columns: 21
+#> $ committee_id        <chr> "07CAC01062", "12CAC01641", "05BQC00110", "06CAC00849", "20CAC02742", "99PAC00069", "05CAC…
+#> $ committee_name      <chr> "KATHY CAMPBELL FOR LEGISLATURE", "SCHEER FOR STATE LEGISLATURE (2016)", "NEBRASKANS FOR L…
+#> $ committee_address   <chr> "6111 CHARTWELL LANE", "2705 DOVER DRIVE", "RT 1, BOX 34", "4608 N 193 AVE CIR", "9151 NW …
+#> $ committee_city      <chr> "LINCOLN", "NORFOLK", "ELYRIA", "ELKHORN", "MALCOLM", "LINCOLN", "BOYS TOWN", "GRETNA", "O…
+#> $ committee_state     <chr> "NE", "NE", "NE", "NE", "NE", "NE", "NE", "NE", "NE", "NE", "NE", "NE", "NE", "NE", "NE", …
+#> $ committee_zip       <chr> "68516", "68701", "68837", "68022", "68402", "68508", "68010", "68028", "68102", "68104", …
+#> $ committee_type      <chr> "C", "C", "B", "C", "C", "S", "C", "C", "S", "C", "S", "C", "C", "S", "B", "C", "C", "C", …
+#> $ source_form         <chr> "Form B1D", "Form B1D", "Form B1D", "Form B1D", "Form B1D", "Form B4B1", "Form B1D", "Form…
+#> $ date_received       <date> 2016-01-25, 2018-01-22, 2005-08-02, 2006-05-01, 2020-10-26, 2001-06-11, 2006-04-11, 2012-…
+#> $ payee_name          <chr> "BRAD ASHFORD", "TONI MAXEY", "CRAICHY, SHARON", "COREY MCKINSEY COMPANY", "USPS", "MAYHEW…
+#> $ payee_address       <chr> "PO BOX 24023 OMAHA NE 68124", "308 SOUTH 8TH STREET NORFOLK NE 68701", "HC 81, BOX 19", "…
+#> $ expenditure_purpose <chr> "EVENT TICKET", "ADDRESSING CHRISTMAS CARDS", "EXPENSES INCURRED PETITION SIGNATURES", "DO…
+#> $ expenditure_date    <date> 2015-07-18, 2017-12-18, 2005-07-25, 2006-04-14, 2020-09-30, 2001-04-23, 2006-03-14, 2012-…
+#> $ expenditure_amount  <dbl> 500.00, 110.00, 358.83, 313.94, 170.75, 212.50, NA, 1000.00, 1000.00, 856.00, 2500.00, 148…
+#> $ is_in_kind          <lgl> FALSE, FALSE, TRUE, NA, NA, FALSE, FALSE, NA, FALSE, TRUE, FALSE, FALSE, NA, FALSE, NA, NA…
+#> $ payee_id            <chr> NA, NA, NA, NA, NA, "99CAC00560", NA, NA, "05CAC00744", NA, "10CAC01468", NA, NA, "07CAC01…
+#> $ na_flag             <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, TRUE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, …
+#> $ dupe_flag           <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE,…
+#> $ expenditure_year    <dbl> 2015, 2017, 2005, 2006, 2020, 2001, 2006, 2012, 2010, 2000, 2010, 2018, 2008, 2010, 2016, …
+#> $ zip_clean           <chr> "68124", "68701", NA, NA, "68501", NA, NA, NA, NA, NA, NA, "32258", NA, NA, NA, "68504", N…
+#> $ state_clean         <chr> "NE", "NE", NA, "NE", "NE", NA, NA, "NE", NA, NA, NA, "FL", NA, NA, "UT", "NE", NA, "NE", …
+```
+
+1.  There are 141,082 records in the database.
+2.  There are 1,017 duplicate records in the database.
+3.  The range and distribution of `amount` and `date` seem reasonable.
+4.  There are 3,699 records missing key variables.
+5.  Consistency in geographic data has been improved with
+    `campfin::normal_*()`.
+6.  The 4-digit `year` variable has been created with
+    `lubridate::year()`.
+
 ## Export
 
+Now the file can be saved on disk for upload to the Accountability
+server. We will name the object using a date range of the records
+included.
+
 ``` r
-work_dir <- here("ne", "expends", "data", "working")
-dir_create(work_dir)
+clean_dir <- dir_create(here("ne", "expends", "data", "clean"))
+clean_csv <- path(clean_dir, glue("ne_expends_19970101-20220401.csv"))
+clean_rds <- path_ext_set(clean_csv, "rds")
+basename(clean_csv)
+#> [1] "ne_expends_19970101-20220401.csv"
 ```
 
 ``` r
-ne_exp %>% 
-  write_csv(
-    na = "",
-    path = glue("{work_dir}/ne_expends_working.csv")
+write_csv(nee, clean_csv, na = "")
+write_rds(nee, clean_rds, compress = "xz")
+(clean_size <- file_size(clean_csv))
+#> 27.8M
+```
+
+## Upload
+
+We can use the `aws.s3::put_object()` to upload the text file to the IRW
+server.
+
+``` r
+aws_key <- path("csv", basename(clean_csv))
+if (!object_exists(aws_key, "publicaccountability")) {
+  put_object(
+    file = clean_csv,
+    object = aws_key, 
+    bucket = "publicaccountability",
+    acl = "public-read",
+    show_progress = TRUE,
+    multipart = TRUE
   )
+}
+aws_head <- head_object(aws_key, "publicaccountability")
+(aws_size <- as_fs_bytes(attr(aws_head, "content-length")))
+unname(aws_size == clean_size)
 ```
