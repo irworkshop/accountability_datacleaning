@@ -1,0 +1,633 @@
+---
+title: "Minnesota Contracts"
+author: "Kiernan Nicholls"
+date: "`r date()`"
+output:
+  github_document: 
+    df_print: tibble
+    toc: true
+    toc_dept: 3
+editor_options: 
+  chunk_output_type: console
+---
+
+<!-- Place comments regarding knitting here -->
+
+```{r setup, include=FALSE, purl=FALSE}
+library(knitr)
+opts_chunk$set(
+  eval = TRUE,
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  error = FALSE,
+  collapse = TRUE,
+  comment = "#>",
+  fig.path = "../plots/",
+  fig.width = 10,
+  dpi = 300
+)
+if (!interactive()) {
+  options(width = 120)
+  set.seed(5)
+}
+```
+
+```{r create-docs-dir, eval=FALSE, echo=FALSE, include=FALSE}
+doc_dir <- fs::dir_create(here::here("state", "mn", "contracts", "docs"))
+```
+
+## Project
+
+The Accountability Project is an effort to cut across data silos and give
+journalists, policy professionals, activists, and the public at large a simple
+way to search across huge volumes of public data about people and organizations.
+
+Our goal is to standardize public data on a few key fields by thinking of each
+dataset row as a transaction. For each transaction there should be (at least) 3
+variables:
+
+1. All **parties** to a transaction.
+2. The **date** of the transaction.
+3. The **amount** of money involved.
+
+## Objectives
+
+This document describes the process used to complete the following objectives:
+
+1. How many records are in the database?
+1. Check for entirely duplicated records.
+1. Check ranges of continuous variables.
+1. Is there anything blank or missing?
+1. Check for consistency issues.
+1. Create a five-digit ZIP Code called `zip`.
+1. Create a `year` field from the transaction date.
+1. Make sure there is data on both parties to a transaction.
+
+## Packages
+
+The following packages are needed to collect, manipulate, visualize, analyze,
+and communicate these results. The `pacman` package will facilitate their
+installation and attachment.
+
+```{r load-packages, message=FALSE, warning=FALSE, error=FALSE}
+if (!require("pacman")) {
+  install.packages("pacman")
+}
+pacman::p_load(
+  tidyverse, # data manipulation
+  lubridate, # datetime strings
+  gluedown, # printing markdown
+  janitor, # clean data frames
+  campfin, # custom irw tools
+  aws.s3, # aws cloud storage
+  refinr, # cluster & merge
+  scales, # format strings
+  readxl, # read excel files
+  knitr, # knit documents
+  vroom, # fast reading
+  rvest, # scrape html
+  glue, # code strings
+  here, # project paths
+  httr, # http requests
+  fs # local storage 
+)
+```
+
+This diary was run using `campfin` version `r packageVersion("campfin")`.
+
+```{r campfin-version}
+packageVersion("campfin")
+```
+
+```{r package-options, echo=FALSE}
+options(options(knitr.kable.NA = ""))
+```
+
+This document should be run as part of the `R_tap` project, which lives as a
+sub-directory of the more general, language-agnostic
+[`irworkshop/accountability_datacleaning`][tap] GitHub repository.
+
+The `R_tap` project uses the [RStudio projects][rproj] feature and should be
+run as such. The project also uses the dynamic `here::here()` tool for file
+paths relative to _your_ machine.
+
+```{r where-here}
+# where does this document knit?
+here::i_am("state/mn/contracts/docs/mn_contracts_diary.Rmd")
+```
+
+[tap]: https://github.com/irworkshop/accountability_datacleaning
+[rproj]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects
+
+## Source
+
+Minnesota state contracts were retrieved via a state records requests filed by
+students at American University.
+
+## Download
+
+The ZIP archive containing the requested data can be downloaded from the
+Investigative Reporting Workshop's server.
+
+```{r raw-dir}
+raw_key <- "jla_class_data2021/fwdminnesotadatarequest.zip"
+raw_dir <- dir_create(here("state", "mn", "contracts", "data", "raw"))
+raw_zip <- path(raw_dir, raw_key)
+```
+
+```{r raw-download}
+if (!file_exists(raw_zip)) {
+  save_object(
+    object = raw_key,
+    bucket = "publicaccountability",
+    file = raw_zip,
+    show_progress = TRUE
+  )
+}
+```
+
+```{r}
+raw_xls <- unzip(raw_zip, exdir = raw_dir)
+```
+
+## Read
+
+The monthly excel files can be read together and combined into a single table.
+
+```{r}
+mnc <- map(
+  .x = raw_xls, 
+  .f = read_excel, 
+  skip = 2, 
+  col_names = FALSE,
+  col_types = "text"
+)
+```
+
+One file is missing column names, which can be added from another file.
+
+```{r fix-names}
+mnc[[4]] <- bind_rows(mnc[[1]][1, -3], mnc[[4]])
+mnc <- map(
+  .x = mnc,
+  .f = function(dat) {
+    dat <- dat |> 
+      remove_empty("cols") |> 
+      row_to_names(1)
+    if (is.na(last(dat[[1]]))) {
+      dat <- head(dat, -1)
+    }
+    return(dat)
+  }
+)
+```
+
+```{r bind-rows}
+mnc <- mnc |> 
+  set_names(basename(raw_xls)) |> 
+  bind_rows(.id = "source_file") |>
+  relocate(source_file, .after = last_col()) |> 
+  clean_names(case = "snake") |> 
+  type_convert(
+    na = c("", "-"),
+    col_types = cols(
+      .default = col_character(),
+      payment_day_dt = col_date_mdy(),
+      payment_amt = col_double()
+    )
+  )
+```
+
+The `supplier` should be separated into two separate values for the ID and name.
+
+```{r supp-split}
+mnc <- mnc |> 
+  separate(
+    col = supplier,
+    into = c("supplier_id", "supplier_name"),
+    sep = "(?<=\\d)\\s-\\s"
+  )
+```
+
+## Explore
+
+There are `r comma(nrow(mnc))` rows of `r ncol(mnc)` columns. Each record
+represents a single contract between the state and a vendor.
+
+```{r glimpse}
+glimpse(mnc)
+tail(mnc)
+```
+
+### Missing
+
+Columns vary in their degree of missing values.
+
+```{r na-count}
+col_stats(mnc, count_na)
+```
+
+We can flag any record missing a key variable needed to identify a transaction.
+
+```{r na-flag}
+key_vars <- c("payment_day_dt", "payment_amt", "supplier_name")
+mnc <- flag_na(mnc, all_of(key_vars))
+sum(mnc$na_flag)
+```
+
+```{r na-view}
+# remove if no missing
+if (sum(is.na(mnc$na_flag)) == 0) {
+  mnc <- select(mnc, -na_flag)
+}
+```
+
+There are no rows missing key values.
+
+### Duplicates
+
+We can also flag any record completely duplicated across every column.
+
+```{r dupe-flag}
+mnc <- flag_dupes(mnc, everything())
+sum(mnc$dupe_flag)
+```
+
+There are now duplicate rows.
+
+### Categorical
+
+```{r distinct-count}
+col_stats(mnc, n_distinct)
+```
+
+### Amounts
+
+```{r amount-round}
+# fix floating point precision
+mnc$payment_amt <- round(mnc$payment_amt, digits = 2)
+```
+
+```{r amount-summary}
+summary(mnc$payment_amt)
+mean(mnc$payment_amt <= 0)
+```
+
+These are the records with the minimum and maximum amounts.
+
+```{r amount-minmax}
+glimpse(mnc[c(which.max(mnc$payment_amt), which.min(mnc$payment_amt)), ])
+```
+
+The distribution of amount values are typically log-normal.
+
+```{r hist-amount, echo=FALSE}
+mnc %>%
+  ggplot(aes(payment_amt)) +
+  geom_histogram(fill = dark2["purple"]) +
+  scale_y_continuous(labels = comma) +
+  scale_x_continuous(
+    breaks = c(1 %o% 10^(0:6)),
+    labels = dollar,
+    trans = "log10"
+  ) +
+  labs(
+    title = "Minnesota Contracts Amount Distribution",
+    caption = "Source: {source}",
+    x = "Amount",
+    y = "Count"
+  )
+```
+
+### Dates
+
+We can add the calendar year from `date` with `lubridate::year()`.
+
+```{r date-year}
+mnc <- mutate(mnc, payment_day_yr = year(payment_day_dt))
+```
+
+```{r date-range}
+min(mnc$payment_day_dt)
+sum(mnc$payment_day_yr < 2000)
+max(mnc$payment_day_dt)
+sum(mnc$payment_day_dt > today())
+```
+
+All of these contracts are from the 12 months between November 2020 and October
+2021.
+
+```{r bar-year, echo=FALSE}
+mnc %>% 
+  count(y = payment_day_yr, m = month(payment_day_dt, TRUE, TRUE)) |> 
+  mutate(lbl = as_factor(paste(y, m, sep = "."))) %>% 
+  ggplot(aes(x = lbl, y = n)) +
+  geom_col() + 
+  scale_fill_brewer(palette = "Dark2") +
+  scale_y_continuous(labels = comma) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "Minnesota Contracts by Year",
+    caption = "Source: {source}",
+    fill = "Election Year",
+    x = "Year Made",
+    y = "Count"
+  )
+```
+
+## Wrangle
+
+To improve the searchability of the database, we will perform some consistent,
+confident string normalization. For geographic variables like city names and
+ZIP codes, the corresponding `campfin::normal_*()` functions are tailor made to 
+facilitate this process.
+
+### ZIP
+
+For ZIP codes, the `campfin::normal_zip()` function will attempt to create
+valid _five_ digit codes by removing the ZIP+4 suffix and returning leading
+zeroes dropped by other programs like Microsoft Excel.
+
+```{r zip-norm}
+mnc <- mnc %>% 
+  mutate(
+    zip_norm = normal_zip(
+      zip = supplier_address_postal_cd,
+      na_rep = TRUE
+    )
+  )
+```
+
+```{r zip-progress}
+progress_table(
+  mnc$supplier_address_postal_cd,
+  mnc$zip_norm,
+  compare = valid_zip
+)
+```
+
+### State
+
+The existing `supplier_address_state` column is already normalized. All invalid
+abbreviations are from other countries.
+
+```{r state-check}
+prop_in(mnc$supplier_address_state, valid_state)
+unique(what_out(mnc$supplier_address_state, valid_state))
+```
+
+### City
+
+Cities are the most difficult geographic variable to normalize, simply due to
+the wide variety of valid cities and formats.
+
+#### Normal
+
+The `campfin::normal_city()` function is a good start, again converting case,
+removing punctuation, but _expanding_ USPS abbreviations. We can also remove
+`invalid_city` values.
+
+```{r city-norm}
+norm_city <- mnc %>% 
+  distinct(supplier_address_city, supplier_address_state, zip_norm) %>% 
+  mutate(
+    city_norm = normal_city(
+      city = supplier_address_city, 
+      abbs = usps_city,
+      states = c("MN", "DC", "MINNESOTA"),
+      na = invalid_city,
+      na_rep = TRUE
+    )
+  )
+```
+
+#### Swap
+
+We can further improve normalization by comparing our normalized value
+against the _expected_ value for that record's state abbreviation and ZIP code.
+If the normalized value is either an abbreviation for or very similar to the
+expected value, we can confidently swap those two.
+
+```{r city-swap}
+norm_city <- norm_city %>% 
+  rename(city_raw = supplier_address_city) %>% 
+  left_join(
+    y = zipcodes,
+    by = c(
+      "supplier_address_state" = "state",
+      "zip_norm" = "zip"
+    )
+  ) %>% 
+  rename(city_match = city) %>% 
+  mutate(
+    match_abb = is_abbrev(city_norm, city_match),
+    match_dist = str_dist(city_norm, city_match),
+    city_swap = if_else(
+      condition = !is.na(match_dist) & (match_abb | match_dist == 1),
+      true = city_match,
+      false = city_norm
+    )
+  ) %>% 
+  select(
+    -city_match,
+    -match_dist,
+    -match_abb
+  )
+```
+
+```{r city-rejoin}
+mnc <- left_join(
+  x = mnc,
+  y = norm_city,
+  by = c(
+    "supplier_address_city" = "city_raw", 
+    "supplier_address_state", 
+    "zip_norm"
+  )
+)
+```
+
+#### Refine
+
+The [OpenRefine][or] algorithms can be used to group similar strings and replace
+the less common versions with their most common counterpart. This can greatly
+reduce inconsistency, but with low confidence; we will only keep any refined
+strings that have a valid city/state/zip combination.
+
+[or]: https://openrefine.org/
+
+```{r city-refine}
+good_refine <- mnc %>% 
+  mutate(
+    city_refine = city_swap %>% 
+      key_collision_merge() %>% 
+      n_gram_merge(numgram = 1)
+  ) %>% 
+  filter(city_refine != city_swap) %>% 
+  inner_join(
+    y = zipcodes,
+    by = c(
+      "city_refine" = "city",
+      "supplier_address_state" = "state",
+      "zip_norm" = "zip"
+    )
+  )
+```
+
+```{r city-count, echo=FALSE}
+good_refine %>%
+  count(
+    supplier_address_state, 
+    zip_norm, 
+    city_swap, 
+    city_refine,
+    sort = TRUE
+  )
+```
+
+Then we can join the refined values back to the database.
+
+```{r city-join}
+mnc <- mnc %>% 
+  left_join(good_refine, by = names(.)) %>% 
+  mutate(city_refine = coalesce(city_refine, city_swap))
+```
+
+#### Progress
+
+Our goal for normalization was to increase the proportion of city values known
+to be valid and reduce the total distinct values by correcting misspellings.
+
+```{r city-progress, echo=FALSE}
+many_city <- c(valid_city, extra_city)
+progress <- progress_table(
+  str_to_upper(mnc$supplier_address_city),
+  mnc$city_norm,
+  mnc$city_swap,
+  mnc$city_refine,
+  compare = many_city
+) %>% mutate(stage = as_factor(stage))
+progress %>% 
+    mutate(across(stage, md_code)) %>% 
+    kable(digits = 3)
+```
+
+You can see how the percentage of valid values increased with each stage.
+
+```{r bar-progress, echo=FALSE}
+raw_in <- percent(prop_in(mnc$supplier_address_city, valid_city))
+progress %>% 
+  ggplot(aes(x = stage, y = prop_in)) +
+  geom_hline(yintercept = 0.99) +
+  geom_col(fill = dark2["purple"]) +
+  coord_cartesian(ylim = c(0.50, 1)) +
+  scale_y_continuous(labels = percent) +
+  labs(
+    title = "Minnesota City Normalization Progress",
+    subtitle = glue("Raw at {raw_in} before conversion to uppercase"),
+    x = "Stage",
+    y = "Percent Valid"
+  )
+```
+
+More importantly, the number of distinct values decreased each stage. We were
+able to confidently change many distinct invalid values to their valid
+equivalent.
+
+```{r bar-distinct, echo=FALSE}
+progress %>% 
+  select(
+    stage, 
+    all = n_distinct,
+    bad = n_diff
+  ) %>% 
+  mutate(good = all - bad) %>% 
+  pivot_longer(c("good", "bad")) %>% 
+  mutate(name = name == "good") %>% 
+  ggplot(aes(x = stage, y = value)) +
+  geom_col(aes(fill = name)) +
+  scale_fill_brewer(palette = "Dark2", direction = -1) +
+  scale_y_continuous(labels = comma) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "Minnesota City Normalization Progress",
+    subtitle = "Distinct values, valid and invalid",
+    x = "Stage",
+    y = "Distinct Values",
+    fill = "Valid"
+  )
+```
+
+Before exporting, we can remove the intermediary normalization columns and
+rename all added variables with the `_clean` suffix.
+
+```{r clean-select}
+mnc <- mnc %>% 
+  select(
+    -city_norm,
+    -city_swap,
+    city_clean = city_refine
+  ) %>% 
+  rename_all(~str_replace(., "_norm", "_clean")) %>% 
+  rename_all(~str_remove(., "_raw")) %>% 
+  relocate(city_clean, .before = zip_clean)
+```
+
+## Conclude
+
+```{r clean-glimpse}
+glimpse(sample_n(mnc, 1000))
+```
+
+1. There are `r comma(nrow(mnc))` records in the database.
+1. There are `r comma(sum(mnc$dupe_flag))` duplicate records in the database.
+1. The range and distribution of `amount` and `date` seem reasonable.
+1. There are `r comma(sum(mnc$na_flag))` records missing key variables.
+1. Consistency in geographic data has been improved with `campfin::normal_*()`.
+1. The 4-digit `year` variable has been created with `lubridate::year()`.
+
+## Export
+
+Now the file can be saved on disk for upload to the Accountability server. We
+will name the object using a date range of the records included.
+
+```{r clean-timestamp}
+min_dt <- str_remove_all(min(mnc$payment_day_dt), "-")
+max_dt <- str_remove_all(max(mnc$payment_day_dt), "-")
+csv_ts <- paste(min_dt, max_dt, sep = "-")
+```
+
+```{r clean-dir}
+clean_dir <- dir_create(here("state", "mn", "contracts", "data", "clean"))
+clean_csv <- path(clean_dir, glue("mn_contracts_{csv_ts}.csv"))
+clean_rds <- path_ext_set(clean_csv, "rds")
+basename(clean_csv)
+```
+
+```{r clean-write}
+write_csv(mnc, clean_csv, na = "")
+write_rds(mnc, clean_rds, compress = "xz")
+(clean_size <- file_size(clean_csv))
+```
+
+## Upload
+
+We can use the `aws.s3::put_object()` to upload the text file to the IRW server.
+
+```{r aws-upload, eval=FALSE}
+aws_key <- path("csv", basename(clean_csv))
+if (!object_exists(aws_key, "publicaccountability")) {
+  put_object(
+    file = clean_csv,
+    object = aws_key, 
+    bucket = "publicaccountability",
+    acl = "public-read",
+    show_progress = TRUE,
+    multipart = TRUE
+  )
+}
+aws_head <- head_object(aws_key, "publicaccountability")
+(aws_size <- as_fs_bytes(attr(aws_head, "content-length")))
+unname(aws_size == clean_size)
+```
