@@ -1,0 +1,633 @@
+---
+title: "Connecticut Businesses"
+author: "Kiernan Nicholls"
+date: "`r date()`"
+output:
+  github_document: 
+    df_print: tibble
+    toc: true
+    toc_dept: 3
+editor_options: 
+  chunk_output_type: console
+---
+
+<!-- Place comments regarding knitting here -->
+
+```{r setup, include=FALSE, purl=FALSE}
+library(knitr)
+opts_chunk$set(
+  eval = TRUE,
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  error = FALSE,
+  collapse = TRUE,
+  comment = "#>",
+  fig.path = "../plots/",
+  fig.width = 10,
+  dpi = 300
+)
+if (!interactive()) {
+  options(width = 120)
+  set.seed(5)
+}
+```
+
+```{r create-docs-dir, eval=FALSE, echo=FALSE, include=FALSE}
+doc_dir <- fs::dir_create(here::here("state", "ct", "Businesses", "docs"))
+```
+
+## Project
+
+The Accountability Project is an effort to cut across data silos and give
+journalists, policy professionals, activists, and the public at large a simple
+way to search across huge volumes of public data about people and organizations.
+
+Our goal is to standardize public data on a few key fields by thinking of each
+dataset row as a transaction. For each transaction there should be (at least) 3
+variables:
+
+1. All **parties** to a transaction.
+2. The **date** of the transaction.
+3. The **amount** of money involved.
+
+## Objectives
+
+This document describes the process used to complete the following objectives:
+
+1. How many records are in the database?
+1. Check for entirely duplicated records.
+1. Check ranges of continuous variables.
+1. Is there anything blank or missing?
+1. Check for consistency issues.
+1. Create a five-digit ZIP Code called `zip`.
+1. Create a `year` field from the transaction date.
+1. Make sure there is data on both parties to a transaction.
+
+## Packages
+
+The following packages are needed to collect, manipulate, visualize, analyze,
+and communicate these results. The `pacman` package will facilitate their
+installation and attachment.
+
+```{r load-packages, message=FALSE, warning=FALSE, error=FALSE}
+if (!require("pacman")) {
+  install.packages("pacman")
+}
+pacman::p_load(
+  tidyverse, # data manipulation
+  lubridate, # datetime strings
+  gluedown, # printing markdown
+  janitor, # clean data frames
+  campfin, # custom irw tools
+  aws.s3, # aws cloud storage
+  refinr, # cluster & merge
+  scales, # format strings
+  knitr, # knit documents
+  vroom, # fast reading
+  rvest, # scrape html
+  glue, # code strings
+  here, # project paths
+  httr, # http requests
+  fs # local storage 
+)
+```
+
+This diary was run using `campfin` version `r packageVersion("campfin")`.
+
+```{r campfin-version}
+packageVersion("campfin")
+```
+
+```{r package-options, echo=FALSE}
+options(options(knitr.kable.NA = ""))
+```
+
+This document should be run as part of the `R_tap` project, which lives as a
+sub-directory of the more general, language-agnostic
+[`irworkshop/accountability_datacleaning`][tap] GitHub repository.
+
+The `R_tap` project uses the [RStudio projects][rproj] feature and should be
+run as such. The project also uses the dynamic `here::here()` tool for file
+paths relative to _your_ machine.
+
+```{r where-here}
+# where does this document knit?
+here::i_am("state/ct/business/docs/ct_business_diary.Rmd")
+```
+
+[tap]: https://github.com/irworkshop/accountability_datacleaning
+[rproj]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects
+
+## Source
+
+Businesses registrations in Connecticut are provided online as part of a
+collaboration between the [CT Data Collaborative][dc] and the Office of The
+Secretary of State.
+
+[dc]: http://ctbusiness.ctdata.org/#/
+
+> In partnership with the Connecticut Secretary of the State, The Connecticut
+Data Collaborative is excited to present multiple tools to explore business
+registration data from January 1980 to May 2021. This is the first time this
+data has been made open and accessible. Here you will find six ways to explore
+the data.
+
+## Download
+
+We can obtain business [registration data by month][mn] from a public Google 
+Drive folder. This folder can be downloaded as a single ZIP archive and the
+CSV files can then be extracted locally.
+
+[mn]: https://www.ctdata.org/sots-monthly-registrations
+
+```{r}
+self_name <- function(x) {
+  stopifnot(is_character(x))
+  setNames(x, x)
+}
+```
+
+```{r raw-dir}
+raw_dir <- dir_create(here("state", "ct", "business", "data", "raw"))
+raw_csv <- dir_ls(raw_dir, glob = "*.csv")
+raw_zip <- dir_ls(raw_dir, glob = "*.zip")
+if (length(raw_csv) == 0) {
+  raw_csv <- unzip(raw_zip, exdir = raw_dir, junkpaths = TRUE)
+  raw_csv <- self_name(fs_path(sort(str_subset(raw_csv, "csv$"))))
+}
+```
+
+## Read
+
+The monthly CSV files can be read together into a list.
+
+```{r raw-read}
+ctb <- map(
+  .x = raw_csv,
+  .f = read_delim,
+  delim = ",",
+  escape_backslash = FALSE,
+  escape_double = FALSE,
+  col_types = cols(
+    .default = col_character(),
+    annual_report_due_date = col_date(),
+    date_registration = col_date(),
+    woman_owned_organization = col_logical(),
+    veteran_owned_organization = col_logical(),
+    minority_owned_organization = col_logical(),
+    organization_is_lgbtqi_owned = col_logical(),
+    create_dt = col_datetime(),
+    began_transacting_in_ct = col_date(),
+    date_of_organization_meeting = col_date()
+  )
+)
+```
+
+That list of monthly registrations can be combined into a single data frame.
+
+```{r raw-bind}
+ctb <- ctb |> 
+  bind_rows(.id = "source_file") |> 
+  relocate(source_file, .after = last_col()) |> 
+  mutate(across(source_file, basename))
+```
+
+```{r echo=FALSE}
+ctb <- ctb |>
+  relocate(
+    office_jurisdiction_1,
+    office_jurisdiction_2,
+    office_jurisdiction_3,
+    office_jurisdiction_4,
+    .after = office_jurisdiction
+  ) |> 
+    relocate(
+    mailing_jurisdiction_1,
+    mailing_jurisdiction_2,
+    mailing_jurisdiction_3,
+    mailing_jurisdiction_4,
+    .after = mailing_jurisdiction
+  )
+```
+
+We are going to keep the first 30 columns, dropping mostly empty and redundant
+data at the
+
+```{r raw-select}
+ctb <- ctb[, c(1:30, 58)]
+```
+
+## Explore
+
+There are `r comma(nrow(ctb))` rows of `r ncol(ctb)` columns. Each record
+represents a single business registered in Connecticut.
+
+```{r glimpse}
+glimpse(ctb)
+tail(ctb)
+```
+
+### Missing
+
+There are no rows missing a name or creation date.
+
+### Duplicates
+
+There are no duplicate rows.
+
+### Categorical
+
+```{r distinct-count}
+col_stats(ctb, n_distinct)
+```
+
+```{r distinct-plots, echo=FALSE, fig.height=3}
+explore_plot(ctb, business_type)
+explore_plot(ctb, status)
+explore_plot(ctb, citizenship)
+```
+
+```{r lgl-count}
+ctb |> 
+  select(where(is.logical)) |> 
+  map(~round(prop.table(table(.)), 3))
+```
+
+### Dates
+
+We can add the calendar year from `date` with `lubridate::year()`
+
+```{r date-year}
+ctb <- mutate(ctb, year_registration = year(date_registration))
+```
+
+```{r date-range}
+min(ctb$date_registration)
+max(ctb$date_registration)
+```
+
+```{r bar-year, echo=FALSE}
+ctb %>% 
+  count(
+    y = year(date_registration), m = month(date_registration)
+  ) %>% 
+  mutate(
+    lbl = as_factor(paste(y, m, sep = "."))
+  ) |> 
+  ggplot(aes(x = lbl, y = n)) +
+  geom_col(aes(fill = as.character(y))) + 
+  scale_y_continuous(labels = comma) +
+  scale_x_discrete(breaks = NULL) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "Connecticut Businesses by Year",
+    caption = "Source: DT Data Collab.",
+    x = "Year Made",
+    y = "Count",
+    fill = "Year"
+  )
+```
+
+## Wrangle
+
+To improve the searchability of the database, we will perform some consistent,
+confident string normalization. For geographic variables like city names and
+ZIP codes, the corresponding `campfin::normal_*()` functions are tailor made to 
+facilitate this process.
+
+### Address
+
+For the street `addresss` variable, the `campfin::normal_address()` function
+will force consistence case, remove punctuation, and abbreviate official 
+USPS suffixes.
+
+```{r address-norm}
+addr_norm <- ctb %>% 
+  distinct(billingstreet) %>% 
+  mutate(
+    address_norm = normal_address(
+      address = billingstreet,
+      abbs = usps_street,
+      na_rep = TRUE
+    )
+  )
+```
+
+```{r address-view}
+addr_norm
+```
+
+```{r address-join}
+ctb <- left_join(ctb, addr_norm, by = "billingstreet")
+```
+
+### ZIP
+
+For ZIP codes, the `campfin::normal_zip()` function will attempt to create
+valid _five_ digit codes by removing the ZIP+4 suffix and returning leading
+zeroes dropped by other programs like Microsoft Excel.
+
+```{r zip-norm}
+ctb <- ctb %>% 
+  mutate(
+    zip_norm = normal_zip(
+      zip = billingpostalcode,
+      na_rep = TRUE
+    )
+  )
+```
+
+```{r zip-progress}
+progress_table(
+  ctb$billingpostalcode,
+  ctb$zip_norm,
+  compare = valid_zip
+)
+```
+
+### State
+
+Valid two digit state abbreviations can be made using the 
+`campfin::normal_state()` function.
+
+```{r state-norm}
+ctb <- ctb %>% 
+  mutate(
+    state_norm = normal_state(
+      state = billingstate,
+      abbreviate = TRUE,
+      na_rep = TRUE,
+      valid = valid_state
+    )
+  )
+```
+
+```{r state-view}
+ctb %>% 
+  filter(billingstate != state_norm) %>% 
+  count(billingstate, state_norm, sort = TRUE)
+```
+
+```{r state-progress}
+progress_table(
+  ctb$billingstate,
+  ctb$state_norm,
+  compare = valid_state
+)
+```
+
+### City
+
+Cities are the most difficult geographic variable to normalize, simply due to
+the wide variety of valid cities and formats.
+
+#### Normal
+
+The `campfin::normal_city()` function is a good start, again converting case,
+removing punctuation, but _expanding_ USPS abbreviations. We can also remove
+`invalid_city` values.
+
+```{r city-norm}
+norm_city <- ctb %>% 
+  distinct(billingcity, state_norm, zip_norm) %>% 
+  mutate(
+    city_norm = normal_city(
+      city = billingcity, 
+      abbs = usps_city,
+      states = c("CT", "DC", "CONNECTICUT"),
+      na = invalid_city,
+      na_rep = TRUE
+    )
+  )
+```
+
+#### Swap
+
+We can further improve normalization by comparing our normalized value
+against the _expected_ value for that record's state abbreviation and ZIP code.
+If the normalized value is either an abbreviation for or very similar to the
+expected value, we can confidently swap those two.
+
+```{r city-swap}
+norm_city <- norm_city %>% 
+  rename(city_raw = billingcity) %>% 
+  left_join(
+    y = zipcodes,
+    by = c(
+      "state_norm" = "state",
+      "zip_norm" = "zip"
+    )
+  ) %>% 
+  rename(city_match = city) %>% 
+  mutate(
+    match_abb = is_abbrev(city_norm, city_match),
+    match_dist = str_dist(city_norm, city_match),
+    city_swap = if_else(
+      condition = !is.na(match_dist) & (match_abb | match_dist == 1),
+      true = city_match,
+      false = city_norm
+    )
+  ) %>% 
+  select(
+    -city_match,
+    -match_dist,
+    -match_abb
+  )
+```
+
+```{r city-rejoin}
+ctb <- left_join(
+  x = ctb,
+  y = norm_city,
+  by = c(
+    "billingcity" = "city_raw", 
+    "state_norm", 
+    "zip_norm"
+  )
+)
+```
+
+#### Refine
+
+The [OpenRefine][or] algorithms can be used to group similar strings and replace
+the less common versions with their most common counterpart. This can greatly
+reduce inconsistency, but with low confidence; we will only keep any refined
+strings that have a valid city/state/zip combination.
+
+[or]: https://openrefine.org/
+
+```{r city-refine}
+good_refine <- ctb %>% 
+  mutate(
+    city_refine = city_swap %>% 
+      key_collision_merge() %>% 
+      n_gram_merge(numgram = 1)
+  ) %>% 
+  filter(city_refine != city_swap) %>% 
+  inner_join(
+    y = zipcodes,
+    by = c(
+      "city_refine" = "city",
+      "state_norm" = "state",
+      "zip_norm" = "zip"
+    )
+  )
+```
+
+```{r city-count, echo=FALSE}
+good_refine %>%
+  count(
+    state_norm, 
+    zip_norm, 
+    city_swap, 
+    city_refine,
+    sort = TRUE
+  )
+```
+
+Then we can join the refined values back to the database.
+
+```{r city-join}
+ctb <- ctb %>% 
+  left_join(good_refine, by = names(.)) %>% 
+  mutate(city_refine = coalesce(city_refine, city_swap))
+```
+
+#### Progress
+
+Our goal for normalization was to increase the proportion of city values known
+to be valid and reduce the total distinct values by correcting misspellings.
+
+```{r city-progress, echo=FALSE}
+many_city <- c(valid_city, extra_city)
+progress <- progress_table(
+  str_to_upper(ctb$billingcity),
+  ctb$city_norm,
+  ctb$city_swap,
+  ctb$city_refine,
+  compare = many_city
+) %>% mutate(stage = as_factor(stage))
+progress %>% 
+    mutate(across(stage, md_code)) %>% 
+    kable(digits = 3)
+```
+
+You can see how the percentage of valid values increased with each stage.
+
+```{r bar-progress, echo=FALSE}
+raw_in <- percent(prop_in(ctb$billingcity, valid_city))
+progress %>% 
+  ggplot(aes(x = stage, y = prop_in)) +
+  geom_hline(yintercept = 0.99) +
+  geom_col(fill = dark2["purple"]) +
+  coord_cartesian(ylim = c(0.98, 1)) +
+  scale_y_continuous(labels = percent) +
+  labs(
+    title = "Connecticut City Normalization Progress",
+    subtitle = glue("Raw at {raw_in} before conversion to uppercase"),
+    x = "Stage",
+    y = "Percent Valid"
+  )
+```
+
+More importantly, the number of distinct values decreased each stage. We were
+able to confidently change many distinct invalid values to their valid
+equivalent.
+
+```{r bar-distinct, echo=FALSE}
+progress %>% 
+  select(
+    stage, 
+    all = n_distinct,
+    bad = n_diff
+  ) %>% 
+  mutate(good = all - bad) %>% 
+  pivot_longer(c("good", "bad")) %>% 
+  mutate(name = name == "good") %>% 
+  ggplot(aes(x = stage, y = value)) +
+  geom_col(aes(fill = name)) +
+  scale_fill_brewer(palette = "Dark2", direction = -1) +
+  scale_y_continuous(labels = comma) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "Connecticut City Normalization Progress",
+    subtitle = "Distinct values, valid and invalid",
+    x = "Stage",
+    y = "Distinct Values",
+    fill = "Valid"
+  )
+```
+
+Before exporting, we can remove the intermediary normalization columns and
+rename all added variables with the `_clean` suffix.
+
+```{r clean-select}
+ctb <- ctb %>% 
+  select(
+    -city_norm,
+    -city_swap,
+    city_clean = city_refine
+  ) %>% 
+  rename_all(~str_replace(., "_norm", "_clean")) %>% 
+  rename_all(~str_remove(., "_raw")) %>% 
+  relocate(address_clean, city_clean, state_clean, .before = zip_clean)
+```
+
+## Conclude
+
+```{r clean-glimpse}
+glimpse(sample_n(ctb, 1000))
+```
+
+1. There are `r comma(nrow(ctb))` records in the database.
+1. There are `r comma(sum(ctb$dupe_flag))` duplicate records in the database.
+1. The range and distribution of `amount` and `date` seem reasonable.
+1. There are `r comma(sum(ctb$na_flag))` records missing key variables.
+1. Consistency in geographic data has been improved with `campfin::normal_*()`.
+1. The 4-digit `year` variable has been created with `lubridate::year()`.
+
+## Export
+
+Now the file can be saved on disk for upload to the Accountability server. We
+will name the object using a date range of the records included.
+
+```{r clean-timestamp}
+min_dt <- str_remove_all(min(ctb$date_registration), "-")
+max_dt <- str_remove_all(max(ctb$date_registration), "-")
+csv_ts <- paste(min_dt, max_dt, sep = "-")
+```
+
+```{r clean-dir}
+clean_dir <- dir_create(here("state", "ct", "business", "data", "clean"))
+clean_csv <- path(clean_dir, glue("ct_businesses_{csv_ts}.csv"))
+clean_rds <- path_ext_set(clean_csv, "rds")
+basename(clean_csv)
+```
+
+```{r clean-write}
+write_csv(ctb, clean_csv, na = "")
+write_rds(ctb, clean_rds, compress = "xz")
+(clean_size <- file_size(clean_csv))
+```
+
+## Upload
+
+We can use the `aws.s3::put_object()` to upload the text file to the IRW server.
+
+```{r aws-upload, eval=FALSE}
+aws_key <- path("csv", basename(clean_csv))
+if (!object_exists(aws_key, "publicaccountability")) {
+  put_object(
+    file = clean_csv,
+    object = aws_key, 
+    bucket = "publicaccountability",
+    acl = "public-read",
+    show_progress = TRUE,
+    multipart = TRUE
+  )
+}
+aws_head <- head_object(aws_key, "publicaccountability")
+(aws_size <- as_fs_bytes(attr(aws_head, "content-length")))
+unname(aws_size == clean_size)
+```
