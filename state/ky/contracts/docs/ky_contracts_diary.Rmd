@@ -1,0 +1,299 @@
+---
+title: "Kentucky Contracts"
+author: "Kiernan Nicholls"
+date: "`r date()`"
+output:
+  github_document: 
+    df_print: tibble
+    toc: true
+    toc_dept: 3
+editor_options: 
+  chunk_output_type: console
+---
+
+<!-- Place comments regarding knitting here -->
+
+```{r setup, include=FALSE, purl=FALSE}
+library(knitr)
+opts_chunk$set(
+  eval = TRUE,
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  error = FALSE,
+  collapse = TRUE,
+  comment = "#>",
+  fig.path = "../plots/",
+  fig.width = 10,
+  dpi = 300
+)
+if (!interactive()) {
+  options(width = 120)
+  set.seed(5)
+}
+```
+
+```{r create-docs-dir, eval=FALSE, echo=FALSE, include=FALSE}
+doc_dir <- fs::dir_create(here::here("state", "ky", "contracts", "docs"))
+```
+
+## Project
+
+The Accountability Project is an effort to cut across data silos and give
+journalists, policy professionals, activists, and the public at large a simple
+way to search across huge volumes of public data about people and organizations.
+
+Our goal is to standardize public data on a few key fields by thinking of each
+dataset row as a transaction. For each transaction there should be (at least) 3
+variables:
+
+1. All **parties** to a transaction.
+2. The **date** of the transaction.
+3. The **amount** of money involved.
+
+## Objectives
+
+This document describes the process used to complete the following objectives:
+
+1. How many records are in the database?
+1. Check for entirely duplicated records.
+1. Check ranges of continuous variables.
+1. Is there anything blank or missing?
+1. Check for consistency issues.
+1. Create a five-digit ZIP Code called `zip`.
+1. Create a `year` field from the transaction date.
+1. Make sure there is data on both parties to a transaction.
+
+## Packages
+
+The following packages are needed to collect, manipulate, visualize, analyze,
+and communicate these results. The `pacman` package will facilitate their
+installation and attachment.
+
+```{r load-packages, message=FALSE, warning=FALSE, error=FALSE}
+if (!require("pacman")) {
+  install.packages("pacman")
+}
+pacman::p_load(
+  tidyverse, # data manipulation
+  lubridate, # datetime strings
+  gluedown, # printing markdown
+  janitor, # clean data frames
+  campfin, # custom irw tools
+  aws.s3, # aws cloud storage
+  refinr, # cluster & merge
+  readxl, # read excel files
+  scales, # format strings
+  knitr, # knit documents
+  vroom, # fast reading
+  rvest, # scrape html
+  glue, # code strings
+  here, # project paths
+  httr, # http requests
+  fs # local storage 
+)
+```
+
+This diary was run using `campfin` version `r packageVersion("campfin")`.
+
+```{r campfin-version}
+packageVersion("campfin")
+```
+
+```{r package-options, echo=FALSE}
+options(options(knitr.kable.NA = ""))
+```
+
+This document should be run as part of the `R_tap` project, which lives as a
+sub-directory of the more general, language-agnostic
+[`irworkshop/accountability_datacleaning`][tap] GitHub repository.
+
+The `R_tap` project uses the [RStudio projects][rproj] feature and should be
+run as such. The project also uses the dynamic `here::here()` tool for file
+paths relative to _your_ machine.
+
+```{r where-here}
+# where does this document knit?
+here::i_am("state/ky/contracts/docs/ky_contracts_diary.Rmd")
+```
+
+[tap]: https://github.com/irworkshop/accountability_datacleaning
+[rproj]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects
+
+## Source
+
+
+
+## Download
+
+```{r raw-dir}
+raw_key <- "jla_class_data2021/O-22-119 B Morse.zip"
+raw_dir <- dir_create(here("state", "ky", "contracts", "data", "raw"))
+raw_zip <- path(raw_dir, basename(raw_key))
+```
+
+```{r raw-download}
+if (!file_exists(raw_key)) {
+  save_object(
+    object = raw_key,
+    bucket = "publicaccountability",
+    file = raw_zip,
+    show_progress = TRUE
+  )
+}
+```
+
+```{r raw-unzip}
+raw_xls <- unzip(raw_zip, exdir = raw_dir)
+```
+
+## Read
+
+```{r raw-read}
+kyc <- read_excel(raw_xls[2])
+kyc <- mutate(kyc, across(ends_with("Date"), as_date))
+kyc <- clean_names(kyc, case = "snake")
+```
+
+```{r clean-names}
+kyc <- clean_names(kyc, case = "snake")
+```
+
+## Explore
+
+There are `r comma(nrow(kyc))` rows of `r ncol(kyc)` columns. Each record
+represents a single contract between the state and a vendor.
+
+```{r glimpse}
+glimpse(kyc)
+tail(kyc)
+```
+
+### Missing
+
+Columns vary in their degree of missing values.
+
+```{r na-count}
+col_stats(kyc, count_na)
+```
+
+No columns are missing values.
+
+### Duplicates
+
+We can also flag any record completely duplicated across every column.
+
+```{r dupe-flag}
+kyc <- flag_dupes(kyc, -contract_id)
+```
+
+There are no duplicate rows.
+
+### Categorical
+
+```{r distinct-count}
+col_stats(kyc, n_distinct)
+```
+
+```{r distinct-plots, echo=FALSE, fig.height=3}
+explore_plot(kyc, authorization) + scale_x_wrap()
+```
+
+### Amounts
+
+The data from this request does not contain a contract amount, despite that 
+being requested.
+
+### Dates
+
+We can add the calendar year from `date` with `lubridate::year()`
+
+```{r date-year}
+kyc <- mutate(kyc, effective_year = year(effective_date))
+```
+
+```{r date-range}
+min(kyc$effective_date)
+sum(kyc$effective_year < 2000)
+max(kyc$effective_date)
+sum(kyc$effective_date > today())
+```
+
+```{r bar-year, echo=FALSE}
+kyc %>% 
+  count(effective_year) %>% 
+  ggplot(aes(x = effective_year, y = n)) +
+  geom_col(aes(fill = n), color = "black") +
+  scale_fill_viridis_c(option = "C", end = 0.9, guide = "none") +
+  scale_y_continuous(labels = comma) +
+  scale_x_continuous(breaks = seq(1990, 2020, by = 2)) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "Kentucky Contracts by Year",
+    caption = "Source: {source}",
+    x = "Year Made",
+    y = "Count"
+  )
+```
+
+## Wrangle
+
+There are no addresses in this data.
+
+## Conclude
+
+```{r clean-glimpse}
+glimpse(sample_n(kyc, 100))
+```
+
+1. There are `r comma(nrow(kyc))` records in the database.
+1. There are `r comma(sum(kyc$dupe_flag))` duplicate records in the database.
+1. The range and distribution of `amount` and `date` seem reasonable.
+1. There are `r comma(sum(kyc$na_flag))` records missing key variables.
+1. Consistency in geographic data has been improved with `campfin::normal_*()`.
+1. The 4-digit `year` variable has been created with `lubridate::year()`.
+
+## Export
+
+Now the file can be saved on disk for upload to the Accountability server. We
+will name the object using a date range of the records included.
+
+```{r clean-timestamp}
+min_dt <- str_remove_all(min(kyc$effective_date), "-")
+max_dt <- str_remove_all(max(kyc$effective_date), "-")
+csv_ts <- paste(min_dt, max_dt, sep = "-")
+```
+
+```{r clean-dir}
+clean_dir <- dir_create(here("state", "ky", "contracts", "data", "clean"))
+clean_csv <- path(clean_dir, glue("ky_contracts_{csv_ts}.csv"))
+clean_rds <- path_ext_set(clean_csv, "rds")
+basename(clean_csv)
+```
+
+```{r clean-write}
+write_csv(kyc, clean_csv, na = "")
+write_rds(kyc, clean_rds, compress = "xz")
+(clean_size <- file_size(clean_csv))
+```
+
+## Upload
+
+We can use the `aws.s3::put_object()` to upload the text file to the IRW server.
+
+```{r aws-upload, eval=FALSE}
+aws_key <- path("csv", basename(clean_csv))
+if (!object_exists(aws_key, "publicaccountability")) {
+  put_object(
+    file = clean_csv,
+    object = aws_key, 
+    bucket = "publicaccountability",
+    acl = "public-read",
+    show_progress = TRUE,
+    multipart = TRUE
+  )
+}
+aws_head <- head_object(aws_key, "publicaccountability")
+(aws_size <- as_fs_bytes(attr(aws_head, "content-length")))
+unname(aws_size == clean_size)
+```
