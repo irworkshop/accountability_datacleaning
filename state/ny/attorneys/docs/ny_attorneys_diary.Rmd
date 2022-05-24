@@ -1,0 +1,601 @@
+---
+title: "New York Attorneys"
+author: "Kiernan Nicholls"
+date: "`r date()`"
+output:
+  github_document: 
+    df_print: tibble
+    toc: true
+    toc_dept: 3
+editor_options: 
+  chunk_output_type: console
+---
+
+<!-- Place comments regarding knitting here -->
+
+```{r setup, include=FALSE, purl=FALSE}
+library(knitr)
+opts_chunk$set(
+  eval = TRUE,
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  error = FALSE,
+  collapse = TRUE,
+  comment = "#>",
+  fig.path = "../plots/",
+  fig.width = 10,
+  dpi = 300
+)
+if (!interactive()) {
+  options(width = 120)
+  set.seed(5)
+}
+```
+
+```{r create-docs-dir, eval=FALSE, echo=FALSE, include=FALSE}
+doc_dir <- fs::dir_create(here::here("state", "ny", "attorneys", "docs"))
+```
+
+## Project
+
+The Accountability Project is an effort to cut across data silos and give
+journalists, policy professionals, activists, and the public at large a simple
+way to search across huge volumes of public data about people and organizations.
+
+Our goal is to standardize public data on a few key fields by thinking of each
+dataset row as a transaction. For each transaction there should be (at least) 3
+variables:
+
+1. All **parties** to a transaction.
+2. The **date** of the transaction.
+3. The **amount** of money involved.
+
+## Objectives
+
+This document describes the process used to complete the following objectives:
+
+1. How many records are in the database?
+1. Check for entirely duplicated records.
+1. Check ranges of continuous variables.
+1. Is there anything blank or missing?
+1. Check for consistency issues.
+1. Create a five-digit ZIP Code called `zip`.
+1. Create a `year` field from the transaction date.
+1. Make sure there is data on both parties to a transaction.
+
+## Packages
+
+The following packages are needed to collect, manipulate, visualize, analyze,
+and communicate these results. The `pacman` package will facilitate their
+installation and attachment.
+
+```{r load-packages, message=FALSE, warning=FALSE, error=FALSE}
+if (!require("pacman")) {
+  install.packages("pacman")
+}
+pacman::p_load(
+  tidyverse, # data manipulation
+  lubridate, # datetime strings
+  gluedown, # printing markdown
+  jsonlite, # read json files
+  janitor, # clean data frames
+  campfin, # custom irw tools
+  aws.s3, # aws cloud storage
+  refinr, # cluster & merge
+  scales, # format strings
+  knitr, # knit documents
+  vroom, # fast reading
+  rvest, # scrape html
+  glue, # code strings
+  here, # project paths
+  httr, # http requests
+  fs # local storage 
+)
+```
+
+This diary was run using `campfin` version `r packageVersion("campfin")`.
+
+```{r campfin-version}
+packageVersion("campfin")
+```
+
+```{r package-options, echo=FALSE}
+options(options(knitr.kable.NA = ""))
+```
+
+This document should be run as part of the `R_tap` project, which lives as a
+sub-directory of the more general, language-agnostic
+[`irworkshop/accountability_datacleaning`][tap] GitHub repository.
+
+The `R_tap` project uses the [RStudio projects][rproj] feature and should be
+run as such. The project also uses the dynamic `here::here()` tool for file
+paths relative to _your_ machine.
+
+```{r where-here}
+# where does this document knit?
+here::i_am("state/ny/attorneys/docs/ny_attorneys_diary.Rmd")
+```
+
+[tap]: https://github.com/irworkshop/accountability_datacleaning
+[rproj]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects
+
+## Source
+
+We can obtain the New York attorneys data from the [state open data portal][na],
+which gets it's data from the NYS Unified Court System and managed by the NYS 
+Office of Court Administration.
+
+> The data included here is the information in the NYS Attorney Registration
+Database that is deemed public information pursuant to 22 NYCRR 118.
+
+> Data derived from most recent biennial registrations filed by NYS Attorneys
+
+> All registered attorneys admitted in NYS, whether they are resident or
+non-resident, active or retired, or practicing law in NY or anywhere else.
+
+[na]: https://data.ny.gov/Transparency/NYS-Attorney-Registrations/eqw2-r5nb
+
+The dataset was created on April 12, 2013 and is updated daily.
+
+```{r echo=FALSE}
+about <- fromJSON("https://data.ny.gov/api/views/eqw2-r5nb.json")
+about$columns |> 
+  select(
+    position,
+    name,
+    fieldName,
+    dataTypeName
+  ) |> 
+  mutate(across(fieldName, md_code)) %>% 
+  kable()
+```
+
+## Download
+
+```{r raw-dir}
+raw_url <- "https://data.ny.gov/api/views/eqw2-r5nb/rows.tsv"
+raw_dir <- dir_create(here("state", "ny", "licenses", "data", "raw"))
+raw_csv <- path(raw_dir, basename(raw_url))
+```
+
+```{r raw-download}
+if (!file_exists(raw_csv)) {
+  GET(
+    url = raw_url,
+    body = list(accessType = "DOWNLOAD"),
+    write_disk(raw_csv),
+    progress("down")
+  )
+}
+```
+
+## Read
+```{r raw-read}
+nya <- read_delim(
+  file = raw_csv,
+  delim = "\t",
+  skip = 1, # use fieldName header
+  escape_backslash = FALSE,
+  escape_double = FALSE,
+  col_names = about$columns$fieldName,
+  col_types = cols(
+    .default = col_character(),
+    year_admitted = col_integer(),
+    next_registration = col_date("%b %Y")
+  )
+)
+```
+
+## Explore
+
+There are `r comma(nrow(nya))` rows of `r ncol(nya)` columns. Each record
+represents a single attorney registered in the state of New York.
+
+```{r glimpse}
+glimpse(nya)
+tail(nya)
+```
+
+### Missing
+
+Columns vary in their degree of missing values.
+
+```{r na-count}
+col_stats(nya, count_na)
+```
+
+We can flag any record missing a key variable needed to identify a transaction.
+
+```{r na-flag}
+key_vars <- c("year_admitted", "last_name", "judicial_department_of_admission")
+nya <- flag_na(nya, all_of(key_vars))
+sum(nya$na_flag)
+```
+
+```{r na-view}
+nya %>% 
+  filter(na_flag) %>% 
+  select(year_admitted, ends_with("name"))
+```
+
+### Duplicates
+
+We can also flag any record completely duplicated across every column.
+
+```{r dupe-flag}
+nya <- flag_dupes(nya, -registration_number)
+sum(nya$dupe_flag)
+```
+
+There are no duplicates in the data, even when ignoring `registration_number`.
+
+### Categorical
+
+```{r distinct-count}
+col_stats(nya, n_distinct)
+```
+
+```{r distinct-plots, echo=FALSE, fig.height=3}
+explore_plot(nya, county) + scale_x_wrap()
+explore_plot(nya, judicial_department_of_admission)
+explore_plot(nya, status) + scale_x_wrap()
+```
+
+### Dates
+
+There is already a `year_admitted` value, but no date exists for when they 
+Attorney was admitted. There is a month of when they must next register.
+
+```{r bar-year, echo=FALSE}
+nya %>% 
+  count(year_admitted) %>% 
+  ggplot(aes(x = year_admitted, y = n)) +
+  geom_col(aes(fill = n), color = "black") + 
+  scale_fill_viridis_c(option = "C", end = 0.90, guide = "none") +
+  scale_y_continuous(labels = comma) +
+  scale_x_continuous(breaks = seq(1900, 2022, by = 10)) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "New York Attorneys by Year",
+    caption = "Source: NYS Unified Court System",
+    fill = "Election Year",
+    x = "Year Admitted",
+    y = "Count"
+  )
+```
+
+## Wrangle
+
+To improve the searchability of the database, we will perform some consistent,
+confident string normalization. For geographic variables like city names and
+ZIP codes, the corresponding `campfin::normal_*()` functions are tailor made to 
+facilitate this process.
+
+It should be noted that a not insignificant number of Attorneys are not from the
+United States.
+
+```{r}
+nya$country <- str_to_upper(nya$country)
+not_usa <- nya$country != "UNITED STATES OF AMERICA" & !is.na(nya$country)
+mean(not_usa)
+```
+
+### Address
+
+For the street `addresss` variable, the `campfin::normal_address()` function
+will force consistence case, remove punctuation, and abbreviate official 
+USPS suffixes.
+
+```{r address-norm}
+addr_norm <- nya %>% 
+  distinct(street_1, street_2) %>% 
+  mutate(
+    street_norm_1 = normal_address(
+      address = street_1,
+      abbs = usps_street,
+      na_rep = TRUE
+    ),
+    street_norm_2 = normal_address(
+      address = street_2,
+      abbs = usps_street,
+      na_rep = TRUE,
+      abb_end = FALSE
+    )
+  ) %>% 
+  unite(
+    col = street_norm,
+    starts_with("street_norm"),
+    sep = " ",
+    remove = TRUE,
+    na.rm = TRUE
+  ) %>% 
+  na_if("")
+```
+
+```{r address-view}
+sample_n(addr_norm, 10)
+```
+
+```{r address-join}
+nya <- left_join(nya, addr_norm, by = c("street_1", "street_2"))
+```
+
+### ZIP
+
+The `zip` column already contains the trimmed 5-digit ZIP code and an additional
+but separate `zip_plus_four` column.
+
+### State
+
+The `state` column already contains only clean abbreviations.
+
+```{r zip-show}
+head(na.omit(nya$zip))
+```
+
+### City
+
+Cities are the most difficult geographic variable to normalize, simply due to
+the wide variety of valid cities and formats.
+
+```{r state-check}
+prop_in(nya$state, valid_state)
+```
+
+#### Normal
+
+The `campfin::normal_city()` function is a good start, again converting case,
+removing punctuation, but _expanding_ USPS abbreviations. We can also remove
+`invalid_city` values.
+
+```{r city-norm}
+norm_city <- nya %>% 
+  distinct(city, state, zip) %>% 
+  mutate(
+    city_norm = normal_city(
+      city = city, 
+      abbs = usps_city,
+      states = c("NY", "DC", "NEW YORK"),
+      na = invalid_city,
+      na_rep = TRUE
+    )
+  )
+```
+
+#### Swap
+
+We can further improve normalization by comparing our normalized value
+against the _expected_ value for that record's state abbreviation and ZIP code.
+If the normalized value is either an abbreviation for or very similar to the
+expected value, we can confidently swap those two.
+
+```{r city-swap}
+norm_city <- norm_city %>% 
+  rename(city_raw = city) %>% 
+  left_join(
+    y = zipcodes,
+    by = c("state", "zip")
+  ) %>% 
+  rename(city_match = city) %>% 
+  mutate(
+    match_abb = is_abbrev(city_norm, city_match),
+    match_dist = str_dist(city_norm, city_match),
+    city_swap = if_else(
+      condition = !is.na(match_dist) & (match_abb | match_dist == 1),
+      true = city_match,
+      false = city_norm
+    )
+  ) %>% 
+  select(
+    -city_match,
+    -match_dist,
+    -match_abb
+  )
+```
+
+```{r city-rejoin}
+nya <- left_join(
+  x = nya,
+  y = norm_city,
+  by = c(
+    "city" = "city_raw", 
+    "state", 
+    "zip"
+  )
+)
+```
+
+#### Refine
+
+The [OpenRefine][or] algorithms can be used to group similar strings and replace
+the less common versions with their most common counterpart. This can greatly
+reduce inconsistency, but with low confidence; we will only keep any refined
+strings that have a valid city/state/zip combination.
+
+[or]: https://openrefine.org/
+
+```{r city-refine}
+good_refine <- nya %>% 
+  mutate(
+    city_refine = city_swap %>% 
+      key_collision_merge() %>% 
+      n_gram_merge(numgram = 1)
+  ) %>% 
+  filter(city_refine != city_swap) %>% 
+  inner_join(
+    y = zipcodes,
+    by = c(
+      "city_refine" = "city",
+      "state",
+      "zip"
+    )
+  )
+```
+
+```{r city-count, echo=FALSE}
+good_refine %>%
+  count(
+    state, 
+    zip, 
+    city_swap, 
+    city_refine,
+    sort = TRUE
+  )
+```
+
+Then we can join the refined values back to the database.
+
+```{r city-join}
+nya <- nya %>% 
+  left_join(good_refine) %>% 
+  mutate(city_refine = coalesce(city_refine, city_swap))
+```
+
+#### Progress
+
+```{r}
+many_city <- c(valid_city, extra_city)
+```
+
+Most of the remaining "invalid" cities are overseas.
+
+```{r}
+out_city <- nya %>% 
+  count(city_refine, country, sort = TRUE) %>% 
+  filter(city_refine %out% many_city, !is.na(city_refine)) %>% 
+  add_prop(sum = TRUE)
+out_city
+```
+
+```{r}
+head(out_city$city_refine, 10)
+```
+
+Our goal for normalization was to increase the proportion of city values known
+to be valid and reduce the total distinct values by correcting misspellings.
+
+```{r city-progress, echo=FALSE}
+progress <- progress_table(
+  str_to_upper(nya$city[!not_usa]),
+  nya$city_norm[!not_usa],
+  nya$city_swap[!not_usa],
+  nya$city_refine[!not_usa],
+  compare = many_city
+) %>% mutate(stage = as_factor(stage))
+progress %>% 
+    mutate(across(stage, md_code)) %>% 
+    kable(digits = 3)
+```
+
+You can see how the percentage of valid values increased with each stage.
+
+```{r bar-progress, echo=FALSE}
+raw_in <- percent(prop_in(nya$city, valid_city))
+progress %>% 
+  ggplot(aes(x = stage, y = prop_in)) +
+  geom_hline(yintercept = 0.99) +
+  geom_col(fill = dark2["purple"]) +
+  coord_cartesian(ylim = c(0.75, 1)) +
+  scale_y_continuous(labels = percent) +
+  labs(
+    title = "New York City Normalization Progress",
+    subtitle = glue("IGNORING NON-USA CITIES"),
+    x = "Stage",
+    y = "Percent Valid"
+  )
+```
+
+More importantly, the number of distinct values decreased each stage. We were
+able to confidently change many distinct invalid values to their valid
+equivalent.
+
+```{r bar-distinct, echo=FALSE}
+progress %>% 
+  select(
+    stage, 
+    all = n_distinct,
+    bad = n_diff
+  ) %>% 
+  mutate(good = all - bad) %>% 
+  pivot_longer(c("good", "bad")) %>% 
+  mutate(name = name == "good") %>% 
+  ggplot(aes(x = stage, y = value)) +
+  geom_col(aes(fill = name)) +
+  scale_fill_brewer(palette = "Dark2", direction = -1) +
+  scale_y_continuous(labels = comma) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "New York City Normalization Progress",
+    subtitle = "IGNORING NON-USA CITIES",
+    x = "Stage",
+    y = "Distinct Values",
+    fill = "Valid"
+  )
+```
+
+Before exporting, we can remove the intermediary normalization columns and
+rename all added variables with the `_clean` suffix.
+
+```{r clean-select}
+nya <- nya %>% 
+  select(
+    -city_norm,
+    -city_swap,
+    city_clean = city_refine
+  ) %>% 
+  rename_all(~str_replace(., "_norm", "_clean")) %>% 
+  rename_all(~str_remove(., "_raw")) 
+```
+
+## Conclude
+
+```{r clean-glimpse}
+glimpse(sample_n(nya, 1000))
+```
+
+1. There are `r comma(nrow(nya))` records in the database.
+1. There are `r comma(sum(nya$dupe_flag))` duplicate records in the database.
+1. The range and distribution of `amount` and `date` seem reasonable.
+1. There are `r comma(sum(nya$na_flag))` records missing key variables.
+1. Consistency in geographic data has been improved with `campfin::normal_*()`.
+1. The 4-digit `year` variable has been created with `lubridate::year()`.
+
+## Export
+
+Now the file can be saved on disk for upload to the Accountability server. We
+will name the object using a date range of the records included.
+
+```{r clean-dir}
+clean_dir <- dir_create(here("state", "ny", "attorneys", "data", "clean"))
+clean_csv <- path(clean_dir, glue("ny_attorneys_20220524.csv"))
+clean_rds <- path_ext_set(clean_csv, "rds")
+basename(clean_csv)
+```
+
+```{r clean-write}
+write_csv(nya, clean_csv, na = "")
+write_rds(nya, clean_rds, compress = "xz")
+(clean_size <- file_size(clean_csv))
+```
+
+## Upload
+
+We can use the `aws.s3::put_object()` to upload the text file to the IRW server.
+
+```{r aws-upload, eval=FALSE}
+aws_key <- path("csv", basename(clean_csv))
+if (!object_exists(aws_key, "publicaccountability")) {
+  put_object(
+    file = clean_csv,
+    object = aws_key, 
+    bucket = "publicaccountability",
+    acl = "public-read",
+    show_progress = TRUE,
+    multipart = TRUE
+  )
+}
+aws_head <- head_object(aws_key, "publicaccountability")
+(aws_size <- as_fs_bytes(attr(aws_head, "content-length")))
+unname(aws_size == clean_size)
+```
