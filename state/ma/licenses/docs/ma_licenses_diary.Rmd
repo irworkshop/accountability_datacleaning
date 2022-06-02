@@ -1,0 +1,630 @@
+---
+title: "Massachusetts Licenses"
+author: "Kiernan Nicholls"
+date: "`r date()`"
+output:
+  github_document: 
+    df_print: tibble
+    toc: true
+    toc_dept: 3
+editor_options: 
+  chunk_output_type: console
+---
+
+<!-- Place comments regarding knitting here -->
+
+```{r setup, include=FALSE, purl=FALSE}
+library(knitr)
+opts_chunk$set(
+  eval = TRUE,
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  error = FALSE,
+  collapse = TRUE,
+  comment = "#>",
+  fig.path = "../plots/",
+  fig.width = 10,
+  dpi = 300
+)
+if (!interactive()) {
+  options(width = 120)
+  set.seed(5)
+}
+```
+
+```{r create-docs-dir, eval=FALSE, echo=FALSE, include=FALSE}
+doc_dir <- fs::dir_create(here::here("state", "ma", "licenses", "docs"))
+```
+
+## Project
+
+The Accountability Project is an effort to cut across data silos and give
+journalists, policy professionals, activists, and the public at large a simple
+way to search across huge volumes of public data about people and organizations.
+
+Our goal is to standardize public data on a few key fields by thinking of each
+dataset row as a transaction. For each transaction there should be (at least) 3
+variables:
+
+1. All **parties** to a transaction.
+2. The **date** of the transaction.
+3. The **amount** of money involved.
+
+## Objectives
+
+This document describes the process used to complete the following objectives:
+
+1. How many records are in the database?
+1. Check for entirely duplicated records.
+1. Check ranges of continuous variables.
+1. Is there anything blank or missing?
+1. Check for consistency issues.
+1. Create a five-digit ZIP Code called `zip`.
+1. Create a `year` field from the transaction date.
+1. Make sure there is data on both parties to a transaction.
+
+## Packages
+
+The following packages are needed to collect, manipulate, visualize, analyze,
+and communicate these results. The `pacman` package will facilitate their
+installation and attachment.
+
+```{r load-packages, message=FALSE, warning=FALSE, error=FALSE}
+if (!require("pacman")) {
+  install.packages("pacman")
+}
+pacman::p_load(
+  tidyverse, # data manipulation
+  lubridate, # datetime strings
+  gluedown, # printing markdown
+  janitor, # clean data frames
+  campfin, # custom irw tools
+  aws.s3, # aws cloud storage
+  refinr, # cluster & merge
+  scales, # format strings
+  knitr, # knit documents
+  vroom, # fast reading
+  rvest, # scrape html
+  glue, # code strings
+  here, # project paths
+  httr, # http requests
+  fs # local storage 
+)
+```
+
+This diary was run using `campfin` version `r packageVersion("campfin")`.
+
+```{r campfin-version}
+packageVersion("campfin")
+```
+
+```{r package-options, echo=FALSE}
+options(options(knitr.kable.NA = ""))
+```
+
+This document should be run as part of the `R_tap` project, which lives as a
+sub-directory of the more general, language-agnostic
+[`irworkshop/accountability_datacleaning`][tap] GitHub repository.
+
+The `R_tap` project uses the [RStudio projects][rproj] feature and should be
+run as such. The project also uses the dynamic `here::here()` tool for file
+paths relative to _your_ machine.
+
+```{r where-here}
+# where does this document knit?
+here::i_am("state/ma/licenses/docs/ma_licenses_diary.Rmd")
+```
+
+[tap]: https://github.com/irworkshop/accountability_datacleaning
+[rproj]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects
+
+## Source
+
+Professional licenses in Massachusetts are obtained from The Office of Health
+and Human Services (EOHHS).
+
+> On this site you can verify the status of an individual or a business license
+and view any disciplinary action, or download a data file of your search results
+at no cost.
+
+> Select a Profession and enter one or more additional fields below. Searching
+by license number or last name will produce the most efficient results.
+Otherwise you may retrieve too large a data set to work with on your screen.
+
+> **Disclaimer:** The information contained in this website ("website content")
+is made available as a public service by the Massachusetts Department of Public
+Health (the Department). The Department considers this information to constitute
+primary source verification. Click here for full disclaimer.
+
+From the [FAQ](https://madph.mylicense.com/verification/Custom/FAQ.htm): 
+
+> **Question:** When I download a file of licensee information, what data is in
+the file and what is the file format?
+> 
+> **Answer:** Use the Preview button to see what data fields will be included.
+The file format is known as Delimited, meaning fields are separated by a
+character known as a delimiter. The file uses the | character as the delimiter.
+When you import the file into Excel, for example, you will be prompted to type
+the delimiter character. The | character can be found on top of the back slash
+character, located between the Backspace and Enter keys.
+
+## Download
+
+The licenses are separated as either being issued to a person or a facility.
+We will manually download all results for each file type for both entities.
+
+> You may now download a data file of your search results in delimited text
+format. The delimiter character used in the data file is called the 'pipes'
+character |, which is located above the Enter key on your keyboard.
+
+```{r raw-dir}
+raw_dir <- dir_create(here("state", "ma", "licenses", "data", "raw"))
+raw_psv <- dir_ls(raw_dir)
+```
+
+## Read
+
+```{r}
+x <- read_lines(raw_psv[6])
+bad_ending <- str_which(x, "\\|$", negate = TRUE)
+x[bad_ending] <- paste0(x[bad_ending], x[bad_ending + 1])
+x <- x[-(bad_ending + 1)]
+tmp <- file_temp(ext = "txt")
+write_lines(x, tmp)
+raw_psv[6] <- tmp
+```
+
+```{r raw-read}
+mal <- read_delim(
+  file = raw_psv,
+  delim = "|",
+  id = "source_file",
+  escape_backslash = FALSE,
+  escape_double = FALSE,
+  locale = locale(date_format = "%m/%d/%Y %H:%M:%S %p"),
+  col_types = cols(
+    .default = col_character(),
+    expiration_date = col_date(),
+    issue_date = col_date()
+  )
+)
+```
+
+```{r clean-names}
+mal <- mal %>% 
+  mutate(
+    across(where(is.character), str_squish),
+    across(source_file, basename)
+  ) %>% 
+  remove_empty(which = "cols") %>% 
+  relocate(source_file, .after = last_col())
+```
+
+## Explore
+
+There are `r comma(nrow(mal))` rows of `r ncol(mal)` columns. Each record
+represents a single licensed issued to an individual or business.
+
+```{r glimpse}
+glimpse(mal)
+tail(mal)
+```
+
+### Missing
+
+Columns vary in their degree of missing values.
+
+```{r na-count}
+col_stats(mal, count_na)
+```
+
+We can flag any record missing a key variable needed to identify a transaction.
+
+```{r na-flag}
+key_vars <- c("license_no", "full_name")
+mal <- flag_na(mal, all_of(key_vars))
+mean(mal$na_flag)
+sum(mal$na_flag)
+```
+
+```{r na-view}
+mal %>% 
+  filter(na_flag) %>% 
+  select(all_of(key_vars), source_file)
+```
+
+```{r na-sum}
+mal %>% 
+  filter(na_flag) %>% 
+  select(source_file) %>% 
+  count(source_file, sort = TRUE)
+```
+
+### Duplicates
+
+We can also flag any record completely duplicated across every column.
+
+```{r dupe-flag}
+mal <- flag_dupes(mal, -license_no)
+sum(mal$dupe_flag)
+```
+
+```{r dupe-view}
+mal %>% 
+  filter(dupe_flag) %>% 
+  select(license_no, all_of(key_vars))
+```
+
+### Categorical
+
+```{r distinct-count}
+col_stats(mal, n_distinct)
+```
+
+```{r distinct-plots, echo=FALSE, fig.height=3}
+explore_plot(mal, license_type_name) + scale_x_wrap()
+explore_plot(mal, license_status_name) + scale_x_wrap()
+```
+
+### Dates
+
+We can add the calendar year from `date` with `lubridate::year()`
+
+```{r date-year}
+mal <- mutate(mal, issue_year = year(issue_date))
+```
+
+```{r date-range}
+min(mal$issue_date, na.rm = TRUE)
+sum(mal$issue_year < 2000, na.rm = TRUE)
+max(mal$issue_date, na.rm = TRUE)
+sum(mal$issue_date > today(), na.rm = TRUE)
+```
+
+```{r bar-year, echo=FALSE}
+mal %>% 
+  count(issue_year) %>% 
+  ggplot(aes(x = issue_year, y = n)) +
+  geom_col(aes(fill = n), color = "black") + 
+  scale_fill_viridis_c(end = 0.9, option = "B", guide = "none") +
+  scale_y_continuous(labels = comma) +
+  scale_x_continuous(breaks = seq(1908, 2022, by = 10)) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "Massachusetts Licenses by Year",
+    caption = "Source: {source}",
+    fill = "Election Year",
+    x = "Year Made",
+    y = "Count"
+  )
+```
+
+## Wrangle
+
+To improve the searchability of the database, we will perform some consistent,
+confident string normalization. For geographic variables like city names and
+ZIP codes, the corresponding `campfin::normal_*()` functions are tailor made to 
+facilitate this process.
+
+### Address
+
+For the street `addresss` variable, the `campfin::normal_address()` function
+will force consistence case, remove punctuation, and abbreviate official 
+USPS suffixes.
+
+```{r address-norm}
+addr_norm <- mal %>% 
+  distinct(addr_line_1, addr_line_2) %>% 
+  mutate(
+    norm_addr_line_1 = normal_address(
+      address = addr_line_1,
+      abbs = usps_street,
+      na_rep = TRUE
+    ),
+    norm_addr_line_2 = normal_address(
+      address = addr_line_2,
+      abbs = usps_street,
+      na_rep = TRUE,
+      abb_end = FALSE
+    )
+  ) %>% 
+  unite(
+    col = address_norm,
+    starts_with("norm_addr"),
+    sep = " ",
+    remove = TRUE,
+    na.rm = TRUE
+  )
+```
+
+```{r address-view}
+addr_norm
+```
+
+```{r address-join}
+mal <- left_join(mal, addr_norm, by = c("addr_line_1", "addr_line_2"))
+```
+
+### ZIP
+
+For ZIP codes, the `campfin::normal_zip()` function will attempt to create
+valid _five_ digit codes by removing the ZIP+4 suffix and returning leading
+zeroes dropped by other programs like Microsoft Excel.
+
+```{r zip-norm}
+mal <- mal %>% 
+  mutate(
+    zip_norm = normal_zip(
+      zip = addr_zipcode,
+      na_rep = TRUE
+    )
+  )
+```
+
+```{r zip-progress}
+progress_table(
+  mal$addr_zipcode,
+  mal$zip_norm,
+  compare = valid_zip
+)
+```
+
+### State
+
+The existing `addr_state` is already sufficiently normalized.
+
+```{r}
+prop_in(mal$addr_state, valid_state)
+table(what_out(mal$addr_state, valid_state))
+mal$addr_state <- str_to_upper(mal$addr_state)
+```
+
+### City
+
+Cities are the most difficult geographic variable to normalize, simply due to
+the wide variety of valid cities and formats.
+
+#### Normal
+
+The `campfin::normal_city()` function is a good start, again converting case,
+removing punctuation, but _expanding_ USPS abbreviations. We can also remove
+`invalid_city` values.
+
+```{r city-norm}
+norm_city <- mal %>% 
+  distinct(addr_city, addr_state, zip_norm) %>% 
+  mutate(
+    city_norm = normal_city(
+      city = addr_city, 
+      abbs = usps_city,
+      states = c("MA", "DC", "MASSACHUSETTS"),
+      na = invalid_city,
+      na_rep = TRUE
+    )
+  )
+```
+
+#### Swap
+
+We can further improve normalization by comparing our normalized value
+against the _expected_ value for that record's state abbreviation and ZIP code.
+If the normalized value is either an abbreviation for or very similar to the
+expected value, we can confidently swap those two.
+
+```{r city-swap}
+norm_city <- norm_city %>% 
+  rename(city_raw = addr_city) %>% 
+  left_join(
+    y = zipcodes,
+    by = c(
+      "addr_state" = "state",
+      "zip_norm" = "zip"
+    )
+  ) %>% 
+  rename(city_match = city) %>% 
+  mutate(
+    match_abb = is_abbrev(city_norm, city_match),
+    match_dist = str_dist(city_norm, city_match),
+    city_swap = if_else(
+      condition = !is.na(match_dist) & (match_abb | match_dist == 1),
+      true = city_match,
+      false = city_norm
+    )
+  ) %>% 
+  select(
+    -city_match,
+    -match_dist,
+    -match_abb
+  )
+```
+
+```{r city-rejoin}
+mal <- left_join(
+  x = mal,
+  y = norm_city,
+  by = c(
+    "addr_city" = "city_raw", 
+    "addr_state", 
+    "zip_norm"
+  )
+)
+```
+
+#### Refine
+
+The [OpenRefine][or] algorithms can be used to group similar strings and replace
+the less common versions with their most common counterpart. This can greatly
+reduce inconsistency, but with low confidence; we will only keep any refined
+strings that have a valid city/state/zip combination.
+
+[or]: https://openrefine.org/
+
+```{r city-refine}
+good_refine <- mal %>% 
+  mutate(
+    city_refine = city_swap %>% 
+      key_collision_merge() %>% 
+      n_gram_merge(numgram = 1)
+  ) %>% 
+  filter(city_refine != city_swap) %>% 
+  inner_join(
+    y = zipcodes,
+    by = c(
+      "city_refine" = "city",
+      "addr_state" = "state",
+      "zip_norm" = "zip"
+    )
+  )
+```
+
+```{r city-count, echo=FALSE}
+good_refine %>%
+  count(
+    addr_state, 
+    zip_norm, 
+    city_swap, 
+    city_refine,
+    sort = TRUE
+  )
+```
+
+Then we can join the refined values back to the database.
+
+```{r city-join}
+mal <- mal %>% 
+  left_join(good_refine, by = names(.)) %>% 
+  mutate(city_refine = coalesce(city_refine, city_swap))
+```
+
+#### Progress
+
+Our goal for normalization was to increase the proportion of city values known
+to be valid and reduce the total distinct values by correcting misspellings.
+
+```{r city-progress, echo=FALSE}
+many_city <- c(valid_city, extra_city)
+progress <- progress_table(
+  str_to_upper(mal$addr_city),
+  mal$city_norm,
+  mal$city_swap,
+  mal$city_refine,
+  compare = many_city
+) %>% mutate(stage = as_factor(stage))
+progress %>% 
+    mutate(across(stage, md_code)) %>% 
+    kable(digits = 3)
+```
+
+You can see how the percentage of valid values increased with each stage.
+
+```{r bar-progress, echo=FALSE}
+raw_in <- percent(prop_in(mal$addr_city, valid_city))
+progress %>% 
+  ggplot(aes(x = stage, y = prop_in)) +
+  geom_hline(yintercept = 0.99) +
+  geom_col(fill = dark2["purple"]) +
+  coord_cartesian(ylim = c(0.75, 1)) +
+  scale_y_continuous(labels = percent) +
+  labs(
+    title = "Massachusetts City Normalization Progress",
+    subtitle = glue("Raw at {raw_in} before conversion to uppercase"),
+    x = "Stage",
+    y = "Percent Valid"
+  )
+```
+
+More importantly, the number of distinct values decreased each stage. We were
+able to confidently change many distinct invalid values to their valid
+equivalent.
+
+```{r bar-distinct, echo=FALSE}
+progress %>% 
+  select(
+    stage, 
+    all = n_distinct,
+    bad = n_diff
+  ) %>% 
+  mutate(good = all - bad) %>% 
+  pivot_longer(c("good", "bad")) %>% 
+  mutate(name = name == "good") %>% 
+  ggplot(aes(x = stage, y = value)) +
+  geom_col(aes(fill = name)) +
+  scale_fill_brewer(palette = "Dark2", direction = -1) +
+  scale_y_continuous(labels = comma) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "Massachusetts City Normalization Progress",
+    subtitle = "Distinct values, valid and invalid",
+    x = "Stage",
+    y = "Distinct Values",
+    fill = "Valid"
+  )
+```
+
+Before exporting, we can remove the intermediary normalization columns and
+rename all added variables with the `_clean` suffix.
+
+```{r clean-select}
+mal <- mal %>% 
+  select(
+    -city_norm,
+    -city_swap,
+    city_clean = city_refine
+  ) %>% 
+  rename_all(~str_replace(., "_norm", "_clean")) %>% 
+  rename_all(~str_remove(., "_raw")) %>% 
+  relocate(address_clean, city_clean, .before = zip_clean)
+```
+
+## Conclude
+
+```{r clean-glimpse}
+glimpse(sample_n(mal, 1000))
+```
+
+1. There are `r comma(nrow(mal))` records in the database.
+1. There are `r comma(sum(mal$dupe_flag))` duplicate records in the database.
+1. The range and distribution of `amount` and `date` seem reasonable.
+1. There are `r comma(sum(mal$na_flag))` records missing key variables.
+1. Consistency in geographic data has been improved with `campfin::normal_*()`.
+1. The 4-digit `year` variable has been created with `lubridate::year()`.
+
+## Export
+
+Now the file can be saved on disk for upload to the Accountability server. We
+will name the object using a date range of the records included.
+
+```{r clean-dir}
+clean_dir <- dir_create(here("state", "ma", "licenses", "data", "clean"))
+clean_csv <- path(clean_dir, glue("ma_licenses_20220601.csv"))
+clean_rds <- path_ext_set(clean_csv, "rds")
+basename(clean_csv)
+```
+
+```{r clean-write}
+write_csv(mal, clean_csv, na = "")
+write_rds(mal, clean_rds, compress = "xz")
+(clean_size <- file_size(clean_csv))
+```
+
+## Upload
+
+We can use the `aws.s3::put_object()` to upload the text file to the IRW server.
+
+```{r aws-upload, eval=FALSE}
+aws_key <- path("csv", basename(clean_csv))
+if (!object_exists(aws_key, "publicaccountability")) {
+  put_object(
+    file = clean_csv,
+    object = aws_key, 
+    bucket = "publicaccountability",
+    acl = "public-read",
+    show_progress = TRUE,
+    multipart = TRUE
+  )
+}
+aws_head <- head_object(aws_key, "publicaccountability")
+(aws_size <- as_fs_bytes(attr(aws_head, "content-length")))
+unname(aws_size == clean_size)
+```
