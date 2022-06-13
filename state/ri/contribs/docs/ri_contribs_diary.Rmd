@@ -257,10 +257,12 @@ col_stats(ric, count_na)
 We can flag any record missing a key variable needed to identify a transaction.
 
 ```{r na-flag}
-key_vars <- c("date", "last_name", "amount", "committee_name")
+key_vars <- c("receipt_date", "full_name", "amount", "organization_name")
 ric <- flag_na(ric, all_of(key_vars))
 sum(ric$na_flag)
 ```
+
+While some rows are missing a `last_name`, very few are missing `full_name`.
 
 ```{r na-view}
 ric %>% 
@@ -273,15 +275,16 @@ ric %>%
 We can also flag any record completely duplicated across every column.
 
 ```{r dupe-flag}
-ric <- flag_dupes(ric, -id)
+ric <- flag_dupes(ric, -contribution_id)
+mean(ric$dupe_flag)
 sum(ric$dupe_flag)
 ```
 
 ```{r dupe-view}
 ric %>% 
   filter(dupe_flag) %>% 
-  select(all_of(key_vars)) %>% 
-  arrange(date)
+  select(contribution_id, all_of(key_vars)) %>% 
+  arrange(receipt_date)
 ```
 
 ### Categorical
@@ -291,7 +294,9 @@ col_stats(ric, n_distinct)
 ```
 
 ```{r distinct-plots, echo=FALSE, fig.height=3}
-explore_plot(ric, type)
+explore_plot(ric, view_incomplete)
+explore_plot(ric, receipt_desc)
+explore_plot(ric, trans_type)
 ```
 
 ### Amounts
@@ -326,7 +331,7 @@ ric %>%
   ) +
   labs(
     title = "Rhode Island Contributions Amount Distribution",
-    caption = "Source: {source}",
+    caption = "Source: RI BOE ERTS",
     x = "Amount",
     y = "Count"
   )
@@ -337,31 +342,38 @@ ric %>%
 We can add the calendar year from `date` with `lubridate::year()`
 
 ```{r date-year}
-ric <- mutate(ric, year = year(date))
+ric <- mutate(ric, receipt_year = year(receipt_date))
 ```
+
+Because we downloaded the original source files _using_ date ranges, we 
+shouldn't expect to find any contributions with errant dates. We do see a few
+contributions that are missing dates, but we have confirmed those dates are
+also missing in the raw exported source files.
 
 ```{r date-range}
-min(ric$date)
-sum(ric$year < 2000)
-max(ric$date)
-sum(ric$date > today())
+count_na(ric$receipt_date)
+min(ric$receipt_date, na.rm = TRUE)
+sum(ric$receipt_year < 2002, na.rm = TRUE)
+max(ric$receipt_date, na.rm = TRUE)
+sum(ric$receipt_date > today(), na.rm = TRUE)
 ```
 
-It's common to see an increase in the number of contributins in elections years.
+It's normal for there to be an increase in the number of contributions in 
+elections years.
 
 ```{r bar-year, echo=FALSE}
 ric %>% 
-  count(year) %>% 
-  mutate(even = is_even(year)) %>% 
-  ggplot(aes(x = year, y = n)) +
+  count(receipt_year) %>% 
+  mutate(even = is_even(receipt_year)) %>% 
+  ggplot(aes(x = receipt_year, y = n)) +
   geom_col(aes(fill = even)) + 
   scale_fill_brewer(palette = "Dark2") +
   scale_y_continuous(labels = comma) +
-  scale_x_continuous(breaks = seq(2000, 2020, by = 2)) +
+  scale_x_continuous(breaks = seq(2000, 2022, by = 2)) +
   theme(legend.position = "bottom") +
   labs(
     title = "Rhode Island Contributions by Year",
-    caption = "Source: {source}",
+    caption = "Source: RI BOE ERTS",
     fill = "Election Year",
     x = "Year Made",
     y = "Count"
@@ -375,6 +387,35 @@ confident string normalization. For geographic variables like city names and
 ZIP codes, the corresponding `campfin::normal_*()` functions are tailor made to 
 facilitate this process.
 
+The data contains a single `city_st_zip` appropriately containing the individual
+city, state, and ZIP code values for each address. We are going to separate
+that column into it's component parts in new columns.
+
+```{r}
+ri_csz <- ric %>% 
+  distinct(city_st_zip) %>% 
+  separate(
+    col = city_st_zip,
+    into = c("city_sep", "st_zip"),
+    sep = ",+\\s?",
+    fill = "left",
+    extra = "merge",
+    remove = FALSE
+  ) %>% 
+  separate(
+    col = st_zip,
+    into = c("state_sep", "zip_sep"),
+    sep = "\\s+",
+    remove = TRUE,
+    fill = "right",
+    extra = "merge"
+  )
+```
+
+```{r}
+ric <- left_join(ric, ri_csz, by = "city_st_zip")
+```
+
 ### Address
 
 For the street `addresss` variable, the `campfin::normal_address()` function
@@ -383,22 +424,14 @@ USPS suffixes.
 
 ```{r address-norm}
 addr_norm <- ric %>% 
-  distinct(address1, address2) %>% 
-  unite(
-    col = address_full,
-    starts_with("address"),
-    sep = " ",
-    remove = FALSE,
-    na.rm = TRUE
-  ) %>% 
+  distinct(address) %>% 
   mutate(
     address_norm = normal_address(
-      address = address_full,
+      address = address,
       abbs = usps_street,
       na_rep = TRUE
     )
-  ) %>% 
-  select(-address_full)
+  )
 ```
 
 ```{r address-view}
@@ -406,7 +439,7 @@ addr_norm
 ```
 
 ```{r address-join}
-ric <- left_join(ric, addr_norm, by = c("address1", "address2"))
+ric <- left_join(ric, addr_norm, by = c("address"))
 ```
 
 ### ZIP
@@ -419,7 +452,7 @@ zeroes dropped by other programs like Microsoft Excel.
 ric <- ric %>% 
   mutate(
     zip_norm = normal_zip(
-      zip = zip,
+      zip = zip_sep,
       na_rep = TRUE
     )
   )
@@ -427,10 +460,14 @@ ric <- ric %>%
 
 ```{r zip-progress}
 progress_table(
-  ric$zip,
+  ric$zip_sep,
   ric$zip_norm,
   compare = valid_zip
 )
+```
+
+```{r}
+ric <- select(ric, -zip_sep)
 ```
 
 ### State
@@ -442,7 +479,7 @@ Valid two digit state abbreviations can be made using the
 ric <- ric %>% 
   mutate(
     state_norm = normal_state(
-      state = state,
+      state = state_sep,
       abbreviate = TRUE,
       na_rep = TRUE,
       valid = valid_state
@@ -452,16 +489,20 @@ ric <- ric %>%
 
 ```{r state-view}
 ric %>% 
-  filter(state != state_norm) %>% 
-  count(state, state_norm, sort = TRUE)
+  filter(state_sep != state_norm) %>% 
+  count(state_sep, state_norm, sort = TRUE)
 ```
 
 ```{r state-progress}
 progress_table(
-  ric$state,
+  ric$state_sep,
   ric$state_norm,
   compare = valid_state
 )
+```
+
+```{r}
+ric <- select(ric, -state_sep)
 ```
 
 ### City
@@ -477,10 +518,10 @@ removing punctuation, but _expanding_ USPS abbreviations. We can also remove
 
 ```{r city-norm}
 norm_city <- ric %>% 
-  distinct(city, state_norm, zip_norm) %>% 
+  distinct(city_sep, state_norm, zip_norm) %>% 
   mutate(
     city_norm = normal_city(
-      city = city, 
+      city = city_sep, 
       abbs = usps_city,
       states = c("RI", "DC", "RHODE ISLAND"),
       na = invalid_city,
@@ -498,7 +539,7 @@ expected value, we can confidently swap those two.
 
 ```{r city-swap}
 norm_city <- norm_city %>% 
-  rename(city_raw = city) %>% 
+  rename(city_raw = city_sep) %>% 
   left_join(
     y = zipcodes,
     by = c(
@@ -528,7 +569,7 @@ ric <- left_join(
   x = ric,
   y = norm_city,
   by = c(
-    "city" = "city_raw", 
+    "city_sep" = "city_raw", 
     "state_norm", 
     "zip_norm"
   )
@@ -589,7 +630,7 @@ to be valid and reduce the total distinct values by correcting misspellings.
 ```{r city-progress, echo=FALSE}
 many_city <- c(valid_city, extra_city)
 progress <- progress_table(
-  str_to_upper(ric$city),
+  str_to_upper(ric$city_sep),
   ric$city_norm,
   ric$city_swap,
   ric$city_refine,
@@ -652,6 +693,7 @@ rename all added variables with the `_clean` suffix.
 ```{r clean-select}
 ric <- ric %>% 
   select(
+    -city_sep,
     -city_norm,
     -city_swap,
     city_clean = city_refine
@@ -680,8 +722,8 @@ Now the file can be saved on disk for upload to the Accountability server. We
 will name the object using a date range of the records included.
 
 ```{r clean-timestamp}
-min_dt <- str_remove_all(min(ric$date), "-")
-max_dt <- str_remove_all(max(ric$date), "-")
+min_dt <- str_remove_all(min(ric$receipt_date, na.rm = TRUE), "-")
+max_dt <- str_remove_all(max(ric$receipt_date, na.rm = TRUE), "-")
 csv_ts <- paste(min_dt, max_dt, sep = "-")
 ```
 
