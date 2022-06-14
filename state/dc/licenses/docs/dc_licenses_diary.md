@@ -1,7 +1,7 @@
 District Of Columbia Licenses
 ================
 Kiernan Nicholls
-Tue May 31 16:58:23 2022
+Tue Jun 14 11:00:29 2022
 
 -   <a href="#project" id="toc-project">Project</a>
 -   <a href="#objectives" id="toc-objectives">Objectives</a>
@@ -156,7 +156,7 @@ if (!file_exists(raw_csv)) {
     escape_backslash = FALSE,
     escape_double = FALSE,
     name_repair = make_clean_names,
-    locale = locale(date_format = "%m/%d/%Y"),
+    # locale = locale(date_format = "%m/%d/%Y"),
     col_types = cols(
       .default = col_character(),
       effective_date = col_date(),
@@ -180,9 +180,9 @@ glimpse(dcl)
 #> $ licensee_name           <chr> "SHENA GREEN", "Weichert Real Estate School", "Security Assurance Management", "Metro …
 #> $ license_type            <chr> "Cosmetology Specialist Operator - Manicurist", "Provider - Real Estate", "Provider - …
 #> $ license_status          <chr> "Expired", "Expired", "Expired", "Expired", "Expired", "Expired", "Expired", "Expired"…
-#> $ effective_date          <date> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
-#> $ license_expiration_date <date> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
-#> $ initial_issue_date      <date> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
+#> $ effective_date          <date> 1900-01-01, 1900-01-01, 1900-01-01, 1900-01-01, 1900-01-01, 1900-01-01, 1900-01-01, 1…
+#> $ license_expiration_date <date> 1900-01-01, 1900-01-01, 1900-01-01, 1900-01-01, 1900-01-01, 1900-01-01, 1900-01-01, 1…
+#> $ initial_issue_date      <date> 1900-01-01, 1900-01-01, 1900-01-01, 1900-01-01, 1900-01-01, 1900-01-01, 1900-01-01, 1…
 #> $ image_name              <chr> "noimage.png", "noimage.png", "noimage.png", "noimage.png", "noimage.png", "noimage.pn…
 #> $ image_url               <chr> "https://govservices.dcra.dc.gov/ProfessionalImages/noimage.png", "https://govservices…
 #> $ affiliated_agency_name  <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
@@ -191,12 +191,12 @@ tail(dcl)
 #> # A tibble: 6 × 11
 #>   license_number licensee_name  license_type license_status effective_date license_expirati… initial_issue_d… image_name
 #>   <chr>          <chr>          <chr>        <chr>          <date>         <date>            <date>           <chr>     
-#> 1 WR800257       MATT BOWMAN    Wrestler     Expired        NA             NA                NA               noimage.p…
-#> 2 WR800258       NORA GREENWALD Wrestler     Expired        NA             NA                NA               noimage.p…
-#> 3 WR800259       TERRI POCH     Wrestler     Expired        NA             NA                NA               noimage.p…
-#> 4 WR800260       MONTY SOPP     Wrestler     Expired        NA             NA                NA               noimage.p…
-#> 5 WR800261       KURT ANGLE     Wrestler     Inactive       NA             NA                NA               260951.JP…
-#> 6 WR800262       MARK CALAWAY   Wrestler     Expired        NA             NA                NA               noimage.p…
+#> 1 WR800257       MATT BOWMAN    Wrestler     Expired        2000-03-31     2002-03-31        1930-01-01       noimage.p…
+#> 2 WR800258       NORA GREENWALD Wrestler     Expired        2004-04-01     2006-03-31        1930-01-01       noimage.p…
+#> 3 WR800259       TERRI POCH     Wrestler     Expired        2000-03-31     2002-03-31        1930-01-01       noimage.p…
+#> 4 WR800260       MONTY SOPP     Wrestler     Expired        2004-04-01     2006-03-31        1930-01-01       noimage.p…
+#> 5 WR800261       KURT ANGLE     Wrestler     Inactive       2018-12-03     2020-03-31        2018-12-03       260951.JP…
+#> 6 WR800262       MARK CALAWAY   Wrestler     Expired        2004-04-01     2006-03-31        1930-01-01       noimage.p…
 #> # … with 3 more variables: image_url <chr>, affiliated_agency_name <chr>, data_flag <chr>
 ```
 
@@ -213,9 +213,9 @@ col_stats(dcl, count_na)
 #>  2 licensee_name           <chr>      39 0.000172  
 #>  3 license_type            <chr>       0 0         
 #>  4 license_status          <chr>       1 0.00000440
-#>  5 effective_date          <date> 227116 1         
-#>  6 license_expiration_date <date> 227116 1         
-#>  7 initial_issue_date      <date> 227116 1         
+#>  5 effective_date          <date>      0 0         
+#>  6 license_expiration_date <date>      0 0         
+#>  7 initial_issue_date      <date>      0 0         
 #>  8 image_name              <chr>       0 0         
 #>  9 image_url               <chr>       0 0         
 #> 10 affiliated_agency_name  <chr>  189528 0.834     
@@ -229,30 +229,20 @@ transaction.
 key_vars <- c("initial_issue_date", "licensee_name", "license_type")
 dcl <- flag_na(dcl, all_of(key_vars))
 sum(dcl$na_flag)
-#> [1] 227116
+#> [1] 39
 ```
 
-All 227116 rows missing a `licensee_name` are cosmetology apprentices
-that were originally issued on January 1, 2001. Suspicious.
+All 39 rows missing a `licensee_name` are cosmetology apprentices that
+were originally issued on January 1, 2001. Suspicious.
 
 ``` r
 dcl %>% 
   filter(na_flag) %>% 
   count(initial_issue_date, licensee_name, license_type)
-#> # A tibble: 222,252 × 4
-#>    initial_issue_date licensee_name                   license_type                                      n
-#>    <date>             <chr>                           <chr>                                         <int>
-#>  1 NA                 "- NORRINGTON PATTERSON, SHEIL" Cosmetology Operator                              1
-#>  2 NA                 ". GABRIELLE"                   Real Estate Broker                                1
-#>  3 NA                 ". GABRIELLE"                   Real Estate Salesperson                           1
-#>  4 NA                 ". NIAMAAT"                     Real Estate Broker                                1
-#>  5 NA                 ". NIAMAAT"                     Real Estate Salesperson                           1
-#>  6 NA                 "*LEON CIFUENTES"               Asbestos Worker                                   1
-#>  7 NA                 "\\TAR ELEC CONTR CO"           Electrician Contractor                            1
-#>  8 NA                 "~~ A & M REALTY"               Independent Broker                                1
-#>  9 NA                 "~~ CASTLE FINDERS INC"         Real Estate Broker                                1
-#> 10 NA                 "~~ CHAPMAN"                    Certified Public Accountant - Not to Practice     1
-#> # … with 222,242 more rows
+#> # A tibble: 1 × 4
+#>   initial_issue_date licensee_name license_type               n
+#>   <date>             <chr>         <chr>                  <int>
+#> 1 2001-01-01         <NA>          Cosmetology Apprentice    39
 ```
 
 ### Duplicates
@@ -262,27 +252,27 @@ We can also flag any record completely duplicated across every column.
 ``` r
 dcl <- flag_dupes(dcl, -license_number)
 sum(dcl$dupe_flag)
-#> [1] 4099
+#> [1] 249
 ```
 
 ``` r
 dcl %>% 
   filter(dupe_flag) %>% 
   count(initial_issue_date, licensee_name, license_type, sort = TRUE)
-#> # A tibble: 1,929 × 4
-#>    initial_issue_date licensee_name   license_type                                     n
-#>    <date>             <chr>           <chr>                                        <int>
-#>  1 NA                 <NA>            Cosmetology Apprentice                          39
-#>  2 NA                 UNK             Cosmetology Apprentice                          21
-#>  3 NA                 NU              Cosmetology Apprentice                          16
-#>  4 NA                 ROBERT WILLIAMS Real Estate Salesperson                          7
-#>  5 NA                 JAMES SMITH     Real Estate Salesperson                          6
-#>  6 NA                 UN              Cosmetology Apprentice                           6
-#>  7 NA                 Thi Le          Cosmetology Specialist Operator - Manicurist     5
-#>  8 NA                 Thi Nguyen      Cosmetology Specialist Operator - Manicurist     5
-#>  9 NA                 Thi Tran        Cosmetology Specialist Operator - Manicurist     5
-#> 10 NA                 ANGELA ROBINSON Cosmetology Apprentice                           4
-#> # … with 1,919 more rows
+#> # A tibble: 84 × 4
+#>    initial_issue_date licensee_name             license_type                                     n
+#>    <date>             <chr>                     <chr>                                        <int>
+#>  1 2001-01-01         <NA>                      Cosmetology Apprentice                          38
+#>  2 2001-01-01         UNK                       Cosmetology Apprentice                          21
+#>  3 2001-01-01         NU                        Cosmetology Apprentice                          16
+#>  4 2001-01-01         UN                        Cosmetology Apprentice                           6
+#>  5 1900-01-01         THI NGUYEN                Cosmetology Specialist Operator - Manicurist     4
+#>  6 1997-03-01         LONG & FOSTER RL EST INC. Real Estate Organization                         4
+#>  7 1900-01-01         Thi Le                    Cosmetology Specialist Operator - Manicurist     3
+#>  8 1900-01-01         Thi Nguyen                Cosmetology Specialist Operator - Manicurist     3
+#>  9 1900-01-01         Thi Tran                  Cosmetology Specialist Operator - Manicurist     3
+#> 10 1997-09-24         BEN CARTER HOLDINGS, INC. Real Estate Organization                         3
+#> # … with 74 more rows
 ```
 
 ### Categorical
@@ -296,14 +286,14 @@ col_stats(dcl, n_distinct)
 #>  2 licensee_name           <chr>  197651 0.870     
 #>  3 license_type            <chr>     156 0.000687  
 #>  4 license_status          <chr>      16 0.0000704 
-#>  5 effective_date          <date>      1 0.00000440
-#>  6 license_expiration_date <date>      1 0.00000440
-#>  7 initial_issue_date      <date>      1 0.00000440
+#>  5 effective_date          <date>   8212 0.0362    
+#>  6 license_expiration_date <date>   4120 0.0181    
+#>  7 initial_issue_date      <date>  11846 0.0522    
 #>  8 image_name              <chr>   83931 0.370     
 #>  9 image_url               <chr>   83932 0.370     
 #> 10 affiliated_agency_name  <chr>    3383 0.0149    
 #> 11 data_flag               <chr>       2 0.00000881
-#> 12 na_flag                 <lgl>       1 0.00000440
+#> 12 na_flag                 <lgl>       2 0.00000881
 #> 13 dupe_flag               <lgl>       2 0.00000881
 ```
 
@@ -325,11 +315,11 @@ dcl <- dcl %>%
 
 ``` r
 min(dcl$date_fix, na.rm = TRUE)
-#> [1] NA
+#> [1] "1903-10-01"
 sum(dcl$year_fix < 2000, na.rm = TRUE)
-#> [1] 0
+#> [1] 76871
 max(dcl$date_fix, na.rm = TRUE)
-#> [1] NA
+#> [1] "2022-05-31"
 sum(dcl$date_fix > today(), na.rm = TRUE)
 #> [1] 0
 ```
@@ -346,23 +336,23 @@ glimpse(sample_n(dcl, 1000))
 #> $ licensee_name           <chr> "ETHEL ARMSTRONG", "AMADI Y. KITWANA", "DONNA BRANT", "KRISTIAN MCCRORY", "TERRELL FLO…
 #> $ license_type            <chr> "Interior Design", "Barber Owner", "Real Estate Salesperson", "Cosmetology Operator", …
 #> $ license_status          <chr> "Expired", "Active", "Expired", "Active", "Inactive", "Expired", "Expired", "Active", …
-#> $ effective_date          <date> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
-#> $ license_expiration_date <date> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
-#> $ initial_issue_date      <date> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
+#> $ effective_date          <date> 1992-10-31, 2021-10-01, 2013-08-31, 2022-04-18, 2018-10-01, 2018-05-01, 2001-03-22, 2…
+#> $ license_expiration_date <date> 1994-10-31, 2023-09-30, 2015-08-31, 2024-04-15, 2020-09-30, 2020-04-30, 2001-08-31, 2…
+#> $ initial_issue_date      <date> 1991-10-29, 2016-02-12, 2009-06-01, 2015-11-12, 2012-01-24, 2016-10-18, 2001-03-22, 2…
 #> $ image_name              <chr> "noimage.png", "noimage.png", "noimage.png", "279912.JPEG", "338150.JPEG", "316476.JPE…
 #> $ image_url               <chr> "https://govservices.dcra.dc.gov/ProfessionalImages/noimage.png", "https://govservices…
 #> $ affiliated_agency_name  <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "UNIVERSAL PROTECT…
 #> $ data_flag               <chr> "PsiData", "PsiData", "PsiData", "PsiData", "PsiData", "PsiData", "PsiData", "PsiData"…
-#> $ na_flag                 <lgl> TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TR…
+#> $ na_flag                 <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FA…
 #> $ dupe_flag               <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FA…
-#> $ date_fix                <date> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
-#> $ year_fix                <dbl> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
+#> $ date_fix                <date> 1991-10-29, 2016-02-12, 2009-06-01, 2015-11-12, 2012-01-24, 2016-10-18, 2001-03-22, 2…
+#> $ year_fix                <dbl> 1991, 2016, 2009, 2015, 2012, 2016, 2001, 2020, 2009, 1986, 2008, 1988, 2007, 2005, 19…
 ```
 
 1.  There are 227,116 records in the database.
-2.  There are 4,099 duplicate records in the database.
+2.  There are 249 duplicate records in the database.
 3.  The range and distribution of `amount` and `date` seem reasonable.
-4.  There are 227,116 records missing key variables.
+4.  There are 39 records missing key variables.
 5.  Consistency in geographic data has been improved with
     `campfin::normal_*()`.
 6.  The 4-digit `year` variable has been created with
@@ -386,7 +376,7 @@ basename(clean_csv)
 write_csv(dcl, clean_csv, na = "")
 write_rds(dcl, clean_rds, compress = "xz")
 (clean_size <- file_size(clean_csv))
-#> 35.8M
+#> 45.5M
 ```
 
 ## Upload

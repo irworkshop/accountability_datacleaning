@@ -176,7 +176,7 @@ if (!file_exists(raw_csv)) {
     escape_backslash = FALSE,
     escape_double = FALSE,
     name_repair = make_clean_names,
-    locale = locale(date_format = "%m/%d/%Y"),
+    # locale = locale(date_format = "%m/%d/%Y"),
     col_types = cols(
       .default = col_character(),
       effective_date = col_date(),
