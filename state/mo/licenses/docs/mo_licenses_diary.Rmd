@@ -1,0 +1,770 @@
+---
+title: "Missouri Licenses"
+author: "Kiernan Nicholls"
+date: "`r date()`"
+output:
+  github_document: 
+    df_print: tibble
+    toc: true
+    toc_dept: 3
+editor_options: 
+  chunk_output_type: console
+---
+
+<!-- Place comments regarding knitting here -->
+
+```{r setup, include=FALSE, purl=FALSE}
+library(knitr)
+opts_chunk$set(
+  eval = TRUE,
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  error = FALSE,
+  collapse = TRUE,
+  comment = "#>",
+  fig.path = "../plots/",
+  fig.width = 10,
+  dpi = 300
+)
+if (!interactive()) {
+  options(width = 120)
+  set.seed(5)
+}
+```
+
+## Project
+
+The Accountability Project is an effort to cut across data silos and give
+journalists, policy professionals, activists, and the public at large a simple
+way to search across huge volumes of public data about people and organizations.
+
+Our goal is to standardize public data on a few key fields by thinking of each
+dataset row as a transaction. For each transaction there should be (at least) 3
+variables:
+
+1. All **parties** to a transaction.
+2. The **date** of the transaction.
+3. The **amount** of money involved.
+
+## Objectives
+
+This document describes the process used to complete the following objectives:
+
+1. How many records are in the database?
+1. Check for entirely duplicated records.
+1. Check ranges of continuous variables.
+1. Is there anything blank or missing?
+1. Check for consistency issues.
+1. Create a five-digit ZIP Code called `zip`.
+1. Create a `year` field from the transaction date.
+1. Make sure there is data on both parties to a transaction.
+
+## Packages
+
+The following packages are needed to collect, manipulate, visualize, analyze,
+and communicate these results. The `pacman` package will facilitate their
+installation and attachment.
+
+```{r load-packages, message=FALSE, warning=FALSE, error=FALSE}
+if (!require("pacman")) {
+  install.packages("pacman")
+}
+pacman::p_load(
+  tidyverse, # data manipulation
+  lubridate, # datetime strings
+  gluedown, # printing markdown
+  janitor, # clean data frames
+  campfin, # custom irw tools
+  aws.s3, # aws cloud storage
+  refinr, # cluster & merge
+  scales, # format strings
+  knitr, # knit documents
+  vroom, # fast reading
+  rvest, # scrape html
+  glue, # code strings
+  here, # project paths
+  httr, # http requests
+  fs # local storage 
+)
+```
+
+This diary was run using `campfin` version `r packageVersion("campfin")`.
+
+```{r campfin-version}
+packageVersion("campfin")
+```
+
+```{r package-options, echo=FALSE}
+options(options(knitr.kable.NA = ""))
+```
+
+This document should be run as part of the `R_tap` project, which lives as a
+sub-directory of the more general, language-agnostic
+[`irworkshop/accountability_datacleaning`][tap] GitHub repository.
+
+The `R_tap` project uses the [RStudio projects][rproj] feature and should be
+run as such. The project also uses the dynamic `here::here()` tool for file
+paths relative to _your_ machine.
+
+```{r where-here}
+# where does this document knit?
+here::i_am("state/mo/licenses/docs/mo_licenses_diary.Rmd")
+```
+
+[tap]: https://github.com/irworkshop/accountability_datacleaning
+[rproj]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects
+
+## Source
+
+The [Missouri Division of Professional Registration][pr] provides listings of
+licensees by field.
+
+[dl]: https://pr.mo.gov/listings.asp
+
+> #### Downloadable Listings - Active License Only
+>
+> The information contained in "Downloadable Listings" and "Licensee Search" is
+updated nightly. If you are unable to locate licensee information or have
+questions regarding any of the information supplied, please contact the
+individual licensing board directly.
+
+## Download
+
+Raw source files will be saved to separate directories indicating their type.
+
+```{r raw-dir}
+zip_dir <- dir_create(here("state", "mo", "licenses", "data", "zip"))
+tsv_dir <- dir_create(here("state", "mo", "licenses", "data", "tsv"))
+doc_dir <- dir_create(here("state", "mo", "licenses", "data", "txt"))
+```
+
+We will download files using `ssl_verifypeer` set to `0` as means of bypassing
+an error with the site's security.
+
+```{r get-funs}
+GET2 <- function(url) {
+  with_config(
+    config = config(ssl_verifypeer = 0L),
+    expr = GET(url = url)
+  )
+}
+```
+
+On the home page are listed the 42 _sub_-pages, each corresponding to a type of
+licensee.
+
+```{r get-types}
+type_list <- GET2("https://pr.mo.gov/listings.asp")
+
+type_a <- type_list %>%
+  content(as = "parsed", encoding = "UTF-8") %>%
+  html_element("#main-content > table:nth-child(3)") %>%
+  html_elements("a")
+
+type_pg <- tibble(
+  a = str_squish(html_text(type_a)),
+  href = paste0("https://pr.mo.gov/", html_attr(type_a, "href"))
+)
+```
+
+```{r echo=FALSE}
+kable(type_pg)
+```
+
+Each sub-page lists all of the ZIP files available for each type of license
+holder in that category.
+
+> ### Accountancy
+> 
+> The files below are Professional Registration Directories and have been tab
+delimited and can be easily imported into various databases, spreadsheets, or
+word processors.
+>
+> Right Click on the `*.ZIP` file you wish to download and select Save As. Place
+the file where you can access it easily.
+>
+> The file description contains information on the type of fields contained in
+the data file and how large the fields are. This will help you set up a
+spreadsheet or database. After setting up your document, spreadsheet or database
+you must import the data file (`*.txt`) into it.
+
+We will go to each of these sub-pages and download the ZIP files listed there.
+Confusingly, the same ZIP file may be listed under multiple sub-pages. For 
+example, the `AAT.ZIP` file (Anesthesiologist Assistant Temporary) is listed
+under **nine** sub-pages: Anesthesiologist Assistants, Healing Arts, Physical, 
+Therapists, etc. We only need to save one copy of each ZIP file.
+
+```{r}
+type_file <- here("state", "mo", "licenses", "data", "mo_lic_urls.csv")
+if (!file_exists(type_file)) {
+  out <- rep(list(NA), rep(nrow(type_pg)))
+  for (i in seq_along(type_pg$href)) {
+    message(paste(i, length(out), sep = "/"))
+    get_sub <- GET2(type_pg$href[i])
+    sub_pg <- content(get_sub, encoding = "UTF-8")
+    sub_mc <- html_element(sub_pg, "#main-content")
+    has_table <- !is.na(html_element(sub_mc, "table"))
+    if (has_table) {
+      sub_tb <- html_table(html_element(sub_mc, "table"))
+      # get only rows that have something
+      sub_tr <- html_elements(sub_pg, "#main-content table tr")
+      sub_tr <- sub_tr[!is.na(sub_tb$X2)]
+      out[[i]] <- tibble(
+        type = type_pg$a[i],
+        href = html_attr(html_element(sub_tr, "a"), "href"),
+        desc = html_text(html_elements(sub_tr, "td")[c(FALSE, TRUE)])
+      )
+    } else {
+      sub_a <- html_elements(sub_pg, "#main-content a")
+      br_txt <- str_match_all(
+        string = as.character(sub_mc),
+        pattern = "</a>\\s(.*?)<br>"
+      )
+      out[[i]] <- tibble(
+        type = type_pg$a[i],
+        href =  str_subset(html_attr(sub_a, "href"), "\\.ZIP$"),
+        desc = br_txt[[1]][, 2]
+      )
+    }
+  }
+  all_urls <- bind_rows(out)
+  write_csv(all_urls, type_file)
+} else {
+  all_urls <- read_csv(type_file)
+}
+```
+
+```{r get-loop, eval=FALSE}
+for (i in seq_along(all_urls$href)) {
+  zip_path <- path(zip_dir, basename(all_urls$href[i]))
+  if (file_exists(zip_path)) {
+    next # file exists
+  } else {
+    download.file(
+      url = all_urls$href[i],
+      destfile = zip_path,
+      extra = "--insecure"
+    )
+  }
+}
+```
+
+## Unzip
+
+We can then take each of those ZIP files and extract the text files within.
+
+```{r echo=FALSE, eval=FALSE}
+raw_zip <- dir_ls(zip_dir, glob = "*.ZIP")
+for (i in seq_along(raw_zip)) {
+  message(i)
+  a <- unzip(raw_zip[i], list = TRUE)
+  b <- unzip(raw_zip[i], exdir = tsv_dir)
+  c <- b[a$Date != max(a$Date)]
+  if (length(c) > 1) {
+    break
+  }
+  d <- paste(path_ext_remove(basename(raw_zip[i])), basename(c), sep = "-")
+  file_move(c, new_path = path(doc_dir, d))
+}
+```
+
+```{r}
+raw_tsv <- dir_ls(tsv_dir)
+```
+
+## Read
+
+```{r raw-read}
+mol <- map(
+  .x = raw_tsv,
+  .f = read_delim,
+  delim = "\t",
+  na = c("", "N/A"),
+  escape_backslash = FALSE,
+  escape_double = FALSE,
+  locale = locale(date_format = "%Y-%m-%d %H:%M:%S"),
+  col_types = cols(
+    .default = col_character(),
+    lic_orig_issue_date = col_date(),
+    lic_exp_date = col_date(),
+  )
+)
+
+```
+
+```{r raw-probs}
+p <- map(mol, problems)
+p[map_lgl(p, ~nrow(.) != 0)]
+table(map_dbl(p, nrow))
+```
+
+```{r raw-bind}
+mol <- mol %>% 
+  bind_rows(.id = "source_file") %>% 
+  relocate(source_file, .after = last_col()) %>% 
+  mutate(
+    across(source_file, basename),
+    across(where(is.character), ~na_if(str_squish(.), ""))
+  )
+```
+
+We are also going to create a new column translating the file type name into
+the license holder description.
+
+```{r}
+mol <- mol %>% 
+  left_join(
+    y = all_urls %>%
+      mutate(lic_profession = str_match(href, "downloadables/(.*).ZIP")[, 2]) %>% 
+      select(lic_profession, lic_desc = desc),
+    by = "lic_profession"
+  )
+```
+
+## Explore
+
+There are `r comma(nrow(mol))` rows of `r ncol(mol)` columns. Each record
+represents a single license issued by the state of Missouri.
+
+```{r glimpse}
+glimpse(mol)
+tail(mol)
+```
+
+### Missing
+
+Columns vary in their degree of missing values.
+
+```{r na-count}
+col_stats(mol, count_na)
+```
+
+We can flag any record missing a key variable needed to identify a transaction.
+
+```{r}
+mol <- mol %>% 
+  mutate(prc_any_name = coalesce(prc_last_name, prc_entity_name)) %>% 
+  flag_na(prc_any_name, lic_orig_issue_date) %>% 
+  select(-prc_any_name)
+mean(mol$na_flag)
+sum(mol$na_flag)
+```
+
+### Duplicates
+
+We can also flag any record completely duplicated across every column.
+
+```{r dupe-flag}
+mol <- flag_dupes(mol, -lic_number)
+sum(mol$dupe_flag)
+```
+
+```{r dupe-view}
+mol %>% 
+  filter(dupe_flag) %>% 
+  count(prc_last_name, prc_entity_name, lic_orig_issue_date, sort = TRUE)
+```
+
+### Categorical
+
+```{r distinct-count}
+col_stats(mol, n_distinct)
+```
+
+```{r distinct-plots, echo=FALSE, fig.height=3}
+explore_plot(mol, lic_desc) + scale_x_wrap()
+explore_plot(mol, clas_description) + scale_x_wrap()
+```
+
+### Dates
+
+We can add the calendar year from `date` with `lubridate::year()`
+
+```{r date-year}
+mol <- mutate(mol, issue_year = year(lic_orig_issue_date))
+```
+
+```{r}
+min(mol$lic_orig_issue_date, na.rm = TRUE)
+sum(mol$lic_orig_issue_date == "1901-01-01", na.rm = TRUE)
+```
+
+```{r date-range}
+sum(mol$year < 2000)
+max(mol$lic_orig_issue_date, na.rm = TRUE)
+sum(mol$lic_orig_issue_date > today(), na.rm = TRUE)
+```
+
+```{r bar-year, echo=FALSE}
+mol %>% 
+  count(issue_year) %>% 
+  filter(issue_year %>% between(1950, 2022)) %>% 
+  ggplot(aes(x = issue_year, y = n)) +
+  geom_col(aes(fill = n), color = "black") + 
+  scale_fill_viridis_c(option = "C", end = 0.9, guide = "none") +
+  scale_y_continuous(labels = comma) +
+  scale_x_continuous(breaks = seq(1900, 2020, by = 10)) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "Missouri Licenses by Year Originally Issued",
+    fill = "Election Year",
+    x = "Year Made",
+    y = "Count"
+  )
+```
+
+```{r}
+mol %>% 
+  count(
+    y = year(lic_exp_date),
+    q = quarter(lic_exp_date)
+  ) %>% 
+  ggplot(aes(x = q, y = n)) +
+  geom_col(aes(fill = n), color = "black") + 
+  scale_fill_viridis_c(option = "C", end = 0.9, guide = "none") +
+  scale_y_continuous(labels = comma) +
+  scale_x_continuous(breaks = 1:4) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "Missouri Licenses by Year Originally Issued",
+    fill = "Election Year",
+    x = "Quarter",
+    y = "Count"
+  ) +
+  facet_wrap(~y, nrow = 1)
+```
+
+## Wrangle
+
+To improve the searchability of the database, we will perform some consistent,
+confident string normalization. For geographic variables like city names and
+ZIP codes, the corresponding `campfin::normal_*()` functions are tailor made to 
+facilitate this process.
+
+### Address
+
+For the street `addresss` variable, the `campfin::normal_address()` function
+will force consistence case, remove punctuation, and abbreviate official 
+USPS suffixes.
+
+```{r address-norm}
+addr_norm <- mol %>% 
+  distinct(ba_address, ba_2address) %>% 
+  mutate(
+    norm_ba_address = normal_address(
+      address = ba_address,
+      abbs = usps_street,
+      na_rep = TRUE
+    ),
+    norm_ba2_address = normal_address(
+      address = ba_2address,
+      abbs = usps_street,
+      na_rep = TRUE,
+      abb_end = TRUE
+    )
+  ) %>% 
+  unite(
+    col = address_norm,
+    starts_with("norm_ba"),
+    sep = " ",
+    remove = TRUE,
+    na.rm = TRUE
+  )
+```
+
+```{r address-view}
+addr_norm
+```
+
+```{r address-join}
+mol <- left_join(mol, addr_norm, by = c("ba_address", "ba_2address"))
+```
+
+### ZIP
+
+For ZIP codes, the `campfin::normal_zip()` function will attempt to create
+valid _five_ digit codes by removing the ZIP+4 suffix and returning leading
+zeroes dropped by other programs like Microsoft Excel.
+
+```{r zip-norm}
+mol <- mol %>% 
+  mutate(
+    zip_norm = normal_zip(
+      zip = ba_zip,
+      na_rep = TRUE
+    )
+  )
+```
+
+```{r zip-progress}
+progress_table(
+  mol$ba_zip,
+  mol$zip_norm,
+  compare = valid_zip
+)
+```
+
+### State
+
+Almost all of `ba_state` is valid except those out of the country.
+
+```{r state-check}
+prop_in(mol$ba_state, valid_state)
+count(what_out(mol$ba_state, valid_state), sort = TRUE)
+```
+
+```{r state-country}
+mol %>% 
+  filter(ba_state %out% valid_state) %>% 
+  count(ba_cntry, sort = TRUE)
+```
+
+### City
+
+Cities are the most difficult geographic variable to normalize, simply due to
+the wide variety of valid cities and formats.
+
+#### Normal
+
+The `campfin::normal_city()` function is a good start, again converting case,
+removing punctuation, but _expanding_ USPS abbreviations. We can also remove
+`invalid_city` values.
+
+```{r city-norm}
+norm_city <- mol %>% 
+  distinct(ba_city, ba_state, zip_norm) %>% 
+  mutate(
+    city_norm = normal_city(
+      city = ba_city, 
+      abbs = usps_city,
+      states = c("MO", "DC", "MISSOURI"),
+      na = invalid_city,
+      na_rep = TRUE
+    )
+  )
+```
+
+#### Swap
+
+We can further improve normalization by comparing our normalized value
+against the _expected_ value for that record's state abbreviation and ZIP code.
+If the normalized value is either an abbreviation for or very similar to the
+expected value, we can confidently swap those two.
+
+```{r city-swap}
+norm_city <- norm_city %>% 
+  rename(city_raw = ba_city) %>% 
+  left_join(
+    y = zipcodes,
+    by = c(
+      "ba_state" = "state",
+      "zip_norm" = "zip"
+    )
+  ) %>% 
+  rename(city_match = city) %>% 
+  mutate(
+    match_abb = is_abbrev(city_norm, city_match),
+    match_dist = str_dist(city_norm, city_match),
+    city_swap = if_else(
+      condition = !is.na(match_dist) & (match_abb | match_dist == 1),
+      true = city_match,
+      false = city_norm
+    )
+  ) %>% 
+  select(
+    -city_match,
+    -match_dist,
+    -match_abb
+  )
+```
+
+```{r city-rejoin}
+mol <- left_join(
+  x = mol,
+  y = norm_city,
+  by = c(
+    "ba_city" = "city_raw", 
+    "ba_state", 
+    "zip_norm"
+  )
+)
+```
+
+#### Refine
+
+The [OpenRefine][or] algorithms can be used to group similar strings and replace
+the less common versions with their most common counterpart. This can greatly
+reduce inconsistency, but with low confidence; we will only keep any refined
+strings that have a valid city/state/zip combination.
+
+[or]: https://openrefine.org/
+
+```{r city-refine}
+good_refine <- mol %>% 
+  mutate(
+    city_refine = city_swap %>% 
+      key_collision_merge() %>% 
+      n_gram_merge(numgram = 1)
+  ) %>% 
+  filter(city_refine != city_swap) %>% 
+  inner_join(
+    y = zipcodes,
+    by = c(
+      "city_refine" = "city",
+      "ba_state" = "state",
+      "zip_norm" = "zip"
+    )
+  )
+```
+
+```{r city-count, echo=FALSE}
+good_refine %>%
+  count(
+    ba_state, 
+    zip_norm, 
+    city_swap, 
+    city_refine,
+    sort = TRUE
+  )
+```
+
+Then we can join the refined values back to the database.
+
+```{r city-join}
+mol <- mol %>% 
+  left_join(good_refine, by = names(.)) %>% 
+  mutate(city_refine = coalesce(city_refine, city_swap))
+```
+
+#### Progress
+
+Our goal for normalization was to increase the proportion of city values known
+to be valid and reduce the total distinct values by correcting misspellings.
+
+```{r city-progress, echo=FALSE}
+many_city <- c(valid_city, extra_city)
+progress <- progress_table(
+  str_to_upper(mol$ba_city),
+  mol$city_norm,
+  mol$city_swap,
+  mol$city_refine,
+  compare = many_city
+) %>% mutate(stage = as_factor(stage))
+progress %>% 
+    mutate(across(stage, md_code)) %>% 
+    kable(digits = 3)
+```
+
+You can see how the percentage of valid values increased with each stage.
+
+```{r bar-progress, echo=FALSE}
+raw_in <- percent(prop_in(mol$ba_city, valid_city))
+progress %>% 
+  ggplot(aes(x = stage, y = prop_in)) +
+  geom_hline(yintercept = 0.99) +
+  geom_col(fill = dark2["purple"]) +
+  coord_cartesian(ylim = c(0.75, 1)) +
+  scale_y_continuous(labels = percent) +
+  labs(
+    title = "Missouri City Normalization Progress",
+    subtitle = glue("Raw at {raw_in} before conversion to uppercase"),
+    x = "Stage",
+    y = "Percent Valid"
+  )
+```
+
+More importantly, the number of distinct values decreased each stage. We were
+able to confidently change many distinct invalid values to their valid
+equivalent.
+
+```{r bar-distinct, echo=FALSE}
+progress %>% 
+  select(
+    stage, 
+    all = n_distinct,
+    bad = n_diff
+  ) %>% 
+  mutate(good = all - bad) %>% 
+  pivot_longer(c("good", "bad")) %>% 
+  mutate(name = name == "good") %>% 
+  ggplot(aes(x = stage, y = value)) +
+  geom_col(aes(fill = name)) +
+  scale_fill_brewer(palette = "Dark2", direction = -1) +
+  scale_y_continuous(labels = comma) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "Missouri City Normalization Progress",
+    subtitle = "Distinct values, valid and invalid",
+    x = "Stage",
+    y = "Distinct Values",
+    fill = "Valid"
+  )
+```
+
+Before exporting, we can remove the intermediary normalization columns and
+rename all added variables with the `_clean` suffix.
+
+```{r clean-select}
+mol <- mol %>% 
+  select(
+    -city_norm,
+    -city_swap,
+    city_clean = city_refine
+  ) %>% 
+  rename_all(~str_replace(., "_norm", "_clean")) %>% 
+  rename_all(~str_remove(., "_raw")) %>% 
+  relocate(address_clean, city_clean, .before = zip_clean)
+```
+
+## Conclude
+
+```{r clean-glimpse}
+glimpse(sample_n(mol, 1000))
+```
+
+1. There are `r comma(nrow(mol))` records in the database.
+1. There are `r comma(sum(mol$dupe_flag))` duplicate records in the database.
+1. The range and distribution of `amount` and `date` seem reasonable.
+1. There are `r comma(sum(mol$na_flag))` records missing key variables.
+1. Consistency in geographic data has been improved with `campfin::normal_*()`.
+1. The 4-digit `year` variable has been created with `lubridate::year()`.
+
+## Export
+
+Now the file can be saved on disk for upload to the Accountability server. We
+will name the object using a date range of the records included.
+
+```{r clean-dir}
+clean_dir <- dir_create(here("state", "mo", "licenses", "data", "clean"))
+clean_csv <- path(clean_dir, glue("mo_licenses_20220617.csv"))
+clean_rds <- path_ext_set(clean_csv, "rds")
+basename(clean_csv)
+```
+
+```{r clean-write}
+write_csv(mol, clean_csv, na = "")
+write_rds(mol, clean_rds, compress = "xz")
+(clean_size <- file_size(clean_csv))
+```
+
+## Upload
+
+We can use the `aws.s3::put_object()` to upload the text file to the IRW server.
+
+```{r aws-upload, eval=FALSE}
+aws_key <- path("csv", basename(clean_csv))
+if (!object_exists(aws_key, "publicaccountability")) {
+  put_object(
+    file = clean_csv,
+    object = aws_key, 
+    bucket = "publicaccountability",
+    acl = "public-read",
+    show_progress = TRUE,
+    multipart = TRUE
+  )
+}
+aws_head <- head_object(aws_key, "publicaccountability")
+(aws_size <- as_fs_bytes(attr(aws_head, "content-length")))
+unname(aws_size == clean_size)
+```
