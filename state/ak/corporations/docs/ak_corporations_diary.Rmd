@@ -1,0 +1,665 @@
+---
+title: "Alaska Corporations"
+author: "Kiernan Nicholls"
+date: "`r date()`"
+output:
+  github_document: 
+    df_print: tibble
+    toc: true
+    toc_dept: 3
+editor_options: 
+  chunk_output_type: console
+---
+
+<!-- Place comments regarding knitting here -->
+
+```{r setup, include=FALSE, purl=FALSE}
+library(knitr)
+opts_chunk$set(
+  eval = TRUE,
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  error = FALSE,
+  collapse = TRUE,
+  comment = "#>",
+  fig.path = "../plots/",
+  fig.width = 10,
+  dpi = 300
+)
+if (!interactive()) {
+  options(width = 120)
+  set.seed(5)
+}
+```
+
+```{r create-docs-dir, eval=FALSE, echo=FALSE, include=FALSE}
+doc_dir <- fs::dir_create(here::here("state", "ak", "corporations", "docs"))
+```
+
+## Project
+
+The Accountability Project is an effort to cut across data silos and give
+journalists, policy professionals, activists, and the public at large a simple
+way to search across huge volumes of public data about people and organizations.
+
+Our goal is to standardize public data on a few key fields by thinking of each
+dataset row as a transaction. For each transaction there should be (at least) 3
+variables:
+
+1. All **parties** to a transaction.
+2. The **date** of the transaction.
+3. The **amount** of money involved.
+
+## Objectives
+
+This document describes the process used to complete the following objectives:
+
+1. How many records are in the database?
+1. Check for entirely duplicated records.
+1. Check ranges of continuous variables.
+1. Is there anything blank or missing?
+1. Check for consistency issues.
+1. Create a five-digit ZIP Code called `zip`.
+1. Create a `year` field from the transaction date.
+1. Make sure there is data on both parties to a transaction.
+
+## Packages
+
+The following packages are needed to collect, manipulate, visualize, analyze,
+and communicate these results. The `pacman` package will facilitate their
+installation and attachment.
+
+```{r load-packages, message=FALSE, warning=FALSE, error=FALSE}
+if (!require("pacman")) {
+  install.packages("pacman")
+}
+pacman::p_load(
+  tidyverse, # data manipulation
+  lubridate, # datetime strings
+  gluedown, # printing markdown
+  janitor, # clean data frames
+  campfin, # custom irw tools
+  aws.s3, # aws cloud storage
+  refinr, # cluster & merge
+  scales, # format strings
+  knitr, # knit documents
+  rvest, # scrape html
+  glue, # code strings
+  here, # project paths
+  httr, # http requests
+  fs # local storage 
+)
+```
+
+This diary was run using `campfin` version `r packageVersion("campfin")`.
+
+```{r campfin-version}
+packageVersion("campfin")
+```
+
+```{r package-options, echo=FALSE}
+options(options(knitr.kable.NA = ""))
+```
+
+This document should be run as part of the `R_tap` project, which lives as a
+sub-directory of the more general, language-agnostic
+[`irworkshop/accountability_datacleaning`][tap] GitHub repository.
+
+The `R_tap` project uses the [RStudio projects][rproj] feature and should be
+run as such. The project also uses the dynamic `here::here()` tool for file
+paths relative to _your_ machine.
+
+```{r where-here}
+# where does this document knit?
+here::i_am("state/ak/corporations/docs/ak_corporations_diary.Rmd")
+```
+
+[tap]: https://github.com/irworkshop/accountability_datacleaning
+[rproj]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects
+
+## Source
+
+Alaskan business licenses are available from the Alaska Department of Commerce, 
+Community, and Economic Development which provides [direct downloads][dd] to
+listings of Corporations, Business & Professional Licensing.
+
+> The Division of Corporations, Business and Professional Licensing provides
+access to thousands of license records online as a service to the public. Use
+the links below to search specific license types, including corporations,
+business licenses, endorsements, and professional licenses.
+
+### Disclaimer
+
+> The Division has attempted to insure that the information contained in these
+electronic documents is as accurate as possible. Only authorized staff from the
+Division of Corporations, Business and Professional Licensing has access to
+modify the data provided.
+> 
+> For individuals who have had a licensing action, a notation should be
+reflected on their website record as "This license has been the subject of a
+formal agreement, order or disciplinary action. Contact the Division for more
+information." The Division makes no guarantee that such action will appear on
+this website and further, we make no warranty or guarantee of the accuracy or
+reliability of the content of this website or the content of any other website
+to which it may link.
+> 
+> Assessing the accuracy and reliability of the information obtained from this
+website is solely the responsibility of the user. The Division shall not be
+responsible or liable for any errors contained herein or for any damages
+resulting from the use of the information contained herein.
+
+## Download
+
+> The Division also allows for full downloads of our corporations, business, and
+professional licensing databases in .CSV format. Select one of the links below
+to download an Excel spreadsheet of all licenses on record with the state.
+Please note that these downloads may require some manipulation and further
+investigation via NAICS code, Entity Type, zip code, dates, etc., in order to
+properly organize the data provided.
+
+```{r raw-dir}
+raw_url <- "https://www.commerce.alaska.gov/cbp/DBDownloads/CorporationsDownload.CSV"
+raw_dir <- dir_create(here("state", "ak", "businesses", "data", "raw"))
+raw_csv <- path(raw_dir, basename(raw_url))
+```
+
+```{r raw-download}
+if (!file_exists(raw_csv)) {
+  download.file(raw_url, raw_csv)
+}
+```
+
+## Read
+
+```{r raw-read}
+akc <- read_delim(
+  file = raw_csv,
+  delim = ",",
+  escape_backslash = FALSE,
+  escape_double = FALSE,
+  col_types = cols(
+    .default = col_character()
+  )
+)
+```
+
+```{r clean-names}
+akc <- akc %>% 
+  clean_names(case = "snake") %>% 
+  mutate(across(ends_with("date"), parse_date, "%m/%d/%Y", na = "Perpetual"))
+```
+
+## Explore
+
+There are `r comma(nrow(akc))` rows of `r ncol(akc)` columns. Each record
+represents a single corporation registered in the state of Alaska.
+
+```{r glimpse}
+glimpse(akc)
+tail(akc)
+```
+
+### Missing
+
+Columns vary in their degree of missing values.
+
+```{r na-count}
+col_stats(akc, count_na)
+```
+
+We can flag any record missing a key variable needed to identify a transaction.
+
+There are _four_ separate types of addresses that might be listed, each with
+a different degree of missing value:
+1. `entityphysaddress`
+2. `entitymailingaddress`
+3. `registeredphysaddress`
+4. `registeredmailaddress`
+
+We are going to create one column containing _any_ address that can be used to
+find rows without an address in any of the four columns.
+
+```{r}
+akc <- akc %>% 
+  mutate(
+    any_addr1 = coalesce(
+      entityphysaddress1,
+      registeredphysaddress1,
+      entitymailingaddress1,
+      registeredmailaddress1
+    ),
+    any_addr2 = coalesce(
+      entityphysaddress2,
+      registeredphysaddress2,
+      entitymailingaddress2,
+      registeredmailaddress2
+    )
+  )
+```
+
+```{r na-flag}
+key_vars <- c("legalname", "akformeddate", "any_addr1")
+akc <- flag_na(akc, all_of(key_vars))
+sum(akc$na_flag)
+```
+
+```{r na-view}
+akc %>% 
+  filter(na_flag) %>% 
+  select(all_of(key_vars))
+```
+
+### Duplicates
+
+There are no duplicate records in the data, even when ignoring `entitynumber`.
+
+### Categorical
+
+```{r distinct-count}
+col_stats(akc, n_distinct)
+```
+
+```{r distinct-plots, echo=FALSE, fig.height=3}
+explore_plot(akc, status)
+explore_plot(akc, corptype) + scale_x_wrap()
+```
+
+### Dates
+
+We can add the calendar year from `date` with `lubridate::year()`
+
+```{r date-year}
+akc <- mutate(akc, akformedyear = year(akformeddate))
+```
+
+```{r date-range}
+min(akc$akformeddate)
+sum(akc$akformedyear < 2000)
+max(akc$akformeddate)
+sum(akc$akformeddate > today())
+```
+
+```{r bar-year, echo=FALSE}
+akc %>% 
+  count(akformedyear) %>% 
+  ggplot(aes(x = akformedyear, y = n)) +
+  geom_col(aes(fill = n), color = "black") + 
+  scale_fill_viridis_b(option = "C", end = 0.9, guide = "none") +
+  scale_y_continuous(labels = comma) +
+  scale_x_continuous(breaks = seq(1900, 2020, by = 5)) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "Alaska Corporations by Year",
+    caption = "Source: {source}",
+    fill = "Election Year",
+    x = "Year Made",
+    y = "Count"
+  )
+```
+
+## Wrangle
+
+To improve the searchability of the database, we will perform some consistent,
+confident string normalization. For geographic variables like city names and
+ZIP codes, the corresponding `campfin::normal_*()` functions are tailor made to 
+facilitate this process.
+
+### Address
+
+For the street `addresss` variable, the `campfin::normal_address()` function
+will force consistence case, remove punctuation, and abbreviate official 
+USPS suffixes.
+
+```{r address-norm}
+addr_norm <- akc %>% 
+  distinct(any_addr1, any_addr2) %>% 
+  mutate(
+    norm_addr1 = normal_address(
+      address = any_addr1,
+      abbs = usps_street,
+      na_rep = TRUE
+    ),
+    norm_addr2 = normal_address(
+      address = any_addr2,
+      abbs = usps_street,
+      na_rep = TRUE,
+      abb_end = FALSE
+    )
+  ) %>% 
+  unite(
+    col = address_norm,
+    starts_with("norm_addr"),
+    sep = " ",
+    remove = TRUE,
+    na.rm = TRUE
+  ) %>% 
+  mutate(across(address_norm, na_if, ""))
+```
+
+```{r address-view}
+addr_norm
+```
+
+```{r address-join}
+akc <- akc %>% 
+  left_join(addr_norm, by = c("any_addr1", "any_addr2")) %>% 
+  select(-any_addr1, -any_addr2)
+```
+
+### ZIP
+
+For ZIP codes, the `campfin::normal_zip()` function will attempt to create
+valid _five_ digit codes by removing the ZIP+4 suffix and returning leading
+zeroes dropped by other programs like Microsoft Excel.
+
+Like addresses, many records that don't contain a mailing ZIP will have a
+physical ZIP (or vice versa). We are going to normalize _one_ ZIP code that
+will be used in searches, ***prioritizing physical addresses first.**
+
+```{r zip-norm}
+akc <- akc %>% 
+  mutate(
+    zip_norm = normal_zip(
+      zip = coalesce(
+        entityphyszip,
+        registeredphyszip,
+        entitymailingzip,
+        registeredmailzip
+      ),
+      na_rep = TRUE
+    )
+  )
+```
+
+```{r}
+akc %>% 
+  select(contains("zip")) %>% 
+  distinct() %>% 
+  filter(is.na(entityphyszip))
+```
+
+```{r zip-progress}
+progress_table(
+  akc$zip_norm,
+  compare = valid_zip
+)
+```
+
+### State
+
+Something similar must be done for state abbreviations.
+
+```{r state-norm}
+akc <- akc %>% 
+  mutate(
+    state_norm = normal_state(
+      state = coalesce(
+        entityphysstateprovince,
+        registeredphysstateprovince,
+        entitymailingstateprovince,
+        registeredmailstateprovince
+      ),
+      abbreviate = TRUE,
+      na_rep = TRUE
+    )
+  )
+```
+
+```{r state-progress}
+progress_table(
+  akc$state_norm,
+  compare = valid_state
+)
+```
+
+### City
+
+Cities are the most difficult geographic variable to normalize, simply due to
+the wide variety of valid cities and formats.
+
+#### Normal
+
+The `campfin::normal_city()` function is a good start, again converting case,
+removing punctuation, but _expanding_ USPS abbreviations. We can also remove
+`invalid_city` values.
+
+```{r city-norm}
+norm_city <- akc %>% 
+  distinct(entityphyscity, registeredphyscity,
+           entitymailingcity, registeredmailcity,
+           state_norm, zip_norm) %>% 
+  mutate(
+    city_norm = normal_city(
+      city = coalesce(
+        entityphyscity,
+        registeredphyscity,
+        entitymailingcity,
+        registeredmailcity
+      ), 
+      abbs = usps_city,
+      states = c("AK", "DC", "ALASKA"),
+      na = invalid_city,
+      na_rep = TRUE
+    )
+  )
+```
+
+#### Swap
+
+We can further improve normalization by comparing our normalized value
+against the _expected_ value for that record's state abbreviation and ZIP code.
+If the normalized value is either an abbreviation for or very similar to the
+expected value, we can confidently swap those two.
+
+```{r city-swap}
+norm_city <- norm_city %>% 
+  left_join(
+    y = zipcodes,
+    by = c(
+      "state_norm" = "state",
+      "zip_norm" = "zip"
+    )
+  ) %>% 
+  rename(city_match = city) %>% 
+  mutate(
+    match_abb = is_abbrev(city_norm, city_match),
+    match_dist = str_dist(city_norm, city_match),
+    city_swap = if_else(
+      condition = !is.na(match_dist) & (match_abb | match_dist == 1),
+      true = city_match,
+      false = city_norm
+    )
+  ) %>% 
+  select(
+    -city_match,
+    -match_dist,
+    -match_abb
+  )
+```
+
+```{r city-rejoin}
+akc <- left_join(
+  x = akc,
+  y = norm_city
+)
+```
+
+#### Refine
+
+The [OpenRefine][or] algorithms can be used to group similar strings and replace
+the less common versions with their most common counterpart. This can greatly
+reduce inconsistency, but with low confidence; we will only keep any refined
+strings that have a valid city/state/zip combination.
+
+[or]: https://openrefine.org/
+
+```{r city-refine}
+good_refine <- akc %>% 
+  mutate(
+    city_refine = city_swap %>% 
+      key_collision_merge() %>% 
+      n_gram_merge(numgram = 1)
+  ) %>% 
+  filter(city_refine != city_swap) %>% 
+  inner_join(
+    y = zipcodes,
+    by = c(
+      "city_refine" = "city",
+      "state_norm" = "state",
+      "zip_norm" = "zip"
+    )
+  )
+```
+
+```{r city-count, echo=FALSE}
+good_refine %>%
+  count(
+    state_norm, 
+    zip_norm, 
+    city_swap, 
+    city_refine,
+    sort = TRUE
+  )
+```
+
+Then we can join the refined values back to the database.
+
+```{r city-join}
+akc <- akc %>% 
+  left_join(good_refine, by = names(.)) %>% 
+  mutate(city_refine = coalesce(city_refine, city_swap))
+```
+
+#### Progress
+
+Our goal for normalization was to increase the proportion of city values known
+to be valid and reduce the total distinct values by correcting misspellings.
+
+```{r city-progress, echo=FALSE}
+many_city <- c(valid_city, extra_city)
+progress <- progress_table(
+  str_to_upper(akc$entityphyscity),
+  akc$city_norm,
+  akc$city_swap,
+  akc$city_refine,
+  compare = many_city
+) %>% mutate(stage = as_factor(stage))
+progress %>% 
+    mutate(across(stage, md_code)) %>% 
+    kable(digits = 3)
+```
+
+You can see how the percentage of valid values increased with each stage.
+
+```{r bar-progress, echo=FALSE}
+raw_in <- percent(prop_in(akc$entityphyscity, valid_city))
+progress %>% 
+  ggplot(aes(x = stage, y = prop_in)) +
+  geom_hline(yintercept = 0.99) +
+  geom_col(fill = dark2["purple"]) +
+  coord_cartesian(ylim = c(0.75, 1)) +
+  scale_y_continuous(labels = percent) +
+  labs(
+    title = "Alaska City Normalization Progress",
+    subtitle = glue("Raw at {raw_in} before conversion to uppercase"),
+    x = "Stage",
+    y = "Percent Valid"
+  )
+```
+
+More importantly, the number of distinct values decreased each stage. We were
+able to confidently change many distinct invalid values to their valid
+equivalent.
+
+```{r bar-distinct, echo=FALSE}
+progress %>% 
+  select(
+    stage, 
+    all = n_distinct,
+    bad = n_diff
+  ) %>% 
+  mutate(good = all - bad) %>% 
+  pivot_longer(c("good", "bad")) %>% 
+  mutate(name = name == "good") %>% 
+  ggplot(aes(x = stage, y = value)) +
+  geom_col(aes(fill = name)) +
+  scale_fill_brewer(palette = "Dark2", direction = -1) +
+  scale_y_continuous(labels = comma) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "Alaska City Normalization Progress",
+    subtitle = "Distinct values, valid and invalid",
+    x = "Stage",
+    y = "Distinct Values",
+    fill = "Valid"
+  )
+```
+
+Before exporting, we can remove the intermediary normalization columns and
+rename all added variables with the `_clean` suffix.
+
+```{r clean-select}
+akc <- akc %>% 
+  select(
+    -city_norm,
+    -city_swap,
+    city_clean = city_refine
+  ) %>% 
+  rename_all(~str_replace(., "_norm", "_clean")) %>% 
+  rename_all(~str_remove(., "_raw")) %>% 
+  relocate(address_clean, city_clean, state_clean, .before = zip_clean)
+```
+
+## Conclude
+
+```{r clean-glimpse}
+glimpse(sample_n(akc, 1000))
+```
+
+1. There are `r comma(nrow(akc))` records in the database.
+1. There are `r comma(sum(akc$dupe_flag))` duplicate records in the database.
+1. The range and distribution of `amount` and `date` seem reasonable.
+1. There are `r comma(sum(akc$na_flag))` records missing key variables.
+1. Consistency in geographic data has been improved with `campfin::normal_*()`.
+1. The 4-digit `year` variable has been created with `lubridate::year()`.
+
+## Export
+
+Now the file can be saved on disk for upload to the Accountability server. We
+will name the object using a date range of the records included.
+
+```{r clean-dir}
+clean_dir <- dir_create(here("state", "ak", "corporations", "data", "clean"))
+csv_ts <- str_remove_all(Sys.Date(), "-")
+clean_csv <- path(clean_dir, glue("ak_corporations_{csv_ts}.csv"))
+clean_rds <- path_ext_set(clean_csv, "rds")
+basename(clean_csv)
+```
+
+```{r clean-write}
+write_csv(akc, clean_csv, na = "")
+write_rds(akc, clean_rds, compress = "xz")
+(clean_size <- file_size(clean_csv))
+```
+
+## Upload
+
+We can use the `aws.s3::put_object()` to upload the text file to the IRW server.
+
+```{r aws-upload, eval=FALSE}
+aws_key <- path("csv", basename(clean_csv))
+if (!object_exists(aws_key, "publicaccountability")) {
+  put_object(
+    file = clean_csv,
+    object = aws_key, 
+    bucket = "publicaccountability",
+    acl = "public-read",
+    show_progress = TRUE,
+    multipart = TRUE
+  )
+}
+aws_head <- head_object(aws_key, "publicaccountability")
+(aws_size <- as_fs_bytes(attr(aws_head, "content-length")))
+unname(aws_size == clean_size)
+```
