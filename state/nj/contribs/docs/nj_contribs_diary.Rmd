@@ -455,7 +455,7 @@ sum(njc$cont_date > today(), na.rm = TRUE)
 ```{r bar_year, echo=FALSE}
 njc %>% 
   count(cont_year) %>%
-  filter(between(cont_year, 1978, 2015)) %>% 
+  filter(between(cont_year, 1978, 2020)) %>% 
   mutate(even = !is_even(cont_year)) %>% 
   ggplot(aes(x = cont_year, y = n)) +
   geom_col(aes(fill = even)) + 
