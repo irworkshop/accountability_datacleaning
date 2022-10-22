@@ -34,7 +34,7 @@ if (!interactive()) {
 ```
 
 ```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
-doc_dir <- fs::dir_create(here::here("mo", "contribs", "docs"))
+doc_dir <- fs::dir_create(here::here("state","mo", "contribs", "docs"))
 ```
 
 ## Project
@@ -113,7 +113,7 @@ here::here()
 [rproj]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects
 
 ## Data
-The contribution data can be obtained from the [Missouri Ethics Commission](https://www.mec.mo.gov/MEC/Campaign_Finance/CF_ContrCSV.aspx). We are interested in downloading contributions received by committees, so here we select the Itemized Contributions Received - Form CD1 A. This data is downloaded on Nov. 20, 2020
+The contribution data can be obtained from the [Missouri Ethics Commission](https://www.mec.mo.gov/MEC/Campaign_Finance/CF_ContrCSV.aspx). We are interested in downloading contributions received by committees, so here we select the Itemized Contributions Received - Form CD1 A. This data is downloaded on Nov. 20, 2020. We 
 
 
 ## Download
@@ -465,7 +465,7 @@ to be valid and reduce the total distinct values by correcting misspellings.
 ```{r city_progress, echo=FALSE}
 many_city <- c(valid_city, extra_city)
 progress <- progress_table(
-  str_to_upper(moc$city_raw),
+  toupper(moc$city_raw),
   moc$city_norm,
   moc$city_swap,
   moc$city_refine,
@@ -552,7 +552,7 @@ glimpse(sample_n(moc, 50))
 Now the file can be saved on disk for upload to the Accountability server.
 
 ```{r clean_dir}
-clean_dir <- dir_create(here("mo", "contribs", "data", "clean"))
+clean_dir <- dir_create(here("state","mo", "contribs", "data", "clean"))
 clean_path <- path(clean_dir, "mo_contribs_clean.csv")
 write_csv(moc, clean_path, na = "")
 (clean_size <- file_size(clean_path))

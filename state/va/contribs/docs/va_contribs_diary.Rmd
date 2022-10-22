@@ -150,11 +150,14 @@ We are interested in schedule's A and B.
 The data itself is hosted on an SBE server and organized in monthly directories.
 
 ```{r raw_list}
+library(polite)
 sbe_url <- "https://apps.elections.virginia.gov/SBE_CSV/CF/"
-sbe_list <- read_html(sbe_url)
+#sbe_list <- read_html(sbe_url)
+sbe_session <- bow(sbe_url, force = T)
+sbe_list <- scrape(sbe_session)
 ```
 
-```{r raw_show, echo=FALSE}
+```{r raw_show, include=FALSE}
 sbe_table <- sbe_list %>% 
   html_node("pre") %>% 
   html_text() %>% 
@@ -177,24 +180,39 @@ sbe_table %>%
       dir,
       paste0(
         "https://apps.elections.virginia.gov/SBE_CSV/CF/", 
-        sbe_table$dir
+        sbe_table$dir,
+        "/"
       )
     )
   ) %>% 
   kable()
 ```
 
+Our last update covered everything prior to Oct, 2020, so we'll start from `2020_11` to `2022-10`. It appears that the full month of Oct, 2022 was included in the report. 
+
 From this list of directories, we can extract each `<href>` HTML tag. These
 tags provide the directory names.
 
 ```{r sbe_dirs_get, results='asis'}
-raw_dir <- dir_create(here("va", "contribs", "data", "raw"))
+raw_dir <- dir_create(here("state","va", "contribs", "data", "raw"))
 sbe_base <- "https://apps.elections.virginia.gov"
-sbe_dirs <- sbe_list %>% 
-  html_nodes("a") %>% 
-  html_attr("href") %>% 
-  str_subset("\\d_")
 ```
+
+```{r sbe_dirs_update}
+update_start <- "2020/11/1"
+update_end <- "2022/10/1"
+sbe_table <- sbe_table %>% filter(datetime >= ymd(update_start) & datetime <= ymd(update_end))
+# sbe_dirs <- sbe_list %>%
+#   html_nodes("a") %>%
+#   html_attr("href") %>%
+#   str_subset("\\d_")
+
+sbe_dirs <-  paste0(
+        "https://apps.elections.virginia.gov/SBE_CSV/CF/", 
+        sbe_table$dir, "/"
+      )
+```
+
 
 ```{r sbe_dirs_list, echo=FALSE}
 sbe_dirs %>% 
@@ -214,9 +232,9 @@ contributions.
 ```{r sbe_names_get}
 sbe_names <- character()
 for (dir in sbe_dirs) {
-  sbe_names <- sbe_base %>% 
-    str_c(dir) %>% 
-    read_html() %>% 
+  sbe_names <- 
+    bow(dir, force = T) %>% 
+    scrape() %>% 
     html_nodes("a") %>% 
     html_attr("href") %>% 
     str_subset("(Schedule(A|B))|Report") %>% 
@@ -252,11 +270,13 @@ be read so that erroneous double quotations can be removed using regular
 expressions.
 
 ```{r raw_download}
+library(httr)
 for (i in seq_along(raw_urls)) {
+  wait = 1
   if (file_exists(raw_paths[i])) {
     next("file already downloaded")
   } else {
-    download.file(raw_urls[i], raw_paths[i])
+    httr::GET(raw_urls[i],user_agent("Mozilla/5.0"), write_disk(raw_paths[i]))
     x <- read_lines(raw_paths[i])
     if (str_starts(x[1], "#")) {
       next("file already fixed")
@@ -264,6 +284,7 @@ for (i in seq_along(raw_urls)) {
       x <- str_replace_all(x, "(?<!^|,|\r\n)\"(?!,|\r\n|$)", "'")
       x <- c("### file fixed", x)
       write_lines(x, raw_paths[i])
+      Sys.sleep(time = wait)
     }
   }
 }
@@ -585,8 +606,9 @@ vac %>%
   geom_col(aes(fill = even)) + 
   scale_fill_brewer(palette = "Dark2") +
   scale_y_continuous(labels = comma) +
-  scale_x_continuous(breaks = seq(2009, 2020, by = 1)) +
-  coord_cartesian(xlim = c(2009, 2020)) +
+  #scale_x_continuous(breaks = seq(2009, 2020, by = 1)) +
+  scale_x_continuous(breaks = seq(2020, 2022, by = 1)) +
+  coord_cartesian(xlim = c(2020, 2022)) +
   theme(legend.position = "bottom") +
   labs(
     title = "Virginia Contributions by Year",
@@ -999,7 +1021,7 @@ glimpse(sample_n(vac, 100))
 Now the file can be saved on disk for upload to the Accountability server.
 
 ```{r clean_dir}
-clean_dir <- dir_create(here("va", "contribs", "data", "clean"))
+clean_dir <- dir_create(here("state","va", "contribs", "data", "clean"))
 clean_path <- path(clean_dir, "va_contribs_clean.csv")
 write_csv(vac, clean_path, na = "")
 (clean_size <- file_size(clean_path))

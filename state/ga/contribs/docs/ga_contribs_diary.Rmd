@@ -34,7 +34,7 @@ if (!interactive()) {
 ```
 
 ```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
-doc_dir <- fs::dir_create(here::here("la", "contribs", "docs"))
+doc_dir <- fs::dir_create(here::here("ga", "contribs", "docs"))
 ```
 
 ## Project
@@ -114,11 +114,11 @@ here::here()
 ## Data
 
 ## Download
-Campaign contribution data is available from the [Georgia Ethics Administration Program](http://www.ethics.la.gov/CampaignFinanceSearch/SearchResultsByContributions.aspx). 
-
-We downloaded the data year by year since there's a limit on the number of rows at each export. The end date of this data is Oct 5, 2020 and the next update should start on Oct 6, 2020. 
+Campaign contribution data is available from the [Georgia Ethics Administration Program](https://media.ethics.ga.gov/search/Campaign/Campaign_ByContributions.aspx). 
+The update covers the time period of Oct 6,2020 to Oct 8, 2022. The next update should start from Oct 9, 2022. 
+Note from earlier: We downloaded the data year by year since there's a limit on the number of rows at each export. The end date of this data is Oct 5, 2020 and the next update should start on Oct 6, 2020. 
 ```{r raw_dir}
-raw_dir <- dir_create(here("ga", "contribs", "data", "raw"))
+raw_dir <- dir_create(here("state","ga", "contribs", "data", "raw"))
 source <- "Georgia Government Transparency and Campaign Finance Commission"
 ```
 
@@ -128,7 +128,7 @@ More in formation about the types of forms that are filed can be found on the Ge
 read_ga_contrib <-  function(file){
 df <- file %>% 
   read_lines(skip = 1) %>% 
-  str_replace_all("(?<!(\n|^|,))\"(?!(,(?=\"))|$|\r)", "'") %>% 
+  str_replace_all("(?<!(\n|^|,))\"(?!(,(?=\"))|$|\r)", "'") %>% I() %>% 
   read_delim(
     delim = ",",
     escape_backslash = FALSE,
@@ -141,7 +141,7 @@ df <- file %>%
 return(df)
 }
 
-gac <- dir_ls(raw_dir) %>% map_dfr(read_ga_contrib)
+gac <- dir_ls(raw_dir) %>% read_ga_contrib()
 
 gac <- gac %>% 
   clean_names() %>% 
@@ -269,7 +269,7 @@ gac %>%
   scale_x_continuous(breaks = seq(2006, 2020, by = 2)) +
   theme(legend.position = "bottom") +
   labs(
-    title = "Georgia Contracts by Year",
+    title = "Georgia Contributions by Year (partial years)",
     caption = glue("Source: {source}"),
     fill = "Election Year",
     x = "Year Made",
@@ -559,7 +559,7 @@ glimpse(sample_n(gac, 20))
 Now the file can be saved on disk for upload to the Accountability server.
 
 ```{r clean_dir}
-clean_dir <- dir_create(here("ga", "contribs", "data", "clean"))
+clean_dir <- dir_create(here("state","ga", "contribs", "data", "clean"))
 clean_path <- path(clean_dir, "ga_contribs_clean.csv")
 write_csv(gac, clean_path, na = "")
 file_size(clean_path)
@@ -637,6 +637,6 @@ dict_raw <- tibble(
 ```{r dict_write}
 write_lines(
   x = c("# Georgia Contributions Data Dictionary\n", dict_md),
-  path = here("ga", "contribs", "ga_contribs_dict.md"),
+  path = here("state","ga", "contribs", "ga_contribs_dict.md"),
 )
 ```

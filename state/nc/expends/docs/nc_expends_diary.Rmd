@@ -120,6 +120,7 @@ political party or a referendum.
 
 
 ### Download
+*2022 update:The last data update was performed on 2020-04-28, so the new update starts from 2020-04-29 to 2022-10-10.
 
 To download the data, perform a [Transaction Entity Search][03] for type
 "Expenditure" from 2008-01-01 to `r today()`.
@@ -133,7 +134,7 @@ during a business day will appear on our website the following day.
 [03]: https://cf.ncsbe.gov/CFTxnLkup/
 
 ```{r raw_dir}
-raw_dir <- dir_create(here("nc", "expends", "data", "raw")) 
+raw_dir <- dir_create(here("state","nc", "expends", "data", "raw")) 
 ```
 
 ### Read
@@ -172,7 +173,7 @@ nc <- read_csv(
   ),
   col_types = cols(
     .default = col_character(),
-    date = col_date_usa(),
+    date = col_date_mdy(),
     amount = col_double()
   )
 ) %>% 
@@ -191,7 +192,7 @@ glimpse(sample_frac(nc))
 ### Missing
 
 ```{r missing_glimpse}
-glimpse_fun(nc, count_na)
+col_stats(nc, count_na)
 ```
 
 There seems to be a regular block of records missing the variables needed to properly identify a
@@ -221,7 +222,7 @@ We can check the distribution of categorical variables to gain a better understa
 kind of expenditures are being made.
 
 ```{r glimpse_distinct}
-glimpse_fun(nc, n_distinct)
+col_stats(nc, n_distinct)
 ```
 
 We can use `campfin::explore_plot()` to explore the distribution of the least distinct categorical
@@ -231,10 +232,10 @@ variables.
 explore_plot(
   data = nc,
   var = transction_type,
-  flip = TRUE,
-  palette = "Dark2",
-  title = "North Carolina Expenditure Types",
-  caption = "Source: NC SBoE"
+  #flip = TRUE,
+  #palette = "Dark2",
+  #title = "North Carolina Expenditure Types",
+  #caption = "Source: NC SBoE"
 )
 ```
 
@@ -242,10 +243,10 @@ explore_plot(
 explore_plot(
   data = nc,
   var = form_of_payment,
-  flip = TRUE,
-  palette = "Dark2",
-  title = "North Carolina Expenditure Payment Method",
-  caption = "Source: NC SBoE"
+  #flip = TRUE,
+  #palette = "Dark2",
+  #title = "North Carolina Expenditure Payment Method",
+  #caption = "Source: NC SBoE"
 )
 ```
 
@@ -253,10 +254,10 @@ explore_plot(
 explore_plot(
   data = drop_na(nc, supports),
   var = supports,
-  flip = FALSE,
-  palette = "Dark2",
-  title = "North Carolina Expenditure Supports Candidate/Issue",
-  caption = "Source: NC SBoE"
+  #flip = FALSE,
+  #palette = "Dark2",
+  #title = "North Carolina Expenditure Supports Candidate/Issue",
+  #caption = "Source: NC SBoE"
 )
 ```
 
@@ -460,7 +461,7 @@ nc %>%
   ggplot(aes(x = year, y = sum)) +
   geom_col(aes(fill = on)) +
   scale_y_continuous(labels = dollar) +
-  scale_x_continuous(breaks = 2008:2019) +
+  scale_x_continuous(breaks = min(nc$year,na.rm = T):max(nc$year, na.rm = T)) +
   scale_fill_brewer(
     type = "qual",
     palette = "Dark2"
@@ -715,7 +716,7 @@ progress %>%
 
 More importantly, the number of distinct values decreased each stage. We were
 able to confidently change many distinct invalid values to their valid
-equivilent.
+equivalent.
 
 ```{r distinct_bar}
 progress %>% 
@@ -752,6 +753,7 @@ progress %>%
 1. The 4-digit `year` variable has been created with `lubridate::year()`
 
 ## Export
+Now the file can be saved on disk for upload to the Accountability server.
 
 ```{r clean_rename}
 nc <- nc %>% 
@@ -764,14 +766,36 @@ nc <- nc %>%
   -match_dist,
 )
 
+
 nc <- nc %>% 
   rename_all(str_replace, "_(norm|swap)$", "_clean")
 ```
 
 ```{r clean_write}
-clean_dir <- dir_create(here("nc", "expends", "data", "clean"))
+clean_dir <- dir_create(here("state","nc", "expends", "data", "clean"))
 clean_path <- path(clean_dir, glue("nc_expends_{today()}.csv"))
 write_csv(nc, clean_path, na = "")
 file_size(clean_path)
-guess_encoding(clean_path)
+#html_guess_encoding(clean_path)
+```
+
+## Upload
+
+We can use the `aws.s3::put_object()` to upload the text file to the IRW server.
+
+```{r aws-upload, eval=FALSE}
+aws_path <- path("csv", basename(clean_path))
+if (!object_exists(aws_path, "publicaccountability")) {
+  put_object(
+    file = clean_path,
+    object = aws_path, 
+    bucket = "publicaccountability",
+    acl = "public-read",
+    show_progress = TRUE,
+    multipart = TRUE
+  )
+}
+aws_head <- head_object(aws_path, "publicaccountability")
+(aws_size <- as_fs_bytes(attr(aws_head, "content-length")))
+unname(aws_size == clean_size)
 ```

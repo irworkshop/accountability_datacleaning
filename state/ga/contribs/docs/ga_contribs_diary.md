@@ -1,20 +1,20 @@
 Georgia Contribution Data Diary
 ================
 Yanqi Xu
-2020-10-09 22:53:53
+2022-10-09 21:45:58
 
-  - [Project](#project)
-  - [Objectives](#objectives)
-  - [Packages](#packages)
-  - [Data](#data)
-  - [Download](#download)
-  - [Read](#read)
-  - [Explore](#explore)
-  - [Wrangle](#wrangle)
-  - [Conclude](#conclude)
-  - [Export](#export)
-  - [Upload](#upload)
-  - [Dictionary](#dictionary)
+-   <a href="#project" id="toc-project">Project</a>
+-   <a href="#objectives" id="toc-objectives">Objectives</a>
+-   <a href="#packages" id="toc-packages">Packages</a>
+-   <a href="#data" id="toc-data">Data</a>
+-   <a href="#download" id="toc-download">Download</a>
+-   <a href="#read" id="toc-read">Read</a>
+-   <a href="#explore" id="toc-explore">Explore</a>
+-   <a href="#wrangle" id="toc-wrangle">Wrangle</a>
+-   <a href="#conclude" id="toc-conclude">Conclude</a>
+-   <a href="#export" id="toc-export">Export</a>
+-   <a href="#upload" id="toc-upload">Upload</a>
+-   <a href="#dictionary" id="toc-dictionary">Dictionary</a>
 
 <!-- Place comments regarding knitting here -->
 
@@ -91,7 +91,7 @@ feature and should be run as such. The project also uses the dynamic
 ``` r
 # where does this document knit?
 here::here()
-#> [1] "/Users/yanqixu/code/accountability_datacleaning/R_campfin"
+#> [1] "/Users/yanqixu/code/accountability_datacleaning"
 ```
 
 ## Data
@@ -100,14 +100,15 @@ here::here()
 
 Campaign contribution data is available from the [Georgia Ethics
 Administration
-Program](http://www.ethics.la.gov/CampaignFinanceSearch/SearchResultsByContributions.aspx).
-
-We downloaded the data year by year since there’s a limit on the number
-of rows at each export. The end date of this data is Oct 5, 2020 and the
-next update should start on Oct 6, 2020.
+Program](https://media.ethics.ga.gov/search/Campaign/Campaign_ByContributions.aspx).
+The update covers the time period of Oct 6,2020 to Oct 8, 2022. The next
+update should start from Oct 9, 2022. Note from earlier: We downloaded
+the data year by year since there’s a limit on the number of rows at
+each export. The end date of this data is Oct 5, 2020 and the next
+update should start on Oct 6, 2020.
 
 ``` r
-raw_dir <- dir_create(here("ga", "contribs", "data", "raw"))
+raw_dir <- dir_create(here("state","ga", "contribs", "data", "raw"))
 source <- "Georgia Government Transparency and Campaign Finance Commission"
 ```
 
@@ -121,7 +122,7 @@ on the Georgia Ethics Administration Program’s
 read_ga_contrib <-  function(file){
 df <- file %>% 
   read_lines(skip = 1) %>% 
-  str_replace_all("(?<!(\n|^|,))\"(?!(,(?=\"))|$|\r)", "'") %>% 
+  str_replace_all("(?<!(\n|^|,))\"(?!(,(?=\"))|$|\r)", "'") %>% I() %>% 
   read_delim(
     delim = ",",
     escape_backslash = FALSE,
@@ -134,7 +135,7 @@ df <- file %>%
 return(df)
 }
 
-gac <- dir_ls(raw_dir) %>% map_dfr(read_ga_contrib)
+gac <- dir_ls(raw_dir) %>% read_ga_contrib()
 
 gac <- gac %>% 
   clean_names() %>% 
@@ -148,75 +149,75 @@ gac <- gac %>%
 
 ``` r
 glimpse(gac)
-#> Rows: 1,981,563
+#> Rows: 497,993
 #> Columns: 22
-#> $ filer_id              <chr> "C2006000061", "C2006000061", "C2006000061", "C2006000061", "C2006…
-#> $ type                  <chr> "Monetary", "Monetary", "Monetary", "Monetary", "Monetary", "Monet…
-#> $ last_name             <chr> "Raymon D Burns PC", "Wayne Lancaster, PC", "Lucas O Harsh, PC", "…
-#> $ first_name            <chr> NA, NA, NA, NA, "Mike", NA, NA, "Pat", "James", "E.D.", NA, NA, NA…
-#> $ address               <chr> "7 Lumpkin Street", "4474 Commerce Dr. Ste B", "Post Office Box 12…
-#> $ city                  <chr> "Lawrenceville", "Buford", "Lawrenceville", "Grayson", "Atlanta", …
-#> $ state                 <chr> "GA", "GA", "GA", "GA", "GA", "GA", "GA", "GA", "GA", "GA", "GA", …
-#> $ zip                   <chr> "30045", "30518", "30046", "30017", "30324", "30263", "31534", "30…
-#> $ pac                   <chr> "none", "none", "none", "none", NA, NA, NA, NA, NA, NA, NA, NA, NA…
-#> $ occupation            <chr> NA, NA, NA, NA, "Attorney", NA, NA, "Heating & Air Conditioning Co…
-#> $ employer              <chr> NA, NA, NA, NA, "self", NA, NA, "United Maintenance, Inc.", "James…
-#> $ date                  <date> 2006-03-10, 2006-03-08, 2006-03-02, 2006-03-03, 2006-03-10, 2006-…
-#> $ election              <chr> "Primary", "Primary", "Primary", "Primary", "Primary", " ", " ", "…
-#> $ election_year         <chr> "2006", "2006", "2006", "2006", "2006", NA, NA, "2006", "2006", "2…
-#> $ cash_amount           <dbl> 250.00, 250.00, 250.00, 500.00, 250.00, 25.00, 480.00, 100.00, 250…
-#> $ in_kind_amount        <dbl> 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, …
-#> $ in_kind_description   <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
-#> $ candidate_first_name  <chr> "Thomas", "Thomas", "Thomas", "Thomas", "Thomas", NA, NA, NA, NA, …
-#> $ candidate_middle_name <chr> "Ned", "Ned", "Ned", "Ned", "Ned", NA, NA, NA, NA, "Mary", "Mary",…
-#> $ candidate_last_name   <chr> "Davis", "Davis", "Davis", "Davis", "Davis", NA, NA, NA, NA, "Nich…
-#> $ candidate_suffix      <chr> "Jr.", "Jr.", "Jr.", "Jr.", "Jr.", NA, NA, NA, NA, NA, NA, NA, NA,…
-#> $ committee_name        <chr> "The Committee for Judge Tom Davis", "The Committee for Judge Tom …
+#> $ filer_id              <chr> "C2017000227", "C2017000227", "C2017000227", "C2017000227", "C20170…
+#> $ type                  <chr> "Monetary", "Monetary", "Monetary", "Monetary", "Monetary", "Moneta…
+#> $ last_name             <chr> "D and R Intensive Car Care", "Mr. Daniel", "Daniels", "Mr. Shah", …
+#> $ first_name            <chr> NA, "Christopher", "Christopher", "Rahim", "Raymond", "Charles R.",…
+#> $ address               <chr> "811 S Main St", "11 Macedonia Rd", "301 Windsor Pkwy", "1555 Calvi…
+#> $ city                  <chr> "Statesboro", "White", "Sandy Springs", "Lawrenceville", "Bloomfiel…
+#> $ state                 <chr> "GA", "GA", "GA", "GA", "MI", "GA", "GA", "GA", "GA", "GA", "GA", "…
+#> $ zip                   <chr> "30458-3464", "30184-3350", "30342-2747", "30043-3612", "48304-2139…
+#> $ pac                   <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
+#> $ occupation            <chr> NA, "Investor", "Attorney", "Owner", "Retired", "Information Reques…
+#> $ employer              <chr> NA, "Self Employed", "Barnes and Thornburg Llp", "Maandesh Llc", "N…
+#> $ date                  <date> 2021-10-14, 2022-01-07, 2021-12-01, 2021-08-09, 2021-12-31, 2021-0…
+#> $ election              <chr> "Primary", "Primary", "Primary", "Primary", "Primary", "Primary", "…
+#> $ election_year         <chr> "2022", "2022", "2022", "2022", "2022", "2022", "2022", "2022", "20…
+#> $ cash_amount           <dbl> 1000.00, 5000.00, 1000.00, 2500.00, 100.00, 7000.00, 7000.00, 1500.…
+#> $ in_kind_amount        <dbl> 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0…
+#> $ in_kind_description   <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
+#> $ candidate_first_name  <chr> "Brian", "Brian", "Brian", "Brian", "Brian", "Brian", "Brian", "Bri…
+#> $ candidate_middle_name <chr> "Porter", "Porter", "Porter", "Porter", "Porter", "Porter", "Porter…
+#> $ candidate_last_name   <chr> "Kemp", "Kemp", "Kemp", "Kemp", "Kemp", "Kemp", "Kemp", "Kemp", "Ke…
+#> $ candidate_suffix      <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
+#> $ committee_name        <chr> "Kemp For Governor, Inc. ", "Kemp For Governor, Inc. ", "Kemp For G…
 tail(gac)
-#> # A tibble: 6 x 22
-#>   filer_id type  last_name first_name address city  state zip   pac   occupation employer
-#>   <chr>    <chr> <chr>     <chr>      <chr>   <chr> <chr> <chr> <chr> <chr>      <chr>   
-#> 1 C202000… Mone… Harvey    Bruce      929 Cl… Atla… GA    3030… <NA>  Attorney   Self Em…
-#> 2 C202000… Mone… Jacxsens… Pete A.    927 Ar… Atla… GA    30307 <NA>  Attorney   Hawkins…
-#> 3 C202000… Mone… Mitchell… Greta      734 Be… Boli… IL    60490 <NA>  Administr… Proviso…
-#> 4 C202000… Mone… Norman    Clorisa    2013 L… Kenn… ga    30152 <NA>  Consultant Unemplo…
-#> 5 C202000… Mone… Rayasam   Ravindra   1936 N… Broo… ga    30319 <NA>  Attorney   Ghanaye…
-#> 6 C202000… Mone… Riggins   Bruce      30 WAD… Macon ga    31210 <NA>  Owner      Ciceros…
-#> # … with 11 more variables: date <date>, election <chr>, election_year <chr>, cash_amount <dbl>,
-#> #   in_kind_amount <dbl>, in_kind_description <chr>, candidate_first_name <chr>,
-#> #   candidate_middle_name <chr>, candidate_last_name <chr>, candidate_suffix <chr>,
-#> #   committee_name <chr>
+#> # A tibble: 6 × 22
+#>   filer_id type  last_…¹ first…² address city  state zip   pac   occup…³ emplo…⁴ date       elect…⁵
+#>   <chr>    <chr> <chr>   <chr>   <chr>   <chr> <chr> <chr> <chr> <chr>   <chr>   <date>     <chr>  
+#> 1 C202100… Mone… Machin… <NA>    9000 M… Uppe… MD    2077… <NA>  <NA>    <NA>    2021-12-15 Primary
+#> 2 C202100… Mone… Mason   Rayburn 115 Al… Macon GA    3121… <NA>  Deep L… Tracto… 2021-08-16 Primary
+#> 3 C202100… Mone… McCarr… Matt    430 Hu… Atla… GA    3035… <NA>  Chief … Bey & … 2022-01-09 Primary
+#> 4 C202100… Mone… Meller  Samuel… 3235 W… Augu… GA    3090… <NA>  Princi… THE ME… 2021-09-29 Primary
+#> 5 C202100… Mone… Melton  Willie  2080 C… Coll… GA    3033… <NA>  Broker  Melton… 2021-10-30 Primary
+#> 6 C202100… Mone… Nash    Katrell 437 Wa… Augu… GA    3090… <NA>  Attorn… Self    2021-09-28 Primary
+#> # … with 9 more variables: election_year <chr>, cash_amount <dbl>, in_kind_amount <dbl>,
+#> #   in_kind_description <chr>, candidate_first_name <chr>, candidate_middle_name <chr>,
+#> #   candidate_last_name <chr>, candidate_suffix <chr>, committee_name <chr>, and abbreviated
+#> #   variable names ¹​last_name, ²​first_name, ³​occupation, ⁴​employer, ⁵​election
 ```
 
 ### Missing
 
 ``` r
 col_stats(gac, count_na)
-#> # A tibble: 22 x 4
-#>    col                   class        n           p
-#>    <chr>                 <chr>    <int>       <dbl>
-#>  1 filer_id              <chr>        0 0          
-#>  2 type                  <chr>        0 0          
-#>  3 last_name             <chr>        3 0.00000151 
-#>  4 first_name            <chr>   327959 0.166      
-#>  5 address               <chr>       83 0.0000419  
-#>  6 city                  <chr>       19 0.00000959 
-#>  7 state                 <chr>      105 0.0000530  
-#>  8 zip                   <chr>        1 0.000000505
-#>  9 pac                   <chr>  1636912 0.826      
-#> 10 occupation            <chr>   313101 0.158      
-#> 11 employer              <chr>   316669 0.160      
-#> 12 date                  <date>       0 0          
-#> 13 election              <chr>   907552 0.458      
-#> 14 election_year         <chr>   921573 0.465      
-#> 15 cash_amount           <dbl>        0 0          
-#> 16 in_kind_amount        <dbl>        0 0          
-#> 17 in_kind_description   <chr>  1960899 0.990      
-#> 18 candidate_first_name  <chr>  1208904 0.610      
-#> 19 candidate_middle_name <chr>  1372980 0.693      
-#> 20 candidate_last_name   <chr>  1208904 0.610      
-#> 21 candidate_suffix      <chr>  1901439 0.960      
-#> 22 committee_name        <chr>    52350 0.0264
+#> # A tibble: 22 × 4
+#>    col                   class       n         p
+#>    <chr>                 <chr>   <int>     <dbl>
+#>  1 filer_id              <chr>       0 0        
+#>  2 type                  <chr>       0 0        
+#>  3 last_name             <chr>       0 0        
+#>  4 first_name            <chr>   20139 0.0404   
+#>  5 address               <chr>       0 0        
+#>  6 city                  <chr>       0 0        
+#>  7 state                 <chr>      25 0.0000502
+#>  8 zip                   <chr>       0 0        
+#>  9 pac                   <chr>  484945 0.974    
+#> 10 occupation            <chr>   20128 0.0404   
+#> 11 employer              <chr>   20218 0.0406   
+#> 12 date                  <date>      0 0        
+#> 13 election              <chr>   31177 0.0626   
+#> 14 election_year         <chr>   30108 0.0605   
+#> 15 cash_amount           <dbl>       0 0        
+#> 16 in_kind_amount        <dbl>       0 0        
+#> 17 in_kind_description   <chr>  497431 0.999    
+#> 18 candidate_first_name  <chr>  415859 0.835    
+#> 19 candidate_middle_name <chr>  430203 0.864    
+#> 20 candidate_last_name   <chr>  415859 0.835    
+#> 21 candidate_suffix      <chr>  494786 0.994    
+#> 22 committee_name        <chr>   13300 0.0267
 ```
 
 We will flag entries with missing `last_name`,`candidate_name`, `city`
@@ -225,27 +226,27 @@ and `date`
 ``` r
 gac <- gac %>% flag_na(last_name, city,date,committee_name)
 sum(gac$na_flag)
-#> [1] 52369
+#> [1] 13300
 ```
 
 ``` r
 gac %>% 
   filter(na_flag) %>% 
   select(last_name, city,date,committee_name)
-#> # A tibble: 52,369 x 4
-#>    last_name                         city          date       committee_name
-#>    <chr>                             <chr>         <date>     <chr>         
-#>  1 Giannasi                          Athens        2006-03-27 <NA>          
-#>  2 Hathaway                          Athens        2006-03-27 <NA>          
-#>  3 Kardos                            Athens        2006-03-24 <NA>          
-#>  4 Ball                              Athens        2006-03-02 <NA>          
-#>  5 Outdoor Advertising Assoc. of Ga. Duluth        2006-01-04 <NA>          
-#>  6 Strange                           The Woodlands 2006-03-16 <NA>          
-#>  7 Abdur-Rahim                       Atlanta       2006-03-31 <NA>          
-#>  8 Bierema                           Athens        2006-03-30 <NA>          
-#>  9 Hicks                             Riverdale     2006-03-31 <NA>          
-#> 10 Burton                            Athens        2006-03-22 <NA>          
-#> # … with 52,359 more rows
+#> # A tibble: 13,300 × 4
+#>    last_name      city          date       committee_name
+#>    <chr>          <chr>         <date>     <chr>         
+#>  1 Prescott       Conyers       2022-01-31 <NA>          
+#>  2 Purdy          Atlanta       2022-01-14 <NA>          
+#>  3 Roden Love LLC Savannah      2022-01-24 <NA>          
+#>  4 Roden          Savannah      2022-01-24 <NA>          
+#>  5 Ross           New York      2022-01-27 <NA>          
+#>  6 S Allen Murray Fairfax       2022-01-11 <NA>          
+#>  7 Sams           Newnan        2022-01-19 <NA>          
+#>  8 Schaufler      Lagrange      2022-01-13 <NA>          
+#>  9 Sharpless      Pine Mountain 2022-01-17 <NA>          
+#> 10 Shigley        Atlanta       2022-01-17 <NA>          
+#> # … with 13,290 more rows
 ```
 
 ### Duplicates
@@ -253,62 +254,63 @@ gac %>%
 ``` r
 gac <- flag_dupes(gac,dplyr::everything())
 sum(gac$dupe_flag)
-#> [1] 65738
+#> [1] 18711
 ```
 
 ``` r
 gac %>% 
   filter(dupe_flag)
-#> # A tibble: 65,738 x 24
-#>    filer_id type  last_name first_name address city  state zip   pac   occupation employer
-#>    <chr>    <chr> <chr>     <chr>      <chr>   <chr> <chr> <chr> <chr> <chr>      <chr>   
-#>  1 NC20060… Mone… The Howa… <NA>       1948 O… Tift… GA    31794 <NA>  <NA>       <NA>    
-#>  2 NC20060… Mone… North At… <NA>       11975 … Alph… GA    30005 <NA>  <NA>       <NA>    
-#>  3 C200600… Mone… WellCare  <NA>       P.O. B… Tampa FL    33622 <NA>  <NA>       <NA>    
-#>  4 NC20060… Mone… Ruthann … <NA>       2000 1… Colu… GA    31901 <NA>  <NA>       <NA>    
-#>  5 NC20060… Mone… North At… <NA>       1121 J… Atla… GA    30068 <NA>  <NA>       <NA>    
-#>  6 NC20060… Mone… West Aug… <NA>       1126 M… Augu… GA    30909 <NA>  <NA>       <NA>    
-#>  7 NC20060… Mone… Women's … <NA>       107 Hi… Rive… GA    30296 <NA>  <NA>       <NA>    
-#>  8 C200600… Mone… Powell    Rex        4485 Y… Doug… GA    30135 <NA>  Construct… Chick-f…
-#>  9 NC20060… Mone… Georgia … <NA>       5445 M… Atla… GA    30342 <NA>  <NA>       <NA>    
-#> 10 NC20060… Mone… Camille … <NA>       95 Col… Atla… GA    30309 <NA>  <NA>       <NA>    
-#> # … with 65,728 more rows, and 13 more variables: date <date>, election <chr>,
-#> #   election_year <chr>, cash_amount <dbl>, in_kind_amount <dbl>, in_kind_description <chr>,
-#> #   candidate_first_name <chr>, candidate_middle_name <chr>, candidate_last_name <chr>,
-#> #   candidate_suffix <chr>, committee_name <chr>, na_flag <lgl>, dupe_flag <lgl>
+#> # A tibble: 18,711 × 24
+#>    filer…¹ type  last_…² first…³ address city  state zip   pac   occup…⁴ emplo…⁵ date       elect…⁶
+#>    <chr>   <chr> <chr>   <chr>   <chr>   <chr> <chr> <chr> <chr> <chr>   <chr>   <date>     <chr>  
+#>  1 C20170… Mone… Mr. Sh… Rahim   1555 C… Lawr… GA    3004… <NA>  Owner   Maande… 2021-08-09 Primary
+#>  2 NC2006… Mone… Brooks  Nakia   409 Ju… Bras… GA    3051… <NA>  Real E… BKG - … 2021-08-17 <NA>   
+#>  3 NC2006… Mone… Ms. Br… Sheila… 4506 O… Mari… GA    3006… <NA>  Real E… Harry … 2021-08-25 <NA>   
+#>  4 NC2006… Mone… Butcher Kaley … 185 Br… Broo… GA    3020… <NA>  Real E… Harry … 2021-08-29 <NA>   
+#>  5 C20220… Mone… Borrum  Jacque… 3858 W… Memp… TN    3811… <NA>  Retired Not Em… 2021-12-20 Primary
+#>  6 C20220… Mone… Galt    John    12 Ken… Pitt… MA    0120… <NA>  Not Em… Not Em… 2021-12-01 Primary
+#>  7 NC2006… Mone… Jefcoat Doug    7716 L… Midl… GA    3182… <NA>  Real E… Jefcoa… 2021-08-27 <NA>   
+#>  8 C20220… Mone… Bryant  Donald… 91307 … East… GA    30364 <NA>  Not Em… Not Em… 2021-12-02 Primary
+#>  9 C20220… Mone… Gholson Sylvia  2330 W… Cony… GA    3009… <NA>  Not Em… Not Em… 2021-12-01 Primary
+#> 10 C20220… Mone… Gholson Sylvia  2330 W… Cony… GA    3009… <NA>  Not Em… Not Em… 2021-12-01 Primary
+#> # … with 18,701 more rows, 11 more variables: election_year <chr>, cash_amount <dbl>,
+#> #   in_kind_amount <dbl>, in_kind_description <chr>, candidate_first_name <chr>,
+#> #   candidate_middle_name <chr>, candidate_last_name <chr>, candidate_suffix <chr>,
+#> #   committee_name <chr>, na_flag <lgl>, dupe_flag <lgl>, and abbreviated variable names
+#> #   ¹​filer_id, ²​last_name, ³​first_name, ⁴​occupation, ⁵​employer, ⁶​election
 ```
 
 ### Categorical
 
 ``` r
 col_stats(gac, n_distinct)
-#> # A tibble: 24 x 4
+#> # A tibble: 24 × 4
 #>    col                   class       n          p
 #>    <chr>                 <chr>   <int>      <dbl>
-#>  1 filer_id              <chr>    6838 0.00345   
-#>  2 type                  <chr>       6 0.00000303
-#>  3 last_name             <chr>  225311 0.114     
-#>  4 first_name            <chr>   76082 0.0384    
-#>  5 address               <chr>  490848 0.248     
-#>  6 city                  <chr>   22700 0.0115    
-#>  7 state                 <chr>     917 0.000463  
-#>  8 zip                   <chr>  181736 0.0917    
-#>  9 pac                   <chr>    4720 0.00238   
-#> 10 occupation            <chr>   67767 0.0342    
-#> 11 employer              <chr>  136424 0.0688    
-#> 12 date                  <date>   5387 0.00272   
-#> 13 election              <chr>      10 0.00000505
-#> 14 election_year         <chr>      38 0.0000192 
-#> 15 cash_amount           <dbl>   36325 0.0183    
-#> 16 in_kind_amount        <dbl>    7443 0.00376   
-#> 17 in_kind_description   <chr>   11001 0.00555   
-#> 18 candidate_first_name  <chr>    1815 0.000916  
-#> 19 candidate_middle_name <chr>    1480 0.000747  
-#> 20 candidate_last_name   <chr>    2944 0.00149   
-#> 21 candidate_suffix      <chr>      14 0.00000707
-#> 22 committee_name        <chr>    4302 0.00217   
-#> 23 na_flag               <lgl>       2 0.00000101
-#> 24 dupe_flag             <lgl>       2 0.00000101
+#>  1 filer_id              <chr>     638 0.00128   
+#>  2 type                  <chr>       5 0.0000100 
+#>  3 last_name             <chr>   90104 0.181     
+#>  4 first_name            <chr>   27829 0.0559    
+#>  5 address               <chr>  202414 0.406     
+#>  6 city                  <chr>   11825 0.0237    
+#>  7 state                 <chr>     284 0.000570  
+#>  8 zip                   <chr>  179084 0.360     
+#>  9 pac                   <chr>     165 0.000331  
+#> 10 occupation            <chr>   23045 0.0463    
+#> 11 employer              <chr>   66474 0.133     
+#> 12 date                  <date>    546 0.00110   
+#> 13 election              <chr>      10 0.0000201 
+#> 14 election_year         <chr>      16 0.0000321 
+#> 15 cash_amount           <dbl>    4313 0.00866   
+#> 16 in_kind_amount        <dbl>     324 0.000651  
+#> 17 in_kind_description   <chr>     255 0.000512  
+#> 18 candidate_first_name  <chr>     342 0.000687  
+#> 19 candidate_middle_name <chr>     249 0.000500  
+#> 20 candidate_last_name   <chr>     381 0.000765  
+#> 21 candidate_suffix      <chr>       7 0.0000141 
+#> 22 committee_name        <chr>     575 0.00115   
+#> 23 na_flag               <lgl>       2 0.00000402
+#> 24 dupe_flag             <lgl>       2 0.00000402
 ```
 
 ``` r
@@ -327,15 +329,15 @@ to map it on TAP.
 gac <- gac %>% mutate(total_amount = cash_amount + in_kind_amount)
 
 summary(gac$in_kind_amount)
-#>     Min.  1st Qu.   Median     Mean  3rd Qu.     Max. 
-#>      0.0      0.0      0.0     10.7      0.0 379603.2
+#>      Min.   1st Qu.    Median      Mean   3rd Qu.      Max. 
+#>       0.0       0.0       0.0       7.6       0.0 1127920.0
 summary(gac$cash_amount)
 #>    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
-#>       0      21     100     447     250 6800000
+#>       0      25     100     419     150 5000000
 mean(gac$in_kind_amount<= 0)
-#> [1] 0.989586
+#> [1] 0.9988715
 mean(gac$cash_amount<= 0)
-#> [1] 0.01042662
+#> [1] 0.00112853
 ```
 
 ![](../plots/hist_amount-1.png)<!-- -->![](../plots/hist_amount-2.png)<!-- -->
@@ -350,9 +352,9 @@ gac <- mutate(gac, year = year(date))
 
 ``` r
 min(gac$date)
-#> [1] "2006-01-01"
+#> [1] "2020-10-06"
 max(gac$date)
-#> [1] "2020-10-05"
+#> [1] "2022-10-01"
 sum(gac$date > today())
 #> [1] 0
 ```
@@ -388,19 +390,19 @@ gac %>%
   select(contains("address")) %>% 
   distinct() %>% 
   sample_n(10)
-#> # A tibble: 10 x 2
-#>    address                         address_norm                  
-#>    <chr>                           <chr>                         
-#>  1 4146 Chadds Crossing, NE        4146 CHADDS XING NE           
-#>  2 100 Galleria Parkway            100 GALLERIA PKWY             
-#>  3 1800 Diagonal Road              1800 DIAGONAL RD              
-#>  4 11241 HILLSBORO VICTOR          11241 HILLSBORO VICTOR        
-#>  5 230 Cedar Circle                230 CEDAR CIR                 
-#>  6 125 Britt Waters Road           125 BRITT WATERS RD           
-#>  7 3344 Peachtree Rd. NE Unit 4104 3344 PEACHTREE RD NE UNIT 4104
-#>  8 P. O. Box 612                   PO BOX 612                    
-#>  9 1677 Terrel Ridge Dr., SE       1677 TERREL RDG DR SE         
-#> 10 100 Emanuel Farm Rd             100 EMANUEL FARM RD
+#> # A tibble: 10 × 2
+#>    address            address_norm      
+#>    <chr>              <chr>             
+#>  1 202 W 27th Ave     202 W 27TH AVE    
+#>  2 7000 PEACHTREE     7000 PEACHTREE    
+#>  3 60 Quail Valley Rd 60 QUAIL VALLEY RD
+#>  4 895 Park Pl        895 PARK PL       
+#>  5 2027 Hulsey Pl     2027 HULSEY PL    
+#>  6 32 Woodcrest Ave   32 WOODCREST AVE  
+#>  7 1476 Fulton St     1476 FULTON ST    
+#>  8 4617 42nd St NW    4617 42ND ST NW   
+#>  9 223 Devon Dr       223 DEVON DR      
+#> 10 1026 Sandpiper Ln  1026 SANDPIPER LN
 ```
 
 ### ZIP
@@ -425,11 +427,11 @@ progress_table(
   gac$zip_norm,
   compare = valid_zip
 )
-#> # A tibble: 2 x 6
-#>   stage    prop_in n_distinct     prop_na  n_out n_diff
-#>   <chr>      <dbl>      <dbl>       <dbl>  <dbl>  <dbl>
-#> 1 zip        0.555     181736 0.000000505 882592 167755
-#> 2 zip_norm   0.999      19143 0.000608      2936    907
+#> # A tibble: 2 × 6
+#>   stage        prop_in n_distinct prop_na  n_out n_diff
+#>   <chr>          <dbl>      <dbl>   <dbl>  <dbl>  <dbl>
+#> 1 gac$zip        0.113     179084 0       441759 172410
+#> 2 gac$zip_norm   0.999      15424 0.00335    524    142
 ```
 
 ### State
@@ -453,20 +455,20 @@ gac <- gac %>%
 gac %>% 
   filter(state != state_norm) %>% 
   count(state, sort = TRUE)
-#> # A tibble: 518 x 2
-#>    state          n
-#>    <chr>      <int>
-#>  1 "Georgia"  25511
-#>  2 "ga"       18507
-#>  3 "Ga"       13949
-#>  4 "georgia"   6013
-#>  5 "GEORGIA"   5728
-#>  6 "GA "       2197
-#>  7 "gA"        1683
-#>  8 "Georgia "  1131
-#>  9 "Ga."        896
-#> 10 "Florida"    437
-#> # … with 508 more rows
+#> # A tibble: 180 × 2
+#>    state            n
+#>    <chr>        <int>
+#>  1 " MI"         3541
+#>  2 "Georgia"     1102
+#>  3 "ga"           959
+#>  4 "Ga"           666
+#>  5 "georgia"      558
+#>  6 "GEORGIA"      547
+#>  7 "gA"           120
+#>  8 "GA "          117
+#>  9 "Georgia "      39
+#> 10 "California"    37
+#> # … with 170 more rows
 ```
 
 ``` r
@@ -475,11 +477,11 @@ progress_table(
   gac$state_norm,
   compare = valid_state
 )
-#> # A tibble: 2 x 6
-#>   stage      prop_in n_distinct   prop_na n_out n_diff
-#>   <chr>        <dbl>      <dbl>     <dbl> <dbl>  <dbl>
-#> 1 state        0.956        917 0.0000530 86346    859
-#> 2 state_norm   1             58 0.00106       0      1
+#> # A tibble: 2 × 6
+#>   stage          prop_in n_distinct   prop_na n_out n_diff
+#>   <chr>            <dbl>      <dbl>     <dbl> <dbl>  <dbl>
+#> 1 gac$state        0.980        284 0.0000502  9978    226
+#> 2 gac$state_norm   1             59 0.00347       0      1
 ```
 
 ### City
@@ -566,20 +568,26 @@ good_refine <- gac %>%
   )
 ```
 
-    #> # A tibble: 148 x 5
-    #>    state_norm zip_norm city_swap        city_refine            n
-    #>    <chr>      <chr>    <chr>            <chr>              <int>
-    #>  1 OH         45206    CINCINATTI       CINCINNATI            36
-    #>  2 IL         60010    NO BARRINGTON    BARRINGTON            24
-    #>  3 IN         47119    FLOYD KNOBBS     FLOYDS KNOBS          15
-    #>  4 OH         45209    CINCINATTI       CINCINNATI            13
-    #>  5 NY         11746    HUNTINGTON SAINT HUNTINGTON STATION     9
-    #>  6 WI         54702    EAU CLAIRE RI    EAU CLAIRE             9
-    #>  7 GA         30080    SMRNYA           SMYRNA                 6
-    #>  8 GA         30144    KENNNESSAW       KENNESAW               6
-    #>  9 GA         31561    SEA ISLAND CO    SEA ISLAND             6
-    #> 10 SC         29406    NORTH CHARLESTON CHARLESTON             5
-    #> # … with 138 more rows
+    #> # A tibble: 17 × 5
+    #>    state_norm zip_norm city_swap         city_refine             n
+    #>    <chr>      <chr>    <chr>             <chr>               <int>
+    #>  1 NY         11733    SETAUKET          EAST SETAUKET          20
+    #>  2 OH         45209    CINCINATTI        CINCINNATI              4
+    #>  3 GA         30339    ATLANTATA         ATLANTA                 3
+    #>  4 CA         90292    MARINA DALE REY   MARINA DEL REY          2
+    #>  5 GA         30308    ALTNATA           ATLANTA                 2
+    #>  6 GA         31522    ST SIMMONS ISLAND SAINT SIMONS ISLAND     2
+    #>  7 IN         47119    FLOYD KNOBBS      FLOYDS KNOBS            2
+    #>  8 CA         92625    CORONA DALE MAR   CORONA DEL MAR          1
+    #>  9 FL         32256    JACKONSVILLE      JACKSONVILLE            1
+    #> 10 GA         30060    MARITTE           MARIETTA                1
+    #> 11 GA         30327    ATLANTATA         ATLANTA                 1
+    #> 12 GA         30354    ATLANTATA         ATLANTA                 1
+    #> 13 GA         30504    GAINESVILLE GA    GAINESVILLE             1
+    #> 14 GU         96931    TAMUNING GU       TAMUNING                1
+    #> 15 OH         45209    CINNCINATI        CINCINNATI              1
+    #> 16 PA         19123    PHILADEDELPHIA    PHILADELPHIA            1
+    #> 17 SC         29406    NORTH CHARLESTON  CHARLESTON              1
 
 Then we can join the refined values back to the database.
 
@@ -591,12 +599,10 @@ gac <- gac %>%
 
 #### Progress
 
-| stage        | prop\_in | n\_distinct | prop\_na | n\_out | n\_diff |
-| :----------- | -------: | ----------: | -------: | -----: | ------: |
-| city\_raw)   |    0.967 |       15741 |    0.000 |  64886 |    6848 |
-| city\_norm   |    0.987 |       13053 |    0.001 |  26292 |    4094 |
-| city\_swap   |    0.995 |       10516 |    0.001 |  10600 |    1575 |
-| city\_refine |    0.995 |       10397 |    0.001 |  10288 |    1457 |
+| stage                                                                   | prop_in | n_distinct | prop_na | n_out | n_diff |
+|:------------------------------------------------------------------------|--------:|-----------:|--------:|------:|-------:|
+| str_to_upper(gac$city_raw) | 0.981| 9218| 0| 9648| 1392| |gac$city_norm |   0.991 |       8831 |       0 |  4725 |    994 |
+| gac$city_swap | 0.994| 8532| 0| 3159| 680| |gac$city_refine             |   0.994 |       8518 |       0 |  3115 |    666 |
 
 You can see how the percentage of valid values increased with each
 stage.
@@ -629,42 +635,42 @@ gac <- gac %>%
 glimpse(sample_n(gac, 20))
 #> Rows: 20
 #> Columns: 30
-#> $ filer_id              <chr> "NC2006000172", "NC2006000336", "NC2010000071", "NC2006000063", "C…
-#> $ type                  <chr> "Monetary", "Monetary", "Monetary", "Monetary", "Monetary", "Monet…
-#> $ last_name             <chr> "KREMER", "Arnold", "Kulprathipanja", "PetroSouth, Inc", "Moon", "…
-#> $ first_name            <chr> "SCOTT", "Jimmy", "Santi", NA, "W. Harold", "GREGORY", "Stacey J."…
-#> $ address               <chr> "1526 HERITAGE MANOR COURT", "152 N Crest Blvd Ste A", "101 Consti…
-#> $ city                  <chr> "SAINT PETERS", "Macon", "Washington", "Griffin", "Augusta", "BATA…
-#> $ state                 <chr> "MO", "GA", "DC", "GA", "GA", "IL", "GA", "GA", "GA", "OK", "FL", …
-#> $ zip                   <chr> "633038484", "31210-1847", "20001", "30224", "30909", "60510", "30…
-#> $ pac                   <chr> NA, NA, "HONEYWELL INTERNATIONAL POLITICAL ACTION COMMITTEE", NA, …
-#> $ occupation            <chr> "COMPLEX SALES MANAGER", "Endodontics", "Director, R&D", NA, "Reti…
-#> $ employer              <chr> "INTERNATIONAL PAPER CO.", "Self Employed", "HONEYWELL INTERNATION…
-#> $ date                  <date> 2018-05-31, 2016-06-01, 2018-12-31, 2016-04-15, 2018-07-08, 2012-…
-#> $ election              <chr> NA, "General", NA, "General", "General", NA, "Primary", NA, "Prima…
-#> $ election_year         <chr> NA, "2016", NA, "2016", "2018", NA, "2016", NA, "2012", NA, NA, NA…
-#> $ cash_amount           <dbl> 30.00, 160.00, 155.20, 300.00, 100.00, 150.00, 500.00, 200.00, 0.0…
-#> $ in_kind_amount        <dbl> 0, 0, 0, 0, 0, 0, 0, 0, 200, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
-#> $ in_kind_description   <chr> NA, NA, NA, NA, NA, NA, NA, NA, "Lumber for signs", NA, NA, NA, NA…
-#> $ candidate_first_name  <chr> NA, NA, NA, NA, "John", NA, "Stacey", NA, "Frederick", NA, NA, NA,…
-#> $ candidate_middle_name <chr> NA, NA, NA, NA, "Jenkins ", NA, "Yvonne", NA, "Clinton", NA, NA, N…
-#> $ candidate_last_name   <chr> NA, NA, NA, NA, "Barrow", NA, "Abrams", NA, "Roden", NA, NA, NA, N…
-#> $ candidate_suffix      <chr> NA, NA, NA, NA, NA, NA, NA, NA, "Jr.", NA, NA, NA, NA, NA, NA, NA,…
-#> $ committee_name        <chr> "International Paper PAC (IP PAC)", "Georgia Dental Political Acti…
-#> $ na_flag               <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, TRUE, FALS…
-#> $ dupe_flag             <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FAL…
-#> $ total_amount          <dbl> 30.00, 160.00, 155.20, 300.00, 100.00, 150.00, 500.00, 200.00, 200…
-#> $ year                  <dbl> 2018, 2016, 2018, 2016, 2018, 2012, 2016, 2019, 2012, 2010, 2011, …
-#> $ address_clean         <chr> "1526 HERITAGE MNR CT", "152 N CRST BLVD STE A", "101 CONSTITUTION…
-#> $ zip_clean             <chr> "63303", "31210", "20001", "30224", "30909", "60510", "30329", "30…
-#> $ state_clean           <chr> "MO", "GA", "DC", "GA", "GA", "IL", "GA", "GA", "GA", "OK", "FL", …
-#> $ city_clean            <chr> "SAINT PETERS", "MACON", "WASHINGTON", "GRIFFIN", "AUGUSTA", "BATA…
+#> $ filer_id              <chr> "NC2018000098", "NC2018000098", "NC2018000098", "NC2018000098", "NC…
+#> $ type                  <chr> "Monetary", "Monetary", "Monetary", "Monetary", "Monetary", "Moneta…
+#> $ last_name             <chr> "Kamesar", "Brower", "Pollard", "Vates", "Bibby", "VIRAL SOLUTIONS …
+#> $ first_name            <chr> "Nathan", "Mark", "Clifford", "Edward", "Elizabeth", NA, "Christoph…
+#> $ address               <chr> "225 S 18th St", "129 Birchwood Ave", "3923 Fruitvale Ave", "7950 O…
+#> $ city                  <chr> "Philadelphia", "Holland", "Oakland", "Pittsford", "Atlanta", "DECA…
+#> $ state                 <chr> "PA", "MI", "CA", "NY", "GA", "GA", "MA", "CA", "OR", "CA", "NJ", "…
+#> $ zip                   <chr> "19103-7904", "49423-6654", "94602-2423", "14534-9505", "30326-1271…
+#> $ pac                   <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
+#> $ occupation            <chr> "Intern", "Mechanical Designer", "Creative Director", "Neurosurgeon…
+#> $ employer              <chr> "Society Hill Synagogue", "Ces Group", "Uber", "University of Roche…
+#> $ date                  <date> 2020-12-07, 2021-09-12, 2020-12-16, 2021-03-10, 2020-12-01, 2021-1…
+#> $ election              <chr> "Run-Off General", "Primary", "Run-Off General", "Primary", "Run-Of…
+#> $ election_year         <chr> "2020", "2022", "2020", "2022", "2020", "2022", "2022", "2020", "20…
+#> $ cash_amount           <dbl> 100, 25, 100, 100, 100, 250, 25, 100, 50, 100, 25, 1000, 500, 100, …
+#> $ in_kind_amount        <dbl> 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+#> $ in_kind_description   <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
+#> $ candidate_first_name  <chr> NA, NA, NA, NA, NA, "Kay", NA, NA, NA, NA, NA, "Hugh 'Bruce'", "Sta…
+#> $ candidate_middle_name <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "Brewster", "Yvonne", "…
+#> $ candidate_last_name   <chr> NA, NA, NA, NA, NA, "Kirkpatrick", NA, NA, NA, NA, NA, "Williamson"…
+#> $ candidate_suffix      <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "III", NA, NA, NA, NA, …
+#> $ committee_name        <chr> "Fair Fight", "Fair Fight", "Fair Fight", "Fair Fight", "Fair Fight…
+#> $ na_flag               <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALS…
+#> $ dupe_flag             <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, TRUE, FALSE, FALSE, FALSE, FALSE…
+#> $ total_amount          <dbl> 100, 25, 100, 100, 100, 250, 25, 100, 50, 100, 25, 1000, 500, 100, …
+#> $ year                  <dbl> 2020, 2021, 2020, 2021, 2020, 2021, 2021, 2020, 2021, 2020, 2021, 2…
+#> $ address_clean         <chr> "225 S 18TH ST", "129 BIRCHWOOD AVE", "3923 FRUITVALE AVE", "7950 O…
+#> $ zip_clean             <chr> "19103", "49423", "94602", "14534", "30326", "30033", "02474", "941…
+#> $ state_clean           <chr> "PA", "MI", "CA", "NY", "GA", "GA", "MA", "CA", "OR", "CA", "NJ", "…
+#> $ city_clean            <chr> "PHILADELPHIA", "HOLLAND", "OAKLAND", "PITTSFORD", "ATLANTA", "DECA…
 ```
 
-1.  There are 1,981,569 records in the database.
-2.  There are 65,744 duplicate records in the database.
+1.  There are 497,993 records in the database.
+2.  There are 18,711 duplicate records in the database.
 3.  The range and distribution of `amount` and `date` seem reasonable.
-4.  There are 52,369 records missing key variables.
+4.  There are 13,300 records missing key variables.
 5.  Consistency in geographic data has been improved with
     `campfin::normal_*()`.
 6.  The 4-digit `year` variable has been created with
@@ -676,16 +682,16 @@ Now the file can be saved on disk for upload to the Accountability
 server.
 
 ``` r
-clean_dir <- dir_create(here("ga", "contribs", "data", "clean"))
+clean_dir <- dir_create(here("state","ga", "contribs", "data", "clean"))
 clean_path <- path(clean_dir, "ga_contribs_clean.csv")
 write_csv(gac, clean_path, na = "")
 file_size(clean_path)
-#> 467M
+#> 104M
 file_encoding(clean_path)
-#> # A tibble: 1 x 3
+#> # A tibble: 1 × 3
 #>   path                                                                                mime  charset
 #>   <fs::path>                                                                          <chr> <chr>  
-#> 1 /Users/yanqixu/code/accountability_datacleaning/R_campfin/ga/contribs/data/clean/g… <NA>  <NA>
+#> 1 …ode/accountability_datacleaning/state/ga/contribs/data/clean/ga_contribs_clean.csv <NA>  <NA>
 ```
 
 ## Upload
@@ -710,7 +716,7 @@ as_fs_bytes(object_size(s3_path, "publicaccountability"))
 The following table describes the variables in our final exported file:
 
 | Column                  | Type        | Definition                                  |
-| :---------------------- | :---------- | :------------------------------------------ |
+|:------------------------|:------------|:--------------------------------------------|
 | `filer_id`              | `character` | ID of filer                                 |
 | `type`                  | `character` | Contribution method                         |
 | `last_name`             | `character` | Last name of filer                          |
@@ -745,6 +751,6 @@ The following table describes the variables in our final exported file:
 ``` r
 write_lines(
   x = c("# Georgia Contributions Data Dictionary\n", dict_md),
-  path = here("ga", "contribs", "ga_contribs_dict.md"),
+  path = here("state","ga", "contribs", "ga_contribs_dict.md"),
 )
 ```

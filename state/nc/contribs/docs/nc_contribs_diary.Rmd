@@ -111,6 +111,7 @@ paths relative to _your_ machine.
 ```{r where_here}
 # where does this document knit?
 here::here()
+raw_dir <- dir_create(here("state","nc", "contribs", "data", "raw"))
 ```
 
 [tap]: https://github.com/irworkshop/accountability_datacleaning
@@ -136,26 +137,36 @@ To download the data, we must run searches on the [NCSBE search portal][search].
 Searching for all records at once returns an error, but we can ask for all
 contributions from a given calendar year and export annual files.
 
+Update note in 2022: The last update was on 2020-07-20, so we'll set the start date of this update to 07/21/2020 and the end date to 10/15/2022. 
+
 [search]: https://cf.ncsbe.gov/CFTxnLkup/AdvancedSearch/
+
+```{r}
+date_from <- "07/21/2020"
+date_to <- "10/15/2022"
+```
+
 
 ```{r raw_export, eval=FALSE}
 # does not work
-date_from <- "01/01/2000"
-param_file <- here("nc", "contribs", "ncsbe_param.txt")
+param_file <- here("state","nc", "contribs", "ncsbe_param.txt")
 raw_param <- glue::glue(readr::read_lines(param_file))
 raw_url <- "https://cf.ncsbe.gov/CFTxnLkup/ExportResults/"
 raw_export <- paste(raw_url, raw_param, sep = "?")
-for (y in 2000:2020) {
-  date_to <- sprintf("12/31%s", y)
-  raw_path <- path(raw_dir, glue("transinq_results-{y}.csv"))
-  if (file.exists(raw_path)) next()
+#for (y in 2020:2022) {
+#for (y in 2000:2020) {
+  #date_to <- sprintf("12/31/%s", y)
+year <- str_extract(date_to,"\\d{4}$")
+  raw_path <- path(raw_dir, glue("transinq_results-{year}.csv"))
+  if (file.exists(raw_path)){
+    #next()
   POST(raw_export, write_disk(raw_path, overwrite = TRUE))
-  message(y)
-}
+  #message(y)
+  }
+#}
 ```
 
 ```{r raw_dir}
-raw_dir <- dir_create(here("nc", "contribs", "data", "raw"))
 raw_files <- as_tibble(dir_info(raw_dir))
 raw_files %>% 
   select(path, size, modification_time) %>% 
@@ -176,7 +187,7 @@ ncc <- vroom(
   na = c("", "NA", "Not Available"),
   col_types = cols(
     .default = col_character(),
-    `Date Occured` = col_date_usa(),
+    `Date Occured` = col_date_mdy(),
     `Amount` = col_double()
   )
 )
@@ -270,7 +281,8 @@ the list. For each chunk, we will write the duplicate row positions to a local
 file.
 
 ```{r dupe_write}
-dupe_file <- here("nc", "contribs", "dupes.txt")
+# Note: It's better to delete the dupes files already in the folder before knitting unless we're sure that the dupes.txt is a complete vector whose length is equal to the current set of data we are processing. 
+dupe_file <- here("state","nc", "contribs", "dupes.txt")
 if (!file_exists(dupe_file)) {
   file_create(dupe_file)
   n <- 1e5 # rows per chunk
@@ -303,7 +315,7 @@ gc(reset = TRUE, full = TRUE)
 ```
 
 A _huge_ percentage of the overall records in this database are duplicates.
-This stems from the use of aggregated records reported millions of timnes by a
+This stems from the use of aggregated records reported millions of times by a
 handful of recipients.
 
 ```{r dupe_view}
@@ -336,6 +348,7 @@ mean(ncc$amount <= 5, na.rm = TRUE) # itemized
 ```
 
 ```{r hist_amount, echo=FALSE}
+data_source <- "North Carolina State Board of Elections (NCSBE)"
 ncc %>%
   ggplot(aes(amount)) +
   geom_histogram(fill = dark2["purple"]) +
@@ -347,8 +360,8 @@ ncc %>%
   ) +
   labs(
     title = "North Carolina Contributions Amount Distribution",
-    subtitle = "from 2000 to 2019",
-    caption = "Source: {source}",
+    subtitle = glue("from {date_from} to {date_to}"),
+    caption = glue("Source: {data_source}"),
     x = "Amount",
     y = "Count"
   )
@@ -367,7 +380,7 @@ Aside from a handful of missing values, the range of dates is clean.
 ```{r date_range}
 prop_na(ncc$date)
 min(ncc$date, na.rm = TRUE)
-sum(ncc$year < 2000, na.rm = TRUE)
+sum(ncc$year < 2020, na.rm = TRUE)
 max(ncc$date, na.rm = TRUE)
 sum(ncc$date > today(), na.rm = TRUE)
 ```
@@ -380,11 +393,12 @@ ncc %>%
   geom_col(aes(fill = even)) + 
   scale_fill_brewer(palette = "Dark2") +
   scale_y_continuous(labels = comma) +
-  scale_x_continuous(breaks = seq(2000, 2020, by = 2)) +
+  #scale_x_continuous(breaks = seq(2000, 2020, by = 2)) +
+  scale_x_continuous() +
   theme(legend.position = "bottom") +
   labs(
     title = "North Carolina Contributions by Year",
-    caption = "Source: {source}",
+    caption = glue("Source: {data_source}"),
     fill = "Election Year",
     x = "Year Made",
     y = "Count"
@@ -683,7 +697,7 @@ glimpse(sample_n(ncc, 20))
 1. The 4-digit `year` variable has been created with `lubridate::year()`.
 
 ```{r clean_dir}
-clean_dir <- dir_create(here("nc", "contribs", "data", "clean"))
+clean_dir <- dir_create(here("state","nc", "contribs", "data", "clean"))
 clean_path <- path(clean_dir, "nc_contribs_clean.csv")
 write_csv(ncc, clean_path, na = "")
 file_size(clean_path)

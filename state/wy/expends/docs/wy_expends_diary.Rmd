@@ -112,12 +112,12 @@ Wyoming requires all statewide candidates, candidate committees, political actio
 
 ### Download
 
-Download raw, **immutable** data file. Go to [the download site](https://www.wycampaignfinance.gov/WYCFWebApplication/GSF_SystemConfiguration/SearchExpenditures.aspx), leave the fields blank, and click the "All" tab and hit "Search". After the table is populated, click "Export"
-The data is downloaded on Nov. 24, 2020.
+Download raw, **immutable** data file. Go to [the download site](https://www.wycampaignfinance.gov/WYCFWebApplication/GSF_SystemConfiguration/SearchExpenditures.aspx), leave the fields blank, and click the "All" tab and hit "Search" with the date range of Nov 25, 2020  to Oct 8, 2022. After the table is populated, click "Export".
+2020 export was downloaded on Nov. 24, 2020.
+
 ```{r raw_dir}
 # create a directory for the raw data
-raw_dir <- here("wy", "expends", "data", "raw")
-dir_create(raw_dir)
+raw_dir <- dir_create(here("state","wy", "expends", "data", "raw"))
 ```
 
 
@@ -126,8 +126,11 @@ dir_create(raw_dir)
 ```{r read_many, echo=FALSE}
 wy <- 
   dir_ls(path = raw_dir) %>% 
-  map(
-    read_delim,
+  #map(
+  read_lines() %>% 
+  str_replace('W"Y', "WY") %>% 
+  I() %>% 
+    read_delim(
     delim = ",",
     escape_double = FALSE,
     escape_backslash = FALSE,
@@ -137,9 +140,9 @@ wy <-
       Amount = col_double()
     )  
     ) %>% 
-  bind_rows() %>% 
-  distinct() %>% 
-  select(-starts_with("X")) %>% 
+  #bind_rows() %>% 
+  #distinct() %>% 
+  #select(-starts_with("X")) %>% 
   clean_names() %>% 
   mutate_if(is_character, str_to_upper) %>% 
   map_if(is_character, str_replace_all, "\\\"", "\'") %>% 
@@ -634,7 +637,7 @@ wy <- wy %>%
 ```
 
 ```{r write_clean}
-clean_dir <- here("wy", "expends", "data", "processed")
+clean_dir <- here("state","wy", "expends", "data", "processed")
 clean_path <- glue("{clean_dir}/wy_expends_clean_update.csv")
 
 dir_create(clean_dir)

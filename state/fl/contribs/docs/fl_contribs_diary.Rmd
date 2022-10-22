@@ -34,7 +34,7 @@ if (!interactive()) {
 ```
 
 ```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
-doc_dir <- fs::dir_create(here::here("fl", "contribs", "docs"))
+doc_dir <- fs::dir_create(here::here("state","fl", "contribs", "docs"))
 ```
 
 ## Project
@@ -89,7 +89,6 @@ pacman::p_load(
   glue, # code strings
   here, # project paths
   httr, # http requests
-  cli, # command line
   fs # local storage 
 )
 ```

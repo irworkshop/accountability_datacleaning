@@ -158,6 +158,8 @@ January 1 and December 31 for each calendar year since 2002. The search result
 totals were noted and the results were saved to a comma-delimited file for each
 year.
 
+The last update took place 
+
 ```{r raw-dir}
 raw_dir <- dir_create(here("state", "ri", "contribs", "data", "raw"))
 raw_csv <- dir_ls(raw_dir, glob = "*.csv")
