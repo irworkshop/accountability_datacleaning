@@ -34,7 +34,7 @@ if (!interactive()) {
 ```
 
 ```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
-fs::dir_create(here::here("in", "contribs", "docs"))
+fs::dir_create(here::here("state","in", "contribs", "docs"))
 ```
 
 ## Project
@@ -160,21 +160,27 @@ We can read the [IED download page][dl] to get the list of URLs to each file.
 [dl]: https://campaignfinance.in.gov/PublicSite/Reporting/DataDownload.aspx
 
 ```{r raw_dir}
-raw_dir <- dir_create(here("in", "contribs", "data", "raw"))
+raw_dir <- dir_create(here("state","in", "contribs", "data", "raw"))
+prev_dir <- dir_create(here("state","in", "contribs", "data", "previous"))
 ```
 
-```{r raw_find, results='asis'}
-aspx <- "https://campaignfinance.in.gov/PublicSite/Reporting/DataDownload.aspx"
-raw_urls <- aspx %>% 
-  read_html() %>% 
-  html_node("#_ctl0_Content_dlstDownloadFiles") %>% 
-  html_nodes("a") %>% 
-  html_attr("href") %>% 
-  str_subset("Contribution") %>% 
-  str_replace("\\\\", "/")
-
-md_bullet(raw_urls)
+```{r raw_find, results='asis', eval=FALSE}
+# aspx <- "https://campaignfinance.in.gov/PublicSite/Reporting/DataDownload.aspx"
+# raw_urls <- aspx %>% 
+#   read_html() %>% 
+#   html_node("#_ctl0_Content_dlstDownloadFiles") %>% 
+#   html_nodes("a") %>% 
+#   html_attr("href") %>% 
+#   str_subset("Contribution") %>% 
+#   str_replace("\\\\", "/")
+# 
+# md_bullet(raw_urls)
 ```
+
+```{r}
+raw_urls <- glue("https://campaignfinance.in.gov/PublicSite/Docs/BulkDataDownloads/{2020:2022}_ContributionData.csv.zip")
+```
+
 
 We can download each of these files to the raw directory.
 
@@ -209,7 +215,7 @@ use regular expressions to find and replace these errant `\n` and `"`
 characters. We will then write the edited strings to a new file.
 
 ```{r fix_raw}
-fix_dir <- dir_create(here("in", "contribs", "data", "fix"))
+fix_dir <- dir_create(here("state","in", "contribs", "data", "fix"))
 if (!any(file_exists(dir_ls(fix_dir)))) {
   for (f in raw_paths) {
     x <- read_file(f)
@@ -252,6 +258,7 @@ inc <- map_df(
 )
 ```
 
+
 ```{r raw_rename}
 inc <- inc %>% 
   clean_names("snake") %>% 
@@ -272,6 +279,17 @@ inc <- inc %>%
 glimpse(inc)
 tail(inc)
 ```
+
+```{r read_prev}
+inc_prev <- read_csv(dir_ls(prev_dir))
+
+inc_prev <- inc_prev %>% select(names(inc))  
+```
+
+```{r}
+inc <- anti_join(inc, inc_prev)
+```
+
 
 ### Missing
 
@@ -374,8 +392,8 @@ inc <- mutate(
   year = year(date),
   year = case_when(
     year < 1998 ~ 1998,
-    year > 2020 ~ 2020,
-    year %>% between(1998, 2020) ~ year
+    year > 2022 ~ 2022,
+    year %>% between(1998, 2022) ~ year
   )
 )
 ```
@@ -389,7 +407,7 @@ inc %>%
   geom_col(aes(fill = even)) + 
   scale_fill_brewer(palette = "Dark2") +
   scale_y_continuous(labels = comma) +
-  scale_x_continuous(breaks = seq(1998, 2020, by = 2)) +
+  scale_x_continuous(breaks = seq(2020, 2022, by = 1)) +
   theme(legend.position = "bottom") +
   labs(
     title = "Indiana Contributions by Year",
@@ -693,8 +711,8 @@ glimpse(sample_n(inc, 50))
 Now the file can be saved on disk for upload to the Accountability server.
 
 ```{r clean_dir}
-clean_dir <- dir_create(here("in", "contribs", "data", "clean"))
-clean_path <- path(clean_dir, "in_contribs_clean.csv")
+clean_dir <- dir_create(here("state","in", "contribs", "data", "clean"))
+clean_path <- path(clean_dir, "in_contribs_clean_2020-2022.csv")
 write_csv(inc, clean_path, na = "")
 (clean_size <- file_size(clean_path))
 file_encoding(clean_path) %>% 
@@ -705,7 +723,7 @@ file_encoding(clean_path) %>%
 
 We can use the `aws.s3::put_object()` to upload the text file to the IRW server.
 
-```{r aws_upload, eval=TRUE}
+```{r aws_upload, eval=FALSE}
 aws_path <- path("csv", basename(clean_path))
 if (!object_exists(aws_path, "publicaccountability")) {
   put_object(

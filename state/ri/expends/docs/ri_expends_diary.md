@@ -1,17 +1,17 @@
 Rhode Island Expenditures
 ================
 Kiernan Nicholls
-2019-08-22 15:18:29
+2022-11-06 10:34:59
 
-  - [Project](#project)
-  - [Objectives](#objectives)
-  - [Packages](#packages)
-  - [Data](#data)
-  - [Import](#import)
-  - [Explore](#explore)
-  - [Wrangle](#wrangle)
-  - [Conclude](#conclude)
-  - [Export](#export)
+-   <a href="#project" id="toc-project">Project</a>
+-   <a href="#objectives" id="toc-objectives">Objectives</a>
+-   <a href="#packages" id="toc-packages">Packages</a>
+-   <a href="#data" id="toc-data">Data</a>
+-   <a href="#import" id="toc-import">Import</a>
+-   <a href="#explore" id="toc-explore">Explore</a>
+-   <a href="#wrangle" id="toc-wrangle">Wrangle</a>
+-   <a href="#conclude" id="toc-conclude">Conclude</a>
+-   <a href="#export" id="toc-export">Export</a>
 
 ## Project
 
@@ -50,6 +50,7 @@ facilitate their installation and attachment.
 
 ``` r
 if (!require("pacman")) install.packages("pacman")
+pacman::p_load_current_gh("irworkshop/campfin")
 pacman::p_load(
   stringdist, # levenshtein value
   tidyverse, # data manipulation
@@ -74,10 +75,6 @@ The IRW’s `campfin` package will also have to be installed from GitHub.
 This package contains functions custom made to help facilitate the
 processing of campaign finance data.
 
-``` r
-pacman::p_load_current_gh("kiernann/campfin")
-```
-
 This document should be run as part of the `R_campfin` project, which
 lives as a sub-directory of the more general, language-agnostic
 [`irworkshop/accountability_datacleaning`](https://github.com/irworkshop/accountability_datacleaning "TAP repo")
@@ -91,7 +88,7 @@ feature and should be run as such. The project also uses the dynamic
 ``` r
 # where dfs this document knit?
 here::here()
-#> [1] "/home/ubuntu/R/accountability_datacleaning/R_campfin"
+#> [1] "/Users/yanqixu/code/accountability_datacleaning"
 ```
 
 ## Data
@@ -113,18 +110,20 @@ Each records tracks a single expenditure as reported by the campaign.
 
 ``` r
 # create a directory for the raw data
-raw_dir <- here("ri", "expends", "data", "raw")
+raw_dir <- here("state","ri", "expends", "data", "raw")
 dir_create(raw_dir)
 ```
 
 To download the file, we can create our own URL and navigate to the page
-using the `RSelenium` package.
+using the `RSelenium` package.The last update was `2019-07-30`, and this
+round of update covers the period from `2019-07-31` to `2022-11-04`. The
+next update should start from `2022-11-05`.
 
 ``` r
 url <- str_c(
   "http://ricampaignfinance.com/RIPublic/Reporting/ExpenditureReport.aspx?OrgID=0",
-  "BeginDate=",
-  "EndDate=",
+  "BeginDate=07/31/2019",
+  "EndDate=11/04/2022",
   "LastName=",
   "FirstName=",
   "ContType=0",
@@ -151,7 +150,7 @@ url <- str_c(
 
 # open the driver with auto download options
 remote_driver <- rsDriver(
-  port = 4444L,
+  port = 4440L,
   browser = "firefox",
   extraCapabilities = makeFirefoxProfile(
     list(
@@ -203,68 +202,68 @@ ri <- ri %>%
 
 ## Explore
 
-There are 315,596 records of 21 variables in the full database.
+There are 90,278 records of 21 variables in the full database.
 
 ``` r
 glimpse(sample_frac(ri))
 ```
 
-    #> Observations: 315,596
-    #> Variables: 21
-    #> $ organization_name   <chr> "DONALD L CARCIERI", "K JOSEPH SHEKARCHI", "MIGUEL C LUNA", "IBEW LO…
-    #> $ expenditure_id      <chr> "5356", "175588", "91606", "48973", "146625", "144637", "340403", "2…
-    #> $ disb_desc           <chr> "CAMPAIGN EXPENDITURE", "REFUND OF CONTRIBUTION", "CAMPAIGN EXPENDIT…
-    #> $ exp_desc            <chr> "TRAVEL & LODGING", "OTHER", "BANK FEES", "CONSULTANT & PROFESSIONAL…
-    #> $ exp_pmt_desc        <chr> "CHECK", "CHECK", "CHECK", "CHECK", "CHECK", "CHECK", "CHECK", "CHEC…
-    #> $ incomplete_desc     <chr> "EXPLANATION<BR>", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
-    #> $ view_incomplete     <chr> "INCOMPLETE", "INCOMPLETE", "INCOMPLETE", "INCOMPLETE", "INCOMPLETE"…
-    #> $ exp_date            <date> 2002-11-02, 2013-03-30, 2009-11-02, 2007-11-27, 2010-11-08, 2011-11…
-    #> $ pmt_date            <chr> "11/02/2002", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
-    #> $ amount              <dbl> 1913.76, 1000.00, 26.00, -1666.66, 133.25, 173.43, 85.30, 2750.00, 6…
-    #> $ full_name           <chr> "KENNETH MCKAY", "KHALIL SHEKARCHI", "BANK RHODE ISLAND", "PAUL MCDO…
-    #> $ address             <chr> "15 BATES AVE.", "132 OLD RIVER ROAD", "P.O. BOX 9488", NA, "62 MAPL…
-    #> $ city_st_zip         <chr> "NORTH KINGSTON, RI 02852", "LINCOLN, RI 02865", "PROVIDENCE, RI 029…
-    #> $ receipt_desc        <chr> "CAMPAIGN EXPENDITURE", "REFUND OF CONTRIBUTION", "CAMPAIGN EXPENDIT…
-    #> $ expenditure_code_id <chr> "27", "28", "4", "5", "5", "26", "10", "7", "12", "32", "10", "12", …
-    #> $ begin_date          <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
-    #> $ end_date            <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
-    #> $ mpf_used            <chr> "-1", "-1", "-1", "-1", "-1", "-1", "-1", "-1", "-1", "-1", "-1", "-…
-    #> $ osap                <dbl> 1913.76, 1000.00, 26.00, -1666.66, 133.25, 173.43, 85.30, 2750.00, 6…
-    #> $ zeroed_by_cf7       <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE…
-    #> $ ricf7filing_id      <chr> "0", "0", "0", "0", "0", "0", "0", "0", "0", "0", "0", "0", "0", "0"…
+    #> Rows: 90,278
+    #> Columns: 21
+    #> $ organization_name   <chr> "CHRISTOPHER T MILLEA", "CASWELL COOKE JR.", "SETH MAGAZINER", "RI AL…
+    #> $ expenditure_id      <chr> "373541", "436971", "382947", "418823", "417953", "442148", "357770",…
+    #> $ disb_desc           <chr> "CAMPAIGN EXPENDITURE", "CAMPAIGN EXPENDITURE", "CAMPAIGN EXPENDITURE…
+    #> $ exp_desc            <chr> "FOOD, BEVERAGES AND MEALS", "ADVERTISING", "RENT & UTILITIES", "OTHE…
+    #> $ exp_pmt_desc        <chr> "CHECK", "CHECK", "CHECK", "CHECK", "CHECK", "CHECK", "CHECK", "CHECK…
+    #> $ incomplete_desc     <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
+    #> $ view_incomplete     <chr> "INCOMPLETE", "INCOMPLETE", "INCOMPLETE", "INCOMPLETE", "INCOMPLETE",…
+    #> $ exp_date            <date> 2020-09-11, 2022-10-01, 2020-12-22, 2022-06-15, 2022-06-22, 2022-10-…
+    #> $ pmt_date            <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
+    #> $ amount              <dbl> 552.04, 517.49, 118.00, 399.90, 179.63, 26.61, 27.92, 3.00, 250.00, 2…
+    #> $ full_name           <chr> "PJ'S PUB", "COASTAL GRAPHICS", "USPS", "SEIU COPE", "ALAMO", "VANTIV…
+    #> $ address             <chr> "1139 PONTIAC AVE", "83 TOM HARVEY ROAD UNIT 5 BLDG C", "2 EXCHANGE T…
+    #> $ city_st_zip         <chr> "CRANSTON, RI 02920", "WESTERLY, RI 02891", "PROVIDENCE, RI 02903", "…
+    #> $ receipt_desc        <chr> "CAMPAIGN EXPENDITURE", "CAMPAIGN EXPENDITURE", "CAMPAIGN EXPENDITURE…
+    #> $ expenditure_code_id <chr> "10", "2", "31", "28", "27", "12", "10", "4", "7", "28", "2", "32", "…
+    #> $ begin_date          <chr> "07/31/2019", "07/31/2019", "07/31/2019", "07/31/2019", "07/31/2019",…
+    #> $ end_date            <chr> "11/04/2022", "11/04/2022", "11/04/2022", "11/04/2022", "11/04/2022",…
+    #> $ mpf_used            <chr> "-1", "-1", "-1", "-1", "-1", "-1", "-1", "-1", "-1", "-1", "-1", "-1…
+    #> $ osap                <dbl> 552.04, 517.49, 118.00, 399.90, 179.63, 26.61, 27.92, 3.00, 250.00, 2…
+    #> $ zeroed_by_cf7       <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE,…
+    #> $ ricf7filing_id      <chr> "0", "0", "0", "0", "0", "0", "0", "0", "0", "0", "0", "0", "0", "0",…
 
 ### Distinct
 
 The variables range in their degree of distinctness.
 
 ``` r
-ri %>% glimpse_fun(n_distinct)
+col_stats(ri,n_distinct)
 ```
 
-    #> # A tibble: 21 x 4
-    #>    var                 type       n          p
-    #>    <chr>               <chr>  <int>      <dbl>
-    #>  1 organization_name   chr     3570 0.0113    
-    #>  2 expenditure_id      chr   315580 1.000     
-    #>  3 disb_desc           chr        5 0.0000158 
-    #>  4 exp_desc            chr       17 0.0000539 
-    #>  5 exp_pmt_desc        chr        1 0.00000317
-    #>  6 incomplete_desc     chr       21 0.0000665 
-    #>  7 view_incomplete     chr        1 0.00000317
-    #>  8 exp_date            date    6015 0.0191    
-    #>  9 pmt_date            chr     1692 0.00536   
-    #> 10 amount              dbl    52397 0.166     
-    #> 11 full_name           chr    49612 0.157     
-    #> 12 address             chr    39329 0.125     
-    #> 13 city_st_zip         chr     6876 0.0218    
-    #> 14 receipt_desc        chr        5 0.0000158 
-    #> 15 expenditure_code_id chr       17 0.0000539 
-    #> 16 begin_date          chr        1 0.00000317
-    #> 17 end_date            chr        1 0.00000317
-    #> 18 mpf_used            chr        1 0.00000317
-    #> 19 osap                dbl    51877 0.164     
-    #> 20 zeroed_by_cf7       lgl        2 0.00000634
-    #> 21 ricf7filing_id      chr      970 0.00307
+    #> # A tibble: 21 × 4
+    #>    col                 class      n         p
+    #>    <chr>               <chr>  <int>     <dbl>
+    #>  1 organization_name   <chr>   1489 0.0165   
+    #>  2 expenditure_id      <chr>  90278 1        
+    #>  3 disb_desc           <chr>      5 0.0000554
+    #>  4 exp_desc            <chr>     17 0.000188 
+    #>  5 exp_pmt_desc        <chr>      1 0.0000111
+    #>  6 incomplete_desc     <chr>      1 0.0000111
+    #>  7 view_incomplete     <chr>      1 0.0000111
+    #>  8 exp_date            <date>  1190 0.0132   
+    #>  9 pmt_date            <chr>    228 0.00253  
+    #> 10 amount              <dbl>  20043 0.222    
+    #> 11 full_name           <chr>  15431 0.171    
+    #> 12 address             <chr>  15348 0.170    
+    #> 13 city_st_zip         <chr>   2914 0.0323   
+    #> 14 receipt_desc        <chr>      5 0.0000554
+    #> 15 expenditure_code_id <chr>     17 0.000188 
+    #> 16 begin_date          <chr>      1 0.0000111
+    #> 17 end_date            <chr>      1 0.0000111
+    #> 18 mpf_used            <chr>      1 0.0000111
+    #> 19 osap                <dbl>  19967 0.221    
+    #> 20 zeroed_by_cf7       <lgl>      2 0.0000222
+    #> 21 ricf7filing_id      <chr>    154 0.00171
 
 ![](../plots/plot_exp_bar-1.png)<!-- -->
 
@@ -279,30 +278,30 @@ The variables also vary in their degree of values that are `NA`
 ri %>% glimpse_fun(count_na)
 ```
 
-    #> # A tibble: 21 x 4
-    #>    var                 type       n      p
-    #>    <chr>               <chr>  <int>  <dbl>
-    #>  1 organization_name   chr        0 0     
-    #>  2 expenditure_id      chr        0 0     
-    #>  3 disb_desc           chr        0 0     
-    #>  4 exp_desc            chr        0 0     
-    #>  5 exp_pmt_desc        chr        0 0     
-    #>  6 incomplete_desc     chr   311376 0.987 
-    #>  7 view_incomplete     chr        0 0     
-    #>  8 exp_date            date       0 0     
-    #>  9 pmt_date            chr   305770 0.969 
-    #> 10 amount              dbl        0 0     
-    #> 11 full_name           chr    27642 0.0876
-    #> 12 address             chr    75328 0.239 
-    #> 13 city_st_zip         chr    60260 0.191 
-    #> 14 receipt_desc        chr        0 0     
-    #> 15 expenditure_code_id chr        0 0     
-    #> 16 begin_date          chr   315596 1     
-    #> 17 end_date            chr   315596 1     
-    #> 18 mpf_used            chr        0 0     
-    #> 19 osap                dbl        0 0     
-    #> 20 zeroed_by_cf7       lgl        0 0     
-    #> 21 ricf7filing_id      chr        0 0
+    #> # A tibble: 21 × 4
+    #>    col                 type       n      p
+    #>    <chr>               <chr>  <dbl>  <dbl>
+    #>  1 organization_name   <chr>      0 0     
+    #>  2 expenditure_id      <chr>      0 0     
+    #>  3 disb_desc           <chr>      0 0     
+    #>  4 exp_desc            <chr>      0 0     
+    #>  5 exp_pmt_desc        <chr>      0 0     
+    #>  6 incomplete_desc     <chr>  90278 1     
+    #>  7 view_incomplete     <chr>      0 0     
+    #>  8 exp_date            <date>     0 0     
+    #>  9 pmt_date            <chr>  89639 0.993 
+    #> 10 amount              <dbl>      0 0     
+    #> 11 full_name           <chr>   3658 0.0405
+    #> 12 address             <chr>  12856 0.142 
+    #> 13 city_st_zip         <chr>  11230 0.124 
+    #> 14 receipt_desc        <chr>      0 0     
+    #> 15 expenditure_code_id <chr>      0 0     
+    #> 16 begin_date          <chr>      0 0     
+    #> 17 end_date            <chr>      0 0     
+    #> 18 mpf_used            <chr>      0 0     
+    #> 19 osap                <dbl>      0 0     
+    #> 20 zeroed_by_cf7       <lgl>      0 0     
+    #> 21 ricf7filing_id      <chr>      0 0
 
 We will flag any record missing a `full_name` or `address`.
 
@@ -318,9 +317,9 @@ duplicated more than once.
 ``` r
 ri_dupes <- distinct(get_dupes(ri))
 nrow(ri_dupes)
-#> [1] 12
+#> [1] 0
 sum(ri_dupes$dupe_count)
-#> [1] 24
+#> [1] 0
 ```
 
 We can then join this table back with the full dataset, flagging any
@@ -338,14 +337,14 @@ rm(ri_dupes)
 
 #### amounts
 
-There are 5913 records with `amount` values less than zero.
+There are 2144 records with `amount` values less than zero.
 
 ``` r
 summary(ri$amount)
-#>     Min.  1st Qu.   Median     Mean  3rd Qu.     Max. 
-#>  -142000       50      120      633      320 11452454
+#>      Min.   1st Qu.    Median      Mean   3rd Qu.      Max. 
+#> -125000.0      23.7     100.0     538.4     300.0  410675.0
 sum(ri$amount < 0)
-#> [1] 5913
+#> [1] 2144
 ```
 
 ``` r
@@ -369,12 +368,12 @@ ri %>%
 
 ### Dates
 
-There are 0 records with an `exp_date` past 2019-08-22.
+There are 0 records with an `exp_date` past 2022-11-06.
 
 ``` r
 summary(ri$exp_date)
 #>         Min.      1st Qu.       Median         Mean      3rd Qu.         Max. 
-#> "2002-01-06" "2010-04-26" "2013-07-28" "2013-03-18" "2016-09-22" "2019-07-30"
+#> "2019-07-31" "2020-09-01" "2021-08-02" "2021-06-27" "2022-06-03" "2022-11-01"
 sum(ri$exp_date > today())
 #> [1] 0
 ```
@@ -423,8 +422,8 @@ ri <- ri %>%
   mutate(
     address_clean = normal_address(
       address = address,
-      add_abbs = usps,
-      na_rep = TRUE,
+      abbs = usps_street,
+      na_rep = TRUE
     )
   )
 
@@ -434,19 +433,19 @@ ri %>%
   sample_n(10)
 ```
 
-    #> # A tibble: 10 x 2
-    #>    address                         address_clean                
-    #>    <chr>                           <chr>                        
-    #>  1 50 BRANCH AVE                   50 BRANCH AVENUE             
-    #>  2 1153 WESTMINSTER ST             1153 WESTMINSTER STREET      
-    #>  3 6 BLACKSTONE VALLEY PL #204     6 BLACKSTONE VALLEY PLACE 204
-    #>  4 2019 PENNSYLVANNIA AVENUE, N.W. 2019 PENNSYLVANNIA AVENUE NW 
-    #>  5 1145 ATWOOD AVE.                1145 ATWOOD AVENUE           
-    #>  6 131 HARRISVILLE MAIN ST         131 HARRISVILLE MAIN STREET  
-    #>  7 410 TERRY AVE N                 410 TERRY AVENUE NORTH       
-    #>  8 386 SHORE RD                    386 SHORE ROAD               
-    #>  9 601 W 184TH ST APT 5D           601 WEST 184TH STREET APT 5D 
-    #> 10 461 MAIN ST                     461 MAIN STREET
+    #> # A tibble: 10 × 2
+    #>    address                     address_clean             
+    #>    <chr>                       <chr>                     
+    #>  1 ATWOOD AVENUE               ATWOOD AVE                
+    #>  2 22 AMFLEX DRIVE             22 AMFLEX DR              
+    #>  3 957 MAIN STREET             957 MAIN ST               
+    #>  4 165 DYERVILLE AVENUE        165 DYERVILLE AVE         
+    #>  5 P.O. BOX 182051             PO BOX 182051             
+    #>  6 119 KENYON AVENUE           119 KENYON AVE            
+    #>  7 450 VETERANS MEMORIAL PKY   450 VETERANS MEMORIAL PKWY
+    #>  8 275 SACRAMENTO ST 4TH FLOOR 275 SACRAMENTO ST 4TH FL  
+    #>  9 984 YORK AVENUE             984 YORK AVE              
+    #> 10 7 FORSYTH ST.               7 FORSYTH ST
 
 ### ZIP
 
@@ -454,9 +453,9 @@ We can do the same to ZIP codes using `campfin::normal_zip()`.
 
 ``` r
 n_distinct(ri$zip_sep)
-#> [1] 3477
-mean(na.omit(ri$zip_sep) %in% geo$zip)
-#> [1] 0.9819398
+#> [1] 1618
+mean(na.omit(ri$zip_sep) %in% valid_zip)
+#> [1] 0.967351
 
 ri <- ri %>% 
   mutate(
@@ -467,32 +466,29 @@ ri <- ri %>%
   )
 
 mean(is.na(ri$zip_clean))
-#> [1] 0.3509582
+#> [1] 0.2705975
 n_distinct(ri$zip_clean)
-#> [1] 2954
-mean(na.omit(ri$zip_clean) %in% geo$zip)
-#> [1] 0.9961188
-n_distinct(ri$zip_clean[which(ri$zip_clean %out% geo$zip)])
-#> [1] 198
+#> [1] 1355
+mean(na.omit(ri$zip_clean) %in% valid_zip)
+#> [1] 0.9977069
+n_distinct(ri$zip_clean[which(ri$zip_clean %out% valid_zip)])
+#> [1] 66
 ```
 
 ### State
 
 ``` r
 n_distinct(ri$state_sep)
-#> [1] 110
-mean(na.omit(ri$state_sep) %in% geo$state)
-#> [1] 0.999626
-setdiff(ri$state_sep, geo$state)
-#>  [1] NA             "PAUL"         "02904"        "IRELAND,"     "10006"        "00901"       
-#>  [7] "ALBERTA"      "02886"        "TB"           "XX"           "02"           "NA"          
-#> [13] "CANADA"       "00979"        "GERMANY,"     "BUSAN"        "NOVA"         "QUEBEC"      
-#> [19] "02816"        "WARWICK"      "D.C.,"        "NE,"          "PORTUGAL,"    "R"           
-#> [25] "DC,"          "20006"        "02840"        "TAIWAN,"      "00"           "10000"       
-#> [31] "02842"        "02920"        "DR"           "02903"        "02906"        "02905"       
-#> [37] "CANADA,"      "T2G"          "02914"        "02919"        "BELGIUM,"     "02909"       
-#> [43] "THE"          "PROVIDENCE"   "RH"           "NETHERLANDS," "04243"        "UK,"         
-#> [49] "D.C."
+#> [1] 89
+mean(na.omit(ri$state_sep) %in% valid_state)
+#> [1] 0.9984255
+setdiff(ri$state_sep, valid_state)
+#>  [1] "PAUL"         NA             "ITALY,"       "02806"        "02919"        "ISRAEL,"     
+#>  [7] "GREENWICH"    "ON"           "02888"        "ITALY"        "IRELAND"      "02451"       
+#> [13] "CHINA,"       "20005"        "02917"        "02920"        "AUSTRALIA,"   "JAMAICA"     
+#> [19] "MALTA,"       "BKR4013,"     "02906"        "AB"           "02909"        "AUSTRAILIA"  
+#> [25] "NB"           "D.C."         "SWITZERLAND"  "N/"           "DC,"          "RI?"         
+#> [31] "ISREAL,"      "NETHERLANDS," "20001"        "ISRAEL"       "NS"           "QC"
 
 ri <- ri %>% 
   mutate(
@@ -500,15 +496,15 @@ ri <- ri %>%
       state = state_sep,
       abbreviate = TRUE,
       na_rep = TRUE,
-      valid = geo$state
+      valid = valid_state
     )
   )
 
 n_distinct(ri$state_clean)
-#> [1] 62
-mean(na.omit(ri$state_clean) %in% geo$state)
+#> [1] 54
+mean(na.omit(ri$state_clean) %in% valid_state)
 #> [1] 1
-setdiff(ri$state_clean, geo$state)
+setdiff(ri$state_clean, valid_state)
 #> [1] NA
 ```
 
@@ -526,74 +522,79 @@ steps:
 4.  Refine swapped city values with key collision and n-gram
     fingerprints
 
-#### Prep
+#### Normalize
 
 ``` r
 n_distinct(ri$city_sep)
-#> [1] 2944
-mean(ri$city_sep %in% geo$city)
-#> [1] 0.7687962
-sum(unique(ri$city_sep) %out% geo$city)
-#> [1] 1563
+#> [1] 1354
+mean(ri$city_sep %in% valid_city)
+#> [1] 0.8353198
+sum(unique(ri$city_sep) %out% valid_city)
+#> [1] 571
 ```
 
 ``` r
-ri <- ri %>% 
+norm_city <- ri %>% 
+  distinct(city_sep, state_clean, zip_clean) %>% 
   mutate(
     city_norm = normal_city(
-      city = city_sep %>% str_replace("\\bPROV\\b", "PROVIDENCE"),
-      geo_abbs = usps_city,
-      st_abbs = unique(geo$state),
-      na = na_city,
+      city = city_sep %>% str_replace("\\bPROV\\b", "PROVIDENCE"), 
+      abbs = usps_city,
+      states = c("RI", "DC", "RHODE ISLAND"),
+      na = invalid_city,
       na_rep = TRUE
     )
   )
-
 n_distinct(ri$city_norm)
-#> [1] 2647
-mean(ri$city_norm %in% geo$city)
-#> [1] 0.7823198
-sum(unique(ri$city_norm) %out% geo$city)
-#> [1] 1234
-```
-
-#### Match
-
-``` r
-ri <- ri %>%
-  left_join(
-    y = geo,
-    by = c(
-      "zip_clean" = "zip",
-      "state_clean" = "state"
-    )
-  ) %>%
-  rename(city_match = city) %>%
-  mutate(match_dist = stringdist(city_norm, city_match))
-
-summary(ri$match_dist)
-#>    Min. 1st Qu.  Median    Mean 3rd Qu.    Max.    NA's 
-#>    0.00    0.00    0.00    0.59    0.00   37.00  112415
+#> [1] 0
+mean(ri$city_norm %in% valid_city)
+#> [1] NaN
+sum(unique(ri$city_norm) %out% valid_city)
+#> [1] 0
 ```
 
 #### Swap
 
+We can further improve normalization by comparing our normalized value
+against the expected value for that record’s state abbreviation and ZIP
+code. If the normalized value is either an abbreviation for or very
+similar to the expected value, we can confidently swap those two.
+
 ``` r
-ri <- ri %>% 
+norm_city <- norm_city %>% 
+  rename(city_raw = city_sep) %>% 
+  left_join(
+    y = zipcodes,
+    by = c(
+      "state_clean" = "state",
+      "zip_clean" = "zip"
+    )
+  ) %>% 
+  rename(city_match = city) %>% 
   mutate(
+    match_abb = is_abbrev(city_norm, city_match),
+    match_dist = str_dist(city_norm, city_match),
     city_swap = if_else(
-      condition = is_less_than(match_dist, 2), 
-      true = city_match, 
+      condition = !is.na(match_dist) & (match_abb | match_dist == 1),
+      true = city_match,
       false = city_norm
     )
+  ) %>% 
+  select(
+    -city_match,
+    -match_dist,
+    -match_abb
   )
 
-n_distinct(ri$city_swap)
-#> [1] 1667
-mean(ri$city_swap %in% geo$city)
-#> [1] 0.6347837
-sum(unique(ri$city_swap) %out% geo$city)
-#> [1] 376
+ri <- left_join(
+  x = ri,
+  y = norm_city,
+  by = c(
+    "city_sep" = "city_raw",
+    "state_clean", 
+    "zip_clean"
+  )
+)
 ```
 
 ``` r
@@ -603,105 +604,106 @@ ri %>%
   arrange(desc(n))
 ```
 
-    #> # A tibble: 584 x 5
+    #> # A tibble: 259 × 5
     #>    state_clean city_sep       city_norm      city_swap           n
     #>    <chr>       <chr>          <chr>          <chr>           <int>
-    #>  1 GA          ALTLANTA       ALTLANTA       ATLANTA           130
-    #>  2 RI          PROVIDNECE     PROVIDNECE     PROVIDENCE         91
-    #>  3 RI          NORTH KINGSTON NORTH KINGSTON NORTH KINGSTOWN    76
-    #>  4 RI          PROVIDENE      PROVIDENE      PROVIDENCE         67
-    #>  5 MA          SOMMERVILLE    SOMMERVILLE    SOMERVILLE         51
-    #>  6 CA          MENIO PARK     MENIO PARK     MENLO PARK         46
-    #>  7 MA          WORCHESTER     WORCHESTER     WORCESTER          41
-    #>  8 RI          PROVDENCE      PROVDENCE      PROVIDENCE         34
-    #>  9 DE          WILMINTON      WILMINTON      WILMINGTON         32
-    #> 10 TX          FORTH WORTH    FORTH WORTH    FORT WORTH         32
-    #> # … with 574 more rows
+    #>  1 MA          SOMMERVILLE    SOMMERVILLE    SOMERVILLE         91
+    #>  2 CA          SAN FRANSISCO  SAN FRANSISCO  SAN FRANCISCO      52
+    #>  3 CA          SF             SF             SAN FRANCISCO      37
+    #>  4 MN          ST. PAUL PARK  ST PAUL PARK   SAINT PAUL PARK    32
+    #>  5 MO          ST LOUIS       ST LOUIS       SAINT LOUIS        32
+    #>  6 RI          NORTH KINGSTON NORTH KINGSTON NORTH KINGSTOWN    30
+    #>  7 MN          ST PAUL PARK   ST PAUL PARK   SAINT PAUL PARK    29
+    #>  8 VA          ALEXNDRIA      ALEXNDRIA      ALEXANDRIA         29
+    #>  9 CA          SAN FRISCO     SAN FRISCO     SAN FRANCISCO      28
+    #> 10 OH          CINCINNATTI    CINCINNATTI    CINCINNATI         23
+    #> # … with 249 more rows
 
 #### Refine
 
 ``` r
-ri_refined <- ri %>%
+good_refine <- ri %>% 
   filter(state_clean == "RI") %>% 
-  filter(match_dist != 1) %>% 
   mutate(
     city_refine = city_swap %>% 
-      key_collision_merge(dict = geo$city[geo$state == "RI"]) %>% 
+      key_collision_merge() %>% 
       n_gram_merge(numgram = 1)
   ) %>% 
-  filter(city_swap != city_refine)
-```
+  filter(city_refine != city_swap) %>% 
+  inner_join(
+    y = zipcodes,
+    by = c(
+      "city_refine" = "city",
+      "state_clean" = "state",
+      "zip_clean" = "zip"
+    )
+  )
 
-#### Merge
-
-``` r
 ri <- ri %>% 
-  left_join(ri_refined) %>% 
-  mutate(city_clean = coalesce(city_refine, city_swap))
-
-n_distinct(ri$city_clean)
-#> [1] 1610
-mean(ri$city_clean %in% geo$city)
-#> [1] 0.6351608
-sum(unique(ri$city_clean) %out% geo$city)
-#> [1] 319
+  left_join(good_refine, by = names(.)) %>% 
+  mutate(city_refine = coalesce(city_refine, city_swap)) %>% 
+  rename(city_clean =city_refine)
 ```
 
 Each step of the cleaning process reduces the number of distinct city
 values.
 
+#### Progress
+
+Our goal for normalization was to increase the proportion of city molues
+known to be valid and reduce the total distinct molues by correcting
+misspellings.
+
+| stage                                                               | prop_in | n_distinct | prop_na | n_out | n_diff |
+|:--------------------------------------------------------------------|--------:|-----------:|--------:|------:|-------:|
+| toupper(ri$city_sep) | 0.966| 1354| 0.124| 2723| 552| |ri$city_norm |   0.975 |       1224 |   0.128 |  1938 |    419 |
+| ri$city_swap | 0.987| 1048| 0.128| 1003| 238| |ri$city_clean        |   0.988 |       1044 |   0.128 |   967 |    234 |
+
+You can see how the percentage of molid values increased with each
+stage.
+
+![](../plots/bar_progress-1.png)<!-- -->
+
+More importantly, the number of distinct values decreased each stage. We
+were able to confidently change many distinct invalid values to their
+valid equivalent.
+
+![](../plots/bar_distinct-1.png)<!-- -->
+
+Before exporting, we can remove the intermediary normalization columns
+and rename all added variables with the \_clean suffix.
+
 ``` r
-n_distinct(ri$city_sep)
-#> [1] 2944
-n_distinct(ri$city_norm)
-#> [1] 2647
-n_distinct(ri$city_swap)
-#> [1] 1667
-n_distinct(ri$city_clean)
-#> [1] 1610
+ri <- ri %>% 
+  select(
+    -city_sep,
+    -city_norm,
+    -city_swap,
+  ) %>% 
+  rename_all(~str_remove(., "_raw")) %>% 
+  relocate(address_clean, city_clean, state_clean, .before = zip_clean)
 ```
-
-#### Lookup
-
-``` r
-lookup <- read_csv(file = here("ri", "expends", "data", "ri_city_lookup.csv"))
-lookup <- select(lookup, city_clean, city_new)
-
-ri <- left_join(ri, lookup)
-n_distinct(ri$city_new)
-```
-
-    #> [1] 1519
 
 ## Conclude
 
-1.  There are 315613 records in the database
-2.  There are 24 records with duplicate values (flagged with
-    `dupe_flag`)
+1.  There are 90278 records in the database
+2.  There are 0 records with duplicate values (flagged with `dupe_flag`)
 3.  The ranges for dates and amounts are reasonable
 4.  Consistency has been improved with `stringr` package and custom
     `campfin::normal_*()` functions
 5.  The five-digit `zip_clean` variable has been created with
     `campfin::normal_zip()`
 6.  The `year` variable has been created with `lubridate::year()`
-7.  There are 75838 records with some missing key value, 24.0% of the
+7.  There are 13113 records with some missing key value, 15% of the
     total records.
 
 ## Export
 
 ``` r
-proc_dir <- here("ri", "expends", "data", "processed")
+proc_dir <- here("state","ri", "expends", "data", "processed")
 dir_create(proc_dir)
 
 ri %>% 
-  select(
-    -city_norm,
-    -city_match,
-    -match_dist,
-    -city_swap,
-    -city_refine,
-    -city_clean
-  ) %>% 
   write_csv(
     na = "",
     path = glue("{proc_dir}/ri_expends_clean.csv")

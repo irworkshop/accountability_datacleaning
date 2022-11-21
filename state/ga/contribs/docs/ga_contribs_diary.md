@@ -102,7 +102,8 @@ Campaign contribution data is available from the [Georgia Ethics
 Administration
 Program](https://media.ethics.ga.gov/search/Campaign/Campaign_ByContributions.aspx).
 The update covers the time period of Oct 6,2020 to Oct 8, 2022. The next
-update should start from Oct 9, 2022. Note from earlier: We downloaded
+update should start from Oct 9, 2022. 
+Note from earlier: We downloaded
 the data year by year since there’s a limit on the number of rows at
 each export. The end date of this data is Oct 5, 2020 and the next
 update should start on Oct 6, 2020.

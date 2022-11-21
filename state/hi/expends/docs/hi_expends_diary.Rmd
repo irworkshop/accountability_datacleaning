@@ -60,17 +60,21 @@ these results. The `pacman` package will facilitate their installation and attac
 
 ```{r load_packages, message=FALSE, dfrning=FALSE, error=FALSE}
 if (!require("pacman")) install.packages("pacman")
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load_gh("irworkshop/campfin")
 pacman::p_load(
-  stringdist, # levenshtein value
   tidyverse, # data manipulation
   lubridate, # datetime strings
-  tidytext, # sentence analysis
-  RSocrata, # read SODA API
-  magrittr, # pipe opperators
+  magrittr, # pipe operators
+  gluedown, # print markdown
   janitor, # dataframe clean
-  zipcode, # clean & database
-  scales, # frormat values
+  refinr, # cluster and merge
+  aws.s3, # aws cloud storage
+  scales, # format strings
+  rvest, # read html pages
+  RSocrata, # read SODA API
   knitr, # knit documents
+  vroom, # read files fast
   glue, # combine strings
   here, # relative storage
   fs # search storage 
@@ -81,7 +85,7 @@ The IRW's `campfin` package will also have to be installed from GitHub. This pac
 functions custom made to help facilitate the processing of campaign finance data.
 
 ```{r load_campfin}
-pacman::p_load_gh("kiernann/campfin")
+pacman::p_load_gh("irworkshop/campfin")
 ```
 
 This document should be run as part of the `R_campfin` project, which lives as a sub-directory of
@@ -111,14 +115,30 @@ The file was created on February 26, 2013 and last updated May 15, 2019.
 
 The data can be directly read using `RSocrata::read.socrata()`.
 
-```{r read_socrata}
-hi <- as_tibble(read.socrata("https://data.hawaii.gov/resource/smzs-eax2.json"))
+```{r raw dir}
+raw_dir <- dir_create(here("state","hi", "expends", "data", "raw"))
+prev_dir <- dir_create(here("state","hi", "expends", "data", "previous"))
+```
+
+
+```{r download, eval=FALSE}
+#hi <- as_tibble(read.socrata("https://data.hawaii.gov/resource/smzs-eax2.json"))
+raw_url <- "https://opendata.hawaii.gov/dataset/1dfb86f4-629c-426f-abef-3029889aa0f7/resource/cbc222c7-42dd-47cf-bea3-1c2dda29acd4/download/ccschb.csv"
+raw_path <- path(raw_dir,basename(raw_url))
+
+if (this_file_new(raw_path)) {
+  download.file(raw_url, raw_path, method = "libcurl")
+}
 ```
 
 Then we can make some general changes to the structure and format of the data frame.
 
-```{r parse_socrata}
-hi <- hi %>%
+```{r read}
+hie <- read_csv(raw_path) %>% clean_names()
+hi_prev <- read_csv(dir_ls(here("state","hi","expends","data","previous")))
+hi_prev <- hi_prev %>% select(names(hie))
+
+%>%
   mutate_if(
     is_character, 
     str_to_upper

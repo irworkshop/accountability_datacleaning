@@ -59,31 +59,32 @@ This document describes the process used to complete the following objectives:
 The following packages are needed to collect, manipulate, visualize, analyze, and communicate
 these results. The `pacman` package will facilitate their installation and attachment.
 
-```{r load_packages, message=FALSE, dfrning=FALSE, error=FALSE}
-if (!require("pacman")) install.packages("pacman")
+```{r p_load, message=FALSE, warning=FALSE, error=FALSE}
+pacman::p_load_gh("VerbalExpressions/RVerbalExpressions")
+pacman::p_load_current_gh("irworkshop/campfin")
 pacman::p_load(
   stringdist, # levenshtein value
   tidyverse, # data manipulation
   lubridate, # datetime strings
-  tidytext, # text analysis
+  tidytext, # text mining tools
   magrittr, # pipe opperators
   janitor, # dataframe clean
-  zipcode, # clean & database
-  scales, # format values
-  knitr, # knit documents
-  rvest, # scrape internet
-  glue, # glue strings
-  here, # relative storage
+  zipcode, # clean & databse
+  batman, # parse logicals
+  refinr, # cluster & merge
+  scales, #format strings
+  rvest, # scrape website
+  skimr, # summary stats
+  vroom, # quickly read
+  glue, # combine strings
+  gluedown, #markdown
+  here, # locate storage
   fs # search storage 
 )
 ```
 
 The IRW's `campfin` package will also have to be installed from GitHub. This package contains
 functions custom made to help facilitate the processing of campaign finance data.
-
-```{r load_campfin}
-pacman::p_load_current_gh("kiernann/campfin")
-```
 
 This document should be run as part of the `R_campfin` project, which lives as a sub-directory of
 the more general, language-agnostic [`irworkshop/accountability_datacleaning`][01] GitHub
@@ -115,7 +116,7 @@ The [`cfrdetail/ReadMe_EXPENDITURES.html`][04] file provides a table of variable
 ```{r readme, results='asis', echo=FALSE}
 download.file(
   url = "https://miboecfr.nictusa.com/cfr/dumpall/cfrdetail/ReadMe_EXPENDITURES.html",
-  destfile = here("mi", "docs", "ReadMe_EXPENDITURES.html")
+  destfile = here("state","mi", "docs", "ReadMe_EXPENDITURES.html")
 )
 
 read_html("https://miboecfr.nictusa.com/cfr/dumpall/cfrdetail/ReadMe_EXPENDITURES.html") %>%
@@ -141,19 +142,20 @@ No expenditure files are large enough to be split, so we can simply create a vec
 `glue()`-ing the standard format with each year.
 
 ```{r make_urls}
-urls <- glue("https://miboecfr.nictusa.com/cfr/dumpall/cfrdetail/{2008:2019}_mi_cfr_expenditures.zip")
+urls <- glue("https://miboecfr.nictusa.com/cfr/dumpall/cfrdetail/{2008:2022}_mi_cfr_expenditures.zip")
 ```
 
 ### Download
 
-Then, if the files haven't already been downloaded we can download each file to the raw directory.
+Then, if the files haven't already been downloaded we can download each file to the raw directory. The files were downloaded Nov 6, 2022. 
 
 ```{r create_raw}
-raw_dir <- here("mi", "expends", "data", "raw")
+raw_dir <- here("state","mi", "expends", "data", "raw")
 dir_create(raw_dir)
 ```
 
 ```{r download_raw}
+
 if (!all_files_new(raw_dir, "*.zip$")) {
   for (year_url in urls) {
     download.file(
@@ -170,22 +172,49 @@ Since the `readr::read_delim()` function can read ZIP files, we don't need to un
 each file into a list using `purrr::map()` and then bind them into a single list after removing
 empty columns.
 
-```{r read_raw}
-mi <-
-  # list all files
-  dir_ls(raw_dir) %>% 
-  # read each into a list
-  map_dfr(
-    read_tsv,
-    col_type = cols(
-      .default = col_character(),
-      doc_stmnt_year = col_integer(),
-      exp_date = col_date("%m/%d/%Y"),
-      amount = col_double()
-    )
-  ) %>% 
-  remove_empty("cols")
+```{r}
+mi_names <- str_split(read_lines(dir_ls(raw_dir)[1])[1], "\t")[[1]]
+mi_names <- mi_names[-length(mi_names)]
+mi_names[length(mi_names)] <- "runtime"
+
+mi_names[29] <- "office"
 ```
+
+
+```{r read_raw}
+mi <-  vroom(
+  file = dir_ls(raw_dir),
+  delim = "\t",
+  skip = 1, # header
+  col_names = mi_names,
+  col_types = cols(
+    .default = col_character(),
+    page_no = col_integer(),
+    doc_stmnt_year = col_integer(),
+    received_date = col_date_mdy(),
+    amount = col_double(),
+    aggregate = col_double(),
+    runtime = col_skip()
+  )
+)
+```
+
+```{r fix address line reading errors}
+read_errors <- mi %>% filter(is.na(as.numeric(amount)))
+
+wrong_posit <- which(mi_names =="address"):(length(mi_names)-2)
+read_errors[wrong_posit] <- read_errors[wrong_posit+1] 
+
+read_errors <- read_errors %>% mutate(unique_id = paste0(expense_id,doc_stmnt_year), exp_date = NA_character_,
+                                      amount = as.numeric(amount))
+
+#read_errors[read_errors$expense_id == "9280",wrong_posit] <- read_errors[read_errors$expense_id == "9280",wrong_posit+1]
+mi <- mi %>% mutate(unique_id = paste0(expense_id,doc_stmnt_year))
+
+mi[match(read_errors$unique_id,mi$unique_id),wrong_posit] <- read_errors[,wrong_posit]
+mi <- mi %>% select(-unique_id)
+```
+
 
 ## Explore
 
@@ -194,6 +223,9 @@ head(mi)
 tail(mi)
 glimpse(sample_frac(mi))
 ```
+
+### Update
+For next update: Since the data contains a unique document sequence number, we can filter out all the rows with a sequence number that already appeared in our last update.
 
 ### Missing
 
@@ -204,7 +236,7 @@ this variable, on the other hand, is `r percent(mean(is.na(mi$lname_or_org)))` m
 (`r sum(is.na(mi$lname_or_org))` records).
 
 ```{r count_na}
-glimpse_fun(mi, count_na)
+col_stats(mi, count_na)
 ```
 
 Any record missing the variables needed to identify both parties of the transaction can be flagged
@@ -222,6 +254,7 @@ for the `expense_id` variable.
 
 ```{r distinct_records}
 nrow(mi) - nrow(distinct(select(mi, -expense_id)))
+flag_dupes(mi, setdiff(names(mi),"expense_id"))
 ```
 
 ### Categorical
@@ -230,33 +263,29 @@ For categorical variables, we can explore the degree of distinctness and the dis
 variables.
 
 ```{r n_distinct}
-glimpse_fun(mi, n_distinct)
+col_stats(mi, n_distinct)
 ```
 
 ```{r exp_type_bar, echo=FALSE}
 explore_plot(
   data = mi,
   var = expenditure_type,
-  title = "Michigan Expenditures Count by Type"
-)
+) + 
+  ggtitle("Michigan Expenditures Count by Type")
 ```
 
 ```{r com_type_bar, echo=FALSE}
 explore_plot(
   data = mi,
   var = com_type,
-  title = "Michigan Expenditures Count by Committee Type",
-  palette = "Dark2",
-  head = 8
-)
+) + ggtitle("Michigan Expenditures Count by Committee Type")
 ```
 
 ```{r sched_bar, echo=FALSE}
 explore_plot(
   data = mi,
   var = schedule_desc,
-  title = "Michigan Expenditures Count by Schedule"
-)
+) + ggtitle("Michigan Expenditures Count by Schedule")
 ```
 
 ```{r desc_bar, echo=FALSE}
@@ -275,7 +304,7 @@ mi %>%
   scale_fill_brewer(
     type = "qual",
     palette = "Dark2",
-    guide = FALSE
+    guide = "none"
   ) +
   labs(
     title = "Michigan Expenditures Count by Description",
@@ -292,6 +321,7 @@ For continuous variables, we can explore the range and distribution of values.
 #### Amounts
 
 ```{r range_amount}
+mi$amount <- as.numeric(mi$amount)
 summary(mi$amount)
 ```
 
@@ -344,6 +374,8 @@ mi %>%
 From the minimum and maximum, we can see that the `date` variable is not exactly clean.
 
 ```{r date_minmax, collapse=TRUE}
+mi$exp_date <- as.Date(mi$exp_date, format = "%m/%d/%Y")
+
 min(mi$exp_date, na.rm = TRUE)
 max(mi$exp_date, na.rm = TRUE)
 ```
@@ -389,7 +421,7 @@ mi %>%
   mutate(p = n/sum(n)) %>% 
   ggplot(aes(x = doc_stmnt_year, y = p)) +
   geom_col(aes(fill = on_year)) +
-  scale_x_continuous(breaks = 2008:2019) +
+  scale_x_continuous(breaks = 2008:2022) +
   scale_y_continuous(labels = percent) +
   scale_fill_brewer(type = "qual", palette = "Dark2") +
   labs(
@@ -437,7 +469,7 @@ mi %>%
   summarize(mean = mean(amount)) %>%
   ggplot(aes(x = exp_year, y = mean)) +
   geom_col(aes(fill = on_year)) +
-  scale_x_continuous(breaks = 2006:2019) +
+  scale_x_continuous(breaks = 2006:2022) +
   scale_y_continuous(labels = dollar) +
   scale_fill_brewer(type = "qual", palette = "Dark2") +
   labs(
@@ -473,7 +505,7 @@ mi <- mi %>%
   mutate(
     address_norm = normal_address(
       address = address,
-      add_abbs = usps,
+      abbs = usps_street,
       na_rep = TRUE
     )
   )
@@ -489,7 +521,7 @@ mi %>%
 
 ```{r zip_pre, collapse=TRUE}
 n_distinct(mi$zip)
-prop_in(mi$zip, geo$zip, na.rm = TRUE)
+prop_in(mi$zip, valid_zip, na.rm = TRUE)
 sample(mi$zip, 10)
 ```
 
@@ -505,26 +537,29 @@ mi <- mi %>%
 
 ```{r zip_post, collapse=TRUE}
 n_distinct(mi$zip_norm)
-prop_in(mi$zip_norm, geo$zip, na.rm = TRUE)
-sum(unique(mi$zip_norm) %out% geo$zip)
+prop_in(mi$zip_norm, valid_zip, na.rm = TRUE)
+sum(unique(mi$zip_norm) %out% valid_zip)
 ```
 
 ### State
 
 ```{r state_pre, collapse=TRUE}
 n_distinct(mi$state)
-prop_in(mi$state, geo$state, na.rm = TRUE)
-setdiff(mi$state, geo$state)
-length(setdiff(mi$state, geo$state))
+prop_in(mi$state, valid_state, na.rm = TRUE)
+setdiff(mi$state, valid_state)
+length(setdiff(mi$state, valid_state))
 ```
 
 ```{r normal_state}
+can_prov <- c("ON", "QC", "NS", "NB", "MB", "BC", "PE", "SK", "AB", "NL")
+
 mi <- mi %>% 
   mutate(
     state_norm = normal_state(
       state = state,
+      abbreviate = TRUE,
       na_rep = TRUE,
-      valid = geo$state
+      valid = c(valid_state, can_prov)
     )
   )
 ```
@@ -534,18 +569,18 @@ mi <- mi %>%
 sum(mi$state != str_replace_na(mi$state_norm), na.rm = T)
 n_distinct(mi$state_norm)
 # only NA remains
-prop_in(mi$state_norm, geo$state, na.rm = TRUE)
-sum(unique(mi$state_norm) %out% geo$state)
+prop_in(mi$state_norm, valid_state, na.rm = TRUE)
+sum(unique(mi$state_norm) %out% valid_state)
 ```
 
 ### City
 
 #### Normalize
 
-```{r city_pre, collapse=TRUE}
+```{r city_norm, collapse=TRUE}
 n_distinct(mi$city)
-prop_in(mi$city, geo$city, na.rm = TRUE)
-length(setdiff(mi$city, geo$city))
+prop_in(mi$city, valid_city, na.rm = TRUE)
+length(setdiff(mi$city, valid_city))
 ```
 
 ```{r nomal_city}
@@ -553,9 +588,9 @@ mi <- mi %>%
   mutate(
     city_norm = normal_city(
       city = str_replace(city, "\\bTWP\\b", "TOWNSHIP"),
-      geo_abbs = usps_city,
-      st_abbs = c("MI", "MICHIGAN", "DC"),
-      na = na_city,
+      abbs = usps_city,
+      states = c("MI", "DC", "MICHIGAN"),
+      na = invalid_city,
       na_rep = TRUE
     )
   )
@@ -570,8 +605,8 @@ mi %>%
 
 ```{r city_post_norm, collapse=TRUE}
 n_distinct(mi$city_norm)
-prop_in(mi$city_norm, geo$city, na.rm = TRUE)
-length(setdiff(mi$city_norm, geo$city))
+prop_in(mi$city_norm, valid_city, na.rm = TRUE)
+length(setdiff(mi$city_norm, valid_city))
 ```
 
 #### Swap
@@ -580,13 +615,18 @@ length(setdiff(mi$city_norm, geo$city))
 mi <- mi %>% 
   rename(city_raw = city) %>% 
   left_join(
-    y = geo,
+    y = zipcodes,
     by = c(
       "state_norm" = "state",
       "zip_norm" = "zip"
     )
   ) %>% 
-  rename(city_match = city) %>% 
+  rename(city_match = city)
+
+mi$city_raw <- iconv(mi$city_raw, to="UTF-8")
+mi$city_match <- iconv(mi$city_raw, to="UTF-8")
+
+mi <- mi %>% 
   mutate(
     match_dist = stringdist(city_raw, city_match),
     city_swap = if_else(
@@ -604,16 +644,220 @@ sum(mi$match_dist == 1, na.rm = TRUE)
 
 ```{r city_post_swap, collapse=TRUE}
 n_distinct(mi$city_swap)
-prop_in(mi$city_swap, geo$city, na.rm = TRUE)
-length(setdiff(mi$city_swap, geo$city))
+prop_in(mi$city_swap, valid_city, na.rm = TRUE)
+length(setdiff(mi$city_swap, valid_city))
 ```
 
-#### Reivew
+#### Refine
 
-```{r}
+The [OpenRefine][or] algorithms can be used to group similar strings and replace
+the less common versions with their most common counterpart. This can greatly
+reduce inconsistency, but with low confidence; we will only keep any refined
+strings that have a valid city/state/zip combination.
+
+[or]: https://openrefine.org/
+
+```{r city_refine}
+good_refine <- mi %>% 
+  mutate(
+    city_refine = city_swap %>% 
+      key_collision_merge() %>% 
+      n_gram_merge(numgram = 1)
+  ) %>% 
+  filter(city_refine != city_swap) %>% 
+  inner_join(
+    y = zipcodes,
+    by = c(
+      "city_refine" = "city",
+      "state_norm" = "state",
+      "zip_norm" = "zip"
+    )
+  )
+```
+
+```{r city_count, echo=FALSE}
+good_refine %>%
+  count(
+    state_norm, 
+    zip_norm, 
+    city_swap, 
+    city_refine,
+    sort = TRUE
+  )
+```
+
+Then we can join the refined values back to the database.
+
+```{r city_join}
+mi <- mi %>% 
+  left_join(good_refine) %>% 
+  mutate(city_refine = coalesce(city_refine, city_swap))
+
+mi$city_refine <- mi$city_refine %>% str_replace("ELANSING", "EAST LANSING")
+```
+
+#### Check
+
+We can use the `campfin::check_city()` function to pass the remaining unknown
+`city_refine` values (and their `state_norm`) to the Google Geocode API. The
+function returns the name of the city or locality which most associated with
+those values.
+
+This is an easy way to both check for typos and check whether an unknown
+`city_refine` value is actually a completely acceptable neighborhood, census
+designated place, or some other locality not found in our `valid_city` vector
+from our `zipcodes` database.
+
+First, we'll filter out any known valid city and aggregate the remaining records
+by their city and state. Then, we will only query those unknown cities which
+appear at least ten times.
+
+```{r check_filter}
+many_city <- c(valid_city, extra_city)
+mi_out <- mi %>% 
+  filter(city_refine %out% many_city) %>% 
+  count(city_refine, state_norm, sort = TRUE) %>% 
+  drop_na() %>% 
+  filter(n > 1) %>% 
+  head(200)
+```
+
+Passing these values to `campfin::check_city()` with `purrr::pmap_dfr()` will
+return a single tibble of the rows returned by each city/state combination.
+
+First, we'll check to see if the API query has already been done and a file
+exist on disk. If such a file exists, we can read it using `readr::read_csv()`.
+If not, the query will be sent and the file will be written using
+`readr::write_csv()`.
+
+```{r check_send}
+check_file <- here("state", "mi", "expends", "data", "api_check.csv")
+if (file_exists(check_file)) {
+  check <- read_csv(
+    file = check_file
+  )
+} else {
+  check <- pmap_dfr(
+    .l = list(
+      mi_out$city_refine, 
+      mi_out$state_norm
+    ), 
+    .f = check_city, 
+    key = Sys.getenv("GEOCODING_API"), 
+    guess = TRUE
+  ) %>% 
+    mutate(guess = coalesce(guess_city, guess_place)) %>% 
+    select(-guess_city, -guess_place)
+  write_csv(
+    x = check,
+    path = check_file
+  )
+}
+```
+
+Any city/state combination with a `check_city_flag` equal to `TRUE` returned a
+matching city string from the API, indicating this combination is valid enough
+to be ignored.
+
+```{r check_accept}
+valid_locality <- check$guess[check$check_city_flag]
+```
+
+Then we can perform some simple comparisons between the queried city and the
+returned city. If they are extremely similar, we can accept those returned
+locality strings and add them to our list of accepted additional localities.
+
+```{r check_compare}
+valid_locality <- check %>% 
+  filter(!check_city_flag) %>% 
+  mutate(
+    abb = is_abbrev(original_city, guess),
+    dist = str_dist(original_city, guess)
+  ) %>%
+  filter(abb | dist <= 3) %>% 
+  pull(guess) %>% 
+  append(valid_locality)
+```
+
+#### Progress
+
+Our goal for normalization was to increase the proportion of city values known
+to be valid and reduce the total distinct values by correcting misspellings.
+
+```{r city_recount}
+many_city <- c(many_city,valid_locality)
 mi %>% 
-  filter(city_swap %out% geo$city) %>% 
-  count(state_norm, city_swap, sort = TRUE)
+  filter(city_refine %out% many_city) %>% 
+  count(city_refine, sort = TRUE)
+```
+
+```{r city_add}
+many_city <- c(
+  many_city,
+  "FARMINGTON HILLS",
+  "SHELBY TOWNSHIP",
+  "MACOMB TOWNSHIP",
+  "GROSSE POINTE WOODS",
+  "GROSSE POINTE FARMS",
+  "GROSSE POINTE PARK"
+)
+```
+
+```{r city_progress, echo=FALSE}
+progress <- progress_table(
+  str_to_upper(mi$city_raw),
+  mi$city_norm,
+  mi$city_swap,
+  mi$city_refine,
+  compare = many_city
+) %>% mutate(stage = as_factor(stage))
+kable(progress, digits = 3)
+```
+
+You can see how the percentage of valid values increased with each stage.
+
+```{r bar_progress, echo=FALSE}
+raw_in <- percent(prop_in(mi$city, valid_city))
+progress %>% 
+  ggplot(aes(x = stage, y = prop_in)) +
+  geom_hline(yintercept = 0.99) +
+  geom_col(fill = dark2["purple"]) +
+  coord_cartesian(ylim = c(0.75, 1)) +
+  scale_y_continuous(labels = percent) +
+  labs(
+    title = "Michigan City Normalization Progress",
+    subtitle = glue("Raw at {raw_in} before conversion to uppercase"),
+    x = "Stage",
+    y = "Percent Valid"
+  )
+```
+
+More importantly, the number of distinct values decreased each stage. We were
+able to confidently change many distinct invalid values to their valid
+equivalent.
+
+```{r bar_distinct, echo=FALSE}
+progress %>% 
+  select(
+    stage, 
+    all = n_distinct,
+    bad = n_diff
+  ) %>% 
+  mutate(good = all - bad) %>% 
+  pivot_longer(c("good", "bad")) %>% 
+  mutate(name = name == "good") %>% 
+  ggplot(aes(x = stage, y = value)) +
+  geom_col(aes(fill = name)) +
+  scale_fill_brewer(palette = "Dark2", direction = -1) +
+  scale_y_continuous(labels = comma) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "Michigan City Normalization Progress",
+    subtitle = "Distinct values, valid and invalid",
+    x = "Stage",
+    y = "Distinct Values",
+    fill = "Valid"
+  )
 ```
 
 ## Conclude
@@ -633,8 +877,9 @@ sum_dupe <- nrow(mi) - nrow(distinct(select(mi, -expense_id)))
 ## Export
 
 ```{r proc_dir}
-proc_dir <- here("mi", "expends", "data", "processed")
+proc_dir <- here("state","mi", "expends", "data", "processed")
 dir_create(proc_dir)
+clean_path <- glue("{proc_dir}/mi_expends_clean.csv")
 ```
 
 ```{r write_csv}
@@ -650,22 +895,32 @@ mi %>%
     -match_dist
   ) %>% 
   write_csv(
-    path = glue("{proc_dir}/mi_expends_clean.csv"),
+    path = clean_path,
     na = ""
   )
+
+(clean_size <- file_size(clean_path))
+file_encoding(clean_path) %>% 
+  mutate(across(path, path.abbrev))
 ```
 
-## Lookup
+## Upload
 
-```{r}
-mi <- read_csv("mi/expends/data/processed/mi_expends_clean.csv")
-lookup <- read_csv("mi/expends/data/mi_city_lookup.csv") %>% select(1:2)
-mi <- left_join(mi, lookup)
-progress_table(mi$city_swap, mi$city_clean, compare = valid_city)
-write_csv(
-  x = mi,
-  path = glue("{proc_dir}/mi_expends_clean.csv"),
-  na = ""
-)
+We can use the `aws.s3::put_object()` to upload the text file to the IRW server.
+
+```{r aws_upload, eval=FALSE}
+aws_path <- path("csv", basename(clean_path))
+if (!object_exists(aws_path, "publicaccountability")) {
+  put_object(
+    file = clean_path,
+    object = aws_path, 
+    bucket = "publicaccountability",
+    acl = "public-read",
+    show_progress = TRUE,
+    multipart = TRUE
+  )
+}
+aws_head <- head_object(aws_path, "publicaccountability")
+(aws_size <- as_fs_bytes(attr(aws_head, "content-length")))
+unname(aws_size == clean_size)
 ```
-

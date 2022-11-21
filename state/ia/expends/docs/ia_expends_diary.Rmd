@@ -119,6 +119,12 @@ data reported electronically.
 
 [03]: https://data.iowa.gov/Campaigns-Elections/Iowa-Campaign-Expenditures/3adi-mht4
 
+## Download
+```{r raw_dir}
+raw_dir <- dir_create(here("state","ia", "expends", "data", "raw"))
+```
+
+
 ## Import
 
 The data can be directly read using `RSocrata::read.socrata()`.
@@ -128,6 +134,11 @@ ia <- as_tibble(read.socrata("https://data.iowa.gov/resource/3adi-mht4.json"))
 ia$amount <- as.double(ia$amount)
 ```
 
+```{r check last update}
+ia_prev <- read_csv(raw_dir %>% list.files(full.names = T))
+```
+
+
 ## Explore
 
 ```{r glimpse}
@@ -135,6 +146,7 @@ head(ia)
 tail(ia)
 glimpse(sample_frac(ia))
 ```
+
 
 ### Missing
 
@@ -433,6 +445,22 @@ progress_table(
 )
 ```
 
+## Filter
+```{r}
+ia_prev
+```
+
+
+### Duplicates
+
+Ignoring the supposedly unique `transaction_id` variable, there are a number of completely
+duplicated records than can be flagged with a new `dupe_flag` variable with `campfin::flag_dupes`.
+
+```{r get_dupes, collapse=TRUE}
+ia <- flag_dupes(ia, -transaction_id)
+sum(ia$dupe_flag)
+mean(ia$dupe_flag)
+```
 
 ## Conclude
 

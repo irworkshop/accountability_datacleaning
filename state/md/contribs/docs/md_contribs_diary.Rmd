@@ -139,12 +139,13 @@ contributions and exporting them using a combination of `POST()` and `GET()`.
 [search]: https://campaignfinance.maryland.gov/Public/ViewReceipts?theme=vista
 
 ```{r raw_dir}
-raw_dir <- dir_create(here("md", "contribs", "data", "raw"))
+raw_dir <- dir_create(here("state","md", "contribs", "data", "raw"))
 ```
 
 First, we will use `httr::POST()` to essentially fill out the search form for
 all filing years. We can get all the filing year options from the drop down
 menu.
+Our last update happened Nov 23, 2020, so we will download the data for 2021-2022 ()
 
 ```{r raw_years}
 cris_url <- "https://campaignfinance.maryland.gov/Public/ViewReceipts"
@@ -153,6 +154,8 @@ fil_years <- read_html(cris_url) %>%
   html_nodes("option") %>% 
   html_text() %>% 
   str_subset("\\d")
+
+fil_years <- fil_years[4]
 ```
 
 Using the `cookies()` from this search request, we can then submit a `GET()`

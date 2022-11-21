@@ -59,6 +59,7 @@ these results. The `pacman` package will facilitate their installation and attac
 
 ```{r p_load, message=FALSE, warning=FALSE, error=FALSE}
 pacman::p_load_gh("VerbalExpressions/RVerbalExpressions")
+pacman::p_load_current_gh("irworkshop/campfin")
 pacman::p_load(
   stringdist, # levenshtein value
   tidyverse, # data manipulation
@@ -69,10 +70,12 @@ pacman::p_load(
   zipcode, # clean & databse
   batman, # parse logicals
   refinr, # cluster & merge
+  scales, #format strings
   rvest, # scrape website
   skimr, # summary stats
   vroom, # quickly read
   glue, # combine strings
+  gluedown, #markdown
   here, # locate storage
   fs # search storage 
 )
@@ -81,18 +84,18 @@ pacman::p_load(
 ```{r custom, echo=FALSE}
 # fix conflict
 here <- here::here
-# custom utility functions
-"%out%" <- Negate("%in%")
-print_all <- function(df) df %>% print(n = nrow(.)) 
-# source functions
-source(here("R", "code", "normalize_geo.R"))
-source(here("R", "code", "all_files_new.R"))
-# load data
-data("zipcode")
-zipcode <-
-  as_tibble(zipcode) %>% 
-  select(city, state, zip) %>% 
-  mutate(city = normalize_city(city))
+# # custom utility functions
+# "%out%" <- Negate("%in%")
+# print_all <- function(df) df %>% print(n = nrow(.)) 
+# # source functions
+# source(here("R", "code", "normalize_geo.R"))
+# source(here("R", "code", "all_files_new.R"))
+# # load data
+# data("zipcode")
+# zipcode <-
+#   as_tibble(zipcode) %>% 
+#   select(city, state, zip) %>% 
+#   mutate(city = normalize_city(city))
 ```
 
 This document should be run as part of the `R_campfin` project, which lives as a sub-directory of
@@ -118,6 +121,8 @@ reporting home page, we can navigate to "Download Campaign Finance Data" which t
 
 On this page, there are additional subdirectories for each year from 1999 until 2012. There are
 additional subdirectories for each month from January 2012 to June 2019.
+
+The new update includes datasets from July 2019 to Nov. 2022.
 
 Inside each subdirectory of `/SBE_CSV/CF/`, there are separate CSV files for each form submitted
 by committees. Expenditure data is reported by candidates and committees using "Schedule D" forms,
@@ -159,32 +164,118 @@ We will start by downloading all the files separated by month from 2012 to 2019.
 First we need to create the URLs for each year/month combination.
 
 ```{r expend_urls}
-sub_dirs <- unlist(map(2012:2019, str_c, str_pad(1:12, 2, side = "left", pad = "0"), sep = "_"))
+#sub_dirs <- unlist(map(2012:2019, str_c, str_pad(1:12, 2, side = "left", pad = "0"), sep = "_"))
+sub_dirs <- unlist(map(2019:2022, str_c, str_pad(1:12, 2, side = "left", pad = "0"), sep = "_"))
 exp_urls <- sort(glue("https://apps.elections.virginia.gov/SBE_CSV/CF/{sub_dirs}/ScheduleD.csv"))
+exp_urls <- exp_urls[7:(length(sub_dirs)-1)]
 head(exp_urls)
+
+exp_urls %>% 
+  tail() %>% 
+  md_code() %>% 
+  md_bullet()
 ```
 
 Then we can download these files to our `/data/raw/single/` directory.
 
-```{r}
-dir_raw <- here("va", "expends", "data", "raw", "single")
-dir_create(dir_raw)
+```{r raw_paths_build}
+raw_dir <- here("state","va", "expends", "data", "raw", "single")
+dir_create(raw_dir)
 
-if (!all_files_new(dir_raw)) {
-  for (url in exp_urls[3:90]) {
-    download.file(
-      url = url,
-      destfile = str_c(
-        dir_raw,
-        url %>% 
-          str_extract("(\\d{4}_\\d{2})/ScheduleD.csv$") %>% 
-          str_replace_all("/", "_"),
-        sep = "/"
-      )
-    )
+raw_names <- basename(str_replace(exp_urls, "/(?=[^/]*$)", "_"))
+raw_paths <- path(raw_dir, raw_names)
+
+# if (!all_files_new(dir_raw)) {
+#   for (url in exp_urls {
+#     download.file(
+#       url = url,
+#       destfile = str_c(
+#         dir_raw,
+#         url %>% 
+#           str_extract("(\\d{4}_\\d{2})/ScheduleD.csv$") %>% 
+#           str_replace_all("/", "_"),
+#         sep = "/"
+#       )
+#     )
+#   }
+# }
+
+for (i in seq_along(raw_paths)) {
+  wait = 1
+  if (file_exists(raw_paths[i])) {
+    next("file already downloaded")
+  } else {
+    httr::GET(exp_urls[i],user_agent("Mozilla/5.0"), write_disk(raw_paths[i]))
+    x <- read_lines(raw_paths[i])
+    if (str_starts(x[1], "#")) {
+      next("file already fixed")
+    } else {
+      x <- str_replace_all(x, "(?<!^|,|\r\n)\"(?!,|\r\n|$)", "'")
+      x <- c("### file fixed", x)
+      write_lines(x, raw_paths[i])
+      Sys.sleep(time = wait)
+    }
   }
 }
 ```
+
+## Fix
+To properly read the file into R, we first have to do some simple string processing to the text file.
+
+```{r fix_dir}
+raw_info <- dir_info(raw_dir)
+fix_dir <- dir_create(path(dirname(raw_dir), "fix"))
+fix_eval <- length(dir_ls(fix_dir)) != nrow(raw_info)
+```
+
+```{r fix_loop_old, eval=fix_eval}
+# for old format files
+for (f in raw_info$path) {
+  n <- path(fix_dir, str_c("FIX", basename(f), sep = "_"))
+  x <- read_lines(f, skip = 1)
+  for (i in rev(seq_along(x))) {
+    y <- i - 1
+    if (y == 0) {
+      next() # skip first
+    } else if (str_starts(x[i], "\"\\d+\",") | str_ends(x[y], "\"(Y|N)\"")) {
+      next() # skip if good
+    } else { # merge if bad
+      x[y] <- str_c(x[y], x[i])
+      x <- x[-i] # remove bad
+    }
+  }
+  x <- str_remove(x, '(?<=")"(?!,)')
+  write_lines(x, n)
+  message(basename(n))
+}
+```
+
+```{r fix_loop_new, eval=fix_eval}
+# new format files
+for (f in raw_info$path[1:length(raw_info$path)]) {
+  n <- path(fix_dir, str_c("FIX", basename(f), sep = "_"))
+  x <- read_lines(f, skip = 1)
+  for (i in rev(seq_along(x))) {
+    if (str_starts(x[i], "\\d+,\\d+,")) {
+      next() # skip if good
+    } else { # merge if bad
+      x[i - 1] <- str_c(x[i - 1], x[i])
+      x <- x[-i] # remove bad
+    }
+  }
+  write_lines(x, n)
+  message(basename(n))
+}
+```
+
+```{r fix_info}
+fix_info <- as_tibble(dir_info(fix_dir))
+sum(fix_info$size)
+fix_info %>% 
+  select(path, size, modification_time) %>% 
+  mutate(across(path, basename))
+```
+
 
 ### Read
 
@@ -194,8 +285,8 @@ then binding each file into a single data frame using `dplyr::bind_rows()`.
 
 ```{r}
 va <- 
-  dir_ls(dir_raw, glob = "*.csv") %>% 
-  map(
+  dir_ls(fix_dir, glob = "*.csv") %>% 
+  map_dfr(
     read_delim,
     delim = ",",
     na = c("NA", "N/A", ""),
@@ -207,7 +298,6 @@ va <-
       Amount = col_double()
     )
   ) %>% 
-  bind_rows() %>% 
   clean_names()
 ```
 
@@ -432,7 +522,7 @@ va %>%
     )
   ) +
   geom_line(mapping = aes(color = election_year), size = 2) +
-  scale_x_continuous(breaks = 1:12) +
+  scale_x_continuous() +
   labs(
     title = "Mean Cost of VA Expenditures Over Year",
     x = "Month of Year",
@@ -458,7 +548,7 @@ va %>%
   count() %>% 
   ggplot() +
   geom_col(aes(year, n)) +
-  scale_x_continuous(breaks = 2009:2019) +
+  scale_x_continuous(breaks = 2019:2022) +
   labs(
     title = "Number of VA Expenditures Over Time",
     x = "Year",
@@ -557,7 +647,7 @@ Using comprehensive list of state abbreviations in the Zipcodes database, we can
 `state` values and manually correct them.
 
 ```{r valid_state, collapse=TRUE}
-valid_state <- c(unique(zipcode$state), "AB", "BC", "MB", "NB", "NS", "ON", "PE", "QC", "SK")
+valid_state <- c(unique(campfin::zipcodes$state), "AB", "BC", "MB", "NB", "NS", "ON", "PE", "QC", "SK")
 length(valid_state)
 setdiff(valid_state, state.abb)
 ```
@@ -570,9 +660,9 @@ va <- va %>% mutate(state_clean = state_code %>% str_replace("New York", "NY"))
 ### City
 
 ```{r city_start, collapse=TRUE}
-valid_city <- unique(zipcode$city)
+valid_city <- unique(campfin::zipcodes$city)
 n_distinct(va$city)
-mean(va$city %in% zipcode$city)
+mean(va$city %in% campfin::zipcodes$city)
 ```
 
 Cleaning city values is the most complicated. This process involves four steps:
@@ -582,7 +672,7 @@ Cleaning city values is the most complicated. This process involves four steps:
 1. swap prepared city values with the ZIP code match _if_ only 1 edit is needed
 1. Refine swapped city values with key collision and n-gram fingerprints
 
-#### Prep
+#### Normalize
 
 We will use the `prep_city()` function in the `/R` directory to normalize the strings, remove some
 common `NA` values, and lop abbreviations off the end of the string.
@@ -590,16 +680,15 @@ common `NA` values, and lop abbreviations off the end of the string.
 ```{r prep_city, collapse=TRUE}
 va <- va %>%
   mutate(
-    city_prep = normalize_city(
+    city_norm = normal_city(
       city = city,
-      na = read_lines(here("R", "data", "na_city.csv")),
-      state_abbs = c("VA", "VIRGINIA", "MA", "DC", "TX")
+      na = invalid_city,,
+      states = c("VA", "VIRGINIA", "MA", "DC", "TX")
     ) %>% 
       str_replace("^VA\\b", "VIRGINIA")
   )
 
-n_distinct(va$city_prep)
-mean(va$city_prep %in% zipcode$city)
+n_distinct(va$city_norm)
 ```
 
 #### Match
@@ -610,14 +699,14 @@ can calculate the edit distance between each original value and the expected val
 ```{r match_city}
 va <- va %>%
   left_join(
-    zipcode,
+    zipcodes,
     by = c(
       "state_clean" = "state",
       "zip_clean" = "zip"
     )
   ) %>%
   rename(city = city.x, city_match = city.y) %>%
-  mutate(match_dist = stringdist(city_prep, city_match))
+  mutate(match_dist = stringdist(city_norm, city_match))
 ```
 
 ```{r view_dist}
@@ -630,7 +719,7 @@ va %>%
 ```{r view_match}
 va %>% 
     filter(match_dist == 1) %>% 
-    count(city_prep, city_match, sort = TRUE)
+    count(city_norm, city_match, sort = TRUE)
 ```
 
 #### Swap
@@ -644,7 +733,7 @@ va <- va %>%
     city_swap = if_else(
       condition = match_dist <= 2, 
       true = city_match, 
-      false = city_prep
+      false = city_norm
     )
   )
 
@@ -685,7 +774,7 @@ va_refined <- va %>%
     state_clean,
     zip_clean,
     city_raw,
-    city_prep,
+    city_norm,
     city_match,
     city_swap,
     city_refine
@@ -707,9 +796,9 @@ va_refined %>%
 ```
 
 ```{r good_refine}
-va_refined <- va_refined %>% 
+cva_refined <- va_refined %>% 
   inner_join(
-    zipcode,
+    zipcodes,
     by = c(
       "city_refine" = "city",
       "state_clean" = "state"
@@ -732,17 +821,73 @@ va <- va %>%
   )
 ```
 
-```{r city_progress, collapse=TRUE}
-n_distinct(va$city)
-n_distinct(va$city_prep)
-n_distinct(va$city_swap)
-n_distinct(va$city_clean)
+#### Progress
+
+Our goal for normalization was to increase the proportion of city values known
+to be valid and reduce the total distinct values by correcting misspellings.
+
+```{r city_progress, echo=FALSE}
+many_city <- c(valid_city, extra_city)
+progress <- progress_table(
+  toupper(va$city_raw),
+  va$city_norm,
+  va$city_swap,
+  va$city_refine,
+  compare = many_city
+) %>% mutate(stage = as_factor(stage))
+kable(progress, digits = 3)
+```
+
+You can see how the percentage of valid values increased with each stage.
+
+```{r bar_progress, echo=FALSE}
+raw_in <- percent(prop_in(va$city_raw, valid_city))
+progress %>% 
+  ggplot(aes(x = stage, y = prop_in)) +
+  geom_hline(yintercept = 0.99) +
+  geom_col(fill = dark2["purple"]) +
+  coord_cartesian(ylim = c(0.75, 1)) +
+  scale_y_continuous(labels = percent) +
+  labs(
+    title = "Virgnia City Normalization Progress",
+    subtitle = glue("Raw at {raw_in} before conversion to uppercase"),
+    x = "Stage",
+    y = "Percent Valid"
+  )
+```
+
+More importantly, the number of distinct values decreased each stage. We were
+able to confidently change many distinct invalid values to their valid
+equivalent.
+
+```{r bar_distinct, echo=FALSE}
+progress %>% 
+  select(
+    stage, 
+    all = n_distinct,
+    bad = n_diff
+  ) %>% 
+  mutate(good = all - bad) %>% 
+  pivot_longer(c("good", "bad")) %>% 
+  mutate(name = name == "good") %>% 
+  ggplot(aes(x = stage, y = value)) +
+  geom_col(aes(fill = name)) +
+  scale_fill_brewer(palette = "Dark2", direction = -1) +
+  scale_y_continuous(labels = comma) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "Virginia City Normalization Progress",
+    subtitle = "Distinct values, valid and invalid",
+    x = "Stage",
+    y = "Distinct Values",
+    fill = "Valid"
+  )
 ```
 
 ## Export
 
 ```{r}
-proc_dir <- here("va", "expends", "data", "processed")
+proc_dir <- here("state","va", "expends", "data", "processed")
 dir_create(proc_dir)
 
 va %>% 
@@ -752,12 +897,12 @@ va %>%
     -zip_code,
     -state_code,
     -city,
-    -city_prep,
+    -city_norm,
     -city_match,
     -match_dist
   ) %>% 
   write_csv(
     na = "",
-    path = str_c(proc_dir, "va_expends_clean.csv", sep = "/")
+    path = str_c(proc_dir, "va_expends_clean_201907-202211.csv", sep = "/")
   )
 ```

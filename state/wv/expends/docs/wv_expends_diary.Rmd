@@ -138,7 +138,7 @@ For filing requirements about candidacy:
 	10.	Circuit and family court judge
 
 
-Their data can be downloaded as anual files on their [data download page][04]. At the time of this writing, the data available for expenditures are from 2018 and 2019.
+Their data can be downloaded as anual files on their [data download page][04]. At the time of this writing, the data available for expenditures are from 2018 to 2022.
 It also comes with the [Expenditures File Layout] [05]
 
 [03]: https://cfrs.wvsos.gov/#/index
@@ -155,13 +155,13 @@ as a single file to be indexed on the TAP database.
 We can select the year for expenditure data download. We can automate this process with the RSelenium package.
 
 ```{r raw_dir}
-raw_dir <- here("wv", "expends", "data", "raw")
+raw_dir <- here("state","wv", "expends", "data", "raw")
 dir_create(raw_dir)
 ```
 
 ```{r download_raw, warning=FALSE, error=FALSE, message=FALSE, collapse=TRUE, eval=FALSE}
 # Use the url to access files
-wv_exp_urls <- glue("https://cfrs.wvsos.gov/CFIS_APIService/api/DataDownload/GetCSVDownloadReport?year={2018:2019}&transactionType=EXP&reportFormat=csv&fileName=EXP_{2018:2019}.csv")
+wv_exp_urls <- glue("https://cfrs.wvsos.gov/CFIS_APIService/api/DataDownload/GetCSVDownloadReport?year={2019:2022}&transactionType=EXP&reportFormat=csv&fileName=EXP_{2019:2022}.csv")
 
 if (!all_files_new(raw_dir)) {
   for (url in wv_exp_urls) {
@@ -186,7 +186,7 @@ wv <-
     glob = "*.csv"
   ) %>%
  read_lines() %>% 
-  str_replace_all("(?<=\\s)\"|\"(?=\")|\"(?=\\s)","'") %>% 
+  str_replace_all("(?<=\\s)\"|\"(?=\")|\"(?=\\s)","'") %>% I() %>% 
  map(
     read_delim,delim = ",", escape_double = FALSE,
     skip = 1,

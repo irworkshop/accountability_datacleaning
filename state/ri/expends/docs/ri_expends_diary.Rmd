@@ -60,6 +60,7 @@ these results. The `pacman` package will facilitate their installation and attac
 
 ```{r p_load, message=FALSE, dfrning=FALSE, error=FALSE}
 if (!require("pacman")) install.packages("pacman")
+pacman::p_load_current_gh("irworkshop/campfin")
 pacman::p_load(
   stringdist, # levenshtein value
   tidyverse, # data manipulation
@@ -82,10 +83,6 @@ here <- here::here
 
 The IRW's `campfin` package will also have to be installed from GitHub. This package contains
 functions custom made to help facilitate the processing of campaign finance data.
-
-```{r load_campfin}
-pacman::p_load_current_gh("kiernann/campfin")
-```
 
 This document should be run as part of the `R_campfin` project, which lives as a sub-directory of
 the more general, language-agnostic [`irworkshop/accountability_datacleaning`][01] GitHub
@@ -121,18 +118,18 @@ are able to specify certain filters to limit what appears on the reports.
 
 ```{r raw_dir}
 # create a directory for the raw data
-raw_dir <- here("ri", "expends", "data", "raw")
+raw_dir <- here("state","ri", "expends", "data", "raw")
 dir_create(raw_dir)
 ```
 
 To download the file, we can create our own URL and navigate to the page using the `RSelenium`
-package.
+package.The last update was `2019-07-30`, and this round of update covers the period from `2019-07-31` to `2022-11-04`. The next update should start from `2022-11-05`.
 
 ```{r download_raw, eval=FALSE}
 url <- str_c(
   "http://ricampaignfinance.com/RIPublic/Reporting/ExpenditureReport.aspx?OrgID=0",
-  "BeginDate=",
-  "EndDate=",
+  "BeginDate=07/31/2019",
+  "EndDate=11/04/2022",
   "LastName=",
   "FirstName=",
   "ContType=0",
@@ -159,7 +156,7 @@ url <- str_c(
 
 # open the driver with auto download options
 remote_driver <- rsDriver(
-  port = 4444L,
+  port = 4440L,
   browser = "firefox",
   extraCapabilities = makeFirefoxProfile(
     list(
@@ -222,7 +219,7 @@ glimpse(sample_frac(ri))
 The variables range in their degree of distinctness.
 
 ```{r n_distinct}
-ri %>% glimpse_fun(n_distinct)
+col_stats(ri,n_distinct)
 ```
 
 ```{r plot_exp_bar, echo=FALSE}
@@ -362,8 +359,8 @@ ri <- ri %>%
   mutate(
     address_clean = normal_address(
       address = address,
-      add_abbs = usps,
-      na_rep = TRUE,
+      abbs = usps_street,
+      na_rep = TRUE
     )
   )
 
@@ -379,7 +376,7 @@ We can do the same to ZIP codes using `campfin::normal_zip()`.
 
 ```{r norm_zip, collapse=TRUE}
 n_distinct(ri$zip_sep)
-mean(na.omit(ri$zip_sep) %in% geo$zip)
+mean(na.omit(ri$zip_sep) %in% valid_zip)
 
 ri <- ri %>% 
   mutate(
@@ -391,16 +388,16 @@ ri <- ri %>%
 
 mean(is.na(ri$zip_clean))
 n_distinct(ri$zip_clean)
-mean(na.omit(ri$zip_clean) %in% geo$zip)
-n_distinct(ri$zip_clean[which(ri$zip_clean %out% geo$zip)])
+mean(na.omit(ri$zip_clean) %in% valid_zip)
+n_distinct(ri$zip_clean[which(ri$zip_clean %out% valid_zip)])
 ```
 
 ### State
 
 ```{r norm_state, collapse=TRUE}
 n_distinct(ri$state_sep)
-mean(na.omit(ri$state_sep) %in% geo$state)
-setdiff(ri$state_sep, geo$state)
+mean(na.omit(ri$state_sep) %in% valid_state)
+setdiff(ri$state_sep, valid_state)
 
 ri <- ri %>% 
   mutate(
@@ -408,13 +405,13 @@ ri <- ri %>%
       state = state_sep,
       abbreviate = TRUE,
       na_rep = TRUE,
-      valid = geo$state
+      valid = valid_state
     )
   )
 
 n_distinct(ri$state_clean)
-mean(na.omit(ri$state_clean) %in% geo$state)
-setdiff(ri$state_clean, geo$state)
+mean(na.omit(ri$state_clean) %in% valid_state)
+setdiff(ri$state_clean, valid_state)
 ```
 
 ### City
@@ -426,63 +423,70 @@ Cleaning city values is the most complicated. This process involves four steps:
 1. swap prepared city values with the ZIP code match _if_ only 1 edit is needed
 1. Refine swapped city values with key collision and n-gram fingerprints
 
-#### Prep
+#### Normalize
 
 ```{r count_city, collapse=TRUE}
 n_distinct(ri$city_sep)
-mean(ri$city_sep %in% geo$city)
-sum(unique(ri$city_sep) %out% geo$city)
+mean(ri$city_sep %in% valid_city)
+sum(unique(ri$city_sep) %out% valid_city)
 ```
 
 ```{r prep_city, collapse=TRUE}
-ri <- ri %>% 
+norm_city <- ri %>% 
+  distinct(city_sep, state_clean, zip_clean) %>% 
   mutate(
     city_norm = normal_city(
-      city = city_sep %>% str_replace("\\bPROV\\b", "PROVIDENCE"),
-      geo_abbs = usps_city,
-      st_abbs = unique(geo$state),
-      na = na_city,
+      city = city_sep %>% str_replace("\\bPROV\\b", "PROVIDENCE"), 
+      abbs = usps_city,
+      states = c("RI", "DC", "RHODE ISLAND"),
+      na = invalid_city,
       na_rep = TRUE
     )
   )
-
 n_distinct(ri$city_norm)
-mean(ri$city_norm %in% geo$city)
-sum(unique(ri$city_norm) %out% geo$city)
-```
-
-#### Match
-
-```{r match_dist, collapse=TRUE}
-ri <- ri %>%
-  left_join(
-    y = geo,
-    by = c(
-      "zip_clean" = "zip",
-      "state_clean" = "state"
-    )
-  ) %>%
-  rename(city_match = city) %>%
-  mutate(match_dist = stringdist(city_norm, city_match))
-
-summary(ri$match_dist)
+mean(ri$city_norm %in% valid_city)
+sum(unique(ri$city_norm) %out% valid_city)
 ```
 
 #### Swap
+We can further improve normalization by comparing our normalized value against the expected value for that record’s state abbreviation and ZIP code. If the normalized value is either an abbreviation for or very similar to the expected value, we can confidently swap those two.
 
-```{r swap_city, collapse=TRUE}
-ri <- ri %>% 
+
+```{r match_dist, collapse=TRUE}
+norm_city <- norm_city %>% 
+  rename(city_raw = city_sep) %>% 
+  left_join(
+    y = zipcodes,
+    by = c(
+      "state_clean" = "state",
+      "zip_clean" = "zip"
+    )
+  ) %>% 
+  rename(city_match = city) %>% 
   mutate(
+    match_abb = is_abbrev(city_norm, city_match),
+    match_dist = str_dist(city_norm, city_match),
     city_swap = if_else(
-      condition = is_less_than(match_dist, 2), 
-      true = city_match, 
+      condition = !is.na(match_dist) & (match_abb | match_dist == 1),
+      true = city_match,
       false = city_norm
     )
+  ) %>% 
+  select(
+    -city_match,
+    -match_dist,
+    -match_abb
   )
 
-n_distinct(ri$city_swap)
-mean(ri$city_swap %in% geo$city)
-sum(unique(ri$city_swap) %out% geo$city)
+ri <- left_join(
+  x = ri,
+  y = norm_city,
+  by = c(
+    "city_sep" = "city_raw",
+    "state_clean", 
+    "zip_clean"
+  )
+)
 ```
 
 ```{r count_swaps}
@@ -495,47 +499,108 @@ ri %>%
 #### Refine
 
 ```{r view_refine}
-ri_refined <- ri %>%
+
+good_refine <- ri %>% 
   filter(state_clean == "RI") %>% 
-  filter(match_dist != 1) %>% 
   mutate(
     city_refine = city_swap %>% 
-      key_collision_merge(dict = geo$city[geo$state == "RI"]) %>% 
+      key_collision_merge() %>% 
       n_gram_merge(numgram = 1)
   ) %>% 
-  filter(city_swap != city_refine)
-```
+  filter(city_refine != city_swap) %>% 
+  inner_join(
+    y = zipcodes,
+    by = c(
+      "city_refine" = "city",
+      "state_clean" = "state",
+      "zip_clean" = "zip"
+    )
+  )
 
-#### Merge
-
-```{r join_refine, collapse=TRUE}
 ri <- ri %>% 
-  left_join(ri_refined) %>% 
-  mutate(city_clean = coalesce(city_refine, city_swap))
-
-n_distinct(ri$city_clean)
-mean(ri$city_clean %in% geo$city)
-sum(unique(ri$city_clean) %out% geo$city)
+  left_join(good_refine, by = names(.)) %>% 
+  mutate(city_refine = coalesce(city_refine, city_swap)) %>% 
+  rename(city_clean =city_refine)
 ```
 
 Each step of the cleaning process reduces the number of distinct city values.
 
-```{r city_reduce, collapse=TRUE}
-n_distinct(ri$city_sep)
-n_distinct(ri$city_norm)
-n_distinct(ri$city_swap)
-n_distinct(ri$city_clean)
+#### Progress
+
+Our goal for normalization was to increase the proportion of city molues known
+to be valid and reduce the total distinct molues by correcting misspellings.
+
+```{r city_progress, echo=FALSE}
+many_city <- c(valid_city, extra_city)
+progress <- progress_table(
+  toupper(ri$city_sep),
+  ri$city_norm,
+  ri$city_swap,
+  ri$city_clean,
+  compare = many_city
+) %>% mutate(stage = as_factor(stage))
+kable(progress, digits = 3)
 ```
 
-#### Lookup
+You can see how the percentage of molid values increased with each stage.
 
+```{r bar_progress, echo=FALSE}
+raw_in <- percent(prop_in(ri$city_raw, valid_city))
+progress %>% 
+  ggplot(aes(x = stage, y = prop_in)) +
+  geom_hline(yintercept = 0.99) +
+  geom_col(fill = dark2["purple"]) +
+  coord_cartesian(ylim = c(0.75, 1)) +
+  scale_y_continuous(labels = percent) +
+  labs(
+    title = "Rhode Island City Normalization Progress",
+    subtitle = glue("Raw at {raw_in} before conversion to uppercase"),
+    x = "Stage",
+    y = "Percent valid"
+  )
+```
+
+More importantly, the number of distinct values decreased each stage. We were
+able to confidently change many distinct invalid values to their valid
+equivalent.
+
+```{r bar_distinct, echo=FALSE}
+progress %>% 
+  select(
+    stage, 
+    all = n_distinct,
+    bad = n_diff
+  ) %>% 
+  mutate(good = all - bad) %>% 
+  pivot_longer(c("good", "bad")) %>% 
+  mutate(name = name == "good") %>% 
+  ggplot(aes(x = stage, y = value)) +
+  geom_col(aes(fill = name)) +
+  scale_fill_brewer(palette = "Dark2", direction = -1) +
+  scale_y_continuous(labels = comma) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "Rhode Island City Normalization Progress",
+    subtitle = "Distinct values, valid and invalid",
+    x = "Stage",
+    y = "Distinct Values",
+    fill = "Valid"
+  )
+```
+
+
+Before exporting, we can remove the intermediary normalization columns and rename all added variables with the _clean suffix.
 ```{r}
-lookup <- read_csv(file = here("ri", "expends", "data", "ri_city_lookup.csv"))
-lookup <- select(lookup, city_clean, city_new)
-
-ri <- left_join(ri, lookup)
-n_distinct(ri$city_new)
+ri <- ri %>% 
+  select(
+    -city_sep,
+    -city_norm,
+    -city_swap,
+  ) %>% 
+  rename_all(~str_remove(., "_raw")) %>% 
+  relocate(address_clean, city_clean, state_clean, .before = zip_clean)
 ```
+
 
 ## Conclude
 
@@ -551,18 +616,10 @@ n_distinct(ri$city_new)
 ## Export
 
 ```{r write_clean}
-proc_dir <- here("ri", "expends", "data", "processed")
+proc_dir <- here("state","ri", "expends", "data", "processed")
 dir_create(proc_dir)
 
 ri %>% 
-  select(
-    -city_norm,
-    -city_match,
-    -match_dist,
-    -city_swap,
-    -city_refine,
-    -city_clean
-  ) %>% 
   write_csv(
     na = "",
     path = glue("{proc_dir}/ri_expends_clean.csv")
