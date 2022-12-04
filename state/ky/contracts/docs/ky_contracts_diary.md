@@ -232,7 +232,6 @@ missing.</p>
 <span id="cb10-26"><a href="#cb10-26" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; 22 contract_amount        &lt;dbl&gt; 12150 0.239    </span></span>
 <span id="cb10-27"><a href="#cb10-27" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; 23 year                   &lt;chr&gt;     5 0.0000985</span></span>
 <span id="cb10-28"><a href="#cb10-28" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; 24 date                   &lt;chr&gt;  7647 0.151</span></span></code></pre></div>
-<div class="sourceCode" id="cb11"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="fu">explore_plot</span>(kyc, classification, <span class="at">na.rm =</span> <span class="cn">TRUE</span>)</span></code></pre></div>
 <h3 id="amounts">Amounts</h3>
 <div class="sourceCode" id="cb13"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="fu">mean</span>(kyc<span class="sc">$</span>contract_amount)</span>
 <span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; [1] 264228.9</span></span>
