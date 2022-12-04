@@ -43,7 +43,7 @@ The Accountability Project is an effort to cut across data silos and give
 journalists, policy professionals, activists, and the public at large a simple
 way to search across huge volumes of public data about people and organizations.
 
-Our goal is to standardizing public data on a few key fields by thinking of each
+Our goal is to standardize public data on a few key fields by thinking of each
 dataset row as a transaction. For each transaction there should be (at least) 3
 variables:
 
