@@ -11,7 +11,7 @@ output:
 editor_options: 
   chunk_output_type: console
 ---
-
+  
 <!-- Place comments regarding knitting here -->
 
 ```{r setup, include=FALSE, purl=FALSE}
