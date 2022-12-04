@@ -113,7 +113,7 @@ here::here()
 
 ## Data
 
-Arizona contracts data can be obtained from the [state transparecy website][tr].
+Arkansas contracts data can be obtained from the [state transparecy website][tr].
 
 [tr]: https://transparency.arkansas.gov/
 
