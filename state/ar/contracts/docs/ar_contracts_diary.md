@@ -95,7 +95,7 @@ here::here()
 
 ## Data
 
-Arizona contracts data can be obtained from the [state transparecy
+Arkansas contracts data can be obtained from the [state transparecy
 website](https://transparency.arkansas.gov/).
 
 > Transparency.Arkansas.gov is a resource for citizens, legislators,
