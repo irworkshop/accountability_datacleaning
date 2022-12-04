@@ -1,12 +1,13 @@
+
 ---
 title: "Kentucky Contracts"
-author: "Kiernan Nicholls"
-date: "`r date()`"
+author: "Jennifer LaFleur/Kiernan Nicholls"
+date: "`r Sys.time()`"
 output:
   github_document: 
     df_print: tibble
     toc: true
-    toc_dept: 3
+    toc_dept: 2
 editor_options: 
   chunk_output_type: console
 ---
@@ -28,13 +29,13 @@ opts_chunk$set(
   dpi = 300
 )
 if (!interactive()) {
-  options(width = 120)
+  options(width = 99)
   set.seed(5)
 }
 ```
 
-```{r create-docs-dir, eval=FALSE, echo=FALSE, include=FALSE}
-doc_dir <- fs::dir_create(here::here("state", "ky", "contracts", "docs"))
+```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
+doc_dir <- fs::dir_create(here::here("ky", "contracts", "docs"))
 ```
 
 ## Project
@@ -70,99 +71,107 @@ The following packages are needed to collect, manipulate, visualize, analyze,
 and communicate these results. The `pacman` package will facilitate their
 installation and attachment.
 
-```{r load-packages, message=FALSE, warning=FALSE, error=FALSE}
-if (!require("pacman")) {
-  install.packages("pacman")
-}
+The IRW's `campfin` package will also have to be installed from GitHub. This
+package contains functions custom made to help facilitate the processing of
+campaign finance data.
+
+```{r load_packages, message=FALSE, warning=FALSE, error=FALSE}
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load_gh("irworkshop/campfin")
 pacman::p_load(
   tidyverse, # data manipulation
   lubridate, # datetime strings
   gluedown, # printing markdown
+  magrittr, # pipe operators
   janitor, # clean data frames
-  campfin, # custom irw tools
-  aws.s3, # aws cloud storage
-  refinr, # cluster & merge
-  readxl, # read excel files
+  refinr, # cluster and merge
   scales, # format strings
   knitr, # knit documents
-  vroom, # fast reading
-  rvest, # scrape html
-  glue, # code strings
-  here, # project paths
+  vroom, # read files fast
+  rvest, # html scraping
+  glue, # combine strings
+  here, # relative paths
   httr, # http requests
-  fs # local storage 
+  fs, # local storage 
+  stringi #string functions
 )
 ```
 
-This diary was run using `campfin` version `r packageVersion("campfin")`.
-
-```{r campfin-version}
-packageVersion("campfin")
-```
-
-```{r package-options, echo=FALSE}
-options(options(knitr.kable.NA = ""))
-```
-
-This document should be run as part of the `R_tap` project, which lives as a
+This document should be run as part of the `R_campfin` project, which lives as a
 sub-directory of the more general, language-agnostic
 [`irworkshop/accountability_datacleaning`][tap] GitHub repository.
 
-The `R_tap` project uses the [RStudio projects][rproj] feature and should be
+The `R_campfin` project uses the [RStudio projects][rproj] feature and should be
 run as such. The project also uses the dynamic `here::here()` tool for file
 paths relative to _your_ machine.
 
-```{r where-here}
+```{r where_here}
 # where does this document knit?
-here::i_am("state/ky/contracts/docs/ky_contracts_diary.Rmd")
+here::here()
 ```
 
 [tap]: https://github.com/irworkshop/accountability_datacleaning
 [rproj]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects
 
-## Source
+## Data
 
+Kentucky contracts data were obtained via Public Records request by Nami Hijikata.
 
-
-## Download
-
-```{r raw-dir}
-raw_key <- "jla_class_data2021/O-22-119 B Morse.zip"
-raw_dir <- dir_create(here("state", "ky", "contracts", "data", "raw"))
-raw_zip <- path(raw_dir, basename(raw_key))
-```
-
-```{r raw-download}
-if (!file_exists(raw_key)) {
-  save_object(
-    object = raw_key,
-    bucket = "publicaccountability",
-    file = raw_zip,
-    show_progress = TRUE
-  )
-}
-```
-
-```{r raw-unzip}
-raw_xls <- unzip(raw_zip, exdir = raw_dir)
-```
 
 ## Read
 
-```{r raw-read}
-kyc <- read_excel(raw_xls[2])
-kyc <- mutate(kyc, across(ends_with("Date"), as_date))
-kyc <- clean_names(kyc, case = "snake")
+```{r read_data}
+kyc <- read.csv("KY_Contracts.csv")
+head(kyc)
 ```
 
-```{r clean-names}
-kyc <- clean_names(kyc, case = "snake")
+There are two dates in the file. We used the year from start date as a separate year column. 
+
+### Dates
+
+
+```{r date_year}
+kyc <- mutate(kyc, year = stri_sub(StartDate,-4))
+```
+
+
+```{r date_range}
+prop_na(kyc$StartDate)
+min(kyc$date, na.rm = TRUE)
+sum(kyc$year < 2000, na.rm = TRUE)
+max(kyc$date, na.rm = TRUE)
+sum(kyc$date > today(), na.rm = TRUE)
+kyc$year <- na_if(kyc$year, 9999)
+```
+
+```{r bar_year, echo=FALSE}
+kyc %>% 
+  count(year) %>% 
+  ggplot(aes(x = year, y = n)) +
+  geom_col(fill = dark2["orange"]) + 
+  scale_y_continuous(labels = comma) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "Kentucky Contracts by Year",
+    x = "Start Year",
+    y = "Count"
+  )
+```
+
+Contracts have both `StartDate` and `EndDate`; we combine these two variables into a single date to represent the transaction. We also make the headers snake case. Replace the word NULL with actually NAs. Combine cab_name and dept_name.
+
+```{r raw_parse, warning=TRUE}
+kyc <- kyc %>% 
+  clean_names("snake") %>% 
+  replace(kyc == "NULL", NA) %>% 
+  mutate(date = paste0(start_date," to ", end_date)) %>% 
+  unite("full_agency", c(cab_name, dept_name), sep=", ", remove = FALSE, na.rm = TRUE) %>% 
+  mutate(vend_city=toupper(vend_city))
+
 ```
 
 ## Explore
 
-There are `r comma(nrow(kyc))` rows of `r ncol(kyc)` columns. Each record
-represents a single contract between the state and a vendor.
 
 ```{r glimpse}
 glimpse(kyc)
@@ -171,129 +180,433 @@ tail(kyc)
 
 ### Missing
 
-Columns vary in their degree of missing values.
+If we count the number of missing values per column, we can see a lot of the
+values from the columns found only in one type of file are missing.
 
-```{r na-count}
+```{r na_count}
 col_stats(kyc, count_na)
 ```
 
-No columns are missing values.
 
 ### Duplicates
 
-We can also flag any record completely duplicated across every column.
+There are no duplicate records in this database.
 
-```{r dupe-flag}
-kyc <- flag_dupes(kyc, -contract_id)
+```{r dupe_flag, warning=TRUE}
+kyc <- flag_dupes(kyc, everything())
 ```
-
-There are no duplicate rows.
 
 ### Categorical
 
-```{r distinct-count}
+```{r n_distinct}
 col_stats(kyc, n_distinct)
 ```
 
-```{r distinct-plots, echo=FALSE, fig.height=3}
-explore_plot(kyc, authorization) + scale_x_wrap()
+```{r distinct_plot}
+explore_plot(kyc, classification, na.rm = TRUE)
+explore_plot(kyc, procurement_name, na.rm = TRUE)
 ```
 
 ### Amounts
 
-The data from this request does not contain a contract amount, despite that 
-being requested.
-
-### Dates
-
-We can add the calendar year from `date` with `lubridate::year()`
-
-```{r date-year}
-kyc <- mutate(kyc, effective_year = year(effective_date))
+```{r amount_summary}
+mean(kyc$contract_amount)
+noquote(map_chr(summary(kyc$contract_amount), dollar))
 ```
 
-```{r date-range}
-min(kyc$effective_date)
-sum(kyc$effective_year < 2000)
-max(kyc$effective_date)
-sum(kyc$effective_date > today())
-```
 
-```{r bar-year, echo=FALSE}
-kyc %>% 
-  count(effective_year) %>% 
-  ggplot(aes(x = effective_year, y = n)) +
-  geom_col(aes(fill = n), color = "black") +
-  scale_fill_viridis_c(option = "C", end = 0.9, guide = "none") +
+```{r hist_amount, echo=FALSE}
+kyc %>%
+  filter(contract_amount >= 1) %>% 
+  ggplot(aes(contract_amount)) +
+  geom_histogram(fill = dark2["purple"]) +
   scale_y_continuous(labels = comma) +
-  scale_x_continuous(breaks = seq(1990, 2020, by = 2)) +
-  theme(legend.position = "bottom") +
+  scale_x_continuous(
+    breaks = c(1 %o% 10^(0:8)),
+    labels = dollar,
+    trans = "log10"
+  ) +
   labs(
-    title = "Kentucky Contracts by Year",
-    caption = "Source: {source}",
-    x = "Year Made",
+    title = "Kentucky Contracts Amount Distribution",
+    x = "Amount",
     y = "Count"
   )
 ```
 
+
 ## Wrangle
 
-There are no addresses in this data.
+To improve the searchability of the database, we will perform some consistent,
+confident string normalization. For geographic variables like city names and
+ZIP codes, the corresponding `campfin::normal_*()` functions are tailor made to 
+facilitate this process.
+
+### Address
+
+For the street `address` variable, the `campfin::normal_address()` function
+will force consistence case, remove punctuation, and abbreviate official 
+USPS suffixes.
+
+```{r address_norm}
+addr_norm <- kyc %>% 
+  distinct(vend_address1) %>% 
+  mutate(
+    address_norm = normal_address(
+      address = vend_address1,
+      abbs = usps_street,
+      na_rep = TRUE
+    )
+  )
+```
+
+```{r address_view}
+addr_norm
+```
+
+```{r address_join}
+kyc <- left_join(kyc, addr_norm, by = "vend_address1")
+```
+
+### ZIP
+
+For ZIP codes, the `campfin::normal_zip()` function will attempt to create
+valid _five_ digit codes by removing the ZIP+4 suffix and returning leading
+zeroes dropped by other programs like Microsoft Excel.
+
+```{r zip_norm}
+kyc <- kyc %>% 
+  mutate(
+    zip_norm = normal_zip(
+      zip = vend_zip,
+      na_rep = TRUE
+    )
+  )
+```
+
+```{r zip_progress}
+progress_table(
+  kyc$vend_zip,
+  kyc$zip_norm,
+  compare = valid_zip
+)
+```
+
+### State
+
+Valid two digit state abbreviations can be made using the 
+`campfin::normal_state()` function.
+
+```{r state_norm}
+kyc <- kyc %>% 
+  mutate(
+    state_norm = normal_state(
+      state = vend_state,
+      abbreviate = TRUE,
+      na_rep = TRUE,
+      valid = valid_state
+    )
+  )
+```
+
+```{r state_view}
+kyc %>% 
+  filter(vend_state != state_norm) %>% 
+  count(vend_state, state_norm, sort = TRUE)
+```
+
+```{r state_progress}
+progress_table(
+  kyc$vend_state,
+  kyc$state_norm,
+  compare = valid_state
+)
+```
+
+### City
+
+Cities are the most difficult geographic variable to normalize, simply due to
+the wide variety of valid cities and formats.
+
+#### Normal
+
+The `campfin::normal_city()` function is a good start, again converting case,
+removing punctuation, but _expanding_ USPS abbreviations. We can also remove
+`invalid_city` values.
+
+```{r city_norm}
+norm_city <- kyc %>% 
+  distinct(vend_city, state_norm, zip_norm) %>% 
+  mutate(
+    city_norm = normal_city(
+      city = vend_city, 
+      abbs = usps_city,
+      states = c("KY", "DC", "KENTUCKY"),
+      na = invalid_city,
+      na_rep = TRUE
+    )
+  )
+```
+
+#### Swap
+
+We can further improve normalization by comparing our normalized value
+against the _expected_ value for that record's state abbreviation and ZIP code.
+If the normalized value is either an abbreviation for or very similar to the
+expected value, we can confidently swap those two.
+
+
+```{r city_swap}
+norm_city <- norm_city %>% 
+  rename(city_raw = vend_city) %>% 
+  left_join(
+    y = zipcodes,
+    by = c(
+      "state_norm" = "state",
+      "zip_norm" = "zip"
+    )
+  ) %>% 
+  rename(city_match = city) %>% 
+  mutate(
+    match_abb = is_abbrev(city_norm, city_match),
+    match_dist = str_dist(city_norm, city_match),
+    city_swap = if_else(
+      condition = !is.na(match_dist) & (match_abb | match_dist == 1),
+      true = city_match,
+      false = city_norm
+    )
+  ) %>% 
+  select(
+    -city_match,
+    -match_dist,
+    -match_abb
+  )
+```
+
+
+```{r city_rejoin}
+kyc <- left_join(
+  x = kyc,
+  y = norm_city,
+  by = c(
+    "vend_city" = "city_raw", 
+    "state_norm", 
+    "zip_norm"
+  )
+)
+```
+
+#### Refine
+
+The [OpenRefine][or] algorithms can be used to group similar strings and replace
+the less common versions with their most common counterpart. This can greatly
+reduce inconsistency, but with low confidence; we will only keep any refined
+strings that have a valid city/state/zip combination.
+
+[or]: https://openrefine.org/
+
+
+```{r city_refine}
+good_refine <- kyc %>% 
+  mutate(
+    city_refine = city_swap %>% 
+      key_collision_merge() %>% 
+      n_gram_merge(numgram = 1)
+  ) %>% 
+  filter(city_refine != city_swap) %>% 
+  inner_join(
+    y = zipcodes,
+    by = c(
+      "city_refine" = "city",
+      "state_norm" = "state",
+      "zip_norm" = "zip"
+    )
+  )
+```
+
+```{r city_count, echo=FALSE}
+good_refine %>%
+  count(
+    state_norm, 
+    zip_norm, 
+    city_swap, 
+    city_refine,
+    sort = TRUE
+  )
+```
+
+Then we can join the refined values back to the database.
+
+```{r city_join}
+kyc <- kyc %>% 
+  left_join(good_refine) %>% 
+  mutate(city_refine = coalesce(city_refine, city_swap))
+```
+
+#### Progress
+
+Our goal for normalization was to increase the proportion of city values known
+to be valid and reduce the total distinct values by correcting misspellings.
+
+```{r city_progress, echo=FALSE}
+many_city <- c(valid_city, extra_city)
+progress <- progress_table(
+  str_to_upper(kyc$vend_city),
+  kyc$city_norm,
+  kyc$city_swap,
+  kyc$city_refine,
+  compare = many_city
+) %>% mutate(stage = as_factor(stage))
+kable(progress, digits = 3)
+```
+
+You can see how the percentage of valid values increased with each stage.
+
+```{r bar_progress, echo=FALSE}
+raw_in <- percent(prop_in(kyc$vend_city, valid_city))
+progress %>% 
+  ggplot(aes(x = stage, y = prop_in)) +
+  geom_hline(yintercept = 0.99) +
+  geom_col(fill = dark2["purple"]) +
+  coord_cartesian(ylim = c(0.75, 1)) +
+  scale_y_continuous(labels = percent) +
+  labs(
+    title = "Kentucky City Normalization Progress",
+    subtitle = glue("Raw at {raw_in} before conversion to uppercase"),
+    x = "Stage",
+    y = "Percent Valid"
+  )
+```
+
+More importantly, the number of distinct values decreased each stage. We were
+able to confidently change many distinct invalid values to their valid
+equivalent.
+
+```{r bar_distinct, echo=FALSE}
+progress %>% 
+  select(
+    stage, 
+    all = n_distinct,
+    bad = n_diff
+  ) %>% 
+  mutate(good = all - bad) %>% 
+  pivot_longer(c("good", "bad")) %>% 
+  mutate(name = name == "good") %>% 
+  ggplot(aes(x = stage, y = value)) +
+  geom_col(aes(fill = name)) +
+  scale_fill_brewer(palette = "Dark2", direction = -1) +
+  scale_y_continuous(labels = comma) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "Kentucky City Normalization Progress",
+    subtitle = "Distinct values, valid and invalid",
+    x = "Stage",
+    y = "Distinct Values",
+    fill = "Valid"
+  )
+```
 
 ## Conclude
 
-```{r clean-glimpse}
-glimpse(sample_n(kyc, 100))
+Before exporting, we can remove the intermediary normalization columns and
+rename all added variables with the `_clean` suffix.
+
+```{r clean_select}
+kyc <- kyc %>% 
+  select(
+    -city_norm,
+    -city_swap,
+    city_clean = city_refine
+  ) %>% 
+  rename_all(~str_replace(., "_norm", "_clean")) %>% 
+  rename_all(~str_remove(., "_raw")) %>% 
+  relocate(state_clean, zip_clean, .after = city_clean)
 ```
+
+```{r clean_glimpse}
+glimpse(sample_n(kyc, 50))
+```
+
+
+## Export
 
 1. There are `r comma(nrow(kyc))` records in the database.
 1. There are `r comma(sum(kyc$dupe_flag))` duplicate records in the database.
 1. The range and distribution of `amount` and `date` seem reasonable.
 1. There are `r comma(sum(kyc$na_flag))` records missing key variables.
-1. Consistency in geographic data has been improved with `campfin::normal_*()`.
-1. The 4-digit `year` variable has been created with `lubridate::year()`.
+1. There are no geographic variables to be normalized.
+1. The 4-digit `year` variable has been created.
 
-## Export
+Now the file can be saved on disk for upload to the Accountability server.
 
-Now the file can be saved on disk for upload to the Accountability server. We
-will name the object using a date range of the records included.
-
-```{r clean-timestamp}
-min_dt <- str_remove_all(min(kyc$effective_date), "-")
-max_dt <- str_remove_all(max(kyc$effective_date), "-")
-csv_ts <- paste(min_dt, max_dt, sep = "-")
+```{r clean_dir}
+clean_dir <- dir_create(here("ky", "contracts", "data", "clean"))
+clean_path <- path(clean_dir, "ky_contracts_clean.csv")
+write_csv(kyc, clean_path, na = "")
+file_size(clean_path)
 ```
 
-```{r clean-dir}
-clean_dir <- dir_create(here("state", "ky", "contracts", "data", "clean"))
-clean_csv <- path(clean_dir, glue("ky_contracts_{csv_ts}.csv"))
-clean_rds <- path_ext_set(clean_csv, "rds")
-basename(clean_csv)
+The encoding of the exported file should be UTF-8 or ASCII.
+
+```{r clean_encode}
+enc <- system2("file", args = paste("-i", clean_path), stdout = TRUE)
+str_replace_all(enc, clean_path, basename)
 ```
 
-```{r clean-write}
-write_csv(kyc, clean_csv, na = "")
-write_rds(kyc, clean_rds, compress = "xz")
-(clean_size <- file_size(clean_csv))
-```
+## Dictionary
 
-## Upload
+The following table describes the variables in our final exported file:
 
-We can use the `aws.s3::put_object()` to upload the text file to the IRW server.
-
-```{r aws-upload, eval=FALSE}
-aws_key <- path("csv", basename(clean_csv))
-if (!object_exists(aws_key, "publicaccountability")) {
-  put_object(
-    file = clean_csv,
-    object = aws_key, 
-    bucket = "publicaccountability",
-    acl = "public-read",
-    show_progress = TRUE,
-    multipart = TRUE
+```{r dict_make, echo=FALSE}
+dict_raw <- tibble(
+  var = md_code(names(kyc)),
+  type = md_code(map_chr(kyc, typeof)),
+  both = FALSE,
+  def = c(
+     "link", 
+     "contract_identifier",
+     "classification",
+     "classification_code",
+     "cited_auth_description", 
+     "contract_type_code",
+     "doc_id",
+     "branch_name",
+     "full_agency",
+     "cab_name",
+     "dept_name",
+     "reason_modification",
+     "start_date",
+     "end_date",
+     "vend_cust_id",
+     "vend_name",
+     "vend_address1",
+     "vend_city",
+     "vend_state",
+     "vend_zip",
+     "procurement_name",
+     "contract_amount",
+     "year",
+     "date",
+     "address_clean",
+     "city_clean",
+     "state_clean",
+     "zip_clean"
   )
-}
-aws_head <- head_object(aws_key, "publicaccountability")
-(aws_size <- as_fs_bytes(attr(aws_head, "content-length")))
-unname(aws_size == clean_size)
+)
 ```
+
+```{r dict_md, echo=FALSE}
+dict_raw$both[c(1:3, 5:6, 8, 13:14, 18:22)] <- TRUE
+(dict_md <- kable(
+  x = dict_raw,
+  format = "markdown",
+  col.names = c("Column", "Type", "Overlaped", "Definition")
+))
+```
+
+```{r dict_write}
+write_lines(
+  x = c("# Kentucky Contracts Data Dictionary\n", dict_md),
+  path = here("ky", "contracts", "ky_contracts_dict.md"),
+)
+```
+
