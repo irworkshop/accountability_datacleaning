@@ -1,6 +1,6 @@
 ---
 title: "Puerto Rico Contributions"
-author: "Kiernan Nicholls"
+author: "Kiernan Nicholls & Aarushi Sahejpal"
 date: "`r date()`"
 output:
   github_document: 
