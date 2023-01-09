@@ -329,7 +329,6 @@ for (i in seq_along(all_csv)) {
   }
 
   invisible(gc(reset = TRUE, full = TRUE))
-  na_check <- sprintf("%0.1f%%", mean(us$na_flag) * 100)
 
   # save checks -----------------------------------------------------------
   # cli_h3("Checking data frame structure")
@@ -345,7 +344,6 @@ for (i in seq_along(all_csv)) {
     n_row = nrow(us),
     n_col = ncol(us),
     sum_amt = sum(as.numeric(us[[amt_col]]), na.rm = TRUE),
-    na_flags = sum(us$na_flag, na.rm = TRUE),
     zero_amt = sum(as.numeric(us[[amt_col]]) <= 0, na.rm = TRUE)
   )
 
