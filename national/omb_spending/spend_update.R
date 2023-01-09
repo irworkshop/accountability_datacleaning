@@ -187,7 +187,10 @@ while (!exists("post_status") || post_status == "running") {
 # download bulk zip when ready --------------------------------------------
 cli_h2("Download bulk file")
 
-data_dir <- dir_create(here("national", "omb_spending", "data"))
+# two directories to put raw and final data
+data_dir <- dir_create(here("national", "omb_spending", "data", "raw"))
+clean_dir <- dir_create(here("national", "omb_spending", "data", "clean"))
+
 raw_zip <- path(data_dir, post_data$file_name)
 
 bulk_size <- fs_bytes(status_get$total_size * 1000)
@@ -245,168 +248,203 @@ us_cols <- read_csv(
   )
 )
 
+# previous data -----------------------------------------------------------
+
+read_aws <- function(object, bucket = "publicaccountability") {
+  aws.s3::s3read_using(
+    FUN = readr::read_csv,
+    object = object,
+    bucket = bucket,
+    col_types = readr::cols(
+      .default = readr::col_character()
+    )
+  )
+}
+
+# read the smallest files for contract prime and sub
+old_con_prime <- read_aws("csv/us_contract-prime_2004-3.csv")
+old_con_sub <- read_aws("csv/us_contract-sub_2002-1.csv")
+
+# repeat for assistance to check column types
+old_assist_prime <- read_aws("csv/us_assist-prime_2007-2.csv")
+old_assist_sub <- read_aws("csv/us_assist-sub_2001-1.csv")
+
 # the files are hosted on the site as downloaded
 # no files need to be read or columns added
 # there are date and year columns
 # addresses are very clear
 # rows are rarely missing values
 # only issue is the ZIP+4 in contracts
-if (FALSE) {
-  for (i in seq_along(all_csv)) {
-    # read file -------------------------------------------------------------
-    cli_h3("Spending file {i}/{n_csv}")
-    cli_alert("{.file {basename(all_csv[i])}}")
 
-    # check and indicate file type
-    # types can have different names for columns
-    is_con <- grepl("All_Contracts", all_csv[i])
-    file_type <- ifelse(is_con, "contract", "assist")
-    is_sub <- grepl("Subawards", all_csv[i])
-    file_type <- paste(file_type, ifelse(is_sub, "sub", "prime"), sep = "-")
+for (i in seq_along(all_csv)) {
+  # read file -------------------------------------------------------------
+  cli_h3("Spending file {i}/{n_csv}")
+  cli_alert("{.file {basename(all_csv[i])}}")
 
-    us_spec <- paste(
-      # col type string based on file type
-      us_cols$type[us_cols$is_con == is_con & us_cols$is_sub == is_sub],
-      collapse = ""
+  # check and indicate file type
+  # types can have different names for columns
+  xis_con <- grepl("All_Contracts", all_csv[i])
+  file_type <- ifelse(xis_con, "contract", "assist")
+  xis_sub <- grepl("Subawards", all_csv[i])
+  file_type <- paste(file_type, ifelse(xis_sub, "sub", "prime"), sep = "-")
+  cli_alert_info("file type: {file_type}")
+
+  type_cols <- us_cols %>%
+    filter(
+      is_con == xis_con,
+      is_sub == xis_sub
     )
 
-    # read data frame
-    us <- read_delim(
-      file = all_csv[i],
-      delim = ",",
-      escape_double = TRUE,
-      na = "",
-      # col_types = us_spec,
-      guess_max = 0,
-      progress = TRUE
-    )
+  us_spec <- paste(
+    # col type string based on file type
+    us_cols$type[us_cols$is_con == xis_con & us_cols$is_sub == xis_sub],
+    collapse = ""
+  )
 
-    # change column names based on file type
-    dt_col  <- ifelse(is_sub, "subaward_action_date", "action_date")
-    zip_col <- ifelse(is_sub, "subawardee_zip_code", "recipient_zip_4_code")
-    amt_col <- ifelse(is_sub, "subaward_amount", "federal_action_obligation")
-    giv_col <- ifelse(is_sub, "prime_awardee_name", "awarding_sub_agency_name")
-    rec_col <- ifelse(is_sub, "subawardee_name", "recipient_name")
+  # read data frame
+  us <- read_delim(
+    file = all_csv[i],
+    delim = ",",
+    escape_double = TRUE,
+    na = "",
+    # col_names = type_cols$column,
+    # col_types = paste(type_cols$type, collapse = ""),
+    col_types = cols(.default = col_character()),
+    guess_max = 0,
+    progress = TRUE
+  )
 
-    n_prob <- nrow(problems(us))
-    if (n_prob > 0) {
-      cli_alert_warning("Found {n_prob} problem{?s} when reading")
-    } else {
-      cli_alert_success("File read without any problems")
-    }
+  # change column names based on file type
+  dt_col  <- ifelse(xis_sub, "subaward_action_date", "action_date")
+  zip_col <- ifelse(xis_sub, "subawardee_zip_code", "recipient_zip_4_code")
+  amt_col <- ifelse(xis_sub, "subaward_amount", "federal_action_obligation")
+  giv_col <- ifelse(xis_sub, "prime_awardee_name", "awarding_sub_agency_name")
+  rec_col <- ifelse(xis_sub, "subawardee_name", "recipient_name")
 
-    # tweak cols ------------------------------------------------------------
-    # cli_h3("Manipulating new columns")
-
-    # check amount col
-    if (is_sub) {
-      cli_alert_info("Using the {.code subaward_amount} col")
-    } else if (!is_con) {
-      # find rows w/out fed obligation
-      no_fed_amt <- is.na(us[[amt_col]])
-      if (mean(no_fed_amt) > 0.1) {
-        amt_check <- sprintf("%0.1f%%", mean(no_fed_amt) * 100)
-        cli_alert_warning(paste(
-          "Many rows missing {.code federal_action_obligation} value",
-          "({col_yellow(amt_check)})"
-        ))
-      }
-      # create new copy col of amt
-      amt_col <- "assist_amount"
-      us[[amt_col]] <- us$federal_action_obligation
-      # replace missing with row loan value
-      us[[amt_col]][no_fed_amt] <- us$face_value_of_loan[no_fed_amt]
-      cli_alert_success("Loan amounts added in new {.code assist_amount} col")
-    }
-
-    # flag missing values
-    us$na_flag <- !complete.cases(us[, c(dt_col, amt_col, giv_col, rec_col)])
-    invisible(gc(reset = TRUE, full = TRUE))
-    na_check <- sprintf("%0.1f%%", mean(us$na_flag) * 100)
-    if (mean(us$na_flag) > 0.01) {
-      cli_alert_warning(paste(
-        "Some rows missing values flagged in new {.code na_flag} col",
-        "({col_yellow(na_check)})"
-      ))
-    } else {
-      cli_alert_success(paste(
-        "Few rows missing values flagged in new {.code na_flag} col",
-        "({col_green(na_check)})"
-      ))
-    }
-
-    # trim zip codes to 5 digits
-    if (is_con) {
-      us$zip_clean <- substr(us[[zip_col]], start = 1, stop = 5)
-      cli_alert_success("Trimmed ZIP codes added in new {.code zip_clean} col")
-    } else {
-      cli_alert_info("Assist files have clean {.code recipient_zip_code} col")
-    }
-
-    # add calendar year from action date
-    us$action_year <- as.integer(format(as.Date(us[[dt_col]]), "%Y"))
-    cli_alert_success("Calendar year added in new {.code action_year} col")
-
-    # save checks -----------------------------------------------------------
-    # cli_h3("Checking data frame structure")
-
-    check <- data.frame(
-      file_nm = basename(all_csv[i]),
-      file_type = file_type,
-      check_dt = Sys.time(),
-      start_dt = start_dt,
-      end_dt = end_dt,
-      min_dt = min(us[[dt_col]], na.rm = TRUE),
-      max_dt = max(us[[dt_col]], na.rm = TRUE),
-      n_row = nrow(us),
-      n_col = ncol(us),
-      sum_amt = sum(as.numeric(us[[amt_col]]), na.rm = TRUE),
-      na_flags = sum(us$na_flag, na.rm = TRUE),
-      zero_amt = sum(as.numeric(us[[amt_col]]) <= 0, na.rm = TRUE)
-    )
-
-    all_checks <- do.call("rbind", list(all_checks, check))
-
-    write_csv(check, check_file, append = file_exists(check_file))
-    cli_alert_success("Checks saved as row in {.path update_check.csv}")
-    row_check <- format(nrow(us), big.mark = ",")
-
-    # overwrite file ----------------------------------------------------------
-    # cli_h3("Save file after checking and changing")
-
-    cli_process_start("Overwriting file {i}/{n_csv}")
-    # save as csv with empty cells and double quotes
-    write_csv(us, file = all_csv[i], na = "")
-    rm(us)
-    Sys.sleep(time = 2)
-    invisible(gc(reset = TRUE, full = TRUE))
-    cli_process_done(msg_done = wt("Overwriting file {i}/{n_csv}"))
+  n_prob <- nrow(problems(us))
+  if (n_prob > 0) {
+    cli_alert_warning("Found {n_prob} problem{?s} when reading")
+  } else {
+    cli_alert_success("File read without any problems")
   }
-}
 
-# stop before upload
-quit(save = "no", status = 0)
+  invisible(gc(reset = TRUE, full = TRUE))
+  na_check <- sprintf("%0.1f%%", mean(us$na_flag) * 100)
 
-# upload ==================================================================
+  # save checks -----------------------------------------------------------
+  # cli_h3("Checking data frame structure")
 
-# aws object: st_file-type_date-range.csv
-# us_contracts-sub_20210101-20210131.csv
+  check <- data.frame(
+    file_nm = basename(all_csv[i]),
+    file_type = file_type,
+    check_dt = Sys.time(),
+    start_dt = start_dt,
+    end_dt = end_dt,
+    min_dt = min(us[[dt_col]], na.rm = TRUE),
+    max_dt = max(us[[dt_col]], na.rm = TRUE),
+    n_row = nrow(us),
+    n_col = ncol(us),
+    sum_amt = sum(as.numeric(us[[amt_col]]), na.rm = TRUE),
+    na_flags = sum(us$na_flag, na.rm = TRUE),
+    zero_amt = sum(as.numeric(us[[amt_col]]) <= 0, na.rm = TRUE)
+  )
 
-# append dates to file names
-file_dates <- paste(gsub("-", "", c(start_dt, end_dt)), collapse = "-")
-# only try upload if set to TRUE and AWS key is found
-if (FALSE && nzchar(Sys.getenv("AWS_SECRET_ACCESS_KEY"))) {
-  for (i in seq_along(all_csv)) {
-    file_type <- all_checks$file_type[i]
+  all_checks <- do.call("rbind", list(all_checks, check))
+
+  write_csv(check, check_file, append = file_exists(check_file))
+  cli_alert_success("Checks saved as row in {.path update_check.csv}")
+  row_check <- format(nrow(us), big.mark = ",")
+
+  # adjust columns for new data -------------------------------------------
+  if (xis_con) {
+    if (xis_sub) {
+      us <- us %>%
+        select(
+          -prime_awardee_uei,
+          -prime_awardee_parent_uei,
+          -subawardee_uei,
+          -subawardee_parent_uei,
+          prime_award_description = prime_award_base_transaction_description
+        )
+      name_check <- all(names(us) == names(old_con_sub))
+    } else {
+      us <- us %>%
+        select(
+          -recipient_uei,
+          -recipient_parent_uei,
+          -transaction_description,
+          award_description = prime_award_base_transaction_description
+        )
+      name_check <- all(names(us) == names(old_con_prime))
+    }
+  } else {
+    if (xis_sub) {
+      us <- us %>%
+        separate(
+          col = prime_award_cfda_numbers_and_titles,
+          into = c("prime_award_cfda_number", "prime_award_cfda_title"),
+          sep = "(?<=\\d):\\s",
+          remove = TRUE,
+          extra = "merge"
+        ) %>%
+        select(
+          -prime_awardee_uei,
+          -prime_awardee_parent_uei,
+          -subawardee_uei,
+          -subawardee_parent_uei,
+          prime_award_description = prime_award_base_transaction_description
+        )
+      name_check <- all(names(us) == names(old_assist_sub))
+    } else {
+      us <- us %>%
+        select(
+          -indirect_cost_federal_share_amount,
+          -recipient_uei,
+          -recipient_parent_uei,
+          -funding_opportunity_number,
+          -funding_opportunity_goals_text,
+          -transaction_description,
+          award_description = prime_award_base_transaction_description
+        )
+      name_check <- all(names(us) == names(old_assist_prime))
+    }
+  }
+
+  if (isTRUE(name_check)) {
+    cli_alert_success("New file names match old file names")
+  } else {
+    cli_alert_danger("New file names mismatch old file names")
+    quit(save = "no", status = 1)
+  }
+
+  # save new file ---------------------------------------------------------
+  cli_h3("Save file after checking and changing")
+  # append dates to file names
+  file_dates <- paste(gsub("-", "", c(start_dt, end_dt)), collapse = "-")
+
+  file_n <- regmatches(
+    x = all_csv[i],
+    m = regexpr(pattern = "\\d+\\.csv", text = all_csv[i])
+  )
+
+  new_name <- paste("us", file_type, file_dates, file_n, sep = "_")
+
+  cli_process_start("Overwriting file {i}/{n_csv}")
+  # save as csv with empty cells and double quotes
+  write_csv(us, file = path(clean_dir, new_name), na = "")
+  rm(us)
+  Sys.sleep(time = 2)
+  invisible(gc(reset = TRUE, full = TRUE))
+  cli_process_done(msg_done = wt("Overwriting file {i}/{n_csv}"))
+
+  # upload to aws -----------------------------------------------------------
+  # only try upload if set to TRUE and AWS key is found
+  if (nzchar(Sys.getenv("AWS_SECRET_ACCESS_KEY"))) {
     cli_process_start("Uploading file {i}/{n_csv}")
-    n <- regmatches(
-      x = all_csv[i],
-      m = regexpr(pattern = "\\d+\\.csv", text = all_csv[i])
-    )
     suppressMessages(
       expr = put_object(
-        file = all_csv[i],
-        object = sprintf("csv/us_%s_%s_%s.csv", file_type, file_dates, n),
+        file = path(clean_dir, new_name),
+        object = path("csv", new_name),
         bucket = "publicaccountability",
         acl = "public-read",
         multipart = TRUE,
