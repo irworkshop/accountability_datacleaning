@@ -223,26 +223,44 @@ for (i in seq_along(lob_json)) {
 }
 
 # date files --------------------------------------------------------------
-
 all_csv <- dir_ls(csv_dir, glob = "*.csv")
 
-# find date of last file update
-aws_ls <- get_bucket_df(bucket = "publicaccountability", prefix = "csv")
+if (!all(str_detect(all_csv, "\\d{8}"))) {
+  # find date of last file update
+  aws_ls <- get_bucket_df(bucket = "publicaccountability", prefix = "csv")
 
-last_dt <- aws_ls$Key %>%
-  str_subset("lda") %>%
-  str_extract_all("\\d{8}") %>%
-  unlist() %>%
-  as.Date(format = "%Y%m%d") %>%
-  max()
+  last_dt <- aws_ls$Key %>%
+    str_subset("lda") %>%
+    str_extract_all("\\d{8}") %>%
+    unlist() %>%
+    as.Date(format = "%Y%m%d") %>%
+    max()
 
-date_stamp <- sprintf(
-  "_%s-%s.csv",
-  str_remove_all(last_dt + 1, "-"),
-  str_remove_all(Sys.Date(), "-")
-)
+  date_stamp <- sprintf(
+    "_%s-%s.csv",
+    str_remove_all(last_dt + 1, "-"),
+    str_remove_all(Sys.Date(), "-")
+  )
 
-new_csv <- all_csv %>%
-  str_replace("\\.csv", date_stamp)
+  new_csv <- all_csv %>%
+    str_replace("\\.csv", date_stamp)
 
-file_move(all_csv, new_csv)
+  file_move(all_csv, new_csv)
+
+  all_csv <- new_csv
+}
+
+# upload files ------------------------------------------------------------
+
+for (i in seq_along(all_csv)) {
+  cli_h1(basename(all_csv[i]))
+  put_object(
+    file = all_csv[i],
+    object = path("csv", basename(all_csv[i])),
+    bucket = "publicaccountability",
+    acl = "public-read",
+    multipart = TRUE,
+    verbose = FALSE,
+    show_progress = TRUE
+  )
+}
