@@ -6,6 +6,7 @@
 suppressPackageStartupMessages(library(tidyverse))
 suppressPackageStartupMessages(library(lubridate))
 suppressPackageStartupMessages(library(jsonlite))
+suppressPackageStartupMessages(library(aws.s3))
 suppressPackageStartupMessages(library(here))
 suppressPackageStartupMessages(library(cli))
 suppressPackageStartupMessages(library(fs))
@@ -25,7 +26,7 @@ suppressPackageStartupMessages(library(fs))
 #   6. Affiliated organizations
 
 # convert nested JSON to flat CSV by filing
-csv_dir <- here("us", "lda_filings", "data", "csv")
+csv_dir <- here("national", "lda_filings", "data", "csv")
 
 fil_csv <- path(csv_dir, "lda_client-firm.csv")
 lob_csv <- path(csv_dir, "lda_firm-lobbyist.csv")
@@ -34,11 +35,11 @@ for_csv <- path(csv_dir, "lda_client-foreign.csv")
 org_csv <- path(csv_dir, "lda_client-affiliate.csv")
 
 # text file containing the files already converted
-prog_txt <- file_create(here("us", "lda_filings", "data", "prog_list.txt"))
+prog_txt <- file_create(here("national", "lda_filings", "data", "prog_list.txt"))
 done_json <- fs_path(read_lines(prog_txt))
 
 # list the json files and remove those already done
-json_dir <- here("us", "lda_filings", "data", "json")
+json_dir <- here("national", "lda_filings", "data", "json")
 lob_json <- dir_ls(json_dir, glob = "*.json")
 lob_json <- lob_json[lob_json %out% done_json]
 
@@ -219,4 +220,47 @@ for (i in seq_along(lob_json)) {
   # write progress to text file
   write_lines(lob_json[i], prog_txt, append = TRUE)
 
+}
+
+# date files --------------------------------------------------------------
+all_csv <- dir_ls(csv_dir, glob = "*.csv")
+
+if (!all(str_detect(all_csv, "\\d{8}"))) {
+  # find date of last file update
+  aws_ls <- get_bucket_df(bucket = "publicaccountability", prefix = "csv")
+
+  last_dt <- aws_ls$Key %>%
+    str_subset("lda") %>%
+    str_extract_all("\\d{8}") %>%
+    unlist() %>%
+    as.Date(format = "%Y%m%d") %>%
+    max()
+
+  date_stamp <- sprintf(
+    "_%s-%s.csv",
+    str_remove_all(last_dt + 1, "-"),
+    str_remove_all(Sys.Date(), "-")
+  )
+
+  new_csv <- all_csv %>%
+    str_replace("\\.csv", date_stamp)
+
+  file_move(all_csv, new_csv)
+
+  all_csv <- new_csv
+}
+
+# upload files ------------------------------------------------------------
+
+for (i in seq_along(all_csv)) {
+  cli_h1(basename(all_csv[i]))
+  put_object(
+    file = all_csv[i],
+    object = path("csv", basename(all_csv[i])),
+    bucket = "publicaccountability",
+    acl = "public-read",
+    multipart = TRUE,
+    verbose = FALSE,
+    show_progress = TRUE
+  )
 }

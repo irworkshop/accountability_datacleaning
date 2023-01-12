@@ -49,8 +49,8 @@ cli_quit <- function(text) {
 #   2. Date after which filings are posted (optional)
 #   3. The alphanumeric API key (optional)
 
-# Rscript sen_lob_fil.R --args {output dir} {from date} {api key}
-# Rscript sen_lob_fil.R --args ~/Documents 2021-01-01 abcdefg123456
+# Rscript scrape_lda_filings.R {output dir} {from date} {api key}
+# Rscript scrape_lda_filings.R ~/Documents 2021-01-01 abcdefg123456
 
 cli_h2("Get command arguments")
 # capture output file from command line
