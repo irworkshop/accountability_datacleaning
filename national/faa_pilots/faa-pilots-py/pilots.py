@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[161]:
+# In[1]:
 
 
 # Importing packages
@@ -13,19 +13,21 @@ import math
 import numpy as np
 
 
-# In[162]:
+# In[2]:
 
 
 # Set relative filepaths
+# Download link: https://www.faa.gov/licenses_certificates/airmen_certification/releasable_airmen_download/
 
 __file__ = 'os.path.abspath('')'
 
 script_dir = os.path.dirname(__file__) 
-rel_path = './data/faa/pilots/CS122022.zip'
+ # rel_path = './data/faa/pilots/CS122022.zip' # December 2022 data
+rel_path = './data/faa/pilots/CS012023.zip'
 abs_file_path = os.path.join(script_dir, rel_path)
 
 
-# In[163]:
+# In[3]:
 
 
 # Read zipfile
@@ -33,7 +35,7 @@ abs_file_path = os.path.join(script_dir, rel_path)
 zf = ZipFile(abs_file_path) 
 
 
-# In[164]:
+# In[4]:
 
 
 # Load the .csv files we need from the zipfile - PILOT_BASIC and NONPILOT_BASIC
@@ -42,23 +44,23 @@ pilot = pd.read_csv(zf.open('PILOT_BASIC.csv'))
 nonpilot = pd.read_csv(zf.open('NONPILOT_BASIC.csv'))
 
 
-# In[165]:
+# In[5]:
 
 
 # Make sure the data loaded into dataframes properly (if working in Jupyter)
 
-# pilot.info()
+pilot.info()
 
 
-# In[166]:
+# In[6]:
 
 
 # Check to make sure the data loaded into dataframes properly (if working in Jupyter)
 
-# nonpilot.info()
+nonpilot.info()
 
 
-# In[167]:
+# In[7]:
 
 
 # Drop the empty columns at the end of each file (the 'Unnamed: 15' fields)
@@ -67,7 +69,7 @@ pilot.drop('Unnamed: 15', inplace=True, axis=1)
 nonpilot.drop('Unnamed: 15', inplace=True, axis=1)
 
 
-# In[168]:
+# In[8]:
 
 
 # Merging the two dataframes together 
@@ -75,7 +77,7 @@ nonpilot.drop('Unnamed: 15', inplace=True, axis=1)
 joined = pd.concat([pilot, nonpilot], axis=0)
 
 
-# In[169]:
+# In[9]:
 
 
 # How many records are in the database?
@@ -85,10 +87,10 @@ joined = pd.concat([pilot, nonpilot], axis=0)
 # Less than 100k rows have basic_med_course_date and basic_med_cmec_date
 # The FAA website states explicitly that this database is not the authoritative source for medical data
 
-# joined.info() 
+joined.info() 
 
 
-# In[170]:
+# In[10]:
 
 
 # Rename columns — all but UNIQUE ID have a space before the text begins, in the raw data
@@ -96,7 +98,7 @@ joined = pd.concat([pilot, nonpilot], axis=0)
 joined.rename(columns={"UNIQUE ID": "uniqueid", " FIRST NAME": "first_name", " LAST NAME": "last_name", " STREET 1": "street_1", " STREET 2": "street_2", " CITY": "city", " STATE": "state", " ZIP CODE": "zip_code", " COUNTRY": "country", " REGION": "region", " MED CLASS": "med_class", " MED DATE": "med_date", " MED EXP DATE": "med_exp_date", " BASIC MED COURSE DATE": "basic_med_course_date", " BASIC MED CMEC DATE": "basic_med_cmec_date"},inplace=True)
 
 
-# In[180]:
+# In[11]:
 
 
 # Putting all of the duplicate rows into a dataframe of their own
@@ -104,17 +106,27 @@ joined.rename(columns={"UNIQUE ID": "uniqueid", " FIRST NAME": "first_name", " L
 joined2 = joined[joined.duplicated()]
 
 
-# In[181]:
+# In[12]:
+
+
+joined['uniqueid'].nunique()
+
+
+# In[13]:
 
 
 # As of 12/19/22, there were 954,997 total records in the joined dataframe and 887,356 unique unique-ids
 # There are 67,641 records in this dataframe, which shows the duplicate rows
 # 954,997 - 887,356 = 67,641
 
+# As of 1/18/23, there were 957,444 total records in the joined dataframe and 887,913 unique unique-ids
+# There are 69,531 records in this dataframe, which shows the duplicate rows
+# 957,444 - 887,913 = 69,531
+
 print(joined2.info())
 
 
-# In[182]:
+# In[14]:
 
 
 # Drops duplicate rows from the dataframe
@@ -123,11 +135,11 @@ print(joined2.info())
 # joined = joined.drop_duplicates()
 
 
-# In[171]:
+# In[15]:
 
 
 # Does it seem to be in the correct range?
-# Let's check each column to see what the values look lik
+# Let's check each column to see what the values look like
 
 # For the first field, uniqueid, these values should appear twice at the most — if the pilot is listed in both files
 # It appears no uniqueid is listed more than twice
@@ -135,7 +147,7 @@ print(joined2.info())
 joined.uniqueid.value_counts()
 
 
-# In[172]:
+# In[16]:
 
 
 # For the rest of the fields, look at field.value_counts() only if performing operations on field
@@ -149,7 +161,7 @@ joined.zip_code.value_counts()
 # But the shorter ZIPs could be accurate, because the pilot's address is in a country other than the US (see next cell)
 
 
-# In[173]:
+# In[17]:
 
 
 # Checking the country column to see if there are countries other than the US
@@ -164,23 +176,16 @@ joined.country.value_counts()
 # There are a variety of different formats that non-US ZIPs come in
 
 
-# In[174]:
+# In[18]:
 
 
 # Creating a US 5-digit ZIP code field
+# This will fill the uszip5 field with ZEROES where the country is not USA
 
 joined['uszip5'] = np.where(joined['country'] == 'USA', joined['zip_code'].astype(str).str[:5], '')
 
 
-# In[175]:
-
-
-# Creating a non-US ZIP code field
-
-joined['nonuszip'] = np.where(joined['country'] != 'USA', joined['zip_code'], '')
-
-
-# In[178]:
+# In[19]:
 
 
 # This is to be sure the 5-digit ZIPs that begin with leading 0s do have the leading 0s -
@@ -190,7 +195,7 @@ joined['nonuszip'] = np.where(joined['country'] != 'USA', joined['zip_code'], ''
 joined['uszip5'] = joined['uszip5'].str.zfill(5)
 
 
-# In[184]:
+# In[20]:
 
 
 # Check ranges: Are numeric fields in ranges that make sense. Anything too high or too low? 
@@ -204,12 +209,11 @@ joined['uszip5'] = joined['uszip5'].str.zfill(5)
 joined.med_class.value_counts()
 
 
-# In[185]:
+# In[21]:
 
 
 # Check ranges: Are numeric fields in ranges that make sense. Anything too high or too low? 
-# For two of the remaining numeric fields, med_date and med_exp_date, the format is MYYYY or MMYYYY, depending
-# We will need to split the month-year into their own columns for each field (month, year columns for both variables)
+# For two of the remaining numeric fields, med_date and med_exp_date, the format is MYYYY or MMYYYY, depending on month
 
 pd.set_option('display.max_rows', 500) # this is so I can see the full list printed in Jupyter
 joined.med_date.value_counts()
@@ -217,7 +221,49 @@ joined.med_date.value_counts()
 # This range, and the numbers within it, look reasonable
 
 
-# In[186]:
+# In[24]:
+
+
+# Check ranges: Are numeric fields in ranges that make sense. Anything too high or too low? 
+
+pd.set_option('display.max_rows', 500) # this is so I can see the full list printed in Jupyter
+joined.med_exp_date.value_counts()
+
+
+# In[25]:
+
+
+# Create a field for the 'year' which reflects the year of the data. 
+# This was uploaded on 1/3/2023, so the year field here will be 2023
+
+joined['asof_year'] = 2023
+
+
+# In[26]:
+
+
+# That's all, folks!
+
+joined.to_csv('pilots_2023.csv')
+
+
+# In[ ]:
+
+
+# As of 1/6/23, this script combines and cleans the PILOT_BASIC.csv and NONPILOT_BASIC.csv files
+# With further work, the script could also combine those two files with the PILOT_CERT.csv and NONPILOT_CERT.csv files
+
+
+# In[ ]:
+
+
+# Below this line is code I wrote to break up the med_date, etc., fields
+# As well as a line of code that puts non-US ZIPs in their own column
+# After discussing with the TAP team we realized this isn't useful 
+# But I kept it here just in case we for some reason need it one day, and in case the code is useful for something else.
+
+
+# In[22]:
 
 
 # We need to approach these two fields differently based on if the month is a one- or two-digit month:
@@ -226,54 +272,12 @@ joined.med_date.value_counts()
 joined = joined.astype({'med_date':'string','med_exp_date':'string'})
 
 
-# In[187]:
+# In[23]:
 
 
 joined.info()
 
-
-# In[188]:
-
-
-# When changing med_date to string, undesired string characters come along
-# Let's remove them
-# But first, to do that, fill the nan values with empty strings because otherwise errors will throw
-
-joined['med_date'].fillna("", inplace=True)
-
-
-# In[189]:
-
-
-# Stripping undesirable characters
-
-joined['med_date'] = joined['med_date'].map(lambda x: x.lstrip('b\'').rstrip('.0\''))
-
-
-# In[190]:
-
-
-# List comprehension to get the med_date_month out of the med_date field
-
-joined['med_date_month'] = [x[:1] if len(x)<6 else x[:2] for x in joined['med_date']]
-
-
-# In[191]:
-
-
-# Create the med_date_year field out of med_date
-
-joined['med_date_year'] = joined.med_date.str[-4:]
-
-
-# In[192]:
-
-
-# Do the same for med_exp_date, which for some reason did not get the undesired chars attached
-# But it's still a good idea to check if these values are in an appropriate range
-
-pd.set_option('display.max_rows', 500) # this is so I can see the full list printed in Jupyter
-joined.med_exp_date.value_counts()
+# Checking to make sure astype worked as expected
 
 
 # In[193]:
@@ -331,18 +335,50 @@ joined['basic_med_cmec_date_month'] = joined.basic_med_cmec_date.str[4:6]
 joined['basic_med_cmec_date_day'] = joined.basic_med_cmec_date.str[6:8]
 
 
-# In[199]:
+# In[175]:
 
 
-# That's all, folks!
+# Creating a non-US ZIP code field
 
-joined.to_csv('pilots.csv')
-
-
-# In[ ]:
+# joined['nonuszip'] = np.where(joined['country'] != 'USA', joined['zip_code'], '')
 
 
-# As of 1/6/23, this script combines and cleans the PILOT_BASIC.csv and NONPILOT_BASIC.csv files
-# With further work, the script could also combine those two files with the PILOT_CERT.csv and NONPILOT_CERT.csv files
-# (likely, a join/concat on uniqueid - Janelle will do this week of 1/9/23)
+# In[188]:
+
+
+# When changing med_date to string, undesired string characters come along
+# Let's remove them
+# But first, to do that, fill the nan values with empty strings because otherwise errors will throw
+
+joined['med_date'].fillna("", inplace=True)
+
+
+# In[189]:
+
+
+# Stripping undesirable characters
+
+joined['med_date'] = joined['med_date'].map(lambda x: x.lstrip('b\'').rstrip('.0\''))
+
+# Note: med_exp_date for some reason did not get the undesired chars attached
+# But it's still a good idea to check if these values are in an appropriate range
+
+# pd.set_option('display.max_rows', 500) # this is so I can see the full list printed in Jupyter
+# joined.med_exp_date.value_counts()
+
+
+# In[190]:
+
+
+# List comprehension to get the med_date_month out of the med_date field
+
+joined['med_date_month'] = [x[:1] if len(x)<6 else x[:2] for x in joined['med_date']]
+
+
+# In[191]:
+
+
+# Create the med_date_year field out of med_date
+
+joined['med_date_year'] = joined.med_date.str[-4:]
 
