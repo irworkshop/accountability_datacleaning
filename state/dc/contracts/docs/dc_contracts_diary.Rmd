@@ -34,7 +34,7 @@ if (!interactive()) {
 ```
 
 ```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
-doc_dir <- fs::dir_create(here::here("dc", "contracts", "docs"))
+doc_dir <- fs::dir_create(here::here("state", "dc", "contracts", "docs"))
 ```
 
 ## Project
@@ -125,21 +125,21 @@ a single CSV file which we can read into R. The same thing can be done on the
 ## Read
 
 ```{r raw_dir}
-raw_dir <- dir_create(here("dc", "contracts", "data", "raw"))
+raw_dir <- dir_create(here("state", "dc", "contracts", "data", "raw"))
 ```
 
 First, we will read the contract awards file.
 
 ```{r raw_read_con}
-dcc <- vroom(
+dcc <- read_delim(
   file = path(raw_dir, "ContractAwards.csv"),
   delim = ",",
-  .name_repair = make_clean_names,
+  locale = locale(date_format = "%m/%d/%Y"),
   col_types = cols(
     .default = col_character(),
-    `Start Date` = col_date_usa(),
-    `End Date` = col_date_usa(),
-    `Award Date` = col_date_usa(),
+    `Start Date` = col_date(),
+    `End Date` = col_date(),
+    `Award Date` = col_date(),
     `Amount` = col_number()
   )
 )
@@ -148,16 +148,21 @@ dcc <- vroom(
 Then the we will read the purchase orders file.
 
 ```{r raw_read_po}
-dcp <- vroom(
+dcp <- read_delim(
   file = path(raw_dir, "PurchaseOrders.csv"),
   delim = ",",
-  .name_repair = make_clean_names,
+  locale = locale(date_format = "%m/%d/%Y"),
   col_types = cols(
     .default = col_character(),
     `Total Amount` = col_number(),
-    `Order Date` = col_date_usa(),
+    `Order Date` = col_date(),
   )
 )
+```
+
+```{r}
+dcc <- clean_names(dcc)
+dcp <- clean_names(dcp)
 ```
 
 After making some column names match, the two data frames can be bound together
@@ -324,7 +329,7 @@ There are no geographic variables, but we can add a 2-digit state abbreviation
 for the spending agency. 
 
 ```{r state_add}
-dcc <- mutate(dcc, state = "DC", .after = agency)
+dcc <- mutate(dcc, state = "dc", .after = agency)
 ```
 
 ## Conclude
@@ -341,11 +346,31 @@ dcc <- mutate(dcc, state = "DC", .after = agency)
 Now the file can be saved on disk for upload to the Accountability server.
 
 ```{r clean_dir}
-clean_dir <- dir_create(here("dc", "contracts", "data", "clean"))
-clean_path <- path(clean_dir, "dc_contracts_clean.csv")
-write_csv(dcc, clean_path, na = "")
-file_size(clean_path)
-mutate(file_encoding(clean_path), across(path, path.abbrev))
+clean_dir <- dir_create(here("state", "dc", "contracts", "data", "clean"))
+clean_csv <- path(clean_dir, "dc_contracts_20200701-20230119.csv")
+write_csv(dcc, clean_csv, na = "")
+file_size(clean_csv)
+mutate(file_encoding(clean_csv), across(path, path.abbrev))
+```
+
+## Upload
+
+We can use the `aws.s3::put_object()` to upload the text file to the IRW server.
+
+```{r aws-upload, eval=FALSE}
+aws_key <- path("csv", basename(clean_csv))
+if (!object_exists(aws_key, "publicaccountability")) {
+  put_object(
+    file = clean_csv,
+    object = aws_key, 
+    bucket = "publicaccountability",
+    acl = "public-read",
+    show_progress = TRUE,
+    multipart = TRUE
+  )
+}
+aws_head <- head_object(aws_key, "publicaccountability")
+(aws_size <- as_fs_bytes(attr(aws_head, "content-length")))
 ```
 
 ## Dictionary
@@ -392,7 +417,7 @@ dict_raw <- tibble(
 ```{r dict_write}
 write_lines(
   x = c("# District Of Columbia Contracts Data Dictionary\n", dict_md),
-  path = here("dc", "contracts", "dc_contracts_dict.md"),
+  file = here("state", "dc", "contracts", "dc_contracts_dict.md"),
 )
 ```
 
