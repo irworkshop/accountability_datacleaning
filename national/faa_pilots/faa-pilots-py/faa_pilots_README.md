@@ -1,7 +1,7 @@
 FAA Pilot Registration - Python 
 ================
 Janelle O'Dea
-Friday January 6 2021
+Friday January 31 2023
 
 -   [Project](#project)
 -   [Objectives](#objectives)
@@ -60,6 +60,8 @@ The database of Federal Aviation Administration (FAA) pilot
 registrations can be obtained from [the FAA
 website](https://www.faa.gov/licenses_certificates/airmen_certification/releasable_airmen_download/).
 
+From the FAA website:
+
 > ### Airmen Certification Database
 >
 > -   Airmen Certification Branch is not the authoritative source for
@@ -113,19 +115,19 @@ to learn more about the data and how to read it.
 
 ## Conclude
 
-1.  There are 954,997 records in the database.
+1.  There are 954,997 records in the database as of the January 2023 upload.
 2.  There are duplicate records.
-3.  Date ranges are reasonable, but the formatting is a bit wacky on two fields (the format is MYYYY or MMYYYY, depending on if one- or two-digit month). 
-4.  There are many records missing medical information (the last four fields in the original data). The FAA website states explicitly that this database is not the authoritative source for medical information.
-5.  Consistency in geographic data has not been improved. However: US ZIP codes (5 digits) and non-US ZIP codes were placed in separate fields, as well as retained in the zip_code field.
-6.  The 4-digit `year` has been created, as well as a 2-digit month and 2-digit day, where applicable. 
+3.  Date ranges are reasonable, but the formatting is unconventional on two fields (the format is MYYYY or MMYYYY, depending on if one- or two-digit month). 
+4.  There are many records missing medical exam information (the last four fields in the original data). The FAA website states explicitly that this database is not the authoritative source for medical information.
+5.  Consistency in geographic data doesn't really apply here. The only note is: There are non-US ZIP codes in the original zip field. A 5-digit US ZIP field — uszip5 — has been created out of the 9 digit ZIP codes provided in the original ZIP field. Note: In the uszip5 field, leading zeros will not show in Excel. They're there.
+6.  The 'year' field reflects the year the data was uploaded.
+7.  The FAA updates this data on the first of every month or the first business day after. The Accountability Project will not update it monthly, however.
 
 ## Export
 
-The last line in the script exports a pilot.csv file. 
-Note: In the uszip5 field, leading zeros will not show in Excel. They're there.
+The last line in the script exports a pilot_2023.csv file. If you're uploading data in a different year, please change the 'yyyy' after the underscore to the current year.
 
 ## Upload
 
-Upload the pilots.csv file via FTP.
+Upload the pilots_yyyy.csv file via FTP.
 
