@@ -34,7 +34,7 @@ if (!interactive()) {
 ```
 
 ```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
-doc_dir <- fs::dir_create(here::here("la", "contracts", "docs"))
+doc_dir <- fs::dir_create(here::here("state", "la", "contracts", "docs"))
 ```
 
 ## Project
@@ -125,13 +125,14 @@ was last updated June 1, 2020.
 Data is available from 2016 through 2019.
 
 ```{r raw_download}
-raw_dir <- dir_create(here("la", "contracts", "data", "raw"))
-raw_source <- "https://checkbook.la.gov/Reports/AnnualSource/"
-raw_names <- glue("FY{16:19}AnnualReportSourceDataAct589.xlsx")
-raw_urls <- str_c(raw_source, raw_names)
-raw_paths <- path(raw_dir, raw_names)
+raw_dir <- dir_create(here("state", "la", "contracts", "data", "raw"))
+raw_urls <- glue(
+  "https://checkbook.la.gov/Reports/AnnualSource/",
+  "FY{20:22}AnnualReportSourceData.xlsx"
+)
+raw_paths <- path(raw_dir, basename(raw_urls))
 if (!all(file_exists(raw_paths))) {
-  download.file(raw_names, raw_paths)
+  download.file(raw_urls, raw_paths)
 }
 ```
 
@@ -167,12 +168,7 @@ lac <- lac %>%
       str_c("20", .) %>% 
       as.integer()
   ) %>% 
-  mutate(
-    description = coalesce(
-      description, published_description, published_text
-    )
-  ) %>% 
-  select(-published_description, -published_text)
+  rename(description = published_text)
 ```
 
 Records belonging to contracts have a `contract_no` and single purchase orders
@@ -325,28 +321,32 @@ lac <- mutate(lac, state = "LA", .after = department_name)
 Now the file can be saved on disk for upload to the Accountability server.
 
 ```{r clean_dir}
-clean_dir <- dir_create(here("la", "contracts", "data", "clean"))
-clean_path <- path(clean_dir, "la_contracts_clean.csv")
-write_csv(lac, clean_path, na = "")
-file_size(clean_path)
-mutate(file_encoding(clean_path), across(path, path.abbrev))
+clean_dir <- dir_create(here("state", "la", "contracts", "data", "clean"))
+clean_csv <- path(clean_dir, "la_contracts_2020-2022.csv")
+write_csv(lac, clean_csv, na = "")
+file_size(clean_csv)
+mutate(file_encoding(clean_csv), across(path, path.abbrev))
 ```
 
 ## Upload
 
-Using the [duckr] R package, we can wrap around the [duck] command line tool to
-upload the file to the IRW server.
+We can use the `aws.s3::put_object()` to upload the text file to the IRW server.
 
-[duckr]: https://github.com/kiernann/duckr
-[duck]: https://duck.sh/
-
-```{r clean_upload, eval=FALSE}
-# remotes::install_github("kiernann/duckr")
-s3_dir <- "s3:/publicaccountability/csv/"
-s3_path <- path(s3_dir, basename(clean_path))
-if (require(duckr)) {
-  duckr::duck_upload(clean_path, s3_path)
+```{r aws-upload, eval=FALSE}
+aws_key <- path("csv", basename(clean_csv))
+if (!object_exists(aws_key, "publicaccountability")) {
+  put_object(
+    file = clean_csv,
+    object = aws_key, 
+    bucket = "publicaccountability",
+    acl = "public-read",
+    show_progress = TRUE,
+    multipart = TRUE
+  )
 }
+aws_head <- head_object(aws_key, "publicaccountability")
+(aws_size <- as_fs_bytes(attr(aws_head, "content-length")))
+unname(aws_size == clean_size)
 ```
 
 ## Dictionary
@@ -384,11 +384,4 @@ dict_raw <- tibble(
   format = "markdown",
   col.names = c("Column", "Type", "Definition")
 ))
-```
-
-```{r dict_write}
-write_lines(
-  x = c("# Louisiana Contracts Data Dictionary\n", dict_md),
-  path = here("la", "contracts", "la_contracts_dict.md"),
-)
 ```

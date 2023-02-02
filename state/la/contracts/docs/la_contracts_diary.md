@@ -1,20 +1,20 @@
 Louisiana Contracts
 ================
 Kiernan Nicholls
-2020-06-03 11:45:48
+2023-02-02 16:05:36
 
-  - [Project](#project)
-  - [Objectives](#objectives)
-  - [Packages](#packages)
-  - [Data](#data)
-  - [Download](#download)
-  - [Read](#read)
-  - [Explore](#explore)
-  - [Wrangle](#wrangle)
-  - [Conclude](#conclude)
-  - [Export](#export)
-  - [Upload](#upload)
-  - [Dictionary](#dictionary)
+- <a href="#project" id="toc-project">Project</a>
+- <a href="#objectives" id="toc-objectives">Objectives</a>
+- <a href="#packages" id="toc-packages">Packages</a>
+- <a href="#data" id="toc-data">Data</a>
+- <a href="#download" id="toc-download">Download</a>
+- <a href="#read" id="toc-read">Read</a>
+- <a href="#explore" id="toc-explore">Explore</a>
+- <a href="#wrangle" id="toc-wrangle">Wrangle</a>
+- <a href="#conclude" id="toc-conclude">Conclude</a>
+- <a href="#export" id="toc-export">Export</a>
+- <a href="#upload" id="toc-upload">Upload</a>
+- <a href="#dictionary" id="toc-dictionary">Dictionary</a>
 
 <!-- Place comments regarding knitting here -->
 
@@ -92,7 +92,7 @@ feature and should be run as such. The project also uses the dynamic
 ``` r
 # where does this document knit?
 here::here()
-#> [1] "/home/kiernan/Code/accountability_datacleaning/R_campfin"
+#> [1] "/home/kiernan/Documents/accountability_datacleaning"
 ```
 
 ## Data
@@ -107,13 +107,14 @@ last updated June 1, 2020.
 Data is available from 2016 through 2019.
 
 ``` r
-raw_dir <- dir_create(here("la", "contracts", "data", "raw"))
-raw_source <- "https://checkbook.la.gov/Reports/AnnualSource/"
-raw_names <- glue("FY{16:19}AnnualReportSourceDataAct589.xlsx")
-raw_urls <- str_c(raw_source, raw_names)
-raw_paths <- path(raw_dir, raw_names)
+raw_dir <- dir_create(here("state", "la", "contracts", "data", "raw"))
+raw_urls <- glue(
+  "https://checkbook.la.gov/Reports/AnnualSource/",
+  "FY{20:22}AnnualReportSourceData.xlsx"
+)
+raw_paths <- path(raw_dir, basename(raw_urls))
 if (!all(file_exists(raw_paths))) {
-  download.file(raw_names, raw_paths)
+  download.file(raw_urls, raw_paths)
 }
 ```
 
@@ -149,12 +150,7 @@ lac <- lac %>%
       str_c("20", .) %>% 
       as.integer()
   ) %>% 
-  mutate(
-    description = coalesce(
-      description, published_description, published_text
-    )
-  ) %>% 
-  select(-published_description, -published_text)
+  rename(description = published_text)
 ```
 
 Records belonging to contracts have a `contract_no` and single purchase
@@ -183,34 +179,35 @@ lac <- lac %>%
 
 ``` r
 glimpse(lac)
-#> Rows: 13,195
+#> Rows: 11,485
 #> Columns: 14
-#> $ source            <chr> "FY16AnnualReportSourceDataAct589.xlsx", "FY16AnnualReportSourceDataAc…
-#> $ id                <chr> "2000151101", "4400009344", "2000115741", "2000156009", "2000115873", …
-#> $ type              <chr> "purchase", "contract", "purchase", "purchase", "purchase", "purchase"…
-#> $ service_type      <chr> "PRO", "PRO", "PRO", "GOV", "GOV", "PRO", "PRO", "GOV", "GOV", "GOV", …
-#> $ service_type_name <chr> "Professional Contract", "Professional Contract", "Professional Contra…
-#> $ dept              <chr> "015", "033", "014", "014", "014", "014", "014", "014", "014", "014", …
-#> $ department_name   <chr> "DEPT OF PUBLIC SAFETY AND CORRECTIONS", "BOARDS, COMMISSIONS, AND AUT…
-#> $ common_vendor     <chr> "310103513", "310119061", "310081403", "310080901", "310080616", "3100…
-#> $ vendor            <chr> "310103513", "310119061", "310081403", "310080901", "310080616", "3100…
-#> $ vendor_name       <chr> "BRIAN PERRY", "GLENNON EVERETT", "11TH JUDICIAL DISTRICT", "12TH JUDI…
-#> $ total_amount      <dbl> 11200.00, 225000.00, 0.00, 0.00, 0.00, 0.00, 0.00, 10589.51, 0.00, 0.0…
-#> $ total_count       <int> 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 1, 1, 1, 1, 1, 1…
-#> $ description       <chr> "Provide orthopedic services to offenders at Elayn Hunt Correctional C…
-#> $ year              <int> 2016, 2016, 2016, 2016, 2016, 2016, 2016, 2016, 2016, 2016, 2016, 2016…
+#> $ source            <chr> "FY20AnnualReportSourceData.xlsx", "FY20AnnualReportSourceData.xlsx", "…
+#> $ id                <chr> "2000077857", "2000077857", "2000077857", "2000084119", "2000084119", "…
+#> $ type              <chr> "purchase", "purchase", "purchase", "purchase", "purchase", "purchase",…
+#> $ service_type      <chr> "COP", "COP", "COP", "COP", "COP", "CON", "CON", "SOC", "SOC", "CON", "…
+#> $ service_type_name <chr> "Cooperative Agreement", "Cooperative Agreement", "Cooperative Agreemen…
+#> $ dept              <chr> "019", "019", "019", "019", "019", "013", "013", "013", "013", "013", "…
+#> $ department_name   <chr> "DEPT OF WILDLIFE AND FISHERIES", "DEPT OF WILDLIFE AND FISHERIES", "DE…
+#> $ common_vendor     <chr> "310055601", "310055601", "310055601", "310007221", "310007221", "31006…
+#> $ vendor            <chr> "310055601", "310055601", "310055601", "310007221", "310007221", "31006…
+#> $ vendor_name       <chr> "DUCKS UNLIMITED", "DUCKS UNLIMITED", "DUCKS UNLIMITED", "KEEP LOUISIAN…
+#> $ description       <chr> NA, "Gulf Coast Joint Venture leader position to coordinate conservatio…
+#> $ total_amount      <dbl> 0.0, 0.0, 30000.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.…
+#> $ total_count       <int> 0, 0, 1, 1, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0, 0, 0, 1,…
+#> $ year              <int> 2020, 2020, 2020, 2020, 2020, 2020, 2020, 2020, 2020, 2020, 2020, 2020,…
 tail(lac)
-#> # A tibble: 6 x 14
-#>   source id    type  service_type service_type_na… dept  department_name common_vendor vendor
-#>   <chr>  <chr> <chr> <chr>        <chr>            <chr> <chr>           <chr>         <chr> 
-#> 1 FY19A… 2000… purc… SOC          Social Services  008   DEPT OF INSURA… 310084732     31008…
-#> 2 FY19A… 2000… purc… SOC          Social Services  013   DEPT OF HEALTH… 310082131     31008…
-#> 3 FY19A… 2000… purc… SOC          Social Services  014   DEPT OF SOCIAL… 310083868     31008…
-#> 4 FY19A… 2000… purc… SOC          Social Services  013   DEPT OF HEALTH… 310136341     31013…
-#> 5 FY19A… 2000… purc… SOC          Social Services  013   DEPT OF HEALTH… 310083056     31008…
-#> 6 FY19A… 2000… purc… SOC          Social Services  013   DEPT OF HEALTH… 310081951     31008…
-#> # … with 5 more variables: vendor_name <chr>, total_amount <dbl>, total_count <int>,
-#> #   description <chr>, year <int>
+#> # A tibble: 6 × 14
+#>   source   id    type  servi…¹ servi…² dept  depar…³ commo…⁴ vendor vendo…⁵ descr…⁶ total…⁷ total…⁸
+#>   <chr>    <chr> <chr> <chr>   <chr>   <chr> <chr>   <chr>   <chr>  <chr>   <chr>     <dbl>   <int>
+#> 1 FY22Ann… 2000… purc… SOC     Social… 015   DEPT O… 310178… 31017… JULIE … Provid… -7.8 e4       1
+#> 2 FY22Ann… 2000… purc… SOC     Social… 013   DEPT O… 310007… 31008… TULANE… Provid… -9.01e4       1
+#> 3 FY22Ann… 2000… purc… SOC     Social… 013   DEPT O… 310081… 31008… SOUTHE… Suppor… -2.13e5       1
+#> 4 FY22Ann… 2000… purc… SOC     Social… 013   DEPT O… 310081… 31008… SOUTHE… Provid… -2.73e5       1
+#> 5 FY22Ann… 2000… purc… SOC     Social… 013   DEPT O… 310083… 31008… LOUISI… Contra… -7.80e5       2
+#> 6 FY22Ann… 2000… purc… SOC     Social… 013   DEPT O… 310081… 31008… SOUTHE… Suppor… -1.43e6       2
+#> # … with 1 more variable: year <int>, and abbreviated variable names ¹​service_type,
+#> #   ²​service_type_name, ³​department_name, ⁴​common_vendor, ⁵​vendor_name, ⁶​description,
+#> #   ⁷​total_amount, ⁸​total_count
 ```
 
 ### Missing
@@ -221,7 +218,7 @@ not need to be flagged.
 
 ``` r
 col_stats(lac, count_na)
-#> # A tibble: 14 x 4
+#> # A tibble: 14 × 4
 #>    col               class     n      p
 #>    <chr>             <chr> <int>  <dbl>
 #>  1 source            <chr>     0 0     
@@ -234,9 +231,9 @@ col_stats(lac, count_na)
 #>  8 common_vendor     <chr>     0 0     
 #>  9 vendor            <chr>     0 0     
 #> 10 vendor_name       <chr>     0 0     
-#> 11 total_amount      <dbl>     0 0     
-#> 12 total_count       <int>     0 0     
-#> 13 description       <chr>  1305 0.0989
+#> 11 description       <chr>   662 0.0576
+#> 12 total_amount      <dbl>     0 0     
+#> 13 total_count       <int>     0 0     
 #> 14 year              <int>     0 0
 ```
 
@@ -250,51 +247,51 @@ contracts or purchase orders made for the same amount in the same year.
 ``` r
 lac <- flag_dupes(lac, -id)
 sum(lac$dupe_flag)
-#> [1] 174
+#> [1] 432
 ```
 
 ``` r
 lac %>% 
   filter(dupe_flag) %>% 
   select(id, year, vendor_name, department_name, total_amount)
-#> # A tibble: 174 x 5
-#>    id          year vendor_name                department_name                       total_amount
-#>    <chr>      <int> <chr>                      <chr>                                        <dbl>
-#>  1 2000122581  2016 ALLIANCE DESIGN GROUP, LLC EXECUTIVE DEPT                                  0 
-#>  2 2000125106  2016 ALLIANCE DESIGN GROUP, LLC EXECUTIVE DEPT                                  0 
-#>  3 2000137207  2016 COMM CARE CORP             DEPT OF HEALTH AND HOSPITALS                11000 
-#>  4 2000138255  2016 COMM CARE CORP             DEPT OF HEALTH AND HOSPITALS                11000 
-#>  5 2000142844  2016 COMM CARE CORP             DEPT OF HEALTH AND HOSPITALS                11000 
-#>  6 2000155735  2016 HARMONY CENTER INC         DEPT OF PUBLIC SAFETY AND CORRECTIONS     1652286.
-#>  7 2000156148  2016 HARMONY CENTER INC         DEPT OF PUBLIC SAFETY AND CORRECTIONS     1652286.
-#>  8 2000156286  2016 HARMONY CENTER INC         DEPT OF PUBLIC SAFETY AND CORRECTIONS     1652286.
-#>  9 2000085414  2016 LCPA                       EXECUTIVE DEPT                                  0 
-#> 10 2000104636  2016 LCPA                       EXECUTIVE DEPT                                  0 
-#> # … with 164 more rows
+#> # A tibble: 432 × 5
+#>    id          year vendor_name                        department_name                      total…¹
+#>    <chr>      <int> <chr>                              <chr>                                  <dbl>
+#>  1 2000114252  2020 GRTR LAFAYETTE CHMBR OF CMMRCE     DEPT OF ECONOMIC DEVELOPMENT               0
+#>  2 2000119708  2020 GREATER BATON ROUGE                DEPT OF ECONOMIC DEVELOPMENT               0
+#>  3 2000149142  2020 WESTED                             DEPT OF EDUCATION                          0
+#>  4 2000149667  2020 WESTED                             DEPT OF EDUCATION                          0
+#>  5 2000236313  2020 DELOITTE CONSULTING LLP            ANCILLARY APPROPRIATIONS                   0
+#>  6 2000253505  2020 SHOWS, CALI & BURNS                EXECUTIVE DEPT                             0
+#>  7 2000261954  2020 POSTLETHWAITE AND NETTERVILLE APAC DEPT OF PUBLIC SAFETY AND CORRECTIO…       0
+#>  8 2000262487  2020 IEM INC                            EXECUTIVE DEPT                             0
+#>  9 2000265762  2020 LOUISIANA PUBLIC HEALTH            DEPT OF HEALTH AND HOSPITALS               0
+#> 10 2000283813  2020 TULANE UNIVERSITY                  DEPT OF HEALTH AND HOSPITALS               0
+#> # … with 422 more rows, and abbreviated variable name ¹​total_amount
 ```
 
 ### Categorical
 
 ``` r
 col_stats(lac, n_distinct)
-#> # A tibble: 15 x 4
+#> # A tibble: 15 × 4
 #>    col               class     n        p
 #>    <chr>             <chr> <int>    <dbl>
-#>  1 source            <chr>     4 0.000303
-#>  2 id                <chr>  8754 0.663   
-#>  3 type              <chr>     2 0.000152
-#>  4 service_type      <chr>     7 0.000531
-#>  5 service_type_name <chr>     7 0.000531
-#>  6 dept              <chr>    28 0.00212 
-#>  7 department_name   <chr>    28 0.00212 
-#>  8 common_vendor     <chr>  3318 0.251   
-#>  9 vendor            <chr>  3605 0.273   
-#> 10 vendor_name       <chr>  3369 0.255   
-#> 11 total_amount      <dbl>  4787 0.363   
-#> 12 total_count       <int>     8 0.000606
-#> 13 description       <chr>  8253 0.625   
-#> 14 year              <int>     4 0.000303
-#> 15 dupe_flag         <lgl>     2 0.000152
+#>  1 source            <chr>     3 0.000261
+#>  2 id                <chr>  7113 0.619   
+#>  3 type              <chr>     2 0.000174
+#>  4 service_type      <chr>     8 0.000697
+#>  5 service_type_name <chr>    13 0.00113 
+#>  6 dept              <chr>    28 0.00244 
+#>  7 department_name   <chr>    49 0.00427 
+#>  8 common_vendor     <chr>  2926 0.255   
+#>  9 vendor            <chr>  3211 0.280   
+#> 10 vendor_name       <chr>  3392 0.295   
+#> 11 description       <chr>  6592 0.574   
+#> 12 total_amount      <dbl>  3744 0.326   
+#> 13 total_count       <int>     9 0.000784
+#> 14 year              <int>     3 0.000261
+#> 15 dupe_flag         <lgl>     2 0.000174
 ```
 
 ``` r
@@ -323,11 +320,11 @@ equal to zero.
 ``` r
 summary(lac$total_amount)
 #>       Min.    1st Qu.     Median       Mean    3rd Qu.       Max. 
-#>  -40484140          0      30000    2900717     148498 4748537099
+#>  -57224191          0      34999    4020329     150000 3908812314
 percent(mean(lac$total_amount < 0), 0.1)
-#> [1] "2.0%"
+#> [1] "1.3%"
 percent(mean(lac$total_amount == 0), 0.1)
-#> [1] "28.1%"
+#> [1] "33.8%"
 ```
 
 ![](../plots/hist_amount-1.png)<!-- -->
@@ -339,17 +336,18 @@ total number of each contract ordered.
 lac %>% 
   group_by(total_count) %>% 
   summarise(mean_amount = mean(total_amount))
-#> # A tibble: 8 x 2
-#>   total_count  mean_amount
-#>         <int>        <dbl>
-#> 1           0        -13.5
-#> 2           1    1385199. 
-#> 3           2    5427466. 
-#> 4           3   25343711. 
-#> 5           4    7879833. 
-#> 6           5 1714362353. 
-#> 7           6     525000  
-#> 8           8      13500
+#> # A tibble: 9 × 2
+#>   total_count mean_amount
+#>         <int>       <dbl>
+#> 1           0          0 
+#> 2           1    2586078.
+#> 3           2    6180951.
+#> 4           3   70893752.
+#> 5           4    6031518.
+#> 6           5    1678375.
+#> 7           6     475000 
+#> 8           7 1534471112.
+#> 9           8 2466221529.
 ```
 
 ### Dates
@@ -371,8 +369,8 @@ lac <- mutate(lac, state = "LA", .after = department_name)
 
 ## Conclude
 
-1.  There are 13,195 records in the database.
-2.  There are 174 duplicate records in the database.
+1.  There are 11,485 records in the database.
+2.  There are 432 duplicate records in the database.
 3.  The range and distribution of `amount` and `date` seem reasonable.
 4.  There are 0 records missing key variables.
 5.  There are no geographic variables to normalize, `state` was added
@@ -385,31 +383,38 @@ Now the file can be saved on disk for upload to the Accountability
 server.
 
 ``` r
-clean_dir <- dir_create(here("la", "contracts", "data", "clean"))
-clean_path <- path(clean_dir, "la_contracts_clean.csv")
-write_csv(lac, clean_path, na = "")
-file_size(clean_path)
-#> 3.86M
-mutate(file_encoding(clean_path), across(path, path.abbrev))
-#> # A tibble: 1 x 3
-#>   path                                             mime            charset
-#>   <chr>                                            <chr>           <chr>  
-#> 1 ~/la/contracts/data/clean/la_contracts_clean.csv application/csv utf-8
+clean_dir <- dir_create(here("state", "la", "contracts", "data", "clean"))
+clean_csv <- path(clean_dir, "la_contracts_2020-2022.csv")
+write_csv(lac, clean_csv, na = "")
+file_size(clean_csv)
+#> 3.19M
+mutate(file_encoding(clean_csv), across(path, path.abbrev))
+#> # A tibble: 1 × 3
+#>   path                                                                                mime  charset
+#>   <fs::path>                                                                          <chr> <chr>  
+#> 1 …countability_datacleaning/state/la/contracts/data/clean/la_contracts_2020-2022.csv text… utf-8
 ```
 
 ## Upload
 
-Using the [duckr](https://github.com/kiernann/duckr) R package, we can
-wrap around the [duck](https://duck.sh/) command line tool to upload the
-file to the IRW server.
+We can use the `aws.s3::put_object()` to upload the text file to the IRW
+server.
 
 ``` r
-# remotes::install_github("kiernann/duckr")
-s3_dir <- "s3:/publicaccountability/csv/"
-s3_path <- path(s3_dir, basename(clean_path))
-if (require(duckr)) {
-  duckr::duck_upload(clean_path, s3_path)
+aws_key <- path("csv", basename(clean_csv))
+if (!object_exists(aws_key, "publicaccountability")) {
+  put_object(
+    file = clean_csv,
+    object = aws_key, 
+    bucket = "publicaccountability",
+    acl = "public-read",
+    show_progress = TRUE,
+    multipart = TRUE
+  )
 }
+aws_head <- head_object(aws_key, "publicaccountability")
+(aws_size <- as_fs_bytes(attr(aws_head, "content-length")))
+unname(aws_size == clean_size)
 ```
 
 ## Dictionary
@@ -417,7 +422,7 @@ if (require(duckr)) {
 The following table describes the variables in our final exported file:
 
 | Column              | Type        | Definition                              |
-| :------------------ | :---------- | :-------------------------------------- |
+|:--------------------|:------------|:----------------------------------------|
 | `source`            | `character` | Source Excel file name                  |
 | `id`                | `character` | Unique contract or purchase ID          |
 | `type`              | `character` | Contract or single purchase order       |
@@ -429,15 +434,8 @@ The following table describes the variables in our final exported file:
 | `common_vendor`     | `character` | Common vendor ID                        |
 | `vendor`            | `character` | Unique vendor ID                        |
 | `vendor_name`       | `character` | Vendor full name                        |
-| `total_amount`      | `double`    | Total contract or purchase amount       |
-| `total_count`       | `integer`   | Total number of contracts ordered       |
-| `description`       | `character` | Free-form text description of contracts |
+| `description`       | `character` | Total contract or purchase amount       |
+| `total_amount`      | `double`    | Total number of contracts ordered       |
+| `total_count`       | `integer`   | Free-form text description of contracts |
 | `year`              | `integer`   | Fiscal year ordered from source file    |
 | `dupe_flag`         | `logical`   | Flag indicating duplicate record        |
-
-``` r
-write_lines(
-  x = c("# Louisiana Contracts Data Dictionary\n", dict_md),
-  path = here("la", "contracts", "la_contracts_dict.md"),
-)
-```
