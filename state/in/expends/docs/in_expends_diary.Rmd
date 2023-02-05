@@ -263,40 +263,37 @@ For categorical variables, we can use `ggplo2::geom_col()` to explore the count 
 ```{r comm_type_bar, echo=FALSE}
 explore_plot(
   data = ind, 
-  var = committee_type,
-  title = "Indiana Expenditures by Committe Type",
-  caption = "Source: Indiana Election Division"
-)
+  var = committee_type) + 
+  labs(title = "Indiana Expenditures by Committe Type",
+       caption = "Source: Indiana Election Division")
 ```
 
 ```{r expend_code_bar, echo=FALSE}
 explore_plot(
   data = ind,
-  var = expenditure_code,
-  title = "Indiana Expenditures by Committe Type",
-  caption = "Source: Indiana Election Division"
-)
+  var = expenditure_code) + 
+  labs(title = "Indiana Expenditures by Committe Type",
+  caption = "Source: Indiana Election Division")
+
 ```
 
 ```{r occupation_bar, echo=FALSE}
 explore_plot(
   data = ind %>% drop_na(occupation) %>% filter(occupation != "Other"),
-  var = occupation,
-  flip = TRUE,
-  title = "Indiana Expenditures by Payee Occupation",
+  var = occupation) + 
+  coord_flip() + 
+  labs(title = "Indiana Expenditures by Payee Occupation",
   subtitle = "Without Missing or 'Other'",
-  caption = "Source: Indiana Election Division"
-)
+  caption = "Source: Indiana Election Division")
 ```
 
 ```{r expend_type_bar, echo=FALSE}
 explore_plot(
   data = ind,
-  var = expenditure_type,
-  flip = TRUE,
-  title = "Indiana Expenditures by Expenditure Use",
-  caption = "Source: Indiana Election Division"
-)
+  var = expenditure_type) + 
+  coord_flip() + 
+  labs(title = "Indiana Expenditures by Expenditure Use",
+  caption = "Source: Indiana Election Division")
 ```
 
 ```{r purpose_word_bar, echo=FALSE, fig.height=10}
