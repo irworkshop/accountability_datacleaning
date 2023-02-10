@@ -1,0 +1,381 @@
+---
+title: "Chicago Salaries"
+author: "Kiernan Nicholls"
+date: "`r date()`"
+output:
+  github_document: 
+    df_print: tibble
+    toc: true
+    toc_dept: 3
+editor_options: 
+  chunk_output_type: console
+---
+
+<!-- Place comments regarding knitting here -->
+
+```{r setup, include=FALSE, purl=FALSE}
+library(knitr)
+opts_chunk$set(
+  eval = TRUE,
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  error = FALSE,
+  collapse = TRUE,
+  comment = "#>",
+  fig.path = "../plots/",
+  fig.width = 10,
+  dpi = 300
+)
+if (!interactive()) {
+  options(width = 120)
+  set.seed(5)
+}
+```
+
+```{r create-docs-dir, eval=FALSE, echo=FALSE, include=FALSE}
+doc_dir <- fs::dir_create(here::here("state", "il", "chicago", "salaries", "docs"))
+```
+
+## Project
+
+The Accountability Project is an effort to cut across data silos and give
+journalists, policy professionals, activists, and the public at large a simple
+way to search across huge volumes of public data about people and organizations.
+
+Our goal is to standardize public data on a few key fields by thinking of each
+dataset row as a transaction. For each transaction there should be (at least) 3
+variables:
+
+1. All **parties** to a transaction.
+2. The **date** of the transaction.
+3. The **amount** of money involved.
+
+## Objectives
+
+This document describes the process used to complete the following objectives:
+
+1. How many records are in the database?
+1. Check for entirely duplicated records.
+1. Check ranges of continuous variables.
+1. Is there anything blank or missing?
+1. Check for consistency issues.
+1. Create a five-digit ZIP Code called `zip`.
+1. Create a `year` field from the transaction date.
+1. Make sure there is data on both parties to a transaction.
+
+## Packages
+
+The following packages are needed to collect, manipulate, visualize, analyze,
+and communicate these results. The `pacman` package will facilitate their
+installation and attachment.
+
+```{r load-packages, message=FALSE, warning=FALSE, error=FALSE}
+if (!require("pacman")) {
+  install.packages("pacman")
+}
+pacman::p_load(
+  tidyverse, # data manipulation
+  lubridate, # datetime strings
+  gluedown, # printing markdown
+  jsonlite, # read json files
+  janitor, # clean data frames
+  campfin, # custom irw tools
+  aws.s3, # aws cloud storage
+  readxl, # read excel files
+  refinr, # cluster & merge
+  scales, # format strings
+  knitr, # knit documents
+  rvest, # scrape html
+  glue, # code strings
+  here, # project paths
+  httr, # http requests
+  fs # local storage 
+)
+```
+
+This diary was run using `campfin` version `r packageVersion("campfin")`.
+
+```{r campfin-version}
+packageVersion("campfin")
+```
+
+```{r package-options, echo=FALSE}
+options(options(knitr.kable.NA = ""))
+```
+
+This document should be run as part of the `R_tap` project, which lives as a
+sub-directory of the more general, language-agnostic
+[`irworkshop/accountability_datacleaning`][tap] GitHub repository.
+
+The `R_tap` project uses the [RStudio projects][rproj] feature and should be
+run as such. The project also uses the dynamic `here::here()` tool for file
+paths relative to _your_ machine.
+
+```{r where-here}
+# where does this document knit?
+here::i_am("state/il/chicago/salaries/docs/chicago_salaries_diary.Rmd")
+```
+
+[tap]: https://github.com/irworkshop/accountability_datacleaning
+[rproj]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects
+
+## Source
+
+> This dataset is a listing of all active City of Chicago employees, complete
+with full names, departments, positions, employment status (part-time or
+full-time), frequency of hourly employee –where applicable—and annual salaries
+or hourly rate. Please note that "active" has a specific meaning for Human
+Resources purposes and will sometimes exclude employees on certain types of
+temporary leave. For hourly employees, the City is providing the hourly rate and
+frequency of hourly employees (40, 35, 20 and 10) to allow dataset users to
+estimate annual wages for hourly employees. Please note that annual wages will
+vary by employee, depending on number of hours worked and seasonal status. For
+information on the positions and related salaries detailed in the annual
+budgets, see https://www.cityofchicago.org/city/en/depts/obm.html
+
+## Download
+
+```{r raw-dir}
+raw_url <- "https://data.cityofchicago.org/api/views/xzkq-xp2w/rows.csv"
+raw_dir <- dir_create(here("state", "il", "chicago", "salaries", "data", "raw"))
+raw_csv <- path(raw_dir, basename(raw_url))
+```
+
+```{r raw-download}
+if (!file_exists(raw_csv)) {
+  download.file(raw_url, raw_csv)
+}
+```
+
+## Read
+
+```{r raw-read}
+chis <- read_delim(
+  file = raw_csv,
+  delim = ",",
+  escape_backslash = FALSE,
+  escape_double = FALSE,
+  locale = locale(date_format = "%m/%d/%Y"),
+  col_types = cols(
+    .default = col_character(),
+    `Typical Hours` = col_double(),
+    `Annual Salary` = col_double(),
+    `Hourly Rate` = col_double()
+  )
+)
+```
+
+```{r clean-names}
+chis <- clean_names(chis, case = "snake")
+```
+
+## Explore
+
+There are `r comma(nrow(chis))` rows of `r ncol(chis)` columns. Each record
+represents a single employee.
+
+```{r glimpse}
+glimpse(chis)
+tail(chis)
+```
+
+### Missing
+
+Columns vary in their degree of missing values.
+
+```{r na-count}
+col_stats(chis, count_na)
+```
+
+Rows have _either_ a `annual_salary` or `hourly_rate` but not both.
+
+```{r na-amount}
+sum(is.na(chis$annual_salary) & is.na(chis$hourly_rate))
+```
+
+### Duplicates
+
+We can flag any record completely duplicated across every column.
+
+```{r dupe-flag}
+chis <- flag_dupes(chis, everything())
+sum(chis$dupe_flag)
+```
+
+```{r dupe-view}
+chis %>% 
+  filter(dupe_flag) %>% 
+  select(1:3) %>% 
+  arrange(name)
+```
+
+### Categorical
+
+```{r distinct-count}
+col_stats(chis, n_distinct)
+```
+
+```{r distinct-plots, echo=FALSE, fig.height=3}
+explore_plot(chis, department) + scale_x_wrap()
+explore_plot(chis, full_or_part_time) + scale_x_wrap()
+explore_plot(chis, salary_or_hourly) + scale_x_wrap()
+```
+
+### Amounts
+
+```{r amount-annual}
+chis <- chis %>% 
+  mutate(
+    # weekly salary for entire year
+    annual_hourly = (typical_hours * hourly_rate) * 52,
+    salary_amount = coalesce(annual_salary, annual_hourly)
+  ) %>% 
+  select(
+    -annual_hourly
+  )
+```
+
+```{r amount-round}
+# fix floating point precision
+chis$salary_amount <- round(chis$salary_amount, digits = 2)
+```
+
+```{r amount-summary}
+summary(chis$salary_amount)
+mean(chis$salary_amount <= 0)
+```
+
+These are the records with the minimum and maximum amounts.
+
+```{r amount-minmax}
+glimpse(chis[c(which.max(chis$salary_amount), which.min(chis$salary_amount)), ])
+```
+
+The distribution of amount values are typically log-normal.
+
+```{r hist-amount, echo=FALSE}
+chis %>%
+  filter(salary_amount > 10000) %>% 
+  ggplot(aes(salary_amount)) +
+  geom_histogram(fill = dark2["purple"], bins = 18) +
+  scale_y_continuous(labels = comma) +
+  scale_x_continuous(
+    n.breaks = 12,
+    labels = dollar
+  ) +
+  labs(
+    title = "Chicago Salaries Amount Distribution",
+    caption = "Source: Chicago Data Portal",
+    x = "Amount",
+    y = "Count"
+  )
+```
+
+```{r dept-sum, echo=FALSE}
+chis %>%
+  group_by(department) %>% 
+  summarise(salary_amount = sum(salary_amount) / 1e9) %>% 
+  arrange(desc(salary_amount)) %>% 
+  head() %>% 
+  ggplot(aes(reorder(department, -salary_amount), salary_amount)) +
+  geom_col(aes(fill = salary_amount), color = "black") +
+  scale_y_continuous(labels = comma) +
+  scale_x_wrap() +
+  scale_fill_viridis_c(option = "C", guide = "none") +
+  labs(
+    title = "Sum of Chicago Salaries by Department",
+    caption = "Source: Chicago Data Portal",
+    x = "Department",
+    y = "Amount Sum ($Bil.)"
+  )
+```
+
+```{r vend-sum, echo=FALSE}
+chis %>%
+  group_by(job_titles) %>% 
+  summarise(salary_amount = mean(salary_amount)) %>% 
+  arrange(desc(salary_amount)) %>% 
+  head() %>% 
+  ggplot(aes(reorder(job_titles, -salary_amount), salary_amount)) +
+  geom_col(aes(fill = salary_amount), color = "black") +
+  scale_y_continuous(labels = comma) +
+  scale_x_wrap() +
+  scale_fill_viridis_c(option = "C", guide = "none") +
+  labs(
+    title = "Mean of Chicago Salaries by Title",
+    caption = "Source: Chicago Data Portal",
+    x = "Vendor",
+    y = "Amount Mean"
+  )
+```
+
+## Wrangle
+
+The `address_*`, `city`, and `state` variables are all already fairly normalized
+and most of the "bad" addresses are foreign, so they shouldn't be changed.
+
+We also needed to add fields for the city and state of the department, which
+will be Chicago and Illinois in every instance.
+
+```{r add-geo}
+chis <- chis %>% 
+  mutate(
+    date = Sys.Date(),
+    year = year(date),
+    dept_city = "CHICAGO",
+    dept_state = "IL"
+  )
+```
+
+## Conclude
+
+```{r clean-glimpse}
+glimpse(sample_n(chis, 1000))
+```
+
+1. There are `r comma(nrow(chis))` records in the database.
+1. There are `r comma(sum(chis$dupe_flag))` duplicate records in the database.
+
+## Export
+
+Now the file can be saved on disk for upload to the Accountability server. We
+will name the object using a date range of the records included.
+
+```{r clean-timestamp}
+csv_ts <- str_remove_all(Sys.Date(), "-")
+```
+
+```{r clean-dir}
+clean_dir <- dir_create(here("state", "il", "chicago", "salaries", "data", "clean"))
+clean_csv <- path(clean_dir, glue("il-chicago_salaries_{csv_ts}.csv"))
+clean_rds <- path_ext_set(clean_csv, "rds")
+basename(clean_csv)
+```
+
+```{r clean-write}
+write_csv(chis, clean_csv, na = "")
+write_rds(chis, clean_rds, compress = "xz")
+(clean_size <- file_size(clean_csv))
+```
+
+## Upload
+
+We can use the `aws.s3::put_object()` to upload the text file to the IRW server.
+
+```{r aws-upload, eval=FALSE}
+aws_key <- path("csv", basename(clean_csv))
+if (!object_exists(aws_key, "publicaccountability")) {
+  put_object(
+    file = clean_csv,
+    object = aws_key, 
+    bucket = "publicaccountability",
+    acl = "public-read",
+    show_progress = TRUE,
+    multipart = TRUE
+  )
+}
+aws_head <- head_object(aws_key, "publicaccountability")
+(aws_size <- as_fs_bytes(attr(aws_head, "content-length")))
+unname(aws_size == clean_size)
+```
