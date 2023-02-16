@@ -83,7 +83,7 @@ pacman::p_load(
   magrittr, # pipe operators
   jsonlite, # parse json files
   janitor, # data frame clean
-  batman, # parse logicals
+  aws.s3, # read from aws s3
   refinr, # cluster and merge
   scales, # format strings
   knitr, # knit documents
@@ -269,12 +269,70 @@ glimpse(wac)
 1. There is no geographic data to normalize.
 1. The 4-digit `calendar_year` variable already exists.
 
+## Update
+
+```{r old_read}
+wac_old <- s3read_using(
+  FUN = read_csv,
+  object = "csv/wa_contracts.csv",
+  bucket = "publicaccountability"
+)
+
+wac_old$omwbe[is.na(wac_old$omwbe)] <- "N"
+```
+
+```{r old_new}
+wac_new <- wac %>% 
+  filter(calendar_year > 2020)
+```
+
+```{r old_2020}
+wac_old_2020 <- wac_old %>% 
+  filter(calendar_year == 2020)
+
+wac_new_2020 <- wac %>% 
+  filter(calendar_year == 2020)
+```
+
+```{r old_combine}
+wac_new <- bind_rows(wac_new, wac_new_2020)
+```
+
 ## Export
 
-```{r clean_dir}
-clean_dir <- dir_create(here("wa", "contracts", "data", "clean"))
-clean_path <- path(clean_dir, "wa_Contracts_clean.csv")
-write_csv(wac, clean_path, na = "")
-file_size(clean_path)
-guess_encoding(clean_path)
+Now the file can be saved on disk for upload to the Accountability server. We
+will name the object using a date range of the records included.
+
+```{r clean-dir}
+clean_dir <- dir_create(here("state", "wa", "contracts", "data", "clean"))
+clean_csv <- path(clean_dir, "wa_contracts_2015-20221129.csv")
+clean_rds <- path_ext_set(clean_csv, "rds")
+basename(clean_csv)
+```
+
+```{r clean-write}
+write_csv(wac, clean_csv, na = "")
+write_rds(wac, clean_rds, compress = "xz")
+(clean_size <- file_size(clean_csv))
+```
+
+## Upload
+
+We can use the `aws.s3::put_object()` to upload the text file to the IRW server.
+
+```{r aws-upload, eval=FALSE}
+aws_key <- path("csv", basename(clean_csv))
+if (!object_exists(aws_key, "publicaccountability")) {
+  put_object(
+    file = clean_csv,
+    object = aws_key, 
+    bucket = "publicaccountability",
+    acl = "public-read",
+    show_progress = TRUE,
+    multipart = TRUE
+  )
+}
+aws_head <- head_object(aws_key, "publicaccountability")
+(aws_size <- as_fs_bytes(attr(aws_head, "content-length")))
+unname(aws_size == clean_size)
 ```

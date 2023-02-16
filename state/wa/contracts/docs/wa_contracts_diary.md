@@ -1,16 +1,18 @@
 Washington Contracts
 ================
 Kiernan Nicholls
-2020-06-05 12:21:11
+2023-02-16 12:41:56
 
-  - [Project](#project)
-  - [Objectives](#objectives)
-  - [Packages](#packages)
-  - [Data](#data)
-  - [Import](#import)
-  - [Explore](#explore)
-  - [Conclude](#conclude)
-  - [Export](#export)
+- <a href="#project" id="toc-project">Project</a>
+- <a href="#objectives" id="toc-objectives">Objectives</a>
+- <a href="#packages" id="toc-packages">Packages</a>
+- <a href="#data" id="toc-data">Data</a>
+- <a href="#import" id="toc-import">Import</a>
+- <a href="#explore" id="toc-explore">Explore</a>
+- <a href="#conclude" id="toc-conclude">Conclude</a>
+- <a href="#update" id="toc-update">Update</a>
+- <a href="#export" id="toc-export">Export</a>
+- <a href="#upload" id="toc-upload">Upload</a>
 
 <!-- Place comments regarding knitting here -->
 
@@ -62,7 +64,7 @@ pacman::p_load(
   magrittr, # pipe operators
   jsonlite, # parse json files
   janitor, # data frame clean
-  batman, # parse logicals
+  aws.s3, # read from aws s3
   refinr, # cluster and merge
   scales, # format strings
   knitr, # knit documents
@@ -86,7 +88,7 @@ feature and should be run as such. The project also uses the dynamic
 ``` r
 # where does this document knit?
 here::here()
-#> [1] "/home/kiernan/Code/accountability_datacleaning/R_campfin"
+#> [1] "/home/kiernan/Documents/accountability_datacleaning"
 ```
 
 ## Data
@@ -124,11 +126,11 @@ Then we can convert some quasi-logical variables to a true logical type.
 
 ``` r
 count(wac, vet_owned)
-#> # A tibble: 2 x 2
+#> # A tibble: 2 × 2
 #>   vet_owned      n
 #>   <chr>      <int>
-#> 1 N         124778
-#> 2 Y            578
+#> 1 N         171950
+#> 2 Y            823
 wac <- mutate_at(
   .tbl = wac,
   .vars = vars(12:14),
@@ -140,58 +142,59 @@ wac <- mutate_at(
 
 ``` r
 glimpse(wac)
-#> Rows: 125,356
+#> Rows: 172,773
 #> Columns: 14
-#> $ customer_type     <chr> "School Districts", "Cities Including Towns", "County", "County", "Cit…
-#> $ customer_name     <chr> "AUBURN SCHOOL DISTRICT 408", "EAST WENATCHEE, CITY OF", "KING COUNTY"…
-#> $ contract_number   <chr> "00111", "00111", "00111", "00111", "00111", "00111", "00111", "00111"…
-#> $ contract_title    <chr> "Fertilizers", "Fertilizers", "Fertilizers", "Fertilizers", "Fertilize…
-#> $ vendor_name       <chr> "WILBUR-ELLIS COMPANY", "WILBUR-ELLIS COMPANY", "WILBUR-ELLIS COMPANY"…
-#> $ calendar_year     <int> 2015, 2015, 2015, 2015, 2015, 2015, 2015, 2015, 2015, 2015, 2015, 2015…
-#> $ q1_sales_reported <dbl> 0, 0, 480, 435, 271, 3176, 135, 3133, 36, 2694, 0, 0, 0, 0, 0, 0, 0, 0…
-#> $ q2_sales_reported <dbl> 0, 0, 529, 0, 271, 0, 196, 2089, 30, 0, 3241, 794, 1604, 6137, 1181, 1…
-#> $ q3_sales_reported <dbl> 271, 4360, 1351, 0, 0, 1588, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 986, 0, 0, …
-#> $ q4_sales_reported <dbl> 0, 0, 11131, 1034, 0, 135, 0, 1031, 0, 0, 2820, 189, 0, 10004, 413, 0,…
-#> $ omwbe             <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
-#> $ vet_owned         <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, …
-#> $ small_business    <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, …
-#> $ diverse_options   <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, …
+#> $ customer_type     <chr> "Cities Including Towns", "Higher Ed (State Agency)", "Higher Ed (State…
+#> $ customer_name     <chr> "ISSAQUAH CITY OF", "YAKIMA VALLEY COLLEGE", "COMM COLLEGES OF SPOKANE"…
+#> $ contract_number   <chr> "00111", "00111", "00111", "00111", "00111", "00111", "00111", "00111",…
+#> $ contract_title    <chr> "Fertilizers", "Fertilizers", "Fertilizers", "Fertilizers", "Fertilizer…
+#> $ vendor_name       <chr> "WILBUR-ELLIS COMPANY LLC", "WILBUR-ELLIS COMPANY LLC", "WILBUR-ELLIS C…
+#> $ calendar_year     <dbl> 2015, 2015, 2015, 2015, 2015, 2015, 2015, 2015, 2015, 2015, 2015, 2015,…
+#> $ q1_sales_reported <dbl> 0, 0, 0, 271, 0, 3176, 0, 3133, 2694, 0, 135, 0, 0, 0, 0, 480, 36, 0, 0…
+#> $ q2_sales_reported <dbl> 975, 0, 1604, 271, 3241, 0, 0, 2089, 0, 103, 196, 0, 0, 6137, 0, 529, 3…
+#> $ q3_sales_reported <dbl> 986, 0, 0, 0, 0, 1588, 271, 0, 0, 0, 0, 0, 0, 0, 4360, 1351, 0, 0, 0, 0…
+#> $ q4_sales_reported <dbl> 1986, 1239, 0, 0, 2820, 135, 0, 1031, 0, 0, 0, 368, 252, 10004, 0, 1113…
+#> $ omwbe             <chr> "N", "N", "N", "N", "N", "N", "N", "N", "N", "N", "N", "N", "N", "N", "…
+#> $ vet_owned         <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, F…
+#> $ small_business    <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, F…
+#> $ diverse_options   <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, F…
 tail(wac)
-#> # A tibble: 6 x 14
-#>   customer_type customer_name contract_number contract_title vendor_name calendar_year
-#>   <chr>         <chr>         <chr>           <chr>          <chr>               <int>
-#> 1 Customers     <NA>          09712           ESRI - Softwa… ENVIRONMEN…          2020
-#> 2 Districts, O… FERRY COUNTY… 09712           ESRI - Softwa… ENVIRONMEN…          2020
-#> 3 County        FRANKLIN COU… 09712           ESRI - Softwa… ENVIRONMEN…          2020
-#> 4 Cities Inclu… MAPLE VALLEY… 09712           ESRI - Softwa… ENVIRONMEN…          2020
-#> 5 Cities Inclu… OAK HARBOR, … 09712           ESRI - Softwa… ENVIRONMEN…          2020
-#> 6 Customers     <NA>          09712           ESRI - Softwa… ENVIRONMEN…          2020
-#> # … with 8 more variables: q1_sales_reported <dbl>, q2_sales_reported <dbl>,
-#> #   q3_sales_reported <dbl>, q4_sales_reported <dbl>, omwbe <chr>, vet_owned <lgl>,
-#> #   small_business <lgl>, diverse_options <lgl>
+#> # A tibble: 6 × 14
+#>   customer_…¹ custo…² contr…³ contr…⁴ vendo…⁵ calen…⁶ q1_sa…⁷ q2_sa…⁸ q3_sa…⁹ q4_sa…˟ omwbe vet_o…˟
+#>   <chr>       <chr>   <chr>   <chr>   <chr>     <dbl>   <dbl>   <dbl>   <dbl>   <dbl> <chr> <lgl>  
+#> 1 Customers   <NA>    13022   Cars, … 72 HOU…    2022       0       0       0       0 N     FALSE  
+#> 2 State Agen… TRANSP… 14422   Office… STEELC…    2022       0       0   10708       0 N     FALSE  
+#> 3 Cities Inc… FEDERA… 14422   Office… STEELC…    2022       0       0    8796       0 N     FALSE  
+#> 4 Customers   <NA>    14422   Office… STEELC…    2022       0       0       0       0 N     FALSE  
+#> 5 Cities Inc… VANCOU… 14422   Office… MILLER…    2022       0    5427   20933       0 N     FALSE  
+#> 6 Customers   <NA>    14422   Office… MILLER…    2022       0       0       0       0 N     FALSE  
+#> # … with 2 more variables: small_business <lgl>, diverse_options <lgl>, and abbreviated variable
+#> #   names ¹​customer_type, ²​customer_name, ³​contract_number, ⁴​contract_title, ⁵​vendor_name,
+#> #   ⁶​calendar_year, ⁷​q1_sales_reported, ⁸​q2_sales_reported, ⁹​q3_sales_reported,
+#> #   ˟​q4_sales_reported, ˟​vet_owned
 ```
 
 ### Missing
 
 ``` r
 col_stats(wac, count_na)
-#> # A tibble: 14 x 4
-#>    col               class      n     p
-#>    <chr>             <chr>  <int> <dbl>
-#>  1 customer_type     <chr>      0 0    
-#>  2 customer_name     <chr>  15739 0.126
-#>  3 contract_number   <chr>      0 0    
-#>  4 contract_title    <chr>      0 0    
-#>  5 vendor_name       <chr>      0 0    
-#>  6 calendar_year     <int>      0 0    
-#>  7 q1_sales_reported <dbl>      0 0    
-#>  8 q2_sales_reported <dbl>      0 0    
-#>  9 q3_sales_reported <dbl>      0 0    
-#> 10 q4_sales_reported <dbl>      0 0    
-#> 11 omwbe             <chr> 121988 0.973
-#> 12 vet_owned         <lgl>      0 0    
-#> 13 small_business    <lgl>      0 0    
-#> 14 diverse_options   <lgl>      0 0
+#> # A tibble: 14 × 4
+#>    col               class     n      p
+#>    <chr>             <chr> <int>  <dbl>
+#>  1 customer_type     <chr>     0 0     
+#>  2 customer_name     <chr> 10220 0.0592
+#>  3 contract_number   <chr>     0 0     
+#>  4 contract_title    <chr>     0 0     
+#>  5 vendor_name       <chr>     0 0     
+#>  6 calendar_year     <dbl>     0 0     
+#>  7 q1_sales_reported <dbl>     0 0     
+#>  8 q2_sales_reported <dbl>     0 0     
+#>  9 q3_sales_reported <dbl>     0 0     
+#> 10 q4_sales_reported <dbl>     0 0     
+#> 11 omwbe             <chr>     0 0     
+#> 12 vet_owned         <lgl>     0 0     
+#> 13 small_business    <lgl>     0 0     
+#> 14 diverse_options   <lgl>     0 0
 ```
 
 About 6% of transactions are missing the customer name.
@@ -199,7 +202,7 @@ About 6% of transactions are missing the customer name.
 ``` r
 wac <- wac %>% flag_na(customer_name, vendor_name)
 percent(mean(wac$na_flag), 0.01)
-#> [1] "12.56%"
+#> [1] "5.92%"
 ```
 
 ### Duplicates
@@ -210,52 +213,45 @@ name.
 ``` r
 wac <- flag_dupes(wac, everything())
 sum(wac$dupe_flag)
-#> [1] 54
+#> [1] 4
 ```
 
 ``` r
 wac %>% 
   filter(dupe_flag) %>% 
   select(customer_name, vendor_name, calendar_year)
-#> # A tibble: 54 x 3
-#>    customer_name vendor_name          calendar_year
-#>    <chr>         <chr>                        <int>
-#>  1 <NA>          US ARMOR CORPORATION          2015
-#>  2 <NA>          US ARMOR CORPORATION          2015
-#>  3 <NA>          PITNEY BOWES INC              2015
-#>  4 <NA>          PITNEY BOWES INC              2015
-#>  5 <NA>          PITNEY BOWES INC              2015
-#>  6 <NA>          PITNEY BOWES INC              2015
-#>  7 <NA>          PITNEY BOWES INC              2015
-#>  8 <NA>          PITNEY BOWES INC              2015
-#>  9 <NA>          PITNEY BOWES INC              2015
-#> 10 <NA>          PITNEY BOWES INC              2015
-#> # … with 44 more rows
+#> # A tibble: 4 × 3
+#>   customer_name vendor_name           calendar_year
+#>   <chr>         <chr>                         <dbl>
+#> 1 <NA>          CLARK NUBER P.S.               2015
+#> 2 <NA>          CLARK NUBER P.S.               2015
+#> 3 <NA>          PACWEST MACHINERY LLC          2016
+#> 4 <NA>          PACWEST MACHINERY LLC          2016
 ```
 
 ### Categorical
 
 ``` r
 col_stats(wac, n_distinct)
-#> # A tibble: 16 x 4
+#> # A tibble: 16 × 4
 #>    col               class     n         p
 #>    <chr>             <chr> <int>     <dbl>
-#>  1 customer_type     <chr>    19 0.000152 
-#>  2 customer_name     <chr>  1328 0.0106   
-#>  3 contract_number   <chr>   415 0.00331  
-#>  4 contract_title    <chr>   383 0.00306  
-#>  5 vendor_name       <chr>  2075 0.0166   
-#>  6 calendar_year     <int>     6 0.0000479
-#>  7 q1_sales_reported <dbl> 25099 0.200    
-#>  8 q2_sales_reported <dbl> 24017 0.192    
-#>  9 q3_sales_reported <dbl> 22497 0.179    
-#> 10 q4_sales_reported <dbl> 22210 0.177    
-#> 11 omwbe             <chr>     4 0.0000319
-#> 12 vet_owned         <lgl>     2 0.0000160
-#> 13 small_business    <lgl>     2 0.0000160
-#> 14 diverse_options   <lgl>     2 0.0000160
-#> 15 na_flag           <lgl>     2 0.0000160
-#> 16 dupe_flag         <lgl>     2 0.0000160
+#>  1 customer_type     <chr>    19 0.000110 
+#>  2 customer_name     <chr>  2042 0.0118   
+#>  3 contract_number   <chr>   472 0.00273  
+#>  4 contract_title    <chr>   437 0.00253  
+#>  5 vendor_name       <chr>  2263 0.0131   
+#>  6 calendar_year     <dbl>     8 0.0000463
+#>  7 q1_sales_reported <dbl> 30821 0.178    
+#>  8 q2_sales_reported <dbl> 32536 0.188    
+#>  9 q3_sales_reported <dbl> 30958 0.179    
+#> 10 q4_sales_reported <dbl> 27825 0.161    
+#> 11 omwbe             <chr>     4 0.0000232
+#> 12 vet_owned         <lgl>     2 0.0000116
+#> 13 small_business    <lgl>     2 0.0000116
+#> 14 diverse_options   <lgl>     2 0.0000116
+#> 15 na_flag           <lgl>     2 0.0000116
+#> 16 dupe_flag         <lgl>     2 0.0000116
 ```
 
 ``` r
@@ -264,23 +260,23 @@ wac %>%
   map(~mutate(count(data.frame(x = .x), x), p = n/sum(n)))
 #> $vet_owned
 #>       x      n           p
-#> 1 FALSE 124778 0.995389132
-#> 2  TRUE    578 0.004610868
+#> 1 FALSE 171950 0.995236524
+#> 2  TRUE    823 0.004763476
 #> 
 #> $small_business
 #>       x      n         p
-#> 1 FALSE 111345 0.8882303
-#> 2  TRUE  14011 0.1117697
+#> 1 FALSE 154563 0.8946016
+#> 2  TRUE  18210 0.1053984
 #> 
 #> $diverse_options
-#>       x     n         p
-#> 1 FALSE 85315 0.6805817
-#> 2  TRUE 40041 0.3194183
+#>       x      n         p
+#> 1 FALSE 152520 0.8827768
+#> 2  TRUE  20253 0.1172232
 #> 
 #> $na_flag
-#>       x      n         p
-#> 1 FALSE 109617 0.8744456
-#> 2  TRUE  15739 0.1255544
+#>       x      n          p
+#> 1 FALSE 162553 0.94084724
+#> 2  TRUE  10220 0.05915276
 ```
 
 ### Amounts
@@ -297,9 +293,9 @@ wac <- wac %>%
 ``` r
 summary(wac$amount)
 #>      Min.   1st Qu.    Median      Mean   3rd Qu.      Max. 
-#>   -338208       657      3749     81534     20576 127182875
+#>  -1696864       752      4298     86892     23178 127182875
 percent(mean(wac$amount <= 0), 0.01)
-#> [1] "6.21%"
+#> [1] "5.90%"
 ```
 
 ![](../plots/hist_amount-1.png)<!-- -->
@@ -315,47 +311,103 @@ consistent year to year.
 
 ``` r
 glimpse(wac)
-#> Rows: 125,356
+#> Rows: 172,773
 #> Columns: 17
 #> Rowwise: 
-#> $ customer_type     <chr> "School Districts", "Cities Including Towns", "County", "County", "Cit…
-#> $ customer_name     <chr> "AUBURN SCHOOL DISTRICT 408", "EAST WENATCHEE, CITY OF", "KING COUNTY"…
-#> $ contract_number   <chr> "00111", "00111", "00111", "00111", "00111", "00111", "00111", "00111"…
-#> $ contract_title    <chr> "Fertilizers", "Fertilizers", "Fertilizers", "Fertilizers", "Fertilize…
-#> $ vendor_name       <chr> "WILBUR-ELLIS COMPANY", "WILBUR-ELLIS COMPANY", "WILBUR-ELLIS COMPANY"…
-#> $ calendar_year     <int> 2015, 2015, 2015, 2015, 2015, 2015, 2015, 2015, 2015, 2015, 2015, 2015…
-#> $ q1_sales_reported <dbl> 0, 0, 480, 435, 271, 3176, 135, 3133, 36, 2694, 0, 0, 0, 0, 0, 0, 0, 0…
-#> $ q2_sales_reported <dbl> 0, 0, 529, 0, 271, 0, 196, 2089, 30, 0, 3241, 794, 1604, 6137, 1181, 1…
-#> $ q3_sales_reported <dbl> 271, 4360, 1351, 0, 0, 1588, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 986, 0, 0, …
-#> $ q4_sales_reported <dbl> 0, 0, 11131, 1034, 0, 135, 0, 1031, 0, 0, 2820, 189, 0, 10004, 413, 0,…
-#> $ omwbe             <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
-#> $ vet_owned         <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, …
-#> $ small_business    <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, …
-#> $ diverse_options   <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, …
-#> $ na_flag           <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, …
-#> $ dupe_flag         <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, …
-#> $ amount            <dbl> 271, 4360, 13491, 1469, 542, 4899, 331, 6253, 66, 2694, 6061, 983, 160…
+#> $ customer_type     <chr> "Cities Including Towns", "Higher Ed (State Agency)", "Higher Ed (State…
+#> $ customer_name     <chr> "ISSAQUAH CITY OF", "YAKIMA VALLEY COLLEGE", "COMM COLLEGES OF SPOKANE"…
+#> $ contract_number   <chr> "00111", "00111", "00111", "00111", "00111", "00111", "00111", "00111",…
+#> $ contract_title    <chr> "Fertilizers", "Fertilizers", "Fertilizers", "Fertilizers", "Fertilizer…
+#> $ vendor_name       <chr> "WILBUR-ELLIS COMPANY LLC", "WILBUR-ELLIS COMPANY LLC", "WILBUR-ELLIS C…
+#> $ calendar_year     <dbl> 2015, 2015, 2015, 2015, 2015, 2015, 2015, 2015, 2015, 2015, 2015, 2015,…
+#> $ q1_sales_reported <dbl> 0, 0, 0, 271, 0, 3176, 0, 3133, 2694, 0, 135, 0, 0, 0, 0, 480, 36, 0, 0…
+#> $ q2_sales_reported <dbl> 975, 0, 1604, 271, 3241, 0, 0, 2089, 0, 103, 196, 0, 0, 6137, 0, 529, 3…
+#> $ q3_sales_reported <dbl> 986, 0, 0, 0, 0, 1588, 271, 0, 0, 0, 0, 0, 0, 0, 4360, 1351, 0, 0, 0, 0…
+#> $ q4_sales_reported <dbl> 1986, 1239, 0, 0, 2820, 135, 0, 1031, 0, 0, 0, 368, 252, 10004, 0, 1113…
+#> $ omwbe             <chr> "N", "N", "N", "N", "N", "N", "N", "N", "N", "N", "N", "N", "N", "N", "…
+#> $ vet_owned         <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, F…
+#> $ small_business    <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, F…
+#> $ diverse_options   <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, F…
+#> $ na_flag           <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, F…
+#> $ dupe_flag         <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, F…
+#> $ amount            <dbl> 3947, 1239, 1604, 542, 6061, 4899, 271, 6253, 2694, 103, 331, 368, 252,…
 ```
 
-1.  There are 125,356 records in the database.
-2.  There are 54 duplicate records in the database.
+1.  There are 172,773 records in the database.
+2.  There are 4 duplicate records in the database.
 3.  The range and distribution of `amount` and `date` seem reasonable.
-4.  There are 15,739 records missing a name.
+4.  There are 10,220 records missing a name.
 5.  There is no geographic data to normalize.
 6.  The 4-digit `calendar_year` variable already exists.
 
-## Export
+## Update
 
 ``` r
-clean_dir <- dir_create(here("wa", "contracts", "data", "clean"))
-clean_path <- path(clean_dir, "wa_Contracts_clean.csv")
-write_csv(wac, clean_path, na = "")
-file_size(clean_path)
-#> 18.6M
-guess_encoding(clean_path)
-#> # A tibble: 2 x 2
-#>   encoding   confidence
-#>   <chr>           <dbl>
-#> 1 UTF-8            1   
-#> 2 ISO-8859-1       0.35
+wac_old <- s3read_using(
+  FUN = read_csv,
+  object = "csv/wa_contracts.csv",
+  bucket = "publicaccountability"
+)
+
+wac_old$omwbe[is.na(wac_old$omwbe)] <- "N"
+```
+
+``` r
+wac_new <- wac %>% 
+  filter(calendar_year > 2020)
+```
+
+``` r
+wac_old_2020 <- wac_old %>% 
+  filter(calendar_year == 2020)
+
+wac_new_2020 <- wac %>% 
+  filter(calendar_year == 2020)
+```
+
+``` r
+wac_new <- bind_rows(wac_new, wac_new_2020)
+```
+
+## Export
+
+Now the file can be saved on disk for upload to the Accountability
+server. We will name the object using a date range of the records
+included.
+
+``` r
+clean_dir <- dir_create(here("state", "wa", "contracts", "data", "clean"))
+clean_csv <- path(clean_dir, "wa_contracts_2015-20221129.csv")
+clean_rds <- path_ext_set(clean_csv, "rds")
+basename(clean_csv)
+#> [1] "wa_contracts_2015-20221129.csv"
+```
+
+``` r
+write_csv(wac, clean_csv, na = "")
+write_rds(wac, clean_rds, compress = "xz")
+(clean_size <- file_size(clean_csv))
+#> 25.4M
+```
+
+## Upload
+
+We can use the `aws.s3::put_object()` to upload the text file to the IRW
+server.
+
+``` r
+aws_key <- path("csv", basename(clean_csv))
+if (!object_exists(aws_key, "publicaccountability")) {
+  put_object(
+    file = clean_csv,
+    object = aws_key, 
+    bucket = "publicaccountability",
+    acl = "public-read",
+    show_progress = TRUE,
+    multipart = TRUE
+  )
+}
+aws_head <- head_object(aws_key, "publicaccountability")
+(aws_size <- as_fs_bytes(attr(aws_head, "content-length")))
+unname(aws_size == clean_size)
 ```
