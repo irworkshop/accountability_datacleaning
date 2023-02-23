@@ -1,28 +1,28 @@
 Mississippi Contributions
 ================
-Kiernan Nicholls
-Wed Aug 25 15:19:37 2021
+Kiernan Nicholls & Yanqi Xu
+Tue Feb 21 23:51:11 2023
 
--   [Project](#project)
--   [Objectives](#objectives)
--   [Packages](#packages)
--   [Data](#data)
--   [Download](#download)
--   [Read](#read)
--   [Explore](#explore)
-    -   [Missing](#missing)
-    -   [Duplicates](#duplicates)
-    -   [Categorical](#categorical)
-    -   [Amounts](#amounts)
-    -   [Dates](#dates)
--   [Wrangle](#wrangle)
-    -   [Address](#address)
-    -   [ZIP](#zip)
-    -   [State](#state)
-    -   [City](#city)
--   [Conclude](#conclude)
--   [Export](#export)
--   [Upload](#upload)
+- <a href="#project" id="toc-project">Project</a>
+- <a href="#objectives" id="toc-objectives">Objectives</a>
+- <a href="#packages" id="toc-packages">Packages</a>
+- <a href="#data" id="toc-data">Data</a>
+- <a href="#download" id="toc-download">Download</a>
+- <a href="#read" id="toc-read">Read</a>
+- <a href="#explore" id="toc-explore">Explore</a>
+  - <a href="#missing" id="toc-missing">Missing</a>
+  - <a href="#duplicates" id="toc-duplicates">Duplicates</a>
+  - <a href="#categorical" id="toc-categorical">Categorical</a>
+  - <a href="#amounts" id="toc-amounts">Amounts</a>
+  - <a href="#dates" id="toc-dates">Dates</a>
+- <a href="#wrangle" id="toc-wrangle">Wrangle</a>
+  - <a href="#address" id="toc-address">Address</a>
+  - <a href="#zip" id="toc-zip">ZIP</a>
+  - <a href="#state" id="toc-state">State</a>
+  - <a href="#city" id="toc-city">City</a>
+- <a href="#conclude" id="toc-conclude">Conclude</a>
+- <a href="#export" id="toc-export">Export</a>
+- <a href="#upload" id="toc-upload">Upload</a>
 
 <!-- Place comments regarding knitting here -->
 
@@ -97,7 +97,7 @@ feature and should be run as such. The project also uses the dynamic
 
 ``` r
 # where does this document knit?
-here::i_am("ms/contribs/docs/ms_contribs_diary.Rmd")
+here::i_am("state/ms/contribs/docs/ms_contribs_diary.Rmd")
 ```
 
 ## Data
@@ -108,7 +108,8 @@ portal](https://cfportal.sos.ms.gov/online/portal/cf/page/cf-search/Portal.aspx)
 
 The portal makes two notes:
 
-1.  Only contributions in excess of $200.00 are required to be itemized.
+1.  Only contributions in excess of \$200.00 are required to be
+    itemized.
 2.  (Disclosures submitted prior to 10/1/2016 are located on the
     [Secretary of State’s Campaign Finance Filings
     Search.](http://www.sos.ms.gov/Elections-Voting/Pages/Campaign-Finance-Search.aspx))
@@ -159,7 +160,7 @@ still have the option of filing their reports in person.
 ## Download
 
 ``` r
-raw_dir <- dir_create(here("ms", "contrib", "data", "raw"))
+raw_dir <- dir_create(here("state","ms", "contribs", "data", "raw"))
 raw_json <- path(raw_dir, "ms_contribs.json")
 ```
 
@@ -204,46 +205,51 @@ msc <- type_convert(
     Amount = col_number()
   )
 )
+
+msc %>% write_csv(path(raw_dir, "ms_contribs.csv"))
 ```
 
 ``` r
+msc <- read_csv(path(raw_dir, "ms_contribs.csv"))
 msc <- clean_names(msc, case = "snake")
+msc <- msc %>% mutate(date = as.Date(date, format = "%Y-%m-%d"))
 ```
 
 ## Explore
 
-There are 72,379 rows of 14 columns. Each record represents a single
+There are 80,864 rows of 14 columns. Each record represents a single
 contribution made from an individual to a committee.
 
 ``` r
 glimpse(msc)
-#> Rows: 72,379
+#> Rows: 80,864
 #> Columns: 14
 #> $ recipient        <chr> "Theresa Gillespie Isom for State Rep District 7 Desoto County", "Shane Barnett", "Friends of…
-#> $ reference_number <chr> "CF201915576", "CF20187220", "CF201915596", "CF201915574", "CF201916179", "CF20183616", "CF20…
+#> $ reference_number <chr> "CF201915576", "CF20187220", "CF201915574", "CF201915596", "CF202325926", "CF202222946", "CF2…
 #> $ filing_desc      <chr> "Theresa Gillespie Isom for State Rep Dist 7 Desoto County 7/30/2019 Primary Pre-Election For…
-#> $ filing_id        <chr> "ad3e429a-bac7-48b0-811d-985000b0f84a", "728df378-2bd1-4676-8c6c-ffcd2b5af491", "fc04cabf-c06…
-#> $ contributor      <chr> "Phillip Bowden", "Contene", "Dawn McLeod", "Dawn McLeod", "Paul McCulloch", "Thomas D. Fried…
-#> $ contributor_type <chr> "Individual", "Corporation", "Individual", "Individual", "Individual", "Individual", "Individ…
+#> $ filing_id        <chr> "ad3e429a-bac7-48b0-811d-985000b0f84a", "728df378-2bd1-4676-8c6c-ffcd2b5af491", "e57a19cf-5d6…
+#> $ contributor      <chr> "Phillip Bowden", "Contene", "Dawn McLeod", "Dawn McLeod", "Dr James Nicholson", "Jo P Deal",…
+#> $ contributor_type <chr> "Individual", "Corporation", "Individual", "Individual", "Individual", "Corporation", "Indivi…
 #> $ address_line1    <chr> "6005 Willow Oaks Dr", "7700 Forsyth Boulevard", "12224 Rebekah Drive", "12224 Rebekah Drive"…
-#> $ city             <chr> "Memphis", "St Louis", "Gulfport", "Gulfport", "Zephyr Cove", "Houston", "Yazoo City", "Jacks…
-#> $ state_code       <chr> "TN", "MO", "MS", "MS", "NV", "TX", "MS", "MS", "MS", "MS", "MS", "MS", "MS", "MS", "MS", "MS…
-#> $ postal_code      <chr> "38120", "39367", "39503", "39503", "89448", "77077", "39194", "39225-4355", "39110", "38121"…
-#> $ in_kind          <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
-#> $ occupation       <chr> "Doctor", "N/A", "Coast Waterworks, Inc.", "Coast Waterworks, Inc.", "Computador/ Apex Comput…
-#> $ date             <dttm> 2019-07-23, 2018-11-14, 2019-07-22, 2019-07-22, 2019-07-28, 2017-12-07, 2019-08-10, 2019-08-…
-#> $ amount           <dbl> 2.50e+02, 5.00e+02, 5.00e+02, 5.00e+02, 1.47e+00, 2.50e+03, 1.50e+03, 1.20e+06, 3.00e+02, 1.0…
+#> $ city             <chr> "Memphis", "St Louis", "Gulfport", "Gulfport", "Hattiesburg", "Jackson", "Zephyr Cove", "Jack…
+#> $ state_code       <chr> "TN", "MO", "MS", "MS", "MS", "MS", "NV", "MS", "MS", "TX", "MS", "MS", "MS", "MS", "MS", "MS…
+#> $ postal_code      <chr> "38120", "39367", "39503", "39503", "39401-7151", "39216", "89448", "39216", "38732", "77077"…
+#> $ in_kind          <lgl> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
+#> $ occupation       <chr> "Doctor", "N/A", "Coast Waterworks, Inc.", "Coast Waterworks, Inc.", "Self-Employed", "St Dom…
+#> $ date             <date> 2019-07-23, 2018-11-14, 2019-07-22, 2019-07-22, 2022-12-02, 2021-10-05, 2019-07-28, 2021-06-…
+#> $ amount           <dbl> 2.50e+02, 5.00e+02, 5.00e+02, 5.00e+02, 5.00e+02, 2.00e+02, 1.47e+00, 2.50e+02, 2.00e+02, 2.5…
 tail(msc)
 #> # A tibble: 6 × 14
-#>   recipient           reference_number filing_desc filing_id contributor contributor_type address_line1 city  state_code
-#>   <chr>               <chr>            <chr>       <chr>     <chr>       <chr>            <chr>         <chr> <chr>     
-#> 1 Tate for Governor   CF201918472      Tate for G… 12a4c851… Zurich Ame… Corporation      1299 Zurich … Scha… IL        
-#> 2 Tate for Governor   CF202019635      Tate for G… 54b0b8bf… Zurich Ame… Corporation      1299 Zurich … Scha… IL        
-#> 3 ActBlue Mississippi CF201910418      ActBlue Mi… b74199f0… ZVOSEC, DE… Individual       4741 HUMBOLD… MINN… MN        
-#> 4 ActBlue Mississippi CF201910418      ActBlue Mi… b74199f0… ZWEGO, JEF… Individual       15032 W. 146… OLAT… KS        
-#> 5 ActBlue Mississippi CF201910417      ActBlue Mi… 01d43326… ZWIEBEL, G… Individual       5311 E. HINS… CENT… CO        
-#> 6 ActBlue Mississippi CF201910417      ActBlue Mi… 01d43326… ZWIER-SWAN… Individual       322 GILLETT … WAUK… IL        
-#> # … with 5 more variables: postal_code <chr>, in_kind <chr>, occupation <chr>, date <dttm>, amount <dbl>
+#>   recipient      refer…¹ filin…² filin…³ contr…⁴ contr…⁵ addre…⁶ city  state…⁷ posta…⁸ in_kind occup…⁹ date       amount
+#>   <chr>          <chr>   <chr>   <chr>   <chr>   <chr>   <chr>   <chr> <chr>   <chr>   <lgl>   <chr>   <date>      <dbl>
+#> 1 Tate for Gove… CF2020… Tate f… 54b0b8… Zurich… Corpor… 1299 Z… Scha… IL      60196-… NA      <NA>    2019-10-11   1000
+#> 2 Tate for Gove… CF2019… Tate f… 12a4c8… Zurich… Corpor… 1299 Z… Scha… IL      60196-… NA      <NA>    2019-10-11   1000
+#> 3 ActBlue Missi… CF2019… ActBlu… b74199… ZVOSEC… Indivi… 4741 H… MINN… MN      55419   NA      MEDICA… 2019-10-29     10
+#> 4 ActBlue Missi… CF2019… ActBlu… b74199… ZWEGO,… Indivi… 15032 … OLAT… KS      66062   NA      ENGINE… 2019-11-01     10
+#> 5 ActBlue Missi… CF2019… ActBlu… 01d433… ZWIEBE… Indivi… 5311 E… CENT… CO      80122   NA      RN      2019-10-23     50
+#> 6 ActBlue Missi… CF2019… ActBlu… 01d433… ZWIER-… Indivi… 322 GI… WAUK… IL      60085   NA      PIANO … 2019-10-23     18
+#> # … with abbreviated variable names ¹​reference_number, ²​filing_desc, ³​filing_id, ⁴​contributor, ⁵​contributor_type,
+#> #   ⁶​address_line1, ⁷​state_code, ⁸​postal_code, ⁹​occupation
 ```
 
 ### Missing
@@ -261,13 +267,13 @@ col_stats(msc, count_na)
 #>  4 filing_id        <chr>      0 0       
 #>  5 contributor      <chr>      0 0       
 #>  6 contributor_type <chr>      0 0       
-#>  7 address_line1    <chr>     51 0.000705
-#>  8 city             <chr>     94 0.00130 
-#>  9 state_code       <chr>     96 0.00133 
-#> 10 postal_code      <chr>    157 0.00217 
-#> 11 in_kind          <chr>  72371 1.00    
-#> 12 occupation       <chr>   8278 0.114   
-#> 13 date             <dttm>     0 0       
+#>  7 address_line1    <chr>     52 0.000643
+#>  8 city             <chr>     94 0.00116 
+#>  9 state_code       <chr>     96 0.00119 
+#> 10 postal_code      <chr>    157 0.00194 
+#> 11 in_kind          <lgl>  80864 1       
+#> 12 occupation       <chr>   8952 0.111   
+#> 13 date             <date>     0 0       
 #> 14 amount           <dbl>      0 0
 ```
 
@@ -288,7 +294,7 @@ We can also flag any record completely duplicated across every column.
 ``` r
 msc <- flag_dupes(msc, everything())
 sum(msc$dupe_flag)
-#> [1] 999
+#> [1] 1599
 ```
 
 ``` r
@@ -296,20 +302,20 @@ msc %>%
   filter(dupe_flag) %>% 
   select(all_of(key_vars)) %>% 
   arrange(date)
-#> # A tibble: 999 × 4
-#>    date                contributor                amount recipient             
-#>    <dttm>              <chr>                       <dbl> <chr>                 
-#>  1 2009-06-22 00:00:00 Gouras & Associates           250 Friends of Phil Bryant
-#>  2 2009-06-22 00:00:00 Gouras & Associates           250 Friends of Phil Bryant
-#>  3 2009-07-16 00:00:00 MS Assoc of Realtors         1000 Friends of Phil Bryant
-#>  4 2009-07-16 00:00:00 MS Assoc of Realtors         1000 Friends of Phil Bryant
-#>  5 2009-07-17 00:00:00 Desoto Co Republican Party    525 Friends of Phil Bryant
-#>  6 2009-07-17 00:00:00 Desoto Co Republican Party    525 Friends of Phil Bryant
-#>  7 2009-07-17 00:00:00 Dr. Jason K. Coleman         1000 Friends of Phil Bryant
-#>  8 2009-07-17 00:00:00 Dr. Jason K. Coleman         1000 Friends of Phil Bryant
-#>  9 2009-07-31 00:00:00 Denbury Resources PAC        2000 Friends of Phil Bryant
-#> 10 2009-07-31 00:00:00 Denbury Resources PAC        2000 Friends of Phil Bryant
-#> # … with 989 more rows
+#> # A tibble: 1,599 × 4
+#>    date       contributor                amount recipient             
+#>    <date>     <chr>                       <dbl> <chr>                 
+#>  1 2009-06-22 Gouras & Associates           250 Friends of Phil Bryant
+#>  2 2009-06-22 Gouras & Associates           250 Friends of Phil Bryant
+#>  3 2009-07-16 MS Assoc of Realtors         1000 Friends of Phil Bryant
+#>  4 2009-07-16 MS Assoc of Realtors         1000 Friends of Phil Bryant
+#>  5 2009-07-17 Desoto Co Republican Party    525 Friends of Phil Bryant
+#>  6 2009-07-17 Desoto Co Republican Party    525 Friends of Phil Bryant
+#>  7 2009-07-17 Dr. Jason K. Coleman         1000 Friends of Phil Bryant
+#>  8 2009-07-17 Dr. Jason K. Coleman         1000 Friends of Phil Bryant
+#>  9 2009-07-31 Denbury Resources PAC        2000 Friends of Phil Bryant
+#> 10 2009-07-31 Denbury Resources PAC        2000 Friends of Phil Bryant
+#> # … with 1,589 more rows
 ```
 
 ### Categorical
@@ -319,37 +325,38 @@ col_stats(msc, n_distinct)
 #> # A tibble: 16 × 4
 #>    col              class      n         p
 #>    <chr>            <chr>  <int>     <dbl>
-#>  1 recipient        <chr>    358 0.00495  
-#>  2 reference_number <chr>   2056 0.0284   
-#>  3 filing_desc      <chr>   1748 0.0242   
-#>  4 filing_id        <chr>   2056 0.0284   
-#>  5 contributor      <chr>  34208 0.473    
-#>  6 contributor_type <chr>     72 0.000995 
-#>  7 address_line1    <chr>  32754 0.453    
-#>  8 city             <chr>   4662 0.0644   
-#>  9 state_code       <chr>     77 0.00106  
-#> 10 postal_code      <chr>  10380 0.143    
-#> 11 in_kind          <chr>      9 0.000124 
-#> 12 occupation       <chr>   7275 0.101    
-#> 13 date             <dttm>  2331 0.0322   
-#> 14 amount           <dbl>   1834 0.0253   
-#> 15 na_flag          <lgl>      1 0.0000138
-#> 16 dupe_flag        <lgl>      2 0.0000276
+#>  1 recipient        <chr>    400 0.00495  
+#>  2 reference_number <chr>   2299 0.0284   
+#>  3 filing_desc      <chr>   1987 0.0246   
+#>  4 filing_id        <chr>   2299 0.0284   
+#>  5 contributor      <chr>  36962 0.457    
+#>  6 contributor_type <chr>     80 0.000989 
+#>  7 address_line1    <chr>  35257 0.436    
+#>  8 city             <chr>   4797 0.0593   
+#>  9 state_code       <chr>     77 0.000952 
+#> 10 postal_code      <chr>  10777 0.133    
+#> 11 in_kind          <lgl>      1 0.0000124
+#> 12 occupation       <chr>   8052 0.0996   
+#> 13 date             <date>  2722 0.0337   
+#> 14 amount           <dbl>   1911 0.0236   
+#> 15 na_flag          <lgl>      1 0.0000124
+#> 16 dupe_flag        <lgl>      2 0.0000247
 ```
 
 ### Amounts
 
-As noted on the portal page, only contributions above $200 need to be
-itemized. Just over half of all contributions in the data are over $200.
+As noted on the portal page, only contributions above \$200 need to be
+itemized. Just over half of all contributions in the data are over
+\$200.
 
 ``` r
 summary(msc$amount)
 #>    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
-#>       0      20     200    1614     500 3200000
+#>       0      20     208    1750     500 3200000
 mean(msc$amount <= 0)
-#> [1] 0.0001381616
+#> [1] 0.0002102295
 mean(msc$amount >= 200)
-#> [1] 0.5084071
+#> [1] 0.5212084
 ```
 
 These are the records with the minimum and maximum amounts.
@@ -358,19 +365,19 @@ These are the records with the minimum and maximum amounts.
 glimpse(msc[c(which.max(msc$amount), which.min(msc$amount)), ])
 #> Rows: 2
 #> Columns: 16
-#> $ recipient        <chr> "Tate for Governor", "Brent Bailey for MPSC"
-#> $ reference_number <chr> "CF201916965", "CF201918760"
-#> $ filing_desc      <chr> "Tate for Governor 8/20/2019 Primary Runoff Pre-Election Form Filing- Amended", "Brent Bailey…
-#> $ filing_id        <chr> "3852a8ff-1848-491b-8d54-24dc19dfed89", "a67d7fb6-992d-4447-bb2f-b350d3d0ced2"
-#> $ contributor      <chr> "Tate Reeves", "Ben James"
-#> $ contributor_type <chr> "Other", "Other"
-#> $ address_line1    <chr> "PO Box 24355", "1700 N 7th Ave"
-#> $ city             <chr> "Jackson", "Laurel"
+#> $ recipient        <chr> "Tate for Governor", "CWA-COPE PAC"
+#> $ reference_number <chr> "CF201916965", "CF202224856"
+#> $ filing_desc      <chr> "Tate for Governor 8/20/2019 Primary Runoff Pre-Election Form Filing- Amended", "CWA-COPE PAC…
+#> $ filing_id        <chr> "3852a8ff-1848-491b-8d54-24dc19dfed89", "616cf54a-e662-4239-bc9e-05fe7f5de87d"
+#> $ contributor      <chr> "Tate Reeves", "ALLYSON GALLOWAY"
+#> $ contributor_type <chr> "Other", "Individual"
+#> $ address_line1    <chr> "PO Box 24355", "5336 SPORTSMAN DR."
+#> $ city             <chr> "Jackson", "NESBIT"
 #> $ state_code       <chr> "MS", "MS"
-#> $ postal_code      <chr> "39225-4355", "39440"
-#> $ in_kind          <chr> NA, "Luncheon"
-#> $ occupation       <chr> "Unknown", NA
-#> $ date             <dttm> 2019-08-09, 2019-11-04
+#> $ postal_code      <chr> "39225-4355", "38651"
+#> $ in_kind          <lgl> NA, NA
+#> $ occupation       <chr> "Unknown", "ATT MOBILITY/ CINGULAR"
+#> $ date             <date> 2019-08-09, 2022-08-16
 #> $ amount           <dbl> 3200000, 0
 #> $ na_flag          <lgl> FALSE, FALSE
 #> $ dupe_flag        <lgl> FALSE, FALSE
@@ -388,13 +395,17 @@ msc <- mutate(msc, year = year(date))
 
 ``` r
 min(msc$date)
-#> [1] "2001-01-29 UTC"
+#> [1] "2001-01-29"
 sum(msc$year < 2000)
 #> [1] 0
 max(msc$date)
-#> [1] "2025-03-26 UTC"
+#> [1] "2025-03-26"
 sum(msc$date > today())
-#> [1] 3
+#> [1] 2
+```
+
+``` r
+msc <- msc %>% filter(date <= as.Date("2023-01-28"))
 ```
 
 ![](../plots/bar_year-1.png)<!-- -->
@@ -429,18 +440,18 @@ msc %>%
   distinct() %>% 
   sample_n(10)
 #> # A tibble: 10 × 2
-#>    address_line1                            address_norm                           
-#>    <chr>                                    <chr>                                  
-#>  1 40260 Lackey Road                        40260 LACKEY RD                        
-#>  2 3166 WINDCREST DR NE                     3166 WINDCREST DR NE                   
-#>  3 2302 ORCHARD RD.                         2302 ORCHARD RD                        
-#>  4 4201 Cathedral Avenue Northwest, Apt 404 4201 CATHEDRAL AVENUE NORTHWEST APT 404
-#>  5 2078 Lake Washington Rd E                2078 LAKE WASHINGTON RD E              
-#>  6 1407 Greenway Cove                       1407 GREENWAY CV                       
-#>  7 509 Arbor Drive                          509 ARBOR DR                           
-#>  8 429 S Katherine Drive                    429 S KATHERINE DR                     
-#>  9 1220 Highland Colony Pkwy                1220 HIGHLAND COLONY PKWY              
-#> 10 167 S FOUNDERS CT                        167 S FOUNDERS CT
+#>    address_line1                address_norm                
+#>    <chr>                        <chr>                       
+#>  1 5182 DORY COURT NORTH        5182 DORY COURT N           
+#>  2 169 Pine Hill Drive          169 PINE HILL DR            
+#>  3 2734 Quail Run Road          2734 QUAIL RUN RD           
+#>  4 6721 WASHINGTON AVE APT 25 E 6721 WASHINGTON AVE APT 25 E
+#>  5 240 Westover Dr              240 WESTOVER DR             
+#>  6 5255 MANHATTAN RD.           5255 MANHATTAN RD           
+#>  7 1490 Highland Colony Pkwy    1490 HIGHLAND COLONY PKWY   
+#>  8 16164 HWY 432                16164 HWY 432               
+#>  9 P. O. Box 441887             P O BOX 441887              
+#> 10 4792 MILITARY ROAD           4792 MILITARY RD
 ```
 
 ### ZIP
@@ -468,8 +479,8 @@ progress_table(
 #> # A tibble: 2 × 6
 #>   stage           prop_in n_distinct prop_na n_out n_diff
 #>   <chr>             <dbl>      <dbl>   <dbl> <dbl>  <dbl>
-#> 1 msc$postal_code   0.719      10380 0.00217 20321   5522
-#> 2 msc$zip_norm      0.966       6736 0.00307  2474   1183
+#> 1 msc$postal_code   0.717      10777 0.00194 22820   5797
+#> 2 msc$zip_norm      0.968       6864 0.00276  2541   1196
 ```
 
 ### State
@@ -510,8 +521,8 @@ progress_table(
 #> # A tibble: 2 × 6
 #>   stage          prop_in n_distinct prop_na n_out n_diff
 #>   <chr>            <dbl>      <dbl>   <dbl> <dbl>  <dbl>
-#> 1 msc$state_code    1.00         77 0.00133    32     19
-#> 2 msc$state_norm    1            58 0.00170     0      1
+#> 1 msc$state_code    1.00         77 0.00119    32     19
+#> 2 msc$state_norm    1            59 0.00148     0      1
 ```
 
 ### City
@@ -611,21 +622,22 @@ good_refine <- msc %>%
   )
 ```
 
-    #> # A tibble: 12 × 5
-    #>    state_norm zip_norm city_swap                city_refine       n
-    #>    <chr>      <chr>    <chr>                    <chr>         <int>
-    #>  1 MS         39540    D LBERVILLE              DIBERVILLE       12
-    #>  2 MS         39167    STARSTAR                 STAR              3
-    #>  3 CA         94117    SAN FRANSICO             SAN FRANCISCO     1
-    #>  4 FL         33483    DELRAY BEACHDELRAY BEACH DELRAY BEACH      1
-    #>  5 GA         30005    ALPHARARETTA             ALPHARETTA        1
-    #>  6 GA         30577    TOCCATA                  TOCCOA            1
-    #>  7 LA         70119    NEW ORLEANS LA           NEW ORLEANS       1
-    #>  8 MO         65201    COLUMBIA MO              COLUMBIA          1
-    #>  9 MS         38664    ROBBINSVILLE             ROBINSONVILLE     1
-    #> 10 MS         39465    PATEL                    PETAL             1
-    #> 11 PA         19130    PHILADELPHIA PA          PHILADELPHIA      1
-    #> 12 VA         22309    ALEXANDRIA NDRIA         ALEXANDRIA        1
+    #> # A tibble: 13 × 5
+    #>    state_norm zip_norm city_swap                city_refine           n
+    #>    <chr>      <chr>    <chr>                    <chr>             <int>
+    #>  1 MS         39167    STARSTAR                 STAR                  3
+    #>  2 OH         45209    CINCINATTI               CINCINNATI            2
+    #>  3 CA         94117    SAN FRANSICO             SAN FRANCISCO         1
+    #>  4 FL         32082    PONTE VERDE BEACH        PONTE VEDRA BEACH     1
+    #>  5 FL         33483    DELRAY BEACHDELRAY BEACH DELRAY BEACH          1
+    #>  6 GA         30005    ALPHARARETTA             ALPHARETTA            1
+    #>  7 GA         30577    TOCCATA                  TOCCOA                1
+    #>  8 LA         70119    NEW ORLEANS LA           NEW ORLEANS           1
+    #>  9 MO         65201    COLUMBIA MO              COLUMBIA              1
+    #> 10 MS         38664    ROBBINSVILLE             ROBINSONVILLE         1
+    #> 11 MS         39465    PATEL                    PETAL                 1
+    #> 12 PA         19130    PHILADELPHIA PA          PHILADELPHIA          1
+    #> 13 VA         22309    ALEXANDRIA NDRIA         ALEXANDRIA            1
 
 Then we can join the refined values back to the database.
 
@@ -641,12 +653,12 @@ Our goal for normalization was to increase the proportion of city values
 known to be valid and reduce the total distinct values by correcting
 misspellings.
 
-| stage                    | prop\_in | n\_distinct | prop\_na | n\_out | n\_diff |
-|:-------------------------|---------:|------------:|---------:|-------:|--------:|
-| `str_to_upper(msc$city)` |    0.975 |        3676 |    0.001 |   1800 |     599 |
-| `msc$city_norm`          |    0.978 |        3594 |    0.002 |   1576 |     501 |
-| `msc$city_swap`          |    0.989 |        3330 |    0.002 |    759 |     220 |
-| `msc$city_refine`        |    0.990 |        3318 |    0.002 |    735 |     209 |
+| stage                    | prop_in | n_distinct | prop_na | n_out | n_diff |
+|:-------------------------|--------:|-----------:|--------:|------:|-------:|
+| `str_to_upper(msc$city)` |   0.975 |       3772 |   0.001 |  2009 |    641 |
+| `msc$city_norm`          |   0.978 |       3690 |   0.001 |  1777 |    544 |
+| `msc$city_swap`          |   0.990 |       3399 |   0.001 |   768 |    234 |
+| `msc$city_refine`        |   0.991 |       3386 |   0.001 |   753 |    222 |
 
 You can see how the percentage of valid values increased with each
 stage.
@@ -680,31 +692,31 @@ msc <- msc %>%
 glimpse(sample_n(msc, 50))
 #> Rows: 50
 #> Columns: 21
-#> $ recipient        <chr> "ActBlue Mississippi", "Mississippi Medical PAC", "Liberty Mutual Insurance Company PAC", "Fr…
-#> $ reference_number <chr> "CF201910416", "CF202121583", "CF201917330", "CFL0004767", "CFL0004767", "CF202020199", "CF20…
-#> $ filing_desc      <chr> "ActBlue Mississippi State/District 10/10/2019 Periodic Report", "Mississippi Medical PAC  1/…
-#> $ filing_id        <chr> "066d93ca-c8f6-4427-b49b-21dcafd0ca76", "a8f8039f-eadb-40e6-9461-8ff1ebb01862", "0a7770cf-074…
-#> $ contributor      <chr> "JONES, GRACE", "Lee Voulters", "Ross A Powell", "Mr. Larry McAlexander", "Dees Management Gr…
-#> $ contributor_type <chr> "Individual", "Individual", "Individual", "Individual", "Corporation", "Individual", "Individ…
-#> $ address_line1    <chr> "60 CR 116", "1340 Broad Ave Ste 440", "7900 Windrose Ave", "Post Office Box 1041", "8440 Blu…
-#> $ city             <chr> "CORINTH", "Gulfport", "Plano", "Oxford", "Baton Rouge", "Jackson", "Ridgeland", "FRESNO", "I…
-#> $ state_code       <chr> "MS", "MS", "TX", "MS", "LA", "MS", "MS", "CA", "IN", "MS", "CA", "MS", "IL", "FL", "TX", "MS…
-#> $ postal_code      <chr> "38834", "39501-2460", "75024-0266", "38655", "70810", "39211", "39180", "93711", "46240-3702…
-#> $ in_kind          <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
-#> $ occupation       <chr> "NOT EMPLOYED", "Memorial Hospital", "Sr Claims Field Manager", "Owner", NA, "Physician", "Ba…
-#> $ date             <dttm> 2019-09-18 00:00:00, 2020-01-26 00:00:00, 2019-12-20 00:00:00, 2010-12-06 00:00:00, 2010-10-…
-#> $ amount           <dbl> 2.00, 208.33, 29.70, 5000.00, 1000.00, 250.00, 90.00, 1.43, 27.63, 250.00, 39.03, 400.00, 250…
+#> $ recipient        <chr> "MADA AUTOPAC", "ActBlue Mississippi", "Tate for Governor", "Friends of Phil Bryant", "ActBlu…
+#> $ reference_number <chr> "CF201911454", "CF201910417", "CF201918472", "CFL0004769", "CF201910417", "CF201918867", "CF2…
+#> $ filing_desc      <chr> "MADA AUTOPAC State/District 10/10/2019 Periodic Report", "ActBlue Mississippi State/District…
+#> $ filing_id        <chr> "11b68637-7f67-4f1a-a9e2-7b77b10e55d4", "01d43326-d40b-45ec-abbf-2792a5fd74bf", "12a4c851-e77…
+#> $ contributor      <chr> "David Kelly", "BASS, STEPHANIE", "Dennis Debar", "Tony Jeff", "CHILDERS, TRAVIS", "Ronald Da…
+#> $ contributor_type <chr> "Individual", "Individual", "Campaign Committee", "Individual", "Individual", "Individual", "…
+#> $ address_line1    <chr> "11619 Bobby Eleuterius Blvd.", "7831 WING SPAN DR", "PO Box 1090", "3 East Bluff Drive", "10…
+#> $ city             <chr> "D'Iberville", "SAN DIEGO", "Leakesville", "Brandon", "BOONEVILLE", "Oklahoma City", "Madison…
+#> $ state_code       <chr> "MS", "CA", "MS", "MS", "MS", "OK", "MS", "MS", "AL", "MA", "UT", "MS", "MS", "WA", "CA", "MS…
+#> $ postal_code      <chr> "39540", "92119", "39451-1090", "39047", "38829", "73134-2632", "39130-1909", "39402", "36693…
+#> $ in_kind          <lgl> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
+#> $ occupation       <chr> "Dealer Principle", "NOT EMPLOYED", NA, "COO", "REAL ESTATE BROKER", "Director, Distribution"…
+#> $ date             <date> 2019-07-17, 2019-10-26, 2019-10-12, 2008-11-07, 2019-10-11, 2019-08-16, 2020-02-28, 2022-03-…
+#> $ amount           <dbl> 50.00, 5.00, 1000.00, 500.00, 250.00, 39.84, 6.00, 10.00, 25.00, 159.81, 195.00, 5.00, 50.00,…
 #> $ na_flag          <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FA…
-#> $ dupe_flag        <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, TRUE, TRUE, FALS…
-#> $ year             <dbl> 2019, 2020, 2019, 2010, 2010, 2020, 2020, 2019, 2019, 2019, 2019, 2017, 2019, 2019, 2019, 201…
-#> $ address_clean    <chr> "60 CR 116", "1340 BROAD AVE STE 440", "7900 WINDROSE AVE", "POST OFFICE BOX 1041", "8440 BLU…
-#> $ city_clean       <chr> "CORINTH", "GULFPORT", "PLANO", "OXFORD", "BATON ROUGE", "JACKSON", "RIDGELAND", "FRESNO", "I…
-#> $ state_clean      <chr> "MS", "MS", "TX", "MS", "LA", "MS", "MS", "CA", "IN", "MS", "CA", "MS", "IL", "FL", "TX", "MS…
-#> $ zip_clean        <chr> "38834", "39501", "75024", "38655", "70810", "39211", "39180", "93711", "46240", "38655", "92…
+#> $ dupe_flag        <lgl> FALSE, FALSE, FALSE, FALSE, TRUE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FAL…
+#> $ year             <dbl> 2019, 2019, 2019, 2008, 2019, 2019, 2020, 2022, 2019, 2019, 2019, 2018, 2019, 2019, 2019, 201…
+#> $ address_clean    <chr> "11619 BOBBY ELEUTERIUS BLVD", "7831 WING SPAN DR", "PO BOX 1090", "3 EAST BLUFF DR", "100 GR…
+#> $ city_clean       <chr> "DIBERVILLE", "SAN DIEGO", "LEAKESVILLE", "BRANDON", "BOONEVILLE", "OKLAHOMA CITY", "MADISON"…
+#> $ state_clean      <chr> "MS", "CA", "MS", "MS", "MS", "OK", "MS", "MS", "AL", "MA", "UT", "MS", "MS", "WA", "CA", "MS…
+#> $ zip_clean        <chr> "39540", "92119", "39451", "39047", "38829", "73134", "39130", "39402", "36693", "02116", "84…
 ```
 
-1.  There are 72,379 records in the database.
-2.  There are 999 duplicate records in the database.
+1.  There are 80,862 records in the database.
+2.  There are 1,599 duplicate records in the database.
 3.  The range and distribution of `amount` and `date` seem reasonable.
 4.  There are 0 records missing key variables.
 5.  Consistency in geographic data has been improved with
@@ -718,11 +730,11 @@ Now the file can be saved on disk for upload to the Accountability
 server.
 
 ``` r
-clean_dir <- dir_create(here("ms", "contribs", "data", "clean"))
-clean_path <- path(clean_dir, "ms_contribs_20161001-20210825.csv")
+clean_dir <- dir_create(here("state","ms", "contribs", "data", "clean"))
+clean_path <- path(clean_dir, "ms_contribs_20161001-20230128.csv")
 write_csv(msc, clean_path, na = "")
 (clean_size <- file_size(clean_path))
-#> 20.5M
+#> 22.1M
 ```
 
 ## Upload

@@ -1,6 +1,6 @@
 ---
 title: "Delaware Contributions"
-author: "Kiernan Nicholls"
+author: "Kiernan Nicholls & Yanqi Xu"
 date: "`r Sys.time()`"
 output:
   github_document: 
@@ -149,13 +149,13 @@ of one responsible party for the organization.
 We can use the search portal to find all record from 1975 to the current date.
 
 ```{r raw_dir}
-raw_dir <- dir_create(here("de", "contribs", "data", "raw"))
+raw_dir <- dir_create(here("state","de", "contribs", "data", "raw"))
 raw_path <- path(raw_dir, "ViewContributionsList.csv")
 ```
 
 First, we submit an `httr::POST()` request with all fields but the dates empty.
 
-```{r raw_post}
+```{r raw_post, eval=FALSE}
 de_post <- POST(
   url = "https://cfrs.elections.delaware.gov/Public/ViewReceipts",
   body = list(
@@ -172,8 +172,8 @@ de_post <- POST(
     ddlState = "",
     txtZipCode = "",
     txtZipExt = "",
-    dtStartDate = "01/01/1975",
-    dtEndDate = format(today(), "%m/%d/%Y"),
+    dtStartDate = "10/05/2020",
+    dtEndDate = format(today(), "11/27/2022"),
     txtAmountRangeFrom = "",
     txtAmountRangeTo = "",
     ddlOffice = "",
@@ -194,12 +194,12 @@ de_post <- POST(
 
 Then, we use the cookies from that POST to make an `httr::GET()` request.
 
-```{r raw_cookies}
+```{r raw_cookies, eval=FALSE}
 de_cook <- cookies(de_post)$value
 names(de_cook) <- cookies(de_post)$name
 ```
 
-```{r raw_get}
+```{r raw_get, eval=FALSE}
 if (!file_exists(raw_path) | file_size(raw_path) < "50M") {
   de_get <- GET(
     url = "https://cfrs.elections.delaware.gov/Public/ExportCSVNew",
@@ -241,7 +241,7 @@ dec <- read_delim(
   escape_double = FALSE,
   col_types = cols(
     .default = col_character(),
-    `Contribution Date` = col_date_usa(),
+    `Contribution Date` = col_date_mdy(),
     `Contribution Amount` = col_double()
   )
 )
@@ -347,7 +347,7 @@ dec %>%
   ) +
   labs(
     title = "Delaware Contributions Amount Distribution",
-    subtitle = "from 2000 to 2019",
+    subtitle = "from 2020 to 2022",
     caption = "Source: {source}",
     x = "Amount",
     y = "Count"
@@ -696,8 +696,8 @@ glimpse(sample_n(dec, 100))
 ## Export
 
 ```{r clean_dir}
-clean_dir <- dir_create(here("de", "contribs", "data", "clean"))
-clean_path <- path(clean_dir, "de_contribs_clean.csv")
+clean_dir <- dir_create(here("state","de", "contribs", "data", "clean"))
+clean_path <- path(clean_dir, "de_contribs_clean_20201005-20221127.csv")
 write_csv(dec, clean_path, na = "")
 (clean_size <- file_size(clean_path))
 file_encoding(clean_path) %>% 
@@ -716,7 +716,7 @@ read_lines(clean_path) %>%
 
 We can use the `aws.s3::put_object()` to upload the text file to the IRW server.
 
-```{r s3_upload, eval=TRUE}
+```{r s3_upload, eval=FALSE}
 s3_path <- path("csv", basename(clean_path))
 if (!object_exists(s3_path, "publicaccountability")) {
   put_object(

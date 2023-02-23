@@ -135,7 +135,7 @@ We will scrape the download page for every archive link, then downloading each
 to a local directory.
 
 ```{r download_raw}
-raw_dir <- dir_create(here("id", "contribs", "data", "raw"))
+raw_dir <- dir_create(here("state","id", "contribs", "data", "raw"))
 raw_base <- "https://sos.idaho.gov/elect/finance/downloads.html"
 raw_page <- read_html(raw_base)
 raw_urls <- raw_page %>% 

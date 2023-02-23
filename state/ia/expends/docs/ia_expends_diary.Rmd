@@ -1,6 +1,6 @@
 ---
 title: "Iowa Expenditures"
-author: "Kiernan Nicholls"
+author: "Kiernan Nicholls & Yanqi Xu"
 date: "`r Sys.time()`"
 output:
   github_document: 
@@ -16,19 +16,18 @@ editor_options:
 ```{r setup, include=FALSE, purl=FALSE}
 library(knitr)
 opts_chunk$set(
-  eval = FALSE,
+  eval = TRUE,
   echo = TRUE,
   warning = FALSE,
   message = FALSE,
   error = FALSE,
-  collapse = TRUE,
   comment = "#>",
   fig.path = "../plots/",
-  fig.width = 10,
+  fig.width = 9,
+  fig.height = 5,
   dpi = 300
 )
 options(width = 99)
-set.seed(5)
 ```
 
 ```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
@@ -69,21 +68,27 @@ these results. The `pacman` package will facilitate their installation and attac
 The IRW's `campfin` package will also have to be installed from GitHub. This package contains
 functions custom made to help facilitate the processing of campaign finance data.
 
-```{r load_packages, message=FALSE, dfrning=FALSE, error=FALSE}
-if (!require("pacman")) install.packages("pacman")
-pacman::p_load_gh("irworkshop/campfin")
+```{r p_load, message=FALSE, warning=FALSE, error=FALSE}
+pacman::p_load_gh("VerbalExpressions/RVerbalExpressions")
+pacman::p_load_current_gh("irworkshop/campfin")
 pacman::p_load(
+  stringdist, # levenshtein value
   tidyverse, # data manipulation
   lubridate, # datetime strings
-  RSocrata, # query soda api
+  tidytext, # text mining tools
   magrittr, # pipe opperators
   janitor, # dataframe clean
-  refinr, # cluster and merge
-  scales, # format strings
-  knitr, # knit documents
-  vroom, # read files fast
+  zipcode, # clean & databse
+  batman, # parse logicals
+  RSocrata, # query soda api
+  refinr, # cluster & merge
+  scales, #format strings
+  rvest, # scrape website
+  skimr, # summary stats
+  vroom, # quickly read
   glue, # combine strings
-  here, # relative storage
+  gluedown, #markdown
+  here, # locate storage
   fs # search storage 
 )
 ```
@@ -119,25 +124,17 @@ data reported electronically.
 
 [03]: https://data.iowa.gov/Campaigns-Elections/Iowa-Campaign-Expenditures/3adi-mht4
 
-## Download
-```{r raw_dir}
-raw_dir <- dir_create(here("state","ia", "expends", "data", "raw"))
-```
-
-
 ## Import
 
 The data can be directly read using `RSocrata::read.socrata()`.
 
 ```{r read_socrata}
-ia <- as_tibble(read.socrata("https://data.iowa.gov/resource/3adi-mht4.json"))
-ia$amount <- as.double(ia$amount)
+#ia <- as_tibble(read.socrata("https://data.iowa.gov/resource/3adi-mht4.json"))
+raw_dir <- here("state","ia","expends","data","raw")
+ia <- read_csv(dir_ls(raw_dir)) %>% clean_names()
+ia$expenditure_amount <- as.double(ia$expenditure_amount)
+ia$date <- as.Date(ia$date,format = "%m/%d/%Y")
 ```
-
-```{r check last update}
-ia_prev <- read_csv(raw_dir %>% list.files(full.names = T))
-```
-
 
 ## Explore
 
@@ -150,11 +147,11 @@ glimpse(sample_frac(ia))
 
 ### Missing
 
-The variables range in their degree of missing values. There are `r count_na(ia$amount)` missing
+The variables range in their degree of missing values. There are `r campfin::count_na(ia$amount)` missing
 values for variables like `transaction_id`, `date`, or `amount`.
 
 ```{r count_na}
-glimpse_fun(ia, count_na)
+col_stats(ia, count_na)
 ```
 
 While there are `r count_na(ia$committee_nm)` missing values for `committee_nm`, 
@@ -164,8 +161,7 @@ record without either an `organization_nm` or `last_nm`.
 
 ```{r flag_na, collapse=TRUE}
 ia <- ia %>% 
-  mutate(payee_nm = coalesce(organization_nm, last_nm)) %>% 
-  flag_na(committee_nm, payee_nm, date, amount)
+  flag_na(committee_name, receiving_organization_name, date, expenditure_amount)
 
 sum(ia$na_flag)
 ```
@@ -177,7 +173,7 @@ The variables also range in their degree of distinctness. We can see that the `t
 expenditure.
 
 ```{r n_distinct}
-glimpse_fun(ia, n_distinct)
+col_stats(ia, n_distinct)
 ```
 
 ### Duplicates
@@ -186,7 +182,7 @@ Ignoring the supposedly unique `transaction_id` variable, there are a number of 
 duplicated records than can be flagged with a new `dupe_flag` variable with `campfin::flag_dupes`.
 
 ```{r get_dupes, collapse=TRUE}
-ia <- flag_dupes(ia, -transaction_id)
+ia <- flag_dupes(ia, everything())
 sum(ia$dupe_flag)
 mean(ia$dupe_flag)
 ```
@@ -203,14 +199,14 @@ correction). The mean expenditure is has a value of `r dollar(mean(ia$amount))`,
 is only `r dollar(median(ia$amount))`.
 
 ```{r anmount_range}
-summary(ia$amount)
-sum(ia$amount <= 0)
-percent(mean(ia$amount <= 0))
+summary(ia$expenditure_amount)
+sum(ia$expenditure_amount <= 0)
+percent(mean(ia$expenditure_amount <= 0))
 ```
 
 ```{r amount_hist, echo=FALSE}
 ia %>% 
-  ggplot(aes(amount)) +
+  ggplot(aes(expenditure_amount)) +
   geom_histogram(fill = RColorBrewer::brewer.pal(3, "Dark2")[3]) +
   scale_x_continuous(
     breaks = c(1 %o% 10^(0:6)),
@@ -229,8 +225,8 @@ ia %>%
 We can view the smallest and largest expenditures to see if these are potentially typos.
 
 ```{r glimpse_minmax_amount}
-glimpse(ia %>% filter(amount == min(amount)))
-glimpse(ia %>% filter(amount == max(amount)))
+glimpse(ia %>% filter(expenditure_amount == min(expenditure_amount)))
+glimpse(ia %>% filter(expenditure_amount == max(expenditure_amount)))
 ```
 
 #### Dates
@@ -280,7 +276,7 @@ ia %>%
 ```{r amount_year_bar, echo=FALSE}
 ia %>% 
   group_by(year, on_year) %>% 
-  summarize(mean = mean(amount)) %>% 
+  summarize(mean = mean(expenditure_amount)) %>% 
   ggplot(aes(x = year, y = mean)) +
   geom_col(aes(fill = on_year)) +
   scale_fill_brewer(
@@ -300,7 +296,7 @@ ia %>%
 ia %>% 
   mutate(month = month(date)) %>% 
   group_by(on_year, month) %>% 
-  summarize(mean = mean(amount)) %>% 
+  summarize(mean = mean(expenditure_amount)) %>% 
   ggplot(aes(month, mean)) +
   geom_line(aes(color = on_year), size = 2) +
   scale_y_continuous(labels = dollar) +
@@ -333,7 +329,7 @@ ia <- ia %>%
   mutate(
     address_norm = normal_address(
       address = address_comb,
-      add_abbs = usps_street,
+      abbs = usps_street,
       na = c("", "NA"),
       na_rep = TRUE
     )
@@ -374,7 +370,7 @@ progress_table(
 ia <- ia %>% 
   mutate(
     state_norm = normal_state(
-      state = str_replace(state_cd, "AI", "IA"),
+      state = str_replace(state, "AI", "IA"),
       na_rep = TRUE,
       valid = NULL
     )
@@ -383,7 +379,7 @@ ia <- ia %>%
 
 ```{r state_progress}
 progress_table(
-  ia$state_cd,
+  ia$state,
   ia$state_norm,
   compare = valid_state
 )
@@ -398,8 +394,8 @@ ia <- ia %>%
   mutate(
     city_norm = normal_city(
       city = city %>% str_replace("DesMoines", "Des Moines"),
-      geo_abbs = usps_city,
-      st_abbs = c("IA", "IOWA", "DC"),
+      abbs = usps_city,
+      states = c("IA", "IOWA", "DC"),
       na = c("", "NA"),
       na_rep = TRUE
     )
@@ -408,7 +404,7 @@ ia <- ia %>%
 
 ```{r city_count_bad}
 ia %>% 
-  filter(city_norm %out% geo$city) %>% 
+  filter(city_norm %out% valid_city) %>% 
   count(state_norm, city, city_norm, sort = TRUE)
 ```
 
@@ -445,54 +441,20 @@ progress_table(
 )
 ```
 
-## Filter
-```{r}
-ia_prev
-```
-
-
-### Duplicates
-
-Ignoring the supposedly unique `transaction_id` variable, there are a number of completely
-duplicated records than can be flagged with a new `dupe_flag` variable with `campfin::flag_dupes`.
-
-```{r get_dupes, collapse=TRUE}
-ia <- flag_dupes(ia, -transaction_id)
-sum(ia$dupe_flag)
-mean(ia$dupe_flag)
-```
-
 ## Conclude
 
 1. There are `r nrow(ia)` records in the database.
-1. There are `r nrow(ia_dupes)` duplicate records in the database.
+1. There are `r nrow(ia$dupes)` duplicate records in the database.
 1. The range and distribution of `amount` and `date` seem reasonable.
 1. There are `r sum(ia$na_flag)` records missing a recipient.
 1. Consistency in goegraphic data has been improved with `campfin::normal_*()`.
 1. The 5-digit `zip_norm` variable has been created with `campfin::normal_zip(ia$zip)`.
 1. The 4-digit `year` variable has been created with `lubridate::year(ia$date)`.
 
-## Lookup
-
-```{r}
-lookup_file <- here("ia", "expends", "data", "ia_city_lookup.csv")
-if (file.exists(lookup_file)) {
-  lookup <- read_csv(lookup_file) %>% select(1:2)
-  ia <- left_join(ia, lookup)
-  progress_table(
-    str_to_upper(ia$city_raw),
-    ia$city_norm,
-    ia$city_swap,
-    ia$city_clean,
-    compare = valid_city
-  )
-}
-```
-
 ## Export
 
 ```{r proc_dir}
-proc_dir <- here("ia", "expends", "data", "processed")
+proc_dir <- here("state","ia", "expends", "data", "processed")
 dir_create(proc_dir)
 ```
 
@@ -500,7 +462,6 @@ dir_create(proc_dir)
 ia %>% 
   select(
     -on_year,
-    -payee_nm,
     -city_match,
     -city_norm,
     -match_dist,

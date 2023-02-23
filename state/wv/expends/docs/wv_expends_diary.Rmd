@@ -180,6 +180,11 @@ We can read each file as a data frame into a list of data frames by `read_delim`
 Remember to pay attention to the date the files were last modified. It gives us an idea of how current the data was.`file.info(dir_ls(raw_dir, glob = "*.csv$"))$mtime`. This data is extracted from the West Virginia Campaign Finance database as it existed as of `r file.info(dir_ls(raw_dir, glob = "*.csv$"))$mtime[1]` for `r basename(dir_ls(raw_dir, glob = "*.csv$"))[1]` and `r file.info(dir_ls(raw_dir, glob = "*.csv$"))$mtime[2]` for `r basename(dir_ls(raw_dir, glob = "*.csv$"))[2]`.
 
 ```{r read_raw}
+wv_names <- read_names(dir_ls(
+    path = raw_dir,
+    glob = "*.csv"
+  )[1])
+
 wv <-
   dir_ls(
     path = raw_dir,
@@ -187,22 +192,18 @@ wv <-
   ) %>%
  read_lines() %>% 
   str_replace_all("(?<=\\s)\"|\"(?=\")|\"(?=\\s)","'") %>% I() %>% 
- map(
-    read_delim,delim = ",", escape_double = FALSE,
+    read_delim(delim = ",", escape_double = FALSE,
     skip = 1,
-   col_names = read_names( dir_ls(
-    path = raw_dir,
-    glob = "*.csv"
-  )[1]),
+    col_names = wv_names,
       escape_backslash = TRUE,
     col_types = cols(
       .default = col_character(),
-      `Expenditure Amount` = col_number()))
-      # `Expenditure Date` = col_date("%m/%d/%Y %I:%M:%S %p"),
-      # `Filed Date` = col_date("%m/%d/%Y %I:%M:%S %p"),
-      # `Fundraiser Event Date` = col_date("%m/%d/%Y %I:%M:%S %p"))) %>%
-  # rename(city_raw = City) %>% 
-  # clean_names()
+      `Expenditure Amount` = col_number(), 
+      `Expenditure Date` = col_date("%m/%d/%Y %I:%M:%S %p"),
+      `Filed Date` = col_date("%m/%d/%Y %I:%M:%S %p"))) %>% clean_names()
+      # `Fundraiser Event Date` = col_date("%m/%d/%Y %I:%M:%S %p"))) 
+wv <- wv %>% rename(expenditure_type = expenditure_type_18,
+                    expenditure_type_1 = expenditure_type_28)
 ```
 
 
@@ -217,7 +218,7 @@ glimpse(sample_frac(wv))
 ### Missing
 
 ```{r glimpse_na}
-glimpse_fun(wv, count_na)
+col_stats(wv, count_na)
 ```
 
 There are very few records missing one of the key values needed to identify a transaction (who, what, when). The`last_name`, `middle_name`,`first_name` and `suffix`variables are used to identify individual payees, while non-individuals were identified in the `last_name` column. We can flag any record with `campfin::flag_na()`
@@ -235,6 +236,16 @@ wv <- wv %>%
 
 sum(wv$na_flag)
 ```
+### Previous update
+We will eliminate rows whose ID appeared in the previous update.
+```{r prev}
+wv_prev <- read_csv(here("state","wv","expends","data", "previous") %>% dir_ls())
+nrow(wv)
+wve <- wv %>% filter(expenditure_id %out% wv_prev$expenditure_id)
+
+nrow(wve)
+```
+
 
 ### Duplicates
 
@@ -242,19 +253,19 @@ We can use `campfin::flag_dupes()` to create a new `dupe_flag` variable with wit
 variable.
 
 ```{r flag_dupes}
-wv <- flag_dupes(wv, dplyr::everything())
-sum(wv$dupe_flag)
-percent(mean(wv$dupe_flag))
+wve <- flag_dupes(wve, dplyr::everything())
+sum(wve$dupe_flag)
+percent(mean(wve$dupe_flag))
 ```
 
 ### Categorical
 
 ```{r glimpse_distinct}
-glimpse_fun(wv, n_distinct)
+col_stats(wve, n_distinct)
 ```
 
 ```{r purpose_bar, echo=FALSE, fig.height=10}
-wv %>% 
+wve %>% 
   drop_na(purpose) %>% 
   count(purpose, sort = TRUE) %>% 
   filter(purpose != "Contribution" & purpose != "Contribution to Candidate") %>% 
@@ -278,17 +289,17 @@ visually with `ggplot2::geom_histogram()` and `ggplot2::geom_violin()`.
 #### Amounts
 
 ```{r summary_amount}
-summary(wv$expenditure_amount)
-sum(wv$expenditure_amount <= 0, na.rm = TRUE)
-sum(wv$expenditure_amount >= 100000, na.rm = TRUE)
+summary(wve$expenditure_amount)
+sum(wve$expenditure_amount <= 0, na.rm = TRUE)
+sum(wve$expenditure_amount >= 100000, na.rm = TRUE)
 ```
 
 ```{r amount_histogram, echo=FALSE, eval=TRUE}
 brewer_dark2 <- RColorBrewer::brewer.pal(n = 8, name = "Dark2")
-wv %>%
+wve %>%
   ggplot(aes(expenditure_amount)) +
   geom_histogram(fill = brewer_dark2[1]) +
-  geom_vline(xintercept = median(wv$expenditure_amount, na.rm = TRUE)) +
+  geom_vline(xintercept = median(wve$expenditure_amount, na.rm = TRUE)) +
   scale_x_continuous(
     breaks = c(1 %o% 10^(0:6)),
     labels = dollar,
@@ -296,7 +307,7 @@ wv %>%
   ) +
   scale_y_continuous(labels = comma) +
   labs(
-    title = "West Virginia Expenditures Amount Distribution",
+    title = "West Virginia Expenditures Amount Distribution, 2019-2022",
     caption = "Source: West Virginia Secretary of State",
     x = "Amount",
     y = "Count"
@@ -304,7 +315,7 @@ wv %>%
 ```
 
 ```{r average amounts, echo = FALSE, eval = TRUE}
-wv %>% 
+wve %>% 
   group_by(committee_type, purpose) %>% 
   summarize(med_exp = median(expenditure_amount)) %>% 
   top_n(5) %>% 
@@ -322,32 +333,34 @@ wv %>%
   )
 ```
 
-`r percent(wv$amount == 0, na.rm = TRUE)` of `amount` values are zero.
+`r percent(wve$amount == 0, na.rm = TRUE)` of `amount` values are zero.
 ```{r zero_amount}
-sum(wv$expenditure_amount < 0, na.rm = TRUE)
-sum(wv$expenditure_amount == 0, na.rm = TRUE)
+sum(wve$expenditure_amount < 0, na.rm = TRUE)
+sum(wve$expenditure_amount == 0, na.rm = TRUE)
 ```
 
 
 #### Dates
 
 ```{r add_year}
-wv <- mutate(wv, year = year(expenditure_date))
+
+wve <- wve %>% mutate(expenditure_date = as.Date(expenditure_date,format = "%m/%d/%Y"))
+wve <- wve %>% mutate(year = year(expenditure_date))
 ```
 The range of expenditure dates seem reasonable.
 ```{r date_range, collapse=TRUE}
-count_na(wv$date)
-min(wv$expenditure_date, na.rm = TRUE)
-max(wv$expenditure_date, na.rm = TRUE)
-sum(wv$expenditure_date > today(), na.rm = TRUE)
+count_na(wve$expenditure_date)
+min(wve$expenditure_date, na.rm = TRUE)
+max(wve$expenditure_date, na.rm = TRUE)
+sum(wve$expenditure_date > today(), na.rm = TRUE)
 ```
 
 ```{r count_year}
-count(wv, year)
+count(wve, year)
 ```
 
 ```{r year_bar_count, echo=FALSE}
-wv %>% 
+wve %>% 
   count(year) %>% 
   mutate(even = is_even(year)) %>% 
   ggplot(aes(x = year, y = n)) +
@@ -366,7 +379,7 @@ wv %>%
 ```
 
 ```{r year_bar_sum, echo=FALSE}
-wv %>% 
+wve %>% 
   group_by(year) %>% 
   summarise(sum = sum(expenditure_amount, na.rm = TRUE)) %>% 
   mutate(even = is_even(year)) %>% 
@@ -374,7 +387,7 @@ wv %>%
   geom_col(aes(fill = even)) +
   scale_fill_brewer(type = "qual", palette = "Dark2") +
   scale_y_continuous(labels = dollar) +
-  scale_x_continuous(breaks = 2010:2019) +
+  scale_x_continuous(breaks = 2019:2022) +
   labs(
     title = "West Virginia Expenditures Total by Year",
     caption = "Source: West Virginia Secretary of State",
@@ -386,7 +399,7 @@ wv %>%
 ```
 
 ```{r year_bar_mean, echo=FALSE}
-wv %>% 
+wve %>% 
   group_by(year) %>% 
   summarise(mean = mean(expenditure_amount, na.rm = TRUE)) %>% 
   mutate(even = is_even(year)) %>% 
@@ -394,7 +407,7 @@ wv %>%
   geom_col(aes(fill = even)) +
   scale_fill_brewer(type = "qual", palette = "Dark2") +
   scale_y_continuous(labels = dollar) +
-  scale_x_continuous(breaks = 2016:2019) +
+  scale_x_continuous(breaks = 2019:2022) +
   labs(
     title = "West Virginia Expenditures Mean by Year",
     caption = "Source: West Virginia Secretary of State",
@@ -406,7 +419,7 @@ wv %>%
 ```
 
 ```{r month_line_count, echo=FALSE}
-wv %>% 
+wve %>% 
   mutate(month = month(expenditure_date), even = is_even(year)) %>% 
   group_by(month, even) %>% 
   summarize(n = n()) %>% 
@@ -435,11 +448,11 @@ normalization to improve the searchability of the database.
 First, we will normalize the street address by removing punctuation and expanding abbreviations.
 
 ```{r normal_address}
-  wv <- wv %>% 
+  wve <- wve %>% 
     unite( col = address_full,c("address1", "address2"), sep = ", ", remove = FALSE, na.rm = TRUE) %>% 
     mutate(address_norm = normal_address(
       address = address_full,
-      add_abbs = usps_city,
+      abbs = usps_city,
       na_rep = TRUE
     ))
 ```
@@ -447,7 +460,7 @@ First, we will normalize the street address by removing punctuation and expandin
 We can see how this improves consistency across the `address_1` and `address_2` fields.
 
 ```{r view_address_change, echo=FALSE}
-wv %>% 
+wve %>% 
   select(starts_with("address")) %>% 
   drop_na() %>% 
   sample_n(10)
@@ -456,20 +469,20 @@ wv %>%
 ### ZIP
 
 The `zip` address is already pretty good, with 
-`r percent(prop_in(wv$zip, valid_zip, na.rm = TRUE))` of the values already in our 95% 
+`r percent(prop_in(wve$zip, valid_zip, na.rm = TRUE))` of the values already in our 95% 
 comprehensive `valid_zip` list.
 
 ```{r count_zip_pre, collapse=TRUE}
-n_distinct(wv$zip)
-prop_in(wv$zip, valid_zip)
-length(setdiff(wv$zip, valid_zip))
+n_distinct(wve$zip)
+prop_in(wve$zip, valid_zip)
+length(setdiff(wve$zip, valid_zip))
 ```
 
 We can improve this further by lopping off the uncommon four-digit extensions and removing common
 invalid codes like 00000 and 99999.
 
 ```{r normal_zip}
-wv <- wv %>% 
+wve <- wve %>% 
   mutate(
     zip_norm = normal_zip(
       zip = zip,
@@ -478,34 +491,34 @@ wv <- wv %>%
   )
 ```
 
-This brings our valid percentage to `r percent(prop_in(wv$zip_norm, valid_zip, na.rm = TRUE))`.
+This brings our valid percentage to `r percent(prop_in(wve$zip_norm, valid_zip, na.rm = TRUE))`.
 
 ```{r count_zip_post, collapse=TRUE}
-n_distinct(wv$zip_norm)
-prop_in(wv$zip_norm, valid_zip)
-length(setdiff(wv$zip_norm, valid_zip))
-count_na(wv$zip_norm) - count_na(wv$zip)
+n_distinct(wve$zip_norm)
+prop_in(wve$zip_norm, valid_zip)
+length(setdiff(wve$zip_norm, valid_zip))
+count_na(wve$zip_norm) - count_na(wve$zip)
 ```
 
 ### State
 
 The `state` variable is also very clean, already at 
-`r percent(prop_in(wv$state, valid_state, na.rm = TRUE))`.
+`r percent(prop_in(wve$state, valid_state, na.rm = TRUE))`.
 
 ```{r count_state_pre, collapse=TRUE}
-n_distinct(wv$state)
-prop_in(wv$state, valid_state, na.rm = TRUE)
-length(setdiff(wv$state, valid_state))
-setdiff(wv$state, valid_state)
+n_distinct(wve$state)
+prop_in(wve$state, valid_state, na.rm = TRUE)
+length(setdiff(wve$state, valid_state))
+setdiff(wve$state, valid_state)
 ```
 
 ```{r normal_state}
-wv$state <- toupper(wv$state)
+wve$state <- toupper(wve$state)
 ```
 "NL" and "ON" are overseas country or state shorthands which we can keep.
 ```{r count_state_post, collapse=TRUE}
-n_distinct(wv$state)
-prop_in(wv$state, valid_state)
+n_distinct(wve$state)
+prop_in(wve$state, valid_state)
 ```
 
 ### City
@@ -520,47 +533,52 @@ the searchablity of the database.
 
 [08]: https://github.com/OpenRefine/OpenRefine/wiki/Clustering-In-Depth
 
+```{r}
+wve <- wve %>% rename(city_raw = city)
+```
+
+
 The raw `city` values are not very normal, with only
-`r percent(prop_in(wv$city_raw, valid_city, na.rm = TRUE))` already in `valid_city`, mostly due to case difference. If we simply convert to uppcase that numbers increases to 
-`r percent(prop_in(str_to_upper(wv$city_raw), valid_city, na.rm = TRUE))`. We will aim to get this number over 99% using the other steps in the process.
+`r percent(prop_in(wve$city_raw, valid_city, na.rm = TRUE))` already in `valid_city`, mostly due to case difference. If we simply convert to uppcase that numbers increases to 
+`r percent(prop_in(str_to_upper(wve$city_raw), valid_city, na.rm = TRUE))`. We will aim to get this number over 99% using the other steps in the process.
 
 ```{r count_city_pre, collapse=TRUE}
-n_distinct(wv$city_raw)
-prop_in(str_to_upper(wv$city_raw), valid_city, na.rm = TRUE)
-length(setdiff(wv$city_raw, valid_city))
-count_na(wv$city_raw)
+n_distinct(wve$city_raw)
+prop_in(str_to_upper(wve$city_raw), valid_city, na.rm = TRUE)
+length(setdiff(wve$city_raw, valid_city))
+count_na(wve$city_raw)
 ```
 
 #### Normalize
 
 ```{r normal_city}
-wv <- wv %>% 
+wve <- wve %>% 
   mutate(
     city_norm = normal_city(
       city = city_raw, 
-      geo_abbs = usps_city,
-      st_abbs = c(valid_state),
+       abbs = usps_city,
+       states = c(valid_state),
       na = invalid_city,
       na_rep = TRUE
     )
   )
 ```
 
-This process brought us to `r percent(prop_in(wv$city_norm, valid_city, na.rm = TRUE))` valid.
+This process brought us to `r percent(prop_in(wve$city_norm, valid_city, na.rm = TRUE))` valid.
 
 ```{r count_city_post_norm, collapse=TRUE}
-n_distinct(wv$city_norm)
-prop_in(wv$city_norm, valid_city, na.rm = TRUE)
-length(setdiff(wv$city_norm, valid_city))
-count_na(wv$city_norm)
+n_distinct(wve$city_norm)
+prop_in(wve$city_norm, valid_city, na.rm = TRUE)
+length(setdiff(wve$city_norm, valid_city))
+count_na(wve$city_norm)
 ```
 
 It also increased the proportion of `NA` values by 
-`r percent(prop_na(wv$city_norm) - prop_na(wv$city_raw))`. These new `NA` values were either a single
+`r percent(prop_na(wve$city_norm) - prop_na(wve$city_raw))`. These new `NA` values were either a single
 (possibly repeating) character, or contained in the `na_city` vector.
 
 ```{r introduced_city_na, echo=FALSE}
-wv %>% 
+wve %>% 
   filter(is.na(city_norm) & !is.na(city_raw)) %>% 
   select(zip_norm, state, city_raw, city_norm) %>% 
   distinct() %>% 
@@ -576,7 +594,7 @@ two values.
 [09]: https://en.wikipedia.org/wiki/Levenshtein_distance
 
 ```{r swap_city}
-wv <- wv %>% 
+wve <- wve %>% 
   left_join(
     y = zipcodes,
     by = c(
@@ -598,14 +616,14 @@ city_swap = if_else(condition = is.na(city_match) == FALSE,
 ```
 
 This is a very fast way to increase the valid proportion to
-`r percent(prop_in(wv$city_swap, valid_city, na.rm = TRUE))` and reduce the number of distinct
-_invalid_ values from `r length(setdiff(wv$city_norm, valid_city))` to only
-`r length(setdiff(wv$city_swap, valid_city))`
+`r percent(prop_in(wve$city_swap, valid_city, na.rm = TRUE))` and reduce the number of distinct
+_invalid_ values from `r length(setdiff(wve$city_norm, valid_city))` to only
+`r length(setdiff(wve$city_swap, valid_city))`
 
 ```{r count_city_post_swap, collapse=TRUE}
-n_distinct(wv$city_swap)
-prop_in(wv$city_swap, valid_city, na.rm = TRUE)
-length(setdiff(wv$city_swap, valid_city))
+n_distinct(wve$city_swap)
+prop_in(wve$city_swap, valid_city, na.rm = TRUE)
+length(setdiff(wve$city_swap, valid_city))
 ```
 
 #### Second Match
@@ -635,8 +653,8 @@ valid_city <- c(valid_city, "SYMMES TOWNSHIP",
 ```
 
 ```{r second match city}
-wv_match_table <- wv %>% 
-  filter(str_sub(wv$city_swap, 1,1) == str_sub(wv$city_match, 1,1)) %>% 
+wv_match_table <- wve %>% 
+  filter(str_sub(wve$city_swap, 1,1) == str_sub(wve$city_match, 1,1)) %>% 
   filter(city_swap %out% valid_city)  %>% 
   mutate(string_dis = stringdist(city_raw, city_match)) %>% 
   select (expenditure_id, zip, state, city_raw, city_swap, city_match, string_dis) %>% 
@@ -648,15 +666,15 @@ wv_match_table <- wv %>%
 We can revert `city_swap` back to the `city_match` values in the match table resulting from misspellings.
 
 ```{r join_refine}
-wv<- wv_match_table %>% select(expenditure_id, sec_city_match) %>% right_join(wv, by = "expenditure_id")
+wve<- wv_match_table %>% select(expenditure_id, sec_city_match) %>% right_join(wve, by = "expenditure_id")
 ```
 
-This brings us to `r percent(prop_in(wv$city_swap, valid_city, na.rm = TRUE))` valid values.
+This brings us to `r percent(prop_in(wve$city_swap, valid_city, na.rm = TRUE))` valid values.
 
 ```{r count_city_post_refine, collapse=TRUE}
-n_distinct(wv$sec_city_match)
-prop_in(wv$sec_city_match, valid_city, na.rm = TRUE)
-length(setdiff(wv$sec_city_match, valid_city))
+n_distinct(wve$sec_city_match)
+prop_in(wve$sec_city_match, valid_city, na.rm = TRUE)
+length(setdiff(wve$sec_city_match, valid_city))
 ```
 
 #### Progress
@@ -665,17 +683,19 @@ We can make very few manual changes to capture the last few big invalid values. 
 abbreviations (e.g., SPFD) often need to be changed by hand.
 
 ```{r view_final_bad}
-wv <- wv %>% 
+wve <- wve %>% 
   mutate(
     city_clean = coalesce(sec_city_match, city_swap)) 
-wv %>%
+
+
+wve %>%
   filter(city_clean %out% valid_city) %>% 
   count(state, city_clean, sort = TRUE) %>% 
   drop_na(city_clean)
 ```
 
 ```{r city_final}
-wv$city_clean <- wv$city_clean %>% 
+wve$city_clean <- wve$city_clean %>% 
       str_replace_all("^BARBOUSVILLE$", "BARBOURSVILLE") %>% 
       str_replace_all("^SAN\\sFRANSICO$", "SAN FRANCISCO") %>% 
       str_replace_all("^BUCHANNAN$", "BUCKHANNON") %>% 
@@ -700,7 +720,7 @@ wv$city_clean <- wv$city_clean %>%
       str_replace_all("AMAZON", "ONLINE PURCHASE") %>% 
       na_if("CITY")
       
-  wv <- wv %>% mutate(city_clean = case_when( city_clean %in% c("WV","WEB BASED","A","PO BOX","ANYWHERE USA","VARIES","COUNTY") ~ NA_character_, TRUE ~ as.character(city_clean)))
+  wve <- wve %>% mutate(city_clean = case_when( city_clean %in% c("WV","WEB BASED","A","PO BOX","ANYWHERE USA","VARIES","COUNTY") ~ NA_character_, TRUE ~ as.character(city_clean)))
   
 ```
 
@@ -731,22 +751,22 @@ valid_city <- c(
 progress_table <- tibble(
   stage = c("raw", "norm", "swap", "clean"),
   prop_good = c(
-    prop_in(str_to_upper(wv$city_raw), valid_city, na.rm = TRUE),
-    prop_in(wv$city_norm, valid_city, na.rm = TRUE),
-    prop_in(wv$city_swap, valid_city, na.rm = TRUE),
-    prop_in(wv$city_clean, valid_city, na.rm = TRUE)
+    prop_in(str_to_upper(wve$city_raw), valid_city, na.rm = TRUE),
+    prop_in(wve$city_norm, valid_city, na.rm = TRUE),
+    prop_in(wve$city_swap, valid_city, na.rm = TRUE),
+    prop_in(wve$city_clean, valid_city, na.rm = TRUE)
   ),
   total_distinct = c(
-    n_distinct(str_to_upper(wv$city_raw)),
-    n_distinct(wv$city_norm),
-    n_distinct(wv$city_swap),
-    n_distinct(wv$city_clean)
+    n_distinct(str_to_upper(wve$city_raw)),
+    n_distinct(wve$city_norm),
+    n_distinct(wve$city_swap),
+    n_distinct(wve$city_clean)
   ),
   unique_bad = c(
-    length(setdiff(str_to_upper(wv$city_raw), valid_city)),
-    length(setdiff(wv$city_norm, valid_city)),
-    length(setdiff(wv$city_swap, valid_city)),
-    length(setdiff(wv$city_clean, valid_city))
+    length(setdiff(str_to_upper(wve$city_raw), valid_city)),
+    length(setdiff(wve$city_norm, valid_city)),
+    length(setdiff(wve$city_swap, valid_city)),
+    length(setdiff(wve$city_clean, valid_city))
   )
 )
 
@@ -816,11 +836,11 @@ progress_table %>%
 
 ## Conclude
 
-1. There are `r nrow(wv)` records in the database.
-1. There are `r sum(wv$dupe_flag)` duplicate records in the database.
+1. There are `r nrow(wve)` records in the database.
+1. There are `r sum(wve$dupe_flag)` duplicate records in the database.
 1. The range and distribution of `amount` seems reasomable, and `date` has been cleaned by removing
-`r sum(wv$date_flag, na.rm = T)` values from the distance past or future.
-1. There are `r sum(wv$na_flag)` records missing either recipient or date.
+`r sum(wve$date_flag, na.rm = T)` values from the distance past or future.
+1. There are `r sum(wve$na_flag)` records missing either recipient or date.
 1. Consistency in geographic data has been improved with `campfin::normal_*()`.
 1. The 5-digit `zip_norm` variable has been created with `campfin::normal_zip()`.
 1. The 4-digit `year_clean` variable has been created with `lubridate::year()`.
@@ -828,23 +848,21 @@ progress_table %>%
 ## Export
 
 ```{r create_proc_dir}
-proc_dir <- here("wv", "expends", "data", "processed")
+proc_dir <- here("state","wv", "expends", "data", "processed")
 dir_create(proc_dir)
 ```
 
 ```{r write_clean}
-wv %>% 
+wve %>% 
   select(
-    -file,
     -city_norm,
-    -city_swap,
     -city_match,
     -city_swap,
     -match_dist,
     -sec_city_match
   ) %>% 
   write_csv(
-    path = glue("{proc_dir}/wv_expends_clean.csv"),
+    path = glue("{proc_dir}/wv_expends_clean_20221031.csv"),
     na = ""
   )
 ```

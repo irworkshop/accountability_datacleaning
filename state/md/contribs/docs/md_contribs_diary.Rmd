@@ -161,7 +161,7 @@ fil_years <- fil_years[4]
 Using the `cookies()` from this search request, we can then submit a `GET()`
 request to save those search results to a local file.
 
-```{r raw_http}
+```{r raw_http, eval=F}
 md_http <- tibble()
 for (y in fil_years) {
   year_path <- path(raw_dir, glue("ContributionsList-{y}.csv"))

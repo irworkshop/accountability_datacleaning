@@ -1,15 +1,14 @@
 ---
-title: "Data Diary"
-subtitle: "Washington Expenditures"
-author: "Kiernan Nicholls"
+title: "Washington Expenditures Data Diary"
+author: "Kiernan Nicholls & Yanqi Xu"
 date: "`r format(Sys.time())`"
 output:
   github_document: 
     df_print: tibble
     toc: true
-    toc_dept: 2
+    toc_dept: 3
 editor_options: 
-  chunk_output_type: console
+  chunk_output_type: console    
 ---
 
 <!-- Place comments regarding knitting here -->
@@ -26,7 +25,8 @@ opts_chunk$set(
   comment = "#>",
   fig.path = "../plots/",
   fig.width = 10,
-  dpi = 300
+  dpi = 300,
+  timeout=120
 )
 options(width = 99)
 set.seed(5)
@@ -79,6 +79,7 @@ pacman::p_load(
   magrittr, # pipe opperators
   janitor, # dataframe clean
   refinr, # cluster and merge
+  RSocrata, # read SODA API
   scales, # format strings
   knitr, # knit documents
   vroom, # read files fast
@@ -304,9 +305,7 @@ can read the SODA dataset directly from the API into R.
 
 ```{r read_data}
 wa_filename <- here(
-  "wa_expends", "data", "raw", 
-  "exenditures_by_candidates_and_political_committees.csv"
-)  
+  "state", "wa","expends", "data", "raw","wa_expends_download.csv")
 if (file.exists(wa_filename) & as_date(file.mtime(wa_filename)) == today()) {
   wa <- read_csv(
     file = wa_filename,
@@ -327,7 +326,7 @@ If the file had to be downloaded from the SODA API, save a copy of the raw data 
 character vectors before being saved as a flat text file.
 
 ```{r write_raw}
-dir_create(here("wa_expends", "data", "raw"))
+#dir_create(here("wa_expends", "data", "raw"))
 if (read_from_soda) {
   wa %>% 
     mutate(recipient_location.coordinates = as.character(recipient_location.coordinates)) %>% 
@@ -342,24 +341,14 @@ Before working with the data in R, some binary character type variables will be 
 logical variables. The coordinates character string will also be separated and converted to numeric
 latitude and longitude variables.s
 
-```{r parse_vars}
+```{r parse_vars, eval=FALSE}
 wa <- wa %>% 
   separate(
     col = recipient_location.coordinates,
     into = c("recipient_longitude", "recipient_latitude"),
     sep = ",\\s",
     remove = TRUE
-  ) %>% 
-  mutate(
-    recipient_longitude = as.double(str_remove(recipient_longitude, "c\\(")),
-    recipient_latitude = as.double(str_remove(recipient_latitude, "\\)")),
-    expenditure_itemized = itemized_or_non_itemized == "Itemized",
-    filer_supports = for_or_against == "For",
-  ) %>% 
-  select(
-    -itemized_or_non_itemized,
-    -for_or_against
-  )
+  ) 
 ```
 
 ## Explore
@@ -380,7 +369,7 @@ The `id` is `r percent(n_distinct(wa$id)/nrow(wa))` distinct and can be used to
 identify a unique transaction.
 
 ```{r n_distinct}
-glimpse_fun(wa, n_distinct)
+col_stats(wa, n_distinct)
 ```
 
 We can explore the distribution of the least distinct values with `ggplot2::geom_bar()`.
@@ -394,7 +383,7 @@ explore_plot(wa, type)
 ```
 
 ```{r plot_party_bar, echo=FALSE}
-explore_plot(wa, party, flip = TRUE)
+explore_plot(wa, party)
 ```
 
 ```{r plot_jurisdiction_bar, echo=FALSE}
@@ -406,7 +395,7 @@ explore_plot(wa, election_year)
 ```
 
 ```{r plot_itemized_bar, echo=FALSE}
-explore_plot(wa, expenditure_itemized)
+explore_plot(wa, itemized_or_non_itemized)
 ```
 
 ```{r plot_code_party, echo=FALSE}
@@ -436,7 +425,7 @@ wa %>%
 ```
 
 ```{r plot_supports_bar, echo=FALSE}
-explore_plot(drop_na(wa, filer_supports), filer_supports)
+explore_plot(drop_na(wa, for_or_against), for_or_against)
 ```
 
 ```{r plot_office_bar, echo=FALSE}
@@ -447,7 +436,7 @@ wa %>%
   slice(1:8) %>% 
   ggplot(aes(reorder(office, n), n)) + 
   geom_col(aes(fill = office)) +
-  scale_fill_brewer(palette = "Dark2", guide = FALSE) +
+  scale_fill_brewer(palette = "Dark2", guide = "none") +
   scale_y_continuous(labels = comma) +
   coord_flip() +
   labs(
@@ -463,7 +452,7 @@ wa %>%
 The variables also vary in their degree of values that are `NA` (missing).
 
 ```{r count_na}
-glimpse_fun(wa, count_na)
+col_stats(wa, count_na)
 ```
 
 We will flag any records with missing values in the key variables used to identify an expenditure.
@@ -504,7 +493,12 @@ wa %>%
   filter(dupe_flag) %>% 
   distinct() %>% 
   ggplot() + 
-  geom_histogram(aes(amount))
+  geom_histogram(aes(amount)) +
+    scale_x_continuous(
+    breaks = c(1 %o% 10^(0:6)),
+    labels = dollar,
+    trans = "log10"
+  )
 ```
 
 ### Ranges
@@ -512,7 +506,7 @@ wa %>%
 The range of continuous variables will need to be checked for data integrity. There are only two
 quasi-continuous variables, the `amount` and `expenditure_date`
 
-We can checl the distribution of continuous variables with `ggplot2::geom_histogram()`
+We can check the distribution of continuous variables with `ggplot2::geom_histogram()`
 
 #### Transaction Amounts
 
@@ -566,7 +560,10 @@ wa %>%
       "mediumpurple", 
       "#999999", 
       "firebrick",
-      "black"
+      "black",
+      "orange",
+      "darkgreen",
+      "cornflowerblue"
     )
   ) +
   facet_wrap(~party, scales = "free_y", ncol = 1) +
@@ -598,7 +595,10 @@ wa %>%
       "mediumpurple", 
       "#999999", 
       "firebrick",
-      "black"
+      "black",
+      "cornflower blue",
+      "darkgreen",
+      "orange"
     )
   ) +
   labs(
@@ -688,7 +688,7 @@ wa <- wa %>%
   mutate(
     address_norm = normal_address(
       address = recipient_address,
-      add_abbs = usps_street,
+      abbs = usps_street,
       na_rep = TRUE
     )
   )
@@ -771,8 +771,8 @@ wa <- wa %>%
   mutate(
     city_norm = normal_city(
       city = recipient_city,
-      geo_abbs = usps_city,
-      st_abbs = c("WA", "DC"),
+      abbs = usps_city,
+      states = c("WA", "DC"),
       na = invalid_city,
       na_rep = TRUE
     )
@@ -905,7 +905,7 @@ with the `na_flag`)
 ## Write
 
 ```{r proc_dir} 
-proc_dir <- here("wa", "expends", "data", "processed")
+proc_dir <- here("state","wa", "expends", "data", "processed")
 dir_create(proc_dir)
 ```
 

@@ -120,14 +120,14 @@ Data is obtained from the [Alaska Public Offices Commission (APOC)][apoc].
 
 Using the [APOC income search][search], we need to search for "All Completed
 Forms", "Any Names", and "Any" type, "Filed _After_" the last update of this
-data. In this case, that is September 30, 2020.
+data. In this case, that is 2021-01-25.
+*2022 update: The last update was September 30, 2020.
+Two files were downloaded. The first one was for Report Year 2021, with 97,323 rows. The other for Report Year 2022, has 113,517 rows. 
 
 [search]: https://aws.state.ak.us/ApocReports/CampaignDisclosure/CDIncome.aspx
 
 ```{r raw_dir}
-raw_dir <- dir_create(here("ak", "contribs", "data", "raw"))
-raw_new <- path(raw_dir, "CD_Transactions_Recent.CSV")
-file_size(raw_new)
+raw_dir <- dir_create(here("state","ak", "contribs", "data", "raw"))
 ```
 
 ## Read
@@ -138,7 +138,9 @@ is an extra comma at the end of each line. We can read this extra column at the
 end as a new `null` column.
 
 ```{r raw_names}
-ak_names <- make_clean_names(read_names(raw_new))
+raw_new <- dir_ls(raw_dir)
+
+ak_names <- make_clean_names(read_names(raw_new[1]))
 ```
 
 All the files can be read into a single data frame using `vroom::vroom()`.
@@ -156,10 +158,10 @@ akc <- vroom(
   col_names = c(ak_names, "null"),
   col_types = cols(
     .default = col_character(),
-    date = col_date_usa(),
+    date = col_date_mdy(),
     amount = col_number(),
     report_year = col_integer(),
-    submitted = col_date_usa(),
+    submitted = col_date_mdy(),
     null = col_logical()
   )
 )
@@ -185,7 +187,7 @@ akc <- akc %>%
 We successfully read the same number of rows as search results.
 
 ```{r raw_rows}
-nrow(akc) == 1411206
+nrow(akc)
 ```
 
 `r percent(mean(akc$tran_type == "Income"))` of rows have an "Income" type.
