@@ -1,27 +1,27 @@
 Puerto Rico Contributions
 ================
-Kiernan Nicholls
-Fri Sep 17 15:54:17 2021
+Kiernan Nicholls & Aarushi Sahejpal
+Fri Jan 6 17:01:32 2023
 
--   [Project](#project)
--   [Objectives](#objectives)
--   [Packages](#packages)
--   [Data](#data)
--   [Download](#download)
--   [Read](#read)
--   [Explore](#explore)
-    -   [Missing](#missing)
-    -   [Duplicates](#duplicates)
-    -   [Categorical](#categorical)
-    -   [Amounts](#amounts)
-    -   [Dates](#dates)
--   [Wrangle](#wrangle)
-    -   [ZIP](#zip)
-    -   [State](#state)
-    -   [City](#city)
--   [Conclude](#conclude)
--   [Export](#export)
--   [Upload](#upload)
+- <a href="#project" id="toc-project">Project</a>
+- <a href="#objectives" id="toc-objectives">Objectives</a>
+- <a href="#packages" id="toc-packages">Packages</a>
+- <a href="#data" id="toc-data">Data</a>
+- <a href="#download" id="toc-download">Download</a>
+- <a href="#read" id="toc-read">Read</a>
+- <a href="#explore" id="toc-explore">Explore</a>
+  - <a href="#missing" id="toc-missing">Missing</a>
+  - <a href="#duplicates" id="toc-duplicates">Duplicates</a>
+  - <a href="#categorical" id="toc-categorical">Categorical</a>
+  - <a href="#amounts" id="toc-amounts">Amounts</a>
+  - <a href="#dates" id="toc-dates">Dates</a>
+- <a href="#wrangle" id="toc-wrangle">Wrangle</a>
+  - <a href="#zip" id="toc-zip">ZIP</a>
+  - <a href="#state" id="toc-state">State</a>
+  - <a href="#city" id="toc-city">City</a>
+- <a href="#conclude" id="toc-conclude">Conclude</a>
+- <a href="#export" id="toc-export">Export</a>
+- <a href="#upload" id="toc-upload">Upload</a>
 
 <!-- Place comments regarding knitting here -->
 
@@ -125,20 +125,20 @@ September 28, 2016 and last updated February 14, 2019.
 
 There are 166,000 rows and 11 columns (translated):
 
--   `Candidate`: Name of the candidate, party or campaign committee.
--   `Candidature`: Description of the candidate, party or campaign
-    committee.
--   `Acronym`: Acronym of the political party or type of committee:
-    -   “CI” = Independent Candidate
-    -   “CGI” = Independent Expenditure Committee
--   `Amount`: Amount of money contributed.
--   `Method`: Donation form.
--   `Donor`: Full name of the donor.
--   `City`: City where the donor resides.
--   `Date`: Date the donation was generated (day / month / year).
--   `Event`: Description of the election year or event.
--   `Zip Code`: Donor zip code.
--   `Location 1`: Donation coordinates based on the donor’s zip code.
+- `Candidate`: Name of the candidate, party or campaign committee.
+- `Candidature`: Description of the candidate, party or campaign
+  committee.
+- `Acronym`: Acronym of the political party or type of committee:
+  - “CI” = Independent Candidate
+  - “CGI” = Independent Expenditure Committee
+- `Amount`: Amount of money contributed.
+- `Method`: Donation form.
+- `Donor`: Full name of the donor.
+- `City`: City where the donor resides.
+- `Date`: Date the donation was generated (day / month / year).
+- `Event`: Description of the election year or event.
+- `Zip Code`: Donor zip code.
+- `Location 1`: Donation coordinates based on the donor’s zip code.
 
 ## Download
 
@@ -217,14 +217,15 @@ glimpse(prc)
 #> $ location_1 <chr> "(18.449732, -66.69879)", "(18.212965, -66.058033)", "(18.410462, -66.060533)", "(18.451131, -66.07…
 tail(prc)
 #> # A tibble: 6 × 11
-#>   candidate                              candidacy acronym amount method donor city  date       event zip_code location_1
-#>   <chr>                                  <chr>     <chr>    <dbl> <chr>  <chr> <chr> <date>     <chr> <chr>    <chr>     
-#> 1 JOSE APONTE DALMAU                     Alcalde … PPD        200 Cheque BARU… CARO… 2018-12-20 2018… 00958    (18.34487…
-#> 2 RICARDO ROSSELLO NEVARES               Gobernad… PNP       2700 Efect… EFRA… YABU… 2018-09-18 2018… 00767    (18.07275…
-#> 3 VICTOR EMERIC CATARINEAU               Alcalde … PPD         20 Efect… HECT… VIEQ… 2018-11-30 2018… 00765    (18.12566…
-#> 4 PARTIDO INDEPENDENTISTA PUERTORRIQUEÑO Partido   PIP        100 Trans… EDWI… MAYA… 2018-11-30 2018… 00680    (18.20523…
-#> 5 RICARDO ROSSELLO NEVARES               Gobernad… PNP       1100 Cheque PEDR… TOA … 2018-09-10 2018… 00952    (18.42921…
-#> 6 YASHIRA LEBRON RODRIGUEZ               Represen… PNP        300 Cheque ANGE… BAYA… 2018-12-11 2018… 00959    (18.38706…
+#>   candidate                              candidacy    acronym amount method donor city  date       event zip_c…¹ locat…²
+#>   <chr>                                  <chr>        <chr>    <dbl> <chr>  <chr> <chr> <date>     <chr> <chr>   <chr>  
+#> 1 JOSE APONTE DALMAU                     Alcalde de … PPD        200 Cheque BARU… CARO… 2018-12-20 2018… 00958   (18.34…
+#> 2 RICARDO ROSSELLO NEVARES               Gobernador   PNP       2700 Efect… EFRA… YABU… 2018-09-18 2018… 00767   (18.07…
+#> 3 VICTOR EMERIC CATARINEAU               Alcalde de … PPD         20 Efect… HECT… VIEQ… 2018-11-30 2018… 00765   (18.12…
+#> 4 PARTIDO INDEPENDENTISTA PUERTORRIQUEÑO Partido      PIP        100 Trans… EDWI… MAYA… 2018-11-30 2018… 00680   (18.20…
+#> 5 RICARDO ROSSELLO NEVARES               Gobernador   PNP       1100 Cheque PEDR… TOA … 2018-09-10 2018… 00952   (18.42…
+#> 6 YASHIRA LEBRON RODRIGUEZ               Representan… PNP        300 Cheque ANGE… BAYA… 2018-12-11 2018… 00959   (18.38…
+#> # … with abbreviated variable names ¹​zip_code, ²​location_1
 ```
 
 ### Missing
@@ -574,12 +575,12 @@ Our goal for normalization was to increase the proportion of city values
 known to be valid and reduce the total distinct values by correcting
 misspellings.
 
-| stage                    | prop\_in | n\_distinct | prop\_na | n\_out | n\_diff |
-|:-------------------------|---------:|------------:|---------:|-------:|--------:|
-| `str_to_upper(prc$city)` |    0.975 |         826 |     0.01 |   4021 |     179 |
-| `prc$city_norm`          |    0.976 |         819 |     0.01 |   3978 |     169 |
-| `prc$city_swap`          |    0.991 |         785 |     0.01 |   1522 |     107 |
-| `prc$city_refine`        |    0.991 |         782 |     0.01 |   1519 |     104 |
+| stage                    | prop_in | n_distinct | prop_na | n_out | n_diff |
+|:-------------------------|--------:|-----------:|--------:|------:|-------:|
+| `str_to_upper(prc$city)` |   0.975 |        826 |    0.01 |  4021 |    179 |
+| `prc$city_norm`          |   0.976 |        820 |    0.01 |  3983 |    170 |
+| `prc$city_swap`          |   0.991 |        786 |    0.01 |  1527 |    108 |
+| `prc$city_refine`        |   0.991 |        783 |    0.01 |  1524 |    105 |
 
 You can see how the percentage of valid values increased with each
 stage.

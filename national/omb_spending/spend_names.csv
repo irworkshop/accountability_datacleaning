@@ -222,3 +222,14 @@ fy,zip_name,zip_size,csv_name,csv_size,aws_name
 2021,All_PrimeTransactionsAndSubawards_2021-03-18_H15M54S36662623.zip,   1.13G,All_Assistance_PrimeTransactions_2021-03-18_H17M26S16_10.csv, 327.13M,us_assist-prime_2021-10.csv
 2021,All_PrimeTransactionsAndSubawards_2021-03-18_H15M54S36662623.zip,   1.13G,All_Contracts_Subawards_2021-03-18_H18M25S21_1.csv,  81.73M,us_contract-sub_2021-1.csv
 2021,All_PrimeTransactionsAndSubawards_2021-03-18_H15M54S36662623.zip,   1.13G,All_Assistance_Subawards_2021-03-18_H18M26S58_1.csv, 160.82M,us_assist-sub_2021-1.csv
+2022,All_PrimeTransactionsAndSubawards_2023-01-04_H17M41S28242593.zip,   1.65G,All_Assistance_PrimeTransactions_2023-01-04_H18M04S14_1.csv,  1.24G,us_assist-prime_20220405-20230104_1.csv
+2022,All_PrimeTransactionsAndSubawards_2023-01-04_H17M41S28242593.zip,   1.65G,All_Assistance_PrimeTransactions_2023-01-04_H18M04S14_2.csv,  1.22G,us_assist-prime_20220405-20230104_1.csv
+2022,All_PrimeTransactionsAndSubawards_2023-01-04_H17M41S28242593.zip,   1.65G,All_Assistance_PrimeTransactions_2023-01-04_H18M04S14_3.csv,  1.22G,us_assist-prime_20220405-20230104_2.csv
+2022,All_PrimeTransactionsAndSubawards_2023-01-04_H17M41S28242593.zip,   1.65G,All_Assistance_PrimeTransactions_2023-01-04_H18M04S14_4.csv,  1.22G,us_assist-prime_20220405-20230104_3.csv
+2022,All_PrimeTransactionsAndSubawards_2023-01-04_H17M41S28242593.zip,   1.65G,All_Assistance_PrimeTransactions_2023-01-04_H18M04S14_5.csv,  1.07G,us_assist-prime_20220405-20230104_5.csv
+2022,All_PrimeTransactionsAndSubawards_2023-01-04_H17M41S28242593.zip,   1.65G,All_Assistance_Subawards_2023-01-04_H19M07S03_1.csv,407.38M,us_assist-sub_20220405-20230104_1.csv
+2022,All_PrimeTransactionsAndSubawards_2023-01-04_H17M41S28242593.zip,   1.65G,All_Contracts_PrimeTransactions_2023-01-04_H17M41S28_1.csv,  1.95G,us_contract-prime_20220405-20230104_1.csv
+2022,All_PrimeTransactionsAndSubawards_2023-01-04_H17M41S28242593.zip,   1.65G,All_Contracts_PrimeTransactions_2023-01-04_H17M41S28_2.csv,  1.95G,us_contract-prime_20220405-20230104_2.csv
+2022,All_PrimeTransactionsAndSubawards_2023-01-04_H17M41S28242593.zip,   1.65G,All_Contracts_PrimeTransactions_2023-01-04_H17M41S28_3.csv,  1.95G,us_contract-prime_20220405-20230104_3.csv
+2022,All_PrimeTransactionsAndSubawards_2023-01-04_H17M41S28242593.zip,   1.65G,All_Contracts_PrimeTransactions_2023-01-04_H17M41S28_4.csv,  1.81G,us_contract-prime_20220405-20230104_4.csv
+2022,All_PrimeTransactionsAndSubawards_2023-01-04_H17M41S28242593.zip,   1.65G,All_Contracts_Subawards_2023-01-04_H19M02S25_1.csv,204.21M,us_contract-sub_20220405-20230104_4.csv

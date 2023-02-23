@@ -32,7 +32,7 @@ set.seed(5)
 ```
 
 ```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
-fs::dir_create(here::here("ny", "contracts", "docs"))
+fs::dir_create(here::here("state", "ny", "contracts", "docs"))
 ```
 
 ## Project
@@ -143,7 +143,7 @@ then reading into memory with `vroom::vroom()`.
 
 ```{r raw_path}
 url <- "https://wwe2.osc.state.ny.us/transparency/contracts/contractresults.cfm"
-raw_dir <- dir_create(here("ny", "contracts", "data", "raw"))
+raw_dir <- dir_create(here("state", "ny", "contracts", "data", "raw"))
 raw_path <- path(raw_dir, "contracts-and-amendments.csv")
 ```
 
@@ -177,25 +177,26 @@ if (!file_exists(raw_path)) {
 ```
 
 ```{r raw_read}
-nyc <- vroom(
+nyc <- read_delim(
   file = raw_path,
   delim = ",",
   skip = 1,
-  .name_repair = make_clean_names,
   escape_double = FALSE,
   escape_backslash = FALSE,
+  locale = locale(date_format = "%m/%d/%Y"),
   col_types = cols(
     .default = col_character(),
     `TRANSACTION AMOUNT` = col_double(),
-    `START DATE` = col_date_usa(),
-    `END DATE` = col_date_usa(),
-    `TRANSACTION APPROVED/FILED DATE` = col_date_usa()
+    `START DATE` = col_date(),
+    `END DATE` = col_date(),
+    `TRANSACTION APPROVED/FILED DATE` = col_date()
   )
 )
 ```
 
 ```{r raw_rename}
 nyc <- nyc %>% 
+  clean_names("snake") %>% 
   rename_all(str_remove, "transaction_") %>% 
   rename_all(str_remove, "_\\w+") %>% 
   mutate_at(vars(type), str_remove, "\\sContract$")
@@ -318,6 +319,14 @@ for the spending agency.
 nyc <- mutate(nyc, state = "NY", .after = department)
 ```
 
+## Update
+
+```{r date_new}
+old_date <- as.Date("2020-05-29")
+nyc <- nyc %>% 
+  filter(approved > old_date)
+```
+
 ## Export
 
 ```{r clean_glimpse}
@@ -330,21 +339,31 @@ glimpse(sample_n(nyc, 20))
 1. The 4-digit `year` variable has been created with `lubridate::year()`.
 
 ```{r clean_write}
-clean_dir <- dir_create(here("ny", "contracts", "data", "clean"))
-clean_path <- path(clean_dir, "ny_contracts_clean.csv")
-write_csv(nyc, clean_path, na = "")
-file_size(clean_path)
-mutate(file_encoding(clean_path), across(path, path.abbrev))
+clean_dir <- dir_create(here("state", "ny", "contracts", "data", "clean"))
+csv_dates <- paste(str_remove_all(c(old_date, Sys.Date()), "-"), collapse = "-")
+clean_csv <- path(clean_dir, "ny_contracts_clean.csv")
+write_csv(nyc, clean_csv, na = "")
+(clean_size <- file_size(clean_csv))
+mutate(file_encoding(clean_csv), across(path, path.abbrev))
 ```
 
 ## Upload
 
-```{r}
-s3_dir <- "s3:/publicaccountability/csv/"
-if (require(duckr)) {
-  duckr::duck_upload(
-    url = path(s3_dir, basename(clean_path)),
-    path = clean_path
+We can use the `aws.s3::put_object()` to upload the text file to the IRW server.
+
+```{r aws-upload, eval=FALSE}
+aws_key <- path("csv", basename(clean_csv))
+if (!object_exists(aws_key, "publicaccountability")) {
+  put_object(
+    file = clean_csv,
+    object = aws_key, 
+    bucket = "publicaccountability",
+    acl = "public-read",
+    show_progress = TRUE,
+    multipart = TRUE
   )
 }
+aws_head <- head_object(aws_key, "publicaccountability")
+(aws_size <- as_fs_bytes(attr(aws_head, "content-length")))
+unname(aws_size == clean_size)
 ```

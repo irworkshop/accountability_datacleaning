@@ -1,19 +1,20 @@
 Arkansas Contracts
 ================
 Kiernan Nicholls
-2020-05-07 15:18:47
+2023-01-17 12:49:16
 
-  - [Project](#project)
-  - [Objectives](#objectives)
-  - [Packages](#packages)
-  - [Data](#data)
-  - [Glossary](#glossary)
-  - [Download](#download)
-  - [Extract](#extract)
-  - [Read](#read)
-  - [Explore](#explore)
-  - [Export](#export)
-  - [Dictionary](#dictionary)
+- <a href="#project" id="toc-project">Project</a>
+- <a href="#objectives" id="toc-objectives">Objectives</a>
+- <a href="#packages" id="toc-packages">Packages</a>
+- <a href="#data" id="toc-data">Data</a>
+- <a href="#glossary" id="toc-glossary">Glossary</a>
+- <a href="#download" id="toc-download">Download</a>
+- <a href="#extract" id="toc-extract">Extract</a>
+- <a href="#existing" id="toc-existing">Existing</a>
+- <a href="#read" id="toc-read">Read</a>
+- <a href="#explore" id="toc-explore">Explore</a>
+- <a href="#export" id="toc-export">Export</a>
+- <a href="#upload" id="toc-upload">Upload</a>
 
 <!-- Place comments regarding knitting here -->
 
@@ -24,7 +25,7 @@ give journalists, policy professionals, activists, and the public at
 large a simple way to search across huge volumes of public data about
 people and organizations.
 
-Our goal is to standardizing public data on a few key fields by thinking
+Our goal is to standardize public data on a few key fields by thinking
 of each dataset row as a transaction. For each transaction there should
 be (at least) 3 variables:
 
@@ -67,6 +68,7 @@ pacman::p_load(
   janitor, # clean data frames
   refinr, # cluster and merge
   scales, # format strings
+  aws.s3, # upload to aws
   knitr, # knit documents
   vroom, # read files fast
   rvest, # html scraping
@@ -90,31 +92,31 @@ feature and should be run as such. The project also uses the dynamic
 ``` r
 # where does this document knit?
 here::here()
-#> [1] "/home/kiernan/Code/accountability_datacleaning/R_campfin"
+#> [1] "/home/kiernan/Documents/accountability_datacleaning"
 ```
 
 ## Data
 
-Arizona contracts data can be obtained from the [state transparecy
+Arkansas contracts data can be obtained from the [state transparecy
 website](https://transparency.arkansas.gov/).
 
 > Transparency.Arkansas.gov is a resource for citizens, legislators,
 > news media, scholars, and nonprofit groups who want to know where the
 > state, their city, town, and school district get their money, and how
-> they spend it. It was created as a result of
-> [Act 303](https://transparency.arkansas.gov/assets/pdf/Act303.pdf)
-> which was passed in the 2011 General Session requiring the Department
-> of Finance and Administration to create a free website, accessible to
-> the public that contains state financial information.
+> they spend it. It was created as a result of [Act
+> 303](https://transparency.arkansas.gov/assets/pdf/Act303.pdf) which
+> was passed in the 2011 General Session requiring the Department of
+> Finance and Administration to create a free website, accessible to the
+> public that contains state financial information.
 
 > State Agencies negotiate contracts with vendors to provide services or
 > goods at set prices. Contract information is available. Choose a link
 > to learn more about contracts awarded in Arkansas.
 
 > Three types of transactions are displayed on this website: 1. Standard
-> contracts in excess of $25,000 and 1. Construction contracts in excess
-> of $20,000 1. Single purchase orders in excess of $25,000
-> 
+> contracts in excess of \$25,000 and 1. Construction contracts in
+> excess of \$20,000 1. Single purchase orders in excess of \$25,000
+>
 > Data about these contracts is displayed on this website. Actual
 > contracts are displayed as PDF documents. Some contract data is
 > considered private or protected under state and federal laws. That
@@ -144,7 +146,7 @@ on the [search page](https://www.ark.org/dfa/transparency/contracts.php)
 by selecting a fiscal year from the drop down menu.
 
 ``` r
-raw_dir <- dir_create(here("ar", "contracts", "data", "raw"))
+raw_dir <- dir_create(here("state", "ar", "contracts", "data", "raw"))
 ```
 
 Or, we can use an `httr::GET()` request for each year. This will change
@@ -152,7 +154,8 @@ the URL and ask for the appropriate archive from the server.
 
 ``` r
 if (length(dir_ls(raw_dir)) == 0) {
-  for (year in 2013:2020) {
+  for (year in 2013:2022) {
+    message(year)
     get_path <- path(raw_dir, glue("contracts_overview_{year}.zip"))
     GET(
       url = glue("https://www.ark.org/dfa/transparency_{year}/contracts.php"),
@@ -174,21 +177,23 @@ if (length(dir_ls(raw_dir)) == 0) {
 ```
 
 ``` r
-zip_info <- as_tibble(dir_info(raw_dir))
+zip_info <- as_tibble(dir_info(raw_dir, glob = "*.zip"))
 zip_info %>% 
   select(path, size, modification_time) %>% 
   mutate(across(path, ~as_fs_path(basename(.))))
-#> # A tibble: 8 x 3
-#>   path                               size modification_time  
-#>   <fs::path>                  <fs::bytes> <dttm>             
-#> 1 contracts_overview_2013.zip     396.58K 2020-05-07 13:09:19
-#> 2 contracts_overview_2014.zip       1.27M 2020-05-07 13:09:25
-#> 3 contracts_overview_2015.zip       1.36M 2020-05-07 13:09:32
-#> 4 contracts_overview_2016.zip     453.98K 2020-05-07 13:09:35
-#> 5 contracts_overview_2017.zip     349.64K 2020-05-07 13:09:38
-#> 6 contracts_overview_2018.zip       2.49M 2020-05-07 13:09:55
-#> 7 contracts_overview_2019.zip       2.54M 2020-05-07 13:10:13
-#> 8 contracts_overview_2020.zip       2.39M 2020-05-07 11:56:59
+#> # A tibble: 10 × 3
+#>    path                               size modification_time  
+#>    <fs::path>                  <fs::bytes> <dttm>             
+#>  1 contracts_overview_2013.zip     396.58K 2023-01-17 11:49:16
+#>  2 contracts_overview_2014.zip       1.27M 2023-01-17 11:49:23
+#>  3 contracts_overview_2015.zip       1.36M 2023-01-17 11:49:28
+#>  4 contracts_overview_2016.zip     453.98K 2023-01-17 11:49:30
+#>  5 contracts_overview_2017.zip     349.64K 2023-01-17 11:49:31
+#>  6 contracts_overview_2018.zip       2.49M 2023-01-17 11:49:40
+#>  7 contracts_overview_2019.zip       2.54M 2023-01-17 11:49:50
+#>  8 contracts_overview_2020.zip       2.46M 2023-01-17 11:49:58
+#>  9 contracts_overview_2021.zip       2.55M 2023-01-17 11:50:07
+#> 10 contracts_overview_2022.zip       2.54M 2023-01-17 11:50:17
 ```
 
 ## Extract
@@ -203,8 +208,9 @@ the fiscal year to the file name.
 
 ``` r
 for (z in zip_info$path) {
+  message(basename(z))
   # extract csv files
-  out_files <- unzip(z, exdir = raw_dir)
+  out_files <- unzip(z, exdir = raw_dir, overwrite = TRUE)
   # determine year from zip
   year <- str_extract(z, "\\d{4}")
   # create new file names
@@ -212,6 +218,33 @@ for (z in zip_info$path) {
   out_new <- path(raw_dir, out_new)
   # rename with year
   file_move(out_files, out_new)
+}
+```
+
+## Existing
+
+``` r
+old_find <- object_exists(
+  object = "csv/ar_contracts_clean.csv",
+  bucket = "publicaccountability"
+)
+```
+
+``` r
+if (old_find) {
+  arc_old <- s3read_using(
+    FUN = read_csv,
+    object = "csv/ar_contracts_clean.csv",
+    bucket = "publicaccountability",
+    col_types = cols(
+      .default = col_character(),
+      date = col_date()
+    )
+  )
+  arc_old %>% 
+    count(fiscal_year)
+  count_na(arc_old$date)
+  max_old <- max(arc_old$date[arc_old$year < 2021], na.rm = TRUE) + 1
 }
 ```
 
@@ -224,20 +257,6 @@ variables are present in both.
 ``` r
 md_bullet(read_names(out_new[1])) # purchase orders
 #> * Fiscal Year
-#> * Agency ID
-#> * Agency
-#> * Contract Number
-#> * Release PO
-#> * Release Date
-#> * PO Agency Value
-#> * PO Agency Name
-#> * Material Group
-#> * Vendor Name
-#> * Vendor DBA
-#> * Amount Ordered
-#> * Amount Spent
-md_bullet(read_names(out_new[2])) # main contracts
-#> * Fiscal Year
 #> * Agency
 #> * Document Category
 #> * Contract Number
@@ -248,6 +267,20 @@ md_bullet(read_names(out_new[2])) # main contracts
 #> * Contract Start Date
 #> * Contract End Date
 #> * Contract Value
+#> * Amount Ordered
+#> * Amount Spent
+md_bullet(read_names(out_new[2])) # main contracts
+#> * Fiscal Year
+#> * Agency ID
+#> * Agency
+#> * Contract Number
+#> * Release PO
+#> * Release Date
+#> * PO Agency Value
+#> * PO Agency Name
+#> * Material Group
+#> * Vendor Name
+#> * Vendor DBA
 #> * Amount Ordered
 #> * Amount Spent
 ```
@@ -263,6 +296,8 @@ md_bullet(md_code(basename(raw_paths)))
 #> * `main_contracts-2018.csv`
 #> * `main_contracts-2019.csv`
 #> * `main_contracts-2020.csv`
+#> * `main_contracts-2021.csv`
+#> * `main_contracts-2022.csv`
 #> * `purchase_orders-2013.csv`
 #> * `purchase_orders-2014.csv`
 #> * `purchase_orders-2015.csv`
@@ -271,6 +306,15 @@ md_bullet(md_code(basename(raw_paths)))
 #> * `purchase_orders-2018.csv`
 #> * `purchase_orders-2019.csv`
 #> * `purchase_orders-2020.csv`
+#> * `purchase_orders-2021.csv`
+#> * `purchase_orders-2022.csv`
+```
+
+``` r
+if (old_find) {
+  new_file <- as.integer(str_extract(raw_paths, "\\d{4}")) >= year(max_old)
+  raw_paths <- raw_paths[new_file]
+}
 ```
 
 ``` r
@@ -309,17 +353,12 @@ If the files were all read properly, there should only be years in the
 
 ``` r
 count(arc, `Fiscal Year`)
-#> # A tibble: 8 x 2
+#> # A tibble: 3 × 2
 #>   `Fiscal Year`      n
 #>           <int>  <int>
-#> 1          2013  20509
-#> 2          2014  66129
-#> 3          2015  71957
-#> 4          2016  22449
-#> 5          2017  16450
-#> 6          2018 136321
-#> 7          2019 137851
-#> 8          2020 133013
+#> 1          2020 136727
+#> 2          2021 141817
+#> 3          2022 141896
 ```
 
 We have to do some parsing and renaming after the fact to account for
@@ -332,7 +371,7 @@ represent the transaction.
 ``` r
 arc <- arc %>% 
   clean_names("snake") %>% 
-  mutate(across(ends_with("date"), parse_date)) %>% 
+  mutate(across(ends_with("date"), parse_date, na = "0000-00-00")) %>% 
   mutate(across(contract_value, parse_double)) %>% 
   mutate(across(file, basename)) %>% 
   mutate(date = coalesce(release_date, contract_start_date)) %>% 
@@ -344,15 +383,6 @@ arc <- arc %>%
     remove = TRUE
   ) %>% 
   mutate(across(vendor_dba, na_if, ""))
-#> Warning: 656 parsing failures.
-#>   row col   expected     actual
-#> 85235  -- valid date 0000-00-00
-#> 85236  -- valid date 0000-00-00
-#> 85237  -- valid date 0000-00-00
-#> 85238  -- valid date 0000-00-00
-#> 85239  -- valid date 0000-00-00
-#> ..... ... .......... ..........
-#> See problems(...) for more details.
 ```
 
 For purchase orders, almost half the agency names are simply “STATEWIDE
@@ -363,20 +393,20 @@ arc %>%
   filter(str_detect(file, "order")) %>% 
   count(agency, po_agency_name, sort = TRUE) %>% 
   mutate(p = n/sum(n))
-#> # A tibble: 314 x 4
-#>    agency                       po_agency_name                   n      p
-#>    <chr>                        <chr>                        <int>  <dbl>
-#>  1 STATEWIDE CONTRACT           AR DEPT OF HUMAN SERVICES    87407 0.163 
-#>  2 AR DEPT OF TRANSPORTATION    AR DEPT OF TRANSPORTATION    68312 0.128 
-#>  3 STATEWIDE CONTRACT           DEPT OF COMMUNITY CORRECTION 52090 0.0972
-#>  4 AR DEPT OF HUMAN SERVICES    AR DEPT OF HUMAN SERVICES    36284 0.0677
-#>  5 STATE HIGHWAY & TRANS DEPT   STATE HIGHWAY & TRANS DEPT   32259 0.0602
-#>  6 DEPT OF COMMUNITY CORRECTION DEPT OF COMMUNITY CORRECTION 32071 0.0599
-#>  7 STATEWIDE CONTRACT           DEPARTMENT OF CORRECTION     25371 0.0474
-#>  8 DEPARTMENT OF CORRECTION     DEPARTMENT OF CORRECTION     22865 0.0427
-#>  9 DEPT OF PARKS AND TOURISM    DEPT OF PARKS AND TOURISM    22721 0.0424
-#> 10 STATEWIDE CONTRACT           DEPT OF PARKS AND TOURISM    22172 0.0414
-#> # … with 304 more rows
+#> # A tibble: 144 × 4
+#>    agency                        po_agency_name     n      p
+#>    <chr>                         <chr>          <int>  <dbl>
+#>  1 AR DEPT OF TRANSPORTATION     <NA>            5623 0.151 
+#>  2 AR DEPT OF HUMAN SERVICES     <NA>            5317 0.143 
+#>  3 STATEWIDE CONTRACT            <NA>            4055 0.109 
+#>  4 AR DEPARTMENT OF HEALTH       <NA>            2718 0.0732
+#>  5 DEPARTMENT OF CORRECTION      <NA>            1570 0.0423
+#>  6 AR GAME AND FISH COMMISSION   <NA>            1243 0.0335
+#>  7 DEPT OF PARKS AND TOURISM     <NA>            1213 0.0326
+#>  8 STATE MILITARY DEPARTMENT     <NA>             971 0.0261
+#>  9 DEPT OF ARKANSAS STATE POLICE <NA>             924 0.0249
+#> 10 DFA - REVENUE SERVICES DIV    <NA>             815 0.0219
+#> # … with 134 more rows
 ```
 
 The `po_agency_name` variable is not present for main contracts, so we
@@ -387,20 +417,20 @@ arc %>%
   filter(str_detect(file, "contract")) %>% 
   count(agency, po_agency_name, sort = TRUE) %>% 
   mutate(p = n/sum(n))
-#> # A tibble: 154 x 4
-#>    agency                        po_agency_name     n      p
-#>    <chr>                         <chr>          <int>  <dbl>
-#>  1 AR DEPT OF HUMAN SERVICES     <NA>           11529 0.167 
-#>  2 STATEWIDE CONTRACT            <NA>            7964 0.116 
-#>  3 AR DEPT OF TRANSPORTATION     <NA>            6388 0.0927
-#>  4 AR DEPARTMENT OF HEALTH       <NA>            6090 0.0883
-#>  5 DEPARTMENT OF CORRECTION      <NA>            4013 0.0582
-#>  6 DEPT OF PARKS AND TOURISM     <NA>            3159 0.0458
-#>  7 STATE HIGHWAY & TRANS DEPT    <NA>            2477 0.0359
-#>  8 DEPT OF COMMUNITY CORRECTION  <NA>            2056 0.0298
-#>  9 AR GAME AND FISH COMMISSION   <NA>            1885 0.0273
-#> 10 DEPT OF ARKANSAS STATE POLICE <NA>            1613 0.0234
-#> # … with 144 more rows
+#> # A tibble: 246 × 4
+#>    agency                       po_agency_name                    n      p
+#>    <chr>                        <chr>                         <int>  <dbl>
+#>  1 STATEWIDE CONTRACT           AR DEPT OF HUMAN SERVICES     84116 0.219 
+#>  2 STATEWIDE CONTRACT           DEPT OF COMMUNITY CORRECTION  57117 0.149 
+#>  3 AR DEPT OF TRANSPORTATION    AR DEPT OF TRANSPORTATION     55742 0.145 
+#>  4 STATEWIDE CONTRACT           DEPARTMENT OF CORRECTION      24373 0.0636
+#>  5 STATEWIDE CONTRACT           DEPT OF PARKS AND TOURISM     18733 0.0489
+#>  6 STATEWIDE CONTRACT           AR DEPARTMENT OF HEALTH       13056 0.0341
+#>  7 AR DEPT OF HUMAN SERVICES    AR DEPT OF HUMAN SERVICES     10850 0.0283
+#>  8 DEPARTMENT OF CORRECTION     DEPARTMENT OF CORRECTION       8713 0.0227
+#>  9 DEPT OF COMMUNITY CORRECTION DEPT OF COMMUNITY CORRECTION   8494 0.0222
+#> 10 STATEWIDE CONTRACT           DEPT OF ARKANSAS STATE POLICE  7133 0.0186
+#> # … with 236 more rows
 ```
 
 ``` r
@@ -415,6 +445,13 @@ arc <- arc %>%
   )
 ```
 
+``` r
+if (old_find) {
+  arc <- arc %>% 
+    filter(date > as.Date(max_old))
+}
+```
+
 ## Explore
 
 Combining these two file types results in a structure where matching
@@ -423,40 +460,42 @@ is most noticeable at the `tail()`.
 
 ``` r
 glimpse(arc)
-#> Rows: 604,679
+#> Rows: 82,888
 #> Columns: 19
-#> $ file                <chr> "main_contracts-2013.csv", "main_contracts-2013.csv", "main_contract…
-#> $ fiscal_year         <int> 2013, 2013, 2013, 2013, 2013, 2013, 2013, 2013, 2013, 2013, 2013, 20…
-#> $ agency              <chr> "ADMIN OFFICE OF THE COURTS", "ADMIN OFFICE OF THE COURTS", "ADMIN O…
-#> $ document_category   <chr> "OUTLINE AGREEMENT", "OUTLINE AGREEMENT", "OUTLINE AGREEMENT", "OUTL…
-#> $ contract_number     <chr> "4600018561", "4600014007", "4600014222", "4600013803", "4600014487"…
-#> $ material_group      <chr> "LEGAL SERVICES, ATTORNEYS", "LEGAL SERVICES, ATTORNEYS", "REIMBURSA…
-#> $ type_of_contract    <chr> "PROFESSIONAL SERVICES", "PROFESSIONAL SERVICES", "PROFESSIONAL SERV…
-#> $ vendor_name         <chr> "FOGLEMAN ROGERS & COE", "PAMELA FISK", "GOODWIN JONES TERRY", "MAZZ…
-#> $ vendor_dba          <chr> "J MATTHEW COE", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
-#> $ contract_start_date <date> 2012-07-01, 2012-07-01, 2012-07-01, 2012-07-01, 2012-07-01, 2012-07…
-#> $ contract_end_date   <date> 2013-06-30, 2013-06-30, 2013-06-30, 2013-06-30, 2013-06-30, 2013-06…
-#> $ contract_value      <dbl> 74316.33, 316138.68, 1411.44, 1411.44, 1411.44, 1411.44, 1411.44, 14…
-#> $ amount_ordered      <dbl> 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 40000.00…
-#> $ amount_spent        <dbl> 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 40000.00…
-#> $ agency_id           <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
-#> $ release_po          <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
-#> $ release_date        <date> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
-#> $ type                <chr> "Contract", "Contract", "Contract", "Contract", "Contract", "Contrac…
-#> $ date                <date> 2012-07-01, 2012-07-01, 2012-07-01, 2012-07-01, 2012-07-01, 2012-07…
+#> $ file                <chr> "main_contracts-2021.csv", "main_contracts-2021.csv", "main_contracts…
+#> $ fiscal_year         <int> 2021, 2021, 2021, 2021, 2021, 2021, 2021, 2021, 2021, 2021, 2021, 202…
+#> $ agency_id           <chr> "0009", "0009", "0009", "0009", "0009", "0009", "0009", "0023", "0023…
+#> $ agency              <chr> "LEGISLATIVE AUDIT", "LEGISLATIVE AUDIT", "LEGISLATIVE AUDIT", "LEGIS…
+#> $ contract_number     <chr> "4600040093", "4600044033", "4600044997", "4600046289", "4600040690",…
+#> $ release_po          <chr> "4501955832", "4501955833", "4501955834", "4501955835", "4501955836",…
+#> $ release_date        <date> 2020-07-07, 2020-07-07, 2020-07-07, 2020-07-07, 2020-07-07, 2020-07-…
+#> $ material_group      <chr> "REAL PROPERTY RENTAL OR LEASE", "REAL PROPERTY RENTAL OR LEASE", "RE…
+#> $ vendor_name         <chr> "AR TEACHER RETIREMENT SYSTEM", "RLW PROPERTIES LLC", "MC BAKER PROPE…
+#> $ vendor_dba          <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, "BELL LAW CO", "BELL LAW CO", NA,…
+#> $ amount_ordered      <dbl> 476116.68, 55440.00, 34343.28, 20987.04, 9265.32, 12240.00, 12362.40,…
+#> $ amount_spent        <dbl> 476116.68, 55440.00, 34343.28, 20987.04, 9265.32, 12240.00, 12362.40,…
+#> $ document_category   <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
+#> $ type_of_contract    <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
+#> $ contract_start_date <date> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
+#> $ contract_end_date   <date> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
+#> $ contract_value      <dbl> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
+#> $ type                <chr> "Contract", "Contract", "Contract", "Contract", "Contract", "Contract…
+#> $ date                <date> 2020-07-07, 2020-07-07, 2020-07-07, 2020-07-07, 2020-07-07, 2020-07-…
 tail(arc)
-#> # A tibble: 6 x 19
-#>   file  fiscal_year agency document_catego… contract_number material_group type_of_contract
-#>   <chr>       <int> <chr>  <chr>            <chr>           <chr>          <chr>           
-#> 1 purc…        2020 DEPAR… <NA>             4600042813      HARDWARE AND … <NA>            
-#> 2 purc…        2020 AR DE… <NA>             4600045698      OFFICE SUPPLI… <NA>            
-#> 3 purc…        2020 DEPAR… <NA>             4600044211      MISCELLANEOUS… <NA>            
-#> 4 purc…        2020 DEPAR… <NA>             4600044211      TIRES AND TUB… <NA>            
-#> 5 purc…        2020 AR DE… <NA>             4600045698      OFFICE SUPPLI… <NA>            
-#> 6 purc…        2020 DEPAR… <NA>             4600045698      OFFICE SUPPLI… <NA>            
-#> # … with 12 more variables: vendor_name <chr>, vendor_dba <chr>, contract_start_date <date>,
-#> #   contract_end_date <date>, contract_value <dbl>, amount_ordered <dbl>, amount_spent <dbl>,
-#> #   agency_id <chr>, release_po <chr>, release_date <date>, type <chr>, date <date>
+#> # A tibble: 6 × 19
+#>   file    fisca…¹ agenc…² agency contr…³ relea…⁴ release_…⁵ mater…⁶ vendo…⁷ vendo…⁸ amoun…⁹ amoun…˟
+#>   <chr>     <int> <chr>   <chr>  <chr>   <chr>   <date>     <chr>   <chr>   <chr>     <dbl>   <dbl>
+#> 1 purcha…    2022 <NA>    TSS -… 450206… <NA>    NA         FIRE P… AMERIC… <NA>     32127   32127 
+#> 2 purcha…    2022 <NA>    TSS -… 450205… <NA>    NA         TRANSP… MOHAWK… <NA>      3570.   3558.
+#> 3 purcha…    2022 <NA>    TSS -… 450203… <NA>    NA         ELEVAT… OTIS E… <NA>     72575.  72575.
+#> 4 purcha…    2022 <NA>    WORKE… 460004… <NA>    NA         ADMINI… TSS - … <NA>    156266. 153365.
+#> 5 purcha…    2022 <NA>    WORKE… 460004… <NA>    NA         REIMBU… OSBORN… <NA>     51900   51900 
+#> 6 purcha…    2022 <NA>    WORKE… 450202… <NA>    NA         REAL P… BEST P… <NA>     35012.  35012.
+#> # … with 7 more variables: document_category <chr>, type_of_contract <chr>,
+#> #   contract_start_date <date>, contract_end_date <date>, contract_value <dbl>, type <chr>,
+#> #   date <date>, and abbreviated variable names ¹​fiscal_year, ²​agency_id, ³​contract_number,
+#> #   ⁴​release_po, ⁵​release_date, ⁶​material_group, ⁷​vendor_name, ⁸​vendor_dba, ⁹​amount_ordered,
+#> #   ˟​amount_spent
 ```
 
 ### Missing
@@ -466,28 +505,28 @@ the values from the columns found only in one type of file are missing.
 
 ``` r
 col_stats(arc, count_na)
-#> # A tibble: 19 x 4
-#>    col                 class       n         p
-#>    <chr>               <chr>   <int>     <dbl>
-#>  1 file                <chr>       0 0        
-#>  2 fiscal_year         <int>       0 0        
-#>  3 agency              <chr>      12 0.0000198
-#>  4 document_category   <chr>  535741 0.886    
-#>  5 contract_number     <chr>     634 0.00105  
-#>  6 material_group      <chr>     807 0.00133  
-#>  7 type_of_contract    <chr>  535768 0.886    
-#>  8 vendor_name         <chr>     723 0.00120  
-#>  9 vendor_dba          <chr>  457050 0.756    
-#> 10 contract_start_date <date> 535741 0.886    
-#> 11 contract_end_date   <date> 535741 0.886    
-#> 12 contract_value      <dbl>  535741 0.886    
-#> 13 amount_ordered      <dbl>       0 0        
-#> 14 amount_spent        <dbl>       0 0        
-#> 15 agency_id           <chr>   68938 0.114    
-#> 16 release_po          <chr>   68938 0.114    
-#> 17 release_date        <date>  69594 0.115    
-#> 18 type                <chr>       0 0        
-#> 19 date                <date>    656 0.00108
+#> # A tibble: 19 × 4
+#>    col                 class      n     p
+#>    <chr>               <chr>  <int> <dbl>
+#>  1 file                <chr>      0 0    
+#>  2 fiscal_year         <int>      0 0    
+#>  3 agency_id           <chr>   8844 0.107
+#>  4 agency              <chr>      0 0    
+#>  5 contract_number     <chr>      0 0    
+#>  6 release_po          <chr>   8844 0.107
+#>  7 release_date        <date>  8844 0.107
+#>  8 material_group      <chr>      0 0    
+#>  9 vendor_name         <chr>      0 0    
+#> 10 vendor_dba          <chr>  67740 0.817
+#> 11 amount_ordered      <dbl>      0 0    
+#> 12 amount_spent        <dbl>      0 0    
+#> 13 document_category   <chr>  74044 0.893
+#> 14 type_of_contract    <chr>  74044 0.893
+#> 15 contract_start_date <date> 74044 0.893
+#> 16 contract_end_date   <date> 74044 0.893
+#> 17 contract_value      <dbl>  74044 0.893
+#> 18 type                <chr>      0 0    
+#> 19 date                <date>     0 0
 ```
 
 But we can flag those key values that should be present in both file
@@ -496,7 +535,7 @@ types.
 ``` r
 arc <- arc %>% flag_na(date, agency, amount_spent, vendor_name)
 percent(mean(arc$na_flag), 0.01)
-#> [1] "0.13%"
+#> [1] "0.00%"
 ```
 
 ``` r
@@ -504,20 +543,8 @@ arc %>%
   filter(na_flag) %>% 
   select(date, agency, amount_spent, vendor_name, type) %>% 
   distinct()
-#> # A tibble: 150 x 5
-#>    date       agency           amount_spent vendor_name type    
-#>    <date>     <chr>                   <dbl> <chr>       <chr>   
-#>  1 2013-08-03 AUDITOR OF STATE       48476  <NA>        Contract
-#>  2 2012-08-08 AUDITOR OF STATE      300000  <NA>        Purchase
-#>  3 2012-09-28 LAND DEPARTMENT        11280  <NA>        Purchase
-#>  4 2012-09-06 LAND DEPARTMENT        13020  <NA>        Purchase
-#>  5 2012-08-13 LAND DEPARTMENT        46025. <NA>        Purchase
-#>  6 2012-09-20 LAND DEPARTMENT       101857. <NA>        Purchase
-#>  7 2012-12-05 LAND DEPARTMENT        48112. <NA>        Purchase
-#>  8 2012-11-05 LAND DEPARTMENT        57388. <NA>        Purchase
-#>  9 2012-12-19 LAND DEPARTMENT        11646. <NA>        Purchase
-#> 10 2012-12-05 LAND DEPARTMENT        44731. <NA>        Purchase
-#> # … with 140 more rows
+#> # A tibble: 0 × 5
+#> # … with 5 variables: date <date>, agency <chr>, amount_spent <dbl>, vendor_name <chr>, type <chr>
 ```
 
 ### Duplicates
@@ -532,30 +559,30 @@ arc <- flag_dupes(arc, everything())
 
 ``` r
 col_stats(arc, n_distinct)
-#> # A tibble: 21 x 4
-#>    col                 class       n          p
-#>    <chr>               <chr>   <int>      <dbl>
-#>  1 file                <chr>      16 0.0000265 
-#>  2 fiscal_year         <int>       8 0.0000132 
-#>  3 agency              <chr>     155 0.000256  
-#>  4 document_category   <chr>       3 0.00000496
-#>  5 contract_number     <chr>   29853 0.0494    
-#>  6 material_group      <chr>     424 0.000701  
-#>  7 type_of_contract    <chr>       5 0.00000827
-#>  8 vendor_name         <chr>    7413 0.0123    
-#>  9 vendor_dba          <chr>    1720 0.00284   
-#> 10 contract_start_date <date>   2827 0.00468   
-#> 11 contract_end_date   <date>   2573 0.00426   
-#> 12 contract_value      <dbl>   27287 0.0451    
-#> 13 amount_ordered      <dbl>  197473 0.327     
-#> 14 amount_spent        <dbl>  199126 0.329     
-#> 15 agency_id           <chr>     153 0.000253  
-#> 16 release_po          <chr>  225404 0.373     
-#> 17 release_date        <date>   3785 0.00626   
-#> 18 type                <chr>       2 0.00000331
-#> 19 date                <date>   4073 0.00674   
-#> 20 na_flag             <lgl>       2 0.00000331
-#> 21 dupe_flag           <lgl>       2 0.00000331
+#> # A tibble: 21 × 4
+#>    col                 class      n         p
+#>    <chr>               <chr>  <int>     <dbl>
+#>  1 file                <chr>      4 0.0000483
+#>  2 fiscal_year         <int>      2 0.0000241
+#>  3 agency_id           <chr>    111 0.00134  
+#>  4 agency              <chr>    117 0.00141  
+#>  5 contract_number     <chr>   7589 0.0916   
+#>  6 release_po          <chr>  40842 0.493    
+#>  7 release_date        <date>   671 0.00810  
+#>  8 material_group      <chr>    329 0.00397  
+#>  9 vendor_name         <chr>   3293 0.0397   
+#> 10 vendor_dba          <chr>    871 0.0105   
+#> 11 amount_ordered      <dbl>  44455 0.536    
+#> 12 amount_spent        <dbl>  44345 0.535    
+#> 13 document_category   <chr>      3 0.0000362
+#> 14 type_of_contract    <chr>      5 0.0000603
+#> 15 contract_start_date <date>   547 0.00660  
+#> 16 contract_end_date   <date>   582 0.00702  
+#> 17 contract_value      <dbl>   4863 0.0587   
+#> 18 type                <chr>      2 0.0000241
+#> 19 date                <date>   687 0.00829  
+#> 20 na_flag             <lgl>      1 0.0000121
+#> 21 dupe_flag           <lgl>      2 0.0000241
 ```
 
 ``` r
@@ -580,41 +607,41 @@ explore_plot(arc, type_of_contract)
 
 ``` r
 mean(arc$amount_ordered != arc$amount_spent)
-#> [1] 0.2299865
+#> [1] 0.3238949
 noquote(map_chr(summary(arc$amount_spent), dollar))
-#>            Min.         1st Qu.          Median            Mean         3rd Qu.            Max. 
-#>      -$2,389.20         $232.19       $1,093.75        $189,670         $10,700 $43,490,471,078
+#>        Min.     1st Qu.      Median        Mean     3rd Qu.        Max. 
+#>          $0     $175.38     $759.90  $69,350.94   $5,477.04 $87,735,393
 mean(arc$amount_spent <= 0)
-#> [1] 0.0310115
+#> [1] 0.06658382
 ```
 
-The maximum `amount_spent` is $43,490,471,078. In this value, we can see
-an enormous discrepancy between the `amount_ordered` and the
+The maximum `amount_spent` is \$87,735,393. In this value, we can see an
+enormous discrepancy between the `amount_ordered` and the
 `amount_spent`.
 
 ``` r
 glimpse(arc[which.max(arc$amount_spent), ])
 #> Rows: 1
 #> Columns: 21
-#> $ file                <chr> "main_contracts-2016.csv"
-#> $ fiscal_year         <int> 2016
-#> $ agency              <chr> "ARKANSAS BUILDING AUTHORITY"
-#> $ document_category   <chr> "OUTLINE AGREEMENT"
-#> $ contract_number     <chr> "4600032490"
-#> $ material_group      <chr> "JANITORIAL/CUSTODIAL SERVICES"
-#> $ type_of_contract    <chr> "OTHER"
-#> $ vendor_name         <chr> "D & B JANITORIAL SERVICES INC"
-#> $ vendor_dba          <chr> NA
-#> $ contract_start_date <date> 2014-07-01
-#> $ contract_end_date   <date> 2016-06-30
-#> $ contract_value      <dbl> 43490471078
-#> $ amount_ordered      <dbl> 227933.5
-#> $ amount_spent        <dbl> 43490471078
+#> $ file                <chr> "purchase_orders-2022.csv"
+#> $ fiscal_year         <int> 2022
 #> $ agency_id           <chr> NA
+#> $ agency              <chr> "AR DEPT OF HUMAN SERVICES"
+#> $ contract_number     <chr> "4600047191"
 #> $ release_po          <chr> NA
 #> $ release_date        <date> NA
-#> $ type                <chr> "Contract"
-#> $ date                <date> 2014-07-01
+#> $ material_group      <chr> "PROFESSIONAL MEDICAL SERVICES - INCLUDING PHYSICIANS"
+#> $ vendor_name         <chr> "GAINWELL TECHNOLOGIES LLC"
+#> $ vendor_dba          <chr> NA
+#> $ amount_ordered      <dbl> 88083231
+#> $ amount_spent        <dbl> 87735393
+#> $ document_category   <chr> "OUTLINE AGREEMENT"
+#> $ type_of_contract    <chr> "OTHER"
+#> $ contract_start_date <date> 2020-07-29
+#> $ contract_end_date   <date> 2021-11-30
+#> $ contract_value      <dbl> 371471466
+#> $ type                <chr> "Purchase"
+#> $ date                <date> 2020-07-29
 #> $ na_flag             <lgl> FALSE
 #> $ dupe_flag           <lgl> FALSE
 ```
@@ -627,39 +654,39 @@ arc %>%
   mutate(amount_dif = amount_spent - amount_ordered) %>% 
   select(agency, contains("amount"), material_group) %>% 
   arrange(amount_dif)
-#> # A tibble: 604,679 x 5
-#>    agency                      amount_ordered amount_spent  amount_dif material_group      
-#>    <chr>                                <dbl>        <dbl>       <dbl> <chr>               
-#>  1 DEPT OF FINANCE AND ADMIN       140308182.     1860782. -138447400  INSURANCE, ALL TYPES
-#>  2 DEPT OF FINANCE AND ADMIN       140308182.     1860782. -138447400  INSURANCE, ALL TYPES
-#>  3 ARKANSAS LOTTERY COMMISSION      81102672.           0   -81102672. LOTTERY GAMING      
-#>  4 ARKANSAS LOTTERY COMMISSION      81102672.           0   -81102672. LOTTERY GAMING      
-#>  5 ARKANSAS LOTTERY COMMISSION      65428723.           0   -65428723. LOTTERY GAMING      
-#>  6 ARKANSAS LOTTERY COMMISSION      63343743.           0   -63343743. LOTTERY GAMING      
-#>  7 ARKANSAS LOTTERY COMMISSION      63343743.           0   -63343743. LOTTERY GAMING      
-#>  8 ARKANSAS LOTTERY COMMISSION      53144227.           0   -53144227. LOTTERY GAMING      
-#>  9 ARKANSAS LOTTERY COMMISSION      46490179.           0   -46490179. LOTTERY GAMING      
-#> 10 ARKANSAS LOTTERY COMMISSION      46490179.           0   -46490179. LOTTERY GAMING      
-#> # … with 604,669 more rows
+#> # A tibble: 82,888 × 5
+#>    agency                    amount_ordered amount_spent amount_dif material_group                 
+#>    <chr>                              <dbl>        <dbl>      <dbl> <chr>                          
+#>  1 AR DEPARTMENT OF HEALTH        32500000      1239929. -31260071. MEDICAL AND LABORATORY SERVICE…
+#>  2 AR DEPARTMENT OF HEALTH        32500000      1239929. -31260071. MEDICAL AND LABORATORY SERVICE…
+#>  3 AR DEPARTMENT OF HEALTH        32605048.    13631296. -18973752. LABORATORY EQUIPMENT AND ACCES…
+#>  4 AR DEPARTMENT OF HEALTH        17236033.        2442. -17233591. LABORATORY EQUIPMENT AND ACCES…
+#>  5 AR DEPARTMENT OF HEALTH        17229928.           0  -17229928. LABORATORY EQUIPMENT AND ACCES…
+#>  6 AR DEPT OF HUMAN SERVICES      53995650.    39294705. -14700944. DATA PROCESSING, COMPUTER, AND…
+#>  7 STATEWIDE SHARED SERVICES      97508282.    86170055. -11338226. INSURANCE MANAGEMENT SERVICES  
+#>  8 STATEWIDE SHARED SERVICES      53208077.    41869851. -11338226. INSURANCE MANAGEMENT SERVICES  
+#>  9 AR DEPARTMENT OF HEALTH        52688300     42333137. -10355163. MISCELLANEOUS SERVICES         
+#> 10 AR DEPARTMENT OF HEALTH        52688300     42333137. -10355163. MISCELLANEOUS SERVICES         
+#> # … with 82,878 more rows
 
 arc %>% 
   mutate(amount_dif = amount_spent - amount_ordered) %>% 
   select(agency, contains("amount"), material_group) %>% 
   arrange(desc(amount_dif))
-#> # A tibble: 604,679 x 5
-#>    agency              amount_ordered amount_spent  amount_dif material_group                      
-#>    <chr>                        <dbl>        <dbl>       <dbl> <chr>                               
-#>  1 ARKANSAS BUILDING …        227933. 43490471078.     4.35e10 JANITORIAL/CUSTODIAL SERVICES       
-#>  2 AR DEPT OF HUMAN S…             0  17848960000      1.78e10 PROFESSIONAL MEDICAL SERVICES - INC…
-#>  3 DEPT OF INFORMATIO…             0    873427008      8.73e 8 DATA PROCESSING, COMPUTER, AND SOFT…
-#>  4 STATEWIDE CONTRACT       23297122.   165206385.     1.42e 8 COMPUTER SOFTWARE FOR MICROCOMPUTER…
-#>  5 DEPT OF FINANCE AN…       2995820.   141443220.     1.38e 8 INSURANCE, ALL TYPES                
-#>  6 DEPT OF FINANCE AN…      14973162.   153420562.     1.38e 8 INSURANCE, ALL TYPES                
-#>  7 STATEWIDE CONTRACT        2184928.   104998044.     1.03e 8 MICROCOMPUTERS, HANDHELD, LAPTOP, A…
-#>  8 STATEWIDE CONTRACT            395.    77200000      7.72e 7 MICROCOMPUTERS, DESKTOP OR TOWERBAS…
-#>  9 STATEWIDE CONTRACT          20650.    67200000      6.72e 7 MICROCOMPUTERS, HANDHELD, LAPTOP, A…
-#> 10 STATEWIDE CONTRACT          41433.    60000000      6.00e 7 MICROCOMPUTERS, DESKTOP OR TOWERBAS…
-#> # … with 604,669 more rows
+#> # A tibble: 82,888 × 5
+#>    agency                         amount_ordered amount_spent amount_dif material_group            
+#>    <chr>                                   <dbl>        <dbl>      <dbl> <chr>                     
+#>  1 DEPT OF EMERGENCY MANAGEMENT         6753376.     6818758      65382. DATA PROCESSING, COMPUTER…
+#>  2 AR DEPARTMENT OF HEALTH              2275459.     2313930.     38471. HOSPITAL, SURGICAL, AND R…
+#>  3 DEPT OF EMERGENCY MANAGEMENT         3376688.     3410379      33691. DATA PROCESSING, COMPUTER…
+#>  4 DEPT OF EMERGENCY MANAGEMENT         3376688.     3410379      33691. DATA PROCESSING, COMPUTER…
+#>  5 DEPT OF EMERGENCY MANAGEMENT         3376688.     3410379      33691. DATA PROCESSING, COMPUTER…
+#>  6 DEPT OF EMERGENCY MANAGEMENT         3376688.     3408379      31691. DATA PROCESSING, COMPUTER…
+#>  7 AR DEPT OF HUMAN SERVICES            2217417.     2231400.     13982. REAL PROPERTY RENTAL OR L…
+#>  8 AR DEPT OF HUMAN SERVICES             436075.      450057.     13982. REAL PROPERTY RENTAL OR L…
+#>  9 DEPT OF TRANSFORM & SHARED SVC        142500       155325      12825  FIRST AID AND SAFETY EQUI…
+#> 10 ADMIN OFFICE OF THE COURTS            147290       159994.     12704. FURNITURE: OFFICE         
+#> # … with 82,878 more rows
 ```
 
 ![](../plots/hist_amount-1.png)<!-- -->
@@ -674,15 +701,15 @@ arc <- mutate(arc, year = year(date))
 
 ``` r
 prop_na(arc$date)
-#> [1] 0.001084873
+#> [1] 0
 min(arc$date, na.rm = TRUE)
-#> [1] "1980-01-01"
+#> [1] "2020-07-06"
 sum(arc$year < 2000, na.rm = TRUE)
-#> [1] 2
+#> [1] 0
 max(arc$date, na.rm = TRUE)
-#> [1] "9999-12-31"
+#> [1] "2022-09-28"
 sum(arc$date > today(), na.rm = TRUE)
-#> [1] 10
+#> [1] 0
 arc$year <- na_if(arc$year, 9999)
 ```
 
@@ -690,10 +717,10 @@ arc$year <- na_if(arc$year, 9999)
 
 ## Export
 
-1.  There are 604,679 records in the database.
+1.  There are 82,888 records in the database.
 2.  There are 4 duplicate records in the database.
 3.  The range and distribution of `amount` and `date` seem reasonable.
-4.  There are 756 records missing key variables.
+4.  There are 0 records missing key variables.
 5.  There are no geographic variables to be normalized.
 6.  The 4-digit `year` variable has been created with
     `lubridate::year()`.
@@ -702,53 +729,44 @@ Now the file can be saved on disk for upload to the Accountability
 server.
 
 ``` r
-clean_dir <- dir_create(here("ar", "contracts", "data", "clean"))
-clean_path <- path(clean_dir, "ar_contracts_clean.csv")
-write_csv(arc, clean_path, na = "")
-file_size(clean_path)
-#> 127M
+clean_dir <- dir_create(here("state", "ar", "contracts", "data", "clean"))
+if (old_find) {
+  date_ts <- paste(str_remove_all(c(max_old, Sys.Date()), "-"), collapse = "-")
+  clean_csv <- path(clean_dir, sprintf("ar_contracts_%s.csv", date_ts))
+} else {
+  clean_csv <- path(clean_dir, "ar_contracts_clean.csv")
+}
+write_csv(arc, clean_csv, na = "")
+file_size(clean_csv)
+#> 17.1M
 ```
 
 The encoding of the exported file should be UTF-8 or ASCII.
 
 ``` r
-enc <- system2("file", args = paste("-i", clean_path), stdout = TRUE)
-str_replace_all(enc, clean_path, basename)
-#> [1] "ar_contracts_clean.csv: application/csv; charset=us-ascii"
+enc <- system2("file", args = paste("-i", clean_csv), stdout = TRUE)
+str_replace_all(enc, clean_csv, basename)
+#> [1] "ar_contracts_20200701-20230117.csv: text/csv; charset=us-ascii"
 ```
 
-## Dictionary
+## Upload
 
-The following table describes the variables in our final exported file:
-
-| Column                | Type        | Overlaped | Definition                             |
-| :-------------------- | :---------- | :-------- | :------------------------------------- |
-| `file`                | `character` | TRUE      | Source file                            |
-| `fiscal_year`         | `integer`   | TRUE      | Transaction’s fiscal year              |
-| `agency`              | `character` | TRUE      | Spending agency name                   |
-| `document_category`   | `character` | FALSE     | Contract category                      |
-| `contract_number`     | `character` | TRUE      | Tracking contract number               |
-| `material_group`      | `character` | TRUE      | Purchase order category                |
-| `type_of_contract`    | `character` | FALSE     | Contract sub-type                      |
-| `vendor_name`         | `character` | TRUE      | Vendor name                            |
-| `vendor_dba`          | `character` | FALSE     | Vendor “doing business as”             |
-| `contract_start_date` | `double`    | FALSE     | Contract start date                    |
-| `contract_end_date`   | `double`    | FALSE     | Contract end date                      |
-| `contract_value`      | `double`    | FALSE     | Total contract value                   |
-| `amount_ordered`      | `double`    | TRUE      | Amount initially ordered               |
-| `amount_spent`        | `double`    | TRUE      | Amount finally spent                   |
-| `agency_id`           | `character` | FALSE     | Spending agency ID                     |
-| `release_po`          | `character` | FALSE     | Releasing agency ID                    |
-| `release_date`        | `double`    | FALSE     | Purchase order date                    |
-| `type`                | `character` | TRUE      | Type of record (Contract or purchase)  |
-| `date`                | `double`    | TRUE      | Unified transaction date               |
-| `na_flag`             | `logical`   | TRUE      | Flag for missing date, amount, or name |
-| `dupe_flag`           | `logical`   | TRUE      | Flag for completely duplicated record  |
-| `year`                | `double`    | TRUE      | Calendar year from unified date        |
+We can use the `aws.s3::put_object()` to upload the text file to the IRW
+server.
 
 ``` r
-write_lines(
-  x = c("# Arkansas Contracts Data Dictionary\n", dict_md),
-  path = here("ar", "contracts", "ar_contracts_dict.md"),
-)
+aws_key <- path("csv", basename(clean_csv))
+if (!object_exists(aws_key, "publicaccountability")) {
+  put_object(
+    file = clean_csv,
+    object = aws_key, 
+    bucket = "publicaccountability",
+    acl = "public-read",
+    show_progress = TRUE,
+    multipart = TRUE
+  )
+}
+aws_head <- head_object(aws_key, "publicaccountability")
+(aws_size <- as_fs_bytes(attr(aws_head, "content-length")))
+unname(aws_size == clean_size)
 ```

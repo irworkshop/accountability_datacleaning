@@ -1,7 +1,17 @@
 Indiana Expenditures
 ================
-Kiernan Nicholls
-2019-11-19 14:52:53
+Kiernan Nicholls & Aarushi Sahejpal
+2023-02-05 15:28:24
+
+- <a href="#project" id="toc-project">Project</a>
+- <a href="#objectives" id="toc-objectives">Objectives</a>
+- <a href="#packages" id="toc-packages">Packages</a>
+- <a href="#data" id="toc-data">Data</a>
+- <a href="#import" id="toc-import">Import</a>
+- <a href="#explore" id="toc-explore">Explore</a>
+- <a href="#wrangle" id="toc-wrangle">Wrangle</a>
+- <a href="#conclude" id="toc-conclude">Conclude</a>
+- <a href="#export" id="toc-export">Export</a>
 
 <!-- Place comments regarding knitting here -->
 
@@ -77,7 +87,7 @@ feature and should be run as such. The project also uses the dynamic
 ``` r
 # where dfs this document knit?
 here::here()
-#> [1] "/home/kiernan/R/accountability_datacleaning/R_campfin"
+#> [1] "/Volumes/TAP/accountability_datacleaning"
 ```
 
 ## Data
@@ -102,14 +112,14 @@ information](http://campaignfinance.in.gov/PublicSite/AboutDatabase.aspx)
 on their campaign finance database.
 
 > ### What is the quality of the data?
-> 
+>
 > The information presented in the campaign finance database is, to the
 > best of our ability, an accurate representation of the reports filed
 > with the Election Division. This information is being provided as a
 > service to the public, has been processed by the Election Division and
 > should be cross-referenced with the original report on file with the
 > Election Division.
-> 
+>
 > Some of the information in the campaign finance database was submitted
 > in electronic form. Most of the information was key-entered from paper
 > reports. Sometimes items which are inconsistent with filing
@@ -122,7 +132,7 @@ on their campaign finance database.
 > finance database will be updated to reflect amendments received.
 
 > ### What does the database contain?
-> 
+>
 > By Indiana law, candidates and committees are required to disclose
 > detailed financial records of contributions received and expenditures
 > made and debts owed by or to the committee. For committees, the
@@ -147,16 +157,15 @@ dir_create(raw_dir)
 > file format. These files can be downloaded and imported into other
 > applications (Microsoft Excel, Microsoft Access, etc.). This data was
 > extracted from the Campaign Finance database as it existed as of
-> 8/6/2019 1:00 AM.
+> 2/5/2023 2:48 PM.
 
 The download URL to each file follows a consistent structure. We can
 create a URL for each file by using `glue::glue()` to change the year in
-the character
-string.
+the character string.
 
 ``` r
 base_url <- "http://campaignfinance.in.gov/PublicSite/Docs/BulkDataDownloads"
-exp_urls <- glue("{base_url}/{2000:2019}_ExpenditureData.csv.zip")
+exp_urls <- glue("{base_url}/{2000:2023}_ExpenditureData.csv.zip")
 ```
 
 The files range in size, which we can check before downloading with
@@ -165,7 +174,7 @@ The files range in size, which we can check before downloading with
 ``` r
 file_sizes <- map_dbl(exp_urls, url_file_size)
 number_bytes(sum(file_sizes))
-#> [1] "14 MiB"
+#> [1] "15 MiB"
 ```
 
 If the files haven’t yet been downloaded, we can download each to the
@@ -223,79 +232,81 @@ ind <- ind %>%
 
 ``` r
 head(ind)
-#> # A tibble: 6 x 18
-#>   file_number committee_type committee candidate_name expenditure_code name  address city  state
-#>   <chr>       <chr>          <chr>     <chr>          <chr>            <chr> <chr>   <chr> <chr>
-#> 1 17          Regular Party  Indiana … <NA>           Missing          <NA>  PO Box… Fort… IN   
-#> 2 17          Regular Party  Indiana … <NA>           Missing          Acce… P.O. B… Char… IN   
-#> 3 17          Regular Party  Indiana … <NA>           Missing          Acce… P.O. B… Char… NC   
-#> 4 17          Regular Party  Indiana … <NA>           Missing          Acce… PO Box… Char… IN   
-#> 5 17          Regular Party  Indiana … <NA>           Missing          Acce… PO Box… Char… IN   
-#> 6 17          Regular Party  Indiana … <NA>           Missing          Acce… PO Box… Char… IN   
-#> # … with 9 more variables: zip <chr>, occupation <chr>, office_sought <chr>,
-#> #   expenditure_type <chr>, description <chr>, purpose <chr>, amount <dbl>,
-#> #   expenditure_date <date>, amended <lgl>
+#> # A tibble: 6 × 18
+#>   file_nu…¹ commi…² commi…³ candi…⁴ expen…⁵ name  address city  state zip   occup…⁶ offic…⁷ expen…⁸
+#>   <chr>     <chr>   <chr>   <chr>   <chr>   <chr> <chr>   <chr> <chr> <chr> <chr>   <chr>   <chr>  
+#> 1 17        Regula… Indian… <NA>    Missing Clin… 301 Ea… Fran… IN    46041 <NA>    <NA>    Other  
+#> 2 17        Regula… Indian… <NA>    Missing Clin… 301 Ea… Fran… IN    46041 <NA>    <NA>    Direct 
+#> 3 17        Regula… Indian… <NA>    Missing Clin… 301 Ea… Fran… IN    46041 <NA>    <NA>    Direct 
+#> 4 17        Regula… Indian… <NA>    Missing Mont… 715 Sy… Craw… IN    46041 <NA>    <NA>    Other  
+#> 5 17        Regula… Indian… <NA>    Missing Mont… 715 Sy… Craw… IN    46041 <NA>    <NA>    Direct 
+#> 6 17        Regula… Indian… <NA>    Missing Mont… 715 Sy… Craw… IN    46041 <NA>    <NA>    Direct 
+#> # … with 5 more variables: description <chr>, purpose <chr>, amount <dbl>,
+#> #   expenditure_date <date>, amended <lgl>, and abbreviated variable names ¹​file_number,
+#> #   ²​committee_type, ³​committee, ⁴​candidate_name, ⁵​expenditure_code, ⁶​occupation, ⁷​office_sought,
+#> #   ⁸​expenditure_type
 tail(ind)
-#> # A tibble: 6 x 18
-#>   file_number committee_type committee candidate_name expenditure_code name  address city  state
-#>   <chr>       <chr>          <chr>     <chr>          <chr>            <chr> <chr>   <chr> <chr>
-#> 1 7262        Political Act… Citizens… <NA>           Advertising      Next… 26899 … Beav… MI   
-#> 2 7262        Political Act… Citizens… <NA>           Fundraising      Ohlu… 7833 N… "LaP… IN   
-#> 3 7262        Political Act… Citizens… <NA>           Operations       Faeg… 300 N … Indi… IN   
-#> 4 7263        Political Act… Democrat… <NA>           Operations       Amal… 275 7t… New … NY   
-#> 5 7263        Political Act… Democrat… <NA>           Operations       Demo… 1225 E… Wash… DC   
-#> 6 7264        Political Act… Supporti… <NA>           Contributions    Fady… 8901 R… Indi… IN   
-#> # … with 9 more variables: zip <chr>, occupation <chr>, office_sought <chr>,
-#> #   expenditure_type <chr>, description <chr>, purpose <chr>, amount <dbl>,
-#> #   expenditure_date <date>, amended <lgl>
+#> # A tibble: 6 × 18
+#>   file_nu…¹ commi…² commi…³ candi…⁴ expen…⁵ name  address city  state zip   occup…⁶ offic…⁷ expen…⁸
+#>   <chr>     <chr>   <chr>   <chr>   <chr>   <chr> <chr>   <chr> <chr> <chr> <chr>   <chr>   <chr>  
+#> 1 7385      Candid… Commit… Eugene… Loan P… Euge… "2677 … "Mar… IN    46151 <NA>    <NA>    Debt P…
+#> 2 7385      Candid… Commit… Eugene… Operat… Dave… "2677 … "Mar… IN    46151 <NA>    <NA>    Paymen…
+#> 3 7517      Candid… Friend… Suzann… Missing Hunt… "PO Bo… "Col… OH    43216 <NA>    House … Direct…
+#> 4 7615      Candid… The Co… Nannet… Contri… Henr… "201 N… "New… IN    47362 <NA>    <NA>    Direct…
+#> 5 7615      Candid… The Co… Nannet… Operat… Edwa… "808 E… "New… IN    47362 <NA>    <NA>    Direct…
+#> 6 7615      Candid… The Co… Nannet… Unitem… <NA>   <NA>    <NA> <NA>  <NA>  <NA>    <NA>    Unitem…
+#> # … with 5 more variables: description <chr>, purpose <chr>, amount <dbl>,
+#> #   expenditure_date <date>, amended <lgl>, and abbreviated variable names ¹​file_number,
+#> #   ²​committee_type, ³​committee, ⁴​candidate_name, ⁵​expenditure_code, ⁶​occupation, ⁷​office_sought,
+#> #   ⁸​expenditure_type
 glimpse(sample_frac(ind))
-#> Observations: 591,205
-#> Variables: 18
-#> $ file_number      <chr> "4902", "4681", "3745", "3511", "17", "5138", "3598", "71", "5556", "26…
-#> $ committee_type   <chr> "Candidate", "Regular Party", "Political Action", "Candidate", "Regular…
-#> $ committee        <chr> "Hoosiers for Kelty", "Porter County Republican Central Committee", "IN…
-#> $ candidate_name   <chr> "Matthew Gerard Kelty", NA, NA, "ROBERT BEHNING", NA, "Richard Allen Do…
-#> $ expenditure_code <chr> "Contributions", "Operations", "Unitemized", "Operations", "Operations"…
-#> $ name             <chr> "Whirlwind Pictures", "KLT Consulting, LLC", NA, "Avery Paper Co.", "CA…
-#> $ address          <chr> "4930 Illinois Road", "306 Napoleon Street", NA, "1021 W. Pennsylvania"…
-#> $ city             <chr> "Fort Wayne", "Valparaiso", NA, "Indianapolis", "Logansport", "Auburn",…
-#> $ state            <chr> "IN", "IN", NA, "In", "IN", "IN", "IN", "IN", "IN", "IN", "IN", "IN", N…
-#> $ zip              <chr> "46804", "46368", NA, "46204", "46947", "46706", "46818", "46804", "463…
-#> $ occupation       <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "Other", NA, NA…
-#> $ office_sought    <chr> NA, NA, NA, NA, NA, NA, NA, "State Senator", "Newton County Council", N…
-#> $ expenditure_type <chr> "Direct - Contributions", "Direct - Operations", "Unitemized - Unitemiz…
-#> $ description      <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
-#> $ purpose          <chr> NA, "congress of counties", NA, "Paper", NA, NA, "Expense reimb for pos…
-#> $ amount           <dbl> 2000.00, 313.68, 3.00, 1285.05, 187.50, 68.12, 520.70, 500.00, 200.00, …
-#> $ expenditure_date <date> 2002-11-08, 2018-01-19, 2019-09-03, 2014-04-25, 2005-07-21, 2010-04-28…
-#> $ amended          <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, F…
+#> Rows: 706,974
+#> Columns: 18
+#> $ file_number      <chr> "4330", "364", "7580", "7193", "118", "1316", "17", "4460", "421", "886"…
+#> $ committee_type   <chr> "Candidate", "Political Action", "Candidate", "Candidate", "Political Ac…
+#> $ committee        <chr> "Dillon for State Senator", "Indiana Realtors Political Action Committee…
+#> $ candidate_name   <chr> "Gary P. Dillon", NA, "Rodney Pol Jr.", "Jeremy Antonio Why", NA, "C. WO…
+#> $ expenditure_code <chr> "Missing", "Contributions", "Fundraising", "Unitemized", "Operations", "…
+#> $ name             <chr> "The Post & Mall", "SteveDavisson.com", "Kristen Self", NA, "Julian Smit…
+#> $ address          <chr> "927 Connexion Way", "P.O. BOX 341", "6284 W Wellington Way, Unit G", NA…
+#> $ city             <chr> "Columbia City", "Salem", "McCordsville", NA, "Scipio", "GREENWOOD", "Mu…
+#> $ state            <chr> "IN", "IN", "IN", NA, "IN", "IN", "IN", "IN", NA, "IN", "IN", "AL", "IN"…
+#> $ zip              <chr> "46725", "47167", "46055", NA, "47273", "46143", "46321", "47546", NA, "…
+#> $ occupation       <chr> NA, NA, NA, NA, NA, NA, "Other", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
+#> $ office_sought    <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "STATE HOUSE/LEGISLATURE/REP…
+#> $ expenditure_type <chr> "Other", "Direct", "Direct - Fundraising", "Unitemized", "Direct", "Dire…
+#> $ description      <chr> "check", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "n/a", NA, NA, …
+#> $ purpose          <chr> NA, "To support candidates advocating homeownership, private property ri…
+#> $ amount           <dbl> 159.00, 500.00, 1000.00, 32.83, 549.92, 325.00, 1191.70, 2295.15, 75.00,…
+#> $ expenditure_date <date> 2003-01-23, 2018-08-31, 2022-03-14, 2018-12-01, 2014-05-14, 2005-05-09,…
+#> $ amended          <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FA…
 ```
 
 ### Missing
 
 ``` r
 glimpse_fun(ind, count_na)
-#> # A tibble: 18 x 4
+#> # A tibble: 18 × 4
 #>    col              type        n          p
 #>    <chr>            <chr>   <dbl>      <dbl>
 #>  1 file_number      <chr>       0 0         
 #>  2 committee_type   <chr>       0 0         
-#>  3 committee        <chr>     152 0.000257  
-#>  4 candidate_name   <chr>  334567 0.566     
+#>  3 committee        <chr>      14 0.0000198 
+#>  4 candidate_name   <chr>  396725 0.561     
 #>  5 expenditure_code <chr>       0 0         
-#>  6 name             <chr>    9678 0.0164    
-#>  7 address          <chr>   51966 0.0879    
-#>  8 city             <chr>   34455 0.0583    
-#>  9 state            <chr>   33113 0.0560    
-#> 10 zip              <chr>   53759 0.0909    
-#> 11 occupation       <chr>  565166 0.956     
-#> 12 office_sought    <chr>  462350 0.782     
-#> 13 expenditure_type <chr>       3 0.00000507
-#> 14 description      <chr>  591199 1.000     
-#> 15 purpose          <chr>  272015 0.460     
-#> 16 amount           <dbl>      21 0.0000355 
-#> 17 expenditure_date <date>   1905 0.00322   
-#> 18 amended          <lgl>      21 0.0000355
+#>  6 name             <chr>   15295 0.0216    
+#>  7 address          <chr>   66722 0.0944    
+#>  8 city             <chr>   46047 0.0651    
+#>  9 state            <chr>   40468 0.0572    
+#> 10 zip              <chr>   69028 0.0976    
+#> 11 occupation       <chr>  671287 0.950     
+#> 12 office_sought    <chr>  555353 0.786     
+#> 13 expenditure_type <chr>       7 0.00000990
+#> 14 description      <chr>  591155 0.836     
+#> 15 purpose          <chr>  589593 0.834     
+#> 16 amount           <dbl>      22 0.0000311 
+#> 17 expenditure_date <date>     23 0.0000325 
+#> 18 amended          <lgl>      23 0.0000325
 ```
 
 There are a fairly significant number of records missing one of the four
@@ -307,7 +318,7 @@ new `na_flag` variable. Most of these records are missing the payee
 ``` r
 ind <- ind %>% flag_na(committee, name, expenditure_date, amount)
 sum(ind$na_flag)
-#> [1] 11700
+#> [1] 15332
 percent(mean(ind$na_flag))
 #> [1] "2%"
 ```
@@ -320,38 +331,38 @@ values in the new `dupe_flag` variable.
 ``` r
 ind <- mutate(ind, dupe_flag = duplicated(ind))
 sum(ind$dupe_flag)
-#> [1] 1381
+#> [1] 14668
 percent(mean(ind$dupe_flag))
-#> [1] "0%"
+#> [1] "2%"
 ```
 
 ### Categorical
 
 ``` r
 glimpse_fun(ind, n_distinct)
-#> # A tibble: 20 x 4
+#> # A tibble: 20 × 4
 #>    col              type        n          p
 #>    <chr>            <chr>   <dbl>      <dbl>
-#>  1 file_number      <chr>    2681 0.00453   
-#>  2 committee_type   <chr>       4 0.00000677
-#>  3 committee        <chr>    4362 0.00738   
-#>  4 candidate_name   <chr>    1737 0.00294   
-#>  5 expenditure_code <chr>       7 0.0000118 
-#>  6 name             <chr>  128941 0.218     
-#>  7 address          <chr>  130437 0.221     
-#>  8 city             <chr>    9343 0.0158    
-#>  9 state            <chr>     232 0.000392  
-#> 10 zip              <chr>   12064 0.0204    
-#> 11 occupation       <chr>      35 0.0000592 
-#> 12 office_sought    <chr>   17893 0.0303    
-#> 13 expenditure_type <chr>      40 0.0000677 
-#> 14 description      <chr>       3 0.00000507
-#> 15 purpose          <chr>   59413 0.100     
-#> 16 amount           <dbl>   93911 0.159     
-#> 17 expenditure_date <date>   7718 0.0131    
-#> 18 amended          <lgl>       3 0.00000507
-#> 19 na_flag          <lgl>       2 0.00000338
-#> 20 dupe_flag        <lgl>       2 0.00000338
+#>  1 file_number      <chr>    3061 0.00433   
+#>  2 committee_type   <chr>       4 0.00000566
+#>  3 committee        <chr>    4743 0.00671   
+#>  4 candidate_name   <chr>    2010 0.00284   
+#>  5 expenditure_code <chr>      10 0.0000141 
+#>  6 name             <chr>  139244 0.197     
+#>  7 address          <chr>  140527 0.199     
+#>  8 city             <chr>    9870 0.0140    
+#>  9 state            <chr>     252 0.000356  
+#> 10 zip              <chr>   12628 0.0179    
+#> 11 occupation       <chr>      42 0.0000594 
+#> 12 office_sought    <chr>   18664 0.0264    
+#> 13 expenditure_type <chr>      52 0.0000736 
+#> 14 description      <chr>    2761 0.00391   
+#> 15 purpose          <chr>    8475 0.0120    
+#> 16 amount           <dbl>  103966 0.147     
+#> 17 expenditure_date <date>   8406 0.0119    
+#> 18 amended          <lgl>       3 0.00000424
+#> 19 na_flag          <lgl>       2 0.00000283
+#> 20 dupe_flag        <lgl>       2 0.00000283
 ```
 
 For categorical variables, we can use `ggplo2::geom_col()` to explore
@@ -378,11 +389,11 @@ distribution. This can be done with visually with
 ``` r
 summary(ind$amount)
 #>     Min.  1st Qu.   Median     Mean  3rd Qu.     Max.     NA's 
-#>  -250000       83      251     1735      780 27050288       21
+#>  -250000       73      250     1650      775 22286028       22
 sum(ind$amount < 0, na.rm = TRUE)
-#> [1] 3749
+#> [1] 5297
 sum(ind$amount > 100000, na.rm = TRUE)
-#> [1] 771
+#> [1] 888
 ```
 
 ![](../plots/amount_histogram-1.png)<!-- -->
@@ -395,74 +406,47 @@ ind <- mutate(ind, expenditure_year = year(expenditure_date))
 
 ``` r
 count_na(ind$expenditure_date)
-#> [1] 1905
+#> [1] 23
 min(ind$expenditure_date, na.rm = TRUE)
-#> [1] "1800-10-01"
+#> [1] "2000-01-01"
 sum(ind$expenditure_year < 1998, na.rm = TRUE)
-#> [1] 29
+#> [1] 0
 max(ind$expenditure_date, na.rm = TRUE)
-#> [1] "5008-05-01"
+#> [1] "2023-08-27"
 sum(ind$expenditure_date > today(), na.rm = TRUE)
-#> [1] 29
+#> [1] 3
 ```
 
 ``` r
 count(ind, expenditure_year) %>% print(n = 52)
-#> # A tibble: 52 x 2
+#> # A tibble: 25 × 2
 #>    expenditure_year     n
 #>               <dbl> <int>
-#>  1             1800     1
-#>  2             1802     1
-#>  3             1899     2
-#>  4             1930     4
-#>  5             1931     1
-#>  6             1932     1
-#>  7             1940     5
-#>  8             1970     1
-#>  9             1977     1
-#> 10             1980     1
-#> 11             1990     1
-#> 12             1994     3
-#> 13             1995     2
-#> 14             1996     1
-#> 15             1997     4
-#> 16             1998   481
-#> 17             1999 10108
-#> 18             2000 33713
-#> 19             2001 16003
-#> 20             2002 36753
-#> 21             2003 27267
-#> 22             2004 39741
-#> 23             2005 19453
-#> 24             2006 38792
-#> 25             2007 22926
-#> 26             2008 43633
-#> 27             2009 17292
-#> 28             2010 38047
-#> 29             2011 21828
-#> 30             2012 40187
-#> 31             2013 19114
-#> 32             2014 34487
-#> 33             2015 22793
-#> 34             2016 37919
-#> 35             2017 19258
-#> 36             2018 37148
-#> 37             2019 12299
-#> 38             2020     9
-#> 39             2021     2
-#> 40             2022     1
-#> 41             2023     3
-#> 42             2024     3
-#> 43             2025     1
-#> 44             2026     2
-#> 45             2027     1
-#> 46             2040     1
-#> 47             2600     1
-#> 48             2800     2
-#> 49             2802     1
-#> 50             3101     1
-#> 51             5008     1
-#> 52               NA  1905
+#>  1             2000 35650
+#>  2             2001 16125
+#>  3             2002 38203
+#>  4             2003 27620
+#>  5             2004 40531
+#>  6             2005 19575
+#>  7             2006 39238
+#>  8             2007 23210
+#>  9             2008 44012
+#> 10             2009 18230
+#> 11             2010 38744
+#> 12             2011 21938
+#> 13             2012 40491
+#> 14             2013 19449
+#> 15             2014 35194
+#> 16             2015 22875
+#> 17             2016 38107
+#> 18             2017 20178
+#> 19             2018 37880
+#> 20             2019 25588
+#> 21             2020 38409
+#> 22             2021 23547
+#> 23             2022 42143
+#> 24             2023    14
+#> 25               NA    23
 ```
 
 ``` r
@@ -477,7 +461,7 @@ ind <- ind %>%
   )
 
 sum(ind$date_flag, na.rm = TRUE)
-#> [1] 58
+#> [1] 3
 ```
 
 ![](../plots/year_bar_count-1.png)<!-- -->
@@ -512,23 +496,23 @@ ind <- ind %>%
 
 We can see how this improves consistency across the `address` field.
 
-    #> # A tibble: 10 x 2
-    #>    address                    address_norm                 
-    #>    <chr>                      <chr>                        
-    #>  1 777 Big Timber Rd.         777 BIG TIMBER ROAD          
-    #>  2 150 W. Market              150 WEST MARKET              
-    #>  3 3665 Priority Way S. Drive 3665 PRIORITY WAY SOUTH DRIVE
-    #>  4 2301 Churchman Ave         2301 CHURCHMAN AVENUE        
-    #>  5 210 E Michigan St          210 EAST MICHIGAN STREET     
-    #>  6 3315 S. Tibbs Ave.         3315 SOUTH TIBBS AVENUE      
-    #>  7 501 W. Memorial St.        501 WEST MEMORIAL STREET     
-    #>  8 PO Box 26267               PO BOX 26267                 
-    #>  9 c/o Alma Moolenaar         C O ALMA MOOLENAAR           
-    #> 10 47 S. Penn                 47 SOUTH PENN
+    #> # A tibble: 10 × 2
+    #>    address               address_norm        
+    #>    <chr>                 <chr>               
+    #>  1 2141 HANOVER DR       2141 HANOVER DR     
+    #>  2 300 S. State Road 201 300 S STATE ROAD 201
+    #>  3 201 N Main            201 N MAIN          
+    #>  4 6195 Central Ave.     6195 CENTRAL AVE    
+    #>  5 3743 PAYTON AVE       3743 PAYTON AVE     
+    #>  6 7040 McFarland Blvd   7040 MCFARLAND BLVD 
+    #>  7 PO Box 7074           PO BOX 7074         
+    #>  8 15 Beacon Dr          15 BEACON DR        
+    #>  9 309 S Prairie St      309 S PRAIRIE ST    
+    #> 10 3610 Balsam Ave       3610 BALSAM AVE
 
 ### ZIP
 
-The `zip` address is already pretty good, with 94% of the values already
+The `zip` address is already pretty good, with 95% of the values already
 in our 95% comprehensive `valid_zip` list.
 
 We can improve this further by lopping off the uncommon four-digit
@@ -552,18 +536,18 @@ progress_table(
   ind$zip_norm,
   compare = valid_zip
 )
-#> # A tibble: 2 x 6
-#>   stage    prop_in n_distinct prop_na n_out n_diff
-#>   <chr>      <dbl>      <dbl>   <dbl> <dbl>  <dbl>
-#> 1 zip        0.940      12064  0.0909 32329   5005
-#> 2 zip_norm   0.993       8312  0.0938  3571    993
+#> # A tibble: 2 × 6
+#>   stage        prop_in n_distinct prop_na n_out n_diff
+#>   <chr>          <dbl>      <dbl>   <dbl> <dbl>  <dbl>
+#> 1 ind$zip        0.946      12628  0.0976 34193   5079
+#> 2 ind$zip_norm   0.992       8888  0.100   5376   1208
 ```
 
 ### State
 
 The `state` variable is also very clean, already at 99%.
 
-There are still 177 invalid values which we can remove.
+There are still 198 invalid values which we can remove.
 
 ``` r
 ind <- ind %>% 
@@ -583,11 +567,11 @@ progress_table(
   ind$state_norm,
   compare = valid_state
 )
-#> # A tibble: 2 x 6
-#>   stage      prop_in n_distinct prop_na n_out n_diff
-#>   <chr>        <dbl>      <dbl>   <dbl> <dbl>  <dbl>
-#> 1 state        0.991        232  0.0560  4822    177
-#> 2 state_norm   1             56  0.0570     0      1
+#> # A tibble: 2 × 6
+#>   stage          prop_in n_distinct prop_na n_out n_diff
+#>   <chr>            <dbl>      <dbl>   <dbl> <dbl>  <dbl>
+#> 1 ind$state        0.990        252  0.0572  6716    198
+#> 2 ind$state_norm   1             55  0.0584     0      1
 ```
 
 ### City
@@ -624,26 +608,26 @@ ind <- ind %>%
   )
 ```
 
-This process brought us to 95% valid.
+This process brought us to 96% valid.
 
 It also increased the proportion of `NA` values by 0%. These new `NA`
 values were either a single (possibly repeating) character, or contained
 in the `na_city` vector.
 
-    #> # A tibble: 75 x 4
+    #> # A tibble: 84 × 4
     #>    zip_norm state_norm city       city_norm
     #>    <chr>    <chr>      <chr>      <chr>    
-    #>  1 <NA>     IN         *          <NA>     
-    #>  2 46250    IN         unknown    <NA>     
-    #>  3 47374    IN         332        <NA>     
-    #>  4 <NA>     IN         online     <NA>     
-    #>  5 <NA>     IN         none given <NA>     
+    #>  1 <NA>     IN         N/A        <NA>     
+    #>  2 <NA>     <NA>       1111       <NA>     
+    #>  3 <NA>     IN         UNKNOWN    <NA>     
+    #>  4 <NA>     IL         unknown    <NA>     
+    #>  5 <NA>     IN         xx         <NA>     
     #>  6 <NA>     IN         None given <NA>     
-    #>  7 46312    IN         E.         <NA>     
-    #>  8 <NA>     <NA>       1111       <NA>     
-    #>  9 <NA>     IN         u          <NA>     
-    #> 10 <NA>     IN         i          <NA>     
-    #> # … with 65 more rows
+    #>  7 <NA>     <NA>       ??         <NA>     
+    #>  8 <NA>     <NA>       N/A        <NA>     
+    #>  9 <NA>     OK         x          <NA>     
+    #> 10 46000    IN         unknown    <NA>     
+    #> # … with 74 more rows
 
 #### Swap
 
@@ -675,7 +659,7 @@ ind <- ind %>%
 ```
 
 This is a very fast way to increase the valid proportion to 99% and
-reduce the number of distinct *invalid* values from 2996 to only 533
+reduce the number of distinct *invalid* values from 3107 to only 587
 
 #### Refine
 
@@ -704,20 +688,20 @@ good_refine <- ind %>%
   )
 ```
 
-    #> # A tibble: 22 x 5
+    #> # A tibble: 24 × 5
     #>    state_norm zip_norm city_swap        city_refine         n
     #>    <chr>      <chr>    <chr>            <chr>           <int>
     #>  1 IN         47150    NEW ALBANY LANE  NEW ALBANY         64
-    #>  2 IN         46184    NEW WHITELAND    WHITELAND          34
+    #>  2 IN         46184    NEW WHITELAND    WHITELAND          33
     #>  3 IN         46590    WINNIOA LAKE     WINONA LAKE         4
     #>  4 IN         47978    RENESSLEAR       RENSSELAER          4
     #>  5 CA         94107    FRANCISCO        SAN FRANCISCO       3
     #>  6 IA         50265    WEST DEMONIS     WEST DES MOINES     3
-    #>  7 SC         29419    NORTH CHARLESTON CHARLESTON          3
-    #>  8 IN         46410    MERRERVILLE      MERRILLVILLE        2
-    #>  9 OH         45999    CINNATTI         CINCINNATI          2
+    #>  7 IN         46410    MERRERVILLE      MERRILLVILLE        2
+    #>  8 OH         45999    CINNATTI         CINCINNATI          2
+    #>  9 SC         29419    NORTH CHARLESTON CHARLESTON          2
     #> 10 CA         94102    SAN FRANCISCO CA SAN FRANCISCO       1
-    #> # … with 12 more rows
+    #> # … with 14 more rows
 
 We can join these good refined values back to the original data and use
 them over their incorrect `city_swap` counterparts in a new
@@ -740,20 +724,20 @@ ind %>%
   filter(city_refine %out% valid_city) %>% 
   count(state_norm, city_refine, sort = TRUE) %>% 
   drop_na(city_refine)
-#> # A tibble: 519 x 3
+#> # A tibble: 572 × 3
 #>    state_norm city_refine          n
 #>    <chr>      <chr>            <int>
-#>  1 IL         COUNTRYSIDE        405
-#>  2 IN         SPEEDWAY           404
-#>  3 IN         INDY               157
-#>  4 IL         OAKBROOK TERRACE    86
-#>  5 IN         OGDEN DUNES         60
-#>  6 MA         FITCHBONS           59
-#>  7 IN         INDPLS              56
-#>  8 MA         WEST SOMERVILLE     53
-#>  9 FL         PLANTATION          52
-#> 10 TX         DFW AIRPORT         52
-#> # … with 509 more rows
+#>  1 IL         COUNTRYSIDE        491
+#>  2 IN         SPEEDWAY           452
+#>  3 MA         WEST SOMERVILLE    272
+#>  4 IN         INDY               163
+#>  5 MA         FITCHBONS          108
+#>  6 IL         OAKBROOK TERRACE    95
+#>  7 TX         DFW AIRPORT         76
+#>  8 SC         DANIEL ISLAND       72
+#>  9 IN         OGDEN DUNES         70
+#> 10 KS         OVERLAND PARK       69
+#> # … with 562 more rows
 ```
 
 ``` r
@@ -834,7 +818,7 @@ valid_locality <- check$guess[check$check_city_flag]
 ```
 
 Then we can perform some simple comparisons between the queried city and
-the returned city. If they are extremelly similar, we can accept those
+the returned city. If they are extremely similar, we can accept those
 returned locality strings and add them to our list of accepted
 additional localities.
 
@@ -860,17 +844,15 @@ many_city <- c(valid_city, extra_city, valid_locality)
 
 ``` r
 prop_in(ind$city_refine, valid_city)
-#> [1] 0.995189
+#> [1] 0.9946119
 prop_in(ind$city_refine, many_city)
-#> [1] 0.9983626
+#> [1] 0.9979556
 ```
 
-| stage        | prop\_in | n\_distinct | prop\_na | n\_out | n\_diff |
-| :----------- | -------: | ----------: | -------: | -----: | ------: |
-| city\_raw)   |   0.9346 |        7246 |   0.0583 |  36426 |    4046 |
-| city\_norm   |   0.9577 |        6155 |   0.0591 |  23507 |    2906 |
-| city\_swap   |   0.9977 |        3640 |   0.1137 |   1198 |     444 |
-| city\_refine |   0.9984 |        3618 |   0.1137 |    858 |     423 |
+| stage                                                                          | prop_in | n_distinct | prop_na | n_out | n_diff |
+|:-------------------------------------------------------------------------------|--------:|-----------:|--------:|------:|-------:|
+| str_to_upper(ind$city_raw) | 0.9379| 7634| 0.0651| 41023| 4240| |ind$city_norm |  0.9584 |       6401 |  0.0661 | 27490 |   2976 |
+| ind$city_swap | 0.9975| 3835| 0.1192| 1585| 461| |ind$city_refine              |  0.9980 |       3811 |  0.1192 |  1273 |    439 |
 
 You can see how the percentage of valid values increased with each
 stage.
@@ -909,12 +891,12 @@ progress %>%
 
 ## Conclude
 
-1.  There are 591205 records in the database.
-2.  There are 1381 duplicate records in the database.
+1.  There are 706974 records in the database.
+2.  There are 14668 duplicate records in the database.
 3.  The range and distribution of `amount` seems reasomable, and `date`
-    has been cleaned by removing 58 values from the distance past or
+    has been cleaned by removing 3 values from the distance past or
     future.
-4.  There are 11700 records missing either recipient or date.
+4.  There are 15332 records missing either recipient or date.
 5.  Consistency in geographic data has been improved with
     `campfin::normal_*()`.
 6.  The 5-digit `zip_norm` variable has been created with

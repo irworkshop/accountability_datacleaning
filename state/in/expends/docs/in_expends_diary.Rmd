@@ -1,6 +1,6 @@
 ---
 title: "Indiana Expenditures"
-author: "Kiernan Nicholls"
+author: "Kiernan Nicholls & Aarushi Sahejpal"
 date: "`r Sys.time()`"
 output:
   github_document: 
@@ -151,14 +151,14 @@ raw_dir <- here("in", "expends", "data", "raw")
 dir_create(raw_dir)
 ```
 
-> This page provides comma separated value (CSV) downloads of contribution and expenditure data for each reporting year in a zipped file format. These files can be downloaded and imported into other applications (Microsoft Excel, Microsoft Access, etc.). This data was extracted from the Campaign Finance database as it existed as of 8/6/2019  1:00 AM. 
+> This page provides comma separated value (CSV) downloads of contribution and expenditure data for each reporting year in a zipped file format. These files can be downloaded and imported into other applications (Microsoft Excel, Microsoft Access, etc.). This data was extracted from the Campaign Finance database as it existed as of 2/5/2023 2:48 PM. 
 
 The download URL to each file follows a consistent structure. We can create a URL for each file
 by using `glue::glue()` to change the year in the character string.
 
 ```{r glue_urls}
 base_url <- "http://campaignfinance.in.gov/PublicSite/Docs/BulkDataDownloads"
-exp_urls <- glue("{base_url}/{2000:2019}_ExpenditureData.csv.zip")
+exp_urls <- glue("{base_url}/{2000:2023}_ExpenditureData.csv.zip")
 ```
 
 The files range in size, which we can check before downloading with `campfin::url_file_size()`. 
@@ -263,40 +263,37 @@ For categorical variables, we can use `ggplo2::geom_col()` to explore the count 
 ```{r comm_type_bar, echo=FALSE}
 explore_plot(
   data = ind, 
-  var = committee_type,
-  title = "Indiana Expenditures by Committe Type",
-  caption = "Source: Indiana Election Division"
-)
+  var = committee_type) + 
+  labs(title = "Indiana Expenditures by Committe Type",
+       caption = "Source: Indiana Election Division")
 ```
 
 ```{r expend_code_bar, echo=FALSE}
 explore_plot(
   data = ind,
-  var = expenditure_code,
-  title = "Indiana Expenditures by Committe Type",
-  caption = "Source: Indiana Election Division"
-)
+  var = expenditure_code) + 
+  labs(title = "Indiana Expenditures by Committe Type",
+  caption = "Source: Indiana Election Division")
+
 ```
 
 ```{r occupation_bar, echo=FALSE}
 explore_plot(
   data = ind %>% drop_na(occupation) %>% filter(occupation != "Other"),
-  var = occupation,
-  flip = TRUE,
-  title = "Indiana Expenditures by Payee Occupation",
+  var = occupation) + 
+  coord_flip() + 
+  labs(title = "Indiana Expenditures by Payee Occupation",
   subtitle = "Without Missing or 'Other'",
-  caption = "Source: Indiana Election Division"
-)
+  caption = "Source: Indiana Election Division")
 ```
 
 ```{r expend_type_bar, echo=FALSE}
 explore_plot(
   data = ind,
-  var = expenditure_type,
-  flip = TRUE,
-  title = "Indiana Expenditures by Expenditure Use",
-  caption = "Source: Indiana Election Division"
-)
+  var = expenditure_type) + 
+  coord_flip() + 
+  labs(title = "Indiana Expenditures by Expenditure Use",
+  caption = "Source: Indiana Election Division")
 ```
 
 ```{r purpose_word_bar, echo=FALSE, fig.height=10}
@@ -752,7 +749,7 @@ valid_locality <- check$guess[check$check_city_flag]
 ```
 
 Then we can perform some simple comparisons between the queried city and the returned city. If they
-are extremelly similar, we can accept those returned locality strings and add them to our list of
+are extremely similar, we can accept those returned locality strings and add them to our list of
 accepted additional localities.
 
 ```{r check_compare}
