@@ -1,6 +1,6 @@
 ---
 title: "Vermont Expenditures"
-author: "Kiernan Nicholls"
+author: "Kiernan Nicholls & Aarushi Sahejpal"
 date: "`r Sys.time()`"
 output:
   github_document: 
@@ -80,6 +80,7 @@ file paths relative to _your_ machine.
 here::here()
 ```
 
+
 ## Data
 
 > Definition of Expenditure - 17 V.S.A. 2901(7)
@@ -100,6 +101,22 @@ used in this chapter, expenditure shall not include any of the following:
 
 ## Read
 
+
+```{r raw_dir}
+raw_dir <- here("vt", "expends", "data", "raw")
+dir_create(raw_dir)
+```
+
+```{r}
+raw_csv <- path(raw_dir, "ViewExpendituresList.csv")
+has_raw <- !file_exists(raw_csv)
+```
+
+```{r}
+setwd("/Volumes/TAP/accountability_datacleaning/vt/expends/data/raw")
+raw_csv <- read_csv("ViewExpenditureList.csv")
+```
+
 ```{r read_csv}
 vt <- 
   here("vt", "expends", "data", "raw", "ViewExpenditureList.csv") %>% 
@@ -119,7 +136,6 @@ vt <-
 
 ## Explore 
 
-## Explore
 
 There are `r nrow(vt)` records of `r length(vt)` variables in the full database.
 
@@ -245,8 +261,6 @@ vt %>%
   )
 ```
 
-The number of contributions is fairly lopsides, with nearly 80% of all records coming from 2016 and
-2018. This makes some sense, as these were election years.
 
 ```{r tran_date_range}
 summary(vt$transaction_date)
@@ -261,7 +275,7 @@ vt %>%
   group_by(transaction_year) %>% 
   ggplot(mapping = aes(transaction_year)) +
   geom_bar() +
-  scale_x_continuous(breaks = seq(2007, 2020)) + 
+  scale_x_continuous(breaks = seq(2014, 2023)) + 
   labs(
     title = "Number of Expenditures by Year",
     x = "Year",
@@ -311,7 +325,7 @@ vt <- vt %>%
   mutate(
     address_norm = normal_address(
       address = address_sep,
-      add_abbs = usps_street,
+      abbs = usps_street,
       na_rep = TRUE
     )
   )
@@ -374,8 +388,6 @@ vt <- vt %>%
   mutate(
     city_norm = normal_city(
       city = city_sep, 
-      geo_abbs = usps_city,
-      st_abbs = c("VT", "DC", "VERMONT"),
       na = invalid_city,
       na_rep = TRUE
     )
@@ -443,8 +455,7 @@ vt_city <-
   read_html("https://www.vermont.gov/towns-and-Cities") %>% 
   html_node("select") %>% 
   html_nodes("option") %>% 
-  html_text(trim = TRUE) %>% 
-  normal_city(geo_abbs = usps_city)
+  html_text(trim = TRUE) 
 ```
 
 ```{r city_expand}

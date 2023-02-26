@@ -1,7 +1,16 @@
 Vermont Expenditures
 ================
-Kiernan Nicholls
-2019-11-11 12:12:06
+Kiernan Nicholls & Aarushi Sahejpal
+2023-02-26 14:41:14
+
+- <a href="#objectives" id="toc-objectives">Objectives</a>
+- <a href="#packages" id="toc-packages">Packages</a>
+- <a href="#data" id="toc-data">Data</a>
+- <a href="#read" id="toc-read">Read</a>
+- <a href="#explore" id="toc-explore">Explore</a>
+- <a href="#wrangle" id="toc-wrangle">Wrangle</a>
+- <a href="#conclude" id="toc-conclude">Conclude</a>
+- <a href="#export" id="toc-export">Export</a>
 
 ## Objectives
 
@@ -58,20 +67,20 @@ paths relative to *your* machine.
 ``` r
 # where was this document knit?
 here::here()
-#> [1] "/home/kiernan/R/accountability_datacleaning/R_campfin"
+#> [1] "/Volumes/TAP/accountability_datacleaning"
 ```
 
 ## Data
 
 > Definition of Expenditure - 17 V.S.A. 2901(7)
-> 
+>
 > Expenditure means a payment, disbursement, distribution, advance
 > deposit, loan, or gift of money, or anything of value paid or promised
 > to be paid for the purpose of influencing an election, advocating a
 > position on a public question, or supporting or opposing one or more
 > candidates. As used in this chapter, expenditure shall not include any
 > of the following:
-> 
+>
 > 1.  A personal loan of money to a candidate from a lending institution
 >     made in the ordinary course of business;
 > 2.  Services provided without compensation by individuals volunteering
@@ -83,6 +92,21 @@ here::here()
 >     candidate or the candidates spouse.
 
 ## Read
+
+``` r
+raw_dir <- here("vt", "expends", "data", "raw")
+dir_create(raw_dir)
+```
+
+``` r
+raw_csv <- path(raw_dir, "ViewExpendituresList.csv")
+has_raw <- !file_exists(raw_csv)
+```
+
+``` r
+setwd("/Volumes/TAP/accountability_datacleaning/vt/expends/data/raw")
+raw_csv <- read_csv("ViewExpenditureList.csv")
+```
 
 ``` r
 vt <- 
@@ -103,31 +127,29 @@ vt <-
 
 ## Explore
 
-## Explore
-
-There are 40280 records of 15 variables in the full database.
+There are 71724 records of 15 variables in the full database.
 
 ``` r
 glimpse(sample_frac(vt))
 ```
 
-    #> Observations: 40,280
-    #> Variables: 15
-    #> $ id                  <chr> "583", "29934", "12850", "4003", "696", "8952", "31449", "31622", "2…
-    #> $ transaction_date    <date> 2019-02-23, 2016-06-27, 2018-02-14, 2018-10-19, 2019-02-15, 2018-07…
-    #> $ payee_type          <chr> "BUSINESS/GROUP/ORGANIZATION", "BUSINESS/GROUP/ORGANIZATION", "BUSIN…
-    #> $ payee_name          <chr> "SOUTH STREET CAFE", "SHELL SERVICE STATION", "SIGNS ON THE CHEAP", …
-    #> $ payee_address       <chr> "105 SOUTH ST, BENNINGTON, VT 05201", "18 SYKES MTN AVE, WHITE RIVER…
-    #> $ registrant_name     <chr> "SCULLY, WILLIAM", "DUNNE, MATT", "ROZZI, MICHAEL", "BRAY, CHRISTOPH…
-    #> $ registrant_type     <chr> "CANDIDATE", "CANDIDATE", "CANDIDATE", "PUBLIC MEDIA ACTIVITIES", "C…
-    #> $ office              <chr> "SELECTPERSON -", "GOVERNOR", "SCHOOL DIRECTOR -", NA, "WARD CLERK -…
-    #> $ election_cycle      <chr> "2019 ANNUAL MEETING (ALL TOWNS)", "2016 GENERAL", "2018 ANNUAL MEET…
-    #> $ reporting_period    <date> 2019-03-01, 2016-07-15, 2018-02-24, 2018-11-20, 2019-02-23, 2018-08…
-    #> $ expenditure_type    <chr> "MONETARY", "MONETARY", "MONETARY", "MONETARY", "MONETARY", "MONETAR…
-    #> $ expenditure_purpose <chr> "FUNDRAISER - FOOD &AMP; BEVERAGE", "STAFF - GAS", "YARD SIGNS", "ME…
-    #> $ expenditure_amount  <dbl> 150.00, 30.79, 224.11, 795.00, 145.00, 23.67, 461.53, 87.39, 0.18, 1…
-    #> $ public_question     <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
-    #> $ comments            <chr> NA, "GAS", NA, NA, NA, NA, NA, "OFFICE SUPPLIES", NA, NA, NA, "FB AD…
+    #> Rows: 71,724
+    #> Columns: 15
+    #> $ id                  <chr> "30600", "5359", "26457", "21655", "42604", "46220", "32571", "35839"…
+    #> $ transaction_date    <date> 2019-10-30, 2022-09-15, 2020-07-01, 2020-10-01, 2018-05-24, 2017-05-…
+    #> $ payee_type          <chr> "BUSINESS/GROUP/ORGANIZATION", "BUSINESS/GROUP/ORGANIZATION", "BUSINE…
+    #> $ payee_name          <chr> NA, "ACLU OF VERMONT", "ZOOM", "IMPERIUM ADVISORS", "CENTRO, INC.", "…
+    #> $ payee_address       <chr> "1 FACEBOOK WAY, MENLO PARK, CA 94025", "PO BOX 277, MONTPELIER , VT …
+    #> $ registrant_name     <chr> "RESCUE VERMONT", "ACLU OF VERMONT PUBLIC QUESTION COMMITTEE", "SULLI…
+    #> $ registrant_type     <chr> "POLITICAL ACTION COMMITTEE", "PUBLIC QUESTION COMMITTEE", "CANDIDATE…
+    #> $ office              <chr> NA, NA, "AUDITOR OF ACCOUNTS", "STATE REPRESENTATIVE - FRANKLIN 6", N…
+    #> $ election_cycle      <chr> "2020 GENERAL", "2022 CONSTITUTIONAL AMENDMENTS (ALL TOWNS)", "2020 G…
+    #> $ reporting_period    <date> 2020-03-15, 2022-10-09, 2020-08-01, 2020-10-15, 2018-07-15, 2017-07-…
+    #> $ expenditure_type    <chr> "MONETARY", "MONETARY", "MONETARY", "MONETARY", "MONETARY", "MONETARY…
+    #> $ expenditure_purpose <chr> "MEDIA - ONLINE ADVERTISING", "ADMINISTRATIVE - SALARIES AND WAGES", …
+    #> $ expenditure_amount  <dbl> 607.25, 1146.21, 15.89, 47.00, 12000.00, 1.25, 593.25, 43.67, 19.95, …
+    #> $ public_question     <chr> NA, "PROP 5", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
+    #> $ comments            <chr> ",", "STAFF TIME SPENT ON PROP 5,", ",", ",", ",", "CREDIT CARD PROCE…
 
 ### Distinct
 
@@ -137,24 +159,24 @@ The variables range in their degree of distinctness.
 glimpse_fun(vt, n_distinct)
 ```
 
-    #> # A tibble: 15 x 4
-    #>    col                 type      n         p
-    #>    <chr>               <chr> <dbl>     <dbl>
-    #>  1 id                  chr   40280 1        
-    #>  2 transaction_date    date   1822 0.0452   
-    #>  3 payee_type          chr      10 0.000248 
-    #>  4 payee_name          chr    6938 0.172    
-    #>  5 payee_address       chr    9456 0.235    
-    #>  6 registrant_name     chr     816 0.0203   
-    #>  7 registrant_type     chr       7 0.000174 
-    #>  8 office              chr     170 0.00422  
-    #>  9 election_cycle      chr      15 0.000372 
-    #> 10 reporting_period    date     62 0.00154  
-    #> 11 expenditure_type    chr       4 0.0000993
-    #> 12 expenditure_purpose chr      86 0.00214  
-    #> 13 expenditure_amount  dbl   12769 0.317    
-    #> 14 public_question     chr      11 0.000273 
-    #> 15 comments            chr    6876 0.171
+    #> # A tibble: 15 × 4
+    #>    col                 type       n         p
+    #>    <chr>               <chr>  <dbl>     <dbl>
+    #>  1 id                  <chr>  71724 1        
+    #>  2 transaction_date    <date>  3090 0.0431   
+    #>  3 payee_type          <chr>     10 0.000139 
+    #>  4 payee_name          <chr>  10659 0.149    
+    #>  5 payee_address       <chr>  15226 0.212    
+    #>  6 registrant_name     <chr>   1300 0.0181   
+    #>  7 registrant_type     <chr>      7 0.0000976
+    #>  8 office              <chr>    189 0.00264  
+    #>  9 election_cycle      <chr>     32 0.000446 
+    #> 10 reporting_period    <date>   132 0.00184  
+    #> 11 expenditure_type    <chr>      4 0.0000558
+    #> 12 expenditure_purpose <chr>     89 0.00124  
+    #> 13 expenditure_amount  <dbl>  19581 0.273    
+    #> 14 public_question     <chr>     23 0.000321 
+    #> 15 comments            <chr>  12505 0.174
 
 We can use `ggplot2::geom_bar()` to explore the distribution of these
 least distinct nominal values.
@@ -180,13 +202,13 @@ vt <- flag_dupes(vt, -id)
 sum(vt$dupe_flag)
 ```
 
-    #> [1] 3165
+    #> [1] 4153
 
 ``` r
 percent(mean(vt$dupe_flag))
 ```
 
-    #> [1] "7.86%"
+    #> [1] "6%"
 
 ### Missing
 
@@ -199,25 +221,25 @@ remaining count of missing values in each variable can be found below:
 glimpse_fun(vt, count_na)
 ```
 
-    #> # A tibble: 16 x 4
-    #>    col                 type      n     p
-    #>    <chr>               <chr> <dbl> <dbl>
-    #>  1 id                  chr       0 0    
-    #>  2 transaction_date    date      0 0    
-    #>  3 payee_type          chr       0 0    
-    #>  4 payee_name          chr       0 0    
-    #>  5 payee_address       chr       0 0    
-    #>  6 registrant_name     chr       0 0    
-    #>  7 registrant_type     chr       0 0    
-    #>  8 office              chr    8222 0.204
-    #>  9 election_cycle      chr       0 0    
-    #> 10 reporting_period    date      0 0    
-    #> 11 expenditure_type    chr       0 0    
-    #> 12 expenditure_purpose chr       0 0    
-    #> 13 expenditure_amount  dbl       0 0    
-    #> 14 public_question     chr   40209 0.998
-    #> 15 comments            chr   26285 0.653
-    #> 16 dupe_flag           lgl       0 0
+    #> # A tibble: 16 × 4
+    #>    col                 type       n        p
+    #>    <chr>               <chr>  <dbl>    <dbl>
+    #>  1 id                  <chr>      0 0       
+    #>  2 transaction_date    <date>     0 0       
+    #>  3 payee_type          <chr>      0 0       
+    #>  4 payee_name          <chr>     57 0.000795
+    #>  5 payee_address       <chr>      0 0       
+    #>  6 registrant_name     <chr>      0 0       
+    #>  7 registrant_type     <chr>      0 0       
+    #>  8 office              <chr>  14789 0.206   
+    #>  9 election_cycle      <chr>      0 0       
+    #> 10 reporting_period    <date>     0 0       
+    #> 11 expenditure_type    <chr>      0 0       
+    #> 12 expenditure_purpose <chr>      0 0       
+    #> 13 expenditure_amount  <dbl>      0 0       
+    #> 14 public_question     <chr>  71352 0.995   
+    #> 15 comments            <chr>      0 0       
+    #> 16 dupe_flag           <lgl>      0 0
 
 Most variables have zero `NA` values, aside from the supplemental
 `public_question` and `comments` variables. `NA` values in the `office`
@@ -229,16 +251,16 @@ vt %>%
   summarise(n_na = sum(is.na(office)))
 ```
 
-    #> # A tibble: 7 x 2
+    #> # A tibble: 7 × 2
     #>   registrant_type                     n_na
     #>   <chr>                              <int>
     #> 1 CANDIDATE                              0
-    #> 2 IE-ONLY POLITICAL ACTION COMMITTEE  1071
-    #> 3 LEGISLATIVE LEADERSHIP PAC           485
-    #> 4 POLITICAL ACTION COMMITTEE          3136
-    #> 5 POLITICAL PARTY COMMITTEE           3373
-    #> 6 PUBLIC MEDIA ACTIVITIES               86
-    #> 7 PUBLIC QUESTION COMMITTEE             71
+    #> 2 IE-ONLY POLITICAL ACTION COMMITTEE  2251
+    #> 3 LEGISLATIVE LEADERSHIP PAC           601
+    #> 4 POLITICAL ACTION COMMITTEE          5245
+    #> 5 POLITICAL PARTY COMMITTEE           6177
+    #> 6 PUBLIC MEDIA ACTIVITIES              142
+    #> 7 PUBLIC QUESTION COMMITTEE            373
 
 ### Ranges
 
@@ -252,22 +274,17 @@ The range for `trans_amount` seems reasonable enough.
 summary(vt$expenditure_amount)
 ```
 
-    #>      Min.   1st Qu.    Median      Mean   3rd Qu.      Max. 
-    #>      0.01     14.36     75.00    688.93    324.00 288221.00
+    #>     Min.  1st Qu.   Median     Mean  3rd Qu.     Max. 
+    #>      0.0     15.1     75.0    611.0    322.4 372000.0
 
 ![](../plots/plot_exp_amt_type-1.png)<!-- -->
-
-The number of contributions is fairly lopsides, with nearly 80% of all
-records coming from 2016 and 2018. This makes some sense, as these were
-election
-    years.
 
 ``` r
 summary(vt$transaction_date)
 ```
 
     #>         Min.      1st Qu.       Median         Mean      3rd Qu.         Max. 
-    #> "2008-08-08" "2016-06-23" "2016-10-06" "2017-02-21" "2018-06-30" "2019-07-04"
+    #> "2014-01-04" "2016-09-21" "2018-10-15" "2019-01-28" "2020-12-19" "2023-02-07"
 
 ``` r
 vt <- mutate(vt, transaction_year = year(transaction_date))
@@ -278,7 +295,7 @@ vt %>%
   group_by(transaction_year) %>% 
   ggplot(mapping = aes(transaction_year)) +
   geom_bar() +
-  scale_x_continuous(breaks = seq(2007, 2020)) + 
+  scale_x_continuous(breaks = seq(2014, 2023)) + 
   labs(
     title = "Number of Expenditures by Year",
     x = "Year",
@@ -289,15 +306,14 @@ vt %>%
 ![](../plots/plot_exp_year-1.png)<!-- -->
 
 For some reason, the reporting period for expenditures begin in 2014
-despite our data spanning 2008 to
-    2019.
+despite our data spanning 2008 to 2019.
 
 ``` r
 summary(vt$reporting_period)
 ```
 
     #>         Min.      1st Qu.       Median         Mean      3rd Qu.         Max. 
-    #> "2014-08-18" "2016-07-15" "2016-10-15" "2017-04-04" "2018-07-15" "2020-11-17"
+    #> "2014-08-18" "2016-10-01" "2018-11-02" "2019-03-09" "2021-01-31" "2023-02-25"
 
 ## Wrangle
 
@@ -333,14 +349,14 @@ vt <- vt %>%
 packageVersion("tidyr")
 ```
 
-    #> [1] '1.0.0'
+    #> [1] '1.2.1'
 
 ``` r
 vt <- vt %>% 
   mutate(
     address_norm = normal_address(
       address = address_sep,
-      add_abbs = usps_street,
+      abbs = usps_street,
       na_rep = TRUE
     )
   )
@@ -353,20 +369,20 @@ vt %>%
   sample_frac()
 ```
 
-    #> # A tibble: 8,180 x 2
-    #>    address_sep           address_norm            
-    #>    <chr>                 <chr>                   
-    #>  1 1340 WILLISTON ROAD   1340 WILLISTON ROAD     
-    #>  2 20455 BLUE HERON TER  20455 BLUE HERON TERRACE
-    #>  3 175 ROUTE 7 SOUTH     175 ROUTE 7 SOUTH       
-    #>  4 357 MAIN ST           357 MAIN STREET         
-    #>  5 414 MINISTER BROOK RD 414 MINISTER BROOK ROAD 
-    #>  6 105 W 3RD STREET      105 WEST 3RD STREET     
-    #>  7 682 CHRISTIAN ST.     682 CHRISTIAN STREET    
-    #>  8 6206 GEORGIA SHORE RD 6206 GEORGIA SHORE ROAD 
-    #>  9 346 SHELBURNE RD      346 SHELBURNE ROAD      
-    #> 10 43 FOREST AVE         43 FOREST AVENUE        
-    #> # … with 8,170 more rows
+    #> # A tibble: 12,881 × 2
+    #>    address_sep              address_norm          
+    #>    <chr>                    <chr>                 
+    #>  1 "500A DALTON DRIVE"      500 A DALTON DR       
+    #>  2 "5501 US 4 "             5501 US 4             
+    #>  3 "113 ACORN LANE SUITE 2" 113 ACORN LANE SUITE 2
+    #>  4 "126 STATE STREET"       126 STATE ST          
+    #>  5 "14 JEFFERSON STREET"    14 JEFFERSON ST       
+    #>  6 "1 VERIZON WAY"          1 VERIZON WAY         
+    #>  7 "829 SOUTH STEET"        829 SOUTH STEET       
+    #>  8 "180 FLYNN AVE SUITE 5"  180 FLYNN AVE SUITE 5 
+    #>  9 "48 NO. MAIN STREET"     48 NO MAIN ST         
+    #> 10 "PO BOX 199"             PO BOX 199            
+    #> # … with 12,871 more rows
 
 ### ZIP
 
@@ -389,11 +405,11 @@ progress_table(
 )
 ```
 
-    #> # A tibble: 2 x 6
-    #>   stage    prop_in n_distinct prop_na n_out n_diff
-    #>   <chr>      <dbl>      <dbl>   <dbl> <dbl>  <dbl>
-    #> 1 zip_sep    0.898       1964 0.00159  4104    940
-    #> 2 zip_norm   0.997       1249 0.00218   108     43
+    #> # A tibble: 2 × 6
+    #>   stage       prop_in n_distinct prop_na n_out n_diff
+    #>   <chr>         <dbl>      <dbl>   <dbl> <dbl>  <dbl>
+    #> 1 vt$zip_sep    0.915       2656 0.00413  6052   1199
+    #> 2 vt$zip_norm   0.996       1733 0.00514   283    103
 
 ### State
 
@@ -417,11 +433,11 @@ progress_table(
 )
 ```
 
-    #> # A tibble: 2 x 6
-    #>   stage      prop_in n_distinct  prop_na n_out n_diff
-    #>   <chr>        <dbl>      <dbl>    <dbl> <dbl>  <dbl>
-    #> 1 state_sep    0.999         59 0           33     10
-    #> 2 state_norm   1             50 0.000819     0      1
+    #> # A tibble: 2 × 6
+    #>   stage         prop_in n_distinct prop_na n_out n_diff
+    #>   <chr>           <dbl>      <dbl>   <dbl> <dbl>  <dbl>
+    #> 1 vt$state_sep    0.998         70 0         132     18
+    #> 2 vt$state_norm   1             53 0.00184     0      1
 
 ### City
 
@@ -430,8 +446,6 @@ vt <- vt %>%
   mutate(
     city_norm = normal_city(
       city = city_sep, 
-      geo_abbs = usps_city,
-      st_abbs = c("VT", "DC", "VERMONT"),
       na = invalid_city,
       na_rep = TRUE
     )
@@ -500,8 +514,7 @@ vt_city <-
   read_html("https://www.vermont.gov/towns-and-Cities") %>% 
   html_node("select") %>% 
   html_nodes("option") %>% 
-  html_text(trim = TRUE) %>% 
-  normal_city(geo_abbs = usps_city)
+  html_text(trim = TRUE) 
 ```
 
 ``` r
@@ -515,20 +528,20 @@ vt %>%
   drop_na(city_refine)
 ```
 
-    #> # A tibble: 55 x 5
-    #>    state_norm zip_norm city_refine        city_match      n
-    #>    <chr>      <chr>    <chr>              <chr>       <int>
-    #>  1 NJ         07726    MANALAPAN          ENGLISHTOWN    52
-    #>  2 VT         05682    NORTH MIDDLESEX    WORCESTER      28
-    #>  3 VT         05303    WEST BRATTLEBORO   BRATTLEBORO    20
-    #>  4 VT         05763    NORTH CHITTENDEN   PITTSFORD      18
-    #>  5 VT         05602    BELIN              MONTPELIER     16
-    #>  6 CA         94025    HACKERS WAY        MENLO PARK      5
-    #>  7 CA         94016    SAN FRANSISCO      DALY CITY       4
-    #>  8 CA         94025    MELNO              MENLO PARK      4
-    #>  9 TX         78645    LAGO VISTA         LEANDER         4
-    #> 10 VT         05346    SOUTH WESTMINISTER PUTNEY          4
-    #> # … with 45 more rows
+    #> # A tibble: 144 × 5
+    #>    state_norm zip_norm city_refine        city_match       n
+    #>    <chr>      <chr>    <chr>              <chr>        <int>
+    #>  1 NJ         07726    "MANALAPAN"        ENGLISHTOWN     52
+    #>  2 VT         05478    "GEORGIA"          SAINT ALBANS    44
+    #>  3 MA         02144    "WEST SOMMERVILLE" SOMERVILLE      26
+    #>  4 VT         05468    "GEORGIA"          MILTON          22
+    #>  5 VT         05682    "NORTH MIDDLESEX"  WORCESTER       21
+    #>  6 VT         05763    "NORTH CHITTENDEN" PITTSFORD       20
+    #>  7 LA         70112    "SUITE "           NEW ORLEANS     16
+    #>  8 VT         05602    "BELIN"            MONTPELIER      16
+    #>  9 VT         05303    "WEST BRATTLEBORO" BRATTLEBORO     12
+    #> 10 VT         05478    "ST ALBANS CITY"   SAINT ALBANS    11
+    #> # … with 134 more rows
 
 ``` r
 progress <- progress_table(
@@ -542,12 +555,10 @@ progress <- progress_table(
 progress$stage <- as_factor(progress$stage)
 ```
 
-| stage        | prop\_in | n\_distinct | prop\_na | n\_out | n\_diff |
-| :----------- | -------: | ----------: | -------: | -----: | ------: |
-| city\_sep    |    0.820 |        1239 |    0.000 |   7269 |     463 |
-| city\_norm   |    0.974 |        1035 |    0.001 |   1059 |     236 |
-| city\_swap   |    0.994 |         830 |    0.025 |    235 |      55 |
-| city\_refine |    0.994 |         828 |    0.025 |    225 |      53 |
+| stage                                                        | prop_in | n_distinct | prop_na | n_out | n_diff |
+|:-------------------------------------------------------------|--------:|-----------:|--------:|------:|-------:|
+| vt$city_sep | 0.849| 1698| 0.000| 10802| 744| |vt$city_norm  |   0.924 |       1472 |   0.002 |  5422 |    505 |
+| vt$city_swap | 0.992| 1076| 0.024| 541| 115| |vt$city_refine |   0.992 |       1073 |   0.024 |   534 |    112 |
 
 You can see how the percentage of valid values increased with each
 stage.
@@ -586,8 +597,8 @@ progress %>%
 
 ## Conclude
 
-1.  There are 40280 records in the database
-2.  The 3165 duplicate records have been flagged with `dupe_flag`
+1.  There are 71724 records in the database
+2.  The 4153 duplicate records have been flagged with `dupe_flag`
 3.  Ranges for continuous variables have been checked and make sense
 4.  There are no important variables with blank or missing values
 5.  Consistency issues have been fixed with the `stringr` package
