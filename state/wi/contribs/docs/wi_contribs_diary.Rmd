@@ -147,14 +147,14 @@ for all contributions and download the row-limited files one by one.
 
 ```{r eval=FALSE}
 source(
-  file = here("wi", "contribs", "docs", "scrape_wi_contribs.R")
+  file = here("state","wi", "contribs", "docs", "scrape_wi_contribs.R")
 )
 ```
 
 The files are downloaded to the `scrape/` directory.
 
 ```{r raw_dir}
-raw_dir <- dir_create(here("wi", "contribs", "data", "scrape"))
+raw_dir <- dir_create(here("state","wi", "contribs", "data", "scrape"))
 raw_info <- as_tibble(dir_info(raw_dir))
 sum(raw_info$size)
 raw_info %>% 

@@ -1,28 +1,28 @@
 Missouri Contributions Data Diary
 ================
 Yanqi Xu
-2020-11-20 21:24:27
+2022-12-25 12:55:13
 
-  - [Project](#project)
-  - [Objectives](#objectives)
-  - [Packages](#packages)
-  - [Data](#data)
-  - [Download](#download)
-  - [Read](#read)
-  - [Explore](#explore)
-      - [Missing](#missing)
-      - [Duplicates](#duplicates)
-      - [Dates](#dates)
-      - [Categorical](#categorical)
-      - [Amounts](#amounts)
-  - [Wrangle](#wrangle)
-      - [Address](#address)
-      - [ZIP](#zip)
-      - [State](#state)
-      - [City](#city)
-  - [Conclude](#conclude)
-  - [Export](#export)
-  - [Upload](#upload)
+-   <a href="#project" id="toc-project">Project</a>
+-   <a href="#objectives" id="toc-objectives">Objectives</a>
+-   <a href="#packages" id="toc-packages">Packages</a>
+-   <a href="#data" id="toc-data">Data</a>
+-   <a href="#download" id="toc-download">Download</a>
+-   <a href="#read" id="toc-read">Read</a>
+-   <a href="#explore" id="toc-explore">Explore</a>
+    -   <a href="#missing" id="toc-missing">Missing</a>
+    -   <a href="#duplicates" id="toc-duplicates">Duplicates</a>
+    -   <a href="#dates" id="toc-dates">Dates</a>
+    -   <a href="#categorical" id="toc-categorical">Categorical</a>
+    -   <a href="#amounts" id="toc-amounts">Amounts</a>
+-   <a href="#wrangle" id="toc-wrangle">Wrangle</a>
+    -   <a href="#address" id="toc-address">Address</a>
+    -   <a href="#zip" id="toc-zip">ZIP</a>
+    -   <a href="#state" id="toc-state">State</a>
+    -   <a href="#city" id="toc-city">City</a>
+-   <a href="#conclude" id="toc-conclude">Conclude</a>
+-   <a href="#export" id="toc-export">Export</a>
+-   <a href="#upload" id="toc-upload">Upload</a>
 
 <!-- Place comments regarding knitting here -->
 
@@ -100,7 +100,7 @@ feature and should be run as such. The project also uses the dynamic
 ``` r
 # where does this document knit?
 here::here()
-#> [1] "/Users/yanqixu/code/accountability_datacleaning/R_campfin"
+#> [1] "/Users/yanqixu/code/accountability_datacleaning"
 ```
 
 ## Data
@@ -109,63 +109,82 @@ The contribution data can be obtained from the [Missouri Ethics
 Commission](https://www.mec.mo.gov/MEC/Campaign_Finance/CF_ContrCSV.aspx).
 We are interested in downloading contributions received by committees,
 so here we select the Itemized Contributions Received - Form CD1 A. This
-data is downloaded on Nov. 20, 2020
+data is downloaded on Dec. 23, 2020.
 
 ## Download
 
 ``` r
-raw_dir <- dir_create(here("mo", "contribs", "data", "raw"))
+raw_dir <- dir_create(here("state","mo", "contribs", "data", "raw"))
 source <- "Missouri Ethics Commission"
 ```
 
-We can download all the data files from 2011 to 2020.
+We can download all the data files from 2011 to 2022.
 
 ## Read
 
 ``` r
-moc <- map_df(dir_ls(raw_dir),read_delim, delim = ",")
+moc <- map_df(dir_ls(raw_dir,regexp = ".+new.+"),read_delim, delim = ",")
 
 moc <- moc %>% clean_names()
 ```
 
 ## Explore
 
-There are 1,200,709 rows of 18 columns.
+There are 503,247 rows of 18 columns.
 
 ``` r
 glimpse(moc)
-#> Rows: 1,200,709
+#> Rows: 503,247
 #> Columns: 18
-#> $ cd1_a_id          <dbl> 2380, 2445, 2450, 2451, 2452, 2453, 2454, 2455, 2456, 2457, 2458, 2459…
-#> $ mecid             <chr> "C091243", "c101169", "C061024", "C031264", "C101334", "C101334", "C10…
-#> $ committee_name    <chr> "FRIENDS TO ELECT BILL LANT", "COMMITTEE TO ELECT JEANETTE 'JENNY' ALL…
-#> $ committee         <chr> "AT&T Missouri", NA, NA, "AT&T Missouri Employee PAC", NA, NA, "AT & T…
-#> $ company           <chr> NA, NA, NA, NA, "CAPE COUNTY REPUBLICAN WOMEN'S CLUB", "BNSF RAILWAY C…
-#> $ first_name        <chr> NA, "Larry and Jeanette", "Neal ", NA, NA, NA, NA, "Craig", "Bill", "N…
-#> $ last_name         <chr> NA, "Allen", "Ethridge", NA, NA, NA, NA, "McNeese", "Hill", "Sealine",…
-#> $ address_1         <chr> "One AT&T Center", "13645 State Highway P", "5246 S.Applecross", "One …
-#> $ address_2         <chr> NA, NA, NA, NA, NA, "AOB-3", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "…
-#> $ city              <chr> "StLouis", "Potosi", "Springfield", "St Louis", "JACKSON", "FORT WORTH…
-#> $ state             <chr> "MO", "MO", "MO", "MO", "MO", "TX", "MO", "MO", "MO", "MO", "MO", "AR"…
-#> $ zip               <chr> "63101", "63664", "65809", "63101", "63755", "76131", "63101", "64456"…
-#> $ employer          <chr> NA, NA, "Self", NA, NA, NA, NA, "Self Employed ", NA, NA, "Sara Lee", …
-#> $ occupation        <chr> NA, "Self ", NA, NA, NA, NA, NA, NA, "Retired", "Farmer", NA, NA, NA, …
-#> $ date              <chr> "12/9/2010 12:00:00 AM", "12/10/2010 12:00:00 AM", "12/19/2010 12:00:0…
-#> $ amount            <dbl> 150.00, 346.31, 120.00, 200.00, 250.00, 500.00, 150.00, 200.00, 30.00,…
-#> $ contribution_type <chr> "M", "M", "M", "M", "M", "M", "M", "M", "M", "M", "M", "M", "M", "M", …
-#> $ report            <chr> "January Quarterly Report", "January Quarterly Report", "January Quart…
+#> $ cd1_a_id          <dbl> 1327191, 1327192, 1327193, 1327194, 1327195, 1327196, 1327197, 1327198,…
+#> $ mecid             <chr> "C000573", "C000573", "C000573", "C000573", "C000573", "C000573", "C000…
+#> $ committee_name    <chr> "Safer Families for Missouri", "Safer Families for Missouri", "Safer Fa…
+#> $ committee         <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
+#> $ company           <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
+#> $ first_name        <chr> "Robert", "J.", "Walter", "John", "John", "Bradley", "James", "John", "…
+#> $ last_name         <chr> "Beezley", "Bertram", "Bley", "Boyd", "Boyd", "Bradshaw", "Brandenburg"…
+#> $ address_1         <chr> "1200 E. Woodhurst R-200", "2345 Grand Blvd. #1925", "1000 W. Nifong Bl…
+#> $ address_2         <chr> NA, NA, "Woodrail Centre", NA, NA, NA, NA, NA, NA, NA, "1 Metropolitan …
+#> $ city              <chr> "Springfield", "Kansas City", "Columbia", "Independence", "Independence…
+#> $ state             <chr> "MO", "MO", "MO", "MO", "MO", "MO", "MO", "MO", "MO", "MO", "MO", "MO",…
+#> $ zip               <chr> "65804", "64108", "65203", "64051", "64051", "65804", "63105", "63459",…
+#> $ employer          <chr> "Robert T. Beezley P.C.", "Bertram & Graf LLC", "Bley & Evans LC", "Boy…
+#> $ occupation        <chr> "Attorney at Law", "Attorney at Law", "Attorney at Law", "Attorney at L…
+#> $ date              <chr> "1/24/2020 12:00:00 AM", "1/24/2020 12:00:00 AM", "1/24/2020 12:00:00 A…
+#> $ amount            <dbl> 25.00, 7.75, 25.00, 25.00, 25.00, 25.00, 12.50, 12.50, 25.00, 25.00, 25…
+#> $ contribution_type <chr> "Monetary", "Monetary", "Monetary", "Monetary", "Monetary", "Monetary",…
+#> $ report            <chr> "April Quarterly Report", "April Quarterly Report", "April Quarterly Re…
 tail(moc)
-#> # A tibble: 6 x 18
-#>   cd1_a_id mecid committee_name committee company first_name last_name address_1 address_2 city 
-#>      <dbl> <chr> <chr>          <chr>     <chr>   <chr>      <chr>     <chr>     <chr>     <chr>
-#> 1  1542677 C180… Kiehne For Mi… <NA>      <NA>    Tim        "Coles "  123 Vall… <NA>      Laba…
-#> 2  1542680 C000… Local 41 Poli… DRIVE Co… <NA>    <NA>        <NA>     25 Louis… <NA>      Wash…
-#> 3  1542690 C201… Elect Raymond… <NA>      <NA>    Pam        "Scrudde… 20718 S.… <NA>      Plea…
-#> 4  1542691 C201… Elect Raymond… <NA>      <NA>    Jane       "Hull"    710 Lacy… <NA>      Belt…
-#> 5  1542692 C201… Elect Raymond… <NA>      Bates … <NA>        <NA>     800 E Nu… <NA>      Butl…
-#> 6  1542708 C000… GREATER KC BL… <NA>      Greate… <NA>        <NA>     400 S. M… <NA>      Inde…
-#> # … with 8 more variables: state <chr>, zip <chr>, employer <chr>, occupation <chr>, date <chr>,
-#> #   amount <dbl>, contribution_type <chr>, report <chr>
+#> # A tibble: 6 × 18
+#>   cd1_a_id mecid  commi…¹ commi…² company first…³ last_…⁴ addre…⁵ addre…⁶ city  state zip   emplo…⁷
+#>      <dbl> <chr>  <chr>   <chr>   <chr>   <chr>   <chr>   <chr>   <chr>   <chr> <chr> <chr> <chr>  
+#> 1  1919111 A1615… "Frien… <NA>    <NA>    "Carol" Graves  9619 M… <NA>    Kans… MO    64134 Teacher
+#> 2  1919112 A1615… "Frien… <NA>    <NA>    "Carol" Graves  9619 M… <NA>    Kans… MO    64134 Teacher
+#> 3  1919113 A1615… "Frien… <NA>    <NA>    "Wesle… Eppers… 3600 P… <NA>    Inde… MO    64052 Not Em…
+#> 4  1919114 C1310… "Dawso… <NA>    <NA>    "Danie… Imhoff  4954 S… <NA>    Spri… MO    65804 Retired
+#> 5  1919129 A2221… "Shian… <NA>    <NA>    "Shian… McMahon PO Box… <NA>    Broo… MO    64628 Linn C…
+#> 6  1919193 C1210… "Fitzp… Centra… <NA>     <NA>   <NA>    P.O. 7… <NA>    Jeff… MO    65102 <NA>   
+#> # … with 5 more variables: occupation <chr>, date <chr>, amount <dbl>, contribution_type <chr>,
+#> #   report <chr>, and abbreviated variable names ¹​committee_name, ²​committee, ³​first_name,
+#> #   ⁴​last_name, ⁵​address_1, ⁶​address_2, ⁷​employer
+```
+
+Since the data is tablulated by year, we can filter out the rows that
+were already included in the last update using the unique identifier
+`cd1_a_id`.
+
+``` r
+n_distinct(moc$cd1_a_id) == nrow(moc)
+#> [1] TRUE
+
+nrow(moc)
+#> [1] 503247
+moc_prev <- read_csv(here("state","mo","contribs", "data", "previous") %>% dir_ls())
+
+moc <- moc %>% filter(cd1_a_id %out% moc_prev$cd1_a_id)
+#after filtering out old data, the dataset's row number:
+nrow(moc)
+#> [1] 297490
 ```
 
 ### Missing
@@ -174,56 +193,56 @@ Columns vary in their degree of missing values.
 
 ``` r
 col_stats(moc, count_na)
-#> # A tibble: 18 x 4
-#>    col               class       n          p
-#>    <chr>             <chr>   <int>      <dbl>
-#>  1 cd1_a_id          <dbl>       0 0         
-#>  2 mecid             <chr>       0 0         
-#>  3 committee_name    <chr>       0 0         
-#>  4 committee         <chr> 1072593 0.893     
-#>  5 company           <chr> 1036177 0.863     
-#>  6 first_name        <chr>  287320 0.239     
-#>  7 last_name         <chr>  271363 0.226     
-#>  8 address_1         <chr>       3 0.00000250
-#>  9 address_2         <chr> 1093017 0.910     
-#> 10 city              <chr>       0 0         
-#> 11 state             <chr>      48 0.0000400 
-#> 12 zip               <chr>    6690 0.00557   
-#> 13 employer          <chr>  369399 0.308     
-#> 14 occupation        <chr>  450043 0.375     
-#> 15 date              <chr>       0 0         
-#> 16 amount            <dbl>       0 0         
-#> 17 contribution_type <chr>       0 0         
-#> 18 report            <chr>       0 0
+#> # A tibble: 18 × 4
+#>    col               class      n        p
+#>    <chr>             <chr>  <int>    <dbl>
+#>  1 cd1_a_id          <dbl>      0 0       
+#>  2 mecid             <chr>      0 0       
+#>  3 committee_name    <chr>      0 0       
+#>  4 committee         <chr> 277144 0.932   
+#>  5 company           <chr> 276381 0.929   
+#>  6 first_name        <chr>  45131 0.152   
+#>  7 last_name         <chr>  41036 0.138   
+#>  8 address_1         <chr>      0 0       
+#>  9 address_2         <chr> 271121 0.911   
+#> 10 city              <chr>      0 0       
+#> 11 state             <chr>      0 0       
+#> 12 zip               <chr>    160 0.000538
+#> 13 employer          <chr>  50647 0.170   
+#> 14 occupation        <chr>  76220 0.256   
+#> 15 date              <chr>      0 0       
+#> 16 amount            <dbl>      0 0       
+#> 17 contribution_type <chr>      0 0       
+#> 18 report            <chr>      0 0
 ```
 
 We can flag any record missing a key variable needed to identify a
 transaction.
 
 ``` r
-moc <- moc %>% flag_na(date, last_name, amount, committee,address_1)
+moc <- moc %>% flag_na(date, last_name, amount, committee_name,address_1)
 sum(moc$na_flag)
-#> [1] 1193708
+#> [1] 41036
 ```
 
 ``` r
 moc %>% 
   filter(na_flag) %>% 
   select(date, last_name, amount, committee,address_1)
-#> # A tibble: 1,193,708 x 5
-#>    date               last_name amount committee                                 address_1         
-#>    <chr>              <chr>      <dbl> <chr>                                     <chr>             
-#>  1 12/9/2010 12:00:0… <NA>        150  AT&T Missouri                             One AT&T Center   
-#>  2 12/10/2010 12:00:… Allen       346. <NA>                                      13645 State Highw…
-#>  3 12/19/2010 12:00:… Ethridge    120  <NA>                                      5246 S.Applecross 
-#>  4 12/6/2010 12:00:0… <NA>        200  AT&T Missouri Employee PAC                One AT&T Center   
-#>  5 12/8/2010 12:00:0… <NA>        250  <NA>                                      145 ARBOR CIRCLE  
-#>  6 12/20/2010 12:00:… <NA>        500  <NA>                                      2500 LOU MENK DRI…
-#>  7 12/23/2010 12:00:… <NA>        150  AT & T MISSOURI EMPLOYEE POLITICAL ACTIO… ONE AT&T CENTER   
-#>  8 12/18/2010 12:00:… McNeese     200  <NA>                                      1 Golf Tee Lane   
-#>  9 12/18/2010 12:00:… Hill         30  <NA>                                      157 NE Coal Ln    
-#> 10 12/31/2010 12:00:… Sealine     100  <NA>                                      RR 3 Box 106A     
-#> # … with 1,193,698 more rows
+#> # A tibble: 41,036 × 5
+#>    date                   last_name amount committee                   address_1                   
+#>    <chr>                  <chr>      <dbl> <chr>                       <chr>                       
+#>  1 10/25/2020 12:00:00 AM <NA>         500 <NA>                        "1600 INDIAN CREEK RD"      
+#>  2 10/25/2020 12:00:00 AM <NA>         500 MO OPTOMETRIC PAC           "100 EAST HIGH STREET"      
+#>  3 11/28/2020 12:00:00 AM <NA>         500 LATHROP GAGE CONSULTING PAC "314 E HIGH ST"             
+#>  4 10/1/2020 12:00:00 AM  <NA>         500 <NA>                        "8600 Hillcrest "           
+#>  5 10/8/2020 12:00:00 AM  <NA>         200 <NA>                        "6 SW 2nd st Suite 107 "    
+#>  6 10/5/2020 12:00:00 AM  <NA>         500 <NA>                        "4019 Clark Ave"            
+#>  7 10/8/2020 12:00:00 AM  <NA>        2000 <NA>                        "1401 Hampton Ave 3rd Floor…
+#>  8 10/6/2020 12:00:00 AM  <NA>         500 <NA>                        "6320 Manchester Ave Ste 42…
+#>  9 10/14/2020 12:00:00 AM <NA>         500 <NA>                        "4501 Emanuel Cleaver II Bl…
+#> 10 10/7/2020 12:00:00 AM  <NA>        2047 <NA>                        "6601 Winchester Ste 280"   
+#> # … with 41,026 more rows
 ```
 
 ### Duplicates
@@ -233,27 +252,27 @@ We can also flag any record completely duplicated across every column.
 ``` r
 moc <- flag_dupes(moc, -cd1_a_id)
 sum(moc$dupe_flag)
-#> [1] 9060
+#> [1] 2435
 ```
 
 ``` r
 moc %>% 
   filter(dupe_flag) %>% 
   select(date, last_name, amount, committee,address_1)
-#> # A tibble: 9,060 x 5
-#>    date                   last_name amount committee address_1               
-#>    <chr>                  <chr>      <dbl> <chr>     <chr>                   
-#>  1 10/28/2010 12:00:00 AM <NA>         160 <NA>      300 S St Charles St     
-#>  2 10/28/2010 12:00:00 AM <NA>         160 <NA>      300 S St Charles St     
-#>  3 12/29/2010 12:00:00 AM McDonnell   3000 <NA>      4909 Sunset Dr.         
-#>  4 12/29/2010 12:00:00 AM McDonnell   3000 <NA>      4909 Sunset Dr.         
-#>  5 12/29/2010 12:00:00 AM McDonnell   3000 <NA>      4909 Sunset Dr.         
-#>  6 12/29/2010 12:00:00 AM McDonnell   3000 <NA>      4909 Sunset Dr.         
-#>  7 12/15/2010 12:00:00 AM Kubic        600 <NA>      4012 N Walrond Avenue   
-#>  8 12/15/2010 12:00:00 AM Kubic        600 <NA>      4012 N Walrond Avenue   
-#>  9 10/4/2010 12:00:00 AM  Palmer        50 <NA>      205 Park Central E. #511
-#> 10 10/4/2010 12:00:00 AM  Palmer        50 <NA>      205 Park Central E. #511
-#> # … with 9,050 more rows
+#> # A tibble: 2,435 × 5
+#>    date                   last_name amount committee                                        addre…¹
+#>    <chr>                  <chr>      <dbl> <chr>                                            <chr>  
+#>  1 11/17/2020 12:00:00 AM <NA>         500 "MPGA PROPANE PAC "                              "4110 …
+#>  2 11/17/2020 12:00:00 AM <NA>         500 "MPGA PROPANE PAC "                              "4110 …
+#>  3 9/18/2020 12:00:00 AM  <NA>        3675 "Catalyst PAC"                                   "PO Bo…
+#>  4 9/18/2020 12:00:00 AM  <NA>        3675 "Catalyst PAC"                                   "PO Bo…
+#>  5 6/26/2020 12:00:00 AM  <NA>        5000 "NEXUS PAC"                                      "714 L…
+#>  6 6/26/2020 12:00:00 AM  <NA>        5000 "NEXUS PAC"                                      "714 L…
+#>  7 10/22/2020 12:00:00 AM <NA>        1000 "AT&T MISSOURI EMPLOYEE POLITICAL ACTION COMMIT… "ONE A…
+#>  8 10/22/2020 12:00:00 AM <NA>        1000 "AT&T MISSOURI EMPLOYEE POLITICAL ACTION COMMIT… "ONE A…
+#>  9 10/23/2020 12:00:00 AM Kambitsch      3  <NA>                                            "2065 …
+#> 10 10/23/2020 12:00:00 AM Kambitsch      3  <NA>                                            "2065 …
+#> # … with 2,425 more rows, and abbreviated variable name ¹​address_1
 ```
 
 ### Dates
@@ -267,13 +286,13 @@ moc <- moc %>% mutate(date = as.Date(date, format = "%m/%d/%Y"),
 
 ``` r
 min(moc$date)
-#> [1] "1917-06-18"
-sum(moc$year < 2000)
-#> [1] 1
+#> [1] "2002-07-28"
+sum(moc$year < 2020)
+#> [1] 70
 max(moc$date)
-#> [1] "2100-03-14"
+#> [1] "2022-12-06"
 sum(moc$date > today())
-#> [1] 1
+#> [1] 0
 ```
 
 ![](../plots/bar_year-1.png)<!-- -->
@@ -282,30 +301,30 @@ sum(moc$date > today())
 
 ``` r
 col_stats(moc, n_distinct)
-#> # A tibble: 21 x 4
-#>    col               class        n          p
-#>    <chr>             <chr>    <int>      <dbl>
-#>  1 cd1_a_id          <dbl>  1200709 1         
-#>  2 mecid             <chr>     8012 0.00667   
-#>  3 committee_name    <chr>     8549 0.00712   
-#>  4 committee         <chr>    29664 0.0247    
-#>  5 company           <chr>    70991 0.0591    
-#>  6 first_name        <chr>    51702 0.0431    
-#>  7 last_name         <chr>    74832 0.0623    
-#>  8 address_1         <chr>   359507 0.299     
-#>  9 address_2         <chr>    22297 0.0186    
-#> 10 city              <chr>    15996 0.0133    
-#> 11 state             <chr>      134 0.000112  
-#> 12 zip               <chr>    51800 0.0431    
-#> 13 employer          <chr>    91422 0.0761    
-#> 14 occupation        <chr>    42070 0.0350    
-#> 15 date              <date>    3796 0.00316   
-#> 16 amount            <dbl>    23662 0.0197    
-#> 17 contribution_type <chr>        2 0.00000167
-#> 18 report            <chr>      407 0.000339  
-#> 19 na_flag           <lgl>        2 0.00000167
-#> 20 dupe_flag         <lgl>        2 0.00000167
-#> 21 year              <dbl>       21 0.0000175
+#> # A tibble: 21 × 4
+#>    col               class       n          p
+#>    <chr>             <chr>   <int>      <dbl>
+#>  1 cd1_a_id          <dbl>  297490 1         
+#>  2 mecid             <chr>    2908 0.00978   
+#>  3 committee_name    <chr>    2945 0.00990   
+#>  4 committee         <chr>    6334 0.0213    
+#>  5 company           <chr>   11357 0.0382    
+#>  6 first_name        <chr>   14600 0.0491    
+#>  7 last_name         <chr>   31533 0.106     
+#>  8 address_1         <chr>   98594 0.331     
+#>  9 address_2         <chr>    6279 0.0211    
+#> 10 city              <chr>    7360 0.0247    
+#> 11 state             <chr>      76 0.000255  
+#> 12 zip               <chr>   19663 0.0661    
+#> 13 employer          <chr>   29094 0.0978    
+#> 14 occupation        <chr>   15741 0.0529    
+#> 15 date              <date>   1009 0.00339   
+#> 16 amount            <dbl>    7916 0.0266    
+#> 17 contribution_type <chr>       2 0.00000672
+#> 18 report            <chr>     100 0.000336  
+#> 19 na_flag           <lgl>       2 0.00000672
+#> 20 dupe_flag         <lgl>       2 0.00000672
+#> 21 year              <dbl>       6 0.0000202
 ```
 
 ![](../plots/distinct_plots-1.png)<!-- -->
@@ -314,10 +333,10 @@ col_stats(moc, n_distinct)
 
 ``` r
 summary(moc$amount)
-#>    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
-#>   -2500      21      80     768     250 4000000
+#>      Min.   1st Qu.    Median      Mean   3rd Qu.      Max. 
+#>   -1304.1      11.0      47.1     476.0     200.0 1996059.2
 mean(moc$amount <= 0)
-#> [1] 0.0004489014
+#> [1] 0.0002285791
 ```
 
 These are the records with the minimum and maximum amounts.
@@ -326,27 +345,27 @@ These are the records with the minimum and maximum amounts.
 glimpse(moc[c(which.max(moc$amount), which.min(moc$amount)), ])
 #> Rows: 2
 #> Columns: 21
-#> $ cd1_a_id          <dbl> 771656, 66375
-#> $ mecid             <chr> "C161011", "C001135"
-#> $ committee_name    <chr> "REPUBLICAN GOVERNORS ASSOCIATION - MISSOURI", "JAY NIXON FOR MISSOURI"
-#> $ committee         <chr> NA, "National Health Corporation PAC State No. 1093"
-#> $ company           <chr> "REPUBLICAN GOVERNORS ASSOCIATION", NA
-#> $ first_name        <chr> NA, NA
-#> $ last_name         <chr> NA, NA
-#> $ address_1         <chr> "1747 PENNSYLVANIA AVE. NW STE 250", "100 Vine Street"
+#> $ cd1_a_id          <dbl> 1740820, 1708931
+#> $ mecid             <chr> "C221856", "C180609"
+#> $ committee_name    <chr> "Mid-America Carpenters Regional Council Missouri-Kansas Area Political…
+#> $ committee         <chr> "Carpenters Help in the Political Process (CHIPP)", NA
+#> $ company           <chr> NA, NA
+#> $ first_name        <chr> NA, "Michael"
+#> $ last_name         <chr> NA, "Moehn"
+#> $ address_1         <chr> "1401 Hampton Avenue", "31 Logan Rd"
 #> $ address_2         <chr> NA, NA
-#> $ city              <chr> "WASHINGTON", "Murfreesboro"
-#> $ state             <chr> "DC", "TN"
-#> $ zip               <chr> "20006", "37130"
-#> $ employer          <chr> NA, NA
-#> $ occupation        <chr> NA, NA
-#> $ date              <date> 2016-10-13, 2011-04-14
-#> $ amount            <dbl> 4000000, -2500
-#> $ contribution_type <chr> "M", "M"
-#> $ report            <chr> "8 Day Before General Election-11/8/2016", "July Quarterly Report"
-#> $ na_flag           <lgl> TRUE, TRUE
+#> $ city              <chr> "St Louis", "Alton"
+#> $ state             <chr> "MO", "IL"
+#> $ zip               <chr> "63139", "620023206"
+#> $ employer          <chr> NA, "AMS Ameren Services"
+#> $ occupation        <chr> NA, "ZA0009 - EVP & Chief Financial Officer"
+#> $ date              <date> 2022-03-01, 2021-12-28
+#> $ amount            <dbl> 1996059.18, -1304.07
+#> $ contribution_type <chr> "Monetary", "Monetary"
+#> $ report            <chr> "8 Day Before General Municipal Election-4/5/2022", "January Quarterly …
+#> $ na_flag           <lgl> TRUE, FALSE
 #> $ dupe_flag         <lgl> FALSE, FALSE
-#> $ year              <dbl> 2016, 2011
+#> $ year              <dbl> 2022, 2021
 ```
 
 ![](../plots/hist_amount-1.png)<!-- -->
@@ -388,19 +407,19 @@ moc %>%
   select(contains("address")) %>% 
   distinct() %>% 
   sample_n(10)
-#> # A tibble: 10 x 3
-#>    address_1            address_2            address_norm                        
-#>    <chr>                <chr>                <chr>                               
-#>  1 4207 N. MAIN STREET  <NA>                 4207 N MAIN ST                      
-#>  2 6131 kingsbury ave   <NA>                 6131 KINGSBURY AVE                  
-#>  3 5508 Kensington Pl N <NA>                 5508 KENSINGTON PL N                
-#>  4 236 Planeview        426 S Jefferson      236 PLANEVIEW 426 S JEFFERSON       
-#>  5 117a W Main          <NA>                 117 A W MAIN                        
-#>  6 316 harbins road nw  <NA>                 316 HARBINS RD NW                   
-#>  7 3620 CONNECTICUT     <NA>                 3620 CONNECTICUT                    
-#>  8 600 E 103rd St       6320 NE Woodstock Dr 600 E 103 RD ST 6320 NE WOODSTOCK DR
-#>  9 6306 Alamo Ave.      <NA>                 6306 ALAMO AVE                      
-#> 10 1103 Hillcrest Dr    <NA>                 1103 HILLCREST DR
+#> # A tibble: 10 × 3
+#>    address_1                  address_2 address_norm           
+#>    <chr>                      <chr>     <chr>                  
+#>  1 5730 county loop 182       <NA>      5730 COUNTY LOOP 182   
+#>  2 341 Towne Vue Dr           <NA>      341 TOWNE VUE DR       
+#>  3 452 gunnison gorge dr      <NA>      452 GUNNISON GORGE DR  
+#>  4 1725 N.W. 9th St.          <NA>      1725 NW 9TH ST         
+#>  5 9 Wilshire Terr            <NA>      9 WILSHIRE TER         
+#>  6 25392 Royal Point Drive    <NA>      25392 ROYAL POINT DR   
+#>  7 3605 Osage Beach Pkwy      <NA>      3605 OSAGE BEACH PKWY  
+#>  8 7 DOUGLASS LANE            <NA>      7 DOUGLASS LN          
+#>  9 966Victoria Ave            <NA>      966VICTORIA AVE        
+#> 10 6676 American Setter Drive <NA>      6676 AMERICAN SETTER DR
 ```
 
 ### ZIP
@@ -425,11 +444,11 @@ progress_table(
   moc$zip_norm,
   compare = valid_zip
 )
-#> # A tibble: 2 x 6
-#>   stage    prop_in n_distinct prop_na  n_out n_diff
-#>   <chr>      <dbl>      <dbl>   <dbl>  <dbl>  <dbl>
-#> 1 zip        0.795      51800 0.00557 244563  40504
-#> 2 zip_norm   0.998      13849 0.00572   2889   1210
+#> # A tibble: 2 × 6
+#>   stage        prop_in n_distinct  prop_na n_out n_diff
+#>   <chr>          <dbl>      <dbl>    <dbl> <dbl>  <dbl>
+#> 1 moc$zip        0.731      19663 0.000538 80064  13580
+#> 2 moc$zip_norm   0.995       8021 0.000669  1460    672
 ```
 
 ### State
@@ -453,20 +472,19 @@ moc <- moc %>%
 moc %>% 
   filter(state != state_norm) %>% 
   count(state, state_norm, sort = TRUE)
-#> # A tibble: 36 x 3
+#> # A tibble: 10 × 3
 #>    state state_norm     n
 #>    <chr> <chr>      <int>
-#>  1 Mo    MO          3986
-#>  2 mo    MO           523
-#>  3 Il    IL            25
-#>  4 Ks    KS            21
-#>  5 Fl    FL            13
-#>  6 ks    KS             9
-#>  7 mO    MO             9
-#>  8 Ca    CA             7
-#>  9 Oh    OH             5
-#> 10 Pa    PA             5
-#> # … with 26 more rows
+#>  1 Mo    MO           785
+#>  2 mo    MO           100
+#>  3 Ne    NE            11
+#>  4 mO    MO             3
+#>  5 Fl    FL             2
+#>  6 Ks    KS             2
+#>  7 Ca    CA             1
+#>  8 Co    CO             1
+#>  9 Il    IL             1
+#> 10 Mi    MI             1
 ```
 
 ``` r
@@ -475,11 +493,11 @@ progress_table(
   moc$state_norm,
   compare = valid_state
 )
-#> # A tibble: 2 x 6
-#>   stage      prop_in n_distinct   prop_na n_out n_diff
-#>   <chr>        <dbl>      <dbl>     <dbl> <dbl>  <dbl>
-#> 1 state        0.996        134 0.0000400  4837     75
-#> 2 state_norm   1             59 0.000197      0      1
+#> # A tibble: 2 × 6
+#>   stage          prop_in n_distinct   prop_na n_out n_diff
+#>   <chr>            <dbl>      <dbl>     <dbl> <dbl>  <dbl>
+#> 1 moc$state        0.997         76 0           920     20
+#> 2 moc$state_norm   1             57 0.0000437     0      1
 ```
 
 ### City
@@ -566,20 +584,20 @@ good_refine <- moc %>%
   )
 ```
 
-    #> # A tibble: 279 x 5
-    #>    state_norm zip_norm city_swap     city_refine      n
-    #>    <chr>      <chr>    <chr>         <chr>        <int>
-    #>  1 MO         63031    FLORRISANT    FLORISSANT      32
-    #>  2 MA         01002    AMHERST MA    AMHERST         23
-    #>  3 VA         22042    CHURCH FALLS  FALLS CHURCH    21
-    #>  4 MO         65737    REED SPRINGS  REEDS SPRING    19
-    #>  5 OH         45206    CINCINATTI    CINCINNATI      14
-    #>  6 MO         63033    FLORRISANT    FLORISSANT      12
-    #>  7 MO         63034    FLORRISANT    FLORISSANT      10
-    #>  8 MO         65201    COLUMBIA `    COLUMBIA         6
-    #>  9 MO         65807    SPRIRINGFIELD SPRINGFIELD      5
-    #> 10 IA         50021    AKENKY        ANKENY           4
-    #> # … with 269 more rows
+    #> # A tibble: 29 × 5
+    #>    state_norm zip_norm city_swap        city_refine      n
+    #>    <chr>      <chr>    <chr>            <chr>        <int>
+    #>  1 MO         63031    FLORRISANT       FLORISSANT       4
+    #>  2 MO         63368    OFFALON          O FALLON         3
+    #>  3 MO         65201    COLUMBIA `       COLUMBIA         3
+    #>  4 SC         29406    NORTH CHARLESTON CHARLESTON       3
+    #>  5 MO         63034    FLORRISANT       FLORISSANT       2
+    #>  6 MO         63073    ST ALBINS        SAINT ALBANS     2
+    #>  7 MO         65203    COLUMBIA `       COLUMBIA         2
+    #>  8 SD         57104    SOUIX FALLS      SIOUX FALLS      2
+    #>  9 AZ         85015    PHOENIX PHOENIX  PHOENIX          1
+    #> 10 CA         91106    PASENDENA        PASADENA         1
+    #> # … with 19 more rows
 
 Then we can join the refined values back to the database.
 
@@ -595,12 +613,10 @@ Our goal for normalization was to increase the proportion of city values
 known to be valid and reduce the total distinct values by correcting
 misspellings.
 
-| stage        | prop\_in | n\_distinct | prop\_na | n\_out | n\_diff |
-| :----------- | -------: | ----------: | -------: | -----: | ------: |
-| city\_raw)   |    0.814 |       12204 |        0 | 223400 |    6071 |
-| city\_norm   |    0.981 |        9831 |        0 |  23178 |    3627 |
-| city\_swap   |    0.988 |        7665 |        0 |  13867 |    1487 |
-| city\_refine |    0.989 |        7481 |        0 |  13403 |    1304 |
+| stage                                                               | prop_in | n_distinct | prop_na | n_out | n_diff |
+|:--------------------------------------------------------------------|--------:|-----------:|--------:|------:|-------:|
+| toupper(moc$city_raw) | 0.846| 5912| 0| 45826| 2019| |moc$city_norm |   0.864 |       5037 |       0 | 40331 |   1112 |
+| moc$city_swap | 0.991| 4395| 0| 2772| 464| |moc$city_refine         |   0.991 |       4373 |       0 |  2733 |    442 |
 
 You can see how the percentage of valid values increased with each
 stage.
@@ -633,37 +649,37 @@ moc <- moc %>%
 glimpse(sample_n(moc, 50))
 #> Rows: 50
 #> Columns: 25
-#> $ cd1_a_id          <dbl> 221239, 765392, 155404, 713116, 461134, 143257, 661575, 625882, 113979…
-#> $ mecid             <chr> "C121140", "C151132", "C071012", "A161272", "C141128", "C111110", "C00…
-#> $ committee_name    <chr> "CITIZENS TO ELECT EHRESMAN", "HAWLEY FOR MISSOURI", "KANDER FOR MISSO…
-#> $ committee         <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
-#> $ company           <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "Cheyenne International LL…
-#> $ first_name        <chr> "Phyllis and Gerald", " Julius", "Elaine", "Ted", "CHRISTOPHER", "L.J.…
-#> $ last_name         <chr> "Nolan", "Wall", "Eppright", "Ehney", "GAHAGAN", "Kissick", "Brandenbu…
-#> $ address_1         <chr> "1918 Compton Hill Pl", "PO Box 226", "8410 Rosehill Rd", "PO Box 9015…
-#> $ address_2         <chr> NA, NA, NA, NA, "1024 W 54TH ST", NA, NA, NA, NA, NA, NA, NA, NA, NA, …
-#> $ city              <chr> "St Louis", "Clinton", "Lenexa", "Kansas City ", "KANSAS CITY", "Kansa…
-#> $ state             <chr> "MO", "MO", "KS", "MO", "MO", "MO", "MO", "MO", "MO", "MO", "MO", "NC"…
-#> $ zip               <chr> "63104", "64735", "66215-2836", "64190", "64158", "64132", "63141", "6…
-#> $ employer          <chr> "retired", "Retired", "The Eppright Law Office, LLC", "Kansas Downtown…
-#> $ occupation        <chr> NA, " Retired", "Attorney", NA, NA, "President", "Attorney at Law", NA…
-#> $ date              <date> 2012-08-04, 2016-10-17, 2012-03-30, 2016-07-11, 2014-07-31, 2012-03-0…
-#> $ amount            <dbl> 200.00, 1500.00, 100.00, 50.00, 250.00, 250.00, 12.50, 35.00, 100.00, …
-#> $ contribution_type <chr> "M", "M", "M", "M", "M", "M", "M", "M", "M", "M", "M", "M", "M", "M", …
-#> $ report            <chr> "30 Day After Primary Election-8/7/2012", "8 Day Before General Electi…
-#> $ na_flag           <lgl> TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE…
-#> $ dupe_flag         <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, …
-#> $ year              <dbl> 2012, 2016, 2012, 2016, 2014, 2012, 2016, 2015, 2019, 2020, 2016, 2017…
-#> $ address_clean     <chr> "1918 COMPTON HL PL", "PO BOX 226", "8410 ROSEHILL RD", "PO BOX 901554…
-#> $ zip_clean         <chr> "63104", "64735", "66215", "64190", "64158", "64132", "63141", "63122"…
-#> $ state_clean       <chr> "MO", "MO", "KS", "MO", "MO", "MO", "MO", "MO", "MO", "MO", "MO", "NC"…
-#> $ city_clean        <chr> "SAINT LOUIS", "CLINTON", "LENEXA", "KANSAS CITY", "KANSAS CITY", "KAN…
+#> $ cd1_a_id          <dbl> 1769267, 1658941, 1561178, 1888638, 1791696, 1548187, 1650628, 1869689,…
+#> $ mecid             <chr> "C201509", "C180553", "C000374", "C191081", "C171069", "C180576", "C180…
+#> $ committee_name    <chr> "Piper for Missouri", "IST-MO Nominee PAC Number Two", "PUBLIC SAFETY C…
+#> $ committee         <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "Profession…
+#> $ company           <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
+#> $ first_name        <chr> "Scott", "Jessica", "Ross", "Sally", "Tyrell", "BRANDON", "ROBERT", "Ch…
+#> $ last_name         <chr> "Duff", "LaBozzetta", "Grundyson", "Dehner", "Aagard", "STEINAGEL", "BI…
+#> $ address_1         <chr> "23 Meandering Way", "813 Westbrooke Meadows Court", "2800 Cherry St", …
+#> $ address_2         <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
+#> $ city              <chr> "Round Rock", "St. Louis", "Kansas City", "St. Louis", "Salt Lake City"…
+#> $ state             <chr> "TX", "MO", "MO", "MO", "UT", "MT", "MI", "MO", "MO", "MO", "CA", "MO",…
+#> $ zip               <chr> "78664", "63021", "64108", "63129", "84111", "59602-7381", "48374-2568"…
+#> $ employer          <chr> "Self", "Venture Cafe St. Louis", "KC MO Fire Department", "Not employe…
+#> $ occupation        <chr> "Atty", "Director", "Chief Officer", "Not employed", "Grants Specialist…
+#> $ date              <date> 2022-02-09, 2021-09-08, 2020-10-02, 2022-09-25, 2022-04-15, 2020-10-30…
+#> $ amount            <dbl> 25.00, 10.00, 10.00, 25.00, 20.00, 16.67, 416.67, 5.00, 50.00, 100.00, …
+#> $ contribution_type <chr> "Monetary", "Monetary", "Monetary", "Monetary", "Monetary", "Monetary",…
+#> $ report            <chr> "April Quarterly Report", "October Quarterly Report", "AMENDED 8 Day Be…
+#> $ na_flag           <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, F…
+#> $ dupe_flag         <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, F…
+#> $ year              <dbl> 2022, 2021, 2020, 2022, 2022, 2020, 2021, 2022, 2022, 2022, 2022, 2022,…
+#> $ address_clean     <chr> "23 MEANDERING WAY", "813 WESTBROOKE MEADOWS CT", "2800 CHERRY ST", "54…
+#> $ zip_clean         <chr> "78664", "63021", "64108", "63129", "84111", "59602", "48374", "64118",…
+#> $ state_clean       <chr> "TX", "MO", "MO", "MO", "UT", "MT", "MI", "MO", "MO", "MO", "CA", "MO",…
+#> $ city_clean        <chr> "ROUND ROCK", "ST LOUIS", "KANSAS CITY", "SAINT LOUIS", "SALT LAKE CITY…
 ```
 
-1.  There are 1,200,709 records in the database.
-2.  There are 9,060 duplicate records in the database.
+1.  There are 297,490 records in the database.
+2.  There are 2,435 duplicate records in the database.
 3.  The range and distribution of `amount` and `date` seem reasonable.
-4.  There are 1,193,708 records missing key variables.
+4.  There are 41,036 records missing key variables.
 5.  Consistency in geographic data has been improved with
     `campfin::normal_*()`.
 6.  The 4-digit `year` variable has been created with
@@ -675,17 +691,17 @@ Now the file can be saved on disk for upload to the Accountability
 server.
 
 ``` r
-clean_dir <- dir_create(here("mo", "contribs", "data", "clean"))
-clean_path <- path(clean_dir, "mo_contribs_clean.csv")
+clean_dir <- dir_create(here("state","mo", "contribs", "data", "clean"))
+clean_path <- path(clean_dir, "mo_contribs_clean_2020-2022.csv")
 write_csv(moc, clean_path, na = "")
 (clean_size <- file_size(clean_path))
-#> 258M
+#> 68.7M
 file_encoding(clean_path) %>% 
   mutate(across(path, path.abbrev))
-#> # A tibble: 1 x 3
-#>   path                                           mime  charset
-#>   <chr>                                          <chr> <chr>  
-#> 1 ~/mo/contribs/data/clean/mo_contribs_clean.csv <NA>  <NA>
+#> # A tibble: 1 × 3
+#>   path                                                                                mime  charset
+#>   <fs::path>                                                                          <chr> <chr>  
+#> 1 …tability_datacleaning/state/mo/contribs/data/clean/mo_contribs_clean_2020-2022.csv <NA>  <NA>
 ```
 
 ## Upload

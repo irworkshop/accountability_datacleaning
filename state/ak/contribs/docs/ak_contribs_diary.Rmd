@@ -133,7 +133,7 @@ line_count <- function(path) {
 ```
 
 ```{r raw_dir}
-raw_dir <- dir_create(here("ak", "contribs", "data", "raw"))
+raw_dir <- dir_create(here("state","ak", "contribs", "data", "raw"))
 raw_info <- dir_info(raw_dir)
 sum(raw_info$size)
 raw_info %>% 
@@ -147,7 +147,7 @@ raw_info %>%
 httr::GET(
   # does not work
   url = "https://aws.state.ak.us/ApocReports/CampaignDisclosure/CDIncome.aspx",
-  write_disk(raw_path)
+  path = raw_path,
   query = list(
     exportAll = "True",
     exportFormat = "CSV",
@@ -183,10 +183,10 @@ akc <- vroom(
   col_names = c(ak_names, "null"),
   col_types = cols(
     .default = col_character(),
-    date = col_date_usa(),
+    date = col_date_mdy(),
     amount = col_number(),
     report_year = col_integer(),
-    submitted = col_date_usa(),
+    submitted = col_date_mdy(),
     null = col_logical()
   )
 )

@@ -113,21 +113,21 @@ here::here()
 [rproj]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects
 
 ## Data
-The contribution data can be obtained from the [Missouri Ethics Commission](https://www.mec.mo.gov/MEC/Campaign_Finance/CF_ContrCSV.aspx). We are interested in downloading contributions received by committees, so here we select the Itemized Contributions Received - Form CD1 A. This data is downloaded on Nov. 20, 2020. We 
+The contribution data can be obtained from the [Missouri Ethics Commission](https://www.mec.mo.gov/MEC/Campaign_Finance/CF_ContrCSV.aspx). We are interested in downloading contributions received by committees, so here we select the Itemized Contributions Received - Form CD1 A. This data is downloaded on Dec. 23, 2020. 
 
 
 ## Download
 
 ```{r raw_dir}
-raw_dir <- dir_create(here("mo", "contribs", "data", "raw"))
+raw_dir <- dir_create(here("state","mo", "contribs", "data", "raw"))
 source <- "Missouri Ethics Commission"
 ```
-We can download all the data files from 2011 to 2020.
+We can download all the data files from 2011 to 2022.
 
 ## Read
 
 ```{r raw_read}
-moc <- map_df(dir_ls(raw_dir),read_delim, delim = ",")
+moc <- map_df(dir_ls(raw_dir,regexp = ".+new.+"),read_delim, delim = ",")
 
 moc <- moc %>% clean_names()
 ```
@@ -141,6 +141,19 @@ glimpse(moc)
 tail(moc)
 ```
 
+Since the data is tablulated by year, we can filter out the rows that were already included in the last update using the unique identifier `cd1_a_id`.
+```{r filter last}
+n_distinct(moc$cd1_a_id) == nrow(moc)
+
+nrow(moc)
+moc_prev <- read_csv(here("state","mo","contribs", "data", "previous") %>% dir_ls())
+
+moc <- moc %>% filter(cd1_a_id %out% moc_prev$cd1_a_id)
+#after filtering out old data, the dataset's row number:
+nrow(moc)
+```
+
+
 ### Missing
 
 Columns vary in their degree of missing values.
@@ -152,7 +165,7 @@ col_stats(moc, count_na)
 We can flag any record missing a key variable needed to identify a transaction.
 
 ```{r na_flag}
-moc <- moc %>% flag_na(date, last_name, amount, committee,address_1)
+moc <- moc %>% flag_na(date, last_name, amount, committee_name,address_1)
 sum(moc$na_flag)
 ```
 
@@ -188,7 +201,7 @@ moc <- moc %>% mutate(date = as.Date(date, format = "%m/%d/%Y"),
 
 ```{r date_range}
 min(moc$date)
-sum(moc$year < 2000)
+sum(moc$year < 2020)
 max(moc$date)
 sum(moc$date > today())
 ```
@@ -202,7 +215,7 @@ moc %>%
   geom_col(aes(fill = even)) + 
   scale_fill_brewer(palette = "Dark2") +
   scale_y_continuous(labels = comma) +
-  scale_x_continuous(breaks = seq(2011, 2020, by = 2)) +
+  scale_x_continuous(breaks = seq(min(moc$year), max(moc$year), by = 2)) +
   theme(legend.position = "bottom") +
   labs(
     title = "Missouri Contributions by Year",
@@ -223,7 +236,7 @@ col_stats(moc, n_distinct)
 ```{r distinct_plots, echo=FALSE}
 
 explore_plot(moc, contribution_type) +
-  labs(title = glue("Missouri campaign contributions by type, 2011 - {max(moc$year)}"),
+  labs(title = glue("Missouri campaign contributions by type, 2020 - {max(moc$year)}"),
                                                         caption = glue("Source:{source}"))
   
 ```
@@ -553,7 +566,7 @@ Now the file can be saved on disk for upload to the Accountability server.
 
 ```{r clean_dir}
 clean_dir <- dir_create(here("state","mo", "contribs", "data", "clean"))
-clean_path <- path(clean_dir, "mo_contribs_clean.csv")
+clean_path <- path(clean_dir, "mo_contribs_clean_2020-2022.csv")
 write_csv(moc, clean_path, na = "")
 (clean_size <- file_size(clean_path))
 file_encoding(clean_path) %>% 

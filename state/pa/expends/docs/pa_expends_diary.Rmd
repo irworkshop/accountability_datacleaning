@@ -25,6 +25,9 @@ opts_chunk$set(
   dpi = 300
 )
 options(width = 99)
+Sys.setenv("http_proxy"="")
+Sys.setenv("no_proxy"=TRUE)
+Sys.setenv("no_proxy"=1)
 ```
 
 ## Project
@@ -108,7 +111,9 @@ here::here()
 
 ### About
 
-More information about the record layout can be found here https://www.dos.pa.gov/VotingElections/CandidatesCommittees/CampaignFinance/Resources/Documents/readme.txt.
+Data layout for 2022 is different from previous years and the record layout can be found [here] [https://www.dos.pa.gov/VotingElections/CandidatesCommittees/CampaignFinance/Resources/Documents/readme2022.txt].
+
+For data prior to 2022, see https://www.dos.pa.gov/VotingElections/CandidatesCommittees/CampaignFinance/Resources/Documents/readmepriorto2022.txt
 
 ## Import
 
@@ -118,7 +123,7 @@ Download raw, **immutable** data file. Go to https://www.dos.pa.gov/VotingElecti
 
 ```{r raw_dir}
 # create a directory for the raw data
-raw_dir <- here("pa", "expends", "data", "raw")
+raw_dir <- here("state","pa", "expends", "data", "raw")
 dir_create(raw_dir)
 ```
 
@@ -153,23 +158,116 @@ if (all_files_new(path = raw_dir, glob = "*.txt")) {
   }
 }
 ```
+
+## Fix
+To properly read the file into R, we first have to do some simple string processing to the text file.
+
+```{r fix_dir}
+fix_dir <- dir_create(path(dirname(raw_dir), "fix"))
+expense_files <- list.files(raw_dir, pattern = "expense|expense_2020|expense_2021|expense_2022", recursive = FALSE, full.names = TRUE)
+fix_eval <- length(dir_ls(fix_dir)) != length(expense_files)
+```
+
+```{r fix_loop_old, eval=fix_eval}
+# for old format files
+for (f in expense_files) {
+  n <- path(fix_dir, str_c("FIX", basename(f), sep = "_"))
+  x <- read_lines(f, skip = 1)
+  for (i in rev(seq_along(x))) {
+    y <- i - 1
+    if (y == 0) {
+      next() # skip first
+    } else if (str_starts(x[i], "\"\\d+\",") | str_ends(x[y], "\"(Y|N)\"")) {
+      next() # skip if good
+    } else { # merge if bad
+      x[y] <- str_c(x[y], x[i])
+      x <- x[-i] # remove bad
+    }
+  }
+  x <- str_remove(x, '(?<=")"(?!,)')
+  write_lines(x, n)
+  message(basename(n))
+}
+```
+
+```{r fix_loop_new, eval=fix_eval}
+# new format files
+for (f in expense_files) {
+  n <- path(fix_dir, str_c("FIX", basename(f), sep = "_"))
+  x <- read_lines(f, skip = 1)
+  for (i in rev(seq_along(x))) {
+    if (str_starts(x[i], "\\d+,\\d+,")) {
+      next() # skip if good
+    } else { # merge if bad
+      x[i - 1] <- str_c(x[i - 1], x[i])
+      x <- x[-i] # remove bad
+    }
+  }
+  write_lines(x, n)
+  message(basename(n))
+}
+```
+
+```{r fix_info}
+fix_info <- as_tibble(dir_info(fix_dir))
+sum(fix_info$size)
+fix_info %>% 
+  select(path, size, modification_time) %>% 
+  mutate(across(path, basename))
+```
+
+
 Read multiple csvs into R
 ```{r read multiple files}
-#recursive set to true because 2016 and 2015 have subdirectories under "raw"
-expense_files <- list.files(raw_dir, pattern = "expense.+", recursive = TRUE, full.names = TRUE)
+exp_22 <- glue(raw_dir, "/expense_2022.txt")
 #pa_lines <- list.files(raw_dir, pattern = ".txt", recursive = TRUE) %>% map(read_lines) %>% unlist()
-pa_col_names <- c("FILERID","EYEAR","CYCLE","EXPNAME","ADDRESS1","ADDRESS2","CITY","STATE","ZIPCODE","EXPDATE","EXPAMT","EXPDESC")
+col_names_2022 <- c("FILERID", 
+"REPORTID", 
+"TIMESTAMP", 
+"EYEAR", 
+"CYCLE", 
+"EXPNAME", 
+"ADDRESS1", 
+"ADDRESS2", 
+"CITY", 
+"STATE", 
+"ZIPCODE", 
+"EXPDATE", 
+"EXPAMT", 
+"EXPDESC")
+
+col_names_earlier <- c("FILERID",
+"EYEAR",
+"CYCLE",
+"EXPNAME",
+"ADDRESS1",
+"ADDRESS2",
+"CITY",
+"STATE",
+"ZIPCODE",
+"EXPDATE",
+"EXPAMT",
+"EXPDESC")
 
 pa <- expense_files %>% 
-  map(read_delim, delim = ",", escape_double = FALSE,
-      escape_backslash = FALSE, col_names = pa_col_names, 
-      col_types = cols(.default = col_character())) %>% 
-bind_rows()
+  map_dfr(.f = read_delim, 
+          .id = "source_file",
+          delim = ",", escape_double = FALSE,
+      escape_backslash = FALSE, col_names = col_names_earlier, 
+      col_types = cols(.default = col_character())
+      ) %>% clean_names()
+
+pa22 <- exp_22 %>% read_delim(",", escape_double = FALSE,
+      escape_backslash = FALSE, col_names = col_names_2022,
+      col_types = cols(.default = col_character()))
+
 ```
 There are `r nrow(pa %>% filter(nchar(STATE)!=2))` parsing failures.
 We'll move along the information in rows that were read incorrectly due to double quotes in the address column. 
 ```{r}
-nudge <- which(nchar(pa$STATE) > 2)
+nudge <- which(nchar(pa$state) > 2)
+
+read_err <- pa %>% filter(nchar(state)!=2) 
 # However, the information in the last column EXPDESC for these columns has been lost at the time of data import.
 for (index in nudge) {
   for (column in c(7:11)){

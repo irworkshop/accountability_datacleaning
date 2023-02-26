@@ -1,6 +1,6 @@
 ---
 title: "Florida Contributions"
-author: "Kiernan Nicholls"
+author: "Kiernan Nicholls & Yanqi Xu"
 date: "`r date()`"
 output:
   github_document: 
@@ -199,7 +199,7 @@ To get all files covering all contributions:
 [exp]: https://dos.elections.myflorida.com/campaign-finance/Contributions/
 
 ```{r raw_tsv}
-raw_dir <- dir_create(here("fl", "contribs", "data", "raw"))
+raw_dir <- dir_create(here("state","fl", "contribs", "data", "raw"))
 raw_tsv <- path(raw_dir, "Contrib.txt")
 ```   
 
@@ -270,7 +270,7 @@ for (i in seq(nrow(post_dt))) {
         Submit = "Submit"
       )
     )
-    cli_alert_success("{from_mdy} - {thru_mdy}")
+    #cli_alert_success("{from_mdy} - {thru_mdy}")
   }
 }
 ```

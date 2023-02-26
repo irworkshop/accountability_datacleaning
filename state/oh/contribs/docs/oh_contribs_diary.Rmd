@@ -34,7 +34,7 @@ if (!interactive()) {
 ```
 
 ```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
-fs::dir_create(here::here("oh", "contribs", "docs"))
+fs::dir_create(here::here("state","oh", "contribs", "docs"))
 ```
 
 ## Project
@@ -192,7 +192,7 @@ wget <- function(url, dir) {
 ```
 
 ```{r raw_download}
-raw_dir <- dir_create(here("oh", "contribs", "data", "raw"))
+raw_dir <- dir_create(here("state","oh", "contribs", "data", "raw"))
 raw_urls <- paste0(ftp_base, ftp_params)
 if (length(dir_ls(raw_dir)) < 84) {
   map(raw_urls, wget, raw_dir)

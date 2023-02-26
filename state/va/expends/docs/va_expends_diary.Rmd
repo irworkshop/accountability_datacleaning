@@ -165,9 +165,9 @@ First we need to create the URLs for each year/month combination.
 
 ```{r expend_urls}
 #sub_dirs <- unlist(map(2012:2019, str_c, str_pad(1:12, 2, side = "left", pad = "0"), sep = "_"))
-sub_dirs <- unlist(map(2019:2022, str_c, str_pad(1:12, 2, side = "left", pad = "0"), sep = "_"))
+sub_dirs <- unlist(map(2012:2023, str_c, str_pad(1:12, 2, side = "left", pad = "0"), sep = "_"))
 exp_urls <- sort(glue("https://apps.elections.virginia.gov/SBE_CSV/CF/{sub_dirs}/ScheduleD.csv"))
-exp_urls <- exp_urls[7:(length(sub_dirs)-1)]
+exp_urls <- exp_urls[3:(length(sub_dirs)-11)]
 head(exp_urls)
 
 exp_urls %>% 
@@ -184,28 +184,19 @@ dir_create(raw_dir)
 
 raw_names <- basename(str_replace(exp_urls, "/(?=[^/]*$)", "_"))
 raw_paths <- path(raw_dir, raw_names)
+```
 
-# if (!all_files_new(dir_raw)) {
-#   for (url in exp_urls {
-#     download.file(
-#       url = url,
-#       destfile = str_c(
-#         dir_raw,
-#         url %>% 
-#           str_extract("(\\d{4}_\\d{2})/ScheduleD.csv$") %>% 
-#           str_replace_all("/", "_"),
-#         sep = "/"
-#       )
-#     )
-#   }
-# }
+
+```{r raw_paths_build}
+library(httr)    
 
 for (i in seq_along(raw_paths)) {
   wait = 1
   if (file_exists(raw_paths[i])) {
     next("file already downloaded")
   } else {
-    httr::GET(exp_urls[i],user_agent("Mozilla/5.0"), write_disk(raw_paths[i]))
+ ua <- "Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Mobile Safari/537.36"
+    httr::GET(exp_urls[i],add_headers(`Connection` = "keep-alive", `User-Agent` = ua), write_disk(raw_paths[i]))
     x <- read_lines(raw_paths[i])
     if (str_starts(x[1], "#")) {
       next("file already fixed")
@@ -228,8 +219,9 @@ fix_dir <- dir_create(path(dirname(raw_dir), "fix"))
 fix_eval <- length(dir_ls(fix_dir)) != nrow(raw_info)
 ```
 
-```{r fix_loop_old, eval=fix_eval}
+```{r fix_loop_old, eval=FALSE}
 # for old format files
+if (fix_eval) {
 for (f in raw_info$path) {
   n <- path(fix_dir, str_c("FIX", basename(f), sep = "_"))
   x <- read_lines(f, skip = 1)
@@ -248,10 +240,12 @@ for (f in raw_info$path) {
   write_lines(x, n)
   message(basename(n))
 }
+}
 ```
 
-```{r fix_loop_new, eval=fix_eval}
+```{r fix_loop_new, eval=FALSE}
 # new format files
+if (fix_eval){
 for (f in raw_info$path[1:length(raw_info$path)]) {
   n <- path(fix_dir, str_c("FIX", basename(f), sep = "_"))
   x <- read_lines(f, skip = 1)
@@ -265,6 +259,7 @@ for (f in raw_info$path[1:length(raw_info$path)]) {
   }
   write_lines(x, n)
   message(basename(n))
+}
 }
 ```
 
@@ -283,7 +278,7 @@ Since all recent files are located in the same directory with the same structure
 all at once by using `purrr::map()` to apply `readr::read_csv()` to each file in the directory,
 then binding each file into a single data frame using `dplyr::bind_rows()`.
 
-```{r}
+```{r read fix}
 va <- 
   dir_ls(fix_dir, glob = "*.csv") %>% 
   map_dfr(
@@ -548,7 +543,7 @@ va %>%
   count() %>% 
   ggplot() +
   geom_col(aes(year, n)) +
-  scale_x_continuous(breaks = 2019:2022) +
+  scale_x_continuous(breaks = 2012:2023) +
   labs(
     title = "Number of VA Expenditures Over Time",
     x = "Year",
@@ -903,6 +898,6 @@ va %>%
   ) %>% 
   write_csv(
     na = "",
-    path = str_c(proc_dir, "va_expends_clean_201907-202211.csv", sep = "/")
+    path = str_c(proc_dir, "va_expends_clean.csv", sep = "/")
   )
 ```

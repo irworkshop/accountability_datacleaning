@@ -1,6 +1,6 @@
 ---
 title: "Hawaii Expenditures"
-author: "Kiernan Nicholls"
+author: "Kiernan Nicholls & Yanqi Xu"
 date: "`r Sys.time()`"
 output:
   github_document: 
@@ -64,6 +64,7 @@ if (!require("pacman")) install.packages("pacman")
 pacman::p_load_gh("irworkshop/campfin")
 pacman::p_load(
   tidyverse, # data manipulation
+  tidytext, #unnest tokens
   lubridate, # datetime strings
   magrittr, # pipe operators
   gluedown, # print markdown
@@ -74,6 +75,7 @@ pacman::p_load(
   rvest, # read html pages
   RSocrata, # read SODA API
   knitr, # knit documents
+  stringdist, # token distance
   vroom, # read files fast
   glue, # combine strings
   here, # relative storage
@@ -106,8 +108,8 @@ here::here()
 ## Data
 
 Data is provided by the Hawaii Campaign Spending Committee's Socrata open data portal. From the
-[Primer metadata page][03], we can find more informat. The Records Reporting System RSN is 38832.
-The file was created on February 26, 2013 and last updated May 15, 2019.
+[Primer metadata page][03], we can find more information. The Records Reporting System RSN is 38832.
+The file was created on February 26, 2013 and last updated Nov 3, 2022.
 
 [03]: https://data.hawaii.gov/Community/Expenditures-Made-By-Hawaii-State-and-County-Candi/3maa-4fgr
 
@@ -117,14 +119,13 @@ The data can be directly read using `RSocrata::read.socrata()`.
 
 ```{r raw dir}
 raw_dir <- dir_create(here("state","hi", "expends", "data", "raw"))
-prev_dir <- dir_create(here("state","hi", "expends", "data", "previous"))
 ```
 
 
 ```{r download, eval=FALSE}
-#hi <- as_tibble(read.socrata("https://data.hawaii.gov/resource/smzs-eax2.json"))
-raw_url <- "https://opendata.hawaii.gov/dataset/1dfb86f4-629c-426f-abef-3029889aa0f7/resource/cbc222c7-42dd-47cf-bea3-1c2dda29acd4/download/ccschb.csv"
-raw_path <- path(raw_dir,basename(raw_url))
+#hie <- as_tibble(read.socrata("https://data.hawaii.gov/resource/3maa-4fgr.json"))
+raw_url <- "http://hicscdata.hawaii.gov/api/views/3maa-4fgr/rows.csv?accessType=DOWNLOAD"
+raw_path <- path(raw_dir,"hi_exp_download.csv")
 
 if (this_file_new(raw_path)) {
   download.file(raw_url, raw_path, method = "libcurl")
@@ -134,43 +135,30 @@ if (this_file_new(raw_path)) {
 Then we can make some general changes to the structure and format of the data frame.
 
 ```{r read}
-hie <- read_csv(raw_path) %>% clean_names()
-hi_prev <- read_csv(dir_ls(here("state","hi","expends","data","previous")))
-hi_prev <- hi_prev %>% select(names(hie))
+hie <- read_csv(dir_ls(raw_dir)) %>% clean_names()
 
-%>%
+hie <- hie %>% 
   mutate_if(
     is_character, 
     str_to_upper
   ) %>% 
-  separate(
-    col = location_1.coordinates,
-    into = c("lat", "lon"),
-    sep = ",\\s"
-  ) %>% 
   mutate(
-    amount = as.double(amount),
-    lat = as.double(str_remove(lat, "c\\(")),
-    lon = as.double(str_remove(lon, "\\)")),
-    in_state = equals(inoutstate, "HI")
-  ) %>% 
-  select(
-    -starts_with("location_1")
-  )
+    amount = as.double(amount)
+  ) 
 ```
 
 ## Explore
 
 ```{r glimpse}
-head(hi)
-tail(hi)
-glimpse(hi)
+head(hie)
+tail(hie)
+glimpse(hie)
 ```
 
 ### Distinct
 
 ```{r n_distinct}
-glimpse_fun(hi, n_distinct)
+col_stats(hie, n_distinct)
 ```
 
 We can use `campfin::explore_plot()` and/or `ggplot2::geom_bar()` to explore the distribution of
@@ -178,15 +166,14 @@ distinct categorical variables.
 
 ```{r vendor_bar, echo=FALSE}
 explore_plot(
-  data = hi,
+  data = hie,
   var = vendor_type,
-  title = "HI Expend Vendor Types",
-  caption = "Source: HI CRS"
-)
+) + labs(  title = "HI Expend Vendor Types",
+  caption = "Source: HI CRS")
 ```
 
 ```{r category_bar, echo=FALSE, fig.height=10}
-hi %>%
+hie %>%
   count(expenditure_category, sort = TRUE) %>%
   mutate(p = n/sum(n)) %>%
   ggplot(aes(reorder(expenditure_category, desc(p)), p)) +
@@ -203,7 +190,7 @@ hi %>%
 ```
 
 ```{r office_bar, echo=FALSE}
-hi %>%
+hie %>%
   count(office, sort = TRUE) %>%
   mutate(p = n/sum(n)) %>%
   ggplot(aes(reorder(office, desc(p)), p)) +
@@ -220,7 +207,8 @@ hi %>%
 ```
 
 ```{r party_bar, echo=FALSE}
-hi %>%
+hie %>%
+  filter(!is.na(party)) %>% 
   count(party, sort = TRUE) %>%
   mutate(p = n/sum(n)) %>%
   ggplot(aes(reorder(party, desc(p)), p)) +
@@ -228,12 +216,13 @@ hi %>%
   scale_fill_manual(
     guide = FALSE,
     values = c(
+      "cornflowerblue",
+      "orange",
       "dodgerblue",
-      "grey10",
-      "red2",
-      "mediumpurple",
       "forestgreen",
-      "orange"
+      "grey10",
+      "mediumpurple",
+      "red2"
     )
   ) +
   scale_y_continuous(labels = percent) +
@@ -247,34 +236,32 @@ hi %>%
 
 ```{r state_bar, echo=FALSE}
 explore_plot(
-  data = hi,
-  var = in_state,
-  title = "HI Expends In State",
-  caption = "Source: HI CRS"
-)
+  data = hie,
+  var = in_out_state
+) + labs( title = "HI Expends In State",
+  caption = "Source: HI CRS")
 ```
 
 ```{r county_bar, echo=FALSE}
 explore_plot(
-  data = filter(hi, !is.na(county)),
-  var = county,
-  title = "HI Expends County",
-  caption = "Source: HI CRS"
-)
+  data = filter(hie, !is.na(county)),
+  var = county
+) + labs(  title = "HI Expends County",
+  caption = "Source: HI CRS")
 ```
 
 ```{r authorized_bar, echo=FALSE}
 explore_plot(
-  data = filter(hi, !is.na(authorized_use)),
-  var = authorized_use,
-  flip = TRUE,
+  data = filter(hie, !is.na(authorized_use)),
+  var = authorized_use
+) + coord_flip() +
+  labs(
   title = "HI Expends Use",
-  caption = "Source: HI CRS"
-) 
+  caption = "Source: HI CRS")
 ```
 
 ```{r words_bar, echo=FALSE, fig.height=10}
-hi %>% 
+hie %>% 
   unnest_tokens(word, purpose_of_expenditure) %>% 
   anti_join(stop_words) %>% 
   count(word, sort = TRUE) %>% 
@@ -301,29 +288,21 @@ We can use `janitor::get_dupes()` to create a separate table of duplicate rows, 
 rows on the original data frame.
 
 ```{r get_dupes, collapse=TRUE}
-hi_dupes <- distinct(get_dupes(hi))
-
-nrow(hi_dupes)
-sum(hi_dupes$dupe_count)
-n_distinct(hi_dupes$candidate_name)
-```
-
-```{r join_dupes, collapse=TRUE}
-hi <- hi %>% 
-  left_join(hi_dupes) %>% 
-  mutate(dupe_flag = !is.na(dupe_count)) %>% 
-  select(-dupe_count)
-
-rm(hi_dupes)
-sum(hi$dupe_flag)
+hie <- flag_dupes(hie, everything())
+tabyl(hie$dupe_flag)
 ```
 
 ### Missing
 
-There are relatively few missing values. There are no missing values that need to be flagged.
+We flag the fields that miss the "city" field. 
 
 ```{r count_na}
-glimpse_fun(hi, count_na)
+col_stats(hie, count_na)
+
+key_vars <- c("city","party")
+
+hie <- flag_na(hie, all_of(key_vars))
+tabyl(hie$na_flag)
 ```
 
 ### Ranges
@@ -331,12 +310,12 @@ glimpse_fun(hi, count_na)
 #### Amount
 
 ```{r summary_amount, collapse=TRUE}
-summary(hi$amount)
-sum(hi$amount < 0)
+summary(hie$amount)
+sum(hie$amount < 0)
 ```
 
 ```{r amount_hist, echo=FALSE}
-hi %>% 
+hie %>% 
   ggplot(aes(amount)) +
   geom_histogram() +
   scale_x_continuous(
@@ -352,8 +331,8 @@ hi %>%
 ```
 
 ```{r amount_hist_party, echo=FALSE}
-hi %>% 
-  filter(party %out% c("GREEN", "LIBERTARIAN")) %>% 
+hie %>% 
+  filter(party %in% c("DEMOCRAT", "NON-PARTISAN","INDEPENDENT","REPUBLICAN")) %>% 
   ggplot(aes(amount)) +
   geom_histogram(aes(fill = party)) +
   scale_x_continuous(
@@ -379,8 +358,8 @@ hi %>%
 ```
 
 ```{r amount_box_party, echo=FALSE}
-hi %>% 
-  filter(party %out% c("GREEN", "LIBERTARIAN")) %>% 
+hie %>% 
+  filter(party %in% c("DEMOCRAT", "NON-PARTISAN","INDEPENDENT","REPUBLICAN")) %>% 
   ggplot(
     mapping = aes(
       x = party,
@@ -401,8 +380,8 @@ hi %>%
     values = c(
       "dodgerblue",
       "mediumpurple",
-      "grey10",
-      "red2"
+      "red2",
+      "grey10"
     )
   ) +
   labs(
@@ -414,7 +393,7 @@ hi %>%
 ```
 
 ```{r amount_line_time, echo=FALSE}
-hi %>% 
+hie %>% 
   group_by(party) %>% 
   arrange(date) %>% 
   mutate(total = cumsum(amount)) %>% 
@@ -438,7 +417,9 @@ hi %>%
       "mediumpurple",
       "orange",
       "grey10",
-      "red2"
+      "red2",
+      "cornflowerblue",
+      "lightgreen"
     )
   ) +
   labs(
@@ -450,13 +431,13 @@ hi %>%
 ```
 
 ```{r amount_cat_box, echo=FALSE}
-top_category <- hi %>% 
+top_category <- hie %>% 
   count(expenditure_category, sort = TRUE) %>% 
   mutate(p = n/sum(n)) %>% 
   filter(p > 0.05) %>% 
   pull(expenditure_category)
 
-hi %>% 
+hie %>% 
   filter(expenditure_category %in% top_category) %>% 
   ggplot(
     mapping = aes(
@@ -489,26 +470,27 @@ hi %>%
 
 #### Date
 
-There are no dates before `r as_date(min(hi$date))` and `r sum(hi$date > today())` dates past the
+There are no dates before `r as_date(min(hie$date))` and `r sum(hie$date > today())` dates past the
 creation of this document.
 
 ```{r date_range, collapse=TRUE}
-min(hi$date)
-max(hi$date)
-sum(hi$date > today())
+min(hie$date)
+max(hie$date)
+sum(hie$date > today())
 ```
 
 To better explore the distribution of dates and track expendtures, we will create a `year_clean`
 variable from `date` using `lubridate::year()`.
 
 ```{r add_year}
-hi <- mutate(hi, year_clean = year(date))
+hie <- hie %>% mutate(date = as.Date(date, format = "%m/%d/%Y"))
+hie <- mutate(hie, year_clean = year(date))
 ```
 
 We can see the expenditures naturally increase in frequency every other year, during the elections.
 
 ```{r year_count}
-hi %>%
+hie %>%
   ggplot(aes(year_clean)) +
   geom_bar() +
   labs(
@@ -521,7 +503,7 @@ hi %>%
 
 ```{r year_amount}
 is_even <- function(x) x %% 2 == 0
-hi %>% 
+hie %>% 
   mutate(election_year = is_even(year_clean)) %>% 
   group_by(year_clean, election_year) %>% 
   summarize(mean = mean(amount)) %>% 
@@ -538,7 +520,7 @@ hi %>%
 ```
 
 ```{r}
-hi %>% 
+hie %>% 
   mutate(
     month = month(date),
     election_year = is_even(year_clean)
@@ -566,7 +548,7 @@ functions.
 ### Address
 
 ```{r norm_address}
-hi <- hi %>% 
+hie <- hie %>% 
   unite(
     col = address_combine,
     address_1, address_2,
@@ -577,31 +559,31 @@ hi <- hi %>%
   mutate(
     address_norm = normal_address(
       address = address_combine,
-      add_abbs = usps_street,
+      abbs = usps_street,
       na_rep = TRUE
     )
   )
 ```
 
 ```{r view_address}
-hi %>% 
+hie %>% 
   select(
     address_1,
     address_2,
     address_norm
-  )
+  ) %>% head(10)
 ```
 
 ### ZIP
 
 ```{r pre_zip, collapse=TRUE}
-n_distinct(hi$zip_code)
-prop_in(hi$zip_code, valid_zip)
-sum(hi$zip_code %out% valid_zip)
+n_distinct(hie$zip_code)
+prop_in(hie$zip_code, valid_zip)
+sum(hie$zip_code %out% valid_zip)
 ```
 
 ```{r normal_zip}
-hi <- hi %>% 
+hie <- hie %>% 
   mutate(
     zip_norm = normal_zip(
       zip = zip_code,
@@ -611,19 +593,19 @@ hi <- hi %>%
 ```
 
 ```{r post_zip, collapse=TRUE}
-n_distinct(hi$zip_norm)
-prop_in(hi$zip_norm, valid_zip)
-sum(hi$zip_norm %out% valid_zip)
+n_distinct(hie$zip_norm)
+prop_in(hie$zip_norm, valid_zip)
+sum(hie$zip_norm %out% valid_zip)
 ```
 
 ### State
 
-`r percent(prop_in(hi$state, valid_state))` of `state` values are valid.
+`r percent(prop_in(hie$state, valid_state))` of `state` values are valid.
 
 ```{r pre_state, collapse=TRUE}
-n_distinct(hi$state)
-prop_in(hi$state, valid_state)
-sum(hi$state %out% valid_state)
+n_distinct(hie$state)
+prop_in(hie$state, valid_state)
+sum(hie$state %out% valid_state)
 ```
 
 ### City
@@ -631,38 +613,38 @@ sum(hi$state %out% valid_state)
 #### Normal
 
 ```{r pre_city, collapse=TRUE}
-n_distinct(hi$city)
-prop_in(hi$city, valid_city)
-sum(unique(hi$city) %out% valid_city)
+n_distinct(hie$city)
+prop_in(hie$city, valid_city)
+sum(unique(hie$city) %out% valid_city)
 ```
 
 ```{r view_city}
-hi %>% 
+hie %>% 
   count(city, sort = TRUE) %>% 
   filter(city %out% valid_city)
 ```
 
 ```{r}
-hi <- hi %>% 
+hie <- hie %>% 
   mutate(
     city_norm = normal_city(
       city = city,
-      geo_abbs = usps_city,
-      st_abbs = c("HI", "HAWAII", "DC"),
+      abbs = usps_city,
+      states = c("HI", "HAWAII", "DC"),
       na = invalid_city,
       na_rep = TRUE
     )
   )
 
-n_distinct(hi$city_norm)
-prop_in(hi$city_norm, valid_city)
-sum(unique(hi$city_norm) %out% valid_city)
+n_distinct(hie$city_norm)
+prop_in(hie$city_norm, valid_city)
+sum(unique(hie$city_norm) %out% valid_city)
 ```
 
 #### Swap
 
 ```{r swap_city, collapse=TRUE}
-hi <- hi %>% 
+hie <- hie %>% 
   rename(city_raw = city) %>% 
   left_join(
     y = zipcodes,
@@ -681,49 +663,52 @@ hi <- hi %>%
     )
   )
 
-mean(hi$match_dist, na.rm = TRUE)
-max(hi$match_dist, na.rm = TRUE)
-sum(hi$match_dist == 1, na.rm = TRUE)
-n_distinct(hi$city_swap)
-prop_in(hi$city_swap, valid_city)
-sum(unique(hi$city_swap) %out% valid_city)
+mean(hie$match_dist, na.rm = TRUE)
+max(hie$match_dist, na.rm = TRUE)
+sum(hie$match_dist == 1, na.rm = TRUE)
+n_distinct(hie$city_swap)
+prop_in(hie$city_swap, valid_city)
+sum(unique(hie$city_swap) %out% valid_city)
 ```
 
 ```{r view_swap}
-hi %>% 
+hie %>% 
   count(state, city_swap, sort = TRUE) %>% 
   filter(city_swap %out% valid_city) %>% 
   drop_na()
 ```
 
 ```{r fix_city}
-hi$city_swap <- hi$city_swap %>% 
-  str_replace("HON", "HONOLULU") %>% 
+hie$city_swap <- hie$city_swap %>% 
+  str_replace("^HON$", "HONOLULU") %>% 
   na_if("HI")
+
+prop_in(hie$city_swap, valid_city)
+
+hie <- hie %>% rename(city_clean = city_swap)
 ```
+
 
 ## Conclude
 
-1. There are `r comma(nrow(hi))` records in the database.
-1. There are `r sum(hi$dupe_flag)` duplicate records, flagged with `dupe_flag`.
+1. There are `r comma(nrow(hie))` records in the database.
+1. There are `r sum(hie$dupe_flag)` duplicate records, flagged with `dupe_flag`.
 1. Ranges for `amount` and `date` are both reasonable.
 1. There are no missing records of importance.
 1. Consistency issues in geographic values have been improved.
-1. The 5-digit `zip_norm` variable has been created with `campfin::normal_zip(hi$zip_code)`
-1. The 4-gitit `year_clean` variable has been created with `lubridate::year(hi$date)`
+1. The 5-digit `zip_norm` variable has been created with `campfin::normal_zip(hie$zip_code)`
+1. The 4-gitit `year_clean` variable has been created with `lubridate::year(hie$date)`
 1. Every record has a payer, payee, date, and amount.
 
 ## Export
 
 ```{r}
-proc_dir <- here("hi", "expends", "data", "processed")
+proc_dir <- here("state","hi", "expends", "data", "processed")
 dir_create(proc_dir)
 
-hi <- hi %>% 
+hie <- hie %>% 
   select(
-    -inoutstate,
     -zip_code,
-    -city_raw,
     -address_1,
     -address_2,
     -address_combine,
@@ -733,14 +718,16 @@ hi <- hi %>%
   )
 ```
 
-## Lookup
+## Export
 
 ```{r}
-lookup <- read_csv("hi/expends/data/hi_city_lookup.csv") %>% select(1:2)
-hi <- left_join(hi, lookup)
-progress_table(hi$city_swap, hi$city_clean, compare = valid_city)
+# lookup <- read_csv("state/hi/expends/data/hi_city_lookup.csv") %>% select(1:2)
+# hie <- left_join(hie, lookup)
+progress_table(hie$city_raw,
+               hie$city_norm,
+               hie$city_clean, compare = valid_city)
 write_csv(
-  x = hi,
+  x = hie,
   path = glue("{proc_dir}/hi_expends_clean.csv"),
   na = ""
 )
