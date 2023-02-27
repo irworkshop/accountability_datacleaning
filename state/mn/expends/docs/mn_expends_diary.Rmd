@@ -1,6 +1,6 @@
 ---
 title: "Minnesota Expenditures"
-author: "Kiernan Nicholls"
+author: "Kiernan Nicholls & Aarushi Sahejpal"
 date: "`r date()`"
 output:
   github_document: 
@@ -332,7 +332,7 @@ max(mne$date)
 sum(mne$date > today())
 ```
 
-It's common to see an increase in the number of contributins in elections years.
+It's common to see an increase in the number of contributions in elections years.
 
 ```{r bar-year, echo=FALSE}
 mne %>% 
@@ -342,7 +342,7 @@ mne %>%
   geom_col(aes(fill = even)) + 
   scale_fill_brewer(palette = "Dark2") +
   scale_y_continuous(labels = comma) +
-  scale_x_continuous(breaks = seq(2015, 2020)) +
+  scale_x_continuous(breaks = seq(2015, 2022)) +
   theme(legend.position = "bottom") +
   labs(
     title = "Minnesota Expenditures by Year",
@@ -374,8 +374,7 @@ addr_norm <- mne %>%
       .cols = c(vendor_address_1, vendor_address_2),
       .fns = list(xnorm = normal_address),
       abbs = usps_street,
-      na_rep = TRUE,
-      abb_end = FALSE
+      na_rep = TRUE
     )
   ) %>% 
   unite(
@@ -688,7 +687,7 @@ We can use the `aws.s3::put_object()` to upload the text file to the IRW server.
 
 ```{r aws-upload, eval=FALSE}
 aws_key <- path("csv", basename(clean_csv))
-if (!object_exists(aws_csv, "publicaccountability")) {
+if (!object_exists(aws_path, "publicaccountability")) {
   put_object(
     file = clean_csv,
     object = aws_key, 
@@ -698,7 +697,7 @@ if (!object_exists(aws_csv, "publicaccountability")) {
     multipart = TRUE
   )
 }
-aws_head <- head_object(aws_csv, "publicaccountability")
+aws_head <- head_object(aws_path, "publicaccountability")
 (aws_size <- as_fs_bytes(attr(aws_head, "content-length")))
 unname(aws_size == clean_size)
 ```
