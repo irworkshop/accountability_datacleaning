@@ -1,7 +1,7 @@
 Minnesota Contributions
 ================
 Kiernan Nicholls & Aarushi Sahejpal
-Sun Feb 26 16:23:19 2023
+Mon Feb 27 11:30:31 2023
 
 - <a href="#project" id="toc-project">Project</a>
 - <a href="#objectives" id="toc-objectives">Objectives</a>
@@ -166,9 +166,9 @@ mnc <- read_delim(
     `Amount` = col_double(),
     `Receipt date` = col_date_mdy(),
     `Year` = col_integer(),
-    `Contributor ID` = col_integer(),
+    `Contributor` = col_character(),
     `Contrib Reg Num` = col_integer(),
-    `Contrib employer ID` = col_integer()
+    `Contrib Employer name` = col_character()
   )
 )
 ```
@@ -521,39 +521,24 @@ unname(aws_size == clean_size)
 
 The following table describes the variables in our final exported file:
 
-<!-- {r dict_make, echo=FALSE}
-dict_raw <- tibble(
-  var = md_code(names(mnc)),
-  type = md_code(map_chr(mnc, typeof)),
-  def = c(
-    "Recipient ID",
-    "**Recipient name**",
-    "Recipeint type",
-    "Recipient sub-type",
-    "**Amount** of contribution",
-    "**Date** contribution made",
-    "**Year** contribution made",
-    "**Contributor name**",
-    "Contributor ID",
-    "Contributor registration",
-    "Contributor type",
-    "Receipt type",
-    "Flag indicating in-kind contribution",
-    "Description of in-kind contribution",
-    "Contributor ZIP code",
-    "Contributor employer name",
-    "Flag indicating missing value",
-    "Flag indicating duplicate record",
-    "City name from _matched_ ZIP code",
-    "State abbreviation from _matched_ ZIP code"
-  )
-)
-
-
-{r dict_md, echo=FALSE}
-(dict_md <- kable(
-  x = dict_raw,
-  format = "markdown",
-  col.names = c("Column", "Type", "Definition")
-))
--->
+| Column                  | Type        | Definition                                 |
+|:------------------------|:------------|:-------------------------------------------|
+| `recipient_reg_num`     | `integer`   | Recipient Registration Number              |
+| `recipient`             | `character` | **Recipient name**                         |
+| `recipient_type`        | `character` | Recipient type                             |
+| `recipient_subtype`     | `character` | Recipient sub-type                         |
+| `amount`                | `double`    | **Amount** of contribution                 |
+| `date`                  | `double`    | **Date** contribution made                 |
+| `year`                  | `integer`   | **Year** contribution made                 |
+| `contributor`           | `character` | **Contributor name**                       |
+| `contrib_reg_num`       | `integer`   | Contributor registration                   |
+| `contrib_type`          | `character` | Contributor type                           |
+| `receipt_type`          | `character` | Receipt type                               |
+| `in_kind`               | `logical`   | Flag indicating in-kind contribution       |
+| `in_kind_descr`         | `character` | Description of in-kind contribution        |
+| `contrib_zip`           | `character` | Contributor ZIP code                       |
+| `contrib_employer_name` | `character` | Contributor employer name                  |
+| `na_flag`               | `logical`   | Flag indicating missing value              |
+| `dupe_flag`             | `logical`   | Flag indicating duplicate record           |
+| `contrib_city_match`    | `character` | City name from *matched* ZIP code          |
+| `contrib_state_match`   | `character` | State abbreviation from *matched* ZIP code |

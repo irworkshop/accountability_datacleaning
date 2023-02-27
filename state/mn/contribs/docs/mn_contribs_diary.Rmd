@@ -178,12 +178,13 @@ mnc <- read_delim(
     `Amount` = col_double(),
     `Receipt date` = col_date_mdy(),
     `Year` = col_integer(),
-    `Contributor ID` = col_integer(),
+    `Contributor` = col_character(),
     `Contrib Reg Num` = col_integer(),
-    `Contrib employer ID` = col_integer()
+    `Contrib Employer name` = col_character()
   )
 )
 ```
+
 
 ```{r clean_names}
 mnc <- mnc %>% 
@@ -398,20 +399,18 @@ unname(aws_size == clean_size)
 
 The following table describes the variables in our final exported file:
 
-<!-- {r dict_make, echo=FALSE}
+```{r dict_make, echo=FALSE}
 dict_raw <- tibble(
   var = md_code(names(mnc)),
   type = md_code(map_chr(mnc, typeof)),
-  def = c(
-    "Recipient ID",
+  def = c("Recipient Registration Number",
     "**Recipient name**",
-    "Recipeint type",
+    "Recipient type",
     "Recipient sub-type",
     "**Amount** of contribution",
     "**Date** contribution made",
     "**Year** contribution made",
     "**Contributor name**",
-    "Contributor ID",
     "Contributor registration",
     "Contributor type",
     "Receipt type",
@@ -425,12 +424,15 @@ dict_raw <- tibble(
     "State abbreviation from _matched_ ZIP code"
   )
 )
+```
 
 
-{r dict_md, echo=FALSE}
+```{r dict_md, echo=FALSE}
 (dict_md <- kable(
   x = dict_raw,
   format = "markdown",
   col.names = c("Column", "Type", "Definition")
 ))
--->
+```
+
+
