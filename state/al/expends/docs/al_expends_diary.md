@@ -1,28 +1,28 @@
 Alabama Expenditures
 ================
-Kiernan Nicholls
-Mon Jan 25 12:22:12 2021
+Kiernan Nicholls & Aarushi Sahejpal
+Mon Feb 27 13:20:37 2023
 
--   [Project](#project)
--   [Objectives](#objectives)
--   [Packages](#packages)
--   [Data](#data)
--   [Download](#download)
--   [Read](#read)
--   [Explore](#explore)
-    -   [Missing](#missing)
-    -   [Duplicates](#duplicates)
-    -   [Categorical](#categorical)
-    -   [Amounts](#amounts)
-    -   [Dates](#dates)
--   [Wrangle](#wrangle)
-    -   [Address](#address)
-    -   [ZIP](#zip)
-    -   [State](#state)
-    -   [City](#city)
--   [Conclude](#conclude)
--   [Export](#export)
--   [Upload](#upload)
+- <a href="#project" id="toc-project">Project</a>
+- <a href="#objectives" id="toc-objectives">Objectives</a>
+- <a href="#packages" id="toc-packages">Packages</a>
+- <a href="#data" id="toc-data">Data</a>
+- <a href="#download" id="toc-download">Download</a>
+- <a href="#read" id="toc-read">Read</a>
+- <a href="#explore" id="toc-explore">Explore</a>
+  - <a href="#missing" id="toc-missing">Missing</a>
+  - <a href="#duplicates" id="toc-duplicates">Duplicates</a>
+  - <a href="#categorical" id="toc-categorical">Categorical</a>
+  - <a href="#amounts" id="toc-amounts">Amounts</a>
+  - <a href="#dates" id="toc-dates">Dates</a>
+- <a href="#wrangle" id="toc-wrangle">Wrangle</a>
+  - <a href="#address" id="toc-address">Address</a>
+  - <a href="#zip" id="toc-zip">ZIP</a>
+  - <a href="#state" id="toc-state">State</a>
+  - <a href="#city" id="toc-city">City</a>
+- <a href="#conclude" id="toc-conclude">Conclude</a>
+- <a href="#export" id="toc-export">Export</a>
+- <a href="#upload" id="toc-upload">Upload</a>
 
 <!-- Place comments regarding knitting here -->
 
@@ -115,7 +115,7 @@ has a table of files available.
 > applications (Microsoft Excel, Microsoft Access, etc.) for your use.
 
 > This data is extracted from the Alabama Electronic FCPA Reporting
-> System database as it existed as of 12/28/2020 1:35 AM
+> System database as it existed as of 02/27/2023 1:35 AM
 
 ``` r
 fcpa_home <- "https://fcpa.alabamavotes.gov/PublicSite"
@@ -127,16 +127,16 @@ al_table <- fcpa_home %>%
 
 | Data Type             | Year | Download                                                                                                                 |
 |:----------------------|:-----|:-------------------------------------------------------------------------------------------------------------------------|
-| Cash Contributions    | 2020 | [Download File](https://fcpa.alabamavotes.gov/PublicSite/Docs/BulkDataDownloads/2020_CashContributionsExtract.csv.zip)   |
-| Expenditures          | 2020 | [Download File](https://fcpa.alabamavotes.gov/PublicSite/Docs/BulkDataDownloads/2020_ExpendituresExtract.csv.zip)        |
-| In-Kind Contributions | 2020 | [Download File](https://fcpa.alabamavotes.gov/PublicSite/Docs/BulkDataDownloads/2020_InKindContributionsExtract.csv.zip) |
-| Other Receipts        | 2020 | [Download File](https://fcpa.alabamavotes.gov/PublicSite/Docs/BulkDataDownloads/2020_OtherReceiptsExtract.csv.zip)       |
-| Cash Contributions    | 2019 | [Download File](https://fcpa.alabamavotes.gov/PublicSite/Docs/BulkDataDownloads/2019_CashContributionsExtract.csv.zip)   |
-| Expenditures          | 2019 | [Download File](https://fcpa.alabamavotes.gov/PublicSite/Docs/BulkDataDownloads/2019_ExpendituresExtract.csv.zip)        |
-| In-Kind Contributions | 2019 | [Download File](https://fcpa.alabamavotes.gov/PublicSite/Docs/BulkDataDownloads/2019_InKindContributionsExtract.csv.zip) |
-| Other Receipts        | 2019 | [Download File](https://fcpa.alabamavotes.gov/PublicSite/Docs/BulkDataDownloads/2019_OtherReceiptsExtract.csv.zip)       |
-| Cash Contributions    | 2018 | [Download File](https://fcpa.alabamavotes.gov/PublicSite/Docs/BulkDataDownloads/2018_CashContributionsExtract.csv.zip)   |
-| Expenditures          | 2018 | [Download File](https://fcpa.alabamavotes.gov/PublicSite/Docs/BulkDataDownloads/2018_ExpendituresExtract.csv.zip)        |
+| Cash Contributions    | 2023 | [Download File](https://fcpa.alabamavotes.gov/PublicSite/Docs/BulkDataDownloads/2023_CashContributionsExtract.csv.zip)   |
+| Expenditures          | 2023 | [Download File](https://fcpa.alabamavotes.gov/PublicSite/Docs/BulkDataDownloads/2023_ExpendituresExtract.csv.zip)        |
+| In-Kind Contributions | 2023 | [Download File](https://fcpa.alabamavotes.gov/PublicSite/Docs/BulkDataDownloads/2023_InKindContributionsExtract.csv.zip) |
+| Other Receipts        | 2023 | [Download File](https://fcpa.alabamavotes.gov/PublicSite/Docs/BulkDataDownloads/2023_OtherReceiptsExtract.csv.zip)       |
+| Cash Contributions    | 2022 | [Download File](https://fcpa.alabamavotes.gov/PublicSite/Docs/BulkDataDownloads/2022_CashContributionsExtract.csv.zip)   |
+| Expenditures          | 2022 | [Download File](https://fcpa.alabamavotes.gov/PublicSite/Docs/BulkDataDownloads/2022_ExpendituresExtract.csv.zip)        |
+| In-Kind Contributions | 2022 | [Download File](https://fcpa.alabamavotes.gov/PublicSite/Docs/BulkDataDownloads/2022_InKindContributionsExtract.csv.zip) |
+| Other Receipts        | 2022 | [Download File](https://fcpa.alabamavotes.gov/PublicSite/Docs/BulkDataDownloads/2022_OtherReceiptsExtract.csv.zip)       |
+| Cash Contributions    | 2021 | [Download File](https://fcpa.alabamavotes.gov/PublicSite/Docs/BulkDataDownloads/2021_CashContributionsExtract.csv.zip)   |
+| Expenditures          | 2021 | [Download File](https://fcpa.alabamavotes.gov/PublicSite/Docs/BulkDataDownloads/2021_ExpendituresExtract.csv.zip)        |
 
 The Secretary of State also provides a file layout
 [key](https://fcpa.alabamavotes.gov/PublicSite/Resources/AL_OtherReceiptsFileLayout.pdf).
@@ -170,7 +170,7 @@ We can construct a URL for each yearly file.
 
 ``` r
 zip_dir <- dir_create(here("al", "expends", "data", "zip"))
-raw_files <- glue("{2013:2020}_ExpendituresExtract.csv.zip")
+raw_files <- glue("{2013:2023}_ExpendituresExtract.csv.zip")
 raw_url <- str_c(fcpa_home, "/Docs/BulkDataDownloads/", raw_files)
 raw_zip <- path(zip_dir, raw_files)
 ```
@@ -236,46 +236,46 @@ ale <- ale %>%
 
 ## Explore
 
-There are now 257,800 rows of 21 columns. Each column represents a
+There are now 343,877 rows of 21 columns. Each column represents a
 single expenditure made by a candidate or committee to a vendor.
 
 ``` r
 glimpse(ale)
-#> Rows: 257,800
+#> Rows: 343,877
 #> Columns: 21
-#> $ org_id         <chr> "25144", "25189", "25156", "25382", "25033", "25032", "24965", "24965", "24965", "25142", "250…
-#> $ amount         <dbl> 50.00, 100.00, 235.00, 10.00, 1.00, 45.00, 1228.15, 750.00, 2500.00, 200.00, 630.00, 1035.00, …
-#> $ date           <date> 2013-01-01, 2013-01-01, 2013-01-01, 2013-01-01, 2013-01-01, 2013-01-02, 2013-01-02, 2013-01-0…
-#> $ last_name      <chr> "CULLMAN COUNTY SPORTS HALL OF FAME", "AL.WILDLIFE FEDERATION", NA, NA, NA, NA, "DELTA PRINTIN…
-#> $ first_name     <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
-#> $ mi             <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
-#> $ suffix         <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
-#> $ address1       <chr> "510 5TH ST SW", "3050 LANARK ROAD", NA, NA, NA, NA, "6001 MONTICELLO DRIVE", "P.O. BOX 2663",…
-#> $ city           <chr> "CULLMAN", "WETUMPKA", NA, NA, NA, NA, "MONTGOMERY", "TUSCALOOSA", "MONTGOMERY", "MONTGOMERY",…
-#> $ state          <chr> "AL", "AL", NA, NA, NA, NA, "AL", "AL", "AL", "AL", "AL", "AL", "GA", "AL", "AL", "AL", "AL", …
-#> $ zip            <chr> "35055", "36054", NA, NA, NA, NA, "36117", "35403", "36104", "36104", "36702", "36702", "30353…
-#> $ explanation    <chr> "AD IN PROGRAM", NA, "ADVERTISING AND TICKET", "BANK FEE", NA, NA, NA, NA, NA, NA, NA, NA, "IN…
-#> $ id             <chr> "1050", "3499", "4728", "7957", "712", "763", "900", "901", "897", "1157", "123", "124", "125"…
-#> $ filed_date     <date> 2013-07-15, 2013-10-02, 2013-10-02, 2013-11-01, 2013-07-01, 2013-07-01, 2013-07-02, 2013-07-0…
-#> $ purpose        <chr> "Advertising", "Charitable Contribution", "Other", "Administrative", "Administrative", "Admini…
-#> $ type           <chr> "Itemized", "Itemized", "Non-Itemized", "Non-Itemized", "Non-Itemized", "Non-Itemized", "Itemi…
-#> $ committee_type <chr> "Principal Campaign Committee", "Principal Campaign Committee", "Principal Campaign Committee"…
-#> $ committee_name <chr> NA, NA, NA, "GULF PAC", "STORMING THE STATE HOUSE POLITICAL ACTION COMMITTEE", NA, NA, NA, NA,…
-#> $ candidate_name <chr> "MARVIN MCDANIEL BUTTRAM", "RANDALL (RANDY) M DAVIS", "JAMES EDWARD BUSKEY", NA, NA, "MICHAEL …
-#> $ amended        <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FAL…
-#> $ source_file    <chr> "2013_ExpendituresExtract.csv", "2013_ExpendituresExtract.csv", "2013_ExpendituresExtract.csv"…
+#> $ org_id         <chr> "25144", "25189", "25156", "25382", "25033", "25032", "24965", "24965", "24965", "25142", "2500…
+#> $ amount         <dbl> 50.00, 100.00, 235.00, 10.00, 1.00, 45.00, 1228.15, 750.00, 2500.00, 200.00, 630.00, 1035.00, 6…
+#> $ date           <date> 2013-01-01, 2013-01-01, 2013-01-01, 2013-01-01, 2013-01-01, 2013-01-02, 2013-01-02, 2013-01-02…
+#> $ last_name      <chr> "CULLMAN COUNTY SPORTS HALL OF FAME", "AL.WILDLIFE FEDERATION", NA, NA, NA, NA, "DELTA PRINTING…
+#> $ first_name     <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
+#> $ mi             <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
+#> $ suffix         <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
+#> $ address1       <chr> "510 5TH ST SW", "3050 LANARK ROAD", NA, NA, NA, NA, "6001 MONTICELLO DRIVE", "P.O. BOX 2663", …
+#> $ city           <chr> "CULLMAN", "WETUMPKA", NA, NA, NA, NA, "MONTGOMERY", "TUSCALOOSA", "MONTGOMERY", "MONTGOMERY", …
+#> $ state          <chr> "AL", "AL", NA, NA, NA, NA, "AL", "AL", "AL", "AL", "AL", "AL", "GA", "AL", "AL", "AL", "AL", "…
+#> $ zip            <chr> "35055", "36054", NA, NA, NA, NA, "36117", "35403", "36104", "36104", "36702", "36702", "30353"…
+#> $ explanation    <chr> "AD IN PROGRAM", NA, "ADVERTISING AND TICKET", "BANK FEE", NA, NA, NA, NA, NA, NA, NA, NA, "INT…
+#> $ id             <chr> "1050", "3499", "4728", "7957", "712", "763", "900", "901", "897", "1157", "123", "124", "125",…
+#> $ filed_date     <date> 2013-07-15, 2013-10-02, 2013-10-02, 2013-11-01, 2013-07-01, 2013-07-01, 2013-07-02, 2013-07-02…
+#> $ purpose        <chr> "Advertising", "Charitable Contribution", "Other", "Administrative", "Administrative", "Adminis…
+#> $ type           <chr> "Itemized", "Itemized", "Non-Itemized", "Non-Itemized", "Non-Itemized", "Non-Itemized", "Itemiz…
+#> $ committee_type <chr> "Principal Campaign Committee", "Principal Campaign Committee", "Principal Campaign Committee",…
+#> $ committee_name <chr> NA, NA, NA, "GULF PAC", "STORMING THE STATE HOUSE POLITICAL ACTION COMMITTEE", NA, NA, NA, NA, …
+#> $ candidate_name <chr> "MARVIN MCDANIEL BUTTRAM", "RANDALL (RANDY) M DAVIS", "JAMES EDWARD BUSKEY", NA, NA, "MICHAEL G…
+#> $ amended        <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALS…
+#> $ source_file    <chr> "2013_ExpendituresExtract.csv", "2013_ExpendituresExtract.csv", "2013_ExpendituresExtract.csv",…
 tail(ale)
-#> # A tibble: 6 x 21
-#>   org_id amount date       last_name first_name mi    suffix address1 city  state zip   explanation id    filed_date
-#>   <chr>   <dbl> <date>     <chr>     <chr>      <chr> <chr>  <chr>    <chr> <chr> <chr> <chr>       <chr> <date>    
-#> 1 24905     5   2019-12-31 SOUTHERN… <NA>       <NA>  <NA>   101 WES… SYLA… AL    35150 BANK CHARGE 2486… 2020-01-02
-#> 2 25243    93.1 2019-12-31 RENASANT… <NA>       <NA>  <NA>   8 COMME… MONT… AL    36104 <NA>        2521… 2020-01-24
-#> 3 25249    90   2019-12-31 RENASANT… <NA>       <NA>  <NA>   8 COMME… MONT… AL    36104 <NA>        2521… 2020-01-24
-#> 4 29204  3800   2020-12-31 BUCKMAST… <NA>       <NA>  <NA>   P.O. BO… MONT… AL    36124 <NA>        2742… 2020-12-31
-#> 5 29204   320   2020-12-31 DEEP SOU… <NA>       <NA>  <NA>   438 1ST… ALAB… AL    35007 <NA>        2742… 2020-12-31
-#> 6 29204   500   2020-12-31 THOMPSON… <NA>       <NA>  <NA>   1921 WA… ALAB… AL    35007 CAMPAIGN S… 2742… 2020-12-31
-#> # … with 7 more variables: purpose <chr>, type <chr>, committee_type <chr>, committee_name <chr>, candidate_name <chr>,
-#> #   amended <lgl>, source_file <chr>
+#> # A tibble: 6 × 21
+#>   org_id amount date       last_…¹ first…² mi    suffix addre…³ city  state zip   expla…⁴ id    filed_date purpose type 
+#>   <chr>   <dbl> <date>     <chr>   <chr>   <chr> <chr>  <chr>   <chr> <chr> <chr> <chr>   <chr> <date>     <chr>   <chr>
+#> 1 24889    268. 2022-12-31 HANCOC… <NA>    <NA>  <NA>   P.O. B… GULF… MS    39502 BANK S… 3616… 2023-01-26 Other   Item…
+#> 2 24889   -268. 2022-12-31 HANCOC… <NA>    <NA>  <NA>   P.O. B… GULF… MS    39502 Offset… 3649… 2023-02-09 Other   Item…
+#> 3 24889    267. 2022-12-31 HANCOC… <NA>    <NA>  <NA>   P.O. B… GULF… MS    39502 BANK S… 3649… 2023-02-09 Other   Item…
+#> 4 30267      5  2022-12-31 AUBURN… <NA>    <NA>  <NA>   100 NO… AUBU… AL    3683… <NA>    3622… 2023-01-29 Admini… Item…
+#> 5 25153     70  2022-12-31 SYNOVU… <NA>    <NA>  <NA>   800 SH… BIRM… AL    35209 BANK S… 3610… 2023-01-24 Admini… Item…
+#> 6 28873    250  2022-12-31 POMPEY  BRENDA  M     <NA>   P.O. B… CAMD… AL    36726 EXPENS… 3631… 2023-01-30 Other   Item…
+#> # … with 5 more variables: committee_type <chr>, committee_name <chr>, candidate_name <chr>, amended <lgl>,
+#> #   source_file <chr>, and abbreviated variable names ¹​last_name, ²​first_name, ³​address1, ⁴​explanation
 ```
 
 ### Missing
@@ -284,29 +284,29 @@ Columns vary in their degree of missing values.
 
 ``` r
 col_stats(ale, count_na)
-#> # A tibble: 21 x 4
-#>    col            class       n     p
-#>    <chr>          <chr>   <int> <dbl>
-#>  1 org_id         <chr>       0 0    
-#>  2 amount         <dbl>       0 0    
-#>  3 date           <date>      0 0    
-#>  4 last_name      <chr>   36239 0.141
-#>  5 first_name     <chr>  214884 0.834
-#>  6 mi             <chr>  251798 0.977
-#>  7 suffix         <chr>  257096 0.997
-#>  8 address1       <chr>   36442 0.141
-#>  9 city           <chr>   36443 0.141
-#> 10 state          <chr>   36442 0.141
-#> 11 zip            <chr>   36590 0.142
-#> 12 explanation    <chr>  165678 0.643
-#> 13 id             <chr>       0 0    
-#> 14 filed_date     <date>      0 0    
-#> 15 purpose        <chr>       0 0    
-#> 16 type           <chr>       0 0    
-#> 17 committee_type <chr>       0 0    
-#> 18 committee_name <chr>  197517 0.766
-#> 19 candidate_name <chr>   60283 0.234
-#> 20 amended        <lgl>       0 0    
+#> # A tibble: 21 × 4
+#>    col            class       n         p
+#>    <chr>          <chr>   <int>     <dbl>
+#>  1 org_id         <chr>       0 0        
+#>  2 amount         <dbl>       0 0        
+#>  3 date           <date>      0 0        
+#>  4 last_name      <chr>   47034 0.137    
+#>  5 first_name     <chr>  282838 0.822    
+#>  6 mi             <chr>  336161 0.978    
+#>  7 suffix         <chr>  343005 0.997    
+#>  8 address1       <chr>   47250 0.137    
+#>  9 city           <chr>   47250 0.137    
+#> 10 state          <chr>   47250 0.137    
+#> 11 zip            <chr>   47439 0.138    
+#> 12 explanation    <chr>  224911 0.654    
+#> 13 id             <chr>       8 0.0000233
+#> 14 filed_date     <date>     30 0.0000872
+#> 15 purpose        <chr>      10 0.0000291
+#> 16 type           <chr>      15 0.0000436
+#> 17 committee_type <chr>      13 0.0000378
+#> 18 committee_name <chr>  260301 0.757    
+#> 19 candidate_name <chr>   83580 0.243    
+#> 20 amended        <lgl>      20 0.0000582
 #> 21 source_file    <chr>       0 0
 ```
 
@@ -319,16 +319,16 @@ key_vars <- c("date", "last_name", "amount", "committee")
 geo_vars <- c("address1", "city", "state", "zip")
 ale <- flag_na(ale, all_of(key_vars))
 sum(ale$na_flag)
-#> [1] 36239
+#> [1] 47045
 ```
 
-14.1% of records are missing a key variable.
+13.7% of records are missing a key variable.
 
 ``` r
 ale %>% 
   filter(na_flag) %>% 
   select(all_of(key_vars))
-#> # A tibble: 36,239 x 4
+#> # A tibble: 47,045 × 4
 #>    date       last_name amount committee                                              
 #>    <date>     <chr>      <dbl> <chr>                                                  
 #>  1 2013-01-01 <NA>       235   JAMES EDWARD BUSKEY                                    
@@ -341,7 +341,7 @@ ale %>%
 #>  8 2013-01-03 <NA>        50   TALLADEGA COUNTY REPUBLICAN PARTY                      
 #>  9 2013-01-05 <NA>        42   JOHNNY MACK MORROW                                     
 #> 10 2013-01-08 <NA>        36.0 UNITED TRANSPORTATION UNION                            
-#> # … with 36,229 more rows
+#> # … with 47,035 more rows
 ```
 
 All of these records missing variables belong to a non-itemized `type`.
@@ -351,11 +351,11 @@ ale %>%
   mutate(non_item = str_detect(type, "Non-Itemized")) %>% 
   group_by(na_flag) %>% 
   summarise(non_item = mean(non_item))
-#> # A tibble: 2 x 2
+#> # A tibble: 2 × 2
 #>   na_flag non_item
 #>   <lgl>      <dbl>
-#> 1 FALSE    0.00158
-#> 2 TRUE     0.999
+#> 1 FALSE         NA
+#> 2 TRUE          NA
 ```
 
 We can remove the flag from such records, they should be missing this
@@ -364,7 +364,7 @@ data.
 ``` r
 ale$na_flag[str_which(ale$type, "Non-Itemized")] <- FALSE
 sum(ale$na_flag)
-#> [1] 30
+#> [1] 48
 ```
 
 This leaves us with very few records.
@@ -373,20 +373,20 @@ This leaves us with very few records.
 ale %>% 
   filter(na_flag) %>% 
   select(all_of(key_vars), type)
-#> # A tibble: 30 x 5
-#>    date       last_name   amount committee                                                                type    
-#>    <date>     <chr>        <dbl> <chr>                                                                    <chr>   
-#>  1 2013-03-19 <NA>        100    TALLADEGA COUNTY REPUBLICAN PARTY                                        Itemized
-#>  2 2013-11-08 <NA>         93.7  SUZELLE MARIE JOSEY                                                      Itemized
-#>  3 2013-11-12 <NA>         24.4  SUZELLE MARIE JOSEY                                                      Itemized
-#>  4 2015-02-09 <NA>       5000    ALABAMA AMERICAN PHYSICAL THERAPY ASSOCIATION POLITICAL ACTION COMMITTEE Itemized
-#>  5 2016-06-01 <NA>        100    MERCERIA LAVONNE LUDGOOD                                                 Itemized
-#>  6 2014-07-15 <NA>        180    LAWRENCE CONAWAY                                                         Itemized
-#>  7 2016-08-22 <NA>       1174.   MICHAEL MILLICAN                                                         Itemized
-#>  8 2017-09-08 <NA>          7.73 JOSEPH BARLOW                                                            Itemized
-#>  9 2018-02-28 <NA>       1500    ALABAMA PHARMACY ASSOCIATION POLITICAL ACTION COMMITTEE                  Itemized
-#> 10 2018-02-28 <NA>      -1500    ALABAMA PHARMACY ASSOCIATION POLITICAL ACTION COMMITTEE                  Itemized
-#> # … with 20 more rows
+#> # A tibble: 48 × 5
+#>    date       last_name                                                                             amount commi…¹ type 
+#>    <date>     <chr>                                                                                  <dbl> <chr>   <chr>
+#>  1 2013-03-19  <NA>                                                                                 1   e2 TALLAD… Item…
+#>  2 2013-11-08  <NA>                                                                                 9.37e1 SUZELL… Item…
+#>  3 2013-11-12  <NA>                                                                                 2.44e1 SUZELL… Item…
+#>  4 2014-09-04 "LOWTHER"                                                                             8.49e2 <NA>    <NA> 
+#>  5 2015-01-09 "Other"                                                                               6.71e4 <NA>    <NA> 
+#>  6 2015-02-09  <NA>                                                                                 5   e3 ALABAM… Item…
+#>  7 2016-06-01  <NA>                                                                                 1   e2 MERCER… Item…
+#>  8 2016-07-13 "COLVERT"                                                                             5   e2 <NA>    <NA> 
+#>  9 2015-07-17 "LOWTHER"                                                                             3.94e2 <NA>    <NA> 
+#> 10 2016-10-26 "SPORTS RADIO 93.9 'THE SCORE\"\",\"\",\"\",\"\",\"P. O. BOX 146\",\"FLORENCE\",\"AL… 6.2 e2 <NA>    <NA> 
+#> # … with 38 more rows, and abbreviated variable name ¹​committee
 ```
 
 ### Duplicates
@@ -396,7 +396,7 @@ We can also flag any record completely duplicated across every column.
 ``` r
 ale <- flag_dupes(ale, -id)
 sum(ale$dupe_flag)
-#> [1] 3111
+#> [1] 4165
 ```
 
 1.2% of records are duplicates.
@@ -405,7 +405,7 @@ sum(ale$dupe_flag)
 ale %>% 
   filter(dupe_flag) %>% 
   select(id, all_of(key_vars))
-#> # A tibble: 3,111 x 5
+#> # A tibble: 4,165 × 5
 #>    id    date       last_name amount committee                      
 #>    <chr> <date>     <chr>      <dbl> <chr>                          
 #>  1 2908  2013-01-28 BARTON      1000 ENPAC                          
@@ -418,7 +418,7 @@ ale %>%
 #>  8 11590 2013-02-11 <NA>          17 CULLMAN COUNTY REPUBLICAN WOMEN
 #>  9 11591 2013-02-11 <NA>          17 CULLMAN COUNTY REPUBLICAN WOMEN
 #> 10 11592 2013-02-11 <NA>          17 CULLMAN COUNTY REPUBLICAN WOMEN
-#> # … with 3,101 more rows
+#> # … with 4,155 more rows
 ```
 
 Similar to the missing values, much of these are non-itemized.
@@ -428,17 +428,17 @@ ale %>%
   mutate(non_item = str_detect(type, "Non-Itemized")) %>% 
   group_by(dupe_flag) %>% 
   summarise(non_item = mean(non_item))
-#> # A tibble: 2 x 2
+#> # A tibble: 2 × 2
 #>   dupe_flag non_item
 #>   <lgl>        <dbl>
-#> 1 FALSE        0.136
-#> 2 TRUE         0.581
+#> 1 FALSE       NA    
+#> 2 TRUE         0.525
 ```
 
 ``` r
 ale$dupe_flag[str_which(ale$type, "Non-Itemized")] <- FALSE
 sum(ale$dupe_flag)
-#> [1] 1303
+#> [1] 1979
 ```
 
 This removes most, but not all, duplicate records.
@@ -447,7 +447,7 @@ This removes most, but not all, duplicate records.
 ale %>% 
   filter(dupe_flag) %>% 
   select(id, all_of(key_vars), type)
-#> # A tibble: 1,303 x 6
+#> # A tibble: 1,979 × 6
 #>    id    date       last_name        amount committee             type    
 #>    <chr> <date>     <chr>             <dbl> <chr>                 <chr>   
 #>  1 2908  2013-01-28 BARTON            1000  ENPAC                 Itemized
@@ -460,40 +460,40 @@ ale %>%
 #>  8 221   2013-05-08 SAHR GROUP        2000  ALABAMA 2014 PAC      Itemized
 #>  9 222   2013-05-08 SAHR GROUP        2000  ALABAMA 2014 PAC      Itemized
 #> 10 4308  2013-08-01 WHALEY             200  RAY BRYAN             Itemized
-#> # … with 1,293 more rows
+#> # … with 1,969 more rows
 ```
 
 ### Categorical
 
 ``` r
 col_stats(ale, n_distinct)
-#> # A tibble: 24 x 4
+#> # A tibble: 24 × 4
 #>    col            class       n          p
 #>    <chr>          <chr>   <int>      <dbl>
-#>  1 org_id         <chr>    3138 0.0122    
-#>  2 amount         <dbl>   47164 0.183     
-#>  3 date           <date>   2930 0.0114    
-#>  4 last_name      <chr>   43745 0.170     
-#>  5 first_name     <chr>    3829 0.0149    
-#>  6 mi             <chr>      32 0.000124  
-#>  7 suffix         <chr>       9 0.0000349 
-#>  8 address1       <chr>   57511 0.223     
-#>  9 city           <chr>    3384 0.0131    
-#> 10 state          <chr>      71 0.000275  
-#> 11 zip            <chr>    4766 0.0185    
-#> 12 explanation    <chr>   39055 0.151     
-#> 13 id             <chr>  257793 1.00      
-#> 14 filed_date     <date>   1824 0.00708   
-#> 15 purpose        <chr>      16 0.0000621 
-#> 16 type           <chr>       4 0.0000155 
-#> 17 committee_type <chr>       2 0.00000776
-#> 18 committee_name <chr>     528 0.00205   
-#> 19 candidate_name <chr>    2522 0.00978   
-#> 20 amended        <lgl>       2 0.00000776
-#> 21 source_file    <chr>       8 0.0000310 
-#> 22 committee      <chr>    3048 0.0118    
-#> 23 na_flag        <lgl>       2 0.00000776
-#> 24 dupe_flag      <lgl>       2 0.00000776
+#>  1 org_id         <chr>    3897 0.0113    
+#>  2 amount         <dbl>   56515 0.164     
+#>  3 date           <date>   3701 0.0108    
+#>  4 last_name      <chr>   53243 0.155     
+#>  5 first_name     <chr>    4689 0.0136    
+#>  6 mi             <chr>      54 0.000157  
+#>  7 suffix         <chr>      24 0.0000698 
+#>  8 address1       <chr>   71813 0.209     
+#>  9 city           <chr>    3995 0.0116    
+#> 10 state          <chr>      89 0.000259  
+#> 11 zip            <chr>    5699 0.0166    
+#> 12 explanation    <chr>   49422 0.144     
+#> 13 id             <chr>  343852 1.00      
+#> 14 filed_date     <date>   2388 0.00694   
+#> 15 purpose        <chr>      31 0.0000901 
+#> 16 type           <chr>      19 0.0000553 
+#> 17 committee_type <chr>      14 0.0000407 
+#> 18 committee_name <chr>     596 0.00173   
+#> 19 candidate_name <chr>    3137 0.00912   
+#> 20 amended        <lgl>       3 0.00000872
+#> 21 source_file    <chr>      11 0.0000320 
+#> 22 committee      <chr>    3729 0.0108    
+#> 23 na_flag        <lgl>       2 0.00000582
+#> 24 dupe_flag      <lgl>       2 0.00000582
 ```
 
 ![](../plots/distinct_plots-1.png)<!-- -->![](../plots/distinct_plots-2.png)<!-- -->![](../plots/distinct_plots-3.png)<!-- -->
@@ -502,10 +502,10 @@ col_stats(ale, n_distinct)
 
 ``` r
 summary(ale$amount)
-#>    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
-#> -431800      50     164    1208     639 1000000
+#>      Min.   1st Qu.    Median      Mean   3rd Qu.      Max. 
+#> -700000.0      50.0     175.0    1274.7     742.3 1000000.0
 mean(ale$amount <= 0)
-#> [1] 0.02236618
+#> [1] 0.02127796
 ```
 
 These are the records with the minimum and maximum amounts.
@@ -514,28 +514,28 @@ These are the records with the minimum and maximum amounts.
 glimpse(ale[c(which.max(ale$amount), which.min(ale$amount)), ])
 #> Rows: 2
 #> Columns: 24
-#> $ org_id         <chr> "25003", "26544"
-#> $ amount         <dbl> 1000000, -431800
-#> $ date           <date> 2014-03-03, 2018-05-21
-#> $ last_name      <chr> "ALABAMA EDUCATION ASSOCIATION", "TARGET ENTERPRISES, LLC"
+#> $ org_id         <chr> "25003", "24982"
+#> $ amount         <dbl> 1e+06, -7e+05
+#> $ date           <date> 2014-03-03, 2019-03-27
+#> $ last_name      <chr> "ALABAMA EDUCATION ASSOCIATION", "FARM BUREAU BANK"
 #> $ first_name     <chr> NA, NA
 #> $ mi             <chr> NA, NA
 #> $ suffix         <chr> NA, NA
-#> $ address1       <chr> "P.O. BOX 4177", "15260 VENTURA BLVD., SUITE 1240"
-#> $ city           <chr> "MONTGOMERY", "SHERMAN OAKS"
-#> $ state          <chr> "AL", "CA"
-#> $ zip            <chr> "36103", "91403"
+#> $ address1       <chr> "P.O. BOX 4177", "17300 HENDERSON PASS"
+#> $ city           <chr> "MONTGOMERY", "SAN ANTONIO"
+#> $ state          <chr> "AL", "TX"
+#> $ zip            <chr> "36103", "78232-1568"
 #> $ explanation    <chr> "LOAN", "Offset due to deletion of filed item"
-#> $ id             <chr> "21321", "203057"
-#> $ filed_date     <date> 2014-04-02, 2018-09-01
-#> $ purpose        <chr> "Other", "Advertising"
+#> $ id             <chr> "21321", "289841"
+#> $ filed_date     <date> 2014-04-02, 2021-09-22
+#> $ purpose        <chr> "Other", "Other"
 #> $ type           <chr> "Itemized", "Itemized"
-#> $ committee_type <chr> "Political Action Committee", "Principal Campaign Committee"
-#> $ committee_name <chr> "ALABAMA VOICE OF TEACHERS FOR EDUCATION", NA
-#> $ candidate_name <chr> NA, "KAY E. IVEY"
+#> $ committee_type <chr> "Political Action Committee", "Political Action Committee"
+#> $ committee_name <chr> "ALABAMA VOICE OF TEACHERS FOR EDUCATION", "FARM PAC - THE POLITICAL ACTION COMMITTEE OF THE AL…
+#> $ candidate_name <chr> NA, NA
 #> $ amended        <lgl> FALSE, FALSE
-#> $ source_file    <chr> "2014_ExpendituresExtract.csv", "2018_ExpendituresExtract.csv"
-#> $ committee      <chr> "ALABAMA VOICE OF TEACHERS FOR EDUCATION", "KAY E. IVEY"
+#> $ source_file    <chr> "2014_ExpendituresExtract.csv", "2021_ExpendituresExtract.csv"
+#> $ committee      <chr> "ALABAMA VOICE OF TEACHERS FOR EDUCATION", "FARM PAC - THE POLITICAL ACTION COMMITTEE OF THE AL…
 #> $ na_flag        <lgl> FALSE, FALSE
 #> $ dupe_flag      <lgl> FALSE, FALSE
 ```
@@ -556,7 +556,7 @@ min(ale$date)
 sum(ale$year < 2000)
 #> [1] 0
 max(ale$date)
-#> [1] "2020-12-31"
+#> [1] "2023-02-16"
 sum(ale$date > today())
 #> [1] 0
 ```
@@ -590,20 +590,20 @@ addr_norm <- ale %>%
 
 ``` r
 addr_norm
-#> # A tibble: 57,511 x 2
-#>    address1                       address_norm           
-#>    <chr>                          <chr>                  
-#>  1 510 5TH ST SW                  510 5TH ST SW          
-#>  2 3050 LANARK ROAD               3050 LANARK RD         
-#>  3 <NA>                           <NA>                   
-#>  4 6001 MONTICELLO DRIVE          6001 MONTICELLO DR     
-#>  5 P.O. BOX 2663                  PO BOX 2663            
-#>  6 60 COMMERCE STREET, SUITE 1400 60 COMMERCE ST STE 1400
-#>  7 201 TALLAPOOSA STREET          201 TALLAPOOSA ST      
-#>  8 PO BOX 2080                    PO BOX 2080            
-#>  9 PO BOX 536126                  PO BOX 536126          
-#> 10 101 TALLAPOOSA STREET          101 TALLAPOOSA ST      
-#> # … with 57,501 more rows
+#> # A tibble: 71,813 × 2
+#>    address1                       address_norm                 
+#>    <chr>                          <chr>                        
+#>  1 510 5TH ST SW                  510 5TH ST SW                
+#>  2 3050 LANARK ROAD               3050 LANARK RD               
+#>  3 <NA>                           <NA>                         
+#>  4 6001 MONTICELLO DRIVE          6001 MONTICELLO DR           
+#>  5 P.O. BOX 2663                  PO BOX 2663                  
+#>  6 60 COMMERCE STREET, SUITE 1400 60 COMMERCE STREET SUITE 1400
+#>  7 201 TALLAPOOSA STREET          201 TALLAPOOSA ST            
+#>  8 PO BOX 2080                    PO BOX 2080                  
+#>  9 PO BOX 536126                  PO BOX 536126                
+#> 10 101 TALLAPOOSA STREET          101 TALLAPOOSA ST            
+#> # … with 71,803 more rows
 ```
 
 ``` r
@@ -632,11 +632,11 @@ progress_table(
   ale$zip_norm,
   compare = valid_zip
 )
-#> # A tibble: 2 x 6
-#>   stage    prop_in n_distinct prop_na n_out n_diff
-#>   <chr>      <dbl>      <dbl>   <dbl> <dbl>  <dbl>
-#> 1 zip        0.977       4766   0.142  5093   1149
-#> 2 zip_norm   0.995       4080   0.143  1135    413
+#> # A tibble: 2 × 6
+#>   stage        prop_in n_distinct prop_na n_out n_diff
+#>   <chr>          <dbl>      <dbl>   <dbl> <dbl>  <dbl>
+#> 1 ale$zip        0.977       5699   0.138  6811   1451
+#> 2 ale$zip_norm   0.995       4803   0.139  1511    504
 ```
 
 ### State
@@ -660,8 +660,10 @@ ale <- ale %>%
 ale %>% 
   filter(state != state_norm) %>% 
   count(state, state_norm, sort = TRUE)
-#> # A tibble: 0 x 3
-#> # … with 3 variables: state <chr>, state_norm <chr>, n <int>
+#> # A tibble: 1 × 3
+#>   state      state_norm     n
+#>   <chr>      <chr>      <int>
+#> 1 WASHINGTON WA             1
 ```
 
 ``` r
@@ -670,11 +672,11 @@ progress_table(
   ale$state_norm,
   compare = valid_state
 )
-#> # A tibble: 2 x 6
-#>   stage      prop_in n_distinct prop_na n_out n_diff
-#>   <chr>        <dbl>      <dbl>   <dbl> <dbl>  <dbl>
-#> 1 state         1.00         71   0.141    88     17
-#> 2 state_norm    1            54   0.142     0      1
+#> # A tibble: 2 × 6
+#>   stage          prop_in n_distinct prop_na n_out n_diff
+#>   <chr>            <dbl>      <dbl>   <dbl> <dbl>  <dbl>
+#> 1 ale$state         1.00         89   0.137   114     34
+#> 2 ale$state_norm    1            55   0.138     0      1
 ```
 
 ### City
@@ -774,20 +776,20 @@ good_refine <- ale %>%
   )
 ```
 
-    #> # A tibble: 47 x 5
+    #> # A tibble: 61 × 5
     #>    state_norm zip_norm city_swap      city_refine       n
     #>    <chr>      <chr>    <chr>          <chr>         <int>
-    #>  1 AL         36104    MONTOMGERY     MONTGOMERY       63
-    #>  2 CA         94107    SAN FRANSICO   SAN FRANCISCO    20
-    #>  3 IL         60197    CARROLL STREAM CAROL STREAM     17
+    #>  1 AL         36104    MONTOMGERY     MONTGOMERY       79
+    #>  2 IL         60197    CARROLL STREAM CAROL STREAM     28
+    #>  3 CA         94107    SAN FRANSICO   SAN FRANCISCO    20
     #>  4 OH         45249    CINNCINATI     CINCINNATI       13
     #>  5 AL         35121    OENOTA         ONEONTA           8
-    #>  6 AL         35234    BMINGHAMIR     BIRMINGHAM        5
-    #>  7 OH         45274    CINCINATTI     CINCINNATI        3
-    #>  8 OH         45274    CINNCINATA     CINCINNATI        3
-    #>  9 AL         35208    BIMINGHAMR     BIRMINGHAM        2
-    #> 10 AL         35565    HAYLEVILLE     HALEYVILLE        2
-    #> # … with 37 more rows
+    #>  6 AL         35768    SCOTTSOBOR     SCOTTSBORO        6
+    #>  7 AL         35769    SCOTTSOBOR     SCOTTSBORO        6
+    #>  8 OH         45249    CINNICINATI    CINCINNATI        6
+    #>  9 AL         35234    BMINGHAMIR     BIRMINGHAM        5
+    #> 10 OH         45274    CINCINATTI     CINCINNATI        3
+    #> # … with 51 more rows
 
 Then we can join the refined values back to the database.
 
@@ -803,12 +805,10 @@ Our goal for normalization was to increase the proportion of city values
 known to be valid and reduce the total distinct values by correcting
 misspellings.
 
-| stage        | prop\_in | n\_distinct | prop\_na | n\_out | n\_diff |
-|:-------------|---------:|------------:|---------:|-------:|--------:|
-| city)        |    0.972 |        3384 |    0.141 |   6180 |    1531 |
-| city\_norm   |    0.978 |        3108 |    0.142 |   4915 |    1232 |
-| city\_swap   |    0.992 |        2291 |    0.142 |   1693 |     410 |
-| city\_refine |    0.993 |        2250 |    0.142 |   1513 |     369 |
+| stage                                                                   | prop_in | n_distinct | prop_na | n_out | n_diff |
+|:------------------------------------------------------------------------|--------:|-----------:|--------:|------:|-------:|
+| str_to_upper(ale$city) | 0.972| 3995| 0.137| 8278| 1868| |ale$city_norm |   0.977 |       3684 |   0.138 |  6786 |   1541 |
+| ale$city_swap | 0.992| 2691| 0.138| 2386| 536| |ale$city_refine         |   0.993 |       2640 |   0.138 |  2143 |    485 |
 
 You can see how the percentage of valid values increased with each
 stage.
@@ -842,41 +842,41 @@ ale <- ale %>%
 glimpse(sample_n(ale, 50))
 #> Rows: 50
 #> Columns: 29
-#> $ org_id         <chr> "26586", "25328", "27977", "25737", "25433", "26605", "26682", "26016", "25603", "26408", "257…
-#> $ amount         <dbl> -550.00, 300.00, 363.31, 220.00, 69.63, 60.00, 500.00, 82.50, 213.86, 12.00, 49.35, 150.00, 2.…
-#> $ date           <date> 2017-08-31, 2014-03-13, 2018-06-27, 2014-10-02, 2014-11-24, 2018-05-19, 2018-05-30, 2016-02-1…
-#> $ last_name      <chr> "MAGIC CITY CLASSIC PARADE", "TALISI HISTORICAL PRESERVATION SOCIETY", "BOOSTERS INCORPORATED"…
-#> $ first_name     <chr> NA, NA, NA, NA, NA, "ANDRES", "JAMES", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
-#> $ mi             <chr> NA, NA, NA, NA, NA, NA, "E", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
-#> $ suffix         <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
-#> $ address1       <chr> "100 GRANDVIEW PLACE, SUITE 110", "650 GILMER AVENUE", "P.O. BOX 70156", "2350 AVALON AVE.", "…
-#> $ city           <chr> "BIRMINGHAM", "TALLASSEE", "MONTGOMERY", "MUSCLE SHOALS", "CITY OF INDUSTRY", "MADISON", "BESS…
-#> $ state          <chr> "AL", "AL", "AL", "AL", "CA", "AL", "AL", "AL", "AL", "CA", NA, "AL", "AL", "MA", "AL", NA, NA…
-#> $ zip            <chr> "35243", "36078", "35107", "35661", "91716-0599", "35756", "35022", "36104", "36608", "94043",…
-#> $ explanation    <chr> "Offset due to deletion of filed item", NA, "ROLL TAPE STICKERS", "POSTAGE", "ADVERTISING- LOW…
-#> $ id             <chr> "126449", "21291", "187772", "57488", "67705", "180544", "183425", "91617", "62158", "257663",…
-#> $ filed_date     <date> 2017-12-04, 2014-04-02, 2018-07-02, 2014-10-10, 2015-01-26, 2018-05-29, 2018-06-01, 2016-02-1…
-#> $ purpose        <chr> "Advertising", "Charitable Contribution", "Other", "Advertising", "Other", "Consultants/Pollin…
-#> $ type           <chr> "Itemized", "Itemized", "Itemized", "Itemized", "Itemized", "Itemized", "Itemized", "Itemized"…
-#> $ committee_type <chr> "Principal Campaign Committee", "Principal Campaign Committee", "Principal Campaign Committee"…
-#> $ committee_name <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "PROGRESSPAC", NA, NA, NA, NA, NA,…
-#> $ candidate_name <chr> "MARSHELL RENA JACKSON HATCHER", "MIKE HOLMES", "STEVEN BURTON AMMONS", "RICHARD KEITH COATES"…
-#> $ amended        <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FAL…
-#> $ source_file    <chr> "2017_ExpendituresExtract.csv", "2014_ExpendituresExtract.csv", "2018_ExpendituresExtract.csv"…
-#> $ committee      <chr> "MARSHELL RENA JACKSON HATCHER", "MIKE HOLMES", "STEVEN BURTON AMMONS", "RICHARD KEITH COATES"…
-#> $ na_flag        <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FAL…
-#> $ dupe_flag      <lgl> FALSE, FALSE, FALSE, TRUE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALS…
-#> $ year           <dbl> 2017, 2014, 2018, 2014, 2014, 2018, 2018, 2016, 2014, 2019, 2014, 2018, 2015, 2018, 2015, 2015…
-#> $ address_clean  <chr> "100 GRANDVIEW PLACE STE 110", "650 GILMER AVE", "PO BOX 70156", "2350 AVALON AVE", "PO BOX 60…
-#> $ city_clean     <chr> "BIRMINGHAM", "TALLASSEE", "MONTGOMERY", "MUSCLE SHOALS", "CITY OF INDUSTRY", "MADISON", "BESS…
-#> $ state_clean    <chr> "AL", "AL", "AL", "AL", "CA", "AL", "AL", "AL", "AL", "CA", NA, "AL", "AL", "MA", "AL", NA, NA…
-#> $ zip_clean      <chr> "35243", "36078", "35107", "35661", "91716", "35756", "35022", "36104", "36608", "94043", NA, …
+#> $ org_id         <chr> "24964", "25662", "27648", "25087", "25325", "27117", "25899", "25172", "29488", "26428", "2517…
+#> $ amount         <dbl> 76.86, 671.00, 303.97, 300.00, 72.00, 1000.00, 400.00, 227.04, 1500.00, 34.75, 5000.00, 5.00, 5…
+#> $ date           <date> 2016-09-01, 2014-03-13, 2018-06-27, 2014-10-02, 2021-12-06, 2018-05-30, 2016-02-10, 2022-08-05…
+#> $ last_name      <chr> "MARRIOTT", "KEVIN CANNON PHOTOGRAPY", "PERDIDO BEACH RESORT", "BATTLES", "WELLS FARGO", "HARWO…
+#> $ first_name     <chr> NA, NA, NA, "BOYD", NA, "TUCKER", NA, NA, NA, NA, "JAMES", NA, "DAVID", NA, NA, NA, NA, "COLLIN…
+#> $ mi             <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "W", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
+#> $ suffix         <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "JR.", NA, NA, NA, NA, NA, …
+#> $ address1       <chr> "1 GRAND BLVD.", "235 SOUTH WILSON AVE", "27200 PERDIDO BEACH BLVD", "49 SOMMERSET DRIVE", "EAS…
+#> $ city           <chr> "POINT CLEAR", "PRICHARD", "ORANGE BEACH", "PHENIX CITY", "MONTGOMERY", "BIRMINGHAM", "FLORENCE…
+#> $ state          <chr> "AL", "AL", "AL", "AL", "AL", "AL", "AL", "AL", "AL", "AL", "AL", "AL", "AL", NA, NA, "AL", "AL…
+#> $ zip            <chr> "36564", "36610", "36561", "36869", "36106", "35205", "35631", "36083", "36104", "35209", "3634…
+#> $ explanation    <chr> NA, "POST CARDS AND FLYERS", NA, "PUTTING UP SIGNS/ HANDING OUT FLYERS", NA, NA, NA, NA, NA, NA…
+#> $ id             <chr> "108829", "21844", "191239", "55350", "298398", "181562", "91247", "346088", "333508", "166755"…
+#> $ filed_date     <date> 2017-01-31, 2014-03-31, 2018-07-03, 2014-10-10, 2022-01-03, 2018-06-01, 2016-02-13, 2022-09-01…
+#> $ purpose        <chr> "Administrative", "Advertising", "Lodging", "Other", "Administrative", "Consultants/Polling", "…
+#> $ type           <chr> "Itemized", "Itemized", "Itemized", "Itemized", "Itemized", "Itemized", "Itemized", "Itemized",…
+#> $ committee_type <chr> "Principal Campaign Committee", "Principal Campaign Committee", "Principal Campaign Committee",…
+#> $ committee_name <chr> NA, NA, NA, NA, "ALA-CRNA", NA, NA, NA, NA, NA, "ASSOCIATED GENERAL CONTRACTORS - PAC", NA, NA,…
+#> $ candidate_name <chr> "TOM WHATLEY", "HENRY ABDUL HASEEB", "JOSEPH JAY SIEGELMAN", "LESLEY VANCE", NA, "LINDSEY DECKA…
+#> $ amended        <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALS…
+#> $ source_file    <chr> "2017_ExpendituresExtract.csv", "2014_ExpendituresExtract.csv", "2018_ExpendituresExtract.csv",…
+#> $ committee      <chr> "TOM WHATLEY", "HENRY ABDUL HASEEB", "JOSEPH JAY SIEGELMAN", "LESLEY VANCE", "ALA-CRNA", "LINDS…
+#> $ na_flag        <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALS…
+#> $ dupe_flag      <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALS…
+#> $ year           <dbl> 2016, 2014, 2018, 2014, 2021, 2018, 2016, 2022, 2022, 2018, 2018, 2021, 2014, 2013, 2020, 2018,…
+#> $ address_clean  <chr> "1 GRAND BLVD", "235 SOUTH WILSON AVE", "27200 PERDIDO BEACH BLVD", "49 SOMMERSET DR", "EASTERN…
+#> $ city_clean     <chr> "POINT CLEAR", "PRICHARD", "ORANGE BEACH", "PHENIX CITY", "MONTGOMERY", "BIRMINGHAM", "FLORENCE…
+#> $ state_clean    <chr> "AL", "AL", "AL", "AL", "AL", "AL", "AL", "AL", "AL", "AL", "AL", "AL", "AL", NA, NA, "AL", "AL…
+#> $ zip_clean      <chr> "36564", "36610", "36561", "36869", "36106", "35205", "35631", "36083", "36104", "35209", "3634…
 ```
 
-1.  There are 257,800 records in the database.
-2.  There are 1,303 duplicate records in the database.
+1.  There are 343,877 records in the database.
+2.  There are 1,979 duplicate records in the database.
 3.  The range and distribution of `amount` and `date` seem reasonable.
-4.  There are 30 records missing key variables.
+4.  There are 48 records missing key variables.
 5.  Consistency in geographic data has been improved with
     `campfin::normal_*()`.
 6.  The 4-digit `year` variable has been created with
@@ -892,13 +892,13 @@ clean_dir <- dir_create(here("al", "expends", "data", "clean"))
 clean_path <- path(clean_dir, "al_expends_clean.csv")
 write_csv(ale, clean_path, na = "")
 (clean_size <- file_size(clean_path))
-#> 68.5M
+#> 91.7M
 file_encoding(clean_path) %>% 
   mutate(across(path, path.abbrev))
-#> # A tibble: 1 x 3
-#>   path                                         mime            charset 
-#>   <fs::path>                                   <chr>           <chr>   
-#> 1 ~/al/expends/data/clean/al_expends_clean.csv application/csv us-ascii
+#> # A tibble: 1 × 3
+#>   path                                                                                      mime  charset
+#>   <fs::path>                                                                                <chr> <chr>  
+#> 1 /Volumes/TAP/accountability_datacleaning/state/al/expends/data/clean/al_expends_clean.csv <NA>  <NA>
 ```
 
 ## Upload
