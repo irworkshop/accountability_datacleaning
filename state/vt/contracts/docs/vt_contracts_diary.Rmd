@@ -83,6 +83,7 @@ pacman::p_load(
   gluedown, # printing markdown
   magrittr, # pipe operators
   janitor, # clean data frames
+  aws.s3, # work with aws data
   refinr, # cluster and merge
   scales, # format strings
   knitr, # knit documents
@@ -139,27 +140,33 @@ No entity affiliated with, employed by, or constituting part of the state of
 Vermont warrants, endorses, assures the accuracy of, or accepts liability for
 the content of any information on this site.  
 
-## Read
+## Download
 
-The data file can be read directly from the portal with `vroom::vroom()`.
-
-```{r raw_read}
-vtc <- vroom(
-  file = "https://data.vermont.gov/api/views/786x-sbp3/rows.tsv",
-  .name_repair = make_clean_names,
-  delim = "\t",
-  col_types = cols(
-    .default = col_character(),
-    `Quarter Ending` = col_date_usa(),
-    `Amount` = col_number()
-  )
-)
+```{r raw-dir}
+raw_url <- "https://data.vermont.gov/api/views/786x-sbp3/rows.tsv"
+raw_dir <- dir_create(here("state", "vt", "contracts", "data", "raw"))
+raw_tsv <- path(raw_dir, basename(raw_url))
 ```
 
-```{r raw_filter, echo=FALSE}
-vtc <- filter(
-  .data = vtc,
-  !is.na(department)
+```{r raw-download}
+if (!file_exists(raw_tsv)) {
+  download.file(raw_url, raw_tsv)
+}
+```
+
+## Read
+
+```{r raw_read}
+vtc <- read_delim(
+  file = raw_tsv,
+  delim = "\t",
+  name_repair = make_clean_names,
+  locale = locale(date_format = "%m/%d/%Y"),
+  col_types = cols(
+    .default = col_character(),
+    quarter_ending = col_date(),
+    amount = col_number()
+  )
 )
 ```
 
@@ -182,9 +189,11 @@ col_stats(vtc, count_na)
 ```
 
 ```{r na_flag}
-vtc <- vtc %>% flag_na(quarter_ending, vendor, amount, department)
+key_vars <- c("quarter_ending", "department", "amount", "vendor")
+vtc <- flag_na(vtc, all_of(key_vars))
 if (sum(vtc$na_flag) == 0) {
   vtc <- select(vtc, -na_flag)
+  message("No missing values, removing flag")
 } else {
   vtc %>% 
     filter(na_flag) %>% 
@@ -208,7 +217,8 @@ amount, but they are flagged nonetheless.
 ```{r dupe_view}
 vtc %>% 
   filter(dupe_flag) %>% 
-  select(quarter_ending, vendor, amount, department)
+  select(all_of(key_vars)) %>% 
+  arrange(quarter_ending, vendor)
 ```
 
 ### Categorical
@@ -218,12 +228,17 @@ col_stats(vtc, n_distinct)
 ```
 
 ```{r distinct_plots, echo=FALSE}
-explore_plot(vtc, department) + scale_x_truncate()
-explore_plot(vtc, fund_description) + scale_x_truncate()
-explore_plot(vtc, account) + scale_x_truncate()
+explore_plot(vtc, department) + scale_x_wrap()
+explore_plot(vtc, fund_description) + scale_x_wrap()
+explore_plot(vtc, account) + scale_x_wrap()
 ```
 
 ### Amounts
+
+```{r amount-round}
+# fix floating point precision
+vtc$amount <- round(vtc$amount, digits = 2)
+```
 
 A small percentage of `amount` values are less than or equal to zero, but the
 range appears otherwise normal.
@@ -354,6 +369,14 @@ progress_table(
 Cities are the most difficult geographic variable to normalize, simply due to
 the wide variety of valid cities and formats.
 
+```{r city_saint}
+usps_city2 <- usps_city %>% 
+  add_row(
+    abb = "ST",
+    full = "SAINT"
+  )
+```
+
 #### Normal
 
 The `campfin::normal_city()` function is a good start, again converting case,
@@ -363,13 +386,14 @@ removing punctuation, but _expanding_ USPS abbreviations. We can also remove
 ```{r city_norm}
 vtc <- vtc %>% 
   mutate(
-    city_norm = normal_city(
-      city = city, 
-      abbs = usps_city,
-      states = c("VT", "DC", "VERMONT"),
-      na = invalid_city,
-      na_rep = TRUE
-    )
+    city_norm = city %>% 
+      str_replace("(?<=\\w)\\.(?=\\w)", " ") %>% 
+      normal_city(
+        abbs = usps_city2,
+        states = c("VT", "DC", "VERMONT"),
+        na = invalid_city,
+        na_rep = TRUE
+      )
   )
 ```
 
@@ -453,34 +477,75 @@ glimpse(sample_n(vtc, 20))
 1. Consistency in geographic data has been improved with `campfin::normal_*()`.
 1. The 4-digit `year` variable has been created with `lubridate::year()`.
 
+## Update
+
+```{r update-read}
+old_aws <- "csv/vt_contracts_clean.csv"
+if (object_exists(old_aws, "publicaccountability")) {
+  # get column types from new data
+  col_types <- paste(str_sub(map_chr(vtc, class), end = 1), collapse = "")
+  vtc_old <- s3read_using(
+    FUN = read_csv,
+    object = old_aws,
+    bucket = "publicaccountability",
+    col_types = col_types
+  )
+  
+  # round double values for comparison
+  vtc_old$amount <- round(vtc_old$amount, 2)
+  
+  nrow(vtc)
+  
+  vtc <- anti_join(
+    x = vtc, 
+    y = vtc_old,
+    by = names(vtc)
+  )
+  
+  nrow(vtc)
+}
+```
+
 ## Export
 
-Now the file can be saved on disk for upload to the Accountability server.
+Now the file can be saved on disk for upload to the Accountability server. We
+will name the object using a date range of the records included.
 
-```{r clean_dir}
-clean_dir <- dir_create(here("vt", "contracts", "data", "clean"))
-clean_path <- path(clean_dir, "vt_contracts_clean.csv")
-write_csv(vtc, clean_path, na = "")
-file_size(clean_path)
-file_encoding(clean_path)
+```{r clean-dir}
+clean_dir <- dir_create(here("state", "vt", "contracts", "data", "clean"))
+csv_ts <- "20200611-20230209"
+clean_csv <- path(clean_dir, glue("vt_contracts_{csv_ts}.csv"))
+clean_rds <- path_ext_set(clean_csv, "rds")
+basename(clean_csv)
+```
+
+```{r clean-write}
+write_csv(vtc, clean_csv, na = "")
+write_rds(vtc, clean_rds, compress = "xz")
+(clean_size <- file_size(clean_csv))
 ```
 
 ## Upload
 
-Using the [duckr] R package, we can wrap around the [duck] command line tool to
-upload the file to the IRW server.
+We can use the `aws.s3::put_object()` to upload the text file to the IRW server.
 
-[duckr]: https://github.com/kiernann/duckr
-[duck]: https://duck.sh/
-
-```{r clean_upload, eval=FALSE}
-# remotes::install_github("kiernann/duckr")
-s3_dir <- "s3:/publicaccountability/csv/"
-s3_path <- path(s3_dir, basename(clean_path))
-if (require(duckr)) {
-  duckr::duck_upload(clean_path, s3_path)
+```{r aws-upload, eval=FALSE}
+aws_key <- path("csv", basename(clean_csv))
+if (!object_exists(aws_key, "publicaccountability")) {
+  put_object(
+    file = clean_csv,
+    object = aws_key, 
+    bucket = "publicaccountability",
+    acl = "public-read",
+    show_progress = TRUE,
+    multipart = TRUE
+  )
 }
+aws_head <- head_object(aws_key, "publicaccountability")
+(aws_size <- as_fs_bytes(attr(aws_head, "content-length")))
+unname(aws_size == clean_size)
 ```
+
 
 ## Dictionary
 

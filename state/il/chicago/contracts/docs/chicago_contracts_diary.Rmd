@@ -1,0 +1,461 @@
+---
+title: "Chicago Contracts"
+author: "Kiernan Nicholls"
+date: "`r date()`"
+output:
+  github_document: 
+    df_print: tibble
+    toc: true
+    toc_dept: 3
+editor_options: 
+  chunk_output_type: console
+---
+
+<!-- Place comments regarding knitting here -->
+
+```{r setup, include=FALSE, purl=FALSE}
+library(knitr)
+opts_chunk$set(
+  eval = TRUE,
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  error = FALSE,
+  collapse = TRUE,
+  comment = "#>",
+  fig.path = "../plots/",
+  fig.width = 10,
+  dpi = 300
+)
+if (!interactive()) {
+  options(width = 120)
+  set.seed(5)
+}
+```
+
+```{r create-docs-dir, eval=FALSE, echo=FALSE, include=FALSE}
+doc_dir <- fs::dir_create(here::here("state", "il", "chicago", "contracts", "docs"))
+```
+
+## Project
+
+The Accountability Project is an effort to cut across data silos and give
+journalists, policy professionals, activists, and the public at large a simple
+way to search across huge volumes of public data about people and organizations.
+
+Our goal is to standardize public data on a few key fields by thinking of each
+dataset row as a transaction. For each transaction there should be (at least) 3
+variables:
+
+1. All **parties** to a transaction.
+2. The **date** of the transaction.
+3. The **amount** of money involved.
+
+## Objectives
+
+This document describes the process used to complete the following objectives:
+
+1. How many records are in the database?
+1. Check for entirely duplicated records.
+1. Check ranges of continuous variables.
+1. Is there anything blank or missing?
+1. Check for consistency issues.
+1. Create a five-digit ZIP Code called `zip`.
+1. Create a `year` field from the transaction date.
+1. Make sure there is data on both parties to a transaction.
+
+## Packages
+
+The following packages are needed to collect, manipulate, visualize, analyze,
+and communicate these results. The `pacman` package will facilitate their
+installation and attachment.
+
+```{r load-packages, message=FALSE, warning=FALSE, error=FALSE}
+if (!require("pacman")) {
+  install.packages("pacman")
+}
+pacman::p_load(
+  tidyverse, # data manipulation
+  lubridate, # datetime strings
+  gluedown, # printing markdown
+  jsonlite, # read json files
+  janitor, # clean data frames
+  campfin, # custom irw tools
+  aws.s3, # aws cloud storage
+  readxl, # read excel files
+  refinr, # cluster & merge
+  scales, # format strings
+  knitr, # knit documents
+  rvest, # scrape html
+  glue, # code strings
+  here, # project paths
+  httr, # http requests
+  fs # local storage 
+)
+```
+
+This diary was run using `campfin` version `r packageVersion("campfin")`.
+
+```{r campfin-version}
+packageVersion("campfin")
+```
+
+```{r package-options, echo=FALSE}
+options(options(knitr.kable.NA = ""))
+```
+
+This document should be run as part of the `R_tap` project, which lives as a
+sub-directory of the more general, language-agnostic
+[`irworkshop/accountability_datacleaning`][tap] GitHub repository.
+
+The `R_tap` project uses the [RStudio projects][rproj] feature and should be
+run as such. The project also uses the dynamic `here::here()` tool for file
+paths relative to _your_ machine.
+
+```{r where-here}
+# where does this document knit?
+here::i_am("state/il/chicago/contracts/docs/chicago_contracts_diary.Rmd")
+```
+
+[tap]: https://github.com/irworkshop/accountability_datacleaning
+[rproj]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects
+
+## Source
+
+> Contracts and modifications awarded by the City of Chicago since 1993. This
+data is currently maintained in the City’s Financial Management and Purchasing
+System (FMPS), which is used throughout the City for contract management and
+payment.
+>
+> Legacy System Records: Purchase Order/Contract Numbers that begin with alpha
+characters identify records imported from legacy systems. Records with a null
+value in the Contract Type field were imported from legacy systems.
+>
+> "Comptroller-Other" Contract Type: Some records where the Contract Type is
+"COMPTROLLER-OTHER" are ordinance-based agreements and may have start dates
+earlier than 1993.
+>
+> Depends Upon Requirements Contracts: If the contract Award Amount is $0, the
+contract is not cancelled, and the contract is a blanket contract, then the
+contract award total Depends Upon Requirements. A Depends Upon Requirements
+contract is an indefinite quantities contract in which the City places orders as
+needed and the vendor is not guaranteed any particular contract award amount.
+>
+> Blanket vs. Standard Contracts: Only blanket contracts (contracts for repeated
+purchases) have FMPS end dates. Standard contracts (for example, construction
+contracts) terminate upon completion and acceptance of all deliverables. These
+dates are tracked outside of FMPS.
+>
+> Negative Modifications: Some contracts are modified to delete scope and money
+from a contract. These reductions are indicated by negative numbers in the Award
+Amount field of this dataset.
+>
+> Data Owner: Procurement Services.  
+> Time Period: 1993 to present.  
+> Frequency: Data is updated daily.  
+
+## Download
+
+```{r raw-dir}
+raw_url <- "https://data.cityofchicago.org/api/views/rsxa-ify5/rows.csv"
+raw_dir <- dir_create(here("state", "il", "contracts", "data", "raw"))
+raw_csv <- path(raw_dir, basename(raw_url))
+```
+
+```{r raw-download}
+if (!file_exists(raw_csv)) {
+  download.file(raw_url, raw_csv)
+}
+```
+
+## Read
+
+```{r raw-read}
+chic <- read_delim(
+  file = raw_csv,
+  delim = ",",
+  escape_backslash = FALSE,
+  escape_double = FALSE,
+  locale = locale(date_format = "%m/%d/%Y"),
+  col_types = cols(
+    .default = col_character(),
+    `Start Date` = col_date(),
+    `End Date` = col_date(),
+    `Approval Date` = col_date(),
+    `Award Amount` = col_double()
+  )
+)
+```
+
+```{r clean-names}
+chic <- clean_names(chic, case = "snake")
+```
+
+## Explore
+
+There are `r comma(nrow(chic))` rows of `r ncol(chic)` columns. Each record
+represents a single contract between the city of Chicago and an outside vendor
+for goods and services.
+
+```{r glimpse}
+glimpse(chic)
+tail(chic)
+```
+
+### Missing
+
+Columns vary in their degree of missing values.
+
+```{r na-count}
+col_stats(chic, count_na)
+```
+
+We can flag any record missing a key variable needed to identify a transaction.
+
+```{r na-flag}
+key_vars <- c("approval_date", "department", "award_amount", "vendor_name")
+chic <- flag_na(chic, all_of(key_vars))
+sum(chic$na_flag)
+```
+
+```{r na-view}
+chic %>% 
+  filter(na_flag) %>% 
+  select(all_of(key_vars))
+```
+
+### Duplicates
+
+We can also flag any record completely duplicated across every column.
+
+```{r dupe-flag}
+chic <- flag_dupes(chic, everything())
+sum(chic$dupe_flag)
+```
+
+```{r dupe-view}
+chic %>% 
+  filter(dupe_flag) %>% 
+  select(all_of(key_vars)) %>% 
+  arrange(approval_date)
+```
+
+### Categorical
+
+```{r distinct-count}
+col_stats(chic, n_distinct)
+```
+
+```{r distinct-plots, echo=FALSE, fig.height=3}
+explore_plot(chic, contract_type) + scale_x_truncate()
+explore_plot(chic, department) + scale_x_truncate()
+explore_plot(chic, procurement_type) + scale_x_truncate()
+```
+
+### Amounts
+
+```{r amount-round}
+# fix floating point precision
+chic$award_amount <- round(chic$award_amount, digits = 2)
+```
+
+```{r amount-summary}
+summary(chic$award_amount)
+mean(chic$award_amount <= 0)
+```
+
+These are the records with the minimum and maximum amounts.
+
+```{r amount-minmax}
+glimpse(chic[c(which.max(chic$award_amount), which.min(chic$award_amount)), ])
+```
+
+The distribution of amount values are typically log-normal.
+
+```{r hist-amount, echo=FALSE}
+chic %>%
+  ggplot(aes(award_amount)) +
+  geom_histogram(fill = dark2["purple"]) +
+  scale_y_continuous(labels = comma) +
+  scale_x_continuous(
+    breaks = c(1 %o% 10^(0:6)),
+    labels = dollar,
+    trans = "log10"
+  ) +
+  labs(
+    title = "Chicago Contracts Amount Distribution",
+    caption = "Source: Chicago Data Portal",
+    x = "Amount",
+    y = "Count"
+  )
+```
+
+```{r dept-sum, echo=FALSE}
+chic %>%
+  group_by(department) %>% 
+  summarise(award_amount = sum(award_amount) / 1e9) %>% 
+  arrange(desc(award_amount)) %>% 
+  head() %>% 
+  ggplot(aes(reorder(department, -award_amount), award_amount)) +
+  geom_col(aes(fill = award_amount), color = "black") +
+  scale_y_continuous(labels = comma) +
+  scale_x_wrap() +
+  scale_fill_viridis_c(option = "C", guide = "none") +
+  labs(
+    title = "Chicago Contracts Amount by Department",
+    caption = "Source: Chicago Data Portal",
+    x = "Department",
+    y = "Amount Sum ($Bil.)"
+  )
+```
+
+```{r vend-sum, echo=FALSE}
+chic %>%
+  group_by(vendor_name) %>% 
+  summarise(award_amount = sum(award_amount) / 1e9) %>% 
+  arrange(desc(award_amount)) %>% 
+  head() %>% 
+  ggplot(aes(reorder(vendor_name, -award_amount), award_amount)) +
+  geom_col(aes(fill = award_amount), color = "black") +
+  scale_y_continuous(labels = comma) +
+  scale_x_wrap() +
+  scale_fill_viridis_c(option = "C", guide = "none") +
+  labs(
+    title = "Chicago Contracts Amount by Vendor",
+    caption = "Source: Chicago Data Portal",
+    x = "Vendor",
+    y = "Amount Sum ($Bil.)"
+  )
+```
+
+### Dates
+
+We can add the calendar year from `approval_date` with `lubridate::year()`.
+
+```{r date-year}
+chic <- mutate(chic, approval_year = year(approval_date))
+```
+
+```{r date-range}
+min(chic$approval_date, na.rm = TRUE)
+sum(chic$approval_year < 2000, na.rm = TRUE)
+max(chic$approval_date, na.rm = TRUE)
+sum(chic$approval_date > today(), na.rm = TRUE)
+```
+
+```{r bar-year, echo=FALSE}
+chic %>% 
+  count(approval_year) %>% 
+  mutate(even = is_even(approval_year)) %>% 
+  ggplot(aes(x = approval_year, y = n)) +
+  geom_col(fill = dark2["purple"]) + 
+  scale_fill_brewer(palette = "Dark2") +
+  scale_y_continuous(labels = comma) +
+  scale_x_continuous(breaks = seq(1990, 2022, by = 2)) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "Chicago Contracts by Year",
+    caption = "Source: Chicago Data Portal",
+    fill = "Election Year",
+    x = "Year Made",
+    y = "Count"
+  )
+```
+
+## Wrangle
+
+The `address_*`, `city`, and `state` variables are all already fairly normalized
+and most of the "bad" addresses are foreign, so they shouldn't be changed.
+
+We also needed to add fields for the city and state of the department, which
+will be Chicago and Illinois in every instance.
+
+```{r add-geo}
+chic <- chic %>% 
+  mutate(
+    dept_city = "CHICAGO",
+    dept_state = "IL"
+  )
+```
+
+### ZIP
+
+For ZIP codes, the `campfin::normal_zip()` function will attempt to create
+valid _five_ digit codes by removing the ZIP+4 suffix and returning leading
+zeroes dropped by other programs like Microsoft Excel.
+
+```{r zip-norm}
+chic <- chic %>% 
+  mutate(
+    zip_norm = normal_zip(
+      zip = zip,
+      na_rep = TRUE
+    )
+  )
+```
+
+```{r zip-progress}
+progress_table(
+  chic$zip,
+  chic$zip_norm,
+  compare = valid_zip
+)
+```
+
+## Conclude
+
+```{r clean-glimpse}
+glimpse(sample_n(chic, 1000))
+```
+
+1. There are `r comma(nrow(chic))` records in the database.
+1. There are `r comma(sum(chic$dupe_flag))` duplicate records in the database.
+1. The range and distribution of `amount` and `date` seem reasonable.
+1. There are `r comma(sum(chic$na_flag))` records missing key variables.
+1. Consistency in geographic data has been improved with `campfin::normal_*()`.
+1. The 4-digit `year` variable has been created with `lubridate::year()`.
+
+## Export
+
+Now the file can be saved on disk for upload to the Accountability server. We
+will name the object using a date range of the records included.
+
+```{r clean-timestamp}
+min_dt <- str_remove_all(min(chic$approval_date, na.rm = TRUE), "-")
+max_dt <- str_remove_all(max(chic$approval_date, na.rm = TRUE), "-")
+csv_ts <- paste(min_dt, max_dt, sep = "-")
+```
+
+```{r clean-dir}
+clean_dir <- dir_create(here("state", "il", "chicago", "contracts", "data", "clean"))
+clean_csv <- path(clean_dir, glue("il-chicago_contracts_{csv_ts}.csv"))
+clean_rds <- path_ext_set(clean_csv, "rds")
+basename(clean_csv)
+```
+
+```{r clean-write}
+write_csv(chic, clean_csv, na = "")
+write_rds(chic, clean_rds, compress = "xz")
+(clean_size <- file_size(clean_csv))
+```
+
+## Upload
+
+We can use the `aws.s3::put_object()` to upload the text file to the IRW server.
+
+```{r aws-upload, eval=FALSE}
+aws_key <- path("csv", basename(clean_csv))
+if (!object_exists(aws_key, "publicaccountability")) {
+  put_object(
+    file = clean_csv,
+    object = aws_key, 
+    bucket = "publicaccountability",
+    acl = "public-read",
+    show_progress = TRUE,
+    multipart = TRUE
+  )
+}
+aws_head <- head_object(aws_key, "publicaccountability")
+(aws_size <- as_fs_bytes(attr(aws_head, "content-length")))
+unname(aws_size == clean_size)
+```
