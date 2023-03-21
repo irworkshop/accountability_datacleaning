@@ -1,6 +1,6 @@
 ---
 title: "New Jersey Contributions"
-author: "Kiernan Nicholls"
+author: "Kiernan Nicholls & Aarushi Sahejpal"
 date: "`r date()`"
 output:
   github_document: 
@@ -125,7 +125,7 @@ filing type. There are nine filing types, according to the headers on the quick
 download page:
 
 ```{r results='asis', echo=FALSE}
-qd <- "https://www.elec.state.nj.us/publicinformation/contrib_quickdownload.htm"
+qd <- "https://www.elec.nj.gov/publicinformation/contrib_quickdownload.htm"
 read_html(qd) %>% 
   html_nodes("h5") %>% 
   html_text() %>% 
@@ -148,8 +148,8 @@ candidates and committees. For the most up-to-date information, please go to the
 “Search for Contributions” pages to search for the most recent contributor
 information.
 
-[elec]: https://www.elec.state.nj.us/ELECReport/
-[quick]: https://www.elec.state.nj.us/publicinformation/quickdownload.htm
+[elect]: https://www.elec.nj.gov/publicinformation/viewreports.htm
+[quick]: https://www.elec.nj.gov/publicinformation/contrib_quickdownload.htm
 [gub]: https://www.elec.nj.gov/download/Data/Gubernatorial/All_GUB_Text.zip
 [leg]: https://www.elec.nj.gov/download/Data/Legislative/All_LEG_Text.zip
 [cw]: https://www.elec.nj.gov/download/Data/Countywide/All_CW_Text.zip
