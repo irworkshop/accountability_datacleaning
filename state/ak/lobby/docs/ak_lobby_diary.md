@@ -1,26 +1,26 @@
 Alaksa Lobbyists
 ================
-Kiernan Nicholls
-2020-04-06 12:00:03
+Kiernan Nicholls & Yanqi Xu
+2023-03-17 23:57:50
 
-  - [Project](#project)
-  - [Objectives](#objectives)
-  - [Packages](#packages)
-  - [Data](#data)
-  - [Import](#import)
-  - [Explore](#explore)
-      - [Missing](#missing)
-      - [Duplicate](#duplicate)
-      - [Categorical](#categorical)
-      - [Continuous](#continuous)
-      - [Amounts](#amounts)
-      - [Dates](#dates)
-  - [Wrangle](#wrangle)
-      - [Address](#address)
-      - [ZIP](#zip)
-      - [State](#state)
-      - [City](#city)
-  - [Export](#export)
+- <a href="#project" id="toc-project">Project</a>
+- <a href="#objectives" id="toc-objectives">Objectives</a>
+- <a href="#packages" id="toc-packages">Packages</a>
+- <a href="#data" id="toc-data">Data</a>
+- <a href="#import" id="toc-import">Import</a>
+- <a href="#explore" id="toc-explore">Explore</a>
+  - <a href="#missing" id="toc-missing">Missing</a>
+  - <a href="#duplicate" id="toc-duplicate">Duplicate</a>
+  - <a href="#categorical" id="toc-categorical">Categorical</a>
+  - <a href="#continuous" id="toc-continuous">Continuous</a>
+  - <a href="#amounts" id="toc-amounts">Amounts</a>
+  - <a href="#dates" id="toc-dates">Dates</a>
+- <a href="#wrangle" id="toc-wrangle">Wrangle</a>
+  - <a href="#address" id="toc-address">Address</a>
+  - <a href="#zip" id="toc-zip">ZIP</a>
+  - <a href="#state" id="toc-state">State</a>
+  - <a href="#city" id="toc-city">City</a>
+- <a href="#export" id="toc-export">Export</a>
 
 <!-- Place comments regarding knitting here -->
 
@@ -95,7 +95,7 @@ feature and should be run as such. The project also uses the dynamic
 ``` r
 # where does this document knit?
 here::here()
-#> [1] "/home/kiernan/Code/accountability_datacleaning/R_campfin"
+#> [1] "/Users/yanqixu/code/accountability_datacleaning"
 ```
 
 ## Data
@@ -104,7 +104,7 @@ Data is obtained from the [Alaska Public Offices
 Commission](http://doa.alaska.gov/apoc/home.html) (APOC).
 
 > #### Mission
-> 
+>
 > To encourage the public’s confidence in their elected and appointed
 > officials by administering Alaska’s disclosure statutes and publishing
 > financial information regarding the activities of election campaigns,
@@ -114,7 +114,7 @@ On the APOC home page, we can see that lobbying disclosure data can be
 searched.
 
 > #### [Lobbying Disclosure](https://aws.state.ak.us/ApocReports/Lobbying/)
-> 
+>
 > Search reports from Lobbyists and Employers of Lobbyists.
 
 ## Import
@@ -123,7 +123,7 @@ From the APOC website, we can query the database for any year and
 download the data locally.
 
 ``` r
-raw_dir <- here("ak", "lobby", "data", "raw")
+raw_dir <- here("state","ak", "lobby", "data", "raw")
 dir_create(raw_dir)
 ```
 
@@ -157,21 +157,20 @@ aklr <- vroom(
   escape_double = FALSE,
   guess_max = 0,
   num_threads = 1,
-  .name_repair = make_clean_names,
   col_types = cols(
     .default = col_character(),
     Result = col_double(),
     `Report Year` = col_integer(),
-    Submitted = col_date_usa(),
+    Submitted = col_date_mdy(),
     `Other Services Performed` = col_logical(),
     `Administrative Lobbying` = col_logical(),
     `Legislative Lobbying` = col_logical(),
-    `Start Date` = col_date_usa(),
+    `Start Date` = col_date_mdy(),
     `Compensation Amount` = col_double(),
     `Reimbursement Of Expenses` = col_logical(),
     `Other Compensation` = col_logical(),
     `Not Qualified As Lobbyist` = col_logical(),
-    `Date Qualified As Lobbyist` = col_date_usa()
+    `Date Qualified As Lobbyist` = col_date_mdy()
   )
 )
 ```
@@ -181,7 +180,7 @@ number of distinct `report` values, a unique row number variable.
 
 ``` r
 n_distinct(aklr$result) == nrow(aklr)
-#> [1] TRUE
+#> [1] FALSE
 ```
 
 ``` r
@@ -201,108 +200,92 @@ n_distinct(aklr$result) == nrow(aklr)
 
 ``` r
 head(aklr)
-#> # A tibble: 6 x 50
-#>   result report_year submitted  status amending first_name last_name middle_name address city 
-#>    <dbl>       <int> <date>     <chr>  <chr>    <chr>      <chr>     <chr>       <chr>   <chr>
-#> 1      1        2020 2020-01-31 Misfi… <NA>     Nils       Andreass… <NA>        One Se… June…
-#> 2      2        2020 2020-01-24 Filed  <NA>     Nils       Andreass… D           One Se… June…
-#> 3      3        2020 2020-01-06 Filed  <NA>     Frank      Bickford  <NA>        PO Box… Anch…
-#> 4      4        2020 2020-01-02 Filed  <NA>     Frank      Bickford  <NA>        PO Box… Anch…
-#> 5      5        2020 2020-01-02 Filed  <NA>     Frank      Bickford  <NA>        PO Box… Anch…
-#> 6      6        2020 2020-01-08 Filed  (Amende… Frank      Bickford  <NA>        PO Box… Anch…
-#> # … with 40 more variables: state_region <chr>, zip <chr>, country <chr>, email <chr>,
-#> #   phone <chr>, fax <chr>, legislative_address <chr>, legislative_city <chr>,
-#> #   legislative_state_region <chr>, legislative_zip <chr>, legislative_country <chr>,
-#> #   legislative_email <chr>, legislative_phone <chr>, legislative_fax <chr>, business_name <chr>,
+#> # A tibble: 6 × 50
+#>   result report_year submitted  status amending first…¹ last_…² middl…³ address city  state…⁴ zip  
+#>    <dbl>       <int> <date>     <chr>  <chr>    <chr>   <chr>   <chr>   <chr>   <chr> <chr>   <chr>
+#> 1      1        2023 2023-01-11 Filed  <NA>     Bruce   Baker   Andrew  P.O. B… Kotz… Alaska  99752
+#> 2      2        2023 2023-01-27 Filed  <NA>     Bruce   Baker   Andrew  P.O. B… Kotz… Alaska  99752
+#> 3      3        2023 2023-01-17 Filed  <NA>     Bruce   Baker   Andrew  P.O. B… Kotz… Alaska  99752
+#> 4      4        2023 2023-01-04 Filed  <NA>     Frank   Bickfo… <NA>    PO Box… Anch… Alaska  99509
+#> 5      5        2023 2023-01-04 Filed  <NA>     Frank   Bickfo… <NA>    PO Box… Anch… Alaska  99509
+#> 6      6        2023 2023-01-05 Filed  <NA>     Frank   Bickfo… <NA>    PO Box… Anch… Alaska  99509
+#> # … with 38 more variables: country <chr>, email <chr>, phone <chr>, fax <chr>,
+#> #   legislative_address <chr>, legislative_city <chr>, legislative_state_region <chr>,
+#> #   legislative_zip <chr>, legislative_country <chr>, legislative_email <chr>,
+#> #   legislative_phone <chr>, legislative_fax <chr>, business_name <chr>,
 #> #   voter_district_name <chr>, employer_name <chr>, employer_contact_first_name <chr>,
 #> #   employer_contact_last_name <chr>, employer_contact_middle_name <chr>,
-#> #   employer_contact_address <chr>, employer_contact_city <chr>,
-#> #   employer_contact_state_region <chr>, employer_contact_zip <chr>,
-#> #   employer_contact_country <chr>, employer_contact_email <chr>, employer_contact_phone <chr>,
-#> #   employer_contact_fax <chr>, other_services_performed <lgl>,
-#> #   other_services_performed_description <chr>, administrative_lobbying <lgl>,
-#> #   legislative_lobbying <lgl>, start_date <date>, compensation_name <chr>,
-#> #   compensation_amount <dbl>, reimbursement_of_expenses <lgl>, other_compensation <lgl>,
-#> #   other_compensation_description <chr>, lobbying_interests_description <chr>,
-#> #   not_qualified_as_lobbyist <lgl>
+#> #   employer_contact_address <chr>, employer_contact_city <chr>, …
 tail(aklr)
-#> # A tibble: 6 x 50
-#>   result report_year submitted  status amending first_name last_name middle_name address city 
-#>    <dbl>       <int> <date>     <chr>  <chr>    <chr>      <chr>     <chr>       <chr>   <chr>
-#> 1   5352        2010 2010-02-17 Filed  <NA>     John       Walsh     <NA>        POB 24… Doug…
-#> 2   5353        2010 2010-03-09 Filed  <NA>     John       Walsh     <NA>        POB 24… Doug…
-#> 3   5354        2010 2010-01-26 Filed  <NA>     Kathie     Wasserman <NA>        217 Se… June…
-#> 4   5355        2010 2010-01-14 Filed  <NA>     royce      weller    <NA>        p.o. b… doug…
-#> 5   5356        2010 2010-02-23 Filed  <NA>     Monte      Williams  <NA>        4020 G… Fort…
-#> 6   5357        2010 2010-01-04 Filed  <NA>     Sheldon    Winters   <NA>        3000 V… June…
-#> # … with 40 more variables: state_region <chr>, zip <chr>, country <chr>, email <chr>,
-#> #   phone <chr>, fax <chr>, legislative_address <chr>, legislative_city <chr>,
-#> #   legislative_state_region <chr>, legislative_zip <chr>, legislative_country <chr>,
-#> #   legislative_email <chr>, legislative_phone <chr>, legislative_fax <chr>, business_name <chr>,
+#> # A tibble: 6 × 50
+#>   result report_year submitted  status amending first…¹ last_…² middl…³ address city  state…⁴ zip  
+#>    <dbl>       <int> <date>     <chr>  <chr>    <chr>   <chr>   <chr>   <chr>   <chr> <chr>   <chr>
+#> 1   6816        2010 2010-02-17 Filed  <NA>     John    Walsh   <NA>    POB 24… Doug… Alaska  99824
+#> 2   6817        2010 2010-03-09 Filed  <NA>     John    Walsh   <NA>    POB 24… Doug… Alaska  99824
+#> 3   6818        2010 2010-01-26 Filed  <NA>     Kathie  Wasser… <NA>    217 Se… June… Alaska  99801
+#> 4   6819        2010 2010-01-14 Filed  <NA>     royce   weller  <NA>    p.o. b… doug… Alaska  99824
+#> 5   6820        2010 2010-02-23 Filed  <NA>     Monte   Willia… <NA>    4020 G… Fort… Florida 33308
+#> 6   6821        2010 2010-01-04 Filed  <NA>     Sheldon Winters <NA>    3000 V… June… Alaska  99801
+#> # … with 38 more variables: country <chr>, email <chr>, phone <chr>, fax <chr>,
+#> #   legislative_address <chr>, legislative_city <chr>, legislative_state_region <chr>,
+#> #   legislative_zip <chr>, legislative_country <chr>, legislative_email <chr>,
+#> #   legislative_phone <chr>, legislative_fax <chr>, business_name <chr>,
 #> #   voter_district_name <chr>, employer_name <chr>, employer_contact_first_name <chr>,
 #> #   employer_contact_last_name <chr>, employer_contact_middle_name <chr>,
-#> #   employer_contact_address <chr>, employer_contact_city <chr>,
-#> #   employer_contact_state_region <chr>, employer_contact_zip <chr>,
-#> #   employer_contact_country <chr>, employer_contact_email <chr>, employer_contact_phone <chr>,
-#> #   employer_contact_fax <chr>, other_services_performed <lgl>,
-#> #   other_services_performed_description <chr>, administrative_lobbying <lgl>,
-#> #   legislative_lobbying <lgl>, start_date <date>, compensation_name <chr>,
-#> #   compensation_amount <dbl>, reimbursement_of_expenses <lgl>, other_compensation <lgl>,
-#> #   other_compensation_description <chr>, lobbying_interests_description <chr>,
-#> #   not_qualified_as_lobbyist <lgl>
+#> #   employer_contact_address <chr>, employer_contact_city <chr>, …
 glimpse(sample_frac(aklr))
-#> Rows: 5,357
+#> Rows: 6,821
 #> Columns: 50
-#> $ result                               <dbl> 4930, 3947, 2745, 2255, 4985, 1833, 3797, 5342, 152…
-#> $ report_year                          <int> 2010, 2012, 2015, 2016, 2010, 2017, 2013, 2010, 201…
-#> $ submitted                            <date> 2010-01-21, 2012-01-04, 2015-01-12, 2016-04-01, 20…
-#> $ status                               <chr> "Filed", "Filed", "Filed", "Filed", "Filed", "Filed…
-#> $ amending                             <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
-#> $ first_name                           <chr> "Patrick", "Patricia", "Paul", "Ashley", "Dennis", …
-#> $ last_name                            <chr> "Carter", "Bielawski", "Quesnel", "Reed", "DeWitt",…
-#> $ middle_name                          <chr> NA, NA, "Alexander", NA, NA, NA, NA, NA, "J", "Anne…
-#> $ address                              <chr> "PO Box 90973", "Jade North, LLC", "PO Box 196612",…
-#> $ city                                 <chr> "Anchorage", "Anchorage", "Anchorage", "Anchorage",…
-#> $ state_region                         <chr> "Alaska", "Alaska", "Alaska", "Alaska", "Alaska", "…
-#> $ zip                                  <chr> "99509", "99501", "99519-6612", "99501", "99803", "…
-#> $ country                              <chr> "United States", "United States", "United States", …
-#> $ email                                <chr> "carterco@mtaonline.net", "pattyb@jadenorth.com", "…
-#> $ phone                                <chr> NA, "9072505504", "907 564 5585  907 242 9896", "90…
-#> $ fax                                  <chr> NA, NA, NA, NA, NA, NA, NA, "9075238140", NA, NA, N…
-#> $ legislative_address                  <chr> "PO Box 90973", "Jade North, LLC", "PO Box 196612",…
-#> $ legislative_city                     <chr> "Anchorage", "Anchorage", "Anchorage", "Anchorage",…
-#> $ legislative_state_region             <chr> "Alaska", "Alaska", "Alaska", "Alaska", "Alaska", "…
-#> $ legislative_zip                      <chr> "99509", "99501", "99519-6612", "99501", "99803", "…
-#> $ legislative_country                  <chr> "United States", "United States", "United States", …
-#> $ legislative_email                    <chr> "carterco@mtaonline.net", "pattyb@jadenorth.com", "…
-#> $ legislative_phone                    <chr> NA, "9072505504", "907 564 5585  907 242 9896", NA,…
-#> $ legislative_fax                      <chr> NA, NA, NA, NA, NA, NA, NA, "9075238140", NA, NA, N…
-#> $ business_name                        <chr> "The Carter Company", "Jade North, LLC", "Oil & gas…
-#> $ voter_district_name                  <chr> "30O - Kenai / Soldotna", "26M - Huffman", "18I - S…
-#> $ employer_name                        <chr> "PFIZER INC.", "TransCanada PipeLines Ltd.", "BP Ex…
-#> $ employer_contact_first_name          <chr> "JENNIE", "Tony", "Phil", "Deb", "wendy", "Mark", "…
-#> $ employer_contact_last_name           <chr> "UNGER EDDY", "Palmer", "Cochrane", "Cummins", "cha…
-#> $ employer_contact_middle_name         <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
-#> $ employer_contact_address             <chr> "C/O NIELSEN MERKSAMER ET AL, 2350 Kerner Blvd., St…
-#> $ employer_contact_city                <chr> "San Rafael", "Calgary", "Anchorage", "Lakewood", "…
-#> $ employer_contact_state_region        <chr> "California", "Alaska", "Alaska", "Washington", "Al…
-#> $ employer_contact_zip                 <chr> "94901", "T2P 5H1", "99508", "98499", "99801", "996…
-#> $ employer_contact_country             <chr> "United States", "Canada", "United States", "United…
-#> $ employer_contact_email               <chr> "jeddy@nmgovlaw.com", "tony_palmer@transcanada.com"…
-#> $ employer_contact_phone               <chr> "415-389-6800", "4039202035", "9075645465", "253-27…
-#> $ employer_contact_fax                 <chr> "415-388-6874", NA, NA, NA, NA, NA, "907-565-6198",…
-#> $ other_services_performed             <lgl> FALSE, FALSE, FALSE, TRUE, FALSE, TRUE, FALSE, FALS…
-#> $ other_services_performed_description <chr> "Consulting on any and all matters relating to the …
-#> $ administrative_lobbying              <lgl> TRUE, FALSE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TR…
-#> $ legislative_lobbying                 <lgl> TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRU…
-#> $ start_date                           <date> 2010-01-19, 2012-01-17, 2015-01-12, 2016-04-01, 20…
-#> $ compensation_name                    <chr> "Contract Lobbyist: Annual Fee", "Contract Lobbyist…
-#> $ compensation_amount                  <dbl> 20000.00, 5000.00, 130.00, 6250.00, 4000.00, 22000.…
-#> $ reimbursement_of_expenses            <lgl> TRUE, TRUE, TRUE, FALSE, TRUE, TRUE, FALSE, TRUE, F…
-#> $ other_compensation                   <lgl> FALSE, TRUE, TRUE, FALSE, FALSE, TRUE, FALSE, FALSE…
-#> $ other_compensation_description       <chr> NA, "Fee prorated from mthly retainer", "Stock Opti…
-#> $ lobbying_interests_description       <chr> "Any and all aspects relating to the pharmaceutical…
-#> $ not_qualified_as_lobbyist            <lgl> NA, FALSE, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
+#> $ result                               <dbl> 4930, 3947, 2745, 2255, 4985, 1833, 3797, 5342, 1527…
+#> $ report_year                          <int> 2013, 2015, 2018, 2019, 2013, 2020, 2016, 2013, 2020…
+#> $ submitted                            <date> 2013-04-09, 2015-01-22, 2018-01-25, 2019-01-07, 201…
+#> $ status                               <chr> "Filed", "Filed", "Filed", "Filed", "Filed", "Filed"…
+#> $ amending                             <chr> NA, NA, NA, NA, NA, NA, NA, NA, "Amendment", NA, "(A…
+#> $ first_name                           <chr> "Wendy", "Robert", "Ashley", "David", "Kimberly", "J…
+#> $ last_name                            <chr> "Chamberlain", "Evans", "Reed", "Parish", "Fox", "Re…
+#> $ middle_name                          <chr> "Anne", NA, NA, NA, "J", NA, NA, NA, NA, NA, "Anne",…
+#> $ address                              <chr> "224 4th Street", "P.O. Box 100384", "813 D Street, …
+#> $ city                                 <chr> "Juneau", "Anchorage", "Anchorage", "Anchorage", "An…
+#> $ state_region                         <chr> "Alaska", "Alaska", "Alaska", "Alaska", "Alaska", "A…
+#> $ zip                                  <chr> "99801", "99510", "99501", "99509", "99503", "99801"…
+#> $ country                              <chr> "United States", "United States", "United States", "…
+#> $ email                                <chr> "wendyc@gci.net", "Robert@evans46alaska.net", "ashle…
+#> $ phone                                <chr> "907-586-2565", "9073517394", "9072798008", "9075222…
+#> $ fax                                  <chr> NA, NA, NA, NA, NA, NA, NA, NA, "9074633922", NA, NA…
+#> $ legislative_address                  <chr> "224 4th Street", "P.O. Box 100384", "813 D Street, …
+#> $ legislative_city                     <chr> "Juneau", "Anchorage", "Anchorage", "Anchorage", "An…
+#> $ legislative_state_region             <chr> "Alaska", "Alaska", "Alaska", "Alaska", "Alaska", "A…
+#> $ legislative_zip                      <chr> "99801", "99510", "99501", "99509", "99503", "99801"…
+#> $ legislative_country                  <chr> "United States", "United States", "United States", "…
+#> $ legislative_email                    <chr> "wendyc@gci.net", "Robert@evans46alaska.net", "ashle…
+#> $ legislative_phone                    <chr> "907-586-2565", "9073517394", NA, "9075222600  90752…
+#> $ legislative_fax                      <chr> NA, NA, NA, NA, NA, NA, NA, NA, "9074633922", NA, NA…
+#> $ business_name                        <chr> "Legislative Consultants in Alaska", "Robert A. Evan…
+#> $ voter_district_name                  <chr> "3B - North Pole / Badger", "21K - West Anchorage", …
+#> $ employer_name                        <chr> "Alaska eHealth Network", "QUINTILLION INC", "Juneau…
+#> $ employer_contact_first_name          <chr> "Rebecca", "Elizabeth", "Duff", "Millie", "Jennie Un…
+#> $ employer_contact_last_name           <chr> "Madison", "Pierce", "Mitchell", "Ryan", "Skelton", …
+#> $ employer_contact_middle_name         <chr> NA, NA, NA, NA, NA, "W.", NA, NA, NA, NA, "J", NA, N…
+#> $ employer_contact_address             <chr> "2440 East Tudor Rd.", "201 East 56th Ave, Suite 300…
+#> $ employer_contact_city                <chr> "Anchorage", "Anchorage", "Juneau", "Anchorage", "Sa…
+#> $ employer_contact_state_region        <chr> "Alaska", "Alaska", "Alaska", "Alaska", "California"…
+#> $ employer_contact_zip                 <chr> "99507", "99518", "99802", "99503", "94901", "94901"…
+#> $ employer_contact_country             <chr> "United States", "United States", "United States", "…
+#> $ employer_contact_email               <chr> "rebecca@ak-ehealth.org", "shari.showalter@quintilli…
+#> $ employer_contact_phone               <chr> "9072502061", "907-230-2398", "907-789-2775", "90744…
+#> $ employer_contact_fax                 <chr> NA, NA, NA, NA, NA, "4153886874", "907-591-2206", NA…
+#> $ other_services_performed             <lgl> FALSE, FALSE, TRUE, FALSE, FALSE, FALSE, FALSE, FALS…
+#> $ other_services_performed_description <chr> NA, NA, "consulting", NA, "Public Affairs Manager", …
+#> $ administrative_lobbying              <lgl> TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE…
+#> $ legislative_lobbying                 <lgl> TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE…
+#> $ start_date                           <date> 2013-04-09, 2015-01-22, 2018-01-24, 2019-01-09, 201…
+#> $ compensation_name                    <chr> "Contract Lobbyist: Annual Fee", "Contract Lobbyist:…
+#> $ compensation_amount                  <dbl> 54000.00, 1500.00, 3000.00, 20000.00, 98.00, 30000.0…
+#> $ reimbursement_of_expenses            <lgl> FALSE, TRUE, FALSE, TRUE, TRUE, FALSE, TRUE, TRUE, F…
+#> $ other_compensation                   <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FAL…
+#> $ other_compensation_description       <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
+#> $ lobbying_interests_description       <chr> "All issues relating to the electronic health care s…
+#> $ not_qualified_as_lobbyist            <lgl> NA, NA, NA, NA, TRUE, NA, NA, NA, NA, NA, NA, NA, NA…
 ```
 
 ### Missing
@@ -312,59 +295,59 @@ a lobbyist.
 
 ``` r
 col_stats(aklr, count_na)
-#> # A tibble: 50 x 4
+#> # A tibble: 50 × 4
 #>    col                                  class      n        p
 #>    <chr>                                <chr>  <int>    <dbl>
 #>  1 result                               <dbl>      0 0       
 #>  2 report_year                          <int>      0 0       
 #>  3 submitted                            <date>     0 0       
 #>  4 status                               <chr>      0 0       
-#>  5 amending                             <chr>   4833 0.902   
+#>  5 amending                             <chr>   6166 0.904   
 #>  6 first_name                           <chr>      0 0       
 #>  7 last_name                            <chr>      0 0       
-#>  8 middle_name                          <chr>   3670 0.685   
+#>  8 middle_name                          <chr>   4719 0.692   
 #>  9 address                              <chr>      0 0       
 #> 10 city                                 <chr>      0 0       
-#> 11 state_region                         <chr>     45 0.00840 
+#> 11 state_region                         <chr>     45 0.00660 
 #> 12 zip                                  <chr>      0 0       
 #> 13 country                              <chr>      0 0       
 #> 14 email                                <chr>      0 0       
-#> 15 phone                                <chr>    322 0.0601  
-#> 16 fax                                  <chr>   3839 0.717   
+#> 15 phone                                <chr>    322 0.0472  
+#> 16 fax                                  <chr>   5187 0.760   
 #> 17 legislative_address                  <chr>      0 0       
 #> 18 legislative_city                     <chr>      0 0       
-#> 19 legislative_state_region             <chr>     47 0.00877 
+#> 19 legislative_state_region             <chr>     47 0.00689 
 #> 20 legislative_zip                      <chr>      0 0       
 #> 21 legislative_country                  <chr>      0 0       
 #> 22 legislative_email                    <chr>      0 0       
-#> 23 legislative_phone                    <chr>    809 0.151   
-#> 24 legislative_fax                      <chr>   3885 0.725   
-#> 25 business_name                        <chr>    309 0.0577  
+#> 23 legislative_phone                    <chr>    929 0.136   
+#> 24 legislative_fax                      <chr>   5235 0.767   
+#> 25 business_name                        <chr>    601 0.0881  
 #> 26 voter_district_name                  <chr>      0 0       
 #> 27 employer_name                        <chr>      0 0       
 #> 28 employer_contact_first_name          <chr>      0 0       
-#> 29 employer_contact_last_name           <chr>      1 0.000187
-#> 30 employer_contact_middle_name         <chr>   5195 0.970   
+#> 29 employer_contact_last_name           <chr>      1 0.000147
+#> 30 employer_contact_middle_name         <chr>   6585 0.965   
 #> 31 employer_contact_address             <chr>      0 0       
 #> 32 employer_contact_city                <chr>      0 0       
-#> 33 employer_contact_state_region        <chr>     79 0.0147  
+#> 33 employer_contact_state_region        <chr>     90 0.0132  
 #> 34 employer_contact_zip                 <chr>      0 0       
 #> 35 employer_contact_country             <chr>      0 0       
-#> 36 employer_contact_email               <chr>      2 0.000373
+#> 36 employer_contact_email               <chr>      3 0.000440
 #> 37 employer_contact_phone               <chr>      0 0       
-#> 38 employer_contact_fax                 <chr>   4058 0.758   
+#> 38 employer_contact_fax                 <chr>   5206 0.763   
 #> 39 other_services_performed             <lgl>      0 0       
-#> 40 other_services_performed_description <chr>   3693 0.689   
-#> 41 administrative_lobbying              <lgl>      1 0.000187
+#> 40 other_services_performed_description <chr>   4790 0.702   
+#> 41 administrative_lobbying              <lgl>      1 0.000147
 #> 42 legislative_lobbying                 <lgl>      0 0       
 #> 43 start_date                           <date>     0 0       
-#> 44 compensation_name                    <chr>     16 0.00299 
+#> 44 compensation_name                    <chr>     16 0.00235 
 #> 45 compensation_amount                  <dbl>      0 0       
 #> 46 reimbursement_of_expenses            <lgl>      0 0       
 #> 47 other_compensation                   <lgl>      0 0       
-#> 48 other_compensation_description       <chr>   5109 0.954   
-#> 49 lobbying_interests_description       <chr>      1 0.000187
-#> 50 not_qualified_as_lobbyist            <lgl>   4744 0.886
+#> 48 other_compensation_description       <chr>   6519 0.956   
+#> 49 lobbying_interests_description       <chr>      1 0.000147
+#> 50 not_qualified_as_lobbyist            <lgl>   6156 0.903
 ```
 
 We can flag those rows with `campfin::na_flag()`.
@@ -389,60 +372,60 @@ aklr <- flag_dupes(aklr, -result)
 
 ``` r
 col_stats(aklr, n_distinct)
-#> # A tibble: 51 x 4
+#> # A tibble: 51 × 4
 #>    col                                  class      n        p
 #>    <chr>                                <chr>  <int>    <dbl>
-#>  1 result                               <dbl>   5357 1       
-#>  2 report_year                          <int>     11 0.00205 
-#>  3 submitted                            <date>  1071 0.200   
-#>  4 status                               <chr>      2 0.000373
-#>  5 amending                             <chr>      4 0.000747
-#>  6 first_name                           <chr>    244 0.0455  
-#>  7 last_name                            <chr>    301 0.0562  
-#>  8 middle_name                          <chr>     75 0.0140  
-#>  9 address                              <chr>    411 0.0767  
-#> 10 city                                 <chr>     85 0.0159  
-#> 11 state_region                         <chr>     19 0.00355 
-#> 12 zip                                  <chr>    118 0.0220  
-#> 13 country                              <chr>      2 0.000373
-#> 14 email                                <chr>    363 0.0678  
-#> 15 phone                                <chr>    424 0.0791  
-#> 16 fax                                  <chr>    138 0.0258  
-#> 17 legislative_address                  <chr>    432 0.0806  
-#> 18 legislative_city                     <chr>     82 0.0153  
-#> 19 legislative_state_region             <chr>     18 0.00336 
-#> 20 legislative_zip                      <chr>    118 0.0220  
-#> 21 legislative_country                  <chr>      2 0.000373
-#> 22 legislative_email                    <chr>    373 0.0696  
-#> 23 legislative_phone                    <chr>    402 0.0750  
-#> 24 legislative_fax                      <chr>    135 0.0252  
-#> 25 business_name                        <chr>    254 0.0474  
-#> 26 voter_district_name                  <chr>     40 0.00747 
-#> 27 employer_name                        <chr>    872 0.163   
-#> 28 employer_contact_first_name          <chr>    821 0.153   
-#> 29 employer_contact_last_name           <chr>   1360 0.254   
-#> 30 employer_contact_middle_name         <chr>     59 0.0110  
-#> 31 employer_contact_address             <chr>   1297 0.242   
-#> 32 employer_contact_city                <chr>    251 0.0469  
-#> 33 employer_contact_state_region        <chr>     43 0.00803 
-#> 34 employer_contact_zip                 <chr>    403 0.0752  
-#> 35 employer_contact_country             <chr>      3 0.000560
-#> 36 employer_contact_email               <chr>   1498 0.280   
-#> 37 employer_contact_phone               <chr>   1279 0.239   
-#> 38 employer_contact_fax                 <chr>    334 0.0623  
-#> 39 other_services_performed             <lgl>      2 0.000373
-#> 40 other_services_performed_description <chr>    678 0.127   
-#> 41 administrative_lobbying              <lgl>      3 0.000560
-#> 42 legislative_lobbying                 <lgl>      2 0.000373
-#> 43 start_date                           <date>   780 0.146   
-#> 44 compensation_name                    <chr>      8 0.00149 
-#> 45 compensation_amount                  <dbl>    646 0.121   
-#> 46 reimbursement_of_expenses            <lgl>      2 0.000373
-#> 47 other_compensation                   <lgl>      2 0.000373
-#> 48 other_compensation_description       <chr>    133 0.0248  
-#> 49 lobbying_interests_description       <chr>   4004 0.747   
-#> 50 not_qualified_as_lobbyist            <lgl>      3 0.000560
-#> 51 na_flag                              <lgl>      2 0.000373
+#>  1 result                               <dbl>   6821 1       
+#>  2 report_year                          <int>     14 0.00205 
+#>  3 submitted                            <date>  1408 0.206   
+#>  4 status                               <chr>      2 0.000293
+#>  5 amending                             <chr>      4 0.000586
+#>  6 first_name                           <chr>    277 0.0406  
+#>  7 last_name                            <chr>    343 0.0503  
+#>  8 middle_name                          <chr>     84 0.0123  
+#>  9 address                              <chr>    476 0.0698  
+#> 10 city                                 <chr>     98 0.0144  
+#> 11 state_region                         <chr>     22 0.00323 
+#> 12 zip                                  <chr>    136 0.0199  
+#> 13 country                              <chr>      2 0.000293
+#> 14 email                                <chr>    424 0.0622  
+#> 15 phone                                <chr>    481 0.0705  
+#> 16 fax                                  <chr>    139 0.0204  
+#> 17 legislative_address                  <chr>    495 0.0726  
+#> 18 legislative_city                     <chr>     96 0.0141  
+#> 19 legislative_state_region             <chr>     22 0.00323 
+#> 20 legislative_zip                      <chr>    137 0.0201  
+#> 21 legislative_country                  <chr>      2 0.000293
+#> 22 legislative_email                    <chr>    434 0.0636  
+#> 23 legislative_phone                    <chr>    457 0.0670  
+#> 24 legislative_fax                      <chr>    136 0.0199  
+#> 25 business_name                        <chr>    276 0.0405  
+#> 26 voter_district_name                  <chr>     55 0.00806 
+#> 27 employer_name                        <chr>   1049 0.154   
+#> 28 employer_contact_first_name          <chr>    967 0.142   
+#> 29 employer_contact_last_name           <chr>   1654 0.242   
+#> 30 employer_contact_middle_name         <chr>     73 0.0107  
+#> 31 employer_contact_address             <chr>   1542 0.226   
+#> 32 employer_contact_city                <chr>    296 0.0434  
+#> 33 employer_contact_state_region        <chr>     44 0.00645 
+#> 34 employer_contact_zip                 <chr>    476 0.0698  
+#> 35 employer_contact_country             <chr>      3 0.000440
+#> 36 employer_contact_email               <chr>   1879 0.275   
+#> 37 employer_contact_phone               <chr>   1587 0.233   
+#> 38 employer_contact_fax                 <chr>    359 0.0526  
+#> 39 other_services_performed             <lgl>      2 0.000293
+#> 40 other_services_performed_description <chr>    746 0.109   
+#> 41 administrative_lobbying              <lgl>      3 0.000440
+#> 42 legislative_lobbying                 <lgl>      2 0.000293
+#> 43 start_date                           <date>  1018 0.149   
+#> 44 compensation_name                    <chr>      9 0.00132 
+#> 45 compensation_amount                  <dbl>    726 0.106   
+#> 46 reimbursement_of_expenses            <lgl>      2 0.000293
+#> 47 other_compensation                   <lgl>      2 0.000293
+#> 48 other_compensation_description       <chr>    157 0.0230  
+#> 49 lobbying_interests_description       <chr>   4928 0.722   
+#> 50 not_qualified_as_lobbyist            <lgl>      3 0.000440
+#> 51 na_flag                              <lgl>      2 0.000293
 ```
 
 ![](../plots/plot_comp_name-1.png)<!-- -->
@@ -465,7 +448,7 @@ aklr <- mutate(aklr, start_year = year(start_date))
 min(aklr$start_date, na.rm = TRUE)
 #> [1] "2010-01-01"
 max(aklr$start_date, na.rm = TRUE)
-#> [1] "2020-04-07"
+#> [1] "2023-03-15"
 ```
 
 ![](../plots/plot_year_count-1.png)<!-- -->
@@ -501,21 +484,21 @@ progress_table(
   aklr$zip_norm,
   compare = valid_zip
 )
-#> # A tibble: 2 x 6
-#>   stage    prop_in n_distinct prop_na n_out n_diff
-#>   <chr>      <dbl>      <dbl>   <dbl> <dbl>  <dbl>
-#> 1 zip        0.990        118       0    52     11
-#> 2 zip_norm   0.999        110       0     8      2
+#> # A tibble: 2 × 6
+#>   stage         prop_in n_distinct  prop_na n_out n_diff
+#>   <chr>           <dbl>      <dbl>    <dbl> <dbl>  <dbl>
+#> 1 aklr$zip        0.991        136 0           58     13
+#> 2 aklr$zip_norm   0.999        126 0.000293     8      3
 progress_table(
   aklr$employer_contact_zip,
   aklr$employer_contact_zip_norm,
   compare = valid_zip
 )
-#> # A tibble: 2 x 6
-#>   stage                     prop_in n_distinct prop_na n_out n_diff
-#>   <chr>                       <dbl>      <dbl>   <dbl> <dbl>  <dbl>
-#> 1 employer_contact_zip        0.919        403       0   434     75
-#> 2 employer_contact_zip_norm   0.989        357       0    60      6
+#> # A tibble: 2 × 6
+#>   stage                          prop_in n_distinct prop_na n_out n_diff
+#>   <chr>                            <dbl>      <dbl>   <dbl> <dbl>  <dbl>
+#> 1 aklr$employer_contact_zip        0.923        476       0   527     83
+#> 2 aklr$employer_contact_zip_norm   0.984        424       0   112     24
 ```
 
 ### State
@@ -537,47 +520,39 @@ progress_table(
   aklr$state_region_norm,
   compare = valid_state
 )
-#> # A tibble: 2 x 6
-#>   stage             prop_in n_distinct prop_na n_out n_diff
-#>   <chr>               <dbl>      <dbl>   <dbl> <dbl>  <dbl>
-#> 1 state_region         0            19 0.00840  5312     19
-#> 2 state_region_norm    1.00         19 0.00840     1      2
+#> # A tibble: 2 × 6
+#>   stage                  prop_in n_distinct prop_na n_out n_diff
+#>   <chr>                    <dbl>      <dbl>   <dbl> <dbl>  <dbl>
+#> 1 aklr$state_region         0            22 0.00660  6776     22
+#> 2 aklr$state_region_norm    1.00         22 0.00660     1      2
 progress_table(
   aklr$employer_contact_state_region,
   aklr$employer_contact_state_region_norm,
   compare = valid_state
 )
-#> # A tibble: 2 x 6
-#>   stage                              prop_in n_distinct prop_na n_out n_diff
-#>   <chr>                                <dbl>      <dbl>   <dbl> <dbl>  <dbl>
-#> 1 employer_contact_state_region        0             43  0.0147  5278     43
-#> 2 employer_contact_state_region_norm   0.996         43  0.0147    22      5
+#> # A tibble: 2 × 6
+#>   stage                                   prop_in n_distinct prop_na n_out n_diff
+#>   <chr>                                     <dbl>      <dbl>   <dbl> <dbl>  <dbl>
+#> 1 aklr$employer_contact_state_region        0             44  0.0132  6731     44
+#> 2 aklr$employer_contact_state_region_norm   0.997         44  0.0132    23      5
 ```
 
 ``` r
 count(aklr, state_region, state_region_norm, sort = TRUE)
-#> # A tibble: 19 x 3
+#> # A tibble: 22 × 3
 #>    state_region         state_region_norm     n
 #>    <chr>                <chr>             <int>
-#>  1 Alaska               AK                 5025
-#>  2 Oregon               OR                   79
-#>  3 Washington           WA                   74
-#>  4 California           CA                   47
+#>  1 Alaska               AK                 6432
+#>  2 Washington           WA                   91
+#>  3 Oregon               OR                   85
+#>  4 California           CA                   56
 #>  5 <NA>                 <NA>                 45
-#>  6 District of Columbia DC                   30
-#>  7 Colorado             CO                   15
+#>  6 District of Columbia DC                   34
+#>  7 Colorado             CO                   21
 #>  8 Texas                TX                   14
-#>  9 Utah                 UT                    6
-#> 10 Arizona              AZ                    5
-#> 11 Florida              FL                    4
-#> 12 Montana              MT                    3
-#> 13 New York             NY                    2
-#> 14 Tennessee            TN                    2
-#> 15 Virginia             VA                    2
-#> 16 Alberta              ALBERTA               1
-#> 17 Idaho                ID                    1
-#> 18 Illinois             IL                    1
-#> 19 Massachusetts        MA                    1
+#>  9 Utah                 UT                    9
+#> 10 New York             NY                    6
+#> # … with 12 more rows
 ```
 
 ``` r
@@ -636,12 +611,12 @@ progress_table(
   aklr$city_swap,
   compare = c(valid_city, extra_city)
 )
-#> # A tibble: 3 x 6
-#>   stage     prop_in n_distinct prop_na n_out n_diff
-#>   <chr>       <dbl>      <dbl>   <dbl> <dbl>  <dbl>
-#> 1 city_raw)   0.995         75       0    25      4
-#> 2 city_norm   0.997         74       0    17      3
-#> 3 city_swap   0.998         74       0     9      2
+#> # A tibble: 3 × 6
+#>   stage                       prop_in n_distinct prop_na n_out n_diff
+#>   <chr>                         <dbl>      <dbl>   <dbl> <dbl>  <dbl>
+#> 1 str_to_upper(aklr$city_raw)   0.996         85       0    27      5
+#> 2 aklr$city_norm                0.997         84       0    19      4
+#> 3 aklr$city_swap                0.999         84       0     9      2
 ```
 
 ``` r
@@ -683,18 +658,18 @@ progress_table(
   aklr$employer_contact_city_swap,
   compare = c(valid_city, extra_city)
 )
-#> # A tibble: 3 x 6
-#>   stage                      prop_in n_distinct prop_na n_out n_diff
-#>   <chr>                        <dbl>      <dbl>   <dbl> <dbl>  <dbl>
-#> 1 employer_contact_city)       0.983        233       0    90     23
-#> 2 employer_contact_city_norm   0.988        229       0    64     18
-#> 3 employer_contact_city_swap   0.993        221       0    35      8
+#> # A tibble: 3 × 6
+#>   stage                                    prop_in n_distinct prop_na n_out n_diff
+#>   <chr>                                      <dbl>      <dbl>   <dbl> <dbl>  <dbl>
+#> 1 str_to_upper(aklr$employer_contact_city)   0.985        273       0   105     26
+#> 2 aklr$employer_contact_city_norm            0.988        269       0    83     21
+#> 3 aklr$employer_contact_city_swap            0.995        258       0    35      8
 ```
 
 ## Export
 
 ``` r
-clean_dir <- dir_create(here("ak", "lobby", "data", "clean"))
+clean_dir <- dir_create(here("state","ak", "lobby", "data", "clean"))
 ```
 
 ``` r
@@ -704,7 +679,7 @@ aklr %>%
     -contains("match")
   ) %>% 
   write_csv(
-    path = path(clean_dir, "ak_lobbyists_clean.csv"),
+    path = path(clean_dir, "ak_lobby_reg.csv"),
     na = ""
   )
 ```

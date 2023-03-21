@@ -68,7 +68,7 @@ functions custom made to help facilitate the processing of campaign finance data
 
 ```{r load_packages, message=FALSE, dfrning=FALSE, error=FALSE}
 if (!require("pacman")) install.packages("pacman")
-pacman::p_load_current_gh("kiernann/campfin")
+pacman::p_load_current_gh("irworkshop/campfin")
 pacman::p_load(
   stringdist, # levenshtein value
   RSelenium, # remote browser
@@ -134,8 +134,7 @@ The files can only be downloaded after submitting a form request for a type of d
 year. We can automate this process with the RSelenium package.
 
 ```{r raw_dir}
-raw_dir <- here("state","mo", "expends", "data", "raw")
-dir_create(raw_dir)
+raw_dir <- dir_create(here("state","mo", "expends", "data", "raw"))
 ```
 
 ```{r download_raw, warning=FALSE, error=FALSE, message=FALSE, collapse=TRUE, eval=FALSE}
@@ -183,21 +182,11 @@ mo <- vroom(
   delim = ",",
   escape_backslash = FALSE,
   escape_double = FALSE,
-  col_types = cols(.default = "c")
+  col_types = cols(.default = "c",
+                   amount = col_double(),
+                  date = col_date("%m/%d/%Y %H:%M:%S %p"))
 )
 ```
-
-Due to an small bug in `vroom::vroom()`, we will have to parse the `date` column using
-`readr::parse_date()` _after_ initally reading the files.
-
-```{r parse_raw}
-mo <- mo %>% 
-  mutate(
-    date = parse_date(date, "%m/%d/%Y %H:%M:%S %p"),
-    amount = parse_number(amount)
-  )
-```
-
 ## Explore
 
 ```{r glimpse}
@@ -209,7 +198,7 @@ glimpse(sample_frac(mo))
 ### Missing
 
 ```{r glimpse_na}
-glimpse_fun(mo, count_na)
+col_stats(mo, count_na)
 ```
 
 There are very few records missing one of the key values needed to identify a transaction (who,
@@ -236,7 +225,7 @@ sum(mo$na_flag)
 
 ### Duplicates
 
-We can use `campfin::flag_dupes()` to create a new `dupe_flag` variable with with value `TRUE` for any duplicate row, after the first occurance. We will ignore the supposedly unique `cd3_b_id` 
+We can use `campfin::flag_dupes()` to create a new `dupe_flag` variable with with value `TRUE` for any duplicate row, after the first occurrence. We will ignore the supposedly unique `cd3_b_id` 
 variable.
 
 ```{r flag_dupes}
@@ -248,7 +237,7 @@ percent(mean(mo$dupe_flag))
 ### Categorical
 
 ```{r glimpse_distinct}
-glimpse_fun(mo, n_distinct)
+col_stats(mo, n_distinct)
 ```
 
 ```{r purpose_word_bar, echo=FALSE, fig.height=10}
@@ -434,7 +423,7 @@ if (packageVersion("tidyr") > "0.8.3.9") {
     mutate(
       address_norm = normal_address(
         address = adress_full,
-        add_abbs = usps_street,
+        abbs = usps_street,
         na_rep = TRUE
       )
     )
@@ -549,8 +538,8 @@ mo <- mo %>%
   mutate(
     city_norm = normal_city(
       city = city, 
-      geo_abbs = usps_city,
-      st_abbs = c("MO", "DC", "MISSOURI"),
+      abbs = usps_city,
+      states = c("MO", "DC", "MISSOURI"),
       na = invalid_city,
       na_rep = TRUE
     )
@@ -843,8 +832,9 @@ mo <- mo %>%
 ## Lookup
 
 ```{r lookup_city}
-lookup <- read_csv("mo/expends/data/mo_city_lookup.csv") %>% select(1:2)
-mo <- left_join(mo, lookup, by = c("city_final" = "CITY_FINAL"))
+
+#lookup <- read_csv("mo/expends/data/mo_city_lookup.csv") %>% select(1:2)
+#mo <- left_join(mo, lookup, by = c("city_final" = "CITY_FINAL"))
 
 progress_table(
   mo$city_raw,

@@ -1,17 +1,17 @@
 Virgina Expenditures Data Diary
 ================
-Kiernan Nicholls
-2022-11-05 14:00:10
+Kiernan Nicholls & Yanqi Xu
+2023-03-13 17:24:30
 
--   <a href="#project" id="toc-project">Project</a>
--   <a href="#objectives" id="toc-objectives">Objectives</a>
--   <a href="#prerequisites" id="toc-prerequisites">Prerequisites</a>
--   <a href="#data" id="toc-data">Data</a>
--   <a href="#import" id="toc-import">Import</a>
--   <a href="#fix" id="toc-fix">Fix</a>
--   <a href="#explore" id="toc-explore">Explore</a>
--   <a href="#wrangle" id="toc-wrangle">Wrangle</a>
--   <a href="#export" id="toc-export">Export</a>
+- <a href="#project" id="toc-project">Project</a>
+- <a href="#objectives" id="toc-objectives">Objectives</a>
+- <a href="#prerequisites" id="toc-prerequisites">Prerequisites</a>
+- <a href="#data" id="toc-data">Data</a>
+- <a href="#import" id="toc-import">Import</a>
+- <a href="#fix" id="toc-fix">Fix</a>
+- <a href="#explore" id="toc-explore">Explore</a>
+- <a href="#wrangle" id="toc-wrangle">Wrangle</a>
+- <a href="#export" id="toc-export">Export</a>
 
 ## Project
 
@@ -141,24 +141,26 @@ separated:
 1.  `SBE_CSV/CF/2013_02/ScheduleD.csv`
 
 We will start by downloading all the files separated by month from 2012
-to 2019.
+to January 2023. Next update should start February 2023.
 
 First we need to create the URLs for each year/month combination.
 
 ``` r
 #sub_dirs <- unlist(map(2012:2019, str_c, str_pad(1:12, 2, side = "left", pad = "0"), sep = "_"))
-sub_dirs <- unlist(map(2019:2022, str_c, str_pad(1:12, 2, side = "left", pad = "0"), sep = "_"))
+sub_dirs <- unlist(map(2012:2023, str_c, str_pad(1:12, 2, side = "left", pad = "0"), sep = "_"))
 exp_urls <- sort(glue("https://apps.elections.virginia.gov/SBE_CSV/CF/{sub_dirs}/ScheduleD.csv"))
-exp_urls <- exp_urls[7:(length(sub_dirs)-1)]
+rep_urls <- sort(glue("https://apps.elections.virginia.gov/SBE_CSV/CF/{sub_dirs}/Report.csv"))
+exp_urls <- exp_urls[3:(length(sub_dirs)-11)]
+rep_urls <- rep_urls[3:(length(sub_dirs)-11)]
 head(exp_urls)
 ```
 
-    #> https://apps.elections.virginia.gov/SBE_CSV/CF/2019_07/ScheduleD.csv
-    #> https://apps.elections.virginia.gov/SBE_CSV/CF/2019_08/ScheduleD.csv
-    #> https://apps.elections.virginia.gov/SBE_CSV/CF/2019_09/ScheduleD.csv
-    #> https://apps.elections.virginia.gov/SBE_CSV/CF/2019_10/ScheduleD.csv
-    #> https://apps.elections.virginia.gov/SBE_CSV/CF/2019_11/ScheduleD.csv
-    #> https://apps.elections.virginia.gov/SBE_CSV/CF/2019_12/ScheduleD.csv
+    #> https://apps.elections.virginia.gov/SBE_CSV/CF/2012_03/ScheduleD.csv
+    #> https://apps.elections.virginia.gov/SBE_CSV/CF/2012_04/ScheduleD.csv
+    #> https://apps.elections.virginia.gov/SBE_CSV/CF/2012_05/ScheduleD.csv
+    #> https://apps.elections.virginia.gov/SBE_CSV/CF/2012_06/ScheduleD.csv
+    #> https://apps.elections.virginia.gov/SBE_CSV/CF/2012_07/ScheduleD.csv
+    #> https://apps.elections.virginia.gov/SBE_CSV/CF/2012_08/ScheduleD.csv
 
 ``` r
 exp_urls %>% 
@@ -167,12 +169,12 @@ exp_urls %>%
   md_bullet()
 ```
 
-    #> * `https://apps.elections.virginia.gov/SBE_CSV/CF/2022_06/ScheduleD.csv`
-    #> * `https://apps.elections.virginia.gov/SBE_CSV/CF/2022_07/ScheduleD.csv`
     #> * `https://apps.elections.virginia.gov/SBE_CSV/CF/2022_08/ScheduleD.csv`
     #> * `https://apps.elections.virginia.gov/SBE_CSV/CF/2022_09/ScheduleD.csv`
     #> * `https://apps.elections.virginia.gov/SBE_CSV/CF/2022_10/ScheduleD.csv`
     #> * `https://apps.elections.virginia.gov/SBE_CSV/CF/2022_11/ScheduleD.csv`
+    #> * `https://apps.elections.virginia.gov/SBE_CSV/CF/2022_12/ScheduleD.csv`
+    #> * `https://apps.elections.virginia.gov/SBE_CSV/CF/2023_01/ScheduleD.csv`
 
 Then we can download these files to our `/data/raw/single/` directory.
 
@@ -181,29 +183,21 @@ raw_dir <- here("state","va", "expends", "data", "raw", "single")
 dir_create(raw_dir)
 
 raw_names <- basename(str_replace(exp_urls, "/(?=[^/]*$)", "_"))
+rep_names <- basename(str_replace(rep_urls, "/(?=[^/]*$)", "_"))
 raw_paths <- path(raw_dir, raw_names)
+rep_paths <- path(dir_create(here("state","va", "expends", "data", "raw", "meta")), rep_names)
+```
 
-# if (!all_files_new(dir_raw)) {
-#   for (url in exp_urls {
-#     download.file(
-#       url = url,
-#       destfile = str_c(
-#         dir_raw,
-#         url %>% 
-#           str_extract("(\\d{4}_\\d{2})/ScheduleD.csv$") %>% 
-#           str_replace_all("/", "_"),
-#         sep = "/"
-#       )
-#     )
-#   }
-# }
+``` r
+library(httr)    
 
 for (i in seq_along(raw_paths)) {
   wait = 1
   if (file_exists(raw_paths[i])) {
     next("file already downloaded")
   } else {
-    httr::GET(exp_urls[i],user_agent("Mozilla/5.0"), write_disk(raw_paths[i]))
+ ua <- "Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Mobile Safari/537.36"
+    httr::GET(exp_urls[i],add_headers(`Connection` = "keep-alive", `User-Agent` = ua), write_disk(raw_paths[i]))
     x <- read_lines(raw_paths[i])
     if (str_starts(x[1], "#")) {
       next("file already fixed")
@@ -211,6 +205,18 @@ for (i in seq_along(raw_paths)) {
       x <- str_replace_all(x, "(?<!^|,|\r\n)\"(?!,|\r\n|$)", "'")
       x <- c("### file fixed", x)
       write_lines(x, raw_paths[i])
+      Sys.sleep(time = wait)
+    }
+  }
+}
+
+for (i in seq_along(rep_paths)) {
+  wait = 0.5
+  if (file_exists(rep_paths[i])) {
+    next("file already downloaded")
+  } else {
+ ua <- "Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Mobile Safari/537.36"
+    httr::GET(rep_urls[i],add_headers(`Connection` = "keep-alive", `User-Agent` = ua), write_disk(rep_paths[i]))
       Sys.sleep(time = wait)
     }
   }
@@ -273,7 +279,7 @@ fix_info <- as_tibble(dir_info(fix_dir))
 sum(fix_info$size)
 ```
 
-    #> 103M
+    #> 257M
 
 ``` r
 fix_info %>% 
@@ -281,20 +287,20 @@ fix_info %>%
   mutate(across(path, basename))
 ```
 
-    #> # A tibble: 41 × 3
+    #> # A tibble: 131 × 3
     #>    path                             size modification_time  
     #>    <chr>                     <fs::bytes> <dttm>             
-    #>  1 FIX_2019_07_ScheduleD.csv       5.71M 2022-11-02 22:04:13
-    #>  2 FIX_2019_08_ScheduleD.csv       1.07M 2022-11-02 22:04:15
-    #>  3 FIX_2019_09_ScheduleD.csv        4.7M 2022-11-02 22:04:18
-    #>  4 FIX_2019_10_ScheduleD.csv       9.61M 2022-11-02 22:04:23
-    #>  5 FIX_2019_11_ScheduleD.csv      798.2K 2022-11-02 22:04:23
-    #>  6 FIX_2019_12_ScheduleD.csv       4.22M 2022-11-02 22:04:25
-    #>  7 FIX_2020_01_ScheduleD.csv       5.57M 2022-11-02 22:04:28
-    #>  8 FIX_2020_02_ScheduleD.csv      80.03K 2022-11-02 22:04:28
-    #>  9 FIX_2020_03_ScheduleD.csv      191.3K 2022-11-02 22:04:29
-    #> 10 FIX_2020_04_ScheduleD.csv       1.76M 2022-11-02 22:04:29
-    #> # … with 31 more rows
+    #>  1 FIX_2012_03_ScheduleD.csv       6.48K 2023-02-22 21:54:40
+    #>  2 FIX_2012_04_ScheduleD.csv     981.71K 2023-02-22 22:33:28
+    #>  3 FIX_2012_05_ScheduleD.csv      21.22K 2023-02-25 12:58:42
+    #>  4 FIX_2012_06_ScheduleD.csv     405.02K 2023-02-25 12:44:15
+    #>  5 FIX_2012_07_ScheduleD.csv       3.14M 2023-02-22 23:23:18
+    #>  6 FIX_2012_08_ScheduleD.csv      69.23K 2023-02-22 23:23:18
+    #>  7 FIX_2012_09_ScheduleD.csv     281.84K 2023-02-22 23:23:18
+    #>  8 FIX_2012_10_ScheduleD.csv       1.38M 2023-02-22 23:23:19
+    #>  9 FIX_2012_11_ScheduleD.csv      87.95K 2023-02-22 23:23:19
+    #> 10 FIX_2012_12_ScheduleD.csv     261.77K 2023-02-22 23:23:19
+    #> # … with 121 more rows
 
 ### Read
 
@@ -302,6 +308,11 @@ Since all recent files are located in the same directory with the same
 structure, we can read them all at once by using `purrr::map()` to apply
 `readr::read_csv()` to each file in the directory, then binding each
 file into a single data frame using `dplyr::bind_rows()`.
+
+We also need to read the related data on reports submitted by each
+committee, which contain names and addresses of each committee. The
+field we can join the report data by is `report_id`, which is unique.
+Each committee could have multiple report ids, but not vice versa.
 
 ``` r
 va <- 
@@ -318,43 +329,184 @@ va <-
       Amount = col_double()
     )
   ) %>% 
-  clean_names()
+    clean_names()
+
+va_meta <- rep_paths %>% map_dfr(read_delim, delim = ",",
+                                   na = c("NA", "N/A", ""),
+                                 escape_double = TRUE, col_types = cols(
+                                   .default = col_character(), ReportYear=col_integer(),
+                                 )) %>% clean_names()
+
+va_prev <- dir_ls(here("state", "va","expends", "data", "previous")) %>% 
+                    read_delim(
+    delim = ",",
+    na = c("NA", "N/A", ""),
+    escape_double = FALSE,
+    col_types = cols(.default = col_character(),
+                     IsIndividual = col_logical(),
+                      TransactionDate = col_date("%m/%d/%Y"),
+                      Amount = col_double())) %>% clean_names()
 ```
 
 The older files, separated by payee type, have a different structure and
-will have to be imported, explored, and cleaned seperated from the
+will have to be imported, explored, and cleaned separated from the
 recent files.
 
 ## Explore
 
-There are 500936 records of 20 variables in the full database.
+There are 1248841 records of 20 variables in the full database.
 
 ``` r
 glimpse(sample_frac(va))
 ```
 
-    #> Rows: 500,936
+    #> Rows: 1,248,841
     #> Columns: 20
-    #> $ schedule_d_id        <chr> "2561989", "3410925", "4014868", "3166613", "3651501", "3527791", "4…
-    #> $ report_id            <chr> "170431", "249779", "299302", "231142", "264810", "256785", "298922"…
-    #> $ committee_contact_id <chr> "25608", NA, "939331", "222267", "860487", NA, "188562", NA, "671271…
-    #> $ first_name           <chr> NA, "Lucy", NA, NA, "Samuel", NA, NA, NA, NA, NA, NA, NA, "William",…
-    #> $ middle_name          <chr> NA, NA, NA, NA, "E", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
-    #> $ last_or_company_name <chr> "Lopez for Delegate", "Barrett", "SignRocket.com", "USPS - Cave Spri…
+    #> $ schedule_d_id        <chr> "414622", "4137749", "2141716", "3553851", "1853557", "2179940", "31…
+    #> $ report_id            <chr> "24519", "310749", "140839", "258260", "122290", "143273", "235434",…
+    #> $ committee_contact_id <chr> "126217", "930126", NA, "690908", NA, "24899", NA, NA, "85406", NA, …
+    #> $ first_name           <chr> NA, NA, NA, NA, NA, NA, "MARGARET", NA, NA, NA, NA, NA, NA, NA, NA, …
+    #> $ middle_name          <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
+    #> $ last_or_company_name <chr> "Victory Store", "Amazon Prime", "MIKE MASKELL FOR VIRGINIA BEACH CI…
     #> $ prefix               <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
     #> $ suffix               <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
-    #> $ address_line1        <chr> "P.O. Box 40366", "PO 2306", "340 Broadway Ave", "4069 Postal Drive"…
-    #> $ address_line2        <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
-    #> $ city                 <chr> "Arlington", "Arlington", "St. Paul Park", "Roanoke", "Appomattox", …
-    #> $ state_code           <chr> "VA", "VA", "MN", "VA", "VA", "VA", "VA", "VA", "NJ", "OR", "MA", "C…
-    #> $ zip_code             <chr> "22204", "22202", "55071", "24018", "24522", "23236", "22116", "2311…
-    #> $ is_individual        <lgl> FALSE, TRUE, FALSE, FALSE, TRUE, FALSE, FALSE, FALSE, FALSE, FALSE, …
-    #> $ transaction_date     <date> 2019-05-06, 2021-05-28, 2022-09-12, 2020-10-22, 2021-08-28, 2021-04…
-    #> $ amount               <dbl> 500.00, 3288.13, 760.00, 143.00, 269.92, 59.32, 25.00, 18.00, 4996.8…
-    #> $ authorizing_name     <chr> "Josh Levi", "KG", "Kim Bentley II", "David Suetterlein", "Dirt Chea…
-    #> $ item_or_service      <chr> "Campaign Contribution", "Payroll", "Yard signs", "PO Box Rental", "…
+    #> $ address_line1        <chr> "5200 SW 30th St", "410 Terry Avenue N", "4403 LISBON LN", "2500 Nim…
+    #> $ address_line2        <chr> NA, NA, NA, NA, "Suite F", NA, NA, NA, NA, NA, NA, "# F8", NA, NA, N…
+    #> $ city                 <chr> "Davenport", "Seattle", "VIRGINIA BEACH", "Virginia Beach", "Newport…
+    #> $ state_code           <chr> "IA", "WA", "VA", "VA", "VA", "VA", "TX", "VA", "VA", "MA", "VA", "T…
+    #> $ zip_code             <chr> "52802", "98109", "23462", "23456", "23607", "23111", "78745", "2360…
+    #> $ is_individual        <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, TRUE, FALSE, FALSE, FALSE,…
+    #> $ transaction_date     <date> 2013-07-19, 2022-12-14, 2018-05-13, 2021-08-31, 2017-08-28, 2018-03…
+    #> $ amount               <dbl> 597.15, 16.15, 96.05, 3.00, 1300.00, 5.00, 50.00, 49.00, 123.99, 511…
+    #> $ authorizing_name     <chr> "Stephanie Brewer", "John G. Selph", "Neil Reiff", "Karen Mallard", …
+    #> $ item_or_service      <chr> "Signs", "Office expense", "Campaign Contribution", "Bank Fees", "Re…
     #> $ schedule_id          <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
-    #> $ report_uid           <chr> "{BEE826B9-8CB8-CB2F-6B1F-1697298FBAAA}", "{8CD84033-9285-548F-C70A-…
+    #> $ report_uid           <chr> "{191BF7FE-21F1-357C-654A-22A1B44729B5}", "{426241D9-C395-0D92-9A85-…
+
+``` r
+glimpse(sample_frac(va_meta))
+```
+
+    #> Rows: 128,544
+    #> Columns: 39
+    #> $ report_id                     <chr> "250882", "102118", "29350", "73154", "79378", "121778", "8…
+    #> $ committee_code                <chr> "CC-19-00846", "CC-12-00368", "CC-13-00245", "CC-15-00388",…
+    #> $ committee_name                <chr> "Friends of Cheryl Buford.", "Hutchinson for Herndon", "Fri…
+    #> $ committee_type                <chr> "Candidate Campaign Committee", "Candidate Campaign Committ…
+    #> $ candidate_name                <chr> "Cheryl  Buford", "Ms. Connie Haines Hutchinson", "Charles …
+    #> $ is_state_wide                 <chr> "False", "False", "False", "False", "False", "False", "Fals…
+    #> $ is_general_assembly           <chr> "False", "False", "False", "False", "False", "False", "True…
+    #> $ is_local                      <chr> "True", "True", "True", "True", "True", "True", "False", "T…
+    #> $ party                         <chr> "Independent", "Independent", "Republican", "Republican", "…
+    #> $ fec_number                    <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
+    #> $ report_year                   <int> 2021, 2016, 2013, 2015, 2015, 2017, 2015, 2022, 2019, 2018,…
+    #> $ filing_date                   <chr> "2021-08-17 10:33:05.793000000", "2016-10-31 10:17:34.00700…
+    #> $ start_date                    <chr> "2021-07-01 00:00:00", "2016-10-01 00:00:00", "2013-10-01 0…
+    #> $ end_date                      <chr> "2021-12-31 00:00:00", "2016-10-26 00:00:00", "2013-10-23 0…
+    #> $ address_line1                 <chr> "PO Box 292", "1019 Van Buren Street", "252 East High Stree…
+    #> $ address_line2                 <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "P.O. Box 104", NA,…
+    #> $ address_line3                 <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
+    #> $ city                          <chr> "McLean", "Herndon", "Charlottesville", "Quicksburg", "Glen…
+    #> $ state_code                    <chr> "VA", "VA", "VA", "VA", "VA", "VA", "VA", "VA", "VA", "VA",…
+    #> $ zip_code                      <chr> "22101", "20170", "22902", "22847", "23233", "22963", "2012…
+    #> $ filing_type                   <chr> "Report", "Report", "Report", "Report", "Large Contribution…
+    #> $ is_final_report               <chr> "True", "False", "False", "False", "False", "False", "False…
+    #> $ is_amendment                  <chr> "False", "False", "False", "False", "False", "False", "True…
+    #> $ amendment_count               <chr> "0", "0", "0", "0", "0", "0", "1", "0", "0", "1", "0", "2",…
+    #> $ submitter_phone               <chr> "703-299-7572", "703-501-6282", "4342425753", "540.233.2113…
+    #> $ submitter_email               <chr> "george_croft@hotmail.com", "conniehutch072@hotmail.com", "…
+    #> $ election_cycle                <chr> "11/2023", "11/2016", "11/2013", "11/2015", "11/2015", "11/…
+    #> $ election_cycle_start_date     <chr> "2020-01-01 00:00:00", "2015-01-01 00:00:00", "2010-01-01 0…
+    #> $ election_cycle_end_date       <chr> "2023-12-31 00:00:00", "2016-12-31 00:00:00", "2013-12-31 0…
+    #> $ office_sought                 <chr> "Member School Board At Large", "Member Town Council - Hern…
+    #> $ district                      <chr> NA, "Town - HERNDON", NA, NA, "Election - THREE CHOPT DISTR…
+    #> $ no_activity                   <chr> "False", "False", "False", "False", "False", "False", "Fals…
+    #> $ balance_last_reporting_period <chr> "1147.34", "147.01", "9489.60", "7125.69", NA, "203.20", "6…
+    #> $ date_of_referendum            <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
+    #> $ submitted_date                <chr> "2021-08-17 10:35:26.307000000", "2016-10-31 10:22:07.35700…
+    #> $ account_id                    <chr> "{6026BCD1-B984-E911-ACC7-984BE103F032}", "{CFF74F5F-607E-E…
+    #> $ due_date                      <chr> "2022-01-18 23:59:59", "2016-10-31 23:59:00", "2013-10-28 1…
+    #> $ is_xml_upload                 <chr> "False", "False", "False", "False", "False", "False", "Fals…
+    #> $ report_uid                    <chr> "{9070A812-CD5B-83A8-A18A-4500A9124123}", "{326F7AA0-5145-F…
+
+``` r
+va_meta <- va_meta %>% select(report_id,candidate_name, committee_name,office_sought, city, address_line1, address_line2, address_line3, state_code, zip_code)
+
+va_meta <- va_meta %>% rename_at(vars(5:10), ~paste0("com_",.))
+```
+
+``` r
+va <- va %>% left_join(va_meta, by = "report_id")
+
+va <- va %>% filter(schedule_d_id %out% va_prev$schedule_d_id)
+
+va %>% filter(committee_name %>% is.na()) %>% nrow()
+```
+
+    #> [1] 0
+
+``` r
+va_prev <- va_prev %>% rename_at(vars(starts_with("committee")), ~sub("committee","com", .x)) %>% glimpse()
+```
+
+    #> Rows: 717,386
+    #> Columns: 49
+    #> $ schedule_d_id                 <chr> "94", "95", "96", "97", "98", "99", "100", "101", "102", "1…
+    #> $ report_id                     <chr> "42", "42", "42", "42", "42", "42", "42", "42", "42", "42",…
+    #> $ com_contact_id                <chr> "888", "888", "888", "888", "888", "888", "888", "888", "88…
+    #> $ first_name                    <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
+    #> $ middle_name                   <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
+    #> $ last_or_company_name          <chr> "Staples", "Staples", "Staples", "Staples", "Staples", "Sta…
+    #> $ prefix                        <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
+    #> $ suffix                        <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
+    #> $ address_line1                 <chr> "295 Worth Avenue", "295 Worth Avenue", "295 Worth Avenue",…
+    #> $ address_line2                 <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "#100",…
+    #> $ city                          <chr> "Stafford", "Stafford", "Stafford", "Stafford", "Stafford",…
+    #> $ state_code                    <chr> "VA", "VA", "VA", "VA", "VA", "VA", "VA", "VA", "VA", "VA",…
+    #> $ zip_code                      <chr> "22554", "22554", "22554", "22554", "22554", "22554", "2255…
+    #> $ is_individual                 <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FAL…
+    #> $ transaction_date              <date> 2012-02-19, 2012-02-25, 2012-02-26, 2012-02-27, 2012-03-03…
+    #> $ amount                        <dbl> 6.81, 60.70, 56.70, 13.11, 72.23, 127.90, 24.49, 168.53, 14…
+    #> $ authorizing_name              <chr> "Jac Starkey", "Jac Starkey", "Jac Starkey", "Jac Starkey",…
+    #> $ item_or_service               <chr> "Name Tags", "Palm Cards", "Palm Cards", "Mailing Labels", …
+    #> $ schedule_id                   <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
+    #> $ com_code                      <chr> "CC-12-00203", "CC-12-00203", "CC-12-00203", "CC-12-00203",…
+    #> $ com_name                      <chr> "Starkey for Supervisor", "Starkey for Supervisor", "Starke…
+    #> $ com_type                      <chr> "Candidate Campaign Committee", "Candidate Campaign Committ…
+    #> $ candidate_name                <chr> "Jac Starkey", "Jac Starkey", "Jac Starkey", "Jac Starkey",…
+    #> $ fec_number                    <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
+    #> $ report_year                   <chr> "2012", "2012", "2012", "2012", "2012", "2012", "2012", "20…
+    #> $ filing_date                   <chr> "2012-03-26 17:17:09.780000000", "2012-03-26 17:17:09.78000…
+    #> $ start_date                    <chr> "2012-01-01 00:00:00", "2012-01-01 00:00:00", "2012-01-01 0…
+    #> $ end_date                      <chr> "2012-03-23 00:00:00", "2012-03-23 00:00:00", "2012-03-23 0…
+    #> $ com_address_line1             <chr> "52 Brush Everard Court", "52 Brush Everard Court", "52 Bru…
+    #> $ com_address_line2             <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
+    #> $ com_address_line3             <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
+    #> $ com_city                      <chr> "Stafford", "Stafford", "Stafford", "Stafford", "Stafford",…
+    #> $ com_state_code                <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
+    #> $ com_zip_code                  <chr> "22554", "22554", "22554", "22554", "22554", "22554", "2255…
+    #> $ filing_type                   <chr> "Report", "Report", "Report", "Report", "Report", "Report",…
+    #> $ is_final_report               <chr> "False", "False", "False", "False", "False", "False", "Fals…
+    #> $ is_amendment                  <chr> "False", "False", "False", "False", "False", "False", "Fals…
+    #> $ amendment_count               <chr> "0", "0", "0", "0", "0", "0", "0", "0", "0", "0", "0", "0",…
+    #> $ submitter_phone               <chr> "540-374-5032", "540-374-5032", "540-374-5032", "540-374-50…
+    #> $ submitter_email               <chr> "bsaller@cox.net", "bsaller@cox.net", "bsaller@cox.net", "b…
+    #> $ election_cycle                <chr> "4/2012", "4/2012", "4/2012", "4/2012", "4/2012", "4/2012",…
+    #> $ election_cycle_start_date     <chr> "2008-01-01 00:00:00", "2008-01-01 00:00:00", "2008-01-01 0…
+    #> $ election_cycle_end_date       <chr> "2012-12-31 00:00:00", "2012-12-31 00:00:00", "2012-12-31 0…
+    #> $ office_sought                 <chr> "Member Board of Supervisors", "Member Board of Supervisors…
+    #> $ district                      <chr> "Election - GARRISONVILLE", "Election - GARRISONVILLE", "El…
+    #> $ no_activity                   <chr> "False", "False", "False", "False", "False", "False", "Fals…
+    #> $ balance_last_reporting_period <chr> ".00", ".00", ".00", ".00", ".00", ".00", ".00", ".00", ".0…
+    #> $ date_of_referendum            <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
+    #> $ submitted_date                <chr> "2012-03-26 17:20:45.740000000", "2012-03-26 17:20:45.74000…
+
+``` r
+va_new <- va_prev %>% 
+  rename(committee_contact_id = com_contact_id,
+         committee_name = com_name) %>% 
+  bind_rows(va)
+```
 
 ### Distinct
 
@@ -368,29 +520,20 @@ va %>%
   mutate(prop_distinct = round(n_distinct / nrow(va), 4))
 ```
 
-    #> # A tibble: 20 × 3
+    #> # A tibble: 29 × 3
     #>    variable             n_distinct prop_distinct
     #>    <chr>                     <int>         <dbl>
-    #>  1 schedule_d_id            500936        1     
-    #>  2 report_id                 27268        0.0544
-    #>  3 committee_contact_id      86443        0.173 
-    #>  4 first_name                 6182        0.0123
-    #>  5 middle_name                 756        0.0015
-    #>  6 last_or_company_name      45105        0.09  
+    #>  1 schedule_d_id            531518        1     
+    #>  2 report_id                 28683        0.054 
+    #>  3 committee_contact_id      90729        0.171 
+    #>  4 first_name                 6365        0.012 
+    #>  5 middle_name                 783        0.0015
+    #>  6 last_or_company_name      47197        0.0888
     #>  7 prefix                        1        0     
     #>  8 suffix                        1        0     
-    #>  9 address_line1             57688        0.115 
-    #> 10 address_line2              3616        0.0072
-    #> 11 city                       5158        0.0103
-    #> 12 state_code                   58        0.0001
-    #> 13 zip_code                  14639        0.0292
-    #> 14 is_individual                 2        0     
-    #> 15 transaction_date           3480        0.0069
-    #> 16 amount                    66213        0.132 
-    #> 17 authorizing_name           8671        0.0173
-    #> 18 item_or_service           59645        0.119 
-    #> 19 schedule_id                  11        0     
-    #> 20 report_uid                21418        0.0428
+    #>  9 address_line1             60326        0.114 
+    #> 10 address_line2              3792        0.0071
+    #> # … with 19 more rows
 
 We can explore the distribution of the least distinct values with
 `ggplot2::geom_bar()`.
@@ -432,29 +575,20 @@ va %>%
   mutate(prop_na = n_na / nrow(va))
 ```
 
-    #> # A tibble: 20 × 3
+    #> # A tibble: 29 × 3
     #>    variable               n_na   prop_na
     #>    <chr>                 <int>     <dbl>
     #>  1 schedule_d_id             0 0        
     #>  2 report_id                 0 0        
-    #>  3 committee_contact_id 202797 0.405    
-    #>  4 first_name           416238 0.831    
-    #>  5 middle_name          489426 0.977    
-    #>  6 last_or_company_name     11 0.0000220
-    #>  7 prefix               500936 1        
-    #>  8 suffix               500936 1        
-    #>  9 address_line1           980 0.00196  
-    #> 10 address_line2        421764 0.842    
-    #> 11 city                    627 0.00125  
-    #> 12 state_code             1901 0.00379  
-    #> 13 zip_code                618 0.00123  
-    #> 14 is_individual             0 0        
-    #> 15 transaction_date          0 0        
-    #> 16 amount                    0 0        
-    #> 17 authorizing_name      47993 0.0958   
-    #> 18 item_or_service        1485 0.00296  
-    #> 19 schedule_id          500921 1.00     
-    #> 20 report_uid                0 0
+    #>  3 committee_contact_id 214010 0.403    
+    #>  4 first_name           442318 0.832    
+    #>  5 middle_name          519344 0.977    
+    #>  6 last_or_company_name     12 0.0000226
+    #>  7 prefix               531518 1        
+    #>  8 suffix               531518 1        
+    #>  9 address_line1          1808 0.00340  
+    #> 10 address_line2        446200 0.839    
+    #> # … with 19 more rows
 
 ### Duplicates
 
@@ -470,8 +604,8 @@ va_dupes <- va %>%
   mutate(dupe_flag = TRUE)
 ```
 
-There are 4743 distinct duplicated records in this database, covering
-12868 total records. It’s entirely possible that two expenditures can be
+There are 4942 distinct duplicated records in this database, covering
+13286 total records. It’s entirely possible that two expenditures can be
 made by the same committee, to the same payeee, of the same amount, on
 the same day, for the same purpose. However, we will flag these records
 with `dupe_flag` nonetheless.
@@ -484,20 +618,20 @@ va_dupes %>%
   mutate(cum_percent = cumsum(percent))
 ```
 
-    #> # A tibble: 666 × 5
+    #> # A tibble: 713 × 5
     #>    item_or_service                 n percent valid_percent cum_percent
     #>    <chr>                       <int>   <dbl>         <dbl>       <dbl>
-    #>  1 Contribution Fee              943  0.199         0.199        0.199
-    #>  2 Contribution Refund           229  0.0483        0.0483       0.247
-    #>  3 Refund to Contributor         199  0.0420        0.0420       0.289
-    #>  4 Processing Fee                193  0.0407        0.0407       0.330
-    #>  5 Contribution processing fee   151  0.0318        0.0319       0.362
-    #>  6 Processing fee                145  0.0306        0.0306       0.392
-    #>  7 Fee                           117  0.0247        0.0247       0.417
-    #>  8 Wire Fee                      105  0.0221        0.0222       0.439
-    #>  9 Bank Fee                      103  0.0217        0.0217       0.461
-    #> 10 Advertising                    66  0.0139        0.0139       0.475
-    #> # … with 656 more rows
+    #>  1 Contribution Fee              943  0.191         0.191        0.191
+    #>  2 Contribution Refund           230  0.0465        0.0466       0.237
+    #>  3 Refund to Contributor         210  0.0425        0.0425       0.280
+    #>  4 Processing Fee                195  0.0395        0.0395       0.319
+    #>  5 Contribution processing fee   151  0.0306        0.0306       0.350
+    #>  6 Processing fee                133  0.0269        0.0269       0.377
+    #>  7 Fee                           130  0.0263        0.0263       0.403
+    #>  8 Wire Fee                      109  0.0221        0.0221       0.425
+    #>  9 Bank Fee                      108  0.0219        0.0219       0.447
+    #> 10 Advertising                    70  0.0142        0.0142       0.461
+    #> # … with 703 more rows
 
 ``` r
 va <- va %>%
@@ -517,7 +651,7 @@ functions and `base::summary()`.
 The expenditure `amount` variable contains the USD value of the
 expenditure and can reasonably reach millions of dollars. This dataset
 contains 0 records with an `amount` value less than zero, which
-sometimes indicate expenditure correction filings. There are however 6
+sometimes indicate expenditure correction filings. There are however 8
 records with an `amount` value *of* zero.
 
 ``` r
@@ -525,14 +659,14 @@ summary(va$amount)
 ```
 
     #>      Min.   1st Qu.    Median      Mean   3rd Qu.      Max. 
-    #>       0.0      25.0     120.1    2071.5     614.2 3078578.5
+    #>       0.0      25.0     117.2    2005.5     596.8 3078578.5
 
 ``` r
 va %>% filter(amount == max(amount, na.rm = TRUE)) %>% glimpse()
 ```
 
     #> Rows: 1
-    #> Columns: 22
+    #> Columns: 31
     #> $ schedule_d_id        <chr> "3607640"
     #> $ report_id            <chr> "262144"
     #> $ committee_contact_id <chr> NA
@@ -553,6 +687,15 @@ va %>% filter(amount == max(amount, na.rm = TRUE)) %>% glimpse()
     #> $ item_or_service      <chr> "Media Buy"
     #> $ schedule_id          <chr> NA
     #> $ report_uid           <chr> "{995FA0DA-EBC4-934C-2D45-D4C7004FC35D}"
+    #> $ candidate_name       <chr> "Gov. Terrance Richard McAuliffe"
+    #> $ committee_name       <chr> "Terry for Virginia"
+    #> $ office_sought        <chr> "Governor"
+    #> $ com_city             <chr> "Arlington"
+    #> $ com_address_line1    <chr> "PO Box 26112"
+    #> $ com_address_line2    <chr> NA
+    #> $ com_address_line3    <chr> NA
+    #> $ com_state_code       <chr> "VA"
+    #> $ com_zip_code         <chr> "22215"
     #> $ dupe_count           <int> NA
     #> $ dupe_flag            <lgl> FALSE
 
@@ -582,7 +725,7 @@ va %>%
 
 ![](../plots/amount_hist_nonlog-1.png)<!-- -->
 
-We will have to transformt he x-axis logarithmically to find patterns in
+We will have to transform the x-axis logarithmically to find patterns in
 the distribution.
 
 ![](../plots/amount_hist-1.png)<!-- -->
@@ -599,13 +742,13 @@ individual (candidate) committees and more general issue committees.
 ### Dates
 
 The quasi-continuous variable `transaction_date` should also be explored
-for a reasonable range. There are no expenditures made before 2012-01-03
-and 3 expenditures reported as being made in the future.
+for a reasonable range. There are no expenditures made before 2008-10-15
+and 0 expenditures reported as being made in the future.
 
 ``` r
 summary(va$transaction_date)
 #>         Min.      1st Qu.       Median         Mean      3rd Qu.         Max. 
-#> "2012-01-03" "2019-09-30" "2020-11-12" "2020-08-14" "2021-08-31" "2022-12-31"
+#> "2008-10-15" "2019-10-15" "2021-02-26" "2020-10-09" "2021-10-06" "2023-01-30"
 ```
 
 ![](../plots/n_year_bar-1.png)<!-- -->
@@ -636,45 +779,57 @@ The `address` variable should be minimally cleaned by removing
 punctuation and fixing white-space.
 
 ``` r
-str_normalize <- function(string) {
-  string %>% 
-    str_to_upper() %>% 
-    str_replace("-", " ") %>% 
-    str_remove_all(rx_punctuation()) %>% 
-    str_trim() %>% 
-    str_squish() %>% 
-    na_if("") %>% 
-    na_if("NA")
-}
-```
-
-``` rclean_address1
 va <- va %>% 
+ unite(
+    col = address_full,
+    starts_with("address_"),
+    sep = " ",
+    remove = FALSE,
+    na.rm = TRUE
+  ) %>% 
+  # normalize combined addr
   mutate(
-    address1_clean = str_normalize(address_line1),
-    address2_clean = str_normalize(address_line2)
-  )
-
-va %>% 
-  filter(address_line1 != address1_clean) %>%
-  select(address_line1, address1_clean) %>% 
-  sample_n(10)
+    address_clean = normal_address(
+      address = address_full,
+      abbs = usps_street,
+      na_rep = TRUE
+    )
+  ) %>% 
+  select(-address_full)
 ```
-
-### Zipcode
 
 ``` r
 va <- va %>% 
+ unite(
+    col = address_full,
+    starts_with("com_address_"),
+    sep = " ",
+    remove = FALSE,
+    na.rm = TRUE
+  ) %>% 
+  # normalize combined addr
   mutate(
-    zip_clean = zip_code %>% 
-      str_remove_all(rx_whitespace()) %>%
-      str_remove_all(rx_digit(inverse = TRUE)) %>% 
-      str_pad(width = 5, pad = "0") %>% 
-      str_sub(1, 5) %>%
-      na_if("00000") %>% 
-      na_if("11111") %>% 
-      na_if("99999") %>% 
-      na_if("")
+    com_address_clean = normal_address(
+      address = address_full,
+      abbs = usps_street,
+      na_rep = TRUE
+    )
+  ) %>% 
+  select(-address_full)
+```
+
+### ZIP
+
+For ZIP codes, the `campfin::normal_zip()` function will attempt to
+create valid *five* digit codes by removing the ZIP+4 suffix and
+returning leading zeroes dropped by other programs like Microsoft Excel.
+
+``` r
+va <- va %>% 
+  mutate_at(
+    .vars = vars(ends_with("zip_code")),
+    .funs = list(norm = normal_zip),
+    na_rep = TRUE
   )
 ```
 
@@ -696,7 +851,14 @@ setdiff(valid_state, state.abb)
 ``` r
 setdiff(va$state_code, valid_state)
 #> [1] NA
-va <- va %>% mutate(state_clean = state_code %>% str_replace("New York", "NY"))
+va <- va %>%
+    mutate_at(
+    .vars = vars(ends_with("state_code")),
+    .funs = list(norm = normal_state),
+    abbreviate = TRUE,
+    na_rep = TRUE,
+    valid = NULL
+  )
 ```
 
 ### City
@@ -704,9 +866,9 @@ va <- va %>% mutate(state_clean = state_code %>% str_replace("New York", "NY"))
 ``` r
 valid_city <- unique(campfin::zipcodes$city)
 n_distinct(va$city)
-#> [1] 5158
+#> [1] 5348
 mean(va$city %in% campfin::zipcodes$city)
-#> [1] 0.102011
+#> [1] 0.0949187
 ```
 
 Cleaning city values is the most complicated. This process involves four
@@ -728,18 +890,18 @@ normalize the strings, remove some common `NA` values, and lop
 abbreviations off the end of the string.
 
 ``` r
-va <- va %>%
-  mutate(
-    city_norm = normal_city(
-      city = city,
-      na = invalid_city,,
-      states = c("VA", "VIRGINIA", "MA", "DC", "TX")
-    ) %>% 
-      str_replace("^VA\\b", "VIRGINIA")
+va <- va %>% 
+    mutate_at(
+    .vars = vars(ends_with("city")),
+    .funs = list(norm = normal_city),
+    abbs = usps_city,
+    states = c("VA", "VIRGINIA", "MA", "DC", "TX"),
+    na = invalid_city,
+    na_rep = TRUE
   )
 
 n_distinct(va$city_norm)
-#> [1] 3851
+#> [1] 3942
 ```
 
 #### Match
@@ -753,8 +915,8 @@ va <- va %>%
   left_join(
     zipcodes,
     by = c(
-      "state_clean" = "state",
-      "zip_clean" = "zip"
+      "state_code_norm" = "state",
+      "zip_code_norm" = "zip"
     )
   ) %>%
   rename(city = city.x, city_match = city.y) %>%
@@ -766,7 +928,7 @@ summary(va$match_dist)
 ```
 
     #>    Min. 1st Qu.  Median    Mean 3rd Qu.    Max.    NA's 
-    #>   0.000   0.000   0.000   0.432   0.000  35.000    9803
+    #>   0.000   0.000   0.000   0.433   0.000  35.000   11630
 
 ``` r
 va %>% 
@@ -777,9 +939,9 @@ va %>%
     #> # A tibble: 3 × 3
     #>   perf_match      n      p
     #>   <lgl>       <int>  <dbl>
-    #> 1 FALSE       31087 0.0621
-    #> 2 TRUE       460046 0.918 
-    #> 3 NA           9803 0.0196
+    #> 1 FALSE       32894 0.0619
+    #> 2 TRUE       486994 0.916 
+    #> 3 NA          11630 0.0219
 
 ``` r
 va %>% 
@@ -787,20 +949,20 @@ va %>%
     count(city_norm, city_match, sort = TRUE)
 ```
 
-    #> # A tibble: 659 × 3
+    #> # A tibble: 681 × 3
     #>    city_norm     city_match        n
     #>    <chr>         <chr>         <int>
-    #>  1 SOMMERVILLE   SOMERVILLE      604
-    #>  2 SAN FRANSISCO SAN FRANCISCO   496
-    #>  3 CENTERVILLE   CENTREVILLE     251
-    #>  4 MENIO PARK    MENLO PARK      212
-    #>  5 MC LEAN       MCLEAN          147
-    #>  6 MENLOW PARK   MENLO PARK      128
-    #>  7 SOMERVBILLE   SOMERVILLE       99
-    #>  8 WINSTONSALEM  WINSTON SALEM    89
-    #>  9 SAN JOE       SAN JOSE         88
-    #> 10 MOUTAIN VIEW  MOUNTAIN VIEW    81
-    #> # … with 649 more rows
+    #>  1 SOMMERVILLE   SOMERVILLE      622
+    #>  2 SAN FRANSISCO SAN FRANCISCO   505
+    #>  3 CENTERVILLE   CENTREVILLE     247
+    #>  4 MENIO PARK    MENLO PARK      223
+    #>  5 MC LEAN       MCLEAN          151
+    #>  6 MENLOW PARK   MENLO PARK      126
+    #>  7 SAN JOE       SAN JOSE        104
+    #>  8 SOMERVBILLE   SOMERVILLE       99
+    #>  9 WINSTONSALEM  WINSTON SALEM    94
+    #> 10 MOUTAIN VIEW  MOUNTAIN VIEW    86
+    #> # … with 671 more rows
 
 #### Swap
 
@@ -818,10 +980,80 @@ va <- va %>%
   )
 
 n_distinct(va$city_swap)
-#> [1] 2850
+#> [1] 2943
+
+va <- va %>% 
+rename(com_city_raw = city) %>% 
+  left_join(
+    y = zipcodes,
+    by = c(
+      "com_state_code_norm" = "state",
+      "com_zip_code_norm" = "zip"
+    )
+  ) %>% 
+  rename(com_city_match = city) %>% 
+  mutate(
+    match_abb = is_abbrev(com_city_norm,com_city_match),
+    match_dist = str_dist(com_city_norm,com_city_match),
+    com_city_swap = if_else(
+      condition = !is.na(com_city_match) & (match_abb | match_dist == 1),
+      true = com_city_match, 
+      false = com_city_norm
+    )
+  ) %>% 
+  select(
+    -com_city_match,
+    -match_abb,
+    -match_dist
+  ) %>% glimpse()
+#> Rows: 531,518
+#> Columns: 43
+#> $ schedule_d_id        <chr> "69434", "69435", "113292", "2430085", "2430086", "2430087", "243008…
+#> $ report_id            <chr> "4932", "4932", "7809", "159729", "159729", "159729", "159729", "159…
+#> $ committee_contact_id <chr> "2711", "2712", "31230", "514564", "514564", "514564", "514564", "54…
+#> $ first_name           <chr> NA, "Diana", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "Randy", NA…
+#> $ middle_name          <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
+#> $ last_or_company_name <chr> "Virginia State Board of Elections", "Venskus", "Kathy Graziano for …
+#> $ prefix               <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
+#> $ suffix               <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
+#> $ address_line1        <chr> "1100 Bank St., Richmond, VA 23219.", "6620  Goldsboro Road", "6948 …
+#> $ address_line2        <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "117", NA, "7th …
+#> $ com_city_raw         <chr> "Richmond", "Falls Church", "Richmond", "Lexington", "Lexington", "L…
+#> $ state_code           <chr> "VA", "VA", "VA", "MN", "MN", "MN", "MN", "VA", "VA", "VA", "VA", "V…
+#> $ zip_code             <chr> "23219", "22042", "23225", "23114", "23114", "23114", "23114", "2311…
+#> $ is_individual        <lgl> FALSE, TRUE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE,…
+#> $ transaction_date     <date> 2012-02-12, 2012-02-12, 2012-04-05, 2019-01-07, 2019-02-07, 2019-03…
+#> $ amount               <dbl> 10.00, 215.67, 250.00, 18.00, 18.00, 18.00, 76.98, 20.00, 58.96, 25.…
+#> $ authorizing_name     <chr> "Diana Venskus", "Sydney Sawyer", "Craig Toalson", "Arika Phillips",…
+#> $ item_or_service      <chr> "Registration fee for SBE/Comet Training", "Reimbursement for award …
+#> $ schedule_id          <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
+#> $ report_uid           <chr> "{FDE858CD-6D65-797B-B546-8DC6C547F408}", "{FDE858CD-6D65-797B-B546-…
+#> $ candidate_name       <chr> NA, NA, NA, "Mrs. Arika  Phillips", "Mrs. Arika  Phillips", "Mrs. Ar…
+#> $ committee_name       <chr> "Virginia Physical Therapy Association - PAC", "Virginia Physical Th…
+#> $ office_sought        <chr> NA, NA, NA, "Member School Board", "Member School Board", "Member Sc…
+#> $ com_city             <chr> "Clifton", "Clifton", "Richmond", "Midlothian", "Midlothian", "Midlo…
+#> $ com_address_line1    <chr> "11907 Henderson Court", "11907 Henderson Court", "400 N. Ridge Rd",…
+#> $ com_address_line2    <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
+#> $ com_address_line3    <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
+#> $ com_state_code       <chr> "VA", "VA", "VA", "VA", "VA", "VA", "VA", "VA", "VA", "VA", "VA", "V…
+#> $ com_zip_code         <chr> "20124", "20124", "23229", "23113", "23113", "23113", "23113", "2311…
+#> $ dupe_count           <int> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
+#> $ dupe_flag            <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE…
+#> $ transaction_year     <dbl> 2012, 2012, 2012, 2019, 2019, 2019, 2019, 2019, 2019, 2019, 2019, 20…
+#> $ address_clean        <chr> "1100 BANK ST RICHMOND VA 23219", "6620 GOLDSBORO RD", "6948 FOREST …
+#> $ com_address_clean    <chr> "11907 HENDERSON CT", "11907 HENDERSON CT", "400 N RIDGE RD", "PO BO…
+#> $ zip_code_norm        <chr> "23219", "22042", "23225", "23114", "23114", "23114", "23114", "2311…
+#> $ com_zip_code_norm    <chr> "20124", "20124", "23229", "23113", "23113", "23113", "23113", "2311…
+#> $ state_code_norm      <chr> "VA", "VA", "VA", "MN", "MN", "MN", "MN", "VA", "VA", "VA", "VA", "V…
+#> $ com_state_code_norm  <chr> "VA", "VA", "VA", "VA", "VA", "VA", "VA", "VA", "VA", "VA", "VA", "V…
+#> $ city_norm            <chr> "RICHMOND", "FALLS CHURCH", "RICHMOND", "LEXINGTON", "LEXINGTON", "L…
+#> $ com_city_norm        <chr> "CLIFTON", "CLIFTON", "RICHMOND", "MIDLOTHIAN", "MIDLOTHIAN", "MIDLO…
+#> $ city_match           <chr> "RICHMOND", "FALLS CHURCH", "RICHMOND", NA, NA, NA, NA, "MIDLOTHIAN"…
+#> $ city_swap            <chr> "RICHMOND", "FALLS CHURCH", "RICHMOND", NA, NA, NA, NA, "MIDLOTHIAN"…
+#> $ com_city_swap        <chr> "CLIFTON", "CLIFTON", "RICHMOND", "MIDLOTHIAN", "MIDLOTHIAN", "MIDLO…
 ```
 
-There are still 22344 records with a `city_swap` value not in our list
+There are still 25103 records with a `city_swap` value not in our list
 of valid city names. Many, if not most, of these values are actually
 acceptable city names that are simply not in our list.
 
@@ -831,124 +1063,65 @@ va %>%
   count(city_swap, sort = TRUE)
 ```
 
-    #> # A tibble: 476 × 2
+    #> # A tibble: 468 × 2
     #>    city_swap              n
     #>    <chr>              <int>
-    #>  1 <NA>                9803
-    #>  2 WEST SOMERVILLE     3983
-    #>  3 NORTH CHESTERFIELD  1821
-    #>  4 DALE CITY            400
-    #>  5 MANASSAS PARK        367
-    #>  6 FAIRLAWN             348
-    #>  7 POTOMAC FALLS        316
-    #>  8 CHESTERBROOK         299
-    #>  9 SOUTH RIDING         271
-    #> 10 ST PAUL PARK         213
-    #> # … with 466 more rows
+    #>  1 <NA>               11630
+    #>  2 WEST SOMERVILLE     4601
+    #>  3 NORTH CHESTERFIELD  2018
+    #>  4 DALE CITY            407
+    #>  5 MANASSAS PARK        370
+    #>  6 FAIRLAWN             367
+    #>  7 CHESTERBROOK         323
+    #>  8 POTOMAC FALLS        300
+    #>  9 SOUTH RIDING         282
+    #> 10 ST LOUIS             270
+    #> # … with 458 more rows
 
 #### Refine
 
-We can use the OpenRefine clustering algorithms to further cluster and
-merge similar values. We will create a new table of these refined
-values.
+The [OpenRefine](https://openrefine.org/) algorithms can be used to
+group similar strings and replace the less common versions with their
+most common counterpart. This can greatly reduce inconsistency, but with
+low confidence; we will only keep any refined strings that have a valid
+city/state/zip combination.
 
 ``` r
-va_refined <- va %>%
-  filter(match_dist != 1) %>% 
+good_refine <- va %>% 
   mutate(
-    city_refine = if_else(
-      condition = match_dist > 2,
-      true = city_swap %>% 
-        key_collision_merge() %>% 
-        n_gram_merge(),
-      false = city_swap
-    )
+    city_refine = city_swap %>% 
+      key_collision_merge() %>% 
+      n_gram_merge(numgram = 1)
   ) %>% 
   filter(city_refine != city_swap) %>% 
-  rename(city_raw = city) %>% 
-  select(
-    schedule_d_id,
-    state_clean,
-    zip_clean,
-    city_raw,
-    city_norm,
-    city_match,
-    city_swap,
-    city_refine
+  inner_join(
+    y = zipcodes,
+    by = c(
+      "city_refine" = "city",
+      "state_code_norm" = "state",
+      "zip_code_norm" = "zip"
+    )
   )
 ```
 
-#### Review
+    #> # A tibble: 8 × 5
+    #>   state_code_norm zip_code_norm city_swap         city_refine        n
+    #>   <chr>           <chr>         <chr>             <chr>          <int>
+    #> 1 CA              94103         SAN FRANSICAO     SAN FRANCISCO      8
+    #> 2 VA              23452         VIRGINIA BEACH VA VIRGINIA BEACH     5
+    #> 3 AL              36265         JACKSONVILLE AL   JACKSONVILLE       2
+    #> 4 NY              10018         NEW YORK NEW YORK NEW YORK           2
+    #> 5 VA              24541         DANVILLE VA       DANVILLE           2
+    #> 6 CA              94043         MOUNTAINVIEW VIEW MOUNTAIN VIEW      1
+    #> 7 TX              78288         SANTONIO          SAN ANTONIO        1
+    #> 8 VA              24083         DALEVILLE VA      DALEVILLE          1
 
-The algorithms rely on comparing the relative frequencies of two similar
-values, rather than a list of *actual* values. This can cause some
-accidential changes to be made.
-
-``` r
-va_refined %>% 
-  select(-schedule_d_id) %>%
-  distinct()
-```
-
-    #> # A tibble: 39 × 7
-    #>    state_clean zip_clean city_raw         city_norm       city_match       city_swap       city_r…¹
-    #>    <chr>       <chr>     <chr>            <chr>           <chr>            <chr>           <chr>   
-    #>  1 NY          14445     E Rochester      E ROCHESTER     EAST ROCHESTER   E ROCHESTER     ROCHEST…
-    #>  2 VA          22103     McClean          MCCLEAN         WEST MCLEAN      MCCLEAN         MCLEAN  
-    #>  3 VA          23860     N Prince George  N PRINCE GEORGE HOPEWELL         N PRINCE GEORGE PRINCE …
-    #>  4 VA          23860     N. Prince George N PRINCE GEORGE HOPEWELL         N PRINCE GEORGE PRINCE …
-    #>  5 VA          22201     Washingtong DC   WASHINGTONG     ARLINGTON        WASHINGTONG     WASHING…
-    #>  6 VA          20111     Mansassas Park   MANSASSAS PARK  MANASSAS         MANSASSAS PARK  MANASSA…
-    #>  7 VA          23834     S  Chesterfield  S CHESTERFIELD  COLONIAL HEIGHTS S CHESTERFIELD  CHESTER…
-    #>  8 VA          23803     S Chesterfield   S CHESTERFIELD  PETERSBURG       S CHESTERFIELD  CHESTER…
-    #>  9 VA          23860     n. Prince George N PRINCE GEORGE HOPEWELL         N PRINCE GEORGE PRINCE …
-    #> 10 VA          23803     S. Chesterfield  S CHESTERFIELD  PETERSBURG       S CHESTERFIELD  CHESTER…
-    #> # … with 29 more rows, and abbreviated variable name ¹​city_refine
-
-``` r
-va_refined %>% 
-  count(state_clean, city_refine, sort = TRUE)
-```
-
-    #> # A tibble: 34 × 3
-    #>    state_clean city_refine             n
-    #>    <chr>       <chr>               <int>
-    #>  1 MA          SOMERVILLE             37
-    #>  2 VA          CHESTERFIELD           24
-    #>  3 NY          ROCHESTER              17
-    #>  4 VA          PRINCE GEORGE          16
-    #>  5 CA          MENLO PARK CA          14
-    #>  6 MN          BLOOMINGTON            11
-    #>  7 VA          WILSON                  7
-    #>  8 CA          SAN JOSE CALIFORNIA     5
-    #>  9 VA          BAILEYS CROSSROADS      4
-    #> 10 FL          NEWPORT                 2
-    #> # … with 24 more rows
-
-``` r
-cva_refined <- va_refined %>% 
-  inner_join(
-    zipcodes,
-    by = c(
-      "city_refine" = "city",
-      "state_clean" = "state"
-    )
-  ) %>% 
-  select(schedule_d_id, city_refine)
-```
-
-#### Join
+Then we can join the refined values back to the database.
 
 ``` r
 va <- va %>% 
-  left_join(va_refined) %>% 
-  mutate(
-    city_clean = if_else(
-      condition = is.na(city_refine),
-      true = city_swap,
-      false = city_refine
-    )
-  )
+  left_join(good_refine, by = names(.)) %>% 
+  mutate(city_refine = coalesce(city_refine, city_swap))
 ```
 
 #### Progress
@@ -957,10 +1130,10 @@ Our goal for normalization was to increase the proportion of city values
 known to be valid and reduce the total distinct values by correcting
 misspellings.
 
-| stage                                                           | prop_in | n_distinct | prop_na | n_out | n_diff |
-|:----------------------------------------------------------------|--------:|-----------:|--------:|------:|-------:|
-| toupper(va$city_raw) | 0.065| 38| 1.000| 157| 34| |va$city_norm |   0.979 |       3851 |   0.003 | 10437 |   1255 |
-| va$city_swap | 0.992| 2850| 0.020| 3820| 374| |va$city_refine   |   0.845 |         34 |   1.000 |    26 |      7 |
+| stage                                                         | prop_in | n_distinct | prop_na | n_out | n_diff |
+|:--------------------------------------------------------------|--------:|-----------:|--------:|------:|-------:|
+| toupper(va$city) | NaN| 0| NaN| 0| 0| |va$city_norm           |   0.980 |       3942 |   0.004 | 10663 |   1245 |
+| va$city_swap | 0.993| 2943| 0.022| 3753| 362| |va$city_refine |   0.993 |       2935 |   0.022 |  3731 |    354 |
 
 You can see how the percentage of valid values increased with each
 stage.
@@ -975,23 +1148,36 @@ valid equivalent.
 
 ## Export
 
+1.  There are 531,518 records in the database.
+2.  There are 13,286 duplicate records in the database.
+3.  The range and distribution of `amount` and `date` seem reasonable.
+4.  There are 0 records missing key variables.
+5.  Consistency in geographic data has been improved with
+    `campfin::normal_*()`.
+6.  The 4-digit `year` variable has been created with
+    `lubridate::year()`.
+
 ``` r
 proc_dir <- here("state","va", "expends", "data", "processed")
 dir_create(proc_dir)
 
-va %>% 
+va <- va %>% 
+  rename(city_clean = city_refine,
+         state_clean = state_code_norm,
+  com_state_clean = com_state_code_norm,
+         zip_clean = zip_code_norm,
+         com_zip_clean = com_zip_code_norm,
+         com_city_clean = com_city_swap) %>% 
   select(
-    -address_line1,
-    -address_line2,
-    -zip_code,
-    -state_code,
-    -city,
     -city_norm,
+    -city_swap,
     -city_match,
-    -match_dist
-  ) %>% 
+    -com_city_norm
+  )
+
+va %>% 
   write_csv(
     na = "",
-    path = str_c(proc_dir, "va_expends_clean_201907-202211.csv", sep = "/")
+    path = str_c(proc_dir, "va_expends.csv", sep = "/")
   )
 ```

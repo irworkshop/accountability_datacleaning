@@ -1,18 +1,18 @@
 Missouri Expenditures
 ================
-Kiernan Nicholls
-2019-09-30 12:58:29
+Kiernan Nicholls & Yanqi Xu
+2023-03-13 23:40:59
 
-  - [Project](#project)
-  - [Objectives](#objectives)
-  - [Packages](#packages)
-  - [Data](#data)
-  - [Import](#import)
-  - [Explore](#explore)
-  - [Wrangle](#wrangle)
-  - [Conclude](#conclude)
-  - [Export](#export)
-  - [Lookup](#lookup)
+- <a href="#project" id="toc-project">Project</a>
+- <a href="#objectives" id="toc-objectives">Objectives</a>
+- <a href="#packages" id="toc-packages">Packages</a>
+- <a href="#data" id="toc-data">Data</a>
+- <a href="#import" id="toc-import">Import</a>
+- <a href="#explore" id="toc-explore">Explore</a>
+- <a href="#wrangle" id="toc-wrangle">Wrangle</a>
+- <a href="#conclude" id="toc-conclude">Conclude</a>
+- <a href="#export" id="toc-export">Export</a>
+- <a href="#lookup" id="toc-lookup">Lookup</a>
 
 <!-- Place comments regarding knitting here -->
 
@@ -57,7 +57,7 @@ processing of campaign finance data.
 
 ``` r
 if (!require("pacman")) install.packages("pacman")
-pacman::p_load_current_gh("kiernann/campfin")
+pacman::p_load_current_gh("irworkshop/campfin")
 pacman::p_load(
   stringdist, # levenshtein value
   RSelenium, # remote browser
@@ -90,7 +90,7 @@ feature and should be run as such. The project also uses the dynamic
 ``` r
 # where dfs this document knit?
 here::here()
-#> [1] "/home/kiernan/R/accountability_datacleaning/R_campfin"
+#> [1] "/Users/yanqixu/code/accountability_datacleaning"
 ```
 
 ## Data
@@ -112,6 +112,10 @@ page](https://www.mec.mo.gov/MEC/Campaign_Finance/CF_ContrCSV.aspx).
 > header/column names; the results are downloaded into a comma-separated
 > value format only.
 
+Data update: Expenditures below the amount of \$100 are now filed
+separately and not itemized. So we only include data compiled from the
+report.
+
 ## Import
 
 We can import each file into R as a single data frame to be explored,
@@ -125,8 +129,7 @@ type of data for a specific year. We can automate this process with the
 RSelenium package.
 
 ``` r
-raw_dir <- here("mo", "expends", "data", "raw")
-dir_create(raw_dir)
+raw_dir <- dir_create(here("state","mo", "expends", "data", "raw"))
 ```
 
 ``` r
@@ -175,93 +178,83 @@ mo <- vroom(
   delim = ",",
   escape_backslash = FALSE,
   escape_double = FALSE,
-  col_types = cols(.default = "c")
+  col_types = cols(.default = "c",
+                   amount = col_double(),
+                  date = col_date("%m/%d/%Y %H:%M:%S %p"))
 )
-```
-
-Due to an small bug in `vroom::vroom()`, we will have to parse the
-`date` column using `readr::parse_date()` *after* initally reading the
-files.
-
-``` r
-mo <- mo %>% 
-  mutate(
-    date = parse_date(date, "%m/%d/%Y %H:%M:%S %p"),
-    amount = parse_number(amount)
-  )
 ```
 
 ## Explore
 
 ``` r
 head(mo)
-#> # A tibble: 6 x 16
-#>   cd3_b_id mecid committee_name first_name last_name company address_1 address_2 city  state zip  
-#>   <chr>    <chr> <chr>          <chr>      <chr>     <chr>   <chr>     <chr>     <chr> <chr> <chr>
-#> 1 1547     C081… KCFT & SRP ST… Judy       Morgan    <NA>    3837 Cam… <NA>      Kans… MO    64109
-#> 2 1548     C081… KCFT & SRP ST… <NA>       <NA>      KCFT &… 3901 Mai… Ste. 201  Kans… MO    64111
-#> 3 1549     C081… KCFT & SRP ST… <NA>       <NA>      KCFT &… 3901 Mai… Ste. 201  Kans… MO    64111
-#> 4 1550     C081… KCFT & SRP ST… <NA>       <NA>      KCFT F… 3901 Mai… Ste. 201  Kans… MO    64111
-#> 5 1551     C091… HICKORY COUNT… <NA>       <NA>      The In… PO Box 1… <NA>      Herm… MO    65668
-#> 6 1571     C091… FRIENDS TO EL… <NA>       <NA>      Missou… 3950 E.N… <NA>      Jopl… MO    64801
-#> # … with 5 more variables: date <date>, purpose <chr>, amount <dbl>, expenditure_type <chr>,
-#> #   report <chr>
+#> # A tibble: 6 × 16
+#>   cd3_b_id mecid   committee…¹ first…² last_…³ company addre…⁴ addre…⁵ city  state zip   date      
+#>   <chr>    <chr>   <chr>       <chr>   <chr>   <chr>   <chr>   <chr>   <chr> <chr> <chr> <date>    
+#> 1 11694    C000510 WEST COUNT… Jerald  Hall    <NA>    863 We… <NA>    Ball… MO    63021 2011-02-23
+#> 2 11830    C000402 MBA OZARK … <NA>    <NA>    Missou… PO Box… <NA>    Jeff… MO    65102 2011-01-21
+#> 3 11851    C000400 MBA RIVER … <NA>    <NA>    Missou… PO Box… <NA>    Jeff… MO    65102 2011-01-21
+#> 4 11925    C051193 WASHINGTON… <NA>    <NA>    YMCA T… 1328 S… <NA>    Poto… MO    63664 2011-03-11
+#> 5 11926    C051193 WASHINGTON… <NA>    <NA>    The In… P.O. B… <NA>    Poto… MO    63664 2011-03-08
+#> 6 11954    A111000 BRIGGS FOR… <NA>    <NA>    Mullig… 1808 W… <NA>    St L… MO    63103 2011-03-30
+#> # … with 4 more variables: purpose <chr>, amount <dbl>, expenditure_type <chr>, report <chr>, and
+#> #   abbreviated variable names ¹​committee_name, ²​first_name, ³​last_name, ⁴​address_1, ⁵​address_2
 tail(mo)
-#> # A tibble: 6 x 16
-#>   cd3_b_id mecid committee_name first_name last_name company address_1 address_2 city  state zip  
-#>   <chr>    <chr> <chr>          <chr>      <chr>     <chr>   <chr>     <chr>     <chr> <chr> <chr>
-#> 1 374261   C111… SEIU HCII MIS… Corinthia… Robinson  <NA>    9628 Ced… A         "Ove… MO    63114
-#> 2 374262   C111… SEIU HCII MIS… Elinor     Simmons   <NA>    1275 N F… <NA>      St L… MO    63135
-#> 3 374263   C111… SEIU HCII MIS… Moorey     Rewita    <NA>    5151      Northland St L… MO    63113
-#> 4 374264   C111… SEIU HCII MIS… "Paula "   Johnson   <NA>    2843 How… <NA>      "St … MO    63106
-#> 5 374265   C111… SEIU HCII MIS… Amy        Jones     <NA>    11141 La… <NA>      St L… MO    63136
-#> 6 374266   C111… SEIU HCII MIS… "Alice "   Allen     <NA>    5808 Ame… 1st FL    St L… MO    63120
-#> # … with 5 more variables: date <date>, purpose <chr>, amount <dbl>, expenditure_type <chr>,
-#> #   report <chr>
+#> # A tibble: 6 × 16
+#>   cd3_b_id mecid   committee…¹ first…² last_…³ company addre…⁴ addre…⁵ city  state zip   date      
+#>   <chr>    <chr>   <chr>       <chr>   <chr>   <chr>   <chr>   <chr>   <chr> <chr> <chr> <date>    
+#> 1 477250   C221838 Citizens f… <NA>    <NA>    Google  1600 A… <NA>    Moun… CA    94043 2022-08-02
+#> 2 477251   C221838 Citizens f… <NA>    <NA>    USPS    301 Co… <NA>    Fult… MO    65251 2022-08-11
+#> 3 477253   C221838 Citizens f… <NA>    <NA>    Walmart 1701 N… <NA>    Fult… MO    65251 2022-08-15
+#> 4 477255   C221838 Citizens f… <NA>    <NA>    Walmart 415 Co… <NA>    Colu… MO    65201 2022-08-14
+#> 5 477257   C221838 Citizens f… <NA>    <NA>    Sam's … 101 Co… <NA>    Colu… MO    65201 2022-08-17
+#> 6 477259   C221838 Citizens f… <NA>    <NA>    Sam's … 101 Co… <NA>    Colu… MO    65201 2022-08-25
+#> # … with 4 more variables: purpose <chr>, amount <dbl>, expenditure_type <chr>, report <chr>, and
+#> #   abbreviated variable names ¹​committee_name, ²​first_name, ³​last_name, ⁴​address_1, ⁵​address_2
 glimpse(sample_frac(mo))
-#> Observations: 276,742
-#> Variables: 16
-#> $ cd3_b_id         <chr> "166814", "29857", "282834", "84666", "270802", "124824", "243217", "18…
-#> $ mecid            <chr> "C051151", "C031159", "C171046", "C101216", "C000478", "C131073", "C000…
-#> $ committee_name   <chr> "HOLSMAN FOR MISSOURI", "MISSOURIANS FOR KOSTER", "Prater For City Coun…
-#> $ first_name       <chr> "Robert ", NA, NA, NA, "CARLA", NA, NA, NA, NA, "LEN", NA, NA, NA, NA, …
-#> $ last_name        <chr> "Felton", NA, NA, NA, "MEDINA", NA, NA, NA, NA, "SALUGHTER", NA, NA, NA…
-#> $ company          <chr> NA, "Starbucks", "Medical Consulting Group LLC", "Quicktrip", NA, "The …
-#> $ address_1        <chr> "8510 E 9th", "2401 Utah Ave S", "2808 S Ingram Mill Rd, Bldg B", "2600…
-#> $ address_2        <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "Suite 201", NA, NA, NA, NA…
-#> $ city             <chr> "Kansas City", "Seattle", "Springfield", "Fenton", "KANSAS CITY", "St L…
-#> $ state            <chr> "MO", "WA", "MO", "MO", "MO", "MO", "KS", "TX", "MO", "MO", "MO", "MO",…
-#> $ zip              <chr> "64112", "98134", "65804", "63026", "64108", "63139", "66212", "79415",…
-#> $ date             <date> 2014-09-15, 2011-07-09, 2017-03-23, 2012-09-29, 2016-11-08, 2013-08-20…
-#> $ purpose          <chr> "Campaign Worker", "Meal Expense", "Campaign mgmt & creative", "stamps"…
-#> $ amount           <dbl> 500.00, 1.87, 3200.00, 153.00, 125.00, 477.36, 110.00, 148.46, 14919.75…
-#> $ expenditure_type <chr> "P", "P", "P", "P", "P", "P", "P", "P", "P", "P", "P", "P", "P", "P", "…
-#> $ report           <chr> "October Quarterly Report", "October Quarterly Report", "8 Day Before G…
+#> Rows: 374,981
+#> Columns: 16
+#> $ cd3_b_id         <chr> "152414", "30698", "258702", "60070", "439635", "242657", "116546", "429…
+#> $ mecid            <chr> "C091143", "C111009", "C151053", "C121200", "C001016", "C151232", "C0710…
+#> $ committee_name   <chr> "FRIENDS OF KEVIN ELMER", "SAVE OUR PLAZA", "GREITENS FOR MISSOURI", "VI…
+#> $ first_name       <chr> NA, "Carol", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
+#> $ last_name        <chr> NA, "Ducak", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
+#> $ company          <chr> "24 Hour Signs", NA, "Key Sport Shop", "Maestro Screen Printing", "Postm…
+#> $ address_1        <chr> "611 W. Mount Vernon St., Suite B", "14 E 56th St.", "1300 S Bishop Ave"…
+#> $ address_2        <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "14550 BEECHNUT STREET", "STE 10…
+#> $ city             <chr> "Nixa", "Kansas City", "Rolla", "St Louis", "Ozark", "Baton Rouge", "Jef…
+#> $ state            <chr> "MO", "MO", "MO", "MO", "MO", "LA", "MO", "IL", "OK", "DC", "TX", "MO", …
+#> $ zip              <chr> "65714", "64113", "65401", "63110", "65721", "70808", "65109", "60661", …
+#> $ date             <date> 2014-05-23, 2011-09-02, 2016-09-23, 2012-06-18, 2021-05-13, 2016-06-19,…
+#> $ purpose          <chr> "Signage", "data entry", "Event Expense", "Signs", "6mo dues post office…
+#> $ amount           <dbl> 469.67, 121.95, 4697.91, 2012.00, 136.00, 1.66, 844.55, 10000.00, 250.00…
+#> $ expenditure_type <chr> "Paid", "Paid", "Paid", "Paid", "Paid", "Paid", "Paid", "Paid", "Paid", …
+#> $ report           <chr> "July Quarterly Report", "October Quarterly Report", "October Quarterly …
 ```
 
 ### Missing
 
 ``` r
-glimpse_fun(mo, count_na)
-#> # A tibble: 16 x 4
-#>    col              type       n         p
-#>    <chr>            <chr>  <dbl>     <dbl>
-#>  1 cd3_b_id         chr        0 0        
-#>  2 mecid            chr        0 0        
-#>  3 committee_name   chr        0 0        
-#>  4 first_name       chr   214056 0.773    
-#>  5 last_name        chr   211749 0.765    
-#>  6 company          chr    60648 0.219    
-#>  7 address_1        chr       12 0.0000434
-#>  8 address_2        chr   252153 0.911    
-#>  9 city             chr       11 0.0000397
-#> 10 state            chr       19 0.0000687
-#> 11 zip              chr      142 0.000513 
-#> 12 date             date       0 0        
-#> 13 purpose          chr        0 0        
-#> 14 amount           dbl        0 0        
-#> 15 expenditure_type chr        0 0        
-#> 16 report           chr        0 0
+col_stats(mo, count_na)
+#> # A tibble: 16 × 4
+#>    col              class       n         p
+#>    <chr>            <chr>   <int>     <dbl>
+#>  1 cd3_b_id         <chr>       0 0        
+#>  2 mecid            <chr>       0 0        
+#>  3 committee_name   <chr>       0 0        
+#>  4 first_name       <chr>  294795 0.786    
+#>  5 last_name        <chr>  290738 0.775    
+#>  6 company          <chr>   77106 0.206    
+#>  7 address_1        <chr>      16 0.0000427
+#>  8 address_2        <chr>  338941 0.904    
+#>  9 city             <chr>      11 0.0000293
+#> 10 state            <chr>      28 0.0000747
+#> 11 zip              <chr>     142 0.000379 
+#> 12 date             <date>      0 0        
+#> 13 purpose          <chr>       7 0.0000187
+#> 14 amount           <dbl>       0 0        
+#> 15 expenditure_type <chr>       0 0        
+#> 16 report           <chr>       0 0
 ```
 
 There are very few records missing one of the key values needed to
@@ -291,44 +284,44 @@ sum(mo$na_flag)
 ### Duplicates
 
 We can use `campfin::flag_dupes()` to create a new `dupe_flag` variable
-with with value `TRUE` for any duplicate row, after the first occurance.
-We will ignore the supposedly unique `cd3_b_id` variable.
+with with value `TRUE` for any duplicate row, after the first
+occurrence. We will ignore the supposedly unique `cd3_b_id` variable.
 
 ``` r
 mo <- flag_dupes(mo, -cd3_b_id)
 sum(mo$dupe_flag)
-#> [1] 1687
+#> [1] 3973
 percent(mean(mo$dupe_flag))
-#> [1] "0.610%"
+#> [1] "1%"
 ```
 
 ### Categorical
 
 ``` r
-glimpse_fun(mo, n_distinct)
-#> # A tibble: 20 x 4
-#>    col              type       n          p
-#>    <chr>            <chr>  <dbl>      <dbl>
-#>  1 cd3_b_id         chr   276742 1         
-#>  2 mecid            chr     6816 0.0246    
-#>  3 committee_name   chr     7254 0.0262    
-#>  4 first_name       chr     8314 0.0300    
-#>  5 last_name        chr    11484 0.0415    
-#>  6 company          chr    54472 0.197     
-#>  7 address_1        chr    90798 0.328     
-#>  8 address_2        chr     6407 0.0232    
-#>  9 city             chr     6203 0.0224    
-#> 10 state            chr       84 0.000304  
-#> 11 zip              chr     7820 0.0283    
-#> 12 date             date    3329 0.0120    
-#> 13 purpose          chr    59185 0.214     
-#> 14 amount           dbl    74678 0.270     
-#> 15 expenditure_type chr        2 0.00000723
-#> 16 report           chr      392 0.00142   
-#> 17 individual       chr    11887 0.0430    
-#> 18 payee_name       chr    64013 0.231     
-#> 19 na_flag          lgl        2 0.00000723
-#> 20 dupe_flag        lgl        2 0.00000723
+col_stats(mo, n_distinct)
+#> # A tibble: 20 × 4
+#>    col              class       n          p
+#>    <chr>            <chr>   <int>      <dbl>
+#>  1 cd3_b_id         <chr>  374981 1         
+#>  2 mecid            <chr>    9530 0.0254    
+#>  3 committee_name   <chr>   10104 0.0269    
+#>  4 first_name       <chr>    8169 0.0218    
+#>  5 last_name        <chr>   14085 0.0376    
+#>  6 company          <chr>   67824 0.181     
+#>  7 address_1        <chr>  112726 0.301     
+#>  8 address_2        <chr>    8980 0.0239    
+#>  9 city             <chr>    6276 0.0167    
+#> 10 state            <chr>      89 0.000237  
+#> 11 zip              <chr>    9162 0.0244    
+#> 12 date             <date>   4558 0.0122    
+#> 13 purpose          <chr>   75858 0.202     
+#> 14 amount           <dbl>   90752 0.242     
+#> 15 expenditure_type <chr>       2 0.00000533
+#> 16 report           <chr>     507 0.00135   
+#> 17 individual       <chr>   14598 0.0389    
+#> 18 payee_name       <chr>   79026 0.211     
+#> 19 na_flag          <lgl>       2 0.00000533
+#> 20 dupe_flag        <lgl>       2 0.00000533
 ```
 
 ![](../plots/purpose_word_bar-1.png)<!-- -->
@@ -344,11 +337,11 @@ distribution. This can be done with visually with
 ``` r
 summary(mo$amount)
 #>      Min.   1st Qu.    Median      Mean   3rd Qu.      Max. 
-#>     -86.8     120.0     259.6    2006.8     750.0 2438725.0
+#>     -86.8     122.0     270.0    2082.6     780.0 2438725.0
 sum(mo$amount <= 0, na.rm = TRUE)
-#> [1] 40
+#> [1] 54
 sum(mo$amount >= 100000, na.rm = TRUE)
-#> [1] 664
+#> [1] 956
 ```
 
 ![](../plots/amount_histogram-1.png)<!-- -->
@@ -365,35 +358,38 @@ count_na(mo$date)
 min(mo$date, na.rm = TRUE)
 #> [1] "1900-01-20"
 sum(mo$year < 2010, na.rm = TRUE)
-#> [1] 59
+#> [1] 66
 max(mo$date, na.rm = TRUE)
-#> [1] "2021-02-02"
+#> [1] "2023-01-09"
 sum(mo$date > today(), na.rm = TRUE)
-#> [1] 1
+#> [1] 0
 ```
 
 ``` r
 count(mo, year)
-#> # A tibble: 17 x 2
+#> # A tibble: 20 × 2
 #>     year     n
 #>    <dbl> <int>
 #>  1  1900     2
 #>  2  2001     1
-#>  3  2002     1
+#>  3  2002     8
 #>  4  2007    16
 #>  5  2008    22
 #>  6  2009    17
 #>  7  2010  3113
-#>  8  2011 21245
+#>  8  2011 21246
 #>  9  2012 44656
 #> 10  2013 18305
-#> 11  2014 37670
-#> 12  2015 22564
-#> 13  2016 48007
-#> 14  2017 21512
-#> 15  2018 45658
-#> 16  2019 13952
-#> 17  2021     1
+#> 11  2014 37674
+#> 12  2015 22569
+#> 13  2016 47981
+#> 14  2017 21571
+#> 15  2018 45905
+#> 16  2019 23001
+#> 17  2020 36325
+#> 18  2021 17816
+#> 19  2022 34752
+#> 20  2023     1
 ```
 
 ``` r
@@ -405,7 +401,7 @@ mo <- mo %>%
   )
 
 sum(mo$date_flag, na.rm = TRUE)
-#> [1] 60
+#> [1] 66
 ```
 
 ![](../plots/year_bar_count-1.png)<!-- -->
@@ -439,7 +435,7 @@ if (packageVersion("tidyr") > "0.8.3.9") {
     mutate(
       address_norm = normal_address(
         address = adress_full,
-        add_abbs = usps_street,
+        abbs = usps_street,
         na_rep = TRUE
       )
     )
@@ -453,32 +449,32 @@ if (packageVersion("tidyr") > "0.8.3.9") {
 We can see how this improves consistency across the `address_1` and
 `address_2` fields.
 
-    #> # A tibble: 10 x 3
-    #>    address_1                address_2             address_norm                                  
-    #>    <chr>                    <chr>                 <chr>                                         
-    #>  1 7925 Clayton Road        Suite 200             7925 CLAYTON ROAD SUITE 200                   
-    #>  2 135 Paul Avenue          Ste B                 135 PAUL AVENUE SUITE B                       
-    #>  3 5555 Hilton Ave          Ste 203               5555 HILTON AVENUE SUITE 203                  
-    #>  4 2001 Holly Ave           #5                    2001 HOLLY AVENUE 5                           
-    #>  5 "1034 S Brentwood Blvd " Suite 1700            1034 SOUTH BRENTWOOD BOULEVARD SUITE 1700     
-    #>  6 6142 Greer               6142 Greer            6142 GREER 6142 GREER                         
-    #>  7 1200 18th St NW          Ste 700               1200 18TH STREET NORTHWEST SUITE 700          
-    #>  8 850 Quincy Street NW     #402                  850 QUINCY STREET NORTHWEST 402               
-    #>  9 3433 Hampton Ave         3841 Holly Hills Blvd 3433 HAMPTON AVENUE 3841 HOLLY HILLS BOULEVARD
-    #> 10 34100 Woodward Ave       Ste 250               34100 WOODWARD AVENUE SUITE 250
+    #> # A tibble: 10 × 3
+    #>    address_1                          address_2                          address_norm              
+    #>    <chr>                              <chr>                              <chr>                     
+    #>  1 8002 North Oak Trfwy               Ste 126                            8002 NORTH OAK TRFWYSTE 1…
+    #>  2 %St. Andrew Church                 309 Hoffmeister Ave.               ST ANDREW CHURCH309 HOFFM…
+    #>  3 540 B Little Hills Industrial Blvd 540 B Little Hills Industrial Blvd 540 B LITTLE HILLS INDUST…
+    #>  4 11142 Gateway Drive                9745 Nettle Drive                  11142 GATEWAY DRIVE9745 N…
+    #>  5 347 Hazel Avenue                   4001 Botanical Avenue              347 HAZEL AVENUE4001 BOTA…
+    #>  6 1340 Poydras Street                Suite 1770                         1340 POYDRAS STREETSUITE …
+    #>  7 14368 S. Outer Forty Drive         14368 S. Outer Forty Drive         14368 S OUTER FORTY DRIVE…
+    #>  8 6268 LORAN AVE                     APT A                              6268 LORAN AVEAPT A       
+    #>  9 335 S Springfield                  P O Box 330                        335 S SPRINGFIELDP O BOX …
+    #> 10 141 Forum Blvd                     Suite 105                          141 FORUM BLVDSUITE 105
 
 ### ZIP
 
-The `zip` address is already pretty good, with 92.5% of the values
-already in our 95% comprehensive `valid_zip` list.
+The `zip` address is already pretty good, with 93% of the values already
+in our 95% comprehensive `valid_zip` list.
 
 ``` r
 n_distinct(mo$zip)
-#> [1] 7820
+#> [1] 9162
 prop_in(mo$zip, valid_zip)
-#> [1] 0.9254049
+#> [1] 0.933929
 length(setdiff(mo$zip, valid_zip))
-#> [1] 3779
+#> [1] 4324
 ```
 
 We can improve this further by lopping off the uncommon four-digit
@@ -494,36 +490,36 @@ mo <- mo %>%
   )
 ```
 
-This brings our valid percentage to 99.6%.
+This brings our valid percentage to 99%.
 
 ``` r
 n_distinct(mo$zip_norm)
-#> [1] 4682
+#> [1] 5719
 prop_in(mo$zip_norm, valid_zip)
-#> [1] 0.9955967
+#> [1] 0.9916678
 length(setdiff(mo$zip_norm, valid_zip))
-#> [1] 511
+#> [1] 788
 count_na(mo$zip_norm) - count_na(mo$zip)
-#> [1] 218
+#> [1] 386
 ```
 
 ### State
 
-The `state` variable is also very clean, already at 99.8%.
+The `state` variable is also very clean, already at 100%.
 
 ``` r
 n_distinct(mo$state)
-#> [1] 84
+#> [1] 89
 prop_in(mo$state, valid_state, na.rm = TRUE)
-#> [1] 0.9976439
+#> [1] 0.9978984
 length(setdiff(mo$state, valid_state))
-#> [1] 29
+#> [1] 33
 setdiff(mo$state, valid_state)
-#>  [1] NA   "Ks" "Mo" "mo" "0"  "na" "BC" "CN" "Tx" "UK" "Fl" " "  "Pa" "SP" "SA" "Ca" "US" "Il" "AU"
-#> [20] "Va" "b"  "EN" "Fr" "JS" "mO" "QC" "Ne" "Ia" "KC"
+#>  [1] "Mo" NA   "0"  "Ks" "mo" "na" "CN" "BC" "Tx" "UK" "Fl" "Pa" "Ca" "US" "SP" "SA" "AU" "Il" "EN"
+#> [20] "Fr" "JS" "Va" "b"  "mO" "QC" "Ne" "Ia" "KC" "NS" "ON" "Oh" "IS" "m0"
 ```
 
-There are still 29 invalid values which we can remove.
+There are still 33 invalid values which we can remove.
 
 ``` r
 mo <- mo %>% 
@@ -539,7 +535,7 @@ mo <- mo %>%
 
 ``` r
 n_distinct(mo$state_norm)
-#> [1] 56
+#> [1] 57
 prop_in(mo$state_norm, valid_state)
 #> [1] 1
 ```
@@ -558,18 +554,18 @@ system to functionally improve the searchablity of the database.
     algorithms](https://github.com/OpenRefine/OpenRefine/wiki/Clustering-In-Depth)
     and keep good changes
 
-The raw `city` values are not very normal, with only 5.05% already in
+The raw `city` values are not very normal, with only 5% already in
 `valid_city`, mostly due to case difference. If we simply convert to
-uppcase that numbers increases to 77.2%. We will aim to get this number
+uppcase that numbers increases to 80%. We will aim to get this number
 over 99% using the other steps in the process.
 
 ``` r
 n_distinct(mo$city)
-#> [1] 6203
+#> [1] 6276
 prop_in(str_to_upper(mo$city), valid_city, na.rm = TRUE)
-#> [1] 0.7721903
+#> [1] 0.7976505
 length(setdiff(mo$city, valid_city))
-#> [1] 5594
+#> [1] 5545
 count_na(mo$city)
 #> [1] 11
 ```
@@ -581,45 +577,45 @@ mo <- mo %>%
   mutate(
     city_norm = normal_city(
       city = city, 
-      geo_abbs = usps_city,
-      st_abbs = c("MO", "DC", "MISSOURI"),
+      abbs = usps_city,
+      states = c("MO", "DC", "MISSOURI"),
       na = invalid_city,
       na_rep = TRUE
     )
   )
 ```
 
-This process brought us to 95.7% valid.
+This process brought us to 80% valid.
 
 ``` r
 n_distinct(mo$city_norm)
-#> [1] 3639
+#> [1] 4460
 prop_in(mo$city_norm, valid_city, na.rm = TRUE)
-#> [1] 0.9574209
+#> [1] 0.8003635
 length(setdiff(mo$city_norm, valid_city))
-#> [1] 1629
+#> [1] 2193
 count_na(mo$city_norm)
-#> [1] 198
+#> [1] 315
 ```
 
-It also increased the proportion of `NA` values by 0.0676%. These new
-`NA` values were either a single (possibly repeating) character, or
-contained in the `na_city` vector.
+It also increased the proportion of `NA` values by 0%. These new `NA`
+values were either a single (possibly repeating) character, or contained
+in the `na_city` vector.
 
-    #> # A tibble: 113 x 4
-    #>    zip_norm state_norm city          city_norm
-    #>    <chr>    <chr>      <chr>         <chr>    
-    #>  1 64444    MO         Unkown        <NA>     
-    #>  2 63044    MO         unknown       <NA>     
-    #>  3 65101    MO         unknown       <NA>     
-    #>  4 <NA>     MO         xxxxx         <NA>     
-    #>  5 63376    MO         requested     <NA>     
-    #>  6 30353    GA         PO Box 536216 <NA>     
-    #>  7 <NA>     MO         Unknown       <NA>     
-    #>  8 65043    <NA>       Requested     <NA>     
-    #>  9 <NA>     PA         Online        <NA>     
-    #> 10 95033    IL         Requested     <NA>     
-    #> # … with 103 more rows
+    #> # A tibble: 144 × 4
+    #>    zip_norm state_norm city      city_norm
+    #>    <chr>    <chr>      <chr>     <chr>    
+    #>  1 65049    MO         UNKNOWN   <NA>     
+    #>  2 64081    MO         Unknown   <NA>     
+    #>  3 64801    MO         requested <NA>     
+    #>  4 64423    MO         Requested <NA>     
+    #>  5 64030    MO         Unknown   <NA>     
+    #>  6 63040    MO         None      <NA>     
+    #>  7 65804    MO         mmm       <NA>     
+    #>  8 63104    MO         requested <NA>     
+    #>  9 64151    MO         Somewhere <NA>     
+    #> 10 63933    MO         online    <NA>     
+    #> # … with 134 more rows
 
 #### Swap
 
@@ -649,16 +645,16 @@ mo <- mo %>%
   )
 ```
 
-This is a very fast way to increase the valid proportion to 97.0% and
-reduce the number of distinct *invalid* values from 1629 to only 596
+This is a very fast way to increase the valid proportion to 81% and
+reduce the number of distinct *invalid* values from 2193 to only 849
 
 ``` r
 n_distinct(mo$city_swap)
-#> [1] 2579
+#> [1] 3071
 prop_in(mo$city_swap, valid_city, na.rm = TRUE)
-#> [1] 0.9704719
+#> [1] 0.8126511
 length(setdiff(mo$city_swap, valid_city))
-#> [1] 596
+#> [1] 849
 ```
 
 #### Refine
@@ -688,23 +684,23 @@ good_refine <- mo %>%
   )
 
 nrow(good_refine)
-#> [1] 66
+#> [1] 57
 ```
 
-    #> # A tibble: 57 x 5
+    #> # A tibble: 47 × 5
     #>    state_norm zip_norm city_raw              city_refine         n
     #>    <chr>      <chr>    <chr>                 <chr>           <int>
     #>  1 KS         66101    Kanssas Cityas City   KANSAS CITY         5
     #>  2 MO         64108    Kanssas Cityas City   KANSAS CITY         4
     #>  3 CA         92067    Ranchero Sante Fe     RANCHO SANTA FE     3
-    #>  4 CA         94133    "San Francisco CA "   SAN FRANCISCO       1
-    #>  5 CA         95131    Jose San              SAN JOSE            1
-    #>  6 IA         52802    Daavenportvenport     DAVENPORT           1
-    #>  7 IL         60094    Palenentine           PALATINE            1
-    #>  8 KS         66101    Kanansas Citysas City KANSAS CITY         1
-    #>  9 KS         66101    Kansas City KS        KANSAS CITY         1
-    #> 10 MA         02421    Lextoning             LEXINGTON           1
-    #> # … with 47 more rows
+    #>  4 MO         64055    Indepence             INDEPENDENCE        2
+    #>  5 CA         94133    San Francisco CA      SAN FRANCISCO       1
+    #>  6 CA         95131    Jose San              SAN JOSE            1
+    #>  7 IA         52802    Daavenportvenport     DAVENPORT           1
+    #>  8 IL         60094    Palenentine           PALATINE            1
+    #>  9 KS         66101    Kanansas Citysas City KANSAS CITY         1
+    #> 10 KS         66101    Kansas City KS        KANSAS CITY         1
+    #> # … with 37 more rows
 
 We can join these good refined values back to the original data and use
 them over their incorrect `city_swap` counterparts in a new
@@ -716,15 +712,15 @@ mo <- mo %>%
   mutate(city_refine = coalesce(city_refine, city_swap))
 ```
 
-This brings us to 97.1% valid values.
+This brings us to 81% valid values.
 
 ``` r
 n_distinct(mo$city_refine)
-#> [1] 2539
+#> [1] 3036
 prop_in(mo$city_refine, valid_city, na.rm = TRUE)
-#> [1] 0.9707128
+#> [1] 0.8128052
 length(setdiff(mo$city_refine, valid_city))
-#> [1] 556
+#> [1] 814
 ```
 
 #### Progress
@@ -738,20 +734,20 @@ mo %>%
   filter(city_refine %out% valid_city) %>% 
   count(state_norm, city_refine, sort = TRUE) %>% 
   drop_na(city_refine)
-#> # A tibble: 559 x 3
+#> # A tibble: 823 × 3
 #>    state_norm city_refine           n
 #>    <chr>      <chr>             <int>
-#>  1 KS         OVERLAND PARK       868
-#>  2 MO         RAYTOWN             665
-#>  3 MO         NORTH KANSAS CITY   513
-#>  4 KS         PRAIRIE VILLAGE     430
-#>  5 MO         OVERLAND            421
-#>  6 MO         WEBSTER GROVES      418
-#>  7 MO         UNIVERSITY CITY     376
-#>  8 MO         STLOUIS             318
-#>  9 KS         LENEXA              256
-#> 10 MO         RICHMOND HEIGHTS    254
-#> # … with 549 more rows
+#>  1 MO         ST LOUIS          49192
+#>  2 MO         ST CHARLES         3649
+#>  3 MO         ST JOSEPH          2163
+#>  4 MO         ST PETERS          1735
+#>  5 KS         OVERLAND PARK      1199
+#>  6 MO         NORTH KANSAS CITY   837
+#>  7 MO         RAYTOWN             794
+#>  8 MO         WEBSTER GROVES      689
+#>  9 MO         OVERLAND            519
+#> 10 MO         UNIVERSITY CITY     464
+#> # … with 813 more rows
 ```
 
 ``` r
@@ -791,17 +787,17 @@ valid_city <- c(
 
 Still, our progress is significant without having to make a single
 manual or unconfident change. The percent of valid cities increased from
-79.0% to 99.1%. The number of total distinct city values decreased from
-4,700 to 2,535. The number of distinct invalid city names decreased from
-2,722 to only 537, a change of -80.3%.
+82% to 83%. The number of total distinct city values decreased from
+4,665 to 3,032. The number of distinct invalid city names decreased from
+2,389 to only 795, a change of -67%.
 
 | Normalization Stage | Total Distinct | Percent Valid | Unique Invalid |
-| :------------------ | -------------: | ------------: | -------------: |
-| raw                 |         0.7901 |          4700 |           2722 |
-| norm                |         0.9764 |          3639 |           1614 |
-| swap                |         0.9894 |          2579 |            581 |
-| refine              |         0.9897 |          2539 |            541 |
-| final               |         0.9912 |          2535 |            537 |
+|:--------------------|---------------:|--------------:|---------------:|
+| raw                 |         0.8160 |          4665 |           2389 |
+| norm                |         0.8191 |          4460 |           2178 |
+| swap                |         0.8315 |          3071 |            834 |
+| refine              |         0.8316 |          3036 |            799 |
+| final               |         0.8331 |          3032 |            795 |
 
 ![](../plots/wrangle_bar_prop-1.png)<!-- -->
 
@@ -809,10 +805,10 @@ manual or unconfident change. The percent of valid cities increased from
 
 ## Conclude
 
-1.  There are 276742 records in the database.
-2.  There are 1687 duplicate records in the database.
+1.  There are 374981 records in the database.
+2.  There are 3973 duplicate records in the database.
 3.  The range and distribution of `amount` seems reasomable, and `date`
-    has been cleaned by removing 60 values from the distance past or
+    has been cleaned by removing 66 values from the distance past or
     future.
 4.  There are 5 records missing either recipient or date.
 5.  Consistency in geographic data has been improved with
@@ -825,7 +821,7 @@ manual or unconfident change. The percent of valid cities increased from
 ## Export
 
 ``` r
-proc_dir <- here("mo", "expends", "data", "processed")
+proc_dir <- here("state","mo", "expends", "data", "processed")
 dir_create(proc_dir)
 ```
 
@@ -845,8 +841,9 @@ mo <- mo %>%
 ## Lookup
 
 ``` r
-lookup <- read_csv("mo/expends/data/mo_city_lookup.csv") %>% select(1:2)
-mo <- left_join(mo, lookup, by = c("city_final" = "CITY_FINAL"))
+
+#lookup <- read_csv("mo/expends/data/mo_city_lookup.csv") %>% select(1:2)
+#mo <- left_join(mo, lookup, by = c("city_final" = "CITY_FINAL"))
 
 progress_table(
   mo$city_raw,
@@ -854,12 +851,12 @@ progress_table(
   mo$CITY_FINAL2, 
   compare = valid_city
 )
-#> # A tibble: 3 x 6
-#>   stage       prop_in n_distinct   prop_na  n_out n_diff
-#>   <chr>         <dbl>      <dbl>     <dbl>  <dbl>  <dbl>
-#> 1 city_raw     0.0512       6203 0.0000397 262558   5579
-#> 2 city_final   0.991        2535 0.0101      2398    537
-#> 3 CITY_FINAL2  0.988        2307 0.0106      3248    320
+#> # A tibble: 3 × 6
+#>   stage           prop_in n_distinct     prop_na  n_out n_diff
+#>   <chr>             <dbl>      <dbl>       <dbl>  <dbl>  <dbl>
+#> 1 mo$city_raw      0.0516       6276   0.0000293 355623   5530
+#> 2 mo$city_final    0.833        3032   0.0139     61704    795
+#> 3 mo$CITY_FINAL2 NaN               0 NaN              0      0
 
 write_csv(
   x = mo,

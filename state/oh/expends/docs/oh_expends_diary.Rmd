@@ -1,6 +1,6 @@
 ---
 title: "Ohio Expenditures"
-author: "Kiernan Nicholls"
+author: "Kiernan Nicholls & Yanqi Xu"
 date: "`r Sys.time()`"
 output:
   github_document: 
@@ -34,7 +34,7 @@ if (!interactive()) {
 ```
 
 ```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
-fs::dir_create(here::here("oh", "expends", "docs"))
+fs::dir_create(here::here("state","oh", "expends", "docs"))
 ```
 
 ## Project
@@ -106,6 +106,7 @@ paths relative to _your_ machine.
 ```{r where_here}
 # where does this document knit?
 here::here()
+raw_dir <- dir_create(here("state","oh", "expends", "data", "raw"))
 ```
 
 [tap]: https://github.com/irworkshop/accountability_datacleaning
@@ -146,16 +147,18 @@ We can download all the Expenditure files by reading the FTP website itself
 and scraping each of the "Download" links in the table. This process needs to
 be repeated for candidates, PACs, and parties.
 
-```{r raw_urls}
+```{r raw_urls, eval=FALSE}
 ftp_base <- "https://www6.ohiosos.gov/ords/"
-t <- c("CAN", "PAC", "PARTY")
+#t <- c("CAN", "PAC", "PARTY")
+t <- c("CAN")
 ftp_url <- glue("f?p=CFDISCLOSURE:73:7027737052457:{t}:NO:RP:P73_TYPE:{t}:")
 ftp_url <- str_c(ftp_base, ftp_url)
 ftp_params <- character()
 ftp_table <- rep(list(NA), length(t))
 for (i in seq_along(t)) {
   ftp_page <- read_html(ftp_url[i])
-  table_id <- paste0("#", str_extract(ftp_page, '(?<=id\\=")report_.*(?="\\s)'))
+  #table_id <- paste0("#", str_extract(ftp_page, '(?<=id\\=")report_.*(?="\\s)'))
+  table_id <- ".info-report > table"
   ftp_table[[i]] <- ftp_page %>%
     html_node(table_id) %>%
     html_table() %>%
@@ -177,22 +180,22 @@ for (i in seq_along(t)) {
 
 Then each link can be downloaded to the `/data/raw` directory.
 
-```{r wget}
+```{r wget, eval = F}
 wget <- function(url, dir) {
   system2(
     command = "wget",
     args = c(
-      "--no-verbose", 
-      "--content-disposition", 
-      url, 
-      paste("-P", raw_dir)
+      "--no-verbose",
+      "--content-disposition",
+      url,
+      paste("-P", raw_dir),
+      wait = 1
     )
   )
 }
 ```
 
-```{r raw_download}
-raw_dir <- dir_create(here("oh", "expends", "data", "raw"))
+```{r raw_download,eval = F}
 raw_urls <- paste0(ftp_base, ftp_params)
 if (length(dir_ls(raw_dir)) < 84) {
   map(raw_urls, wget, raw_dir)
@@ -271,17 +274,11 @@ We can identify the transaction year and filer type from the source file name.
 ```{r fil_types}
 fil_types <- ohe %>% 
   count(file_path, sort = TRUE) %>% 
-  extract(
-    col = file_path,
-    into = c("file_type", "file_year"),
-    regex = "(?:ALL_)?(\\w{3})_EXP_(\\d{4})\\.CSV",
-    remove = FALSE,
-    convert = TRUE
-  ) %>% 
   mutate(
-    file_type = file_type %>% 
-      str_replace("CAC", "CAN") %>% 
-      str_replace("PPC", "PAR")
+    file_type = case_when(str_detect(file_path,"CAC|CAN") ~ "CANDIDATE",
+                          str_detect(file_path,"PAC") ~ "PAC",
+                          str_detect(file_path, "PPC|PAR") ~ "PARTY"),
+    file_year = str_extract(file_path, "(?=.+)\\d{4}.CSV") %>% str_remove(".CSV") %>% as.numeric()
   )
 ```
 
@@ -292,7 +289,7 @@ fil_types %>%
   scale_fill_brewer(palette = "Dark2", name = "Filer Type") +
   theme(legend.position = "bottom") +
   scale_y_continuous(labels = comma) +
-  scale_x_continuous(breaks = seq(1990, 2020, by = 2)) +
+  scale_x_continuous(breaks = seq(min(fil_types$file_year), max(fil_types$file_year), by = 2)) +
   labs(
     title = "Contributions by Filter Type",
     x = "File Year",
@@ -301,7 +298,7 @@ fil_types %>%
 ```
 
 ```{r fil_join}
-ohe <- left_join(ohe, fil_types[, -4], by = "file_path")
+ohe <- left_join(ohe, fil_types %>% select(-n), by = "file_path")
 ```
 
 ## Explore
@@ -312,6 +309,20 @@ There are `r comma(nrow(ohe))` rows of `r ncol(ohe)` columns.
 glimpse(ohe)
 tail(ohe)
 ```
+
+## Previous
+
+Another way is to read in the previous update and filter out the rows already in the old file. 
+```{r read prev, eval=FALSE}
+prev_file <- here("state","oh","expends","data","previous")
+
+oh_prev <- read_csv(prev_file %>% dir_ls())
+
+oh_prev <- oh_prev %>% select(intersect(oh_prev %>% names(), ohe %>% names())) %>% filter(file_year == 2020)
+
+ohe <- ohe %>% setdiff(oh_prev)
+```
+
 
 ### Missing
 
@@ -354,10 +365,12 @@ for the same person to contribute the same amount to the same committee on the
 same day, we can flag these values anyway.
 
 ```{r dupe_flag}
-d1 <- duplicated(ohe, fromLast = FALSE)
-d2 <- duplicated(ohe, fromLast = TRUE)
-ohe <- mutate(ohe, dupe_flag = d1 | d2)
-rm(d1, d2); flush_memory()
+# d1 <- duplicated(ohe, fromLast = FALSE)
+# d2 <- duplicated(ohe, fromLast = TRUE)
+# ohe <- mutate(ohe, dupe_flag = d1 | d2)
+# rm(d1, d2); 
+ohe <- ohe %>% flag_dupes(dplyr::everything())
+flush_memory()
 ```
 
 `r percent(mean(ohe$dupe_flag), 0.1)` of rows are duplicated at least once.
@@ -700,7 +713,7 @@ glimpse(sample_n(ohe, 20))
 ## Export
 
 ```{r clean_dir}
-clean_dir <- dir_create(here("oh", "expends", "data", "clean"))
+clean_dir <- dir_create(here("state","oh", "expends", "data", "clean"))
 clean_path <- path(clean_dir, "oh_expends_clean.csv")
 write_csv(ohe, clean_path, na = "")
 file_size(clean_path)
@@ -712,7 +725,7 @@ file_encoding(clean_path) %>%
 
 We can use the `aws.s3::put_object()` to upload the text file to the IRW server.
 
-```{r s3_upload, eval=TRUE}
+```{r s3_upload, eval=FALSE}
 s3_path <- path("csv", basename(clean_path))
 if (!object_exists(s3_path, "publicaccountability")) {
   put_object(
@@ -726,7 +739,7 @@ if (!object_exists(s3_path, "publicaccountability")) {
 }
 ```
 
-```{r s3_size}
+```{r s3_size,eval=FALSE}
 as_fs_bytes(object_size(s3_path, "publicaccountability"))
 ```
 

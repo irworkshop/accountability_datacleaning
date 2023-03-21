@@ -1,22 +1,23 @@
 Virginia Contributions
 ================
-Kiernan Nicholls
-2022-10-22 15:11:43
+Kiernan Nicholls & Yanqi Xu
+2023-03-16 00:41:15
 
--   <a href="#project" id="toc-project">Project</a>
--   <a href="#objectives" id="toc-objectives">Objectives</a>
--   <a href="#packages" id="toc-packages">Packages</a>
--   <a href="#data" id="toc-data">Data</a>
--   <a href="#download" id="toc-download">Download</a>
--   <a href="#read" id="toc-read">Read</a>
--   <a href="#join" id="toc-join">Join</a>
--   <a href="#explore" id="toc-explore">Explore</a>
--   <a href="#missing" id="toc-missing">Missing</a>
--   <a href="#wrangle" id="toc-wrangle">Wrangle</a>
--   <a href="#conclude" id="toc-conclude">Conclude</a>
--   <a href="#export" id="toc-export">Export</a>
--   <a href="#upload" id="toc-upload">Upload</a>
--   <a href="#dictionary" id="toc-dictionary">Dictionary</a>
+- <a href="#project" id="toc-project">Project</a>
+- <a href="#objectives" id="toc-objectives">Objectives</a>
+- <a href="#packages" id="toc-packages">Packages</a>
+- <a href="#data" id="toc-data">Data</a>
+- <a href="#download" id="toc-download">Download</a>
+- <a href="#read" id="toc-read">Read</a>
+- <a href="#duplicates" id="toc-duplicates">Duplicates</a>
+- <a href="#join" id="toc-join">Join</a>
+- <a href="#explore" id="toc-explore">Explore</a>
+- <a href="#missing" id="toc-missing">Missing</a>
+- <a href="#wrangle" id="toc-wrangle">Wrangle</a>
+- <a href="#conclude" id="toc-conclude">Conclude</a>
+- <a href="#export" id="toc-export">Export</a>
+- <a href="#upload" id="toc-upload">Upload</a>
+- <a href="#dictionary" id="toc-dictionary">Dictionary</a>
 
 <!-- Place comments regarding knitting here -->
 
@@ -110,18 +111,18 @@ Elections (SBE).
 
 The SBE has candidates and committees file ten types of reports:
 
-| Schedule                      | Description                                                                     |
-|:------------------------------|:--------------------------------------------------------------------------------|
-| Schedule A                    | Direct Contributions over \$100 Use to report contributions exceeding \$100. S… |
-| Schedule B                    | In-Kind Contributions over \$100 Use to report contributions of services rend…  |
-| Schedule C                    | Rebates, Refunds and Interest Use to report receipts of refunds, rebates int…   |
-| Schedule D                    | Itemization of Expenditures Use to report all expenditures incurred by a co…    |
-| Schedule E                    | Itemization of Loans Use to report the itemization of all loans received and…   |
-| Schedule F                    | Debts Remaining Unpaid Use to itemize any outstanding debt that remains outs…   |
-| Schedule G                    | Statement of Funds Contributions, receipts, expenditures and loans that have…   |
-| Schedule H                    | Summary of Receipts and Disbursements Contributions, receipts, expenditures …   |
-| Schedule I                    | Surplus Funds Paid Out Use to report the disposition of surplus funds.Sched…    |
-| Designated Expenditure Report | For each designated contribution received by the campaign committee from a po…  |
+| Schedule                      | Description                                                                      |
+|:------------------------------|:---------------------------------------------------------------------------------|
+| Schedule A                    | Direct Contributions over \$100 Use to report contributions exceeding \$100. Sc… |
+| Schedule B                    | In-Kind Contributions over \$100 Use to report contributions of services rende…  |
+| Schedule C                    | Rebates, Refunds and Interest Use to report receipts of refunds, rebates inte…   |
+| Schedule D                    | Itemization of Expenditures Use to report all expenditures incurred by a com…    |
+| Schedule E                    | Itemization of Loans Use to report the itemization of all loans received and/…   |
+| Schedule F                    | Debts Remaining Unpaid Use to itemize any outstanding debt that remains outst…   |
+| Schedule G                    | Statement of Funds Contributions, receipts, expenditures and loans that have …   |
+| Schedule H                    | Summary of Receipts and Disbursements Contributions, receipts, expenditures a…   |
+| Schedule I                    | Surplus Funds Paid Out Use to report the disposition of surplus funds.Schedu…    |
+| Designated Expenditure Report | For each designated contribution received by the campaign committee from a po…   |
 
 We are interested in schedule’s A and B.
 
@@ -138,11 +139,10 @@ sbe_session <- bow(sbe_url, force = T)
 sbe_list <- scrape(sbe_session)
 ```
 
-Our last update covered everything prior to Oct, 2020, so we’ll start
-from `2020_11` to `2022-10`. It appears that the full month of Oct, 2022
-was included in the report.
+We’ll grab everything from `2020_11` to `2023_02`. The next update
+should start with `2023-03`.
 
-From this list of directories, we can extract each `<href>` HTML tag.
+From this list of directories, we can extract each `< href>` HTML tag.
 These tags provide the directory names.
 
 ``` r
@@ -151,26 +151,9 @@ sbe_base <- "https://apps.elections.virginia.gov"
 ```
 
 ``` r
-update_start <- "2020/11/1"
-update_end <- "2022/10/1"
-sbe_table <- sbe_table %>% filter(datetime >= ymd(update_start) & datetime <= ymd(update_end))
-# sbe_dirs <- sbe_list %>%
-#   html_nodes("a") %>%
-#   html_attr("href") %>%
-#   str_subset("\\d_")
-
-sbe_dirs <-  paste0(
-        "https://apps.elections.virginia.gov/SBE_CSV/CF/", 
-        sbe_table$dir, "/"
-      )
+update_start <- "2020/10/1"
+update_end <- "2023/2/1"
 ```
-
-    #> * `https://apps.elections.virginia.gov/SBE_CSV/CF/2022_04/`
-    #> * `https://apps.elections.virginia.gov/SBE_CSV/CF/2022_05/`
-    #> * `https://apps.elections.virginia.gov/SBE_CSV/CF/2022_06/`
-    #> * `https://apps.elections.virginia.gov/SBE_CSV/CF/2022_07/`
-    #> * `https://apps.elections.virginia.gov/SBE_CSV/CF/2022_08/`
-    #> * `https://apps.elections.virginia.gov/SBE_CSV/CF/2022_09/`
 
 Then we can navigate to each of these directories and look for file
 names containing “ScheduleA” or “ScheduleB” (these file names are
@@ -188,17 +171,10 @@ for (dir in sbe_dirs) {
     scrape() %>% 
     html_nodes("a") %>% 
     html_attr("href") %>% 
-    str_subset("(Schedule(A|B))|Report") %>% 
+    str_subset("(Schedule(A|B))") %>% 
     append(sbe_names)
 }
 ```
-
-    #> * `/SBE_CSV/CF/2020_12/Report.csv`
-    #> * `/SBE_CSV/CF/2020_12/ScheduleA.csv`
-    #> * `/SBE_CSV/CF/2020_12/ScheduleB.csv`
-    #> * `/SBE_CSV/CF/2020_11/Report.csv`
-    #> * `/SBE_CSV/CF/2020_11/ScheduleA.csv`
-    #> * `/SBE_CSV/CF/2020_11/ScheduleB.csv`
 
 Using these server paths, we can build local paths to save each file to.
 
@@ -207,13 +183,6 @@ raw_urls <- str_c(sbe_base, sbe_names)
 raw_names <- basename(str_replace(raw_urls, "/(?=[^/]*$)", "_"))
 raw_paths <- path(raw_dir, raw_names)
 ```
-
-    #> * `/va/contribs/data/raw/2020_12_Report.csv`
-    #> * `/va/contribs/data/raw/2020_12_ScheduleA.csv`
-    #> * `/va/contribs/data/raw/2020_12_ScheduleB.csv`
-    #> * `/va/contribs/data/raw/2020_11_Report.csv`
-    #> * `/va/contribs/data/raw/2020_11_ScheduleA.csv`
-    #> * `/va/contribs/data/raw/2020_11_ScheduleB.csv`
 
 If these paths don’t already exist, we can download them now. Each file
 needs to be read so that erroneous double quotations can be removed
@@ -246,7 +215,8 @@ We can now read all of the schedule A and B files into a single
 dataframe.
 
 ``` r
-sched_paths <- str_subset(raw_paths, "Schedule")
+#sched_paths <- str_subset(raw_paths, "Schedule")
+sched_paths <- dir_ls(raw_dir, regexp= ".+Schedule.+")
 ```
 
 ``` r
@@ -271,7 +241,7 @@ vac <- map_df(
 We can also identify the source file for each record.
 
 ``` r
-vac$source_file <- basename(sched_paths[as.integer(vac$source_file)])
+vac$source_file <- basename(vac$source_file)
 vac <- relocate(vac, source_file, .after = last_col())
 ```
 
@@ -280,7 +250,9 @@ The `date` column is a mix of `%m/%d/%Y` and `%Y-%m-%d` formats.
 ``` r
 vac_mdy <- str_which(vac$date, "^\\d{2}/")
 vac$date[vac_mdy] <- as.character(mdy(vac$date[vac_mdy]))
-vac$date <- parse_datetime(vac$date)
+vac$date <- parse_datetime(vac$date) %>% as_date()
+
+#vac %>% mutate(across(contains("date"), parse_date)
 ```
 
 Each contribution has a unique ID number for either schedule A or B. We
@@ -292,6 +264,66 @@ vac <- vac %>%
   select(-sched_a, -sched_b)
 ```
 
+## Duplicates
+
+We can flag any record duplicated at least once, aside from the
+supposedly unique contribution ID.
+
+``` r
+dupe_file <- path(dirname(raw_dir), "dupes.csv")
+if (file_exists(dupe_file)) {
+  vac <- read_csv(
+    file = dupe_file,
+    col_types = cols(
+      rpt_id = col_character(),
+      con_id = col_character()
+    )
+  )
+  #vac <- left_join(vac, dupes)
+} else {
+vac <- flag_dupes(vac, -con_id)
+vac %>% write_csv(path(dirname(raw_dir), "dupes.csv"))
+}
+```
+
+``` r
+percent(mean(vac$dupe_flag), 0.01)
+#> [1] "1.18%"
+```
+
+``` r
+vac %>% 
+  filter(dupe_flag) %>% 
+  #select(all_of(key_vars)) %>% 
+  arrange(date) %>% glimpse()
+#> Rows: 19,063
+#> Columns: 24
+#> $ rpt_id        <chr> "302206", "302206", "302283", "302283", "302283", "302283", "294836", "2948…
+#> $ fil_id        <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
+#> $ first_name    <chr> "Lavern", "Lavern", "Diane", "Diane", "Barbara/Vashonta", "Barbara/Vashonta…
+#> $ middle_name   <chr> "J.", "J.", NA, NA, NA, NA, NA, NA, NA, NA, "V", "V", "Montgomery", "Montgo…
+#> $ last_name     <chr> "Chatman", "Chatman", "Crawford-Batt", "Crawford-Batt", "Roach", "Roach", "…
+#> $ prefix        <chr> "Ms.", "Ms.", "Ms.", "Ms.", NA, NA, NA, NA, "Mr.", "Mr.", "Mr.", "Mr.", NA,…
+#> $ suffix        <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
+#> $ emp_name      <chr> "EDJ Associates", "EDJ Associates", "Retired", "Retired", "BJ's Wholesale",…
+#> $ occupation    <chr> "Vice President Business Development", "Vice President Business Development…
+#> $ emp_place     <chr> "Alexandria VA", "Alexandria VA", "Alexandria VA", "Alexandria VA", "Alexan…
+#> $ addr1         <chr> "307 Yoakum Pkwy", "307 Yoakum Pkwy", "3201 Landover St", "3201 Landover St…
+#> $ addr2         <chr> "Apt 1426", "Apt 1426", "Apt 301", "Apt 301", NA, NA, NA, NA, NA, NA, NA, N…
+#> $ city          <chr> "Alexandria", "Alexandria", "Alexandria", "Alexandria", "Alexandria", "Alex…
+#> $ state         <chr> "VA", "VA", "VA", "VA", "VA", "VA", "VA", "VA", "VA", "VA", "VA", "VA", "VA…
+#> $ zip           <chr> "22304-4037", "22304-4037", "22305-1909", "22305-1909", "22303-1141", "2230…
+#> $ is_individual <lgl> TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRU…
+#> $ date          <date> 2008-11-09, 2008-11-09, 2011-05-03, 2011-05-03, 2011-10-30, 2011-10-30, 20…
+#> $ amount        <dbl> 250, 250, 35, 35, 75, 75, 50, 50, 250, 250, 500, 500, 250, 250, 100, 100, 1…
+#> $ total         <dbl> 500.00, 500.00, 170.00, 170.00, 150.00, 150.00, 250.00, 250.00, 500.00, 500…
+#> $ valuation     <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "FairMarketValue", "FairMar…
+#> $ product       <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "rent and office expenses",…
+#> $ source_file   <chr> "2022_12_ScheduleA.csv", "2022_12_ScheduleA.csv", "2022_12_ScheduleA.csv", …
+#> $ con_id        <chr> "9463223", "9463224", "9464133", "9464134", "9464203", "9464204", "9353732"…
+#> $ dupe_flag     <lgl> TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRU…
+```
+
 ## Join
 
 Each contribution is reported by the committee to which is was made. The
@@ -299,7 +331,8 @@ information on those reports, including who filed them and when, is
 contained in a separate file every month.
 
 ``` r
-rpt_paths <- str_subset(raw_paths, "Report")
+rpt_paths <- dir_ls(here("state","va", "expends", "data", "raw", "meta"))
+#rpt_paths <- str_subset(raw_paths, "Report")
 ```
 
 ``` r
@@ -332,7 +365,8 @@ rpt <- map_df(
 ```
 
 ``` r
-rpt$source_file <- basename(rpt_paths[as.integer(rpt$source_file)])
+#rpt$source_file <- basename(rpt_paths[as.integer(rpt$source_file)])
+rpt$source_file <- basename(rpt$source_file)
 rpt <- relocate(rpt, source_file, .after = last_col())
 ```
 
@@ -358,86 +392,87 @@ vac <- rename_prefix(
 
 ## Explore
 
-There are 1,478,180 columns and 57 columns.
+There are 1,620,252 columns and 58 columns.
 
 ``` r
 glimpse(vac)
-#> Rows: 1,478,180
-#> Columns: 57
-#> $ rpt_id          <chr> "295025", "295027", "295027", "295027", "295027", "295027", "295027", "29…
-#> $ fil_id          <chr> "923588", "901829", "906895", "912850", "916262", "920778", "920780", "92…
-#> $ first_name      <chr> "MaryJane", "Robert", NA, "Christine", "Christopher", "Merritt", "Donald"…
-#> $ middle_name     <chr> NA, NA, NA, NA, NA, NA, NA, NA, "L", NA, NA, NA, NA, NA, NA, NA, NA, NA, …
-#> $ last_name       <chr> "Tousignant-Dolan", "Hess", "Winchester Republican Committee", "Windle", …
-#> $ prefix          <chr> NA, NA, NA, NA, NA, NA, NA, NA, "Mrs", "Mr.", NA, NA, NA, NA, NA, NA, NA,…
+#> Rows: 1,620,252
+#> Columns: 58
+#> $ rpt_id          <chr> "215398", "215398", "215399", "215399", "215399", "215399", "215399", "21…
+#> $ fil_id          <chr> "566840", "567308", "586240", "586255", "586255", "586258", "586267", "58…
+#> $ first_name      <chr> "Theresa", "William", "Arthur", "Rebecca", "Rebecca", "Myron", "Barbara",…
+#> $ middle_name     <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "PETER", NA, NA, "SONJIA"…
+#> $ last_name       <chr> "Stearns", "Ackerman", "Cornfeld", "Daly", "Daly", "Gray", "Bennett", "Ch…
+#> $ prefix          <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
 #> $ suffix          <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
-#> $ emp_name        <chr> NA, "Retired", NA, "National Association of Realtors", "Melco", "Peraton"…
-#> $ occupation      <chr> "Retired", "Retired", "Political", "Realtor", "Architect", "Systems Engin…
-#> $ emp_place       <chr> NA, "Retired", "Winchester, Va", "Washington, District of Columbia", "Win…
-#> $ con_addr1       <chr> "611Heritage Circle", "429 Castleman Dr.", "P.O. Box 4282", "36202 Silcot…
-#> $ con_addr2       <chr> NA, NA, NA, NA, "Suite A", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
-#> $ con_city        <chr> "Lynchburg", "Winchester", "Winchester", "Purcellville,", "Winchester", "…
-#> $ con_state       <chr> "VA", "VA", "VA", "VA", "VA", "VA", "PA", "VA", "TX", "VA", "NJ", "NJ", "…
-#> $ con_zip         <chr> "24503", "22601", "22604-4282", "20132", "22601", "22624", "17022", "2260…
-#> $ is_individual   <lgl> TRUE, TRUE, FALSE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, …
-#> $ date            <dttm> 2022-08-31, 2022-08-18, 2022-08-24, 2022-07-09, 2022-07-14, 2022-08-04, …
-#> $ amount          <dbl> 1000, 250, 700, 300, 250, 250, 302, 250, 300, 75, 100, 320, 195, 5000, 18…
-#> $ total           <dbl> 0.00, 350.00, 900.00, 300.00, 250.00, 250.00, 302.00, 250.00, 300.00, 107…
+#> $ emp_name        <chr> "CRNA-JD", "unknown", "ABC Properties", "NOT EMPLOYED", "NOT EMPLOYED", "…
+#> $ occupation      <chr> "CRNA-JD", "unknown", "Real Estate", "NOT EMPLOYED", "NOT EMPLOYED", "NOT…
+#> $ emp_place       <chr> "St Louis,  MO", "unknown", "New York, New York", "NOT EMPLOYED", "NOT EM…
+#> $ con_addr1       <chr> "St Louis,  MO", "12361 Henderson Rd", "152 W. 57th St.", "3100 Bacon Sch…
+#> $ con_addr2       <chr> NA, NA, NA, NA, NA, NA, "#521", NA, NA, NA, NA, NA, NA, NA, NA, NA, "STE …
+#> $ con_city        <chr> "St Louis", "Clifton", "New York", "Saxe", "Saxe", "Charlotte", "Arlingto…
+#> $ con_state       <chr> "MO", "VA", "NY", "VA", "VA", "NC", "VA", "NC", "VA", "VA", "VA", "VA", "…
+#> $ con_zip         <chr> "63112", "20124", "10019", "23967", "23967", "28226", "22204", "23937", "…
+#> $ is_individual   <lgl> TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, FALSE, TRUE, TRUE, TRUE, TRUE, …
+#> $ date            <date> 2019-05-06, 2019-05-23, 2019-06-05, 2019-06-01, 2019-06-06, 2019-06-12, …
+#> $ amount          <dbl> 100, 104, 250, 147, 10, 200, 250, 250, 100, 100, 50, 50, 500, 2000, 250, …
+#> $ total           <dbl> 200, 104, 250, 147, 157, 200, 250, 250, 200, 200, 125, 175, 500, 2000, 25…
 #> $ valuation       <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
 #> $ product         <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
-#> $ con_source_file <chr> "2022_09_ScheduleA.csv", "2022_09_ScheduleA.csv", "2022_09_ScheduleA.csv"…
-#> $ con_id          <chr> "9356644", "9356652", "9356653", "9356654", "9356655", "9356656", "935665…
-#> $ fil_code        <chr> "CC-22-00522", "CC-22-00272", "CC-22-00272", "CC-22-00272", "CC-22-00272"…
-#> $ fil_name        <chr> "Treney Tweedy for Council", "DeAngelis for City Council", "DeAngelis for…
+#> $ con_source_file <chr> "2020_11_ScheduleA.csv", "2020_11_ScheduleA.csv", "2020_11_ScheduleA.csv"…
+#> $ con_id          <chr> "5372334", "5372335", "5372336", "5372337", "5372338", "5372339", "537234…
+#> $ dupe_flag       <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FAL…
+#> $ fil_code        <chr> "CC-19-00343", "CC-19-00343", "CC-19-00343", "CC-19-00343", "CC-19-00343"…
+#> $ fil_name        <chr> "Friends of Virginia", "Friends of Virginia", "Friends of Virginia", "Fri…
 #> $ fil_type        <chr> "Candidate Campaign Committee", "Candidate Campaign Committee", "Candidat…
-#> $ cand_name       <chr> "Treney L Tweedy", "Emily Rose  DeAngelis", "Emily Rose  DeAngelis", "Emi…
+#> $ cand_name       <chr> "Virginia M Smith", "Virginia M Smith", "Virginia M Smith", "Virginia M S…
 #> $ is_stwide       <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FAL…
 #> $ is_assembly     <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FAL…
 #> $ is_local        <lgl> TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, T…
-#> $ party           <chr> "Independent", "Republican", "Republican", "Republican", "Republican", "R…
-#> $ report_year     <chr> "2022", "2022", "2022", "2022", "2022", "2022", "2022", "2022", "2022", "…
-#> $ filing_date     <dttm> 2022-09-01 01:08:45, 2022-09-01 07:24:43, 2022-09-01 07:24:43, 2022-09-0…
-#> $ start_date      <dttm> 2022-08-31, 2022-07-01, 2022-07-01, 2022-07-01, 2022-07-01, 2022-07-01, …
-#> $ end_date        <dttm> 2022-08-31, 2022-08-31, 2022-08-31, 2022-08-31, 2022-08-31, 2022-08-31, …
-#> $ fil_addr1       <chr> "P.O. Box 6283", "700 Woodland Ave", "700 Woodland Ave", "700 Woodland Av…
+#> $ party           <chr> "Democratic", "Democratic", "Democratic", "Democratic", "Democratic", "De…
+#> $ report_year     <chr> "2019", "2019", "2019", "2019", "2019", "2019", "2019", "2019", "2019", "…
+#> $ filing_date     <dttm> 2020-07-21 09:38:49, 2020-07-21 09:38:49, 2020-07-21 09:40:18, 2020-07-2…
+#> $ start_date      <dttm> 2019-04-01, 2019-04-01, 2019-05-31, 2019-05-31, 2019-05-31, 2019-05-31, …
+#> $ end_date        <dttm> 2019-05-30, 2019-05-30, 2019-06-30, 2019-06-30, 2019-06-30, 2019-06-30, …
+#> $ fil_addr1       <chr> "P.O. Box 734", "P.O. Box 734", "P.O. Box 734", "P.O. Box 734", "P.O. Box…
 #> $ fil_addr2       <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
-#> $ fil_city        <chr> "Lynchburg", "Winchester", "Winchester", "Winchester", "Winchester", "Win…
+#> $ fil_city        <chr> "North Prince George", "North Prince George", "North Prince George", "Nor…
 #> $ fil_state       <chr> "VA", "VA", "VA", "VA", "VA", "VA", "VA", "VA", "VA", "VA", "VA", "VA", "…
-#> $ fil_zip         <chr> "24502-6283", "22601", "22601", "22601", "22601", "22601", "22601", "2260…
-#> $ filing_type     <chr> "Large Contribution Report", "Report", "Report", "Report", "Report", "Rep…
+#> $ fil_zip         <chr> "23875", "23875", "23875", "23875", "23875", "23875", "23875", "23875", "…
+#> $ filing_type     <chr> "Report", "Report", "Report", "Report", "Report", "Report", "Report", "Re…
 #> $ is_final        <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FAL…
-#> $ is_amend        <chr> "False", "False", "False", "False", "False", "False", "False", "False", "…
-#> $ amend_count     <int> 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0…
-#> $ fil_phone       <chr> "434-401-4545", "2153503216", "2153503216", "2153503216", "2153503216", "…
-#> $ fil_email       <chr> "treneytweedy@gmail.com", "Electemily2@gmail.com", "Electemily2@gmail.com…
-#> $ election_cycle  <chr> "11/2022", "11/2022", "11/2022", "11/2022", "11/2022", "11/2022", "11/202…
-#> $ elect_start     <dttm> 2019-01-01, 2019-01-01, 2019-01-01, 2019-01-01, 2019-01-01, 2019-01-01, …
-#> $ elect_end       <dttm> 2022-12-31, 2022-12-31, 2022-12-31, 2022-12-31, 2022-12-31, 2022-12-31, …
-#> $ office          <chr> "Member City Council - At Large", "Member City Council", "Member City Cou…
-#> $ district        <chr> NA, "Election - Second Ward", "Election - Second Ward", "Election - Secon…
+#> $ is_amend        <chr> "True", "True", "True", "True", "True", "True", "True", "True", "True", "…
+#> $ amend_count     <int> 2, 2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3…
+#> $ fil_phone       <chr> "8043809495", "8043809495", "8043809495", "8043809495", "8043809495", "80…
+#> $ fil_email       <chr> "Svirginia100@gmail.com", "Svirginia100@gmail.com", "Svirginia100@gmail.c…
+#> $ election_cycle  <chr> "11/2019", "11/2019", "11/2019", "11/2019", "11/2019", "11/2019", "11/201…
+#> $ elect_start     <dttm> 2016-01-01, 2016-01-01, 2016-01-01, 2016-01-01, 2016-01-01, 2016-01-01, …
+#> $ elect_end       <dttm> 2019-12-31, 2019-12-31, 2019-12-31, 2019-12-31, 2019-12-31, 2019-12-31, …
+#> $ office          <chr> "Member Senate Of Virginia", "Member Senate Of Virginia", "Member Senate …
+#> $ district        <chr> "State Senate - 15th District", "State Senate - 15th District", "State Se…
 #> $ no_activity     <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FAL…
 #> $ referendum_date <dttm> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
-#> $ submitted_date  <dttm> 2022-09-01 01:09:13, 2022-09-01 08:00:53, 2022-09-01 08:00:53, 2022-09-0…
-#> $ account_id      <chr> "{8B1C4536-E1AB-4F58-8095-41D6913FD8E4}", "{8AA8834C-9341-4B01-A45B-233DA…
-#> $ due_date        <dttm> 2022-09-01 23:59:59, 2022-09-15 23:59:59, 2022-09-15 23:59:59, 2022-09-1…
-#> $ fil_source_file <chr> "2022_09_Report.csv", "2022_09_Report.csv", "2022_09_Report.csv", "2022_0…
+#> $ submitted_date  <dttm> 2020-11-02 18:32:27, 2020-11-02 18:32:27, 2020-11-02 18:32:44, 2020-11-0…
+#> $ account_id      <chr> "{25F611E0-1A44-E911-9F1A-984BE103F032}", "{25F611E0-1A44-E911-9F1A-984BE…
+#> $ due_date        <dttm> 2019-06-03 23:59:00, 2019-06-03 23:59:00, 2019-07-15 23:59:00, 2019-07-1…
+#> $ fil_source_file <chr> "2020_11_Report.csv", "2020_11_Report.csv", "2020_11_Report.csv", "2020_1…
 tail(vac)
-#> # A tibble: 6 × 57
+#> # A tibble: 6 × 58
 #>   rpt_id fil_id first_name middle_n…¹ last_…² prefix suffix emp_n…³ occup…⁴ emp_p…⁵ con_a…⁶ con_a…⁷
 #>   <chr>  <chr>  <chr>      <chr>      <chr>   <chr>  <chr>  <chr>   <chr>   <chr>   <chr>   <chr>  
-#> 1 223835 <NA>   Jody       <NA>       Wagner  <NA>   <NA>   Jody's… CEO     Norfol… 7106 O… <NA>   
-#> 2 223835 <NA>   Jody       <NA>       Wagner  <NA>   <NA>   Jody's… CEO     Norfol… 7106 O… <NA>   
-#> 3 223835 <NA>   Jody       <NA>       Wagner  <NA>   <NA>   Jody's… CEO     Norfol… 7106 O… <NA>   
-#> 4 223835 <NA>   Jody       <NA>       Wagner  <NA>   <NA>   Jody's… CEO     Norfol… 7106 O… <NA>   
-#> 5 223835 <NA>   Jody       <NA>       Wagner  <NA>   <NA>   Jody's… CEO     Norfol… 7106 O… <NA>   
-#> 6 223845 584215 SCOTT      <NA>       TRAMME… <NA>   <NA>   X       RETIRED X       12640 … <NA>   
-#> # … with 45 more variables: con_city <chr>, con_state <chr>, con_zip <chr>, is_individual <lgl>,
-#> #   date <dttm>, amount <dbl>, total <dbl>, valuation <chr>, product <chr>, con_source_file <chr>,
-#> #   con_id <chr>, fil_code <chr>, fil_name <chr>, fil_type <chr>, cand_name <chr>,
-#> #   is_stwide <lgl>, is_assembly <lgl>, is_local <lgl>, party <chr>, report_year <chr>,
-#> #   filing_date <dttm>, start_date <dttm>, end_date <dttm>, fil_addr1 <chr>, fil_addr2 <chr>,
-#> #   fil_city <chr>, fil_state <chr>, fil_zip <chr>, filing_type <chr>, is_final <lgl>,
-#> #   is_amend <chr>, amend_count <int>, fil_phone <chr>, fil_email <chr>, election_cycle <chr>, …
+#> 1 312277 235667 <NA>       <NA>       Virgin… <NA>   <NA>   <NA>    PAC     Richmo… 17 E C… <NA>   
+#> 2 312277 702533 <NA>       <NA>       Two Ca… <NA>   <NA>   <NA>    Govern… Richmo… 1205 E… Suite …
+#> 3 312282 702533 <NA>       <NA>       Two Ca… <NA>   <NA>   <NA>    Govern… Richmo… 1205 E… Suite …
+#> 4 312338 891052 <NA>       <NA>       Cigar … <NA>   <NA>   <NA>    Lobbyi… Richmo… Broad … <NA>   
+#> 5 312349 968338 Draper     <NA>       Carlton <NA>   <NA>   Southe… Projec… Mechan… 69 Ken… <NA>   
+#> 6 312349 969959 Draper     <NA>       Carlton <NA>   <NA>   Southe… Projec… Mechan… 69 Ken… <NA>   
+#> # … with 46 more variables: con_city <chr>, con_state <chr>, con_zip <chr>, is_individual <lgl>,
+#> #   date <date>, amount <dbl>, total <dbl>, valuation <chr>, product <chr>, con_source_file <chr>,
+#> #   con_id <chr>, dupe_flag <lgl>, fil_code <chr>, fil_name <chr>, fil_type <chr>,
+#> #   cand_name <chr>, is_stwide <lgl>, is_assembly <lgl>, is_local <lgl>, party <chr>,
+#> #   report_year <chr>, filing_date <dttm>, start_date <dttm>, end_date <dttm>, fil_addr1 <chr>,
+#> #   fil_addr2 <chr>, fil_city <chr>, fil_state <chr>, fil_zip <chr>, filing_type <chr>,
+#> #   is_final <lgl>, is_amend <chr>, amend_count <int>, fil_phone <chr>, fil_email <chr>, …
 ```
 
 ## Missing
@@ -446,66 +481,67 @@ Columns vary in their degree of missing values.
 
 ``` r
 col_stats(vac, count_na)
-#> # A tibble: 57 × 4
+#> # A tibble: 58 × 4
 #>    col             class        n          p
 #>    <chr>           <chr>    <int>      <dbl>
 #>  1 rpt_id          <chr>        0 0         
-#>  2 fil_id          <chr>  1320027 0.893     
-#>  3 first_name      <chr>    72362 0.0490    
-#>  4 middle_name     <chr>  1331411 0.901     
-#>  5 last_name       <chr>        0 0         
-#>  6 prefix          <chr>  1418468 0.960     
-#>  7 suffix          <chr>  1466295 0.992     
-#>  8 emp_name        <chr>    75633 0.0512    
-#>  9 occupation      <chr>     4804 0.00325   
-#> 10 emp_place       <chr>     6284 0.00425   
-#> 11 con_addr1       <chr>       38 0.0000257 
-#> 12 con_addr2       <chr>  1410652 0.954     
-#> 13 con_city        <chr>       14 0.00000947
-#> 14 con_state       <chr>   132483 0.0896    
-#> 15 con_zip         <chr>       23 0.0000156 
+#>  2 fil_id          <chr>  1419188 0.876     
+#>  3 first_name      <chr>    91509 0.0565    
+#>  4 middle_name     <chr>  1456503 0.899     
+#>  5 last_name       <chr>        3 0.00000185
+#>  6 prefix          <chr>  1552385 0.958     
+#>  7 suffix          <chr>  1606892 0.992     
+#>  8 emp_name        <chr>    95013 0.0586    
+#>  9 occupation      <chr>     5846 0.00361   
+#> 10 emp_place       <chr>     7640 0.00472   
+#> 11 con_addr1       <chr>       64 0.0000395 
+#> 12 con_addr2       <chr>  1542460 0.952     
+#> 13 con_city        <chr>       29 0.0000179 
+#> 14 con_state       <chr>   141567 0.0874    
+#> 15 con_zip         <chr>       39 0.0000241 
 #> 16 is_individual   <lgl>        0 0         
-#> 17 date            <dttm>       0 0         
+#> 17 date            <date>       0 0         
 #> 18 amount          <dbl>        0 0         
 #> 19 total           <dbl>        0 0         
-#> 20 valuation       <chr>  1463403 0.990     
-#> 21 product         <chr>  1463542 0.990     
+#> 20 valuation       <chr>  1602728 0.989     
+#> 21 product         <chr>  1602929 0.989     
 #> 22 con_source_file <chr>        0 0         
 #> 23 con_id          <chr>        0 0         
-#> 24 fil_code        <chr>        0 0         
-#> 25 fil_name        <chr>        0 0         
-#> 26 fil_type        <chr>        0 0         
-#> 27 cand_name       <chr>   909226 0.615     
-#> 28 is_stwide       <lgl>        0 0         
-#> 29 is_assembly     <lgl>        0 0         
-#> 30 is_local        <lgl>        0 0         
-#> 31 party           <chr>   909225 0.615     
-#> 32 report_year     <chr>        0 0         
-#> 33 filing_date     <dttm>       0 0         
-#> 34 start_date      <dttm>       0 0         
-#> 35 end_date        <dttm>       0 0         
-#> 36 fil_addr1       <chr>     3897 0.00264   
-#> 37 fil_addr2       <chr>  1435687 0.971     
-#> 38 fil_city        <chr>     3897 0.00264   
-#> 39 fil_state       <chr>        0 0         
-#> 40 fil_zip         <chr>     3897 0.00264   
-#> 41 filing_type     <chr>        0 0         
-#> 42 is_final        <lgl>        0 0         
-#> 43 is_amend        <chr>        0 0         
-#> 44 amend_count     <int>        0 0         
-#> 45 fil_phone       <chr>    34027 0.0230    
-#> 46 fil_email       <chr>    13689 0.00926   
-#> 47 election_cycle  <chr>   908767 0.615     
-#> 48 elect_start     <dttm>       0 0         
-#> 49 elect_end       <dttm>       0 0         
-#> 50 office          <chr>   918413 0.621     
-#> 51 district        <chr>  1164899 0.788     
-#> 52 no_activity     <lgl>        0 0         
-#> 53 referendum_date <dttm> 1475640 0.998     
-#> 54 submitted_date  <dttm>       0 0         
-#> 55 account_id      <chr>        0 0         
-#> 56 due_date        <dttm>       0 0         
-#> 57 fil_source_file <chr>        0 0
+#> 24 dupe_flag       <lgl>        0 0         
+#> 25 fil_code        <chr>        0 0         
+#> 26 fil_name        <chr>        0 0         
+#> 27 fil_type        <chr>        0 0         
+#> 28 cand_name       <chr>  1005395 0.621     
+#> 29 is_stwide       <lgl>        0 0         
+#> 30 is_assembly     <lgl>        0 0         
+#> 31 is_local        <lgl>        0 0         
+#> 32 party           <chr>  1005394 0.621     
+#> 33 report_year     <chr>        0 0         
+#> 34 filing_date     <dttm>       0 0         
+#> 35 start_date      <dttm>       0 0         
+#> 36 end_date        <dttm>       0 0         
+#> 37 fil_addr1       <chr>     3897 0.00241   
+#> 38 fil_addr2       <chr>  1569184 0.968     
+#> 39 fil_city        <chr>     3897 0.00241   
+#> 40 fil_state       <chr>        0 0         
+#> 41 fil_zip         <chr>     3897 0.00241   
+#> 42 filing_type     <chr>        0 0         
+#> 43 is_final        <lgl>        0 0         
+#> 44 is_amend        <chr>        0 0         
+#> 45 amend_count     <int>        0 0         
+#> 46 fil_phone       <chr>    43136 0.0266    
+#> 47 fil_email       <chr>    18297 0.0113    
+#> 48 election_cycle  <chr>  1004934 0.620     
+#> 49 elect_start     <dttm>       0 0         
+#> 50 elect_end       <dttm>       0 0         
+#> 51 office          <chr>  1013847 0.626     
+#> 52 district        <chr>  1267080 0.782     
+#> 53 no_activity     <lgl>        0 0         
+#> 54 referendum_date <dttm> 1617012 0.998     
+#> 55 submitted_date  <dttm>       0 0         
+#> 56 account_id      <chr>        0 0         
+#> 57 due_date        <dttm>       0 0         
+#> 58 fil_source_file <chr>        0 0
 ```
 
 We can flag any record missing a key variable, like a date or name,
@@ -526,68 +562,20 @@ vac <- vac %>%
   flag_na(all_of(key_vars))
 ```
 
-There are 0 records missing a key variable.
+There are 3 records missing a key variable.
 
 ``` r
 sum(vac$na_flag)
-#> [1] 0
+#> [1] 3
 vac %>% 
   filter(na_flag) %>% 
   select(all_of(key_vars))
-#> # A tibble: 0 × 4
-#> # … with 4 variables: con_name <chr>, date <dttm>, amount <dbl>, fil_name <chr>
-```
-
-### Duplicates
-
-We can flag any record duplicated at least once, aside from the
-supposedly unique contribution ID.
-
-``` r
-dupe_file <- path(dirname(raw_dir), "dupes.csv")
-if (file_exists(dupe_file)) {
-  dupes <- read_csv(
-    file = dupe_file,
-    col_types = cols(
-      rpt_id = col_character(),
-      con_id = col_character()
-    )
-  )
-  vac <- left_join(vac, dupes)
-} else {
-  d1 <- duplicated(select(vac, -con_id), fromLast = FALSE)
-  flush_memory()
-  d2 <- duplicated(select(vac, -con_id), fromLast = TRUE)
-  flush_memory()
-  vac <- mutate(vac, dupe_flag = d1 | d2)
-  rm(d1, d2)
-}
-```
-
-``` r
-percent(mean(vac$dupe_flag), 0.01)
-#> [1] "1.23%"
-```
-
-``` r
-vac %>% 
-  filter(dupe_flag) %>% 
-  select(all_of(key_vars)) %>% 
-  arrange(date, con_name)
-#> # A tibble: 18,166 × 4
-#>    con_name                date                amount fil_name                 
-#>    <chr>                   <dttm>               <dbl> <chr>                    
-#>  1 Bonnie Klakowicz        2015-09-30 00:00:00     50 George Barker for Senate 
-#>  2 Bonnie Klakowicz        2015-09-30 00:00:00     50 George Barker for Senate 
-#>  3 Mr. Alfred McKenney     2016-08-30 00:00:00    250 Friends of Monty Mason   
-#>  4 Mr. Alfred McKenney     2016-08-30 00:00:00    250 Friends of Monty Mason   
-#>  5 Mr. Clyde V Croswell    2017-05-15 00:00:00    500 Friends of Wendy Gooditis
-#>  6 Mr. Clyde V Croswell    2017-05-15 00:00:00    500 Friends of Wendy Gooditis
-#>  7 Taylor Montgomery Mason 2017-05-31 00:00:00    250 Friends of Monty Mason   
-#>  8 Taylor Montgomery Mason 2017-05-31 00:00:00    250 Friends of Monty Mason   
-#>  9 Suzanne Liggett         2017-08-15 00:00:00    100 Friends of Wendy Gooditis
-#> 10 Suzanne Liggett         2017-08-15 00:00:00    100 Friends of Wendy Gooditis
-#> # … with 18,156 more rows
+#> # A tibble: 3 × 4
+#>   con_name date       amount fil_name               
+#>   <chr>    <date>      <dbl> <chr>                  
+#> 1 <NA>     2022-09-20     50 Stephanie For Lynchburg
+#> 2 <NA>     2022-11-01     25 Stephanie For Lynchburg
+#> 3 <NA>     2022-11-02    100 Stephanie For Lynchburg
 ```
 
 ### Categorical
@@ -595,68 +583,68 @@ vac %>%
 ``` r
 col_stats(vac, n_distinct)
 #> # A tibble: 60 × 4
-#>    col             class        n           p
-#>    <chr>           <chr>    <int>       <dbl>
-#>  1 rpt_id          <chr>    17347 0.0117     
-#>  2 fil_id          <chr>    70747 0.0479     
-#>  3 first_name      <chr>    35251 0.0238     
-#>  4 middle_name     <chr>     7310 0.00495    
-#>  5 last_name       <chr>   144160 0.0975     
-#>  6 prefix          <chr>      152 0.000103   
-#>  7 suffix          <chr>      124 0.0000839  
-#>  8 emp_name        <chr>   111145 0.0752     
-#>  9 occupation      <chr>    47030 0.0318     
-#> 10 emp_place       <chr>    38712 0.0262     
-#> 11 con_addr1       <chr>   451093 0.305      
-#> 12 con_addr2       <chr>     6036 0.00408    
-#> 13 con_city        <chr>    22636 0.0153     
-#> 14 con_state       <chr>       62 0.0000419  
-#> 15 con_zip         <chr>    89408 0.0605     
-#> 16 is_individual   <lgl>        2 0.00000135 
-#> 17 date            <dttm>    2791 0.00189    
-#> 18 amount          <dbl>    10857 0.00734    
-#> 19 total           <dbl>    32253 0.0218     
-#> 20 valuation       <chr>        5 0.00000338 
-#> 21 product         <chr>     3729 0.00252    
-#> 22 con_source_file <chr>       46 0.0000311  
-#> 23 con_id          <chr>  1478180 1          
-#> 24 fil_code        <chr>     2228 0.00151    
-#> 25 fil_name        <chr>     2246 0.00152    
-#> 26 fil_type        <chr>        7 0.00000474 
-#> 27 cand_name       <chr>     1697 0.00115    
-#> 28 is_stwide       <lgl>        2 0.00000135 
-#> 29 is_assembly     <lgl>        2 0.00000135 
-#> 30 is_local        <lgl>        2 0.00000135 
-#> 31 party           <chr>       10 0.00000677 
-#> 32 report_year     <chr>       13 0.00000879 
-#> 33 filing_date     <dttm>   17346 0.0117     
-#> 34 start_date      <dttm>     865 0.000585   
-#> 35 end_date        <dttm>     781 0.000528   
-#> 36 fil_addr1       <chr>     2180 0.00147    
-#> 37 fil_addr2       <chr>      239 0.000162   
-#> 38 fil_city        <chr>      430 0.000291   
-#> 39 fil_state       <chr>       13 0.00000879 
-#> 40 fil_zip         <chr>      619 0.000419   
-#> 41 filing_type     <chr>        2 0.00000135 
-#> 42 is_final        <lgl>        2 0.00000135 
-#> 43 is_amend        <chr>        2 0.00000135 
-#> 44 amend_count     <int>       13 0.00000879 
-#> 45 fil_phone       <chr>     1975 0.00134    
-#> 46 fil_email       <chr>     2138 0.00145    
-#> 47 election_cycle  <chr>       37 0.0000250  
-#> 48 elect_start     <dttm>      15 0.0000101  
-#> 49 elect_end       <dttm>      15 0.0000101  
-#> 50 office          <chr>      132 0.0000893  
-#> 51 district        <chr>      560 0.000379   
-#> 52 no_activity     <lgl>        2 0.00000135 
-#> 53 referendum_date <dttm>       7 0.00000474 
-#> 54 submitted_date  <dttm>   17347 0.0117     
-#> 55 account_id      <chr>     2228 0.00151    
-#> 56 due_date        <dttm>     739 0.000500   
-#> 57 fil_source_file <chr>       23 0.0000156  
-#> 58 con_name        <chr>   417467 0.282      
-#> 59 na_flag         <lgl>        1 0.000000677
-#> 60 dupe_flag       <lgl>        2 0.00000135
+#>    col             class        n          p
+#>    <chr>           <chr>    <int>      <dbl>
+#>  1 rpt_id          <chr>    21720 0.0134    
+#>  2 fil_id          <chr>    85374 0.0527    
+#>  3 first_name      <chr>    37071 0.0229    
+#>  4 middle_name     <chr>     7790 0.00481   
+#>  5 last_name       <chr>   151691 0.0936    
+#>  6 prefix          <chr>      169 0.000104  
+#>  7 suffix          <chr>      135 0.0000833 
+#>  8 emp_name        <chr>   119710 0.0739    
+#>  9 occupation      <chr>    50790 0.0313    
+#> 10 emp_place       <chr>    40492 0.0250    
+#> 11 con_addr1       <chr>   480621 0.297     
+#> 12 con_addr2       <chr>     6489 0.00400   
+#> 13 con_city        <chr>    23361 0.0144    
+#> 14 con_state       <chr>       62 0.0000383 
+#> 15 con_zip         <chr>    93659 0.0578    
+#> 16 is_individual   <lgl>        2 0.00000123
+#> 17 date            <date>    3392 0.00209   
+#> 18 amount          <dbl>    12411 0.00766   
+#> 19 total           <dbl>    35829 0.0221    
+#> 20 valuation       <chr>        5 0.00000309
+#> 21 product         <chr>     4606 0.00284   
+#> 22 con_source_file <chr>       56 0.0000346 
+#> 23 con_id          <chr>  1620252 1         
+#> 24 dupe_flag       <lgl>        2 0.00000123
+#> 25 fil_code        <chr>     2517 0.00155   
+#> 26 fil_name        <chr>     2534 0.00156   
+#> 27 fil_type        <chr>        7 0.00000432
+#> 28 cand_name       <chr>     1944 0.00120   
+#> 29 is_stwide       <lgl>        2 0.00000123
+#> 30 is_assembly     <lgl>        2 0.00000123
+#> 31 is_local        <lgl>        2 0.00000123
+#> 32 party           <chr>       10 0.00000617
+#> 33 report_year     <chr>       17 0.0000105 
+#> 34 filing_date     <dttm>   21719 0.0134    
+#> 35 start_date      <dttm>    1028 0.000634  
+#> 36 end_date        <dttm>     926 0.000572  
+#> 37 fil_addr1       <chr>     2479 0.00153   
+#> 38 fil_addr2       <chr>      266 0.000164  
+#> 39 fil_city        <chr>      478 0.000295  
+#> 40 fil_state       <chr>       14 0.00000864
+#> 41 fil_zip         <chr>      662 0.000409  
+#> 42 filing_type     <chr>        2 0.00000123
+#> 43 is_final        <lgl>        2 0.00000123
+#> 44 is_amend        <chr>        2 0.00000123
+#> 45 amend_count     <int>       13 0.00000802
+#> 46 fil_phone       <chr>     2252 0.00139   
+#> 47 fil_email       <chr>     2443 0.00151   
+#> 48 election_cycle  <chr>       41 0.0000253 
+#> 49 elect_start     <dttm>      16 0.00000988
+#> 50 elect_end       <dttm>      17 0.0000105 
+#> 51 office          <chr>      150 0.0000926 
+#> 52 district        <chr>      608 0.000375  
+#> 53 no_activity     <lgl>        2 0.00000123
+#> 54 referendum_date <dttm>       7 0.00000432
+#> 55 submitted_date  <dttm>   21720 0.0134    
+#> 56 account_id      <chr>     2517 0.00155   
+#> 57 due_date        <dttm>     861 0.000531  
+#> 58 fil_source_file <chr>       28 0.0000173 
+#> 59 con_name        <chr>   443142 0.274     
+#> 60 na_flag         <lgl>        2 0.00000123
 ```
 
 ![](../plots/unnamed-chunk-1-1.png)<!-- -->![](../plots/unnamed-chunk-1-2.png)<!-- -->![](../plots/unnamed-chunk-1-3.png)<!-- -->![](../plots/unnamed-chunk-1-4.png)<!-- -->
@@ -666,9 +654,9 @@ col_stats(vac, n_distinct)
 ``` r
 summary(vac$amount)
 #>     Min.  1st Qu.   Median     Mean  3rd Qu.     Max. 
-#>        0       12       25      676      100 78945623
+#>        0       12       25      816      100 95648796
 mean(vac$amount <= 0)
-#> [1] 2.70603e-05
+#> [1] 2.530471e-05
 ```
 
 ![](../plots/hist_amount-1.png)<!-- -->
@@ -681,40 +669,16 @@ vac <- mutate(vac, year = year(date))
 
 ``` r
 min(vac$date)
-#> [1] "2012-01-12 UTC"
+#> [1] "2008-08-29"
 sum(vac$year < 2000)
 #> [1] 0
 max(vac$date)
-#> [1] "2024-08-17 UTC"
+#> [1] "2024-08-17"
 sum(vac$date > today())
 #> [1] 4
 ```
 
 ![](../plots/bar_year-1.png)<!-- -->
-
-There are 0 records with a `year` value of 2009, which is before the
-lowest date of 2012 we would expect.
-
-All of these records came from the same two reports made in January and
-April of 2014. An exact same number of records from each report.
-
-``` r
-vac %>% 
-  filter(year == 2009) %>% 
-  count(rpt_id, con_source_file, fil_source_file, sort = TRUE)
-#> # A tibble: 0 × 4
-#> # … with 4 variables: rpt_id <chr>, con_source_file <chr>, fil_source_file <chr>, n <int>
-```
-
-These transactions were made in 2009 and weren’t reported until 2014.
-
-``` r
-vac %>% 
-  filter(year == 2009) %>% 
-  count(date, filing_date, sort = TRUE)
-#> # A tibble: 0 × 3
-#> # … with 3 variables: date <dttm>, filing_date <dttm>, n <int>
-```
 
 ## Wrangle
 
@@ -752,20 +716,20 @@ con_addr_norm <- vac %>%
   select(-con_addr_full)
 ```
 
-    #> # A tibble: 456,762 × 3
-    #>    con_addr1                  con_addr2 con_addr_norm                
-    #>    <chr>                      <chr>     <chr>                        
-    #>  1 611Heritage Circle         <NA>      611HERITAGE CIR              
-    #>  2 429 Castleman Dr.          <NA>      429 CASTLEMAN DR             
-    #>  3 P.O. Box 4282              <NA>      PO BOX 4282                  
-    #>  4 36202 Silcott Meadow Place <NA>      36202 SILCOTT MEADOW PLACE   
-    #>  5 609 Cedar Creek Grade      Suite A   609 CEDAR CREEK GRADE SUITE A
-    #>  6 122 Clearview Drive        <NA>      122 CLEARVIEW DR             
-    #>  7 91 Timber Villa            <NA>      91 TIMBER VILLA              
-    #>  8 702 Battle Ave             <NA>      702 BATTLE AVE               
-    #>  9 10150 Copeland Place       <NA>      10150 COPELAND PLACE         
-    #> 10 1504 Kings Hwy             <NA>      1504 KINGS HWY               
-    #> # … with 456,752 more rows
+    #> # A tibble: 487,187 × 3
+    #>    con_addr1            con_addr2 con_addr_norm          
+    #>    <chr>                <chr>     <chr>                  
+    #>  1 St Louis,  MO        <NA>      ST LOUIS MO            
+    #>  2 12361 Henderson Rd   <NA>      12361 HENDERSON RD     
+    #>  3 152 W. 57th St.      <NA>      152 W 57TH ST          
+    #>  4 3100 Bacon School Rd <NA>      3100 BACON SCHOOL RD   
+    #>  5 4705 Whetstone Ct    <NA>      4705 WHETSTONE CT      
+    #>  6 5550 Columbia Pike   #521      5550 COLUMBIA PIKE #521
+    #>  7 PO BOX 444           <NA>      PO BOX 444             
+    #>  8 PO BOX 734           <NA>      PO BOX 734             
+    #>  9 10463 Jordan Parkway <NA>      10463 JORDAN PKWY      
+    #> 10 204 Forrest Drive    <NA>      204 FORREST DR         
+    #> # … with 487,177 more rows
 
 This table can be joined to the original contributions.
 
@@ -807,18 +771,18 @@ vac %>%
   distinct() %>% 
   sample_n(10)
 #> # A tibble: 10 × 6
-#>    con_addr1                    con_addr2 fil_addr1      fil_addr2 con_addr_norm            fil_a…¹
-#>    <chr>                        <chr>     <chr>          <chr>     <chr>                    <chr>  
-#>  1 224 COLON AVE                <NA>      9431 Goldfield <NA>      224 COLON AVE            9431 G…
-#>  2 102 LANTERN CIR              <NA>      9431 Goldfield <NA>      102 LANTERN CIR          9431 G…
-#>  3 3602 S IRONWOOD DR; APT 220W <NA>      9431 Goldfield <NA>      3602 S IRONWOOD DR APT … 9431 G…
-#>  4 165 WEST END AVE APT 10F     <NA>      9431 Goldfield <NA>      165 WEST END AVE APT 10F 9431 G…
-#>  5 7719 Rio Grande Blvd NW      <NA>      PO Box 26112   <NA>      7719 RIO GRANDE BLVD NW  PO BOX…
-#>  6 13400 Amy Way                <NA>      PO Box 31408   <NA>      13400 AMY WAY            PO BOX…
-#>  7 958 DALE ST                  <NA>      9431 Goldfield <NA>      958 DALE ST              9431 G…
-#>  8 3017 E BERYL AVE             <NA>      9431 Goldfield <NA>      3017 E BERYL AVE         9431 G…
-#>  9 311 Edwin Lane NE            <NA>      PO Box 3950    <NA>      311 EDWIN LANE NE        PO BOX…
-#> 10 PO Box 501                   <NA>      PO Box 3950    <NA>      PO BOX 501               PO BOX…
+#>    con_addr1                   con_addr2 fil_addr1           fil_addr2 con_addr_norm        fil_a…¹
+#>    <chr>                       <chr>     <chr>               <chr>     <chr>                <chr>  
+#>  1 12612 Pleasant Prospect Rd  <NA>      PO Box 2306         <NA>      12612 PLEASANT PROS… PO BOX…
+#>  2 7104 Danford Place          <NA>      5302 Rich Ct.       <NA>      7104 DANFORD PL      5302 R…
+#>  3 5706 GUTHRIE PLACE          <NA>      9431 Goldfield      <NA>      5706 GUTHRIE PL      9431 G…
+#>  4 406 HAWKINS ISLAND DRIVE    <NA>      9431 Goldfield      <NA>      406 HAWKINS ISLAND … 9431 G…
+#>  5 2669 FANIEUL HALL CT.       <NA>      9431 Goldfield      <NA>      2669 FANIEUL HALL CT 9431 G…
+#>  6 4310 GLENVIEW AVENUE        <NA>      9431 Goldfield      <NA>      4310 GLENVIEW AVE    9431 G…
+#>  7 20022 APPLEDOWRE CIRCLE #34 <NA>      9431 Goldfield      <NA>      20022 APPLEDOWRE CI… 9431 G…
+#>  8 11601 MONTANA AVE #6        <NA>      9431 Goldfield      <NA>      11601 MONTANA AVE #6 9431 G…
+#>  9 3151 Rutrough Road          <NA>      4222 Fortuna Center 659       3151 RUTROUGH RD     4222 F…
+#> 10 1916 SAN PEDRO DR NE        <NA>      9431 Goldfield      <NA>      1916 SAN PEDRO DR NE 9431 G…
 #> # … with abbreviated variable name ¹​fil_addr_norm
 ```
 
@@ -849,10 +813,10 @@ progress_table(
 #> # A tibble: 4 × 6
 #>   stage            prop_in n_distinct   prop_na  n_out n_diff
 #>   <chr>              <dbl>      <dbl>     <dbl>  <dbl>  <dbl>
-#> 1 vac$con_zip        0.782      89408 0.0000156 322245  69608
-#> 2 vac$con_zip_norm   0.990      22842 0.000177   14350   2627
-#> 3 vac$fil_zip        0.990        619 0.00264    14530     80
-#> 4 vac$fil_zip_norm   1.00         551 0.00264        3      3
+#> 1 vac$con_zip        0.782      93659 0.0000241 352694  73544
+#> 2 vac$con_zip_norm   0.991      23233 0.000212   14734   2719
+#> 3 vac$fil_zip        0.990        662 0.00241    16545     92
+#> 4 vac$fil_zip_norm   1.00         583 0.00241        3      3
 ```
 
 ### State
@@ -861,9 +825,9 @@ The state variables do not need to be normalized.
 
 ``` r
 prop_in(vac$con_state, valid_state)
-#> [1] 0.999968
+#> [1] 0.9999615
 prop_in(vac$fil_state, valid_state)
-#> [1] 0.9997605
+#> [1] 0.9997741
 ```
 
 ### City
@@ -930,20 +894,20 @@ con_city_swap <- vac %>%
   )
 ```
 
-    #> # A tibble: 3,168 × 4
+    #> # A tibble: 3,412 × 4
     #>    con_city_norm con_state con_zip_norm con_city_swap      
     #>    <chr>         <chr>     <chr>        <chr>              
     #>  1 MC LEAN       VA        22101        MCLEAN             
     #>  2 MC LEAN       VA        22102        MCLEAN             
     #>  3 NEWTON        MA        02459        NEWTON CENTER      
     #>  4 VA BEACH      VA        23451        VIRGINIA BEACH     
-    #>  5 WELLESLEY     MA        02481        WELLESLEY HILLS    
-    #>  6 VA BEACH      VA        23456        VIRGINIA BEACH     
+    #>  5 VA BEACH      VA        23456        VIRGINIA BEACH     
+    #>  6 WELLESLEY     MA        02481        WELLESLEY HILLS    
     #>  7 COEUR DALENE  ID        83815        COEUR D ALENE      
     #>  8 ST AUGUSTINE  FL        32084        SAINT AUGUSTINE    
     #>  9 CHINCOTEAGUE  VA        23336        CHINCOTEAGUE ISLAND
     #> 10 VA BEACH      VA        23454        VIRGINIA BEACH     
-    #> # … with 3,158 more rows
+    #> # … with 3,402 more rows
 
 ``` r
 vac <- left_join(vac, con_city_swap)
@@ -984,28 +948,20 @@ fil_city_swap <- vac %>%
   )
 ```
 
-    #> # A tibble: 19 × 4
-    #>    fil_city_norm fil_state fil_zip_norm fil_city_swap      
-    #>    <chr>         <chr>     <chr>        <chr>              
-    #>  1 FAIRFAX       VA        22039        FAIRFAX STATION    
-    #>  2 HMAPTON       VA        23666        HAMPTON            
-    #>  3 VA BEACH      VA        23451        VIRGINIA BEACH     
-    #>  4 CHESEAPEAKE   VA        23320        CHESAPEAKE         
-    #>  5 BAYSE         VA        22810        BASYE              
-    #>  6 ALEXNDRIA     VA        22314        ALEXANDRIA         
-    #>  7 CLEARBROOK    VA        22624        CLEAR BROOK        
-    #>  8 WILIAMSBURG   VA        23187        WILLIAMSBURG       
-    #>  9 VA BEACH      VA        23454        VIRGINIA BEACH     
-    #> 10 MC LEAN       VA        22101        MCLEAN             
-    #> 11 VA BEACH      VA        23453        VIRGINIA BEACH     
-    #> 12 SPERRYVILLEQ  VA        22740        SPERRYVILLE        
-    #> 13 AMELIA        VA        23002        AMELIA COURT HOUSE 
-    #> 14 NEWPPORT NEWS VA        23602        NEWPORT NEWS       
-    #> 15 SPOTSLVANIA   VA        22553        SPOTSYLVANIA       
-    #> 16 ANANNDALE     VA        22003        ANNANDALE          
-    #> 17 CHINCOTEAGUE  VA        23336        CHINCOTEAGUE ISLAND
-    #> 18 MANAKINSABOT  VA        23103        MANAKIN SABOT      
-    #> 19 RICHMNOND     VA        23218        RICHMOND
+    #> # A tibble: 22 × 4
+    #>    fil_city_norm fil_state fil_zip_norm fil_city_swap  
+    #>    <chr>         <chr>     <chr>        <chr>          
+    #>  1 FAIRFAX       VA        22039        FAIRFAX STATION
+    #>  2 HMAPTON       VA        23666        HAMPTON        
+    #>  3 VA BEACH      VA        23451        VIRGINIA BEACH 
+    #>  4 FAIRFIEDL     VA        24435        FAIRFIELD      
+    #>  5 CHESEAPEAKE   VA        23320        CHESAPEAKE     
+    #>  6 VA BEACH      VA        23454        VIRGINIA BEACH 
+    #>  7 BAYSE         VA        22810        BASYE          
+    #>  8 VA BEACH      VA        23453        VIRGINIA BEACH 
+    #>  9 ALEXNDRIA     VA        22314        ALEXANDRIA     
+    #> 10 CLEARBROOK    VA        22624        CLEAR BROOK    
+    #> # … with 12 more rows
 
 ``` r
 vac <- left_join(vac, fil_city_swap)
@@ -1037,21 +993,21 @@ good_refine <- vac %>%
   )
 ```
 
-    #> [1] 339
-    #> # A tibble: 146 × 5
+    #> [1] 396
+    #> # A tibble: 162 × 5
     #>    con_state con_zip_norm con_city_swap       con_city_refine     n
     #>    <chr>     <chr>        <chr>               <chr>           <int>
-    #>  1 VA        22180        VIENNA VA           VIENNA             40
-    #>  2 NV        89410        GARDNERVILLE NEVADA GARDNERVILLE       20
-    #>  3 PA        17402        YORKYORK            YORK               13
-    #>  4 VA        23220        RICHMONDRICHMOND    RICHMOND           13
-    #>  5 MA        02144        SOMMERSVILLE        SOMERVILLE         10
-    #>  6 CO        80014        AURORA CO           AURORA              9
-    #>  7 OR        97103        ASTORIA OR          ASTORIA             9
-    #>  8 SC        29406        NORTH CHARLESTON    CHARLESTON          8
-    #>  9 VA        22901        CHARLOTTESVILLE VA  CHARLOTTESVILLE     8
-    #> 10 NY        10022        NEW YORK NY         NEW YORK            7
-    #> # … with 136 more rows
+    #>  1 VA        22180        VIENNA VA           VIENNA             44
+    #>  2 NV        89410        GARDNERVILLE NEVADA GARDNERVILLE       23
+    #>  3 VA        20143        CATHARPINCATHARPIN  CATHARPIN          16
+    #>  4 NY        11201        BROOKLYN|NY         BROOKLYN           15
+    #>  5 PA        17402        YORKYORK            YORK               13
+    #>  6 VA        23220        RICHMONDRICHMOND    RICHMOND           13
+    #>  7 MA        02144        SOMMERSVILLE        SOMERVILLE         10
+    #>  8 CO        80014        AURORA CO           AURORA              9
+    #>  9 OR        97103        ASTORIA OR          ASTORIA             9
+    #> 10 SC        29406        NORTH CHARLESTON    CHARLESTON          8
+    #> # … with 152 more rows
 
 Then we can join the refined values back to the database.
 
@@ -1065,13 +1021,13 @@ vac <- vac %>%
 
 | stage                                                                             | prop_in | n_distinct | prop_na | n_out | n_diff |
 |:----------------------------------------------------------------------------------|--------:|-----------:|--------:|------:|-------:|
-| str_to_upper(vac$con_city) | 0.976| 16755| 0.000| 35249| 6562| |vac$con_city_norm |   0.981 |      15310 |   0.000 | 28559 |   5088 |
-| vac$con_city_swap | 0.992| 11367| 0.099| 10073| 1695| |vac$con_city_refine        |   0.993 |      11242 |   0.099 |  9743 |   1570 |
+| str_to_upper(vac$con_city) | 0.976| 17320| 0.000| 39025| 6985| |vac$con_city_norm |   0.981 |      15785 |   0.000 | 31541 |   5419 |
+| vac$con_city_swap | 0.992| 11637| 0.097| 11195| 1817| |vac$con_city_refine        |   0.993 |      11498 |   0.097 | 10808 |   1678 |
 
 | stage                                                                        | prop_in | n_distinct | prop_na | n_out | n_diff |
 |:-----------------------------------------------------------------------------|--------:|-----------:|--------:|------:|-------:|
-| str_to_upper(vac$fil_city) | 0.998| 368| 0.003| 2739| 34| |vac$fil_city_norm |   0.999 |        362 |   0.003 |  1556 |     26 |
-| vac\$fil_city_swap                                                           |   0.999 |        346 |   0.004 |   810 |     12 |
+| str_to_upper(vac$fil_city) | 0.998| 405| 0.002| 3536| 45| |vac$fil_city_norm |   0.999 |        396 |   0.002 |  2151 |     34 |
+| vac\$fil_city_swap                                                           |   0.999 |        378 |   0.004 |   993 |     18 |
 
 You can see how the percentage of valid values increased with each
 stage.
@@ -1104,79 +1060,79 @@ vac <- vac %>%
 glimpse(sample_n(vac, 100))
 #> Rows: 100
 #> Columns: 67
-#> $ rpt_id          <chr> "226901", "226891", "260033", "226901", "256785", "274118", "272937", "25…
-#> $ fil_id          <chr> NA, NA, NA, NA, NA, NA, NA, "789975", NA, NA, NA, NA, NA, NA, NA, NA, "80…
-#> $ first_name      <chr> "ZACHARY", "SHAWNA", NA, "KIMBERLY", "JOHN", "ELIZABETH", "Joe", "Kevin",…
-#> $ middle_name     <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
-#> $ last_name       <chr> "PRUCKOWSKI", "LOMONACO", "Parazonium P.C.", "WOLFE", "TEMPLER", "LOWER-B…
+#> $ rpt_id          <chr> "276299", "271682", "274118", "280399", "306645", "271592", "280399", "26…
+#> $ fil_id          <chr> NA, NA, NA, NA, "776447", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
+#> $ first_name      <chr> "Paul", "Stephen", "MARTIN", "WILLIAM", "Junious", "william", "JOHN", "Jo…
+#> $ middle_name     <chr> NA, NA, NA, NA, NA, NA, NA, NA, "E", "D.", NA, NA, NA, NA, NA, NA, NA, "M…
+#> $ last_name       <chr> "Fischer", "Riederer", "HALL", "MILLIRON", "Mays", "breer", "EDEN", "Scan…
 #> $ prefix          <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
 #> $ suffix          <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
-#> $ emp_name        <chr> "VERTICAL APPLICATIONS", "NEWPORT NEWS PUBLIC LIBRARY", NA, "UNIVERSITY O…
-#> $ occupation      <chr> "IT CONTRACTOR", "OUTREACH COORDINATOR", "Law Firm", "LIBRARIAN", "SOFTWA…
-#> $ emp_place       <chr> "BROADLANDS VA", "NEWPORT NEWS VA", "Virginia Beach,VA", "RICHMOND VA", "…
-#> $ con_addr1       <chr> "125G CLUBHOUSE DR. SW; APT 6", "3516 SPENCE RD", "1112 Laskin Road", "28…
-#> $ con_addr2       <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
-#> $ con_city        <chr> "LEESBURG", "PORTSMOUTH", "Virginia Beach", "RICHMOND", "RESTON", "FALLS …
-#> $ con_state       <chr> "VA", "VA", "VA", "VA", "VA", "VA", "VA", "VA", "WA", "DC", NA, "VA", "VA…
-#> $ con_zip         <chr> "20175", "23703", "23451", "23222", "20190-4629", "22041", "23235-2724", …
-#> $ is_individual   <lgl> TRUE, TRUE, FALSE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, …
-#> $ date            <dttm> 2020-09-30, 2020-06-11, 2021-09-28, 2020-09-30, 2021-05-17, 2021-09-30, …
-#> $ amount          <dbl> 25.0, 25.0, 3000.0, 25.0, 25.0, 250.0, 50.0, 50.0, 50.0, 100.0, 5.0, 100.…
-#> $ total           <dbl> 1200.0, 25.0, 3000.0, 75.0, 100.0, 2050.0, 353.0, 250.0, 50.0, 100.0, 5.0…
+#> $ emp_name        <chr> "Retired", "Retired", "MUFC", "ROBERT MORRIS UNIVERSITY", "seeking", "Not…
+#> $ occupation      <chr> "Retired", "Retired", "MUFC", "CUSTODIAL WORKER", "seeking", "Not Employe…
+#> $ emp_place       <chr> "Arlington,VA", "Manchester Center,VT", "ARLINGTON VA", "BADEN PA", "seek…
+#> $ con_addr1       <chr> "340 N Edison St", "168 East Branch Farms", "100 S ABERDEEN ST", "417 DIP…
+#> $ con_addr2       <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "Apt 2", NA, …
+#> $ con_city        <chr> "Arlington", "Manchester Center", "ARLINGTON", "BADEN", "seeking", "Washi…
+#> $ con_state       <chr> "VA", "VT", "VA", "PA", "VA", "DC", "TX", "VA", "AZ", "VA", "CA", "NH", "…
+#> $ con_zip         <chr> "22203", "05255", "22204", "15005-1715", "00000", "20008-1040", "75227", …
+#> $ is_individual   <lgl> TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, T…
+#> $ date            <date> 2021-09-16, 2021-11-01, 2021-09-26, 2021-10-03, 2022-11-21, 2021-10-27, …
+#> $ amount          <dbl> 10.00, 5.00, 10.00, 50.00, 17.75, 125.00, 5.00, 500.00, 5.00, 300.00, 100…
+#> $ total           <dbl> 181.00, 110.00, 20.00, 50.00, 195.25, 125.00, 15.00, 500.00, 5.00, 300.00…
 #> $ valuation       <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
 #> $ product         <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
-#> $ con_source_file <chr> "2021_01_ScheduleA.csv", "2021_01_ScheduleA.csv", "2021_10_ScheduleA.csv"…
-#> $ con_id          <chr> "5584452", "5549917", "6780082", "5584928", "6450849", "7705162", "749267…
-#> $ fil_code        <chr> "PAC-12-00545", "PAC-12-00545", "CC-21-00082", "PAC-12-00545", "PAC-12-00…
-#> $ fil_name        <chr> "ActBlue Virginia", "ActBlue Virginia", "Youngkin for Governor, Inc.", "A…
-#> $ fil_type        <chr> "Political Action Committee", "Political Action Committee", "Candidate Ca…
-#> $ cand_name       <chr> NA, NA, "Mr. Glenn Allen Youngkin", NA, NA, NA, "Gov. Terrance Richard Mc…
-#> $ is_stwide       <lgl> FALSE, FALSE, TRUE, FALSE, FALSE, FALSE, TRUE, TRUE, FALSE, FALSE, FALSE,…
+#> $ con_source_file <chr> "2022_01_ScheduleA.csv", "2021_12_ScheduleA.csv", "2022_01_ScheduleA.csv"…
+#> $ con_id          <chr> "8599699", "7447635", "7682981", "8790227", "9553598", "7382775", "905348…
+#> $ dupe_flag       <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FAL…
+#> $ fil_code        <chr> "CC-21-00082", "CC-21-00082", "PAC-12-00545", "PAC-12-00545", "PAC-17-006…
+#> $ fil_name        <chr> "Youngkin for Governor, Inc.", "Youngkin for Governor, Inc.", "ActBlue Vi…
+#> $ fil_type        <chr> "Candidate Campaign Committee", "Candidate Campaign Committee", "Politica…
+#> $ cand_name       <chr> "Mr. Glenn Allen Youngkin", "Mr. Glenn Allen Youngkin", NA, NA, NA, "Gov.…
+#> $ is_stwide       <lgl> TRUE, TRUE, FALSE, FALSE, FALSE, TRUE, FALSE, TRUE, FALSE, TRUE, TRUE, FA…
 #> $ is_assembly     <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FAL…
 #> $ is_local        <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FAL…
-#> $ party           <chr> NA, NA, "Republican", NA, NA, NA, "Democratic", "Republican", NA, NA, NA,…
-#> $ report_year     <chr> "2020", "2020", "2021", "2020", "2021", "2021", "2021", "2021", "2021", "…
-#> $ filing_date     <dttm> 2021-01-05 15:20:33, 2021-01-05 14:56:50, 2021-10-15 19:11:39, 2021-01-0…
-#> $ start_date      <dttm> 2020-07-01, 2020-04-01, 2021-09-01, 2020-07-01, 2021-04-01, 2021-07-01, …
-#> $ end_date        <dttm> 2020-09-30, 2020-06-30, 2021-09-30, 2020-09-30, 2021-06-30, 2021-09-30, …
-#> $ fil_addr1       <chr> "9431 Goldfield", "9431 Goldfield", "PO Box 3950", "9431 Goldfield", "943…
-#> $ fil_addr2       <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
-#> $ fil_city        <chr> "Burke", "Burke", "Merrifield", "Burke", "Burke", "Burke", "Arlington", "…
+#> $ party           <chr> "Republican", "Republican", NA, NA, NA, "Democratic", NA, "Republican", N…
+#> $ report_year     <chr> "2021", "2021", "2021", "2022", "2022", "2021", "2022", "2021", "2021", "…
+#> $ filing_date     <dttm> 2022-01-14 15:00:11, 2021-12-02 18:11:13, 2022-01-07 13:04:15, 2022-03-0…
+#> $ start_date      <dttm> 2021-09-01, 2021-10-22, 2021-07-01, 2021-10-01, 2022-10-01, 2021-10-22, …
+#> $ end_date        <dttm> 2021-09-30, 2021-11-25, 2021-09-30, 2021-12-31, 2022-12-31, 2021-11-25, …
+#> $ fil_addr1       <chr> "PO Box 3950", "PO Box 3950", "9431 Goldfield", "9431 Goldfield", "P.O. B…
+#> $ fil_addr2       <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "SUIT…
+#> $ fil_city        <chr> "Merrifield", "Merrifield", "Burke", "Burke", "Lovettsville", "Arlington"…
 #> $ fil_state       <chr> "VA", "VA", "VA", "VA", "VA", "VA", "VA", "VA", "VA", "VA", "VA", "VA", "…
-#> $ fil_zip         <chr> "22015", "22015", "22116", "22015", "22015", "22015", "22215", "22656", "…
+#> $ fil_zip         <chr> "22116", "22116", "22015", "22015", "20180", "22215", "22015", "22116", "…
 #> $ filing_type     <chr> "Report", "Report", "Report", "Report", "Report", "Report", "Report", "Re…
 #> $ is_final        <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FAL…
-#> $ is_amend        <chr> "True", "True", "False", "True", "False", "False", "True", "False", "Fals…
-#> $ amend_count     <int> 1, 1, 0, 1, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0…
-#> $ fil_phone       <chr> "617 517-7600", "617 517-7600", "(571) 286-1930", "617 517-7600", "617 51…
-#> $ fil_email       <chr> "treasurer@actblue.com", "treasurer@actblue.com", "info@youngkinforgovern…
-#> $ election_cycle  <chr> NA, NA, "11/2021", NA, NA, NA, "11/2021", "11/2021", NA, NA, NA, "11/2021…
-#> $ elect_start     <dttm> 2020-01-01, 2020-01-01, 2018-01-01, 2020-01-01, 2021-01-01, 2021-01-01, …
-#> $ elect_end       <dttm> 2020-12-31, 2020-12-31, 2021-12-31, 2020-12-31, 2021-12-31, 2021-12-31, …
-#> $ office          <chr> NA, NA, "Governor", NA, NA, NA, "Governor", "Lieutenant Governor", NA, NA…
-#> $ district        <chr> NA, NA, NA, NA, NA, NA, "00", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
+#> $ is_amend        <chr> "True", "False", "False", "False", "False", "False", "False", "True", "Fa…
+#> $ amend_count     <int> 3, 0, 0, 0, 0, 0, 0, 3, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0…
+#> $ fil_phone       <chr> "(571) 286-1930", "(571) 286-1930", "617 517-7600", "617 517-7600", NA, "…
+#> $ fil_email       <chr> "info@youngkinforgovernor.com", "info@youngkinforgovernor.com", "treasure…
+#> $ election_cycle  <chr> "11/2021", "11/2021", NA, NA, NA, "11/2021", NA, "11/2021", NA, "11/2021"…
+#> $ elect_start     <dttm> 2018-01-01, 2018-01-01, 2021-01-01, 2021-01-01, 2022-01-01, 2018-01-01, …
+#> $ elect_end       <dttm> 2021-12-31, 2021-12-31, 2021-12-31, 2021-12-31, 2022-12-31, 2021-12-31, …
+#> $ office          <chr> "Governor", "Governor", NA, NA, NA, "Governor", NA, "Governor", NA, "Gove…
+#> $ district        <chr> NA, NA, NA, NA, NA, "00", NA, NA, NA, NA, NA, NA, NA, NA, NA, "00", NA, N…
 #> $ no_activity     <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FAL…
 #> $ referendum_date <dttm> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
-#> $ submitted_date  <dttm> 2021-01-05 15:44:39, 2021-01-05 15:04:51, 2021-10-15 19:56:36, 2021-01-0…
-#> $ account_id      <chr> "{76FAFFED-0784-E111-9BED-984BE103F032}", "{76FAFFED-0784-E111-9BED-984BE…
-#> $ due_date        <dttm> 2020-10-15 23:59:00, 2020-07-15 23:59:00, 2021-10-15 23:59:59, 2020-10-1…
-#> $ fil_source_file <chr> "2021_01_Report.csv", "2021_01_Report.csv", "2021_10_Report.csv", "2021_0…
-#> $ con_name        <chr> "ZACHARY PRUCKOWSKI", "SHAWNA LOMONACO", "Parazonium P.C.", "KIMBERLY WOL…
+#> $ submitted_date  <dttm> 2022-01-18 17:11:19, 2021-12-02 19:59:41, 2022-01-07 14:09:08, 2022-03-0…
+#> $ account_id      <chr> "{3F72510A-5026-4F1F-BCD6-2339F134B348}", "{3F72510A-5026-4F1F-BCD6-2339F…
+#> $ due_date        <dttm> 2021-10-15 23:59:59, 2021-12-02 23:59:59, 2021-10-15 23:59:59, 2022-01-1…
+#> $ fil_source_file <chr> "2022_01_Report.csv", "2021_12_Report.csv", "2022_01_Report.csv", "2022_0…
+#> $ con_name        <chr> "Paul Fischer", "Stephen Riederer", "MARTIN HALL", "WILLIAM MILLIRON", "J…
 #> $ na_flag         <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FAL…
-#> $ dupe_flag       <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FAL…
-#> $ year            <dbl> 2020, 2020, 2021, 2020, 2021, 2021, 2021, 2021, 2021, 2021, 2021, 2021, 2…
-#> $ con_addr_clean  <chr> "125G CLUBHOUSE DR SW APT 6", "3516 SPENCE RD", "1112 LASKIN RD", "2804 H…
-#> $ fil_addr_clean  <chr> "9431 GOLDFIELD", "9431 GOLDFIELD", "PO BOX 3950", "9431 GOLDFIELD", "943…
-#> $ con_zip_clean   <chr> "20175", "23703", "23451", "23222", "20190", "22041", "23235", "23111", "…
-#> $ fil_zip_clean   <chr> "22015", "22015", "22116", "22015", "22015", "22015", "22215", "22656", "…
-#> $ fil_city_clean  <chr> "BURKE", "BURKE", "MERRIFIELD", "BURKE", "BURKE", "BURKE", "ARLINGTON", "…
-#> $ con_city_clean  <chr> "LEESBURG", "PORTSMOUTH", "VIRGINIA BEACH", "RICHMOND", "RESTON", "FALLS …
+#> $ year            <dbl> 2021, 2021, 2021, 2021, 2022, 2021, 2021, 2021, 2021, 2021, 2021, 2022, 2…
+#> $ con_addr_clean  <chr> "340 N EDISON ST", "168 EAST BRANCH FARMS", "100 S ABERDEEN ST", "417 DIP…
+#> $ fil_addr_clean  <chr> "PO BOX 3950", "PO BOX 3950", "9431 GOLDFIELD", "9431 GOLDFIELD", "PO BOX…
+#> $ con_zip_clean   <chr> "22203", "05255", "22204", "15005", NA, "20008", "75227", "22101", "85747…
+#> $ fil_zip_clean   <chr> "22116", "22116", "22015", "22015", "20180", "22215", "22015", "22116", "…
+#> $ fil_city_clean  <chr> "MERRIFIELD", "MERRIFIELD", "BURKE", "BURKE", "LOVETTSVILLE", "ARLINGTON"…
+#> $ con_city_clean  <chr> "ARLINGTON", "MANCHESTER CENTER", "ARLINGTON", "BADEN", NA, "WASHINGTON",…
 ```
 
-1.  There are 1,478,180 records in the database.
-2.  There are 18,166 duplicate records in the database.
+1.  There are 1,620,252 records in the database.
+2.  There are 19,063 duplicate records in the database.
 3.  The range and distribution of `amount` and `date` seem reasonable.
-4.  There are 0 records missing key variables.
+4.  There are 3 records missing key variables.
 5.  Consistency in geographic data has been improved with
     `campfin::normal_*()`.
 6.  The 4-digit `year` variable has been created with
@@ -1192,7 +1148,7 @@ clean_dir <- dir_create(here("state","va", "contribs", "data", "clean"))
 clean_path <- path(clean_dir, "va_contribs_clean.csv")
 write_csv(vac, clean_path, na = "")
 (clean_size <- file_size(clean_path))
-#> 961M
+#> 1.01G
 file_encoding(clean_path) %>% 
   mutate(across(path, path.abbrev))
 #> # A tibble: 1 × 3
@@ -1252,43 +1208,43 @@ The following table describes the variables in our final exported file:
 | `product`         | `character` | In-kind contribution product            |
 | `con_source_file` | `character` | Contribution source file name           |
 | `con_id`          | `character` | **Unique** contribution ID              |
-| `fil_code`        | `character` | **Unique** filer code                   |
-| `fil_name`        | `character` | Filing committee name                   |
-| `fil_type`        | `character` | Filing committee type                   |
-| `cand_name`       | `character` | Candidate name                          |
-| `is_stwide`       | `logical`   | Flag for statewide race                 |
-| `is_assembly`     | `logical`   | Flag for general assembly race          |
-| `is_local`        | `logical`   | Flag for local race                     |
-| `party`           | `character` | Candidate political party               |
-| `report_year`     | `character` | Reporting year                          |
-| `filing_date`     | `double`    | Date report filed                       |
-| `start_date`      | `double`    | Date reporting period began             |
-| `end_date`        | `double`    | Date reporting period ended             |
-| `fil_addr1`       | `character` | Committee street address                |
-| `fil_addr2`       | `character` | Committee secondary address             |
-| `fil_city`        | `character` | Committee city name                     |
-| `fil_state`       | `character` | Committee state abbreviation            |
-| `fil_zip`         | `character` | Committee ZIP+4 code                    |
-| `filing_type`     | `character` | Type of report filed                    |
-| `is_final`        | `logical`   | Flag for final election report          |
-| `is_amend`        | `character` | Flag for amended report                 |
-| `amend_count`     | `integer`   | Amended report version count            |
-| `fil_phone`       | `character` | Filer phone number                      |
-| `fil_email`       | `character` | Filer email address                     |
-| `election_cycle`  | `character` | Election cycle date/month               |
-| `elect_start`     | `double`    | Date election began                     |
-| `elect_end`       | `double`    | Date election ended                     |
-| `office`          | `character` | Office sought by receiving candidate    |
-| `district`        | `character` | District in which election held         |
-| `no_activity`     | `logical`   | Flag for no activity reported           |
-| `referendum_date` | `double`    | Date referendum held                    |
-| `submitted_date`  | `double`    | Date report filed                       |
-| `account_id`      | `character` | Unique account ID hash of filer         |
-| `due_date`        | `double`    | Date report due with state              |
-| `fil_source_file` | `character` | Report source file name                 |
-| `con_name`        | `character` | Combined full contributor name          |
-| `na_flag`         | `logical`   | Flag for missing date, amount, or name  |
-| `dupe_flag`       | `logical`   | Flag for completely duplicated record   |
+| `dupe_flag`       | `logical`   | **Unique** filer code                   |
+| `fil_code`        | `character` | Filing committee name                   |
+| `fil_name`        | `character` | Filing committee type                   |
+| `fil_type`        | `character` | Candidate name                          |
+| `cand_name`       | `character` | Flag for statewide race                 |
+| `is_stwide`       | `logical`   | Flag for general assembly race          |
+| `is_assembly`     | `logical`   | Flag for local race                     |
+| `is_local`        | `logical`   | Candidate political party               |
+| `party`           | `character` | Reporting year                          |
+| `report_year`     | `character` | Date report filed                       |
+| `filing_date`     | `double`    | Date reporting period began             |
+| `start_date`      | `double`    | Date reporting period ended             |
+| `end_date`        | `double`    | Committee street address                |
+| `fil_addr1`       | `character` | Committee secondary address             |
+| `fil_addr2`       | `character` | Committee city name                     |
+| `fil_city`        | `character` | Committee state abbreviation            |
+| `fil_state`       | `character` | Committee ZIP+4 code                    |
+| `fil_zip`         | `character` | Type of report filed                    |
+| `filing_type`     | `character` | Flag for final election report          |
+| `is_final`        | `logical`   | Flag for amended report                 |
+| `is_amend`        | `character` | Amended report version count            |
+| `amend_count`     | `integer`   | Filer phone number                      |
+| `fil_phone`       | `character` | Filer email address                     |
+| `fil_email`       | `character` | Election cycle date/month               |
+| `election_cycle`  | `character` | Date election began                     |
+| `elect_start`     | `double`    | Date election ended                     |
+| `elect_end`       | `double`    | Office sought by receiving candidate    |
+| `office`          | `character` | District in which election held         |
+| `district`        | `character` | Flag for no activity reported           |
+| `no_activity`     | `logical`   | Date referendum held                    |
+| `referendum_date` | `double`    | Date report filed                       |
+| `submitted_date`  | `double`    | Unique account ID hash of filer         |
+| `account_id`      | `character` | Date report due with state              |
+| `due_date`        | `double`    | Report source file name                 |
+| `fil_source_file` | `character` | Combined full contributor name          |
+| `con_name`        | `character` | Flag for missing date, amount, or name  |
+| `na_flag`         | `logical`   | Flag for completely duplicated record   |
 | `year`            | `double`    | Calendar year of contribution date      |
 | `con_addr_clean`  | `character` | Normalized contributor combined address |
 | `fil_addr_clean`  | `character` | Normalized committee combined address   |

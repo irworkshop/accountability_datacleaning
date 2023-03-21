@@ -1,6 +1,6 @@
 ---
 title: "Alaksa Lobbyists"
-author: "Kiernan Nicholls"
+author: "Kiernan Nicholls & Yanqi Xu"
 date: "`r Sys.time()`"
 output:
   github_document: 
@@ -128,10 +128,10 @@ On the APOC home page, we can see that lobbying disclosure data can be searched.
 ## Import
 
 From the APOC website, we can query the database for any year and download the
-data locally.
+data locally. 
 
 ```{r raw_dir}
-raw_dir <- here("ak", "lobby", "data", "raw")
+raw_dir <- here("state","ak", "lobby", "data", "raw")
 dir_create(raw_dir)
 ```
 
@@ -164,21 +164,20 @@ aklr <- vroom(
   escape_double = FALSE,
   guess_max = 0,
   num_threads = 1,
-  .name_repair = make_clean_names,
   col_types = cols(
     .default = col_character(),
     Result = col_double(),
     `Report Year` = col_integer(),
-    Submitted = col_date_usa(),
+    Submitted = col_date_mdy(),
     `Other Services Performed` = col_logical(),
     `Administrative Lobbying` = col_logical(),
     `Legislative Lobbying` = col_logical(),
-    `Start Date` = col_date_usa(),
+    `Start Date` = col_date_mdy(),
     `Compensation Amount` = col_double(),
     `Reimbursement Of Expenses` = col_logical(),
     `Other Compensation` = col_logical(),
     `Not Qualified As Lobbyist` = col_logical(),
-    `Date Qualified As Lobbyist` = col_date_usa()
+    `Date Qualified As Lobbyist` = col_date_mdy()
   )
 )
 ```
@@ -242,7 +241,7 @@ col_stats(aklr, n_distinct)
 ```
 
 ```{r plot_comp_name, echo=FALSE}
-explore_plot(aklr, compensation_name, flip = TRUE)
+explore_plot(aklr, compensation_name) + coord_flip()
 ```
 
 ```{r plot_reimburse, echo=FALSE}
@@ -258,7 +257,7 @@ aklr %>%
   filter(compensation_name %in% most_common(aklr$compensation_name, 4)) %>% 
   ggplot(aes(compensation_amount)) +
   geom_histogram(fill = RColorBrewer::brewer.pal(3, "Dark2")[1]) +
-  scale_x_continuous(labels = dollar, trans = "log10") +
+  scale_x_continuous(labels = dollar, trans = "log10") + 
   scale_y_continuous(labels = comma) +
   facet_wrap(~compensation_name, scales = "free", ncol = 1)
 ```
@@ -453,7 +452,7 @@ progress_table(
 ## Export
 
 ```{r proc_dir}
-clean_dir <- dir_create(here("ak", "lobby", "data", "clean"))
+clean_dir <- dir_create(here("state","ak", "lobby", "data", "clean"))
 ```
 
 ```{r proc_export}
@@ -463,7 +462,7 @@ aklr %>%
     -contains("match")
   ) %>% 
   write_csv(
-    path = path(clean_dir, "ak_lobbyists_clean.csv"),
+    path = path(clean_dir, "ak_lobb_reg.csv"),
     na = ""
   )
 ```

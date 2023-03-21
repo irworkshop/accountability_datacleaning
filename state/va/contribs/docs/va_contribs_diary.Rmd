@@ -34,7 +34,7 @@ if (!interactive()) {
 ```
 
 ```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
-fs::dir_create(here::here("va", "contribs", "docs"))
+fs::dir_create(here::here("state","va", "contribs", "docs"))
 ```
 
 ## Project
@@ -149,7 +149,7 @@ We are interested in schedule's A and B.
 
 The data itself is hosted on an SBE server and organized in monthly directories.
 
-```{r raw_list}
+```{r raw_list, eval=FALSE}
 library(polite)
 sbe_url <- "https://apps.elections.virginia.gov/SBE_CSV/CF/"
 #sbe_list <- read_html(sbe_url)
@@ -157,7 +157,7 @@ sbe_session <- bow(sbe_url, force = T)
 sbe_list <- scrape(sbe_session)
 ```
 
-```{r raw_show, include=FALSE}
+```{r raw_show, eval=FALSE, include=FALSE}
 sbe_table <- sbe_list %>% 
   html_node("pre") %>% 
   html_text() %>% 
@@ -188,9 +188,10 @@ sbe_table %>%
   kable()
 ```
 
-Our last update covered everything prior to Oct, 2020, so we'll start from `2020_11` to `2022-10`. It appears that the full month of Oct, 2022 was included in the report. 
+We'll grab everything from `2020_11` to `2023_02`. The next update should start with `2023-03`.
 
-From this list of directories, we can extract each `<href>` HTML tag. These
+From this list of directories, we can extract each `<
+href>` HTML tag. These
 tags provide the directory names.
 
 ```{r sbe_dirs_get, results='asis'}
@@ -199,8 +200,12 @@ sbe_base <- "https://apps.elections.virginia.gov"
 ```
 
 ```{r sbe_dirs_update}
-update_start <- "2020/11/1"
+update_start <- "2020/10/1"
 update_end <- "2023/2/1"
+```
+
+
+```{r sbe_dirs_update_table, eval=FALSE, include=FALSE}
 sbe_table <- sbe_table %>% filter(datetime >= ymd(update_start) & datetime <= ymd(update_end))
 # sbe_dirs <- sbe_list %>%
 #   html_nodes("a") %>%
@@ -214,7 +219,8 @@ sbe_dirs <-  paste0(
 ```
 
 
-```{r sbe_dirs_list, echo=FALSE}
+
+```{r sbe_dirs_list, eval=FALSE, include=FALSE}
 sbe_dirs %>% 
   tail() %>% 
   md_code() %>% 
@@ -229,7 +235,7 @@ We also want all of the `Report.csv` files for each month, these files contain
 the information on the reports filed by the committees which contains the
 contributions.
 
-```{r sbe_names_get}
+```{r sbe_names_get, eval=FALSE}
 sbe_names <- character()
 for (dir in sbe_dirs) {
   sbe_names <- 
@@ -237,12 +243,12 @@ for (dir in sbe_dirs) {
     scrape() %>% 
     html_nodes("a") %>% 
     html_attr("href") %>% 
-    str_subset("(Schedule(A|B))|Report") %>% 
+    str_subset("(Schedule(A|B))") %>% 
     append(sbe_names)
 }
 ```
 
-```{r sbe_paths_list, echo=FALSE}
+```{r sbe_paths_list, echo=FALSE, eval=FALSE, include=FALSE}
 sbe_names %>% 
   tail() %>% 
   md_code() %>% 
@@ -251,13 +257,13 @@ sbe_names %>%
 
 Using these server paths, we can build local paths to save each file to.
 
-```{r raw_paths_build}
+```{r raw_paths_build, eval=FALSE}
 raw_urls <- str_c(sbe_base, sbe_names)
 raw_names <- basename(str_replace(raw_urls, "/(?=[^/]*$)", "_"))
 raw_paths <- path(raw_dir, raw_names)
 ```
 
-```{r raw_paths_list, echo=FALSE}
+```{r raw_paths_list, echo=FALSE, eval=FALSE}
 raw_paths %>%
   tail() %>% 
   str_remove("(.*)(?=/va)") %>% 
@@ -269,7 +275,7 @@ If these paths don't already exist, we can download them now. Each file needs to
 be read so that erroneous double quotations can be removed using regular 
 expressions.
 
-```{r raw_download}
+```{r raw_download, eval=FALSE }
 library(httr)
 for (i in seq_along(raw_urls)) {
   wait = 1
@@ -295,7 +301,8 @@ for (i in seq_along(raw_urls)) {
 We can now read all of the schedule A and B files into a single dataframe.
 
 ```{r sched_paths}
-sched_paths <- str_subset(raw_paths, "Schedule")
+#sched_paths <- str_subset(raw_paths, "Schedule")
+sched_paths <- dir_ls(raw_dir, regexp= ".+Schedule.+")
 ```
 
 ```{r raw_read}
@@ -320,7 +327,7 @@ vac <- map_df(
 We can also identify the source file for each record.
 
 ```{r raw_source}
-vac$source_file <- basename(sched_paths[as.integer(vac$source_file)])
+vac$source_file <- basename(vac$source_file)
 vac <- relocate(vac, source_file, .after = last_col())
 ```
 
@@ -356,7 +363,9 @@ The `date` column is a mix of `%m/%d/%Y` and `%Y-%m-%d` formats.
 ```{r raw_dates}
 vac_mdy <- str_which(vac$date, "^\\d{2}/")
 vac$date[vac_mdy] <- as.character(mdy(vac$date[vac_mdy]))
-vac$date <- parse_datetime(vac$date)
+vac$date <- parse_datetime(vac$date) %>% as_date()
+
+#vac %>% mutate(across(contains("date"), parse_date)
 ```
 
 Each contribution has a unique ID number for either schedule A or B. We can
@@ -368,6 +377,40 @@ vac <- vac %>%
   select(-sched_a, -sched_b)
 ```
 
+## Duplicates
+
+We can flag any record duplicated at least once, aside from the supposedly
+unique contribution ID.
+
+```{r dupe_find}
+dupe_file <- path(dirname(raw_dir), "dupes.csv")
+if (file_exists(dupe_file)) {
+  vac <- read_csv(
+    file = dupe_file,
+    col_types = cols(
+      rpt_id = col_character(),
+      con_id = col_character()
+    )
+  )
+  #vac <- left_join(vac, dupes)
+} else {
+vac <- flag_dupes(vac, -con_id)
+vac %>% write_csv(path(dirname(raw_dir), "dupes.csv"))
+}
+```
+
+```{r dupe_count}
+percent(mean(vac$dupe_flag), 0.01)
+```
+
+```{r dupe_view}
+vac %>% 
+  filter(dupe_flag) %>% 
+  #select(all_of(key_vars)) %>% 
+  arrange(date) %>% glimpse()
+```
+
+
 ## Join
 
 Each contribution is reported by the committee to which is was made. The
@@ -375,7 +418,8 @@ information on those reports, including who filed them and when, is contained
 in a separate file every month.
 
 ```{r rpt_paths}
-rpt_paths <- str_subset(raw_paths, "Report")
+rpt_paths <- dir_ls(here("state","va", "expends", "data", "raw", "meta"))
+#rpt_paths <- str_subset(raw_paths, "Report")
 ```
 
 ```{r rpt_read}
@@ -408,7 +452,8 @@ rpt <- map_df(
 ```
 
 ```{r rpt_source}
-rpt$source_file <- basename(rpt_paths[as.integer(rpt$source_file)])
+#rpt$source_file <- basename(rpt_paths[as.integer(rpt$source_file)])
+rpt$source_file <- basename(rpt$source_file)
 rpt <- relocate(rpt, source_file, .after = last_col())
 ```
 
@@ -508,43 +553,6 @@ vac %>%
   select(all_of(key_vars))
 ```
 
-### Duplicates
-
-We can flag any record duplicated at least once, aside from the supposedly
-unique contribution ID.
-
-```{r dupe_find}
-dupe_file <- path(dirname(raw_dir), "dupes.csv")
-if (file_exists(dupe_file)) {
-  dupes <- read_csv(
-    file = dupe_file,
-    col_types = cols(
-      rpt_id = col_character(),
-      con_id = col_character()
-    )
-  )
-  vac <- left_join(vac, dupes)
-} else {
-  d1 <- duplicated(select(vac, -con_id), fromLast = FALSE)
-  flush_memory()
-  d2 <- duplicated(select(vac, -con_id), fromLast = TRUE)
-  flush_memory()
-  vac <- mutate(vac, dupe_flag = d1 | d2)
-  rm(d1, d2)
-}
-```
-
-```{r dupe_count}
-percent(mean(vac$dupe_flag), 0.01)
-```
-
-```{r dupe_view}
-vac %>% 
-  filter(dupe_flag) %>% 
-  select(all_of(key_vars)) %>% 
-  arrange(date, con_name)
-```
-
 ### Categorical
 
 ```{r n_distinct}
@@ -578,7 +586,7 @@ vac %>%
   ) +
   labs(
     title = "Virginia Contributions Amount Distribution",
-    subtitle = "from 2000 to 2019",
+    subtitle = "from 2012 to 2023",
     caption = "Source: VA SBE",
     x = "Amount",
     y = "Count"
@@ -607,8 +615,8 @@ vac %>%
   scale_fill_brewer(palette = "Dark2") +
   scale_y_continuous(labels = comma) +
   #scale_x_continuous(breaks = seq(2009, 2020, by = 1)) +
-  scale_x_continuous(breaks = seq(2020, 2022, by = 1)) +
-  coord_cartesian(xlim = c(2020, 2022)) +
+  scale_x_continuous(breaks = seq(2009, 2022, by = 1)) +
+  coord_cartesian(xlim = c(2009, 2022)) +
   theme(legend.position = "bottom") +
   labs(
     title = "Virginia Contributions by Year",
@@ -617,26 +625,6 @@ vac %>%
     x = "Year Made",
     y = "Count"
   )
-```
-
-There are `r comma(sum(vac$year == 2009))` records with a `year` value of 2009,
-which is before the lowest date of 2012 we would expect.
-
-All of these records came from the same two reports made in January and April
-of 2014. An exact same number of records from each report.
-
-```{r year_source}
-vac %>% 
-  filter(year == 2009) %>% 
-  count(rpt_id, con_source_file, fil_source_file, sort = TRUE)
-```
-
-These transactions were made in 2009 and weren't reported until 2014.
-
-```{r year_filed}
-vac %>% 
-  filter(year == 2009) %>% 
-  count(date, filing_date, sort = TRUE)
 ```
 
 ## Wrangle

@@ -1,6 +1,6 @@
 ---
 title: "Virgina Expenditures Data Diary"
-author: "Kiernan Nicholls"
+author: "Kiernan Nicholls & Yanqi Xu"
 date: "`r format(Sys.time())`"
 output:
   github_document: 
@@ -159,7 +159,7 @@ For years after 2011, the files are organized by month and are not separated:
 
 1. `SBE_CSV/CF/2013_02/ScheduleD.csv`
 
-We will start by downloading all the files separated by month from 2012 to 2019.
+We will start by downloading all the files separated by month from 2012 to January 2023. Next update should start February 2023. 
 
 First we need to create the URLs for each year/month combination.
 
@@ -167,7 +167,9 @@ First we need to create the URLs for each year/month combination.
 #sub_dirs <- unlist(map(2012:2019, str_c, str_pad(1:12, 2, side = "left", pad = "0"), sep = "_"))
 sub_dirs <- unlist(map(2012:2023, str_c, str_pad(1:12, 2, side = "left", pad = "0"), sep = "_"))
 exp_urls <- sort(glue("https://apps.elections.virginia.gov/SBE_CSV/CF/{sub_dirs}/ScheduleD.csv"))
+rep_urls <- sort(glue("https://apps.elections.virginia.gov/SBE_CSV/CF/{sub_dirs}/Report.csv"))
 exp_urls <- exp_urls[3:(length(sub_dirs)-11)]
+rep_urls <- rep_urls[3:(length(sub_dirs)-11)]
 head(exp_urls)
 
 exp_urls %>% 
@@ -183,11 +185,13 @@ raw_dir <- here("state","va", "expends", "data", "raw", "single")
 dir_create(raw_dir)
 
 raw_names <- basename(str_replace(exp_urls, "/(?=[^/]*$)", "_"))
+rep_names <- basename(str_replace(rep_urls, "/(?=[^/]*$)", "_"))
 raw_paths <- path(raw_dir, raw_names)
+rep_paths <- path(dir_create(here("state","va", "expends", "data", "raw", "meta")), rep_names)
 ```
 
 
-```{r raw_paths_build}
+```{r download, eval=FALSE}
 library(httr)    
 
 for (i in seq_along(raw_paths)) {
@@ -208,6 +212,18 @@ for (i in seq_along(raw_paths)) {
     }
   }
 }
+
+for (i in seq_along(rep_paths)) {
+  wait = 0.5
+  if (file_exists(rep_paths[i])) {
+    next("file already downloaded")
+  } else {
+ ua <- "Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Mobile Safari/537.36"
+    httr::GET(rep_urls[i],add_headers(`Connection` = "keep-alive", `User-Agent` = ua), write_disk(rep_paths[i]))
+      Sys.sleep(time = wait)
+    }
+  }
+}
 ```
 
 ## Fix
@@ -221,7 +237,6 @@ fix_eval <- length(dir_ls(fix_dir)) != nrow(raw_info)
 
 ```{r fix_loop_old, eval=FALSE}
 # for old format files
-if (fix_eval) {
 for (f in raw_info$path) {
   n <- path(fix_dir, str_c("FIX", basename(f), sep = "_"))
   x <- read_lines(f, skip = 1)
@@ -240,12 +255,10 @@ for (f in raw_info$path) {
   write_lines(x, n)
   message(basename(n))
 }
-}
 ```
 
 ```{r fix_loop_new, eval=FALSE}
 # new format files
-if (fix_eval){
 for (f in raw_info$path[1:length(raw_info$path)]) {
   n <- path(fix_dir, str_c("FIX", basename(f), sep = "_"))
   x <- read_lines(f, skip = 1)
@@ -259,7 +272,6 @@ for (f in raw_info$path[1:length(raw_info$path)]) {
   }
   write_lines(x, n)
   message(basename(n))
-}
 }
 ```
 
@@ -278,6 +290,8 @@ Since all recent files are located in the same directory with the same structure
 all at once by using `purrr::map()` to apply `readr::read_csv()` to each file in the directory,
 then binding each file into a single data frame using `dplyr::bind_rows()`.
 
+We also need to read the related data on reports submitted by each committee, which contain names and addresses of each committee. The field we can join the report data by is `report_id`, which is unique. Each committee could have multiple report ids, but not vice versa.
+
 ```{r read fix}
 va <- 
   dir_ls(fix_dir, glob = "*.csv") %>% 
@@ -293,11 +307,27 @@ va <-
       Amount = col_double()
     )
   ) %>% 
-  clean_names()
+    clean_names()
+
+va_meta <- rep_paths %>% map_dfr(read_delim, delim = ",",
+                                   na = c("NA", "N/A", ""),
+                                 escape_double = TRUE, col_types = cols(
+                                   .default = col_character(), ReportYear=col_integer(),
+                                 )) %>% clean_names()
+
+va_prev <- dir_ls(here("state", "va","expends", "data", "previous")) %>% 
+                    read_delim(
+    delim = ",",
+    na = c("NA", "N/A", ""),
+    escape_double = FALSE,
+    col_types = cols(.default = col_character(),
+                     IsIndividual = col_logical(),
+                      TransactionDate = col_date("%m/%d/%Y"),
+                      Amount = col_double())) %>% clean_names()
 ```
 
 The older files, separated by payee type, have a different structure and will have to be imported,
-explored, and cleaned seperated from the recent files.
+explored, and cleaned separated from the recent files.
 
 ## Explore
 
@@ -305,7 +335,32 @@ There are `r nrow(va)` records of `r length(va)` variables in the full database.
 
 ```{r glimpse}
 glimpse(sample_frac(va))
+glimpse(sample_frac(va_meta))
 ```
+
+```{r meta streamline}
+va_meta <- va_meta %>% select(report_id,candidate_name, committee_name,office_sought, city, address_line1, address_line2, address_line3, state_code, zip_code)
+
+va_meta <- va_meta %>% rename_at(vars(5:10), ~paste0("com_",.))
+```
+
+```{r report}
+va <- va %>% left_join(va_meta, by = "report_id")
+
+va <- va %>% filter(schedule_d_id %out% va_prev$schedule_d_id)
+
+va %>% filter(committee_name %>% is.na()) %>% nrow()
+```
+
+```{r}
+va_prev <- va_prev %>% rename_at(vars(starts_with("committee")), ~sub("committee","com", .x)) %>% glimpse()
+
+va_new <- va_prev %>% 
+  rename(committee_contact_id = com_contact_id,
+         committee_name = com_name) %>% 
+  bind_rows(va)
+```
+
 
 ### Distinct
 
@@ -455,7 +510,7 @@ va %>%
   )
 ```
 
-We will have to transformt he x-axis logarithmically to find patterns in the distribution.
+We will have to transform the x-axis logarithmically to find patterns in the distribution.
 
 ```{r amount_hist, echo=FALSE}
 va %>% 
@@ -541,6 +596,7 @@ summary(va$transaction_date)
 va %>%
   group_by(year = year(transaction_date)) %>% 
   count() %>% 
+  
   ggplot() +
   geom_col(aes(year, n)) +
   scale_x_continuous(breaks = 2012:2023) +
@@ -592,47 +648,58 @@ va <- va %>% mutate(transaction_year = year(transaction_date))
 The `address` variable should be minimally cleaned by removing punctuation and fixing white-space.
 
 ```{r str_normalize}
-str_normalize <- function(string) {
-  string %>% 
-    str_to_upper() %>% 
-    str_replace("-", " ") %>% 
-    str_remove_all(rx_punctuation()) %>% 
-    str_trim() %>% 
-    str_squish() %>% 
-    na_if("") %>% 
-    na_if("NA")
-}
-```
-
-```{rclean_address1}
 va <- va %>% 
+ unite(
+    col = address_full,
+    starts_with("address_"),
+    sep = " ",
+    remove = FALSE,
+    na.rm = TRUE
+  ) %>% 
+  # normalize combined addr
   mutate(
-    address1_clean = str_normalize(address_line1),
-    address2_clean = str_normalize(address_line2)
-  )
-
-va %>% 
-  filter(address_line1 != address1_clean) %>%
-  select(address_line1, address1_clean) %>% 
-  sample_n(10)
+    address_clean = normal_address(
+      address = address_full,
+      abbs = usps_street,
+      na_rep = TRUE
+    )
+  ) %>% 
+  select(-address_full)
 ```
 
-### Zipcode
+```{r com address norm}
+va <- va %>% 
+ unite(
+    col = address_full,
+    starts_with("com_address_"),
+    sep = " ",
+    remove = FALSE,
+    na.rm = TRUE
+  ) %>% 
+  # normalize combined addr
+  mutate(
+    com_address_clean = normal_address(
+      address = address_full,
+      abbs = usps_street,
+      na_rep = TRUE
+    )
+  ) %>% 
+  select(-address_full)
+```
 
+### ZIP
+
+For ZIP codes, the `campfin::normal_zip()` function will attempt to create
+valid _five_ digit codes by removing the ZIP+4 suffix and returning leading
+zeroes dropped by other programs like Microsoft Excel.
 
 
 ```{r clean_zipcodes}
 va <- va %>% 
-  mutate(
-    zip_clean = zip_code %>% 
-      str_remove_all(rx_whitespace()) %>%
-      str_remove_all(rx_digit(inverse = TRUE)) %>% 
-      str_pad(width = 5, pad = "0") %>% 
-      str_sub(1, 5) %>%
-      na_if("00000") %>% 
-      na_if("11111") %>% 
-      na_if("99999") %>% 
-      na_if("")
+  mutate_at(
+    .vars = vars(ends_with("zip_code")),
+    .funs = list(norm = normal_zip),
+    na_rep = TRUE
   )
 ```
 
@@ -649,7 +716,14 @@ setdiff(valid_state, state.abb)
 
 ```{r view_states, collapse=TRUE}
 setdiff(va$state_code, valid_state)
-va <- va %>% mutate(state_clean = state_code %>% str_replace("New York", "NY"))
+va <- va %>%
+    mutate_at(
+    .vars = vars(ends_with("state_code")),
+    .funs = list(norm = normal_state),
+    abbreviate = TRUE,
+    na_rep = TRUE,
+    valid = NULL
+  )
 ```
 
 ### City
@@ -673,14 +747,14 @@ We will use the `prep_city()` function in the `/R` directory to normalize the st
 common `NA` values, and lop abbreviations off the end of the string.
 
 ```{r prep_city, collapse=TRUE}
-va <- va %>%
-  mutate(
-    city_norm = normal_city(
-      city = city,
-      na = invalid_city,,
-      states = c("VA", "VIRGINIA", "MA", "DC", "TX")
-    ) %>% 
-      str_replace("^VA\\b", "VIRGINIA")
+va <- va %>% 
+    mutate_at(
+    .vars = vars(ends_with("city")),
+    .funs = list(norm = normal_city),
+    abbs = usps_city,
+    states = c("VA", "VIRGINIA", "MA", "DC", "TX"),
+    na = invalid_city,
+    na_rep = TRUE
   )
 
 n_distinct(va$city_norm)
@@ -696,13 +770,14 @@ va <- va %>%
   left_join(
     zipcodes,
     by = c(
-      "state_clean" = "state",
-      "zip_clean" = "zip"
+      "state_code_norm" = "state",
+      "zip_code_norm" = "zip"
     )
   ) %>%
   rename(city = city.x, city_match = city.y) %>%
   mutate(match_dist = stringdist(city_norm, city_match))
 ```
+
 
 ```{r view_dist}
 summary(va$match_dist)
@@ -733,6 +808,31 @@ va <- va %>%
   )
 
 n_distinct(va$city_swap)
+
+va <- va %>% 
+rename(com_city_raw = city) %>% 
+  left_join(
+    y = zipcodes,
+    by = c(
+      "com_state_code_norm" = "state",
+      "com_zip_code_norm" = "zip"
+    )
+  ) %>% 
+  rename(com_city_match = city) %>% 
+  mutate(
+    match_abb = is_abbrev(com_city_norm,com_city_match),
+    match_dist = str_dist(com_city_norm,com_city_match),
+    com_city_swap = if_else(
+      condition = !is.na(com_city_match) & (match_abb | match_dist == 1),
+      true = com_city_match, 
+      false = com_city_norm
+    )
+  ) %>% 
+  select(
+    -com_city_match,
+    -match_abb,
+    -match_dist
+  ) %>% glimpse()
 ```
 
 There are still `r sum(va$city_swap %out% valid_city, na.rm = T)` records with a `city_swap` value
@@ -746,75 +846,50 @@ va %>%
 ```
 
 #### Refine
+The [OpenRefine][or] algorithms can be used to group similar strings and replace
+the less common versions with their most common counterpart. This can greatly
+reduce inconsistency, but with low confidence; we will only keep any refined
+strings that have a valid city/state/zip combination.
 
-We can use the OpenRefine clustering algorithms to further cluster and merge similar values. We
-will create a new table of these refined values.
+[or]: https://openrefine.org/
 
-```{r view_refine}
-va_refined <- va %>%
-  filter(match_dist != 1) %>% 
+```{r city_refine}
+good_refine <- va %>% 
   mutate(
-    city_refine = if_else(
-      condition = match_dist > 2,
-      true = city_swap %>% 
-        key_collision_merge() %>% 
-        n_gram_merge(),
-      false = city_swap
-    )
+    city_refine = city_swap %>% 
+      key_collision_merge() %>% 
+      n_gram_merge(numgram = 1)
   ) %>% 
   filter(city_refine != city_swap) %>% 
-  rename(city_raw = city) %>% 
-  select(
-    schedule_d_id,
-    state_clean,
-    zip_clean,
-    city_raw,
-    city_norm,
-    city_match,
-    city_swap,
-    city_refine
-  )
-```
-
-#### Review
-
-The algorithms rely on comparing the relative frequencies of two similar values, rather than a list
-of _actual_ values. This can cause some accidential changes to be made.
-
-```{r most_refined}
-va_refined %>% 
-  select(-schedule_d_id) %>%
-  distinct()
-
-va_refined %>% 
-  count(state_clean, city_refine, sort = TRUE)
-```
-
-```{r good_refine}
-cva_refined <- va_refined %>% 
   inner_join(
-    zipcodes,
+    y = zipcodes,
     by = c(
       "city_refine" = "city",
-      "state_clean" = "state"
-    )
-  ) %>% 
-  select(schedule_d_id, city_refine)
-```
-
-#### Join
-
-```{r join_refine}
-va <- va %>% 
-  left_join(va_refined) %>% 
-  mutate(
-    city_clean = if_else(
-      condition = is.na(city_refine),
-      true = city_swap,
-      false = city_refine
+      "state_code_norm" = "state",
+      "zip_code_norm" = "zip"
     )
   )
 ```
+
+```{r city_count, echo=FALSE}
+good_refine %>%
+  count(
+    state_code_norm, 
+    zip_code_norm, 
+    city_swap, 
+    city_refine,
+    sort = TRUE
+  )
+```
+
+Then we can join the refined values back to the database.
+
+```{r city_join}
+va <- va %>% 
+  left_join(good_refine, by = names(.)) %>% 
+  mutate(city_refine = coalesce(city_refine, city_swap))
+```
+
 
 #### Progress
 
@@ -824,7 +899,7 @@ to be valid and reduce the total distinct values by correcting misspellings.
 ```{r city_progress, echo=FALSE}
 many_city <- c(valid_city, extra_city)
 progress <- progress_table(
-  toupper(va$city_raw),
+  toupper(va$city),
   va$city_norm,
   va$city_swap,
   va$city_refine,
@@ -879,25 +954,35 @@ progress %>%
   )
 ```
 
-## Export
 
+## Export
+1. There are `r comma(nrow(va))` records in the database.
+1. There are `r comma(sum(va$dupe_flag))` duplicate records in the database.
+1. The range and distribution of `amount` and `date` seem reasonable.
+1. There are `r comma(sum(va$na_flag))` records missing key variables.
+1. Consistency in geographic data has been improved with `campfin::normal_*()`.
+1. The 4-digit `year` variable has been created with `lubridate::year()`.
 ```{r}
 proc_dir <- here("state","va", "expends", "data", "processed")
 dir_create(proc_dir)
 
-va %>% 
+va <- va %>% 
+  rename(city_clean = city_refine,
+         state_clean = state_code_norm,
+  com_state_clean = com_state_code_norm,
+         zip_clean = zip_code_norm,
+         com_zip_clean = com_zip_code_norm,
+         com_city_clean = com_city_swap) %>% 
   select(
-    -address_line1,
-    -address_line2,
-    -zip_code,
-    -state_code,
-    -city,
     -city_norm,
+    -city_swap,
     -city_match,
-    -match_dist
-  ) %>% 
+    -com_city_norm
+  )
+
+va %>% 
   write_csv(
     na = "",
-    path = str_c(proc_dir, "va_expends_clean.csv", sep = "/")
+    path = str_c(proc_dir, "va_expends.csv", sep = "/")
   )
 ```
