@@ -1,6 +1,6 @@
 ---
 title: "Utah Contributions"
-author: "Kiernan Nicholls"
+author: "Kiernan Nicholls & Aarushi Sahejpal"
 date: "`r date()`"
 output:
   github_document: 
@@ -352,40 +352,12 @@ or committee.
 ```{r glimpse}
 glimpse(utc)
 tail(utc)
+
 ```
 
 We can see that despite data existing since 1998, contributions aren't really
 reported in bulk until 2008.
 
-```{r echo=FALSE}
-row_count <- utc %>% 
-  count(entity_type, report_year, sort = TRUE)
-
-et_levels <- row_count %>% 
-  group_by(entity_type) %>% 
-  summarise(n = sum(n)) %>% 
-  arrange(desc(n)) %>% 
-  pull(entity_type)
-
-row_count$entity_type <- factor(
-  x = row_count$entity_type,
-  levels = et_levels
-)
-
-row_count %>% 
-  ggplot(aes(x = report_year, y = n)) +
-  geom_col(aes(fill = entity_type), position = position_stack(reverse = TRUE)) +
-  scale_fill_brewer(palette = "Dark2") +
-  scale_y_continuous(labels = comma) +
-  theme(legend.position = "bottom") +
-  guides(fill = guide_legend(nrow = 1, byrow = TRUE))+
-  labs(
-    title = "Utah Contributions by Entity Type and Report Year",
-    subtitle = "Combonation determines in which file contribution obtained",
-    x = "Report Year",
-    y = "Count"
-  )
-```
 
 ### Missing
 
@@ -439,7 +411,6 @@ col_stats(utc, n_distinct)
 
 ```{r distinct_plots, echo=FALSE}
 explore_plot(utc, report) + scale_x_wrap()
-explore_plot(utc, entity_type)
 ```
 
 ### Amounts
@@ -496,7 +467,7 @@ utc %>%
   geom_col(aes(fill = even)) + 
   scale_fill_brewer(palette = "Dark2") +
   scale_y_continuous(labels = comma) +
-  scale_x_continuous(breaks = seq(2000, 2020, by = 2)) +
+  scale_x_continuous(breaks = seq(2000, 2023, by = 2)) +
   theme(legend.position = "bottom") +
   labs(
     title = "Utah Contributions by Year",
@@ -846,7 +817,7 @@ Now the file can be saved on disk for upload to the Accountability server.
 
 ```{r clean_dir}
 clean_dir <- dir_create(here("ut", "contribs", "data", "clean"))
-clean_path <- path(clean_dir, "ut_contribs_2000-20210827.csv")
+clean_path <- path(clean_dir, "ut_contribs_2000-2023.csv")
 write_csv(utc, clean_path, na = "")
 (clean_size <- file_size(clean_path))
 ```
