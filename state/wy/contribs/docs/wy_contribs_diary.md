@@ -1,28 +1,28 @@
 Wyoming Contributions
 ================
-Kiernan Nicholls
-Tue Oct 19 15:27:59 2021
+Kiernan Nicholls & Aarushi Sahejpal
+Fri Mar 24 22:01:13 2023
 
--   [Project](#project)
--   [Objectives](#objectives)
--   [Packages](#packages)
--   [Source](#source)
--   [Download](#download)
--   [Read](#read)
--   [Explore](#explore)
--   [Separate](#separate)
-    -   [Missing](#missing)
-    -   [Duplicates](#duplicates)
-    -   [Categorical](#categorical)
-    -   [Amounts](#amounts)
-    -   [Dates](#dates)
--   [Wrangle](#wrangle)
-    -   [ZIP](#zip)
-    -   [City](#city)
--   [Conclude](#conclude)
--   [Export](#export)
--   [Upload](#upload)
--   [Dictionary](#dictionary)
+- <a href="#project" id="toc-project">Project</a>
+- <a href="#objectives" id="toc-objectives">Objectives</a>
+- <a href="#packages" id="toc-packages">Packages</a>
+- <a href="#source" id="toc-source">Source</a>
+- <a href="#download" id="toc-download">Download</a>
+- <a href="#read" id="toc-read">Read</a>
+- <a href="#explore" id="toc-explore">Explore</a>
+- <a href="#separate" id="toc-separate">Separate</a>
+  - <a href="#missing" id="toc-missing">Missing</a>
+  - <a href="#duplicates" id="toc-duplicates">Duplicates</a>
+  - <a href="#categorical" id="toc-categorical">Categorical</a>
+  - <a href="#amounts" id="toc-amounts">Amounts</a>
+  - <a href="#dates" id="toc-dates">Dates</a>
+- <a href="#wrangle" id="toc-wrangle">Wrangle</a>
+  - <a href="#zip" id="toc-zip">ZIP</a>
+  - <a href="#city" id="toc-city">City</a>
+- <a href="#conclude" id="toc-conclude">Conclude</a>
+- <a href="#export" id="toc-export">Export</a>
+- <a href="#upload" id="toc-upload">Upload</a>
+- <a href="#dictionary" id="toc-dictionary">Dictionary</a>
 
 <!-- Place comments regarding knitting here -->
 
@@ -122,7 +122,7 @@ sources. Those search results need to be manually exported as the
 raw_dir <- dir_create(here("wy", "contribs", "data", "raw"))
 raw_txt <- dir_ls(raw_dir, glob = "*.txt")
 file_size(raw_txt)
-#> 16.7M
+#> 7.63M
 ```
 
 ## Read
@@ -147,31 +147,32 @@ wyc <- clean_names(wyc, case = "snake")
 
 ## Explore
 
-There are 124,996 rows of 8 columns. Each record represents a single
+There are 59,416 rows of 8 columns. Each record represents a single
 contribution from an individual or business to a political committee.
 
 ``` r
 glimpse(wyc)
-#> Rows: 124,996
+#> Rows: 59,416
 #> Columns: 8
-#> $ contributor_name  <chr> "RAY, ROBERT  (CHEYENNE)", "WYOMING INVESTOR NETWORK (LANDER)", NA, "HANLON, THEODORE  (CHEY…
-#> $ recipient_name    <chr> "LARAMIE DEMOCRATIC PARTY CENTRAL COMMITTEE", "WOMEN FOR WYOMING PAC", "PROTECT OUR POLICE P…
-#> $ recipient_type    <chr> "PARTY COMMITTEE", "POLITICAL ACTION COMMITTEE", "POLITICAL ACTION COMMITTEE", "PARTY COMMIT…
-#> $ contribution_type <chr> "MONETARY", "MONETARY", "UN-ITEMIZED", "MONETARY", "MONETARY", "MONETARY", "MONETARY", "MONE…
-#> $ date              <date> 2020-12-31, 2020-12-31, 2020-12-31, 2020-12-30, 2020-12-30, 2020-12-30, 2020-12-29, 2020-12…
-#> $ filing_status     <chr> "AMEND - ADD", "AMEND - ADD", "FILED", "AMEND - ADD", "AMEND - ADD", "AMEND - ADD", "AMEND -…
-#> $ amount            <dbl> 87.09, 230.00, 19035.00, 193.90, 10.00, 10.00, 10.00, 28.83, 20.00, 20.00, 20.00, 50.00, 1.0…
-#> $ city_state_zip    <chr> "CHEYENNE, WY 82009", "LANDER, WY 82520", NA, "CHEYENNE, WY 82003", "LARAMIE, WY 82072", "LA…
+#> $ contributor_name  <chr> "KING, SUSAN  (BILLINGS)", "OEDEKOVEN, PEGGY  (LAGRANGE)", "SHUPTRINE, SANDY  (JACKSON)", "W…
+#> $ recipient_name    <chr> "VOTEVOGELHEIM", "COMMITTEE TO ELECT CURT MEIER", "STORER FOR STATE HOUSE", "FRIENDS OF MARK…
+#> $ recipient_type    <chr> "CANDIDATE COMMITTEE", "CANDIDATE COMMITTEE", "CANDIDATE COMMITTEE", "CANDIDATE COMMITTEE", …
+#> $ contribution_type <chr> "MONETARY", "MONETARY", "MONETARY", "MONETARY", "MONETARY", "MONETARY", "MONETARY", "MONETAR…
+#> $ date              <date> 2022-12-22, 2022-12-19, 2022-12-19, 2022-12-19, 2022-12-16, 2022-12-08, 2022-12-08, 2022-12…
+#> $ filing_status     <chr> "AMEND - ADD", "AMEND - ADD", "AMEND - ADD", "AMEND - ADD", "AMEND - ADD", "AMEND - ADD", "A…
+#> $ amount            <dbl> 100.00, 6.00, 100.00, 1000.00, 2500.00, 200.00, 253.43, 253.43, 70.00, 100.00, 117.72, 100.0…
+#> $ city_state_zip    <chr> "BILLINGS, MT 59106", "LAGRANGE, WY 82221", "JACKSON, WY 83001", "BENTONVILLE, AR 72716", "C…
 tail(wyc)
 #> # A tibble: 6 × 8
-#>   contributor_name   recipient_name       recipient_type contribution_ty… date       filing_status amount city_state_zip
-#>   <chr>              <chr>                <chr>          <chr>            <date>     <chr>          <dbl> <chr>         
-#> 1 FRANK PEASLEY (DO… PLATTE REPUBLICAN P… PARTY COMMITT… MONETARY         2009-01-01 FILED           300  "DOUGLAS, WY …
-#> 2 MATHEWSON, PAM  (… ALBANY DEMOCRATIC P… PARTY COMMITT… IN-KIND          2009-01-01 FILED            80  "LARAMIE, WY …
-#> 3 MEASOM, FRAN  (JA… TETON DEMOCRATIC PA… PARTY COMMITT… MONETARY         2009-01-01 FILED            40  "JACKSON, WY …
-#> 4 <NA>               BIG HORN DEMOCRATIC… PARTY COMMITT… UN-ITEMIZED      2009-01-01 FILED           566. "AA "         
-#> 5 <NA>               FREMONT REPUBLICAN … PARTY COMMITT… UN-ITEMIZED      2009-01-01 FILED           370   <NA>         
-#> 6 <NA>               PARK REPUBLICAN PAR… PARTY COMMITT… UN-ITEMIZED      2008-12-16 PUBLISHED       281.  <NA>
+#>   contributor_name                 recipient_name       recipient_type      contribu…¹ date       filin…² amount city_…³
+#>   <chr>                            <chr>                <chr>               <chr>      <date>     <chr>    <dbl> <chr>  
+#> 1 BUNCE, WILLIAM W  (STEPHENVILLE) MICHELI FOR GOVERNOR CANDIDATE COMMITTEE MONETARY   2009-04-08 FILED     1000 STEPHE…
+#> 2 COSNER, BARNEY  (LINCOLN)        MICHELI FOR GOVERNOR CANDIDATE COMMITTEE MONETARY   2009-04-08 FILED     1000 LINCOL…
+#> 3 MICHELI, MATTHEW J  (CHEYENNE)   MICHELI FOR GOVERNOR CANDIDATE COMMITTEE MONETARY   2009-04-08 FILED     4010 CHEYEN…
+#> 4 PARK, GORDON L  (EVANSTON)       MICHELI FOR GOVERNOR CANDIDATE COMMITTEE MONETARY   2009-04-08 FILED      100 EVANST…
+#> 5 THOMPSON, DOUGLAS L  (LANDER)    MICHELI FOR GOVERNOR CANDIDATE COMMITTEE MONETARY   2009-04-08 FILED      100 LANDER…
+#> 6 MICHELI, RON  (FT. BRIDGER)      MICHELI FOR GOVERNOR CANDIDATE COMMITTEE MONETARY   2009-03-15 FILED     1000 FT. BR…
+#> # … with abbreviated variable names ¹​contribution_type, ²​filing_status, ³​city_state_zip
 ```
 
 ## Separate
@@ -187,7 +188,7 @@ wyc <- wyc %>%
   extract(
     col = "city_state_zip",
     into = c("city_split", "state_split", "zip_split"),
-    regex = "^(.*), (.*) (.*)$",
+    regex = "^(.*),\\s+(\\w{2})\\s+(\\d{5})$",
     remove = FALSE
   ) %>% 
   mutate(across(where(is.character), str_squish)) %>% 
@@ -203,18 +204,18 @@ col_stats(wyc, count_na)
 #> # A tibble: 12 × 4
 #>    col               class      n      p
 #>    <chr>             <chr>  <int>  <dbl>
-#>  1 contributor_name  <chr>   3330 0.0266
-#>  2 contributor_city  <chr>   3336 0.0267
+#>  1 contributor_name  <chr>   1000 0.0168
+#>  2 contributor_city  <chr>   1006 0.0169
 #>  3 recipient_name    <chr>      0 0     
 #>  4 recipient_type    <chr>      0 0     
 #>  5 contribution_type <chr>      0 0     
 #>  6 date              <date>     0 0     
 #>  7 filing_status     <chr>      0 0     
 #>  8 amount            <dbl>      0 0     
-#>  9 city_state_zip    <chr>   3167 0.0253
-#> 10 city_split        <chr>   3349 0.0268
-#> 11 state_split       <chr>   3263 0.0261
-#> 12 zip_split         <chr>   3349 0.0268
+#>  9 city_state_zip    <chr>    961 0.0162
+#> 10 city_split        <chr>   1022 0.0172
+#> 11 state_split       <chr>   1022 0.0172
+#> 12 zip_split         <chr>   1022 0.0172
 ```
 
 We can flag any record missing a key variable needed to identify a
@@ -224,29 +225,29 @@ transaction.
 key_vars <- c("date", "contributor_name", "amount", "recipient_name")
 wyc <- flag_na(wyc, all_of(key_vars))
 mean(wyc$na_flag)
-#> [1] 0.02664085
+#> [1] 0.01683048
 sum(wyc$na_flag)
-#> [1] 3330
+#> [1] 1000
 ```
 
 ``` r
 wyc %>% 
   filter(na_flag) %>% 
   select(all_of(key_vars))
-#> # A tibble: 3,330 × 4
-#>    date       contributor_name   amount recipient_name                           
-#>    <date>     <chr>               <dbl> <chr>                                    
-#>  1 2020-12-31 <NA>             19035    PROTECT OUR POLICE PAC                   
-#>  2 2020-12-22 <NA>               260    PARK REPUBLICAN PARTY CENTRAL COMMITTEE  
-#>  3 2020-12-21 <NA>               164    REPUBLICAN                               
-#>  4 2020-12-15 <NA>                47.5  MARSHALL BURT                            
-#>  5 2020-12-14 <NA>                 5.44 MARSHALL BURT                            
-#>  6 2020-12-01 <NA>                 9    REPUBLICAN                               
-#>  7 2020-12-01 <NA>               205    REPUBLICAN                               
-#>  8 2020-11-30 <NA>               296.   REPUBLICAN                               
-#>  9 2020-11-24 <NA>                42    ALBANY REPUBLICAN PARTY CENTRAL COMMITTEE
-#> 10 2020-11-23 <NA>                12    PARK REPUBLICAN PARTY CENTRAL COMMITTEE  
-#> # … with 3,320 more rows
+#> # A tibble: 1,000 × 4
+#>    date       contributor_name amount recipient_name                     
+#>    <date>     <chr>             <dbl> <chr>                              
+#>  1 2022-12-01 <NA>               5.05 CONNOLLY FOR HOUSE COMMITTEE       
+#>  2 2022-11-06 <NA>             200    COMMITTEE TO ELECT JEN SOLIS       
+#>  3 2022-10-28 <NA>              50    CONNOLLY FOR HOUSE COMMITTEE       
+#>  4 2022-10-27 <NA>              90    TODD PETERSON                      
+#>  5 2022-10-26 <NA>             255    COMMITTEE TO ELECT LEESA KUHLMANN  
+#>  6 2022-10-26 <NA>             100    TED HANLON COMMITTEE TO ELECT      
+#>  7 2022-10-25 <NA>              95.3  MARSHALL ALAN BURT                 
+#>  8 2022-10-21 <NA>              60    THE COMMITTEE TO ELECT JORDAN EVANS
+#>  9 2022-10-18 <NA>             292.   BEN HORNOK FOR WYOMING             
+#> 10 2022-10-18 <NA>              40    JEFF D MARTIN                      
+#> # … with 990 more rows
 ```
 
 ### Duplicates
@@ -256,9 +257,9 @@ We can also flag any record completely duplicated across every column.
 ``` r
 wyc <- flag_dupes(wyc, everything())
 mean(wyc$dupe_flag)
-#> [1] 0.0374652
+#> [1] 0.008920156
 sum(wyc$dupe_flag)
-#> [1] 4683
+#> [1] 530
 ```
 
 ``` r
@@ -266,20 +267,20 @@ wyc %>%
   filter(dupe_flag) %>% 
   select(all_of(key_vars)) %>% 
   arrange(date)
-#> # A tibble: 4,683 × 4
-#>    date       contributor_name    amount recipient_name                           
-#>    <date>     <chr>                <dbl> <chr>                                    
-#>  1 2009-01-01 ACTBLUE WYOMING       24.0 TETON DEMOCRATIC PARTY CENTRAL COMMITTEE 
-#>  2 2009-01-01 ACTBLUE WYOMING       24.0 TETON DEMOCRATIC PARTY CENTRAL COMMITTEE 
-#>  3 2009-10-07 LENZ, CLARK A         40   ALBANY REPUBLICAN PARTY CENTRAL COMMITTEE
-#>  4 2009-10-07 LENZ, CLARK A         40   ALBANY REPUBLICAN PARTY CENTRAL COMMITTEE
-#>  5 2009-10-07 STUTZ, SAMANTHASARA   20   ALBANY REPUBLICAN PARTY CENTRAL COMMITTEE
-#>  6 2009-10-07 STUTZ, SAMANTHASARA   20   ALBANY REPUBLICAN PARTY CENTRAL COMMITTEE
-#>  7 2009-11-15 THOMPSON, CODY       100   MICHELI FOR GOVERNOR                     
-#>  8 2009-11-15 THOMPSON, CODY       100   MICHELI FOR GOVERNOR                     
-#>  9 2009-11-21 BLUEMEL, IVAN         60   MICHELI FOR GOVERNOR                     
-#> 10 2009-11-21 BLUEMEL, IVAN         60   MICHELI FOR GOVERNOR                     
-#> # … with 4,673 more rows
+#> # A tibble: 530 × 4
+#>    date       contributor_name  amount recipient_name      
+#>    <date>     <chr>              <dbl> <chr>               
+#>  1 2009-11-15 THOMPSON, CODY       100 MICHELI FOR GOVERNOR
+#>  2 2009-11-15 THOMPSON, CODY       100 MICHELI FOR GOVERNOR
+#>  3 2009-11-21 BLUEMEL, IVAN         60 MICHELI FOR GOVERNOR
+#>  4 2009-11-21 BLUEMEL, IVAN         60 MICHELI FOR GOVERNOR
+#>  5 2009-11-21 BUGAS, LARRY          60 MICHELI FOR GOVERNOR
+#>  6 2009-11-21 BUGAS, LARRY          60 MICHELI FOR GOVERNOR
+#>  7 2009-11-21 CARPENTER, DONALD     30 MICHELI FOR GOVERNOR
+#>  8 2009-11-21 CARPENTER, DONALD     30 MICHELI FOR GOVERNOR
+#>  9 2009-11-21 COVOLO, CARI          25 MICHELI FOR GOVERNOR
+#> 10 2009-11-21 COVOLO, CARI          25 MICHELI FOR GOVERNOR
+#> # … with 520 more rows
 ```
 
 ### Categorical
@@ -289,20 +290,20 @@ col_stats(wyc, n_distinct)
 #> # A tibble: 14 × 4
 #>    col               class      n         p
 #>    <chr>             <chr>  <int>     <dbl>
-#>  1 contributor_name  <chr>  38923 0.311    
-#>  2 contributor_city  <chr>   2434 0.0195   
-#>  3 recipient_name    <chr>    794 0.00635  
-#>  4 recipient_type    <chr>      4 0.0000320
-#>  5 contribution_type <chr>      5 0.0000400
-#>  6 date              <date>  3911 0.0313   
-#>  7 filing_status     <chr>      4 0.0000320
-#>  8 amount            <dbl>   4548 0.0364   
-#>  9 city_state_zip    <chr>   5004 0.0400   
-#> 10 city_split        <chr>   2427 0.0194   
-#> 11 state_split       <chr>     55 0.000440 
-#> 12 zip_split         <chr>   3425 0.0274   
-#> 13 na_flag           <lgl>      2 0.0000160
-#> 14 dupe_flag         <lgl>      2 0.0000160
+#>  1 contributor_name  <chr>  24863 0.418    
+#>  2 contributor_city  <chr>   2036 0.0343   
+#>  3 recipient_name    <chr>    825 0.0139   
+#>  4 recipient_type    <chr>      2 0.0000337
+#>  5 contribution_type <chr>      5 0.0000842
+#>  6 date              <date>  2728 0.0459   
+#>  7 filing_status     <chr>      4 0.0000673
+#>  8 amount            <dbl>   2361 0.0397   
+#>  9 city_state_zip    <chr>   3809 0.0641   
+#> 10 city_split        <chr>   2029 0.0341   
+#> 11 state_split       <chr>     55 0.000926 
+#> 12 zip_split         <chr>   2808 0.0473   
+#> 13 na_flag           <lgl>      2 0.0000337
+#> 14 dupe_flag         <lgl>      2 0.0000337
 ```
 
 ![](../plots/distinct-plots-1.png)<!-- -->![](../plots/distinct-plots-2.png)<!-- -->![](../plots/distinct-plots-3.png)<!-- -->
@@ -316,9 +317,9 @@ wyc$amount <- round(wyc$amount, digits = 2)
 ``` r
 summary(wyc$amount)
 #>      Min.   1st Qu.    Median      Mean   3rd Qu.      Max. 
-#>       0.0      20.0      55.0     357.4     150.0 2177032.0
+#>       0.0      50.0     100.0     642.4     350.0 2177032.0
 mean(wyc$amount <= 0)
-#> [1] 0.0007440238
+#> [1] 1.683048e-05
 ```
 
 These are the records with the minimum and maximum amounts.
@@ -355,11 +356,11 @@ wyc <- mutate(wyc, year = year(date))
 
 ``` r
 min(wyc$date)
-#> [1] "2008-12-16"
+#> [1] "2009-03-15"
 sum(wyc$year < 2000)
 #> [1] 0
 max(wyc$date)
-#> [1] "2020-12-31"
+#> [1] "2022-12-22"
 sum(wyc$date > today())
 #> [1] 0
 ```
@@ -475,21 +476,18 @@ good_refine <- wyc %>%
   )
 ```
 
-    #> # A tibble: 12 × 5
-    #>    state_split zip_split city_swap             city_refine          n
-    #>    <chr>       <chr>     <chr>                 <chr>            <int>
-    #>  1 WY          82720     HULLET                HULETT               2
-    #>  2 IL          60074     PALENTINE             PALATINE             1
-    #>  3 SD          57717     BELLE FROUCHE         BELLE FOURCHE        1
-    #>  4 WI          54494     WISCONSIN RAPIDSAOIDS WISCONSIN RAPIDS     1
-    #>  5 WY          82001     CHENEYHE              CHEYENNE             1
-    #>  6 WY          82003     CHEYENNE//            CHEYENNE             1
-    #>  7 WY          82009     CHEYYEN               CHEYENNE             1
-    #>  8 WY          82433     MEETETSEE             MEETEETSE            1
-    #>  9 WY          82514     FORT WASKAHIE         FORT WASHAKIE        1
-    #> 10 WY          82633     OUGLASD               DOUGLAS              1
-    #> 11 WY          82720     HULLETTE              HULETT               1
-    #> 12 WY          82721     OORCROFTM             MOORCROFT            1
+    #> # A tibble: 9 × 5
+    #>   state_split zip_split city_swap             city_refine          n
+    #>   <chr>       <chr>     <chr>                 <chr>            <int>
+    #> 1 NC          28277     CHAROLETTE            CHARLOTTE            1
+    #> 2 WI          54494     WISCONSIN RAPIDSAOIDS WISCONSIN RAPIDS     1
+    #> 3 WY          82001     CHENEYHE              CHEYENNE             1
+    #> 4 WY          82514     FORT WASKAHIE         FORT WASHAKIE        1
+    #> 5 WY          82604     CS ASPER              CASPER               1
+    #> 6 WY          82633     OUGLASD               DOUGLAS              1
+    #> 7 WY          82720     HULLET                HULETT               1
+    #> 8 WY          82720     HULLETTE              HULETT               1
+    #> 9 WY          82721     OORCROFTM             MOORCROFT            1
 
 Then we can join the refined values back to the database.
 
@@ -507,10 +505,10 @@ misspellings.
 
 | stage                          | prop_in | n_distinct | prop_na | n_out | n_diff |
 |:-------------------------------|--------:|-----------:|--------:|------:|-------:|
-| `str_to_upper(wyc$city_split)` |   0.981 |       2427 |   0.027 |  2305 |    665 |
-| `wyc$city_norm`                |   0.985 |       2360 |   0.027 |  1844 |    591 |
-| `wyc$city_swap`                |   0.995 |       1949 |   0.027 |   624 |    166 |
-| `wyc$city_refine`              |   0.995 |       1937 |   0.027 |   611 |    154 |
+| `str_to_upper(wyc$city_split)` |   0.972 |       2029 |   0.017 |  1610 |    481 |
+| `wyc$city_norm`                |   0.979 |       1982 |   0.017 |  1203 |    427 |
+| `wyc$city_swap`                |   0.992 |       1702 |   0.017 |   465 |    125 |
+| `wyc$city_refine`              |   0.992 |       1693 |   0.017 |   456 |    116 |
 
 You can see how the percentage of valid values increased with each
 stage.
@@ -545,27 +543,27 @@ wyc <- wyc %>%
 glimpse(sample_n(wyc, 50))
 #> Rows: 50
 #> Columns: 15
-#> $ contributor_name  <chr> "SWINTZ, ROBERT E", "TROMBLE, VERN", "WOMACK, AMY", "LUZMOOR, GLORIA", "KIRVEN, LAWRENCE E",…
-#> $ contributor_city  <chr> "JACKSON", "LANDER", "CASPER", "ROCK SPRINGS", "BUFFALO", "CASPER", "THERMOPOLIS", "CHEYENNE…
-#> $ recipient_name    <chr> "WY REALTORS PAC", "REPUBLICAN WOMEN OF FREMONT COUNTY PAC", "REPUBLICAN", "WY EDUCATION ASS…
-#> $ recipient_type    <chr> "POLITICAL ACTION COMMITTEE", "POLITICAL ACTION COMMITTEE", "PARTY COMMITTEE", "POLITICAL AC…
-#> $ contribution_type <chr> "MONETARY", "MONETARY", "MONETARY", "MONETARY", "MONETARY", "MONETARY", "MONETARY", "MONETAR…
-#> $ date              <date> 2010-08-23, 2019-03-31, 2017-07-05, 2016-08-31, 2014-08-07, 2018-07-05, 2018-05-03, 2014-05…
-#> $ filing_status     <chr> "FILED", "FILED", "AMEND - ADD", "FILED", "FILED", "FILED", "AMEND - ADD", "FILED", "FILED",…
-#> $ amount            <dbl> 20.0, 80.0, 200.0, 20.0, 50.0, 100.0, 40.0, 200.0, 25.0, 200.0, 180.0, 15.0, 61.0, 5.0, 10.0…
-#> $ city_state_zip    <chr> "JACKSON, WY 83002", "LANDER, WY 82520", "CASPER, WY 82601", "ROCK SPRINGS, WY 82901", "BUFF…
+#> $ contributor_name  <chr> "HILL, DRAKE AND CINDY", "WYOMING HOSPITAL ASSOCIATION PAC", "ELSER, HARRY", "FUECHSEL, JEFF…
+#> $ contributor_city  <chr> "CHEYENNE", "CHEYENNE", "JACKSON", "JACKSON", "CHEYENNE", "CASPER", "CHEYENNE", "LANDER", "E…
+#> $ recipient_name    <chr> "COMMITTEE TO ELECT CINDY HILL", "R. J. KOST", "MEAD FOR GOVERNOR", "COMMITTEE TO ELECT RITA…
+#> $ recipient_type    <chr> "CANDIDATE COMMITTEE", "CANDIDATE", "CANDIDATE COMMITTEE", "CANDIDATE COMMITTEE", "CANDIDATE…
+#> $ contribution_type <chr> "LOAN", "MONETARY", "MONETARY", "MONETARY", "MONETARY", "MONETARY", "MONETARY", "MONETARY", …
+#> $ date              <date> 2012-01-06, 2018-08-28, 2010-10-21, 2010-07-06, 2022-05-29, 2014-10-07, 2014-07-12, 2020-06…
+#> $ filing_status     <chr> "FILED", "FILED", "FILED", "FILED", "FILED", "FILED", "FILED", "FILED", "FILED", "FILED", "F…
+#> $ amount            <dbl> 600, 500, 100, 50, 500, 250, 100, 100, 20, 25, 500, 250, 25, 500, 25, 100, 1517, 200, 100, 5…
+#> $ city_state_zip    <chr> "CHEYENNE, WY 82001", "CHEYENNE, WY 82001", "JACKSON, WY 83001", "JACKSON, WY 83001", "CHEYE…
 #> $ na_flag           <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, F…
-#> $ dupe_flag         <lgl> TRUE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FA…
-#> $ year              <dbl> 2010, 2019, 2017, 2016, 2014, 2018, 2018, 2014, 2016, 2010, 2017, 2019, 2012, 2015, 2015, 20…
-#> $ city_clean        <chr> "JACKSON", "LANDER", "CASPER", "ROCK SPRINGS", "BUFFALO", "CASPER", "THERMOPOLIS", "CHEYENNE…
-#> $ state_clean       <chr> "WY", "WY", "WY", "WY", "WY", "WY", "WY", "WY", "WY", "WY", "SD", "WY", "WY", "WY", "WY", "W…
-#> $ zip_clean         <chr> "83002", "82520", "82601", "82901", "82834", "82601", "82443", "82003", "82447", "82009", "5…
+#> $ dupe_flag         <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, F…
+#> $ year              <dbl> 2012, 2018, 2010, 2010, 2022, 2014, 2014, 2020, 2010, 2010, 2010, 2020, 2014, 2022, 2022, 20…
+#> $ city_clean        <chr> "CHEYENNE", "CHEYENNE", "JACKSON", "JACKSON", "CHEYENNE", "CASPER", "CHEYENNE", "LANDER", "E…
+#> $ state_clean       <chr> "WY", "WY", "WY", "WY", "WY", "WY", "WY", "WY", "WY", "WY", "WY", "WY", "WY", "WY", "WY", "W…
+#> $ zip_clean         <chr> "82001", "82001", "83001", "83001", "82009", "82601", "82009", "82520", "82930", "82520", "8…
 ```
 
-1.  There are 124,996 records in the database.
-2.  There are 4,683 duplicate records in the database.
+1.  There are 59,416 records in the database.
+2.  There are 530 duplicate records in the database.
 3.  The range and distribution of `amount` and `date` seem reasonable.
-4.  There are 3,330 records missing key variables.
+4.  There are 1,000 records missing key variables.
 5.  Consistency in geographic data has been improved with
     `campfin::normal_*()`.
 6.  The 4-digit `year` variable has been created with
@@ -578,10 +576,10 @@ server.
 
 ``` r
 clean_dir <- dir_create(here("wy", "contribs", "data", "clean"))
-clean_csv <- path(clean_dir, "wy_contribs_20081216-20201231.csv")
+clean_csv <- path(clean_dir, "wy_contribs_20081216-20221231.csv")
 write_csv(wyc, clean_csv, na = "")
 (clean_size <- file_size(clean_csv))
-#> 19M
+#> 8.71M
 ```
 
 ## Upload

@@ -1,6 +1,6 @@
 ---
-title: "West Virginia Contracts"
-author: "Kiernan Nicholls"
+title: "West Virginia Contributions"
+author: "Kiernan Nicholls & Aarushi Sahejpal "
 date: "`r Sys.time()`"
 output:
   github_document: 
@@ -96,6 +96,7 @@ pacman::p_load(
   fs # local storage 
 )
 ```
+
 
 This document should be run as part of the `R_campfin` project, which lives as a
 sub-directory of the more general, language-agnostic
@@ -342,7 +343,7 @@ wvc %>%
   ) +
   labs(
     title = "West Virginia Contracts Amount Distribution",
-    subtitle = "from 2000 to 2019",
+    subtitle = "from 2000 to 2023",
     caption = "Source: WV CFRS",
     x = "Amount",
     y = "Count"
@@ -374,7 +375,7 @@ wvc %>%
   geom_col(aes(fill = even)) + 
   scale_fill_brewer(palette = "Dark2") +
   scale_y_continuous(labels = comma) +
-  scale_x_continuous(breaks = seq(2016, 2020, by = 1)) +
+  scale_x_continuous(breaks = seq(2016, 2023, by = 1)) +
   theme(legend.position = "bottom") +
   labs(
     title = "West Virginia Contracts by Year",
@@ -703,7 +704,7 @@ Now the file can be saved on disk for upload to the Accountability server.
 
 ```{r clean-dir}
 clean_dir <- dir_create(here("wv", "contribs", "data", "clean"))
-clean_path <- path(clean_dir, "wv_contribs_20160301-20210630.csv")
+clean_path <- path(clean_dir, "wv_contribs_20160301-2023.csv")
 write_csv(wvc, clean_path, na = "")
 (clean_size <- file_size(clean_path))
 ```
