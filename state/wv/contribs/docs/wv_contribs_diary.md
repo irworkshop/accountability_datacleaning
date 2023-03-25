@@ -1,21 +1,21 @@
-West Virginia Contracts
+West Virginia Contributions
 ================
-Kiernan Nicholls
-2021-09-29 15:47:36
+Kiernan Nicholls & Aarushi Sahejpal
+2023-03-24 22:43:24
 
--   [Project](#project)
--   [Objectives](#objectives)
--   [Packages](#packages)
--   [Data](#data)
--   [Dictionary](#dictionary)
--   [Download](#download)
--   [Read](#read)
--   [Explore](#explore)
--   [Wrangle](#wrangle)
--   [Conclude](#conclude)
--   [Export](#export)
--   [Upload](#upload)
--   [Dictionary](#dictionary-1)
+- <a href="#project" id="toc-project">Project</a>
+- <a href="#objectives" id="toc-objectives">Objectives</a>
+- <a href="#packages" id="toc-packages">Packages</a>
+- <a href="#data" id="toc-data">Data</a>
+- <a href="#dictionary" id="toc-dictionary">Dictionary</a>
+- <a href="#download" id="toc-download">Download</a>
+- <a href="#read" id="toc-read">Read</a>
+- <a href="#explore" id="toc-explore">Explore</a>
+- <a href="#wrangle" id="toc-wrangle">Wrangle</a>
+- <a href="#conclude" id="toc-conclude">Conclude</a>
+- <a href="#export" id="toc-export">Export</a>
+- <a href="#upload" id="toc-upload">Upload</a>
+- <a href="#dictionary-1" id="toc-dictionary-1">Dictionary</a>
 
 <!-- Place comments regarding knitting here -->
 
@@ -94,7 +94,7 @@ feature and should be run as such. The project also uses the dynamic
 ``` r
 # where does this document knit?
 here::here()
-#> [1] "/home/kiernan/Documents/accountability_datacleaning/R_tap"
+#> [1] "/Volumes/TAP/accountability_datacleaning"
 ```
 
 ## Data
@@ -177,14 +177,18 @@ wv_ls <- request("https://cfrs.wvsos.gov/CFIS_APIService/api/") %>%
 
 | TransactionKey          | ElectionYear | NameOfFile     | TransactionType |
 |:------------------------|-------------:|:---------------|:----------------|
+| Contributions and Loans |         2023 | `CON_2023.csv` | CON             |
+| Expenditures            |         2023 | `EXP_2023.csv` | EXP             |
+| Expenditures            |         2022 | `EXP_2022.csv` | EXP             |
+| Contributions and Loans |         2022 | `CON_2022.csv` | CON             |
 | Contributions and Loans |         2021 | `CON_2021.csv` | CON             |
 | Expenditures            |         2021 | `EXP_2021.csv` | EXP             |
 | Expenditures            |         2020 | `EXP_2020.csv` | EXP             |
 | Contributions and Loans |         2020 | `CON_2020.csv` | CON             |
-| Expenditures            |         2019 | `EXP_2019.csv` | EXP             |
 | Contributions and Loans |         2019 | `CON_2019.csv` | CON             |
-| Contributions and Loans |         2018 | `CON_2018.csv` | CON             |
+| Expenditures            |         2019 | `EXP_2019.csv` | EXP             |
 | Expenditures            |         2018 | `EXP_2018.csv` | EXP             |
+| Contributions and Loans |         2018 | `CON_2018.csv` | CON             |
 
 ``` r
 wv_ls <- wv_ls %>% 
@@ -209,13 +213,15 @@ for (i in seq(nrow(wv_ls))) {
 }
 ```
 
-    #> # A tibble: 4 × 3
+    #> # A tibble: 6 × 3
     #>   path                size modification_time  
     #>   <chr>        <fs::bytes> <dttm>             
-    #> 1 CON_2021.csv       3.11M 2021-09-28 16:41:43
-    #> 2 CON_2020.csv      14.02M 2021-09-28 16:41:52
-    #> 3 CON_2019.csv       4.35M 2021-09-28 16:41:55
-    #> 4 CON_2018.csv        8.4M 2021-09-28 16:42:00
+    #> 1 CON_2023.csv       1.33M 2023-03-24 22:29:27
+    #> 2 CON_2022.csv      10.85M 2023-03-24 22:29:34
+    #> 3 CON_2021.csv       4.32M 2023-03-24 22:29:36
+    #> 4 CON_2020.csv      13.99M 2023-03-24 22:29:45
+    #> 5 CON_2019.csv       4.26M 2023-03-24 22:29:48
+    #> 6 CON_2018.csv        8.4M 2023-03-24 22:29:54
 
 ## Read
 
@@ -257,24 +263,20 @@ wvc <- read_delim(
 
 ``` r
 problems(wvc)
-#> # A tibble: 15 × 5
-#>      row   col expected   actual     file                        
-#>    <int> <int> <chr>      <chr>      <chr>                       
-#>  1 33120    29 30 columns 29 columns /tmp/RtmpEmdMma/CON_2020.csv
-#>  2 33130    29 30 columns 29 columns /tmp/RtmpEmdMma/CON_2020.csv
-#>  3 33144    29 30 columns 29 columns /tmp/RtmpEmdMma/CON_2020.csv
-#>  4 33146    29 30 columns 29 columns /tmp/RtmpEmdMma/CON_2020.csv
-#>  5 33147    29 30 columns 29 columns /tmp/RtmpEmdMma/CON_2020.csv
-#>  6 33376    29 30 columns 29 columns /tmp/RtmpEmdMma/CON_2020.csv
-#>  7 33379    29 30 columns 29 columns /tmp/RtmpEmdMma/CON_2020.csv
-#>  8 35147    29 30 columns 29 columns /tmp/RtmpEmdMma/CON_2020.csv
-#>  9 36122    29 30 columns 29 columns /tmp/RtmpEmdMma/CON_2020.csv
-#> 10 36132    29 30 columns 29 columns /tmp/RtmpEmdMma/CON_2020.csv
-#> 11 36233    29 30 columns 29 columns /tmp/RtmpEmdMma/CON_2020.csv
-#> 12 36410    29 30 columns 29 columns /tmp/RtmpEmdMma/CON_2020.csv
-#> 13 36461    29 30 columns 29 columns /tmp/RtmpEmdMma/CON_2020.csv
-#> 14 36640    29 30 columns 29 columns /tmp/RtmpEmdMma/CON_2020.csv
-#> 15  5467    29 30 columns 29 columns /tmp/RtmpEmdMma/CON_2021.csv
+#> # A tibble: 42 × 5
+#>      row   col expected                       actual     file                                      
+#>    <int> <int> <chr>                          <chr>      <chr>                                     
+#>  1 21326    15 date like %m/%d/%Y %H:%M:%S %p Individual /private/var/folders/kn/rwt3lmvn7gs3vl38b…
+#>  2 21326    29 30 columns                     29 columns /private/var/folders/kn/rwt3lmvn7gs3vl38b…
+#>  3 23094    29 30 columns                     29 columns /private/var/folders/kn/rwt3lmvn7gs3vl38b…
+#>  4 27816    29 30 columns                     29 columns /private/var/folders/kn/rwt3lmvn7gs3vl38b…
+#>  5 29495    29 30 columns                     29 columns /private/var/folders/kn/rwt3lmvn7gs3vl38b…
+#>  6 30378    29 30 columns                     29 columns /private/var/folders/kn/rwt3lmvn7gs3vl38b…
+#>  7 31904    29 30 columns                     29 columns /private/var/folders/kn/rwt3lmvn7gs3vl38b…
+#>  8 32469    29 30 columns                     29 columns /private/var/folders/kn/rwt3lmvn7gs3vl38b…
+#>  9 33466    29 30 columns                     29 columns /private/var/folders/kn/rwt3lmvn7gs3vl38b…
+#> 10 33475    29 30 columns                     29 columns /private/var/folders/kn/rwt3lmvn7gs3vl38b…
+#> # … with 32 more rows
 ```
 
 Column names can be converted to snake case and simplified.
@@ -293,65 +295,66 @@ count(wvc, contribution_type)
 #> # A tibble: 5 × 2
 #>   contribution_type                        n
 #>   <chr>                                <int>
-#> 1 In-Kind                               3383
-#> 2 Monetary                            124037
-#> 3 Other Income                          1504
-#> 4 Receipt of Transfer of Excess Funds    554
-#> 5 <NA>                                   952
+#> 1 In-Kind                               4865
+#> 2 Monetary                            179328
+#> 3 Other Income                          2058
+#> 4 Receipt of Transfer of Excess Funds    711
+#> 5 <NA>                                  1163
 ```
 
 ## Explore
 
 ``` r
 glimpse(wvc)
-#> Rows: 130,430
+#> Rows: 188,125
 #> Columns: 30
-#> $ org_id                 <chr> "19", "24", "24", "24", "24", "24", "24", "24", "24", "24", "55", …
-#> $ receipt_amount         <dbl> 217.79, 3.22, 3.33, 3.44, 3.44, 5.17, 7.73, 7.99, 7.99, 8.44, 40.0…
-#> $ receipt_date           <date> 2020-11-02, 2021-06-30, 2021-04-30, 2021-03-31, 2021-05-31, 2021-…
-#> $ last_name              <chr> "Howell", "WVCCU", "WVCCU", "WVCCU", "WVCCU", "WVCCU", "WVCCU", "W…
-#> $ first_name             <chr> "Gary", NA, NA, NA, NA, NA, NA, NA, NA, NA, "John", "Michael", "Ja…
-#> $ middle_name            <chr> "G", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "E", NA, "J", NA, NA,…
+#> $ org_id                 <chr> "24", "24", "24", "95", "95", "95", "95", "144", "149", "1181", "1…
+#> $ receipt_amount         <dbl> 1.92, 1.99, 2.09, 0.01, 0.05, 0.05, 0.05, 500.00, 2414.80, 10.00, …
+#> $ receipt_date           <date> 2022-11-30, 2022-12-31, 2022-10-31, 2022-11-25, 2022-10-05, 2022-…
+#> $ last_name              <chr> "WVCCU", "WVCCU", "WVCCU", "First Exchange Bank", "First Exchange …
+#> $ first_name             <chr> NA, NA, NA, NA, NA, NA, NA, NA, "Jason", NA, NA, "Lisa", "Teri", "…
+#> $ middle_name            <chr> NA, NA, NA, NA, NA, NA, NA, NA, "A.", NA, NA, NA, NA, NA, NA, NA, …
 #> $ suffix                 <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
-#> $ address1               <chr> "PO Box 39", "1306 Murdoch Ave", "1306 Murdoch Ave", NA, "1306 Mur…
+#> $ address1               <chr> "1306 Murdoch Ave", "1306 Murdoch Ave", "1306 Murdoch Ave", "11 We…
 #> $ address2               <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
-#> $ city                   <chr> "Keyser", "Parkersburg", "Parkersburg", NA, "Parkersburg", NA, "Pa…
-#> $ state                  <chr> "WV", "WV", "WV", "ME", "WV", "ME", "WV", "WV", "ME", "WV", "ME", …
-#> $ zip                    <chr> "26726", "26101", "26101", NA, "26101", NA, "26101", "26101", NA, …
-#> $ description            <chr> NA, "Interest", "Interest", "Interest", "Interest", "Interest", "I…
-#> $ receipt_id             <chr> "301122", "317450", "317448", "310000", "317449", "309998", "30085…
-#> $ filed_date             <dttm> 2021-01-07 13:11:35, 2021-08-02 16:29:57, 2021-08-02 16:29:57, 20…
-#> $ receipt_source_type    <chr> "Individual", "Business or Organization", "Business or Organizatio…
+#> $ city                   <chr> "Parkersburg", "Parkersburg", "Parkersburg", "Mannington", "Mannin…
+#> $ state                  <chr> "WV", "WV", "WV", "WV", "WV", "WV", "WV", "ME", "WV", "WV", "WV", …
+#> $ zip                    <chr> "26101", "26101", "26101", "26582", "26582", "26582", "26582", NA,…
+#> $ description            <chr> "Interest", "Interest", "Interest", "Interest on Checking Account"…
+#> $ receipt_id             <chr> "442380", "442381", "442378", "418044", "406541", "417752", "41804…
+#> $ filed_date             <dttm> 2023-01-06 14:35:15, 2023-01-06 14:35:15, 2023-01-06 14:35:15, 20…
+#> $ receipt_source_type    <chr> "Business or Organization", "Business or Organization", "Business …
 #> $ amended                <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FAL…
 #> $ receipt_type           <chr> "Contributions", "Contributions", "Contributions", "Contributions"…
 #> $ committee_type         <chr> "State Candidate", "State Candidate", "State Candidate", "State Ca…
 #> $ committee_name         <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
-#> $ candidate_name         <chr> "Gary G. Howell", "Lissa Lucas", "Lissa Lucas", "Lissa Lucas", "Li…
-#> $ employer               <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "retired", "As…
-#> $ occupation             <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "Retired", "Ot…
+#> $ candidate_name         <chr> "Lissa Lucas", "Lissa Lucas", "Lissa Lucas", "David Pethtel", "Dav…
+#> $ employer               <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "retired", NA,…
+#> $ occupation             <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
 #> $ occupation_comment     <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FAL…
 #> $ forgiven_loan          <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
-#> $ fundraiser_event_date  <dttm> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
-#> $ fundraiser_event_type  <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
-#> $ fundraiser_event_place <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
-#> $ report_name            <chr> "2020 4th Quarter Report", "2021 2nd Quarter Report", "2021 2nd Qu…
-#> $ contribution_type      <chr> "Monetary", "Other Income", "Other Income", "Other Income", "Other…
+#> $ fundraiser_event_date  <dttm> NA, NA, NA, NA, NA, NA, NA, NA, NA, 2022-11-11 05:00:00, 2022-11-…
+#> $ fundraiser_event_type  <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, "Eisenhower Dinner", "Eisenhow…
+#> $ fundraiser_event_place <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, "Eisenhower Dinner 2022", "Eis…
+#> $ report_name            <chr> "2022 4th Quarter Report", "2022 4th Quarter Report", "2022 4th Qu…
+#> $ contribution_type      <chr> "Other Income", "Other Income", "Other Income", "Other Income", "O…
 tail(wvc)
 #> # A tibble: 6 × 30
-#>   org_id receipt_amount receipt_date last_name      first_name middle_name suffix address1 address2
-#>   <chr>           <dbl> <date>       <chr>          <chr>      <chr>       <chr>  <chr>    <chr>   
-#> 1 40776            500  2018-11-05   Coca-Cola      <NA>       <NA>        <NA>   4100 Co… <NA>    
-#> 2 40776           1000  2018-11-01   Adams          Richard    <NA>        <NA>   53 Mead… <NA>    
-#> 3 40776           1200  2018-10-30   Azinger        Thomas     Albert      <NA>   1310 7t… <NA>    
-#> 4 40776           2300  2018-10-18   Azinger        Thomas     Albert      <NA>   1310 7t… <NA>    
-#> 5 42375           4778. 2018-12-12   Roger Shuttle… <NA>       <NA>        <NA>   331 Tom… <NA>    
-#> 6 42375           5000  2016-07-16   Roger Shuttle… <NA>       <NA>        <NA>   331 Tom… <NA>    
-#> # … with 21 more variables: city <chr>, state <chr>, zip <chr>, description <chr>,
-#> #   receipt_id <chr>, filed_date <dttm>, receipt_source_type <chr>, amended <lgl>,
-#> #   receipt_type <chr>, committee_type <chr>, committee_name <chr>, candidate_name <chr>,
-#> #   employer <chr>, occupation <chr>, occupation_comment <lgl>, forgiven_loan <chr>,
-#> #   fundraiser_event_date <dttm>, fundraiser_event_type <chr>, fundraiser_event_place <chr>,
-#> #   report_name <chr>, contribution_type <chr>
+#>   org_id receipt_amount receipt_…¹ last_…² first…³ middl…⁴ suffix addre…⁵ addre…⁶ city  state zip  
+#>   <chr>           <dbl> <date>     <chr>   <chr>   <chr>   <chr>  <chr>   <chr>   <chr> <chr> <chr>
+#> 1 40776            500  2018-11-05 Coca-C… <NA>    <NA>    <NA>   4100 C… <NA>    Char… NC    28711
+#> 2 40776           1000  2018-11-01 Adams   Richard <NA>    <NA>   53 Mea… <NA>    Park… WV    26101
+#> 3 40776           1200  2018-10-30 Azinger Thomas  Albert  <NA>   1310 7… <NA>    Vien… WV    26105
+#> 4 40776           2300  2018-10-18 Azinger Thomas  Albert  <NA>   1310 7… <NA>    Vien… WV    26105
+#> 5 42375           4778. 2018-12-12 Roger … <NA>    <NA>    <NA>   331 To… <NA>    Morg… WV    26508
+#> 6 42375           5000  2016-07-16 Roger … <NA>    <NA>    <NA>   331 To… <NA>    Morg… WV    26508
+#> # … with 18 more variables: description <chr>, receipt_id <chr>, filed_date <dttm>,
+#> #   receipt_source_type <chr>, amended <lgl>, receipt_type <chr>, committee_type <chr>,
+#> #   committee_name <chr>, candidate_name <chr>, employer <chr>, occupation <chr>,
+#> #   occupation_comment <lgl>, forgiven_loan <chr>, fundraiser_event_date <dttm>,
+#> #   fundraiser_event_type <chr>, fundraiser_event_place <chr>, report_name <chr>,
+#> #   contribution_type <chr>, and abbreviated variable names ¹​receipt_date, ²​last_name,
+#> #   ³​first_name, ⁴​middle_name, ⁵​address1, ⁶​address2
 ```
 
 ### Missing
@@ -361,38 +364,38 @@ Columns range in their degree of missing values.
 ``` r
 col_stats(wvc, count_na)
 #> # A tibble: 30 × 4
-#>    col                    class       n       p
-#>    <chr>                  <chr>   <int>   <dbl>
-#>  1 org_id                 <chr>       0 0      
-#>  2 receipt_amount         <dbl>       0 0      
-#>  3 receipt_date           <date>      0 0      
-#>  4 last_name              <chr>    3481 0.0267 
-#>  5 first_name             <chr>   18650 0.143  
-#>  6 middle_name            <chr>  112356 0.861  
-#>  7 suffix                 <chr>  128202 0.983  
-#>  8 address1               <chr>   61943 0.475  
-#>  9 address2               <chr>  127226 0.975  
-#> 10 city                   <chr>   61207 0.469  
-#> 11 state                  <chr>       0 0      
-#> 12 zip                    <chr>   61629 0.473  
-#> 13 description            <chr>  125277 0.960  
-#> 14 receipt_id             <chr>       0 0      
-#> 15 filed_date             <dttm>      0 0      
-#> 16 receipt_source_type    <chr>       0 0      
-#> 17 amended                <lgl>       0 0      
-#> 18 receipt_type           <chr>       0 0      
-#> 19 committee_type         <chr>       0 0      
-#> 20 committee_name         <chr>  130430 1      
-#> 21 candidate_name         <chr>   38439 0.295  
-#> 22 employer               <chr>   77848 0.597  
-#> 23 occupation             <chr>   84454 0.648  
-#> 24 occupation_comment     <lgl>       0 0      
-#> 25 forgiven_loan          <chr>  130430 1      
-#> 26 fundraiser_event_date  <dttm> 106611 0.817  
-#> 27 fundraiser_event_type  <chr>  106774 0.819  
-#> 28 fundraiser_event_place <chr>  106611 0.817  
-#> 29 report_name            <chr>       0 0      
-#> 30 contribution_type      <chr>     952 0.00730
+#>    col                    class       n         p
+#>    <chr>                  <chr>   <int>     <dbl>
+#>  1 org_id                 <chr>       0 0        
+#>  2 receipt_amount         <dbl>       0 0        
+#>  3 receipt_date           <date>      0 0        
+#>  4 last_name              <chr>    5340 0.0284   
+#>  5 first_name             <chr>   25846 0.137    
+#>  6 middle_name            <chr>  162433 0.863    
+#>  7 suffix                 <chr>  185032 0.984    
+#>  8 address1               <chr>   89544 0.476    
+#>  9 address2               <chr>  183847 0.977    
+#> 10 city                   <chr>   88565 0.471    
+#> 11 state                  <chr>       0 0        
+#> 12 zip                    <chr>   89248 0.474    
+#> 13 description            <chr>  180282 0.958    
+#> 14 receipt_id             <chr>       0 0        
+#> 15 filed_date             <dttm>      2 0.0000106
+#> 16 receipt_source_type    <chr>       0 0        
+#> 17 amended                <lgl>       2 0.0000106
+#> 18 receipt_type           <chr>       0 0        
+#> 19 committee_type         <chr>       2 0.0000106
+#> 20 committee_name         <chr>  188125 1        
+#> 21 candidate_name         <chr>   61572 0.327    
+#> 22 employer               <chr>  105135 0.559    
+#> 23 occupation             <chr>  114727 0.610    
+#> 24 occupation_comment     <lgl>       2 0.0000106
+#> 25 forgiven_loan          <chr>  188125 1        
+#> 26 fundraiser_event_date  <dttm> 156110 0.830    
+#> 27 fundraiser_event_type  <chr>  156273 0.831    
+#> 28 fundraiser_event_place <chr>  156108 0.830    
+#> 29 report_name            <chr>       0 0        
+#> 30 contribution_type      <chr>    1163 0.00618
 ```
 
 We should flag any record missing a key variable, those needed to
@@ -407,7 +410,7 @@ key_vars <- c("receipt_date", "last_name", "receipt_amount", "candidate_name")
 ``` r
 wvc <- flag_na(wvc, all_of(key_vars))
 mean(wvc$na_flag)
-#> [1] 0.31837
+#> [1] 0.3525581
 ```
 
 ### Duplicates
@@ -418,7 +421,7 @@ save for the supposedly unique `id`.
 ``` r
 wvc <- flag_dupes(wvc, -receipt_id)
 percent(mean(wvc$dupe_flag), 0.01)
-#> [1] "1.40%"
+#> [1] "3.96%"
 ```
 
 ``` r
@@ -426,7 +429,7 @@ wvc %>%
   filter(dupe_flag) %>% 
   select(all_of(key_vars)) %>% 
   arrange(receipt_date)
-#> # A tibble: 1,827 × 4
+#> # A tibble: 7,459 × 4
 #>    receipt_date last_name         receipt_amount candidate_name
 #>    <date>       <chr>                      <dbl> <chr>         
 #>  1 2017-04-04   Douglas  McKinney            100 <NA>          
@@ -439,7 +442,7 @@ wvc %>%
 #>  8 2017-07-18   Floyd                          5 <NA>          
 #>  9 2017-08-21   Tarr                        1000 Ryan Ferns    
 #> 10 2017-08-21   Tarr                        1000 Ryan Ferns    
-#> # … with 1,817 more rows
+#> # … with 7,449 more rows
 ```
 
 ### Categorical
@@ -449,38 +452,38 @@ col_stats(wvc, n_distinct)
 #> # A tibble: 32 × 4
 #>    col                    class       n          p
 #>    <chr>                  <chr>   <int>      <dbl>
-#>  1 org_id                 <chr>    1140 0.00874   
-#>  2 receipt_amount         <dbl>    5238 0.0402    
-#>  3 receipt_date           <date>   1574 0.0121    
-#>  4 last_name              <chr>   25991 0.199     
-#>  5 first_name             <chr>    6914 0.0530    
-#>  6 middle_name            <chr>     780 0.00598   
-#>  7 suffix                 <chr>       8 0.0000613 
-#>  8 address1               <chr>   24672 0.189     
-#>  9 address2               <chr>     689 0.00528   
-#> 10 city                   <chr>    3130 0.0240    
-#> 11 state                  <chr>      72 0.000552  
-#> 12 zip                    <chr>    4024 0.0309    
-#> 13 description            <chr>    2337 0.0179    
-#> 14 receipt_id             <chr>  130429 1.00      
-#> 15 filed_date             <dttm>   6573 0.0504    
-#> 16 receipt_source_type    <chr>       7 0.0000537 
-#> 17 amended                <lgl>       1 0.00000767
-#> 18 receipt_type           <chr>       4 0.0000307 
-#> 19 committee_type         <chr>       4 0.0000307 
-#> 20 committee_name         <chr>       1 0.00000767
-#> 21 candidate_name         <chr>     673 0.00516   
-#> 22 employer               <chr>    9562 0.0733    
-#> 23 occupation             <chr>      34 0.000261  
-#> 24 occupation_comment     <lgl>       1 0.00000767
-#> 25 forgiven_loan          <chr>       1 0.00000767
-#> 26 fundraiser_event_date  <dttm>    621 0.00476   
-#> 27 fundraiser_event_type  <chr>     303 0.00232   
-#> 28 fundraiser_event_place <chr>     877 0.00672   
-#> 29 report_name            <chr>      61 0.000468  
-#> 30 contribution_type      <chr>       5 0.0000383 
-#> 31 na_flag                <lgl>       2 0.0000153 
-#> 32 dupe_flag              <lgl>       2 0.0000153
+#>  1 org_id                 <chr>    1471 0.00782   
+#>  2 receipt_amount         <dbl>    6758 0.0359    
+#>  3 receipt_date           <date>   2128 0.0113    
+#>  4 last_name              <chr>   34228 0.182     
+#>  5 first_name             <chr>    8629 0.0459    
+#>  6 middle_name            <chr>    1012 0.00538   
+#>  7 suffix                 <chr>       9 0.0000478 
+#>  8 address1               <chr>   32596 0.173     
+#>  9 address2               <chr>     890 0.00473   
+#> 10 city                   <chr>    4043 0.0215    
+#> 11 state                  <chr>      74 0.000393  
+#> 12 zip                    <chr>    5411 0.0288    
+#> 13 description            <chr>    3287 0.0175    
+#> 14 receipt_id             <chr>  188124 1.00      
+#> 15 filed_date             <dttm>   9668 0.0514    
+#> 16 receipt_source_type    <chr>       8 0.0000425 
+#> 17 amended                <lgl>       2 0.0000106 
+#> 18 receipt_type           <chr>       5 0.0000266 
+#> 19 committee_type         <chr>       5 0.0000266 
+#> 20 committee_name         <chr>       1 0.00000532
+#> 21 candidate_name         <chr>     881 0.00468   
+#> 22 employer               <chr>   12690 0.0675    
+#> 23 occupation             <chr>      35 0.000186  
+#> 24 occupation_comment     <lgl>       2 0.0000106 
+#> 25 forgiven_loan          <chr>       1 0.00000532
+#> 26 fundraiser_event_date  <dttm>    830 0.00441   
+#> 27 fundraiser_event_type  <chr>     408 0.00217   
+#> 28 fundraiser_event_place <chr>    1182 0.00628   
+#> 29 report_name            <chr>      81 0.000431  
+#> 30 contribution_type      <chr>       5 0.0000266 
+#> 31 na_flag                <lgl>       2 0.0000106 
+#> 32 dupe_flag              <lgl>       2 0.0000106
 ```
 
 ![](../plots/distinct_plot-1.png)<!-- -->![](../plots/distinct_plot-2.png)<!-- -->![](../plots/distinct_plot-3.png)<!-- -->![](../plots/distinct_plot-4.png)<!-- -->![](../plots/distinct_plot-5.png)<!-- -->
@@ -496,12 +499,12 @@ The range of contribution amounts seems reasonable.
 ``` r
 noquote(map_chr(summary(wvc$receipt_amount), dollar))
 #>       Min.    1st Qu.     Median       Mean    3rd Qu.       Max. 
-#>      $0.01     $20.20        $50    $560.94       $250 $1,000,000
+#>      $0.01        $20        $50    $506.45       $250 $1,000,000
 sum(wvc$receipt_amount <= 0.01)
-#> [1] 77
+#> [1] 112
 ```
 
-Here is the largest contribution of $1,000,000:
+Here is the largest contribution of \$1,000,000:
 
 ``` r
 glimpse(wvc[which.max(wvc$receipt_amount), ])
@@ -560,7 +563,7 @@ min(wvc$receipt_date)
 sum(wvc$receipt_year < 2016)
 #> [1] 0
 max(wvc$receipt_date)
-#> [1] "2021-06-30"
+#> [1] "2023-02-14"
 sum(wvc$receipt_date > today())
 #> [1] 0
 ```
@@ -582,18 +585,12 @@ official USPS suffixes.
 
 ``` r
 addr_norm <- wvc %>%
-  distinct(address1, address2) %>% 
+  distinct(address1) %>% 
   mutate(
     norm_address1 = normal_address(
       address = address1,
       abbs = usps_street,
       na_rep = TRUE
-    ),
-    norm_address2 = normal_address(
-      address = address2,
-      abbs = usps_street,
-      na_rep = TRUE,
-      abb_end = FALSE
     )
   ) %>% 
   unite(
@@ -608,19 +605,19 @@ addr_norm <- wvc %>%
 
 ``` r
 sample_n(addr_norm, 10)
-#> # A tibble: 10 × 3
-#>    address1              address2 address_norm        
-#>    <chr>                 <chr>    <chr>               
-#>  1 205 1st Ave S         <NA>     205 1ST AVE S       
-#>  2 650 Rich Hollow Rd.   <NA>     650 RICH HOLLOW RD  
-#>  3 1074 MOUNT VERON RD   <NA>     1074 MOUNT VERON RD 
-#>  4 600 Club Cir          <NA>     600 CLUB CIR        
-#>  5 268 Osborne Ave       <NA>     268 OSBORNE AVE     
-#>  6 1111 East Village Dr. <NA>     1111 EAST VILLAGE DR
-#>  7 1611 Speedway Ave     <NA>     1611 SPEEDWAY AVE   
-#>  8 1515 Thomas Circle    <NA>     1515 THOMAS CIR     
-#>  9 1200 Front Street     <NA>     1200 FRONT ST       
-#> 10 832 Walters Rd        <NA>     832 WALTERS RD
+#> # A tibble: 10 × 2
+#>    address1              address_norm      
+#>    <chr>                 <chr>             
+#>  1 405 N. Capitol St     405 N CAPITOL ST  
+#>  2 713 Brightridge Drive 713 BRIGHTRIDGE DR
+#>  3 1014 3rd Street West  1014 3RD STREET W 
+#>  4 116 Tazewell ST       116 TAZEWELL ST   
+#>  5 2003 Park Ave         2003 PARK AVE     
+#>  6 3316 Nina V Lane      3316 NINA V LN    
+#>  7 104 Putnam Court      104 PUTNAM CT     
+#>  8 832 Broadway          832 BROADWAY      
+#>  9 104 Creekside Ct      104 CREEKSIDE CT  
+#> 10 P.O.Box 6266          POBOX 6266
 ```
 
 ``` r
@@ -652,8 +649,8 @@ progress_table(
 #> # A tibble: 2 × 6
 #>   stage        prop_in n_distinct prop_na n_out n_diff
 #>   <chr>          <dbl>      <dbl>   <dbl> <dbl>  <dbl>
-#> 1 wvc$zip        0.969       4024   0.473  2156    832
-#> 2 wvc$zip_norm   0.996       3396   0.473   269    143
+#> 1 wvc$zip        0.970       5411   0.474  2967   1067
+#> 2 wvc$zip_norm   0.996       4603   0.474   374    193
 ```
 
 ### State
@@ -677,28 +674,29 @@ wvc <- wvc %>%
 wvc %>% 
   filter(state != state_norm) %>% 
   count(state, state_norm, sort = TRUE)
-#> # A tibble: 19 × 3
+#> # A tibble: 20 × 3
 #>    state state_norm     n
 #>    <chr> <chr>      <int>
-#>  1 wv    WV           463
-#>  2 Wv    WV            73
-#>  3 dc    DC            42
-#>  4 tx    TX            29
-#>  5 wV    WV            25
+#>  1 wv    WV           591
+#>  2 Wv    WV            68
+#>  3 dc    DC            47
+#>  4 wV    WV            38
+#>  5 tx    TX            31
 #>  6 ca    CA            21
 #>  7 ky    KY            18
 #>  8 mA    MA             9
 #>  9 ny    NY             8
 #> 10 ma    MA             6
-#> 11 vA    VA             4
-#> 12 md    MD             3
-#> 13 Ok    OK             3
-#> 14 co    CO             2
-#> 15 in    IN             2
-#> 16 oh    OH             2
+#> 11 oh    OH             4
+#> 12 vA    VA             4
+#> 13 md    MD             3
+#> 14 Ok    OK             3
+#> 15 co    CO             2
+#> 16 in    IN             2
 #> 17 va    VA             2
 #> 18 il    IL             1
 #> 19 nC    NC             1
+#> 20 Va    VA             1
 ```
 
 ``` r
@@ -708,10 +706,10 @@ progress_table(
   compare = valid_state
 )
 #> # A tibble: 2 × 6
-#>   stage          prop_in n_distinct    prop_na n_out n_diff
-#>   <chr>            <dbl>      <dbl>      <dbl> <dbl>  <dbl>
-#> 1 wvc$state        0.995         72 0            715     20
-#> 2 wvc$state_norm   1             53 0.00000767     0      1
+#>   stage          prop_in n_distinct   prop_na n_out n_diff
+#>   <chr>            <dbl>      <dbl>     <dbl> <dbl>  <dbl>
+#> 1 wvc$state        0.995         74 0           863     22
+#> 2 wvc$state_norm   1             53 0.0000159     0      1
 ```
 
 ### City
@@ -811,22 +809,27 @@ good_refine <- wvc %>%
   )
 ```
 
-    #> # A tibble: 13 × 5
-    #>    state_norm zip_norm city_swap       city_refine       n
-    #>    <chr>      <chr>    <chr>           <chr>         <int>
-    #>  1 WV         25303    SO CHARLESTON   CHARLESTON       15
-    #>  2 WV         25311    EAST CHARLESTON CHARLESTON        5
-    #>  3 WV         25309    SO CHARLESTON   CHARLESTON        4
-    #>  4 WV         26416    PHILLIPI        PHILIPPI          3
-    #>  5 CA         94118    SAN FRANSCISO   SAN FRANCISCO     2
-    #>  6 WV         25301    EAST CHARLESTON CHARLESTON        2
-    #>  7 WV         26845    OIL FIELDS      OLD FIELDS        2
-    #>  8 NC         28231    CHAROLETTE      CHARLOTTE         1
-    #>  9 WV         24970    RONCERVERT      RONCEVERTE        1
-    #> 10 WV         25414    CHARLESTON TOWN CHARLES TOWN      1
-    #> 11 WV         25701    HUNGINTON       HUNTINGTON        1
-    #> 12 WV         25826    CORRINE         CORINNE           1
-    #> 13 WV         26501    MORGNTANTOWN    MORGANTOWN        1
+    #> # A tibble: 18 × 5
+    #>    state_norm zip_norm city_swap          city_refine           n
+    #>    <chr>      <chr>    <chr>              <chr>             <int>
+    #>  1 WV         25303    SO CHARLESTON      CHARLESTON           16
+    #>  2 OH         45237    CINCINATTI         CINCINNATI           11
+    #>  3 WV         26845    OIL FIELDS         OLD FIELDS            7
+    #>  4 WV         25311    EAST CHARLESTON    CHARLESTON            6
+    #>  5 WV         25309    SO CHARLESTON      CHARLESTON            4
+    #>  6 WV         26416    PHILLIPI           PHILIPPI              4
+    #>  7 WV         25301    EAST CHARLESTON    CHARLESTON            3
+    #>  8 CA         90272    PACIFIC PALLASADES PACIFIC PALISADES     2
+    #>  9 CA         94118    SAN FRANSCISO      SAN FRANCISCO         2
+    #> 10 WV         25719    HUNGINTON          HUNTINGTON            2
+    #> 11 NC         28231    CHAROLETTE         CHARLOTTE             1
+    #> 12 WV         24970    RONCERVERT         RONCEVERTE            1
+    #> 13 WV         25414    CHARLESTON TOWN    CHARLES TOWN          1
+    #> 14 WV         25420    GERRARDSTOWN RD    GERRARDSTOWN          1
+    #> 15 WV         25701    HUNGINTON          HUNTINGTON            1
+    #> 16 WV         25826    CORRINE            CORINNE               1
+    #> 17 WV         26187    WILLIAMSOTN        WILLIAMSTOWN          1
+    #> 18 WV         26501    MORGNTANTOWN       MORGANTOWN            1
 
 Then we can join the refined values back to the database.
 
@@ -842,12 +845,12 @@ Our goal for normalization was to increase the proportion of city values
 known to be valid and reduce the total distinct values by correcting
 misspellings.
 
-| stage                    | prop\_in | n\_distinct | prop\_na | n\_out | n\_diff |
-|:-------------------------|---------:|------------:|---------:|-------:|--------:|
-| `str_to_upper(wvc$city)` |    0.967 |        2737 |    0.469 |   2271 |     702 |
-| `wvc$city_norm`          |    0.975 |        2608 |    0.470 |   1715 |     560 |
-| `wvc$city_swap`          |    0.994 |        2241 |    0.470 |    385 |     187 |
-| `wvc$city_refine`        |    0.995 |        2230 |    0.470 |    353 |     177 |
+| stage                    | prop_in | n_distinct | prop_na | n_out | n_diff |
+|:-------------------------|--------:|-----------:|--------:|------:|-------:|
+| `str_to_upper(wvc$city)` |   0.965 |       3557 |   0.471 |  3514 |    933 |
+| `wvc$city_norm`          |   0.975 |       3394 |   0.471 |  2491 |    757 |
+| `wvc$city_swap`          |   0.994 |       2885 |   0.471 |   550 |    240 |
+| `wvc$city_refine`        |   0.995 |       2870 |   0.471 |   494 |    226 |
 
 You can see how the percentage of valid values increased with each
 stage.
@@ -881,49 +884,49 @@ wvc <- wvc %>%
 glimpse(sample_n(wvc, 50))
 #> Rows: 50
 #> Columns: 37
-#> $ org_id                 <chr> "2202", "2265", "92", "2202", "1885", "48832", "17", "99783", "20"…
-#> $ receipt_amount         <dbl> 7.33, 40.00, 500.00, 7.60, 275.00, 10.00, 200.00, 100000.00, 50.00…
-#> $ receipt_date           <date> 2019-05-01, 2020-06-25, 2017-10-04, 2017-11-01, 2019-08-27, 2021-…
-#> $ last_name              <chr> "Witt", "Stephen G. Roberts", "Michele C. Crites", "jeffery a spra…
-#> $ first_name             <chr> "Timothy", "Stephen", "Michele", "jeffery", NA, "Enrique", "Daniel…
-#> $ middle_name            <chr> NA, "G.", "C.", "a", NA, NA, NA, NA, "Daye", "L.", NA, NA, NA, NA,…
+#> $ org_id                 <chr> "143", "352", "1893", "1889", "136045", "25799", "42091", "25627",…
+#> $ receipt_amount         <dbl> 200.0, 500.0, 5.0, 200.0, 100.0, 50.0, 100.0, 577.0, 25.0, 3.0, 10…
+#> $ receipt_date           <date> 2018-02-08, 2018-10-17, 2020-08-27, 2020-11-30, 2022-02-09, 2019-…
+#> $ last_name              <chr> "Karlin", "Jackson Co Democratic Exec Comm", "Ward", "Sims", "K Oq…
+#> $ first_name             <chr> "Allan", NA, "Glen", "David", "Joyce", "Erica", "Edward", NA, "W",…
+#> $ middle_name            <chr> NA, NA, NA, "A.", NA, NA, NA, NA, "Jefferson", NA, "P.", NA, NA, N…
 #> $ suffix                 <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
-#> $ address1               <chr> NA, "1624 Kanawha Boulevard East", "471 Point Dr.", NA, NA, "1946 …
-#> $ address2               <chr> NA, NA, NA, NA, NA, NA, NA, "Suite 800", NA, NA, NA, NA, NA, NA, N…
-#> $ city                   <chr> NA, "Charleston", "Petersburg", NA, NA, "Charleston", NA, "Washing…
-#> $ state                  <chr> "ME", "WV", "WV", "ME", "ME", "WV", "ME", "DC", "ME", "ME", "ME", …
-#> $ zip                    <chr> NA, "25311", "26847", NA, NA, "25314", NA, "20006", NA, NA, NA, "2…
+#> $ address1               <chr> "41 Wilson Ave.", NA, "407 Keeney Mountain Rd.", "P. O. Box 5349",…
+#> $ address2               <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
+#> $ city                   <chr> "Morgantown", "Ripley", "Sandstone", "Vienna", NA, NA, "Washington…
+#> $ state                  <chr> "WV", "WV", "WV", "WV", "ME", "ME", "DC", "WV", "NC", "ME", "ME", …
+#> $ zip                    <chr> "26501", "25271", "25985-9249", "26105", NA, "91011", "20016", "25…
 #> $ description            <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
-#> $ receipt_id             <chr> "122062", "244527", "287", "45592", "141956", "313934", "10735", "…
-#> $ filed_date             <dttm> 2019-07-02 17:02:09, 2020-07-08 09:55:28, 2018-04-05 00:00:00, 20…
-#> $ receipt_source_type    <chr> "Individual", "Individual", "Individual", "Individual", "Business …
+#> $ receipt_id             <chr> "14684", "89705", "252266", "297644", "348333", "124054", "265650"…
+#> $ filed_date             <dttm> 2018-04-05 00:00:00, 2018-10-29 11:34:35, 2020-10-07 10:31:13, 20…
+#> $ receipt_source_type    <chr> "Individual", "Business or Organization", "Individual", "Individua…
 #> $ amended                <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FAL…
 #> $ receipt_type           <chr> "Contributions", "Contributions", "Contributions", "Contributions"…
-#> $ committee_type         <chr> "State Political Action Committee", "State Political Action Commit…
+#> $ committee_type         <chr> "State Candidate", "State Candidate", "State Political Action Comm…
 #> $ committee_name         <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
-#> $ candidate_name         <chr> NA, NA, "Robert Karnes", NA, NA, "Patrick Morrisey", "John R. Kell…
-#> $ employer               <chr> NA, "WV Chamber of Commerce", "Allegheny Wood Products", NA, NA, "…
-#> $ occupation             <chr> NA, "General Business", "Other", NA, NA, "Business Owner", NA, NA,…
+#> $ candidate_name         <chr> "Mike Caputo", "Missy Sue Morris", NA, NA, "Sydnee Smirl McElroy",…
+#> $ employer               <chr> NA, NA, NA, "Law Offices of David A. Sims", NA, NA, "E.M Rahal and…
+#> $ occupation             <chr> NA, NA, NA, "Attorney/Legal", NA, NA, "Other", NA, NA, "General Bu…
 #> $ occupation_comment     <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FAL…
 #> $ forgiven_loan          <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
-#> $ fundraiser_event_date  <dttm> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, 2018-09-14 04:00:00, …
-#> $ fundraiser_event_type  <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "Fundraiser", NA, NA, …
-#> $ fundraiser_event_place <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "Nanners Fundraiser", …
-#> $ report_name            <chr> "2019 2nd Quarter Report", "2020 2nd Quarter Report", "Primary-Fir…
+#> $ fundraiser_event_date  <dttm> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
+#> $ fundraiser_event_type  <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
+#> $ fundraiser_event_place <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
+#> $ report_name            <chr> "2018 Precandidate Annual Report", "Pre-General Report", "2020 3rd…
 #> $ contribution_type      <chr> "Monetary", "Monetary", "Monetary", "Monetary", "Monetary", "Monet…
-#> $ na_flag                <lgl> TRUE, TRUE, FALSE, TRUE, TRUE, FALSE, FALSE, TRUE, FALSE, TRUE, FA…
+#> $ na_flag                <lgl> FALSE, FALSE, TRUE, TRUE, FALSE, FALSE, FALSE, TRUE, TRUE, TRUE, T…
 #> $ dupe_flag              <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FAL…
-#> $ receipt_year           <dbl> 2019, 2020, 2017, 2017, 2019, 2021, 2018, 2020, 2018, 2020, 2020, …
-#> $ address_clean          <chr> NA, "1624 KANAWHA BOULEVARD E", "471 POINT DR", NA, NA, "1946 KANA…
-#> $ city_clean             <chr> NA, "CHARLESTON", "PETERSBURG", NA, NA, "CHARLESTON", NA, "WASHING…
-#> $ state_clean            <chr> "ME", "WV", "WV", "ME", "ME", "WV", "ME", "DC", "ME", "ME", "ME", …
-#> $ zip_clean              <chr> NA, "25311", "26847", NA, NA, "25314", NA, "20006", NA, NA, NA, "2…
+#> $ receipt_year           <dbl> 2018, 2018, 2020, 2020, 2022, 2019, 2020, 2021, 2020, 2022, 2019, …
+#> $ address_clean          <chr> "41 WILSON AVE", NA, "407 KEENEY MOUNTAIN RD", "PO BOX 5349", NA, …
+#> $ city_clean             <chr> "MORGANTOWN", "RIPLEY", "SANDSTONE", "VIENNA", NA, NA, "WASHINGTON…
+#> $ state_clean            <chr> "WV", "WV", "WV", "WV", "ME", "ME", "DC", "WV", "NC", "ME", "ME", …
+#> $ zip_clean              <chr> "26501", "25271", "25985", "26105", NA, "91011", "20016", "25311",…
 ```
 
-1.  There are 130,430 records in the database.
-2.  There are 1,827 duplicate records in the database.
+1.  There are 188,125 records in the database.
+2.  There are 7,459 duplicate records in the database.
 3.  The range and distribution of `amount` and `date` seem reasonable.
-4.  There are 41,525 records missing key variables.
+4.  There are 66,325 records missing key variables.
 5.  Consistency in geographic data has been improved with
     `campfin::normal_*()`.
 6.  The 4-digit `year` variable has been created with
@@ -936,10 +939,10 @@ server.
 
 ``` r
 clean_dir <- dir_create(here("wv", "contribs", "data", "clean"))
-clean_path <- path(clean_dir, "wv_contribs_20160301-20210630.csv")
+clean_path <- path(clean_dir, "wv_contribs_20160301-2023.csv")
 write_csv(wvc, clean_path, na = "")
 (clean_size <- file_size(clean_path))
-#> 32.8M
+#> 47.3M
 ```
 
 ## Upload
