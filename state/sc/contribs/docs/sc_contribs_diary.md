@@ -1,28 +1,28 @@
 South Carolina Contributions
 ================
-Kiernan Nicholls
-Fri Feb 25 13:44:44 2022
+Kiernan Nicholls & Aarushi Sahejpal
+Fri Mar 24 20:55:01 2023
 
--   [Project](#project)
--   [Objectives](#objectives)
--   [Packages](#packages)
--   [Source](#source)
--   [Download](#download)
--   [Read](#read)
--   [Explore](#explore)
-    -   [Missing](#missing)
-    -   [Duplicates](#duplicates)
-    -   [Categorical](#categorical)
-    -   [Amounts](#amounts)
-    -   [Dates](#dates)
--   [Wrangle](#wrangle)
-    -   [Address](#address)
-    -   [ZIP](#zip)
-    -   [State](#state)
-    -   [City](#city)
--   [Conclude](#conclude)
--   [Export](#export)
--   [Upload](#upload)
+- <a href="#project" id="toc-project">Project</a>
+- <a href="#objectives" id="toc-objectives">Objectives</a>
+- <a href="#packages" id="toc-packages">Packages</a>
+- <a href="#source" id="toc-source">Source</a>
+- <a href="#download" id="toc-download">Download</a>
+- <a href="#read" id="toc-read">Read</a>
+- <a href="#explore" id="toc-explore">Explore</a>
+  - <a href="#missing" id="toc-missing">Missing</a>
+  - <a href="#duplicates" id="toc-duplicates">Duplicates</a>
+  - <a href="#categorical" id="toc-categorical">Categorical</a>
+  - <a href="#amounts" id="toc-amounts">Amounts</a>
+  - <a href="#dates" id="toc-dates">Dates</a>
+- <a href="#wrangle" id="toc-wrangle">Wrangle</a>
+  - <a href="#address" id="toc-address">Address</a>
+  - <a href="#zip" id="toc-zip">ZIP</a>
+  - <a href="#state" id="toc-state">State</a>
+  - <a href="#city" id="toc-city">City</a>
+- <a href="#conclude" id="toc-conclude">Conclude</a>
+- <a href="#export" id="toc-export">Export</a>
+- <a href="#upload" id="toc-upload">Upload</a>
 
 <!-- Place comments regarding knitting here -->
 
@@ -85,11 +85,11 @@ pacman::p_load(
 )
 ```
 
-This diary was run using `campfin` version 1.0.8.9201.
+This diary was run using `campfin` version 1.0.8.
 
 ``` r
 packageVersion("campfin")
-#> [1] '1.0.8.9201'
+#> [1] '1.0.8'
 ```
 
 This document should be run as part of the `R_tap` project, which lives
@@ -172,37 +172,38 @@ scc <- scc %>%
 
 ## Explore
 
-There are 652,039 rows of 13 columns. Each record represents a single
+There are 741,401 rows of 13 columns. Each record represents a single
 contribution made from an individual to a campaign.
 
 ``` r
 glimpse(scc)
-#> Rows: 652,039
+#> Rows: 741,401
 #> Columns: 13
-#> $ contribution_id        <int> 972, 2422, 974, 6636, 6638, 1257, 1259, 1025, 1027, 1043, 1045, 1062, 35162, 1064, 1079…
-#> $ office_run_id          <int> 246, 246, 250, 251, 251, 253, 253, 275, 275, 284, 284, 298, 298, 265, 265, 265, 265, 26…
-#> $ candidate_id           <int> 224, 224, 228, 229, 229, 231, 231, 253, 253, 262, 262, 276, 276, 243, 243, 243, 243, 24…
-#> $ date                   <date> 2007-09-21, 2007-11-26, 2007-10-19, 2007-09-30, 2007-09-30, 2007-09-24, 2007-10-17, 20…
-#> $ amount                 <dbl> 550.00, 300.00, 200.00, 25.00, 50.00, 50.00, 400.00, 300.00, 1000.00, 60.00, 50.00, 45.…
-#> $ candidate_name         <chr> "Carron Smoak", "Carron Smoak", "Ryan Buckhannon", "Michael Loftus", "Michael Loftus", …
-#> $ office_name            <chr> "Isle Of Palms City Council", "Isle Of Palms City Council", "Isle Of Palms City Council…
-#> $ election_date          <date> 2007-10-16, 2007-10-16, 2007-11-06, 2007-11-06, 2007-11-06, 2007-11-06, 2007-11-06, 20…
-#> $ contributor_name       <chr> "Carron Smoak", "Carron Smoak", "Colette Holmes", "Larry Staffard", "Michael Maughon", …
-#> $ contributor_occupation <chr> "Health, Safety & Environmental Director", "Health, Safety & Environmental Director", "…
-#> $ group                  <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, TRUE, FALSE, TRUE, FALSE, FALSE, TRUE, FALSE, FALSE,…
-#> $ contributor_address    <chr> "50 Pelican Reach  Isle of Palms, SC 29451", "50 Pelican Reach  Isle of Palms, SC 29451…
-#> $ description            <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
+#> $ contribution_id        <int> 509104, 4609, 440609, 1239354, 1239370, 1159100, 1118020, 1159103, 1153698, 1158996, 11…
+#> $ office_run_id          <int> 13591, 1235, 13591, 47098, 47098, 47098, 47098, 47098, 47098, 47098, 47098, 47098, 4709…
+#> $ candidate_id           <int> 1792, 1208, 1792, 31409, 31409, 31409, 31409, 31409, 31409, 31409, 31409, 31409, 31409,…
+#> $ date                   <date> 2014-01-10, 2008-02-29, 2013-01-03, 2020-10-15, 2020-10-24, 2020-05-05, 2020-03-20, 20…
+#> $ amount                 <dbl> 300.00, 1000.00, 300.00, 50.00, 100.00, 500.00, 1000.00, 500.00, 20.00, 20.00, 50.00, 7…
+#> $ candidate_name         <chr> "Phillip Owens", "Phillip Shoopman", "Phillip Owens", "ernest mccord Jr.", "ernest mcco…
+#> $ office_name            <chr> "SC House of Representatives District 5", "SC Senate District 5", "SC House of Represen…
+#> $ election_date          <date> 2014-11-04, 2008-06-10, 2014-11-04, 2020-11-03, 2020-11-03, 2020-11-03, 2020-11-03, 20…
+#> $ contributor_name       <chr> "Joel Ledbetter", "John Mulvaney", "Joel Ledbetter", "Terese Parker", "Derrick Gunter",…
+#> $ contributor_occupation <chr> "Manager", "Real Estate Developer", "Manager", "Not Employed", "Electronic Technician",…
+#> $ group                  <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FAL…
+#> $ contributor_address    <chr> "PO Box 619  Easley, SC 29641", "518 Ralph Hood Road  Indian Land, SC 29707", "PO Box 6…
+#> $ description            <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "Act Bl…
 tail(scc)
 #> # A tibble: 6 × 13
-#>   contribution_id office_run_id candidate_id date       amount candidate_name office_name election_date contributor_name
-#>             <int>         <int>        <int> <date>      <dbl> <chr>          <chr>       <date>        <chr>           
-#> 1         1558395         59999        32993 2022-02-14    105 Candace Jenni… SC House o… 2022-03-08    Mark Taylor     
-#> 2         1558365         59999        32993 2022-02-03     35 Candace Jenni… SC House o… 2022-03-08    George Karges   
-#> 3         1558379         59999        32993 2022-02-07    500 Candace Jenni… SC House o… 2022-03-08    Thomas Fernandez
-#> 4         1558380         59999        32993 2022-02-07     35 Candace Jenni… SC House o… 2022-03-08    Chris Herndon   
-#> 5         1558517         70874        44236 2022-02-08    135 Darnell Hartw… Berkeley 5  2022-06-07    Mike Doty       
-#> 6         1558518         70881        44259 2022-02-08     25 Robert McInty… Charleston… 2022-06-14    Yana McIntyre   
-#> # … with 4 more variables: contributor_occupation <chr>, group <lgl>, contributor_address <chr>, description <chr>
+#>   contribution_id office_ru…¹ candi…² date       amount candi…³ offic…⁴ election…⁵ contr…⁶ contr…⁷ group contr…⁸ descr…⁹
+#>             <int>       <int>   <int> <date>      <dbl> <chr>   <chr>   <date>     <chr>   <chr>   <lgl> <chr>   <chr>  
+#> 1           38210        1491    1464 2008-06-11  500   Rubin … SC Hou… 2008-06-10 THE ST… <NA>    TRUE  61 BRO… <NA>   
+#> 2           38207        1491    1464 2008-06-11  100   Rubin … SC Hou… 2008-06-10 R. HUN… ATTORN… FALSE P.O.BO… <NA>   
+#> 3          293936        6037    1464 2011-07-14   67.5 Rubin … SC Hou… 2010-11-02 Region… <NA>    TRUE  11004 … <NA>   
+#> 4          429367       11870    1700 2012-06-08  500   Curtis… SC Hou… 2012-05-29 ECHO    <NA>    TRUE  808 Kn… <NA>   
+#> 5          429364       11870    1700 2012-06-08   25   Curtis… SC Hou… 2012-05-29 Elizab… Secret… FALSE P.O. B… <NA>   
+#> 6          429368       11870    1700 2012-06-11 1000   Curtis… SC Hou… 2012-05-29 SC Soc… <NA>    TRUE  P.O. B… <NA>   
+#> # … with abbreviated variable names ¹​office_run_id, ²​candidate_id, ³​candidate_name, ⁴​office_name, ⁵​election_date,
+#> #   ⁶​contributor_name, ⁷​contributor_occupation, ⁸​contributor_address, ⁹​description
 ```
 
 ### Missing
@@ -212,21 +213,21 @@ Columns vary in their degree of missing values.
 ``` r
 col_stats(scc, count_na)
 #> # A tibble: 13 × 4
-#>    col                    class       n     p
-#>    <chr>                  <chr>   <int> <dbl>
-#>  1 contribution_id        <int>       0 0    
-#>  2 office_run_id          <int>       0 0    
-#>  3 candidate_id           <int>       0 0    
-#>  4 date                   <date>      0 0    
-#>  5 amount                 <dbl>       0 0    
-#>  6 candidate_name         <chr>       0 0    
-#>  7 office_name            <chr>       0 0    
-#>  8 election_date          <date>      0 0    
-#>  9 contributor_name       <chr>       0 0    
-#> 10 contributor_occupation <chr>  137025 0.210
-#> 11 group                  <lgl>       0 0    
-#> 12 contributor_address    <chr>       0 0    
-#> 13 description            <chr>  650110 0.997
+#>    col                    class       n         p
+#>    <chr>                  <chr>   <int>     <dbl>
+#>  1 contribution_id        <int>       0 0        
+#>  2 office_run_id          <int>       0 0        
+#>  3 candidate_id           <int>       0 0        
+#>  4 date                   <date>      0 0        
+#>  5 amount                 <dbl>       0 0        
+#>  6 candidate_name         <chr>       0 0        
+#>  7 office_name            <chr>       0 0        
+#>  8 election_date          <date>      0 0        
+#>  9 contributor_name       <chr>       9 0.0000121
+#> 10 contributor_occupation <chr>  147250 0.199    
+#> 11 group                  <lgl>       0 0        
+#> 12 contributor_address    <chr>       0 0        
+#> 13 description            <chr>  728765 0.983
 ```
 
 We can flag any record missing a key variable needed to identify a
@@ -246,9 +247,9 @@ We can also flag any record completely duplicated across every column.
 ``` r
 scc <- flag_dupes(scc, -contribution_id)
 sum(scc$dupe_flag)
-#> [1] 5568
+#> [1] 7431
 mean(scc$dupe_flag)
-#> [1] 0.008539367
+#> [1] 0.01002292
 ```
 
 ``` r
@@ -256,20 +257,20 @@ scc %>%
   filter(dupe_flag) %>% 
   select(all_of(key_vars)) %>% 
   arrange(date)
-#> # A tibble: 5,568 × 4
+#> # A tibble: 7,431 × 4
 #>    date       contributor_name       amount candidate_name 
 #>    <date>     <chr>                   <dbl> <chr>          
-#>  1 2007-08-30 unitemized 100 or less   568. Mark Richardson
-#>  2 2007-08-30 unitemized 100 or less   568. Mark Richardson
-#>  3 2007-09-26 Grover Seaton           1000  Blair Jennings 
-#>  4 2007-09-26 Grover Seaton           1000  Blair Jennings 
-#>  5 2007-09-29 Doris Brockington        100  Frank Wideman  
-#>  6 2007-09-29 Doris Brockington        100  Frank Wideman  
-#>  7 2007-10-17 Archie Patterson          25  E Cromartie II 
-#>  8 2007-10-17 Archie Patterson          25  E Cromartie II 
-#>  9 2007-10-29 James Means               25  E Cromartie II 
-#> 10 2007-10-29 James Means               25  E Cromartie II 
-#> # … with 5,558 more rows
+#>  1 2002-02-28 William McCauley        1000  Joshua Kimbrell
+#>  2 2002-02-28 William McCauley        1000  Joshua Kimbrell
+#>  3 2007-08-30 unitemized 100 or less   568. Mark Richardson
+#>  4 2007-08-30 unitemized 100 or less   568. Mark Richardson
+#>  5 2007-09-26 Grover Seaton           1000  Blair Jennings 
+#>  6 2007-09-26 Grover Seaton           1000  Blair Jennings 
+#>  7 2007-09-29 Doris Brockington        100  Frank Wideman  
+#>  8 2007-09-29 Doris Brockington        100  Frank Wideman  
+#>  9 2007-10-17 Archie Patterson          25  E Cromartie II 
+#> 10 2007-10-17 Archie Patterson          25  E Cromartie II 
+#> # … with 7,421 more rows
 ```
 
 ### Categorical
@@ -279,20 +280,20 @@ col_stats(scc, n_distinct)
 #> # A tibble: 14 × 4
 #>    col                    class       n          p
 #>    <chr>                  <chr>   <int>      <dbl>
-#>  1 contribution_id        <int>  652039 1         
-#>  2 office_run_id          <int>   13577 0.0208    
-#>  3 candidate_id           <int>   10526 0.0161    
-#>  4 date                   <date>   5482 0.00841   
-#>  5 amount                 <dbl>   14483 0.0222    
-#>  6 candidate_name         <chr>    8151 0.0125    
-#>  7 office_name            <chr>    1151 0.00177   
-#>  8 election_date          <date>    518 0.000794  
-#>  9 contributor_name       <chr>  269741 0.414     
-#> 10 contributor_occupation <chr>   37270 0.0572    
-#> 11 group                  <lgl>       2 0.00000307
-#> 12 contributor_address    <chr>  332271 0.510     
-#> 13 description            <chr>     407 0.000624  
-#> 14 dupe_flag              <lgl>       2 0.00000307
+#>  1 contribution_id        <int>  741401 1         
+#>  2 office_run_id          <int>   14747 0.0199    
+#>  3 candidate_id           <int>   11491 0.0155    
+#>  4 date                   <date>   5879 0.00793   
+#>  5 amount                 <dbl>   15531 0.0209    
+#>  6 candidate_name         <chr>    8576 0.0116    
+#>  7 office_name            <chr>    1337 0.00180   
+#>  8 election_date          <date>    550 0.000742  
+#>  9 contributor_name       <chr>  297437 0.401     
+#> 10 contributor_occupation <chr>   40854 0.0551    
+#> 11 group                  <lgl>       2 0.00000270
+#> 12 contributor_address    <chr>  368583 0.497     
+#> 13 description            <chr>    2309 0.00311   
+#> 14 dupe_flag              <lgl>       2 0.00000270
 ```
 
 ![](../plots/distinct-plots-1.png)<!-- -->
@@ -307,9 +308,9 @@ scc$amount <- round(scc$amount, digits = 2)
 ``` r
 summary(scc$amount)
 #>      Min.   1st Qu.    Median      Mean   3rd Qu.      Max. 
-#>    -250.0      50.0     150.0     387.2     500.0 1127418.1
+#>    -250.0      50.0     100.0     374.7     500.0 1127418.1
 mean(scc$amount <= 0)
-#> [1] 0.0006932101
+#> [1] 0.000627191
 ```
 
 These are the records with the minimum and maximum amounts.
@@ -348,16 +349,16 @@ scc <- mutate(scc, year = year(date))
 
 ``` r
 min(scc$date)
-#> [1] "2003-08-31"
+#> [1] "2000-01-03"
 sum(scc$year < 2000)
 #> [1] 0
 max(scc$date)
-#> [1] "2022-02-23"
+#> [1] "2023-03-15"
 sum(scc$date > today())
 #> [1] 0
 ```
 
-It’s common to see an increase in the number of contributins in
+It’s common to see an increase in the number of contributions in
 elections years.
 
 ![](../plots/bar-year-1.png)<!-- -->
@@ -399,20 +400,20 @@ addr_norm <- scc %>%
 
 ``` r
 addr_norm
-#> # A tibble: 294,327 × 2
-#>    address_sep          address_norm      
-#>    <chr>                <chr>             
-#>  1 50 Pelican Reach     50 PELICAN REACH  
-#>  2 7 53rd Ave           7 53RD AVE        
-#>  3 3302 Hartnett Blvd   3302 HARTNETT BLVD
-#>  4 7 Wills Way          7 WILLS WAY       
-#>  5 21 J.C. Long Blvd    21 JC LONG BLVD   
-#>  6 6 Ensign Ct          6 ENSIGN CT       
-#>  7 1415 M. L. King Blvd 1415 M L KING BLVD
-#>  8 246 Forest Trail     246 FOREST TRL    
-#>  9 237 Fulmer Rd        237 FULMER RD     
-#> 10 3936 Sunset Blvd     3936 SUNSET BLVD  
-#> # … with 294,317 more rows
+#> # A tibble: 325,723 × 2
+#>    address_sep               address_norm             
+#>    <chr>                     <chr>                    
+#>  1 PO Box 619                PO BOX 619               
+#>  2 518 Ralph Hood Road       518 RALPH HOOD RD        
+#>  3 141 Clearview Circle      141 CLEARVIEW CIR        
+#>  4 112 Chestnut Street       112 CHESTNUT ST          
+#>  5 41 Lameau Dr              41 LAMEAU DR             
+#>  6 5148 Maplewood dr         5148 MAPLEWOOD DR        
+#>  7 925 Cleveland St Unit 277 925 CLEVELAND ST UNIT 277
+#>  8 312 Picadilly Street      312 PICADILLY ST         
+#>  9 45 Sacha Lane             45 SACHA LN              
+#> 10 615 Morgan St             615 MORGAN ST            
+#> # … with 325,713 more rows
 ```
 
 ``` r
@@ -446,8 +447,8 @@ progress_table(
 #> # A tibble: 2 × 6
 #>   stage        prop_in n_distinct prop_na n_out n_diff
 #>   <chr>          <dbl>      <dbl>   <dbl> <dbl>  <dbl>
-#> 1 scc$zip_sep    0.994      12227  0.0259  3731   1116
-#> 2 scc$zip_norm   0.995      12181  0.0269  2982   1069
+#> 1 scc$zip_sep    0.994      12942  0.0263  4289   1162
+#> 2 scc$zip_norm   0.995      12896  0.0272  3539   1115
 ```
 
 ``` r
@@ -458,7 +459,7 @@ scc %>%
 #>    zip_sep   zip_norm     n
 #>    <chr>     <chr>    <int>
 #>  1 00000     <NA>       633
-#>  2 11111     <NA>        34
+#>  2 11111     <NA>        35
 #>  3 99999     <NA>        22
 #>  4 294076256 29407        3
 #>  5 294646302 29464        3
@@ -495,20 +496,20 @@ scc <- scc %>%
 scc %>% 
   filter(state_sep != state_norm | !is.na(state_sep) & is.na(state_norm)) %>% 
   count(state_sep, state_norm, sort = TRUE)
-#> # A tibble: 41 × 3
+#> # A tibble: 47 × 3
 #>    state_sep state_norm     n
 #>    <chr>     <chr>      <int>
-#>  1 sc        SC           195
-#>  2 Sc        SC            35
+#>  1 sc        SC           353
+#>  2 Sc        SC            41
 #>  3 Ga        GA            21
 #>  4 So        <NA>          15
-#>  5 Fl        FL             6
-#>  6 sC        SC             6
-#>  7 Co        CO             4
-#>  8 Ma        MA             4
-#>  9 nc        NC             4
-#> 10 Or        OR             3
-#> # … with 31 more rows
+#>  5 sC        SC             9
+#>  6 Fl        FL             6
+#>  7 nc        NC             6
+#>  8 ga        GA             5
+#>  9 NA        <NA>           5
+#> 10 Co        CO             4
+#> # … with 37 more rows
 ```
 
 ``` r
@@ -520,8 +521,8 @@ progress_table(
 #> # A tibble: 2 × 6
 #>   stage          prop_in n_distinct prop_na n_out n_diff
 #>   <chr>            <dbl>      <dbl>   <dbl> <dbl>  <dbl>
-#> 1 scc$state_sep    0.999        101  0.0259   333     42
-#> 2 scc$state_norm   1             60  0.0259     0      1
+#> 1 scc$state_sep    0.999        106  0.0263   518     47
+#> 2 scc$state_norm   1             59  0.0263     0      1
 ```
 
 ``` r
@@ -630,20 +631,20 @@ good_refine <- good_refine %>%
   filter(str_detect(city_swap, "^(NORTH|SOUTH|EAST|WEST)", negate = TRUE))
 ```
 
-    #> # A tibble: 107 × 5
-    #>    state_norm zip_norm city_swap         city_refine             n
-    #>    <chr>      <chr>    <chr>             <chr>               <int>
-    #>  1 SC         29920    ST HELENAS ISLAND SAINT HELENA ISLAND    10
-    #>  2 MD         20878    GAITEHURSBURG     GAITHERSBURG            4
-    #>  3 SC         29205    COLUMBIACOLUMBIA  COLUMBIA                4
-    #>  4 SC         29406    NO CHARLESTON     CHARLESTON              4
-    #>  5 SC         29585    PAWSLEY ISLAND    PAWLEYS ISLAND          4
-    #>  6 FL         32082    PONTE VERDE BEACH PONTE VEDRA BEACH       3
-    #>  7 NY         11733    SETAUKET          EAST SETAUKET           3
-    #>  8 SC         29365    LYNAM             LYMAN                   3
-    #>  9 SC         29512    BENNESTVILLE      BENNETTSVILLE           3
-    #> 10 CA         92698    ALISA VIE JO      ALISO VIEJO             2
-    #> # … with 97 more rows
+    #> # A tibble: 115 × 5
+    #>    state_norm zip_norm city_swap         city_refine           n
+    #>    <chr>      <chr>    <chr>             <chr>             <int>
+    #>  1 SC         29406    NO CHARLESTON     CHARLESTON            6
+    #>  2 MD         20878    GAITEHURSBURG     GAITHERSBURG          4
+    #>  3 SC         29205    COLUMBIACOLUMBIA  COLUMBIA              4
+    #>  4 SC         29585    PAWSLEY ISLAND    PAWLEYS ISLAND        4
+    #>  5 CA         92698    ALISA VIE JO      ALISO VIEJO           3
+    #>  6 FL         32082    PONTE VERDE BEACH PONTE VEDRA BEACH     3
+    #>  7 SC         29365    LYNAM             LYMAN                 3
+    #>  8 SC         29512    BENNESTVILLE      BENNETTSVILLE         3
+    #>  9 SC         29681    SIMPONSVILLE      SIMPSONVILLE          3
+    #> 10 CA         94107    SAN FRANSICO      SAN FRANCISCO         2
+    #> # … with 105 more rows
 
 Then we can join the refined values back to the database.
 
@@ -661,10 +662,10 @@ misspellings.
 
 | stage                        | prop_in | n_distinct | prop_na | n_out | n_diff |
 |:-----------------------------|--------:|-----------:|--------:|------:|-------:|
-| `str_to_upper(scc$city_sep)` |   0.943 |       9313 |   0.026 | 35928 |   3974 |
-| `scc$city_norm`              |   0.972 |       8567 |   0.028 | 17898 |   3195 |
-| `scc$city_swap`              |   0.994 |       6682 |   0.028 |  3605 |   1288 |
-| `scc$city_refine`            |   0.995 |       6587 |   0.028 |  3459 |   1196 |
+| `str_to_upper(scc$city_sep)` |   0.942 |      10355 |   0.026 | 41516 |   4699 |
+| `scc$city_norm`              |   0.973 |       9252 |   0.028 | 19701 |   3557 |
+| `scc$city_swap`              |   0.993 |       7222 |   0.028 |  4983 |   1505 |
+| `scc$city_refine`            |   0.993 |       7119 |   0.028 |  4836 |   1405 |
 
 You can see how the percentage of valid values increased with each
 stage.
@@ -698,30 +699,30 @@ scc <- scc %>%
 glimpse(sample_n(scc, 1000))
 #> Rows: 1,000
 #> Columns: 20
-#> $ contribution_id        <int> 250769, 1358390, 1334336, 1395796, 243260, 1339746, 560026, 534650, 705833, 570551, 133…
-#> $ office_run_id          <int> 8210, 47899, 45036, 31487, 7001, 49433, 15929, 15707, 17945, 9247, 45036, 265, 16767, 4…
-#> $ candidate_id           <int> 5659, 31124, 27720, 15553, 6429, 32624, 12227, 12084, 13429, 5890, 27720, 243, 12710, 2…
-#> $ date                   <date> 2010-09-09, 2020-08-14, 2020-07-14, 2017-09-05, 2010-08-16, 2021-04-26, 2014-08-18, 20…
-#> $ amount                 <dbl> 500.00, 1000.00, 5.00, 250.00, 250.00, 12.50, 100.00, 250.00, 500.00, 40.00, 100.00, 25…
-#> $ candidate_name         <chr> "Vincent Sheheen", "Thomas Brittain Jr", "Sam Skardon", "Donald Branham", "James Byars …
-#> $ office_name            <chr> "Governor", "SC House of Representatives District 107", "SC Senate District 41", "Kersh…
-#> $ election_date          <date> 2010-11-02, 2020-11-03, 2020-11-03, 2018-06-12, 2010-06-08, 2022-06-07, 2014-09-30, 20…
-#> $ contributor_name       <chr> "Carolyn Bishop-McLeod", "South Carolina Association For Justice PAC", "Nina Hoffman", …
-#> $ contributor_occupation <chr> "Retired", NA, "attorney", "Business owner", "Insurance Agent", "Not Employed", "PHYSIC…
-#> $ group                  <lgl> FALSE, TRUE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALS…
-#> $ contributor_address    <chr> "2970 Bruce Circle Ext  Sumter, SC 29154", "PO Box 11495  Columbia, SC 29211", "5 Lavin…
-#> $ city_sep               <chr> "Sumter", "Columbia", "Charleston", "Camden", "Summerville", "Pittsburg", "WINNSBORO", …
+#> $ contribution_id        <int> 1374319, 579283, 646816, 78667, 1198104, 1334508, 277358, 951844, 494518, 632050, 16719…
+#> $ office_run_id          <int> 10902, 15167, 16197, 338, 46597, 45036, 8873, 32756, 9247, 16856, 72261, 71702, 14093, …
+#> $ candidate_id           <int> 9215, 11712, 12431, 316, 31051, 27720, 7792, 16351, 5890, 12760, 27353, 45726, 11060, 6…
+#> $ date                   <date> 2012-02-29, 2014-06-19, 2014-05-17, 2008-12-08, 2020-06-08, 2020-10-26, 2010-12-02, 20…
+#> $ amount                 <dbl> 100.00, 25.00, 100.00, 1500.00, 500.00, 35.00, 30.00, 25.00, 3500.00, 100.00, 100.00, 1…
+#> $ candidate_name         <chr> "Joseph McElveen III", "Krystal Dotson", "Thomas Smalls", "Andre Bauer", "Stacey Owens"…
+#> $ office_name            <chr> "SC Senate District 35", "Horry County Council", "Hampton Sheriff", "Lieutenant Governo…
+#> $ election_date          <date> 2012-11-06, 2014-11-04, 2014-11-04, 2010-06-02, 2020-06-09, 2020-11-03, 2010-12-07, 20…
+#> $ contributor_name       <chr> "Emily Bahnmuller", "Cheryl Bell", "Lucinda Bennett", "R. Scott Townes", "Jeff Walker",…
+#> $ contributor_occupation <chr> "Teacher", "self-employed", "Self employed", "Carlson Wagonlit Travel", "Accountant/Fin…
+#> $ group                  <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, TRUE, FALSE, FALSE, FALSE, FALS…
+#> $ contributor_address    <chr> "940 Oak Brook Blvd  Sumter, SC 29150", "PO Box 14108  Surfside Beach, SC 29587", "289 …
+#> $ city_sep               <chr> "Sumter", "Surfside Beach", "Estill", "Greenville", "Greer", "Charleston", "ORANGEBURG"…
 #> $ description            <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
 #> $ dupe_flag              <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FAL…
-#> $ year                   <dbl> 2010, 2020, 2020, 2017, 2010, 2021, 2014, 2014, 2016, 2014, 2020, 2008, 2015, 2019, 202…
-#> $ address_clean          <chr> "2970 BRUCE CIRCLE EXT", "PO BOX 11495", "5 LAVINGTON RD", "816 BROAD ST", "1661 N MAIN…
-#> $ city_clean             <chr> "SUMTER", "COLUMBIA", "CHARLESTON", "CAMDEN", "SUMMERVILLE", "PITTSBURG", "WINNSBORO", …
-#> $ state_clean            <chr> "SC", "SC", "SC", "SC", "SC", "CA", "SC", "SC", "SC", "SC", "SC", "SC", "SC", "SC", "SC…
-#> $ zip_clean              <chr> "29154", "29211", "29407", "29020", "29483", "94565", "29180", "29180", "29936", "29410…
+#> $ year                   <dbl> 2012, 2014, 2014, 2008, 2020, 2020, 2010, 2018, 2013, 2015, 2022, 2022, 2014, 2009, 201…
+#> $ address_clean          <chr> "940 OAK BROOK BLVD", "PO BOX 14108", "289 GRAYSON ST", "135 ENDINBURGH CT", "10 CLAYMO…
+#> $ city_clean             <chr> "SUMTER", "SURFSIDE BEACH", "ESTILL", "GREENVILLE", "GREER", "CHARLESTON", "ORANGEBURG"…
+#> $ state_clean            <chr> "SC", "SC", "SC", "SC", "SC", "SC", "SC", "SC", "GA", "SC", "SC", "SC", "SC", "SC", "GA…
+#> $ zip_clean              <chr> "29150", "29587", "29918", "29607", "29650", "29407", "29115", "29730", "31139", "29461…
 ```
 
-1.  There are 652,039 records in the database.
-2.  There are 5,568 duplicate records in the database.
+1.  There are 741,401 records in the database.
+2.  There are 7,431 duplicate records in the database.
 3.  The range and distribution of `amount` and `date` seem reasonable.
 4.  There are 0 records missing key variables.
 5.  Consistency in geographic data has been improved with
@@ -746,14 +747,14 @@ clean_dir <- dir_create(here("sc", "contribs", "data", "clean"))
 clean_csv <- path(clean_dir, glue("sc_contribs_{csv_ts}.csv"))
 clean_rds <- path_ext_set(clean_csv, "rds")
 basename(clean_csv)
-#> [1] "sc_contribs_20030831-20220223.csv"
+#> [1] "sc_contribs_20000103-20230315.csv"
 ```
 
 ``` r
 write_csv(scc, clean_csv, na = "")
 write_rds(scc, clean_rds, compress = "xz")
 (clean_size <- file_size(clean_csv))
-#> 133M
+#> 152M
 ```
 
 ## Upload
