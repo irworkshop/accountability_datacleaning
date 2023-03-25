@@ -1,6 +1,6 @@
 ---
 title: "Kentucky Contributions"
-author: "Kiernan Nicholls"
+author: "Kiernan Nicholls & Aarushi Sahejpal"
 date: "`r date()`"
 output:
   github_document: 
@@ -128,7 +128,7 @@ raw_dir <- dir_create(here("ky", "contribs", "data", "raw"))
 ```
 
 ```{r raw_download}
-for (yr in 2011:2021) {
+for (yr in 2011:2023) {
   cli_h2("Starting year: {yr}")
   for (mn in 1:12) {
     start_dt <- as.Date(paste(yr, mn, 1, sep = "-"))

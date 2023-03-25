@@ -1,28 +1,28 @@
 Kentucky Contributions
 ================
-Kiernan Nicholls
-Tue May 11 16:05:42 2021
+Kiernan Nicholls & Aarushi Sahejpal
+Fri Mar 24 23:46:28 2023
 
--   [Project](#project)
--   [Objectives](#objectives)
--   [Packages](#packages)
--   [Data](#data)
--   [Download](#download)
--   [Read](#read)
--   [Explore](#explore)
-    -   [Missing](#missing)
-    -   [Duplicates](#duplicates)
-    -   [Categorical](#categorical)
-    -   [Amounts](#amounts)
-    -   [Dates](#dates)
--   [Wrangle](#wrangle)
-    -   [Address](#address)
-    -   [ZIP](#zip)
-    -   [State](#state)
-    -   [City](#city)
--   [Conclude](#conclude)
--   [Export](#export)
--   [Upload](#upload)
+- <a href="#project" id="toc-project">Project</a>
+- <a href="#objectives" id="toc-objectives">Objectives</a>
+- <a href="#packages" id="toc-packages">Packages</a>
+- <a href="#data" id="toc-data">Data</a>
+- <a href="#download" id="toc-download">Download</a>
+- <a href="#read" id="toc-read">Read</a>
+- <a href="#explore" id="toc-explore">Explore</a>
+  - <a href="#missing" id="toc-missing">Missing</a>
+  - <a href="#duplicates" id="toc-duplicates">Duplicates</a>
+  - <a href="#categorical" id="toc-categorical">Categorical</a>
+  - <a href="#amounts" id="toc-amounts">Amounts</a>
+  - <a href="#dates" id="toc-dates">Dates</a>
+- <a href="#wrangle" id="toc-wrangle">Wrangle</a>
+  - <a href="#address" id="toc-address">Address</a>
+  - <a href="#zip" id="toc-zip">ZIP</a>
+  - <a href="#state" id="toc-state">State</a>
+  - <a href="#city" id="toc-city">City</a>
+- <a href="#conclude" id="toc-conclude">Conclude</a>
+- <a href="#export" id="toc-export">Export</a>
+- <a href="#upload" id="toc-upload">Upload</a>
 
 <!-- Place comments regarding knitting here -->
 
@@ -118,7 +118,7 @@ raw_dir <- dir_create(here("ky", "contribs", "data", "raw"))
 ```
 
 ``` r
-for (yr in 2011:2021) {
+for (yr in 2011:2023) {
   cli_h2("Starting year: {yr}")
   for (mn in 1:12) {
     start_dt <- as.Date(paste(yr, mn, 1, sep = "-"))
@@ -159,24 +159,24 @@ raw_info %>%
 ``` r
 raw_info <- dir_info(raw_dir)
 sum(raw_info$size)
-#> 103M
+#> 174M
 raw_info %>% 
   select(path, size, modification_time) %>% 
   mutate(across(path, basename))
-#> # A tibble: 125 x 3
+#> # A tibble: 147 × 3
 #>    path                       size modification_time  
 #>    <chr>               <fs::bytes> <dttm>             
-#>  1 ky-con_2011-Apr.csv        620K 2021-05-10 11:19:29
-#>  2 ky-con_2011-Aug.csv        873K 2021-05-10 11:20:46
-#>  3 ky-con_2011-Dec.csv        361K 2021-05-10 11:22:10
-#>  4 ky-con_2011-Feb.csv        197K 2021-05-10 11:18:54
-#>  5 ky-con_2011-Jan.csv        136K 2021-05-10 11:18:40
-#>  6 ky-con_2011-Jul.csv        655K 2021-05-10 11:20:26
-#>  7 ky-con_2011-Jun.csv        860K 2021-05-10 11:20:08
-#>  8 ky-con_2011-Mar.csv        592K 2021-05-10 11:19:10
-#>  9 ky-con_2011-May.csv        564K 2021-05-10 11:19:49
-#> 10 ky-con_2011-Nov.csv        431K 2021-05-10 11:21:46
-#> # … with 115 more rows
+#>  1 ky-con_2011-Apr.csv        911K 2023-03-24 23:47:04
+#>  2 ky-con_2011-Aug.csv        990K 2023-03-24 23:47:50
+#>  3 ky-con_2011-Dec.csv        502K 2023-03-24 23:48:35
+#>  4 ky-con_2011-Feb.csv        300K 2023-03-24 23:46:41
+#>  5 ky-con_2011-Jan.csv        316K 2023-03-24 23:46:30
+#>  6 ky-con_2011-Jul.csv        732K 2023-03-24 23:47:39
+#>  7 ky-con_2011-Jun.csv        920K 2023-03-24 23:47:27
+#>  8 ky-con_2011-Mar.csv        800K 2023-03-24 23:46:53
+#>  9 ky-con_2011-May.csv        658K 2023-03-24 23:47:16
+#> 10 ky-con_2011-Nov.csv        614K 2023-03-24 23:48:24
+#> # … with 137 more rows
 ```
 
 We have downloaded `nrow(raw_info)` files totaling `sum(raw_info$size)`
@@ -207,62 +207,65 @@ kyc <- clean_names(kyc, case = "snake")
 
 ## Explore
 
-There are 449,571 rows of 32 columns. Each record represents a single
+There are 674,610 rows of 34 columns. Each record represents a single
 contribution from an organization or individual to a campaign or
 committee.
 
 ``` r
 glimpse(kyc)
-#> Rows: 449,571
-#> Columns: 32
-#> $ to_organization        <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
-#> $ from_organization_name <chr> NA, "INTERNATIONAL BROTHERHOOD OF ELECTRICAL WORKERS PAC 369", "FORCHT BANK", NA, NA, N…
-#> $ contributor_last_name  <chr> "JUNG", NA, NA, "DERRICKSON", "POE", "ADKINS", "BLEVINS", NA, "DALEY", "DUKE", "COLLINS…
-#> $ contributor_first_name <chr> "COURTNEY", NA, NA, "CHARLES", "WAYNE", "ROCKY", "WALTER", NA, "RON", "MARILYN", "TED",…
-#> $ recipient_last_name    <chr> "MOELLMAN", "LACKEY", "WUCHNER", "GRIMES", "GRIMES", "GRIMES", "GRIMES", "BUTLER", "GRI…
-#> $ recipient_first_name   <chr> "KEN", "JOHN", "ADDIA", "ALISON LUNDERGAN", "ALISON LUNDERGAN", "ALISON LUNDERGAN", "AL…
-#> $ office_sought          <chr> "STATE TREASURER", "COMMISSIONER OF AGRICULTURE", "AUDITOR OF PUBLIC ACCOUNTS", "SECRET…
-#> $ location               <chr> "STATEWIDE", "STATEWIDE", "STATEWIDE", "STATEWIDE", "STATEWIDE", "STATEWIDE", "STATEWID…
-#> $ election_date          <date> 2011-11-08, 2011-05-17, 2011-05-17, 2011-05-17, 2011-05-17, 2011-05-17, 2011-05-17, 20…
-#> $ election_type          <chr> "GENERAL", "PRIMARY", "PRIMARY", "PRIMARY", "PRIMARY", "PRIMARY", "PRIMARY", "PRIMARY",…
+#> Rows: 674,610
+#> Columns: 34
+#> $ to_organization        <chr> "FAYETTE COUNTY DEMOCRATIC EXECUTIVE COMMITTEE", "SCOTT COUNTY DEMOCRATIC EXECUTIVE COM…
+#> $ from_organization_name <chr> NA, "TOTAL", "TOTAL", "IN-KIND TOTAL", "MAIN SOURCE BANK", "IN-KIND RECD. TOTAL", "CENT…
+#> $ contributor_last_name  <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, "JUNG", NA, NA, "DERRICKSON", "POE", "ADKINS", "BLE…
+#> $ contributor_first_name <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, "COURTNEY", NA, NA, "CHARLES", "WAYNE", "ROCKY", "W…
+#> $ recipient_last_name    <chr> NA, NA, NA, NA, NA, NA, NA, NA, "BUTLER", "MOELLMAN", "LACKEY", "WUCHNER", "GRIMES", "G…
+#> $ recipient_first_name   <chr> NA, NA, NA, NA, NA, NA, NA, NA, "DWIGHT", "KEN", "JOHN", "ADDIA", "ALISON LUNDERGAN", "…
+#> $ office_sought          <chr> NA, NA, NA, NA, NA, NA, NA, NA, "STATE REPRESENTATIVE", "STATE TREASURER", "COMMISSIONE…
+#> $ location               <chr> NA, NA, NA, NA, NA, NA, NA, NA, "18TH DISTRICT", "STATEWIDE", "STATEWIDE", "STATEWIDE",…
+#> $ election_date          <date> NA, NA, NA, NA, NA, NA, NA, NA, 2012-05-22, 2011-11-08, 2011-05-17, 2011-05-17, 2011-0…
+#> $ election_type          <chr> NA, NA, NA, NA, NA, NA, NA, NA, "PRIMARY", "GENERAL", "PRIMARY", "PRIMARY", "PRIMARY", …
 #> $ exemption_status       <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FAL…
-#> $ other_text             <chr> NA, NA, "INTEREST", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
-#> $ address1               <chr> "241 N ASHBROOK", "4315 PRESTON HIGHWAY, # 102", "P O BOX 55250", "440 ALLEN AVE", "13 …
-#> $ address2               <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
-#> $ city                   <chr> "LAKESIDE PARK", "LOUISVILLE", "LEXINGTON", "MOREHEAD", "MAYSVILLE", "SANDY HOOK", "WES…
-#> $ state                  <chr> "KY", "KY", "KY", "KY", "KY", "KY", "KY", "KY", "KY", "KY", "KY", "KY", "KY", "KY", "KY…
-#> $ zip                    <chr> "41017", "402132031", "40555", "403511106", "41056", "41171", "414721109", NA, "41702",…
-#> $ amount                 <dbl> 1000.00, 1000.00, 6.80, 500.00, 100.00, 750.00, 250.00, 4.65, 250.00, 250.00, 1000.00, …
-#> $ contribution_type      <chr> "INDIVIDUAL", "KYPAC", "INTEREST", "INDIVIDUAL", "INDIVIDUAL", "INDIVIDUAL", "INDIVIDUA…
-#> $ contribution_mode      <chr> "DIRECT", "DIRECT", "DIRECT", "DIRECT", "DIRECT", "DIRECT", "DIRECT", "DIRECT", "DIRECT…
+#> $ other_text             <chr> NA, "TOTAL", "TOTAL", "IN-KIND - JON PARK", NA, "TOTAL", NA, NA, NA, NA, NA, "INTEREST"…
+#> $ address1               <chr> NA, NA, NA, NA, "VERSAILLES ROAD", NA, "P.O. BOX 1360", "6300 DUTCHMANS PARKWAY", NA, "…
+#> $ address2               <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "STE. 1A", NA, …
+#> $ city                   <chr> NA, NA, NA, NA, "FRANKFORT", NA, "LEXINGTON", "LOUISVILLE", NA, "LAKESIDE PARK", "LOUIS…
+#> $ state                  <chr> "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "KY", "KY", "N/A", "KY", "N/A", "KY", "N/A", …
+#> $ zip                    <chr> NA, NA, NA, NA, "406010000", NA, "405880000", "402050000", NA, "41017", "402132031", "4…
+#> $ amount                 <dbl> 3.14, 548.00, 2333.00, 87.77, 0.12, 1460.00, 17.00, 155.35, 4.65, 1000.00, 1000.00, 6.8…
+#> $ contribution_type      <chr> "INTEREST", "OTHER", "OTHER", "OTHER", "INTEREST", "OTHER", "INTEREST", "KYPAC", "INTER…
+#> $ contribution_mode      <chr> "DIRECT", "DIRECT", "DIRECT", "DIRECT", "DIRECT", "DIRECT", "DIRECT", "TRANSFER", "DIRE…
 #> $ occupation             <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
 #> $ other_occupation       <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
-#> $ employer               <chr> "IRS", NA, NA, "RETIRED", "RETIRED", "COMMONWEALTH OF KENTUCKY", "COMMONWEALTH OF KENTU…
+#> $ employer               <chr> NA, NA, NA, NA, NA, NA, NA, "REAL ESTATE PAC", NA, "IRS", NA, NA, "RETIRED", "RETIRED",…
 #> $ spouse_prefix          <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
-#> $ spouse_last_name       <chr> NA, NA, NA, "DERRICKSON", NA, "ADKINS", "BLEVINS", NA, NA, "DUKE", NA, NA, "LUALLEN", "…
+#> $ spouse_last_name       <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "DERRICKSON", NA, "ADKINS", "BLEVINS", …
 #> $ spouse_first_name      <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
 #> $ spouse_middle_initial  <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
 #> $ spouse_suffix          <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
-#> $ spouse_occupation      <chr> NA, NA, NA, "LIBRARY ASSISTANT", NA, "HOMEMAKER", "PHLEBOTOMIST", NA, NA, "CONSULTANT",…
-#> $ spouse_employer        <chr> NA, NA, NA, "RETIRED", NA, "N/A", "EAST KY PHLEBOTOMY SCIENCES", NA, NA, "GORDON DUKE C…
-#> $ number_of_contributors <int> 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, …
-#> $ inkind_description     <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
+#> $ spouse_occupation      <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "LIBRARY ASSISTANT", NA, "HOMEMAKER", "…
+#> $ spouse_employer        <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "RETIRED", NA, "N/A", "EAST KY PHLEBOTO…
+#> $ number_of_contributors <int> 0, 0, 0, 0, 1, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, …
+#> $ inkind_description     <chr> NA, NA, NA, "PROGRAMS FOR LINCOLN-REAGAN DAY LUNCHEON", NA, "VARIOUS", NA, NA, NA, NA, …
+#> $ receipt_date           <chr> "04/30/2011 00:00:00", "04/30/2011 00:00:00", "04/30/2011 00:00:00", "04/30/2011 00:00:…
+#> $ statement_type         <chr> "30 DAY POST", "30 DAY POST", "30 DAY POST", "30 DAY POST", "QUARTERLY", "30 DAY POST",…
 tail(kyc)
-#> # A tibble: 6 x 32
-#>   to_organization   from_organizatio… contributor_last… contributor_fir… recipient_last_… recipient_first… office_sought
-#>   <chr>             <chr>             <chr>             <chr>            <chr>            <chr>            <chr>        
-#> 1 KENTUCKY DENTAL … Dr SaMANTHA sHAV… <NA>              <NA>             <NA>             <NA>             <NA>         
-#> 2 KENTUCKY DENTAL … Dr John Roy       <NA>              <NA>             <NA>             <NA>             <NA>         
-#> 3 KENTUCKY DENTAL … Dr Mark Schulte   <NA>              <NA>             <NA>             <NA>             <NA>         
-#> 4 KENTUCKY DENTAL … Dr Stephen Remme… <NA>              <NA>             <NA>             <NA>             <NA>         
-#> 5 KENTUCKY PHYSICI… <NA>              Harrison          William          <NA>             <NA>             <NA>         
-#> 6 <NA>              <NA>              HOPKINS           DWIGHT           HOPKINS          DWIGHT           CIRCUIT COUR…
-#> # … with 25 more variables: location <chr>, election_date <date>, election_type <chr>, exemption_status <lgl>,
-#> #   other_text <chr>, address1 <chr>, address2 <chr>, city <chr>, state <chr>, zip <chr>, amount <dbl>,
-#> #   contribution_type <chr>, contribution_mode <chr>, occupation <chr>, other_occupation <chr>, employer <chr>,
-#> #   spouse_prefix <chr>, spouse_last_name <chr>, spouse_first_name <chr>, spouse_middle_initial <chr>,
-#> #   spouse_suffix <chr>, spouse_occupation <chr>, spouse_employer <chr>, number_of_contributors <int>,
-#> #   inkind_description <chr>
+#> # A tibble: 6 × 34
+#>   to_organi…¹ from_…² contr…³ contr…⁴ recip…⁵ recip…⁶ offic…⁷ locat…⁸ election…⁹ elect…˟ exemp…˟ other…˟ addre…˟ addre…˟
+#>   <chr>       <chr>   <chr>   <chr>   <chr>   <chr>   <chr>   <chr>   <date>     <chr>   <lgl>   <chr>   <chr>   <chr>  
+#> 1 <NA>        <NA>    <NA>    <NA>    Chambe… Cassie  STATE … 19TH D… 2023-02-21 SPECIAL FALSE   <NA>    <NA>    <NA>   
+#> 2 <NA>        <NA>    <NA>    <NA>    Chambe… Cassie  STATE … 19TH D… 2023-02-21 SPECIAL FALSE   <NA>    <NA>    <NA>   
+#> 3 <NA>        <NA>    <NA>    <NA>    Chambe… Cassie  STATE … 19TH D… 2023-02-21 SPECIAL FALSE   <NA>    <NA>    <NA>   
+#> 4 <NA>        <NA>    <NA>    <NA>    Chambe… Cassie  STATE … 19TH D… 2023-02-21 SPECIAL FALSE   <NA>    <NA>    <NA>   
+#> 5 <NA>        <NA>    <NA>    <NA>    Chambe… Cassie  STATE … 19TH D… 2023-02-21 SPECIAL FALSE   <NA>    <NA>    <NA>   
+#> 6 <NA>        <NA>    <NA>    <NA>    Chambe… Cassie  STATE … 19TH D… 2023-02-21 SPECIAL FALSE   <NA>    <NA>    <NA>   
+#> # … with 20 more variables: city <chr>, state <chr>, zip <chr>, amount <dbl>, contribution_type <chr>,
+#> #   contribution_mode <chr>, occupation <chr>, other_occupation <chr>, employer <chr>, spouse_prefix <chr>,
+#> #   spouse_last_name <chr>, spouse_first_name <chr>, spouse_middle_initial <chr>, spouse_suffix <chr>,
+#> #   spouse_occupation <chr>, spouse_employer <chr>, number_of_contributors <int>, inkind_description <chr>,
+#> #   receipt_date <chr>, statement_type <chr>, and abbreviated variable names ¹​to_organization, ²​from_organization_name,
+#> #   ³​contributor_last_name, ⁴​contributor_first_name, ⁵​recipient_last_name, ⁶​recipient_first_name, ⁷​office_sought,
+#> #   ⁸​location, ⁹​election_date, ˟​election_type, ˟​exemption_status, ˟​other_text, ˟​address1, ˟​address2
 ```
 
 ### Missing
@@ -271,41 +274,43 @@ Columns vary in their degree of missing values.
 
 ``` r
 col_stats(kyc, count_na)
-#> # A tibble: 32 x 4
+#> # A tibble: 34 × 4
 #>    col                    class       n      p
 #>    <chr>                  <chr>   <int>  <dbl>
-#>  1 to_organization        <chr>  343632 0.764 
-#>  2 from_organization_name <chr>  404187 0.899 
-#>  3 contributor_last_name  <chr>  123226 0.274 
-#>  4 contributor_first_name <chr>  123226 0.274 
-#>  5 recipient_last_name    <chr>   72344 0.161 
-#>  6 recipient_first_name   <chr>   72344 0.161 
-#>  7 office_sought          <chr>   72344 0.161 
-#>  8 location               <chr>   72344 0.161 
-#>  9 election_date          <date>  72344 0.161 
-#> 10 election_type          <chr>   72344 0.161 
+#>  1 to_organization        <chr>  524339 0.777 
+#>  2 from_organization_name <chr>  619050 0.918 
+#>  3 contributor_last_name  <chr>  195247 0.289 
+#>  4 contributor_first_name <chr>  195246 0.289 
+#>  5 recipient_last_name    <chr>  133930 0.199 
+#>  6 recipient_first_name   <chr>  133930 0.199 
+#>  7 office_sought          <chr>  133930 0.199 
+#>  8 location               <chr>  133930 0.199 
+#>  9 election_date          <date> 133930 0.199 
+#> 10 election_type          <chr>  133930 0.199 
 #> 11 exemption_status       <lgl>       0 0     
-#> 12 other_text             <chr>  435930 0.970 
-#> 13 address1               <chr>   84071 0.187 
-#> 14 address2               <chr>  436287 0.970 
-#> 15 city                   <chr>   83975 0.187 
-#> 16 state                  <chr>   73237 0.163 
-#> 17 zip                    <chr>   84874 0.189 
+#> 12 other_text             <chr>  656095 0.973 
+#> 13 address1               <chr>  146024 0.216 
+#> 14 address2               <chr>  659762 0.978 
+#> 15 city                   <chr>  145918 0.216 
+#> 16 state                  <chr>   96004 0.142 
+#> 17 zip                    <chr>  146320 0.217 
 #> 18 amount                 <dbl>       0 0     
 #> 19 contribution_type      <chr>       0 0     
-#> 20 contribution_mode      <chr>   30810 0.0685
-#> 21 occupation             <chr>  350697 0.780 
-#> 22 other_occupation       <chr>  446319 0.993 
-#> 23 employer               <chr>  192658 0.429 
-#> 24 spouse_prefix          <chr>  449571 1     
-#> 25 spouse_last_name       <chr>  377923 0.841 
-#> 26 spouse_first_name      <chr>  449571 1     
-#> 27 spouse_middle_initial  <chr>  449571 1     
-#> 28 spouse_suffix          <chr>  449571 1     
-#> 29 spouse_occupation      <chr>  379228 0.844 
-#> 30 spouse_employer        <chr>  398649 0.887 
+#> 20 contribution_mode      <chr>   53227 0.0789
+#> 21 occupation             <chr>  508671 0.754 
+#> 22 other_occupation       <chr>  674610 1     
+#> 23 employer               <chr>  270840 0.401 
+#> 24 spouse_prefix          <chr>  674610 1     
+#> 25 spouse_last_name       <chr>  589758 0.874 
+#> 26 spouse_first_name      <chr>  674610 1     
+#> 27 spouse_middle_initial  <chr>  674610 1     
+#> 28 spouse_suffix          <chr>  674610 1     
+#> 29 spouse_occupation      <chr>  591071 0.876 
+#> 30 spouse_employer        <chr>  611956 0.907 
 #> 31 number_of_contributors <int>       0 0     
-#> 32 inkind_description     <chr>  437414 0.973
+#> 32 inkind_description     <chr>  658507 0.976 
+#> 33 receipt_date           <chr>       0 0     
+#> 34 statement_type         <chr>       0 0
 ```
 
 Contributions can be made to an individual (with a `RecipientLastName`),
@@ -356,7 +361,7 @@ We can also flag any record completely duplicated across every column.
 ``` r
 kyc <- flag_dupes(kyc, everything())
 sum(kyc$dupe_flag)
-#> [1] 104113
+#> [1] 54093
 ```
 
 `percent(mean(kyc$dupe_flag))` of all records are duplicates.
@@ -369,20 +374,20 @@ kyc %>%
     amount, election_date, address1
   ) %>% 
   arrange(recipient_last_name, election_date, amount)
-#> # A tibble: 104,113 x 5
-#>    contributor_last_name recipient_last_name amount election_date address1                 
-#>    <chr>                 <chr>                <dbl> <date>        <chr>                    
-#>  1 ABNER                 ABNER                 126  2014-05-20    67 BRONSON RD            
-#>  2 ABNER                 ABNER                 126  2014-05-20    67 BRONSON RD            
-#>  3 <NA>                  ABNER                 380. 2014-05-20    <NA>                     
-#>  4 <NA>                  ABNER                 380. 2014-05-20    <NA>                     
-#>  5 Ruxar                 Abraham              1000  2020-05-19    7085 old hinkleville road
-#>  6 Ruxar                 Abraham              1000  2020-05-19    7085 old hinkleville road
-#>  7 <NA>                  Abraham               100  2020-11-03    <NA>                     
-#>  8 <NA>                  Abraham               100  2020-11-03    <NA>                     
-#>  9 <NA>                  Abraham               100  2020-11-03    <NA>                     
-#> 10 <NA>                  Abraham               100  2020-11-03    <NA>                     
-#> # … with 104,103 more rows
+#> # A tibble: 54,093 × 5
+#>    contributor_last_name recipient_last_name amount election_date address1
+#>    <chr>                 <chr>                <dbl> <date>        <chr>   
+#>  1 <NA>                  Abraham                100 2020-11-03    <NA>    
+#>  2 <NA>                  Abraham                100 2020-11-03    <NA>    
+#>  3 <NA>                  Ackerman                50 2022-05-17    <NA>    
+#>  4 <NA>                  Ackerman                50 2022-05-17    <NA>    
+#>  5 <NA>                  Ackerman                50 2022-05-17    <NA>    
+#>  6 <NA>                  Ackerman               100 2022-05-17    <NA>    
+#>  7 <NA>                  Ackerman               100 2022-05-17    <NA>    
+#>  8 <NA>                  Ackerman               100 2022-05-17    <NA>    
+#>  9 <NA>                  Ackerman               100 2022-05-17    <NA>    
+#> 10 <NA>                  Ackerman               100 2022-05-17    <NA>    
+#> # … with 54,083 more rows
 ```
 
 Without a contribution date, it’s difficult to identify these duplicates
@@ -393,43 +398,45 @@ payments). We will flag them but not remove any.
 
 ``` r
 col_stats(kyc, n_distinct)
-#> # A tibble: 34 x 4
+#> # A tibble: 36 × 4
 #>    col                    class       n          p
 #>    <chr>                  <chr>   <int>      <dbl>
-#>  1 to_organization        <chr>     572 0.00127   
-#>  2 from_organization_name <chr>    7409 0.0165    
-#>  3 contributor_last_name  <chr>   31069 0.0691    
-#>  4 contributor_first_name <chr>   13803 0.0307    
-#>  5 recipient_last_name    <chr>    2694 0.00599   
-#>  6 recipient_first_name   <chr>    1383 0.00308   
-#>  7 office_sought          <chr>      42 0.0000934 
-#>  8 location               <chr>     900 0.00200   
-#>  9 election_date          <date>     33 0.0000734 
-#> 10 election_type          <chr>       6 0.0000133 
-#> 11 exemption_status       <lgl>       1 0.00000222
-#> 12 other_text             <chr>    1936 0.00431   
-#> 13 address1               <chr>  138567 0.308     
-#> 14 address2               <chr>    2885 0.00642   
-#> 15 city                   <chr>    6599 0.0147    
-#> 16 state                  <chr>     103 0.000229  
-#> 17 zip                    <chr>   24093 0.0536    
-#> 18 amount                 <dbl>   41145 0.0915    
-#> 19 contribution_type      <chr>      26 0.0000578 
-#> 20 contribution_mode      <chr>       9 0.0000200 
-#> 21 occupation             <chr>    7217 0.0161    
-#> 22 other_occupation       <chr>     809 0.00180   
-#> 23 employer               <chr>   73242 0.163     
-#> 24 spouse_prefix          <chr>       1 0.00000222
-#> 25 spouse_last_name       <chr>    9318 0.0207    
-#> 26 spouse_first_name      <chr>       1 0.00000222
-#> 27 spouse_middle_initial  <chr>       1 0.00000222
-#> 28 spouse_suffix          <chr>       1 0.00000222
-#> 29 spouse_occupation      <chr>    5063 0.0113    
-#> 30 spouse_employer        <chr>   15865 0.0353    
-#> 31 number_of_contributors <int>     330 0.000734  
-#> 32 inkind_description     <chr>    5014 0.0112    
-#> 33 na_flag                <lgl>       1 0.00000222
-#> 34 dupe_flag              <lgl>       2 0.00000445
+#>  1 to_organization        <chr>     925 0.00137   
+#>  2 from_organization_name <chr>    9983 0.0148    
+#>  3 contributor_last_name  <chr>   45007 0.0667    
+#>  4 contributor_first_name <chr>   21737 0.0322    
+#>  5 recipient_last_name    <chr>    4511 0.00669   
+#>  6 recipient_first_name   <chr>    2169 0.00322   
+#>  7 office_sought          <chr>      46 0.0000682 
+#>  8 location               <chr>    1267 0.00188   
+#>  9 election_date          <date>     57 0.0000845 
+#> 10 election_type          <chr>       6 0.00000889
+#> 11 exemption_status       <lgl>       1 0.00000148
+#> 12 other_text             <chr>    3978 0.00590   
+#> 13 address1               <chr>  208732 0.309     
+#> 14 address2               <chr>    3141 0.00466   
+#> 15 city                   <chr>    9288 0.0138    
+#> 16 state                  <chr>      60 0.0000889 
+#> 17 zip                    <chr>   28183 0.0418    
+#> 18 amount                 <dbl>   51622 0.0765    
+#> 19 contribution_type      <chr>      26 0.0000385 
+#> 20 contribution_mode      <chr>       9 0.0000133 
+#> 21 occupation             <chr>   12959 0.0192    
+#> 22 other_occupation       <chr>       1 0.00000148
+#> 23 employer               <chr>  109757 0.163     
+#> 24 spouse_prefix          <chr>       1 0.00000148
+#> 25 spouse_last_name       <chr>   10997 0.0163    
+#> 26 spouse_first_name      <chr>       1 0.00000148
+#> 27 spouse_middle_initial  <chr>       1 0.00000148
+#> 28 spouse_suffix          <chr>       1 0.00000148
+#> 29 spouse_occupation      <chr>    5870 0.00870   
+#> 30 spouse_employer        <chr>   18342 0.0272    
+#> 31 number_of_contributors <int>     377 0.000559  
+#> 32 inkind_description     <chr>    7593 0.0113    
+#> 33 receipt_date           <chr>    4404 0.00653   
+#> 34 statement_type         <chr>      13 0.0000193 
+#> 35 na_flag                <lgl>       1 0.00000148
+#> 36 dupe_flag              <lgl>       2 0.00000296
 ```
 
 ![](../plots/distinct_plots-1.png)<!-- -->![](../plots/distinct_plots-2.png)<!-- -->![](../plots/distinct_plots-3.png)<!-- -->![](../plots/distinct_plots-4.png)<!-- -->
@@ -438,10 +445,10 @@ col_stats(kyc, n_distinct)
 
 ``` r
 summary(kyc$amount)
-#>    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
-#> -800000     100     250    1956     800 4885000
+#>     Min.  1st Qu.   Median     Mean  3rd Qu.     Max. 
+#> -4917869       50      200     1561      500  4917869
 mean(kyc$amount <= 0)
-#> [1] 0.01054561
+#> [1] 0.01241013
 ```
 
 These are the records with the minimum and maximum amounts.
@@ -449,27 +456,27 @@ These are the records with the minimum and maximum amounts.
 ``` r
 glimpse(kyc[c(which.max(kyc$amount), which.min(kyc$amount)), ])
 #> Rows: 2
-#> Columns: 34
-#> $ to_organization        <chr> "MARSY'S LAW FOR KENTUCKY, LLC, PIC", NA
-#> $ from_organization_name <chr> "TOTAL", NA
-#> $ contributor_last_name  <chr> NA, "BEVIN"
-#> $ contributor_first_name <chr> NA, "MATTHEW"
-#> $ recipient_last_name    <chr> NA, "Bevin"
-#> $ recipient_first_name   <chr> NA, "Matt"
-#> $ office_sought          <chr> NA, "SLATE"
-#> $ location               <chr> NA, "STATEWIDE"
-#> $ election_date          <date> NA, 2019-11-05
-#> $ election_type          <chr> NA, "GENERAL"
+#> Columns: 36
+#> $ to_organization        <chr> NA, NA
+#> $ from_organization_name <chr> NA, NA
+#> $ contributor_last_name  <chr> "HEINER", "HEINER"
+#> $ contributor_first_name <chr> "HAL", "HAL"
+#> $ recipient_last_name    <chr> "HEINER", "HEINER"
+#> $ recipient_first_name   <chr> "HAL", "HAL"
+#> $ office_sought          <chr> "SLATE", "SLATE"
+#> $ location               <chr> "STATEWIDE", "STATEWIDE"
+#> $ election_date          <date> 2015-05-19, 2015-05-19
+#> $ election_type          <chr> "PRIMARY", "PRIMARY"
 #> $ exemption_status       <lgl> FALSE, FALSE
-#> $ other_text             <chr> "RECEIPTS", NA
-#> $ address1               <chr> NA, "PO BOX 4335"
+#> $ other_text             <chr> NA, NA
+#> $ address1               <chr> "15101 PIERCY MILL RD", "15101 PIERCY MILL RD"
 #> $ address2               <chr> NA, NA
-#> $ city                   <chr> NA, "LOUISVILLE"
-#> $ state                  <chr> NA, "KY"
-#> $ zip                    <chr> NA, "402530000"
-#> $ amount                 <dbl> 4885000, -800000
-#> $ contribution_type      <chr> "OTHER", "CANDIDATE"
-#> $ contribution_mode      <chr> "DIRECT", "LOAN_REPAYMENT"
+#> $ city                   <chr> "LOUISVILLE", "LOUISVILLE"
+#> $ state                  <chr> "KY", "KY"
+#> $ zip                    <chr> "40245", "40245"
+#> $ amount                 <dbl> 4917869, -4917869
+#> $ contribution_type      <chr> "CANDIDATE_DEBT_ASSUMPTION", "CANDIDATE"
+#> $ contribution_mode      <chr> "DIRECT", "LOAN"
 #> $ occupation             <chr> NA, NA
 #> $ other_occupation       <chr> NA, NA
 #> $ employer               <chr> NA, NA
@@ -482,6 +489,8 @@ glimpse(kyc[c(which.max(kyc$amount), which.min(kyc$amount)), ])
 #> $ spouse_employer        <chr> NA, NA
 #> $ number_of_contributors <int> 0, 0
 #> $ inkind_description     <chr> NA, NA
+#> $ receipt_date           <chr> "11/10/2015 00:00:00", "11/10/2015 00:00:00"
+#> $ statement_type         <chr> "ANNUAL", "ANNUAL"
 #> $ na_flag                <lgl> FALSE, FALSE
 #> $ dupe_flag              <lgl> FALSE, FALSE
 ```
@@ -534,19 +543,19 @@ kyc %>%
   select(contains("address")) %>% 
   distinct() %>% 
   sample_n(10)
-#> # A tibble: 10 x 3
-#>    address1                    address2 address_norm            
-#>    <chr>                       <chr>    <chr>                   
-#>  1 2041 MT MORIAH RD           <NA>     2041 MT MORIAH RD       
-#>  2 136 COLONIAL WAY            <NA>     136 COLONIAL WAY        
-#>  3 8700 WESTPORT ROAD, STE 201 <NA>     8700 WESTPORT RD STE 201
-#>  4 681 BLAKES FORK RD          <NA>     681 BLAKES FRK RD       
-#>  5 424 LUNA BELLA LN           <NA>     424 LUNA BELLA LN       
-#>  6 CITATION TRAIL              <NA>     CITATION TRL            
-#>  7 889 FOREST LAKE DRIVE       <NA>     889 FRST LK DR          
-#>  8 137 SUGARTREE LANE          <NA>     137 SUGARTREE LN        
-#>  9 101 BROADWAY                <NA>     101 BROADWAY            
-#> 10 4819 CEDAR FOREST PL        <NA>     4819 CEDAR FRST PL
+#> # A tibble: 10 × 3
+#>    address1                   address2 address_norm              
+#>    <chr>                      <chr>    <chr>                     
+#>  1 1400 WILLOW                <NA>     1400 WILLOW               
+#>  2 539 BARBERRY LANE          <NA>     539 BARBERRY LN           
+#>  3 580 Scaffold Cane Rd.      <NA>     580 SCAFFOLD CANE RD      
+#>  4 336 JONAQUIN CIRCLE        <NA>     336 JONAQUIN CIR          
+#>  5 4751 FOX RUN ROAD          <NA>     4751 FOX RUN RD           
+#>  6 558 Beech Grove Rd         <NA>     558 BEECH GROVE RD        
+#>  7 3267 Ashby Fork Road       <NA>     3267 ASHBY FORK RD        
+#>  8 1666 CONNECTICUT AVENUE NW <NA>     1666 CONNECTICUT AVENUE NW
+#>  9 217 BAYWOOD                <NA>     217 BAYWOOD               
+#> 10 P. O. BOX 4253             <NA>     PO BOX 4253
 ```
 
 ### ZIP
@@ -571,11 +580,11 @@ progress_table(
   kyc$zip_norm,
   compare = valid_zip
 )
-#> # A tibble: 2 x 6
+#> # A tibble: 2 × 6
 #>   stage        prop_in n_distinct prop_na  n_out n_diff
 #>   <chr>          <dbl>      <dbl>   <dbl>  <dbl>  <dbl>
-#> 1 kyc$zip        0.577      24093   0.189 154345  19576
-#> 2 kyc$zip_norm   0.995       6635   0.193   1775    699
+#> 1 kyc$zip        0.656      28183   0.217 181750  21695
+#> 2 kyc$zip_norm   0.996       8415   0.221   2161    842
 ```
 
 ### State
@@ -599,7 +608,7 @@ kyc <- kyc %>%
 kyc %>% 
   filter(state != state_norm) %>% 
   count(state, state_norm, sort = TRUE)
-#> # A tibble: 0 x 3
+#> # A tibble: 0 × 3
 #> # … with 3 variables: state <chr>, state_norm <chr>, n <int>
 ```
 
@@ -609,11 +618,11 @@ progress_table(
   kyc$state_norm,
   compare = valid_state
 )
-#> # A tibble: 2 x 6
-#>   stage          prop_in n_distinct prop_na n_out n_diff
-#>   <chr>            <dbl>      <dbl>   <dbl> <dbl>  <dbl>
-#> 1 kyc$state        0.999        103   0.163   390     46
-#> 2 kyc$state_norm   1             57   0.164     0      1
+#> # A tibble: 2 × 6
+#>   stage          prop_in n_distinct prop_na  n_out n_diff
+#>   <chr>            <dbl>      <dbl>   <dbl>  <dbl>  <dbl>
+#> 1 kyc$state        0.627         60   0.142 215977      8
+#> 2 kyc$state_norm   1             53   0.462      0      1
 ```
 
 ### City
@@ -713,20 +722,20 @@ good_refine <- kyc %>%
   )
 ```
 
-    #> # A tibble: 130 x 5
-    #>    state_norm zip_norm city_swap      city_refine      n
-    #>    <chr>      <chr>    <chr>          <chr>        <int>
-    #>  1 KY         40601    FRANKFORTKFORT FRANKFORT       16
-    #>  2 KY         40602    FRANKFORTKFORT FRANKFORT       11
-    #>  3 KY         42003    PAUDUACH       PADUCAH         11
-    #>  4 KY         41129    CATTLESBURG    CATLETTSBURG    10
-    #>  5 KY         42301    OWENSOBOR      OWENSBORO       10
-    #>  6 KY         40056    PEE WEE VALLEY PEWEE VALLEY     7
-    #>  7 OH         45255    CINCINATTI     CINCINNATI       7
-    #>  8 KY         40511    LEXINGTONTON   LEXINGTON        6
-    #>  9 KY         40601    FRANKFORTRT    FRANKFORT        5
-    #> 10 OH         45202    CINCINATTI     CINCINNATI       5
-    #> # … with 120 more rows
+    #> # A tibble: 85 × 5
+    #>    state_norm zip_norm city_swap          city_refine          n
+    #>    <chr>      <chr>    <chr>              <chr>            <int>
+    #>  1 KY         42301    OWENSOBOR          OWENSBORO           34
+    #>  2 KY         41129    CATTLESBURG        CATLETTSBURG        14
+    #>  3 OH         45202    CINCINATTI         CINCINNATI           9
+    #>  4 KY         42003    PAUDUACH           PADUCAH              8
+    #>  5 OH         45255    CINCINATTI         CINCINNATI           8
+    #>  6 KY         42717    BURKESVVILE        BURKESVILLE          7
+    #>  7 KY         41129    CATTLETSBURG       CATLETTSBURG         6
+    #>  8 KY         40056    PEE WEE VALLEY     PEWEE VALLEY         5
+    #>  9 KY         42001    PADACUAH           PADUCAH              4
+    #> 10 OH         44251    WESTERFIELD CENTER WESTFIELD CENTER     4
+    #> # … with 75 more rows
 
 Then we can join the refined values back to the database.
 
@@ -742,10 +751,10 @@ Our goal for normalization was to increase the proportion of city values
 known to be valid and reduce the total distinct values by correcting
 misspellings.
 
-| stage                                                                                          | prop\_in | n\_distinct | prop\_na | n\_out | n\_diff |
-|:-----------------------------------------------------------------------------------------------|---------:|------------:|---------:|-------:|--------:|
-| str\_to\_upper(kyc*c**i**t**y*)\|0.964\|5334\|0.187\|13060\|2202\|\|*k**y**c*city\_norm        |    0.981 |        5139 |    0.188 |   6908 |    1990 |
-| kyc*c**i**t**y*<sub>*s*</sub>*w**a**p*\|0.993\|3942\|0.188\|2580\|748\|\|*k**y**c*city\_refine |    0.994 |        3878 |    0.188 |   2224 |     684 |
+| stage                                                                    | prop_in | n_distinct | prop_na | n_out | n_diff |
+|:-------------------------------------------------------------------------|--------:|-----------:|--------:|------:|-------:|
+| str_to_upper(kyc$city) | 0.966| 6833| 0.216| 17929| 2944| |kyc$city_norm |   0.982 |       6554 |   0.218 |  9305 |   2643 |
+| kyc$city_swap | 0.991| 5379| 0.218| 4559| 1443| |kyc$city_refine         |   0.992 |       5329 |   0.218 |  4361 |   1393 |
 
 You can see how the percentage of valid values increased with each
 stage.
@@ -778,49 +787,51 @@ kyc <- kyc %>%
 ``` r
 glimpse(sample_n(kyc, 50))
 #> Rows: 50
-#> Columns: 38
-#> $ to_organization        <chr> NA, "CONWAY OVERLY FOR KENTUCKY", NA, NA, NA, NA, NA, NA, "TRIMBLE COUNTY DEMOCRATIC EX…
-#> $ from_organization_name <chr> NA, NA, NA, NA, NA, NA, NA, "ALL PAC OF WESTERN KY", NA, NA, "REPUBLICAN PARTY OF KENTU…
-#> $ contributor_last_name  <chr> "MILLER", "PUGH", NA, NA, "RANDALL", "HINES", "Roberts", NA, NA, "BARGER", NA, "KEITZ",…
-#> $ contributor_first_name <chr> "PAUL", "KEVIN", NA, NA, "KENNETH", "GREG", "Rachel", NA, NA, "BEVERLY", NA, "JUDY", "G…
-#> $ recipient_last_name    <chr> "AUBREY", "CONWAY", "MELTON", "Scott", "FRAZIER", "RICHARDS", "Henriquez", "P'POOL", NA…
-#> $ recipient_first_name   <chr> "JOHN", "JACK", "PATRICK", "Attica", "RACHELLE", "JODY", "Roberto", "TODD", NA, "AMANDA…
-#> $ office_sought          <chr> "SHERIFF", "SLATE", "SHERIFF", "STATE REPRESENTATIVE", "STATE REPRESENTATIVE", "STATE R…
-#> $ location               <chr> "JEFFERSON", "STATEWIDE", "FRANKLIN", "41ST DISTRICT", "27TH DISTRICT", "20TH DISTRICT"…
-#> $ election_date          <date> 2018-11-06, 2015-11-03, 2014-11-04, 2022-05-17, 2016-05-17, 2012-11-06, 2020-11-03, 20…
-#> $ election_type          <chr> "GENERAL", "GENERAL", "GENERAL", "PRIMARY", "PRIMARY", "GENERAL", "GENERAL", "GENERAL",…
+#> Columns: 40
+#> $ to_organization        <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, "TIME WARNER CABLE KENTUCKY, PAC", NA, NA, NA, NA, …
+#> $ from_organization_name <chr> NA, NA, NA, "Teamsters Local 100 Drive (PAC)", NA, NA, NA, NA, NA, NA, NA, NA, "INTERNA…
+#> $ contributor_last_name  <chr> NA, "OSBORNE", "MCCOY", NA, "GRAHAM", "MCCOLLUM", "Hayes", "Hermes", NA, "DAY", "Parker…
+#> $ contributor_first_name <chr> NA, "CRYSTAL", "ELIZABETH", NA, "DERRICK", "AMRGARET", "William", "Tyson", NA, "HEATHER…
+#> $ recipient_last_name    <chr> "Bailey", "JOHNSON", "BECHLER", "Montgomery", "GRIMES", "MCCOLLOM", "Collett", "Gilbert…
+#> $ recipient_first_name   <chr> "Carlos", "ROB", "LYNN", "Timothy", "ALISON LUNDERGAN", "CHARLES", "Joshua", "Courtney"…
+#> $ office_sought          <chr> "CITY COMMISSIONER (A)", "COURT OF APPEALS JUDGE", "STATE REPRESENTATIVE", "STATE REPRE…
+#> $ location               <chr> "BOWLING GREEN-WARREN", "5TH DISTRICT-1ST DIVISION", "4TH DISTRICT", "66TH DISTRICT", "…
+#> $ election_date          <date> 2022-11-08, 2018-11-06, 2018-05-22, 2022-11-08, 2011-05-17, 2018-11-06, 2022-11-08, 20…
+#> $ election_type          <chr> "GENERAL", "UNEXPIRED - GENERAL", "PRIMARY", "GENERAL", "PRIMARY", "GENERAL", "GENERAL"…
 #> $ exemption_status       <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FAL…
-#> $ other_text             <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "TOTAL", NA, NA, NA, NA, NA…
-#> $ address1               <chr> "2813 NEWBURG ROAD", "110 GRANDVIEW DR", NA, NA, "623 NORTH WILSON ROAD SUITE B", "1786…
+#> $ other_text             <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
+#> $ address1               <chr> NA, "301 WHISPERING BROOK DR.", "506 DEEPWOOD DRIVE", "2100 Oak Rd", "157 BELLEMEADE DR…
 #> $ address2               <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
-#> $ city                   <chr> "LOUISVILLE", "PIKEVILLE", NA, NA, "RADCLIFF", "BOWLING GREEN", "Newport", "OWENSBORO",…
-#> $ state                  <chr> "KY", "KY", NA, NA, "KY", "KY", "KY", "KY", "KY", "KY", "KY", "KY", "KY", "KY", "KY", "…
-#> $ zip                    <chr> "40205", "415011941", NA, NA, "40160", "421030000", "41071", "423020000", NA, NA, "4060…
-#> $ amount                 <dbl> 500.00, 1000.00, 450.00, 10.00, 157.00, 250.00, 175.00, 1000.00, 2750.42, 100.00, 83.86…
-#> $ contribution_type      <chr> "INDIVIDUAL", "INDIVIDUAL", "UNITEMIZED", "UNITEMIZED", "INDIVIDUAL", "CANDIDATE", "IND…
-#> $ contribution_mode      <chr> "EVENT_FUNDRAISING", "EVENT_FUNDRAISING", "DIRECT", NA, "DIRECT", "DIRECT", "EVENT_FUND…
-#> $ occupation             <chr> "RETIRED", NA, NA, "interpreter", NA, NA, NA, NA, NA, NA, NA, "RETIRED", NA, NA, NA, NA…
+#> $ city                   <chr> NA, "NICHOLASVILLE", "HOPKINSVILLE", "Cincinnati", "FRANKFORT", "HENDERSON", "Middlesbo…
+#> $ state                  <chr> NA, "KY", "KY", "OH", "N/A", "KY", "KY", "KY", NA, "N/A", "KY", "KY", "DC", "KY", "N/A"…
+#> $ zip                    <chr> NA, "40356", "42240", "45241", "406013945", "41420", "40965", "41018", NA, "400140000",…
+#> $ amount                 <dbl> 100.00, 500.00, 250.00, 1000.00, 150.00, 2000.00, 1000.00, 100.00, 5.00, 26.92, 50.00, …
+#> $ contribution_type      <chr> "UNITEMIZED", "INDIVIDUAL", "INDIVIDUAL", "KYPAC", "INDIVIDUAL", "INDIVIDUAL", "INDIVID…
+#> $ contribution_mode      <chr> "EVENT_FUNDRAISING", "DIRECT", "EVENT_FUNDRAISING", "DIRECT", "DIRECT", "DIRECT", "DIRE…
+#> $ occupation             <chr> NA, NA, NA, NA, NA, NA, "Attorney", "Construction Management", NA, NA, "Retired", "Admi…
 #> $ other_occupation       <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
-#> $ employer               <chr> "RETIRED", "PIKEVILLE MEDICAL CENTER", NA, NA, "THE INSURANCE STORE", "HINES PHARMACY",…
+#> $ employer               <chr> NA, "CRYSTAL OSBORNE", "PLANTERS BANK", NA, "FRANKFORT INDEPENDENT SCHOOLS", NA, "Hayes…
 #> $ spouse_prefix          <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
-#> $ spouse_last_name       <chr> NA, "PUGH", NA, NA, NA, "HINES", NA, NA, NA, NA, NA, NA, NA, "MOBERLY", NA, NA, NA, "SM…
+#> $ spouse_last_name       <chr> NA, NA, "MCCOY", NA, "GRAHAM", NA, NA, NA, NA, NA, NA, NA, NA, NA, "GUILLAUME", NA, NA,…
 #> $ spouse_first_name      <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
 #> $ spouse_middle_initial  <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
 #> $ spouse_suffix          <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
-#> $ spouse_occupation      <chr> NA, "HOMEMAKER", NA, NA, NA, "HOMEMAKER", NA, NA, NA, NA, NA, NA, NA, "RETIRED", NA, NA…
-#> $ spouse_employer        <chr> NA, "N/A", NA, NA, NA, "N/A", NA, NA, NA, NA, NA, NA, NA, "N/A", NA, NA, NA, NA, NA, NA…
-#> $ number_of_contributors <int> 0, 0, 5, 1, 0, 1, 0, 1, 0, 0, 1, 1, 1, 0, 0, 0, 2, 0, 0, 0, 1, 1, 1, 1, 0, 1, 1, 0, 0, …
-#> $ inkind_description     <chr> NA, NA, NA, NA, "ADVERTISING", NA, NA, NA, NA, NA, "OFFICE SPACE", NA, NA, NA, NA, NA, …
+#> $ spouse_occupation      <chr> NA, NA, "RESTAURANT OWNER", NA, "U.S. SOCIAL SECURITY ADMIN. CLAIMS REP", NA, NA, NA, N…
+#> $ spouse_employer        <chr> NA, NA, NA, NA, "FEDERAL COURT", NA, NA, NA, NA, NA, NA, NA, NA, NA, "CENTURY", NA, NA,…
+#> $ number_of_contributors <int> 1, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 122, 0, 0, 1, 0, 1, 0, 1, 0, 0, 0, 0, 0…
+#> $ inkind_description     <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
+#> $ receipt_date           <chr> "09/08/2022 00:00:00", "09/18/2018 00:00:00", "03/29/2018 00:00:00", "06/21/2022 00:00:…
+#> $ statement_type         <chr> "60 DAY PRE", "30 DAY PRE", "30 DAY PRE", "60 DAY PRE", "32-DAY PRE", "30 DAY PRE", "60…
 #> $ na_flag                <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FAL…
-#> $ dupe_flag              <lgl> FALSE, FALSE, FALSE, TRUE, FALSE, FALSE, FALSE, FALSE, TRUE, FALSE, FALSE, TRUE, FALSE,…
-#> $ address_clean          <chr> "2813 NEWBURG RD", "110 GRANDVIEW DR", NA, NA, "623 N WILSON RD STE B", "1786 EUCLID AV…
-#> $ city_clean             <chr> "LOUISVILLE", "PIKEVILLE", NA, NA, "RADCLIFF", "BOWLING GREEN", "NEWPORT", "OWENSBORO",…
-#> $ zip_clean              <chr> "40205", "41501", NA, NA, "40160", "42103", "41071", "42302", NA, NA, "40602", "40356",…
-#> $ state_clean            <chr> "KY", "KY", NA, NA, "KY", "KY", "KY", "KY", "KY", "KY", "KY", "KY", "KY", "KY", "KY", "…
+#> $ dupe_flag              <lgl> TRUE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, TRUE, FALSE, FALSE, FALSE, FALSE…
+#> $ address_clean          <chr> NA, "301 WHISPERING BROOK DR", "506 DEEPWOOD DR", "2100 OAK RD", "157 BELLEMEADE DR", "…
+#> $ city_clean             <chr> NA, "NICHOLASVILLE", "HOPKINSVILLE", "CINCINNATI", "FRANKFORT", "HENDERSON", "MIDDLESBO…
+#> $ zip_clean              <chr> NA, "40356", "42240", "45241", "40601", "41420", "40965", "41018", NA, "40014", "40324"…
+#> $ state_clean            <chr> NA, "KY", "KY", "OH", NA, "KY", "KY", "KY", NA, NA, "KY", "KY", "DC", "KY", NA, "KY", N…
 ```
 
-1.  There are 449,673 records in the database.
-2.  There are 104,215 duplicate records in the database.
+1.  There are 674,610 records in the database.
+2.  There are 54,093 duplicate records in the database.
 3.  The range and distribution of `amount` and `date` seem reasonable.
 4.  There are 0 records missing key variables.
 5.  Consistency in geographic data has been improved with
@@ -838,22 +849,22 @@ clean_dir <- dir_create(here("ky", "contribs", "data", "clean"))
 clean_path <- path(clean_dir, "ky_contribs_clean.csv")
 write_csv(kyc, clean_path, na = "")
 (clean_size <- file_size(clean_path))
-#> 93.8M
+#> 157M
 non_ascii(clean_path)
-#> # A tibble: 89 x 2
+#> # A tibble: 340 × 2
 #>       row line                                                                                                          
 #>     <int> <chr>                                                                                                         
-#>  1 300830 ",,PEACH,LEN<c3><89>E,BESHEAR,ANDREW,SLATE,STATEWIDE,2019-05-21,PRIMARY,FALSE,,4686 VERSAILLES RD,,FRANKFORT,…
-#>  2 316504 "\"BUILDING INDUSTRY ASSOCIATION OF GREATER LOUISVILLE, PAC\",,NA<c3><8f>VE,JENNIFER,,,,,,,FALSE,,7803 ROLLIN…
-#>  3 316572 "\"BUILDING INDUSTRY ASSOCIATION OF GREATER LOUISVILLE, PAC\",,NA<c3><8f>VE,JENNIFER,,,,,,,FALSE,,7803 ROLLIN…
-#>  4 341369 ",,PEACH,LEN<c3><89>E,BESHEAR,ANDREW,SLATE,STATEWIDE,2019-11-05,GENERAL,FALSE,,4686 VERSAILLES RD,,FRANKFORT,…
-#>  5 360280 "\"BUILDING INDUSTRY ASSOCIATION OF GREATER LOUISVILLE, PAC\",,NA<c3><8f>VE,JENNIFER,,,,,,,FALSE,,7803 ROLLIN…
-#>  6 360296 "\"BUILDING INDUSTRY ASSOCIATION OF GREATER LOUISVILLE, PAC\",,NA<c3><8f>VE,JENNIFER,,,,,,,FALSE,,7803 ROLLIN…
-#>  7 365246 ",,HAAS,ERIC,Bevin,Matt,SLATE,STATEWIDE,2019-11-05,GENERAL,FALSE,,42 STARDUST PT,,FORT THOMAS,KY,410750000,50…
-#>  8 368411 "\"KENTUCKY LAND TITLE ASSOCIATION, PAC\",,Mitchell,Jeremy,,,,,,,FALSE,,5670 Old Richmond Rd<c2><a0>,,Lexingt…
-#>  9 369254 ",,Laughlin,Joshua,REILLY,SHAWN,LEGISLATIVE COUNCIL - EVEN,JEFFERSON-DIST 8,2020-05-19,PRIMARY,FALSE,,1622 Ro…
-#> 10 369925 ",Kentucky Distiller<e2><80><99>s Association Bourbon Trail,,,Westrom,Susan,STATE REPRESENTATIVE,79TH DISTRIC…
-#> # … with 79 more rows
+#>  1 342341 ",,PEACH,LEN<c3><89>E,BESHEAR,ANDREW,SLATE,STATEWIDE,2019-05-21,PRIMARY,FALSE,,4686 VERSAILLES RD,,FRANKFORT,…
+#>  2 357740 "\"BUILDING INDUSTRY ASSOCIATION OF GREATER LOUISVILLE, PAC\",,NA<c3><8f>VE,JENNIFER,,,,,,,FALSE,,7803 ROLLIN…
+#>  3 382204 ",,PEACH,LEN<c3><89>E,BESHEAR,ANDREW,SLATE,STATEWIDE,2019-11-05,GENERAL,FALSE,,4686 VERSAILLES RD,,FRANKFORT,…
+#>  4 400359 "\"BUILDING INDUSTRY ASSOCIATION OF GREATER LOUISVILLE, PAC\",,NA<c3><8f>VE,JENNIFER,,,,,,,FALSE,,7803 ROLLIN…
+#>  5 405377 ",,HAAS,ERIC,Bevin,Matt,SLATE,STATEWIDE,2019-11-05,GENERAL,FALSE,,42 STARDUST PT,,FORT THOMAS,KY,410750000,50…
+#>  6 408293 "\"KENTUCKY LAND TITLE ASSOCIATION, PAC\",,Mitchell,Jeremy,,,,,,,FALSE,,5670 Old Richmond Rd<c2><a0>,,Lexingt…
+#>  7 409113 ",,Laughlin,Joshua,REILLY,SHAWN,LEGISLATIVE COUNCIL - EVEN,JEFFERSON-DIST 8,2020-05-19,PRIMARY,FALSE,,1622 Ro…
+#>  8 409979 ",Kentucky Distiller<e2><80><99>s Association Bourbon Trail,,,Westrom,Susan,STATE REPRESENTATIVE,79TH DISTRIC…
+#>  9 410047 ",,O<e2><80><99>Bryan,Donna,Westrom,Susan,STATE REPRESENTATIVE,79TH DISTRICT,2020-11-03,GENERAL,FALSE,,3124 O…
+#> 10 410052 ",The Women<e2><80><99>s Network,,,Westrom,Susan,STATE REPRESENTATIVE,79TH DISTRICT,2020-11-03,GENERAL,FALSE,…
+#> # … with 330 more rows
 ```
 
 ## Upload
