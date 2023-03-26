@@ -1,23 +1,23 @@
 Connecticut Contributions
 ================
-Kiernna Nicholls
-2020-10-05 12:48:50
+Kiernna Nicholls & Aarushi Sahejpal
+2023-03-25 23:32:31
 
-  - [Project](#project)
-  - [Objectives](#objectives)
-  - [Packages](#packages)
-  - [Data](#data)
-  - [Download](#download)
-  - [Read](#read)
-  - [Explore](#explore)
-  - [Missing](#missing)
-  - [Duplicates](#duplicates)
-  - [Amounts](#amounts)
-  - [Dates](#dates)
-  - [Wrangle](#wrangle)
-  - [Conclude](#conclude)
-  - [Export](#export)
-  - [Upload](#upload)
+- <a href="#project" id="toc-project">Project</a>
+- <a href="#objectives" id="toc-objectives">Objectives</a>
+- <a href="#packages" id="toc-packages">Packages</a>
+- <a href="#data" id="toc-data">Data</a>
+- <a href="#download" id="toc-download">Download</a>
+- <a href="#read" id="toc-read">Read</a>
+- <a href="#explore" id="toc-explore">Explore</a>
+- <a href="#missing" id="toc-missing">Missing</a>
+- <a href="#duplicates" id="toc-duplicates">Duplicates</a>
+- <a href="#amounts" id="toc-amounts">Amounts</a>
+- <a href="#dates" id="toc-dates">Dates</a>
+- <a href="#wrangle" id="toc-wrangle">Wrangle</a>
+- <a href="#conclude" id="toc-conclude">Conclude</a>
+- <a href="#export" id="toc-export">Export</a>
+- <a href="#upload" id="toc-upload">Upload</a>
 
 <!-- Place comments regarding knitting here -->
 
@@ -95,7 +95,7 @@ feature and should be run as such. The project also uses the dynamic
 ``` r
 # where does this document knit?
 here::here()
-#> [1] "/home/kiernan/Code/tap/R_campfin"
+#> [1] "/Volumes/TAP/accountability_datacleaning"
 ```
 
 ## Data
@@ -162,11 +162,11 @@ There are three types of files, with each varying slightly year to year:
 
 1.  Party and PAC receipts
     1.  2008-2013 (23 columns)
-    2.  2014-2020 (35 columns)
+    2.  2014-2022 (? columns)
 2.  Candidate exploratory committee receipts
     1.  2008-2013 (23 columns)
     2.  2014-2015 (37 columns)
-    3.  2016-2020 (41 columns)
+    3.  2016-2022 (? columns)
 3.  General committee receipts
     1.  2002-2007 (26 columns)
 
@@ -184,15 +184,13 @@ old_files <- str_subset(raw_paths, "Cifs_Receipts")
 md_bullet(md_code(basename(old_files)))
 ```
 
-  - `Cifs_Receipts_2007.csv`
-  - `Cifs_Receipts_2006.csv`
-  - `Cifs_Receipts_2005.csv`
-  - `Cifs_Receipts_2004.csv`
-  - `Cifs_Receipts_2003.csv`
-  - `Cifs_Receipts_1999_2001.csv`
-  - `Cifs_Receipts_2002.csv`
-
-<!-- end list -->
+- `Cifs_Receipts_2007.csv`
+- `Cifs_Receipts_2006.csv`
+- `Cifs_Receipts_2005.csv`
+- `Cifs_Receipts_2004.csv`
+- `Cifs_Receipts_2003.csv`
+- `Cifs_Receipts_1999_2001.csv`
+- `Cifs_Receipts_2002.csv`
 
 ``` r
 ct_old <- map_df(
@@ -273,21 +271,21 @@ cand_files <- str_subset(raw_paths, "Candidate")
 md_bullet(md_code(basename(cand_files)))
 ```
 
-  - `Receipts2020ElectionYearCandidateExploratoryCommittees.csv`
-  - `Receipts2019ElectionYearCandidateExploratoryCommittees.csv`
-  - `Receipts2018ElectionYearCandidateExploratoryCommittees.csv`
-  - `Receipts2017ElectionYearCandidateExploratoryCommittees.csv`
-  - `Receipts2016ElectionYearCandidateExploratoryCommittees.csv`
-  - `Receipts2015ElectionYearCandidateExploratoryCommittees.csv`
-  - `Receipts2014ElectionYearCandidateExploratoryCommittees.csv`
-  - `Receipts2013ElectionYearCandidateExploratoryCommittees.csv`
-  - `Receipts2012ElectionYearCandidateExploratoryCommittees.csv`
-  - `Receipts2011ElectionYearCandidateExploratoryCommittees.csv`
-  - `Receipts2011ElectionYearCandidateExploratoryCommittees.csv`
-  - `Receipts2010ElectionYearCandidateExploratoryCommittees.csv`
-  - `Receipts2008ElectionYearCandidateExploratoryCommittees.CSV`
-
-<!-- end list -->
+- `Receipts2022ElectionYearCandidateExploratoryCommittees.csv`
+- `Receipts2021ElectionYearCandidateExploratoryCommittees.csv`
+- `Receipts2020ElectionYearCandidateExploratoryCommittees.csv`
+- `Receipts2019ElectionYearCandidateExploratoryCommittees.csv`
+- `Receipts2018ElectionYearCandidateExploratoryCommittees.csv`
+- `Receipts2017ElectionYearCandidateExploratoryCommittees.csv`
+- `Receipts2016ElectionYearCandidateExploratoryCommittees.csv`
+- `Receipts2015ElectionYearCandidateExploratoryCommittees.csv`
+- `Receipts2014ElectionYearCandidateExploratoryCommittees.csv`
+- `Receipts2013ElectionYearCandidateExploratoryCommittees.csv`
+- `Receipts2012ElectionYearCandidateExploratoryCommittees.csv`
+- `Receipts2011ElectionYearCandidateExploratoryCommittees.csv`
+- `Receipts2011ElectionYearCandidateExploratoryCommittees.csv`
+- `Receipts2010ElectionYearCandidateExploratoryCommittees.csv`
+- `Receipts2008ElectionYearCandidateExploratoryCommittees.CSV`
 
 ``` r
 ct_cand <- map(
@@ -309,14 +307,14 @@ The number of columns in a file increased over time.
 
 ``` r
 map_dbl(ct_cand, length)
-#>  [1] 41 41 41 41 41 37 37 23 23 22 22 22 21
+#>  [1] 41 41 41 41 41 41 41 37 37 23 23 22 22 22 21
 ```
 
 However, all the columns present in the old files are present in the
 newer ones. Only additional columns are added over time.
 
     #>  [1] 1.000000 1.000000 1.000000 1.000000 1.000000 1.000000 1.000000 1.000000 1.000000 1.000000
-    #> [11] 1.000000 1.000000 0.952381
+    #> [11] 1.000000 1.000000 1.000000 1.000000 0.952381
 
 That means we can safely `bind_rows()` and create a single dataframe.
 
@@ -350,21 +348,21 @@ pac_files <- str_subset(raw_paths, "PAC")
 md_bullet(md_code(basename(pac_files)))
 ```
 
-  - `Receipts2020CalendarYearPartyPACCommittees.csv`
-  - `Receipts2019CalendarYearPartyPACCommittees.csv`
-  - `Receipts2018CalendarYearPartyPACCommittees.csv`
-  - `Receipts2017CalendarYearPartyPACCommittees.csv`
-  - `Receipts2016CalendarYearPartyPACCommittees.csv`
-  - `Receipts2015CalendarYearPartyPACCommittees.csv`
-  - `Receipts2014CalendarYearPartyPACCommittees.csv`
-  - `Receipts2013CalendarYearPartyPACCommittees.csv`
-  - `Receipts2012CalendarYearPartyPACCommittees.csv`
-  - `Receipts2011CalendarYearPartyPACCommittees.csv`
-  - `Receipts2010CalendarYearPartyPACCommittees.csv`
-  - `Receipts2009CalendarYearPartyPACCommittees.CSV`
-  - `Receipts2008CalendarYearPartyPACCommittees.CSV`
-
-<!-- end list -->
+- `Receipts2022CalendarYearPartyPACCommittees.csv`
+- `Receipts2021CalendarYearPartyPACCommittees.csv`
+- `Receipts2020CalendarYearPartyPACCommittees.csv`
+- `Receipts2019CalendarYearPartyPACCommittees.csv`
+- `Receipts2018CalendarYearPartyPACCommittees.csv`
+- `Receipts2017CalendarYearPartyPACCommittees.csv`
+- `Receipts2016CalendarYearPartyPACCommittees.csv`
+- `Receipts2015CalendarYearPartyPACCommittees.csv`
+- `Receipts2014CalendarYearPartyPACCommittees.csv`
+- `Receipts2013CalendarYearPartyPACCommittees.csv`
+- `Receipts2012CalendarYearPartyPACCommittees.csv`
+- `Receipts2011CalendarYearPartyPACCommittees.csv`
+- `Receipts2010CalendarYearPartyPACCommittees.csv`
+- `Receipts2009CalendarYearPartyPACCommittees.CSV`
+- `Receipts2008CalendarYearPartyPACCommittees.CSV`
 
 ``` r
 ct_pac <- map(
@@ -386,14 +384,14 @@ The number of columns in a file increased over time.
 
 ``` r
 map_dbl(ct_pac, length)
-#>  [1] 35 35 35 35 35 34 34 23 24 24 24 21 21
+#>  [1] 35 35 35 35 35 35 35 34 34 23 24 24 24 21 21
 ```
 
 However, all the columns present in the old files are present in the
 newer ones. Only additional columns are added over time.
 
     #>  [1] 1.000000 1.000000 1.000000 1.000000 1.000000 1.000000 1.000000 1.000000 1.000000 1.000000
-    #> [11] 1.000000 0.952381 0.952381
+    #> [11] 1.000000 1.000000 1.000000 0.952381 0.952381
 
 That means we can safely `bind_rows()` and create a single dataframe.
 
@@ -438,134 +436,128 @@ key_vars <- c("contributor", "date_clean", "amount", "committee")
 ctc %>% 
   select(all_of(key_vars), source_type) %>% 
   sample_n(20)
-#> # A tibble: 20 x 5
-#>    contributor        date_clean amount committee                                       source_type
-#>    <chr>              <date>      <dbl> <chr>                                           <chr>      
-#>  1 Carol Rizzolo      2018-03-30  100   Bronin for Connecticut                          PAC        
-#>  2 Michelle Robles    2008-05-12   20   Carlos Silva For State Rep. 08                  PAC        
-#>  3 CARL JONES         2010-06-16    5   Campaign Mccrory 2010                           PAC        
-#>  4 Richard Berkensto… 2018-04-08   10   Haines2018                                      PAC        
-#>  5 Marshall T Segar   2002-10-11   40   Stillman 2002                                   OLD        
-#>  6 Lynne Moore        2013-03-17   25   District D Democratic Committee Of Norwalk      CAND       
-#>  7 JAMES M CRAWFORD   2016-06-16   50   Elect Needleman For Senate 2016                 PAC        
-#>  8 John Olsen         2006-08-01   35   DeStefano for Connecticut                       OLD        
-#>  9 George Dreyer      2002-10-28  500   Friends of John Rowland                         OLD        
-#> 10 Liba H Furhman     2013-01-23   60   New Milford Democratic Town Committee           CAND       
-#> 11 Joanne S. Conant   2006-07-07   50   Jodi Rell '06                                   OLD        
-#> 12 LINDA J CUNNINGHAM 2016-04-30   50   Suffield Democratic Town Committee              CAND       
-#> 13 ANTHONY HENRY      2010-06-18    5   Rojas 2010                                      PAC        
-#> 14 Arthur Adduci Jr   2017-07-07   39.3 International Brotherhood Of Electrical Worker… CAND       
-#> 15 FRANCIS COOK       2014-10-14   50   Somers Democratic Town Committee                CAND       
-#> 16 NANCY R CLAPP      2010-04-13   25   Joan Lewis For State Representative             PAC        
-#> 17 Gilbert Strickler  2005-10-05   25   District A Democratic Committee                 OLD        
-#> 18 John Lantelme      2012-06-13   50   Lavery Campaign Committee                       PAC        
-#> 19 Edward Anderson    2019-06-30   44.8 IRON PAC 424                                    CAND       
-#> 20 David Weir         2014-03-24   25   Tim For Connecticut                             PAC
+#> # A tibble: 20 × 5
+#>    contributor                          date_clean amount committee                     source_type
+#>    <chr>                                <date>      <dbl> <chr>                         <chr>      
+#>  1 Nancy L Coolidge                     2020-07-27   50   Elect Dauphinais              PAC        
+#>  2 Christian Hoheb                      2010-10-26  100   Foley For Governor, Inc.      PAC        
+#>  3 Philip L Young III                   2012-05-22   20   Backer 2012                   PAC        
+#>  4 Steven Humphrey                      2004-09-30  500   DeStefano for Connecticut     OLD        
+#>  5 Melissa 0 Bazar                      2020-05-17   10   Steve Meskers 4 Greenwich     PAC        
+#>  6 tricia a mezzeti                     2009-08-10  125   Clinton Democratic Town Comm… CAND       
+#>  7 CHRISTOPHER A MANOUSE                2017-11-06    3   AT & T Connecticut Employees… CAND       
+#>  8 Jill Mehler                          2017-11-30   50   Merrill 2018                  PAC        
+#>  9 Linda Vannoni                        NA           41.6 Connecticut Health Care Dist… CAND       
+#> 10 Robert E Scalzo                      2009-08-30   25   Danbury Democratic Town Comm… CAND       
+#> 11 Alanah Coshow                        2017-01-26   50   East Hampton Republican Town… CAND       
+#> 12 Gail Adler                           NA           52   Connecticut Health Care Dist… CAND       
+#> 13 Matthew Anderson                     2020-09-08  100   Old Lyme Democratic Town Com… CAND       
+#> 14 ROBERT DURAN                         2010-02-19  100   Brenda 2010                   PAC        
+#> 15 Arnold Goldman                       2021-07-20  250   Canton Republican Town Commi… CAND       
+#> 16 Insurance Association of Connecticut 2018-09-05  250   Jason Rojas PAC               CAND       
+#> 17 Christie Carpino                     2006-09-26  100   Friends of Ralph Capenera     OLD        
+#> 18 Andrea Levine                        2012-06-14    5   Pollard2012                   PAC        
+#> 19 Elizabeth Esty                       2011-05-07   20   Cheshire Democratic Women's … CAND       
+#> 20 Leila McCormick                      2014-10-09    5   Linda Louise For District 52… PAC
 ```
 
 ## Explore
 
 ``` r
 head(ctc)
-#> # A tibble: 6 x 57
-#>   committee contributor district office employer rec_type fil_type date  filed amount receipt
-#>   <chr>     <chr>       <chr>    <chr>  <chr>    <chr>    <chr>    <chr> <chr>  <dbl> <chr>  
-#> 1 2020 Bar… Jeffrey St… <NA>     Undet… <NA>     Itemize… Explora… 4/8/… 6/8/…    100 Origin…
-#> 2 2020 Bar… Cynthia Je… <NA>     Undet… <NA>     Itemize… Explora… 4/16… 6/8/…    100 Origin…
-#> 3 2020 Bar… Cynthia Je… <NA>     Undet… <NA>     Itemize… Explora… 4/25… 6/8/…    250 Origin…
-#> 4 2020 Bar… Norbert Ri… <NA>     Undet… Marine … Itemize… Explora… 5/6/… 6/8/…    375 Origin…
-#> 5 2020 Bar… David Buch… <NA>     Undet… Self Em… Itemize… Explora… 5/7/… 6/8/…    375 Origin…
-#> 6 2020 Bar… Horacio Ca… <NA>     Undet… Integri… Itemize… Explora… 5/9/… 6/8/…    250 Origin…
-#> # … with 46 more variables: occupation <chr>, election_year <chr>, con_exec <chr>, con_leg <chr>,
+#> # A tibble: 6 × 57
+#>   committee       contributor district office employer rec_type fil_type date  filed amount receipt
+#>   <chr>           <chr>       <chr>    <chr>  <chr>    <chr>    <chr>    <chr> <chr>  <dbl> <chr>  
+#> 1 2022 Comisky f… Kerry A Co… 34       State… Bozzuto… Itemize… Candida… 7/1/… 7/20…    290 Origin…
+#> 2 2022 Comisky f… Kurt J Com… 34       State… <NA>     Persona… Candida… 7/1/… 7/20…    500 Origin…
+#> 3 2022 Comisky f… Maxwell C … 34       State… Bender,… Itemize… Candida… 4/23… 7/1/…     75 Origin…
+#> 4 2022 DAC House… Bonnie L P… 114      State… <NA>     Itemize… Candida… 6/17… 7/9/…     50 Origin…
+#> 5 2022 DAC House… Brian D Ma… 114      State… <NA>     Itemize… Candida… 6/11… 7/9/…     10 Origin…
+#> 6 2022 DAC House… Casimir Mi… 114      State… Retired  Itemize… Candida… 6/15… 7/9/…      5 Origin…
+#> # ℹ 46 more variables: occupation <chr>, election_year <chr>, con_exec <chr>, con_leg <chr>,
 #> #   contractor <chr>, lobbyist <chr>, source <chr>, refiled <chr>, address <chr>, city <chr>,
 #> #   state <chr>, zip <chr>, event <chr>, report <chr>, fil_id <chr>, sec_letter <chr>,
 #> #   sec_name <chr>, period_start <chr>, period_end <chr>, first <chr>, middle <chr>, last <chr>,
 #> #   candidate_first_name <chr>, candidate_middle_intial <chr>, candidate_last_name <chr>,
 #> #   report_id <chr>, form <chr>, is_reimbursement_claimed <chr>, description <chr>, method <chr>,
-#> #   election_year_2 <chr>, source_file <chr>, date_clean <date>, fil_sub <chr>, trans_sub <chr>,
-#> #   trans_type <chr>, trans_name <chr>, is_contrib <chr>, submitted <chr>, comm_to <chr>,
-#> #   loan <dbl>, inkind_desc <chr>, inkind_est <chr>, interest <dbl>, occup_desc <chr>,
-#> #   source_type <chr>
+#> #   election_year_2 <chr>, source_file <chr>, date_clean <date>, fil_sub <chr>, trans_sub <chr>, …
 tail(ctc)
-#> # A tibble: 6 x 57
-#>   committee contributor district office employer rec_type fil_type date  filed amount receipt
-#>   <chr>     <chr>       <chr>    <chr>  <chr>    <chr>    <chr>    <chr> <chr>  <dbl> <chr>  
-#> 1 Jodi Rel… Philip L. … <NA>     <NA>   <NA>     <NA>     CA       3/2/… 4/10…   -250 <NA>   
-#> 2 Tom Gaff… <NA>        <NA>     <NA>   <NA>     <NA>     CA       9/30… 10/1…      0 <NA>   
-#> 3 Connecti… Steven W L… <NA>     <NA>   <NA>     <NA>     PO       10/5… 10/3…    -75 <NA>   
-#> 4 Nappier … Michael J … <NA>     <NA>   <NA>     <NA>     CA       10/4… 10/1…    -75 <NA>   
-#> 5 Madison … Kristine M… <NA>     <NA>   <NA>     <NA>     PA       3/29… 7/10…   -100 <NA>   
-#> 6 Madison … Kristine M… <NA>     <NA>   <NA>     <NA>     PA       3/29… 7/10…   -100 <NA>   
-#> # … with 46 more variables: occupation <chr>, election_year <chr>, con_exec <chr>, con_leg <chr>,
+#> # A tibble: 6 × 57
+#>   committee       contributor district office employer rec_type fil_type date  filed amount receipt
+#>   <chr>           <chr>       <chr>    <chr>  <chr>    <chr>    <chr>    <chr> <chr>  <dbl> <chr>  
+#> 1 Jodi Rell '06   Philip L. … <NA>     <NA>   <NA>     <NA>     CA       3/2/… 4/10…   -250 <NA>   
+#> 2 Tom Gaffey for… <NA>        <NA>     <NA>   <NA>     <NA>     CA       9/30… 10/1…      0 <NA>   
+#> 3 Connecticut Bu… Steven W L… <NA>     <NA>   <NA>     <NA>     PO       10/5… 10/3…    -75 <NA>   
+#> 4 Nappier for St… Michael J … <NA>     <NA>   <NA>     <NA>     CA       10/4… 10/1…    -75 <NA>   
+#> 5 Madison Rep. T… Kristine M… <NA>     <NA>   <NA>     <NA>     PA       3/29… 7/10…   -100 <NA>   
+#> 6 Madison Rep. T… Kristine M… <NA>     <NA>   <NA>     <NA>     PA       3/29… 7/10…   -100 <NA>   
+#> # ℹ 46 more variables: occupation <chr>, election_year <chr>, con_exec <chr>, con_leg <chr>,
 #> #   contractor <chr>, lobbyist <chr>, source <chr>, refiled <chr>, address <chr>, city <chr>,
 #> #   state <chr>, zip <chr>, event <chr>, report <chr>, fil_id <chr>, sec_letter <chr>,
 #> #   sec_name <chr>, period_start <chr>, period_end <chr>, first <chr>, middle <chr>, last <chr>,
 #> #   candidate_first_name <chr>, candidate_middle_intial <chr>, candidate_last_name <chr>,
 #> #   report_id <chr>, form <chr>, is_reimbursement_claimed <chr>, description <chr>, method <chr>,
-#> #   election_year_2 <chr>, source_file <chr>, date_clean <date>, fil_sub <chr>, trans_sub <chr>,
-#> #   trans_type <chr>, trans_name <chr>, is_contrib <chr>, submitted <chr>, comm_to <chr>,
-#> #   loan <dbl>, inkind_desc <chr>, inkind_est <chr>, interest <dbl>, occup_desc <chr>,
-#> #   source_type <chr>
+#> #   election_year_2 <chr>, source_file <chr>, date_clean <date>, fil_sub <chr>, trans_sub <chr>, …
 glimpse(sample_n(ctc, 20))
 #> Rows: 20
 #> Columns: 57
-#> $ committee                <chr> "Southington Democratic Town Committee", "Bridgeport Republican…
-#> $ contributor              <chr> "John Moise", "Michael Hoffman", "Hilary Frisch", "Dwight Harri…
-#> $ district                 <chr> NA, NA, NA, NA, NA, "6", NA, NA, NA, NA, NA, "72", "92", "151",…
-#> $ office                   <chr> NA, NA, "Undetermined", NA, NA, "State Senator", NA, NA, "Undet…
-#> $ employer                 <chr> "CT Transit", NA, "Student", NA, NA, "Mooreland Hill School", "…
-#> $ rec_type                 <chr> "Itemized Contributions from Individuals", NA, "Itemized Contri…
-#> $ fil_type                 <chr> "Party Committee", "PA", "Exploratory Committee", "Party Commit…
-#> $ date                     <chr> "9/18/2015", "10/21/2002", "2/5/2017", "6/7/2008", "9/10/2013",…
-#> $ filed                    <chr> "10/10/2015", "10/29/2002", "4/10/2017", "7/8/2008", "10/29/201…
-#> $ amount                   <dbl> 100.00, 3.00, 5.00, 60.00, 10.00, 5.00, 50.00, 2000.00, 50.00, …
-#> $ receipt                  <chr> "Original", NA, "Original", "Original", "Original", "Original",…
-#> $ occupation               <chr> NA, NA, "Student", NA, NA, "Teacher", NA, NA, "retired", "Other…
-#> $ election_year            <chr> NA, NA, "2018", "2008", NA, "2012", NA, NA, "2018", NA, NA, "20…
-#> $ con_exec                 <chr> NA, NA, NA, NA, "NO", NA, NA, NA, NA, NA, "NO", NA, NA, NA, NA,…
-#> $ con_leg                  <chr> NA, NA, NA, NA, "NO", NA, NA, NA, NA, NA, "NO", NA, NA, NA, NA,…
-#> $ contractor               <chr> "NO", NA, NA, "NO", "NO", NA, "NO", NA, NA, NA, "NO", NA, NA, N…
-#> $ lobbyist                 <chr> "NO", NA, NA, "NO", "NO", NA, "NO", NA, NA, NA, "NO", NA, NA, N…
-#> $ source                   <chr> "eFILE", NA, "eFILE", "eFILE", "Data Entry", "eFILE", "eFILE", …
-#> $ refiled                  <chr> "NO", NA, NA, "NO", "NO", NA, "NO", "NO", NA, NA, "NO", NA, NA,…
-#> $ address                  <chr> "238 Stonegate Rd", NA, "PO Box 15", NA, "16 tanglewood Lane", …
-#> $ city                     <chr> "Southington", "Bridgeport", "Middlefield", "Burlington", "BOLT…
-#> $ state                    <chr> "CT", "CT", "CT", "CT", "ct", "CT", "CT", "CT", "CT", "FL", "CT…
-#> $ zip                      <chr> "06489-", "06606", "06455-0015", NA, "06043", "06052-", "06473-…
-#> $ event                    <chr> "09182015A", NA, NA, NA, NA, NA, NA, "09192016A", "09162017A", …
-#> $ report                   <chr> "October 10 Filing", NA, "April 10 Filing", NA, NA, NA, NA, "Oc…
-#> $ fil_id                   <chr> "2178", NA, "10519", NA, NA, NA, NA, "8838", "10472", NA, NA, N…
-#> $ sec_letter               <chr> "B", NA, "B", NA, NA, NA, NA, "C1", "B", NA, NA, NA, "O", "B", …
-#> $ sec_name                 <chr> "Itemized Contributions from Individuals", NA, "Itemized Contri…
-#> $ period_start             <chr> "7/1/2015", NA, "1/2/2017", NA, NA, NA, NA, "7/1/2016", "7/1/20…
-#> $ period_end               <chr> "9/30/2015", NA, "3/31/2017", NA, NA, NA, NA, "9/30/2016", "9/3…
-#> $ first                    <chr> "John", "Michael", "Hilary", NA, NA, NA, NA, NA, "yrtes", "Sher…
-#> $ middle                   <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "L"…
-#> $ last                     <chr> "Moise", "Hoffman", "Frisch", NA, NA, NA, NA, NA, "kambo", "Ber…
-#> $ candidate_first_name     <chr> NA, NA, "Daniel", NA, NA, NA, NA, NA, "Pjerin \"Peter\"", NA, N…
-#> $ candidate_middle_intial  <chr> NA, NA, "T", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "B…
-#> $ candidate_last_name      <chr> NA, NA, "Drew", NA, NA, NA, NA, NA, "Lumaj", NA, NA, NA, "Dillo…
-#> $ report_id                <chr> "E34564", NA, "E47031", NA, NA, NA, NA, "E39225", "E50637", NA,…
-#> $ form                     <chr> NA, NA, "30", NA, NA, NA, NA, NA, "30", NA, NA, NA, "30", "30",…
-#> $ is_reimbursement_claimed <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "Yes", NA, NA, …
-#> $ description              <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
-#> $ method                   <chr> NA, "CA", "Credit/Debit Card", NA, NA, NA, NA, NA, "Cash", "PC"…
-#> $ election_year_2          <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
-#> $ source_file              <chr> "Receipts2015ElectionYearCandidateExploratoryCommittees.csv", "…
-#> $ date_clean               <date> 2015-09-18, 2002-10-21, 2017-02-05, 2008-06-07, 2013-09-10, 20…
-#> $ fil_sub                  <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
-#> $ trans_sub                <chr> NA, "Contribution from an Individual", NA, NA, NA, NA, NA, NA, …
-#> $ trans_type               <chr> NA, "Monetary gift (receipt) at other than a fundraising affair…
-#> $ trans_name               <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
-#> $ is_contrib               <chr> NA, "Y", NA, NA, NA, NA, NA, NA, NA, "Y", NA, NA, NA, NA, NA, N…
-#> $ submitted                <chr> NA, "10/29/2002", NA, NA, NA, NA, NA, NA, NA, "1/28/2004", NA, …
-#> $ comm_to                  <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
-#> $ loan                     <dbl> NA, 0, NA, NA, NA, NA, NA, NA, NA, 0, NA, NA, NA, NA, NA, NA, N…
-#> $ inkind_desc              <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
-#> $ inkind_est               <chr> NA, "0", NA, NA, NA, NA, NA, NA, NA, "0", NA, NA, NA, NA, NA, N…
-#> $ interest                 <dbl> NA, 0, NA, NA, NA, NA, NA, NA, NA, 0, NA, NA, NA, NA, NA, NA, N…
-#> $ occup_desc               <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, "real estate", NA, NA, NA, …
-#> $ source_type              <chr> "CAND", "OLD", "PAC", "CAND", "CAND", "PAC", "CAND", "CAND", "P…
+#> $ committee                <chr> "Committee To Re-Elect Mike Lawlor", "Brandi Briggs For Westport…
+#> $ contributor              <chr> "Yvonne Kapavitch", "Walter J Sutherland", "Carl Fortuna", "Gary…
+#> $ district                 <chr> "99", "136", NA, NA, "20", NA, NA, "22", NA, NA, NA, NA, NA, "33…
+#> $ office                   <chr> "State Representative", "State Representative", NA, NA, "State S…
+#> $ employer                 <chr> "Deltronics", "Retired", "Town Of Old Saybrook", NA, NA, "Mashan…
+#> $ rec_type                 <chr> "Itemized Contributions from Individuals", "Itemized Contributio…
+#> $ fil_type                 <chr> "Candidate Committee", "Candidate Committee", "Party Committee",…
+#> $ date                     <chr> "6/11/2008", "7/1/2014", "3/27/2019", "6/14/2009", "5/7/2020", "…
+#> $ filed                    <chr> "7/10/2008", "7/23/2014", "4/2/2019", "7/10/2009", "7/1/2020", "…
+#> $ amount                   <dbl> 5, 10, 75, 30, 5, 100, 250, 100, 100, 100, 50, 50, 100, 25, 50, …
+#> $ receipt                  <chr> "Original", "Original", "Original", "Original", "Original", "Ori…
+#> $ occupation               <chr> "Electronic Tech", "Stock Broker", "Selectman", NA, NA, "Life & …
+#> $ election_year            <chr> NA, "2014", NA, "2008", "2020", NA, NA, "2014", NA, NA, "2018", …
+#> $ con_exec                 <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
+#> $ con_leg                  <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
+#> $ contractor               <chr> NA, NA, "NO", NA, NA, "NO", "NO", NA, "NO", "NO", NA, "NO", "NO"…
+#> $ lobbyist                 <chr> NA, NA, "NO", NA, NA, "NO", "NO", NA, "NO", "NO", NA, "NO", "NO"…
+#> $ source                   <chr> "Data Entry", "eFILE", "eFILE", "eFILE", "eFILE", "eFILE", "eFIL…
+#> $ refiled                  <chr> NA, NA, "NO", "NO", NA, "NO", "NO", NA, "NO", "NO", NA, "NO", "N…
+#> $ address                  <chr> NA, "12 Primrose Ln", "54 Pennywise La", NA, "12 Dubois Rd", "37…
+#> $ city                     <chr> "EAST HAVEN", "Westport", "Old Saybrook", "Colchester", "Uncasvi…
+#> $ state                    <chr> "CT", "CT", "CT", "CT", "CT", "CT", "CT", "CT", "CT", "CT", "CT"…
+#> $ zip                      <chr> NA, "06880-", "06475-", NA, "-", "06385-", "06902-8131", "06062-…
+#> $ event                    <chr> NA, NA, NA, NA, NA, NA, NA, NA, "10062014W", "09182021H", NA, NA…
+#> $ report                   <chr> NA, "Itemized Statement accompanying application for Public Gran…
+#> $ fil_id                   <chr> NA, "9764", "2124", NA, "12324", NA, "4422", "9771", "1863", "22…
+#> $ sec_letter               <chr> NA, "B", "B", NA, "B", NA, "B", "B", "B", "B", "B", NA, "B", "B"…
+#> $ sec_name                 <chr> NA, "Itemized Contributions from Individuals", "Itemized Contrib…
+#> $ period_start             <chr> NA, "7/1/2014", "1/1/2019", NA, "4/1/2020", NA, "10/29/2018", "5…
+#> $ period_end               <chr> NA, "7/22/2014", "3/31/2019", NA, "6/30/2020", NA, "12/31/2018",…
+#> $ first                    <chr> NA, "Walter", "Carl", NA, "Timothy", NA, "Erna", "JOHN", "Debora…
+#> $ middle                   <chr> NA, "J", NA, NA, NA, NA, NA, "W", "L", NA, NA, NA, "S", NA, NA, …
+#> $ last                     <chr> NA, "Sutherland", "Fortuna", NA, "Shanahan", NA, "Szekeres", "HA…
+#> $ candidate_first_name     <chr> NA, "Brandi", NA, NA, "Martha", NA, NA, "Katherine", NA, NA, "Ro…
+#> $ candidate_middle_intial  <chr> NA, "D", NA, NA, "E", NA, NA, "M", NA, NA, "V", NA, NA, NA, "C",…
+#> $ candidate_last_name      <chr> NA, "Briggs", NA, NA, "Marx", NA, NA, "Pugliese", NA, NA, "Stefa…
+#> $ report_id                <chr> NA, "E26915", "E67008", NA, "E74178", NA, "E65917", "E25454", "E…
+#> $ form                     <chr> NA, NA, NA, NA, "30", NA, NA, NA, NA, NA, "30", NA, NA, NA, "30"…
+#> $ is_reimbursement_claimed <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
+#> $ description              <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
+#> $ method                   <chr> NA, NA, "Personal Check", NA, "Credit/Debit Card", NA, "Personal…
+#> $ election_year_2          <chr> "2008", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
+#> $ source_file              <chr> "Receipts2008ElectionYearCandidateExploratoryCommittees.CSV", "R…
+#> $ date_clean               <date> 2008-06-11, 2014-07-01, 2019-03-27, 2009-06-14, 2020-05-07, 201…
+#> $ fil_sub                  <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
+#> $ trans_sub                <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
+#> $ trans_type               <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
+#> $ trans_name               <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
+#> $ is_contrib               <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
+#> $ submitted                <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
+#> $ comm_to                  <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
+#> $ loan                     <dbl> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
+#> $ inkind_desc              <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
+#> $ inkind_est               <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
+#> $ interest                 <dbl> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
+#> $ occup_desc               <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
+#> $ source_type              <chr> "PAC", "PAC", "CAND", "CAND", "PAC", "CAND", "CAND", "PAC", "CAN…
 ```
 
 ## Missing
@@ -576,65 +568,65 @@ files will contribute empty columns for rows from the earlier files.
 
 ``` r
 col_stats(ctc, count_na)
-#> # A tibble: 57 x 4
+#> # A tibble: 57 × 4
 #>    col                      class        n         p
 #>    <chr>                    <chr>    <int>     <dbl>
-#>  1 committee                <chr>       71 0.0000500
-#>  2 contributor              <chr>    30087 0.0212   
-#>  3 district                 <chr>   848587 0.598    
-#>  4 office                   <chr>   655285 0.462    
-#>  5 employer                 <chr>   534476 0.377    
-#>  6 rec_type                 <chr>   155757 0.110    
-#>  7 fil_type                 <chr>       72 0.0000507
-#>  8 date                     <chr>    48281 0.0340   
-#>  9 filed                    <chr>       71 0.0000500
-#> 10 amount                   <dbl>     1188 0.000837 
-#> 11 receipt                  <chr>   155789 0.110    
-#> 12 occupation               <chr>   430899 0.304    
-#> 13 election_year            <chr>   699742 0.493    
-#> 14 con_exec                 <chr>  1282877 0.904    
-#> 15 con_leg                  <chr>  1283105 0.904    
-#> 16 contractor               <chr>  1043816 0.736    
-#> 17 lobbyist                 <chr>  1017848 0.717    
-#> 18 source                   <chr>   155756 0.110    
-#> 19 refiled                  <chr>   927891 0.654    
-#> 20 address                  <chr>   454250 0.320    
-#> 21 city                     <chr>    24477 0.0173   
-#> 22 state                    <chr>    28991 0.0204   
-#> 23 zip                      <chr>   191564 0.135    
-#> 24 event                    <chr>  1171699 0.826    
-#> 25 report                   <chr>   690740 0.487    
-#> 26 fil_id                   <chr>   683135 0.481    
-#> 27 sec_letter               <chr>   690740 0.487    
-#> 28 sec_name                 <chr>   690740 0.487    
-#> 29 period_start             <chr>   691248 0.487    
-#> 30 period_end               <chr>   691249 0.487    
-#> 31 first                    <chr>   591244 0.417    
-#> 32 middle                   <chr>  1139352 0.803    
-#> 33 last                     <chr>   590571 0.416    
-#> 34 candidate_first_name     <chr>   943532 0.665    
-#> 35 candidate_middle_intial  <chr>  1095563 0.772    
-#> 36 candidate_last_name      <chr>   943532 0.665    
-#> 37 report_id                <chr>   690741 0.487    
-#> 38 form                     <chr>  1057547 0.745    
-#> 39 is_reimbursement_claimed <chr>  1412613 0.996    
-#> 40 description              <chr>  1413549 0.996    
-#> 41 method                   <chr>   764512 0.539    
-#> 42 election_year_2          <chr>  1335460 0.941    
+#>  1 committee                <chr>       71 0.0000447
+#>  2 contributor              <chr>    31219 0.0196   
+#>  3 district                 <chr>   949310 0.597    
+#>  4 office                   <chr>   730451 0.459    
+#>  5 employer                 <chr>   562493 0.354    
+#>  6 rec_type                 <chr>   155757 0.0980   
+#>  7 fil_type                 <chr>       72 0.0000453
+#>  8 date                     <chr>    48282 0.0304   
+#>  9 filed                    <chr>       71 0.0000447
+#> 10 amount                   <dbl>     1188 0.000747 
+#> 11 receipt                  <chr>   155791 0.0980   
+#> 12 occupation               <chr>   461674 0.290    
+#> 13 election_year            <chr>   774908 0.487    
+#> 14 con_exec                 <chr>  1453808 0.914    
+#> 15 con_leg                  <chr>  1454114 0.915    
+#> 16 contractor               <chr>  1147631 0.722    
+#> 17 lobbyist                 <chr>  1119674 0.704    
+#> 18 source                   <chr>   155756 0.0980   
+#> 19 refiled                  <chr>  1023798 0.644    
+#> 20 address                  <chr>   455623 0.287    
+#> 21 city                     <chr>    25842 0.0163   
+#> 22 state                    <chr>    30338 0.0191   
+#> 23 zip                      <chr>   192929 0.121    
+#> 24 event                    <chr>  1309771 0.824    
+#> 25 report                   <chr>   690740 0.434    
+#> 26 fil_id                   <chr>   683135 0.430    
+#> 27 sec_letter               <chr>   690740 0.434    
+#> 28 sec_name                 <chr>   690740 0.434    
+#> 29 period_start             <chr>   691269 0.435    
+#> 30 period_end               <chr>   691270 0.435    
+#> 31 first                    <chr>   599979 0.377    
+#> 32 middle                   <chr>  1272552 0.800    
+#> 33 last                     <chr>   599307 0.377    
+#> 34 candidate_first_name     <chr>  1018698 0.641    
+#> 35 candidate_middle_intial  <chr>  1210062 0.761    
+#> 36 candidate_last_name      <chr>  1018698 0.641    
+#> 37 report_id                <chr>   690741 0.434    
+#> 38 form                     <chr>  1132713 0.712    
+#> 39 is_reimbursement_claimed <chr>  1582104 0.995    
+#> 40 description              <chr>  1583317 0.996    
+#> 41 method                   <chr>   774672 0.487    
+#> 42 election_year_2          <chr>  1506533 0.948    
 #> 43 source_file              <chr>        0 0        
-#> 44 date_clean               <date>   52990 0.0373   
-#> 45 fil_sub                  <chr>  1385619 0.977    
-#> 46 trans_sub                <chr>  1263125 0.890    
-#> 47 trans_type               <chr>  1275182 0.899    
-#> 48 trans_name               <chr>  1406852 0.992    
-#> 49 is_contrib               <chr>  1263225 0.890    
-#> 50 submitted                <chr>  1268607 0.894    
-#> 51 comm_to                  <chr>  1411204 0.995    
-#> 52 loan                     <dbl>  1275072 0.899    
-#> 53 inkind_desc              <chr>  1417274 0.999    
-#> 54 inkind_est               <chr>  1275027 0.899    
-#> 55 interest                 <dbl>  1274969 0.899    
-#> 56 occup_desc               <chr>  1373629 0.968    
+#> 44 date_clean               <date>   52993 0.0333   
+#> 45 fil_sub                  <chr>  1556692 0.979    
+#> 46 trans_sub                <chr>  1434198 0.902    
+#> 47 trans_type               <chr>  1446255 0.910    
+#> 48 trans_name               <chr>  1577925 0.992    
+#> 49 is_contrib               <chr>  1434298 0.902    
+#> 50 submitted                <chr>  1439680 0.906    
+#> 51 comm_to                  <chr>  1582277 0.995    
+#> 52 loan                     <dbl>  1446145 0.910    
+#> 53 inkind_desc              <chr>  1588347 0.999    
+#> 54 inkind_est               <chr>  1446100 0.910    
+#> 55 interest                 <dbl>  1446042 0.910    
+#> 56 occup_desc               <chr>  1544702 0.972    
 #> 57 source_type              <chr>        0 0
 ```
 
@@ -646,7 +638,7 @@ Even from the main variables, quite a few are missing values.
 ``` r
 ctc <- flag_na(ctc, all_of(key_vars))
 percent(mean(ctc$na_flag), 0.1)
-#> [1] "5.8%"
+#> [1] "5.2%"
 ```
 
 ``` r
@@ -654,20 +646,20 @@ ctc %>%
   filter(na_flag) %>% 
   select(all_of(key_vars)) %>% 
   sample_frac()
-#> # A tibble: 82,310 x 4
-#>    contributor       date_clean amount committee                                             
-#>    <chr>             <date>      <dbl> <chr>                                                 
-#>  1 JAMES ABRIOLA     NA          145   Trumbull Republican Town Committee                    
-#>  2 BARBARA EDWARDS   NA           33.1 Connecticut Health Care District 1199 PAC             
-#>  3 <NA>              2000-12-19  250   Citizens for Jepsen                                   
-#>  4 Soltoski Adam     NA           19.9 International Brotherhood Of Electrical Workers 42 PAC
-#>  5 DONALD P KONOW    NA           10   Osten 2012                                            
-#>  6 MICHAEL A DEBARBA NA           10   Connecticut Police & Fire Union PAC                   
-#>  7 Robert Rutkowski  NA           12.1 International Brotherhood Of Electrical Workers 42 PAC
-#>  8 Richard Dieckman  NA          150   Trumbull Republican Town Committee                    
-#>  9 <NA>              2018-07-25  100   EVA for CT                                            
-#> 10 ELIZABETH NUGENT  NA          200   Trumbull Democratic Town Committee                    
-#> # … with 82,300 more rows
+#> # A tibble: 83,450 × 4
+#>    contributor        date_clean amount committee                                 
+#>    <chr>              <date>      <dbl> <chr>                                     
+#>  1 SUSAN WINKEL       NA           29.2 UI POWER PAC                              
+#>  2 MICHAEL DESCOTEAUX NA           30   Connecticut Health Care District 1199 PAC 
+#>  3 <NA>               2014-09-19   25   East Hartford Democratic Town Committee   
+#>  4 JAMES MERITHEW     NA            8   Connecticut Chapter 1150                  
+#>  5 <NA>               2003-06-03 1000   Connecticut Citizen Action Group State PAC
+#>  6 <NA>               2016-07-01   20   Chester Republican Town Committee         
+#>  7 Tammy Mesita       NA            5   Miller For 36Th                           
+#>  8 MARIA PACHECO      NA           35   Connecticut Health Care District 1199 PAC 
+#>  9 <NA>               2017-07-01 1825   Shelton Democratic Town Committee         
+#> 10 Jeffrey Capeci     NA           50   Newtown Republican Town Committee         
+#> # ℹ 83,440 more rows
 ```
 
 Most of these records missing values are missing a date.
@@ -677,22 +669,22 @@ ctc %>%
   filter(na_flag) %>% 
   select(all_of(key_vars)) %>% 
   col_stats(count_na)
-#> # A tibble: 4 x 4
+#> # A tibble: 4 × 4
 #>   col         class      n        p
 #>   <chr>       <chr>  <int>    <dbl>
-#> 1 contributor <chr>  30087 0.366   
-#> 2 date_clean  <date> 52990 0.644   
-#> 3 amount      <dbl>   1188 0.0144  
-#> 4 committee   <chr>     71 0.000863
+#> 1 contributor <chr>  31219 0.374   
+#> 2 date_clean  <date> 52993 0.635   
+#> 3 amount      <dbl>   1188 0.0142  
+#> 4 committee   <chr>     71 0.000851
 ```
 
 Not much of these missing values were created when parsing the date.
 
 ``` r
 prop_na(ctc$date)
-#> [1] 0.03402922
+#> [1] 0.03036827
 prop_na(ctc$date_clean)
-#> [1] 0.0373482
+#> [1] 0.03333138
 ```
 
 ## Duplicates
@@ -700,27 +692,27 @@ prop_na(ctc$date_clean)
 ``` r
 ctc <- flag_dupes(ctc, everything())
 percent(mean(ctc$dupe_flag), 0.1)
-#> [1] "2.0%"
+#> [1] "1.9%"
 ```
 
 ``` r
 ctc %>% 
   filter(dupe_flag) %>% 
   select(all_of(key_vars))
-#> # A tibble: 28,903 x 4
-#>    contributor      date_clean amount committee                   
-#>    <chr>            <date>      <dbl> <chr>                       
-#>  1 David Rogan      2020-03-01     10 Arata 2020                  
-#>  2 David Rogan      2020-03-01     10 Arata 2020                  
-#>  3 Bonnie Cuprak    2020-05-05     10 Bell 2020                   
-#>  4 Bonnie Cuprak    2020-05-05     10 Bell 2020                   
-#>  5 Mildred L Hudson 2020-07-13     25 Billie Miller 2020          
-#>  6 Mildred L Hudson 2020-07-13     25 Billie Miller 2020          
-#>  7 Kenneth Trice    2020-02-06      5 Brenda 2020                 
-#>  8 Kenneth Trice    2020-02-06      5 Brenda 2020                 
-#>  9 Michael Farina   2020-01-27      5 Concepcion For Hartford 2020
-#> 10 Michael Farina   2020-01-27      5 Concepcion For Hartford 2020
-#> # … with 28,893 more rows
+#> # A tibble: 29,675 × 4
+#>    contributor      date_clean amount committee                              
+#>    <chr>            <date>      <dbl> <chr>                                  
+#>  1 India Liddell    2022-07-12     50 Anastasia Yopp for State Representative
+#>  2 India Liddell    2022-07-12     50 Anastasia Yopp for State Representative
+#>  3 Jeffrey Weissman 2022-07-18     15 Andy 2022                              
+#>  4 Jeffrey Weissman 2022-07-18     15 Andy 2022                              
+#>  5 Audra Veach      2022-05-18      5 ARATA 2022                             
+#>  6 Audra Veach      2022-05-18      5 ARATA 2022                             
+#>  7 Margaret Dadakis 2022-03-30     25 Arora For CT                           
+#>  8 Margaret Dadakis 2022-03-30     25 Arora For CT                           
+#>  9 Jason Lebel      2022-05-19      5 Ashley Gillece For the 43rd            
+#> 10 Jason Lebel      2022-05-19      5 Ashley Gillece For the 43rd            
+#> # ℹ 29,665 more rows
 ```
 
 ## Amounts
@@ -728,9 +720,9 @@ ctc %>%
 ``` r
 summary(ctc$amount)
 #>     Min.  1st Qu.   Median     Mean  3rd Qu.     Max.     NA's 
-#>  -108842       11       50      247      100 10000000     1188
+#>  -108842       11       50      256      100 10000000     1188
 mean(ctc$amount <= 0, na.rm = TRUE)
-#> [1] 0.002890756
+#> [1] 0.002579476
 ```
 
 ![](../plots/hist_amount-1.png)<!-- -->
@@ -739,20 +731,20 @@ mean(ctc$amount <= 0, na.rm = TRUE)
 ctc %>% 
   count(cents = amount %% 1, sort = TRUE) %>% 
   add_prop()
-#> # A tibble: 999 x 3
-#>      cents       n        p
-#>      <dbl>   <int>    <dbl>
-#>  1  0      1355868 0.956   
-#>  2  0.5       8977 0.00633 
-#>  3  0.300     1991 0.00140 
-#>  4  0.25      1836 0.00129 
-#>  5 NA         1188 0.000837
-#>  6  0.75       981 0.000691
-#>  7  0.03       634 0.000447
-#>  8  0.02       607 0.000428
-#>  9  0.0200     486 0.000343
-#> 10  0.200      480 0.000338
-#> # … with 989 more rows
+#> # A tibble: 1,008 × 3
+#>     cents       n        p
+#>     <dbl>   <int>    <dbl>
+#>  1  0     1519068 0.955   
+#>  2  0.5      9548 0.00601 
+#>  3  0.300    2078 0.00131 
+#>  4  0.25     2074 0.00130 
+#>  5 NA        1188 0.000747
+#>  6  0.75     1067 0.000671
+#>  7  0.03      752 0.000473
+#>  8  0.02      728 0.000458
+#>  9  0.700     676 0.000425
+#> 10  0.200     653 0.000411
+#> # ℹ 998 more rows
 ```
 
 ## Dates
@@ -763,14 +755,14 @@ ctc <- mutate(ctc, year_clean = year(date_clean))
 
 ``` r
 min(ctc$date_clean, na.rm = TRUE)
-#> [1] "200-05-17"
+#> [1] "0200-05-17"
 sum(ctc$year_clean < 2000, na.rm = TRUE)
 #> [1] 1501
 max(ctc$date_clean, na.rm = TRUE)
 #> [1] "3007-11-30"
 sum(ctc$date_clean > today(), na.rm = TRUE)
 #> [1] 7
-ctc$year_clean[which(ctc$year_clean > 2020)] <- NA
+ctc$year_clean[which(ctc$year_clean > 2022)] <- NA
 ctc$year_clean[which(ctc$year_clean < 1998)] <- NA
 ```
 
@@ -805,19 +797,19 @@ ctc %>%
   select(contains("address")) %>% 
   distinct() %>% 
   sample_n(10)
-#> # A tibble: 10 x 2
-#>    address             address_norm       
-#>    <chr>               <chr>              
-#>  1 896 ETHAN ALLEN HWY 896 ETHAN ALLEN HWY
-#>  2 Lexington Avenue    LEXINGTON AVE      
-#>  3 1275 Chapel St      1275 CHAPEL ST     
-#>  4 223 West Walk       223 W WALK         
-#>  5 260 Andrew St       260 ANDREW ST      
-#>  6 85 Catherie Dr      85 CATHERIE DR     
-#>  7 PO Box 4265         PO BOX 4265        
-#>  8 120 WALNUT STREET   120 WALNUT ST      
-#>  9 793 Capital Ave     793 CAPITAL AVE    
-#> 10 104 Williamsburg Rd 104 WILLIAMSBURG RD
+#> # A tibble: 10 × 2
+#>    address                   address_norm             
+#>    <chr>                     <chr>                    
+#>  1 190 Tomlinson Ave Apt 14E 190 TOMLINSON AVE APT 14E
+#>  2 196 Fan Hill Rd           196 FAN HILL RD          
+#>  3 15 Autumn Cir             15 AUTUMN CIR            
+#>  4 205 HELEN ST              205 HELEN ST             
+#>  5 197 CONCORD AVENUE        197 CONCORD AVE          
+#>  6 860 Knapps Hwy            860 KNAPPS HWY           
+#>  7 38 Beverly Rd             38 BEVERLY RD            
+#>  8 17 MEREDITH LANE          17 MEREDITH LN           
+#>  9 50 Lexington Ave Apt 7D   50 LEXINGTON AVE APT 7D  
+#> 10 41 ST AUGUSTINE ST        41 ST AUGUSTINE ST
 ```
 
 ### ZIP
@@ -842,11 +834,11 @@ progress_table(
   ctc$zip_norm,
   compare = valid_zip
 )
-#> # A tibble: 2 x 6
-#>   stage    prop_in n_distinct prop_na  n_out n_diff
-#>   <chr>      <dbl>      <dbl>   <dbl>  <dbl>  <dbl>
-#> 1 zip        0.211      39520   0.135 967843  35917
-#> 2 zip_norm   0.997       8586   0.171   3168    923
+#> # A tibble: 2 × 6
+#>   stage        prop_in n_distinct prop_na   n_out n_diff
+#>   <chr>          <dbl>      <dbl>   <dbl>   <dbl>  <dbl>
+#> 1 ctc$zip        0.186      43443   0.121 1137549  39839
+#> 2 ctc$zip_norm   0.972       9896   0.158   37968   1705
 ```
 
 ### State
@@ -870,20 +862,20 @@ ctc <- ctc %>%
 ctc %>% 
   filter(state != state_norm) %>% 
   count(state, state_norm, sort = TRUE)
-#> # A tibble: 34 x 3
+#> # A tibble: 34 × 3
 #>    state state_norm     n
 #>    <chr> <chr>      <int>
 #>  1 Ct    CT          8207
 #>  2 ct    CT          1019
 #>  3 cT    CT           137
 #>  4 CT.   CT            72
-#>  5 ny    NY            18
-#>  6 Va    VA            18
+#>  5 Va    VA            18
+#>  6 ny    NY            18
 #>  7 nc    NC            16
 #>  8 Fl    FL             7
 #>  9 CT5   CT             6
 #> 10 Ma    MA             6
-#> # … with 24 more rows
+#> # ℹ 24 more rows
 ```
 
 ``` r
@@ -892,11 +884,11 @@ progress_table(
   ctc$state_norm,
   compare = valid_state
 )
-#> # A tibble: 2 x 6
-#>   stage      prop_in n_distinct prop_na n_out n_diff
-#>   <chr>        <dbl>      <dbl>   <dbl> <dbl>  <dbl>
-#> 1 state        0.993        239  0.0204  9906    183
-#> 2 state_norm   1             56  0.0207     0      1
+#> # A tibble: 2 × 6
+#>   stage          prop_in n_distinct prop_na n_out n_diff
+#>   <chr>            <dbl>      <dbl>   <dbl> <dbl>  <dbl>
+#> 1 ctc$state        0.994        241  0.0191  9925    185
+#> 2 ctc$state_norm   1             57  0.0193     0      1
 ```
 
 ### City
@@ -983,20 +975,20 @@ good_refine <- ctc %>%
   )
 ```
 
-    #> # A tibble: 53 x 5
+    #> # A tibble: 54 × 5
     #>    state_norm zip_norm city_swap                  city_refine          n
     #>    <chr>      <chr>    <chr>                      <chr>            <int>
-    #>  1 CT         06896    REDDING RIDGE              REDDING             19
+    #>  1 CT         06896    REDDING RIDGE              REDDING             23
     #>  2 MA         01073    SOUTH HAMPTON              SOUTHAMPTON         11
     #>  3 CT         06066    ROCKVILLE VERNON           VERNON ROCKVILLE     4
     #>  4 NY         11733    SETAUKET                   EAST SETAUKET        4
     #>  5 SC         29406    NORTH CHARLESTON           CHARLESTON           4
     #>  6 CA         94103    SAN FRANSICO               SAN FRANCISCO        2
     #>  7 CT         06074    SOUTH WINDSORSOUTH WINDSOR SOUTH WINDSOR        2
-    #>  8 CT         06614    STAFFORD                   STRATFORD            2
-    #>  9 MA         01060    NORTH HAMPTON              NORTHAMPTON          2
-    #> 10 CA         94102    SAN FRANCISCOSAN FRANCISO  SAN FRANCISCO        1
-    #> # … with 43 more rows
+    #>  8 MA         01060    NORTH HAMPTON              NORTHAMPTON          2
+    #>  9 CA         94102    SAN FRANCISCOSAN FRANCISO  SAN FRANCISCO        1
+    #> 10 CA         94109    SAN FRANSICO               SAN FRANCISCO        1
+    #> # ℹ 44 more rows
 
 Then we can join the refined values back to the database.
 
@@ -1008,12 +1000,10 @@ ctc <- ctc %>%
 
 #### Progress
 
-| stage        | prop\_in | n\_distinct | prop\_na | n\_out | n\_diff |
-| :----------- | -------: | ----------: | -------: | -----: | ------: |
-| city\_raw)   |    0.989 |        6946 |    0.017 |  15184 |    2852 |
-| city\_norm   |    0.991 |        6565 |    0.017 |  12314 |    2440 |
-| city\_swap   |    0.995 |        5552 |    0.017 |   6788 |    1400 |
-| city\_refine |    0.995 |        5510 |    0.017 |   6717 |    1358 |
+| stage                                                                        | prop_in | n_distinct | prop_na | n_out | n_diff |
+|:-----------------------------------------------------------------------------|--------:|-----------:|--------:|------:|-------:|
+| str_to_upper(ctc$city_raw) | 0.990| 7337| 0.016| 16037| 3003| |ctc$city_norm |   0.991 |       6974 |   0.016 | 13512 |   2618 |
+| ctc$city_swap | 0.995| 5947| 0.016| 7411| 1557| |ctc$city_refine             |   0.995 |       5905 |   0.016 |  7339 |   1515 |
 
 You can see how the percentage of valid values increased with each
 stage.
@@ -1043,76 +1033,76 @@ ctc <- ctc %>%
 glimpse(sample_n(ctc, 50))
 #> Rows: 50
 #> Columns: 64
-#> $ committee                <chr> "April for CT Senate", "East Hampton Democratic Town Committee"…
-#> $ contributor              <chr> "William S Longbardi", "Ray Krupa", "John L Ingersoll", "David …
-#> $ district                 <chr> "34", NA, "143", "20", "109", "5", NA, NA, "123", NA, "9", "121…
-#> $ office                   <chr> "State Senator", NA, "State Representative", "State Representat…
-#> $ employer                 <chr> "Yale New Haven Hospital", NA, NA, "Peterson Landscaping Servic…
-#> $ rec_type                 <chr> "Itemized Contributions from Individuals", "In Kind NCC", "Item…
-#> $ fil_type                 <chr> "Candidate Committee", "Party Committee", "Candidate Committee"…
-#> $ date                     <chr> "5/8/2020", "9/27/2015", NA, "7/12/2010", "6/5/2012", "6/26/201…
-#> $ filed                    <chr> "6/8/2020", "10/8/2015", "5/8/2008", "9/23/2010", "7/8/2012", "…
-#> $ amount                   <dbl> 5.00, 65.00, 75.00, 25.00, 0.04, 25.00, 1500.00, 100.00, 10.00,…
-#> $ receipt                  <chr> "Original", "Original", "Original", "Original", "Original", "Or…
-#> $ occupation               <chr> "Security", NA, "Retired", "landscape contractor", NA, "PRESIDE…
-#> $ election_year            <chr> "2020", NA, NA, "2010", "2012", "2018", NA, NA, "2012", NA, "20…
-#> $ con_exec                 <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, "NO", NA, NA, NA, NA, NA, N…
-#> $ con_leg                  <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, "NO", NA, NA, NA, NA, NA, N…
-#> $ contractor               <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
-#> $ lobbyist                 <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
-#> $ source                   <chr> "eFILE", "eFILE", "Data Entry", "eFILE", "eFILE", "eFILE", NA, …
-#> $ refiled                  <chr> NA, "NO", NA, NA, NA, NA, NA, NA, NA, "NO", NA, NA, NA, NA, NA,…
-#> $ address                  <chr> "16 Wood Ter", "28 Keighley Pond Rd", NA, NA, "20 Trinity St", …
-#> $ city                     <chr> "East Haven", "Middle Haddam", "WILTON", "West Hartford", "Hart…
-#> $ state                    <chr> "CT", "CT", "CT", "CT", "CT", "CT", "CT", "CT", "CT", "CT", "CT…
-#> $ zip                      <chr> "06513-", "06456-", NA, "06119-", "06106-1628", "06032-3040", "…
-#> $ event                    <chr> NA, "09272015A", NA, NA, NA, "06262018A", NA, NA, NA, NA, NA, N…
-#> $ report                   <chr> "Itemized Statement accompanying application for Public Grant",…
-#> $ fil_id                   <chr> "12542", "1997", NA, NA, NA, "12010", NA, NA, NA, NA, NA, "1004…
-#> $ sec_letter               <chr> "B", "L4", NA, NA, NA, "B", NA, NA, NA, NA, NA, "B", "B", "B", …
-#> $ sec_name                 <chr> "Itemized Contributions from Individuals", "In-Kind Donations N…
-#> $ period_start             <chr> "4/13/2020", "7/1/2015", NA, NA, NA, "5/14/2018", NA, NA, NA, N…
-#> $ period_end               <chr> "6/1/2020", "9/30/2015", NA, NA, NA, "6/30/2018", NA, NA, NA, N…
-#> $ first                    <chr> "William", NA, NA, NA, NA, "ANNA", "Zadelle", "Frank", NA, NA, …
-#> $ middle                   <chr> "S", NA, NA, NA, NA, "S", NA, NA, NA, NA, NA, NA, NA, "J", NA, …
-#> $ last                     <chr> "Longbardi", NA, NA, NA, NA, "AVENOSO", "Krasow Greenblatt", "M…
-#> $ candidate_first_name     <chr> "April", NA, NA, NA, NA, "Phillip", NA, NA, NA, NA, NA, "Joseph…
-#> $ candidate_middle_intial  <chr> NA, NA, NA, NA, NA, "J", NA, NA, NA, NA, NA, "P", NA, "C", NA, …
-#> $ candidate_last_name      <chr> "Capone", NA, NA, NA, NA, "Chabot", NA, NA, NA, NA, NA, "Gresko…
-#> $ report_id                <chr> "E74395", "E34836", NA, NA, NA, "E56451", NA, NA, NA, NA, NA, "…
-#> $ form                     <chr> "30", NA, NA, NA, NA, "30", NA, NA, NA, NA, NA, "30", "30", NA,…
-#> $ is_reimbursement_claimed <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
-#> $ description              <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
-#> $ method                   <chr> "Cash", NA, NA, NA, NA, "Personal Check", "PC", "PC", NA, NA, N…
-#> $ election_year_2          <chr> NA, NA, "2008", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
-#> $ source_file              <chr> "Receipts2020ElectionYearCandidateExploratoryCommittees.csv", "…
-#> $ date_clean               <date> 2020-05-08, 2015-09-27, NA, 2010-07-12, 2012-06-05, 2018-06-26…
-#> $ fil_sub                  <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
-#> $ trans_sub                <chr> NA, NA, NA, NA, NA, NA, "Contribution from an Individual", "Con…
-#> $ trans_type               <chr> NA, NA, NA, NA, NA, NA, "Monetary gift (receipt) at other than …
-#> $ trans_name               <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
-#> $ is_contrib               <chr> NA, NA, NA, NA, NA, NA, "Y", "Y", NA, NA, NA, NA, NA, NA, NA, N…
-#> $ submitted                <chr> NA, NA, NA, NA, NA, NA, "10/6/2006", NA, NA, NA, NA, NA, NA, NA…
-#> $ comm_to                  <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
-#> $ loan                     <dbl> NA, NA, NA, NA, NA, NA, 0, 0, NA, NA, NA, NA, NA, NA, NA, NA, 0…
-#> $ inkind_desc              <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
-#> $ inkind_est               <chr> NA, NA, NA, NA, NA, NA, "0", "0", NA, NA, NA, NA, NA, NA, NA, N…
-#> $ interest                 <dbl> NA, NA, NA, NA, NA, NA, 0, 0, NA, NA, NA, NA, NA, NA, NA, NA, 0…
-#> $ occup_desc               <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
-#> $ source_type              <chr> "PAC", "CAND", "PAC", "PAC", "PAC", "PAC", "OLD", "OLD", "PAC",…
-#> $ na_flag                  <lgl> FALSE, FALSE, TRUE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, T…
-#> $ dupe_flag                <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, …
-#> $ year_clean               <dbl> 2020, 2015, NA, 2010, 2012, 2018, 2006, 2002, 2012, NA, 2012, 2…
-#> $ address_clean            <chr> "16 WOOD TER", "28 KEIGHLEY POND RD", NA, NA, "20 TRINITY ST", …
-#> $ zip_clean                <chr> "06513", "06456", NA, "06119", "06106", "06032", "06117", "0685…
-#> $ state_clean              <chr> "CT", "CT", "CT", "CT", "CT", "CT", "CT", "CT", "CT", "CT", "CT…
-#> $ city_clean               <chr> "EAST HAVEN", "MIDDLE HADDAM", "WILTON", "WEST HARTFORD", "HART…
+#> $ committee                <chr> "Lauretti Governor 2014", "Karen Houghtaling State Rep 80Th Dist…
+#> $ contributor              <chr> "Mark Romano", "lori spector", "ARLINE B THEON", "DAVID PARIAN",…
+#> $ district                 <chr> NA, "80", NA, NA, "18", "65", "53", NA, NA, NA, "12", "31", NA, …
+#> $ office                   <chr> "Governor", "State Representative", NA, NA, "State Representativ…
+#> $ employer                 <chr> "Self", NA, "AT&T Services. Inc.", "R&D PROPERTIES LLC", "Town o…
+#> $ rec_type                 <chr> "Itemized Contributions from Individuals", "Itemized Contributio…
+#> $ fil_type                 <chr> "Candidate Committee", "Candidate Committee", "Political Action …
+#> $ date                     <chr> "3/5/2014", "7/13/2008", "6/20/2008", "4/8/2013", "1/5/2020", "2…
+#> $ filed                    <chr> "4/10/2014", "7/17/2008", "7/10/2008", "7/5/2013", "3/1/2020", "…
+#> $ amount                   <dbl> 100, 25, 5, 10, 5, 5, 5, 100, 500, 14, 50, 50, 300, 10, 20, 100,…
+#> $ receipt                  <chr> "Original", "Original", "Original", "Original", "Original", "Ori…
+#> $ occupation               <chr> "Developer", NA, "PROJECT MANAGER IT", "SELF-EMPLOYED", "Teacher…
+#> $ election_year            <chr> "2014", NA, NA, NA, "2020", "2022", "2022", NA, NA, "2008", "201…
+#> $ con_exec                 <chr> NA, NA, "NO", "NO", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
+#> $ con_leg                  <chr> NA, NA, "NO", "NO", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
+#> $ contractor               <chr> NA, NA, "NO", "NO", NA, NA, NA, NA, "NO", "NO", NA, NA, "NO", NA…
+#> $ lobbyist                 <chr> NA, NA, "NO", "NO", NA, NA, NA, NA, "NO", "NO", NA, NA, "NO", NA…
+#> $ source                   <chr> "eFILE", "eFILE", "Data Entry", "Data Entry", "eFILE", "eFILE", …
+#> $ refiled                  <chr> NA, NA, "NO", "NO", NA, NA, NA, NA, "NO", "NO", NA, NA, "NO", NA…
+#> $ address                  <chr> "6 Frans Way", NA, NA, "90 TRUMBULL ST", "256 King Philip Dr", "…
+#> $ city                     <chr> "Shelton", "Wolcott", "WALLINGFORD", "MERIDEN", "West Hartford",…
+#> $ state                    <chr> "CT", "CT", "CT", "CT", "CT", "CT", "CT", "CT", "CT", "CT", "CT"…
+#> $ zip                      <chr> "06484-", NA, NA, "06451", "06117-", "06790-", "06084-", "06901"…
+#> $ event                    <chr> "03052014A", NA, NA, NA, NA, NA, NA, NA, "05142012A", NA, NA, NA…
+#> $ report                   <chr> "April 10 Filing", NA, NA, NA, "Optional Itemized Statement for …
+#> $ fil_id                   <chr> "9397", NA, NA, NA, "12290", "13010", "13229", NA, NA, NA, NA, "…
+#> $ sec_letter               <chr> "B", NA, NA, NA, "B", "B", "B", NA, NA, NA, NA, "B", "B", "B", "…
+#> $ sec_name                 <chr> "Itemized Contributions from Individuals", NA, NA, NA, "Itemized…
+#> $ period_start             <chr> "1/1/2014", NA, NA, NA, "1/1/2020", "1/16/2022", "4/10/2022", NA…
+#> $ period_end               <chr> "3/31/2014", NA, NA, NA, "2/29/2020", "3/31/2022", "6/21/2022", …
+#> $ first                    <chr> "Mark", NA, NA, NA, "Ryan", "Paul", "Nilda", "Jonathan", NA, NA,…
+#> $ middle                   <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "F", NA, NA, NA,…
+#> $ last                     <chr> "Romano", NA, NA, NA, "Ford", "Farley", "Nunez", "Levirne", NA, …
+#> $ candidate_first_name     <chr> "Mark", NA, NA, NA, "Jillian", "Michelle", "Kenneth", NA, NA, NA…
+#> $ candidate_middle_intial  <chr> "A", NA, NA, NA, "M", "L", "J", NA, NA, NA, NA, "A", NA, "C", "A…
+#> $ candidate_last_name      <chr> "Lauretti", NA, NA, NA, "Gilchrest", "Cook", "Trice", NA, NA, NA…
+#> $ report_id                <chr> "E24150", NA, NA, NA, "E73047", "E89638", "E92493", NA, NA, NA, …
+#> $ form                     <chr> NA, NA, NA, NA, "30", "30", "30", NA, NA, NA, NA, "30", NA, "30"…
+#> $ is_reimbursement_claimed <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
+#> $ description              <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
+#> $ method                   <chr> NA, NA, NA, NA, "Credit/Debit Card", "Credit/Debit Card", "Credi…
+#> $ election_year_2          <chr> NA, "2008", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
+#> $ source_file              <chr> "Receipts2014ElectionYearCandidateExploratoryCommittees.csv", "R…
+#> $ date_clean               <date> 2014-03-05, 2008-07-13, 2008-06-20, 2013-04-08, 2020-01-05, 202…
+#> $ fil_sub                  <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
+#> $ trans_sub                <chr> NA, NA, NA, NA, NA, NA, NA, "Contribution from an Individual", N…
+#> $ trans_type               <chr> NA, NA, NA, NA, NA, NA, NA, "Monetary gift (receipt) at other th…
+#> $ trans_name               <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
+#> $ is_contrib               <chr> NA, NA, NA, NA, NA, NA, NA, "Y", NA, NA, NA, NA, NA, NA, NA, NA,…
+#> $ submitted                <chr> NA, NA, NA, NA, NA, NA, NA, "4/10/2006", NA, NA, NA, NA, NA, NA,…
+#> $ comm_to                  <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
+#> $ loan                     <dbl> NA, NA, NA, NA, NA, NA, NA, 0, NA, NA, NA, NA, NA, NA, NA, NA, N…
+#> $ inkind_desc              <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
+#> $ inkind_est               <chr> NA, NA, NA, NA, NA, NA, NA, "0", NA, NA, NA, NA, NA, NA, NA, NA,…
+#> $ interest                 <dbl> NA, NA, NA, NA, NA, NA, NA, 0, NA, NA, NA, NA, NA, NA, NA, NA, N…
+#> $ occup_desc               <chr> NA, NA, NA, NA, NA, NA, NA, "Vice President", NA, NA, NA, NA, NA…
+#> $ source_type              <chr> "PAC", "PAC", "CAND", "CAND", "PAC", "PAC", "PAC", "OLD", "CAND"…
+#> $ na_flag                  <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, F…
+#> $ dupe_flag                <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, F…
+#> $ year_clean               <dbl> 2014, 2008, 2008, 2013, 2020, 2022, 2022, 2006, 2012, 2009, 2010…
+#> $ address_clean            <chr> "6 FRANS WAY", NA, NA, "90 TRUMBULL ST", "256 KING PHILIP DR", "…
+#> $ zip_clean                <chr> "06484", NA, NA, "06451", "06117", "06790", "06084", "06901", "0…
+#> $ state_clean              <chr> "CT", "CT", "CT", "CT", "CT", "CT", "CT", "CT", "CT", "CT", "CT"…
+#> $ city_clean               <chr> "SHELTON", "WOLCOTT", "WALLINGFORD", "MERIDEN", "WEST HARTFORD",…
 ```
 
-1.  There are 1,418,816 records in the database.
-2.  There are 28,909 duplicate records in the database.
+1.  There are 1,589,889 records in the database.
+2.  There are 29,681 duplicate records in the database.
 3.  The range and distribution of `amount` and `date` seem reasonable.
-4.  There are 82,310 records missing key variables.
+4.  There are 83,450 records missing key variables.
 5.  Consistency in geographic data has been improved with
     `campfin::normal_*()`.
 6.  The 4-digit `year` variable has been created with
@@ -1128,13 +1118,13 @@ clean_dir <- dir_create(here("ct", "contribs", "data", "clean"))
 clean_path <- path(clean_dir, "ct_contribs_clean.csv")
 write_csv(ctc, clean_path, na = "")
 file_size(clean_path)
-#> 595M
+#> 678M
 file_encoding(clean_path) %>% 
   mutate(across(path, path.abbrev))
-#> # A tibble: 1 x 3
-#>   path                                           mime            charset
-#>   <chr>                                          <chr>           <chr>  
-#> 1 ~/ct/contribs/data/clean/ct_contribs_clean.csv application/csv utf-8
+#> # A tibble: 1 × 3
+#>   path                                                                                mime  charset
+#>   <fs::path>                                                                          <chr> <chr>  
+#> 1 …lumes/TAP/accountability_datacleaning/ct/contribs/data/clean/ct_contribs_clean.csv <NA>  <NA>
 ```
 
 ## Upload
@@ -1150,7 +1140,8 @@ if (!object_exists(s3_path, "publicaccountability")) {
     object = s3_path, 
     bucket = "publicaccountability",
     acl = "public-read",
-    show_progress = TRUE
+    show_progress = TRUE,
+    multipart = TRUE
   )
 }
 as_fs_bytes(object_size(s3_path, "publicaccountability"))

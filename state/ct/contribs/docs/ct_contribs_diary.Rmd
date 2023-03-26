@@ -1,6 +1,6 @@
 ---
 title: "Connecticut Contributions"
-author: "Kiernna Nicholls"
+author: "Kiernna Nicholls & Aarushi Sahejpal"
 date: "`r Sys.time()`"
 output:
   github_document: 
@@ -174,11 +174,11 @@ There are three types of files, with each varying slightly year to year:
 
 1. Party and PAC receipts
     1. 2008-2013 (23 columns)
-    2. 2014-2020 (35 columns)
+    2. 2014-2022 (? columns)
 2. Candidate exploratory committee receipts
     1. 2008-2013 (23 columns)
     2. 2014-2015 (37 columns)
-    3. 2016-2020 (41 columns)
+    3. 2016-2022 (? columns)
 3. General committee receipts
     1. 2002-2007 (26 columns)
 
@@ -597,7 +597,7 @@ min(ctc$date_clean, na.rm = TRUE)
 sum(ctc$year_clean < 2000, na.rm = TRUE)
 max(ctc$date_clean, na.rm = TRUE)
 sum(ctc$date_clean > today(), na.rm = TRUE)
-ctc$year_clean[which(ctc$year_clean > 2020)] <- NA
+ctc$year_clean[which(ctc$year_clean > 2022)] <- NA
 ctc$year_clean[which(ctc$year_clean < 1998)] <- NA
 ```
 
@@ -610,8 +610,8 @@ ctc %>%
   geom_col(aes(fill = even)) + 
   scale_fill_brewer(palette = "Dark2") +
   scale_y_continuous(labels = comma) +
-  scale_x_continuous(breaks = seq(2000, 2020, by = 2)) +
-  coord_cartesian(xlim = c(1998, 2020)) +
+  scale_x_continuous(breaks = seq(2000, 2022, by = 2)) +
+  coord_cartesian(xlim = c(1998, 2022)) +
   theme(legend.position = "bottom") +
   labs(
     title = "Connecticut Contributions by Year",
