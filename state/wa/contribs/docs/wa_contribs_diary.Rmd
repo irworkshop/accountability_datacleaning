@@ -377,13 +377,13 @@ sum(wac$receipt_date > today())
 ```{r bar_year, echo=FALSE}
 wac %>%
   count(receipt_year) %>% 
-  filter(receipt_year >= 2004, receipt_year <= 2021) %>% 
+  filter(receipt_year >= 2004, receipt_year <= 2022) %>% 
   mutate(even = is_even(receipt_year)) %>% 
   ggplot(aes(x = receipt_year, y = n)) +
   geom_col(aes(fill = even)) + 
   scale_fill_brewer(palette = "Dark2") +
   scale_y_continuous(labels = comma) +
-  scale_x_continuous(breaks = seq(2000, 2020, by = 2)) +
+  scale_x_continuous(breaks = seq(2000, 2022, by = 2)) +
   theme(legend.position = "bottom") +
   labs(
     title = "Washington Contributions by Year",
@@ -686,7 +686,7 @@ Now the file can be saved on disk for upload to the Accountability server.
 
 ```{r clean_dir}
 clean_dir <- dir_create(here("wa", "contribs", "data", "clean"))
-clean_path <- path(clean_dir, "wa_contribs_20040101-20210922.csv")
+clean_path <- path(clean_dir, "wa_contribs_20040101-2023.csv")
 write_csv(wac, clean_path, na = "")
 (clean_size <- file_size(clean_path))
 ```
