@@ -1,32 +1,32 @@
 Illinois Contributions
 ================
-Kiernan Nicholls
-Fri Sep 17 16:01:59 2021
+Kiernan Nicholls & Aarushi Sahejpal
+Sun Mar 26 14:54:58 2023
 
--   [Project](#project)
--   [Objectives](#objectives)
--   [Packages](#packages)
--   [Data](#data)
--   [Download](#download)
-    -   [Dictionary](#dictionary)
-    -   [Receipts](#receipts)
--   [Fix](#fix)
--   [Read](#read)
--   [Committees](#committees)
--   [Explore](#explore)
-    -   [Missing](#missing)
-    -   [Duplicates](#duplicates)
-    -   [Categorical](#categorical)
-    -   [Amounts](#amounts)
-    -   [Dates](#dates)
--   [Wrangle](#wrangle-1)
-    -   [Address](#address)
-    -   [ZIP](#zip)
-    -   [State](#state)
-    -   [City](#city)
--   [Conclude](#conclude)
--   [Export](#export)
--   [Upload](#upload)
+- <a href="#project" id="toc-project">Project</a>
+- <a href="#objectives" id="toc-objectives">Objectives</a>
+- <a href="#packages" id="toc-packages">Packages</a>
+- <a href="#data" id="toc-data">Data</a>
+- <a href="#download" id="toc-download">Download</a>
+  - <a href="#dictionary" id="toc-dictionary">Dictionary</a>
+  - <a href="#receipts" id="toc-receipts">Receipts</a>
+- <a href="#fix" id="toc-fix">Fix</a>
+- <a href="#read" id="toc-read">Read</a>
+- <a href="#committees" id="toc-committees">Committees</a>
+- <a href="#explore" id="toc-explore">Explore</a>
+  - <a href="#missing" id="toc-missing">Missing</a>
+  - <a href="#duplicates" id="toc-duplicates">Duplicates</a>
+  - <a href="#categorical" id="toc-categorical">Categorical</a>
+  - <a href="#amounts" id="toc-amounts">Amounts</a>
+  - <a href="#dates" id="toc-dates">Dates</a>
+- <a href="#wrangle-1" id="toc-wrangle-1">Wrangle</a>
+  - <a href="#address" id="toc-address">Address</a>
+  - <a href="#zip" id="toc-zip">ZIP</a>
+  - <a href="#state" id="toc-state">State</a>
+  - <a href="#city" id="toc-city">City</a>
+- <a href="#conclude" id="toc-conclude">Conclude</a>
+- <a href="#export" id="toc-export">Export</a>
+- <a href="#upload" id="toc-upload">Upload</a>
 
 <!-- Place comments regarding knitting here -->
 
@@ -148,9 +148,9 @@ also available in \[bulk\] from the ILSBOE.
 >
 > Electronic filing is required for all political committees that during
 > a reporting period (i) had at any time a balance or an accumulation of
-> contributions of $10,000 or more, (ii) made aggregate expenditures of
-> $10,000 or more, or (iii) received loans of an aggregate of $10,000 or
-> more. Once a committee exceeds the threshold that requires it to
+> contributions of \$10,000 or more, (ii) made aggregate expenditures of
+> \$10,000 or more, or (iii) received loans of an aggregate of \$10,000
+> or more. Once a committee exceeds the threshold that requires it to
 > report electronically, it must continue thereafter to report
 > electronically until it dissolves, whether or not its accumulation,
 > receipts or expenditures fall beneath the levels set by statute for
@@ -160,15 +160,15 @@ also available in \[bulk\] from the ILSBOE.
 >
 > Any individual, trust, partnership, committee, association,
 > corporation, or any other organization or group of persons which
-> receives or spends more than $5,000 on behalf of or in opposition to a
-> candidate or question of public policy, meets the definition of a
+> receives or spends more than \$5,000 on behalf of or in opposition to
+> a candidate or question of public policy, meets the definition of a
 > political committee and must comply with all provisions of the
 > Illinois Campaign Financing Act, including the filing of campaign
-> disclosure reports. The $5,000 threshold does not apply to political
+> disclosure reports. The \$5,000 threshold does not apply to political
 > party committees. In addition, any entity other than a natural person
 > that makes expenditures of any kind in an aggregate amount of more
-> than $3,000 during any 12-month period supporting or opposing a public
-> official or candidate must organize as a political committee.
+> than \$3,000 during any 12-month period supporting or opposing a
+> public official or candidate must organize as a political committee.
 
 ## Download
 
@@ -182,21 +182,21 @@ il_home <- read_html("https://elections.il.gov/campaigndisclosuredatafiles/")
 
 This table of files includes the date, size, name and URL.
 
-| date                |   length | name                                                                                                                                |
-|:--------------------|---------:|:------------------------------------------------------------------------------------------------------------------------------------|
-| 2020-01-17 15:25:00 |    11.7K | [`CampaignDisclosureDataDictionary.txt`](https://elections.il.gov/campaigndisclosuredatafiles/CampaignDisclosureDataDictionary.txt) |
-| 2021-09-17 06:20:00 |    3.02M | [`Candidates.txt`](https://elections.il.gov/campaigndisclosuredatafiles/Candidates.txt)                                             |
-| 2021-09-17 06:20:00 |    2.38M | [`CanElections.txt`](https://elections.il.gov/campaigndisclosuredatafiles/CanElections.txt)                                         |
-| 2021-09-17 06:20:00 |   581.4K | [`CmteCandidateLinks.txt`](https://elections.il.gov/campaigndisclosuredatafiles/CmteCandidateLinks.txt)                             |
-| 2021-09-17 06:20:00 | 1021.96K | [`CmteOfficerLinks.txt`](https://elections.il.gov/campaigndisclosuredatafiles/CmteOfficerLinks.txt)                                 |
-| 2021-09-17 06:20:00 |    7.73M | [`Committees.txt`](https://elections.il.gov/campaigndisclosuredatafiles/Committees.txt)                                             |
-| 2021-09-17 06:20:00 |   45.54M | [`D2Totals.txt`](https://elections.il.gov/campaigndisclosuredatafiles/D2Totals.txt)                                                 |
-| 2021-09-17 06:22:00 |  611.86M | [`Expenditures.txt`](https://elections.il.gov/campaigndisclosuredatafiles/Expenditures.txt)                                         |
-| 2021-09-17 06:22:00 |  105.52M | [`FiledDocs.txt`](https://elections.il.gov/campaigndisclosuredatafiles/FiledDocs.txt)                                               |
-| 2021-09-17 06:22:00 |    2.68M | [`Investments.txt`](https://elections.il.gov/campaigndisclosuredatafiles/Investments.txt)                                           |
-| 2021-09-17 06:22:00 |    6.07M | [`Officers.txt`](https://elections.il.gov/campaigndisclosuredatafiles/Officers.txt)                                                 |
-| 2021-09-17 06:22:00 |    2.16M | [`PrevOfficers.txt`](https://elections.il.gov/campaigndisclosuredatafiles/PrevOfficers.txt)                                         |
-| 2021-09-17 06:23:00 |  840.69M | [`Receipts.txt`](https://elections.il.gov/campaigndisclosuredatafiles/Receipts.txt)                                                 |
+| date                |  length | name                                                                                                                                |
+|:--------------------|--------:|:------------------------------------------------------------------------------------------------------------------------------------|
+| 2020-01-17 15:25:00 |   11.7K | [`CampaignDisclosureDataDictionary.txt`](https://elections.il.gov/campaigndisclosuredatafiles/CampaignDisclosureDataDictionary.txt) |
+| 2023-03-26 08:10:00 |   3.18M | [`Candidates.txt`](https://elections.il.gov/campaigndisclosuredatafiles/Candidates.txt)                                             |
+| 2023-03-26 08:10:00 |   2.53M | [`CanElections.txt`](https://elections.il.gov/campaigndisclosuredatafiles/CanElections.txt)                                         |
+| 2023-03-26 08:10:00 | 609.88K | [`CmteCandidateLinks.txt`](https://elections.il.gov/campaigndisclosuredatafiles/CmteCandidateLinks.txt)                             |
+| 2023-03-26 08:10:00 |   1.05M | [`CmteOfficerLinks.txt`](https://elections.il.gov/campaigndisclosuredatafiles/CmteOfficerLinks.txt)                                 |
+| 2023-03-26 08:12:00 |   8.09M | [`Committees.txt`](https://elections.il.gov/campaigndisclosuredatafiles/Committees.txt)                                             |
+| 2023-03-26 08:10:00 |  48.67M | [`D2Totals.txt`](https://elections.il.gov/campaigndisclosuredatafiles/D2Totals.txt)                                                 |
+| 2023-03-26 08:11:00 | 654.13M | [`Expenditures.txt`](https://elections.il.gov/campaigndisclosuredatafiles/Expenditures.txt)                                         |
+| 2023-03-26 08:12:00 | 114.88M | [`FiledDocs.txt`](https://elections.il.gov/campaigndisclosuredatafiles/FiledDocs.txt)                                               |
+| 2023-03-26 08:12:00 |   2.86M | [`Investments.txt`](https://elections.il.gov/campaigndisclosuredatafiles/Investments.txt)                                           |
+| 2023-03-26 08:12:00 |   6.37M | [`Officers.txt`](https://elections.il.gov/campaigndisclosuredatafiles/Officers.txt)                                                 |
+| 2023-03-26 08:12:00 |   2.28M | [`PrevOfficers.txt`](https://elections.il.gov/campaigndisclosuredatafiles/PrevOfficers.txt)                                         |
+| 2023-03-26 08:12:00 | 895.09M | [`Receipts.txt`](https://elections.il.gov/campaigndisclosuredatafiles/Receipts.txt)                                                 |
 
 ### Dictionary
 
@@ -348,8 +348,19 @@ ilc <- read_delim(
 
 ``` r
 problems(ilc)
-#> # A tibble: 0 × 5
-#> # … with 5 variables: row <int>, col <int>, expected <chr>, actual <chr>, file <chr>
+#> # A tibble: 10 × 5
+#>        row   col expected   actual     file                                                                            
+#>      <int> <int> <chr>      <chr>      <chr>                                                                           
+#>  1 5608089    30 29 columns 30 columns /Volumes/TAP/accountability_datacleaning/state/il/contribs/data/Receipts-fix.txt
+#>  2 5629734    30 29 columns 30 columns /Volumes/TAP/accountability_datacleaning/state/il/contribs/data/Receipts-fix.txt
+#>  3 5745750    15 29 columns 15 columns /Volumes/TAP/accountability_datacleaning/state/il/contribs/data/Receipts-fix.txt
+#>  4 5745751     1 an integer Chicago    /Volumes/TAP/accountability_datacleaning/state/il/contribs/data/Receipts-fix.txt
+#>  5 5745751     2 an integer IL         /Volumes/TAP/accountability_datacleaning/state/il/contribs/data/Receipts-fix.txt
+#>  6 5745751    15 29 columns 15 columns /Volumes/TAP/accountability_datacleaning/state/il/contribs/data/Receipts-fix.txt
+#>  7 5804800    15 29 columns 15 columns /Volumes/TAP/accountability_datacleaning/state/il/contribs/data/Receipts-fix.txt
+#>  8 5804801     1 an integer Chicago    /Volumes/TAP/accountability_datacleaning/state/il/contribs/data/Receipts-fix.txt
+#>  9 5804801     2 an integer IL         /Volumes/TAP/accountability_datacleaning/state/il/contribs/data/Receipts-fix.txt
+#> 10 5804801    15 29 columns 15 columns /Volumes/TAP/accountability_datacleaning/state/il/contribs/data/Receipts-fix.txt
 ```
 
 To ensure the file was properly read, we should count the distinct
@@ -358,11 +369,12 @@ column, which should only contain `TRUE` and `FALSE` values.
 
 ``` r
 count(ilc, RedactionRequested)
-#> # A tibble: 2 × 2
+#> # A tibble: 3 × 2
 #>   RedactionRequested       n
 #>   <lgl>                <int>
-#> 1 FALSE              5470297
-#> 2 TRUE                 10217
+#> 1 FALSE              5809846
+#> 2 TRUE                 12672
+#> 3 NA                       4
 ```
 
 ``` r
@@ -524,12 +536,12 @@ ilc <- left_join(
 
 ## Explore
 
-There are 5,480,514 rows of 34 columns. Each record represents a single
+There are 5,822,522 rows of 34 columns. Each record represents a single
 contribution from an individual or business to a campaign or committee.
 
 ``` r
 glimpse(ilc)
-#> Rows: 5,480,514
+#> Rows: 5,822,522
 #> Columns: 34
 #> $ id                    <int> 236628, 236629, 236630, 236631, 236632, 236633, 236634, 236635, 236636, 236637, 236638, …
 #> $ committee_id          <int> 10353, 10353, 10353, 10353, 10353, 10353, 10353, 10353, 10353, 10353, 10353, 10353, 1035…
@@ -569,17 +581,17 @@ tail(ilc)
 #> # A tibble: 6 × 34
 #>        id committee_id filed_doc_id e_trans_id last_only_name     first_name rcv_date            amount aggregate_amount
 #>     <int>        <int>        <int> <chr>      <chr>              <chr>      <dttm>               <dbl>            <dbl>
-#> 1 5597112        20886       816189 <NA>       Illinois CPA's fo… <NA>       2021-04-09 00:00:00    400              400
-#> 2 5597113        20886       816189 <NA>       Brittan Bolin Con… <NA>       2021-04-19 00:00:00    500              500
-#> 3 5597114        20886       816189 <NA>       Cassidy            Michael    2021-06-02 00:00:00    500              500
-#> 4 5597115        36738       816190 <NA>       Shapiro            James      2021-09-14 00:00:00   1000                0
-#> 5 5597116        36738       816190 <NA>       Holmes             Patricia   2021-09-14 00:00:00   1000                0
-#> 6 5597117        36738       816190 <NA>       David              Dr. Indra  2021-09-14 00:00:00   1000                0
-#> # … with 25 more variables: loan_amount <dbl>, occupation <chr>, employer <chr>, address1 <chr>, address2 <chr>,
-#> #   city <chr>, state <chr>, zip <chr>, d2part <chr>, description <chr>, vendor_last_only_name <chr>,
-#> #   vendor_first_name <chr>, vendor_address1 <chr>, vendor_address2 <chr>, vendor_city <chr>, vendor_state <chr>,
-#> #   vendor_zip <chr>, archived <lgl>, country <chr>, redaction_requested <lgl>, cmte_name <chr>, cmte_address <chr>,
-#> #   cmte_city <chr>, cmte_state <chr>, cmte_zip <chr>
+#> 1 5942260        38806       879499 <NA>       SEIU HealthCare I… <NA>       2023-03-25 00:00:00  30000                0
+#> 2 5942261        38799       879500 <NA>       citizen for sophi… <NA>       2023-03-25 00:00:00  10000                0
+#> 3 5942262        38799       879500 <NA>       Bridges            Vasco      2023-03-25 00:00:00   1000                0
+#> 4 5942263        38799       879501 <NA>       stevens            reginald   2023-03-23 00:00:00   1500                0
+#> 5 5942264        38799       879501 <NA>       peterson           james      2023-03-23 00:00:00   1500                0
+#> 6 5942265        38806       879502 <NA>       Cook County Colle… <NA>       2023-03-25 00:00:00   2000                0
+#> # ℹ 25 more variables: loan_amount <dbl>, occupation <chr>, employer <chr>, address1 <chr>, address2 <chr>, city <chr>,
+#> #   state <chr>, zip <chr>, d2part <chr>, description <chr>, vendor_last_only_name <chr>, vendor_first_name <chr>,
+#> #   vendor_address1 <chr>, vendor_address2 <chr>, vendor_city <chr>, vendor_state <chr>, vendor_zip <chr>,
+#> #   archived <lgl>, country <chr>, redaction_requested <lgl>, cmte_name <chr>, cmte_address <chr>, cmte_city <chr>,
+#> #   cmte_state <chr>, cmte_zip <chr>
 ```
 
 ### Missing
@@ -589,42 +601,42 @@ Columns vary in their degree of missing values.
 ``` r
 col_stats(ilc, count_na)
 #> # A tibble: 34 × 4
-#>    col                   class        n         p
-#>    <chr>                 <chr>    <int>     <dbl>
-#>  1 id                    <int>        0 0        
-#>  2 committee_id          <int>        0 0        
-#>  3 filed_doc_id          <int>        0 0        
-#>  4 e_trans_id            <chr>  5416229 0.988    
-#>  5 last_only_name        <chr>        0 0        
-#>  6 first_name            <chr>  3213605 0.586    
-#>  7 rcv_date              <dttm>       0 0        
-#>  8 amount                <dbl>        0 0        
-#>  9 aggregate_amount      <dbl>        0 0        
-#> 10 loan_amount           <dbl>        0 0        
-#> 11 occupation            <chr>  4731828 0.863    
-#> 12 employer              <chr>  4732506 0.864    
-#> 13 address1              <chr>    22284 0.00407  
-#> 14 address2              <chr>  4716227 0.861    
-#> 15 city                  <chr>    28667 0.00523  
-#> 16 state                 <chr>    12544 0.00229  
-#> 17 zip                   <chr>    36827 0.00672  
-#> 18 d2part                <chr>        0 0        
-#> 19 description           <chr>  5047481 0.921    
-#> 20 vendor_last_only_name <chr>  5168086 0.943    
-#> 21 vendor_first_name     <chr>  5362546 0.978    
-#> 22 vendor_address1       <chr>  5172099 0.944    
-#> 23 vendor_address2       <chr>  5448621 0.994    
-#> 24 vendor_city           <chr>  5171646 0.944    
-#> 25 vendor_state          <chr>  5168598 0.943    
-#> 26 vendor_zip            <chr>  5168480 0.943    
-#> 27 archived              <lgl>        0 0        
-#> 28 country               <chr>  5403264 0.986    
-#> 29 redaction_requested   <lgl>        0 0        
-#> 30 cmte_name             <chr>        0 0        
-#> 31 cmte_address          <chr>        0 0        
-#> 32 cmte_city             <chr>      359 0.0000655
-#> 33 cmte_state            <chr>      450 0.0000821
-#> 34 cmte_zip              <chr>     4331 0.000790
+#>    col                   class        n           p
+#>    <chr>                 <chr>    <int>       <dbl>
+#>  1 id                    <int>        2 0.000000343
+#>  2 committee_id          <int>        2 0.000000343
+#>  3 filed_doc_id          <int>        0 0          
+#>  4 e_trans_id            <chr>  5753663 0.988      
+#>  5 last_only_name        <chr>        2 0.000000343
+#>  6 first_name            <chr>  3395551 0.583      
+#>  7 rcv_date              <dttm>       2 0.000000343
+#>  8 amount                <dbl>        2 0.000000343
+#>  9 aggregate_amount      <dbl>        2 0.000000343
+#> 10 loan_amount           <dbl>        2 0.000000343
+#> 11 occupation            <chr>  5012754 0.861      
+#> 12 employer              <chr>  5014127 0.861      
+#> 13 address1              <chr>    24387 0.00419    
+#> 14 address2              <chr>  5008222 0.860      
+#> 15 city                  <chr>    33065 0.00568    
+#> 16 state                 <chr>    15050 0.00258    
+#> 17 zip                   <chr>    41771 0.00717    
+#> 18 d2part                <chr>        4 0.000000687
+#> 19 description           <chr>  5365976 0.922      
+#> 20 vendor_last_only_name <chr>  5489138 0.943      
+#> 21 vendor_first_name     <chr>  5696160 0.978      
+#> 22 vendor_address1       <chr>  5493259 0.943      
+#> 23 vendor_address2       <chr>  5787481 0.994      
+#> 24 vendor_city           <chr>  5492795 0.943      
+#> 25 vendor_state          <chr>  5489656 0.943      
+#> 26 vendor_zip            <chr>  5489626 0.943      
+#> 27 archived              <lgl>        6 0.00000103 
+#> 28 country               <chr>  5741045 0.986      
+#> 29 redaction_requested   <lgl>        4 0.000000687
+#> 30 cmte_name             <chr>        2 0.000000343
+#> 31 cmte_address          <chr>        2 0.000000343
+#> 32 cmte_city             <chr>      361 0.0000620  
+#> 33 cmte_state            <chr>      452 0.0000776  
+#> 34 cmte_zip              <chr>     4333 0.000744
 ```
 
 We can flag any record missing a key variable needed to identify a
@@ -634,7 +646,7 @@ transaction.
 key_vars <- c("rcv_date", "last_only_name", "amount", "cmte_name")
 ilc <- flag_na(ilc, all_of(key_vars))
 sum(ilc$na_flag)
-#> [1] 0
+#> [1] 2
 ```
 
 0.0% rows are missing a key variable.
@@ -654,11 +666,11 @@ duplicate `id` to a text file.
 
 ``` r
 prop_distinct(ilc$id)
-#> [1] 1
+#> [1] 0.9999998
 ```
 
 ``` r
-dupe_file <- here("ny", "contribs", "data", "dupe_ids.txt")
+dupe_file <- here("il", "contribs", "data", "dupe_ids.txt")
 if (!file_exists(dupe_file)) {
   tmp <- file_temp(ext = "rds")
   write_rds(ilc, file = tmp)
@@ -712,70 +724,71 @@ ilc <- left_join(ilc, dupe_id, by = "id")
 ilc <- mutate(ilc, across(dupe_flag, Negate(is.na)))
 ```
 
-1.4% of rows are duplicates.
+0.3% of rows are duplicates.
 
 ``` r
 ilc %>% 
   filter(dupe_flag) %>% 
   count(rcv_date, last_only_name, amount, cmte_name, sort = TRUE)
-#> # A tibble: 72,494 × 5
-#>    rcv_date            last_only_name                   amount cmte_name                           n
-#>    <dttm>              <chr>                             <dbl> <chr>                           <int>
-#>  1 2012-03-22 00:00:00 "SEIU Illinois Council PAC Fund"   75   United for Rudy Lozano Jr          33
-#>  2 2014-08-11 00:00:00 "Working America"                  55.9 Working America                    30
-#>  3 2014-07-24 00:00:00 "Working America"                  55.9 Working America                    25
-#>  4 2014-09-26 00:00:00 "Working America"                  55.9 Working America                    17
-#>  5 2011-02-28 00:00:00 "SEIU IL Council PAC"              75   Friends to Elect Toni L Foulkes     9
-#>  6 2014-08-11 00:00:00 "Working America"                  77.5 Working America                     8
-#>  7 2002-03-08 00:00:00 "437 North Rush"                 1916.  Friends of Blagojevich              7
-#>  8 2016-03-21 00:00:00 "Friends of Robert \"Bob\" Rita"  210   Friends of Juliana Stratton         7
-#>  9 2002-03-08 00:00:00 "Grais"                           300   Friends of Blagojevich              6
-#> 10 2002-03-08 00:00:00 "Landis Plastics Inc."           1250   Citizens for Patrick O'Malley       6
-#> # … with 72,484 more rows
+#> # A tibble: 19,065 × 5
+#>    rcv_date            last_only_name           amount cmte_name                         n
+#>    <dttm>              <chr>                     <dbl> <chr>                         <int>
+#>  1 2002-03-08 00:00:00 437 North Rush            1916. Friends of Blagojevich            7
+#>  2 2002-03-08 00:00:00 Grais                      300  Friends of Blagojevich            6
+#>  3 2002-03-08 00:00:00 Landis Plastics Inc.      1250  Citizens for Patrick O'Malley     6
+#>  4 2002-05-01 00:00:00 Discount Smoke Shop        250  Citizens for Jim Watson           6
+#>  5 2002-03-08 00:00:00 Bilbrey & Hylla P.C.       250  Friends of Blagojevich            5
+#>  6 2002-03-08 00:00:00 DYN-PAC Illinois          2500  Friends of Blagojevich            5
+#>  7 2002-05-01 00:00:00 Kelso                      500  Friends of Blagojevich            5
+#>  8 2002-03-08 00:00:00 Citizens for Steve Davis  2500  Friends of Blagojevich            4
+#>  9 2002-03-08 00:00:00 Deterding                  250  Friends of Blagojevich            4
+#> 10 2002-03-08 00:00:00 Fernandez                 1000  Friends for Gutierrez             4
+#> # ℹ 19,055 more rows
 ```
 
 ### Categorical
 
 ``` r
 col_stats(ilc, n_distinct)
-#> # A tibble: 35 × 4
+#> # A tibble: 36 × 4
 #>    col                   class        n           p
 #>    <chr>                 <chr>    <int>       <dbl>
-#>  1 id                    <int>  5480514 1          
-#>  2 committee_id          <int>    11617 0.00212    
-#>  3 filed_doc_id          <int>   290243 0.0530     
-#>  4 e_trans_id            <chr>    62549 0.0114     
-#>  5 last_only_name        <chr>   475705 0.0868     
-#>  6 first_name            <chr>    92850 0.0169     
-#>  7 rcv_date              <dttm>    9933 0.00181    
-#>  8 amount                <dbl>   109903 0.0201     
-#>  9 aggregate_amount      <dbl>    85618 0.0156     
-#> 10 loan_amount           <dbl>    11021 0.00201    
-#> 11 occupation            <chr>    19743 0.00360    
-#> 12 employer              <chr>    61613 0.0112     
-#> 13 address1              <chr>   716789 0.131      
-#> 14 address2              <chr>    42814 0.00781    
-#> 15 city                  <chr>    16549 0.00302    
-#> 16 state                 <chr>      148 0.0000270  
-#> 17 zip                   <chr>    86400 0.0158     
-#> 18 d2part                <chr>        5 0.000000912
-#> 19 description           <chr>    62928 0.0115     
-#> 20 vendor_last_only_name <chr>    36454 0.00665    
-#> 21 vendor_first_name     <chr>     4688 0.000855   
-#> 22 vendor_address1       <chr>    49526 0.00904    
-#> 23 vendor_address2       <chr>     2498 0.000456   
-#> 24 vendor_city           <chr>     3123 0.000570   
-#> 25 vendor_state          <chr>       83 0.0000151  
-#> 26 vendor_zip            <chr>     5680 0.00104    
-#> 27 archived              <lgl>        2 0.000000365
-#> 28 country               <chr>      196 0.0000358  
-#> 29 redaction_requested   <lgl>        2 0.000000365
-#> 30 cmte_name             <chr>    11503 0.00210    
-#> 31 cmte_address          <chr>    10000 0.00182    
-#> 32 cmte_city             <chr>      796 0.000145   
-#> 33 cmte_state            <chr>       28 0.00000511 
-#> 34 cmte_zip              <chr>      952 0.000174   
-#> 35 dupe_flag             <lgl>        2 0.000000365
+#>  1 id                    <int>  5822521 1.00       
+#>  2 committee_id          <int>    12507 0.00215    
+#>  3 filed_doc_id          <int>   325836 0.0560     
+#>  4 e_trans_id            <chr>    66905 0.0115     
+#>  5 last_only_name        <chr>   493806 0.0848     
+#>  6 first_name            <chr>    96356 0.0165     
+#>  7 rcv_date              <dttm>   10491 0.00180    
+#>  8 amount                <dbl>   115967 0.0199     
+#>  9 aggregate_amount      <dbl>    90744 0.0156     
+#> 10 loan_amount           <dbl>    11592 0.00199    
+#> 11 occupation            <chr>    21350 0.00367    
+#> 12 employer              <chr>    67279 0.0116     
+#> 13 address1              <chr>   756902 0.130      
+#> 14 address2              <chr>    44282 0.00761    
+#> 15 city                  <chr>    17209 0.00296    
+#> 16 state                 <chr>      151 0.0000259  
+#> 17 zip                   <chr>    92939 0.0160     
+#> 18 d2part                <chr>        7 0.00000120 
+#> 19 description           <chr>    66498 0.0114     
+#> 20 vendor_last_only_name <chr>    38513 0.00661    
+#> 21 vendor_first_name     <chr>     4946 0.000849   
+#> 22 vendor_address1       <chr>    52699 0.00905    
+#> 23 vendor_address2       <chr>     2676 0.000460   
+#> 24 vendor_city           <chr>     3255 0.000559   
+#> 25 vendor_state          <chr>       83 0.0000143  
+#> 26 vendor_zip            <chr>     6027 0.00104    
+#> 27 archived              <lgl>        3 0.000000515
+#> 28 country               <chr>      209 0.0000359  
+#> 29 redaction_requested   <lgl>        3 0.000000515
+#> 30 cmte_name             <chr>    12375 0.00213    
+#> 31 cmte_address          <chr>    10760 0.00185    
+#> 32 cmte_city             <chr>      819 0.000141   
+#> 33 cmte_state            <chr>       29 0.00000498 
+#> 34 cmte_zip              <chr>      980 0.000168   
+#> 35 na_flag               <lgl>        2 0.000000343
+#> 36 dupe_flag             <lgl>        2 0.000000343
 ```
 
 ![](../plots/distinct_plots-1.png)<!-- -->![](../plots/distinct_plots-2.png)<!-- -->
@@ -784,10 +797,10 @@ col_stats(ilc, n_distinct)
 
 ``` r
 summary(ilc$amount)
-#>      Min.   1st Qu.    Median      Mean   3rd Qu.      Max. 
-#>         0       200       400      2076      1000 400164048
+#>      Min.   1st Qu.    Median      Mean   3rd Qu.      Max.      NA's 
+#>         0       200       400      2272      1000 400164048         2
 mean(ilc$amount <= 0)
-#> [1] 4.014222e-06
+#> [1] NA
 ```
 
 These are the records with the minimum and maximum amounts.
@@ -795,7 +808,7 @@ These are the records with the minimum and maximum amounts.
 ``` r
 glimpse(ilc[c(which.max(ilc$amount), which.min(ilc$amount)), ])
 #> Rows: 2
-#> Columns: 35
+#> Columns: 36
 #> $ id                    <int> 5464817, 28693
 #> $ committee_id          <int> 34699, 8511
 #> $ filed_doc_id          <int> 787508, 85873
@@ -830,6 +843,7 @@ glimpse(ilc[c(which.max(ilc$amount), which.min(ilc$amount)), ])
 #> $ cmte_city             <chr> "CHICAGO", "ROCKFORD"
 #> $ cmte_state            <chr> "IL", "IL"
 #> $ cmte_zip              <chr> "60632", "61107"
+#> $ na_flag               <lgl> FALSE, FALSE
 #> $ dupe_flag             <lgl> FALSE, FALSE
 ```
 
@@ -845,13 +859,13 @@ ilc <- mutate(ilc, rcv_year = year(rcv_date))
 
 ``` r
 min(ilc$rcv_date)
-#> [1] "1903-02-07 UTC"
+#> [1] NA
 sum(ilc$rcv_year < 1994)
-#> [1] 6
+#> [1] NA
 max(ilc$rcv_date)
-#> [1] "2021-09-15 UTC"
+#> [1] NA
 sum(ilc$rcv_date > today())
-#> [1] 0
+#> [1] NA
 ```
 
 ![](../plots/bar_year-1.png)<!-- -->
@@ -892,18 +906,18 @@ norm_addr <- ilc %>%
 ``` r
 sample_n(norm_addr, 10)
 #> # A tibble: 10 × 3
-#>    address1                            address2 address_norm                      
-#>    <chr>                               <chr>    <chr>                             
-#>  1 766 Research Pkwy.                  <NA>     766 RESEARCH PKWY                 
-#>  2 610 W 18th St                       <NA>     610 W 18TH ST                     
-#>  3 4101 S Morgan St                    <NA>     4101 S MORGAN ST                  
-#>  4 440 North Wabash Avenue             #4906    440 NORTH WABASH AVENUE 4906      
-#>  5 20912 W Ames Ct (22619 Fox Trail Ln <NA>     20912 W AMES CT 22619 FOX TRAIL LN
-#>  6 5312 S. Archer                      <NA>     5312 S ARCHER                     
-#>  7 900 N Kingsbury                     Apt 1031 900 N KINGSBURY APT 1031          
-#>  8 15122 108th Street                  <NA>     15122 108TH ST                    
-#>  9 322 N. Linden Ave                   <NA>     322 N LINDEN AVE                  
-#> 10 261 Maple St.                       <NA>     261 MAPLE ST
+#>    address1                    address2 address_norm                 
+#>    <chr>                       <chr>    <chr>                        
+#>  1 P.O. Box 1745               <NA>     PO BOX 1745                  
+#>  2 1621 East New York Street   <NA>     1621 EAST NEW YORK ST        
+#>  3 1103 Galen Drive            <NA>     1103 GALEN DR                
+#>  4 3731 W. ROOSEVELT           <NA>     3731 W ROOSEVELT             
+#>  5 6 Candlelight Dr            <NA>     6 CANDLELIGHT DR             
+#>  6 7107 West Belmont Ave.      Suite 5  7107 WEST BELMONT AVE SUITE 5
+#>  7 1750 New York Ave., NW      <NA>     1750 NEW YORK AVE NW         
+#>  8 323 S. ASHLAND              <NA>     323 S ASHLAND                
+#>  9 2210 W. Carmen Ave. Apt. 1W <NA>     2210 W CARMEN AVE APT 1W     
+#> 10 8140 S. Prairei  Park       <NA>     8140 S PRAIREI PARK
 ```
 
 ``` r
@@ -935,8 +949,8 @@ progress_table(
 #> # A tibble: 2 × 6
 #>   stage        prop_in n_distinct prop_na  n_out n_diff
 #>   <chr>          <dbl>      <dbl>   <dbl>  <dbl>  <dbl>
-#> 1 ilc$zip        0.881      86400 0.00672 649903  76051
-#> 2 ilc$zip_norm   0.998      12589 0.00851  13403   1528
+#> 1 ilc$zip        0.876      92939 0.00717 715029  82204
+#> 2 ilc$zip_norm   0.998      13082 0.00888  14271   1603
 ```
 
 ### State
@@ -960,7 +974,7 @@ st_norm <- ilc %>%
 ``` r
 st_norm %>% 
   filter(state != state_norm)
-#> # A tibble: 36 × 2
+#> # A tibble: 37 × 2
 #>    state state_norm
 #>    <chr> <chr>     
 #>  1 Mi    MI        
@@ -973,7 +987,7 @@ st_norm %>%
 #>  8 Mn    MN        
 #>  9 Wi    WI        
 #> 10 wa    WA        
-#> # … with 26 more rows
+#> # ℹ 27 more rows
 ```
 
 ``` r
@@ -989,8 +1003,8 @@ progress_table(
 #> # A tibble: 2 × 6
 #>   stage          prop_in n_distinct prop_na n_out n_diff
 #>   <chr>            <dbl>      <dbl>   <dbl> <dbl>  <dbl>
-#> 1 ilc$state         1.00        148 0.00229  1565     92
-#> 2 ilc$state_norm    1            57 0.00242     0      1
+#> 1 ilc$state         1.00        151 0.00258  2104     95
+#> 2 ilc$state_norm    1            57 0.00274     0      1
 ```
 
 ### City
@@ -1090,20 +1104,20 @@ good_refine <- ilc %>%
   )
 ```
 
-    #> # A tibble: 235 × 5
+    #> # A tibble: 257 × 5
     #>    state_norm zip_norm city_swap          city_refine           n
     #>    <chr>      <chr>    <chr>              <chr>             <int>
-    #>  1 IL         60411    SO CHICAGO HEIGHTS CHICAGO HEIGHTS     576
-    #>  2 IL         60429    EAST HAZEL CREST   HAZEL CREST         462
+    #>  1 IL         60411    SO CHICAGO HEIGHTS CHICAGO HEIGHTS     553
+    #>  2 IL         60429    EAST HAZEL CREST   HAZEL CREST         470
     #>  3 IL         60010    NO BARRINGTON      BARRINGTON           65
-    #>  4 IA         51102    SOUIX CITY         SIOUX CITY           50
-    #>  5 IL         60429    EAST HAZELCREST    HAZEL CREST          38
-    #>  6 MD         20817    BESTHEDA           BETHESDA             27
-    #>  7 IL         60476    THORTHON           THORNTON             23
-    #>  8 IL         60007    LAKE GROVE VILLAGE ELK GROVE VILLAGE    21
-    #>  9 IL         62832    DUQUION            DU QUOIN             19
-    #> 10 IL         60411    CHCIAAGO HEIGHTS   CHICAGO HEIGHTS      18
-    #> # … with 225 more rows
+    #>  4 IA         51102    SOUIX CITY         SIOUX CITY           53
+    #>  5 IL         60429    EAST HAZELCREST    HAZEL CREST          40
+    #>  6 NC         27102    WINSTIONSALEM      WINSTON SALEM        30
+    #>  7 MD         20817    BESTHEDA           BETHESDA             29
+    #>  8 IL         60411    SOCHICAGO HEIGHTS  CHICAGO HEIGHTS      23
+    #>  9 IL         60476    THORTHON           THORNTON             23
+    #> 10 IL         60007    LAKE GROVE VILLAGE ELK GROVE VILLAGE    21
+    #> # ℹ 247 more rows
 
 Then we can join the refined values back to the database.
 
@@ -1119,10 +1133,10 @@ Our goal for normalization was to increase the proportion of city values
 known to be valid and reduce the total distinct values by correcting
 misspellings.
 
-| stage                                                                                            | prop\_in | n\_distinct | prop\_na | n\_out | n\_diff |
-|:-------------------------------------------------------------------------------------------------|---------:|------------:|---------:|-------:|--------:|
-| str\_to\_upper(ilc*c**i**t**y*)\|0.965\|13043\|0.005\|191847\|7992\|\|*i**l**c*city\_norm        |    0.974 |       11655 |    0.006 | 142793 |    6579 |
-| ilc*c**i**t**y*<sub>*s*</sub>*w**a**p*\|0.994\|7658\|0.006\|32590\|2598\|\|*i**l**c*city\_refine |    0.994 |        7463 |    0.006 |  30663 |    2405 |
+| stage                                                                      | prop_in | n_distinct | prop_na |  n_out | n_diff |
+|:---------------------------------------------------------------------------|--------:|-----------:|--------:|-------:|-------:|
+| str_to_upper(ilc$city) | 0.965| 13585| 0.006| 201928| 8375| |ilc$city_norm |   0.974 |      12156 |   0.006 | 152161 |   6924 |
+| ilc$city_swap | 0.994| 7978| 0.006| 33812| 2754| |ilc$city_refine          |   0.995 |       7764 |   0.006 |  31787 |   2542 |
 
 You can see how the percentage of valid values increased with each
 stage.
@@ -1153,55 +1167,56 @@ ilc <- ilc %>%
 ``` r
 glimpse(sample_n(ilc, 50))
 #> Rows: 50
-#> Columns: 40
-#> $ id                    <int> 3575904, 5251513, 3048014, 5327121, 1637265, 2792511, 562807, 4025039, 5290391, 1427915,…
-#> $ committee_id          <int> 23965, 4255, 4565, 35482, 11769, 22077, 538, 23854, 497, 909, 22977, 25879, 13229, 19136…
-#> $ filed_doc_id          <int> 477218, 748375, 413398, 760475, 294894, 391892, 204303, 538182, 753494, 275888, 450394, …
+#> Columns: 41
+#> $ id                    <int> 5720047, 5685644, 3575904, 5251513, 3048014, 5327121, 1637265, 2792511, 562807, 4025039,…
+#> $ committee_id          <int> 36993, 34087, 23965, 4255, 4565, 35482, 11769, 22077, 538, 23854, 497, 909, 22977, 25879…
+#> $ filed_doc_id          <int> 839880, 831832, 477218, 748375, 413398, 760475, 294894, 391892, 204303, 538182, 753494, …
 #> $ e_trans_id            <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
-#> $ last_only_name        <chr> "Pierce Law Office", "Woodrow", "Republican State Senate Campaign Committee", "Holmes", …
-#> $ first_name            <chr> NA, "Sheila", NA, "Matt", NA, "Venu", NA, NA, "Vicki", "Kevin", "James", NA, "Earl A.", …
-#> $ rcv_date              <dttm> 2012-09-27, 2019-09-04, 2010-08-31, 2019-11-06, 2004-03-22, 2009-06-30, 2000-04-19, 201…
-#> $ amount                <dbl> 500.00, 50.00, 268.23, 250.00, 750.00, 200.00, 1130.95, 1000.00, 257.50, 45.00, 1000.00,…
-#> $ aggregate_amount      <dbl> 500.00, 200.00, 18932.95, 250.00, 750.00, 1700.00, 6526.46, 1000.00, 257.50, 351.81, 300…
+#> $ last_only_name        <chr> "Eikenberry", "Jones", "Pierce Law Office", "Woodrow", "Republican State Senate Campaign…
+#> $ first_name            <chr> "Patrick", "DeVaughn", NA, "Sheila", NA, "Matt", NA, "Venu", NA, NA, "Vicki", "Kevin", "…
+#> $ rcv_date              <dttm> 2022-01-05, 2021-12-27, 2012-09-27, 2019-09-04, 2010-08-31, 2019-11-06, 2004-03-22, 200…
+#> $ amount                <dbl> 250.00, 500.00, 500.00, 50.00, 268.23, 250.00, 750.00, 200.00, 1130.95, 1000.00, 257.50,…
+#> $ aggregate_amount      <dbl> 250.00, 500.00, 500.00, 200.00, 18932.95, 250.00, 750.00, 1700.00, 6526.46, 1000.00, 257…
 #> $ loan_amount           <dbl> 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0…
-#> $ occupation            <chr> NA, NA, NA, NA, NA, "Attorney", NA, NA, NA, NA, "VP, Global Sales", NA, "Attorney", NA, …
-#> $ employer              <chr> NA, NA, NA, NA, NA, "Vedder Price Kaufman & Krammholz", NA, NA, NA, NA, "Wittern Group",…
-#> $ address1              <chr> "461 W. Main", "1200 E Pershing Rd", "P.O. Box 3422", "2220 S. State Rte 157, Suite 225"…
-#> $ address2              <chr> "PO Box 147", NA, NA, NA, "4301 GARDEN CITY DR", NA, NA, "#300", NA, NA, NA, NA, NA, NA,…
-#> $ city                  <chr> "Bushnell", "Decatur", "Springfield", "Edwardsville", "LANDOVER", "Chicago", "Crestwood"…
-#> $ state                 <chr> "IL", "IL", "IL", "IL", "MD", "IL", "IL", "DC", "IL", "IL", "IA", "IL", "IL", "IL", "IL"…
-#> $ zip                   <chr> "61422", "62526", "62708", "62025", "20785", "60606", "60445", "20004", "60035", "61820"…
-#> $ d2part                <chr> "1A", "1A", "5A", "1A", "2A", "1A", "1A", "1A", "1A", "1A", "1A", "2A", "1A", "2A", "1A"…
-#> $ description           <chr> NA, NA, "Taxes", NA, NA, NA, NA, NA, NA, NA, "161549", NA, NA, NA, NA, NA, NA, NA, NA, N…
-#> $ vendor_last_only_name <chr> NA, NA, "Internal Revenue Service", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
+#> $ occupation            <chr> NA, NA, NA, NA, NA, NA, NA, "Attorney", NA, NA, NA, NA, "VP, Global Sales", NA, "Attorne…
+#> $ employer              <chr> NA, NA, NA, NA, NA, NA, NA, "Vedder Price Kaufman & Krammholz", NA, NA, NA, NA, "Wittern…
+#> $ address1              <chr> "5212 N Richmond Cir", "10500 Ridgeland Ave", "461 W. Main", "1200 E Pershing Rd", "P.O.…
+#> $ address2              <chr> NA, "2", "PO Box 147", NA, NA, NA, "4301 GARDEN CITY DR", NA, NA, "#300", NA, NA, NA, NA…
+#> $ city                  <chr> "Bettendorf", "Chicago Ridge", "Bushnell", "Decatur", "Springfield", "Edwardsville", "LA…
+#> $ state                 <chr> "IA", "IL", "IL", "IL", "IL", "IL", "MD", "IL", "IL", "DC", "IL", "IL", "IA", "IL", "IL"…
+#> $ zip                   <chr> "52722", "60415", "61422", "62526", "62708", "62025", "20785", "60606", "60445", "20004"…
+#> $ d2part                <chr> "1A", "1A", "1A", "1A", "5A", "1A", "2A", "1A", "1A", "1A", "1A", "1A", "1A", "2A", "1A"…
+#> $ description           <chr> NA, NA, NA, NA, "Taxes", NA, NA, NA, NA, NA, NA, NA, "161549", NA, NA, NA, NA, NA, NA, N…
+#> $ vendor_last_only_name <chr> NA, NA, NA, NA, "Internal Revenue Service", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
 #> $ vendor_first_name     <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
 #> $ vendor_address1       <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
 #> $ vendor_address2       <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
-#> $ vendor_city           <chr> NA, NA, "Cincinnati", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
-#> $ vendor_state          <chr> NA, NA, "OH", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
-#> $ vendor_zip            <chr> NA, NA, "45999", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
-#> $ archived              <lgl> FALSE, FALSE, TRUE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE…
+#> $ vendor_city           <chr> NA, NA, NA, NA, "Cincinnati", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
+#> $ vendor_state          <chr> NA, NA, NA, NA, "OH", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
+#> $ vendor_zip            <chr> NA, NA, NA, NA, "45999", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
+#> $ archived              <lgl> FALSE, FALSE, FALSE, FALSE, TRUE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE…
 #> $ country               <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
 #> $ redaction_requested   <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALS…
-#> $ cmte_name             <chr> "Friends of Ramon Escapa", "Illinois Chiropractic Society PAC", "Citizens for Doherty", …
-#> $ cmte_address          <chr> "PO BOX 341", "PO BOX 9493", "7805 W CATALPA AVE", "PO BOX 48", "10400 W HIGGINS RD STE …
-#> $ cmte_city             <chr> "RUSHVILLE", "SPRINGFIELD", "CHICAGO", "GLEN CARBON", "ROSEMONT", "RIVER FOREST", "SPRIN…
+#> $ cmte_name             <chr> "Thoms for Senate", "16th Ward Democratic Organization", "Friends of Ramon Escapa", "Ill…
+#> $ cmte_address          <chr> "224 18TH STREET SUITE M200", "6200 S ADA", "PO BOX 341", "PO BOX 9493", "7805 W CATALPA…
+#> $ cmte_city             <chr> "ROCK ISLAND", "CHICAGO", "RUSHVILLE", "SPRINGFIELD", "CHICAGO", "GLEN CARBON", "ROSEMON…
 #> $ cmte_state            <chr> "IL", "IL", "IL", "IL", "IL", "IL", "IL", "IL", "IL", "IL", "IL", "IL", "IL", "IL", "IL"…
-#> $ cmte_zip              <chr> "62681", "62791", "60656", "62034", "60018", "60305", "62705", "60011", "60602", "62701"…
+#> $ cmte_zip              <chr> "61201", "60636", "62681", "62791", "60656", "62034", "60018", "60305", "62705", "60011"…
+#> $ na_flag               <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALS…
 #> $ dupe_flag             <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALS…
-#> $ rcv_year              <dbl> 2012, 2019, 2010, 2019, 2004, 2009, 2000, 2014, 2019, 2004, 2011, 2019, 2000, 2020, 2002…
-#> $ address_clean         <chr> "461 W MAIN PO BOX 147", "1200 E PERSHING RD", "PO BOX 3422", "2220 S STATE RTE 157 SUIT…
-#> $ city_clean            <chr> "BUSHNELL", "DECATUR", "SPRINGFIELD", "EDWARDSVILLE", "LANDOVER", "CHICAGO", "CRESTWOOD"…
-#> $ state_clean           <chr> "IL", "IL", "IL", "IL", "MD", "IL", "IL", "DC", "IL", "IL", "IA", "IL", "IL", "IL", "IL"…
-#> $ zip_clean             <chr> "61422", "62526", "62708", "62025", "20785", "60606", "60445", "20004", "60035", "61820"…
+#> $ rcv_year              <dbl> 2022, 2021, 2012, 2019, 2010, 2019, 2004, 2009, 2000, 2014, 2019, 2004, 2011, 2019, 2000…
+#> $ address_clean         <chr> "5212 N RICHMOND CIR", "10500 RIDGELAND AVE 2", "461 W MAIN PO BOX 147", "1200 E PERSHIN…
+#> $ city_clean            <chr> "BETTENDORF", "CHICAGO RIDGE", "BUSHNELL", "DECATUR", "SPRINGFIELD", "EDWARDSVILLE", "LA…
+#> $ state_clean           <chr> "IA", "IL", "IL", "IL", "IL", "IL", "MD", "IL", "IL", "DC", "IL", "IL", "IA", "IL", "IL"…
+#> $ zip_clean             <chr> "52722", "60415", "61422", "62526", "62708", "62025", "20785", "60606", "60445", "20004"…
 ```
 
 ## Conclude
 
-1.  There are 5,480,514 records in the database.
-2.  There are 76,052 duplicate records in the database.
+1.  There are 5,822,522 records in the database.
+2.  There are 20,093 duplicate records in the database.
 3.  The range and distribution of `amount` and `date` seem reasonable.
-4.  There are 0 records missing key variables.
+4.  There are 2 records missing key variables.
 5.  Consistency in geographic data has been improved with
     `campfin::normal_*()`.
 6.  The 4-digit `year` variable has been created with
@@ -1214,10 +1229,10 @@ server.
 
 ``` r
 clean_dir <- dir_create(here("il", "contribs", "data", "clean"))
-clean_path <- path(clean_dir, "il_contribs_19940701-20210915.csv")
+clean_path <- path(clean_dir, "il_contribs_19940701-2023.csv")
 write_csv(ilc, clean_path, na = "")
 (clean_size <- file_size(clean_path))
-#> 1.36G
+#> 1.48G
 ```
 
 ## Upload

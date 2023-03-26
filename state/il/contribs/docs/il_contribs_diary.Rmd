@@ -1,6 +1,6 @@
 ---
 title: "Illinois Contributions"
-author: "Kiernan Nicholls"
+author: "Kiernan Nicholls & Aarushi Sahejpal"
 date: "`r date()`"
 output:
   github_document: 
@@ -558,7 +558,7 @@ prop_distinct(ilc$id)
 ```
 
 ```{r dupe_write}
-dupe_file <- here("ny", "contribs", "data", "dupe_ids.txt")
+dupe_file <- here("il", "contribs", "data", "dupe_ids.txt")
 if (!file_exists(dupe_file)) {
   tmp <- file_temp(ext = "rds")
   write_rds(ilc, file = tmp)
@@ -1017,7 +1017,7 @@ Now the file can be saved on disk for upload to the Accountability server.
 
 ```{r clean_dir}
 clean_dir <- dir_create(here("il", "contribs", "data", "clean"))
-clean_path <- path(clean_dir, "il_contribs_19940701-20210915.csv")
+clean_path <- path(clean_dir, "il_contribs_19940701-2023.csv")
 write_csv(ilc, clean_path, na = "")
 (clean_size <- file_size(clean_path))
 ```
