@@ -109,10 +109,10 @@ project also uses the dynamic `here::here()` tool for file paths relative to _yo
 [02]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects "Rproj"
 
 ## Download
-Set the download directory first.
+Set the download directory first. This data update includes everything prior to 2023, so the next update should start with the 2023-2024 cycle. 
 ```{r create raw_dir}
 # create a directory for the raw data
-raw_dir <- here("ct", "lobby", "data", "raw","reg")
+raw_dir <- here("state","ct", "lobby", "data", "raw","reg")
 
 dir_create(raw_dir)
 ```
@@ -147,7 +147,7 @@ Communicator Lobbyists:
 This Rmd file documents the CT registration data only, whereas the expenditure data is wrangled in a separate data diary.
 
 
-To generate a master dataset, we will need to download four kinds of data tables from [Office of State Ethics](https://www.oseapps.ct.gov/NewLobbyist/PublicReports/AdditionalReports.aspx), _Communicator Lobbyist List_ for information about lobbyists, _All Registrants - Client_ for information about clients, _Registration by Client, Communicator, Bus Org and Registration Date_ for their relationships, as well as the _Combined Lobbyist List by Registrant with Type of Lobbying and Issues_. There will be overlapping and missing fields, but we will use the _Registration by Client, Communicator, Bus Org and Registration Date_  as the base table since it captures the relationship between the lobbyists and their clients.
+To generate a master dataset, we will need to download four kinds of data tables from [Office of State Ethics](https://www.oseapps.ct.gov/NewLobbyist/PublicReports/AdditionalReports.aspx), _Communicator Lobbyist List_ for information about lobbyists (Note that this data file is the total of the next two data files, in-house and outside communicators), Switch to the tab _Relationship/Registrant reports - All Registrants - Client_ for information about clients, _Registration by Client, Communicator, Bus Org and Registration Date_ for their relationships, as well as the _Combined Lobbyist List by Registrant with Type of Lobbying and Issues_. There will be overlapping and missing fields, but we will use the _Registration by Client, Communicator, Bus Org and Registration Date_  as the base table since it captures the relationship between the lobbyists and their clients.
 
 ## Reading
 We discovered that the xls files are actually structured as html tables. We'll use the `rvest` package to read these files.
@@ -424,11 +424,13 @@ _invalid_ values from `r length(setdiff(ct_lob$city_norm, valid_place))` to only
 ## Join
 We'll join the two data frames together. 
 ```{r join pre}
-ct_lob$dupe_flag %>% tabyl()
+if ("dupe_flag" %in%  names(ct_lob)) {
+ct_lob$dupe_flag %>% tabyl()  
+}
 
 ct_lob <- ct_lob %>% 
-  filter(!dupe_flag) %>% 
-  select(-c(dupe_flag,
+  #filter(!dupe_flag) %>% 
+  select(-c(
             city_norm)) %>% 
   rename(city_clean = city_swap) %>% 
   rename_all(.funs = ~str_c("lobbyist_",.))
@@ -477,7 +479,7 @@ sample_frac(ct_join)
 ## Export
 
 ```{r write clean}
-clean_dir <- here("ct", "lobby", "data", "processed","reg")
+clean_dir <- here("state","ct", "lobby", "data", "processed","reg")
 dir_create(clean_dir)
 ct_join %>% 
   select(-c(dupe_flag)) %>% 

@@ -1,20 +1,20 @@
 Louisiana Expenditures
 ================
-Kiernan Nicholls
-2020-07-02 14:30:41
+Kiernan Nicholls & Yanqi Xu
+2023-03-26 16:14:19
 
-  - [Project](#project)
-  - [Objectives](#objectives)
-  - [Packages](#packages)
-  - [Data](#data)
-  - [Download](#download)
-  - [Read](#read)
-  - [Explore](#explore)
-  - [Wrangle](#wrangle)
-  - [Conclude](#conclude)
-  - [Export](#export)
-  - [Upload](#upload)
-  - [Dictionary](#dictionary)
+- <a href="#project" id="toc-project">Project</a>
+- <a href="#objectives" id="toc-objectives">Objectives</a>
+- <a href="#packages" id="toc-packages">Packages</a>
+- <a href="#data" id="toc-data">Data</a>
+- <a href="#download" id="toc-download">Download</a>
+- <a href="#read" id="toc-read">Read</a>
+- <a href="#explore" id="toc-explore">Explore</a>
+- <a href="#wrangle" id="toc-wrangle">Wrangle</a>
+- <a href="#conclude" id="toc-conclude">Conclude</a>
+- <a href="#export" id="toc-export">Export</a>
+- <a href="#upload" id="toc-upload">Upload</a>
+- <a href="#dictionary" id="toc-dictionary">Dictionary</a>
 
 <!-- Place comments regarding knitting here -->
 
@@ -91,7 +91,7 @@ feature and should be run as such. The project also uses the dynamic
 ``` r
 # where does this document knit?
 here::here()
-#> [1] "/home/kiernan/Code/accountability_datacleaning/R_campfin"
+#> [1] "/Users/yanqixu/code/accountability_datacleaning"
 ```
 
 ## Data
@@ -109,10 +109,10 @@ Administration’s](http://ethics.la.gov/AboutTheBoard.aspx):
 We can search expenditure records from the LEA’s expenditures search
 portal:
 
->   - [Campaign Finance
->     Expenditures](http://www.ethics.la.gov/CampaignFinanceSearch/SearchEfilingExpenditures.aspx)  
->     Choose this option to sort and view campaign expense records.  
->     Expenditures may appear multiple times in the search.
+> - [Campaign Finance
+>   Expenditures](http://www.ethics.la.gov/CampaignFinanceSearch/SearchEfilingExpenditures.aspx)  
+>   Choose this option to sort and view campaign expense records.  
+>   Expenditures may appear multiple times in the search.
 
 ## Download
 
@@ -120,24 +120,26 @@ We can search for expenditures between two dates, however the number of
 results that can be returned at a time is 100,000.
 
 > Due to the high volume of contribution receipts, these search results
-> are limited to the top 100,000 of 1,285,753 records that match your
+> are limited to the top 100,000 of 1,473,715 records that match your
 > search criteria and sorting selection.
 
 To circumvent this cap, we perform multiple searches between the start
-and end of the years between 2000 and 2020. The
+and end of the years between 2000 and 2022. The
 [cURL](https://en.wikipedia.org/wiki/CURL) commands to download these
 chunks are stored in the `raw_curl.sh` text file. We can run these
 commands one by one and save the returned files locally.
 
+We will start our next update from Jan 1, 2023.
+
 ``` r
-raw_dir <- dir_create(here("la", "expends", "data", "raw"))
-raw_path <- path(raw_dir, "la_exp_raw.csv")
-raw_curl <- read_lines(here("la", "expends", "raw_curl.sh"))
+raw_dir <- dir_create(here("state","la", "expends", "data", "raw"))
+#raw_path <- path(raw_dir, "la_exp_raw.csv")
+#raw_curl <- read_lines(here("state","la", "expends", "raw_curl.sh"))
 ```
 
 ``` r
 for (i in seq_along(raw_curl)) {
-  out_path <- path(raw_dir, glue("SearchResults-{seq(2000, 2020)[i]}.csv"))
+  out_path <- path(raw_dir, glue("SearchResults-{【  seq(2000, 2022)[i]}.csv"))
   write_lines(system(raw_curl[i], intern = TRUE), out_path)
   flush_memory(); Sys.sleep(5)
 }
@@ -146,26 +148,26 @@ for (i in seq_along(raw_curl)) {
 ``` r
 raw_info <- dir_info(raw_dir)
 nrow(raw_info)
-#> [1] 27
+#> [1] 30
 sum(raw_info$size)
-#> 250M
+#> 282M
 as_tibble(raw_info) %>% 
   select(path, size, modification_time) %>% 
   mutate(across(path, path.abbrev))
-#> # A tibble: 27 x 3
-#>    path                                                size modification_time  
-#>    <chr>                                        <fs::bytes> <dttm>             
-#>  1 ~/la/expends/data/raw/SearchResults-2000.csv       3.56M 2020-07-02 12:27:13
-#>  2 ~/la/expends/data/raw/SearchResults-2001.csv       3.18M 2020-07-02 12:30:16
-#>  3 ~/la/expends/data/raw/SearchResults-2002.csv       7.69M 2020-07-02 12:31:06
-#>  4 ~/la/expends/data/raw/SearchResults-2003.csv      19.79M 2020-07-02 12:33:02
-#>  5 ~/la/expends/data/raw/SearchResults-2004.csv       6.76M 2020-07-02 12:33:47
-#>  6 ~/la/expends/data/raw/SearchResults-2005.csv       4.07M 2020-07-02 12:34:42
-#>  7 ~/la/expends/data/raw/SearchResults-2006.csv       7.99M 2020-07-02 12:35:27
-#>  8 ~/la/expends/data/raw/SearchResults-2007.csv      18.98M 2020-07-02 12:36:55
-#>  9 ~/la/expends/data/raw/SearchResults-2008.csv        9.1M 2020-07-02 12:38:10
-#> 10 ~/la/expends/data/raw/SearchResults-2009.csv      12.57M 2020-07-02 12:39:00
-#> # … with 17 more rows
+#> # A tibble: 30 × 3
+#>    path                                                                    size modification_time  
+#>    <fs::path>                                                            <fs::> <dttm>             
+#>  1 …bility_datacleaning/state/la/expends/data/raw/SearchResults_2000.csv  3.57M 2023-03-24 23:08:28
+#>  2 …bility_datacleaning/state/la/expends/data/raw/SearchResults_2001.csv  3.18M 2023-03-24 23:27:06
+#>  3 …bility_datacleaning/state/la/expends/data/raw/SearchResults_2002.csv  7.71M 2023-03-26 15:58:36
+#>  4 …bility_datacleaning/state/la/expends/data/raw/SearchResults_2003.csv 19.81M 2023-03-26 15:59:29
+#>  5 …bility_datacleaning/state/la/expends/data/raw/SearchResults_2004.csv  6.78M 2023-03-24 23:32:04
+#>  6 …bility_datacleaning/state/la/expends/data/raw/SearchResults_2005.csv  4.08M 2023-03-24 23:32:28
+#>  7 …bility_datacleaning/state/la/expends/data/raw/SearchResults_2006.csv  8.03M 2023-03-24 23:33:44
+#>  8 …bility_datacleaning/state/la/expends/data/raw/SearchResults_2007.csv 19.02M 2023-03-24 23:37:03
+#>  9 …bility_datacleaning/state/la/expends/data/raw/SearchResults_2008.csv  9.12M 2023-03-24 23:38:08
+#> 10 …bility_datacleaning/state/la/expends/data/raw/SearchResults_2009.csv 12.62M 2023-03-26 16:06:47
+#> # … with 20 more rows
 ```
 
 ## Read
@@ -181,13 +183,13 @@ lae <- vroom(
   trim_ws = TRUE,
   id = "file",
   num_threads = 1,
-  .name_repair = make_clean_names,
+  #.name_repair = make_clean_names,
   col_types = cols(
     .default = col_character(),
-    ExpenditureDate = col_date_usa(),
+    ExpenditureDate = col_date_mdy(),
     ExpenditureAmt = col_number()
   )
-)
+) %>% clean_names()
 ```
 
 ``` r
@@ -208,36 +210,37 @@ lae <- lae %>%
 
 ``` r
 glimpse(lae)
-#> Rows: 1,259,656
+#> Rows: 1,445,196
 #> Columns: 17
-#> $ file        <chr> "~/la/expends/data/raw/SearchResults-2000.csv", "~/la/expends/data/raw/Searc…
-#> $ last        <chr> "ABC Pelican PAC", "ABC Pelican PAC", "ABC Pelican PAC", "ABC Pelican PAC", …
-#> $ first       <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
-#> $ code        <chr> "F202", "F202", "F202", "F202", "F202", "F202", "F202", "F202", "F202", "F20…
-#> $ type        <chr> "ANN", "ANN", "ANN", "ANN", "ANN", "ANN", "ANN", "ANN", "ANN", "ANN", "ANN",…
-#> $ number      <chr> "LA-1860", "LA-1860", "LA-1860", "LA-1860", "LA-1860", "LA-1860", "LA-1860",…
-#> $ schedule    <chr> "E-4", "E-4", "E-1", "E-1", "E-3", "E-3", "E-3", "E-3", "E-3", "E-4", "E-3",…
-#> $ recipient   <chr> "IRS", "ABC PELICAN CHAPTER", "SPAULDING GROUP INC.", "LOUISIANA SENATE DEMO…
-#> $ addr1       <chr> NA, "19251 Highland Road", NA, "P.O. Box 4385", "1995 Nonconnah Blvd.", NA, …
-#> $ addr2       <chr> NA, NA, NA, NA, NA, NA, NA, "Suite 203", NA, NA, NA, NA, NA, NA, NA, NA, NA,…
-#> $ city        <chr> "Memphis", "Baton Rouge", "Louisville", "Baton Rouge", "Memphis", NA, "Jeffe…
-#> $ state       <chr> "TN", "LA", "KY", "LA", "TN", NA, "LA", "LA", "LA", "LA", "LA", "LA", "LA", …
-#> $ zip         <chr> NA, "70809", NA, "70801-4385", "38132", NA, "70181", "70122", "71483", "7081…
-#> $ description <chr> NA, "Administrative Fees for 2000", "Bush/Cheney Buttons Signs and Bumper St…
-#> $ beneficiary <chr> NA, NA, NA, NA, "COMMITTEE TO ELECT PAUL STANLEY", "FRIENDS OF MIKE FUTRELL"…
-#> $ date        <date> 2000-03-08, 2000-11-17, 2000-11-03, 2000-05-02, 2000-07-24, 2000-05-10, 200…
-#> $ amount      <dbl> 2199.00, 2000.00, 515.00, 500.00, 500.00, 500.00, 500.00, 500.00, 500.00, 41…
+#> $ file        <chr> "/Users/yanqixu/code/accountability_datacleaning/state/la/expends/data/raw/Se…
+#> $ last        <chr> "ABC Pelican PAC", "ABC Pelican PAC", "ABC Pelican PAC", "ABC Pelican PAC", "…
+#> $ first       <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
+#> $ code        <chr> "F202", "F202", "F202", "F202", "F202", "F202", "F202", "F202", "F202", "F202…
+#> $ type        <chr> "ANN", "ANN", "ANN", "ANN", "ANN", "ANN", "ANN", "ANN", "ANN", "ANN", "ANN", …
+#> $ number      <chr> "LA-1860", "LA-1860", "LA-1860", "LA-1860", "LA-1860", "LA-1860", "LA-1860", …
+#> $ schedule    <chr> "E-4", "E-4", "E-1", "E-1", "E-3", "E-3", "E-3", "E-3", "E-3", "E-4", "E-3", …
+#> $ recipient   <chr> "IRS", "ABC PELICAN CHAPTER", "SPAULDING GROUP INC.", "LOUISIANA SENATE DEMOC…
+#> $ addr1       <chr> NA, "19251 Highland Road", NA, "P.O. Box 4385", "1995 Nonconnah Blvd.", NA, "…
+#> $ addr2       <chr> NA, NA, NA, NA, NA, NA, NA, "Suite 203", NA, NA, NA, NA, NA, NA, NA, NA, NA, …
+#> $ city        <chr> "Memphis", "Baton Rouge", "Louisville", "Baton Rouge", "Memphis", NA, "Jeffer…
+#> $ state       <chr> "TN", "LA", "KY", "LA", "TN", NA, "LA", "LA", "LA", "LA", "LA", "LA", "LA", N…
+#> $ zip         <chr> NA, "70809", NA, "70801-4385", "38132", NA, "70181", "70122", "71483", "70810…
+#> $ description <chr> NA, "Administrative Fees for 2000", "Bush/Cheney Buttons Signs and Bumper Sti…
+#> $ beneficiary <chr> NA, NA, NA, NA, "COMMITTEE TO ELECT PAUL STANLEY", "FRIENDS OF MIKE FUTRELL",…
+#> $ date        <date> 2000-03-08, 2000-11-17, 2000-11-03, 2000-05-02, 2000-07-24, 2000-05-10, 2000…
+#> $ amount      <dbl> 2199.00, 2000.00, 515.00, 500.00, 500.00, 500.00, 500.00, 500.00, 500.00, 411…
 tail(lae)
-#> # A tibble: 6 x 17
-#>   file  last  first code  type  number schedule recipient addr1 addr2 city  state zip   description
-#>   <chr> <chr> <chr> <chr> <chr> <chr>  <chr>    <chr>     <chr> <chr> <chr> <chr> <chr> <chr>      
-#> 1 ~/la… Zuck… Jason F102  30P   LA-88… E-1      ERIC MCV… 304 … <NA>  Mand… LA    70448 Campaign M…
-#> 2 ~/la… Zuck… Jason F102  30P   LA-88… E-1      ERIC MCV… 304 … <NA>  Mand… LA    70448 Campaign M…
-#> 3 ~/la… Zuck… Jason F102  30P   LA-88… E-1      COVINGTO… 2144… <NA>  Abit… LA    70420 Campaign S…
-#> 4 ~/la… Zuck… Jason F102  10P   LA-88… E-1      BOURGEOI… 127 … <NA>  Covi… LA    70433 Marketing …
-#> 5 ~/la… Zuck… Jason F102  30P   LA-88… E-1      MELE PRI… 619 … <NA>  Covi… LA    70433 Printing s…
-#> 6 ~/la… Zuck… Jason F102  30P   LA-88… E-1      CAPLAND   3334… Suit… Meta… LA    70002 Hats with …
-#> # … with 3 more variables: beneficiary <chr>, date <date>, amount <dbl>
+#> # A tibble: 6 × 17
+#>   file         last  first code  type  number sched…¹ recip…² addr1 addr2 city  state zip   descr…³
+#>   <chr>        <chr> <chr> <chr> <chr> <chr>  <chr>   <chr>   <chr> <chr> <chr> <chr> <chr> <chr>  
+#> 1 /Users/yanq… Zerv… Carl… F102  SUP   LA-10… E-1     WEEBLY  460 … <NA>  San … CA    94107 2022-2…
+#> 2 /Users/yanq… Zerv… Carl… F102  SUP   LA-10… E-1     REGION… 1820… <NA>  New … LA    70130 Fees t…
+#> 3 /Users/yanq… Zibi… Franz F102  SUP   LA-10… E-1     CYNTHI… 16 C… <NA>  Kenn… LA    70065 Campai…
+#> 4 /Users/yanq… Zibi… Franz F102  SUP   LA-10… E-1     CAMPAI… P.O.… <NA>  Bato… LA    70821 Filing…
+#> 5 /Users/yanq… Zibi… Franz F102  SUP   LA-10… E-1     HEAVEN… 2328… <NA>  New … LA    70114 Donati…
+#> 6 /Users/yanq… Zuck… Jason F102  ANN   LA-10… E-1     AMERIC… 406 … <NA>  Mand… LA    70448 Bank s…
+#> # … with 3 more variables: beneficiary <chr>, date <date>, amount <dbl>, and abbreviated variable
+#> #   names ¹​schedule, ²​recipient, ³​description
 ```
 
 ### Missing
@@ -246,25 +249,25 @@ Columns vary in their degree of missing values.
 
 ``` r
 col_stats(lae, count_na)
-#> # A tibble: 17 x 4
-#>    col         class        n        p
-#>    <chr>       <chr>    <int>    <dbl>
-#>  1 file        <chr>        0 0       
-#>  2 last        <chr>        0 0       
-#>  3 first       <chr>   194386 0.154   
-#>  4 code        <chr>        0 0       
-#>  5 type        <chr>      131 0.000104
-#>  6 number      <chr>        0 0       
-#>  7 schedule    <chr>        0 0       
-#>  8 recipient   <chr>      248 0.000197
-#>  9 addr1       <chr>    60597 0.0481  
-#> 10 addr2       <chr>  1172090 0.930   
-#> 11 city        <chr>    32881 0.0261  
-#> 12 state       <chr>    26564 0.0211  
-#> 13 zip         <chr>    77644 0.0616  
-#> 14 description <chr>   109365 0.0868  
-#> 15 beneficiary <chr>  1186702 0.942   
-#> 16 date        <date>       0 0       
+#> # A tibble: 17 × 4
+#>    col         class        n         p
+#>    <chr>       <chr>    <int>     <dbl>
+#>  1 file        <chr>        0 0        
+#>  2 last        <chr>        0 0        
+#>  3 first       <chr>   228689 0.158    
+#>  4 code        <chr>        0 0        
+#>  5 type        <chr>      131 0.0000906
+#>  6 number      <chr>        0 0        
+#>  7 schedule    <chr>        0 0        
+#>  8 recipient   <chr>      248 0.000172 
+#>  9 addr1       <chr>    60983 0.0422   
+#> 10 addr2       <chr>  1342896 0.929    
+#> 11 city        <chr>    33162 0.0229   
+#> 12 state       <chr>    30945 0.0214   
+#> 13 zip         <chr>    78101 0.0540   
+#> 14 description <chr>   117081 0.0810   
+#> 15 beneficiary <chr>  1358912 0.940    
+#> 16 date        <date>       0 0        
 #> 17 amount      <dbl>        0 0
 ```
 
@@ -282,7 +285,7 @@ All such records are missing a beneficiary.
 lae %>% 
   filter(na_flag) %>% 
   select(date, last, amount, recipient)
-#> # A tibble: 248 x 4
+#> # A tibble: 248 × 4
 #>    date       last                      amount recipient
 #>    <date>     <chr>                      <dbl> <chr>    
 #>  1 2002-04-22 Entergy Corp. PAC (ENPAC)  3000  <NA>     
@@ -303,7 +306,7 @@ lae %>%
   filter(na_flag) %>% 
   select(date, last, amount, recipient) %>% 
   col_stats(count_na)
-#> # A tibble: 4 x 4
+#> # A tibble: 4 × 4
 #>   col       class      n     p
 #>   <chr>     <chr>  <int> <dbl>
 #> 1 date      <date>     0     0
@@ -328,55 +331,55 @@ Over 1% of records are such duplicates
 
 ``` r
 percent(mean(lae$dupe_flag), 0.01)
-#> [1] "1.07%"
+#> [1] "1.21%"
 ```
 
 ``` r
 lae %>% 
   filter(dupe_flag) %>% 
   select(date, last, amount, recipient, number)
-#> # A tibble: 13,459 x 5
+#> # A tibble: 17,535 × 5
 #>    date       last         amount recipient           number 
 #>    <date>     <chr>         <dbl> <chr>               <chr>  
 #>  1 2000-11-07 Addison, Jr.    150 STERLING COLLINS    LA-1619
 #>  2 2000-11-07 Addison, Jr.    150 STERLING COLLINS    LA-1619
 #>  3 2000-11-07 Addison, Jr.     75 MR DON KELLY        LA-1619
 #>  4 2000-11-07 Addison, Jr.     75 MR DON KELLY        LA-1619
-#>  5 2000-11-07 Addison, Jr.     75 TAREN MACK          LA-1619
-#>  6 2000-11-07 Addison, Jr.     75 TAREN MACK          LA-1619
+#>  5 2000-11-07 Addison, Jr.     75 MR ERIC D ADDISON   LA-1619
+#>  6 2000-11-07 Addison, Jr.     75 ASHLEY SPOTSVILLE   LA-1619
 #>  7 2000-11-07 Addison, Jr.     75 ASHLEY SPOTSVILLE   LA-1619
-#>  8 2000-11-07 Addison, Jr.     75 ASHLEY SPOTSVILLE   LA-1619
-#>  9 2000-11-07 Addison, Jr.     75 MR ALLEN S MERCHANT LA-1619
+#>  8 2000-11-07 Addison, Jr.     75 TAREN MACK          LA-1619
+#>  9 2000-11-07 Addison, Jr.     75 TAREN MACK          LA-1619
 #> 10 2000-11-07 Addison, Jr.     75 MR ALLEN S MERCHANT LA-1619
-#> # … with 13,449 more rows
+#> # … with 17,525 more rows
 ```
 
 ### Categorical
 
 ``` r
 col_stats(lae, n_distinct)
-#> # A tibble: 19 x 4
+#> # A tibble: 19 × 4
 #>    col         class       n          p
 #>    <chr>       <chr>   <int>      <dbl>
-#>  1 file        <chr>      27 0.0000214 
-#>  2 last        <chr>    2967 0.00236   
-#>  3 first       <chr>    2560 0.00203   
-#>  4 code        <chr>      12 0.00000953
-#>  5 type        <chr>      16 0.0000127 
-#>  6 number      <chr>   44754 0.0355    
-#>  7 schedule    <chr>      10 0.00000794
-#>  8 recipient   <chr>  265395 0.211     
-#>  9 addr1       <chr>  279295 0.222     
-#> 10 addr2       <chr>   14644 0.0116    
-#> 11 city        <chr>    8530 0.00677   
-#> 12 state       <chr>      62 0.0000492 
-#> 13 zip         <chr>   29321 0.0233    
-#> 14 description <chr>  312103 0.248     
-#> 15 beneficiary <chr>   14824 0.0118    
-#> 16 date        <date>   7476 0.00593   
-#> 17 amount      <dbl>  113178 0.0898    
-#> 18 na_flag     <lgl>       2 0.00000159
-#> 19 dupe_flag   <lgl>       2 0.00000159
+#>  1 file        <chr>      30 0.0000208 
+#>  2 last        <chr>    3354 0.00232   
+#>  3 first       <chr>    2889 0.00200   
+#>  4 code        <chr>      12 0.00000830
+#>  5 type        <chr>      16 0.0000111 
+#>  6 number      <chr>   55410 0.0383    
+#>  7 schedule    <chr>      10 0.00000692
+#>  8 recipient   <chr>  288970 0.200     
+#>  9 addr1       <chr>  308398 0.213     
+#> 10 addr2       <chr>   15647 0.0108    
+#> 11 city        <chr>    9303 0.00644   
+#> 12 state       <chr>      64 0.0000443 
+#> 13 zip         <chr>   31193 0.0216    
+#> 14 description <chr>  358835 0.248     
+#> 15 beneficiary <chr>   16418 0.0114    
+#> 16 date        <date>   8395 0.00581   
+#> 17 amount      <dbl>  123996 0.0858    
+#> 18 na_flag     <lgl>       2 0.00000138
+#> 19 dupe_flag   <lgl>       2 0.00000138
 ```
 
 ![](../plots/distinct_plots-1.png)<!-- -->![](../plots/distinct_plots-2.png)<!-- -->![](../plots/distinct_plots-3.png)<!-- -->![](../plots/distinct_plots-4.png)<!-- -->
@@ -386,9 +389,9 @@ col_stats(lae, n_distinct)
 ``` r
 summary(lae$amount)
 #>      Min.   1st Qu.    Median      Mean   3rd Qu.      Max. 
-#>       0.0      60.6     110.3     848.8     427.8 2000000.0
+#>       0.0      60.0     120.0     853.7     450.0 3063269.8
 mean(lae$amount <= 0)
-#> [1] 0
+#> [1] 0.0005231124
 ```
 
 ![](../plots/hist_amount-1.png)<!-- -->
@@ -407,9 +410,9 @@ min(lae$date)
 sum(lae$year < 2000)
 #> [1] 0
 max(lae$date)
-#> [1] "2020-11-19"
+#> [1] "2022-12-31"
 sum(lae$date > today())
-#> [1] 1
+#> [1] 0
 ```
 
 ![](../plots/bar_year-1.png)<!-- -->
@@ -451,19 +454,19 @@ lae %>%
   select(contains("addr")) %>% 
   distinct() %>% 
   sample_n(10)
-#> # A tibble: 10 x 3
-#>    addr1                addr2       addr_norm           
-#>    <chr>                <chr>       <chr>               
-#>  1 408 Holy Cross Place <NA>        408 HOLY CROSS PLACE
-#>  2 719-A South Burnside <NA>        719 A S BURNSIDE    
-#>  3 2431 Rue Beauregard  <NA>        2431 RUE BEAUREGARD 
-#>  4 912 Maine Street     <NA>        912 MAINE ST        
-#>  5 4919 DESIRE DRIVE    <NA>        4919 DESIRE DR      
-#>  6 PO BOX 1983          <NA>        PO BOX 1983         
-#>  7 150 Melacon Drive    <NA>        150 MELACON DR      
-#>  8 37321 Mindy Way      <NA>        37321 MINDY WAY     
-#>  9 605 W St Mary Blvd   <NA>        605 W ST MARY BLVD  
-#> 10 C/O                  PO BOX 3268 CO PO BOX 3268
+#> # A tibble: 10 × 3
+#>    addr1                    addr2     addr_norm                
+#>    <chr>                    <chr>     <chr>                    
+#>  1 710 Mazant               <NA>      710 MAZANT               
+#>  2 233 W. 12th Street       <NA>      233 W 12TH ST            
+#>  3 11 Tara Boulevard        <NA>      11 TARA BLVD             
+#>  4 800 Tchoupitoulas Street <NA>      800 TCHOUPITOULAS ST     
+#>  5 17301 W Colfax           <NA>      17301 W COLFAX           
+#>  6 2959 COLLEGE DR          <NA>      2959 COLLEGE DR          
+#>  7 7685 JEFFERSON PAIGE RD  <NA>      7685 JEFFERSON PAIGE RD  
+#>  8 333 Girod St. Apt 305    <NA>      333 GIROD ST APT 305     
+#>  9 620 MENDELSSOHN          SUITE 186 620 MENDELSSOHN SUITE 186
+#> 10 308 Jackson St           <NA>      308 JACKSON ST
 ```
 
 ### ZIP
@@ -488,11 +491,11 @@ progress_table(
   lae$zip_norm,
   compare = valid_zip
 )
-#> # A tibble: 2 x 6
-#>   stage    prop_in n_distinct prop_na  n_out n_diff
-#>   <chr>      <dbl>      <dbl>   <dbl>  <dbl>  <dbl>
-#> 1 zip        0.895      29321  0.0616 124026  22541
-#> 2 zip_norm   0.997       8249  0.0627   4108    900
+#> # A tibble: 2 × 6
+#>   stage        prop_in n_distinct prop_na  n_out n_diff
+#>   <chr>          <dbl>      <dbl>   <dbl>  <dbl>  <dbl>
+#> 1 lae$zip        0.903      31193  0.0540 133160  23854
+#> 2 lae$zip_norm   0.996       8966  0.0552   5907   1080
 ```
 
 ### State
@@ -516,7 +519,7 @@ lae <- lae %>%
 lae %>% 
   filter(state != state_norm) %>% 
   count(state, state_norm, sort = TRUE)
-#> # A tibble: 0 x 3
+#> # A tibble: 0 × 3
 #> # … with 3 variables: state <chr>, state_norm <chr>, n <int>
 ```
 
@@ -526,11 +529,11 @@ progress_table(
   lae$state_norm,
   compare = valid_state
 )
-#> # A tibble: 2 x 6
-#>   stage      prop_in n_distinct prop_na n_out n_diff
-#>   <chr>        <dbl>      <dbl>   <dbl> <dbl>  <dbl>
-#> 1 state        0.997         62  0.0211  4191     10
-#> 2 state_norm   1.00          59  0.0244     7      7
+#> # A tibble: 2 × 6
+#>   stage          prop_in n_distinct prop_na n_out n_diff
+#>   <chr>            <dbl>      <dbl>   <dbl> <dbl>  <dbl>
+#> 1 lae$state         1.00         64  0.0214   565     12
+#> 2 lae$state_norm    1.00         61  0.0218    14      9
 ```
 
 ### City
@@ -617,20 +620,20 @@ good_refine <- lae %>%
   )
 ```
 
-    #> # A tibble: 104 x 5
-    #>    state_norm zip_norm city_swap       city_refine       n
-    #>    <chr>      <chr>    <chr>           <chr>         <int>
-    #>  1 CA         94103    SAN FRANSICO    SAN FRANCISCO    22
-    #>  2 OH         45202    CINCINATTI      CINCINNATI       22
-    #>  3 LA         70068    LAPALCE         LA PLACE         18
-    #>  4 LA         71110    BARKSDALE A F B BARKSDALE AFB    14
-    #>  5 LA         71457    NACTITOCHES     NATCHITOCHES     12
-    #>  6 LA         70001    METIAIRE        METAIRIE          8
-    #>  7 LA         70119    NEW ORLEANSLA   NEW ORLEANS       8
-    #>  8 OH         45274    CINCINATTI      CINCINNATI        8
-    #>  9 LA         70390    NOPOLEANVILLE   NAPOLEONVILLE     6
-    #> 10 CA         94102    SAN FRANSICO    SAN FRANCISCO     5
-    #> # … with 94 more rows
+    #> # A tibble: 125 × 5
+    #>    state_norm zip_norm city_swap       city_refine            n
+    #>    <chr>      <chr>    <chr>           <chr>              <int>
+    #>  1 CA         94103    SAN FRANSICO    SAN FRANCISCO         22
+    #>  2 OH         45202    CINCINATTI      CINCINNATI            22
+    #>  3 LA         70068    LAPALCE         LA PLACE              18
+    #>  4 LA         70775    ST FRANCESVILLE SAINT FRANCISVILLE    15
+    #>  5 CA         94025    MELONO PARK     MENLO PARK            12
+    #>  6 LA         71457    NACTITOCHES     NATCHITOCHES          12
+    #>  7 OH         45271    CINCINATTI      CINCINNATI            10
+    #>  8 LA         70001    METIAIRE        METAIRIE               8
+    #>  9 LA         70119    NEW ORLEANSLA   NEW ORLEANS            8
+    #> 10 OH         45274    CINCINATTI      CINCINNATI             8
+    #> # … with 115 more rows
 
 Then we can join the refined values back to the database.
 
@@ -642,12 +645,10 @@ lae <- lae %>%
 
 #### Progress
 
-| stage        | prop\_in | n\_distinct | prop\_na | n\_out | n\_diff |
-| :----------- | -------: | ----------: | -------: | -----: | ------: |
-| city\_raw)   |    0.972 |        6437 |    0.026 |  34744 |    3290 |
-| city\_norm   |    0.983 |        6084 |    0.027 |  21030 |    2911 |
-| city\_swap   |    0.995 |        4382 |    0.027 |   6575 |    1210 |
-| city\_refine |    0.995 |        4298 |    0.027 |   6294 |    1127 |
+| stage                                                                        | prop_in | n_distinct | prop_na | n_out | n_diff |
+|:-----------------------------------------------------------------------------|--------:|-----------:|--------:|------:|-------:|
+| str_to_upper(lae$city_raw) | 0.972| 7037| 0.023| 39272| 3687| |lae$city_norm |   0.974 |       6665 |   0.024 | 36026 |   3303 |
+| lae$city_swap | 0.995| 4773| 0.024| 7729| 1398| |lae$city_refine             |   0.995 |       4671 |   0.024 |  7386 |   1297 |
 
 You can see how the percentage of valid values increased with each
 stage.
@@ -678,36 +679,36 @@ lae <- lae %>%
 
 ``` r
 glimpse(sample_frac(lae))
-#> Rows: 1,259,656
+#> Rows: 1,445,196
 #> Columns: 24
-#> $ file        <chr> "~/la/expends/data/raw/SearchResults-2016.csv", "~/la/expends/data/raw/Searc…
-#> $ last        <chr> "LA Association of Wholesalers PAC", "Chabert", "LA Democrats (formerly Demo…
-#> $ first       <chr> NA, "Norbert (Norby)", NA, "Candyce", "Joseph A.", "James", "Regina Ashford"…
-#> $ code        <chr> "F202", "F102", "F202", "F102", "F102", "F102", "F102", "F102", "F102", "F10…
-#> $ type        <chr> "ANN", "ANN", "40G", "40G", "ANN", "10P", "10P", "30P", "40G", "SUP", "EDAY"…
-#> $ number      <chr> "LA-58981", "LA-48190", "LA-55643", "LA-68479", "LA-39561", "LA-31859", "LA-…
-#> $ schedule    <chr> "E-3", "E-1", "E-1", "E-1", "E-1", "E-1", "E-1", "E-1", "E-1", "E-1", "B", "…
-#> $ recipient   <chr> "JOSEPH BOUIE CAMPAIGN FUND", "LOUISIANA SMALL BUSINESS ASSOCIATION", "SHYAM…
-#> $ addr1       <chr> "6305", "P.O. Box 44367", "714 N Mulberry St", "312 S Anderson", NA, "P.O. B…
-#> $ addr2       <chr> "Elysian Fields Ave. Ste 400", NA, NA, NA, NA, NA, NA, NA, "Apt 102", NA, NA…
-#> $ city        <chr> "New Orleans", "Baton Rouge", "Tallulah", "Washington", "Houma", "New Orlean…
-#> $ state       <chr> "LA", "LA", "LA", "LA", "LA", "LA", "LA", "LA", "LA", "LA", "LA", "LA", "LA"…
-#> $ zip         <chr> "70122", "70804", "71282-3330", "70589", "70360", "70181-1305", "70807", "70…
-#> $ description <chr> "Oct 2019 Primary", "Directory", "Democratic Party Slate Card Distribution",…
-#> $ beneficiary <chr> "JOSEPH BOUIE CAMPAIGN FUND", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
-#> $ date        <date> 2016-03-13, 2014-01-24, 2015-11-21, 2017-04-29, 2013-12-12, 2011-09-26, 201…
-#> $ amount      <dbl> 1000.00, 7.63, 100.00, 100.00, 49.18, 1457.64, 25.00, 50.00, 720.00, 119.97,…
-#> $ na_flag     <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE,…
-#> $ dupe_flag   <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE,…
-#> $ year        <dbl> 2016, 2014, 2015, 2017, 2013, 2011, 2015, 2011, 2017, 2004, 2019, 2017, 2011…
-#> $ addr_clean  <chr> "6305 ELYSIAN FLDS AVE STE 400", "PO BOX 44367", "714 N MULBERRY ST", "312 S…
-#> $ zip_clean   <chr> "70122", "70804", "71282", "70589", "70360", "70181", "70807", "70528", "701…
-#> $ state_clean <chr> "LA", "LA", "LA", "LA", "LA", "LA", "LA", "LA", "LA", "LA", "LA", "LA", "LA"…
-#> $ city_clean  <chr> "NEW ORLEANS", "BATON ROUGE", "TALLULAH", "WASHINGTON", "HOUMA", "NEW ORLEAN…
+#> $ file        <chr> "/Users/yanqixu/code/accountability_datacleaning/state/la/expends/data/raw/Se…
+#> $ last        <chr> "Romero", "Cooper", "Hewitt", "Thomas Jefferson Fund", "Brown", "LaBostrie", …
+#> $ first       <chr> "Troy", "Michael (Mike)", "Sharon W.", NA, "Cary T.", "Paulette Porter", "Cra…
+#> $ code        <chr> "F102", "F102", "F102", "F202", "F102", "F102", "F102", "F102", "F102", "F102…
+#> $ type        <chr> "ANN", "ANN", "ANN", "ANN", "30P", "10G", "ANN", "180P", "90P", "40G", "ANN",…
+#> $ number      <chr> "LA-102824", "LA-75764", "LA-109734", "LA-58742", "LA-42652", "LA-64892", "LA…
+#> $ schedule    <chr> "E-1", "E-1", "E-1", "E-3", "E-1", "E-1", "E-1", "E-1", "E-1", "E-1", "E-1", …
+#> $ recipient   <chr> "KRISPY KREME", "COPELAND&#39;S", "DONER FUNDRAISING", "PAUL BONIN", "PEARCE …
+#> $ addr1       <chr> "5006 Hardy", "680 US-190", "3112 WINDSOR RD", "228 St. Charles Ave", "408 We…
+#> $ addr2       <chr> NA, NA, "#105", "#1310", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
+#> $ city        <chr> "Hattiesburg", "Covington", "AUSTIN", "New Orleans", "Ruston", "WHITE CASTLE"…
+#> $ state       <chr> "MS", "LA", "TX", "LA", "LA", "LA", "LA", "MS", "LA", "LA", "LA", "LA", "LA",…
+#> $ zip         <chr> "39402", "70433", "78703", "70130", "71270", "70788", "70810", "39301", "7082…
+#> $ description <chr> "Breakfast for Louisiana exhibitors and Open Livestock Show.", "Meal with sup…
+#> $ beneficiary <chr> NA, NA, NA, "PAUL BONIN", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
+#> $ date        <date> 2021-07-02, 2018-02-08, 2022-11-01, 2016-03-09, 2014-06-12, 2015-10-24, 2017…
+#> $ amount      <dbl> 247.50, 28.86, 2040.12, 1000.00, 664.02, 75.00, 50.32, 100.00, 8500.00, 1500.…
+#> $ na_flag     <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, …
+#> $ dupe_flag   <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, …
+#> $ year        <dbl> 2021, 2018, 2022, 2016, 2014, 2015, 2017, 2013, 2020, 2011, 2015, 2011, 2017,…
+#> $ addr_clean  <chr> "5006 HARDY", "680 US190", "3112 WINDSOR RD #105", "228 ST CHARLES AVE #1310"…
+#> $ zip_clean   <chr> "39402", "70433", "78703", "70130", "71270", "70788", "70810", "39301", "7082…
+#> $ state_clean <chr> "MS", "LA", "TX", "LA", "LA", "LA", "LA", "MS", "LA", "LA", "LA", "LA", "LA",…
+#> $ city_clean  <chr> "HATTIESBURG", "COVINGTON", "AUSTIN", "NEW ORLEANS", "RUSTON", "WHITE CASTLE"…
 ```
 
-1.  There are 1,259,656 records in the database.
-2.  There are 13,459 duplicate records in the database.
+1.  There are 1,445,196 records in the database.
+2.  There are 17,535 duplicate records in the database.
 3.  The range and distribution of `amount` and `date` seem reasonable.
 4.  There are 248 records missing key variables.
 5.  Consistency in geographic data has been improved with
@@ -725,13 +726,13 @@ clean_dir <- dir_create(here("la", "expends", "data", "clean"))
 clean_path <- path(clean_dir, "la_expends_clean.csv")
 write_csv(lae, clean_path, na = "")
 file_size(clean_path)
-#> 282M
+#> 398M
 file_encoding(clean_path) %>% 
   mutate(across(path, path.abbrev))
-#> # A tibble: 1 x 3
-#>   path                                         mime            charset 
-#>   <chr>                                        <chr>           <chr>   
-#> 1 ~/la/expends/data/clean/la_expends_clean.csv application/csv us-ascii
+#> # A tibble: 1 × 3
+#>   path                                                                                mime  charset
+#>   <fs::path>                                                                          <chr> <chr>  
+#> 1 …anqixu/code/accountability_datacleaning/la/expends/data/clean/la_expends_clean.csv <NA>  <NA>
 ```
 
 ## Upload
@@ -754,7 +755,7 @@ if (require(duckr)) {
 The following table describes the variables in our final exported file:
 
 | Column        | Original name             | Type        | Definition                             |
-| :------------ | :------------------------ | :---------- | :------------------------------------- |
+|:--------------|:--------------------------|:------------|:---------------------------------------|
 | `file`        | `file`                    | `character` | Source file path                       |
 | `last`        | `filer_last_name`         | `character` | Spending candidate last name           |
 | `first`       | `filer_first_name`        | `character` | Spending candidate first name          |

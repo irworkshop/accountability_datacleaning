@@ -109,7 +109,7 @@ project also uses the dynamic `here::here()` tool for file paths relative to _yo
 Set the download directory first.
 ```{r create raw_dir}
 # create a directory for the raw data
-raw_dir <- here("ct", "lobby", "data", "raw","exp")
+raw_dir <- here("state","ct", "lobby", "data", "raw","exp")
 
 dir_create(raw_dir)
 ```
@@ -283,7 +283,7 @@ ctlc %>% filter(client %in% top5$client) %>%
 We'll need the ID information from the registration list that we previously processed. Note that the registration data is arranged by year and not session, so a session may include multiple `client-communicator` intances.Since duplicates will be joined multiple times to the actual compensation data frame, and thus we do not wish to introduce duplicates in this joined data frame. We will de-dupe the registration data for each year and prioritize years that have more comprehensive information than the other year of the same session. That is, we will create a column `na_count` counting the `NA` values of each row and only maintain the intance with a smaller `na_count` value.
 
 ```{r import}
-reg_dir <- here("ct", "lobby", "data", "processed","reg")
+reg_dir <- here("state","ct", "lobby", "data", "processed","reg")
 ct_reg <- read_csv(glue("{reg_dir}/ct_lobby_reg.csv"),col_types = cols(.default = col_character()))
 
 ct_reg <- ct_reg %>% 
@@ -292,7 +292,8 @@ ct_reg <- ct_reg %>%
   mutate(session = case_when(str_detect(client_year, "2013|2014") ~ "2013-2014",
                              str_detect(client_year, "2015|2016") ~ "2015-2016",
                              str_detect(client_year, "2017|2018") ~ "2017-2018",
-                             str_detect(client_year, "2019|2020") ~ "2019-2020"))
+                             str_detect(client_year, "2019|2020") ~ "2019-2020",
+                             str_detect(client_year, "2021|2022") ~ "2021-2022"))
 
 ct_join <- ct_reg %>% 
   select(client_name,client_year, lobbyist_first_name,lobbyist_last_name,lobbyist_year,client_address_clean, session,client_phone,client_city_clean,client_email, client_zip, client_state, lobbyist_city_clean, lobbyist_address_clean, lobbyist_state, lobbyist_zip, lobbyist_email) %>% 
@@ -315,10 +316,11 @@ ct_dupe <- ct_join %>% filter(n==2) %>%
 ct_dedupe <- ct_dupe %>% group_split(client_name, lobbyist_first_name, lobbyist_last_name, session)
 
 # For entries with the same client_name, lobbyist_first_name, lobbyist_last_name, session, we group them in a list for comparison
+
 for (i in seq_along(ct_dedupe)){
-ct_dedupe[[i]] <- ct_dedupe[[i]] %>% 
+ct_dedupe[[i]]$early_more_info <- NA
   # early_more_info suggests whether the first entry has more information
-  mutate(early_more_info = ct_dedupe[[i]]$row_sum[1] - ct_dedupe[[i]]$row_sum[2] < 0 ) 
+  ct_dedupe[[i]]$row_sum[1] < ct_dedupe[[i]]$row_sum[2]
 # if the first entry has more non-NA columns, use the first entry, otherwise use the second instance.
   if (ct_dedupe[[i]]$early_more_info[1]) {
   ct_dedupe[[i]] <- ct_dedupe[[i]][1,]
@@ -357,7 +359,7 @@ sample_frac(ctlc)
 ## Export
 
 ```{r write clean}
-clean_dir <- here("ct", "lobby", "data", "processed","exp")
+clean_dir <- here("state","ct", "lobby", "data", "processed","exp")
 dir_create(clean_dir)
 ctlc_clean %>% 
   select(-c(lobbyist_first_name, lobbyist_last_name)) %>% 

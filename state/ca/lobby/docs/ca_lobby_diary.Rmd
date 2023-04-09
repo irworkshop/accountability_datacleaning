@@ -1,6 +1,6 @@
 ---
 title: "California Lobbyists"
-author: "Kiernan Nicholls"
+author: "Kiernan Nicholls & Yanqi Xu"
 date: "`r Sys.time()`"
 output:
   github_document: 
@@ -125,6 +125,8 @@ activity information changes often. The raw data extracts are updated once a
 day. Campaign finance and lobbying activity filings can also be obtained in hard
 copy by contacting the Secretary of State's Political Reform Division.
 
+This file was downloaded on March 29, 2023 and replaces the old one that contained the full download up to the last update. 
+
 [03]: https://www.sos.ca.gov/
 [04]: https://www.sos.ca.gov/campaign-lobbying/about-political-reform-division/
 [05]: http://cal-access.sos.ca.gov/
@@ -144,7 +146,7 @@ url_file_size(key_url)
 If they ZIP file containing the documentation files has not yet been downloaded, we can do so now.
 
 ```{r download_key}
-doc_dir <- here("ca", "lobby", "docs")
+doc_dir <- here("state","ca", "lobby", "docs")
 key_file <- str_c(doc_dir, basename(key_url), sep = "/")
 if (!this_file_new(key_file)) {
   download.file(
@@ -177,7 +179,7 @@ file_delete(key_file)
 ### Download
 
 ```{r zip_file}
-raw_dir <- dir_create(here("ca", "lobby", "data", "raw"))
+raw_dir <- dir_create(here("state","ca", "lobby", "data", "raw"))
 zip_url <- "https://campaignfinance.cdn.sos.ca.gov/dbwebexport.zip"
 zip_file <- str_c(raw_dir, basename(zip_url), sep = "/")
 ```
@@ -607,7 +609,7 @@ calr <- calr %>%
 ```
 
 ```{r}
-clean_dir <- dir_create(here("ca", "lobby", "data", "clean"))
+clean_dir <- dir_create(here("state","ca", "lobby", "data", "clean"))
 clean_path <- path(clean_dir, "ca_lobby_reg.csv")
 write_csv(calr, path = clean_path, na = "")
 ```

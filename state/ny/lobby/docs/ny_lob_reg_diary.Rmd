@@ -120,7 +120,7 @@ A [data dictionary](https://jcope.ny.gov/system/files/documents/2018/04/nysjcope
 ### Setting up Raw Data Directory
 
 ```{r raw_dir}
-raw_dir <- dir_create(here("ny", "lobby", "data", "raw"))
+raw_dir <- dir_create(here("state","ny", "lobby", "data", "raw"))
 ```
 
 ### Read
@@ -491,7 +491,7 @@ ny_lob <- ny_lob  %>%
 ## Export
 
 ```{r clean_dir}
-clean_dir <- dir_create(here("ny", "lobby", "data", "processed","reg"))
+clean_dir <- dir_create(here("state","ny", "lobby", "data", "processed","reg"))
 ```
 
 ```{r write_clean, eval=FALSE}

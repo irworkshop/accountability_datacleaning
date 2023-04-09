@@ -1,6 +1,6 @@
 ---
 title: "Deleware Lobbyist Registration"
-author: "Kiernan Nicholls"
+author: "Kiernan Nicholls & Yanqi Xu"
 date: "`r Sys.time()`"
 output:
   github_document: 
@@ -32,7 +32,7 @@ set.seed(5)
 ```
 
 ```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
-fs::dir_create(here::here("de", "lobbying", "reg", "docs"))
+fs::dir_create(here::here("state","de", "lobbying", "reg", "docs"))
 ```
 
 ## Project
@@ -107,7 +107,8 @@ here::here()
 
 ## Data
 
-Data is obtained from the [Deleware Public Integrity Commission][depic] (PIC).
+Data is obtained from the [Deleware Public Integrity Commission][depic] (PIC). It was accessed on March 26
+, 2023.
 
 > Registration and authorization laws for those lobbying the General Assembly or State agencies,
 whether paid or not. Quarterly expense reports required for direct expenditures on General Assembly
@@ -129,37 +130,32 @@ and address. Click magnifying glass to search.
 We can use `httr::GET()` to submit an HTTP request for the file. Then, the response content of that
 request can be parsed as a CSV using `httr:content()` and `readr::read_csv()`.
 
+Since some end dates are marked "Indefinite" when a lobbyist is still active, we transform the data to make the "indefinite" entries NAs instead when we are reading this column in as date.
+
 ```{r download_raw}
-raw_url <- "https://egov.delaware.gov/Lobs/Explore/DownloadReport?reportCode=LOB"
+raw_url <- "https://pirs.delaware.gov/documents/EmployerAuthorizationCsv"
 delr <- 
   GET(url = raw_url) %>%
   content(as = "raw") %>%
   read_csv(
+    name_repair = make_clean_names,
     col_types = cols(
       .default = col_character(),
-      StartDate = col_date_usa(),
-      EndDate = col_date_usa()
+      lobbying_start_date = col_date_mdy(),
+      lobbying_end_date = col_date_mdy()
     )
-  ) %>% 
-  clean_names(case = "snake")
+  )
 ```
+
 
 Some of the variable names will be prepended with `lob_*` or truncated for simplicity and
 clarity.
 
 ```{r names_change}
-names(delr)[c(1:8, 13)] <- c(
-  "lob_first", 
-  "lob_last", 
-  "lob_address1", 
-  "lob_address2", 
-  "lob_city", 
-  "lob_state", 
-  "lob_zip",
-  "emp_name",
-  "emp_zip"
-)
-names(delr) <- str_replace(names(delr), "employer_", "emp_")
+names(delr) <- str_replace(names(delr), "lobbyist_", "lob_") %>% 
+  str_replace("employer_|empl_", "emp_") %>% 
+  str_remove("lobbying_") %>% 
+  str_remove("_code")
 ```
 
 ## Explore
@@ -203,44 +199,26 @@ variable with `campfin::normal_address()`.
 ```{r address_normal}
 packageVersion("tidyr")
 delr <- delr %>% 
-  # combine street addr
-  unite(
-    starts_with("lob_address"),
-    col = lob_adress_full,
-    sep = " ",
-    remove = FALSE,
-    na.rm = TRUE
-  ) %>% 
-  # normalize combined addr
   mutate(
     lob_address_norm = normal_address(
-      address = lob_adress_full,
+      address = lob_address,
       abbs = usps_street,
       na_rep = TRUE
     )
-  ) %>% 
-  select(-lob_adress_full)
+  )
 ```
 
 The same process will be performed for `emp_address`.
 
 ```{r emp_address_normal}
 delr <- delr %>% 
-  unite(
-    col = emp_adress_full,
-    emp_address1, emp_address2,
-    sep = " ",
-    remove = FALSE,
-    na.rm = TRUE
-  ) %>% 
   mutate(
     emp_address_norm = normal_address(
-      address = emp_adress_full,
+      address = emp_address,
       abbs = usps_street,
       na_rep = TRUE
     )
-  ) %>% 
-  select(-emp_adress_full)
+  )
 ```
 
 ```{r address_view}
@@ -416,7 +394,7 @@ delr <- mutate(
 ## Export
 
 ```{r create_proc_dir}
-proc_dir <- dir_create(here("de", "lobby", "data", "processed"))
+proc_dir <- dir_create(here("state","de", "lobby", "data", "processed"))
 ```
 
 ```{r write_clean}
@@ -430,7 +408,7 @@ delr %>%
     emp_city_norm = emp_city_swap
   ) %>% 
   write_csv(
-    path = glue("{proc_dir}/de_lobbyists.csv"),
+    path = glue("{proc_dir}/de_lobby_reg.csv"),
     na = ""
   )
 ```

@@ -32,7 +32,7 @@ set.seed(5)
 ```
 
 ```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
-fs::dir_create(here::here("nc", "lobby", "docs"))
+fs::dir_create(here::here("state","nc", "lobby", "docs"))
 ```
 
 ## Project
@@ -111,6 +111,8 @@ The data is obtained from the North Carolina Secretary of State's office [Lobbyi
 can download the database for all terms including resigned lobbyists in a a rich text file. We'll make a
 `httr::GET()` request on the file to download and write the text file to disk.
 
+It was downloaded on March 29, 2023. 
+
 [03]:https://www.sosnc.gov/online_services/lobbying/download
 
 Accoding to the North Carolina Secretary of State's office website, 
@@ -122,19 +124,19 @@ Accoding to the North Carolina Secretary of State's office website,
                                             
 
 ```{r raw_get}
-raw_dir <- here("nc", "lobby", "data", "raw")
+raw_dir <- here("state","nc", "lobby", "data", "raw")
 dir_create(raw_dir)
 
 lob_relative_url <- read_html("https://www.sosnc.gov/online_services/lobbying/lobbying_download_results") %>% html_nodes(xpath="//a[contains(text(),'Click Here To Download Text Only')]") %>% html_attr("href")
 
 lob_url <- str_replace(lob_relative_url, "../../", "https://www.sosnc.gov/")
 
-lob_file <- "nc_lob_master_20.txt"
+lob_file <- "nc_lob_master.txt"
 
 lob_path <- str_c(raw_dir, lob_file, sep = "/")
 if (!this_file_new(lob_path)) {
   GET(lob_url, write_disk(lob_path, overwrite = TRUE))
-  unzip(lob_path, exdir = raw_dir)
+  #unzip(lob_path, exdir = raw_dir)
 }
 ```
 
@@ -145,7 +147,7 @@ The rich text file doesn't specify its delimiter, but we can determine that the 
 First, we will use `readr::read_delim()` to read the data frame of lobbyists. There will be some parsing errors resulting in the fact that every line except for the headers ended with an extraneous `\t`, which we can safely disregard.
 
 ```{r raw_read_lob}
-nc_lob <- read_delim(dir_ls(raw_dir, regexp = "20.txt"),
+nc_lob <- read_delim(dir_ls(raw_dir, regexp = "nc_lob_master.txt"),
     "\t", escape_double = FALSE, trim_ws = TRUE, col_types = cols(
       .default = col_character()
     )) %>% clean_names()
@@ -427,7 +429,7 @@ nc_check <- nc_check %>%
 ```
 
 ```{r write check_table to csv, echo=FALSE, eval=FALSE}
-clean_dir <- here("nc", "lobby", "data", "processed")
+clean_dir <- here("state","nc", "lobby", "data", "processed")
 dir_create(clean_dir)
 nc_check %>% write_csv(
     path = file.path(clean_dir,"nc_check.csv"),
@@ -436,7 +438,7 @@ nc_check %>% write_csv(
 ```
 
 ```{r read saved check_table, echo=FALSE}
-clean_dir <- here("nc", "lobby", "data", "processed")
+clean_dir <- here("state","nc", "lobby", "data", "processed")
 nc_check <- read_csv(glue("{clean_dir}/nc_check.csv"))
 head(nc_check)
 ```
@@ -493,7 +495,7 @@ nc_lob <- nc_lob %>%
 
 
 ```{r proc_dir}
-proc_dir <- here("nc", "lobby", "data", "processed")
+proc_dir <- here("state","nc", "lobby", "data", "processed")
 dir_create(proc_dir)
 ```
 

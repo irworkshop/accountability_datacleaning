@@ -111,7 +111,7 @@ This dataset comes courtesy of the State of
 
 The resource is named `exenditures_by_candidates_and_political_committees` and covers the last 10
 years of data with daily updates. Each records represents a single "Expenditure by a campaign or
-committee."
+committee." The data was downloaded on Dec. 25, 2022.
 
 ### About
 

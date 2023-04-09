@@ -49,7 +49,7 @@ This document describes the process used to complete the following objectives:
 1. Check ranges
 1. Is there anything blank or missing?
 1. Check for consistency issues
-1. Create a five-digit ZIP Code called `ZIP5`
+1. Create a five-digit ZIP Code called `zip_clean`
 1. Create a `YEAR` field from the transaction date
 1. Make sure there is data on both parties to a transaction
 
@@ -112,8 +112,9 @@ Wyoming requires all statewide candidates, candidate committees, political actio
 
 ### Download
 
-Download raw, **immutable** data file. Go to [the download site](https://www.wycampaignfinance.gov/WYCFWebApplication/GSF_SystemConfiguration/SearchExpenditures.aspx), leave the fields blank, and click the "All" tab and hit "Search" with the date range of Nov 25, 2020  to Oct 8, 2022. After the table is populated, click "Export".
-2020 export was downloaded on Nov. 24, 2020.
+Download raw, **immutable** data file. Go to [the download site](https://www.wycampaignfinance.gov/WYCFWebApplication/GSF_SystemConfiguration/SearchExpenditures.aspx), leave the fields blank, go to "advanced setting," click the "All" tab and hit "Search" with the date range of Jan 1, 2008  to April 1, 2023. After the table is populated, click "Export".
+
+Note that the date range probably corresponds to reporting date, and there's probably a lag. We can see the data only goes through the end of 2022, so the next update should start Jan 1, 2023.
 
 ```{r raw_dir}
 # create a directory for the raw data
@@ -124,7 +125,7 @@ raw_dir <- dir_create(here("state","wy", "expends", "data", "raw"))
 ### Read
 
 ```{r read_many, echo=FALSE}
-wy <- 
+wye <- 
   dir_ls(path = raw_dir) %>% 
   #map(
   read_lines() %>% 
@@ -151,12 +152,12 @@ wy <-
 
 ## Explore
 
-There are `nrow(wy)` records of `length(wy)` variables in the full database.
+There are `nrow(wye)` records of `length(wye)` variables in the full database.
 
 ```{r glimpse}
-head(wy)
-tail(wy)
-glimpse(wy)
+head(wye)
+tail(wye)
+glimpse(wye)
 ```
 
 ### Distinct
@@ -165,20 +166,20 @@ The variables range in their degree of distinctness.
 
 
 ```{r n_distinct}
-wy %>% col_stats(n_distinct)
+wye %>% col_stats(n_distinct)
 ```
 
 We can explore the distribution of the least distinct values with `ggplot2::geom_bar()`.
 
 ```{r plot_bar, echo=FALSE}
-ggplot(data = wy) +
+ggplot(data = wye) +
   geom_bar(aes(filer_type))
 ```
 
 Or, filter the data and explore the most frequent discrete data.
 
 ```{r plot_bar2, echo=FALSE}
-wy %>% 
+wye %>% 
   group_by(payee)  %>% 
   summarize(total_spent = sum(amount)) %>% 
   head(10) %>% 
@@ -199,19 +200,19 @@ wy %>%
 We will flag the entries with an empty `city_state_zip` column.
 
 ```{r count_na}
-wy %>% col_stats(count_na)
+wye %>% col_stats(count_na)
 ```
 
 We will flag any records with missing values in the key variables used to identify an expenditure.
-There are `r sum(wy$na_flag)` columns in city_state_zip that are NAs.
+There are `r sum(wye$na_flag)` columns in city_state_zip that are NAs.
 ```{r na_flag}
-wy <- wy %>% flag_na(city_state_zip)
+wye <- wye %>% flag_na(city_state_zip)
 ```
 
 ### Duplicates
 There are no duplicates.
 ```{r get_dupes, collapse=TRUE}
-wy_dupes <- flag_dupes(wy)
+wy_dupes <- flag_dupes(wye)
 ```
 
 ### Ranges
@@ -219,13 +220,13 @@ wy_dupes <- flag_dupes(wy)
 #### Amounts
 
 ```{r}
-summary(wy$amount)
+summary(wye$amount)
 ```
 
 See how the campaign expenditures were distributed
 
 ```{r}
-wy %>% 
+wye %>% 
   ggplot(aes(x = amount)) + 
   geom_histogram(fill = dark2[1]) +
   scale_x_continuous(
@@ -235,7 +236,7 @@ wy %>%
 
 Distribution of expenses by filer
 ```{r box_plot_by_type, echo=FALSE}
-wy %>% 
+wye %>% 
   ggplot(
     mapping = aes(
       x = filer_type, 
@@ -266,10 +267,10 @@ wy %>%
 ```
 
 ### Dates
-The dates seem to be reasonable, with records dating back to `r summary(wy$date)[1]` till `r summary(wy$date)[-1]` 
+The dates seem to be reasonable, with records dating back to `r summary(wye$date)[1]` till `r summary(wye$date)[-1]` 
 ```{r}
-summary(wy$date)
-sum(wy$date > today())
+summary(wye$date)
+sum(wye$date > today())
 ```
 
 ### Year
@@ -277,11 +278,11 @@ sum(wy$date > today())
 Add a `year` variable from `date` after `col_date()` using `lubridate::year()`.
 
 ```{r add_year}
-wy <- wy %>% mutate(year = year(date))
+wye <- wye %>% mutate(year = year(date))
 ```
 
 ```{r year_count_bar, echo=FALSE}
-wy %>% 
+wye %>% 
   mutate(on_year = is_even(year)) %>% 
   count(on_year, year) %>% 
   ggplot(aes(x = year, y = n)) +
@@ -302,7 +303,7 @@ wy %>%
 ```
 
 ```{r amount_year_bar, echo=FALSE}
-wy %>% 
+wye %>% 
   mutate(on_year = is_even(year)) %>%
   group_by(year, on_year) %>% 
   summarize(mean = mean(amount)) %>% 
@@ -324,7 +325,7 @@ wy %>%
 ```
 
 ```{r amount_month_line}
-wy %>% 
+wye %>% 
   mutate(month = month(date)) %>% 
   mutate(on_year = is_even(year)) %>%
   group_by(on_year, month) %>% 
@@ -348,7 +349,7 @@ wy %>%
 ## Wrangle
 ### Indexing
 ```{r}
-wy <- tibble::rowid_to_column(wy, "id")
+wye <- tibble::rowid_to_column(wye, "id")
 ```
 
 The lengths of city_state_zip column differ, and regular expressions can be used to separate the components.
@@ -356,16 +357,27 @@ The lengths of city_state_zip column differ, and regular expressions can be used
 The original data the city, state, and ZIP all in one column. The following code separates them. 
 
 ### Zipcode
-First, we'll extract any numbers whose lengths range from 1 to 5 to `zip`, whose proportion of valid zip is pretty high and doesn't need further normalization. 
+First, we'll extract any numbers whose lengths range from 1 to 5 to `zip`, whose proportion of valid zip is pretty high. 
 
 ```{r}
-wy <- wy %>% 
+wye <- wye %>% 
   mutate(
     zip = city_state_zip %>% 
       str_extract("\\d{2,5}") %>% 
       normal_zip(na_rep = TRUE))
-sample(wy$zip, 10)
-prop_in(wy$zip, valid_zip, na.rm = T)
+sample(wye$zip, 10)
+prop_in(wye$zip, valid_zip, na.rm = T)
+```
+
+
+```{r zip clean}
+wye <- mutate(
+  .data = wye,
+  zip_clean = normal_zip(
+    zip = zip,
+    na_rep = TRUE
+  )
+)
 ```
 
 
@@ -374,11 +386,11 @@ prop_in(wy$zip, valid_zip, na.rm = T)
 In this regex, state is considered to consist of two upper-case letters following a space, or two upper-case letters with a trailing space at the end.
 
 ```{r separate state}
-wy <- wy %>% 
+wye <- wye %>% 
   mutate( state =
-            trimws(str_extract(wy$city_state_zip, "\\s([A-Z]{2})\\s|^([A-Z]{2})\\s$")))
-count_na(wy$state)
-prop_in(wy$state, valid_state, na.rm = T)
+            trimws(str_extract(wye$city_state_zip, "\\s([A-Z]{2})\\s|^([A-Z]{2})\\s$")))
+count_na(wye$state)
+prop_in(wye$state, valid_state, na.rm = T)
 ```
 
 The states are mostly valid and don't need to be cleaned. 
@@ -410,27 +422,27 @@ Cleaning city values is the most complicated. This process involves four steps:
 #### Normalize
 Find the cities before a comma first, if not, find the non-numeric string. 
 ``` {r two-step regex match}
-wy <- wy %>% 
+wye <- wye %>% 
   mutate(
-    city_raw = str_match(wy$city_state_zip,"(^\\D{3,}),")[,2]) 
+    city_raw = str_match(wye$city_state_zip,"(^\\D{3,}),")[,2]) 
 
-wy <- wy %>% mutate(city_raw=ifelse(is.na(city_raw)==TRUE, 
+wye <- wye %>% mutate(city_raw=ifelse(is.na(city_raw)==TRUE, 
                str_extract(city_state_zip, "[A-Z]{4,}"), paste(city_raw)))
 
-wy$city_raw <- wy$city_raw %>% 
+wye$city_raw <- wye$city_raw %>% 
   str_replace("^ROCK$", "ROCK SPRING") 
 ```
 
 ```{r city_raw summary, collapse= TRUE}
-count_na(wy$city_raw)
-n_distinct(wy$city_raw)
-prop_in(wy$city_raw, valid_city, na.rm = TRUE)
-sum(unique(wy$city_raw) %out% valid_city)
+count_na(wye$city_raw)
+n_distinct(wye$city_raw)
+prop_in(wye$city_raw, valid_city, na.rm = TRUE)
+sum(unique(wye$city_raw) %out% valid_city)
 ```
 
-`r sum(!is.na(wy$city_raw))` cities were found.
+`r sum(!is.na(wye$city_raw))` cities were found.
 ```{r prep_city}
-wy <- wy %>% mutate(city_norm = normal_city(city_raw))
+wye <- wye %>% mutate(city_norm = normal_city(city_raw))
 ```
 
 #### Swap
@@ -441,7 +453,7 @@ If the normalized value is either an abbreviation for or very similar to the
 expected value, we can confidently swap those two.
 
 ```{r match_dist}
-wy <- wy %>% 
+wye <- wye%>% 
   left_join(
     y = zipcodes,
     by = c(
@@ -470,7 +482,7 @@ wy <- wy %>%
 ### Lookup
 This process is manual lookup and correction
 ```{r }
-wy$city_swap <- wy$city_swap %>% 
+wye$city_swap <- wye$city_swap %>% 
   str_replace("^CAS$", "CASPER") %>% 
   str_replace("^CA$", "CASPER") %>% 
   str_replace("^RS$","ROCK SPRINGS") %>% 
@@ -482,7 +494,7 @@ wy$city_swap <- wy$city_swap %>%
   str_replace("^SLC$", "SALT LAKE CITY") %>% 
   str_replace("^COD$", "CODY") 
 
-n_distinct(wy$city_swap)
+n_distinct(wye$city_swap)
 ```
 
 #### Refine
@@ -495,7 +507,7 @@ strings that have a valid city/state/zip combination.
 [or]: https://openrefine.org/
 
 ```{r city_refine}
-good_refine <- wy %>% 
+good_refine <- wye %>% 
   mutate(
     city_refine = city_swap %>% 
       key_collision_merge() %>% 
@@ -526,7 +538,7 @@ good_refine %>%
 Then we can join the refined values back to the database.
 
 ```{r city_join}
-wy <- wy %>% 
+wye <- wye %>% 
   left_join(good_refine) %>% 
   mutate(city_refine = coalesce(city_refine, city_swap))
 ```
@@ -536,10 +548,10 @@ wy <- wy %>%
 ```{r city_progress, echo=FALSE}
 many_city <- c(valid_city, extra_city, wy_city)
 progress <- progress_table(
-  str_to_upper(wy$city_raw),
-  wy$city_norm,
-  wy$city_swap,
-  wy$city_refine,
+  str_to_upper(wye$city_raw),
+  wye$city_norm,
+  wye$city_swap,
+  wye$city_refine,
   compare = many_city
 ) %>% mutate(stage = as_factor(stage))
 kable(progress, digits = 3)
@@ -547,7 +559,7 @@ kable(progress, digits = 3)
 
 ```{r view_refine, echo=F, eval=FALSE}
 # Get a table of cities that are not in the valid_city vector
-wy_out <- wy %>% 
+wy_out <- wye %>% 
   count(state, city_swap, sort = TRUE) %>% 
   filter(city_swap %out% c(valid_city,wy_city)) %>% 
   drop_na()
@@ -572,7 +584,7 @@ to_refine <- prep_refine %>% filter(n()==1) %>% filter(city_swap %in% prep_refin
 ```
 
 ```{r join_refine, eval=FALSE, echo=FALSE}
-wy_refined <- wy %>% left_join(to_refine, by = "city_swap") %>% 
+wy_refined <- wye %>% left_join(to_refine, by = "city_swap") %>% 
   select(-n, -state_clean.y, -dist, - string_agrep) %>% 
    mutate(city_refine = if_else(
     condition = is.na(city) == TRUE,
@@ -585,7 +597,7 @@ wy_refined <- wy %>% left_join(to_refine, by = "city_swap") %>%
 Manually change the city_refine fields due to overcorrection/undercorrection.
 
 ```{r}
-wy$city_refine <- wy$city_refine %>% 
+wye$city_refine <- wye$city_refine %>% 
   str_replace("^RIO VISTA$", "LAGO VISTA") %>% 
   str_replace("^OGEN$", "OGDEN") %>%
   str_replace("^ANNIPOLIS$", "ANNAPOLIS") %>% 
@@ -599,34 +611,34 @@ wy$city_refine <- wy$city_refine %>%
   str_replace("^PINE$", "PINEDALE")
 ```
 
-This process reduces the number of distinct city value by `r n_distinct(wy$city_raw) - n_distinct(wy$city_refine)`
+This process reduces the number of distinct city value by `r n_distinct(wye$city_raw) - n_distinct(wye$city_refine)`
 ```{r city_progress1, collapse=TRUE}
-n_distinct(wy$city_raw)
-n_distinct(wy$city_norm)
-n_distinct(wy$city_swap)
-n_distinct(wy$city_refine)
+n_distinct(wye$city_raw)
+n_distinct(wye$city_norm)
+n_distinct(wye$city_swap)
+n_distinct(wye$city_refine)
 ```
 
 
 Each step of the cleaning process reduces the number of distinct city values.
-There are `r sum(!is.na(wy$city_raw))` entries of cities identified in the original data matching the regex with `r n_distinct(wy$city_raw)` distinct values, after the swap and refine processes, there are `r sum(!is.na(wy$city_refine))` entries with `r n_distinct(wy$city_refine)` distinct values. 
+There are `r sum(!is.na(wye$city_raw))` entries of cities identified in the original data matching the regex with `r n_distinct(wye$city_raw)` distinct values, after the swap and refine processes, there are `r sum(!is.na(wye$city_refine))` entries with `r n_distinct(wye$city_refine)` distinct values. 
 
 ## Conclude
 
-1. There are `r nrow(wy)` records in the database
-1. There are `r sum(wy$dupe_flag)` records with duplicate filer, recipient, date, _and_ amount
+1. There are `r nrow(wye)` records in the database
+1. There are `r sum(wye$dupe_flag)` records with duplicate filer, recipient, date, _and_ amount
 (flagged with `dupe_flag`)
 1. The ranges for dates and amounts are reasonable
 1. Consistency has been improved with `stringr` package and custom `normal_*()` functions.
 1. The five-digit `zip_clean` variable has been created with `zipcode::clean.zipcode()`
 1. The `year` variable has been created with `lubridate::year()`
-1. There are `r sum(is.na(wy$filer_name))` records with missing `name` values and `r sum(is.na(wy$date))`
+1. There are `r sum(is.na(wye$filer_name))` records with missing `name` values and `r sum(is.na(wye$date))`
 records with missing `date` values (both flagged with the `na_flag`)
 
 ## Export
 
 ```{r clean file}
-wy <- wy %>% 
+wye <- wye%>% 
   rename(city_clean = city_refine) %>% 
   select(
     -city_raw,
@@ -638,10 +650,10 @@ wy <- wy %>%
 
 ```{r write_clean}
 clean_dir <- here("state","wy", "expends", "data", "processed")
-clean_path <- glue("{clean_dir}/wy_expends_clean_update.csv")
+clean_path <- glue("{clean_dir}/wy_expends_clean_20080101-20221231.csv")
 
 dir_create(clean_dir)
-wy %>% 
+wye %>% 
   write_csv(
     path = clean_path,
     na = ""
@@ -672,8 +684,8 @@ The following table describes the variables in our final exported file:
 
 ```{r dict_make, echo=FALSE}
 dict_raw <- tibble(
-  var = md_code(names(wy)),
-  type = md_code(map_chr(wy, typeof)),
+  var = md_code(names(wye)),
+  type = md_code(map_chr(wye, typeof)),
   def = c(
     "Type of filer",
     "Name of filer",
@@ -703,7 +715,7 @@ dict_raw <- tibble(
 ```{r dict_write,echo=FALSE, eval=FALSE}
 write_lines(
   x = c("# Wyoming Expenditure Data Dictionary\n", dict_md),
-  path = here("wy", "exp", "wy_exp_dict.md"),
+  path = here("state","wy", "exp", "wy_exp_dict.md"),
 )
 ```
 

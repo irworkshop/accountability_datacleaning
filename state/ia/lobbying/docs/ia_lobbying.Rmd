@@ -103,19 +103,19 @@ here::here()
 Set the download directory first.
 ```{r raw_dir}
 # create a directory for the raw data
-raw_dir_lb <- here("ia", "lobbying", "data", "raw", "lobbyists")
-raw_dir_cl <- here("ia", "lobbying", "data", "raw", "clients")
-dir_create(raw_dir_lb)
-dir_create(raw_dir_cl)
+raw_dir_lb <- dir_create(here("state","ia", "lobbying", "data", "raw", "lobbyists"))
+raw_dir_cl <- dir_create(here("state","ia", "lobbying", "data", "raw", "clients"))
+
 ```
 The [Iowa Legislature] [03] makes available lobbyist information through a database for each session. First, we need to download all the lobbyists registration records associated with each session and combine them into a single preadsheet. 
+We'll download all the files up to the 89th session (ending in 2022). The next update should start with the full year of 2023. 
 
 [03]: https://www.legis.iowa.gov/lobbyist/reports/searchLobby?type=lobbyist
 [05]: https://www.legis.iowa.gov/docs/ico/chapter/68B.pdf#page=24
 
 ```{r lobbyings, eval = FALSE}
-
-lb_url_1 <- glue("https://www.legis.iowa.gov/lobbyist/reports/searchLobby?action=generateExcel&ga={83:88}")
+### change the "83:89" timeframe, start with 90:most recent
+lb_url_1 <- glue("https://www.legis.iowa.gov/lobbyist/reports/searchLobby?action=generateExcel&ga={83:89}")
 
 lb_url_2 <- glue("&type=lobbyist&personID=&clientID=&name=&session={1:2}")
 
@@ -123,8 +123,8 @@ ia_lobby_lb_urls <- NULL
 
 for (i in lb_url_1) {
   for (j in lb_url_2){
-    if (str_detect(i, "88") & str_detect(j, "session=2")){
-      break}
+    #if (str_detect(i, "88") & str_detect(j, "session=2")){
+     # break}
     ia_lobby_lb_urls = c(ia_lobby_lb_urls,str_c(i,j))
   }
 }
@@ -138,7 +138,7 @@ if (!all_files_new(raw_dir_lb)) {
   }
 }
 
-cl_url_1 <- glue("https://www.legis.iowa.gov/lobbyist/reports/searchLobby?action=generateExcel&ga={83:88}")
+cl_url_1 <- glue("https://www.legis.iowa.gov/lobbyist/reports/searchLobby?action=generateExcel&ga={83:89}")
 
 cl_url_2 <- glue("&type=client&personID=&clientID=&name=&session={1:2}")
 
@@ -146,8 +146,8 @@ ia_lobby_cl_urls <- NULL
 
 for (i in cl_url_1) {
   for (j in cl_url_2){
-    if (str_detect(i, "88") & str_detect(j, "session=2")){
-      break}
+    # if (str_detect(i, "88") & str_detect(j, "session=2")){
+    #   break}
     ia_lobby_cl_urls = c(ia_lobby_cl_urls,str_c(i,j))
   }
 }
@@ -184,8 +184,7 @@ ia_lobby_cl <- dir_ls(raw_dir_cl, glob = "*.xlsx")  %>%
   mutate(session_1 = as.numeric(str_sub(basename(file), start = -8, end = -7)),
           session_2 = as.numeric(str_sub(basename(file), start = -6, end = -6))) %>% 
   mutate_if(is_character, str_to_upper) %>% 
-  rename(address_raw = address) %>% 
-  na_if("NULL")
+  rename(address_raw = address)
 ```
 
 ### Wrangling
@@ -341,8 +340,7 @@ ia_lobby_lb <- dir_ls(raw_dir_lb, glob = "*.xlsx")  %>%
   mutate(session_1 = as.numeric(str_sub(basename(file), start = -8, end = -7)),
           session_2 = as.numeric(str_sub(basename(file), start = -6, end = -6))) %>% 
   mutate_if(is_character, str_to_upper) %>% 
-  rename(address_raw = address) %>% 
-  na_if("NULL")
+  rename(address_raw = address)
 ```
 
 #### Duplicates
@@ -506,15 +504,18 @@ To avoid confusion and extraneous records, we only join the non-duplicate rows.
 ia_lobby <- ia_lobby_cl %>% 
   rename(lobbyist = cl_lobbyist) %>% 
   filter(!cl_dupe_flag) %>% 
-  left_join(ia_lobby_lb %>% filter(!lb_dupe_flag), by = c("lobbyist" = "lb_name",
+  left_join(ia_lobby_lb,
+              #filter(!lb_dupe_flag), 
+            by = c("lobbyist" = "lb_name",
                                                           "cl_session_1" = "lb_session_1",
                                                           "cl_session_2" = "lb_session_2",
                                                           "cl_year" = "lb_year")) %>% 
-  select(-c(cl_dupe_flag, lb_dupe_flag, 
+  select(-c(cl_dupe_flag, 
+            #lb_dupe_flag, 
             ends_with("_raw"))) %>% 
   rename(client = cl_client,
-         lb_zip5 = lb_zip_norm,
-         cl_zip5 = cl_zip_norm) 
+         lb_zip_clean = lb_zip_norm,
+         cl_zip_clean = cl_zip_norm) 
 
 ia_lobby %>% col_stats(count_na)
 ```
@@ -522,10 +523,9 @@ ia_lobby %>% col_stats(count_na)
 ## Export
 
 ```{r write_clean}
-clean_dir <- here("ia", "lobbying", "data", "processed")
+clean_dir <- here("state","ia", "lobbying", "data", "processed")
 dir_create(clean_dir)
 ia_lobby %>% 
-  na_if("NULL") %>% 
   write_csv(
     path = glue("{clean_dir}/ia_lobby_reg_clean.csv"),
     na = ""

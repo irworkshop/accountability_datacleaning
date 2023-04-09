@@ -101,7 +101,7 @@ here::here()
 ## Data
 
 Data is obtained from the [Alaska Public Offices
-Commission](http://doa.alaska.gov/apoc/home.html) (APOC).
+Commission](http://doa.alaska.gov/apoc/home.html) (APOC). The dataset was downloaded on March 17, 2023.
 
 > #### Mission
 >

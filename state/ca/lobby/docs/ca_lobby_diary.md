@@ -1,15 +1,15 @@
 California Lobbyists
 ================
-Kiernan Nicholls
-2020-04-06 14:11:54
+Kiernan Nicholls & Yanqi Xu
+2023-03-29 21:28:05
 
-  - [Project](#project)
-  - [Packages](#packages)
-  - [Data](#data)
-  - [Import](#import)
-  - [Explore](#explore)
-  - [Wrangle](#wrangle)
-  - [Export](#export)
+- <a href="#project" id="toc-project">Project</a>
+- <a href="#packages" id="toc-packages">Packages</a>
+- <a href="#data" id="toc-data">Data</a>
+- <a href="#import" id="toc-import">Import</a>
+- <a href="#explore" id="toc-explore">Explore</a>
+- <a href="#wrangle" id="toc-wrangle">Wrangle</a>
+- <a href="#export" id="toc-export">Export</a>
 
 <!-- Place comments regarding knitting here -->
 
@@ -69,7 +69,7 @@ feature and should be run as such. The project also uses the dynamic
 ``` r
 # where does this document knit?
 here::here()
-#> [1] "/home/kiernan/Code/accountability_datacleaning/R_campfin"
+#> [1] "/Users/yanqixu/code/accountability_datacleaning"
 ```
 
 ## Data
@@ -88,13 +88,13 @@ All California campaign finance data can be downloaded in a single file.
 As described on PRD website:
 
 > ### Raw Data for Campaign Finance and Lobbying Activity
-> 
+>
 > In addition to presenting California campaign finance and lobbying
 > activity on the user-friendly [CAL-ACCESS
 > website](http://cal-access.sos.ca.gov/), the Secretary of State
 > provides the raw data to allow people with technical expertise to
 > create their own databases.
-> 
+>
 > The raw data is presented in tab-delimited text files from
 > corresponding tables in the CAL-ACCESS database. Users can uncompress
 > and extract the data with standard software such as PKZIP, WinZip, or
@@ -104,17 +104,19 @@ As described on PRD website:
 > CAL-ACCESS data structure and fields.
 
 > ### Download Files
-> 
->   - [Guides to CAL-ACCESS data structure and fields
->     (ZIP)](https://campaignfinance.cdn.sos.ca.gov/calaccess-documentation.zip)
->   - [CAL-ACCESS raw data
->     (ZIP)](https://campaignfinance.cdn.sos.ca.gov/dbwebexport.zip)
-> 
+>
+> - [Guides to CAL-ACCESS data structure and fields
+>   (ZIP)](https://campaignfinance.cdn.sos.ca.gov/calaccess-documentation.zip)
+> - [CAL-ACCESS raw data
+>   (ZIP)](https://campaignfinance.cdn.sos.ca.gov/dbwebexport.zip)
+>
 > All CAL-ACCESS users should keep in mind that campaign finance and
 > lobbying activity information changes often. The raw data extracts are
 > updated once a day. Campaign finance and lobbying activity filings can
 > also be obtained in hard copy by contacting the Secretary of State’s
 > Political Reform Division.
+
+This file was downloaded on March 29, 2023 and replaces the old one that contained the full download up to the last update.
 
 ### Variables
 
@@ -131,7 +133,7 @@ If they ZIP file containing the documentation files has not yet been
 downloaded, we can do so now.
 
 ``` r
-doc_dir <- here("ca", "lobby", "docs")
+doc_dir <- here("state","ca", "lobby", "docs")
 key_file <- str_c(doc_dir, basename(key_url), sep = "/")
 if (!this_file_new(key_file)) {
   download.file(
@@ -146,7 +148,7 @@ Before we unzip the file, we can view it’s contents.
 ``` r
 key_content <- as_tibble(unzip(key_file, list = TRUE))
 print(key_content)
-#> # A tibble: 49 x 3
+#> # A tibble: 49 × 3
 #>    Name                                                     Length Date               
 #>    <chr>                                                     <dbl> <dttm>             
 #>  1 CalAccess-Documentation/                                      0 2018-04-12 11:23:00
@@ -178,7 +180,7 @@ file_delete(key_file)
 ### Download
 
 ``` r
-raw_dir <- dir_create(here("ca", "lobby", "data", "raw"))
+raw_dir <- dir_create(here("state","ca", "lobby", "data", "raw"))
 zip_url <- "https://campaignfinance.cdn.sos.ca.gov/dbwebexport.zip"
 zip_file <- str_c(raw_dir, basename(zip_url), sep = "/")
 ```
@@ -187,11 +189,10 @@ The ZIP file is extremelly large, and will take quite some time
 
 ``` r
 url_file_size(zip_url)
-#> 966M
+#> 1.16G
 if (requireNamespace("speedtest", quietly = TRUE)) {
   # speedtest::spd_test()
 }
-#> NULL
 ```
 
 If the most recent version of the file has not yet been downloaded, we
@@ -417,175 +418,171 @@ calr <- clean_names(calr, "snake")
 
 ``` r
 head(calr)
-#> # A tibble: 6 x 52
-#>   filing_id amend_id rec_type form_type sender_id filer_id entity_cd filer_naml filer_namf
-#>   <chr>        <dbl> <chr>    <chr>     <chr>     <chr>    <chr>     <chr>      <chr>     
-#> 1 624359           0 CVR      F615      E24542    L25430   LBY       Dinno      Rachel    
-#> 2 624360           0 CVR      F615      L24721    L24721   LBY       Farabee    David R.  
-#> 3 624361           0 CVR      F615      L23112    L23112   LBY       Rosegay    Margaret …
-#> 4 624362           0 CVR      F615      L23330    L23330   LBY       Whitlock   Wayne M.  
-#> 5 624363           0 CVR      F615      L23346    L23346   LBY       Maas       Brian W.  
-#> 6 624364           0 CVR      F635      E22568    E22568   LEM       Californi… <NA>      
-#> # … with 43 more variables: filer_namt <chr>, filer_nams <chr>, report_num <chr>, rpt_date <date>,
-#> #   from_date <date>, thru_date <date>, cum_beg_dt <date>, firm_id <chr>, firm_name <chr>,
-#> #   firm_city <chr>, firm_st <chr>, firm_zip4 <chr>, firm_phon <chr>, mail_city <chr>,
-#> #   mail_st <chr>, mail_zip4 <chr>, mail_phon <chr>, sig_date <date>, sig_loc <chr>,
-#> #   sig_naml <chr>, sig_namf <chr>, sig_namt <chr>, sig_nams <chr>, prn_naml <chr>,
-#> #   prn_namf <chr>, prn_namt <chr>, prn_nams <chr>, sig_title <chr>, nopart1_cb <chr>,
-#> #   nopart2_cb <chr>, part1_1_cb <chr>, part1_2_cb <chr>, ctrib_n_cb <chr>, ctrib_y_cb <chr>,
-#> #   lby_actvty <chr>, lobby_n_cb <chr>, lobby_y_cb <chr>, major_naml <chr>, major_namf <chr>,
-#> #   major_namt <chr>, major_nams <chr>, rcpcmte_nm <chr>, rcpcmte_id <chr>
+#> # A tibble: 6 × 52
+#>   filing_id amend…¹ rec_t…² form_…³ sende…⁴ filer…⁵ entit…⁶ filer…⁷ filer…⁸ filer…⁹ filer…˟ repor…˟
+#>   <chr>       <dbl> <chr>   <chr>   <chr>   <chr>   <chr>   <chr>   <chr>   <chr>   <chr>   <chr>  
+#> 1 624359          0 CVR     F615    E24542  L25430  LBY     Dinno   Rachel  <NA>    <NA>    000    
+#> 2 624360          0 CVR     F615    L24721  L24721  LBY     Farabee David … <NA>    <NA>    000    
+#> 3 624361          0 CVR     F615    L23112  L23112  LBY     Rosegay Margar… <NA>    <NA>    000    
+#> 4 624362          0 CVR     F615    L23330  L23330  LBY     Whitlo… Wayne … <NA>    <NA>    000    
+#> 5 624363          0 CVR     F615    L23346  L23346  LBY     Maas    Brian … <NA>    <NA>    000    
+#> 6 624364          0 CVR     F635    E22568  E22568  LEM     Califo… <NA>    <NA>    <NA>    000    
+#> # … with 40 more variables: rpt_date <date>, from_date <date>, thru_date <date>,
+#> #   cum_beg_dt <date>, firm_id <chr>, firm_name <chr>, firm_city <chr>, firm_st <chr>,
+#> #   firm_zip4 <chr>, firm_phon <chr>, mail_city <chr>, mail_st <chr>, mail_zip4 <chr>,
+#> #   mail_phon <chr>, sig_date <date>, sig_loc <chr>, sig_naml <chr>, sig_namf <chr>,
+#> #   sig_namt <chr>, sig_nams <chr>, prn_naml <chr>, prn_namf <chr>, prn_namt <chr>,
+#> #   prn_nams <chr>, sig_title <chr>, nopart1_cb <chr>, nopart2_cb <chr>, part1_1_cb <chr>,
+#> #   part1_2_cb <chr>, ctrib_n_cb <chr>, ctrib_y_cb <chr>, lby_actvty <chr>, lobby_n_cb <chr>, …
 tail(calr)
-#> # A tibble: 6 x 52
-#>   filing_id amend_id rec_type form_type sender_id filer_id entity_cd filer_naml filer_namf
-#>   <chr>        <dbl> <chr>    <chr>     <chr>     <chr>    <chr>     <chr>      <chr>     
-#> 1 2415709          0 CVR      F635      1400705   1400705  LEM       SIGHTWAY … <NA>      
-#> 2 2415710          0 CVR      F635      1402307   1402307  LEM       PARAMOUNT… <NA>      
-#> 3 2415711          0 CVR      F625      F00743    F00743   FRM       Pillsbury… <NA>      
-#> 4 2415770          0 CVR      F635      1255072   1255072  LEM       MONTEREY … <NA>      
-#> 5 2415862          0 CVR      F615      F00854    1375480  LBY       Noland-Ha… Lauren M. 
-#> 6 2415864          0 CVR      F615      F00854    L00514   LBY       Soares     George H. 
-#> # … with 43 more variables: filer_namt <chr>, filer_nams <chr>, report_num <chr>, rpt_date <date>,
-#> #   from_date <date>, thru_date <date>, cum_beg_dt <date>, firm_id <chr>, firm_name <chr>,
-#> #   firm_city <chr>, firm_st <chr>, firm_zip4 <chr>, firm_phon <chr>, mail_city <chr>,
-#> #   mail_st <chr>, mail_zip4 <chr>, mail_phon <chr>, sig_date <date>, sig_loc <chr>,
-#> #   sig_naml <chr>, sig_namf <chr>, sig_namt <chr>, sig_nams <chr>, prn_naml <chr>,
-#> #   prn_namf <chr>, prn_namt <chr>, prn_nams <chr>, sig_title <chr>, nopart1_cb <chr>,
-#> #   nopart2_cb <chr>, part1_1_cb <chr>, part1_2_cb <chr>, ctrib_n_cb <chr>, ctrib_y_cb <chr>,
-#> #   lby_actvty <chr>, lobby_n_cb <chr>, lobby_y_cb <chr>, major_naml <chr>, major_namf <chr>,
-#> #   major_namt <chr>, major_nams <chr>, rcpcmte_nm <chr>, rcpcmte_id <chr>
+#> # A tibble: 6 × 52
+#>   filing_id amend…¹ rec_t…² form_…³ sende…⁴ filer…⁵ entit…⁶ filer…⁷ filer…⁸ filer…⁹ filer…˟ repor…˟
+#>   <chr>       <dbl> <chr>   <chr>   <chr>   <chr>   <chr>   <chr>   <chr>   <chr>   <chr>   <chr>  
+#> 1 2748130         0 CVR     F625    1436555 1436555 FRM     FOGART… <NA>    <NA>    <NA>    000    
+#> 2 2748172         0 CVR     F615    F24894  1243954 LBY     COSTIG… <NA>    <NA>    <NA>    000    
+#> 3 2748291         0 CVR     F635    1412920 1396339 LEM     CALIFO… <NA>    <NA>    <NA>    000    
+#> 4 2748292         0 CVR     F635    C24459  C24459  LEM     CALIFO… <NA>    <NA>    <NA>    000    
+#> 5 2748300         0 CVR     F635    1245875 1245875 LEM     PURDUE… <NA>    <NA>    <NA>    000    
+#> 6 2748301         0 CVR     F615    1376751 1376751 FRM     ARCE    SARA A. <NA>    <NA>    000    
+#> # … with 40 more variables: rpt_date <date>, from_date <date>, thru_date <date>,
+#> #   cum_beg_dt <date>, firm_id <chr>, firm_name <chr>, firm_city <chr>, firm_st <chr>,
+#> #   firm_zip4 <chr>, firm_phon <chr>, mail_city <chr>, mail_st <chr>, mail_zip4 <chr>,
+#> #   mail_phon <chr>, sig_date <date>, sig_loc <chr>, sig_naml <chr>, sig_namf <chr>,
+#> #   sig_namt <chr>, sig_nams <chr>, prn_naml <chr>, prn_namf <chr>, prn_namt <chr>,
+#> #   prn_nams <chr>, sig_title <chr>, nopart1_cb <chr>, nopart2_cb <chr>, part1_1_cb <chr>,
+#> #   part1_2_cb <chr>, ctrib_n_cb <chr>, ctrib_y_cb <chr>, lby_actvty <chr>, lobby_n_cb <chr>, …
 glimpse(sample_frac(calr))
-#> Rows: 382,523
+#> Rows: 465,764
 #> Columns: 52
-#> $ filing_id  <chr> "1308086", "810966", "1618452", "1013388", "2203145", "1567413", "1105709", "…
-#> $ amend_id   <dbl> 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,…
-#> $ rec_type   <chr> "CVR", "CVR", "CVR", "CVR", "CVR", "CVR", "CVR", "CVR", "CVR", "CVR", "CVR", …
-#> $ form_type  <chr> "F615", "F625", "F635", "F635", "F615", "F615", "F625", "F635", "F635", "F625…
-#> $ sender_id  <chr> "E01343", "F23084", "1335106", "1223221", "1334663", "1261533", "F00956", "12…
-#> $ filer_id   <chr> "1253714", "F23084", "1335106", "1223221", "1334663", "1292898", "F00956", "1…
-#> $ entity_cd  <chr> "LBY", "FRM", "LEM", "LEM", "FRM", "LBY", "FRM", "LEM", "LEM", "FRM", "FRM", …
-#> $ filer_naml <chr> "HOFFMAN", "LEVY GOVERNMENT RELATIONS, EDWARD", "URDANG CAPITAL MANGEMENT, IN…
-#> $ filer_namf <chr> "ERIKA K.", NA, NA, NA, "KEVIN", "ANGELA K.W.", NA, NA, NA, NA, "TATE", NA, N…
-#> $ filer_namt <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "Ms.", NA, NA, NA, NA, NA…
-#> $ filer_nams <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
-#> $ report_num <chr> "000", "000", "000", "000", "000", "000", "000", "000", "000", "000", "000", …
-#> $ rpt_date   <date> 2008-01-31, 2002-01-31, 2011-10-20, 2004-04-29, 2018-01-19, 2011-01-19, 2005…
-#> $ from_date  <date> 2007-10-01, 2001-10-01, 2001-07-01, 2004-01-01, 2017-10-01, 2010-10-01, 2005…
-#> $ thru_date  <date> 2007-12-31, 2001-12-31, 2011-09-30, 2004-03-31, 2017-12-31, 2010-12-31, 2005…
-#> $ cum_beg_dt <date> NA, 2001-01-01, 2011-01-01, 2003-01-01, NA, NA, 2005-01-01, 2017-01-01, 2017…
-#> $ firm_id    <chr> "E01343", "F23084", NA, "1223221", "1334663", "1261533", "F00956", "1222916",…
-#> $ firm_name  <chr> "California School Boards Association", "LEVY GOVERNMENT RELATIONS, EDWARD", …
-#> $ firm_city  <chr> "West Sacramento", "SACRAMENTO", "PLYMOUTH MEETING", "Los Angeles", "NEWPORT …
-#> $ firm_st    <chr> "CA", "CA", "PA", "CA", "CA", "CA", "CA", "OR", "CA", "CA", NA, "CA", "CA", "…
-#> $ firm_zip4  <chr> "95691", "95814", "19462", "90024-6532", "92660", "95814", "95814", "97701", …
-#> $ firm_phon  <chr> "(916) 325-4020", "(916) 441-7377", "6108184612", "(310) 954-5001", "94972048…
-#> $ mail_city  <chr> NA, NA, "PITTSBURGH", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "SACRAMENTO…
-#> $ mail_st    <chr> NA, NA, "PA", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "CA", NA, NA, "CA",…
-#> $ mail_zip4  <chr> NA, NA, "15258", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "95814", NA, NA,…
-#> $ mail_phon  <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
-#> $ sig_date   <date> 2008-01-29, 2002-01-21, 2011-10-20, 2004-04-19, 2018-01-19, 2011-01-19, 2005…
-#> $ sig_loc    <chr> "West Sacramento", "SACRAMENTO, CA", "Pittsburgh, Pennsylvania", "Los Angeles…
-#> $ sig_naml   <chr> "Hoffman", "LEVY", "March", "Broad", "Gray", "BLANCHARD        (444200  SLC)"…
-#> $ sig_namf   <chr> "Erika", "EDWARD", "Amy M", "Eli", "Kevin", "ANGELA K. ", "Ronald W.", "Neil"…
-#> $ sig_namt   <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "Ms.", "Mr.", NA, NA, NA,…
-#> $ sig_nams   <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
-#> $ prn_naml   <chr> NA, "LEVY", "March", "Broad", "Gray", "BLANCHARD        (444200  SLC)", "Benn…
-#> $ prn_namf   <chr> NA, "EDWARD", "Amy M", "Eli", "Kevin", "ANGELA K. ", "Ronald W.", "Neil", "BR…
-#> $ prn_namt   <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "Ms.", NA, NA, NA, NA, NA…
-#> $ prn_nams   <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
-#> $ sig_title  <chr> NA, "OWNER (4324 - RS)", "Managing Director", NA, "Senior Vice President", NA…
-#> $ nopart1_cb <chr> "X", NA, NA, NA, "X", "X", NA, NA, NA, NA, "X", NA, NA, "X", "X", "X", NA, "X…
-#> $ nopart2_cb <chr> "X", NA, NA, NA, "X", "X", NA, NA, NA, NA, "X", NA, NA, "X", "X", "X", NA, "X…
-#> $ part1_1_cb <chr> NA, "X", NA, NA, NA, NA, "X", NA, NA, "X", NA, NA, NA, NA, NA, NA, NA, NA, NA…
-#> $ part1_2_cb <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
-#> $ ctrib_n_cb <chr> NA, "X", "X", NA, NA, NA, "X", "X", "X", "X", NA, "X", "X", NA, NA, NA, "X", …
-#> $ ctrib_y_cb <chr> NA, NA, NA, "X", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
-#> $ lby_actvty <chr> NA, NA, "University of California", NA, NA, NA, NA, "AB 509, AB 1008, AB 1180…
-#> $ lobby_n_cb <chr> NA, "X", NA, NA, NA, NA, "X", NA, NA, "X", NA, NA, NA, NA, NA, NA, NA, NA, NA…
-#> $ lobby_y_cb <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
-#> $ major_naml <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
-#> $ major_namf <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
-#> $ major_namt <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
-#> $ major_nams <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
-#> $ rcpcmte_nm <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
-#> $ rcpcmte_id <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
+#> $ filing_id  <chr> "1308086", "810966", "1618452", "1013388", "2203145", "2599500", "1567413", "1…
+#> $ amend_id   <dbl> 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, …
+#> $ rec_type   <chr> "CVR", "CVR", "CVR", "CVR", "CVR", "CVR", "CVR", "CVR", "CVR", "CVR", "CVR", "…
+#> $ form_type  <chr> "F615", "F625", "F635", "F635", "F615", "F635", "F615", "F625", "F635", "F635"…
+#> $ sender_id  <chr> "E01343", "F23084", "1335106", "1223221", "1334663", "C26750", "1261533", "F00…
+#> $ filer_id   <chr> "1253714", "F23084", "1335106", "1223221", "1334663", "C26750", "1292898", "F0…
+#> $ entity_cd  <chr> "LBY", "FRM", "LEM", "LEM", "FRM", "LEM", "LBY", "FRM", "LEM", "LEM", "FRM", "…
+#> $ filer_naml <chr> "HOFFMAN", "LEVY GOVERNMENT RELATIONS, EDWARD", "URDANG CAPITAL MANGEMENT, INC…
+#> $ filer_namf <chr> "ERIKA K.", NA, NA, NA, "KEVIN", NA, "ANGELA K.W.", NA, NA, NA, NA, "TATE", NA…
+#> $ filer_namt <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "Ms.", NA, NA, NA, NA,…
+#> $ filer_nams <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
+#> $ report_num <chr> "000", "000", "000", "000", "000", "000", "000", "000", "000", "000", "000", "…
+#> $ rpt_date   <date> 2008-01-31, 2002-01-31, 2011-10-20, 2004-04-29, 2018-01-19, 2021-07-29, 2011-…
+#> $ from_date  <date> 2007-10-01, 2001-10-01, 2001-07-01, 2004-01-01, 2017-10-01, 2021-04-01, 2010-…
+#> $ thru_date  <date> 2007-12-31, 2001-12-31, 2011-09-30, 2004-03-31, 2017-12-31, 2021-06-30, 2010-…
+#> $ cum_beg_dt <date> NA, 2001-01-01, 2011-01-01, 2003-01-01, NA, 2021-01-01, NA, 2005-01-01, 2017-…
+#> $ firm_id    <chr> "E01343", "F23084", NA, "1223221", "1334663", "C26750", "1261533", "F00956", "…
+#> $ firm_name  <chr> "California School Boards Association", "LEVY GOVERNMENT RELATIONS, EDWARD", N…
+#> $ firm_city  <chr> "West Sacramento", "SACRAMENTO", "PLYMOUTH MEETING", "Los Angeles", "NEWPORT B…
+#> $ firm_st    <chr> "CA", "CA", "PA", "CA", "CA", "CA", "CA", "CA", "OR", "CA", "CA", NA, "CA", "C…
+#> $ firm_zip4  <chr> "95691", "95814", "19462", "90024-6532", "92660", "95814", "95814", "95814", "…
+#> $ firm_phon  <chr> "(916) 325-4020", "(916) 441-7377", "6108184612", "(310) 954-5001", "949720487…
+#> $ mail_city  <chr> NA, NA, "PITTSBURGH", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "SACRAME…
+#> $ mail_st    <chr> NA, NA, "PA", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "CA", NA, NA, NA…
+#> $ mail_zip4  <chr> NA, NA, "15258", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "95814", NA, …
+#> $ mail_phon  <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
+#> $ sig_date   <date> 2008-01-29, 2002-01-21, 2011-10-20, 2004-04-19, 2018-01-19, 2021-07-29, 2011-…
+#> $ sig_loc    <chr> "West Sacramento", "SACRAMENTO, CA", "Pittsburgh, Pennsylvania", "Los Angeles,…
+#> $ sig_naml   <chr> "Hoffman", "LEVY", "March", "Broad", "Gray", "Acosta", "BLANCHARD        (4442…
+#> $ sig_namf   <chr> "Erika", "EDWARD", "Amy M", "Eli", "Kevin", "Juan", "ANGELA K. ", "Ronald W.",…
+#> $ sig_namt   <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "Ms.", "Mr.", NA, NA, …
+#> $ sig_nams   <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
+#> $ prn_naml   <chr> NA, "LEVY", "March", "Broad", "Gray", "Acosta", "BLANCHARD        (444200  SLC…
+#> $ prn_namf   <chr> NA, "EDWARD", "Amy M", "Eli", "Kevin", "Juan", "ANGELA K. ", "Ronald W.", "Nei…
+#> $ prn_namt   <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "Ms.", NA, NA, NA, NA,…
+#> $ prn_nams   <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
+#> $ sig_title  <chr> NA, "OWNER (4324 - RS)", "Managing Director", NA, "Senior Vice President", "AV…
+#> $ nopart1_cb <chr> "X", NA, NA, NA, "X", NA, "X", NA, NA, NA, NA, "X", NA, NA, "X", "X", "X", NA,…
+#> $ nopart2_cb <chr> "X", NA, NA, NA, "X", NA, "X", NA, NA, NA, NA, "X", NA, NA, "X", "X", "X", NA,…
+#> $ part1_1_cb <chr> NA, "X", NA, NA, NA, NA, NA, "X", NA, NA, "X", NA, NA, NA, NA, NA, NA, NA, "X"…
+#> $ part1_2_cb <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
+#> $ ctrib_n_cb <chr> NA, "X", "X", NA, NA, NA, NA, "X", "X", "X", "X", NA, "X", "X", NA, NA, NA, "X…
+#> $ ctrib_y_cb <chr> NA, NA, NA, "X", NA, "X", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
+#> $ lby_actvty <chr> NA, NA, "University of California", NA, NA, NA, NA, NA, "AB 509, AB 1008, AB 1…
+#> $ lobby_n_cb <chr> NA, "X", NA, NA, NA, NA, NA, "X", NA, NA, "X", NA, NA, NA, NA, NA, NA, NA, "X"…
+#> $ lobby_y_cb <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
+#> $ major_naml <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
+#> $ major_namf <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
+#> $ major_namt <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
+#> $ major_nams <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
+#> $ rcpcmte_nm <chr> NA, NA, NA, NA, NA, "BNSF Railway Company", NA, NA, NA, NA, NA, NA, NA, NA, NA…
+#> $ rcpcmte_id <chr> NA, NA, NA, NA, NA, "484024", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
 ```
 
 ``` r
 col_stats(calr, count_na)
-#> # A tibble: 52 x 4
+#> # A tibble: 52 × 4
 #>    col        class       n         p
 #>    <chr>      <chr>   <int>     <dbl>
 #>  1 filing_id  <chr>       0 0        
 #>  2 amend_id   <dbl>       0 0        
 #>  3 rec_type   <chr>       0 0        
 #>  4 form_type  <chr>       0 0        
-#>  5 sender_id  <chr>     664 0.00174  
+#>  5 sender_id  <chr>     664 0.00143  
 #>  6 filer_id   <chr>       0 0        
-#>  7 entity_cd  <chr>    2206 0.00577  
+#>  7 entity_cd  <chr>    2800 0.00601  
 #>  8 filer_naml <chr>       0 0        
-#>  9 filer_namf <chr>  271496 0.710    
-#> 10 filer_namt <chr>  379116 0.991    
-#> 11 filer_nams <chr>  382182 0.999    
-#> 12 report_num <chr>     664 0.00174  
+#>  9 filer_namf <chr>  328908 0.706    
+#> 10 filer_namt <chr>  462042 0.992    
+#> 11 filer_nams <chr>  465390 0.999    
+#> 12 report_num <chr>     664 0.00143  
 #> 13 rpt_date   <date>      0 0        
-#> 14 from_date  <date>     11 0.0000288
-#> 15 thru_date  <date>     11 0.0000288
-#> 16 cum_beg_dt <date> 103059 0.269    
-#> 17 firm_id    <chr>  118214 0.309    
-#> 18 firm_name  <chr>  111222 0.291    
-#> 19 firm_city  <chr>     214 0.000559 
-#> 20 firm_st    <chr>    2830 0.00740  
-#> 21 firm_zip4  <chr>    2785 0.00728  
-#> 22 firm_phon  <chr>    3617 0.00946  
-#> 23 mail_city  <chr>  350045 0.915    
-#> 24 mail_st    <chr>  349880 0.915    
-#> 25 mail_zip4  <chr>  350077 0.915    
-#> 26 mail_phon  <chr>  373982 0.978    
-#> 27 sig_date   <date>   2235 0.00584  
-#> 28 sig_loc    <chr>    1479 0.00387  
-#> 29 sig_naml   <chr>    3831 0.0100   
-#> 30 sig_namf   <chr>    3716 0.00971  
-#> 31 sig_namt   <chr>  353144 0.923    
-#> 32 sig_nams   <chr>  380327 0.994    
-#> 33 prn_naml   <chr>   33556 0.0877   
-#> 34 prn_namf   <chr>   33393 0.0873   
-#> 35 prn_namt   <chr>  358898 0.938    
-#> 36 prn_nams   <chr>  380788 0.995    
-#> 37 sig_title  <chr>   63544 0.166    
-#> 38 nopart1_cb <chr>  275062 0.719    
-#> 39 nopart2_cb <chr>  272250 0.712    
-#> 40 part1_1_cb <chr>  351774 0.920    
-#> 41 part1_2_cb <chr>  381456 0.997    
-#> 42 ctrib_n_cb <chr>  159475 0.417    
-#> 43 ctrib_y_cb <chr>  335208 0.876    
-#> 44 lby_actvty <chr>  183810 0.481    
-#> 45 lobby_n_cb <chr>  350701 0.917    
-#> 46 lobby_y_cb <chr>  382431 1.00     
-#> 47 major_naml <chr>  374247 0.978    
-#> 48 major_namf <chr>  380994 0.996    
-#> 49 major_namt <chr>  382280 0.999    
-#> 50 major_nams <chr>  382198 0.999    
-#> 51 rcpcmte_nm <chr>  353732 0.925    
-#> 52 rcpcmte_id <chr>  356305 0.931
+#> 14 from_date  <date>     12 0.0000258
+#> 15 thru_date  <date>     12 0.0000258
+#> 16 cum_beg_dt <date> 127476 0.274    
+#> 17 firm_id    <chr>  153684 0.330    
+#> 18 firm_name  <chr>  142771 0.307    
+#> 19 firm_city  <chr>     398 0.000855 
+#> 20 firm_st    <chr>    3832 0.00823  
+#> 21 firm_zip4  <chr>    3885 0.00834  
+#> 22 firm_phon  <chr>    4421 0.00949  
+#> 23 mail_city  <chr>  423972 0.910    
+#> 24 mail_st    <chr>  421143 0.904    
+#> 25 mail_zip4  <chr>  424025 0.910    
+#> 26 mail_phon  <chr>  455584 0.978    
+#> 27 sig_date   <date>   2241 0.00481  
+#> 28 sig_loc    <chr>    1491 0.00320  
+#> 29 sig_naml   <chr>    3878 0.00833  
+#> 30 sig_namf   <chr>    3751 0.00805  
+#> 31 sig_namt   <chr>  434646 0.933    
+#> 32 sig_nams   <chr>  463457 0.995    
+#> 33 prn_naml   <chr>   35209 0.0756   
+#> 34 prn_namf   <chr>   35032 0.0752   
+#> 35 prn_namt   <chr>  440593 0.946    
+#> 36 prn_nams   <chr>  463952 0.996    
+#> 37 sig_title  <chr>   72603 0.156    
+#> 38 nopart1_cb <chr>  333131 0.715    
+#> 39 nopart2_cb <chr>  330281 0.709    
+#> 40 part1_1_cb <chr>  429022 0.921    
+#> 41 part1_2_cb <chr>  463861 0.996    
+#> 42 ctrib_n_cb <chr>  190565 0.409    
+#> 43 ctrib_y_cb <chr>  409163 0.878    
+#> 44 lby_actvty <chr>  223966 0.481    
+#> 45 lobby_n_cb <chr>  427759 0.918    
+#> 46 lobby_y_cb <chr>  464979 0.998    
+#> 47 major_naml <chr>  455980 0.979    
+#> 48 major_namf <chr>  464123 0.996    
+#> 49 major_namt <chr>  465473 0.999    
+#> 50 major_nams <chr>  465425 0.999    
+#> 51 rcpcmte_nm <chr>  431961 0.927    
+#> 52 rcpcmte_id <chr>  435260 0.935
 ```
 
 ``` r
 distinct_counts <- col_stats(calr, n_distinct, print = FALSE)
 print(distinct_counts)
-#> # A tibble: 52 x 4
+#> # A tibble: 52 × 4
 #>    col        class      n          p
 #>    <chr>      <chr>  <int>      <dbl>
-#>  1 filing_id  <chr> 352395 0.921     
-#>  2 amend_id   <dbl>     11 0.0000288 
-#>  3 rec_type   <chr>      1 0.00000261
-#>  4 form_type  <chr>      4 0.0000105 
-#>  5 sender_id  <chr>  13937 0.0364    
-#>  6 filer_id   <chr>  16554 0.0433    
-#>  7 entity_cd  <chr>      8 0.0000209 
-#>  8 filer_naml <chr>  22527 0.0589    
-#>  9 filer_namf <chr>   4737 0.0124    
-#> 10 filer_namt <chr>     30 0.0000784 
+#>  1 filing_id  <chr> 427232 0.917     
+#>  2 amend_id   <dbl>     11 0.0000236 
+#>  3 rec_type   <chr>      1 0.00000215
+#>  4 form_type  <chr>      4 0.00000859
+#>  5 sender_id  <chr>  16184 0.0347    
+#>  6 filer_id   <chr>  19038 0.0409    
+#>  7 entity_cd  <chr>      8 0.0000172 
+#>  8 filer_naml <chr>  25595 0.0550    
+#>  9 filer_namf <chr>   5285 0.0113    
+#> 10 filer_namt <chr>     32 0.0000687 
 #> # … with 42 more rows
 x_cols <- which(distinct_counts$n <= 4)
 x_cols <- x_cols[which(x_cols > 5)]
@@ -617,30 +614,26 @@ inner_join(
   y = cal_emp_lob,
   by = c("filer_id" = "lobbyist_id")
 )
-#> # A tibble: 9,162 x 57
-#>    filing_id amend_id rec_type form_type sender_id filer_id entity_cd filer_naml filer_namf
-#>    <chr>        <dbl> <chr>    <chr>     <chr>     <chr>    <chr>     <chr>      <chr>     
-#>  1 624398           0 CVR      F615      E00122    1222954  LBY       NIXON      DARRYL    
-#>  2 624398           0 CVR      F615      E00122    1222954  LBY       NIXON      DARRYL    
-#>  3 624398           0 CVR      F615      E00122    1222954  LBY       NIXON      DARRYL    
-#>  4 624398           0 CVR      F615      E00122    1222954  LBY       NIXON      DARRYL    
-#>  5 624445           0 CVR      F615      E00243    1222906  LBY       ROTHROCK   DOROTHY   
-#>  6 624445           0 CVR      F615      E00243    1222906  LBY       ROTHROCK   DOROTHY   
-#>  7 624445           0 CVR      F615      E00243    1222906  LBY       ROTHROCK   DOROTHY   
-#>  8 624445           0 CVR      F615      E00243    1222906  LBY       ROTHROCK   DOROTHY   
-#>  9 650665           0 CVR      F615      E00559    1223153  LBY       BROWN      AMY L.    
-#> 10 650665           0 CVR      F615      E00559    1223153  LBY       BROWN      AMY L.    
-#> # … with 9,152 more rows, and 48 more variables: filer_namt <chr>, filer_nams <chr>,
-#> #   report_num <chr>, rpt_date <date>, from_date <date>, thru_date <date>, cum_beg_dt <date>,
-#> #   firm_id <chr>, firm_name <chr>, firm_city <chr>, firm_st <chr>, firm_zip4 <chr>,
-#> #   firm_phon <chr>, mail_city <chr>, mail_st <chr>, mail_zip4 <chr>, mail_phon <chr>,
-#> #   sig_date <date>, sig_loc <chr>, sig_naml <chr>, sig_namf <chr>, sig_namt <chr>,
-#> #   sig_nams <chr>, prn_naml <chr>, prn_namf <chr>, prn_namt <chr>, prn_nams <chr>,
-#> #   sig_title <chr>, nopart1_cb <lgl>, nopart2_cb <lgl>, part1_1_cb <lgl>, part1_2_cb <lgl>,
-#> #   ctrib_n_cb <lgl>, ctrib_y_cb <lgl>, lby_actvty <chr>, lobby_n_cb <chr>, lobby_y_cb <chr>,
-#> #   major_naml <chr>, major_namf <chr>, major_namt <chr>, major_nams <chr>, rcpcmte_nm <chr>,
-#> #   rcpcmte_id <chr>, employer_id <chr>, lobbyist_last_name <chr>, lobbyist_first_name <chr>,
-#> #   employer_name <chr>, session_id <dbl>
+#> # A tibble: 9,864 × 57
+#>    filing…¹ amend…² rec_t…³ form_…⁴ sende…⁵ filer…⁶ entit…⁷ filer…⁸ filer…⁹ filer…˟ filer…˟ repor…˟
+#>    <chr>      <dbl> <chr>   <chr>   <chr>   <chr>   <chr>   <chr>   <chr>   <chr>   <chr>   <chr>  
+#>  1 624398         0 CVR     F615    E00122  1222954 LBY     NIXON   DARRYL  <NA>    <NA>    000    
+#>  2 624398         0 CVR     F615    E00122  1222954 LBY     NIXON   DARRYL  <NA>    <NA>    000    
+#>  3 624398         0 CVR     F615    E00122  1222954 LBY     NIXON   DARRYL  <NA>    <NA>    000    
+#>  4 624398         0 CVR     F615    E00122  1222954 LBY     NIXON   DARRYL  <NA>    <NA>    000    
+#>  5 624445         0 CVR     F615    E00243  1222906 LBY     ROTHRO… DOROTHY <NA>    <NA>    000    
+#>  6 624445         0 CVR     F615    E00243  1222906 LBY     ROTHRO… DOROTHY <NA>    <NA>    000    
+#>  7 624445         0 CVR     F615    E00243  1222906 LBY     ROTHRO… DOROTHY <NA>    <NA>    000    
+#>  8 624445         0 CVR     F615    E00243  1222906 LBY     ROTHRO… DOROTHY <NA>    <NA>    000    
+#>  9 650665         0 CVR     F615    E00559  1223153 LBY     BROWN   AMY L.  <NA>    <NA>    000    
+#> 10 650665         0 CVR     F615    E00559  1223153 LBY     BROWN   AMY L.  <NA>    <NA>    000    
+#> # … with 9,854 more rows, 45 more variables: rpt_date <date>, from_date <date>, thru_date <date>,
+#> #   cum_beg_dt <date>, firm_id <chr>, firm_name <chr>, firm_city <chr>, firm_st <chr>,
+#> #   firm_zip4 <chr>, firm_phon <chr>, mail_city <chr>, mail_st <chr>, mail_zip4 <chr>,
+#> #   mail_phon <chr>, sig_date <date>, sig_loc <chr>, sig_naml <chr>, sig_namf <chr>,
+#> #   sig_namt <chr>, sig_nams <chr>, prn_naml <chr>, prn_namf <chr>, prn_namt <chr>,
+#> #   prn_nams <chr>, sig_title <chr>, nopart1_cb <chr>, nopart2_cb <chr>, part1_1_cb <lgl>,
+#> #   part1_2_cb <lgl>, ctrib_n_cb <lgl>, ctrib_y_cb <lgl>, lby_actvty <chr>, lobby_n_cb <chr>, …
 ```
 
 ## Wrangle
@@ -674,13 +667,13 @@ progress_table(
   calr$mail_zip4_norm,
   compare = valid_zip
 )
-#> # A tibble: 4 x 6
-#>   stage          prop_in n_distinct prop_na n_out n_diff
-#>   <chr>            <dbl>      <dbl>   <dbl> <dbl>  <dbl>
-#> 1 firm_zip4        0.938       4574 0.00728 23506   1585
-#> 2 mail_zip4        0.828       1033 0.915    5585    257
-#> 3 firm_zip4_norm   0.997       3267 0.00758  1326    145
-#> 4 mail_zip4_norm   0.997        869 0.915      96     15
+#> # A tibble: 4 × 6
+#>   stage               prop_in n_distinct prop_na n_out n_diff
+#>   <chr>                 <dbl>      <dbl>   <dbl> <dbl>  <dbl>
+#> 1 calr$firm_zip4        0.944       4941 0.00834 25807   1682
+#> 2 calr$mail_zip4        0.849       1155 0.910    6307    278
+#> 3 calr$firm_zip4_norm   0.996       3550 0.00884  1630    168
+#> 4 calr$mail_zip4_norm   0.996        978 0.910     166     21
 ```
 
 ### States
@@ -702,13 +695,13 @@ progress_table(
   calr$mail_st_norm,
   compare = valid_state
 )
-#> # A tibble: 4 x 6
-#>   stage        prop_in n_distinct prop_na n_out n_diff
-#>   <chr>          <dbl>      <dbl>   <dbl> <dbl>  <dbl>
-#> 1 firm_st        0.996         90 0.00740  1706     39
-#> 2 mail_st        0.999         48 0.915      36      6
-#> 3 firm_st_norm   0.999         76 0.0110    331     25
-#> 4 mail_st_norm   0.999         47 0.915      28      5
+#> # A tibble: 4 × 6
+#>   stage             prop_in n_distinct prop_na n_out n_diff
+#>   <chr>               <dbl>      <dbl>   <dbl> <dbl>  <dbl>
+#> 1 calr$firm_st        0.996         98 0.00823  1955     47
+#> 2 calr$mail_st        0.939         54 0.904    2712      9
+#> 3 calr$firm_st_norm   0.999         77 0.0114    486     26
+#> 4 calr$mail_st_norm   0.999         51 0.910      34      6
 ```
 
 ### City
@@ -788,15 +781,15 @@ progress_table(
   calr$mail_city_swap,
   compare = c(valid_city, extra_city)
 )
-#> # A tibble: 6 x 6
-#>   stage          prop_in n_distinct  prop_na n_out n_diff
-#>   <chr>            <dbl>      <dbl>    <dbl> <dbl>  <dbl>
-#> 1 firm_city        0.977       2160 0.000559  8859    703
-#> 2 firm_city_norm   0.981       1972 0.000565  7121    511
-#> 3 firm_city_swap   0.988       1829 0.000565  4456    355
-#> 4 mail_city        0.986        533 0.915      458     37
-#> 5 mail_city_norm   0.988        531 0.915      378     34
-#> 6 mail_city_swap   0.992        521 0.915      246     22
+#> # A tibble: 6 × 6
+#>   stage               prop_in n_distinct  prop_na n_out n_diff
+#>   <chr>                 <dbl>      <dbl>    <dbl> <dbl>  <dbl>
+#> 1 calr$firm_city        0.977       2361 0.000855 10643    808
+#> 2 calr$firm_city_norm   0.981       2156 0.000859  8668    597
+#> 3 calr$firm_city_swap   0.988       1985 0.000859  5638    413
+#> 4 calr$mail_city        0.987        589 0.910      554     48
+#> 5 calr$mail_city_norm   0.989        582 0.910      450     39
+#> 6 calr$mail_city_swap   0.992        572 0.910      318     27
 ```
 
 ## Export
@@ -809,7 +802,7 @@ calr <- calr %>%
 ```
 
 ``` r
-clean_dir <- dir_create(here("ca", "lobby", "data", "clean"))
+clean_dir <- dir_create(here("state","ca", "lobby", "data", "clean"))
 clean_path <- path(clean_dir, "ca_lobby_reg.csv")
 write_csv(calr, path = clean_path, na = "")
 ```
@@ -817,12 +810,12 @@ write_csv(calr, path = clean_path, na = "")
 ``` r
 dir_delete(key_dir) # no git
 file_size(clean_path)
-#> 132M
+#> 160M
 guess_encoding(clean_path)
-#> # A tibble: 3 x 2
+#> # A tibble: 3 × 2
 #>   encoding   confidence
 #>   <chr>           <dbl>
 #> 1 UTF-8            1   
 #> 2 ISO-8859-1       0.39
-#> 3 ISO-8859-2       0.24
+#> 3 ISO-8859-2       0.22
 ```

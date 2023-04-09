@@ -128,7 +128,7 @@ On the APOC home page, we can see that lobbying disclosure data can be searched.
 ## Import
 
 From the APOC website, we can query the database for any year and download the
-data locally. 
+data locally. The dataset was downloaded on March 17, 2023.
 
 ```{r raw_dir}
 raw_dir <- here("state","ak", "lobby", "data", "raw")

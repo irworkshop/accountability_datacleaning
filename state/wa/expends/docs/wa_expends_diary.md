@@ -110,7 +110,7 @@ Disclosure Commission](http://www.pdc.wa.gov), access through the
 The resource is named
 `exenditures_by_candidates_and_political_committees` and covers the last
 10 years of data with daily updates. Each records represents a single
-“Expenditure by a campaign or committee.”
+“Expenditure by a campaign or committee.” The data was downloaded on Dec. 25, 2022.
 
 ### About
 

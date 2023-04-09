@@ -1,7 +1,16 @@
 Colorado Lobbying Expenditure Data Diary
 ================
 Yanqi Xu
-2020-03-25 17:19:54
+2023-03-26 19:42:18
+
+- <a href="#project" id="toc-project">Project</a>
+- <a href="#objectives" id="toc-objectives">Objectives</a>
+- <a href="#packages" id="toc-packages">Packages</a>
+- <a href="#data" id="toc-data">Data</a>
+- <a href="#import" id="toc-import">Import</a>
+- <a href="#explore" id="toc-explore">Explore</a>
+- <a href="#conclude" id="toc-conclude">Conclude</a>
+- <a href="#export" id="toc-export">Export</a>
 
 <!-- Place comments regarding knitting here -->
 
@@ -79,28 +88,27 @@ feature and should be run as such. The project also uses the dynamic
 ``` r
 # where does this document knit?
 here::here()
-#> [1] "/Users/yanqixu/code/accountability_datacleaning/R_campfin"
+#> [1] "/Users/yanqixu/code/accountability_datacleaning"
 ```
 
 ## Data
 
 Lobbyist data is obtained from the [Colorado Open Data
 Portal](https://data.colorado.gov/Lobbyist/Directory-of-Lobbyists-in-Colorado/bqa5-gr84).
-The data is as current as March 11, 2020.
+The data is as current as March 26, 2023.
 
 > About:  
 > Information for each registered lobbyist, including contact details,
 > and their associated income and expenses as summarized by month and
 > associated report date for the State of Colorado dating back to 1995
-> provided by the Colorado Department of State
-(CDOS).
+> provided by the Colorado Department of State (CDOS).
 
 ## Import
 
 ### Setting up Raw Data Directory
 
 ``` r
-raw_dir <- dir_create(here("co", "lobby", "data", "raw", "exp"))
+raw_dir <- dir_create(here("state","co", "lobby", "data", "raw", "exp"))
 ```
 
 ### Download from web
@@ -169,64 +177,70 @@ co_exp <- read_csv(dir_ls(raw_dir, regexp = "Expenses.+"),
 
 ``` r
 head(cole)
-#> # A tibble: 6 x 18
-#>   lobbyist_last_n… lobbyist_first_… lobbyist_addres… lobbyist_addres… lobbyist_city lobbyist_state
-#>   <chr>            <chr>            <chr>            <chr>            <chr>         <chr>         
-#> 1 WOODHOUSE        JEFF             1675 BROADWAY    <NA>             DENVER        CO            
-#> 2 Harvey           Lauren           1200 Federal Bl… <NA>             Denver        CO            
-#> 3 DE               HAAN             <NA>             <NA>             <NA>          <NA>          
-#> 4 GATES            LANDON           1700 Lincoln St… <NA>             Denver        CO            
-#> 5 PICKAR           JOY              1555 PROMONTORY… <NA>             GREELEY       CO            
-#> 6 NIELSEN          JOHN             2260 BASELINE R… <NA>             BOULDER       CO            
-#> # … with 12 more variables: lobbyist_zip <chr>, official_state_lobbyist <chr>,
-#> #   primary_lobbyist_id <chr>, annual_lobbyist_registration_id <chr>, date_disclosure_filed <chr>,
-#> #   date_disclosure_last_modified <chr>, business_associated_with_pending_legislation <chr>,
+#> # A tibble: 6 × 18
+#>   lobbyis…¹ lobby…² lobby…³ lobby…⁴ lobby…⁵ lobby…⁶ lobby…⁷ offic…⁸ prima…⁹ annua…˟ date_…˟ date_…˟
+#>   <chr>     <chr>   <chr>   <chr>   <chr>   <chr>   <chr>   <chr>   <chr>   <chr>   <chr>   <chr>  
+#> 1 Jim Dris… James   8396 E… <NA>    Denver  CO      80238   <NA>    201750… 202250… <NA>    <NA>   
+#> 2 Olson     Emilie  1010 V… <NA>    Washin… DC      20005   <NA>    201950… 202150… 04/04/… 04/04/…
+#> 3 Wallace   Rebecca PO Box… <NA>    Denver  CO      80206   <NA>    202150… 202150… 04/09/… 04/09/…
+#> 4 Staberg   Christ… 1580 L… <NA>    DENVER  CO      80203   <NA>    200350… 201050… 11/05/… 11/05/…
+#> 5 Adelson   Shawnee 1616 1… <NA>    Denver  CO      80202   <NA>    202050… 202150… 04/07/… 04/07/…
+#> 6 BARRETT   JOHN    10513 … <NA>    AUSTIN  TX      78759   <NA>    200750… 202150… 04/04/… 04/04/…
+#> # … with 6 more variables: business_associated_with_pending_legislation <chr>,
 #> #   total_monthly_income <chr>, total_monthly_expenses <chr>, report_month <chr>,
-#> #   fiscal_year <chr>, report_due_date <chr>
+#> #   fiscal_year <chr>, report_due_date <chr>, and abbreviated variable names ¹​lobbyist_last_name,
+#> #   ²​lobbyist_first_name, ³​lobbyist_address1, ⁴​lobbyist_address2, ⁵​lobbyist_city, ⁶​lobbyist_state,
+#> #   ⁷​lobbyist_zip, ⁸​official_state_lobbyist, ⁹​primary_lobbyist_id,
+#> #   ˟​annual_lobbyist_registration_id, ˟​date_disclosure_filed, ˟​date_disclosure_last_modified
 tail(cole)
-#> # A tibble: 6 x 18
-#>   lobbyist_last_n… lobbyist_first_… lobbyist_addres… lobbyist_addres… lobbyist_city lobbyist_state
-#>   <chr>            <chr>            <chr>            <chr>            <chr>         <chr>         
-#> 1 McCarthy         Danny            1120 Lincoln St… <NA>             Denver        CO            
-#> 2 Baillie          Theresa          401 Plymouth Ro… <NA>             Plymouth Mee… PA            
-#> 3 Weil             Lisa             1355 S. Colorad… <NA>             Denver        CO            
-#> 4 Weil             Lisa             1355 S. Colorad… <NA>             Denver        CO            
-#> 5 Weil             Lisa             1355 S. Colorad… <NA>             Denver        CO            
-#> 6 Weil             Lisa             1355 S. Colorad… <NA>             Denver        CO            
-#> # … with 12 more variables: lobbyist_zip <chr>, official_state_lobbyist <chr>,
-#> #   primary_lobbyist_id <chr>, annual_lobbyist_registration_id <chr>, date_disclosure_filed <chr>,
-#> #   date_disclosure_last_modified <chr>, business_associated_with_pending_legislation <chr>,
+#> # A tibble: 6 × 18
+#>   lobbyis…¹ lobby…² lobby…³ lobby…⁴ lobby…⁵ lobby…⁶ lobby…⁷ offic…⁸ prima…⁹ annua…˟ date_…˟ date_…˟
+#>   <chr>     <chr>   <chr>   <chr>   <chr>   <chr>   <chr>   <chr>   <chr>   <chr>   <chr>   <chr>  
+#> 1 Mallory   Jesse   789 Sh… <NA>    Denver  CO      80203   <NA>    201750… 202250… <NA>    <NA>   
+#> 2 Hunsaker  Shelbe  601 Ne… <NA>    Washin… DC      20001   <NA>    202150… 202250… 03/15/… 03/15/…
+#> 3 Ehrett    Alexan… 532 Go… <NA>    Golden  CO      80401   <NA>    202250… 202250… 03/14/… 03/14/…
+#> 4 Bailey    Grier   1410 G… <NA>    DENVER  CO      80203   <NA>    200750… 202250… 03/15/… 03/15/…
+#> 5 Recht Ko… <NA>    1600 S… <NA>    Denver  CO      80202   <NA>    201950… 202250… 03/15/… 03/15/…
+#> 6 Amaha     Naomi   1009 G… <NA>    Denver  CO      80203   <NA>    202250… 202250… 03/15/… 03/15/…
+#> # … with 6 more variables: business_associated_with_pending_legislation <chr>,
 #> #   total_monthly_income <chr>, total_monthly_expenses <chr>, report_month <chr>,
-#> #   fiscal_year <chr>, report_due_date <chr>
+#> #   fiscal_year <chr>, report_due_date <chr>, and abbreviated variable names ¹​lobbyist_last_name,
+#> #   ²​lobbyist_first_name, ³​lobbyist_address1, ⁴​lobbyist_address2, ⁵​lobbyist_city, ⁶​lobbyist_state,
+#> #   ⁷​lobbyist_zip, ⁸​official_state_lobbyist, ⁹​primary_lobbyist_id,
+#> #   ˟​annual_lobbyist_registration_id, ˟​date_disclosure_filed, ˟​date_disclosure_last_modified
 
 head(co_exp)
-#> # A tibble: 6 x 18
-#>   lobbyist_last_n… lobbyist_first_… lobbyist_addres… lobbyist_addres… lobbyist_city lobbyist_state
-#>   <chr>            <chr>            <chr>            <chr>            <chr>         <chr>         
-#> 1 ABBOUD           GERALD           POWER SPORTS DE… 2003 W ALAMEDA   DENVER        CO            
-#> 2 ABBOUD           GERALD           POWER SPORTS DE… 2003 W ALAMEDA   DENVER        CO            
-#> 3 ABBOUD           GERALD           POWER SPORTS DE… 2003 W ALAMEDA   DENVER        CO            
-#> 4 ABBOUD           GERALD           POWER SPORTS DE… 2003 W ALAMEDA   DENVER        CO            
-#> 5 ABBOUD           GERALD           POWER SPORTS DE… 2003 W ALAMEDA   DENVER        CO            
-#> 6 ABBOUD           GERALD           POWER SPORTS DE… 2003 W ALAMEDA   DENVER        CO            
-#> # … with 12 more variables: lobbyist_zip <chr>, primary_lobbyist_id <chr>,
-#> #   annual_lobbyist_registration_id <chr>, official_state_lobbyist <chr>, expenditure_name <chr>,
-#> #   expenditure_amount <chr>, expenditure_receipt_date <chr>, expenditure_purpose <chr>,
-#> #   expenditure_for_media_flag <chr>, report_month <chr>, fiscal_year <chr>, report_due_date <chr>
+#> # A tibble: 6 × 18
+#>   lobbyis…¹ lobby…² lobby…³ lobby…⁴ lobby…⁵ lobby…⁶ lobby…⁷ prima…⁸ annua…⁹ offic…˟ expen…˟ expen…˟
+#>   <chr>     <chr>   <chr>   <chr>   <chr>   <chr>   <chr>   <chr>   <chr>   <chr>   <chr>   <chr>  
+#> 1 WESTFALL  RICHARD <NA>    <NA>    <NA>    <NA>    <NA>    199670… 199670… N       NONE    0      
+#> 2 YOUNG     LYNN    5345 U… <NA>    ARVADA  CO      80001   199070… 199770… N       NONE    0      
+#> 3 YATES     ALBERT  102 AD… <NA>    FORT C… CO      80523-… 199770… 200070… Y       NONE    0      
+#> 4 WILSON    GEOFFR… 1144 S… <NA>    DENVER  CO      80203   199070… 199870… N       NONE    0      
+#> 5 WEIST     KELLY   9289 B… <NA>    CONIFER CO      80433   200170… 200170… N       NONE    0      
+#> 6 WILLIAMS  GREGORY <NA>    <NA>    <NA>    <NA>    <NA>    199070… 199670… N       NONE    0      
+#> # … with 6 more variables: expenditure_receipt_date <chr>, expenditure_purpose <chr>,
+#> #   expenditure_for_media_flag <chr>, report_month <chr>, fiscal_year <chr>,
+#> #   report_due_date <chr>, and abbreviated variable names ¹​lobbyist_last_name,
+#> #   ²​lobbyist_first_name, ³​lobbyist_address1, ⁴​lobbyist_address2, ⁵​lobbyist_city, ⁶​lobbyist_state,
+#> #   ⁷​lobbyist_zip, ⁸​primary_lobbyist_id, ⁹​annual_lobbyist_registration_id,
+#> #   ˟​official_state_lobbyist, ˟​expenditure_name, ˟​expenditure_amount
 tail(co_exp)
-#> # A tibble: 6 x 18
-#>   lobbyist_last_n… lobbyist_first_… lobbyist_addres… lobbyist_addres… lobbyist_city lobbyist_state
-#>   <chr>            <chr>            <chr>            <chr>            <chr>         <chr>         
-#> 1 Mallory          Jesse            450 Lincoln Str… Suite 103        Denver        CO            
-#> 2 Weil             Lisa             1355 S. Colorad… Building C, Sui… Denver        CO            
-#> 3 Mallory          Jesse            450 Lincoln Str… Suite 103        Denver        CO            
-#> 4 Mallory          Jesse            450 Lincoln Str… Suite 103        Denver        CO            
-#> 5 Mallory          Jesse            450 Lincoln Str… Suite 103        Denver        CO            
-#> 6 Martin           Carolyn          19039 Plaza Dr   Suite 210        Parker        CO            
-#> # … with 12 more variables: lobbyist_zip <chr>, primary_lobbyist_id <chr>,
-#> #   annual_lobbyist_registration_id <chr>, official_state_lobbyist <chr>, expenditure_name <chr>,
-#> #   expenditure_amount <chr>, expenditure_receipt_date <chr>, expenditure_purpose <chr>,
-#> #   expenditure_for_media_flag <chr>, report_month <chr>, fiscal_year <chr>, report_due_date <chr>
+#> # A tibble: 6 × 18
+#>   lobbyis…¹ lobby…² lobby…³ lobby…⁴ lobby…⁵ lobby…⁶ lobby…⁷ prima…⁸ annua…⁹ offic…˟ expen…˟ expen…˟
+#>   <chr>     <chr>   <chr>   <chr>   <chr>   <chr>   <chr>   <chr>   <chr>   <chr>   <chr>   <chr>  
+#> 1 Castaneda Milena  789 Sh… #300    Denver  CO      80203   202350… 202350… N       Milena… 15.96  
+#> 2 Colorado… <NA>    1144 S… <NA>    DENVER  CO      80203   200750… 202250… N       Heathe… 2703.43
+#> 3 Couture-… Travis  11250 … c/o Of… Fairfax VA      22030   201550… 202250… N       Grassr… 286    
+#> 4 Conventi… <NA>    7670 O… <NA>    San Di… CA      92111   202050… 202250… N       Printi… 15.7   
+#> 5 Blumenfe… Austin  PO Box… <NA>    Denver  CO      80206   202250… 202250… N       <NA>    25000  
+#> 6 Conventi… <NA>    7670 O… <NA>    San Di… CA      92111   202050… 202250… N       Social… 34.84  
+#> # … with 6 more variables: expenditure_receipt_date <chr>, expenditure_purpose <chr>,
+#> #   expenditure_for_media_flag <chr>, report_month <chr>, fiscal_year <chr>,
+#> #   report_due_date <chr>, and abbreviated variable names ¹​lobbyist_last_name,
+#> #   ²​lobbyist_first_name, ³​lobbyist_address1, ⁴​lobbyist_address2, ⁵​lobbyist_city, ⁶​lobbyist_state,
+#> #   ⁷​lobbyist_zip, ⁸​primary_lobbyist_id, ⁹​annual_lobbyist_registration_id,
+#> #   ˟​official_state_lobbyist, ˟​expenditure_name, ˟​expenditure_amount
 ```
 
 ### Missing
@@ -235,49 +249,49 @@ All records seem to be pretty complete.
 
 ``` r
 col_stats(cole, count_na)
-#> # A tibble: 18 x 4
+#> # A tibble: 18 × 4
 #>    col                                          class      n      p
 #>    <chr>                                        <chr>  <int>  <dbl>
 #>  1 lobbyist_last_name                           <chr>      0 0     
-#>  2 lobbyist_first_name                          <chr>   7797 0.0478
-#>  3 lobbyist_address1                            <chr>  11568 0.0709
-#>  4 lobbyist_address2                            <chr> 163271 1     
-#>  5 lobbyist_city                                <chr>  11568 0.0709
-#>  6 lobbyist_state                               <chr>  11568 0.0709
-#>  7 lobbyist_zip                                 <chr>  11568 0.0709
-#>  8 official_state_lobbyist                      <chr>      0 0     
+#>  2 lobbyist_first_name                          <chr>   8630 0.0461
+#>  3 lobbyist_address1                            <chr>  11568 0.0618
+#>  4 lobbyist_address2                            <chr> 187254 1     
+#>  5 lobbyist_city                                <chr>  11568 0.0618
+#>  6 lobbyist_state                               <chr>  11568 0.0618
+#>  7 lobbyist_zip                                 <chr>  11568 0.0618
+#>  8 official_state_lobbyist                      <chr> 187254 1     
 #>  9 primary_lobbyist_id                          <chr>      0 0     
 #> 10 annual_lobbyist_registration_id              <chr>      0 0     
-#> 11 date_disclosure_filed                        <chr>  48857 0.299 
-#> 12 date_disclosure_last_modified                <chr>   3754 0.0230
-#> 13 business_associated_with_pending_legislation <chr> 163085 0.999 
-#> 14 total_monthly_income                         <chr>  65124 0.399 
-#> 15 total_monthly_expenses                       <chr> 117091 0.717 
+#> 11 date_disclosure_filed                        <chr>   3478 0.0186
+#> 12 date_disclosure_last_modified                <chr>  48574 0.259 
+#> 13 business_associated_with_pending_legislation <chr> 187053 0.999 
+#> 14 total_monthly_income                         <chr>  74218 0.396 
+#> 15 total_monthly_expenses                       <chr> 140178 0.749 
 #> 16 report_month                                 <chr>      0 0     
 #> 17 fiscal_year                                  <chr>      0 0     
 #> 18 report_due_date                              <chr>      0 0
 col_stats(co_exp, count_na)
-#> # A tibble: 18 x 4
-#>    col                             class     n         p
-#>    <chr>                           <chr> <int>     <dbl>
-#>  1 lobbyist_last_name              <chr>     0 0        
-#>  2 lobbyist_first_name             <chr>  2764 0.0409   
-#>  3 lobbyist_address1               <chr>  9978 0.148    
-#>  4 lobbyist_address2               <chr> 56645 0.838    
-#>  5 lobbyist_city                   <chr>  9978 0.148    
-#>  6 lobbyist_state                  <chr>  9978 0.148    
-#>  7 lobbyist_zip                    <chr>  9978 0.148    
-#>  8 primary_lobbyist_id             <chr>     0 0        
-#>  9 annual_lobbyist_registration_id <chr>     0 0        
-#> 10 official_state_lobbyist         <chr>     0 0        
-#> 11 expenditure_name                <chr>  3918 0.0580   
-#> 12 expenditure_amount              <chr>     1 0.0000148
-#> 13 expenditure_receipt_date        <chr> 31551 0.467    
-#> 14 expenditure_purpose             <chr> 49534 0.733    
-#> 15 expenditure_for_media_flag      <chr>     0 0        
-#> 16 report_month                    <chr>     0 0        
-#> 17 fiscal_year                     <chr>     0 0        
-#> 18 report_due_date                 <chr>     0 0
+#> # A tibble: 18 × 4
+#>    col                             class     n       p
+#>    <chr>                           <chr> <int>   <dbl>
+#>  1 lobbyist_last_name              <chr>     0 0      
+#>  2 lobbyist_first_name             <chr>  3253 0.0468 
+#>  3 lobbyist_address1               <chr> 10082 0.145  
+#>  4 lobbyist_address2               <chr> 57418 0.827  
+#>  5 lobbyist_city                   <chr> 10082 0.145  
+#>  6 lobbyist_state                  <chr> 10140 0.146  
+#>  7 lobbyist_zip                    <chr> 10140 0.146  
+#>  8 primary_lobbyist_id             <chr>   162 0.00233
+#>  9 annual_lobbyist_registration_id <chr>   162 0.00233
+#> 10 official_state_lobbyist         <chr>   162 0.00233
+#> 11 expenditure_name                <chr>  4366 0.0629 
+#> 12 expenditure_amount              <chr>   163 0.00235
+#> 13 expenditure_receipt_date        <chr> 31708 0.456  
+#> 14 expenditure_purpose             <chr> 49695 0.715  
+#> 15 expenditure_for_media_flag      <chr>   220 0.00317
+#> 16 report_month                    <chr>   220 0.00317
+#> 17 fiscal_year                     <chr>   220 0.00317
+#> 18 report_due_date                 <chr>   220 0.00317
 ```
 
 We’ll flag records without lobbyists’ addresses.
@@ -297,11 +311,11 @@ There isn’t any duplicate column.
 ``` r
 cole <- flag_dupes(cole, dplyr::everything())
 sum(cole$dupe_flag)
-#> [1] 602
+#> [1] 612
 
 co_exp <- flag_dupes(co_exp, dplyr::everything())
 sum(co_exp$dupe_flag)
-#> [1] 998
+#> [1] 1017
 ```
 
 ### Categorical
@@ -336,20 +350,20 @@ We can see the distribution of the `year` variable as such.
 
 ``` r
 tabyl(co_exp$fiscal_year)
-#> # A tibble: 26 x 3
-#>    `co_exp$fiscal_year`     n percent
-#>    <chr>                <dbl>   <dbl>
-#>  1 1995                  3743  0.0554
-#>  2 1996                  6855  0.101 
-#>  3 1997                  6898  0.102 
-#>  4 1998                  6783  0.100 
-#>  5 1999                  6252  0.0925
-#>  6 2000                  6532  0.0967
-#>  7 2001                  6475  0.0958
-#>  8 2002                  4085  0.0604
-#>  9 2003                  2751  0.0407
-#> 10 2004                  2797  0.0414
-#> # … with 16 more rows
+#> # A tibble: 30 × 4
+#>    `co_exp$fiscal_year`     n percent valid_percent
+#>    <chr>                <int>   <dbl>         <dbl>
+#>  1 1995                  3743  0.0539        0.0541
+#>  2 1996                  6855  0.0987        0.0990
+#>  3 1997                  6898  0.0993        0.0996
+#>  4 1998                  6784  0.0977        0.0980
+#>  5 1999                  6252  0.0900        0.0903
+#>  6 2000                  6535  0.0941        0.0944
+#>  7 2001                  6475  0.0932        0.0935
+#>  8 2002                  4080  0.0587        0.0589
+#>  9 2003                  2751  0.0396        0.0397
+#> 10 2004                  2797  0.0403        0.0404
+#> # … with 20 more rows
 ```
 
 ![](../plots/year%20count-1.png)<!-- -->
@@ -368,14 +382,14 @@ co_exp <- co_exp %>%
 
 summary(cole$total_monthly_income)
 #>    Min. 1st Qu.  Median    Mean 3rd Qu.    Max.    NA's 
-#>       0     522    2500    6694    7000  259454   65124
+#>       0     580    2708    7419    7500  346923   74218
 summary(cole$total_monthly_expenses)
-#>    Min. 1st Qu.  Median    Mean 3rd Qu.    Max.    NA's 
-#>       0       0       0     752     100 2399285  117091
+#>      Min.   1st Qu.    Median      Mean   3rd Qu.      Max.      NA's 
+#>       0.0       0.0       0.0     995.4     112.1 2865427.0    140178
 
 summary(co_exp$expenditure_amount)
 #>      Min.   1st Qu.    Median      Mean   3rd Qu.      Max.      NA's 
-#>       0.0       0.0       9.8     513.9      82.0 1974852.0         1
+#>       0.0       0.0      10.3     676.2      93.5 2752833.5       163
 ```
 
 ### Wrangle
@@ -427,22 +441,22 @@ cole %>%
   distinct() %>% 
   sample_n(10) %>% 
   glimpse()
-#> Observations: 10
-#> Variables: 3
-#> $ lobbyist_address1     <chr> "5290 DTC PARKWAY", "899 North Capitol Street NE", "1201 Maryland …
+#> Rows: 10
+#> Columns: 3
+#> $ lobbyist_address1     <chr> "3333 S. BANNOCK ST", "7606 N Union Blvd", "350 KIMBARK ST", "P.O. …
 #> $ lobbyist_address2     <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA
-#> $ lobbyist_address_norm <chr> "5290 DTC PKWY", "899 N CAPITOL ST NE", "1201 MARYLAND AVE SW", "C…
+#> $ lobbyist_address_norm <chr> "3333 S BANNOCK ST", "7606 N UNION BLVD", "350 KIMBARK ST", "PO BOX…
 
 co_exp %>% 
   select(contains("address")) %>% 
   distinct() %>% 
   sample_n(10) %>% 
   glimpse()
-#> Observations: 10
-#> Variables: 3
-#> $ lobbyist_address1     <chr> "PO BOX 288", "1800 Larimer Street, Suite 1400", "3632 NEWTON ST",…
-#> $ lobbyist_address2     <chr> NA, NA, NA, NA, NA, NA, NA, "SUITE 1000", NA, "Suite 150"
-#> $ lobbyist_address_norm <chr> "PO BOX 288", "1800 LARIMER ST STE 1400", "3632 NEWTON ST", "2250 …
+#> Rows: 10
+#> Columns: 3
+#> $ lobbyist_address1     <chr> "4676 Broadway", "1580 Logan Street", "1597 COLE BLVD STE 310", "30…
+#> $ lobbyist_address2     <chr> NA, "Suite 510", NA, "Suite 400", NA, NA, NA, "Suite B206", NA, NA
+#> $ lobbyist_address_norm <chr> "4676 BROADWAY", "1580 LOGAN STREET SUITE 510", "1597 COLE BLVD STE…
 ```
 
 ### ZIP
@@ -467,33 +481,33 @@ progress_table(
   cole$lobbyist_zip5,
   compare = valid_zip
 )
-#> # A tibble: 2 x 6
-#>   stage         prop_in n_distinct prop_na n_out n_diff
-#>   <chr>           <dbl>      <dbl>   <dbl> <dbl>  <dbl>
-#> 1 lobbyist_zip    0.969        622  0.0709  4634     95
-#> 2 lobbyist_zip5   0.998        545  0.0709   298      9
+#> # A tibble: 2 × 6
+#>   stage              prop_in n_distinct prop_na n_out n_diff
+#>   <chr>                <dbl>      <dbl>   <dbl> <dbl>  <dbl>
+#> 1 cole$lobbyist_zip    0.974        732  0.0618  4652    104
+#> 2 cole$lobbyist_zip5   0.998        650  0.0618   339     12
 
 progress_table(
   co_exp$lobbyist_zip,
   co_exp$lobbyist_zip5,
   compare = valid_zip
 )
-#> # A tibble: 2 x 6
-#>   stage         prop_in n_distinct prop_na n_out n_diff
-#>   <chr>           <dbl>      <dbl>   <dbl> <dbl>  <dbl>
-#> 1 lobbyist_zip    0.961        370   0.148  2235     72
-#> 2 lobbyist_zip5   1.00         311   0.148     3      3
+#> # A tibble: 2 × 6
+#>   stage                prop_in n_distinct prop_na n_out n_diff
+#>   <chr>                  <dbl>      <dbl>   <dbl> <dbl>  <dbl>
+#> 1 co_exp$lobbyist_zip    0.964        401   0.146  2146     72
+#> 2 co_exp$lobbyist_zip5   1.00         342   0.146     3      3
 ```
 
 ### State
 
-By examining the percentage of lobbyist\_state that are considered
-valid, we can see that the variable in both datasets doesn’t need to be
+By examining the percentage of lobbyist_state that are considered valid,
+we can see that the variable in both datasets doesn’t need to be
 normalized.
 
 ``` r
 prop_in(cole$lobbyist_state, valid_state, na.rm = T)
-#> [1] 1
+#> [1] 0.9999943
 prop_in(co_exp$lobbyist_state, valid_state, na.rm = T)
 #> [1] 1
 ```
@@ -501,7 +515,7 @@ prop_in(co_exp$lobbyist_state, valid_state, na.rm = T)
 ### City
 
 Cities are the most difficult geographic variable to normalize, simply
-due to the wide variety of valid cities and formats. \#\#\#\# Normal
+due to the wide variety of valid cities and formats. \#### Normal
 
 The `campfin::normal_city()` function is a good coleart, again
 converting case, removing punctuation, but *expanding* USPS
@@ -515,7 +529,7 @@ cole <- cole %>%
       na_rep = TRUE))
 
 prop_in(cole$lobbyist_city_norm, valid_city, na.rm = T)
-#> [1] 0.9642064
+#> [1] 0.9599057
 
 co_exp <- co_exp %>% 
       mutate(lobbyist_city_norm = normal_city(lobbyist_city,abbs = usps_city,
@@ -524,7 +538,7 @@ co_exp <- co_exp %>%
       na_rep = TRUE))
 
 prop_in(co_exp$lobbyist_city_norm, valid_city, na.rm = T)
-#> [1] 0.9710417
+#> [1] 0.968613
 ```
 
 #### Swap
@@ -585,25 +599,21 @@ co_exp <- co_exp %>%
 ```
 
 After the two normalization steps, the percentage of valid cities is
-close to 100% for both
-datasets.
+close to 100% for both datasets.
 
 #### Progress
 
-| stage                | prop\_in | n\_distinct | prop\_na | n\_out | n\_diff |
-| :------------------- | -------: | ----------: | -------: | -----: | ------: |
-| lobbyist\_city       |    0.700 |         381 |    0.071 |  45540 |     217 |
-| lobbyist\_city\_norm |    0.997 |         290 |    0.071 |    446 |      21 |
-| lobbyist\_city\_swap |    0.999 |         283 |    0.073 |    200 |      10 |
+| stage                                                                        | prop_in | n_distinct | prop_na | n_out | n_diff |
+|:-----------------------------------------------------------------------------|--------:|-----------:|--------:|------:|-------:|
+| cole$lobbyist_city | 0.611| 463| 0.062| 68321| 298| |cole$lobbyist_city_norm |   0.994 |        350 |   0.062 |  1000 |     26 |
+| cole\$lobbyist_city_swap                                                     |   0.997 |        338 |   0.064 |   564 |     11 |
 
-CO Lobbyists Summary Data Normalization
-Progress
+CO Lobbyists Summary Data Normalization Progress
 
-| stage                | prop\_in | n\_distinct | prop\_na | n\_out | n\_diff |
-| :------------------- | -------: | ----------: | -------: | -----: | ------: |
-| lobbyist\_city       |    0.891 |         203 |    0.148 |   6296 |      86 |
-| lobbyist\_city\_norm |    0.999 |         160 |    0.148 |     51 |       7 |
-| lobbyist\_city\_swap |    1.000 |         158 |    0.148 |     10 |       5 |
+| stage                                                                           | prop_in | n_distinct | prop_na | n_out | n_diff |
+|:--------------------------------------------------------------------------------|--------:|-----------:|--------:|------:|-------:|
+| co_exp$lobbyist_city | 0.860| 247| 0.145| 8316| 130| |co_exp$lobbyist_city_norm |   0.998 |        178 |   0.146 |    95 |      9 |
+| co_exp\$lobbyist_city_swap                                                      |   0.999 |        175 |   0.146 |    33 |      5 |
 
 CO Lobbyists Expenditure Data Normalization Progress
 
@@ -620,76 +630,77 @@ valid equivalent.
 
 ``` r
 glimpse(sample_n(cole, 20))
-#> Observations: 20
-#> Variables: 25
-#> $ lobbyist_last_name                           <chr> "WANSTRATH", "YEHLE", "JACKSON KELLY PLLC",…
-#> $ lobbyist_first_name                          <chr> "CATHERINE", "FRAN", NA, "ARLENE", "Nick", …
-#> $ lobbyist_address1                            <chr> "3000 E. CEDAR AVE. #3", NA, "1099 18TH STR…
-#> $ lobbyist_address2                            <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
-#> $ lobbyist_city                                <chr> "DENVER", NA, "DENVER", "Englewood", "Denve…
-#> $ lobbyist_state                               <chr> "CO", NA, "CO", "CO", "CO", "CO", "CO", "CO…
-#> $ lobbyist_zip                                 <chr> "80209", NA, "80202", "80112", "80203", "80…
-#> $ official_state_lobbyist                      <chr> "N", "N", "N", "N", "N", "N", "N", "Y", "N"…
-#> $ primary_lobbyist_id                          <chr> "19927000253", "19967000346", "20075002185"…
-#> $ annual_lobbyist_registration_id              <chr> "19997000702", "19967000346", "20075004153"…
-#> $ date_disclosure_filed                        <chr> NA, NA, "06/13/2008 12:00:00 AM", NA, "05/1…
-#> $ date_disclosure_last_modified                <chr> "10/06/1999 12:00:00 AM", "02/13/1996 12:00…
-#> $ business_associated_with_pending_legislation <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
-#> $ total_monthly_income                         <dbl> 16249.83, 1000.00, 25166.67, 1000.00, 500.0…
-#> $ total_monthly_expenses                       <dbl> 172.76, 0.00, NA, 3316.67, NA, NA, 0.00, NA…
-#> $ report_month                                 <chr> "September", "January", "May", "March", "Ap…
-#> $ fiscal_year                                  <chr> "2000", "1996", "2008", "1997", "2017", "20…
-#> $ report_due_date                              <date> 1999-10-15, 1996-02-15, 2008-06-16, 1997-0…
-#> $ na_flag                                      <lgl> FALSE, TRUE, FALSE, FALSE, FALSE, FALSE, FA…
-#> $ dupe_flag                                    <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, F…
-#> $ year                                         <dbl> 1999, 1996, 2008, 1997, 2017, 2008, 1996, 2…
-#> $ lobbyist_address_norm                        <chr> "3000 E CEDAR AVE 3", NA, "1099 18 TH ST", …
-#> $ lobbyist_zip5                                <chr> "80209", NA, "80202", "80112", "80203", "80…
-#> $ lobbyist_city_norm                           <chr> "DENVER", NA, "DENVER", "ENGLEWOOD", "DENVE…
-#> $ lobbyist_city_swap                           <chr> "DENVER", NA, "DENVER", "ENGLEWOOD", "DENVE…
+#> Rows: 20
+#> Columns: 25
+#> $ lobbyist_last_name                           <chr> "STREAMER", "COLORADO COMMUNIQUE INC", "LAW"…
+#> $ lobbyist_first_name                          <chr> "CAROL", NA, "DANIEL", "Brad", "Wesley", "BA…
+#> $ lobbyist_address1                            <chr> "1705 14TH ST #357", "98 Wadsworth Blvd", "1…
+#> $ lobbyist_address2                            <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
+#> $ lobbyist_city                                <chr> "BOULDER", "LAKEWOOD", "DENVER", "Brentwood"…
+#> $ lobbyist_state                               <chr> "CO", "CO", "CO", "TN", "CO", "CA", "CO", "C…
+#> $ lobbyist_zip                                 <chr> "80302-6321", "80226", "80203", "37027", "80…
+#> $ official_state_lobbyist                      <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
+#> $ primary_lobbyist_id                          <chr> "19897000207", "20017000750", "19907000251",…
+#> $ annual_lobbyist_registration_id              <chr> "19967000305", "20065003203", "19997000901",…
+#> $ date_disclosure_filed                        <chr> "08/08/1996 12:00:00 AM", "11/13/2006 12:00:…
+#> $ date_disclosure_last_modified                <chr> NA, "11/13/2006 12:00:00 AM", NA, NA, "02/14…
+#> $ business_associated_with_pending_legislation <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
+#> $ total_monthly_income                         <dbl> 772.81, 18083.33, NA, NA, 3195.00, 2112.00, …
+#> $ total_monthly_expenses                       <dbl> 0, 126, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
+#> $ report_month                                 <chr> "July", "October", "December", "April", "Jan…
+#> $ fiscal_year                                  <chr> "1997", "2007", "2000", "2023", "2018", "201…
+#> $ report_due_date                              <date> 1996-08-15, 2006-11-15, 2000-01-15, 2023-05…
+#> $ na_flag                                      <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FA…
+#> $ dupe_flag                                    <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FA…
+#> $ year                                         <dbl> 1996, 2006, 2000, 2023, 2018, 2012, 2019, 20…
+#> $ lobbyist_address_norm                        <chr> "1705 14TH ST #357", "98 WADSWORTH BLVD", "1…
+#> $ lobbyist_zip5                                <chr> "80302", "80226", "80203", "37027", "80202",…
+#> $ lobbyist_city_norm                           <chr> "BOULDER", "LAKEWOOD", "DENVER", "BRENTWOOD"…
+#> $ lobbyist_city_swap                           <chr> "BOULDER", "LAKEWOOD", "DENVER", "BRENTWOOD"…
 glimpse(sample_n(co_exp, 20))
-#> Observations: 20
-#> Variables: 25
-#> $ lobbyist_last_name              <chr> "LUFEN", "FORD, SOVINE & FORD", "LOWER", "FERM", "HEINTZ…
-#> $ lobbyist_first_name             <chr> "RALPH", "CHUCK", "JAY", "ROBERT", "ED", "KAREN", "BRIAN…
-#> $ lobbyist_address1               <chr> "495 Uinta Way", "1539 MONROE STREET", "P.O. BOX 3489", …
-#> $ lobbyist_address2               <chr> "Ste. 240", NA, NA, "Suite 300", NA, NA, NA, NA, NA, NA,…
-#> $ lobbyist_city                   <chr> "Denver", "DENVER", "ENGLEWOOD", "Denver", "LITTLETON", …
-#> $ lobbyist_state                  <chr> "CO", "CO", "CO", "CO", "CO", "CO", "CO", "CO", NA, NA, …
-#> $ lobbyist_zip                    <chr> "80230", "80206", "80155", "80202", "80124", "80944", "8…
-#> $ primary_lobbyist_id             <chr> "20085000349", "19947000400", "19897000499", "1990700013…
-#> $ annual_lobbyist_registration_id <chr> "20095000060", "19987000393", "19977000179", "2004500239…
-#> $ official_state_lobbyist         <chr> "N", "N", "N", "N", "N", "N", "N", "N", "N", "N", "N", "…
-#> $ expenditure_name                <chr> "RALPH LUFEN", "SEN LACY", "NONE", NA, "NON ITEMIZED GIF…
-#> $ expenditure_amount              <dbl> 9.00, 6.35, 0.00, 1070.73, 16.27, 0.00, 0.00, 0.00, 0.00…
-#> $ expenditure_receipt_date        <date> 2009-04-25, 1998-01-01, NA, 2004-12-01, 1996-03-01, NA,…
-#> $ expenditure_purpose             <chr> "PARKING", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
-#> $ expenditure_for_media_flag      <chr> "N", "N", "N", "N", "N", "N", "N", "N", "N", "N", "N", "…
-#> $ report_month                    <chr> "April", "April", "January", "November", "March", "April…
-#> $ fiscal_year                     <chr> "2009", "1998", "1997", "2005", "1996", "1998", "2002", …
-#> $ report_due_date                 <date> 2009-05-15, 1998-05-15, 1997-02-15, 2004-12-15, 1996-04…
-#> $ na_flag                         <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, …
-#> $ dupe_flag                       <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, …
-#> $ year                            <dbl> 2009, 1998, 1997, 2004, 1996, 1998, 2001, 1997, 1998, 19…
-#> $ lobbyist_address_norm           <chr> "495 UINTA WAY STE 240", "1539 MONROE ST", "PO BOX 3489"…
-#> $ lobbyist_zip5                   <chr> "80230", "80206", "80155", "80202", "80124", "80944", "8…
-#> $ lobbyist_city_norm              <chr> "DENVER", "DENVER", "ENGLEWOOD", "DENVER", "LITTLETON", …
-#> $ lobbyist_city_swap              <chr> "DENVER", "DENVER", "ENGLEWOOD", "DENVER", "LITTLETON", …
+#> Rows: 20
+#> Columns: 25
+#> $ lobbyist_last_name              <chr> "BUECHE", "DAVIES", "Legacy Consulting Colorado, LLC", "P…
+#> $ lobbyist_first_name             <chr> "KENNETH", "JEANNE", "Lacey", "LINDA", "ROBERT", "JAMES",…
+#> $ lobbyist_address1               <chr> "1144 SHERMAN ST", "PO BOX 159", "1192 Xenophon St", "859…
+#> $ lobbyist_address2               <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, "Suite 300", NA, NA, …
+#> $ lobbyist_city                   <chr> "DENVER", "DEER TRAIL", "Golden", "DENVER", NA, "DENVER",…
+#> $ lobbyist_state                  <chr> "CO", "CO", "CO", "CO", NA, "CO", "CO", "CO", NA, "CO", "…
+#> $ lobbyist_zip                    <chr> "80203", "80105", "80401", "80238", NA, "80203", "80203",…
+#> $ primary_lobbyist_id             <chr> "19907000131", "19897000033", "20195023409", "19987000312…
+#> $ annual_lobbyist_registration_id <chr> "19987000078", "19977000166", "20205114613", "20045002910…
+#> $ official_state_lobbyist         <chr> "N", "N", "N", "N", "N", "N", "N", "N", "N", "N", "N", "N…
+#> $ expenditure_name                <chr> "NONE", "NONE", NA, "REP MARK CLOER", "RED ROCKS COLLEGE"…
+#> $ expenditure_amount              <dbl> 0.00, 0.00, 110.43, 64.00, 83.00, 0.00, 0.00, 13.09, 0.00…
+#> $ expenditure_receipt_date        <date> NA, NA, 2021-02-27, 2004-10-22, 1996-06-01, NA, NA, 1996…
+#> $ expenditure_purpose             <chr> NA, NA, "General Business Expenses", "ARTHRITIS DINNER", …
+#> $ expenditure_for_media_flag      <chr> "N", "N", "N", "N", "N", "N", "N", "N", "N", "N", "N", "N…
+#> $ report_month                    <chr> "January", "May", "February", "October", "June", "August"…
+#> $ fiscal_year                     <chr> "1998", "1997", "2021", "2005", "1996", "1999", "1998", "…
+#> $ report_due_date                 <date> 1998-02-15, 1997-06-15, 2021-03-15, 2004-11-15, 1996-07-…
+#> $ na_flag                         <lgl> FALSE, FALSE, FALSE, FALSE, TRUE, FALSE, FALSE, FALSE, TR…
+#> $ dupe_flag                       <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, F…
+#> $ year                            <dbl> 1998, 1997, 2021, 2004, 1996, 1998, 1997, 1996, 1996, 199…
+#> $ lobbyist_address_norm           <chr> "1144 SHERMAN ST", "PO BOX 159", "1192 XENOPHON ST", "859…
+#> $ lobbyist_zip5                   <chr> "80203", "80105", "80401", "80238", NA, "80203", "80203",…
+#> $ lobbyist_city_norm              <chr> "DENVER", "DEER TRAIL", "GOLDEN", "DENVER", NA, "DENVER",…
+#> $ lobbyist_city_swap              <chr> "DENVER", "DEER TRAIL", "GOLDEN", "DENVER", NA, "DENVER",…
 ```
 
-1.  There are 163271 records in the summary database and 67578 in the
+1.  There are 187254 records in the summary database and 69464 in the
     expenditure database.
-2.  There’re 602 duplicate records in the summary database and 998 in
+2.  There’re 612 duplicate records in the summary database and 1017 in
     the expenditure database.
 3.  The range and distribution of `amount` and `date` seem reasonable.
-4.  There are 9979 records missing either address or expenditure amount.
+4.  There are 10141 records missing either address or expenditure
+    amount.
 5.  Consistency in goegraphic data has been improved with
     `campfin::normal_*()`.
 
 ## Export
 
 ``` r
-clean_dir <- dir_create(here("co", "lobby", "data", "exp","clean"))
+clean_dir <- dir_create(here("state","co", "lobby", "data", "exp","clean"))
 ```
 
 ``` r

@@ -1,7 +1,14 @@
 Colorado Lobbying Registration Diary
 ================
 Yanqi Xu
-2020-03-12 10:40:12
+2023-03-26 16:51:46
+
+- <a href="#project" id="toc-project">Project</a>
+- <a href="#objectives" id="toc-objectives">Objectives</a>
+- <a href="#packages" id="toc-packages">Packages</a>
+- <a href="#data" id="toc-data">Data</a>
+- <a href="#conclude" id="toc-conclude">Conclude</a>
+- <a href="#export" id="toc-export">Export</a>
 
 <!-- Place comments regarding knitting here -->
 
@@ -75,30 +82,22 @@ feature and should be run as such. The project also uses the dynamic
 ``` r
 # where does this document knit?
 here::here()
-#> [1] "/Users/yanqixu/code/accountability_datacleaning/R_campfin"
+#> [1] "/Users/yanqixu/code/accountability_datacleaning"
 ```
 
 ## Data
 
-Lobbyist data is obtained from the [New Jersey Election Law Enforcement
-Commission](https://www.elec.state.nj.us/forcandidates/gaa_pub_info.htm).
+Lobbyist data is obtained from the [Colorado Open Data
+Portal](https://data.colorado.gov/Lobbyist/Directory-of-Lobbyist-Clients-in-Colorado/35k5-cv8s).
+The data is as current as March 26, 2023.
 
-> #### Download
-> 
-> “View Quarterly Reports and Quarterly Summary” -\> “Entity Search” -\>
-> “Search” -\> “Download Records”
-
-The [Entity Search
-page](https://www3-elec.mwg.state.nj.us/ELEC_AGAA/entitysearch.aspx), we
-can see a table is generated and can be retrieved:
-
-The data is downloaded on March 11, 2020.
-
-First, we must download a reporting linking lobbyists to their
-principals.
+> About:  
+> Lobbyist name and address and the names and addresses of their
+> associated clients provided by the Colorado Department of State
+> (CDOS).
 
 ``` r
-raw_dir <- dir_create(here("co", "lobby", "data", "raw", "reg"))
+raw_dir <- dir_create(here("state","co", "lobby", "data", "raw", "reg"))
 ```
 
 ``` r
@@ -137,49 +136,51 @@ colr <- colr %>%
 
 ``` r
 head(colr)
-#> # A tibble: 6 x 15
-#>   lobbyist_last_n… lobbyist_first_… lobbyist_addres… lobbyist_addres… lobbyist_city lobbyist_state
-#>   <chr>            <chr>            <chr>            <chr>            <chr>         <chr>         
-#> 1 A. TRENT & ASSO… <NA>             P. O. BOX 711    <NA>             JOHNSTOWN     CO            
-#> 2 ABBOUD           GERALD           POWER SPORTS DE… 2003 W ALAMEDA   DENVER        CO            
-#> 3 ABBOUD           GERALD           POWER SPORTS DE… 2003 W ALAMEDA   DENVER        CO            
-#> 4 ABBOUD           GERALD           POWER SPORTS DE… 2003 W ALAMEDA   DENVER        CO            
-#> 5 ABBOUD           GERALD           POWER SPORTS DE… 2003 W ALAMEDA   DENVER        CO            
-#> 6 ABBOUD           GERALD           POWER SPORTS DE… 2003 W ALAMEDA   DENVER        CO            
-#> # … with 9 more variables: lobbyist_zip <chr>, primary_lobbyist_id <chr>,
-#> #   annual_lobbyist_registration_id <chr>, client_name <chr>, client_address1 <chr>,
-#> #   client_address2 <chr>, client_city <chr>, client_state <chr>, client_zip <chr>
+#> # A tibble: 6 × 15
+#>   lobbyis…¹ lobby…² lobby…³ lobby…⁴ lobby…⁵ lobby…⁶ lobby…⁷ prima…⁸ annua…⁹ clien…˟ clien…˟ clien…˟
+#>   <chr>     <chr>   <chr>   <chr>   <chr>   <chr>   <chr>   <chr>   <chr>   <chr>   <chr>   <chr>  
+#> 1 A. TRENT… <NA>    P. O. … <NA>    JOHNST… CO      80534   200850… 200850… ALAN T… P. O. … <NA>   
+#> 2 ABBOUD    GERALD  POWER … 2003 W… DENVER  CO      80223   198970… 199570… COLORA… 2025 W… <NA>   
+#> 3 ABBOUD    GERALD  POWER … 2003 W… DENVER  CO      80223   198970… 199570… COLORA… 246 S … <NA>   
+#> 4 ABBOUD    GERALD  POWER … 2003 W… DENVER  CO      80223   198970… 199670… COLORA… 2015 W… <NA>   
+#> 5 ABBOUD    GERALD  POWER … 2003 W… DENVER  CO      80223   198970… 199670… COLORA… 2015 W… <NA>   
+#> 6 ABBOUD    GERALD  POWER … 2003 W… DENVER  CO      80223   198970… 199670… COLORA… 2015 W… <NA>   
+#> # … with 3 more variables: client_city <chr>, client_state <chr>, client_zip <chr>, and
+#> #   abbreviated variable names ¹​lobbyist_last_name, ²​lobbyist_first_name, ³​lobbyist_address1,
+#> #   ⁴​lobbyist_address2, ⁵​lobbyist_city, ⁶​lobbyist_state, ⁷​lobbyist_zip, ⁸​primary_lobbyist_id,
+#> #   ⁹​annual_lobbyist_registration_id, ˟​client_name, ˟​client_address1, ˟​client_address2
 tail(colr)
-#> # A tibble: 6 x 15
-#>   lobbyist_last_n… lobbyist_first_… lobbyist_addres… lobbyist_addres… lobbyist_city lobbyist_state
-#>   <chr>            <chr>            <chr>            <chr>            <chr>         <chr>         
-#> 1 COLORADO LEGISL… <NA>             1410 GRANT STRE… SUITE D-110      DENVER        CO            
-#> 2 COLORADO LEGISL… <NA>             1410 GRANT STRE… SUITE D-110      DENVER        CO            
-#> 3 THOMSON          KRISTEN          4100 E ARKANSAS… TGS GLOBAL       DENVER        CO            
-#> 4 CAPITOLINE CONS… ARLENE           10305 SPRING GR… <NA>             ENGLEWOOD     CO            
-#> 5 COLORADO LEGISL… <NA>             1410 GRANT STRE… SUITE D-110      DENVER        CO            
-#> 6 COLORADO LEGISL… <NA>             1410 GRANT STRE… SUITE D-110      DENVER        CO            
-#> # … with 9 more variables: lobbyist_zip <chr>, primary_lobbyist_id <chr>,
-#> #   annual_lobbyist_registration_id <chr>, client_name <chr>, client_address1 <chr>,
-#> #   client_address2 <chr>, client_city <chr>, client_state <chr>, client_zip <chr>
+#> # A tibble: 6 × 15
+#>   lobbyis…¹ lobby…² lobby…³ lobby…⁴ lobby…⁵ lobby…⁶ lobby…⁷ prima…⁸ annua…⁹ clien…˟ clien…˟ clien…˟
+#>   <chr>     <chr>   <chr>   <chr>   <chr>   <chr>   <chr>   <chr>   <chr>   <chr>   <chr>   <chr>  
+#> 1 CORNERST… <NA>    1660 L… SUITE … DENVER  CO      80238   202051… 202250… CRH AM… 600 AS… <NA>   
+#> 2 CAPITOL … <NA>    800 N … #702    DENVER  CO      80203   201050… 202250… POPULU… 300 E.… STE 900
+#> 3 BRIDGE C… JOE     2205 S… UNIT 8  DENVER  CO      80222   201650… 202250… LOGAN … 315 MA… <NA>   
+#> 4 SOASH & … <NA>    1626 W… <NA>    DENVER  CO      80203   201250… 201350… REPUBL… 410 MA… SUITE …
+#> 5 PROTOSTR… DIANA   7904 E… <NA>    DENVER  CO      80238   200170… 202250… ENVIRO… 1543 W… <NA>   
+#> 6 CORNERST… <NA>    800 MA… 7TH FL… WASHIN… DC      20024   202051… 202250… CRH AM… 600 AS… <NA>   
+#> # … with 3 more variables: client_city <chr>, client_state <chr>, client_zip <chr>, and
+#> #   abbreviated variable names ¹​lobbyist_last_name, ²​lobbyist_first_name, ³​lobbyist_address1,
+#> #   ⁴​lobbyist_address2, ⁵​lobbyist_city, ⁶​lobbyist_state, ⁷​lobbyist_zip, ⁸​primary_lobbyist_id,
+#> #   ⁹​annual_lobbyist_registration_id, ˟​client_name, ˟​client_address1, ˟​client_address2
 glimpse(sample_n(colr, 20))
-#> Observations: 20
-#> Variables: 15
-#> $ lobbyist_last_name              <chr> "HOLDREN", "AXIOM STRATEGIES INC DBA AXIOM POLITICS", "W…
-#> $ lobbyist_first_name             <chr> "LARRY", NA, "JACOB", "STEVEN", "SEAN", NA, "MICHAEL", "…
-#> $ lobbyist_address1               <chr> "2360 LAWRENCE ST.", "1600 BROADWAY", "7082 W MORRAINE D…
-#> $ lobbyist_address2               <chr> NA, "SUITE 1350", NA, "SUITE 820", NA, "SUITE 1350", NA,…
-#> $ lobbyist_city                   <chr> "DENVER", "DENVER", "LITTLETON", "DENVER", "DENVER", "DE…
-#> $ lobbyist_state                  <chr> "CO", "CO", "CO", "CO", "CO", "CO", "CO", "CO", "CO", "C…
-#> $ lobbyist_zip                    <chr> "80205", "80202", "80128", "80202", "80224", "80202", "8…
-#> $ primary_lobbyist_id             <chr> "20065038052", "20017000845", "20145028329", "2007500155…
-#> $ annual_lobbyist_registration_id <chr> "20061038052", "20115022638", "20165019337", "2009500654…
-#> $ client_name                     <chr> "LARRY HOLDREN", "ASSOCIATION OF AMERICAN PUBLISHERS", "…
-#> $ client_address1                 <chr> "2360 LAWRENCE", "455 MASSACHUSETTS AVE, NW", "900 COTTA…
-#> $ client_address2                 <chr> NA, "SUITE # 700", NA, NA, NA, "# 300", NA, NA, NA, NA, …
-#> $ client_city                     <chr> "DENVER", "WASHINGTON", "BLOOMFIELD", "ISLANDIA", "1625 …
-#> $ client_state                    <chr> "CO", "DC", "CT", "NY", "DC", "CO", "CO", "MN", "CO", "C…
-#> $ client_zip                      <chr> "80205", "20001", "06002", "11749", "20036", "80302", "8…
+#> Rows: 20
+#> Columns: 15
+#> $ lobbyist_last_name              <chr> "TOMLINSON", "FENDER", "JLH CONSULTING & PUBLIC AFFAIRS, …
+#> $ lobbyist_first_name             <chr> "DANNY", "SHANNON", "JASON", "SEAN", "AMY", "MARGARET", "…
+#> $ lobbyist_address1               <chr> "PO BOX 567", "1551 WEWATTA STREET", "2105 MEADOW GREEN C…
+#> $ lobbyist_address2               <chr> "38 VIRGINIA CANYON ROAD", NA, NA, NA, NA, NA, NA, "SUITE…
+#> $ lobbyist_city                   <chr> "IDAHO SPRINGS", "DENVER", "FRANKTOWN", "DENVER", "LITTLE…
+#> $ lobbyist_state                  <chr> "CO", "CO", "CO", "CO", "CO", "TX", "CO", "CO", "CO", "CO…
+#> $ lobbyist_zip                    <chr> "80452", "80202", "80116", "80204", "80123", "78746", "80…
+#> $ primary_lobbyist_id             <chr> "20025001646", "20135000358", "20065000037", "20065002933…
+#> $ annual_lobbyist_registration_id <chr> "20075003033", "20135032162", "20115022540", "20215070534…
+#> $ client_name                     <chr> "ECONOMIC DEVELOPMENT COUNCIL OF COLORADO", "BUCHANAN & S…
+#> $ client_address1                 <chr> "12050 N. PECOS STREET", "7703 RALSTON ROAD", "421 NORTH …
+#> $ client_address2                 <chr> "SUITE 200", NA, NA, NA, "SUITE 200-223", NA, NA, NA, NA,…
+#> $ client_city                     <chr> "WESTMINSTER", "ARVADA", "PUEBLO", "LOUISVILLE", "DENVER"…
+#> $ client_state                    <chr> "CO", "CO", "CO", "KY", "CO", "MA", "CO", "DC", "CO", "TN…
+#> $ client_zip                      <chr> "80234", "80002", "81003", "40222", "80209", "01752", "80…
 ```
 
 According to the [data
@@ -216,32 +217,32 @@ colr <- colr %>%
 
 ``` r
 col_stats(colr, count_na)
-#> # A tibble: 17 x 4
-#>    col                             class     n         p
-#>    <chr>                           <chr> <int>     <dbl>
-#>  1 lobbyist_last_name              <chr>     1 0.0000150
-#>  2 lobbyist_first_name             <chr> 10769 0.161    
-#>  3 lobbyist_address1               <chr>  1467 0.0220   
-#>  4 lobbyist_address2               <chr> 38912 0.582    
-#>  5 lobbyist_city                   <chr>  1467 0.0220   
-#>  6 lobbyist_state                  <chr>  1467 0.0220   
-#>  7 lobbyist_zip                    <chr>  1467 0.0220   
-#>  8 primary_lobbyist_id             <chr>     1 0.0000150
-#>  9 annual_lobbyist_registration_id <chr>     1 0.0000150
-#> 10 client_name                     <chr>    39 0.000584 
-#> 11 client_address1                 <chr>   264 0.00395  
-#> 12 client_address2                 <chr> 51847 0.776    
-#> 13 client_city                     <chr>   195 0.00292  
-#> 14 client_state                    <chr>   195 0.00292  
-#> 15 client_zip                      <chr>   199 0.00298  
-#> 16 year                            <chr>     1 0.0000150
-#> 17 first_year                      <chr>     1 0.0000150
+#> # A tibble: 17 × 4
+#>    col                             class     n        p
+#>    <chr>                           <chr> <int>    <dbl>
+#>  1 lobbyist_last_name              <chr>     0 0       
+#>  2 lobbyist_first_name             <chr> 12555 0.152   
+#>  3 lobbyist_address1               <chr>  1466 0.0178  
+#>  4 lobbyist_address2               <chr> 46099 0.559   
+#>  5 lobbyist_city                   <chr>  1466 0.0178  
+#>  6 lobbyist_state                  <chr>  1466 0.0178  
+#>  7 lobbyist_zip                    <chr>  1466 0.0178  
+#>  8 primary_lobbyist_id             <chr>     0 0       
+#>  9 annual_lobbyist_registration_id <chr>     0 0       
+#> 10 client_name                     <chr>    48 0.000582
+#> 11 client_address1                 <chr>   262 0.00318 
+#> 12 client_address2                 <chr> 62649 0.760   
+#> 13 client_city                     <chr>   193 0.00234 
+#> 14 client_state                    <chr>   193 0.00234 
+#> 15 client_zip                      <chr>   197 0.00239 
+#> 16 year                            <chr>     0 0       
+#> 17 first_year                      <chr>     0 0
 ```
 
 ``` r
 colr <- colr %>% flag_na(lobbyist_last_name, client_name)
 sum(colr$na_flag)
-#> [1] 39
+#> [1] 48
 ```
 
 ### Duplicates
@@ -251,7 +252,7 @@ We can see there’s no duplicate entry.
 ``` r
 colr <- flag_dupes(colr, dplyr::everything())
 sum(colr$dupe_flag)
-#> [1] 2235
+#> [1] 3282
 ```
 
 ### Categorical
@@ -266,20 +267,20 @@ is presumably a human error.
 colr <- colr %>% 
   mutate(year = as.numeric(year))
 tabyl(colr$year)
-#> # A tibble: 28 x 4
-#>    `colr$year`     n percent valid_percent
-#>          <dbl> <dbl>   <dbl>         <dbl>
-#>  1        1995  1173  0.0176        0.0176
-#>  2        1996  1328  0.0199        0.0199
-#>  3        1997  1087  0.0163        0.0163
-#>  4        1998  1287  0.0193        0.0193
-#>  5        1999  1905  0.0285        0.0285
-#>  6        2000  1792  0.0268        0.0268
-#>  7        2001  3383  0.0506        0.0506
-#>  8        2002  1779  0.0266        0.0266
-#>  9        2003  1986  0.0297        0.0297
-#> 10        2004  2195  0.0328        0.0329
-#> # … with 18 more rows
+#> # A tibble: 30 × 3
+#>    `colr$year`     n percent
+#>          <dbl> <int>   <dbl>
+#>  1        1995  1173  0.0142
+#>  2        1996  1328  0.0161
+#>  3        1997  1087  0.0132
+#>  4        1998  1287  0.0156
+#>  5        1999  1905  0.0231
+#>  6        2000  1792  0.0217
+#>  7        2001  3382  0.0410
+#>  8        2002  1778  0.0216
+#>  9        2003  1985  0.0241
+#> 10        2004  2194  0.0266
+#> # … with 20 more rows
 ```
 
 ### Wrangle
@@ -324,14 +325,14 @@ colr %>%
   distinct() %>% 
   sample_n(10) %>% 
   glimpse()
-#> Observations: 10
-#> Variables: 6
-#> $ lobbyist_address1     <chr> "1045 N LINCOLN STREET", "137O PENNSYLVANIA STREET #400", "1410 GR…
-#> $ lobbyist_address2     <chr> "SUITE 303", NA, NA, "SUITE 2200", NA, NA, NA, NA, NA, NA
-#> $ client_address1       <chr> "3224 E 7TH PARKWAY", "1180 CLERMONT STREET", "3075 S. SHERMAN ST.…
-#> $ client_address2       <chr> NA, NA, NA, "SUITE 104", NA, NA, NA, NA, NA, NA
-#> $ lobbyist_address_norm <chr> "1045 N LINCOLN ST STE 303", "137 O PENNSYLVANIA ST 400", "1410 GR…
-#> $ client_address_norm   <chr> "3224 E 7 TH PKWY", "1180 CLERMONT ST", "3075 S SHERMAN ST", "1615…
+#> Rows: 10
+#> Columns: 6
+#> $ lobbyist_address1     <chr> "1551 LARIMER #1603", "1410 GRANT STREET", "1410 GRANT STREET", "16…
+#> $ lobbyist_address2     <chr> NA, "SUITE C 107", "SUITE A-301", NA, "STE 1460", NA, NA, NA, NA, NA
+#> $ client_address1       <chr> "14041 HWY 105 EAST", "1201 CONNECTICUT AVE. NW", "3025 W. 37TH AVE…
+#> $ client_address2       <chr> NA, NA, NA, NA, NA, NA, "12TH FLOOR", NA, NA, NA
+#> $ lobbyist_address_norm <chr> "1551 LARIMER #1603", "1410 GRANT STREET SUITE C 107", "1410 GRANT …
+#> $ client_address_norm   <chr> "14041 HWY 105 E", "1201 CONNECTICUT AVE NW", "3025 W 37TH AVE SUIT…
 ```
 
 ### ZIP
@@ -356,13 +357,13 @@ progress_table(
   colr$client_zip5,
   compare = valid_zip
 )
-#> # A tibble: 4 x 6
-#>   stage         prop_in n_distinct prop_na n_out n_diff
-#>   <chr>           <dbl>      <dbl>   <dbl> <dbl>  <dbl>
-#> 1 lobbyist_zip    0.984        604 0.0220   1033     91
-#> 2 lobbyist_zip5   0.998        530 0.0220    137      8
-#> 3 client_zip      0.965       1831 0.00298  2299    484
-#> 4 client_zip5     0.995       1460 0.00325   327     73
+#> # A tibble: 4 × 6
+#>   stage              prop_in n_distinct prop_na n_out n_diff
+#>   <chr>                <dbl>      <dbl>   <dbl> <dbl>  <dbl>
+#> 1 colr$lobbyist_zip    0.985        714 0.0178   1255    100
+#> 2 colr$lobbyist_zip5   0.998        635 0.0178    145     11
+#> 3 colr$client_zip      0.969       2039 0.00239  2576    523
+#> 4 colr$client_zip5     0.994       1646 0.00264   453     95
 ```
 
 ### State
@@ -372,9 +373,9 @@ Valid two digit state abbreviations can be made using the
 
 ``` r
 prop_in(colr$lobbyist_state, valid_state, na.rm = T)
-#> [1] 1
+#> [1] 0.9999877
 prop_in(colr$client_state, valid_state, na.rm = T)
-#> [1] 0.9998349
+#> [1] 0.9996111
 colr <- colr %>% 
    mutate(client_state_norm = normal_state(client_state,abbreviate = TRUE,
       na_rep = TRUE,
@@ -385,7 +386,7 @@ colr <- colr %>%
 colr %>% 
   filter(client_state != client_state_norm) %>% 
   count(client_state, sort = TRUE)
-#> # A tibble: 0 x 2
+#> # A tibble: 0 × 2
 #> # … with 2 variables: client_state <chr>, n <int>
 ```
 
@@ -395,17 +396,17 @@ progress_table(
   colr$client_state_norm,
   compare = valid_state
 )
-#> # A tibble: 2 x 6
-#>   stage             prop_in n_distinct prop_na n_out n_diff
-#>   <chr>               <dbl>      <dbl>   <dbl> <dbl>  <dbl>
-#> 1 client_state         1.00         57 0.00292    11      9
-#> 2 client_state_norm    1            49 0.00308     0      1
+#> # A tibble: 2 × 6
+#>   stage                  prop_in n_distinct prop_na n_out n_diff
+#>   <chr>                    <dbl>      <dbl>   <dbl> <dbl>  <dbl>
+#> 1 colr$client_state         1.00         58 0.00234    32     10
+#> 2 colr$client_state_norm    1            49 0.00273     0      1
 ```
 
 ### City
 
 Cities are the most difficult geographic variable to normalize, simply
-due to the wide variety of valid cities and formats. \#\#\#\# Normal
+due to the wide variety of valid cities and formats. \#### Normal
 
 The `campfin::normal_city()` function is a good colrart, again
 converting case, removing punctuation, but *expanding* USPS
@@ -419,9 +420,9 @@ colr <- colr %>%
       na_rep = TRUE)))
 
 prop_in(colr$lobbyist_city_norm, valid_city, na.rm = T)
-#> [1] 0.9789601
+#> [1] 0.9678905
 prop_in(colr$client_city_norm, valid_city, na.rm = T)
-#> [1] 0.9580837
+#> [1] 0.9532464
 ```
 
 #### Swap
@@ -484,17 +485,13 @@ colr <- colr %>%
 ```
 
 After the two normalization steps, the percentage of valid cities is at
-100%. \#\#\#\#
-Progress
+100%. \#### Progress
 
-| stage                | prop\_in | n\_distinct | prop\_na | n\_out | n\_diff |
-| :------------------- | -------: | ----------: | -------: | -----: | ------: |
-| lobbyist\_city       |    0.998 |         287 |    0.022 |    143 |      25 |
-| client\_city         |    0.977 |         912 |    0.003 |   1557 |     247 |
-| lobbyist\_city\_norm |    0.999 |         281 |    0.022 |     97 |      17 |
-| client\_city\_norm   |    0.985 |         863 |    0.003 |    992 |     194 |
-| lobbyist\_city\_swap |    1.000 |         274 |    0.024 |     24 |       8 |
-| client\_city\_swap   |    0.992 |         732 |    0.012 |    518 |      75 |
+| stage                                                                        | prop_in | n_distinct | prop_na | n_out | n_diff |
+|:-----------------------------------------------------------------------------|--------:|-----------:|--------:|------:|-------:|
+| colr$lobbyist_city | 0.997| 350| 0.018| 206| 30| |colr$client_city           |   0.976 |       1019 |   0.002 |  1960 |    284 |
+| colr$lobbyist_city_norm | 0.998| 343| 0.018| 192| 22| |colr$client_city_norm |   0.980 |        969 |   0.003 |  1629 |    232 |
+| colr$lobbyist_city_swap | 0.999| 331| 0.020| 93| 9| |colr$client_city_swap   |   0.991 |        817 |   0.012 |   717 |     92 |
 
 You can see how the percentage of valid values increased with each
 stage.
@@ -535,43 +532,43 @@ progress %>%
 
 ``` r
 glimpse(sample_n(colr, 20))
-#> Observations: 20
-#> Variables: 28
-#> $ lobbyist_last_name              <chr> "KLINE", "MANTELLI", "THE CAPSTONE GROUP, LLC", "REES", …
-#> $ lobbyist_first_name             <chr> "SALLY", "LUCILLE", NA, "DIANE", "JASON", "ANDREW", "PAM…
-#> $ lobbyist_address1               <chr> "1099 18TH STREET", "2000 HOWARD SMITH AVENUE WEST", "15…
-#> $ lobbyist_address2               <chr> "SUITE 2150", NA, NA, NA, NA, NA, NA, "APT-1705", NA, "U…
-#> $ lobbyist_city                   <chr> "DENVER", "WINDSOR", "DENVER", "DENVER", "DENVER", "DENV…
-#> $ lobbyist_state                  <chr> "CO", "CO", "CO", "CO", "CO", "CO", "CO", "CO", "CO", "C…
-#> $ lobbyist_zip                    <chr> "80202", "80550", "80203", "80202", "80203", "80202", "8…
-#> $ primary_lobbyist_id             <chr> "20025000097", "20017000735", "20035003105", "1990700030…
-#> $ annual_lobbyist_registration_id <chr> "20025001678", "20017000735", "20175022149", "2005500265…
-#> $ client_name                     <chr> "ACS", "KODAK COLO DIV/EASTMAN KODAK CO", "GENERAL MOTOR…
-#> $ client_address1                 <chr> "1200 K STREET N.W.", "9952 EASTMAN PARK DR", "300 RENAI…
-#> $ client_address2                 <chr> "SUITE 1200", NA, NA, NA, "SUITE 200", NA, NA, NA, NA, "…
-#> $ client_city                     <chr> "WASHINGTON", "WINDSOR", "DETROIT", "ENGLEWOOD", "DENVER…
-#> $ client_state                    <chr> "DC", "CO", "MI", "CO", "CO", "CO", "CO", "OR", "CO", "C…
-#> $ client_zip                      <chr> "20005", "80551", "48265", "80112", "80222", "80237-2722…
-#> $ year                            <dbl> 2002, 2001, 2017, 2005, 2015, 1998, 1996, 2011, 1998, 20…
-#> $ first_year                      <chr> "2002", "2001", "2003", "1990", "2006", "1998", "1992", …
-#> $ na_flag                         <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, …
-#> $ dupe_flag                       <lgl> FALSE, FALSE, FALSE, FALSE, TRUE, FALSE, FALSE, FALSE, F…
-#> $ lobbyist_address_norm           <chr> "1099 18 TH ST STE 2150", "2000 HOWARD SMITH AVE W", "15…
-#> $ client_address_norm             <chr> "1200 K ST N W STE 1200", "9952 EASTMAN PARK DR", "300 R…
-#> $ lobbyist_zip5                   <chr> "80202", "80550", "80203", "80202", "80203", "80202", "8…
-#> $ client_zip5                     <chr> "20005", "80551", "48265", "80112", "80222", "80237", "8…
-#> $ client_state_norm               <chr> "DC", "CO", "MI", "CO", "CO", "CO", "CO", "OR", "CO", "C…
-#> $ lobbyist_city_norm              <chr> "DENVER", "WINDSOR", "DENVER", "DENVER", "DENVER", "DENV…
-#> $ client_city_norm                <chr> "WASHINGTON", "WINDSOR", "DETROIT", "ENGLEWOOD", "DENVER…
-#> $ lobbyist_city_swap              <chr> "DENVER", "WINDSOR", "DENVER", "DENVER", "DENVER", "DENV…
-#> $ client_city_swap                <chr> "WASHINGTON", "WINDSOR", "DETROIT", "ENGLEWOOD", "DENVER…
+#> Rows: 20
+#> Columns: 28
+#> $ lobbyist_last_name              <chr> "KELLY-BOWRY", "BRANDEBERRY MCKENNA PUBLIC AFFAIRS", "GOF…
+#> $ lobbyist_first_name             <chr> "TANYA", NA, "ERIN", "DANNY", "III", NA, "RACHEL", "DANIE…
+#> $ lobbyist_address1               <chr> "2205 W. 136TH AVENUE, STE. 106", "1410 GRANT STREET, C-3…
+#> $ lobbyist_address2               <chr> "#317", NA, "SUITE # 510", "38 VIRGINIA CANYON ROAD", NA,…
+#> $ lobbyist_city                   <chr> "WESTMINSTER", "DENVER", "DENVER", "IDAHO SPRINGS", NA, "…
+#> $ lobbyist_state                  <chr> "CO", "CO", "CO", "CO", NA, "CO", "CO", "CO", "CO", "CO",…
+#> $ lobbyist_zip                    <chr> "80023", "80203", "80202", "80452", NA, "80203", "80202",…
+#> $ primary_lobbyist_id             <chr> "20075000109", "20105000133", "20105000068", "20025001646…
+#> $ annual_lobbyist_registration_id <chr> "20095006063", "20105000133", "20185025726", "20095005884…
+#> $ client_name                     <chr> "SUBCONTRACTOR", "CFSA, C/O MULTISTATES ASSOCIATES", "VIS…
+#> $ client_address1                 <chr> "2042 GLENCOE STREET", "515 KING STREET", "P.O. BOX 8999"…
+#> $ client_address2                 <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "SUITE 315", NA, …
+#> $ client_city                     <chr> "DENVER", "ALEXANDRIA", "SAN FRANCISCO", "DENVER", "ALEXA…
+#> $ client_state                    <chr> "CO", "VA", "CA", "CO", "VA", "CO", "CO", "CO", "CO", "CO…
+#> $ client_zip                      <chr> "80207", "22314", "94128", "80237", "22314", "80422", "80…
+#> $ year                            <dbl> 2009, 2010, 2018, 2009, 1996, 2017, 2010, 2013, 2012, 201…
+#> $ first_year                      <chr> "2007", "2010", "2010", "2002", "1995", "2009", "2006", "…
+#> $ na_flag                         <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, F…
+#> $ dupe_flag                       <lgl> TRUE, TRUE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, TRU…
+#> $ lobbyist_address_norm           <chr> "2205 W 136TH AVENUE STE 106 #317", "1410 GRANT STREET C3…
+#> $ client_address_norm             <chr> "2042 GLENCOE ST", "515 KING ST", "PO BOX 8999", "7979 EA…
+#> $ lobbyist_zip5                   <chr> "80023", "80203", "80202", "80452", NA, "80203", "80202",…
+#> $ client_zip5                     <chr> "80207", "22314", "94128", "80237", "22314", "80422", "80…
+#> $ client_state_norm               <chr> "CO", "VA", "CA", "CO", "VA", "CO", "CO", "CO", "CO", "CO…
+#> $ lobbyist_city_norm              <chr> "WESTMINSTER", "DENVER", "DENVER", "IDAHO SPRINGS", NA, "…
+#> $ client_city_norm                <chr> "DENVER", "ALEXANDRIA", "SAN FRANCISCO", "DENVER", "ALEXA…
+#> $ lobbyist_city_swap              <chr> "WESTMINSTER", "DENVER", "DENVER", "IDAHO SPRINGS", NA, "…
+#> $ client_city_swap                <chr> "DENVER", "ALEXANDRIA", "SAN FRANCISCO", "DENVER", "ALEXA…
 ```
 
-1.  There are 66819 records in the database.
-2.  There are 2235 duplicate records in the database.
-3.  The range and distribution of `amount` seems mostly reasonable
-    except for a few entries.
-4.  There are 39 records missing either recipient or date.
+1.  There are 82470 records in the database.
+2.  There are 3282 duplicate records in the database.
+3.  The range and distribution of `year` seems mostly reasonable except
+    for a few entries.
+4.  There are 48 records missing either recipient or date.
 5.  Consistency in goegraphic data has been improved with
     `campfin::normal_*()`.
 6.  The 4-digit `year` variable has been created with
@@ -580,7 +577,7 @@ glimpse(sample_n(colr, 20))
 ## Export
 
 ``` r
-clean_dir <- dir_create(here("co", "lobby", "data", "reg","clean"))
+clean_dir <- dir_create(here("state","co", "lobby", "data", "reg","clean"))
 ```
 
 ``` r

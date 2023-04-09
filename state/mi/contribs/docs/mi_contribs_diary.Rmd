@@ -1,6 +1,6 @@
 ---
 title: "Michigan Contributions"
-author: "Kiernan Nicholls"
+author: "Kiernan Nicholls & Yanqi Xu"
 date: "`r date()`"
 output:
   github_document: 
@@ -103,7 +103,7 @@ paths relative to _your_ machine.
 
 ```{r where_here}
 # where does this document knit?
-here::i_am("mi/contribs/docs/mi_contribs_diary.Rmd")
+here::i_am("state/mi/contribs/docs/mi_contribs_diary.Rmd")
 ```
 
 [tap]: https://github.com/irworkshop/accountability_datacleaning
@@ -113,7 +113,7 @@ here::i_am("mi/contribs/docs/mi_contribs_diary.Rmd")
 
 This data is obtained from the Michigan [Board of Elections (BOE)][boe] 
 [Campaign Finance Reporting (CFR)][cfr] system. The data is provided as 
-[annual ZIP archive files][data] for the years 1998 through 2020. These files
+[annual ZIP archive files][data] for the years 1998 through 2023. These files
 are updated nightly.
 
 [boe]: https://www.michigan.gov/sos/0,4670,7-127-1633---,00.html
@@ -162,8 +162,10 @@ and read them together into a single data frame object.
 We will scrape the download page for every archive link, then downloading each
 to a local directory.
 
+Since the last update included all data prior to 2021, we will start with `2021_00` and exclude the incomplete 2023 file. The next update should start with the first file from 2023.
+
 ```{r raw_dir}
-raw_dir <- dir_create(here("mi", "contribs", "data", "raw"))
+raw_dir <- dir_create(here("state","mi", "contribs", "data", "raw"))
 raw_page <- read_html(raw_base)
 ```
 
@@ -174,6 +176,8 @@ raw_urls <- raw_page %>%
   html_attr("href") %>% 
   str_subset("contributions") %>% 
   str_c(raw_base, ., sep = "/")
+# change this next time to 56:xx to start with 2023
+raw_urls <- raw_urls[50:55]
 ```
 
 ```{r raw_paths}
@@ -309,7 +313,7 @@ prop_distinct(mic$tx)
 ```
 
 ```{r dupe_file}
-dupe_file <- here("mi", "contribs", "dupes.tsv.xz")
+dupe_file <- here("state","mi", "contribs", "dupes.tsv.xz")
 ```
 
 ```{r dupe_write}
@@ -459,8 +463,8 @@ mic %>%
   geom_col(aes(fill = even)) + 
   scale_fill_brewer(palette = "Dark2") +
   scale_y_continuous(labels = comma) +
-  scale_x_continuous(breaks = seq(1998, 2021, by = 2)) +
-  coord_cartesian(xlim = c(1996, 2021)) +
+  scale_x_continuous(breaks = seq(1921, 2023, by = 2)) +
+  coord_cartesian(xlim = c(1921, 2023)) +
   theme(legend.position = "bottom") +
   labs(
     title = "Michigan Contributions by Year",
@@ -821,8 +825,8 @@ glimpse(sample_n(mic, 50))
 Now the file can be saved on disk for upload to the Accountability server.
 
 ```{r clean_dir}
-clean_dir <- dir_create(here("mi", "contribs", "data", "clean"))
-clean_path <- path(clean_dir, "mi_contribs_clean.csv")
+clean_dir <- dir_create(here("state","mi", "contribs", "data", "clean"))
+clean_path <- path(clean_dir, "mi_contribs_clean_2021-2022.csv")
 write_csv(mic, clean_path, na = "")
 (clean_size <- file_size(clean_path))
 file_encoding(clean_path) %>% 

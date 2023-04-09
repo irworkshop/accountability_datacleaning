@@ -34,7 +34,7 @@ if (!interactive()) {
 ```
 
 ```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
-doc_dir <- fs::dir_create(here::here("il", "lobby", "docs"))
+doc_dir <- fs::dir_create(here::here("state","il", "lobby", "docs"))
 ```
 
 ## Project
@@ -131,7 +131,7 @@ Lobbying data is obtained from the Illinois Secretary of State via a public reco
 The results data was manually exported to the `data/raw/` directory.
 
 ```{r raw_dir}
-raw_dir <- dir_create(here("il", "lobbying", "data", "raw"))
+raw_dir <- dir_create(here("state","il", "lobbying", "data", "raw"))
 raw_info <- as_tibble(dir_info(raw_dir))
 raw_info %>% 
   select(path, size, modification_time)

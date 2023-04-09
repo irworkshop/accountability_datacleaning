@@ -105,13 +105,13 @@ here::here()
 
 ## Data
 
-Lobbyist data is obtained from the [Colorado Open Data Portal][03]. The data is as current as March 11, 2020.
+Lobbyist data is obtained from the [Colorado Open Data Portal][03]. The data is as current as March 26, 2023.
 
 > About:   
 Lobbyist name and address and the names and addresses of their associated clients provided by the Colorado Department of State (CDOS).
 
 ```{r raw_dir}
-raw_dir <- dir_create(here("co", "lobby", "data", "raw", "reg"))
+raw_dir <- dir_create(here("state","co", "lobby", "data", "raw", "reg"))
 ```
 
 
@@ -450,7 +450,7 @@ glimpse(sample_n(colr, 20))
 ## Export
 
 ```{r clean_dir}
-clean_dir <- dir_create(here("co", "lobby", "data", "reg","clean"))
+clean_dir <- dir_create(here("state","co", "lobby", "data", "reg","clean"))
 ```
 
 ```{r write_clean}

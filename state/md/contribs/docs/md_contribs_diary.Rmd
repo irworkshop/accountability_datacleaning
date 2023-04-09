@@ -1,6 +1,6 @@
 ---
 title: "Maryland Contributions"
-author: "Kiernan Nicholls"
+author: "Kiernan Nicholls & Yanqi Xu"
 date: "`r Sys.time()`"
 output:
   github_document: 
@@ -145,9 +145,9 @@ raw_dir <- dir_create(here("state","md", "contribs", "data", "raw"))
 First, we will use `httr::POST()` to essentially fill out the search form for
 all filing years. We can get all the filing year options from the drop down
 menu.
-Our last update happened Nov 23, 2020, so we will download the data for 2021-2022 ()
+Our last update included data up to Nov 17, 2020, so we will download the data from Nov 18, 2020 to April 7, 2023. However, the next update should start on Jan. 19, 2023 because the more recent entries could be 
 
-```{r raw_years}
+```{r raw_years, eval=FALSE}
 cris_url <- "https://campaignfinance.maryland.gov/Public/ViewReceipts"
 fil_years <- read_html(cris_url) %>% 
   html_node("#FilingYear") %>% 
@@ -246,7 +246,7 @@ To properly read the file into R, we first have to do some simple string
 processing to the text file.
 
 ```{r fix_lines}
-fix_paths <- path_temp(basename(raw_info$path))
+fix_paths <- fs::path_temp(basename(raw_info$path))
 for (i in seq_along(raw_info$path)) {
   if (!file_exists(fix_paths[i])) {
     read_file(raw_info$path[i]) %>% 
@@ -267,9 +267,9 @@ file_info(fix_paths) %>%
 ```
 
 ### Read
-
+Since the more recent entries could be incomplete due to the lag in reporting, we are going to exclude all the entries after `2023-01-18`
 ```{r raw_read}
-# 5,548,922
+# 1,216,240
 mdc <- map_df(
   .x = fix_paths,
   .f = read_delim,
@@ -281,10 +281,11 @@ mdc <- map_df(
   na = c("", "NA", "N/A", "NULL", "Not Included"),
   col_types = cols(
     .default = col_character(),
-    `Contribution Date` = col_date_usa(),
+    `Contribution Date` = col_date_mdy(),
     `Contribution Amount` = col_double()
   )
 )
+
 ```
 
 ```{r raw_rename}
@@ -306,6 +307,8 @@ mdc <- mdc %>%
     office = `Office`,
     fund = `Fundtype`
   )
+
+mdc <- mdc %>% filter(date <= as.Date("2023-01-18"))
 ```
 
 ### Separate
@@ -485,7 +488,7 @@ mdc <- mutate(mdc, tx = row_number())
 ```
 
 ```{r dupe_file}
-dupe_file <- here("md", "contribs", "dupes.csv.xz")
+dupe_file <- here("state","md", "contribs", "dupes_2023.csv.xz")
 ```
 
 ```{r dupe_write}
@@ -608,8 +611,8 @@ mdc %>%
   geom_col(aes(fill = even)) +
   scale_fill_brewer(palette = "Dark2") +
   scale_y_continuous(labels = comma) +
-  scale_x_continuous(breaks = seq(2005, 2020, by = 2)) +
-  coord_cartesian(xlim = c(2005, 2020)) +
+  scale_x_continuous(breaks = seq(2000, 2023, by = 2)) +
+  coord_cartesian(xlim = c(2020, 2023)) +
   theme(legend.position = "bottom") +
   labs(
     title = "Maryland Contribution by Year",
@@ -897,8 +900,8 @@ glimpse(sample_n(mdc, 100))
 Now the file can be saved on disk for upload to the Accountability server.
 
 ```{r clean_dir}
-clean_dir <- dir_create(here("md", "contribs", "data", "clean"))
-clean_path <- path(clean_dir, "md_contribs_clean.csv")
+clean_dir <- dir_create(here("state","md", "contribs", "data", "clean"))
+clean_path <- path(clean_dir, "md_contribs_clean_20201118-20230118.csv")
 write_csv(mdc, clean_path, na = "")
 (clean_size <- file_size(clean_path))
 file_encoding(clean_path) %>% 
@@ -909,7 +912,7 @@ file_encoding(clean_path) %>%
 
 We can use the `aws.s3::put_object()` to upload the text file to the IRW server.
 
-```{r aws_upload, eval=TRUE}
+```{r aws_upload, eval=FALSE}
 aws_path <- path("csv", basename(clean_path))
 if (!object_exists(aws_path, "publicaccountability")) {
   put_object(
