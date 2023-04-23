@@ -207,7 +207,6 @@ col_stats(ctlc, count_na)
 We can see there's no duplicate entry.
 ```{r dupe_flag}
 ctlc <- flag_dupes(ctlc, dplyr::everything())
-sum(ctlc$dupe_flag)
 ```
 
 
@@ -218,7 +217,8 @@ ctlc <- ctlc %>% mutate(session = str_extract(source_file, "\\d{4}")) %>%
                           mutate(session = case_when(session == "2013" ~ "2013-2014",
                             session == "2015" ~ "2015-2016",
                              session == "2017" ~ "2017-2018",
-                             session == "2019" ~ "2019-2020")) %>% 
+                             session == "2019" ~ "2019-2020",
+                            session == "2021" ~ "2021-2022")) %>% 
         select(-source_file)
 
 ```
@@ -272,7 +272,7 @@ ctlc %>% filter(client %in% top5$client) %>%
   ) +
   labs(
     title = "Conencticut Top 5 Clients Lobbhying Amount Distribution",
-    subtitle = "from 2013 to 2019, by total expenditures",
+    subtitle = "from 2013 to 2022, by total expenditures",
     caption = "Source: CT Office of Ethics",
     x = "",
     y = "Expenditure Amount"
@@ -316,13 +316,14 @@ ct_dupe <- ct_join %>% filter(n==2) %>%
 ct_dedupe <- ct_dupe %>% group_split(client_name, lobbyist_first_name, lobbyist_last_name, session)
 
 # For entries with the same client_name, lobbyist_first_name, lobbyist_last_name, session, we group them in a list for comparison
+ct_dedupes <- rep(NA, length(ct_dedupe))
 
 for (i in seq_along(ct_dedupe)){
-ct_dedupe[[i]]$early_more_info <- NA
   # early_more_info suggests whether the first entry has more information
-  ct_dedupe[[i]]$row_sum[1] < ct_dedupe[[i]]$row_sum[2]
+  ct_dedupes[i] <- ct_dedupe[[i]]$row_sum[1] < ct_dedupe[[i]]$row_sum[2]
+  
 # if the first entry has more non-NA columns, use the first entry, otherwise use the second instance.
-  if (ct_dedupe[[i]]$early_more_info[1]) {
+  if (ct_dedupes[i]) {
   ct_dedupe[[i]] <- ct_dedupe[[i]][1,]
   }
   else{
@@ -330,7 +331,7 @@ ct_dedupe[[i]]$early_more_info <- NA
   }
 }
 
-ct_deduped <- ct_dedupe %>% plyr::ldply() %>% select(-c(row_sum,early_more_info,n))
+ct_deduped <- ct_dedupe %>% plyr::ldply() %>% select(-c(row_sum,n))
 # first remove all the double entries
 ct_join<- ct_join %>% filter(n != 2) %>% 
   unite(remove = T, col = "communicator", lobbyist_first_name, lobbyist_last_name,sep = " ", na.rm = TRUE) %>% select(-n) %>% 
@@ -346,11 +347,11 @@ ctlc_clean <- ctlc %>%
 
 col_stats(ctlc_clean, count_na)         
 
-sample_frac(ctlc)
+sample_frac(ctlc_clean)
 ```
 
-1. There are `r nrow(ctlc)` records in the database.
-1. There are `r sum(ctlc$dupe_flag)` duplicate records in the database.
+1. There are `r nrow(ctlc_clean)` records in the database.
+1. There are `r sum(ctlc_clean$dupe_flag)` duplicate records in the database.
 1. The range and distribution of `year` seems mostly reasonable except for a few entries.
 1. Consistency in goegraphic data has been improved with `campfin::normal_*()`.
 1. The 4-digit `year` variable has been created with `lubridate::year()`.

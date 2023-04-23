@@ -1,6 +1,6 @@
 ---
 title: "Kentucky Lobbyists"
-author: "Kiernan Nicholls & Yanqi Xu"
+author: "Kiernan Nicholls & Yanqi"
 date: "`r Sys.time()`"
 output:
   github_document: 

@@ -722,7 +722,7 @@ Now the file can be saved on disk for upload to the Accountability
 server.
 
 ``` r
-clean_dir <- dir_create(here("la", "expends", "data", "clean"))
+clean_dir <- dir_create(here("state","la", "expends", "data", "clean"))
 clean_path <- path(clean_dir, "la_expends_clean.csv")
 write_csv(lae, clean_path, na = "")
 file_size(clean_path)

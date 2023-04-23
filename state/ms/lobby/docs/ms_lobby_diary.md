@@ -1,7 +1,23 @@
 Mississippi Lobbying Registration Data Diary
 ================
 Yanqi Xu
-2020-02-11 18:41:35
+2023-04-09 22:42:24
+
+- <a href="#project" id="toc-project">Project</a>
+- <a href="#objectives" id="toc-objectives">Objectives</a>
+- <a href="#packages" id="toc-packages">Packages</a>
+- <a href="#download" id="toc-download">Download</a>
+- <a href="#reading" id="toc-reading">Reading</a>
+- <a href="#explore" id="toc-explore">Explore</a>
+  - <a href="#duplicates" id="toc-duplicates">Duplicates</a>
+  - <a href="#year" id="toc-year">Year</a>
+- <a href="#wrangling" id="toc-wrangling">Wrangling</a>
+  - <a href="#phone" id="toc-phone">Phone</a>
+  - <a href="#address" id="toc-address">Address</a>
+  - <a href="#zip" id="toc-zip">ZIP</a>
+  - <a href="#state" id="toc-state">State</a>
+  - <a href="#city" id="toc-city">City</a>
+- <a href="#join" id="toc-join">Join</a>
 
 ## Project
 
@@ -28,7 +44,7 @@ objectives:
 3.  Check ranges
 4.  Is there anything blank or missing?
 5.  Check for consistency issues
-6.  Create a five-digit ZIP Code called `ZIP5`
+6.  Create a five-digit ZIP Code called `zip_clean`
 7.  Create a `YEAR` field from the transaction date
 8.  Make sure there is data on both parties to a transaction
 
@@ -74,7 +90,7 @@ Set the download directory first.
 
 ``` r
 # create a directory for the raw data
-raw_dir <- here("ms", "lobby", "data", "raw","reg")
+raw_dir <- here("state","ms", "lobby", "data", "raw","reg")
 
 dir_create(raw_dir)
 ```
@@ -116,27 +132,11 @@ expenditure data is wrangled in a separate data diary.
 [Mississippi Secretary of
 State](https://sos.ms.gov/elec/portal/msel2/page/search/portal.aspx)
 makes lobbyist and client registry searchable and downloadable from 2010
-to
-2020.
+to 2023.
 
-``` r
-ms_url_lb <- glue("https://sos.ms.gov/elec/portal/msel2/Config/Mississippi/Elections/Controls/SosWeb/Lobbyist/LobbyistSearchControls/HandlerWrap.aspx?type=1&year={2010:2020}&lastName=&firstName=&clientName=")
-
-ms_url_cl <-  glue("https://sos.ms.gov/elec/portal/msel2/Config/Mississippi/Elections/Controls/SosWeb/Lobbyist/LobbyistSearchControls/HandlerWrap.aspx?type=3&year={2010:2020}&lastName=&firstName=&clientName=")
-  
-
-dest_file_lb <- glue("{raw_dir}/ms_lobby_lb_{2010:2020}.xls")
-dest_file_cl <- glue("{raw_dir}/ms_lobby_cl_{2010:2020}.xls")
-if (!all_files_new(raw_dir)) {
-    download.file(
-      url = ms_url_cl,
-      destfile = dest_file_cl)
-  download.file(
-      url = ms_url_lb,
-      destfile = dest_file_lb)
-  Sys.sleep(1)
-}
-```
+The last update included data up to Jan 2020. We are going to download
+data for 2020-2022, and then exclude the 2020 entires already present in
+the old file. The next update should start with 2023.
 
 Then, we’ll merge each dataset into a master dataset. Note that there is
 no date or year field in the individual databases, and we will need to
@@ -159,9 +159,9 @@ regulates lobbyists registration as such.
 > statute requires all registered lobbyists to file three (3) reports
 > during the lobbying cycle:  
 > - Legislative Mid-Session Report due on February 25th  
-> \- Legislative End-of-Session Report due within ten (10) days after
+> - Legislative End-of-Session Report due within ten (10) days after
 > sine die  
-> \- Annual Report of Expenditures due no later than January 30th  
+> - Annual Report of Expenditures due no later than January 30th  
 > (Miss. Code Ann. § 5-8-11(5)(6)).  
 > Registered lobbyists’ clients file one (1) report, the Annual Report,
 > with the Secretary of State’s Office during the lobbying cycle.
@@ -193,13 +193,28 @@ ms_lobby_lb <- ms_lb_files %>% map_dfr(read_web_tb, .id = "file") %>%
                    clean_names()
 ```
 
+#### Previous
+
+We can read in the previous file
+
+``` r
+prev_dir <- here("state","ms","lobby","data","previous")
+
+prev_path <- dir_ls(prev_dir, regexp = ".+reg.+")
+#10,646
+ms_prev <- read_csv(prev_path)
+
+names(ms_prev) <- names(ms_prev) %>% str_replace_all("zip5",
+                                                     "zip_clean")
+```
+
 ## Explore
 
 ### Duplicates
 
 We’ll use the `flag_dupes()` function to see if there are records
-identical to one another and flag the duplicates. A new variable
-`dupe_flag` will be created.
+identical to one another and flag the duplicates. No duplicated rows
+were found
 
 ``` r
 ms_lobby_lb <- flag_dupes(ms_lobby_lb, dplyr::everything())
@@ -210,35 +225,20 @@ ms_lobby_cl <- flag_dupes(ms_lobby_cl, dplyr::everything())
 
 ``` r
 ms_lobby_lb <- ms_lobby_lb %>% mutate (date = registration_date %>% as.Date(format = "%b %d %Y %I:%M%p"),
-                                       year = str_extract(date,"\\d{4}")) %>% 
+                                       year = as.numeric(str_extract(date,"\\d{4}"))) %>% 
   select(-file)
 
 ms_lobby_cl <- ms_lobby_cl %>% mutate (date = registration_date %>% as.Date(format = "%b %d %Y %I:%M%p"),
-                                       year = str_extract(date,"\\d{4}")) %>% 
+                                       year = as.numeric(str_extract(date,"\\d{4}"))) %>% 
   select(-file)
 ```
 
-``` r
-ms_lobby_lb %>% 
-  mutate(year = as.numeric(year)) %>% 
-  group_by(year) %>% 
-  ggplot(aes(year)) +
-  scale_x_continuous(breaks = 2010:2020) +
-  geom_bar(fill = RColorBrewer::brewer.pal(3, "Dark2")[1]) +
-  labs(
-    title = "Mississippi Lobbyists Registration by Year",
-    caption = "Source: Mississippi Elections Division: Lobbying",
-    x = "Year",
-    y = "Count"
-  )
-```
-
-![](../plots/unnamed-chunk-1-1.png)<!-- --> \#\#\# Missing There’s not a
+![](../plots/unnamed-chunk-1-1.png)<!-- --> \### Missing There’s not a
 single empty field in the two data frames.
 
 ``` r
 ms_lobby_cl  %>% col_stats(count_na)
-#> # A tibble: 13 x 4
+#> # A tibble: 13 × 4
 #>    col                  class      n     p
 #>    <chr>                <chr>  <int> <dbl>
 #>  1 client_name          <chr>      0     0
@@ -253,9 +253,9 @@ ms_lobby_cl  %>% col_stats(count_na)
 #> 10 certification_number <chr>      0     0
 #> 11 description          <chr>      0     0
 #> 12 date                 <date>     0     0
-#> 13 year                 <chr>      0     0
+#> 13 year                 <dbl>      0     0
 ms_lobby_lb  %>% col_stats(count_na)
-#> # A tibble: 13 x 4
+#> # A tibble: 13 × 4
 #>    col                  class      n     p
 #>    <chr>                <chr>  <int> <dbl>
 #>  1 first_name           <chr>      0     0
@@ -270,7 +270,7 @@ ms_lobby_lb  %>% col_stats(count_na)
 #> 10 postal_code          <chr>      0     0
 #> 11 telephone            <chr>      0     0
 #> 12 date                 <date>     0     0
-#> 13 year                 <chr>      0     0
+#> 13 year                 <dbl>      0     0
 ```
 
 ## Wrangling
@@ -280,8 +280,7 @@ city, ZIP, state, phone for both lobbyists and their clients, as well as
 authorization date. The lobbyists registry has the one-to-one
 relationship between lobbyists and clients, so we will use `ms_lobby_lb`
 as the main data frame and join the clients’ information from the
-`ms_lobby_cl` data
-frame.
+`ms_lobby_cl` data frame.
 
 ### Phone
 
@@ -311,19 +310,19 @@ reaches 100% validity.
 
 ``` r
 prop_in(ms_lobby_lb$postal_code, valid_zip, na.rm = TRUE) %>% percent()
-#> [1] "42%"
+#> [1] "55%"
 prop_in(ms_lobby_cl$postal_code, valid_zip, na.rm = TRUE) %>% percent()
-#> [1] "48%"
+#> [1] "67%"
 
 ms_lobby_lb <- ms_lobby_lb %>% 
-  mutate(zip5 = normal_zip(postal_code))
+  mutate(zip_clean = normal_zip(postal_code))
   
 ms_lobby_cl <- ms_lobby_cl %>% 
-  mutate(zip5 = normal_zip(postal_code))
+  mutate(zip_clean = normal_zip(postal_code))
 
-prop_in(ms_lobby_lb$zip5, valid_zip, na.rm = TRUE) %>% percent()
+prop_in(ms_lobby_lb$zip_clean, valid_zip, na.rm = TRUE) %>% percent()
 #> [1] "100%"
-prop_in(ms_lobby_cl$zip5, valid_zip, na.rm = TRUE) %>% percent()
+prop_in(ms_lobby_cl$zip_clean, valid_zip, na.rm = TRUE) %>% percent()
 #> [1] "100%"
 ```
 
@@ -346,9 +345,9 @@ case.
 
 ``` r
 prop_in(ms_lobby_cl$city, valid_city, na.rm = TRUE) %>% percent()
-#> [1] "47%"
+#> [1] "27%"
 prop_in(ms_lobby_lb$city, valid_city, na.rm = TRUE) %>% percent()
-#> [1] "57%"
+#> [1] "38%"
 ```
 
 #### Normalize
@@ -360,14 +359,14 @@ ms_lobby_lb <- ms_lobby_lb %>% mutate(city_norm = normal_city(city = city,
                                             na = invalid_city,
                                             na_rep = TRUE))
 n_distinct(ms_lobby_lb$city)
-#> [1] 258
+#> [1] 164
 n_distinct(ms_lobby_lb$city_norm)
-#> [1] 209
+#> [1] 141
 
 prop_in(ms_lobby_lb$city, valid_city, na.rm = TRUE)
-#> [1] 0.568049
+#> [1] 0.3830464
 prop_in(ms_lobby_lb$city_norm, valid_city, na.rm = TRUE)
-#> [1] 0.9647502
+#> [1] 0.9658278
 ```
 
 ``` r
@@ -377,14 +376,14 @@ ms_lobby_cl <- ms_lobby_cl %>% mutate(city_norm = normal_city(city = city,
                                             na = invalid_city,
                                             na_rep = TRUE))
 n_distinct(ms_lobby_cl$city)
-#> [1] 462
+#> [1] 318
 n_distinct(ms_lobby_cl$city_norm)
-#> [1] 368
+#> [1] 269
 
 prop_in(ms_lobby_cl$city, valid_city, na.rm = TRUE)
-#> [1] 0.4659765
+#> [1] 0.271164
 prop_in(ms_lobby_cl$city_norm, valid_city, na.rm = TRUE)
-#> [1] 0.96
+#> [1] 0.9547619
 ```
 
 #### Swap
@@ -400,7 +399,7 @@ ms_lobby_cl <- ms_lobby_cl %>%
     y = zipcodes,
     by = c(
       "state" = "state",
-      "zip5" = "zip"
+      "zip_clean" = "zip"
     )
   ) %>% 
   rename(city_match = city.y,
@@ -430,7 +429,7 @@ ms_lobby_lb <- ms_lobby_lb %>%
     y = zipcodes,
     by = c(
       "state" = "state",
-      "zip5" = "zip"
+      "zip_clean" = "zip"
     )
   ) %>% 
   rename(city_match = city.y,
@@ -466,12 +465,12 @@ progress_table(
   ms_lobby_cl$city_swap,
   compare = valid_place
 )
-#> # A tibble: 3 x 6
-#>   stage     prop_in n_distinct prop_na n_out n_diff
-#>   <chr>       <dbl>      <dbl>   <dbl> <dbl>  <dbl>
-#> 1 city        0.481        462 0        5519    304
-#> 2 city_norm   0.990        368 0         107     20
-#> 3 city_swap   0.996        357 0.00508    38      8
+#> # A tibble: 3 × 6
+#>   stage                 prop_in n_distinct prop_na n_out n_diff
+#>   <chr>                   <dbl>      <dbl>   <dbl> <dbl>  <dbl>
+#> 1 ms_lobby_cl$city        0.281        318 0        2719    252
+#> 2 ms_lobby_cl$city_norm   0.984        269 0          59     16
+#> 3 ms_lobby_cl$city_swap   0.998        264 0.00582     8      4
 
 progress_table(
   ms_lobby_lb$city,
@@ -479,21 +478,21 @@ progress_table(
   ms_lobby_lb$city_swap,
   compare = valid_place
 )
-#> # A tibble: 3 x 6
-#>   stage     prop_in n_distinct prop_na n_out n_diff
-#>   <chr>       <dbl>      <dbl>   <dbl> <dbl>  <dbl>
-#> 1 city        0.576        258 0        4497    161
-#> 2 city_norm   0.997        209 0          30      5
-#> 3 city_swap   1.00         209 0.00123     5      3
+#> # A tibble: 3 × 6
+#>   stage                 prop_in n_distinct prop_na n_out n_diff
+#>   <chr>                   <dbl>      <dbl>   <dbl> <dbl>  <dbl>
+#> 1 ms_lobby_lb$city        0.388        164 0        2311    135
+#> 2 ms_lobby_lb$city_norm   0.997        141 0          13      6
+#> 3 ms_lobby_lb$city_swap   0.998        140 0.00238     8      4
 ```
 
 This is a very fast way to increase the valid proportion in the lobbyist
 data frame to 3% and reduce the number of distinct *invalid* values from
-5 to only 3
+6 to only 4
 
 Similarly, the valid proportion in the clients data frame was bumped up
-to 3% and reduce the number of distinct *invalid* values from 20 to only
-8
+to 3% and reduce the number of distinct *invalid* values from 16 to only
+4
 
 ## Join
 
@@ -516,8 +515,8 @@ ms_lobby_reg <- ms_lobby_cl %>%
             "client_year" = "year"))
 ```
 
-Finally, we will remove the iterative columns created during the
-normalization process, and inspect the output `ms_lob_reg` dataframe.
+We will remove the iterative columns created during the normalization
+process,
 
 ``` r
 ms_lobby_reg <- ms_lobby_reg %>% 
@@ -525,52 +524,64 @@ ms_lobby_reg <- ms_lobby_reg %>%
   rename(city_clean = city_swap,
          year = client_year,
          certification_number = client_certification_number)
+```
+
+Then, we will join this file with the previous data from the last
+update, but exclude the rows already in the last update.
+
+``` r
+ms_lobby_reg <- ms_lobby_reg %>% anti_join(ms_prev)
+```
+
+Finally,we’ll inspect the output `ms_lob_reg` dataframe.
+
+``` r
 
 col_stats(ms_lobby_reg, count_na)
-#> # A tibble: 31 x 4
+#> # A tibble: 31 × 4
 #>    col                      class      n        p
 #>    <chr>                    <chr>  <int>    <dbl>
 #>  1 client_name              <chr>      0 0       
-#>  2 client_telephone         <chr>     14 0.00132 
-#>  3 client_fax               <chr>     14 0.00132 
-#>  4 client_address_line1     <chr>     14 0.00132 
-#>  5 client_address_line2     <chr>     14 0.00132 
-#>  6 client_city              <chr>     14 0.00132 
-#>  7 client_state             <chr>     14 0.00132 
-#>  8 client_postal_code       <chr>     14 0.00132 
-#>  9 client_registration_date <chr>     14 0.00132 
+#>  2 client_telephone         <chr>      4 0.00106 
+#>  3 client_fax               <chr>      4 0.00106 
+#>  4 client_address_line1     <chr>      4 0.00106 
+#>  5 client_address_line2     <chr>      4 0.00106 
+#>  6 client_city              <chr>      4 0.00106 
+#>  7 client_state             <chr>      4 0.00106 
+#>  8 client_postal_code       <chr>      4 0.00106 
+#>  9 client_registration_date <chr>      4 0.00106 
 #> 10 certification_number     <chr>      0 0       
-#> 11 client_description       <chr>     14 0.00132 
-#> 12 client_date              <date>    14 0.00132 
-#> 13 year                     <chr>      0 0       
-#> 14 client_telephone_norm    <chr>     14 0.00132 
-#> 15 client_address_norm      <chr>     14 0.00132 
-#> 16 client_zip5              <chr>     14 0.00132 
-#> 17 client_city_clean        <chr>     68 0.00639 
-#> 18 first_name               <chr>      3 0.000282
-#> 19 last_name                <chr>      3 0.000282
-#> 20 registration_date        <chr>      3 0.000282
-#> 21 address_line1            <chr>      3 0.000282
-#> 22 address_line2            <chr>      3 0.000282
-#> 23 city                     <chr>      3 0.000282
-#> 24 state                    <chr>      3 0.000282
-#> 25 postal_code              <chr>      3 0.000282
-#> 26 telephone                <chr>      3 0.000282
-#> 27 date                     <date>     3 0.000282
-#> 28 telephone_norm           <chr>      3 0.000282
-#> 29 address_norm             <chr>      3 0.000282
-#> 30 zip5                     <chr>     13 0.00122 
-#> 31 city_clean               <chr>     16 0.00150
+#> 11 client_description       <chr>      4 0.00106 
+#> 12 client_date              <date>     4 0.00106 
+#> 13 year                     <dbl>      0 0       
+#> 14 client_telephone_norm    <chr>      4 0.00106 
+#> 15 client_address_norm      <chr>      4 0.00106 
+#> 16 client_zip_clean         <chr>      4 0.00106 
+#> 17 client_city_clean        <chr>     26 0.00689 
+#> 18 first_name               <chr>      0 0       
+#> 19 last_name                <chr>      0 0       
+#> 20 registration_date        <chr>      0 0       
+#> 21 address_line1            <chr>      0 0       
+#> 22 address_line2            <chr>      0 0       
+#> 23 city                     <chr>      0 0       
+#> 24 state                    <chr>      0 0       
+#> 25 postal_code              <chr>      0 0       
+#> 26 telephone                <chr>      0 0       
+#> 27 date                     <date>     0 0       
+#> 28 telephone_norm           <chr>      0 0       
+#> 29 address_norm             <chr>      0 0       
+#> 30 zip_clean                <chr>      3 0.000794
+#> 31 city_clean               <chr>      9 0.00238
 ```
 
 There are only a few instances of client record and lobbyist record not
-matching. \#\# Export
+matching. \## Export
 
 ``` r
-clean_dir <- here("ms", "lobby", "data", "processed","reg")
+clean_dir <- here("state","ms", "lobby", "data", "processed","reg")
 dir_create(clean_dir)
   write_csv(x = ms_lobby_reg,
-    path = glue("{clean_dir}/ms_lobby_reg.csv"),
+    path = glue("{clean_dir}/ms_lobby_reg_2020-2022.csv"),
     na = ""
   )
 ```

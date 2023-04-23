@@ -1,6 +1,6 @@
 ---
 title: "Michigan Lobbyists"
-author: "Kiernan Nicholls"
+author: "Kiernan Nicholls & Yanqi Xu"
 date: "`r Sys.time()`"
 output:
   github_document: 
@@ -111,7 +111,7 @@ here::here()
 
 Data is obtained from the [Michigan Secretary of State][sos]. The data is
 provided by NICUSA, Inc., which provides information technology services for the
-SOS.
+SOS. The data accessed on April 9, 2023 has a total of 8,261 records. This update includes all the rows in the last dataset. The next update will likely replace the current dataset. 
 
 > Use this page to search for information concerning individuals and
 organizations registered under the Michigan Lobby Registration Act, as well as
@@ -129,13 +129,14 @@ using `curl` with the `--insecure` option.
 [sos]: https://www.michigan.gov/sos/
 
 ```{r raw_dir}
-raw_dir <- here("mi", "lobby", "data", "raw")
+raw_dir <- here("state","mi", "lobby", "data", "raw")
 dir_create(raw_dir)
 ```
 
 ```{r raw_curl}
 # changes from time to time
-lob_url <- "https://miboecfr.nictusa.com/cfr/dumpdata/aaaMxayCb/mi_lobby.sh"
+#lob_url <- "https://miboecfr.nictusa.com/cfr/dumpdata/aaaMxayCb/mi_lobby.sh"
+lob_url <- "https://miboecfr.nictusa.com/cfr/dumpdata/aaaeNaqWQ/mi_lobby.sh"
 lob_path <- url2path(lob_url, raw_dir)
 if (!file_exists(lob_path)) {
   download.file(
@@ -210,8 +211,8 @@ milr <- read_delim(
   col_types = cols(
     .default = col_character(),
     type = col_factor(),
-    reg = col_date_usa(),
-    term = col_date_usa()
+    reg = col_date_mdy(),
+    term = col_date_mdy()
   )
 )
 ```
@@ -254,10 +255,9 @@ The database contains both outside lobbyist and lobbying agents.
 ```{r plot_agent, echo=FALSE}
 explore_plot(
   data = milr,
-  var = type,
-  title = "Michigan Lobbyist Types",
-  subtitle = "A = Agent, L = Lobbyist"
-)
+  var = type
+) + labs(title = "Michigan Lobbyist Types",
+  subtitle = "A = Agent, L = Lobbyist")
 ```
 
 `r percent(prop_na(milr$term))` of lobbyists in the database have a termination 
@@ -417,9 +417,9 @@ kable(progress, digits = 3)
 ### Export
 
 ```{r clean_write}
-clean_dir <- dir_create(here("mi", "lobby", "data", "clean"))
+clean_dir <- dir_create(here("state","mi", "lobby", "data", "clean"))
 clean_path <- path(clean_dir, "mi_lobby_reg.csv")
-write_csv(milr, path = clean_path, na = "")
+write_csv(milr %>% rename(city_clean = city_swap) %>% select(-city_norm), path = clean_path, na = "")
 ```
 
 ```{r clean_check}
@@ -428,6 +428,8 @@ guess_encoding(clean_path)
 ```
 
 ## Contributions
+
+Lobbying expenditure data be queried as [itemized lobby expenditure analysis](https://miboecfr.nictusa.com/cgi-bin/cfr/lobby_exp_anls.cgi). 
 
 ```{r exp_down}
 exp_url <- "https://miboecfr.nictusa.com/cfr/dumpall/miloball.sh"
@@ -527,6 +529,11 @@ mile %>%
     x = "Report Year",
     y = "Count"
   )
+```
+
+
+```{r year and state}
+mile <- mile %>% rename(year = rpt_year) %>% mutate(state = "MI")
 ```
 
 ```{r}

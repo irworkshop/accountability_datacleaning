@@ -58,7 +58,7 @@ This document describes the process used to complete the following objectives:
 1. Check ranges
 1. Is there anything blank or missing?
 1. Check for consistency issues
-1. Create a five-digit ZIP Code called `ZIP5`
+1. Create a five-digit ZIP Code called `zip_clean`
 1. Create a `YEAR` field from the transaction date
 1. Make sure there is data on both parties to a transaction
 
@@ -108,7 +108,7 @@ project also uses the dynamic `here::here()` tool for file paths relative to _yo
 Set the download directory first.
 ```{r create raw_dir}
 # create a directory for the raw data
-raw_dir <- here("ms", "lobby", "data", "raw","reg")
+raw_dir <- here("state","ms", "lobby", "data", "raw","reg")
 
 dir_create(raw_dir)
 ```
@@ -142,20 +142,22 @@ information.
 [03]: https://www.sos.ms.gov/Elections-Voting/Documents/2019%20Lobbying%20Guide.pdf
 This Rmd file documents the MS registration data only, whereas the expenditure data is wrangled in a separate data diary.
 
-[Mississippi Secretary of State](https://sos.ms.gov/elec/portal/msel2/page/search/portal.aspx) makes lobbyist and client registry searchable and downloadable from 2010 to 2020.
+[Mississippi Secretary of State](https://sos.ms.gov/elec/portal/msel2/page/search/portal.aspx) makes lobbyist and client registry searchable and downloadable from 2010 to 2023. 
 
-```{r lobbyists, eval = FALSE}
-ms_url_lb <- glue("https://sos.ms.gov/elec/portal/msel2/Config/Mississippi/Elections/Controls/SosWeb/Lobbyist/LobbyistSearchControls/HandlerWrap.aspx?type=1&year={2010:2020}&lastName=&firstName=&clientName=")
+The last update included data up to Jan 2020. We are going to download data for 2020-2022, and then exclude the 2020 entires already present in the old file. The next update should start with 2023. 
 
-ms_url_cl <-  glue("https://sos.ms.gov/elec/portal/msel2/Config/Mississippi/Elections/Controls/SosWeb/Lobbyist/LobbyistSearchControls/HandlerWrap.aspx?type=3&year={2010:2020}&lastName=&firstName=&clientName=")
-  
+```{r lobbyists, eval = FALSE, include = FALSE}
+ms_url_lb <- glue("https://lobbying.sos.ms.gov/elec/portal/msel2/Config/Mississippi/Elections/Controls/SosWeb/Lobbyist/LobbyistSearchControls/HandlerWrap.aspx?type=1&year={2010:2022}&lastName=&firstName=&clientName=")
 
-dest_file_lb <- glue("{raw_dir}/ms_lobby_lb_{2010:2020}.xls")
-dest_file_cl <- glue("{raw_dir}/ms_lobby_cl_{2010:2020}.xls")
+ms_url_cl <-  glue("https://lobbying.sos.ms.gov/elec/portal/msel2/Config/Mississippi/Elections/Controls/SosWeb/Lobbyist/LobbyistSearchControls/HandlerWrap.aspx?type=3&year={2010:2022}&lastName=&firstName=&clientName=")
+
+dest_file_lb <- glue("{raw_dir}/ms_lobby_lb_{2010:2022}.xls")
+dest_file_cl <- glue("{raw_dir}/ms_lobby_cl_{2010:2022}.xls")
 if (!all_files_new(raw_dir)) {
     download.file(
-      url = ms_url_cl,
-      destfile = dest_file_cl)
+      url = ms_url_cl[1],
+      destfile = dest_file_cl[1],
+      method = "curl")
   download.file(
       url = ms_url_lb,
       destfile = dest_file_lb)
@@ -207,12 +209,25 @@ ms_lobby_lb <- ms_lb_files %>% map_dfr(read_web_tb, .id = "file") %>%
                    bind_rows() %>% 
                    clean_names()
 ```
+#### Previous
+We can read in the previous file 
+
+```{r read previous}
+prev_dir <- here("state","ms","lobby","data","previous")
+
+prev_path <- dir_ls(prev_dir, regexp = ".+reg.+")
+#10,646
+ms_prev <- read_csv(prev_path)
+
+names(ms_prev) <- names(ms_prev) %>% str_replace_all("zip5",
+                                                     "zip_clean")
+```
+
 ## Explore
 
 ### Duplicates
 
-We'll use the `flag_dupes()` function to see if there are records identical to one another and flag the duplicates. A new variable `dupe_flag` will be created.
-
+We'll use the `flag_dupes()` function to see if there are records identical to one another and flag the duplicates. No duplicated rows were found
 ```{r flag dupe}
 ms_lobby_lb <- flag_dupes(ms_lobby_lb, dplyr::everything())
 ms_lobby_cl <- flag_dupes(ms_lobby_cl, dplyr::everything())
@@ -220,21 +235,20 @@ ms_lobby_cl <- flag_dupes(ms_lobby_cl, dplyr::everything())
 ### Year
 ```{r create year}
 ms_lobby_lb <- ms_lobby_lb %>% mutate (date = registration_date %>% as.Date(format = "%b %d %Y %I:%M%p"),
-                                       year = str_extract(date,"\\d{4}")) %>% 
+                                       year = as.numeric(str_extract(date,"\\d{4}"))) %>% 
   select(-file)
 
 ms_lobby_cl <- ms_lobby_cl %>% mutate (date = registration_date %>% as.Date(format = "%b %d %Y %I:%M%p"),
-                                       year = str_extract(date,"\\d{4}")) %>% 
+                                       year = as.numeric(str_extract(date,"\\d{4}"))) %>% 
   select(-file)
 ```
 
-
 ```{r echo=FALSE}
-ms_lobby_lb %>% 
+ms_lobby_lb %>% bind_rows(ms_prev) %>% 
   mutate(year = as.numeric(year)) %>% 
   group_by(year) %>% 
   ggplot(aes(year)) +
-  scale_x_continuous(breaks = 2010:2020) +
+  scale_x_continuous(breaks = 2010:2022) +
   geom_bar(fill = RColorBrewer::brewer.pal(3, "Dark2")[1]) +
   labs(
     title = "Mississippi Lobbyists Registration by Year",
@@ -280,13 +294,13 @@ prop_in(ms_lobby_lb$postal_code, valid_zip, na.rm = TRUE) %>% percent()
 prop_in(ms_lobby_cl$postal_code, valid_zip, na.rm = TRUE) %>% percent()
 
 ms_lobby_lb <- ms_lobby_lb %>% 
-  mutate(zip5 = normal_zip(postal_code))
+  mutate(zip_clean = normal_zip(postal_code))
   
 ms_lobby_cl <- ms_lobby_cl %>% 
-  mutate(zip5 = normal_zip(postal_code))
+  mutate(zip_clean = normal_zip(postal_code))
 
-prop_in(ms_lobby_lb$zip5, valid_zip, na.rm = TRUE) %>% percent()
-prop_in(ms_lobby_cl$zip5, valid_zip, na.rm = TRUE) %>% percent()
+prop_in(ms_lobby_lb$zip_clean, valid_zip, na.rm = TRUE) %>% percent()
+prop_in(ms_lobby_cl$zip_clean, valid_zip, na.rm = TRUE) %>% percent()
 ```
 
 ### State
@@ -342,7 +356,7 @@ ms_lobby_cl <- ms_lobby_cl %>%
     y = zipcodes,
     by = c(
       "state" = "state",
-      "zip5" = "zip"
+      "zip_clean" = "zip"
     )
   ) %>% 
   rename(city_match = city.y,
@@ -371,7 +385,7 @@ ms_lobby_lb <- ms_lobby_lb %>%
     y = zipcodes,
     by = c(
       "state" = "state",
-      "zip5" = "zip"
+      "zip_clean" = "zip"
     )
   ) %>% 
   rename(city_match = city.y,
@@ -443,14 +457,23 @@ ms_lobby_reg <- ms_lobby_cl %>%
             "client_certification_number" = "certification_number",
             "client_year" = "year"))
 ```
-
-Finally, we will remove the iterative columns created during the normalization process, and inspect the output `ms_lob_reg` dataframe.
-```{r inspect output}
+We will remove the iterative columns created during the normalization process, 
+```{r rename}
 ms_lobby_reg <- ms_lobby_reg %>% 
   select(-city_norm) %>% 
   rename(city_clean = city_swap,
          year = client_year,
          certification_number = client_certification_number)
+```
+
+Then, we will join this file with the previous data from the last update, but exclude the rows already in the last update.
+```{r bind old}
+ms_lobby_reg <- ms_lobby_reg %>% anti_join(ms_prev)
+```
+
+
+Finally,we'll inspect the output `ms_lob_reg` dataframe.
+```{r inspect output}
 
 col_stats(ms_lobby_reg, count_na)
 ```
@@ -458,10 +481,10 @@ There are only a few instances of client record and lobbyist record not matching
 ## Export
 
 ```{r write clean}
-clean_dir <- here("ms", "lobby", "data", "processed","reg")
+clean_dir <- here("state","ms", "lobby", "data", "processed","reg")
 dir_create(clean_dir)
   write_csv(x = ms_lobby_reg,
-    path = glue("{clean_dir}/ms_lobby_reg.csv"),
+    path = glue("{clean_dir}/ms_lobby_reg_2020-2022.csv"),
     na = ""
   )
 ```

@@ -130,7 +130,7 @@ dir_create(raw_dir)
 Download all the file packages containing all campaign-finance-related files. 
 ```{r download to raw_dir, eval = FALSE}
 #download the files into the directory
-pa_exp_urls <- glue("https://www.dos.pa.gov//VotingElections/CandidatesCommittees/CampaignFinance/Resources/Documents/{2015:2019}.zip")
+pa_exp_urls <- glue("https://www.dos.pa.gov//VotingElections/CandidatesCommittees/CampaignFinance/Resources/Documents/{2015:2022}.zip")
 
 if (!all_files_new(raw_dir)) {
   for (url in pa_exp_urls) {
@@ -164,13 +164,16 @@ To properly read the file into R, we first have to do some simple string process
 
 ```{r fix_dir}
 fix_dir <- dir_create(path(dirname(raw_dir), "fix"))
-expense_files <- list.files(raw_dir, pattern = "expense|expense_2020|expense_2021|expense_2022", recursive = FALSE, full.names = TRUE)
-fix_eval <- length(dir_ls(fix_dir)) != length(expense_files)
+pa_expends_paths <- dir_ls(raw_dir, regexp = "expense.+", recurse = FALSE)
+
+raw_dir %>% dir_info() %>% filter(path %in% pa_expends_paths)
+
+#fix_eval <- length(dir_ls(fix_dir)) != length(expense_files)
 ```
 
-```{r fix_loop_old, eval=fix_eval}
+```{r fix_loop_old, eval=false}
 # for old format files
-for (f in expense_files) {
+for (f in pa_expends_paths) {
   n <- path(fix_dir, str_c("FIX", basename(f), sep = "_"))
   x <- read_lines(f, skip = 1)
   for (i in rev(seq_along(x))) {
@@ -192,7 +195,7 @@ for (f in expense_files) {
 
 ```{r fix_loop_new, eval=fix_eval}
 # new format files
-for (f in expense_files) {
+for (f in pa_expends_paths) {
   n <- path(fix_dir, str_c("FIX", basename(f), sep = "_"))
   x <- read_lines(f, skip = 1)
   for (i in rev(seq_along(x))) {

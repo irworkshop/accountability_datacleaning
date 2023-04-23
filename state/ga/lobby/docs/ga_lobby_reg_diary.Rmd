@@ -34,7 +34,7 @@ if (!interactive()) {
 ```
 
 ```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
-doc_dir <- fs::dir_create(here::here("ga", "lobby", "docs"))
+doc_dir <- fs::dir_create(here::here("state","ga", "lobby", "docs"))
 ```
 
 ## Project
@@ -111,19 +111,23 @@ here::here()
 
 [tap]: https://github.com/irworkshop/accountability_datacleaning
 [rproj]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects
-[ethics]:https://media.ethics.ga.gov/search/Campaign/Campaign_ByContributions.aspx
+[ethics]:https://media.ethics.ga.gov/search/Lobbyist/Lobbyist_Menu.aspx
 ## Data
 
 Lobbying data is obtained from the [Georgia Government Transparency and Campaign Finance Commission][ethics].
 We use the Lobbyist Roster under the **Search Lobbyist** feature to return a list of lobbyists. There're two options for the data output, organized by group or lobbyist. We will use the Lobbyist Group Roster so that the data is organized by clients in relation to the lobbyists they employed.
 
-Note that the data is separated by year, and we will use `httr` to obtain each year's data via a `POST` request, whose parameters can be found from network activities.
+Note that the data is separated by year, and we will use `httr` to obtain each year's data via a `POST` request, whose parameters can be found from network activities.w
+
+There are two types of rosters, lobbying groups and lobbyists. We'll download both for each year. 
+
+For this update, we downloaded all the files from 2004 to the end of 2022. THe next update should start with 2023. 
 
 ## Download
 We can set up the raw directory.
 ```{r}
-raw_dir <- dir_create(here("ga", "lobby", "data", "raw","reg"))
-raw_lob_paths <- path(raw_dir, glue("ga_lob_{2004:2020}.xls"))
+raw_dir <- dir_create(here("state","ga", "lobby", "data", "raw","reg"))
+raw_lob_paths <- path(raw_dir, glue("ga_lob_{2006:2022}.csv"))
 ```
 The curl command is preprocessed to include `listGroup={c(LGR,LR)}` and `listYear={2004:2020}`
 ```{r download, eval=FALSE}
@@ -159,7 +163,9 @@ We can see that for year 2004 and 2005 the files are actually empty, so we'll di
 
 ### Read
 The 2001—2003 data has rows to escape. So we'll read the two datasets separately. The file's also not in a standard Excel format, so we will use `rvest` to scrape the html content. We'll also add the year to each dataframe. 
-```{r raw_read}
+
+We will also read in the group rosters separately, which contain addresses of principals/clients.
+```{r raw_read, eval=FALSE}
 ga_lob_read <- function(ga_path){
   year_from_file <- str_extract(ga_path,"20\\d{2}")
   lob_type <- str_extract(ga_path,"(?<=_)\\w{3}(?=_\\d+)")
@@ -171,28 +177,45 @@ if (file_exists(lob_file)) {
   ga_html <- ga_path %>% read_html()
   ga_node <- ga_html %>% html_node("table")
   ga_table <- ga_node %>% html_table()
-  names(ga_table) <- ga_table[1,]
+  names(ga_table) <- ga_table[1,] %>% unlist()
   ga_table <- ga_table[2:nrow(ga_table),]
   ga_table <- ga_table %>% 
     mutate(Year = year_from_file)
     write_csv(
     x = ga_table,
-    path = lob_file
+    file = lob_file
   )
     message(glue("Conversion completed for year {year_from_file}"))
 }
 }
 
-ga_lob <- map_dfr(raw_lob_paths[3:length(raw_lob_paths)], ga_lob_read)
+ga_lob <- map_dfr(raw_lob_paths[1], ga_lob_read)
 ```
-
 
 
 ```{r}
 galr <- dir_ls(raw_dir,regexp = ".*lob_.*.csv") %>% 
-  map_dfr(read_csv,col_types = cols(.default = col_character()))
+  map_dfr(read_csv,col_types = cols(.default = col_character(),
+                                    DateRegistered = col_date("%m/%d/%Y %H:%M:%S %p"),
+                                    DateTerminated = col_date("%m/%d/%Y %H:%M:%S %p"),
+                                    PaymentExceeds = col_logical()
+          )) %>% 
+          clean_names()
 
-galr_early <- dir_ls(raw_dir, regexp = ".+0103.xls") %>% read_xls(skip = 1,col_types = "text")
+galr_early <- dir_ls(raw_dir, regexp = ".+0103.xls") %>% read_xls(skip = 1,col_types = "text") %>% clean_names()
+
+```
+
+```{r}
+galr_grp <- dir_ls(raw_dir, regexp = ".*grp_.*.csv") %>% 
+    map_dfr(read_csv,col_types = cols(.default = col_character(),
+                                    DateRegistered = col_date("%m/%d/%Y %H:%M:%S %p"),
+                                    DateTerminated = col_date("%m/%d/%Y %H:%M:%S %p"),
+                                    PaymentExceeds = col_logical()
+          )) %>% 
+          clean_names()
+
+galr_grp <- galr_grp %>% select(association,filer_id,address1, address2, phone, city, state,zip,phone, date_registered, year) %>% unique()
 ```
 
 
@@ -201,24 +224,24 @@ According to the website, the `PaymentExceeds` column is a logical vector indica
 We will also need to rename some columns in the 01-03 files to keep it consistent with the later files. 
 ```{r}
 galr_early <- galr_early %>% 
-  mutate(Year = str_sub(`Docket Year`, start = 1L, end = 4L),
-         Registered = excel_numeric_to_date(as.numeric(Registered))) %>% 
-  rename(Association=`Association Name`,
-         DateRegistered = Registered,
-         FirstName = First,
-         MiddleName = Middle,
-         DocketYear = `Docket Year`,
-         Address1 = `Address 1`,
-         LastName = Last)
+  mutate(year = str_sub(docket_year, start = 1L, end = 4L),
+         registered = excel_numeric_to_date(as.numeric(registered))) %>% 
+  rename(association= association_name,
+         date_registered = registered,
+         first_name = first,
+         middle_name = middle,
+         last_name = last)
 ```
 
 ### Duplicates
 
-There are no duplicate records.
+There are some duplicate records.
 
 ```{r dupe_flag, warning=TRUE}
 galr <- flag_dupes(galr, everything())
 galr_early <- flag_dupes(galr_early, everything())
+galr_grp <- flag_dupes(galr_grp, everything())
+sum(galr$dupe_flag)
 sum(galr_early$dupe_flag)
 ```
 
@@ -228,6 +251,8 @@ glimpse(galr)
 tail(galr)
 glimpse(galr_early)
 tail(galr_early)
+glimpse(galr_grp)
+tail(galr_grp)
 ```
 
 
@@ -236,11 +261,12 @@ tail(galr_early)
 ```{r na_count}
 col_stats(galr, count_na)
 col_stats(galr_early, count_na)
+col_stats(galr_grp, count_na)
 ```
 
 ```{r na_flag}
-galr <- galr %>% flag_na(FilerID, FirstName,LastName, DateRegistered,Association)
-galr_early <- galr_early %>% flag_na(FirstName,LastName, DateRegistered,Association)
+galr <- galr %>% flag_na(filer_id,first_name,last_name,date_registered,association)
+galr_early <- galr_early %>% flag_na(first_name,last_name,date_registered, association)
 sum(galr$na_flag)
 sum(galr_early$na_flag)
 ```
@@ -248,11 +274,27 @@ sum(galr_early$na_flag)
 ```{r na_view}
 galr %>% 
   filter(na_flag) %>% 
-  select(FilerID, FirstName,LastName, DateRegistered,Association)
+  select(filer_id, first_name,last_name, date_registered,association)
 
 galr_early %>% 
   filter(na_flag) %>% 
-  select(FirstName,LastName, DateRegistered,Association)
+  select(first_name,last_name, date_registered,association)
+```
+
+```{r}
+galr_grp <- galr_grp %>% rename_at(.vars = vars(3:8), .funs = ~ str_c("grp_",.))
+galr_grp$grp_address1[which(galr_grp$grp_address1 == "2400 WEST LLYOD EXPRESSWAY")] <- "2400 WEST LLOYD EXPRESSWAY"
+
+galr_grp <- galr_grp %>% group_by(association) %>% 
+  filter(date_registered == min(date_registered))
+
+galr_grp <- galr_grp %>% select(-date_registered)
+
+galr_grp <- galr_grp %>% flag_dupes(everything())
+
+galr_grp <- galr_grp %>% filter(!dupe_flag)
+
+galr <- galr %>% left_join(galr_grp)
 ```
 
 
@@ -266,31 +308,31 @@ col_stats(galr, n_distinct)
 
 We can examine the validity of `date_clean`. It looks pretty clean.
 ```{r date_range}
-min(galr$DateRegistered)
-max(galr$DateRegistered)
-sum(galr$DateRegistered > today())
+min(galr$date_registered)
+max(galr$date_registered)
+sum(galr$date_registered > today())
 ```
 
 ```{r date_range early}
-min(galr_early$DateRegistered)
-max(galr_early$DateRegistered)
-sum(galr_early$DateRegistered > today())
+min(galr_early$date_registered)
+max(galr_early$date_registered)
+sum(galr_early$date_registered > today())
 ```
 
 ```{r bar_year, echo=FALSE}
-galr <- galr %>% mutate(Year = as.integer(Year))
-galr_early <- galr_early %>% mutate(Year = as.integer(Year))
+galr <- galr %>% mutate(year = as.integer(year))
+galr_early <- galr_early %>% mutate(year = as.integer(year))
 
 galr %>%
-  count(Year) %>% 
-  bind_rows(galr_early %>% count(Year)) %>% 
-  mutate(even = is_even(Year)) %>% 
-  ggplot(aes(x = Year, y = n)) +
+  count(year) %>% 
+  bind_rows(galr_early %>% count(year)) %>% 
+  mutate(even = is_even(year)) %>% 
+  ggplot(aes(x = year, y = n)) +
   geom_col(fill = dark2["purple"]) + 
   scale_fill_brewer(palette = "Dark2") +
   scale_y_continuous(labels = comma) +
-  scale_x_continuous(breaks = seq(1980, 2020, by = 2)) +
-  coord_cartesian(xlim = c(1989, 2020)) +
+  scale_x_continuous(breaks = seq(2001, 2022, by = 2)) +
+  coord_cartesian(xlim = c(2001, 2022)) +
   theme(legend.position = "bottom") +
   labs(
     title = "Georgia Lobbyists Registration by Year",
@@ -312,15 +354,20 @@ To normalize the lobbyist phone number variable, will will combine the number an
 ```{r phone_normal}
 galr <- galr %>% 
   unite(
-    Phone, PhoneExt,
-    col = "Phone_norm",
+    phone, phone_ext,
+    col = "phone_norm",
     sep = "x",
     remove = FALSE,
     na.rm = TRUE
   ) %>% 
   mutate(
-    Phone_norm = normal_phone(
-      number = "Phone_norm",
+    phone_norm = normal_phone(
+      number = "phone_norm",
+      na_bad = FALSE,
+      rm_ext = FALSE
+    ),
+      grp_phone_norm = normal_phone(
+      number = "grp_phone",
       na_bad = FALSE,
       rm_ext = FALSE
     )
@@ -328,7 +375,7 @@ galr <- galr %>%
 
 galr_early <- galr_early %>% 
   mutate(
-    Phone_norm = normal_phone(
+    phone_norm = normal_phone(
       number = "Phone",
       na_bad = FALSE,
       rm_ext = FALSE
@@ -338,12 +385,12 @@ galr_early <- galr_early %>%
 
 ```{r phone_view, echo=FALSE}
 galr %>% 
-  select(Phone, PhoneExt, Phone_norm) %>% 
+  select(phone, phone_ext, phone_norm) %>% 
   distinct() %>% 
   sample_frac()
 
 galr_early %>% 
-  select(Phone, Phone_norm) %>% 
+  select(phone, phone_norm) %>% 
   distinct() %>% 
   sample_frac()
 ```
@@ -360,7 +407,14 @@ galr <- galr %>%
   # combine street addr
   unite(
     col = address_full,
-    starts_with("Address"),
+    starts_with("address"),
+    sep = " ",
+    remove = FALSE,
+    na.rm = TRUE
+  ) %>% 
+    unite(
+    col = grp_address_full,
+    starts_with("grp_address"),
     sep = " ",
     remove = FALSE,
     na.rm = TRUE
@@ -370,7 +424,12 @@ galr <- galr %>%
      address = address_full,
      abbs = usps_street,
      na = invalid_city
-   )
+   ),
+    grp_address_norm = normal_address(
+     address = grp_address_full,
+     abbs = usps_street,
+     na = invalid_city
+   ),
  ) 
 
 galr_early <- galr_early %>% 
@@ -403,7 +462,7 @@ galr_early %>%
   sample_n(10)
 
 galr <- galr %>% 
-  select(-address_full)
+  select(-c(address_full, grp_address_full))
 
 galr_early <- galr_early %>% 
   select(-address_full)
@@ -420,15 +479,17 @@ zeroes dropped by other programs like Microsoft Excel.
 galr <- mutate(
   .data = galr,
   zip_norm = normal_zip(
-    zip = Zip,
+    zip = zip,
     na_rep = TRUE
-  )
+  ),
+  grp_zip_norm = normal_zip(zip = grp_zip,
+                            na_rep = TRUE)
 )
 
 galr_early <- mutate(
   .data = galr_early,
   zip_norm = normal_zip(
-    zip = Zip,
+    zip = zip,
     na_rep = TRUE
   )
 )
@@ -437,9 +498,11 @@ galr_early <- mutate(
 
 ```{r zip_progress}
 progress_table(
-  galr$Zip,
-  galr_early$Zip,
+  galr$zip,
+  galr$grp_zip,
+  galr_early$zip,
   galr$zip_norm,
+  galr$grp_zip_norm,
   galr_early$zip_norm,
   compare = valid_zip
 )
@@ -449,8 +512,8 @@ progress_table(
 The two-letter state abbreviations are almost valid and don't need to be normalized. 
 
 ```{r state_norm}
-prop_in(galr$State, valid_state, na.rm = T)
-prop_in(galr_early$State, valid_state, na.rm = T)
+prop_in(galr$state, valid_state, na.rm = T)
+prop_in(galr_early$state, valid_state, na.rm = T)
 ```
 
 ### City
@@ -468,18 +531,25 @@ removing punctuation, but _expanding_ USPS abbreviations. We can also remove
 galr <- galr %>% 
   mutate(
     city_norm = normal_city(
-      city = City, 
+      city = city, 
       abbs = usps_city,
       states = usps_state,
       na = invalid_city,
       na_rep = TRUE
-    )
+    ),
+      grp_city_norm = normal_city(
+      city = grp_city, 
+      abbs = usps_city,
+      states = usps_state,
+      na = invalid_city,
+      na_rep = TRUE
+    ),
   )
 
 galr_early <- galr_early %>% 
   mutate(
     city_norm = normal_city(
-      city = City, 
+      city = city, 
       abbs = usps_city,
       states = usps_state,
       na = invalid_city,
@@ -494,7 +564,7 @@ prop_in(galr_early$city_norm,many_city)
 
 ```{r city_progress, echo=FALSE}
 progress <- progress_table(
-  str_to_upper(galr$City),
+  str_to_upper(galr$city),
   galr$city_norm,
   compare = many_city
 ) %>% mutate(stage = as_factor(stage))
@@ -537,8 +607,8 @@ nrow(galr_early)
 Now the file can be saved on disk for upload to the Accountability server.
 
 ```{r clean_dir}
-clean_dir <- dir_create(here("ga", "lobby", "data", "clean","reg"))
-clean_path <- path(clean_dir, "ga_lobby_reg_clean_2006_2020.csv")
+clean_dir <- dir_create(here("state","ga", "lobby", "data", "clean","reg"))
+clean_path <- path(clean_dir, "ga_lobby_reg_clean_2006_2022.csv")
 early_path <- path(clean_dir, "ga_lobby_reg_clean_2001_2003.csv")
 write_csv(galr, clean_path, na = "")
 write_csv(galr_early, early_path, na = "")
@@ -606,9 +676,19 @@ dict_raw <- tibble(
     "Year of data publication",
     "Flag for missing date, organization, or, filerID or name",
     "Flag for completely duplicated record",
+    "Lobbying group street address line 1",
+    "Lobbying group street address line 2",
+    "Lobbying group phone",
+    "Lobbying group city",
+    "Lobbying group state",
+    "Lobbying group zip",
+    "Normalized lobbying group phone number",
+    "Normalized lobbying group street address",
     "Normalized lobbyist street address",
-    "Normalized 5-digit ZIP code",
-    "Normalized city name"
+    "Normalized 5-digit lobbyist ZIP code",
+    "Normalized 5-digit lobbying group ZIP code",
+    "Normalized lobbyist city name",
+    "Normalized lobbying group city name"
   )
 )
 ```
@@ -624,6 +704,6 @@ dict_raw <- tibble(
 ```{r dict_write}
 write_lines(
   x = c("# Georgia Lobbying Registration Data Dictionary\n", dict_md),
-  path = here("ga", "lobby", "ga_contribs_dict.md"),
+  path = here("state","ga", "lobby", "ga_contribs_dict.md"),
 )
 ```

@@ -1,15 +1,15 @@
 Connecticut Lobbying Compensation Data Diary
 ================
 Yanqi Xu
-2020-04-15 16:38:43
+2023-04-22 21:01:56
 
-  - [Project](#project)
-  - [Objectives](#objectives)
-  - [Packages](#packages)
-  - [Download](#download)
-  - [Import](#import)
-  - [Explore](#explore)
-  - [Export](#export)
+- <a href="#project" id="toc-project">Project</a>
+- <a href="#objectives" id="toc-objectives">Objectives</a>
+- <a href="#packages" id="toc-packages">Packages</a>
+- <a href="#download" id="toc-download">Download</a>
+- <a href="#import" id="toc-import">Import</a>
+- <a href="#explore" id="toc-explore">Explore</a>
+- <a href="#export" id="toc-export">Export</a>
 
 ## Project
 
@@ -83,7 +83,7 @@ Set the download directory first.
 
 ``` r
 # create a directory for the raw data
-raw_dir <- here("ct", "lobby", "data", "raw","exp")
+raw_dir <- here("state","ct", "lobby", "data", "raw","exp")
 
 dir_create(raw_dir)
 ```
@@ -100,13 +100,13 @@ According to \[CT Office of State Ethics\]
 Lobbyist terms:  
 \> A Client Lobbyist is the party paying for lobbying services on its
 behalf. In other words, the client lobbyist is expending or agreeing to
-expend the threshold amount of $3,000 in a calendar year. A Communicator
-Lobbyist receives payment and does the actual lobbying legwork (i.e.,
-communicating or soliciting others to communicate).  
-\> A Communicator Lobbyist receives or agrees to receive $3,000 for
+expend the threshold amount of \$3,000 in a calendar year. A
+Communicator Lobbyist receives payment and does the actual lobbying
+legwork (i.e., communicating or soliciting others to communicate).  
+\> A Communicator Lobbyist receives or agrees to receive \$3,000 for
 lobbying activities in a calendar year. A communicator lobbyist can
 be:  
-1\. An individual; or 2. A member of a Business Organization (e.g., a
+1. An individual; or 2. A member of a Business Organization (e.g., a
 firm or association that is owned by or employs a number of lobbyists),
 Conn. Gen. Stat. § 1-91 (t); or 3. An In-house Communicator (a lobbyist
 who is a salaried employee of a client lobbyist).
@@ -115,9 +115,9 @@ Registration and Filing Specifics:
 
 > Individuals or entities are required by law to register as a lobbyist
 > with the Office of State Ethics (OSE) if they:  
-> 1\. Expend or agree to expend $3,000 or more in a calendar year in
-> lobbying; OR 2. Receive or agree to receive $3,000 or more in a
-> calendar year in lobbying. Once the $3,000 threshold is met,
+> 1. Expend or agree to expend \$3,000 or more in a calendar year in
+> lobbying; OR 2. Receive or agree to receive \$3,000 or more in a
+> calendar year in lobbying. Once the \$3,000 threshold is met,
 > registration with the OSE is required. Registration occurs biennially
 > (every two years) by January 15, or prior to the commencement of
 > lobbying, whichever is later.
@@ -126,10 +126,11 @@ Client Lobbyists:
 \> Client lobbyists file quarterly financial reports, with the third and
 fourth quarters combined. These reports are filed between the 1st and
 10th days of April, July and January.  
-2\. To ensure timely transparency, if a client lobbyist spends or agrees
-to spend more than $100 in legislative lobbying while the Legislature is
-in regular session, that lobbyist must file monthly financial reports.  
-3\. The quarterly and monthly reports gather information such as
+2. To ensure timely transparency, if a client lobbyist spends or agrees
+to spend more than \$100 in legislative lobbying while the Legislature
+is in regular session, that lobbyist must file monthly financial
+reports.  
+3. The quarterly and monthly reports gather information such as
 compensation, sales tax and money expended in connection with lobbying;
 expenditures benefiting a public official or his/her staff or immediate
 family; all other lobbying expenditures; and the fundamental terms of
@@ -160,13 +161,14 @@ is separated by year.
 
 We can download each TXT file to the `/ct/data/raw` directory.
 
-    #> # A tibble: 4 x 4
-    #>   path                                       type         size birth_time         
-    #>   <chr>                                      <fct> <fs::bytes> <dttm>             
-    #> 1 /ct/lobby/data/raw/exp/lobby_comp_2013.csv file         534K 2019-12-23 08:08:08
-    #> 2 /ct/lobby/data/raw/exp/lobby_comp_2015.csv file         581K 2019-12-23 07:51:36
-    #> 3 /ct/lobby/data/raw/exp/lobby_comp_2017.csv file         569K 2019-12-23 07:51:14
-    #> 4 /ct/lobby/data/raw/exp/lobby_comp_2019.csv file         478K 2020-04-15 14:37:40
+    #> # A tibble: 5 × 4
+    #>   path                                             type         size birth_time         
+    #>   <chr>                                            <fct> <fs::bytes> <dttm>             
+    #> 1 /state/ct/lobby/data/raw/exp/lobby_comp_2013.csv file         534K 2019-12-23 07:08:08
+    #> 2 /state/ct/lobby/data/raw/exp/lobby_comp_2015.csv file         581K 2019-12-23 06:51:36
+    #> 3 /state/ct/lobby/data/raw/exp/lobby_comp_2017.csv file         569K 2019-12-23 06:51:14
+    #> 4 /state/ct/lobby/data/raw/exp/lobby_comp_2019.csv file         573K 2023-04-02 16:07:30
+    #> 5 /state/ct/lobby/data/raw/exp/lobby_comp_2021.csv file         572K 2023-04-02 16:08:39
 
 ### Read
 
@@ -193,36 +195,40 @@ ctlc[5:8] <-  ctlc[5:8] %>% map(as.numeric)
 
 ``` r
 head(ctlc)
-#> # A tibble: 6 x 8
-#>   source_file              communicator  client   selected_type comp_amt sales_tax exp_reimb  total
-#>   <chr>                    <chr>         <chr>    <chr>            <dbl>     <dbl>     <dbl>  <dbl>
-#> 1 /Users/yanqixu/code/acc… 3D Consultin… Eversou… Administrati…        0         0         0      0
-#> 2 /Users/yanqixu/code/acc… 3D Consultin… Eversou… Legislative     240000         0       750 240750
-#> 3 /Users/yanqixu/code/acc… 3D Consultin… Eversou… ClientTotal     240000         0       750 240750
-#> 4 /Users/yanqixu/code/acc… Aaron Cheever Advance… Administrati…        0         0         0      0
-#> 5 /Users/yanqixu/code/acc… Aaron Cheever Advance… Legislative          0         0         0      0
-#> 6 /Users/yanqixu/code/acc… Aaron Cheever Advance… ClientTotal          0         0         0      0
+#> # A tibble: 6 × 8
+#>   source_file                                 commu…¹ client selec…² comp_…³ sales…⁴ exp_r…⁵  total
+#>   <chr>                                       <chr>   <chr>  <chr>     <dbl>   <dbl>   <dbl>  <dbl>
+#> 1 /Users/yanqixu/code/accountability_datacle… 3D Con… Evers… Admini…       0       0       0      0
+#> 2 /Users/yanqixu/code/accountability_datacle… 3D Con… Evers… Legisl…  240000       0     750 240750
+#> 3 /Users/yanqixu/code/accountability_datacle… 3D Con… Evers… Client…  240000       0     750 240750
+#> 4 /Users/yanqixu/code/accountability_datacle… Aaron … Advan… Admini…       0       0       0      0
+#> 5 /Users/yanqixu/code/accountability_datacle… Aaron … Advan… Legisl…       0       0       0      0
+#> 6 /Users/yanqixu/code/accountability_datacle… Aaron … Advan… Client…       0       0       0      0
+#> # … with abbreviated variable names ¹​communicator, ²​selected_type, ³​comp_amt, ⁴​sales_tax,
+#> #   ⁵​exp_reimb
 tail(ctlc)
-#> # A tibble: 6 x 8
-#>   source_file              communicator client    selected_type comp_amt sales_tax exp_reimb  total
-#>   <chr>                    <chr>        <chr>     <chr>            <dbl>     <dbl>     <dbl>  <dbl>
-#> 1 /Users/yanqixu/code/acc… Zachary Lea… AFSCME C… ClientTotal     75661.         0      685. 76346.
-#> 2 /Users/yanqixu/code/acc… Zachary McK… CT Confe… Administrati…       0          0        0      0 
-#> 3 /Users/yanqixu/code/acc… Zachary McK… CT Confe… Legislative     19025          0      408  19433 
-#> 4 /Users/yanqixu/code/acc… Zachary McK… CT Confe… ClientTotal     19025          0      408  19433 
-#> 5 /Users/yanqixu/code/acc… Zack Campbe… Working … Legislative      7194.         0        0   7194.
-#> 6 /Users/yanqixu/code/acc… Zack Campbe… Working … ClientTotal      7194.         0        0   7194.
+#> # A tibble: 6 × 8
+#>   source_file                                 commu…¹ client selec…² comp_…³ sales…⁴ exp_r…⁵  total
+#>   <chr>                                       <chr>   <chr>  <chr>     <dbl>   <dbl>   <dbl>  <dbl>
+#> 1 /Users/yanqixu/code/accountability_datacle… Zachar… CT Co… Admini…      0        0       0     0 
+#> 2 /Users/yanqixu/code/accountability_datacle… Zachar… CT Co… Legisl…  44171        0       0 44171 
+#> 3 /Users/yanqixu/code/accountability_datacle… Zachar… CT Co… Client…  44171        0       0 44171 
+#> 4 /Users/yanqixu/code/accountability_datacle… Zina D… Lockh… Admini…    291.       0       0   291.
+#> 5 /Users/yanqixu/code/accountability_datacle… Zina D… Lockh… Legisl…   2914.       0       0  2914.
+#> 6 /Users/yanqixu/code/accountability_datacle… Zina D… Lockh… Client…   3205        0       0  3205 
+#> # … with abbreviated variable names ¹​communicator, ²​selected_type, ³​comp_amt, ⁴​sales_tax,
+#> #   ⁵​exp_reimb
 glimpse(sample_frac(ctlc))
-#> Rows: 19,552
+#> Rows: 25,543
 #> Columns: 8
-#> $ source_file   <chr> "/Users/yanqixu/code/accountability_datacleaning/R_campfin/ct/lobby/data/r…
-#> $ communicator  <chr> "Lorelei Mottese", "Halloran & Sage Government Affairs, LLC", "Reynolds St…
-#> $ client        <chr> "Wakefern Food Corporation", "CT Society of Plastic and Reconstructive Sur…
-#> $ selected_type <chr> "Administrative", "ClientTotal", "Administrative", "Administrative", "Admi…
-#> $ comp_amt      <dbl> 0.00, 14000.00, 60416.67, 94029.24, 0.00, 18910.30, 29732.75, 6006.51, 855…
-#> $ sales_tax     <dbl> 0.00, 0.00, 0.00, 5970.84, 0.00, 0.00, 0.00, 0.00, 5427.78, 0.00, 0.00, 0.…
-#> $ exp_reimb     <dbl> 0.00, 0.00, 0.00, 0.00, 0.00, 1171.60, 561.83, 0.00, 0.00, 1350.00, 0.00, …
-#> $ total         <dbl> 0.00, 14000.00, 60416.67, 100000.08, 0.00, 20081.90, 30294.58, 6006.51, 90…
+#> $ source_file   <chr> "/Users/yanqixu/code/accountability_datacleaning/state/ct/lobby/data/raw/ex…
+#> $ communicator  <chr> "Lorelei Mottese", "Halloran & Sage Government Affairs, LLC", "Mary Elizabe…
+#> $ client        <chr> "Wakefern Food Corporation", "CT Society of Plastic and Reconstructive Surg…
+#> $ selected_type <chr> "Administrative", "ClientTotal", "Administrative", "Administrative", "Admin…
+#> $ comp_amt      <dbl> 0.00, 14000.00, 0.00, 94029.24, 0.00, 18910.30, 37500.00, 29732.75, 0.00, 1…
+#> $ sales_tax     <dbl> 0.00, 0.00, 0.00, 5970.84, 0.00, 0.00, 2381.25, 0.00, 0.00, 13175.00, 5427.…
+#> $ exp_reimb     <dbl> 0.00, 0.00, 0.00, 0.00, 0.00, 1171.60, 750.00, 561.83, 0.00, 0.00, 0.00, 0.…
+#> $ total         <dbl> 0.00, 14000.00, 0.00, 100000.08, 0.00, 20081.90, 40631.25, 30294.58, 0.00, …
 ```
 
 ``` r
@@ -235,7 +241,7 @@ The data file doesn’t seem to miss any important fields.
 
 ``` r
 col_stats(ctlc, count_na)
-#> # A tibble: 8 x 4
+#> # A tibble: 8 × 4
 #>   col           class     n     p
 #>   <chr>         <chr> <int> <dbl>
 #> 1 source_file   <chr>     0     0
@@ -254,8 +260,6 @@ We can see there’s no duplicate entry.
 
 ``` r
 ctlc <- flag_dupes(ctlc, dplyr::everything())
-sum(ctlc$dupe_flag)
-#> [1] 0
 ```
 
 ### Session
@@ -269,7 +273,8 @@ ctlc <- ctlc %>% mutate(session = str_extract(source_file, "\\d{4}")) %>%
                           mutate(session = case_when(session == "2013" ~ "2013-2014",
                             session == "2015" ~ "2015-2016",
                              session == "2017" ~ "2017-2018",
-                             session == "2019" ~ "2019-2020")) %>% 
+                             session == "2019" ~ "2019-2020",
+                            session == "2021" ~ "2021-2022")) %>% 
         select(-source_file)
 ```
 
@@ -292,7 +297,7 @@ is, we will create a column `na_count` counting the `NA` values of each
 row and only maintain the intance with a smaller `na_count` value.
 
 ``` r
-reg_dir <- here("ct", "lobby", "data", "processed","reg")
+reg_dir <- here("state","ct", "lobby", "data", "processed","reg")
 ct_reg <- read_csv(glue("{reg_dir}/ct_lobby_reg.csv"),col_types = cols(.default = col_character()))
 
 ct_reg <- ct_reg %>% 
@@ -301,7 +306,8 @@ ct_reg <- ct_reg %>%
   mutate(session = case_when(str_detect(client_year, "2013|2014") ~ "2013-2014",
                              str_detect(client_year, "2015|2016") ~ "2015-2016",
                              str_detect(client_year, "2017|2018") ~ "2017-2018",
-                             str_detect(client_year, "2019|2020") ~ "2019-2020"))
+                             str_detect(client_year, "2019|2020") ~ "2019-2020",
+                             str_detect(client_year, "2021|2022") ~ "2021-2022"))
 
 ct_join <- ct_reg %>% 
   select(client_name,client_year, lobbyist_first_name,lobbyist_last_name,lobbyist_year,client_address_clean, session,client_phone,client_city_clean,client_email, client_zip, client_state, lobbyist_city_clean, lobbyist_address_clean, lobbyist_state, lobbyist_zip, lobbyist_email) %>% 
@@ -313,9 +319,9 @@ ct_count <- ct_join %>% count(client_name, lobbyist_first_name, lobbyist_last_na
   #count(client_name, lobbyist_first_name, lobbyist_last_name)
 ```
 
-Our goal is to reduce the number of rows in the `ct_reg` table to 9932,
-which is the total number of ct\_reg rows (each row represents a
-distinct relationship between a client and a lobbyist for a session).
+Our goal is to reduce the number of rows in the `ct_reg` table to 13047,
+which is the total number of ct_reg rows (each row represents a distinct
+relationship between a client and a lobbyist for a session).
 
 ``` r
 ct_join <- ct_join %>% 
@@ -327,12 +333,14 @@ ct_dupe <- ct_join %>% filter(n==2) %>%
 ct_dedupe <- ct_dupe %>% group_split(client_name, lobbyist_first_name, lobbyist_last_name, session)
 
 # For entries with the same client_name, lobbyist_first_name, lobbyist_last_name, session, we group them in a list for comparison
+ct_dedupes <- rep(NA, length(ct_dedupe))
+
 for (i in seq_along(ct_dedupe)){
-ct_dedupe[[i]] <- ct_dedupe[[i]] %>% 
   # early_more_info suggests whether the first entry has more information
-  mutate(early_more_info = ct_dedupe[[i]]$row_sum[1] - ct_dedupe[[i]]$row_sum[2] < 0 ) 
+  ct_dedupes[i] <- ct_dedupe[[i]]$row_sum[1] < ct_dedupe[[i]]$row_sum[2]
+  
 # if the first entry has more non-NA columns, use the first entry, otherwise use the second instance.
-  if (ct_dedupe[[i]]$early_more_info[1]) {
+  if (ct_dedupes[i]) {
   ct_dedupe[[i]] <- ct_dedupe[[i]][1,]
   }
   else{
@@ -340,7 +348,7 @@ ct_dedupe[[i]] <- ct_dedupe[[i]] %>%
   }
 }
 
-ct_deduped <- ct_dedupe %>% plyr::ldply() %>% select(-c(row_sum,early_more_info,n))
+ct_deduped <- ct_dedupe %>% plyr::ldply() %>% select(-c(row_sum,n))
 # first remove all the double entries
 ct_join<- ct_join %>% filter(n != 2) %>% 
   unite(remove = T, col = "communicator", lobbyist_first_name, lobbyist_last_name,sep = " ", na.rm = TRUE) %>% select(-n) %>% 
@@ -355,7 +363,7 @@ ctlc_clean <- ctlc %>%
   left_join(ct_join, by = c("client", "communicator", "session")) 
 
 col_stats(ctlc_clean, count_na)         
-#> # A tibble: 24 x 4
+#> # A tibble: 24 × 4
 #>    col                    class     n     p
 #>    <chr>                  <chr> <int> <dbl>
 #>  1 communicator           <chr>     0 0    
@@ -366,42 +374,47 @@ col_stats(ctlc_clean, count_na)
 #>  6 exp_reimb              <dbl>     0 0    
 #>  7 total                  <dbl>     0 0    
 #>  8 session                <chr>     0 0    
-#>  9 client_year            <chr> 12312 0.630
-#> 10 lobbyist_year          <chr> 12312 0.630
-#> 11 client_address_clean   <chr> 12312 0.630
-#> 12 client_phone           <chr> 12312 0.630
-#> 13 client_city_clean      <chr> 12332 0.631
-#> 14 client_email           <chr> 12312 0.630
-#> 15 client_zip             <chr> 12312 0.630
-#> 16 client_state           <chr> 12312 0.630
-#> 17 lobbyist_city_clean    <chr> 12355 0.632
-#> 18 lobbyist_address_clean <chr> 12335 0.631
-#> 19 lobbyist_state         <chr> 12335 0.631
-#> 20 lobbyist_zip           <chr> 12335 0.631
-#> 21 lobbyist_email         <chr> 12335 0.631
-#> 22 dupe_flag              <lgl> 12312 0.630
-#> 23 lobbyist_first_name    <chr> 19550 1    
-#> 24 lobbyist_last_name     <chr> 19550 1
+#>  9 client_year            <chr> 16263 0.637
+#> 10 lobbyist_year          <chr> 16263 0.637
+#> 11 client_address_clean   <chr> 16263 0.637
+#> 12 client_phone           <chr> 16263 0.637
+#> 13 client_city_clean      <chr> 16286 0.638
+#> 14 client_email           <chr> 16263 0.637
+#> 15 client_zip             <chr> 16263 0.637
+#> 16 client_state           <chr> 16263 0.637
+#> 17 lobbyist_city_clean    <chr> 16314 0.639
+#> 18 lobbyist_address_clean <chr> 16291 0.638
+#> 19 lobbyist_state         <chr> 16291 0.638
+#> 20 lobbyist_zip           <chr> 16291 0.638
+#> 21 lobbyist_email         <chr> 16291 0.638
+#> 22 dupe_flag              <lgl> 16263 0.637
+#> 23 lobbyist_first_name    <chr> 25541 1    
+#> 24 lobbyist_last_name     <chr> 25541 1
 
-sample_frac(ctlc)
-#> # A tibble: 19,550 x 8
-#>    communicator      client              selected_type  comp_amt sales_tax exp_reimb  total session
-#>    <chr>             <chr>               <chr>             <dbl>     <dbl>     <dbl>  <dbl> <chr>  
-#>  1 Camilliere, Clou… Hartford Distribut… ClientTotal      15000       952.       500 1.65e4 2019-2…
-#>  2 Rome Smith & Lutz EPMJR, LLC          Administrative    8000       508        500 9.01e3 2013-2…
-#>  3 Gallo & Robinson… Legal Assistance R… ClientTotal     112000.     7112.         0 1.19e5 2013-2…
-#>  4 Diane Manning     United Services, I… Legislative       1597.        0          0 1.60e3 2019-2…
-#>  5 Nome Associates   CT Food Assoc.      Legislative      90467.     5745.       250 9.65e4 2015-2…
-#>  6 Ashley Bogle      Health New England… Legislative       1080.        0          0 1.08e3 2015-2…
-#>  7 Jennifer Alexand… Connecticut Coalit… ClientTotal      14804.        0          0 1.48e4 2015-2…
-#>  8 The Connecticut … The Carpet and Rug… Administrative       0         0          0 0.     2013-2…
-#>  9 Gallo & Robinson… CT Coalition to En… ClientTotal      11000         0       1750 1.27e4 2013-2…
-#> 10 Walkovich Associ… Connecticut Allian… Legislative      10000         0        500 1.05e4 2013-2…
-#> # … with 19,540 more rows
+sample_frac(ctlc_clean)
+#> # A tibble: 25,541 × 24
+#>    communic…¹ client selec…² comp_…³ sales…⁴ exp_r…⁵  total session clien…⁶ lobby…⁷ clien…⁸ clien…⁹
+#>    <chr>      <chr>  <chr>     <dbl>   <dbl>   <dbl>  <dbl> <chr>   <chr>   <chr>   <chr>   <chr>  
+#>  1 HALLORAN … ALLST… CLIENT…  84000    5382.     750 90132. 2013-2… <NA>    <NA>    <NA>    <NA>   
+#>  2 NICKEY KO… CONNE… LEGISL…  14433.      0        0 14433. 2021-2… 2021    2021    10 ALC… 860-61…
+#>  3 ERIN BOGGS OPEN … ADMINI…      0       0        0     0  2021-2… 2021    2021    75 CHA… 860-61…
+#>  4 RYAN M. B… ADVAN… ADMINI…    240       0        0   240  2019-2… 2019    2019    909 PO… 314-72…
+#>  5 JAMES CRO… COALI… CLIENT…  10300       0        0 10300  2015-2… 2015    2015    PO BOX… 203-24…
+#>  6 DEREK PHE… FUEL … LEGISL…  13195       0        0 13195  2021-2… 2021    2021    3 GREA… 203-82…
+#>  7 CAPITOL C… CHRIS… CLIENT…  24000       0      750 24750  2019-2… <NA>    <NA>    <NA>    <NA>   
+#>  8 SULLIVAN … ALMAD… ADMINI…   5625       0        0  5625  2021-2… <NA>    <NA>    <NA>    <NA>   
+#>  9 FOCUS GOV… CONNE… CLIENT…  19769.   1255.     500 21524  2021-2… <NA>    <NA>    <NA>    <NA>   
+#> 10 SULLIVAN … AGRIC… ADMINI…      0       0        0     0  2017-2… <NA>    <NA>    <NA>    <NA>   
+#> # … with 25,531 more rows, 12 more variables: client_city_clean <chr>, client_email <chr>,
+#> #   client_zip <chr>, client_state <chr>, lobbyist_city_clean <chr>, lobbyist_address_clean <chr>,
+#> #   lobbyist_state <chr>, lobbyist_zip <chr>, lobbyist_email <chr>, dupe_flag <lgl>,
+#> #   lobbyist_first_name <chr>, lobbyist_last_name <chr>, and abbreviated variable names
+#> #   ¹​communicator, ²​selected_type, ³​comp_amt, ⁴​sales_tax, ⁵​exp_reimb, ⁶​client_year,
+#> #   ⁷​lobbyist_year, ⁸​client_address_clean, ⁹​client_phone
 ```
 
-1.  There are 19550 records in the database.
-2.  There are 0 duplicate records in the database.
+1.  There are 25541 records in the database.
+2.  There are NA duplicate records in the database.
 3.  The range and distribution of `year` seems mostly reasonable except
     for a few entries.
 4.  Consistency in goegraphic data has been improved with
@@ -412,7 +425,7 @@ sample_frac(ctlc)
 ## Export
 
 ``` r
-clean_dir <- here("ct", "lobby", "data", "processed","exp")
+clean_dir <- here("state","ct", "lobby", "data", "processed","exp")
 dir_create(clean_dir)
 ctlc_clean %>% 
   select(-c(lobbyist_first_name, lobbyist_last_name)) %>% 
