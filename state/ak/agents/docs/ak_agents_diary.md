@@ -1,22 +1,22 @@
 Alaska Agents
 ================
-Kiernan Nicholls
-Mon Jun 27 11:23:56 2022
+Kiernan Nicholls & Aarushi Sahejpal
+Fri Apr 28 06:15:57 2023
 
--   <a href="#project" id="toc-project">Project</a>
--   <a href="#objectives" id="toc-objectives">Objectives</a>
--   <a href="#packages" id="toc-packages">Packages</a>
--   <a href="#source" id="toc-source">Source</a>
-    -   <a href="#disclaimer" id="toc-disclaimer">Disclaimer</a>
--   <a href="#download" id="toc-download">Download</a>
--   <a href="#read" id="toc-read">Read</a>
--   <a href="#explore" id="toc-explore">Explore</a>
-    -   <a href="#missing" id="toc-missing">Missing</a>
-    -   <a href="#duplicates" id="toc-duplicates">Duplicates</a>
-    -   <a href="#categorical" id="toc-categorical">Categorical</a>
--   <a href="#conclude" id="toc-conclude">Conclude</a>
--   <a href="#export" id="toc-export">Export</a>
--   <a href="#upload" id="toc-upload">Upload</a>
+- <a href="#project" id="toc-project">Project</a>
+- <a href="#objectives" id="toc-objectives">Objectives</a>
+- <a href="#packages" id="toc-packages">Packages</a>
+- <a href="#source" id="toc-source">Source</a>
+  - <a href="#disclaimer" id="toc-disclaimer">Disclaimer</a>
+- <a href="#download" id="toc-download">Download</a>
+- <a href="#read" id="toc-read">Read</a>
+- <a href="#explore" id="toc-explore">Explore</a>
+  - <a href="#missing" id="toc-missing">Missing</a>
+  - <a href="#duplicates" id="toc-duplicates">Duplicates</a>
+  - <a href="#categorical" id="toc-categorical">Categorical</a>
+- <a href="#conclude" id="toc-conclude">Conclude</a>
+- <a href="#export" id="toc-export">Export</a>
+- <a href="#upload" id="toc-upload">Upload</a>
 
 <!-- Place comments regarding knitting here -->
 
@@ -78,11 +78,11 @@ pacman::p_load(
 )
 ```
 
-This diary was run using `campfin` version 1.0.8.9300.
+This diary was run using `campfin` version 1.0.10.9001.
 
 ``` r
 packageVersion("campfin")
-#> [1] '1.0.8.9300'
+#> [1] '1.0.10.9001'
 ```
 
 This document should be run as part of the `R_tap` project, which lives
@@ -177,30 +177,32 @@ aka <- clean_names(aka, case = "snake")
 
 ## Explore
 
-There are 85,387 rows of 7 columns. Each record represents a single
+There are 87,930 rows of 7 columns. Each record represents a single
 agent of a registered business entity.
 
 ``` r
 glimpse(aka)
-#> Rows: 85,387
+#> Rows: 87,930
 #> Columns: 7
-#> $ parent_entity_number         <chr> "104365", "104686", "67254D", "125456", "115108", "110111", "75704D", "105255", "…
-#> $ parent_entity_name           <chr> "Ginger LLC", "Blue Sky Hangars, LLC", "Frontier Electric, Inc.", "R.S. Armstrong…
-#> $ parent_record_type           <chr> "Limited Liability Company", "Limited Liability Company", "Business Corporation",…
+#> $ parent_entity_number         <chr> "105099", "105719", "115970", "75704D", "105255", "105598", "105735", "72575D", "…
+#> $ parent_entity_name           <chr> "Alaska Avalanche Specialists, LLC.", "Andes Properties, LLC", "Fairmont, LLC", "…
+#> $ parent_record_type           <chr> "Limited Liability Company", "Limited Liability Company", "Limited Liability Comp…
 #> $ official_entity_number       <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
-#> $ official_last_or_entity_name <chr> "Handel", "Fishback", "Lillo", "Armstrong", "Chastain", "Lucas", "Alderman", "Kin…
-#> $ official_first_name          <chr> "Colleen M.", "Steve", "John", "Richard S.", "Bradley H.", "Derek Harland", "Mark…
+#> $ official_last_or_entity_name <chr> "Glude", "Andes", "Green", "Alderman", "Kinney", "Housley", "SWEATT", "Kalmbach",…
+#> $ official_first_name          <chr> "William J", "Alex", "Harold", "Mark C", "James Randall", "James M.", "JESS E.", …
 #> $ official_title               <chr> "Registered Agent", "Registered Agent", "Registered Agent", "Registered Agent", "…
 tail(aka)
 #> # A tibble: 6 × 7
-#>   parent_entity_num… parent_entity_n… parent_record_t… official_entity… official_last_o… official_first_… official_title
-#>   <chr>              <chr>            <chr>            <chr>            <chr>            <chr>            <chr>         
-#> 1 10166575           Hanuman Family … Limited Liabili… <NA>             Wilkin           Oratai           Registered Ag…
-#> 2 10194719           Stonerock's Ser… Limited Liabili… <NA>             Stonerock        Quentin          Registered Ag…
-#> 3 10195116           QUEST LLC        Limited Liabili… <NA>             Carnahan         Jesse            Registered Ag…
-#> 4 10195974           Frosty Feet Tim… Limited Liabili… <NA>             Fisk             Stacy            Registered Ag…
-#> 5 10196423           Forays Group, I… Business Corpor… <NA>             Anderson         Jerrad           Registered Ag…
-#> 6 10196727           Coach Gettys, L… Limited Liabili… <NA>             Gettys           April            Registered Ag…
+#>   parent_entity_number parent_entity_name               parent_record_type official_entity_number official_last_or_ent…¹
+#>   <chr>                <chr>                            <chr>              <chr>                  <chr>                 
+#> 1 10227513             Swell Creative, LLC              Limited Liability… <NA>                   Smithers              
+#> 2 10183940             STRATAVARIOUS LLC                Limited Liability… <NA>                   Paddock               
+#> 3 10184096             Park Consulting LLC              Limited Liability… <NA>                   Park                  
+#> 4 10228649             Jennifer Cross LPC, LLC          Limited Liability… <NA>                   Cross                 
+#> 5 10229064             Original Clothing L.L.C.         Limited Liability… <NA>                   Warlick               
+#> 6 10231033             Engage Accounting and Consultin… Limited Liability… <NA>                   Kolipano              
+#> # ℹ abbreviated name: ¹​official_last_or_entity_name
+#> # ℹ 2 more variables: official_first_name <chr>, official_title <chr>
 ```
 
 ### Missing
@@ -216,9 +218,9 @@ col_stats(aka, count_na)
 #> 1 parent_entity_number         <chr>     0 0    
 #> 2 parent_entity_name           <chr>     0 0    
 #> 3 parent_record_type           <chr>     0 0    
-#> 4 official_entity_number       <chr> 50190 0.588
+#> 4 official_entity_number       <chr> 51068 0.581
 #> 5 official_last_or_entity_name <chr>     0 0    
-#> 6 official_first_name          <chr> 35401 0.415
+#> 6 official_first_name          <chr> 37060 0.421
 #> 7 official_title               <chr>     0 0
 ```
 
@@ -229,20 +231,20 @@ registered *as* the official.
 aka %>% 
   filter(is.na(official_first_name)) %>% 
   count(official_last_or_entity_name, sort = TRUE)
-#> # A tibble: 564 × 2
+#> # A tibble: 538 × 2
 #>    official_last_or_entity_name               n
 #>    <chr>                                  <int>
-#>  1 Corporation Service Company             5882
-#>  2 C T Corporation System                  5526
-#>  3 LMRA Services, Inc.                     5247
-#>  4 Registered Agents Inc                   2185
-#>  5 COGENCY GLOBAL INC.                     1635
-#>  6 United States Corporation Agents, Inc.  1134
-#>  7 INCORP SERVICES, INC.                   1018
-#>  8 NATIONAL REGISTERED AGENTS, INC.         941
-#>  9 Registered Agent Solutions, Inc.         829
-#> 10 Northwest Registered Agent Inc           765
-#> # … with 554 more rows
+#>  1 Corporation Service Company             6192
+#>  2 C T Corporation System                  5585
+#>  3 LMRA Services, Inc.                     5349
+#>  4 Registered Agents Inc                   2529
+#>  5 COGENCY GLOBAL INC.                     1713
+#>  6 United States Corporation Agents, Inc.  1226
+#>  7 Northwest Registered Agent Inc          1016
+#>  8 INCORP SERVICES, INC.                    995
+#>  9 NATIONAL REGISTERED AGENTS, INC.         910
+#> 10 Registered Agent Solutions, Inc.         899
+#> # ℹ 528 more rows
 ```
 
 ### Duplicates
@@ -252,27 +254,29 @@ We can flag any record completely duplicated across every column.
 ``` r
 aka <- flag_dupes(aka, everything())
 sum(aka$dupe_flag)
-#> [1] 700
+#> [1] 730
 ```
 
 ``` r
 aka %>% 
   filter(dupe_flag) %>% 
   arrange(parent_entity_name)
-#> # A tibble: 700 × 8
-#>    parent_entity_nu… parent_entity_n… parent_record_t… official_entity… official_last_o… official_first_… official_title
-#>    <chr>             <chr>            <chr>            <chr>            <chr>            <chr>            <chr>         
-#>  1 10082727          1-7178 Fairweat… Limited Liabili… 10014663         Anderson Regist… <NA>             Registered Ag…
-#>  2 10082727          1-7178 Fairweat… Limited Liabili… 10014663         Anderson Regist… <NA>             Registered Ag…
-#>  3 10157959          10200 Nigh Rd, … Limited Liabili… 10014663         Anderson Regist… <NA>             Registered Ag…
-#>  4 10157959          10200 Nigh Rd, … Limited Liabili… 10014663         Anderson Regist… <NA>             Registered Ag…
-#>  5 10167468          1033 Zakandra, … Limited Liabili… 10014663         Anderson Regist… <NA>             Registered Ag…
-#>  6 10167468          1033 Zakandra, … Limited Liabili… 10014663         Anderson Regist… <NA>             Registered Ag…
-#>  7 10172975          10712 Lunar, LLC Limited Liabili… 10014663         Anderson Regist… <NA>             Registered Ag…
-#>  8 10172975          10712 Lunar, LLC Limited Liabili… 10014663         Anderson Regist… <NA>             Registered Ag…
-#>  9 10176155          10841 Klutina L… Limited Liabili… 10014663         Anderson Regist… <NA>             Registered Ag…
-#> 10 10176155          10841 Klutina L… Limited Liabili… 10014663         Anderson Regist… <NA>             Registered Ag…
-#> # … with 690 more rows, and 1 more variable: dupe_flag <lgl>
+#> # A tibble: 730 × 8
+#>    parent_entity_number parent_entity_name      parent_record_type        official_entity_number official_last_or_enti…¹
+#>    <chr>                <chr>                   <chr>                     <chr>                  <chr>                  
+#>  1 10082727             1-7178 Fairweather, LLC Limited Liability Company 10014663               Anderson Registered Ag…
+#>  2 10082727             1-7178 Fairweather, LLC Limited Liability Company 10014663               Anderson Registered Ag…
+#>  3 10157959             10200 Nigh Rd, LLC      Limited Liability Company 10014663               Anderson Registered Ag…
+#>  4 10157959             10200 Nigh Rd, LLC      Limited Liability Company 10014663               Anderson Registered Ag…
+#>  5 10167468             1033 Zakandra, LLC      Limited Liability Company 10014663               Anderson Registered Ag…
+#>  6 10167468             1033 Zakandra, LLC      Limited Liability Company 10014663               Anderson Registered Ag…
+#>  7 10202415             10630 Tahneeta, LLC     Limited Liability Company 10014663               Anderson Registered Ag…
+#>  8 10202415             10630 Tahneeta, LLC     Limited Liability Company 10014663               Anderson Registered Ag…
+#>  9 10172975             10712 Lunar, LLC        Limited Liability Company 10014663               Anderson Registered Ag…
+#> 10 10172975             10712 Lunar, LLC        Limited Liability Company 10014663               Anderson Registered Ag…
+#> # ℹ 720 more rows
+#> # ℹ abbreviated name: ¹​official_last_or_entity_name
+#> # ℹ 3 more variables: official_first_name <chr>, official_title <chr>, dupe_flag <lgl>
 ```
 
 ### Categorical
@@ -282,14 +286,14 @@ col_stats(aka, n_distinct)
 #> # A tibble: 8 × 4
 #>   col                          class     n         p
 #>   <chr>                        <chr> <int>     <dbl>
-#> 1 parent_entity_number         <chr> 85037 0.996    
-#> 2 parent_entity_name           <chr> 85036 0.996    
-#> 3 parent_record_type           <chr>     9 0.000105 
-#> 4 official_entity_number       <chr>   378 0.00443  
-#> 5 official_last_or_entity_name <chr> 19748 0.231    
-#> 6 official_first_name          <chr> 11307 0.132    
-#> 7 official_title               <chr>     1 0.0000117
-#> 8 dupe_flag                    <lgl>     2 0.0000234
+#> 1 parent_entity_number         <chr> 87565 0.996    
+#> 2 parent_entity_name           <chr> 87563 0.996    
+#> 3 parent_record_type           <chr>     9 0.000102 
+#> 4 official_entity_number       <chr>   357 0.00406  
+#> 5 official_last_or_entity_name <chr> 20162 0.229    
+#> 6 official_first_name          <chr> 11399 0.130    
+#> 7 official_title               <chr>     1 0.0000114
+#> 8 dupe_flag                    <lgl>     2 0.0000227
 ```
 
 ![](../plots/distinct-plots-1.png)<!-- -->
@@ -300,18 +304,18 @@ col_stats(aka, n_distinct)
 glimpse(sample_n(aka, 1000))
 #> Rows: 1,000
 #> Columns: 8
-#> $ parent_entity_number         <chr> "10009051", "57642D", "10072214", "10136191", "10080234", "10079590", "10170455",…
-#> $ parent_entity_name           <chr> "Agua Dulce Land Company, L.L.C.", "INTERIOR MECHANICAL SERVICES, INC.", "PAPA BE…
-#> $ parent_record_type           <chr> "Limited Liability Company", "Business Corporation", "Business Corporation", "Lim…
-#> $ official_entity_number       <chr> NA, NA, NA, NA, "46429F", "137082", NA, NA, NA, "46429F", NA, NA, NA, NA, "77893F…
-#> $ official_last_or_entity_name <chr> "Galvez", "BEEMAN", "ESSIAN", "McCourtney", "Corporation Service Company", "URS A…
-#> $ official_first_name          <chr> "Carlos", "RANDALL", "JUSTIN", "David", NA, NA, "Yasiel", "Jerry", "Nate", NA, "T…
+#> $ parent_entity_number         <chr> "32929D", "10164161", "132249", "66090D", "10069422", "10054439", "10201103", "10…
+#> $ parent_entity_name           <chr> "SUTLIFF'S HARDWARE, INC.", "BRIGHTON PLACE, LIMITED PARTNERSHIP", "S & F Fisheri…
+#> $ parent_record_type           <chr> "Business Corporation", "Limited Partnership", "Limited Liability Company", "Limi…
+#> $ official_entity_number       <chr> NA, "10045051", NA, NA, "79048F", "77446D", NA, NA, "10021053", "88971D", NA, NA,…
+#> $ official_last_or_entity_name <chr> "ZIMMERMAN", "LMRA Services, Inc.", "Miles", "PRUHS", "Registered Agent Solutions…
+#> $ official_first_name          <chr> "DON", NA, "Maryann", "J. DANA", NA, NA, "JESSE", "Jana", NA, NA, "Jeffrey", "Gir…
 #> $ official_title               <chr> "Registered Agent", "Registered Agent", "Registered Agent", "Registered Agent", "…
 #> $ dupe_flag                    <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALS…
 ```
 
-1.  There are 85,387 records in the database.
-2.  There are 700 duplicate records in the database.
+1.  There are 87,930 records in the database.
+2.  There are 730 duplicate records in the database.
 3.  The range and distribution of `amount` and `date` seem reasonable.
 4.  There are 0 records missing key variables.
 5.  Consistency in geographic data has been improved with
@@ -330,14 +334,14 @@ csv_ts <- str_remove_all(today(), "-")
 clean_csv <- path(clean_dir, glue("ak_agents_{csv_ts}.csv"))
 clean_rds <- path_ext_set(clean_csv, "rds")
 basename(clean_csv)
-#> [1] "ak_agents_20220627.csv"
+#> [1] "ak_agents_20230428.csv"
 ```
 
 ``` r
 write_csv(aka, clean_csv, na = "")
 write_rds(aka, clean_rds, compress = "xz")
 (clean_size <- file_size(clean_csv))
-#> 8.67M
+#> 8.94M
 ```
 
 ## Upload

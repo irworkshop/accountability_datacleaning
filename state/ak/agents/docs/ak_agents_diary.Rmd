@@ -1,6 +1,6 @@
 ---
 title: "Alaska Agents"
-author: "Kiernan Nicholls"
+author: "Kiernan Nicholls & Aarushi Sahejpal"
 date: "`r date()`"
 output:
   github_document: 
