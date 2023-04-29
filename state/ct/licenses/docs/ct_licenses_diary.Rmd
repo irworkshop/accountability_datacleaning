@@ -1,6 +1,6 @@
 ---
 title: "Connecticut Licenses"
-author: "Kiernan Nicholls"
+author: "Kiernan Nicholls & Aarushi Sahejpal"
 date: "`r date()`"
 output:
   github_document: 
@@ -284,7 +284,7 @@ ctl %>%
   geom_col(aes(fill = n), color = "black") + 
   scale_fill_viridis_c(end = 0.9, option = "C", guide = "none") +
   scale_y_continuous(labels = comma) +
-  scale_x_continuous(breaks = seq(1990, 2020, by = 5)) +
+  scale_x_continuous(breaks = seq(1990, 2023, by = 5)) +
   theme(legend.position = "bottom") +
   labs(
     title = "Connecticut Licenses by Year",

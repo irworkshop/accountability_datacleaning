@@ -1,27 +1,27 @@
 Connecticut Licenses
 ================
-Kiernan Nicholls
-Thu May 5 15:15:11 2022
+Kiernan Nicholls & Aarushi Sahejpal
+Sat Apr 29 17:53:33 2023
 
--   <a href="#project" id="toc-project">Project</a>
--   <a href="#objectives" id="toc-objectives">Objectives</a>
--   <a href="#packages" id="toc-packages">Packages</a>
--   <a href="#source" id="toc-source">Source</a>
--   <a href="#download" id="toc-download">Download</a>
--   <a href="#read" id="toc-read">Read</a>
--   <a href="#explore" id="toc-explore">Explore</a>
-    -   <a href="#missing" id="toc-missing">Missing</a>
-    -   <a href="#duplicates" id="toc-duplicates">Duplicates</a>
-    -   <a href="#categorical" id="toc-categorical">Categorical</a>
-    -   <a href="#dates" id="toc-dates">Dates</a>
--   <a href="#wrangle" id="toc-wrangle">Wrangle</a>
-    -   <a href="#address" id="toc-address">Address</a>
-    -   <a href="#zip" id="toc-zip">ZIP</a>
-    -   <a href="#state" id="toc-state">State</a>
-    -   <a href="#city" id="toc-city">City</a>
--   <a href="#conclude" id="toc-conclude">Conclude</a>
--   <a href="#export" id="toc-export">Export</a>
--   <a href="#upload" id="toc-upload">Upload</a>
+- <a href="#project" id="toc-project">Project</a>
+- <a href="#objectives" id="toc-objectives">Objectives</a>
+- <a href="#packages" id="toc-packages">Packages</a>
+- <a href="#source" id="toc-source">Source</a>
+- <a href="#download" id="toc-download">Download</a>
+- <a href="#read" id="toc-read">Read</a>
+- <a href="#explore" id="toc-explore">Explore</a>
+  - <a href="#missing" id="toc-missing">Missing</a>
+  - <a href="#duplicates" id="toc-duplicates">Duplicates</a>
+  - <a href="#categorical" id="toc-categorical">Categorical</a>
+  - <a href="#dates" id="toc-dates">Dates</a>
+- <a href="#wrangle" id="toc-wrangle">Wrangle</a>
+  - <a href="#address" id="toc-address">Address</a>
+  - <a href="#zip" id="toc-zip">ZIP</a>
+  - <a href="#state" id="toc-state">State</a>
+  - <a href="#city" id="toc-city">City</a>
+- <a href="#conclude" id="toc-conclude">Conclude</a>
+- <a href="#export" id="toc-export">Export</a>
+- <a href="#upload" id="toc-upload">Upload</a>
 
 <!-- Place comments regarding knitting here -->
 
@@ -84,11 +84,11 @@ pacman::p_load(
 )
 ```
 
-This diary was run using `campfin` version 1.0.8.9300.
+This diary was run using `campfin` version 1.0.10.9001.
 
 ``` r
 packageVersion("campfin")
-#> [1] '1.0.8.9300'
+#> [1] '1.0.10.9001'
 ```
 
 This document should be run as part of the `R_tap` project, which lives
@@ -181,47 +181,47 @@ ctl <- clean_names(ctl, case = "snake")
 
 ## Explore
 
-There are 2,128,738 rows of 21 columns. Each record represents a single
+There are 2,260,323 rows of 21 columns. Each record represents a single
 license or credential.
 
 ``` r
 glimpse(ctl)
-#> Rows: 2,128,738
+#> Rows: 2,260,323
 #> Columns: 21
-#> $ credential_id           <chr> "10", "100", "1000", "10000", "100000", "1000000", "1000001", "1000002", "1000004", "1…
-#> $ name                    <chr> "SEMYON RODKIN", "RAILROAD SALVAGE OF CT INC", "ROBERT MCMAHON JR", "CHARLES L DAVENPO…
-#> $ type                    <chr> "INDIVIDUAL", "CORPORATION", "INDIVIDUAL", "INDIVIDUAL", "INDIVIDUAL", "INDIVIDUAL", "…
-#> $ business_name           <chr> NA, "RAILROAD SALVAGE OF CT INC", NA, "JAMES L PUTNAM", NA, NA, NA, NA, NA, NA, NA, NA…
+#> $ credential_id           <chr> "1000104", "2027327", "2027328", "1000679", "1000791", "1000830", "1002287", "1000202"…
+#> $ name                    <chr> "UBALDO J GONZALEZ", "WAYNE CARTER", "SODARA CHAN", "ALISON J LEGERE", "JOHN F MCNELLI…
+#> $ type                    <chr> "INDIVIDUAL", "INDIVIDUAL", "INDIVIDUAL", "INDIVIDUAL", "INDIVIDUAL", "INDIVIDUAL", "I…
+#> $ business_name           <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
 #> $ dba                     <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
-#> $ full_credential_code    <chr> "PEN.0018966", "PME.0003731", "RCG.0000413", "HIC.0512350", "ELC.0012234-E2", "90.0122…
-#> $ credential_type         <chr> "PEN", "PME", "RCG", "HIC", "ELC", "90", "70", "70", "90", "65", "91", "65", "65", "91…
-#> $ credential_number       <chr> "18966", "3731", "413", "512350", "12234", "12240", "13732", "13733", "12241", "3351",…
-#> $ credential_sub_category <chr> NA, NA, NA, NA, "E2", NA, NA, NA, NA, NA, NA, NA, NA, NA, "E2", NA, NA, NA, NA, NA, NA…
-#> $ credential              <chr> "PROFESSIONAL ENGINEER", "NON LEGEND DRUG PERMIT", "CERTIFIED GENERAL REAL ESTATE APPR…
-#> $ status                  <chr> "INACTIVE", "INACTIVE", "INACTIVE", "INACTIVE", "INACTIVE", "INACTIVE", "INACTIVE", "I…
-#> $ status_reason           <chr> "FAILED TO RENEW", NA, NA, "EXPIRED MORE THAN 3 YEARS - MUST REAPPLY", NA, "LAPSED DUE…
-#> $ active                  <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FA…
-#> $ issue_date              <date> 1995-03-13, NA, NA, NA, NA, 2011-05-31, 2011-06-09, 2011-06-09, 2011-05-31, 2011-06-0…
-#> $ effective_date          <date> 2007-02-01, NA, 1995-05-01, 2005-12-01, NA, 2014-04-01, 2011-06-09, 2013-08-05, 2011-…
-#> $ expiration_date         <date> 2008-01-31, 1995-12-31, 1995-04-30, 2006-11-30, NA, 2015-04-30, 2014-03-31, 2016-12-3…
-#> $ address                 <chr> "214 WEST 29TH ST", "70 BRITANNIA ST", "40 Birchwood Heights Road", "34 SHERRY DR", "8…
-#> $ city                    <chr> "NEW YORK", "MERIDEN", "Storrs", "SOUTHINGTON", "GROTON", "LAWRENCE", "NORWALK", "SIMS…
-#> $ state                   <chr> "NY", "CT", "CT", "CT", "CT", "MA", "CT", "CT", "NY", "CT", "CT", "CT", "CT", "CT", "C…
-#> $ zip                     <chr> "10001", "06450", "06268", "06489", "06340", "018431043", "068552011", "060702487", "1…
-#> $ record_refreshed_on     <chr> "06/23/2009", "04/23/2004", "02/05/2009", "08/16/2018", "04/23/2004", "08/05/2015", "0…
+#> $ full_credential_code    <chr> "ELC.0198723-E2", "CASE.0993725", "CASE.0993303", "10.100432", "10.101078", "10.102261…
+#> $ credential_type         <chr> "ELC", "CASE", "CASE", "10", "10", "10", "ELC", "HIC", "CASE", "10", "11", "CASE", "PE…
+#> $ credential_number       <chr> "198723", "993725", "993303", "100432", "101078", "102261", "198766", "631002", "96297…
+#> $ credential_sub_category <chr> "E2", NA, NA, NA, NA, NA, "E2", NA, NA, NA, NA, NA, NA, NA, "S2", "E1", NA, NA, NA, "T…
+#> $ credential              <chr> "ELECTRICAL UNLIMITED JOURNEYPERSON", "CASINO CLASS I EMPLOYEE", "CASINO CLASS I EMPLO…
+#> $ status                  <chr> "ACTIVE", "ACTIVE", "ACTIVE", "ACTIVE", "ACTIVE", "ACTIVE", "ACTIVE", "ACTIVE", "ACTIV…
+#> $ status_reason           <chr> "CURRENT", NA, NA, "CURRENT", "CURRENT", "CURRENT", "CURRENT", "CURRENT", NA, "CURRENT…
+#> $ active                  <lgl> TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TR…
+#> $ issue_date              <date> 2011-05-31, 1995-04-26, 1993-10-19, 2011-06-29, 2011-07-18, 2011-09-15, 2011-06-11, 2…
+#> $ effective_date          <date> 2022-10-01, 2022-11-01, 2022-11-01, 2022-10-01, 2022-10-01, 2022-10-01, 2022-10-01, 2…
+#> $ expiration_date         <date> 2023-09-30, 2023-10-31, 2023-10-31, 2023-09-30, 2023-09-30, 2023-09-30, 2023-09-30, 2…
+#> $ address                 <chr> "105 FIVE FIELDS RD", "62 Canterbury Rd", "58 Kenyon Rd.", "124 Constitution Street, U…
+#> $ city                    <chr> "MADISON", "Mystic", "Waterford", "Wallingford", "BRISTOL", "Stratford", "MONROE", "CR…
+#> $ state                   <chr> "CT", "CT", "CT", "CT", "CT", "CT", "CT", "CT", "CT", "MA", "CT", "CT", "GA", "CT", "C…
+#> $ zip                     <chr> "064432532", "06355", "06385", "06492", "060104946", "06614", "064682835", "064162407"…
+#> $ record_refreshed_on     <chr> "09/12/2022", "11/03/2022", "11/03/2022", "09/12/2022", "09/12/2022", "09/12/2022", "0…
 tail(ctl)
 #> # A tibble: 6 × 21
-#>   credential_id name        type  business_name dba   full_credential… credential_type credential_numb… credential_sub_…
-#>   <chr>         <chr>       <chr> <chr>         <chr> <chr>            <chr>           <chr>            <chr>           
-#> 1 998767        BRITTANY W… INDI… <NA>          <NA>  14.009117        14              9117             <NA>            
-#> 2 999018        JACQUELINE… INDI… <NA>          <NA>  10.100923        10              100923           <NA>            
-#> 3 999280        HAO-CHEN H… INDI… <NA>          <NA>  PEN.0028341      PEN             28341            <NA>            
-#> 4 999302        JAN A GEOT… INDI… <NA>          <NA>  10.099997        10              99997            <NA>            
-#> 5 999409        ARMANDO MA… INDI… <NA>          <NA>  90.012283        90              12283            <NA>            
-#> 6 999771        NICOLE A P… INDI… <NA>          <NA>  10.100897        10              100897           <NA>            
-#> # … with 12 more variables: credential <chr>, status <chr>, status_reason <chr>, active <lgl>, issue_date <date>,
-#> #   effective_date <date>, expiration_date <date>, address <chr>, city <chr>, state <chr>, zip <chr>,
-#> #   record_refreshed_on <chr>
+#>   credential_id name                    type  business_name dba   full_credential_code credential_type credential_number
+#>   <chr>         <chr>                   <chr> <chr>         <chr> <chr>                <chr>           <chr>            
+#> 1 999558        ACTION REMODELING       PART… ACTION REMOD… <NA>  HIC.0630961          HIC             630961           
+#> 2 999584        DEMOLITION PLUS LLC     LIMI… DEMOLITION P… <NA>  HIC.0630967          HIC             630967           
+#> 3 999697        ADS CONSTRUCTION CORP   CORP… ADS CONSTRUC… AUTU… HIC.0630975          HIC             630975           
+#> 4 999700        COMPLETE CARE MASONRY … LIMI… COMPLETE CAR… <NA>  HIC.0630976          HIC             630976           
+#> 5 999738        J FERNANDES HOME IMPRO… LIMI… J FERNANDES … <NA>  HIC.0630980          HIC             630980           
+#> 6 999795        VINCENT J MIGNECO       INDI… <NA>          <NA>  PTN.0013413          PTN             13413            
+#> # ℹ 13 more variables: credential_sub_category <chr>, credential <chr>, status <chr>, status_reason <chr>,
+#> #   active <lgl>, issue_date <date>, effective_date <date>, expiration_date <date>, address <chr>, city <chr>,
+#> #   state <chr>, zip <chr>, record_refreshed_on <chr>
 ```
 
 ### Missing
@@ -234,25 +234,25 @@ col_stats(ctl, count_na)
 #>    col                     class        n           p
 #>    <chr>                   <chr>    <int>       <dbl>
 #>  1 credential_id           <chr>        0 0          
-#>  2 name                    <chr>       67 0.0000315  
+#>  2 name                    <chr>       67 0.0000296  
 #>  3 type                    <chr>        0 0          
-#>  4 business_name           <chr>  1544954 0.726      
-#>  5 dba                     <chr>  1970979 0.926      
-#>  6 full_credential_code    <chr>        1 0.000000470
+#>  4 business_name           <chr>  1612424 0.713      
+#>  5 dba                     <chr>  2099452 0.929      
+#>  6 full_credential_code    <chr>        1 0.000000442
 #>  7 credential_type         <chr>        0 0          
-#>  8 credential_number       <chr>    51656 0.0243     
-#>  9 credential_sub_category <chr>  1896260 0.891      
+#>  8 credential_number       <chr>    56636 0.0251     
+#>  9 credential_sub_category <chr>  2018177 0.893      
 #> 10 credential              <chr>        0 0          
 #> 11 status                  <chr>        0 0          
-#> 12 status_reason           <chr>   610065 0.287      
+#> 12 status_reason           <chr>   644703 0.285      
 #> 13 active                  <lgl>        0 0          
-#> 14 issue_date              <date>  462974 0.217      
-#> 15 effective_date          <date>  218765 0.103      
-#> 16 expiration_date         <date>  250034 0.117      
-#> 17 address                 <chr>     8343 0.00392    
-#> 18 city                    <chr>     8207 0.00386    
-#> 19 state                   <chr>    12980 0.00610    
-#> 20 zip                     <chr>    11986 0.00563    
+#> 14 issue_date              <date>  510247 0.226      
+#> 15 effective_date          <date>  268666 0.119      
+#> 16 expiration_date         <date>  304401 0.135      
+#> 17 address                 <chr>     8943 0.00396    
+#> 18 city                    <chr>     8657 0.00383    
+#> 19 state                   <chr>    13380 0.00592    
+#> 20 zip                     <chr>    12082 0.00535    
 #> 21 record_refreshed_on     <chr>        0 0
 ```
 
@@ -274,15 +274,15 @@ ctl %>%
 #>    <chr> <chr>                  <date>         <chr>                         
 #>  1 <NA>  AIRLINE LIQUOR         2011-09-21     BRADLEY INT'L AIRPORT         
 #>  2 <NA>  NON LEGEND DRUG PERMIT 2011-08-31     361 NEW PARK AVE              
-#>  3 <NA>  LIQUOR BRAND LABEL     1998-06-22     CONNECTICUT BRAND REGISTRATION
-#>  4 <NA>  LIQUOR BRAND LABEL     1997-12-11     CONNECTICUT BRAND REGISTRATION
-#>  5 <NA>  LIQUOR BRAND LABEL     2000-08-30     CONNECTICUT BRAND REGISTRATION
-#>  6 <NA>  LIQUOR BRAND LABEL     1998-05-14     CONNECTICUT BRAND REGISTRATION
-#>  7 <NA>  LIQUOR BRAND LABEL     1998-04-22     CONNECTICUT BRAND REGISTRATION
-#>  8 <NA>  LIQUOR BRAND LABEL     2001-02-13     CONNECTICUT BRAND REGISTRATION
-#>  9 <NA>  LIQUOR BRAND LABEL     2001-02-05     CONNECTICUT BRAND REGISTRATION
-#> 10 <NA>  LIQUOR BRAND LABEL     NA             CONNECTICUT BRAND REGISTRATION
-#> # … with 57 more rows
+#>  3 <NA>  LIQUOR BRAND LABEL     2004-02-24     CONNECTICUT BRAND REGISTRATION
+#>  4 <NA>  LIQUOR BRAND LABEL     1998-06-22     CONNECTICUT BRAND REGISTRATION
+#>  5 <NA>  LIQUOR BRAND LABEL     1997-12-11     CONNECTICUT BRAND REGISTRATION
+#>  6 <NA>  LIQUOR BRAND LABEL     2000-08-30     CONNECTICUT BRAND REGISTRATION
+#>  7 <NA>  LIQUOR BRAND LABEL     1998-05-14     CONNECTICUT BRAND REGISTRATION
+#>  8 <NA>  LIQUOR BRAND LABEL     1998-04-22     CONNECTICUT BRAND REGISTRATION
+#>  9 <NA>  LIQUOR BRAND LABEL     2001-02-13     CONNECTICUT BRAND REGISTRATION
+#> 10 <NA>  LIQUOR BRAND LABEL     2001-02-05     CONNECTICUT BRAND REGISTRATION
+#> # ℹ 57 more rows
 ```
 
 ### Duplicates
@@ -292,7 +292,7 @@ We can also flag any record completely duplicated across every column.
 ``` r
 ctl <- flag_dupes(ctl, -credential_id)
 sum(ctl$dupe_flag)
-#> [1] 194
+#> [1] 218
 ```
 
 ``` r
@@ -300,20 +300,20 @@ ctl %>%
   filter(dupe_flag) %>% 
   select(name, credential, effective_date, address) %>% 
   arrange(effective_date)
-#> # A tibble: 194 × 4
-#>    name                    credential                                       effective_date address                      
-#>    <chr>                   <chr>                                            <date>         <chr>                        
-#>  1 SONIA V MEHTA           Speech and Language Pathologist Temporary Permit 2015-02-23     230 MURRAY LN                
-#>  2 SONIA V MEHTA           Speech and Language Pathologist Temporary Permit 2015-02-23     230 MURRAY LN                
-#>  3 ALICIA A BERG           Hairdresser/Cosmetician                          NA             30 West Chestnut Street      
-#>  4 ALICIA A BERG           Hairdresser/Cosmetician                          NA             30 West Chestnut Street      
-#>  5 MARIA GARCIA            Hairdresser/Cosmetician                          NA             108 Hawthorne Dr North Apt 2f
-#>  6 MARIA GARCIA            Hairdresser/Cosmetician                          NA             108 Hawthorne Dr North Apt 2f
-#>  7 ANDREA MARTINEZ         Hairdresser/Cosmetician                          NA             54 HILLCREST PARK RD         
-#>  8 ANDREA MARTINEZ         Hairdresser/Cosmetician                          NA             54 HILLCREST PARK RD         
-#>  9 SHANNON M SMIRNOW CLARK Emergency Medical Technician                     NA             412 Allegheny Way, Apt. 102  
-#> 10 SHANNON M SMIRNOW CLARK Emergency Medical Technician                     NA             412 Allegheny Way, Apt. 102  
-#> # … with 184 more rows
+#> # A tibble: 218 × 4
+#>    name                       credential                                                          effective_date address
+#>    <chr>                      <chr>                                                               <date>         <chr>  
+#>  1 SONIA V MEHTA              Speech and Language Pathologist Temporary Permit                    2015-02-23     230 MU…
+#>  2 SONIA V MEHTA              Speech and Language Pathologist Temporary Permit                    2015-02-23     230 MU…
+#>  3 THERESA KING               Medication Administration Certification                             NA             95 Mag…
+#>  4 ALICIA A BERG              Hairdresser/Cosmetician                                             NA             30 Wes…
+#>  5 ALICIA A BERG              Hairdresser/Cosmetician                                             NA             30 Wes…
+#>  6 MARIA GARCIA               Hairdresser/Cosmetician                                             NA             108 Ha…
+#>  7 MARIA GARCIA               Hairdresser/Cosmetician                                             NA             108 Ha…
+#>  8 WOODSON EUGENE             Emergency Medical Technician                                        NA             173 CO…
+#>  9 WOODSON EUGENE             Emergency Medical Technician                                        NA             173 CO…
+#> 10 TEXIBRIDPURE T742C19 18241 MEDICAL MARIJUANA  AND ADULT-USE CANNABIS PRODUCER BRAND REGISTRAT… NA             856 Ec…
+#> # ℹ 208 more rows
 ```
 
 Almost all “duplicate” licenses are missing an `effective_date`,
@@ -321,7 +321,7 @@ indicating they could just be repeat submissions.
 
 ``` r
 prop_na(ctl$effective_date[ctl$dupe_flag])
-#> [1] 0.9896907
+#> [1] 0.9908257
 ```
 
 ### Categorical
@@ -331,29 +331,29 @@ col_stats(ctl, n_distinct)
 #> # A tibble: 23 × 4
 #>    col                     class        n           p
 #>    <chr>                   <chr>    <int>       <dbl>
-#>  1 credential_id           <chr>  2128738 1          
-#>  2 name                    <chr>  1611603 0.757      
-#>  3 type                    <chr>       22 0.0000103  
-#>  4 business_name           <chr>   450793 0.212      
-#>  5 dba                     <chr>   106077 0.0498     
-#>  6 full_credential_code    <chr>  2076369 0.975      
-#>  7 credential_type         <chr>      472 0.000222   
-#>  8 credential_number       <chr>   692922 0.326      
-#>  9 credential_sub_category <chr>      177 0.0000831  
-#> 10 credential              <chr>      599 0.000281   
-#> 11 status                  <chr>       19 0.00000893 
-#> 12 status_reason           <chr>      245 0.000115   
-#> 13 active                  <lgl>        2 0.000000940
-#> 14 issue_date              <date>   26525 0.0125     
-#> 15 effective_date          <date>   18970 0.00891    
-#> 16 expiration_date         <date>   13034 0.00612    
-#> 17 address                 <chr>  1153015 0.542      
-#> 18 city                    <chr>    33873 0.0159     
-#> 19 state                   <chr>      146 0.0000686  
-#> 20 zip                     <chr>   335806 0.158      
-#> 21 record_refreshed_on     <chr>     5532 0.00260    
-#> 22 na_flag                 <lgl>        2 0.000000940
-#> 23 dupe_flag               <lgl>        2 0.000000940
+#>  1 credential_id           <chr>  2260323 1          
+#>  2 name                    <chr>  1677973 0.742      
+#>  3 type                    <chr>       22 0.00000973 
+#>  4 business_name           <chr>   473490 0.209      
+#>  5 dba                     <chr>   107748 0.0477     
+#>  6 full_credential_code    <chr>  2203001 0.975      
+#>  7 credential_type         <chr>      483 0.000214   
+#>  8 credential_number       <chr>   702850 0.311      
+#>  9 credential_sub_category <chr>      176 0.0000779  
+#> 10 credential              <chr>      607 0.000269   
+#> 11 status                  <chr>       19 0.00000841 
+#> 12 status_reason           <chr>      253 0.000112   
+#> 13 active                  <lgl>        2 0.000000885
+#> 14 issue_date              <date>   26889 0.0119     
+#> 15 effective_date          <date>   19320 0.00855    
+#> 16 expiration_date         <date>   13432 0.00594    
+#> 17 address                 <chr>  1194281 0.528      
+#> 18 city                    <chr>    35107 0.0155     
+#> 19 state                   <chr>      146 0.0000646  
+#> 20 zip                     <chr>   352515 0.156      
+#> 21 record_refreshed_on     <chr>     5883 0.00260    
+#> 22 na_flag                 <lgl>        2 0.000000885
+#> 23 dupe_flag               <lgl>        2 0.000000885
 ```
 
 ![](../plots/distinct-plots-1.png)<!-- -->![](../plots/distinct-plots-2.png)<!-- -->![](../plots/distinct-plots-3.png)<!-- -->![](../plots/distinct-plots-4.png)<!-- -->
@@ -364,7 +364,7 @@ col_stats(ctl, n_distinct)
 min(ctl$effective_date, na.rm = TRUE)
 #> [1] "1800-12-27"
 max(ctl$effective_date, na.rm = TRUE)
-#> [1] "2025-09-30"
+#> [1] "2024-02-01"
 ```
 
 There are many licenses with an `effective_date` of December 27, 1800.
@@ -417,20 +417,20 @@ addr_norm <- ctl %>%
 
 ``` r
 addr_norm
-#> # A tibble: 1,153,015 × 2
-#>    address                   address_norm           
-#>    <chr>                     <chr>                  
-#>  1 214 WEST 29TH ST          214 WEST 29TH ST       
-#>  2 70 BRITANNIA ST           70 BRITANNIA ST        
-#>  3 40 Birchwood Heights Road 40 BIRCHWOOD HEIGHTS RD
-#>  4 34 SHERRY DR              34 SHERRY DR           
-#>  5 84 BUDDINGTON RD #4       84 BUDDINGTON RD #4    
-#>  6 2 ANDOVER TER             2 ANDOVER TER          
-#>  7 18 LUDLOW MNR             18 LUDLOW MNR          
-#>  8 1 CANDLEWOOD CT           1 CANDLEWOOD CT        
-#>  9 88 RENNERT LN             88 RENNERT LN          
-#> 10 722 TOWER AVE             722 TOWER AVE          
-#> # … with 1,153,005 more rows
+#> # A tibble: 1,194,281 × 2
+#>    address                           address_norm                    
+#>    <chr>                             <chr>                           
+#>  1 105 FIVE FIELDS RD                105 FIVE FIELDS RD              
+#>  2 62 Canterbury Rd                  62 CANTERBURY RD                
+#>  3 58 Kenyon Rd.                     58 KENYON RD                    
+#>  4 124 Constitution Street, Unit #13 124 CONSTITUTION STREET UNIT #13
+#>  5 195 Indian Trail                  195 INDIAN TRL                  
+#>  6 80 Peacock Drive                  80 PEACOCK DR                   
+#>  7 30 FOX RUN                        30 FOX RUN                      
+#>  8 18 HICKSVILLE RD                  18 HICKSVILLE RD                
+#>  9 122 SULLIVAN RD.                  122 SULLIVAN RD                 
+#> 10 145 Barber st                     145 BARBER ST                   
+#> # ℹ 1,194,271 more rows
 ```
 
 ``` r
@@ -462,8 +462,8 @@ progress_table(
 #> # A tibble: 2 × 6
 #>   stage        prop_in n_distinct prop_na  n_out n_diff
 #>   <chr>          <dbl>      <dbl>   <dbl>  <dbl>  <dbl>
-#> 1 ctl$zip        0.608     335806 0.00563 829549 318015
-#> 2 ctl$zip_norm   0.988      25485 0.00625  25965   3972
+#> 1 ctl$zip        0.607     352515 0.00535 882464 334455
+#> 2 ctl$zip_norm   0.988      26092 0.00597  27042   4200
 ```
 
 ### State
@@ -480,20 +480,20 @@ ctl |>
     y = zipcodes,
     by = c("zip_norm" = "zip")
   )
-#> # A tibble: 5,386 × 6
+#> # A tibble: 5,849 × 6
 #>    state_raw zip_norm     n     p city     state
 #>    <chr>     <chr>    <int> <dbl> <chr>    <chr>
-#>  1 <NA>      <NA>      7579 0.357 <NA>     <NA> 
-#>  2 PH        1634       403 0.376 <NA>     <NA> 
-#>  3 CH        <NA>       277 0.389 <NA>     <NA> 
-#>  4 OC        <NA>       154 0.396 <NA>     <NA> 
-#>  5 PH        1605       120 0.402 <NA>     <NA> 
-#>  6 VN        <NA>       104 0.407 <NA>     <NA> 
-#>  7 CY        <NA>        92 0.411 <NA>     <NA> 
-#>  8 I2        20130       90 0.415 PARIS    VA   
-#>  9 <NA>      010         90 0.419 <NA>     <NA> 
-#> 10 I2        13210       75 0.423 SYRACUSE NY   
-#> # … with 5,376 more rows
+#>  1 <NA>      <NA>      7645 0.339 <NA>     <NA> 
+#>  2 PH        1634       374 0.355 <NA>     <NA> 
+#>  3 CH        <NA>       290 0.368 <NA>     <NA> 
+#>  4 OC        <NA>       166 0.375 <NA>     <NA> 
+#>  5 PH        1605       118 0.381 <NA>     <NA> 
+#>  6 VN        <NA>       110 0.386 <NA>     <NA> 
+#>  7 I2        20130       95 0.390 PARIS    VA   
+#>  8 CY        <NA>        93 0.394 <NA>     <NA> 
+#>  9 <NA>      010         90 0.398 <NA>     <NA> 
+#> 10 I2        13210       81 0.402 SYRACUSE NY   
+#> # ℹ 5,839 more rows
 ```
 
 ### City
@@ -593,20 +593,20 @@ good_refine <- ctl %>%
   )
 ```
 
-    #> # A tibble: 124 × 5
-    #>    state zip_norm city_swap        city_refine          n
-    #>    <chr> <chr>    <chr>            <chr>            <int>
-    #>  1 WV    25303    SO CHARLESTON    CHARLESTON          56
-    #>  2 NY    11733    SETAUKET         EAST SETAUKET       50
-    #>  3 IL    60606    CHIGACO          CHICAGO             18
-    #>  4 MA    01060    NORTH HAMPTON    NORTHAMPTON         16
-    #>  5 CT    06081    TARRIFVILLE      TARIFFVILLE         11
-    #>  6 SC    29406    NORTH CHARLESTON CHARLESTON          11
-    #>  7 RI    02904    NO PROVIDENCE    PROVIDENCE           7
-    #>  8 MA    01073    SOUTH HAMPTON    SOUTHAMPTON          6
-    #>  9 CA    92879    CORONA CA        CORONA               4
-    #> 10 NY    10520    CROTON/HUDSON    CROTON ON HUDSON     4
-    #> # … with 114 more rows
+    #> # A tibble: 131 × 5
+    #>    state zip_norm city_swap        city_refine       n
+    #>    <chr> <chr>    <chr>            <chr>         <int>
+    #>  1 WV    25303    SO CHARLESTON    CHARLESTON       56
+    #>  2 NY    11733    SETAUKET         EAST SETAUKET    47
+    #>  3 IL    60606    CHIGACO          CHICAGO          18
+    #>  4 MA    01060    NORTH HAMPTON    NORTHAMPTON      16
+    #>  5 SC    29406    NORTH CHARLESTON CHARLESTON       13
+    #>  6 CT    06081    TARRIFVILLE      TARIFFVILLE       9
+    #>  7 RI    02904    NO PROVIDENCE    PROVIDENCE        7
+    #>  8 MA    01073    SOUTH HAMPTON    SOUTHAMPTON       6
+    #>  9 CA    92879    CORONA CA        CORONA            5
+    #> 10 CA    92673    SAN CELMNENTE    SAN CLEMENTE      4
+    #> # ℹ 121 more rows
 
 Then we can join the refined values back to the database.
 
@@ -624,10 +624,10 @@ misspellings.
 
 | stage                    | prop_in | n_distinct | prop_na | n_out | n_diff |
 |:-------------------------|--------:|-----------:|--------:|------:|-------:|
-| `str_to_upper(ctl$city)` |   0.976 |      25147 |   0.004 | 50751 |  14617 |
-| `ctl$city_norm`          |   0.982 |      22540 |   0.004 | 38450 |  11967 |
-| `ctl$city_swap`          |   0.988 |      18913 |   0.004 | 25424 |   8299 |
-| `ctl$city_refine`        |   0.988 |      18806 |   0.004 | 25132 |   8192 |
+| `str_to_upper(ctl$city)` |   0.976 |      25932 |   0.004 | 53105 |  15190 |
+| `ctl$city_norm`          |   0.982 |      23232 |   0.004 | 40503 |  12452 |
+| `ctl$city_swap`          |   0.988 |      19518 |   0.004 | 27053 |   8705 |
+| `ctl$city_refine`        |   0.988 |      19407 |   0.004 | 26750 |   8594 |
 
 You can see how the percentage of valid values increased with each
 stage.
@@ -661,37 +661,37 @@ ctl <- ctl %>%
 glimpse(sample_n(ctl, 1000))
 #> Rows: 1,000
 #> Columns: 27
-#> $ credential_id           <chr> "2176436", "1769586", "975106", "1165432", "2137296", "789141", "479295", "445369", "7…
-#> $ name                    <chr> "JUSTIN MACDOUGALL", "Franklin Fund Allocator Series", "STEVEN WALLACH", "MICHELLE M W…
-#> $ type                    <chr> "INDIVIDUAL", "BUSINESS", "INDIVIDUAL", "INDIVIDUAL", "BUSINESS", "INDIVIDUAL", "INDIV…
-#> $ business_name           <chr> NA, "Franklin Fund Allocator Series", NA, NA, "SYNGENTA CROP PROTECTION. LLC", NA, NA,…
-#> $ dba                     <chr> NA, NA, "STEVEN WALLACH LANDSCAPES", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
-#> $ full_credential_code    <chr> "PMCO.0044203", "ICOE.1091084", "HIC.0628899", "PCT.0012706", "PMPR.0010223", "8.00065…
-#> $ credential_type         <chr> "PMCO", "ICOE", "HIC", "PCT", "PMPR", "8", "CSP", "HIC", "20", "70", "HIS", "LBD", "10…
-#> $ credential_number       <chr> "44203", "1091084", "628899", "12706", "10223", "657", "42234", "612113", "23090", "99…
-#> $ credential_sub_category <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "RES", NA, NA, NA, NA, NA,…
-#> $ credential              <chr> "Pesticide Commercial Operator Certification", "Investment Company - Open End", "HOME …
-#> $ status                  <chr> "INACTIVE", "INACTIVE", "INACTIVE", "INACTIVE", "ACTIVE", "INACTIVE", "INACTIVE", "INA…
-#> $ status_reason           <chr> "LAPSED RENEWAL", "TERMINATED", "EXPIRED MORE THAN 3 YEARS - MUST REAPPLY", NA, "REGIS…
-#> $ active                  <lgl> FALSE, FALSE, FALSE, FALSE, TRUE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FAL…
-#> $ issue_date              <date> 2015-06-12, NA, 2010-11-12, 2013-09-05, NA, 1978-01-25, 2007-09-28, 2006-08-04, 1981-…
-#> $ effective_date          <date> 2015-02-01, 2019-12-31, 2014-12-01, 2016-02-01, 2021-01-01, 2018-11-01, 2008-03-01, 2…
-#> $ expiration_date         <date> 2020-01-31, 2020-08-14, 2015-11-30, 2018-01-31, 2025-12-31, 2019-10-31, 2009-02-28, 2…
-#> $ address                 <chr> "501 PEPPER STREET", NA, "277 NEWFIELD ST", "10 MCGINNIS ST", "P O BOX 18300", "11 MEA…
-#> $ city                    <chr> "MONROE", "SAN MATEO", "MIDDLETOWN", "EAST BRUNSWICK", "GREENSBORO", "GALES FERRY", "N…
-#> $ state                   <chr> "CT", "CA", "CT", "NJ", "NC", "CT", "CT", "CT", "CT", "RI", "CT", "CT", "NC", "CT", "C…
-#> $ zip                     <chr> "06468", "944031906", "064576473", "088162672", "274198300", "06335", "06513", "06786"…
-#> $ record_refreshed_on     <chr> "02/14/2022", "09/08/2020", "12/04/2018", "01/01/2019", "01/04/2021", "02/03/2020", "0…
+#> $ credential_id           <chr> "1093128", "1688285", "848890", "1146986", "2065949", "653432", "339999", "305664", "5…
+#> $ name                    <chr> "JONATHAN HIRSCHFELD", "SIERRA N BOMBARD", "JILL M BAUER", "CHATEAU BEAUSEJOUR SAINT E…
+#> $ type                    <chr> "INDIVIDUAL", "INDIVIDUAL", "INDIVIDUAL", "LBD BRAND", "INDIVIDUAL", "INDIVIDUAL", "IN…
+#> $ business_name           <chr> NA, NA, NA, "CHATEAU BEAUSEJOUR SAINT EMILION GRAND CRU", NA, NA, NA, "A L S CONTRACTI…
+#> $ dba                     <chr> NA, NA, NA, NA, NA, NA, "NEW ENGLAND CLASSICS", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
+#> $ full_credential_code    <chr> "CPAL.0012429", "RES.0813730", "70.009157", "LBD.0098521", "NLT.0001120", "10.R53688",…
+#> $ credential_type         <chr> "CPAL", "RES", "70", "LBD", "NLT", "10", "HIC", "NHC", "10", "ARI", "SNPC", "IMP", "HI…
+#> $ credential_number       <chr> "12429", "813730", "9157", "98521", "1120", "R53688", "579847", "3798", "69852", "3972…
+#> $ credential_sub_category <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "TEMP", "RES",…
+#> $ credential              <chr> "CERTIFIED PUBLIC ACCOUNTANT LICENSE", "REAL ESTATE SALESPERSON", "Emergency Medical T…
+#> $ status                  <chr> "INACTIVE", "INACTIVE", "ACTIVE", "INACTIVE", "ACTIVE", "INACTIVE", "INACTIVE", "INACT…
+#> $ status_reason           <chr> "VOLUNTARY NON-RENEWAL", "LACK OF SPONSORSHIP", "CURRENT", NA, "CURRENT", "LAPSED DUE …
+#> $ active                  <lgl> FALSE, FALSE, TRUE, FALSE, TRUE, FALSE, FALSE, FALSE, TRUE, TRUE, FALSE, TRUE, FALSE, …
+#> $ issue_date              <date> 2005-03-11, 2019-11-19, 2008-01-14, 2013-01-25, 2020-09-04, 1997-01-17, 2006-03-21, N…
+#> $ effective_date          <date> 2008-01-01, 2021-06-25, 2022-01-01, 2013-01-25, 2022-05-01, NA, 2010-12-10, 2005-10-0…
+#> $ expiration_date         <date> 2008-12-31, 2022-05-31, 2023-12-31, 2016-01-24, 2024-04-30, 1997-05-31, 2011-11-30, 2…
+#> $ address                 <chr> "6 QUAIL RUN", "17 HARTFORD TURNPIKE", "1 Church Street", "CONNECTICUT BRAND REGISTRAT…
+#> $ city                    <chr> "RANDOLPH", "TOLLAND", "STONINGTON", "HARTFORD", "DANBURY", "WHIPPANY", "CANTON", "DAN…
+#> $ state                   <chr> "NJ", "CT", "CT", "CT", "CT", "NJ", "CT", "CT", "CA", "CT", "CT", "WI", "CT", "CT", "C…
+#> $ zip                     <chr> "07869", "06084", "06378", "06106", "068108195", "07981", "060192042", "06810", "93611…
+#> $ record_refreshed_on     <chr> "08/02/2012", "06/28/2021", "07/19/2021", "06/13/2017", "06/09/2022", "07/08/2009", "0…
 #> $ na_flag                 <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FA…
 #> $ dupe_flag               <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FA…
-#> $ effective_year          <dbl> 2015, 2019, 2014, 2016, 2021, 2018, 2008, 2008, 2016, 2005, 2020, 2019, 2013, 1994, NA…
-#> $ address_clean           <chr> "501 PEPPER ST", NA, "277 NEWFIELD ST", "10 MCGINNIS ST", "P O BOX 18300", "11 MEADOW …
-#> $ city_clean              <chr> "MONROE", "SAN MATEO", "MIDDLETOWN", "EAST BRUNSWICK", "GREENSBORO", "GALES FERRY", "N…
-#> $ zip_clean               <chr> "06468", "94403", "06457", "08816", "27419", "06335", "06513", "06786", "06082", "0289…
+#> $ effective_year          <dbl> 2008, 2021, 2022, 2013, 2022, NA, 2010, 2005, 2022, 2022, 1999, 2023, 2009, 2018, 2020…
+#> $ address_clean           <chr> "6 QUAIL RUN", "17 HARTFORD TPKE", "1 CHURCH ST", "CONNECTICUT BRAND REGISTRATION", "0…
+#> $ city_clean              <chr> "RANDOLPH", "TOLLAND", "STONINGTON", "HARTFORD", "DANBURY", "WHIPPANY", "CANTON", "DAN…
+#> $ zip_clean               <chr> "07869", "06084", "06378", "06106", "06810", "07981", "06019", "06810", "93611", "0646…
 ```
 
-1.  There are 2,128,738 records in the database.
-2.  There are 194 duplicate records in the database.
+1.  There are 2,260,323 records in the database.
+2.  There are 218 duplicate records in the database.
 3.  The range and distribution of `amount` and `date` seem reasonable.
 4.  There are 67 records missing key variables.
 5.  Consistency in geographic data has been improved with
@@ -717,7 +717,7 @@ basename(clean_csv)
 write_csv(ctl, clean_csv, na = "")
 write_rds(ctl, clean_rds, compress = "xz")
 (clean_size <- file_size(clean_csv))
-#> 519M
+#> 551M
 ```
 
 ## Upload
