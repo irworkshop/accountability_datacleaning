@@ -1,6 +1,6 @@
 ---
 title: "Arkansas Contributions"
-author: "Kiernan Nicholls"
+author: "Kiernan Nicholls & Aarushi Sahejpal"
 date: "`r Sys.time()`"
 output:
   github_document: 
@@ -122,7 +122,7 @@ These files can be downloaded and imported into other applications (Microsoft
 Excel, Microsoft Access, etc.)
 > 
 > This data is extracted from the Arkansas Campaign Finance database as it
-existed as of 06/24/2020 12:02 PM.
+existed as of 04/28/2023 6:42 AM.
 
 The AR SOS also provides a [data layout key][04]:
 
@@ -693,7 +693,7 @@ Now the file can be saved on disk for upload to the Accountability server.
 
 ```{r clean_dir}
 clean_dir <- dir_create(here("ar", "contribs", "data", "clean"))
-clean_path <- path(clean_dir, "ar_contribs_clean.csv")
+clean_path <- path(clean_dir, "ar_contribs_20230331.csv")
 write_csv(arc, clean_path, na = "")
 file_size(clean_path)
 file_encoding(clean_path) %>% 
@@ -723,9 +723,9 @@ as_fs_bytes(object_size(s3_path, "publicaccountability"))
 
 ## Dictionary
 
-The following table describes the variables in our final exported file:
+### The following table describes the variables in our final exported file:
 
-```{r dict_make, echo=FALSE}
+### r dict_make, echo=FALSE}
 dict_raw <- tibble(
   var = md_code(names(arc)),
   old = c(md_code(old_names), rep("", ncol(arc) - length(old_names))),
@@ -762,12 +762,13 @@ dict_raw <- tibble(
     "Normalized city name"
   )
 )
-```
+###
 
-```{r dict_md, echo=FALSE}
+###  
+r dict_md, echo=FALSE}
 (dict_md <- kable(
   x = dict_raw,
   format = "markdown",
   col.names = c("Column", "Original", "Type", "Definition")
 ))
-```
+###
