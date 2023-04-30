@@ -1,33 +1,38 @@
 Pennsylvania Campaign Expenditures Data Diary
 ================
 Yanqi Xu
-2019-12-11 10:48:40
+2023-04-30 16:01:09
 
--   [Project](#project)
--   [Objectives](#objectives)
--   [Packages](#packages)
--   [Data](#data)
--   [Import](#import)
--   [Explore](#explore)
--   [Wrangle](#wrangle)
--   [Conclude](#conclude)
--   [Export](#export)
+- <a href="#project" id="toc-project">Project</a>
+- <a href="#objectives" id="toc-objectives">Objectives</a>
+- <a href="#packages" id="toc-packages">Packages</a>
+- <a href="#data" id="toc-data">Data</a>
+- <a href="#import" id="toc-import">Import</a>
+- <a href="#fix" id="toc-fix">Fix</a>
+- <a href="#explore" id="toc-explore">Explore</a>
+- <a href="#wrangle" id="toc-wrangle">Wrangle</a>
+- <a href="#conclude" id="toc-conclude">Conclude</a>
+- <a href="#export" id="toc-export">Export</a>
 
-Project
--------
+## Project
 
-The Accountability Project is an effort to cut across data silos and give journalists, policy professionals, activists, and the public at large a simple way to search across huge volumes of public data about people and organizations.
+The Accountability Project is an effort to cut across data silos and
+give journalists, policy professionals, activists, and the public at
+large a simple way to search across huge volumes of public data about
+people and organizations.
 
-Our goal is to standardizing public data on a few key fields by thinking of each dataset row as a transaction. For each transaction there should be (at least) 3 variables:
+Our goal is to standardizing public data on a few key fields by thinking
+of each dataset row as a transaction. For each transaction there should
+be (at least) 3 variables:
 
 1.  All **parties** to a transaction
 2.  The **date** of the transaction
 3.  The **amount** of money involved
 
-Objectives
-----------
+## Objectives
 
-This document describes the process used to complete the following objectives:
+This document describes the process used to complete the following
+objectives:
 
 1.  How many records are in the database?
 2.  Check for duplicates
@@ -38,10 +43,11 @@ This document describes the process used to complete the following objectives:
 7.  Create a `YEAR` field from the transaction date
 8.  Make sure there is data on both parties to a transaction
 
-Packages
---------
+## Packages
 
-The following packages are needed to collect, manipulate, visualize, analyze, and communicate these results. The `pacman` package will facilitate their installation and attachment.
+The following packages are needed to collect, manipulate, visualize,
+analyze, and communicate these results. The `pacman` package will
+facilitate their installation and attachment.
 
 ``` r
 if (!require("pacman")) install.packages("pacman")
@@ -64,41 +70,79 @@ pacman::p_load(
 )
 ```
 
-This document should be run as part of the `R_campfin` project, which lives as a sub-directory of the more general, language-agnostic [`irworkshop/accountability_datacleaning`](https://github.com/irworkshop/accountability_datacleaning "TAP repo") GitHub repository.
+This document should be run as part of the `R_campfin` project, which
+lives as a sub-directory of the more general, language-agnostic
+[`irworkshop/accountability_datacleaning`](https://github.com/irworkshop/accountability_datacleaning "TAP repo")
+GitHub repository.
 
-The `R_campfin` project uses the [RStudio projects](https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects "Rproj") feature and should be run as such. The project also uses the dynamic `here::here()` tool for file paths relative to *your* machine.
+The `R_campfin` project uses the [RStudio
+projects](https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects "Rproj")
+feature and should be run as such. The project also uses the dynamic
+`here::here()` tool for file paths relative to *your* machine.
 
 ``` r
 # where dfs this document knit?
 here::here()
-#> [1] "/Users/soc/accountability/accountability_datacleaning/R_campfin"
+#> [1] "/Users/yanqixu/code/accountability_datacleaning"
 ```
 
-Data
-----
+## Data
+
+Data is from the [Pennsylvania Election and Campaign Finance System
+(ECF)](https://www.dos.pa.gov/VotingElections/CandidatesCommittees/CampaignFinance/Pages/default.aspx).
+
+The ECF provides a [Full Campaign Finance
+Export](https://www.dos.pa.gov/VotingElections/CandidatesCommittees/CampaignFinance/Resources/Pages/FullCampaignFinanceExport.aspx).
+From this page, files are organized as annual directories containing
+files for contributions, debt, expenditures, filer information, and
+receipts.
+
+The ECF also provides a `readme.txt` file, which we can read to better
+understand the data we will be downloading.
+
+In this update, we include all years up to 2022. The next update should
+start with 2023.
+
+``` r
+pa_host <- "https://www.dos.pa.gov/VotingElections"
+pa_dir <- "CandidatesCommittees/CampaignFinance/Resources/Documents"
+readme_file <- "readmepriorto2022.txt"
+readme_url <- paste(pa_host, pa_dir, readme_file, sep = "/")
+```
+
+This text file provides the column names and types for the each of the
+data files included in the raw download.
 
 ### About
 
-More information about the record layout can be found here <https://www.dos.pa.gov/VotingElections/CandidatesCommittees/CampaignFinance/Resources/Documents/readme.txt>.
+Data layout for 2022 is different from previous years and the record
+layout can be found
+[here](https://www.dos.pa.gov/VotingElections/CandidatesCommittees/CampaignFinance/Resources/Documents/readme2022.txt).
 
-Import
-------
+For data prior to 2022, see
+<https://www.dos.pa.gov/VotingElections/CandidatesCommittees/CampaignFinance/Resources/Documents/readmepriorto2022.txt>
+
+## Import
 
 ### Download
 
-Download raw, **immutable** data file. Go to <https://www.dos.pa.gov/VotingElections/CandidatesCommittees/CampaignFinance/Resources/Pages/FullCampaignFinanceExport.aspx>. We'll download the files from 2015 to 2019 (file format: zip file) with the script.
+Download raw, **immutable** data file. Go to
+<https://www.dos.pa.gov/VotingElections/CandidatesCommittees/CampaignFinance/Resources/Pages/FullCampaignFinanceExport.aspx>.
+We’ll download the files from 2015 to 2019 (file format: zip file) with
+the script.
 
 ``` r
 # create a directory for the raw data
-raw_dir <- here("pa", "expends", "data", "raw")
+raw_dir <- here("state","pa", "expends", "data", "raw")
 dir_create(raw_dir)
 ```
 
-Download all the file packages containing all campaign-finance-related files.
+Download all the file packages containing all campaign-finance-related
+files.
 
 ``` r
 #download the files into the directory
-pa_exp_urls <- glue("https://www.dos.pa.gov//VotingElections/CandidatesCommittees/CampaignFinance/Resources/Documents/{2015:2019}.zip")
+pa_exp_urls <- glue("https://www.dos.pa.gov//VotingElections/CandidatesCommittees/CampaignFinance/Resources/Documents/{2015:2022}.zip")
 
 if (!all_files_new(raw_dir)) {
   for (url in pa_exp_urls) {
@@ -129,199 +173,580 @@ if (all_files_new(path = raw_dir, glob = "*.txt")) {
 }
 ```
 
-Read multiple csvs into R
+## Fix
+
+To properly read the file into R, we first have to do some simple string
+processing to the text file.
 
 ``` r
-#recursive set to true because 2016 and 2015 have subdirectories under "raw"
-expense_files <- list.files(raw_dir, pattern = "expense.+", recursive = TRUE, full.names = TRUE)
-#pa_lines <- list.files(raw_dir, pattern = ".txt", recursive = TRUE) %>% map(read_lines) %>% unlist()
-pa_col_names <- c("FILERID","EYEAR","CYCLE","EXPNAME","ADDRESS1","ADDRESS2","CITY","STATE","ZIPCODE","EXPDATE","EXPAMT","EXPDESC")
+fix_dir <- dir_create(path(dirname(raw_dir), "fix"))
+pa_expends_paths <- dir_ls(raw_dir, regexp = "expense.+", recurse = FALSE)
 
-pa <- expense_files %>% 
-  map(read_delim, delim = ",", escape_double = FALSE,
-      escape_backslash = FALSE, col_names = pa_col_names, 
-      col_types = cols(.default = col_character())) %>% 
-bind_rows()
+raw_dir %>% dir_info() %>% filter(path %in% pa_expends_paths)
 ```
 
-There are 4 parsing failures. We'll move along the information in rows that were read incorrectly due to double quotes in the address column.
+    #> # A tibble: 8 × 18
+    #>   path         type   size permiss…¹ modification_time   user  group devic…² hard_…³ speci…⁴  inode
+    #>   <fs::path>   <fct> <fs:> <fs::per> <dttm>              <chr> <chr>   <dbl>   <dbl>   <dbl>  <dbl>
+    #> 1 …expense.txt file    13M rw-r--r-- 2023-04-17 22:38:42 yanq… staff  1.68e7       1       0 1.04e8
+    #> 2 …se_2015.txt file  13.3M rw-r--r-- 2023-04-17 22:35:07 yanq… staff  1.68e7       1       0 1.04e8
+    #> 3 …se_2016.txt file  13.6M rw-r--r-- 2023-04-17 22:37:16 yanq… staff  1.68e7       1       0 1.04e8
+    #> 4 …se_2017.txt file  12.1M rw-r--r-- 2023-04-17 22:37:57 yanq… staff  1.68e7       1       0 1.04e8
+    #> 5 …3042019.txt file  16.4M rw-r--r-- 2023-04-17 22:38:02 yanq… staff  1.68e7       1       0 1.04e8
+    #> 6 …se_2020.txt file  13.3M rw-r--r-- 2023-04-17 22:38:47 yanq… staff  1.68e7       1       0 1.04e8
+    #> 7 …se_2021.txt file  11.7M rw-r--r-- 2023-04-17 22:38:51 yanq… staff  1.68e7       1       0 1.04e8
+    #> 8 …se_2022.txt file  18.1M rw-r--r-- 2023-04-17 22:40:30 yanq… staff  1.68e7       1       0 1.04e8
+    #> # … with 7 more variables: block_size <dbl>, blocks <dbl>, flags <int>, generation <dbl>,
+    #> #   access_time <dttm>, change_time <dttm>, birth_time <dttm>, and abbreviated variable names
+    #> #   ¹​permissions, ²​device_id, ³​hard_links, ⁴​special_device_id
 
 ``` r
-nudge <- which(nchar(pa$STATE) > 2)
-# However, the information in the last column EXPDESC for these columns has been lost at the time of data import.
-for (index in nudge) {
-  for (column in c(7:11)){
-    pa[[index, column]] <- pa[[index, column+1]]
+#fix_eval <- length(dir_ls(fix_dir)) != length(expense_files)
+```
+
+``` r
+# for old format files
+for (f in pa_expends_paths) {
+  n <- path(fix_dir, str_c("FIX", basename(f), sep = "_"))
+  x <- read_lines(f, skip = 1)
+  for (i in rev(seq_along(x))) {
+    y <- i - 1
+    if (y == 0) {
+      next() # skip first
+    } else if (str_starts(x[i], "\"\\d+\",") | str_ends(x[y], "\"(Y|N)\"")) {
+      next() # skip if good
+    } else { # merge if bad
+      x[y] <- str_c(x[y], x[i])
+      x <- x[-i] # remove bad
+    }
   }
+  x <- str_remove(x, '(?<=")"(?!,)')
+  write_lines(x, n)
+  message(basename(n))
 }
 ```
 
-The text fields contain both lower-case and upper-case letters. The for loop converts them to all upper-case letters unifies the encoding to "UTF-8", replaces the "&", the HTML expression of "An ampersand". These strings are invalid and cannot be converted Converting the encoding may result in some NA values
-
 ``` r
-col_stats(pa, count_na)
+# new format files
+for (f in pa_expends_paths) {
+  n <- path(fix_dir, str_c("FIX", basename(f), sep = "_"))
+  x <- read_lines(f, skip = 1)
+  for (i in rev(seq_along(x))) {
+    if (str_starts(x[i], "\\d+,\\d+,")) {
+      next() # skip if good
+    } else { # merge if bad
+      x[i - 1] <- str_c(x[i - 1], x[i])
+      x <- x[-i] # remove bad
+    }
+  }
+  write_lines(x, n)
+  message(basename(n))
+}
 ```
 
-    #> # A tibble: 12 x 4
-    #>    col      class      n        p
-    #>    <chr>    <chr>  <int>    <dbl>
-    #>  1 FILERID  <chr>      0 0       
-    #>  2 EYEAR    <chr>      0 0       
-    #>  3 CYCLE    <chr>      0 0       
-    #>  4 EXPNAME  <chr>    112 0.000227
-    #>  5 ADDRESS1 <chr>  14553 0.0295  
-    #>  6 ADDRESS2 <chr> 457826 0.929   
-    #>  7 CITY     <chr>  11556 0.0234  
-    #>  8 STATE    <chr>  11015 0.0223  
-    #>  9 ZIPCODE  <chr>  15654 0.0318  
-    #> 10 EXPDATE  <chr>   1450 0.00294 
-    #> 11 EXPAMT   <chr>      0 0       
-    #> 12 EXPDESC  <chr>   9492 0.0193
+``` r
+fix_info <- as_tibble(dir_info(fix_dir))
+sum(fix_info$size)
+fix_info %>% 
+  select(path, size, modification_time) %>% 
+  mutate(across(path, basename))
+```
+
+Read multiple csvs into R
 
 ``` r
-pa <- pa %>% mutate_all(.funs = iconv, to = "UTF-8") %>% 
-  mutate_all(.funs = str_replace,"&AMP;", "&") %>% 
-  mutate_if(is.character, str_to_upper)
+exp_22 <- glue(raw_dir, "/expense_2022.txt")
+#pa_lines <- list.files(raw_dir, pattern = ".txt", recursive = TRUE) %>% map(read_lines) %>% unlist()
+
+pa_expends_paths <- setdiff(pa_expends_paths, exp_22)
+col_names_2022 <- c("FILERID", 
+"REPORTID", 
+"EYEAR",
+"TIMESTAMP", 
+"CYCLE", 
+"EXPNAME", 
+"ADDRESS1", 
+"ADDRESS2", 
+"CITY", 
+"STATE", 
+"ZIPCODE", 
+"EXPDATE", 
+"EXPAMT", 
+"EXPDESC")
+
+col_names_earlier <- readme$expense$col
+```
+
+There are some double quotes in the files that cause errors when reading
+in. So we will manually change the double quotes into single quotes. The
+regex used to process files up to 2022 and since 2022 are very similar,
+just a little different.
+
+``` r
+y <- read_lines(exp_22)
+#find quotes not at the end that don't contain commas
+y <- y %>% str_replace_all('(?<!,)\\"(?!$|,)',"'")
+
+read_pa <- function(file){
+  x <- read_lines(file)
+  #find quotes not at the beginning and not at the end that don't contain commas
+  x <- x %>% str_replace_all('(?<!^|,)\\"(?!$|,)',"'") %>% 
+    str_replace_all("&amp;", "&")
+  df <- read_delim(I(x),
+          delim = ",", escape_double = FALSE,
+      escape_backslash = FALSE, col_names = col_names_earlier, 
+      col_types = cols(.default = col_character()))
+  return(df)
+}
+
+
+pa <- pa_expends_paths %>% 
+  map_dfr(read_pa)
+
+pa22 <- I(y) %>% read_delim(",", escape_double = FALSE,
+      escape_backslash = FALSE, col_names = col_names_2022,
+      name_repair = make_clean_names,
+      col_types = cols(.default = col_character()))
+```
+
+We can see that the two files’ record layouts are similar, with the 2022
+file having two more columns `reportid` and `timestamp`. We can just
+combine them into one.
+
+``` r
+pae <- pa %>% bind_rows(pa22)
+```
+
+We also need to pull up the processed filer table to join back to the
+`filerid`, and `eyear` fields.
+
+Then we can read the fixed filer files to describe the recipients.
+
+``` r
+fil_paths <- dir_ls(
+  path = raw_dir, 
+  recurse = TRUE, 
+  regexp = "(F|f)iler[\\.|_]"
+)
+
+fix_check <- here("state","pa", "expends", "data", "fixed.txt")
+```
+
+``` r
+# do not repeat if done
+#if (!file_exists(fix_check)) {
+  # for all filer files
+  for (f in c(fil_paths)) {
+    # read raw file
+    read_file(f) %>% 
+      # force conversion to simple
+      iconv(to = "ASCII", sub = "") %>% 
+      # replace non-carriage newline
+      str_replace_all("(?<!\r)\n", " ") %>%
+      # replace not-field double quotes
+      str_replace_all("(?<!^|,|\r\n)\"(?!,|\r\n|$)", "\'") %>% 
+      # replace non-delim commas
+      str_remove_all(",(?!\"|\\d|\\.\\d+|-(\\d|\\.))") %>% 
+      # overwrite raw file
+      write_file(f)
+    # check progress
+    message(paste(basename(f), "done"))
+    # clean garbage memory
+    flush_memory()
+  }
+  # note this has done
+  file_create(fix_check)
+#}
+```
+
+``` r
+fil_path_2022 <- glue(raw_dir, "/filer_2022.txt")
+#pa_lines <- list.files(raw_dir, pattern = ".txt", recursive = TRUE) %>% map(read_lines) %>% unlist()
+fil_cols_2022 <- c("filerid", "reportid", "eyear", "timestamp", "cycle", "ammend", "terminate", "filertype","filername",
+ "office", "district", "party", "address1", "address2", "city", "state",    
+ "zipcode", "county", "phone", "beginning","monetary", "inkind")
+fil_paths <- setdiff(fil_paths, fil_path_2022)
+
+filers2022 <- read_delim(fil_path_2022,
+                          delim = ",",
+  escape_backslash = FALSE, 
+  escape_double = FALSE,
+  col_names = fil_cols_2022,
+  col_types = cols(
+    .default = col_character()
+  ))
+
+filers <- map_df(
+  .x = fil_paths,
+  .f = read_delim,
+  delim = ",",
+  escape_backslash = FALSE, 
+  escape_double = FALSE,
+  col_names = readme$filer$col,
+  col_types = cols(
+    .default = col_character()
+  )
+)
+
+filers <- filers2022 %>% bind_rows(filers)
+```
+
+We only want to join a single filer to each contribution listed in the
+data. We can group by the unique filer ID and a filing year and select
+only one copy of the data.
+
+``` r
+nrow(filers)
+```
+
+    #> [1] 69375
+
+``` r
+filers <- filers %>% 
+  group_by(filerid, eyear) %>% 
+  slice(1) %>% 
+  ungroup()
+nrow(filers)
+```
+
+    #> [1] 30182
+
+``` r
+filers %>% write_csv(glue("{raw_dir}/join_filers_2022.csv"))
+```
+
+Now the filer information can be added to the contribution data with a
+`dplyr::left_join()` along the unique filer ID and election year.
+
+``` r
+# 18,386,163
+pae <- left_join(
+  x = pae,
+  y = filers,
+  by = c("filerid", "eyear"),
+  suffix = c("_exp", "_fil")
+)
+rm(filers)
+
+pae <- rename_prefix(
+  df = pae,
+  suffix = c("_exp", "_fil"),
+  punct = TRUE
+)
+```
+
+``` r
+pae <- pae %>% 
+  rename_with(~str_replace(., "address", "addr")) %>% 
+  rename(
+    exp_zip = exp_zipcode,
+    fil_type = filertype,
+    filer = filername,
+    fil_zip = fil_zipcode,
+    fil_phone = phone
+  )
+```
+
+The text fields contain both lower-case and upper-case letters. The for
+loop converts them to all upper-case letters unifies the encoding to
+“UTF-8”, replaces the “&”, the HTML expression of “An ampersand”. These
+strings are invalid and cannot be converted Converting the encoding may
+result in some NA values. But there’re not too many of them based on
+counts of NAs before and after the encoding conversion.
+
+``` r
+col_stats(pae, count_na)
+```
+
+    #> # A tibble: 34 × 4
+    #>    col           class      n        p
+    #>    <chr>         <chr>  <int>    <dbl>
+    #>  1 filerid       <chr>      0 0       
+    #>  2 eyear         <chr>      0 0       
+    #>  3 exp_cycle     <chr>      0 0       
+    #>  4 expname       <chr>    135 0.000151
+    #>  5 exp_addr1     <chr>  22303 0.0250  
+    #>  6 exp_addr2     <chr> 819926 0.918   
+    #>  7 exp_city      <chr>  18882 0.0211  
+    #>  8 exp_state     <chr>  18523 0.0207  
+    #>  9 exp_zip       <chr>  24201 0.0271  
+    #> 10 expdate       <chr>   2717 0.00304 
+    #> 11 expamt        <chr>      0 0       
+    #> 12 expdesc       <chr>  15888 0.0178  
+    #> 13 exp_reportid  <chr> 763645 0.855   
+    #> 14 exp_timestamp <chr> 763660 0.855   
+    #> 15 fil_reportid  <chr> 763645 0.855   
+    #> 16 fil_timestamp <chr> 763660 0.855   
+    #> 17 fil_cycle     <chr>      0 0       
+    #> 18 ammend        <chr>      0 0       
+    #> 19 terminate     <chr>      0 0       
+    #> 20 fil_type      <chr>   2331 0.00261 
+    #> 21 filer         <chr>      0 0       
+    #> 22 office        <chr> 700974 0.785   
+    #> 23 district      <chr> 700430 0.784   
+    #> 24 party         <chr> 469686 0.526   
+    #> 25 fil_addr1     <chr>    900 0.00101 
+    #> 26 fil_addr2     <chr> 777738 0.871   
+    #> 27 fil_city      <chr>    643 0.000720
+    #> 28 fil_state     <chr>    980 0.00110 
+    #> 29 fil_zip       <chr>    806 0.000902
+    #> 30 county        <chr> 541583 0.606   
+    #> 31 fil_phone     <chr> 383562 0.429   
+    #> 32 beginning     <chr>      0 0       
+    #> 33 monetary      <chr>      0 0       
+    #> 34 inkind        <chr>      0 0
+
+``` r
+pae <- pae %>% mutate_all(.funs = iconv, to = "UTF-8") 
 # After the encoding, we'll see how many entries have NA fields for each column.
-col_stats(pa, count_na)
+col_stats(pae, count_na)
 ```
 
-    #> # A tibble: 12 x 4
-    #>    col      class      n        p
-    #>    <chr>    <chr>  <int>    <dbl>
-    #>  1 FILERID  <chr>      0 0       
-    #>  2 EYEAR    <chr>      0 0       
-    #>  3 CYCLE    <chr>      0 0       
-    #>  4 EXPNAME  <chr>    124 0.000252
-    #>  5 ADDRESS1 <chr>  14563 0.0295  
-    #>  6 ADDRESS2 <chr> 457826 0.929   
-    #>  7 CITY     <chr>  11556 0.0234  
-    #>  8 STATE    <chr>  11015 0.0223  
-    #>  9 ZIPCODE  <chr>  15654 0.0318  
-    #> 10 EXPDATE  <chr>   1450 0.00294 
-    #> 11 EXPAMT   <chr>      0 0       
-    #> 12 EXPDESC  <chr>   9495 0.0193
+    #> # A tibble: 34 × 4
+    #>    col           class      n        p
+    #>    <chr>         <chr>  <int>    <dbl>
+    #>  1 filerid       <chr>      0 0       
+    #>  2 eyear         <chr>      0 0       
+    #>  3 exp_cycle     <chr>      0 0       
+    #>  4 expname       <chr>    135 0.000151
+    #>  5 exp_addr1     <chr>  22303 0.0250  
+    #>  6 exp_addr2     <chr> 819926 0.918   
+    #>  7 exp_city      <chr>  18882 0.0211  
+    #>  8 exp_state     <chr>  18523 0.0207  
+    #>  9 exp_zip       <chr>  24201 0.0271  
+    #> 10 expdate       <chr>   2717 0.00304 
+    #> 11 expamt        <chr>      0 0       
+    #> 12 expdesc       <chr>  15888 0.0178  
+    #> 13 exp_reportid  <chr> 763645 0.855   
+    #> 14 exp_timestamp <chr> 763660 0.855   
+    #> 15 fil_reportid  <chr> 763645 0.855   
+    #> 16 fil_timestamp <chr> 763660 0.855   
+    #> 17 fil_cycle     <chr>      0 0       
+    #> 18 ammend        <chr>      0 0       
+    #> 19 terminate     <chr>      0 0       
+    #> 20 fil_type      <chr>   2331 0.00261 
+    #> 21 filer         <chr>      0 0       
+    #> 22 office        <chr> 700974 0.785   
+    #> 23 district      <chr> 700430 0.784   
+    #> 24 party         <chr> 469686 0.526   
+    #> 25 fil_addr1     <chr>    900 0.00101 
+    #> 26 fil_addr2     <chr> 777738 0.871   
+    #> 27 fil_city      <chr>    643 0.000720
+    #> 28 fil_state     <chr>    980 0.00110 
+    #> 29 fil_zip       <chr>    806 0.000902
+    #> 30 county        <chr> 541583 0.606   
+    #> 31 fil_phone     <chr> 383562 0.429   
+    #> 32 beginning     <chr>      0 0       
+    #> 33 monetary      <chr>      0 0       
+    #> 34 inkind        <chr>      0 0
 
 ``` r
 #All the fields are converted to strings. Convert to date and double.
-pa$EXPDATE <- as.Date(pa$EXPDATE, "%Y%m%d")
-pa$EXPAMT <- as.double(pa$EXPAMT)
-pa$ADDRESS1 <- normal_address(pa$ADDRESS1)
-pa$ADDRESS2 <- normal_address(pa$ADDRESS2)
+pae$expdate <- as.Date(pae$expdate, "%Y%m%d")
+pae$expamt <- as.double(pae$expamt)
 ```
 
-Explore
--------
+## Explore
 
-There are `nrow(pa)` records of `length(pa)` variables in the full database.
+There are `nrow(pae)` records of `length(pae)` variables in the full
+database.
 
 ``` r
-head(pa)
+head(pae)
 ```
 
-    #> # A tibble: 6 x 12
-    #>   FILERID  EYEAR CYCLE EXPNAME    ADDRESS1   ADDRESS2 CITY  STATE ZIPCODE EXPDATE    EXPAMT EXPDESC
-    #>   <chr>    <chr> <chr> <chr>      <chr>      <chr>    <chr> <chr> <chr>   <date>      <dbl> <chr>  
-    #> 1 20140199 2015  2     VALLEY DE… 1321 FREE… <NA>     CHES… PA    15024   2015-02-16  250   DONATI…
-    #> 2 20140199 2015  2     OFFICE MAX 4080 WILA… <NA>     MONR… PA    15146   2015-02-18   16.6 OFFICE…
-    #> 3 20140199 2015  2     GATEWAY C… PARKING    <NA>     PITT… PA    15222   2015-02-18   20   PARKING
-    #> 4 20140199 2015  2     USPS       KILBUCK    <NA>     PITT… PA    15290   2015-02-18  980   POSTAGE
-    #> 5 20140199 2015  2     EDDIE MER… GATEWAY C… <NA>     PITT… PA    15222   2015-02-18  102.  CAMPAI…
-    #> 6 20140199 2015  2     CASTLE SH… C O EILEE… <NA>     PITT… PA    15234   2015-02-23  100   DONATI…
+    #> # A tibble: 6 × 34
+    #>   filerid eyear exp_cycle expname exp_a…¹ exp_a…² exp_c…³ exp_s…⁴ exp_zip expdate    expamt expdesc
+    #>   <chr>   <chr> <chr>     <chr>   <chr>   <chr>   <chr>   <chr>   <chr>   <date>      <dbl> <chr>  
+    #> 1 9600029 2019  8         15th W… c/o Bi… 635 Mo… Pittsb… PA      15217   2019-02-28   150  Contri…
+    #> 2 9600029 2019  8         Wilkin… 900 Wo… 2nd Fl… Pittsb… PA      15221   2019-02-22   120  Ticket…
+    #> 3 9600029 2019  8         AT&T M… PO Box… <NA>    Carol … IL      601976… 2019-01-03   162. Cellul…
+    #> 4 9600029 2019  8         AT&T M… PO Box… <NA>    Carol … IL      601976… 2019-02-13   143. Cellul…
+    #> 5 9600029 2019  8         AOH Di… c/o Ja… 5 Peri… Pittsb… PA      15220   2019-02-21   170  3/10 B…
+    #> 6 9600029 2019  8         Allegh… 22 Wab… Ste 205 Pittsb… PA      152205… 2019-03-05   500  Sponso…
+    #> # … with 22 more variables: exp_reportid <chr>, exp_timestamp <chr>, fil_reportid <chr>,
+    #> #   fil_timestamp <chr>, fil_cycle <chr>, ammend <chr>, terminate <chr>, fil_type <chr>,
+    #> #   filer <chr>, office <chr>, district <chr>, party <chr>, fil_addr1 <chr>, fil_addr2 <chr>,
+    #> #   fil_city <chr>, fil_state <chr>, fil_zip <chr>, county <chr>, fil_phone <chr>,
+    #> #   beginning <chr>, monetary <chr>, inkind <chr>, and abbreviated variable names ¹​exp_addr1,
+    #> #   ²​exp_addr2, ³​exp_city, ⁴​exp_state
 
 ``` r
-tail(pa)
+tail(pae)
 ```
 
-    #> # A tibble: 6 x 12
-    #>   FILERID  EYEAR CYCLE EXPNAME  ADDRESS1  ADDRESS2 CITY  STATE ZIPCODE EXPDATE    EXPAMT EXPDESC   
-    #>   <chr>    <chr> <chr> <chr>    <chr>     <chr>    <chr> <chr> <chr>   <date>      <dbl> <chr>     
-    #> 1 2019C02… 2019  2     VISTA P… 95 HAYDE… <NA>     LEXI… MA    02421   2019-03-17   36.0 PRINTING …
-    #> 2 2019C02… 2019  2     VISTA P… 95 HAYDE… <NA>     LEXI… MA    02421   2019-03-28   36.3 PRINTED C…
-    #> 3 20190018 2019  1     VISTA P… 95 HAYDE… <NA>     LEXI… MA    02421   2019-01-29  121.  CAMPAIGN …
-    #> 4 2019C02… 2019  2     VISTA P… ONLINE    <NA>     <NA>  <NA>  <NA>    2019-04-30  604.  5.5 X 8.5…
-    #> 5 2019C02… 2019  2     VISTA P… ONLINE    <NA>     <NA>  <NA>  <NA>    2019-05-01  165.  4X6 POSTC…
-    #> 6 20170137 2019  2     VISTA P… ONLINE    <NA>     <NA>  <NA>  <NA>    2019-05-01  165.  4X6 POSTC…
+    #> # A tibble: 6 × 34
+    #>   filerid eyear exp_cycle expname exp_a…¹ exp_a…² exp_c…³ exp_s…⁴ exp_zip expdate    expamt expdesc
+    #>   <chr>   <chr> <chr>     <chr>   <chr>   <chr>   <chr>   <chr>   <chr>   <date>      <dbl> <chr>  
+    #> 1 372408  2022  2         FXG SI… 145 SA… <NA>    MECHAN… PA      17050   2022-04-15   2226 SIGNS  
+    #> 2 372408  2022  2         RGB PO… 3031 L… <NA>    CAMP H… PA      17011   2022-03-31   6000 CONSUL…
+    #> 3 372408  2022  2         RGB PO… 3031 L… <NA>    CAMP H… PA      17011   2022-04-18  13000 CONSUL…
+    #> 4 372408  2022  2         RGB PO… 3031 L… <NA>    CAMP H… PA      17011   2022-04-21  10000 CONSUL…
+    #> 5 372408  2022  2         RGB PO… 3031 L… <NA>    CAMP H… PA      17011   2022-05-01  12630 CONSUL…
+    #> 6 372408  2022  2         Cumber… 302 Li… <NA>    Mechan… PA      17050   2022-05-01   1000 CONTRI…
+    #> # … with 22 more variables: exp_reportid <chr>, exp_timestamp <chr>, fil_reportid <chr>,
+    #> #   fil_timestamp <chr>, fil_cycle <chr>, ammend <chr>, terminate <chr>, fil_type <chr>,
+    #> #   filer <chr>, office <chr>, district <chr>, party <chr>, fil_addr1 <chr>, fil_addr2 <chr>,
+    #> #   fil_city <chr>, fil_state <chr>, fil_zip <chr>, county <chr>, fil_phone <chr>,
+    #> #   beginning <chr>, monetary <chr>, inkind <chr>, and abbreviated variable names ¹​exp_addr1,
+    #> #   ²​exp_addr2, ³​exp_city, ⁴​exp_state
 
 ``` r
-glimpse(pa)
+glimpse(pae)
 ```
 
-    #> Observations: 493,025
-    #> Variables: 12
-    #> $ FILERID  <chr> "20140199", "20140199", "20140199", "20140199", "20140199", "20140199", "201401…
-    #> $ EYEAR    <chr> "2015", "2015", "2015", "2015", "2015", "2015", "2015", "2015", "2015", "2015",…
-    #> $ CYCLE    <chr> "2", "2", "2", "2", "2", "2", "2", "2", "2", "2", "2", "2", "2", "2", "2", "2",…
-    #> $ EXPNAME  <chr> "VALLEY DEMOCRATIC COMM", "OFFICE MAX", "GATEWAY CENTER", "USPS", "EDDIE MERIOT…
-    #> $ ADDRESS1 <chr> "1321 FREEPORT RD", "4080 WILAM PENN HIGHWAY", "PARKING", "KILBUCK", "GATEWAY C…
-    #> $ ADDRESS2 <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
-    #> $ CITY     <chr> "CHESWICK", "MONROEVILLE", "PITTSBURGH", "PITTSBURGH", "PITTSBURGH", "PITTSBURG…
-    #> $ STATE    <chr> "PA", "PA", "PA", "PA", "PA", "PA", "PA", "PA", "PA", "PA", "PA", "PA", "PA", "…
-    #> $ ZIPCODE  <chr> "15024", "15146", "15222", "15290", "15222", "15234", "15219", "15209", "15045"…
-    #> $ EXPDATE  <date> 2015-02-16, 2015-02-18, 2015-02-18, 2015-02-18, 2015-02-18, 2015-02-23, 2015-0…
-    #> $ EXPAMT   <dbl> 250.00, 16.63, 20.00, 980.00, 101.53, 100.00, 1000.00, 100.00, 100.00, 68.00, 6…
-    #> $ EXPDESC  <chr> "DONATION", "OFFICE SUPPLIES", "PARKING", "POSTAGE", "CAMPAIGN - MEAL", "DONATI…
+    #> Rows: 893,339
+    #> Columns: 34
+    #> $ filerid       <chr> "9600029", "9600029", "9600029", "9600029", "9600029", "9600029", "9600029"…
+    #> $ eyear         <chr> "2019", "2019", "2019", "2019", "2019", "2019", "2019", "2019", "2019", "20…
+    #> $ exp_cycle     <chr> "8", "8", "8", "8", "8", "8", "8", "8", "8", "8", "8", "8", "8", "8", "8", …
+    #> $ expname       <chr> "15th Ward Democratic Committee", "Wilkinsburg Chamber of Commerce", "AT&T …
+    #> $ exp_addr1     <chr> "c/o Bill Tenney", "900 Wood Street", "PO Box 6416", "PO Box 6416", "c/o Ja…
+    #> $ exp_addr2     <chr> "635 Montclair Street", "2nd Floor", NA, NA, "5 Perity Lane", "Ste 205", "2…
+    #> $ exp_city      <chr> "Pittsburgh", "Pittsburgh", "Carol Stream", "Carol Stream", "Pittsburgh", "…
+    #> $ exp_state     <chr> "PA", "PA", "IL", "IL", "PA", "PA", "PA", "PA", "PA", "PA", "PA", "IL", "PA…
+    #> $ exp_zip       <chr> "15217", "15221", "601976416", "601976416", "15220", "152205445", "15216", …
+    #> $ expdate       <date> 2019-02-28, 2019-02-22, 2019-01-03, 2019-02-13, 2019-02-21, 2019-03-05, 20…
+    #> $ expamt        <dbl> 150.00, 120.00, 161.76, 143.02, 170.00, 500.00, 100.00, 150.00, 100.00, 150…
+    #> $ expdesc       <chr> "Contribution-Event of 3/2", "Tickets to 2/28 Event", "Cellular Phone Servi…
+    #> $ exp_reportid  <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
+    #> $ exp_timestamp <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
+    #> $ fil_reportid  <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
+    #> $ fil_timestamp <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
+    #> $ fil_cycle     <chr> "5", "5", "5", "5", "5", "5", "5", "5", "5", "5", "5", "5", "5", "5", "5", …
+    #> $ ammend        <chr> "Y", "Y", "Y", "Y", "Y", "Y", "Y", "Y", "Y", "Y", "Y", "Y", "Y", "Y", "Y", …
+    #> $ terminate     <chr> "N", "N", "N", "N", "N", "N", "N", "N", "N", "N", "N", "N", "N", "N", "N", …
+    #> $ fil_type      <chr> "2", "2", "2", "2", "2", "2", "2", "2", "2", "2", "2", "2", "2", "2", "2", …
+    #> $ filer         <chr> "Jay Costa Jr for State Senate", "Jay Costa Jr for State Senate", "Jay Cost…
+    #> $ office        <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
+    #> $ district      <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
+    #> $ party         <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
+    #> $ fil_addr1     <chr> "314 Newport Road", "314 Newport Road", "314 Newport Road", "314 Newport Ro…
+    #> $ fil_addr2     <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
+    #> $ fil_city      <chr> "Pittsburgh", "Pittsburgh", "Pittsburgh", "Pittsburgh", "Pittsburgh", "Pitt…
+    #> $ fil_state     <chr> "PA", "PA", "PA", "PA", "PA", "PA", "PA", "PA", "PA", "PA", "PA", "PA", "PA…
+    #> $ fil_zip       <chr> "15221", "15221", "15221", "15221", "15221", "15221", "15221", "15221", "15…
+    #> $ county        <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
+    #> $ fil_phone     <chr> "4128713924", "4128713924", "4128713924", "4128713924", "4128713924", "4128…
+    #> $ beginning     <chr> "468319.2800", "468319.2800", "468319.2800", "468319.2800", "468319.2800", …
+    #> $ monetary      <chr> ".0000", ".0000", ".0000", ".0000", ".0000", ".0000", ".0000", ".0000", ".0…
+    #> $ inkind        <chr> ".0000", ".0000", ".0000", ".0000", ".0000", ".0000", ".0000", ".0000", ".0…
 
 ### Distinct
 
-The variables range in their degree of distinctness.
+The variables range in their degree of distinctness. Checking the number
+of distinct values of a discrete variable is another good way to ensure
+the file was read properly.
 
 ``` r
-pa %>% col_stats(n_distinct)
+pae %>% col_stats(n_distinct)
 ```
 
-    #> # A tibble: 12 x 4
-    #>    col      class       n         p
-    #>    <chr>    <chr>   <int>     <dbl>
-    #>  1 FILERID  <chr>    4133 0.00838  
-    #>  2 EYEAR    <chr>       7 0.0000142
-    #>  3 CYCLE    <chr>       9 0.0000183
-    #>  4 EXPNAME  <chr>  101504 0.206    
-    #>  5 ADDRESS1 <chr>   94245 0.191    
-    #>  6 ADDRESS2 <chr>    4403 0.00893  
-    #>  7 CITY     <chr>    6218 0.0126   
-    #>  8 STATE    <chr>      56 0.000114 
-    #>  9 ZIPCODE  <chr>   20786 0.0422   
-    #> 10 EXPDATE  <date>   1820 0.00369  
-    #> 11 EXPAMT   <dbl>   66564 0.135    
-    #> 12 EXPDESC  <chr>   79859 0.162
+    #> # A tibble: 34 × 4
+    #>    col           class       n          p
+    #>    <chr>         <chr>   <int>      <dbl>
+    #>  1 filerid       <chr>   14230 0.0159    
+    #>  2 eyear         <chr>      11 0.0000123 
+    #>  3 exp_cycle     <chr>       9 0.0000101 
+    #>  4 expname       <chr>  178666 0.200     
+    #>  5 exp_addr1     <chr>  186730 0.209     
+    #>  6 exp_addr2     <chr>    7997 0.00895   
+    #>  7 exp_city      <chr>   12746 0.0143    
+    #>  8 exp_state     <chr>      56 0.0000627 
+    #>  9 exp_zip       <chr>   34625 0.0388    
+    #> 10 expdate       <date>   3195 0.00358   
+    #> 11 expamt        <dbl>  101829 0.114     
+    #> 12 expdesc       <chr>  147548 0.165     
+    #> 13 exp_reportid  <chr>    2581 0.00289   
+    #> 14 exp_timestamp <chr>     306 0.000343  
+    #> 15 fil_reportid  <chr>    2581 0.00289   
+    #> 16 fil_timestamp <chr>     306 0.000343  
+    #> 17 fil_cycle     <chr>       9 0.0000101 
+    #> 18 ammend        <chr>       2 0.00000224
+    #> 19 terminate     <chr>       2 0.00000224
+    #> 20 fil_type      <chr>       4 0.00000448
+    #> 21 filer         <chr>    8094 0.00906   
+    #> 22 office        <chr>      21 0.0000235 
+    #> 23 district      <chr>     207 0.000232  
+    #> 24 party         <chr>      22 0.0000246 
+    #> 25 fil_addr1     <chr>    7746 0.00867   
+    #> 26 fil_addr2     <chr>     908 0.00102   
+    #> 27 fil_city      <chr>    1526 0.00171   
+    #> 28 fil_state     <chr>      37 0.0000414 
+    #> 29 fil_zip       <chr>    3024 0.00339   
+    #> 30 county        <chr>      67 0.0000750 
+    #> 31 fil_phone     <chr>    4551 0.00509   
+    #> 32 beginning     <chr>   20106 0.0225    
+    #> 33 monetary      <chr>    5971 0.00668   
+    #> 34 inkind        <chr>     473 0.000529
 
 ### Missing
 
-The variables also vary in their degree of values that are `NA` (missing).
+The variables also vary in their degree of values that are `NA`
+(missing).
 
 ``` r
-pa %>% col_stats(count_na)
+pae %>% col_stats(count_na)
 ```
 
-    #> # A tibble: 12 x 4
-    #>    col      class       n        p
-    #>    <chr>    <chr>   <int>    <dbl>
-    #>  1 FILERID  <chr>       0 0       
-    #>  2 EYEAR    <chr>       0 0       
-    #>  3 CYCLE    <chr>       0 0       
-    #>  4 EXPNAME  <chr>     124 0.000252
-    #>  5 ADDRESS1 <chr>   14684 0.0298  
-    #>  6 ADDRESS2 <chr>  457826 0.929   
-    #>  7 CITY     <chr>   11556 0.0234  
-    #>  8 STATE    <chr>   11015 0.0223  
-    #>  9 ZIPCODE  <chr>   15654 0.0318  
-    #> 10 EXPDATE  <date>   1450 0.00294 
-    #> 11 EXPAMT   <dbl>       0 0       
-    #> 12 EXPDESC  <chr>    9495 0.0193
+    #> # A tibble: 34 × 4
+    #>    col           class       n        p
+    #>    <chr>         <chr>   <int>    <dbl>
+    #>  1 filerid       <chr>       0 0       
+    #>  2 eyear         <chr>       0 0       
+    #>  3 exp_cycle     <chr>       0 0       
+    #>  4 expname       <chr>     135 0.000151
+    #>  5 exp_addr1     <chr>   22303 0.0250  
+    #>  6 exp_addr2     <chr>  819926 0.918   
+    #>  7 exp_city      <chr>   18882 0.0211  
+    #>  8 exp_state     <chr>   18523 0.0207  
+    #>  9 exp_zip       <chr>   24201 0.0271  
+    #> 10 expdate       <date>   2717 0.00304 
+    #> 11 expamt        <dbl>       0 0       
+    #> 12 expdesc       <chr>   15888 0.0178  
+    #> 13 exp_reportid  <chr>  763645 0.855   
+    #> 14 exp_timestamp <chr>  763660 0.855   
+    #> 15 fil_reportid  <chr>  763645 0.855   
+    #> 16 fil_timestamp <chr>  763660 0.855   
+    #> 17 fil_cycle     <chr>       0 0       
+    #> 18 ammend        <chr>       0 0       
+    #> 19 terminate     <chr>       0 0       
+    #> 20 fil_type      <chr>    2331 0.00261 
+    #> 21 filer         <chr>       0 0       
+    #> 22 office        <chr>  700974 0.785   
+    #> 23 district      <chr>  700430 0.784   
+    #> 24 party         <chr>  469686 0.526   
+    #> 25 fil_addr1     <chr>     900 0.00101 
+    #> 26 fil_addr2     <chr>  777738 0.871   
+    #> 27 fil_city      <chr>     643 0.000720
+    #> 28 fil_state     <chr>     980 0.00110 
+    #> 29 fil_zip       <chr>     806 0.000902
+    #> 30 county        <chr>  541583 0.606   
+    #> 31 fil_phone     <chr>  383562 0.429   
+    #> 32 beginning     <chr>       0 0       
+    #> 33 monetary      <chr>       0 0       
+    #> 34 inkind        <chr>       0 0
 
-We will flag any records with missing values in the key variables used to identify an expenditure. There are 0 elements that are flagged as missing at least one value.
+We will flag any records with missing values in the key variables used
+to identify an expenditure. There are 0 elements that are flagged as
+missing at least one value.
 
 ``` r
-pa <- pa %>% flag_na(EXPNAME, EXPDATE, EXPDESC, EXPAMT, CITY)
+pae <- pae %>% flag_na(expname, expdate, expdesc, expamt, exp_city,filer)
+
+percent(mean(pae$na_flag), 0.01)
 ```
+
+    #> [1] "3.66%"
 
 ### Duplicates
 
+We can see there’re not complete duplicates.
+
 ``` r
 pa <- flag_dupes(pa, dplyr::everything())
-sum(pa$dupe_flag)
-#> [1] 7000
+sum(pae$dupe_flag)
+#> [1] 0
 ```
 
 ### Ranges
@@ -329,422 +754,416 @@ sum(pa$dupe_flag)
 #### Amounts
 
 ``` r
-summary(pa$EXPAMT)
-#>     Min.  1st Qu.   Median     Mean  3rd Qu.     Max. 
-#>   -67500       60      250     2613      752 12147387
-sum(pa$EXPAMT < 0 , na.rm = TRUE)
-#> [1] 538
+summary(pae$expamt)
+#>      Min.   1st Qu.    Median      Mean   3rd Qu.      Max. 
+#>   -300000        55       250      4839       971 517202055
+sum(pae$expamt < 0 , na.rm = TRUE)
+#> [1] 1000
 ```
 
 See how the campaign expenditures were distributed
 
 ``` r
-pa %>% 
-  ggplot(aes(x = EXPAMT)) + 
+pae %>% 
+  ggplot(aes(x = expamt)) + 
   geom_histogram() +
   scale_x_continuous(
     trans = "log10", labels = dollar)
 ```
 
-![](../plots/amount%20distribution-1.png)
+![](../plots/amount%20distribution-1.png)<!-- -->
 
 Expenditures out of state
 
 ``` r
-sum(pa$STATE != "PA", na.rm = TRUE)
+sum(pae$state != "PA", na.rm = TRUE)
 ```
 
-    #> [1] 78926
+    #> [1] 0
 
-Top spending purposes ![](../plots/unnamed-chunk-4-1.png)
+Top spending purposes ![](../plots/unnamed-chunk-7-1.png)<!-- -->
 
 ### Dates
 
 Some of the dates are too far back and some are past the current dates.
 
 ``` r
-summary(pa$EXPDATE)
+summary(pae$expdate)
 ```
 
     #>         Min.      1st Qu.       Median         Mean      3rd Qu.         Max.         NA's 
-    #> "1825-04-20" "2016-03-01" "2017-04-08" "2017-04-02" "2018-05-15" "5018-09-15"       "1450"
+    #> "1825-04-20" "2017-01-20" "2018-11-26" "2019-01-20" "2021-01-11" "5018-09-15"       "2717"
 
 ### Year
 
-Add a `year` variable from `date` after `col_date()` using `lubridate::year()`.
+Add a `year` variable from `date` after `col_date()` using
+`lubridate::year()`.
 
 ``` r
-pa <- pa %>% mutate(year = year(EXPDATE), on_year = is_even(year))
+pae <- pae %>% mutate(year = year(expdate), on_year = is_even(year))
 ```
 
-Turn some year and date values to NAs.
+![](../plots/year_count_bar-1.png)<!-- -->
+
+![](../plots/amount_year_bar-1.png)<!-- -->
+
+![](../plots/amount_month_line-1.png)<!-- -->
 
 ``` r
-pa <- pa %>% mutate(date_flag = year < 2000 | year > format(Sys.Date(), "%Y"), 
-                    date_clean = ifelse(
-                    date_flag, NA, EXPDATE),
-                    year_clean = ifelse(
-                    date_flag, NA, year))
+pae %>% group_by(expdesc) %>% summarize(total = sum(expamt)) %>% arrange(desc(total))
 ```
 
-![](../plots/year_count_bar-1.png)
+    #> # A tibble: 147,548 × 2
+    #>    expdesc                                                                           total
+    #>    <chr>                                                                             <dbl>
+    #>  1 <NA>                                                                         885585008.
+    #>  2 POSTAGE                                                                      525768975.
+    #>  3 Contribution                                                                 248892109.
+    #>  4 Unitemized Expenditures                                                      210584211.
+    #>  5 CONTRIBUTION                                                                 207431001.
+    #>  6 Non PA Disbursements                                                         163777826.
+    #>  7 DONATION                                                                     130424591.
+    #>  8 See FEC report at https://www.fec.gov/data/committee/C00042366/? tab=filings 114236099.
+    #>  9 NON-PENNSYLVANIA EXPENDITURES                                                109614808.
+    #> 10 See FEC report at https://www.fec.gov/data/committee/C00042366/?tab=filings   57998962.
+    #> # … with 147,538 more rows
 
-![](../plots/amount_year_bar-1.png)
+## Wrangle
 
-![](../plots/amount_month_line-1.png)
+To improve the searchability of the database, we will perform some
+consistent, confident string normalization. For geographic variables
+like city names and ZIP codes, the corresponding `campfin::normal_*()`
+functions are tailor made to facilitate this process.
+
+### Address
+
+For the street `*_addresss` variables, the `campfin::normal_address()`
+function will force consistence case, remove punctuation, and abbreviate
+official USPS suffixes.
 
 ``` r
-pa %>% group_by(EXPDESC) %>% summarize(total = sum(EXPAMT)) %>% arrange(desc(total))
+norm_addr <- pae %>%
+  count(exp_addr1, exp_addr2, sort = TRUE) %>% 
+  select(-n) %>% 
+  unite(
+    col = exp_addr_full,
+    starts_with("exp_addr"),
+    sep = " ",
+    remove = FALSE,
+    na.rm = TRUE
+  ) %>% 
+  mutate(
+    exp_addr_norm = normal_address(
+      address = exp_addr_full,
+      abbs = usps_street,
+      na_rep = TRUE
+    )
+  ) %>% 
+  select(-exp_addr_full)
 ```
 
-    #> # A tibble: 79,859 x 2
-    #>    EXPDESC                                       total
-    #>    <chr>                                         <dbl>
-    #>  1 <NA>                                     266672875.
-    #>  2 CONTRIBUTION                             185395743.
-    #>  3 NON PA DISBURSEMENTS                      95018717.
-    #>  4 DONATION                                  26623333.
-    #>  5 MEDIA BUY                                 26199723.
-    #>  6 NON-PENNSYLVANIA EXPENDITURES             21187323.
-    #>  7 POLITICAL CONTRIBUTION                    15977415.
-    #>  8 BALANCE OF DISBURSEMENTS FROM FEC REPORT  15574849.
-    #>  9 AD BUY                                    15494933.
-    #> 10 CAMPAIGN CONTRIBUTION                     14995155.
-    #> # … with 79,849 more rows
-
-Wrangle
--------
-
-The state column is now pretty clean, as all non-NA columns have two characters.
-
-### Indexing
-
 ``` r
-pa <- tibble::rowid_to_column(pa, "index")
+norm_addr
 ```
 
-### Zipcode
-
-The Zipcode column can range from 1 to 13 columns.
+    #> # A tibble: 193,306 × 3
+    #>    exp_addr1     exp_addr2 exp_addr_norm
+    #>    <chr>         <chr>     <chr>        
+    #>  1 <NA>          <NA>      <NA>         
+    #>  2 PO Box 412    <NA>      PO BOX 412   
+    #>  3 PO Box 441146 <NA>      PO BOX 441146
+    #>  4 366 Summer St <NA>      366 SUMMER ST
+    #>  5 PO Box 792    <NA>      PO BOX 792   
+    #>  6 1 Hacker Way  <NA>      1 HACKER WAY 
+    #>  7 1 HACKER WAY  <NA>      1 HACKER WAY 
+    #>  8 PO Box 624    <NA>      PO BOX 624   
+    #>  9 P.O. Box 412  <NA>      PO BOX 412   
+    #> 10 PO BOX 441146 <NA>      PO BOX 441146
+    #> # … with 193,296 more rows
 
 ``` r
-table(nchar(pa$ZIPCODE))
+pae <- left_join(pae, norm_addr)
+rm(norm_addr); flush_memory(1)
+```
+
+We will repeat the process for filer addresses.
+
+``` r
+norm_addr <- pae %>% 
+  count(fil_addr1, fil_addr2, sort = TRUE) %>% 
+  select(-n) %>% 
+  unite(
+    col = fil_addr_full,
+    starts_with("fil_addr"),
+    sep = " ",
+    remove = FALSE,
+    na.rm = TRUE
+  ) %>% 
+  mutate(
+    fil_addr_norm = normal_address(
+      address = fil_addr_full,
+      abbs = usps_street,
+      na_rep = TRUE
+    )
+  ) %>% 
+  select(-fil_addr_full)
+```
+
+``` r
+norm_addr
+```
+
+    #> # A tibble: 8,020 × 3
+    #>    fil_addr1                        fil_addr2             fil_addr_norm                            
+    #>    <chr>                            <chr>                 <chr>                                    
+    #>  1 "PO Box 22635"                   <NA>                  PO BOX 22635                             
+    #>  2 "112 STATE STREET"               <NA>                  112 STATE ST                             
+    #>  3 "815 16th St. NW"                <NA>                  815 16TH ST NW                           
+    #>  4 "146 DYERS STONE DRIVE"          <NA>                  146 DYERS STONE DR                       
+    #>  5 "2791 SOUTHAMPTON ROAD         " <NA>                  2791 SOUTHAMPTON RD                      
+    #>  6 "PO Box 476"                     <NA>                  PO BOX 476                               
+    #>  7 "1719 Spring Garden Street"      <NA>                  1719 SPRING GARDEN ST                    
+    #>  8 "229 State St"                   <NA>                  229 STATE ST                             
+    #>  9 "500 N. THIRD STREET 4TH FLOOR"  P.O. BOX 11787        500 N THIRD STREET 4TH FLOOR PO BOX 11787
+    #> 10 "C/O TREAS: Joseph Ashdale"      2980 SOUTHAMPTON ROAD C/O TREAS JOSEPH ASHDALE 2980 SOUTHAMPTO…
+    #> # … with 8,010 more rows
+
+``` r
+pae <- left_join(pae, norm_addr)
+rm(norm_addr); flush_memory(1)
+```
+
+### ZIP
+
+``` r
+table(nchar(pae$fil_zip))
+#> 
+#>      4      5      6      8      9     10 
+#>     75 545285 130184    729  74928 141332
+table(nchar(pae$exp_zip))
 #> 
 #>      1      2      3      4      5      6      7      8      9     10     13 
-#>     11     33    114    309 389524    783     26    118  84633   1818      2
+#>     13     38    260    561 683960   1291    132    162 178309   4408      4
+```
+
+For ZIP codes, the `campfin::normal_zip()` function will attempt to
+create valid *five* digit codes by removing the ZIP+4 suffix and
+returning leading zeroes dropped by other programs like Microsoft Excel.
+
+``` r
+pae <- mutate_at(
+  .tbl = pae,
+  .vars = vars(ends_with("zip")),
+  .funs = list(norm = normal_zip),
+  na_rep = TRUE
+)
 ```
 
 ``` r
-pa <- pa %>% 
-  mutate(
-    zip_clean = ZIPCODE %>% 
-      normal_zip(na_rep = TRUE))
-sample(pa$zip_clean, 10)
-#>  [1] "19114" "19147" "18923" "17101" "40285" "17110" "19149" "84130" "19128" "18091"
+progress_table(
+  pae$exp_zip,
+  pae$exp_zip_norm,
+  pae$fil_zip,
+  pae$fil_zip_norm,
+  compare = valid_zip
+)
 ```
+
+    #> # A tibble: 4 × 6
+    #>   stage            prop_in n_distinct  prop_na  n_out n_diff
+    #>   <chr>              <dbl>      <dbl>    <dbl>  <dbl>  <dbl>
+    #> 1 pae$exp_zip        0.781      34625 0.0271   189997  27581
+    #> 2 pae$exp_zip_norm   0.995       9799 0.0295     3954   1278
+    #> 3 pae$fil_zip        0.610       3024 0.000902 347821   1988
+    #> 4 pae$fil_zip_norm   0.998       1243 0.000919   1385     39
 
 ### State
 
-View values in the STATE field is not a valid state abbreviation
-
-    #> [1] "CN" "CN" "CN" "CN"
-    #> # A tibble: 4 x 21
-    #>    index FILERID EYEAR CYCLE EXPNAME ADDRESS1 ADDRESS2 CITY  STATE ZIPCODE EXPDATE    EXPAMT
-    #>    <int> <chr>   <chr> <chr> <chr>   <chr>    <chr>    <chr> <chr> <chr>   <date>      <dbl>
-    #> 1   3445 7900257 2015  1     CSA BA… 1500 NO… <NA>     QUEB… CN    J4B 5H3 2015-03-18   5.11
-    #> 2   3446 7900257 2015  1     CSA BA… 1500 NO… <NA>     QUEB… CN    J4B 5H3 2015-03-18 511.  
-    #> 3 296601 201700… 2017  6     ISTOCK  1240 20… <NA>     CALG… CN    00000   2017-10-27  35.0 
-    #> 4 400304 2009450 2018  6     HOOTSU… 5 EAST … <NA>     VANC… CN    V5T 1R6 2018-10-31  47.7 
-    #> # … with 9 more variables: EXPDESC <chr>, na_flag <lgl>, dupe_flag <lgl>, year <dbl>,
-    #> #   on_year <lgl>, date_flag <lgl>, date_clean <dbl>, year_clean <dbl>, zip_clean <chr>
-
-These are expenditures in Canada, which we can leave in. \#\#\# City
-
-Cleaning city values is the most complicated. This process involves four steps:
-
-1.  Prepare raw city values by removing invalid data and reducing inconsistencies
-2.  Match prepared city values with the *actual* city name of that record's ZIP code
-3.  swap prepared city values with the ZIP code match *if* only 1 edit is needed
-4.  Refine swapped city values with key collision and n-gram fingerprints
-
-#### Prep
-
-481469 distinct cities were in the original dataset in column
+There is no need to clean the two state variables.
 
 ``` r
-pa <- pa %>% mutate(city_prep = normal_city(city = CITY,
-                                            abbs = usps_city,
-                                            states = c(valid_state),
-                                            na = invalid_city,
-                                            na_rep = TRUE))
-n_distinct(pa$city_prep)
-#> [1] 5747
+prop_in(pae$exp_state, valid_state)
 ```
 
-#### Match
+    #> [1] 0.9999943
 
 ``` r
-pa <- pa %>%
-  left_join(
-    y = zipcodes,
-    by = c(
-      "zip_clean" = "zip",
-      "STATE" = "state"
+prop_in(pae$fil_state, valid_state)
+```
+
+    #> [1] 1
+
+### City
+
+Cleaning city values is the most complicated. This process involves four
+steps:
+
+1.  Prepare raw city values by removing invalid data and reducing
+    inconsistencies
+2.  Match prepared city values with the *actual* city name of that
+    record’s ZIP code
+3.  swap prepared city values with the ZIP code match *if* only 1 edit
+    is needed
+4.  Refine swapped city values with key collision and n-gram
+    fingerprints
+
+#### Normal
+
+0 distinct cities were in the original dataset in column
+
+``` r
+exp_norm_city <- pae %>% 
+  count(exp_city, exp_state, exp_zip_norm, sort = TRUE) %>% 
+  select(-n) %>% 
+  mutate(
+    across(
+      .cols = exp_city, 
+      .fns = list(norm = normal_city), 
+      abbs = usps_city,
+      states = c("PA", "DC", "PENNSYLVANIA"),
+      na = invalid_city,
+      na_rep = TRUE
     )
-  ) %>% 
-  rename(city_match = city)
+  )
+```
+
+``` r
+fil_norm_city <- pae %>% 
+  count(fil_city, fil_state, fil_zip_norm, sort = TRUE) %>% 
+  select(-n) %>% 
+  mutate(
+    across(
+      .cols = fil_city, 
+      .fns = list(norm = normal_city), 
+      abbs = usps_city,
+      states = c("PA", "DC", "PENNSYLVANIA"),
+      na = invalid_city,
+      na_rep = TRUE
+    )
+  )
 ```
 
 #### Swap
 
-To replace city names with expected city names from zipcode when the two variables are no more than two characters different
+We can further improve normalization by comparing our normalized value
+against the *expected* value for that record’s state abbreviation and
+ZIP code. If the normalized value is either an abbreviation for or very
+similar to the expected value, we can confidently swap those two.
 
 ``` r
-pa <- pa %>% 
+exp_norm_city <- exp_norm_city %>% 
+  left_join(
+    y = zipcodes,
+    by = c(
+      "exp_state" = "state",
+      "exp_zip_norm" = "zip"
+    )
+  ) %>% 
+  rename(city_match = city) %>% 
   mutate(
-    match_dist = stringdist(city_prep, city_match),
-    city_swap = if_else(condition = is.na(city_match) == FALSE,
-                        if_else(
-      condition = match_dist <= 2,
+    match_abb = is_abbrev(exp_city_norm, city_match),
+    match_dist = str_dist(exp_city_norm, city_match),
+    exp_city_swap = if_else(
+      condition = !is.na(match_dist) & (match_abb | match_dist == 1),
       true = city_match,
-      false = city_prep
-    ),
-      false = city_prep
-  ))
-
-
-summary(pa$match_dist)
+      false = exp_city_norm
+    )
+  ) %>% 
+  select(
+    -city_match,
+    -match_dist,
+    -match_abb
+  )
 ```
-
-    #>    Min. 1st Qu.  Median    Mean 3rd Qu.    Max.    NA's 
-    #>    0.00    0.00    0.00    0.61    0.00   22.00   20616
 
 ``` r
-sum(pa$match_dist == 1, na.rm = TRUE)
+fil_norm_city <- fil_norm_city %>% 
+  left_join(
+    y = zipcodes,
+    by = c(
+      "fil_state" = "state",
+      "fil_zip_norm" = "zip"
+    )
+  ) %>% 
+  rename(city_match = city) %>% 
+  mutate(
+    match_abb = is_abbrev(fil_city_norm, city_match),
+    match_dist = str_dist(fil_city_norm, city_match),
+    fil_city_swap = if_else(
+      condition = !is.na(match_dist) & (match_abb | match_dist == 1),
+      true = city_match,
+      false = fil_city_norm
+    )
+  ) %>% 
+  select(
+    -city_match,
+    -match_dist,
+    -match_abb
+  )
 ```
-
-    #> [1] 5424
-
-``` r
-n_distinct(pa$city_swap)
-```
-
-    #> [1] 4339
 
 #### Refine
 
-``` r
-valid_city <- campfin::valid_city
-```
+The [OpenRefine](https://openrefine.org/) algorithms can be used to
+group similar strings and replace the less common versions with their
+most common counterpart. This can greatly reduce inconsistency, but with
+low confidence; we will only keep any refined strings that have a valid
+city/state/zip combination.
 
-Use the OpenRefine algorithms to cluster similar values and merge them together. This can be done using the refinr::key\_collision\_merge() and refinr::n\_gram\_merge() functions on our prepared and swapped city data.
-
 ``` r
-pa_refined <- pa %>%
-  filter(match_dist != 1) %>% 
-  filter(STATE =="PA") %>% 
+good_refine <- exp_norm_city %>% 
   mutate(
-    city_refine = city_swap %>% 
-      key_collision_merge(dict = valid_city) %>% 
-      n_gram_merge(numgram = 2),
-    refined = (city_swap != city_refine)
+    exp_city_refine = exp_city_swap %>% 
+      key_collision_merge() %>% 
+      n_gram_merge(numgram = 1)
   ) %>% 
-  filter(refined) %>% 
-  select(
-    index,
-    FILERID, 
-    CITY,
-    city_prep,
-    city_match,
-    city_swap,
-    match_dist,
-    city_refine,
-    STATE, 
-    ZIPCODE,
-    zip_clean
+  filter(exp_city_refine != exp_city_swap) %>% 
+  inner_join(
+    y = zipcodes,
+    by = c(
+      "exp_city_refine" = "city",
+      "exp_state" = "state",
+      "exp_zip_norm" = "zip"
+    )
   )
-
-pa_refined %>% 
-  count(city_swap, city_refine) %>% 
-  arrange(desc(n))
 ```
 
-    #> # A tibble: 70 x 3
-    #>    city_swap        city_refine        n
-    #>    <chr>            <chr>          <int>
-    #>  1 SINKING SPRINGS  SINKING SPRING    23
-    #>  2 SOUTHERN EASTERN SOUTHEASTERN      18
-    #>  3 MC MURRAY        MCMURRAY          15
-    #>  4 MC BG            MCCBG             13
-    #>  5 PLEASANT MOUNT   MOUNT PLEASANT    11
-    #>  6 CLIFFORD         FORD CLIFF         8
-    #>  7 WESCOESVILLE     WESCOSVILLE        8
-    #>  8 EDDYSTON         EDDYSTONE          7
-    #>  9 BROMALL          BROOMALL           4
-    #> 10 CARSLISLE        CARLISLE           4
-    #> # … with 60 more rows
+    #> # A tibble: 142 × 5
+    #>    exp_state exp_zip_norm exp_city_swap exp_city_refine     n
+    #>    <chr>     <chr>        <chr>         <chr>           <int>
+    #>  1 CA        94103        SAN FRANSICO  SAN FRANCISCO       2
+    #>  2 CA        94110        SAN FRANSICO  SAN FRANCISCO       2
+    #>  3 DE        19886        WILLIMINGTON  WILMINGTON          2
+    #>  4 OH        45249        CINCINATTI    CINCINNATI          2
+    #>  5 OH        45274        CINCINATTI    CINCINNATI          2
+    #>  6 PA        15136        MC KEES ROCK  MCKEES ROCKS        2
+    #>  7 PA        17110        HARRISBURGURG HARRISBURG          2
+    #>  8 PA        19444        LAYFETTE HILL LAFAYETTE HILL      2
+    #>  9 CA        94025        MELENO PARK   MENLO PARK          1
+    #> 10 CA        94043        MOUTAINVEIW   MOUNTAIN VIEW       1
+    #> # … with 132 more rows
+
+Then we can join the refined values back to the database.
 
 ``` r
-refined_values <- unique(pa_refined$city_refine)
-count_refined <- tibble(
-  city_refine = refined_values, 
-  refine_count = NA
-)
-
-for (i in seq_along(refined_values)) {
-  count_refined$refine_count[i] <- sum(str_detect(pa$city_swap, refined_values[i]), na.rm = TRUE)
-}
-
-swap_values <- unique(pa_refined$city_swap)
-count_swap <- tibble(
-  city_swap = swap_values, 
-  swap_count = NA
-)
-
-for (i in seq_along(swap_values)) {
-  count_swap$swap_count[i] <- sum(str_detect(pa$city_swap, swap_values[i]), na.rm = TRUE)
-}
-
-pa_refined %>% 
-  left_join(count_swap) %>% 
-  left_join(count_refined) %>%
-  select(
-    FILERID,
-    city_match,
-    city_swap,
-    city_refine,
-    swap_count,
-    refine_count
-  ) %>% 
-  mutate(diff_count = refine_count - swap_count) %>%
-  mutate(refine_dist = stringdist(city_swap, city_refine)) %>%
-  distinct() %>%
-  arrange(city_refine) %>% 
-  print_all()
+exp_norm_city <- exp_norm_city %>% 
+  left_join(good_refine, by = names(.)) %>% 
+  mutate(exp_city_refine = coalesce(exp_city_refine, exp_city_swap))
 ```
 
-    #> # A tibble: 111 x 8
-    #>     FILERID  city_match   city_swap    city_refine   swap_count refine_count diff_count refine_dist
-    #>     <chr>    <chr>        <chr>        <chr>              <int>        <int>      <int>       <dbl>
-    #>   1 2002093  PITTSBURGH   ADDRESSON F… ADDRESS ON F…          1           26         25           1
-    #>   2 9500250  BRIDGEVILLE  ALISON PARK  ALLISON PARK           1          321        320           1
-    #>   3 7900321  PITTSTON     AVOCO        AVOCA                  1          501        500           1
-    #>   4 20170352 WILKES BARRE BEARCREEK    BEAR CREEK             1           10          9           1
-    #>   5 8100217  MARCUS HOOK  BOOTHWYNN    BOOTHWYN               1          184        183           1
-    #>   6 2017C01… HARRISBURG   BRESLER      BRESSLER               1           63         62           1
-    #>   7 20130207 NEWTOWN SQU… BROMALL      BROOMALL               4          407        403           1
-    #>   8 20150282 NEWTOWN SQU… BROMALL      BROOMALL               4          407        403           1
-    #>   9 20170314 SOUTH LONDO… CARSLISLE    CARLISLE               4          689        685           1
-    #>  10 20150001 WAYNE        CHESTER BRO… CHESTERBROOK           1          104        103           1
-    #>  11 8900208  BROCKWAY     DUBOIS       DU BOIS                7          430        423           1
-    #>  12 20170387 SCRANTON     DUNMMORE     DUNMORE                1          454        453           1
-    #>  13 9100189  NORRISTOWN   EAST NORRIT… EAST NORRIST…          1            2          1           1
-    #>  14 7900243  CRUM LYNNE   EDDYSTON     EDDYSTONE             38           31         -7           1
-    #>  15 2010095  LEVITTOWN    FALSINGTON   FALLSINGTON            1           57         56           1
-    #>  16 20180378 LEVITTOWN    FALSSINGTON  FALLSINGTON            1           57         56           1
-    #>  17 2015C00… CLIFFORD     CLIFFORD     FORD CLIFF             8           17          9           8
-    #>  18 2002199  CLIFFORD     CLIFFORD     FORD CLIFF             8           17          9           8
-    #>  19 8400100  CLIFFORD     CLIFFORD     FORD CLIFF             8           17          9           8
-    #>  20 8400100  MOSCOW       CLIFFORD     FORD CLIFF             8           17          9           8
-    #>  21 8400100  CARBONDALE   CLIFFORD     FORD CLIFF             8           17          9           8
-    #>  22 8100217  KINGSTON     FORTY FORTY  FORTY FORT             1           30         29           1
-    #>  23 8100217  GLEN LYON    GLEN OLDEN   GLENOLDEN              1          334        333           1
-    #>  24 9600227  CARBONDALE   GREENFIELD … GREENFIELD T…          1           31         30           1
-    #>  25 9500133  SOUTHAMPTON  HOLAND       HOLLAND                1          343        342           1
-    #>  26 7900134  DUNCANSVILLE HOLIDAYSBURG HOLLIDAYSBURG          5          599        594           1
-    #>  27 2002171  NORRISTOWN   JEFFERSONVI… JEFFERSONVIL…          2          310        308           1
-    #>  28 2006168  NORRISTOWN   JEFFERSONVI… JEFFERSONVIL…          2          310        308           1
-    #>  29 7900259  LANCASTER    LANCASTERTER LANCASTER              1         5607       5606           3
-    #>  30 2006030  HAWLEY       LORDS VALEY  LORDS VALLEY           1           30         29           1
-    #>  31 2002072  NEW KENSING… LOWER BURER… LOWER BURRELL          1           74         73           1
-    #>  32 9600321  AMBLER       LOWER GWYNE… LOWER GWYNEDD          3          109        106           1
-    #>  33 9800210  PITTSBURGH   MC CANDLESS  MCCANDLESS             1            8          7           1
-    #>  34 8200038  MCCONNELLSB… MC CBG       MCCBG                  2           18         16           1
-    #>  35 7900343  MCCONNELLSB… MC BG        MCCBG                 13           18          5           1
-    #>  36 7900343  FORT LITTLE… MC BG        MCCBG                 13           18          5           1
-    #>  37 7900343  MARION       MC BG        MCCBG                 13           18          5           1
-    #>  38 7900343  NEEDMORE     MC CONNELLS… MCCONNELLSBU…          3          209        206           1
-    #>  39 7900343  MARION       MC CONNELLS… MCCONNELLSBU…          3          209        206           1
-    #>  40 7900343  SALTILLO     MC CONNELLS… MCCONNELLSBU…          3          209        206           1
-    #>  41 2017C03… CANONSBURG   MC MURRAY    MCMURRAY              15          586        571           1
-    #>  42 20180183 CANONSBURG   MC MURRAY    MCMURRAY              15          586        571           1
-    #>  43 8000629  CANONSBURG   MC MURRAY    MCMURRAY              15          586        571           1
-    #>  44 7900298  CANONSBURG   MC MURRAY    MCMURRAY              15          586        571           1
-    #>  45 20170137 CANONSBURG   MC MURRAY    MCMURRAY              15          586        571           1
-    #>  46 20120168 ELKINS PARK  MELROSE PAA… MELROSE PARK           1           25         24           1
-    #>  47 8200637  ORVISTON     MILHEIM      MILLHEIM               1          135        134           1
-    #>  48 8000474  FOLSOM       MILMONT      MILLMONT              76            9        -67           1
-    #>  49 8100217  FOLSOM       MILMONT      MILLMONT              76            9        -67           1
-    #>  50 2016C03… PITTSBURGH   MOUNT LEBAN… MOUNT LEBANON          1           64         63           1
-    #>  51 2005279  PLEASANT MO… PLEASANT MO… MOUNT PLEASA…         11          489        478          12
-    #>  52 8000616  PLEASANT MO… PLEASANT MO… MOUNT PLEASA…         11          489        478          12
-    #>  53 20170074 PLEASANT MO… PLEASANT MO… MOUNT PLEASA…         11          489        478          12
-    #>  54 2010296  PLEASANT MO… PLEASANT MO… MOUNT PLEASA…         11          489        478          12
-    #>  55 9200410  MOUNT PLEAS… MOUNT PLEAS… MOUNT PLEASA…          1          489        488           3
-    #>  56 8800087  WILKES BARRE MOUNTAINTOP  MOUNTAIN TOP           2          138        136           1
-    #>  57 2010090  WILKES BARRE MOUNTAINTOP  MOUNTAIN TOP           2          138        136           1
-    #>  58 20160056 ONO          ONO          NON                  606         3250       2644           2
-    #>  59 2018C07… LOYSVILLE    ON           NON                55673         3250     -52423           1
-    #>  60 20130205 IRWIN        NORTH UNTIN… NORTH HUNTIN…          1          129        128           1
-    #>  61 2010095  LANGHORNE    PENDEL       PENNDEL                2           85         83           1
-    #>  62 9500165  PHILADELPHIA PHIILA       PHILA                  1        83313      83312           1
-    #>  63 2010025  PHILADELPHIA PHILLA       PHILA                  1        83313      83312           1
-    #>  64 20180008 PHILADELPHIA PHILADEL     PHILADE            73984        73986          2           1
-    #>  65 7900117  PITTSBURGH   PITT         PIT                33711        33761         50           1
-    #>  66 2010389  PITTSBURGH   PLUMBORO     PLUM BORO              1            3          2           1
-    #>  67 8100217  POTTSVILLE   POTTSGROVE   POTTS GROVE            1            2          1           1
-    #>  68 2011150  NEW PROVIDE… QUARYVILLE   QUARRYVILLE            1          383        382           1
-    #>  69 9400092  BANGOR       ROSETTO      ROSETO                 2           21         19           1
-    #>  70 20120110 BELLE VERNON ROS TRAVER … ROSTRAVER TO…          1           45         44           1
-    #>  71 7900366  BELLE VERNON ROOSTRAVER … ROSTRAVER TO…          1           45         44           1
-    #>  72 2010427  RECTOR       RUFFSDALE    RUFFS DALE             1           23         22           1
-    #>  73 8800271  READING      SINKING SPR… SINKING SPRI…         24          199        175           1
-    #>  74 2007012  READING      SINKING SPR… SINKING SPRI…         24          199        175           1
-    #>  75 2004017  READING      SINKING SPR… SINKING SPRI…         24          199        175           1
-    #>  76 9700250  READING      SINKING SPR… SINKING SPRI…         24          199        175           1
-    #>  77 9700144  READING      SINKING SPR… SINKING SPRI…         24          199        175           1
-    #>  78 20120083 READING      SINKING SPR… SINKING SPRI…         24          199        175           1
-    #>  79 7900443  READING      SINKING SPR… SINKING SPRI…         24          199        175           1
-    #>  80 7900364  READING      SINKING SPR… SINKING SPRI…         24          199        175           1
-    #>  81 7900302  READING      SINKING SPR… SINKING SPRI…         24          199        175           1
-    #>  82 9200410  READING      SINKING SPR… SINKING SPRI…         24          199        175           1
-    #>  83 8400128  READING      SINKING SPR… SINKING SPRI…         24          199        175           1
-    #>  84 7900202  READING      SINKING SPR… SINKING SPRI…         24          199        175           1
-    #>  85 9700178  READING      SINKING SPR… SINKING SPRI…         24          199        175           1
-    #>  86 2000081  READING      SINKING SPR… SINKING SPRI…         24          199        175           1
-    #>  87 2002336  READING      SINKING SPR… SINKING SPRI…         24          199        175           1
-    #>  88 8600110  READING      SINKING SPR… SINKING SPRI…         24          199        175           1
-    #>  89 7900491  SOUTHEASTERN SOUTHERN EA… SOUTHEASTERN          18         1599       1581           4
-    #>  90 8300005  CHATHAM      SOUTH EASTE… SOUTHEASTERN           4         1599       1595           1
-    #>  91 8300005  WESTTOWN     SOUTH EASTE… SOUTHEASTERN           4         1599       1595           1
-    #>  92 7900434  MOSCOW       SPRINGBROOK… SPRING BROOK…          1            4          3           1
-    #>  93 8000444  PHILADELPHIA SPRINGHOUSE  SPRING HOUSE           3          282        279           1
-    #>  94 2010310  AMBLER       SPRINGHOUSE  SPRING HOUSE           3          282        279           1
-    #>  95 20170091 SPRING HOUSE SPRINGMILL   SPRING MILLS           2           45         43           2
-    #>  96 9700178  HARRISBURG   STEELLTON    STEELTON               2          660        658           1
-    #>  97 9500250  HARRISBURG   STEELLTON    STEELTON               2          660        658           1
-    #>  98 2000213  PITTSBURGH   SWISVALE     SWISSVALE              1           58         57           1
-    #>  99 2004037  RUSSELL      TITTUSVILLE  TITUSVILLE             1           31         30           1
-    #> 100 9500237  MARCUS HOOK  UPPER HICHE… UPPER CHICHE…          1          263        262           1
-    #> 101 8100217  SPRINGFIELD  UPPERCHICHE… UPPER CHICHE…          1          263        262           1
-    #> 102 7900444  ASTON        UPPER CHICH… UPPER CHICHE…        264          263         -1           1
-    #> 103 9500250  PITTSBURGH   UPER SAINT … UPPER SAINT …          1          196        195           1
-    #> 104 7900443  PITTSBURGH   UPPER SAINT… UPPER SAINT …          1          196        195           1
-    #> 105 8300167  ALLENTOWN    WESCOESVILLE WESCOSVILLE            8           45         37           1
-    #> 106 7900433  GREEN LANE   WESCOESVILLE WESCOSVILLE            8           45         37           1
-    #> 107 20120381 ALLENTOWN    WESCOESVILLE WESCOSVILLE            8           45         37           1
-    #> 108 7900433  CATASAUQUA   WESCOESVILLE WESCOSVILLE            8           45         37           1
-    #> 109 9400092  ALLENTOWN    WESCOESVILLE WESCOSVILLE            8           45         37           1
-    #> 110 20120022 WYOMING      WEST WEST    WEST                   1         6390       6389           5
-    #> 111 9700250  PITTSBURGH   WILKES TOWN… WILKENS TOWN…          1            1          0           1
-
-Manually change the city\_refine fields due to overcorrection.
+Manually change the city_refine fields due to overcorrection.
 
 ``` r
-st_pattern <- str_c("\\s",unique(zipcodes$state), "$", collapse = "|")
-
-
-pa_refined$city_refine <- pa_refined$city_refine %>% 
+exp_norm_city <- exp_norm_city %>% 
+  mutate(
+    exp_city_refine = exp_city_refine %>% 
+  na_if("ILLEGIBLE") %>% 
+  str_replace("^PHILA$", "PHILADELPHIA") %>% 
+  str_replace("^PGH$", "PITTSBURGH") %>% 
+  str_replace("^NEW YORK CITY$", "NEW YORK") %>% 
+  str_replace("^H\\sBURG$", "HARRISBURG") %>% 
+  str_replace("^HBG$", "HARRISBURG") %>% 
+  str_replace("^NYC$", "NEW YORK") %>% 
   str_replace("^DU BOIS$", "DUBOIS") %>% 
   str_replace("^PIT$", "PITTSBURGH") %>% 
   str_replace("^MCCBG$", "MCCONNELLSBURG") %>% 
@@ -752,296 +1171,191 @@ pa_refined$city_refine <- pa_refined$city_refine %>%
   str_replace("^GREENVILLE$", "EAST GREENVILLE") %>% 
   str_replace("^NON$", "ONO") %>% 
   str_replace("^FORD CLIFF$", "CLIFFORD") %>% 
-  str_replace("^W\\sB$", "WILKES BARRE") 
-
-  
-
-refined_table <-pa_refined %>% 
-  select(index, city_refine)
+  str_replace("^W\\sB$", "WILKES BARRE")) 
 ```
 
-#### Merge
+#### Check
+
+We can use the `campfin::check_city()` function to pass the remaining
+unknown `city_refine` values (and their `state_norm`) to the Google
+Geocode API. The function returns the name of the city or locality which
+most associated with those values.
+
+This is an easy way to both check for typos and check whether an unknown
+`city_refine` value is actually a completely acceptable neighborhood,
+census designated place, or some other locality not found in our
+`valid_city` vector from our `zipcodes` database.
+
+First, we’ll filter out any known valid city and aggregate the remaining
+records by their city and state. Then, we will only query those unknown
+cities which appear at least ten times.
 
 ``` r
-pa <- pa %>% 
-  left_join(refined_table, by ="index") %>% 
-  mutate(city = coalesce(city_refine, city_swap)) 
+pae_out <- exp_norm_city %>% 
+  filter(exp_city_refine %out% c(valid_city, extra_city)) %>% 
+  count(exp_city_refine, exp_state, sort = TRUE) %>% 
+  drop_na() %>% 
+  head(1000)
+```
 
-pa$city <- pa$city %>% 
-  str_replace("^MT PLEASANT$", "MOUNT PLEASANT") %>% 
-  str_replace("^ST\\s", "SAINT ") %>% 
-  str_replace("^MT\\s", "MOUNT ") %>%  
-  str_replace("^FT\\s", "FORT ") %>% 
-  str_replace("^W\\sB$|WB", "WILKES BARRE") %>% 
-  str_replace("\\sHTS$|\\sHGTS$", " HEIGHTS") %>% 
-  str_replace("\\sSQ$", " SQUARE") %>% 
-  str_replace("\\sSPGS$|\\sSPR$|\\sSPRG$", "  SPRINGS") %>% 
-  str_replace("\\sJCT$", " JUNCTION") %>% 
-  str_replace("^E\\s", "EAST ") %>% 
-  str_replace("^N\\s", "NORTH ") %>% 
-  str_replace("^W\\s", "WEST ") %>% 
-  str_remove(valid_state) %>% 
-  str_remove("^X+$")
+Passing these values to `campfin::check_city()` with `purrr::pmap_dfr()`
+will return a single tibble of the rows returned by each city/state
+combination.
+
+First, we’ll check to see if the API query has already been done and a
+file exist on disk. If such a file exists, we can read it using
+`readr::read_csv()`. If not, the query will be sent and the file will be
+written using `readr::write_csv()`.
+
+``` r
+check_file <- here("state","pa", "expends", "data", "api_check.csv")
+if (file_exists(check_file)) {
+  check <- read_csv(
+    file = check_file,
+    col_types = cols(
+      .default = col_character(),
+      check_city_flag = col_logical()
+    )
+  )
+} else {
+  check <- pmap_dfr(
+    .l = list(
+      pae_out$exp_city_refine, 
+      pae_out$exp_state
+    ), 
+    .f = check_city, 
+    key = Sys.getenv("GEOCODE_KEY"), 
+    guess = TRUE
+  ) %>% 
+    mutate(guess = coalesce(guess_city, guess_place)) %>% 
+    select(-guess_city, -guess_place)
+  write_csv(
+    x = check,
+    path = check_file
+  )
+}
+```
+
+Any city/state combination with a `check_city_flag` equal to `TRUE`
+returned a matching city string from the API, indicating this
+combination is valid enough to be ignored.
+
+``` r
+valid_locality <- check$guess[check$check_city_flag]
+```
+
+Then we can perform some simple comparisons between the queried city and
+the returned city. If they are extremely similar, we can accept those
+returned locality strings and add them to our list of accepted
+additional localities.
+
+``` r
+valid_locality <- check %>% 
+  filter(!check_city_flag) %>% 
+  mutate(
+    abb = is_abbrev(original_city, guess),
+    dist = str_dist(original_city, guess)
+  ) %>%
+  filter(abb | dist <= 3) %>% 
+  pull(guess) %>% 
+  c(valid_locality)
 ```
 
 ``` r
-pa_match_table <- pa %>% 
-  filter(str_sub(pa$city, 1,1) == str_sub(pa$city_match, 1,1)) %>% 
-  filter(city %out% valid_city)  %>% 
-  mutate(string_dis = stringdist(city, city_match)) %>% 
-  select (index, zip_clean, STATE, city, city_match, string_dis) %>% 
-  distinct() %>% 
-  add_count(city_match) %>% 
-  rename("sec_city_match" = "city_match")
+valid_locality <- c(valid_locality, "ABBOTT PARK", "RESEARCH TRIANGLE PARK")
+```
 
+``` r
 # Manually change overcorrected city names to original 
-pa_match_table$sec_city_match <- pa_match_table$sec_city_match %>% 
-  str_replace("^ARLINGTON$", "ALEXANDRIA") %>% 
-  str_replace("^BROWNSVILLE$", "BENTLEYVILLE") %>% 
+exp_norm_city$exp_city_refine <- exp_norm_city$exp_city_refine %>% 
   str_replace("^FEASTERVILLE\\sTREVOSE", "FEASTERVILLE") %>% 
   str_replace("LEES SUMMIT", "LAKE LOTAWANA") %>% 
   str_replace("HAZLETON", "HAZLE TOWNSHIP") %>% 
   str_replace("DANIA", "DANIA BEACH") %>% 
   str_replace("CRANBERRY TWP", "CRANBERRY TOWNSHIP")
 
-pa_match_table[pa_match_table$city == "HOLLIDASBURG", "city_match"] <- "HOLLIDAYSBURG"
-pa_match_table[pa_match_table$city == "PENN HELLE", "city_match"] <- "PENN HILLS"
-pa_match_table[pa_match_table$city == "PHUM", "city_match"] <- "PLUM"
-pa_match_table[pa_match_table$city == "CLARKSGREEN", "city_match"] <- "CLARKS GREEN"
-pa_match_table[pa_match_table$city == "SANFRANCISCO", "city_match"] <- "SAN FRANCISCO"
-pa_match_table[pa_match_table$city == "RIEFFTON", "city_match"] <- "REIFFTON"
-pa_match_table[pa_match_table$city == "SHOREVILLE", "city_match"] <- "SHOREVIEW"
-pa_match_table[pa_match_table$city == "PITTSBURGH PLUM", "city_match"] <- "PLUM"
-pa_match_table[pa_match_table$city == "MOUNTVIEW", "city_match"] <- "MOUNT VIEW"
-pa_match_table[pa_match_table$city == "PLUM BORO", "city_match"] <- "PLUM"
-pa_match_table[pa_match_table$city == "HAZELTON CITY", "city_match"] <- "HAZLE TOWNSHIP"
-pa_match_table[pa_match_table$city == "BARNSVILLE", "city_match"] <- "BARNESVILLE"
-
-keep_original <- c( "SHOREVIEW" ,
-   "CUYAHOGA" ,
-   "MEDFORD LAKES" ,
-   "WEST GOSHEN" ,
-   "CLEVELAND HEIGHTS" ,
-   "LAHORNE" ,
-   "ROCHESTER HILLS" ,
-   "PENLLYN" ,
-   "SOUTHERN" ,
-   "WEST DEPTFORD" ,
-   "SEVEN FIELDS" ,
-   "LORDS VALLEY" ,
-   "WILDWOOD CREST" ,
-   "BETHLEHEM TOWNSHIP" ,
-   "MOON TOWNSHIP" ,
-   "BELFONTE" ,
-   "NEWPORT TOWNSHIP" , 
-   "LINTHICUM" , 
-   "WARRIOR RUN" ,
-   "PRIMOS SECANE" ,
-   "COOKPORT" , 
-   "MANASSAS PARK" ,
-   "MCMURRAY" ,
-   "MOYLAN" ,
-   "BELMONT HILLS" ,
-   "THORNBURY" ,
-   "HANOVER TOWNSHIP" ,
-   "MIAMI SPRINGS" ,
-   "BROOKLYN PARK" )
-
-pa_match_table[pa_match_table$city %in% keep_original,"sec_city_match"] <-
-  pa_match_table[pa_match_table$city %in% keep_original,"city"]
-
-
-pa <-pa %>% 
-  left_join(select(pa_match_table, index, sec_city_match), by = "index") %>% mutate(city_clean = coalesce(sec_city_match, city))
-
-pa$city_clean <- pa$city_clean %>% str_replace("\\sTWP$", " TOWNSHIP")
-
-n_distinct(pa$city_clean[pa$city_clean %out% valid_city])
+exp_norm_city[which(exp_norm_city$exp_city == "HOLLIDASBURG"), "exp_city_refine"] <- "HOLLIDAYSBURG"
+exp_norm_city[which(exp_norm_city$exp_city == "PENN HELLE"), "exp_city_refine"] <- "PENN HILLS"
+exp_norm_city[which(exp_norm_city$exp_city == "PHUM"), "exp_city_refine"] <- "PLUM"
+exp_norm_city[which(exp_norm_city$exp_city == "CLARKSGREEN"), "exp_city_refine"] <- "CLARKS GREEN"
+exp_norm_city[which(exp_norm_city$exp_city == "SANFRANCISCO"), "exp_city_refine"] <- "SAN FRANCISCO"
+exp_norm_city[which(exp_norm_city$exp_city == "RIEFFTON"), "exp_city_refine"] <- "REIFFTON"
+exp_norm_city[which(exp_norm_city$exp_city == "SHOREVILLE"), "exp_city_refine"] <- "SHOREVIEW"
+exp_norm_city[which(exp_norm_city$exp_city == "PITTSBURGH PLUM"), "exp_city_refine"] <- "PLUM"
+exp_norm_city[which(exp_norm_city$exp_city == "MOUNTVIEW"), "exp_city_refine"] <- "MOUNT VIEW"
+exp_norm_city[which(exp_norm_city$exp_city == "PLUM BORO"), "exp_city_refine"] <- "PLUM"
+exp_norm_city[which(exp_norm_city$exp_city == "HAZELTON CITY"), "exp_city_refine"] <- "HAZLE TOWNSHIP"
+exp_norm_city[which(exp_norm_city$exp_city == "BARNSVILLE"), "exp_city_refine"] <- "BARNESVILLE"
 ```
 
-    #> [1] 1502
+``` r
+pae <- left_join(pae, exp_norm_city)
+pae <- left_join(pae, fil_norm_city)
+```
 
 ``` r
-valid_city <- unique(c(valid_city, extra_city))
+many_city <- c(valid_city, extra_city, valid_locality)
 
-pa_city_lookup <- read_csv(file = here("pa", "expends", "data", "raw", "pa_city_lookup.csv"), col_names = c("city", "city_lookup", "changed", "count"), skip = 1)
+pae_out <- exp_norm_city %>% 
+  filter(exp_city_refine %out% many_city) %>% 
+  count(exp_city,exp_city_refine, exp_state, sort = TRUE) %>% 
+  drop_na()
 
-pa_out <- pa %>% 
-  count( city_clean, sort = TRUE) %>% 
-  filter(city_clean %out% valid_city) 
+pa_city_lookup <- read_csv(file = here("state","pa", "expends", "data", "raw", "pa_city_lookup.csv"), col_names = c("city", "city_lookup", "changed", "count"), skip = 1)
 
-pa_out <- pa_out %>% left_join(pa_city_lookup, by = c("city_clean" = "city")) %>% filter(city_clean != city_lookup | is.na(city_lookup)) %>% drop_na(city_clean)
+pae_out <- pae_out %>% left_join(pa_city_lookup, by = c("exp_city_refine" = "city")) %>% filter(exp_city_refine != city_lookup | is.na(city_lookup)) %>% drop_na(exp_city_refine) %>% select(-c(n,changed, count))
 
-pa <- pa %>% left_join(pa_out, by = "city_clean") %>% mutate(city_after_lookup = ifelse(
-  is.na(city_lookup) & city_clean %out% valid_city,
+pae <- pae %>% left_join(pae_out, by = c("exp_city", "exp_state","exp_city_refine")) %>% mutate(exp_city_clean = ifelse(
+  is.na(city_lookup) & exp_city_refine %out% valid_city,
   NA,
-  coalesce(city_lookup, city_clean))) 
-
-pa$city_after_lookup <- pa$city_after_lookup %>% str_replace("^\\sTWP$", " TOWNSHIP")
-
-pa[pa$index == which(pa$city_after_lookup == "MA"),8:9] <- c("LEXINGTON", "MA")
-pa[pa$index == which(pa$city_after_lookup == "L"),8] <- c("LOS ANGELES")
-pa[pa$index %in% which(pa$city_after_lookup %in% c("PA", "NJ")), 8] <- ""
-pa[pa$index == "319505", 8] <- "HARRISBURG"
-
-#pa_final_lookup <- read_excel(glue("{raw_dir}/pa_final_fixes.xlsx"))
-pa_final_lookup <- read_excel(glue("{raw_dir}/pa_final_fixes.xlsx"), col_types = "text")
-
-
-pa <- pa %>% left_join(pa_final_lookup, by = c("city_after_lookup" = "city_clean")) %>% 
-mutate(city_output = if_else(condition = is.na(fix) & city_after_lookup %out% valid_city, NA_character_,
-                               coalesce(fix,city_after_lookup)))
+  coalesce(city_lookup, exp_city_refine)))
 ```
 
-Each process also increases the percent of valid city names.
+| stage                                                                            | prop_in | n_distinct | prop_na | n_out | n_diff |
+|:---------------------------------------------------------------------------------|--------:|-----------:|--------:|------:|-------:|
+| str_to_upper(pae$exp_city) | 0.953| 9078| 0.021| 41356| 4501| |pae$exp_city_norm |   0.965 |       8410 |   0.024 | 30704 |   3789 |
+| pae$exp_city_swap | 0.993| 6173| 0.024| 6197| 1577| |pae$exp_city_refine         |   0.995 |       6047 |   0.024 |  4604 |   1460 |
+| pae\$exp_city_clean                                                              |   1.000 |       4176 |   0.055 |    34 |     11 |
 
-``` r
-prop_in(pa$CITY, valid_city, na.rm = TRUE)
-#> [1] 0.9510332
-prop_in(pa$city_prep, valid_city, na.rm = TRUE)
-#> [1] 0.9621608
-prop_in(pa$city_swap, valid_city, na.rm = TRUE)
-#> [1] 0.9720373
-prop_in(pa$city, valid_city, na.rm = TRUE)
-#> [1] 0.9386369
-prop_in(pa$city_clean, valid_city, na.rm = TRUE)
-#> [1] 0.9892286
-prop_in(pa$city_after_lookup, valid_city, na.rm = TRUE)
-#> [1] 0.9999454
-prop_in(pa$city_output, valid_city, na.rm = TRUE)
-#> [1] 0.9999727
+![](../plots/bar_progress-1.png)<!-- -->
 
-progress_table <- tibble(
-  stage = c("raw", "norm", "swap", "refine","second match", "lookup", "final lookup"),
-  prop_good = c(
-    prop_in(str_to_upper(pa$CITY), valid_city, na.rm = TRUE),
-    prop_in(pa$city_prep, valid_city, na.rm = TRUE),
-    prop_in(pa$city_swap, valid_city, na.rm = TRUE),
-    prop_in(pa$city, valid_city, na.rm = TRUE),
-    prop_in(pa$city_clean, valid_city, na.rm = TRUE),
-    prop_in(pa$city_after_lookup, valid_city, na.rm = TRUE),
-    prop_in(pa$city_output, valid_city, na.rm = TRUE)
-  ),
-  total_distinct = c(
-    n_distinct(str_to_upper(pa$CITY)),
-    n_distinct(pa$city_prep),
-    n_distinct(pa$city_swap),
-    n_distinct(pa$city),
-    n_distinct(pa$city_clean),
-    n_distinct(pa$city_after_lookup),
-    n_distinct(pa$city_output)
-  ),
-  unique_bad = c(
-    length(setdiff(str_to_upper(pa$CITY), valid_city)),
-    length(setdiff(pa$city_prep, valid_city)),
-    length(setdiff(pa$city_swap, valid_city)),
-    length(setdiff(pa$city, valid_city)),
-    length(setdiff(pa$city_clean, valid_city)),
-    length(setdiff(pa$city_after_lookup, valid_city)),
-    length(setdiff(pa$city_output, valid_city))
-  )
-)
+More importantly, the number of distinct values decreased each stage. We
+were able to confidently change many distinct invalid values to their
+valid equivalent.
 
-diff_change <- progress_table$unique_bad[1]-progress_table$unique_bad[4]
-prop_change <- diff_change/progress_table$unique_bad[1]
-```
+![](../plots/bar_distinct-1.png)<!-- -->
 
-Each step of the cleaning process reduces the number of distinct city values. There are 481469 with 6218 distinct values, after the swap and refine processes, there are 476488 entries with 3408 distinct values.
+## Conclude
 
-| Normalization Stage |  Percent Valid|  Total Distinct|  Unique Invalid|
-|:--------------------|--------------:|---------------:|---------------:|
-| raw                 |         0.9510|            6218|            2822|
-| norm                |         0.9622|            5747|            2327|
-| swap                |         0.9720|            4339|             938|
-| refine              |         0.9386|            5912|            2520|
-| second match        |         0.9892|            4646|            1236|
-| lookup              |         0.9999|            3422|              11|
-| final lookup        |         1.0000|            3408|               2|
-
-![](../plots/wrangle_bar_prop-1.png)
-
-``` r
-pa <- pa %>%   
-  unite(
-    ADDRESS1, ADDRESS2,
-    col = address_clean,
-    sep = " ",
-    remove = FALSE,
-    na.rm = TRUE
-  ) %>% 
-  mutate(address_clean = normal_address(
-      address = address_clean,
-      abbs = usps_city,
-      na_rep = TRUE
-    ))
-```
-
-We also need to pull up the processed filer table to join back to the `FILERID`, `EYEAR` and `CYCLE` field.
-
-``` r
-clean_dir <- here("pa", "expends", "data", "processed")
-pa_filer <- read_csv(glue("{clean_dir}/pa_filers_clean.csv"), 
-                     col_types = cols(.default = col_character())) %>% 
-  rename_at(vars(contains("clean")), list(~str_c("filer_",.)))
-
-pa_filer <- pa_filer %>% flag_dupes(FILERID,EYEAR,CYCLE)
-
-pa_filer <-  pa_filer %>% 
-  filter(!dupe_flag) %>% 
-  select(
-    FILERID,
-    EYEAR,
-    CYCLE,
-    FILERNAME,
-    FILERTYPE,
-    filer_state,
-    ends_with("clean")
-  )
-```
-
-``` r
-pa <- pa %>% left_join(pa_filer, by = c("FILERID", "EYEAR", "CYCLE"))
-```
-
-Conclude
---------
-
-1.  There are 493025 records in the database
-2.  There are 7000 records with suspected duplicate filerID, recipient, date, *and* amount (flagged with `dupe_flag`)
+1.  There are 893339 records in the database
+2.  There are 0 records with suspected duplicate filerID, recipient,
+    date, *and* amount (flagged with `dupe_flag`)
 3.  The ranges for dates and amounts are reasonable
-4.  Consistency has been improved with `stringr` package and custom `normal_*()` functions.
-5.  The five-digit `zip_clean` variable has been created with `zipcode::clean.zipcode()`
+4.  Consistency has been improved with `stringr` package and custom
+    `normal_*()` functions.
+5.  The five-digit `zip_clean` variable has been created with
+    `zipcode::clean.zipcode()`
 6.  The `year` variable has been created with `lubridate::year()`
-7.  There are 11556 records with missing `city` values and 124 records with missing `payee` values (both flagged with the `na_flag`).
+7.  There are 0 records with missing `city` values and 0 records with
+    missing `payee` values (both flagged with the `na_flag`).
 
-Export
-------
+## Export
 
 ``` r
-clean_dir <- here("pa", "expends", "data", "processed")
+clean_dir <- here("state","pa", "expends", "data", "processed")
 dir_create(clean_dir)
-pa %>% 
+pae %>% 
   select(
-    -index,
-    -city_prep,
+    -exp_city_norm,
     -on_year,
-    -city_match,
-    -match_dist,
-    -city_swap,
-    -city_refine,
-    -city_clean,
+    -exp_city_swap,
+    -exp_city_refine,
     -city_lookup,
-    -city_after_lookup,
-    -sec_city_match,
-    -n,
-    -fix,
-    -changed,
-    -city,
-    -count
+    -fil_city_norm
   ) %>% 
-    rename (zip5 = zip_clean,
-          filer_zip5 = filer_zip_clean,
-          city_clean = city_output) %>% 
+    rename (exp_zip_clean = exp_zip_norm,
+          fil_zip_clean = fil_zip_norm,
+          fil_city_clean =fil_city_swap) %>% 
   write_csv(
     path = glue("{clean_dir}/pa_expends_clean.csv"),
     na = ""

@@ -1,6 +1,6 @@
 ---
 title: "Arizona Contributions"
-author: "Kiernan Nicholls"
+author: "Kiernan Nicholls & Yanqi Xu"
 date: "`r date()`"
 output:
   github_document: 
@@ -34,7 +34,7 @@ if (!interactive()) {
 ```
 
 ```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
-doc_dir <- fs::dir_create(here::here("az", "contribs", "docs"))
+doc_dir <- fs::dir_create(here::here("state","az", "contribs", "docs"))
 ```
 
 ## Project
@@ -104,7 +104,7 @@ paths relative to _your_ machine.
 
 ```{r where_here}
 # where does this document knit?
-here::i_am("az/contribs/docs/az_contribs_diary.Rmd")
+here::i_am("state/az/contribs/docs/az_contribs_diary.Rmd")
 ```
 
 [tap]: https://github.com/irworkshop/accountability_datacleaning
@@ -121,7 +121,7 @@ sharing site Serv-U. That file was download and then uploaded to the IRW server,
 where it can be downloaded.
 
 ```{r raw_dir}
-raw_dir <- dir_create(here("az", "contribs", "data", "raw"))
+raw_dir <- dir_create(here("state","az", "contribs", "data", "raw"))
 raw_obj <- "20201230-CFS_Export.mdb"
 raw_mdb <- path(raw_dir, raw_obj)
 raw_aws <- path("csv", raw_obj)
