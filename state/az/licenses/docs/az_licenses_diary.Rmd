@@ -1,6 +1,6 @@
 ---
 title: "Arizona Licenses"
-author: "Kiernan Nicholls"
+author: "Kiernan Nicholls & Aarushi Sahejpal"
 date: "`r date()`"
 output:
   github_document: 
@@ -121,7 +121,7 @@ here::i_am("state/az/licenses/docs/az_licenses_diary.Rmd")
 
 ## Source
 
-> Last Updated 06/14/2022.
+> Last Updated 04/21/2023
 >
 > For the best results finding a specific registrant, please enter only their
 license number and hit apply.
@@ -140,36 +140,23 @@ Export CSV box to the right.
 > Please note that Board staff cannot make recommendations regarding the
 procurement of registrant services.
 
-
 ## Download
 
 ```{r}
-raw_url <- modify_url(
-  url = "https://btr.az.gov/",
-  path = c(
-    "sites/default/files/views_data_export",
-    "registered_professional_search_data_export_1",
-    "1655222496/Registered_proffessional_list.csv"
-  )
-)
+raw_csv <- read_csv('/Volumes/TAP/accountability_datacleaning/state/az/licenses/data/raw/Registered_proffessional_list.csv')
 ```
 
 ```{r raw-dir}
-raw_dir <- dir_create(here("state", "az", "licenses", "data", "raw"))
-raw_csv <- path(raw_dir, basename(raw_url))
+raw_dir <- dir_create(here("state", "az", "licenses", "data", "raw")) 
+raw_csv <- path(raw_dir) 
 ```
 
-```{r raw-download}
-if (!file_exists(raw_csv)) {
-  GET(raw_url, write_disk(raw_csv), progress("down"))
-}
-```
 
 ## Read
 
 ```{r raw-read}
 azl <- read_delim(
-  file = raw_csv,
+  file = "/Volumes/TAP/accountability_datacleaning/state/az/licenses/data/raw/Registered_proffessional_list.csv",
   delim = ",",
   escape_backslash = FALSE,
   escape_double = FALSE,
@@ -182,6 +169,7 @@ azl <- read_delim(
   )
 )
 ```
+
 
 ```{r clean-names}
 azl <- clean_names(azl, case = "snake")
@@ -269,7 +257,7 @@ azl %>%
   geom_col(aes(fill = n), color = "black") + 
   scale_fill_viridis_c(option = "B", guide = "none", end = 0.9) +
   scale_y_continuous(labels = comma) +
-  scale_x_continuous(breaks = seq(1920, 2020, by = 10)) +
+  scale_x_continuous(breaks = seq(1920, 2023, by = 10)) +
   theme(legend.position = "bottom") +
   labs(
     title = "Arizona Licenses by Year",

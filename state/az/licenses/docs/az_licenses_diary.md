@@ -1,27 +1,27 @@
 Arizona Licenses
 ================
-Kiernan Nicholls
-Tue Jun 14 12:34:24 2022
+Kiernan Nicholls & Aarushi Sahejpal
+Tue May 2 10:26:21 2023
 
--   <a href="#project" id="toc-project">Project</a>
--   <a href="#objectives" id="toc-objectives">Objectives</a>
--   <a href="#packages" id="toc-packages">Packages</a>
--   <a href="#source" id="toc-source">Source</a>
--   <a href="#download" id="toc-download">Download</a>
--   <a href="#read" id="toc-read">Read</a>
--   <a href="#explore" id="toc-explore">Explore</a>
-    -   <a href="#missing" id="toc-missing">Missing</a>
-    -   <a href="#duplicates" id="toc-duplicates">Duplicates</a>
-    -   <a href="#categorical" id="toc-categorical">Categorical</a>
-    -   <a href="#dates" id="toc-dates">Dates</a>
--   <a href="#wrangle" id="toc-wrangle">Wrangle</a>
-    -   <a href="#address" id="toc-address">Address</a>
-    -   <a href="#zip" id="toc-zip">ZIP</a>
-    -   <a href="#state" id="toc-state">State</a>
-    -   <a href="#city" id="toc-city">City</a>
--   <a href="#conclude" id="toc-conclude">Conclude</a>
--   <a href="#export" id="toc-export">Export</a>
--   <a href="#upload" id="toc-upload">Upload</a>
+- <a href="#project" id="toc-project">Project</a>
+- <a href="#objectives" id="toc-objectives">Objectives</a>
+- <a href="#packages" id="toc-packages">Packages</a>
+- <a href="#source" id="toc-source">Source</a>
+- <a href="#download" id="toc-download">Download</a>
+- <a href="#read" id="toc-read">Read</a>
+- <a href="#explore" id="toc-explore">Explore</a>
+  - <a href="#missing" id="toc-missing">Missing</a>
+  - <a href="#duplicates" id="toc-duplicates">Duplicates</a>
+  - <a href="#categorical" id="toc-categorical">Categorical</a>
+  - <a href="#dates" id="toc-dates">Dates</a>
+- <a href="#wrangle" id="toc-wrangle">Wrangle</a>
+  - <a href="#address" id="toc-address">Address</a>
+  - <a href="#zip" id="toc-zip">ZIP</a>
+  - <a href="#state" id="toc-state">State</a>
+  - <a href="#city" id="toc-city">City</a>
+- <a href="#conclude" id="toc-conclude">Conclude</a>
+- <a href="#export" id="toc-export">Export</a>
+- <a href="#upload" id="toc-upload">Upload</a>
 
 <!-- Place comments regarding knitting here -->
 
@@ -83,11 +83,11 @@ pacman::p_load(
 )
 ```
 
-This diary was run using `campfin` version 1.0.8.9300.
+This diary was run using `campfin` version 1.0.10.9001.
 
 ``` r
 packageVersion("campfin")
-#> [1] '1.0.8.9300'
+#> [1] '1.0.10.9001'
 ```
 
 This document should be run as part of the `R_tap` project, which lives
@@ -107,7 +107,7 @@ here::i_am("state/az/licenses/docs/az_licenses_diary.Rmd")
 
 ## Source
 
-> Last Updated 06/14/2022.
+> Last Updated 04/21/2023
 >
 > For the best results finding a specific registrant, please enter only
 > their license number and hit apply.
@@ -129,32 +129,19 @@ here::i_am("state/az/licenses/docs/az_licenses_diary.Rmd")
 ## Download
 
 ``` r
-raw_url <- modify_url(
-  url = "https://btr.az.gov/",
-  path = c(
-    "sites/default/files/views_data_export",
-    "registered_professional_search_data_export_1",
-    "1655222496/Registered_proffessional_list.csv"
-  )
-)
+raw_csv <- read_csv('/Volumes/TAP/accountability_datacleaning/state/az/licenses/data/raw/Registered_proffessional_list.csv')
 ```
 
 ``` r
-raw_dir <- dir_create(here("state", "az", "licenses", "data", "raw"))
-raw_csv <- path(raw_dir, basename(raw_url))
-```
-
-``` r
-if (!file_exists(raw_csv)) {
-  GET(raw_url, write_disk(raw_csv), progress("down"))
-}
+raw_dir <- dir_create(here("state", "az", "licenses", "data", "raw")) 
+raw_csv <- path(raw_dir) 
 ```
 
 ## Read
 
 ``` r
 azl <- read_delim(
-  file = raw_csv,
+  file = "/Volumes/TAP/accountability_datacleaning/state/az/licenses/data/raw/Registered_proffessional_list.csv",
   delim = ",",
   escape_backslash = FALSE,
   escape_double = FALSE,
@@ -174,12 +161,12 @@ azl <- clean_names(azl, case = "snake")
 
 ## Explore
 
-There are 70,696 rows of 13 columns. Each record represents a single
+There are 72,893 rows of 13 columns. Each record represents a single
 professional or occupation license.
 
 ``` r
 glimpse(azl)
-#> Rows: 70,696
+#> Rows: 72,893
 #> Columns: 13
 #> $ license_number    <int> 9999, 9997, 9972, 9968, 9930, 9928, 9921, 9919, 9918, 9896, 9892, 9883, 9881, 9819, 9793, 97…
 #> $ first_name        <chr> "JOHN", "HJALMAR", "ALAN", "HOWARD", "HOWARD", "ALAN", "JOE", "JOSEPH", "JAMES", "Henry", "R…
@@ -204,7 +191,7 @@ tail(azl)
 #> 4            373 DWIGHT     CHENAULT  Expired        ARCHITECT      1927-10-10        1993-06-30      1571 FAIR PARK AVE
 #> 5            359 GLENTON    SYKES     Cancelled      ENGINEER/CIVIL 1926-10-10        1986-06-30      480 RUDASILL RD   
 #> 6            232 E          HERRERAS  Cancelled      ARCHITECT      1924-10-10        1991-03-31      1331 E WAVERLY ST 
-#> # … with 5 more variables: address_line_2 <chr>, city <chr>, state <chr>, zip <chr>, phone <chr>
+#> # ℹ 5 more variables: address_line_2 <chr>, city <chr>, state <chr>, zip <chr>, phone <chr>
 ```
 
 ### Missing
@@ -214,21 +201,21 @@ Columns vary in their degree of missing values.
 ``` r
 col_stats(azl, count_na)
 #> # A tibble: 13 × 4
-#>    col               class      n        p
-#>    <chr>             <chr>  <int>    <dbl>
-#>  1 license_number    <int>      0 0       
-#>  2 first_name        <chr>      0 0       
-#>  3 last_name         <chr>      0 0       
-#>  4 license_status    <chr>      0 0       
-#>  5 discipline        <chr>     14 0.000198
-#>  6 board_action_date <date>    20 0.000283
-#>  7 expiration_date   <date> 13452 0.190   
-#>  8 address_line_1    <chr>   1128 0.0160  
-#>  9 address_line_2    <chr>  59076 0.836   
-#> 10 city              <chr>   1061 0.0150  
-#> 11 state             <chr>   2269 0.0321  
-#> 12 zip               <chr>   1127 0.0159  
-#> 13 phone             <chr>  10868 0.154
+#>    col               class      n         p
+#>    <chr>             <chr>  <int>     <dbl>
+#>  1 license_number    <int>      0 0        
+#>  2 first_name        <chr>      3 0.0000412
+#>  3 last_name         <chr>      3 0.0000412
+#>  4 license_status    <chr>      0 0        
+#>  5 discipline        <chr>     15 0.000206 
+#>  6 board_action_date <date>    14 0.000192 
+#>  7 expiration_date   <date> 13781 0.189    
+#>  8 address_line_1    <chr>    956 0.0131   
+#>  9 address_line_2    <chr>  59847 0.821    
+#> 10 city              <chr>    887 0.0122   
+#> 11 state             <chr>   1859 0.0255   
+#> 12 zip               <chr>    962 0.0132   
+#> 13 phone             <chr>  10852 0.149
 ```
 
 We can flag any record missing a key variable needed to identify a
@@ -238,27 +225,27 @@ transaction.
 key_vars <- c("board_action_date", "last_name", "discipline")
 azl <- flag_na(azl, all_of(key_vars))
 sum(azl$na_flag)
-#> [1] 34
+#> [1] 32
 ```
 
 ``` r
 azl %>% 
   filter(na_flag) %>% 
   select(all_of(key_vars))
-#> # A tibble: 34 × 3
-#>    board_action_date last_name  discipline    
-#>    <date>            <chr>      <chr>         
-#>  1 NA                Skinner    ENGINEER/CIVIL
-#>  2 NA                Yorgason   ALARM AGENT   
-#>  3 NA                Viramontes ALARM AGENT   
-#>  4 NA                Saul       ALARM AGENT   
-#>  5 NA                Barajas    ALARM AGENT   
-#>  6 NA                Edmison    ALARM AGENT   
-#>  7 NA                Ives       ALARM AGENT   
-#>  8 NA                Kochheiser ALARM AGENT   
-#>  9 NA                Ruh        ALARM AGENT   
-#> 10 NA                Sorcinelli ALARM AGENT   
-#> # … with 24 more rows
+#> # A tibble: 32 × 3
+#>    board_action_date last_name  discipline         
+#>    <date>            <chr>      <chr>              
+#>  1 NA                Chavez     ALARM AGENT        
+#>  2 NA                Skinner    ENGINEER/CIVIL     
+#>  3 NA                Verbeke    HOME INSPECTOR     
+#>  4 NA                Sorcinelli ALARM AGENT        
+#>  5 NA                Carpenter  ALARM AGENT        
+#>  6 NA                Klein      ALARM AGENT        
+#>  7 NA                OHLE       HOME INSPECTOR     
+#>  8 NA                MARTENS    LANDSCAPE ARCHITECT
+#>  9 NA                TREESE     ENGINEER/ELECTRICAL
+#> 10 2002-09-20        <NA>       HOME INSPECTOR     
+#> # ℹ 22 more rows
 ```
 
 ### Duplicates
@@ -268,7 +255,7 @@ We can also flag any record completely duplicated across every column.
 ``` r
 azl <- flag_dupes(azl, -license_number)
 sum(azl$dupe_flag)
-#> [1] 245
+#> [1] 253
 ```
 
 ``` r
@@ -276,7 +263,7 @@ azl %>%
   filter(dupe_flag) %>% 
   select(all_of(key_vars)) %>% 
   arrange(board_action_date)
-#> # A tibble: 245 × 3
+#> # A tibble: 253 × 3
 #>    board_action_date last_name  discipline         
 #>    <date>            <chr>      <chr>              
 #>  1 1955-10-10        GRUNDSTEDT ENGINEER/MINING    
@@ -289,7 +276,7 @@ azl %>%
 #>  8 1963-10-10        GERVASIO   ENGINEER/CIVIL     
 #>  9 1964-03-13        CORLEY     ENGINEER/CIVIL     
 #> 10 1964-03-13        CORLEY     ENGINEER/CIVIL     
-#> # … with 235 more rows
+#> # ℹ 243 more rows
 ```
 
 ### Categorical
@@ -299,21 +286,21 @@ col_stats(azl, n_distinct)
 #> # A tibble: 15 × 4
 #>    col               class      n         p
 #>    <chr>             <chr>  <int>     <dbl>
-#>  1 license_number    <int>  70369 0.995    
-#>  2 first_name        <chr>   8549 0.121    
-#>  3 last_name         <chr>  34814 0.492    
-#>  4 license_status    <chr>     18 0.000255 
-#>  5 discipline        <chr>     26 0.000368 
-#>  6 board_action_date <date>  4279 0.0605   
-#>  7 expiration_date   <date>  2624 0.0371   
-#>  8 address_line_1    <chr>  54841 0.776    
-#>  9 address_line_2    <chr>   4469 0.0632   
-#> 10 city              <chr>   7665 0.108    
-#> 11 state             <chr>     94 0.00133  
-#> 12 zip               <chr>  11271 0.159    
-#> 13 phone             <chr>  50218 0.710    
-#> 14 na_flag           <lgl>      2 0.0000283
-#> 15 dupe_flag         <lgl>      2 0.0000283
+#>  1 license_number    <int>  72558 0.995    
+#>  2 first_name        <chr>   8875 0.122    
+#>  3 last_name         <chr>  36004 0.494    
+#>  4 license_status    <chr>     17 0.000233 
+#>  5 discipline        <chr>     25 0.000343 
+#>  6 board_action_date <date>  4469 0.0613   
+#>  7 expiration_date   <date>  2768 0.0380   
+#>  8 address_line_1    <chr>  56120 0.770    
+#>  9 address_line_2    <chr>   4701 0.0645   
+#> 10 city              <chr>   7786 0.107    
+#> 11 state             <chr>     94 0.00129  
+#> 12 zip               <chr>  11414 0.157    
+#> 13 phone             <chr>  52225 0.716    
+#> 14 na_flag           <lgl>      2 0.0000274
+#> 15 dupe_flag         <lgl>      2 0.0000274
 ```
 
 ![](../plots/distinct-plots-1.png)<!-- -->![](../plots/distinct-plots-2.png)<!-- -->
@@ -328,13 +315,13 @@ azl <- mutate(azl, year = year(board_action_date))
 
 ``` r
 count_na(azl$board_action_date)
-#> [1] 20
+#> [1] 14
 min(azl$board_action_date, na.rm = TRUE)
 #> [1] "1924-10-10"
 mean(azl$year < 2000, na.rm = TRUE)
-#> [1] 0.4059794
+#> [1] 0.3936525
 max(azl$board_action_date, na.rm = TRUE)
-#> [1] "2022-06-13"
+#> [1] "2023-04-21"
 sum(azl$board_action_date > today(), na.rm = TRUE)
 #> [1] 0
 ```
@@ -382,7 +369,7 @@ addr_norm <- azl %>%
 
 ``` r
 addr_norm
-#> # A tibble: 56,458 × 3
+#> # A tibble: 57,961 × 3
 #>    address_line_1                      address_line_2 address_norm                     
 #>    <chr>                               <chr>          <chr>                            
 #>  1 <NA>                                <NA>           <NA>                             
@@ -395,7 +382,7 @@ addr_norm
 #>  8 5700 N PLACITA DEL TRUENO           <NA>           5700 N PLACITA DEL TRUENO        
 #>  9 303 Thunderbird Ln                  <NA>           303 THUNDERBIRD LN               
 #> 10 1301 LOUSE RD                       <NA>           1301 LOUSE RD                    
-#> # … with 56,448 more rows
+#> # ℹ 57,951 more rows
 ```
 
 ``` r
@@ -427,8 +414,8 @@ progress_table(
 #> # A tibble: 2 × 6
 #>   stage        prop_in n_distinct prop_na n_out n_diff
 #>   <chr>          <dbl>      <dbl>   <dbl> <dbl>  <dbl>
-#> 1 azl$zip        0.952      11271  0.0159  3335   2643
-#> 2 azl$zip_norm   0.989       9407  0.0195   796    535
+#> 1 azl$zip        0.954      11414  0.0132  3306   2616
+#> 2 azl$zip_norm   0.989       9567  0.0166   805    532
 ```
 
 ### State
@@ -455,17 +442,17 @@ azl %>%
 #> # A tibble: 55 × 3
 #>    state      state_norm     n
 #>    <chr>      <chr>      <int>
-#>  1 Arizona    AZ         25417
-#>  2 California CA         10020
-#>  3 Texas      TX          3589
-#>  4 Colorado   CO          3068
-#>  5 Utah       UT          2783
-#>  6 Washington WA          1459
-#>  7 Illinois   IL          1388
-#>  8 Nevada     NV          1372
-#>  9 Florida    FL          1300
-#> 10 Missouri   MO          1212
-#> # … with 45 more rows
+#>  1 Arizona    AZ         26151
+#>  2 California CA         10199
+#>  3 Texas      TX          3794
+#>  4 Colorado   CO          3226
+#>  5 Utah       UT          3089
+#>  6 Washington WA          1503
+#>  7 Illinois   IL          1432
+#>  8 Nevada     NV          1415
+#>  9 Florida    FL          1379
+#> 10 Missouri   MO          1281
+#> # ℹ 45 more rows
 ```
 
 ``` r
@@ -477,8 +464,8 @@ progress_table(
 #> # A tibble: 2 × 6
 #>   stage           prop_in n_distinct prop_na n_out n_diff
 #>   <chr>             <dbl>      <dbl>   <dbl> <dbl>  <dbl>
-#> 1 azl$state      0.000175         94  0.0321 68415     92
-#> 2 azl$state_norm 1                57  0.0365     0      1
+#> 1 azl$state      0.000169         94  0.0255 71022     92
+#> 2 azl$state_norm 1                57  0.0300     0      1
 ```
 
 ### City
@@ -578,7 +565,7 @@ good_refine <- azl %>%
   )
 ```
 
-    #> # A tibble: 23 × 5
+    #> # A tibble: 24 × 5
     #>    state_norm zip_norm city_swap         city_refine          n
     #>    <chr>      <chr>    <chr>             <chr>            <int>
     #>  1 SC         29406    NORTH CHARLESTON  CHARLESTON           2
@@ -588,10 +575,10 @@ good_refine <- azl %>%
     #>  5 CA         90266    MAHANTTAN BEACH   MANHATTAN BEACH      1
     #>  6 CA         91730    RANCHO CUMCAMOUGA RANCHO CUCAMONGA     1
     #>  7 CA         91745    HACIENDA HGTHS    HACIENDA HEIGHTS     1
-    #>  8 CA         92648    HUNGTINTON BEACH  HUNTINGTON BEACH     1
-    #>  9 CA         92805    ANAHEMIN          ANAHEIM              1
-    #> 10 CA         94577    SAN LEONARDO      SAN LEANDRO          1
-    #> # … with 13 more rows
+    #>  8 CA         92563    MURIETTA          MURRIETA             1
+    #>  9 CA         92648    HUNGTINTON BEACH  HUNTINGTON BEACH     1
+    #> 10 CA         92805    ANAHEMIN          ANAHEIM              1
+    #> # ℹ 14 more rows
 
 Then we can join the refined values back to the database.
 
@@ -609,10 +596,10 @@ misspellings.
 
 | stage                                      | prop_in | n_distinct | prop_na | n_out | n_diff |
 |:-------------------------------------------|--------:|-----------:|--------:|------:|-------:|
-| `str_to_upper(str_remove(azl$city, ",$"))` |   0.957 |       5669 |   0.015 |  3022 |   1691 |
-| `azl$city_norm`                            |   0.967 |       5317 |   0.016 |  2292 |   1296 |
-| `azl$city_swap`                            |   0.986 |       4766 |   0.016 |   972 |    695 |
-| `azl$city_refine`                          |   0.986 |       4744 |   0.016 |   951 |    674 |
+| `str_to_upper(str_remove(azl$city, ",$"))` |   0.959 |       5738 |   0.012 |  2988 |   1676 |
+| `azl$city_norm`                            |   0.968 |       5409 |   0.013 |  2318 |   1308 |
+| `azl$city_swap`                            |   0.986 |       4838 |   0.013 |   981 |    691 |
+| `azl$city_refine`                          |   0.987 |       4815 |   0.013 |   959 |    669 |
 
 You can see how the percentage of valid values increased with each
 stage.
@@ -646,32 +633,32 @@ azl <- azl %>%
 glimpse(sample_n(azl, 1000))
 #> Rows: 1,000
 #> Columns: 20
-#> $ license_number    <int> 57812, 30375, 23154, 44282, 39754, 17860, 29086, 61644, 12532, 13304, 4781, 74376, 50448, 61…
-#> $ first_name        <chr> "David", "BRUCE", "EDMUND", "MARK", "JEFFREY", "MARY", "RICHARD", "Noah", "JAMES", "JOHN", "…
-#> $ last_name         <chr> "Partida", "JUDD", "MAZUR", "LAVEER", "ERICSON", "PARKE", "HEDRICK", "Lewkowitz", "CORSARO",…
-#> $ license_status    <chr> "Cancelled", "Cancelled", "Retired", "Inactive", "Cancelled", "Active", "Inactive", "Cancell…
-#> $ discipline        <chr> "ALARM AGENT", "ARCHITECT", "ARCHITECT", "HOME INSPECTOR", "ARCHITECT", "ENGINEER/SANITARY",…
-#> $ board_action_date <date> 2014-04-21, 1996-07-10, 1989-07-12, 2006-04-12, 2003-08-13, 1984-10-30, 1995-05-10, 2016-02…
-#> $ expiration_date   <date> 2016-04-21, 2011-09-30, NA, NA, 2018-09-30, 2025-06-30, NA, 2019-03-31, 2017-06-30, NA, NA,…
-#> $ address_line_1    <chr> "307 Butterfield Trail", "PIER 9 THE EMBARCADERO", "1529 QUEEN PALM DR", "INSPECT TECHNOLOGI…
-#> $ address_line_2    <chr> NA, NA, NA, "5264 W BOBWHITE WAY", NA, NA, NA, NA, NA, NA, NA, "Suite 250", NA, NA, NA, "#50…
-#> $ city              <chr> "Imperial,", "SAN FRANCISCO,", "EDGEWATER,", "TUCSON,", "Pittsburg,", "Scottsdale,", "LITTLE…
-#> $ state             <chr> "California", "California", "Florida", "Arizona", "Pennsylvania", "Arizona", "Colorado", "Ar…
-#> $ zip               <chr> "92251", "94111", "32132", "85742", "15206", "85254", "801201910", "85012", "85256", "85749"…
-#> $ phone             <chr> "(760) 355-0420", "(415) 421-1680", "(904) 423-2362", "(520) 572-6346", "6022937414", "480-2…
+#> $ license_number    <int> 60007, 32599, 25362, 1377, 46498, 41984, 20095, 31292, 63835, 14867, 15615, 8014, 76566, 526…
+#> $ first_name        <chr> "Gregory", "BRAD", "RONALD", "HAROLD", "COLLIN", "KARA", "KENNETH", "JOHN", "Micah", "JOSEPH…
+#> $ last_name         <chr> "Darveaux", "TAYLOR", "BRENNER", "BOZARTH", "JONES", "YOUNG", "RICHARDS", "ZIEBARTH", "Hanna…
+#> $ license_status    <chr> "Cancelled", "Cancelled", "Retired", "Cancelled", "Active", "Delinquent", "Inactive", "Cance…
+#> $ discipline        <chr> "HOME INSPECTOR", "ENGINEER/CIVIL", "ENGINEER/STRUCTURAL", "ENGINEER/MECHANICAL", "LANDSCAPE…
+#> $ board_action_date <date> 2015-04-28, 1998-06-05, 1991-07-25, 1948-03-04, 2007-06-26, 2004-12-20, 1986-10-14, 1997-04…
+#> $ expiration_date   <date> 2017-04-28, 2013-06-30, NA, 1984-03-31, 2025-06-30, 2023-03-31, NA, 2018-06-30, 2026-03-31,…
+#> $ address_line_1    <chr> "29592 N 69th Drive", "220 ST CHARLES WAY #150", "1989 GRANDVIEW DR", "1501 W PALMAIRE", "15…
+#> $ address_line_2    <chr> NA, NA, NA, NA, "Unit D", NA, NA, NA, NA, NA, NA, NA, "Suite 300", NA, NA, NA, "Suite D", NA…
+#> $ city              <chr> "Peoria,", "YORK,", "VICTORIA,", "PHOENIX,", "Emeryville,", "Phoenix,", "NASHVILLE,", "San D…
+#> $ state             <chr> "Arizona", "Pennsylvania", "British Columbia", "Arizona", "California", "Arizona", "Tennesse…
+#> $ zip               <chr> "85383", "17406", "V8N  2V2", "85021", "94608", "85016", "37221", "92103", "85234", "06604",…
+#> $ phone             <chr> "(602) 881-0139", "(717) 741-6484", "(250) 477-0730", NA, "415-205-5131", NA, "(615) 646-811…
 #> $ na_flag           <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, F…
-#> $ dupe_flag         <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, F…
-#> $ year              <dbl> 2014, 1996, 1989, 2006, 2003, 1984, 1995, 2016, 1979, 1980, 1960, 2021, 2009, 2015, 2020, 20…
-#> $ address_clean     <chr> "307 BUTTERFIELD TRL", "PIER 9 THE EMBARCADERO", "1529 QUEEN PALM DR", "INSPECT TECHNOLOGIES…
-#> $ city_clean        <chr> "IMPERIAL", "SAN FRANCISCO", "EDGEWATER", "TUCSON", "PITTSBURGH", "SCOTTSDALE", "LITTLETON",…
-#> $ state_clean       <chr> "CA", "CA", "FL", "AZ", "PA", "AZ", "CO", "AZ", "AZ", "AZ", "AZ", "AZ", "CA", "GA", "AZ", "C…
-#> $ zip_clean         <chr> "92251", "94111", "32132", "85742", "15206", "85254", "80120", "85012", "85256", "85749", "8…
+#> $ dupe_flag         <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, TRUE, FALSE, FALSE, FA…
+#> $ year              <dbl> 2015, 1998, 1991, 1948, 2007, 2004, 1986, 1997, 2017, 1982, 1983, 1971, 2022, 2011, 2016, 20…
+#> $ address_clean     <chr> "29592 N 69TH DR", "220 ST CHARLES WAY #150", "1989 GRANDVIEW DR", "1501 W PALMAIRE", "1510 …
+#> $ city_clean        <chr> "PEORIA", "YORK", "VICTORIA", "PHOENIX", "EMERYVILLE", "PHOENIX", "NASHVILLE", "SAN DIEGO", …
+#> $ state_clean       <chr> "AZ", "PA", NA, "AZ", "CA", "AZ", "TN", "CA", "AZ", "CT", "AZ", "AZ", "OR", "WI", "UT", "AZ"…
+#> $ zip_clean         <chr> "85383", "17406", "822", "85021", "94608", "85016", "37221", "92103", "85234", "06604", "850…
 ```
 
-1.  There are 70,696 records in the database.
-2.  There are 245 duplicate records in the database.
+1.  There are 72,893 records in the database.
+2.  There are 253 duplicate records in the database.
 3.  The range and distribution of `amount` and `date` seem reasonable.
-4.  There are 34 records missing key variables.
+4.  There are 32 records missing key variables.
 5.  Consistency in geographic data has been improved with
     `campfin::normal_*()`.
 6.  The 4-digit `year` variable has been created with
@@ -694,14 +681,14 @@ clean_dir <- dir_create(here("state", "az", "licenses", "data", "clean"))
 clean_csv <- path(clean_dir, glue("az_licenses_{csv_ts}.csv"))
 clean_rds <- path_ext_set(clean_csv, "rds")
 basename(clean_csv)
-#> [1] "az_licenses_19241010-20220613.csv"
+#> [1] "az_licenses_19241010-20230421.csv"
 ```
 
 ``` r
 write_csv(azl, clean_csv, na = "")
 write_rds(azl, clean_rds, compress = "xz")
 (clean_size <- file_size(clean_csv))
-#> 12.2M
+#> 12.5M
 ```
 
 ## Upload
