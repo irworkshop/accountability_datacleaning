@@ -34,7 +34,7 @@ if (!interactive()) {
 ```
 
 ```{r create-docs-dir, eval=FALSE, echo=FALSE, include=FALSE}
-doc_dir <- fs::dir_create(here::here("az", "expends", "docs"))
+doc_dir <- fs::dir_create(here::here("state","az", "expends", "docs"))
 ```
 
 ## Project

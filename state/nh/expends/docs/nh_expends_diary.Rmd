@@ -1,6 +1,6 @@
 ---
 title: "New Hampshire Expenditures"
-author: "Kiernan Nicholls"
+author: "Kiernan Nicholls & Yanqi Xu"
 date: "`r Sys.time()`"
 output:
   github_document: 
@@ -141,14 +141,14 @@ expenditure will be reported on the next report of receipts and expenditures tha
 ## Import
 
 To download the bulk data format, one needs to navigate to the [Expenditures search page][05]. From
-there, remove "2020 General Election" from the "Election Cycle" drop down menu. Enter "01/01/2010"
+there, remove "2022 General Election" from the "Election Cycle" drop down menu. Enter "01/01/2010"
 in the "Transaction Date Range" input box. After searching with these parameters, download the file
-by clicking the "CSV" button at the bottom of the page.
+by clicking the "CSV" button at the bottom of the page. The data was downloaded on 2023-04-23. The next update should start on 2023-04-24. 
 
-We will automate this using the `RSelenium` package.
+We can automate this using the `RSelenium` package.
 
 ```{r create_raw}
-raw_dir <- here("nh", "expends", "data", "raw")
+raw_dir <- here("state","nh", "expends", "data", "raw")
 dir_create(raw_dir)
 ```
 
@@ -190,10 +190,39 @@ remote_driver$server$stop()
 
 [05]: https://cfs.sos.nh.gov/Public/ExpensesList
 
+```{r read_raw fix, eval=FALSE}
+x <- read_lines(raw_dir %>% dir_ls())  
+x <- str_remove(x,",$")
+for (i in rev(seq_along(x))) {
+    j <- i - 1
+    if (j == 0) {
+      next() # skip first
+    } else if (str_starts(x[i], "\\d+/\\d+/\\d{4}")) {
+      next() # skip if good - starts with a number
+    } else { # merge if bad
+      x[j] <- str_c(x[j], x[i])
+      x <- x[-i] # remove bad
+    }
+}
+```
+
+
+```{r create fix}
+fix_dir <- dir_create(path(dirname(raw_dir), "fix"))
+fix_path <- glue("{fix_dir}/nh_fix_2023.txt")
+```
+
+```{r write fix, eval=FALSE}
+x %>% write_lines(fix_path)
+message(basename(fix_path))
+```
+
 ```{r read_raw}
 nh <- 
-  read_csv(
-    file = glue("{raw_dir}/ViewExpenditureList.csv"),
+  read_delim(
+    file = fix_path,
+    delim = ",",
+    #col_names = nh_col_names,
     col_types = cols(
       .default = col_character(),
       `Transaction Date` = col_date("%m/%d/%Y %H:%M:%S %p"),
@@ -460,7 +489,7 @@ nh <- nh %>%
   mutate(
     payee_address_norm = normal_address(
       address = payee_address_sep,
-      add_abbs = usps_street,
+      abbs = usps_street,
       na_rep = TRUE
     )
   )
@@ -522,8 +551,8 @@ nh <- nh %>%
   mutate(
     payee_city_norm = normal_city(
       city = payee_city_sep,
-      geo_abbs = usps_city,
-      st_abbs = c("NH", "DC"),
+      abbs = usps_city,
+      states = c("NH", "DC"),
       na_rep = TRUE
     )
   ) %>% 
@@ -579,8 +608,11 @@ the `transaction_date` values range from `r min_date` to `r max_date`
 ## Export
 
 ```{r write_clean}
-dir_proc <- here("nh", "expends", "data", "processed")
+dir_proc <- here("state","nh", "expends", "data", "processed")
 dir_create(dir_proc)
+
+
+nh <- nh %>% rename(payee_city_clean = payee_city_swap)
 
 write_csv(
   x = nh,
