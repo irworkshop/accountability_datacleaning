@@ -20,7 +20,7 @@ git clone git@github.com:irworkshop/accountability_datacleaning.git
 
 If you're submitting documentation on a new collection of data, you can [create
 a new branch][br], make all your changes and additions, and then [submit a pull
-request][pr] that somebody on the TAP deem can review and approve.
+request][pr] that somebody on the TAP team can review and approve.
 
 ``` bash
 git branch md_contribs
