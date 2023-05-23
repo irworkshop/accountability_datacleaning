@@ -31,7 +31,7 @@ git checkout md_contribs
 [pr]: https://docs.github.com/en/pull-requests/collaborating-with-pull-requests
 
 When working in R with [RStudio][rstudio], open the `tap.Rproj` file in RStudio.
-This will let you create and edit data documentation using the proper file
+This will allow you create and edit data documentation using the proper file
 hierarchy. Your files should run better and save output to the right location.
 
 [rstudio]: https://www.rstudio.com/
