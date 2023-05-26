@@ -107,7 +107,7 @@ here::i_am("nd/contribs/docs/nd_contribs_diary.Rmd")
 
 ## Source
 
-South Dakota campaign contributions data was obtained by students at
+North Dakota campaign contributions data was obtained by students at
 American University via a state records request.
 
 ## Download
