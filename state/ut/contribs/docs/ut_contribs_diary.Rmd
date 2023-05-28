@@ -817,7 +817,7 @@ Now the file can be saved on disk for upload to the Accountability server.
 
 ```{r clean_dir}
 clean_dir <- dir_create(here("ut", "contribs", "data", "clean"))
-clean_path <- path(clean_dir, "ut_contribs_2000-2023.csv")
+clean_path <- path(clean_dir, "ut_contribs_2000-20230510.csv")
 write_csv(utc, clean_path, na = "")
 (clean_size <- file_size(clean_path))
 ```

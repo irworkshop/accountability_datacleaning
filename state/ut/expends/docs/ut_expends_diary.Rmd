@@ -1,6 +1,6 @@
 ---
 title: "Utah Expenditures"
-author: "Kiernan Nicholls"
+author: "Kiernan Nicholls & Aarushi Sahejpal"
 date: "`r Sys.time()`"
 output:
   github_document: 
@@ -258,12 +258,8 @@ ute <- map(ute, ~mutate(., ENTITY = names(.)[2], .after = 1))
 ute <- map(ute, rename, COMMITTEE = 3)
 # bind all together
 ute <- clean_names(bind_rows(ute))
-ute <- rename_with(ute, str_remove, 5:8, "tran_")
 ```
 
-```{r raw_logical}
-ute <- mutate(ute, across(c(filed, inkind, loan), ~not(is.na(.))))
-```
 
 ```{r echo=FALSE}
 ute <- rename(ute, amount = amt)
@@ -375,7 +371,7 @@ ute %>%
   geom_col(aes(fill = even)) + 
   scale_fill_brewer(palette = "Dark2") +
   scale_y_continuous(labels = comma) +
-  scale_x_continuous(breaks = seq(2000, 2020, by = 2)) +
+  scale_x_continuous(breaks = seq(2000, 2023, by = 2)) +
   theme(legend.position = "bottom") +
   labs(
     title = "Utah Expenditures by Year",
@@ -677,29 +673,13 @@ Now the file can be saved on disk for upload to the Accountability server.
 
 ```{r clean_dir}
 clean_dir <- dir_create(here("ut", "expends", "data", "clean"))
-clean_path <- path(clean_dir, "ut_expends_clean.csv")
+clean_path <- path(clean_dir, "ut_expends_20230510.csv")
 write_csv(ute, clean_path, na = "")
 file_size(clean_path)
 file_encoding(clean_path) %>% 
   mutate(across(path, path.abbrev))
 ```
 
-## Upload
-
-Using the [duckr] R package, we can wrap around the [duck] command line tool to
-upload the file to the IRW server.
-
-[duckr]: https://github.com/kiernann/duckr
-[duck]: https://duck.sh/
-
-```{r clean_upload, eval=FALSE}
-# remotes::install_github("kiernann/duckr")
-s3_dir <- "s3:/publicaccountability/csv/"
-s3_path <- path(s3_dir, basename(clean_path))
-if (require(duckr)) {
-  duckr::duck_upload(clean_path, s3_path)
-}
-```
 
 ## Dictionary
 

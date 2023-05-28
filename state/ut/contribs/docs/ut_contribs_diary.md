@@ -1,7 +1,7 @@
 Utah Contributions
 ================
 Kiernan Nicholls & Aarushi Sahejpal
-Fri Mar 24 10:19:29 2023
+Sun May 28 10:10:15 2023
 
 - <a href="#project" id="toc-project">Project</a>
 - <a href="#objectives" id="toc-objectives">Objectives</a>
@@ -217,12 +217,12 @@ for (yr in rpt_years) {
 }
 ```
 
-We are left with 101 CSV files with data.
+We are left with 102 CSV files with data.
 
 ``` r
 raw_info <- dir_info(raw_dir, glob = "*.csv")
 nrow(raw_info)
-#> [1] 101
+#> [1] 102
 sum(raw_info$size)
 #> 162M
 raw_csv <- raw_info$path
@@ -350,12 +350,12 @@ utc <- utc %>%
 
 ## Explore
 
-There are 729,540 rows of 20 columns. Each record represents a single
+There are 729,542 rows of 20 columns. Each record represents a single
 contribution made from an entity to a political campaign or committee.
 
 ``` r
 glimpse(utc)
-#> Rows: 729,540
+#> Rows: 729,542
 #> Columns: 20
 #> $ filed           <lgl> TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE…
 #> $ entity_name     <chr> "Pharmaceutical Research and Manufacturers of America (PhRMA)", "Mutual Benefit International …
@@ -379,16 +379,15 @@ glimpse(utc)
 #> $ report_year     <int> 2008, 2011, 2011, 2011, 2011, 2011, 2011, 2011, 2011, 2011, 2011, 2011, 2011, 2011, 2011, 2011…
 tail(utc)
 #> # A tibble: 6 × 20
-#>   filed entity…¹ report tran_id tran_…² tran_date  tran_…³ inkind loan  amends name  purpose addre…⁴ addre…⁵ city  state
-#>   <lgl> <chr>    <chr>    <int> <chr>   <date>       <dbl> <lgl>  <lgl> <chr>  <chr> <chr>   <chr>   <chr>   <chr> <chr>
-#> 1 FALSE ZOO ART… Septe… 1208980 Contri… 2023-03-01   1745. FALSE  FALSE <NA>   Salt… <NA>    54 Fin… <NA>    Salt… UT   
-#> 2 FALSE ZOO ART… Septe… 1208983 Contri… 2023-03-01  19077. FALSE  FALSE <NA>   Hale… <NA>    9900 S… <NA>    Sandy UT   
-#> 3 FALSE ZOO ART… Septe… 1208984 Contri… 2023-03-01   2203. FALSE  FALSE <NA>   Utah… <NA>    202 We… <NA>    Salt… UT   
-#> 4 FALSE ZOO ART… Septe… 1209024 Contri… 2023-03-03   1000. FALSE  FALSE <NA>   Wasa… <NA>    824 S … Ste B1… Salt… UT   
-#> 5 FALSE ZOO ART… Septe… 1209202 Contri… 2023-03-06   1188. FALSE  FALSE <NA>   Utah… <NA>    20 S W… <NA>    Salt… UT   
-#> 6 FALSE ZOO ART… Septe… 1209609 Contri… 2023-03-07   2054. FALSE  FALSE <NA>   Salt… <NA>    111 Ea… Suite … Salt… UT   
-#> # … with 4 more variables: zip <chr>, inkind_comments <chr>, entity_type <chr>, report_year <int>, and abbreviated
-#> #   variable names ¹​entity_name, ²​tran_type, ³​tran_amt, ⁴​address1, ⁵​address2
+#>   filed entity_name     report tran_id tran_type tran_date  tran_amt inkind loan  amends name  purpose address1 address2
+#>   <lgl> <chr>           <chr>    <int> <chr>     <date>        <dbl> <lgl>  <lgl> <chr>  <chr> <chr>   <chr>    <chr>   
+#> 1 FALSE ZOO ARTS AND P… Septe… 1208980 Contribu… 2023-03-01    1745. FALSE  FALSE <NA>   Salt… <NA>    54 Finc… <NA>    
+#> 2 FALSE ZOO ARTS AND P… Septe… 1208983 Contribu… 2023-03-01   19077. FALSE  FALSE <NA>   Hale… <NA>    9900 So… <NA>    
+#> 3 FALSE ZOO ARTS AND P… Septe… 1208984 Contribu… 2023-03-01    2203. FALSE  FALSE <NA>   Utah… <NA>    202 Wes… <NA>    
+#> 4 FALSE ZOO ARTS AND P… Septe… 1209024 Contribu… 2023-03-03    1000. FALSE  FALSE <NA>   Wasa… <NA>    824 S 4… Ste B127
+#> 5 FALSE ZOO ARTS AND P… Septe… 1209202 Contribu… 2023-03-06    1188. FALSE  FALSE <NA>   Utah… <NA>    20 S We… <NA>    
+#> 6 FALSE ZOO ARTS AND P… Septe… 1209609 Contribu… 2023-03-07    2054. FALSE  FALSE <NA>   Salt… <NA>    111 Eas… Suite 99
+#> # ℹ 6 more variables: city <chr>, state <chr>, zip <chr>, inkind_comments <chr>, entity_type <chr>, report_year <int>
 ```
 
 We can see that despite data existing since 1998, contributions aren’t
@@ -412,15 +411,15 @@ col_stats(utc, count_na)
 #>  7 tran_amt        <dbl>       0 0       
 #>  8 inkind          <lgl>       0 0       
 #>  9 loan            <lgl>       0 0       
-#> 10 amends          <chr>  728297 0.998   
+#> 10 amends          <chr>  728299 0.998   
 #> 11 name            <chr>     107 0.000147
-#> 12 purpose         <chr>  729429 1.00    
+#> 12 purpose         <chr>  729431 1.00    
 #> 13 address1        <chr>    2799 0.00384 
-#> 14 address2        <chr>  709615 0.973   
+#> 14 address2        <chr>  709617 0.973   
 #> 15 city            <chr>    2055 0.00282 
 #> 16 state           <chr>   24556 0.0337  
 #> 17 zip             <chr>    1351 0.00185 
-#> 18 inkind_comments <chr>  722138 0.990   
+#> 18 inkind_comments <chr>  722140 0.990   
 #> 19 entity_type     <chr>       0 0       
 #> 20 report_year     <int>       0 0
 ```
@@ -455,7 +454,7 @@ utc %>%
 #>  8 2011-05-14 <NA>       0   Utah Dental Association Political Action Committee   
 #>  9 2012-08-17 <NA>       0   A.B.A.T.E. of Utah                                   
 #> 10 2012-01-19 <NA>       0   Associated General Contractors                       
-#> # … with 97 more rows
+#> # ℹ 97 more rows
 ```
 
 ### Duplicates
@@ -489,7 +488,7 @@ utc %>%
 #>  8   24432 2004-06-11 Cain, Camille T.                      500 Karras, Nolan E     
 #>  9   25794 2004-10-07 Aggregate Contributions                25 Aubrey, Johnathan M.
 #> 10   25762 2004-10-07 Aggregate Contributions                25 Aubrey, Johnathan M.
-#> # … with 28,043 more rows
+#> # ℹ 28,043 more rows
 ```
 
 ### Categorical
@@ -502,9 +501,9 @@ col_stats(utc, n_distinct)
 #>  1 filed           <lgl>       2 0.00000274
 #>  2 entity_name     <chr>    2353 0.00323   
 #>  3 report          <chr>      15 0.0000206 
-#>  4 tran_id         <int>  729540 1         
+#>  4 tran_id         <int>  729542 1         
 #>  5 tran_type       <chr>       1 0.00000137
-#>  6 tran_date       <date>   6606 0.00906   
+#>  6 tran_date       <date>   6607 0.00906   
 #>  7 tran_amt        <dbl>   15531 0.0213    
 #>  8 inkind          <lgl>       2 0.00000274
 #>  9 loan            <lgl>       2 0.00000274
@@ -532,7 +531,7 @@ summary(utc$tran_amt)
 #>      Min.   1st Qu.    Median      Mean   3rd Qu.      Max. 
 #>   -7355.0      10.0      25.0     369.2     100.0 1780024.0
 mean(utc$tran_amt <= 0)
-#> [1] 0.002633166
+#> [1] 0.002633159
 ```
 
 These are the records with the minimum and maximum amounts.
@@ -581,7 +580,7 @@ min(utc$tran_date)
 sum(utc$tran_year < 2000)
 #> [1] 0
 max(utc$tran_date)
-#> [1] "2023-03-23"
+#> [1] "2023-05-10"
 sum(utc$tran_date > today())
 #> [1] 0
 ```
@@ -622,19 +621,19 @@ norm_addr <- utc %>%
 ```
 
     #> # A tibble: 228,160 × 3
-    #>    address1                           address2 address_norm                    
-    #>    <chr>                              <chr>    <chr>                           
-    #>  1 <NA>                               <NA>     <NA>                            
-    #>  2 10440 N Central Expwy, Suite #1160 <NA>     10440 N CENTRAL EXPWY SUITE 1160
-    #>  3 36 South State, Suite 900          <NA>     36 SOUTH STATE SUITE 900        
-    #>  4 1014 University Circle             <NA>     1014 UNIVERSITY CIR             
-    #>  5 300 N Hospital Drive               <NA>     300 N HOSPITAL DR               
-    #>  6 5509 W Kinsington Circle           <NA>     5509 W KINSINGTON CIR           
-    #>  7 10183 Loridan Lane                 <NA>     10183 LORIDAN LN                
-    #>  8 6483 Canyon Cove Place             <NA>     6483 CANYON COVE PLACE          
-    #>  9 14727 Woods Landing Ct             <NA>     14727 WOODS LANDING CT          
-    #> 10 1252 Arlington Drive               <NA>     1252 ARLINGTON DR               
-    #> # … with 228,150 more rows
+    #>    address1                           address2 address_norm                     
+    #>    <chr>                              <chr>    <chr>                            
+    #>  1 <NA>                               <NA>     <NA>                             
+    #>  2 10440 N Central Expwy, Suite #1160 <NA>     10440 N CENTRAL EXPWY SUITE #1160
+    #>  3 36 South State, Suite 900          <NA>     36 SOUTH STATE SUITE 900         
+    #>  4 1014 University Circle             <NA>     1014 UNIVERSITY CIR              
+    #>  5 300 N Hospital Drive               <NA>     300 N HOSPITAL DR                
+    #>  6 5509 W Kinsington Circle           <NA>     5509 W KINSINGTON CIR            
+    #>  7 10183 Loridan Lane                 <NA>     10183 LORIDAN LN                 
+    #>  8 6483 Canyon Cove Place             <NA>     6483 CANYON COVE PL              
+    #>  9 14727 Woods Landing Ct             <NA>     14727 WOODS LANDING CT           
+    #> 10 1252 Arlington Drive               <NA>     1252 ARLINGTON DR                
+    #> # ℹ 228,150 more rows
 
 ``` r
 utc <- left_join(utc, norm_addr, by = c("address1", "address2"))
@@ -699,13 +698,13 @@ utc %>%
 #>  4 ca    CA             3
 #>  5 co    CO             2
 #>  6 md    MD             2
-#>  7 ak    AK             1
-#>  8 Co    CO             1
-#>  9 il    IL             1
-#> 10 ma    MA             1
-#> 11 or    OR             1
-#> 12 va    VA             1
-#> 13 Va    VA             1
+#>  7 Co    CO             1
+#>  8 Va    VA             1
+#>  9 ak    AK             1
+#> 10 il    IL             1
+#> 11 ma    MA             1
+#> 12 or    OR             1
+#> 13 va    VA             1
 ```
 
 ``` r
@@ -818,7 +817,7 @@ good_refine <- utc %>%
   )
 ```
 
-    #> # A tibble: 64 × 5
+    #> # A tibble: 69 × 5
     #>    state_norm zip_norm city_swap                 city_refine         n
     #>    <chr>      <chr>    <chr>                     <chr>           <int>
     #>  1 UT         84105    SALT LAKE CITYSLC         SALT LAKE CITY     56
@@ -831,7 +830,7 @@ good_refine <- utc %>%
     #>  8 CO         80113    ENGLEWOOD CO              ENGLEWOOD           2
     #>  9 DE         19850    WILLIMNGTON               WILMINGTON          2
     #> 10 FL         33308    FORT LAUDERDALE FL        FORT LAUDERDALE     2
-    #> # … with 54 more rows
+    #> # ℹ 59 more rows
 
 Then we can join the refined values back to the database.
 
@@ -854,20 +853,20 @@ many_city <- c(valid_city, extra_city)
 utc %>% 
   count(city_refine, sort = TRUE) %>% 
   filter(city_refine %out% many_city)
-#> # A tibble: 1,160 × 2
+#> # A tibble: 1,165 × 2
 #>    city_refine         n
 #>    <chr>           <int>
-#>  1 <NA>             9538
+#>  1 <NA>             9537
 #>  2 ST GEORGE         611
 #>  3 NIBLEY            592
 #>  4 SOUTH SALT LAKE   440
-#>  5 WVC               433
+#>  5 WVC               440
 #>  6 SALT LAKE CIT     422
 #>  7 WEST VALLEY C     343
 #>  8 FARR WEST         321
-#>  9 SLC               295
+#>  9 SLC               297
 #> 10 MOUNTAIN GREEN    238
-#> # … with 1,150 more rows
+#> # ℹ 1,155 more rows
 ```
 
 ``` r
@@ -892,9 +891,9 @@ many_city <- c(many_city, "NIBLEY", "ST GEORGE")
 | stage                    | prop_in | n_distinct | prop_na | n_out | n_diff |
 |:-------------------------|--------:|-----------:|--------:|------:|-------:|
 | `str_to_upper(utc$city)` |   0.909 |      13573 |   0.003 | 66259 |   3581 |
-| `utc$city_norm`          |   0.959 |      12128 |   0.013 | 29329 |   2107 |
-| `utc$city_swap`          |   0.989 |      11263 |   0.013 |  7916 |   1212 |
-| `utc$city_refine`        |   0.992 |      11204 |   0.013 |  6029 |   1153 |
+| `utc$city_norm`          |   0.959 |      12131 |   0.013 | 29646 |   2112 |
+| `utc$city_swap`          |   0.989 |      11272 |   0.013 |  7795 |   1222 |
+| `utc$city_refine`        |   0.992 |      11208 |   0.013 |  5891 |   1158 |
 
 You can see how the percentage of valid values increased with each
 stage.
@@ -931,33 +930,33 @@ glimpse(sample_n(utc, 50))
 #> $ filed           <lgl> TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE…
 #> $ entity_name     <chr> "Vote for West Jordan", "Americans for an Informed Electorate", "Eliason, Steven", "Associated…
 #> $ report          <chr> "General", "September 30th", "Convention", "August 31st", "September 30th", "September 30th", …
-#> $ tran_id         <int> 670412, 822706, 314807, 65715, 819317, 1022102, 1051527, 588323, 689531, 966200, 1162443, 8153…
+#> $ tran_id         <int> 668011, 822706, 317182, 65715, 819317, 1022099, 1051527, 578637, 689531, 966200, 1162443, 8153…
 #> $ tran_type       <chr> "Contribution", "Contribution", "Contribution", "Contribution", "Contribution", "Contribution"…
-#> $ tran_date       <date> 2017-10-10, 2018-08-22, 2012-01-12, 2008-01-01, 2018-08-03, 2020-09-05, 2020-10-15, 2016-08-0…
-#> $ tran_amt        <dbl> 1000.00, 10.00, 400.00, 76.00, 25.00, 35.00, 15.00, 64.64, 25.00, 25.00, 2.00, 25.00, 1.00, 7.…
-#> $ inkind          <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FAL…
-#> $ loan            <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, TRUE, FALSE, FALSE, FALSE, FALSE, FALSE, FALS…
+#> $ tran_date       <date> 2017-10-02, 2018-08-22, 2012-01-01, 2008-01-01, 2018-08-03, 2020-09-05, 2020-10-15, 2016-05-2…
+#> $ tran_amt        <dbl> 33.00, 10.00, 5002.65, 76.00, 25.00, 100.00, 15.00, 200.00, 25.00, 25.00, 2.00, 25.00, 1.00, 7…
+#> $ inkind          <lgl> TRUE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALS…
+#> $ loan            <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FAL…
 #> $ amends          <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
-#> $ name            <chr> "Peterson Development Company, LLC", "JEFFERY PITTS", "Pacificorp", "The Guarantee Company Of …
+#> $ name            <chr> "Anonymous", "JEFFERY PITTS", "2010 Candidate Account - Balance Transfer", "The Guarantee Comp…
 #> $ purpose         <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
-#> $ address1        <chr> "225 South 200 East", "1206 SW 8th Ave", "825 NE Multnomah", "8950 South Sandia Hills Drive #1…
-#> $ address2        <chr> "Suite 200", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
-#> $ city            <chr> "Salt Lake City", "Ontario", "Portland", "Sandy", "Salt Lake City", "SALT LAKE CITY", "Provo",…
-#> $ state           <chr> "UT", "OR", "OR", "UT", "UT", "UT", "UT", "UT", "IN", "UT", "UT", "CA", "UT", "UT", "UT", "UT"…
-#> $ zip             <chr> "84111", "97914", "97232", "84094", "84115", "84109", "84604", "84094", "47805", "84404", "840…
-#> $ inkind_comments <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
+#> $ address1        <chr> "-", "1206 SW 8th Ave", NA, "8950 South Sandia Hills Drive #1149", "1817 S. Main Street, Suite…
+#> $ address2        <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
+#> $ city            <chr> "West Jordan", "Ontario", NA, "Sandy", "Salt Lake City", "Salt  Lake City", "Provo", "woods cr…
+#> $ state           <chr> "UT", "OR", "UT", "UT", "UT", "UT", "UT", "UT", "IN", "UT", "UT", "CA", "UT", "UT", "UT", "UT"…
+#> $ zip             <chr> "84084", "97914", "88888", "84094", "84115", "84102", "84604", "84010", "47805", "84404", "840…
+#> $ inkind_comments <chr> "website service", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
 #> $ entity_type     <chr> "PIC", "PAC", "PCC", "PAC", "PAC", "PCC", "PARTY", "PCC", "PAC", "PARTY", "PAC", "PAC", "PAC",…
 #> $ report_year     <int> 2017, 2018, 2012, 2008, 2018, 2020, 2020, 2016, 2017, 2019, 2022, 2018, 2013, 2015, 2018, 2013…
 #> $ na_flag         <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FAL…
 #> $ dupe_flag       <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FAL…
 #> $ tran_year       <dbl> 2017, 2018, 2012, 2008, 2018, 2020, 2020, 2016, 2017, 2019, 2022, 2018, 2013, 2015, 2018, 2013…
-#> $ address_clean   <chr> "225 SOUTH 200 EAST SUITE 200", "1206 SW 8TH AVE", "825 NE MULTNOMAH", "8950 SOUTH SANDIA HILL…
-#> $ city_clean      <chr> "SALT LAKE CITY", "ONTARIO", "PORTLAND", "SANDY", "SALT LAKE CITY", "SALT LAKE CITY", "PROVO",…
-#> $ state_clean     <chr> "UT", "OR", "OR", "UT", "UT", "UT", "UT", "UT", "IN", "UT", "UT", "CA", "UT", "UT", "UT", "UT"…
-#> $ zip_clean       <chr> "84111", "97914", "97232", "84094", "84115", "84109", "84604", "84094", "47805", "84404", "840…
+#> $ address_clean   <chr> NA, "1206 SW 8TH AVE", NA, "8950 SOUTH SANDIA HILLS DRIVE #1149", "1817 S MAIN STREET SUITE 14…
+#> $ city_clean      <chr> "WEST JORDAN", "ONTARIO", NA, "SANDY", "SALT LAKE CITY", "SALT LAKE CITY", "PROVO", "WOODS CRO…
+#> $ state_clean     <chr> "UT", "OR", "UT", "UT", "UT", "UT", "UT", "UT", "IN", "UT", "UT", "CA", "UT", "UT", "UT", "UT"…
+#> $ zip_clean       <chr> "84084", "97914", NA, "84094", "84115", "84102", "84604", "84010", "47805", "84404", "84005", …
 ```
 
-1.  There are 729,540 records in the database.
+1.  There are 729,542 records in the database.
 2.  There are 28,053 duplicate records in the database.
 3.  The range and distribution of `tran_amt` and `tran_date` seem
     reasonable.
@@ -974,7 +973,7 @@ server.
 
 ``` r
 clean_dir <- dir_create(here("ut", "contribs", "data", "clean"))
-clean_path <- path(clean_dir, "ut_contribs_2000-2023.csv")
+clean_path <- path(clean_dir, "ut_contribs_2000-20230510.csv")
 write_csv(utc, clean_path, na = "")
 (clean_size <- file_size(clean_path))
 #> 154M
