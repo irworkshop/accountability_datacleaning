@@ -1,11 +1,12 @@
 Vermont Expenditures
 ================
 Kiernan Nicholls & Aarushi Sahejpal
-2023-02-26 14:41:14
+2023-05-27 22:27:57
 
 - <a href="#objectives" id="toc-objectives">Objectives</a>
 - <a href="#packages" id="toc-packages">Packages</a>
 - <a href="#data" id="toc-data">Data</a>
+- <a href="#download" id="toc-download">Download</a>
 - <a href="#read" id="toc-read">Read</a>
 - <a href="#explore" id="toc-explore">Explore</a>
 - <a href="#wrangle" id="toc-wrangle">Wrangle</a>
@@ -91,6 +92,14 @@ here::here()
 > 4.  Unreimbursed campaign-related travel expenses, paid for by the
 >     candidate or the candidates spouse.
 
+## Download
+
+Data can be downloaded from the [Vermont Campaign Finance
+System](https://campaignfinance.vermont.gov/). Under the Expenditure
+section, selection a transaction range that starts on Jan 1st, 1975 –
+the earliest day in the digital system – and then till the present day.
+We will save this exported text file locally.
+
 ## Read
 
 ``` r
@@ -104,7 +113,7 @@ has_raw <- !file_exists(raw_csv)
 ```
 
 ``` r
-setwd("/Volumes/TAP/accountability_datacleaning/vt/expends/data/raw")
+setwd("/Volumes/TAP/accountability_datacleaning/state/vt/expends/data/raw")
 raw_csv <- read_csv("ViewExpenditureList.csv")
 ```
 
@@ -135,21 +144,21 @@ glimpse(sample_frac(vt))
 
     #> Rows: 71,724
     #> Columns: 15
-    #> $ id                  <chr> "30600", "5359", "26457", "21655", "42604", "46220", "32571", "35839"…
-    #> $ transaction_date    <date> 2019-10-30, 2022-09-15, 2020-07-01, 2020-10-01, 2018-05-24, 2017-05-…
+    #> $ id                  <chr> "51599", "43652", "50706", "56139", "66402", "30644", "70046", "41251…
+    #> $ transaction_date    <date> 2016-10-06, 2018-03-14, 2016-10-17, 2016-09-14, 2015-12-23, 2019-10-…
     #> $ payee_type          <chr> "BUSINESS/GROUP/ORGANIZATION", "BUSINESS/GROUP/ORGANIZATION", "BUSINE…
-    #> $ payee_name          <chr> NA, "ACLU OF VERMONT", "ZOOM", "IMPERIUM ADVISORS", "CENTRO, INC.", "…
-    #> $ payee_address       <chr> "1 FACEBOOK WAY, MENLO PARK, CA 94025", "PO BOX 277, MONTPELIER , VT …
-    #> $ registrant_name     <chr> "RESCUE VERMONT", "ACLU OF VERMONT PUBLIC QUESTION COMMITTEE", "SULLI…
-    #> $ registrant_type     <chr> "POLITICAL ACTION COMMITTEE", "PUBLIC QUESTION COMMITTEE", "CANDIDATE…
-    #> $ office              <chr> NA, NA, "AUDITOR OF ACCOUNTS", "STATE REPRESENTATIVE - FRANKLIN 6", N…
-    #> $ election_cycle      <chr> "2020 GENERAL", "2022 CONSTITUTIONAL AMENDMENTS (ALL TOWNS)", "2020 G…
-    #> $ reporting_period    <date> 2020-03-15, 2022-10-09, 2020-08-01, 2020-10-15, 2018-07-15, 2017-07-…
+    #> $ payee_name          <chr> "ACTBLUE-VT", "BIG LOTS", "JET SERVICE ENVELOPE COMPANY", "TROIANO, C…
+    #> $ payee_address       <chr> "PO BOX 441146, SOMERVILLE, MA 02144", "1400 US ROUTE 302, BARRE, VT …
+    #> $ registrant_name     <chr> "MCCORMACK, RICHARD J", "HERRING, LUCAS JAMES", "SCOTT, PHIL", "VERMO…
+    #> $ registrant_type     <chr> "CANDIDATE", "CANDIDATE", "CANDIDATE", "POLITICAL ACTION COMMITTEE", …
+    #> $ office              <chr> "STATE SENATE - WINDSOR", "MAYOR -", "GOVERNOR", NA, "ATTORNEY GENERA…
+    #> $ election_cycle      <chr> "2016 GENERAL", "2018 ANNUAL MEETING (ALL TOWNS)", "2016 GENERAL", "2…
+    #> $ reporting_period    <date> 2016-10-15, 2018-03-20, 2016-11-04, 2016-10-01, 2016-03-15, 2020-03-…
     #> $ expenditure_type    <chr> "MONETARY", "MONETARY", "MONETARY", "MONETARY", "MONETARY", "MONETARY…
-    #> $ expenditure_purpose <chr> "MEDIA - ONLINE ADVERTISING", "ADMINISTRATIVE - SALARIES AND WAGES", …
-    #> $ expenditure_amount  <dbl> 607.25, 1146.21, 15.89, 47.00, 12000.00, 1.25, 593.25, 43.67, 19.95, …
-    #> $ public_question     <chr> NA, "PROP 5", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
-    #> $ comments            <chr> ",", "STAFF TIME SPENT ON PROP 5,", ",", ",", ",", "CREDIT CARD PROCE…
+    #> $ expenditure_purpose <chr> "ACTBLUE FEES", "GIFTS", "PRINTING - COPIES", "CONTRIBUTION TO REGIST…
+    #> $ expenditure_amount  <dbl> 2.14, 14.82, 95.29, 700.00, 1539.42, 1.58, 1021.39, 20.00, 1085.79, 2…
+    #> $ public_question     <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
+    #> $ comments            <chr> ",", "THANK YOU CARDS FOR CAMPAIGN VOLUNTEERS; CHECK #1005,", ",", ",…
 
 ### Distinct
 
@@ -349,7 +358,7 @@ vt <- vt %>%
 packageVersion("tidyr")
 ```
 
-    #> [1] '1.2.1'
+    #> [1] '1.3.0'
 
 ``` r
 vt <- vt %>% 
@@ -370,19 +379,19 @@ vt %>%
 ```
 
     #> # A tibble: 12,881 × 2
-    #>    address_sep              address_norm          
-    #>    <chr>                    <chr>                 
-    #>  1 "500A DALTON DRIVE"      500 A DALTON DR       
-    #>  2 "5501 US 4 "             5501 US 4             
-    #>  3 "113 ACORN LANE SUITE 2" 113 ACORN LANE SUITE 2
-    #>  4 "126 STATE STREET"       126 STATE ST          
-    #>  5 "14 JEFFERSON STREET"    14 JEFFERSON ST       
-    #>  6 "1 VERIZON WAY"          1 VERIZON WAY         
-    #>  7 "829 SOUTH STEET"        829 SOUTH STEET       
-    #>  8 "180 FLYNN AVE SUITE 5"  180 FLYNN AVE SUITE 5 
-    #>  9 "48 NO. MAIN STREET"     48 NO MAIN ST         
-    #> 10 "PO BOX 199"             PO BOX 199            
-    #> # … with 12,871 more rows
+    #>    address_sep                        address_norm                     
+    #>    <chr>                              <chr>                            
+    #>  1 800 HASKELL AVENUE                 800 HASKELL AVE                  
+    #>  2 30 COTTAGE RD                      30 COTTAGE RD                    
+    #>  3 82 ECONOMOU RD                     82 ECONOMOU RD                   
+    #>  4 37 PLEASANT STREET                 37 PLEASANT ST                   
+    #>  5 319 RUBY ROAD                      319 RUBY RD                      
+    #>  6 1 ARROW DRIVE                      1 ARROW DR                       
+    #>  7 137 MAPLE ST                       137 MAPLE ST                     
+    #>  8 PO BOX 85                          PO BOX 85                        
+    #>  9 PATCHEN RD                         PATCHEN RD                       
+    #> 10 O'ROURKE MEDIA GRIP MEDIA REPORTER OROURKE MEDIA GRIP MEDIA REPORTER
+    #> # ℹ 12,871 more rows
 
 ### ZIP
 
@@ -528,7 +537,7 @@ vt %>%
   drop_na(city_refine)
 ```
 
-    #> # A tibble: 144 × 5
+    #> # A tibble: 140 × 5
     #>    state_norm zip_norm city_refine        city_match       n
     #>    <chr>      <chr>    <chr>              <chr>        <int>
     #>  1 NJ         07726    "MANALAPAN"        ENGLISHTOWN     52
@@ -541,7 +550,7 @@ vt %>%
     #>  8 VT         05602    "BELIN"            MONTPELIER      16
     #>  9 VT         05303    "WEST BRATTLEBORO" BRATTLEBORO     12
     #> 10 VT         05478    "ST ALBANS CITY"   SAINT ALBANS    11
-    #> # … with 134 more rows
+    #> # ℹ 130 more rows
 
 ``` r
 progress <- progress_table(
@@ -557,8 +566,8 @@ progress$stage <- as_factor(progress$stage)
 
 | stage                                                        | prop_in | n_distinct | prop_na | n_out | n_diff |
 |:-------------------------------------------------------------|--------:|-----------:|--------:|------:|-------:|
-| vt$city_sep | 0.849| 1698| 0.000| 10802| 744| |vt$city_norm  |   0.924 |       1472 |   0.002 |  5422 |    505 |
-| vt$city_swap | 0.992| 1076| 0.024| 541| 115| |vt$city_refine |   0.992 |       1073 |   0.024 |   534 |    112 |
+| vt$city_sep | 0.849| 1698| 0.000| 10802| 744| |vt$city_norm  |   0.924 |       1468 |   0.002 |  5423 |    504 |
+| vt$city_swap | 0.992| 1072| 0.024| 536| 111| |vt$city_refine |   0.992 |       1069 |   0.024 |   529 |    108 |
 
 You can see how the percentage of valid values increased with each
 stage.
@@ -639,7 +648,7 @@ vt <- vt %>%
 ``` r
 vt %>% 
   write_csv(
-    path = glue("{proc_dir}/df_type_clean.csv"),
+    path = glue("{proc_dir}/vt_expends_20230520.csv"),
     na = ""
   )
 ```

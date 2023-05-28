@@ -99,6 +99,12 @@ used in this chapter, expenditure shall not include any of the following:
 > 4. Unreimbursed campaign-related travel expenses, paid for by the candidate or the candidates
 > spouse.
 
+## Download
+
+[cfs]: https://campaignfinance.vermont.gov/
+
+Data can be downloaded from the [Vermont Campaign Finance System][cfs]. Under the Expenditure section, selection a transaction range that starts on Jan 1st, 1975 -- the earliest day in the digital system -- and then till the present day. We will save this exported text file locally.
+
 ## Read
 
 
@@ -113,7 +119,7 @@ has_raw <- !file_exists(raw_csv)
 ```
 
 ```{r}
-setwd("/Volumes/TAP/accountability_datacleaning/vt/expends/data/raw")
+setwd("/Volumes/TAP/accountability_datacleaning/state/vt/expends/data/raw")
 raw_csv <- read_csv("ViewExpenditureList.csv")
 ```
 
@@ -572,7 +578,7 @@ vt <- vt %>%
 ```{r clean_write, eval=FALSE}
 vt %>% 
   write_csv(
-    path = glue("{proc_dir}/df_type_clean.csv"),
+    path = glue("{proc_dir}/vt_expends_20230520.csv"),
     na = ""
   )
 ```
