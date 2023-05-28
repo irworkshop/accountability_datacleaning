@@ -1,7 +1,7 @@
 Vermont Contributions
 ================
 Kiernan Nicholls & Aarushi Sahejpal
-Sat Feb 18 17:10:56 2023
+Sat May 27 22:53:12 2023
 
 - <a href="#project" id="toc-project">Project</a>
 - <a href="#objectives" id="toc-objectives">Objectives</a>
@@ -95,7 +95,9 @@ feature and should be run as such. The project also uses the dynamic
 
 ``` r
 # where does this document knit?
-here::i_am("vt/contribs/docs/vt_contribs_diary.Rmd")
+here::here()
+#> [1] "/Volumes/TAP/accountability_datacleaning"
+setwd("/Volumes/TAP/accountability_datacleaning/state/vt/contribs")
 ```
 
 ## Data
@@ -108,15 +110,14 @@ exported to a CSV file.
 
 ## Download
 
-While [Vermont Campaign Finance
-System](https://campaignfinance.vermont.gov/) indicates that information
-surrounding contributions can be traced back to 1975, the earliest date
-in the system where public information is available is 2014. We will
-save this exported text file locally.
+Data can be downloaded from the [Vermont Campaign Finance
+System](https://campaignfinance.vermont.gov/). Under the Contrubution
+section, select a transaction date range that starts on Jan 1st, 1975 –
+the earliest day in the digital system – and then till the present day.
+We will save this exported text file locally.
 
 ``` r
 raw_dir <- here("vt", "contribs", "data", "raw")
-setwd("/Volumes/TAP/accountability_datacleaning/vt/contribs/data/raw")
 raw_csv <- path(raw_dir, "ViewContributionsList.csv")
 has_raw <- !file_exists(raw_csv)
 ```
@@ -156,7 +157,7 @@ vtc <- read_delim( # 67,591
 ``` r
 problems(vtc)
 #> # A tibble: 0 × 5
-#> # … with 5 variables: row <int>, col <int>, expected <chr>, actual <chr>, file <chr>
+#> # ℹ 5 variables: row <int>, col <int>, expected <chr>, actual <chr>, file <chr>
 ```
 
 To ensure the file was correctly read, we can count the distinct values
@@ -216,18 +217,18 @@ glimpse(vtc)
 #> $ town_state                <chr> "VT", "VT", "VT", "VT", "CA", "VT", "VT", "VT", "VT", "RI", "NY", "VT", "VT", "VT", …
 tail(vtc)
 #> # A tibble: 6 × 16
-#>   transaction…¹ contr…² contr…³ contr…⁴ recei…⁵ recei…⁶ office elect…⁷ reportin…⁸ contr…⁹ amount total…˟ comme…˟ in_ki…˟
-#>   <date>        <chr>   <chr>   <chr>   <chr>   <chr>   <chr>  <chr>   <date>     <chr>    <dbl>   <dbl> <chr>   <chr>  
-#> 1 2014-05-29    Indivi… Lockwo… 73 Tab… Weinbe… Candid… Mayor… 2015 A… 2015-02-01 Moneta…   250     250  <NA>    <NA>   
-#> 2 2014-05-29    Indivi… Kittre… 331 Be… Weinbe… Candid… Mayor… 2015 A… 2015-02-01 Moneta…   250     250  <NA>    <NA>   
-#> 3 2014-05-01    Self    Cisar,… 86 Pin… Cisar,… Candid… State… 2014 G… 2014-10-15 Moneta…   148.   1264. <NA>    <NA>   
-#> 4 2014-02-26    Indivi… Sherwa… 19746 … Weinbe… Candid… Mayor… 2015 A… 2015-02-01 Moneta…  1000    1000  <NA>    <NA>   
-#> 5 2014-02-26    Indivi… Sherwa… 19746 … Weinbe… Candid… Mayor… 2015 A… 2015-02-01 Moneta…  1000    1000  <NA>    <NA>   
-#> 6 2014-01-23    Indivi… Bruhn,… 60 Bar… Weinbe… Candid… Mayor… 2015 A… 2015-02-01 Moneta…   250     250  <NA>    <NA>   
-#> # … with 2 more variables: town_city <chr>, town_state <chr>, and abbreviated variable names ¹​transaction_date,
-#> #   ²​contributor_type, ³​contributor_name, ⁴​contributor_address, ⁵​receiving_registrant, ⁶​receiving_registrant_type,
-#> #   ⁷​election_cycle, ⁸​reporting_period, ⁹​contribution_type, ˟​total_contribution_amount, ˟​comments,
-#> #   ˟​in_kind_sub_category
+#>   transaction_date contributor_type contributor_name   contributor_address   receiving_registrant receiving_registrant…¹
+#>   <date>           <chr>            <chr>              <chr>                 <chr>                <chr>                 
+#> 1 2014-05-29       Individual       Lockwood, Todd R   73 Tabor Place, Sout… Weinberger, Miro     Candidate             
+#> 2 2014-05-29       Individual       Kittredge, Charles 331 Beach Road, Shel… Weinberger, Miro     Candidate             
+#> 3 2014-05-01       Self             Cisar, John        86 Pinecrest Drive, … Cisar, John          Candidate             
+#> 4 2014-02-26       Individual       Sherwat, Harlan    19746 Garrett Highwa… Weinberger, Miro     Candidate             
+#> 5 2014-02-26       Individual       Sherwat, Beverly C 19746 Garrett Highwa… Weinberger, Miro     Candidate             
+#> 6 2014-01-23       Individual       Bruhn, Paul A      60 Bartlett Bay Road… Weinberger, Miro     Candidate             
+#> # ℹ abbreviated name: ¹​receiving_registrant_type
+#> # ℹ 10 more variables: office <chr>, election_cycle <chr>, reporting_period <date>, contribution_type <chr>,
+#> #   amount <dbl>, total_contribution_amount <dbl>, comments <chr>, in_kind_sub_category <chr>, town_city <chr>,
+#> #   town_state <chr>
 ```
 
 ### Missing
@@ -307,7 +308,7 @@ vtc %>%
 #>  8 2014-08-19       Wamble, Louis        100 Morris, Kiah                                      
 #>  9 2014-09-29       Richmond, Douglas    100 Feliciano, Dan                                    
 #> 10 2014-09-29       Richmond, Douglas    100 Feliciano, Dan                                    
-#> # … with 1,454 more rows
+#> # ℹ 1,454 more rows
 ```
 
 ### Categorical
@@ -391,7 +392,7 @@ sum(vtc$transaction_year < 2014)
 max(vtc$transaction_date)
 #> [1] "2023-02-22"
 sum(vtc$transaction_date > today())
-#> [1] 1
+#> [1] 0
 ```
 
 ![](../plots/bar_year-1.png)<!-- -->
@@ -427,7 +428,7 @@ vtc %>%
 #>  8 Anonymous                                         MILTON           VT        
 #>  9 Anonymous                                         Providence       RI        
 #> 10 Anonymous                                         Brooklyn         NY        
-#> # … with 63,935 more rows
+#> # ℹ 63,935 more rows
 ```
 
 However, the city and state values are present in the full contributor
@@ -651,13 +652,14 @@ good_refine <- vtc %>%
   )
 ```
 
-    #> # A tibble: 4 × 5
+    #> # A tibble: 5 × 5
     #>   state_norm zip_norm city_swap        city_refine          n
     #>   <chr>      <chr>    <chr>            <chr>            <int>
-    #> 1 VT         05053    NORTH PROMFET    NORTH POMFRET        1
-    #> 2 VT         05403    SOUTH BURLINGONT SOUTH BURLINGTON     1
-    #> 3 VT         05458    GRAND ISLE RD    GRAND ISLE           1
-    #> 4 VT         05736    RUTLAND CENTER   CENTER RUTLAND       1
+    #> 1 NY         10025    NEW YORKNY       NEW YORK             2
+    #> 2 VT         05053    NORTH PROMFET    NORTH POMFRET        1
+    #> 3 VT         05403    SOUTH BURLINGONT SOUTH BURLINGTON     1
+    #> 4 VT         05458    GRAND ISLE RD    GRAND ISLE           1
+    #> 5 VT         05736    RUTLAND CENTER   CENTER RUTLAND       1
 
 Then we can join the refined values back to the database.
 
@@ -674,20 +676,20 @@ many_city <- c(valid_city, extra_city)
 vtc %>% 
   count(state_norm, city_refine, sort = TRUE) %>% 
   filter(city_refine %out% many_city)
-#> # A tibble: 286 × 3
-#>    state_norm city_refine          n
-#>    <chr>      <chr>            <int>
-#>  1 VT         <NA>               849
-#>  2 <NA>       <NA>               836
-#>  3 VT         WEYBRIDGE          221
-#>  4 VT         GEORGIA            145
-#>  5 VT         PANTON             102
-#>  6 MA         NEEDHAM HEIGHTS     92
-#>  7 VT         ST ALBANS           89
-#>  8 VT         BARRE TOWN          81
-#>  9 VT         WEST BRATTLEBORO    78
-#> 10 VT         FERRISBURGH         76
-#> # … with 276 more rows
+#> # A tibble: 285 × 3
+#>    state_norm city_refine         n
+#>    <chr>      <chr>           <int>
+#>  1 VT         <NA>              849
+#>  2 <NA>       <NA>              836
+#>  3 VT         WEYBRIDGE         221
+#>  4 VT         GEORGIA           145
+#>  5 VT         PANTON            102
+#>  6 MA         NEEDHAM HEIGHTS    92
+#>  7 VT         BARRE TOWN         81
+#>  8 VT         FERRISBURGH        76
+#>  9 VT         ST ALBANS          76
+#> 10 VT         WEATHERSFIELD      73
+#> # ℹ 275 more rows
 ```
 
 ``` r
@@ -699,9 +701,9 @@ many_city <- c(many_city, "WEYBRIDGE", "GEORGIA")
 | stage                        | prop_in | n_distinct | prop_na | n_out | n_diff |
 |:-----------------------------|--------:|-----------:|--------:|------:|-------:|
 | `str_to_upper(vtc$city_sep)` |   0.926 |       2530 |   0.018 |  6497 |    652 |
-| `vtc$city_norm`              |   0.948 |       2350 |   0.019 |  4558 |    460 |
-| `vtc$city_swap`              |   0.981 |       2167 |   0.019 |  1661 |    265 |
-| `vtc$city_refine`            |   0.981 |       2163 |   0.019 |  1657 |    261 |
+| `vtc$city_norm`              |   0.948 |       2356 |   0.019 |  4584 |    466 |
+| `vtc$city_swap`              |   0.981 |       2167 |   0.019 |  1670 |    265 |
+| `vtc$city_refine`            |   0.981 |       2162 |   0.019 |  1664 |    260 |
 
 You can see how the percentage of valid values increased with each
 stage.
@@ -776,7 +778,7 @@ server.
 
 ``` r
 clean_dir <- dir_create(here("vt", "contribs", "data", "clean"))
-clean_path <- path(clean_dir, "vt_contribs_clean.csv")
+clean_path <- path(clean_dir, "vt_contribs_20241116.csv")
 write_csv(vtc, clean_path, na = "")
 (clean_size <- file_size(clean_path))
 #> 20.4M

@@ -100,7 +100,8 @@ paths relative to _your_ machine.
 
 ```{r where_here}
 # where does this document knit?
-here::i_am("vt/contribs/docs/vt_contribs_diary.Rmd")
+here::here()
+setwd("/Volumes/TAP/accountability_datacleaning/state/vt/contribs")
 ```
 
 [tap]: https://github.com/irworkshop/accountability_datacleaning
@@ -117,16 +118,14 @@ run by the Secretary of State's Elections Division. Contributions can be
 
 ## Download
 
-While [Vermont Campaign Finance System][cfs] indicates that information surrounding contributions can be traced back to 1975, the earliest date in the system where public information is available is 2014. We will save this exported text file locally.
+Data can be downloaded from the [Vermont Campaign Finance System][cfs]. Under the Contrubution section, select a transaction date range that starts on Jan 1st, 1975 -- the earliest day in the digital system -- and then till the present day. We will save this exported text file locally.
 
 ```{r raw_dir}
 raw_dir <- here("vt", "contribs", "data", "raw")
 raw_csv <- path(raw_dir, "ViewContributionsList.csv")
 has_raw <- !file_exists(raw_csv)
 ```
-```{r}
-raw_csv <- read_csv("ViewContributionsList.csv")
-```
+
 
 ```{r}
 x <- read_lines(raw_csv)
@@ -652,7 +651,7 @@ Now the file can be saved on disk for upload to the Accountability server.
 
 ```{r clean_dir}
 clean_dir <- dir_create(here("vt", "contribs", "data", "clean"))
-clean_path <- path(clean_dir, "vt_contribs_clean.csv")
+clean_path <- path(clean_dir, "vt_contribs_20241116.csv")
 write_csv(vtc, clean_path, na = "")
 (clean_size <- file_size(clean_path))
 ```
