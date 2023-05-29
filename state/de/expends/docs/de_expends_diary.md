@@ -1,7 +1,7 @@
 Delaware Expenditures
 ================
 Kiernan Nicholls & Aarushi Sahejpal
-2023-03-25 00:34:08
+2023-05-29 10:33:23
 
 - <a href="#project" id="toc-project">Project</a>
 - <a href="#objectives" id="toc-objectives">Objectives</a>
@@ -220,7 +220,7 @@ count(dee, `Fixed Asset`)
 #> # A tibble: 2 × 2
 #>   `Fixed Asset`      n
 #>   <chr>          <int>
-#> 1 No            175728
+#> 1 No            175802
 #> 2 Yes              117
 ```
 
@@ -245,7 +245,7 @@ dee <- dee %>%
 
 ``` r
 glimpse(dee)
-#> Rows: 175,845
+#> Rows: 175,919
 #> Columns: 16
 #> $ date        <date> 2012-08-15, 2011-11-01, 2011-11-19, 2011-12-08, 2011-12-10, 2011-12-29, 2012…
 #> $ name        <chr> "USPS", "Vista Print", "Caleeob Watson", "Fast Signs", "Pal", "Charles Potter…
@@ -265,16 +265,15 @@ glimpse(dee)
 #> $ fixed_asset <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, …
 tail(dee)
 #> # A tibble: 6 × 16
-#>   date       name   addr1 addr2 city  state zip   type  amount cf_id commi…¹ categ…² purpose method
-#>   <date>     <chr>  <chr> <chr> <chr> <chr> <chr> <chr>  <dbl> <chr> <chr>   <chr>   <chr>   <chr> 
-#> 1 2022-04-05 NGP V… 1445… <NA>  Wash… DC    20005 Busi…    150 0100… People… Other … Other   Debit…
-#> 2 2022-06-13 NGP V… 1445… <NA>  Wash… DC    20005 Busi…    150 0100… People… Other … Other   Debit…
-#> 3 2022-07-05 NGP V… 1445… <NA>  Wash… DC    20005 Busi…    150 0100… People… Other … Other   Debit…
-#> 4 2022-08-04 NGP V… 1445… <NA>  Wash… DC    20005 Busi…    150 0100… People… Other … Other   Debit…
-#> 5 2022-09-01 NGP V… 1445… <NA>  Wash… DC    20005 Busi…    150 0100… People… Other … Other   Debit…
-#> 6 2022-09-30 NGP V… 1445… <NA>  Wash… DC    20005 Busi…    150 0100… People… Other … Other   Debit…
-#> # … with 2 more variables: period <chr>, fixed_asset <lgl>, and abbreviated variable names
-#> #   ¹​committee, ²​category
+#>   date       name    addr1    addr2 city  state zip   type  amount cf_id committee category purpose
+#>   <date>     <chr>   <chr>    <chr> <chr> <chr> <chr> <chr>  <dbl> <chr> <chr>     <chr>    <chr>  
+#> 1 2022-04-05 NGP VAN 1445 Ne… <NA>  Wash… DC    20005 Busi…    150 0100… People f… Other E… Other  
+#> 2 2022-06-13 NGP VAN 1445 Ne… <NA>  Wash… DC    20005 Busi…    150 0100… People f… Other E… Other  
+#> 3 2022-07-05 NGP VAN 1445 Ne… <NA>  Wash… DC    20005 Busi…    150 0100… People f… Other E… Other  
+#> 4 2022-08-04 NGP VAN 1445 Ne… <NA>  Wash… DC    20005 Busi…    150 0100… People f… Other E… Other  
+#> 5 2022-09-01 NGP VAN 1445 Ne… <NA>  Wash… DC    20005 Busi…    150 0100… People f… Other E… Other  
+#> 6 2022-09-30 NGP VAN 1445 Ne… <NA>  Wash… DC    20005 Busi…    150 0100… People f… Other E… Other  
+#> # ℹ 3 more variables: method <chr>, period <chr>, fixed_asset <lgl>
 ```
 
 ### Missing
@@ -287,18 +286,18 @@ col_stats(dee, count_na)
 #>    col         class       n         p
 #>    <chr>       <chr>   <int>     <dbl>
 #>  1 date        <date>      0 0        
-#>  2 name        <chr>    6259 0.0356   
-#>  3 addr1       <chr>    7966 0.0453   
-#>  4 addr2       <chr>  167544 0.953    
-#>  5 city        <chr>   19736 0.112    
-#>  6 state       <chr>    6857 0.0390   
-#>  7 zip         <chr>   22005 0.125    
+#>  2 name        <chr>    6265 0.0356   
+#>  3 addr1       <chr>    7972 0.0453   
+#>  4 addr2       <chr>  167616 0.953    
+#>  5 city        <chr>   19742 0.112    
+#>  6 state       <chr>    6863 0.0390   
+#>  7 zip         <chr>   22011 0.125    
 #>  8 type        <chr>       6 0.0000341
 #>  9 amount      <dbl>       0 0        
 #> 10 cf_id       <chr>       2 0.0000114
 #> 11 committee   <chr>       0 0        
 #> 12 category    <chr>       0 0        
-#> 13 purpose     <chr>    8042 0.0457   
+#> 13 purpose     <chr>    8060 0.0458   
 #> 14 method      <chr>   68171 0.388    
 #> 15 period      <chr>       0 0        
 #> 16 fixed_asset <lgl>       0 0
@@ -317,7 +316,7 @@ percent(mean(dee$na_flag), 0.1)
 dee %>% 
   filter(na_flag) %>% 
   select(date, name, amount, committee)
-#> # A tibble: 6,259 × 4
+#> # A tibble: 6,265 × 4
 #>    date       name  amount committee                                                            
 #>    <date>     <chr>  <dbl> <chr>                                                                
 #>  1 2017-10-19 <NA>   100   Friends of Melanie George                                            
@@ -330,7 +329,7 @@ dee %>%
 #>  8 2017-03-22 <NA>    14.2 Progressive Democrats for Delaware  Inc.                             
 #>  9 2017-01-25 <NA>    60   Friends of Rich Collins                                              
 #> 10 2017-03-31 <NA>    12   Friends of Rich Collins                                              
-#> # … with 6,249 more rows
+#> # ℹ 6,255 more rows
 ```
 
 All of these missing *key* values are in the `name` variable.
@@ -352,7 +351,7 @@ percent(mean(dee$dupe_flag), 0.1)
 dee %>% 
   filter(dupe_flag) %>% 
   select(date, name, amount, committee)
-#> # A tibble: 4,717 × 4
+#> # A tibble: 4,730 × 4
 #>    date       name                                   amount committee                       
 #>    <date>     <chr>                                   <dbl> <chr>                           
 #>  1 2017-06-12 Democrat Legislative Campaign Committe 125    Friends of Quinn Johnson        
@@ -365,7 +364,7 @@ dee %>%
 #>  8 2017-02-01 RallyPiryx  Inc.                        10.4  Kent County Republican Committee
 #>  9 2017-02-01 RallyPiryx  Inc.                         5.18 Kent County Republican Committee
 #> 10 2017-02-08 RallyPiryx  Inc.                         5.18 Kent County Republican Committee
-#> # … with 4,707 more rows
+#> # ℹ 4,720 more rows
 ```
 
 ### Categorical
@@ -375,22 +374,22 @@ col_stats(dee, n_distinct)
 #> # A tibble: 18 × 4
 #>    col         class      n          p
 #>    <chr>       <chr>  <int>      <dbl>
-#>  1 date        <date>  6802 0.0387    
-#>  2 name        <chr>  36375 0.207     
-#>  3 addr1       <chr>  39080 0.222     
-#>  4 addr2       <chr>   1278 0.00727   
+#>  1 date        <date>  6832 0.0388    
+#>  2 name        <chr>  36385 0.207     
+#>  3 addr1       <chr>  39093 0.222     
+#>  4 addr2       <chr>   1278 0.00726   
 #>  5 city        <chr>   3679 0.0209    
 #>  6 state       <chr>     80 0.000455  
-#>  7 zip         <chr>   4981 0.0283    
+#>  7 zip         <chr>   4985 0.0283    
 #>  8 type        <chr>     16 0.0000910 
-#>  9 amount      <dbl>  32400 0.184     
-#> 10 cf_id       <chr>   1738 0.00988   
-#> 11 committee   <chr>   1729 0.00983   
+#>  9 amount      <dbl>  32417 0.184     
+#> 10 cf_id       <chr>   1741 0.00990   
+#> 11 committee   <chr>   1731 0.00984   
 #> 12 category    <chr>     24 0.000136  
 #> 13 purpose     <chr>     88 0.000500  
 #> 14 method      <chr>     13 0.0000739 
-#> 15 period      <chr>    410 0.00233   
-#> 16 fixed_asset <lgl>      1 0.00000569
+#> 15 period      <chr>    416 0.00236   
+#> 16 fixed_asset <lgl>      1 0.00000568
 #> 17 na_flag     <lgl>      2 0.0000114 
 #> 18 dupe_flag   <lgl>      2 0.0000114
 ```
@@ -426,7 +425,7 @@ summary(dee$amount)
 #>    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
 #>  -16811      51     190    1190     507 7558376
 mean(dee$amount <= 0)
-#> [1] 0.02925872
+#> [1] 0.02928052
 ```
 
 ![](../plots/hist_amount-1.png)<!-- -->
@@ -448,7 +447,7 @@ min(dee$date)
 sum(dee$year < 2000)
 #> [1] 0
 max(dee$date)
-#> [1] "2023-02-15"
+#> [1] "2023-05-16"
 sum(dee$date > today())
 #> [1] 0
 ```
@@ -493,18 +492,18 @@ dee %>%
   distinct() %>% 
   sample_n(10)
 #> # A tibble: 10 × 3
-#>    addr1                               addr2 addr_norm                       
-#>    <chr>                               <chr> <chr>                           
-#>  1 20980 DuPont                        <NA>  20980 DUPONT                    
-#>  2 3 par court                         <NA>  3 PAR CT                        
-#>  3 9349 Old Furnace Road               <NA>  9349 OLD FURNACE RD             
-#>  4 PRIVATE                             <NA>  PRIVATE                         
-#>  5 1 Whittington Way                   <NA>  1 WHITTINGTON WAY               
-#>  6 3 Bala Plaza West                   #125  3 BALA PLAZA WEST 125           
-#>  7 9A Trolley Square    Wilmington  DE <NA>  9 A TROLLEY SQUARE WILMINGTON DE
-#>  8 323 W. Main Street                  <NA>  323 W MAIN ST                   
-#>  9 4425 N Market St                    <NA>  4425 N MARKET ST                
-#> 10 P.O. Box 182564                     <NA>  PO BOX 182564
+#>    addr1                               addr2 addr_norm                      
+#>    <chr>                               <chr> <chr>                          
+#>  1 PO Box 624 Georgetown               <NA>  PO BOX 624 GEORGETOWN          
+#>  2 43 Cape Henlopen Drive              <NA>  43 CAPE HENLOPEN DR            
+#>  3 1515 Spring                         <NA>  1515 SPG                       
+#>  4 2818 Mayfield Ave                   <NA>  2818 MAYFIELD AVE              
+#>  5 PO Box 1729                         <NA>  PO BOX 1729                    
+#>  6 123 West Pine St                    <NA>  123 WEST PINE ST               
+#>  7 2311 Baynard Blvd    Wilmington  DE <NA>  2311 BAYNARD BLVD WILMINGTON DE
+#>  8 323 W. Main Street                  <NA>  323 W MAIN ST                  
+#>  9 4425 N Market St                    <NA>  4425 N MARKET ST               
+#> 10 115 Joel Hill                       <NA>  115 JOEL HL
 ```
 
 ### ZIP
@@ -532,8 +531,8 @@ progress_table(
 #> # A tibble: 2 × 6
 #>   stage        prop_in n_distinct prop_na n_out n_diff
 #>   <chr>          <dbl>      <dbl>   <dbl> <dbl>  <dbl>
-#> 1 dee$zip        0.592       4981   0.125 62805   3260
-#> 2 dee$zip_norm   0.996       2955   0.126   677    259
+#> 1 dee$zip        0.591       4985   0.125 62872   3264
+#> 2 dee$zip_norm   0.996       2958   0.126   677    259
 ```
 
 ### State
@@ -570,7 +569,7 @@ dee %>%
 #>  8 Tx    TX            12
 #>  9 Ca    CA            11
 #> 10 il    IL             8
-#> # … with 18 more rows
+#> # ℹ 18 more rows
 ```
 
 ``` r
@@ -675,8 +674,7 @@ good_refine <- dee %>%
 ```
 
     #> # A tibble: 0 × 5
-    #> # … with 5 variables: state_norm <chr>, zip_norm <chr>, city_swap <chr>, city_refine <chr>,
-    #> #   n <int>
+    #> # ℹ 5 variables: state_norm <chr>, zip_norm <chr>, city_swap <chr>, city_refine <chr>, n <int>
 
 Then we can join the refined values back to the database.
 
@@ -694,20 +692,20 @@ dee %>%
   filter(city_refine %out% many_city) %>% 
   count(city_refine, state_norm, sort = TRUE) %>% 
   drop_na()
-#> # A tibble: 355 × 3
+#> # A tibble: 357 × 3
 #>    city_refine state_norm     n
 #>    <chr>       <chr>      <int>
 #>  1 WILM        DE           481
 #>  2 PHILA       DE           106
 #>  3 PA          DE            69
 #>  4 VIEW        DE            67
-#>  5 DC          DE            41
+#>  5 DC          DE            44
 #>  6 ST          DE            29
 #>  7 MD          DE            27
 #>  8 NECK        DE            27
 #>  9 COUNTY      DE            22
 #> 10 RD          DE            21
-#> # … with 345 more rows
+#> # ℹ 347 more rows
 ```
 
 ``` r
@@ -724,8 +722,8 @@ many_city <- c(many_city, "DEWEY BEACH", "LONG NECK")
 
 | stage                                                                        | prop_in | n_distinct | prop_na | n_out | n_diff |
 |:-----------------------------------------------------------------------------|--------:|-----------:|--------:|------:|-------:|
-| str_to_upper(dee$city_raw) | 0.917| 3221| 0.112| 13006| 1705| |dee$city_norm |   0.929 |       2700 |   0.117 | 11040 |   1170 |
-| dee$city_swap | 0.989| 1809| 0.117| 1672| 326| |dee$city_refine              |   0.992 |       1808 |   0.117 |  1191 |    325 |
+| str_to_upper(dee$city_raw) | 0.917| 3221| 0.112| 13008| 1705| |dee$city_norm |   0.928 |       2709 |   0.117 | 11176 |   1180 |
+| dee$city_swap | 0.989| 1810| 0.117| 1678| 327| |dee$city_refine              |   0.992 |       1809 |   0.117 |  1197 |    326 |
 
 You can see how the percentage of valid values increased with each
 stage.
@@ -758,35 +756,35 @@ dee <- dee %>%
 glimpse(sample_n(dee, 20))
 #> Rows: 20
 #> Columns: 23
-#> $ date        <date> 2018-07-29, 2022-02-15, 2010-09-27, 2019-12-06, 2009-02-16, 2020-10-13, 2021…
-#> $ name        <chr> "The Writer's Block", "New Castle County Democratic Committee", "Town of Brid…
-#> $ addr1       <chr> "1203 Glenside Ave", "136 Peoples Way", "Bridgeville", "235 Drawyers Drive", …
-#> $ addr2       <chr> NA, NA, NA, NA, NA, NA, NA, "Suite 200", NA, NA, NA, "Suite 219", NA, NA, NA,…
-#> $ city        <chr> "Wilmington", "Hockessin", NA, "Middletown", "Bala Cynwyd", NA, "Wilmington",…
-#> $ state       <chr> "DE", "DE", "DE", "DE", "PA", NA, "DE", "MA", "DE", "DE", "DE", "AZ", "DE", "…
-#> $ zip         <chr> "19803-3303", "19707-", NA, "19709", "19004", NA, "19702-", "02458-", "19805"…
-#> $ type        <chr> "Business/Group/Organization", "Political Committee", "Business/Group/Organiz…
-#> $ amount      <dbl> 940.00, 4047.00, 150.00, 80.00, 1000.00, 12.89, 600.00, 150.00, 150.00, 240.0…
-#> $ cf_id       <chr> "01004420", "01004147", "01002077", "03000712", "02000527", "01001285", "0200…
-#> $ committee   <chr> "Friends of Jeff Olmstead", "Scott Phillips for Sheriff", "Booth for Senate",…
-#> $ category    <chr> "Media", "Other Expenses", "Other Expenses", "In-Kind", "Other Expenses", "To…
-#> $ purpose     <chr> "Media - Website Development", "Other", "Data Conversion", "Fundraiser - Auct…
-#> $ method      <chr> "Check", "Check", NA, "Check", NA, "Debit Card", "Check", "Check", "Debit Car…
+#> $ date        <date> 2018-09-29, 2022-02-25, 2010-09-09, 2019-12-12, 2009-09-02, 2020-10-06, 2021…
+#> $ name        <chr> "Jesse T. McVay", NA, "Mail Movers", "Paul Johnston", "PNC BANK", "U.S. Posta…
+#> $ addr1       <chr> "72 Sackarackin Ave", NA, "PO Box 2494", "218 Brick Store Landing Road", "640…
+#> $ addr2       <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, "35016 Midway Outlet Dr Ste 327", NA, "Su…
+#> $ city        <chr> "Dover", NA, "Salisbury", "Smyrna", "Street", "Hockessin", "Wilmington", "Dov…
+#> $ state       <chr> "DE", NA, "MD", "DE", "DE", "DE", "DE", "DE", "DE", "DE", "DE", "AZ", "DE", "…
+#> $ zip         <chr> "19901", NA, "21802", "19977-", "19901", "19707-", "19810", "19904-", "19808"…
+#> $ type        <chr> "Individual", "Total of Expenditures not exceeding $100", "Business/Group/Org…
+#> $ amount      <dbl> 60.00, 26.00, 1435.67, 34.98, 62.90, 110.00, 600.00, 300.00, 14.78, 1790.00, …
+#> $ cf_id       <chr> "03000632", "01001340", "01002077", "03000712", "01001571", "01001285", "0200…
+#> $ committee   <chr> "Libertarian Party of Delaware", "Friends to Elect Danny Short", "Booth for S…
+#> $ category    <chr> "In-Kind", "Total of Expenditures not exceeding $100", "Printing and Campaign…
+#> $ purpose     <chr> "Meeting Expenses", "Total of Expenditures not exceeding $100", "Data Convers…
+#> $ method      <chr> "Credit Card", "Check", NA, "Check", NA, "Debit Card", "Check", "Check", "Deb…
 #> $ period      <chr> "2018 30 Day General", "2022 30 Day General", "2010 30 Day General", "2019 An…
 #> $ fixed_asset <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, …
-#> $ na_flag     <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, TRUE, FALSE, FALSE, FALSE, FALSE, FALSE, F…
+#> $ na_flag     <lgl> FALSE, TRUE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, F…
 #> $ dupe_flag   <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, …
-#> $ year        <dbl> 2018, 2022, 2010, 2019, 2009, 2020, 2021, 2015, 2018, 2007, 2013, 2020, 2013,…
-#> $ addr_clean  <chr> "1203 GLENSIDE AVE", "136 PEOPLES WAY", "BRIDGEVILLE", "235 DRAWYERS DR", "ON…
-#> $ zip_clean   <chr> "19803", "19707", NA, "19709", "19004", NA, "19702", "02458", "19805", "19973…
-#> $ state_clean <chr> "DE", "DE", "DE", "DE", "PA", NA, "DE", "MA", "DE", "DE", "DE", "AZ", "DE", "…
-#> $ city_clean  <chr> "WILMINGTON", "HOCKESSIN", NA, "MIDDLETOWN", "BALA CYNWYD", NA, "NEWARK", "NE…
+#> $ year        <dbl> 2018, 2022, 2010, 2019, 2009, 2020, 2021, 2016, 2018, 2013, 2008, 2020, 2013,…
+#> $ addr_clean  <chr> "72 SACKARACKIN AVE", NA, "PO BOX 2494", "218 BRICK STORE LANDING RD", "640 S…
+#> $ zip_clean   <chr> "19901", NA, "21802", "19977", "19901", "19707", "19810", "19904", "19808", "…
+#> $ state_clean <chr> "DE", NA, "MD", "DE", "DE", "DE", "DE", "DE", "DE", "DE", "DE", "AZ", "DE", "…
+#> $ city_clean  <chr> "DOVER", NA, "SALISBURY", "SMYRNA", "DOVER", "HOCKESSIN", "WILMINGTON", "DOVE…
 ```
 
-1.  There are 175,845 records in the database.
-2.  There are 4,717 duplicate records in the database.
+1.  There are 175,919 records in the database.
+2.  There are 4,730 duplicate records in the database.
 3.  The range and distribution of `amount` and `date` seem reasonable.
-4.  There are 6,259 records missing key variables.
+4.  There are 6,265 records missing key variables.
 5.  Consistency in geographic data has been improved with
     `campfin::normal_*()`.
 6.  The 4-digit `year` variable has been created with
@@ -799,7 +797,7 @@ server.
 
 ``` r
 clean_dir <- dir_create(here("de", "expends", "data", "clean"))
-clean_path <- path(clean_dir, "de_expends_clean.csv")
+clean_path <- path(clean_dir, "de_expends_20230516.csv")
 write_csv(dee, clean_path, na = "")
 file_size(clean_path)
 #> 42.5M
@@ -807,7 +805,7 @@ file_encoding(clean_path)
 #> # A tibble: 1 × 3
 #>   path                                                                                mime  charset
 #>   <fs::path>                                                                          <chr> <chr>  
-#> 1 /Volumes/TAP/accountability_datacleaning/de/expends/data/clean/de_expends_clean.csv <NA>  <NA>
+#> 1 …umes/TAP/accountability_datacleaning/de/expends/data/clean/de_expends_20230516.csv <NA>  <NA>
 ```
 
 ## Upload
