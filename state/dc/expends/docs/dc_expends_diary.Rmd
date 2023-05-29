@@ -113,7 +113,7 @@ paths relative to _your_ machine.
 
 ```{r where-here}
 # where does this document knit?
-here::i_am("dc/expends/docs/dc_expends_diary.Rmd")
+here::here
 ```
 
 [tap]: https://github.com/irworkshop/accountability_datacleaning
@@ -170,7 +170,7 @@ read_html("https://efiling.ocf.dc.gov/ContributionExpenditure") %>%
 ```{r raw-info, echo=FALSE}
 file_info(raw_csv) %>% 
   select(path, size) %>% 
-  mutate(path = dc_types) %>% 
+  mutate(path = dc_types2) %>% 
   kable(col.names = c("File Type", "File Size"))
 ```
 
