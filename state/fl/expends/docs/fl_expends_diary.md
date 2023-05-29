@@ -1,7 +1,7 @@
 Florida Expenditures
 ================
 Kiernan Nicholls & Aarushi Sahejpal
-Sat Apr 29 17:05:28 2023
+Mon May 29 10:59:03 2023
 
 - <a href="#project" id="toc-project">Project</a>
 - <a href="#objectives" id="toc-objectives">Objectives</a>
@@ -263,7 +263,7 @@ and then manually combine any of those split lines.
 ``` r
 fll <- read_lines(raw_tsv)
 length(fll)
-#> [1] 1252735
+#> [1] 1255626
 fl_head <- fll[1] # save header
 fll <- fll[-1] # remove header
 ```
@@ -309,9 +309,9 @@ tmp_tsv <- file_temp(ext = "tsv")
 write_lines(x = c(fl_head, fll), file = tmp_tsv)
 ```
 
-    #>           used (Mb) gc trigger  (Mb) limit (Mb) max used (Mb)
-    #> Ncells 1232053 65.8    4297061 229.5         NA  1232053 65.8
-    #> Vcells 3084216 23.6   28514414 217.6     102400  3084216 23.6
+    #>           used (Mb) gc trigger (Mb) limit (Mb) max used (Mb)
+    #> Ncells 1232053 65.8    4305204  230         NA  1232053 65.8
+    #> Vcells 3084216 23.6   28570116  218     102400  3084216 23.6
 
 ## Read
 
@@ -338,13 +338,13 @@ fle <- fle %>%
 
 ## Explore
 
-There are 1,252,734 rows of 8 columns. Each record represents a single
+There are 1,255,625 rows of 8 columns. Each record represents a single
 expenditure made by a political campaign to an outside vendor for goods
 or services.
 
 ``` r
 glimpse(fle)
-#> Rows: 1,252,734
+#> Rows: 1,255,625
 #> Columns: 8
 #> $ comm_name      <chr> "Ackerman, Paul J (REP)(STR)", "Adkins, Janet H. (REP)(STR)", "Florida Justice PAC (CCE)", "Cit…
 #> $ date           <date> 2008-01-01, 2008-01-01, 2008-01-01, 2008-01-01, 2008-01-01, 2008-01-01, 2008-01-01, 2008-01-01…
@@ -375,14 +375,14 @@ col_stats(fle, count_na)
 #> # A tibble: 8 × 4
 #>   col            class      n           p
 #>   <chr>          <chr>  <int>       <dbl>
-#> 1 comm_name      <chr>      1 0.000000798
+#> 1 comm_name      <chr>      1 0.000000796
 #> 2 date           <date>     4 0.00000319 
 #> 3 amount         <dbl>      4 0.00000319 
-#> 4 payee_name     <chr>     59 0.0000471  
-#> 5 address        <chr>   1108 0.000884   
-#> 6 city_state_zip <chr>      9 0.00000718 
-#> 7 purpose        <chr>    324 0.000259   
-#> 8 type           <chr>      9 0.00000718
+#> 4 payee_name     <chr>     60 0.0000478  
+#> 5 address        <chr>   1110 0.000884   
+#> 6 city_state_zip <chr>      9 0.00000717 
+#> 7 purpose        <chr>    325 0.000259   
+#> 8 type           <chr>      9 0.00000717
 ```
 
 We can flag any record missing a key variable needed to identify a
@@ -392,7 +392,7 @@ transaction.
 key_vars <- c("date", "payee_name", "amount", "comm_name")
 fle <- flag_na(fle, all_of(key_vars))
 sum(fle$na_flag)
-#> [1] 62
+#> [1] 63
 ```
 
 A few hundred records are missing a `payee_name`.
@@ -402,20 +402,20 @@ fle %>%
   filter(na_flag) %>% 
   select(all_of(key_vars), city_state_zip) %>% 
   relocate(city_state_zip, .after = payee_name)
-#> # A tibble: 62 × 5
+#> # A tibble: 63 × 5
 #>    date       payee_name city_state_zip amount comm_name                                    
 #>    <date>     <chr>      <chr>           <dbl> <chr>                                        
 #>  1 2008-03-18 <NA>       ", FL 32302"        0 Lake County Education Association Tiger (CCE)
 #>  2 2008-03-20 <NA>       ",  "               0 Florida Cattle PAC (CCE)                     
 #>  3 2008-04-10 <NA>       ",  "               0 Greater Pinellas Democratic Club CCE (CCE)   
 #>  4 2008-07-22 <NA>       ", FL 34748"        0 Lake County Education Association Tiger (CCE)
-#>  5 2008-08-12 <NA>       ", FL 32778"        0 Lake County Education Association Tiger (CCE)
-#>  6 2008-08-12 <NA>       ", FL 34788"        0 Lake County Education Association Tiger (CCE)
-#>  7 2008-08-12 <NA>       ", ND 34731"        0 Lake County Education Association Tiger (CCE)
+#>  5 2008-08-12 <NA>       ", ND 34731"        0 Lake County Education Association Tiger (CCE)
+#>  6 2008-08-12 <NA>       ", FL 32778"        0 Lake County Education Association Tiger (CCE)
+#>  7 2008-08-12 <NA>       ", FL 34788"        0 Lake County Education Association Tiger (CCE)
 #>  8 2008-08-12 <NA>       ", FL 32778"        0 Lake County Education Association Tiger (CCE)
 #>  9 2008-08-28 <NA>       ", FL 34731"        0 Lake County Education Association Tiger (CCE)
 #> 10 2008-08-28 <NA>       ", FL 32778"        0 Lake County Education Association Tiger (CCE)
-#> # ℹ 52 more rows
+#> # ℹ 53 more rows
 ```
 
 ``` r
@@ -426,9 +426,9 @@ fle %>%
 #>   col        class      n           p
 #>   <chr>      <chr>  <int>       <dbl>
 #> 1 date       <date>     4 0.00000319 
-#> 2 payee_name <chr>     59 0.0000471  
+#> 2 payee_name <chr>     60 0.0000478  
 #> 3 amount     <dbl>      4 0.00000319 
-#> 4 comm_name  <chr>      1 0.000000798
+#> 4 comm_name  <chr>      1 0.000000796
 ```
 
 ### Duplicates
@@ -438,9 +438,9 @@ We can also flag any record completely duplicated across every column.
 ``` r
 fle <- flag_dupes(fle, everything())
 mean(fle$dupe_flag)
-#> [1] 0.02187615
+#> [1] 0.02186003
 sum(fle$dupe_flag)
-#> [1] 27405
+#> [1] 27448
 ```
 
 2.19% of records are duplicated at least once.
@@ -450,7 +450,7 @@ fle %>%
   filter(dupe_flag) %>% 
   select(all_of(key_vars)) %>% 
   arrange(payee_name, amount)
-#> # A tibble: 27,405 × 4
+#> # A tibble: 27,448 × 4
 #>    date       payee_name     amount comm_name                       
 #>    <date>     <chr>           <dbl> <chr>                           
 #>  1 2021-09-15 .COM, AMAZON     16   Leadership in Action (PAC)      
@@ -463,7 +463,7 @@ fle %>%
 #>  8 2018-07-23 .COM, CALLFIRE   75   Porter, Jeffrey Duane (DEM)(AGR)
 #>  9 2018-07-23 .COM, CALLFIRE   75   Porter, Jeffrey Duane (DEM)(AGR)
 #> 10 2018-07-27 .COM, CALLFIRE   75   Porter, Jeffrey Duane (DEM)(AGR)
-#> # ℹ 27,395 more rows
+#> # ℹ 27,438 more rows
 ```
 
 ``` r
@@ -471,7 +471,7 @@ fle %>%
   filter(dupe_flag) %>% 
   select(all_of(key_vars)) %>% 
   count(payee_name, amount, comm_name, sort = TRUE)
-#> # A tibble: 7,910 × 4
+#> # A tibble: 7,919 × 4
 #>    payee_name                amount comm_name                                          n
 #>    <chr>                      <dbl> <chr>                                          <int>
 #>  1 HANCOCK BANK               20    Florida Democratic Legislative Campaign  (PAP)   612
@@ -484,7 +484,7 @@ fle %>%
 #>  8 HANCOCK BANK               30    Florida Democratic Legislative Campaign  (PAP)   155
 #>  9 SUNTRUST BANK              10    Gillum, Andrew  (DEM)(GOV)                       136
 #> 10 BANK OF AMERICA             3    Amendment 2 is for Everybody (PAC)               135
-#> # ℹ 7,900 more rows
+#> # ℹ 7,909 more rows
 ```
 
 ### Categorical
@@ -494,16 +494,16 @@ col_stats(fle, n_distinct)
 #> # A tibble: 10 × 4
 #>    col            class       n          p
 #>    <chr>          <chr>   <int>      <dbl>
-#>  1 comm_name      <chr>    8616 0.00688   
-#>  2 date           <date>   5600 0.00447   
-#>  3 amount         <dbl>  145020 0.116     
-#>  4 payee_name     <chr>  253992 0.203     
-#>  5 address        <chr>  295833 0.236     
-#>  6 city_state_zip <chr>   28466 0.0227    
-#>  7 purpose        <chr>  172152 0.137     
-#>  8 type           <chr>      21 0.0000168 
-#>  9 na_flag        <lgl>       2 0.00000160
-#> 10 dupe_flag      <lgl>       2 0.00000160
+#>  1 comm_name      <chr>    8658 0.00690   
+#>  2 date           <date>   5629 0.00448   
+#>  3 amount         <dbl>  145309 0.116     
+#>  4 payee_name     <chr>  254239 0.202     
+#>  5 address        <chr>  296119 0.236     
+#>  6 city_state_zip <chr>   28494 0.0227    
+#>  7 purpose        <chr>  172399 0.137     
+#>  8 type           <chr>      21 0.0000167 
+#>  9 na_flag        <lgl>       2 0.00000159
+#> 10 dupe_flag      <lgl>       2 0.00000159
 ```
 
 ``` r
@@ -517,7 +517,7 @@ fle <- mutate(fle, across(type, str_to_upper))
 ``` r
 summary(fle$amount)
 #>     Min.  1st Qu.   Median     Mean  3rd Qu.     Max.     NA's 
-#> -4500000       55      320     3498     1000 27395368        4
+#> -4500000       55      320     3504     1000 27395368        4
 mean(fle$amount <= 0)
 #> [1] NA
 ```
@@ -528,7 +528,7 @@ These are the records with the minimum and maximum amounts.
 glimpse(fle[c(which.max(fle$amount), which.min(fle$amount)), ])
 #> Rows: 2
 #> Columns: 10
-#> $ comm_name      <chr> "Let's Get To Work (ECO)", "Friends of Ron DeSantis (PAC)"
+#> $ comm_name      <chr> "Let's Get To Work (ECO)", "Empower Parents PAC (PAC)"
 #> $ date           <date> 2014-03-06, 2022-12-30
 #> $ amount         <dbl> 27395368, -4500000
 #> $ payee_name     <chr> "LET'S GET TO WORK", "REPUBLICAN PARTY OF FLORIDA"
@@ -694,18 +694,18 @@ fle %>%
   distinct() %>% 
   sample_n(10)
 #> # A tibble: 10 × 2
-#>    address                                       address_clean                             
-#>    <chr>                                         <chr>                                     
-#>  1 13030 SW 260TH STREET                         13030 SW 260TH ST                         
-#>  2 11700 CENTRAL PARKWAY                         11700 CENTRAL PKWY                        
-#>  3 7050 WEST PALMETTO PARK ROAD, #15 - SUITE 190 7050 WEST PALMETTO PARK ROAD #15 SUITE 190
-#>  4 1766 NW 95TH STREET                           1766 NW 95TH ST                           
-#>  5 5885 S HIGHWAY US 1                           5885 S HIGHWAY US 1                       
-#>  6 23374 SERENE MEADOW DR S                      23374 SERENE MEADOW DR S                  
-#>  7 511 WEST SOUTH STREET, #201                   511 WEST SOUTH STREET #201                
-#>  8 2170 SE OCEAN BLVD.                           2170 SE OCEAN BLVD                        
-#>  9 US1                                           US1                                       
-#> 10 198 E. BIG BEAVER RD                          198 E BIG BEAVER RD
+#>    address                          address_clean                   
+#>    <chr>                            <chr>                           
+#>  1 1835 NE MIAMI GARDENS DR STE 547 1835 NE MIAMI GARDENS DR STE 547
+#>  2 11700 CENTRAL PARKWAY            11700 CENTRAL PKWY              
+#>  3 4225 SW 40TH BLVD                4225 SW 40TH BLVD               
+#>  4 1766 NW 95TH STREET              1766 NW 95TH ST                 
+#>  5 600 N UNIVERSITY DR              600 N UNIVERSITY DR             
+#>  6 23374 SERENE MEADOW DR S         23374 SERENE MEADOW DR S        
+#>  7 6860 FULFPORT BOULEVARD, #331    6860 FULFPORT BOULEVARD #331    
+#>  8 1366 NW 1ST ST                   1366 NW 1ST ST                  
+#>  9 US1                              US1                             
+#> 10 53051 PINE CREEK DR              53051 PINE CREEK DR
 ```
 
 ### ZIP
@@ -733,8 +733,8 @@ progress_table(
 #> # A tibble: 2 × 6
 #>   stage        prop_in n_distinct prop_na n_out n_diff
 #>   <chr>          <dbl>      <dbl>   <dbl> <dbl>  <dbl>
-#> 1 fle$zip_sep    0.994      11677  0.0225  6735   1816
-#> 2 fle$zip_norm   0.995      11663  0.0234  5600   1802
+#> 1 fle$zip_sep    0.995      11684  0.0225  6747   1817
+#> 2 fle$zip_norm   0.995      11670  0.0234  5611   1803
 ```
 
 ### State
@@ -775,7 +775,7 @@ progress_table(
 #> # A tibble: 2 × 6
 #>   stage          prop_in n_distinct  prop_na n_out n_diff
 #>   <chr>            <dbl>      <dbl>    <dbl> <dbl>  <dbl>
-#> 1 fle$state_sep    0.995        176 0.000750  6829    121
+#> 1 fle$state_sep    0.995        177 0.000749  6848    122
 #> 2 fle$state_norm   1             56 0.00620      0      1
 ```
 
@@ -885,7 +885,7 @@ good_refine <- fle %>%
     #>  5 OH         45274    CINCINATTI         CINCINNATI            18
     #>  6 CA         94103    SAN FRANSCISO      SAN FRANCISCO         13
     #>  7 FL         32082    PONTE VERDE BEACH  PONTE VEDRA BEACH     13
-    #>  8 FL         33126    MIAMIMI            MIAMI                  9
+    #>  8 FL         33126    MIAMIMI            MIAMI                 10
     #>  9 FL         32082    PONTE VERDRE BEACH PONTE VEDRA BEACH      8
     #> 10 FL         33584    SNEFFER            SEFFNER                8
     #> # ℹ 243 more rows
@@ -906,8 +906,8 @@ misspellings.
 
 | stage                                                                        | prop_in | n_distinct | prop_na | n_out | n_diff |
 |:-----------------------------------------------------------------------------|--------:|-----------:|--------:|------:|-------:|
-| str_to_upper(fle$city_sep) | 0.945| 9268| 0.005| 68681| 5170| |fle$city_norm |   0.959 |       8520 |   0.005 | 50789 |   4409 |
-| fle$city_swap | 0.990| 6416| 0.005| 12820| 2291| |fle$city_refine            |   0.990 |       6267 |   0.005 | 12226 |   2145 |
+| str_to_upper(fle$city_sep) | 0.945| 9276| 0.005| 68827| 5176| |fle$city_norm |   0.959 |       8528 |   0.005 | 50909 |   4415 |
+| fle$city_swap | 0.990| 6422| 0.005| 12856| 2295| |fle$city_refine            |   0.990 |       6273 |   0.005 | 12261 |   2149 |
 
 You can see how the percentage of valid values increased with each
 stage.
@@ -941,25 +941,25 @@ glimpse(sample_n(fle, 50))
 #> Columns: 15
 #> $ comm_name      <chr> "Proven Leadership for Miami-Dade County  (PAC)", "Committee of Florida Agents (PAC)", "Florida…
 #> $ date           <date> 2019-10-17, 2016-07-25, 2018-10-25, 2020-08-09, 2016-04-15, 2014-07-31, 2018-05-21, 2014-02-05…
-#> $ amount         <dbl> 5210.00, 5000.00, 1000.00, 18040.41, 63.90, 61.70, 935.00, 1000.00, 520.00, 500.00, 50000.00, 1…
+#> $ amount         <dbl> 5210.00, 5000.00, 1000.00, 1211.00, 63.90, 61.70, 935.00, 1000.00, 520.00, 500.00, 30000.00, 10…
 #> $ payee_name     <chr> "VARGAS, ANGELA", "FLORIDA FIRST FOREVER, INC.", "PATRICK HENRY FOR STATE HOUSE - DISTRICT 26",…
-#> $ address        <chr> "1833 NW 35TH STREET APT 3", "1700 NORTH MONROE STREET, SUITE 11-253", "P.O. BOX 12082", "405 S…
-#> $ city_state_zip <chr> "MIAMI, FL 33142", "TALLAHASSEE, FL 32303", "DAYTONA BEACH, FL 32120", "TAMPA, FL ", "DAYTONA B…
+#> $ address        <chr> "1833 NW 35TH STREET APT 3", "1700 NORTH MONROE STREET, SUITE 11-253", "P.O. BOX 12082", "487 E…
+#> $ city_state_zip <chr> "MIAMI, FL 33142", "TALLAHASSEE, FL 32303", "DAYTONA BEACH, FL 32120", "TALLAHASSEE, FL ", "DAY…
 #> $ purpose        <chr> "WAGES", "CONTRIBUTION", "CAMPAIGN CONTRIBUTION", "ADVERTISING", "CAMPAIGN EMBROIDERY", "REFUND…
 #> $ type           <chr> "ECC", "MON", "CAN", "MON", "MON", "MON", "MON", "CAN", "DIS", "MON", "MON", "CAN", "CAN", "MON…
 #> $ na_flag        <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALS…
 #> $ dupe_flag      <lgl> FALSE, TRUE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE…
 #> $ year           <dbl> 2019, 2016, 2018, 2020, 2016, 2014, 2018, 2014, 2020, 2009, 2022, 2020, 2014, 2022, 2019, 2010,…
-#> $ address_clean  <chr> "1833 NW 35TH STREET APT 3", "1700 NORTH MONROE STREET SUITE 11253", "PO BOX 12082", "405 S DAL…
-#> $ city_clean     <chr> "MIAMI", "TALLAHASSEE", "DAYTONA BEACH", "TAMPA", "DAYTONA BEACH", "SUNRISE", "LAKELAND", "NORT…
-#> $ state_clean    <chr> "FL", "FL", "FL", "FL", "FL", "FL", "FL", "FL", "FL", "FL", "FL", "FL", "MO", "LA", "FL", "FL",…
-#> $ zip_clean      <chr> "33142", "32303", "32120", NA, "32114", "33351", "33811", "33408", "32202", "33441", "32223", "…
+#> $ address_clean  <chr> "1833 NW 35TH STREET APT 3", "1700 NORTH MONROE STREET SUITE 11253", "PO BOX 12082", "487 E TEN…
+#> $ city_clean     <chr> "MIAMI", "TALLAHASSEE", "DAYTONA BEACH", "TALLAHASSEE", "DAYTONA BEACH", "SUNRISE", "LAKELAND",…
+#> $ state_clean    <chr> "FL", "FL", "FL", "FL", "FL", "FL", "FL", "FL", "FL", "FL", "FL", "FL", "MO", "FL", "FL", "FL",…
+#> $ zip_clean      <chr> "33142", "32303", "32120", NA, "32114", "33351", "33811", "33408", "32202", "33496", "32669", "…
 ```
 
-1.  There are 1,252,736 records in the database.
-2.  There are 27,407 duplicate records in the database.
+1.  There are 1,255,627 records in the database.
+2.  There are 27,450 duplicate records in the database.
 3.  The range and distribution of `amount` and `date` seem reasonable.
-4.  There are 62 records missing key variables.
+4.  There are 63 records missing key variables.
 5.  Consistency in geographic data has been improved with
     `campfin::normal_*()`.
 6.  The 4-digit `year` variable has been created with
@@ -972,10 +972,10 @@ server.
 
 ``` r
 clean_dir <- dir_create(here("fl", "expends", "data", "clean"))
-clean_path <- path(clean_dir, "fl_expends_1995-20230429.csv")
+clean_path <- path(clean_dir, "fl_expends_20030101-20230510.csv")
 write_csv(fle, clean_path, na = "")
 (clean_size <- file_size(clean_path))
-#> 229M
+#> 230M
 ```
 
 ## Upload
