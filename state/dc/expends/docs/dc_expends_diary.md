@@ -1,29 +1,26 @@
 District Of Columbia Expenditures
 ================
-Kiernan Nicholls
-Wed Feb 9 12:39:50 2022
+Kiernan Nicholls & Aarushi Sahejpal
+Mon May 29 10:13:00 2023
 
--   [Project](#project)
--   [Objectives](#objectives)
--   [Packages](#packages)
--   [Source](#source)
--   [Data](#data)
--   [Download](#download)
--   [Read](#read)
--   [Explore](#explore)
-    -   [Missing](#missing)
-    -   [Duplicates](#duplicates)
-    -   [Categorical](#categorical)
-    -   [Amounts](#amounts)
-    -   [Dates](#dates)
--   [Wrangle](#wrangle)
-    -   [Address](#address)
-    -   [ZIP](#zip)
-    -   [State](#state)
-    -   [City](#city)
--   [Conclude](#conclude)
--   [Export](#export)
--   [Upload](#upload)
+- <a href="#project" id="toc-project">Project</a>
+- <a href="#objectives" id="toc-objectives">Objectives</a>
+- <a href="#packages" id="toc-packages">Packages</a>
+- <a href="#source" id="toc-source">Source</a>
+- <a href="#data" id="toc-data">Data</a>
+- <a href="#download" id="toc-download">Download</a>
+- <a href="#read" id="toc-read">Read</a>
+- <a href="#explore" id="toc-explore">Explore</a>
+  - <a href="#missing" id="toc-missing">Missing</a>
+  - <a href="#categorical" id="toc-categorical">Categorical</a>
+  - <a href="#amounts" id="toc-amounts">Amounts</a>
+  - <a href="#dates" id="toc-dates">Dates</a>
+- <a href="#wrangle" id="toc-wrangle">Wrangle</a>
+  - <a href="#state" id="toc-state">State</a>
+  - <a href="#city" id="toc-city">City</a>
+- <a href="#conclude" id="toc-conclude">Conclude</a>
+- <a href="#export" id="toc-export">Export</a>
+- <a href="#upload" id="toc-upload">Upload</a>
 
 <!-- Place comments regarding knitting here -->
 
@@ -85,11 +82,11 @@ pacman::p_load(
 )
 ```
 
-This diary was run using `campfin` version 1.0.8.9201.
+This diary was run using `campfin` version 1.0.10.9001.
 
 ``` r
 packageVersion("campfin")
-#> [1] '1.0.8.9201'
+#> [1] '1.0.10.9001'
 ```
 
 This document should be run as part of the `R_tap` project, which lives
@@ -104,7 +101,9 @@ feature and should be run as such. The project also uses the dynamic
 
 ``` r
 # where does this document knit?
-here::i_am("dc/expends/docs/dc_expends_diary.Rmd")
+setwd("/Volumes/TAP/accountability_datacleaning/state")
+here::here()
+#> [1] "/Volumes/TAP/accountability_datacleaning"
 ```
 
 ## Source
@@ -144,121 +143,70 @@ The file abstract reads:
 
 ``` r
 raw_dir <- dir_create(here("dc", "expends", "data", "raw"))
-raw_csv <- dir_ls(raw_dir, glob = "*.csv")
 ```
 
-| File Type                         | File Size |
-|:----------------------------------|----------:|
-| Principal Campaign Committee      |     7.49M |
-| Political Action Committee        |     1.83M |
-| Initiative                        |   243.94K |
-| Referendum                        |    52.82K |
-| Recall                            |    13.44K |
-| Inaugural Committee               |    28.89K |
-| Legal Defense Committee           |       933 |
-| Independent Expenditure Committee |   100.49K |
-| Exploratory Committee             |    24.49K |
-| Senators & Representatives        |   165.03K |
-| Constituent Service Program       |     2.19M |
-
 ## Read
+
+``` r
+raw_paths <- dir_ls(raw_dir)
+md_bullet(md_code(path.abbrev(raw_paths)))
+```
+
+- `/Volumes/TAP/accountability_datacleaning/dc/expends/data/raw/Campaign_Financial_Expenditures (1).csv`
 
 These files have a troublesome encoding. We can read and re-write them.
 
 ``` r
-dc_types2 <- map_chr(
-  raw_csv,
-  function(x) {
-    readLines(
-      con = file(x, encoding = "UTF-16LE", blocking = FALSE), 
-      n = 1
-    )
-  }
-)
+library(readr)
+
+dce <- read_csv("/Volumes/TAP/accountability_datacleaning/dc/expends/data/raw/Campaign_Financial_Expenditures (1).csv")
 ```
 
 ``` r
-for (p in raw_csv) {
-  message(basename(p))
-  write_csv(
-    file = p,
-    x = read.csv(
-      file = p,
-      skip = 1,
-      fileEncoding = "UTF-16LE", 
-      check.names = FALSE
-    )
-  )
-}
+dce <- dce %>% 
+  clean_names("snake") 
 ```
 
 ``` r
-names(raw_csv) <- dc_types
-```
-
-``` r
-dce <- map(
-  .x = raw_csv,
-  .f = function(x) {
-    with_edition(
-      edition = 1,
-      code = read_delim(
-        file = x,
-        delim = ",",
-        escape_backslash = FALSE,
-        escape_double = TRUE,
-        col_types = cols(
-          .default = col_character(),
-          `Payment Date` = col_date_mdy(),
-          `Amount` = col_number()
-        )
-      )
-    )
-  }
-)
-```
-
-``` r
-dce <- map(dce, ~rename(., `Expendee Name` = 1)) %>% bind_rows()
-```
-
-``` r
-dce <- clean_names(dce, case = "snake")
+dce <- dce %>% 
+  rename(date = transactiondate)
 ```
 
 ## Explore
 
-There are 108,335 rows of 13 columns. Each record represents a single
+There are 114,088 rows of 15 columns. Each record represents a single
 Expenditures…
 
 ``` r
 glimpse(dce)
-#> Rows: 108,335
-#> Columns: 13
-#> $ expendee_name           <chr> "\"SS\" for Ward 8 City Council", "\"SS\" for Ward 8 City Council", "\"SS\" for Ward 8…
-#> $ payee_first_name        <chr> NA, "Anthony", NA, NA, NA, NA, NA, NA, NA, "David", "Donna", NA, "Elsie", NA, NA, NA, …
-#> $ payee_middle_name       <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
-#> $ payee_last_name         <chr> NA, "Cooper", NA, NA, NA, NA, NA, NA, NA, "Brown", "Long", NA, "Long", NA, NA, NA, NA,…
-#> $ payee_organization_name <chr> "ACTS Inc.", NA, "Apex Gas Station", "Applebees", "Capitol Marking Products, Inc.", "C…
-#> $ number_and_street       <chr> "102 Canal Rd.", "3700 9th Street, SE", "2830 Sherman Ave. NW.", "3447 Donnell Drive "…
-#> $ city                    <chr> "Dumfries", "Washington", "Washington", "Forrestville", "Arlington", "Washington", "Wa…
-#> $ state                   <chr> "VA", "DC", "DC", "MD", "VA", "DC", "DC", "DC", "DC", "DC", "DC", "MD", "DC", "MD", "D…
-#> $ zip                     <chr> "22026", "20032", "20001", "20735", "22204", "20032", "20032", "20032", "20032", "2003…
-#> $ purpose_of_expenditure  <chr> "Equipment Purchases", "Consultant", "Travel", "Catering/Refreshments", "Supplies", "P…
-#> $ further_explanation     <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
-#> $ payment_date            <date> 2004-08-29, 2004-09-18, 2004-08-31, 2004-09-06, 2004-08-26, 2004-08-25, 2004-08-25, 2…
-#> $ amount                  <dbl> 32.19, 50.00, 10.00, 47.17, 35.53, 370.00, 13.65, 7.42, 0.83, 410.00, 50.00, 296.96, 5…
+#> Rows: 114,088
+#> Columns: 15
+#> $ objectid          <dbl> 19010569, 19010570, 19010571, 19010572, 19010573, 19010574, 19010575, 19010576, 19010881, 19…
+#> $ candidatename     <chr> "Sandra Allen", "Sandra Allen", "Sandra Allen", "Sandra Allen", "Sandra Allen", "Sandra Alle…
+#> $ payee             <chr> "Adenike  Banjo Banjo", "Benjamin & Johnson", "Bob Bethea", "Frederick Hill", "Willie Mayer"…
+#> $ address           <chr> "6115 Marlboro Pike, District Heights, MD 20747", "c/o 1428 R. St. NW.#2, Washington, DC 200…
+#> $ purpose           <chr> "Consultant", "Equipment Purchases", "Consultant", "Travel", "Consultant", "Equipment Purcha…
+#> $ amount            <dbl> 500, 400, 500, 400, 400, 275, 250, 400, 680, 49, 250, 50, 200, 236, 98, 135, 432, 2000, 1503…
+#> $ date              <chr> "2004/08/27 04:00:00+00", "2004/08/27 04:00:00+00", "2004/08/27 04:00:00+00", "2004/08/27 04…
+#> $ address_id        <dbl> NA, 240209, 811823, NA, 147179, NA, 67435, 79579, NA, NA, NA, 289588, NA, NA, 35208, NA, 336…
+#> $ xcoord            <dbl> NA, 397094.2, 397228.7, NA, 399301.1, NA, 400790.8, 400467.3, NA, NA, NA, 400583.8, NA, NA, …
+#> $ ycoord            <dbl> NA, 138277.7, 137931.8, NA, 128983.2, NA, 132575.6, 128841.0, NA, NA, NA, 140550.2, NA, NA, …
+#> $ latitude          <dbl> NA, 38.91236, 38.90924, NA, 38.82863, NA, 38.86100, 38.82735, NA, NA, NA, 38.93283, NA, NA, …
+#> $ longitude         <dbl> NA, -77.03350, -77.03195, NA, -77.00805, NA, -76.99089, -76.99462, NA, NA, NA, -76.99327, NA…
+#> $ fulladdress       <chr> NA, "1428 R STREET NW", "1400 - 1499 BLOCK OF 14TH STREET NW", NA, "6 CHESAPEAKE STREET SW",…
+#> $ gis_last_mod_dttm <chr> "2023/05/29 10:54:52+00", "2023/05/29 10:54:52+00", "2023/05/29 10:54:52+00", "2023/05/29 10…
+#> $ ward              <chr> NA, "Ward 2", "Ward 2", NA, "Ward 8", NA, "Ward 8", "Ward 8", NA, NA, NA, "Ward 5", NA, NA, …
 tail(dce)
-#> # A tibble: 6 × 13
-#>   expendee_name    payee_first_name payee_middle_na… payee_last_name payee_organizat… number_and_stre… city  state zip  
-#>   <chr>            <chr>            <chr>            <chr>           <chr>            <chr>            <chr> <chr> <chr>
-#> 1 Yvette Alexande… Yvette           <NA>             Alexander       <NA>             3440 Highwood Dr Wash… DC    20009
-#> 2 Yvette Alexande… Yvette           <NA>             Alexander       <NA>             3440 Highwood Dr Wash… DC    20020
-#> 3 Yvette Alexande… Yvette           <NA>             Alexander       <NA>             3442 Highwood Dr Wash… DC    20020
-#> 4 Yvette Alexande… Yvette           <NA>             Alexander       <NA>             3443 Highwood A… Wash… DC    20020
-#> 5 Yvette Alexande… Yvette           <NA>             Alexander       <NA>             3442 Highwood Dr Wash… DC    20020
-#> 6 Yvette Alexande… Yvette           <NA>             Alexander       <NA>             3442 Highwood D… Wash… DC    20020
-#> # … with 4 more variables: purpose_of_expenditure <chr>, further_explanation <chr>, payment_date <date>, amount <dbl>
+#> # A tibble: 6 × 15
+#>   objectid candidatename  payee     address purpose amount date  address_id xcoord ycoord latitude longitude fulladdress
+#>      <dbl> <chr>          <chr>     <chr>   <chr>    <dbl> <chr>      <dbl>  <dbl>  <dbl>    <dbl>     <dbl> <chr>      
+#> 1 19127377 Adrian Fenty   The Luci… c/o Sa… **Plaq…    150 2006…     223624 3.98e5 1.41e5     38.9     -77.0 1229 SHEPH…
+#> 2 19127378 Muriel Bowser  DC Cameo… c/o Sh… **2 ti…     50 2013…      53132 4.02e5 1.42e5     38.9     -77.0 2000 UPSHU…
+#> 3 19127379 Adrian Fenty   Giant Fo… c/o Sh… **Sr. …    125 2006…     223624 3.98e5 1.41e5     38.9     -77.0 1229 SHEPH…
+#> 4 19127380 Lankward Smith U. S.Pos… c/o Te… <NA>       348 2016…     218759 3.98e5 1.37e5     38.9     -77.0 800 K STRE…
+#> 5 19127381 Jim Graham     Bernstei… c/o Th… Rental      43 2003…     232041 3.97e5 1.39e5     38.9     -77.0 2505 13TH …
+#> 6 19127382 Vincent Gray   Rrecreat… unk701… **dona…    250 2012…     295830 4.00e5 1.30e5     38.8     -77.0 701 MISSIS…
+#> # ℹ 2 more variables: gis_last_mod_dttm <chr>, ward <chr>
 ```
 
 ### Missing
@@ -267,99 +215,54 @@ Columns vary in their degree of missing values.
 
 ``` r
 col_stats(dce, count_na)
-#> # A tibble: 13 × 4
-#>    col                     class       n        p
-#>    <chr>                   <chr>   <int>    <dbl>
-#>  1 expendee_name           <chr>       0 0       
-#>  2 payee_first_name        <chr>   72925 0.673   
-#>  3 payee_middle_name       <chr>  105436 0.973   
-#>  4 payee_last_name         <chr>   73281 0.676   
-#>  5 payee_organization_name <chr>   51886 0.479   
-#>  6 number_and_street       <chr>     246 0.00227 
-#>  7 city                    <chr>      63 0.000582
-#>  8 state                   <chr>     210 0.00194 
-#>  9 zip                     <chr>      62 0.000572
-#> 10 purpose_of_expenditure  <chr>    3214 0.0297  
-#> 11 further_explanation     <chr>   98411 0.908   
-#> 12 payment_date            <date>      0 0       
-#> 13 amount                  <dbl>       0 0
+#> # A tibble: 15 × 4
+#>    col               class     n       p
+#>    <chr>             <chr> <int>   <dbl>
+#>  1 objectid          <dbl>     0 0      
+#>  2 candidatename     <chr> 15863 0.139  
+#>  3 payee             <chr>  1727 0.0151 
+#>  4 address           <chr>  1730 0.0152 
+#>  5 purpose           <chr> 33220 0.291  
+#>  6 amount            <dbl>   518 0.00454
+#>  7 date              <chr>     0 0      
+#>  8 address_id        <dbl> 45433 0.398  
+#>  9 xcoord            <dbl> 45433 0.398  
+#> 10 ycoord            <dbl> 45433 0.398  
+#> 11 latitude          <dbl> 45433 0.398  
+#> 12 longitude         <dbl> 45433 0.398  
+#> 13 fulladdress       <chr> 45433 0.398  
+#> 14 gis_last_mod_dttm <chr>     0 0      
+#> 15 ward              <chr> 45639 0.400
 ```
 
 We can flag any record missing a key variable needed to identify a
 transaction.
 
 ``` r
-dce <- dce %>% 
-  unite(
-    col = "payee_full_name",
-    payee_first_name, payee_middle_name, payee_last_name,
-    remove = FALSE,
-    sep = " ",
-    na.rm = TRUE
-  ) %>% 
-  mutate(
-    payee_name = coalesce(payee_organization_name, payee_full_name),
-    payee_name = na_if(payee_name, "")
-  ) %>% 
-  select(-payee_full_name)
-```
-
-``` r
-key_vars <- c("payment_date", "expendee_name", "amount", "payee_name")
+key_vars <- c("date", "candidatename", "amount", "payee")
 dce <- flag_na(dce, all_of(key_vars))
 sum(dce$na_flag)
-#> [1] 16476
+#> [1] 15922
 ```
 
 ``` r
 dce %>% 
   filter(na_flag) %>% 
   select(all_of(key_vars))
-#> # A tibble: 16,476 × 4
-#>    payment_date expendee_name                  amount payee_name
-#>    <date>       <chr>                           <dbl> <chr>     
-#>  1 2014-08-10   Friends of Courtney R. Snowden  343.  <NA>      
-#>  2 2014-08-04   Friends of Courtney R. Snowden  333.  <NA>      
-#>  3 2014-08-03   Friends of Courtney R. Snowden 3500   <NA>      
-#>  4 2014-07-17   Friends of Courtney R. Snowden   60.2 <NA>      
-#>  5 2014-07-14   Friends of Courtney R. Snowden  676.  <NA>      
-#>  6 2014-07-11   Friends of Courtney R. Snowden 2500   <NA>      
-#>  7 2014-09-15   Jim Graham 2014                4241.  <NA>      
-#>  8 2006-10-15   Moore for Ward 5                 40   <NA>      
-#>  9 2006-09-06   Moore for Ward 5                 31.6 <NA>      
-#> 10 2009-12-31   Muriel Bowser for Ward 4 2008   153.  <NA>      
-#> # … with 16,466 more rows
-```
-
-### Duplicates
-
-We can also flag any record completely duplicated across every column.
-
-``` r
-dce <- flag_dupes(dce, everything())
-sum(dce$dupe_flag)
-#> [1] 4218
-```
-
-``` r
-dce %>% 
-  filter(dupe_flag) %>% 
-  select(all_of(key_vars)) %>% 
-  arrange(payment_date)
-#> # A tibble: 4,218 × 4
-#>    payment_date expendee_name                                  amount payee_name            
-#>    <date>       <chr>                                           <dbl> <chr>                 
-#>  1 2003-02-03   Washington DC Association of Realtors PAC         400 <NA>                  
-#>  2 2003-02-03   Washington DC Association of Realtors PAC         400 <NA>                  
-#>  3 2003-02-12   Committee to Re-Elect Jack Evans                  500 Premium Distributors  
-#>  4 2003-02-12   Committee to Re-Elect Jack Evans                  500 Premium Distributors  
-#>  5 2003-02-12   Committee to Re-Elect Jack Evans                  500 Ronald Cohen Mgmt. Co.
-#>  6 2003-02-12   Committee to Re-Elect Jack Evans                  500 Ronald Cohen Mgmt. Co.
-#>  7 2003-02-12   Committee to Re-Elect Jack Evans                  500 Scott Pannick         
-#>  8 2003-02-12   Committee to Re-Elect Jack Evans                  500 Scott Pannick         
-#>  9 2003-02-28   Peggy Cooper Cafritz for President of Bd of Ed     17 Industrial Bank       
-#> 10 2003-02-28   Peggy Cooper Cafritz for President of Bd of Ed     17 Industrial Bank       
-#> # … with 4,208 more rows
+#> # A tibble: 15,922 × 4
+#>    date                   candidatename amount payee                               
+#>    <chr>                  <chr>          <dbl> <chr>                               
+#>  1 2013/06/19 04:00:00+00 <NA>              25 Deluxe Checks                       
+#>  2 2011/02/16 05:00:00+00 <NA>             500 Friends of Hans Riemer              
+#>  3 2011/02/16 05:00:00+00 <NA>             250 Progressive Leaders for South County
+#>  4 2010/03/23 04:00:00+00 <NA>             500 Re-Elect Tommy Wells                
+#>  5 2010/03/23 04:00:00+00 <NA>             500 Michael A. Brown Community Fund     
+#>  6 2010/03/31 04:00:00+00 <NA>             250 Catania 2010                        
+#>  7 2013/07/01 04:00:00+00 <NA>             205 Carr Workplace                      
+#>  8 2013/08/01 04:00:00+00 <NA>             205 Carr Workplace                      
+#>  9 2015/07/06 04:00:00+00 <NA>              12 EagleBank                           
+#> 10 2015/07/06 04:00:00+00 <NA>            1000 SP Associates III, LLC              
+#> # ℹ 15,912 more rows
 ```
 
 ### Categorical
@@ -367,24 +270,24 @@ dce %>%
 ``` r
 col_stats(dce, n_distinct)
 #> # A tibble: 16 × 4
-#>    col                     class      n         p
-#>    <chr>                   <chr>  <int>     <dbl>
-#>  1 expendee_name           <chr>    880 0.00812  
-#>  2 payee_first_name        <chr>   6126 0.0565   
-#>  3 payee_middle_name       <chr>    226 0.00209  
-#>  4 payee_last_name         <chr>   6472 0.0597   
-#>  5 payee_organization_name <chr>  15206 0.140    
-#>  6 number_and_street       <chr>  37569 0.347    
-#>  7 city                    <chr>   2266 0.0209   
-#>  8 state                   <chr>     60 0.000554 
-#>  9 zip                     <chr>   2686 0.0248   
-#> 10 purpose_of_expenditure  <chr>     37 0.000342 
-#> 11 further_explanation     <chr>   5611 0.0518   
-#> 12 payment_date            <date>  6471 0.0597   
-#> 13 amount                  <dbl>  24013 0.222    
-#> 14 payee_name              <chr>  29504 0.272    
-#> 15 na_flag                 <lgl>      2 0.0000185
-#> 16 dupe_flag               <lgl>      2 0.0000185
+#>    col               class      n          p
+#>    <chr>             <chr>  <int>      <dbl>
+#>  1 objectid          <dbl> 114088 1         
+#>  2 candidatename     <chr>    475 0.00416   
+#>  3 payee             <chr>  33899 0.297     
+#>  4 address           <chr>  41726 0.366     
+#>  5 purpose           <chr>   8092 0.0709    
+#>  6 amount            <dbl>   5423 0.0475    
+#>  7 date              <chr>   6941 0.0608    
+#>  8 address_id        <dbl>  12328 0.108     
+#>  9 xcoord            <dbl>  12229 0.107     
+#> 10 ycoord            <dbl>  12255 0.107     
+#> 11 latitude          <dbl>  12317 0.108     
+#> 12 longitude         <dbl>  12319 0.108     
+#> 13 fulladdress       <chr>  12329 0.108     
+#> 14 gis_last_mod_dttm <chr>      1 0.00000877
+#> 15 ward              <chr>      9 0.0000789 
+#> 16 na_flag           <lgl>      2 0.0000175
 ```
 
 ![](../plots/distinct-plots-1.png)<!-- -->
@@ -398,10 +301,10 @@ dce$amount <- round(dce$amount, digits = 2)
 
 ``` r
 summary(dce$amount)
-#>     Min.  1st Qu.   Median     Mean  3rd Qu.     Max. 
-#> -96037.7     39.5    133.5    942.4    500.0 513240.0
+#>     Min.  1st Qu.   Median     Mean  3rd Qu.     Max.     NA's 
+#> -96038.0     37.0    130.0    984.4    500.0 513240.0      518
 mean(dce$amount <= 0)
-#> [1] 0.001550745
+#> [1] NA
 ```
 
 These are the records with the minimum and maximum amounts.
@@ -410,22 +313,22 @@ These are the records with the minimum and maximum amounts.
 glimpse(dce[c(which.max(dce$amount), which.min(dce$amount)), ])
 #> Rows: 2
 #> Columns: 16
-#> $ expendee_name           <chr> "Citizens to Elect Linda Cropp Mayor", "Gray for Mayor"
-#> $ payee_first_name        <chr> NA, NA
-#> $ payee_middle_name       <chr> NA, NA
-#> $ payee_last_name         <chr> NA, NA
-#> $ payee_organization_name <chr> "Media Production LUC", "EXPENDITURES NOT NEGOTIATED"
-#> $ number_and_street       <chr> "Georgian Bank", "2000 14TH STREET, NW SUITE 433"
-#> $ city                    <chr> "Powder Spring", "WASHINGTON"
-#> $ state                   <chr> "GA", "DC"
-#> $ zip                     <chr> "32134", "20009"
-#> $ purpose_of_expenditure  <chr> "Advertising", "Other"
-#> $ further_explanation     <chr> NA, NA
-#> $ payment_date            <date> 2006-08-23, 2011-01-31
-#> $ amount                  <dbl> 513240.00, -96037.71
-#> $ payee_name              <chr> "Media Production LUC", "EXPENDITURES NOT NEGOTIATED"
-#> $ na_flag                 <lgl> FALSE, FALSE
-#> $ dupe_flag               <lgl> FALSE, FALSE
+#> $ objectid          <dbl> 19024451, 19112546
+#> $ candidatename     <chr> "Linda  Cropp", "Vincent Gray"
+#> $ payee             <chr> "Media Production LUC", "EXPENDITURES NOT NEGOTIATED"
+#> $ address           <chr> "Georgian Bank, Powder Spring, GA 32134", "2000 14TH STREET, NW SUITE 433, WASHINGTON, DC 20…
+#> $ purpose           <chr> "Advertising", "**PER AUDIT"
+#> $ amount            <dbl> 513240, -96038
+#> $ date              <chr> "2006/08/23 04:00:00+00", "2011/01/31 05:00:00+00"
+#> $ address_id        <dbl> NA, 239976
+#> $ xcoord            <dbl> NA, 397180.2
+#> $ ycoord            <dbl> NA, 138856.1
+#> $ latitude          <dbl> NA, 38.91757
+#> $ longitude         <dbl> NA, -77.03251
+#> $ fulladdress       <chr> NA, "2000 14TH STREET NW"
+#> $ gis_last_mod_dttm <chr> "2023/05/29 10:54:52+00", "2023/05/29 10:54:52+00"
+#> $ ward              <chr> NA, "Ward 1"
+#> $ na_flag           <lgl> FALSE, FALSE
 ```
 
 The distribution of amount values are typically log-normal.
@@ -437,17 +340,20 @@ The distribution of amount values are typically log-normal.
 We can add the calendar year from `date` with `lubridate::year()`
 
 ``` r
-dce <- mutate(dce, payment_year = year(payment_date))
+dce <- mutate(dce, payment_year = year(date))
+dce <- dce %>%
+  mutate(date = as.Date(date, format = "%Y/%m/%d %H:%M:%S+00")) %>%
+  mutate(date = format(date, "%Y-%m-%d"))
 ```
 
 ``` r
-min(dce$payment_date)
+min(dce$date)
 #> [1] "2003-01-01"
 sum(dce$payment_year < 2000)
 #> [1] 0
-max(dce$payment_date)
-#> [1] "2021-12-30"
-sum(dce$payment_date > today())
+max(dce$date)
+#> [1] "2023-05-04"
+sum(dce$date > today())
 #> [1] 0
 ```
 
@@ -463,121 +369,10 @@ consistent, confident string normalization. For geographic variables
 like city names and ZIP codes, the corresponding `campfin::normal_*()`
 functions are tailor made to facilitate this process.
 
-### Address
-
-For the street `addresss` variable, the `campfin::normal_address()`
-function will force consistence case, remove punctuation, and abbreviate
-official USPS suffixes.
-
-``` r
-addr_norm <- dce %>% 
-  distinct(number_and_street) %>% 
-  mutate(
-    address_norm = normal_address(
-      address = number_and_street,
-      abbs = usps_street,
-      na_rep = TRUE
-    )
-  )
-```
-
-``` r
-addr_norm
-#> # A tibble: 37,569 × 2
-#>    number_and_street          address_norm           
-#>    <chr>                      <chr>                  
-#>  1 "102 Canal Rd."            102 CANAL RD           
-#>  2 "3700 9th Street, SE"      3700 9TH STREET SE     
-#>  3 "2830 Sherman Ave. NW."    2830 SHERMAN AVE NW    
-#>  4 "3447 Donnell Drive "      3447 DONNELL DR        
-#>  5 "4611 Columbia Pk "        4611 COLUMBIA PK       
-#>  6 "*****************"        <NA>                   
-#>  7 "************************" <NA>                   
-#>  8 "Congress Heights, SE"     CONGRESS HEIGHTS SE    
-#>  9 "1107 Savannah Street, SE" 1107 SAVANNAH STREET SE
-#> 10 "1109 Savannah Road, SE"   1109 SAVANNAH ROAD SE  
-#> # … with 37,559 more rows
-```
-
-``` r
-dce <- left_join(dce, addr_norm, by = "number_and_street")
-```
-
-### ZIP
-
-For ZIP codes, the `campfin::normal_zip()` function will attempt to
-create valid *five* digit codes by removing the ZIP+4 suffix and
-returning leading zeroes dropped by other programs like Microsoft Excel.
-
-``` r
-dce <- dce %>% 
-  mutate(
-    zip_norm = normal_zip(
-      zip = zip,
-      na_rep = TRUE
-    )
-  )
-```
-
-``` r
-progress_table(
-  dce$zip,
-  dce$zip_norm,
-  compare = valid_zip
-)
-#> # A tibble: 2 × 6
-#>   stage        prop_in n_distinct  prop_na n_out n_diff
-#>   <chr>          <dbl>      <dbl>    <dbl> <dbl>  <dbl>
-#> 1 dce$zip        0.961       2686 0.000572  4273    322
-#> 2 dce$zip_norm   0.992       2546 0.0283     807    165
-```
-
 ### State
 
 Valid two digit state abbreviations can be made using the
 `campfin::normal_state()` function.
-
-``` r
-dce <- dce %>% 
-  mutate(
-    state_norm = normal_state(
-      state = state,
-      abbreviate = TRUE,
-      na_rep = TRUE,
-      valid = valid_state
-    )
-  )
-```
-
-``` r
-dce %>% 
-  filter(state != state_norm) %>% 
-  count(state, state_norm, sort = TRUE)
-#> # A tibble: 8 × 3
-#>   state          state_norm     n
-#>   <chr>          <chr>      <int>
-#> 1 Maryland       MD            10
-#> 2 California     CA             3
-#> 3 Massachusetts  MA             3
-#> 4 Florida        FL             1
-#> 5 Minnesota      MN             1
-#> 6 Nebraska       NE             1
-#> 7 North Carolina NC             1
-#> 8 Pennsylvania   PA             1
-```
-
-``` r
-progress_table(
-  dce$state,
-  dce$state_norm,
-  compare = valid_state
-)
-#> # A tibble: 2 × 6
-#>   stage          prop_in n_distinct prop_na n_out n_diff
-#>   <chr>            <dbl>      <dbl>   <dbl> <dbl>  <dbl>
-#> 1 dce$state         1.00         60 0.00194    21      9
-#> 2 dce$state_norm    1            52 0.00194     0      1
-```
 
 ### City
 
@@ -590,194 +385,36 @@ The `campfin::normal_city()` function is a good start, again converting
 case, removing punctuation, but *expanding* USPS abbreviations. We can
 also remove `invalid_city` values.
 
-``` r
-norm_city <- dce %>% 
-  distinct(city, state_norm, zip_norm) %>% 
-  mutate(
-    city_norm = normal_city(
-      city = city, 
-      abbs = usps_city,
-      states = c("DC", "DC", "DISTRICT OF COLUMBIA"),
-      na = invalid_city,
-      na_rep = TRUE
-    )
-  )
-```
-
-#### Swap
-
-We can further improve normalization by comparing our normalized value
-against the *expected* value for that record’s state abbreviation and
-ZIP code. If the normalized value is either an abbreviation for or very
-similar to the expected value, we can confidently swap those two.
-
-``` r
-norm_city <- norm_city %>% 
-  rename(city_raw = city) %>% 
-  left_join(
-    y = zipcodes,
-    by = c(
-      "state_norm" = "state",
-      "zip_norm" = "zip"
-    )
-  ) %>% 
-  rename(city_match = city) %>% 
-  mutate(
-    match_abb = is_abbrev(city_norm, city_match),
-    match_dist = str_dist(city_norm, city_match),
-    city_swap = if_else(
-      condition = !is.na(match_dist) & (match_abb | match_dist == 1),
-      true = city_match,
-      false = city_norm
-    )
-  ) %>% 
-  select(
-    -city_match,
-    -match_dist,
-    -match_abb
-  )
-```
-
-``` r
-dce <- left_join(
-  x = dce,
-  y = norm_city,
-  by = c(
-    "city" = "city_raw", 
-    "state_norm", 
-    "zip_norm"
-  )
-)
-```
-
-#### Refine
-
-The [OpenRefine](https://openrefine.org/) algorithms can be used to
-group similar strings and replace the less common versions with their
-most common counterpart. This can greatly reduce inconsistency, but with
-low confidence; we will only keep any refined strings that have a valid
-city/state/zip combination.
-
-``` r
-good_refine <- dce %>% 
-  mutate(
-    city_refine = city_swap %>% 
-      key_collision_merge() %>% 
-      n_gram_merge(numgram = 1)
-  ) %>% 
-  filter(city_refine != city_swap) %>% 
-  inner_join(
-    y = zipcodes,
-    by = c(
-      "city_refine" = "city",
-      "state_norm" = "state",
-      "zip_norm" = "zip"
-    )
-  )
-```
-
-    #> # A tibble: 17 × 5
-    #>    state_norm zip_norm city_swap      city_refine        n
-    #>    <chr>      <chr>    <chr>          <chr>          <int>
-    #>  1 PA         19126    PHILADEPHILA   PHILADELPHIA       4
-    #>  2 OH         45263    CINCINATTI     CINCINNATI         2
-    #>  3 OH         45271    CINCINATTI     CINCINNATI         2
-    #>  4 OH         45274    CINCINATTI     CINCINNATI         2
-    #>  5 PA         19101    PHILIDEPHIA    PHILADELPHIA       2
-    #>  6 WV         25303    SO CHARLESTON  CHARLESTON         2
-    #>  7 CA         94104    SAN FRANSICO   SAN FRANCISCO      1
-    #>  8 CA         94117    SAN FRANSICO   SAN FRANCISCO      1
-    #>  9 DC         20001    WASH//INGTON   WASHINGTON         1
-    #> 10 DC         20005    WASHGINTTON    WASHINGTON         1
-    #> 11 KY         40285    LOUSIVLLE      LOUISVILLE         1
-    #> 12 MD         20774    UPPER MARLOBOR UPPER MARLBORO     1
-    #> 13 NM         87113    ALBURQURQUE    ALBUQUERQUE        1
-    #> 14 OH         45380    VERSALLIES     VERSAILLES         1
-    #> 15 PA         19118    PHILLIDELPHIA  PHILADELPHIA       1
-    #> 16 SD         57117    SOUIX FALLS    SIOUX FALLS        1
-    #> 17 VA         22031    FAIRRRFAX      FAIRFAX            1
-
-Then we can join the refined values back to the database.
-
-``` r
-dce <- dce %>% 
-  left_join(good_refine, by = names(.)) %>% 
-  mutate(city_refine = coalesce(city_refine, city_swap))
-```
-
-#### Progress
-
-Our goal for normalization was to increase the proportion of city values
-known to be valid and reduce the total distinct values by correcting
-misspellings.
-
-| stage                    | prop_in | n_distinct | prop_na | n_out | n_diff |
-|:-------------------------|--------:|-----------:|--------:|------:|-------:|
-| `str_to_upper(dce$city)` |   0.962 |       1964 |   0.001 |  4126 |    883 |
-| `dce$city_norm`          |   0.984 |       1621 |   0.003 |  1683 |    509 |
-| `dce$city_swap`          |   0.995 |       1379 |   0.003 |   574 |    245 |
-| `dce$city_refine`        |   0.995 |       1366 |   0.003 |   549 |    232 |
-
-You can see how the percentage of valid values increased with each
-stage.
-
-![](../plots/bar-progress-1.png)<!-- -->
-
-More importantly, the number of distinct values decreased each stage. We
-were able to confidently change many distinct invalid values to their
-valid equivalent.
-
-![](../plots/bar-distinct-1.png)<!-- -->
-
-Before exporting, we can remove the intermediary normalization columns
-and rename all added variables with the `_clean` suffix.
-
-``` r
-dce <- dce %>% 
-  select(
-    -city_norm,
-    -city_swap,
-    city_clean = city_refine
-  ) %>% 
-  rename_all(~str_replace(., "_norm", "_clean")) %>% 
-  rename_all(~str_remove(., "_raw")) %>% 
-  relocate(address_clean, city_clean, state_clean, .before = zip_clean)
-```
-
 ## Conclude
 
 ``` r
 glimpse(sample_n(dce, 1000))
 #> Rows: 1,000
-#> Columns: 21
-#> $ expendee_name           <chr> "Committee to Re-Elect Yvette Alexander", "Mary Cheh for DC Council", "Paul Strauss Co…
-#> $ payee_first_name        <chr> "Darryl Rose", NA, NA, NA, NA, NA, NA, "Larry", "Andre", NA, NA, NA, NA, "Kathy ", NA,…
-#> $ payee_middle_name       <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
-#> $ payee_last_name         <chr> "Rose", NA, NA, NA, NA, NA, NA, "Decker", "Jones", NA, NA, NA, NA, "Henderson", NA, NA…
-#> $ payee_organization_name <chr> NA, "ACME Printing", "ActBlue Technical Services", NA, "Beyond the Hill Strategies", "…
-#> $ number_and_street       <chr> "3608 Alabama Ave SE", "7 Aquarius Court", "366 Summer Street", "2221 North First Stre…
-#> $ city                    <chr> "Washington", "Silver Spring", "Somerville", "San Jose", "Baltimmore", "Washington", "…
-#> $ state                   <chr> "DC", "MD", "MA", "CA", "MD", "DC", "MD", "DC", "DC", "MD", "DC", "VA", "DC", "DC", "M…
-#> $ zip                     <chr> "20020", "20906", "02144-3132", "95131", "21225", "20009", "20907", "20001", "20032", …
-#> $ purpose_of_expenditure  <chr> "Consultant", "Printing", "Bank Fees", "Bank Fees", "Consultant", "Bank Fees", "Transf…
-#> $ further_explanation     <chr> NA, NA, NA, "PayPal fees", NA, "Transaction Fee", NA, NA, NA, NA, NA, NA, NA, NA, NA, …
-#> $ payment_date            <date> 2008-04-01, 2006-04-26, 2020-01-19, 2020-02-18, 2014-08-21, 2016-01-31, 2010-08-23, 2…
-#> $ amount                  <dbl> 700.00, 2296.89, 3.95, 1.03, 3040.49, 3.95, 850.00, 48.26, 60.00, 300.00, 20.00, 975.3…
-#> $ payee_name              <chr> "Darryl Rose Rose", "ACME Printing", "ActBlue Technical Services", NA, "Beyond the Hil…
-#> $ na_flag                 <lgl> FALSE, FALSE, FALSE, TRUE, FALSE, FALSE, TRUE, FALSE, FALSE, FALSE, FALSE, FALSE, FALS…
-#> $ dupe_flag               <lgl> FALSE, FALSE, FALSE, TRUE, FALSE, TRUE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALS…
-#> $ payment_year            <dbl> 2008, 2006, 2020, 2020, 2014, 2016, 2010, 2013, 2006, 2007, 2004, 2010, 2018, 2003, 20…
-#> $ address_clean           <chr> "3608 ALABAMA AVE SE", "7 AQUARIUS CT", "366 SUMMER ST", "2221 NORTH FIRST ST", "906 S…
-#> $ city_clean              <chr> "WASHINGTON", "SILVER SPRING", "SOMERVILLE", "SAN JOSE", "BALTIMMORE", "WASHINGTON", "…
-#> $ state_clean             <chr> "DC", "MD", "MA", "CA", "MD", "DC", "MD", "DC", "DC", "MD", "DC", "VA", "DC", "DC", "M…
-#> $ zip_clean               <chr> "20020", "20906", "02144", "95131", "21225", "20009", "20907", "20001", "20032", "2077…
+#> Columns: 17
+#> $ objectid          <dbl> 19123656, 19030363, 19058308, 19065371, 19085390, 19044130, 19048727, 19091516, 19070629, 19…
+#> $ candidatename     <chr> "Adrian Fenty", NA, "Lankward Smith", "David A Catania", "Dave Oberting", "Muriel Bowser", "…
+#> $ payee             <chr> "Mark Smith", "The Sexton Group", "William O'Field", "Duane Haneckow", "Stripe", "Malik Will…
+#> $ address           <chr> "6130 Banks Pl NE, Washington, DC 20018", "405 West Superior STE 703, Chicago, IL 60654", "2…
+#> $ purpose           <chr> "**assistance w/  food for Stop the Violence event", NA, "Computer Expenses", "**Laptop and …
+#> $ amount            <dbl> 79, 48, 36, 424, 79, 4250, 301, 2000, 35, 2, 8, 89, 100, 6, 250, 160, 1150, 200, 8, 485, 150…
+#> $ date              <chr> "2010-06-09", "2020-11-19", "2012-10-19", "2014-02-17", "2016-01-29", "2017-10-06", "2008-07…
+#> $ address_id        <dbl> 4419, NA, 297623, 242761, 813901, 50284, NA, NA, 239905, 252851, NA, 301099, NA, 302006, 288…
+#> $ xcoord            <dbl> 407568.6, NA, 395773.5, 397948.9, 401791.8, 402305.5, NA, NA, 397940.9, 397624.1, NA, 397207…
+#> $ ycoord            <dbl> 136037.4, NA, 139067.4, 136400.2, 140185.7, 140902.0, NA, NA, 137733.7, 142381.0, NA, 140193…
+#> $ latitude          <dbl> 38.89215, NA, 38.91947, 38.89545, 38.92955, 38.93600, NA, NA, 38.90746, 38.94932, NA, 38.929…
+#> $ longitude         <dbl> -76.91276, NA, -77.04874, -77.02364, -76.97934, -76.97341, NA, NA, -77.02374, -77.02741, NA,…
+#> $ fulladdress       <chr> "6130 BANKS PLACE NE", NA, "2070 BELMONT ROAD NW", "401 9TH STREET NW", "3100 - 3199 BLOCK O…
+#> $ gis_last_mod_dttm <chr> "2023/05/29 10:54:52+00", "2023/05/29 10:54:52+00", "2023/05/29 10:54:52+00", "2023/05/29 10…
+#> $ ward              <chr> "Ward 7", NA, "Ward 1", "Ward 2", "Ward 5", "Ward 5", NA, NA, "Ward 2", "Ward 4", NA, "Ward …
+#> $ na_flag           <lgl> FALSE, TRUE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, TRUE, FALSE, FALSE, FAL…
+#> $ payment_year      <dbl> 2010, 2020, 2012, 2014, 2016, 2017, 2008, 2010, 2012, 2022, 2015, 2014, 2003, 2014, 2011, 20…
 ```
 
-1.  There are 108,335 records in the database.
-2.  There are 4,218 duplicate records in the database.
+1.  There are 114,088 records in the database.
+2.  There are 0 duplicate records in the database.
 3.  The range and distribution of `amount` and `payment_date` seem
     reasonable.
-4.  There are 16,476 records missing key variables.
+4.  There are 15,922 records missing key variables.
 5.  Consistency in geographic data has been improved with
     `campfin::normal_*()`.
 6.  The 4-digit `year` variable has been created with
@@ -790,8 +427,8 @@ server. We will name the object using a date range of the records
 included.
 
 ``` r
-min_dt <- str_remove_all(min(dce$payment_date), "-")
-max_dt <- str_remove_all(max(dce$payment_date), "-")
+min_dt <- str_remove_all(min(dce$date), "-")
+max_dt <- str_remove_all(max(dce$date), "-")
 csv_ts <- paste(min_dt, max_dt, sep = "-")
 ```
 
@@ -800,14 +437,14 @@ clean_dir <- dir_create(here("dc", "expends", "data", "clean"))
 clean_csv <- path(clean_dir, glue("dc_expends_{csv_ts}.csv"))
 clean_rds <- path_ext_set(clean_csv, "rds")
 basename(clean_csv)
-#> [1] "dc_expends_20030101-20211230.csv"
+#> [1] "dc_expends_20030101-20230504.csv"
 ```
 
 ``` r
 write_csv(dce, clean_csv, na = "")
 write_rds(dce, clean_rds, compress = "xz")
 (clean_size <- file_size(clean_csv))
-#> 19M
+#> 20.9M
 ```
 
 ## Upload
