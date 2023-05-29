@@ -1,17 +1,17 @@
 Texas Expenditures
 ================
-Kiernan Nicholls
-2020-07-13 17:55:51
+Kiernan Nicholls & Yanqi Xu
+2023-05-27 23:35:23
 
-  - [Project](#project)
-  - [Objectives](#objectives)
-  - [Packages](#packages)
-  - [Data](#data)
-  - [Explore](#explore)
-  - [Wrangle](#wrangle)
-  - [Conclude](#conclude)
-  - [Export](#export)
-  - [Upload](#upload)
+- <a href="#project" id="toc-project">Project</a>
+- <a href="#objectives" id="toc-objectives">Objectives</a>
+- <a href="#packages" id="toc-packages">Packages</a>
+- <a href="#data" id="toc-data">Data</a>
+- <a href="#explore" id="toc-explore">Explore</a>
+- <a href="#wrangle" id="toc-wrangle">Wrangle</a>
+- <a href="#conclude" id="toc-conclude">Conclude</a>
+- <a href="#export" id="toc-export">Export</a>
+- <a href="#upload" id="toc-upload">Upload</a>
 
 <!-- Place comments regarding knitting here -->
 
@@ -88,7 +88,7 @@ feature and should be run as such. The project also uses the dynamic
 ``` r
 # where does this document knit?
 here::here()
-#> [1] "/home/kiernan/Code/tap/R_campfin"
+#> [1] "/Users/yanqixu/code/accountability_datacleaning"
 ```
 
 ## Data
@@ -121,42 +121,36 @@ file](https://www.ethics.state.tx.us/data/search/cf/CFS-ReadMe.txt).
 
 ``` r
 readme_url <- "https://www.ethics.state.tx.us/data/search/cf/CFS-ReadMe.txt"
-readme <- read_lines(here("tx", "expends", "CFS-ReadMe.txt"))
+readme <- read_lines(here("state","tx", "expends", "CFS-ReadMe.txt"))
 ```
 
 At the top of this file is a table of contents.
 
 ``` r
-read_table(readme[seq(13, 47, 2)][-2]) %>% 
-  unite(`File Contents`, 2:3, sep = " ") %>% 
-  mutate(
-    `File Name(s)` = `File Name(s)` %>% 
-      str_split(",\\s") %>% 
-      map(md_code) %>% 
-      map_chr(str_c, collapse = ", "),
-    `File Contents` = str_trunc(`File Contents`, width = 30)
-  ) %>% 
+read_fwf(readme[seq(13, 47, 2)][-c(1,2)] %>% I()) %>% 
+  select(-c(3,5)) %>% 
+  rename(record_name = X1, file_content=X2, file_name = X4) %>% 
   kable()
 ```
 
-| Record Name      | File Contents                 | File Name(s)                                    |
-| :--------------- | :---------------------------- | :---------------------------------------------- |
-| AssetData        | Assets - Schedule M           | `assets.csv`                                    |
-| CandidateData    | Direct Campaign Expenditure…  | `cand.csv`                                      |
-| ContributionData | Contributions - Schedules A/C | `contribs_##.csv`, `cont_ss.csv`, `cont_t.csv,` |
-| CoverSheet1Data  | Cover Sheet 1 - Cover sheet…  | `cover.csv`, `cover_ss.csv`, `cover_t.csv`      |
-| CoverSheet2Data  | Cover Sheet 2 - Notices rec…  | `notices.csv`                                   |
-| CoverSheet3Data  | Cover Sheet 3 - Committee p…  | `purpose.csv`                                   |
-| CreditData       | Credits - Schedule K          | `credits.csv`                                   |
-| DebtData         | Debts - Schedule L            | `debts.csv`                                     |
-| ExpendData       | Expenditures - Schedules F/…  | `expend_##.csv`, `expn_t.csv`                   |
-| ExpendCategory   | Expenditure category codes    | `expn_catg.csv`                                 |
-| FilerData        | Filer index                   | `filers.csv`                                    |
-| FinalData        | Final reports                 | `final.csv`                                     |
-| LoanData         | Loans - Schedule E            | `loans.csv`                                     |
-| PledgeData       | Pledges - Schedule B          | `pledges.csv`, `pldg_ss.csv`, `pldg_t.csv`      |
-| SpacData         | Index of Specific-purpose c…  | `spacs.csv`                                     |
-| TravelData       | Travel outside the State of…  | `travel.csv`                                    |
+| record_name      | file_content                                          | file_name                                  |
+|:-----------------|:------------------------------------------------------|:-------------------------------------------|
+| AssetData        | Assets - Schedule M                                   | assets.csv                                 |
+| CandidateData    | Direct Campaign Expenditure Candidates                | cand.csv                                   |
+| ContributionData | Contributions - Schedules A/C                         | contribs\_##.csv, cont_ss.csv, cont_t.csv, |
+| CoverSheet1Data  | Cover Sheet 1 - Cover sheet information and totals    | cover.csv, cover_ss.csv, cover_t.csv       |
+| CoverSheet2Data  | Cover Sheet 2 - Notices received by candidates/office | notices.csv                                |
+| CoverSheet3Data  | Cover Sheet 3 - Committee purpose                     | purpose.csv                                |
+| CreditData       | Credits - Schedule K                                  | credits.csv                                |
+| DebtData         | Debts - Schedule L                                    | debts.csv                                  |
+| ExpendData       | Expenditures - Schedules F/G/H/I                      | expend\_##.csv, expn_t.csv                 |
+| ExpendCategory   | Expenditure category codes                            | expn_catg.csv                              |
+| FilerData        | Filer index                                           | filers.csv                                 |
+| FinalData        | Final reports                                         | final.csv                                  |
+| LoanData         | Loans - Schedule E                                    | loans.csv                                  |
+| PledgeData       | Pledges - Schedule B                                  | pledges.csv, pldg_ss.csv, pldg_t.csv       |
+| SpacData         | Index of Specific-purpose committees                  | spacs.csv                                  |
+| TravelData       | Travel outside the State of Texas - Schedule T        | travel.csv                                 |
 
 From this table, we know the ExpendData record (`contribs_##.csv`)
 contains the data we want.
@@ -168,7 +162,7 @@ contains the data we want.
 > the next regular campaign finance report.
 
 | Pos | Field                      | Type       | Mask          | Len | Description                                                                |
-| --: | :------------------------- | :--------- | :------------ | --: | :------------------------------------------------------------------------- |
+|----:|:---------------------------|:-----------|:--------------|----:|:---------------------------------------------------------------------------|
 |   1 | `record_type`              | String     |               |  20 | Record type code - always EXPN                                             |
 |   2 | `form_type_cd`             | String     |               |  20 | TEC form used                                                              |
 |   3 | `sched_form_type_cd`       | String     |               |  20 | TEC Schedule Used                                                          |
@@ -210,15 +204,18 @@ The ExpendCategory record is a small table explaining the expenditure
 category codes used.
 
 | Pos | Field                        | Type   | Mask | Len | Description                      |
-| --: | :--------------------------- | :----- | :--- | --: | :------------------------------- |
+|----:|:-----------------------------|:-------|:-----|----:|:---------------------------------|
 |   1 | `record_type`                | String |      |  20 | Record type code - always EXCAT  |
 |   2 | `expend_category_code_value` | String |      |  30 | Expenditure category code        |
 |   3 | `expend_category_code_label` | String |      | 100 | Expenditure category description |
 
 ### Download
 
+The data was accessed on May 27, 2023 and included updates through May
+16, 2023.
+
 ``` r
-raw_dir <- dir_create(here("tx", "expends", "data", "raw"))
+raw_dir <- dir_create(here("state","tx", "expends", "data", "raw"))
 zip_url <- "https://www.ethics.state.tx.us/data/search/cf/TEC_CF_CSV.zip"
 zip_file <- path(raw_dir, basename(zip_url))
 ```
@@ -237,7 +234,7 @@ if (!file_exists(zip_file)) {
 
 ### Extract
 
-There are 80 CSV files inside the ZIP archive.
+There are 113 CSV files inside the ZIP archive.
 
 ``` r
 zip_contents <- 
@@ -307,54 +304,58 @@ txe <- vroom(
 
 ``` r
 glimpse(txe)
-#> Rows: 3,676,011
-#> Columns: 32
-#> $ form           <chr> "MPAC", "MPAC", "MPAC", "MPAC", "MPAC", "MPAC", "MPAC", "MPAC", "MPAC", "…
-#> $ schedule       <chr> "F1", "F1", "F1", "F1", "F1", "F1", "F1", "F1", "F1", "F1", "F1", "F1", "…
-#> $ report_id      <chr> "157773", "323134", "157773", "311114", "157773", "235729", "207492", "29…
-#> $ received       <date> 2000-10-12, 2006-11-01, 2000-10-12, 2006-06-01, 2000-10-12, 2004-01-02, …
-#> $ info_flag      <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FAL…
-#> $ filer_id       <chr> "00010883", "00010883", "00010883", "00010883", "00010883", "00010883", "…
-#> $ filer_type     <chr> "MPAC", "MPAC", "MPAC", "MPAC", "MPAC", "MPAC", "MPAC", "MPAC", "MPAC", "…
-#> $ filer          <chr> "THE EL PASO ENERGY CORPORATION PAC", "El Paso Corporation PAC", "THE EL …
-#> $ id             <chr> "100000001", "100000002", "100000003", "100000004", "100000005", "1000000…
-#> $ date           <date> 2000-09-14, 2006-10-10, 2000-09-12, 2006-05-02, 2000-09-01, 2003-12-17, …
-#> $ amount         <dbl> 1000.00, 1000.00, 500.00, 1000.00, 2500.00, 250.00, 1000.00, 1000.00, 200…
-#> $ describe       <chr> "CONTRIBUTION TO POLITICAL COMMITTEE", "Desc:Direct Contribution", "CONTR…
-#> $ category       <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
-#> $ description    <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
-#> $ itemize_flag   <lgl> TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, T…
-#> $ travel_flag    <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FAL…
-#> $ politics_flag  <lgl> TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, T…
-#> $ reimburse_flag <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FAL…
-#> $ corp_flag      <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FAL…
-#> $ liveexp_flag   <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FAL…
-#> $ payee_type     <chr> "ENTITY", "ENTITY", "ENTITY", "ENTITY", "ENTITY", "ENTITY", "ENTITY", "EN…
-#> $ vendor         <chr> "WARREN CHISUM CAMPAIGN", "Alaskans For Don Young", "GARNET COLEMAN CAMPA…
-#> $ last           <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "RICHARDS…
-#> $ suffix         <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "III", NA…
-#> $ first          <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "JOEL", N…
-#> $ prefix         <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
-#> $ addr1          <chr> "P.O. BOX 1512", "2504 Fairbanks Street", "P. O. BOX 88140", "1331 H Stre…
-#> $ addr2          <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, "Suite A", NA, "104 Hume Avenue", NA,…
-#> $ city           <chr> "PAMPA", "Anchorage", "HOUSTON", "Washington", "HOUSTON", "WACO", "VICTOR…
-#> $ state          <chr> "TX", "AK", "TX", "DC", "TX", "TX", "TX", "LA", "TX", "DC", "TX", "VA", "…
-#> $ zip            <chr> "79066-1512", "99503", "77288", "20005", "77098", "76702", "77402", "7001…
-#> $ region         <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
+#> Rows: 4,355,908
+#> Columns: 34
+#> $ form               <chr> "MPAC", "MPAC", "MPAC", "MPAC", "MPAC", "MPAC", "MPAC", "MPAC", "MPAC"…
+#> $ schedule           <chr> "F1", "F1", "F1", "F1", "F1", "F1", "F1", "F1", "F1", "F1", "F1", "F1"…
+#> $ report_id          <chr> "157773", "323134", "157773", "311114", "157773", "235729", "207492", …
+#> $ received           <chr> "20001012", "20061101", "20001012", "20060601", "20001012", "20040102"…
+#> $ info_flag          <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, …
+#> $ filer_id           <chr> "00010883", "00010883", "00010883", "00010883", "00010883", "00010883"…
+#> $ filer_type         <chr> "MPAC", "MPAC", "MPAC", "MPAC", "MPAC", "MPAC", "MPAC", "MPAC", "MPAC"…
+#> $ filer              <chr> "THE EL PASO ENERGY CORPORATION PAC", "El Paso Corporation PAC", "THE …
+#> $ id                 <dbl> 1e+08, 1e+08, 1e+08, 1e+08, 1e+08, 1e+08, 1e+08, 1e+08, 1e+08, 1e+08, …
+#> $ date               <chr> "20000914", "20061010", "20000912", "20060502", "20000901", "20031217"…
+#> $ amount             <chr> "1000.00", "1000.00", "500.00", "1000.00", "2500.00", "250.00", "1000.…
+#> $ describe           <chr> "CONTRIBUTION TO POLITICAL COMMITTEE", "Desc:Direct Contribution", "CO…
+#> $ category           <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
+#> $ description        <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
+#> $ itemize_flag       <lgl> TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE…
+#> $ travel_flag        <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, …
+#> $ politics_flag      <lgl> TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE…
+#> $ reimburse_flag     <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, …
+#> $ corp_flag          <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, …
+#> $ liveexp_flag       <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, …
+#> $ payee_type         <chr> "ENTITY", "ENTITY", "ENTITY", "ENTITY", "ENTITY", "ENTITY", "ENTITY", …
+#> $ vendor             <chr> "WARREN CHISUM CAMPAIGN", "Alaskans For Don Young", "GARNET COLEMAN CA…
+#> $ last               <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "RICHA…
+#> $ suffix             <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "III",…
+#> $ first              <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "JOEL"…
+#> $ prefix             <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
+#> $ addr1              <chr> "P.O. BOX 1512", "2504 Fairbanks Street", "P. O. BOX 88140", "1331 H S…
+#> $ addr2              <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, "Suite A", NA, "104 Hume Avenue", …
+#> $ city               <chr> "PAMPA", "Anchorage", "HOUSTON", "Washington", "HOUSTON", "WACO", "VIC…
+#> $ state              <chr> "TX", "AK", "TX", "DC", "TX", "TX", "TX", "LA", "TX", "DC", "TX", "VA"…
+#> $ zip                <chr> "79066-1512", "99503", "77288", "20005", "77098", "76702", "77402", "7…
+#> $ region             <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
+#> $ credit_card_issuer <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
+#> $ repayment_dt       <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
 tail(txe)
-#> # A tibble: 6 x 32
-#>   form  schedule report_id received   info_flag filer_id filer_type filer id    date       amount
-#>   <chr> <chr>    <chr>     <date>     <lgl>     <chr>    <chr>      <chr> <chr> <date>      <dbl>
-#> 1 JCOH  F1       100789564 2020-07-12 FALSE     00081704 JCOH       Mays… 1042… 2020-05-29   12  
-#> 2 JCOH  F1       100789564 2020-07-12 FALSE     00081704 JCOH       Mays… 1042… 2020-06-30   12  
-#> 3 JCOH  F1       100789564 2020-07-12 FALSE     00081704 JCOH       Mays… 1042… 2020-02-21  108. 
-#> 4 JCOH  F1       100789564 2020-07-12 FALSE     00081704 JCOH       Mays… 1042… 2020-02-26   49.6
-#> 5 JCOH  F1       100789564 2020-07-12 FALSE     00081704 JCOH       Mays… 1042… 2020-02-27   46.2
-#> 6 GPAC  F1       100789781 2020-07-12 FALSE     00016824 GPAC       Waco… 1042… 2020-03-24 2396. 
-#> # … with 21 more variables: describe <chr>, category <chr>, description <chr>, itemize_flag <lgl>,
-#> #   travel_flag <lgl>, politics_flag <lgl>, reimburse_flag <lgl>, corp_flag <lgl>,
-#> #   liveexp_flag <lgl>, payee_type <chr>, vendor <chr>, last <chr>, suffix <chr>, first <chr>,
-#> #   prefix <chr>, addr1 <chr>, addr2 <chr>, city <chr>, state <chr>, zip <chr>, region <chr>
+#> # A tibble: 6 × 34
+#>   form  schedule report…¹ recei…² info_…³ filer…⁴ filer…⁵ filer     id date  amount descr…⁶ categ…⁷
+#>   <chr> <chr>    <chr>    <chr>   <lgl>   <chr>   <chr>   <chr>  <dbl> <chr> <chr>  <chr>   <chr>  
+#> 1 CEC   F1       1009046… 202305… FALSE   000551… CEC     Nuec… 1.05e8 2022… 18.48  "Merch… FEES   
+#> 2 CEC   F1       1009046… 202305… FALSE   000551… CEC     Nuec… 1.05e8 2022… 123.38 "Merch… FEES   
+#> 3 CEC   F1       1009046… 202305… FALSE   000551… CEC     Nuec… 1.05e8 2022… 7.15   "Merch… FEES   
+#> 4 CEC   F1       1009046… 202305… FALSE   000551… CEC     Nuec… 1.05e8 2022… 2.78   "Merch… FEES   
+#> 5 CEC   F1       1009046… 202305… FALSE   000551… CEC     Nuec… 1.05e8 2022… 14.15  "Merch… FEES   
+#> 6 CEC   F1       1009028… 202305… FALSE   000551… CEC     Nuec… 1.05e8 2022… 350.15 "Merch… FEES   
+#> # … with 21 more variables: description <chr>, itemize_flag <lgl>, travel_flag <lgl>,
+#> #   politics_flag <lgl>, reimburse_flag <lgl>, corp_flag <lgl>, liveexp_flag <lgl>,
+#> #   payee_type <chr>, vendor <chr>, last <chr>, suffix <chr>, first <chr>, prefix <chr>,
+#> #   addr1 <chr>, addr2 <chr>, city <chr>, state <chr>, zip <chr>, region <chr>,
+#> #   credit_card_issuer <chr>, repayment_dt <chr>, and abbreviated variable names ¹​report_id,
+#> #   ²​received, ³​info_flag, ⁴​filer_id, ⁵​filer_type, ⁶​describe, ⁷​category
 ```
 
 ### Missing
@@ -363,41 +364,43 @@ Columns vary in their degree of missing values.
 
 ``` r
 col_stats(txe, count_na)
-#> # A tibble: 32 x 4
-#>    col            class        n        p
-#>    <chr>          <chr>    <int>    <dbl>
-#>  1 form           <chr>        0 0       
-#>  2 schedule       <chr>        0 0       
-#>  3 report_id      <chr>        0 0       
-#>  4 received       <date>     520 0.000141
-#>  5 info_flag      <lgl>        0 0       
-#>  6 filer_id       <chr>        0 0       
-#>  7 filer_type     <chr>        0 0       
-#>  8 filer          <chr>      559 0.000152
-#>  9 id             <chr>        0 0       
-#> 10 date           <date>   21282 0.00579 
-#> 11 amount         <dbl>    21275 0.00579 
-#> 12 describe       <chr>    25154 0.00684 
-#> 13 category       <chr>  1574259 0.428   
-#> 14 description    <chr>  3586682 0.976   
-#> 15 itemize_flag   <lgl>        0 0       
-#> 16 travel_flag    <lgl>        0 0       
-#> 17 politics_flag  <lgl>   670044 0.182   
-#> 18 reimburse_flag <lgl>        0 0       
-#> 19 corp_flag      <lgl>    14990 0.00408 
-#> 20 liveexp_flag   <lgl>   349203 0.0950  
-#> 21 payee_type     <chr>    20092 0.00547 
-#> 22 vendor         <chr>   812041 0.221   
-#> 23 last           <chr>  2883096 0.784   
-#> 24 suffix         <chr>  3666975 0.998   
-#> 25 first          <chr>  2886387 0.785   
-#> 26 prefix         <chr>  3434303 0.934   
-#> 27 addr1          <chr>    57490 0.0156  
-#> 28 addr2          <chr>  3340151 0.909   
-#> 29 city           <chr>    39237 0.0107  
-#> 30 state          <chr>    31176 0.00848 
-#> 31 zip            <chr>    53305 0.0145  
-#> 32 region         <chr>  3674794 1.00
+#> # A tibble: 34 × 4
+#>    col                class       n        p
+#>    <chr>              <chr>   <int>    <dbl>
+#>  1 form               <chr>       0 0       
+#>  2 schedule           <chr>       0 0       
+#>  3 report_id          <chr>       0 0       
+#>  4 received           <chr>     520 0.000119
+#>  5 info_flag          <lgl>       0 0       
+#>  6 filer_id           <chr>       0 0       
+#>  7 filer_type         <chr>       0 0       
+#>  8 filer              <chr>     559 0.000128
+#>  9 id                 <dbl>       0 0       
+#> 10 date               <chr>   21293 0.00489 
+#> 11 amount             <chr>   21286 0.00489 
+#> 12 describe           <chr>   25173 0.00578 
+#> 13 category           <chr> 1582020 0.363   
+#> 14 description        <chr> 4231240 0.971   
+#> 15 itemize_flag       <lgl>       0 0       
+#> 16 travel_flag        <lgl>       0 0       
+#> 17 politics_flag      <lgl> 1003220 0.230   
+#> 18 reimburse_flag     <lgl>     529 0.000121
+#> 19 corp_flag          <lgl>   15410 0.00354 
+#> 20 liveexp_flag       <lgl>  644505 0.148   
+#> 21 payee_type         <chr>   20092 0.00461 
+#> 22 vendor             <chr>  941201 0.216   
+#> 23 last               <chr> 3433850 0.788   
+#> 24 suffix             <chr> 4345708 0.998   
+#> 25 first              <chr> 3437480 0.789   
+#> 26 prefix             <chr> 4087944 0.938   
+#> 27 addr1              <chr>   63546 0.0146  
+#> 28 addr2              <chr> 3940060 0.905   
+#> 29 city               <chr>   43543 0.0100  
+#> 30 state              <chr>   34101 0.00783 
+#> 31 zip                <chr>   59260 0.0136  
+#> 32 region             <chr> 4353231 0.999   
+#> 33 credit_card_issuer <chr> 4351884 0.999   
+#> 34 repayment_dt       <chr> 4355908 1
 ```
 
 We can use `campfin::flag_na()` to create a new `na_flag` variable to
@@ -416,7 +419,7 @@ txe <- txe %>%
 
 ``` r
 percent(mean(txe$na_flag), 0.01)
-#> [1] "0.60%"
+#> [1] "0.50%"
 ```
 
 ``` r
@@ -425,20 +428,20 @@ txe %>%
   select(last, vendor, date, amount, filer) %>% 
   distinct() %>% 
   sample_frac()
-#> # A tibble: 1,671 x 5
-#>    last  vendor                     date       amount filer                                        
-#>    <chr> <chr>                      <date>      <dbl> <chr>                                        
-#>  1 <NA>  <NA>                       NA             NA Grimes County Republican Party               
-#>  2 <NA>  <NA>                       2008-05-13    100 GREEN PARTY OF TEXAS                         
-#>  3 <NA>  <NA>                       NA             NA Corpus Christi Police Officers' Association  
-#>  4 <NA>  <NA>                       NA             NA Mitchell, Monte M. (Dr.)                     
-#>  5 <NA>  <NA>                       NA             NA Baytown Fire Fighters Political Action Commi…
-#>  6 <NA>  U--Haul Moving & Storage   NA             NA Turner, Scott (The Honorable)                
-#>  7 <NA>  Dewhurst Campaign Committ… 2008-09-29   1000 <NA>                                         
-#>  8 <NA>  Whit-Co Printing           NA             NA Price IV, Walter T. (The Honorable)          
-#>  9 <NA>  Southwest Airlines         NA             NA Parker IV, Nathaniel W. (The Honorable)      
-#> 10 <NA>  <NA>                       NA             NA Texas Vote Environment                       
-#> # … with 1,661 more rows
+#> # A tibble: 1,690 × 5
+#>    last  vendor                               date     amount  filer                               
+#>    <chr> <chr>                                <chr>    <chr>   <chr>                               
+#>  1 <NA>  <NA>                                 <NA>     <NA>    Grimes County Republican Party      
+#>  2 <NA>  <NA>                                 20080513 100.00  GREEN PARTY OF TEXAS                
+#>  3 <NA>  <NA>                                 <NA>     <NA>    Corpus Christi Police Officers' Ass…
+#>  4 <NA>  <NA>                                 <NA>     <NA>    Mitchell, Monte M. (Dr.)            
+#>  5 <NA>  <NA>                                 <NA>     <NA>    Baytown Fire Fighters Political Act…
+#>  6 <NA>  U--Haul Moving & Storage             <NA>     <NA>    Turner, Scott (The Honorable)       
+#>  7 <NA>  Dewhurst Campaign Committee          20080929 1000.00 <NA>                                
+#>  8 <NA>  JW Marriott San Antonio Hill Country <NA>     <NA>    Price IV, Walter T. (The Honorable) 
+#>  9 <NA>  Starbucks                            <NA>     <NA>    Parker IV, Nathaniel W. (The Honora…
+#> 10 <NA>  <NA>                                 <NA>     <NA>    Texas Vote Environment              
+#> # … with 1,680 more rows
 ```
 
 ### Duplicates
@@ -451,35 +454,61 @@ d1 <- duplicated(select(txe, -id), fromLast = FALSE)
 d2 <- duplicated(select(txe, -id), fromLast = TRUE)
 txe <- mutate(txe, dupe_flag = d1 | d2)
 percent(mean(txe$dupe_flag), 0.01)
-#> [1] "2.81%"
 rm(d1, d2); flush_memory()
+```
+
+``` r
+dupe_file <- here("state","tx", "expends", "dupes.txt")
+```
+
+``` r
+txe %>% select(id,dupe_flag) %>% filter(dupe_flag) %>% write_csv(dupe_file, na="")
+```
+
+``` r
+dupes <- read_csv(
+  file = dupe_file,
+  col_types = cols(
+    id = col_double(),
+    dupe_flag = col_logical()
+  )
+)
+comma(nrow(dupes))
+#> [1] "137,351"
+```
+
+``` r
+txe <- left_join(txe, dupes, by = "id")
+txe <- mutate(txe, dupe_flag = !is.na(dupe_flag))
+percent(mean(txe$dupe_flag), 0.01)
+#> [1] "3.15%"
 ```
 
 ``` r
 txe %>% 
   filter(dupe_flag) %>% 
   select(last, vendor, date, amount, filer)
-#> # A tibble: 103,189 x 5
-#>    last    vendor                                 date       amount filer                       
-#>    <chr>   <chr>                                  <date>      <dbl> <chr>                       
-#>  1 <NA>    Mike Ross for Congress                 2007-10-18 5000   El Paso Corporation PAC     
-#>  2 <NA>    Mike Ross for Congress                 2007-10-18 5000   El Paso Corporation PAC     
-#>  3 <NA>    Democratic Congressional Campaign Cmte 2006-12-21 5000   El Paso Corporation PAC     
-#>  4 <NA>    Democratic Congressional Campaign Cmte 2006-12-21 5000   El Paso Corporation PAC     
-#>  5 Patrick <NA>                                   2014-05-20 5000   Texas Chiropractic Assn. PAC
-#>  6 Patrick <NA>                                   2014-05-20 5000   Texas Chiropractic Assn. PAC
-#>  7 <NA>    Dell Financial Services                2009-05-20   28.6 Texas Democratic Party      
-#>  8 <NA>    Dell Financial Services                2009-05-20   28.6 Texas Democratic Party      
-#>  9 <NA>    IBEW Building                          2012-09-06 3831.  Texas Democratic Party      
-#> 10 <NA>    IBEW Building                          2012-09-06 3831.  Texas Democratic Party      
-#> # … with 103,179 more rows
+#> # A tibble: 137,351 × 5
+#>    last    vendor                                 date     amount  filer                       
+#>    <chr>   <chr>                                  <chr>    <chr>   <chr>                       
+#>  1 <NA>    Mike Ross for Congress                 20071018 5000.00 El Paso Corporation PAC     
+#>  2 <NA>    Mike Ross for Congress                 20071018 5000.00 El Paso Corporation PAC     
+#>  3 <NA>    Democratic Congressional Campaign Cmte 20061221 5000.00 El Paso Corporation PAC     
+#>  4 <NA>    Democratic Congressional Campaign Cmte 20061221 5000.00 El Paso Corporation PAC     
+#>  5 Patrick <NA>                                   20140520 5000.00 Texas Chiropractic Assn. PAC
+#>  6 Patrick <NA>                                   20140520 5000.00 Texas Chiropractic Assn. PAC
+#>  7 <NA>    Dell Financial Services                20090520 28.62   Texas Democratic Party      
+#>  8 <NA>    Dell Financial Services                20090520 28.62   Texas Democratic Party      
+#>  9 <NA>    IBEW Building                          20120906 3831.09 Texas Democratic Party      
+#> 10 <NA>    IBEW Building                          20120906 3831.09 Texas Democratic Party      
+#> # … with 137,341 more rows
 ```
 
 Much of these duplicate variables are also missing values
 
 ``` r
 percent(mean(txe$na_flag[txe$dupe_flag]), 0.01)
-#> [1] "19.36%"
+#> [1] "14.57%"
 ```
 
 ``` r
@@ -487,58 +516,62 @@ txe %>%
   filter(dupe_flag) %>% 
   select(last, vendor, date, amount, filer) %>% 
   col_stats(count_na)
-#> # A tibble: 5 x 4
+#> # A tibble: 5 × 4
 #>   col    class      n         p
 #>   <chr>  <chr>  <int>     <dbl>
-#> 1 last   <chr>  94227 0.913    
-#> 2 vendor <chr>  28587 0.277    
-#> 3 date   <date> 19970 0.194    
-#> 4 amount <dbl>  19970 0.194    
-#> 5 filer  <chr>      2 0.0000194
+#> 1 last   <chr> 121157 0.882    
+#> 2 vendor <chr>  35819 0.261    
+#> 3 date   <chr>  20011 0.146    
+#> 4 amount <chr>  20011 0.146    
+#> 5 filer  <chr>      2 0.0000146
 ```
 
 ### Categorical
 
 ``` r
 col_stats(txe, n_distinct)
-#> # A tibble: 34 x 4
-#>    col            class        n           p
-#>    <chr>          <chr>    <int>       <dbl>
-#>  1 form           <chr>       27 0.00000734 
-#>  2 schedule       <chr>       12 0.00000326 
-#>  3 report_id      <chr>   149863 0.0408     
-#>  4 received       <date>    6041 0.00164    
-#>  5 info_flag      <lgl>        2 0.000000544
-#>  6 filer_id       <chr>     8222 0.00224    
-#>  7 filer_type     <chr>       14 0.00000381 
-#>  8 filer          <chr>    13698 0.00373    
-#>  9 id             <chr>  3676011 1          
-#> 10 date           <date>    7540 0.00205    
-#> 11 amount         <dbl>   212245 0.0577     
-#> 12 describe       <chr>   770492 0.210      
-#> 13 category       <chr>       21 0.00000571 
-#> 14 description    <chr>    17236 0.00469    
-#> 15 itemize_flag   <lgl>        1 0.000000272
-#> 16 travel_flag    <lgl>        2 0.000000544
-#> 17 politics_flag  <lgl>        3 0.000000816
-#> 18 reimburse_flag <lgl>        2 0.000000544
-#> 19 corp_flag      <lgl>        3 0.000000816
-#> 20 liveexp_flag   <lgl>        3 0.000000816
-#> 21 payee_type     <chr>        3 0.000000816
-#> 22 vendor         <chr>   311119 0.0846     
-#> 23 last           <chr>    43309 0.0118     
-#> 24 suffix         <chr>       33 0.00000898 
-#> 25 first          <chr>    28395 0.00772    
-#> 26 prefix         <chr>       31 0.00000843 
-#> 27 addr1          <chr>   527871 0.144      
-#> 28 addr2          <chr>    28726 0.00781    
-#> 29 city           <chr>    17318 0.00471    
-#> 30 state          <chr>      101 0.0000275  
-#> 31 zip            <chr>    46457 0.0126     
-#> 32 region         <chr>      180 0.0000490  
-#> 33 na_flag        <lgl>        2 0.000000544
-#> 34 dupe_flag      <lgl>        2 0.000000544
+#> # A tibble: 36 × 4
+#>    col                class       n           p
+#>    <chr>              <chr>   <int>       <dbl>
+#>  1 form               <chr>      27 0.00000620 
+#>  2 schedule           <chr>      12 0.00000275 
+#>  3 report_id          <chr>  177459 0.0407     
+#>  4 received           <chr>    6955 0.00160    
+#>  5 info_flag          <lgl>       2 0.000000459
+#>  6 filer_id           <chr>    9547 0.00219    
+#>  7 filer_type         <chr>      14 0.00000321 
+#>  8 filer              <chr>   15292 0.00351    
+#>  9 id                 <dbl> 4355908 1          
+#> 10 date               <chr>    8569 0.00197    
+#> 11 amount             <chr>  245214 0.0563     
+#> 12 describe           <chr>  877414 0.201      
+#> 13 category           <chr>      21 0.00000482 
+#> 14 description        <chr>   21336 0.00490    
+#> 15 itemize_flag       <lgl>       1 0.000000230
+#> 16 travel_flag        <lgl>       2 0.000000459
+#> 17 politics_flag      <lgl>       3 0.000000689
+#> 18 reimburse_flag     <lgl>       3 0.000000689
+#> 19 corp_flag          <lgl>       3 0.000000689
+#> 20 liveexp_flag       <lgl>       3 0.000000689
+#> 21 payee_type         <chr>       3 0.000000689
+#> 22 vendor             <chr>  347306 0.0797     
+#> 23 last               <chr>   49686 0.0114     
+#> 24 suffix             <chr>      36 0.00000826 
+#> 25 first              <chr>   31611 0.00726    
+#> 26 prefix             <chr>      33 0.00000758 
+#> 27 addr1              <chr>  595552 0.137      
+#> 28 addr2              <chr>   32079 0.00736    
+#> 29 city               <chr>   18509 0.00425    
+#> 30 state              <chr>     100 0.0000230  
+#> 31 zip                <chr>   54501 0.0125     
+#> 32 region             <chr>     276 0.0000634  
+#> 33 credit_card_issuer <chr>      22 0.00000505 
+#> 34 repayment_dt       <chr>       1 0.000000230
+#> 35 na_flag            <lgl>       2 0.000000459
+#> 36 dupe_flag          <lgl>       2 0.000000459
 ```
+
+![](../plots/distinct_plot-1.png)<!-- -->![](../plots/distinct_plot-2.png)<!-- -->![](../plots/distinct_plot-3.png)<!-- -->
 
 ``` r
 txe %>% 
@@ -551,29 +584,33 @@ txe %>%
   kable(digits = 2)
 ```
 
-| lgl\_var        | prop\_true |
-| :-------------- | ---------: |
-| info\_flag      |       0.16 |
-| itemize\_flag   |       1.00 |
-| travel\_flag    |       0.00 |
-| politics\_flag  |         NA |
-| reimburse\_flag |       0.04 |
-| corp\_flag      |         NA |
-| liveexp\_flag   |         NA |
-| na\_flag        |       0.01 |
-| dupe\_flag      |       0.03 |
+| lgl_var        | prop_true |
+|:---------------|----------:|
+| info_flag      |      0.15 |
+| itemize_flag   |      1.00 |
+| travel_flag    |      0.00 |
+| politics_flag  |        NA |
+| reimburse_flag |        NA |
+| corp_flag      |        NA |
+| liveexp_flag   |        NA |
+| na_flag        |      0.01 |
+| dupe_flag      |      0.03 |
 
 ### Amounts
 
-The `amount` value ranges from a -$5,000 minimum to $16,996,410, with
-only 15 records having a value less than $0.
+``` r
+txe <- txe %>% mutate(amount = as.numeric(amount))
+```
+
+The `amount` value ranges from a -\$5,000 minimum to \$21,069,022, with
+only 15 records having a value less than \$0.
 
 ``` r
 noquote(map_chr(summary(txe$amount), dollar))
 #>        Min.     1st Qu.      Median        Mean     3rd Qu.        Max.        NA's 
-#>     -$5,000      $47.57     $161.10   $1,258.26        $550 $16,996,410     $21,275
+#>     -$5,000      $45.22     $162.13   $1,419.03     $595.22 $21,069,022     $21,286
 sum(txe$amount <= 0, na.rm = TRUE)
-#> [1] 319
+#> [1] 419
 ```
 
 The logarithm of `expend_amount` is normally distributed around the
@@ -595,21 +632,22 @@ To better explore and search the database, we will create a `year`
 variable from `date` using `lubridate::year()`
 
 ``` r
+txe <- txe %>% mutate(date = as.Date(date, format = "%Y%m%d"))
 txe <- mutate(txe, year = year(date))
 ```
 
-The date range is fairly clean, with 0 values after 2020-07-13 and only
+The date range is fairly clean, with 0 values after 2023-05-27 and only
 91 before the year 2000.
 
 ``` r
 percent(prop_na(txe$date), 0.01)
-#> [1] "0.58%"
+#> [1] "0.49%"
 min(txe$date, na.rm = TRUE)
 #> [1] "1994-10-01"
 sum(txe$year < 2000, na.rm = TRUE)
 #> [1] 91
 max(txe$date, na.rm = TRUE)
-#> [1] "2020-07-12"
+#> [1] "2023-05-11"
 sum(txe$date > today(), na.rm = TRUE)
 #> [1] 0
 ```
@@ -620,12 +658,12 @@ through 2019. We will flag these records.
 
 ``` r
 count(txe, year, sort = FALSE) %>% print(n = 23)
-#> # A tibble: 24 x 2
+#> # A tibble: 27 × 2
 #>     year      n
 #>    <dbl>  <int>
 #>  1  1994     14
 #>  2  1999     77
-#>  3  2000  83693
+#>  3  2000  83695
 #>  4  2001  80415
 #>  5  2002 177322
 #>  6  2003  86667
@@ -638,15 +676,15 @@ count(txe, year, sort = FALSE) %>% print(n = 23)
 #> 13  2010 262524
 #> 14  2011 154846
 #> 15  2012 243062
-#> 16  2013 182038
-#> 17  2014 265798
-#> 18  2015 158825
-#> 19  2016 220242
-#> 20  2017 182422
-#> 21  2018 302170
-#> 22  2019 187425
-#> 23  2020  58209
-#> # … with 1 more row
+#> 16  2013 182058
+#> 17  2014 265936
+#> 18  2015 159022
+#> 19  2016 220335
+#> 20  2017 182534
+#> 21  2018 302818
+#> 22  2019 190212
+#> 23  2020 248693
+#> # … with 4 more rows
 ```
 
 ![](../plots/year_bar-1.png)<!-- -->
@@ -690,19 +728,19 @@ txe %>%
   select(starts_with("addr")) %>% 
   distinct() %>% 
   sample_n(10)
-#> # A tibble: 10 x 3
-#>    addr1                                           addr2     addr_norm                             
-#>    <chr>                                           <chr>     <chr>                                 
-#>  1 300 S A.W. Grimes Blvd #20205                   <NA>      300 S A W GRIMES BLVD 20205           
-#>  2 7305 Golden Hawk                                <NA>      7305 GOLDEN HAWK                      
-#>  3 2805 Business Center Drive                      <NA>      2805 BUSINESS CTR DR                  
-#>  4 2911 TURTLE CREEK BLVD                          14TH FLO… 2911 TURTLE CRK BLVD 14 TH FL         
-#>  5 316 College Street                              <NA>      316 COLLEGE ST                        
-#>  6 925 N. Bibb Street No. 43                       <NA>      925 N BIBB ST NO 43                   
-#>  7 301 6th Avenue North, Suite 109 War Memorial B… <NA>      301 6 TH AVE N STE 109 WAR MEMORIAL B…
-#>  8 2973 Crockett Street                            <NA>      2973 CROCKETT ST                      
-#>  9 10604 Buccaneer Pt.                             <NA>      10604 BUCCANEER PT                    
-#> 10 7694 Alameda                                    <NA>      7694 ALAMEDA
+#> # A tibble: 10 × 3
+#>    addr1                      addr2 addr_norm                 
+#>    <chr>                      <chr> <chr>                     
+#>  1 13 Olive Street            <NA>  13 OLIVE ST               
+#>  2 6021 Ronchamps             <NA>  6021 RONCHAMPS            
+#>  3 3611 Cooper                <NA>  3611 COOPER               
+#>  4 6505 High Brook Drive      <NA>  6505 HIGH BROOK DR        
+#>  5 18482 Kuykendahl           # 132 18482 KUYKENDAHL # 132    
+#>  6 823 CONGRESS AVE.          <NA>  823 CONGRESS AVE          
+#>  7 9902 Diego Springs Dr.     <NA>  9902 DIEGO SPRINGS DR     
+#>  8 7312 Maplecrest Dr.        <NA>  7312 MAPLECREST DR        
+#>  9 6121 W Park Blvd Ste FC103 <NA>  6121 W PARK BLVD STE FC103
+#> 10 1800 ELM                   <NA>  1800 ELM
 ```
 
 ### ZIP
@@ -727,11 +765,11 @@ progress_table(
   txe$zip_norm,
   compare = valid_zip
 )
-#> # A tibble: 2 x 6
-#>   stage    prop_in n_distinct prop_na  n_out n_diff
-#>   <chr>      <dbl>      <dbl>   <dbl>  <dbl>  <dbl>
-#> 1 zip        0.900      46457  0.0145 361371  32954
-#> 2 zip_norm   0.996      16418  0.0153  14984   2376
+#> # A tibble: 2 × 6
+#>   stage        prop_in n_distinct prop_na  n_out n_diff
+#>   <chr>          <dbl>      <dbl>   <dbl>  <dbl>  <dbl>
+#> 1 txe$zip        0.895      54501  0.0136 450103  39764
+#> 2 txe$zip_norm   0.995      18159  0.0145  20172   2829
 ```
 
 ### State
@@ -755,7 +793,7 @@ txe <- txe %>%
 txe %>% 
   filter(state != state_norm) %>% 
   count(state, state_norm, sort = TRUE)
-#> # A tibble: 32 x 3
+#> # A tibble: 32 × 3
 #>    state state_norm     n
 #>    <chr> <chr>      <int>
 #>  1 Tx    TX          6420
@@ -777,11 +815,11 @@ progress_table(
   txe$state_norm,
   compare = valid_state
 )
-#> # A tibble: 2 x 6
-#>   stage      prop_in n_distinct prop_na n_out n_diff
-#>   <chr>        <dbl>      <dbl>   <dbl> <dbl>  <dbl>
-#> 1 state        0.998        101 0.00848  8828     43
-#> 2 state_norm   1             58 0.00901     0      1
+#> # A tibble: 2 × 6
+#>   stage          prop_in n_distinct prop_na n_out n_diff
+#>   <chr>            <dbl>      <dbl>   <dbl> <dbl>  <dbl>
+#> 1 txe$state        0.998        100 0.00783  8833     42
+#> 2 txe$state_norm   1             59 0.00827     0      1
 ```
 
 ### City
@@ -868,20 +906,20 @@ good_refine <- txe %>%
   )
 ```
 
-    #> # A tibble: 246 x 5
+    #> # A tibble: 283 × 5
     #>    state_norm zip_norm city_swap     city_refine       n
     #>    <chr>      <chr>    <chr>         <chr>         <int>
     #>  1 AZ         85072    PHENIOX       PHOENIX         125
-    #>  2 IL         60197    CORAL STREAM  CAROL STREAM     74
-    #>  3 CA         94105    SAN FRANSICO  SAN FRANCISCO    63
-    #>  4 CA         94103    SAN FRANSCICO SAN FRANCISCO    62
-    #>  5 TX         75098    WILEY         WYLIE            62
+    #>  2 IL         60197    CORAL STREAM  CAROL STREAM     78
+    #>  3 CA         94103    SAN FRANSCICO SAN FRANCISCO    74
+    #>  4 CA         94105    SAN FRANSICO  SAN FRANCISCO    65
+    #>  5 TX         75098    WILEY         WYLIE            63
     #>  6 NM         87190    ALBURQUEQUE   ALBUQUERQUE      52
     #>  7 TX         76844    GOLDWAITHE    GOLDTHWAITE      45
     #>  8 AZ         85072    PHENOIX       PHOENIX          43
     #>  9 CA         94128    SAN FRANSICO  SAN FRANCISCO    38
-    #> 10 OH         45280    CINCINATTI    CINCINNATI       27
-    #> # … with 236 more rows
+    #> 10 CA         94107    SAN FRANSICO  SAN FRANCISCO    33
+    #> # … with 273 more rows
 
 Then we can join the refined values back to the database.
 
@@ -893,12 +931,10 @@ txe <- txe %>%
 
 #### Progress
 
-| stage        | prop\_in | n\_distinct | prop\_na | n\_out | n\_diff |
-| :----------- | -------: | ----------: | -------: | -----: | ------: |
-| city\_raw)   |    0.975 |       13524 |    0.011 |  92349 |    7770 |
-| city\_norm   |    0.985 |       11870 |    0.011 |  52738 |    6075 |
-| city\_swap   |    0.994 |        8545 |    0.011 |  20600 |    2754 |
-| city\_refine |    0.995 |        8359 |    0.011 |  19403 |    2570 |
+| stage                                                                        | prop_in | n_distinct | prop_na | n_out | n_diff |
+|:-----------------------------------------------------------------------------|--------:|-----------:|--------:|------:|-------:|
+| str_to_upper(txe$city_raw) | 0.979| 14050| 0.01| 91385| 7707| |txe$city_norm |   0.984 |      13225 |    0.01 | 69606 |   6865 |
+| txe$city_swap | 0.994| 9515| 0.01| 25390| 3163| |txe$city_refine             |   0.994 |       9300 |    0.01 | 24048 |   2950 |
 
 You can see how the percentage of valid values increased with each
 stage.
@@ -930,52 +966,54 @@ txe <- txe %>%
 ``` r
 glimpse(sample_n(txe, 20))
 #> Rows: 20
-#> Columns: 39
-#> $ form           <chr> "COH", "COH", "COH", "PTYCORP", "MPAC", "CORCOH", "MPAC", "JCOH", "GPAC",…
-#> $ schedule       <chr> "F1", "F1", "F1", "F4", "F1", "F4", "F1", "G", "F1", "F1", "F1", "F1", "F…
-#> $ report_id      <chr> "100638095", "100752865", "579176", "100748312", "554986", "100620182", "…
-#> $ received       <date> 2016-07-15, 2020-01-15, 2013-07-11, 2019-07-12, 2013-01-03, 2016-01-28, …
-#> $ info_flag      <lgl> FALSE, FALSE, TRUE, FALSE, FALSE, FALSE, FALSE, FALSE, TRUE, TRUE, FALSE,…
-#> $ filer_id       <chr> "00051407", "00020493", "00069137", "00023868", "00028329", "00020493", "…
-#> $ filer_type     <chr> "COH", "COH", "COH", "PTYCORP", "MPAC", "COH", "MPAC", "JCOH", "GPAC", "C…
-#> $ filer          <chr> "Paxton Jr., W. Kenneth (The Honorable)", "Hunter, Todd A. (The Honorable…
-#> $ id             <chr> "102905339", "103956686", "102520395", "103872630", "101032804", "1028125…
-#> $ date           <date> 2016-05-31, 2019-08-20, 2013-06-27, 2019-05-15, 2012-11-28, 2015-10-25, …
-#> $ amount         <dbl> 9.40, 500.00, 1.03, 15.23, 1000.00, 128.31, 250.00, 130.00, 99.59, 500.00…
-#> $ describe       <chr> "postage for campaign mailing materials", "Reception sponsor for fundrais…
-#> $ category       <chr> "OVERHEAD", "EVENT", "FEES", "OVERHEAD", "DONATIONS", "OTHER", NA, "OTHER…
-#> $ description    <chr> NA, NA, NA, NA, NA, "Hotel expense", NA, "labor", NA, NA, NA, NA, NA, NA,…
-#> $ itemize_flag   <lgl> TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, T…
-#> $ travel_flag    <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FAL…
-#> $ politics_flag  <lgl> TRUE, NA, TRUE, NA, TRUE, TRUE, TRUE, NA, TRUE, TRUE, TRUE, NA, TRUE, TRU…
-#> $ reimburse_flag <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FAL…
-#> $ corp_flag      <lgl> FALSE, FALSE, FALSE, TRUE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALS…
-#> $ liveexp_flag   <lgl> NA, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, NA, FALSE, FA…
-#> $ payee_type     <chr> "ENTITY", "ENTITY", "ENTITY", "ENTITY", "ENTITY", "ENTITY", "ENTITY", "IN…
-#> $ vendor         <chr> "USPS", "Texans for Greg Abbott", "PayPal", "Amazon.com", "Joe Straus Cam…
-#> $ last           <chr> NA, NA, NA, NA, NA, NA, NA, "Ugalde", "STALLINGS", NA, NA, NA, "Ngo", "MA…
-#> $ suffix         <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
-#> $ first          <chr> NA, NA, NA, NA, NA, NA, NA, "Artimeo", "LANDON", NA, NA, NA, "Vanna", "CR…
-#> $ prefix         <chr> NA, NA, NA, NA, NA, NA, NA, "MR", "MR", NA, NA, NA, NA, "MR", NA, NA, NA,…
-#> $ addr1          <chr> "601 Cross Timbers, Suite 118", "P.O. 308", "1840 Embarcadero Road", "120…
-#> $ addr2          <chr> NA, NA, NA, "#12T", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "Suit…
-#> $ city           <chr> "Flower Mound", "Austin", "Palo Alto", "Seattle", "San Antonio", "McAllen…
-#> $ state          <chr> "TX", "TX", "CA", "WA", "TX", "TX", "TX", "TX", "TX", "CA", "TX", "TX", "…
-#> $ zip            <chr> "75028", "78767", "94303", "98101", "78209", "78503", "77098", "75401", "…
-#> $ region         <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
-#> $ na_flag        <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FAL…
-#> $ dupe_flag      <lgl> FALSE, FALSE, TRUE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALS…
-#> $ year           <dbl> 2016, 2019, 2013, 2019, 2012, 2015, 2001, 2016, 2011, 2018, 2013, 2018, 2…
-#> $ addr_clean     <chr> "601 CROSS TIMBERS STE 118", "PO 308", "1840 EMBARCADERO RD", "1200 STEWA…
-#> $ zip_clean      <chr> "75028", "78767", "94303", "98101", "78209", "78503", "77098", "75401", "…
-#> $ state_clean    <chr> "TX", "TX", "CA", "WA", "TX", "TX", "TX", "TX", "TX", "CA", "TX", "TX", "…
-#> $ city_clean     <chr> "FLOWER MOUND", "AUSTIN", "PALO ALTO", "SEATTLE", "SAN ANTONIO", "MCALLEN…
+#> Columns: 41
+#> $ form               <chr> "GPAC", "COH", "MPAC", "CORPAC", "COH", "GPAC", "CORCOH", "GPAC", "COH…
+#> $ schedule           <chr> "F1", "F1", "F1", "F1", "F1", "F1", "F1", "F1", "G", "F1", "F1", "F1",…
+#> $ report_id          <chr> "100814689", "254969", "100798255", "438083", "478435", "232741", "422…
+#> $ received           <chr> "20210702", "20040715", "20201005", "20100114", "20110118", "20031027"…
+#> $ info_flag          <lgl> FALSE, TRUE, FALSE, FALSE, TRUE, FALSE, TRUE, TRUE, FALSE, FALSE, FALS…
+#> $ filer_id           <chr> "00058757", "00033299", "00011832", "00015809", "00066290", "00015670"…
+#> $ filer_type         <chr> "GPAC", "COH", "MPAC", "GPAC", "COH", "GPAC", "COH", "GPAC", "COH", "G…
+#> $ filer              <chr> "Cy-Fair Republican Women PAC", "Estes, Craig L.", "Texas Chiropractic…
+#> $ id                 <dbl> 104449785, 101155357, 104301573, 100214779, 102355535, 100134855, 1010…
+#> $ date               <date> 2021-04-13, 2004-01-13, 2020-09-09, 2008-09-15, 2010-12-27, 2003-10-2…
+#> $ amount             <dbl> 1.02, 897.46, 500.00, 84.00, 950.00, 137.00, 31.10, 250.00, 50.88, 192…
+#> $ describe           <chr> "Mother's day theme", "Printing", "Consulting Lobbyists", "Invitations…
+#> $ category           <chr> "EVENT", NA, "CONSULT", NA, "OVERHEAD", NA, NA, "DONATIONS", "FOOD", "…
+#> $ description        <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
+#> $ itemize_flag       <lgl> TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE…
+#> $ travel_flag        <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, …
+#> $ politics_flag      <lgl> NA, TRUE, NA, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, NA, TRUE, TRUE…
+#> $ reimburse_flag     <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, …
+#> $ corp_flag          <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, …
+#> $ liveexp_flag       <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, …
+#> $ payee_type         <chr> "ENTITY", "ENTITY", "ENTITY", "ENTITY", "INDIVIDUAL", "INDIVIDUAL", "E…
+#> $ vendor             <chr> "Walmart", "Humphrey Printing Co.", "Statecraft LLC", "U S Postmaster"…
+#> $ last               <chr> NA, NA, NA, NA, "Dawson", "Lopez", NA, "Price Campaign", NA, NA, NA, N…
+#> $ suffix             <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
+#> $ first              <chr> NA, NA, NA, NA, "Robert", "Chris", NA, "Walter T. (Four)", NA, NA, NA,…
+#> $ prefix             <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "MR", NA, NA, …
+#> $ addr1              <chr> "26270 Hwy 290", "1602 Midwestern Parkway", "1907 Cypress Creek Rd. Su…
+#> $ addr2              <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "Suite L17", "SUITE 105", NA, …
+#> $ city               <chr> "Cypress", "Wichita Falls", "Cedar Park", "Austin", "Austin", "Houston…
+#> $ state              <chr> "TX", "TX", "TX", "TX", "TX", "TX", "TX", "TX", "TX", "TX", "TX", "TX"…
+#> $ zip                <chr> "77429", "76302", "78613", "78701", "78757", "77009", "79905", "79109-…
+#> $ region             <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
+#> $ credit_card_issuer <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
+#> $ repayment_dt       <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
+#> $ na_flag            <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, …
+#> $ dupe_flag          <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, …
+#> $ year               <dbl> 2021, 2004, 2020, 2008, 2010, 2003, 2008, 2012, 2012, 2014, 2019, 2019…
+#> $ addr_clean         <chr> "26270 HWY 290", "1602 MIDWESTERN PKWY", "1907 CYPRESS CREEK RD SUITE …
+#> $ zip_clean          <chr> "77429", "76302", "78613", "78701", "78757", "77009", "79905", "79109"…
+#> $ state_clean        <chr> "TX", "TX", "TX", "TX", "TX", "TX", "TX", "TX", "TX", "TX", "TX", "TX"…
+#> $ city_clean         <chr> "CYPRESS", "WICHITA FALLS", "CEDAR PARK", "AUSTIN", "AUSTIN", "HOUSTON…
 ```
 
-1.  There are 3,676,011 records in the database.
-2.  There are 103,189 duplicate records in the database.
+1.  There are 4,355,908 records in the database.
+2.  There are 137,351 duplicate records in the database.
 3.  The range and distribution of `amount` and `date` seem reasonable.
-4.  There are 21,911 records missing key variables.
+4.  There are 21,939 records missing key variables.
 5.  Consistency in geographic data has been improved with
     `campfin::normal_*()`.
 6.  The 4-digit `year` variable has been created with
@@ -987,17 +1025,17 @@ Now the file can be saved on disk for upload to the Accountability
 server.
 
 ``` r
-clean_dir <- dir_create(here("tx", "expends", "data", "clean"))
+clean_dir <- dir_create(here("state","tx", "expends", "data", "clean"))
 clean_path <- path(clean_dir, "tx_expends_clean.csv")
 write_csv(txe, clean_path, na = "")
 file_size(clean_path)
-#> 1001M
+#> 1.17G
 file_encoding(clean_path) %>% 
   mutate(across(path, path.abbrev))
-#> # A tibble: 1 x 3
-#>   path                                         mime            charset 
-#>   <chr>                                        <chr>           <chr>   
-#> 1 ~/tx/expends/data/clean/tx_expends_clean.csv application/csv us-ascii
+#> # A tibble: 1 × 3
+#>   path                                                                                mime  charset
+#>   <fs::path>                                                                          <chr> <chr>  
+#> 1 …/code/accountability_datacleaning/state/tx/expends/data/clean/tx_expends_clean.csv <NA>  <NA>
 ```
 
 ## Upload
