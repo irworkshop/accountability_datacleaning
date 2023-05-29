@@ -1,6 +1,6 @@
 ---
 title: "Pennsylvania Contributions"
-author: "Kiernan Nicholls"
+author: "Kiernan Nicholls & Yanqi Xu"
 date: "`r Sys.time()`"
 output:
   github_document: 
@@ -129,7 +129,7 @@ understand the data we will be downloading.
 ```{r vars_read}
 pa_host <- "https://www.dos.pa.gov/VotingElections"
 pa_dir <- "CandidatesCommittees/CampaignFinance/Resources/Documents"
-readme_file <- "readme.txt"
+readme_file <- "readmepriorto2022.txt"
 readme_url <- paste(pa_host, pa_dir, readme_file, sep = "/")
 ```
 
@@ -154,7 +154,7 @@ readme <- readme_url %>%
         extra = "merge",
         fill = "right"
       ) %>% 
-      na_if("") %>% 
+      #na_if("") %>% 
       drop_na() %>% 
       mutate(col = str_to_lower(col))
   ) %>% 
@@ -191,25 +191,32 @@ Each ZIP archive is simply named as the 4-digit year for the files within.
 We can download each ZIP to the `/data/raw` directory.
 
 ```{r raw_download}
-zip_names <- paste(2000:2020, "zip", sep = ".")
+zip_names <- paste(2000:2022, "zip", sep = ".")
 zip_urls <- paste(pa_host, pa_dir, zip_names, sep = "/")
-raw_dir <- dir_create(here("pa", "contribs", "data", "raw"))
+raw_dir <- dir_create(here("state","pa", "contribs", "data", "raw"))
 zip_paths <- path(raw_dir, zip_names)
-fix_check <- here("pa", "contribs", "data", "fixed.txt")
+fix_check <- here("state","pa", "contribs", "data", "fixed.txt")
 if (length(dir_ls(raw_dir, regexp = "zip")) < 10) {
-  download.file(zip_urls, zip_paths)
-  file_delete(fix_check)
+  for (i in seq_along(zip_urls)) {
+  download.file(zip_urls[i], zip_paths[i])
+  #file_delete(fix_check)
+  }
 }
 ```
 
 Then we will unzip the annual directory from each archive.
 
-```{r raw_unzip}
-if (all(dir_ls(raw_dir) %in% zip_paths)) {
-  for (z in zip_paths) {
-    out <- unzip(z, exdir = raw_dir, junkpaths = TRUE)
-    y_dir <- dir_create(path(raw_dir, str_extract(z, "\\d{4}")))
-    file_move(out, path(y_dir, basename(out)))
+```{r raw_unzip, eval=FALSE}
+zip_files <- dir_ls(raw_dir, glob = "*.zip")
+
+if (all_files_new(path = raw_dir, glob = "*.txt")) {
+  for (i in seq_along(zip_files)) {
+    unzip(
+      zipfile = zip_files[i],
+      #Matches the csv files that starts with contrib, and trim the "./ " from directory names
+      files = grep("(contrib|filer).+", unzip(zip_files[i]), value = TRUE) %>% substring(3,),
+      exdir = raw_dir
+    )
   }
 }
 ```
@@ -230,7 +237,10 @@ fil_paths <- dir_ls(
   path = raw_dir, 
   recurse = TRUE, 
   regexp = "(F|f)iler[\\.|_]"
-)
+) %>% 
+c(dir_ls(path = here("state","pa", "expends", "data", "raw"),
+                recurse = TRUE, 
+  regexp = "(F|f)iler[\\.|_]"))
 ```
 
 The file names are a little different year to year, but they all have the same
@@ -364,7 +374,7 @@ Now the filer information can be added to the contribution data with a
 `dplyr::left_join()` along the unique filer ID and election year.
 
 ```{r raw_join}
-# 18,386,163
+# 21,761,034
 pac <- left_join(
   x = pac,
   y = filers,
@@ -527,6 +537,11 @@ pac %>%
   select(tx, all_of(key_vars))
 ```
 
+```{r}
+pac <- pac %>% select(-tx)
+```
+
+
 ### Amounts
 
 The range and distribution of the contribution `amount` should be checked. We
@@ -554,13 +569,13 @@ pac %>%
   ) +
   labs(
     title = "Pennsylvania Contributions Amount Distribution",
-    subtitle = "from 2000 to 2020",
+    subtitle = "from 2000 to 2022",
     x = "Amount",
     y = "Count"
   )
 ```
 
-```{r violin_amount_party, echo=FALSE}
+```{r violin_amount_party, echo=FALSE, eval=FALSE}
 pac %>%
   filter(amount >= 1, amount <= 1e6) %>% 
   filter(party %in% most_common(party, 3) | is.na(party)) %>% 
@@ -607,7 +622,7 @@ max(pac$date, na.rm = TRUE)
 sum(pac$date > today(), na.rm = TRUE)
 ```
 
-The bulk of transactions occur between 2000 and 2020.
+The bulk of transactions occur between 2000 and 2022.
 
 ```{r bar_year, echo=FALSE}
 pac %>% 
@@ -618,8 +633,8 @@ pac %>%
   geom_col(aes(fill = odd)) + 
   scale_fill_brewer(palette = "Dark2") +
   scale_y_continuous(labels = comma) +
-  scale_x_continuous(breaks = seq(2000, 2020, by = 2)) +
-  coord_cartesian(xlim = c(2000, 2020)) +
+  scale_x_continuous(breaks = seq(2000, 2022, by = 2)) +
+  coord_cartesian(xlim = c(2000, 2022)) +
   theme(legend.position = "bottom") +
   labs(
     title = "Pennsylvania Contributions by Year",
@@ -923,7 +938,7 @@ If not, the query will be sent and the file will be written using
 `readr::write_csv()`.
 
 ```{r check_send}
-check_file <- here("pa", "contribs", "data", "api_check.csv")
+check_file <- here("state","pa", "contribs", "data", "api_check.csv")
 if (file_exists(check_file)) {
   check <- read_csv(
     file = check_file,
@@ -1099,7 +1114,7 @@ glimpse(sample_n(pac, 100))
 Now the file can be saved on disk for upload to the Accountability server.
 
 ```{r clean_dir}
-clean_dir <- dir_create(here("pa", "contribs", "data", "clean"))
+clean_dir <- dir_create(here("state","pa", "contribs", "data", "clean"))
 clean_path <- path(clean_dir, "pa_contribs_clean.csv")
 write_csv(pac, clean_path, na = "")
 (clean_size <- file_size(clean_path))
@@ -1162,7 +1177,6 @@ dict_raw <- tibble(
     "Filer 2-digit state abbreviation",
     "Filer ZIP+4 code",
     "County election held in",
-    "Unique transaction number",
     "Filer telephone number",
     "Flag for missing date, amount, or name",
     "Flag for completely duplicated record",

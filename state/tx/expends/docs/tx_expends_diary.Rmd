@@ -1,6 +1,6 @@
 ---
 title: "Texas Expenditures"
-author: "Kiernan Nicholls"
+author: "Kiernan Nicholls & Yanqi Xu"
 date: "`r Sys.time()`"
 output:
   github_document: 
@@ -135,21 +135,15 @@ Flat File Architecture Record Listing -- Generated 06/11/2016 12:38:08 PM
 
 ```{r read_key}
 readme_url <- "https://www.ethics.state.tx.us/data/search/cf/CFS-ReadMe.txt"
-readme <- read_lines(here("tx", "expends", "CFS-ReadMe.txt"))
+readme <- read_lines(here("state","tx", "expends", "CFS-ReadMe.txt"))
 ```
 
 At the top of this file is a table of contents.
 
 ```{r}
-read_table(readme[seq(13, 47, 2)][-2]) %>% 
-  unite(`File Contents`, 2:3, sep = " ") %>% 
-  mutate(
-    `File Name(s)` = `File Name(s)` %>% 
-      str_split(",\\s") %>% 
-      map(md_code) %>% 
-      map_chr(str_c, collapse = ", "),
-    `File Contents` = str_trunc(`File Contents`, width = 30)
-  ) %>% 
+read_fwf(readme[seq(13, 47, 2)][-c(1,2)] %>% I()) %>% 
+  select(-c(3,5)) %>% 
+  rename(record_name = X1, file_content=X2, file_name = X4) %>% 
   kable()
 ```
 
@@ -205,9 +199,9 @@ exp_cat %>%
 [07]: https://www.ethics.state.tx.us/data/search/cf/CFS-ReadMe.txt
 
 ### Download
-
+The data was accessed on May 27, 2023 and included updates through May 16, 2023. 
 ```{r raw_paths}
-raw_dir <- dir_create(here("tx", "expends", "data", "raw"))
+raw_dir <- dir_create(here("state","tx", "expends", "data", "raw"))
 zip_url <- "https://www.ethics.state.tx.us/data/search/cf/TEC_CF_CSV.zip"
 zip_file <- path(raw_dir, basename(zip_url))
 ```
@@ -335,7 +329,8 @@ txe <- txe %>%
   select(-record_type, -payee_short, -country, -county) %>% 
   # convert from Y/N to logical
   mutate(across(liveexp_flag, na_out, c("Y", "N"))) %>% 
-  mutate(across(ends_with("_flag"), to_logical))
+  mutate(across(ends_with("_flag"), to_logical)) %>% 
+  mutate(id = as.numeric(id))
 ```
 
 ## Explore
@@ -383,12 +378,42 @@ txe %>%
 We can also create a new `dupe_flag` variable to identify any record which is
 duplicated at least once across all variables.
 
-```{r flag_dupes}
+```{r flag_dupes, eval=FALSE}
 d1 <- duplicated(select(txe, -id), fromLast = FALSE)
 d2 <- duplicated(select(txe, -id), fromLast = TRUE)
 txe <- mutate(txe, dupe_flag = d1 | d2)
 percent(mean(txe$dupe_flag), 0.01)
 rm(d1, d2); flush_memory()
+```
+
+```{r}
+dupe_file <- here("state","tx", "expends", "dupes.txt")
+```
+
+```{r write dupes, eval = FALSE}
+txe %>% select(id,dupe_flag) %>% filter(dupe_flag) %>% write_csv(dupe_file, na="")
+```
+
+```{r dupe_read}
+dupes <- read_csv(
+  file = dupe_file,
+  col_types = cols(
+    id = col_double(),
+    dupe_flag = col_logical()
+  )
+)
+comma(nrow(dupes))
+```
+
+```{r dupe_join}
+txe <- left_join(txe, dupes, by = "id")
+txe <- mutate(txe, dupe_flag = !is.na(dupe_flag))
+percent(mean(txe$dupe_flag), 0.01)
+```
+
+```{r echo=FALSE}
+rm(dupes)
+flush_memory()
 ```
 
 ```{r dupe_view}
@@ -409,6 +434,7 @@ txe %>%
   select(last, vendor, date, amount, filer) %>% 
   col_stats(count_na)
 ```
+
 
 ### Categorical
 
@@ -434,6 +460,10 @@ txe %>%
 ```
 
 ### Amounts
+
+```{r}
+txe <- txe %>% mutate(amount = as.numeric(amount))
+```
 
 The `amount` value ranges from a 
 `r dollar(min(txe$amount, na.rm = TRUE))` minimum to
@@ -461,7 +491,7 @@ txe %>%
   geom_vline(xintercept = median(txe$amount, na.rm = TRUE)) +
   labs(
     title = "Texas Expenditure Amount Distribution",
-    subtitle = "from 2000 to 2019",
+    subtitle = "from 2000 to 2023",
     caption = "Source: Texas Ethics Commission"
   )
 ```
@@ -551,6 +581,7 @@ To better explore and search the database, we will create a `year`
 variable from `date` using `lubridate::year()`
 
 ```{r add_year}
+txe <- txe %>% mutate(date = as.Date(date, format = "%Y%m%d"))
 txe <- mutate(txe, year = year(date))
 ```
 
@@ -908,7 +939,7 @@ glimpse(sample_n(txe, 20))
 Now the file can be saved on disk for upload to the Accountability server.
 
 ```{r clean_dir}
-clean_dir <- dir_create(here("tx", "expends", "data", "clean"))
+clean_dir <- dir_create(here("state","tx", "expends", "data", "clean"))
 clean_path <- path(clean_dir, "tx_expends_clean.csv")
 write_csv(txe, clean_path, na = "")
 file_size(clean_path)

@@ -802,7 +802,22 @@ mic <- mic %>%
   select(
     -city_norm,
     -city_swap,
-    city_clean = city_refine
+    -tx,
+    city_clean = city_refine,
+    doc_seq_no = doc_id,
+    contribution_id =	cont_id,
+    cont_detail_id = cont_detail,
+    doc_stmnt_year = doc_year,
+    doc_type_desc =	doc_type,
+    com_legal_name = com_name,
+    common_name	= com_aka,
+    cfr_com_id =	com_id,
+    can_first_name = can_f_name,
+    can_last_name =	can_l_name,
+    contribtype	= cont_type,
+    l_name_or_org	= l_name,
+    received_date =	date,
+    received_year	= year
   ) %>% 
   rename_all(~str_replace(., "_norm", "_clean")) %>% 
   rename_all(~str_remove(., "_raw")) %>% 
