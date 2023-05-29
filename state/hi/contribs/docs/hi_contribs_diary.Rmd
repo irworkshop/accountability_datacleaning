@@ -1,6 +1,6 @@
 ---
 title: "Hawaii Contributions"
-author: "Kiernan Nicholls"
+author: "Kiernan Nicholls & Aarushi Sahejpal"
 date: "`r date()`"
 output:
   github_document: 
@@ -245,7 +245,7 @@ hic <- bind_rows(hic) %>%
 
 There are `r comma(nrow(hic))` rows of `r ncol(hic)` columns. Each record
 represents a single campaign contribution received by Hawaii state and county
-candidates from November 8, 2006 through June 30, 2021.
+candidates from November 8, 2006 through January 1, 2023.
 
 ```{r glimpse}
 glimpse(hic)
@@ -387,7 +387,7 @@ hic %>%
   geom_col(aes(fill = even)) + 
   scale_fill_brewer(palette = "Dark2") +
   scale_y_continuous(labels = comma) +
-  scale_x_continuous(breaks = seq(2006, 2020, by = 1)) +
+  scale_x_continuous(breaks = seq(2006, 2023, by = 1)) +
   theme(legend.position = "bottom") +
   labs(
     title = "Hawaii Contributions by Year",
