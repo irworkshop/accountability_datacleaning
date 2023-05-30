@@ -1,6 +1,6 @@
 ---
 title: "Hawaii Expenditures"
-author: "Kiernan Nicholls & Yanqi Xu"
+author: "Kiernan Nicholls, Yanqi Xu, and Aarushi Sahejpal"
 date: "`r Sys.time()`"
 output:
   github_document: 
@@ -109,9 +109,9 @@ here::here()
 
 Data is provided by the Hawaii Campaign Spending Committee's Socrata open data portal. From the
 [Primer metadata page][03], we can find more information. The Records Reporting System RSN is 38832.
-The file was created on February 26, 2013 and last updated Nov 3, 2022.
+The file was created on December 12, 2019 and last updated February 8, 2023. This file represents expenditures made by Hawaii state and county candidates From November 8, 2006 Through December 31, 2022.
 
-[03]: https://data.hawaii.gov/Community/Expenditures-Made-By-Hawaii-State-and-County-Candi/3maa-4fgr
+[03]: https://opendata.hawaii.gov/dataset/expenditures-made-by-hawaii-state-and-county-candidates
 
 ## Import
 
@@ -123,7 +123,7 @@ raw_dir <- dir_create(here("state","hi", "expends", "data", "raw"))
 
 
 ```{r download, eval=FALSE}
-#hie <- as_tibble(read.socrata("https://data.hawaii.gov/resource/3maa-4fgr.json"))
+# hie <- as_tibble(read.socrata("https://data.hawaii.gov/resource/3maa-4fgr.json"))
 raw_url <- "http://hicscdata.hawaii.gov/api/views/3maa-4fgr/rows.csv?accessType=DOWNLOAD"
 raw_path <- path(raw_dir,"hi_exp_download.csv")
 
@@ -206,33 +206,6 @@ hie %>%
   )
 ```
 
-```{r party_bar, echo=FALSE}
-hie %>%
-  filter(!is.na(party)) %>% 
-  count(party, sort = TRUE) %>%
-  mutate(p = n/sum(n)) %>%
-  ggplot(aes(reorder(party, desc(p)), p)) +
-  geom_col(aes(fill = party)) +
-  scale_fill_manual(
-    guide = FALSE,
-    values = c(
-      "cornflowerblue",
-      "orange",
-      "dodgerblue",
-      "forestgreen",
-      "grey10",
-      "mediumpurple",
-      "red2"
-    )
-  ) +
-  scale_y_continuous(labels = percent) +
-  labs(
-    title = "HI Expend Party",
-    caption = "Source: HI CRS",
-    x = "Political Party",
-    y = "Percent"
-  )
-```
 
 ```{r state_bar, echo=FALSE}
 explore_plot(
@@ -392,43 +365,6 @@ hie %>%
   )
 ```
 
-```{r amount_line_time, echo=FALSE}
-hie %>% 
-  group_by(party) %>% 
-  arrange(date) %>% 
-  mutate(total = cumsum(amount)) %>% 
-  ggplot(
-    mapping = aes(
-      x = date,
-      y = total
-    )
-  ) +
-  geom_line(
-    size = 2,
-    mapping = aes(
-      color = party
-    )
-  ) +
-  scale_y_continuous(labels = dollar) +
-  scale_color_manual(
-    values = c(
-      "dodgerblue",
-      "forestgreen",
-      "mediumpurple",
-      "orange",
-      "grey10",
-      "red2",
-      "cornflowerblue",
-      "lightgreen"
-    )
-  ) +
-  labs(
-    title = "HI Expend Amount",
-    caption = "Source: HI CRS",
-    x = "Time",
-    y = "Total Amount"
-  )
-```
 
 ```{r amount_cat_box, echo=FALSE}
 top_category <- hie %>% 
@@ -470,16 +406,8 @@ hie %>%
 
 #### Date
 
-There are no dates before `r as_date(min(hie$date))` and `r sum(hie$date > today())` dates past the
-creation of this document.
 
-```{r date_range, collapse=TRUE}
-min(hie$date)
-max(hie$date)
-sum(hie$date > today())
-```
-
-To better explore the distribution of dates and track expendtures, we will create a `year_clean`
+To better explore the distribution of dates and track expenditures, we will create a `year_clean`
 variable from `date` using `lubridate::year()`.
 
 ```{r add_year}
@@ -487,6 +415,11 @@ hie <- hie %>% mutate(date = as.Date(date, format = "%m/%d/%Y"))
 hie <- mutate(hie, year_clean = year(date))
 ```
 
+
+```{r date_range, collapse=TRUE}
+min(hie$date)
+max(hie$date)
+```
 We can see the expenditures naturally increase in frequency every other year, during the elections.
 
 ```{r year_count}
@@ -728,8 +661,28 @@ progress_table(hie$city_raw,
                hie$city_clean, compare = valid_city)
 write_csv(
   x = hie,
-  path = glue("{proc_dir}/hi_expends_clean.csv"),
+  path = glue("{proc_dir}/hi_expends_20230127.csv"),
   na = ""
 )
 ```
 
+## Upload
+
+We can use the `aws.s3::put_object()` to upload the text file to the IRW server.
+
+```{r aws-upload, eval=FALSE}
+aws_path <- path("csv", basename(clean_path))
+if (!object_exists(aws_path, "publicaccountability")) {
+  put_object(
+    file = clean_path,
+    object = aws_path, 
+    bucket = "publicaccountability",
+    acl = "public-read",
+    show_progress = TRUE,
+    multipart = TRUE
+  )
+}
+aws_head <- head_object(aws_path, "publicaccountability")
+(aws_size <- as_fs_bytes(attr(aws_head, "content-length")))
+unname(aws_size == clean_size)
+```

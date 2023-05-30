@@ -1,18 +1,19 @@
 Hawaii Expenditures
 ================
-Kiernan Nicholls & Yanqi Xu
-2022-12-17 16:25:26
+Kiernan Nicholls, Yanqi Xu, and Aarushi Sahejpal
+2023-05-30 13:05:19
 
--   <a href="#project" id="toc-project">Project</a>
--   <a href="#objectives" id="toc-objectives">Objectives</a>
--   <a href="#packages" id="toc-packages">Packages</a>
--   <a href="#data" id="toc-data">Data</a>
--   <a href="#import" id="toc-import">Import</a>
--   <a href="#explore" id="toc-explore">Explore</a>
--   <a href="#wrangle" id="toc-wrangle">Wrangle</a>
--   <a href="#conclude" id="toc-conclude">Conclude</a>
--   <a href="#export" id="toc-export">Export</a>
--   <a href="#export-1" id="toc-export-1">Export</a>
+- <a href="#project" id="toc-project">Project</a>
+- <a href="#objectives" id="toc-objectives">Objectives</a>
+- <a href="#packages" id="toc-packages">Packages</a>
+- <a href="#data" id="toc-data">Data</a>
+- <a href="#import" id="toc-import">Import</a>
+- <a href="#explore" id="toc-explore">Explore</a>
+- <a href="#wrangle" id="toc-wrangle">Wrangle</a>
+- <a href="#conclude" id="toc-conclude">Conclude</a>
+- <a href="#export" id="toc-export">Export</a>
+- <a href="#export-1" id="toc-export-1">Export</a>
+- <a href="#upload" id="toc-upload">Upload</a>
 
 ## Project
 
@@ -64,7 +65,7 @@ pacman::p_load(
   aws.s3, # aws cloud storage
   scales, # format strings
   rvest, # read html pages
-RSocrata, # read SODA API
+  RSocrata, # read SODA API
   knitr, # knit documents
   stringdist, # token distance
   vroom, # read files fast
@@ -95,16 +96,18 @@ feature and should be run as such. The project also uses the dynamic
 ``` r
 # where dfs this document knit?
 here::here()
-#> [1] "/Users/yanqixu/code/accountability_datacleaning"
+#> [1] "/Volumes/TAP/accountability_datacleaning"
 ```
 
 ## Data
 
 Data is provided by the Hawaii Campaign Spending Committee’s Socrata
 open data portal. From the [Primer metadata
-page](https://data.hawaii.gov/Community/Expenditures-Made-By-Hawaii-State-and-County-Candi/3maa-4fgr),
+page](https://opendata.hawaii.gov/dataset/expenditures-made-by-hawaii-state-and-county-candidates),
 we can find more information. The Records Reporting System RSN is 38832.
-The file was created on February 26, 2013 and last updated Nov 3, 2022.
+The file was created on December 12, 2019 and last updated February 8,
+2023. This file represents expenditures made by Hawaii state and county
+candidates From November 8, 2006 Through December 31, 2022.
 
 ## Import
 
@@ -115,7 +118,7 @@ raw_dir <- dir_create(here("state","hi", "expends", "data", "raw"))
 ```
 
 ``` r
-#hie <- as_tibble(read.socrata("https://data.hawaii.gov/resource/3maa-4fgr.json"))
+# hie <- as_tibble(read.socrata("https://data.hawaii.gov/resource/3maa-4fgr.json"))
 raw_url <- "http://hicscdata.hawaii.gov/api/views/3maa-4fgr/rows.csv?accessType=DOWNLOAD"
 raw_path <- path(raw_dir,"hi_exp_download.csv")
 
@@ -147,64 +150,62 @@ head(hie)
 ```
 
     #> # A tibble: 6 × 21
-    #>   candid…¹ vendo…² vendo…³ date  amount autho…⁴ expen…⁵ purpo…⁶ addre…⁷ addre…⁸ city  state zip_c…⁹
-    #>   <chr>    <chr>   <chr>   <chr>  <dbl> <chr>   <chr>   <chr>   <chr>   <chr>   <chr> <chr> <chr>  
-    #> 1 AIONA, … OTHER … SERVPA… 10/0…  868.  <NA>    UTILIT… TELEPH… PO BOX… <NA>    HONO… HI    96803  
-    #> 2 AIONA, … OTHER … HAWAII… 04/0…  130.  <NA>    UTILIT… TELEPH… PO BOX… <NA>    HONO… HI    96820  
-    #> 3 AIONA, … OTHER … USPS K… 09/1…   44   <NA>    POSTAG… POSTAGE HAHANI… <NA>    KAIL… HI    96734  
-    #> 4 AIONA, … OTHER … NEW SE… 06/0…   20   <NA>    OTHER   GRATUI… PO BOX… <NA>    KANE… HI    96744  
-    #> 5 AIONA, … OTHER … FEDEX   12/0…   45.5 <NA>    POSTAG… SHIPPI… PO BOX… <NA>    PASA… CA    91109  
-    #> 6 ANDERSO… INDIVI… HIYAKU… 09/1… 1000   <NA>    OTHER   RETURN… P.O. B… <NA>    AIEA  HI    96701  
-    #> # … with 8 more variables: office <chr>, district <chr>, county <chr>, party <chr>, reg_no <chr>,
-    #> #   election_period <chr>, mapping_location <chr>, in_out_state <chr>, and abbreviated variable
-    #> #   names ¹​candidate_name, ²​vendor_type, ³​vendor_name, ⁴​authorized_use, ⁵​expenditure_category,
-    #> #   ⁶​purpose_of_expenditure, ⁷​address_1, ⁸​address_2, ⁹​zip_code
+    #>   candidate_name   vendor_type  vendor_name        date  amount authorized_use expenditure_category
+    #>   <chr>            <chr>        <chr>              <chr>  <dbl> <chr>          <chr>               
+    #> 1 AIONA, JAMES     OTHER ENTITY HAWAIIAN TELCOM    05/1…  131.  <NA>           UTILITIES           
+    #> 2 AIONA, JAMES     OTHER ENTITY EDWARD ENTERPRISES 03/0… 1263.  <NA>           POSTAGE/MAILING     
+    #> 3 AIONA, JAMES     OTHER ENTITY GLENN'S FLOWERS &… 11/0…   56.5 <NA>           OTHER               
+    #> 4 AIONA, JAMES     OTHER ENTITY HAWAIIAN TELCOM    11/1…   57.3 <NA>           UTILITIES           
+    #> 5 AKUNA, MEILING   CANDIDATE    AKUNA, MEILING     10/1…    0   <NA>           OTHER               
+    #> 6 ANDERSON, IKAIKA OTHER ENTITY OLOMANA COMMUNITY… 07/2…  100   <NA>           DONATIONS           
+    #> # ℹ 14 more variables: purpose_of_expenditure <chr>, address_1 <chr>, address_2 <chr>, city <chr>,
+    #> #   state <chr>, zip_code <chr>, office <chr>, district <chr>, county <chr>, party <chr>,
+    #> #   reg_no <chr>, election_period <chr>, mapping_location <chr>, in_out_state <chr>
 
 ``` r
 tail(hie)
 ```
 
     #> # A tibble: 6 × 21
-    #>   candid…¹ vendo…² vendo…³ date  amount autho…⁴ expen…⁵ purpo…⁶ addre…⁷ addre…⁸ city  state zip_c…⁹
-    #>   <chr>    <chr>   <chr>   <chr>  <dbl> <chr>   <chr>   <chr>   <chr>   <chr>   <chr> <chr> <chr>  
-    #> 1 WILLE, … OTHER … KAMUEL… 09/2…  120.  DIRECT… OTHER   PAPER … 67-114… <NA>    KAMU… HI    96743  
-    #> 2 VICTORI… POLITI… MAUI D… 07/2…   45   <NA>    OTHER   LUNCHE… P.O. B… <NA>    KULA  HI    96790  
-    #> 3 WHITING… OTHER … US POS… 08/0…  175   DIRECT… POSTAG… STAMPS  95-566… <NA>    NA'A… HI    96772  
-    #> 4 WHITING… OTHER … US POS… 06/2…    7   DIRECT… POSTAG… STAMPS  96-316… <NA>    PAHA… HI    96777  
-    #> 5 WAKAI, … CANDID… WAKAI,… 05/0…   70.6 <NA>    FOOD &… REIMB.… 1541 A… <NA>    HONO… HI    96819  
-    #> 6 WEATHER… OTHER … HAWAII… 04/1… 2541.  <NA>    ADVERT… NEWSPA… P.O. B… <NA>    HILO  HI    96721  
-    #> # … with 8 more variables: office <chr>, district <chr>, county <chr>, party <chr>, reg_no <chr>,
-    #> #   election_period <chr>, mapping_location <chr>, in_out_state <chr>, and abbreviated variable
-    #> #   names ¹​candidate_name, ²​vendor_type, ³​vendor_name, ⁴​authorized_use, ⁵​expenditure_category,
-    #> #   ⁶​purpose_of_expenditure, ⁷​address_1, ⁸​address_2, ⁹​zip_code
+    #>   candidate_name  vendor_type  vendor_name         date  amount authorized_use expenditure_category
+    #>   <chr>           <chr>        <chr>               <chr>  <dbl> <chr>          <chr>               
+    #> 1 YUKIMURA, JOANN OTHER ENTITY GAYLORD'S           06/1…   37.9 <NA>           FOOD & BEVERAGES    
+    #> 2 YAMASHITA, KYLE OTHER ENTITY EAST MAUI DISTRICT… 10/1…  500   <NA>           CAMPAIGN HEADQUARTE…
+    #> 3 YAMASHITA, KYLE OTHER ENTITY PUKALANI ELEMENTAR… 03/1…  250   PUBLIC SCHOOL… DONATIONS           
+    #> 4 YOUNG, BYRON    OTHER ENTITY BUILDASIGN.COM      04/1…  494   DIRECTLY RELA… ADVERTISING, MEDIA …
+    #> 5 YAMASHITA, KYLE OTHER ENTITY U.S. POSTAL SERVICE 03/2…    5   DIRECTLY RELA… POSTAGE/MAILING     
+    #> 6 YUKIMURA, JOANN OTHER ENTITY HAWAII LINK         06/0…   46.8 <NA>           CONTRACT, EMPLOYEE …
+    #> # ℹ 14 more variables: purpose_of_expenditure <chr>, address_1 <chr>, address_2 <chr>, city <chr>,
+    #> #   state <chr>, zip_code <chr>, office <chr>, district <chr>, county <chr>, party <chr>,
+    #> #   reg_no <chr>, election_period <chr>, mapping_location <chr>, in_out_state <chr>
 
 ``` r
 glimpse(hie)
 ```
 
-    #> Rows: 232,898
+    #> Rows: 237,202
     #> Columns: 21
     #> $ candidate_name         <chr> "AIONA, JAMES", "AIONA, JAMES", "AIONA, JAMES", "AIONA, JAMES", "A…
-    #> $ vendor_type            <chr> "OTHER ENTITY", "OTHER ENTITY", "OTHER ENTITY", "OTHER ENTITY", "O…
-    #> $ vendor_name            <chr> "SERVPAC INC.", "HAWAIIAN TELCOM", "USPS KAILUA", "NEW SEASON ENTE…
-    #> $ date                   <chr> "10/05/2010", "04/02/2009", "09/14/2010", "06/02/2010", "12/08/201…
-    #> $ amount                 <dbl> 868.27, 130.44, 44.00, 20.00, 45.47, 1000.00, 12.00, 50.00, 430.13…
+    #> $ vendor_type            <chr> "OTHER ENTITY", "OTHER ENTITY", "OTHER ENTITY", "OTHER ENTITY", "C…
+    #> $ vendor_name            <chr> "HAWAIIAN TELCOM", "EDWARD ENTERPRISES", "GLENN'S FLOWERS & PLANTS…
+    #> $ date                   <chr> "05/18/2009", "03/04/2009", "11/07/2008", "11/16/2010", "10/11/201…
+    #> $ amount                 <dbl> 130.92, 1263.17, 56.54, 57.28, 0.00, 100.00, 20.92, 6.50, 100.00, …
     #> $ authorized_use         <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
-    #> $ expenditure_category   <chr> "UTILITIES", "UTILITIES", "POSTAGE/MAILING", "OTHER", "POSTAGE/MAI…
-    #> $ purpose_of_expenditure <chr> "TELEPHONE", "TELEPHONE", "POSTAGE", "GRATUITY", "SHIPPING", "RETU…
-    #> $ address_1              <chr> "PO BOX 2719", "PO BOX 30770", "HAHANI ST.", "PO BOX 4503", "PO BO…
-    #> $ address_2              <chr> NA, NA, NA, NA, NA, NA, NA, "-", NA, NA, NA, NA, NA, NA, NA, NA, N…
-    #> $ city                   <chr> "HONOLULU", "HONOLULU", "KAILUA", "KANEOHE", "PASADENA", "AIEA", "…
-    #> $ state                  <chr> "HI", "HI", "HI", "HI", "CA", "HI", "HI", "HI", "HI", "HI", "HI", …
-    #> $ zip_code               <chr> "96803", "96820", "96734", "96744", "91109", "96701", "96804", "96…
-    #> $ office                 <chr> "GOVERNOR", "GOVERNOR", "GOVERNOR", "GOVERNOR", "GOVERNOR", "HONOL…
+    #> $ expenditure_category   <chr> "UTILITIES", "POSTAGE/MAILING", "OTHER", "UTILITIES", "OTHER", "DO…
+    #> $ purpose_of_expenditure <chr> "TELEPHONE", "POSTAGE", "FLOWERS", "INTERNET", "NO EXPENDITURES", …
+    #> $ address_1              <chr> "PO BOX 30770", "PO BOX 30468", "PO BOX 553", "PO BOX 30770", "HC1…
+    #> $ address_2              <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
+    #> $ city                   <chr> "HONOLULU", "HONOLULU", "WAIMANALO", "HONOLULU", "HAIKU", "KAILUA"…
+    #> $ state                  <chr> "HI", "HI", "HI", "HI", "HI", "HI", "HI", "HI", "HI", "HI", "HI", …
+    #> $ zip_code               <chr> "96820", "96820", "96795", "96820", "96708", "96734", "96797", "96…
+    #> $ office                 <chr> "GOVERNOR", "GOVERNOR", "GOVERNOR", "GOVERNOR", "HOUSE", "HONOLULU…
     #> $ district               <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
     #> $ county                 <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
     #> $ party                  <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
-    #> $ reg_no                 <chr> "CC10162", "CC10162", "CC10162", "CC10162", "CC10162", "CC10472", …
-    #> $ election_period        <chr> "2006-2010", "2006-2010", "2006-2010", "2006-2010", "2010-2014", "…
+    #> $ reg_no                 <chr> "CC10162", "CC10162", "CC10162", "CC10162", "CC10756", "CC10472", …
+    #> $ election_period        <chr> "2006-2010", "2006-2010", "2006-2010", "2010-2014", "2008-2010", "…
     #> $ mapping_location       <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
-    #> $ in_out_state           <chr> "HI", "HI", "HI", "HI", "OUT OF STATE", "HI", "HI", "HI", "HI", "H…
+    #> $ in_out_state           <chr> "HI", "HI", "HI", "HI", "HI", "HI", "HI", "HI", "HI", "HI", "HI", …
 
 ### Distinct
 
@@ -215,27 +216,27 @@ col_stats(hie, n_distinct)
     #> # A tibble: 21 × 4
     #>    col                    class     n          p
     #>    <chr>                  <chr> <int>      <dbl>
-    #>  1 candidate_name         <chr>  1312 0.00563   
-    #>  2 vendor_type            <chr>     6 0.0000258 
-    #>  3 vendor_name            <chr> 38501 0.165     
-    #>  4 date                   <chr>  5816 0.0250    
-    #>  5 amount                 <dbl> 51675 0.222     
-    #>  6 authorized_use         <chr>     9 0.0000386 
-    #>  7 expenditure_category   <chr>    27 0.000116  
-    #>  8 purpose_of_expenditure <chr> 93062 0.400     
-    #>  9 address_1              <chr> 42298 0.182     
-    #> 10 address_2              <chr>  3215 0.0138    
-    #> 11 city                   <chr>  2023 0.00869   
-    #> 12 state                  <chr>    57 0.000245  
-    #> 13 zip_code               <chr>  3324 0.0143    
-    #> 14 office                 <chr>    12 0.0000515 
-    #> 15 district               <chr>    66 0.000283  
-    #> 16 county                 <chr>     5 0.0000215 
-    #> 17 party                  <chr>     8 0.0000343 
-    #> 18 reg_no                 <chr>  1461 0.00627   
-    #> 19 election_period        <chr>    23 0.0000988 
-    #> 20 mapping_location       <chr> 33603 0.144     
-    #> 21 in_out_state           <chr>     2 0.00000859
+    #>  1 candidate_name         <chr>  1331 0.00561   
+    #>  2 vendor_type            <chr>     6 0.0000253 
+    #>  3 vendor_name            <chr> 39102 0.165     
+    #>  4 date                   <chr>  5886 0.0248    
+    #>  5 amount                 <dbl> 52186 0.220     
+    #>  6 authorized_use         <chr>     9 0.0000379 
+    #>  7 expenditure_category   <chr>    27 0.000114  
+    #>  8 purpose_of_expenditure <chr> 94387 0.398     
+    #>  9 address_1              <chr> 42926 0.181     
+    #> 10 address_2              <chr>  3275 0.0138    
+    #> 11 city                   <chr>  2054 0.00866   
+    #> 12 state                  <chr>    57 0.000240  
+    #> 13 zip_code               <chr>  3396 0.0143    
+    #> 14 office                 <chr>    12 0.0000506 
+    #> 15 district               <chr>    66 0.000278  
+    #> 16 county                 <chr>     5 0.0000211 
+    #> 17 party                  <chr>     9 0.0000379 
+    #> 18 reg_no                 <chr>  1486 0.00626   
+    #> 19 election_period        <chr>    24 0.000101  
+    #> 20 mapping_location       <chr> 35355 0.149     
+    #> 21 in_out_state           <chr>     2 0.00000843
 
 We can use `campfin::explore_plot()` and/or `ggplot2::geom_bar()` to
 explore the distribution of distinct categorical variables.
@@ -245,8 +246,6 @@ explore the distribution of distinct categorical variables.
 ![](../plots/category_bar-1.png)<!-- -->
 
 ![](../plots/office_bar-1.png)<!-- -->
-
-![](../plots/party_bar-1.png)<!-- -->
 
 ![](../plots/state_bar-1.png)<!-- -->
 
@@ -267,8 +266,8 @@ tabyl(hie$dupe_flag)
 #> # A tibble: 2 × 3
 #>   `hie$dupe_flag`      n percent
 #>   <lgl>            <int>   <dbl>
-#> 1 FALSE           229641  0.986 
-#> 2 TRUE              3257  0.0140
+#> 1 FALSE           233856  0.986 
+#> 2 TRUE              3346  0.0141
 ```
 
 ### Missing
@@ -287,21 +286,21 @@ col_stats(hie, count_na)
     #>  3 vendor_name            <chr>      0 0       
     #>  4 date                   <chr>      0 0       
     #>  5 amount                 <dbl>      0 0       
-    #>  6 authorized_use         <chr>  97292 0.418   
+    #>  6 authorized_use         <chr>  97292 0.410   
     #>  7 expenditure_category   <chr>      0 0       
     #>  8 purpose_of_expenditure <chr>      0 0       
-    #>  9 address_1              <chr>    114 0.000489
-    #> 10 address_2              <chr> 217509 0.934   
-    #> 11 city                   <chr>     42 0.000180
+    #>  9 address_1              <chr>    114 0.000481
+    #> 10 address_2              <chr> 221529 0.934   
+    #> 11 city                   <chr>     42 0.000177
     #> 12 state                  <chr>      0 0       
     #> 13 zip_code               <chr>      0 0       
     #> 14 office                 <chr>      0 0       
-    #> 15 district               <chr> 192310 0.826   
-    #> 16 county                 <chr> 213056 0.915   
-    #> 17 party                  <chr> 176635 0.758   
+    #> 15 district               <chr> 194545 0.820   
+    #> 16 county                 <chr> 216531 0.913   
+    #> 17 party                  <chr> 176928 0.746   
     #> 18 reg_no                 <chr>      0 0       
     #> 19 election_period        <chr>      0 0       
-    #> 20 mapping_location       <chr>  61012 0.262   
+    #> 20 mapping_location       <chr>  57267 0.241   
     #> 21 in_out_state           <chr>      0 0       
     #> 22 dupe_flag              <lgl>      0 0
 
@@ -315,8 +314,8 @@ tabyl(hie$na_flag)
     #> # A tibble: 2 × 3
     #>   `hie$na_flag`      n percent
     #>   <lgl>          <int>   <dbl>
-    #> 1 FALSE          56256   0.242
-    #> 2 TRUE          176642   0.758
+    #> 1 FALSE          60267   0.254
+    #> 2 TRUE          176935   0.746
 
 ### Ranges
 
@@ -325,7 +324,7 @@ tabyl(hie$na_flag)
 ``` r
 summary(hie$amount)
 #>      Min.   1st Qu.    Median      Mean   3rd Qu.      Max. 
-#>  -5898.00     27.20     99.99    615.80    350.48 271096.00
+#>  -5898.00     27.17    100.00    616.02    353.36 271096.00
 sum(hie$amount < 0)
 #> [1] 306
 ```
@@ -336,31 +335,24 @@ sum(hie$amount < 0)
 
 ![](../plots/amount_box_party-1.png)<!-- -->
 
-![](../plots/amount_line_time-1.png)<!-- -->
-
 ![](../plots/amount_cat_box-1.png)<!-- -->
 
 #### Date
 
-There are no dates before NA and NA dates past the creation of this
-document.
-
-``` r
-min(hie$date)
-#> [1] "01/01/2007"
-max(hie$date)
-#> [1] "12/31/2021"
-sum(hie$date > today())
-#> [1] NA
-```
-
-To better explore the distribution of dates and track expendtures, we
+To better explore the distribution of dates and track expenditures, we
 will create a `year_clean` variable from `date` using
 `lubridate::year()`.
 
 ``` r
 hie <- hie %>% mutate(date = as.Date(date, format = "%m/%d/%Y"))
 hie <- mutate(hie, year_clean = year(date))
+```
+
+``` r
+min(hie$date)
+#> [1] "2006-11-08"
+max(hie$date)
+#> [1] "2023-01-27"
 ```
 
 We can see the expenditures naturally increase in frequency every other
@@ -459,28 +451,28 @@ hie %>%
 ```
 
     #> # A tibble: 10 × 3
-    #>    address_1                 address_2 address_norm            
-    #>    <chr>                     <chr>     <chr>                   
-    #>  1 PO BOX 2719               <NA>      PO BOX 2719             
-    #>  2 PO BOX 30770              <NA>      PO BOX 30770            
-    #>  3 HAHANI ST.                <NA>      HAHANI ST               
-    #>  4 PO BOX 4503               <NA>      PO BOX 4503             
-    #>  5 PO BOX 7221               <NA>      PO BOX 7221             
-    #>  6 P.O. BOX 2930             <NA>      PO BOX 2930             
-    #>  7 P.O. BOX 2300             <NA>      PO BOX 2300             
-    #>  8 -                         -         <NA>                    
-    #>  9 94-3000 FARRINGTON HWY #1 <NA>      943000 FARRINGTON HWY #1
-    #> 10 PO BOX 970081             <NA>      PO BOX 970081
+    #>    address_1                   address_2 address_norm               
+    #>    <chr>                       <chr>     <chr>                      
+    #>  1 PO BOX 30770                <NA>      PO BOX 30770               
+    #>  2 PO BOX 30468                <NA>      PO BOX 30468               
+    #>  3 PO BOX 553                  <NA>      PO BOX 553                 
+    #>  4 PO BOX 30770                <NA>      PO BOX 30770               
+    #>  5 HC173 WAILUA ROAD KEANAE    <NA>      HC173 WAILUA ROAD KEANAE   
+    #>  6 P.O. BOX 734                <NA>      PO BOX 734                 
+    #>  7 97-799 LUMIAINA ST.         <NA>      97799 LUMIAINA ST          
+    #>  8 ONLINE CONTRIBUTION SERVICE <NA>      ONLINE CONTRIBUTION SERVICE
+    #>  9 P. O. BOX 790100            <NA>      P O BOX 790100             
+    #> 10 P. O. BOX 548               <NA>      P O BOX 548
 
 ### ZIP
 
 ``` r
 n_distinct(hie$zip_code)
-#> [1] 3324
+#> [1] 3396
 prop_in(hie$zip_code, valid_zip)
-#> [1] 0.9554741
+#> [1] 0.955658
 sum(hie$zip_code %out% valid_zip)
-#> [1] 10370
+#> [1] 10518
 ```
 
 ``` r
@@ -495,11 +487,11 @@ hie <- hie %>%
 
 ``` r
 n_distinct(hie$zip_norm)
-#> [1] 2260
+#> [1] 2301
 prop_in(hie$zip_norm, valid_zip)
-#> [1] 0.9972652
+#> [1] 0.9972174
 sum(hie$zip_norm %out% valid_zip)
-#> [1] 1708
+#> [1] 1747
 ```
 
 ### State
@@ -521,11 +513,11 @@ sum(hie$state %out% valid_state)
 
 ``` r
 n_distinct(hie$city)
-#> [1] 2023
+#> [1] 2054
 prop_in(hie$city, valid_city)
-#> [1] 0.9544654
+#> [1] 0.954537
 sum(unique(hie$city) %out% valid_city)
-#> [1] 1081
+#> [1] 1095
 ```
 
 ``` r
@@ -534,20 +526,20 @@ hie %>%
   filter(city %out% valid_city)
 ```
 
-    #> # A tibble: 1,081 × 2
+    #> # A tibble: 1,095 × 2
     #>    city               n
     #>    <chr>          <int>
-    #>  1 KAILUA-KONA     2704
-    #>  2 SOMMERVILLE      339
+    #>  1 KAILUA-KONA     2742
+    #>  2 SOMMERVILLE      343
     #>  3 95131            227
     #>  4 HON              210
-    #>  5 ???              200
-    #>  6 IWILEI           189
-    #>  7 ONLINE           172
-    #>  8 HONOLULU, OAHU   139
-    #>  9 -                132
+    #>  5 ???              202
+    #>  6 IWILEI           190
+    #>  7 ONLINE           171
+    #>  8 HONOLULU, OAHU   147
+    #>  9 -                133
     #> 10 KANE'OHE         132
-    #> # … with 1,071 more rows
+    #> # ℹ 1,085 more rows
 
 ``` r
 hie <- hie %>% 
@@ -564,19 +556,19 @@ hie <- hie %>%
 n_distinct(hie$city_norm)
 ```
 
-    #> [1] 1831
+    #> [1] 1861
 
 ``` r
 prop_in(hie$city_norm, valid_city)
 ```
 
-    #> [1] 0.9643139
+    #> [1] 0.9642647
 
 ``` r
 sum(unique(hie$city_norm) %out% valid_city)
 ```
 
-    #> [1] 884
+    #> [1] 897
 
 #### Swap
 
@@ -601,17 +593,17 @@ hie <- hie %>%
   )
 
 mean(hie$match_dist, na.rm = TRUE)
-#> [1] 0.1987494
+#> [1] 0.1991597
 max(hie$match_dist, na.rm = TRUE)
 #> [1] 27
 sum(hie$match_dist == 1, na.rm = TRUE)
-#> [1] 4888
+#> [1] 4970
 n_distinct(hie$city_swap)
-#> [1] 1332
+#> [1] 1357
 prop_in(hie$city_swap, valid_city)
-#> [1] 0.9875422
+#> [1] 0.9874731
 sum(unique(hie$city_swap) %out% valid_city)
-#> [1] 395
+#> [1] 402
 ```
 
 ``` r
@@ -621,20 +613,20 @@ hie %>%
   drop_na()
 ```
 
-    #> # A tibble: 396 × 3
+    #> # A tibble: 403 × 3
     #>    state city_swap         n
     #>    <chr> <chr>         <int>
-    #>  1 HI    HON             232
-    #>  2 HI    IWILEI          189
-    #>  3 HI    HONOLULU OAHU   138
-    #>  4 PA    CHESTERBROOK    105
-    #>  5 CA    MOUNT VIEW      102
+    #>  1 HI    HON             233
+    #>  2 HI    IWILEI          190
+    #>  3 HI    HONOLULU OAHU   146
+    #>  4 CA    MOUNT VIEW      110
+    #>  5 PA    CHESTERBROOK    105
     #>  6 HI    LANAI            95
     #>  7 HI    WAILEA           89
     #>  8 HI    KONA             81
-    #>  9 CA    SAN FRANSCISO    61
+    #>  9 CA    SAN FRANSCISO    67
     #> 10 HI    KAHULUI MAUI     56
-    #> # … with 386 more rows
+    #> # ℹ 393 more rows
 
 ``` r
 hie$city_swap <- hie$city_swap %>% 
@@ -644,7 +636,7 @@ hie$city_swap <- hie$city_swap %>%
 prop_in(hie$city_swap, valid_city)
 ```
 
-    #> [1] 0.9887082
+    #> [1] 0.9886222
 
 ``` r
 hie <- hie %>% rename(city_clean = city_swap)
@@ -652,8 +644,8 @@ hie <- hie %>% rename(city_clean = city_swap)
 
 ## Conclude
 
-1.  There are 232,898 records in the database.
-2.  There are 3257 duplicate records, flagged with `dupe_flag`.
+1.  There are 237,202 records in the database.
+2.  There are 3346 duplicate records, flagged with `dupe_flag`.
 3.  Ranges for `amount` and `date` are both reasonable.
 4.  There are no missing records of importance.
 5.  Consistency issues in geographic values have been improved.
@@ -694,14 +686,36 @@ progress_table(hie$city_raw,
     #> # A tibble: 3 × 6
     #>   stage          prop_in n_distinct    prop_na n_out n_diff
     #>   <chr>            <dbl>      <dbl>      <dbl> <dbl>  <dbl>
-    #> 1 hie$city_raw     0.954       2023   0.000180 10603   1081
+    #> 1 hie$city_raw     0.955       2054   0.000177 10782   1095
     #> 2 hie$city_norm  NaN              0 NaN            0      0
-    #> 3 hie$city_clean   0.989       1330   0.0148    2591    393
+    #> 3 hie$city_clean   0.989       1355   0.0148    2659    400
 
 ``` r
 write_csv(
   x = hie,
-  path = glue("{proc_dir}/hi_expends_clean.csv"),
+  path = glue("{proc_dir}/hi_expends_20230127.csv"),
   na = ""
 )
+```
+
+## Upload
+
+We can use the `aws.s3::put_object()` to upload the text file to the IRW
+server.
+
+``` r
+aws_path <- path("csv", basename(clean_path))
+if (!object_exists(aws_path, "publicaccountability")) {
+  put_object(
+    file = clean_path,
+    object = aws_path, 
+    bucket = "publicaccountability",
+    acl = "public-read",
+    show_progress = TRUE,
+    multipart = TRUE
+  )
+}
+aws_head <- head_object(aws_path, "publicaccountability")
+(aws_size <- as_fs_bytes(attr(aws_head, "content-length")))
+unname(aws_size == clean_size)
 ```
