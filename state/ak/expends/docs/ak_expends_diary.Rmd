@@ -103,7 +103,7 @@ paths relative to _your_ machine.
 
 ```{r where_here}
 # where does this document knit?
-here::i_am("ak/expends/docs/ak_expends_diary.Rmd")
+here::here()
 ```
 
 [tap]: https://github.com/irworkshop/accountability_datacleaning
@@ -316,6 +316,9 @@ We can add the calendar year from `date` with `lubridate::year()`
 
 ```{r date_year}
 ake <- mutate(ake, year = year(date))
+ake <- ake %>%
+  mutate(date = as.Date(date, format = "%Y/%m/%d %H:%M:%S+00")) %>%
+  mutate(date = format(date, "%Y-%m-%d"))
 ```
 
 ```{r date_range}
@@ -333,8 +336,8 @@ ake %>%
   geom_col(aes(fill = even)) + 
   scale_fill_brewer(palette = "Dark2") +
   scale_y_continuous(labels = comma) +
-  scale_x_continuous(breaks = seq(2011, 2022)) +
-  coord_cartesian(xlim = c(2011, 2022)) +
+  scale_x_continuous(breaks = seq(2011, 2023)) +
+  coord_cartesian(xlim = c(2011, 2023)) +
   theme(legend.position = "bottom") +
   labs(
     title = "Alaska Expenditures by Year",
@@ -645,7 +648,7 @@ Now the file can be saved on disk for upload to the Accountability server.
 
 ```{r clean_dir}
 clean_dir <- dir_create(here("ak", "expends", "data", "clean"))
-clean_path <- path(clean_dir, "ak_expends_clean.csv")
+clean_path <- path(clean_dir, "ak_expends_2023-05-18.csv")
 write_csv(ake, clean_path, na = "")
 (clean_size <- file_size(clean_path))
 file_encoding(clean_path) %>% 

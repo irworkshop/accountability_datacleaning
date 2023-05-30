@@ -1,28 +1,28 @@
 Alaska Expenditures
 ================
 Kiernan Nicholls & Aarushi Sahejpal
-Tue Sep 20 14:41:25 2022
+Tue May 30 14:48:18 2023
 
--   <a href="#project" id="toc-project">Project</a>
--   <a href="#objectives" id="toc-objectives">Objectives</a>
--   <a href="#packages" id="toc-packages">Packages</a>
--   <a href="#data" id="toc-data">Data</a>
--   <a href="#download" id="toc-download">Download</a>
--   <a href="#read" id="toc-read">Read</a>
--   <a href="#explore" id="toc-explore">Explore</a>
-    -   <a href="#missing" id="toc-missing">Missing</a>
-    -   <a href="#duplicates" id="toc-duplicates">Duplicates</a>
-    -   <a href="#categorical" id="toc-categorical">Categorical</a>
-    -   <a href="#amounts" id="toc-amounts">Amounts</a>
-    -   <a href="#dates" id="toc-dates">Dates</a>
--   <a href="#wrangle" id="toc-wrangle">Wrangle</a>
-    -   <a href="#address" id="toc-address">Address</a>
-    -   <a href="#zip" id="toc-zip">ZIP</a>
-    -   <a href="#state" id="toc-state">State</a>
-    -   <a href="#city" id="toc-city">City</a>
--   <a href="#conclude" id="toc-conclude">Conclude</a>
--   <a href="#export" id="toc-export">Export</a>
--   <a href="#upload" id="toc-upload">Upload</a>
+- <a href="#project" id="toc-project">Project</a>
+- <a href="#objectives" id="toc-objectives">Objectives</a>
+- <a href="#packages" id="toc-packages">Packages</a>
+- <a href="#data" id="toc-data">Data</a>
+- <a href="#download" id="toc-download">Download</a>
+- <a href="#read" id="toc-read">Read</a>
+- <a href="#explore" id="toc-explore">Explore</a>
+  - <a href="#missing" id="toc-missing">Missing</a>
+  - <a href="#duplicates" id="toc-duplicates">Duplicates</a>
+  - <a href="#categorical" id="toc-categorical">Categorical</a>
+  - <a href="#amounts" id="toc-amounts">Amounts</a>
+  - <a href="#dates" id="toc-dates">Dates</a>
+- <a href="#wrangle" id="toc-wrangle">Wrangle</a>
+  - <a href="#address" id="toc-address">Address</a>
+  - <a href="#zip" id="toc-zip">ZIP</a>
+  - <a href="#state" id="toc-state">State</a>
+  - <a href="#city" id="toc-city">City</a>
+- <a href="#conclude" id="toc-conclude">Conclude</a>
+- <a href="#export" id="toc-export">Export</a>
+- <a href="#upload" id="toc-upload">Upload</a>
 
 <!-- Place comments regarding knitting here -->
 
@@ -96,7 +96,8 @@ feature and should be run as such. The project also uses the dynamic
 
 ``` r
 # where does this document knit?
-here::i_am("ak/expends/docs/ak_expends_diary.Rmd")
+here::here()
+#> [1] "/Volumes/TAP/accountability_datacleaning"
 ```
 
 ## Data
@@ -190,51 +191,50 @@ ake <- ake %>%
 
 ## Explore
 
-There are 265,063 rows of 25 columns. Each record represents a single
+There are 225,062 rows of 25 columns. Each record represents a single
 expenditure from a committee to a vendor.
 
 ``` r
 glimpse(ake)
-#> Rows: 265,063
+#> Rows: 225,062
 #> Columns: 25
 #> $ txn          <chr> "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18"…
-#> $ date         <date> 2022-01-16, 2021-11-17, 2022-02-14, 2021-12-02, 2021-11-25, 2021-11-21, 2022-01-08, 2021-12-30, …
-#> $ pay_type     <chr> "Check", "Check", "Check", "Check", "Check", "Check", "Check", "Check", "Debit Card", "Debit Card…
-#> $ pay_info     <chr> "159", "151", "155", "154", "153", "152", "158", "156", NA, NA, NA, NA, NA, "Training", "Training…
-#> $ amount       <dbl> 206.98, 693.00, 100.00, 68.99, 154.95, 500.00, 199.98, 100.00, 22.50, 73.42, 98.91, 35.84, 7.00, …
-#> $ last         <chr> "Donley", "Chambers", "Thompkins", "Donley", "Donley", "Donley", "Donley", "Rittgers Companies, L…
-#> $ first        <chr> "David", "Michael", "Brittany", "David", "David", "David", "David", NA, NA, NA, NA, NA, NA, NA, N…
-#> $ address      <chr> "6860 Tondi Lane", "201 Barrow St #4", "13020 Foster Road", "6860 Tondi Lane", "6860 Tondi Lane",…
+#> $ date         <date> 2023-02-01, 2022-11-23, 2022-11-28, 2022-12-01, 2022-12-01, 2022-12-09, 2022-12-09, 2022-12-09, …
+#> $ pay_type     <chr> "Check", "Debit Card", "Debit Card", "Debit Card", "Debit Card", "Debit Card", "Debit Card", "Deb…
+#> $ pay_info     <chr> "1003", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "159", "151", "155", "154", "153", "152",…
+#> $ amount       <dbl> 54.86, 276.00, 14.00, 303.27, 194.15, 179.00, 170.75, 161.29, 360.00, 40.00, 1241.60, 16.00, 15.2…
+#> $ last         <chr> "Frasca", "US Post Office", "US Post Office", "PIP Printing", "PIP Printing", "AT Publishing", "O…
+#> $ first        <chr> "Cheryl", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "David", "Michael", "Brittany", "David"…
+#> $ address      <chr> "2415 La Honda Dr", "1601 W. Northern Lights", "1601 W. Northern Lights", "833 E. 4th Ave", "833 …
 #> $ city         <chr> "Anchorage", "Anchorage", "Anchorage", "Anchorage", "Anchorage", "Anchorage", "Anchorage", "Ancho…
 #> $ state        <chr> "Alaska", "Alaska", "Alaska", "Alaska", "Alaska", "Alaska", "Alaska", "Alaska", "Alaska", "Alaska…
-#> $ zip          <chr> "99507", "99501", "99516", "99507", "99507", "99507", "99507", "99507", "99508", "99508", "99501"…
+#> $ zip          <chr> "99517", "99517", "99517", "99501", "99501", "99507", "99503", "99503", "99517", "99507", "70112"…
 #> $ country      <chr> "USA", "USA", "USA", "USA", "USA", "USA", "USA", "USA", "USA", "USA", "USA", "USA", "USA", "USA",…
-#> $ occupation   <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "Foundation", "Foundation", "Internet Domain/…
-#> $ employer     <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "FACL", "FACL", "GoDaddy.com", "Paypal", "Off…
-#> $ purpose      <chr> "Reimburse for 1/16/21 Amazon purchase of printer toner.", "Website services and electronic media…
+#> $ occupation   <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
+#> $ employer     <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
+#> $ purpose      <chr> "Reimburse for campaign checks", "PO box rental", "PO Box key deposit", "Printing of campaign mat…
 #> $ rpt_type     <chr> "Previous Year Start Report", "Previous Year Start Report", "Previous Year Start Report", "Previo…
-#> $ elect_year   <int> 2023, 2023, 2023, 2023, 2023, 2023, 2023, 2023, 2022, 2022, 2022, 2022, 2022, 2022, 2022, 2022, 2…
+#> $ elect_year   <int> 2024, 2024, 2024, 2024, 2024, 2024, 2024, 2024, 2024, 2024, 2024, 2024, 2024, 2023, 2023, 2023, 2…
 #> $ elect_name   <chr> "Anchorage Municipal Election", "Anchorage Municipal Election", "Anchorage Municipal Election", "…
 #> $ elect_type   <chr> "Anchorage Municipal", "Anchorage Municipal", "Anchorage Municipal", "Anchorage Municipal", "Anch…
 #> $ municipality <chr> "Anchorage, City and Borough", "Anchorage, City and Borough", "Anchorage, City and Borough", "Anc…
-#> $ office       <chr> "School Board", "School Board", "School Board", "School Board", "School Board", "School Board", "…
+#> $ office       <chr> "Mayor", "Mayor", "Mayor", "Mayor", "Mayor", "Mayor", "Mayor", "Mayor", "Mayor", "Mayor", "Mayor"…
 #> $ filer_type   <chr> "Candidate", "Candidate", "Candidate", "Candidate", "Candidate", "Candidate", "Candidate", "Candi…
-#> $ committee    <chr> "Dave Donley", "Dave Donley", "Dave Donley", "Dave Donley", "Dave Donley", "Dave Donley", "Dave D…
-#> $ rpt_year     <int> 2023, 2023, 2023, 2023, 2023, 2023, 2023, 2023, 2022, 2022, 2022, 2022, 2022, 2022, 2022, 2022, 2…
-#> $ submitted    <date> 2022-02-13, 2022-02-13, 2022-02-13, 2022-02-13, 2022-02-13, 2022-02-13, 2022-02-13, 2022-02-13, …
+#> $ committee    <chr> "Dave Bronson", "Dave Bronson", "Dave Bronson", "Dave Bronson", "Dave Bronson", "Dave Bronson", "…
+#> $ rpt_year     <int> 2024, 2024, 2024, 2024, 2024, 2024, 2024, 2024, 2024, 2024, 2024, 2024, 2024, 2023, 2023, 2023, 2…
+#> $ submitted    <date> 2023-02-15, 2023-02-15, 2023-02-15, 2023-02-15, 2023-02-15, 2023-02-15, 2023-02-15, 2023-02-15, …
 tail(ake)
 #> # A tibble: 6 × 25
-#>   txn    date   pay_type pay_info amount last  first address city  state zip   country occupat…¹ emplo…² purpose rpt_t…³
-#>   <chr>  <date> <chr>    <chr>     <dbl> <chr> <chr> <chr>   <chr> <chr> <chr> <chr>   <chr>     <chr>   <chr>   <chr>  
-#> 1 "    … NA     <NA>     <NA>         NA <NA>  <NA>  <NA>    <NA>  <NA>  <NA>  <NA>    <NA>      <NA>    <NA>    <NA>   
-#> 2 "    … NA     <NA>     <NA>         NA <NA>  <NA>  <NA>    <NA>  <NA>  <NA>  <NA>    <NA>      <NA>    <NA>    <NA>   
-#> 3 "    … NA     <NA>     <NA>         NA <NA>  <NA>  <NA>    <NA>  <NA>  <NA>  <NA>    <NA>      <NA>    <NA>    <NA>   
-#> 4 "    … NA     <NA>     <NA>         NA <NA>  <NA>  <NA>    <NA>  <NA>  <NA>  <NA>    <NA>      <NA>    <NA>    <NA>   
-#> 5 "    … NA     <NA>     <NA>         NA <NA>  <NA>  <NA>    <NA>  <NA>  <NA>  <NA>    <NA>      <NA>    <NA>    <NA>   
-#> 6 "</ht… NA     <NA>     <NA>         NA <NA>  <NA>  <NA>    <NA>  <NA>  <NA>  <NA>    <NA>      <NA>    <NA>    <NA>   
-#> # … with 9 more variables: elect_year <int>, elect_name <chr>, elect_type <chr>, municipality <chr>, office <chr>,
-#> #   filer_type <chr>, committee <chr>, rpt_year <int>, submitted <date>, and abbreviated variable names ¹​occupation,
-#> #   ²​employer, ³​rpt_type
+#>   txn      date   pay_type pay_info amount last  first address city  state zip   country occupation employer purpose
+#>   <chr>    <date> <chr>    <chr>     <dbl> <chr> <chr> <chr>   <chr> <chr> <chr> <chr>   <chr>      <chr>    <chr>  
+#> 1 "      … NA     <NA>     <NA>         NA <NA>  <NA>  <NA>    <NA>  <NA>  <NA>  <NA>    <NA>       <NA>     <NA>   
+#> 2 "      … NA     <NA>     <NA>         NA <NA>  <NA>  <NA>    <NA>  <NA>  <NA>  <NA>    <NA>       <NA>     <NA>   
+#> 3 "      … NA     <NA>     <NA>         NA <NA>  <NA>  <NA>    <NA>  <NA>  <NA>  <NA>    <NA>       <NA>     <NA>   
+#> 4 "      … NA     <NA>     <NA>         NA <NA>  <NA>  <NA>    <NA>  <NA>  <NA>  <NA>    <NA>       <NA>     <NA>   
+#> 5 "    </… NA     <NA>     <NA>         NA <NA>  <NA>  <NA>    <NA>  <NA>  <NA>  <NA>    <NA>       <NA>     <NA>   
+#> 6 "</html… NA     <NA>     <NA>         NA <NA>  <NA>  <NA>    <NA>  <NA>  <NA>  <NA>    <NA>       <NA>     <NA>   
+#> # ℹ 10 more variables: rpt_type <chr>, elect_year <int>, elect_name <chr>, elect_type <chr>, municipality <chr>,
+#> #   office <chr>, filer_type <chr>, committee <chr>, rpt_year <int>, submitted <date>
 ```
 
 ### Missing
@@ -247,30 +247,30 @@ col_stats(ake, count_na)
 #>    col          class       n        p
 #>    <chr>        <chr>   <int>    <dbl>
 #>  1 txn          <chr>       0 0       
-#>  2 date         <date>     63 0.000238
-#>  3 pay_type     <chr>      62 0.000234
-#>  4 pay_info     <chr>  150155 0.566   
-#>  5 amount       <dbl>      63 0.000238
-#>  6 last         <chr>     115 0.000434
-#>  7 first        <chr>  219084 0.827   
-#>  8 address      <chr>    1542 0.00582 
-#>  9 city         <chr>    1134 0.00428 
-#> 10 state        <chr>     309 0.00117 
-#> 11 zip          <chr>    1346 0.00508 
-#> 12 country      <chr>      63 0.000238
-#> 13 occupation   <chr>  256823 0.969   
-#> 14 employer     <chr>  257700 0.972   
-#> 15 purpose      <chr>     186 0.000702
-#> 16 rpt_type     <chr>     917 0.00346 
-#> 17 elect_year   <int>   28660 0.108   
-#> 18 elect_name   <chr>      63 0.000238
-#> 19 elect_type   <chr>   28660 0.108   
-#> 20 municipality <chr>  198760 0.750   
-#> 21 office       <chr>   88855 0.335   
-#> 22 filer_type   <chr>      63 0.000238
-#> 23 committee    <chr>      63 0.000238
-#> 24 rpt_year     <int>      63 0.000238
-#> 25 submitted    <date>     63 0.000238
+#>  2 date         <date>     62 0.000275
+#>  3 pay_type     <chr>      61 0.000271
+#>  4 pay_info     <chr>  138886 0.617   
+#>  5 amount       <dbl>      62 0.000275
+#>  6 last         <chr>      82 0.000364
+#>  7 first        <chr>  189662 0.843   
+#>  8 address      <chr>    1272 0.00565 
+#>  9 city         <chr>     846 0.00376 
+#> 10 state        <chr>     332 0.00148 
+#> 11 zip          <chr>     990 0.00440 
+#> 12 country      <chr>      62 0.000275
+#> 13 occupation   <chr>  217461 0.966   
+#> 14 employer     <chr>  218224 0.970   
+#> 15 purpose      <chr>     172 0.000764
+#> 16 rpt_type     <chr>     369 0.00164 
+#> 17 elect_year   <int>   22470 0.0998  
+#> 18 elect_name   <chr>      62 0.000275
+#> 19 elect_type   <chr>   22470 0.0998  
+#> 20 municipality <chr>  163243 0.725   
+#> 21 office       <chr>   74677 0.332   
+#> 22 filer_type   <chr>      62 0.000275
+#> 23 committee    <chr>      62 0.000275
+#> 24 rpt_year     <int>      62 0.000275
+#> 25 submitted    <date>     62 0.000275
 ```
 
 We can flag any record missing a key variable needed to identify a
@@ -280,14 +280,14 @@ transaction.
 key_vars <- c("date", "last", "amount", "committee")
 ake <- flag_na(ake, all_of(key_vars))
 sum(ake$na_flag)
-#> [1] 115
+#> [1] 82
 ```
 
 ``` r
 ake %>% 
   filter(na_flag) %>% 
   select(all_of(key_vars))
-#> # A tibble: 115 × 4
+#> # A tibble: 82 × 4
 #>    date       last  amount committee                                                                                    
 #>    <date>     <chr>  <dbl> <chr>                                                                                        
 #>  1 2019-07-19 <NA>   1673. Liz Snyder                                                                                   
@@ -300,7 +300,7 @@ ake %>%
 #>  8 2017-02-22 <NA>      0  IUOE Local 302 PAC  (International Union of Operating Engineers Local 302 Political Action C…
 #>  9 2017-02-22 <NA>      0  IUOE Local 302 PAC  (International Union of Operating Engineers Local 302 Political Action C…
 #> 10 2017-02-22 <NA>      0  IUOE Local 302 PAC  (International Union of Operating Engineers Local 302 Political Action C…
-#> # … with 105 more rows
+#> # ℹ 72 more rows
 ```
 
 ### Duplicates
@@ -310,27 +310,27 @@ We can also flag any record completely duplicated across every column.
 ``` r
 ake <- flag_dupes(ake, -txn)
 sum(ake$dupe_flag)
-#> [1] 47064
+#> [1] 41090
 ```
 
 ``` r
 ake %>% 
   filter(dupe_flag) %>% 
   select(txn, all_of(key_vars))
-#> # A tibble: 47,064 × 5
-#>    txn   date       last                                           amount committee            
-#>    <chr> <date>     <chr>                                           <dbl> <chr>                
-#>  1 14    2021-11-19 Federation for Applied Conservative Leadership   40   Sharon Denise Jackson
-#>  2 15    2021-11-19 Federation for Applied Conservative Leadership   40   Sharon Denise Jackson
-#>  3 21    2021-12-31 Paypal                                           14.9 Sharon Denise Jackson
-#>  4 23    2021-12-31 Paypal                                           14.9 Sharon Denise Jackson
-#>  5 155   2022-01-15 Anedot Inc.                                       4.3 Michael Cronk        
-#>  6 157   2022-01-15 Anedot Inc.                                       4.3 Michael Cronk        
-#>  7 158   2022-01-15 Anedot Inc.                                       4.3 Michael Cronk        
-#>  8 180   2021-03-09 Wells Fargo                                      52.3 Rachel M. Ries       
-#>  9 181   2021-03-13 Dubay Business Services                         700   Rachel M. Ries       
-#> 10 182   2021-08-12 Dubay Business Services                        2000   Rachel M. Ries       
-#> # … with 47,054 more rows
+#> # A tibble: 41,090 × 5
+#>    txn   date       last                      amount committee        
+#>    <chr> <date>     <chr>                      <dbl> <chr>            
+#>  1 88    2023-01-17 eFundraising Connections    7.75 Kevin Scott Myers
+#>  2 89    2023-01-17 eFundraising Connections    7.75 Kevin Scott Myers
+#>  3 158   2023-01-12 KSRM                     7320    Peter A. Micciche
+#>  4 159   2023-01-13 Empire Consulting          50    Peter A. Micciche
+#>  5 160   2023-01-13 Hendrix                  1000    Peter A. Micciche
+#>  6 161   2023-01-12 Kelley Connect             39.6  Peter A. Micciche
+#>  7 162   2023-01-06 G. F. Sherman Signs      1473    Peter A. Micciche
+#>  8 163   2023-01-06 G. F. Sherman Signs      1473    Peter A. Micciche
+#>  9 164   2023-01-12 Kelley Connect             39.6  Peter A. Micciche
+#> 10 165   2023-01-12 KSRM                     7320    Peter A. Micciche
+#> # ℹ 41,080 more rows
 ```
 
 ### Categorical
@@ -340,33 +340,33 @@ col_stats(ake, n_distinct)
 #> # A tibble: 27 × 4
 #>    col          class       n          p
 #>    <chr>        <chr>   <int>      <dbl>
-#>  1 txn          <chr>  265049 1.00      
-#>  2 date         <date>   4123 0.0156    
-#>  3 pay_type     <chr>      12 0.0000453 
-#>  4 pay_info     <chr>   13631 0.0514    
-#>  5 amount       <dbl>   32240 0.122     
-#>  6 last         <chr>   25596 0.0966    
-#>  7 first        <chr>    4206 0.0159    
-#>  8 address      <chr>   34388 0.130     
-#>  9 city         <chr>    2713 0.0102    
-#> 10 state        <chr>      94 0.000355  
-#> 11 zip          <chr>    3392 0.0128    
-#> 12 country      <chr>      24 0.0000905 
-#> 13 occupation   <chr>     765 0.00289   
-#> 14 employer     <chr>    1014 0.00383   
-#> 15 purpose      <chr>   52876 0.199     
-#> 16 rpt_type     <chr>      14 0.0000528 
-#> 17 elect_year   <int>      13 0.0000490 
-#> 18 elect_name   <chr>      56 0.000211  
-#> 19 elect_type   <chr>      10 0.0000377 
-#> 20 municipality <chr>      27 0.000102  
-#> 21 office       <chr>      12 0.0000453 
-#> 22 filer_type   <chr>       4 0.0000151 
-#> 23 committee    <chr>    1376 0.00519   
-#> 24 rpt_year     <int>      13 0.0000490 
-#> 25 submitted    <date>   2206 0.00832   
-#> 26 na_flag      <lgl>       2 0.00000755
-#> 27 dupe_flag    <lgl>       2 0.00000755
+#>  1 txn          <chr>  225048 1.00      
+#>  2 date         <date>   3638 0.0162    
+#>  3 pay_type     <chr>      11 0.0000489 
+#>  4 pay_info     <chr>   12662 0.0563    
+#>  5 amount       <dbl>   30002 0.133     
+#>  6 last         <chr>   22688 0.101     
+#>  7 first        <chr>    3696 0.0164    
+#>  8 address      <chr>   30263 0.134     
+#>  9 city         <chr>    2499 0.0111    
+#> 10 state        <chr>      93 0.000413  
+#> 11 zip          <chr>    3122 0.0139    
+#> 12 country      <chr>      24 0.000107  
+#> 13 occupation   <chr>     771 0.00343   
+#> 14 employer     <chr>    1062 0.00472   
+#> 15 purpose      <chr>   47555 0.211     
+#> 16 rpt_type     <chr>      13 0.0000578 
+#> 17 elect_year   <int>      14 0.0000622 
+#> 18 elect_name   <chr>      53 0.000235  
+#> 19 elect_type   <chr>      11 0.0000489 
+#> 20 municipality <chr>      26 0.000116  
+#> 21 office       <chr>      13 0.0000578 
+#> 22 filer_type   <chr>       4 0.0000178 
+#> 23 committee    <chr>    1229 0.00546   
+#> 24 rpt_year     <int>      12 0.0000533 
+#> 25 submitted    <date>   1872 0.00832   
+#> 26 na_flag      <lgl>       2 0.00000889
+#> 27 dupe_flag    <lgl>       2 0.00000889
 ```
 
 ![](../plots/distinct_plots-1.png)<!-- -->![](../plots/distinct_plots-2.png)<!-- -->![](../plots/distinct_plots-3.png)<!-- -->![](../plots/distinct_plots-4.png)<!-- -->![](../plots/distinct_plots-5.png)<!-- -->![](../plots/distinct_plots-6.png)<!-- -->![](../plots/distinct_plots-7.png)<!-- -->
@@ -375,8 +375,8 @@ col_stats(ake, n_distinct)
 
 ``` r
 summary(ake$amount)
-#>    Min. 1st Qu.  Median    Mean 3rd Qu.    Max.    NA's 
-#>       0      20      94    1244     500 3152887      63
+#>      Min.   1st Qu.    Median      Mean   3rd Qu.      Max.      NA's 
+#>       0.0      19.5      90.0    1374.3     500.0 3152887.0        62
 mean(ake$amount <= 0)
 #> [1] NA
 ```
@@ -387,31 +387,31 @@ These are the records with the minimum and maximum amounts.
 glimpse(ake[c(which.max(ake$amount), which.min(ake$amount)), ])
 #> Rows: 2
 #> Columns: 27
-#> $ txn          <chr> "51637", "62"
-#> $ date         <date> 2020-09-23, 2021-11-26
-#> $ pay_type     <chr> "Check", "Debit Card"
-#> $ pay_info     <chr> "1186", NA
+#> $ txn          <chr> "75191", "1896"
+#> $ date         <date> 2020-09-23, 2023-03-22
+#> $ pay_type     <chr> "Check", "Check"
+#> $ pay_info     <chr> "1186", "Void 1186"
 #> $ amount       <dbl> 3152887, 0
-#> $ last         <chr> "Bright Strategy & Communications", " Paypal"
-#> $ first        <chr> NA, NA
-#> $ address      <chr> "900 W 5th Ave #100", "2211 N1st St"
-#> $ city         <chr> "Anchorage", "San Jose"
-#> $ state        <chr> "Alaska", "California"
-#> $ zip          <chr> "99501", "95131"
+#> $ last         <chr> "Bright Strategy & Communications", "Holleman"
+#> $ first        <chr> NA, "Andy"
+#> $ address      <chr> "900 W 5th Ave #100", "PO box 212333"
+#> $ city         <chr> "Anchorage", "Anchorage"
+#> $ state        <chr> "Alaska", "Alaska"
+#> $ zip          <chr> "99501", "99521"
 #> $ country      <chr> "USA", "USA"
 #> $ occupation   <chr> NA, NA
 #> $ employer     <chr> NA, NA
 #> $ purpose      <chr> "TV ads: $3,388,436.61 with GCI Cable, KATH, KJUD, KTBY, KTUU, KTVF, KXDF, KXLJ, KYUR, D2 Media S…
-#> $ rpt_type     <chr> "Thirty Day Report", "Year Start Report"
-#> $ elect_year   <int> 2020, 2022
-#> $ elect_name   <chr> "State General Election", "State Primary"
-#> $ elect_type   <chr> "State General", "State Primary"
-#> $ municipality <chr> NA, NA
-#> $ office       <chr> NA, "Senate"
-#> $ filer_type   <chr> "Group", "Candidate"
-#> $ committee    <chr> "OneAlaska--Vote No on One", "Janice Lynn Park"
-#> $ rpt_year     <int> 2020, 2022
-#> $ submitted    <date> 2020-10-05, 2022-02-15
+#> $ rpt_type     <chr> "Thirty Day Report", "Seven Day Report"
+#> $ elect_year   <int> 2020, 2023
+#> $ elect_name   <chr> "State General Election", "Anchorage Municipal Election"
+#> $ elect_type   <chr> "State General", "Anchorage Municipal"
+#> $ municipality <chr> NA, "Anchorage, City and Borough"
+#> $ office       <chr> NA, NA
+#> $ filer_type   <chr> "Group", "Group"
+#> $ committee    <chr> "OneAlaska--Vote No on One", "Anchorage Central Labor Coucil PAC Anchorage Central Labor Council…
+#> $ rpt_year     <int> 2020, 2023
+#> $ submitted    <date> 2020-10-05, 2023-03-27
 #> $ na_flag      <lgl> FALSE, FALSE
 #> $ dupe_flag    <lgl> FALSE, FALSE
 ```
@@ -424,6 +424,9 @@ We can add the calendar year from `date` with `lubridate::year()`
 
 ``` r
 ake <- mutate(ake, year = year(date))
+ake <- ake %>%
+  mutate(date = as.Date(date, format = "%Y/%m/%d %H:%M:%S+00")) %>%
+  mutate(date = format(date, "%Y-%m-%d"))
 ```
 
 ``` r
@@ -469,18 +472,18 @@ ake %>%
   distinct() %>% 
   sample_n(10)
 #> # A tibble: 10 × 2
-#>    address                         address_norm                
-#>    <chr>                           <chr>                       
-#>  1 "2233 112th Ave NE"             2233 112TH AVE NE           
-#>  2 "#2512 Parks Highway "          #2512 PARKS HWY             
-#>  3 "737 N Michigan #2020"          737 N MICHIGAN #2020        
-#>  4 "4720 Business Park Blvd #G-25" 4720 BUSINESS PARK BLVD #G25
-#>  5 "1989 AIRPORT WAY"              1989 AIRPORT WAY            
-#>  6 "P. O. Box 993"                 P O BOX 993                 
-#>  7 "4340 MacAlister Dr."           4340 MACALISTER DR          
-#>  8 "19300 International Blvd."     19300 INTERNATIONAL BLVD    
-#>  9 "2014 Southeast 39th"           2014 SOUTHEAST 39TH         
-#> 10 "2449 Glenwood Street"          2449 GLENWOOD ST
+#>    address                       address_norm               
+#>    <chr>                         <chr>                      
+#>  1 22568 Sambar Lp.              22568 SAMBAR LP            
+#>  2 815 1st Ave Suite 188         815 1ST AVE SUITE 188      
+#>  3 1000 E Northern Lights Blvd.  1000 E NORTHERN LIGHTS BLVD
+#>  4 Po BOX 6615                   PO BOX 6615                
+#>  5 1121 124th Ave NE             1121 124TH AVE NE          
+#>  6 1503 W 31st Ave Suite 202     1503 W 31ST AVE SUITE 202  
+#>  7 1423 Lawrenceville Rd.        1423 LAWRENCEVILLE RD      
+#>  8 11701 Nix Court #A1           11701 NIX COURT #A1        
+#>  9 22 Sing Lee Ave               22 SING LEE AVE            
+#> 10 815 16th Street NW, 4th Floor 815 16TH STREET NW 4TH FL
 ```
 
 ### ZIP
@@ -508,8 +511,8 @@ progress_table(
 #> # A tibble: 2 × 6
 #>   stage        prop_in n_distinct prop_na n_out n_diff
 #>   <chr>          <dbl>      <dbl>   <dbl> <dbl>  <dbl>
-#> 1 ake$zip        0.956       3392 0.00508 11600   1356
-#> 2 ake$zip_norm   0.986       2513 0.0136   3698    415
+#> 1 ake$zip        0.954       3122 0.00440 10315   1198
+#> 2 ake$zip_norm   0.986       2362 0.0134   3177    374
 ```
 
 ### State
@@ -533,20 +536,20 @@ ake <- ake %>%
 ake %>% 
   filter(state != state_norm) %>% 
   count(state, state_norm, sort = TRUE)
-#> # A tibble: 52 × 3
+#> # A tibble: 53 × 3
 #>    state                state_norm      n
 #>    <chr>                <chr>       <int>
-#>  1 Alaska               AK         187452
-#>  2 California           CA          34779
-#>  3 Louisiana            LA          13747
-#>  4 Massachusetts        MA           4662
-#>  5 Washington           WA           4461
-#>  6 New York             NY           2833
-#>  7 Texas                TX           2165
-#>  8 District of Columbia DC           1694
-#>  9 Virginia             VA           1266
-#> 10 Ohio                 OH           1159
-#> # … with 42 more rows
+#>  1 Alaska               AK         149437
+#>  2 California           CA          33281
+#>  3 Louisiana            LA          14608
+#>  4 Massachusetts        MA           5171
+#>  5 Washington           WA           3692
+#>  6 New York             NY           2546
+#>  7 Texas                TX           2236
+#>  8 District of Columbia DC           1551
+#>  9 Georgia              GA           1340
+#> 10 Virginia             VA           1292
+#> # ℹ 43 more rows
 ```
 
 ``` r
@@ -558,8 +561,8 @@ progress_table(
 #> # A tibble: 2 × 6
 #>   stage            prop_in n_distinct prop_na  n_out n_diff
 #>   <chr>              <dbl>      <dbl>   <dbl>  <dbl>  <dbl>
-#> 1 ake$state      0.0000189         94 0.00117 264749     93
-#> 2 ake$state_norm 1                 53 0.00321      0      1
+#> 1 ake$state      0.0000222         93 0.00148 224725     92
+#> 2 ake$state_norm 1                 54 0.00388      0      1
 ```
 
 ### City
@@ -662,17 +665,17 @@ good_refine <- ake %>%
     #> # A tibble: 32 × 5
     #>    state_norm zip_norm city_swap           city_refine           n
     #>    <chr>      <chr>    <chr>               <chr>             <int>
-    #>  1 CA         94110    SAN FRANSICO        SAN FRANCISCO       228
+    #>  1 CA         94110    SAN FRANSICO        SAN FRANCISCO       180
     #>  2 CA         94107    SAN FRANSICO        SAN FRANCISCO        94
-    #>  3 AK         99518    ANCHROGE            ANCHORAGE            51
+    #>  3 AK         99518    ANCHROGE            ANCHORAGE            46
     #>  4 WA         98110    B BAINBRIDGE ISLAND BAINBRIDGE ISLAND    24
-    #>  5 MA         02144    SOMMERSVILLE        SOMERVILLE           16
-    #>  6 IL         60197    CORAL STREAM        CAROL STREAM         13
-    #>  7 AK         99654    WASSILA             WASILLA               7
-    #>  8 CA         94103    SAN FRANSICO        SAN FRANCISCO         7
-    #>  9 CA         94120    SAN FRANSICO        SAN FRANCISCO         7
-    #> 10 CA         94102    SAN FRANSCIO        SAN FRANCISCO         5
-    #> # … with 22 more rows
+    #>  5 AK         99654    WASSILA             WASILLA              23
+    #>  6 CA         94043    MOUNTIANVIEW        MOUNTAIN VIEW        22
+    #>  7 MA         02144    SOMMERSVILLE        SOMERVILLE           16
+    #>  8 IL         60197    CORAL STREAM        CAROL STREAM         13
+    #>  9 CA         94158    SAN FRANSICO        SAN FRANCISCO         9
+    #> 10 CA         94103    SAN FRANSICO        SAN FRANCISCO         7
+    #> # ℹ 22 more rows
 
 Then we can join the refined values back to the database.
 
@@ -688,10 +691,10 @@ Our goal for normalization was to increase the proportion of city values
 known to be valid and reduce the total distinct values by correcting
 misspellings.
 
-| stage                                                                                                                                                                                                                                                                                      | prop_in | n_distinct | prop_na | n_out | n_diff |
-|:-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|--------:|-----------:|--------:|------:|-------:|
-| str_to_upper(ake![city) \| 0.937\| 2342\| 0.004\| 16677\| 1229\| \|ake](https://latex.codecogs.com/png.image?%5Cdpi%7B110%7D&space;%5Cbg_white&space;city%29%20%7C%200.937%7C%202342%7C%200.004%7C%2016677%7C%201229%7C%20%7Cake "city) | 0.937| 2342| 0.004| 16677| 1229| |ake")city_norm |   0.974 |       1829 |   0.007 |  6792 |    688 |
-| ake![city_swap \| 0.990\| 1505\| 0.007\| 2504\| 348\| \|ake](https://latex.codecogs.com/png.image?%5Cdpi%7B110%7D&space;%5Cbg_white&space;city_swap%20%7C%200.990%7C%201505%7C%200.007%7C%202504%7C%20348%7C%20%7Cake "city_swap | 0.990| 1505| 0.007| 2504| 348| |ake")city_refine        |   0.992 |       1483 |   0.007 |  2007 |    326 |
+| stage                                                                    | prop_in | n_distinct | prop_na | n_out | n_diff |
+|:-------------------------------------------------------------------------|--------:|-----------:|--------:|------:|-------:|
+| str_to_upper(ake$city) | 0.931| 2159| 0.004| 15551| 1109| |ake$city_norm |   0.972 |       1687 |   0.007 |  6322 |    604 |
+| ake$city_swap | 0.990| 1402| 0.007| 2200| 301| |ake$city_refine          |   0.992 |       1383 |   0.007 |  1715 |    282 |
 
 You can see how the percentage of valid values increased with each
 stage.
@@ -725,44 +728,44 @@ ake <- ake %>%
 glimpse(sample_n(ake, 50))
 #> Rows: 50
 #> Columns: 32
-#> $ txn           <chr> "146486", "4490", "107008", "233720", "221588", "141384", "185266", "125772", "199889", "247933"…
-#> $ date          <date> 2016-09-30, 2022-03-16, 2018-03-31, 2014-11-02, 2014-08-26, 2016-07-05, 2014-07-03, 2017-08-14,…
-#> $ pay_type      <chr> "Check", "Electronic Funds Transfer", "Check", "Check", "Check", "Check", "Check", "Bank Fee", "…
-#> $ pay_info      <chr> "1571", NA, "1100", "1129", "197", "1016", "1051", NA, NA, NA, "0022", NA, NA, "127", NA, "2046"…
-#> $ amount        <dbl> 500.00, 4346.28, 1500.00, 1042.15, 15.00, 100.00, 254500.00, 1.38, 472.70, 7.55, 4190.92, 10.30,…
-#> $ last          <chr> "Patricia for House", "ADP Federal Account", "DeLaiarro", "Express Business Service ", "Kreiss-T…
-#> $ first         <chr> NA, NA, "Paula", NA, "Jonathan", "Jasmine", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
-#> $ address       <chr> "PO Box 940107", "2602 Fairbanks", "8401 Pioneer Dr", "360 E. International Airport Rd #6", "Big…
-#> $ city          <chr> "Houston", "Anchorage", "Anchorage", "Anchorage", "Sitka", "Anchorage", "Anchorage", "San Franci…
-#> $ state         <chr> "Alaska", "Alaska", "Alaska", "Alaska", "Alaska", "Alaska", "Alaska", "California", "Washington"…
-#> $ zip           <chr> "99694", "99503", "99504", "99518", "99835", "99508", "99501", "94103", "98168", NA, "99508", "7…
+#> $ txn           <chr> "163219", "167718", "78767", "58188", "47232", "145865", "96988", "194378", "62586", "69427", "2…
+#> $ date          <chr> "2016-07-29", "2016-07-05", "2020-10-02", "2021-10-20", "2021-03-21", "2018-12-12", "2019-11-22"…
+#> $ pay_type      <chr> "Check", "Check", "Bank Fee", "Debit Card", "Bank Fee", "Credit Card", "Check", "Check", "Electr…
+#> $ pay_info      <chr> "1376", "1008", NA, NA, NA, NA, "109", "1093", "Online", "5591", NA, NA, "126", NA, "8715", NA, …
+#> $ amount        <dbl> 88.00, 576.88, 150.26, 33.98, 10.30, 654.10, 1500.00, 826.20, 4.72, 1352.55, 0.56, 0.74, 450.00,…
+#> $ last          <chr> "Valley Business Machine", "5th Avenue Design & Graphics Inc.", "Stripe, Inc", "Amazon", "Anedot…
+#> $ first         <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
+#> $ address       <chr> "5825 Mayflower Ct", "1222 Well Street, Suite 3", "510 Townsend Street", "410 Terry Ave N", "134…
+#> $ city          <chr> "Wasilla", "Fairbanks", "San Francisco", "Seattle", "NEW ORLEANS", "Fairbanks", "Anchorage", "An…
+#> $ state         <chr> "Alaska", "Alaska", "California", "Washington", "Louisiana", "Alaska", "Alaska", "Alaska", "Loui…
+#> $ zip           <chr> "99654", "99701", "94103", "98109", "70112", "99701", "99516", "99501", "70810", "21401", "20036…
 #> $ country       <chr> "USA", "USA", "USA", "USA", "USA", "USA", "USA", "USA", "USA", "USA", "USA", "USA", "USA", "USA"…
 #> $ occupation    <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
 #> $ employer      <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
-#> $ purpose       <chr> "Donation", "Administrative Transfer", "Accounting, banking, data analysis, financial compliance…
-#> $ rpt_type      <chr> "Thirty Day Report", "Seven Day Report", "Thirty Day Report", "Year End Report", "Thirty Day Rep…
-#> $ elect_year    <int> 2016, 2022, 2018, 2014, 2014, 2016, 2014, 2017, 2014, 2012, 2018, 2021, 2016, 2014, 2013, 2014, …
-#> $ elect_name    <chr> "State General Election", "Anchorage Municipal Election", "State Primary Election", "State Gener…
-#> $ elect_type    <chr> "State General", "Anchorage Municipal", "State Primary", "State General", "State General", "Stat…
-#> $ municipality  <chr> NA, "Anchorage, City and Borough", NA, NA, NA, NA, NA, "Fairbanks Northstar Borough", NA, NA, NA…
-#> $ office        <chr> NA, NA, "Lt. Governor", "House", "House", "Senate", NA, "Assembly", "Governor", NA, "House", "Ma…
-#> $ filer_type    <chr> "Group", "Group", "Candidate", "Candidate", "Candidate", "Candidate", "Group", "Candidate", "Can…
-#> $ committee     <chr> "Putting Alaskans First PAC", "Alaska Democratic Party", "Byron I. Mallott", "Matt Claman", "Jon…
-#> $ rpt_year      <int> 2016, 2022, 2018, 2014, 2014, 2016, 2014, 2017, 2014, 2012, 2018, 2021, 2016, 2014, 2013, 2014, …
-#> $ submitted     <date> 2016-10-10, 2022-03-29, 2018-10-28, 2016-06-30, 2015-03-09, 2016-07-19, 2014-07-21, 2017-09-02,…
+#> $ purpose       <chr> "Brochure Printing", "Banner design and printing for campaign publicity.", "Bank Fees", "Hand Wa…
+#> $ rpt_type      <chr> "Seven Day Report", "Thirty Day Report", "Thirty Day Report", "Seven Day Report", "Seven Day Rep…
+#> $ elect_year    <int> 2016, 2016, 2020, 2021, 2021, 2018, NA, 2015, 2020, 2020, 2023, 2019, 2016, 2018, NA, 2022, 2018…
+#> $ elect_name    <chr> "State Primary Election", "State Primary Election", "State General Election", "Matanuska-Susitna…
+#> $ elect_type    <chr> "State Primary", "State Primary", "State General", "Matanuska-Susitna Borough", "Anchorage Munic…
+#> $ municipality  <chr> NA, NA, NA, "Matanuska-Susitna Borough", "Anchorage, City and Borough", NA, NA, "Anchorage, City…
+#> $ office        <chr> NA, "House", "Senate", "Assembly", "Mayor", "House", NA, "Mayor", NA, NA, NA, NA, "Assembly", "S…
+#> $ filer_type    <chr> "Group", "Candidate", "Candidate", "Candidate", "Candidate", "Candidate", "Group", "Candidate", …
+#> $ committee     <chr> "Valley Republican Women", "Jeanne L. Olson", "Robert H Myers Jr", "Tamara Boeve", "David W Bron…
+#> $ rpt_year      <int> 2016, 2016, 2020, 2021, 2021, 2018, 2019, 2015, 2020, 2020, 2023, 2019, 2016, 2018, 2019, 2022, …
+#> $ submitted     <date> 2016-08-08, 2016-08-09, 2020-10-10, 2022-01-18, 2021-05-11, 2020-02-18, 2020-01-23, 2015-06-19,…
 #> $ na_flag       <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE…
-#> $ dupe_flag     <lgl> FALSE, FALSE, FALSE, FALSE, TRUE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, TRUE, FALSE, FALSE, …
-#> $ year          <dbl> 2016, 2022, 2018, 2014, 2014, 2016, 2014, 2017, 2014, 2012, 2018, 2021, 2016, 2014, 2013, 2014, …
-#> $ address_clean <chr> "PO BOX 940107", "2602 FAIRBANKS", "8401 PIONEER DR", "360 E INTERNATIONAL AIRPORT RD #6", "BIG …
-#> $ city_clean    <chr> "HOUSTON", "ANCHORAGE", "ANCHORAGE", "ANCHORAGE", "SITKA", "ANCHORAGE", "ANCHORAGE", "SAN FRANCI…
-#> $ state_clean   <chr> "AK", "AK", "AK", "AK", "AK", "AK", "AK", "CA", "WA", "AK", "AK", "LA", "CA", "AK", "AK", "AK", …
-#> $ zip_clean     <chr> "99694", "99503", "99504", "99518", "99835", "99508", "99501", "94103", "98168", NA, "99508", "7…
+#> $ dupe_flag     <lgl> FALSE, FALSE, TRUE, TRUE, FALSE, FALSE, FALSE, FALSE, TRUE, FALSE, FALSE, FALSE, FALSE, FALSE, F…
+#> $ year          <dbl> 2016, 2016, 2020, 2021, 2021, 2018, 2019, 2015, 2020, 2020, 2023, 2019, 2016, 2018, 2019, 2021, …
+#> $ address_clean <chr> "5825 MAYFLOWER CT", "1222 WELL STREET SUITE 3", "510 TOWNSEND ST", "410 TERRY AVE N", "1340 POY…
+#> $ city_clean    <chr> "WASILLA", "FAIRBANKS", "SAN FRANCISCO", "SEATTLE", "NEW ORLEANS", "FAIRBANKS", "ANCHORAGE", "AN…
+#> $ state_clean   <chr> "AK", "AK", "CA", "WA", "LA", "AK", "AK", "AK", "LA", "MD", "DC", "AK", "AK", "AK", "AK", "TX", …
+#> $ zip_clean     <chr> "99654", "99701", "94103", "98109", "70112", "99701", "99516", "99501", "70810", "21401", "20036…
 ```
 
-1.  There are 265,063 records in the database.
-2.  There are 47,064 duplicate records in the database.
+1.  There are 225,062 records in the database.
+2.  There are 41,090 duplicate records in the database.
 3.  The range and distribution of `amount` and `date` seem reasonable.
-4.  There are 115 records missing key variables.
+4.  There are 82 records missing key variables.
 5.  Consistency in geographic data has been improved with
     `campfin::normal_*()`.
 6.  The 4-digit `year` variable has been created with
@@ -775,16 +778,16 @@ server.
 
 ``` r
 clean_dir <- dir_create(here("ak", "expends", "data", "clean"))
-clean_path <- path(clean_dir, "ak_expends_clean.csv")
+clean_path <- path(clean_dir, "ak_expends_2023-05-18.csv")
 write_csv(ake, clean_path, na = "")
 (clean_size <- file_size(clean_path))
-#> 76.1M
+#> 65.1M
 file_encoding(clean_path) %>% 
   mutate(across(path, path.abbrev))
 #> # A tibble: 1 × 3
-#>   path                                                                                          mime  charset
-#>   <fs::path>                                                                                    <chr> <chr>  
-#> 1 /Volumes/TAP/TAP/accountability_datacleaning/state/ak/expends/data/clean/ak_expends_clean.csv <NA>  <NA>
+#>   path                                                                                     mime  charset
+#>   <fs::path>                                                                               <chr> <chr>  
+#> 1 /Volumes/TAP/accountability_datacleaning/ak/expends/data/clean/ak_expends_2023-05-18.csv <NA>  <NA>
 ```
 
 ## Upload
