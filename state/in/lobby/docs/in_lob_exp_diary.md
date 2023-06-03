@@ -1,14 +1,14 @@
 Indiana Lobbying Expenditure Diary
 ================
 Yanqi Xu
-2020-04-14 16:52:27
+2023-06-03 14:14:36
 
-  - [Project](#project)
-  - [Objectives](#objectives)
-  - [Packages](#packages)
-  - [Data](#data)
-  - [Conclude](#conclude)
-  - [Export](#export)
+- <a href="#project" id="toc-project">Project</a>
+- <a href="#objectives" id="toc-objectives">Objectives</a>
+- <a href="#packages" id="toc-packages">Packages</a>
+- <a href="#data" id="toc-data">Data</a>
+- <a href="#conclude" id="toc-conclude">Conclude</a>
+- <a href="#export" id="toc-export">Export</a>
 
 <!-- Place comments regarding knitting here -->
 
@@ -56,6 +56,8 @@ if (!require("pacman")) install.packages("pacman")
 pacman::p_load_gh("irworkshop/campfin")
 pacman::p_load(
   readxl, # read excel
+  httr, # GET request
+  rvest, # scrape web page
   tidyverse, # data manipulation
   lubridate, # datetime strings
   magrittr, # pipe opperators
@@ -83,25 +85,25 @@ feature and should be run as such. The project also uses the dynamic
 ``` r
 # where does this document knit?
 here::here()
-#> [1] "/Users/yanqixu/code/accountability_datacleaning/R_campfin"
+#> [1] "/Users/yanqixu/code/accountability_datacleaning"
 ```
 
 ## Data
 
 Lobbyist data is obtained from the [Indiana Lobby Registration
-Commission](https://www.in.gov/ilrc/2335.htm). The data is as current as
-March 16, 2020.
+Commission](https://www.in.gov/ilrc/2335.htm). The data was updated
+through 2022.
 
 ``` r
-raw_dir <- dir_create(here("in", "lobby", "data", "raw", "exp"))
+raw_dir <- dir_create(here("state","in", "lobby", "data", "raw", "exp"))
 ```
 
 ``` r
 landing_url <- 'https://www.in.gov/ilrc/2335.htm'
 
-urls <- GET(landing_url) %>% content() %>% html_nodes("a") %>% html_attr("href")
+urls <- GET(landing_url) %>% content() %>% html_nodes("a")
 
-comp_urls <- paste0('https://www.in.gov',urls[str_detect(urls, 'Compensated Lobbyist Total')] %>% html_attr('href'))
+comp_urls <- paste0('https://www.in.gov',urls[str_detect(html_text(urls), 'Compensated Lobbyist Total')] %>% html_attr('href'))
 
 wget <- function(url, dir) {
   system2(
@@ -110,22 +112,27 @@ wget <- function(url, dir) {
       "--no-verbose",
       "--content-disposition",
       url,
-      paste("-P", raw_dir)
+      paste("-P", dir)
     )
   )
 }
 
-if (!all_files_new(raw_dir)) {
+if (!this_file_new(raw_dir)) {
   map(comp_urls, wget, raw_dir)
 }
 ```
 
 ### Read
 
+Lobbyist data is obtained from the [Indiana Lobby Registration
+Commission](https://www.in.gov/ilrc/2335.htm). At the time of data
+aquisition, exployer lobbyist lists are available in xls format from
+2006 to 2022.
+
 These files come in various formats, and we will need to parse them
 differently according to their file extensions. The excel files have
-certain rows that we need to skip. From 2013 to 2019, the file structure
-is similar. For the terminated column, TA=Term. April, TO=Term. October
+certain rows that we need to skip. For the terminated column, TA=Term.
+April, TO=Term. October
 
 ``` r
 inle_csv <- read_csv(dir_ls(raw_dir) %>% str_subset('csv'), 
@@ -136,7 +143,7 @@ in_0809_fs <- dir_ls(raw_dir) %>% str_subset('2008|2009')
 
 in_1112_fs <- dir_ls(raw_dir) %>% str_subset('2011|2012')
 
-in_1319_fs <- dir_ls(raw_dir) %>% str_subset('2013|2014|2015|2016|2017|2019')
+in_1322_fs <- dir_ls(raw_dir) %>% str_subset('2013|2014|2015|2016|2017|2019|2020|2021|2022')
 
 # Get the vector of column names by reading in the 2019 file and accessing its column headers
 names_inle <- names(inle_csv)
@@ -184,20 +191,20 @@ inle_csv <- inle_csv %>%
              lobbyist_clean = lobbyist) %>% 
       fill(year_clean, lobbyist_clean)
 
-in_1319 <- map_dfr(in_1319_fs, read_inxl) %>% 
+in_1322 <- map_dfr(in_1322_fs, read_inxl) %>% 
   bind_rows(inle_csv)
 
 in_1112 <- map_dfr(in_1112_fs, read_1112_inxl)
 
 inle <- read_inxl(dir_ls(raw_dir) %>% str_subset("2010")) %>% 
   bind_rows(in_1112) %>% 
-  bind_rows(in_1319)
+  bind_rows(in_1322)
 ```
 
-Next, we can see that the file strutures for 2008 and 2009 are different
-from the one later on. The main difference is that: 1. The grand\_totals
-for each year is in its own row. 2. The `first_period_*` and
-`second_period_*` columns use the same column for each category, but
+Next, we can see that the file structures for 2008 and 2009 are
+different from the one later on. The main difference is that: 1. The
+grand_totals for each year is in its own row. 2. The `first_period_*`
+and `second_period_*` columns use the same column for each category, but
 there’s a `PD` column for period.
 
 We will transform the data accordingly.
@@ -229,30 +236,25 @@ read_0809_inxl <- function(in_file){
     # create a new column that fills down column names
   df <- df %>% 
     add_column(year = NA_character_,.before = 1) %>% 
-    mutate(year_clean = str_extract(in_file,"\\d{4}")) %>% 
-    mutate(lobbyist_clean = `lobbyist name`) %>% 
-    fill(lobbyist_clean)
+    mutate(year_clean = str_extract(in_file,"\\d{4}"))
   
   x <- df %>% filter(pd == 1)
   x <- x %>% select(-pd)
-  names(x) <- c("year","lobbyist", "client", names_inle %>% str_subset("first"),"grand_totals", "year_clean","lobbyist_clean")
+  names(x) <- c("year","lobbyist", "client", names_inle %>% str_subset("first"),"grand_totals", "year_clean")
   
   y <- df %>% filter(pd == 2)
   y <- y %>% select(-pd)
-  names(y) <- c("year","lobbyist", "client", names_inle[17:length(names_inle)], "year_clean","lobbyist_clean")
+  names(y) <- c("year","lobbyist", "client", names_inle[17:length(names_inle)], "year_clean")
   
-  combined <- x %>% left_join(y, by = c("year","lobbyist_clean","client", "grand_totals","year_clean")) %>%
-    select(-grand_totals, grand_totals) %>% 
-    select(-lobbyist.y) %>% 
-    rename(lobbyist = lobbyist.x) %>% 
-    select(-lobbyist_clean, lobbyist_clean)
+  y <- unique(y)
+  x <- unique(x)
+  combined <- x %>% full_join(y, by = c("year","client","lobbyist", "grand_totals","year_clean"),multiple="all")
   
   return(combined)
 }
 
 in_0809 <- map_dfr(in_0809_fs, read_0809_inxl) %>% 
-  add_column(terminated = NA_character_, .after = 3) %>% 
-  na_if("na")
+  add_column(terminated = NA_character_, .after = 3)
 
 inle <- inle %>% 
   bind_rows(in_0809)
@@ -272,129 +274,119 @@ inle <-inle %>%
 
 ``` r
 head(inle)
-#> # A tibble: 6 x 31
-#>   year  lobbyist client terminated first_period_co… first_period_re… first_period_re…
-#>   <chr> <chr>    <chr>  <chr>                 <dbl>            <dbl>            <dbl>
-#> 1 2009… ABEL, E… BLUE … <NA>                     0                 0                0
-#> 2 2009  AGUILER… TAN C… X-10                 10000                 0                0
-#> 3 2009  AHLERIN… NUCOR… X-10                     0                 0                0
-#> 4 2009… AINSWOR… IN FA… <NA>                  1051.                0                0
-#> 5 2009… ALLDRED… NATL … <NA>                     0                 0                0
-#> 6 2009  ALLEN, … CHECK… X-10                     0                 0                0
-#> # … with 24 more variables: first_period_other_entertainment <dbl>,
-#> #   first_period_other_gifts <dbl>, first_period_expenditures_all_members <dbl>,
-#> #   first_period_gifts <dbl>, first_period_registration_late_fees <dbl>,
-#> #   first_period_other_expenses <dbl>, first_period_gross_expenditures <dbl>,
-#> #   first_period_deductions <dbl>, first_period_net_expenditures <dbl>,
-#> #   second_period_compensation <dbl>, second_period_reimburse <dbl>,
-#> #   second_period_receptions <dbl>, second_period_other_entertainment <dbl>,
-#> #   second_period_other_gifts <dbl>, second_period_expenditures_all_members <dbl>,
-#> #   second_period_gifts <dbl>, second_period_registration_late_fees <dbl>,
-#> #   second_period_other_expenses <dbl>, second_period_gross_expenditures <dbl>,
-#> #   second_period_deductions <dbl>, second_period_net_expenditures <dbl>, grand_totals <dbl>,
-#> #   year_clean <dbl>, lobbyist_clean <chr>
+#> # A tibble: 6 × 31
+#>   year      lobbyist client termi…¹ first…² first…³ first…⁴ first…⁵ first…⁶ first…⁷ first…⁸ first…⁹
+#>   <chr>     <chr>    <chr>  <chr>     <dbl>   <dbl>   <dbl>   <dbl>   <dbl>   <dbl>   <dbl>   <dbl>
+#> 1 2009/2010 ABEL, E… BLUE … <NA>         0        0       0       0       0       0       0       0
+#> 2 2009      AGUILER… TAN C… X-10     10000        0       0       0       0       0       0       0
+#> 3 2009      AHLERIN… NUCOR… X-10         0        0       0       0       0       0       0       0
+#> 4 2009/2010 AINSWOR… IN FA… <NA>      1051.       0       0       0       0       0       0       0
+#> 5 2009/2010 ALLDRED… NATL … <NA>         0        0       0       0       0       0       0       0
+#> 6 2009      ALLEN, … CHECK… X-10         0        0       0       0       0       0       0       0
+#> # … with 19 more variables: first_period_other_expenses <dbl>,
+#> #   first_period_gross_expenditures <dbl>, first_period_deductions <dbl>,
+#> #   first_period_net_expenditures <dbl>, second_period_compensation <dbl>,
+#> #   second_period_reimburse <dbl>, second_period_receptions <dbl>,
+#> #   second_period_other_entertainment <dbl>, second_period_other_gifts <dbl>,
+#> #   second_period_expenditures_all_members <dbl>, second_period_gifts <dbl>,
+#> #   second_period_registration_late_fees <dbl>, second_period_other_expenses <dbl>, …
 tail(inle)
-#> # A tibble: 6 x 31
-#>   year  lobbyist client terminated first_period_co… first_period_re… first_period_re…
-#>   <chr> <chr>    <chr>  <chr>                 <dbl>            <dbl>            <dbl>
-#> 1 <NA>  ZARICH,… INSUR… <NA>                      0                0                0
-#> 2 <NA>  ZEHERAL… INDIA… <NA>                      0                0                0
-#> 3 <NA>  ZELLER,… INDIA… <NA>                      0                0                0
-#> 4 <NA>  <NA>     INDIA… <NA>                      0                0                0
-#> 5 <NA>  ZIEBA, … IN OP… <NA>                      0                0                0
-#> 6 <NA>  ZLAJIC,… ARCEL… <NA>                      0                0                0
-#> # … with 24 more variables: first_period_other_entertainment <dbl>,
-#> #   first_period_other_gifts <dbl>, first_period_expenditures_all_members <dbl>,
-#> #   first_period_gifts <dbl>, first_period_registration_late_fees <dbl>,
-#> #   first_period_other_expenses <dbl>, first_period_gross_expenditures <dbl>,
-#> #   first_period_deductions <dbl>, first_period_net_expenditures <dbl>,
-#> #   second_period_compensation <dbl>, second_period_reimburse <dbl>,
-#> #   second_period_receptions <dbl>, second_period_other_entertainment <dbl>,
-#> #   second_period_other_gifts <dbl>, second_period_expenditures_all_members <dbl>,
-#> #   second_period_gifts <dbl>, second_period_registration_late_fees <dbl>,
-#> #   second_period_other_expenses <dbl>, second_period_gross_expenditures <dbl>,
-#> #   second_period_deductions <dbl>, second_period_net_expenditures <dbl>, grand_totals <dbl>,
-#> #   year_clean <dbl>, lobbyist_clean <chr>
+#> # A tibble: 6 × 31
+#>   year  lobbyist     client termi…¹ first…² first…³ first…⁴ first…⁵ first…⁶ first…⁷ first…⁸ first…⁹
+#>   <chr> <chr>        <chr>  <chr>     <dbl>   <dbl>   <dbl>   <dbl>   <dbl>   <dbl>   <dbl>   <dbl>
+#> 1 <NA>  <NA>         INDIA… <NA>         NA      NA      NA      NA      NA      NA      NA      NA
+#> 2 <NA>  YAGER, STEP… INDIA… <NA>         NA      NA      NA      NA      NA      NA      NA      NA
+#> 3 <NA>  <NA>         BERNA… <NA>         NA      NA      NA      NA      NA      NA      NA      NA
+#> 4 <NA>  ZARICH, KAT… INDIA… <NA>         NA      NA      NA      NA      NA      NA      NA      NA
+#> 5 <NA>  <NA>         IN OP… <NA>         NA      NA      NA      NA      NA      NA      NA      NA
+#> 6 <NA>  <NA>         ARCEL… <NA>         NA      NA      NA      NA      NA      NA      NA      NA
+#> # … with 19 more variables: first_period_other_expenses <dbl>,
+#> #   first_period_gross_expenditures <dbl>, first_period_deductions <dbl>,
+#> #   first_period_net_expenditures <dbl>, second_period_compensation <dbl>,
+#> #   second_period_reimburse <dbl>, second_period_receptions <dbl>,
+#> #   second_period_other_entertainment <dbl>, second_period_other_gifts <dbl>,
+#> #   second_period_expenditures_all_members <dbl>, second_period_gifts <dbl>,
+#> #   second_period_registration_late_fees <dbl>, second_period_other_expenses <dbl>, …
 glimpse(sample_n(inle, 20))
 #> Rows: 20
 #> Columns: 31
-#> $ year                                   <chr> "2019", NA, NA, NA, "2011", "2014", NA, "2012", N…
-#> $ lobbyist                               <chr> "HILDEBRAND, EMMY", NA, NA, NA, NA, "ROGERS, STEV…
-#> $ client                                 <chr> "HVAF OF INDIANA, INC.", "IN FARM BUREAU", "IN AC…
-#> $ terminated                             <chr> NA, "TO", NA, NA, NA, NA, NA, NA, NA, NA, NA, "FI…
-#> $ first_period_compensation              <dbl> 0.00, 5055.23, 6461.54, 35830.53, 49916.50, 0.00,…
-#> $ first_period_reimburse                 <dbl> 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 9…
-#> $ first_period_receptions                <dbl> 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0…
-#> $ first_period_other_entertainment       <dbl> 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0…
-#> $ first_period_other_gifts               <dbl> 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0…
-#> $ first_period_expenditures_all_members  <dbl> 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0…
-#> $ first_period_gifts                     <dbl> 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0…
-#> $ first_period_registration_late_fees    <dbl> 0, 0, 0, 10, 0, 0, 0, 0, 2, 100, 55, 0, 0, 0, 0, …
-#> $ first_period_other_expenses            <dbl> 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 202.9, 0.…
-#> $ first_period_gross_expenditures        <dbl> 0.00, 5055.23, 6461.54, 35840.53, 49916.50, 0.00,…
-#> $ first_period_deductions                <dbl> 0.00, 5055.23, 0.00, 35840.53, 0.00, 0.00, 0.00, …
-#> $ first_period_net_expenditures          <dbl> 0.00, 0.00, 6461.54, 0.00, 49916.50, 0.00, 0.00, …
-#> $ second_period_compensation             <dbl> 0.00, 1147.18, 1292.31, 1040.85, 55054.50, 0.00, …
-#> $ second_period_reimburse                <dbl> 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, NA, 0, 0, 0, 0, …
-#> $ second_period_receptions               <dbl> 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, NA, 0, 0, 0, 0, …
-#> $ second_period_other_entertainment      <dbl> 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 5…
-#> $ second_period_other_gifts              <dbl> 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, NA, 0, 0, 0, 0, …
-#> $ second_period_expenditures_all_members <dbl> 0.0, 376.2, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.…
-#> $ second_period_gifts                    <dbl> 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, NA, 0, 0, 0, 0, …
-#> $ second_period_registration_late_fees   <dbl> 0, 0, 0, 0, 0, 0, 100, 0, 2, 0, 0, NA, 0, 5, 0, 0…
-#> $ second_period_other_expenses           <dbl> 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 2…
-#> $ second_period_gross_expenditures       <dbl> 0.00, 1523.38, 1292.31, 1040.85, 55054.50, 0.00, …
-#> $ second_period_deductions               <dbl> 0.00, 1523.38, 0.00, 1040.85, 0.00, 0.00, 100.00,…
-#> $ second_period_net_expenditures         <dbl> 0.00, 0.00, 1292.31, 0.00, 55054.50, 0.00, 0.00, …
-#> $ grand_totals                           <dbl> 0.00, 0.00, 7753.85, 0.00, 104971.00, 0.00, 0.00,…
-#> $ year_clean                             <dbl> 2019, 2017, 2014, 2019, 2011, 2014, 2009, 2012, 2…
-#> $ lobbyist_clean                         <chr> "HILDEBRAND, EMMY", "TAFT STETTINIUS & HOLLISTER …
+#> $ year                                   <chr> "2019", NA, NA, NA, NA, "2011", NA, "2014", NA, NA…
+#> $ lobbyist                               <chr> "HILDEBRAND, EMMY", NA, NA, NA, NA, NA, "LYLE, JUN…
+#> $ client                                 <chr> "HVAF OF INDIANA, INC.", "IN FARM BUREAU", "INDIAN…
+#> $ terminated                             <chr> NA, "TO", NA, NA, NA, NA, NA, NA, NA, NA, NA, "FIR…
+#> $ first_period_compensation              <dbl> 0.00, 5055.23, 2116.67, 6461.54, 35830.53, 49916.5…
+#> $ first_period_reimburse                 <dbl> 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.…
+#> $ first_period_receptions                <dbl> 0, 0, 0, 0, 0, 0, 0, 0, 0, NA, 0, 0, 0, 0, NA, 0, …
+#> $ first_period_other_entertainment       <dbl> 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 32…
+#> $ first_period_other_gifts               <dbl> 0, 0, 0, 0, 0, 0, 0, 0, 0, NA, 0, 0, 0, 0, NA, 0, …
+#> $ first_period_expenditures_all_members  <dbl> 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 13…
+#> $ first_period_gifts                     <dbl> 0, 0, 0, 0, 0, 0, 0, 0, 0, NA, 0, 0, 0, 0, NA, 0, …
+#> $ first_period_registration_late_fees    <dbl> 0, 0, 0, 0, 10, 0, 0, 0, 0, NA, 0, 0, 100, 55, NA,…
+#> $ first_period_other_expenses            <dbl> 0, 0, 0, 0, 0, 0, 0, 0, 0, NA, 0, 0, 0, 0, NA, 0, …
+#> $ first_period_gross_expenditures        <dbl> 0.00, 5055.23, 2116.67, 6461.54, 35840.53, 49916.5…
+#> $ first_period_deductions                <dbl> 0.00, 5055.23, 2116.67, 0.00, 35840.53, 0.00, 0.00…
+#> $ first_period_net_expenditures          <dbl> 0.00, 0.00, 0.00, 6461.54, 0.00, 49916.50, 8470.00…
+#> $ second_period_compensation             <dbl> 0.00, 1147.18, 350.00, 1292.31, 1040.85, 55054.50,…
+#> $ second_period_reimburse                <dbl> 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, NA, 0, 0, 0, 0, 0…
+#> $ second_period_receptions               <dbl> 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, NA, 0, 0, 0, 0, 0…
+#> $ second_period_other_entertainment      <dbl> 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 20…
+#> $ second_period_other_gifts              <dbl> 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, NA, 0, 0, 0, 0, 0…
+#> $ second_period_expenditures_all_members <dbl> 0.0, 376.2, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0…
+#> $ second_period_gifts                    <dbl> 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, NA, 0, 0, 0, 0, 0…
+#> $ second_period_registration_late_fees   <dbl> 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, NA, 0, 0, 0, 0, 0…
+#> $ second_period_other_expenses           <dbl> 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, NA, 0, 0, 0, 0, 0…
+#> $ second_period_gross_expenditures       <dbl> 0.00, 1523.38, 350.00, 1292.31, 1040.85, 55054.50,…
+#> $ second_period_deductions               <dbl> 0.00, 1523.38, 350.00, 0.00, 1040.85, 0.00, 0.00, …
+#> $ second_period_net_expenditures         <dbl> 0.00, 0.00, 0.00, 1292.31, 0.00, 55054.50, 25410.0…
+#> $ grand_totals                           <dbl> 0.00, 0.00, 0.00, 7753.85, 0.00, 104971.00, 33880.…
+#> $ year_clean                             <dbl> 2019, 2017, 2018, 2014, 2019, 2011, 2008, 2014, 20…
+#> $ lobbyist_clean                         <chr> "HILDEBRAND, EMMY", "TAFT STETTINIUS & HOLLISTER L…
 ```
 
 ### Missing
 
 ``` r
 col_stats(inle, count_na)
-#> # A tibble: 31 x 4
+#> # A tibble: 31 × 4
 #>    col                                    class     n       p
 #>    <chr>                                  <chr> <int>   <dbl>
-#>  1 year                                   <chr>  8740 0.477  
-#>  2 lobbyist                               <chr>  7594 0.414  
-#>  3 client                                 <chr>    90 0.00491
-#>  4 terminated                             <chr> 15341 0.837  
-#>  5 first_period_compensation              <dbl>   909 0.0496 
-#>  6 first_period_reimburse                 <dbl>   911 0.0497 
-#>  7 first_period_receptions                <dbl>   911 0.0497 
-#>  8 first_period_other_entertainment       <dbl>   910 0.0497 
-#>  9 first_period_other_gifts               <dbl>   910 0.0497 
-#> 10 first_period_expenditures_all_members  <dbl>   911 0.0497 
-#> 11 first_period_gifts                     <dbl>   905 0.0494 
-#> 12 first_period_registration_late_fees    <dbl>   903 0.0493 
-#> 13 first_period_other_expenses            <dbl>   818 0.0446 
-#> 14 first_period_gross_expenditures        <dbl>   156 0.00851
-#> 15 first_period_deductions                <dbl>   258 0.0141 
-#> 16 first_period_net_expenditures          <dbl>   156 0.00851
-#> 17 second_period_compensation             <dbl>  2136 0.117  
-#> 18 second_period_reimburse                <dbl>  2138 0.117  
-#> 19 second_period_receptions               <dbl>  2139 0.117  
-#> 20 second_period_other_entertainment      <dbl>  2138 0.117  
-#> 21 second_period_other_gifts              <dbl>  2140 0.117  
-#> 22 second_period_expenditures_all_members <dbl>  2139 0.117  
-#> 23 second_period_gifts                    <dbl>  2139 0.117  
-#> 24 second_period_registration_late_fees   <dbl>  2139 0.117  
-#> 25 second_period_other_expenses           <dbl>  2137 0.117  
-#> 26 second_period_gross_expenditures       <dbl>   863 0.0471 
-#> 27 second_period_deductions               <dbl>  2114 0.115  
-#> 28 second_period_net_expenditures         <dbl>   863 0.0471 
-#> 29 grand_totals                           <dbl>    38 0.00207
+#>  1 year                                   <chr> 11214 0.477  
+#>  2 lobbyist                               <chr>  9340 0.398  
+#>  3 client                                 <chr>    52 0.00221
+#>  4 terminated                             <chr> 19860 0.846  
+#>  5 first_period_compensation              <dbl>  2685 0.114  
+#>  6 first_period_reimburse                 <dbl>  2687 0.114  
+#>  7 first_period_receptions                <dbl>  2687 0.114  
+#>  8 first_period_other_entertainment       <dbl>  2686 0.114  
+#>  9 first_period_other_gifts               <dbl>  2686 0.114  
+#> 10 first_period_expenditures_all_members  <dbl>  2687 0.114  
+#> 11 first_period_gifts                     <dbl>  2681 0.114  
+#> 12 first_period_registration_late_fees    <dbl>  2679 0.114  
+#> 13 first_period_other_expenses            <dbl>  2594 0.110  
+#> 14 first_period_gross_expenditures        <dbl>  1932 0.0823 
+#> 15 first_period_deductions                <dbl>  2034 0.0866 
+#> 16 first_period_net_expenditures          <dbl>  1932 0.0823 
+#> 17 second_period_compensation             <dbl>  3384 0.144  
+#> 18 second_period_reimburse                <dbl>  3386 0.144  
+#> 19 second_period_receptions               <dbl>  3387 0.144  
+#> 20 second_period_other_entertainment      <dbl>  3386 0.144  
+#> 21 second_period_other_gifts              <dbl>  3388 0.144  
+#> 22 second_period_expenditures_all_members <dbl>  3387 0.144  
+#> 23 second_period_gifts                    <dbl>  3387 0.144  
+#> 24 second_period_registration_late_fees   <dbl>  3387 0.144  
+#> 25 second_period_other_expenses           <dbl>  3385 0.144  
+#> 26 second_period_gross_expenditures       <dbl>  2111 0.0899 
+#> 27 second_period_deductions               <dbl>  3362 0.143  
+#> 28 second_period_net_expenditures         <dbl>  2111 0.0899 
+#> 29 grand_totals                           <dbl>    38 0.00162
 #> 30 year_clean                             <dbl>     0 0      
-#> 31 lobbyist_clean                         <chr>     0 0
+#> 31 lobbyist_clean                         <chr>  4101 0.175
 ```
 
 ``` r
 inle <- inle %>% flag_na(client, lobbyist_clean)
 sum(inle$na_flag)
-#> [1] 90
+#> [1] 4153
 ```
 
 ### Duplicates
@@ -404,7 +396,7 @@ We can see there’s no duplicate entry.
 ``` r
 inle <- flag_dupes(inle, dplyr::everything())
 sum(inle$dupe_flag)
-#> [1] 84
+#> [1] 36
 ```
 
 ### Categorical
@@ -424,7 +416,7 @@ inle %>%
   ) +
   labs(
     title = "Indiana Contributions Amount Distribution",
-    subtitle = "from 2008 to 2019",
+    subtitle = "from 2008 to 2022",
     caption = "Source: Indiana Lobby Registration Commission",
     x = "Amount",
     y = "Count"
@@ -433,59 +425,60 @@ inle %>%
 
 ![](../plots/conv%20num-1.png)<!-- -->
 
-### Wrangle
-
-To improve the searchability of the database, we will perform some
-consistent, confident string normalization. For geographic variables
-like city names and ZIP codes, the corresponding `campfin::normal_*()`
-functions are taylor made to facilitate this process.
-
 ## Conclude
+
+``` r
+inle <- inle %>% mutate(lobbyist_clean = coalesce(lobbyist_clean,lobbyist))
+```
 
 ``` r
 glimpse(sample_n(inle, 20))
 #> Rows: 20
 #> Columns: 33
-#> $ year                                   <chr> NA, "2014", NA, "2011", "2012", NA, "2012", "2015…
-#> $ lobbyist                               <chr> NA, "CHURCH, DOUGLAS", NA, "FELTS, PAJE", "BLUNT,…
-#> $ client                                 <chr> "AETNA, INC.", "CHURCH CHURCH HITTLE & ANTRIM", "…
-#> $ terminated                             <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "…
-#> $ first_period_compensation              <dbl> 0.00, 0.00, 4500.00, 0.00, 0.00, 0.00, 550.00, 0.…
-#> $ first_period_reimburse                 <dbl> 3.02, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0…
-#> $ first_period_receptions                <dbl> 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0…
-#> $ first_period_other_entertainment       <dbl> 9.69, 0.00, 0.00, 0.00, 23.15, 0.00, 0.00, 0.00, …
-#> $ first_period_other_gifts               <dbl> 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0…
-#> $ first_period_expenditures_all_members  <dbl> 75.28, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, …
-#> $ first_period_gifts                     <dbl> 0.00, 0.00, 0.00, 0.00, 134.83, 0.00, 0.00, 0.00,…
-#> $ first_period_registration_late_fees    <dbl> 206, 0, 215, 0, 0, 0, 0, 0, 0, 0, 0, 0, 205, 0, 0…
-#> $ first_period_other_expenses            <dbl> 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0…
-#> $ first_period_gross_expenditures        <dbl> 293.99, 0.00, 4715.00, 0.00, 157.98, 0.00, 550.00…
-#> $ first_period_deductions                <dbl> 293.99, 0.00, 4715.00, 0.00, 157.98, 0.00, 0.00, …
-#> $ first_period_net_expenditures          <dbl> 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.00000…
-#> $ second_period_compensation             <dbl> 846.11, 0.00, 1529.52, 0.00, 0.00, 0.00, 0.00, 0.…
-#> $ second_period_reimburse                <dbl> 51.82, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, …
-#> $ second_period_receptions               <dbl> 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0…
-#> $ second_period_other_entertainment      <dbl> 1.8, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,…
-#> $ second_period_other_gifts              <dbl> 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0…
-#> $ second_period_expenditures_all_members <dbl> 44.58, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, …
-#> $ second_period_gifts                    <dbl> 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0…
-#> $ second_period_registration_late_fees   <dbl> 208, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,…
-#> $ second_period_other_expenses           <dbl> 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0…
-#> $ second_period_gross_expenditures       <dbl> 1152.31, 0.00, 1529.52, 0.00, 0.00, 0.00, 0.00, 0…
-#> $ second_period_deductions               <dbl> 1152.31, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00…
-#> $ second_period_net_expenditures         <dbl> 0.00, 0.00, 1529.52, 0.00, 0.00, 0.00, 0.00, 0.00…
-#> $ grand_totals                           <dbl> 0.000000e+00, 0.000000e+00, 1.529520e+03, 0.00000…
-#> $ year_clean                             <dbl> 2014, 2014, 2018, 2011, 2012, 2008, 2012, 2015, 2…
-#> $ lobbyist_clean                         <chr> "BOSE PUBLIC AFFAIRS GROUP", "CHURCH, DOUGLAS", "…
-#> $ na_flag                                <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, …
-#> $ dupe_flag                              <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, …
+#> $ year                                   <chr> "2012", NA, "2011", NA, NA, "2014", NA, "2020", NA…
+#> $ lobbyist                               <chr> "KERCE, CLIFFORD", NA, NA, NA, NA, "CHURCH, DOUGLA…
+#> $ client                                 <chr> "CARPENTERS INDUSTRIAL COUNCIL", "INDIANA STATE AS…
+#> $ terminated                             <chr> NA, NA, NA, NA, NA, NA, NA, "FIRST PERIOD", NA, NA…
+#> $ first_period_compensation              <dbl> 0.00, 1011.01, 0.00, 0.00, 0.00, 0.00, NA, 0.00, 0…
+#> $ first_period_reimburse                 <dbl> 0.00, 57.97, 0.00, 0.00, 3.02, 0.00, NA, 0.00, 0.0…
+#> $ first_period_receptions                <dbl> 0, 0, 0, 0, 0, 0, NA, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0…
+#> $ first_period_other_entertainment       <dbl> 0.00, 0.00, 0.00, 0.00, 9.69, 0.00, NA, 0.00, 0.00…
+#> $ first_period_other_gifts               <dbl> 0, 0, 0, 0, 0, 0, NA, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0…
+#> $ first_period_expenditures_all_members  <dbl> 0.00, 75.61, 0.00, 0.00, 75.28, 0.00, NA, 0.00, 0.…
+#> $ first_period_gifts                     <dbl> 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, NA, 0.00, 0.00…
+#> $ first_period_registration_late_fees    <dbl> 0, 200, 0, 0, 206, 0, NA, 0, 0, 0, 0, 0, 0, 0, 0, …
+#> $ first_period_other_expenses            <dbl> 0, 0, 0, 0, 0, 0, NA, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0…
+#> $ first_period_gross_expenditures        <dbl> 0.00, 1344.59, 0.00, 0.00, 293.99, 0.00, NA, 0.00,…
+#> $ first_period_deductions                <dbl> 0.00, 1344.59, 0.00, 0.00, 293.99, 0.00, NA, 0.00,…
+#> $ first_period_net_expenditures          <dbl> 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000…
+#> $ second_period_compensation             <dbl> 0.00, 667.27, 0.00, 0.00, 846.11, 0.00, 1250.00, N…
+#> $ second_period_reimburse                <dbl> 0.00, 0.00, 0.00, 0.00, 51.82, 0.00, 0.00, NA, 0.0…
+#> $ second_period_receptions               <dbl> 0, 0, 0, 0, 0, 0, 0, NA, 0, 0, 0, 0, 0, 0, 0, 0, 0…
+#> $ second_period_other_entertainment      <dbl> 0.0, 0.0, 0.0, 0.0, 1.8, 0.0, 0.0, NA, 0.0, 0.0, 0…
+#> $ second_period_other_gifts              <dbl> 0, 0, 0, 0, 0, 0, 0, NA, 0, 0, 0, 0, 0, 0, 0, 0, 0…
+#> $ second_period_expenditures_all_members <dbl> 0.00, 0.00, 0.00, 0.00, 44.58, 0.00, 0.00, NA, 0.0…
+#> $ second_period_gifts                    <dbl> 0, 0, 0, 0, 0, 0, 0, NA, 0, 0, 0, 0, 0, 0, 0, 0, 0…
+#> $ second_period_registration_late_fees   <dbl> 0, 0, 0, 0, 208, 0, 0, NA, 0, 0, 0, 0, 0, 0, 0, 0,…
+#> $ second_period_other_expenses           <dbl> 0, 0, 0, 0, 0, 0, 0, NA, 0, 0, 0, 0, 0, 0, 0, 0, 0…
+#> $ second_period_gross_expenditures       <dbl> 0.00, 667.27, 0.00, 0.00, 1152.31, 0.00, 1250.00, …
+#> $ second_period_deductions               <dbl> 0.00, 667.27, 0.00, 0.00, 1152.31, 0.00, 1250.00, …
+#> $ second_period_net_expenditures         <dbl> 0, 0, 0, 0, 0, 0, 0, NA, 0, 0, 0, 0, 0, 0, 0, 0, 0…
+#> $ grand_totals                           <dbl> 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000…
+#> $ year_clean                             <dbl> 2012, 2018, 2011, 2010, 2014, 2014, 2008, 2020, 20…
+#> $ lobbyist_clean                         <chr> "KERCE, CLIFFORD", "BOSE PUBLIC AFFAIRS GROUP", "C…
+#> $ na_flag                                <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, TRUE, FA…
+#> $ dupe_flag                              <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, F…
+min(inle$year_clean)
+#> [1] 2008
+max(inle$year_clean)
+#> [1] 2022
 ```
 
-1.  There are 18321 records in the database.
-2.  There are 84 duplicate records in the database.
+1.  There are 23485 records in the database.
+2.  There are 36 duplicate records in the database.
 3.  The range and distribution of `year` seems mostly reasonable except
     for a few entries.
-4.  There are 90 records missing either recipient or date.
+4.  There are 4153 records missing either recipient or date.
 5.  Consistency in goegraphic data has been improved with
     `campfin::normal_*()`.
 6.  The 4-digit `year` variable has been created with
@@ -494,7 +487,7 @@ glimpse(sample_n(inle, 20))
 ## Export
 
 ``` r
-clean_dir <- dir_create(here("in", "lobby", "data", "exp","clean"))
+clean_dir <- dir_create(here("state","in", "lobby", "data", "exp","clean"))
 ```
 
 ``` r

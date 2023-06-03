@@ -30,7 +30,7 @@ set.seed(5)
 ```
 
 ```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
-fs::dir_create(here::here("la", "lobbyists", "docs"))
+fs::dir_create(here::here("state","la", "lobbyists", "docs"))
 ```
 ## Project
 
@@ -114,8 +114,7 @@ here::here()
 Set the data directory first.
 ```{r raw_dir}
 # create a directory for the raw data
-reg_dir <- here("la", "lobbyists", "data", "raw", "reg")
-dir_create(reg_dir)
+reg_dir <- dir_create(here("la", "lobbyists", "data", "raw", "reg"))
 ```
 The [Louisiana Board of Ethics] [03] makes available a listing of all current lobbyists (2019). For more detailed representation data, the Accountability Project obtained records of previous years through a public record request.
 
@@ -130,14 +129,12 @@ the first action requiring his registration as a lobbyist, whichever occurs firs
 five days after employment as a lobbyist or not later than five days after the first action requiring his
 registration as a lobbyist, whichever occurs first. 
 
-The authorization data is obtained by IRW through an open record request to the Louisiana Ethics Administration Program. The data is as current as July 10, 2020.
+The authorization data is obtained by IRW through an open record request to the Louisiana Ethics Administration Program. The data was downloaded July 10, 2020.
 
 # Reading
 We will notice that some rows were delimited incorrectly, as a supposedly single rows is separated into two lines with the first row of the overflow line an invalid forward slash.
 
 ```{r}
-reg_dir <- dir_create(here("la", "lobbyists", "data", "raw", "reg"))
-
 la_lines <- read_lines(glue("{reg_dir}/lobby_reg.csv"))
 la_cols <- str_split(la_lines[1], ",", simplify = TRUE)
 la_lines <- la_lines[-1]

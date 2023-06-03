@@ -108,10 +108,11 @@ here::here()
 
 ## Data
 
-Lobbyist data is obtained from the [Indiana Lobby Registration Commission][03]. The data is as current as March 16, 2020.
+Lobbyist data is obtained from the [Indiana Lobby Registration Commission][03]. At the time of data aquisition, exployer lobbyist lists are available in xls format from 2006 to 2022.
 
 ```{r raw_dir}
-raw_dir <- dir_create(here("in", "lobby", "data", "raw", "exp"))
+raw_dir <- dir_create(here("state","in","lobby", "data", "raw", "exp"))
+emp_dir <- dir_create(path(raw_dir,"emp"))
 ```
 
 ```{r download, eval=FALSE}
@@ -119,7 +120,7 @@ landing_url <- 'https://www.in.gov/ilrc/2335.htm'
 
 urls <- GET(landing_url) %>% content() %>% html_nodes("a")
 
-emp_urls <- paste0('https://www.in.gov',urls[str_detect(urls, 'Employer Lobbyist Total')] %>% html_attr('href'))
+emp_urls <- paste0('https://www.in.gov',urls[str_detect(html_text(urls), 'Employer Lobbyist Total')] %>% html_attr('href'))
 
 wget <- function(url, dir) {
   system2(
@@ -133,7 +134,6 @@ wget <- function(url, dir) {
   )
 }
 
-emp_dir <- dir_create(path(raw_dir,"emp"))
 if (!all_files_new(emp_dir)) {
   map(emp_urls, wget, emp_dir)
 }
@@ -146,7 +146,6 @@ The excel files have certain rows that we need to skip. From 2013 to 2019, the f
 For the terminated column, TA=Term. April, TO=Term. October
 
 ```{r read csv}
-emp_dir <- path(raw_dir,"emp")
 inle_csv <- read_csv(dir_ls(emp_dir) %>% str_subset('csv'), 
                  col_types = cols(.default = col_character())) %>% 
   clean_names() 
@@ -155,7 +154,7 @@ in_emp_0809_fs <- dir_ls(emp_dir) %>% str_subset('2008|09')
 
 in_1112_fs <- dir_ls(emp_dir) %>% str_subset('2011|2012')
 
-in_1319_fs <- dir_ls(emp_dir) %>% str_subset('2013|2014|2015|2016|2017|2019') %>% .[1:6]
+in_1322_fs <- dir_ls(emp_dir) %>% str_subset('2013|2014|2015|2016|2017|2019|2020|2021|2022')
 
 # Get the vector of column names by reading in the 2019 file and accessing its column headers
 names_inle <- names(inle_csv)
@@ -209,7 +208,7 @@ df <- df[4:nrow(df),]
 #              lobbyist_clean = lobbyist) %>% 
 #       fill(year_clean, lobbyist_clean)
 
-in_1319 <- map_dfr(in_1319_fs[1:6], read_inxl)
+in_1322 <- map_dfr(in_1322_fs, read_inxl)
   # bind_rows(inle_csv)
 
 in_1112 <- map_dfr(in_1112_fs, read_1112_inxl)
@@ -220,7 +219,7 @@ in_2010 <- read_inxl(in_2010_fs)
 
 inle_emp <- read_inxl(dir_ls(emp_dir) %>% str_subset("2010")) %>% 
   bind_rows(in_1112) %>% 
-  bind_rows(in_1319)
+  bind_rows(in_1322)
 ```
 
 Next, we can see that the file structures for 2008 and 2009 are different from the one later on. The main difference is that: 
@@ -369,7 +368,7 @@ glimpse(sample_n(inle, 20))
 ## Export
 
 ```{r clean_dir}
-clean_dir <- dir_create(here("in", "lobby", "data", "exp","clean"))
+clean_dir <- dir_create(here("state","in", "lobby", "data", "exp","clean"))
 ```
 
 ```{r write_clean}

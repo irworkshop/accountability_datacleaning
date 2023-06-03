@@ -462,7 +462,10 @@ inner_join(
 ```{r year_add}
 calr <- mutate(calr, year = year(rpt_date))
 calr$year[which(calr$year < 2000)] <- NA
-calr$year[which(calr$year > 2020)] <- NA
+calr$year[which(calr$year > 2024)] <- NA
+
+ca_lobby_reg$year[which(ca_lobby_reg$year < 2000)] <- NA
+ca_lobby_reg$year[which(ca_lobby_reg$year > 2024)] <- NA
 ```
 
 ```{r year_bar, echo=FALSE}
@@ -611,7 +614,8 @@ calr <- calr %>%
 ```{r}
 clean_dir <- dir_create(here("state","ca", "lobby", "data", "clean"))
 clean_path <- path(clean_dir, "ca_lobby_reg.csv")
-write_csv(calr, path = clean_path, na = "")
+write_csv(calr, file = clean_path, na = "")
+write_csv(ca_lobby_reg, file = clean_path, na = "")
 ```
 
 ```{r}
