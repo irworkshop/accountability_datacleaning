@@ -2,6 +2,7 @@ Alabama Lobbyists
 ================
 First Last
 2020-01-15 17:07:56
+By Kiernan Nicholls
 
   - [Project](#project)
   - [Objectives](#objectives)
