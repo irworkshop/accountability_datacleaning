@@ -133,7 +133,7 @@ clients](https://ethics-form.alabama.gov/entity/FileUpload2015/RegisteredLobbyis
 for 2020, these two files do not show the relationship between each
 lobbyist and those entites for which they lobby.
 
-Instead, that relationship is documents on annual filings for each
+Instead, that relationship is documented on annual filings for each
 individual lobbyist. These reports are given as PDF documents and can be
 searched from the [AEC search
 page](http://ethics.alabama.gov/search/PublicEmployeeSearch.aspx).
