@@ -54,10 +54,40 @@ objectives:
 7.  Create a `year` field from the transaction date.
 8.  Make sure there is data on both parties to a transaction.
 
+## File structure
+
+File structure:
+
+├── accountability_datacleaning
+│   ├── state
+│   │   ├── mo
+            ├──contribs
+            ├──expends
+            ├──licenses
+            ├──lobby
+            ├──voters_2020
+            ├──voters_2023
+                ├──data
+                    ├──Missouri
+                       Missouri.zip
+                        ├──data
+                ├──reqs
+                   requirements.txt
+            ├──voters_old
+
 ## Packages
 
-To install packages, use: pip install -r requirements.txt
+To install packages, use: pip install -r requirements.txt, in the reqs directory. 
 
+```
+numpy==1.21.6
+pandas==1.3.5
+
+For data analysis and formatting
+
+python-slugify==8.0.1 
+
+To format column names
 ```
 
 ## Data
@@ -68,10 +98,19 @@ Division, Office of Secretary of State.
 
 The MCVR data was provided as a ZIP archive through a file sharing site.
 
-``` r
-raw_dir <- dir_create(here("mo", "voters", "data", "raw"))
-raw_zip <- path(raw_dir, "Files.zip")
-raw_out <- as_fs_path(unzip(raw_zip, exdir = raw_dir))
+```
+Cells 3, 4 and 5 in the Jupyter notebook take care of expanding the ZIP and finding the filename we need.
+You may need to change directories or filenames if the state has made changes.
+
+# Show the name of the zipfile that is opened in the next step
+files = os.listdir(abs_file_path)
+
+# Read the zipfile
+voters = (files[1])
+zf = ZipFile(abs_file_path + "/" + voters)
+
+# List files in zipfile
+zf.namelist()
 ```
 
 The archive contains a README file to explain the data:
@@ -156,149 +195,93 @@ And a record layout describing the columns of the file:
 We can read the tab-delimited file as a dataframe.
 
 ```
+# Load data into dataframe, first with no header for processing reasons
+voters = pd.read_csv(zf.open('data\\PSR_VotersList_01032023_9-51-24 AM.txt'), sep='\t', header=None)
+
+# Now set the first row as header
+voters.columns = voters.iloc[0] 
+```
 
 There are 20 columns at the end of the dataframe containing all of the
 past elections in which each person has voted. We are going to keep the
 most recent election and then save all the columns as a separate data
-frame. This data frame will be kept in a *long* format, with a row for
-every election.
+frame. 
 
-``` r
-hist_file <- path(dirname(raw_dir), "vote_history.csv")
-if (file_exists(hist_file)) {
-  vote_hist <- vroom(
-    file = hist_file,
-    col_types = cols(
-      voter_id = col_character(),
-      order = col_integer(),
-      date = col_date(),
-      election = col_character()
-    )
-  )
-} else {
-  vote_hist <- select(mov, `Voter ID`, starts_with("Voter History"))
-  vote_hist <- pivot_longer(
-    data = vote_hist,
-    cols = starts_with("Voter History"),
-    names_to = "order",
-    values_to = "election"
-  )
-  vote_hist <- vote_hist %>% 
-    clean_names("snake") %>% 
-    filter(!is.na(election))
-  vote_hist <- separate(
-    data = vote_hist,
-    col = election,
-    sep = "(?<=\\d)\\s",
-    into = c("date", "election")
-  )
-  vote_hist <- mutate(
-    .data = vote_hist,
-    order = as.integer(str_extract(order, "\\d+")),
-    date = parse_date(date, "%m/%d/%Y")
-  )
-  write_csv(
-    x = vote_hist,
-    path = hist_file
-  )
-}
+```
+# There are 20 voter history columns. We'll keep the most recent and store the others in a different dataframe.
+# Also get the names of column headers so we can use them to put the columns we need in another dataframe.
+
+column_headers = list(voters.columns.values)
+del_cols = column_headers[35:]
+print(del_cols)
+
+# Put old voter history 2-20 into a new, separate dataframe
+voters2 = pd.DataFrame()
+voters2 = pd.concat([voters2,voters[del_cols]],axis=0)
 ```
 
-We can then remove the election columns.
+We then remove the extra election columns at the end.
+
+```
+# Drop voter history 2-20 from original dataframe
+
+voters.drop(columns=['voter_history_2', 'voter_history_3', 'voter_history_4', 'voter_history_5', 'voter_history_6', 'voter_history_7', 'voter_history_8', 'voter_history_9', 'voter_history_10', 'voter_history_11', 'voter_history_12', 'voter_history_13', 'voter_history_14', 'voter_history_15', 'voter_history_16', 'voter_history_17', 'voter_history_18', 'voter_history_19', 'voter_history_20'], inplace=True)
+```
 
 ## Old
 
 In 2020, the TAP team received a similar file. We are going to keep any
 registered voters not found in the current MCVR file.
 
-Most of the voters in the 2020 data are in the 2023 data. There were 706,371 voters in the 2020 data not in the current MCVR file. 
+Most of the voters in the 2020 data are in the 2023 data. 
 
-``` r
-prop_in(moo$voter_id, mov$voter_id)
-#> [1] 0.9233826
-prop_in(mov$voter_id, moo$voter_id)
-#> [1] 0.9068094
+```
+# Comparing voter ID columns
+# In 2020, the TAP team received a similar file. We are going to keep any
+# registered voters not found in the current file.
+
+idx1 = pd.Index(voters.voter_id)
+idx2 = pd.Index(voters20.voter_id)
+
+diff = idx2.difference(idx1).values
+
+
+There are 706,371 voters in the 2020 data who are not in the current data.
 ```
 
-Using the unique `voter_id` we will remove any voter found in the newer
-data.
+We'll put the voters who were not found in the 2023 file but were in the 2020 file into their own dataframe.
+We will need them later, when we want to join the old voter data to the most recent voter registrations.
+We'll do that at the end.
 
-``` r
-nrow(moo)
-#> [1] 4210231
-moo <- filter(moo, voter_id %out% mov$voter_id)
-nrow(moo)
-#> [1] 322577
+
 ```
+# Convert diff array to list
 
-The unique old data can then be joined to the most recent voter
-registrations.
+diff = list(diff)
 
-``` r
-mov <- bind_rows(mov, moo, .id = "source")
-mov <- relocate(mov, source, .after = last_col())
-add_prop(count(mov, source))
-#> # A tibble: 2 x 3
-#>   source       n      p
-#>   <chr>    <int>  <dbl>
-#> 1 1      4287158 0.930 
-#> 2 2       322577 0.0700
+# Put those voters from 2020 data not in current data into a df; we'll need it later.
+
+keepers = voters20[voters20['voter_id'].isin(diff)]
+
+# To join the old unique 2020 voter data to the 2023 dataset, we'll use the following code
+
+<code>
+
+But we won't do that until we get the 2023 data cleaned up and in the same structure as the 2020 data.
+If we try to join them now, the fieldnames do not match and it won't work.
 ```
 
 ## Explore
 
-There are 4,609,735 rows of 31 columns.
+In the new 2023 file, as we got it, there are 4,268,187 records with 54 columns. Columns are described in the record layout under #Data. 
 
-``` r
-glimpse(mov)
-#> Rows: 4,609,735
-#> Columns: 31
-#> $ county               <chr> "Adair", "Adair", "Adair", "Adair", "Adair", "Adair", "Adair", "Ada…
-#> $ voter_id             <chr> "751417626", "460039164", "23351760", "750155978", "23351765", "750…
-#> $ first_name           <chr> "CHRISTIAN", "MIRANDA", "DIANA", "TRACY", "ROBIN", "LEONNA", "ROGER…
-#> $ middle_name          <chr> "MESHACK", "KAY", "L", "LYNN", "M", "R", "L", "BETH", "AVERY", "MAR…
-#> $ last_name            <chr> "HATALA", "ABERNATHY", "REYNOLDS", "REYNOLDS", "SACK", "ALTER", "CA…
-#> $ suffix               <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
-#> $ house_number         <chr> "906", "304", "24183", "24183", "24294", "1512", "1512", "9", "9", …
-#> $ house_suffix         <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
-#> $ pre_direction        <chr> "E", "E", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "S", NA, …
-#> $ street_name          <chr> "WASHINGTON", "BURTON", "STATE HWY 3", "STATE HWY 3", "STATE HWY V"…
-#> $ street_type          <chr> "ST", "ST", NA, NA, NA, "DR", "DR", NA, NA, NA, NA, NA, "TRL", "DR"…
-#> $ post_direction       <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
-#> $ unit_type            <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
-#> $ unit_number          <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
-#> $ non_standard_address <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
-#> $ city                 <chr> "KIRKSVILLE", "KIRKSVILLE", "KIRKSVILLE", "KIRKSVILLE", "BRASHEAR",…
-#> $ state                <chr> "MO", "MO", "MO", "MO", "MO", "MO", "MO", "MO", "MO", "MO", "MO", "…
-#> $ zip                  <chr> "63501", "63501", "63501", "63501", "63533", "63501", "63501", "635…
-#> $ birth_date           <date> 1996-08-28, 1985-11-24, 1946-10-13, 1976-12-16, 1955-03-09, 1958-0…
-#> $ reg_date             <date> 2015-12-14, 2006-03-08, 1980-04-21, 2007-07-10, 1990-10-15, 2010-0…
-#> $ precinct             <chr> "104", "105", "108", "108", "809", "102", "102", "102", "102", "102…
-#> $ precinct_name        <chr> "NORTHEAST FOUR/BENTON", "NORTHEAST FIVE/BENTON", "RURAL BENTON/BEN…
-#> $ split                <chr> "01", "01", "04", "04", "01", "01", "01", "01", "01", "01", "01", "…
-#> $ township             <chr> "BENTON TOWNSHIP", "BENTON TOWNSHIP", "BENTON TOWNSHIP", "BENTON TO…
-#> $ ward                 <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
-#> $ congressional        <chr> "CN-N 6", "CN-N 6", "CN-N 6", "CN-N 6", "CN-N 6", "CN-N 6", "CN-N 6…
-#> $ legislative          <chr> "LE-N 003", "LE-N 003", "LE-N 004", "LE-N 004", "LE-N 004", "LE-N 0…
-#> $ state_senate         <chr> "SE-N 18", "SE-N 18", "SE-N 18", "SE-N 18", "SE-N 18", "SE-N 18", "…
-#> $ voter_status         <chr> "Active", "Active", "Active", "Inactive", "Active", "Active", "Acti…
-#> $ last_election        <chr> "08/04/2020 Primary", "11/06/2018 General", "08/04/2020 Primary", "…
-#> $ source               <chr> "1", "1", "1", "1", "1", "1", "1", "1", "1", "1", "1", "1", "1", "1…
-tail(mov)
-#> # A tibble: 6 x 31
-#>   county voter_id first_name middle_name last_name suffix house_number house_suffix pre_direction
-#>   <chr>  <chr>    <chr>      <chr>       <chr>     <chr>  <chr>        <chr>        <chr>        
-#> 1 Wright 37309118 BERNICE    <NA>        GASPERSON <NA>   8655         <NA>         <NA>         
-#> 2 Wright 7500444… STEVEN     P           RUTZ      <NA>   1503         <NA>         N            
-#> 3 Wright 37312915 NOAH       <NA>        HANCOCK   <NA>   475          <NA>         W            
-#> 4 Wright 49598325 DALE       <NA>        HINTT     <NA>   11270        <NA>         <NA>         
-#> 5 Wright 7506473… ROXANNE    MARY        COLLINS   <NA>   6530         <NA>         <NA>         
-#> 6 Wright 37311115 BUEL       L           JEMES     <NA>   9672         <NA>         <NA>         
-#> # … with 22 more variables: street_name <chr>, street_type <chr>, post_direction <chr>,
-#> #   unit_type <chr>, unit_number <chr>, non_standard_address <chr>, city <chr>, state <chr>,
-#> #   zip <chr>, birth_date <date>, reg_date <date>, precinct <chr>, precinct_name <chr>,
-#> #   split <chr>, township <chr>, ward <chr>, congressional <chr>, legislative <chr>,
-#> #   state_senate <chr>, voter_status <chr>, last_election <chr>, source <chr>
+```
+county  voter_id  first_name  middle_name last_name suffix  house_number  house_suffix  pre_direction street_name ... voter_history_11  voter_history_12  voter_history_13  voter_history_14  voter_history_15  voter_history_16  voter_history_17  voter_history_18  voter_history_19  voter_history_20
+1 Adair 461017702 JOHN  WILLIAM MCNEILL NaN 1306  NaN NaN ROOK  ... NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN
+2 Adair 751833496 ALEXANDER DOUGLAS STONEBURNER KARST NaN 702 NaN S SHERIDAN  ... NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN
+3 Adair 751105687 KEVIN LEE WINDSPERGER NaN 17469 NaN NaN DAIRY ... NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN
+4 Adair 752025280 TAYLOR  ANN CLAYTON NaN 809 NaN S MULANIX ... NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN
+5 Adair 751367266 AUSTIN  BRADLEY MORSE NaN 1214  NaN S WABASH  ... NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN
 ```
 
 ### Missing
