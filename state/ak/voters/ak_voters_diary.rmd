@@ -1,0 +1,427 @@
+---
+title: "Alaska voters"
+author: "Jennifer LaFleur"
+date: "`r Sys.time()`"
+output:
+  github_document: 
+    df_print: tibble
+    toc: true
+    toc_dept: 3
+editor_options: 
+  chunk_output_type: console
+---
+
+<!-- Place comments regarding knitting here -->
+
+```{r setup, include=FALSE, purl=FALSE}
+library(knitr)
+opts_chunk$set(
+  eval = TRUE,
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  error = FALSE,
+  collapse = TRUE,
+  comment = "#>",
+  fig.path = "../plots/",
+  fig.width = 10,
+  dpi = 300
+)
+if (!interactive()) {
+  options(width = 99)
+  set.seed(5)
+}
+```
+
+```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
+doc_dir <- fs::dir_create(here::here("ak", "voters", "docs"))
+```
+
+
+## Project
+
+The Accountability Project is an effort to cut across data silos and give
+journalists, policy professionals, activists, and the public at large a simple
+way to search across public data about individuals, organizations and locations.
+
+Our goal is to standardize public data on a few key fields by thinking of each
+dataset row as a transaction. For each transaction there should be (at least) 3
+variables:
+
+1. All **parties** to a transaction.
+2. The **date** of the transaction.
+3. The **amount** of money involved.
+
+## Objectives
+
+This document describes the process used to complete the following objectives:
+
+1. How many records are in the database?
+2. Check for entirely duplicated records.
+3. Check ranges of continuous variables.
+4. Is there anything blank or missing?
+5. Check for consistency issues.
+6. Create a five-digit ZIP Code called `zip`.
+7. Create a `year` field from the transaction date.
+8. Make sure there is data on both parties to a transaction.
+
+## Packages
+
+The following packages are needed to collect, manipulate, visualize, analyze,
+and communicate these results. The `pacman` package will facilitate their
+installation and attachment.
+
+
+```{r load_packages, message=FALSE, warning=FALSE, error=FALSE}
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load(
+  tidyverse, # data manipulation
+  lubridate, # datetime strings
+  gluedown, # printing markdown
+  janitor, # clean data frames
+  campfin, # custom irw tools
+  aws.s3, # aws cloud storage
+  readxl, # read excel files
+  refinr, # cluster & merge
+  scales, # format strings
+  digest, # hash strings
+  knitr, # knit documents
+  vroom, # fast reading
+  rvest, # scrape html
+  glue, # code strings
+  here, # project paths
+  httr, # http requests
+  fs, # local storage 
+  stringr # string functions
+ )
+```
+## Read
+
+```{r read voters}
+akv <- read.csv('ak_Public_Voter_List_20230118.csv',strip.white=TRUE)
+```
+
+
+```{r read party}
+party <- read.csv('party.csv')
+akv <- akv %>%  
+    left_join(party, by = c("PARTY"="partycode"))
+```
+
+## Data
+
+The Alaska voter data was obtained via open records request from the Alaska Division of Elections. And received in January 2023.
+
+
+Two files were provided to the Accountability Project:
+
+1. a csv containing the voter data 
+2. a pdf containing the record layout 
+
+
+#### Columns
+
+```{r rec_layout, echo=FALSE}
+rec_layout <- tribble(
+  ~column, ~description,
+"UN",                 "Address undeliverable",
+"PARTY",	            "Voter party affiliation",
+"DP",	                "Voter house district and precinct",
+"LAST_NAME",          "Voter last name",
+"FIRST_NAME",	        "Voter first name",
+"MIDDLE_NAME",	      "Voter middle init_name",
+"SUFFIX_NAME",	      "Voter suffix",
+"ASCENSION",	        "Random number assigned to the voter",                    
+"REG_DATE",	          "Date of most recent registration (if included)",
+"ORG_REG_DATE",	      "Date when voter originally registered (if included)",
+"DIST_DATE",	        "Date when voter registered in house district (if included)",
+"RESIDENCE_ADDRESS",  "Voter residence address",
+"RESIDENCE_CITY",	    "Voter residence city",
+"RESIDENCE_ZIP",	    "Voter residence ZIP",
+"MAILING_ADDRESS1",	  "Line 1 voter mailing address",
+"MAILING_ADDRESS2",   "Line 2 voter mailing address",
+"MAILING_ADDRESS3",	  "Line 3 voter mailing address",  
+"MAILING_CITY",	      "Voter mailing city",
+"MAILING_STATE",	    "Voter mailing state",
+"MAILING_ZIP",	      "Voter mailing ZIP",
+"MAILING_COUNTRY",	  "If overseas, voter mailing country",
+"GENDER",	            "Voter gender",
+"VH1",	              "voter history columns", 
+"VH2",	              " ",
+"VH3",	              " ",	
+"VH4",		            " ",
+"VH5",		            " ",
+"VH6",	              " ",	
+"VH7",	              " ",	
+"VH8",	              " ",	
+"VH9",	              " ",
+"VH10",	              " ",	
+"VH11",	              " ",	
+"VH12",	              " ",
+"VH13",	              " ",	
+"VH14",	              " ",	
+"VH15",	              " ",	
+"VH16",	              " "	
+)
+```
+
+```{r echo=FALSE}
+kable(rec_layout)
+```
+
+Voter history is represented by an election ID that consists of five to six characters with the first	two digits being the year of the election followed by a three to four lettered election name code. The second set of data is the method that the voter voted:	
+
+P Voted in person at the polls	
+E Voted an Early Vote ballot	
+A Voted an Absentee ballot	
+Q Voted a Questioned ballot	
+
+Statewide primary and general elections are consistently named with the year and	
+election codes of PRIM and GENR:	
+18PRIM 2018 Primary Election	
+18GENR 2018 General Election	
+
+Statewide special elections are reflected as:	
+07SPEC 2007 Statewide Special Election	
+
+State conducted Regional Educational Attendance Area elections (school board elections	
+in unorganized boroughs of Alaska) are reflected as REAA, RE## or R###:	
+18REAA 2018 Regional Educational Attendance Area elections	
+18RE17 2018 Regional Educational Attendance Area election in REAA 17	
+18R123 2018 Regional Education Attendance Area election in REAA 12	
+Section 3	
+
+Local and special city and borough elections from 2016 forward, the election ID will show the two-digit year and three to four alpha characters that represents the	city/borough name or geographic region name:	
+
+18VALD 2018 local election for the City of Valdez	
+18MOA 2018 local election for the Municipality of Anchorage	
+18WASI 2018 local election for the City of Wasilla	
+18FNSB 2018 local election for the Fairbanks North Star Borough	
+18NSLB 2018 local election for the North Slope Borough	
+
+At times, city and boroughs will conduct special or run-off elections.  The last characterof the election ID will reflect either a â€˜Sâ€™ or â€˜Râ€™ for special or runoff.	Prior to 2016, local and special city and borough elections were:	
+12REGL 2012 Regular Local Election	
+12SPEL 2012 Special Local Election	
+
+For a list of city and/or boroughs within the State of Alaska, visit the division	
+Research webpage below and locate the Alaska Community List selections:	
+http://www.elections.alaska.gov/Core/electionresources.php	
+
+
+
+
+#### Political party
+
+Voter political party affiliation.
+Recognized Political Parties: Are those parties that have gained recognized
+political party status under Alaska Statute 15.80.010(27) and voters appear on
+voter lists as follows:
+A:Alaskan Independence Party
+D:Alaska Democratic Party
+R:Alaska Republican Party
+
+Political Groups: Are those groups that have applied for party status but have
+not met the qualifications to be a recognized political party under Alaska
+Statute 15.80.010(26) and voters appear on voter lists as follows:
+C:Alaska Constitution Party
+L:Alaska Libertarian Party
+E:Moderate Party of Alaska
+O:Progressive Party of Alaska
+F:Freedom Reform Party
+P:Patriot's Party of Alaska
+G:Green Party of Alaska
+V:Veterans Party of Alaska
+H:OWL Party
+W:UCES Clowns Party
+K:Alliance Party of Alaska
+No Affiliation / Undeclared: Voters who chose not to declare an affiliation or
+who are unaffiliated appear on voter lists as follows:
+N:Nonpartisan (no affiliation)
+U:Undeclared
+
+
+## Explore
+
+There are `r scales::comma(nrow(akv))` rows of `r ncol(akv)` columns.
+
+```{r glimpse}
+glimpse(akv)
+tail(akv)
+```
+
+### Missing
+
+Columns vary in their degree of missing values.
+
+```{r na_count}
+col_stats(akv, count_na)
+```
+
+No columns are missing the registration date or last name needed to identify a
+voter.
+
+### Duplicates
+
+We can also flag any record completely duplicated across every column.
+
+```{r dupe_flag}
+d1 <- duplicated(akv, fromLast = FALSE)
+d2 <- duplicated(akv, fromLast = TRUE)
+akv <- mutate(akv, dupe_flag = d1 | d2)
+sum(akv$dupe_flag)
+```
+
+```{r dupe_rm, echo=FALSE}
+rm(d1, d2)
+flush_memory(1)
+```
+
+```{r dupe_view}
+akv %>% 
+  filter(dupe_flag) %>% 
+  select(ORG_REG_DATE, LAST_NAME, PARTY) %>% 
+  arrange(ORG_REG_DATE)
+```
+
+### Categorical
+
+```{r distinct_count}
+col_stats(akv, n_distinct)
+```
+
+
+### Cleaning
+
+Pull the year from ORG_REG_DATE
+
+```{r date_year}
+akv <- mutate(akv, year = str_sub(ORG_REG_DATE, start= -4))
+```
+
+Add the state
+
+```{r state}
+akv <- mutate(akv, state = "Alaska")
+```
+
+Create a five-digit zip field
+
+```{r ZIP}
+akv <- mutate(akv, zip = str_sub(RESIDENCE_ZIP, 1, 5))
+```
+
+Clean column names
+
+```{r names}
+akv <- clean_names(akv)
+```
+
+## Explore
+
+
+```{r bar_year, echo=FALSE}
+explore_plot(akv, year)
+explore_plot(akv, party)
+```
+
+
+## Wrangle
+
+Check geo variables
+
+```{r geo_check, echo=FALSE}
+unique(akv$residence_city)
+unique(akv$state)
+prop_in(akv$zip, valid_zip)
+```
+
+## Conclude
+
+
+```{r clean_glimpse}
+glimpse(sample_n(akv, 25))
+```
+
+1. There are `r comma(nrow(akv))` records in the database.
+2. There are `r comma(sum(akv$dupe_flag))` duplicate records in the database.
+3. The range and distribution of `year` seem reasonable.
+
+
+## Export
+
+Now the file can be saved on disk for upload to the Accountability server.
+
+```{r clean_dir}
+clean_dir <- dir_create(here("ak", "voters", "data", "clean"))
+clean_path <- path(clean_dir, "ak_voters_clean.csv")
+write_csv(akv, clean_path, na = "")
+(clean_size <- file_size(clean_path))
+file_encoding(clean_path) %>% 
+  mutate(across(path, path.abbrev))
+```
+
+## Dictionary
+
+The following table describes the variables in our final exported file:
+
+```{r dict_make, echo=FALSE}
+dict_raw <- tibble(
+  var = md_code(names(akv)),
+  type = md_code(map_chr(akv, typeof)),
+  def = c(
+    "undeliverable",
+    "party",
+    "district precinct",
+    "last name",
+    "first name",
+    "middle name/init",
+    "suffix",
+    "random ID",
+    "Most recent registration date",
+    "Original registration date",
+    "date voter registered in district",
+    "residence address",
+    "residence city",
+    "residence zip",
+    "mailing address1",
+    "mailing address2",
+    "mailing address3",
+    "mailing city",
+    "mailing state",
+    "mailing ZIP code",
+    "mailing country if outside U.S.",
+    "gender",
+    "voting history",
+    "voting history",
+    "voting history",
+    "voting history",
+    "voting history",
+    "voting history",
+    "voting history",
+    "voting history",
+    "voting history",
+    "voting history",
+    "voting history",
+    "voting history",
+    "voting history",
+    "voting history",
+    "voting history",
+    "voting history",
+    "party name",
+    "duplicate flag",
+    "Original registration year",
+    "Residential state",
+    "5-digit residential ZIP code"
+       )
+)
+```
+
+
+```{r dict_md, echo=FALSE}
+(dict_md <- kable(
+  x = dict_raw,
+  format = "markdown",
+  col.names = c("Column", "Type", "Definition")
+))
+```
+
