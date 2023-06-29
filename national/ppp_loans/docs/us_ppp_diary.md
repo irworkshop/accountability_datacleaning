@@ -295,7 +295,7 @@ ppp %>%
 
 ### Duplicates
 
-There are a small amount of duplicate records in the database, all of
+There is a small number of duplicate records in the database, all of
 which can be flagged with a new logical variable.
 
 We can also flag any record completely duplicated across every column.
