@@ -13,6 +13,16 @@ Kiernan Nicholls & Yanqi Xu
 - <a href="#normalize" id="toc-normalize">Normalize</a>
 - <a href="#export" id="toc-export">Export</a>
 
+  - [Project](#project)
+  - [Objectives](#objectives)
+  - [Packages](#packages)
+  - [Data](#data)
+  - [Import](#import)
+  - [Explore](#explore)
+  - [Wrangle](#wrangle)
+  - [Normalize](#normalize)
+  - [Export](#export)
+
 <!-- Place comments regarding knitting here -->
 
 ## Project
@@ -132,7 +142,7 @@ clients](https://ethics-form.alabama.gov/entity/FileUpload2015/RegisteredLobbyis
 these two files do not show the relationship between each lobbyist and
 those entities for which they lobby.
 
-Instead, that relationship is documents on annual filings for each
+Instead, that relationship is documented on annual filings for each
 individual lobbyist. These reports are given as PDF documents and can be
 searched from the [AEC search
 page](http://ethics.alabama.gov/search/PublicEmployeeSearch.aspx).
