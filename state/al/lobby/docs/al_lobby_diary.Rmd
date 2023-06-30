@@ -1,6 +1,6 @@
 ---
 title: "Alabama Lobbyists"
-author: "First Last"
+author: "Kiernan Nicholls & Yanqi Xu"
 date: "`r Sys.time()`"
 output:
   github_document: 
@@ -142,49 +142,38 @@ legislative body or regulatory body or any committee thereof."
 ## Import
 
 While the AEC _does_ provide two Excel files listing [registered lobbyists][06] 
-and [registered principal clients][07] for 2020, these two files do not show
-the relationship between each lobbyist and those entites for which they lobby.
+and [registered principal clients][07], these two files do not show
+the relationship between each lobbyist and those entities for which they lobby.
 
 Instead, that relationship is documents on annual filings for each individual
 lobbyist. These reports are given as PDF documents and can be searched from the
 [AEC search page][08].
 
-The PDF statements can be then be viewed one at a time. Each yearly PDF has a 
+The PDF statements can be then be viewed one at a time. Each yearly PDF of a lobyist has a 
 unique lobbyist ID (`lid`), which can be passed to an `httr::GET()` request to 
 save the PDF.
-
-```{r get, eval=FALSE}
-GET(
-  url = "http://ethics.alabama.gov/search/ViewReports.aspx",
-  write_disk(path, overwrite = TRUE),
-  query = list(
-    lid = 21,
-    rpt = "rptLobbyistRegistration"
-  )
-)
-```
 
 [06]: https://ethics-form.alabama.gov/entity/FileUpload2015/RegisteredLobbyist/WebDataForExcel_2010.aspx
 [07]: https://ethics-form.alabama.gov/entity/FileUpload2015/RegisteredLobbyist/rptPrincipalsListing_Excel.aspx
 [08]: http://ethics.alabama.gov/search/PublicEmployeeSearch.aspx
 ### Download
 
-Opening random PDF's from 2008 to 2020, it seems as though their are valid 
-lobbyist ID's from 1 to 11,000 (with roughly 25% inbetween leading to "empty"
+Opening random PDF's from 2008 to 2023, it seems as though their are valid 
+lobbyist ID's from 1 to 14,900 (with roughly 25% inbetween leading to "empty"
 files without any information).
 
 This takes **hours**, but we can loop through each ID and write the file to
 disk.
 
 ```{r raw_dir, eval=TRUE}
-raw_dir <- dir_create(here("al", "lobby", "data", "raw"))
+raw_dir <- dir_create(here("state","al", "lobby", "data", "raw"))
 ```
 
 ```{r download, eval=FALSE}
-n <- 11100
+n <- 14900
 start_time <- Sys.time()
 if (length(dir_ls(raw_dir)) < 5000) {
-  for (i in seq(min, n)) {
+  for (i in seq(n)) {
     path <- glue("{raw_dir}/reg_{str_pad(i, nchar(n), pad = '0')}.pdf")
     loop_start <- Sys.time()
     # make get request
@@ -354,12 +343,22 @@ frame_pdf <- function(file) {
 We can then apply this function to every PDF downloaded and combine the results
 of each into a single giant data frame.
 
-```{r}
+```{r, eval=FALSE}
 allr <- map_df(
   .x = dir_ls(raw_dir),
   .f = frame_pdf
 )
 ```
+
+```{r, eval=FALSE, echo=FALSE}
+allr %>% write_csv(path(raw_dir, "allr_from_pdf.csv"), na = "")
+```
+
+```{r, echo=FALSE}
+allr <- read_csv(path(raw_dir, "allr_from_pdf.csv"))
+```
+
+
 
 ## Explore
 
@@ -399,13 +398,13 @@ allr <- allr %>%
   separate(
     col = lob_city,
     into = c("lob_city", "lob_state"),
-    sep = ",\\s(?=[:upper:])",
+    sep = ",\\s(?=[A-Z])",
     extra = "merge"
   ) %>%
   mutate_at(
     .vars = vars(lob_state),
     .funs = str_remove,
-    pattern = "(.*,\\s)(?=[:upper:])"
+    pattern = "(.*,\\s)(?=[A-Z])"
   ) %>%
   separate(
     col = lob_state,
@@ -452,8 +451,7 @@ allr <- allr %>%
   mutate_if(
     .predicate = is_character,
     .funs = str_trim
-  ) %>%
-  na_if("")
+  )
 ```
 
 ```{r echo=FALSE}
@@ -629,7 +627,7 @@ progress_table(
 ## Export
 
 ```{r create_proc_dir}
-proc_dir <- dir_create(here("al", "lobby", "data", "processed"))
+proc_dir <- dir_create(here("state","al", "lobby", "data", "processed"))
 ```
 
 ```{r write_clean}
@@ -643,7 +641,7 @@ allr %>%
     pri_city_norm = pri_city_swap,
   ) %>% 
   write_csv(
-    path = glue("{proc_dir}/al_lobbyists.csv"),
+    path = glue("{proc_dir}/al_lobby_reg.csv"),
     na = ""
   )
 ```

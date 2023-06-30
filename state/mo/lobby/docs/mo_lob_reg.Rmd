@@ -32,7 +32,7 @@ set.seed(5)
 ```
 
 ```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
-fs::dir_create(here::here("mo", "lobby", "docs"))
+fs::dir_create(here::here("state","mo", "lobby", "docs"))
 ```
 
 ## Project
@@ -119,7 +119,7 @@ The workshop obtained the MO lobbying registration data through a Sunshine Reque
 ### Setting up Raw Data Directory
 
 ```{r raw_dir}
-raw_dir <- dir_create(here("mo", "lobby", "data", "raw", "reg"))
+raw_dir <- dir_create(here("state","mo", "lobby", "data", "raw", "reg"))
 ```
 
 ### Read

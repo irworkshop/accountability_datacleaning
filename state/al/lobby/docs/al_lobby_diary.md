@@ -1,17 +1,17 @@
 Alabama Lobbyists
 ================
-First Last
-2020-01-15 17:07:56
+Kiernan Nicholls & Yanqi Xu
+2023-06-13 21:05:18
 
-  - [Project](#project)
-  - [Objectives](#objectives)
-  - [Packages](#packages)
-  - [Data](#data)
-  - [Import](#import)
-  - [Explore](#explore)
-  - [Wrangle](#wrangle)
-  - [Normalize](#normalize)
-  - [Export](#export)
+- <a href="#project" id="toc-project">Project</a>
+- <a href="#objectives" id="toc-objectives">Objectives</a>
+- <a href="#packages" id="toc-packages">Packages</a>
+- <a href="#data" id="toc-data">Data</a>
+- <a href="#import" id="toc-import">Import</a>
+- <a href="#explore" id="toc-explore">Explore</a>
+- <a href="#wrangle" id="toc-wrangle">Wrangle</a>
+- <a href="#normalize" id="toc-normalize">Normalize</a>
+- <a href="#export" id="toc-export">Export</a>
 
 <!-- Place comments regarding knitting here -->
 
@@ -86,7 +86,7 @@ feature and should be run as such. The project also uses the dynamic
 ``` r
 # where does this document knit?
 here::here()
-#> [1] "/home/kiernan/R/accountability_datacleaning/R_campfin"
+#> [1] "/Users/yanqixu/code/accountability_datacleaning"
 ```
 
 ## Data
@@ -109,8 +109,8 @@ the AEC website, the requirments for lobbyist registration are given.
 > contract with any department or agency of the Executive, Legislative
 > or Judicial Branch of state government.
 
-Per
-[Section 36-25-1(20)](http://ethics.alabama.gov/docs/WhatisLobbyingREVISEDDec2012.pdf):
+Per [Section
+36-25-1(20)](http://ethics.alabama.gov/docs/WhatisLobbyingREVISEDDec2012.pdf):
 
 > Lobby or Lobbying is: “The practice of promoting, opposing, or in any
 > manner influencing or attempting to influence the introduction,
@@ -128,9 +128,9 @@ Per
 While the AEC *does* provide two Excel files listing [registered
 lobbyists](https://ethics-form.alabama.gov/entity/FileUpload2015/RegisteredLobbyist/WebDataForExcel_2010.aspx)
 and [registered principal
-clients](https://ethics-form.alabama.gov/entity/FileUpload2015/RegisteredLobbyist/rptPrincipalsListing_Excel.aspx)
-for 2020, these two files do not show the relationship between each
-lobbyist and those entites for which they lobby.
+clients](https://ethics-form.alabama.gov/entity/FileUpload2015/RegisteredLobbyist/rptPrincipalsListing_Excel.aspx),
+these two files do not show the relationship between each lobbyist and
+those entities for which they lobby.
 
 Instead, that relationship is documents on annual filings for each
 individual lobbyist. These reports are given as PDF documents and can be
@@ -138,38 +138,27 @@ searched from the [AEC search
 page](http://ethics.alabama.gov/search/PublicEmployeeSearch.aspx).
 
 The PDF statements can be then be viewed one at a time. Each yearly PDF
-has a unique lobbyist ID (`lid`), which can be passed to an
+of a lobyist has a unique lobbyist ID (`lid`), which can be passed to an
 `httr::GET()` request to save the PDF.
-
-``` r
-GET(
-  url = "http://ethics.alabama.gov/search/ViewReports.aspx",
-  write_disk(path, overwrite = TRUE),
-  query = list(
-    lid = 21,
-    rpt = "rptLobbyistRegistration"
-  )
-)
-```
 
 ### Download
 
-Opening random PDF’s from 2008 to 2020, it seems as though their are
-valid lobbyist ID’s from 1 to 11,000 (with roughly 25% inbetween leading
+Opening random PDF’s from 2008 to 2023, it seems as though their are
+valid lobbyist ID’s from 1 to 14,900 (with roughly 25% inbetween leading
 to “empty” files without any information).
 
 This takes **hours**, but we can loop through each ID and write the file
 to disk.
 
 ``` r
-raw_dir <- dir_create(here("al", "lobby", "data", "raw"))
+raw_dir <- dir_create(here("state","al", "lobby", "data", "raw"))
 ```
 
 ``` r
-n <- 11100
+n <- 14900
 start_time <- Sys.time()
 if (length(dir_ls(raw_dir)) < 5000) {
-  for (i in seq(min, n)) {
+  for (i in seq(n)) {
     path <- glue("{raw_dir}/reg_{str_pad(i, nchar(n), pad = '0')}.pdf")
     loop_start <- Sys.time()
     # make get request
@@ -352,97 +341,99 @@ allr <- map_df(
 
 ``` r
 head(allr)
-#> # A tibble: 6 x 17
-#>   id    lob_year lob_date   lob_name lob_phone lob_addr1 lob_addr2 lob_city lob_public lob_subjects
-#>   <chr>    <int> <date>     <chr>    <chr>     <chr>     <chr>     <chr>    <chr>      <chr>       
-#> 1 00004     2008 NA         ADAMS, … 334-265-… Post Off… 465 Sout… Montgom… No         ZZZ Child A…
-#> 2 00004     2008 NA         ADAMS, … 334-265-… Post Off… 465 Sout… Montgom… No         ZZZ Child A…
-#> 3 00004     2008 NA         ADAMS, … 334-265-… Post Off… 465 Sout… Montgom… No         ZZZ Child A…
-#> 4 00004     2008 NA         ADAMS, … 334-265-… Post Off… 465 Sout… Montgom… No         ZZZ Child A…
-#> 5 00004     2008 NA         ADAMS, … 334-265-… Post Off… 465 Sout… Montgom… No         ZZZ Child A…
-#> 6 00005     2008 2008-12-09 ADAMS, … 334-265-… 400 S. U… Suite 23… Montgom… No         ZZZ Budgeta…
-#> # … with 7 more variables: pri_name <chr>, pri_phone <chr>, pri_addr <chr>, pri_start <date>,
-#> #   pri_end_date <date>, pri_sign <chr>, pri_behalf <chr>
+#> # A tibble: 6 × 17
+#>   id    lob_year lob_date   lob_n…¹ lob_p…² lob_a…³ lob_a…⁴ lob_c…⁵ lob_p…⁶ lob_s…⁷ pri_n…⁸ pri_p…⁹
+#>   <chr>    <dbl> <date>     <chr>   <chr>   <chr>   <chr>   <chr>   <chr>   <chr>   <chr>   <chr>  
+#> 1 00004     2008 NA         ADAMS,… 334-26… Post O… 465 So… Montgo… No      ZZZ Ch… Adams … 334-26…
+#> 2 00004     2008 NA         ADAMS,… 334-26… Post O… 465 So… Montgo… No      ZZZ Ch… Financ… 334-55…
+#> 3 00004     2008 NA         ADAMS,… 334-26… Post O… 465 So… Montgo… No      ZZZ Ch… Kimber… 334-26…
+#> 4 00004     2008 NA         ADAMS,… 334-26… Post O… 465 So… Montgo… No      ZZZ Ch… Poultr… 334-26…
+#> 5 00004     2008 NA         ADAMS,… 334-26… Post O… 465 So… Montgo… No      ZZZ Ch… Save t… 203-22…
+#> 6 00005     2008 2008-12-09 ADAMS,… 334-26… 400 S.… Suite … Montgo… No      ZZZ Bu… Access… 334-51…
+#> # … with 5 more variables: pri_addr <chr>, pri_start <date>, pri_end_date <date>, pri_sign <chr>,
+#> #   pri_behalf <chr>, and abbreviated variable names ¹​lob_name, ²​lob_phone, ³​lob_addr1,
+#> #   ⁴​lob_addr2, ⁵​lob_city, ⁶​lob_public, ⁷​lob_subjects, ⁸​pri_name, ⁹​pri_phone
 tail(allr)
-#> # A tibble: 6 x 17
-#>   id    lob_year lob_date   lob_name lob_phone lob_addr1 lob_addr2 lob_city lob_public lob_subjects
-#>   <chr>    <int> <date>     <chr>    <chr>     <chr>     <chr>     <chr>    <chr>      <chr>       
-#> 1 11077     2020 2020-01-01 HOSP, A… 334-263-… 7265 Hal… <NA>      Montgom… No         General Bus…
-#> 2 11079     2020 2020-01-06 SAUNDER… 334-265-… 555 Alab… <NA>      Montgom… No         Trucking In…
-#> 3 11081     2020 2020-01-02 HOBBIE,… 770-389-… 2155 Hig… <NA>      McDonou… No         Law Enforce…
-#> 4 11092     2020 2020-01-06 WALKER,… 334-264-… 445 Dext… Suite 40… Montgom… No         Payday Lend…
-#> 5 11098     2020 2020-01-02 VUCOVIC… 334-356-… 4266 Lom… <NA>      Montgom… No         Education   
-#> 6 11100     2020 2020-01-02 deGRAFF… 334-271-… 4156 Car… <NA>      Montgom… No         Nursing Hom…
-#> # … with 7 more variables: pri_name <chr>, pri_phone <chr>, pri_addr <chr>, pri_start <date>,
-#> #   pri_end_date <date>, pri_sign <chr>, pri_behalf <chr>
+#> # A tibble: 6 × 17
+#>   id    lob_year lob_date   lob_n…¹ lob_p…² lob_a…³ lob_a…⁴ lob_c…⁵ lob_p…⁶ lob_s…⁷ pri_n…⁸ pri_p…⁹
+#>   <chr>    <dbl> <date>     <chr>   <chr>   <chr>   <chr>   <chr>   <chr>   <chr>   <chr>   <chr>  
+#> 1 14859     2023 2023-05-12 Viaud,… 540-44… c/o Co… 7670 O… San Di… No      Consti… Conven… 540-44…
+#> 2 14860     2023 2023-05-18 Willia… 443-41… 200 Ma… 7th Fl… Washin… No      Tax Is… IAC/In… 202-49…
+#> 3 14861     2023 2023-05-18 Corin,… 202-71… 1201 P… Suite … Washin… No      Health… Americ… 202-71…
+#> 4 14862     2023 2023-05-22 Willia… 202-84… 1401 K… Suite … Washin… No      Data p… ACT     202-84…
+#> 5 14863     2023 2023-05-26 Rogers… 608-82… 361 In… <NA>    Madiso… No      Pharma… Navitu… 877-57…
+#> 6 14864     2023 2023-05-30 Whited… 512-63… 1101 W… 636     Austin… No      Alcoho… Distil… 202-68…
+#> # … with 5 more variables: pri_addr <chr>, pri_start <date>, pri_end_date <date>, pri_sign <chr>,
+#> #   pri_behalf <chr>, and abbreviated variable names ¹​lob_name, ²​lob_phone, ³​lob_addr1,
+#> #   ⁴​lob_addr2, ⁵​lob_city, ⁶​lob_public, ⁷​lob_subjects, ⁸​pri_name, ⁹​pri_phone
 glimpse(sample_frac(allr))
-#> Observations: 16,982
-#> Variables: 17
-#> $ id           <chr> "03747", "08080", "10144", "04608", "02643", "08174", "06735", "09070", "10…
-#> $ lob_year     <int> 2010, 2016, 2019, 2011, 2009, 2016, 2014, 2017, 2019, 2009, 2011, 2014, 201…
-#> $ lob_date     <date> 2010-01-11, 2016-01-21, 2019-01-29, 2011-01-28, 2009-01-30, 2016-01-28, 20…
-#> $ lob_name     <chr> "WEEKS, MIKE", "DEARBORN, GINA", "BRADLEY, STEPHEN E.", "ROWE, CHARLES C.",…
-#> $ lob_phone    <chr> "334-263-3407", "334-391-4518", "205-933-6676", "334-244-2187", "334-262-25…
-#> $ lob_addr1    <chr> "Post Office Box 56", "217 Country Club Park", "2101 Highland Avenue, Suite…
-#> $ lob_addr2    <chr> NA, "PMB 302", NA, NA, NA, "1819 North 5th Avenue", NA, NA, "Suite 300", NA…
-#> $ lob_city     <chr> "Montgomery, AL 36101-0056", "Birmingham, AL 35213", "Birmingham, AL 35205"…
-#> $ lob_public   <chr> "No", "No", "No", "No", "No", "No", "No", "No", "No", "No", "No", "No", "No…
-#> $ lob_subjects <chr> "Regulations, Worker's Compensation, Vending, Tort Reform, Trade Associatio…
-#> $ pri_name     <chr> "Alabama Pawnbrokers Association", "Brewer Attorneys and Counselors obo 3M"…
-#> $ pri_phone    <chr> "334-493-4447", "214-653-4000", "815-436-1310", "334-244-2187", "334-834-90…
-#> $ pri_addr     <chr> "1907 Highway 84 West , Opp, AL 36467", "1717 Main Street Ste. 5900, Dallas…
-#> $ pri_start    <date> 2010-02-01, 2016-01-29, 2019-03-04, 2011-02-02, 2009-01-30, 2016-02-01, 20…
-#> $ pri_end_date <date> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, 2012-03-28…
-#> $ pri_sign     <chr> "JOE M. MOULTON", "Travis J. Carter", "Darius Holmes", "John D Crawford", "…
-#> $ pri_behalf   <chr> "over 25", "corporation", "corporation", "6-10", NA, "public entity", "over…
+#> Rows: 22,991
+#> Columns: 17
+#> $ id           <chr> "08835", "08276", "11720", "05699", "08856", "02655", "13462", "05855", "112…
+#> $ lob_year     <dbl> 2017, 2016, 2021, 2013, 2017, 2009, 2022, 2013, 2020, 2022, 2010, 2020, 2017…
+#> $ lob_date     <date> 2017-02-17, 2016-01-04, 2021-01-14, 2013-01-15, 2017-01-05, 2009-01-30, 202…
+#> $ lob_name     <chr> "WEST, DEBRA K", "KING, CHRISTINE", "TEAGUE, JOHN A.", "PATRICK, G. FERRELL"…
+#> $ lob_phone    <chr> "515-778-7429", "256-310-4111", "334-265-8086", "334-315-1353", "334-265-002…
+#> $ lob_addr1    <chr> "101 Constitution Avenue, NW", "3322 West End Avenue", "Government Corporate…
+#> $ lob_addr2    <chr> "Suite 700", "Suite # 100", "441 High Street, Suite 103", NA, NA, NA, NA, NA…
+#> $ lob_city     <chr> "Washington, DC 20001", "Nashville, TN 37203", "Montgomery, AL 36104", "Mont…
+#> $ lob_public   <chr> "No", "No", "No", "No", "No", "No", "No", "No", "No", "No", "No", "No", "No"…
+#> $ lob_subjects <chr> "Insurance", "ZZZState Agencies , Boards, and Commissions, ZZZ State Budget,…
+#> $ pri_name     <chr> "American Council of Life Insurers", "Sarrell Regional Dental Center for Pub…
+#> $ pri_phone    <chr> "202-624-2385", "256-310-4111", "256-675-4612", "940-383-8100", "334-261-200…
+#> $ pri_addr     <chr> "101 Constitution Avenue NW Suite 700, Washington, DC 20001", "3322 West End…
+#> $ pri_start    <date> 2017-03-10, 2016-01-04, 2021-06-21, 2013-01-16, 2017-01-18, 2009-01-30, 202…
+#> $ pri_end_date <date> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
+#> $ pri_sign     <chr> "J. Bruce Ferguson", "Christine King", "Mike Bruce", "Zach Rozell", "Richard…
+#> $ pri_behalf   <chr> "over 25", "over 25", "corporation", "corporation", "over 25", NA, "6-10", "…
 ```
 
 ``` r
 col_stats(allr, count_na)
-#> # A tibble: 17 x 4
+#> # A tibble: 17 × 4
 #>    col          class      n         p
 #>    <chr>        <chr>  <int>     <dbl>
 #>  1 id           <chr>      0 0        
-#>  2 lob_year     <int>      0 0        
-#>  3 lob_date     <date>  1379 0.0812   
+#>  2 lob_year     <dbl>      0 0        
+#>  3 lob_date     <date>  1420 0.0618   
 #>  4 lob_name     <chr>      0 0        
-#>  5 lob_phone    <chr>     20 0.00118  
-#>  6 lob_addr1    <chr>      1 0.0000589
-#>  7 lob_addr2    <chr>  11873 0.699    
+#>  5 lob_phone    <chr>     20 0.000870 
+#>  6 lob_addr1    <chr>      1 0.0000435
+#>  7 lob_addr2    <chr>  15759 0.685    
 #>  8 lob_city     <chr>      0 0        
 #>  9 lob_public   <chr>      0 0        
 #> 10 lob_subjects <chr>      0 0        
 #> 11 pri_name     <chr>      0 0        
-#> 12 pri_phone    <chr>     92 0.00542  
+#> 12 pri_phone    <chr>    105 0.00457  
 #> 13 pri_addr     <chr>      0 0        
-#> 14 pri_start    <date>     2 0.000118 
-#> 15 pri_end_date <date> 15231 0.897    
-#> 16 pri_sign     <chr>     16 0.000942 
-#> 17 pri_behalf   <chr>   3156 0.186
+#> 14 pri_start    <date>     3 0.000130 
+#> 15 pri_end_date <date> 20891 0.909    
+#> 16 pri_sign     <chr>     19 0.000826 
+#> 17 pri_behalf   <chr>   3459 0.150
 ```
 
 ``` r
 col_stats(allr, n_distinct)
-#> # A tibble: 17 x 4
-#>    col          class      n        p
-#>    <chr>        <chr>  <int>    <dbl>
-#>  1 id           <chr>   7588 0.447   
-#>  2 lob_year     <int>     13 0.000766
-#>  3 lob_date     <date>  1033 0.0608  
-#>  4 lob_name     <chr>   2117 0.125   
-#>  5 lob_phone    <chr>   1640 0.0966  
-#>  6 lob_addr1    <chr>   1706 0.100   
-#>  7 lob_addr2    <chr>    494 0.0291  
-#>  8 lob_city     <chr>    627 0.0369  
-#>  9 lob_public   <chr>      2 0.000118
-#> 10 lob_subjects <chr>   3467 0.204   
-#> 11 pri_name     <chr>   2794 0.165   
-#> 12 pri_phone    <chr>   2981 0.176   
-#> 13 pri_addr     <chr>   3538 0.208   
-#> 14 pri_start    <date>  1795 0.106   
-#> 15 pri_end_date <date>   963 0.0567  
-#> 16 pri_sign     <chr>   5602 0.330   
-#> 17 pri_behalf   <chr>     20 0.00118
+#> # A tibble: 17 × 4
+#>    col          class      n         p
+#>    <chr>        <chr>  <int>     <dbl>
+#>  1 id           <chr>   9949 0.433    
+#>  2 lob_year     <dbl>     16 0.000696 
+#>  3 lob_date     <date>  1404 0.0611   
+#>  4 lob_name     <chr>   2630 0.114    
+#>  5 lob_phone    <chr>   1960 0.0853   
+#>  6 lob_addr1    <chr>   2098 0.0913   
+#>  7 lob_addr2    <chr>    574 0.0250   
+#>  8 lob_city     <chr>    758 0.0330   
+#>  9 lob_public   <chr>      2 0.0000870
+#> 10 lob_subjects <chr>   4650 0.202    
+#> 11 pri_name     <chr>   3434 0.149    
+#> 12 pri_phone    <chr>   3724 0.162    
+#> 13 pri_addr     <chr>   4510 0.196    
+#> 14 pri_start    <date>  2404 0.105    
+#> 15 pri_end_date <date>  1182 0.0514   
+#> 16 pri_sign     <chr>   7059 0.307    
+#> 17 pri_behalf   <chr>     40 0.00174
 ```
 
 ``` r
@@ -470,13 +461,13 @@ allr <- allr %>%
   separate(
     col = lob_city,
     into = c("lob_city", "lob_state"),
-    sep = ",\\s(?=[:upper:])",
+    sep = ",\\s(?=[A-Z])",
     extra = "merge"
   ) %>%
   mutate_at(
     .vars = vars(lob_state),
     .funs = str_remove,
-    pattern = "(.*,\\s)(?=[:upper:])"
+    pattern = "(.*,\\s)(?=[A-Z])"
   ) %>%
   separate(
     col = lob_state,
@@ -485,20 +476,21 @@ allr <- allr %>%
   )
 ```
 
-    #> # A tibble: 7,588 x 12
-    #>    lob_year lob_date lob_last lob_first lob_phone lob_addr1 lob_addr2 lob_city lob_state lob_zip
-    #>    <chr>    <chr>    <chr>    <chr>     <chr>     <chr>     <chr>     <chr>    <chr>     <chr>  
-    #>  1 2019     2019-01… MATHISON ADRIENNE  251-359-… 5811 JAC… <NA>      ATMORE   AL        36502  
-    #>  2 2012     2012-01… ALMEIDA  JEFFREY D 803-546-… 101 EAST… <NA>      LEXINGT… SC        29072  
-    #>  3 2012     2012-01… EDWARDS  SUZANNE   334-549-… 1116 GRE… <NA>      MONTGOM… AL        36111  
-    #>  4 2013     2013-02… WHISENA… JENNIFER… 205-980-… 2101 PRO… SUITE 150 BIRMING… AL        35242  
-    #>  5 2011     2011-01… MILLER   JEFF M.   334-264-… 3 SOUTH … <NA>      MONTGOM… AL        36104  
-    #>  6 2008     <NA>     WOOD     JR., JAM… 334-215-… POST OFF… <NA>      MT. MEI… AL        36057  
-    #>  7 2013     2013-01… FORRIST… VERNER K… 334-832-… POST OFF… SUITE 90… MONTGOM… AL        36101-…
-    #>  8 2020     2020-01… HUTCHENS C. WAYNE  205-988-… 1884 DAT… ROOM 116  BIRMING… AL        35244  
-    #>  9 2018     2018-01… FLETCHER JAMES B.  334-272-… 4264 LOM… <NA>      MONTGOM… AL        36106  
-    #> 10 2009     2009-01… BARGANI… JON D.    334-272-… 8112 HEN… <NA>      MONTGOM… AL        36117  
-    #> # … with 7,578 more rows, and 2 more variables: lob_public <chr>, lob_subjects <chr>
+    #> # A tibble: 9,949 × 12
+    #>    lob_year lob_d…¹ lob_l…² lob_f…³ lob_p…⁴ lob_a…⁵ lob_a…⁶ lob_c…⁷ lob_s…⁸ lob_zip lob_p…⁹ lob_s…˟
+    #>    <chr>    <chr>   <chr>   <chr>   <chr>   <chr>   <chr>   <chr>   <chr>   <chr>   <chr>   <chr>  
+    #>  1 2022     2022-0… O'BRIEN BARBAR… 850-32… 3626 B… <NA>    TALLAH… FL      32311   NO      FINANC…
+    #>  2 2019     2019-0… HOSP    EDWARD… 205-22… 450 RI… <NA>    BIRMIN… AL      35244   NO      EMPLOY…
+    #>  3 2010     2010-0… BARGAN… JON D.  334-27… 8112 H… <NA>    MONTGO… AL      36117   NO      ZZZ HE…
+    #>  4 2012     2012-0… HARPER  TAYLOR… 334-26… P.O. B… <NA>    GRAND … AL      36541   NO      ZZZ AL…
+    #>  5 2018     2018-0… DAVIS   WILLIA… 334-83… P.O. B… <NA>    MONTGO… AL      36101   NO      UTILIT…
+    #>  6 2012     2012-0… MARAMAN MELVIN… 334-30… 453 SO… <NA>    MONTGO… AL      36104   NO      UTILIT…
+    #>  7 2021     2021-0… KIDD    EMERY   334-83… P.O. B… <NA>    MONTGO… AL      36103-… NO      ZZZEDU…
+    #>  8 2008     <NA>    SHAW    SHIRLE… 334-24… STATE … 600 DE… MONTGO… AL      36130   NO      ZZZ BU…
+    #>  9 2019     2019-0… GARNER  BRITNE… 205-44… P O BO… <NA>    BIRMIN… AL      35260   NO      OPTOME…
+    #> 10 2010     2010-0… GEORGE  RANDAL… 334-24… P.O. B… <NA>    MONTGO… AL      36101   NO      ZZZTOU…
+    #> # … with 9,939 more rows, and abbreviated variable names ¹​lob_date, ²​lob_last, ³​lob_first,
+    #> #   ⁴​lob_phone, ⁵​lob_addr1, ⁶​lob_addr2, ⁷​lob_city, ⁸​lob_state, ⁹​lob_public, ˟​lob_subjects
 
 And we can do the same for principal clients.
 
@@ -531,24 +523,24 @@ allr <- allr %>%
   mutate_if(
     .predicate = is_character,
     .funs = str_trim
-  ) %>%
-  na_if("")
+  )
 ```
 
-    #> # A tibble: 14,290 x 10
-    #>    pri_name pri_phone pri_addr pri_city pri_state pri_zip pri_start pri_end_date pri_sign
-    #>    <chr>    <chr>     <chr>    <chr>    <chr>     <chr>   <chr>     <chr>        <chr>   
-    #>  1 COSBY C… 334-412-… P. O. B… SELMA    AL        36702   2018-01-… <NA>         WILLIAM…
-    #>  2 SCHOOL … 334-262-… 400 S. … MONTGOM… AL        36104   2008-01-… <NA>         SUSAN L…
-    #>  3 COMMUNI… 615-651-… 424 CHU… NASHVIL… TN        37219   2015-01-… <NA>         DAVID S…
-    #>  4 GLOBAL … 703-955-… 12021 S… RESTON   VA        20190   2014-12-… <NA>         DASVID …
-    #>  5 ALABAMA… 256-538-… 180 JAK… STEELE   AL        35987   2013-02-… <NA>         VALLEY …
-    #>  6 BLUE CR… 205-220-… 450 RIV… BIRMING… AL        35244   2012-02-… <NA>         J. ROBI…
-    #>  7 SYNCORA… 212-478-… 1221 AV… NEW YORK NY        10020   2008-08-… <NA>         JOHN WI…
-    #>  8 ALABAMA… 334-260-… P.O. BO… MONTGOM… AL        36124   2018-01-… <NA>         LARRY V…
-    #>  9 BAYER H… 914-333-… C/O SAN… TARRYTO… NY        10591   2010-01-… <NA>         SANDRA …
-    #> 10 CHILDRE… 334-242-… 401 ADA… MONTGOM… AL        36104   2008-01-… <NA>         CHRISTY…
-    #> # … with 14,280 more rows, and 1 more variable: pri_behalf <chr>
+    #> # A tibble: 19,237 × 10
+    #>    pri_name                 pri_p…¹ pri_a…² pri_c…³ pri_s…⁴ pri_zip pri_s…⁵ pri_e…⁶ pri_s…⁷ pri_b…⁸
+    #>    <chr>                    <chr>   <chr>   <chr>   <chr>   <chr>   <chr>   <chr>   <chr>   <chr>  
+    #>  1 PSYCHIATRIC SOLUTIONS, … 615-31… 6640 C… FRANKL… TN      37067   2008-0… <NA>    CRAIG … <NA>   
+    #>  2 COOSA-ALABAMA RIVER IMP… 334-55… 770 WA… MONTGO… AL      36104   2023-0… <NA>    BLAKE … CORPOR…
+    #>  3 GREENDOT                 703-68… C/O MU… ALEXAN… VA      22314   2016-0… <NA>    JEFFER… CORPOR…
+    #>  4 ALABAMA DENTAL ASSOCIAT… 334-26… 836 WA… MONTGO… AL      36104   2010-0… <NA>    ZACK S… CORPOR…
+    #>  5 RELYF                    205-64… POST O… ORANGE… AL      36561   2021-0… <NA>    CHEY G… 6-10   
+    #>  6 LORD ABBETT MUNICIPAL I… 201-82… 90 HUD… JERSEY… NJ      07302   2012-0… <NA>    JOHN K… CORPOR…
+    #>  7 ALABAMA DISTRICT ATTORN… 334-24… 515 SO… MONTGO… AL      36104   2015-0… <NA>    RANDAL… OVER 25
+    #>  8 GREAT-WEST FINANCIAL AN… 303-73… 8525 E… GREENW… CO      80111   2014-1… <NA>    BRENT … CORPOR…
+    #>  9 THE LOUIS BERGER GROUP   973-40… 412 MT… MORRIS… NJ      07960   2013-0… <NA>    RAED E… CORPOR…
+    #> 10 ALABAMA SPAY/NEUTER CLI… 205-31… 2721 C… IRONDA… AL      35210   2011-0… <NA>    MARK H… <NA>   
+    #> # … with 19,227 more rows, and abbreviated variable names ¹​pri_phone, ²​pri_addr, ³​pri_city,
+    #> #   ⁴​pri_state, ⁵​pri_start, ⁶​pri_end_date, ⁷​pri_sign, ⁸​pri_behalf
 
 ## Normalize
 
@@ -591,20 +583,20 @@ allr %>%
   select(contains("lob_addr")) %>% 
   distinct() %>% 
   sample_frac()
-#> # A tibble: 1,882 x 3
-#>    lob_addr1                         lob_addr2 lob_addr_norm                     
-#>    <chr>                             <chr>     <chr>                             
-#>  1 1079 NORMANDY TRACE ROAD          <NA>      1079 NORMANDY TRACE ROAD          
-#>  2 531 HERRON STREET                 <NA>      531 HERRON STREET                 
-#>  3 2100 3RD AVENUE NORTH, SUITE 1100 <NA>      2100 3RD AVENUE NORTH SUITE 1100  
-#>  4 20700 CIVIC CENTER DRIVE          SUITE 200 20700 CIVIC CENTER DRIVE SUITE 200
-#>  5 P.O. BOX 76                       <NA>      PO BOX 76                         
-#>  6 173 MEDICAL CENTER DRIVE          <NA>      173 MEDICAL CENTER DRIVE          
-#>  7 202 BUILDING A, FIELDCREST        <NA>      202 BUILDING A FIELDCREST         
-#>  8 1166 GINGER DR                    <NA>      1166 GINGER DRIVE                 
-#>  9 770 WASHINGTON AVE.               SUITE 180 770 WASHINGTON AVENUE SUITE 180   
-#> 10 600 CLAY STREET                   <NA>      600 CLAY STREET                   
-#> # … with 1,872 more rows
+#> # A tibble: 2,305 × 3
+#>    lob_addr1                        lob_addr2               lob_addr_norm                          
+#>    <chr>                            <chr>                   <chr>                                  
+#>  1 P.O. BOX 940                     <NA>                    PO BOX 940                             
+#>  2 ONE RAVINIA DRIVE                SUITE 1000              ONE RAVINIA DRIVE SUITE 1000           
+#>  3 41 BROOKLAND CT                  <NA>                    41 BROOKLAND CT                        
+#>  4 215 S. MONROE ST.                SUITE 303               215 S MONROE ST SUITE 303              
+#>  5 361 8TH AVENUE EAST              <NA>                    361 8TH AVENUE E                       
+#>  6 ALABAMA DEPT. OF HUMAN RESOURCES POST OFFFICE BOX 304000 ALABAMA DEPT OF HUMAN RESOURCES POST O…
+#>  7 4252 CARMICHAEL ROAD             <NA>                    4252 CARMICHAEL RD                     
+#>  8 3800 LLYDE LANE                  <NA>                    3800 LLYDE LN                          
+#>  9 770 WASHINGTON AVE. STE. 530     <NA>                    770 WASHINGTON AVE STE 530             
+#> 10 202 GOVERNMENT ST. SUITE 220     <NA>                    202 GOVERNMENT ST SUITE 220            
+#> # … with 2,295 more rows
 ```
 
 ### ZIP
@@ -626,13 +618,13 @@ progress_table(
   allr$pri_zip_norm,
   compare = valid_zip
 )
-#> # A tibble: 4 x 6
-#>   stage        prop_in n_distinct  prop_na n_out n_diff
-#>   <chr>          <dbl>      <dbl>    <dbl> <dbl>  <dbl>
-#> 1 lob_zip        0.893        571 0         1824    129
-#> 2 lob_zip_norm   1.00         461 0            6      3
-#> 3 pri_zip        0.896       1160 0.000589  1773    187
-#> 4 pri_zip_norm   0.999       1022 0.000648    22      8
+#> # A tibble: 4 × 6
+#>   stage             prop_in n_distinct  prop_na n_out n_diff
+#>   <chr>               <dbl>      <dbl>    <dbl> <dbl>  <dbl>
+#> 1 allr$lob_zip        0.907        681 0         2141    141
+#> 2 allr$lob_zip_norm   1.00         560 0           10      5
+#> 3 allr$pri_zip        0.904       1354 0.000522  2215    210
+#> 4 allr$pri_zip_norm   0.998       1199 0.000522    36     15
 ```
 
 ### State
@@ -654,13 +646,13 @@ progress_table(
   allr$pri_state_norm,
   compare = valid_state
 )
-#> # A tibble: 4 x 6
-#>   stage          prop_in n_distinct prop_na n_out n_diff
-#>   <chr>            <dbl>      <dbl>   <dbl> <dbl>  <dbl>
-#> 1 lob_state        1             33       0     0      0
-#> 2 lob_state_norm   1             33       0     0      0
-#> 3 pri_state        0.999         52       0    13     11
-#> 4 pri_state_norm   1.00          46       0     5      5
+#> # A tibble: 4 × 6
+#>   stage               prop_in n_distinct   prop_na n_out n_diff
+#>   <chr>                 <dbl>      <dbl>     <dbl> <dbl>  <dbl>
+#> 1 allr$lob_state        1             34 0             0      0
+#> 2 allr$lob_state_norm   1             34 0             0      0
+#> 3 allr$pri_state        0.999         56 0            17     13
+#> 4 allr$pri_state_norm   1.00          50 0.0000435     8      7
 ```
 
 ### City
@@ -739,21 +731,21 @@ progress_table(
   allr$pri_city_swap,
   compare = valid_city
 )
-#> # A tibble: 6 x 6
-#>   stage         prop_in n_distinct   prop_na n_out n_diff
-#>   <chr>           <dbl>      <dbl>     <dbl> <dbl>  <dbl>
-#> 1 lob_city        0.984        269 0           264     24
-#> 2 lob_city_norm   0.985        266 0           255     19
-#> 3 lob_city_swap   0.987        261 0.000530    217     12
-#> 4 pri_city        0.971        598 0.0000589   498     84
-#> 5 pri_city_norm   0.979        584 0.0000589   355     60
-#> 6 pri_city_swap   0.983        559 0.00253     284     37
+#> # A tibble: 6 × 6
+#>   stage              prop_in n_distinct   prop_na n_out n_diff
+#>   <chr>                <dbl>      <dbl>     <dbl> <dbl>  <dbl>
+#> 1 allr$lob_city        0.982        334 0           413     34
+#> 2 allr$lob_city_norm   0.982        331 0           405     30
+#> 3 allr$lob_city_swap   0.984        321 0.000609    357     18
+#> 4 allr$pri_city        0.965        707 0.0000870   796    114
+#> 5 allr$pri_city_norm   0.970        685 0.000130    690     87
+#> 6 allr$pri_city_swap   0.980        647 0.00278     459     47
 ```
 
 ## Export
 
 ``` r
-proc_dir <- dir_create(here("al", "lobby", "data", "processed"))
+proc_dir <- dir_create(here("state","al", "lobby", "data", "processed"))
 ```
 
 ``` r
@@ -767,7 +759,7 @@ allr %>%
     pri_city_norm = pri_city_swap,
   ) %>% 
   write_csv(
-    path = glue("{proc_dir}/al_lobbyists.csv"),
+    path = glue("{proc_dir}/al_lob_reg.csv"),
     na = ""
   )
 ```

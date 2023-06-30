@@ -98,7 +98,7 @@ subdirectory of the ELECT website.
 
 On this page, there are additional subdirectories for each year from
 1999 until 2012. There are additional subdirectories for each month from
-January 2012 to February 2022.
+January 2012 to February 2023.
 
 Inside each subdirectory of `/SBE_CSV/CF/`, there are separate CSV files
 for each form submitted by committees. Expenditure data is reported by

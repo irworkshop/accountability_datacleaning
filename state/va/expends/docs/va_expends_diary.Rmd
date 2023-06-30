@@ -120,9 +120,9 @@ reporting home page, we can navigate to "Download Campaign Finance Data" which t
 [`SBE_CSV/CF/`][03] subdirectory of the ELECT website.
 
 On this page, there are additional subdirectories for each year from 1999 until 2012. There are
-additional subdirectories for each month from January 2012 to June 2019.
+additional subdirectories for each month from January 2012 to Feb. 2023.
 
-The new update includes datasets from July 2019 to Nov. 2022.
+The new update includes datasets from July 2019 to Jan. 2023.
 
 Inside each subdirectory of `/SBE_CSV/CF/`, there are separate CSV files for each form submitted
 by committees. Expenditure data is reported by candidates and committees using "Schedule D" forms,

@@ -19,7 +19,7 @@ cli_h1("Download Wisconsin Contributions")
 wi_dir <- commandArgs(trailingOnly = TRUE)
 if (length(wi_dir) != 1 || !is_dir(wi_dir)) {
   # create new directory if none supplied
-  wi_dir <- dir_create(here("wi", "contribs", "data", "scrape"))
+  wi_dir <- dir_create(here("state","wi", "contribs", "data", "scrape"))
 }
 
 # functions ---------------------------------------------------------------
@@ -30,14 +30,15 @@ wi_css <- function(browser, css) {
 }
 
 # this function helps wait for browser to download
-file_wait <- function(file, wait = 1) {
+file_wait <- function(file, wait = 2) {
   cli::cli_process_start("Downloading {.path {basename(file)}}")
   while(!fs::file_exists(file)) Sys.sleep(time = wait)
+  #ReceiptsList.OqUbzbLs.csv.part temp file
   cli::cli_process_done()
 }
 
 # this function helps wait for browser to download
-page_wait <- function(pattern, wait = 1) {
+page_wait <- function(pattern, wait = 5) {
   cli::cli_process_start("Loading")
   while(grepl(pattern, unlist(chrome$getCurrentUrl()))) Sys.sleep(time = wait)
   cli::cli_process_done()
@@ -51,13 +52,29 @@ out_mdy <- function(date) {
 
 # open a remove firebox browser
 cli_alert_info("Opening remote chrome browser")
+# remote_driver <- rsDriver(
+#   port = 4444L,
+#   browser = "chrome",
+#   verbose = FALSE,
+#   extraCapabilities = list(
+#     profile.default_content_settings.popups = 0L,
+#     download.prompt_for_download = FALSE
+#   )
+# )
+
 remote_driver <- rsDriver(
-  port = 4444L,
-  browser = "chrome",
+  port = 4321L,
+  browser = "firefox",
+  version = "latest",
+  chromever = NULL,
+  geckover = "latest",
+  iedrver = NULL,
   verbose = FALSE,
-  extraCapabilities = list(
-    profile.default_content_settings.popups = 0L,
-    download.prompt_for_download = FALSE
+  extraCapabilities = makeFirefoxProfile(
+    list(
+      profile.default_content_settings.popups = 0L,
+      download.prompt_for_download = FALSE
+    )
   )
 )
 
@@ -106,10 +123,12 @@ ceiling(n_all / 65000) == length(n_range)
 
 wi_csv <- path(wi_dir, sprintf("wi_contribs_%s.csv", n_range))
 
+
 # this is the default chrome download file
 dl_csv <- path_home("Downloads", "ReceiptsList.csv")
 
 for (i in seq_along(n_range)) {
+#for (i in 51:50) {
   cli_h3("Get rows {n_range[i]}")
   if (file_exists(wi_csv[i])) {
     cli_alert_success("File {.path {basename(wi_csv[i])}} already saved")
@@ -121,10 +140,14 @@ for (i in seq_along(n_range)) {
   wi_css(chrome, "btnTextextra")$clickElement()
   Sys.sleep(10)
   file_wait(dl_csv)
+  #wait for it to complete download, because otherwise sometimes a 0-byte temp file gets moved if internet speed is not that fast, finetune wait time as needed
+  Sys.sleep(30)
   file_move(dl_csv, wi_csv[i])
-  cli_alert_success("File moved to {.path {basename(wi_csv[i])}}")
+  cli_alert_success("File renamed to {.path {basename(wi_csv[i])}}")
   Sys.sleep(10)
 }
+
+
 
 # close browser -----------------------------------------------------------
 

@@ -32,7 +32,7 @@ set.seed(5)
 ```
 
 ```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
-fs::dir_create(here::here("df", "data", "docs"))
+fs::dir_create(here::here("state", "ky", "lobby", "docs"))
 ```
 
 ## Project
@@ -75,7 +75,7 @@ pacman::p_load_gh("irworkshop/campfin")
 pacman::p_load(
   tidyverse, # data manipulation
   lubridate, # datetime strings
-  textreadr, # read text files
+  striprtf, # read text files
   magrittr, # pipe opperators
   janitor, # dataframe clean
   refinr, # cluster and merge
@@ -97,7 +97,7 @@ project also uses the dynamic `here::here()` tool for file paths relative to _yo
 
 ```{r where_here}
 # where does this document knit?
-here::here()
+raw_dir <- fs::dir_create(here::here("state", "ky", "lobby", "data", "raw"))
 ```
 
 # Registration
@@ -511,7 +511,7 @@ kylr <- kylr %>%
 ```
 
 ```{r clean_write}
-clean_dir <- dir_create(here("ky", "lobbying", "data", "clean"))
+clean_dir <- dir_create(here("state","ky", "lobby", "data", "clean"))
 clean_path <- path(clean_dir, "ky_lobby_reg.csv")
 write_csv(kylr, path = clean_path, na = "")
 ```

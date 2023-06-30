@@ -1,6 +1,6 @@
 ---
 title: "Wisconsin Contributions"
-author: "Kiernan Nicholls"
+author: "Kiernan Nicholls & Yanqi Xu"
 date: "`r Sys.time()`"
 output:
   github_document: 
@@ -34,7 +34,7 @@ if (!interactive()) {
 ```
 
 ```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
-fs::dir_create(here::here("wi", "contribs", "docs"))
+fs::dir_create(here::here("state","wi", "contribs", "docs"))
 ```
 
 ## Project
@@ -124,7 +124,7 @@ required by law to disclose.
 Using the CIFS [contribution search portal][search], we can run a search for all
 contributions from "All Filing Periods" from the dates 2000-01-01 to 
 `r today()`. Those search results need to be manually exported as the
-`ReceiptsList.csv` file.
+`ReceiptsList.csv` file. A total of 8,385,580 entries were generated based on the query accessed on June 4, 2023.
 
 > To view contributions to a committee, go to the CFIS Home Page, on the left
 hand side, and click View Receipts. A pop up letting you know that this
@@ -184,7 +184,7 @@ sort(table(diff(row_range)))
 The files can be read into a single data frame with `read_delim()`.
 
 ```{r raw_read}
-wic <- read_delim( # 6,936,189
+wic <- read_delim( # 8,385,580
   file = raw_csv,
   delim = ",",
   escape_double = FALSE,
@@ -204,7 +204,7 @@ We can check the number of rows against the total reported by our empty search.
 We can also count the number of distinct values from a discrete column.
 
 ```{r raw_check}
-nrow(wic) == 6936189 # check col count
+nrow(wic) == 8385580 # check col count
 count(wic, ContributorType) # check distinct col
 prop_na(wic[[length(wic)]]) # empty column
 ```
@@ -289,6 +289,8 @@ wic %>%
   select(all_of(key_vars))
 ```
 
+
+
 ### Duplicates
 
 We can also flag any entirely duplicate rows. To keep memory usage low with such
@@ -334,6 +336,7 @@ wic %>%
         contribution_amount, receiving_committee_name, 
         sort = TRUE)
 ```
+
 
 ### Categorical
 
@@ -406,9 +409,9 @@ wic %>%
   geom_col(aes(fill = even)) + 
   scale_fill_brewer(palette = "Dark2") +
   scale_y_continuous(labels = comma) +
-  scale_x_continuous(breaks = seq(2000, 2020, by = 2)) +
+  scale_x_continuous(breaks = seq(2000, 2024, by = 2)) +
   theme(legend.position = "bottom") +
-  coord_cartesian(xlim = c(2008, 2021)) +
+  coord_cartesian(xlim = c(2008, 2023)) +
   labs(
     title = "Wisconsin Contributions by Year",
     caption = "Source: WI CIFS",
@@ -705,8 +708,8 @@ glimpse(sample_n(wic, 50))
 Now the file can be saved on disk for upload to the Accountability server.
 
 ```{r clean-dir}
-clean_dir <- dir_create(here("wi", "contribs", "data", "clean"))
-clean_path <- path(clean_dir, "wi_contribs_2008-20211018.csv")
+clean_dir <- dir_create(here("state","wi", "contribs", "data", "clean"))
+clean_path <- path(clean_dir, "wi_contribs_2008-20230604.csv")
 write_csv(wic, clean_path, na = "")
 (clean_size <- file_size(clean_path))
 ```
