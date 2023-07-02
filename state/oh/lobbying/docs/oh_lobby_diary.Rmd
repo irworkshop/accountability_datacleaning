@@ -1,6 +1,6 @@
 ---
 title: "Ohio Lobbyists"
-author: "Kiernan Nicholls"
+author: "Kiernan Nicholls & Yanqi Xu"
 date: "`r Sys.time()`"
 output:
   github_document: 
@@ -32,7 +32,7 @@ set.seed(5)
 ```
 
 ```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
-fs::dir_create(here::here("oh", "lobbying", "docs"))
+fs::dir_create(here::here("staet","oh", "lobbying", "docs"))
 ```
 
 ## Project
@@ -57,7 +57,7 @@ This document describes the process used to complete the following objectives:
 1. Check ranges
 1. Is there anything blank or missing?
 1. Check for consistency issues
-1. Create a five-digit ZIP Code called `ZIP5`
+1. Create a five-digit ZIP Code called `zip_clean`
 1. Create a `YEAR` field from the transaction date
 1. Make sure there is data on both parties to a transaction
 
@@ -121,22 +121,72 @@ include both private and public sector employees.
 
 ## Import
 
-### GET
+### Download
 
-The file can be downloaded directly from the [OLIG-JLEC website][raw] using an `httr::GET()`
-request.
+The list of active lobbyists by year can be downloaded directly from the [OLIG-JLEC website][raw]. In this update, we included everything from 2009 to 2023.Next update can start with 2024. 
 
-[raw]: https://www2.jlec-olig.state.oh.us/olac/Reports/AgentEmployerList.aspx
+[raw]: https://www2.jlec-olig.state.oh.us/olac/Reports/AgentActivityByYear.aspx
 
 ```{r}
-raw_dir <- here("oh", "lobbying", "data", "raw")
+raw_dir <- here("state","oh", "lobbying", "data", "raw")
 dir_create(raw_dir)
 ```
+Employer address is also available but can only be queried on a certain date. Here we set the date to June 30 of each year. 
 
-```{r download_raw}
-raw_url <- "https://www2.jlec-olig.state.oh.us/olac/Reports/agentList.aspx"
-ohlr <- content(GET(raw_url)) %>% clean_names("snake")
+```{r download_raw, eval=FALSE}
+raw_urls <- glue("https://www2.jlec-olig.state.oh.us/olac/Reports/Excel_ActiveAgentDetails.aspx?y={2009:2023}")
+raw_paths <- glue(raw_dir,"/ActiveAgentDetails{2020:2023}.csv")
+for (f in raw_paths) {
+if (!this_file_new(f)) {
+  download.file(raw_urls, raw_paths)
+}
+}
+
+emp_urls <- glue("https://www2.jlec-olig.state.oh.us/olac/Reports/Excel_ActiveEmployerSummary.aspx?d=6/30/{2009:2023}")
+emp_paths <- glue(raw_dir,"/ActiveEmployerSummary{2009:2023}.csv")
+for (f in emp_paths) {
+if (!this_file_new(f)) {
+  download.file(emp_urls, emp_paths)
+}
+}
 ```
+
+```{r read}
+ohlr <- map_dfr(dir_ls(raw_dir,regexp = ".+Agent.+"),read_csv, .id = "source") %>% clean_names()
+
+ohlr <- ohlr %>% select(-x11) %>% mutate(year = str_extract(source, "\\d{4}"))
+
+ohlr <-  ohlr %>% select(-source)
+```
+
+```{r read_emp}
+emp <- map_dfr(dir_ls(raw_dir,regexp = ".+Employer.+"),read_csv) %>% clean_names()
+
+emp <- emp %>% unite(
+  address_1,
+  address_2,
+  col = address_combined,
+  sep = " ",
+  remove = FALSE,
+  na.rm = TRUE
+  ) %>%
+  mutate(address_clean = normal_address(
+  address = address_combined,
+  abbs = usps_city,
+  na_rep = TRUE
+  )) %>% 
+  select(-address_combined)
+
+emp_clean <- emp %>% 
+  select(employer_name, address_clean, city,state,zipcode,phone) %>% unique() 
+
+names(emp_clean)[2:6] <- str_c("emp_",names(emp_clean)[2:6])
+```
+
+```{r join}
+ohlr <- ohlr %>% left_join(emp_clean)
+```
+
 
 ## Explore
 
@@ -148,14 +198,14 @@ glimpse(sample_frac(ohlr))
 
 ### Missing
 
-There are no records missing important information.
+There are more than 1,000 entries missing an employer address, but that's likely because when we downloaded the employer list mid-year, and those employers were not active then. Given the number of records, it's still a relatively small number of employers we are missing. 
 
 ```{r glimpse_na}
-glimpse_fun(ohlr, count_na)
+col_stats(ohlr, count_na)
 ```
 
 ```{r flag_na}
-ohlr <- flag_na(ohlr, last_name, employer_name, zipcode)
+ohlr <- flag_na(ohlr, agent_l_name, employer_name, zipcode)
 if (sum(ohlr$na_flag) == 0) {
   ohlr <- select(ohlr, -na_flag)
 }
@@ -187,7 +237,7 @@ ohlr <- ohlr %>%
   ) %>% 
   # normalize combined addr
   mutate(
-    address_norm = normal_address(
+    address_clean = normal_address(
       address = address_full,
       abbs = usps_street,
       na_rep = TRUE
@@ -207,18 +257,16 @@ ohlr %>%
 
 ```{r normal_zip}
 ohlr <- ohlr %>% 
-  mutate(
-    zip_norm = normal_zip(
-      zip = zipcode,
-      na_rep = TRUE
-    )
-  )
+mutate_at(.vars = vars(ends_with('zipcode')), .funs = list(norm = ~ normal_zip(.,
+      na_rep = TRUE)))
 ```
 
 ```{r zip_progress, collapse=TRUE}
 progress_table(
   ohlr$zipcode,
-  ohlr$zip_norm,
+  ohlr$zipnorm,
+  ohlr$emp_zipcode,
+  ohlr$emp_zipcode_norm,
   compare = valid_zip
 )
 ```
@@ -227,37 +275,37 @@ progress_table(
 
 ```{r state_normal}
 ohlr <- ohlr %>% 
-  mutate(
-    state_norm = normal_state(
-      state = state,
-      abbreviate = TRUE,
-      na_rep = TRUE,
-      valid = NULL
-    )
-  )
+  mutate_at(
+  .vars = vars(ends_with("state")),
+  .funs = list(norm = normal_state),
+  abbreviate = TRUE,
+  na_rep = TRUE,
+  valid = valid_state
+)
 ```
 
 ```{r state_progress, collapse=TRUE}
 progress_table(
   ohlr$state,
   ohlr$state_norm,
+  ohlr$emp_state,
+  ohlr$emp_state_norm,
   compare = valid_state
 )
 ```
 
-### Citye
+### City
 
 ```{r city_normal}
 ohlr <- ohlr %>% 
-  mutate(
-    city_norm = normal_city(
-      city = city, 
+  mutate_at(
+    .vars = vars(ends_with("city")),
+    .funs = list(norm = normal_city),
       abbs = usps_city,
       states = c("OH", "DC", "OHIO"),
       na = invalid_city,
       na_rep = TRUE
     )
-  )
 ```
 
 ```{r city_swap}
@@ -267,7 +315,7 @@ ohlr <- ohlr %>%
     y = zipcodes,
     by = c(
       "state_norm" = "state",
-      "zip_norm" = "zip"
+      "zipcode_norm" = "zip"
     )
   ) %>% 
   rename(city_match = city) %>% 
@@ -279,28 +327,197 @@ ohlr <- ohlr %>%
       true = city_match,
       false = city_norm
     )
+  ) %>% 
+    select(
+    -city_match,
+    -match_dist,
+    -match_abb
+  )
+
+ohlr <- ohlr %>%
+  rename(emp_city_raw = emp_city) %>% 
+  left_join(
+    y = zipcodes,
+    by = c(
+      "emp_state_norm" = "state",
+      "emp_zipcode_norm" = "zip"
+    )
+  ) %>% 
+  rename(emp_city_match = city) %>% 
+  mutate(
+    match_dist = stringdist(emp_city_norm, emp_city_match),
+    match_abb = is_abbrev(emp_city_norm, emp_city_match),
+    emp_city_swap = if_else(
+      condition = match_abb | match_dist == 1,
+      true = emp_city_match,
+      false = emp_city_norm
+    )
+  ) %>% 
+  select(
+    -emp_city_match,
+    -match_dist,
+    -match_abb
   )
 ```
 
-```{r city_progress, collapse=TRUE}
-progress_table(
+```{r city_count_out}
+ohlr %>% 
+  filter(city_swap %out% valid_city) %>% 
+  count(state_norm, city_norm, city_swap, sort = TRUE)
+```
+
+#### Refine
+
+The [OpenRefine] algorithms can be used to group similar strings and replace the
+less common versions with their most common counterpart. This can greatly 
+reduce inconsistency, but with low confidence; we will only keep any refined
+strings that have a valid city/state/zip combination.
+
+[or]: https://openrefine.org/
+
+```{r city_refine}
+good_refine <- ohlr %>% 
+  mutate(
+    city_refine = city_swap %>% 
+      key_collision_merge() %>% 
+      n_gram_merge(numgram = 1)
+  ) %>% 
+  filter(city_refine != city_swap) %>% 
+  inner_join(
+    y = zipcodes,
+    by = c(
+      "city_refine" = "city",
+      "state_norm" = "state",
+      "zipcode_norm" = "zip"
+    )
+  )
+```
+
+```{r city_count, echo=FALSE}
+good_refine %>%
+  count(
+    state_norm, 
+    zipcode_norm, 
+    city_swap, 
+    city_refine,
+    sort = TRUE
+  )
+```
+
+Then we can join the refined values back to the database.
+
+```{r city_join}
+ohlr <- ohlr %>% 
+  left_join(good_refine) %>% 
+  mutate(city_refine = coalesce(city_refine, city_swap))
+```
+We can repeat the process for employer cities. 
+```{r emp_city_refine}
+good_refine <- ohlr %>% 
+  mutate(
+    emp_city_refine = emp_city_swap %>% 
+      key_collision_merge() %>% 
+      n_gram_merge(numgram = 1)
+  ) %>% 
+  filter(emp_city_refine != emp_city_swap) %>% 
+  inner_join(
+    y = zipcodes,
+    by = c(
+      "emp_city_refine" = "city",
+      "emp_state_norm" = "state",
+      "emp_zipcode_norm" = "zip"
+    )
+  )
+```
+
+```{r emp_city_join}
+ohlr <- ohlr %>% 
+  left_join(good_refine) %>% 
+  mutate(emp_city_refine = coalesce(emp_city_refine, emp_city_swap))
+```
+
+#### Progress
+
+```{r city_progress, echo=FALSE}
+many_city <- c(valid_city, extra_city)
+progress <- progress_table(
   str_to_upper(ohlr$city_raw),
   ohlr$city_norm,
   ohlr$city_swap,
-  compare = valid_city
-)
+  ohlr$city_refine,
+  str_to_upper(ohlr$emp_city_raw),
+ohlr$emp_city_norm,
+ohlr$emp_city_swap,
+ohlr$emp_city_refine,
+  compare = many_city
+) %>% mutate(stage = as_factor(stage))
+kable(progress, digits = 3)
 ```
 
-```{r city_count}
+You can see how the percentage of valid values increased with each stage.
+
+```{r bar_progress, echo=FALSE}
+raw_in <- percent(prop_in(ohlr$city_raw, valid_city))
+progress %>% 
+  ggplot(aes(x = stage, y = prop_in)) +
+  geom_hline(yintercept = 0.99) +
+  geom_col(fill = dark2["purple"]) +
+  coord_cartesian(ylim = c(0.75, 1)) +
+  scale_y_continuous(labels = percent) +
+  labs(
+    title = "Montana City Normalization Progress",
+    subtitle = glue("Raw at {raw_in} before conversion to uppercase"),
+    x = "Stage",
+    y = "Percent Valid"
+  )
+```
+
+More importantly, the number of distinct values decreased each stage. We were
+able to confidently change many distinct invalid values to their valid
+equivalent.
+
+```{r bar_distinct, echo=FALSE}
+progress %>% 
+  select(
+    stage, 
+    all = n_distinct,
+    bad = n_diff
+  ) %>% 
+  mutate(good = all - bad) %>% 
+  pivot_longer(c("good", "bad")) %>% 
+  mutate(name = name == "good") %>% 
+  ggplot(aes(x = stage, y = value)) +
+  geom_col(aes(fill = name)) +
+  scale_fill_brewer(palette = "Dark2", direction = -1) +
+  scale_y_continuous(labels = comma) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "Montana City Normalization Progress",
+    subtitle = "Distinct values, valid and invalid",
+    x = "Stage",
+    y = "Distinct Values",
+    fill = "Valid"
+  )
+```
+
+### Phone
+
+We can use `campfin::normal_phone()` to convert the numeric phone numbers into an unambiguous
+character format. This prevents the column from being read as a numeric variable.
+
+```{r phone_norm}
+ohlr <- ohlr %>% 
+  mutate(
+    phone_clean = normal_phone(phone),
+    emp_phone_clean = normal_phone(emp_phone)
+  )
+```
+
+```{r phone_view, echo=FALSE}
 ohlr %>% 
-  filter(city_swap %out% valid_city) %>% 
-  count(state_norm, city_swap, city_match, sort = TRUE)
-```
-
-### Year
-
-```{r year_add}
-ohlr <- mutate(ohlr, year = year(today()))
+  select(contains("phone")) %>% 
+  distinct() %>% 
+  sample_frac()
 ```
 
 ## Conclude
@@ -310,22 +527,32 @@ ohlr <- mutate(ohlr, year = year(today()))
 1. There are no records missing any pertinent information.
 1. Consistency in goegraphic data has been improved with `campfin::normal_*()`.
 1. The 5-digit `zip_norm` variable has been created with `campfin::normal_zip()`.
-1. There is no date listed in the database. The current `year` was added.
 
 ## Export
 
+```{r}
+ohlr <- ohlr %>% 
+  select(
+    -city_norm,
+    -emp_city_norm,
+    -city_swap,
+    -emp_city_swap
+  ) %>% 
+  rename(
+    city_clean = city_refine,
+    emp_city_clean = emp_city_refine
+  ) %>% 
+  rename_all(~str_replace(., "_norm", "_clean"))
+```
+
+
 ```{r create_proc_dir}
-proc_dir <- here("oh", "lobbying", "data", "processed")
+proc_dir <- here("state","oh", "lobbying", "data", "processed")
 dir_create(proc_dir)
 ```
 
 ```{r write_clean}
 ohlr %>% 
-  select(
-    -city_match,
-    -match_abb,
-    -match_dist
-  ) %>% 
   write_csv(
     path = glue("{proc_dir}/oh_lobby_reg.csv"),
     na = ""

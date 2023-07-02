@@ -1,6 +1,6 @@
 ---
 title: "Hawaii Lobbyists"
-author: "Kiernan Nicholls"
+author: "Kiernan Nicholls & Yanqi Xu"
 date: "`r Sys.time()`"
 output:
   github_document: 
@@ -32,7 +32,7 @@ set.seed(5)
 ```
 
 ```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
-fs::dir_create(here::here("hi", "lobbying", "docs"))
+fs::dir_create(here::here("state","hi", "lobbying", "docs"))
 ```
 
 ## Project
@@ -107,37 +107,13 @@ here::here()
 
 ## Data
 
-Data can be obtained by the [Hawaii State Ethics Commission][hec] via their [Socrata portal][hsp].
+Data can be obtained by the [Hawaii State Ethics Commission][hec] via their [Socrata portal][hsp]. The [search tool][download] lets us export all lobbying registration data from 2019-2023 in a csv format.
 
 [hec]: https://ethics.hawaii.gov/
 [hsp]: https://data.hawaii.gov/
+[download]:https://hawaiiethics.my.site.com/public/s/reports?report=Lobbyist%20Registrations
 
-```{r meta_read, echo=FALSE}
-hi_meta <- fromJSON("https://data.hawaii.gov/api/views/gdxe-t5ff")
-```
 
-The relavent file is named `r quote(hi_meta$name)` with the ID of `r md_code(hi_meta$id)`. The file
-was created at `r as_datetime(hi_meta$createdAt)`.
-
-There are `r nrow(hi_meta$columns)` columns in the database.
-
-```{r meta_cols}
-hi_meta %>% 
-  use_series("columns") %>% 
-  as_tibble() %>% 
-  select(
-    position,
-    fieldName,
-    name,
-    dataTypeName
-  ) %>%
-  mutate(fieldName = md_code(fieldName)) %>% 
-  kable(col.names = c("col", "variable", "name", "type"))
-```
-
-This data does _not_ include the mailing addresses of the lobbyists and principal organizations.
-After contacting the Ethics Commission, I was provided with an Excel file containing the additional
-mailing address variable; this data will be processed and added to the site.
 
 ## Import
 
@@ -145,55 +121,16 @@ If the file containing addresses is found on disc, the wrangling will continue; 
 raw file will be read from the portal and not wrangled any futher.
 
 ```{r raw_dir}
-raw_dir <- here("hi", "lobbying", "data", "raw")
+raw_dir <- here("state","hi", "lobbying", "data", "raw")
 dir_create(raw_dir)
 ```
 
-```{r raw_read}
-geo_file <- dir_ls(raw_dir, type = "file", glob = "*.xlsx") 
-raw_file <- "https://data.hawaii.gov/api/views/gdxe-t5ff/rows.csv"
+```{r}
+hilr <- read_csv(dir_ls(raw_dir, regex = ".+registration.+"))
 
-if (file_exists(geo_file)) {
-  # read the excel file
-  hilr <- 
-     read_csv(
-      file = format_csv(read_excel(geo_file)),
-      skip = 1,
-      col_names = c(
-        "reg_name", "lob_name", "org_name", "lob_firm", "date_filed", "status", 
-        "date_reg", "date_term", "lob_email", "lob_phone", "lob_ext", "lob_geo", 
-        "lob_city", "lob_state", "lob_zip"
-      ),
-      col_types = cols(
-        .default = col_character(),
-        date_filed = col_date_usa(),
-        date_reg = col_date_usa(),
-        date_term = col_date_usa()
-      )
-    )
-} else {
-  # read the portal file
-  hilr <- 
-    read_csv(
-      file = raw_file,
-      col_types = cols(
-        Registration = col_date_usa(),
-        Termination = col_date_usa()
-      )
-    ) %>%
-    # rename, reorder, and clean
-    rename(
-      lob_name = `Lobbyist Name`,
-      org_name = `Organization Name`,
-      session = `Lobby Year`
-    ) %>% 
-    select(-View, View) %>% 
-    clean_names() %>% 
-    mutate(view = str_extract(view, "(?<=\\()(.*)(?=\\))"))
-  # stop the document
-  knit_exit()
-}
+hilr <- hilr %>% clean_names()
 ```
+
 
 ## Wrangle
 

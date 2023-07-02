@@ -57,7 +57,7 @@ This document describes the process used to complete the following objectives:
 1. Check ranges
 1. Is there anything blank or missing?
 1. Check for consistency issues
-1. Create a five-digit ZIP Code called `ZIP5`
+1. Create a five-digit ZIP Code called `zip_clean`
 1. Create a `YEAR` field from the transaction date
 1. Make sure there is data on both parties to a transaction
 
@@ -136,8 +136,9 @@ The text file is a table of lobbyists with their clients indented below them.  W
 package, we can read the RTF file into a character vector of the lines on the document.
 
 ```{r raw_read}
-lob_url <- "https://klec.ky.gov/Reports/Reports/Agents.rtf"
-kylr <- read_rtf(file = lob_url)
+raw_dir <- dir_create(here::here("state", "ky", "lobby", "data", "raw"))
+kylr <- read_rtf(file = dir_ls(raw_dir,regexp = ".+rtf"))
+read_fwf(file =dir_ls(raw_dir,regexp = ".+rtf"))
 ```
 
 ```{r raw_head, echo=FALSE}

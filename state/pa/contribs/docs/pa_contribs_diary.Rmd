@@ -34,7 +34,7 @@ if (!interactive()) {
 ```
 
 ```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
-fs::dir_create(here::here("pa", "contribs", "docs"))
+fs::dir_create(here::here("state","pa", "contribs", "docs"))
 ```
 
 ## Project
@@ -130,15 +130,21 @@ understand the data we will be downloading.
 pa_host <- "https://www.dos.pa.gov/VotingElections"
 pa_dir <- "CandidatesCommittees/CampaignFinance/Resources/Documents"
 readme_file <- "readmepriorto2022.txt"
-readme_url <- paste(pa_host, pa_dir, readme_file, sep = "/")
+readme_url_old <- paste(pa_host, pa_dir, readme_file, sep = "/")
+
+readme_new <- "readme2022.txt"
+readme_url_new <- paste(pa_host, pa_dir, readme_new
+                        , sep = "/")
 ```
 
 This text file provides the column names and types for the each of the data
 files included in the raw download.
 
 ```{r vars_print, echo=FALSE}
-readme <- readme_url %>% 
-  read_lines(skip = 4) %>% 
+read_me <- function(readme_url,skip_lines_no){
+  df <- 
+  readme_url %>% 
+  read_lines(skip = skip_lines_no) %>% 
   str_c(collapse = "\r\n") %>% 
   str_split("\\W(?=\\w+\r\n-+)") %>% 
   pluck(1) %>%
@@ -159,6 +165,11 @@ readme <- readme_url %>%
       mutate(col = str_to_lower(col))
   ) %>% 
   set_names(c("contribs", "debt", "expense", "filer", "receipt"))
+return(df)
+}
+
+readme <- read_me(readme_url_old,4)
+readme_new <- read_me(readme_url_new,6)
 ```
 
 Here are the columns included in the contributions data set:
@@ -233,14 +244,6 @@ con_paths <- dir_ls(
   regexp = "(C|c)ontrib[\\.|_]"
 )
 
-fil_paths <- dir_ls(
-  path = raw_dir, 
-  recurse = TRUE, 
-  regexp = "(F|f)iler[\\.|_]"
-) %>% 
-c(dir_ls(path = here("state","pa", "expends", "data", "raw"),
-                recurse = TRUE, 
-  regexp = "(F|f)iler[\\.|_]"))
 ```
 
 The file names are a little different year to year, but they all have the same
@@ -300,6 +303,9 @@ using `vroom::vroom()`. We need to use the column names and types listed in the
 `readme.txt` file we downloaded earlier.
 
 ```{r raw_read}
+pa_2022_path <- dir_ls(raw_dir,regexp = ".+2022.txt")
+con_paths <- setdiff(con_paths, pa_2022_path)
+
 pac <- map_df(
   .x = con_paths,
   .f = read_delim,
@@ -322,14 +328,55 @@ pac <- map_df(
     occupation = col_character(),
     ename = col_character(),
     contdate1 = col_date("%Y%m%d"),
+    contamt1 = col_double(),
+  )
+)
+
+pac_2022 <- read_delim(
+  pa_2022_path,
+  delim = ",",
+  escape_backslash = FALSE, 
+  escape_double = FALSE,
+  col_names = readme_new$contribs$col,
+  col_types = cols(
+    .default = col_skip(),
+    filerid = col_character(),
+    # reportid = col_character(),
+    # timestamp = col_date("%Y-%m-%d"),
+    eyear = col_integer(),
+    cycle = col_integer(),
+    section = col_character(),
+    contributor = col_character(),
+    address1 = col_character(),
+    address2 = col_character(),
+    city = col_character(),
+    state = col_character(),
+    zipcode = col_character(),
+    occupation = col_character(),
+    ename = col_character(),
+    contdate1 = col_date("%Y%m%d"),
     contamt1 = col_double()
   )
 )
+
+pac <- pac_2022 %>% bind_rows(pac)
 ```
 
 Then we can read the fixed filer files to describe the recipients.
 
 ```{r fil_read}
+fil_paths <- dir_ls(
+  path = raw_dir, 
+  recurse = TRUE, 
+  regexp = "(F|f)iler[\\.|_]"
+) %>% 
+c(dir_ls(path = here("state","pa", "expends", "data", "raw"),
+                recurse = TRUE, 
+  regexp = "(F|f)iler[\\.|_]"))
+
+fil_path_2022 <- glue(here("state","pa", "expends", "data", "raw"), "/filer_2022.txt")
+
+fil_paths <- setdiff(fil_paths, fil_path_2022)
 filers <- map_df(
   .x = fil_paths,
   .f = read_delim,
@@ -355,6 +402,31 @@ filers <- map_df(
     phone = col_character(),
   )
 )
+
+filers2022 <- read_delim(fil_path_2022,
+                          delim = ",",
+  escape_backslash = FALSE, 
+  escape_double = FALSE,
+  col_names = readme_new$filer$col,
+  col_types = cols(
+    .default = col_skip(),
+        eyear = col_integer(),
+    filerid = col_character(),
+    filertype = col_character(),
+    filername = col_character(),
+    office = col_character(),
+    district = col_character(),
+    party = col_character(),
+    address1 = col_character(),
+    address2 = col_character(),
+    city = col_character(),
+    state = col_character(),
+    zipcode = col_character(),
+    county = col_character(),
+    phone = col_character(),
+  ))
+
+filers <- filers2022 %>% bind_rows(filers)
 ```
 
 We only want to join a single filer to each contribution listed in the data.
@@ -479,7 +551,7 @@ pac <- mutate(pac, tx = row_number())
 ```
 
 ```{r dupe_write}
-dupe_file <- here("pa", "contribs", "dupes.txt")
+dupe_file <- here("state","pa", "contribs", "dupes.txt")
 if (!file_exists(dupe_file)) {
   file_create(dupe_file)
   pac <- mutate(pac, group = str_sub(date, end = 7))

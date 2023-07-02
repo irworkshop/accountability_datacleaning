@@ -1,6 +1,6 @@
 ---
-title: "Iowa Contributions"
-author: "Kiernan Nicholls"
+title: "Iowa Campaign Contributions"
+author: "Kiernan Nicholls & Yanqi Xu"
 date: "`r Sys.time()`"
 output:
   github_document: 
@@ -34,7 +34,7 @@ if (!interactive()) {
 ```
 
 ```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
-fs::dir_create(here::here("ia", "contribs", "docs"))
+fs::dir_create(here::here("state","ia", "contribs", "docs"))
 ```
 
 ## Project
@@ -114,7 +114,7 @@ here::here()
 
 ## Data
 
-Data is obtained from the [Iowa Ethics and Campaign Disclosure Board][iae].
+Data is obtained from the [Iowa Ethics and Campaign Disclosure Board][iae]. The API returns contributions dating back to `2003-01-01`. 
 
 > In order to accomplish its Mission, the Board will enforce the provisions of
 the "Campaign Disclosure Act" in Iowa Code chapter 68A, the "Government Ethics
@@ -125,12 +125,13 @@ rules in Chapter 351 of the Iowa Administrative Code.
 [iae]: https://ethics.iowa.gov/
 
 The Board provides the file through the [state open data portal][odp] under the
-title "Iowa Campaign Contributions Received." The data can be accessed as a
+title ["Iowa Campaign Contributions Received."][cont] The data can be accessed as a
 tabular CSV file or through a number of direct APIs.
 
-The database was created June 18, 2015 and last updated December 10, 2019.
+The database was created June 18, 2015 and last updated July 1, 2023.
 
 [odp]: https://data.iowa.gov/
+[cont]:https://data.iowa.gov/Campaigns-Elections/Iowa-Campaign-Contributions-Received/smfg-ds7h
 
 > This dataset contains information on contributions and in kind donations made
 by organizations and individuals to state-wide, legislative or local candidate
@@ -173,7 +174,7 @@ These fixed files can be read into a single data frame with `purrr::map_df()`
 and `readr::read_delim()`.
 
 ```{r raw_dir}
-raw_dir <- dir_create(here("ia", "contribs", "data", "raw"))
+raw_dir <- dir_create(here("state","ia", "contribs", "data", "raw"))
 raw_url <- "https://data.iowa.gov/api/views/smfg-ds7h/rows.csv"
 raw_path <- path(raw_dir, basename(raw_url))
 if (!this_file_new(raw_path)) {
@@ -187,7 +188,7 @@ iac <- vroom(
   na = c("", "N/A", "NA", "n/a", "na"),
   col_types = cols(
     .default = col_character(),
-    `Date` = col_date_usa(),
+    `Date` = col_date_mdy(),
     `Contribution Amount` = col_double()
   )
 )
@@ -195,7 +196,7 @@ iac <- vroom(
 
 ```{r raw_rename, echo=FALSE}
 iac <- iac %>% 
-  clean_names("snake") %>%
+  clean_names("snake") %>% 
   rename(
     code = committee_code,
     committee = committee_name,
@@ -203,16 +204,13 @@ iac <- iac %>%
     cont_comm_cd = contributing_committee_code,
     cont_org = contributing_organization,
     first = first_name,
-    mi = middle_initial,
     last = last_name,
     addr1 = address_line_1,
     addr2 = address_line_2,
     zip = zip_code,
-    amount = contribution_amount,
-    tx = transaction_id,
+    amount = contribution_amount
   ) %>% 
-  mutate(last = coalesce(last, cont_org)) %>% 
-  select(-cont_org, -cont_comm_cd)
+  select(-cont_comm_cd)
 ```
 
 We can ensure this file was read correctly by counting distinct values of a 
@@ -268,7 +266,8 @@ iac %>%
 We can create a file containing every duplicate record in the data.
 
 ```{r dupe_write}
-dupe_file <- path(dirname(raw_dir), "dupes.csv")
+dupe_file <- path(raw_dir, "dupes.csv")
+iac <- rowid_to_column(iac, var = "tx")
 if (!file_exists(dupe_file)) {
   write_lines("tx,dupe_flag", dupe_file)
   iac <- mutate(iac, group = str_sub(date, end = 7))
@@ -279,7 +278,7 @@ if (!file_exists(dupe_file)) {
   pb <- txtProgressBar(max = length(ias), style = 3)
   for (i in seq_along(ias)) {
     write_csv(
-      path = dupe_file,
+      file = dupe_file,
       append = TRUE,
       x = tibble(
         tx = ia_tx[[i]],
@@ -300,7 +299,7 @@ if (!file_exists(dupe_file)) {
 dupes <- read_csv(
   file = dupe_file,
   col_types = cols(
-    tx = col_character(),
+    tx = col_integer(),
     dupe_flag = col_logical()
   )
 )
@@ -321,6 +320,10 @@ iac %>%
   arrange(date, last)
 ```
   
+```{r}
+iac <- iac %>% select(-tx)
+```
+
 ## Categorical
 
 ```{r n_distinct}
@@ -362,7 +365,7 @@ iac %>%
   filter(!is.na(amount), amount >= 1) %>% 
   ggplot(aes(x = type, y = amount)) +
   geom_violin(aes(fill = type), adjust = 3) +
-  scale_fill_brewer(palette = "Dark2", guide = FALSE) +
+  scale_fill_brewer(palette = "Dark2", guide = "none") +
   scale_y_continuous(
     breaks = c(1 %o% 10^(0:6)),
     labels = dollar,
@@ -391,7 +394,7 @@ iac %>%
   geom_col(aes(fill = even)) + 
   scale_fill_brewer(palette = "Dark2") +
   scale_y_continuous(labels = comma) +
-  scale_x_continuous(breaks = seq(1998, 2020, by = 2)) +
+  scale_x_continuous(breaks = seq(1998, 2024, by = 2)) +
   theme(legend.position = "bottom") +
   labs(
     title = "Iowa Contributions by Year",
@@ -672,7 +675,7 @@ glimpse(sample_n(iac, 50))
 Now the file can be saved on disk for upload to the Accountability server.
 
 ```{r clean_dir}
-clean_dir <- dir_create(here("ia", "contribs", "data", "clean"))
+clean_dir <- dir_create(here("state","ia", "contribs", "data", "clean"))
 clean_path <- path(clean_dir, "ia_contribs_clean.csv")
 write_csv(iac, clean_path, na = "")
 (clean_size <- file_size(clean_path))
@@ -684,7 +687,7 @@ file_encoding(clean_path) %>%
 
 We can use the `aws.s3::put_object()` to upload the text file to the IRW server.
 
-```{r aws_upload, eval=TRUE}
+```{r aws_upload, eval=FALSE}
 aws_path <- path("csv", basename(clean_path))
 if (!object_exists(aws_path, "publicaccountability")) {
   put_object(
@@ -710,20 +713,21 @@ dict_raw <- tibble(
   var = md_code(names(iac)),
   type = md_code(map_chr(iac, typeof)),
   def = c(
-    "Unique transaction hash",
     "Date contribution was made",
     "Recipient committee code",
+    "Recipient committee type",
     "Recipient committee name",
     "Type of contribution (direct, in-kind)",
+    "Contributor organization",
     "Contributor first name",
-    "Contributor middle initial",
-    "Contributor last name or organization",
+    "Contributor last name",
     "Contributor street address",
     "Contributor secondary address",
     "Contributor state abbreviation",
     "Contributor city name",
     "Contributor ZIP+4 code",
     "Amount or correction",
+    "Check number",
     "Flag for missing value",
     "Flag for duplicate row",
     "Calendar year contribution made",

@@ -1,22 +1,22 @@
 Iowa Contributions
 ================
-Kiernan Nicholls
-2020-10-28 14:16:38
+Kiernan Nicholls & Yanqi Xu
+2023-07-02 18:17:36
 
-  - [Project](#project)
-  - [Objectives](#objectives)
-  - [Packages](#packages)
-  - [Data](#data)
-  - [Read](#read)
-  - [Explore](#explore)
-  - [Categorical](#categorical)
-  - [Amounts](#amounts)
-  - [Dates](#dates)
-  - [Wrangle](#wrangle)
-  - [Conclude](#conclude)
-  - [Export](#export)
-  - [Upload](#upload)
-  - [Dictionary](#dictionary)
+- [Project](#project)
+- [Objectives](#objectives)
+- [Packages](#packages)
+- [Data](#data)
+- [Read](#read)
+- [Explore](#explore)
+- [Categorical](#categorical)
+- [Amounts](#amounts)
+- [Dates](#dates)
+- [Wrangle](#wrangle)
+- [Conclude](#conclude)
+- [Export](#export)
+- [Upload](#upload)
+- [Dictionary](#dictionary)
 
 <!-- Place comments regarding knitting here -->
 
@@ -94,13 +94,14 @@ feature and should be run as such. The project also uses the dynamic
 ``` r
 # where does this document knit?
 here::here()
-#> [1] "/home/kiernan/Code/tap/R_campfin"
+#> [1] "/Users/yanqixu/code/accountability_datacleaning"
 ```
 
 ## Data
 
 Data is obtained from the [Iowa Ethics and Campaign Disclosure
-Board](https://ethics.iowa.gov/).
+Board](https://ethics.iowa.gov/). The API returns contributions dating
+back to `2003-01-01`.
 
 > In order to accomplish its Mission, the Board will enforce the
 > provisions of the “Campaign Disclosure Act” in Iowa Code chapter 68A,
@@ -110,12 +111,13 @@ Board](https://ethics.iowa.gov/).
 > the Iowa Administrative Code.
 
 The Board provides the file through the [state open data
-portal](https://data.iowa.gov/) under the title “Iowa Campaign
-Contributions Received.” The data can be accessed as a tabular CSV file
-or through a number of direct APIs.
+portal](https://data.iowa.gov/) under the title [“Iowa Campaign
+Contributions
+Received.”](https://data.iowa.gov/Campaigns-Elections/Iowa-Campaign-Contributions-Received/smfg-ds7h)
+The data can be accessed as a tabular CSV file or through a number of
+direct APIs.
 
-The database was created June 18, 2015 and last updated December 10,
-2019.
+The database was created June 18, 2015 and last updated July 1, 2023.
 
 > This dataset contains information on contributions and in kind
 > donations made by organizations and individuals to state-wide,
@@ -139,7 +141,7 @@ The Board also provides a disclaimer on the completness of the database:
 > 2007 on; contributions to party committees between 2003 and 2007 from
 > political and candidate committees; contributions from State Political
 > Committees to candidates between 2003 and 2004; contributions from
-> Federal/Out-of-State Political Committees over $50 from 2005 on; and
+> Federal/Out-of-State Political Committees over \$50 from 2005 on; and
 > contributions from county central committees from 2008 on.
 
 The database license is as follows:
@@ -162,7 +164,7 @@ These fixed files can be read into a single data frame with
 `purrr::map_df()` and `readr::read_delim()`.
 
 ``` r
-raw_dir <- dir_create(here("ia", "contribs", "data", "raw"))
+raw_dir <- dir_create(here("state","ia", "contribs", "data", "raw"))
 raw_url <- "https://data.iowa.gov/api/views/smfg-ds7h/rows.csv"
 raw_path <- path(raw_dir, basename(raw_url))
 if (!this_file_new(raw_path)) {
@@ -176,7 +178,7 @@ iac <- vroom(
   na = c("", "N/A", "NA", "n/a", "na"),
   col_types = cols(
     .default = col_character(),
-    `Date` = col_date_usa(),
+    `Date` = col_date_mdy(),
     `Contribution Amount` = col_double()
   )
 )
@@ -187,41 +189,44 @@ of a known discrete variable.
 
 ``` r
 n_distinct(iac$type) == 2
-#> [1] TRUE
+#> [1] FALSE
 ```
 
 ## Explore
 
-There are 1,982,775 rows of 14 columns.
+There are 2,248,344 rows of 15 columns.
 
 ``` r
 glimpse(iac)
-#> Rows: 1,982,775
-#> Columns: 14
-#> $ tx        <chr> "{14050320-5718-7824-1750-000000000000}", "{15050320-5015-6938-5245-0000000000…
-#> $ date      <date> 2003-01-01, 2003-01-01, 2003-01-01, 2003-01-02, 2003-01-02, 2003-01-02, 2003-…
-#> $ code      <chr> "6160", "6356", "1040", "6096", "6155", "6063", "9613", "931", "6063", "9613",…
-#> $ committee <chr> "Community Bankers of Iowa Political Action Committee", "Planned Parenthood Ad…
-#> $ type      <chr> "CON", "CON", "CON", "CON", "CON", "CON", "CON", "CON", "CON", "CON", "CON", "…
-#> $ first     <chr> NA, "Alta", NA, "Al", "Steven", "Nancy", "Kathy", NA, "Robert", "Deb", "Jane",…
-#> $ mi        <chr> NA, NA, NA, NA, "J", NA, NA, NA, NA, NA, NA, NA, "F", NA, NA, NA, NA, "E", NA,…
-#> $ last      <chr> "Unitemized", "Price", "Veridian  Credit Union", "Streb", "Pfannes", "Urbanows…
-#> $ addr1     <chr> "123 street", "4888 School House Rd", "1827 Ansborough Ave.", "PO Box 48", "12…
-#> $ addr2     <chr> NA, NA, NA, NA, NA, NA, NA, "400 E. Court Ave., Ste 100", "2829 Westown Parkwa…
-#> $ city      <chr> "anywhere", "Bettendorf", "Waterloo", "North Liberty", "Boone", "Marshalltown"…
-#> $ state     <chr> "IA", "IA", "IA", "IA", "IA", "IA", "IA", "IA", "IA", "IA", "IA", "IA", "NE", …
-#> $ zip       <chr> "00000", "52722", "50701", "52317", "50036", "50158", "52403", "50309-2027", "…
-#> $ amount    <dbl> 261.00, 50.00, 21.78, 400.00, 25.00, 100.00, 15.00, 250.00, 25.00, 15.00, 20.0…
+#> Rows: 2,248,344
+#> Columns: 15
+#> $ date           <date> 2007-12-18, 2003-12-31, 2004-12-31, 2007-06-30, 2006-12-31, 2004-07-14, 2…
+#> $ code           <chr> "1700", "6082", "6082", "6082", "6082", "6082", "6082", "6082", "6082", "6…
+#> $ committee_type <chr> "State House", "Iowa PAC", "Iowa PAC", "Iowa PAC", "Iowa PAC", "Iowa PAC",…
+#> $ committee      <chr> "Johnson for Iowa House", "MidAmerican Energy Company PAC", "MidAmerican E…
+#> $ type           <chr> "CON", "CON", "CON", "CON", "CON", "CON", "CON", "CON", "CON", "CON", "CON…
+#> $ cont_org       <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
+#> $ first          <chr> "Al & Lori", "Daniel", "Daniel", "Daniel", "Daniel", "Daniel", "Daniel", "…
+#> $ last           <chr> "Hill", "Hegarty", "Hegarty", "Hegarty", "Hegarty", "Hegarty", "Hegarty", …
+#> $ addr1          <chr> "15768 - 300th Street", "1405 W 6th St", "1405 W 6th St", "1405 W 6th St",…
+#> $ addr2          <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
+#> $ city           <chr> "Radcliffe", "Storm Lake", "Storm Lake", "Storm Lake", "Storm Lake", "Stor…
+#> $ state          <chr> "IA", "IA", "IA", "IA", "IA", "IA", "IA", "IA", "IA", "IA", "IA", "IA", "I…
+#> $ zip            <chr> "50230", "50588", "50588", "50588", "50588", "50588", "50588", "50588", "5…
+#> $ amount         <dbl> 500.00, 24.48, 25.20, 55.20, 26.76, 16.80, 40.88, 28.62, 60.24, 29.64, 38.…
+#> $ check_number   <chr> "5012", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
 tail(iac)
-#> # A tibble: 6 x 14
-#>   tx      date       code  committee   type  first mi    last  addr1 addr2 city  state zip   amount
-#>   <chr>   <date>     <chr> <chr>       <chr> <chr> <chr> <chr> <chr> <chr> <chr> <chr> <chr>  <dbl>
-#> 1 {6DFE1… 2020-05-22 2563  Reichman f… CON   Jeff… D     Reic… P.O.… <NA>  Mont… IA    52639  140  
-#> 2 {1B669… 2020-06-01 6125  RPAC Iowa … CON   Renee <NA>  Dunk… 3433… <NA>  Cumm… IA    50061   90.9
-#> 3 {7EECA… 2020-06-04 2365  Phil Mille… CON   Barb… <NA>  Royal 4710… <NA>  West… IA    50265   25  
-#> 4 {098BE… 2020-06-25 6021  Credit Uni… CON   Mich… <NA>  Ramos 3421… <NA>  East… IL    61244    1  
-#> 5 {FB17E… 2020-07-07 6021  Credit Uni… CON   Brit… <NA>  McLa… 2413… <NA>  Urba… IA    50322    4  
-#> 6 {C45E7… 2020-05-30 6429  Heavy High… CON   Tracy <NA>  Yans… 3001… <NA>  Bloo… MN    55425   20
+#> # A tibble: 6 × 15
+#>   date       code  committ…¹ commi…² type  cont_…³ first last  addr1 addr2 city  state zip   amount
+#>   <date>     <chr> <chr>     <chr>   <chr> <chr>   <chr> <chr> <chr> <chr> <chr> <chr> <chr>  <dbl>
+#> 1 2019-09-12 731   State Se… People… CON   <NA>    Elai… Klein 2775… <NA>  Dubu… IA    52001    100
+#> 2 2018-09-02 40034 County C… Kacena… CON   <NA>    JoAnn Sadl… 3448… <NA>  Corr… IA    51016     25
+#> 3 2014-05-12 57    State Se… Re-ele… CON   <NA>    David Brown 520 … <NA>  Des … IA    5030…    100
+#> 4 2010-08-02 1318  State Ho… Paulse… CON   <NA>    Nic   Pott… 134 … <NA>  Mari… IA    52302     50
+#> 5 2020-10-15 2620  State Ho… clayto… CON   <NA>    Brit… Patt… 1220… <NA>  Delr… FL    33445      1
+#> 6 2016-06-21 9098  State Ce… Iowa D… CON   <NA>    Ally… McKe… 658 … <NA>  Iowa… IA    5224…     40
+#> # … with 1 more variable: check_number <chr>, and abbreviated variable names ¹​committee_type,
+#> #   ²​committee, ³​cont_org
 ```
 
 ### Missing
@@ -230,23 +235,24 @@ Columns vary in their degree of missing values.
 
 ``` r
 col_stats(iac, count_na)
-#> # A tibble: 14 x 4
-#>    col       class        n        p
-#>    <chr>     <chr>    <int>    <dbl>
-#>  1 tx        <chr>        0 0       
-#>  2 date      <date>       0 0       
-#>  3 code      <chr>        0 0       
-#>  4 committee <chr>        0 0       
-#>  5 type      <chr>        0 0       
-#>  6 first     <chr>   234264 0.118   
-#>  7 mi        <chr>  1699517 0.857   
-#>  8 last      <chr>      280 0.000141
-#>  9 addr1     <chr>     7979 0.00402 
-#> 10 addr2     <chr>  1901620 0.959   
-#> 11 city      <chr>     6663 0.00336 
-#> 12 state     <chr>     2819 0.00142 
-#> 13 zip       <chr>     1654 0.000834
-#> 14 amount    <dbl>        0 0
+#> # A tibble: 15 × 4
+#>    col            class        n       p
+#>    <chr>          <chr>    <int>   <dbl>
+#>  1 date           <date>       0 0      
+#>  2 code           <chr>        0 0      
+#>  3 committee_type <chr>        0 0      
+#>  4 committee      <chr>        0 0      
+#>  5 type           <chr>        0 0      
+#>  6 cont_org       <chr>  2054093 0.914  
+#>  7 first          <chr>   214337 0.0953 
+#>  8 last           <chr>   214281 0.0953 
+#>  9 addr1          <chr>    13924 0.00619
+#> 10 addr2          <chr>  2158462 0.960  
+#> 11 city           <chr>    12133 0.00540
+#> 12 state          <chr>     5577 0.00248
+#> 13 zip            <chr>     3474 0.00155
+#> 14 amount         <dbl>        0 0      
+#> 15 check_number   <chr>  1369542 0.609
 ```
 
 We can flag any record missing a key variable needed to identify a
@@ -256,7 +262,7 @@ transaction.
 key_vars <- c("date", "last", "amount", "committee")
 iac <- flag_na(iac, all_of(key_vars))
 sum(iac$na_flag)
-#> [1] 280
+#> [1] 214281
 ```
 
 All of the flagged rows are only missing a contributor `last` name.
@@ -266,19 +272,19 @@ iac %>%
   filter(na_flag) %>% 
   select(all_of(key_vars)) %>% 
   sample_n(10)
-#> # A tibble: 10 x 4
-#>    date       last  amount committee                                    
-#>    <date>     <chr>  <dbl> <chr>                                        
-#>  1 2010-06-29 <NA>   20    Brenna Bird for County Attorney              
-#>  2 2010-10-18 <NA>   10    Iowans For Miller                            
-#>  3 2010-10-12 <NA>   20    Brenna Bird for County Attorney              
-#>  4 2010-11-30 <NA>    0.98 Upmeyer for House                            
-#>  5 2011-07-15 <NA>  100    Wayne County Democratic Central Committee    
-#>  6 2006-05-03 <NA>   23    Fallon for Governor                          
-#>  7 2004-07-28 <NA>   42    Clay County Republican Central Committee     
-#>  8 2008-01-09 <NA>  199.   Clay County Democratic Central Committee     
-#>  9 2004-10-22 <NA>   55    Clay County Democratic Central Committee     
-#> 10 2011-06-06 <NA>  170    Van Buren County Republican Central Committee
+#> # A tibble: 10 × 4
+#>    date       last   amount committee                                             
+#>    <date>     <chr>   <dbl> <chr>                                                 
+#>  1 2019-06-10 <NA>   1000   Iowa Insurance Institute PAC                          
+#>  2 2006-08-29 <NA>  20000   Iowa Democratic Party                                 
+#>  3 2020-08-10 <NA>  25000   Kim Reynolds for Iowa                                 
+#>  4 2016-09-26 <NA>    500   Kressig for Iowa House 59                             
+#>  5 2017-12-22 <NA>    500   Chaz Allen 4 Senate                                   
+#>  6 2017-01-03 <NA>     23   Plumbers & Steamfitters Local Union #33               
+#>  7 2013-07-31 <NA>     11.5 Iowans for Fitzgerald                                 
+#>  8 2022-09-02 <NA>    500   Win With Windschitl                                   
+#>  9 2017-01-03 <NA>    100   Dan Dawson for State Senate                           
+#> 10 2004-02-27 <NA>     14   Iowa Farm Bureau Federation Political Action Committee
 ```
 
 ``` r
@@ -286,13 +292,13 @@ iac %>%
   filter(na_flag) %>% 
   select(all_of(key_vars)) %>% 
   col_stats(count_na)
-#> # A tibble: 4 x 4
-#>   col       class      n     p
-#>   <chr>     <chr>  <int> <dbl>
-#> 1 date      <date>     0     0
-#> 2 last      <chr>    280     1
-#> 3 amount    <dbl>      0     0
-#> 4 committee <chr>      0     0
+#> # A tibble: 4 × 4
+#>   col       class       n     p
+#>   <chr>     <chr>   <int> <dbl>
+#> 1 date      <date>      0     0
+#> 2 last      <chr>  214281     1
+#> 3 amount    <dbl>       0     0
+#> 4 committee <chr>       0     0
 ```
 
 ### Duplicates
@@ -300,7 +306,8 @@ iac %>%
 We can create a file containing every duplicate record in the data.
 
 ``` r
-dupe_file <- path(dirname(raw_dir), "dupes.csv")
+dupe_file <- path(raw_dir, "dupes.csv")
+iac <- rowid_to_column(iac, var = "tx")
 if (!file_exists(dupe_file)) {
   write_lines("tx,dupe_flag", dupe_file)
   iac <- mutate(iac, group = str_sub(date, end = 7))
@@ -311,7 +318,7 @@ if (!file_exists(dupe_file)) {
   pb <- txtProgressBar(max = length(ias), style = 3)
   for (i in seq_along(ias)) {
     write_csv(
-      path = dupe_file,
+      file = dupe_file,
       append = TRUE,
       x = tibble(
         tx = ia_tx[[i]],
@@ -332,7 +339,7 @@ if (!file_exists(dupe_file)) {
 dupes <- read_csv(
   file = dupe_file,
   col_types = cols(
-    tx = col_character(),
+    tx = col_integer(),
     dupe_flag = col_logical()
   )
 )
@@ -345,7 +352,7 @@ transaction ID.
 iac <- left_join(iac, dupes)
 iac <- mutate(iac, dupe_flag = !is.na(dupe_flag))
 percent(mean(iac$dupe_flag), 0.1)
-#> [1] "1.6%"
+#> [1] "100.0%"
 ```
 
 ``` r
@@ -353,61 +360,65 @@ iac %>%
   filter(dupe_flag) %>% 
   select(all_of(key_vars)) %>% 
   arrange(date, last)
-#> # A tibble: 31,894 x 4
-#>    date       last                amount committee                                     
-#>    <date>     <chr>                <dbl> <chr>                                         
-#>  1 2003-01-15 Iowa Health PAC        500 Iowa Democratic Party                         
-#>  2 2003-01-15 Iowa Health PAC        500 Iowa Democratic Party                         
-#>  3 2003-01-17 Pedersen                10 Black Hawk County Republican Central Committee
-#>  4 2003-01-17 Pedersen                10 Black Hawk County Republican Central Committee
-#>  5 2003-01-17 unidentified            20 Citizens for Excellence in Government         
-#>  6 2003-01-17 unidentified            20 Citizens for Excellence in Government         
-#>  7 2003-01-29 Smith                  100 Linn Phoenix Club                             
-#>  8 2003-01-29 Smith                  100 Linn Phoenix Club                             
-#>  9 2003-01-31 IDP Federal Account  10000 Iowa Democratic Party                         
-#> 10 2003-01-31 IDP Federal Account  10000 Iowa Democratic Party                         
-#> # … with 31,884 more rows
+#> # A tibble: 2,248,344 × 4
+#>    date       last       amount committee                                            
+#>    <date>     <chr>       <dbl> <chr>                                                
+#>  1 2003-01-01 Price        50   Planned Parenthood Advocates of Iowa PAC             
+#>  2 2003-01-01 Unitemized  261   Community Bankers of Iowa Political Action Committee 
+#>  3 2003-01-01 <NA>         21.8 Citizens to Elect Bill Dotzler                       
+#>  4 2003-01-02 Balderston   15   Linn County Republican Women                         
+#>  5 2003-01-02 Bee          25   Iowa Dental Political Action Committee               
+#>  6 2003-01-02 Burnham     100   Iowa Dental Political Action Committee               
+#>  7 2003-01-02 Consamus    100   Iowa Dental Political Action Committee               
+#>  8 2003-01-02 DeVore      250   Manufactured Housing Political Action Committee #6096
+#>  9 2003-01-02 Foster       15   Linn County Republican Women                         
+#> 10 2003-01-02 Gee          15   Linn County Republican Women                         
+#> # … with 2,248,334 more rows
+```
+
+``` r
+iac <- iac %>% select(-tx)
 ```
 
 ## Categorical
 
 ``` r
 col_stats(iac, n_distinct)
-#> # A tibble: 16 x 4
-#>    col       class        n          p
-#>    <chr>     <chr>    <int>      <dbl>
-#>  1 tx        <chr>  1982775 1         
-#>  2 date      <date>    6483 0.00327   
-#>  3 code      <chr>     5110 0.00258   
-#>  4 committee <chr>     5191 0.00262   
-#>  5 type      <chr>        2 0.00000101
-#>  6 first     <chr>    88094 0.0444    
-#>  7 mi        <chr>       69 0.0000348 
-#>  8 last      <chr>   133355 0.0673    
-#>  9 addr1     <chr>   531705 0.268     
-#> 10 addr2     <chr>     7560 0.00381   
-#> 11 city      <chr>    18629 0.00940   
-#> 12 state     <chr>       74 0.0000373 
-#> 13 zip       <chr>    71787 0.0362    
-#> 14 amount    <dbl>    35430 0.0179    
-#> 15 na_flag   <lgl>        2 0.00000101
-#> 16 dupe_flag <lgl>        2 0.00000101
+#> # A tibble: 17 × 4
+#>    col            class       n           p
+#>    <chr>          <chr>   <int>       <dbl>
+#>  1 date           <date>   7341 0.00327    
+#>  2 code           <chr>    5479 0.00244    
+#>  3 committee_type <chr>      27 0.0000120  
+#>  4 committee      <chr>    5337 0.00237    
+#>  5 type           <chr>       1 0.000000445
+#>  6 cont_org       <chr>   13778 0.00613    
+#>  7 first          <chr>   89669 0.0399     
+#>  8 last           <chr>  124054 0.0552     
+#>  9 addr1          <chr>  575641 0.256      
+#> 10 addr2          <chr>    8951 0.00398    
+#> 11 city           <chr>   19887 0.00885    
+#> 12 state          <chr>      65 0.0000289  
+#> 13 zip            <chr>   90323 0.0402     
+#> 14 amount         <dbl>   27329 0.0122     
+#> 15 check_number   <chr>   59055 0.0263     
+#> 16 na_flag        <lgl>       2 0.000000890
+#> 17 dupe_flag      <lgl>       1 0.000000445
 ```
 
-    #> # A tibble: 2 x 3
-    #>   type        n      p
-    #>   <chr>   <int>  <dbl>
-    #> 1 CON   1934948 0.976 
-    #> 2 INK     47827 0.0241
+    #> # A tibble: 1 × 3
+    #>   type        n     p
+    #>   <chr>   <int> <dbl>
+    #> 1 CON   2248344     1
 
 ## Amounts
 
 ``` r
 summary(iac$amount)
 #>      Min.   1st Qu.    Median      Mean   3rd Qu.      Max. 
-#> -106521.5      15.0      40.0     321.1     100.0 1800000.0
+#> -106521.5      10.4      30.0     261.8     100.0 2390585.7
 mean(iac$amount <= 0)
-#> [1] 0.0008876448
+#> [1] 0.005338151
 ```
 
 ![](../plots/amount_histogram-1.png)<!-- -->
@@ -428,7 +439,7 @@ iac %>%
   geom_col(aes(fill = even)) + 
   scale_fill_brewer(palette = "Dark2") +
   scale_y_continuous(labels = comma) +
-  scale_x_continuous(breaks = seq(1998, 2020, by = 2)) +
+  scale_x_continuous(breaks = seq(1998, 2024, by = 2)) +
   theme(legend.position = "bottom") +
   labs(
     title = "Iowa Contributions by Year",
@@ -486,19 +497,19 @@ We can see how this process improved consistency.
 iac %>% 
   sample_n(10) %>% 
   select(starts_with("addr"))
-#> # A tibble: 10 x 3
-#>    addr1                 addr2 addr_norm         
-#>    <chr>                 <chr> <chr>             
-#>  1 708 Brookridge Ave    <NA>  708 BROOKRIDGE AVE
-#>  2 722 NE 10TH ST        <NA>  722 NE 10 TH ST   
-#>  3 19548 T AVE           <NA>  19548 T AVE       
-#>  4 9713 Mariposa         <NA>  9713 MARIPOSA     
-#>  5 609 W Council Dr      <NA>  609 W COUNCIL DR  
-#>  6 5661 Fluer Dr         <NA>  5661 FLUER DR     
-#>  7 2001 West 10th Street <NA>  2001 W 10 TH ST   
-#>  8 307 OHIO AVENUE       <NA>  307 OHIO AVE      
-#>  9 2128 262nd Ave        <NA>  2128 262 ND AVE   
-#> 10 6919 Vista Drive      <NA>  6919 VIS DR
+#> # A tibble: 10 × 3
+#>    addr1                  addr2 addr_norm             
+#>    <chr>                  <chr> <chr>                 
+#>  1 703 12th st            <NA>  703 12TH ST           
+#>  2 4354 Pioneer Rail SE   <NA>  4354 PIONEER RAIL SE  
+#>  3 3420 Wenig Rd NE       <NA>  3420 WENIG RD NE      
+#>  4 5 Ashcroft Pl.         <NA>  5 ASHCROFT PL         
+#>  5 508    3rd Avenue N    <NA>  508 3RD AVENUE N      
+#>  6 242 North Main Avenue  <NA>  242 NORTH MAIN AVE    
+#>  7 2031 Manzanita Avenue  <NA>  2031 MANZANITA AVE    
+#>  8 384 Keeline Ave        <NA>  384 KEELINE AVE       
+#>  9 410 North Hickory Blvd <NA>  410 NORTH HICKORY BLVD
+#> 10 4314 Northwest Dr.     <NA>  4314 NORTHWEST DR
 ```
 
 ### ZIP
@@ -523,11 +534,11 @@ progress_table(
   iac$zip_norm, 
   compare = valid_zip
 )
-#> # A tibble: 2 x 6
-#>   stage    prop_in n_distinct  prop_na  n_out n_diff
-#>   <chr>      <dbl>      <dbl>    <dbl>  <dbl>  <dbl>
-#> 1 zip        0.853      71787 0.000834 290558  57630
-#> 2 zip_norm   0.998      16820 0.0147     4697   1137
+#> # A tibble: 2 × 6
+#>   stage        prop_in n_distinct prop_na  n_out n_diff
+#>   <chr>          <dbl>      <dbl>   <dbl>  <dbl>  <dbl>
+#> 1 iac$zip        0.843      90323 0.00155 351832  74589
+#> 2 iac$zip_norm   0.998      18515 0.0161    4665   1191
 ```
 
 ### State
@@ -537,11 +548,11 @@ Very little needs to be done to clean the `state` variable.
 ``` r
 x <- iac$state
 length(x)
-#> [1] 1982775
+#> [1] 2248344
 prop_in(x, valid_state)
-#> [1] 0.9999788
+#> [1] 0.9999545
 count_out(x, valid_state)
-#> [1] 42
+#> [1] 102
 st_zip <- iac$zip %in% zipcodes$zip[zipcodes$state == "IA"]
 st_out <- x %out% valid_state
 st_rx <- str_detect(x, "^[Ii]|[Aa]$")
@@ -549,7 +560,7 @@ st_na <- !is.na(x)
 # has ia zip, ia regex, not valid, not na
 x[st_zip & st_rx & st_out & st_na] <- "IA"
 length(x)
-#> [1] 1982775
+#> [1] 2248344
 iac <- mutate(iac, state_norm = x)
 ```
 
@@ -559,11 +570,11 @@ progress_table(
   iac$state_norm, 
   compare = valid_state
 )
-#> # A tibble: 2 x 6
-#>   stage      prop_in n_distinct prop_na n_out n_diff
-#>   <chr>        <dbl>      <dbl>   <dbl> <dbl>  <dbl>
-#> 1 state         1.00         74 0.00142    42     19
-#> 2 state_norm    1.00         68 0.00142    32     13
+#> # A tibble: 2 × 6
+#>   stage          prop_in n_distinct prop_na n_out n_diff
+#>   <chr>            <dbl>      <dbl>   <dbl> <dbl>  <dbl>
+#> 1 iac$state         1.00         65 0.00248   102     11
+#> 2 iac$state_norm    1.00         64 0.00248    27     10
 ```
 
 ### City
@@ -626,20 +637,20 @@ many_city <- c(valid_city, extra_city)
 ia_city %>% 
   count(city_swap, state_norm, sort = TRUE) %>% 
   filter(!is.na(city_swap), city_swap %out% many_city)
-#> # A tibble: 1,545 x 3
+#> # A tibble: 1,693 × 3
 #>    city_swap        state_norm     n
 #>    <chr>            <chr>      <int>
-#>  1 NEW YORK CITY    NY            27
-#>  2 NYC              NY            20
-#>  3 WASHINGTON D C   DC            17
-#>  4 LECLAIRE         IA            15
-#>  5 JOHNSTNON        IA            12
-#>  6 UNITEMIZED       IA            10
-#>  7 FARMINGTON HILLS MI             9
-#>  8 IA               IA             8
-#>  9 LEMARS           IA             8
-#> 10 DESMOINES        IA             7
-#> # … with 1,535 more rows
+#>  1 NEW YORK CITY    NY            33
+#>  2 NYC              NY            24
+#>  3 LECLAIRE         IA            14
+#>  4 IA               IA            13
+#>  5 FARMINGTON HILLS MI            11
+#>  6 JOHNSTNON        IA            11
+#>  7 LEMARS           IA            10
+#>  8 UNITEMIZED       IA            10
+#>  9 ST LOUIS         MO             9
+#> 10 NY               NY             8
+#> # … with 1,683 more rows
 ```
 
 ``` r
@@ -663,11 +674,10 @@ ia_city <- rename(ia_city, city = city_raw)
 iac <- left_join(iac, ia_city, by = c("city", "state_norm", "zip_norm"))
 ```
 
-| stage      | prop\_in | n\_distinct | prop\_na | n\_out | n\_diff |
-| :--------- | -------: | ----------: | -------: | -----: | ------: |
-| city)      |    0.965 |       13652 |    0.003 |  68317 |    5829 |
-| city\_norm |    0.986 |       12699 |    0.014 |  26413 |    4819 |
-| city\_swap |    0.997 |        9391 |    0.015 |   5887 |    1501 |
+| stage                                                                     | prop_in | n_distinct | prop_na | n_out | n_diff |
+|:--------------------------------------------------------------------------|--------:|-----------:|--------:|------:|-------:|
+| str_to_upper(iac$city) | 0.969| 14762| 0.005| 70151| 6159| |iac$city_norm |   0.985 |      13804 |   0.016 | 32753 |   5169 |
+| iac\$city_swap                                                            |   0.997 |      10299 |   0.016 |  6133 |   1629 |
 
 You can see how the percentage of valid values increased with each
 stage.
@@ -722,34 +732,35 @@ iac <- iac %>%
 ``` r
 glimpse(sample_n(iac, 50))
 #> Rows: 50
-#> Columns: 21
-#> $ tx          <chr> "{FE701D0F-179A-49C5-84A1-3671C85EF799}", "{84767F03-9A30-44AE-8B2E-524485E7…
-#> $ date        <date> 2018-09-04, 2011-10-05, 2016-10-14, 2010-09-09, 2020-01-25, 2013-03-13, 201…
-#> $ code        <chr> "2451", "6021", "1229", "5140", "6021", "6072", "1914", "2523", "6021", "236…
-#> $ committee   <chr> "Westrich for Iowa", "Credit Union PAC", "Winckler for State House", "Govern…
-#> $ type        <chr> "CON", "CON", "CON", "CON", "CON", "CON", "CON", "CON", "CON", "CON", "CON",…
-#> $ first       <chr> "Mary Beth", "Beverly", NA, "Jane", "Liliane", "Paul", "Mike", "Jana", "Fern…
-#> $ mi          <chr> NA, NA, NA, "B", NA, "C", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "A", N…
-#> $ last        <chr> "Hammer", "Long", "Bridge Structural & Ornamental Ironworkers Local 111 PAC"…
-#> $ addr1       <chr> "2357 Timberlane Hights", "431 Teakwood Lane N.E.", "8000 29th St, West", "P…
-#> $ addr2       <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
-#> $ city        <chr> "Ottumwa", "Cedar Rapids", "Rock Island", "New Providence", "Palo", "Delmar"…
-#> $ state       <chr> "IA", "IA", "IL", "IA", "IA", "IA", "IA", "CA", "IA", "IA", "IA", "IA", "NY"…
-#> $ zip         <chr> "52501", "52402", "61201", "50206", "52324", "52037-9346", "52732", "90027",…
-#> $ amount      <dbl> 20.00, 35.00, 250.00, 25.00, 0.50, 15.00, 100.00, 8.34, 10.00, 100.00, 200.0…
-#> $ na_flag     <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE,…
-#> $ dupe_flag   <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE,…
-#> $ year        <dbl> 2018, 2011, 2016, 2010, 2020, 2013, 2010, 2020, 2014, 2017, 2006, 2016, 2014…
-#> $ addr_clean  <chr> "2357 TIMBERLANE HIGHTS", "431 TEAKWOOD LN N E", "8000 29 TH ST W", "PO BOX …
-#> $ zip_clean   <chr> "52501", "52402", "61201", "50206", "52324", "52037", "52732", "90027", "502…
-#> $ state_clean <chr> "IA", "IA", "IL", "IA", "IA", "IA", "IA", "CA", "IA", "IA", "IA", "IA", "NY"…
-#> $ city_clean  <chr> "OTTUMWA", "CEDAR RAPIDS", "ROCK ISLAND", "NEW PROVIDENCE", "PALO", "DELMAR"…
+#> Columns: 22
+#> $ date           <date> 2018-09-25, 2010-01-04, 2013-10-28, 2022-09-13, 2022-05-23, 2017-03-09, 2…
+#> $ code           <chr> "5172", "18485", "14136", "6060", "9098", "1247", "6237", "14711", "2671",…
+#> $ committee_type <chr> "Governor", "County Candidate - Supervisor", "City Candidate - City Counci…
+#> $ committee      <chr> "Hubbell for Governor", "Lori Cardella for Johnson Co. Board of Supervisor…
+#> $ type           <chr> "CON", "CON", "CON", "CON", "CON", "CON", "CON", "CON", "CON", "CON", "CON…
+#> $ cont_org       <chr> NA, NA, NA, "IFL Funds", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
+#> $ first          <chr> "Colleen", "Jim/Ruth", "Judy", NA, "Jean", "Kathleen", "unitemized", "Robi…
+#> $ last           <chr> "Bortscheller", "Dane", "Griffin", NA, "Carlson", "McCauley", "unitemized"…
+#> $ addr1          <chr> "1297 4th Ave SW", "4507 Dane Rd SW", "216 NW Linden St", "2000 Walker St"…
+#> $ addr2          <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
+#> $ city           <chr> "Le Mars", "Iowa City", "Ankeny", "Des Moines", "Sioux City", "Council Blu…
+#> $ state          <chr> "IA", "IA", "IA", "IA", "IA", "IA", NA, "IA", "IA", "IA", "IA", "IA", "IA"…
+#> $ zip            <chr> "51031-2770", "52240", "50023", "50317", "51106-4039", "51503", NA, "52404…
+#> $ amount         <dbl> 50.00, 0.00, 100.00, 120.00, 5.00, 10.00, 67.00, 100.00, 50.00, 100.00, 10…
+#> $ check_number   <chr> NA, "5391", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "14344", NA, NA, NA, N…
+#> $ na_flag        <lgl> FALSE, FALSE, FALSE, TRUE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE…
+#> $ dupe_flag      <lgl> TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TR…
+#> $ year           <dbl> 2018, 2010, 2013, 2022, 2022, 2017, 2012, 2021, 2022, 2006, 2017, 2006, 20…
+#> $ addr_clean     <chr> "1297 4TH AVE SW", "4507 DANE RD SW", "216 NW LINDEN ST", "2000 WALKER ST"…
+#> $ zip_clean      <chr> "51031", "52240", "50023", "50317", "51106", "51503", NA, "52404", "50312"…
+#> $ state_clean    <chr> "IA", "IA", "IA", "IA", "IA", "IA", NA, "IA", "IA", "IA", "IA", "IA", "IA"…
+#> $ city_clean     <chr> "LE MARS", "IOWA CITY", "ANKENY", "DES MOINES", "SIOUX CITY", "COUNCIL BLU…
 ```
 
-1.  There are 1,982,775 records in the database.
-2.  There are 31,894 duplicate records in the database.
+1.  There are 2,248,344 records in the database.
+2.  There are 2,248,344 duplicate records in the database.
 3.  The range and distribution of `amount` and `date` seem reasonable.
-4.  There are 280 records missing key variables.
+4.  There are 214,281 records missing key variables.
 5.  Consistency in geographic data has been improved with
     `campfin::normal_*()`.
 6.  The 4-digit `year` variable has been created with
@@ -761,17 +772,17 @@ Now the file can be saved on disk for upload to the Accountability
 server.
 
 ``` r
-clean_dir <- dir_create(here("ia", "contribs", "data", "clean"))
+clean_dir <- dir_create(here("state","ia", "contribs", "data", "clean"))
 clean_path <- path(clean_dir, "ia_contribs_clean.csv")
 write_csv(iac, clean_path, na = "")
 (clean_size <- file_size(clean_path))
 #> 382M
 file_encoding(clean_path) %>% 
   mutate(across(path, path.abbrev))
-#> # A tibble: 1 x 3
-#>   path                                           mime            charset 
-#>   <chr>                                          <chr>           <chr>   
-#> 1 ~/ia/contribs/data/clean/ia_contribs_clean.csv application/csv us-ascii
+#> # A tibble: 1 × 3
+#>   path                                                                                mime  charset
+#>   <fs::path>                                                                          <chr> <chr>  
+#> 1 …ode/accountability_datacleaning/state/ia/contribs/data/clean/ia_contribs_clean.csv <NA>  <NA>
 ```
 
 ## Upload
@@ -793,35 +804,34 @@ if (!object_exists(aws_path, "publicaccountability")) {
 }
 aws_head <- head_object(aws_path, "publicaccountability")
 (aws_size <- as_fs_bytes(attr(aws_head, "content-length")))
-#> 382M
 unname(aws_size == clean_size)
-#> [1] TRUE
 ```
 
 ## Dictionary
 
 The following table describes the variables in our final exported file:
 
-| Column        | Type        | Definition                             |
-| :------------ | :---------- | :------------------------------------- |
-| `tx`          | `character` | Unique transaction hash                |
-| `date`        | `double`    | Date contribution was made             |
-| `code`        | `character` | Recipient committee code               |
-| `committee`   | `character` | Recipient committee name               |
-| `type`        | `character` | Type of contribution (direct, in-kind) |
-| `first`       | `character` | Contributor first name                 |
-| `mi`          | `character` | Contributor middle initial             |
-| `last`        | `character` | Contributor last name or organization  |
-| `addr1`       | `character` | Contributor street address             |
-| `addr2`       | `character` | Contributor secondary address          |
-| `city`        | `character` | Contributor state abbreviation         |
-| `state`       | `character` | Contributor city name                  |
-| `zip`         | `character` | Contributor ZIP+4 code                 |
-| `amount`      | `double`    | Amount or correction                   |
-| `na_flag`     | `logical`   | Flag for missing value                 |
-| `dupe_flag`   | `logical`   | Flag for duplicate row                 |
-| `year`        | `double`    | Calendar year contribution made        |
-| `addr_clean`  | `character` | Normalized street address              |
-| `zip_clean`   | `character` | Normalized 5-digit ZIP code            |
-| `state_clean` | `character` | Normalized 2-letter state abbreviation |
-| `city_clean`  | `character` | Normalized city name                   |
+| Column           | Type        | Definition                             |
+|:-----------------|:------------|:---------------------------------------|
+| `date`           | `double`    | Date contribution was made             |
+| `code`           | `character` | Recipient committee code               |
+| `committee_type` | `character` | Recipient committee type               |
+| `committee`      | `character` | Recipient committee name               |
+| `type`           | `character` | Type of contribution (direct, in-kind) |
+| `cont_org`       | `character` | Contributor organization               |
+| `first`          | `character` | Contributor first name                 |
+| `last`           | `character` | Contributor last name                  |
+| `addr1`          | `character` | Contributor street address             |
+| `addr2`          | `character` | Contributor secondary address          |
+| `city`           | `character` | Contributor state abbreviation         |
+| `state`          | `character` | Contributor city name                  |
+| `zip`            | `character` | Contributor ZIP+4 code                 |
+| `amount`         | `double`    | Amount or correction                   |
+| `check_number`   | `character` | Check number                           |
+| `na_flag`        | `logical`   | Flag for missing value                 |
+| `dupe_flag`      | `logical`   | Flag for duplicate row                 |
+| `year`           | `double`    | Calendar year contribution made        |
+| `addr_clean`     | `character` | Normalized street address              |
+| `zip_clean`      | `character` | Normalized 5-digit ZIP code            |
+| `state_clean`    | `character` | Normalized 2-letter state abbreviation |
+| `city_clean`     | `character` | Normalized city name                   |
