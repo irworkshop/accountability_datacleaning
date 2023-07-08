@@ -112,16 +112,16 @@ here::here()
 [rproj]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects "Rproj"
 
 ## Data
-The lobbying registration data can be downloaded from the [Idaho Secretary of State's website](https://sos.idaho.gov/elections-division/lobbyist-information/). Data for 2020 and 2019 can be accessed through direct download. The website has two views by lobbyist and by employer, but they are essentially powered by the same data backend. Data prior to 2018 can also be downloaded in a separate tab.
+The lobbying registration data can be downloaded from the [Idaho Secretary of State's website](https://elections.sos.idaho.gov/TED/PublicPortal/Launchpad.aspx). Registartion data for 2019 onward can be accessed through direct download. The website has two views by lobbyist and by employer, but they are essentially powered by the same data backend. Data prior to 2018 can also be downloaded in a separate tab.
 
-This data is downloaded on Feb. 19, 2020.
+This data is downloaded on July 4, 2023 to include registration data for 2019 through 2022.
 
 ## Import
 
 ### Setting up Raw Data Directory
 
 ```{r raw_dir}
-raw_dir <- dir_create(here("id", "lobby", "data", "raw", "exp"))
+raw_dir <- dir_create(here("state","id", "lobby", "data", "raw", "exp"))
 ```
 
 ### Download
@@ -402,7 +402,7 @@ progress %>%
   coord_cartesian(ylim = c(0.75, 1)) +
   scale_y_continuous(labels = percent) +
   labs(
-    title = "Missouri City Normalization Progress",
+    title = "Idaho City Normalization Progress",
     x = "stage",
     y = "Percent Valid"
   )
@@ -453,7 +453,7 @@ glimpse(sample_n(id_lob_exp, 20))
 ## Export
 
 ```{r clean_dir}
-clean_dir <- dir_create(here("id", "lobby", "data", "reg","clean"))
+clean_dir <- dir_create(here("state","id", "lobby", "data", "reg","clean"))
 ```
 
 ```{r write_clean}

@@ -236,7 +236,7 @@ glimpse(sample_frac(fllr))
 ### Missing
 
 ```{r glimpse_na}
-glimpse_fun(fllr, count_na)
+col_stats(fllr, count_na)
 ```
 
 ```{r flag_na}

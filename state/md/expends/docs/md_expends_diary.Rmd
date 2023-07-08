@@ -1,6 +1,6 @@
 ---
 title: "Maryland Expenditures"
-author: "Kiernan Nicholls"
+author: "Kiernan Nicholls & Yanqi Xu"
 date: "`r Sys.time()`"
 output:
   github_document: 
@@ -136,9 +136,9 @@ at the end of a reporting period.
 [help]: https://campaignfinance.maryland.gov/home/viewpage?title=View%20Expenditures%20/%20Outstanding%20Obligations&link=Public/ViewExpenses
 
 ## Download
-
+Our last update included data up until June 30, 2020. In this update, we will include everything up to June 30, 2023. The next update should start with July 1, 2023. 
 ```{r raw_dir}
-raw_dir <- dir_create(here("md", "expends", "data", "raw"))
+raw_dir <- dir_create(here("state","md", "expends", "data", "raw"))
 raw_path <- path(raw_dir, "ExpenseInfo.xls")
 raw_gone <- !file_exists(raw_path)
 ```
@@ -149,7 +149,7 @@ as filling out the form manually on the website and clicking "Search".
 
 ```{r raw_post, eval=raw_gone}
 md_post <- POST(
-  url = "https://campaignfinance.maryland.gov/Public/OtherSearch?theme=vista",
+  url = "https://campaignfinance.maryland.gov/Public/ViewExpenses",
   body = list(
     txtPayeeLastName = "",
     txtPayeeFirstName = "",
@@ -168,8 +168,9 @@ md_post <- POST(
     FilingYear = "",
     FilingPeriodName = "",
     ddlFundType = "",
-    dtStartDate = "01/01/2005",
-    dtEndDate = format(today(), "%m/%d/%Y"),
+    dtStartDate = "07/01/2020",
+    dtStartDate = "06/30/2023",
+    #dtEndDate = format(today(), "%m/%d/%Y"),
     txtAmountfrom = "",
     txtAmountto = "",
     Submit = "Search"
@@ -214,35 +215,17 @@ file_info(raw_path) %>%
   mutate(across(path, path.abbrev))
 ```
 
-## Convert
-
-The `libreoffice` command is a free, open-source alternative to Microsoft 
-Office. We can run the program headless-ly (without a GUI) and convert the file.
-
-```bash
-sudo apt install libreoffice
-libreoffice --headless --convert-to csv path.xsl --outdir /tmp/
-```
-
-```{r libre_convert, include=FALSE, eval=FALSE}
-libre_convert <- function(path = NULL, dir = tempdir()) {
-  system(glue("libreoffice --headless --convert-to csv {path} --outdir {dir}"))
-}
-```
-
-```{r convert_raw, eval=FALSE}
-libre_convert(raw_path, raw_dir)
-```
-
-```{r}
-raw_convert <- dir_ls(raw_dir, glob = "*.csv")
-```
 
 ## Read
 
+```{r}
+raw_files <- dir_ls(raw_dir, glob = "*.csv")
+```
+
 ```{r raw_read}
-mde <- vroom(
-  file = raw_convert,
+mde <- map_dfr(
+  raw_files,
+  vroom,
   delim = ",",
   quote = "\"",
   escape_backslash = FALSE,
@@ -395,7 +378,7 @@ mde %>%
   geom_col(aes(fill = even)) + 
   scale_fill_brewer(palette = "Dark2") +
   scale_y_continuous(labels = comma) +
-  scale_x_continuous(breaks = 2004:2020) +
+  scale_x_continuous(breaks = 2020:2022) +
   theme(legend.position = "bottom") +
   labs(
     title = "Maryland Expenditures by Year",
@@ -422,7 +405,7 @@ md_bullet(head(mde$address))
 By using `tidyr::separate()` and `tidyr::unite()`, we can split this single
 string into it's component pieced in new variables ending in `_sep`.
 
-```{r addr_sep}
+```{r}
 mde <- mde %>% 
   separate(
     col = address,
@@ -449,9 +432,7 @@ mde <- mde %>%
   )
 ```
 
-```{r}
 
-```
 
 ### Address
 
@@ -468,13 +449,6 @@ mde <- mde %>%
       na_rep = TRUE
     )
   )
-```
-
-```{r address_view}
-mde %>% 
-  select(contains("addr_")) %>% 
-  distinct() %>% 
-  sample_n(10)
 ```
 
 ### ZIP
@@ -674,7 +648,7 @@ kable(progress, digits = 3)
 You can see how the percentage of valid values increased with each stage.
 
 ```{r bar_progress, echo=FALSE}
-raw_in <- percent(prop_in(mde$city_sep, valid_city))
+raw_in <- percent(prop_in(mde$city_sep, many_city))
 progress %>% 
   ggplot(aes(x = stage, y = prop_in)) +
   geom_hline(yintercept = 0.99) +
@@ -750,8 +724,8 @@ glimpse(sample_n(mde, 20))
 Now the file can be saved on disk for upload to the Accountability server.
 
 ```{r clean_dir}
-clean_dir <- dir_create(here("md", "expends", "data", "clean"))
-clean_path <- path(clean_dir, "md_expends_clean.csv")
+clean_dir <- dir_create(here("state","md", "expends", "data", "clean"))
+clean_path <- path(clean_dir, "md_expends_clean_202007-202306.csv")
 write_csv(mde, clean_path, na = "")
 file_size(clean_path)
 file_encoding(clean_path) %>% 
