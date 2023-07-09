@@ -128,10 +128,10 @@ combining these relationships into a single data frame. We can run that script n
 ```{r source}
 raw_dir <- dir_create(here("state","mn", "lobby", "data","raw"))
 scrape_file <- dir_ls(raw_dir, glob = "*lob_scrape.csv$")
-#scrape_script <- here("state", "mn", "lobby", "code", "scrape_mn_lobby.R")
-# if (!file_exists(path = scrape_file)) {
-#   source(file = scrape_script, local = TRUE)
-# }
+scrape_script <- here("state", "mn", "lobby", "code", "scrape_mn_lobby.R")
+ if (!file_exists(path = scrape_file)) {
+   source(file = scrape_script, local = TRUE)
+ }
 ```
 
 ## Import

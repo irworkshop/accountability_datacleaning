@@ -542,6 +542,7 @@ dir_create(proc_dir)
 
 ```{r write_clean}
 idlr %>% 
+  select(-match_exp) %>%  
   write_csv(
     path = glue("{proc_dir}/id_lobby_reg_2019-2022.csv"),
     na = ""
