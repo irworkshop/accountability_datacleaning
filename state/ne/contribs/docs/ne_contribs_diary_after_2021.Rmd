@@ -1,6 +1,6 @@
 ---
 title: "Nebraska Contributions"
-author: "Kiernan Nicholls"
+author: "Kiernan Nicholls & Yanqi Xu"
 date: "`r date()`"
 output:
   github_document: 
@@ -34,7 +34,7 @@ if (!interactive()) {
 ```
 
 ```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
-doc_dir <- fs::dir_create(here::here("zstate","ne", "contribs", "docs"))
+doc_dir <- fs::dir_create(here::here("state","ne", "contribs", "docs"))
 ```
 
 ## Project
@@ -113,11 +113,11 @@ here::i_am("state/ne/contribs/docs/ne_contribs_diary.Rmd")
 ## Data
 
 Data is obtained by from the Nebraska Accountability and Disclosure Commission's
-(NADC) [Open Data portal][03]. From this portal, we will download the 
-[Campaign Statements Data][04].
+(NADC) [Open Data portal][03]. Data prior to 2022 was available in bulk and was processed in a different workflow. (See `ne_contribs_diary.Rmd`). This update deals with new data since 2021. 
 
-> A weekly export of the campaign filings based upon the paper records filed
-with the Nebraska Accountability and Disclosure Commission.
+> The page provides comma separated value (CSV) downloads of contribution, loan, and expenditure data for each reporting year in a zipped file format. These files can be downloaded and imported into other applications (Microsoft Excel, Microsoft Access, etc.)
+
+> This data is extracted from the state of Nebraska database as it existed as of  7/21/2023  2:26 AM
 
 The [NADC home][04] page explains the role and resources provided by the 
 Commission.
@@ -196,7 +196,7 @@ official records on file with the Commission, the official records of the
 Commission take precedence.
 
 [01]: https://github.com/irworkshop/accountability_datacleaning
-[03]: http://www.nebraska.gov/government/open-data/
+[03]: https://nadc-e.nebraska.gov/PublicSite/PublicMaster.master
 [04]: http://www.nadc.nebraska.gov/index.html
 [05]: http://www.nadc.nebraska.gov/cf/index.html
 [06]: http://www.nadc.nebraska.gov/docs/B-1-2018.doc
@@ -226,33 +226,36 @@ updated weekly. [**Download**](https://www.nebraska.gov/nadc_data/nadc_data.zip)
 The bulk data is provided as a single ZIP archive we can download.
 
 ```{r raw_dir}
-raw_url <- "https://www.nebraska.gov/nadc_data/nadc_data.zip"
+raw_urls <- glue("https://nadc-e.nebraska.gov/PublicSite/Docs/BulkDataDownloads/{2021:2023}_ContributionLoanExtract.csv.zip")
 raw_dir <- dir_create(here("state","ne", "contribs", "data", "raw"))
-raw_zip <- path(raw_dir, basename(raw_url))
+raw_zips <- path(raw_dir, basename(raw_urls))
 ```
 
 ```{r raw_download}
-if (!file_exists(raw_zip)) {
-  download.file(
-    url = raw_url, 
-    destfile = raw_zip, 
-    method = "curl", 
-    extra = "--cipher 'DEFAULT:!DH'"
-  )
+for (i in seq_along(raw_zips)) {
+raw_zip <- raw_zips[i]
+  if (!file_exists(raw_zip)) {
+    download.file(
+      url = raw_urls[i], 
+      destfile = raw_zip, 
+      method = "curl", 
+      extra = "--cipher 'DEFAULT:!DH'"
+    )
+  }
+  
 }
 ```
 
 ### Extract
 
-This ZIP file contains 63 text files for each of the various forms submitted.
 We can extract each of these text files into our data directory.
 
 ```{r raw_extract}
-raw_all <- unzip(
-  zipfile = raw_zip,
+raw_all <- map(raw_zips, unzip,
+  zipfile = ,
   junkpaths = TRUE,
   exdir = raw_dir
-)
+) %>% unlist()
 ```
 
 ```{r raw_info}
@@ -261,81 +264,35 @@ file_info(raw_all) %>%
   mutate(across(path, path.abbrev))
 ```
 
-### About
-
-One file contains the date the database was last updated.
-
-```{r about_date}
-date_updated <- read_file(file = path(raw_dir, "DATE_UPDATED.TXT"))
-print(date_updated)
-ymd_hms(str_remove_all(date_updated, "\\D")) - now()
-```
-
-Before we can prepare the file for indexing, we need to locate the exact data
-we're interested in. The content, structure, and relationship of each file is
-described in the `nadc_tables.rtf` rich text file. The files correspond to the
-_forms_ through which candidates and committees report their contributions,
-expenditures, etc. Each type of filter uses a different form, so all
-expenditures are split among a few files (corresponding to a few forms). Each
-form typically also has a section (schedule) where _expenditures_ are reported.
-
-Using this file, we can grasp what information is contained on what forms and
-which tables we will need to combine to identify the parties, date, and amount
-of every campaign expenditure.
-
-Form A1 contains all of the names and addresses of political, candidate, and
-ballot question committees. This form has no transactions.
-
-* Date Received
-* Committee ID Number
-* Committee Name
-* Committee Address
-* Committee City
-* Committee State
-* Committee Zip
-* Committee Type
-    * C = Candidate Committee
-    * B = Ballot Question
-    * P = Political Action Committee
-    * T = Political Party Committee
-    * I or R = Independent Reporting Committee
-    * S = Separate Segregated Political Fund Committee
-
-Then the various types of transactions for those committee types are reported
-on subsequent forms. The files of interested were confirmed by the NADC to the
-Investigative Reporting Workshop in June of 2018.
-
-* FORM**B1AB** – All Data from form B-1 schedule A and B, Contributions
-* FORM**B2A** – Form B-2 Contributions
-* FORM**B3** – Report of Earmarked Contribution
-* FORM**B4A** – Form B-4 Schedule A:
-    * Committee ID  - Use to link with FORMB4, along with Date Received
-* FORM**B4B1** – Form B-4 Schedule B Section 1
-* FORM**B5** – Report of Late contributions
-* FORM**B7** – Report of Political Contributions of Corporation, Union, etc.
-* FORM**B72** – Form B-7 Direct contributions
-* FORM**B73** – Form B-7 Indirect contributions
-
-When we read all these sub-forms together and join them against the committee
-statements then we can identify all transactions.
-
 ## Read
 
-```{r raw_read}
-ne_all <- map(
-  .x = raw_all,
-  .f = read_delim,
-  delim = "|",
-  escape_backslash = FALSE,
-  escape_double = FALSE,
-  col_types = cols(.default = col_character()),
-  trim_ws = TRUE
-)
+```{r raw_fix}
+fix_csv <- path_temp(basename(raw_all))
+for (i in seq_along(raw_all)) {
+  read_lines(raw_all[i]) %>% 
+    str_replace_all("\\s\"([A-z\\. ]+)\"[^,|\"]*", " '\\1'") %>% 
+    str_replace_all("(?<!^|,)\"(?!,|$)", r"("""")") %>% 
+    write_lines(fix_csv[i])
+}
 ```
 
-```{r echo=FALSE}
-ne_all <- map(ne_all, clean_names)
-names(ne_all) <- path_ext_remove(basename(raw_all))
+The fixed text files can be read into a single data frame.
+
+```{r raw_read}
+nec <- read_delim(
+  file = fix_csv,
+  delim = ",",
+  escape_backslash = FALSE, 
+  escape_double = TRUE,
+  na = c("", " "),
+  col_types = cols(
+    .default = col_character(),
+  )
+) %>% clean_names()
+```
+
+```{r}
+problems(nec)
 ```
 
 ### Format
@@ -344,167 +301,11 @@ Now that each of the files is read as an element of a list, we can format them
 for combination and matching against the tables containing full information on
 the filing committees.
 
-#### A Forms
+#### Date
 
 ```{r form_a1}
-a1 <- ne_all$forma1 %>% 
-  select(starts_with("committee")) %>% 
-  rename(committee_id = committee_id_number) %>% 
-  distinct()
-```
-
-#### B Forms
-
-```{r}
-b1ab <- ne_all$formb1ab %>% 
-  select(
-    committee_id,
-    date_received,
-    contributor_id,
-    contribution_date,
-    cash_contribution,
-    in_kind_contribution,
-    unpaid_pledges,
-    starts_with("contributor_")
-  ) %>% 
-  unite(
-    col = contributor_name,
-    contributor_first_name, contributor_middle_initial, contributor_last_name,
-    sep = " ",
-    na.rm = TRUE,
-    remove = TRUE
-  ) %>% 
-  mutate(
-    contributor_name = coalesce(
-      contributor_organization_name,
-      na_if(contributor_name, "")
-    )
-  ) %>% 
-  select(-contributor_organization_name)
-```
-
-```{r}
-b2a <- ne_all$formb2a %>% 
-  select(
-    committee_id,
-    date_received,
-    contributor_id,
-    contribution_date,
-    cash_contribution,
-    in_kind_contribution,
-    unpaid_pledges,
-    contributor_name = report_id
-  )
-```
-
-```{r}
-b4a <- ne_all$formb4a %>% 
-  select(
-    committee_id,
-    date_received,
-    contributor_id,
-    contribution_date,
-    cash_contribution,
-    in_kind_contribution,
-    unpaid_pledges,
-    contributor_name = report_id
-  )
-```
-
-```{r}
-b5 <- ne_all$formb5 %>% 
-  select(
-    committee_id,
-    date_received,
-    contributor_id,
-    contribution_date = date_of_contribution,
-    cash_contribution = amount,
-    contributor_name
-  )
-```
-
-```{r}
-b72 <- ne_all$formb72 %>% 
-  select(
-    committee_name,
-    committee_id,
-    date_received,
-    contributor_id,
-    contribution_date,
-    cash_contribution = amount,
-    contributor_name = report_id
-  )
-```
-
-```{r}
-b73 <- ne_all$formb73 %>% 
-  select(
-    committee_name,
-    committee_id,
-    date_received,
-    contributor_id,
-    contribution_date,
-    cash_contribution = amount,
-    contributor_name = report_id
-  )
-```
-
-### Join
-
-```{r join_names}
-names(b4a) %in% names(b1ab)
-names(b2a) %in% names(b1ab)
-names(b2a) %in% names(b4a)
-names(b2a) %in% names(b5)
-names(b2a) %in% names(b72)
-names(b2a) %in% names(b73)
-```
-
-```{r join_bind}
-bx <- bind_rows(
-  "Form B1AB" = b1ab, 
-  "Form B4A" = b4a, 
-  "Form B5" = b5, 
-  "Form B72" = b72, 
-  "Form B73" = b73, 
-  .id = "source_form"
-)
-```
-
-```{r join_comms}
-nec <- right_join(a1, bx, by = "committee_id")
-nec <- nec %>% 
-  mutate(
-    committee_name = coalesce(committee_name.x, committee_name.y),
-    .keep = "unused",
-    .after = committee_id
-  )
-```
-
-```{r join_parse}
-nec <- nec %>% 
-  # parse column types
-  type_convert(
-    col_types = cols(
-      date_received = col_date_mdy(),
-      contribution_date = col_date_mdy(),
-      cash_contribution = col_double(),
-      in_kind_contribution = col_double(),
-      unpaid_pledges = col_double()
-    )
-  ) %>% 
-  mutate(
-    across(
-      .cols = c(cash_contribution, in_kind_contribution, unpaid_pledges),
-      .fns = ~na_if(., 0)
-    ),
-    # create a single amount column
-    contribution_amount = coalesce(
-      cash_contribution, 
-      in_kind_contribution, 
-      unpaid_pledges
-    )
-  )
+nec  <- nec %>% mutate(across(.cols = ends_with("date"),
+                             .fns = lubridate::mdy))
 ```
 
 ## Explore
@@ -517,6 +318,12 @@ glimpse(nec)
 tail(nec)
 ```
 
+```{r}
+nec <- nec %>% rename(contributor_name = contributor_or_source_name_individual_last_name,
+                      source_type = contributor_or_transaction_source_type)
+```
+
+
 ### Missing
 
 Columns vary in their degree of missing values.
@@ -528,8 +335,8 @@ col_stats(nec, count_na)
 We can flag any record missing a key variable needed to identify a transaction.
 
 ```{r na_flag}
-key_vars <- c("contribution_date", "contributor_name", 
-              "contribution_amount", "committee_name")
+key_vars <- c("receipt_date", "filer_name", 
+              "receipt_amount", "contributor_name")
 nec <- flag_na(nec, all_of(key_vars))
 mean(nec$na_flag)
 sum(nec$na_flag)
@@ -538,17 +345,16 @@ sum(nec$na_flag)
 ```{r na_view}
 nec %>% 
   filter(na_flag) %>% 
-  select(all_of(key_vars), source_form)
+  select(all_of(key_vars))
 ```
 
 ```{r}
 nec %>% 
-  group_by(source_form) %>% 
   summarise(
     n = n(),
-    no_key_comm = mean(is.na(committee_name)),
+    no_key_comm = mean(is.na(filer_name)),
     no_key_name = mean(is.na(contributor_name)),
-    no_key_amt = mean(is.na(contribution_amount))
+    no_key_amt = mean(is.na(receipt_amount))
   ) %>% 
   arrange(desc(n))
 ```
@@ -565,9 +371,8 @@ mean(nec$dupe_flag)
 
 ```{r dupe_view}
 nec %>% 
-  filter(dupe_flag) %>% 
-  select(all_of(key_vars)) %>% 
-  arrange(contribution_date)
+  group_by(source_type) %>% 
+  arrange(receipt_date)
 ```
 
 ### Categorical
@@ -577,31 +382,31 @@ col_stats(nec, n_distinct)
 ```
 
 ```{r distinct_plots, echo=FALSE}
-explore_plot(nec, committee_type)
-explore_plot(nec, source_form)
+explore_plot(nec, filer_type)
+explore_plot(nec, source_type)
 ```
 
 ### Amounts
 
 ```{r amount_round}
-nec$contribution_amount <- round(nec$contribution_amount, 2)
+nec$receipt_amount <- round(as.numeric(nec$receipt_amount), 2)
 ```
 
 ```{r amount_summary}
-summary(nec$contribution_amount)
-mean(nec$contribution_amount <= 0, na.rm = TRUE)
+summary(nec$receipt_amount)
+mean(nec$receipt_amount <= 0, na.rm = TRUE)
 ```
 
 These are the records with the minimum and maximum amounts.
 
 ```{r amount_minmax}
-glimpse(nec[c(which.max(nec$contribution_amount), which.min(nec$contribution_amount)), ])
+glimpse(nec[c(which.max(nec$receipt_amount), which.min(nec$receipt_amount)), ])
 ```
 
 ```{r hist_amount, echo=FALSE}
 nec %>%
-  filter(contribution_amount >= 1) %>% 
-  ggplot(aes(contribution_amount)) +
+  filter(receipt_amount >= 1) %>% 
+  ggplot(aes(receipt_amount)) +
   geom_histogram(fill = dark2["purple"], bins = 25) +
   scale_y_continuous(labels = comma) +
   scale_x_continuous(
@@ -622,26 +427,26 @@ nec %>%
 We can add the calendar year from `date` with `lubridate::year()`
 
 ```{r date_year}
-nec <- mutate(nec, contribution_year = year(contribution_date))
+nec <- mutate(nec, year = year(receipt_date))
 ```
 
 ```{r date_range}
-min(nec$contribution_date)
-sum(nec$contribution_year < 1984)
-max(nec$contribution_date)
-sum(nec$contribution_date > today())
+min(nec$receipt_date)
+sum(nec$year < 1984)
+max(nec$receipt_date)
+sum(nec$receipt_date > today())
 ```
 
 ```{r bar_year, echo=FALSE}
 nec %>% 
-  filter(contribution_year > 1984, contribution_year < 2022) %>% 
-  count(contribution_year) %>% 
-  mutate(even = is_even(contribution_year)) %>% 
-  ggplot(aes(x = contribution_year, y = n)) +
+  count(year) %>% 
+  filter(year > 2020) %>%  
+  mutate(even = is_even(year)) %>% 
+  ggplot(aes(x = year, y = n)) +
   geom_col(aes(fill = even)) + 
   scale_fill_brewer(palette = "Dark2") +
   scale_y_continuous(labels = comma) +
-  scale_x_continuous(breaks = seq(1984, 2020, by = 4)) +
+  #scale_x_continuous(breaks = 2021:2023) +
   theme(legend.position = "bottom") +
   labs(
     title = "Nebraska Contributions by Year",
@@ -666,23 +471,26 @@ will force consistence case, remove punctuation, and abbreviate official
 USPS suffixes.
 
 ```{r address-norm}
-addr_norm <- nec %>% 
-  distinct(contributor_address) %>% 
+   nec <- nec %>% 
+   unite(
+    col = addr_full,
+    starts_with("address"),
+    sep = " ",
+    remove = FALSE,
+    na.rm = TRUE
+  ) %>% 
   mutate(
     address_norm = normal_address(
-      address = contributor_address,
+      address = addr_full,
       abbs = usps_street,
       na_rep = TRUE
     )
-  )
+  ) %>% 
+  select(-addr_full)
 ```
 
 ```{r address-view}
-sample_n(addr_norm, 10)
-```
-
-```{r address-join}
-nec <- left_join(nec, addr_norm, by = "contributor_address")
+sample_n(nec, 10) %>% glimpse()
 ```
 
 ### ZIP
@@ -695,7 +503,7 @@ zeroes dropped by other programs like Microsoft Excel.
 nec <- nec %>% 
   mutate(
     zip_norm = normal_zip(
-      zip = contributor_zipcode,
+      zip = zip,
       na_rep = TRUE
     )
   )
@@ -703,7 +511,7 @@ nec <- nec %>%
 
 ```{r zip-progress}
 progress_table(
-  nec$contributor_zipcode,
+  nec$zip,
   nec$zip_norm,
   compare = valid_zip
 )
@@ -711,11 +519,11 @@ progress_table(
 
 ### State
 
-The existing `contributor_state` column needs not be cleaned.
+The existing `state` column needs not be cleaned.
 
 ```{r state_check}
-prop_in(nec$contributor_state, valid_state)
-what_out(nec$contributor_state, valid_state)
+prop_in(nec$state, valid_state)
+what_out(nec$state, valid_state)
 ```
 
 ### City
@@ -731,10 +539,10 @@ removing punctuation, but _expanding_ USPS abbreviations. We can also remove
 
 ```{r city-norm}
 norm_city <- nec %>% 
-  distinct(contributor_city, contributor_state, zip_norm) %>% 
+  distinct(city, state, zip_norm) %>% 
   mutate(
     city_norm = normal_city(
-      city = contributor_city, 
+      city = city, 
       abbs = usps_city,
       states = c("NE", "DC", "NEBRASKA"),
       na = invalid_city,
@@ -752,11 +560,11 @@ expected value, we can confidently swap those two.
 
 ```{r city-swap}
 norm_city <- norm_city %>% 
-  rename(city_raw = contributor_city) %>% 
+  rename(city_raw = city) %>% 
   left_join(
     y = zipcodes,
     by = c(
-      "contributor_state" = "state",
+      "state" = "state",
       "zip_norm" = "zip"
     )
   ) %>% 
@@ -782,8 +590,8 @@ nec <- left_join(
   x = nec,
   y = norm_city,
   by = c(
-    "contributor_city" = "city_raw", 
-    "contributor_state", 
+    "city" = "city_raw", 
+    "state", 
     "zip_norm"
   )
 )
@@ -810,7 +618,7 @@ good_refine <- nec %>%
     y = zipcodes,
     by = c(
       "city_refine" = "city",
-      "contributor_state" = "state",
+      "state" = "state",
       "zip_norm" = "zip"
     )
   )
@@ -819,7 +627,7 @@ good_refine <- nec %>%
 ```{r city-count, echo=FALSE}
 good_refine %>%
   count(
-    contributor_state, 
+    state, 
     zip_norm, 
     city_swap, 
     city_refine,
@@ -843,7 +651,7 @@ to be valid and reduce the total distinct values by correcting misspellings.
 ```{r city-progress, echo=FALSE}
 many_city <- c(valid_city, extra_city)
 progress <- progress_table(
-  nec$contributor_city,
+  nec$city,
   nec$city_norm,
   nec$city_swap,
   nec$city_refine,
@@ -857,7 +665,7 @@ progress %>%
 You can see how the percentage of valid values increased with each stage.
 
 ```{r bar-progress, echo=FALSE}
-raw_in <- percent(prop_in(nec$contributor_city, valid_city))
+raw_in <- percent(prop_in(nec$city, valid_city))
 progress %>% 
   ggplot(aes(x = stage, y = prop_in)) +
   geom_hline(yintercept = 0.99) +
@@ -934,15 +742,13 @@ Now the file can be saved on disk for upload to the Accountability server. We
 will name the object using a date range of the records included.
 
 ```{r clean-dir}
-clean_dir <- dir_create(here("ne", "contribs", "data", "clean"))
-clean_csv <- path(clean_dir, glue("ne_contribs_1984-20220329.csv"))
-clean_rds <- path_ext_set(clean_csv, "rds")
+clean_dir <- dir_create(here("state","ne", "contribs", "data", "clean"))
+clean_csv <- path(clean_dir, glue("ne_contribs_2021-20230721.csv"))
 basename(clean_csv)
 ```
 
 ```{r clean-write}
 write_csv(nec, clean_csv, na = "")
-write_rds(nec, clean_rds, compress = "xz")
 (clean_size <- file_size(clean_csv))
 ```
 
