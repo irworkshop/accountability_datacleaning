@@ -148,7 +148,7 @@ Go to Public Disclosure > Lobbying Activity > List of Lobbyists' Principals > Ty
 Both tables are downloaded on March 18, 2020. 
 
 ```{r raw_dir}
-raw_dir <- here("sc", "lobby", "data", "raw", "reg")
+raw_dir <- here("state","sc", "lobby", "data", "raw", "reg")
 dir_create(raw_dir)
 ```
 

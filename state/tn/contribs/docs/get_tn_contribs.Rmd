@@ -93,7 +93,7 @@ here::here()
 [02]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects "Rproj"
 
 ```{r set up raw dir}
-tn_dir <- dir_create(here("state","tn", "expends", "data", "raw"))
+tn_dir <- dir_create(here("state","tn", "contribs", "data", "raw"))
 tn_csv <- dir_ls(tn_dir, glob = "*.csv")
 tn_yrs <- as.numeric(unique(str_extract(tn_csv, "\\d{4}")))
 ```
@@ -107,8 +107,32 @@ Data can be searched on the [BECF portal][portal] by year and downloaded locally
 [portal]: https://apps.tn.gov/tncamp-app/public/ceresults.htm
 
 The last update included 2000-2021, so we are going to include all updates between then and July 15, 2023. The next update should replace this one and include everything from 2022 on. 
-```{r download files}
-for (y in 2022:2023) {
+
+```{r }
+if (!require("pacman")) {
+  install.packages("pacman")
+}
+
+pacman::p_load(
+  tidyverse,
+  lubridate,
+  janitor,
+  campfin,
+  aws.s3,
+  refinr,
+  scales,
+  rvest,
+  here,
+  httr,
+  cli,
+  fs
+)
+
+tn_dir <- dir_create(here("state","tn", "contribs", "data", "raw"))
+tn_csv <- dir_ls(tn_dir, glob = "*.csv")
+tn_yrs <- as.numeric(unique(str_extract(tn_csv, "\\d{4}")))
+
+for (y in 2000:2021) {
   if (y %in% tn_yrs) {
     message("Files for year already saved")
     next
@@ -117,21 +141,22 @@ for (y in 2022:2023) {
   # request data ------------------------------------------------------------
 
   # visit home page for session ID cookies
-  search_home <- GET("https://apps.tn.gov/tncamp/public/cesearch.htm")
+  search_home <- GET("https://apps.tn.gov/tncamp-app/public/cesearch.htm")
 
   sesh_id <- cookies(search_home)
   sesh_id <- setNames(sesh_id$value, sesh_id$name)
 
   # submit POST request for all FROM for year Y
   search_post <- POST(
-    url = "https://apps.tn.gov/tncamp/public/cesearch.htm",
+    url = "https://apps.tn.gov/tncamp-app/public/cesearch.htm",
     set_cookies(sesh_id),
     body = list(
-      searchType = "expenditures",
+      searchType = "contributions",
       toType = "both", # to both candidates and committees
-      toCandidate = TRUE, # from all types
-      toPac = TRUE,
-      toOther = TRUE,
+      fromCandidate = TRUE, # from all types
+      fromPAC = TRUE,
+      fromIndividual = TRUE,
+      fromOrganization = TRUE,
       electionYearSelection = "",
       yearSelection = y, # for given year
       recipientName = "", # no name filters
@@ -153,12 +178,12 @@ for (y in 2022:2023) {
       dateField = TRUE,
       electionYearField = TRUE,
       reportNameField = TRUE,
-      candidatePACNameField = TRUE,
-      vendorNameField = TRUE,
-      vendorAddressField = TRUE,
-      purposeField = TRUE,
-      candidateForField = TRUE,
-      soField = TRUE,
+      recipientNameField = TRUE,
+      contributorNameField = TRUE,
+      contributorAddressField = TRUE,
+      contributorOccupationField = TRUE,
+      contributorEmployerField = TRUE,
+      descriptionField = TRUE,
       `_continue` = "Continue",
       `_continue` = "Search"
     )
@@ -167,7 +192,7 @@ for (y in 2022:2023) {
 
   # read search results -----------------------------------------------------
   search_get <- GET(
-    url = "https://apps.tn.gov/tncamp/public/ceresults.htm",
+    url = "https://apps.tn.gov/tncamp-app/public/ceresults.htm",
     set_cookies(sesh_id)
   )
 
@@ -190,7 +215,7 @@ for (y in 2022:2023) {
   cli_h3("First results: {n_row} results")
 
   # define first file name
-  csv_path <- path(tn_dir, sprintf("tn_expend_%i-%i.csv", y, more_loop))
+  csv_path <- path(tn_dir, sprintf("tn_contrib_%i-%i.csv", y, more_loop))
 
   # download the first list of results as CSV
   csv_get <- GET(csv_link, write_disk(csv_path), progress("down"))
@@ -203,7 +228,7 @@ for (y in 2022:2023) {
     cli_alert_warning("More records available")
     more_loop <- more_loop + 1 # increment loop number
     more_get <- GET( # follow the more button link
-      url = "https://apps.tn.gov/tncamp/public/ceresultsnext.htm",
+      url = "https://apps.tn.gov/tncamp-app/public/ceresultsnext.htm",
       set_cookies(sesh_id)
     )
     more_list <- content(more_get)
@@ -214,7 +239,7 @@ for (y in 2022:2023) {
     cli_h3("More results page {more_loop}: {n_row} results")
 
     # create new path and save CSV file
-    csv_path <- path(tn_dir, sprintf("tn_expend_%i-%i.csv", y, more_loop))
+    csv_path <- path(tn_dir, sprintf("tn_contrib_%i-%i.csv", y, more_loop))
     csv_get <- GET(csv_link, write_disk(csv_path), progress("down"))
 
     # check for more button
@@ -225,19 +250,14 @@ for (y in 2022:2023) {
 
   Sys.sleep(runif(1, 10, 30))
 }
-```
 
-
-```{r raw csv}
 tn_csv <- dir_ls(tn_dir, glob = "*.csv")
 ```
-### Read
-We will first use 
-`purrr::map()` to use `readxl::read_excel()` and create a list of data frames.
-read together -----------------------------------------------------------
 
-```{r read csv}
-tne <- map_df(
+ read together -----------------------------------------------------------
+
+```{r }
+tnc <- map_df(
   .x = tn_csv,
   .f = function(x) {
     with_edition(
@@ -250,7 +270,7 @@ tne <- map_df(
         col_types = cols(
           .default = col_character(),
           `Amount` = col_number(),
-          # 09/0/2008, 55/21/2013, 06/31/2020
+          # 09/32/2020, 07/24/15, 5/6/14
           # `Date` = col_date("%m/%d/%Y"),
           `Election Year` = col_integer()
         )
@@ -259,32 +279,24 @@ tne <- map_df(
   }
 )
 
-tne <- clean_names(tne, case = "snake")
-n_distinct(na.omit(tne$type)) == 3
-
-bad_dates <- which(is.na(mdy(tne$date)) & !is.na(tne$date))
-munge_dt <- str_replace(
-  string = tne$date[bad_dates],
-  pattern = "(\\d+)/(\\d+)/(\\d+)",
-  replacement = "\\3-\\1-\\2"
-)
+tnc <- clean_names(tnc, case = "snake")
+n_distinct(tnc$type) == 2
 ```
 
-### Date
- fix dates with `lubridate`                                          
+ fix dates with lubridate
  invalid dates with be removed
 
 ```{r }
-tne <- mutate(tne, across(date, mdy))
+tnc <- mutate(tnc, across(date, mdy))
 ```
 
  split address -----------------------------------------------------------
 
 ```{r }
-x3 <- tne %>%
-  distinct(vendor_address) %>%
+x3 <- tnc %>%
+  distinct(contributor_address) %>%
   separate(
-    col = vendor_address,
+    col = contributor_address,
     into = c("addr_city", "state_zip"),
     sep = "\\s,\\s(?=[^,]*,[^,]*$)",
     remove = FALSE,
@@ -323,7 +335,7 @@ no_zip <- bad_split %>%
 
 ```{r }
 bad_split <- bad_split %>%
-  filter(vendor_address %out% no_zip$vendor_address)
+  filter(contributor_address %out% no_zip$contributor_address)
 ```
 
  no zip, city-state moved to end, split-merge city into addr
@@ -344,7 +356,7 @@ no_zip <- bad_split %>%
   bind_rows(no_zip)
 
 bad_split <- bad_split %>%
-  filter(vendor_address %out% no_zip$vendor_address)
+  filter(contributor_address %out% no_zip$contributor_address)
 ```
 
  no state, addr moved to state, move to addr and remove state
@@ -356,7 +368,7 @@ no_state <- bad_split %>%
   rename(addr_city = state)
 
 bad_split <- bad_split %>%
-  filter(vendor_address %out% no_state$vendor_address)
+  filter(contributor_address %out% no_state$contributor_address)
 ```
 
  combine everything and extract states
@@ -365,7 +377,7 @@ bad_split <- bad_split %>%
 full_bad <- bad_split %>%
   filter(is.na(state) | nchar(state) != 2) %>%
   unite(
-    -vendor_address,
+    -contributor_address,
     col = addr_city,
     sep = ", ",
     na.rm = TRUE
@@ -376,7 +388,7 @@ full_bad <- bad_split %>%
   )
 
 bad_split <- bad_split %>%
-  filter(vendor_address %out% full_bad$vendor_address)
+  filter(contributor_address %out% full_bad$contributor_address)
 ```
 
  remaining just have bad states in general
@@ -402,9 +414,7 @@ tn_addr <- bind_rows(good_split, bad_fix)
 tn_addr <- mutate(tn_addr, across(everything(), str_squish))
 ```
 
-## Wrangle
-We will wrangle the address to separte the city, zip and state fields. 
-### ZIP
+ wrangle address ---------------------------------------------------------
  trim zip codes
 
 ```{r }
@@ -412,14 +422,14 @@ tn_addr <- tn_addr %>%
   mutate(across(zip, normal_zip)) %>%
   rename(zip_norm = zip)
 ```
-### State
+
  state already very good
 
 ```{r }
 prop_in(tn_addr$state, valid_state)
 tn_addr <- rename(tn_addr, state_norm = state)
 ```
-### Address
+
  split address on last comma
 
 ```{r }
@@ -433,9 +443,7 @@ tn_addr <- separate(
   fill = "left"
 )
 ```
-### City
 
-#### Normalize
  normalize city
 
 ```{r }
@@ -478,7 +486,6 @@ tn_city <- tn_city %>%
   )
 ```
 
-#### Refine
  rejoin to address
 
 ```{r }
@@ -509,8 +516,7 @@ tn_addr <- tn_addr %>%
   mutate(city_refine = coalesce(city_refine, city_swap))
 ```
 
-## Address
-normalize address with usps standard
+ normalize address with usps standard
 
 ```{r }
 tn_addr <- tn_addr %>%
@@ -531,28 +537,28 @@ tn_addr <- distinct(tn_addr)
  add back all split and cleaned addresses
 
 ```{r }
-tne <- left_join(
-  x = tne,
+tnc <- left_join(
+  x = tnc,
   y = tn_addr,
-  by = "vendor_address"
+  by = "contributor_address"
 )
 
 many_city <- c(valid_city, extra_city)
 many_city <- c(many_city, "RESEARCH TRIANGLE PARK", "FARMINGTON HILLS")
 
 progress_table(
-  tne$city_sep,
-  tne$city_norm,
-  tne$city_swap,
-  tne$city_refine,
+  tnc$city_sep,
+  tnc$city_norm,
+  tnc$city_swap,
+  tnc$city_refine,
   compare = many_city
 )
 ```
 
-remove intermediary columns
+ remove intermediary columns
 
 ```{r }
-tne <- tne %>%
+tnc <- tnc %>%
   select(
     -city_sep,
     -city_norm,
@@ -563,67 +569,64 @@ tne <- tne %>%
   relocate(city_norm, .after = addr_norm) %>%
   rename_with(~str_replace(., "_norm", "_clean"))
 ```
-## Explore
+
+ explore -----------------------------------------------------------------
 
 ```{r }
-glimpse(tne)
+glimpse(tnc)
 ```
 
-### Missing
  flag NA values
 
 ```{r }
-col_stats(tne, count_na)
-key_vars <- c("date", "candidate_pac_name", "amount", "vendor_name")
-tne <- flag_na(tne, all_of(key_vars))
-sum(tne$na_flag)
-tne %>%
+col_stats(tnc, count_na)
+key_vars <- c("date", "contributor_name", "amount", "recipient_name")
+tnc <- flag_na(tnc, all_of(key_vars))
+sum(tnc$na_flag)
+tnc %>%
   filter(na_flag) %>%
   select(all_of(key_vars)) %>%
   sample_n(10)
 ```
 
-### Categorical
  count distinct values
 
 ```{r }
-col_stats(tne, n_distinct)
+col_stats(tnc, n_distinct)
 ```
 
  count/plot discrete
 
 ```{r }
-count(tne, type)
-count(tne, adj)
-explore_plot(tne, report_name) + scale_x_wrap()
+count(tnc, type)
+count(tnc, adj)
+explore_plot(tnc, report_name) + scale_x_wrap()
 ```
 
  flag duplicate values
 
 ```{r }
-tne <- flag_dupes(tne, everything())
-mean(tne$dupe_flag)
-tne %>%
+tnc <- flag_dupes(tnc, everything())
+mean(tnc$dupe_flag)
+tnc %>%
   filter(dupe_flag) %>%
   select(all_of(key_vars)) %>%
-  arrange(candidate_pac_name)
+  arrange(recipient_name)
 ```
 
-### Continuous
-
-#### Amounts
+ amounts -----------------------------------------------------------------
 
 ```{r }
-summary(tne$amount)
-sum(tne$amount <= 0)
+summary(tnc$amount)
+sum(tnc$amount <= 0)
 ```
 
  min and max to and from same people?
 
 ```{r }
-glimpse(tne[c(which.max(tne$amount), which.min(tne$amount)), ])
+glimpse(tnc[c(which.max(tnc$amount), which.min(tnc$amount)), ])
 
-tne %>%
+tnc %>%
   filter(amount >= 1) %>%
   ggplot(aes(amount)) +
   geom_histogram(fill = dark2["purple"], bins = 30) +
@@ -634,35 +637,35 @@ tne %>%
     trans = "log10"
   ) +
   labs(
-    title = "Tennessee Expenditures Amount Distribution",
+    title = "New Mexico Contributions Amount Distribution",
     caption = "Source: TN Online Campaign Finance",
     x = "Amount",
     y = "Count"
   )
 ```
-### Dates
-We will create a `year` variable from the transaction date, and plot the distribution. 
+
+ dates -------------------------------------------------------------------
 
 ```{r }
-tne <- mutate(tne, year = year(date))
+tnc <- mutate(tnc, year = year(date))
 
-min(tne$date, na.rm = TRUE)
-sum(tne$year < 2000, na.rm = TRUE)
-max(tne$date, na.rm = TRUE)
-sum(tne$date > today(), na.rm = TRUE)
+min(tnc$date, na.rm = TRUE)
+sum(tnc$year < 2000, na.rm = TRUE)
+max(tnc$date, na.rm = TRUE)
+sum(tnc$date > today(), na.rm = TRUE)
 
-tne %>%
-  filter(between(year, min(tne$year, na.rm = T), max(tne$year, na.rm = T))) %>%
+tnc %>%
+  filter(between(year, 2002, 2021)) %>%
   count(year) %>%
   mutate(even = is_even(year)) %>%
   ggplot(aes(x = year, y = n)) +
   geom_col(aes(fill = even)) +
   scale_fill_brewer(palette = "Dark2") +
   scale_y_continuous(labels = scales::comma) +
-  scale_x_continuous(breaks = seq(min(tne$year, na.rm = T), max(tne$year, na.rm = T), by = 2)) +
+  scale_x_continuous(breaks = seq(2000, 2020, by = 2)) +
   theme(legend.position = "bottom") +
   labs(
-    title = "Tennessee Expenditures by Year",
+    title = "Tennessee Contributions by Year",
     caption = "Source: TN Online Campaign Finance",
     fill = "Election Year",
     x = "Year Made",
@@ -670,41 +673,18 @@ tne %>%
   )
 ```
 
+ export ------------------------------------------------------------------
 
 ```{r }
-tne$date <- as.character(tne$date)
-tne$date[bad_dates] <- munge_dt
-```
-
-## Conclude
-
-```{r clean-glimpse}
-glimpse(sample_n(tne, 1000))
-```
-
-1. There are `r comma(nrow(tne))` records in the database.
-1. There are `r comma(sum(tne$dupe_flag))` duplicate records in the database.
-1. The range and distribution of `amount` and `date` seem reasonable.
-1. There are `r comma(sum(tne$na_flag))` records missing key variables.
-1. Consistency in geographic data has been improved with `campfin::normal_*()`.
-1. The 4-digit `year` variable has been created with `lubridate::year()`.
-
-## Export
-
-Now the file can be saved on disk for upload to the Accountability server. We
-will name the object using a date range of the records included.
-
-
-```{r }
-clean_dir <- dir_create(here("state","tn", "expends", "data", "clean"))
-clean_path <- path(clean_dir, "tn_expends_2022-20230714.csv")
-write_csv(tne, clean_path, na = "")
+clean_dir <- dir_create(here("state", "tn", "contribs", "data", "clean"))
+clean_path <- path(clean_dir, "tn_contribs_2002-20210824.csv")
+write_csv(tnc, clean_path, na = "")
 (clean_size <- file_size(clean_path))
 ```
 
-## Upload
+ upload ------------------------------------------------------------------
 
-```{r eval=FALSE}
+```{r }
 aws_path <- path("csv", basename(clean_path))
 if (!object_exists(aws_path, "publicaccountability")) {
   put_object(
