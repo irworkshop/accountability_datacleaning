@@ -5,7 +5,7 @@ date: "`r Sys.time()`"
 output:
   github_document: 
     df_print: tibble
-    toc: TRUE
+    toc: true
     toc_dept: 2
 editor_options: 
   chunk_output_type: console
@@ -108,7 +108,15 @@ Data can be searched on the [BECF portal][portal] by year and downloaded locally
 
 We are going to include updates from 2000 through the end of 2022 in this update. 
 
+```{r raw_dir}
+tn_dir <- dir_create(here("state","tn", "contribs", "data", "raw"))
+tn_csv <- dir_ls(tn_dir, glob = "*.csv")
+tn_yrs <- as.numeric(unique(str_extract(tn_csv, "\\d{4}")))
+```
+
+
 ```{r eval=FALSE}
+
 for (y in 2001:2022) {
   if (y %in% tn_yrs) {
     message("Files for year already saved")
@@ -202,10 +210,6 @@ descriptionField = TRUE,
       # descriptionField = TRUE,
        `_continue` = "Continue",
        `_continue` = "Search"
-    )
-  )
-
-
 
   # read search results -----------------------------------------------------
   search_get <- GET(
@@ -492,7 +496,7 @@ tn_city <- tn_city %>%
     match_dist = str_dist(city_norm, city_match),
     city_swap = if_else(
       condition = !is.na(match_dist) & (match_abb | match_dist == 1),
-      TRUE = city_match,
+      true = city_match,
       false = city_norm
     )
   ) %>%

@@ -123,7 +123,7 @@ for (y in 2022:2023) {
   sesh_id <- setNames(sesh_id$value, sesh_id$name)
 
   # submit POST request for all FROM for year Y
-  search_post1 <- POST(
+  search_post <- POST(
     url = "https://apps.tn.gov/tncamp/public/cesearch.htm",
     set_cookies(sesh_id),
     body = list(
