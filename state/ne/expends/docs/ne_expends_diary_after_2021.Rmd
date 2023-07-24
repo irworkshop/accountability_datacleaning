@@ -1,5 +1,5 @@
 ---
-title: "Nebraska Contributions since 2021"
+title: "Nebraska Expenditures since 2021"
 author: "Kiernan Nicholls & Yanqi Xu"
 date: "`r date()`"
 output:
@@ -113,11 +113,11 @@ here::i_am("state/ne/contribs/docs/ne_contribs_diary.Rmd")
 ## Data
 
 Data is obtained by from the Nebraska Accountability and Disclosure Commission's
-(NADC) [website][03]. Data prior to 2022 was available in bulk and was processed in a different workflow. (See `ne_contribs_diary.Rmd`). This update deals with new data since 2021. 
+(NADC) [data download page][03]. Data prior to 2022 was available in bulk and was processed in a different workflow. (See `ne_expends_diary.Rmd`). This update deals with new data since 2021 and can be accessed on the website by clicking on `Expenditures`.
 
 > The page provides comma separated value (CSV) downloads of contribution, loan, and expenditure data for each reporting year in a zipped file format. These files can be downloaded and imported into other applications (Microsoft Excel, Microsoft Access, etc.)
 
-> This data is extracted from the state of Nebraska database as it existed as of  7/21/2023  2:26 AM
+> This data is extracted from the state of Nebraska database as it existed as of  7/23/2023  2:26 AM
 
 The [NADC home][04] page explains the role and resources provided by the 
 Commission.
@@ -158,7 +158,7 @@ activity of the committee. It discloses the name of contributors of more than
 \$250 and the amounts of the contributions. It discloses expenditures of more
 than \$250.
 
-3. > Report of Late Contributions - this document discloses contributions of
+3. > Report of Late Expenditures - this document discloses contributions of
 $1,000 or more received by the committee during 14 days immediately preceding
 the election. Information reported as late contributions are also reported on
 subsequent campaign statements.
@@ -196,22 +196,17 @@ official records on file with the Commission, the official records of the
 Commission take precedence.
 
 [01]: https://github.com/irworkshop/accountability_datacleaning
-[03]: https://nadc-e.nebraska.gov/PublicSite/PublicMaster.master
-[02]: http://nadc-e.nebraska.gov/PublicSite/DataDownload.aspx
+[03]: https://nadc.nebraska.gov/view-campaign-filings-personal-financial-disclosures-potential-conflicts-lobbying-reports-and-more
 [04]: http://www.nadc.nebraska.gov/index.html
 [05]: http://www.nadc.nebraska.gov/cf/index.html
 [06]: http://www.nadc.nebraska.gov/docs/B-1-2018.doc
 [07]: http://www.nadc.nebraska.gov/docs/B-2-2018.doc
 [08]: http://www.nadc.nebraska.gov/docs/B-4-2018.doc
 
-## Download
 
-The NADC provides a [bulk download][02] of records on their data.
-
-The bulk data is provided as ZIP archive we can download.
 ```{r raw_dir}
-raw_urls <- glue("https://nadc-e.nebraska.gov/PublicSite/Docs/BulkDataDownloads/{2021:2023}_ContributionLoanExtract.csv.zip")
-raw_dir <- dir_create(here("state","ne", "contribs", "data", "raw"))
+raw_urls <- glue("https://nadc-e.nebraska.gov/PublicSite/Docs/BulkDataDownloads/{2021:2023}_ExpenditureExtract.csv.zip")
+raw_dir <- dir_create(here("state","ne", "expends", "data", "raw"))
 raw_zips <- path(raw_dir, basename(raw_urls))
 ```
 
@@ -263,7 +258,7 @@ for (i in seq_along(raw_all)) {
 The fixed text files can be read into a single data frame.
 
 ```{r raw_read}
-nec <- read_delim(
+nee <- read_delim(
   file = fix_csv,
   delim = ",",
   escape_backslash = FALSE, 
@@ -276,7 +271,7 @@ nec <- read_delim(
 ```
 
 ```{r}
-problems(nec)
+problems(nee)
 ```
 
 ### Format
@@ -288,23 +283,29 @@ the filing committees.
 #### Date
 
 ```{r form_a1}
-nec  <- nec %>% mutate(across(.cols = ends_with("date"),
+nee  <- nee %>% mutate(across(.cols = ends_with("date"),
                              .fns = lubridate::mdy))
 ```
 
 ## Explore
 
-There are `r comma(nrow(nec))` rows of `r ncol(nec)` columns. Each record
+There are `r comma(nrow(nee))` rows of `r ncol(nee)` columns. Each record
 represents a single contribution from an entity to a committee.
 
 ```{r glimpse}
-glimpse(nec)
-tail(nec)
+glimpse(nee)
+tail(nee)
 ```
 
 ```{r}
-nec <- nec %>% rename(contributor_name = contributor_or_source_name_individual_last_name,
-                      source_type = contributor_or_transaction_source_type)
+nee <- nee %>% rename(transaction_type = expenditure_transaction_type,
+                      sub_type = expenditure_sub_type,
+                      payee_type = payee_or_recipient_or_in_kind_contributor_type,
+                      payee_name = payee_or_recipient_or_in_kind_contributor_name)
+
+nee <- nee %>% 
+   rename_with(~str_replace(., "expenditure_", "exp_")) 
+  
 ```
 
 
@@ -313,32 +314,32 @@ nec <- nec %>% rename(contributor_name = contributor_or_source_name_individual_l
 Columns vary in their degree of missing values.
 
 ```{r na_count}
-col_stats(nec, count_na)
+col_stats(nee, count_na)
 ```
 
 We can flag any record missing a key variable needed to identify a transaction.
 
 ```{r na_flag}
-key_vars <- c("receipt_date", "filer_name", 
-              "receipt_amount", "contributor_name")
-nec <- flag_na(nec, all_of(key_vars))
-mean(nec$na_flag)
-sum(nec$na_flag)
+key_vars <- c("exp_date", "filer_name", 
+              "exp_amount", "payee_name")
+nee <- flag_na(nee, all_of(key_vars))
+mean(nee$na_flag)
+sum(nee$na_flag)
 ```
 
 ```{r na_view}
-nec %>% 
+nee %>% 
   filter(na_flag) %>% 
   select(all_of(key_vars))
 ```
 
 ```{r}
-nec %>% 
+nee %>% 
   summarise(
     n = n(),
     no_key_comm = mean(is.na(filer_name)),
-    no_key_name = mean(is.na(contributor_name)),
-    no_key_amt = mean(is.na(receipt_amount))
+    no_key_name = mean(is.na(payee_name)),
+    no_key_amt = mean(is.na(exp_amount))
   ) %>% 
   arrange(desc(n))
 ```
@@ -348,49 +349,42 @@ nec %>%
 We can also flag any record completely duplicated across every column.
 
 ```{r dupe_flag}
-nec <- flag_dupes(nec, everything())
-sum(nec$dupe_flag)
-mean(nec$dupe_flag)
-```
-
-```{r dupe_view}
-nec %>% 
-  group_by(source_type) %>% 
-  arrange(receipt_date)
+nee <- flag_dupes(nee, everything())
+sum(nee$dupe_flag)
+mean(nee$dupe_flag)
 ```
 
 ### Categorical
 
 ```{r distinct_count}
-col_stats(nec, n_distinct)
+col_stats(nee, n_distinct)
 ```
 
 ```{r distinct_plots, echo=FALSE}
-explore_plot(nec, filer_type)
-explore_plot(nec, source_type)
+explore_plot(nee, filer_type)
+explore_plot(nee, transaction_type)
 ```
 
 ### Amounts
 
 ```{r amount_round}
-nec$receipt_amount <- round(as.numeric(nec$receipt_amount), 2)
+nee$exp_amount <- round(as.numeric(nee$exp_amount), 2)
 ```
 
 ```{r amount_summary}
-summary(nec$receipt_amount)
-mean(nec$receipt_amount <= 0, na.rm = TRUE)
+summary(nee$exp_amount)
 ```
 
 These are the records with the minimum and maximum amounts.
 
 ```{r amount_minmax}
-glimpse(nec[c(which.max(nec$receipt_amount), which.min(nec$receipt_amount)), ])
+glimpse(nee[c(which.max(nee$exp_amount), which.min(nee$exp_amount)), ])
 ```
 
 ```{r hist_amount, echo=FALSE}
-nec %>%
-  filter(receipt_amount >= 1) %>% 
-  ggplot(aes(receipt_amount)) +
+nee %>%
+  filter(exp_amount >= 1) %>% 
+  ggplot(aes(exp_amount)) +
   geom_histogram(fill = dark2["purple"], bins = 25) +
   scale_y_continuous(labels = comma) +
   scale_x_continuous(
@@ -399,7 +393,7 @@ nec %>%
     trans = "log10"
   ) +
   labs(
-    title = "Nebraska Contributions Amount Distribution",
+    title = "Nebraska Expenditures Amount Distribution",
     caption = "Source: NADC",
     x = "Amount",
     y = "Count"
@@ -411,18 +405,18 @@ nec %>%
 We can add the calendar year from `date` with `lubridate::year()`
 
 ```{r date_year}
-nec <- mutate(nec, year = year(receipt_date))
+nee <- mutate(nee, year = year(exp_date))
 ```
 
 ```{r date_range}
-min(nec$receipt_date)
-sum(nec$year < 1984)
-max(nec$receipt_date)
-sum(nec$receipt_date > today())
+min(nee$exp_date)
+sum(nee$year < 1984)
+max(nee$exp_date)
+sum(nee$exp_date > today())
 ```
 
 ```{r bar_year, echo=FALSE}
-nec %>% 
+nee %>% 
   count(year) %>% 
   filter(year > 2020) %>%  
   mutate(even = is_even(year)) %>% 
@@ -433,7 +427,7 @@ nec %>%
   #scale_x_continuous(breaks = 2021:2023) +
   theme(legend.position = "bottom") +
   labs(
-    title = "Nebraska Contributions by Year",
+    title = "Nebraska Expenditures by Year",
     caption = "Source: NADC",
     fill = "Election Year",
     x = "Year Made",
@@ -455,7 +449,7 @@ will force consistence case, remove punctuation, and abbreviate official
 USPS suffixes.
 
 ```{r address-norm}
-   nec <- nec %>% 
+   nee <- nee %>% 
    unite(
     col = addr_full,
     starts_with("address"),
@@ -474,7 +468,7 @@ USPS suffixes.
 ```
 
 ```{r address-view}
-sample_n(nec, 10) %>% glimpse()
+sample_n(nee, 10) %>% glimpse()
 ```
 
 ### ZIP
@@ -484,7 +478,7 @@ valid _five_ digit codes by removing the ZIP+4 suffix and returning leading
 zeroes dropped by other programs like Microsoft Excel.
 
 ```{r zip-norm}
-nec <- nec %>% 
+nee <- nee %>% 
   mutate(
     zip_norm = normal_zip(
       zip = zip,
@@ -495,8 +489,8 @@ nec <- nec %>%
 
 ```{r zip-progress}
 progress_table(
-  nec$zip,
-  nec$zip_norm,
+  nee$zip,
+  nee$zip_norm,
   compare = valid_zip
 )
 ```
@@ -506,8 +500,8 @@ progress_table(
 The existing `state` column needs not be cleaned.
 
 ```{r state_check}
-prop_in(nec$state, valid_state)
-what_out(nec$state, valid_state)
+prop_in(nee$state, valid_state)
+what_out(nee$state, valid_state)
 ```
 
 ### City
@@ -522,7 +516,7 @@ removing punctuation, but _expanding_ USPS abbreviations. We can also remove
 `invalid_city` values.
 
 ```{r city-norm}
-norm_city <- nec %>% 
+norm_city <- nee %>% 
   distinct(city, state, zip_norm) %>% 
   mutate(
     city_norm = normal_city(
@@ -570,8 +564,8 @@ norm_city <- norm_city %>%
 ```
 
 ```{r city-rejoin}
-nec <- left_join(
-  x = nec,
+nee <- left_join(
+  x = nee,
   y = norm_city,
   by = c(
     "city" = "city_raw", 
@@ -591,7 +585,7 @@ strings that have a valid city/state/zip combination.
 [or]: https://openrefine.org/
 
 ```{r city-refine}
-good_refine <- nec %>% 
+good_refine <- nee %>% 
   mutate(
     city_refine = city_swap %>% 
       key_collision_merge() %>% 
@@ -622,7 +616,7 @@ good_refine %>%
 Then we can join the refined values back to the database.
 
 ```{r city-join}
-nec <- nec %>% 
+nee <- nee %>% 
   left_join(good_refine, by = names(.)) %>% 
   mutate(city_refine = coalesce(city_refine, city_swap))
 ```
@@ -635,10 +629,10 @@ to be valid and reduce the total distinct values by correcting misspellings.
 ```{r city-progress, echo=FALSE}
 many_city <- c(valid_city, extra_city)
 progress <- progress_table(
-  nec$city,
-  nec$city_norm,
-  nec$city_swap,
-  nec$city_refine,
+  nee$city,
+  nee$city_norm,
+  nee$city_swap,
+  nee$city_refine,
   compare = many_city
 ) %>% mutate(stage = as_factor(stage))
 progress %>% 
@@ -649,7 +643,7 @@ progress %>%
 You can see how the percentage of valid values increased with each stage.
 
 ```{r bar-progress, echo=FALSE}
-raw_in <- percent(prop_in(nec$city, valid_city))
+raw_in <- percent(prop_in(nee$city, valid_city))
 progress %>% 
   ggplot(aes(x = stage, y = prop_in)) +
   geom_hline(yintercept = 0.99) +
@@ -696,7 +690,7 @@ Before exporting, we can remove the intermediary normalization columns and
 rename all added variables with the `_clean` suffix.
 
 ```{r clean-select}
-nec <- nec %>% 
+nee <- nee %>% 
   select(
     -city_norm,
     -city_swap,
@@ -710,13 +704,13 @@ nec <- nec %>%
 ## Conclude
 
 ```{r clean-glimpse}
-glimpse(sample_n(nec, 1000))
+glimpse(sample_n(nee, 1000))
 ```
 
-1. There are `r comma(nrow(nec))` records in the database.
-1. There are `r comma(sum(nec$dupe_flag))` duplicate records in the database.
+1. There are `r comma(nrow(nee))` records in the database.
+1. There are `r comma(sum(nee$dupe_flag))` duplicate records in the database.
 1. The range and distribution of `amount` and `date` seem reasonable.
-1. There are `r comma(sum(nec$na_flag))` records missing key variables.
+1. There are `r comma(sum(nee$na_flag))` records missing key variables.
 1. Consistency in geographic data has been improved with `campfin::normal_*()`.
 1. The 4-digit `year` variable has been created with `lubridate::year()`.
 
@@ -726,13 +720,13 @@ Now the file can be saved on disk for upload to the Accountability server. We
 will name the object using a date range of the records included.
 
 ```{r clean-dir}
-clean_dir <- dir_create(here("state","ne", "contribs", "data", "clean"))
-clean_csv <- path(clean_dir, glue("ne_contribs_2021-20230721.csv"))
+clean_dir <- dir_create(here("state","ne", "expends", "data", "clean"))
+clean_csv <- path(clean_dir, glue("ne_expends_2021-20230723.csv"))
 basename(clean_csv)
 ```
 
 ```{r clean-write}
-write_csv(nec, clean_csv, na = "")
+write_csv(nee, clean_csv, na = "")
 (clean_size <- file_size(clean_csv))
 ```
 

@@ -105,8 +105,7 @@ here::i_am("state/ne/contribs/docs/ne_contribs_diary.Rmd")
 ## Data
 
 Data is obtained by from the Nebraska Accountability and Disclosure
-Commission’s (NADC) [Open Data
-portal](https://nadc-e.nebraska.gov/PublicSite/PublicMaster.master).
+Commission’s (NADC) [website](https://nadc.nebraska.gov/view-campaign-filings-personal-financial-disclosures-potential-conflicts-lobbying-reports-and-more).
 Data prior to 2022 was available in bulk and was processed in a
 different workflow. (See `ne_contribs_diary.Rmd`). This update deals
 with new data since 2021.
@@ -205,25 +204,9 @@ of the Commission take precedence.
 
 ## Download
 
-The NADC provides a bulk download of records on their [search
-page](https://nadc.nebraska.gov/ccdb/search.cgi).
+The NADC provides a bulk download of records on their data each year.
 
-> The campaign filings displayed on this website are based upon the
-> paper records filed with the Nebraska Accountability and Disclosure
-> Commission. While every effort has been made to ensure accurate data
-> input, errors may occur. Anyone noting an error is encouraged to
-> contact this office.
->
-> In any discrepancy between information displayed on this website and
-> the official records on file with the Commission, the official records
-> of the Commission take precedence.
-
-> Download the entire dataset of campaign filings based upon the paper
-> records filed with the Nebraska Accountability and Disclosure
-> Commission. Dataset is updated weekly.
-> [**Download**](https://www.nebraska.gov/nadc_data/nadc_data.zip)
-
-The bulk data is provided as a single ZIP archive we can download.
+The bulk data is provided as an annual ZIP archive we can download.
 
 ``` r
 raw_urls <- glue("https://nadc-e.nebraska.gov/PublicSite/Docs/BulkDataDownloads/{2021:2023}_ContributionLoanExtract.csv.zip")
