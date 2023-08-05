@@ -32,7 +32,7 @@ set.seed(5)
 ```
 
 ```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
-fs::dir_create(here::here("ne", "lobbying", "docs"))
+fs::dir_create(here::here("state","ne", "lobbying", "docs"))
 ```
 
 ## Project
@@ -109,10 +109,7 @@ here::here()
 
 ## Data
 
-A list of registered lobbyists can be obtained from the 
-[Nebraska Legislature's website][nel].
-
-[nel]: https://nebraskalegislature.gov/reports/lobby.php
+The data is obtained via a public records request fulfilled on July 27, 2023. A zip archive was provided by the legislative clerk's office. The data includes records from 2000 to July 21, 2023. 
 
 > The following reports identify lobbyists registered in Nebraska with the
 Office of the Clerk of the Legislature.
@@ -130,145 +127,54 @@ Office of the Clerk of the Legislature.
 [4]: https://nebraskalegislature.gov/FloorDocs/Current/PDF/Lobby/activity_final_by_bill.pdf
 [5]: https://nebraskalegislature.gov/FloorDocs/Current/PDF/Lobby/counts.pdf
 
-Each of these data files comes in PDF format only.
 
 ## Import
 
-We will have to use the `pdftools` package to read these files and extract the
-text content. We are first interested in the list of registered lobbyists by
-principal clients.
+```{r}
+raw_dir <- dir_create(here::here("state","ne", "lobbying", "data","raw"))
 
-```{r pdf_file}
-pdf_file <- "https://nebraskalegislature.gov/FloorDocs/Current/PDF/Lobby/principallist.pdf"
+nelr <- read_csv(dir_ls(raw_dir, glob = "*.csv"))
+
+nelr <- nelr %>% clean_names()
 ```
 
-The `pdftools::pdf_text()` file can read each page of the file into a list of
-character strings, with each page being read as a _single_ character string list
-element.
-
-```{r pdf_text}
-nelr <- pdf_text(pdf_file)
-cat(nelr[[1]])
+```{r}
+nelr <- nelr %>% mutate(across(.cols = ends_with("_date"), mdy))
 ```
 
-We can define a function that uses the `stringr` and `tibble` packages to takes
-these page strings and split them up and wrangle them into a data frame. The
-file is structured so that lobbyists are listed below each of their principals,
-indented by 3 spaces. We can use that structure to identify which rows are
-lobbyists, then split the string into three columns.
 
-Before this, we will need to note the date of the file.
+## Explore
 
-```{r pdf_date}
-lob_date <- mdy(str_extract(nelr[[1]], "(?<=AS OF )\\w+ \\d{1,2}, \\d{4}"))
-lob_year <- year(lob_date)
+```{r glimpse}
+glimpse(nelr)
+tail(nelr)
 ```
 
-```{r pdf_table}
-pdf_table <- function(page) {
-  # split the page into lines
-  x <- page %>%
-    str_remove_all("\\sWD\\s") %>%
-    str_split("\n") %>%
-    `[[`(1)
-  # define the rows to remove
-  heading <- 1:str_which(x, "Principal and Lobbyist\\s")
-  footer <- str_which(x, "Lobbyist Registration, Room 2014 State Capitol"):length(x)
-  x <- x[-c(heading, footer)]
-  # enframe the rows and separate
-  x <- x %>%
-    enframe(name = NULL, value = "line") %>%
-    mutate(
-      indent = str_detect(line, "^\\s{3}\\w"),
-      line = str_trim(line)
-    ) %>%
-    separate(
-      col = line,
-      into = c("name", "address"),
-      sep = "\\s{2,}",
-      extra = "merge"
-    ) %>% 
-    separate(
-      col = address,
-      into = c("address", "phone"),
-      sep = "\\s+(?=\\()"
-    )
-}
+### Missing
+
+Columns vary in their degree of missing values.
+
+```{r na_count}
+col_stats(nelr, count_na)
 ```
 
-```{r pdf_parse}
-nelr <- nelr %>% 
-  map_dfr(pdf_table) %>%
-  filter(phone %>% str_detect("^\\(")) %>%
-  mutate(
-    pri_name = ifelse(!indent, name, NA),
-    pri_geo = ifelse(!indent, address, NA),
-    pri_phone = ifelse(!indent, phone, NA)
-  ) %>%
-  fill(starts_with("pri")) %>%
-  filter(indent) %>%
-  select(-indent) %>% 
-  rename(
-    lob_name = name,
-    lob_geo = address,
-    lob_phone = phone
-  )
-```
 
-```{r echo=FALSE}
-print(nelr)
+### Duplicates
+
+We can also flag any record completely duplicated across every column.
+
+```{r dupe_flag}
+nelr <- flag_dupes(nelr, everything())
+sum(nelr$dupe_flag)
+mean(nelr$dupe_flag)
 ```
 
 ## Wrangle
-
-This new `lob_address` column can now be split into it's components with `tidyr::separate()`.
-
-```{r address_split_lob}
-nelr <- nelr %>%
-  separate(
-    col = lob_geo,
-    into = c(glue("lob_street{1:10}"), "lob_city", "lob_state_zip"),
-    sep = ",\\s",
-    fill = "left",
-    remove = FALSE
-  ) %>%
-  unite(
-    starts_with("lob_street"),
-    col = "lob_address",
-    sep = " ",
-    na.rm = TRUE
-  ) %>%
-  separate(
-    col = lob_state_zip,
-    sep = "\\s(?=\\d)",
-    into = c("lob_state", "lob_zip")
-  )
+First, we will rename some columns. 
+```{r}
+nelr <- nelr %>% rename_with(~str_replace(., "principal_", "pri_")) %>% 
+  rename_with(~str_replace(., "lobbyist_", "lob_"))
 ```
-
-The same process needs to be done for the `pri_address`.
-
-```{r address_split_pri}
-nelr <- nelr %>%
-  separate(
-    col = pri_geo,
-    into = c(glue("pri_street{1:10}"), "pri_city", "pri_state_zip"),
-    sep = ",\\s",
-    fill = "left",
-    remove = FALSE
-  ) %>%
-  unite(
-    starts_with("pri_street"),
-    col = "pri_address",
-    sep = " ",
-    na.rm = TRUE
-  ) %>%
-  separate(
-    col = pri_state_zip,
-    sep = "\\s(?=\\d)",
-    into = c("pri_state", "pri_zip")
-  )
-```
-
 ### Phone
 
 ```{r phone_normal}
@@ -295,11 +201,15 @@ nelr <- nelr %>%
 nelr %>% 
   select(
     pri_address,
-    pri_address_norm
+    pri_address_norm,
+    lob_address,
+    lob_address_norm
   ) %>% 
   distinct() %>% 
   sample_frac()
 ```
+
+
 
 ### ZIP
 
@@ -356,7 +266,7 @@ nelr <- nelr %>%
     match_abb = is_abbrev(lob_city_norm, city_match),
     match_dist = str_dist(lob_city_norm, city_match),
     lob_city_swap = if_else(
-      condition = match_abb | match_dist == 1,
+      condition = !is.na(match_dist) & (match_abb | match_dist == 1),
       true = city_match,
       false = lob_city_norm
     )
@@ -382,7 +292,7 @@ nelr <- nelr %>%
     match_abb = is_abbrev(pri_city_norm, city_match),
     match_dist = str_dist(pri_city_norm, city_match),
     pri_city_swap = if_else(
-      condition = match_abb | match_dist == 1,
+      condition = !is.na(match_dist) & (match_abb | match_dist == 1),
       true = city_match,
       false = pri_city_norm
     )
@@ -416,28 +326,20 @@ progress_table(
 
 ```{r clean_order}
 nelr <- nelr %>% 
-  select(
-    lob_name,
-    lob_addr = lob_address_norm,
-    lob_city = lob_city_swap,
-    lob_state,
-    lob_zip = lob_zip_norm,
-    pri_name,
-    pri_addr = pri_address_norm,
-    pri_city = pri_city_swap,
-    pri_state,
-    pri_zip = pri_zip_norm,
-  ) %>% 
+  select(-c(
+    lob_city_clean = lob_city_swap,
+    pri_city_clean = pri_city_swap
+  )) %>% 
   mutate(
-    date = lob_date, 
-    year = lob_year,
+    year = year(registration_date),
     .before = lob_name
-  )
+  ) %>% 
+  rename_with(~str_replace(., "_norm", "_clean"))
 ```
 
 ```{r clean_write}
 clean_dir <- dir_create(here("state","ne", "lobbying", "data", "clean"))
-clean_path <- path(clean_dir, "ne_lobbyist_clean.csv")
+clean_path <- path(clean_dir, "ne_lobby_reg.csv")
 write_csv(nelr, clean_path, na = "")
 ```
 

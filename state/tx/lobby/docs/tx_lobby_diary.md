@@ -1,7 +1,7 @@
 Texas Lobbying
 ================
 Kiernan Nicholls & Yanqi Xu
-2023-07-09 16:20:29
+2023-08-04 22:19:40
 
 - [Project](#project)
 - [Objectives](#objectives)
@@ -95,7 +95,7 @@ The data can be obtained from the [Texas Ethics
 Commission](https://www.ethics.state.tx.us/data/search/lobby/). The
 download page lists data files from 2001 and on. Since the older files
 are in a format relatively hard to wrangle. We here include only
-lobbying records from 2016 on. The 2023 file was updated on 2023-07-09.
+lobbying records from 2016 on. The 2023 file was updated on 2023-08-04.
 
 ## Import
 
@@ -198,9 +198,9 @@ glimpse(sample_n(txl, 20))
 #> $ lob_zip            <chr> "78701", "78701", "78701", "78701", "78701", "78767", "78701", "78701"…
 #> $ pri_name           <chr> "Crown Castle International Corp.", "Secure Democracy", "Adelanto Heal…
 #> $ pri_addr1          <chr> "1220 Augusta Dr. Ste 600", "611 Pennsylvania Ave., SE #143", "401 W. …
-#> $ pri_addr2          <chr> NA, NA, "Suite 840", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
+#> $ pri_addr2          <chr> NA, NA, "Suite 840", NA, NA, NA, NA, NA, NA, "Bldg B", NA, NA, NA, NA,…
 #> $ pri_city           <chr> "Houston", "Washington", "Austin", "Austin", "Santa Monica", "Weatherf…
-#> $ pri_state          <chr> "TX", "DC", "TX", "TX", "CA", "TX", "TX", "NV", "TX", "FL", "TX", "NY"…
+#> $ pri_state          <chr> "TX", "DC", "TX", "TX", "CA", "TX", "TX", "NV", "TX", "CA", "TX", "NY"…
 #> $ pri_zip            <chr> "77057", "20003", "78701-4078", "78701", "90405", "76086", "77477", "8…
 #> $ reporting_interval <chr> "REGULAR", "REGULAR", "MODIFIED", "REGULAR", "REGULAR", "MODIFIED", "R…
 #> $ begin              <date> 2018-01-08, 2021-01-13, 2022-12-08, 2019-01-03, 2020-10-13, 2022-04-2…
@@ -221,22 +221,22 @@ col_stats(txl, count_na)
 #>  2 lob_name           <chr>      0 0        
 #>  3 lob_biz            <chr>   7783 0.113    
 #>  4 lob_addr1          <chr>      7 0.000102 
-#>  5 lob_addr2          <chr>  39865 0.580    
+#>  5 lob_addr2          <chr>  39881 0.580    
 #>  6 lob_city           <chr>      7 0.000102 
 #>  7 lob_state          <chr>      6 0.0000873
 #>  8 lob_zip            <chr>      7 0.000102 
-#>  9 pri_name           <chr>    853 0.0124   
-#> 10 pri_addr1          <chr>   1014 0.0148   
-#> 11 pri_addr2          <chr>  50302 0.732    
-#> 12 pri_city           <chr>   1015 0.0148   
-#> 13 pri_state          <chr>   1038 0.0151   
-#> 14 pri_zip            <chr>   1036 0.0151   
+#>  9 pri_name           <chr>    857 0.0125   
+#> 10 pri_addr1          <chr>   1018 0.0148   
+#> 11 pri_addr2          <chr>  50329 0.732    
+#> 12 pri_city           <chr>   1019 0.0148   
+#> 13 pri_state          <chr>   1043 0.0152   
+#> 14 pri_zip            <chr>   1040 0.0151   
 #> 15 reporting_interval <chr>   1541 0.0224   
-#> 16 begin              <date>   866 0.0126   
-#> 17 stop               <date>   865 0.0126   
-#> 18 method             <chr>    864 0.0126   
-#> 19 amount             <chr>    863 0.0126   
-#> 20 exact              <chr>  68125 0.992
+#> 16 begin              <date>   870 0.0127   
+#> 17 stop               <date>   869 0.0126   
+#> 18 method             <chr>    868 0.0126   
+#> 19 amount             <chr>    867 0.0126   
+#> 20 exact              <chr>  68177 0.992
 ```
 
 ``` r
@@ -250,20 +250,20 @@ txl %>%
   filter(na_flag) %>% 
   select(lob_name, pri_name) %>% 
   sample_frac()
-#> # A tibble: 853 × 2
+#> # A tibble: 857 × 2
 #>    lob_name                 pri_name
 #>    <chr>                    <chr>   
 #>  1 Migliaro, Alyse          <NA>    
 #>  2 Ballew, Joel D.          <NA>    
 #>  3 Thompson III, John David <NA>    
 #>  4 Rotkoff, Jeffre W.       <NA>    
-#>  5 Wallace, Blair Ruth      <NA>    
+#>  5 Tomascik, Tracy          <NA>    
 #>  6 Burner, Burnie           <NA>    
-#>  7 Rogers Jr., Johnnie B.   <NA>    
+#>  7 PGIM, Inc.               <NA>    
 #>  8 Boutilier, Bruce         <NA>    
 #>  9 Newell, Stephanie M.     <NA>    
 #> 10 Adair, Bobby Glenn       <NA>    
-#> # … with 843 more rows
+#> # … with 847 more rows
 ```
 
 ### Duplicates
@@ -306,23 +306,23 @@ col_stats(txl, n_distinct)
 #> # A tibble: 22 × 4
 #>    col                class      n         p
 #>    <chr>              <chr>  <int>     <dbl>
-#>  1 lob_id             <chr>   3339 0.0486   
-#>  2 lob_name           <chr>   3400 0.0495   
-#>  3 lob_biz            <chr>   1974 0.0287   
-#>  4 lob_addr1          <chr>   2986 0.0435   
-#>  5 lob_addr2          <chr>    835 0.0122   
-#>  6 lob_city           <chr>    339 0.00493  
-#>  7 lob_state          <chr>     39 0.000568 
-#>  8 lob_zip            <chr>    813 0.0118   
-#>  9 pri_name           <chr>   9755 0.142    
-#> 10 pri_addr1          <chr>  10702 0.156    
-#> 11 pri_addr2          <chr>   1508 0.0220   
-#> 12 pri_city           <chr>   1356 0.0197   
-#> 13 pri_state          <chr>     50 0.000728 
-#> 14 pri_zip            <chr>   2850 0.0415   
-#> 15 reporting_interval <chr>      3 0.0000437
-#> 16 begin              <date>  1950 0.0284   
-#> 17 stop               <date>  1149 0.0167   
+#>  1 lob_id             <chr>   3349 0.0487   
+#>  2 lob_name           <chr>   3410 0.0496   
+#>  3 lob_biz            <chr>   1980 0.0288   
+#>  4 lob_addr1          <chr>   2995 0.0436   
+#>  5 lob_addr2          <chr>    836 0.0122   
+#>  6 lob_city           <chr>    341 0.00496  
+#>  7 lob_state          <chr>     39 0.000567 
+#>  8 lob_zip            <chr>    817 0.0119   
+#>  9 pri_name           <chr>   9765 0.142    
+#> 10 pri_addr1          <chr>  10718 0.156    
+#> 11 pri_addr2          <chr>   1511 0.0220   
+#> 12 pri_city           <chr>   1351 0.0197   
+#> 13 pri_state          <chr>     50 0.000727 
+#> 14 pri_zip            <chr>   2857 0.0416   
+#> 15 reporting_interval <chr>      3 0.0000436
+#> 16 begin              <date>  1964 0.0286   
+#> 17 stop               <date>  1159 0.0169   
 #> 18 method             <chr>      4 0.0000582
 #> 19 amount             <chr>     36 0.000524 
 #> 20 exact              <chr>     14 0.000204 
@@ -395,18 +395,18 @@ txl %>%
   distinct() %>% 
   sample_n(10)
 #> # A tibble: 10 × 3
-#>    lob_addr1                    lob_addr2  lob_addr_norm               
-#>    <chr>                        <chr>      <chr>                       
-#>  1 1700 Rio Grande              Suite 100  1700 RIO GRANDE SUITE 100   
-#>  2 130 East Kaliste Saloom Road <NA>       130 EAST KALISTE SALOOM RD  
-#>  3 2450 Holcombe Blvd           Suite 24L  2450 HOLCOMBE BLVD SUITE 24L
-#>  4 919 Congress Ave.            Suite 1400 919 CONGRESS AVE SUITE 1400 
-#>  5 103 Point Street             <NA>       103 POINT ST                
-#>  6 600 Travis                   Suite 4200 600 TRAVIS SUITE 4200       
-#>  7 1108 Lavaca St               Suite 500  1108 LAVACA ST SUITE 500    
-#>  8 400 W. 15th St. #150         <NA>       400 W 15TH ST #150          
-#>  9 1155 F Street N.W            Suite 1200 1155 F STREET NW SUITE 1200 
-#> 10 105 W. Riverside Dr.         #105       105 W RIVERSIDE DR #105
+#>    lob_addr1                          lob_addr2                lob_addr_norm                       
+#>    <chr>                              <chr>                    <chr>                               
+#>  1 200 E. Nopal                       Suite 203                200 E NOPAL SUITE 203               
+#>  2 700 Lavaca Street                  Suite 1400               700 LAVACA STREET SUITE 1400        
+#>  3 1111 West 6th Street               Bldg. B, Suite 400       1111 WEST 6TH STREET BLDG B SUITE 4…
+#>  4 Dallas-Fort Worth Hospital Council 300 Decker Dr., Ste. 300 DALLASFORT WORTH HOSPITAL COUNCIL 3…
+#>  5 1111 Bagby, Sky Lobby 2            <NA>                     1111 BAGBY SKY LOBBY 2              
+#>  6 6608 Weslayan Street               <NA>                     6608 WESLAYAN ST                    
+#>  7 7020 Easy Wind Dr. Ste. 200        <NA>                     7020 EASY WIND DR STE 200           
+#>  8 13001 Bridgeview Ct.               <NA>                     13001 BRIDGEVIEW CT                 
+#>  9 12506 Fallen Tower Lane            <NA>                     12506 FALLEN TOWER LN               
+#> 10 1001 Noble Energy Way              <NA>                     1001 NOBLE ENERGY WAY
 ```
 
 ### ZIP
@@ -435,10 +435,10 @@ progress_table(
 #> # A tibble: 4 × 6
 #>   stage            prop_in n_distinct  prop_na n_out n_diff
 #>   <chr>              <dbl>      <dbl>    <dbl> <dbl>  <dbl>
-#> 1 txl$lob_zip        0.957        813 0.000102  2980    183
-#> 2 txl$lob_zip_norm   1.00         661 0.000102    29      6
-#> 3 txl$pri_zip        0.937       2850 0.0151    4286    646
-#> 4 txl$pri_zip_norm   0.997       2359 0.0154     183     61
+#> 1 txl$lob_zip        0.957        817 0.000102  2980    183
+#> 2 txl$lob_zip_norm   1.00         665 0.000102    29      6
+#> 3 txl$pri_zip        0.937       2857 0.0151    4286    647
+#> 4 txl$pri_zip_norm   0.997       2365 0.0154     184     62
 ```
 
 ### State
@@ -494,7 +494,7 @@ txl <- txl %>%
     match_abb = is_abbrev(lob_city_norm, city_match),
     match_dist = str_dist(lob_city_norm, city_match),
     lob_city_swap = if_else(
-      condition = !is.na(match_dist) & match_abb | match_dist == 1,
+      condition = !is.na(match_dist) & (match_abb | match_dist == 1),
       true = city_match,
       false = lob_city_norm
     )
@@ -520,7 +520,7 @@ txl <- txl %>%
     match_abb = is_abbrev(pri_city_norm, city_match),
     match_dist = str_dist(pri_city_norm, city_match),
     pri_city_swap = if_else(
-      condition = !is.na(match_dist) & match_abb | match_dist == 1,
+      condition = !is.na(match_dist) & (match_abb | match_dist == 1),
       true = city_match,
       false = pri_city_norm
     )
@@ -537,12 +537,12 @@ txl <- txl %>%
     #> # A tibble: 6 × 6
     #>   stage                      prop_in n_distinct  prop_na n_out n_diff
     #>   <chr>                        <dbl>      <dbl>    <dbl> <dbl>  <dbl>
-    #> 1 str_to_upper(txl$lob_city)   0.998        318 0.000102   104     23
-    #> 2 txl$lob_city_norm            0.999        316 0.000102    75     20
-    #> 3 txl$lob_city_swap            0.999        305 0.000771    49     10
-    #> 4 str_to_upper(txl$pri_city)   0.983       1276 0.0148    1149    191
-    #> 5 txl$pri_city_norm            0.986       1263 0.0148     954    176
-    #> 6 txl$pri_city_swap            0.995       1120 0.0225     333     50
+    #> 1 str_to_upper(txl$lob_city)   0.998        320 0.000102   104     23
+    #> 2 txl$lob_city_norm            0.999        318 0.000102    75     20
+    #> 3 txl$lob_city_swap            0.999        310 0.000102    50     11
+    #> 4 str_to_upper(txl$pri_city)   0.983       1278 0.0148    1150    192
+    #> 5 txl$pri_city_norm            0.986       1265 0.0148     955    177
+    #> 6 txl$pri_city_swap            0.994       1157 0.0148     378     68
 
 ## Conclude
 
@@ -559,40 +559,40 @@ txl <- txl %>%
 glimpse(sample_n(txl, 20))
 #> Rows: 20
 #> Columns: 29
-#> $ lob_id             <chr> "65392", "12905", "83343", "13484", "34739", "13768", "83262", "70459"…
-#> $ lob_name           <chr> "Taylor, Gregory", "McGarry, Mignon", "Saldana, Amanda", "Fickel, Ann"…
-#> $ lob_biz            <chr> "Consultant", NA, "Lawyer", "Texas Classroom Teachers Association", "C…
-#> $ lob_addr1          <chr> "10 Strecker Road", "504 West 14th Street", "1508 S Lone Star Way Unit…
-#> $ lob_addr2          <chr> NA, NA, NA, NA, "Ste 113-205", NA, NA, NA, NA, NA, "Ste. 200", "One De…
-#> $ lob_city           <chr> "Ellisville", "Austin", "Edinburg", "Austin", "Dallas", "Austin", "Aus…
-#> $ lob_state          <chr> "MO", "TX", "TX", "TX", "TX", "TX", "TX", "TX", "TX", "TX", "TX", "TX"…
-#> $ lob_zip            <chr> "63011", "78701", "78539", "78767-1489", "75248", "78763", "78701", "7…
-#> $ pri_name           <chr> "Hatada Enterprises, Inc.", "Vistra Energy Corp.", "AT&T", "Texas Clas…
-#> $ pri_addr1          <chr> "150 FM 854", "1601 Bryan Street", "208 S Akard St.", "P.O. Box 1489",…
-#> $ pri_addr2          <chr> NA, NA, NA, NA, NA, NA, NA, "100 Congress Ave., Ste. 1300", NA, NA, NA…
-#> $ pri_city           <chr> "Valley Mills", "Dallas", "Dallas", "Austin", "Plano", "Baltimore", "W…
-#> $ pri_state          <chr> "TX", "TX", "TX", "TX", "TX", "MD", "TX", "TX", "TX", "TX", NA, "TX", …
-#> $ pri_zip            <chr> "76689", "75201", "75202", "78767", "75026", "21236", "76708", "78701"…
-#> $ reporting_interval <chr> "MODIFIED", "MODIFIED", "REGULAR", "MODIFIED", "MODIFIED", "REGULAR", …
-#> $ begin              <date> 2023-01-03, 2017-01-06, 2021-01-15, 2023-01-01, 2017-01-04, 2017-12-1…
-#> $ stop               <date> 2023-12-31, 2017-12-31, 2021-12-31, 2023-12-31, 2017-12-31, 2017-12-3…
-#> $ method             <chr> "PROSPECT", "PROSPECT", "PROSPECT", "PROSPECT", "PROSPECT", "PAID", "P…
-#> $ amount             <chr> "LOBBCOMP01", "LT149999", "LOBBCOMP01", "LOBBCOMP03", "LT99999", "LT10…
+#> $ lob_id             <chr> "13768", "83262", "70459", "82898", "82941", "56925", "30094", "40995"…
+#> $ lob_name           <chr> "Goodell Polan, Deborah", "Barnes, Kelly", "Smith, Sharon", "Norman, S…
+#> $ lob_biz            <chr> "Attorney", "consulting", "Attorney", "McGuireWoods Consulting", "San …
+#> $ lob_addr1          <chr> "P.O. Box 50272", "823 Congress Ave., Ste. 900", "100 Congress Ave., S…
+#> $ lob_addr2          <chr> NA, NA, NA, NA, NA, "Ste. 200", "Suite 900", NA, NA, "Suite 1500", "Su…
+#> $ lob_city           <chr> "Austin", "Austin", "Austin", "Austin", "San Angelo", "Austin", "Austi…
+#> $ lob_state          <chr> "TX", "TX", "TX", "TX", "TX", "TX", "TX", "TX", "TX", "TX", "TX", "CA"…
+#> $ lob_zip            <chr> "78763", "78701", "78701", "78701", "76903", "78701", "78701", "79105"…
+#> $ pri_name           <chr> "Mariner Finance, LLC", "Saturn Jets, LLC", "Travis County Municipal U…
+#> $ pri_addr1          <chr> "8211 Town Center Drive", "7815 Karl May Drive", "c/o Armbrust & Brown…
+#> $ pri_addr2          <chr> NA, NA, "100 Congress Ave., Ste. 1300", NA, NA, NA, NA, "Suite 500", "…
+#> $ pri_city           <chr> "Baltimore", "Waco", "Austin", "Arlington", "San Angelo", "Oakville", …
+#> $ pri_state          <chr> "MD", "TX", "TX", "TX", "TX", NA, "ME", "TX", "TX", "TX", "MD", "CA", …
+#> $ pri_zip            <chr> "21236", "76708", "78701", "76010", "76904", "L6J2X1", "02481", "78701…
+#> $ reporting_interval <chr> "REGULAR", "REGULAR", "MODIFIED", NA, NA, "REGULAR", "REGULAR", "MODIF…
+#> $ begin              <date> 2017-12-11, 2020-01-31, 2019-01-01, 2019-01-10, 2019-01-03, 2021-03-2…
+#> $ stop               <date> 2017-12-31, 2020-12-31, 2019-12-31, 2019-12-31, 2019-11-30, 2021-12-3…
+#> $ method             <chr> "PAID", "PROSPECT", "PAID", "PROSPECT", "PROSPECT", "PROSPECT", "PROSP…
+#> $ amount             <chr> "LT10000", "LOBBCOMP01", "LT10000", "LT10000", "EQZERO", "LOBBCOMP03",…
 #> $ exact              <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA…
 #> $ na_flag            <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, …
-#> $ dupe_flag          <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, …
-#> $ year               <dbl> 2023, 2017, 2021, 2023, 2017, 2017, 2020, 2019, 2019, 2019, 2021, 2023…
-#> $ lob_addr_clean     <chr> "10 STRECKER RD", "504 WEST 14TH ST", "1508 S LONE STAR WAY UNIT 1", "…
-#> $ pri_addr_clean     <chr> "150 FM 854", "1601 BRYAN ST", "208 S AKARD ST", "PO BOX 1489", "PO BO…
-#> $ lob_zip_clean      <chr> "63011", "78701", "78539", "78767", "75248", "78763", "78701", "78701"…
-#> $ pri_zip_clean      <chr> "76689", "75201", "75202", "78767", "75026", "21236", "76708", "78701"…
-#> $ lob_city_clean     <chr> "ELLISVILLE", "AUSTIN", "EDINBURG", "AUSTIN", "DALLAS", "AUSTIN", "AUS…
-#> $ pri_city_clean     <chr> "VALLEY MILLS", "DALLAS", "DALLAS", "AUSTIN", "PLANO", "BALTIMORE", "W…
+#> $ dupe_flag          <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, TRUE, F…
+#> $ year               <dbl> 2017, 2020, 2019, 2019, 2019, 2021, 2023, 2017, 2022, 2018, 2018, 2023…
+#> $ lob_addr_clean     <chr> "PO BOX 50272", "823 CONGRESS AVE STE 900", "100 CONGRESS AVE STE 1300…
+#> $ pri_addr_clean     <chr> "8211 TOWN CENTER DR", "7815 KARL MAY DR", "C/O ARMBRUST BROWN PLLC 10…
+#> $ lob_zip_clean      <chr> "78763", "78701", "78701", "78701", "76903", "78701", "78701", "79105"…
+#> $ pri_zip_clean      <chr> "21236", "76708", "78701", "76010", "76904", "621", "02481", "78701", …
+#> $ lob_city_clean     <chr> "AUSTIN", "AUSTIN", "AUSTIN", "AUSTIN", "SAN ANGELO", "AUSTIN", "AUSTI…
+#> $ pri_city_clean     <chr> "BALTIMORE", "WACO", "AUSTIN", "ARLINGTON", "SAN ANGELO", "OAKVILLE", …
 ```
 
-1.  There are 68,700 records in the database.
+1.  There are 68,752 records in the database.
 2.  There are 2,621 duplicate records in the database.
-3.  There are 853 records missing ….
+3.  There are 857 records missing ….
 4.  Consistency in geographic data has been improved with
     `campfin::normal_*()`.
 5.  The 4-digit `year` variable has been created with
