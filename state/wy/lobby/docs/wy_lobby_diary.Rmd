@@ -1,6 +1,6 @@
 ---
 title: "Wyoming Lobbyists"
-author: "Kiernan Nicholls"
+author: "Kiernan Nicholls & Yanqi Xu"
 date: "`r Sys.time()`"
 output:
   github_document: 
@@ -105,13 +105,17 @@ here::here()
 
 ## Data
 
-Data is obtained from the Wyoming Secretary of State's office [Lobbying Center][03]. From their, we
+Data is obtained from the Wyoming Secretary of State's office [Lobbying Center][03]. From there, we
 can download "a zip file containing the lobbyist data files for the current period." We'll make a
 `httr::GET()` request on the file to download write the raw ZIP archive to disk.
 
-```{r raw_get}
-raw_dir <- here("wy", "lobby", "data", "raw")
+```{r raw_dir}
+raw_dir <- here("state","wy", "lobby", "data", "raw")
 dir_create(raw_dir)
+```
+
+
+```{r raw_get, eval=FALSE}
 lob_url <- "https://lobbyist.wyo.gov/Lobbyist/Download.aspx"
 lob_head <- headers(HEAD(lob_url))
 lob_file <- str_remove(lob_head[["content-disposition"]], "(.*);\\sfilename=")
@@ -121,6 +125,7 @@ if (!this_file_new(lob_path)) {
   unzip(lob_path, exdir = raw_dir)
 }
 ```
+
 
 [03]: https://lobbyist.wyo.gov/Lobbyist/Default.aspx
 
@@ -204,8 +209,7 @@ orgs <- orgs %>%
     org_name = name,
     zip = postal_code
   ) %>% 
-  mutate_at(vars(phone), str_remove, "\\|$") %>% 
-  na_if("")
+  mutate(phone = phone %>% str_remove("\\|$"))
 ```
 
 Finally, we can use `dplyr::*_join()` to combine these three tables into a single data frame with
@@ -261,6 +265,8 @@ simple and **confident** manipulations to the original data and create new, norm
 First, we will add the year in which each lobbyist was registered.
 
 ```{r year_add}
+wylr$lob_reg <- mdy(wylr$lob_reg)
+wylr$lob_exp <- mdy(wylr$lob_exp)
 wylr <- mutate(wylr, lob_year = year(lob_reg))
 ```
 
@@ -495,7 +501,7 @@ wylr %>%
 ## Export
 
 ```{r proc_dir}
-proc_dir <- here("wy", "lobby", "data", "processed")
+proc_dir <- here("state","wy", "lobby", "data", "processed")
 dir_create(proc_dir)
 ```
 

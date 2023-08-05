@@ -109,7 +109,7 @@ here::here()
 
 ## Data
 
-The data can be obtained from the [Texas Ethics Commission][tec]. The download page lists data files from 2001 and on. Since the older files are in a format relatively hard to wrangle. We here include only lobbying records from 2016 on. The 2023 file was updated on 2023-07-09.
+The data can be obtained from the [Texas Ethics Commission][tec]. The download page lists data files from 2001 and on. Since the older files are in a format relatively hard to wrangle. We here include only lobbying records from 2016 on. The 2023 file was updated on 2023-08-04.
 
 [tec]:https://www.ethics.state.tx.us/data/search/lobby/
 
@@ -367,7 +367,7 @@ txl <- txl %>%
     match_abb = is_abbrev(lob_city_norm, city_match),
     match_dist = str_dist(lob_city_norm, city_match),
     lob_city_swap = if_else(
-      condition = !is.na(match_dist) & match_abb | match_dist == 1,
+      condition = !is.na(match_dist) & (match_abb | match_dist == 1),
       true = city_match,
       false = lob_city_norm
     )
@@ -393,7 +393,7 @@ txl <- txl %>%
     match_abb = is_abbrev(pri_city_norm, city_match),
     match_dist = str_dist(pri_city_norm, city_match),
     pri_city_swap = if_else(
-      condition = !is.na(match_dist) & match_abb | match_dist == 1,
+      condition = !is.na(match_dist) & (match_abb | match_dist == 1),
       true = city_match,
       false = pri_city_norm
     )
