@@ -1,7 +1,7 @@
 Missouri Voters
 ================
 Janelle O'Dea
-2023-05-04
+2023-08-28
 
   - [Project](#project)
   - [Objectives](#objectives)
@@ -54,6 +54,9 @@ objectives:
 7.  Create a `year` field from the transaction date.
 8.  Make sure there is data on both parties to a transaction.
 
+Results you see are from work done in a Jupyter Notebook. That notebook, mo-voters-2023.ipynb is in this repo.
+The script version of this is also in the repo, called mo_voters_2023.py.
+
 ## File structure
 
 File structure:
@@ -68,6 +71,8 @@ File structure:
             ├──voters_2020
             ├──voters_2023
                 ├──data
+                mo-voters-2023.ipynb
+                mo_voters_2023_README.md 
                     ├──Missouri
                        Missouri.zip
                         ├──data
@@ -80,14 +85,19 @@ File structure:
 To install packages, use: pip install -r requirements.txt, in the reqs directory. 
 
 ```
-numpy==1.21.6
-pandas==1.3.5
+import pandas as pd
+from zipfile import ZipFile
+import os
+import math
+import numpy as np
+from slugify import slugify
+import locale
+locale.setlocale(locale.LC_ALL, '')
 
-For data analysis and formatting
-
-python-slugify==8.0.1 
-
-To format column names
+# for printing dfs
+pd.options.display.max_rows = 100
+# for printing lists
+pd.options.display.max_seq_items = 50
 ```
 
 ## Data
@@ -99,17 +109,27 @@ Division, Office of Secretary of State.
 The MCVR data was provided as a ZIP archive through a file sharing site.
 
 ```
-Cells 3, 4 and 5 in the Jupyter notebook take care of expanding the ZIP and finding the filename we need.
-You may need to change directories or filenames if the state has made changes.
+# Set relative filepaths
+# Missouri voter data is obtained via public records request to the Elections Division, Office of Secretary of State
+# More info about data source can be found in the README
 
-# Show the name of the zipfile that is opened in the next step
+__file__ = 'os.path.abspath('')'
+
+script_dir = os.path.dirname(__file__)
+rel_path = './data/Missouri'
+abs_file_path = os.path.join(script_dir, rel_path)
+
+# Get list of files from zipfile opened in next step
+
 files = os.listdir(abs_file_path)
 
 # Read the zipfile
+
 voters = (files[1])
 zf = ZipFile(abs_file_path + "/" + voters)
 
 # List files in zipfile
+
 zf.namelist()
 ```
 
@@ -288,119 +308,87 @@ county  voter_id  first_name  middle_name last_name suffix  house_number  house_
 
 Columns vary in their degree of missing values.
 
-``` r
-col_stats(mov, count_na)
-#> # A tibble: 31 x 4
-#>    col                  class        n          p
-#>    <chr>                <chr>    <int>      <dbl>
-#>  1 county               <chr>        0 0         
-#>  2 voter_id             <chr>        0 0         
-#>  3 first_name           <chr>       43 0.00000933
-#>  4 middle_name          <chr>   423492 0.0919    
-#>  5 last_name            <chr>        8 0.00000174
-#>  6 suffix               <chr>  4440694 0.963     
-#>  7 house_number         <chr>    72852 0.0158    
-#>  8 house_suffix         <chr>  4595759 0.997     
-#>  9 pre_direction        <chr>  3222794 0.699     
-#> 10 street_name          <chr>    72879 0.0158    
-#> 11 street_type          <chr>   620541 0.135     
-#> 12 post_direction       <chr>  4573435 0.992     
-#> 13 unit_type            <chr>  4160252 0.902     
-#> 14 unit_number          <chr>  4160266 0.902     
-#> 15 non_standard_address <chr>  4535998 0.984     
-#> 16 city                 <chr>      981 0.000213  
-#> 17 state                <chr>     1001 0.000217  
-#> 18 zip                  <chr>      974 0.000211  
-#> 19 birth_date           <date>     623 0.000135  
-#> 20 reg_date             <date>       0 0         
-#> 21 precinct             <chr>      974 0.000211  
-#> 22 precinct_name        <chr>   323494 0.0702    
-#> 23 split                <chr>      974 0.000211  
-#> 24 township             <chr>  1017415 0.221     
-#> 25 ward                 <chr>  1894187 0.411     
-#> 26 congressional        <chr>      608 0.000132  
-#> 27 legislative          <chr>       43 0.00000933
-#> 28 state_senate         <chr>       12 0.00000260
-#> 29 voter_status         <chr>   322577 0.0700    
-#> 30 last_election        <chr>  1069026 0.232     
-#> 31 source               <chr>        0 0
+``` 
+county                             0
+voter_id                           0
+first_name                        30
+middle_name                   401624
+last_name                        456
+suffix                       4114617
+house_number                   31179
+house_suffix                 4256636
+pre_direction                2963552
+street_name                    31198
+street_type                   531846
+post_direction               4233141
+unit_type                    3874393
+unit_number                  3874425
+non_standard_address         4235200
+residential_city                   0
+residential_state                 16
+residential_zipcode                0
+mailing_address              4035157
+mailing_city                 4039026
+mailing_state                4039175
+mailing_zipcode              4039164
+birthdate                          0
+political_party              4084653
+registration_date                  0
+precinct                           0
+precinct_name                      0
+split                              0
+township                      913574
+ward                         1788722
+congressional_district_20         19
+legislative_district_20           56
+senate_district_20                56
+voter_status                       0
+voter_history_1               598452
+voter_history_2              1018238
+voter_history_3              1315678
+voter_history_4              1547307
+voter_history_5              1742024
+voter_history_6              1911056
+voter_history_7              2059904
+voter_history_8              2192849
+voter_history_9              2313466
+voter_history_10             2423630
+voter_history_11             2525953
+voter_history_12             2620435
+voter_history_13             2708562
+voter_history_14             2790824
+voter_history_15             2868254
+voter_history_16             2941071
+voter_history_17             3010628
+voter_history_18             3076092
+voter_history_19             3138099
+voter_history_20             3196461
 ```
 
 ### Duplicates
 
-We can also flag any record completely duplicated across every column.
+We can flag any record completely duplicated across every column. We can also flag across chosen columns.
+Multiple tests are done to deterine there are no entirely duplicate rows in the dataframe. 
+In the 2023 data, there do not appear to be any duplicates. 
 
-``` r
-dupe_file <- here("mo", "voters", "dupes.csv")
-if (!file_exists(dupe_file)) {
-  file_create(dupe_file)
-  write_lines("voter_id,dupe_flag", dupe_file)
-  mos <- mov %>% 
-    select(-voter_id) %>% 
-    group_split(county)
-  split_id <- split(mov$voter_id, mov$county)
-  pb <- txtProgressBar(max = length(mos), style = 3)
-  for (i in seq_along(mos)) {
-    write_csv(
-      path = dupe_file,
-      append = TRUE,
-      col_names = FALSE,
-      x = tibble(
-        voter_id = split_id[[i]],
-        dupe_flag = or(
-          e1 = duplicated(mos[[i]], fromLast = FALSE),
-          e2 = duplicated(mos[[i]], fromLast = TRUE)
-        )
-      )
-    )
-    flush_memory(1)
-    setTxtProgressBar(pb, i)
-  }
-  rm(mos)
-}
 ```
+all_dupe = voters[voters.duplicated()]
+all_dupe.info
 
-``` r
-dupes <- read_csv(
-  file = dupe_file,
-  col_types = cols(
-    voter_id = col_character(),
-    dupe_flag = col_logical()
-  )
-)
-```
+...]
+Index: []
 
-``` r
-nrow(mov)
-#> [1] 4609735
-mov <- left_join(mov, dupes)
-nrow(mov)
-#> [1] 4609735
-mov <- mutate(mov, dupe_flag = !is.na(dupe_flag))
-sum(mov$dupe_flag)
-#> [1] 71
-```
+[0 rows x 54 columns]>
 
-We can see that, despite unique IDs, there are duplicate voters.
+voterids = voters.duplicated(subset=["voter_id"])
+print("Duplicate voter IDs:")
 
-``` r
-mov %>% 
-  filter(dupe_flag) %>% 
-  select(voter_id, first_name, last_name, birth_date, zip)
-#> # A tibble: 71 x 5
-#>    voter_id  first_name last_name birth_date zip  
-#>    <chr>     <chr>      <chr>     <date>     <chr>
-#>  1 750534633 TREISHA    STRINGER  1990-12-06 64759
-#>  2 752044678 TREISHA    STRINGER  1990-12-06 64759
-#>  3 752173868 ETINOSA    OMOROGBE  1998-10-21 65201
-#>  4 752173869 ETINOSA    OMOROGBE  1998-10-21 65201
-#>  5 752033376 TERI       TURNBULL  1961-01-11 65020
-#>  6 752033377 TERI       TURNBULL  1961-01-11 65020
-#>  7 752125335 JANESSA    STEWART   1999-10-10 64012
-#>  8 752125334 JANESSA    STEWART   1999-10-10 64012
-#>  9 752140371 NATHANIEL  SKOW      1977-11-03 64012
-#> 10 752140368 NATHANIEL  SKOW      1977-11-03 64012
-#> # … with 61 more rows
+# Print voter ID records only if duplicate = True
+if voterids[2] == True:
+    print(voterids)
+
+Duplicate voter IDs:
+
 ```
 
 ### Categorical
