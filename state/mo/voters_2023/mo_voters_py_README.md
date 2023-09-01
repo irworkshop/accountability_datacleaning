@@ -393,46 +393,62 @@ Duplicate voter IDs:
 
 ### Categorical
 
-``` r
-col_stats(mov, n_distinct)
-#> # A tibble: 32 x 4
-#>    col                  class        n           p
-#>    <chr>                <chr>    <int>       <dbl>
-#>  1 county               <chr>      116 0.0000252  
-#>  2 voter_id             <chr>  4609734 1.00       
-#>  3 first_name           <chr>   144695 0.0314     
-#>  4 middle_name          <chr>   129055 0.0280     
-#>  5 last_name            <chr>   234791 0.0509     
-#>  6 suffix               <chr>     1115 0.000242   
-#>  7 house_number         <chr>    42079 0.00913    
-#>  8 house_suffix         <chr>      139 0.0000302  
-#>  9 pre_direction        <chr>        9 0.00000195 
-#> 10 street_name          <chr>    55911 0.0121     
-#> 11 street_type          <chr>      119 0.0000258  
-#> 12 post_direction       <chr>       11 0.00000239 
-#> 13 unit_type            <chr>       32 0.00000694 
-#> 14 unit_number          <chr>    17253 0.00374    
-#> 15 non_standard_address <chr>    49794 0.0108     
-#> 16 city                 <chr>     1527 0.000331   
-#> 17 state                <chr>       35 0.00000759 
-#> 18 zip                  <chr>    78026 0.0169     
-#> 19 birth_date           <date>   32205 0.00699    
-#> 20 reg_date             <date>   24318 0.00528    
-#> 21 precinct             <chr>     1600 0.000347   
-#> 22 precinct_name        <chr>     2758 0.000598   
-#> 23 split                <chr>     1860 0.000403   
-#> 24 township             <chr>     1508 0.000327   
-#> 25 ward                 <chr>     1235 0.000268   
-#> 26 congressional        <chr>       24 0.00000521 
-#> 27 legislative          <chr>      169 0.0000367  
-#> 28 state_senate         <chr>       48 0.0000104  
-#> 29 voter_status         <chr>        4 0.000000868
-#> 30 last_election        <chr>      551 0.000120   
-#> 31 source               <chr>        2 0.000000434
-#> 32 dupe_flag            <lgl>        2 0.000000434
+```                       Column  Unique Values
+0                      county            116
+1                    voter_id        4268187
+2                  first_name         140907
+3                 middle_name         133899
+4                   last_name         229386
+5                      suffix            985
+6                house_number          67853
+7                house_suffix            106
+8               pre_direction              9
+9                 street_name          55604
+10                street_type            109
+11             post_direction              9
+12                  unit_type             32
+13                unit_number          14843
+14       non_standard_address          21251
+15           residential_city            989
+16          residential_state              2
+17        residential_zipcode         101865
+18            mailing_address         112175
+19               mailing_city           3859
+20              mailing_state             60
+21            mailing_zipcode           7330
+22                  birthdate            111
+23            political_party              4
+24          registration_date          23598
+25                   precinct           1053
+26              precinct_name           2793
+27                      split           1612
+28                   township           1131
+29                       ward            962
+30  congressional_district_20              8
+31    legislative_district_20            163
+32         senate_district_20             34
+33               voter_status              2
+34            voter_history_1            538
+35            voter_history_2            581
+36            voter_history_3            602
+37            voter_history_4            615
+38            voter_history_5            603
+39            voter_history_6            620
+40            voter_history_7            616
+41            voter_history_8            625
+42            voter_history_9            631
+43           voter_history_10            631
+44           voter_history_11            619
+45           voter_history_12            631
+46           voter_history_13            629
+47           voter_history_14            632
+48           voter_history_15            623
+49           voter_history_16            622
+50           voter_history_17            616
+51           voter_history_18            615
+52           voter_history_19            607
+53           voter_history_20            605
 ```
-
-![](../plots/distinct_plots-1.png)<!-- -->![](../plots/distinct_plots-2.png)<!-- -->
 
 ### Dates
 
