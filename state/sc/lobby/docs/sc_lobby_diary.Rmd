@@ -32,7 +32,7 @@ set.seed(5)
 ```
 
 ```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
-fs::dir_create(here::here("sc", "lobby", "docs"))
+fs::dir_create(here::here("state","sc", "lobby", "docs"))
 ```
 
 ## Project
@@ -140,12 +140,13 @@ View a list of lobbyists, lobbyists' principals or their contact information.
 > * [Individual Lobbyist's Principal Lookup](https://apps.sc.gov/LobbyingActivity/SearchLPContact.aspx)
 > * [Year End Compilation Report](https://apps.sc.gov/LobbyingActivity/CompilationReport.aspx)
 
-First, we must download a reporting linking lobbyists to their principals. We will download the `Lobbyists and Their Principals` table. Go to Public Disclosure > Lobbying Activity > List of Lobbyist > Type: All Lobbyist, and then hit Continue. A csv file is available for download. We'll name it `lob_prin.csv`.
+First, we must download a report linking lobbyists to their principals. We will download the `Lobbyists and Their Principals` table. Go to [Public Disclosure][pd] > Lobbying Activity > List of Lobbyist > Type: All Lobbyist, and then hit Continue. A csv file is available for download. We'll name it `lob_prin.csv`.
 
 Then we can download the `Lobbyists' Principals and Their Lobbyists`
 Go to Public Disclosure > Lobbying Activity > List of Lobbyists' Principals > Type: All Lobbyists' Principals, and then hit Continue. A csv file is available for download. We'll name it `prin_lob.csv`.
 
 Both tables are downloaded on March 18, 2020. 
+[pd]:https://apps.sc.gov/LobbyingActivity/LAIndex.aspx
 
 ```{r raw_dir}
 raw_dir <- here("state","sc", "lobby", "data", "raw", "reg")
