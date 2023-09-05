@@ -324,7 +324,7 @@ clean_dir <- dir_create(here("state","ny", "lobby", "data", "processed","exp"))
 ``` r
 write_csv(
   x = nyle,
-  path = path(clean_dir, "nyle_2019-2022.csv"),
+  path = path(clean_dir, "ny_lob_exp_2019-2022.csv"),
   na = ""
 )
 ```
