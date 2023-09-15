@@ -454,22 +454,14 @@ Duplicate voter IDs:
 
 We can add the calendar year from `date` with `lubridate::year()`
 
-``` r
-mov <- mutate(mov, reg_year = year(reg_date))
+There are voters — more than 1,000 of them — whose birth dates are 1800, 1895, 1899. There are more than 3,400 voters who are over 100 years old. Janelle has an inquiry in to the Missouri Secretary of State about this. We note it in the data description but leave them in the final output, here. 
+
+Change the type of variabe to datetime. 
+
+``` 
+voters['registration_date'] = pd.to_datetime(voters['registration_date'], errors="coerce")
 ```
 
-``` r
-min(mov$reg_date)
-#> [1] "101-07-16"
-mean(mov$reg_year < 2000)
-#> [1] 0.2916372
-max(mov$reg_date)
-#> [1] "2020-10-05"
-sum(mov$reg_date > today())
-#> [1] 0
-```
-
-![](../plots/bar_year-1.png)<!-- -->
 
 ## Wrangle
 
