@@ -1,7 +1,7 @@
 Missouri Voters
 ================
 Janelle O'Dea
-2023-08-28
+10/12/2023
 
   - [Project](#project)
   - [Objectives](#objectives)
@@ -452,254 +452,435 @@ Duplicate voter IDs:
 
 ### Dates
 
-We can add the calendar year from `date` with `lubridate::year()`
+We will derive the year from the registration date field. Change the type of variable to datetime, first. Some of the values come in as text, some as non-text.
 
-There are voters — more than 1,000 of them — whose birth dates are 1800, 1895, 1899. There are more than 3,400 voters who are over 100 years old. Janelle has an inquiry in to the Missouri Secretary of State about this. We note it in the data description but leave them in the final output, here. 
-
-Change the type of variabe to datetime. 
-
-``` 
-voters['registration_date'] = pd.to_datetime(voters['registration_date'], errors="coerce")
 ```
+voters['registration_date'] = pd.to_datetime(voters['registration_date'], errors="coerce")
+unique = voters.nunique()
+unique_df = pd.DataFrame({"Column": unique.index, "Unique Values": unique.values})
+print(unique_df)`
+
+voters['reg_year'] = voters['reg_date'].dt.year
+```
+
+There is also a birth date field, which we do keep, and there is a note about that field below.
+
+A note about birth dates:
+
+There are voters — more than 1,000 of them — whose birth dates are 1800, 1895, 1899. There are more than 3,400 voters who are over 100 years old. Janelle has an inquiry in to the Missouri Secretary of State about this and is investigating. We note it in the data description but leave them in the final output, here. 
 
 
 ## Wrangle
 
-To improve the searchability of the database, we will perform some
-consistent, confident string normalization. For geographic variables
-like city names and ZIP codes, the corresponding `campfin::normal_*()`
-functions are tailor made to facilitate this process.
+Perform some consistent string normalization on address variables.
 
 ### Address
 
 We can create a single, unified normalized address field.
 
-``` r
-mov <- mov %>% 
-  unite(
-    col = address_norm,
-    house_number:non_standard_address,
-    sep = " ",
-    na.rm = TRUE,
-    remove = FALSE
-  ) %>% 
-  relocate(address_norm, .after = last_col())
+```
+voters["address_norm"] = voters["house_number"].astype(str) +"-"+ voters["house_suffix"].astype(str) +"-"+ voters["pre_direction"].astype(str) +"-"+ voters["street_name"].astype(str) +"-"+ voters["street_type"].astype(str) +"-"+ voters["post_direction"].astype(str) +"-"+ voters["unit_type"].astype(str) +"-"+ voters["unit_number"].astype(str) +"-"+ voters["non_standard_address"].astype(str)
 ```
 
-``` r
-mov %>% 
-  select(address_norm, house_number:non_standard_address) %>% 
-  sample_n(20) %>% 
-  remove_empty("cols")
-#> # A tibble: 20 x 8
-#>    address_norm house_number pre_direction street_name street_type unit_type unit_number
-#>    <chr>        <chr>        <chr>         <chr>       <chr>       <chr>     <chr>      
-#>  1 3160 ROCK Q… <NA>         <NA>          <NA>        <NA>        <NA>      <NA>       
-#>  2 5414 VILLAG… 5414         <NA>          VILLAGE CO… LN          <NA>      <NA>       
-#>  3 3962 HIGHWA… 3962         <NA>          HIGHWAY JJ  <NA>        <NA>      <NA>       
-#>  4 4105 DERBY … 4105         <NA>          DERBY RIDGE DR          <NA>      <NA>       
-#>  5 3582 LAKEVI… 3582         <NA>          LAKEVIEW H… DR          <NA>      <NA>       
-#>  6 625 CHELSEA… 625          <NA>          CHELSEA     AVE         <NA>      <NA>       
-#>  7 901 E PEAR … 901          E             PEAR        AVE         <NA>      <NA>       
-#>  8 1901 CAIRO … 1901         <NA>          CAIRO       DR          <NA>      <NA>       
-#>  9 9231 OLD BO… 9231         <NA>          OLD BONHOM… RD          <NA>      <NA>       
-#> 10 704 HEDGEWO… 704          <NA>          HEDGEWOOD   CT          <NA>      <NA>       
-#> 11 2407 S OVER… 2407         S             OVERTON     AVE         <NA>      <NA>       
-#> 12 904 MASON ST 904          <NA>          MASON       ST          <NA>      <NA>       
-#> 13 2404 E MECH… 2404         E             MECHANIC    ST          APT       31         
-#> 14 5919 PAMPLI… 5919         <NA>          PAMPLIN     PL          <NA>      <NA>       
-#> 15 2334 SW RIV… 2334         SW            RIVER TRAIL RD          <NA>      <NA>       
-#> 16 13720 MASON… 13720        <NA>          MASON GREEN CT          <NA>      <NA>       
-#> 17 519 TIMBER … 519          <NA>          TIMBER      DR          APT       B          
-#> 18 1407 HIGHWA… 1407         <NA>          HIGHWAY 19  <NA>        <NA>      <NA>       
-#> 19 3510 BROWNI… 3510         <NA>          BROWNING    AVE         <NA>      <NA>       
-#> 20 16037 E 828… 16037        E             828         RD          <NA>      <NA>       
-#> # … with 1 more variable: non_standard_address <chr>
+Replace and clean up nan values in the address_norm field.
+
+```
+voters["address_norm"] = voters["address_norm"].str.replace('nan-', '')
+voters["address_norm"] = voters["address_norm"].str.replace('-nan', '')
+voters["address_norm"] = voters["address_norm"].str.replace(' ', '-')
+voters["address_norm"] = voters["address_norm"].str.replace('-', ' ')
+```
+
+First, fix inconsistent/misspellings/etc that may confuse code, in street type field
+I can't believe this exact Py dict, that I created, doesn't already exist, but
+I didn't find it anywhere, and found people on Stack asking how to do what I'm doing here
+
+```
+voters['street_type'].unique()
+
+array(['DR', 'ST', 'WAY', nan, 'CT', 'AVE', 'LN', 'TRL', 'PL', 'RD',
+       'PLZ', 'XXXXX', 'TER', 'CIRC', 'SQ', 'BLVD', 'TERR', 'EST', 'RDG',
+       'CIR', 'LANE', 'VLG', 'CV', 'PKWY', 'RD.', 'LOOP', 'HWY', 'BND',
+       'CR', 'RUN', 'ALY', 'DM', 'LK', 'HGTS', 'PT', 'SPGS', 'ST.', 'A',
+       'HLS', 'PARK', 'VW', 'BR', 'GRV', 'VLY', 'HOLW', 'TRLS', 'APT',
+       'PASS', 'COND', 'COR', 'TRCE', 'HILL', 'PK', 'JCT', 'BLF', 'XING',
+       'AV', 'BYP', 'PATH', 'ESTS', 'TR', 'TRFY', 'MEWS', 'WAYE', 'GDNS',
+       'SPUR', 'CRK', 'HL', 'HTS', 'S', 'LP', 'COVE', 'LNDG', 'RUE',
+       'MNR', 'WALK', 'FLDS', 'EXPY', 'PSGE', 'WY', 'PKY', 'EXT', 'GLN',
+       'FRK', 'BRK', 'CTR', 'TPKE', 'MDWS', 'TFWY', 'HVN', 'RD2', 'PLN',
+       'MHP', 'ROW', 'ANX', 'STA', 'MDW', 'CMN', 'IS', 'CRST', 'CLB',
+       'HBR', 'FRST', 'SHR', 'CORS', 'MTN', 'MWS', 'GTWY', 'RNCH', 'FLD'],
+      dtype=object)
+
+``` 
+
+Translations are taken from here: https://pe.usps.com/text/pub28/28apc_002.htm. Any others needed are added (XXXXX = redacted). I put those into a Google Sheet, then saved it as a .csv. Then into a df here. Then map the values defined in the dict to the col in the df. Then make replacements.
+
+```
+usps_street_types = pd.read_csv('usps_street_types.csv')
+mapping_dict = usps_street_types.set_index('abbr')['full'].to_dict()
+voters['street_type'] = voters['street_type'].replace(mapping_dict)
+```
+
+CQ'd any that did not show up in USPS by Googling the address. Not sure about MHP, which in Missouri usually stands for Missouri Highway Patrol. Also not sure about ANEX.
+
+```
+voters['street_type'].unique()
+array(['DRIVE', 'STREET', 'WAY', nan, 'COURT', 'AVENUE', 'LANE', 'TRAIL',
+       'PLACE', 'ROAD', 'PLAZA', 'redacted', 'TERRACE', 'CIRCLE',
+       'SQUARE', 'BOULEVARD', 'ESTATE', 'RIDGE', 'VILLAGE', 'COVE',
+       'PARKWAY', 'LOOP', 'HIGHWAY', 'BEND', 'RUN', 'ALLEY', 'DAM',
+       'LAKE', 'HEIGHTS', 'POINT', 'SPRINGS', 'A', 'HILLS', 'PARK',
+       'VIEW', 'BRANCH', 'GROVE', 'VALLEY', 'HOLLOW', 'APT', 'PASS',
+       'COND', 'CORNER', 'TRACE', 'HILL', 'JUNCTION', 'BLUFF', 'CROSSING',
+       'BYPASS', 'PATH', 'ESTATES', 'TRAILS', 'TRAFFICWAY', 'MEWS',
+       'WAYE', 'GARDENS', 'SPUR', 'CREEK', 'LANDING', 'RUE', 'MANOR',
+       'WALK', 'FIELDS', 'EXPRESSWAY', 'PASSAGE', 'EXTENSION', 'GLEN',
+       'FORK', 'BROOK', 'CENTER', 'TURNPIKE', 'MEADOWS', 'HAVEN',
+       'ROAD #2', 'PLAIN', 'MHP', 'ROW', 'ANEX', 'STATION', 'COMMON',
+       'ISLAND', 'CREST', 'CLUB', 'HARBOR', 'FOREST', 'SHORE', 'CORNERS',
+       'MOUNTAIN', 'GATEWAY', 'RANCH', 'FIELD'], dtype=object)
 ```
 
 ### ZIP
 
-For ZIP codes, the `campfin::normal_zip()` function will attempt to
-create valid *five* digit codes by removing the ZIP+4 suffix and
-returning leading zeroes dropped by other programs like Microsoft Excel.
+Let's see what we're working with.
 
-``` r
-mov <- mov %>% 
-  mutate(
-    zip_norm = normal_zip(
-      zip = zip,
-      na_rep = TRUE
-    )
-  )
+zip_code_lengths1 = voters['residential_zipcode'].str.len().value_counts()
+print(zip_code_lengths1)
+
+```
+zip_code_lengths1 = voters['residential_zipcode'].str.len().value_counts()
+print(zip_code_lengths1)
+
+5.0     3808894
+10.0     270265
+7.0       57759
+9.0         161
+8.0          36
+Name: residential_zipcode, dtype: int64
 ```
 
-``` r
-progress_table(
-  mov$zip,
-  mov$zip_norm,
-  compare = valid_zip
-)
-#> # A tibble: 2 x 6
-#>   stage    prop_in n_distinct  prop_na  n_out n_diff
-#>   <chr>      <dbl>      <dbl>    <dbl>  <dbl>  <dbl>
-#> 1 zip        0.927      78026 0.000211 334286  76967
-#> 2 zip_norm   1.00        1063 0.000348    504      4
+There are some 9-digit ZIPs in here; we clean those up to be just 5 digits
+
+```
+voters['zip_clean'] = voters['residential_zipcode'].str.slice(0, 5)
+```
+
+This is to be sure the 5-digit ZIPs that begin with leading 0s do have the leading 0s. Python strips them, and, when we export to .csv, they will not show up in Excel - so the ZIP 01234 would appear as 1234. However, if you open the file in a text editor, the 0s are there.
+
+```
+voters['zip_clean'] = voters['zip_clean'].str.zfill(5)
+```
+
+Just making sure that worked.
+
+```
+zip_code_lengths2 = voters['zip_clean'].str.len().value_counts()
+print(zip_code_lengths2)
+
+5.0    4137115
+Name: zip_clean, dtype: int64
 ```
 
 ### State
 
-As we would expect, all the Missouri voters live in Missouri.
+As expected, all voters registered to vote live in the state of Missouri.
 
-``` r
-count(mov, state, sort = TRUE)
-#> # A tibble: 35 x 2
-#>    state             n
-#>    <chr>         <int>
-#>  1 MO          4608112
-#>  2 <NA>           1001
-#>  3 DONIPHAN        304
-#>  4 NAYLOR          141
-#>  5 FAIRDEALING      41
-#>  6 KAHOKA           34
-#>  7 GATEWOOD         18
-#>  8 ALEXANDRIA       14
-#>  9 OXLY             14
-#> 10 REVERE           13
-#> # … with 25 more rows
+``` 
+voters['residential_state'].unique()
+
+array(['MO', 'XXXXX', nan], dtype=object)
 ```
 
 ### City
 
-Cities are the most difficult geographic variable to normalize, simply
-due to the wide variety of valid cities and formats.
+Cities are the most difficult to normalize bc of wide variety of cities/formats. The state of Missouri seems to have normalized them, though; there aren't any misspellings of any cities that I can see.
+The only step left w/ addresses would be to standardize these fields/addresses against USPS records. There are several Python libraries that do this, but doing so is outside of the scope of work here, so we leave it.
 
-#### Normal
+``` 
+voters['residential_city'].unique()
 
-The `campfin::normal_city()` function is a good start, again converting
-case, removing punctuation, but *expanding* USPS abbreviations. We can
-also remove `invalid_city` values.
-
-``` r
-mov <- mov %>% 
-  mutate(
-    city_norm = normal_city(
-      city = city, 
-      abbs = usps_city,
-      states = c("MO", "DC", "MISSOURI"),
-      na = invalid_city,
-      na_rep = TRUE
-    )
-  )
+array(['KIRKSVILLE', 'BRASHEAR', 'GIBBS', 'LA PLATA', 'NOVINGER',
+       'GREENTOP', 'GREENCASTLE', 'XXXXX', 'HURDLAND', 'NEW BOSTON',
+       'COUNTRY CLUB', 'SAVANNAH', 'ST JOSEPH', 'COSBY', 'UNION STAR',
+       'AMAZONIA', 'ROSENDALE', 'FILLMORE', 'CLARKSDALE', 'HELENA',
+       'BOLCKOW', 'KING CITY', 'REA', 'BARNARD', 'GUILFORD', 'GRAHAM',
+       'ROCK PORT', 'TARKIO', 'FAIRFAX', 'BURLINGTON JUNCTION',
+       'WESTBORO', 'CRAIG', 'WATSON', 'ELMO', 'SKIDMORE', 'VANDALIA',
+       'MEXICO', 'LADDONIA', 'BENTON CITY', 'CENTRALIA', 'THOMPSON',
+       'FARBER', 'MARTINSBURG', 'RUSH HILL', 'MIDDLETOWN', 'WELLSVILLE',
+       'AUXVASSE', 'STURGEON', 'CLARK', 'MADISON', 'MONETT', 'PURDY',
+       'SHELL KNOB', 'CASSVILLE', 'WASHBURN', 'GOLDEN', 'EXETER',
+       'SELIGMAN', 'CRANE', 'AURORA', 'BUTTERFIELD', 'EAGLE ROCK',
+       'VERONA', 'WHEATON', 'PIERCE CITY', 'CAPE FAIR', 'FAIRVIEW',
+       'GALENA', 'JENKINS', 'ROCKY COMFORT', 'LAMAR', 'MINDENMINES',
+       'GOLDEN CITY', 'SHELDON', 'LIBERAL', 'ASBURY', 'JERICO SPRINGS',
+       'JASPER', 'ORONOGO', 'BRONAUGH', 'IRWIN', 'IANTHA', 'LOCKWOOD',
+       'ADRIAN', 'BUTLER', 'RICH HILL', 'AMSTERDAM', 'DREXEL', 'AMORET',
+       'FOSTER', 'APPLETON CITY', 'HUME', 'ARCHIE', 'ROCKVILLE',
+       'MONTROSE', 'URICH', 'WARSAW', 'QUINCY', 'LINCOLN', 'COLE CAMP',
+       'EDWARDS', 'WINDSOR', 'CLINTON', 'OSCEOLA', 'STOVER', 'IONIA',
+       'MORA', 'WHEATLAND', 'CROSS TIMBERS', 'CLIMAX SPRINGS', 'MARQUAND',
+       'MARBLE HILL', 'PATTON', 'SEDGEWICKVILLE', 'GLENALLEN',
+       'MILLERSVILLE', 'LEOPOLD', 'ZALMA', 'STURDIVANT', 'FREDERICKTOWN',
+       'BROWNWOOD', 'ADVANCE', 'GRASSY', 'DAISY', 'PERRYVILLE', 'GIPSY',
+       'FRIEDHEIM', 'PUXICO', 'WHITEWATER', 'MC GEE', 'ARAB', 'COLUMBIA',
+       'HALLSVILLE', 'ASHLAND', 'HARTSBURG', 'HARRISBURG', 'ROCHEPORT',
+       'EDGERTON', 'GOWER', 'DE KALB', 'AGENCY', 'EASTON', 'RUSHVILLE',
+       'FAUCETT', 'DEARBORN', 'STEWARTSVILLE', 'POPLAR BLUFF',
+       'WAPPAPELLO', 'QULIN', 'WILLIAMSVILLE', 'BROSELEY', 'HARVIELL',
+       'FISK', 'NEELYVILLE', 'ELLSINORE', 'NAYLOR', 'ROMBAUER',
+       'FAIRDEALING', 'BRAYMER', 'CAMERON', 'KIDDER', 'HAMILTON',
+       'LATHROP', 'KINGSTON', 'BRECKENRIDGE', 'POLO', 'COWGILL', 'LAWSON',
+       'TURNEY', 'TEBBETTS', 'FULTON', 'NEW BLOOMFIELD', 'HOLTS SUMMIT',
+       'MOKANE', 'STEEDMAN', 'MONTGOMERY CITY', 'PORTLAND',
+       'KINGDOM CITY', 'RHINELAND', 'WILLIAMSBURG', 'JEFFERSON CITY',
+       'ROACH', 'CAMDENTON', 'OSAGE BEACH', 'LINN CREEK', 'LAKE OZARK',
+       'SUNRISE BEACH', 'FOUR SEASONS', 'STOUTLAND', 'GRAVOIS MILLS',
+       'MACKS CREEK', 'KAISER', 'MONTREAL', 'RICHLAND', 'LEBANON',
+       'ELDRIDGE', 'BRUMLEY', 'TUNAS', 'CAPE GIRARDEAU', 'DELTA',
+       'JACKSON', 'OAK RIDGE', 'ALTENBURG', 'BURFORDVILLE', 'CHAFFEE',
+       'OLD APPLETON', 'POCAHONTAS', 'ORAN', 'SCOTT CITY', 'CARROLLTON',
+       'HALE', 'NORBORNE', 'BOGARD', 'TINA', 'BOSWORTH', 'DE WITT',
+       'DAWN', 'HARDIN', 'VAN BUREN', 'GRANDIN', 'FREMONT', 'DONIPHAN',
+       'ELLINGTON', 'PIEDMONT', 'RAYMORE', 'HARRISONVILLE', 'BELTON',
+       'GARDEN CITY', 'PLEASANT HILL', 'PECULIAR', 'CREIGHTON',
+       'CLEVELAND', 'VILLAGE OF LOCH LLOYD', 'FREEMAN', 'GUNN CITY',
+       'LEES SUMMIT', 'LAKE WINNEBAGO', 'EAST LYNNE', 'KINGSVILLE',
+       'GREENWOOD', 'KANSAS CITY', 'STRASBURG', 'LAKE ANNETTE',
+       'WEST LINE', 'LATOUR', 'HOLDEN', 'LONE JACK', 'EL DORADO SPRINGS',
+       'HUMANSVILLE', 'STOCKTON', 'FAIR PLAY', 'DADEVILLE', 'DUNNEGAN',
+       'ALDRICH', 'GLASGOW', 'BRUNSWICK', 'KEYTESVILLE', 'MARCELINE',
+       'SALISBURY', 'NEW CAMBRIA', 'SUMNER', 'DALTON', 'TRIPLETT',
+       'ROTHVILLE', 'MENDON', 'CLIFTON HILL', 'BROOKFIELD', 'OZARK',
+       'ROGERSVILLE', 'NIXA', 'SPOKANE', 'HIGHLANDVILLE', 'CHESTNUTRIDGE',
+       'SPARTA', 'BRUNER', 'BILLINGS', 'CLEVER', 'BRADLEYVILLE',
+       'CHADWICK', 'REPUBLIC', 'BROOKLINE STATION', 'FORDLAND',
+       'SADDLEBROOKE', 'OLDFIELD', 'GARRISON', 'FORSYTH', 'WALNUT SHADE',
+       'PONCE DE LEON', 'REEDS SPRING', 'MARIONVILLE', 'TANEYVILLE',
+       'KAHOKA', 'WILLIAMSTOWN', 'WAYLAND', 'CANTON', 'LURAY', 'REVERE',
+       'ALEXANDRIA', 'WYACONDA', 'ARBELA', 'ST PATRICK', 'KEARNEY',
+       'LIBERTY', 'HOLT', 'GLADSTONE', 'SMITHVILLE', 'EXCELSIOR SPRINGS',
+       'NORTH KANSAS CITY', 'MISSOURI CITY', 'TRIMBLE', 'MOSBY', 'ORRICK',
+       'PLATTSBURG', 'OSBORN', 'RUSSELLVILLE', 'HENLEY', 'EUGENE',
+       'WARDSVILLE', 'LOHMAN', 'CENTERTOWN', 'ST THOMAS', 'META',
+       'BOONVILLE', 'PILOT GROVE', 'BLACKWATER', 'WOOLDRIDGE',
+       'OTTERVILLE', 'BUNCETON', 'PRAIRIE HOME', 'CALIFORNIA', 'SYRACUSE',
+       'TIPTON', 'NELSON', 'CLARKSBURG', 'SMITHTON', 'SEDALIA',
+       'JAMESTOWN', 'LEASBURG', 'CUBA', 'BOURBON', 'STEELVILLE',
+       'SULLIVAN', 'CHERRYVILLE', 'OWENSVILLE', 'ST JAMES',
+       'COOK STATION', 'DAVISVILLE', 'SALEM', 'VIBURNUM', 'WESCO',
+       'EVERTON', 'GREENFIELD', 'WALNUT GROVE', 'SOUTH GREENFIELD',
+       'ARCOLA', 'ASH GROVE', 'BUFFALO', 'URBANA', 'FAIR GROVE',
+       'ELKLAND', 'LOUISBURG', 'LONG LANE', 'PHILLIPSBURG', 'CONWAY',
+       'WINDYVILLE', 'PRESTON', 'JAMESPORT', 'GALLATIN', 'WINSTON',
+       'PATTONSBURG', 'WEATHERBY', 'ALTAMONT', 'JAMESON', 'COFFEY',
+       'CHILLICOTHE', 'GILMAN CITY', 'MC FALL', 'TRENTON', 'MAYSVILLE',
+       'AMITY', 'LENOX', 'JADWIN', 'LICKING', 'BUNKER', 'BOSS', 'ROLLA',
+       'EDGAR SPRINGS', 'LAKE SPRING', 'LECOMA', 'BIXBY', 'AVA',
+       'MOUNTAIN GROVE', 'VANZANT', 'DORA', 'SQUIRES', 'DRURY',
+       'WILLOW SPRINGS', 'WEST PLAINS', 'SEYMOUR', 'NORWOOD', 'WASOLA',
+       'MANSFIELD', 'CABOOL', 'MACOMB', 'KENNETT', 'CLARKTON', 'CAMPBELL',
+       'MALDEN', 'HOLCOMB', 'SENATH', 'CARDWELL', 'WHITEOAK', 'ARBYRD',
+       'BERNIE', 'HORNERSVILLE', 'GIBSON', 'GOBLER', 'STEELE',
+       'GRUBVILLE', 'ROBERTSVILLE', 'VILLA RIDGE', 'UNION', 'WASHINGTON',
+       'NEW HAVEN', 'ST CLAIR', 'PACIFIC', 'GERALD', 'LABADIE',
+       'ST ALBANS', 'CATAWISSA', 'LONEDELL', 'LESLIE', 'GRAY SUMMIT',
+       'LUEBBERING', 'BEAUFORT', 'BERGER', 'ROSEBUD', 'CHESTERFIELD',
+       'HERMANN', 'GASCONADE', 'BLAND', 'MORRISON', 'LINN', 'MT STERLING',
+       'ALBANY', 'DARLINGTON', 'STANBERRY', 'GENTRY', 'NEW HAMPTON',
+       'DENVER', 'RAVENWOOD', 'WORTH', 'PARNELL', 'MARTINSVILLE',
+       'SPRINGFIELD', 'WILLARD', 'STRAFFORD', 'PLEASANT HOPE',
+       'BOIS D ARC', 'BRIGHTON', 'MARSHFIELD', 'BROOKLINE', 'TURNERS',
+       'BRIMSON', 'GALT', 'SPICKARD', 'LAREDO', 'CHULA', 'BETHANY',
+       'EAGLEVILLE', 'CAINSVILLE', 'RIDGEWAY', 'HATFIELD', 'BLYTHEDALE',
+       'GRANT CITY', 'MT MORIAH', 'DAVIS CITY', 'LAMONI', 'CHILHOWEE',
+       'DEEPWATER', 'CALHOUN', 'BLAIRSTOWN', 'LEETON', 'FLEMINGTON',
+       'WEAUBLEAU', 'HERMITAGE', 'PITTSBURG', 'POLK', 'NO CITY DATA',
+       'HALF WAY', 'COLLINS', 'FOREST CITY', 'OREGON', 'MOUND CITY',
+       'MAITLAND', 'FAYETTE', 'ARMSTRONG', 'FRANKLIN', 'NEW FRANKLIN',
+       'HIGBEE', 'MOUNTAIN VIEW', 'POMONA', 'CAULFIELD', 'POTTERSVILLE',
+       'PEACE VALLEY', 'MOODY', 'KOSHKONONG', 'BAKERSFIELD', 'ARCADIA',
+       'IRONTON', 'VULCAN', 'ANNAPOLIS', 'DES ARC', 'BLACK',
+       'MIDDLE BROOK', 'PILOT KNOB', 'BELLEVIEW', 'CALEDONIA', 'COURTOIS',
+       'BISMARCK', 'LESTERVILLE', 'BLUE SPRINGS', 'INDEPENDENCE',
+       'GRANDVIEW', 'GRAIN VALLEY', 'LAKE LOTAWANA', 'OAK GROVE',
+       'BUCKNER', 'SUGAR CREEK', 'RAYTOWN', 'LAKE TAPAWINGO', 'SIBLEY',
+       'UNITY VILLAGE', 'LEVASY', 'NAPOLEON', 'DUENWEG', 'WEBB CITY',
+       'JOPLIN', 'CARL JUNCTION', 'CARTHAGE', 'ALBA', 'CARTERVILLE',
+       'PURCELL', 'SARCOXIE', 'LA RUSSELL', 'REEDS', 'NECK CITY',
+       'DIAMOND', 'WACO', 'AVILLA', 'ARNOLD', 'IMPERIAL', 'PEVELY',
+       'HIGH RIDGE', 'EUREKA', 'FENTON', 'CEDAR HILL', 'HILLSBORO',
+       'FESTUS', 'DE SOTO', 'DITTMER', 'CRYSTAL CITY', 'HERCULANEUM',
+       'HOUSE SPRINGS', 'BARNHART', 'LABARQUE CREEK', 'FLETCHER',
+       'BLOOMSDALE', 'VALLES MINES', 'KIMMSWICK', 'BYRNES MILL',
+       'BONNE TERRE', 'SULPHUR SPRINGS', 'MORSE MILL', 'HEMATITE',
+       'LIGUORI', 'MAPAVILLE', 'RICHWOODS', 'WARRENSBURG', 'CONCORDIA',
+       'BATES CITY', 'HIGGINSVILLE', 'KNOB NOSTER', 'CENTERVIEW',
+       'WHITEMAN AIR FORCE BASE', 'LA MONTE', 'ODESSA', 'SWEET SPRINGS',
+       'MAYVIEW', 'GREEN RIDGE', 'EDINA', 'SHELBYVILLE', 'NEWARK',
+       'KNOX CITY', 'NOVELTY', 'RUTLEDGE', 'BARING', 'LA BELLE',
+       'LEONARD', 'GORIN', 'FALCON', 'LYNCHBURG', 'PLATO', 'GROVESPRING',
+       'LAQUEY', 'LEXINGTON', 'WELLINGTON', 'ALMA', 'WAVERLY', 'CORDER',
+       'BLACKBURN', 'DOVER', 'EMMA', 'CAMDEN', 'MOUNT VERNON', 'MILLER',
+       'WENTWORTH', 'STOTTS CITY', 'FREISTATT', 'HALLTOWN', 'EWING',
+       'LA GRANGE', 'LEWISTOWN', 'MONTICELLO', 'MAYWOOD', 'DURHAM',
+       'BETHEL', 'TAYLOR', 'TROY', 'MOSCOW MILLS', 'FOLEY', 'FORISTELL',
+       'OLD MONROE', 'WINFIELD', 'HAWK POINT', 'ELSBERRY', 'EOLIA',
+       'SILEX', 'WRIGHT CITY', 'WARRENTON', 'WHITESIDE', 'TRUXTON',
+       'BOWLING GREEN', 'BELLFLOWER', 'MEADVILLE', 'LACLEDE', 'BUCKLIN',
+       'BROWNING', 'PURDIN', 'ST CATHERINE', 'LINNEUS', 'HUMPHREYS',
+       'WINIGAN', 'WHEELING', 'MOORESVILLE', 'LUDLOW', 'UTICA', 'MACON',
+       'BEVIER', 'ATLANTA', 'EXCELLO', 'CALLAO', 'ETHEL', 'ELMER',
+       'ANABEL', 'JACKSONVILLE', 'CLARENCE', 'FARMINGTON', 'SILVA',
+       'BELLE', 'VIENNA', 'DIXON', 'VICHY', 'ARGYLE', 'BRINKTOWN',
+       'FREEBURG', 'HANNIBAL', 'PALMYRA', 'MONROE CITY', 'PHILADELPHIA',
+       'HUNNEWELL', 'EMDEN', 'NOEL', 'PINEVILLE', 'STELLA', 'ANDERSON',
+       'GOODMAN', 'SOUTH WEST CITY', 'SENECA', 'POWELL', 'JANE', 'NEOSHO',
+       'LANAGAN', 'TIFF CITY', 'PRINCETON', 'HARRIS', 'MERCER', 'NEWTOWN',
+       'POWERSVILLE', 'ELDON', 'IBERIA', 'ROCKY MOUNT', 'ULMAN',
+       'TUSCUMBIA', 'ST ELIZABETH', 'OLEAN', 'CROCKER', 'BARNETT',
+       'CHARLESTON', 'EAST PRAIRIE', 'WYATT', 'BERTRAND', 'SIKESTON',
+       'ANNISTON', 'WILSON CITY', 'LATHAM', 'FORTUNA', 'VERSAILLES',
+       'HIGH POINT', 'MC GIRK', 'PARIS', 'SANTA FE', 'SHELBINA',
+       'MOBERLY', 'STOUTSVILLE', 'PERRY', 'HOLLIDAY', 'LENTNER',
+       'JONESBURG', 'NEW FLORENCE', 'HIGH HILL', 'MCKITTRICK',
+       'BIG SPRING', 'MINEOLA', 'AMERICUS', 'DANVILLE', 'BUELL', 'GAMMA',
+       'LAURIE', 'FLORENCE', 'PORTAGEVILLE', 'LILBOURN', 'MATTHEWS',
+       'MARSTON', 'GIDEON', 'NEW MADRID', 'CATRON', 'PARMA', 'RISCO',
+       'MOREHOUSE', 'KEWANEE', 'TALLAPOOSA', 'HOWARDVILLE', 'CANALOU',
+       'NORTH LILBOURN', 'WARDELL', 'CONRAN', 'GRANBY', 'STARK CITY',
+       'LOMA LINDA', 'RACINE', 'SAGINAW', 'MARYVILLE', 'CONCEPTION',
+       'CLYDE', 'CLEARMONT', 'CONCEPTION JUNCTION', 'PICKERING',
+       'HOPKINS', 'SHERIDAN', 'THAYER', 'BIRCH TREE', 'ALTON', 'COUCH',
+       'MYRTLE', 'GATEWOOD', 'WINONA', 'WESTPHALIA', 'CHAMOIS',
+       'BONNOTS MILL', 'LOOSE CREEK', 'KOELTZTOWN', 'THORNFIELD',
+       'TECUMSEH', 'UDALL', 'GAINESVILLE', 'NOBLE', 'THEODOSIA',
+       'PONTIAC', 'ISABELLA', 'BRIXEY', 'ZANONI', 'PROTEM', 'HARDENVILLE',
+       'SYCAMORE', 'ROCKBRIDGE', 'COOTER', 'HAYTI', 'CARUTHERSVILLE',
+       'HOLLAND', 'BRAGG CITY', 'PASCOLA', 'BRAGGADOCIO', 'DEERING',
+       'UNIONTOWN', 'FROHNA', 'ST MARY', 'BRAZEAU', 'FARRAR', 'MC BRIDE',
+       'HOUSTONIA', 'HUGHESVILLE', 'MARSHALL', 'NEWBURG', 'JEROME',
+       'BEULAH', 'DUKE', 'DEVILS ELBOW', 'LOUISIANA', 'NEW LONDON',
+       'FRANKFORD', 'CLARKSVILLE', 'CURRYVILLE', 'NEW HARTFORD',
+       'ASHBURN', 'ANNADA', 'PAYNESVILLE', 'WESTON', 'PARKVILLE',
+       'RIVERSIDE', 'WEATHERBY LAKE', 'PLATTE CITY', 'NORTHMOOR',
+       'LAKE WAUKOMIS', 'FERRELVIEW', 'HOUSTON LAKE', 'PLATTE WOODS',
+       'CAMDEN POINT', 'FARLEY', 'WALDRON', 'BOLIVAR', 'MORRISVILLE',
+       'GOODSON', 'WAYNESVILLE', 'ST ROBERT', 'FORT LEONARD WOOD',
+       'UNIONVILLE', 'LIVONIA', 'LUCERNE', 'WORTHINGTON', 'COATSVILLE',
+       'POLLOCK', 'CENTER', 'SAVERTON', 'HUNTSVILLE', 'CAIRO', 'RENICK',
+       'RICHMOND', 'RAYVILLE', 'HENRIETTA', 'WOOD HEIGHTS', 'CENTERVILLE',
+       'REDFORD', 'REYNOLDS', 'OXLY', 'SLATER', 'MIAMI', 'MALTA BEND',
+       'GRAND PASS', 'ARROW ROCK', 'GILLIAM', 'QUEEN CITY', 'LANCASTER',
+       'GLENWOOD', 'DOWNING', 'MEMPHIS', 'GRANGER', 'KELSO', 'BENTON',
+       'PERKINS', 'VANDUSER', 'COMMERCE', 'MORLEY', 'BELL CITY',
+       'BLODGETT', 'EMINENCE', 'SUMMERSVILLE', 'HARTSHORN',
+       'STEFFENVILLE', 'ST PETERS', 'ST CHARLES', 'O FALLON',
+       'WENTZVILLE', 'LAKE ST LOUIS', 'MARTHASVILLE', 'AUGUSTA',
+       'DEFIANCE', 'PORTAGE DES SIOUX', 'WEST ALTON', 'NEW MELLE',
+       'LOWRY CITY', 'SCHELL CITY', 'ROSCOE', 'HARWOOD', 'PARK HILLS',
+       'FRENCH VILLAGE', 'DESLOGE', 'DOE RUN', 'LEADWOOD', 'IRONDALE',
+       'LEADINGTON', 'BLACKWELL', 'CADET', 'ST LOUIS', 'FLORISSANT',
+       'BALLWIN', 'MARYLAND HEIGHTS', 'ELLISVILLE', 'MANCHESTER',
+       'ST ANN', 'BRIDGETON', 'WILDWOOD', 'HAZELWOOD', 'VALLEY PARK',
+       'ALLENTON', 'STE GENEVIEVE', 'ESSEX', 'DEXTER', 'BLOOMFIELD',
+       'GRAYRIDGE', 'DUDLEY', 'PAINTON', 'BRANSON WEST',
+       'KIMBERLING CITY', 'LAMPE', 'BLUE EYE', 'BRANSON', 'HURLEY',
+       'HOLLISTER', 'GREEN CITY', 'MILAN', 'KIRBYVILLE', 'CEDAR CREEK',
+       'MERRIAM WOODS', 'RIDGEDALE', 'ROCKAWAY BEACH', 'KISSEE MILLS',
+       'POWERSITE', 'POINT LOOKOUT', 'RUETER', 'CHESTNUT RIDGE',
+       'RAYMONDVILLE', 'SUCCESS', 'HOUSTON', 'SOLO', 'ELK CREEK',
+       'BUCYRUS', 'GRAFF', 'ROBY', 'HUGGINS', 'BENDAVIS', 'YUKON',
+       'EUNICE', 'MAPLES', 'NEVADA', 'WALKER', 'MILO', 'DEERFIELD',
+       'RICHARDS', 'MOUNDVILLE', 'METZ', 'TRUESDALE', 'LAKE SHERWOOD',
+       'DUTZOW', 'INNSBROOK', 'POTOSI', 'MINERAL POINT', 'BELGRADE',
+       'TIFF', 'PATTERSON', 'GREENVILLE', 'MILL SPRING', 'LODI', 'CLUBB',
+       'LOWNDES', 'GLEN ALLEN', 'NIANGUA', 'HARTVILLE', 'ALLENDALE'],
+      dtype=object)
 ```
 
-#### Progress
+```
+How many unique cities are there? 989, which seems reasonable: There are roughly 1,000 muni governments, and several other types of smaller gov'ts in MO. (Taken from here https://www2.census.gov/govs/cog/gc0212mo.pdf)
 
-Our goal for normalization was to increase the proportion of city values
-known to be valid and reduce the total distinct values by correcting
-misspellings.
+print(len(voters['residential_city'].unique()))
 
-| stage      | prop\_in | n\_distinct | prop\_na |  n\_out | n\_diff |
-| :--------- | -------: | ----------: | -------: | ------: | ------: |
-| city)      |    0.777 |        1527 |        0 | 1026936 |     583 |
-| city\_norm |    0.996 |        1024 |        0 |   19571 |      64 |
+989
+```
 
 ## Conclude
 
-Before exporting, we can remove the intermediary normalization columns
-and rename all added variables with the `_clean` suffix.
+Before exporting:
 
-``` r
-mov <- rename_all(mov, ~str_replace(., "_norm", "_clean"))
+Rename specified fields in the df to match the prior TAP MO voter data file format so that we do not need to create a new dataset.
+
+```
+voters.rename(columns = {'address_norm':'address_clean', 'residential_city':'city', 'residential_state': 'state', 'residential_zipcode': 'zip', 'birthdate': 'birth_date', 'registration_date': 'reg_date', 'congressional_district_20': 'congressional', 'legislative_district_20': 'legislative', 'senate_district_20': 'state_senate', 'voter_history_1': 'last_election'}, inplace = True)
 ```
 
-``` r
-glimpse(sample_n(mov, 50))
-#> Rows: 50
-#> Columns: 36
-#> $ county               <chr> "Boone", "Jefferson", "Boone", "Pettis", "Gentry", "St. Louis City"…
-#> $ voter_id             <chr> "1094876", "13134337", "4628917", "15544030", "750441438", "7513581…
-#> $ first_name           <chr> "ROBERT", "KACI", "JOHNNY", "JULIE", "CINDY", "TAYLOR", "RACHEAL", …
-#> $ middle_name          <chr> "LEE", "JEAN", NA, "A", "S", "ANISE", "LEAH", "S", "JOE", NA, "P", …
-#> $ last_name            <chr> "YOUNG", "DIXON", "WILLIAMS", "WASSON", "COCHRAN", "BAKER", "BEASLE…
-#> $ suffix               <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "JR", NA, NA, NA, NA, "…
-#> $ house_number         <chr> "1109", "1824", NA, "1205", "307", "3032", "1717", "5039", "1026", …
-#> $ house_suffix         <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
-#> $ pre_direction        <chr> NA, NA, NA, NA, NA, NA, "E", NA, NA, "W", NA, NA, "S", NA, "E", NA,…
-#> $ street_name          <chr> "ELSDON", "WEST", NA, "ELM HILLS", "3 RD.ST", "W NORWOOD", "PRIMROS…
-#> $ street_type          <chr> "DR", "DR", NA, "BLVD", NA, "DR", "ST", "AVE", "DR", "ST", "ST", "P…
-#> $ post_direction       <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
-#> $ unit_type            <chr> NA, NA, NA, NA, NA, NA, "APT", NA, NA, NA, NA, "APT", NA, NA, NA, N…
-#> $ unit_number          <chr> NA, NA, NA, NA, NA, NA, "F-109", NA, NA, NA, NA, "A", NA, NA, NA, N…
-#> $ non_standard_address <chr> NA, NA, "901 WILKES BLVD", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
-#> $ city                 <chr> "COLUMBIA", "HIGH RIDGE", "COLUMBIA", "SEDALIA", "KING CITY", "ST L…
-#> $ state                <chr> "MO", "MO", "MO", "MO", "MO", "MO", "MO", "MO", "MO", "MO", "MO", "…
-#> $ zip                  <chr> "65203-0", "63049", "65201-0", "65301", "64463", "63115", "65804", …
-#> $ birth_date           <date> 1961-05-17, 1975-06-29, 1957-05-31, 1968-12-27, 1962-05-25, 1997-0…
-#> $ reg_date             <date> 2017-07-15, 2004-09-01, 2007-03-27, 2000-07-17, 2008-10-08, 2015-0…
-#> $ precinct             <chr> "5I", "71.A", "1A", "47", "9", "01", "411", "01", "5B", "03", "14",…
-#> $ precinct_name        <chr> "5I", "71.A Brennan", "1A", "SEDALIA WEST", "JACKSON EAST", "WARD 0…
-#> $ split                <chr> "5I1", "01", "1A3", "03", "01", "02", "01", "03", "01", "01", "06",…
-#> $ township             <chr> "MISSOURI", "Rock Township", "MISSOURI", "SEDALIA WEST", "JACKSON T…
-#> $ ward                 <chr> "WD 05", NA, "WD 01", NA, "KCEW", "0001", "ZN 4", "0001", "WD 05", …
-#> $ congressional        <chr> "CN-N 4", "CN-N 2", "CN-N 4", "CN-N 4", "CN-N 6", "CN-N 1", "CN-N 7…
-#> $ legislative          <chr> "LE-N 046", "LE-N 097", "LE-N 045", "LE-N 052", "LE-N 002", "LE-N 0…
-#> $ state_senate         <chr> "SE-N 19", "SE-N 22", "SE-N 19", "SE-N 28", "SE-N 12", "SE-N 04", "…
-#> $ voter_status         <chr> "Active", "Active", "Inactive", "Active", "Active", "Active", "Inac…
-#> $ last_election        <chr> NA, "11/06/2018 General", NA, "08/04/2020 Primary", "08/04/2020 Pri…
-#> $ source               <chr> "1", "1", "1", "1", "1", "1", "1", "1", "1", "1", "1", "1", "1", "1…
-#> $ dupe_flag            <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALS…
-#> $ reg_year             <dbl> 2017, 2004, 2007, 2000, 2008, 2015, 2016, 2016, 1986, 1999, 2014, 2…
-#> $ address_clean        <chr> "1109 ELSDON DR", "1824 WEST DR", "901 WILKES BLVD", "1205 ELM HILL…
-#> $ zip_clean            <chr> "65203", "63049", "65201", "65301", "64463", "63115", "65804", "631…
-#> $ city_clean           <chr> "COLUMBIA", "HIGH RIDGE", "COLUMBIA", "SEDALIA", "KING CITY", "SAIN…
+Change names/create fields that don't exist in df currently but are in old data. Create source flag in new file (in joined file at end, 1 = old data, 2 = new).
+
+```
+voters['reg_year'] = voters['reg_date'].dt.year
+voters['source'] = 2
+voters['zip_clean'] = voters['zip']
+voters['city_clean'] = voters['city']
 ```
 
-1.  There are 4,609,735 records in the database.
-2.  There are 71 duplicate records in the database.
-3.  The range and distribution of `amount` and `date` seem reasonable.
-4.  There are 0 records missing key variables.
-5.  Consistency in geographic data has been improved with
-    `campfin::normal_*()`.
-6.  The 4-digit `year` variable has been created with
-    `lubridate::year()`.
+Create a new df that has only the data we need.
+
+```
+fields_needed = ['county', 'voter_id', 'first_name', 'middle_name', 'last_name', 'suffix', 'house_number', 'house_suffix', 'pre_direction', 'street_name', 'street_type', 'post_direction', 'unit_type', 'unit_number', 'non_standard_address', 'city', 'state', 'zip', 'birth_date', 'reg_date', 'precinct', 'precinct_name', 'split', 'township', 'ward', 'congressional', 'legislative', 'state_senate', 'voter_status', 'last_election', 'source', 'dupe_flag', 'reg_year', 'address_clean', 'zip_clean', 'city_clean']
+
+# Filter df to only those fields 
+
+voters_tap = voters[fields_needed]
+```
+
+Join it with the old file.
+
+```
+joined = pd.concat([voters_tap, keepers])
+```
+
+Check for duplicates in new, joined file, create dupe flag in join file based on check.
+
+```
+# Now we need to check the joined file for duplicate values
+# keep=False here is marking all duplicates, based on voter_id, as True
+# The dupe analysis based on unique IDs seems to indicate there aren't any
+# BUT, caveat: There are unique IDs, and still duplicate voters; see below
+
+is_duplicated = joined['voter_id'].duplicated(keep=False)
+
+# Check for duplicates across name, birthdate, mailing ZIP
+# Reveals that despite unique voter IDs (per Kiernan's R script), there are dupes
+# Recast dupe_flag based on this
+
+duped_names = joined.duplicated(subset=["first_name", "last_name", "birth_date", "zip"])
+
+# This filters the dataframe to only the duplicated names 
+
+names_duped = joined[duped_names]
+
+# This recasts the dupe flag
+joined['dupe_flag'] = np.where(joined.duplicated(subset=["first_name", "last_name", "birth_date", "zip"], keep=False), 'TRUE', 'FALSE')
+
+t = ['TRUE']
+filtered_t = joined[joined['dupe_flag'].isin(t)]
+print('In the 2023 and 2020 data, combined, there are ' + "{:,}".format(len(filtered_t['voter_id'])) + ' duplicates.')
+
+In the 2023 and 2020 data, combined, there are 3,969 duplicates.
+```
 
 ## Export
 
 Now the file can be saved on disk for upload to the Accountability
 server.
 
-``` r
-clean_dir <- dir_create(here("mo", "voters", "data", "clean"))
-clean_path <- path(clean_dir, "mo_voters.csv")
-write_csv(mov, clean_path, na = "")
-(clean_size <- file_size(clean_path))
-#> 1G
-file_encoding(clean_path) %>% 
-  mutate(across(path, path.abbrev))
-#> # A tibble: 1 x 3
-#>   path                                 mime            charset
-#>   <chr>                                <chr>           <chr>  
-#> 1 ~/mo/voters/data/clean/mo_voters.csv application/csv utf-8
 ```
+# Export for TAP
 
-## Upload
-
-We can use the `aws.s3::put_object()` to upload the text file to the IRW
-server.
-
-``` r
-aws_path <- path("csv", basename(clean_path))
-if (!object_exists(aws_path, "publicaccountability")) {
-  put_object(
-    file = clean_path,
-    object = aws_path, 
-    bucket = "publicaccountability",
-    acl = "public-read",
-    show_progress = TRUE,
-    multipart = TRUE
-  )
-}
-aws_head <- head_object(aws_path, "publicaccountability")
-(aws_size <- as_fs_bytes(attr(aws_head, "content-length")))
-unname(aws_size == clean_size)
+joined.to_csv('mo_voters_2023.csv')
 ```
