@@ -5,6 +5,7 @@ Janelle O'Dea
 
   - [Project](#project)
   - [Objectives](#objectives)
+  - [Structure](#structure)
   - [Packages](#packages)
   - [Data](#data)
   - [Read](#read)
@@ -21,7 +22,6 @@ Janelle O'Dea
       - [City](#city)
   - [Conclude](#conclude)
   - [Export](#export)
-  - [Upload](#upload)
 
 <!-- Place comments regarding knitting here -->
 
@@ -57,7 +57,7 @@ objectives:
 Results you see are from work done in a Jupyter Notebook. That notebook, mo-voters-2023.ipynb is in this repo.
 The script version of this is also in the repo, called mo_voters_2023.py.
 
-## File structure
+## Structure
 
 File structure:
 
