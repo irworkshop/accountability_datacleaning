@@ -117,13 +117,10 @@ here::here()
 
 ## Data
 
-This data is obtained from the Michigan [Board of Elections (BOE)][boe] 
-[Campaign Finance Reporting (CFR)][cfr] system. The data is provided as 
-[annual ZIP archive files][data] for the years 1998 through 2020. These files
-are updated nightly.
+This data is obtained from the Idaho [Secretary of State (SoS)][sos]. The data is provided for the years 1994 through 2018. 
+For data after 2018, we can download them from the new data portal.
 
-[boe]: https://www.michigan.gov/sos/0,4670,7-127-1633---,00.html
-[cfr]: https://www.michigan.gov/sos/0,4670,7-127-1633_8723---,00.html
+[sos]: https://sos.idaho.gov/elect/finance/downloads.html
 [data]: https://miboecfr.nictusa.com/cfr/dumpall/cfrdetail/
 
 ## Import

@@ -1,0 +1,963 @@
+---
+title: "Massachusetts Contributions"
+author: "Kiernan Nicholls & Yanqi Xu"
+date: "`r Sys.time()`"
+output:
+  github_document: 
+    df_print: tibble
+    toc: true
+    toc_dept: 2
+editor_options: 
+  chunk_output_type: console
+---
+
+<!-- Place comments regarding knitting here -->
+
+```{r setup, include=FALSE, purl=FALSE}
+library(knitr)
+opts_chunk$set(
+  eval = TRUE,
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  error = FALSE,
+  collapse = TRUE,
+  comment = "#>",
+  fig.path = "../plots/",
+  fig.width = 10,
+  dpi = 300
+)
+if (!interactive()) {
+  options(width = 99)
+  set.seed(5)
+}
+```
+
+```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
+fs::dir_create(here::here("state","ma", "contribs", "docs"))
+```
+
+## Project
+
+The Accountability Project is an effort to cut across data silos and give
+journalists, policy professionals, activists, and the public at large a simple
+way to search across huge volumes of public data about people and organizations.
+
+Our goal is to standardizing public data on a few key fields by thinking of each
+dataset row as a transaction. For each transaction there should be (at least) 3
+variables:
+
+1. All **parties** to a transaction.
+2. The **date** of the transaction.
+3. The **amount** of money involved.
+
+## Objectives
+
+This document describes the process used to complete the following objectives:
+
+1. How many records are in the database?
+1. Check for entirely duplicated records.
+1. Check ranges of continuous variables.
+1. Is there anything blank or missing?
+1. Check for consistency issues.
+1. Create a five-digit ZIP Code called `zip`.
+1. Create a `year` field from the transaction date.
+1. Make sure there is data on both parties to a transaction.
+
+## Packages
+
+The following packages are needed to collect, manipulate, visualize, analyze,
+and communicate these results. The `pacman` package will facilitate their
+installation and attachment.
+
+The IRW's `campfin` package will also have to be installed from GitHub. This
+package contains functions custom made to help facilitate the processing of
+campaign finance data.
+
+```{r load_packages, message=FALSE, warning=FALSE, error=FALSE}
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load_gh("irworkshop/campfin")
+pacman::p_load_gh("kiernann/mdbr")
+pacman::p_load(
+  tidyverse, # data manipulation
+  lubridate, # datetime strings
+  magrittr, # pipe operators
+  gluedown, # print markdown
+  janitor, # dataframe clean
+  aws.s3, # aws cloud storage
+  refinr, # cluster and merge
+  scales, # format strings
+  knitr, # knit documents
+  vroom, # read files fast
+  glue, # combine strings
+  here, # relative storage
+  fs # search storage 
+)
+```
+
+This document should be run as part of the `R_campfin` project, which lives as a
+sub-directory of the more general, language-agnostic
+[`irworkshop/accountability_datacleaning`][tap] GitHub repository.
+
+The `R_campfin` project uses the [RStudio projects][rproj] feature and should be
+run as such. The project also uses the dynamic `here::here()` tool for file
+paths relative to _your_ machine.
+
+```{r where_here}
+# where does this document knit?
+here::here()
+```
+
+[tap]: https://github.com/irworkshop/accountability_datacleaning
+[rproj]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects
+
+## Data
+
+Data is obtained from the Massachusetts [Office of Campaign and Political 
+Finance (OCPF)][https://www.ocpf.us/]. 
+
+> The Office of Campaign and Political Finance is an independent state agency
+that administers Massachusetts General Law [Chapter 55][55] the campaign finance
+law, and [Chapter 55C][55c], the limited public financing program for statewide
+candidates. Established in 1973, OCPF is the depository for disclosure reports
+filed by candidates and political committees under M.G.L. Chapter 55.
+
+[55]: https://www.ocpf.us/Legal/CampaignFinanceLaw
+[55C]: https://www.ocpf.us/Legal/PublicFinancingLaw
+[dl]: https://www.ocpf.us/Data
+
+## Download
+
+We can download zip files by year. These zip files contain multiple data files.
+
+[mdb]: http://ocpf2.blob.core.windows.net/downloads/data/campaign-finance-reports.zip
+
+We can download this archive and extract the file to the `ma/contribs/data/raw`
+directory.
+
+```{r raw_dir}
+#raw_dir <- dir_create(here("state","ma", "contribs", "data", "raw"))
+raw_dir <- here("state","ma", "contribs", "data", "raw")
+zip_name <- glue("ocpf-{2020:2023}-reports.zip")
+zip_url <- str_c("http://ocpf2.blob.core.windows.net/downloads/data2/", zip_name)
+zip_paths <- path(raw_dir, zip_name) 
+```
+
+```{r raw_download}
+for (i in seq_along(zip_paths)) {
+ if (!this_file_new(zip_paths[i])) {
+  download.file(zip_url[i], zip_paths[i])
+  unzip(zip_paths[i], exdir = str_remove(zip_paths[i],".zip"))
+} 
+}
+```
+
+## Read
+
+We can see that `read_me` file provided in the zip details the file layouts for these tables. For contributions, everthing is contained in the `report-items.txt` file.
+
+```{r}
+data_dict <- read_lines(dir_ls(raw_dir, regexp = "readme.txt",recurse = T)[1])
+
+data_dict <- data_dict[175:246]
+
+data_dict <- data_dict %>% I() %>%  read_tsv(col_names = c("variable","notes"))
+
+data_dict <- data_dict %>% 
+  mutate(notes = coalesce(notes, X3)) %>% select(-X3)
+```
+
+
+```{r raw_read}
+raw_paths <- dir_ls(raw_dir, regexp = "report-items.txt",recurse = T)
+
+mac <- read_tsv(
+  file = raw_paths,
+  na = c("", "NA", "N/A"),
+  col_types = cols(
+    .default = col_character(),
+    Date = col_date(),
+    Amount = col_double()
+  )
+)
+
+mac <- mac %>% select(-ncol(mac))
+```
+
+```{r raw_rename, echo=FALSE}
+mac <- mac %>% 
+  clean_names("snake") %>% 
+  remove_empty("cols") %>% 
+  #rename_all(~str_replace(., "contributor", "cont")) %>% 
+  rename_all(~str_remove(., "ocpf")) %>% 
+  rename(
+    rpt_id = report_id,
+    line = line_sequence,
+    first = first_name,
+    last = last_name,
+    officer = principal_officer,
+  )
+```
+
+```{r echo=FALSE}
+flush_memory()
+```
+
+The records of the receipts file are provided to OCPF on reports, identified by
+the `rpt_id` variable. The receipt records themselves do not contain the
+information on the committee recipients of each contribution. The information on
+the receiving committee are contained in the `UPLOAD_MASTER` database. We can
+read that table using the same method as above.
+
+```{r master_read}
+master <- read_mdb(
+  file = mdb_path,
+  table = "vUPLOAD_MASTER",,
+  na = c("", "NA", "N/A"),
+  col_types = cols(
+    .default = col_character(),
+    Amendment = col_logical(),
+    Filing_Date = col_datetime(),
+    Report_Year = col_integer(),
+    Beginning_Date = col_date(),
+    Ending_Date = col_date()
+  )
+)
+```
+
+```{r master_rename, echo=FALSE}
+master <- master %>% 
+  clean_names("snake") %>% 
+  select(
+    rpt_id = report_id,
+    rpt_year = report_year,
+    filing_date,
+    start_date = beginning_date,
+    end_date = ending_date,
+    cpf_id,
+    rpt_type = report_type_description,
+    cand_name = full_name,
+    office,
+    district,
+    comm_name = report_comm_name,
+    comm_city = report_comm_city,
+    comm_state = report_comm_state,
+    comm_zip = report_comm_zip,
+    category,
+    amendment
+  )
+```
+
+The records of this file contain the identifying information for the receiving
+committees making each report. We can use `dplyr::inner_join()` to join this
+table with the contributions table along the `rpt_id` variable.
+
+```{r master_join}
+mac <- inner_join(mac, master, by = "rpt_id")
+rm(master); flush_memory()
+```
+
+## Explore
+
+There are `r comma(nrow(mac))` rows of `r ncol(mac)` columns.
+
+```{r glimpse}
+glimpse(mac)
+tail(mac)
+```
+
+## Missing
+
+We should flag any records missing one of the key variables needed to properly
+identify a unique contribution.
+
+```{r na_count}
+col_stats(mac, count_na)
+```
+
+We can first `dplyr::coalesce()` the contributor and recipient variables to
+only flag records missing _any_ kind of name.
+
+```{r na_flag}
+mac <- mac %>% 
+  unite(
+    col = contrib_any,
+    first, last, 
+    sep = " ",
+    na.rm = TRUE,
+    remove = FALSE
+  ) %>% 
+  relocate(contrib_any, .after = last_col()) %>% 
+  mutate(across(contrib_any, na_if, "")) %>% 
+  mutate(
+    recip_any = coalesce(comm_name, cand_name)
+  ) %>% 
+  flag_na(contrib_any, recip_any, date, amount)
+```
+
+The only variable missing from theses columns is the coalesced contributor name.
+
+```{r na_view}
+mac %>% 
+  filter(na_flag) %>% 
+  select(contrib_any, recip_any, date, amount) %>% 
+  col_stats(count_na)
+```
+
+For all records with a `cont_type` of "OTHER", there is no given contributor
+name. We can remove these flags.
+
+```{r na_remove}
+prop_na(mac$contrib_any[which(mac$cont_type != "OTHER")])
+prop_na(mac$contrib_any[which(mac$cont_type == "OTHER")])
+mac$na_flag[which(mac$cont_type == "OTHER")] <- FALSE
+# very few remain
+percent(mean(mac$na_flag), accuracy = 0.01)
+```
+
+## Duplicates
+
+We can create a file containing every duplicate record in the data.
+
+```{r dupe_write}
+dupe_file <- path(dirname(raw_dir), "dupes.tsv")
+if (!file_exists(dupe_file)) {
+  file_create(dupe_file)
+  mac <- mutate(mac, group = str_sub(date, end = 7))
+  ma_id <- split(mac$id, mac$group)
+  mas <- mac %>%
+    select(-id, -line, -guid) %>% 
+    group_split(group, .keep = FALSE)
+  pb <- txtProgressBar(max = length(mas), style = 3)
+  for (i in seq_along(mas)) {
+    d1 <- duplicated(mas[[i]], fromLast = FALSE)
+    d2 <- duplicated(mas[[i]], fromLast = TRUE)
+    dupes <- data.frame(id = ma_id[[i]], dupe_flag = d1 | d2)
+    dupes <- filter(dupes, dupe_flag)
+    vroom_write(
+      x = dupes,
+      path = dupe_file,
+      append = TRUE,
+      progress = FALSE,
+    )
+    rm(d1, d2, dupes)
+    mas[[i]] <- NA
+    flush_memory(1)
+    setTxtProgressBar(pb, i)
+  }
+}
+```
+
+```{r dupe_read}
+dupes <- vroom(
+  file = dupe_file,
+  col_names = c("id", "dupe_flag"),
+  col_types = cols(
+    id = col_character(),
+    dupe_flag = col_logical()
+  )
+)
+```
+
+This file can then be joined against the contributions using the transaction ID.
+
+```{r dupe_flag}
+mac <- left_join(mac, dupes, by = "id")
+mac <- mutate(mac, dupe_flag = !is.na(dupe_flag))
+percent(mean(mac$dupe_flag), 0.1)
+```
+
+```{r dupe_view}
+mac %>% 
+  filter(dupe_flag) %>% 
+  select(contrib_any, recip_any, date, amount) %>% 
+  arrange(date, contrib_any)
+```
+
+## Categorical
+
+```{r n_distinct}
+col_stats(mac, n_distinct)
+```
+
+```{r bar_type, echo=FALSE}
+explore_plot(
+  data = mac,
+  var = cont_type
+)
+```
+
+```{r bar_method, echo=FALSE}
+explore_plot(
+  data = mac,
+  var = tender
+)
+```
+
+```{r bar_report, echo=FALSE}
+explore_plot(
+  data = mac,
+  var = rpt_type
+) + theme(axis.text.x = element_text(angle = 15, vjust = 0.5))
+```
+
+```{r bar_category, echo=FALSE}
+explore_plot(
+  data = mac,
+  var = category
+)
+```
+
+```{r bar_amendment, echo=FALSE}
+explore_plot(
+  data = mac,
+  var = amendment
+)
+```
+
+## Amounts
+
+```{r ammount_summary}
+summary(mac$amount)
+mean(mac$amount <= 0)
+```
+
+```{r amount_histogram, echo=FALSE}
+mac %>%
+  filter(amount >= 1, !is.na(amount)) %>% 
+  ggplot(aes(amount)) +
+  geom_histogram(fill = dark2["purple"], bins = 20) +
+  scale_y_continuous(labels = comma) +
+  scale_x_continuous(
+    breaks = c(1 %o% 10^(0:6)),
+    labels = dollar,
+    trans = "log10"
+  ) +
+  labs(
+    title = "Massachusetts Contributions Amount Distribution",
+    subtitle = "from 2000 to 2019",
+    caption = "Source: MA OCPF",
+    x = "Amount",
+    y = "Count"
+  )
+```
+
+## Dates
+
+The actual year a contribution was made sometimes differs from the year in which
+it was reported. The later is identified int eh `rpt_year` variable but  we will
+create a new `year` variable from `date` using `lubridate::year()`. This will
+more accurately identify the contribution.
+
+```{r date_year}
+mac <- mutate(mac, year = year(date))
+```
+
+```{r}
+mac %>%
+  count(year) %>%
+  mutate(even = is_even(year)) %>% 
+  ggplot(aes(x = year, y = n)) +
+  geom_col(aes(fill = even)) +
+  coord_cartesian(xlim = c(2000, 2020)) +
+  scale_fill_brewer(palette = "Dark2") +
+  scale_x_continuous(breaks = seq(2000, 2020, by = 2)) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "Massachusetts Contributions by Year",
+    caption = "Source: MA OCPF",
+    fill = "Election Year",
+    x = "Amount",
+    y = "Count"
+  )
+```
+
+```{r month_grid, echo=FALSE}
+# janurary contribs 
+mac %>% 
+  filter(year != rpt_year) %>% 
+  count(month = month(date), rpt_month = month(filing_date)) %>% 
+  ggplot(aes(x = month, y = rpt_month)) +
+  geom_tile(aes(fill = n)) +
+  scale_x_continuous(breaks = 1:12) +
+  scale_y_continuous(breaks = 1:12) +
+  coord_flip() +
+  scale_fill_viridis_c() +
+  labs(
+    x = "Month Made",
+    y = "Month Reported",
+    fill = "Count"
+  )
+```
+
+```{r date_range}
+min(mac$date)
+sum(mac$year < 2001)
+max(mac$date)
+sum(mac$date > today())
+```
+
+## Wrangle
+
+To improve the searchability of the database, we will perform some consistent,
+confident string normalization. For geographic variables like city names and
+ZIP codes, the corresponding `campfin::normal_*()` functions are tailor made to
+facilitate this process.
+
+```{r pre_count}
+comma(nrow(mac))
+```
+
+### Address
+
+For the street `addresss` variable, the `campfin::normal_address()` function
+will force consistence case, remove punctuation, and abbreviate official
+USPS suffixes.
+
+This can be done by creating a separate table of unique normalized addresses.
+
+```{r addr_norm}
+addr_norm <- mac %>%
+  count(address, sort = TRUE) %>% 
+  select(-n) %>% 
+  mutate(
+    address_norm = normal_address(
+      address = address,
+      abbs = usps_street,
+      na_rep = TRUE
+    )
+  )
+```
+
+```{r addr_th, echo=FALSE}
+addr_norm <- addr_norm %>% 
+  mutate(address_norm = str_remove(address_norm, "(?<=\\d)\\s(?=TH\\b)"))
+```
+
+```{r addr_view}
+print(addr_norm)
+```
+
+Then joining that table on to the original contributions.
+
+```{r addr_join}
+mac <- left_join(mac, addr_norm, by = "address")
+rm(addr_norm)
+```
+
+### ZIP
+
+For ZIP codes, the `campfin::normal_zip()` function will attempt to create
+valid _five_ digit codes by removing the ZIP+4 suffix and returning leading
+zeroes dropped by other programs like Microsoft Excel.
+
+```{r zip_norm}
+zip_norm <- mac %>%
+  count(zip, sort = TRUE) %>% 
+  select(-n) %>% 
+  mutate(
+    zip_norm = normal_zip(
+      zip = zip,
+      na_rep = TRUE
+    )
+  )
+```
+
+```{r zip_join}
+mac <- left_join(mac, zip_norm, by = "zip")
+rm(zip_norm)
+```
+
+```{r zip_progress}
+progress_table(
+  mac$zip,
+  mac$zip_norm,
+  compare = valid_zip
+)
+```
+
+### State
+
+Valid two digit state abbreviations can be made using the
+`campfin::normal_state()` function.
+
+```{r state_norm}
+state_norm <- mac %>%
+  count(state, sort = TRUE) %>% 
+  select(-n) %>% 
+  mutate(
+    state_norm = normal_state(
+      state = state,
+      abbreviate = TRUE,
+      na_rep = TRUE,
+      valid = NULL
+    )
+  )
+```
+
+```{r state_join}
+mac <- left_join(mac, state_norm, by = "state")
+rm(state_norm)
+```
+
+```{r state_view}
+mac %>%
+  filter(state != state_norm) %>%
+  count(state, state_norm, sort = TRUE)
+```
+
+```{r state_progress}
+progress_table(
+  mac$state,
+  mac$state_norm,
+  compare = valid_state
+)
+```
+
+### City
+
+Cities are the most difficult geographic variable to normalize, simply due to
+the wide variety of valid cities and formats.
+
+#### Normal
+
+The `campfin::normal_city()` function is a good start, again converting case,
+removing punctuation, but _expanding_ USPS abbreviations. We can also remove
+`invalid_city` values.
+
+```{r city_south}
+usps_city <- usps_city %>% 
+  add_row(abb = "SO", full = "SOUTH")
+```
+
+```{r city_norm}
+city_norm <- mac %>%
+  count(city, state_norm, zip_norm, sort = TRUE) %>% 
+  select(-n) %>% 
+  mutate(
+    city_norm = normal_city(
+      city = city,
+      abbs = usps_city,
+      states = c("MA", "DC", "MASSACHUSETTS"),
+      na = invalid_city,
+      na_rep = TRUE
+    )
+  )
+```
+
+#### Swap
+
+We can further improve normalization by comparing our normalized value
+against the _expected_ value for that record's state abbreviation and ZIP code.
+If the normalized value is either an abbreviation for or very similar to the
+expected value, we can confidently swap those two.
+
+```{r city_swap}
+city_norm <- city_norm %>%
+  rename(city_raw = city) %>%
+  left_join(
+    y = zipcodes,
+    by = c(
+      "state_norm" = "state",
+      "zip_norm" = "zip"
+    )
+  ) %>%
+  rename(city_match = city) %>%
+  mutate(
+    match_abb = is_abbrev(city_norm, city_match),
+    match_dist = str_dist(city_norm, city_match),
+    city_swap = if_else(
+      condition = !is.na(match_dist) & (match_abb | match_dist == 1),
+      true = city_match,
+      false = city_norm
+    )
+  ) %>%
+  select(
+    -city_match,
+    -match_dist,
+    -match_abb
+  ) %>% 
+  rename(city = city_raw)
+```
+
+#### Refine
+
+The [OpenRefine][or] algorithms can be used to group similar strings and replace
+the less common versions with their most common counterpart. This can greatly
+reduce inconsistency, but with low confidence; we will only keep any refined
+strings that have a valid city/state/zip combination.
+
+[or]: https://openrefine.org/
+
+```{r refine_city}
+good_refine <- city_norm %>%
+  mutate(
+    city_refine = city_swap %>%
+      key_collision_merge() %>%
+      n_gram_merge(numgram = 1)
+  ) %>%
+  filter(city_refine != city_swap) %>%
+  inner_join(
+    y = zipcodes,
+    by = c(
+      "city_refine" = "city",
+      "state_norm" = "state",
+      "zip_norm" = "zip"
+    )
+  ) %>% 
+  select(
+    city_swap, 
+    city_refine
+  )
+```
+
+```{r view_city_refines, echo=FALSE}
+good_refine %>% 
+  count(city_swap, city_refine, sort = TRUE)
+```
+
+Then we can join the refined values back to the database.
+
+```{r join_refine}
+city_norm <- city_norm %>%
+  left_join(good_refine, by = "city_swap") %>%
+  mutate(city_refine = coalesce(city_refine, city_swap))
+```
+
+```{r city_review}
+city_norm %>% 
+  filter(city_norm != city_refine) %>% 
+  sample_n(10)
+```
+
+```{r city_rejoin}
+mac <- left_join(
+  x = mac,
+  y = distinct(city_norm),
+  by = c("city", "state_norm", "zip_norm")
+)
+```
+
+```{r post_count}
+comma(nrow(mac))
+```
+
+#### Progress
+
+```{r city_progress, echo=FALSE}
+many_city <- c(valid_city, extra_city)
+progress <- progress_table(
+  str_to_upper(mac$city),
+  mac$city_norm,
+  mac$city_swap,
+  mac$city_refine,
+  compare = many_city
+) %>% mutate(stage = as_factor(stage))
+```
+  
+```{r progress_print, echo=FALSE}
+kable(progress, digits = 3)
+```
+
+You can see how the percentage of valid values increased with each stage.
+
+```{r progress_bar, echo=FALSE}
+raw_in <- percent(prop_in(mac$city, valid_city))
+progress %>%
+  ggplot(aes(x = stage, y = prop_in)) +
+  geom_hline(yintercept = 0.99) +
+  geom_col(fill = dark2["purple"]) +
+  coord_cartesian(ylim = c(0.90, 1)) +
+  scale_y_continuous(labels = percent) +
+  labs(
+    title = "Massachusetts City Normalization Progress",
+    subtitle = glue("Raw at {raw_in} before conversion to uppercase"),
+    x = "Stage",
+    y = "Percent Valid"
+  )
+```
+
+More importantly, the number of distinct values decreased each stage. We were
+able to confidently change many distinct invalid values to their valid
+equivalent.
+
+```{r distinct_bar}
+progress %>%
+  select(
+    stage,
+    all = n_distinct,
+    bad = n_diff
+  ) %>%
+  mutate(good = all - bad) %>%
+  pivot_longer(c("good", "bad")) %>%
+  mutate(name = name == "good") %>%
+  ggplot(aes(x = stage, y = value)) +
+  geom_col(aes(fill = name)) +
+  scale_fill_brewer(palette = "Dark2", direction = -1) +
+  scale_y_continuous(labels = comma) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "Massachusetts City Normalization Progress",
+    subtitle = "Distinct values, valid and invalid",
+    x = "Stage",
+    y = "Percent Valid",
+    fill = "Valid"
+  )
+```
+
+#### Committee
+
+The same normalization should be done for the recipient committee address.
+
+```{r comm_geo_norm}
+comm_geo <- mac %>% 
+  count(comm_city, comm_state, comm_zip, sort = TRUE) %>% 
+  select(-n) %>% 
+  mutate(
+    comm_city_norm = normal_city(
+      city = comm_city,
+      abbs = usps_city,
+      states = "MA",
+      na = invalid_city
+    ),
+    comm_zip_norm = normal_zip(comm_zip, na_rep = TRUE),
+    comm_state_norm = comm_state %>% 
+      str_trim(side = "both") %>% 
+      str_replace("^M$", "MA") %>% 
+      normal_state(valid = valid_state)
+  )
+```
+
+```{r comm_geo_join}
+mac <- left_join(mac, comm_geo)
+```
+
+```{r comm_geo_check}
+prop_in(mac$comm_city_norm, many_city)
+prop_in(mac$comm_state_norm, valid_state)
+prop_in(mac$comm_zip_norm, valid_zip)
+```
+
+## Conclude
+
+```{r city_remove}
+mac <- mac %>% 
+  select(
+    -city_norm,
+    -city_swap,
+    city_clean = city_refine
+  ) %>% 
+  rename_all(~str_replace(., "_norm", "_clean")) %>% 
+  relocate(state_clean, zip_clean, .after = city_clean)
+```
+
+```{r clean_glimpse}
+glimpse(sample_n(mac, 100))
+```
+
+1. There are `r comma(nrow(mac))` records in the database.
+1. There are `r comma(sum(mac$dupe_flag))` duplicate records in the database.
+1. The range and distribution of `amount` and `date` seem reasonable.
+1. There are `r comma(sum(mac$na_flag))` records missing a recipient or date.
+1. Consistency in geographic data has been improved with `campfin::normal_*()`.
+1. The 4-digit `year` variable has been created with `lubridate::year()`.
+
+## Export
+
+Now the file can be saved on disk for upload to the Accountability server.
+
+```{r clean_dir}
+clean_dir <- dir_create(here("ma", "contribs", "data", "clean"))
+clean_path <- path(clean_dir, "ma_contribs_clean.csv")
+write_csv(mac, clean_path, na = "")
+(clean_size <- file_size(clean_path))
+file_encoding(clean_path) %>% 
+  mutate(across(path, path.abbrev))
+```
+
+## Upload
+
+We can use the `aws.s3::put_object()` to upload the text file to the IRW server.
+
+```{r aws_upload, eval=TRUE}
+aws_path <- path("csv", basename(clean_path))
+if (!object_exists(aws_path, "publicaccountability")) {
+  put_object(
+    file = clean_path,
+    object = aws_path, 
+    bucket = "publicaccountability",
+    acl = "public-read",
+    show_progress = TRUE,
+    multipart = TRUE
+  )
+}
+aws_head <- head_object(aws_path, "publicaccountability")
+(aws_size <- as_fs_bytes(attr(aws_head, "content-length")))
+unname(aws_size == clean_size)
+```
+
+## Dictionary
+
+The following table describes the variables in our final exported file:
+
+```{r dict_make, echo=FALSE}
+dict_raw <- tibble(
+  var = md_code(names(mac)),
+  type = md_code(map_chr(mac, typeof)),
+  def = c(
+    "_Unique_ transaction ID",
+    "Report ID number",
+    "_Unique_ transaction line number",
+    "**Date** contribution was made",
+    "Contributor type (individual or not)",
+    "Contributor first name",
+    "Contributor last name",
+    "Contributor street address",
+    "Contributor city name",
+    "Contributor state",
+    "Contributor ZIP+4 code",
+    "Contributor occupation",
+    "Contributor employer name",
+    "Committee officer filing report",
+    "Contributor ID number",
+    "Contribution **amount** or correction",
+    "Method by which contribution was made",
+    "_Unique_ transaction ID hash",
+    "Year report was filed",
+    "Date report was filed",
+    "Date reporting period began",
+    "Date reporting period ended",
+    "Recipient committee ID",
+    "Report on which contribution reported",
+    "Recieving candidate name",
+    "Office sought by candidate",
+    "District in which election held",
+    "Recieving committee name",
+    "Committee city name",
+    "Committee state",
+    "Committee ZIP+4 code",
+    "Contribution category",
+    "Flag indicating amended report",
+    "Full combined contributor name",
+    "Coalesced recipient name",
+    "Flag indicating missing values",
+    "Flag indicating duplicate record",
+    "Calendar year contribution made",
+    "Normalized full street address",
+    "Normalized city name",
+    "Normalized 2-letter state",
+    "Normalized 5-digit ZIP code",
+    "Normalized committee city",
+    "Normalized committee state",
+    "Normalized committee ZIP"
+  )
+)
+```
+
+```{r dict_md, echo=FALSE}
+(dict_md <- kable(
+  x = dict_raw,
+  format = "markdown",
+  col.names = c("Column", "Type", "Definition")
+))
+```

@@ -127,7 +127,7 @@ According to the [West Virginia State Ethics Commission](https://ethics.wv.gov/l
 ### Setting up Raw Data Directory
 
 ```{r raw_dir}
-raw_dir <- dir_create(here("wv", "lobby", "data", "raw","reg"))
+raw_dir <- dir_create(here("state","wv", "lobby", "data", "raw","reg"))
 ```
 
 ### Read

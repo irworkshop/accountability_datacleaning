@@ -122,6 +122,25 @@ The workshop obtained the MO lobbying registration data through a Sunshine Reque
 raw_dir <- dir_create(here("state","mo", "lobby", "data", "raw", "reg"))
 ```
 
+```{r download}
+zip_paths <- glue("LobEFiler{1:19}_Records.zip")
+lob_urls <- paste0("https://mec.mo.gov/WebDocs/Downloads/", zip_paths)
+for (i in seq_along(zip_paths)) {
+ if (!this_file_new(zip_paths[i])) {
+  download.file(lob_urls[i], zip_paths[i])
+} 
+}
+```
+
+```{r unzip}
+#mdb_path <- dir_ls(raw_dir, regexp = "mdb")
+for (zip_path in path(raw_dir, zip_paths)) {
+unzip(zip_path, exdir = raw_dir)  
+}
+
+```
+
+
 ### Read
 ```{r raw_read}
 mo_lob <- read_xlsx(

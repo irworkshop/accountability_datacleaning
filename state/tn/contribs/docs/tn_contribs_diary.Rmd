@@ -1,8 +1,61 @@
-# TN Contributions
-# Kiernan Nicholls, Julia Ingram
-# Investigative Reporting Workshop
-# Tue Aug 24 14:10:10 2021
+---
+title: "TN Contributions"
+author: "Kiernan Nicholls, Julia Ingram & Yanqi Xu"
+date: "`r Sys.time()`"
+output:
+  github_document: 
+    df_print: tibble
+    toc: true
+    toc_dept: 2
+editor_options: 
+  chunk_output_type: console
+---
+<!-- Place comments regarding knitting here -->
 
+```{r setup, include=FALSE, purl=FALSE}
+library(knitr)
+opts_chunk$set(
+  eval = TRUE,
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  error = FALSE,
+  collapse = TRUE,
+  comment = "#>",
+  fig.path = "../plots/",
+  fig.width = 10,
+  dpi = 300
+)
+if (!interactive()) {
+  options(width = 99)
+  set.seed(5)
+}
+```
+
+## Objectives
+
+This document describes the process used to complete the following objectives:
+
+1. How many records are in the database?
+1. Check for duplicates
+1. Check ranges
+1. Is there anything blank or missing?
+1. Check for consistency issues
+1. Create a five-digit ZIP Code called `zip`
+1. Create a `year` field from the transaction date
+1. Make sure there is data on both parties to a transaction
+
+## Packages
+
+The following packages are needed to collect, manipulate, visualize, analyze,
+and communicate these results. The `pacman` package will facilitate their
+installation and attachment.
+
+The `campfin` package will also have to be installed from GitHub. This
+package contains functions custom made to help facilitate the processing of
+campaign finance data.
+
+```{r load r packages}
 if (!require("pacman")) {
   install.packages("pacman")
 }
@@ -21,134 +74,50 @@ pacman::p_load(
   cli,
   fs
 )
+```
 
+This document should be run as part of the `R_campfin` project, which lives as a sub-directory of
+the more general, language-agnostic [`irworkshop/accountability_datacleaning`][01] GitHub
+repository.
+
+The `R_campfin` project uses the [RStudio projects][02] feature and should be run as such. The
+project also uses the dynamic `here::here()` tool for file paths relative to _your_ machine.
+
+
+```{r where_here, collapse=TRUE}
+# where does this document knit?
+here::here()
+```
+
+[01]: https://github.com/irworkshop/accountability_datacleaning "TAP repo"
+[02]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects "Rproj"
+
+```{r set up raw dir}
 tn_dir <- dir_create(here("state","tn", "contribs", "data", "raw"))
 tn_csv <- dir_ls(tn_dir, glob = "*.csv")
 tn_yrs <- as.numeric(unique(str_extract(tn_csv, "\\d{4}")))
+```
 
-for (y in 2000:2022) {
-  if (y %in% tn_yrs) {
-    message("Files for year already saved")
-    next
-  }
-  cli_h2("Year: {y}")
-  # request data ------------------------------------------------------------
+### Import
+Data is obtained from the [Tennessee Bureau of Ethics and Campaign Finance (BECF)][becf].
 
-  # visit home page for session ID cookies
-  search_home <- GET("https://apps.tn.gov/tncamp-app/public/cesearch.htm")
+Data can be searched on the [BECF portal][portal] by year and downloaded locally.
 
-  sesh_id <- cookies(search_home)
-  sesh_id <- setNames(sesh_id$value, sesh_id$name)
+[becf]: https://www.tn.gov/tref.html
+[portal]: https://apps.tn.gov/tncamp-app/public/ceresults.htm
 
-  # submit POST request for all FROM for year Y
-  search_post <- POST(
-    url = "https://apps.tn.gov/tncamp-app/public/cesearch.htm",
-    set_cookies(sesh_id),
-    body = list(
-      searchType = "contributions",
-      toType = "both", # to both candidates and committees
-      fromCandidate = TRUE, # from all types
-      fromPAC = TRUE,
-      fromIndividual = TRUE,
-      fromOrganization = TRUE,
-      electionYearSelection = "",
-      yearSelection = y, # for given year
-      recipientName = "", # no name filters
-      contributorName = "",
-      employer = "",
-      occupation = "",
-      zipCode = "",
-      candName = "",
-      vendorName = "",
-      vendorZipCode = "",
-      purpose = "",
-      typeOf = "all",
-      amountSelection = "equal",
-      amountDollars = "",
-      amountCents = "",
-      typeField = TRUE, # add all available fields
-      adjustmentField = TRUE,
-      amountField = TRUE,
-      dateField = TRUE,
-      electionYearField = TRUE,
-      reportNameField = TRUE,
-      recipientNameField = TRUE,
-      contributorNameField = TRUE,
-      contributorAddressField = TRUE,
-      contributorOccupationField = TRUE,
-      contributorEmployerField = TRUE,
-      descriptionField = TRUE,
-      `_continue` = "Continue",
-      `_continue` = "Search"
-    )
-  )
+The last update was through Aug. 24, 2021. We will download data from 2021 to Sept. 17 2023, and use an `anti_join` to exclude 2021 data already in the last update. 
 
 
-  # read search results -----------------------------------------------------
-  search_get <- GET(
-    url = "https://apps.tn.gov/tncamp-app/public/ceresults.htm",
-    set_cookies(sesh_id)
-  )
-
-  search_list <- content(search_get)
-
-  # find csv export link at bottom of page
-  csv_link <- search_list %>%
-    html_element(".exportlinks > a") %>%
-    html_attr("href")
-
-  csv_link <- str_c("https://apps.tn.gov", csv_link)
-
-  # set initial loop numbers
-  more_loop <- 1
-  n_all <- 0
-
-  # find initial number of results
-  n_row <- parse_number(html_text(html_element(search_list, ".pagebanner")))
-  n_all <- n_all + n_row
-  cli_h3("First results: {n_row} results")
-
-  # define first file name
-  csv_path <- path(tn_dir, sprintf("tn_contrib_%i-%i.csv", y, more_loop))
-
-  # download the first list of results as CSV
-  csv_get <- GET(csv_link, write_disk(csv_path), progress("down"))
-
-  # check for the "More" button
-  has_more <- !is.na(html_element(search_list, ".btn-blue"))
-
-  while (has_more) {
-    Sys.sleep(runif(1, 1, 3))
-    cli_alert_warning("More records available")
-    more_loop <- more_loop + 1 # increment loop number
-    more_get <- GET( # follow the more button link
-      url = "https://apps.tn.gov/tncamp-app/public/ceresultsnext.htm",
-      set_cookies(sesh_id)
-    )
-    more_list <- content(more_get)
-
-    # find number of more results found
-    n_row <- parse_number(html_text(html_element(more_list, ".pagebanner")))
-    n_all <- n_all + n_row
-    cli_h3("More results page {more_loop}: {n_row} results")
-
-    # create new path and save CSV file
-    csv_path <- path(tn_dir, sprintf("tn_contrib_%i-%i.csv", y, more_loop))
-    csv_get <- GET(csv_link, write_disk(csv_path), progress("down"))
-
-    # check for more button
-    has_more <- !is.na(html_element(more_list, ".btn-blue"))
-  }
-  # finish when button disappears
-  cli_alert_success("No more results this year")
-
-  Sys.sleep(runif(1, 10, 30))
-}
-
+```{r raw csv}
 tn_csv <- dir_ls(tn_dir, glob = "*.csv")
+```
+### Read
+We will first use 
+`purrr::map()` to use `readxl::read_excel()` and create a list of data frames.
+read together -----------------------------------------------------------
 
-# read together -----------------------------------------------------------
-
+```{r }
 tnc <- map_df(
   .x = tn_csv,
   .f = function(x) {
@@ -173,13 +142,39 @@ tnc <- map_df(
 
 tnc <- clean_names(tnc, case = "snake")
 n_distinct(tnc$type) == 2
+```
 
-# fix dates with lubridate
-# invalid dates with be removed
+ fix dates with lubridate
+ invalid dates with be removed
+
+```{r }
 tnc <- mutate(tnc, across(date, mdy))
+```
 
-# split address -----------------------------------------------------------
+We'll then read in the previous processed 2001-2021 contributions data to eliminate duplicates in the new `tnc` files 
+```{r}
+prev_dir <- here("state","tn", "contribs", "data", "previous")
+prev_csv <- dir_ls(prev_dir, glob = "*.csv")
+tnc_prev <- read_csv(prev_csv)
+```
 
+```{r}
+tnc_prev <- tnc_prev %>% select(-c(13:19))
+tnc <- tnc %>% 
+  anti_join(tnc_prev)
+```
+
+### Date
+ fix dates with `lubridate`                                          
+ invalid dates with be removed
+
+```{r }
+tnc <- mutate(tnc, across(date, mdy))
+```
+
+ split address -----------------------------------------------------------
+
+```{r }
 x3 <- tnc %>%
   distinct(contributor_address) %>%
   separate(
@@ -200,10 +195,12 @@ x3 <- tnc %>%
 
 good_split <- filter(x3, state %in% valid_abb)
 bad_split <- filter(x3, state %out% valid_abb)
+```
 
-# fix split ---------------------------------------------------------------
+ fix split ---------------------------------------------------------------
+ mising something in the middle, move and re-split
 
-# mising something in the middle, move and re-split
+```{r }
 no_zip <- bad_split %>%
   filter(is.na(state) & is.na(addr_city) & str_detect(zip, "\\s\\w{2}$")) %>%
   select(-addr_city, -state) %>%
@@ -214,12 +211,18 @@ no_zip <- bad_split %>%
     extra = "merge",
     fill = "right"
   )
+```
 
-# remove fixed from bad
+ remove fixed from bad
+
+```{r }
 bad_split <- bad_split %>%
   filter(contributor_address %out% no_zip$contributor_address)
+```
 
-# no zip, city-state moved to end, split-merge city into addr
+ no zip, city-state moved to end, split-merge city into addr
+
+```{r }
 no_zip <- bad_split %>%
   filter(!is.na(addr_city) & is.na(state) & str_detect(zip, "\\s\\w{2}$")) %>%
   separate(
@@ -236,8 +239,11 @@ no_zip <- bad_split %>%
 
 bad_split <- bad_split %>%
   filter(contributor_address %out% no_zip$contributor_address)
+```
 
-# no state, addr moved to state, move to addr and remove state
+ no state, addr moved to state, move to addr and remove state
+
+```{r }
 no_state <- bad_split %>%
   filter(is.na(addr_city) & !is.na(state) & str_detect(zip, "^\\d{5,}")) %>%
   select(-addr_city) %>%
@@ -245,8 +251,11 @@ no_state <- bad_split %>%
 
 bad_split <- bad_split %>%
   filter(contributor_address %out% no_state$contributor_address)
+```
 
-# combine everything and extract states
+ combine everything and extract states
+
+```{r }
 full_bad <- bad_split %>%
   filter(is.na(state) | nchar(state) != 2) %>%
   unite(
@@ -262,33 +271,50 @@ full_bad <- bad_split %>%
 
 bad_split <- bad_split %>%
   filter(contributor_address %out% full_bad$contributor_address)
+```
 
-# remaining just have bad states in general
+ remaining just have bad states in general
+
+```{r }
 bad_split %>%
   count(state, sort = TRUE)
+```
 
-# recombine fixes and fill with empty cols
+ recombine fixes and fill with empty cols
+
+```{r }
 bad_fix <- bind_rows(no_zip, no_state, full_bad, bad_split)
 bad_fix <- mutate(bad_fix, across(.fns = str_squish))
 
-sample_n(bad_fix, 20)
+sample_n(bad_fix, 5)
+```
 
-# recombine with good splits
+ recombine with good splits
+
+```{r }
 tn_addr <- bind_rows(good_split, bad_fix)
 tn_addr <- mutate(tn_addr, across(everything(), str_squish))
+```
 
-# wrangle address ---------------------------------------------------------
+ wrangle address ---------------------------------------------------------
+ trim zip codes
 
-# trim zip codes
+```{r }
 tn_addr <- tn_addr %>%
   mutate(across(zip, normal_zip)) %>%
   rename(zip_norm = zip)
+```
 
-# state already very good
+ state already very good
+
+```{r }
 prop_in(tn_addr$state, valid_state)
 tn_addr <- rename(tn_addr, state_norm = state)
+```
 
-# split address on last comma
+ split address on last comma
+
+```{r }
 tn_addr <- separate(
   data = tn_addr,
   col = addr_city,
@@ -298,8 +324,11 @@ tn_addr <- separate(
   extra = "merge",
   fill = "left"
 )
+```
 
-# normalize city
+ normalize city
+
+```{r }
 tn_city <- tn_addr %>%
   distinct(city_sep, state_norm, zip_norm) %>%
   mutate(
@@ -337,8 +366,11 @@ tn_city <- tn_city %>%
     -match_dist,
     -match_abb
   )
+```
 
-# rejoin to address
+ rejoin to address
+
+```{r }
 tn_addr <- left_join(tn_addr, tn_city)
 
 good_refine <- tn_addr %>%
@@ -356,13 +388,19 @@ good_refine <- tn_addr %>%
       "zip_norm" = "zip"
     )
   )
+```
 
-# add refined cities back
+ add refined cities back
+
+```{r }
 tn_addr <- tn_addr %>%
   left_join(good_refine, by = names(.)) %>%
   mutate(city_refine = coalesce(city_refine, city_swap))
+```
 
-# normalize address with usps standard
+ normalize address with usps standard
+
+```{r }
 tn_addr <- tn_addr %>%
   mutate(
     .keep = "unused",
@@ -376,8 +414,11 @@ tn_addr <- tn_addr %>%
   )
 
 tn_addr <- distinct(tn_addr)
+```
 
-# add back all split and cleaned addresses
+ add back all split and cleaned addresses
+
+```{r }
 tnc <- left_join(
   x = tnc,
   y = tn_addr,
@@ -394,8 +435,11 @@ progress_table(
   tnc$city_refine,
   compare = many_city
 )
+```
 
-# remove intermediary columns
+ remove intermediary columns
+
+```{r }
 tnc <- tnc %>%
   select(
     -city_sep,
@@ -406,12 +450,17 @@ tnc <- tnc %>%
   rename(city_norm = city_refine) %>%
   relocate(city_norm, .after = addr_norm) %>%
   rename_with(~str_replace(., "_norm", "_clean"))
+```
 
-# explore -----------------------------------------------------------------
+ explore -----------------------------------------------------------------
 
+```{r }
 glimpse(tnc)
+```
 
-# flag NA values
+ flag NA values
+
+```{r }
 col_stats(tnc, count_na)
 key_vars <- c("date", "contributor_name", "amount", "recipient_name")
 tnc <- flag_na(tnc, all_of(key_vars))
@@ -420,29 +469,43 @@ tnc %>%
   filter(na_flag) %>%
   select(all_of(key_vars)) %>%
   sample_n(10)
+```
 
-# count distinct values
+ count distinct values
+
+```{r }
 col_stats(tnc, n_distinct)
+```
 
-# count/plot discrete
+ count/plot discrete
+
+```{r }
 count(tnc, type)
 count(tnc, adj)
 explore_plot(tnc, report_name) + scale_x_wrap()
+```
 
-# flag duplicate values
+ flag duplicate values
+
+```{r }
 tnc <- flag_dupes(tnc, everything())
 mean(tnc$dupe_flag)
 tnc %>%
   filter(dupe_flag) %>%
   select(all_of(key_vars)) %>%
   arrange(recipient_name)
+```
 
-# amounts -----------------------------------------------------------------
+ amounts -----------------------------------------------------------------
 
+```{r }
 summary(tnc$amount)
 sum(tnc$amount <= 0)
+```
 
-# min and max to and from same people?
+ min and max to and from same people?
+
+```{r }
 glimpse(tnc[c(which.max(tnc$amount), which.min(tnc$amount)), ])
 
 tnc %>%
@@ -461,9 +524,11 @@ tnc %>%
     x = "Amount",
     y = "Count"
   )
+```
 
-# dates -------------------------------------------------------------------
+ dates -------------------------------------------------------------------
 
+```{r }
 tnc <- mutate(tnc, year = year(date))
 
 min(tnc$date, na.rm = TRUE)
@@ -488,16 +553,36 @@ tnc %>%
     x = "Year Made",
     y = "Count"
   )
+```
 
-# export ------------------------------------------------------------------
+ ## Conclude
 
+```{r clean-glimpse}
+glimpse(sample_n(tnc, 1000))
+```
+
+1. There are `r comma(nrow(tnc))` records in the database.
+1. There are `r comma(sum(tnc$dupe_flag))` duplicate records in the database.
+1. The range and distribution of `amount` and `date` seem reasonable.
+1. There are `r comma(sum(tnc$na_flag))` records missing key variables.
+1. Consistency in geographic data has been improved with `campfin::normal_*()`.
+1. The 4-digit `year` variable has been created with `lubridate::year()`.
+
+## Export
+
+Now the file can be saved on disk for upload to the Accountability server. We
+will name the object using a date range of the records included.
+
+```{r }
 clean_dir <- dir_create(here("state", "tn", "contribs", "data", "clean"))
-clean_path <- path(clean_dir, "tn_contribs_2002-20210824.csv")
+clean_path <- path(clean_dir, "tn_contribs_20210825-20230917.csv")
 write_csv(tnc, clean_path, na = "")
 (clean_size <- file_size(clean_path))
+```
 
-# upload ------------------------------------------------------------------
+### upload 
 
+```{r eval=FALSE}
 aws_path <- path("csv", basename(clean_path))
 if (!object_exists(aws_path, "publicaccountability")) {
   put_object(
@@ -512,3 +597,5 @@ if (!object_exists(aws_path, "publicaccountability")) {
 aws_head <- head_object(aws_path, "publicaccountability")
 (aws_size <- as_fs_bytes(attr(aws_head, "content-length")))
 unname(aws_size == clean_size)
+```
+

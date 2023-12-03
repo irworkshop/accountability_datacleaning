@@ -113,6 +113,15 @@ here::here()
 [repo]: https://github.com/irworkshop/accountability_datacleaning
 [rproj]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects
 
+## Import
+
+To import the data for processing, we will have to download each archive file
+and read them together into a single data frame object.
+
+```{r dir_setup}
+raw_dir <- dir_create(here("state","id", "contribs", "data", "raw"))
+```
+
 ## Data
 
 This data is obtained from the Idaho [Secretary of State (SoS)][sos]. The data is provided for the years 1994 through 2018. 
@@ -121,18 +130,13 @@ For data after 2018, we can download them from the
 [sos]: https://sos.idaho.gov/elect/finance/downloads.html
 [data]: https://miboecfr.nictusa.com/cfr/dumpall/cfrdetail/
 
-## Import
-
-To import the data for processing, we will have to download each archive file
-and read them together into a single data frame object.
 
 ### Download
 
 We will scrape the download page for every archive link, then downloading each
 to a local directory.
 
-```{r download_raw}
-raw_dir <- dir_create(here("state","id", "contribs", "data", "raw"))
+```{r download_raw, eval=FALSE}
 raw_base <- "https://sos.idaho.gov/elect/finance/downloads.html"
 raw_page <- read_html(raw_base)
 raw_urls <- raw_page %>% 

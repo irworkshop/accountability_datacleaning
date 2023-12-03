@@ -118,7 +118,7 @@ The [Rhode Island Secretary of State's office](https://www.sos.ri.gov/divisions/
 ### Setting up Raw Data Directory
 
 ```{r raw_dir}
-raw_dir <- dir_create(here("ri", "lobby", "data", "raw", "reg"))
+raw_dir <- dir_create(here("state","ri", "lobby", "data", "raw", "reg"))
 ```
 
 ### Read

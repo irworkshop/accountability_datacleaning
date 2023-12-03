@@ -162,8 +162,7 @@ In an email communication, a staff member of with the commission wrote:
 Set the raw file directory first.
 ```{r raw_dir}
 # create a directory for the raw data
-reg_dir <- here("wi", "lobbyists", "data", "raw", "registration")
-dir_create(reg_dir)
+reg_dir <- dir_create(here("state","wi", "lobbyists", "data", "raw", "reg"))
 ```
 
 [04]:https://lobbying.wi.gov/Directories/DirectoryOfLicensedLobbyists/2019REG

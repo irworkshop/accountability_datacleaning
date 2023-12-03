@@ -1,7 +1,16 @@
 South Carolina Lobbying Registration Data Diary
 ================
 Yanqi Xu
-2020-03-18 17:22:15
+2023-10-08 17:53:35
+
+- [Project](#project)
+- [Objectives](#objectives)
+- [Packages](#packages)
+- [Data](#data)
+- [Explore](#explore)
+- [Wrangle](#wrangle)
+- [Conclude](#conclude)
+- [Export](#export)
 
 <!-- Place comments regarding knitting here -->
 
@@ -76,7 +85,7 @@ feature and should be run as such. The project also uses the dynamic
 ``` r
 # where does this document knit?
 here::here()
-#> [1] "/Users/yanqixu/code/accountability_datacleaning/R_campfin"
+#> [1] "/Users/yanqixu/code/accountability_datacleaning"
 ```
 
 ## Data
@@ -85,7 +94,7 @@ Lobbyist data is obtained from the [South Carolina State Ethics
 Commission](https://apps.sc.gov/PublicReporting/Index.aspx).
 
 > #### Welcome
-> 
+>
 > Registrations for both lobbyists and their respective lobbyist’s
 > principals are available online for viewing. Disclosure for both
 > lobbyists and their respective lobbyist’s principals will also be
@@ -97,43 +106,43 @@ page](https://apps.sc.gov/LobbyingActivity/LAIndex.aspx), we can see the
 files that can be retrieved:
 
 > #### Lobbying Activity
-> 
+>
 > Welcome to the State Ethics Commission Online Public Disclosure and
 > Accountability Reporting System for Lobbying Activity. Registrations
 > for both lobbyists and their respective lobbyist’s principals are
 > available online for viewing.
-> 
+>
 > Disclosure for both lobbyists and their respective lobbyist’s
 > principals are available for the period June 30, 2009 through the
 > present.
-> 
+>
 > These filings can be accessed by searching individual reports by
 > lobbyist and lobbyist’s principal names and by complete list of
 > current lobbyist and lobbyist’s principal registrations.
 
 > #### List Reports
-> 
+>
 > View a list of lobbyists, lobbyists’ principals or their contact
 > information.
-> 
->   - [Lobbyists and Their
->     Principals](https://apps.sc.gov/LobbyingActivity/SelectLobbyistGroup.aspx)
->   - [Download Lobbyist Contacts (CSV
->     file)](https://apps.sc.gov/LobbyingActivity/DisplayCsv.aspx)
->   - [Individual Lobbyist
->     Lookup](https://apps.sc.gov/LobbyingActivity/SearchLobbyistContact.aspx)
->   - [Lobbyists’ Principals and Their
->     Lobbyists](https://apps.sc.gov/LobbyingActivity/SelectLobbyistPrincipalGroup.aspx)
->   - [Download Lobbyist’s Principal Contacts (CSV
->     file)](https://apps.sc.gov/LobbyingActivity/DisplayCsv.aspx)
->   - [Individual Lobbyist’s Principal
->     Lookup](https://apps.sc.gov/LobbyingActivity/SearchLPContact.aspx)
->   - [Year End Compilation
->     Report](https://apps.sc.gov/LobbyingActivity/CompilationReport.aspx)
+>
+> - [Lobbyists and Their
+>   Principals](https://apps.sc.gov/LobbyingActivity/SelectLobbyistGroup.aspx)
+> - [Download Lobbyist Contacts (CSV
+>   file)](https://apps.sc.gov/LobbyingActivity/DisplayCsv.aspx)
+> - [Individual Lobbyist
+>   Lookup](https://apps.sc.gov/LobbyingActivity/SearchLobbyistContact.aspx)
+> - [Lobbyists’ Principals and Their
+>   Lobbyists](https://apps.sc.gov/LobbyingActivity/SelectLobbyistPrincipalGroup.aspx)
+> - [Download Lobbyist’s Principal Contacts (CSV
+>   file)](https://apps.sc.gov/LobbyingActivity/DisplayCsv.aspx)
+> - [Individual Lobbyist’s Principal
+>   Lookup](https://apps.sc.gov/LobbyingActivity/SearchLPContact.aspx)
+> - [Year End Compilation
+>   Report](https://apps.sc.gov/LobbyingActivity/CompilationReport.aspx)
 
-First, we must download a reporting linking lobbyists to their
-principals. We will download the `Lobbyists and Their Principals` table.
-Go to Public Disclosure \> Lobbying Activity \> List of Lobbyist \>
+First, we must download a report linking lobbyists to their principals.
+We will download the `Lobbyists and Their Principals` table. Go to
+\[Public Disclosure\]\[pd\] \> Lobbying Activity \> List of Lobbyist \>
 Type: All Lobbyist, and then hit Continue. A csv file is available for
 download. We’ll name it `lob_prin.csv`.
 
@@ -142,31 +151,26 @@ to Public Disclosure \> Lobbying Activity \> List of Lobbyists’
 Principals \> Type: All Lobbyists’ Principals, and then hit Continue. A
 csv file is available for download. We’ll name it `prin_lob.csv`.
 
-Both tables are downloaded on March 18, 2020.
+The datasets were downloaded September 9, 2023.
+\[pd\]:<https://apps.sc.gov/LobbyingActivity/LAIndex.aspx>
 
 ``` r
-raw_dir <- here("sc", "lobby", "data", "raw", "reg")
-dir_create(raw_dir)
-```
-
-``` r
-sclr <- read_csv(dir_ls(raw_dir))
+raw_reg_dir <- dir_create(here("state","sc", "lobby", "data", "raw", "reg"))
+raw_exp_dir <- dir_create(here("state","sc", "lobby", "data", "raw", "exp"))
 ```
 
 ### Import
 
-Using these three files, we can create a single data frame listing
+Using these different files, we can create a single data frame listing
 lobbyists and those for whom they lobby.
+
+It appears that the address field in the `lob_prin.csv` dataset is for
+lobbyists, and the address in the `prin_lob.csv` data is for principles.
 
 ``` r
 lobs <- 
   # read as string
-  read_lines(file = path(raw_dir, "lob_prin.csv")) %>%
-  extract(-2) %>% 
-  # fix quote enclosure
-  str_replace("\"Eye\"", "'Eye'") %>%
-  # pass as delim file
-  read_delim(
+  read_delim(file = path(raw_reg_dir, "lob_prin.csv"),
     delim = ",",
     escape_backslash = FALSE,
     escape_double = FALSE,
@@ -186,7 +190,7 @@ names(lobs) <- names(lobs) %>%
 ``` r
 pris <- 
   read_delim(
-    file = path(raw_dir, "prin_lob.csv"),
+    file = path(raw_reg_dir, "prin_lob.csv"),
     delim = ",",
     escape_backslash = FALSE,
     escape_double = FALSE,
@@ -216,7 +220,7 @@ that all lobbyist records were accounted for from the `pris` dataframe.
 
 ``` r
 col_stats(lobs, count_na)
-#> # A tibble: 10 x 4
+#> # A tibble: 10 × 4
 #>    col           class     n     p
 #>    <chr>         <chr> <int> <dbl>
 #>  1 lob_lastname  <chr>     0 0    
@@ -227,10 +231,10 @@ col_stats(lobs, count_na)
 #>  6 lob_zip       <chr>     0 0    
 #>  7 lob_phone     <dbl>     0 0    
 #>  8 lob_principal <chr>     0 0    
-#>  9 lob_middle    <chr>   474 0.383
-#> 10 lob_suffix    <chr>  1155 0.934
+#>  9 lob_middle    <chr>   755 0.456
+#> 10 lob_suffix    <chr>  1554 0.938
 col_stats(sclr, count_na)
-#> # A tibble: 15 x 4
+#> # A tibble: 15 × 4
 #>    col           class     n     p
 #>    <chr>         <chr> <int> <dbl>
 #>  1 lob_lastname  <chr>     0 0    
@@ -241,8 +245,8 @@ col_stats(sclr, count_na)
 #>  6 lob_zip       <chr>     0 0    
 #>  7 lob_phone     <dbl>     0 0    
 #>  8 lob_principal <chr>     0 0    
-#>  9 lob_middle    <chr>   474 0.383
-#> 10 lob_suffix    <chr>  1155 0.934
+#>  9 lob_middle    <chr>   755 0.456
+#> 10 lob_suffix    <chr>  1554 0.938
 #> 11 pri_address   <chr>     0 0    
 #> 12 pri_city      <chr>     0 0    
 #> 13 pri_state     <chr>     0 0    
@@ -256,6 +260,131 @@ prop_in(
 #> [1] 1
 ```
 
+We will also download the yearly compilation reports, which contain
+payments made to lobbyists. Go to Public Disclosure \> Lobbying Activity
+\> Year End Compilation Report,\` then select year and “Lobbyist” for
+report type.
+
+``` r
+scle <- read_csv(glue(raw_exp_dir, "/sc_lob_exp_{2009:2023}.csv"), id = "file") %>% clean_names()
+
+scle <- scle %>% select(-x27)
+```
+
+We cann add a year field according to the file name generated when we
+downloaded the annual expenditure files.
+
+``` r
+scle <- scle %>% 
+  mutate(year = str_extract(file, "\\d{4}")) %>% 
+  select(-file)
+```
+
+We will then get rid of dollar signs and commas in the numeric fields
+and turn them into numeric.
+
+``` r
+scle <- 
+  scle %>% 
+  mutate(across(3:27, ~str_replace(.,"\\(\\$","-") %>% str_remove_all(",|\\$|\\)") %>% as.numeric())) %>% 
+  mutate(across(1:2, str_squish))
+```
+
+``` r
+sc_lob <- read_csv(path(raw_reg_dir, "sc_lobbyists.csv")) %>% clean_names()
+sc_pri <-  read_csv(path(raw_reg_dir, "sc_principals.csv")) %>% clean_names()
+```
+
+``` r
+sc_pri <- sc_pri %>% 
+  select(-x9)
+
+names(sc_pri)[1:5] <- names(sc_pri)[1:5] %>% 
+  str_remove("_(.*)") %>% 
+  str_remove("code$") %>%
+  str_replace("^lpname$", "name") %>% 
+  str_c("pri", ., sep = "_")
+```
+
+``` r
+sc_lob <- sc_lob %>% 
+  select(-x9)
+```
+
+We can join the registration and expenditures datasets together so that
+the address fields would be reflected in the expenditure dataset. The
+fields to be joined by are lobbyist_principals and lobbyist names.
+
+First, we need to create a field in the `sclr` field to concatenate
+lobbyist names.
+
+``` r
+sclr <- sclr %>% 
+  unite(col = "lobbyist", lob_firstname, lob_middle, lob_lastname, lob_suffix, sep = " ", remove = F, na.rm = T ) %>%
+  mutate(lobbyist = str_squish(lobbyist))
+
+sc_lob <- sc_lob %>% 
+  unite(col = "lobbyist", first_name, middle_init, last_name, title, sep = " ", remove = F, na.rm = T ) %>%
+  mutate(lobbyist = str_squish(lobbyist))
+```
+
+There are some duplicates or multiple entries in the `sc_lob` and
+`sc_pri` datasets, and we will get rid of these duplicates by using the
+address with the bigger row number.
+
+``` r
+sc_lob <- sc_lob %>% rowid_to_column() %>% 
+  group_by(lobbyist) %>% 
+  filter(rowid==max(rowid))
+
+sc_lob <- sc_lob %>% select(-rowid)
+
+names(sc_lob) <- c("lobbyist","lob_firstname","lob_middle","lob_lastname","lob_suffix","lob_address","lob_city","lob_state","lob_zip")
+```
+
+Now that we’ve made sure there are no duplicates, we can join the
+lobbyist address info back to the `scle` data.
+
+``` r
+
+scle <- scle %>% rename(lob_principal = lobbyists_principal)
+
+scle_full <- scle %>% 
+  left_join(sclr, by = c("lobbyist", "lob_principal"))
+
+scle_work <- scle_full %>% filter(is.na(lob_address)|is.na(pri_address))
+
+scle_good <- setdiff(scle_full,scle_work)
+
+scle_work <- scle_work[1:27]
+
+scle_work <- scle_work %>% left_join(sc_lob)
+```
+
+``` r
+
+sc_pri <- sc_pri %>% rowid_to_column() %>% 
+  group_by(pri_name) %>% 
+  filter(rowid==max(rowid))
+
+sc_pri <- sc_pri %>% select(-rowid)
+```
+
+Now that we’ve made sure there are no duplicates, we can join the
+lobbyist address info back to the `scle` data.
+
+``` r
+
+names(sc_pri) <- c("lob_principal","pri_address","pri_city","pri_state","pri_zip","pri_last","pri_first","pri_middle")
+
+sc_pri <-  sc_pri %>%  unite(col = "principal_name", pri_first, pri_middle, pri_last, sep = " ", remove = F, na.rm = T ) %>%
+  mutate(principal_name = str_squish(principal_name))
+
+scle_work <- scle_work %>% left_join(sc_pri)
+
+scle <- scle_good %>% bind_rows(scle_work)
+```
+
 ## Explore
 
 ### Duplicaes
@@ -263,22 +392,13 @@ prop_in(
 We can see that there’s no duplicate rows in this dataset.
 
 ``` r
-sclr %>% flag_dupes(dplyr::everything())
-#> # A tibble: 1,237 x 15
-#>    lob_lastname lob_firstname lob_address lob_city lob_state lob_zip lob_phone lob_principal
-#>    <chr>        <chr>         <chr>       <chr>    <chr>     <chr>       <dbl> <chr>        
-#>  1 Adams        Stevenson     605 Founta… Columbia SC        29209      8.04e9 Conservation…
-#>  2 Adkins       Todd          11250 Wapl… Fairfax  VA        22030      7.03e9 National Rif…
-#>  3 Allen        Fred          PO Box 120… Columbia SC        29211      8.03e9 AT & T Servi…
-#>  4 Allen        Fred          PO Box 120… Columbia SC        29211      8.03e9 BMW Manufact…
-#>  5 Allen        Fred          PO Box 120… Columbia SC        29211      8.03e9 Ducks Unlimi…
-#>  6 Allen        Fred          PO Box 120… Columbia SC        29211      8.03e9 Outdoor Adve…
-#>  7 Allen        Fred          PO Box 120… Columbia SC        29211      8.03e9 RAI Services…
-#>  8 Allen        Fred          PO Box 120… Columbia SC        29211      8.03e9 Southern Win…
-#>  9 Allen        Fred          PO Box 120… Columbia SC        29211      8.03e9 Wine & Spiri…
-#> 10 Allman       Melissa       454 South … Rock Hi… SC        29730      8.03e9 BAYADA Home …
-#> # … with 1,227 more rows, and 7 more variables: lob_middle <chr>, lob_suffix <chr>,
-#> #   pri_address <chr>, pri_city <chr>, pri_state <chr>, pri_zip <chr>, pri_phone <dbl>
+scle <- scle %>% flag_dupes(dplyr::everything())
+tabyl(scle$dupe_flag)
+#> # A tibble: 2 × 3
+#>   `scle$dupe_flag`     n  percent
+#>   <lgl>            <int>    <dbl>
+#> 1 FALSE            18608 1.00    
+#> 2 TRUE                 6 0.000322
 ```
 
 ## Wrangle
@@ -295,7 +415,7 @@ function will force consistence case, remove punctuation, and
 abbreviation official USPS suffixes.
 
 ``` r
-sclr <- sclr %>% 
+scle <- scle %>% 
   mutate_at(.vars = vars(ends_with('address')), 
             .funs = list(norm = ~ normal_address(.,
 ,abbs = usps_street,
@@ -303,17 +423,17 @@ sclr <- sclr %>%
 ```
 
 ``` r
-sclr %>% 
+scle %>% 
   select(contains("address")) %>% 
   distinct() %>% 
   sample_n(10) %>% 
   glimpse()
-#> Observations: 10
-#> Variables: 4
-#> $ lob_address      <chr> "1901 Main St", "1855 East Main Street, Suite 14, PMB 104", "701 Gervai…
-#> $ pri_address      <chr> "720 Gracern Rd., Suite 106", "1020 N. French St., DE5-002-03-11", "675…
-#> $ lob_address_norm <chr> "1901 MAIN ST", "1855 E MAIN ST STE 14 PMB 104", "701 GERVAIS ST STE 15…
-#> $ pri_address_norm <chr> "720 GRACERN RD STE 106", "1020 N FRENCH ST DE 50020311", "675 W PEACHT…
+#> Rows: 10
+#> Columns: 4
+#> $ lob_address      <chr> "1404 Gervais Street", "1482 Lee Avenue", "P. O. Box 11266", "P. O. Box …
+#> $ pri_address      <chr> "201 Partridge Ln", "333 Lakeside Drive", "1718 M St, NW 188", "PO Box 1…
+#> $ lob_address_norm <chr> "1404 GERVAIS ST", "1482 LEE AVE", "P O BOX 11266", "P O BOX 5653", "230…
+#> $ pri_address_norm <chr> "201 PARTRIDGE LN", "333 LAKESIDE DR", "1718 M ST NW 188", "PO BOX 1030"…
 ```
 
 ### ZIP
@@ -323,7 +443,7 @@ create valied *five* digit codes by removing the ZIP+4 suffix and
 returning leading zeroes dropped by other programs like Microsoft Excel.
 
 ``` r
-sclr <- sclr %>% 
+scle <- scle %>% 
     mutate_at(.vars = vars(ends_with('zip')), .funs = list(norm = ~ normal_zip(.,na_rep = T))) %>% 
     rename(lob_zip5 = lob_zip_norm,
            pri_zip5 = pri_zip_norm)
@@ -331,55 +451,55 @@ sclr <- sclr %>%
 
 ``` r
 progress_table(
-  sclr$lob_zip,
-  sclr$lob_zip5,
-  sclr$pri_zip,
-  sclr$pri_zip5,
+  scle$lob_zip,
+  scle$lob_zip5,
+  scle$pri_zip,
+  scle$pri_zip5,
   compare = valid_zip
 )
-#> # A tibble: 4 x 6
-#>   stage    prop_in n_distinct prop_na n_out n_diff
-#>   <chr>      <dbl>      <dbl>   <dbl> <dbl>  <dbl>
-#> 1 lob_zip    0.969        155       0    38     13
-#> 2 lob_zip5   1            145       0     0      0
-#> 3 pri_zip    0.988        316       0    15     10
-#> 4 pri_zip5   0.999        312       0     1      1
+#> # A tibble: 4 × 6
+#>   stage         prop_in n_distinct prop_na n_out n_diff
+#>   <chr>           <dbl>      <dbl>   <dbl> <dbl>  <dbl>
+#> 1 scle$lob_zip    0.962        425 0.00177   699     44
+#> 2 scle$lob_zip5   0.996        393 0.00177    81      3
+#> 3 scle$pri_zip    0.974        769 0.00107   484     52
+#> 4 scle$pri_zip5   0.996        744 0.00107    68      7
 ```
 
 ### State
 
-By examining the percentage of lobbyist\_state that are considered
-valid, we can see that the `state` variable in both datasets doesn’t
-need to be normalized.
+By examining the percentage of lobbyist_state that are considered valid,
+we can see that the `state` variable in both datasets doesn’t need to be
+normalized.
 
 ``` r
-prop_in(sclr$lob_state, valid_state, na.rm = T)
+prop_in(scle$lob_state, valid_state, na.rm = T)
 #> [1] 1
-prop_in(sclr$pri_state, valid_state, na.rm = T)
+prop_in(scle$pri_state, valid_state, na.rm = T)
 #> [1] 1
 ```
 
 ### City
 
 Cities are the most difficult geographic variable to normalize, simply
-due to the wide variety of valid cities and formats. \#\#\#\# Normal
+due to the wide variety of valid cities and formats. \#### Normal
 
 The `campfin::normal_city()` function is a good sclrart, again
 converting case, removing punctuation, but *expanding* USPS
 abbreviations. We can also remove `invalid_city` values.
 
 ``` r
-sclr <- sclr %>% 
+scle <- scle %>% 
   mutate_at(.vars = vars(ends_with('city')), .funs = list(norm = ~ normal_city(.,
       abbs = usps_city,
       states = usps_state,
       na = invalid_city,
       na_rep = TRUE)))
 
-prop_in(sclr$lob_city_norm, valid_city, na.rm = T)
-#> [1] 0.9967664
-prop_in(sclr$pri_city_norm, valid_city, na.rm = T)
-#> [1] 0.9692805
+prop_in(scle$lob_city_norm, valid_city, na.rm = T)
+#> [1] 0.9894516
+prop_in(scle$pri_city_norm, valid_city, na.rm = T)
+#> [1] 0.9683769
 ```
 
 #### Swap
@@ -390,7 +510,7 @@ ZIP code. If the normalized value is either an abbreviation for or very
 similar to the expected value, we can confidently swap those two.
 
 ``` r
-sclr <- sclr %>% 
+scle <- scle %>% 
   left_join(
     y = zipcodes,
     by = c(
@@ -414,7 +534,7 @@ sclr <- sclr %>%
     -match_abb
   )
 
-sclr <- sclr %>% 
+scle <- scle %>% 
   left_join(
     y = zipcodes,
     by = c(
@@ -447,31 +567,27 @@ our list of known cities.
 ``` r
 many_city <- c(valid_city, extra_city)
 
-sclr_out <- sclr %>% 
+scle_out <- scle %>% 
   filter(pri_city_swap %out% many_city) %>% 
   count(pri_city_swap, pri_state, sort = TRUE) %>% 
   drop_na()
 ```
 
 ``` r
-sclr <- sclr %>% 
+scle <- scle %>% 
   mutate(pri_city_swap = str_replace(pri_city_swap,"^COLUMBIA SC$", "COLUMBIA"))
 ```
 
 After the two normalization steps, the percentage of valid cities is
-close to 100% for both
-datasets.
+close to 100% for both datasets.
 
 #### Progress
 
-| stage           | prop\_in | n\_distinct | prop\_na | n\_out | n\_diff |
-| :-------------- | -------: | ----------: | -------: | -----: | ------: |
-| lob\_city       |    0.010 |          98 |    0.000 |   1225 |      95 |
-| lob\_city\_norm |    0.997 |          93 |    0.000 |      4 |       2 |
-| lob\_city\_swap |    0.997 |          94 |    0.001 |      4 |       3 |
-| pri\_city       |    0.008 |         197 |    0.000 |   1227 |     192 |
-| pri\_city\_norm |    0.976 |         187 |    0.000 |     30 |       8 |
-| pri\_city\_swap |    0.998 |         182 |    0.006 |      3 |       2 |
+| stage                                                                | prop_in | n_distinct | prop_na | n_out | n_diff |
+|:---------------------------------------------------------------------|--------:|-----------:|--------:|------:|-------:|
+| scle$lob_city | 0.003| 255| 0.002| 18530| 246| |scle$lob_city_norm   |   0.990 |        237 |   0.002 |   189 |     18 |
+| scle$lob_city_swap | 0.995| 231| 0.007| 89| 10| |scle$pri_city       |   0.010 |        484 |   0.001 | 18404 |    467 |
+| scle$pri_city_norm | 0.979| 447| 0.001| 399| 39| |scle$pri_city_swap |   0.998 |        429 |   0.013 |    44 |     15 |
 
 SC Lobbyists Registration City Normalization Progress
 
@@ -487,36 +603,67 @@ valid equivalent.
 ## Conclude
 
 ``` r
-glimpse(sample_n(sclr, 20))
-#> Observations: 20
-#> Variables: 23
-#> $ lob_lastname     <chr> "DeWorken", "Parker", "Scott", "Parker", "Phan", "Smith", "Brown", "Fly…
-#> $ lob_firstname    <chr> "John", "Vicki", "Darrell", "Vicki", "Stacie", "Stephen", "Herbert", "B…
-#> $ lob_address      <chr> "PO Box 9793", "PO Box 12244", "1411 Gervais Street, Suite 500", "PO Bo…
-#> $ lob_city         <chr> "Greenville", "Columbia", "Columbia", "Columbia", "Ridgefield", "Sparta…
-#> $ lob_state        <chr> "SC", "SC", "SC", "SC", "CT", "SC", "SC", "SC", "SC", "DC", "SC", "SC",…
-#> $ lob_zip          <chr> "29604", "29211", "29201", "29211", "06877", "29307", "29211", "29201",…
-#> $ lob_phone        <dbl> 8649055529, 8032538662, 8642470548, 8032538662, 2037787917, 8645800029,…
-#> $ lob_principal    <chr> "SC Retail Association", "University Center of Greenville, Inc.", "Next…
-#> $ lob_middle       <chr> "M", "C", "T", "C", NA, "H", "B", NA, "F", NA, NA, "C", NA, NA, "K", "D…
-#> $ lob_suffix       <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
-#> $ pri_address      <chr> "PO Box 1030", "225 S. Pleasantburg Drive", "9600 Escarpment Blvd", "P.…
-#> $ pri_city         <chr> "Raleigh", "Greenville", "Austin", "Columbia", "Ridgefield", "Wilmingto…
-#> $ pri_state        <chr> "NC", "SC", "TX", "SC", "CT", "DE", "SC", "SC", "SC", "DC", "SC", "SC",…
-#> $ pri_zip          <chr> "27602", "29607", "78749", "29211", "06877", "19884", "29210", "29169",…
-#> $ pri_phone        <dbl> 9198320811, 8642501111, 5122843074, 8039331259, 2037985303, 3024320956,…
-#> $ lob_address_norm <chr> "PO BOX 9793", "PO BOX 12244", "1411 GERVAIS ST STE 500", "PO BOX 12244…
-#> $ pri_address_norm <chr> "PO BOX 1030", "225 S PLEASANTBURG DR", "9600 ESCARPMENT BLVD", "PO BOX…
-#> $ lob_zip5         <chr> "29604", "29211", "29201", "29211", "06877", "29307", "29211", "29201",…
-#> $ pri_zip5         <chr> "27602", "29607", "78749", "29211", "06877", "19884", "29210", "29169",…
-#> $ lob_city_norm    <chr> "GREENVILLE", "COLUMBIA", "COLUMBIA", "COLUMBIA", "RIDGEFIELD", "SPARTA…
-#> $ pri_city_norm    <chr> "RALEIGH", "GREENVILLE", "AUSTIN", "COLUMBIA", "RIDGEFIELD", "WILMINGTO…
-#> $ lob_city_swap    <chr> "GREENVILLE", "COLUMBIA", "COLUMBIA", "COLUMBIA", "RIDGEFIELD", "SPARTA…
-#> $ pri_city_swap    <chr> "RALEIGH", "GREENVILLE", "AUSTIN", "COLUMBIA", "RIDGEFIELD", "WILMINGTO…
+glimpse(sample_n(scle, 20))
+#> Rows: 20
+#> Columns: 54
+#> $ lobbyist                                                            <chr> "Graham Tew", "Hobart…
+#> $ lob_principal                                                       <chr> "Greenwood Genetic Ce…
+#> $ income_received_for_lobbying_period_1                               <dbl> 3000.00, 7500.00, 357…
+#> $ income_received_for_lobbying_period_2                               <dbl> 1000.00, 10500.00, 0.…
+#> $ income_received_for_lobbying_calendar_year_total                    <dbl> 4000.00, 18000.00, 35…
+#> $ supplies_period_1                                                   <dbl> 0.00, 0.00, 0.00, 0.0…
+#> $ supplies_period_2                                                   <dbl> 0.00, 0.00, 0.00, 0.0…
+#> $ supplies_period_calendar_year_total                                 <dbl> 0.00, 0.00, 0.00, 0.0…
+#> $ rent_period_1                                                       <dbl> 0.00, 0.00, 0.00, 0.0…
+#> $ rent_period_2                                                       <dbl> 0.00, 0.00, 0.00, 0.0…
+#> $ rent_period_calendar_year_total                                     <dbl> 0.00, 0.00, 0.00, 0.0…
+#> $ utilities_period_1                                                  <dbl> 0.00, 0.00, 0.00, 0.0…
+#> $ utilities_period_2                                                  <dbl> 0.00, 0.00, 0.00, 0.0…
+#> $ utilities_period_calendar_year_total                                <dbl> 0.00, 0.00, 0.00, 0.0…
+#> $ compensation_period_1                                               <dbl> 0.00, 0.00, 0.00, 0.0…
+#> $ compensation_period_2                                               <dbl> 0.00, 0.00, 0.00, 0.0…
+#> $ compensation_period_calendar_year_total                             <dbl> 0.00, 0.00, 0.00, 0.0…
+#> $ other_expenditures_period_1                                         <dbl> 0.00, 0.00, 0.00, 0.0…
+#> $ other_expenditures_period_2                                         <dbl> 0.00, 0.00, 0.00, 0.0…
+#> $ other_expenditures_calendar_year_total                              <dbl> 0.00, 0.00, 0.00, 0.0…
+#> $ expenditures_made_on_behalf_of_judiciary_period_1                   <dbl> 0, 0, 0, 0, 0, 0, 0, …
+#> $ expenditures_made_on_behalf_of_judiciary_period_2                   <dbl> 0, 0, 0, 0, 0, 0, 0, …
+#> $ expenditures_made_on_behalf_of_judiciary_period_calendar_year_total <dbl> 0, 0, 0, 0, 0, 0, 0, …
+#> $ total_income_and_expenditures_period_1                              <dbl> 3000.00, 7500.00, 357…
+#> $ total_income_and_expenditures_period_2                              <dbl> 1000.00, 10500.00, 0.…
+#> $ total_income_and_expenditures_calendar_year_total                   <dbl> 4000.00, 18000.00, 35…
+#> $ year                                                                <dbl> 2019, 2016, 2015, 201…
+#> $ lob_lastname                                                        <chr> "Tew", "Trotter", "Bu…
+#> $ lob_firstname                                                       <chr> "Graham", "Hobart", "…
+#> $ lob_address                                                         <chr> "1301 Gervais St., Su…
+#> $ lob_city                                                            <chr> "Columbia", "Columbia…
+#> $ lob_state                                                           <chr> "SC", "SC", "DC", "SC…
+#> $ lob_zip                                                             <chr> "29201", "29211", "20…
+#> $ lob_phone                                                           <dbl> 8034291711, NA, NA, N…
+#> $ lob_middle                                                          <chr> NA, "O", NA, "Z", "D"…
+#> $ lob_suffix                                                          <chr> NA, "Jr.", NA, "III",…
+#> $ pri_address                                                         <chr> "101 Gregor Mendel Ci…
+#> $ pri_city                                                            <chr> "Greenwood", "New Ber…
+#> $ pri_state                                                           <chr> "SC", "NC", "DC", "SC…
+#> $ pri_zip                                                             <chr> "29646", "28562", "20…
+#> $ pri_phone                                                           <dbl> 8649418100, NA, NA, N…
+#> $ principal_name                                                      <chr> NA, "Owen Andrews", "…
+#> $ pri_last                                                            <chr> NA, "Andrews", "Burts…
+#> $ pri_first                                                           <chr> NA, "Owen", "Mark", "…
+#> $ pri_middle                                                          <chr> NA, NA, NA, NA, NA, "…
+#> $ dupe_flag                                                           <lgl> FALSE, FALSE, FALSE, …
+#> $ lob_address_norm                                                    <chr> "1301 GERVAIS ST SUIT…
+#> $ pri_address_norm                                                    <chr> "101 GREGOR MENDEL CI…
+#> $ lob_zip5                                                            <chr> "29201", "29211", "20…
+#> $ pri_zip5                                                            <chr> "29646", "28562", "20…
+#> $ lob_city_norm                                                       <chr> "COLUMBIA", "COLUMBIA…
+#> $ pri_city_norm                                                       <chr> "GREENWOOD", "NEW BER…
+#> $ lob_city_swap                                                       <chr> "COLUMBIA", "COLUMBIA…
+#> $ pri_city_swap                                                       <chr> "GREENWOOD", "NEW BER…
 ```
 
-1.  There are 1237 records in the database.
-2.  There’re 0 duplicate records.
+1.  There are 18614 records in the database.
+2.  There’re 6 duplicate records.
 3.  The range and distribution of `amount` and `date` seem reasonable.
 4.  There are 0 records missing either address or expenditure amount.
 5.  Consistency in goegraphic data has been improved with
@@ -526,16 +673,18 @@ glimpse(sample_n(sclr, 20))
 ## Export
 
 ``` r
-clean_dir <- dir_create(here("sc", "lobby", "data", "reg","clean"))
+clean_dir <- dir_create(here("state","sc", "lobby", "data","clean"))
 ```
 
 ``` r
 write_csv(
-  x = sclr %>% 
+  x = scle %>% 
     select(-c(lob_city_norm, pri_city_norm)) %>% 
     rename( lob_city_clean = lob_city_swap,
-                       pri_city_clean = pri_city_swap),
-  path = path(clean_dir, "sc_lob_reg_clean.csv"),
+            pri_city_clean = pri_city_swap,
+            lob_zip_clean = lob_zip5,
+            pri_zip_clean = pri_zip5),
+  path = path(clean_dir, "sc_lob_clean_2009-2023.csv"),
   na = ""
 )
 ```

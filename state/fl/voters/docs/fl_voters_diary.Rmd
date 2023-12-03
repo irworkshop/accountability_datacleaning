@@ -1,6 +1,6 @@
 ---
 title: "Florida Voters"
-author: "Kiernan Nicholls"
+author: "Kiernan Nicholls & Yanqi Xu"
 date: "`r Sys.time()`"
 output:
   github_document: 
@@ -93,7 +93,8 @@ pacman::p_load(
   glue, # combine strings
   here, # relative paths
   httr, # http requests
-  fs # local storage 
+  fs, # local storage 
+  tabulizer # read pdf columns
 )
 ```
 
@@ -147,16 +148,17 @@ at the end of the calendar year in which made and must be renewed annually.
 
 ## Download
 
-The raw data from the disk can be downloaded from the Workshop's AWS server.
+The raw data from the disk can be downloaded from the Workshop's AWS server. It was last updated on Oct. 10, 2023. 
 
-```{r aws_bucket}
+
+```{r aws_bucket,eval=F, echo=F}
 aws_info <- get_bucket_df(
   bucket = "publicaccountability", 
   prefix = "FOR_REVIEW/fl_voters"
 )
 ```
 
-```{r aws_info, echo=FALSE}
+```{r aws_info, echo=FALSE, eval=F}
 aws_info <- aws_info %>% 
   as_tibble() %>% 
   transmute(
@@ -168,12 +170,12 @@ print(aws_info)
 ```
 
 ```{r raw_dir}
-raw_dir <- dir_create(here("fl", "voters", "data", "raw"))
+raw_dir <- dir_create(here("state","fl", "voters", "data", "raw"))
 ```
 
 We will save each object to a local directory.
 
-```{r aws_get}
+```{r aws_get,eval=FALSE, echo=FALSE}
 for (key in aws_info$path[aws_info$size > 0]) {
   p <- path(raw_dir, basename(key))
   if (!file_exists(p)) {
@@ -427,7 +429,7 @@ There are 67 codes in the `County Name` column:
 ## Read
 
 ```{r raw_unzip}
-det_dir <- path(raw_dir, "details")
+det_dir <- dir_create(path(raw_dir, "details"))
 if (length(dir_ls(det_dir)) != 67) {
    unzip(
     zipfile = raw_info$path[2],
@@ -494,6 +496,7 @@ flv <- rename(
 )
 ```
 
+
 To check the file has been correctly read, we can count the distinct values in
 a known discrete variable like `party` affiliation. IF the file was ready
 incorrectly due to a delimiter or quote, we would see erroneous values.
@@ -505,18 +508,23 @@ count(flv, party, sort = TRUE)
 ### Old
 
 ```{r old_download}
-old_path <- path(raw_dir, "fl_voters_old.csv")
+prev_dir <- dir_create(raw_dir %>% str_replace("raw","previous"))
+old_path <- path(prev_dir, "fl_voters_clean.csv")
+```
+
+```{r eval=FALSE}
 if (!file_exists(old_path)) {
   save_object(
     file = old_path,
-    object = "csv/FL_VOTERS.csv",
+    object = "csv/fl_voters_clean.csv",
     bucket = getOption("aws.bucket"),
     show_progress = TRUE
   )
 }
 ```
 
-```{r old_read}
+
+```{r old_read,eval=F}
 flo <- vroom(
   file = old_path,
   na = c("", "*", "NA"),
@@ -528,36 +536,60 @@ flo <- vroom(
 )
 ```
 
-```{r old_reverse}
+```{r old_reverse,eval=F}
 flo <- flo %>% 
-  # keep only voters not in new data
-  filter(`Voter ID` %out% flv$voter_id) %>% 
   # remove the added columns
-  select(-CITY_CLEAN, -ZIP5, -BIRTHYEAR, -RACE_TXT, -YEAR) %>% 
+  select(-c(setdiff(names(flo), names(flv)))) %>% 
+  # keep only voters not in new data
+  filter(voter_id %out% flv$voter_id)
   # spit the combined phone
-  separate(
-    col = PHONE,
-    into = c("area", "num"),
-    sep = "(?<=.{3})(?=.{7})",
-    extra = "merge",
-    fill = "left"
-  ) %>% 
+  # separate(
+  #   col = PHONE,
+  #   into = c("area", "num"),
+  #   sep = "(?<=.{3})(?=.{7})",
+  #   extra = "merge",
+  #   fill = "left"
+  # ) %>% 
   # match names to new data
-  set_names(names(flv))
+  #set_names(names(flv))
 ```
 
-```{r old_inactive}
+```{r old_inactive,eval=F}
 add_prop(count(flo, status))
 add_prop(count(flv, status))
 flo <- mutate(flo, status = "INA")
+#flo %>% write_csv(path(prev_dir, "flo_processed.csv", na=""))
+flo$birth_date <- flo$birth_date %>% ymd()
 ```
 
-```{r old_bind}
+```{r,echo=F,eval=FALSE}
+flo <-read_csv(path(prev_dir, "flo_processed.csv", na=""),
+               col_types = cols(
+     .default = col_character(),
+     birth_date = col_date("%m/%d/%Y"),
+    reg_date = col_date("%m/%d/%Y")
+   ))
+flv$req_exempt <- as.logical(flv$req_exempt)
+```
+
+```{r old_bind,eval=FALSE}
 flv <- bind_rows(flv, flo, .id = "old_flag")
+rm(flo)
 flv <- mutate(flv, old_flag = (old_flag == 2), req_exempt = (req_exempt == "Y"))
 flv <- relocate(flv, old_flag, .after = email)
 comma(nrow(flv))
 ```
+
+```{r, echo=FALSE}
+rm(flv)
+flv <- read_csv(path(prev_dir, "flv_processed.csv"),
+                col_types = cols(
+                     .default = col_character(),
+     birth_date = col_date("%m/%d/%Y"),
+    reg_date = col_date("%m/%d/%Y")))
+```
+
+
 
 ## Explore
 
@@ -604,7 +636,7 @@ flv %>%
 We can also flag any record completely duplicated across every column.
 
 ```{r dupe_file}
-dupe_file <- here("fl", "voters", "dupes.csv.xz")
+dupe_file <- here("state","fl", "voters", "dupes_2023.csv.xz")
 ```
 
 ```{r dupe_write}
@@ -822,6 +854,7 @@ if (!file_exists(addr_file)) {
 
 ```{r addr_join}
 flv <- left_join(flv, addr_norm)
+rm(addr_norm)
 ```
 
 ```{r address_view}
@@ -886,7 +919,7 @@ The `campfin::normal_city()` function is a good start, again converting case,
 removing punctuation, but _expanding_ USPS abbreviations. We can also remove
 `invalid_city` values.
 
-```{r city_norm}
+```{r city_norm,eval=FALSE}
 norm_city <- flv %>% 
   count(city, state_norm, zip_norm, sort = TRUE) %>% 
   select(-n) %>% 
@@ -908,7 +941,7 @@ against the _expected_ value for that record's state abbreviation and ZIP code.
 If the normalized value is either an abbreviation for or very similar to the
 expected value, we can confidently swap those two.
 
-```{r city_swap}
+```{r city_swap,eval=FALSE}
 norm_city <- norm_city %>% 
   rename(city_raw = city) %>% 
   left_join(
@@ -936,11 +969,22 @@ norm_city <- norm_city %>%
   rename(city = city_raw)
 ```
 
-```{r city_join2}
+```{r,echo=FALSE}
+#norm_city %>% write_csv(path(prev_dir, "norm_city.csv"),na="")
+norm_city <- read_csv(path(prev_dir, "norm_city.csv"),col_types = cols(.default = col_character()))
+flv <- read_csv(here("state","fl", "voters", "data", "clean", "fl_voters_clean_20231010.csv"),col_types = cols(.default = col_character()))
+```
+
+
+```{r city_join2,eval=FALSE}
 flv <- left_join(flv, norm_city)
+```
+
+```{r}
 many_city <- c(valid_city, extra_city)
 prop_in(flv$city_swap, many_city)
 ```
+
 
 #### Progress
 
@@ -1063,8 +1107,8 @@ Now the file can be saved on disk for upload to the Accountability server.
 flush_memory()
 ```
 
-```{r clean_dir}
-clean_dir <- dir_create(here("fl", "voters", "data", "clean"))
+```{r clean_dir,eval=FALSE}
+clean_dir <- dir_create(here("state","fl", "voters", "data", "clean"))
 clean_path <- path(clean_dir, "fl_voters_clean.csv")
 write_csv(flv, clean_path, na = "")
 (clean_size <- file_size(clean_path))

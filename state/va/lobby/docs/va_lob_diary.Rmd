@@ -32,7 +32,7 @@ set.seed(5)
 ```
 
 ```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
-fs::dir_create(here::here("va", "lobby", "docs"))
+fs::dir_create(here::here("state","va", "lobby", "docs"))
 ```
 
 ## Project
@@ -124,7 +124,7 @@ This data diary handles processing of the lobbyist compensation and expenditure 
 ### Setting up Raw Data Directory
 
 ```{r raw_dir}
-raw_dir <- dir_create(here("va", "lobby", "data", "raw"))
+raw_dir <- dir_create(here("state","va", "lobby", "data", "raw"))
 ```
 
 ### Read

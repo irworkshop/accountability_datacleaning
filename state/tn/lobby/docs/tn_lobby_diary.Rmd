@@ -1,6 +1,6 @@
 ---
-title: "Kentucky Contributions"
-author: "Kiernan Nicholls & Aarushi Sahejpal"
+title: "Tennessee Lobbyists"
+author: "Yanqi Xu"
 date: "`r date()`"
 output:
   github_document: 
@@ -33,8 +33,8 @@ if (!interactive()) {
 }
 ```
 
-```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
-doc_dir <- fs::dir_create(here::here("ky", "contribs", "docs"))
+```{r create-docs-dir, eval=FALSE, echo=FALSE, include=FALSE}
+doc_dir <- fs::dir_create(here::here("state", "tn", "lobby", "docs"))
 ```
 
 ## Project
@@ -70,7 +70,7 @@ The following packages are needed to collect, manipulate, visualize, analyze,
 and communicate these results. The `pacman` package will facilitate their
 installation and attachment.
 
-```{r load_packages, message=FALSE, warning=FALSE, error=FALSE}
+```{r load-packages, message=FALSE, warning=FALSE, error=FALSE}
 if (!require("pacman")) {
   install.packages("pacman")
 }
@@ -78,239 +78,166 @@ pacman::p_load(
   tidyverse, # data manipulation
   lubridate, # datetime strings
   gluedown, # printing markdown
+  jsonlite, # read json files
   janitor, # clean data frames
   campfin, # custom irw tools
   aws.s3, # aws cloud storage
+  readxl, # read excel files
   refinr, # cluster & merge
   scales, # format strings
   knitr, # knit documents
-  vroom, # fast reading
   rvest, # scrape html
   glue, # code strings
   here, # project paths
   httr, # http requests
-  cli, # commend line
   fs # local storage 
 )
 ```
 
-This document should be run as part of the `R_campfin` project, which lives as a
+This diary was run using `campfin` version `r packageVersion("campfin")`.
+
+```{r campfin-version}
+packageVersion("campfin")
+```
+
+```{r package-options, echo=FALSE}
+options(options(knitr.kable.NA = ""))
+```
+
+This document should be run as part of the `R_tap` project, which lives as a
 sub-directory of the more general, language-agnostic
 [`irworkshop/accountability_datacleaning`][tap] GitHub repository.
 
-The `R_campfin` project uses the [RStudio projects][rproj] feature and should be
+The `R_tap` project uses the [RStudio projects][rproj] feature and should be
 run as such. The project also uses the dynamic `here::here()` tool for file
 paths relative to _your_ machine.
 
-```{r where_here}
+```{r where-here}
 # where does this document knit?
-here::i_am("ky/contribs/docs/ky_contribs_diary.Rmd")
+here::i_am("state/tn/lobby/docs/tn_lobby_diary.Rmd")
 ```
 
 [tap]: https://github.com/irworkshop/accountability_datacleaning
 [rproj]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects
 
-## Data
+## Source
 
-State contributions can be obtained from the [Kentucky Registry of Election 
-Finance (KREF)][kref]. Data can be exported from the KREF candidate search
-[page](https://secure.kentucky.gov/kref/publicsearch/CandidateSearch/).
-
-[kref]: https://kref.ky.gov/Pages/default.aspx
+The lobbyists data can be obtained from the [Tennessee Ethics Commission][]
 
 ## Download
 
-Data must be requested in small, monthly chunks or the server will time out and
-fail. We can request all contributions for each month since 2011.
-
-```{r raw_dir}
-raw_dir <- dir_create(here("state","ky", "contribs", "data", "raw"))
+```{r raw-dir}
+raw_url <- "https://example.com/source_file.csv"
+raw_dir <- dir_create(here("state", "tn", "lobby", "data", "raw"))
+raw_csv <- path(raw_dir, basename(raw_url))
 ```
 
-```{r raw_download}
-for (yr in 2011:2023) {
-  cli_h2("Starting year: {yr}")
-  for (mn in 1:12) {
-    start_dt <- as.Date(paste(yr, mn, 1, sep = "-"))
-    end_dt <- start_dt %m+% months(1) - days(1)
-    if (start_dt > today()) {
-      next
-    }
-    dt_path <- path(raw_dir, glue("ky-con_{yr}-{month.abb[mn]}.csv"))
-    if (!file_exists(dt_path)) {
-      ky_get <- RETRY(
-        verb = "GET",
-        "https://secure.kentucky.gov/kref/publicsearch/ExportContributors",
-        write_disk(path = dt_path, overwrite = TRUE),
-        query = list(
-          ElectionDate = "",
-          MaximalDate = end_dt,
-          MinimalDate = start_dt,
-          ContributionSearchType = "All"
-        )
-      )
-      cli_alert_success("{month.abb[mn]}: {as.character(file_size(dt_path))}")
-      Sys.sleep(10)
-    } else {
-      cli_alert_success("{month.abb[mn]} done!")
-    }
-  }
+```{r raw-download}
+if (!file_exists(raw_csv)) {
+  download.file(raw_url, raw_csv)
 }
 ```
 
-```{r}
-raw_info <- dir_info(raw_dir)
-raw_info %>% 
-  filter(size == 511) %>% 
-  pull(path) %>% 
-  file_delete()
-```
-
-```{r raw_info}
-raw_info <- dir_info(raw_dir)
-sum(raw_info$size)
-raw_info %>% 
-  select(path, size, modification_time) %>% 
-  mutate(across(path, basename))
-```
-
-We have downloaded `nrow(raw_info)` files totaling `sum(raw_info$size)` in 
-size.
-
 ## Read
 
-Given all of these files have the same structure, we can read them all into a
-single data frame at once.
-
-```{r raw_read}
-kyc <- map_dfr(
-  .x = raw_info$path,
-  .f = read_csv,
+```{r raw-read}
+tnl <- read_delim(
+  file = raw_csv,
+  delim = ",",
+  escape_backslash = FALSE,
+  escape_double = FALSE,
   col_types = cols(
     .default = col_character(),
-    ElectionDate = col_date_mdy(),
-    ExemptionStatus = col_logical(),
-    Amount = col_double(),
-    NumberOfContributors = col_integer()
+    date = col_date_mdy(),
+    amount = col_double()
   )
 )
 ```
 
-```{r clean_name}
-kyc <- clean_names(kyc, case = "snake")
+```{r clean-names}
+tnl <- clean_names(tnl, case = "snake")
 ```
 
 ## Explore
 
-There are `r comma(nrow(kyc))` rows of `r ncol(kyc)` columns. Each record
-represents a single contribution from an organization or individual to a
-campaign or committee.
+There are `r comma(nrow(tnl))` rows of `r ncol(tnl)` columns. Each record
+represents a single Lobbyists...
 
 ```{r glimpse}
-glimpse(kyc)
-tail(kyc)
+glimpse(tnl)
+tail(tnl)
 ```
 
 ### Missing
 
 Columns vary in their degree of missing values.
 
-```{r na_count}
-col_stats(kyc, count_na)
+```{r na-count}
+col_stats(tnl, count_na)
 ```
-
-Contributions can be made to an individual (with a `RecipientLastName`), an
-organization (with a `ToOrganization` name), or an individual _with_ a committee
-name as well. We only want to flag records that are truly missing _any_ way to
-identify the parties of the transaction.
 
 We can flag any record missing a key variable needed to identify a transaction.
 
-```{r na_flag}
-kyc <- kyc %>% 
-  unite(
-    col = recipient_any_name,
-    recipient_first_name, recipient_last_name,
-    sep = " ",
-    remove = FALSE
-  ) %>% 
-  mutate(
-    to_any = coalesce(to_organization, recipient_any_name)
-  ) %>% 
-  unite(
-    col = contributor_any_name,
-    contributor_first_name, contributor_last_name,
-    sep = " ",
-    remove = FALSE
-  ) %>% 
-  mutate(
-    from_any = coalesce(from_organization_name, contributor_any_name)
-  ) %>% 
-  flag_na(to_any, from_any, amount) %>% 
-  select(
-    -recipient_any_name,
-    -contributor_any_name,
-    -to_any, -from_any
-    )
+```{r na-flag}
+key_vars <- c("date", "last_name", "amount", "committee_name")
+tnl <- flag_na(tnl, all_of(key_vars))
+sum(tnl$na_flag)
 ```
 
-```{r na_sum}
-sum(kyc$na_flag)
+```{r na-view}
+tnl %>% 
+  filter(na_flag) %>% 
+  select(all_of(key_vars))
 ```
 
 ### Duplicates
 
 We can also flag any record completely duplicated across every column.
 
-```{r dupe_flag}
-kyc <- flag_dupes(kyc, everything())
-sum(kyc$dupe_flag)
+```{r dupe-flag}
+tnl <- flag_dupes(tnl, -id)
+sum(tnl$dupe_flag)
 ```
 
-`percent(mean(kyc$dupe_flag))` of all records are duplicates.
-
-```{r dupe_view}
-kyc %>% 
+```{r dupe-view}
+tnl %>% 
   filter(dupe_flag) %>% 
-  select(
-    contributor_last_name, recipient_last_name, 
-    amount, election_date, address1
-  ) %>% 
-  arrange(recipient_last_name, election_date, amount)
+  select(all_of(key_vars)) %>% 
+  arrange(date)
 ```
-
-Without a contribution date, it's difficult to identify these duplicates as
-stemming from a flaw in the data (rather than "true" duplicate repeat payments).
-We will flag them but not remove any.
 
 ### Categorical
 
-```{r distinct_count}
-col_stats(kyc, n_distinct)
+```{r distinct-count}
+col_stats(tnl, n_distinct)
 ```
 
-```{r distinct_plots, echo=FALSE, fig.height=3}
-explore_plot(kyc, election_type)
-explore_plot(kyc, office_sought)
-explore_plot(kyc, contribution_type)
-explore_plot(kyc, contribution_mode)
+```{r distinct-plots, echo=FALSE, fig.height=3}
+explore_plot(tnl, type)
 ```
 
 ### Amounts
 
-```{r amount_summary}
-summary(kyc$amount)
-mean(kyc$amount <= 0)
+```{r amount-round}
+# fix floating point precision
+tnl$amount <- round(tnl$amount, digits = 2)
+```
+
+```{r amount-summary}
+summary(tnl$amount)
+mean(tnl$amount <= 0)
 ```
 
 These are the records with the minimum and maximum amounts.
 
-```{r amount_minmax}
-glimpse(kyc[c(which.max(kyc$amount), which.min(kyc$amount)), ])
+```{r amount-minmax}
+glimpse(tnl[c(which.max(tnl$amount), which.min(tnl$amount)), ])
 ```
 
-```{r hist_amount, echo=FALSE}
-kyc %>%
+The distribution of amount values are typically log-normal.
+
+```{r hist-amount, echo=FALSE}
+tnl %>%
   ggplot(aes(amount)) +
   geom_histogram(fill = dark2["purple"]) +
   scale_y_continuous(labels = comma) +
@@ -320,7 +247,7 @@ kyc %>%
     trans = "log10"
   ) +
   labs(
-    title = "Kentucky Contributions Amount Distribution",
+    title = "Tennessee Lobbyists Amount Distribution",
     caption = "Source: {source}",
     x = "Amount",
     y = "Count"
@@ -329,21 +256,36 @@ kyc %>%
 
 ### Dates
 
-There is no variable containing the actual date the contributions were made.
+We can add the calendar year from `date` with `lubridate::year()`
 
-The `election_date` is the only date variable.
+```{r date-year}
+tnl <- mutate(tnl, year = year(date))
+```
 
-```{r election_date_bar, echo=FALSE}
-kyc %>% 
-  count(year = year(election_date)) %>% 
-  ggplot(aes(year, n)) +
-  geom_col(aes(fill = n)) +
-  scale_fill_viridis_c(end = 0.5, guide = FALSE) +
-  scale_x_continuous(n.breaks = 20) +
+```{r date-range}
+min(tnl$date)
+sum(tnl$year < 2000)
+max(tnl$date)
+sum(tnl$date > today())
+```
+
+It's common to see an increase in the number of contributins in elections years.
+
+```{r bar-year, echo=FALSE}
+tnl %>% 
+  count(year) %>% 
+  mutate(even = is_even(year)) %>% 
+  ggplot(aes(x = year, y = n)) +
+  geom_col(aes(fill = even)) + 
+  scale_fill_brewer(palette = "Dark2") +
   scale_y_continuous(labels = comma) +
+  scale_x_continuous(breaks = seq(2000, 2020, by = 2)) +
+  theme(legend.position = "bottom") +
   labs(
-    title = "Contributions by election year",
-    x = "Year",
+    title = "Tennessee Lobbyists by Year",
+    caption = "Source: {source}",
+    fill = "Election Year",
+    x = "Year Made",
     y = "Count"
   )
 ```
@@ -361,8 +303,9 @@ For the street `addresss` variable, the `campfin::normal_address()` function
 will force consistence case, remove punctuation, and abbreviate official 
 USPS suffixes.
 
-```{r address_norm}
-kyc <- kyc %>% 
+```{r address-norm}
+addr_norm <- tnl %>% 
+  distinct(address1, address2) %>% 
   unite(
     col = address_full,
     starts_with("address"),
@@ -380,11 +323,12 @@ kyc <- kyc %>%
   select(-address_full)
 ```
 
-```{r address_view}
-kyc %>% 
-  select(contains("address")) %>% 
-  distinct() %>% 
-  sample_n(10)
+```{r address-view}
+addr_norm
+```
+
+```{r address-join}
+tnl <- left_join(tnl, addr_norm, by = c("address1", "address2"))
 ```
 
 ### ZIP
@@ -393,8 +337,8 @@ For ZIP codes, the `campfin::normal_zip()` function will attempt to create
 valid _five_ digit codes by removing the ZIP+4 suffix and returning leading
 zeroes dropped by other programs like Microsoft Excel.
 
-```{r zip_norm}
-kyc <- kyc %>% 
+```{r zip-norm}
+tnl <- tnl %>% 
   mutate(
     zip_norm = normal_zip(
       zip = zip,
@@ -403,10 +347,10 @@ kyc <- kyc %>%
   )
 ```
 
-```{r zip_progress}
+```{r zip-progress}
 progress_table(
-  kyc$zip,
-  kyc$zip_norm,
+  tnl$zip,
+  tnl$zip_norm,
   compare = valid_zip
 )
 ```
@@ -416,8 +360,8 @@ progress_table(
 Valid two digit state abbreviations can be made using the 
 `campfin::normal_state()` function.
 
-```{r state_norm}
-kyc <- kyc %>% 
+```{r state-norm}
+tnl <- tnl %>% 
   mutate(
     state_norm = normal_state(
       state = state,
@@ -428,16 +372,16 @@ kyc <- kyc %>%
   )
 ```
 
-```{r state_view}
-kyc %>% 
+```{r state-view}
+tnl %>% 
   filter(state != state_norm) %>% 
   count(state, state_norm, sort = TRUE)
 ```
 
-```{r state_progress}
+```{r state-progress}
 progress_table(
-  kyc$state,
-  kyc$state_norm,
+  tnl$state,
+  tnl$state_norm,
   compare = valid_state
 )
 ```
@@ -453,14 +397,14 @@ The `campfin::normal_city()` function is a good start, again converting case,
 removing punctuation, but _expanding_ USPS abbreviations. We can also remove
 `invalid_city` values.
 
-```{r city_norm}
-norm_city <- kyc %>% 
+```{r city-norm}
+norm_city <- tnl %>% 
   distinct(city, state_norm, zip_norm) %>% 
   mutate(
     city_norm = normal_city(
       city = city, 
       abbs = usps_city,
-      states = c("KY", "DC", "KENTUCKY"),
+      states = c("TN", "DC", "TENNESSEE"),
       na = invalid_city,
       na_rep = TRUE
     )
@@ -474,7 +418,7 @@ against the _expected_ value for that record's state abbreviation and ZIP code.
 If the normalized value is either an abbreviation for or very similar to the
 expected value, we can confidently swap those two.
 
-```{r city_swap}
+```{r city-swap}
 norm_city <- norm_city %>% 
   rename(city_raw = city) %>% 
   left_join(
@@ -501,9 +445,9 @@ norm_city <- norm_city %>%
   )
 ```
 
-```{r city_rejoin}
-kyc <- left_join(
-  x = kyc,
+```{r city-rejoin}
+tnl <- left_join(
+  x = tnl,
   y = norm_city,
   by = c(
     "city" = "city_raw", 
@@ -522,8 +466,8 @@ strings that have a valid city/state/zip combination.
 
 [or]: https://openrefine.org/
 
-```{r city_refine}
-good_refine <- kyc %>% 
+```{r city-refine}
+good_refine <- tnl %>% 
   mutate(
     city_refine = city_swap %>% 
       key_collision_merge() %>% 
@@ -540,7 +484,7 @@ good_refine <- kyc %>%
   )
 ```
 
-```{r city_count, echo=FALSE}
+```{r city-count, echo=FALSE}
 good_refine %>%
   count(
     state_norm, 
@@ -553,8 +497,8 @@ good_refine %>%
 
 Then we can join the refined values back to the database.
 
-```{r city_join}
-kyc <- kyc %>% 
+```{r city-join}
+tnl <- tnl %>% 
   left_join(good_refine, by = names(.)) %>% 
   mutate(city_refine = coalesce(city_refine, city_swap))
 ```
@@ -564,22 +508,24 @@ kyc <- kyc %>%
 Our goal for normalization was to increase the proportion of city values known
 to be valid and reduce the total distinct values by correcting misspellings.
 
-```{r city_progress, echo=FALSE}
+```{r city-progress, echo=FALSE}
 many_city <- c(valid_city, extra_city)
 progress <- progress_table(
-  str_to_upper(kyc$city),
-  kyc$city_norm,
-  kyc$city_swap,
-  kyc$city_refine,
+  str_to_upper(tnl$city),
+  tnl$city_norm,
+  tnl$city_swap,
+  tnl$city_refine,
   compare = many_city
 ) %>% mutate(stage = as_factor(stage))
-kable(progress, digits = 3)
+progress %>% 
+    mutate(across(stage, md_code)) %>% 
+    kable(digits = 3)
 ```
 
 You can see how the percentage of valid values increased with each stage.
 
-```{r bar_progress, echo=FALSE}
-raw_in <- percent(prop_in(kyc$city, valid_city))
+```{r bar-progress, echo=FALSE}
+raw_in <- percent(prop_in(tnl$city, valid_city))
 progress %>% 
   ggplot(aes(x = stage, y = prop_in)) +
   geom_hline(yintercept = 0.99) +
@@ -587,7 +533,7 @@ progress %>%
   coord_cartesian(ylim = c(0.75, 1)) +
   scale_y_continuous(labels = percent) +
   labs(
-    title = "Kentucky City Normalization Progress",
+    title = "Tennessee City Normalization Progress",
     subtitle = glue("Raw at {raw_in} before conversion to uppercase"),
     x = "Stage",
     y = "Percent Valid"
@@ -598,7 +544,7 @@ More importantly, the number of distinct values decreased each stage. We were
 able to confidently change many distinct invalid values to their valid
 equivalent.
 
-```{r bar_distinct, echo=FALSE}
+```{r bar-distinct, echo=FALSE}
 progress %>% 
   select(
     stage, 
@@ -614,7 +560,7 @@ progress %>%
   scale_y_continuous(labels = comma) +
   theme(legend.position = "bottom") +
   labs(
-    title = "Kentucky City Normalization Progress",
+    title = "Tennessee City Normalization Progress",
     subtitle = "Distinct values, valid and invalid",
     x = "Stage",
     y = "Distinct Values",
@@ -622,13 +568,11 @@ progress %>%
   )
 ```
 
-## Conclude
-
 Before exporting, we can remove the intermediary normalization columns and
 rename all added variables with the `_clean` suffix.
 
-```{r clean_select}
-kyc <- kyc %>% 
+```{r clean-select}
+tnl <- tnl %>% 
   select(
     -city_norm,
     -city_swap,
@@ -636,49 +580,63 @@ kyc <- kyc %>%
   ) %>% 
   rename_all(~str_replace(., "_norm", "_clean")) %>% 
   rename_all(~str_remove(., "_raw")) %>% 
-  relocate(city_clean, .after = address_clean)
+  relocate(address_clean, city_clean, state_clean, .before = zip_clean)
 ```
 
-```{r clean_glimpse}
-glimpse(sample_n(kyc, 50))
+## Conclude
+
+```{r clean-glimpse}
+glimpse(sample_n(tnl, 1000))
 ```
 
-1. There are `r comma(nrow(kyc))` records in the database.
-1. There are `r comma(sum(kyc$dupe_flag))` duplicate records in the database.
+1. There are `r comma(nrow(tnl))` records in the database.
+1. There are `r comma(sum(tnl$dupe_flag))` duplicate records in the database.
 1. The range and distribution of `amount` and `date` seem reasonable.
-1. There are `r comma(sum(kyc$na_flag))` records missing key variables.
+1. There are `r comma(sum(tnl$na_flag))` records missing key variables.
 1. Consistency in geographic data has been improved with `campfin::normal_*()`.
 1. The 4-digit `year` variable has been created with `lubridate::year()`.
 
 ## Export
 
-Now the file can be saved on disk for upload to the Accountability server.
+Now the file can be saved on disk for upload to the Accountability server. We
+will name the object using a date range of the records included.
 
-```{r clean_dir}
-clean_dir <- dir_create(here("state","ky", "contribs", "data", "clean"))
-clean_path <- path(clean_dir, "ky_contribs_clean.csv")
-write_csv(kyc, clean_path, na = "")
-(clean_size <- file_size(clean_path))
-non_ascii(clean_path)
+```{r clean-timestamp}
+min_dt <- str_remove_all(min(tnl$date), "-")
+max_dt <- str_remove_all(max(tnl$date), "-")
+csv_ts <- paste(min_dt, max_dt, sep = "-")
+```
+
+```{r clean-dir}
+clean_dir <- dir_create(here("state", "tn", "lobby", "data", "clean"))
+clean_csv <- path(clean_dir, glue("tn_lobby_{csv_ts}.csv"))
+clean_rds <- path_ext_set(clean_csv, "rds")
+basename(clean_csv)
+```
+
+```{r clean-write}
+write_csv(tnl, clean_csv, na = "")
+write_rds(tnl, clean_rds, compress = "xz")
+(clean_size <- file_size(clean_csv))
 ```
 
 ## Upload
 
 We can use the `aws.s3::put_object()` to upload the text file to the IRW server.
 
-```{r aws_upload, eval=FALSE}
-aws_path <- path("csv", basename(clean_path))
-if (!object_exists(aws_path, "publicaccountability")) {
+```{r aws-upload, eval=FALSE}
+aws_key <- path("csv", basename(clean_csv))
+if (!object_exists(aws_key, "publicaccountability")) {
   put_object(
-    file = clean_path,
-    object = aws_path, 
+    file = clean_csv,
+    object = aws_key, 
     bucket = "publicaccountability",
     acl = "public-read",
     show_progress = TRUE,
     multipart = TRUE
   )
 }
-aws_head <- head_object(aws_path, "publicaccountability")
+aws_head <- head_object(aws_key, "publicaccountability")
 (aws_size <- as_fs_bytes(attr(aws_head, "content-length")))
 unname(aws_size == clean_size)
 ```
