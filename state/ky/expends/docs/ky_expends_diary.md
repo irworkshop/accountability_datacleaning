@@ -1,7 +1,7 @@
 Kentucky Expenditures
 ================
 Yanqi Xu & Kiernan Nicholls
-Sat Dec 2 12:31:23 2023
+Sat Dec 9 11:13:44 2023
 
 - [Project](#project)
 - [Objectives](#objectives)
@@ -386,7 +386,7 @@ The `election_date` is the only date variable.
 ``` r
 glimpse(sample_n(kye, 50))
 #> Rows: 50
-#> Columns: 18
+#> Columns: 19
 #> $ recipient_last_name        <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "Kolb", NA, NA, NA, "JONES", "Lucas", N…
 #> $ recipient_first_name       <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "Chris", NA, NA, NA, "LYDIA", "Debbie",…
 #> $ organization_name          <chr> "TEMPS PLUS", "Signarama", "ELITE GRAPHICS, INC.", "Creasy Mahan Nature Preserve", …
@@ -405,6 +405,7 @@ glimpse(sample_n(kye, 50))
 #> $ is_independent_expenditure <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "False", NA, NA, NA, NA…
 #> $ na_flag                    <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE,…
 #> $ dupe_flag                  <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, TRUE, FALSE, FALSE, FALSE, FALSE, …
+#> $ year                       <dbl> 2020, 2022, 2015, 2022, 2020, 2015, 2015, 2022, 2022, 2022, 2018, NA, 2014, 2022, 2…
 ```
 
 1.  There are 213,460 records in the database.
@@ -430,7 +431,7 @@ clean_dir <- dir_create(here("state","ky", "expends", "data", "clean"))
 clean_path <- path(clean_dir, "ky_expends_clean.csv")
 write_csv(kye, clean_path, na = "")
 (clean_size <- file_size(clean_path))
-#> 31.6M
+#> 32.4M
 non_ascii(clean_path)
 #> # A tibble: 240 × 2
 #>      row line                                                                                                           

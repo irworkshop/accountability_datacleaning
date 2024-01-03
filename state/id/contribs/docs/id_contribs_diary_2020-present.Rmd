@@ -1,0 +1,541 @@
+---
+title: "Idaho Contributions, 2020-present"
+author: "Kiernan Nicholls & Yanqi Xu"
+date: "`r Sys.time()`"
+output:
+  github_document: 
+    df_print: tibble
+    toc: true
+    toc_dept: 2
+editor_options: 
+  chunk_output_type: console
+---
+
+<!-- Place comments regarding knitting here -->
+
+```{r setup, include=FALSE, purl=FALSE}
+library(knitr)
+opts_chunk$set(
+  eval = TRUE,
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  error = FALSE,
+  collapse = TRUE,
+  comment = "#>",
+  fig.path = "../plots/",
+  fig.width = 10,
+  dpi = 300
+)
+if (!interactive()) {
+  options(width = 99)
+  set.seed(5)
+}
+```
+
+```{r create_docs_dir, eval=FALSE, echo=FALSE, include=FALSE}
+fs::dir_create(here::here("state","id", "contribs", "docs"))
+```
+
+## Project
+
+The Accountability Project is an effort to cut across data silos and give
+journalists, policy professionals, activists, and the public at large a simple
+way to search across huge volumes of public data about people and organizations.
+
+Our goal is to standardizing public data on a few key fields by thinking of each
+dataset row as a transaction. For each transaction there should be (at least) 3
+variables:
+
+1. All **parties** to a transaction
+2. The **date** of the transaction
+3. The **amount** of money involved
+
+## Objectives
+
+This document describes the process used to complete the following objectives:
+
+1. How many records are in the database?
+1. Check for duplicates
+1. Check ranges
+1. Is there anything blank or missing?
+1. Check for consistency issues
+1. Create a five-digit ZIP Code called `zip`
+1. Create a `year` field from the transaction date
+1. Make sure there is data on both parties to a transaction
+
+## Packages
+
+The following packages are needed to collect, manipulate, visualize, analyze,
+and communicate these results. The `pacman` package will facilitate their
+installation and attachment.
+
+The IRW's `campfin` package will also have to be installed from GitHub. This
+package contains functions custom made to help facilitate the processing of
+campaign finance data.
+
+```{r load_packages, message=FALSE, warning=FALSE, error=FALSE}
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load_gh("irworkshop/campfin")
+pacman::p_load(
+  tidyverse, # data manipulation
+  snakecase, # column naming
+  lubridate, # datetime strings
+  magrittr, # pipe opperators
+  gluedown, # printing markdown
+  janitor, # dataframe clean
+  aws.s3, # upload to aws s3
+  refinr, # cluster and merge
+  scales, # format strings
+  readxl, # read excel files
+  knitr, # knit documents
+  rvest, # read html pages
+  vroom, # read files fast
+  glue, # combine strings
+  here, # relative storage
+  fs # search storage 
+)
+```
+
+This document should be run as part of the `R_campfin` project, which lives as a
+sub-directory of the more general, language-agnostic
+[`irworkshop/accountability_datacleaning`][repo] GitHub repository.
+
+The `R_campfin` project uses the [RStudio projects][rproj] feature and should be
+run as such. The project also uses the dynamic `here::here()` tool for file
+paths relative to _your_ machine.
+
+```{r where_here}
+# where does this document knit?
+here::here()
+```
+
+[repo]: https://github.com/irworkshop/accountability_datacleaning
+[rproj]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects
+
+## Import
+
+To import the data for processing, we will have to download each archive file
+and read them together into a single data frame object.
+
+```{r dir_setup}
+raw_dir <- dir_create(here("state","id", "contribs", "data", "raw"))
+```
+
+## Data
+
+The data was provided as a public records request and was fulfilled on Dec. 4, 2023. For data prior to 2020, see this [data dictionary](https://github.com/irworkshop/accountability_datacleaning/blob/8689889cefa62b7e5b0bdad5133123ed72fe9393/state/id/contribs/docs/id_contribs_diary.md?plain=1#L827).
+
+
+### Read
+
+Each file has a different column order and names. We will first use 
+`purrr::map()` to use `readxl::read_excel()` and create a list of data frames.
+
+```{r read_csv}
+idc <- read_csv(
+  dir_ls(raw_dir)
+) %>% clean_names()
+```
+
+In this update, since we would like to create a new dataset for records from 2020-01-01 and on, we need to remove records after 2020-01-01 in the last update. We will do so by segregating these 2020 records and replace the data in the previous update.
+```{r}
+prev_dir <- here("state","id", "contribs", "data", "previous")
+
+idc_prev <- read_csv(path(prev_dir, "id_contribs_clean_download.csv"))
+
+x <- idc_prev %>% filter(date>=as.Date("2020-01-01") & is.na(source_file))
+
+idc_prev_new <- anti_join(idc_prev, x)
+
+idc_prev_new %>% write_csv(path(prev_dir, "id_contribs_clean.csv"))
+```
+
+
+We also need to reorder and recode these variables to be consistent across each
+year.
+
+
+```{r recode}
+idc <- idc %>% 
+  mutate_if(is_character, str_to_upper) %>% 
+  mutate(
+    to_office = to_office %>% 
+      str_replace("REPRESENTATIVE", "REP."),
+    to_party = to_party %>% 
+      str_replace("OTHER", "OTH") %>% 
+      str_replace("REPUBLICAN", "REP") %>% 
+      str_replace("DEMOCRATIC", "DEM") %>% 
+      str_replace("INDEPENDENT", "IND") %>% 
+      str_replace("LIBERTARIAN", "LIB") %>% 
+      str_replace("CONSTITUTION", "CON") %>% 
+      str_replace("NON-PARTISAN", "NON")
+  )
+```
+
+
+```{r dates}
+count_na(idc$date) 
+```
+
+## Explore
+
+```{r glimpse}
+glimpse(idc)
+head(idc)
+tail(idc)
+```
+
+We should first identify which columns are missing the kinds of key information
+we need to properly identify all parties to a contribution. We can do this
+with `campfin::flag_na()` after creating a new
+
+```{r count_na}
+col_stats(idc, count_na)
+```
+
+```{r flag_na}
+idc <- idc %>% 
+  flag_na(from_name, to_name, date, amount)
+
+sum(idc$na_flag)
+mean(idc$na_flag)
+```
+
+Records that are entirely duplicated at least once across all columns should
+also be identified with `campfin::flag_dupes()`. The first occurrence of the
+record is not flagged, but all subsequent duplicates are. Not all these records
+are true duplicates, since it is technically possible to make the same
+contribution to the same person on the same day for the same amount.
+
+Upon checking, we found no incidence of duplicates.
+
+```{r flag_dupes}
+idc <- flag_dupes(idc, everything(), .check = TRUE)
+```
+
+### Categorical
+
+```{r n_distinct}
+col_stats(idc, n_distinct)
+```
+
+```{r bar_office, echo=FALSE}
+explore_plot(
+  data = idc,
+  var = to_office
+) + 
+  theme(axis.text.x = element_text(angle = 10, vjust = 0.7)) +
+  labs(
+    title = "Idaho Contributions by Office, 2020-2023",
+    caption = "Source: Idaho Elections Office"
+  )
+```
+
+```{r bar_party, echo=FALSE}
+explore_plot(
+  data = idc,
+  var = to_party
+) +
+  labs(
+  title = "Idaho Contributions by Office, 2020-2023",
+  caption = "Source: Idaho Elections Office"
+  )
+```
+
+
+### Amounts
+
+```{r amount_summary}
+summary(idc$amount)
+mean(idc$amount <= 0)
+```
+
+```{r amount_minmax}
+glimpse(idc[c(which.min(idc$amount), which.max(idc$amount)), ])
+```
+
+```{r amount_histogram, echo=FALSE}
+idc %>%
+  filter(amount > 1) %>% 
+  ggplot(aes(amount)) +
+  geom_histogram(fill = dark2["purple"], bins = 20) +
+  scale_y_continuous(labels = comma) +
+  scale_x_continuous(
+    breaks = c(1 %o% 10^(0:6)),
+    labels = dollar,
+    trans = "log10"
+  ) +
+  labs(
+    title = "Idaho Contributions Amount Distribution",
+    subtitle = "from 2000 to 2019",
+    caption = "Source: Idaho Elections Office",
+    x = "Amount",
+    y = "Count"
+  )
+```
+
+
+### Dates
+
+```{r year_add}
+idc <- mutate(idc, year = year(date))
+```
+
+```{r date_range}
+min(idc$date, na.rm = TRUE)
+max(idc$date, na.rm = TRUE)
+idc <- mutate(idc, date_flag = date > today() | year < 1999 | is.na(date))
+count_na(idc$date) 
+sum(idc$date_flag) 
+mean(idc$date_flag)
+min_year <- year(min(idc$date, na.rm = TRUE))
+max_year <- year(max(idc$date, na.rm = TRUE))
+```
+
+```{r date_replace}
+x <- idc$date[idc$date_flag & !is.na(idc$date)]
+x <- str_replace(x, "^202(?=[^2])", "201")
+x <- str_replace(x, "^19([^9])", "199")
+x <- str_replace(x, "^2([^2])", "20")
+x <- str_replace(x, "2061", "2016")
+x[which(x > today() | year(x) < 1999)] <- NA
+idc$date[idc$date_flag & !is.na(idc$date)] <- as_date(x)
+idc <- mutate(
+  .data = idc,
+  date_flag = date > today() | year < 1999 | is.na(date),
+  year = year(date)
+)
+count_na(idc$date) # 807
+sum(idc$date_flag) # 807
+```
+
+```{r amount_violin, echo=FALSE}
+idc %>%
+  filter(
+    amount > 1,
+    amount < 1e6,
+    from_party %in% most_common(idc$from_party, 4)
+  ) %>% 
+  ggplot(aes(x = from_party, y = amount)) +
+  geom_violin(aes(fill = from_party), adjust = 2) +
+  scale_fill_brewer(palette = "Dark2", guide = FALSE) +
+  scale_y_continuous(
+    breaks = c(1 %o% 10^(0:6)),
+    labels = dollar,
+    trans = "log10"
+  ) +
+  labs(
+    title = "Idaho Contributions Amount Distribution",
+    subtitle = glue("from {min_year} to {max_year}, by Party"),
+    caption = "Source: Idaho Elections Office",
+    x = "Amount",
+    y = "Count"
+  )
+```
+
+## Wrangle
+
+### Address
+
+```{r address_norm}
+idc <- idc %>% 
+  mutate_at(.vars = vars(ends_with('address')),
+            .funs = list(norm = ~ normal_address(address = .,
+      abbs = usps_city,
+      na_rep = TRUE)))
+```
+
+```{r address_view}
+idc %>% 
+  select(contains("address")) %>% 
+  distinct() %>% 
+  sample_frac()
+```
+
+### ZIP
+
+```{r zip_norm}
+idc %>% select(ends_with('zip')) %>% 
+  map_dbl(prop_in, valid_zip, na.rm = TRUE) %>% map_chr(percent) %>% glimpse()
+
+idc <- idc %>% 
+  mutate_at(.vars = vars(ends_with('zip')), .funs = list(norm = ~ normal_zip(.)))
+
+idc %>% select(contains('zip')) %>% 
+  map_dbl(prop_in, valid_zip, na.rm = TRUE) %>%  map_chr(percent)
+```
+
+```{r zip_progress}
+progress_table(
+  idc$to_zip,
+  idc$to_zip_norm,
+  idc$from_zip,
+  idc$from_zip_norm,
+  compare = valid_zip
+)
+```
+
+### State
+
+```{r state_norm}
+idc %>% select(ends_with('state')) %>% 
+  map_dbl(prop_in, valid_state, na.rm = TRUE) %>% map_chr(percent) %>% glimpse()
+
+idc <- idc %>% mutate(from_state_norm = normal_state(from_state))
+```
+
+```{r state_progress}
+progress_table(
+  idc$from_state,
+  idc$from_state_norm,
+  compare = valid_state
+)
+```
+
+### City
+
+```{r city_norm}
+idc %>% select(ends_with('city')) %>% 
+  map_dbl(prop_in, valid_city, na.rm = TRUE) %>% map_chr(percent) %>% glimpse()
+
+valid_place <- c(valid_city,extra_city)
+
+idc <- idc %>% 
+  mutate_at(.vars = vars(ends_with('city')),
+            .funs = list(norm = ~ normal_city(city = .,abbs = usps_city,
+                                            states = c(valid_state),
+                                            na = invalid_city,
+                                            na_rep = TRUE)))
+idc %>% select(contains('city')) %>% 
+  map_dbl(prop_in, valid_place, na.rm = TRUE) %>%  map_chr(percent)
+```
+
+```{r city_swap}
+idc <- idc %>%
+  rename(from_city_raw = from_city) %>% 
+  left_join(
+    y = zipcodes,
+    by = c(
+      "from_state_norm" = "state",
+      "from_zip_norm" = "zip"
+    )
+  ) %>% 
+  rename(city_match = city) %>% 
+  mutate(
+    match_abb = is_abbrev(from_city_norm, city_match),
+    match_dist = str_dist(from_city_norm, city_match),
+    from_city_swap = if_else(
+      condition = match_abb | match_dist == 1,
+      true = city_match,
+      false = from_city_norm
+    )
+  ) %>% 
+  select(
+    -match_abb,
+    -match_dist,
+    -city_match
+  )
+```
+
+```{r}
+idc <- idc %>%
+  rename(to_city_raw = to_city) %>% 
+  left_join(
+    y = zipcodes,
+    by = c(
+      "to_state" = "state",
+      "to_zip_norm" = "zip"
+    )
+  ) %>% 
+  rename(city_match = city) %>% 
+  mutate(
+    match_abb = is_abbrev(to_city_norm, city_match),
+    match_dist = str_dist(to_city_norm, city_match),
+    to_city_swap = if_else(
+      condition = match_abb | match_dist == 1,
+      true = city_match,
+      false = to_city_norm
+    )
+  ) %>% 
+  select(
+    -match_abb,
+    -match_dist,
+    -city_match
+  )
+```
+
+
+```{r city_progress}
+progress_table(
+  idc$from_city_raw,
+  idc$from_city_norm,
+  idc$from_city_swap,
+  idc$to_city_raw,
+  idc$to_city_norm,
+  idc$to_city_swap,
+  compare = valid_place
+)
+```
+
+
+## Conclude
+
+Before exporting, we can remove the intermediary normalization columns and
+rename all added variables with the `_clean` suffix.
+
+```{r clean_select}
+idc <- idc %>% 
+  select(
+    -c(from_city_norm, to_city_norm),
+    from_city_clean = from_city_swap,
+    to_city_clean = to_city_swap,
+  ) %>% 
+  rename_all(~str_replace(., "_norm", "_clean")) %>% 
+  rename_all(~str_remove(., "_raw"))
+```
+
+```{r clean_glimpse}
+glimpse(sample_n(idc, 50))
+```
+
+1. There are `r comma(nrow(idc))` records in the database.
+1. There are 0 duplicate records in the database.
+1. The range and distribution of `amount` and `date` seem reasonable.
+1. There are `r comma(sum(idc$na_flag))` records missing key variables.
+1. Consistency in geographic data has been improved with `campfin::normal_*()`.
+1. The 4-digit `year` variable has been created with `lubridate::year()`.
+
+## Export
+
+Now the file can be saved on disk for upload to the Accountability server.
+
+```{r clean_dir}
+clean_dir <- dir_create(here("state","id", "contribs", "data", "clean"))
+clean_path <- path(clean_dir, "id_contribs_20200101-20231203.csv")
+write_csv(idc, clean_path, na = "")
+(clean_size <- file_size(clean_path))
+file_encoding(clean_path) %>% 
+  mutate(across(path, path.abbrev))
+```
+
+## Upload
+
+We can use the `aws.s3::put_object()` to upload the text file to the IRW server.
+
+```{r aws_upload, eval=FALSE}
+aws_path <- path("csv", basename(clean_path))
+if (!object_exists(aws_path, "publicaccountability")) {
+  put_object(
+    file = clean_path,
+    object = aws_path, 
+    bucket = "publicaccountability",
+    acl = "public-read",
+    show_progress = TRUE,
+    multipart = TRUE
+  )
+}
+aws_head <- head_object(aws_path, "publicaccountability")
+(aws_size <- as_fs_bytes(attr(aws_head, "content-length")))
+unname(aws_size == clean_size)
+```

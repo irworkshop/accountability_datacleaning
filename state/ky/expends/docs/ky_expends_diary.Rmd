@@ -300,8 +300,10 @@ There is no variable containing the actual date the expenditures were made.
 The `election_date` is the only date variable.
 
 ```{r election_date_bar, echo=FALSE}
+kye <- kye %>% 
+  mutate(year = year(election_date)) 
+
 kye %>% 
-  mutate(year = year(election_date)) %>% 
   filter(year>=2010) %>% 
   count(year) %>% 
   ggplot(aes(year, n)) +

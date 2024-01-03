@@ -112,7 +112,7 @@ here::here()
 [rproj]: https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects "Rproj"
 
 ## Data
-The workshop obtained the MO lobbying registration data through a Sunshine Request to the Missouri Ethics Commission. The data is current as of Feb. 14, 2020. Note that the file structure changed in 2019, since which a table of all current lobbyists is available, so we will process these two datasets separately. 
+The workshop obtained the MO lobbying registration data through a Sunshine Request to the Missouri Ethics Commission.  Note that the file structure changed in 2019. The previous updates included everything up to end of 2018. And in this update, we'll start with 2019.
 
 ## Import
 
@@ -122,8 +122,9 @@ The workshop obtained the MO lobbying registration data through a Sunshine Reque
 raw_dir <- dir_create(here("state","mo", "lobby", "data", "raw", "reg"))
 ```
 
-```{r download}
-zip_paths <- glue("LobEFiler{1:19}_Records.zip")
+```{r download,eval=F}
+#zip_paths <- glue("LobEFiler{1:19}_Records.zip")
+zip_paths <- glue("LFS_Records.zip")
 lob_urls <- paste0("https://mec.mo.gov/WebDocs/Downloads/", zip_paths)
 for (i in seq_along(zip_paths)) {
  if (!this_file_new(zip_paths[i])) {
@@ -132,7 +133,7 @@ for (i in seq_along(zip_paths)) {
 }
 ```
 
-```{r unzip}
+```{r unzip, eval=F}
 #mdb_path <- dir_ls(raw_dir, regexp = "mdb")
 for (zip_path in path(raw_dir, zip_paths)) {
 unzip(zip_path, exdir = raw_dir)  
@@ -143,22 +144,38 @@ unzip(zip_path, exdir = raw_dir)
 
 ### Read
 ```{r raw_read}
-mo_lob <- read_xlsx(
-  path = dir_ls(raw_dir, regexp = "Data.xlsx")
-) %>% clean_names() %>% mutate_if(is.character, str_conv, encoding = "UTF-8") %>% mutate_if(is.character, str_to_upper)
+# mo_lob <- read_xlsx(
+#   path = dir_ls(raw_dir, regexp = "Data.xlsx")
+# ) %>% clean_names() %>% mutate_if(is.charracter, str_conv, encoding = "UTF-8") %>% mutate_if(is.character, str_to_upper)
+# 
+# mo_prin <- read_xlsx(
+#   path = dir_ls(raw_dir, regexp = "Data.xlsx"), sheet = 3
+# ) %>% clean_names() %>% mutate_if(is.character, st_conv, encoding = "UTF-8") %>% mutate_if(is.character, str_to_upper)
 
-mo_prin <- read_xlsx(
-  path = dir_ls(raw_dir, regexp = "Data.xlsx"), sheet = 3
-) %>% clean_names() %>% mutate_if(is.character, str_conv, encoding = "UTF-8") %>% mutate_if(is.character, str_to_upper)
+mol <- read_csv(
+  dir_ls(raw_dir,regex=".+LFS_Lob_PrincipalRelationship.csv",recurse = T)) %>% clean_names() %>% mutate_if(is.character, str_conv, encoding = "UTF-8") %>% mutate_if(is.character, str_to_upper)
 
-mo_prin_new <- read_xlsx(
-  path = dir_ls(raw_dir) %>% str_subset("2019"), sheet = 2
-) %>% clean_names() %>% mutate_if(is.character, str_conv, encoding = "UTF-8") %>% mutate_if(is.character, str_to_upper)
+mol <- mol %>% 
+  mutate(across(.cols = ends_with("date"), .fns= mdy)) %>% 
+  mutate(across(.cols = starts_with("relationship"), .fns= mdy))
+  
 
-mo_lob_new <- read_xlsx(
-  path = dir_ls(raw_dir) %>% str_subset("2019")
-) %>% clean_names() %>% mutate_if(is.character, str_conv, encoding = "UTF-8") %>% mutate_if(is.character, str_to_upper)
+mo_prin <- read_csv(dir_ls(raw_dir,regexp = ".+LFS_Lob_Principal.csv",recurse=T)) %>% clean_names()
+mo_lob <- read_csv(dir_ls(raw_dir,regexp = ".+LFS_Lobbyist.csv",recurse=T)) %>% clean_names()
+mo_emp <- read_csv(dir_ls(raw_dir,regexp = ".+LFS_Lob_Employee.csv",recurse=T)) %>% clean_names()
+
 ```
+
+### Rename
+First, we can rename the variables in the `mo_lob` and `mo_emp` files respectively.
+```{r}
+mo_lob <- mo_lob %>% 
+  rename_with(.cols = 9:16, ~ str_c("lob_",.))
+
+mo_lob <- mo_lob %>% 
+  select(-entered_by)
+```
+
 
 
 #### Year
