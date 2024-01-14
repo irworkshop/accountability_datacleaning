@@ -468,10 +468,20 @@ glimpse(sample_n(ide, 1000))
 
 ## Export
 
+```{r}
+ide <- ide %>% 
+  rename_all(~str_replace(., "_swap", "_clean")) %>% 
+  select(-ends_with("city_norm")) %>% 
+  rename_all(~str_replace(., "_norm", "_clean")) %>% 
+  rename_all(~str_remove(., "_raw"))
+```
+
+
 Now the file can be saved on disk for upload to the Accountability server. We
 will name the object using a date range of the records included.
 
 ```{r clean-timestamp}
+ide$date <- as.Date(ide$date)
 min_dt <- str_remove_all(min(ide$date, na.rm = TRUE), "-")
 max_dt <- str_remove_all(max(ide$date, na.rm = TRUE), "-")
 csv_ts <- paste(min_dt, max_dt, sep = "-")

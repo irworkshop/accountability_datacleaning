@@ -1,7 +1,7 @@
 Idaho Expenditures, 2020-present
 ================
 Kiernan Nicholls & Yanqi Xu
-2024-01-01 23:20:45
+2024-01-07 22:23:24
 
 - [Project](#project)
 - [Objectives](#objectives)
@@ -712,29 +712,38 @@ glimpse(sample_n(ide, 1000))
 
 ## Export
 
+``` r
+ide <- ide %>% 
+  rename_all(~str_replace(., "_swap", "_clean")) %>% 
+  select(-ends_with("city_norm")) %>% 
+  rename_all(~str_replace(., "_norm", "_clean")) %>% 
+  rename_all(~str_remove(., "_raw"))
+```
+
 Now the file can be saved on disk for upload to the Accountability
 server. We will name the object using a date range of the records
 included.
 
 ``` r
+ide$date <- as.Date(ide$date)
 min_dt <- str_remove_all(min(ide$date, na.rm = TRUE), "-")
 max_dt <- str_remove_all(max(ide$date, na.rm = TRUE), "-")
 csv_ts <- paste(min_dt, max_dt, sep = "-")
 ```
 
 ``` r
-clean_dir <- dir_create(here("id", "expends", "data", "clean"))
+clean_dir <- dir_create(here("state","id", "expends", "data", "clean"))
 clean_csv <- path(clean_dir, glue("id_expends_{csv_ts}.csv"))
 clean_rds <- path_ext_set(clean_csv, "rds")
 basename(clean_csv)
-#> [1] "id_expends_20200101-20231130 12:00:00.csv"
+#> [1] "id_expends_20200101-20231130.csv"
 ```
 
 ``` r
 write_csv(ide, clean_csv, na = "")
 write_rds(ide, clean_rds, compress = "xz")
 (clean_size <- file_size(clean_csv))
-#> 32.8M
+#> 30.5M
 ```
 
 ## Upload

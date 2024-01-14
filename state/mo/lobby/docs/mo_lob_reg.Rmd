@@ -181,8 +181,20 @@ mo_lob <- mo_lob %>%
 #### Year
 Sometimes in the current lobbyist list, there will be 2019 and 2020 registrations while everything else is the same. We can safely flag the earlier ones as duplicates and go with the new registration when joining it with the principal data.
 ```{r create year}
-mo_lob_reg <- mo_prin %>% 
-  left_join(mo_lob, by = "lob_id")
+
+mo_lob <- mo_lob %>% mutate(start_date = mdy(start_date),
+                            year = year(start_date))
+
+mo_lob <- mo_lob %>% select(-id)
+
+flag_dupes(mo_lob,dplyr::everything(), .both = F)
+
+mo_lob_reg <- mol%>% 
+  mutate(year = year(start_date)) %>% 
+  left_join(mo_lob, by = c("mecid_l", "start_date","year"))
+
+
+mo_prin %>% count(mecid_p, address1,year(start_date %>% mdy()), sort=T)
 
 mo_lob_reg <- mo_lob_reg %>% 
   mutate(year = year(rec_date))

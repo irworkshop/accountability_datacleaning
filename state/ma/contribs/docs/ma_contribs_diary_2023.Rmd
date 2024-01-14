@@ -143,7 +143,7 @@ zip_url <- str_c("http://ocpf2.blob.core.windows.net/downloads/data2/", zip_name
 zip_paths <- path(raw_dir, zip_name) 
 ```
 
-```{r raw_download}
+```{r raw_download, eval=FALSE}
 for (i in seq_along(zip_paths)) {
  if (!this_file_new(zip_paths[i])) {
   download.file(zip_url[i], zip_paths[i])
@@ -157,9 +157,9 @@ for (i in seq_along(zip_paths)) {
 We can see that `read_me` file provided in the zip details the file layouts for these tables. For contributions, everthing is contained in the `report-items.txt` file.
 
 ```{r}
-data_dict <- read_lines(dir_ls(raw_dir, regexp = "readme.txt",recurse = T)[1])
+data_meta <- read_lines(dir_ls(raw_dir, regexp = "readme.txt",recurse = T)[1])
 
-data_dict <- data_dict[175:246]
+data_dict <- data_meta[175:246]
 
 data_dict <- data_dict %>% I() %>%  read_tsv(col_names = c("variable","notes"))
 
@@ -176,7 +176,6 @@ mac <- read_tsv(
   na = c("", "NA", "N/A"),
   col_types = cols(
     .default = col_character(),
-    Date = col_date(),
     Amount = col_double()
   )
 )
@@ -191,70 +190,89 @@ mac <- mac %>%
   #rename_all(~str_replace(., "contributor", "cont")) %>% 
   rename_all(~str_remove(., "ocpf")) %>% 
   rename(
-    rpt_id = report_id,
-    line = line_sequence,
     first = first_name,
-    last = last_name,
-    officer = principal_officer,
-  )
+    last = name
+  ) 
 ```
 
 ```{r echo=FALSE}
 flush_memory()
 ```
 
-The records of the receipts file are provided to OCPF on reports, identified by
-the `rpt_id` variable. The receipt records themselves do not contain the
-information on the committee recipients of each contribution. The information on
-the receiving committee are contained in the `UPLOAD_MASTER` database. We can
-read that table using the same method as above.
+According to the data dictionary, this file contains both receipts and expenditures. We need to narrow down to records related to receipts only using the `record_type_id` indicator.
 
-```{r master_read}
-master <- read_mdb(
-  file = mdb_path,
-  table = "vUPLOAD_MASTER",,
-  na = c("", "NA", "N/A"),
-  col_types = cols(
-    .default = col_character(),
-    Amendment = col_logical(),
-    Filing_Date = col_datetime(),
-    Report_Year = col_integer(),
-    Beginning_Date = col_date(),
-    Ending_Date = col_date()
-  )
-)
+```{r}
+mac$record_type_id <- mac$record_type_id %>% as.double()
+
+mac <- mac %>% filter(record_type_id %in% c(201:204,211,220,303,401:403))
 ```
 
-```{r master_rename, echo=FALSE}
-master <- master %>% 
-  clean_names("snake") %>% 
-  select(
-    rpt_id = report_id,
-    rpt_year = report_year,
-    filing_date,
-    start_date = beginning_date,
-    end_date = ending_date,
-    cpf_id,
-    rpt_type = report_type_description,
-    cand_name = full_name,
-    office,
-    district,
-    comm_name = report_comm_name,
-    comm_city = report_comm_city,
-    comm_state = report_comm_state,
-    comm_zip = report_comm_zip,
-    category,
-    amendment
-  )
+### Contribution type
+The type of contribution (individual, committee) is recorded in the `record_type_id`` field and each number represents a contribution category described in the data dictionary. We will join that with the original data
+
+```{r}
+cont_tb <- data_meta[90:156] %>% I() %>%  read_tsv(col_names = c("record_type_id","cont_type"))
 ```
 
-The records of this file contain the identifying information for the receiving
-committees making each report. We can use `dplyr::inner_join()` to join this
-table with the contributions table along the `rpt_id` variable.
 
-```{r master_join}
-mac <- inner_join(mac, master, by = "rpt_id")
-rm(master); flush_memory()
+```{r}
+mac <- mac %>% left_join(cont_tb)
+```
+
+### Previous
+Since there are some entries that were already included in the last update, we'll get rid of these rows by matching the `item_id`.
+```{r}
+mac_prev <- read_csv(here("state","ma", "contribs", "data","previous","ma_contribs_clean.csv"))
+```
+
+We'll then standardize these column names so that they're consistent. 
+```{r}
+mac <- mac %>% 
+  rename(id = item_id,
+          rpt_id = report_id,
+          address = street_address,
+          cpf_id = related_cpf_id,
+          officer = principal_officer,
+          tender = tender_type_id
+          ) %>%
+  mutate(date = mdy(date),
+         tender = tender %>% str_replace("1", "Check") %>% 
+str_replace("2", "Cash or Money Order") %>% 
+str_replace("3", "Credit Card") %>% 
+str_replace("4", "Transfer") %>% 
+str_replace("5", "Other") %>% 
+str_replace("6", "Cash") %>% 
+str_replace("7", "Money Order"))
+
+mac$id = as.double(mac$id)
+```
+
+```{r}
+mac <- mac %>% filter(id %out% mac_prev$id)
+```
+
+```{r}
+mac$rpt_id <- as.numeric(mac$rpt_id)
+```
+
+
+## Filer
+
+This file doesn't contain the information about filers and recipients of contributions. We need to extract that information from the data file `reports.csv`.
+
+```{r}
+mac_f <- read_tsv(dir_ls(raw_dir, regexp = "reports.txt",recurse = T)) %>% clean_names()
+```
+
+We only need the committee name in this case, and will match the filer data with the contribution data base on the `line` (or `report_id` in the filer data base) field.
+
+```{r}
+mac_f <- mac_f %>% 
+  select(rpt_id = report_id, recip_any = ocpf_full_name,rpt_type = report_type_description)
+```
+
+```{r}
+mac <- mac %>% left_join(mac_f)
 ```
 
 ## Explore
@@ -289,9 +307,6 @@ mac <- mac %>%
   ) %>% 
   relocate(contrib_any, .after = last_col()) %>% 
   mutate(across(contrib_any, na_if, "")) %>% 
-  mutate(
-    recip_any = coalesce(comm_name, cand_name)
-  ) %>% 
   flag_na(contrib_any, recip_any, date, amount)
 ```
 
@@ -326,7 +341,7 @@ if (!file_exists(dupe_file)) {
   mac <- mutate(mac, group = str_sub(date, end = 7))
   ma_id <- split(mac$id, mac$group)
   mas <- mac %>%
-    select(-id, -line, -guid) %>% 
+    select(-id) %>% 
     group_split(group, .keep = FALSE)
   pb <- txtProgressBar(max = length(mas), style = 3)
   for (i in seq_along(mas)) {
@@ -353,7 +368,7 @@ dupes <- vroom(
   file = dupe_file,
   col_names = c("id", "dupe_flag"),
   col_types = cols(
-    id = col_character(),
+    id = col_number(),
     dupe_flag = col_logical()
   )
 )
@@ -383,7 +398,7 @@ col_stats(mac, n_distinct)
 ```{r bar_type, echo=FALSE}
 explore_plot(
   data = mac,
-  var = cont_type
+  var = description
 )
 ```
 
@@ -404,14 +419,7 @@ explore_plot(
 ```{r bar_category, echo=FALSE}
 explore_plot(
   data = mac,
-  var = category
-)
-```
-
-```{r bar_amendment, echo=FALSE}
-explore_plot(
-  data = mac,
-  var = amendment
+  var = cont_type
 )
 ```
 
@@ -435,7 +443,7 @@ mac %>%
   ) +
   labs(
     title = "Massachusetts Contributions Amount Distribution",
-    subtitle = "from 2000 to 2019",
+    subtitle = "from 2020 to 2023",
     caption = "Source: MA OCPF",
     x = "Amount",
     y = "Count"
@@ -445,12 +453,15 @@ mac %>%
 ## Dates
 
 The actual year a contribution was made sometimes differs from the year in which
-it was reported. The later is identified int eh `rpt_year` variable but  we will
+it was reported. We will
 create a new `year` variable from `date` using `lubridate::year()`. This will
 more accurately identify the contribution.
 
 ```{r date_year}
 mac <- mutate(mac, year = year(date))
+
+max_year <- max(mac$year, na.rm = T)
+min_year <- min(mac$year, na.rm = T)
 ```
 
 ```{r}
@@ -459,9 +470,9 @@ mac %>%
   mutate(even = is_even(year)) %>% 
   ggplot(aes(x = year, y = n)) +
   geom_col(aes(fill = even)) +
-  coord_cartesian(xlim = c(2000, 2020)) +
+  coord_cartesian(xlim = c(2020, max_year)) +
   scale_fill_brewer(palette = "Dark2") +
-  scale_x_continuous(breaks = seq(2000, 2020, by = 2)) +
+  scale_x_continuous(breaks = seq(2020, max_year, by = 2)) +
   theme(legend.position = "bottom") +
   labs(
     title = "Massachusetts Contributions by Year",
@@ -472,27 +483,8 @@ mac %>%
   )
 ```
 
-```{r month_grid, echo=FALSE}
-# janurary contribs 
-mac %>% 
-  filter(year != rpt_year) %>% 
-  count(month = month(date), rpt_month = month(filing_date)) %>% 
-  ggplot(aes(x = month, y = rpt_month)) +
-  geom_tile(aes(fill = n)) +
-  scale_x_continuous(breaks = 1:12) +
-  scale_y_continuous(breaks = 1:12) +
-  coord_flip() +
-  scale_fill_viridis_c() +
-  labs(
-    x = "Month Made",
-    y = "Month Reported",
-    fill = "Count"
-  )
-```
-
 ```{r date_range}
 min(mac$date)
-sum(mac$year < 2001)
 max(mac$date)
 sum(mac$date > today())
 ```
@@ -708,7 +700,7 @@ good_refine <- city_norm %>%
   select(
     city_swap, 
     city_refine
-  )
+  ) 
 ```
 
 ```{r view_city_refines, echo=FALSE}
@@ -719,6 +711,8 @@ good_refine %>%
 Then we can join the refined values back to the database.
 
 ```{r join_refine}
+good_refine <- good_refine %>% unique()
+
 city_norm <- city_norm %>%
   left_join(good_refine, by = "city_swap") %>%
   mutate(city_refine = coalesce(city_refine, city_swap))
@@ -804,40 +798,6 @@ progress %>%
     fill = "Valid"
   )
 ```
-
-#### Committee
-
-The same normalization should be done for the recipient committee address.
-
-```{r comm_geo_norm}
-comm_geo <- mac %>% 
-  count(comm_city, comm_state, comm_zip, sort = TRUE) %>% 
-  select(-n) %>% 
-  mutate(
-    comm_city_norm = normal_city(
-      city = comm_city,
-      abbs = usps_city,
-      states = "MA",
-      na = invalid_city
-    ),
-    comm_zip_norm = normal_zip(comm_zip, na_rep = TRUE),
-    comm_state_norm = comm_state %>% 
-      str_trim(side = "both") %>% 
-      str_replace("^M$", "MA") %>% 
-      normal_state(valid = valid_state)
-  )
-```
-
-```{r comm_geo_join}
-mac <- left_join(mac, comm_geo)
-```
-
-```{r comm_geo_check}
-prop_in(mac$comm_city_norm, many_city)
-prop_in(mac$comm_state_norm, valid_state)
-prop_in(mac$comm_zip_norm, valid_zip)
-```
-
 ## Conclude
 
 ```{r city_remove}
@@ -867,8 +827,8 @@ glimpse(sample_n(mac, 100))
 Now the file can be saved on disk for upload to the Accountability server.
 
 ```{r clean_dir}
-clean_dir <- dir_create(here("ma", "contribs", "data", "clean"))
-clean_path <- path(clean_dir, "ma_contribs_clean.csv")
+clean_dir <- dir_create(here("state","ma", "contribs", "data", "clean"))
+clean_path <- path(clean_dir, "ma_contribs_clean_2020-2023.csv")
 write_csv(mac, clean_path, na = "")
 (clean_size <- file_size(clean_path))
 file_encoding(clean_path) %>% 
@@ -879,7 +839,7 @@ file_encoding(clean_path) %>%
 
 We can use the `aws.s3::put_object()` to upload the text file to the IRW server.
 
-```{r aws_upload, eval=TRUE}
+```{r aws_upload, eval=FALSE}
 aws_path <- path("csv", basename(clean_path))
 if (!object_exists(aws_path, "publicaccountability")) {
   put_object(
@@ -900,64 +860,26 @@ unname(aws_size == clean_size)
 
 The following table describes the variables in our final exported file:
 
-```{r dict_make, echo=FALSE}
-dict_raw <- tibble(
-  var = md_code(names(mac)),
+```{r dict_md, echo=FALSE}
+data_dict_clean <- 
+  tibble(
+      var = md_code(names(mac)),
   type = md_code(map_chr(mac, typeof)),
-  def = c(
-    "_Unique_ transaction ID",
-    "Report ID number",
-    "_Unique_ transaction line number",
-    "**Date** contribution was made",
-    "Contributor type (individual or not)",
-    "Contributor first name",
-    "Contributor last name",
-    "Contributor street address",
-    "Contributor city name",
-    "Contributor state",
-    "Contributor ZIP+4 code",
-    "Contributor occupation",
-    "Contributor employer name",
-    "Committee officer filing report",
-    "Contributor ID number",
-    "Contribution **amount** or correction",
-    "Method by which contribution was made",
-    "_Unique_ transaction ID hash",
-    "Year report was filed",
-    "Date report was filed",
-    "Date reporting period began",
-    "Date reporting period ended",
-    "Recipient committee ID",
-    "Report on which contribution reported",
-    "Recieving candidate name",
-    "Office sought by candidate",
-    "District in which election held",
-    "Recieving committee name",
-    "Committee city name",
-    "Committee state",
-    "Committee ZIP+4 code",
-    "Contribution category",
-    "Flag indicating amended report",
-    "Full combined contributor name",
+  def = c(data_dict$notes[49:69],
+          "Contributor type (individual or not)",
     "Coalesced recipient name",
+    "Report on which contribution reported",
+              "Full combined contributor name",
     "Flag indicating missing values",
     "Flag indicating duplicate record",
     "Calendar year contribution made",
     "Normalized full street address",
     "Normalized city name",
     "Normalized 2-letter state",
-    "Normalized 5-digit ZIP code",
-    "Normalized committee city",
-    "Normalized committee state",
-    "Normalized committee ZIP"
-  )
-)
-```
+    "Normalized 5-digit ZIP code"))
 
-```{r dict_md, echo=FALSE}
 (dict_md <- kable(
-  x = dict_raw,
+  x = data_dict_clean,
   format = "markdown",
-  col.names = c("Column", "Type", "Definition")
-))
+  col.names = c("Column", "Type", "Definition")))
 ```
