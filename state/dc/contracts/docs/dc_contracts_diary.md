@@ -99,7 +99,7 @@ here::here()
 A list of contracts by fiscal year can be obtained from the District of
 Columbia [Contracts and Procurement Transparency
 Portal](https://contracts.ocp.dc.gov/contracts/search). A search can be
-run for results by fiscal years 2016 through 2021. This search can then
+run for results by fiscal year. This search can then
 be exported as a single CSV file which we can read into R. The same
 thing can be done on the [purchase orders
 portal](https://contracts.ocp.dc.gov/purchase/search).
