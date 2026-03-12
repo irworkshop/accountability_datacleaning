@@ -105,7 +105,7 @@ Alabama contributions data can be retrieved from the Alabama Electronic
 Fair Campaign Practices Act (FCPA) [Reporting System
 website](https://fcpa.alabamavotes.gov/PublicSite/Homepage.aspx). We can
 find the files of interest on the [Data Download
-page](https://fcpa.alabamavotes.gov/page.request.do?page=page.acfPublicDownloadData)), which
+page](https://fcpa.alabamavotes.gov/page.request.do?page=page.acfPublicDownloadData), which
 has a table of files available.
 
 > This page provides comma separated value (CSV) downloadable files
