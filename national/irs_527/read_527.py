@@ -2,7 +2,14 @@ import csv
 
 file_location = "FullDataFile.txt"
 
-infile = open(file_location, 'r')
+# latin-1, not utf-8. The IRS file is mixed: of 646 non-ASCII bytes in 2.7GB,
+# about 94 are genuine utf-8 sequences (0xc2 0xae = (R), 0xc2 0xa0 = nbsp) while
+# the rest are bare latin-1 bytes (a lone 0xae, 0xa0, 0xe9...). No single codec
+# is "correct", so read with the one that cannot fail: latin-1 maps all 256 byte
+# values, so decoding never raises. The cost is that those ~94 utf-8 sequences
+# come through as mojibake ("A(R)" rather than "(R)") -- 94 characters out of
+# 2.9 billion. Anything stricter dies partway, which is what utf-8 was doing.
+infile = open(file_location, 'r', encoding='latin-1')
 
 DIRECTOR_HEADERS = ['record_type', 'form_id', 'director_id', 'org_name', 'ein', 'entity_name', 'entity_title', 'entity_address_1', 'entity_address_2', 'entity_address_city', 'entity_address_st', 'entity_address_zip_code', 'entity_address_zip_code_ext']
 RELATED_HEADERS = ['record_type', 'form_id_number', 'entity_id', 'org_name', 'ein', 'entity_name', 'entity_relationship', 'entity_address_1', 'entity_address_2', 'entity_address_city', 'entity_address_st', 'entity_address_zip_code', 'entity_address_zip_ext']
@@ -11,6 +18,29 @@ FORM_8872_HEADERS = ['record_type', 'form_type', 'form_id_number', 'period_begin
 EAIN_HEADERS = ['record_type','form_id','eain_id','election_authority_id_number', 'state_issued']
 A_HEADERS = ['record_type', 'form_id_number', 'sched_a_id', 'org_name', 'ein', 'contributor_name', 'contributor_address_1', 'contributor_address_2', 'contributor_address_city', 'contributor_address_state', 'contributor_address_zip_code', 'contributor_address_zip_ext', 'contributor_employer', 'contribution_amount', 'contributor_occupation', 'agg_contribution_ytd', 'contribution_date']
 B_HEADERS = ['record_type', 'form_id_number', 'sched_b_id', 'org_name', 'ein', 'recipient_name', 'recipient_address_1', 'recipient_address_2', 'recipient_address_city', 'recipient_address_st', 'recipient_address_zip_code', 'recipient_address_zip_ext', 'recipient_employer', 'expenditure_amount', 'recipient_occupation', 'expenditure_date', 'expenditure_purpose']
+
+# A D record carries no date of its own -- a director is simply attached to a
+# filing. It does carry form_id, which matches form_id_number on the Form 8871
+# ('1') record, and that has insert_datetime: when the IRS recorded the filing.
+# That is the right proxy for "when was this person a director", because each
+# filing is a snapshot of the roster, so someone serving several years appears
+# on several forms, each with its own date.
+#
+# Deliberately NOT established_date: that is when the *organisation* was founded,
+# not when the filing happened, and joining on it yields directors in 1808.
+#
+# R and E records share the same form_id link and could get the same treatment,
+# but neither is published, so they are left alone.
+FILING_DATE_HEADERS = ['filing_date', 'filing_year']
+DATE_LINKED_TYPES = ('D',)
+
+# form_id sits at position 1 on a D record.
+FORM_ID_POSITION = 1
+
+# Positions within an 8871 record, derived rather than hardcoded so they follow
+# FORM_8871_HEADERS if it is ever corrected.
+FORM_8871_ID_POSITION = FORM_8871_HEADERS.index('form_id_number')
+FORM_8871_DATE_POSITION = FORM_8871_HEADERS.index('insert_datetime')
 
 writer_dict = {
     'A':{'headers':A_HEADERS},
@@ -25,11 +55,43 @@ writer_dict = {
 
 for recordtype in writer_dict.keys():
     outfile_name = "527read_%s.csv" % recordtype
-    outfile =  open(outfile_name, 'w')
-    dw = csv.DictWriter(outfile, fieldnames=writer_dict[recordtype]['headers'], extrasaction='ignore')
+    # Explicit encoding so output doesn't depend on the machine's locale, and
+    # newline='' because the csv module handles line endings itself.
+    outfile =  open(outfile_name, 'w', encoding='utf-8', newline='')
+    # source_headers maps the pipe-delimited fields positionally; output_headers
+    # adds the joined filing date, which has no position in the source record.
+    source_headers = writer_dict[recordtype]['headers']
+    output_headers = list(source_headers)
+    if recordtype in DATE_LINKED_TYPES:
+        output_headers += FILING_DATE_HEADERS
+    writer_dict[recordtype]['source_headers'] = source_headers
+    dw = csv.DictWriter(outfile, fieldnames=output_headers, extrasaction='ignore')
     dw.writeheader()
     writer_dict[recordtype]['writer'] = dw
     print("Writing row type %s to file %s" % (recordtype, outfile_name))
+
+
+def build_form_date_index(path):
+    """Pass one: form_id_number -> insert_datetime, from the 8871 records.
+
+    A separate pass because a D record can appear before the '1' record it
+    belongs to, so the lookup has to be complete before any D row is written.
+    Cheap: ~78k entries, and a scan of the file takes a few seconds.
+    """
+    index = {}
+    with open(path, 'r', encoding='latin-1') as form_file:
+        for line in form_file:
+            if not line.startswith('1|'):
+                continue
+            values = line.rstrip('\n').split('|')
+            if len(values) <= FORM_8871_DATE_POSITION:
+                continue
+            index[values[FORM_8871_ID_POSITION]] = values[FORM_8871_DATE_POSITION].strip()
+    print("Indexed %s Form 8871 filing dates" % len(index))
+    return index
+
+
+FORM_DATE_INDEX = build_form_date_index(file_location)
 
 
 def make_dict(headers, array):
@@ -43,7 +105,16 @@ def make_dict(headers, array):
 
 
 def handle_row(recordtype, value_array):
-    this_row = make_dict(writer_dict[recordtype]['headers'], value_array)
+    this_row = make_dict(writer_dict[recordtype]['source_headers'], value_array)
+
+    if recordtype in DATE_LINKED_TYPES:
+        form_id = value_array[FORM_ID_POSITION] if len(value_array) > FORM_ID_POSITION else ''
+        filing_date = FORM_DATE_INDEX.get(form_id, '')
+        this_row['filing_date'] = filing_date
+        # insert_datetime looks like '2001-05-13 21:20:54', so the year is the
+        # first four characters. Left blank rather than guessed when absent.
+        this_row['filing_year'] = filing_date[:4] if filing_date else ''
+
     writer_dict[recordtype]['writer'].writerow(this_row)
 
 
